@@ -16,15 +16,12 @@ import { LoginPage } from '../components/auth/LoginPage'
 import { RegisterPage } from '../components/auth/RegisterPage'
 import { ResetPasswordPage } from '../components/auth/ResetPasswordPage'
 import { SetupPage } from '../components/modals/SetupPage'
-import { CompetitionPage } from '../components/trader/CompetitionPage'
 import { AITradersPage } from '../components/trader/AITradersPage'
 import { FAQPage } from '../pages/FAQPage'
 import { LandingPage } from '../pages/LandingPage'
 import { BeginnerOnboardingPage } from '../pages/BeginnerOnboardingPage'
-import { DataPage } from '../pages/DataPage'
 import { AgentChatPage } from '../pages/AgentChatPage'
 import { SettingsPage } from '../pages/SettingsPage'
-import { StrategyMarketPage } from '../pages/StrategyMarketPage'
 import { StrategyStudioPage } from '../pages/StrategyStudioPage'
 import { TraderDashboardPage } from '../pages/TraderDashboardPage'
 import { useAuth } from '../contexts/AuthContext'
@@ -466,14 +463,6 @@ export function AppRoutes() {
           }
         />
         <Route
-          path={ROUTES.data}
-          element={
-            <AppChrome currentPage="data" showFooter={false}>
-              <DataPage />
-            </AppChrome>
-          }
-        />
-        <Route
           path={ROUTES.settings}
           element={
             isAuthenticated ? (
@@ -496,30 +485,6 @@ export function AppRoutes() {
               )
             ) : (
               <Navigate to={ROUTES.login} replace />
-            )
-          }
-        />
-        <Route
-          path={ROUTES.competition}
-          element={
-            isAuthenticated ? (
-              <AppChrome currentPage="competition" animateContent>
-                <CompetitionPage />
-              </AppChrome>
-            ) : (
-              <LandingPage />
-            )
-          }
-        />
-        <Route
-          path={ROUTES.strategyMarket}
-          element={
-            isAuthenticated ? (
-              <AppChrome currentPage="strategy-market" animateContent>
-                <StrategyMarketPage />
-              </AppChrome>
-            ) : (
-              <LandingPage />
             )
           }
         />
