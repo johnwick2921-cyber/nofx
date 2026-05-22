@@ -119,28 +119,6 @@ export default function HeaderBar({
                   requiresAuth: false,
                 },
                 {
-                  page: 'data',
-                  path: ROUTES.data,
-                  label:
-                    language === 'zh'
-                      ? '数据'
-                      : language === 'id'
-                        ? 'Data'
-                        : 'Data',
-                  requiresAuth: false,
-                },
-                {
-                  page: 'strategy-market',
-                  path: ROUTES.strategyMarket,
-                  label:
-                    language === 'zh'
-                      ? '策略市场'
-                      : language === 'id'
-                        ? 'Pasar'
-                        : 'Market',
-                  requiresAuth: true,
-                },
-                {
                   page: 'traders',
                   path: ROUTES.traders,
                   label: t('configNav', language),
@@ -156,12 +134,6 @@ export default function HeaderBar({
                   page: 'strategy',
                   path: ROUTES.strategy,
                   label: t('strategyNav', language),
-                  requiresAuth: true,
-                },
-                {
-                  page: 'competition',
-                  path: ROUTES.competition,
-                  label: t('realtimeNav', language),
                   requiresAuth: true,
                 },
                 {
@@ -454,28 +426,6 @@ export default function HeaderBar({
                       requiresAuth: false,
                     },
                     {
-                      page: 'data',
-                      path: ROUTES.data,
-                      label:
-                        language === 'zh'
-                          ? '数据'
-                          : language === 'id'
-                            ? 'Data'
-                            : 'Data',
-                      requiresAuth: false,
-                    },
-                    {
-                      page: 'strategy-market',
-                      path: ROUTES.strategyMarket,
-                      label:
-                        language === 'zh'
-                          ? '策略市场'
-                          : language === 'id'
-                            ? 'Pasar'
-                            : 'Market',
-                      requiresAuth: true,
-                    },
-                    {
                       page: 'traders',
                       path: ROUTES.traders,
                       label: t('configNav', language),
@@ -491,12 +441,6 @@ export default function HeaderBar({
                       page: 'strategy',
                       path: ROUTES.strategy,
                       label: t('strategyNav', language),
-                      requiresAuth: true,
-                    },
-                    {
-                      page: 'competition',
-                      path: ROUTES.competition,
-                      label: t('realtimeNav', language),
                       requiresAuth: true,
                     },
                     {
