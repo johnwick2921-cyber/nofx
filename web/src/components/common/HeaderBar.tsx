@@ -92,7 +92,7 @@ export default function HeaderBar({
           className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer"
         >
           <img src="/icons/vl.svg" alt="VL" className="w-7 h-7" />
-          <span className="text-lg font-bold text-nofx-gold">NOFX</span>
+          <span className="text-lg font-bold text-nofx-gold">VL</span>
         </div>
 
         {/* Desktop Menu */}

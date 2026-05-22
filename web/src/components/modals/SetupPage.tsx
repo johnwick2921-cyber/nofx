@@ -138,7 +138,7 @@ export function SetupPage() {
             <div className="flex justify-center mb-4">
               <div className="relative">
                 <div className="absolute -inset-4 bg-nofx-gold/20 rounded-full blur-2xl" />
-                <img src="/icons/nofx.svg" alt="NOFX" className="w-14 h-14 relative z-10 drop-shadow-[0_0_15px_rgba(240,185,11,0.3)]" />
+                <img src="/icons/vl.svg" alt="VL" className="w-14 h-14 relative z-10 drop-shadow-[0_0_15px_rgba(240,185,11,0.3)]" />
               </div>
             </div>
             <h1 className="text-2xl font-bold text-white mb-1.5">{l.welcome}</h1>

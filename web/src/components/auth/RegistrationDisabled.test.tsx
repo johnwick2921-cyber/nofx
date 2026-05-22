@@ -50,7 +50,7 @@ describe('RegistrationDisabled Component', () => {
       renderComponent()
       const logo = screen.getByAltText('NoFx Logo')
       expect(logo).toBeTruthy()
-      expect(logo.getAttribute('src')).toBe('/icons/nofx.svg')
+      expect(logo.getAttribute('src')).toBe('/icons/vl.svg')
     })
 
     it('should display registration closed heading', () => {
