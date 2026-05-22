@@ -18,6 +18,7 @@ import (
 	"nofx/trader/indodax"
 	"nofx/trader/kucoin"
 	"nofx/trader/lighter"
+	ntTrader "nofx/trader/ninjatrader"
 	"nofx/trader/okx"
 	"nofx/wallet"
 	"sync"
@@ -57,7 +58,7 @@ type AutoTraderConfig struct {
 	AIModel string // AI model: "qwen" or "deepseek"
 
 	// Trading platform selection
-	Exchange   string // Exchange type: "binance", "bybit", "okx", "bitget", "gate", "hyperliquid", "aster" or "lighter"
+	Exchange   string // Exchange type: "binance", "bybit", "okx", "bitget", "gate", "hyperliquid", "aster", "lighter", "indodax", or "ninjatrader"
 	ExchangeID string // Exchange account UUID (for multi-account support)
 
 	// Binance API configuration
@@ -90,6 +91,10 @@ type AutoTraderConfig struct {
 	// Indodax API configuration
 	IndodaxAPIKey    string
 	IndodaxSecretKey string
+
+	// NinjaTrader CSV bridge configuration
+	NinjaTraderDataDir string // /mnt/c/Users/<u>/NofxTrader/data
+	NinjaTraderSymbol  string // e.g. "MNQ" (informational; NT uses chart's instrument)
 
 	// Hyperliquid configuration
 	HyperliquidPrivateKey  string
@@ -312,6 +317,15 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 	case "indodax":
 		logger.Infof("🏦 [%s] Using Indodax Spot trading", config.Name)
 		trader = indodax.NewIndodaxTrader(config.IndodaxAPIKey, config.IndodaxSecretKey)
+	case "ninjatrader":
+		logger.Infof("🏦 [%s] Using NinjaTrader CSV bridge (CME futures via SIM)", config.Name)
+		if config.NinjaTraderDataDir == "" {
+			return nil, fmt.Errorf("ninjatrader requires NinjaTraderDataDir (set NINJATRADER_DATA_DIR in env or per-exchange config)")
+		}
+		trader = ntTrader.New(ntTrader.Config{
+			DataDir: config.NinjaTraderDataDir,
+			Symbol:  config.NinjaTraderSymbol,
+		})
 	default:
 		return nil, fmt.Errorf("unsupported trading platform: %s", config.Exchange)
 	}
