@@ -1,8 +1,9 @@
 package config
 
 import (
-	"nofx/telemetry"
+	"nofx/logger"
 	"nofx/mcp"
+	"nofx/telemetry"
 	"os"
 	"strconv"
 	"strings"
@@ -66,6 +67,9 @@ func Init() {
 	}
 	if cfg.JWTSecret == "" {
 		cfg.JWTSecret = "default-jwt-secret-change-in-production"
+		logger.Warnf("⚠️  JWT_SECRET env var not set; using INSECURE default. " +
+			"Acceptable for localhost-only paper trading. " +
+			"Set JWT_SECRET in .env (e.g. `openssl rand -base64 64`) before any network-exposed deploy.")
 	}
 
 	if v := os.Getenv("API_SERVER_PORT"); v != "" {
