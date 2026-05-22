@@ -44,6 +44,15 @@ type Config struct {
 	AlpacaSecretKey string // Alpaca secret key
 	TwelveDataKey   string // TwelveData API key for forex & metals
 
+	// Databento (NQ futures data)
+	DatabentoAPIKey  string
+	DatabentoDataset string // e.g., "GLBX.MDP3"
+
+	// NinjaTrader (CSV bridge for execution)
+	NinjaTraderDataDir string // e.g., "/mnt/c/Users/<u>/NofxTrader/data"
+
+	// Trading mode: "crypto" (default, original behavior) or "futures"
+	TradingMode string
 }
 
 // Init initializes global configuration (from .env)
@@ -94,6 +103,12 @@ func Init() {
 	cfg.AlpacaAPIKey = os.Getenv("ALPACA_API_KEY")
 	cfg.AlpacaSecretKey = os.Getenv("ALPACA_SECRET_KEY")
 	cfg.TwelveDataKey = os.Getenv("TWELVEDATA_API_KEY")
+
+	// Databento + NinjaTrader (NQ futures path)
+	cfg.DatabentoAPIKey = os.Getenv("DATABENTO_API_KEY")
+	cfg.DatabentoDataset = getEnvOrDefault("DATABENTO_DATASET", "GLBX.MDP3")
+	cfg.NinjaTraderDataDir = os.Getenv("NINJATRADER_DATA_DIR")
+	cfg.TradingMode = getEnvOrDefault("TRADING_MODE", "crypto")
 
 	// Database configuration
 	if v := os.Getenv("DB_TYPE"); v != "" {
@@ -146,4 +161,11 @@ func Get() *Config {
 		Init()
 	}
 	return global
+}
+
+func getEnvOrDefault(key, def string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return def
 }
