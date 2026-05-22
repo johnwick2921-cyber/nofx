@@ -93,7 +93,7 @@ export function LoginPage() {
               <div className="relative">
                 <div className="absolute -inset-3 bg-nofx-gold/15 rounded-full blur-2xl" />
                 <img
-                  src="/icons/nofx.svg"
+                  src="/icons/vl.svg"
                   alt="NOFX"
                   className="w-14 h-14 relative z-10"
                 />

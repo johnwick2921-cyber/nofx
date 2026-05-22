@@ -133,3 +133,7 @@ PR_DESCRIPTION.md
 
 # Go build artifacts
 /nofx-server
+
+# Compiled binaries (defensive: also matched by nofx pattern but explicit is better)
+/nofx-bin
+/nq_smoke

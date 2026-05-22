@@ -18,7 +18,6 @@ import { ResetPasswordPage } from '../components/auth/ResetPasswordPage'
 import { SetupPage } from '../components/modals/SetupPage'
 import { AITradersPage } from '../components/trader/AITradersPage'
 import { FAQPage } from '../pages/FAQPage'
-import { LandingPage } from '../pages/LandingPage'
 import { BeginnerOnboardingPage } from '../pages/BeginnerOnboardingPage'
 import { AgentChatPage } from '../pages/AgentChatPage'
 import { SettingsPage } from '../pages/SettingsPage'
@@ -430,7 +429,16 @@ export function AppRoutes() {
     <>
       <LegacyHashRedirect />
       <Routes>
-        <Route path={ROUTES.home} element={<LandingPage />} />
+        <Route
+          path={ROUTES.home}
+          element={
+            user ? (
+              <Navigate to={ROUTES.settings} replace />
+            ) : (
+              <Navigate to={ROUTES.login} replace />
+            )
+          }
+        />
         <Route path={ROUTES.login} element={<LoginPage />} />
         <Route path={ROUTES.register} element={<RegisterPage />} />
         <Route path={ROUTES.resetPassword} element={<ResetPasswordPage />} />
@@ -490,11 +498,11 @@ export function AppRoutes() {
         />
         <Route
           path={ROUTES.traders}
-          element={isAuthenticated ? <TradersRoute /> : <LandingPage />}
+          element={isAuthenticated ? <TradersRoute /> : <Navigate to={ROUTES.login} replace />}
         />
         <Route
           path={ROUTES.dashboard}
-          element={isAuthenticated ? <DashboardRoute /> : <LandingPage />}
+          element={isAuthenticated ? <DashboardRoute /> : <Navigate to={ROUTES.login} replace />}
         />
         <Route
           path={ROUTES.strategy}
@@ -504,7 +512,7 @@ export function AppRoutes() {
                 <StrategyStudioPage />
               </AppChrome>
             ) : (
-              <LandingPage />
+              <Navigate to={ROUTES.login} replace />
             )
           }
         />
