@@ -146,7 +146,7 @@ export function FAQLayout({ language }: FAQLayoutProps) {
           </p>
           <div className="flex items-center justify-center gap-4">
             <a
-              href="https://github.com/NoFxAiOS/nofx"
+              href="#"
               target="_blank"
               rel="noopener noreferrer"
               className="px-6 py-3 rounded-lg font-semibold transition-all hover:scale-105"
@@ -159,7 +159,7 @@ export function FAQLayout({ language }: FAQLayoutProps) {
               GitHub
             </a>
             <a
-              href="https://t.me/nofx_dev_community"
+              href="#"
               target="_blank"
               rel="noopener noreferrer"
               className="px-6 py-3 rounded-lg font-semibold transition-all hover:scale-105"
