@@ -135,12 +135,6 @@ export default function HeaderBar({
                   label: t('strategyNav', language),
                   requiresAuth: true,
                 },
-                {
-                  page: 'faq',
-                  path: ROUTES.faq,
-                  label: t('faqNav', language),
-                  requiresAuth: false,
-                },
               ]
 
               const handleNavClick = (tab: (typeof navTabs)[0]) => {
@@ -383,12 +377,6 @@ export default function HeaderBar({
                       path: ROUTES.strategy,
                       label: t('strategyNav', language),
                       requiresAuth: true,
-                    },
-                    {
-                      page: 'faq',
-                      path: ROUTES.faq,
-                      label: t('faqNav', language),
-                      requiresAuth: false,
                     },
                   ]
 
