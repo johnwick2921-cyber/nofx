@@ -537,6 +537,17 @@ var xyzDexAssets = map[string]bool{
 	"XYZ100": true,
 }
 
+var cmeFuturesRoots = map[string]bool{
+	"NQ": true, "MNQ": true,
+	"ES": true, "MES": true,
+	"RTY": true, "M2K": true,
+	"YM": true, "MYM": true,
+	"CL": true, "MCL": true,
+	"GC": true, "MGC": true,
+}
+
+const cmeMonthCodes = "FGHJKMNQUVXZ"
+
 // IsXyzDexAsset checks if a symbol is an xyz dex asset
 func IsXyzDexAsset(symbol string) bool {
 	base := strings.ToUpper(symbol)
@@ -551,10 +562,73 @@ func IsXyzDexAsset(symbol string) bool {
 	return xyzDexAssets[base]
 }
 
+// IsCMEFuturesSymbol checks for supported CME futures roots, specific contracts,
+// and Databento continuous symbols such as NQ.c.0.
+func IsCMEFuturesSymbol(symbol string) bool {
+	_, ok := normalizeCMEFuturesSymbol(symbol)
+	return ok
+}
+
+func normalizeCMEFuturesSymbol(symbol string) (string, bool) {
+	raw := strings.TrimSpace(symbol)
+	if raw == "" {
+		return "", false
+	}
+
+	lower := strings.ToLower(raw)
+	if strings.Contains(lower, ".c.") {
+		parts := strings.Split(lower, ".c.")
+		if len(parts) != 2 || parts[0] == "" || parts[1] == "" || !allDigits(parts[1]) {
+			return "", false
+		}
+		root := strings.ToUpper(parts[0])
+		if !cmeFuturesRoots[root] {
+			return "", false
+		}
+		return root + ".c." + parts[1], true
+	}
+
+	upper := strings.ToUpper(raw)
+	if cmeFuturesRoots[upper] {
+		return upper, true
+	}
+
+	for root := range cmeFuturesRoots {
+		if !strings.HasPrefix(upper, root) {
+			continue
+		}
+		suffix := upper[len(root):]
+		if len(suffix) < 2 || len(suffix) > 3 {
+			continue
+		}
+		if !strings.ContainsRune(cmeMonthCodes, rune(suffix[0])) {
+			continue
+		}
+		if allDigits(suffix[1:]) {
+			return upper, true
+		}
+	}
+
+	return "", false
+}
+
+func allDigits(s string) bool {
+	for _, r := range s {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return s != ""
+}
+
 // Normalize normalizes symbol
 // For crypto: ensures it's a USDT trading pair
 // For xyz dex assets (stocks, forex, commodities): uses xyz: prefix without USDT suffix
 func Normalize(symbol string) string {
+	if normalized, ok := normalizeCMEFuturesSymbol(symbol); ok {
+		return normalized
+	}
+
 	symbol = strings.ToUpper(symbol)
 
 	// Check if this is an xyz dex asset

@@ -169,13 +169,19 @@ func (a *Agent) loadAIClientFromStoreUser(storeUserID string) (mcp.AIClient, str
 
 			// Use the provider registry for providers like claw402 that have their own
 			// client implementation (x402 payment, custom auth, etc.).
+			//
+			// When CustomModelName is empty, pass through the empty string so each
+			// provider's SetAPIKey keeps its built-in default (e.g. "deepseek-chat",
+			// "deepseek-v4-flash"). Do NOT substitute model.ID — that's a DB key like
+			// "<userID>_deepseek" and providers will reject it as an unknown model.
 			if client := mcp.NewAIClientByProvider(provider); client != nil {
-				if modelName == "" {
-					modelName = model.ID
-				}
 				client.SetAPIKey(apiKey, customAPIURL, modelName)
-				a.log().Info("agent AI client selected (provider registry)", "store_user_id", candidateUserID, "model_id", model.ID, "provider", provider, "model", modelName)
-				return client, modelName, true
+				logModel := modelName
+				if logModel == "" {
+					logModel = "(provider default)"
+				}
+				a.log().Info("agent AI client selected (provider registry)", "store_user_id", candidateUserID, "model_id", model.ID, "provider", provider, "model", logModel)
+				return client, logModel, true
 			}
 
 			customAPIURL, modelName = resolveModelRuntimeConfig(provider, customAPIURL, modelName, model.ID)
@@ -334,7 +340,7 @@ func resolveModelRuntimeConfig(provider, customAPIURL, customModelName, fallback
 		model string
 	}
 	defaults := map[string]providerDefaults{
-		"deepseek": {url: "https://api.deepseek.com/v1", model: "deepseek-chat"},
+		"deepseek": {url: "https://api.deepseek.com/v1", model: "deepseek-v4-pro"},
 		"qwen":     {url: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen3-max"},
 		"openai":   {url: "https://api.openai.com/v1", model: "gpt-5.2"},
 		"claude":   {url: "https://api.anthropic.com/v1", model: "claude-opus-4-6"},
