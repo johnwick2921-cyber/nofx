@@ -2892,6 +2892,33 @@ After all three return clean (`go build ./... && cd web && npm run build`) → r
 
 > **Added 2026-05-22 based on external research.** Plan 1.5 replaces the CSV polling bridge with an in-process NinjaScript AddOn that hosts a TCP/WebSocket loopback server. This eliminates every "v1 limitation" Task 7 documents (manual close, balance read, cancel/modify, real fill events) and removes the CSV runtime hazards H1-H4 by design. **Plan 1 (CSV) still ships first** to validate the AI brain in SIM; Plan 1.5 migrates the bridge once Plan 1 trades cleanly.
 
+## Trigger conditions — when to start Plan 1.5
+
+Plan 1.5 is **deferred** until at least one of these conditions fires. Do NOT
+preemptively rebuild the bridge — the CSV path in Plan 1 is sufficient for
+the "validate AI brain in SIM" objective.
+
+Start Plan 1.5 when any one of these is true:
+
+1. **AI brain validated for several sessions.** The AI is making sensible NQ
+   decisions on stale-bar (15-min Databento Historical) data and you're
+   ready to graduate to real-time bars + real fill events for live trading.
+   Concretely: 20-50 cycles observed in SIM with reasoning quality you trust.
+
+2. **Funded broker connection imminent.** You're switching NinjaTrader's
+   account from SIM101 to a real funded prop-firm account. Plan 1.5 is
+   required before live money — the CSV bridge cannot read real balance
+   ($50k mock breaks position sizing) and cannot manually close on news.
+
+3. **CSV race condition fires in SIM.** Hazards H1-H4 (lost-signal race,
+   1-sec dedup collision, DrvFs mtime, fill replay on session rollover)
+   are documented as acceptable for SIM but not for live. If any fires
+   in SIM, that's the signal to upgrade the bridge now rather than later.
+
+Until one of those triggers fires: **the CSV path is canonical**, Plan 1
+stays the production path, and Plan 1.5 lives as documented architecture
+ready to execute when needed.
+
 ## Why this architecture change
 
 The CSV bridge in Plan 1 has known caps:
@@ -4514,20 +4541,100 @@ func IsCMEOpen(t time.Time) bool {
     }
 }
 
-// isCMEHoliday — minimal list; expand as needed.
+// isCMEHoliday returns true if t falls on a CME-observed full-closure holiday.
+// CME may have shortened-hours days (e.g. Good Friday, day after Thanksgiving),
+// but for v1 we treat shortened days as full closures and refuse to trade.
+// Refine in a later plan if this becomes operationally restrictive.
 func isCMEHoliday(ct time.Time) bool {
+    year := ct.Year()
+    month := ct.Month()
+    day := ct.Day()
+    weekday := ct.Weekday()
+
+    // Fixed-date holidays
     md := ct.Format("01-02")
     switch md {
-    case "01-01", "07-04", "12-24", "12-25", "12-31":
+    case "01-01": // New Year's Day
+        return true
+    case "06-19": // Juneteenth
+        return true
+    case "07-04": // Independence Day
+        return true
+    case "12-24": // Christmas Eve (early close treated as closure)
+        return true
+    case "12-25": // Christmas Day
+        return true
+    case "12-31": // New Year's Eve (early close treated as closure)
         return true
     }
-    // Thanksgiving = 4th Thursday of November
-    if ct.Month() == time.November && ct.Weekday() == time.Thursday {
-        if (ct.Day()-1)/7 == 3 {
+
+    // MLK Day — 3rd Monday of January
+    if month == time.January && weekday == time.Monday && (day-1)/7 == 2 {
+        return true
+    }
+
+    // Presidents Day — 3rd Monday of February
+    if month == time.February && weekday == time.Monday && (day-1)/7 == 2 {
+        return true
+    }
+
+    // Good Friday — Friday before Easter
+    if month == time.March || month == time.April {
+        easter := easterSunday(year)
+        goodFri := easter.AddDate(0, 0, -2)
+        if ct.Year() == goodFri.Year() && ct.Month() == goodFri.Month() && ct.Day() == goodFri.Day() {
             return true
         }
     }
+
+    // Memorial Day — last Monday of May
+    if month == time.May && weekday == time.Monday {
+        // Check if next Monday is in June (i.e. this is the last Monday of May)
+        nextMon := ct.AddDate(0, 0, 7)
+        if nextMon.Month() == time.June {
+            return true
+        }
+    }
+
+    // Labor Day — 1st Monday of September
+    if month == time.September && weekday == time.Monday && day <= 7 {
+        return true
+    }
+
+    // Thanksgiving — 4th Thursday of November (plus day after as early-close)
+    if month == time.November && weekday == time.Thursday && (day-1)/7 == 3 {
+        return true
+    }
+    // Day after Thanksgiving — Friday after 4th Thursday
+    if month == time.November && weekday == time.Friday {
+        thursday := ct.AddDate(0, 0, -1)
+        if thursday.Month() == time.November && (thursday.Day()-1)/7 == 3 {
+            return true
+        }
+    }
+
     return false
+}
+
+// easterSunday returns the date of Easter Sunday in the given year (Western/Gregorian).
+// Used only for Good Friday calculation.
+func easterSunday(year int) time.Time {
+    // Anonymous Gregorian algorithm (Meeus/Jones/Butcher)
+    a := year % 19
+    b := year / 100
+    c := year % 100
+    d := b / 4
+    e := b % 4
+    f := (b + 8) / 25
+    g := (b - f + 1) / 3
+    h := (19*a + b - d - g + 15) % 30
+    i := c / 4
+    k := c % 4
+    l := (32 + 2*e + 2*i - h - k) % 7
+    m := (a + 11*h + 22*l) / 451
+    month := (h + l - 7*m + 114) / 31
+    day := ((h + l - 7*m + 114) % 31) + 1
+    return time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.UTC)
 }
 ```
 
@@ -4537,18 +4644,33 @@ func isCMEHoliday(ct time.Time) bool {
 func TestIsCMEOpen(t *testing.T) {
     chicago, _ := time.LoadLocation("America/Chicago")
     cases := []struct {
+        name string
         when time.Time
         want bool
     }{
-        {time.Date(2026, 6, 15, 10, 0, 0, 0, chicago), true},   // Mon 10am
-        {time.Date(2026, 6, 15, 16, 30, 0, 0, chicago), false}, // Mon daily break
-        {time.Date(2026, 6, 20, 12, 0, 0, 0, chicago), false},  // Saturday
-        {time.Date(2026, 7, 4, 10, 0, 0, 0, chicago), false},   // Independence Day
+        {"Mon 10am normal trading", time.Date(2026, 6, 15, 10, 0, 0, 0, chicago), true},
+        {"Mon daily break 4:30pm CT", time.Date(2026, 6, 15, 16, 30, 0, 0, chicago), false},
+        {"Saturday closed", time.Date(2026, 6, 20, 12, 0, 0, 0, chicago), false},
+        {"New Year's Day", time.Date(2026, 1, 1, 10, 0, 0, 0, chicago), false},
+        {"MLK Day 2026 (Jan 19)", time.Date(2026, 1, 19, 10, 0, 0, 0, chicago), false},
+        {"Presidents Day 2026 (Feb 16)", time.Date(2026, 2, 16, 10, 0, 0, 0, chicago), false},
+        {"Good Friday 2026 (Apr 3)", time.Date(2026, 4, 3, 10, 0, 0, 0, chicago), false},
+        {"Memorial Day 2026 (May 25)", time.Date(2026, 5, 25, 10, 0, 0, 0, chicago), false},
+        {"Juneteenth", time.Date(2026, 6, 19, 10, 0, 0, 0, chicago), false},
+        {"Independence Day", time.Date(2026, 7, 4, 10, 0, 0, 0, chicago), false},
+        {"Labor Day 2026 (Sep 7)", time.Date(2026, 9, 7, 10, 0, 0, 0, chicago), false},
+        {"Thanksgiving 2026 (Nov 26)", time.Date(2026, 11, 26, 10, 0, 0, 0, chicago), false},
+        {"Day after Thanksgiving 2026 (Nov 27)", time.Date(2026, 11, 27, 10, 0, 0, 0, chicago), false},
+        {"Christmas Eve", time.Date(2026, 12, 24, 10, 0, 0, 0, chicago), false},
+        {"Christmas Day", time.Date(2026, 12, 25, 10, 0, 0, 0, chicago), false},
+        {"New Year's Eve", time.Date(2026, 12, 31, 10, 0, 0, 0, chicago), false},
     }
     for _, tc := range cases {
-        if got := IsCMEOpen(tc.when); got != tc.want {
-            t.Errorf("IsCMEOpen(%v) = %v, want %v", tc.when, got, tc.want)
-        }
+        t.Run(tc.name, func(t *testing.T) {
+            if got := IsCMEOpen(tc.when); got != tc.want {
+                t.Errorf("IsCMEOpen(%v) = %v, want %v", tc.when, got, tc.want)
+            }
+        })
     }
 }
 ```
@@ -4581,23 +4703,86 @@ git commit -m "feat(futures): CME session calendar + skip decisions when market 
 // provider/databento/contract_calendar.go
 package databento
 
-import "time"
+import (
+    "fmt"
+    "strings"
+    "time"
+)
 
-// NextExpiryFromSymbol returns the expiry date of the given CME contract code.
-// Format: "MNQM6" = MNQ June 2026. Month codes: H=Mar, M=Jun, U=Sep, Z=Dec.
-// Expiry = 3rd Friday of the contract month.
-func NextExpiryFromSymbol(symbol string) (time.Time, error) {
-    // Parse last 2 chars as month-code + last-digit-of-year
-    // ...
+// CME month codes for futures contract symbology.
+var cmeMonthCodes = map[byte]time.Month{
+    'F': time.January,
+    'G': time.February,
+    'H': time.March,
+    'J': time.April,
+    'K': time.May,
+    'M': time.June,
+    'N': time.July,
+    'Q': time.August,
+    'U': time.September,
+    'V': time.October,
+    'X': time.November,
+    'Z': time.December,
 }
 
-// DaysUntilExpiry returns calendar days from `now` until contract expiry.
+// NextExpiryFromSymbol returns the expiry date of the given CME contract code,
+// disambiguating the single-digit year against `now`. Format: last 2 chars are
+// month code (F/G/H/J/K/M/N/Q/U/V/X/Z) + last digit of year.
+//
+// Year disambiguation rule: assume the contract is in the current decade.
+// If that would place the contract more than 1 year in the past, assume next
+// decade. This handles the normal case (front-month contract within ~1 year
+// of now) without breaking when the year-digit wraps (e.g. 2030).
+//
+// Examples (now=2026-05-22):
+//   "MNQM6" → 2026-06 (current decade, current year)
+//   "MNQU6" → 2026-09 (current decade, this year)
+//   "MNQH7" → 2027-03 (current decade, next year)
+//   "MNQM0" → 2030-06 (current decade, but year 2020 would be 6 years ago → bump to 2030)
+func NextExpiryFromSymbol(symbol string, now time.Time) (time.Time, error) {
+    if len(symbol) < 2 {
+        return time.Time{}, fmt.Errorf("contract code too short: %q", symbol)
+    }
+    code := strings.ToUpper(symbol)
+    monthChar := code[len(code)-2]
+    yearChar := code[len(code)-1]
+
+    month, ok := cmeMonthCodes[monthChar]
+    if !ok {
+        return time.Time{}, fmt.Errorf("invalid CME month code %q in %q", monthChar, symbol)
+    }
+    if yearChar < '0' || yearChar > '9' {
+        return time.Time{}, fmt.Errorf("invalid year digit %q in %q", yearChar, symbol)
+    }
+    yearDigit := int(yearChar - '0')
+
+    decade := (now.Year() / 10) * 10
+    year := decade + yearDigit
+    // If the candidate year is more than 1 year before now, the contract code
+    // refers to the next decade.
+    if year < now.Year()-1 {
+        year += 10
+    }
+    return thirdFridayOf(year, month), nil
+}
+
+// DaysUntilExpiry returns calendar days from now until contract expiry.
+// Returns 999 if the symbol cannot be parsed (treat as "not near expiry").
 func DaysUntilExpiry(symbol string, now time.Time) int {
-    exp, err := NextExpiryFromSymbol(symbol)
+    exp, err := NextExpiryFromSymbol(symbol, now)
     if err != nil {
         return 999
     }
     return int(exp.Sub(now).Hours() / 24)
+}
+
+// thirdFridayOf returns the 3rd Friday of the given month — CME index futures
+// expiry convention.
+func thirdFridayOf(year int, month time.Month) time.Time {
+    // Start at day 1, advance to first Friday, then add 14 days.
+    first := time.Date(year, month, 1, 0, 0, 0, 0, time.UTC)
+    offset := (int(time.Friday) - int(first.Weekday()) + 7) % 7
+    return first.AddDate(0, 0, offset+14)
 }
 ```
 
@@ -4612,7 +4797,39 @@ if config.Get().TradingMode == "futures" {
 }
 ```
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 3: Test year-digit disambiguation**
+```go
+// provider/databento/contract_calendar_test.go
+func TestNextExpiryFromSymbol_YearDisambiguation(t *testing.T) {
+    cases := []struct {
+        symbol string
+        now    time.Time
+        want   time.Time
+    }{
+        {"MNQM6", date(2026, 5, 22), date(2026, 6, 19)},   // current quarter
+        {"MNQU6", date(2026, 5, 22), date(2026, 9, 18)},   // next quarter
+        {"MNQH7", date(2026, 5, 22), date(2027, 3, 19)},   // next year
+        {"MNQM0", date(2029, 12, 1), date(2030, 6, 21)},   // year-digit wrap into next decade
+        {"MNQH0", date(2029, 12, 1), date(2030, 3, 15)},   // wrap, earliest month
+    }
+    for _, tc := range cases {
+        got, err := NextExpiryFromSymbol(tc.symbol, tc.now)
+        if err != nil {
+            t.Errorf("symbol=%q: %v", tc.symbol, err)
+            continue
+        }
+        if !got.Equal(tc.want) {
+            t.Errorf("symbol=%q now=%v: got %v, want %v", tc.symbol, tc.now, got, tc.want)
+        }
+    }
+}
+
+func date(y int, m time.Month, d int) time.Time {
+    return time.Date(y, m, d, 0, 0, 0, 0, time.UTC)
+}
+```
+
+- [ ] **Step 4: Commit**
 ```bash
 git commit -m "feat(futures): contract roll detection + block entries near expiry"
 ```
@@ -4783,6 +5000,16 @@ type Decision struct {
     CreatedAt        time.Time
 }
 ```
+
+**Timezone requirement:** `CreatedAt` is always stored as UTC. The Go layer
+inserts `time.Now().UTC()`; the database column is TIMESTAMP WITH TIME ZONE
+(Postgres) or TEXT in ISO 8601 UTC format (SQLite). The display layer in
+TraderDashboardPage converts to the user's local time zone for rendering.
+Storing local time in the audit trail creates DST-transition bugs that
+cause decisions to appear out-of-order or duplicated; UTC is non-negotiable.
+
+The same rule applies to FillLatencyMs computation: subtract two UTC
+timestamps, do not mix wall-clock and monotonic time.
 
 - [ ] **Step 2: Persistence**
 GORM Migrate adds the new columns. Insert at decision-time + update at fill-time.
@@ -4982,6 +5209,26 @@ Sections to include:
 3. **Verify trader loads** — `curl localhost:8080/api/traders` returns the configured NT trader. Log shows `📦 Loading trader X (AI Model: deepseek, Exchange: ninjatrader/...)`.
 4. **First-trade smoke** — manual decision via `cmd/nq_smoke/main.go all`, watch for fill appearing in `trades_taken.csv` and in DB `decisions` table.
 5. **Shutdown** — `pkill -TERM -f nofx-bin`; verify no hung file handles via `lsof | grep NofxTrader`.
+6. **Windows Defender exclusion for the data directory.** Defender's
+   real-time scanner can transiently lock files during `os.Rename` from
+   the Go side, causing the atomic temp+rename pattern in
+   `provider/ninjatrader/csv_writer.go` to fail with EBUSY. Exclude the
+   data directory from real-time scanning. From an Administrator
+   PowerShell prompt on the Windows host:
+
+```powershell
+   Add-MpPreference -ExclusionPath "C:\Users\<user>\NofxTrader\data"
+```
+
+   Verify the exclusion is active:
+
+```powershell
+   Get-MpPreference | Select-Object -ExpandProperty ExclusionPath
+```
+
+   This is a one-time setup per host. Without it, you may see intermittent
+   "rename: Access is denied" errors in Go logs during high-frequency signal
+   writes — these are benign (the next write succeeds) but noisy.
 
 ## Task 31: Document rollback procedure
 
