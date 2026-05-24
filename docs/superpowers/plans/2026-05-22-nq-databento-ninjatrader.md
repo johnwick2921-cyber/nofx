@@ -2377,6 +2377,77 @@ These become the next slices once this one is validated.
 
 ---
 
+## Parallel Dispatch Map
+
+The tasks below split into three independent clusters that can run concurrently via `superpowers:dispatching-parallel-agents`. Each cluster ends at a clean compile boundary so dispatches don't fight over shared files.
+
+### Cluster A — Databento data pipeline (Tasks 1–4)
+
+**Files touched:** `provider/databento/`, `market/data.go` (Normalize fix only), `config/`
+**Independent because:** Pure data ingestion; no overlap with bridge or UI files.
+
+```text
+Task("Cluster A: Databento data pipeline", subagent_type: "feature-dev:code-architect", prompt: """
+Implement Tasks 1–4 from docs/superpowers/plans/2026-05-22-nq-databento-ninjatrader.md:
+- Task 1: TRADING_MODE + DATABENTO_API_KEY wiring in config/config.go
+- Task 2: provider/databento/client.go — Historical OHLCV REST client (HTTP Basic auth, GET /v0/timeseries.get_range)
+- Task 3: Symbol resolver NQ.c.0 → MNQM6 (continuous → specific contract)
+- Task 4: Databento bar → market.Kline adapter; fix Normalize() case-preservation for NQ.c.0
+Constraints: do NOT touch trader/ninjatrader/ or web/. Stop after `go build ./...` is clean and Task 2.4 + Task 4.6 tests pass.
+Return: summary of files created, test results, any deviations from the plan.
+""")
+```
+
+### Cluster B — NinjaTrader CSV bridge (Tasks 5–8)
+
+**Files touched:** `trader/ninjatrader/`, `trader/auto_trader.go` (switch case only)
+**Independent because:** Bridge code is self-contained in one package; only touches auto_trader.go at the broker switch (Task 8) — merge conflict is trivial.
+**Blocker:** none on Cluster A — bridge code doesn't import provider/databento.
+
+```text
+Task("Cluster B: NinjaTrader CSV bridge", subagent_type: "feature-dev:code-architect", prompt: """
+Implement Tasks 5–8 from docs/superpowers/plans/2026-05-22-nq-databento-ninjatrader.md:
+- Task 5: trader/ninjatrader/csv_writer.go — 5-field signal writer (datetime, direction, entry, SL, TP)
+- Task 6: trader/ninjatrader/csv_tailer.go — 3-field fill tailer with dedup
+- Task 7: trader/ninjatrader/trader.go — 19-method Trader interface impl; compile-time `var _ types.Trader = (*Trader)(nil)`
+- Task 8: add "ninjatrader" case to trader/auto_trader.go broker switch (~line 268)
+Hazards to encode in code: H1 (lost-signal race, 2s polling), H2 (datetime+direction dedup collision — add monotonic nonce as 6th CSV field OR rate-limit Go writer to ≥2s), H4 (fill replay on NT restart — persist last-processed offset).
+Return: summary of files created, list of CSV fields, dedup strategy chosen.
+""")
+```
+
+### Cluster C — Prompt + UI + smoke (Tasks 9–11)
+
+**Files touched:** `kernel/engine_prompt.go`, `web/src/pages/`, `cmd/nq_smoke/`
+**Independent because:** Prompt + UI + smoke runner; doesn't touch provider or trader internals.
+**Blocker:** Task 10 (smoke) needs A + B done. Tasks 9 + 11 can start immediately.
+
+```text
+Task("Cluster C: Prompt + UI", subagent_type: "feature-dev:code-architect", prompt: """
+Implement Tasks 9 + 11 from docs/superpowers/plans/2026-05-22-nq-databento-ninjatrader.md (DEFER Task 10 — needs Clusters A + B merged first):
+- Task 9: kernel/engine_prompt.go — NQ futures prompt template with FuturesContext (no MACDSignal — single float64 only)
+- Task 11: confirm crypto-era pages (Data, Strategy Market, Competition) are gone from web/src/router/AppRoutes.tsx + web/src/components/common/HeaderBar.tsx
+Constraints: do NOT touch provider/databento/ or trader/ninjatrader/. Run `cd web && npm run build` after Task 11.
+Return: prompt diff summary, list of removed route entries, npm build output.
+""")
+```
+
+### Sequencing
+
+1. **Dispatch A + B + C(Task 9, 11 only) in one message** — 3 parallel agents.
+2. **Wait for all three to return** — verify each summary, run `go build ./... && cd web && npm run build`.
+3. **Then dispatch Task 10** (end-to-end smoke) as a single agent — depends on A + B fills landing in `data/data.db` via real NT execution.
+
+### Plan 1.5 (NT8 AddOn migration) — NOT parallelizable
+
+Plan 1.5 replaces the CSV bridge with a TCP/WebSocket NDJSON protocol. It must be sequential because:
+- Stage 1 (AddOn skeleton) blocks Stage 2 (protocol wire)
+- Stage 2 blocks Stage 3 (Go-side client)
+- Stage 3 blocks Stage 4 (cutover from CSV)
+- Stage 5 (CSV removal) requires Stage 4 stable
+
+Each stage produces a working binary; dispatch one agent per stage in sequence.
+
 ## Self-review
 
 **Spec coverage:**
@@ -2413,6 +2484,407 @@ Following external audit, the plan was updated with:
 - **`GetBalance` $50k mock** honestly disclosed as feeding both prompt equity math and Go-side risk checks; 3 fix options documented; option 3 (disable Go-side balance sizing for ninjatrader exchange) recommended for early go-live.
 
 **The plan is now executable for Plan 1 SIM paper trading.** Going live requires Plan 1.5 (CSV protocol hardening + real balance read) and Plan 2 (CME calendar + contract rolls + kill-switches).
+
+---
+
+## Task 12: Backend kernel + market futures routing (Cluster D)
+
+**Why:** v4 audit found that `BuildSystemPrompt("futures")` falls through to crypto, futures decision JSON omits `symbol`, `GetWithTimeframes` has no Databento branch, and `kernel/engine.go` never checks `TradingMode`.
+
+**Files:**
+- Modify: `kernel/engine_prompt.go:39-46` (add futures case to variant switch)
+- Modify: `kernel/engine_prompt_futures.go:50` (add `symbol` to JSON shape)
+- Modify: `market/data.go:147-256` (add futures branch in GetWithTimeframes)
+- Modify: `kernel/engine.go` (resolve continuous symbol when TradingMode=futures)
+- Test: `kernel/engine_prompt_test.go`, `market/data_test.go`
+
+- [ ] **Step 1: Route futures variant in BuildSystemPrompt**
+
+In `kernel/engine_prompt.go` find the variant switch (around line 39-46) and add:
+```go
+case "futures":
+    return BuildFuturesSystemPrompt(accountEquity)
+```
+Place BEFORE the default crypto case so "futures" matches first.
+
+- [ ] **Step 2: Add `symbol` to futures decision JSON**
+
+In `kernel/engine_prompt_futures.go` find the JSON example string (around line 50) and update from `{action, entry, stop_loss, take_profit, reasoning}` to `{symbol, action, entry, stop_loss, take_profit, reasoning, confidence}`. The `symbol` field is required by `engine_analysis.go` decision parser.
+
+- [ ] **Step 3: Add futures branch in GetWithTimeframes**
+
+In `market/data.go` add a helper:
+```go
+func getKlinesFromDatabento(symbol string, timeframe string) ([]Kline, error) {
+    cfg := config.Get()
+    client := databento.NewClient(cfg.DatabentoAPIKey, cfg.DatabentoDataset)
+    resolved, err := databento.ResolveContinuous(client, symbol)
+    if err != nil { return nil, err }
+    bars, err := client.GetOHLCV(resolved, timeframe, 200)
+    if err != nil { return nil, err }
+    return BarsToKlines(bars), nil
+}
+```
+Then in `GetWithTimeframes` add (BEFORE the hyperliquid/coinank fork):
+```go
+if IsCMEFuturesSymbol(symbol) {
+    return getKlinesFromDatabento(symbol, tf)
+}
+```
+
+- [ ] **Step 4: Wire kernel/engine.go to TradingMode**
+
+In `kernel/engine.go` where the engine builds prompts/fetches data, add a TradingMode check at the entry point:
+```go
+if config.Get().TradingMode == "futures" {
+    variant = "futures"
+}
+```
+This ensures the futures prompt path triggers when env var is set, regardless of strategy config.
+
+- [ ] **Step 5: Tests + build**
+
+Add `TestBuildSystemPrompt_FuturesVariant` and `TestNormalize_CMEFutures("NQ.c.0")` cases. Run:
+```bash
+go test ./kernel/... ./market/...
+go build ./...
+```
+
+- [ ] **Step 6: Commit**
+```bash
+git commit -m "feat(futures): route futures variant + add Databento branch in GetWithTimeframes + symbol in decision JSON"
+```
+
+---
+
+## Task 13: Backend wiring + storage for NinjaTrader (Cluster E)
+
+**Why:** v4 audit found `manager/trader_manager.go` has no ninjatrader case → NT traders unloadable from DB; `store/exchange.go` Exchange struct lacks NT fields; `AutoTraderConfig` missing `NTDefaultContractQty`; CSV tailer offset not persisted.
+
+**Files:**
+- Modify: `store/exchange.go` (add NT fields to Exchange struct + GORM tags + migration)
+- Modify: `manager/trader_manager.go:~700` (add ninjatrader case to addTraderFromStore switch)
+- Modify: `trader/auto_trader.go:95-97,~322` (add NTDefaultContractQty field + use it)
+- Modify: `provider/ninjatrader/csv_tailer.go:18,78-82` (persist offset to disk)
+- Test: `store/exchange_test.go`, `provider/ninjatrader/csv_tailer_test.go`
+
+- [ ] **Step 1: Add NT fields to Exchange struct**
+
+In `store/exchange.go` add to the Exchange struct:
+```go
+// NinjaTrader-specific (only set when ExchangeType == "ninjatrader")
+NTDataDir            string `gorm:"column:nt_data_dir"            json:"nt_data_dir,omitempty"`
+NTInstrumentName     string `gorm:"column:nt_instrument_name"     json:"nt_instrument_name,omitempty"`
+NTDefaultContractQty int    `gorm:"column:nt_default_contract_qty" json:"nt_default_contract_qty,omitempty"`
+```
+GORM AutoMigrate will add the columns; no separate migration file needed.
+
+- [ ] **Step 2: Add ninjatrader case in manager**
+
+In `manager/trader_manager.go` find the `switch exchangeCfg.ExchangeType` block in `addTraderFromStore` (around line 661-700) and after the `case "indodax":` add:
+```go
+case "ninjatrader":
+    traderConfig.NinjaTraderDataDir = exchangeCfg.NTDataDir
+    traderConfig.NinjaTraderSymbol = exchangeCfg.NTInstrumentName
+    traderConfig.NTDefaultContractQty = exchangeCfg.NTDefaultContractQty
+```
+
+- [ ] **Step 3: Add NTDefaultContractQty to AutoTraderConfig**
+
+In `trader/auto_trader.go` near line 95-97 add field:
+```go
+NTDefaultContractQty int
+```
+And in the ninjatrader case (around line 320-328) pass it into `ntTrader.New(ntTrader.Config{...DefaultContractQty: config.NTDefaultContractQty})`.
+
+- [ ] **Step 4: Persist CSV tailer offset**
+
+In `provider/ninjatrader/csv_tailer.go` change `seen int` to a disk-backed counter:
+```go
+type Tailer struct {
+    path       string
+    offsetPath string  // e.g. path + ".offset"
+    seen       int
+}
+
+func (t *Tailer) loadOffset() {
+    if data, err := os.ReadFile(t.offsetPath); err == nil {
+        fmt.Sscanf(string(data), "%d", &t.seen)
+    }
+}
+
+func (t *Tailer) saveOffset() {
+    _ = os.WriteFile(t.offsetPath, []byte(fmt.Sprintf("%d", t.seen)), 0644)
+}
+```
+Call `loadOffset()` in constructor; call `saveOffset()` after every successful row processing. Removes H4 fill-replay hazard.
+
+- [ ] **Step 5: Tests + build**
+```bash
+go test ./store/... ./manager/... ./provider/ninjatrader/...
+go build ./...
+```
+
+- [ ] **Step 6: Commit**
+```bash
+git commit -m "feat(nt): per-account exchange fields + manager wiring + tailer offset persistence"
+```
+
+---
+
+## Task 14: Frontend NinjaTrader config (Settings page)
+
+**Why:** v4 audit found ExchangeConfigModal has no NinjaTrader option, SettingsPage handleSaveExchange doesn't pass NT params. User cannot save NT config from UI.
+
+**Files:**
+- Modify: `web/src/components/trader/ExchangeConfigModal.tsx` (~+140 LOC across 4 sections)
+- Modify: `web/src/pages/SettingsPage.tsx:190-257` (handleSaveExchange signature + payload)
+
+- [ ] **Step 1: Add NinjaTrader to SUPPORTED_EXCHANGE_TEMPLATES**
+
+In `web/src/components/trader/ExchangeConfigModal.tsx` around line 23-34, append to the templates array:
+```ts
+{
+    id: 'ninjatrader',
+    name: 'NinjaTrader',
+    type: 'futures',
+    icon: '/icons/ninjatrader.svg',  // OK to fallback to a generic icon if asset not present
+    description: 'CME futures via NT8 CSV bridge',
+    requiresApiKey: false,
+}
+```
+
+- [ ] **Step 2: Add form state**
+
+Around line 154-180 add useState entries:
+```tsx
+const [ntDataDir, setNtDataDir] = useState('')
+const [ntInstrumentName, setNtInstrumentName] = useState('MNQ')
+const [ntDefaultContractQty, setNtDefaultContractQty] = useState(1)
+```
+
+- [ ] **Step 3: Add form UI section**
+
+After the existing `aster` form section (around line 720-756) add:
+```tsx
+{selectedExchange === 'ninjatrader' && (
+    <div className="space-y-4">
+        <div>
+            <label className="block text-sm font-medium mb-1">NT Data Directory (WSL path)</label>
+            <input
+                type="text"
+                value={ntDataDir}
+                onChange={(e) => setNtDataDir(e.target.value)}
+                placeholder="/mnt/c/Users/<u>/NofxTrader/data"
+                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded"
+            />
+        </div>
+        <div>
+            <label className="block text-sm font-medium mb-1">Instrument</label>
+            <input
+                type="text"
+                value={ntInstrumentName}
+                onChange={(e) => setNtInstrumentName(e.target.value)}
+                placeholder="MNQ"
+                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded"
+            />
+        </div>
+        <div>
+            <label className="block text-sm font-medium mb-1">Default Contract Qty</label>
+            <input
+                type="number"
+                min="1"
+                value={ntDefaultContractQty}
+                onChange={(e) => setNtDefaultContractQty(parseInt(e.target.value) || 1)}
+                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded"
+            />
+        </div>
+    </div>
+)}
+```
+
+- [ ] **Step 4: Add validation branch in handleSubmit**
+
+In `ExchangeConfigModal.tsx` around line 301-339 add:
+```tsx
+} else if (selectedExchange === 'ninjatrader') {
+    if (!ntDataDir.trim()) {
+        setError('NT Data Directory is required')
+        return
+    }
+}
+```
+
+- [ ] **Step 5: Update onSave call + props interface**
+
+In `ExchangeConfigModal.tsx` find the onSave invocation at the end of handleSubmit and pass NT params; update the props interface (~line 39-55) to include `ntDataDir`, `ntInstrumentName`, `ntDefaultContractQty`.
+
+- [ ] **Step 6: Update SettingsPage handleSaveExchange**
+
+In `web/src/pages/SettingsPage.tsx:190-257` add NT params to function signature and thread into createRequest/updateRequest body:
+```ts
+const handleSaveExchange = async (
+    // ...existing params...
+    ntDataDir?: string,
+    ntInstrumentName?: string,
+    ntDefaultContractQty?: number,
+) => {
+    // ...
+    const payload = {
+        // ...existing fields...
+        nt_data_dir: ntDataDir,
+        nt_instrument_name: ntInstrumentName,
+        nt_default_contract_qty: ntDefaultContractQty,
+    }
+}
+```
+
+- [ ] **Step 7: Build + smoke test**
+```bash
+cd web && npm run build
+```
+Then open Settings → Exchanges → Add → NinjaTrader and confirm form renders.
+
+- [ ] **Step 8: Commit**
+```bash
+git commit -m "feat(web): NinjaTrader exchange config form + save handler"
+```
+
+---
+
+## Task 15: Frontend futures-gating (Dashboard + Strategy)
+
+**Why:** v4 audit found Dashboard hardcodes USDT/leverage; CoinSourceEditor appends USDT to "NQ"; IndicatorEditor + RiskControlEditor have no variant prop.
+
+**Files:**
+- Modify: `web/src/pages/TraderDashboardPage.tsx:513,522,530,609,663,673` (gate on exchange_type)
+- Modify: `web/src/components/strategy/CoinSourceEditor.tsx:69-79` (skip USDT for CME)
+- Modify: `web/src/components/strategy/IndicatorEditor.tsx:656-688` (variant prop + hide crypto sources)
+- Modify: `web/src/components/strategy/RiskControlEditor.tsx:61-128` (variant prop + relabel)
+
+- [ ] **Step 1: Gate Dashboard StatCard units**
+
+In `web/src/pages/TraderDashboardPage.tsx` around lines 513, 522, 530:
+```tsx
+const unit = exchangeType === 'ninjatrader' ? 'USD' : 'USDT'
+<StatCard ... unit={unit} ... />
+```
+`exchangeType` is already available via `getExchangeTypeFromList(...)` helper.
+
+- [ ] **Step 2: Hide Leverage + Liquidation Price columns for NT**
+
+Around lines 609, 663, 673 wrap each `<th>` and `<td>` with:
+```tsx
+{exchangeType !== 'ninjatrader' && (
+    <th className="hidden md:table-cell ...">Leverage</th>
+)}
+```
+Same pattern for Liquidation Price column.
+
+- [ ] **Step 3: Skip USDT auto-append for CME futures**
+
+In `web/src/components/strategy/CoinSourceEditor.tsx` around line 69-79:
+```ts
+const cmeFuturesPattern = /^(NQ|MNQ|ES|MES|YM|MYM|RTY|M2K|CL|GC)(\.c\.0|[A-Z]\d)?$/i
+if (cmeFuturesPattern.test(symbol)) {
+    return symbol  // keep as-is, no USDT
+}
+```
+Place BEFORE the existing xyzDexAssets check.
+
+- [ ] **Step 4: Add variant prop to IndicatorEditor**
+
+In `web/src/components/strategy/IndicatorEditor.tsx` add `variant?: 'crypto' | 'futures'` prop. Around lines 656-688 gate crypto-only toggles:
+```tsx
+{variant !== 'futures' && (
+    <label><input type="checkbox" name="enable_funding_rate" /> Funding Rate</label>
+)}
+```
+Same for OI Ranking, NetFlow Ranking, Price Ranking sources.
+
+Pass `variant={exchangeType === 'ninjatrader' ? 'futures' : 'crypto'}` from `StrategyStudioPage.tsx`.
+
+- [ ] **Step 5: Add variant prop to RiskControlEditor**
+
+In `web/src/components/strategy/RiskControlEditor.tsx` add `variant?: 'crypto' | 'futures'` prop. Relabel:
+```tsx
+const leverageLabel = variant === 'futures' ? 'Primary Instrument Leverage' : 'BTC/ETH Leverage'
+const sizeUnit = variant === 'futures' ? 'contracts' : 'USDT'
+```
+
+- [ ] **Step 6: Build + visual smoke**
+```bash
+cd web && npm run build
+```
+Then open Dashboard for a NT trader and verify no USDT unit, no Leverage/LiqPrice columns. Open Strategy Studio and verify no funding rate / OI sources for futures.
+
+- [ ] **Step 7: Commit**
+```bash
+git commit -m "feat(web): futures-gate Dashboard + IndicatorEditor + RiskControlEditor + CoinSourceEditor"
+```
+
+---
+
+## Task 16: VL brand cleanup + minor fixes
+
+**Why:** v4 audit found SetupPage still says "Welcome to NOFX"; chart watermarks say "NOFX"; agent.go:174 comment is stale; missing Normalize test.
+
+**Files:**
+- Modify: `web/src/pages/SetupPage.tsx` (NOFX → VL in 3 languages)
+- Modify: `web/src/components/charts/EquityChart.tsx:321,335` (watermark text)
+- Modify: `web/src/components/charts/AdvancedChart.tsx:1161,1182` (watermark text)
+- Modify: `agent/agent.go:174` (comment example)
+- Test: `market/data_test.go` (TestNormalize_CMEFutures)
+
+- [ ] **Step 1: SetupPage NOFX → VL**
+
+In `web/src/pages/SetupPage.tsx` replace any occurrence of "NOFX" in user-visible copy with "VL". Check 3 language blocks (en, zh, id).
+
+- [ ] **Step 2: Chart watermarks**
+
+In `EquityChart.tsx:321,335` and `AdvancedChart.tsx:1161,1182` change watermark text "NOFX" → "VL".
+
+- [ ] **Step 3: Update stale comment**
+
+In `agent/agent.go:174` change comment example `"deepseek-chat"` → `"deepseek-v4-pro"` to match the actual default.
+
+- [ ] **Step 4: Add Normalize futures test**
+
+In `market/data_test.go` add:
+```go
+func TestNormalize_CMEFutures(t *testing.T) {
+    cases := []struct{ in, want string }{
+        {"NQ.c.0", "NQ.c.0"},
+        {"MNQ.c.0", "MNQ.c.0"},
+        {"nq.c.0", "NQ.c.0"},  // only the ticker portion uppercased
+    }
+    for _, tc := range cases {
+        if got := Normalize(tc.in); got != tc.want {
+            t.Errorf("Normalize(%q) = %q, want %q", tc.in, got, tc.want)
+        }
+    }
+}
+```
+
+- [ ] **Step 5: Build + commit**
+```bash
+go build ./... && cd web && npm run build && cd ..
+git commit -m "chore: VL brand cleanup + stale comment + Normalize futures test"
+```
+
+---
+
+## Dispatch map for Tasks 12-16
+
+Tasks 12 + 13 + 14/15 are independent — they touch disjoint file sets. Task 16 can fold into any of them. Dispatch in parallel via one message:
+
+```text
+Task("Task 12: Backend kernel + market futures routing")
+Task("Task 13: Backend wiring + storage for NinjaTrader")
+Task("Task 14+15: Frontend NT config + futures-gating")  // touches different files, one agent handles both
+```
+
+After all three return clean (`go build ./... && cd web && npm run build`) → run Task 10 (end-to-end smoke) as the final verification.
 
 ---
 
@@ -3911,3 +4383,699 @@ Plus the **backbone** (provider/databento/, provider/ninjatrader/, trader/ninjat
 - Decision whether to add `prompt_variant="futures"` as a NEW variant (alongside balanced/aggressive/conservative) OR a NEW `coin_source_variant` discriminator
 - NQ symbol canonical format: confirm `NQ.c.0` (Databento) vs `NQ`/`NQM6` (specific contract) — propose `NQ.c.0` as primary
 - Whether to *delete* leverage/liquidation columns server-side or *hide* them client-side — recommend client-side only (less backend churn)
+
+---
+
+# Plan 2: CME futures domain (production-grade)
+
+> **Required before live money.** Plan 1 + 1.5 get the bot trading SIM cleanly. Plan 2 hardens it for CME's actual rules: tick sizes, contract rolls, session windows, holidays, settlement. Skipping Plan 2 = rejected orders + invalid prices + trading during closed markets.
+
+## Task 17: Tick-size rounding for entry/SL/TP
+
+**Why:** NQ tick = 0.25 (4 ticks/point); MNQ tick = 0.25. AI returns floating-point prices like `21503.17` — CME rejects anything not on a tick boundary. Round at the boundary before writing CSV.
+
+**Files:**
+- Create: `trader/ninjatrader/tick_rounding.go`
+- Test: `trader/ninjatrader/tick_rounding_test.go`
+- Modify: `trader/ninjatrader/trader.go` (call rounding before `csv_writer.Write`)
+
+- [ ] **Step 1: Write the failing test**
+```go
+// trader/ninjatrader/tick_rounding_test.go
+func TestRoundToTick(t *testing.T) {
+    cases := []struct {
+        in, tick, want float64
+    }{
+        {21503.17, 0.25, 21503.25},   // round up
+        {21503.13, 0.25, 21503.00},   // round down
+        {21503.125, 0.25, 21503.00},  // halfway = banker's round
+        {21500.0, 0.25, 21500.00},    // exact
+    }
+    for _, tc := range cases {
+        if got := RoundToTick(tc.in, tc.tick); got != tc.want {
+            t.Errorf("RoundToTick(%v, %v) = %v, want %v", tc.in, tc.tick, got, tc.want)
+        }
+    }
+}
+```
+
+- [ ] **Step 2: Implementation**
+```go
+// trader/ninjatrader/tick_rounding.go
+package ninjatrader
+
+import "math"
+
+// InstrumentTickSize returns the tick size in points for a CME instrument.
+// Returns 0.25 for NQ/MNQ/ES/MES (index futures default). Other instruments
+// can be added as needed.
+func InstrumentTickSize(symbol string) float64 {
+    switch symbol {
+    case "NQ", "MNQ", "ES", "MES":
+        return 0.25
+    case "YM", "MYM":
+        return 1.0
+    case "RTY", "M2K":
+        return 0.10
+    case "CL":  // crude oil
+        return 0.01
+    case "GC":  // gold
+        return 0.10
+    default:
+        return 0.25  // safe default for indices
+    }
+}
+
+// RoundToTick rounds price to the nearest tick boundary.
+// Uses banker's rounding (round-half-to-even) to avoid bias.
+func RoundToTick(price, tick float64) float64 {
+    if tick <= 0 {
+        return price
+    }
+    return math.Round(price/tick) * tick
+}
+```
+
+- [ ] **Step 3: Wire into trader.go**
+In `OpenLong` and `OpenShort`, before constructing SignalRow:
+```go
+tick := InstrumentTickSize(t.cfg.Symbol)
+entry := RoundToTick(decision.Entry, tick)
+sl := RoundToTick(decision.StopLoss, tick)
+tp := RoundToTick(decision.TakeProfit, tick)
+```
+
+- [ ] **Step 4: Verify + commit**
+```bash
+go test ./trader/ninjatrader/...
+git commit -m "feat(nt): round entry/SL/TP to instrument tick size"
+```
+
+## Task 18: CME session calendar + RTH/ETH gating
+
+**Why:** CME Globex hours: Sun 5pm CT → Fri 4pm CT, daily break 4-5pm CT. Holiday closures exist (Christmas, New Year, etc.). Trading outside these windows = rejected orders + risk in thin liquidity.
+
+**Files:**
+- Create: `kernel/cme_calendar.go`
+- Create: `kernel/cme_calendar_test.go`
+- Modify: `kernel/engine.go` (skip decision cycle when market closed)
+
+- [ ] **Step 1: Write the calendar**
+```go
+// kernel/cme_calendar.go
+package kernel
+
+import "time"
+
+// IsCMEOpen reports whether CME Globex is open for index futures at the given time.
+// Globex hours (Chicago time):
+//   Sunday 17:00 → Friday 16:00, with a 60-minute daily break at 16:00–17:00.
+// Holidays observed: New Year, MLK Day, Presidents Day, Good Friday, Memorial Day,
+//   Juneteenth, Independence Day, Labor Day, Thanksgiving (+ day after), Christmas Eve,
+//   Christmas Day. Each may have shortened hours; for v1 we treat them as full closures
+//   and refuse to trade. Refine in Plan 3 if it becomes restrictive.
+func IsCMEOpen(t time.Time) bool {
+    chicago, _ := time.LoadLocation("America/Chicago")
+    ct := t.In(chicago)
+    if isCMEHoliday(ct) {
+        return false
+    }
+    wd := ct.Weekday()
+    hour := ct.Hour()
+    switch wd {
+    case time.Saturday:
+        return false
+    case time.Sunday:
+        return hour >= 17
+    case time.Friday:
+        return hour < 16
+    default:  // Mon-Thu
+        return hour != 16
+    }
+}
+
+// isCMEHoliday — minimal list; expand as needed.
+func isCMEHoliday(ct time.Time) bool {
+    md := ct.Format("01-02")
+    switch md {
+    case "01-01", "07-04", "12-24", "12-25", "12-31":
+        return true
+    }
+    // Thanksgiving = 4th Thursday of November
+    if ct.Month() == time.November && ct.Weekday() == time.Thursday {
+        if (ct.Day()-1)/7 == 3 {
+            return true
+        }
+    }
+    return false
+}
+```
+
+- [ ] **Step 2: Test**
+```go
+// kernel/cme_calendar_test.go
+func TestIsCMEOpen(t *testing.T) {
+    chicago, _ := time.LoadLocation("America/Chicago")
+    cases := []struct {
+        when time.Time
+        want bool
+    }{
+        {time.Date(2026, 6, 15, 10, 0, 0, 0, chicago), true},   // Mon 10am
+        {time.Date(2026, 6, 15, 16, 30, 0, 0, chicago), false}, // Mon daily break
+        {time.Date(2026, 6, 20, 12, 0, 0, 0, chicago), false},  // Saturday
+        {time.Date(2026, 7, 4, 10, 0, 0, 0, chicago), false},   // Independence Day
+    }
+    for _, tc := range cases {
+        if got := IsCMEOpen(tc.when); got != tc.want {
+            t.Errorf("IsCMEOpen(%v) = %v, want %v", tc.when, got, tc.want)
+        }
+    }
+}
+```
+
+- [ ] **Step 3: Gate engine decision cycle**
+In `kernel/engine.go` at the top of the scan loop:
+```go
+if config.Get().TradingMode == "futures" && !IsCMEOpen(time.Now()) {
+    logger.Info("CME closed, skipping decision cycle")
+    return
+}
+```
+
+- [ ] **Step 4: Commit**
+```bash
+git commit -m "feat(futures): CME session calendar + skip decisions when market closed"
+```
+
+## Task 19: Contract roll automation
+
+**Why:** NQ futures expire quarterly (March / June / Sep / Dec). NQ.c.0 is the front month; after expiry day, it auto-points to the next contract, but the AI may still be holding the old contract → liquidation. Need detection + roll plan.
+
+**Files:**
+- Create: `provider/databento/contract_calendar.go`
+- Modify: `trader/ninjatrader/trader.go` (warn near expiry)
+- Modify: `kernel/engine.go` (avoid new entries within 5 days of expiry)
+
+- [ ] **Step 1: Add expiry resolver**
+```go
+// provider/databento/contract_calendar.go
+package databento
+
+import "time"
+
+// NextExpiryFromSymbol returns the expiry date of the given CME contract code.
+// Format: "MNQM6" = MNQ June 2026. Month codes: H=Mar, M=Jun, U=Sep, Z=Dec.
+// Expiry = 3rd Friday of the contract month.
+func NextExpiryFromSymbol(symbol string) (time.Time, error) {
+    // Parse last 2 chars as month-code + last-digit-of-year
+    // ...
+}
+
+// DaysUntilExpiry returns calendar days from `now` until contract expiry.
+func DaysUntilExpiry(symbol string, now time.Time) int {
+    exp, err := NextExpiryFromSymbol(symbol)
+    if err != nil {
+        return 999
+    }
+    return int(exp.Sub(now).Hours() / 24)
+}
+```
+
+- [ ] **Step 2: Engine gating**
+In `kernel/engine.go` at decision-evaluate time:
+```go
+if config.Get().TradingMode == "futures" {
+    if days := databento.DaysUntilExpiry(symbol, time.Now()); days <= 5 {
+        logger.Warnf("contract %s expires in %d days, blocking new entries", symbol, days)
+        decision.Action = "HOLD"  // override
+    }
+}
+```
+
+- [ ] **Step 3: Commit**
+```bash
+git commit -m "feat(futures): contract roll detection + block entries near expiry"
+```
+
+## Task 20: Symbol precision + decimal-safe arithmetic
+
+**Why:** Position sizing, PnL, tick math all use float64. For NQ at 21500, 0.01-point rounding error = $5 over 100 trades. Audit and add `decimal.Decimal` only where it matters (position sizing, fill matching).
+
+**Files:**
+- Modify: `kernel/engine_position.go` (use math/big or shopspring/decimal for sizing)
+- Test: `kernel/engine_position_test.go`
+
+- [ ] **Step 1: Use existing helpers**
+Check `market/data_klines.go` for any rounding helpers; if absent, add:
+```go
+func roundDecimals(v float64, decimals int) float64 {
+    p := math.Pow(10, float64(decimals))
+    return math.Round(v*p) / p
+}
+```
+2 decimals for NQ prices; 0 decimals for contract quantities.
+
+- [ ] **Step 2: Position-size sanity test**
+```go
+func TestPositionSize_NQ(t *testing.T) {
+    // 1 NQ contract @ 21500 = $1,075,000 notional ($50/point × 21500)
+    // Account $10k, risk 1% = $100; stop 25 points = $1,250 loss/contract
+    // → Should size to 0 contracts (can't afford 1)
+}
+```
+
+- [ ] **Step 3: Commit**
+
+---
+
+# Plan 3: Risk management + kill switches
+
+> **Required for live money.** Without explicit risk limits, a runaway AI decision can blow up the account. Plan 3 adds hard limits enforced in Go (not just in the prompt).
+
+## Task 21: Daily loss limit + force-flat kill switch
+
+**Why:** AI prompt says "don't risk more than 1%" but it's a suggestion, not a guard rail. Need hard server-side enforcement.
+
+**Files:**
+- Create: `kernel/risk_limits.go`
+- Create: `kernel/risk_limits_test.go`
+- Modify: `kernel/engine.go` (pre-trade risk check + post-fill PnL check)
+- Modify: `config/config.go` (add risk limit env vars)
+
+- [ ] **Step 1: Risk-limit struct**
+```go
+// kernel/risk_limits.go
+package kernel
+
+type RiskLimits struct {
+    MaxDailyLossUSD     float64  // hard stop for the day
+    MaxConcurrentTrades int      // open position cap
+    MaxNotionalUSD      float64  // total notional cap
+    MaxContractsPerOrder int     // single-order size cap
+}
+
+func (r *RiskLimits) CheckPreTrade(ctx *Context, decision *Decision) error {
+    if ctx.Account.TotalPnL < -r.MaxDailyLossUSD {
+        return fmt.Errorf("daily loss limit hit: %.2f", ctx.Account.TotalPnL)
+    }
+    if len(ctx.Positions) >= r.MaxConcurrentTrades {
+        return fmt.Errorf("concurrent trade cap reached: %d", r.MaxConcurrentTrades)
+    }
+    notional := decision.PositionSizeUSD
+    for _, p := range ctx.Positions {
+        notional += p.NotionalUSD
+    }
+    if notional > r.MaxNotionalUSD {
+        return fmt.Errorf("notional cap exceeded: %.2f", notional)
+    }
+    return nil
+}
+```
+
+- [ ] **Step 2: Wire into engine**
+In `kernel/engine.go` after parsing the AI decision:
+```go
+limits := RiskLimits{
+    MaxDailyLossUSD:     config.Get().RiskMaxDailyLossUSD,
+    MaxConcurrentTrades: config.Get().RiskMaxConcurrentTrades,
+    MaxNotionalUSD:      config.Get().RiskMaxNotionalUSD,
+    MaxContractsPerOrder: config.Get().RiskMaxContractsPerOrder,
+}
+if err := limits.CheckPreTrade(ctx, decision); err != nil {
+    logger.Warnf("⚠️ risk limit violated: %v — forcing HOLD", err)
+    decision.Action = "HOLD"
+}
+```
+
+- [ ] **Step 3: Config env vars**
+```go
+// config/config.go
+RiskMaxDailyLossUSD     float64
+RiskMaxConcurrentTrades int
+RiskMaxNotionalUSD      float64
+RiskMaxContractsPerOrder int
+```
+Defaults: `$500`, `2`, `$50000`, `5`.
+
+- [ ] **Step 4: Force-flat API endpoint**
+Add `POST /api/risk/force-flat` that calls every active trader's `CancelAllOrders + CloseLong/CloseShort`. (For NT v1: just cancel pending signals — manual close not supported.) Surface as a red "EMERGENCY FLAT" button on TraderDashboardPage.
+
+- [ ] **Step 5: Tests + commit**
+
+## Task 22: Stale-data + drift detection
+
+**Why:** If Databento returns stale OHLCV (e.g. last bar is 10 min old), the AI is making decisions on old data. Detect and skip the cycle.
+
+**Files:**
+- Modify: `market/data.go` (timestamp check after fetch)
+- Modify: `kernel/engine.go` (abort decision on stale data)
+
+- [ ] **Step 1: Add `IsFresh` check**
+```go
+// in market/data.go
+func (k *Kline) IsFresh(maxAge time.Duration) bool {
+    return time.Since(time.UnixMilli(k.OpenTime)) <= maxAge
+}
+```
+
+- [ ] **Step 2: Engine gating**
+```go
+lastBar := data.Klines[len(data.Klines)-1]
+if !lastBar.IsFresh(2 * time.Minute) {
+    logger.Warnf("stale data for %s (last bar %v old) — skipping cycle", symbol, time.Since(time.UnixMilli(lastBar.OpenTime)))
+    return
+}
+```
+
+- [ ] **Step 3: Commit**
+
+---
+
+# Plan 4: Observability + reliability
+
+> **Required for confidence in production.** Without metrics, you don't know if the bot is healthy. Without retries, transient network blips become trade-misses.
+
+## Task 23: Structured logging + decision audit trail
+
+**Files:**
+- Modify: `kernel/engine.go` (log decision with full context to structured logger)
+- Modify: `store/decision.go` (persist decision JSON + risk-check outcome + execution status)
+- Create: `api/handler_decisions.go` (read endpoint for audit replay)
+
+- [ ] **Step 1: Decision struct expansion**
+```go
+type Decision struct {
+    ID               int64
+    TraderID         string
+    Symbol           string
+    Action           string
+    Entry, SL, TP    float64
+    Confidence       float64
+    Reasoning        string
+    PromptVersion    string  // hash of system prompt for reproducibility
+    AIModel          string
+    AILatencyMs      int64
+    RiskCheckPassed  bool
+    RiskCheckError   string
+    ExecutionStatus  string  // "queued", "filled", "rejected", "blocked"
+    FillPrice        *float64
+    FillLatencyMs    *int64
+    CreatedAt        time.Time
+}
+```
+
+- [ ] **Step 2: Persistence**
+GORM Migrate adds the new columns. Insert at decision-time + update at fill-time.
+
+- [ ] **Step 3: API + UI**
+Expose at `GET /api/decisions/audit?trader_id=xxx&since=2026-05-22`; render in TraderDashboardPage's Decisions tab.
+
+## Task 24: Retry + circuit breaker for Databento + NT bridge
+
+**Why:** Databento HTTP can return 5xx; NT CSV write can fail with EBUSY on Windows file lock contention. Need bounded retry with backoff, plus circuit breaker that pauses the trader after N consecutive failures.
+
+**Files:**
+- Create: `mcp/retry.go` (generic retry-with-backoff)
+- Modify: `provider/databento/client.go` (use retry on doRequest)
+- Modify: `provider/ninjatrader/csv_writer.go` (retry on rename collision)
+
+- [ ] **Step 1: Retry helper**
+```go
+func RetryWithBackoff(ctx context.Context, maxAttempts int, fn func() error) error {
+    delay := 200 * time.Millisecond
+    for attempt := 0; attempt < maxAttempts; attempt++ {
+        if err := fn(); err == nil {
+            return nil
+        }
+        select {
+        case <-ctx.Done():
+            return ctx.Err()
+        case <-time.After(delay):
+        }
+        delay *= 2
+        if delay > 5*time.Second {
+            delay = 5 * time.Second
+        }
+    }
+    return fmt.Errorf("max retries exceeded")
+}
+```
+
+- [ ] **Step 2: Circuit breaker**
+```go
+type CircuitBreaker struct {
+    failureThreshold int
+    cooldown         time.Duration
+    failures         int
+    openedAt         time.Time
+    mu               sync.Mutex
+}
+func (cb *CircuitBreaker) Allow() bool { /* ... */ }
+func (cb *CircuitBreaker) RecordFailure() { /* ... */ }
+func (cb *CircuitBreaker) RecordSuccess() { cb.failures = 0 }
+```
+
+- [ ] **Step 3: Wire into trader loop**
+After N=5 consecutive failures, pause the trader for 5 minutes and log to decision audit trail.
+
+## Task 25: Prometheus metrics endpoint
+
+**Why:** CTO ask. Without numbers you don't know what's happening.
+
+**Files:**
+- Modify: `main.go` (add /metrics route)
+- Create: `telemetry/metrics.go` (counter + histogram definitions)
+
+- [ ] **Step 1: Define metrics**
+```go
+// telemetry/metrics.go
+var (
+    DecisionsTotal = prometheus.NewCounterVec(
+        prometheus.CounterOpts{Name: "nofx_decisions_total"},
+        []string{"trader_id", "action", "status"},
+    )
+    DecisionLatency = prometheus.NewHistogramVec(
+        prometheus.HistogramOpts{Name: "nofx_decision_latency_seconds"},
+        []string{"trader_id"},
+    )
+    FillLatency = prometheus.NewHistogramVec(
+        prometheus.HistogramOpts{Name: "nofx_fill_latency_seconds"},
+        []string{"exchange"},
+    )
+    DatabentoErrorsTotal = prometheus.NewCounter(
+        prometheus.CounterOpts{Name: "nofx_databento_errors_total"},
+    )
+)
+```
+
+- [ ] **Step 2: Expose /metrics**
+```go
+http.Handle("/metrics", promhttp.Handler())
+```
+
+- [ ] **Step 3: Instrument decision path**
+Add `DecisionLatency.WithLabelValues(traderID).Observe(elapsed.Seconds())` in `engine.go`.
+
+---
+
+# Plan 5: Testing matrix
+
+> **Required for CI confidence.** Without integration tests, every code change is a coin flip.
+
+## Task 26: Databento mock server
+
+**Files:**
+- Create: `provider/databento/mock_server.go` (httptest-based)
+- Modify: `provider/databento/historical_test.go` (use mock)
+
+- [ ] **Step 1: Mock OHLCV server**
+```go
+// provider/databento/mock_server.go
+func NewMockServer(t *testing.T, fixture string) *httptest.Server {
+    return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        if r.URL.Path == "/v0/timeseries.get_range" {
+            http.ServeFile(w, r, fixture)
+            return
+        }
+        if r.URL.Path == "/v0/symbology.resolve" {
+            // ...
+        }
+    }))
+}
+```
+Fixture: `provider/databento/fixtures/nq-ohlcv-1m.json` with 100 sample bars.
+
+- [ ] **Step 2: Update tests to use mock**
+
+## Task 27: NinjaTrader CSV bridge mock harness
+
+**Files:**
+- Create: `provider/ninjatrader/mock_nt.go` (goroutine that simulates NT polling + writing fills)
+- Create: `trader/ninjatrader/integration_test.go` (full Go → CSV → mock NT → CSV → tailer round-trip)
+
+- [ ] **Step 1: Mock NT loop**
+```go
+// Reads trade_signals.csv every 100ms (faster than real 2s for tests),
+// writes a synthetic fill to trades_taken.csv after 200ms.
+func StartMockNT(dataDir string, fillDelay time.Duration) (stop func())
+```
+
+- [ ] **Step 2: Round-trip test**
+```go
+func TestTrader_OpenLong_RoundTrip(t *testing.T) {
+    dir := t.TempDir()
+    stop := StartMockNT(dir, 200*time.Millisecond)
+    defer stop()
+
+    tr := New(Config{DataDir: dir, Symbol: "MNQ"})
+    err := tr.OpenLong("MNQ", 21500, 21450, 21550)
+    require.NoError(t, err)
+
+    // Wait for fill...
+    fill := waitForFill(t, dir, 2*time.Second)
+    require.Equal(t, "LONG", fill.Direction)
+}
+```
+
+## Task 28: AI prompt golden tests
+
+**Why:** Changing the prompt template can silently break decision quality. Pin the prompt structure with snapshot tests.
+
+**Files:**
+- Create: `kernel/engine_prompt_golden_test.go`
+- Create: `kernel/testdata/golden/futures_aggressive.txt`
+
+- [ ] **Step 1: Snapshot test**
+```go
+func TestBuildFuturesSystemPrompt_Golden(t *testing.T) {
+    got := BuildFuturesSystemPrompt(10000)
+    want := readGoldenFile(t, "futures_aggressive.txt")
+    if got != want {
+        t.Fatalf("prompt changed.\nDiff:\n%s", diff(got, want))
+    }
+}
+```
+Update via `go test -update`.
+
+## Task 29: End-to-end smoke matrix
+
+Extend `cmd/nq_smoke/main.go` with sub-commands:
+- `nq_smoke databento` — fetch OHLCV, verify shape
+- `nq_smoke resolver` — resolve NQ.c.0 → MNQM6
+- `nq_smoke prompt` — build system prompt, check non-empty
+- `nq_smoke roundtrip` — full write→mockNT→tailer cycle
+- `nq_smoke all` — runs everything
+
+---
+
+# Plan 6: Operational runbook
+
+> **CTO/SRE-style ops doc.** Not code — but every production system needs these procedures.
+
+## Task 30: Document startup procedure
+
+**File:** Create `docs/operations/STARTUP.md`
+
+Sections to include:
+1. **Pre-flight checks** — env vars set (JWT_SECRET, DATABENTO_API_KEY, NINJATRADER_DATA_DIR), NT8 running on Windows, ClaudeTrader strategy attached to MNQ chart, WSL2 mirrored networking enabled.
+2. **Cold start** — `./nofx-bin > /tmp/nofx.log 2>&1 &` — verify port 8080 listens, log shows "✅ System started successfully".
+3. **Verify trader loads** — `curl localhost:8080/api/traders` returns the configured NT trader. Log shows `📦 Loading trader X (AI Model: deepseek, Exchange: ninjatrader/...)`.
+4. **First-trade smoke** — manual decision via `cmd/nq_smoke/main.go all`, watch for fill appearing in `trades_taken.csv` and in DB `decisions` table.
+5. **Shutdown** — `pkill -TERM -f nofx-bin`; verify no hung file handles via `lsof | grep NofxTrader`.
+
+## Task 31: Document rollback procedure
+
+**File:** Create `docs/operations/ROLLBACK.md`
+
+1. **Code rollback** — `git checkout <previous-good-commit> -- .`; `go build -o nofx-bin .`; restart.
+2. **Schema rollback** — GORM auto-migrate is additive; for column removal, use a migration file under `store/migrations/`. Always snapshot `data/data.db` to `data/data.db.bak.<timestamp>` before code deploy.
+3. **NT script rollback** — restore prior `claudetrader.cs` from git; rebuild in NT (`F5`).
+4. **Risk wipe** — if rollback follows an unexpected loss, run force-flat (`curl -X POST localhost:8080/api/risk/force-flat -H "Authorization: Bearer $TOKEN"`) before any new trades.
+
+## Task 32: Document monitoring + alerting
+
+**File:** Create `docs/operations/MONITORING.md`
+
+Key dashboards (Grafana / similar):
+- **Decision rate** — `rate(nofx_decisions_total[5m])` — should be ~1/scan_interval
+- **Fill latency** — `histogram_quantile(0.95, nofx_fill_latency_seconds)` — alert if > 30s
+- **Databento errors** — `rate(nofx_databento_errors_total[10m])` — alert if > 0.1/sec
+- **Daily PnL** — read from DB; alert if < -$500 (matches `RiskMaxDailyLossUSD`)
+- **CME session health** — alert at 16:00 CT if a trade attempt was logged during the break
+
+Manual checks (no alerting infra yet):
+- `tail -f /tmp/nofx.log | grep -E "ERROR|WARN"`
+- `curl localhost:8080/api/risk/status` — exposes current PnL + position count vs limits
+
+## Task 33: Document disaster recovery
+
+**File:** Create `docs/operations/DR.md`
+
+1. **DB corruption** — restore from latest `.bak`; replay missing decisions via NT trades_taken.csv backfill (read fills, reconstruct decisions).
+2. **NT8 crash mid-trade** — `claudetrader.cs` tracks active position internally; restart resumes from current position. **Risk:** if SL/TP weren't acked to broker, they're lost. Mitigation: after every NT restart, manually verify SL/TP are placed via the NT Orders window.
+3. **Databento outage** — fall back to last-known OHLCV cached in DB; engine refuses new entries on stale data per Task 22.
+4. **WSL2 reboot** — confirm `wsl --version` shows mirrored mode; reconfirm `/mnt/c/` is writable from Linux side.
+5. **Lost JWT secret** — invalidate all sessions (clear `users.last_session_token`); users must re-login.
+
+## Task 34: Document trader-mode runbook
+
+**File:** Create `docs/operations/TRADER_MODE.md`
+
+For the user (not engineers):
+- How to switch from SIM to live (NT8 simulation account → real account; re-login required)
+- Daily checklist before market open: NT8 connected? ClaudeTrader strategy enabled? Bot logs healthy?
+- Weekly checklist: contract roll calendar (3rd Friday); review decision audit trail; rotate API keys.
+- Emergency: how to hit force-flat from the dashboard.
+
+---
+
+# Plan 7: Documentation + ADRs
+
+## Task 35: Architecture Decision Records
+
+Create `docs/adr/` with one file per significant decision:
+- `001-csv-bridge-vs-tcp.md` — why CSV first, TCP later (Plan 1.5)
+- `002-databento-vs-alternatives.md` — why Databento over Polygon/IB Trader Workstation/CQG
+- `003-nt8-vs-tradovate.md` — why we picked NT8 (user has license, NinjaScript open-source bridges exist)
+- `004-decision-json-shape.md` — locking the action/symbol/entry/stop_loss/take_profit/reasoning shape across crypto + futures
+- `005-tick-rounding-strategy.md` — banker's rounding, not floor/ceil, to avoid bias
+
+Each ADR follows the format: **Status / Context / Decision / Consequences**.
+
+## Task 36: API reference
+
+`docs/api/README.md` — list every HTTP endpoint with request/response example. Generate from `api/server.go` route table if practical; otherwise write manually.
+
+## Task 37: Onboarding doc
+
+`docs/getting-started/NEW_DEV.md` — for someone joining the project:
+- Repo layout map
+- Run locally (`go build`, `cd web && npm run dev`)
+- How to add a new exchange (link to `trader/CLAUDE.md`)
+- How to add a new AI provider (link to `provider/CLAUDE.md`)
+- Plan reading order: Plan 1 → 1.5 → 2 → 3 → 4 → 5 → 6 → 7
+
+---
+
+# Completion checklist (definitive)
+
+| Plan | Status | Blocker for live? |
+|---|---|---|
+| Plan 1 (CSV bridge SIM) | ✅ Shipped | — |
+| Plan 1.5 (NT8 AddOn TCP) | 📋 Documented | No (CSV works for SIM) |
+| Plan 2 (CME domain) | 📋 Documented | **YES** — tick rounding + sessions + rolls |
+| Plan 3 (Risk + kill switch) | 📋 Documented | **YES** — no live without hard limits |
+| Plan 4 (Observability) | 📋 Documented | Recommended |
+| Plan 5 (Testing matrix) | 📋 Documented | Recommended |
+| Plan 6 (Operational runbook) | 📋 Documented | **YES** — for any non-dev operator |
+| Plan 7 (Docs + ADRs) | 📋 Documented | No |
+
+**Order of execution after Plan 1 cleanup (Tasks 12-16):**
+1. Plan 2 (Tasks 17-20) — gate live with tick/session/roll/decimal correctness
+2. Plan 3 (Tasks 21-22) — kill switches before any real money
+3. Plan 4 (Tasks 23-25) — observability so you can SEE the bot
+4. Plan 5 (Tasks 26-29) — CI confidence before iterating
+5. Plan 6 (Tasks 30-34) — runbook for ops handoff
+6. Plan 7 (Tasks 35-37) — write while context is fresh
+
+After all of these: **the bot is ready for paper-live → real-live trading with reasonable safeguards.** Without Plan 2 + 3, do NOT trade real money.
