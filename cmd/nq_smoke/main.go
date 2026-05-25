@@ -38,7 +38,11 @@ func main() {
 
 	// 1. Fetch NQ bars
 	db := databento.NewClient("", dbKey)
-	end := time.Now().UTC()
+	const (
+		databentoEmbargo   = 15 * time.Minute // GLBX.MDP3 publication delay
+		databentoSafetyBuf = 2 * time.Minute  // clock skew + variance margin
+	)
+	end := time.Now().UTC().Add(-(databentoEmbargo + databentoSafetyBuf))
 	start := end.Add(-30 * time.Minute)
 	bars, err := db.GetOHLCV("NQ.c.0", "1m", start, end)
 	if err != nil {
