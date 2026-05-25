@@ -50,8 +50,13 @@ func main() {
 		//
 		// Production Plan 1.5 will use real-time embargo (15min + 2min
 		// safety). See Plan 1.5 Cold Start Sequence spec (commit e15c1dc0).
-		smokeLookbackEnd   = 96 * time.Hour
-		smokeLookbackRange = 30 * time.Minute
+		smokeLookbackEnd = 96 * time.Hour
+
+		// 90 minutes window: gives 90 bars at 1m granularity.
+		// EMA50 (longest indicator) needs 50 bars minimum. 90 provides
+		// 40-bar headroom for session-boundary gaps and any sparse
+		// OHLCV records during low-liquidity periods.
+		smokeLookbackRange = 90 * time.Minute
 	)
 	end := time.Now().UTC().Add(-smokeLookbackEnd)
 	start := end.Add(-smokeLookbackRange)
