@@ -39,11 +39,18 @@ func main() {
 	// 1. Fetch NQ bars
 	db := databento.NewClient("", dbKey)
 	const (
-		databentoEmbargo   = 15 * time.Minute // GLBX.MDP3 publication delay
-		databentoSafetyBuf = 2 * time.Minute  // clock skew + variance margin
+		// SMOKE TEST CONFIG — uses 24h lookback to accommodate Databento
+		// Historical tier WITHOUT real-time entitlement. Yesterday's data
+		// is guaranteed available regardless of tier, session, or holiday.
+		//
+		// Production Plan 1.5 will use the documented 15-min embargo when
+		// upgraded to real-time-with-embargo tier. See Plan 1.5 Cold Start
+		// Sequence spec (commit e15c1dc0) for the canonical numbers.
+		smokeLookbackEnd   = 24 * time.Hour
+		smokeLookbackRange = 30 * time.Minute
 	)
-	end := time.Now().UTC().Add(-(databentoEmbargo + databentoSafetyBuf))
-	start := end.Add(-30 * time.Minute)
+	end := time.Now().UTC().Add(-smokeLookbackEnd)
+	start := end.Add(-smokeLookbackRange)
 	bars, err := db.GetOHLCV("NQ.c.0", "1m", start, end)
 	if err != nil {
 		log.Fatalf("databento: %v", err)
