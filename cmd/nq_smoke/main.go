@@ -39,14 +39,18 @@ func main() {
 	// 1. Fetch NQ bars
 	db := databento.NewClient("", dbKey)
 	const (
-		// SMOKE TEST CONFIG — uses 24h lookback to accommodate Databento
-		// Historical tier WITHOUT real-time entitlement. Yesterday's data
-		// is guaranteed available regardless of tier, session, or holiday.
+		// SMOKE TEST CONFIG — uses 96h (4-day) lookback to accommodate:
+		//   1. Databento Historical tier ~3h availability lag
+		//   2. CME weekend gap (Fri 16:00 CT → Sun 17:00 CT, ~49h)
+		//   3. Single-day holiday extensions (~73h)
+		//   4. Standard 3-day market holidays (Memorial Day, MLK, etc., ~97h)
 		//
-		// Production Plan 1.5 will use the documented 15-min embargo when
-		// upgraded to real-time-with-embargo tier. See Plan 1.5 Cold Start
-		// Sequence spec (commit e15c1dc0) for the canonical numbers.
-		smokeLookbackEnd   = 24 * time.Hour
+		// Does NOT cover 5+ day exchange closures (year-end Christmas).
+		// Defer smoke test during those rare periods.
+		//
+		// Production Plan 1.5 will use real-time embargo (15min + 2min
+		// safety). See Plan 1.5 Cold Start Sequence spec (commit e15c1dc0).
+		smokeLookbackEnd   = 96 * time.Hour
 		smokeLookbackRange = 30 * time.Minute
 	)
 	end := time.Now().UTC().Add(-smokeLookbackEnd)
@@ -56,7 +60,9 @@ func main() {
 		log.Fatalf("databento: %v", err)
 	}
 	if len(bars) < 50 {
-		log.Fatalf("got %d bars; need at least 50 for indicators", len(bars))
+		log.Printf("got %d bars (need 50); window=[%s, %s]",
+			len(bars), start.Format(time.RFC3339), end.Format(time.RFC3339))
+		os.Exit(1)
 	}
 	fmt.Printf("✓ Fetched %d 1m NQ bars\n", len(bars))
 
