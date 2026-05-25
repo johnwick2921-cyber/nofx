@@ -3422,6 +3422,496 @@ blockers):
   and run it on every PR that touches the timestamp normalization
   path.
 
+## Plan 1.5 — Merge Logic State Machine (Research Summary 2026-05-25)
+
+This subsection specifies how NT live bars and Databento Historical
+bars combine into a single canonical 1-minute time series keyed by
+bar_open_utc. It complements the design findings above, which
+established the architecture and protocols. This section establishes
+the LIFECYCLE — what happens at boot, during normal operation, on
+disconnects, and at end-of-day.
+
+### Three Rules That Dominate
+
+1. NT wins every conflict. Discrepancies are logged (info / warn /
+   error tiered by tick distance), never auto-resolved against NT.
+   NT is the execution venue truth.
+
+2. Time, not source, is the join key. All bars are keyed on
+   bar_open_utc (second precision UTC). NT stamps bars at CLOSE
+   per NT8 help guide, so Go reader must subtract 60s to obtain
+   canonical open. Databento ohlcv-1m is timestamped at OPEN per
+   NautilusTrader Databento integration docs.
+
+3. Databento is structurally lagged by ~15 minutes. Databento's
+   roadmap explicitly states intraday GLBX.MDP3 via Historical API
+   has 15-min embargo without real-time entitlement. Databento can
+   never close the gap to "now" — only to "now − 15 min."
+
+### Cold Start Sequence
+
+WARMUP WINDOW: 7-10 RTH sessions for indicators up to EMA(200) on 15m.
+Matches backtrader's _minperiod convention and QuantConnect Lean's
+SetWarmUp pattern. NautilusTrader uses the same historical-prefetch-
+then-subscribe pattern (PR #3825).
+
+BOUNDARY CALCULATION:
+- databento_warmup_end = T0 - 15min - 2min safety = T0 - 17min
+- nt_handoff_start = first NT bar with bar_close_utc >= T0
+- overlap_window = [databento_warmup_end, nt_handoff_start] =
+  15-17min hole BY CONSTRUCTION
+
+SEQUENCE (sequential, not parallel):
+1. Block on Databento timeseries.get_range for warmup window
+   ending at T0 - 17min
+2. Feed bars through indicator pipeline with is_warmup=true
+3. Start consuming NT CSV tail
+4. Mark system "live-ready" only when nt_handoff_start observed
+
+FALLBACK on short Databento response:
+- Missing bars inside active session: log warn, proceed if
+  missing_pct <= 5%; abort if > 5%
+- Missing bars during 16:00-17:00 CT halt or weekend: expected,
+  no log
+
+### Overlap Zone at Cold Start
+
+DECISION: Accept the gap explicitly. Do NOT block waiting for
+Databento to catch up (wastes 15 min of signal time). Do NOT
+forward-fill (pollutes indicators with synthetic data).
+
+PATTERN:
+- Warm indicators on [T0 - warmup, T0 - 17min)
+- Mark [T0 - 17min, T0) as state=GAP
+- Start consuming NT at T0
+- Schedule backfill from Databento for the gap at T0 + 17min
+
+RISK: indicators path-dependent over the missing window (cumulative
+VWAP anchored at session open, opening-range breakouts) must check
+state != GAP before firing. Path-independent indicators (EMAs warmed
+from earlier data) are safe.
+
+Expose WarmupComplete boolean analogous to Lean's IsWarmingUp.
+Strategy code is responsible for gating on it.
+
+### Warm Restart Mid-Session
+
+SCENARIO: Go process died 14:32, restarts 14:35. Local Parquet has
+bars up to 14:30. Databento has bars up to 14:20. NT has been
+emitting throughout (NT didn't die — only Go did).
+
+RECOVERY HIERARCHY (fastest first):
+1. Local Parquet replay for [boot - warmup, 14:30] — no network,
+   indicators rehydrate in milliseconds
+2. NT live tail consumed from 14:35 onward. NT may have written
+   bars [14:30, 14:35] to CSV during the Go outage. VERIFY-11
+   below.
+3. Databento backfill for any remaining hole [14:30, 14:35] is
+   partially available (Databento has through 14:20, won't have
+   14:30 until ~14:45). Mark these state=PENDING_BACKFILL.
+
+REFERENCE: NautilusTrader v1.225.0 (PR #3733) — "Fixed Interactive
+Brokers historical bar subscriptions not restored after daily
+gateway restart" — confirms automatic re-request of historical bars
+on reconnect is production-grade pattern.
+
+GO LOGIC ON BOOT:
+- Read last_local_bar_open_utc from Parquet
+- Issue ONE bounded Databento request for (last_local, T0 - 15min)
+- Tail NT CSV from saved offset
+- Backfill scheduler handles PENDING_BACKFILL bars at T+17min
+
+### NT Disconnect / Reconnect During Session
+
+SCENARIO: NT loses CQG/Rithmic price feed at 11:42, reconnects at
+11:47. During gap NT emits NOTHING to CSV. Per NT staff: "Keep
+running will not recalculate the historical data that has passed
+so it would just keep running once the connection resumes."
+
+DETECTION (defense in depth, three signals):
+
+Signal 1: Time-since-last-bar
+- Watchdog timer on canonical stream
+- > 90s during session: suspect
+- > 180s: confirmed disconnect
+
+Signal 2: Heartbeat file
+- NinjaScript writes UTC timestamp to heartbeat.txt every 5s
+- Go reads heartbeat
+- Stale > 30s: degraded
+
+Signal 3: Connection probe
+- NinjaScript writes line on OnConnectionStatusUpdate(ConnectionLost)
+- And again on .Connected
+- Definitive signal
+
+Any TWO of three confirm NT outage.
+
+FALLBACK DURING NT GAP:
+- Stay on canonical stream, switch source-of-truth flag to DEGRADED
+- Do NOT write Databento bars into canonical stream during gap
+  (Databento is 15 min behind, gap [11:42, 11:47] won't exist on
+  Databento until ~12:02)
+- Mark [last_nt_bar, NT_reconnect_bar) as state=NT_GAP
+- At NT_reconnect_bar + 17min, scheduled backfill pulls Databento
+  [11:42, 11:47] and writes with source="databento_historical",
+  provisional=true
+
+TRANSITION HANDLING:
+- When OnConnectionStatusUpdate -> Connected fires, do NOT call
+  ReloadAllHistoricalData() from running strategy. NT help guide
+  warns: "This method should NOT be called from any of the event
+  methods which access data."
+- For data-emitting NinjaScript, set ConnectionLossHandling =
+  KeepRunning rather than default Recalculate (default would
+  re-fire OnBarUpdate on backfilled bars, risking duplicates)
+- If NT bars arrive later for the gap window, they overwrite
+  Databento provisional bars per the NT-wins rule, discrepancy
+  logged
+
+### Discrepancy Detection and Logging
+
+Once Databento catches up (T+17min for any bar), every NT bar
+acquires a Databento counterpart for comparison.
+
+AGGRESSIVENESS: Compare every bar as it becomes comparable. One
+hash-map lookup per bar, cheap. Sampling only at EOD throws away
+timing information that makes feed-quality bugs diagnosable.
+
+TOLERANCE LADDER (NQ tick = 0.25, MNQ tick = 0.25):
+
+OHLC fields:
+- Exact match: no log
+- Off by <= 1 tick (0.25): info
+- Off by 2 ticks (0.50): warn
+- Off by > 2 ticks: error
+
+Volume:
+- Ratio in [0.95, 1.05]: info, normal
+- Ratio in [0.80, 0.95) or (1.05, 1.20]: warn, known-class divergence
+- Ratio outside [0.80, 1.20]: error, investigate
+
+Volume divergence between CQG/Rithmic and Databento is EXPECTED,
+not an error condition by itself. Different aggregation, different
+message coalescing.
+
+LOG FORMAT (greppable single-line JSON):
+{"ts":"2026-05-25T14:31:00Z","evt":"bar_discrepancy","sym":"NQM6",
+ "bar_open_utc":"2026-05-25T14:30:00Z","field":"close",
+ "nt":21450.25,"db":21450.50,"ticks_off":1,"vol_nt":1842,
+ "vol_db":1851,"level":"info"}
+
+Naming supports triage:
+grep evt=bar_discrepancy | jq 'select(.level=="error")'
+
+No alerts, no auto-pause (per task constraints).
+
+### End-of-Day Reconciliation
+
+At 16:00 CT (start of daily halt), NT has emitted full session.
+At ~16:45 CT Databento has caught up. Reconciliation job runs
+at 17:15 CT (17:00 reopen + 15-min buffer).
+
+SEQUENCE:
+1. Read NT bars for session from canonical Parquet
+2. Read Databento bars for same session via one
+   timeseries.get_range call
+3. Bar-set diff:
+   - In Databento but NOT in NT: nt_missing — real holes in
+     execution-venue data. Write with source=databento_historical,
+     provisional=true. Log warn. THIS catches "NT silently missed
+     bars" — without this step canonical stream gets quietly
+     shorter than the day.
+   - In NT but NOT in Databento: db_missing. Extremely rare.
+     Log info, trust NT.
+   - In both: run tolerance ladder
+4. Rewrite vs append: do NOT rewrite NT bars even if Databento
+   disagrees (NT-wins rule). EOD writes limited to:
+   - INSERT of nt_missing bars (with source tag and provisional)
+   - UPDATE of db_close, db_volume, db_match_status audit columns
+     on existing rows (NOT canonical OHLCV)
+
+SCHEDULING:
+- Automatic at 17:15 CT, with 30-min retry window if Databento
+  fails
+- Manual --reconcile-day YYYY-MM-DD CLI flag for ad-hoc replay
+
+### Source Tagging
+
+Single source string column per bar. Three values cover universe:
+- nt_live: bar consumed from NT CSV in real time
+- nt_replay: bar read from NT CSV after Go-process restart (NT
+  was running, Go was not)
+- databento_historical: bar fetched via Databento Historical API
+  (warmup, gap fill, EOD insert)
+
+Separate provisional boolean column marks bars that may be
+overwritten later. Currently only databento_historical bars
+filling NT gaps are provisional.
+
+### Parquet Layout
+
+DECISION: One file per symbol per day, all sources merged, source
+as a column.
+
+Pattern:
+data/bars_1m/symbol=NQM6/date=2026-05-25/part-0.parquet
+
+RATIONALE:
+- Queries are overwhelmingly time-range scans on one symbol
+- Splitting by source doubles file count, complicates "give me
+  canonical series" read path, works against Parquet's columnar
+  compression on bar_open_utc
+- Modexa's Parquet partition design analysis: "Date-only
+  partitioning when 90% of analytics filter by a time range" —
+  this workload exactly
+- Target file size 1-10 MB. 1440 bars/day × ~80 bytes = ~110 KB
+  raw, ~30-50 KB compressed. Well below standard 128-512 MB
+  row-group recommendation but acceptable at this volume.
+
+### Gap Detection
+
+Run periodic contiguous-sweep every 60s during session hours:
+
+expected = expected_minute_stream(session_start, now - 1min)
+for t in expected:
+    if t not in local_index:
+        gaps.append(t)
+if gaps and now - max(gaps) > 120s:
+    trigger_backfill(gaps)
+
+expected_minute_stream MUST respect:
+- 16:00-17:00 CT daily halt
+- Friday 16:00 CT to Sunday 17:00 CT weekend gap
+- CME holiday calendar
+
+Without these the detector fires every halt minute. Pre-compute
+session-minute calendar weekly from CME calendar.
+
+### On-Demand Backfill
+
+Databento timeseries.get_range is RANGE-ONLY. No single-bar
+endpoint. Coalesce gap-fill requests to ranges with at most
+5-min separation; minimizes HTTP overhead.
+
+Canonical shape from Databento Python client (Go equivalent):
+client.timeseries.get_range(
+    dataset='GLBX.MDP3', symbols='NQ.c.0', schema='ohlcv-1m',
+    stype_in='continuous', start='...', end='...'
+)
+
+Use stype_in='continuous' with NQ.c.0 / MNQ.c.0 to avoid rollover
+bookkeeping inside Go process.
+
+### Clock Skew (Windows Host)
+
+W32Time service sufficient for this use case but MUST be
+configured. Per Microsoft Learn "High Accuracy W32time Requirements":
+W32time was created for "computers to be equal to or less than
+five minutes (which is configurable) of each other for
+authentication purposes." Five-minute skew is CATASTROPHIC for
+bar joining.
+
+CONFIGURATION on Windows host (where NT8 runs):
+Command form from Microsoft Learn "Windows Time Service Tools
+and Settings":
+w32tm /config /manualpeerlist:"pool.ntp.org,0x8"
+       /syncfromflags:manual /update
+
+The 0x8 flag is SpecialInterval / client-mode association —
+enables tighter polling.
+
+WSL2 inherits Windows host clock by default. Verify with date -u
+on both sides at startup.
+
+TARGET SKEW: < 250 ms
+- Anything above 1s means stale bar_open_utc lands in wrong
+  minute bucket
+- Startup check in Go: abort if
+  |wsl_clock - windows_clock| > 250ms
+
+### Session Boundary Merge Behavior
+
+DAILY HALT 16:00-17:00 CT Mon-Thu:
+Pre-compute expected minute set per session day:
+session_minutes(day) = minutes(17:00CT day-1, 16:00CT day)
+                       - holidays
+
+Gap detector and EOD reconciler both consume this calendar.
+
+WEEKEND Friday 16:00 CT → Sunday 17:00 CT:
+- Treat as 49-hour expected gap
+- Sunday 17:00 CT bar is first new bar of next trading week
+- Tag with session_first_bar=true audit column
+- Cold start on Sunday afternoon should fetch warmup window
+  crossing weekend cleanly — Databento returns no bars during
+  closed hours, contiguous-sweep detector must skip them
+
+### Decision Matrix (Merge Logic)
+
+State / NT available / Databento current / Action / Canonical source:
+
+WARMUP / not yet / yes (delayed) / pull Databento [T0-7d, T0-17min]
+/ databento_historical
+
+OVERLAP_HOLE / not yet / no (inside 15-min embargo) / mark gap, wait
+/ none
+
+LIVE / yes / yes (for past bars) / consume NT CSV, compare against
+Databento at T+17min / nt_live
+
+NT_GAP / no (disconnect) / catches up at T+17min / mark gap,
+backfill from Databento later / databento_historical (provisional)
+
+NT_RECONNECT / yes / yes / resume NT, NT backfill (if any)
+overwrites provisional Databento / nt_live (overwrites)
+
+EOD_RECONCILE / session closed / full day available / diff sets,
+insert nt_missing bars, log discrepancies / databento_historical
+for missing only
+
+WEEKEND / no (closed) / no new data / idle, no writes / none
+
+### State Machine
+
+States: BOOT -> WARMUP -> LIVE <-> NT_GAP, LIVE -> EOD_RECONCILE
+-> WEEKEND -> BOOT
+
+BOOT:
+- load last_local_bar_open_utc from Parquet
+- if last_local within current session: LIVE_RESUME
+- else: WARMUP
+
+WARMUP:
+- request Databento [now - warmup_window, now - 17min]
+- feed indicators in monotonic order with is_warmup=true
+- on completion: emit WarmupComplete event -> LIVE
+
+LIVE:
+- consume NT CSV tail
+- on each new NT bar: write canonical with source=nt_live
+- every 60s: run gap_detector
+- every bar+17min: run discrepancy_check against Databento
+- on heartbeat_stale OR connection_lost: -> NT_GAP
+- at 16:00 CT Mon-Thu or Fri close: -> EOD_RECONCILE
+
+NT_GAP:
+- log warn evt=nt_gap_open
+- scheduled job at gap_start + 17min: fetch Databento
+  [gap_start, min(now - 17min, gap_end)]
+- write with source=databento_historical, provisional=true
+- on heartbeat_recovered AND new NT bar arrives: -> LIVE
+- on NT bar inside [gap_start, gap_end] (later): overwrite
+  provisional bar, log info
+
+EOD_RECONCILE:
+- wait until 17:15 CT
+- fetch Databento for full session
+- set_diff against NT bars
+- insert nt_missing bars (provisional=true)
+- run tolerance ladder for each comparable bar
+- -> WEEKEND (Fri) or sleep until 17:00 CT next day
+
+WEEKEND:
+- on Sunday 16:50 CT: -> WARMUP (short, just to seed indicators
+  if state was lost)
+
+### Implementation Checklist (Merge Logic)
+
+1. Normalize NT timestamp on ingest: subtract 60s from NT CSV row
+   to produce bar_open_utc. Unit-test against known fixture.
+
+2. Confirm Databento OHLCV-1m timestamp convention via one live
+   Historical request. Assert ts_event corresponds to bar-open.
+   See [VERIFY-12].
+
+3. Implement source tagging as Parquet column, not directory.
+
+4. Implement three-signal disconnect detector (time-since-last-bar,
+   heartbeat file, optional explicit connection-status line in
+   NT CSV).
+
+5. Set ConnectionLossHandling = KeepRunning in any data-emitting
+   NinjaScript to avoid default Recalculate re-firing OnBarUpdate.
+
+6. Schedule EOD reconciliation at 17:15 CT with 30-min retry
+   window if Databento fails.
+
+7. Pre-compute session-minute calendar for next 30 days, refresh
+   weekly from CME holiday calendar.
+
+8. Configure W32Time on Windows host with 0x8 interval flag.
+   Verify w32tm /query /status reports stratum <= 3 before market
+   open daily. Add startup check in Go process that aborts if
+   |wsl_clock - windows_clock| > 250ms.
+
+9. Define JSON log schema for bar_discrepancy. Rotate daily.
+
+10. Build --reconcile-day CLI for manual EOD replay.
+
+11. Test cold start across the 16:00-17:00 CT halt — warmup window
+    will straddle the halt, gap detector must NOT fire on the
+    missing 60 minutes.
+
+### Additional Verification Items
+
+[VERIFY-11] NT CSV behavior when NT is up but Go reader is down
+for 5 min. Are bars present, or backfilled by NT into CSV
+automatically? Determines whether warm restart can rely on
+NT-side persistence.
+
+[VERIFY-12] Databento OHLCV-1m timestamp convention. Make one
+live Historical request, inspect ts_event vs bar boundaries,
+confirm it's bar-OPEN (not close). NautilusTrader's adapter
+normalizes to close internally — the raw Databento API does not.
+
+[VERIFY-13] Databento behavior during 16:00-17:00 CT daily halt.
+Does it emit bars with volume=0, or no rows? Code the gap
+detector accordingly.
+
+[VERIFY-14] NT CSV behavior on true CQG/Rithmic disconnect
+lasting > 60s. Does NT Historical Data Server backfill into CSV
+automatically, or only after ReloadAllHistoricalData() called?
+
+[VERIFY-15] Clock skew between Windows host and WSL2 at startup.
+Measure |wsl_clock - windows_clock| over 1 hour. Should be
+< 250ms.
+
+### Sources (Merge Logic)
+
+NT8 ConnectionLossHandling:
+https://ninjatrader.com/support/helpGuides/nt8/connectionlosshandling.htm
+
+NT8 OnConnectionStatusUpdate:
+https://ninjatrader.com/support/helpguides/nt8/onconnectionstatusupdate.htm
+
+NT8 ReloadAllHistoricalData:
+https://ninjatrader.com/support/helpguides/nt8/reloadallhistoricaldata.htm
+
+NautilusTrader Databento integration:
+https://nautilustrader.io/docs/latest/integrations/databento/
+
+Databento 15-min historical embargo:
+https://roadmap.databento.com/b/n0o5prm6/feature-ideas/release-historical-data-as-soon-as-possible-based-on-licensing-requirements-including-intraday
+
+QuantConnect warmup documentation:
+https://www.quantconnect.com/forum/discussion/4646/what-is-the-purpose-of-a-warmup-period-and-how-do-i-find-out-how-long-it-should-be/
+
+CME equity futures trading hours:
+https://www.cmegroup.com/education/files/eq-trading-hours.pdf
+
+Microsoft Learn W32Time configuration:
+https://learn.microsoft.com/en-us/windows-server/networking/windows-time-service/windows-time-service-tools-and-settings
+
+QuantVPS NTP for futures trading:
+https://www.quantvps.com/blog/ntp-time-synchronization-in-trading
+
+NexusFi data feeds analysis:
+https://nexusfi.com/a/platforms/data-feeds-market-data
+
+Parquet partition design (Modexa):
+https://medium.com/@Modexa/7-parquet-partition-designs-that-actually-work-69a2a0811ea8
+
 ## Why this architecture change
 
 The CSV bridge in Plan 1 has known caps:
