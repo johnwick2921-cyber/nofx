@@ -2987,6 +2987,183 @@ Until one of those triggers fires: **the CSV path is canonical**, Plan 1
 stays the production path, and Plan 1.5 lives as documented architecture
 ready to execute when needed.
 
+## Plan 1.5 — Design Findings (Research Summary 2026-05-25)
+
+The following findings come from a comprehensive research pass on the
+NT8 → Go (WSL2) real-time market data bridge problem. They are NOT
+implementation specs — they are the verified-or-flagged knowledge that
+must inform the Plan 1.5 implementation when it is written.
+
+Each finding cites its source. Items marked [VERIFY] require empirical
+confirmation on John's specific machine before relying on them.
+
+### Architecture Decision: CSV-over-/mnt/c with 1-minute bars
+
+DECISION: Plan 1.5 will use CSV append on /mnt/c as the bar transport,
+not TCP, not NetMQ, not WebSocket, not memory-mapped files.
+
+RATIONALE:
+- Plan 1 already validated this pattern end-to-end with 2 real fills
+  on 2026-05-22. Lowest implementation risk.
+- For 1-minute bars on NQ/MNQ, the 250ms-poll-jitter latency is
+  comfortably below any actionable strategy budget.
+- Alternative transports (NetMQ, WebSocket, TCP) deferred to Stage 2,
+  triggered only if measured p99 latency exceeds 500ms.
+
+DECISION: NT emits ONLY 1-minute bars. Go aggregates 5m/15m/H1/H4
+in-process.
+
+RATIONALE:
+- Single source of truth for higher timeframes
+- Backtest-live parity: same aggregation logic used against historical
+  Databento OHLCV-1m
+- Multi-BarsArray NinjaScript has documented synchronization quirks
+  (NT8 "stair-step effect" in multi-series indicators)
+- Reconnect resilience: gap-filling one 1m feed is trivial; gap-filling
+  5 separate timeframe streams introduces consistency bugs
+
+### NT8 Calculate Mode (verified from NT support forum)
+
+DECISION: Calculate.OnEachTick + IsFirstTickOfBar + State.Historical
+guard. The bar-writer fires once per closed bar in realtime only.
+
+EXACT IDIOM:
+- In State.SetDefaults: Calculate = Calculate.OnEachTick
+- In OnBarUpdate():
+  - if (State == State.Historical) return;
+  - if (!IsFirstTickOfBar) return;
+  - if (CurrentBar < 1) return;
+  - Write Times[0][1] / Opens[0][1] / Highs[0][1] / Lows[0][1] /
+    Closes[0][1] / Volumes[0][1]
+
+WARNING: Without the State.Historical return guard, every strategy
+restart writes thousands of duplicate historical bars. Confirmed by NT
+staff in forum thread "State == State.Realtime".
+
+WARNING: NT redownloads the current day's historical data on every
+reconnect (NT staff, forum thread "Reload charts after connection
+lost"). This means after a NT reconnect, there is a temporary GAP in
+the live-emitted bars while NT replays history. The Go side must
+gap-fill from Databento Historical on reconnect detection.
+
+### File I/O Pattern (NT official guidance)
+
+DECISION: Explicit lock object + FileStream with FileMode.Append +
+FileShare.Read + FileOptions.WriteThrough.
+
+RATIONALE: NT's own multi-threading help guide explicitly requires
+protection of custom resources because "market data is distributed
+across the entire application by a randomly assigned UI thread, there
+is no guarantee that your object will be running on the same event
+thread."
+
+PATTERN:
+private static readonly object _writeLock = new object();
+lock(_writeLock) {
+    using (FileStream(_csvPath, FileMode.Append, FileAccess.Write,
+                      FileShare.Read, 4096, FileOptions.WriteThrough))
+    using (StreamWriter sw) { sw.WriteLine(row); }
+}
+
+FileShare.Read allows Go to hold the file open for reading concurrently
+without blocking NT writes. Go reader must use os.Open (read-only) and
+must NEVER call syscall.Flock — that would cause NT's next write to
+throw "process cannot access the file."
+
+### WSL2 File Watching: HARD CONSTRAINT
+
+CRITICAL FINDING: inotify on /mnt/c DOES NOT FIRE for Windows-side
+file writes. This is microsoft/WSL issue #4739 and #5424, both still
+open as of May 2026.
+
+DO NOT use fsnotify in Go for this bridge. The Add() call will
+succeed silently, but events will never arrive. There is no error to
+detect.
+
+DECISION: Polling with os.Stat + persisted byte offset, every 250ms.
+
+GO PATTERN:
+- Load lastOffset from /home/hoang/nofx/.state/bars_MNQ_1m.offset
+- Loop: os.Stat -> if size > lastOffset -> os.Open -> Seek(lastOffset)
+  -> read new bytes -> update offset -> save offset
+- Only ingest lines ending in '\n' (handles partial reads where NT
+  has flushed bytes but not yet completed a line)
+- Persist offset to WSL native filesystem (NOT /mnt/c) for guaranteed
+  POSIX rename atomicity
+
+POLLING INTERVAL: 250ms is the recommended default. Worst-case
+NT-write-to-Go-ingest latency = 250ms + transport overhead, typically
+under 500ms total. Stat overhead is sub-millisecond on a small file;
+CPU impact negligible.
+
+### Timestamp Reconciliation: NT vs Databento
+
+CRITICAL FINDING: NT and Databento use OPPOSITE bar timestamp
+conventions in DIFFERENT timezones.
+
+- NT: bar timestamp = bar CLOSE time, in the timezone configured in
+  Control Center > Tools > Options > General (defaults to Windows
+  local time). Verified from NT staff reply in forum thread
+  "NinjaScript NT8 TIME[0]" plus the "How Bars Are Built" help guide.
+- Databento OHLCV: ts_event = bar OPEN time, in UTC nanoseconds.
+  Verified from NautilusTrader integration docs and Databento schema
+  documentation.
+
+CONSEQUENCE: The same 1-minute bar (e.g., 09:30:00-09:31:00 ET) will
+appear in NT as Time[0] = 09:31:00 LOCAL and in Databento as
+ts_event = 09:30:00.000000000 UTC. Off-by-one-minute bugs from this
+mismatch are the #1 source of NT-Databento integration failures.
+
+CANONICAL KEY: All bars in the Go side are keyed by bar_open_utc
+(time.Time, UTC, second precision). Convert at ingest:
+- NT side: write Times[0][1].AddMinutes(-1).ToUniversalTime() as
+  ISO-8601
+- Databento side: time.Unix(0, ts_event_ns).UTC()
+
+DST HANDLING: NT uses local Windows time and shifts with DST.
+Databento uses UTC and is immune. Always store and reason in UTC;
+convert to ET/CT at display layer only.
+
+### Multi-Timeframe: Aggregate in Go from 1m
+
+DECISION: NT writes only 1m bars. Go aggregates 5m, 15m, H1, H4.
+
+WARNING: 5m bar close instants in NT and Databento RARELY align to
+the same millisecond. NT bars close on the first tick AFTER the
+boundary (verified NT forum thread "Bar Closing Time" documents
+2-10 second delta in slow markets). Databento bars close on the
+matching-engine aggregation boundary (deterministic).
+
+Implication: ALWAYS use bar_open_utc as the key. NEVER use
+arrival-wall-clock-time.
+
+### Session Boundaries (CME NQ/MNQ)
+
+VERIFIED from CME E-mini/Micro futures contract specifications page
+(May 2026):
+- Sunday 17:00 CT → Friday 16:00 CT
+- Daily trading halt 16:00–17:00 CT Mon-Thu
+- In Eastern Time: Sunday 18:00 ET → Friday 17:00 ET, daily halt
+  17:00-18:00 ET Mon-Thu
+
+CME holidays and early closes occur on different days from US
+equity markets. DO NOT infer session boundaries from clock arithmetic
+alone — use NT's Trading Hours template (Bars.IsFirstBarOfSession)
+or Databento's "status" schema.
+
+### Contract Roll Handling
+
+CRITICAL FINDING from NT's official rollover help guide:
+"NinjaScript strategies are not rolled forward and must be manually
+rolled over."
+
+> NOTE: The remainder of the Plan 1.5 research summary (Contract Roll
+> handling consequences, Latency Measurement, Reordering & Dedup,
+> Process Lifecycle, Alternative Transports, Databento Live pricing,
+> Decision Matrix, Recommendations, Caveats) was truncated in the
+> source message at "CONSEQUENCE: Pl…" and will be appended in a
+> follow-up commit once the full text is re-supplied.
+
 ## Why this architecture change
 
 The CSV bridge in Plan 1 has known caps:
