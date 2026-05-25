@@ -2915,6 +2915,74 @@ Start Plan 1.5 when any one of these is true:
    are documented as acceptable for SIM but not for live. If any fires
    in SIM, that's the signal to upgrade the bridge now rather than later.
 
+4. Real-time bars required for actionable strategy validation
+
+   PROBLEM
+   - Databento Historical OHLCV has a publication delay (verify exact
+     delay against Databento docs and current account tier before Plan
+     1.5 design — assume 15 minutes for planning purposes)
+   - Strategies with intra-session entry windows (e.g. TTrades AM
+     Silver Bullet, 10:00-11:00 ET) cannot be validated for actionable
+     edge on delayed data — by the time a bar arrives, the entry
+     window may have already passed
+   - Databento Live DOES provide OHLCV aggregates at 1-second and
+     1-minute intervals over its real-time streaming API (per
+     databento.com/futures product page). Earlier internal assumption
+     that Databento Live was ticks-only was INCORRECT.
+   - However, Databento Live requires a separate subscription tier
+     beyond Historical, while NinjaTrader already receives a live
+     CQG/Rithmic feed through the prop firm subscription (MFFU,
+     Bulenox, Apex, Topstep all include this) at no additional cost.
+
+   DECISION
+   - Plan 1.5 will source LIVE bars from NinjaTrader, not Databento
+     Live
+   - Databento Historical retained for: warmup on cold start, gap fill
+     after restart, archive, walk-forward backtests
+   - NT live bars become primary source for the live indicator loop
+   - Trade-off accepted: Plan 1.5 requires NinjaScript changes to
+     ClaudeTrader.cs and a Go-side bar reader; in exchange,
+     elimination of source-disagreement risk and zero additional data
+     vendor cost during SIM phase
+
+   SCOPE EXPANSION
+   - Plan 1.5 was previously scoped as "TCP socket bridge for orders"
+   - Now expanded to include:
+     a) TCP or CSV-based live bar feed (NT → Go), implementation
+        choice deferred to Plan 1.5 design doc
+     b) Data source switcher in Go (Historical for warmup, Live for
+        steady-state)
+     c) Bar timestamp normalization (NT close-time vs Databento
+        open-time conventions — verify both before implementing)
+     d) Contract roll handling across NT and Databento symbol
+        conventions
+
+   OPEN QUESTIONS FOR PLAN 1.5 DESIGN DOC
+   - Current Calculate mode in ClaudeTrader.cs (OnBarClose vs
+     OnEachTick) — read file to verify before designing the bar-write
+     path
+   - File I/O method: File.AppendAllText vs FileStream with explicit
+     FileShare.Read — NT support docs recommend lock object
+     (private object barWriteLock = new object()) for multi-threaded
+     write safety
+   - Tail-from-offset reader pattern in Go to survive bot restarts
+     without losing NT-written bars
+   - Bar timestamp convention difference: NT defaults to bar-close
+     time; Databento OHLCV uses bar-open (ts_event = bar start) —
+     verify both and document the translation
+   - Symbol normalization across MNQM6/MNQU6 rolls
+   - Latency budget: NT writes bar → Go reads bar → indicators → AI →
+     CSV signal → NT places order. Target end-to-end < 5 seconds for
+     1-minute timeframe viability.
+
+   CITATIONS
+   - Databento OHLCV aggregate availability:
+     https://databento.com/futures (verified 2026-05-25)
+   - NT8 multi-threading file I/O guidance:
+     https://ninjatrader.com/support/helpguides/nt8/multi-threading.htm
+   - NT8 IsFirstTickOfBar / Calculate mode behavior:
+     https://ninjatrader.com/support/helpGuides/nt8/isfirsttickofbar.htm
+
 Until one of those triggers fires: **the CSV path is canonical**, Plan 1
 stays the production path, and Plan 1.5 lives as documented architecture
 ready to execute when needed.
