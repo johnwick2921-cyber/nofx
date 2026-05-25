@@ -4671,7 +4671,7 @@ This is important: **Plan 1 does not require structural changes to the strategy 
 
 ## Databento
 
-- **Documentation:** https://databento.com/docs
+- **Documentation portal:** https://databento.com/docs/
 - **Historical API base:** `https://hist.databento.com/v0/`
 - **Authentication:** HTTP Basic, API key as username, empty password (NOT a Bearer token despite some community examples).
 - **Pricing:** Pay-per-symbol-day. NQ continuous (`NQ.c.0`) on `GLBX.MDP3` is ~$0.001-0.005 per call for `ohlcv-1m` over short windows.
@@ -4709,7 +4709,7 @@ Local code:                 /home/hoang/nofx
 Upstream NOFX:              https://github.com/NoFxAiOS/nofx
 Architecture docs:          https://github.com/NoFxAiOS/nofx/tree/dev/docs/architecture
 NT CSV bridge:              https://github.com/J0shusmc/Claude-Trader-NinjaTrader
-Databento docs:             https://databento.com/docs
+Databento docs portal:      https://databento.com/docs/
 Databento Hist API:         https://hist.databento.com/v0/
 Databento Go SDK (official): (does not exist — use net/http per Task 2)
 Databento Go SDK (community): https://github.com/NimbleMarkets/dbn-go (alternative for later swap)

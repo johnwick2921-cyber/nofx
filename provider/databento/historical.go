@@ -22,13 +22,20 @@ type Bar struct {
 
 // rawBar mirrors the JSON shape Databento returns for ohlcv-* schemas.
 // Numeric fields arrive as integer fixed-point with 1e9 divisor.
+// ts_event and rtype are nested in the "hd" record header — they are NOT
+// at the top level. (A prior parser version assumed top-level ts_event;
+// the fabricated unit-test fixture matched that assumption and shipped a
+// silent bug, caught by the live smoke test on 2026-05-25.)
 type rawBar struct {
-	TsEvent string `json:"ts_event"`
-	Open    string `json:"open"`
-	High    string `json:"high"`
-	Low     string `json:"low"`
-	Close   string `json:"close"`
-	Volume  string `json:"volume"`
+	Hd struct {
+		TsEvent string `json:"ts_event"`
+		Rtype   int    `json:"rtype"`
+	} `json:"hd"`
+	Open   string `json:"open"`
+	High   string `json:"high"`
+	Low    string `json:"low"`
+	Close  string `json:"close"`
+	Volume string `json:"volume"`
 }
 
 // GetOHLCV fetches OHLCV bars for one symbol over [start, end).
@@ -79,9 +86,12 @@ func parseOHLCVResponse(body []byte) ([]Bar, error) {
 }
 
 func (r rawBar) toBar() (Bar, error) {
-	tsNs, err := strconv.ParseInt(r.TsEvent, 10, 64)
+	if r.Hd.Rtype != 33 {
+		return Bar{}, fmt.Errorf("unexpected rtype %d (want 33 for ohlcv-1m)", r.Hd.Rtype)
+	}
+	tsNs, err := strconv.ParseInt(r.Hd.TsEvent, 10, 64)
 	if err != nil {
-		return Bar{}, fmt.Errorf("databento: parse ts_event %q: %w", r.TsEvent, err)
+		return Bar{}, fmt.Errorf("databento: parse ts_event %q: %w", r.Hd.TsEvent, err)
 	}
 	open, err := scaledFloat(r.Open)
 	if err != nil {
