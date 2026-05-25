@@ -3157,12 +3157,270 @@ CRITICAL FINDING from NT's official rollover help guide:
 "NinjaScript strategies are not rolled forward and must be manually
 rolled over."
 
-> NOTE: The remainder of the Plan 1.5 research summary (Contract Roll
-> handling consequences, Latency Measurement, Reordering & Dedup,
-> Process Lifecycle, Alternative Transports, Databento Live pricing,
-> Decision Matrix, Recommendations, Caveats) was truncated in the
-> source message at "CONSEQUENCE: Pl…" and will be appended in a
-> follow-up commit once the full text is re-supplied.
+CONSEQUENCE: Plan 1.5 must explicitly handle the front-month roll on
+both sides (NT and Databento) because they have OPPOSITE policies and
+NEITHER auto-rolls inside a running NinjaScript strategy.
+
+- NT side uses fixed expiry-month symbols (e.g. MNQ 06-26, MNQ 09-26).
+  Live ticks arrive only for the explicit front-month contract attached
+  to the chart. Per NT staff in forum thread "continuous ticket for
+  MES/MNQ/M2K": "Loading the current front month in NinjaTrader 8 with
+  a default merge policy of 'Merge Back Adjusted' will be almost
+  identical to a continuous contract."
+- Databento side ships RAW prices through the roll (no back-adjustment)
+  via continuous symbology (MNQ.c.0, MNQ.v.0, MNQ.n.0, MNQ.c.1). From
+  Databento docs: "Our continuous contract symbology does not behave
+  the same as continuous contracts provided on retail charting apps,
+  which create a continuous series by applying a constant offset on
+  each rollover month to the lead month contract. Our philosophy is
+  generally to provide raw prices."
+
+VOLUME-DRIVEN ROLL TIMING: per FlowBots Knowledge Center analysis,
+volume typically migrates from the front contract to the next 1-2
+days BEFORE the calendar expiry. NT's rollover prompt fires based on
+calendar date and can leave the running strategy pointing at a
+near-empty contract for that 1-2 day window. Best practice: defer
+the NT rollover prompt until volume has actually migrated.
+
+STITCHING OPTIONS (3 methods):
+- Raw stitched: concatenate front-month series, accept the price-jump
+  at each roll. Appropriate when indicators are scale-invariant or
+  analyze each contract separately.
+- Back-adjusted (additive): subtract the front/back roll-day spread
+  from all pre-roll bars. NT default "Merge Back Adjusted" policy;
+  appropriate for trend indicators (MA, BB).
+- Ratio-adjusted: multiply all pre-roll bars by new_price/old_price
+  ratio. Better for very long histories where additive offsets
+  accumulate.
+
+PLAN: live trade only the explicit front-month contract; manually
+re-deploy strategy on roll day; plan a tradeless window of several
+hours to avoid signaling on the synthetic price jump; request
+Databento MNQ.v.0 (volume-based continuous) raw for historical
+warmup; apply Go-side back-adjustment at ingest.
+
+### Latency Measurement
+
+Instrument both sides explicitly. NT writes two timestamps per CSV
+row (bar_close_utc_nt, wallclock_at_write_utc captured immediately
+before sw.WriteLine). Go captures time.Now().UTC() at three points:
+- t_read_stat: when os.Stat first shows new bytes
+- t_parse_done: when the row is fully parsed into a struct
+- t_indicator_done: when downstream indicators have processed it
+
+NT-to-Go transport latency = t_read_stat - wallclock_at_write_utc.
+
+ENGINEERING ESTIMATES (component breakdown, NOT measured on John's
+machine — see VERIFY-7):
+- NT bar-close to NT file-write: < 10 ms (sub-second tick + lock
+  acquisition)
+- NT write to NTFS flush: < 5 ms with FileOptions.WriteThrough
+- NTFS to DrvFs visibility: < 50 ms typical, occasional spikes to
+  several hundred ms
+- Go poll-jitter: 0-250 ms depending on phase alignment relative to
+  bar close
+- Go parse + ingest: < 1 ms per row
+
+BUDGET: end-to-end p99 < 500 ms (NT bar-close to Go indicator update).
+Above 500 ms triggers Stage 2 transport upgrade (see Alternative
+Transports below).
+
+BOTTLENECK: the 250 ms poll interval. Reducing it costs CPU; moving
+off CSV to a push-based transport eliminates it entirely.
+
+See [VERIFY-7] in Caveats and Verification Items below.
+
+### Reordering and Deduplication
+
+FAILURE MODES:
+1. NT reconnect during session: NT replays the day's historical and
+   the State.Historical guard prevents re-writes. If the strategy is
+   RE-ENABLED (not just reconnected), prior bars may never get
+   appended (no double-write), while subsequent live bars are
+   appended normally. Net: occasional gaps, never duplicates.
+2. File-system buffering reordering: with FileOptions.WriteThrough
+   and a single-thread writer protected by lock(), reordering is not
+   possible within a single NT process. Cross-process reordering is
+   also not a concern (one writer).
+3. Strategy restart while a bar is being written: lock acquisition
+   is process-scoped; an OS crash mid-write can leave a partial line.
+   Mitigated by the partial-line rule below.
+
+PARTIAL-LINE RULE (Go side): only ingest lines that end with '\n'.
+On incomplete final read, set lastOffset to the end of the last
+newline (NOT to the current file position).
+
+IDEMPOTENT INGESTION: use (symbol, bar_open_utc) as composite primary
+key. Dedup cache with 24-hour TTL:
+- 24h × 60 bars/hour = 1440 entries per symbol — trivial memory
+- key format: fmt.Sprintf("%s|%d", symbol, barOpenUTC.Unix())
+- On duplicate: log debug, skip ingestion
+
+### Process Lifecycle and Persistent Offset
+
+When the Go process dies and restarts, replaying the entire CSV
+from offset 0 is wasteful. Persist last-known-good offset.
+
+CHECKPOINT LOCATION: WSL native filesystem (e.g.
+/home/hoang/nofx/.state/), NOT /mnt/c.
+
+REASON: DrvFs does NOT guarantee POSIX rename atomicity across the
+Windows/Linux boundary. ext4 native does. Atomic-rename is the
+critical primitive for crash-safe checkpoints.
+
+WRITE PATTERN (write-to-tmp + atomic rename):
+- Write offset bytes to checkpointPath + ".tmp"
+- os.Rename(tmp, checkpointPath) — atomic on same-filesystem WSL
+  native
+
+RECOVERY ON STARTUP:
+- Load offset from checkpoint file
+- os.Seek(offset, io.SeekStart) on the CSV
+- Resume the polling loop
+
+OFFSET-BEYOND-FILE-SIZE: if saved offset is greater than current CSV
+size (e.g. NT truncated and re-initialized the bar log between
+sessions), reset offset to 0 and re-ingest from start. The dedup
+cache prevents double-emission of any bars from the prior session
+that remain in the cache window.
+
+### Alternative Transports (Future Migration Path)
+
+Plan 1.5 ships on CSV. The following are deferred upgrade paths
+triggered only if measured latency exceeds the 500 ms p99 budget.
+
+| Transport | Effort | Latency | Reliability notes |
+|---|---|---|---|
+| NinjaScript TCP server | 1-2 days | 1-5 ms | Fragile inside NT process per NT staff; users report success in Console apps but issues inside NT |
+| NetMQ (native C# ZeroMQ) | 2-3 days | 1-5 ms | No native libsodium dependency; cleaner than clrzmq4 inside NT. RECOMMENDED for fan-out pub/sub |
+| WebSocket from NinjaScript | 2-3 days | 2-10 ms | NT support has explicitly recommended over raw TCP: "websockets… more reliable than TCP". RECOMMENDED for single-connection simple protocol |
+| HTTP POST from NT to Go | 1 day | 5-50 ms | Highest overhead; easiest to debug; survives Go restarts gracefully. Best for control-plane, not bar data |
+
+REJECTED OPTIONS:
+- Named pipes: WSL2 cannot directly open Windows named pipes; would
+  require a Windows-side proxy.
+- Memory-mapped files: cross-kernel sync primitives not guaranteed
+  across DrvFs; MMF semantics undocumented for the Win-Lin boundary.
+
+CSV ROLE AFTER MIGRATION: keep CSV as warm-backup archive. The CSV
+writer should remain enabled even after socket-based transport
+becomes primary — the file is a free durability layer and aids
+post-mortem analysis.
+
+### Decision Matrix Summary
+
+| Design question | Recommended | Rationale |
+|---|---|---|
+| Transport for bar data | CSV append on /mnt/c | Already works; meets 500ms p99 budget for 1m bars |
+| Calculate mode | Calculate.OnEachTick + IsFirstTickOfBar + State.Historical guard | Documented NT idiom; preserves option for future intra-bar tick channel |
+| Bar timestamp written | Bar OPEN in UTC ISO-8601 | Matches Databento ts_event convention; DST-immune; one canonical key |
+| Multi-timeframe | NT writes only 1m; Go aggregates 5m/15m/H1/H4 | Single source of truth; backtest-live parity; reconnect-safe |
+| Symbol on live NT | Front-month explicit (e.g. MNQ 06-26) | NT live cannot use continuous symbols on CQG/Rithmic |
+| File I/O pattern | lock(_writeLock) { FileStream(Append, FileShare.Read, WriteThrough) } | Per NT's own multi-threading help guide |
+| Go-side file watching | Polling os.Stat every 250ms + persisted offset | inotify does NOT fire for Windows-side writes on /mnt/c |
+| Dedup key | symbol + bar_open_utc, 24h TTL | Idempotent against historical replay, reconnect, restart |
+| Checkpoint location | WSL native filesystem (/home/hoang/nofx/.state/) | DrvFs does NOT guarantee POSIX rename atomicity |
+| Rollover handling | Manual NT re-deploy on roll day; pause trading window around roll | NT support: "NinjaScript strategies are not rolled forward" |
+| Databento role | Historical only — warmup, gap-fill, backtest, archive | Live tier with OHLCV is $1,399/mo annual contract; NT live via prop firm is free and matches execution venue |
+| Latency budget | End-to-end p99 < 500ms (NT bar-close to Go indicator update) | Comfortably achievable with 250ms poll; reassess only if sub-100ms required |
+
+### Staged Implementation Recommendations
+
+STAGE 0 — Week 1 (Plan 1.5 minimum viable):
+1. Add a BarWriter section to ClaudeTrader.cs using the
+   Calculate.OnEachTick + IsFirstTickOfBar + State.Historical guard
+   from the NT8 Calculate Mode section above. Emit ONLY 1m bars.
+   Write to C:\Users\hoang\NofxTrader\data\bars_MNQ_1m.csv with
+   columns: bar_open_utc, wallclock_at_write_utc, open, high, low,
+   close, volume.
+2. Add a Go-side tail_csv package that polls
+   /mnt/c/Users/hoang/NofxTrader/data/bars_MNQ_1m.csv every 250ms
+   with persisted offset in /home/hoang/nofx/.state/.
+3. Aggregate 5m, 15m, H1, H4 in Go using bar_open_utc as the
+   canonical key.
+4. Dedup by (symbol, bar_open_utc) with 24h TTL.
+5. Run a 1-week soak test on SIM101 during RTH and overnight. Log
+   NT-to-Go latency on every bar.
+
+STAGE 1 — Weeks 2-3 (hardening):
+6. Add gap-fill from Databento Historical on startup. Query
+   everything between the latest persisted bar_open_utc and (now -
+   16 minutes) to stay outside Databento's 15-minute Historical
+   publication delay.
+7. Add session-boundary detection using a hard-coded CME calendar
+   table or by reading Databento's status schema offline.
+8. Add a unit test that takes one known NT bar and one known
+   Databento bar for the same minute, normalizes both, and asserts
+   equality on the canonical key.
+9. Add a daily smoke test that compares the previous day's NT bars
+   (via CSV) against Databento Historical OHLCV-1m for the same day,
+   after end-of-session, and alerts on any mismatch exceeding the
+   tolerance ladder (defined in Merge Logic State Machine, to be
+   added in a later commit).
+
+STAGE 2 — only if Stage 0 measured p99 latency exceeds 500 ms:
+10. Replace CSV with NetMQ pub/sub: NT publishes tcp://*:5556
+    topic bar.MNQ.1m; Go subscribes. Keep CSV as warm-backup
+    archive.
+
+BENCHMARKS THAT CHANGE THE RECOMMENDATION:
+- If NT-to-Go p99 latency > 500 ms during RTH: upgrade transport
+  to NetMQ or WebSocket (Stage 2).
+- If Databento Live drops below $200/month or a new lower tier with
+  OHLCV appears: reconsider Databento Live as primary feed for
+  backtest-live parity.
+- If WSL2 adds Windows-side inotify forwarding (microsoft/WSL #4739):
+  drop polling, use fsnotify.
+
+### Caveats and Verification Items
+
+[VERIFY-7] Measure NT-to-Go transport latency p50 and p99 over a
+full RTH session on John's machine. If p99 exceeds 500 ms, Stage 2
+transport migration is triggered. NT staff have noted that
+Calculate.OnEachTick is "CPU intensive if your program code is
+compute intensive" — for a bar-only writer that early-returns on
+!IsFirstTickOfBar this is negligible, but verify under live NQ load
+(~1k-10k ticks/min during RTH).
+
+[VERIFY-8] FileShare.Read semantics across DrvFs: confirm
+empirically that Go can open and read the file while NT holds the
+write handle. Build a 1-day soak test before relying on it.
+Validated in spirit by NT's own multi-threading help guide and
+YSFKDR/NinjaTrader_Data_Exporter's use of ReaderWriterLockSlim,
+but the cross-kernel boundary is the verification gap.
+
+[VERIFY-9] Bar-close jitter under low-liquidity conditions. NT bars
+only close on the next tick after the boundary. During Sunday-night
+reopen or holiday sessions, multi-second close latency is documented
+(NT forum thread "Bar Closing Time"). Affects arrival timing, not
+bar content. Decide whether the strategy can tolerate.
+
+[VERIFY-10] Read the actual upstream claudetrader.cs C# source via
+git clone and diff against the patterns documented here before
+merging the bar-writer changes. Automated fetch returned a
+permissions error during research; the patterns above are from NT's
+own help guide and corroborating community sources. Confirm
+threading and State semantics in the live source match before
+implementation.
+
+CONFIRMATION ITEMS (recheck periodically, NOT pre-implementation
+blockers):
+- Databento pricing can change. Standard tier rose from $179/month
+  at April 2025 launch to $199/month by May 2026; Plus $1,399/month
+  verified May 2026. Recheck before any business decision involving
+  Live data.
+- CME session schedule changes occasionally. Verified May 2026 from
+  CME's E-mini/Micro futures page. Use NT's Trading Hours template
+  (Bars.IsFirstBarOfSession) and/or Databento's status schema rather
+  than hard-coded clock arithmetic.
+- WSL2 inotify limitation could be fixed in a future WSL2 release
+  without obvious announcement. Don't write code that assumes
+  "polling forever" — abstract the watcher behind an interface so
+  future migration is a one-file change.
+- Time zone conversion is the single most common bug source in this
+  kind of bridge. Write the unit test described in Stage 1 step 8
+  and run it on every PR that touches the timestamp normalization
+  path.
 
 ## Why this architecture change
 
