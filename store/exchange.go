@@ -38,8 +38,12 @@ type Exchange struct {
 	LighterPrivateKey       crypto.EncryptedString `gorm:"column:lighter_private_key;default:''" json:"lighterPrivateKey"`
 	LighterAPIKeyPrivateKey crypto.EncryptedString `gorm:"column:lighter_api_key_private_key;default:''" json:"lighterAPIKeyPrivateKey"`
 	LighterAPIKeyIndex      int                    `gorm:"column:lighter_api_key_index;default:0" json:"lighterAPIKeyIndex"`
-	CreatedAt               time.Time              `json:"created_at"`
-	UpdatedAt               time.Time              `json:"updated_at"`
+	// NinjaTrader CSV bridge configuration (no API key required)
+	NTDataDir            string    `gorm:"column:nt_data_dir;default:''" json:"ntDataDir"`
+	NTInstrumentName     string    `gorm:"column:nt_instrument_name;default:''" json:"ntInstrumentName"`
+	NTDefaultContractQty int       `gorm:"column:nt_default_contract_qty;default:0" json:"ntDefaultContractQty"`
+	CreatedAt            time.Time `json:"created_at"`
+	UpdatedAt            time.Time `json:"updated_at"`
 }
 
 func (Exchange) TableName() string { return "exchanges" }
@@ -100,6 +104,7 @@ func (s *ExchangeStore) cleanupIncompleteExchangeConfigs() error {
 			string(exchange.AsterPrivateKey),
 			exchange.LighterWalletAddr,
 			string(exchange.LighterAPIKeyPrivateKey),
+			exchange.NTDataDir,
 		)
 		if len(missing) > 0 {
 			if err := s.db.Delete(&Exchange{}, "id = ? AND user_id = ?", exchange.ID, exchange.UserID).Error; err != nil {
@@ -218,19 +223,29 @@ func getExchangeNameAndType(exchangeType string) (name string, typ string) {
 		return "LIGHTER DEX", "dex"
 	case "indodax":
 		return "Indodax", "cex"
+	case "ninjatrader":
+		return "NinjaTrader", "futures"
 	default:
 		return exchangeType + " Exchange", "cex"
 	}
 }
 
-// Create creates a new exchange account with UUID
+// Create creates a new exchange account with UUID.
+// NinjaTrader fields (ntDataDir/ntInstrumentName/ntDefaultContractQty) are
+// only meaningful when exchangeType=="ninjatrader"; pass "" / 0 otherwise.
 func (s *ExchangeStore) Create(userID, exchangeType, accountName string, enabled bool,
 	apiKey, secretKey, passphrase string, testnet bool,
 	hyperliquidWalletAddr string, hyperliquidUnifiedAcct bool,
 	asterUser, asterSigner, asterPrivateKey,
-	lighterWalletAddr, lighterPrivateKey, lighterApiKeyPrivateKey string, lighterApiKeyIndex int) (string, error) {
+	lighterWalletAddr, lighterPrivateKey, lighterApiKeyPrivateKey string, lighterApiKeyIndex int,
+	ntDataDir, ntInstrumentName string, ntDefaultContractQty int) (string, error) {
 
-	if missing := MissingRequiredExchangeCredentialFields(exchangeType, apiKey, secretKey, passphrase, hyperliquidWalletAddr, asterUser, asterSigner, asterPrivateKey, lighterWalletAddr, lighterApiKeyPrivateKey); len(missing) > 0 {
+	if missing := MissingRequiredExchangeCredentialFields(
+		exchangeType, apiKey, secretKey, passphrase,
+		hyperliquidWalletAddr, asterUser, asterSigner, asterPrivateKey,
+		lighterWalletAddr, lighterApiKeyPrivateKey,
+		ntDataDir,
+	); len(missing) > 0 {
 		return "", fmt.Errorf("missing required exchange fields: %s", strings.Join(missing, ", "))
 	}
 
@@ -265,6 +280,9 @@ func (s *ExchangeStore) Create(userID, exchangeType, accountName string, enabled
 		LighterPrivateKey:       crypto.EncryptedString(lighterPrivateKey),
 		LighterAPIKeyPrivateKey: crypto.EncryptedString(lighterApiKeyPrivateKey),
 		LighterAPIKeyIndex:      lighterApiKeyIndex,
+		NTDataDir:               ntDataDir,
+		NTInstrumentName:        ntInstrumentName,
+		NTDefaultContractQty:    ntDefaultContractQty,
 	}
 
 	if err := s.db.Create(exchange).Error; err != nil {
@@ -273,10 +291,13 @@ func (s *ExchangeStore) Create(userID, exchangeType, accountName string, enabled
 	return id, nil
 }
 
-// Update updates exchange configuration by UUID
+// Update updates exchange configuration by UUID.
+// NinjaTrader fields (ntDataDir/ntInstrumentName/ntDefaultContractQty) are
+// only meaningful when the row is type "ninjatrader"; pass "" / 0 otherwise.
 func (s *ExchangeStore) Update(userID, id string, enabled bool, apiKey, secretKey, passphrase string, testnet bool,
 	hyperliquidWalletAddr string, hyperliquidUnifiedAcct bool,
-	asterUser, asterSigner, asterPrivateKey, lighterWalletAddr, lighterPrivateKey, lighterApiKeyPrivateKey string, lighterApiKeyIndex int) error {
+	asterUser, asterSigner, asterPrivateKey, lighterWalletAddr, lighterPrivateKey, lighterApiKeyPrivateKey string, lighterApiKeyIndex int,
+	ntDataDir, ntInstrumentName string, ntDefaultContractQty int) error {
 
 	logger.Debugf("🔧 ExchangeStore.Update: userID=%s, id=%s", userID, id)
 
@@ -290,6 +311,15 @@ func (s *ExchangeStore) Update(userID, id string, enabled bool, apiKey, secretKe
 		"lighter_wallet_addr":         lighterWalletAddr,
 		"lighter_api_key_index":       lighterApiKeyIndex,
 		"updated_at":                  time.Now().UTC(),
+	}
+	if ntDataDir != "" {
+		updates["nt_data_dir"] = ntDataDir
+	}
+	if ntInstrumentName != "" {
+		updates["nt_instrument_name"] = ntInstrumentName
+	}
+	if ntDefaultContractQty != 0 {
+		updates["nt_default_contract_qty"] = ntDefaultContractQty
 	}
 
 	// Only update encrypted fields if not empty
@@ -361,7 +391,8 @@ func (s *ExchangeStore) CreateLegacy(userID, id, name, typ string, enabled bool,
 	if id == "binance" || id == "bybit" || id == "okx" || id == "bitget" || id == "hyperliquid" || id == "aster" || id == "lighter" {
 		_, err := s.Create(userID, id, "Default", enabled, apiKey, secretKey, "", testnet,
 			hyperliquidWalletAddr, true, // Default to Unified Account mode
-			asterUser, asterSigner, asterPrivateKey, "", "", "", 0)
+			asterUser, asterSigner, asterPrivateKey, "", "", "", 0,
+			"", "", 0) // NinjaTrader fields not used in legacy create
 		return err
 	}
 

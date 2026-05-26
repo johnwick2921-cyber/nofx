@@ -9,7 +9,7 @@ import { LanguageSwitcher } from '../common/LanguageSwitcher'
 
 const labels = {
   zh: {
-    welcome: '欢迎使用 NOFX',
+    welcome: '欢迎使用 VL',
     subtitle: '创建账号开始使用',
     email: '邮箱',
     emailPlaceholder: 'you@example.com',
@@ -22,7 +22,7 @@ const labels = {
     singleUser: '单用户系统 — 这是唯一的账号',
   },
   en: {
-    welcome: 'Welcome to NOFX',
+    welcome: 'Welcome to VL',
     subtitle: 'Create your account to get started',
     email: 'Email',
     emailPlaceholder: 'you@example.com',
@@ -35,7 +35,7 @@ const labels = {
     singleUser: 'Single-user system — this is the only account',
   },
   id: {
-    welcome: 'Selamat Datang di NOFX',
+    welcome: 'Selamat Datang di VL',
     subtitle: 'Buat akun untuk memulai',
     email: 'Email',
     emailPlaceholder: 'you@example.com',
