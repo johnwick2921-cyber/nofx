@@ -11,6 +11,7 @@ import {
   BLOCKRUN_MODELS,
   CLAW402_MODELS,
   AI_PROVIDER_CONFIG,
+  DEFAULT_CLAW402_MODEL,
   getShortName,
 } from './model-constants'
 
@@ -541,7 +542,7 @@ function Claw402ConfigForm({
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
           {CLAW402_MODELS.map((m) => {
-            const isSelected = (modelName || 'deepseek') === m.id
+            const isSelected = (modelName || DEFAULT_CLAW402_MODEL) === m.id
             return (
               <button
                 key={m.id}
