@@ -53,6 +53,14 @@ type Config struct {
 
 	// Trading mode: "crypto" (default, original behavior) or "futures"
 	TradingMode string
+
+	// Plan 3 Task 21 — Risk limits (hard server-side kill switches).
+	// Defaults: $500 daily loss, 2 concurrent trades, $50k notional, 5 contracts/order.
+	// Zero value disables the corresponding check.
+	RiskMaxDailyLossUSD      float64 // RISK_MAX_DAILY_LOSS_USD
+	RiskMaxConcurrentTrades  int     // RISK_MAX_CONCURRENT_TRADES
+	RiskMaxNotionalUSD       float64 // RISK_MAX_NOTIONAL_USD
+	RiskMaxContractsPerOrder int     // RISK_MAX_CONTRACTS_PER_ORDER
 }
 
 // Init initializes global configuration (from .env)
@@ -110,6 +118,12 @@ func Init() {
 	cfg.NinjaTraderDataDir = os.Getenv("NINJATRADER_DATA_DIR")
 	cfg.TradingMode = getEnvOrDefault("TRADING_MODE", "crypto")
 
+	// Plan 3 Task 21 — Risk limits
+	cfg.RiskMaxDailyLossUSD = getEnvFloat("RISK_MAX_DAILY_LOSS_USD", 500)
+	cfg.RiskMaxConcurrentTrades = getEnvInt("RISK_MAX_CONCURRENT_TRADES", 2)
+	cfg.RiskMaxNotionalUSD = getEnvFloat("RISK_MAX_NOTIONAL_USD", 50_000)
+	cfg.RiskMaxContractsPerOrder = getEnvInt("RISK_MAX_CONTRACTS_PER_ORDER", 5)
+
 	// Database configuration
 	if v := os.Getenv("DB_TYPE"); v != "" {
 		cfg.DBType = strings.ToLower(v)
@@ -166,6 +180,24 @@ func Get() *Config {
 func getEnvOrDefault(key, def string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
+	}
+	return def
+}
+
+func getEnvFloat(key string, def float64) float64 {
+	if v := os.Getenv(key); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return f
+		}
+	}
+	return def
+}
+
+func getEnvInt(key string, def int) int {
+	if v := os.Getenv(key); v != "" {
+		if i, err := strconv.Atoi(v); err == nil {
+			return i
+		}
 	}
 	return def
 }
