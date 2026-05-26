@@ -1,11 +1,14 @@
 package ninjatrader
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"nofx/internal/retry"
 )
 
 // CSVWriter writes trade signals to a Windows-shared CSV file that
@@ -59,9 +62,13 @@ func (w *CSVWriter) WriteSignal(s SignalRow) error {
 		os.Remove(tmp.Name())
 		return fmt.Errorf("ninjatrader writer: close temp: %w", err)
 	}
-	if err := os.Rename(tmp.Name(), w.SignalsPath()); err != nil {
+	// Plan 4 Task 24 — retry rename to handle Windows EBUSY (Defender scanner lock)
+	renameErr := retry.RetryWithBackoff(context.Background(), 3, func() error {
+		return os.Rename(tmp.Name(), w.SignalsPath())
+	})
+	if renameErr != nil {
 		os.Remove(tmp.Name())
-		return fmt.Errorf("ninjatrader writer: rename temp: %w", err)
+		return fmt.Errorf("ninjatrader writer: rename temp: %w", renameErr)
 	}
 	return nil
 }

@@ -6,6 +6,7 @@ import (
 	"nofx/kernel"
 	"nofx/logger"
 	"nofx/store"
+	"nofx/telemetry"
 	"nofx/wallet"
 	"strings"
 	"time"
@@ -96,7 +97,20 @@ func (at *AutoTrader) runCycle() error {
 
 	// 5. Use strategy engine to call AI for decision
 	at.logInfof("🤖 Requesting AI analysis and decision... [Strategy Engine]")
+	// Plan 4 Task 25 — decision latency timer (start)
+	decisionStart := time.Now()
 	aiDecision, err := kernel.GetFullDecisionWithStrategy(ctx, at.mcpClient, at.strategyEngine, "balanced")
+	// Plan 4 Task 25 — decision metrics
+	telemetry.DecisionLatency.WithLabelValues(at.id).Observe(time.Since(decisionStart).Seconds())
+	if aiDecision != nil {
+		for _, d := range aiDecision.Decisions {
+			status := "queued"
+			if err != nil {
+				status = "rejected"
+			}
+			telemetry.DecisionsTotal.WithLabelValues(at.id, d.Action, status).Inc()
+		}
+	}
 
 	if aiDecision != nil && aiDecision.AIRequestDurationMs > 0 {
 		record.AIRequestDurationMs = aiDecision.AIRequestDurationMs

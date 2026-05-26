@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // Server HTTP API server
@@ -74,6 +75,11 @@ func corsMiddleware() gin.HandlerFunc {
 
 // setupRoutes Setup routes
 func (s *Server) setupRoutes() {
+	// Plan 4 Task 25 — Prometheus metrics endpoint (mounted on root, unauth).
+	// Placed BEFORE the /api group so the convergence stage can verify
+	// ordering vs T23's risk + audit endpoints (T23 lives inside /api).
+	s.router.GET("/metrics", gin.WrapH(promhttp.Handler()))
+
 	// API route group
 	api := s.router.Group("/api")
 	{
@@ -359,6 +365,21 @@ Returns the most recent AI decision for each symbol analyzed in the last scan cy
 				`Query: ?trader_id=<EXACT trader_id from GET /api/my-traders>
 Returns: {"total_trades":<int>,"winning_trades":<int>,"win_rate":<float>,"total_pnl":<float>,"sharpe_ratio":<float>,"max_drawdown":<float>}`,
 				s.handleStatistics)
+
+			// Plan 4 Task 23 — risk + audit endpoints
+			s.routeWithSchema(protected, "POST", "/risk/force-flat", "Emergency flatten all positions for a trader",
+				`Body or query: trader_id=<EXACT trader_id from GET /api/my-traders>
+Returns: {"triggered":<bool>,"trader_id":"<string>","positions_flattened":<int>,"timestamp_utc":"<RFC3339>","log_message":"<string>","reason":"<string, only when triggered=false>"}
+For non-ninjatrader brokers returns triggered=false with reason explaining why.`,
+				s.handleForceFlat)
+			s.routeWithSchema(protected, "GET", "/risk/status", "Get current risk-limit + account state snapshot",
+				`Query: ?trader_id=<EXACT trader_id from GET /api/my-traders>
+Returns: {"trader_id":"<string>","daily_pnl_usd":<float>,"daily_loss_limit_usd":<float>,"concurrent_trades":<int>,"max_concurrent_trades":<int>,"current_notional_usd":<float>,"max_notional_usd":<float>,"kill_switch_armed":<bool>,"last_reset_utc":"<RFC3339>"}`,
+				s.handleRiskStatus)
+			s.routeWithSchema(protected, "GET", "/audit/decisions", "Decision audit trail (Plan 4 T23)",
+				`Query: ?trader_id=<EXACT trader_id>&since=<YYYY-MM-DD, default 7d ago>&limit=<int, default 100, max 1000>
+Returns: []DecisionRecord JSON ordered by timestamp DESC, including PromptVersion, AIModel, AILatencyMs, RiskCheck*, ExecutionStatus, FillPrice, FillLatencyMs.`,
+				s.handleDecisionAudit)
 
 		}
 	}
