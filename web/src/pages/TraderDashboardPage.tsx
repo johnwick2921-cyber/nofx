@@ -3,6 +3,7 @@ import { mutate } from 'swr'
 import { api } from '../lib/api'
 import { ChartTabs } from '../components/charts/ChartTabs'
 import { DecisionCard } from '../components/trader/DecisionCard'
+import { EmergencyFlatButton } from '../components/trader/EmergencyFlatButton'
 import { PositionHistory } from '../components/trader/PositionHistory'
 import { PunkAvatar, getTraderAvatar } from '../components/common/PunkAvatar'
 import { confirmToast, notify } from '../lib/notify'
@@ -380,6 +381,9 @@ export function TraderDashboardPage({
                         </h2>
 
                         <div className="flex items-center gap-4">
+                            {/* Plan 4 T23 — Emergency Flat (red, prominent, top-right) */}
+                            <EmergencyFlatButton traderId={selectedTrader.trader_id} />
+
                             {/* Trader Selector */}
                             {traders && traders.length > 0 && (
                                 <div className="flex items-center gap-2 nofx-glass px-1 py-1 rounded-lg border border-white/5">

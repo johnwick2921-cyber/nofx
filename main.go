@@ -129,6 +129,12 @@ func main() {
 		}
 	}
 
+	// Plan 4 Task 23 — risk + audit endpoints are registered inside
+	// api.NewServer / setupRoutes (gin router); see api/server.go for
+	// POST /api/risk/force-flat, GET /api/risk/status, GET /api/audit/decisions.
+
+	// Plan 4 Task 25 — Prometheus metrics endpoint (T25 owns this marker; T23 leaves space below).
+
 	// Start API server
 	server := api.NewServer(traderManager, st, cryptoService, cfg.APIServerPort)
 

@@ -6,6 +6,7 @@
 package databento
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -15,7 +16,13 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"nofx/internal/retry"
+	"nofx/telemetry"
 )
+
+// Plan 4 Task 24 — retry + circuit breaker for transient HTTP errors
+var dbBreaker = retry.NewCircuitBreaker(5, 5*time.Minute)
 
 const (
 	DefaultHistoricalBaseURL = "https://hist.databento.com/v0"
@@ -98,10 +105,32 @@ func (c *Client) doRequest(path string, params url.Values) ([]byte, error) {
 	req.Header.Set("Authorization", "Basic "+basicAuth(apiKey, ""))
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("databento: HTTP error: %w", err)
+	// Plan 4 Task 24 — retry + circuit breaker for transient HTTP errors
+	if !dbBreaker.Allow() {
+		return nil, retry.ErrCircuitOpen
 	}
+	var resp *http.Response
+	retryErr := retry.RetryWithBackoff(context.Background(), 3, func() error {
+		var doErr error
+		resp, doErr = httpClient.Do(req)
+		if doErr != nil {
+			return doErr
+		}
+		if resp.StatusCode >= 500 {
+			// Drain + close so we can retry safely.
+			_, _ = io.Copy(io.Discard, resp.Body)
+			resp.Body.Close()
+			return fmt.Errorf("databento %d", resp.StatusCode)
+		}
+		return nil
+	})
+	if retryErr != nil {
+		dbBreaker.RecordFailure()
+		// Plan 4 Task 25 — Databento error metric (5xx + network failures after retry)
+		telemetry.DatabentoErrorsTotal.Inc()
+		return nil, fmt.Errorf("databento: HTTP error: %w", retryErr)
+	}
+	dbBreaker.RecordSuccess()
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
