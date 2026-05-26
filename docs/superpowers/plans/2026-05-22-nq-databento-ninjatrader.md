@@ -6319,3 +6319,122 @@ Each ADR follows the format: **Status / Context / Decision / Consequences**.
 6. Plan 7 (Tasks 35-37) — write while context is fresh
 
 After all of these: **the bot is ready for paper-live → real-live trading with reasonable safeguards.** Without Plan 2 + 3, do NOT trade real money.
+
+## Plan 1 — Post-Mortem (2026-05-25)
+
+Plan 1 was marked SHIPPED on 2026-05-22 based on:
+- 2 real SIM fills on SIM101 via NT Playback
+- Unit tests passing for provider/databento and provider/ninjatrader
+
+Final acceptance via cmd/nq_smoke against the live Databento API
+was deferred to 2026-05-25. That acceptance session surfaced six
+latent bugs in the cmd/nq_smoke entry point, all in the warmup
+/ data-fetch / parser code path. NONE in the AI/CSV/NT path.
+
+The CSV→NT→fill round trip was validated tonight (2026-05-25 evening
+session) with a real LIVE-session fill at 29807 on SIM101 after CME
+Memorial Day closure ended.
+
+### Bugs found and fixed (2026-05-25 session)
+
+1. Databento window-too-recent — smoke runner queried end=now,
+   but Databento Historical has publication lag. Fixed: 17min
+   buffer (commit 286ee3b9), then 24h buffer (3ae0bf77) once
+   tier-lag reality surfaced.
+
+2. Weekend gap — 24h buffer fails on Monday morning when 24h
+   back lands in the Sunday 18:00 to Friday 17:00 weekend hole.
+   Fixed: 96h buffer (commit 18c21bae) covers worst-case 3-day
+   holiday weekends.
+
+3. Parser struct shape — Databento ohlcv-1m response has
+   ts_event nested in hd, not top level. Hand-fabricated test
+   fixture put ts_event at top level, so the unit test passed
+   against a payload that never matched real API output. The
+   bug shipped to SHIPPED status because the test was fiction.
+   Fixed: real captured fixture + CRITICAL comment block
+   (commit 8d20487d).
+
+4. Lookback range too narrow — 30min window returns 30 bars;
+   EMA50 needs 50 bar minimum. Fixed: 90min for 40-bar
+   headroom (commit 46cd2aa1).
+
+### Lessons
+
+1. Unit tests against fabricated fixtures are not unit tests.
+   They are theater. Future Databento integration changes MUST
+   verify fixtures against live curl output before committing.
+
+2. SHIPPED status should require live-API acceptance through
+   the production code path, not just unit tests + manual NT
+   smoke. The 2026-05-22 SHIPPED claim was technically true
+   for the NT bridge (csv_writer / csv_tailer / trader) which
+   were exercised manually, but the cmd/nq_smoke entry that
+   exercises the FULL chain Databento → indicators → AI →
+   CSV → NT had never run.
+
+3. Recommendation: future plans MUST add a "Live API acceptance"
+   gate to the SHIPPED criteria, not just "unit tests pass +
+   manual smoke." This is captured in Plan 5 (Testing matrix)
+   Task 26 (Databento mock server) and Task 29 (E2E smoke
+   matrix) — those tasks now have proven need.
+
+### Pass 2 validation (2026-05-25 evening)
+
+After Memorial Day closure ended (CME reopen 18:00 ET), pipeline
+exercised end-to-end with a single LONG signal on SIM101:
+
+- Signal: entry=29812.00, sl=29792.00, tp=29842.00 (1.5 R:R)
+- CSV write to /mnt/c/Users/hoang/NofxTrader/data/trade_signals.csv
+- NT VLTrader detected signal within ~2 sec
+- Market order placed against MNQ 06-26 contract
+- Filled at 29807.00 (5pt favorable slippage)
+- Fill row written to trades_taken.csv
+- Go tailer detected and logged the new fill
+- Clean exit
+
+H4 observed exactly as documented in Plan 1 hazards section: the
+Go tailer re-emitted the two historical Playback fills from
+2026-05-22 at startup before catching the new live fill. This is
+the "fill replay on session rollover" hazard. Plan 1.5 fix
+(stable fill-ID dedup + persisted offset) already specified in
+canonical plan.
+
+### Current Plan 1 status (after 2026-05-25)
+
+- Databento parser handles real API response shape: DONE
+- cmd/nq_smoke validates end-to-end pipeline (Pass 1): DONE
+- cmd/nq_smoke validates CSV→NT→fill loop (Pass 2): DONE
+- Three pending PRs to merge in order:
+  - chore/hide-faq-nav → nq-databento-ninjatrader-plan
+  - chore/rename-claudetrader-to-vltrader → main (audit doc)
+  - nq-databento-ninjatrader-plan → main (Plan 1 release)
+- Plan 1.5 implementation: triggered by Plan 1.5 trigger
+  conditions, not yet fired
+
+### [VERIFY-16] Databento tier vs documented embargo
+
+Plan 1.5 design assumed Databento intraday GLBX.MDP3 has a
+documented 15-minute embargo. That number applies to the
+real-time-with-embargo subscription tier. The current account
+is on basic Historical tier with multi-hour available_end lag
+(~3 hours observed during 2026-05-25 acceptance session) and
+weekend gap behavior requiring 96h lookback for Monday-morning
+queries.
+
+This does NOT change the Plan 1.5 architecture — bars come
+from NT live feed via CQG/Rithmic, not Databento. Databento
+Historical remains for warmup, gap-fill, backtest only, where
+the multi-hour lag is acceptable.
+
+But it DOES change one production-path expectation: when
+implementing Plan 1.5 Cold Start Sequence (databento_warmup_end
+= T0 - 17min), the 17min constant assumes real-time-with-embargo
+tier. If the system runs on the current Historical tier, the
+warmup must use a larger buffer (96h or session-aware) and
+accept stale warmup bars.
+
+For SIM/Plan-1 validation: 96h buffer is fine.
+For live/Plan-1.5 implementation: confirm Databento tier
+before implementing the Cold Start logic. Either upgrade to
+real-time-with-embargo or adapt the buffer constant.
