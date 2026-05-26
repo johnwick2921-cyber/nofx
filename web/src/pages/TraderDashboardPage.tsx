@@ -3,6 +3,7 @@ import { mutate } from 'swr'
 import { api } from '../lib/api'
 import { ChartTabs } from '../components/charts/ChartTabs'
 import { DecisionCard } from '../components/trader/DecisionCard'
+import { DecisionAudit } from '../components/trader/DecisionAudit'
 import { EmergencyFlatButton } from '../components/trader/EmergencyFlatButton'
 import { PositionHistory } from '../components/trader/PositionHistory'
 import { PunkAvatar, getTraderAvatar } from '../components/common/PunkAvatar'
@@ -143,6 +144,8 @@ export function TraderDashboardPage({
     const chartSectionRef = useRef<HTMLDivElement>(null)
     const [showWalletAddress, setShowWalletAddress] = useState<boolean>(false)
     const [copiedAddress, setCopiedAddress] = useState<boolean>(false)
+    // Plan 4 Task 23.4 — Dashboard tab switcher (Overview / Decisions).
+    const [dashboardTab, setDashboardTab] = useState<'overview' | 'decisions'>('overview')
 
     // Current positions pagination
     const [positionsPageSize, setPositionsPageSize] = useState<number>(20)
@@ -558,8 +561,57 @@ export function TraderDashboardPage({
                     </div>
                 )}
 
+                {/* Plan 4 Task 23.4 — Dashboard tab switcher */}
+                <div className="mb-4 flex items-center gap-1 border-b border-white/10 pb-1">
+                    <button
+                        type="button"
+                        data-testid="overview-tab"
+                        onClick={() => setDashboardTab('overview')}
+                        className={`px-4 py-2 rounded-md text-xs font-medium uppercase tracking-wider transition-all ${
+                            dashboardTab === 'overview'
+                                ? 'bg-nofx-gold/10 text-nofx-gold border border-nofx-gold/20 shadow-[0_0_10px_rgba(240,185,11,0.1)]'
+                                : 'text-nofx-text-muted hover:text-nofx-text-main hover:bg-white/5 border border-transparent'
+                        }`}
+                    >
+                        Overview
+                    </button>
+                    <button
+                        type="button"
+                        data-testid="decisions-tab"
+                        onClick={() => setDashboardTab('decisions')}
+                        className={`px-4 py-2 rounded-md text-xs font-medium uppercase tracking-wider transition-all ${
+                            dashboardTab === 'decisions'
+                                ? 'bg-nofx-gold/10 text-nofx-gold border border-nofx-gold/20 shadow-[0_0_10px_rgba(240,185,11,0.1)]'
+                                : 'text-nofx-text-muted hover:text-nofx-text-main hover:bg-white/5 border border-transparent'
+                        }`}
+                    >
+                        Decisions
+                    </button>
+                </div>
+
+                {/* Decisions tab content (Plan 4 Task 23.4 audit table) */}
+                {dashboardTab === 'decisions' && (
+                    <div
+                        data-testid="decisions-tab-content"
+                        className="nofx-glass p-6 animate-slide-in mb-6"
+                        style={{ animationDelay: '0.1s' }}
+                    >
+                        <div className="flex items-center justify-between mb-5">
+                            <h2 className="text-lg font-bold flex items-center gap-2 text-nofx-text-main uppercase tracking-wide">
+                                <span className="text-indigo-400">🧠</span> Decision Audit Trail
+                            </h2>
+                            <span className="text-xs text-nofx-text-muted font-mono">
+                                last 100 cycles
+                            </span>
+                        </div>
+                        <DecisionAudit traderId={selectedTrader.trader_id} />
+                    </div>
+                )}
+
                 {/* Main Content Area */}
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <div
+                    className={`grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6 ${dashboardTab === 'overview' ? '' : 'hidden'}`}
+                >
                     {/* Left Column: Charts + Positions */}
                     <div className="space-y-6">
                         {/* Chart Tabs (Equity / K-line) */}
@@ -810,7 +862,7 @@ export function TraderDashboardPage({
                 </div>
 
                 {/* Position History Section */}
-                {selectedTraderId && (
+                {selectedTraderId && dashboardTab === 'overview' && (
                     <div
                         className="nofx-glass p-6 animate-slide-in"
                         style={{ animationDelay: '0.25s' }}

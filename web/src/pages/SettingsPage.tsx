@@ -202,7 +202,10 @@ export function SettingsPage() {
     lighterWalletAddr?: string,
     lighterPrivateKey?: string,
     lighterApiKeyPrivateKey?: string,
-    lighterApiKeyIndex?: number
+    lighterApiKeyIndex?: number,
+    ntDataDir?: string,
+    ntInstrumentName?: string,
+    ntDefaultContractQty?: number,
   ) => {
     try {
       if (exchangeId) {
@@ -222,6 +225,9 @@ export function SettingsPage() {
               lighter_private_key: lighterPrivateKey || '',
               lighter_api_key_private_key: lighterApiKeyPrivateKey || '',
               lighter_api_key_index: lighterApiKeyIndex || 0,
+              nt_data_dir: ntDataDir || '',
+              nt_instrument_name: ntInstrumentName || '',
+              nt_default_contract_qty: ntDefaultContractQty || 0,
             },
           },
         }
@@ -244,6 +250,9 @@ export function SettingsPage() {
           lighter_private_key: lighterPrivateKey || '',
           lighter_api_key_private_key: lighterApiKeyPrivateKey || '',
           lighter_api_key_index: lighterApiKeyIndex || 0,
+          nt_data_dir: ntDataDir || '',
+          nt_instrument_name: ntInstrumentName || '',
+          nt_default_contract_qty: ntDefaultContractQty || 0,
         }
         await api.createExchangeEncrypted(createRequest)
       toast.success('Exchange account created')

@@ -1523,6 +1523,7 @@ func (a *Agent) toolManageExchangeConfig(storeUserID, argsJSON string) string {
 			strings.TrimSpace(args.LighterPrivateKey),
 			strings.TrimSpace(args.LighterAPIKeyPrivateKey),
 			lighterIndex,
+			"", "", 0, // NinjaTrader fields not exposed via the agent tool
 		)
 		if err != nil {
 			return fmt.Sprintf(`{"error":"failed to create exchange config: %s"}`, err)
@@ -1654,6 +1655,7 @@ func (a *Agent) toolManageExchangeConfig(storeUserID, argsJSON string) string {
 			strings.TrimSpace(args.LighterPrivateKey),
 			strings.TrimSpace(args.LighterAPIKeyPrivateKey),
 			lighterIndex,
+			"", "", 0, // NinjaTrader fields not exposed via the agent tool
 		); err != nil {
 			return fmt.Sprintf(`{"error":"failed to update exchange config: %s"}`, err)
 		}
