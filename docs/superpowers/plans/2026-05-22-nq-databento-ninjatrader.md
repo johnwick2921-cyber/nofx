@@ -33,7 +33,7 @@
 > "rename this variable in foo.go"). The read-first rule applies
 > ONLY when the prompt invokes plan content.
 
-> **Agent tooling available in this repo (registered 2026-05-25):**
+> **Agent tooling available in this repo (registered 2026-05-25; hardened 2026-05-26):**
 > A Playwright MCP server is registered in `~/.claude.json` for project
 > `/home/hoang/nofx`. When you spawn agents that need to verify the React
 > frontend (Settings page exchange config form, Dashboard column rendering,
@@ -44,8 +44,41 @@
 > end-to-end — `npm run build` only confirms TypeScript compiles, not
 > that the rendered DOM is correct.
 >
-> Server command: `npx -y @playwright/mcp@latest --headless`
-> Register on a fresh machine with: `claude mcp add playwright -- npx -y "@playwright/mcp@latest" --headless`
+> Server command:
+> `npx -y @playwright/mcp@latest --headless --executable-path /home/hoang/.cache/ms-playwright/chromium-1223/chrome-linux64/chrome`
+>
+> Required env (set in the MCP registration, not the shell):
+> `LD_LIBRARY_PATH=/home/hoang/.local/lib/playwright-deps/extracted/usr/lib/x86_64-linux-gnu`
+>
+> **WSL2 / Ubuntu 24.04 hardening notes (2026-05-26):**
+> 1. Chromium needs `libnss3`, `libnssutil3`, `libnspr4` — these are NOT
+>    pre-installed on this WSL2 image and `sudo` was unavailable. Workaround:
+>    `.deb` files downloaded from the Ubuntu noble archive and extracted to
+>    `~/.local/lib/playwright-deps/extracted/` via `dpkg-deb -x`. No sudo,
+>    no system pollution; just user-space libs reachable via `LD_LIBRARY_PATH`.
+>    To re-apply on a fresh machine:
+>    ```bash
+>    mkdir -p ~/.local/lib/playwright-deps && cd ~/.local/lib/playwright-deps
+>    apt-get download --print-uris libnss3 libnspr4 \
+>      | grep -oP "'http[^']+'" | tr -d "'" | xargs -n1 curl -sSLO
+>    mkdir -p extracted
+>    for f in *.deb; do dpkg-deb -x "$f" extracted/; done
+>    ```
+> 2. The MCP server defaults to `--browser chrome` which expects system
+>    Google Chrome at `/opt/google/chrome/chrome`. This system has none.
+>    The `--executable-path` flag overrides this and points at Playwright's
+>    bundled Chromium (the FULL one, not the `chrome-headless-shell` —
+>    the MCP's `--headless` flag handles headless mode, the binary should
+>    be the regular `chrome` binary in `chromium-1223/`).
+> 3. To register on a fresh machine (after steps 1 + 2 prerequisites):
+>    ```bash
+>    LIB_PATH=$HOME/.local/lib/playwright-deps/extracted/usr/lib/x86_64-linux-gnu
+>    CHROME_BIN=$HOME/.cache/ms-playwright/chromium-1223/chrome-linux64/chrome
+>    claude mcp add-json playwright "{\"type\":\"stdio\",\"command\":\"npx\",\"args\":[\"-y\",\"@playwright/mcp@latest\",\"--headless\",\"--executable-path\",\"$CHROME_BIN\"],\"env\":{\"LD_LIBRARY_PATH\":\"$LIB_PATH\"}}"
+>    ```
+> 4. Session restart required after registration changes. MCP tool schemas
+>    are sealed at session start; updates to `~/.claude.json` only take
+>    effect on the next `claude` invocation.
 
 **Goal:** Get the nofx bot to fetch NQ futures OHLCV from Databento, ask the AI for a trade decision in futures-native vocabulary, write that decision to a CSV signal file, and have NinjaTrader (running on the user's Windows host with the open-source `claudetrader.cs` strategy attached to an MNQ chart) execute that decision in SIM mode — then tail the fills CSV back into the bot's database.
 
