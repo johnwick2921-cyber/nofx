@@ -2,6 +2,37 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Canonical plan read-first protocol (added 2026-05-25):**
+> Before acting on ANY prompt that references this plan, the agent
+> MUST read the plan doc end-to-end in its current state on disk:
+>
+> ```
+> view docs/superpowers/plans/2026-05-22-nq-databento-ninjatrader.md
+> ```
+>
+> This is non-negotiable because:
+> 1. The plan evolves between sessions. A prompt may reference
+>    "Task 14" or "Plan 1.5 trigger 3" without re-stating the
+>    content; the agent needs the current text.
+> 2. Post-mortems, [VERIFY-N] items, and branch-state sections
+>    capture state that supersedes earlier instructions.
+> 3. The Playwright MCP block (registered 2026-05-25) tells the
+>    agent which verification tool to use; missing it means
+>    falling back to weaker checks.
+> 4. Branch tip and commit history live in the "Branch state since
+>    Plan 1.5 design closeout" section — without reading it, the
+>    agent does not know what commits already landed.
+>
+> If the prompt asks you to "open PR #1", "fix Task 14", "verify
+> Plan 1.5 design", or any task referencing this plan by number
+> or name, the FIRST tool call must be `view` on this plan doc.
+> Skipping this step is a process violation.
+>
+> The agent may rely on prompt-supplied context for any
+> self-contained instruction NOT referencing the plan (e.g.
+> "rename this variable in foo.go"). The read-first rule applies
+> ONLY when the prompt invokes plan content.
+
 > **Agent tooling available in this repo (registered 2026-05-25):**
 > A Playwright MCP server is registered in `~/.claude.json` for project
 > `/home/hoang/nofx`. When you spawn agents that need to verify the React
