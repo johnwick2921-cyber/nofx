@@ -16,6 +16,8 @@ import (
 	"sync"
 	"time"
 
+	"nofx/logger"
+	"nofx/provider/databento"
 	"nofx/provider/ninjatrader"
 	"nofx/trader/types"
 )
@@ -72,6 +74,13 @@ func (t *Trader) OpenShort(symbol string, quantity float64, leverage int) (map[s
 }
 
 func (t *Trader) placeEntry(symbol, side string, quantity float64) (map[string]interface{}, error) {
+	// Plan 2 Task 19: warn (do not block) when entering near contract expiry.
+	// The engine.go ShouldBlockEntryForExpiry guard is the authoritative gate;
+	// this is a defense-in-depth informational log in case the trader is
+	// invoked outside the normal AI-decision path.
+	if days := databento.DaysUntilExpiry(symbol, time.Now()); days >= 0 && days <= 5 {
+		logger.Warnf("ninjatrader: placing %s entry on %s within %d days of expiry — verify contract roll", side, symbol, days)
+	}
 	t.mu.Lock()
 	sl := t.stopLoss[keyFor(symbol, side)]
 	tp := t.takePrft[keyFor(symbol, side)]
@@ -85,10 +94,17 @@ func (t *Trader) placeEntry(symbol, side string, quantity float64) (map[string]i
 	// Use SL/TP midpoint as a sensible reference value.
 	entryRef := (sl + tp) / 2.0
 
+	// Plan 2 Task 17: round entry/SL/TP to instrument tick boundary.
+	// CME rejects off-tick prices; AI returns raw floats like 21503.17.
+	tick := InstrumentTickSize(t.cfg.Symbol)
+	entry := RoundToTick(entryRef, tick)
+	sl = RoundToTick(sl, tick)
+	tp = RoundToTick(tp, tick)
+
 	sig := ninjatrader.SignalRow{
 		DateTime:   time.Now().Format("01/02/2006 15:04:05"),
 		Direction:  side,
-		EntryPrice: entryRef,
+		EntryPrice: entry,
 		StopLoss:   sl,
 		TakeProfit: tp,
 	}
