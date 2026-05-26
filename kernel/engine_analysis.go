@@ -74,6 +74,78 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 			return nil, nil
 		}
 	}
+	// ============================================================================
+	// Plan 3 Task 21 — Daily loss limit + kill switch (owned by T21)
+	// T22 must add its block AFTER this section.
+	// ============================================================================
+	// Plan 3 Task 21 — risk gate: enforce hard daily-loss + concurrent-trades
+	// + notional caps BEFORE expensive prompt assembly. We only check the
+	// daily-loss + concurrent-position gates here (pre-prompt) because the
+	// per-decision notional requires a parsed Decision which doesn't exist
+	// yet. Notional + per-order contract gates are evaluated at execution
+	// time via RiskLimits.CheckPreTrade(...) from the trader loop.
+	//
+	// Boundary: PnL strictly less than -MaxDailyLossUSD trips; equality is
+	// permissive (matches plan source `< -r.MaxDailyLossUSD`).
+	if ctx != nil {
+		MaybeResetDaily(time.Now())
+		limits := LoadRiskLimitsFromConfig()
+		// existingNotional from open positions (MarkPrice * Quantity).
+		existingNotional := 0.0
+		for _, p := range ctx.Positions {
+			existingNotional += p.MarkPrice * p.Quantity
+		}
+		// requestedNotional unknown at this point (no decision yet) → 0.
+		if err := limits.CheckPreTrade(ctx.Account.TotalPnL, len(ctx.Positions), 0, existingNotional); err != nil {
+			logger.Warnf("⚠️ Plan 3 T21 risk gate tripped: %v — skipping decision cycle (HOLD)", err)
+			return nil, nil
+		}
+	}
+	// ============================================================================
+	// Plan 3 Task 22 — Stale-data + drift detection (owned by T22)
+	// ============================================================================
+	// Verify the latest OHLCV bar is fresh and free of suspicious limit-move-
+	// style drift before feeding it to the AI. RTH gets a tight 90s tolerance;
+	// ETH gets 5min. A >5% close-to-close move inside 60s trips the drift gate.
+	// On any HOLD here we return (nil, nil) so the loop treats it as a clean
+	// skip — same convention as T18/T19/T21.
+	//
+	// Skipped silently when MarketDataMap is empty (data not yet fetched in
+	// this cycle); the downstream fetch will populate it and the next cycle
+	// will gate normally. We deliberately check pre-fetch in case the loop
+	// pre-populated the map from a hotter source.
+	if ctx != nil && len(ctx.MarketDataMap) > 0 {
+		cfg := market.DefaultFreshnessConfig()
+		now := time.Now()
+		for symbol, data := range ctx.MarketDataMap {
+			if data == nil || data.TimeframeData == nil {
+				continue
+			}
+			for tf, tfData := range data.TimeframeData {
+				if tfData == nil || len(tfData.Klines) < 2 {
+					continue
+				}
+				bars := tfData.Klines
+				latest := bars[len(bars)-1]
+				prev := bars[len(bars)-2]
+				health := market.CheckDataHealth(
+					latest.Time, latest.Close,
+					prev.Time, prev.Close,
+					now, cfg,
+				)
+				switch health {
+				case market.HealthStale:
+					age := now.Sub(time.UnixMilli(latest.Time))
+					logger.Warnf("⚠️ Plan 3 T22: stale data for %s [%s] (last bar %v old) — skipping cycle", symbol, tf, age)
+					return nil, nil
+				case market.HealthSuspiciousDrift:
+					logger.Warnf("⚠️ Plan 3 T22: suspicious drift for %s [%s] (prev=%.4f latest=%.4f) — skipping cycle", symbol, tf, prev.Close, latest.Close)
+					return nil, nil
+				}
+			}
+		}
+	}
+
 	if engine == nil {
 		defaultConfig := store.GetDefaultStrategyConfig("en")
 		engine = NewStrategyEngine(&defaultConfig)
@@ -426,4 +498,47 @@ func removeInvisibleRunes(s string) string {
 
 func compactArrayOpen(s string) string {
 	return reArrayOpenSpace.ReplaceAllString(strings.TrimSpace(s), "[{")
+}
+
+// ============================================================================
+// Plan 3 Task 21 — Force-flat helper (owned by T21)
+// ============================================================================
+
+// ForceFlatSignaler is the minimal interface a broker bridge must satisfy so
+// that kernel can ForceFlat without importing the concrete broker package
+// (e.g. provider/ninjatrader). Keeps risk_limits + engine decoupled.
+//
+// The expected concrete implementation today is *ninjatrader.CSVWriter, which
+// satisfies WriteSignal(SignalRow) error. Anonymous struct satisfaction works
+// only if SignalRow is in scope, so callers pass a thin adapter — see the
+// (future) POST /api/risk/force-flat endpoint for the adapter shape.
+//
+// API note: this helper is invoked by an HTTP endpoint (POST /api/risk/force-flat),
+// NOT by the engine itself. The engine only HOLDs on risk trips; closing
+// positions is an operator-initiated action surfaced via a red "EMERGENCY FLAT"
+// button on TraderDashboardPage. The endpoint + button are deferred to a
+// follow-up PR.
+type ForceFlatSignaler interface {
+	// ForceFlat emits whatever broker-specific signal closes all positions.
+	// For ninjatrader v1: cancel pending CSV signals (NT does not yet expose
+	// a "close all" command via the bridge — manual close on the chart).
+	ForceFlat(traderID string) error
+}
+
+// MaybeForceFlat invokes the broker's ForceFlat path and logs the outcome.
+// Returns nil for the no-op nil-signaler case so the API endpoint can be
+// safely called when no broker is wired up (e.g. paper test).
+func MaybeForceFlat(traderID string, signaler ForceFlatSignaler) error {
+	if signaler == nil {
+		logger.Warnf("Plan 3 T21 MaybeForceFlat: no signaler wired for trader %s — no-op", traderID)
+		return nil
+	}
+	logger.Warnf("🔴 Plan 3 T21 FORCE-FLAT invoked for trader %s", traderID)
+	if err := signaler.ForceFlat(traderID); err != nil {
+		return fmt.Errorf("force-flat trader %s: %w", traderID, err)
+	}
+	// After a force-flat, reset the daily PnL window so the operator can
+	// resume after they have addressed whatever tripped the kill switch.
+	ResetDailyPnL()
+	return nil
 }
