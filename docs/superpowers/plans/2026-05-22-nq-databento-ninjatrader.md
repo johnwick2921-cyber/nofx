@@ -6342,8 +6342,11 @@ Plan 1 was marked SHIPPED on 2026-05-22 based on:
 
 Final acceptance via cmd/nq_smoke against the live Databento API
 was deferred to 2026-05-25. That acceptance session surfaced six
-latent bugs in the cmd/nq_smoke entry point, all in the warmup
-/ data-fetch / parser code path. NONE in the AI/CSV/NT path.
+findings in the cmd/nq_smoke entry point — four code bugs (fixed
+in the 2026-05-25 session), one verified non-bug, and one
+documentation/tier-reality observation. All findings sat in the
+warmup / data-fetch / parser code path. NONE in the AI/CSV/NT
+path.
 
 The CSV→NT→fill round trip was validated tonight (2026-05-25 evening
 session) with a real LIVE-session fill at 29807 on SIM101 after CME
@@ -6372,6 +6375,26 @@ Memorial Day closure ended.
 4. Lookback range too narrow — 30min window returns 30 bars;
    EMA50 needs 50 bar minimum. Fixed: 90min for 40-bar
    headroom (commit 46cd2aa1).
+
+5. 1e9 fixed-point division — VERIFIED NOT A BUG. The
+   scaledFloat() helper at provider/databento/historical.go:117-123
+   correctly divides integer-scaled prices (e.g. "21500250000000")
+   by 1e9 to produce floats (21500.25). Reviewed during the
+   parser-fix pre-edit check on 2026-05-25; behavior was already
+   correct, no patch required. Listed here so the audit trail
+   shows the code path was examined and ruled out, not silently
+   skipped.
+
+6. Account-tier vs documented embargo — documentation/reality
+   observation, captured as [VERIFY-16] below. The Plan 1.5
+   design assumed Databento intraday GLBX.MDP3 has a documented
+   15-minute embargo; that figure applies to the
+   real-time-with-embargo subscription tier. The current
+   Historical-tier account has multi-hour available_end lag
+   (~3 hours observed) and required 96h lookback for
+   weekend-spanning queries (per item 2 above). This is not a
+   bug in the code — it is a planning assumption that needs
+   revisiting if Plan 1.5 Cold Start runs on this tier.
 
 ### Lessons
 
@@ -6425,6 +6448,38 @@ canonical plan.
   - nq-databento-ninjatrader-plan → main (Plan 1 release)
 - Plan 1.5 implementation: triggered by Plan 1.5 trigger
   conditions, not yet fired
+
+### Branch state since Plan 1.5 design closeout
+
+After e15c1dc0 (Plan 1.5 merge logic state machine, 2026-05-25),
+eight commits landed on nq-databento-ninjatrader-plan during the
+Plan 1 live-API acceptance + cleanup session:
+
+- 286ee3b9 fix(nq_smoke): add 17min lag buffer for Databento
+  historical embargo
+- 3ae0bf77 fix(nq_smoke): use 24h lookback for Historical-tier
+  Databento account
+- 18c21bae fix(nq_smoke): 96h lookback survives weekend + 3-day
+  holiday gaps
+- 8d20487d fix(databento): parser struct shape + real fixture +
+  docs URL (the parser-fixture-fiction bug surfaced here)
+- 46cd2aa1 fix(nq_smoke): bump lookback range to 90min for EMA50
+  headroom
+- 9b7f8d70 chore(plan-1): rename ClaudeTrader → VLTrader in
+  comments (1:1 swap across 5 Go files; upstream URL citation in
+  provider/ninjatrader/types.go:7 preserved as historical
+  attribution)
+- 5db0bea6 docs(plan): Plan 1 post-mortem + Pass 2 validation +
+  VERIFY-16 (this post-mortem section)
+- 6d66b6ac docs(plan): document Playwright MCP availability for
+  UI verification (registered npx -y @playwright/mcp@latest
+  --headless in ~/.claude.json; Chromium binary pre-installed
+  at ~/.cache/ms-playwright/ for headless E2E testing of
+  frontend tasks 14/15)
+
+Branch tip at the time of this update: 6d66b6ac. Branch is ahead
+of origin/main by the full commit history since the v4-polish
+merge (339d90ab).
 
 ### [VERIFY-16] Databento tier vs documented embargo
 
