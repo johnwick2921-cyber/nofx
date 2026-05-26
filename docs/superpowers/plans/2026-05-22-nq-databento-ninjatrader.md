@@ -6581,9 +6581,10 @@ canonical plan.
 - Databento parser handles real API response shape: DONE
 - cmd/nq_smoke validates end-to-end pipeline (Pass 1): DONE
 - cmd/nq_smoke validates CSV→NT→fill loop (Pass 2): DONE
-- Three pending PRs to merge in order:
-  - chore/hide-faq-nav → nq-databento-ninjatrader-plan
-  - chore/rename-claudetrader-to-vltrader → main (audit doc)
+- Two pending PRs to merge in order (chore/hide-faq-nav was
+  superseded by commit 119e36ee already on this branch and
+  closed without merge on 2026-05-25):
+  - chore/rename-claudetrader-to-vltrader → main (audit doc only)
   - nq-databento-ninjatrader-plan → main (Plan 1 release)
 - Plan 1.5 implementation: triggered by Plan 1.5 trigger
   conditions, not yet fired
@@ -6619,6 +6620,14 @@ Plan 1 live-API acceptance + cleanup session:
 Branch tip at the time of this update: 6d66b6ac. Branch is ahead
 of origin/main by the full commit history since the v4-polish
 merge (339d90ab).
+
+PR #1 closeout (2026-05-25 evening): the chore/hide-faq-nav
+branch was closed without merge after recon revealed it was
+functionally identical to commit 119e36ee already on this
+branch. Recon found a 51-file conflict surface (5 weeks of
+branch divergence) for what would have been a no-op merge.
+Branch deleted from local + origin. Future PR ordering:
+rename audit → main, then Plan 1 release → main.
 
 ### [VERIFY-16] Databento tier vs documented embargo
 
