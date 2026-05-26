@@ -2,6 +2,20 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Agent tooling available in this repo (registered 2026-05-25):**
+> A Playwright MCP server is registered in `~/.claude.json` for project
+> `/home/hoang/nofx`. When you spawn agents that need to verify the React
+> frontend (Settings page exchange config form, Dashboard column rendering,
+> Strategy Studio variant gating, etc.), use the `mcp__playwright__*` tools
+> to drive a headless Chromium against `http://localhost:3000` after
+> running `cd web && npm run dev`. Chromium binary is pre-installed at
+> `~/.cache/ms-playwright/`. Without this, you cannot verify UI changes
+> end-to-end — `npm run build` only confirms TypeScript compiles, not
+> that the rendered DOM is correct.
+>
+> Server command: `npx -y @playwright/mcp@latest --headless`
+> Register on a fresh machine with: `claude mcp add playwright -- npx -y "@playwright/mcp@latest" --headless`
+
 **Goal:** Get the nofx bot to fetch NQ futures OHLCV from Databento, ask the AI for a trade decision in futures-native vocabulary, write that decision to a CSV signal file, and have NinjaTrader (running on the user's Windows host with the open-source `claudetrader.cs` strategy attached to an MNQ chart) execute that decision in SIM mode — then tail the fills CSV back into the bot's database.
 
 **Architecture:** Three independent layers wired through narrow interfaces.
