@@ -17,6 +17,46 @@ import (
 	"time"
 )
 
+// TestGetOHLCV_MockEndToEnd exercises the full client → HTTP → parser path
+// against a captured-shape NDJSON fixture served by NewMockServer. This is
+// the regression guard for the 2026-05-25 hd.ts_event nested-struct bug:
+// the fixture mirrors the real Databento wire format, so any drift in the
+// rawBar shape will fail here instead of only in live smoke.
+func TestGetOHLCV_MockEndToEnd(t *testing.T) {
+	srv := NewMockServer(t, "fixtures/nq-ohlcv-1m-real.json", "fixtures/resolve-nqm6.json")
+	c := NewClient(srv.URL+"/v0", "test-key")
+
+	start := time.Unix(0, 1779456600000000000).UTC()
+	end := start.Add(100 * time.Minute)
+	bars, err := c.GetOHLCV("NQ.c.0", "1m", start, end)
+	if err != nil {
+		t.Fatalf("GetOHLCV: %v", err)
+	}
+	if len(bars) != 100 {
+		t.Fatalf("want 100 bars, got %d", len(bars))
+	}
+
+	// First bar shape sanity: real NQ levels around 21500, non-zero OHLCV.
+	b0 := bars[0]
+	if b0.Timestamp.IsZero() {
+		t.Error("bar[0] has zero timestamp — hd.ts_event likely not parsed")
+	}
+	if b0.Open < 20000 || b0.Open > 25000 {
+		t.Errorf("bar[0].Open = %v, out of NQ realistic band", b0.Open)
+	}
+	if b0.High < b0.Low || b0.Volume <= 0 {
+		t.Errorf("bar[0] OHLCV invariants violated: %+v", b0)
+	}
+
+	// Monotonic, strictly increasing 60s spacing across all 100 bars.
+	for i := 1; i < len(bars); i++ {
+		dt := bars[i].Timestamp.Sub(bars[i-1].Timestamp)
+		if dt != 60*time.Second {
+			t.Fatalf("bars[%d].Timestamp - bars[%d].Timestamp = %v, want 60s", i, i-1, dt)
+		}
+	}
+}
+
 // realDatabentoResponseLine is a real OHLCV-1m record captured from a live
 // GLBX.MDP3 NQ.c.0 curl on 2026-05-25 (smoke-test diagnosis window).
 const realDatabentoResponseLine = `{"hd":{"ts_event":"1779387780000000000","rtype":33,"publisher_id":1,"instrument_id":42004058},"open":"29456250000000","high":"29458750000000","low":"29445500000000","close":"29454750000000","volume":"581"}`

@@ -25,6 +25,28 @@ import (
 )
 
 func main() {
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "databento":
+			runDatabentoSmoke()
+			return
+		case "resolver":
+			runResolverSmoke()
+			return
+		case "prompt":
+			runPromptSmoke()
+			return
+		case "roundtrip":
+			runRoundtripSmoke()
+			return
+		case "all":
+			runAllSmokes()
+			return
+		case "help", "-h", "--help":
+			printHelp()
+			return
+		}
+	}
 	_ = godotenv.Load("/home/hoang/nofx/.env")
 
 	dbKey := os.Getenv("DATABENTO_API_KEY")
