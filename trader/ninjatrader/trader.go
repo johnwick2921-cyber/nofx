@@ -1,5 +1,5 @@
 // Package ninjatrader implements the trader.Trader interface by writing
-// trade signals to a CSV file that NinjaTrader's claudetrader.cs strategy
+// trade signals to a CSV file that NinjaTrader's vltrader.cs strategy
 // consumes. Reads fills back via a CSV tailer.
 //
 // Limitations (intentional for Plan 1 SIM paper trading; lifted by Plan 1.5):
@@ -81,7 +81,7 @@ func (t *Trader) placeEntry(symbol, side string, quantity float64) (map[string]i
 		return nil, fmt.Errorf("ninjatrader: SetStopLoss and SetTakeProfit must be called before %s", side)
 	}
 
-	// Entry price for the CSV is a "reference" — claudetrader uses MARKET orders.
+	// Entry price for the CSV is a "reference" — vltrader uses MARKET orders.
 	// Use SL/TP midpoint as a sensible reference value.
 	entryRef := (sl + tp) / 2.0
 
@@ -138,7 +138,7 @@ func (t *Trader) CancelAllOrders(symbol string) error {
 }
 
 func (t *Trader) GetBalance() (map[string]interface{}, error) {
-	// claudetrader.cs doesn't expose balance via CSV. For paper-mode v1, return
+	// vltrader.cs doesn't expose balance via CSV. For paper-mode v1, return
 	// a fixed SIM101 balance ($50k default) so the trader loop doesn't fail
 	// balance checks. Documented in plan; lifted by Plan 1.5.
 	return map[string]interface{}{

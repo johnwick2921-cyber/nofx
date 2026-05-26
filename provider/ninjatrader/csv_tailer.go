@@ -11,7 +11,7 @@ import (
 	"time"
 )
 
-// CSVTailer reads new rows appended to trades_taken.csv by claudetrader.cs.
+// CSVTailer reads new rows appended to trades_taken.csv by vltrader.cs.
 type CSVTailer struct {
 	dataDir      string
 	pollInterval time.Duration

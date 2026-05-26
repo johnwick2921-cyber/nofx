@@ -4,7 +4,7 @@
 // decision → CSV signal → NT fill → console output.
 //
 // Requires:
-//   - NT 8 running on Windows host with claudetrader.cs on an MNQ chart in SIM
+//   - NT 8 running on Windows host with vltrader.cs on an MNQ chart in SIM
 //   - .env populated with DATABENTO_API_KEY + NINJATRADER_DATA_DIR
 package main
 

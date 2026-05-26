@@ -9,7 +9,7 @@ import (
 )
 
 // CSVWriter writes trade signals to a Windows-shared CSV file that
-// NinjaTrader's claudetrader.cs polls every 2 seconds.
+// NinjaTrader's vltrader.cs polls every 2 seconds.
 type CSVWriter struct {
 	dataDir string
 	mu      sync.Mutex
@@ -25,7 +25,7 @@ func (w *CSVWriter) SignalsPath() string {
 }
 
 // WriteSignal validates and writes one signal. The file is truncated and
-// rewritten with header + this single row — claudetrader.cs clears the file
+// rewritten with header + this single row — vltrader.cs clears the file
 // after processing, so we always overwrite to avoid stale rows accumulating.
 //
 // Atomicity: write to temp file then os.Rename. NT polls every 2s; without
