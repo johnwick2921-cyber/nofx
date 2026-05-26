@@ -31,6 +31,7 @@ const SUPPORTED_EXCHANGE_TEMPLATES = [
   { exchange_type: 'aster', name: 'Aster DEX', type: 'dex' as const },
   { exchange_type: 'lighter', name: 'Lighter', type: 'dex' as const },
   { exchange_type: 'indodax', name: 'Indodax', type: 'cex' as const },
+  { exchange_type: 'ninjatrader', name: 'NinjaTrader', type: 'futures' as const },
 ]
 
 interface ExchangeConfigModalProps {
@@ -51,7 +52,10 @@ interface ExchangeConfigModalProps {
     lighterWalletAddr?: string,
     lighterPrivateKey?: string,
     lighterApiKeyPrivateKey?: string,
-    lighterApiKeyIndex?: number
+    lighterApiKeyIndex?: number,
+    ntDataDir?: string,
+    ntInstrumentName?: string,
+    ntDefaultContractQty?: number
   ) => Promise<void>
   onDelete: (exchangeId: string) => void
   onClose: () => void
@@ -110,6 +114,7 @@ function ExchangeCard({
       type="button"
       onClick={onClick}
       disabled={disabled}
+      data-testid={`exchange-option-${template.exchange_type}`}
       className="flex flex-col items-center gap-2 p-4 rounded-xl transition-all hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
       style={{
         background: selected ? 'rgba(240, 185, 11, 0.15)' : '#0B0E11',
@@ -133,8 +138,14 @@ function ExchangeCard({
       <span
         className="text-xs px-2 py-0.5 rounded-full"
         style={{
-          background: template.type === 'cex' ? 'rgba(240, 185, 11, 0.2)' : 'rgba(139, 92, 246, 0.2)',
-          color: template.type === 'cex' ? '#F0B90B' : '#A78BFA',
+          background:
+            template.type === 'cex' ? 'rgba(240, 185, 11, 0.2)'
+              : template.type === 'dex' ? 'rgba(139, 92, 246, 0.2)'
+                : 'rgba(14, 203, 129, 0.2)',
+          color:
+            template.type === 'cex' ? '#F0B90B'
+              : template.type === 'dex' ? '#A78BFA'
+                : '#0ECB81',
         }}
       >
         {template.type.toUpperCase()}
@@ -177,6 +188,11 @@ export function ExchangeConfigModal({
   const [lighterWalletAddr, setLighterWalletAddr] = useState('')
   const [lighterApiKeyPrivateKey, setLighterApiKeyPrivateKey] = useState('')
   const [lighterApiKeyIndex, setLighterApiKeyIndex] = useState(0)
+
+  // NinjaTrader fields
+  const [ntDataDir, setNtDataDir] = useState('')
+  const [ntInstrumentName, setNtInstrumentName] = useState('MNQ')
+  const [ntDefaultContractQty, setNtDefaultContractQty] = useState(1)
 
   // Other state
   const [secureInputTarget, setSecureInputTarget] = useState<null | 'hyperliquid' | 'aster' | 'lighter'>(null)
@@ -329,6 +345,20 @@ export function ExchangeConfigModal({
       } else if (currentExchangeType === 'lighter') {
         if (!lighterWalletAddr.trim() || !lighterApiKeyPrivateKey.trim()) return
         await onSave(exchangeId, exchangeType, trimmedAccountName, '', '', '', testnet, undefined, undefined, undefined, undefined, lighterWalletAddr.trim(), '', lighterApiKeyPrivateKey.trim(), lighterApiKeyIndex)
+      } else if (currentExchangeType === 'ninjatrader') {
+        if (!ntDataDir.trim()) {
+          toast.error('NT Data Directory is required')
+          return
+        }
+        await onSave(
+          exchangeId, exchangeType, trimmedAccountName,
+          '', '', '', testnet,
+          undefined, undefined, undefined, undefined,
+          undefined, undefined, undefined, undefined,
+          ntDataDir.trim(),
+          ntInstrumentName.trim() || 'MNQ',
+          ntDefaultContractQty || 1,
+        )
       } else {
         if (!apiKey.trim() || !secretKey.trim()) return
         await onSave(exchangeId, exchangeType, trimmedAccountName, apiKey.trim(), secretKey.trim(), '', testnet)
@@ -341,6 +371,7 @@ export function ExchangeConfigModal({
   const stepLabels = [t('exchangeConfig.selectExchange', language), t('exchangeConfig.configure', language)]
   const cexExchanges = SUPPORTED_EXCHANGE_TEMPLATES.filter(t => t.type === 'cex')
   const dexExchanges = SUPPORTED_EXCHANGE_TEMPLATES.filter(t => t.type === 'dex')
+  const futuresExchanges = SUPPORTED_EXCHANGE_TEMPLATES.filter(t => t.type === 'futures')
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 overflow-y-auto backdrop-blur-sm">
@@ -450,6 +481,26 @@ export function ExchangeConfigModal({
                     ))}
                   </div>
                 </div>
+
+                {/* Futures (CME via NinjaTrader) */}
+                {futuresExchanges.length > 0 && (
+                  <div className="space-y-3">
+                    <div className="text-xs font-medium uppercase tracking-wide" style={{ color: '#0ECB81' }}>
+                      Futures (CME)
+                    </div>
+                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
+                      {futuresExchanges.map((template) => (
+                        <ExchangeCard
+                          key={template.exchange_type}
+                          template={template}
+                          selected={selectedExchangeType === template.exchange_type}
+                          onClick={() => handleSelectExchange(template.exchange_type)}
+                          disabled={webCryptoStatus !== 'secure' && webCryptoStatus !== 'disabled'}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -716,6 +767,69 @@ export function ExchangeConfigModal({
                 </>
               )}
 
+              {/* NinjaTrader Fields */}
+              {currentExchangeType === 'ninjatrader' && (
+                <>
+                  <div className="p-4 rounded-xl" style={{ background: 'rgba(14, 203, 129, 0.1)', border: '1px solid rgba(14, 203, 129, 0.3)' }}>
+                    <div className="flex items-start gap-2">
+                      <span style={{ fontSize: '16px' }}>📈</span>
+                      <div>
+                        <div className="text-sm font-semibold mb-1" style={{ color: '#0ECB81' }}>
+                          NinjaTrader CSV Bridge
+                        </div>
+                        <div className="text-xs" style={{ color: '#848E9C' }}>
+                          CME futures (NQ/MNQ/ES/MES) via NT8 file bridge. No API key needed — point to the WSL view of the NT data directory.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 text-sm font-semibold" style={{ color: '#EAECEF' }}>
+                      <Key className="w-4 h-4" style={{ color: '#0ECB81' }} />
+                      NT Data Directory (WSL path) *
+                    </label>
+                    <input
+                      type="text"
+                      data-testid="ninjatrader-data-directory"
+                      value={ntDataDir}
+                      onChange={(e) => setNtDataDir(e.target.value)}
+                      placeholder="/mnt/c/Users/<u>/NofxTrader/data"
+                      className="w-full px-4 py-3 rounded-xl font-mono text-sm"
+                      style={{ background: '#0B0E11', border: '1px solid #2B3139', color: '#EAECEF' }}
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 text-sm font-semibold" style={{ color: '#EAECEF' }}>
+                      Instrument
+                    </label>
+                    <input
+                      type="text"
+                      data-testid="ninjatrader-instrument"
+                      value={ntInstrumentName}
+                      onChange={(e) => setNtInstrumentName(e.target.value)}
+                      placeholder="MNQ"
+                      className="w-full px-4 py-3 rounded-xl"
+                      style={{ background: '#0B0E11', border: '1px solid #2B3139', color: '#EAECEF' }}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="flex items-center gap-2 text-sm font-semibold" style={{ color: '#EAECEF' }}>
+                      Default Contract Quantity
+                    </label>
+                    <input
+                      type="number"
+                      data-testid="ninjatrader-contract-qty"
+                      min={1}
+                      value={ntDefaultContractQty}
+                      onChange={(e) => setNtDefaultContractQty(parseInt(e.target.value) || 1)}
+                      className="w-full px-4 py-3 rounded-xl"
+                      style={{ background: '#0B0E11', border: '1px solid #2B3139', color: '#EAECEF' }}
+                    />
+                  </div>
+                </>
+              )}
+
               {/* Lighter Fields */}
               {currentExchangeType === 'lighter' && (
                 <>
@@ -762,6 +876,7 @@ export function ExchangeConfigModal({
                 </button>
                 <button
                   type="submit"
+                  data-testid={currentExchangeType === 'ninjatrader' ? 'ninjatrader-submit' : 'exchange-submit'}
                   disabled={isSaving || !accountName.trim()}
                   className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold transition-all hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
                   style={{ background: '#F0B90B', color: '#000' }}

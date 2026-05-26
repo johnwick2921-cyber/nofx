@@ -697,6 +697,13 @@ func (tm *TraderManager) addTraderFromStore(traderCfg *store.Trader, aiModelCfg 
 	case "indodax":
 		traderConfig.IndodaxAPIKey = string(exchangeCfg.APIKey)
 		traderConfig.IndodaxSecretKey = string(exchangeCfg.SecretKey)
+	case "ninjatrader":
+		// CME futures via NT8 CSV bridge. No API key — uses a filesystem path
+		// shared with NinjaTrader (see provider/ninjatrader + trader/ninjatrader).
+		traderConfig.NinjaTraderDataDir = exchangeCfg.NTDataDir
+		if exchangeCfg.NTInstrumentName != "" {
+			traderConfig.NinjaTraderSymbol = exchangeCfg.NTInstrumentName
+		}
 	}
 
 	// Set API keys based on AI model (convert EncryptedString to string)
