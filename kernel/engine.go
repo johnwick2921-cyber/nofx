@@ -6,13 +6,15 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
+	"nofx/config"
 	"nofx/logger"
 	"nofx/market"
+	"nofx/provider/databento"
 	"nofx/provider/hyperliquid"
 	"nofx/provider/nofxos"
 	"nofx/security"
 	"nofx/store"
+	"os"
 	"strings"
 	"time"
 )
@@ -873,4 +875,50 @@ func detectLanguage(text string) Language {
 		}
 	}
 	return LangEnglish
+}
+
+// ============================================================================
+// Plan 2 Task 18 — CME session gating (owned by T18; T19 must not edit this block)
+// ============================================================================
+
+// ShouldSkipDecisionCycle reports whether the AI decision cycle should be
+// skipped because the CME futures market is currently closed. Returns true
+// only when TradingMode == "futures" AND IsCMEOpen(time.Now()) == false.
+// In crypto mode this is always false (24/7 markets).
+//
+// Callers (e.g. GetFullDecisionWithStrategy in engine_analysis.go) should
+// invoke this at the top of each decision cycle BEFORE any expensive work
+// like fetching klines or building prompts.
+func ShouldSkipDecisionCycle() bool {
+	if config.Get().TradingMode != "futures" {
+		return false
+	}
+	if IsCMEOpen(time.Now()) {
+		return false
+	}
+	logger.Info("CME closed, skipping decision cycle")
+	return true
+}
+
+// ============================================================================
+// Plan 2 Task 19 — Contract roll detection
+// Block new entries within 5 days of CME quarterly expiry to avoid being
+// caught in low-liquidity rollover periods. Owned by T19.
+// ============================================================================
+
+// ShouldBlockEntryForExpiry reports whether new entries for the given CME
+// futures contract should be blocked because the contract is within 5 days
+// of its quarterly expiry. The second return value is the resolved days-
+// until-expiry (or -1 when not in futures mode).
+//
+// In crypto mode this is always (false, -1) — crypto has no expiry.
+// Unparseable symbols pass through (days=999) so they never trigger the
+// block — a deliberately permissive fallback that prefers false negatives
+// over false positives.
+func ShouldBlockEntryForExpiry(symbol string, now time.Time) (bool, int) {
+	if config.Get().TradingMode != "futures" {
+		return false, -1
+	}
+	days := databento.DaysUntilExpiry(symbol, now)
+	return days >= 0 && days <= 5, days
 }

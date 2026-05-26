@@ -3,6 +3,7 @@ package kernel
 import (
 	"encoding/json"
 	"fmt"
+	"nofx/config"
 	"nofx/logger"
 	"nofx/market"
 	"nofx/mcp"
@@ -45,6 +46,33 @@ func GetFullDecision(ctx *Context, mcpClient mcp.AIClient) (*FullDecision, error
 func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *StrategyEngine, variant string) (*FullDecision, error) {
 	if ctx == nil {
 		return nil, fmt.Errorf("context is nil")
+	}
+	// Plan 2 Task 18: skip decision cycle when CME is closed (futures mode only).
+	// Returns nil decision + nil error so callers treat it as a clean no-op cycle.
+	if ShouldSkipDecisionCycle() {
+		return nil, nil
+	}
+	// Plan 2 Task 19: filter candidates near contract expiry (futures mode only).
+	// Within 5 days of the 3rd-Friday quarterly expiry, liquidity collapses on
+	// the front month and rolls to the next contract. Block new entries on any
+	// such symbol by dropping it from CandidateCoins BEFORE prompt assembly.
+	// (Existing positions on the expiring contract are NOT dropped — the AI
+	// still needs to evaluate close/hold for them.)
+	if config.Get().TradingMode == "futures" && len(ctx.CandidateCoins) > 0 {
+		filtered := ctx.CandidateCoins[:0]
+		now := time.Now()
+		for _, c := range ctx.CandidateCoins {
+			if blocked, days := ShouldBlockEntryForExpiry(c.Symbol, now); blocked {
+				logger.Warnf("contract %s expires in %d days, blocking new entries", c.Symbol, days)
+				continue
+			}
+			filtered = append(filtered, c)
+		}
+		ctx.CandidateCoins = filtered
+		if len(ctx.CandidateCoins) == 0 && len(ctx.Positions) == 0 {
+			logger.Info("Plan 2 T19: all candidates near expiry and no open positions — skipping cycle")
+			return nil, nil
+		}
 	}
 	if engine == nil {
 		defaultConfig := store.GetDefaultStrategyConfig("en")
