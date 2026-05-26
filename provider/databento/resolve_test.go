@@ -2,6 +2,22 @@ package databento
 
 import "testing"
 
+// TestResolveContinuous_MockEndToEnd exercises the full client → HTTP →
+// parser path for symbology.resolve against the captured-shape fixture
+// served by NewMockServer.
+func TestResolveContinuous_MockEndToEnd(t *testing.T) {
+	srv := NewMockServer(t, "fixtures/nq-ohlcv-1m-real.json", "fixtures/resolve-nqm6.json")
+	c := NewClient(srv.URL+"/v0", "test-key")
+
+	got, err := c.ResolveContinuous("NQ.c.0")
+	if err != nil {
+		t.Fatalf("ResolveContinuous: %v", err)
+	}
+	if got != "NQM6" {
+		t.Errorf("got %q, want %q", got, "NQM6")
+	}
+}
+
 func TestParseResolveResponse_FrontMonthNQ(t *testing.T) {
 	// Real-shape response from /v0/symbology.resolve for symbols=NQ.c.0
 	body := []byte(`{
