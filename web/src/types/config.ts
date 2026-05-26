@@ -74,7 +74,7 @@ export interface ExchangeAccountStateResponse {
 }
 
 export interface CreateExchangeRequest {
-  exchange_type: string          // "binance", "bybit", "okx", "hyperliquid", "aster", "lighter"
+  exchange_type: string          // "binance", "bybit", "okx", "hyperliquid", "aster", "lighter", "ninjatrader"
   account_name: string           // User-defined account name
   enabled: boolean
   api_key?: string
@@ -89,6 +89,10 @@ export interface CreateExchangeRequest {
   lighter_private_key?: string
   lighter_api_key_private_key?: string
   lighter_api_key_index?: number
+  // NinjaTrader specific
+  nt_data_dir?: string
+  nt_instrument_name?: string
+  nt_default_contract_qty?: number
 }
 
 export interface CreateTraderRequest {
@@ -140,6 +144,10 @@ export interface UpdateExchangeConfigRequest {
       lighter_private_key?: string
       lighter_api_key_private_key?: string
       lighter_api_key_index?: number
+      // NinjaTrader specific
+      nt_data_dir?: string
+      nt_instrument_name?: string
+      nt_default_contract_qty?: number
     }
   }
 }

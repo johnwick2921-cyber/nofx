@@ -2,7 +2,7 @@ package store
 
 import "strings"
 
-func MissingRequiredExchangeCredentialFields(exchangeType, apiKey, secretKey, passphrase, hyperliquidWalletAddr, asterUser, asterSigner, asterPrivateKey, lighterWalletAddr, lighterAPIKeyPrivateKey string) []string {
+func MissingRequiredExchangeCredentialFields(exchangeType, apiKey, secretKey, passphrase, hyperliquidWalletAddr, asterUser, asterSigner, asterPrivateKey, lighterWalletAddr, lighterAPIKeyPrivateKey string, ntDataDir ...string) []string {
 	switch strings.ToLower(strings.TrimSpace(exchangeType)) {
 	case "binance", "bybit", "gate", "indodax":
 		return missingNamedFields(
@@ -30,6 +30,14 @@ func MissingRequiredExchangeCredentialFields(exchangeType, apiKey, secretKey, pa
 		return missingNamedFields(
 			namedField{"lighter_wallet_addr", lighterWalletAddr},
 			namedField{"lighter_api_key_private_key", lighterAPIKeyPrivateKey},
+		)
+	case "ninjatrader":
+		ntDir := ""
+		if len(ntDataDir) > 0 {
+			ntDir = ntDataDir[0]
+		}
+		return missingNamedFields(
+			namedField{"nt_data_dir", ntDir},
 		)
 	default:
 		return []string{"exchange_type"}
@@ -76,7 +84,8 @@ func IsVisibleExchange(exchange *Exchange) bool {
 		strings.TrimSpace(exchange.LighterWalletAddr) != "" ||
 		strings.TrimSpace(string(exchange.LighterPrivateKey)) != "" ||
 		strings.TrimSpace(string(exchange.LighterAPIKeyPrivateKey)) != "" ||
-		exchange.LighterAPIKeyIndex != 0
+		exchange.LighterAPIKeyIndex != 0 ||
+		strings.TrimSpace(exchange.NTDataDir) != ""
 }
 
 func IsVisibleTrader(trader *Trader) bool {
