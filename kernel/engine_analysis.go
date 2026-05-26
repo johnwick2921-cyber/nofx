@@ -8,6 +8,7 @@ import (
 	"nofx/market"
 	"nofx/mcp"
 	"nofx/store"
+	"nofx/telemetry"
 	"regexp"
 	"strings"
 	"time"
@@ -50,6 +51,8 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 	// Plan 2 Task 18: skip decision cycle when CME is closed (futures mode only).
 	// Returns nil decision + nil error so callers treat it as a clean no-op cycle.
 	if ShouldSkipDecisionCycle() {
+		// Plan 4 Task 25 — gate instrumentation
+		telemetry.RiskGateTrips.WithLabelValues("task18_cme_closed").Inc()
 		return nil, nil
 	}
 	// Plan 2 Task 19: filter candidates near contract expiry (futures mode only).
@@ -71,6 +74,8 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 		ctx.CandidateCoins = filtered
 		if len(ctx.CandidateCoins) == 0 && len(ctx.Positions) == 0 {
 			logger.Info("Plan 2 T19: all candidates near expiry and no open positions — skipping cycle")
+			// Plan 4 Task 25 — gate instrumentation
+			telemetry.RiskGateTrips.WithLabelValues("task19_contract_roll").Inc()
 			return nil, nil
 		}
 	}
@@ -98,6 +103,8 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 		// requestedNotional unknown at this point (no decision yet) → 0.
 		if err := limits.CheckPreTrade(ctx.Account.TotalPnL, len(ctx.Positions), 0, existingNotional); err != nil {
 			logger.Warnf("⚠️ Plan 3 T21 risk gate tripped: %v — skipping decision cycle (HOLD)", err)
+			// Plan 4 Task 25 — gate instrumentation
+			telemetry.RiskGateTrips.WithLabelValues("task21_risk_limit").Inc()
 			return nil, nil
 		}
 	}
@@ -137,9 +144,13 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 				case market.HealthStale:
 					age := now.Sub(time.UnixMilli(latest.Time))
 					logger.Warnf("⚠️ Plan 3 T22: stale data for %s [%s] (last bar %v old) — skipping cycle", symbol, tf, age)
+					// Plan 4 Task 25 — gate instrumentation
+					telemetry.RiskGateTrips.WithLabelValues("task22_drift").Inc()
 					return nil, nil
 				case market.HealthSuspiciousDrift:
 					logger.Warnf("⚠️ Plan 3 T22: suspicious drift for %s [%s] (prev=%.4f latest=%.4f) — skipping cycle", symbol, tf, prev.Close, latest.Close)
+					// Plan 4 Task 25 — gate instrumentation
+					telemetry.RiskGateTrips.WithLabelValues("task22_drift").Inc()
 					return nil, nil
 				}
 			}

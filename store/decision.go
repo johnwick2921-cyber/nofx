@@ -30,7 +30,16 @@ type DecisionRecordDB struct {
 	Success             bool      `gorm:"default:false"`
 	ErrorMessage        string    `gorm:"column:error_message;default:''"`
 	AIRequestDurationMs int64     `gorm:"column:ai_request_duration_ms;default:0"`
-	CreatedAt           time.Time `json:"created_at"`
+	// Plan 4 Task 23 — decision audit trail fields
+	PromptVersion   string    `gorm:"column:prompt_version;default:''"`
+	AIModel         string    `gorm:"column:ai_model;default:''"`
+	AILatencyMs     int64     `gorm:"column:ai_latency_ms;default:0"`
+	RiskCheckPassed bool      `gorm:"column:risk_check_passed;default:false"`
+	RiskCheckError  string    `gorm:"column:risk_check_error;default:''"`
+	ExecutionStatus string    `gorm:"column:execution_status;default:''"`
+	FillPrice       *float64  `gorm:"column:fill_price"`
+	FillLatencyMs   *int64    `gorm:"column:fill_latency_ms"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 func (DecisionRecordDB) TableName() string { return "decision_records" }
@@ -54,6 +63,16 @@ type DecisionRecord struct {
 	AccountState        AccountSnapshot    `json:"account_state"`
 	Positions           []PositionSnapshot `json:"positions"`
 	Decisions           []DecisionAction   `json:"decisions"`
+	// Plan 4 Task 23 — decision audit trail fields (created_at is JSON-aliased from Timestamp).
+	PromptVersion   string    `json:"prompt_version"`
+	AIModel         string    `json:"ai_model"`
+	AILatencyMs     int64     `json:"ai_latency_ms"`
+	RiskCheckPassed bool      `json:"risk_check_passed"`
+	RiskCheckError  string    `json:"risk_check_error"`
+	ExecutionStatus string    `json:"execution_status"`
+	FillPrice       *float64  `json:"fill_price,omitempty"`
+	FillLatencyMs   *int64    `json:"fill_latency_ms,omitempty"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 // AccountSnapshot account state snapshot
@@ -137,6 +156,16 @@ func (db *DecisionRecordDB) toRecord() *DecisionRecord {
 		Success:             db.Success,
 		ErrorMessage:        db.ErrorMessage,
 		AIRequestDurationMs: db.AIRequestDurationMs,
+		// Plan 4 Task 23 — audit trail fields
+		PromptVersion:   db.PromptVersion,
+		AIModel:         db.AIModel,
+		AILatencyMs:     db.AILatencyMs,
+		RiskCheckPassed: db.RiskCheckPassed,
+		RiskCheckError:  db.RiskCheckError,
+		ExecutionStatus: db.ExecutionStatus,
+		FillPrice:       db.FillPrice,
+		FillLatencyMs:   db.FillLatencyMs,
+		CreatedAt:       db.CreatedAt,
 	}
 	json.Unmarshal([]byte(db.CandidateCoins), &record.CandidateCoins)
 	json.Unmarshal([]byte(db.ExecutionLog), &record.ExecutionLog)
@@ -172,6 +201,15 @@ func (s *DecisionStore) LogDecision(record *DecisionRecord) error {
 		Success:             record.Success,
 		ErrorMessage:        record.ErrorMessage,
 		AIRequestDurationMs: record.AIRequestDurationMs,
+		// Plan 4 Task 23 — audit trail fields
+		PromptVersion:   record.PromptVersion,
+		AIModel:         record.AIModel,
+		AILatencyMs:     record.AILatencyMs,
+		RiskCheckPassed: record.RiskCheckPassed,
+		RiskCheckError:  record.RiskCheckError,
+		ExecutionStatus: record.ExecutionStatus,
+		FillPrice:       record.FillPrice,
+		FillLatencyMs:   record.FillLatencyMs,
 	}
 
 	if err := s.db.Create(dbRecord).Error; err != nil {
@@ -294,6 +332,38 @@ func (s *DecisionStore) GetAllStatistics() (*Statistics, error) {
 	s.db.Raw("SELECT COUNT(*) FROM trader_positions WHERE status = 'CLOSED'").Scan(&stats.TotalClosePositions)
 
 	return stats, nil
+}
+
+// GetAuditRecords (Plan 4 Task 23) returns decision records for the audit endpoint.
+// Filters: traderID (required), since (UTC inclusive lower bound), limit (capped at maxLimit).
+// Returns records ordered by timestamp DESC (newest first).
+func (s *DecisionStore) GetAuditRecords(traderID string, since time.Time, limit int) ([]*DecisionRecord, error) {
+	if limit <= 0 {
+		limit = 100
+	}
+	const maxLimit = 1000
+	if limit > maxLimit {
+		limit = maxLimit
+	}
+
+	q := s.db.Model(&DecisionRecordDB{}).Order("timestamp DESC").Limit(limit)
+	if traderID != "" {
+		q = q.Where("trader_id = ?", traderID)
+	}
+	if !since.IsZero() {
+		q = q.Where("timestamp >= ?", since.UTC())
+	}
+
+	var dbRecords []*DecisionRecordDB
+	if err := q.Find(&dbRecords).Error; err != nil {
+		return nil, fmt.Errorf("failed to query audit decision records: %w", err)
+	}
+
+	records := make([]*DecisionRecord, len(dbRecords))
+	for i, db := range dbRecords {
+		records[i] = db.toRecord()
+	}
+	return records, nil
 }
 
 // GetLastCycleNumber gets the last cycle number for specified trader
