@@ -2135,6 +2135,23 @@ git add cmd/nq_smoke/main.go
 git commit -m "feat(cmd): add NQ end-to-end smoke runner"
 ```
 
+- [ ] **Step 10.4: Playwright integration assertion**
+
+After the manual smoke fills against NT SIM, verify the UI reflects
+the backend state. While the bot is running and `cd web && npm run dev`
+is serving on localhost:3000:
+
+1. mcp__playwright__browser_navigate to /dashboard?trader=<id>
+2. mcp__playwright__browser_snapshot — assert the new fill row
+   appears in the positions table
+3. mcp__playwright__browser_snapshot — assert Recent Decisions panel
+   shows the LONG signal we just piped
+4. mcp__playwright__browser_console_messages — no React errors during
+   the live update poll
+
+This proves the full chain works in the user-facing view, not just
+the backend logs.
+
 ---
 
 ## Task 11: Remove three crypto-era pages from navigation
@@ -2364,6 +2381,20 @@ For NQ-trading focus, three crypto-era pages are removed:
 
 Three control surfaces remain: Settings (Config), Strategy (Studio), Traders (Dashboard)."
 ```
+
+- [ ] **Step 11.11: Playwright UI assertion**
+
+Verify removal at the DOM level, not just TypeScript:
+
+1. mcp__playwright__browser_navigate to http://localhost:3000/
+2. mcp__playwright__browser_snapshot — accessibility tree must NOT
+   contain links to "Data", "Strategy Market", "Leaderboard" (desktop
+   AND mobile nav)
+3. mcp__playwright__browser_navigate to /data — should 404 or redirect
+4. mcp__playwright__browser_navigate to /strategy-market — same
+5. mcp__playwright__browser_navigate to /competition — same
+6. Confirm Agent, Traders, Strategy, Settings, FAQ links still render
+7. mcp__playwright__browser_console_messages — no router errors
 
 ---
 
@@ -2764,6 +2795,22 @@ Then open Settings → Exchanges → Add → NinjaTrader and confirm form render
 git commit -m "feat(web): NinjaTrader exchange config form + save handler"
 ```
 
+- [ ] **Step 9: Playwright form assertion**
+
+After npm build passes, verify the form actually renders and saves:
+
+1. mcp__playwright__browser_navigate to /settings
+2. mcp__playwright__browser_click on "Exchanges" tab
+3. mcp__playwright__browser_click "Add Exchange"
+4. mcp__playwright__browser_click the NinjaTrader card
+5. mcp__playwright__browser_snapshot — assert form has DataDir,
+   InstrumentName, DefaultContractQty inputs (NOT API key inputs)
+6. mcp__playwright__browser_type into DataDir field
+7. mcp__playwright__browser_click Save
+8. mcp__playwright__browser_snapshot — assert exchange appears in
+   list with NinjaTrader name
+9. mcp__playwright__browser_console_messages — no errors
+
 ---
 
 ## Task 15: Frontend futures-gating (Dashboard + Strategy)
@@ -2837,6 +2884,24 @@ Then open Dashboard for a NT trader and verify no USDT unit, no Leverage/LiqPric
 git commit -m "feat(web): futures-gate Dashboard + IndicatorEditor + RiskControlEditor + CoinSourceEditor"
 ```
 
+- [ ] **Step 8: Playwright futures-gating assertion**
+
+The build only proves TS compiles; the runtime behavior is what
+matters. With a NT trader configured:
+
+1. mcp__playwright__browser_navigate to /dashboard?trader=<NT-trader-id>
+2. mcp__playwright__browser_snapshot — assert StatCards show "USD"
+   text, NOT "USDT"
+3. mcp__playwright__browser_snapshot — positions table headers must
+   NOT contain "Leverage" or "Liquidation Price"
+4. mcp__playwright__browser_navigate to /strategy
+5. mcp__playwright__browser_click into a futures-variant strategy
+6. mcp__playwright__browser_snapshot — IndicatorEditor must NOT
+   render funding rate or OI toggle sections
+7. mcp__playwright__browser_snapshot — RiskControlEditor labels read
+   "Primary Instrument Leverage" not "BTC/ETH Leverage"
+8. mcp__playwright__browser_console_messages — no errors
+
 ---
 
 ## Task 16: VL brand cleanup + minor fixes
@@ -2885,6 +2950,18 @@ func TestNormalize_CMEFutures(t *testing.T) {
 go build ./... && cd web && npm run build && cd ..
 git commit -m "chore: VL brand cleanup + stale comment + Normalize futures test"
 ```
+
+- [ ] **Step 6: Playwright brand assertion**
+
+Catch any "NOFX" string that slipped through:
+
+1. mcp__playwright__browser_navigate to /setup
+2. mcp__playwright__browser_get_page_text — search for "NOFX".
+   Expected: 0 matches.
+3. mcp__playwright__browser_navigate to a trader dashboard with chart
+4. mcp__playwright__browser_take_screenshot — visually confirm chart
+   watermark reads "VL" not "NOFX"
+5. mcp__playwright__browser_console_messages — no errors
 
 ---
 
@@ -6024,6 +6101,19 @@ GORM Migrate adds the new columns. Insert at decision-time + update at fill-time
 - [ ] **Step 3: API + UI**
 Expose at `GET /api/decisions/audit?trader_id=xxx&since=2026-05-22`; render in TraderDashboardPage's Decisions tab.
 
+- [ ] **Step 4: Playwright audit trail assertion**
+
+Verify the decision audit endpoint actually renders in the UI:
+
+1. mcp__playwright__browser_navigate to /dashboard?trader=<id>
+2. mcp__playwright__browser_click "Decisions" tab
+3. mcp__playwright__browser_snapshot — assert table shows columns:
+   Symbol, Action, Entry, SL, TP, Confidence, Risk Check,
+   Execution Status, Fill Price, Latency
+4. For a known historical decision, assert the Reasoning field
+   expands on click
+5. mcp__playwright__browser_console_messages — no errors
+
 ## Task 24: Retry + circuit breaker for Databento + NT bridge
 
 **Why:** Databento HTTP can return 5xx; NT CSV write can fail with EBUSY on Windows file lock contention. Need bounded retry with backoff, plus circuit breaker that pauses the trader after N consecutive failures.
@@ -6280,6 +6370,24 @@ For the user (not engineers):
 - Daily checklist before market open: NT8 connected? ClaudeTrader strategy enabled? Bot logs healthy?
 - Weekly checklist: contract roll calendar (3rd Friday); review decision audit trail; rotate API keys.
 - Emergency: how to hit force-flat from the dashboard.
+
+### Playwright runbook verification
+
+Before any live trade, run this manual check to confirm the
+emergency-flat button works end-to-end:
+
+1. cd web && npm run dev
+2. mcp__playwright__browser_navigate to /dashboard
+3. mcp__playwright__browser_click the red "Emergency Flat" button
+4. mcp__playwright__browser_snapshot — assert confirmation modal
+   appears
+5. mcp__playwright__browser_click "Confirm"
+6. Verify backend logs show: "FORCE FLAT initiated by user"
+7. mcp__playwright__browser_snapshot — assert positions table is
+   empty within 10s
+
+If the button does not exist, does not confirm, or does not flatten —
+do NOT trade live. Fix the button first.
 
 ---
 
