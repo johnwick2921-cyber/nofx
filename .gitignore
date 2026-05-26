@@ -137,3 +137,10 @@ PR_DESCRIPTION.md
 # Compiled binaries (defensive: also matched by nofx pattern but explicit is better)
 /nofx-bin
 /nq_smoke
+
+# Local environment backups (not for commit)
+.env.save
+.env.save.*
+
+# Playwright MCP cache (per-session, not for commit)
+.playwright-mcp/
