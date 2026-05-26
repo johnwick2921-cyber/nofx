@@ -1,9 +1,9 @@
 // Package ninjatrader implements the file-CSV bridge to NinjaTrader 8's
-// claudetrader.cs NinjaScript strategy. Go writes trade_signals.csv (5 fields)
+// vltrader.cs NinjaScript strategy. Go writes trade_signals.csv (5 fields)
 // which NT8 polls every 2 seconds; NT8 appends to trades_taken.csv (3 fields)
 // which Go tails. No sockets, no daemon — atomic file ops only.
 //
-// Verified against claudetrader.cs source — see
+// Verified against vltrader.cs source — see
 // https://github.com/J0shusmc/Claude-Trader-NinjaTrader.
 package ninjatrader
 
@@ -12,16 +12,16 @@ import (
 	"strings"
 )
 
-// SignalRow is one row of trade_signals.csv that claudetrader.cs consumes.
+// SignalRow is one row of trade_signals.csv that vltrader.cs consumes.
 type SignalRow struct {
-	DateTime   string // MM/dd/yyyy HH:mm:ss — claudetrader.cs DateTime format
+	DateTime   string // MM/dd/yyyy HH:mm:ss — vltrader.cs DateTime format
 	Direction  string // "LONG" or "SHORT"
 	EntryPrice float64
 	StopLoss   float64
 	TakeProfit float64
 }
 
-// FillRow is one row of trades_taken.csv that claudetrader.cs appends.
+// FillRow is one row of trades_taken.csv that vltrader.cs appends.
 type FillRow struct {
 	DateTime   string // MM/dd/yyyy HH:mm:ss
 	Direction  string // "LONG" or "SHORT"
