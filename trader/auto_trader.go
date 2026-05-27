@@ -318,14 +318,17 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 		logger.Infof("🏦 [%s] Using Indodax Spot trading", config.Name)
 		trader = indodax.NewIndodaxTrader(config.IndodaxAPIKey, config.IndodaxSecretKey)
 	case "ninjatrader":
-		logger.Infof("🏦 [%s] Using NinjaTrader CSV bridge (CME futures via SIM)", config.Name)
+		logger.Infof("🏦 [%s] Using NinjaTrader (transport via NT_TRANSPORT env, CME futures via SIM)", config.Name)
 		if config.NinjaTraderDataDir == "" {
 			return nil, fmt.Errorf("ninjatrader requires NinjaTraderDataDir (set NINJATRADER_DATA_DIR in env or per-exchange config)")
 		}
-		trader = ntTrader.New(ntTrader.Config{
+		trader, err = ntTrader.NewTraderFromEnv(ntTrader.Config{
 			DataDir: config.NinjaTraderDataDir,
 			Symbol:  config.NinjaTraderSymbol,
 		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize NinjaTrader: %w", err)
+		}
 	default:
 		return nil, fmt.Errorf("unsupported trading platform: %s", config.Exchange)
 	}
