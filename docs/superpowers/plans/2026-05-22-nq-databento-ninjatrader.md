@@ -4340,6 +4340,112 @@ Trigger conditions (any one):
 
 **Plan 1 stays canonical until one of those triggers fires.** Do not pre-emptively rebuild the bridge — the CSV path is sufficient for the "validate AI brain" objective.
 
+## Implementation Spec (building pre-trigger)
+
+> **Status update (2026-05-26):** Plan 1.5 is moving from "designed, deferred" to "designed + spec'd, building pre-trigger" as a belt-and-suspenders measure before live money. The CSV bridge (Plan 1, validated on 2026-05-22 with a real SIM fill at NQ 29807) remains the canonical production path. The TCP AddOn is being built as an opt-in alternative via the `NT_TRANSPORT` env var (`csv` default, `tcp` opt-in), with zero-downtime flip-back. Cross-reference: ADR-001 (CSV bridge vs TCP).
+
+### Why build pre-trigger
+
+Plan 1.5 was originally deferred per ADR-001 until one of the documented trigger conditions fired (CSV latency, Defender file-lock contention, operator-reported failures, or sub-second algorithm cadence). None has fired. Building pre-trigger anyway provides:
+
+1. A live-tested alternative transport ready before the first live-money trade — avoids an emergency migration if a CSV failure surfaces under load.
+2. Wire-protocol stability locked while the rest of the canonical plan is still fresh in operator memory — better than re-deriving it weeks later.
+3. Plan 1 critical files preserved byte-identical (per ADR-007) — TCP is purely additive; the CSV bridge is not modified, removed, or refactored.
+
+### File manifest
+
+**Go files (8 new, all ADD-only — Plan 1 critical files stay byte-identical):**
+
+- `provider/ninjatrader/tcp_server.go` — TCP listener bound to 127.0.0.1:36974 (NOT NT's ATI port 36973); accepts a single concurrent NT AddOn client; routes signal frames out, fill/heartbeat/ack frames in.
+- `provider/ninjatrader/tcp_framing.go` — 4-byte big-endian length-prefix codec + JSON marshalling for the 4 message types.
+- `provider/ninjatrader/tcp_framing_test.go` — round-trip framing tests, malformed-frame rejection, oversized-frame (>1MB) rejection.
+- `provider/ninjatrader/tcp_server_test.go` — listener lifecycle, concurrent-client rejection, graceful close on context cancellation.
+- `provider/ninjatrader/tcp_client_mock.go` — in-process mock NT client for integration tests (mirrors `mock_nt.go`'s role for the CSV path).
+- `trader/ninjatrader/tcp_trader.go` — alternative `Trader` implementation that emits signals through the TCP server. SEPARATE TYPE from the existing CSV `Trader` (per ADR-007: additive, not a modification).
+- `trader/ninjatrader/transport.go` — env-var router. Reads `NT_TRANSPORT=csv|tcp` (default `csv`); constructor returns either the existing CSV `Trader` or the new `TCPTrader`. Zero-downtime flip-back: change the env var, restart the bot, no code rebuild required.
+- `cmd/nq_smoke/smoke_tcp.go` — `nq_smoke tcp` sub-command exercising the TCP round-trip end-to-end against the mock NT client. Follows the Plan 5 Task 29 dispatch precedent (ADD-only sub-command, `cmd/nq_smoke/main.go` receives dispatch wiring only).
+
+**C# AddOn files (3, scaffolded only — must compile on Windows host):**
+
+- `ninjascript/VLTraderTCPClient.cs` — NinjaScript AddOn class. Connects to `127.0.0.1:36974` on NT startup; subscribes to bar data and order events; emits fill frames; consumes signal frames and submits OCO bracket orders via NT's managed order API. CANNOT compile in WSL2 — requires Visual Studio (or NT8's NinjaScript editor F5) on the Windows host.
+- `ninjascript/vltrader_tcp_README.md` — install procedure (drop file into `Documents\NinjaTrader 8\bin\Custom\AddOns\`, compile via NT8 editor, restart NT, verify Active in NT's Output window).
+- `ninjascript/vltrader_tcp_PROTOCOL.md` — wire protocol reference (mirrors the spec below) so the C# side has a local copy of the contract.
+
+### Wire protocol
+
+**Framing:** every frame on the TCP stream is a 4-byte big-endian length prefix followed by a UTF-8 JSON payload. Max frame size: 1 MB (oversized frames are an error → server closes the connection).
+
+**Envelope:**
+
+```
+{
+  "type": "signal" | "fill" | "heartbeat" | "ack",
+  "payload": { … }
+}
+```
+
+**Signal frame payload** (Go server → C# AddOn):
+
+- `symbol` (string, e.g. "MNQ")
+- `side` (string, "long" | "short")
+- `quantity` (int, default contracts)
+- `entry` (float64, tick-rounded)
+- `stop_loss` (float64, tick-rounded)
+- `take_profit` (float64, tick-rounded)
+- `signal_id` (string, UUID)
+- `timestamp` (RFC3339)
+
+**Fill frame payload** (C# AddOn → Go server):
+
+- `signal_id` (string, matches the originating signal)
+- `fill_price` (float64)
+- `fill_time` (RFC3339)
+- `side` (string)
+- `quantity` (int)
+- `slippage_ticks` (float64)
+- `status` (string, "filled" | "rejected" | "partial")
+
+**Heartbeat frame** (bidirectional): empty payload, 30s interval.
+
+**Ack frame** (bidirectional): `{ "acks": "heartbeat" }` or `{ "acks": "<signal_id>" }`.
+
+### Failure modes + reconnect
+
+- **TCP disconnect:** server holds the signal queue; on reconnect, sends pending signals with original timestamps. Client (C# AddOn) may reject signals older than 60s as stale.
+- **Heartbeat timeout:** server closes the connection after 60s without an ack; client reconnects every 5s.
+- **Invalid frame** (bad length, oversized >1MB, malformed JSON): server logs warn + closes the connection; client reconnects.
+- **Order rejection by NT8:** AddOn emits a fill frame with `status=rejected`; Go side logs the rejection and does NOT retry (manual operator intervention required).
+
+### Manual followup (operator, post-PR-merge)
+
+1. Compile `VLTraderTCPClient.cs` on the Windows host using Visual Studio or NT8's built-in NinjaScript editor (F5).
+2. Drop the compiled AddOn into `Documents\NinjaTrader 8\bin\Custom\AddOns\`.
+3. Restart NT8; verify the AddOn shows as Active in NT's Output window.
+4. Start the bot with `NT_TRANSPORT=tcp` set in the environment.
+5. Submit a SIM test signal through the dashboard's existing signal flow.
+6. Verify: NT8 places an OCO bracket order; the fill emits back through the TCP channel; the bot records the position.
+7. If success → Plan 1.5 is full-stack verified; annotate `v1.0-plan1-5` tag with the verification timestamp.
+8. If failure → diagnose against `vltrader_tcp_PROTOCOL.md`; patch the C# AddOn or Go server side as needed; do NOT fall back to CSV until the diagnosis is captured.
+
+### Plan 1 critical file integrity (ADR-007)
+
+Plan 1.5 ADDS files. It does NOT modify any of the 19 Plan 1 critical files locked by ADR-007:
+
+- `provider/ninjatrader/csv_writer.go`
+- `provider/ninjatrader/csv_tailer.go`
+- `provider/ninjatrader/types.go` (reused via import; not modified)
+- `provider/ninjatrader/mock_nt.go`
+- `trader/ninjatrader/trader.go` (the existing CSV `Trader`; `TCPTrader` is a separate type)
+- `trader/ninjatrader/tick_rounding.go`
+
+`cmd/nq_smoke/main.go` is modified ADD-only (smoke dispatch wiring for the new `tcp` sub-command), per the Plan 5 Task 29 precedent.
+
+### Release tag scheme
+
+- `v1.0-plan1-5-spec` — this docs-only change (the spec being read right now).
+- `v1.0-plan1-5` — the actual code, follow-up PR after this spec lands.
+- The `v1.0-plan1-5` tag annotation will be extended once the operator's manual compile + NT8 integration test (steps 1–7 above) is complete, with the note "verified via operator manual compile + NT8 integration test on YYYY-MM-DD".
+
 ---
 
 # Reference: Developing New Strategies and Indicators
