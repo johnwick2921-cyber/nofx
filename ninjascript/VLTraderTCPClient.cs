@@ -13,11 +13,10 @@
 #region Using declarations
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Net.Sockets;
 using System.Text;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using System.Threading;
 using NinjaTrader.Cbi;
 using NinjaTrader.Core;
@@ -204,9 +203,13 @@ namespace NinjaTrader.NinjaScript.AddOns
         {
             try
             {
-                JObject root = JObject.Parse(json);
-                var type = (string)root["type"];
-                var payload = root["payload"] as JObject;
+                var root = (Dictionary<string, object>)new JsonParser(json).Parse();
+                string type = GetString(root, "type");
+                Dictionary<string, object> payload = null;
+                if (root.ContainsKey("payload"))
+                {
+                    payload = root["payload"] as Dictionary<string, object>;
+                }
                 if (type == "signal")
                 {
                     HandleSignal(payload);
@@ -232,7 +235,7 @@ namespace NinjaTrader.NinjaScript.AddOns
         }
 
         // === Signal handling: OCO bracket placement (spec L4387-4396) ===
-        private void HandleSignal(JObject p)
+        private void HandleSignal(Dictionary<string, object> p)
         {
             if (p == null)
             {
@@ -249,14 +252,14 @@ namespace NinjaTrader.NinjaScript.AddOns
             string ts;
             try
             {
-                symbol   = (string)p["symbol"];
-                side     = (string)p["side"];                    // "long" | "short"
-                qty      = (int)p["quantity"];
-                entry    = (double)(decimal)p["entry"];
-                sl       = (double)(decimal)p["stop_loss"];
-                tp       = (double)(decimal)p["take_profit"];
-                signalId = (string)p["signal_id"];
-                ts       = (string)p["timestamp"];
+                symbol   = GetString(p, "symbol");
+                side     = GetString(p, "side");                 // "long" | "short"
+                qty      = GetInt(p, "quantity");
+                entry    = GetDouble(p, "entry");
+                sl       = GetDouble(p, "stop_loss");
+                tp       = GetDouble(p, "take_profit");
+                signalId = GetString(p, "signal_id");
+                ts       = GetString(p, "timestamp");
             }
             catch (Exception ex)
             {
@@ -396,30 +399,30 @@ namespace NinjaTrader.NinjaScript.AddOns
         private void SendFillFrame(string signalId, double fillPrice, string side,
                                    int qty, double slippageTicks, string status)
         {
-            var payload = new
+            var payload = new Dictionary<string, object>
             {
-                signal_id     = signalId,
-                fill_price    = fillPrice,
-                fill_time     = DateTime.UtcNow.ToString("o"),
-                side          = side,
-                quantity      = qty,
-                slippage_ticks = slippageTicks,
-                status        = status
+                ["signal_id"]      = signalId,
+                ["fill_price"]     = fillPrice,
+                ["fill_time"]      = DateTime.UtcNow.ToString("o"),
+                ["side"]           = side,
+                ["quantity"]       = qty,
+                ["slippage_ticks"] = slippageTicks,
+                ["status"]         = status
             };
             WriteEnvelope("fill", payload);
         }
 
         private void SendAck(string acks)
         {
-            WriteEnvelope("ack", new { acks });
+            WriteEnvelope("ack", new Dictionary<string, object> { ["acks"] = acks });
         }
 
-        private void WriteEnvelope(string type, object payload)
+        private void WriteEnvelope(string type, Dictionary<string, object> payload)
         {
             if (stream == null) return;
             try
             {
-                string json = JsonConvert.SerializeObject(new { type, payload });
+                string json = EncodeFrame(type, payload);
                 byte[] body = Encoding.UTF8.GetBytes(json);
                 if (body.Length > MAX_FRAME_BYTES)
                 {
@@ -453,7 +456,7 @@ namespace NinjaTrader.NinjaScript.AddOns
             {
                 Thread.Sleep(HEARTBEAT_INTERVAL_MS);
                 if (ct.IsCancellationRequested) return;
-                WriteEnvelope("heartbeat", new { });
+                WriteEnvelope("heartbeat", new Dictionary<string, object>());
             }
         }
 
@@ -466,6 +469,281 @@ namespace NinjaTrader.NinjaScript.AddOns
         private static void LogWarn(string msg)
         {
             try { NinjaScript.Log(msg, LogLevel.Warning); } catch { }
+        }
+
+        // ==============================================================
+        // Hand-rolled JSON encoder + parser (no external deps).
+        // NT8 user AddOns cannot resolve Newtonsoft.Json reliably, so we
+        // implement only what the 4-message wire protocol needs:
+        // {type, payload} envelopes with flat snake_case payloads.
+        // On-wire bytes must match Go encoding/json: snake_case keys,
+        // invariant-culture numbers, compact (no pretty-print), UTF-8.
+        // ==============================================================
+
+        private static string EncodeFrame(string type, Dictionary<string, object> payload)
+        {
+            var sb = new StringBuilder();
+            sb.Append('{');
+            sb.Append("\"type\":");
+            AppendString(sb, type);
+            sb.Append(",\"payload\":");
+            AppendObject(sb, payload);
+            sb.Append('}');
+            return sb.ToString();
+        }
+
+        private static void AppendObject(StringBuilder sb, Dictionary<string, object> obj)
+        {
+            sb.Append('{');
+            if (obj != null)
+            {
+                bool first = true;
+                foreach (var kv in obj)
+                {
+                    if (!first) sb.Append(',');
+                    first = false;
+                    AppendString(sb, kv.Key);
+                    sb.Append(':');
+                    AppendValue(sb, kv.Value);
+                }
+            }
+            sb.Append('}');
+        }
+
+        private static void AppendValue(StringBuilder sb, object v)
+        {
+            if (v == null) { sb.Append("null"); return; }
+            if (v is string s) { AppendString(sb, s); return; }
+            if (v is bool b) { sb.Append(b ? "true" : "false"); return; }
+            if (v is int i) { sb.Append(i.ToString(CultureInfo.InvariantCulture)); return; }
+            if (v is long l) { sb.Append(l.ToString(CultureInfo.InvariantCulture)); return; }
+            if (v is double d) { sb.Append(d.ToString("R", CultureInfo.InvariantCulture)); return; }
+            if (v is float f) { sb.Append(((double)f).ToString("R", CultureInfo.InvariantCulture)); return; }
+            if (v is decimal m) { sb.Append(m.ToString(CultureInfo.InvariantCulture)); return; }
+            if (v is Dictionary<string, object> nested) { AppendObject(sb, nested); return; }
+            AppendString(sb, v.ToString());
+        }
+
+        private static void AppendString(StringBuilder sb, string s)
+        {
+            sb.Append('"');
+            if (s != null)
+            {
+                foreach (char c in s)
+                {
+                    switch (c)
+                    {
+                        case '"':  sb.Append("\\\""); break;
+                        case '\\': sb.Append("\\\\"); break;
+                        case '\n': sb.Append("\\n"); break;
+                        case '\r': sb.Append("\\r"); break;
+                        case '\t': sb.Append("\\t"); break;
+                        case '\b': sb.Append("\\b"); break;
+                        case '\f': sb.Append("\\f"); break;
+                        default:
+                            if (c < 0x20) sb.AppendFormat("\\u{0:x4}", (int)c);
+                            else sb.Append(c);
+                            break;
+                    }
+                }
+            }
+            sb.Append('"');
+        }
+
+        // === Field-extraction helpers (typed reads from parsed dictionary) ===
+        private static string GetString(Dictionary<string, object> obj, string key)
+        {
+            if (obj != null && obj.TryGetValue(key, out var v) && v != null) return v.ToString();
+            return null;
+        }
+
+        private static double GetDouble(Dictionary<string, object> obj, string key)
+        {
+            if (obj != null && obj.TryGetValue(key, out var v) && v != null)
+            {
+                if (v is double d) return d;
+                if (v is long l) return (double)l;
+                if (v is int i) return (double)i;
+                if (v is decimal m) return (double)m;
+                return Convert.ToDouble(v, CultureInfo.InvariantCulture);
+            }
+            return 0.0;
+        }
+
+        private static int GetInt(Dictionary<string, object> obj, string key)
+        {
+            if (obj != null && obj.TryGetValue(key, out var v) && v != null)
+            {
+                if (v is long l) return (int)l;
+                if (v is int i) return i;
+                if (v is double d) return (int)d;
+                return Convert.ToInt32(v, CultureInfo.InvariantCulture);
+            }
+            return 0;
+        }
+
+        // === Recursive-descent JSON parser ===
+        private class JsonParser
+        {
+            private readonly string s;
+            private int pos;
+
+            public JsonParser(string input)
+            {
+                s = input ?? string.Empty;
+                pos = 0;
+            }
+
+            public object Parse()
+            {
+                SkipWs();
+                return ParseValue();
+            }
+
+            private object ParseValue()
+            {
+                SkipWs();
+                if (pos >= s.Length) throw new Exception("unexpected EOF");
+                char c = s[pos];
+                if (c == '{') return ParseObject();
+                if (c == '"') return ParseString();
+                if (c == 't' || c == 'f') return ParseBool();
+                if (c == 'n') return ParseNull();
+                if (c == '-' || (c >= '0' && c <= '9')) return ParseNumber();
+                if (c == '[') return ParseArray();
+                throw new Exception("unexpected char '" + c + "' at " + pos);
+            }
+
+            private Dictionary<string, object> ParseObject()
+            {
+                var result = new Dictionary<string, object>();
+                pos++; // consume '{'
+                SkipWs();
+                if (pos < s.Length && s[pos] == '}') { pos++; return result; }
+                while (true)
+                {
+                    SkipWs();
+                    string key = ParseString();
+                    SkipWs();
+                    if (pos >= s.Length || s[pos] != ':') throw new Exception("expected ':' at " + pos);
+                    pos++; // consume ':'
+                    SkipWs();
+                    object value = ParseValue();
+                    result[key] = value;
+                    SkipWs();
+                    if (pos < s.Length && s[pos] == ',') { pos++; continue; }
+                    if (pos < s.Length && s[pos] == '}') { pos++; return result; }
+                    throw new Exception("expected ',' or '}' at " + pos);
+                }
+            }
+
+            private string ParseString()
+            {
+                if (pos >= s.Length || s[pos] != '"') throw new Exception("expected string at " + pos);
+                pos++; // consume opening '"'
+                var sb = new StringBuilder();
+                while (pos < s.Length && s[pos] != '"')
+                {
+                    if (s[pos] == '\\' && pos + 1 < s.Length)
+                    {
+                        char esc = s[pos + 1];
+                        switch (esc)
+                        {
+                            case '"':  sb.Append('"'); pos += 2; break;
+                            case '\\': sb.Append('\\'); pos += 2; break;
+                            case '/':  sb.Append('/'); pos += 2; break;
+                            case 'n':  sb.Append('\n'); pos += 2; break;
+                            case 'r':  sb.Append('\r'); pos += 2; break;
+                            case 't':  sb.Append('\t'); pos += 2; break;
+                            case 'b':  sb.Append('\b'); pos += 2; break;
+                            case 'f':  sb.Append('\f'); pos += 2; break;
+                            case 'u':
+                                if (pos + 5 < s.Length)
+                                {
+                                    sb.Append((char)Convert.ToInt32(s.Substring(pos + 2, 4), 16));
+                                    pos += 6;
+                                }
+                                else
+                                {
+                                    pos++;
+                                }
+                                break;
+                            default: sb.Append(esc); pos += 2; break;
+                        }
+                    }
+                    else
+                    {
+                        sb.Append(s[pos]);
+                        pos++;
+                    }
+                }
+                if (pos >= s.Length) throw new Exception("unterminated string");
+                pos++; // consume closing '"'
+                return sb.ToString();
+            }
+
+            private object ParseNumber()
+            {
+                int start = pos;
+                if (s[pos] == '-') pos++;
+                while (pos < s.Length &&
+                       (char.IsDigit(s[pos]) || s[pos] == '.' ||
+                        s[pos] == 'e' || s[pos] == 'E' ||
+                        s[pos] == '+' || s[pos] == '-'))
+                {
+                    pos++;
+                }
+                string num = s.Substring(start, pos - start);
+                if (num.IndexOfAny(new[] { '.', 'e', 'E' }) >= 0)
+                {
+                    return double.Parse(num, CultureInfo.InvariantCulture);
+                }
+                if (long.TryParse(num, NumberStyles.Integer, CultureInfo.InvariantCulture, out long l))
+                {
+                    return l;
+                }
+                return double.Parse(num, CultureInfo.InvariantCulture);
+            }
+
+            private bool ParseBool()
+            {
+                if (pos + 4 <= s.Length && s.Substring(pos, 4) == "true") { pos += 4; return true; }
+                if (pos + 5 <= s.Length && s.Substring(pos, 5) == "false") { pos += 5; return false; }
+                throw new Exception("invalid bool at " + pos);
+            }
+
+            private object ParseNull()
+            {
+                if (pos + 4 <= s.Length && s.Substring(pos, 4) == "null") { pos += 4; return null; }
+                throw new Exception("invalid null at " + pos);
+            }
+
+            private List<object> ParseArray()
+            {
+                var result = new List<object>();
+                pos++; // consume '['
+                SkipWs();
+                if (pos < s.Length && s[pos] == ']') { pos++; return result; }
+                while (true)
+                {
+                    SkipWs();
+                    result.Add(ParseValue());
+                    SkipWs();
+                    if (pos < s.Length && s[pos] == ',') { pos++; continue; }
+                    if (pos < s.Length && s[pos] == ']') { pos++; return result; }
+                    throw new Exception("expected ',' or ']' at " + pos);
+                }
+            }
+
+            private void SkipWs()
+            {
+                while (pos < s.Length &&
+                       (s[pos] == ' ' || s[pos] == '\t' ||
+                        s[pos] == '\n' || s[pos] == '\r'))
+                {
+                    pos++;
+                }
+            }
         }
     }
 }
