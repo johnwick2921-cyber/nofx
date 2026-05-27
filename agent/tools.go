@@ -28,6 +28,7 @@ import (
 	"nofx/trader/indodax"
 	"nofx/trader/kucoin"
 	"nofx/trader/lighter"
+	ntTrader "nofx/trader/ninjatrader"
 	"nofx/trader/okx"
 )
 
@@ -1094,6 +1095,11 @@ func buildTraderExchangeProbe(exchangeCfg *store.Exchange, userID string) (trade
 			exchangeCfg.LighterAPIKeyIndex,
 			false,
 		)
+	case "ninjatrader":
+		return ntTrader.New(ntTrader.Config{
+			DataDir: exchangeCfg.NTDataDir,
+			Symbol:  exchangeCfg.NTInstrumentName,
+		}), nil
 	default:
 		return nil, fmt.Errorf("unsupported exchange type: %s", exchangeCfg.ExchangeType)
 	}
