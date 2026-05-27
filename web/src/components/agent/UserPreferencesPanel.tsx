@@ -128,8 +128,8 @@ export function UserPreferencesPanel({ token, language }: Props) {
           }}
         >
           {language === 'zh'
-            ? '把长期偏好固定下来，比如“默认用中文回答”或“优先关注 BTC 和 ETH”。'
-            : 'Pin durable preferences the agent should keep in mind, like answering in Chinese or focusing on BTC and ETH.'}
+            ? '把长期偏好固定下来，比如“默认用中文回答”或“优先关注 MNQ 期货”。'
+            : 'Pin durable preferences the agent should keep in mind, like answering in Chinese or focusing on MNQ futures.'}
         </div>
       </div>
 
@@ -143,8 +143,8 @@ export function UserPreferencesPanel({ token, language }: Props) {
           }}
           placeholder={
             language === 'zh'
-              ? '例如：默认用中文回答，优先关注 BTC、ETH'
-              : 'Example: Answer in Chinese and focus on BTC, ETH'
+              ? '例如：默认用中文回答，优先关注 MNQ 期货'
+              : 'Example: Answer in Chinese and focus on MNQ futures'
           }
           style={{
             flex: 1,
