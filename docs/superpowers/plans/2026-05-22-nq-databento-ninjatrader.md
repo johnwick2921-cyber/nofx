@@ -6794,3 +6794,132 @@ For SIM/Plan-1 validation: 96h buffer is fine.
 For live/Plan-1.5 implementation: confirm Databento tier
 before implementing the Cold Start logic. Either upgrade to
 real-time-with-embargo or adapt the buffer constant.
+
+# Plan 4.x Roadmap — VL Futures Readiness
+
+Captured from comprehensive web UI audit run on 2026-05-27 during Plan 1.5 operator verification session. The audit ran 104 tool calls over 11 minutes, mapped every page in the dashboard, identified crypto-era residue from the pre-VL-rebrand codebase, and surfaced Plan 1.5 backend functionality with no UI surface.
+
+Cross-reference: ADR-001 (CSV bridge vs TCP), ADR-007 (Plan 1 critical file integrity).
+
+## Chart Data Source Decision
+
+**Decision: NinjaTrader (via Plan 1.5 VLTraderTCPClient.cs extension), NOT Databento.**
+
+Rationale: Operator's Databento subscription is the delayed tier (~15-min lag on historical OHLCV bars). Real-time tier costs ~$199/mo for MNQ. For a futures-trading product, a delayed chart erodes operator trust in the entire app. NT8 provides zero-delay both historical and live bars to the operator's running NT8 instance, which is the same data the trader sees in the NT8 chart.
+
+Architectural implications:
+- Chart only works when NT8 + AddOn running (already the case when trading is active)
+- Plan 4.4 extends the existing Plan 1.5 TCP wire protocol with new message types: `bars_subscribe`, `bar_update`, `bars_historical`
+- VLTraderTCPClient.cs gets bar subscription via NT8 SDK `AddInstrumentBarsSubscription`
+- Frontend MarketChart adds Futures pill, picks NT trader's instrument, subscribes via WS/SSE to bot's bar-relay endpoint
+- Databento provider remains for kernel decisions (historical pulls for AI context); NOT used for chart
+
+Plan 1.5 critical file integrity (ADR-007) preserved: existing TCP protocol stays additive; bar message types are NEW.
+
+## Audit Findings — Issue Catalog
+
+Recorded at file:line precision for surgical hotfix targeting.
+
+### Crypto-era residue (UI shows crypto-only when futures is active)
+
+| Issue | File:Line | Scope | Plan |
+|---|---|---|---|
+| Chart has no Futures pill, falls back to BTC/HYPERLIQUID | `web/src/components/charts/ChartTabs.tsx:19,28-34,47-53` | ~200 LOC, 90min | 4.4 |
+| Backend `/api/klines` has no NT/Databento case (500s) | `api/handler_klines.go:48-78` | ~120 LOC, 60min | 4.5 |
+| Stat cards hardcode USDT label | `web/src/pages/TraderDashboardPage.tsx:520,529,537` | ~80 LOC, 45min | 4.3 |
+| Leverage + Liquidation columns shown for NT (meaningless) | `web/src/pages/TraderDashboardPage.tsx:665,667,719,729` | (bundled in 4.3) | 4.3 |
+| Strategy Studio crypto-only (Coin Source AI500, BTC/ETH leverage, USDT grid) | `web/src/components/strategy/CoinSourceEditor.tsx`, `RiskControlEditor.tsx:80-127`, `GridConfigEditor.tsx:15-90` | ~400 LOC, 3hr | 4.6 |
+| AgentChat tickers hardcoded BTC/ETH/SOL | `web/src/components/agent/MarketTicker.tsx:14`, `WelcomeScreen.tsx:24-31` | ~60 LOC, 30min | 4.7 |
+| Settings exchange card shows API Key/Secret badges for NT | `web/src/pages/SettingsPage.tsx` | ~20 LOC, 20min | 4.13 |
+| `/api/symbols` returns 400 'Unsupported exchange' for NT | `api/handler_symbols.go` | (bundled in 4.5) | 4.5 |
+
+### Plan 1.5 backend with no UI surface
+
+Operator drives these entirely via env vars / logs — no dashboard visibility:
+
+- `NT_TRANSPORT=tcp` opt-in: no toggle in UI
+- TCP listener status: no connected/waiting badge
+- CME calendar gate: no 'CME CLOSED — skipping' indicator
+- Databento provider status: no indicator
+- NT8 AddOn version/health: no surface
+
+Future Plan 4.14 candidate: 'Plan 1.5 backend visibility panel' (status badges, env-var toggle, CME session indicator). Scope estimate pending audit Phase 4 deepening.
+
+### Mock/placeholder data still in production paths
+
+| Issue | File:Line | Scope | Plan |
+|---|---|---|---|
+| NT trader returns hardcoded $50k mock balance | `trader/ninjatrader/trader.go:161-162` | ~150 LOC + C# AddOn ext, 2hr | 4.11 |
+| DecisionAudit React key prop warning (console noise) | `web/src/components/trader/DecisionAudit.tsx:179-180, 234-236` | ~6 LOC, 5min | 4.9 |
+
+### What is working for NT futures (validated by audit)
+
+- Settings → Add Exchange → NinjaTrader template with WSL data dir, Instrument (default MNQ), Contract Qty fields
+- Trader creation + run lifecycle on NT exchange
+- TCP transport active on 36974, AddOn connects, signal frames flow (Plan 1.5 lifecycle complete)
+- Decision audit table renders all 11 columns + 'wait' decision rows
+- Emergency Flat modal opens, Cancel works, kernel-kill-switch warning correct
+- Position History panel
+- DecisionAudit surfaces `fill_price` + `fill_latency_ms`
+
+Partial: `slippage_ticks` (Plan 1.5 wire field) not yet surfaced in DecisionAudit row.
+
+## Plan 4.x Sequencing
+
+Proposed order (lowest risk + highest visible value first):
+
+1. **Plan 4.9** — DecisionAudit React key warning
+   ~6 LOC, 5min. Free hygiene. Removes console noise.
+
+2. **Plan 4.3** — USDT label + leverage/liq column hiding
+   ~80 LOC, 45min. Cosmetic but immediate visual correctness.
+
+3. **Plan 4.13** — Settings exchange API Key badge for NT
+   ~20 LOC, 20min. Cosmetic; removes confusion.
+
+4. **Research dispatch** — NT8 AddOn bar subscription patterns, TradingView Lightweight Charts v5 wiring patterns, reference implementations. Web-search + web-fetch driven. Output: research report.
+
+5. **Plan 4.4-spec** — Lock chart wiring design in plan doc (NT8 source). Tagged `v1.0-plan4-4-spec` (docs-only).
+
+6. **Plan 4.5** — `handler_klines.go` NT route to bot's WS/SSE endpoint. Slim, orchestrates Plan 4.4 pipeline. ~120 LOC, 60min.
+
+7. **Plan 4.4-build** — Go server bar-relay + C# AddOn bar subscription + frontend Futures pill + chart wiring. ~720 LOC across 3 languages. 3-4hr (likely with 1-2 compile hotfix cycles like Plan 1.5).
+
+8. **Plan 4.7** — AgentChat tickers BTC/ETH/SOL → MNQ default. ~60 LOC, 30min.
+
+9. **Plan 4.11** — NT trader real balance (no $50k mock). ~150 LOC + C# AddOn extension (new wire message: `account_balance`). 2hr.
+
+10. **Plan 4.6** — Strategy Studio futures-aware rewrite. ~400 LOC, 3hr. Largest UX change. Lowest priority since AI-decision side works without UI editor changes.
+
+11. **Plan 4.14** — Plan 1.5 backend visibility panel. Scope pending design.
+
+Total scope estimate: ~1,700 LOC over ~12-15 hours of focused work. Spread across 6-10 individual PRs each with own tag.
+
+## Verification Plan
+
+Each Plan 4.x ships with Playwright surrogate verification:
+
+- Plan 4.3, 4.7, 4.9, 4.13: Playwright pass confirms UI render + interaction
+- Plan 4.4, 4.5: Playwright pass confirms chart renders MNQ data with non-empty bars + live update flicker
+- Plan 4.6: Playwright pass confirms Strategy Studio loads + saves without crypto-required fields when exchange is NT
+- Plan 4.11: Playwright pass confirms balance reflects NT account (not $50k)
+- Plan 4.14: Playwright pass confirms backend status panel renders + reflects env-var state
+
+Plan 1 critical files (ADR-007 invariant) preserved across all Plan 4.x work. Plan 4.4 + 4.11 ADD to Plan 1.5 wire protocol ADDITIVELY (new message types); existing `signal`/`fill`/`heartbeat`/`ack`/`bars_*` unchanged.
+
+## Open Questions (to resolve before Plan 4.4 dispatch)
+
+- Multi-instrument support: chart subscribes to ONE instrument at a time, or multi-symbol pane?
+- Historical depth: how many bars on initial load? 500? 1000?
+- Bar resolution: 1m only initially, or all of 1m/5m/15m/1H?
+- WS vs SSE for bar relay: which fits the Go stack better?
+- Bar cache invalidation: when NT8 disconnects, do cached bars stay shown or get marked stale?
+- CME calendar integration: when CME is closed, chart should show 'CME CLOSED' overlay (Plan 4.14 dependency?)
+
+## Cross-references
+
+- ADR-001 — CSV bridge vs TCP (Plan 1.5 architectural baseline)
+- ADR-007 — Plan 1 critical file integrity (preserved across Plan 4.x work)
+- Plan 1.5 spec L4343-4447 — TCP wire protocol foundation that Plan 4.4 extends
+- Plan 5 — Testing matrix (Plan 4.x extensions tested via the same mock + smoke patterns)
+- web/CLAUDE.md — frontend-side architecture notes
