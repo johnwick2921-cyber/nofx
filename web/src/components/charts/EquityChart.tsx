@@ -34,14 +34,24 @@ interface EquityPoint {
 interface EquityChartProps {
   traderId?: string
   embedded?: boolean // 嵌入模式（不显示外层卡片）
+  isFutures?: boolean // NT futures: show USD instead of USDT (Plan 4.3.1)
 }
 
-export function EquityChart({ traderId, embedded = false }: EquityChartProps) {
+export function EquityChart({
+  traderId,
+  embedded = false,
+  isFutures = false,
+}: EquityChartProps) {
+  const currencyLabel = isFutures ? 'USD' : 'USDT'
   const { language } = useLanguage()
   const { user, token } = useAuth()
   const [displayMode, setDisplayMode] = useState<'dollar' | 'percent'>('dollar')
 
-  const { data: history, error, isLoading } = useSWR<EquityPoint[]>(
+  const {
+    data: history,
+    error,
+    isLoading,
+  } = useSWR<EquityPoint[]>(
     user && token && traderId ? `equity-history-${traderId}` : null,
     () => api.getEquityHistory(traderId, true),
     {
@@ -66,7 +76,10 @@ export function EquityChart({ traderId, embedded = false }: EquityChartProps) {
     return (
       <div className={embedded ? 'p-6' : 'binance-card p-6'}>
         {!embedded && (
-          <h3 className="text-lg font-semibold mb-6" style={{ color: '#EAECEF' }}>
+          <h3
+            className="text-lg font-semibold mb-6"
+            style={{ color: '#EAECEF' }}
+          >
             {t('accountEquityCurve', language)}
           </h3>
         )}
@@ -108,7 +121,10 @@ export function EquityChart({ traderId, embedded = false }: EquityChartProps) {
     return (
       <div className={embedded ? 'p-6' : 'binance-card p-6'}>
         {!embedded && (
-          <h3 className="text-lg font-semibold mb-6" style={{ color: '#EAECEF' }}>
+          <h3
+            className="text-lg font-semibold mb-6"
+            style={{ color: '#EAECEF' }}
+          >
             {t('accountEquityCurve', language)}
           </h3>
         )}
@@ -195,14 +211,15 @@ export function EquityChart({ traderId, embedded = false }: EquityChartProps) {
             Cycle #{data.cycle != null ? data.cycle : '—'}
           </div>
           <div className="font-bold mono" style={{ color: '#EAECEF' }}>
-            {data.raw_equity.toFixed(2)} USDT
+            {data.raw_equity.toFixed(2)} {currencyLabel}
           </div>
           <div
             className="text-sm mono font-bold"
             style={{ color: data.raw_pnl >= 0 ? '#0ECB81' : '#F6465D' }}
           >
             {data.raw_pnl >= 0 ? '+' : ''}
-            {data.raw_pnl.toFixed(2)} USDT ({data.raw_pnl_pct >= 0 ? '+' : ''}
+            {data.raw_pnl.toFixed(2)} {currencyLabel} (
+            {data.raw_pnl_pct >= 0 ? '+' : ''}
             {data.raw_pnl_pct}%)
           </div>
         </div>
@@ -212,7 +229,11 @@ export function EquityChart({ traderId, embedded = false }: EquityChartProps) {
   }
 
   return (
-    <div className={embedded ? 'p-3 sm:p-5' : 'binance-card p-3 sm:p-5 animate-fade-in'}>
+    <div
+      className={
+        embedded ? 'p-3 sm:p-5' : 'binance-card p-3 sm:p-5 animate-fade-in'
+      }
+    >
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
         <div className="flex-1">
@@ -234,7 +255,7 @@ export function EquityChart({ traderId, embedded = false }: EquityChartProps) {
                 className="text-base sm:text-lg ml-1"
                 style={{ color: '#848E9C' }}
               >
-                USDT
+                {currencyLabel}
               </span>
             </span>
             <div className="flex items-center gap-2 flex-wrap">
@@ -265,7 +286,7 @@ export function EquityChart({ traderId, embedded = false }: EquityChartProps) {
                 style={{ color: '#848E9C' }}
               >
                 ({isProfit ? '+' : ''}
-                {currentValue.raw_pnl.toFixed(2)} USDT)
+                {currentValue.raw_pnl.toFixed(2)} {currencyLabel})
               </span>
             </div>
           </div>
@@ -289,7 +310,7 @@ export function EquityChart({ traderId, embedded = false }: EquityChartProps) {
                 : { background: 'transparent', color: '#848E9C' }
             }
           >
-            <DollarSign className="w-4 h-4" /> USDT
+            <DollarSign className="w-4 h-4" /> {currencyLabel}
           </button>
           <button
             onClick={() => setDisplayMode('percent')}
@@ -416,7 +437,7 @@ export function EquityChart({ traderId, embedded = false }: EquityChartProps) {
             className="text-xs sm:text-sm font-bold mono"
             style={{ color: '#EAECEF' }}
           >
-            {initialBalance.toFixed(2)} USDT
+            {initialBalance.toFixed(2)} {currencyLabel}
           </div>
         </div>
         <div
@@ -433,7 +454,7 @@ export function EquityChart({ traderId, embedded = false }: EquityChartProps) {
             className="text-xs sm:text-sm font-bold mono"
             style={{ color: '#EAECEF' }}
           >
-            {currentValue.raw_equity.toFixed(2)} USDT
+            {currentValue.raw_equity.toFixed(2)} {currencyLabel}
           </div>
         </div>
         <div
