@@ -71,6 +71,14 @@ type TCPServer struct {
 	lastAckTime  time.Time
 	staleOverride time.Duration // test hook: 0 means use TCPStaleSignalAge
 
+	// writeMu serializes all writes to a connected client's net.Conn.
+	// Both heartbeatLoop and readLoop (handling client heartbeats) write
+	// to the same conn; without serialization, concurrent writes could
+	// interleave frame bytes and corrupt the wire protocol. The C# side
+	// already uses lock(writeLock) for the same reason. Added in
+	// Plan 1.5.6 alongside the FrameHeartbeat ack-write deadline fix.
+	writeMu sync.Mutex
+
 	// Lifecycle.
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
@@ -272,8 +280,18 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			s.connMu.Unlock()
 
 		case FrameHeartbeat:
-			// Respond to peer heartbeat with an ack (spec L4410).
-			if err := WriteFrame(c, FrameAck, AckPayload{Acks: "heartbeat"}); err != nil {
+			// Respond to peer heartbeat with an ack (spec L4410). Set our
+			// own write deadline — Go's net.Conn deadlines are PERSISTENT
+			// until reset, so without this the ack inherits whatever
+			// deadline heartbeatLoop most recently set. Once that stale
+			// deadline expires (5s after the last scheduled server
+			// heartbeat), every subsequent write fails with i/o timeout
+			// and the connection dies. (Plan 1.5.6, fixes NEW-1.)
+			s.writeMu.Lock()
+			_ = c.SetWriteDeadline(time.Now().Add(5 * time.Second))
+			err := WriteFrame(c, FrameAck, AckPayload{Acks: "heartbeat"})
+			s.writeMu.Unlock()
+			if err != nil {
 				s.logger.Warn("tcp_server: write heartbeat ack", "err", err)
 				return
 			}
@@ -309,8 +327,11 @@ func (s *TCPServer) heartbeatLoop(ctx context.Context, c net.Conn) {
 				s.closeConn()
 				return
 			}
+			s.writeMu.Lock()
 			_ = c.SetWriteDeadline(time.Now().Add(5 * time.Second))
-			if err := WriteFrame(c, FrameHeartbeat, HeartbeatPayload{}); err != nil {
+			err := WriteFrame(c, FrameHeartbeat, HeartbeatPayload{})
+			s.writeMu.Unlock()
+			if err != nil {
 				s.logger.Warn("tcp_server: write heartbeat", "err", err)
 				s.closeConn()
 				return
@@ -348,8 +369,11 @@ func (s *TCPServer) flushPending() error {
 	s.pendingMu.Unlock()
 
 	for _, sig := range toSend {
+		s.writeMu.Lock()
 		_ = c.SetWriteDeadline(time.Now().Add(5 * time.Second))
-		if err := WriteFrame(c, FrameSignal, sig); err != nil {
+		err := WriteFrame(c, FrameSignal, sig)
+		s.writeMu.Unlock()
+		if err != nil {
 			// Re-queue the un-sent signals (including this one) for next flush.
 			s.pendingMu.Lock()
 			s.pending = append(s.pending, timedSignal{payload: sig, timestamp: now})
