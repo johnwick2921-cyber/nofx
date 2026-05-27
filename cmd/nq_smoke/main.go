@@ -39,6 +39,9 @@ func main() {
 		case "roundtrip":
 			runRoundtripSmoke()
 			return
+		case "tcp":
+			runTCPSmoke()
+			return
 		case "all":
 			runAllSmokes()
 			return
