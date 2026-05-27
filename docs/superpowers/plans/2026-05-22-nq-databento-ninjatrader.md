@@ -6923,3 +6923,286 @@ Plan 1 critical files (ADR-007 invariant) preserved across all Plan 4.x work. Pl
 - Plan 1.5 spec L4343-4447 — TCP wire protocol foundation that Plan 4.4 extends
 - Plan 5 — Testing matrix (Plan 4.x extensions tested via the same mock + smoke patterns)
 - web/CLAUDE.md — frontend-side architecture notes
+
+## Plan 4.4 Deep Spec (Research-Informed)
+
+This subsection supersedes the 200-LOC stub estimate for Plan 4.4 in the issue catalog above. Generated from a comprehensive research dispatch on 2026-05-27 covering NT8 BarsRequest API, TradingView Lightweight Charts v5 realtime patterns, Go SSE relay patterns, and alternative CME data source comparison.
+
+### Scope revision
+
+| Item | Roadmap stub | Research-informed actual |
+|---|---|---|
+| LOC | ~200 | ~2,260 |
+| Time | 90 min | ~33 engineering hours |
+| Stages | 1 (frontend only) | 4 (wire spec, C# AddOn, Go relay, frontend) |
+| Hotfix cycles expected | 1 | 5 (one more than Plan 1.5) |
+| Files modified | ChartTabs.tsx | ~10 across 3 languages |
+| New files created | 0 | ~6 (Go bars package, C# manager, frontend chart) |
+
+The original 200 LOC estimate covered only the frontend Futures pill addition. Real Plan 4.4 must extend:
+- C# AddOn (`VLTraderTCPClient.cs` subscription manager) — ~600 LOC
+- Go relay layer (new `provider/ninjatrader/bars_*` package + SSE handler in `api/`) — ~800 LOC
+- Frontend `FuturesChart` component + ChartTabs integration — ~400 LOC
+- Tests + integration fixtures (mock NT, golden data, Vitest, integration) — ~460 LOC
+
+### Data source decision (confirmed by research)
+
+NT8 remains the chosen chart data source. Comparative analysis ruled out:
+
+- **Databento Standard:** $179/month for real-time CME live tier (operator currently on delayed tier with ~15min lag on historical bars). Upgrade is the clean fallback if NT8 ever proves unreliable, but $0 incremental cost via NT8 wins for v1.
+- **Databento real-time latency:** median 6.1µs from venue handoff (per Databento blog) — Plan 4.5 candidate if triggered.
+- **Polygon.io Futures:** $199/month, beta rollout state uncertain.
+- **IQFeed (DTN):** $108.15/month base + $24.87 NA futures surcharge + per-exchange Globex fees.
+- **Tradovate API:** requires funded Tradovate account (operator's prop firm constraint unknown).
+- **Rithmic R | Protocol API:** requires funded Rithmic prop firm account; uses WebSockets + protobuf.
+- **CME DataMine direct:** $600-$1,500/month professional rates only.
+
+### Wire protocol extension (additive to Plan 1.5 per ADR-007)
+
+Four new message types reuse Plan 1.5 framing (4-byte big-endian uint32 length prefix + snake_case JSON envelope `{type, payload}`). Existing `signal`/`fill`/`heartbeat`/`ack` byte-locked.
+
+1. **`bars_subscribe`** (Go bot → C# AddOn)
+
+```json
+{
+  "type": "bars_subscribe",
+  "payload": {
+    "subscription_id": "sub_01HMNQ12345",
+    "symbol": "MNQ 03-26",
+    "period_type": "minute",
+    "period_value": 1,
+    "bars_back": 500,
+    "trading_hours": "CME US Index Futures ETH",
+    "lookup_policy": "provider",
+    "merge_policy": "merge_back_adjusted"
+  }
+}
+```
+
+2. **`bars_historical`** (C# AddOn → Go bot → frontend, one shot)
+
+```json
+{
+  "type": "bars_historical",
+  "payload": {
+    "subscription_id": "...",
+    "symbol": "MNQ 03-26",
+    "error_code": "NoError",
+    "error_message": "",
+    "bars": [{"t": 1748352000, "o": 21845.25, "h": 21847.50, "l": 21844.00, "c": 21846.75, "v": 1234}],
+    "last_bar_in_progress": true
+  }
+}
+```
+
+`last_bar_in_progress: true` always — per NT8 BarsRequest docs the final returned bar may be in-progress.
+
+3. **`bar_update`** (C# AddOn → Go bot → frontend, streaming)
+
+```json
+{
+  "type": "bar_update",
+  "payload": {
+    "subscription_id": "...",
+    "symbol": "MNQ 03-26",
+    "bars": [{"t": 1748352060, "o": 21846.75, "h": 21847.25, "l": 21846.50, "c": 21847.00, "v": 42}],
+    "is_new_bar": false,
+    "tick_seq": 4827
+  }
+}
+```
+
+`bars` array (not single bar) because NT8 `OnBarUpdate` can update `MinIndex..MaxIndex` range from a single tick on Range or non-time-based bar periods. `tick_seq` used as SSE `Last-Event-ID` for resume on disconnect.
+
+4. **`bars_unsubscribe`** (Go bot → C# AddOn)
+
+```json
+{
+  "type": "bars_unsubscribe",
+  "payload": {"subscription_id": "..."}
+}
+```
+
+**Field shape conventions:**
+- snake_case JSON field names (`signal_id`, `bars_back`, `trading_hours`)
+- doubles formatted with `.ToString("R", CultureInfo.InvariantCulture)` to preserve precision on the wire
+- timestamps as Unix UTC seconds (integer); converted in C# from NT8's local-time `Bars.GetTime()` via `TimeZoneInfo.ConvertTimeToUtc` with `Bars.TradingHours.TimeZoneInfo`
+- compact JSON, no pretty-print
+- UTF-8 byte encoding
+
+### Architecture
+
+```
+NT8 (Windows 11)              Go bot (WSL2 Ubuntu)              Browser
+─────────────────             ──────────────────────             ─────────────────
+VLTraderAddOn                 tcp_server.go                      FuturesChart.tsx
+├ Plan 1.5 TCP client         ├ envelope router                  ├ createChart
+└ VLBarsSubscription          └ BarsRegistry (NEW)               ├ chart.addSeries
+  Manager (NEW)                 ├ map[subID]*ntSub                  (CandlestickSeries)
+  ├ BarsRequest per             ├ per-subscriber Out             ├ series.setData
+  │  subscription                  channel (256 buf)              ├ series.update
+  ├ .Update event               └ drop-newest backpressure       └ EventSource SSE
+  ├ MinIndex..MaxIndex                                              (?token=JWT)
+  │  bar batching             sse_handler.go (gin) (NEW)
+  ├ Connection                 ├ GET /api/v1/bars/stream
+  │  reconnect-recreate        ├ JWT in ?token= (EventSource
+  └ JSON encoder                │   cannot send headers)
+     (StringBuilder,            ├ 15s keepalive comment
+      InvariantCulture,         └ X-Accel-Buffering: no
+      "R" round-trip)
+```
+
+Transport: SSE over WebSocket. Rationale: server→client only once subscribed, EventSource native browser auto-reconnect, HTTP/2 multiplexing friendly, easier debugging via curl, plays nice with existing gin stack. WebSocket reserved for multi-chart panes (Plan 4.5+).
+
+### Latency budget (200ms tick-to-chart SLO)
+
+```
+NT8 tick → BarsRequest.Update             5-20ms
+C# encode + TCP send                      <5ms
+WSL2 ↔ Windows loopback                   <2ms (Plan 1.5 proven)
+Go fan-out + SSE write                    <5ms
+Browser EventSource receive               10-50ms
+React state + canvas redraw               5-20ms
+─────
+Total typical:                            30-100ms
+SLO ceiling:                              200ms
+```
+
+### NT8 SDK gotchas (15 cataloged, top 10 most critical for Plan 4.4)
+
+1. **Reconnect kills `BarsRequest.Update` silently.** Forum thread (Mizpah Software / jeronymite): after a connection drop and reconnect, the `.Update` event stops firing for the existing `BarsRequest`. Workaround: hook `Connection.ConnectionStatusUpdate`; on transition back to Connected, dispose+recreate every active `BarsRequest` with same parameters. NT staff acknowledged but not documented as a platform guarantee.
+
+2. **Multiple bars updated by single tick.** Official `BarsRequest` docs: "Depending on the BarsPeriod type, you can have situations where more than one bar is updated by a single tick. Be sure to process the full range of updated bars." Plan 4.4 `OnBarUpdate` handler must loop `e.MinIndex..e.MaxIndex`; `bar_update.payload.bars` MUST be an array.
+
+3. **`bars.GetTime()` returns local time, not UTC.** Per NT forum (ChelseaB staff): "Real-time and historical data are already automatically converted to your local time zone as they are received." TradingView Lightweight Charts needs Unix UTC seconds. Conversion required: `TimeZoneInfo.ConvertTimeToUtc(t, bars.TradingHours.TimeZoneInfo)` → Unix seconds.
+
+4. **Newtonsoft.Json officially unsupported in user AddOns.** Per NT staff. Plan 1.5.2 already established the hand-rolled JSON encoder pattern in pure `System.*` C#. Plan 4.4 extends the same encoder with array support for `bars[]`.
+
+5. **No `is_first_tick_of_bar` helper in AddOn context.** Compute as `e.MaxIndex > sub.LastSeenMaxIndex`. Save `LastSeenMaxIndex` on each event. Per NT staff forum reply.
+
+6. **Connection-specific BarsRequest not supported.** Per NT staff (Jesse): "The bars request would use the platform's general connection settings." Operator with multiple broker connections (FXCM, IB, Rithmic, etc.) must place the futures broker connection first in connection order.
+
+7. **`NinjaScript.Print`/`Log` do NOT work in AddOn context.** Use `NinjaTrader.Code.Output.Process(msg, PrintTo.OutputTab1)` — Plan 1.5.2 established this. `PrintTo.OutputTab2` reserved for errors.
+
+8. **AddOn `State.Configure` may run multiple times.** UI clone problem. Guard real allocation with static-bool. Real cleanup only in `State.Terminated` of same instance.
+
+9. **`ErrorCode` enum only 7 documented members** (NoError, LogOnFailed, OrderRejected, UnableToCancelOrder, UnableToChangeOrder, UserAbort, Panic). NoData not in published list. Handler stringifies received value; anything != NoError is failure.
+
+10. **CME US Index Futures RTH template was updated in 2024** to remove the 15:15-15:30 CT halt. ETH recommended for MNQ algo trading (captures overnight session).
+
+(11-15: lock contention, memory leaks, dispose ordering, NT8 version differences, freeze-on-reconnect 10-15s — documented in research artifact.)
+
+### Frontend gotchas (9 critical)
+
+1. **EventSource cannot set custom headers.** JWT must travel via short-lived (5 min) signed query parameter. Server reads `c.Query("token")`, not `Authorization` header.
+
+2. **`setData()` vs `update()` semantics.** Per v5 docs: "We do not recommend calling `ISeriesApi.setData` to update the chart, as this method replaces all series data and can significantly affect the performance." Use `setData()` ONCE on `bars_historical` receive, then `update()` for every `bar_update`.
+
+3. **`update()` same time vs new time.** Same time → extends current bar (live progression). New time → appends new bar. Frontend handles `last_bar_in_progress` correctly.
+
+4. **TradingView v5 API change.** `chart.addCandlestickSeries()` removed. Must use `chart.addSeries(CandlestickSeries, opts)` with explicit import.
+
+5. **Time format.** `UTCTimestamp` (Unix seconds) for intraday; ISO strings collapse to daily resolution.
+
+6. **`autoSize: true`** in v5 eliminates ResizeObserver boilerplate.
+
+7. **Background tab throttling.** Browser throttles canvas redraws on hidden tabs but SSE keeps flowing. Accept; let canvas catch up on tab focus.
+
+8. **Chart unmount cleanup.** Must close `EventSource` AND call `chart.remove()` in React useEffect cleanup. Subscription teardown via `bars_unsubscribe` handled server-side on EventSource close.
+
+9. **Loading/Empty/Error states.** Must surface in UI distinctly: loading (waiting `bars_historical`), ready (data displayed), disconnected (auto-reconnecting), error (`bars_historical` error_code != NoError).
+
+### Go relay gotchas (8 critical)
+
+1. **Subscription dedup keyed by (userID, symbol, period).** Multiple frontend clients viewing same symbol share ONE NT8 BarsRequest. Registry: `map[userKey]subscriptionID → ntSubscription`.
+
+2. **Backpressure: drop-newest, never block broadcast.** Per-subscriber buffered channel (256 entries). Slow SSE client doesn't block the fan-out goroutine.
+
+3. **Cache last `bars_historical` for late joiners.** Second subscriber to same `(userID, symbol, period)` gets cached payload immediately, no second NT8 round-trip.
+
+4. **`X-Accel-Buffering: no` header** defeats reverse-proxy buffering (nginx, traefik). Required even in dev to prevent Vite proxy buffering.
+
+5. **Disable gzip middleware on `/api/v1/bars/stream`.** SSE incompatible with gzip; per-route exclusion required.
+
+6. **Concurrent map access.** `sync.RWMutex` + plain map (not `sync.Map`) because access pattern is "many writes broadcast to N readers" — `sync.Map` optimizes for the opposite.
+
+7. **Graceful shutdown.** Drain subscriber channels, send `bars_unsubscribe` for each NT subscription, close TCP connection cleanly.
+
+8. **CORS.** `Access-Control-Allow-Origin` matching the Vite dev origin (`http://localhost:3000`). No credentials needed when using JWT-in-query.
+
+### 4-stage rollout
+
+**Stage 1 — Wire spec + end-to-end loopback (~8h)**
+- Land 4 new envelope types in Plan 1.5 wire spec
+- Implement C# `VLBarsSubscriptionManager` + JSON encoder extensions
+- Implement Go `BarsRegistry` + SSE handler
+- Assert: curl-driven SSE client gets `bars_historical` with ≥500 bars from a single `bars_subscribe` envelope
+- Promotion gate: end-to-end loopback works; p99 encode/decode <5ms; one MNQ chart renders
+
+**Stage 2 — Robustness against NT8 gotchas (~12h)**
+- Reconnect-driven BarsRequest recreation (`Connection.ConnectionStatusUpdate` hook)
+- `MinIndex..MaxIndex` multi-bar batching verified with Range bar period
+- `last_bar_in_progress` handling verified on frontend
+- Backpressure dropping verified with slow-consumer Vitest
+- Promotion gate: survive 30s NT8 disconnect; survive tab backgrounded 10min; survive MNQ Z25→H26 roll with MergeBackAdjusted
+
+**Stage 3 — Multi-tenant + auth + ops polish (~8h)**
+- JWT-in-query 5-min TTL with refresh-on-401
+- Per-tenant subscription isolation
+- SSE keepalive comment every 15s
+- Prometheus metrics: `active_subscriptions`, `dropped_envelopes`, `per_symbol_tick_rate`
+- Promotion gate: 2 concurrent operators on same MNQ chart, independent NT subscriptions, isolated SSE streams
+
+**Stage 4 — Multi-pane indicators (Plan 4.5 candidate)**
+- v5 native multi-pane RSI/MACD/Volume separate panes
+- Defer if Plan 4.4 budget tight
+
+### Failure modes to expect (lessons from Plan 1.5)
+
+Plan 1.5 needed 4 hotfix cycles. Plan 4.4 expects 5 because of 4 new failure dimensions:
+
+1. **Time-zone conversion bugs.** First chart load may show bars at midnight UTC instead of US trading hours if `ConvertTimeToUtc` gets wrong `TimeZoneInfo`. → Plan 4.4.1 hotfix likely.
+
+2. **Reconnect doesn't recover bars stream** (the `Connection.ConnectionStatusUpdate` hook is fragile). → Plan 4.4.2 hotfix likely.
+
+3. **OCO bracket signal vs bars stream interleave** in the TCP wire — both flowing through `tcp_server.go`, must not corrupt each other's frames. → Plan 4.4.3 hotfix possible.
+
+4. **EventSource auto-reconnect storms** if the SSE server restarts during dev. Need exponential backoff client-side. → Plan 4.4.4 hotfix likely.
+
+5. **NT8 SDK API mismatch** (BarsRequest constructor, BarsPeriod enum values, MergePolicy values vary across NT 8.0.x and 8.1.x). → Plan 4.4.5 hotfix possible.
+
+### Verification approach
+
+Each Stage promotion gates on Playwright surrogate verification (proven by Plan 1.5):
+- Stage 1: Playwright confirms one Futures pill appears, chart renders with 500 bars
+- Stage 2: Manual NT8 disconnect/reconnect; Playwright confirms chart resumes within 10s
+- Stage 3: Two browser sessions on same chart; Playwright confirms both render
+- Stage 4: Multi-pane RSI verified
+
+Real-world operator verification (NT8 + dashboard + live SIM signal flow + bar updates correlating with NT8 chart) runs at end of Stage 2 minimum.
+
+### Open questions (resolve before Plan 4.4-build dispatch)
+
+1. Trading hours default: ETH (recommended for algo) vs RTH
+2. MergePolicy default: BackAdjusted (chart-friendly) vs NonBackAdjusted
+3. `bars_back` default: 500 (≈ 8.3 ETH hours) vs 1000
+4. Multi-symbol overlay in Plan 4.4 or defer to 4.5
+5. JWT TTL for SSE query param (recommend 5 min, refreshable)
+6. Drop-newest backpressure policy confirmation
+7. Per-tenant subscription dedup behavior confirmation
+8. Chart-side persistence on Go side: none (confirm acceptable)
+
+### Research artifact reference
+
+Full research report (12 sections, production C# code skeletons, Go relay reference implementation, frontend React code, comprehensive gotchas catalog, GitHub reference implementations with URLs) captured as conversation artifact on 2026-05-27. Future Plan 4.4-spec and Plan 4.4-build dispatches reference both:
+- This canonical plan doc section (locked design + scope)
+- The research artifact (production code skeletons + exhaustive edge cases)
+
+### Cross-references
+
+- ADR-001 — CSV bridge vs TCP (Plan 1.5 baseline that 4.4 extends)
+- ADR-007 — Plan 1 critical file integrity (preserved; 4.4 ADDS message types, doesn't modify existing)
+- Plan 1.5 spec L4343-4500 — TCP wire protocol foundation
+- Plan 5 — Testing matrix (Plan 4.4 extends via mock NT + golden bar data)
+- web/CLAUDE.md — frontend architecture notes
+- Research artifact (2026-05-27) — comprehensive technical reference
