@@ -16,8 +16,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net.Sockets;
 using System.Text;
-using System.Text.Json;
-using System.Text.Json.Serialization;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System.Threading;
 using NinjaTrader.Cbi;
 using NinjaTrader.Core;
@@ -204,27 +204,25 @@ namespace NinjaTrader.NinjaScript.AddOns
         {
             try
             {
-                using (var doc = JsonDocument.Parse(json))
+                JObject root = JObject.Parse(json);
+                var type = (string)root["type"];
+                var payload = root["payload"] as JObject;
+                if (type == "signal")
                 {
-                    var type = doc.RootElement.GetProperty("type").GetString();
-                    var payload = doc.RootElement.GetProperty("payload");
-                    if (type == "signal")
-                    {
-                        HandleSignal(payload);
-                    }
-                    else if (type == "heartbeat")
-                    {
-                        // Ack incoming heartbeats per spec L4410.
-                        SendAck("heartbeat");
-                    }
-                    else if (type == "ack")
-                    {
-                        // Server-side ack of our heartbeat/fill — informational only.
-                    }
-                    else
-                    {
-                        LogWarn("VLTraderTCPClient: unknown frame type " + type);
-                    }
+                    HandleSignal(payload);
+                }
+                else if (type == "heartbeat")
+                {
+                    // Ack incoming heartbeats per spec L4410.
+                    SendAck("heartbeat");
+                }
+                else if (type == "ack")
+                {
+                    // Server-side ack of our heartbeat/fill — informational only.
+                }
+                else
+                {
+                    LogWarn("VLTraderTCPClient: unknown frame type " + type);
                 }
             }
             catch (Exception ex)
@@ -234,8 +232,13 @@ namespace NinjaTrader.NinjaScript.AddOns
         }
 
         // === Signal handling: OCO bracket placement (spec L4387-4396) ===
-        private void HandleSignal(JsonElement p)
+        private void HandleSignal(JObject p)
         {
+            if (p == null)
+            {
+                LogWarn("VLTraderTCPClient: signal payload missing or not an object");
+                return;
+            }
             string symbol;
             string side;
             int qty;
@@ -246,14 +249,14 @@ namespace NinjaTrader.NinjaScript.AddOns
             string ts;
             try
             {
-                symbol   = p.GetProperty("symbol").GetString();
-                side     = p.GetProperty("side").GetString();    // "long" | "short"
-                qty      = p.GetProperty("quantity").GetInt32();
-                entry    = p.GetProperty("entry").GetDouble();
-                sl       = p.GetProperty("stop_loss").GetDouble();
-                tp       = p.GetProperty("take_profit").GetDouble();
-                signalId = p.GetProperty("signal_id").GetString();
-                ts       = p.GetProperty("timestamp").GetString();
+                symbol   = (string)p["symbol"];
+                side     = (string)p["side"];                    // "long" | "short"
+                qty      = (int)p["quantity"];
+                entry    = (double)(decimal)p["entry"];
+                sl       = (double)(decimal)p["stop_loss"];
+                tp       = (double)(decimal)p["take_profit"];
+                signalId = (string)p["signal_id"];
+                ts       = (string)p["timestamp"];
             }
             catch (Exception ex)
             {
@@ -346,11 +349,11 @@ namespace NinjaTrader.NinjaScript.AddOns
                 return;
             }
 
-            // OcoId for the entry order is the signal_id; child orders use
+            // Oco group for the entry order is the signal_id; child orders use
             // signal_id-sl / signal_id-tp. We only emit a fill for the entry
-            // and exits — both share the same OcoId so the Go side can
+            // and exits — both share the same Oco group so the Go side can
             // correlate via signal_id.
-            string ocoId = e.Order != null ? e.Order.OcoId : null;
+            string ocoId = e.Order != null ? e.Order.Oco : null;
             if (string.IsNullOrEmpty(ocoId)) return;
 
             // Trim "-sl" / "-tp" suffix if present (these are exit-leg fills).
@@ -416,7 +419,7 @@ namespace NinjaTrader.NinjaScript.AddOns
             if (stream == null) return;
             try
             {
-                string json = JsonSerializer.Serialize(new { type, payload });
+                string json = JsonConvert.SerializeObject(new { type, payload });
                 byte[] body = Encoding.UTF8.GetBytes(json);
                 if (body.Length > MAX_FRAME_BYTES)
                 {
