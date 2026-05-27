@@ -11,12 +11,11 @@ interface TickerData {
   volume: string
 }
 
-const SYMBOLS = ['BTCUSDT', 'ETHUSDT', 'SOLUSDT']
+const SYMBOLS = ['MNQ']
 
 const SYMBOL_ICONS: Record<string, string> = {
-  BTC: '₿',
-  ETH: 'Ξ',
-  SOL: '◎',
+  MNQ: 'N',
+  NQ: 'N',
 }
 
 export function MarketTicker() {
