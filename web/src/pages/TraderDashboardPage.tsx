@@ -690,6 +690,7 @@ export function TraderDashboardPage({
                   selectedTrader.exchange_id,
                   exchanges
                 )}
+                isFutures={isFutures}
               />
             </div>
 
