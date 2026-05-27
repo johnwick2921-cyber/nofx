@@ -1,480 +1,222 @@
-# 🤝 Contributing to NOFX
+# Contributing to nofx
 
-**Language:** [English](CONTRIBUTING.md) | [中文](docs/i18n/zh-CN/CONTRIBUTING.md)
+This is the operational contract for shipping changes to `nofx`, the NQ futures trading bot. Read it once. The rules in here are not aesthetic — they are the procedural floor that keeps a live-validated trading bot live-validated across PRs.
 
-Thank you for your interest in contributing to NOFX! This document provides guidelines and workflows for contributing to the project.
-
----
-
-## 📑 Table of Contents
-
-- [Code of Conduct](#code-of-conduct)
-- [How Can I Contribute?](#how-can-i-contribute)
-- [Development Workflow](#development-workflow)
-- [PR Submission Guidelines](#pr-submission-guidelines)
-- [Coding Standards](#coding-standards)
-- [Commit Message Guidelines](#commit-message-guidelines)
-- [Review Process](#review-process)
-- [Bounty Program](#bounty-program)
+For architectural context, read `docs/ONBOARDING.md` first. For decision rationale, read `docs/adr/ADR-001` through `ADR-007`.
 
 ---
 
-## 📜 Code of Conduct
+## Before you start
 
-This project adheres to the [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you are expected to uphold this code.
+Confirm these are true before you open an editor:
 
----
+- You have read the **subsystem `CLAUDE.md`** for the directory you intend to touch (`kernel/`, `market/`, `provider/`, `trader/`, `web/`, plus any deeper `CLAUDE.md`).
+- You have read the **ADRs** relevant to your change. `docs/adr/ADR-001..ADR-007`.
+- You know which **plan** your change belongs to. Pure bug fixes are fine; new features should map to a plan or be small enough to stand alone.
+- You can run the build green locally: `go build ./...` and `cd web && npm run build`.
 
-## 🎯 How Can I Contribute?
-
-### 1. Report Bugs 🐛
-
-- Use the [Bug Report Template](.github/ISSUE_TEMPLATE/bug_report.md)
-- Check if the bug has already been reported
-- Include detailed reproduction steps
-- Provide environment information (OS, Go version, etc.)
-
-### 2. Suggest Features ✨
-
-- Use the [Feature Request Template](.github/ISSUE_TEMPLATE/feature_request.md)
-- Explain the use case and benefits
-- Check if it aligns with the [project roadmap](docs/roadmap/README.md)
-
-### 3. Submit Pull Requests 🔧
-
-Before submitting a PR, please check the following:
-
-#### ✅ **Accepted Contributions**
-
-**High Priority** (aligned with roadmap):
-- 🔒 Security enhancements (encryption, authentication, RBAC)
-- 🧠 AI model integrations (GPT-4, Claude, Gemini Pro)
-- 🔗 Exchange integrations (OKX, Bybit, Lighter, EdgeX)
-- 📊 Trading data APIs (AI500, OI analysis, NetFlow)
-- 🎨 UI/UX improvements (mobile responsiveness, charts)
-- ⚡ Performance optimizations
-- 🐛 Bug fixes
-- 📝 Documentation improvements
-
-**Medium Priority:**
-- ✅ Test coverage improvements
-- 🌐 Internationalization (new language support)
-- 🔧 Build/deployment tooling
-- 📈 Monitoring and logging enhancements
-
-#### ❌ **Not Accepted** (without prior discussion)
-
-- Major architectural changes without RFC (Request for Comments)
-- Features not aligned with project roadmap
-- Breaking changes without migration path
-- Code that introduces new dependencies without justification
-- Experimental features without opt-in flag
-
-**⚠️ Important:** For major features, please open an issue for discussion **before** starting work.
+If your change touches the AI prompt, the decision JSON shape, or any "high-cascade type" listed in `CLAUDE.md`, **stop and open a discussion first**.
 
 ---
 
-## 🛠️ Development Workflow
+## Branch + PR workflow
 
-### 1. Fork and Clone
+Branches off `main`:
 
 ```bash
-# Fork the repository on GitHub
-# Then clone your fork
-git clone https://github.com/YOUR_USERNAME/nofx.git
-cd nofx
-
-# Add upstream remote
-git remote add upstream https://github.com/NoFxAiOS/nofx.git
+git checkout main && git pull
+git checkout -b feat/<short-slug>     # or fix/..., docs/..., chore/...
 ```
 
-### 2. Create a Feature Branch
+Naming conventions:
 
-```bash
-# Update your local dev branch
-git checkout dev
-git pull upstream dev
+- `feat/` — new feature
+- `fix/` — bug fix
+- `docs/` — documentation only
+- `chore/` — build, config, dependency, rename
+- `refactor/` — code restructure with no behavior change
+- `perf/` — performance, no behavior change
+- `test/` — test-only
 
-# Create a new branch
-git checkout -b feature/your-feature-name
-# or
-git checkout -b fix/your-bug-fix
+PR title in conventional-commits form:
+
+```
+feat(plan2): tick rounding + session calendar
+fix(plan4.2): NinjaTrader exchange type missed at 5 downstream consumers
+docs(adr): add ADR-007 Plan 1 critical-file integrity
 ```
 
-**Branch Naming Convention:**
-- `feature/` - New features
-- `fix/` - Bug fixes
-- `docs/` - Documentation updates
-- `refactor/` - Code refactoring
-- `perf/` - Performance improvements
-- `test/` - Test updates
-- `chore/` - Build/config changes
+PR body must include:
 
-### 3. Set Up Development Environment
+1. **What** — one paragraph describing the change.
+2. **Why** — link to plan task or issue.
+3. **Plan 1 critical file delta** — `git diff v1.0-plan1 -- <list>` output, or "no Plan 1 critical files touched."
+4. **Test evidence** — `go test ./...` exit code, `npm run build` exit code, any smoke runs.
+5. **UI verification** — for any frontend change, a live-DOM Playwright check, not just a bundle scan. See §6.
 
-```bash
-# Install Go dependencies
-go mod download
+---
 
-# Install frontend dependencies
-cd web
-npm install
-cd ..
+## Plan 1 critical file integrity
 
-# Install TA-Lib (required)
-# macOS:
-brew install ta-lib
+This is the most important rule in the document. Read ADR-007 for the full rationale.
 
-# Ubuntu/Debian:
-sudo apt-get install libta-lib0-dev
+**The following files were validated against a live SIM environment** (real SIM fills on SIM101 at NQ 29807 via NT Playback on 2026-05-22). They must remain **byte-identical** across every subsequent PR unless your PR has a spec-authorized exception:
+
+```
+provider/databento/historical.go
+provider/databento/resolve.go
+provider/databento/contract_calendar.go
+provider/databento/client.go
+provider/databento/mock_server.go
+provider/ninjatrader/csv_writer.go
+provider/ninjatrader/csv_tailer.go
+provider/ninjatrader/types.go
+provider/ninjatrader/mock_nt.go
+cmd/nq_smoke/main.go                    (ADD-only — Plan 5 Task 29 dispatcher)
+kernel/engine_prompt_futures.go
+kernel/cme_calendar.go
+kernel/risk_limits.go
+kernel/engine_prompt_golden_test.go
+market/databento_adapter.go
+market/decimal_safe.go
+market/data_freshness.go
+trader/ninjatrader/tick_rounding.go
+trader/ninjatrader/trader.go
 ```
 
-### 4. Make Your Changes
-
-- Follow the [coding standards](#coding-standards)
-- Write tests for new features
-- Update documentation as needed
-- Keep commits focused and atomic
-
-### 5. Test Your Changes
+Verify in every dispatch convergence phase and again before commit:
 
 ```bash
-# Run backend tests
+git diff v1.0-plan1 -- \
+  provider/databento/historical.go \
+  provider/databento/resolve.go \
+  provider/databento/contract_calendar.go \
+  provider/databento/client.go \
+  provider/ninjatrader/csv_writer.go \
+  provider/ninjatrader/csv_tailer.go \
+  provider/ninjatrader/types.go \
+  kernel/engine_prompt_futures.go \
+  kernel/cme_calendar.go \
+  kernel/risk_limits.go \
+  market/databento_adapter.go \
+  market/decimal_safe.go \
+  market/data_freshness.go \
+  trader/ninjatrader/tick_rounding.go \
+  trader/ninjatrader/trader.go
+```
+
+Expected output: empty, **or** confined to the documented exceptions below.
+
+**Exceptions (spec-authorized):**
+
+- `cmd/nq_smoke/main.go` ADD-only — Plan 5 Task 29 adds dispatcher wiring; existing logic unchanged.
+- Plan 4 Task 24 wrappers — retry / circuit-breaker around `provider/databento/client.go` and `provider/ninjatrader/csv_writer.go` are written as **wrappers in separate files**, never as in-place edits to the locked files.
+- `provider/databento/mock_server.go` + `provider/ninjatrader/mock_nt.go` — added during Plan 5 and locked from that point forward.
+
+If you need an exception that isn't listed, **the PR description must include a re-validation plan** (how will we re-prove the live SIM round-trip still works after this change?). Reviewers will ask.
+
+---
+
+## Parallel subagent dispatch
+
+For multi-task work, dispatch parallel `general-purpose` subagents per ADR-005. Mechanics:
+
+1. **One subagent per disjoint task block.** Task blocks are disjoint when their file sets do not overlap, or only overlap additively under ownership markers.
+2. **Ownership markers in shared files** — `// Plan N Task M — owned by TX` delimits added regions in files multiple tasks share.
+3. **Convergence verification phase** — serial pass that runs `go build ./...`, `go test ./...`, `cd web && npm run build`, and a `git diff` review against the dispatch brief. No commit until convergence is green.
+4. **Plan 1 critical files are read-only inside dispatched work** (see §3 above and ADR-007).
+5. **`general-purpose` subagent type only.** The `feature-dev:code-architect` subagent is read-only — it blocks `Bash`, `Edit`, and `Write`, and will return "I would do X" without producing any diff. This was the failure mode of PR #3 Stage 5E. See ADR-005.
+
+---
+
+## Tool manifest (hard rule)
+
+Every dispatched implementation subagent receives exactly this tool manifest:
+
+```
+Bash, Read, Edit, Write, Grep, Glob
+```
+
+Do **not** downgrade this list. Do **not** swap `general-purpose` for `code-architect`. Do **not** add the Playwright tools to an implementation subagent — Playwright is for verification, run from the main thread after convergence.
+
+---
+
+## Playwright UI verification
+
+For any frontend change, **bundle scan ≠ live DOM verification**.
+
+Plan 4.2 exists because Plan 4 changed an exchange-type enum and Plan 4.1's verification scanned the JS bundle for the new string. The string was there. But five live-DOM consumers (a dropdown filter, a card label, a hover tooltip, a Settings header, a Decisions-tab tag) had not been updated — they read the old enum value and silently rendered nothing or misrendered. The bundle scan said "all good." The user opened the dashboard and saw an empty exchange dropdown.
+
+Lesson: **after `npm run build`, navigate the live DOM with Playwright** and assert against rendered text and visible elements, not against bundle strings. See `docs/operations/TRADER_MODE.md` §5 for the emergency-flat runbook style.
+
+---
+
+## Release tagging
+
+The repo carries one tag per shipped plan. In order:
+
+- `v1.0-plan1` — CSV bridge SIM-validated.
+- `v1.0-plan2` — CME futures domain (tick rounding, calendar, roll, decimal-safe).
+- `v1.0-plan3` — Risk limits + force-flat + stale-data drift.
+- `v1.0-plan4` — Observability (audit trail, retry/breaker, Prometheus, Emergency Flat).
+- `v1.0-plan4-1` — UI gaps (NinjaTrader UI, Decisions tab, VLTrader rebrand sweep).
+- `v1.0-plan4-2` — Integration bug fix-up (five downstream consumers).
+- `v1.0-plan5` — Testing matrix (Databento mock, NT mock, prompt goldens, smoke sub-commands).
+- `v1.0-plan6` — Operational runbooks.
+
+Each tag is the merge commit of its PR into `main`. Tag from the merged HEAD:
+
+```bash
+git checkout main && git pull
+git tag -a v1.0-planN -m "feat(planN): <subject>"
+git push origin v1.0-planN
+```
+
+A tag is the rollback target referenced in `docs/operations/ROLLBACK.md` §1. Do not move or delete a tag once published — write a new one.
+
+---
+
+## Don't break the build
+
+These commands must exit 0 before you push:
+
+```bash
+go build ./...
 go test ./...
-
-# Build backend
-go build -o nofx
-
-# Run frontend in dev mode
-cd web
-npm run dev
-
-# Build frontend
-npm run build
+cd web && npm run build && cd ..
 ```
 
-### 6. Commit Your Changes
-
-Follow the [commit message guidelines](#commit-message-guidelines):
+If you touched the AI prompt path, run the goldens explicitly:
 
 ```bash
-git add .
-git commit -m "feat: add support for OKX exchange integration"
+go test ./kernel -run TestPromptGolden
 ```
 
-### 7. Push and Create PR
+If you touched any Plan 1 critical file, the verification diff in §3 must be clean — or your PR description carries the spec-authorized exception text.
+
+If you touched the CME calendar, re-read ADR-006 and run:
 
 ```bash
-# Push to your fork
-git push origin feature/your-feature-name
-
-# Go to GitHub and create a Pull Request
-# Use the PR template and fill in all sections
+go test ./kernel -run TestIsCMEOpen
+go test ./kernel -run TestHoliday
 ```
+
+**Annual maintenance:** the holiday table in `kernel/cme_calendar.go` is hardcoded. When the calendar year rolls over, somebody updates the table. There is no test that auto-fires on Jan 1. This is documented in ADR-006 — treat the table review as a January item.
 
 ---
 
-## 📝 PR Submission Guidelines
+## Code style
 
-### Before Submitting
-
-- [ ] Code compiles successfully (`go build` and `npm run build`)
-- [ ] All tests pass (`go test ./...`)
-- [ ] No linting errors (`go fmt`, `go vet`)
-- [ ] Documentation is updated
-- [ ] Commits follow conventional commits format
-- [ ] Branch is rebased on latest `dev`
-
-### PR Title Format
-
-Use [Conventional Commits](https://www.conventionalcommits.org/) format:
-
-```
-<type>(<scope>): <subject>
-
-Examples:
-feat(exchange): add OKX exchange integration
-fix(trader): resolve position tracking bug
-docs(readme): update installation instructions
-perf(ai): optimize prompt generation
-refactor(core): extract common exchange interface
-```
-
-**Types:**
-- `feat` - New feature
-- `fix` - Bug fix
-- `docs` - Documentation
-- `style` - Code style (formatting, no logic change)
-- `refactor` - Code refactoring
-- `perf` - Performance improvement
-- `test` - Test updates
-- `chore` - Build/config changes
-- `ci` - CI/CD changes
-- `security` - Security improvements
-
-### PR Description
-
-Use the [PR template](.github/PULL_REQUEST_TEMPLATE.md) and ensure:
-
-1. **Clear description** of what and why
-2. **Type of change** is marked
-3. **Related issues** are linked
-4. **Testing steps** are documented
-5. **Screenshots** for UI changes
-6. **All checkboxes** are completed
-
-### PR Size
-
-Keep PRs focused and reasonably sized:
-
-- ✅ **Small PR** (< 300 lines): Ideal, fast review
-- ⚠️ **Medium PR** (300-1000 lines): Acceptable, may take longer
-- ❌ **Large PR** (> 1000 lines): Please break into smaller PRs
+- **Go:** `go fmt`, `go vet`, errors wrapped with `fmt.Errorf("...: %w", err)`. The 19-method `trader/types.Trader` interface uses a compile-time check (`var _ types.Trader = (*Trader)(nil)`) — don't add or remove methods without updating every broker. See `trader/CLAUDE.md`.
+- **TypeScript:** strict mode, `npm run lint` clean. No `any`. Three i18n languages (`en`, `zh`, `id`) — every new user-facing string needs all three.
+- **CSV protocol for `vltrader.cs`:** 5-field signals, 3-field fills. Pinned in `CLAUDE.md`. Do not change without coordinated Go + NinjaScript updates and a rollback plan.
 
 ---
 
-## 💻 Coding Standards
+## Where to find help
 
-### Go Code
-
-```go
-// ✅ Good: Clear naming, proper error handling
-func ConnectToExchange(apiKey, secret string) (*Exchange, error) {
-    if apiKey == "" || secret == "" {
-        return nil, fmt.Errorf("API credentials are required")
-    }
-
-    client, err := createClient(apiKey, secret)
-    if err != nil {
-        return nil, fmt.Errorf("failed to create client: %w", err)
-    }
-
-    return &Exchange{client: client}, nil
-}
-
-// ❌ Bad: Poor naming, no error handling
-func ce(a, s string) *Exchange {
-    c := createClient(a, s)
-    return &Exchange{client: c}
-}
-```
-
-**Best Practices:**
-- Use meaningful variable names
-- Handle all errors explicitly
-- Add comments for complex logic
-- Follow Go idioms and conventions
-- Run `go fmt` before committing
-- Use `go vet` and `golangci-lint`
-
-### TypeScript/React Code
-
-```typescript
-// ✅ Good: Type-safe, clear naming
-interface TraderConfig {
-  id: string;
-  exchange: 'binance' | 'hyperliquid' | 'aster';
-  aiModel: string;
-  enabled: boolean;
-}
-
-const TraderCard: React.FC<{ trader: TraderConfig }> = ({ trader }) => {
-  const [isRunning, setIsRunning] = useState(false);
-
-  const handleStart = async () => {
-    try {
-      await startTrader(trader.id);
-      setIsRunning(true);
-    } catch (error) {
-      console.error('Failed to start trader:', error);
-    }
-  };
-
-  return <div>...</div>;
-};
-
-// ❌ Bad: No types, unclear naming
-const TC = (props) => {
-  const [r, setR] = useState(false);
-  const h = () => { startTrader(props.t.id); setR(true); };
-  return <div>...</div>;
-};
-```
-
-**Best Practices:**
-- Use TypeScript strict mode
-- Define interfaces for all data structures
-- Avoid `any` type
-- Use functional components with hooks
-- Follow React best practices
-- Run `npm run lint` before committing
-
-### File Structure
-
-```
-NOFX/
-├── cmd/               # Main applications
-├── internal/          # Private code
-│   ├── exchange/      # Exchange adapters
-│   ├── trader/        # Trading logic
-│   ├── ai/           # AI integrations
-│   └── api/          # API handlers
-├── pkg/              # Public libraries
-├── web/              # Frontend
-│   ├── src/
-│   │   ├── components/
-│   │   ├── pages/
-│   │   ├── hooks/
-│   │   └── utils/
-│   └── public/
-└── docs/             # Documentation
-```
-
----
-
-## 📋 Commit Message Guidelines
-
-### Format
-
-```
-<type>(<scope>): <subject>
-
-<body>
-
-<footer>
-```
-
-### Examples
-
-```
-feat(exchange): add OKX futures API integration
-
-- Implement order placement and cancellation
-- Add balance and position retrieval
-- Support leverage configuration
-
-Closes #123
-```
-
-```
-fix(trader): prevent duplicate position opening
-
-The trader was opening multiple positions in the same direction
-for the same symbol. Added check to prevent this behavior.
-
-Fixes #456
-```
-
-```
-docs: update Docker deployment guide
-
-- Add troubleshooting section
-- Update environment variables
-- Add examples for common scenarios
-```
-
-### Rules
-
-- Use present tense ("add" not "added")
-- Use imperative mood ("move" not "moves")
-- First line ≤ 72 characters
-- Reference issues and PRs
-- Explain "what" and "why", not "how"
-
----
-
-## 🔍 Review Process
-
-### Timeline
-
-- **Initial review:** Within 2-3 business days
-- **Follow-up reviews:** Within 1-2 business days
-- **Bounty PRs:** Priority review within 1 business day
-
-### Review Criteria
-
-Reviewers will check:
-
-1. **Functionality**
-   - Does it work as intended?
-   - Are edge cases handled?
-   - No regression in existing features?
-
-2. **Code Quality**
-   - Follows coding standards?
-   - Well-structured and readable?
-   - Proper error handling?
-
-3. **Testing**
-   - Adequate test coverage?
-   - Tests pass in CI?
-   - Manual testing documented?
-
-4. **Documentation**
-   - Code comments where needed?
-   - README/docs updated?
-   - API changes documented?
-
-5. **Security**
-   - No hardcoded secrets?
-   - Input validation?
-   - No known vulnerabilities?
-
-### Response to Feedback
-
-- Address all review comments
-- Ask questions if unclear
-- Mark conversations as resolved
-- Re-request review after changes
-
-### Approval and Merge
-
-- Requires **1 approval** from maintainers
-- All CI checks must pass
-- No unresolved conversations
-- Maintainers will merge (squash merge for small PRs, merge commit for features)
-
----
-
-## 💰 Bounty Program
-
-### How It Works
-
-1. Check [open bounty issues](https://github.com/NoFxAiOS/nofx/labels/bounty)
-2. Comment to claim (first come, first served)
-3. Complete work within deadline
-4. Submit PR with bounty claim section filled
-5. Get paid upon merge
-
-### Guidelines
-
-- Read [Bounty Guide](docs/community/bounty-guide.md)
-- Meet all acceptance criteria
-- Include demo video/screenshots
-- Follow all contribution guidelines
-- Payment details discussed privately
-
----
-
-## ❓ Questions?
-
-- **General questions:** Join our [Telegram Community](https://t.me/nofx_dev_community)
-- **Technical questions:** Open a [Discussion](https://github.com/NoFxAiOS/nofx/discussions)
-- **Security issues:** See [Security Policy](SECURITY.md)
-- **Bug reports:** Use [Bug Report Template](.github/ISSUE_TEMPLATE/bug_report.md)
-
----
-
-## 📚 Additional Resources
-
-- [Project Roadmap](docs/roadmap/README.md)
-- [Architecture Documentation](docs/architecture/README.md)
-- [Deployment Guide](docs/getting-started/docker-deploy.en.md)
-
----
-
-## 🙏 Thank You!
-
-Your contributions make NOFX better for everyone. We appreciate your time and effort!
-
-**Happy coding! 🚀**
+- `docs/ONBOARDING.md` — system tour for new engineers.
+- `docs/adr/ADR-001..ADR-007` — architecture rationale.
+- `docs/operations/STARTUP.md` / `MONITORING.md` / `TRADER_MODE.md` / `ROLLBACK.md` / `DR.md` — operator runbooks.
+- `docs/superpowers/plans/2026-05-22-nq-databento-ninjatrader.md` — the 37-task implementation plan.
+- `CLAUDE.md` at repo root — project-level instructions, including the high-cascade types list and the JWT secret gate.
