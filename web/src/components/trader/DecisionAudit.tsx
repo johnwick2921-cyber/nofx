@@ -13,7 +13,7 @@
 //
 // Click a row to expand the Reasoning panel.
 
-import { useEffect, useState } from 'react'
+import { Fragment, useEffect, useState } from 'react'
 
 interface DecisionActionRecord {
   action: string
@@ -58,9 +58,20 @@ interface FlatRow {
 function flattenDecisions(records: DecisionAuditRow[]): FlatRow[] {
   const rows: FlatRow[] = []
   for (const rec of records) {
-    const actions = rec.decisions && rec.decisions.length > 0
-      ? rec.decisions
-      : [{ action: 'wait', symbol: '-', price: 0, stop_loss: 0, take_profit: 0, confidence: 0, reasoning: '' }]
+    const actions =
+      rec.decisions && rec.decisions.length > 0
+        ? rec.decisions
+        : [
+            {
+              action: 'wait',
+              symbol: '-',
+              price: 0,
+              stop_loss: 0,
+              take_profit: 0,
+              confidence: 0,
+              reasoning: '',
+            },
+          ]
     actions.forEach((a, i) => {
       rows.push({
         cycleId: rec.id,
@@ -122,14 +133,20 @@ export function DecisionAudit({ traderId }: Props) {
 
   if (loading) {
     return (
-      <div className="p-4 text-sm text-nofx-text-muted" data-testid="decision-audit-loading">
+      <div
+        className="p-4 text-sm text-nofx-text-muted"
+        data-testid="decision-audit-loading"
+      >
         Loading decisions...
       </div>
     )
   }
   if (error) {
     return (
-      <div className="p-4 text-sm text-nofx-red" data-testid="decision-audit-error">
+      <div
+        className="p-4 text-sm text-nofx-red"
+        data-testid="decision-audit-error"
+      >
         Error: {error}
       </div>
     )
@@ -139,7 +156,10 @@ export function DecisionAudit({ traderId }: Props) {
 
   if (rows.length === 0) {
     return (
-      <div className="p-6 text-center text-nofx-text-muted opacity-70" data-testid="decision-audit-empty">
+      <div
+        className="p-6 text-center text-nofx-text-muted opacity-70"
+        data-testid="decision-audit-empty"
+      >
         <div className="text-4xl mb-2 opacity-40">🧠</div>
         <div className="text-sm">No decisions yet</div>
       </div>
@@ -148,23 +168,40 @@ export function DecisionAudit({ traderId }: Props) {
 
   return (
     <div className="overflow-x-auto">
-      <table
-        data-testid="decision-audit-table"
-        className="w-full text-xs"
-      >
+      <table data-testid="decision-audit-table" className="w-full text-xs">
         <thead className="text-left border-b border-white/10">
           <tr className="text-nofx-text-muted font-mono uppercase tracking-wider">
             <th className="px-2 py-2 font-semibold whitespace-nowrap">Time</th>
-            <th className="px-2 py-2 font-semibold whitespace-nowrap">Symbol</th>
-            <th className="px-2 py-2 font-semibold whitespace-nowrap">Action</th>
-            <th className="px-2 py-2 font-semibold whitespace-nowrap text-right">Entry</th>
-            <th className="px-2 py-2 font-semibold whitespace-nowrap text-right">SL</th>
-            <th className="px-2 py-2 font-semibold whitespace-nowrap text-right">TP</th>
-            <th className="px-2 py-2 font-semibold whitespace-nowrap text-right">Confidence</th>
-            <th className="px-2 py-2 font-semibold whitespace-nowrap text-center">Risk Check</th>
-            <th className="px-2 py-2 font-semibold whitespace-nowrap">Execution Status</th>
-            <th className="px-2 py-2 font-semibold whitespace-nowrap text-right">Fill Price</th>
-            <th className="px-2 py-2 font-semibold whitespace-nowrap text-right">Latency</th>
+            <th className="px-2 py-2 font-semibold whitespace-nowrap">
+              Symbol
+            </th>
+            <th className="px-2 py-2 font-semibold whitespace-nowrap">
+              Action
+            </th>
+            <th className="px-2 py-2 font-semibold whitespace-nowrap text-right">
+              Entry
+            </th>
+            <th className="px-2 py-2 font-semibold whitespace-nowrap text-right">
+              SL
+            </th>
+            <th className="px-2 py-2 font-semibold whitespace-nowrap text-right">
+              TP
+            </th>
+            <th className="px-2 py-2 font-semibold whitespace-nowrap text-right">
+              Confidence
+            </th>
+            <th className="px-2 py-2 font-semibold whitespace-nowrap text-center">
+              Risk Check
+            </th>
+            <th className="px-2 py-2 font-semibold whitespace-nowrap">
+              Execution Status
+            </th>
+            <th className="px-2 py-2 font-semibold whitespace-nowrap text-right">
+              Fill Price
+            </th>
+            <th className="px-2 py-2 font-semibold whitespace-nowrap text-right">
+              Latency
+            </th>
           </tr>
         </thead>
         <tbody>
@@ -174,20 +211,22 @@ export function DecisionAudit({ traderId }: Props) {
             const isExpanded = expandedKey === row.rowKey
             const tsRaw = p.created_at || p.timestamp
             const tsDisplay = tsRaw ? new Date(tsRaw).toLocaleString() : '—'
-            const latencyMs = p.fill_latency_ms != null ? p.fill_latency_ms : p.ai_latency_ms
+            const latencyMs =
+              p.fill_latency_ms != null ? p.fill_latency_ms : p.ai_latency_ms
             const riskOk = p.risk_check_passed
             return (
-              <>
+              <Fragment key={row.rowKey}>
                 <tr
-                  key={row.rowKey}
                   data-testid={`decision-row-${row.cycleId}`}
                   className="border-b border-white/5 hover:bg-white/5 cursor-pointer transition-colors"
-                  onClick={() =>
-                    setExpandedKey(isExpanded ? null : row.rowKey)
-                  }
+                  onClick={() => setExpandedKey(isExpanded ? null : row.rowKey)}
                 >
-                  <td className="px-2 py-2 text-nofx-text-muted whitespace-nowrap font-mono">{tsDisplay}</td>
-                  <td className="px-2 py-2 font-mono font-semibold text-nofx-text-main whitespace-nowrap">{a.symbol || '—'}</td>
+                  <td className="px-2 py-2 text-nofx-text-muted whitespace-nowrap font-mono">
+                    {tsDisplay}
+                  </td>
+                  <td className="px-2 py-2 font-mono font-semibold text-nofx-text-main whitespace-nowrap">
+                    {a.symbol || '—'}
+                  </td>
                   <td className="px-2 py-2 whitespace-nowrap">
                     <span className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-white/5 text-nofx-text-main">
                       {a.action || '—'}
@@ -232,11 +271,11 @@ export function DecisionAudit({ traderId }: Props) {
                   </td>
                 </tr>
                 {isExpanded && (
-                  <tr
-                    key={`${row.rowKey}-reasoning`}
-                    data-testid={`decision-row-${row.cycleId}-reasoning`}
-                  >
-                    <td colSpan={11} className="px-3 py-3 bg-white/[0.03] text-nofx-text-main text-xs">
+                  <tr data-testid={`decision-row-${row.cycleId}-reasoning`}>
+                    <td
+                      colSpan={11}
+                      className="px-3 py-3 bg-white/[0.03] text-nofx-text-main text-xs"
+                    >
                       <div className="flex items-center gap-3 mb-2 text-[10px] font-mono uppercase tracking-wider text-nofx-text-muted">
                         <span>Reasoning</span>
                         {p.ai_model && (
@@ -261,7 +300,7 @@ export function DecisionAudit({ traderId }: Props) {
                     </td>
                   </tr>
                 )}
-              </>
+              </Fragment>
             )
           })}
         </tbody>
