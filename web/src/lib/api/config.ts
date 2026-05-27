@@ -106,6 +106,15 @@ export const configApi = {
   },
 
   async createExchangeEncrypted(request: CreateExchangeRequest): Promise<{ id: string }> {
+    // Plan 4.2 fix (BUG 4.1.A.b1): NinjaTrader has no API key/secret to encrypt
+    // (auths via Windows process / file CSV bridge per Task 14). Skip encryption
+    // and POST plain JSON — backend accepts it directly.
+    if (request.exchange_type === 'ninjatrader') {
+      const result = await httpClient.post<{ id: string }>(`${API_BASE}/exchanges`, request)
+      if (!result.success) throw new Error('Failed to create exchange account')
+      return result.data!
+    }
+
     // Check if transport encryption is enabled
     const config = await CryptoService.fetchCryptoConfig()
 
