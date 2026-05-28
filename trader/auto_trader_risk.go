@@ -3,9 +3,16 @@ package trader
 import (
 	"fmt"
 	"nofx/logger"
+	"nofx/market"
 	"strings"
 	"time"
 )
+
+// futuresMaxNotionalLeverage mirrors kernel.futuresMaxNotionalLeverage: the
+// notional sanity ceiling for CME futures (max notional = equity × this).
+// Kept in lockstep with the risk gate so the executor cap matches what the
+// gate already accepted.
+const futuresMaxNotionalLeverage = 20.0
 
 // startDrawdownMonitor starts drawdown monitoring
 func (at *AutoTrader) startDrawdownMonitor() {
@@ -197,12 +204,17 @@ func (at *AutoTrader) enforcePositionValueRatio(positionSizeUSD float64, equity 
 
 	// Get the appropriate position value ratio limit
 	var maxPositionValueRatio float64
-	if isBTCETH(symbol) {
+	switch {
+	case market.IsCMEFuturesSymbol(symbol):
+		// CME futures: notional sanity ceiling (matches the risk gate). The
+		// precise contract sizing + clamp happens at order placement.
+		maxPositionValueRatio = futuresMaxNotionalLeverage
+	case isBTCETH(symbol):
 		maxPositionValueRatio = riskControl.BTCETHMaxPositionValueRatio
 		if maxPositionValueRatio <= 0 {
 			maxPositionValueRatio = 5.0 // Default: 5x for BTC/ETH
 		}
-	} else {
+	default:
 		maxPositionValueRatio = riskControl.AltcoinMaxPositionValueRatio
 		if maxPositionValueRatio <= 0 {
 			maxPositionValueRatio = 1.0 // Default: 1x for altcoins

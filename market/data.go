@@ -38,12 +38,24 @@ func GetWithExchange(symbol, exchange string) (*Data, error) {
 
 	// Check if this is an xyz dex asset (use Hyperliquid API)
 	isXyzAsset := IsXyzDexAsset(symbol)
+	// CME futures (NT8) read the live BarCache via the injected provider —
+	// never CoinAnk. BarCache holds 5m/15m/1h (not 3m/4h), so we map 5m->short
+	// and 1h->longer. Crypto path below is untouched.
+	isFutures := IsCMEFuturesSymbol(symbol)
 
 	// For hyperliquid exchange, also use Hyperliquid API
 	useHyperliquidAPI := isXyzAsset || strings.ToLower(exchange) == "hyperliquid"
 
 	// Get 3-minute K-line data (or 5-minute for xyz assets as 3m may not be available)
-	if useHyperliquidAPI {
+	if isFutures {
+		if FuturesBarsProvider == nil {
+			return nil, fmt.Errorf("%s: CME futures but no NT8 bar provider wired", symbol)
+		}
+		klines3m = FuturesBarsProvider(symbol, "5m", 200)
+		if len(klines3m) == 0 {
+			return nil, fmt.Errorf("%s: no NT8 5m bars cached", symbol)
+		}
+	} else if useHyperliquidAPI {
 		// Use Hyperliquid API for xyz dex assets (use 5m since 3m may not be available)
 		klines3m, err = getKlinesFromHyperliquid(symbol, "5m", 100)
 		if err != nil {
@@ -63,8 +75,13 @@ func GetWithExchange(symbol, exchange string) (*Data, error) {
 		return nil, fmt.Errorf("%s data is stale, possible cache failure", symbol)
 	}
 
-	// Get 4-hour K-line data
-	if useHyperliquidAPI {
+	// Get 4-hour K-line data (futures: use 1h from BarCache as the longer TF)
+	if isFutures {
+		klines4h = FuturesBarsProvider(symbol, "1h", 200)
+		if len(klines4h) == 0 {
+			return nil, fmt.Errorf("%s: no NT8 1h bars cached", symbol)
+		}
+	} else if useHyperliquidAPI {
 		klines4h, err = getKlinesFromHyperliquid(symbol, "4h", 100)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to get 4-hour K-line from Hyperliquid: %v", err)

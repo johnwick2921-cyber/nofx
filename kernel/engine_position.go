@@ -3,7 +3,16 @@ package kernel
 import (
 	"fmt"
 	"nofx/logger"
+	"nofx/market"
 )
+
+// futuresMaxNotionalLeverage is the notional sanity ceiling for CME futures
+// in the risk gate: max position notional = equity × this. Futures are
+// leveraged instruments (a $50k account holds ~$60k MNQ notional on ~$2.2k
+// margin), so the crypto equity×ratio cap is wrong. This is a coarse ceiling
+// that rejects absurd sizes; precise contract sizing + clamp happens in the
+// executor (auto_trader_orders.go).
+const futuresMaxNotionalLeverage = 20.0
 
 // ============================================================================
 // Decision Validation
@@ -36,7 +45,14 @@ func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoi
 		maxLeverage := altcoinLeverage
 		posRatio := altcoinPosRatio
 		maxPositionValue := accountEquity * posRatio
-		if d.Symbol == "BTCUSDT" || d.Symbol == "ETHUSDT" {
+		isFutures := market.IsCMEFuturesSymbol(d.Symbol)
+		switch {
+		case isFutures:
+			// CME futures are sized in contracts, not crypto USD ratio. Apply
+			// a notional sanity ceiling (equity × futuresMaxNotionalLeverage);
+			// the executor does the precise contract sizing + clamp.
+			maxPositionValue = accountEquity * futuresMaxNotionalLeverage
+		case d.Symbol == "BTCUSDT" || d.Symbol == "ETHUSDT":
 			maxLeverage = btcEthLeverage
 			posRatio = btcEthPosRatio
 			maxPositionValue = accountEquity * posRatio
@@ -69,9 +85,12 @@ func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoi
 
 		tolerance := maxPositionValue * 0.01
 		if d.PositionSizeUSD > maxPositionValue+tolerance {
-			if d.Symbol == "BTCUSDT" || d.Symbol == "ETHUSDT" {
+			switch {
+			case isFutures:
+				return fmt.Errorf("%s futures notional cannot exceed %.0f USD (%.0fx account equity), actual: %.0f", d.Symbol, maxPositionValue, futuresMaxNotionalLeverage, d.PositionSizeUSD)
+			case d.Symbol == "BTCUSDT" || d.Symbol == "ETHUSDT":
 				return fmt.Errorf("BTC/ETH single coin position value cannot exceed %.0f USDT (%.1fx account equity), actual: %.0f", maxPositionValue, posRatio, d.PositionSizeUSD)
-			} else {
+			default:
 				return fmt.Errorf("altcoin single coin position value cannot exceed %.0f USDT (%.1fx account equity), actual: %.0f", maxPositionValue, posRatio, d.PositionSizeUSD)
 			}
 		}
