@@ -15,6 +15,13 @@ import (
 
 // BuildSystemPrompt builds System Prompt according to strategy configuration
 func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string) string {
+	// CME futures (NT8/MNQ) use a dedicated futures system prompt that emits
+	// the SAME <reasoning>/<decision> envelope this parser expects, but with
+	// futures framing. Early-return keeps the crypto assembly below untouched.
+	if strings.ToLower(strings.TrimSpace(variant)) == "futures" {
+		return e.BuildFuturesDecisionSystemPrompt(accountEquity)
+	}
+
 	var sb strings.Builder
 	riskControl := e.config.RiskControl
 	promptSections := e.config.PromptSections
