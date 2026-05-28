@@ -151,6 +151,27 @@ func GetWithTimeframes(symbol string, timeframes []string, primaryTimeframe stri
 		return nil, fmt.Errorf("at least one timeframe is required")
 	}
 
+	// Task 12 / Cluster D — CME futures route to Databento. The branch lives
+	// here so every existing call site (kernel/engine_analysis.go,
+	// api/strategy.go, trader/auto_trader_grid*.go) picks it up
+	// automatically. Crypto path is byte-unchanged below.
+	if IsCMEFuturesSymbol(symbol) {
+		if primaryTimeframe == "" {
+			primaryTimeframe = timeframes[0]
+		}
+		hasPrimary := false
+		for _, tf := range timeframes {
+			if tf == primaryTimeframe {
+				hasPrimary = true
+				break
+			}
+		}
+		if !hasPrimary {
+			timeframes = append([]string{primaryTimeframe}, timeframes...)
+		}
+		return getDataFromDatabento(symbol, timeframes, primaryTimeframe, count)
+	}
+
 	// If primary timeframe is not specified, use the first one
 	if primaryTimeframe == "" {
 		primaryTimeframe = timeframes[0]
@@ -554,7 +575,17 @@ func IsXyzDexAsset(symbol string) bool {
 // Normalize normalizes symbol
 // For crypto: ensures it's a USDT trading pair
 // For xyz dex assets (stocks, forex, commodities): uses xyz: prefix without USDT suffix
+// For CME futures (Task 12): preserves case (NQ.c.0 not NQ.C.0) and never appends USDT.
+//
+//	Databento's continuous symbology requires the lowercase `.c.` suffix
+//	and rejects uppercased / USDT-suffixed forms. Detection via the
+//	shared helper IsCMEFuturesSymbol — keep the early-return BEFORE the
+//	ToUpper below or the symbol is irreversibly corrupted.
 func Normalize(symbol string) string {
+	// Task 12 / Cluster D — CME futures bypass crypto normalization.
+	if IsCMEFuturesSymbol(symbol) {
+		return strings.TrimSpace(symbol)
+	}
 	symbol = strings.ToUpper(symbol)
 
 	// Check if this is an xyz dex asset

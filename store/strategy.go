@@ -235,8 +235,16 @@ func normalizeSymbols(values []string) []string {
 	out := make([]string, 0, len(values))
 	seen := make(map[string]bool, len(values))
 	for _, value := range splitLooseStringList(values) {
-		value = strings.ToUpper(strings.TrimSpace(value))
-		value = strings.Trim(value, "，,;； ")
+		value = strings.TrimSpace(value)
+		// Task 12 / Cluster D — CME futures symbols keep their case
+		// (NQ.c.0 not NQ.C.0). Uppercasing breaks the Databento
+		// continuous symbology convention. Crypto path unchanged.
+		if isCMEFuturesSymbol(value) {
+			value = strings.Trim(value, "，,;； ")
+		} else {
+			value = strings.ToUpper(value)
+			value = strings.Trim(value, "，,;； ")
+		}
 		if value == "" || seen[value] {
 			continue
 		}
@@ -244,6 +252,59 @@ func normalizeSymbols(values []string) []string {
 		out = append(out, value)
 	}
 	return out
+}
+
+// isCMEFuturesSymbol mirrors market.IsCMEFuturesSymbol. Duplicated here
+// because store/ deliberately does not depend on market/. Keep the two
+// in lockstep — see market/futures_symbol.go for the canonical version
+// + documentation.
+func isCMEFuturesSymbol(symbol string) bool {
+	s := strings.TrimSpace(symbol)
+	if s == "" {
+		return false
+	}
+	if strings.Contains(s, ".c.") {
+		return true
+	}
+	upper := strings.ToUpper(s)
+	if _, ok := cmeFuturesRootsStore[upper]; ok {
+		return true
+	}
+	for root := range cmeFuturesRootsStore {
+		if strings.HasPrefix(upper, root+".") {
+			return true
+		}
+		if strings.HasPrefix(upper, root) && len(upper) == len(root)+2 {
+			tail := upper[len(root):]
+			if isQuarterlyMonthStore(tail[0]) && tail[1] >= '0' && tail[1] <= '9' {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// cmeFuturesRootsStore mirrors market.cmeFuturesRoots. See note on
+// isCMEFuturesSymbol above.
+var cmeFuturesRootsStore = map[string]struct{}{
+	"NQ":  {},
+	"MNQ": {},
+	"ES":  {},
+	"MES": {},
+	"RTY": {},
+	"M2K": {},
+	"YM":  {},
+	"MYM": {},
+	"CL":  {},
+	"GC":  {},
+}
+
+func isQuarterlyMonthStore(b byte) bool {
+	switch b {
+	case 'H', 'M', 'U', 'Z':
+		return true
+	}
+	return false
 }
 
 func normalizeTimeframes(values []string) []string {
