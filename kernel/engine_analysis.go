@@ -314,10 +314,13 @@ func fetchMarketDataWithStrategy(ctx *Context, engine *StrategyEngine) error {
 			continue
 		}
 
-		// Liquidity filter (skip for xyz dex assets - they don't have OI data from Binance)
+		// Liquidity filter (skip for xyz dex assets - they don't have OI data from Binance).
+		// CME futures (NT8 path) likewise have no crypto open-interest feed, so the
+		// OI gate would wrongly drop them (OI=0 < threshold) — exempt them too.
 		isExistingPosition := positionSymbols[coin.Symbol]
 		isXyzAsset := market.IsXyzDexAsset(coin.Symbol)
-		if !isExistingPosition && !isXyzAsset && data.OpenInterest != nil && data.CurrentPrice > 0 {
+		isFutures := market.IsCMEFuturesSymbol(coin.Symbol)
+		if !isExistingPosition && !isXyzAsset && !isFutures && data.OpenInterest != nil && data.CurrentPrice > 0 {
 			oiValue := data.OpenInterest.Latest * data.CurrentPrice
 			oiValueInMillions := oiValue / 1_000_000
 			if oiValueInMillions < minOIThresholdMillions {

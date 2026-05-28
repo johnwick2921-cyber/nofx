@@ -45,6 +45,9 @@ func getOrStartTCPServer() (*ntwire.TCPServer, error) {
 			return
 		}
 		tcpServerInst = server
+		// Stage 3: route the kernel's futures kline reads to this server's
+		// live BarCache (NT8 bars), bypassing CoinAnk. Crypto path untouched.
+		wireFuturesBarsProvider(server)
 	})
 	return tcpServerInst, tcpServerErr
 }

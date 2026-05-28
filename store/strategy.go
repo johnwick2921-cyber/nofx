@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"nofx/config"
+
 	"gorm.io/gorm"
 )
 
@@ -900,6 +902,32 @@ func (s *StrategyStore) initDefaultData() error {
 	return nil
 }
 
+// defaultCoinSource returns the seed coin source for a fresh strategy.
+// Futures mode (TRADING_MODE=futures) seeds the single NT8 instrument as a
+// static coin so a reseeded DB does not revert to the dead ai500 pool (the
+// reseed-durable counterpart to the runtime N11 flip). Crypto mode keeps the
+// ai500 default.
+func defaultCoinSource() CoinSourceConfig {
+	if cfg := config.Get(); cfg != nil && cfg.TradingMode == "futures" {
+		return CoinSourceConfig{
+			SourceType:  "static",
+			StaticCoins: []string{"MNQ"},
+			AI500Limit:  3,
+			OITopLimit:  3,
+			OILowLimit:  3,
+		}
+	}
+	return CoinSourceConfig{
+		SourceType: "ai500",
+		UseAI500:   true,
+		AI500Limit: 3,
+		UseOITop:   false,
+		OITopLimit: 3,
+		UseOILow:   false,
+		OILowLimit: 3,
+	}
+}
+
 // GetDefaultStrategyConfig returns the default strategy configuration for the given language
 func GetDefaultStrategyConfig(lang string) StrategyConfig {
 	// Normalize language to "zh" or "en"
@@ -909,16 +937,8 @@ func GetDefaultStrategyConfig(lang string) StrategyConfig {
 	}
 
 	config := StrategyConfig{
-		Language: normalizedLang,
-		CoinSource: CoinSourceConfig{
-			SourceType: "ai500",
-			UseAI500:   true,
-			AI500Limit: 3,
-			UseOITop:   false,
-			OITopLimit: 3,
-			UseOILow:   false,
-			OILowLimit: 3,
-		},
+		Language:   normalizedLang,
+		CoinSource: defaultCoinSource(),
 		Indicators: IndicatorConfig{
 			Klines: KlineConfig{
 				PrimaryTimeframe:     "5m",
