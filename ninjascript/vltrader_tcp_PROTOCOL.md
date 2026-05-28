@@ -25,7 +25,7 @@ Every JSON body has the same outer shape:
 
 ```json
 {
-  "type": "signal" | "fill" | "heartbeat" | "ack",
+  "type": "signal" | "fill" | "heartbeat" | "ack" | "bars_subscribe" | "bars_historical" | "bar_update" | "bars_unsubscribe",
   "payload": { }
 }
 ```
@@ -110,6 +110,117 @@ Or for a specific signal:
 { "type": "ack", "payload": { "acks": "uuid-v4-string" } }
 ```
 
+### 5. `bars_subscribe` (Go server → C# AddOn) — Plan 4.4 Stage 1
+
+Request native multi-timeframe bar subscriptions for a single NT8 instrument.
+For each timeframe the C# AddOn opens one `BarsRequest` against NT8's data
+engine, emits one `bars_historical` frame on the initial load, then streams
+`bar_update` frames as ticks arrive.
+
+```json
+{
+  "type": "bars_subscribe",
+  "payload": {
+    "symbol": "MNQ",
+    "timeframes": ["1m", "5m", "15m", "1h"],
+    "bars_back": 500
+  }
+}
+```
+
+**Field semantics:**
+
+- `symbol`: NT8 instrument symbol (e.g. `MNQ`). The AddOn resolves it via
+  `Instrument.GetInstrument(symbol)` exactly like the signal path.
+- `timeframes`: list of timeframe strings the engine wants. Valid values mirror
+  `store/strategy.go::normalizeTimeframe`: `1m, 3m, 5m, 15m, 30m, 1h, 2h, 4h,
+  6h, 8h, 12h, 1d, 3d, 1w`. The AddOn maps each to a `BarsPeriod` and opens a
+  separate `BarsRequest`. Unknown values are skipped with a log warn.
+- `bars_back`: number of historical bars to load on initial subscription
+  (default 500 if omitted). Same value used for every requested timeframe.
+
+Re-subscribing to a `(symbol, timeframe)` that already has an active
+subscription is idempotent — the second `bars_subscribe` returns immediately
+without re-opening the `BarsRequest`.
+
+### 6. `bars_historical` (C# AddOn → Go server) — Plan 4.4 Stage 1
+
+Sent ONCE per `(symbol, timeframe)` when the initial `BarsRequest` completes.
+Carries the full historical batch in a single frame (bounded by the 1 MB
+envelope ceiling — at ~80 bytes per bar that's ~13k bars headroom, more than
+the engine ever requests).
+
+```json
+{
+  "type": "bars_historical",
+  "payload": {
+    "symbol": "MNQ",
+    "timeframe": "1m",
+    "bars": [
+      { "t": 1748352000000, "o": 21500.25, "h": 21501.00, "l": 21500.00, "c": 21500.75, "v": 42 },
+      { "t": 1748352060000, "o": 21500.75, "h": 21501.25, "l": 21500.50, "c": 21501.00, "v": 38 }
+    ]
+  }
+}
+```
+
+**Field semantics:**
+
+- `symbol`, `timeframe`: echo the originating `bars_subscribe` keys.
+- `bars`: ordered ascending by time, each bar is a compact 6-field object:
+  - `t`: Unix epoch milliseconds, **UTC**. The C# side converts NT8's
+    local-time `bars.GetTime(i)` to UTC using
+    `bars.TradingHours.TimeZoneInfo` before emit. Charts + indicators on the
+    Go side assume UTC; mis-timezoned bars are the #1 cause of off-by-an-hour
+    bugs.
+  - `o, h, l, c`: bar OHLC, double-precision.
+  - `v`: volume, may be a `double` for tick-volume instruments — emitted as
+    JSON number, no special encoding.
+
+### 7. `bar_update` (C# AddOn → Go server) — Plan 4.4 Stage 1
+
+Streaming updates from `BarsRequest.Update`. **The `bars` field is an array
+even when only one bar changed** — a single tick can update multiple bar
+indices when crossing minute boundaries with high-frequency feeds, and the
+NT8 contract is to walk `MinIndex..MaxIndex`. Always emit every bar in that
+range, in ascending order.
+
+```json
+{
+  "type": "bar_update",
+  "payload": {
+    "symbol": "MNQ",
+    "timeframe": "1m",
+    "bars": [
+      { "t": 1748352120000, "o": 21501.00, "h": 21501.50, "l": 21500.75, "c": 21501.25, "v": 17 }
+    ]
+  }
+}
+```
+
+**Field semantics:** identical to `bars_historical`. The Go side dedupes
+by `(symbol, timeframe, t)` and treats a later frame for the same `t` as an
+update-in-progress.
+
+### 8. `bars_unsubscribe` (Go server → C# AddOn) — Plan 4.4 Stage 1
+
+Tear down one or more `(symbol, timeframe)` subscriptions cleanly.
+
+```json
+{
+  "type": "bars_unsubscribe",
+  "payload": {
+    "symbol": "MNQ",
+    "timeframes": ["1m", "5m"]
+  }
+}
+```
+
+Omitting `timeframes` (empty or missing) is equivalent to "all timeframes
+for this symbol." The AddOn disposes the affected `BarsRequest`s, stops
+emitting `bar_update` frames for them, and removes them from its
+subscription registry.
+
 ## Failure modes
 
 - **TCP disconnect**: the server holds the signal queue; on reconnect, it sends pending signals with their original timestamps. The C# AddOn may reject signals older than 60s as stale (emits a `status=rejected` fill).
@@ -124,3 +235,5 @@ Or for a specific signal:
 - Architectural rationale: `docs/adr/ADR-001-csv-bridge-vs-tcp.md`.
 - Plan 1.5 spec: `docs/superpowers/plans/2026-05-22-nq-databento-ninjatrader.md` lines 4343-4447.
 - Plan 1 critical-file integrity guard: `docs/adr/ADR-007-plan1-critical-file-integrity.md` (Plan 1.5 is purely additive — none of the CSV bridge files are modified).
+- Plan 4.4 deep spec: same plan doc, Plan 4.4 Deep Spec section. Defines `bars_subscribe`, `bars_historical`, `bar_update`, `bars_unsubscribe` envelopes consumed by the new C# `VLBarsSubscriptionManager`.
+- Plan 4.4 Stage 1 C# implementation: `ninjascript/VLBarsSubscriptionManager.cs`. Isolates BarsRequest logic from the proven signal/fill/heartbeat path in `VLTraderTCPClient.cs` (which gains only a field, a constructor call, and two switch cases).
