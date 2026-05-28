@@ -7341,11 +7341,19 @@ Plus the comprehensive 5-page UI inventory produced 2026-05-28 at
   encoder, auto_trader wiring, server singleton). None exercised
   the steady-state heartbeat path for more than a few minutes.
   Any soak ≥1 minute would have surfaced this.
-- **Fix:** `provider/ninjatrader/tcp_server.go` — `SetWriteDeadline`
-  before the ack write + `writeMu sync.Mutex` to serialize the 3
-  WriteFrame call sites (ack, heartbeat send, signal flush). +28/-4
-  LOC. Single file. ADR-007 critical files untouched. No C# AddOn
-  recompile.
+- **Fix:** `provider/ninjatrader/tcp_server.go` — two changes,
+  primary + secondary:
+  - **PRIMARY (closes the actual bug):** add `SetWriteDeadline`
+    before the ack write so it no longer inherits the stale
+    deadline.
+  - **SECONDARY (defense-in-depth, not because frame corruption
+    was observed):** add `writeMu sync.Mutex` to serialize the
+    3 WriteFrame call sites (ack, heartbeat send, signal flush).
+    The C# side already uses `lock(writeLock)`; this brings the
+    Go side to parity.
+
+  +28/-4 LOC. Single file. ADR-007 critical files untouched. No
+  C# AddOn recompile.
 - **Verification:** 14-minute soak post-deploy on PID 51866 showed
   0 heartbeat errors, 1 client connect (initial only), 0
   disconnects. Pre-fix would have produced 14+ of each.
@@ -7364,10 +7372,15 @@ Plus the comprehensive 5-page UI inventory produced 2026-05-28 at
   as the next length-prefix → garbage length (often >1MB) →
   `ErrFrameTooLarge` → disconnect.
 - **Fix (Patch C):** Removed the read deadline; block on `ReadFrame`
-  until a complete frame arrives OR the connection closes. A
-  separate ctx-cancel watcher goroutine closes the conn on
-  `ctx.Done()`, which unblocks the read. No frame-byte desync
-  possible.
+  until a complete frame arrives OR the connection closes.
+  Implementation uses **`context.WithCancel` + a watcher goroutine**
+  (`connCtx, connCancel := context.WithCancel(ctx); defer connCancel();
+  go func() { <-connCtx.Done(); c.Close() }()`) — NOT
+  `context.AfterFunc`. Same architectural pattern (cancellable
+  blocking read driven by ctx), the more traditional API. Either
+  would work; the operator chose `WithCancel`+goroutine to keep the
+  pattern uniform with the rest of the codebase. No frame-byte
+  desync possible.
 - **Found by:** Pre-Stage-2 diagnostic — looking for any other
   socket noise before starting Plan 4.4 Stage 2. Confirmed via
   post-1.5.6 soak logs showing the residual ~0.5%/frame
@@ -7554,3 +7567,312 @@ both shipped work and the NT8 pivot.
   `verify_*.png`). Should be moved to `.claude/screenshots/` (which
   is in `.gitignore`) or deleted. Currently harmless but noisy in
   `git status`.
+
+---
+
+# 2026-05-28 Plan Update — Wire-protocol design additions + report corrections
+
+This block adds the wire-protocol design decisions surfaced by the
+2026-05-28 external-report comparison (see
+[docs/internal/external-reviews/2026-05-28-comparison-vs-canonical-plan.md](../../internal/external-reviews/2026-05-28-comparison-vs-canonical-plan.md))
+and records the 3 corrections (W1 / W2 / W3) plus deferred hardening
+items (N2 / N6). The 4 new wire-protocol additions (N1 / N3 / N4 / N5)
+land in the Plan 4.4 Stage 2 design **before** Stage 2 builds, so
+they're designed in from the start rather than retrofitted in a later
+hotfix cycle.
+
+## Plan 4.4 Stage 2 — Wire-protocol design additions (2026-05-28, pre-build)
+
+Cross-references: Plan 4.4 Deep Spec wire protocol section (L7043+);
+Plan 4.x Sequencing REVISED 2026-05-28 (Stage 2 listing); ADR-007
+(any additive frame type must ship simultaneously on Go + C# sides).
+
+### N1 — `protocol_version` field on envelope (or heartbeat payload)
+
+**What:** Add an integer `protocol_version` field. Versions start
+at `1` for the current Plan 1.5 + 4.4 spec; bumped only on
+breaking changes to the wire format.
+
+**Where:** Either in the JSON envelope alongside `type` + `payload`,
+or in the `heartbeat` payload (so it rides on existing heartbeat
+traffic without growing every frame). Recommended: envelope-level
+(visible on every frame; simpler to inspect during debugging).
+
+**Why:** On connect, each side reads the peer's version. The
+**older** side logs a warning and falls back to whatever envelope/
+field shape it understands. Distinguishes:
+- "I received a frame type I don't recognize, that's expected on a
+  newer peer" — current warn-and-continue behavior, unchanged
+- "I received a frame type I don't recognize AND the peer's version
+  is older than mine" — this is real wire drift, escalate beyond a
+  warn
+
+The current warn-and-continue rule masks both cases identically.
+Would have caught at least one Plan 1.5.x hotfix early (drift
+between hand-rolled JSON encoder versions).
+
+**Implementation surface:** Adds a field to `Envelope` struct in
+`provider/ninjatrader/tcp_framing.go` AND `VLTraderTCPClient.cs`
+JSON encoder. Coordinated commit per ADR-007. ~10 LOC each side.
+
+**Lands in:** Plan 4.4 Stage 2 (alongside the bar frame types).
+
+### N3 — `bars_resync` frame type
+
+**What:** A new wire message:
+
+```json
+{
+  "type": "bars_resync",
+  "payload": {
+    "subscription_id": "...",
+    "last_bar_open_utc": 1748352000
+  }
+}
+```
+
+Sent by Go → C# on Go reconnect for each active subscription. C#
+replies with one or more `bars_historical` frames covering the
+range `[last_bar_open_utc, now]`.
+
+**Why:** Closes the Go-restarts-while-NT-keeps-streaming gap. The
+Plan 4.4 Stage 2 design already includes "cache last bars_historical
+for late joiners" on the Go side — but that cache is Go-process-
+local. If the Go process restarts, the cache is empty AND the bars
+that NT8 streamed during the outage are lost forever (the C#
+`BarsRequest.Update` event already fired; there's no replay
+mechanism on the C# side without a wire-level handshake).
+
+**Implementation surface:** New frame type (1 envelope shape, 2
+handlers — one in `tcp_server.go` for the dispatch, one in
+`VLTraderTCPClient.cs` + `VLBarsSubscriptionManager.cs` for the
+replay logic). ~30-50 LOC each side. C# side needs to keep a
+sliding window of recently-emitted bars per subscription (size
+configurable; default e.g. last 1,000 bars) so it can serve a
+resync without re-querying NT8's historical store.
+
+**Lands in:** Plan 4.4 Stage 2.
+
+### N4 — Paginate `bars_historical` at ~5,000 bars
+
+**What:** When responding to a `bars_subscribe` (initial load) or
+`bars_resync` (gap fill), if the requested range produces more
+than ~5,000 bars, C# sends multiple sequential `bars_historical`
+frames with a continuation flag:
+
+```json
+{
+  "type": "bars_historical",
+  "payload": {
+    "subscription_id": "...",
+    "bars": [...],
+    "more": true,           // false on the final batch
+    "batch_index": 0
+  }
+}
+```
+
+**Why:** Even with the 1 MB frame ceiling, a single batch of ~5k
+1m bars (~200 bytes each ≈ 1 MB) saturates the read pipeline for
+the duration of the batch parse. Other frames (signal acks,
+heartbeats) starve on the shared socket until the big batch
+completes. Pagination restores fairness: the Go-side reader can
+process other frames between batches, and Stage 2's backpressure
+channel doesn't see one giant burst.
+
+**Implementation surface:** C# side splits the bars array at the
+batch boundary; Go side accumulates batches into a complete window
+keyed by `subscription_id` and emits on `more=false`. ~20 LOC each
+side.
+
+**Lands in:** Plan 4.4 Stage 2.
+
+### N5 — Dropped-coalesced-tick counter
+
+**What:** Instrument the Stage 2 backpressure channel with a
+counter for in-progress `bar_update` ticks that get dropped due to
+coalescing (newer tick overwrites older pending tick in the channel
+slot for the same `subscription_id|bar_open_utc`).
+
+**Why:** Indicator-path slowness manifests as elevated drop rate.
+If drop rate > ~1% of stream rate, the indicator computation is
+lagging behind the bar stream — should trigger a profiling pass,
+not be silent. Without the counter, this degradation is invisible
+until the trader makes a decision on stale indicators.
+
+**Implementation surface:** Plain `atomic.Uint64` counter inside
+`market.Data` or wherever the coalescing channel lives. Surfaced
+via `/api/internal/metrics` or Prometheus when Plan 4.14 (backend
+visibility panel) lands. ~5 LOC for the counter, +10-20 LOC for
+the UI surface when 4.14 catches up.
+
+**Lands in:** Stage 2 (counter); Plan 4.14 (UI surface).
+
+## External-report comparison — corrections logged (2026-05-28)
+
+The 3 W-items from
+[2026-05-28-comparison-vs-canonical-plan.md](../../internal/external-reviews/2026-05-28-comparison-vs-canonical-plan.md)
+that the canonical plan's own post-mortems should reflect:
+
+### W1 — Plan 1.5.7 uses `context.WithCancel`+goroutine, NOT `context.AfterFunc`
+
+The external report inferred `context.AfterFunc(ctx, func(){ conn.SetReadDeadline(time.Now()) })`
+from Go context docs. The actual fix at commit `803a8727` uses
+`context.WithCancel(ctx)` + a watcher goroutine `go func() {
+<-connCtx.Done(); c.Close() }()`. Same architectural pattern,
+different API. The Plan 1.5.7 post-mortem above has been updated
+to explicitly cite `WithCancel`+goroutine so future readers can't
+re-infer the wrong API surface.
+
+### W2 — Plan 1.5.6 primary vs secondary fix
+
+The external report framed the v1.5.6 fix as concurrent-write
+corruption mitigation. The actual primary root cause was the stale
+persistent write deadline on the heartbeat-ack path; `writeMu` was
+defense-in-depth (no frame corruption was observed in
+production). The Plan 1.5.6 post-mortem above has been updated to
+explicitly split PRIMARY vs SECONDARY in the Fix section.
+
+### W3 — `engine_position.go` validActions = 6, not 9
+
+The external report cited "upstream issue #982" as enumerating 9
+valid decision actions:
+
+```
+open_long, open_short, close_long, close_short,
+update_stop_loss, update_take_profit, partial_close,
+hold, wait
+```
+
+The actual `kernel/engine_position.go::validActions` map (verified
+2026-05-28 via grep) contains **6** entries:
+
+```go
+validActions = map[string]bool{
+    "open_long":   true,
+    "open_short":  true,
+    "close_long":  true,
+    "close_short": true,
+    "hold":        true,
+    "wait":        true,
+}
+```
+
+`update_stop_loss`, `update_take_profit`, and `partial_close` are
+NOT discrete action keys in the validation path. They may exist
+elsewhere (e.g. as decision-parsing fields, or in an upstream
+branch not on origin/main), but the 9-action claim does not match
+the current shipped code. Any prompt template or downstream
+consumer that assumes the 9-action set is out of sync; if those
+actions are intended to be supported, they need a deliberate
+add-to-validActions PR.
+
+## Branch ground truth (2026-05-28)
+
+The external report's biggest confusion was probing `origin/dev`
+(GitHub-declared default) and finding only upstream crypto NOFX,
+which led to a chain of "INFERRED, not visible" caveats throughout
+its §12. The clarifying facts:
+
+| Branch | Tip SHA | Contents |
+|---|---|---|
+| `origin/main` (operator's trunk) | `6c3333a6` (and advancing) | **All futures work** — `ninjascript/`, `provider/ninjatrader/tcp_server.go` + `tcp_framing.go`, `kernel/engine_prompt_futures.go`, ADR-007, this canonical plan with the 2026-05-28 NT8 pivot, the 28 `v1.0-*` tags, `CLAUDE.md` files at root + subsystems |
+| `origin/dev` (GitHub default, vestige) | `ab5873e2` | Upstream crypto NOFX. CHANGELOG.md last-updated 2025-11-01. No `ninjascript/`. No C# in language stats |
+
+GitHub's UI (language breakdown, default-branch view, "Code" tab
+listing) reflects `dev`. External probes that read those without
+explicitly switching to `main` will see the upstream crypto code
+and conclude (incorrectly) that the futures work is missing.
+
+**Deferred (repo-config decision):** consider setting GitHub's
+default branch to `main` so external reviewers and CI / 
+fork-tracking infrastructure see the right trunk by default. Trade-
+off to evaluate before flipping: some CI keys off the default
+branch, and any fork-tracking that's pinned to `dev` would need
+updating. Not blocking; tracked as repo hygiene.
+
+## Deferred / Open Items (refreshed 2026-05-28)
+
+Carried forward from the prior 2026-05-28 plan update, plus 2 new
+items from the external-report comparison:
+
+### N2 — CI hash-check enforcing ADR-007
+
+**What:** Add a CI workflow that computes SHA-256 of the 3
+ADR-007 critical files (`provider/ninjatrader/tcp_server.go`,
+`provider/ninjatrader/tcp_framing.go`,
+`ninjascript/VLTraderTCPClient.cs`). If a PR changes the hash of
+one without matching changes to the others, fail the check.
+
+**Why:** Currently ADR-007 is enforced by review discipline (the
+ADR itself says "any change must be simultaneous on both sides").
+A CI check mechanizes this — catches drift before it lands. Would
+have caught at least one Plan 1.5.x desync if the contract had
+been enforced earlier.
+
+**Threshold to relax:** only when a coordinated minor-version bump
+is being released; even then, the check should require all 3 hashes
+to change in the same PR rather than be bypass-able.
+
+**Adoption value:** medium-high. Not urgent (review discipline has
+held so far), but mechanizes a rule that's currently a soft norm.
+
+### N6 — fetch-event-source polyfill (chart SSE JWT in Authorization header)
+
+**What:** Replace the native browser `EventSource` API in the
+`FuturesChart` component (to be built in Plan 4.4 Stage 4) with
+the [`fetch-event-source`](https://www.npmjs.com/package/@microsoft/fetch-event-source)
+polyfill. The polyfill lets you set custom headers on an SSE
+connection, so the JWT can ride in the `Authorization` header
+instead of the URL query parameter.
+
+**Why:** The current Plan 4.4 Stage 4 design has JWT-in-query as a
+mitigation for the EventSource header limitation (WHATWG html#2177).
+URLs leak into server logs and browser history; the chart token
+must be short-TTL and scoped. Moving the JWT to the Authorization
+header eliminates the URL-token risk entirely.
+
+**Threshold to skip:** if a cookie-based session-auth alternative
+is added (the chart JWT would ride on the session cookie), the
+polyfill becomes unnecessary.
+
+**Trade-offs:** polyfill is a non-zero maintenance dependency
+(~9KB minified; Microsoft-maintained, used in production by VS Code
+Live Share); evaluate against the short-TTL-token mitigation cost.
+
+**Lands in:** Plan 4.4 Stage 4 (alongside the FuturesChart
+component itself). Decide polyfill vs short-TTL token at Stage 4
+design review.
+
+### CHANGELOG.md pointer-ification
+
+`CHANGELOG.md` is an upstream-NOFX vestige; its last entry is
+`[3.0.0] 2025-10-30` and it has no awareness of the futures work
+or any `v1.0-*` tag on this fork. Replaced in this same PR with a
+one-line pointer to:
+
+- This plan doc's Ship Log section (the canonical change log for
+  the futures fork)
+- `git tag -l 'v1.0-*'` (the version log — 28 tags as of
+  2026-05-28)
+
+(Editing CHANGELOG.md is in-scope for this doc update; it is NOT a
+Plan 1 critical file per ADR-007.)
+
+### Adoption sequence
+
+Suggested order for landing N1/N3/N4/N5 into the Stage 2 build:
+
+1. **N1 protocol_version** — design-only addition to the envelope
+   spec; lands in the Stage 2 wire-design PR alongside the bar
+   frame types.
+2. **N4 paginate `bars_historical`** — additive contract change to
+   an already-designed frame; lands in the same Stage 2 PR.
+3. **N3 bars_resync** — new frame type; lands in Stage 2 alongside
+   the others (no point splitting one C# + one Go PR per frame).
+4. **N5 dropped-tick counter** — Go-only, lands in Stage 2 wherever
+   the coalescing channel goes. UI surface waits for Plan 4.14.
+
+All four are additive per ADR-007 and ride on a single coordinated
+Stage 2 build (one Go PR, one C# PR, hash-matched per ADR-007 if
+N2 lands first).
