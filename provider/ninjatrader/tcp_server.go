@@ -65,6 +65,18 @@ type TCPServer struct {
 	// Inbound fills — TCPTrader subscribes via Fills().
 	fillCh chan FillPayload
 
+	// Plan 4.4 Stage 2 — bar ingest. Bar frames from the C# AddOn
+	// (bars_historical, bar_update) decode in the read loop and post to
+	// barIngestCh via a NON-BLOCKING drop-oldest send (for bar_update) or
+	// a bounded BLOCKING send (for bars_historical). The drainBarIngest
+	// goroutine consumes from this channel and writes into barCache.
+	// Backpressure invariant: a slow cache writer must NOT stall the
+	// socket read (which would block heartbeats → spurious reconnect).
+	barCache      *BarCache
+	barIngestCh   chan barIngestMsg
+	barsSubscribe BarsSubscribePayload // sent on each (re)connect after flushPending
+	barsSubMu     sync.RWMutex         // protects barsSubscribe
+
 	// Connection state — single concurrent client (spec L4359).
 	connMu        sync.Mutex
 	conn          net.Conn
@@ -85,6 +97,34 @@ type TCPServer struct {
 	logger *slog.Logger
 }
 
+// barIngestMsg is the internal envelope passed from the socket read loop
+// to the drain goroutine that writes into barCache. The historical flag
+// distinguishes the one-shot seed batch from streaming updates so the
+// drainer can apply the correct cache method.
+type barIngestMsg struct {
+	historical bool
+	symbol     string
+	timeframe  string
+	bars       []Bar
+}
+
+// barIngestChannelBuffer caps the bar ingest channel. Sized so a brief
+// scheduler hiccup in the drain goroutine doesn't drop bar_updates on the
+// floor under normal load; a sustained backlog under pathological load
+// will drop oldest-first to keep the socket read responsive.
+const barIngestChannelBuffer = 256
+
+// Plan 4.4 Stage 2 — default auto-subscribe parameters. These match the
+// Balanced Strategy's SelectedTimeframes (store/strategy.go) for the
+// active futures trader and prove the end-to-end bar pipe. Stage 3 will
+// replace these with a per-trader strategy lookup; for now the constants
+// validate the framing + cache + handler chain.
+var (
+	defaultAutoBarsSymbol     = "MNQ"
+	defaultAutoBarsTimeframes = []string{"5m", "15m", "1h"}
+	defaultAutoBarsBack       = 500
+)
+
 // timedSignal pairs a signal payload with the wall-clock time SendSignal was
 // called, so the flush path can drop stale-on-reconnect entries.
 type timedSignal struct {
@@ -99,9 +139,43 @@ func NewTCPServer(logger *slog.Logger) *TCPServer {
 		logger = slog.Default()
 	}
 	return &TCPServer{
-		addr:   TCPListenAddr,
-		fillCh: make(chan FillPayload, fillChannelBuffer),
+		addr:        TCPListenAddr,
+		fillCh:      make(chan FillPayload, fillChannelBuffer),
+		barCache:    NewBarCache(0),
+		barIngestCh: make(chan barIngestMsg, barIngestChannelBuffer),
+		barsSubscribe: BarsSubscribePayload{
+			Symbol:     defaultAutoBarsSymbol,
+			Timeframes: append([]string(nil), defaultAutoBarsTimeframes...),
+			BarsBack:   defaultAutoBarsBack,
+		},
 		logger: logger,
+	}
+}
+
+// BarCache exposes the bar cache for the kernel (Stage 3) and chart
+// relay (Stage 4). The cache is goroutine-safe; readers receive snapshot
+// copies via Get and never block writers for long.
+func (s *TCPServer) BarCache() *BarCache { return s.barCache }
+
+// SetBarsSubscribe overrides the auto-subscribe parameters sent on each
+// (re)connect. Stage 3 will call this with the active strategy's
+// SelectedTimeframes; until then the server uses Balanced Strategy
+// defaults (MNQ at 5m/15m/1h, 500 bars back).
+func (s *TCPServer) SetBarsSubscribe(p BarsSubscribePayload) {
+	s.barsSubMu.Lock()
+	defer s.barsSubMu.Unlock()
+	// Defensive copy of the timeframes slice to detach from caller storage.
+	p.Timeframes = append([]string(nil), p.Timeframes...)
+	s.barsSubscribe = p
+}
+
+func (s *TCPServer) currentBarsSubscribe() BarsSubscribePayload {
+	s.barsSubMu.RLock()
+	defer s.barsSubMu.RUnlock()
+	return BarsSubscribePayload{
+		Symbol:     s.barsSubscribe.Symbol,
+		Timeframes: append([]string(nil), s.barsSubscribe.Timeframes...),
+		BarsBack:   s.barsSubscribe.BarsBack,
 	}
 }
 
@@ -115,8 +189,11 @@ func (s *TCPServer) Start(ctx context.Context) error {
 	s.listener = ln
 	cctx, cancel := context.WithCancel(ctx)
 	s.cancel = cancel
-	s.wg.Add(1)
+	s.wg.Add(2)
 	go s.acceptLoop(cctx)
+	// Plan 4.4 Stage 2 — bar ingest drain goroutine, decouples cache
+	// writes from the socket read loop.
+	go s.drainBarIngest(cctx)
 	s.logger.Info("tcp_server: listening", "addr", s.addr)
 	return nil
 }
@@ -229,6 +306,108 @@ func (s *TCPServer) acceptLoop(ctx context.Context) {
 		go s.heartbeatLoop(ctx, c)
 		// Flush any signals queued during the disconnect window.
 		_ = s.flushPending()
+		// Plan 4.4 Stage 2 — auto-subscribe to bars on every accept so
+		// the C# AddOn starts emitting bars_historical + bar_update
+		// without operator action. Idempotent on the C# side per the
+		// protocol contract (re-subscribing returns immediately).
+		s.sendAutoBarsSubscribe(c)
+	}
+}
+
+// sendAutoBarsSubscribe emits the configured bars_subscribe frame on a
+// freshly-accepted connection. Failure here is non-fatal — the C# side
+// will simply not start streaming bars; the next reconnect retries. We
+// log a warn so the operator sees the failure.
+func (s *TCPServer) sendAutoBarsSubscribe(c net.Conn) {
+	payload := s.currentBarsSubscribe()
+	if payload.Symbol == "" || len(payload.Timeframes) == 0 {
+		// No subscription configured — Stage 2 default always populates
+		// this, but defend against an explicit empty override.
+		return
+	}
+	s.writeMu.Lock()
+	_ = c.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	err := WriteFrame(c, FrameBarsSubscribe, payload)
+	s.writeMu.Unlock()
+	if err != nil {
+		s.logger.Warn("tcp_server: send bars_subscribe", "err", err,
+			"symbol", payload.Symbol, "timeframes", payload.Timeframes)
+		return
+	}
+	s.logger.Info("tcp_server: sent bars_subscribe",
+		"symbol", payload.Symbol,
+		"timeframes", payload.Timeframes,
+		"bars_back", payload.BarsBack)
+}
+
+// drainBarIngest consumes the bar ingest channel and applies updates to
+// the cache. Runs as a background goroutine for the server's lifetime.
+// Decoupling the cache writes from the socket read loop guarantees the
+// read loop never stalls on cache lock contention — which would block
+// heartbeat reads and trigger a spurious reconnect.
+func (s *TCPServer) drainBarIngest(ctx context.Context) {
+	defer s.wg.Done()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case msg := <-s.barIngestCh:
+			if msg.historical {
+				s.barCache.SeedHistorical(msg.symbol, msg.timeframe, msg.bars)
+			} else {
+				s.barCache.Upsert(msg.symbol, msg.timeframe, msg.bars)
+			}
+		}
+	}
+}
+
+// enqueueBarUpdate posts a bar_update to the ingest channel using a
+// drop-oldest, non-blocking send. If the channel is full (slow drain
+// goroutine), we discard the OLDEST pending update to make room, log
+// the drop once, and retry. If the channel is still full after the
+// drop, we discard THIS update too — under sustained pressure the
+// freshest in-flight update will still arrive on the next tick.
+//
+// This path MUST NOT block the socket read loop. Blocking the read
+// loop stalls heartbeat receive → 60s ack timeout → server closes the
+// conn → spurious reconnect cycle.
+func (s *TCPServer) enqueueBarUpdate(symbol, timeframe string, bars []Bar) {
+	msg := barIngestMsg{historical: false, symbol: symbol, timeframe: timeframe, bars: bars}
+	select {
+	case s.barIngestCh <- msg:
+		return
+	default:
+	}
+	// Channel full — drop oldest, log once, retry.
+	select {
+	case <-s.barIngestCh:
+		s.logger.Warn("tcp_server: bar ingest backpressure — dropped oldest update",
+			"symbol", symbol, "timeframe", timeframe)
+	default:
+	}
+	select {
+	case s.barIngestCh <- msg:
+	default:
+		s.logger.Warn("tcp_server: bar ingest backpressure — dropping current update",
+			"symbol", symbol, "timeframe", timeframe)
+	}
+}
+
+// enqueueBarHistorical posts a bars_historical message to the ingest
+// channel. Historical batches are one-shot per (symbol, timeframe) and
+// carry the full warmup window the kernel needs for indicator
+// computation — they MUST NOT be dropped. We use a bounded blocking
+// send guarded by a short timeout: if the drain goroutine is stuck
+// longer than 2s, log + drop (better to lose this batch than deadlock
+// the read loop forever).
+func (s *TCPServer) enqueueBarHistorical(symbol, timeframe string, bars []Bar) {
+	msg := barIngestMsg{historical: true, symbol: symbol, timeframe: timeframe, bars: bars}
+	select {
+	case s.barIngestCh <- msg:
+		return
+	case <-time.After(2 * time.Second):
+		s.logger.Warn("tcp_server: bar ingest backpressure — dropped historical (drain stuck)",
+			"symbol", symbol, "timeframe", timeframe, "bars", len(bars))
 	}
 }
 
@@ -314,6 +493,28 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 		case FrameSignal:
 			// Clients don't send signals; ignore but log.
 			s.logger.Warn("tcp_server: unexpected signal frame from client")
+
+		case FrameBarsHistorical:
+			// Plan 4.4 Stage 2 — one-shot per (symbol, timeframe) after
+			// the initial BarsRequest load. Seeds the cache.
+			var p BarsHistoricalPayload
+			if err := json.Unmarshal(env.Payload, &p); err != nil {
+				s.logger.Warn("tcp_server: bad bars_historical payload", "err", err)
+				continue
+			}
+			s.enqueueBarHistorical(p.Symbol, p.Timeframe, p.Bars)
+
+		case FrameBarUpdate:
+			// Plan 4.4 Stage 2 — streaming updates. The bars array may
+			// carry multiple bar indices per the NT8 multi-bar gotcha
+			// (a single tick can update MinIndex..MaxIndex); the cache's
+			// Upsert handles each in order via dedup-by-t.
+			var p BarUpdatePayload
+			if err := json.Unmarshal(env.Payload, &p); err != nil {
+				s.logger.Warn("tcp_server: bad bar_update payload", "err", err)
+				continue
+			}
+			s.enqueueBarUpdate(p.Symbol, p.Timeframe, p.Bars)
 
 		default:
 			s.logger.Warn("tcp_server: unknown frame type", "type", env.Type)

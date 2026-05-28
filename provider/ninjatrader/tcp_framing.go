@@ -63,6 +63,61 @@ type AckPayload struct {
 // HeartbeatPayload is an empty struct — spec L4408 says empty payload.
 type HeartbeatPayload struct{}
 
+// Plan 4.4 Stage 2 — bar frame types (envelope format identical to signal/fill/heartbeat/ack: 4-byte big-endian length + JSON {type, payload}).
+// See ninjascript/vltrader_tcp_PROTOCOL.md sections 5-8 for field semantics.
+const (
+	FrameBarsSubscribe   FrameType = "bars_subscribe"
+	FrameBarsHistorical  FrameType = "bars_historical"
+	FrameBarUpdate       FrameType = "bar_update"
+	FrameBarsUnsubscribe FrameType = "bars_unsubscribe"
+)
+
+// Bar is the compact 6-field OHLCV bar used in bars_historical and bar_update
+// frames (protocol §6-7). Volume is a float because NT8 tick-volume
+// instruments report fractional values.
+type Bar struct {
+	T int64   `json:"t"` // Unix epoch ms, UTC
+	O float64 `json:"o"`
+	H float64 `json:"h"`
+	L float64 `json:"l"`
+	C float64 `json:"c"`
+	V float64 `json:"v"` // volume can be tick-volume (fractional)
+}
+
+// BarsSubscribePayload is the Go-server → C#-AddOn subscribe frame per
+// protocol §5. One frame requests N timeframes for a single symbol; the AddOn
+// opens one BarsRequest per timeframe.
+type BarsSubscribePayload struct {
+	Symbol     string   `json:"symbol"`
+	Timeframes []string `json:"timeframes"` // e.g. ["1m","5m","15m","1h"]
+	BarsBack   int      `json:"bars_back"`  // default 500 per protocol
+}
+
+// BarsHistoricalPayload is the C#-AddOn → Go-server one-shot batch sent when
+// the initial BarsRequest completes per protocol §6. Bars are ordered
+// ascending by time.
+type BarsHistoricalPayload struct {
+	Symbol    string `json:"symbol"`
+	Timeframe string `json:"timeframe"`
+	Bars      []Bar  `json:"bars"` // ascending by time
+}
+
+// BarUpdatePayload is the C#-AddOn → Go-server streaming update per protocol
+// §7. Bars is ALWAYS an array — a single NT8 tick can update multiple bar
+// indices (MinIndex..MaxIndex) when crossing timeframe boundaries.
+type BarUpdatePayload struct {
+	Symbol    string `json:"symbol"`
+	Timeframe string `json:"timeframe"`
+	Bars      []Bar  `json:"bars"` // ALWAYS an array — single tick can update multiple indices (NT8 multi-bar gotcha). Walk MinIndex..MaxIndex.
+}
+
+// BarsUnsubscribePayload is the Go-server → C#-AddOn teardown frame per
+// protocol §8. Empty/nil Timeframes means "all timeframes for this symbol".
+type BarsUnsubscribePayload struct {
+	Symbol     string   `json:"symbol"`
+	Timeframes []string `json:"timeframes,omitempty"` // empty/nil = all for this symbol
+}
+
 // ErrFrameTooLarge signals the peer sent a length header > TCPMaxFrameBytes.
 // Per spec L4416, the server logs and closes the connection on this error.
 var ErrFrameTooLarge = errors.New("tcp_framing: frame exceeds max size")
