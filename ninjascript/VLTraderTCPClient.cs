@@ -310,10 +310,19 @@ namespace NinjaTrader.NinjaScript.AddOns
                 return;
             }
 
-            var instrument = Instrument.GetInstrument(symbol);
+            // Resolve the bare root ("MNQ") to the NT8 front-month
+            // contract ("MNQ 06-26") via VLContractResolver (date-derived,
+            // auto-rolls). NT8's Instrument.GetInstrument requires the
+            // qualified contract; a bare root returns null. Canonical
+            // symbol on the wire stays "MNQ"; contract form only exists
+            // inside this GetInstrument call.
+            string contract = VLContractResolver.ResolveFrontMonthContract(symbol);
+            LogInfo("VLTraderTCPClient: resolved " + symbol + " -> " + contract);
+            var instrument = Instrument.GetInstrument(contract);
             if (instrument == null)
             {
-                LogWarn("VLTraderTCPClient: instrument " + symbol + " not found — rejecting");
+                LogWarn("VLTraderTCPClient: instrument " + symbol
+                        + " (resolved to " + contract + ") not found — rejecting");
                 SendFillFrame(signalId, 0.0, side, qty, 0.0, "rejected");
                 return;
             }
