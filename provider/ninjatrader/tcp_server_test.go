@@ -239,3 +239,112 @@ func TestTCPServer_FillRoundTrip(t *testing.T) {
 		t.Fatal("no fill within 3s")
 	}
 }
+
+// TestTCPServer_IdleConnectionSurvives (Plan 1.5.7) — proves that an idle
+// client connection (no inbound frames) is NOT dropped by a spurious read
+// timeout. Under the pre-1.5.7 code path, the read loop set a 2s read
+// deadline; after 2s of silence the deadline fired, and although the loop
+// continued, any frame that arrived mid-deadline could be misaligned by
+// the partial-read consumption. This test exercises the "no frame at all"
+// case: a properly-implemented read loop with no deadline must hold the
+// connection open indefinitely.
+//
+// We wait 5 seconds (>2× the old deadline) and assert IsConnected stays
+// true throughout.
+func TestTCPServer_IdleConnectionSurvives(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip 5s idle test in short mode")
+	}
+	srv := NewTCPServer(nil)
+	addr := freeEphemeralAddr(t)
+	srv.SetAddrForTest(addr)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := srv.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	defer srv.Stop()
+
+	// Open a raw TCP connection (no MockTCPClient — we want to send ZERO
+	// bytes, not even heartbeats, to isolate the deadline behavior).
+	c, err := net.Dial("tcp", addr)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer c.Close()
+
+	// Wait for the server to register the connection.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if srv.IsConnected() {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !srv.IsConnected() {
+		t.Fatal("server did not register the client connection")
+	}
+
+	// Sample IsConnected every 500ms for 5 seconds. Under the pre-1.5.7
+	// 2s-deadline code, any spurious disconnect would flip this to false
+	// well before the 5s mark.
+	for i := 0; i < 10; i++ {
+		time.Sleep(500 * time.Millisecond)
+		if !srv.IsConnected() {
+			t.Fatalf("connection dropped at t=%dms despite client sending nothing",
+				(i+1)*500)
+		}
+	}
+}
+
+// TestTCPServer_ShutdownUnblocksIdleRead (Plan 1.5.7) — proves the
+// per-connection ctx-cancel watcher correctly unblocks an idle blocked-on-
+// read goroutine when the server context is cancelled. Without the watcher,
+// removing the 2s read deadline would leave the readLoop blocked forever
+// on an idle connection during shutdown.
+//
+// We dial in, wait for IsConnected, then call Stop() and assert it returns
+// within a few seconds (proving the read goroutine was unblocked, drained
+// the wg, and Stop completed).
+func TestTCPServer_ShutdownUnblocksIdleRead(t *testing.T) {
+	srv := NewTCPServer(nil)
+	addr := freeEphemeralAddr(t)
+	srv.SetAddrForTest(addr)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	if err := srv.Start(ctx); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+
+	c, err := net.Dial("tcp", addr)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer c.Close()
+
+	// Wait for the server to register the connection.
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if srv.IsConnected() {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !srv.IsConnected() {
+		t.Fatal("server did not register the client connection")
+	}
+
+	// Now Stop the server. The readLoop is blocked in ReadFrame on an
+	// idle conn; the ctx-cancel watcher must close the conn, unblocking
+	// the read so Stop() can drain the WaitGroup.
+	done := make(chan error, 1)
+	go func() { done <- srv.Stop() }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Errorf("Stop: %v", err)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("Stop did not return within 3s — readLoop likely still blocked, watcher broken")
+	}
+}
