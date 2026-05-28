@@ -66,9 +66,9 @@ type TCPServer struct {
 	fillCh chan FillPayload
 
 	// Connection state — single concurrent client (spec L4359).
-	connMu       sync.Mutex
-	conn         net.Conn
-	lastAckTime  time.Time
+	connMu        sync.Mutex
+	conn          net.Conn
+	lastAckTime   time.Time
 	staleOverride time.Duration // test hook: 0 means use TCPStaleSignalAge
 
 	// writeMu serializes all writes to a connected client's net.Conn.
@@ -235,20 +235,35 @@ func (s *TCPServer) acceptLoop(ctx context.Context) {
 func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 	defer s.wg.Done()
 	defer s.closeConn()
+
+	// Plan 1.5.7 — per-connection ctx-cancel watcher unblocks the blocked
+	// ReadFrame on server shutdown by closing this specific conn. Replaces
+	// the previous SetReadDeadline(2s) + continue-on-timeout pattern that
+	// caused frame desync: when a frame arrived near the 2s deadline,
+	// io.ReadFull would consume partial bytes (the consumed bytes are gone
+	// from the socket) then return a timeout; the `continue` then re-entered
+	// ReadFrame which read 4 fresh bytes starting at the WRONG offset (mid-
+	// header or mid-body), decoded as a garbage big-endian length usually
+	// > 1 MB, and triggered ErrFrameTooLarge → spurious "oversized frame,
+	// closing connection" warnings (~49 over 16h on quiet traffic).
+	//
+	// connCtx is derived from the server ctx so it cancels on shutdown.
+	// defer connCancel() runs on normal disconnect, releasing the watcher
+	// goroutine without a leak. c.Close() is idempotent.
+	connCtx, connCancel := context.WithCancel(ctx)
+	defer connCancel()
+	go func() {
+		<-connCtx.Done()
+		_ = c.Close()
+	}()
+
 	for {
-		select {
-		case <-ctx.Done():
-			return
-		default:
-		}
-		// Modest read deadline so the loop notices ctx cancellation between frames.
-		_ = c.SetReadDeadline(time.Now().Add(2 * time.Second))
+		// No SetReadDeadline — ReadFrame blocks until a frame arrives OR
+		// the connection is closed (by the watcher above on shutdown, or
+		// by the peer). The watcher provides the shutdown-responsiveness
+		// the old 2s polling deadline used to.
 		env, err := ReadFrame(c)
 		if err != nil {
-			var ne net.Error
-			if errors.As(err, &ne) && ne.Timeout() {
-				continue
-			}
 			if errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
 				s.logger.Info("tcp_server: client disconnected")
 				return
