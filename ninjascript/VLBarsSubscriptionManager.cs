@@ -124,18 +124,21 @@ namespace NinjaTrader.NinjaScript.AddOns
                 return;
             }
 
-            // Resolve the instrument once per subscribe batch. NT8 caches
-            // instruments internally so repeated GetInstrument calls are cheap.
-            // FLAG: NT8 API — Instrument.GetInstrument(string) is the same call
-            // VLTraderTCPClient.HandleSignal uses; if NT8 ever requires the
-            // contract-month suffix here (e.g. "MNQ 03-26"), the Go side will
-            // need to send the fully-qualified symbol on subscribe too. For
-            // Stage 1 we assume bare root ("MNQ") resolves via the operator's
-            // configured trading hours template, matching the signal path.
-            var instrument = Instrument.GetInstrument(symbol);
+            // Resolve the bare root ("MNQ") to the NT8 front-month
+            // contract ("MNQ 06-26") via VLContractResolver. NT8's
+            // Instrument.GetInstrument requires the qualified contract;
+            // a bare root returns null. The resolver is date-derived so
+            // it auto-rolls at the quarterly boundary (June → September
+            // around 2026-06-11 with the 8-day pre-roll offset). The
+            // canonical Go-side symbol stays "MNQ"; the contract suffix
+            // exists only inside this GetInstrument call.
+            string contract = VLContractResolver.ResolveFrontMonthContract(symbol);
+            logInfo("VLBarsSubscriptionManager: resolved " + symbol + " -> " + contract);
+            var instrument = Instrument.GetInstrument(contract);
             if (instrument == null)
             {
-                logWarn("VLBarsSubscriptionManager: instrument " + symbol + " not found");
+                logWarn("VLBarsSubscriptionManager: instrument " + symbol
+                        + " (resolved to " + contract + ") not found");
                 return;
             }
 
@@ -410,11 +413,18 @@ namespace NinjaTrader.NinjaScript.AddOns
                     active.Remove(entry.Key);
                     logInfo("VLBarsSubscriptionManager: reconnect — re-subscribing " + entry.Key);
 
-                    var instrument = Instrument.GetInstrument(entry.Symbol);
+                    // Same root → front-month resolution as the initial
+                    // subscribe path. Re-resolved on each reconnect so a
+                    // reconnect that straddles a quarterly roll picks up
+                    // the new contract automatically.
+                    string contract = VLContractResolver.ResolveFrontMonthContract(entry.Symbol);
+                    logInfo("VLBarsSubscriptionManager: reconnect resolved "
+                            + entry.Symbol + " -> " + contract);
+                    var instrument = Instrument.GetInstrument(contract);
                     if (instrument == null)
                     {
                         logWarn("VLBarsSubscriptionManager: reconnect — instrument "
-                                + entry.Symbol + " not found");
+                                + entry.Symbol + " (resolved to " + contract + ") not found");
                         continue;
                     }
                     // Preserve LastEmittedTimeUtcMs on the new entry so the
