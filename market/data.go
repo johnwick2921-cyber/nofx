@@ -174,13 +174,28 @@ func GetWithTimeframes(symbol string, timeframes []string, primaryTimeframe stri
 
 	// Check if this is an xyz dex asset (use Hyperliquid API)
 	isXyzAsset := IsXyzDexAsset(symbol)
+	// CME futures (NQ.c.0 / MNQ / ...) read the live NT8 bar feed via the
+	// injected FuturesBarsProvider — NEVER CoinAnk. Crypto path below is
+	// untouched.
+	isFutures := IsCMEFuturesSymbol(symbol)
 
 	// Get K-line data for each timeframe
 	for _, tf := range timeframes {
 		var klines []Kline
 		var err error
 
-		if isXyzAsset {
+		if isFutures {
+			// NT8 futures: read closed bars from the BarCache (Stage 3).
+			if FuturesBarsProvider == nil {
+				logger.Infof("⚠️ %s %s: CME futures symbol but no NT8 bar provider wired; skipping", symbol, tf)
+				continue
+			}
+			klines = FuturesBarsProvider(symbol, tf, 200)
+			if len(klines) == 0 {
+				logger.Infof("⚠️ %s %s: no NT8 bars cached yet", symbol, tf)
+				continue
+			}
+		} else if isXyzAsset {
 			// Use Hyperliquid API for xyz dex assets
 			klines, err = getKlinesFromHyperliquid(symbol, tf, 200)
 			if err != nil {
