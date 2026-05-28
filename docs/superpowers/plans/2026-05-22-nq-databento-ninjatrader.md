@@ -7388,6 +7388,8 @@ Plus the comprehensive 5-page UI inventory produced 2026-05-28 at
 
 ### N11 — Trader STARVED (not blocked by risk gate)
 
+> **SUPERSEDED 2026-05-28 → see `## N11 — RESOLVED (flip applied + cycle proven, 2026-05-28)`** (appended at end of doc). The N11 coin-source flip is applied and the decision cycle is proven end-to-end on SIM. The original `risk_check_passed=false` reasoning below is also corrected: that column is UNWIRED (never a rejection signal) — see `## 2026-05-28 — risk_check_passed is UNWIRED (not a rejection signal)`. The remaining WAIT decisions are the empty-market-data root cause, not ai500 starvation — see `## 2026-05-28 Root Cause — Kernel reads Binance klines, not NT8 BarCache`.
+
 - **Symptom:** Trader `mnq sIM TEST` had `risk_check_passed=false`
   visible in DecisionAudit, and 5+ consecutive cycles showed "No
   candidate coins available, cycle skipped." Initial diagnosis:
@@ -7412,6 +7414,12 @@ Plus the comprehensive 5-page UI inventory produced 2026-05-28 at
 - **Documentation correction:** the inventory N11 entry was
   corrected from "30-second config fix" to "requires Plan 4.4
   staged build; data-fetch routing is the real blocker."
+- **CORRECTION 2026-05-28 →** the "GORM zero-value" reasoning above
+  is technically right but understates the scope: `risk_check_passed`
+  is an UNWIRED column — no code path EVER sets it (verified across
+  all 246 rows, before AND after the N11 flip). It was never a real
+  rejection signal in any scenario, not just this one. See
+  `## 2026-05-28 — risk_check_passed is UNWIRED (not a rejection signal)`.
 
 ## Plan 4.x Sequencing — REVISED 2026-05-28
 
@@ -7423,11 +7431,22 @@ both shipped work and the NT8 pivot.
 - v1.0-plan1-5-6 — TCP heartbeat write-deadline fix
 - v1.0-task12-symbols — futures symbol normalization
 - Plan 1.5.7 read-deadline fix (merged, untagged)
+- **Plan 4.4 Stage 1 — C# AddOn multi-TF bar subscription
+  (`VLBarsSubscriptionManager`) — SHIPPED 2026-05-28**, tag
+  `v1.0-nt8-contract-resolver`. Bars PROVEN flowing into BarCache.
+  (Moved here from In-flight; was "PR #29 awaiting merge".)
 
 ### In-flight
 - **Plan 4.4 Stage 1** — C# AddOn multi-TF bar subscription
-  (`VLBarsSubscriptionManager`). PR #29 awaiting merge after
-  Plan 1.5.7 verification. Compiled clean in operator's Windows VS.
+  (`VLBarsSubscriptionManager`). ~~PR #29 awaiting merge after
+  Plan 1.5.7 verification. Compiled clean in operator's Windows VS.~~
+  **SHIPPED 2026-05-28 →** (was: PR #29 awaiting merge). Bars are
+  PROVEN flowing into BarCache; the C# bar-subscription work shipped
+  under tag `v1.0-nt8-contract-resolver`. Moved to **Already SHIPPED**
+  framing below. Remaining decision-side gap is NOT bar delivery —
+  it's the kernel reading the wrong source (Binance klines, not
+  BarCache); see `## 2026-05-28 Root Cause` + `## 2026-05-28
+  Reordered Fix Roadmap` (Stage 3).
 
 ### Next, in order
 - **Plan 4.4 Stage 2** — Go bar handling
@@ -7544,6 +7563,12 @@ both shipped work and the NT8 pivot.
 - N8 — password-change form has no "old password" verification
   before allowing change. Trivial bypass if session token leaks.
   ~10 LOC + backend endpoint update.
+- **LOW (added 2026-05-28, from N11 VERIFY 2) — C# `Account.All[0]`
+  fallback fail-closed.** If `Sim101` is absent the C# AddOn's
+  `Account.All[0]` fallback picks whatever account happens to be
+  loaded first. Harden to fail-closed (refuse to operate rather than
+  silently bind to an arbitrary — possibly LIVE — account) instead
+  of defaulting to `Account.All[0]`.
 
 ### Cosmetic bundle (defer to Plan 4.9.x)
 - Favicon: still serves 404 on `/favicon.ico` (browser auto-fetch
@@ -7876,3 +7901,172 @@ Suggested order for landing N1/N3/N4/N5 into the Stage 2 build:
 All four are additive per ADR-007 and ride on a single coordinated
 Stage 2 build (one Go PR, one C# PR, hash-matched per ADR-007 if
 N2 lands first).
+
+---
+
+# 2026-05-28 UI Audit + N11 Resolution + Pinpointed Stage 3 Fix
+
+This block records a convergence: a per-page UI data-flow audit (run
+on `origin/main` @ `4f0843e5`, against the live app) and the N11
+trader-starvation investigation landed on the **same single root
+cause** from two independent angles. It also records N11 as RESOLVED,
+corrects the `risk_check_passed` interpretation, reorders the fix
+roadmap, reaffirms the Databento-dropped decision, and logs the new
+bugs the audit surfaced.
+
+## 2026-05-28 Root Cause — Kernel reads Binance klines, not NT8 BarCache
+
+The two investigations converged on one cause:
+
+- **Engine-side (UI audit):** the trader's market-data map comes up
+  empty, so DecisionAudit fills with 100 WAIT rows.
+- **Kernel-side (N11 cycle proof):** the decision cycle reaches the
+  AI brain but on absent/mismatched data.
+
+Both trace to a single call. `buildTradingContext` →
+`getKlinesFromCoinAnk(symbol, tf, "binance", 200)` at
+**`market/data.go:192`**. The live log confirms it:
+
+```
+Unknown exchange 'ninjatrader', defaulting to Binance for CoinAnk.
+```
+
+There are **NO `BarCache` references in `kernel/`, `market/`, or
+`trader/`** — the kernel never reads the source that actually holds
+the NQ bars. Bars ARE flowing into `BarCache` (PROVEN, shipped under
+tag `v1.0-nt8-contract-resolver`); the kernel just reads the wrong
+source. Given absent/mismatched data, the AI's "wait" is the
+**RATIONAL** output — not a bug in the brain, a bug in the plumbing.
+
+**The pinpointed fix (Stage 3):** swap that ONE call for
+`BarCache().Get(symbol, tf)` in the futures branch. Precise,
+single-call, no broad refactor.
+
+## N11 — RESOLVED (flip applied + cycle proven, 2026-05-28)
+
+(Supersedes `### N11 — Trader STARVED (not blocked by risk gate)`
+above — that post-mortem is preserved with a SUPERSEDED marker.)
+
+- **Flip applied:** Balanced Strategy (`d5412693`)
+  `ai_config.coin_source` flipped `ai500` → static `["NQ.c.0"]` at
+  runtime in `data/data.db` (gitignored). Pre-flip DB backed up to
+  `/tmp/data.db.bak-pre-n11-flip`.
+- **Cycle PROVEN end-to-end on SIM:** decisions `#244` / `#245`,
+  `candidate_coins ["NQ.c.0"]`, AI round-tripped
+  (`ai_request_duration_ms` 11884 / 15379 ms, model `deepseek-v4-pro`),
+  `action: wait`, `success: 1`, no order fired. **3/3 verify PASS.**
+- **Scope:** only Balanced changed; Conservative / Aggressive still
+  use `ai500`.
+- **NOT reseed-durable:** the flip lives in the runtime DB. A durable
+  fix is either a `GetDefaultStrategyConfig` tweak OR a boot
+  migration — **recommend folding into Stage 3's PR** (Stage 3 Step 2
+  touches the kernel anyway).
+- **CORRECTION:** the WAIT decisions are **NOT** ai500 starvation
+  (the flip worked — coins are now selected). They are the
+  empty-market-data cause (see `## 2026-05-28 Root Cause` above). The
+  flip removed the coin-selection short-circuit; Stage 3 removes the
+  data starvation. Two distinct gates: N11 cleared the first, Stage 3
+  clears the second.
+
+## 2026-05-28 — risk_check_passed is UNWIRED (not a rejection signal)
+
+`risk_check_passed`, `ai_model`, and `ai_latency_ms` are DecisionAudit
+columns that **no code path ever sets**. All 246 rows show
+`0`/empty — BEFORE and AFTER the N11 flip. `risk_check_passed=0` was
+**NEVER** a real rejection; it is a pre-existing observability gap, not
+a risk-gate verdict. (This supersedes any prior text — including the
+N11 post-mortem above — that read `risk_check_passed=0` as a risk-gate
+rejection.)
+
+- **Reliable "AI ran" signal:** `ai_request_duration_ms` + logs (these
+  are what proved the N11 cycle, not `risk_check_passed`).
+- **Follow-up:** wiring these columns is an observability task — fold
+  into **Plan 4.14** (backend visibility panel).
+
+## 2026-05-28 UI Data-Flow Audit (origin/main 4f0843e5, live app)
+
+Per-page findings against the live app on `origin/main` @ `4f0843e5`:
+
+- **Settings — healthiest.** All controls wired; save/persist
+  verified.
+- **Dashboard.**
+  - Balance = hardcoded **$50k MOCK**
+    (`trader/ninjatrader/trader.go:156-163`,
+    `trader/ninjatrader/tcp_trader.go:171-177`).
+  - Positions empty (no fills yet).
+  - DecisionAudit all **WAIT** — empty data, NOT ai500 (the flip
+    worked; see Root Cause above).
+  - Crypto "balanced" prompt served to the futures trader:
+    `kernel/engine_prompt_futures.go` EXISTS but is **unused**
+    (`auto_trader_loop.go:102` selects the crypto prompt).
+- **Strategy Studio.** Save/persist works and the store is
+  futures-aware, BUT:
+  - symbol picker appends `USDT`;
+  - default config still `ai500`/`nofxos` — **new strategies are
+    born broken** (`store/strategy.go:914`, `store/strategy.go:945`);
+  - risk tiers are crypto;
+  - the futures prompt is unreachable from the UI.
+- **Agent Chat.** Functional, BUT:
+  - market chart shows Binance `BTCUSDT`, not MNQ
+    (`api/handler_klines.go:48-78`);
+  - MarketTicker empty (Binance proxy).
+
+**New bugs surfaced by the audit:**
+
+- account-state variadic bug
+  (`api/exchange_account_state.go:327-339`) — falsely reports NT as
+  `missing_credentials`. ~2 LOC.
+- `/api/klines` silent Binance fallback for unknown exchanges —
+  should return `400` instead of silently defaulting.
+- `/settings` → `/dashboard` auto-redirect (trace the cause).
+- cosmetic: dead NT "Register" link; Chinese-in-EN hints.
+
+## 2026-05-28 Reordered Fix Roadmap
+
+Reflects the audit + N11 convergence. Data plane unblocks everything.
+
+### 🔴 BLOCKING (data plane)
+
+- **Stage 1 — C# bars [DONE — `v1.0-nt8-contract-resolver`].**
+- **Stage 2 — Go bar handling [bars flow + cached, PROVEN].** N1/N3/N4/N5
+  wire-design items pending IF not yet built — **confirm remaining**
+  against the Stage 2 wire-design section above.
+- **Stage 3 — the pinpointed one-call fix.** Swap
+  `getKlinesFromCoinAnk` → `BarCache().Get(symbol, tf)` in the futures
+  branch (`market/data.go:192`). Turns WAIT into real decisions — **THE
+  unlock.** Fold in here: (a) the futures-prompt selection at
+  `auto_trader_loop.go:102` (route futures traders to
+  `engine_prompt_futures.go`), and (b) the reseed-durable default
+  (`GetDefaultStrategyConfig` tweak OR boot migration — makes the N11
+  flip survive a reseed).
+- **Stage 4 — FuturesChart + SSE relay** off the same NT8 feed →
+  fixes the Binance chart.
+
+### 🟠 After (depends on data plane)
+
+- **Plan 4.11** — real NT balance (~150 LOC; fixes the $50k mock).
+- MarketTicker → NT8 feed.
+
+### 🟡 Quick wire-ups (zero-dependency)
+
+- account-state variadic fix (~2 LOC).
+- default-config off `ai500`.
+- `/api/klines` return `400` (instead of silent Binance fallback).
+- `/settings`→`/dashboard` redirect trace.
+
+### 🟢 Lower
+
+- **Plan 4.6** — Strategy Studio futures rewrite.
+- **Plan 4.14** — backend visibility (also wire `risk_check_passed`,
+  `ai_model`, `ai_latency_ms`).
+- **Plan 4.9.x** — cosmetic bundle.
+
+## 2026-05-28 — Databento stays DROPPED (reaffirmed)
+
+The audit's Agent 4 suggested wiring Databento into
+`handler_klines`. **REJECTED** per the locked architecture (see
+`## Locked Data Architecture Decisions (2026-05-28)`): the chart rides
+the **NT8 feed** (Stage 4); Databento is Historical-only (~8h lag) and
+stays dropped; the old Plan 4.5 Databento route stays DROPPED. The
+`/api/klines` `400`-cleanup survives (it's hygiene, not a data-path
+change); the Databento route does not.
