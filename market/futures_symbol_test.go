@@ -79,6 +79,37 @@ func TestNormalize_CMEFutures_PreservesCaseAndSkipsUSDT(t *testing.T) {
 	}
 }
 
+func TestFuturesPointValue(t *testing.T) {
+	cases := []struct {
+		in   string
+		want float64
+	}{
+		// Index futures (the ones we trade): bare root, continuous, contract,
+		// and qualified forms all resolve to the same multiplier.
+		{"MNQ", 2.0},
+		{"MNQ.c.0", 2.0},
+		{"MNQU6", 2.0},
+		{"MNQ 06-26", 2.0},
+		{"NQ", 20.0},
+		{"NQ.c.0", 20.0},
+		{"ES", 50.0},
+		{"MES", 5.0},
+		{"RTY", 50.0},
+		{"M2K", 5.0},
+		{"YM", 5.0},
+		{"MYM", 0.5},
+		// Non-futures / unknown → 0 (caller must not divide by it).
+		{"BTCUSDT", 0},
+		{"TSLA", 0},
+		{"", 0},
+	}
+	for _, c := range cases {
+		if got := FuturesPointValue(c.in); got != c.want {
+			t.Errorf("FuturesPointValue(%q) = %v, want %v", c.in, got, c.want)
+		}
+	}
+}
+
 func TestNormalize_Crypto_UnchangedByTask12(t *testing.T) {
 	// Sanity: crypto path must be byte-unchanged. If this test fails,
 	// the Task 12 branch leaked into the crypto path.
