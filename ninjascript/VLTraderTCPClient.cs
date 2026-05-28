@@ -563,6 +563,26 @@ namespace NinjaTrader.NinjaScript.AddOns
             if (v is float f) { sb.Append(((double)f).ToString("R", CultureInfo.InvariantCulture)); return; }
             if (v is decimal m) { sb.Append(m.ToString(CultureInfo.InvariantCulture)); return; }
             if (v is Dictionary<string, object> nested) { AppendObject(sb, nested); return; }
+            // Plan 4.4 bar-payload fix: List<object> / arrays. Must come AFTER
+            // string + Dictionary (string is IEnumerable<char>; Dictionary is
+            // IEnumerable<KeyValuePair>). Without this, bars_historical /
+            // bar_update payloads (["bars"] = List<object>) get stringified
+            // via the .ToString() fallback to "System.Collections.Generic.
+            // List`1[System.Object]", and Go rejects them with
+            // "cannot unmarshal string into ... []Bar".
+            if (v is System.Collections.IEnumerable e)
+            {
+                sb.Append('[');
+                bool firstItem = true;
+                foreach (var item in e)
+                {
+                    if (!firstItem) sb.Append(',');
+                    firstItem = false;
+                    AppendValue(sb, item);
+                }
+                sb.Append(']');
+                return;
+            }
             AppendString(sb, v.ToString());
         }
 
