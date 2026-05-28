@@ -33,6 +33,68 @@
 > "rename this variable in foo.go"). The read-first rule applies
 > ONLY when the prompt invokes plan content.
 
+## 2026-05-28 ARCHITECTURE PIVOT — NT8 as single data source (Databento dropped)
+
+> **READ THIS FIRST IF YOU ARE WORKING ON ANYTHING DATA-RELATED.**
+> The plan title still says "Databento + NinjaTrader" for historical
+> continuity, but as of 2026-05-28 **Databento is DROPPED**. NT8 via
+> Tradovate is the SINGLE real-time data source for BOTH trading
+> decisions AND chart display.
+
+### Decision
+
+NT8 (via Tradovate) becomes the SINGLE real-time source for:
+
+- **Trading decisions** — `kernel/engine_analysis.go` reads NT8 bars
+  through the TCP wire (Plan 4.4 Stages 1–3)
+- **Chart display** — same NT8 feed routed through an SSE relay to
+  the React frontend (Plan 4.4 Stage 4)
+
+One source, two consumers, zero lag.
+
+### Why
+
+The `cmd/nq_smoke` foundation test (2026-05-28) probed the operator's
+current Databento Historical subscription and found the
+`available_end` cursor is **~8 hours behind wall-clock**, not the
+~15-minute figure the plan originally assumed. 8-hour-stale data
+cannot drive live decisions. Tradovate (the NT8 data feed) is
+real-time — confirmed against live MNQ candles moving in NT8 on
+2026-05-28.
+
+### What was dropped vs. kept
+
+| Item | Status |
+|---|---|
+| Databento Historical fetch from kernel (Task 12 Step 3 `getKlinesFromDatabento` + `GetWithTimeframes` Databento branch + `available_end` probe) | **DROPPED** (PR #27 added, PR #28 trimmed) |
+| Symbol normalization for CME futures (`isCMEFuturesSymbol`, `market.Normalize` CME-bypass, `store/strategy normalizeSymbols` guard) | **KEPT** — fixes futures-symbol corruption regardless of source; NT8 symbols (e.g. `MNQ 03-26`) hit the same path |
+| `cmd/nq_smoke` Databento probe code (the `available_end` available-history measurement) | **KEPT as reference** — if Databento is ever revived (e.g. for backfill/backtest), the probe pattern is the right starting point |
+| Plan 4.4 Deep Spec research (NT8 BarsRequest API, TradingView Lightweight Charts v5, Go SSE relay, 15 NT8 gotchas) | **KEPT and now central** — this is the architecture for the staged build below |
+
+### What this supersedes (in this very doc)
+
+- Task 12 (line 2599) — the Databento `getKlinesFromDatabento` helper
+  and `GetWithTimeframes` Databento branch are **SUPERSEDED 2026-05-28**.
+  See "2026-05-28 Architecture Pivot." The symbol-normalization steps
+  in Task 12 remained shipped (v1.0-task12-symbols).
+- Old Plan 4.5 — `/api/klines` NT route via Databento. **SUPERSEDED**.
+  There is no Databento klines route in the NT8 architecture; the
+  chart consumes the same NT8 bar feed as decisions (Plan 4.4 Stage 4).
+- Any plan text describing "Databento for decisions" or "Databento
+  with 15-minute embargo as primary data source" — superseded.
+- [VERIFY-16] (line 6771) "Databento tier vs documented embargo" is
+  now MOOT under the NT8 pivot; the 8h Historical-tier lag is the
+  documented reason Databento was rejected.
+
+### See also (further down in this doc)
+
+- **Ship Log (2026-05-28)** — what's landed since the last plan update
+- **Post-Mortems (2026-05-28)** — Plan 1.5.6, 1.5.7, N11 root causes
+- **Plan 4.x Sequencing — REVISED 2026-05-28** — the staged NT8 build
+- **Locked Data Architecture Decisions (2026-05-28)** — multi-TF + source
+
+---
+
 > **Agent tooling available in this repo (registered 2026-05-25; hardened 2026-05-26):**
 > A Playwright MCP server is registered in `~/.claude.json` for project
 > `/home/hoang/nofx`. When you spawn agents that need to verify the React
@@ -2597,6 +2659,17 @@ Following external audit, the plan was updated with:
 ---
 
 ## Task 12: Backend kernel + market futures routing (Cluster D)
+
+> **PARTIALLY SUPERSEDED 2026-05-28 — see "Architecture Pivot" at top of doc.**
+> The Databento branch in `GetWithTimeframes` (Step 3 below) was built
+> in PR #27 then dropped in PR #28 because the Historical-tier
+> `available_end` lag is ~8 hours, unusable for live decisions.
+> SHIPPED from this task: the futures variant routing (Step 1) +
+> symbol-on-decision-JSON (Step 2) + symbol normalization
+> (`isCMEFuturesSymbol`, `Normalize` CME bypass, `normalizeSymbols`
+> guard) — all under `v1.0-task12-symbols`. Data fetch is now Plan
+> 4.4 Stage 3 (read from NT8 TCP feed, not from any external HTTP
+> provider).
 
 **Why:** v4 audit found that `BuildSystemPrompt("futures")` falls through to crypto, futures decision JSON omits `symbol`, `GetWithTimeframes` has no Databento branch, and `kernel/engine.go` never checks `TradingMode`.
 
@@ -6866,6 +6939,16 @@ Partial: `slippage_ticks` (Plan 1.5 wire field) not yet surfaced in DecisionAudi
 
 ## Plan 4.x Sequencing
 
+> **PARTIALLY SUPERSEDED 2026-05-28 — see "Plan 4.x Sequencing —
+> REVISED 2026-05-28" at the end of this doc for the current
+> ordering after the NT8 pivot.** Items 1–4 below (Plan 4.9, 4.3,
+> 4.3.1, 4.13, 4.7, 4.7.1) all SHIPPED — see Ship Log at end of doc.
+> Item "Plan 4.5 — handler_klines.go NT route" is **DROPPED** —
+> there is no Databento klines route in the NT8 architecture; the
+> chart consumes the same NT8 bar feed as decisions (Plan 4.4
+> Stage 4). The original sequencing below is preserved for the
+> audit trail.
+
 Proposed order (lowest risk + highest visible value first):
 
 1. **Plan 4.9** — DecisionAudit React key warning
@@ -7206,3 +7289,268 @@ Full research report (12 sections, production C# code skeletons, Go relay refere
 - Plan 5 — Testing matrix (Plan 4.4 extends via mock NT + golden bar data)
 - web/CLAUDE.md — frontend architecture notes
 - Research artifact (2026-05-27) — comprehensive technical reference
+
+---
+
+# 2026-05-28 Plan Update — Ship Log, Post-Mortems, Revised Roadmap
+
+This block records reality as of 2026-05-28 and supersedes earlier
+sections where flagged. See also the "2026-05-28 ARCHITECTURE PIVOT"
+section at the top of this doc for the NT8-as-single-source decision.
+
+## Ship Log (since v1.0-plan4-roadmap-spec)
+
+25 release tags on origin as of 2026-05-28. New since the last plan
+update (chronological by merge):
+
+| Tag | Date | PR | Summary |
+|---|---|---|---|
+| `v1.0-plan4-9` | 2026-05-26 | #19 | DecisionAudit React key warning fix (Dashboard Decisions tab console hygiene) |
+| `v1.0-plan4-3` | 2026-05-26 | #20 | USDT→USD labels + Leverage/Liquidation column hide on Dashboard StatCards + positions table |
+| `v1.0-plan4-13` | 2026-05-26 | #21 | Settings → Exchanges NT card shows "TCP Bridge" badge instead of "API Key" / "Secret" |
+| `v1.0-plan4-3-1` | 2026-05-26 | #22 | EquityChart USDT residue cleanup (7 sites now use `currencyLabel`, wired from `isFutures` prop) |
+| `v1.0-plan4-7` | 2026-05-26 | #23 | AgentChat MarketTicker BTC/ETH/SOL → MNQ; WelcomeScreen prompts futures-aware |
+| `(docs)` | 2026-05-26 | #24 | Vite HMR stale-module cache gotcha documented in `web/CLAUDE.md` |
+| `v1.0-plan4-7-1` | 2026-05-26 | #25 | UserPreferencesPanel placeholder MNQ-only (Plan 4.7 residue: "focusing on BTC and ETH" → "focusing on MNQ") |
+| `v1.0-plan1-5-6` | 2026-05-27 | #26 | TCP heartbeat write-deadline + concurrent-write mutex — fixes the 60s reconnect loop caught by 2026-05-27 comprehensive audit NEW-1 |
+| `v1.0-task12-symbols` | 2026-05-28 | #27 + #28 | Futures symbol normalization (Databento branch added in #27, then trimmed in #28 per the NT8 pivot); symbol fixes kept |
+| `(untagged merge)` | 2026-05-28 | #30 | Plan 1.5.7 — TCP read-deadline desync fix (Patch C). Merged to main at `6defdc84`; no release tag yet |
+
+Plus the comprehensive 5-page UI inventory produced 2026-05-28 at
+[docs/internal/inventory/](docs/internal/inventory/) — see
+`INDEX.md` for the cross-reference + 27 observations including N11.
+
+## Post-Mortems (2026-05-28)
+
+### Plan 1.5.6 — TCP heartbeat write-deadline bug
+
+- **Symptom:** Deterministic 60-second TCP reconnect loop. 240+ WARN
+  `tcp_server: write heartbeat ack err="...i/o timeout"` events
+  observed across ~16 hours steady-state on 2026-05-27.
+- **Root cause:** Go's `net.Conn` write deadlines are PERSISTENT
+  until reset. The `FrameHeartbeat` ack handler in `readLoop` called
+  `WriteFrame` WITHOUT first calling `SetWriteDeadline`. The ack
+  inherited the stale 5s deadline from the most recent
+  `heartbeatLoop` send. 5 seconds after that scheduled heartbeat,
+  the deadline expired; any subsequent write — including the ack
+  to the next client heartbeat — failed immediately with
+  `i/o timeout`. `readLoop` returned, `defer closeConn()` ran, socket
+  died. C# AddOn reconnected 5s later. Cycle = 60s.
+- **Why hotfixes 1.5.1 through 1.5.4 missed it:** They addressed
+  feature-complete surface (Newtonsoft removal, hand-rolled JSON
+  encoder, auto_trader wiring, server singleton). None exercised
+  the steady-state heartbeat path for more than a few minutes.
+  Any soak ≥1 minute would have surfaced this.
+- **Fix:** `provider/ninjatrader/tcp_server.go` — `SetWriteDeadline`
+  before the ack write + `writeMu sync.Mutex` to serialize the 3
+  WriteFrame call sites (ack, heartbeat send, signal flush). +28/-4
+  LOC. Single file. ADR-007 critical files untouched. No C# AddOn
+  recompile.
+- **Verification:** 14-minute soak post-deploy on PID 51866 showed
+  0 heartbeat errors, 1 client connect (initial only), 0
+  disconnects. Pre-fix would have produced 14+ of each.
+
+### Plan 1.5.7 — TCP read-deadline desync (Patch C)
+
+- **Symptom:** Spurious `oversized frame` disconnects (~0.5%/frame,
+  ~49 events over 16h). Caused intermittent C# AddOn reconnects on
+  top of the 1.5.6 baseline — present since Plan 1.5 initial impl,
+  invisible until the 1.5.6 fix removed the dominant noise.
+- **Root cause:** `readLoop` used `SetReadDeadline(2 * time.Second)`
+  + continue-on-timeout to let the loop notice `ctx.Done()`. Partial
+  reads near the deadline boundary left bytes consumed without the
+  full frame being parsed. The next iteration started reading from
+  the middle of the previous frame — interpreting 4 arbitrary bytes
+  as the next length-prefix → garbage length (often >1MB) →
+  `ErrFrameTooLarge` → disconnect.
+- **Fix (Patch C):** Removed the read deadline; block on `ReadFrame`
+  until a complete frame arrives OR the connection closes. A
+  separate ctx-cancel watcher goroutine closes the conn on
+  `ctx.Done()`, which unblocks the read. No frame-byte desync
+  possible.
+- **Found by:** Pre-Stage-2 diagnostic — looking for any other
+  socket noise before starting Plan 4.4 Stage 2. Confirmed via
+  post-1.5.6 soak logs showing the residual ~0.5%/frame
+  disconnect pattern.
+
+### N11 — Trader STARVED (not blocked by risk gate)
+
+- **Symptom:** Trader `mnq sIM TEST` had `risk_check_passed=false`
+  visible in DecisionAudit, and 5+ consecutive cycles showed "No
+  candidate coins available, cycle skipped." Initial diagnosis:
+  "risk gate is rejecting; flip the threshold."
+- **Actual root cause:** The active strategy was using a dead
+  `ai500` coin source (HTTP 402 from claw402 paywall). The cycle
+  short-circuited at coin selection BEFORE running the AI brain or
+  the risk gate. `risk_check_passed=false` was a GORM zero-value
+  (the field was never set because that code path never ran), not
+  a real risk rejection.
+- **Why the misdiagnosis:** The DecisionAudit column shows
+  `risk_check_passed` as a boolean; the UI doesn't distinguish
+  "false because rejected" from "false because never evaluated."
+  Initial fix proposal was a "30-second config flip" — turn off
+  the risk gate. That would have done nothing because the gate
+  wasn't the blocker.
+- **Real fix path:** Data-fetch routing (the Plan 4.4 staged build).
+  Once decisions get bars from NT8 instead of dead AI500/Databento
+  paths, the cycle reaches the AI brain and the risk gate, and
+  trades can flow. Trader was STARVED of input data, not blocked
+  by output gate.
+- **Documentation correction:** the inventory N11 entry was
+  corrected from "30-second config fix" to "requires Plan 4.4
+  staged build; data-fetch routing is the real blocker."
+
+## Plan 4.x Sequencing — REVISED 2026-05-28
+
+Supersedes the earlier sequencing above (lines ~6940+). Reflects
+both shipped work and the NT8 pivot.
+
+### Already SHIPPED
+- v1.0-plan4-9, 4-3, 4-3-1, 4-13, 4-7, 4-7-1 — small wins (above)
+- v1.0-plan1-5-6 — TCP heartbeat write-deadline fix
+- v1.0-task12-symbols — futures symbol normalization
+- Plan 1.5.7 read-deadline fix (merged, untagged)
+
+### In-flight
+- **Plan 4.4 Stage 1** — C# AddOn multi-TF bar subscription
+  (`VLBarsSubscriptionManager`). PR #29 awaiting merge after
+  Plan 1.5.7 verification. Compiled clean in operator's Windows VS.
+
+### Next, in order
+- **Plan 4.4 Stage 2** — Go bar handling
+  - New frame types (`bars_subscribe`, `bars_historical`,
+    `bar_update`, `bars_unsubscribe`) per Plan 1.5 wire spec
+    additive extension
+  - `BarsRegistry` (the (userID, symbol, period) dedup map)
+  - Auto-subscribe lifecycle (subscribe on first consumer,
+    unsubscribe on last)
+  - Bar cache for late-joiners
+  - Drop-newest backpressure on the per-subscriber channel
+  - Wire into TCPServer's existing read/write loops
+
+- **Plan 4.4 Stage 3** — wire bars into kernel decisions
+  - `engine_analysis.go` reads bars from `BarsRegistry`
+    instead of `GetWithTimeframes` HTTP fetch
+  - `kernel/engine.go` resolves `NT_TRANSPORT=tcp` + NT
+    exchange → use NT8 bars
+  - **End-to-end validation runbook** (operator-observable
+    success criteria: trader cycles produce actionable
+    decisions on zero-lag bars, AI brain runs, risk gate
+    runs, signals flow to NT8)
+
+- **Plan 4.4 Stage 4** — chart display
+  - SSE relay (`/api/v1/bars/stream` handler in `api/`)
+  - JWT-in-query (EventSource can't set headers)
+  - 15s keepalive, `X-Accel-Buffering: no`, gzip-disable
+  - Frontend `FuturesChart` component (TradingView v5,
+    `chart.addSeries(CandlestickSeries)`, `setData` once
+    then `update` per `bar_update`)
+  - `ChartTabs` futures pill (`MARKET_CONFIG.futures`)
+
+### After Plan 4.4 stages all green
+- **Plan 4.11** — real NT balance via wire-protocol extension
+  (TCP `account_balance` frame type; ~150 LOC + C# AddOn extension)
+- **Plan 4.6** — Strategy Studio futures-aware rewrite (~400 LOC,
+  largest UX change pending — touches `CoinSourceEditor`,
+  `IndicatorEditor`, `RiskControlEditor`, `GridConfigEditor`,
+  PromptSections variant)
+- **Plan 4.14** — Plan 1.5 backend visibility panel (NT_TRANSPORT
+  toggle, TCP listener status, AddOn health, CME calendar gate,
+  Databento status if revived for backfill — currently no UI
+  surface; would have surfaced 1.5.6 reconnect loop without
+  log-tail)
+- **Plan 4.9.x cosmetic bundle** — favicon, footer hrefs, Chinese
+  label rendering in EN locale, PageNotFound orphan reachability,
+  grainy-gradient 404 image
+
+### DROPPED from the original roadmap
+- **Plan 4.5 — handler_klines.go NT route**: the original idea
+  was a Databento backend route serving MNQ candles to the chart.
+  Under the NT8 pivot, the chart consumes the same NT8 bar feed
+  as decisions (Plan 4.4 Stage 4), so no separate klines route is
+  needed. The `/api/klines` silent Binance fallback for unknown
+  exchanges (NEW-2 from 2026-05-27 audit) is still worth fixing
+  as a hygiene cleanup (5 LOC: return 400 instead of silently
+  defaulting), but not as part of the futures data path.
+
+## Locked Data Architecture Decisions (2026-05-28)
+
+- **Source:** NT8 via Tradovate (real-time, confirmed live MNQ
+  candles moving 2026-05-28). No external HTTP provider involved
+  in the live decision path.
+- **Transport from NT8 to Go:** existing Plan 1.5 TCP socket on
+  `127.0.0.1:36974`. Extended additively per ADR-007 with 4 new
+  bar-related frame types.
+- **Multi-timeframe:** YES — the engine consumes
+  `StrategyConfig.Indicators.Klines.SelectedTimeframes` (Balanced
+  Strategy default: `["5m", "15m", "1h"]`, `PrimaryTimeframe="5m"`,
+  `LongerTimeframe="4h"`). The full coded TF vocabulary is 14
+  values (1m, 3m, 5m, 15m, 30m, 1h, 2h, 4h, 6h, 8h, 12h, 1d, 3d,
+  1w) per `store/strategy.go::normalizeTimeframe`.
+- **Multi-TF method:** **Option 1 — native** — one `BarsRequest`
+  per selected timeframe on the C# AddOn side. NOT Go-side
+  aggregation from 1m. Reason: higher-timeframe bias must match
+  NT8's own bars (DST/session-boundary edges differ subtly from
+  pure 1m roll-up).
+- **Chart window at runtime:** NOT NEEDED. `BarsRequest` pulls
+  from NT8's data engine directly; no chart instance required.
+  Operator does not need to leave a chart open for the bot to
+  function.
+- **One feed, two consumers:** Decisions (Stage 3 reads from
+  `BarsRegistry`) AND chart (Stage 4 streams via SSE) both
+  consume the same NT8 bars. Single source of truth, no two-feed
+  divergence risk.
+- **Databento revival path (if ever needed):** The `cmd/nq_smoke`
+  `available_end` probe pattern is preserved as a reference for
+  any future backfill/backtest use. Live decisions will NOT use
+  Databento unless the operator's subscription tier upgrades to
+  real-time (currently Historical-only with ~8h lag, unusable).
+
+## Deferred / Open Items (refreshed 2026-05-28)
+
+### Plan 4.4 open questions (gate detailed design of Stages 2 + 4)
+1. Trading hours default: ETH (recommended for algo) vs RTH
+2. MergePolicy default: BackAdjusted vs NonBackAdjusted
+3. `bars_back` default: 500 (~8.3 ETH hours) vs 1000
+4. Multi-symbol overlay in Plan 4.4 or defer to 4.5-equivalent
+5. JWT TTL for SSE query param (recommend 5 min, refreshable)
+6. Drop-newest backpressure policy confirmation
+7. Per-tenant subscription dedup behavior confirmation
+8. Chart-side persistence on Go side: none — confirm acceptable
+
+### Stage 2 verify items (mechanical, not design)
+- Tradovate's documented concurrent-BarsRequest limit (research
+  flagged 8 active in some forum threads; verify against the
+  operator's account tier before designing the Auto-Subscribe
+  behavior)
+- Bar timestamp normalization across NT (local) and the canonical
+  bar_open_utc on the Go side — already documented in Plan 1.5
+  Design Findings + Merge Logic State Machine; carry into Stage 2
+
+### Security
+- N8 — password-change form has no "old password" verification
+  before allowing change. Trivial bypass if session token leaks.
+  ~10 LOC + backend endpoint update.
+
+### Cosmetic bundle (defer to Plan 4.9.x)
+- Favicon: still serves 404 on `/favicon.ico` (browser auto-fetch
+  separate from the SVG link in `<head>`)
+- Footer GitHub/Twitter/Telegram hrefs all `#` placeholders
+- Chinese label rendering in EN locale on a few stat-card units
+- PageNotFound component exists but is orphan (no route hits it
+  thanks to catch-all redirect to `/`)
+- Grainy-gradients 404 background image asset
+
+### Plan 1.5 area
+- `symbology.resolve` 422 from Databento (was Task 3 in original
+  plan) — MOOT under NT8 pivot but noted: if Databento is ever
+  revived, the resolve endpoint behavior may have changed.
+- Tradovate concurrent-BarsRequest limit — Stage 2 verify item
+  above; flagged in Plan 4.4 NT8 SDK gotchas
+
+### Repo hygiene
+- ~30 untracked screenshot/inventory PNGs in repo root from prior
+  audit sessions (`audit_*.png`, `test*.png`, `plan4_verify_*.png`,
+  `verify_*.png`). Should be moved to `.claude/screenshots/` (which
+  is in `.gitignore`) or deleted. Currently harmless but noisy in
+  `git status`.
