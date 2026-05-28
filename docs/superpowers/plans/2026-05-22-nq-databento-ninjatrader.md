@@ -8018,7 +8018,9 @@ Per-page findings against the live app on `origin/main` @ `4f0843e5`:
   `missing_credentials`. ~2 LOC.
 - `/api/klines` silent Binance fallback for unknown exchanges —
   should return `400` instead of silently defaulting.
-- `/settings` → `/dashboard` auto-redirect (trace the cause).
+- `/settings` → `/dashboard` auto-redirect (trace the cause). — RETRACTED
+  2026-05-28: not a bug; SettingsPage has zero navigate calls, it was the
+  shared Playwright browser driven by another agent.
 - cosmetic: dead NT "Register" link; Chinese-in-EN hints.
 
 ## 2026-05-28 Reordered Fix Roadmap
@@ -8052,7 +8054,9 @@ Reflects the audit + N11 convergence. Data plane unblocks everything.
 - account-state variadic fix (~2 LOC).
 - default-config off `ai500`.
 - `/api/klines` return `400` (instead of silent Binance fallback).
-- `/settings`→`/dashboard` redirect trace.
+- `/settings`→`/dashboard` redirect trace. — RETRACTED 2026-05-28: not a
+  bug; SettingsPage has zero navigate calls, it was the shared Playwright
+  browser driven by another agent.
 
 ### 🟢 Lower
 
@@ -8060,6 +8064,32 @@ Reflects the audit + N11 convergence. Data plane unblocks everything.
 - **Plan 4.14** — backend visibility (also wire `risk_check_passed`,
   `ai_model`, `ai_latency_ms`).
 - **Plan 4.9.x** — cosmetic bundle.
+
+### Depth tiers (2026-05-28) — independent of the data-plane chain
+
+Strategic finding from the 5-agent depth audit: the data-plane chain (Stage
+2/3/4 + 4.11) is **UNCHANGED** and still the unlock for real
+decisions/chart/balance, **BUT** ~25 depth findings are **INDEPENDENT** of
+that chain and can be batched in parallel:
+
+- 🟠 **correctness** — NT controls (Close Position/CloseLong/CloseShort,
+  Emergency Flat), edit-form repopulation (nt_* setters), AI Model delete,
+  account_name drop + HL-flag flip, account-state variadic (~2 LOC),
+  getTradersUsingExchange names (`[object Object]`), ensureRawKlines
+  render-time setState, `/login`-wipe + 401 hard-redirect, swallowed
+  errors, onboarding error state.
+- 🟡 **safety/UX** — confirm dialogs on destructive Settings actions; the
+  deferred security items (tokenless reset-password, reset-account
+  wipes-all); USDT-append symbol corruption.
+- 🟢 **dead-code cleanup** — ~58KB dead charts + dead modals + dead schema
+  fields + FAQ branches + PageNotFound decision (wire `*`→404 or delete).
+- 🔵 **crypto-residue → fold into Plan 4.6** — risk tiers, margin-mode,
+  grid symbols, futures-prompt-unreachable (also Stage 3),
+  StatCard/EquityChart USD propagation, FAQ rewrite, `/faq` nav link.
+- 🟣 **observability → fold into Plan 4.14** — wire the 5 dead
+  DecisionAudit columns + model/prompt badges.
+- 🌐 **i18n → dedicated pass / 4.9.x** — Indonesian fallthrough,
+  Chinese-in-EN leaks, x-axis locale, English-only auth strings.
 
 ## 2026-05-28 — Databento stays DROPPED (reaffirmed)
 
@@ -8070,3 +8100,119 @@ the **NT8 feed** (Stage 4); Databento is Historical-only (~8h lag) and
 stays dropped; the old Plan 4.5 Databento route stays DROPPED. The
 `/api/klines` `400`-cleanup survives (it's hygiene, not a data-path
 change); the Databento route does not.
+
+## 2026-05-28 Deep Per-Page Completeness Audit
+
+Layered on top of the breadth audit (`## 2026-05-28 UI Data-Flow Audit`
+above) — does NOT supersede it. A **deeper** per-page completeness pass.
+
+**Method.** 5 parallel general-purpose agents, exhaustive code inventory +
+Playwright/curl live verification, read-only, each with an honest coverage
+section. Surface split:
+
+1. Settings + modals
+2. Dashboard + Traders
+3. Strategy Studio editors
+4. Charts + Ticker + Chat
+5. Auth + Onboarding + FAQ + chrome + routes
+
+**COVERAGE CAVEAT (itself a bug).** All 5 agents lost the live
+authenticated session mid-run because visiting `/login` wipes the session
+(`LoginPage.tsx:29-33`) and any `401` hard-redirects to `/login`
+(`httpClient.ts:148-155`). Live verification of authed surfaces is
+therefore **PARTIAL**; **code verification is complete and authoritative.**
+The agents correctly **REFUSED** to forge a JWT or register a throwaway
+user to regain access — integrity held.
+
+**DISCREPANCY (unresolved live).** Dashboard StatCards are **USD-correct**
+(`TraderDashboardPage.tsx:185-188`); a possibly-stale screenshot showed
+`USDT`. `EquityChart.tsx:45` is a **separate** `isFutures` unit-label path.
+**Action item:** confirm `isFutures` propagates into `EquityChart`.
+
+## 2026-05-28 Depth Audit — Security Findings (DEFERRED, not yet fixed)
+
+- `/api/reset-password` resets **ANY** user's password from email + new
+  password — **NO token, NO verification, NO current-password check**
+  (`handler_user.go:193-227`). Auth bypass; on a single-user box that's the
+  only account.
+- "Forgot account?" → `POST /api/reset-account` **WIPES ALL USERS**
+  (`server.go:127`).
+- `/login` mount wipes the active session (`LoginPage.tsx:29-33`) + `401`
+  hard-redirect (`httpClient.ts:148-155`).
+- Reset-password min-length contradiction (checklist `8`, placeholder `6`,
+  backend `6`).
+- **Status:** operator **deferred** ("sec later") — recorded here so they
+  are not lost; revisit before any non-local exposure.
+
+## 2026-05-28 Depth Audit — NT Broker UI Gaps
+
+The "looks-wired-isn't" tier — controls render but fail at runtime for the
+primary (NinjaTrader) broker.
+
+- **Close Position** (per row) → `HTTP 400`, no `ninjatrader` case
+  (`handler_trader_status.go:159`); `CloseLong`/`CloseShort` also error.
+  **Guaranteed fail once a fill exists.**
+- **Emergency Flat** → Confirm → **nil-writer no-op** (`handler_risk.go:119`),
+  logs "operator must flatten manually on NT chart", dumps raw JSON in UI.
+- **NT edit-form doesn't repopulate:** TS type `config.ts:21-50` omits
+  `nt_*`; edit `useEffect` `ExchangeConfigModal.tsx:228-243` has no `nt_*`
+  setters (backend GET **does** return them). **Primary broker.**
+- **Create-trader shows Cross/Isolated margin mode for NT** (dead crypto
+  knob, `TraderConfigModal.tsx:367-391`).
+
+## 2026-05-28 Depth Audit — Correctness / Persistence Bugs
+
+- **AI Model "Remove" doesn't delete** (`SettingsPage.tsx:193-227` +
+  `store/ai_model.go:222` — sends `api_key:''` but store only writes
+  non-empty → never cleared → row stays visible). No real `DELETE` wired.
+- **`account_name` silently dropped on exchange edit**
+  (`handler_exchange.go` + `exchange.go:297-353`; dead `UpdateAccountName`
+  uncalled).
+- **`hyperliquid_unified_account` flipped to `false` on edit** (form never
+  sends it; `exchange.go:308` writes unconditionally).
+- **`getTradersUsingExchange().join()` → `[object Object]` toast**
+  (`AITradersPage.tsx:505`).
+- **`ensureRawKlines()` render-time setState anti-pattern**
+  (`IndicatorEditor.tsx:106-115`) → spurious unsaved-changes flag;
+  Raw-Klines checkbox disabled + always-on (dead control).
+- **"Fill Default" / default-config still writes the dead `NofxOS`/`ai500`
+  key** (`IndicatorEditor.tsx:206-218`; `store/strategy.go` default) → new
+  strategies born broken. (= the reseed-durable counterpart to the runtime
+  N11 flip; **fold into Stage 3**.)
+- **5 of 9 risk fields are display-only "System enforced"**
+  (`RiskControlEditor.tsx:54,158,180,244,280`); only 4 editable.
+- **Symbol inputs auto-append "USDT"** → corrupt CME roots (`"NQ"` →
+  `"NQUSDT"`, `"NQ.c.0"` → `"NQ.C.0USDT"`) in `CoinSourceEditor` + the chart
+  quick-input.
+- **BeginnerOnboarding broken error state** (no retry when `data===null`).
+- **Silent failures:** swallowed token-overflow `400` / missing-fields /
+  save errors; chart wrong-data with no warning; ticker empty with no
+  empty-state; dashboard degrades to `"--"` after 2 silent retries.
+
+## 2026-05-28 Depth Audit — Dead Code
+
+- **4 chart components ~58KB:** `TradingViewChart`, `ChartWithOrders`,
+  `ChartWithOrdersSimple` (contains "测试模式 / under development"
+  placeholder), `ComparisonChart` — zero render refs.
+- `TraderConfigViewModal.tsx`, `BeginnerGuideCards.tsx` — imported nowhere.
+- `PageNotFound.tsx` — never imported; `*` route does `Navigate→/` so 404
+  never renders (**decide:** wire `*`→404 or delete).
+- **Dead schema fields:** `external_data_sources`,
+  `use_hyper_all`/`_main`/`hyper_main_limit`,
+  `longer_timeframe`/`longer_count` (no UI).
+- `/faq` is an **orphan** (no nav link; URL-only); FAQ content **entirely
+  stale crypto** (Binance/HL/Docker/TA-Lib; zero NQ/MNQ/CME).
+- **Dead footer social links** (`OFFICIAL_LINKS.*` empty → `href=""`
+  reloads page).
+
+## 2026-05-28 Depth Audit — i18n
+
+- **Indonesian (`id`) falls through to English** in strategy editors /
+  onboarding / agent panels.
+- **~10 Chinese-in-EN leaks;** worst is the Competition-toggle title
+  (`TradersList.tsx:394`, user-visible under EN locale). Others:
+  `ExchangeConfigModal` credential-status + placeholders, `ModelConfigModal`,
+  `TwoStageKeyModal` toasts, coin-source `'固定币种'` preview, `AdvancedChart`
+  x-axis `toLocaleString('zh-CN')`.
+- **"Reset to default" writes Chinese prompt text for EN users**
+  (`PromptSectionsEditor.tsx:14-43`).
