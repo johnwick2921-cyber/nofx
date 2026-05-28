@@ -119,6 +119,22 @@ func (m *MockTCPClient) SendAck(target string) error {
 	return WriteFrame(c, FrameAck, AckPayload{Acks: target})
 }
 
+// sendFrameForTest emits an arbitrary frame from the mock client side.
+// Used by Plan 4.4 Stage 2 integration tests
+// (tcp_server_bars_test.go) to inject bars_historical / bar_update
+// frames into a real TCPServer for end-to-end bar receive-path
+// validation. Production callers should use the typed SendFill /
+// SendAck helpers above.
+func (m *MockTCPClient) sendFrameForTest(frameType FrameType, payload any) error {
+	m.connMu.Lock()
+	c := m.conn
+	m.connMu.Unlock()
+	if c == nil {
+		return errors.New("mock_tcp_client: not connected")
+	}
+	return WriteFrame(c, frameType, payload)
+}
+
 func (m *MockTCPClient) readLoop(ctx context.Context, c net.Conn) {
 	defer m.wg.Done()
 	for {
