@@ -54,6 +54,11 @@ namespace NinjaTrader.NinjaScript.AddOns
         private readonly Dictionary<string, double> signalTickSizeByOco = new Dictionary<string, double>();
         private readonly object signalMapLock = new object();
 
+        // Plan 4.4 Stage 1 — multi-timeframe BarsRequest subscriptions. Owns
+        // its own state; calls back into SendFrame() which serializes through
+        // writeLock so bar frames cannot interleave with signal/fill bytes.
+        private VLBarsSubscriptionManager barsManager;
+
         protected override void OnStateChange()
         {
             if (State == State.SetDefaults)
@@ -71,6 +76,12 @@ namespace NinjaTrader.NinjaScript.AddOns
                 {
                     account.OrderUpdate += OnOrderUpdate;
                 }
+                // Plan 4.4 Stage 1 — instantiate the bars manager BEFORE the
+                // reader thread starts so an early bars_subscribe frame has a
+                // destination. SendFrame is wired through this instance so
+                // bar frames inherit the same writeLock + encoder used by the
+                // proven signal/fill/heartbeat path.
+                barsManager = new VLBarsSubscriptionManager(SendFrame, LogInfo, LogWarn);
                 readerThread = new Thread(() => RunConnectionLoop(cts.Token))
                 {
                     IsBackground = true,
@@ -93,6 +104,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                 {
                     try { account.OrderUpdate -= OnOrderUpdate; } catch { }
                 }
+                try { barsManager?.DisposeAll(); } catch { }
                 try { stream?.Close(); } catch { }
                 try { client?.Close(); } catch { }
                 LogInfo("VLTraderTCPClient: AddOn Terminated");
@@ -222,6 +234,16 @@ namespace NinjaTrader.NinjaScript.AddOns
                 else if (type == "ack")
                 {
                     // Server-side ack of our heartbeat/fill — informational only.
+                }
+                else if (type == "bars_subscribe")
+                {
+                    // Plan 4.4 Stage 1 — forward to the bars manager.
+                    barsManager?.HandleBarsSubscribe(payload);
+                }
+                else if (type == "bars_unsubscribe")
+                {
+                    // Plan 4.4 Stage 1 — forward to the bars manager.
+                    barsManager?.HandleBarsUnsubscribe(payload);
                 }
                 else
                 {
@@ -415,6 +437,17 @@ namespace NinjaTrader.NinjaScript.AddOns
         private void SendAck(string acks)
         {
             WriteEnvelope("ack", new Dictionary<string, object> { ["acks"] = acks });
+        }
+
+        /// <summary>
+        /// Plan 4.4 Stage 1 — entry point for VLBarsSubscriptionManager.
+        /// Routes its bar frames (bars_historical, bar_update) through the
+        /// SAME WriteEnvelope path the signal/fill/heartbeat code uses, so
+        /// bar bytes inherit the writeLock and the hand-rolled encoder.
+        /// </summary>
+        internal void SendFrame(string type, Dictionary<string, object> payload)
+        {
+            WriteEnvelope(type, payload);
         }
 
         private void WriteEnvelope(string type, Dictionary<string, object> payload)
