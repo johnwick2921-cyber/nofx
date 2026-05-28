@@ -310,10 +310,19 @@ namespace NinjaTrader.NinjaScript.AddOns
                 return;
             }
 
-            var instrument = Instrument.GetInstrument(symbol);
+            // Resolve the bare root ("MNQ") to the NT8 front-month
+            // contract ("MNQ 06-26") via VLContractResolver (date-derived,
+            // auto-rolls). NT8's Instrument.GetInstrument requires the
+            // qualified contract; a bare root returns null. Canonical
+            // symbol on the wire stays "MNQ"; contract form only exists
+            // inside this GetInstrument call.
+            string contract = VLContractResolver.ResolveFrontMonthContract(symbol);
+            LogInfo("VLTraderTCPClient: resolved " + symbol + " -> " + contract);
+            var instrument = Instrument.GetInstrument(contract);
             if (instrument == null)
             {
-                LogWarn("VLTraderTCPClient: instrument " + symbol + " not found — rejecting");
+                LogWarn("VLTraderTCPClient: instrument " + symbol
+                        + " (resolved to " + contract + ") not found — rejecting");
                 SendFillFrame(signalId, 0.0, side, qty, 0.0, "rejected");
                 return;
             }
@@ -554,6 +563,26 @@ namespace NinjaTrader.NinjaScript.AddOns
             if (v is float f) { sb.Append(((double)f).ToString("R", CultureInfo.InvariantCulture)); return; }
             if (v is decimal m) { sb.Append(m.ToString(CultureInfo.InvariantCulture)); return; }
             if (v is Dictionary<string, object> nested) { AppendObject(sb, nested); return; }
+            // Plan 4.4 bar-payload fix: List<object> / arrays. Must come AFTER
+            // string + Dictionary (string is IEnumerable<char>; Dictionary is
+            // IEnumerable<KeyValuePair>). Without this, bars_historical /
+            // bar_update payloads (["bars"] = List<object>) get stringified
+            // via the .ToString() fallback to "System.Collections.Generic.
+            // List`1[System.Object]", and Go rejects them with
+            // "cannot unmarshal string into ... []Bar".
+            if (v is System.Collections.IEnumerable e)
+            {
+                sb.Append('[');
+                bool firstItem = true;
+                foreach (var item in e)
+                {
+                    if (!firstItem) sb.Append(',');
+                    firstItem = false;
+                    AppendValue(sb, item);
+                }
+                sb.Append(']');
+                return;
+            }
             AppendString(sb, v.ToString());
         }
 
