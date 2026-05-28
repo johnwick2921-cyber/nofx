@@ -151,27 +151,6 @@ func GetWithTimeframes(symbol string, timeframes []string, primaryTimeframe stri
 		return nil, fmt.Errorf("at least one timeframe is required")
 	}
 
-	// Task 12 / Cluster D — CME futures route to Databento. The branch lives
-	// here so every existing call site (kernel/engine_analysis.go,
-	// api/strategy.go, trader/auto_trader_grid*.go) picks it up
-	// automatically. Crypto path is byte-unchanged below.
-	if IsCMEFuturesSymbol(symbol) {
-		if primaryTimeframe == "" {
-			primaryTimeframe = timeframes[0]
-		}
-		hasPrimary := false
-		for _, tf := range timeframes {
-			if tf == primaryTimeframe {
-				hasPrimary = true
-				break
-			}
-		}
-		if !hasPrimary {
-			timeframes = append([]string{primaryTimeframe}, timeframes...)
-		}
-		return getDataFromDatabento(symbol, timeframes, primaryTimeframe, count)
-	}
-
 	// If primary timeframe is not specified, use the first one
 	if primaryTimeframe == "" {
 		primaryTimeframe = timeframes[0]
