@@ -262,7 +262,12 @@ namespace NinjaTrader.NinjaScript.AddOns
                 // Fire the historical load.
                 try
                 {
-                    request.Request((bars, errorCode, errorMessage) =>
+                    // NT8 8.1: the callback's first arg is the BarsRequest
+                    // itself (NOT a Bars collection). The actual Bars data
+                    // hangs off request.Bars. We capture `entry` and read
+                    // entry.Request.Bars inside EmitHistorical so the path
+                    // is consistent with OnBarsUpdate.
+                    request.Request((req, errorCode, errorMessage) =>
                     {
                         if (errorCode != ErrorCode.NoError)
                         {
@@ -270,7 +275,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                                     + key + ": " + errorCode + " — " + errorMessage);
                             return;
                         }
-                        EmitHistorical(entry, bars);
+                        EmitHistorical(entry);
                     });
                 }
                 catch (Exception ex)
@@ -291,8 +296,10 @@ namespace NinjaTrader.NinjaScript.AddOns
         // Historical + streaming emit
         // ==============================================================
 
-        private void EmitHistorical(BarsRequestEntry entry, Bars bars)
+        private void EmitHistorical(BarsRequestEntry entry)
         {
+            // NT8 8.1: BarsRequest exposes its loaded data via request.Bars.
+            var bars = entry.Request != null ? entry.Request.Bars : null;
             if (bars == null || bars.Count == 0)
             {
                 logInfo("VLBarsSubscriptionManager: historical " + entry.Key + " — zero bars");
@@ -340,11 +347,12 @@ namespace NinjaTrader.NinjaScript.AddOns
             // already covered the same bar times.
             if (!entry.HistoricalSent) return;
 
-            // FLAG: NT8 API — BarsUpdateEventArgs exposes MinIndex, MaxIndex,
-            // and the source Bars object as `args.Bars` or similar. The
-            // exact name varies; if the operator's build calls it
-            // `args.BarsSeries` or `args.SourceBars`, swap the accessor.
-            var bars = args.Bars;
+            // NT8 8.1: BarsUpdateEventArgs exposes MinIndex + MaxIndex only.
+            // The source Bars collection hangs off the BarsRequest, NOT off
+            // the event args (confirmed via operator compile-check —
+            // CS1061 'BarsUpdateEventArgs' does not contain a definition
+            // for 'Bars'). We read from the captured entry.Request.Bars.
+            var bars = entry.Request != null ? entry.Request.Bars : null;
             int minIdx = args.MinIndex;
             int maxIdx = args.MaxIndex;
 
