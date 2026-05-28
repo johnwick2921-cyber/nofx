@@ -2,12 +2,37 @@ package trader
 
 import (
 	"fmt"
+	"math"
 	"nofx/kernel"
 	"nofx/logger"
 	"nofx/market"
 	"nofx/store"
 	"time"
 )
+
+// maxFuturesContracts caps the per-order contract count for CME futures
+// (SIM-conservative). Tune per account size; 10 MNQ ≈ $600k notional ≈ $22k
+// intraday margin, comfortably within a $50k SIM account.
+const maxFuturesContracts = 10.0
+
+// futuresOrderQuantity converts a decision's notional (position_size_usd) into
+// a clamped contract count for CME futures: contracts = notional / (price ×
+// pointValue), rounded, floored at 1, capped at maxFuturesContracts. Bypasses
+// the crypto notional/leverage margin model (futures margin is per-contract).
+func futuresOrderQuantity(symbol string, notionalUSD, price float64) float64 {
+	pv := market.FuturesPointValue(symbol)
+	if pv <= 0 || price <= 0 {
+		return 1 // safe default: 1 contract
+	}
+	contracts := math.Round(notionalUSD / (price * pv))
+	if contracts < 1 {
+		contracts = 1
+	}
+	if contracts > maxFuturesContracts {
+		contracts = maxFuturesContracts
+	}
+	return contracts
+}
 
 // executeDecisionWithRecord executes AI decision and records detailed information
 func (at *AutoTrader) executeDecisionWithRecord(decision *kernel.Decision, actionRecord *store.DecisionAction) error {
@@ -82,29 +107,38 @@ func (at *AutoTrader) executeOpenLongWithRecord(decision *kernel.Decision, actio
 		decision.PositionSizeUSD = adjustedPositionSize
 	}
 
-	// ⚠️ Auto-adjust position size if insufficient margin
-	// Formula: totalRequired = positionSize/leverage + positionSize*0.001 + positionSize/leverage*0.01
-	//        = positionSize * (1.01/leverage + 0.001)
-	marginFactor := 1.01/float64(decision.Leverage) + 0.001
-	maxAffordablePositionSize := availableBalance / marginFactor
+	// Calculate order quantity.
+	var quantity float64
+	if market.IsCMEFuturesSymbol(decision.Symbol) {
+		// CME futures: size in contracts (notional / (price × point value)),
+		// clamped. Skip the crypto notional/leverage margin model — futures
+		// margin is per-contract, not notional/leverage.
+		quantity = futuresOrderQuantity(decision.Symbol, decision.PositionSizeUSD, marketData.CurrentPrice)
+	} else {
+		// ⚠️ Auto-adjust position size if insufficient margin (crypto)
+		// Formula: totalRequired = positionSize/leverage + positionSize*0.001 + positionSize/leverage*0.01
+		//        = positionSize * (1.01/leverage + 0.001)
+		marginFactor := 1.01/float64(decision.Leverage) + 0.001
+		maxAffordablePositionSize := availableBalance / marginFactor
 
-	actualPositionSize := decision.PositionSizeUSD
-	if actualPositionSize > maxAffordablePositionSize {
-		// Use 98% of max to leave buffer for price fluctuation
-		adjustedSize := maxAffordablePositionSize * 0.98
-		logger.Infof("  ⚠️ Position size %.2f exceeds max affordable %.2f, auto-reducing to %.2f",
-			actualPositionSize, maxAffordablePositionSize, adjustedSize)
-		actualPositionSize = adjustedSize
-		decision.PositionSizeUSD = actualPositionSize
+		actualPositionSize := decision.PositionSizeUSD
+		if actualPositionSize > maxAffordablePositionSize {
+			// Use 98% of max to leave buffer for price fluctuation
+			adjustedSize := maxAffordablePositionSize * 0.98
+			logger.Infof("  ⚠️ Position size %.2f exceeds max affordable %.2f, auto-reducing to %.2f",
+				actualPositionSize, maxAffordablePositionSize, adjustedSize)
+			actualPositionSize = adjustedSize
+			decision.PositionSizeUSD = actualPositionSize
+		}
+
+		// [CODE ENFORCED] Minimum position size check
+		if err := at.enforceMinPositionSize(decision.PositionSizeUSD); err != nil {
+			return err
+		}
+
+		// Calculate quantity with adjusted position size
+		quantity = actualPositionSize / marketData.CurrentPrice
 	}
-
-	// [CODE ENFORCED] Minimum position size check
-	if err := at.enforceMinPositionSize(decision.PositionSizeUSD); err != nil {
-		return err
-	}
-
-	// Calculate quantity with adjusted position size
-	quantity := actualPositionSize / marketData.CurrentPrice
 	actionRecord.Quantity = quantity
 	actionRecord.Price = marketData.CurrentPrice
 
@@ -199,29 +233,38 @@ func (at *AutoTrader) executeOpenShortWithRecord(decision *kernel.Decision, acti
 		decision.PositionSizeUSD = adjustedPositionSize
 	}
 
-	// ⚠️ Auto-adjust position size if insufficient margin
-	// Formula: totalRequired = positionSize/leverage + positionSize*0.001 + positionSize/leverage*0.01
-	//        = positionSize * (1.01/leverage + 0.001)
-	marginFactor := 1.01/float64(decision.Leverage) + 0.001
-	maxAffordablePositionSize := availableBalance / marginFactor
+	// Calculate order quantity.
+	var quantity float64
+	if market.IsCMEFuturesSymbol(decision.Symbol) {
+		// CME futures: size in contracts (notional / (price × point value)),
+		// clamped. Skip the crypto notional/leverage margin model — futures
+		// margin is per-contract, not notional/leverage.
+		quantity = futuresOrderQuantity(decision.Symbol, decision.PositionSizeUSD, marketData.CurrentPrice)
+	} else {
+		// ⚠️ Auto-adjust position size if insufficient margin (crypto)
+		// Formula: totalRequired = positionSize/leverage + positionSize*0.001 + positionSize/leverage*0.01
+		//        = positionSize * (1.01/leverage + 0.001)
+		marginFactor := 1.01/float64(decision.Leverage) + 0.001
+		maxAffordablePositionSize := availableBalance / marginFactor
 
-	actualPositionSize := decision.PositionSizeUSD
-	if actualPositionSize > maxAffordablePositionSize {
-		// Use 98% of max to leave buffer for price fluctuation
-		adjustedSize := maxAffordablePositionSize * 0.98
-		logger.Infof("  ⚠️ Position size %.2f exceeds max affordable %.2f, auto-reducing to %.2f",
-			actualPositionSize, maxAffordablePositionSize, adjustedSize)
-		actualPositionSize = adjustedSize
-		decision.PositionSizeUSD = actualPositionSize
+		actualPositionSize := decision.PositionSizeUSD
+		if actualPositionSize > maxAffordablePositionSize {
+			// Use 98% of max to leave buffer for price fluctuation
+			adjustedSize := maxAffordablePositionSize * 0.98
+			logger.Infof("  ⚠️ Position size %.2f exceeds max affordable %.2f, auto-reducing to %.2f",
+				actualPositionSize, maxAffordablePositionSize, adjustedSize)
+			actualPositionSize = adjustedSize
+			decision.PositionSizeUSD = actualPositionSize
+		}
+
+		// [CODE ENFORCED] Minimum position size check
+		if err := at.enforceMinPositionSize(decision.PositionSizeUSD); err != nil {
+			return err
+		}
+
+		// Calculate quantity with adjusted position size
+		quantity = actualPositionSize / marketData.CurrentPrice
 	}
-
-	// [CODE ENFORCED] Minimum position size check
-	if err := at.enforceMinPositionSize(decision.PositionSizeUSD); err != nil {
-		return err
-	}
-
-	// Calculate quantity with adjusted position size
-	quantity := actualPositionSize / marketData.CurrentPrice
 	actionRecord.Quantity = quantity
 	actionRecord.Price = marketData.CurrentPrice
 
