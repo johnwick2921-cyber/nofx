@@ -225,6 +225,17 @@ func (at *AutoTrader) runCycle() error {
 	// 8. Sort decisions: ensure close positions first, then open positions (prevent position stacking overflow)
 	logger.Info(strings.Repeat("-", 70))
 
+	// GetFullDecisionWithStrategy returns (nil, nil) when the risk gate HOLDs
+	// the cycle (e.g. Plan 3 T21 daily-loss limit) — there is no decision to
+	// execute. Guard before dereferencing aiDecision.Decisions below. (A real
+	// $0 balance in the brief pre-first-account_balance-frame window, Plan
+	// 4.11, can trip the gate and surface this otherwise-latent nil deref.)
+	if aiDecision == nil {
+		at.logInfof("ℹ️ No actionable decision this cycle (risk gate HOLD); skipping execution")
+		at.saveDecision(record)
+		return nil
+	}
+
 	// 8. Sort decisions: ensure close positions first, then open positions (prevent position stacking overflow)
 	sortedDecisions := sortDecisionsByPriority(aiDecision.Decisions)
 
