@@ -279,6 +279,10 @@ namespace NinjaTrader.NinjaScript.AddOns
                 {
                     HandleSignal(payload);
                 }
+                else if (type == "close_position")
+                {
+                    HandleClosePosition(payload);
+                }
                 else if (type == "heartbeat")
                 {
                     // Ack incoming heartbeats per spec L4410.
@@ -430,6 +434,34 @@ namespace NinjaTrader.NinjaScript.AddOns
             }
         }
 
+        // === Manual close: flatten the position + cancel its working orders ===
+        // account.Flatten closes the position at market AND cancels the bracket's
+        // SL/TP, so no orphaned exit orders are left to re-open a position. The
+        // flatten's market fill arrives in OnOrderUpdate as an exit (Sell /
+        // BuyToCover) and is reported as a position_close with reason "manual".
+        private void HandleClosePosition(Dictionary<string, object> p)
+        {
+            if (p == null) { LogWarn("VLTraderTCPClient: close_position empty payload"); return; }
+            if (account == null) { LogWarn("VLTraderTCPClient: close_position no account"); return; }
+            try
+            {
+                string symbol = GetString(p, "symbol");
+                string contract = VLContractResolver.ResolveFrontMonthContract(symbol);
+                var instrument = Instrument.GetInstrument(contract);
+                if (instrument == null)
+                {
+                    LogWarn("VLTraderTCPClient: close_position instrument not found " + symbol);
+                    return;
+                }
+                account.Flatten(new[] { instrument });
+                LogInfo("VLTraderTCPClient: flatten " + symbol + " (" + contract + ")");
+            }
+            catch (Exception ex)
+            {
+                LogWarn("VLTraderTCPClient: close_position failed: " + ex.Message);
+            }
+        }
+
         // === Fill subscription (spec L4398-4406) ===
         private void OnOrderUpdate(object sender, OrderEventArgs e)
         {
@@ -442,41 +474,40 @@ namespace NinjaTrader.NinjaScript.AddOns
             }
             if (e.Order == null) return;
 
-            // The order NAME encodes the OCO leg: entry = signal_id,
-            // exits = signal_id-sl / signal_id-tp. (Oco is the shared GROUP id
-            // = signal_id for all three, so leg detection must use Name.)
+            // Classify by ORDER ACTION, not name: Buy/SellShort = entry,
+            // Sell/BuyToCover = exit (an SL/TP leg OR a manual flatten — a
+            // flatten order may have no -sl/-tp name, so name alone is not
+            // enough). The order Name still carries the -sl/-tp suffix when
+            // present → the exit reason; otherwise the exit is a "manual" close.
             string orderName = e.Order.Name ?? "";
-            string ocoId     = e.Order.Oco;
-            if (string.IsNullOrEmpty(orderName) && string.IsNullOrEmpty(ocoId)) return;
-
-            // Base signal_id + which exit leg (if any).
-            string signalId = !string.IsNullOrEmpty(orderName) ? orderName : ocoId;
+            string ocoId     = e.Order.Oco ?? "";
+            string signalId  = orderName.Length > 0 ? orderName : ocoId;
             string exitReason = null;
             if (signalId.EndsWith("-sl")) { exitReason = "sl"; signalId = signalId.Substring(0, signalId.Length - 3); }
             else if (signalId.EndsWith("-tp")) { exitReason = "tp"; signalId = signalId.Substring(0, signalId.Length - 3); }
 
-            // Position-history fix: an exit-leg FILL means the position closed.
-            // Emit position_close (NOT a fill frame) carrying the real exit
-            // price so the Go side marks the open position CLOSED. Emit ONLY on
-            // a full Filled — PartFilled is transient (NT sends a final Filled;
-            // emitting per-partial would duplicate the close) and a rejection is
-            // an error. Exit legs never take the fill-frame path (that's for
-            // entries). Held side is the opposite of the exit action (Sell
-            // closed a long, BuyToCover closed a short).
-            if (exitReason != null)
+            var action = e.Order.OrderAction;
+            bool isExit = (action == OrderAction.Sell || action == OrderAction.BuyToCover);
+
+            // Exit fill (SL, TP, or manual flatten) → the position closed. Emit
+            // position_close with the real exit price (reason from the leg name,
+            // else "manual"). Only on a full Filled — PartFilled is transient (NT
+            // sends a final Filled; per-partial would duplicate the close) and a
+            // rejection is an error. Held side is opposite the exit action.
+            if (isExit)
             {
                 if (e.OrderState == OrderState.Filled)
                 {
-                    string positionSide = (e.Order.OrderAction == OrderAction.BuyToCover) ? "short" : "long";
+                    string positionSide = (action == OrderAction.BuyToCover) ? "short" : "long";
                     string rootSymbol = "";
                     try { rootSymbol = e.Order.Instrument.MasterInstrument.Name; } catch { }
                     SendPositionCloseFrame(signalId, rootSymbol, positionSide,
-                                           e.AverageFillPrice, e.Filled, exitReason);
+                                           e.AverageFillPrice, e.Filled, exitReason ?? "manual");
                 }
                 return;
             }
 
-            // Entry leg → fill-frame path (filled / partial / rejected).
+            // Entry leg (Buy = long, SellShort = short) → fill-frame path.
             string status;
             switch (e.OrderState)
             {
@@ -498,10 +529,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                 lock (signalMapLock) { pendingBrackets.Remove(signalId); }
             }
 
-            string sideStr = (e.Order.OrderAction == OrderAction.Buy
-                              || e.Order.OrderAction == OrderAction.BuyToCover)
-                              ? "long"
-                              : "short";
+            string sideStr = (action == OrderAction.Buy) ? "long" : "short";
 
             double slippageTicks = 0.0;
             lock (signalMapLock)

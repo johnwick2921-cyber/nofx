@@ -111,8 +111,23 @@ type PositionClosePayload struct {
 	PositionSide string  `json:"position_side"` // "long" | "short" (held side)
 	ExitPrice    float64 `json:"exit_price"`
 	Quantity     int     `json:"quantity"`
-	ExitReason   string  `json:"exit_reason"` // "sl" | "tp"
+	ExitReason   string  `json:"exit_reason"` // "sl" | "tp" | "manual"
 	ExitTime     string  `json:"exit_time"`   // RFC3339
+}
+
+// Manual close — Go-server → C#-AddOn, additive frame. The AddOn flattens the
+// position for the symbol (account.Flatten), which closes at market AND cancels
+// the protective bracket so no orphaned SL/TP can re-open a position. The
+// flatten's market fill comes back as a position_close (reason "manual").
+const FrameClosePosition FrameType = "close_position"
+
+// ClosePositionPayload requests a flatten of the symbol's position. Quantity is
+// advisory (the AddOn flattens the whole position); Side is informational.
+type ClosePositionPayload struct {
+	Symbol   string `json:"symbol"`
+	Side     string `json:"side"` // "long" | "short" (informational)
+	Quantity int    `json:"quantity"`
+	SignalID string `json:"signal_id"`
 }
 
 // Bar is the compact 6-field OHLCV bar used in bars_historical and bar_update
