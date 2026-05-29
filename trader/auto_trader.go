@@ -507,6 +507,16 @@ func (at *AutoTrader) Run() error {
 		}
 	}
 
+	// Start NinjaTrader close-sync (TCP transport only). NT closes positions
+	// broker-side via the OCO bracket and has no order-sync, so this records
+	// SL/TP exits into position history (event-driven off position_close frames).
+	if at.exchange == "ninjatrader" {
+		if ntTCP, ok := at.trader.(*ntTrader.TCPTrader); ok && at.store != nil {
+			ntTCP.StartCloseSync(at.id, at.exchangeID, at.exchange, at.store)
+			at.logInfof("🔄 NinjaTrader close-sync enabled (SL/TP exits → position history)")
+		}
+	}
+
 	ticker := time.NewTicker(at.config.ScanInterval)
 	defer ticker.Stop()
 

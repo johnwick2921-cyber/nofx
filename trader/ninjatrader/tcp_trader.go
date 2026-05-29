@@ -40,6 +40,10 @@ type TCPTrader struct {
 	// interface, but cheap insurance.
 	pendingMu sync.Mutex
 	pending   map[string]string // signal_id -> side
+
+	// closeSyncOnce guards StartCloseSync so a re-entrant AutoTrader.Run never
+	// spawns a second consumer racing on the single ClosedPositions() channel.
+	closeSyncOnce sync.Once
 }
 
 // Compile-time interface guard (ADR-007 pattern — mirrors CSV Trader).
