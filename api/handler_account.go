@@ -61,6 +61,7 @@ func (s *Server) handleGetAccounts(c *gin.Context) {
 
 	// Retrieve account list and current account from the TCP server
 	accounts, current := tcpServer.GetAccountsList()
+	logger.Infof("api/accounts: retrieved %d accounts from TCP server, current=%q", len(accounts), current)
 
 	// Convert internal wire structs to API response structs
 	apiAccounts := make([]AccountInfo, len(accounts))
@@ -70,6 +71,7 @@ func (s *Server) handleGetAccounts(c *gin.Context) {
 			IsSim:     a.IsSim,
 			IsCurrent: a.Name == current,
 		}
+		logger.Infof("api/accounts: account[%d]=%q is_sim=%v", i, a.Name, a.IsSim)
 	}
 
 	c.JSON(http.StatusOK, GetAccountsResponse{
