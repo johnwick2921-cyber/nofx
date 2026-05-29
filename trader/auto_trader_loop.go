@@ -362,11 +362,17 @@ func (at *AutoTrader) buildTradingContext() (*kernel.Context, error) {
 	currentPositionKeys := make(map[string]bool)
 
 	for _, pos := range positions {
-		symbol := pos["symbol"].(string)
-		side := pos["side"].(string)
-		entryPrice := pos["entryPrice"].(float64)
-		markPrice := pos["markPrice"].(float64)
-		quantity := pos["positionAmt"].(float64)
+		// Comma-ok every assert: NT futures positions omit Binance-only fields
+		// (e.g. liquidationPrice — futures have no liquidation), so an unchecked
+		// .(float64) on a missing key panics and takes down the whole bot.
+		symbol, _ := pos["symbol"].(string)
+		if symbol == "" {
+			continue
+		}
+		side, _ := pos["side"].(string)
+		entryPrice, _ := pos["entryPrice"].(float64)
+		markPrice, _ := pos["markPrice"].(float64)
+		quantity, _ := pos["positionAmt"].(float64)
 		if quantity < 0 {
 			quantity = -quantity // Short position quantity is negative, convert to positive
 		}
@@ -376,8 +382,8 @@ func (at *AutoTrader) buildTradingContext() (*kernel.Context, error) {
 			continue
 		}
 
-		unrealizedPnl := pos["unRealizedProfit"].(float64)
-		liquidationPrice := pos["liquidationPrice"].(float64)
+		unrealizedPnl, _ := pos["unRealizedProfit"].(float64)
+		liquidationPrice, _ := pos["liquidationPrice"].(float64)
 
 		// Calculate margin used (estimated)
 		leverage := 10 // Default value, should actually be fetched from position info
