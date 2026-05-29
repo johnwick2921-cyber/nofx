@@ -17,7 +17,13 @@ interface ChartTabsProps {
 
 type ChartTab = 'equity' | 'kline'
 type Interval = '1m' | '5m' | '15m' | '30m' | '1h' | '4h' | '1d'
-type MarketType = 'hyperliquid' | 'crypto' | 'stocks' | 'forex' | 'metals'
+type MarketType =
+  | 'hyperliquid'
+  | 'crypto'
+  | 'stocks'
+  | 'forex'
+  | 'metals'
+  | 'ninjatrader'
 
 interface SymbolInfo {
   symbol: string
@@ -67,6 +73,14 @@ const MARKET_CONFIG = {
     color: 'amber',
     hasDropdown: false,
   },
+  ninjatrader: {
+    exchange: 'ninjatrader',
+    defaultSymbol: 'MNQ',
+    icon: '🥷',
+    labelKey: 'ninjatrader' as const,
+    color: 'red',
+    hasDropdown: false,
+  },
 }
 
 const INTERVALS: { value: Interval; label: string }[] = [
@@ -84,6 +98,7 @@ function getMarketTypeFromExchange(exchangeId: string | undefined): MarketType {
   if (!exchangeId) return 'hyperliquid'
   const lower = exchangeId.toLowerCase()
   if (lower.includes('hyperliquid')) return 'hyperliquid'
+  if (lower.includes('ninjatrader')) return 'ninjatrader'
   // Other exchanges default to crypto type
   return 'crypto'
 }
