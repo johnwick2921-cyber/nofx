@@ -54,12 +54,16 @@ export function AccountSelector({
       currentAccount,
       'accounts=',
       accounts,
+      'accounts[0].is_sim=',
+      accounts[0]?.is_sim,
       'isLoading=',
       isLoading,
       'error=',
-      error
+      error,
+      'isSelecting=',
+      isSelecting
     )
-  }, [currentAccount, accounts, isLoading, error])
+  }, [currentAccount, accounts, isLoading, error, isSelecting])
 
   // Memoize ref callback to prevent infinite setState loop
   const handleTriggerRef = useCallback((el: HTMLButtonElement | null) => {
