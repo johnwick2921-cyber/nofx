@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 
 	"nofx/logger"
+	"nofx/market"
 	"nofx/provider/databento"
 	ntwire "nofx/provider/ninjatrader"
 	"nofx/trader/types"
@@ -169,25 +170,113 @@ func (t *TCPTrader) CancelAllOrders(symbol string) error {
 }
 
 func (t *TCPTrader) GetBalance() (map[string]interface{}, error) {
-	// Mirror CSV Trader — TCP protocol doesn't expose balance either.
+	// Plan 4.11 — serve the REAL NT SIM account from the latest account_balance
+	// frame (C# AddOn → tcp_server). No more $50k mock. Until the first frame
+	// arrives (AddOn connecting), report zeros so the dashboard shows "no data"
+	// rather than a fabricated balance; the C# emits on connect + periodically.
+	if acct, ok := t.server.AccountState(); ok {
+		equity := acct.NetLiquidation
+		if equity == 0 {
+			equity = acct.CashValue + acct.UnrealizedPnL
+		}
+		avail := acct.BuyingPower
+		if avail == 0 {
+			avail = acct.CashValue
+		}
+		return map[string]interface{}{
+			"totalEquity":           equity,
+			"availableBalance":      avail,
+			"totalWalletBalance":    acct.CashValue,
+			"totalUnrealizedProfit": acct.UnrealizedPnL,
+		}, nil
+	}
 	return map[string]interface{}{
-		"totalEquity":      50000.0,
-		"availableBalance": 50000.0,
+		"totalEquity":      0.0,
+		"availableBalance": 0.0,
 	}, nil
 }
 
 func (t *TCPTrader) GetPositions() ([]map[string]interface{}, error) {
 	t.mu.Lock()
-	defer t.mu.Unlock()
 	if !t.hasFill {
+		t.mu.Unlock()
 		return []map[string]interface{}{}, nil
 	}
+	fill := t.lastFill
+	t.mu.Unlock()
+
+	side := upperSideStr(fill.Side)
+	qty := float64(fill.Quantity)
+	entry := fill.FillPrice
+
+	// Mark price from the live BarCache (latest 5m bar close); fall back to the
+	// entry fill if no bars are cached yet. This makes uPnL a real, moving
+	// number instead of the {qty:1.0} stub with no mark.
+	mark := entry
+	if bars := t.server.BarCache().Get(t.symbol, "5m"); len(bars) > 0 {
+		mark = bars[len(bars)-1].C
+	}
+
+	// Futures: contract point value (MNQ=$2/pt). uPnL = (mark-entry) × qty ×
+	// pointValue × direction. positionAmt is signed (short < 0) per the
+	// Binance convention GetAccountInfo expects.
+	pv := market.FuturesPointValue(t.symbol)
+	if pv <= 0 {
+		pv = 1
+	}
+	dir := 1.0
+	signedQty := qty
+	if side == "SHORT" {
+		dir = -1.0
+		signedQty = -qty
+	}
+	uPnL := (mark - entry) * dir * qty * pv
+	uPnLPct := 0.0
+	if entry > 0 {
+		uPnLPct = (mark - entry) / entry * 100 * dir
+	}
+
 	return []map[string]interface{}{{
-		"symbol":     t.symbol,
-		"side":       upperSideStr(t.lastFill.Side),
-		"entryPrice": t.lastFill.FillPrice,
-		"quantity":   float64(t.lastFill.Quantity),
+		// snake_case — read by the UI Position type (web/src/types/trading.ts)
+		"symbol":             t.symbol,
+		"side":               side,
+		"entry_price":        entry,
+		"mark_price":         mark,
+		"quantity":           qty,
+		"leverage":           1.0, // futures: margin is per-contract, not crypto leverage
+		"unrealized_pnl":     uPnL,
+		"unrealized_pnl_pct": uPnLPct,
+		"liquidation_price":  0.0,
+		"margin_used":        0.0,
+		// camelCase — read by AutoTrader.GetAccountInfo (Binance-style margin calc)
+		"positionAmt":      signedQty,
+		"entryPrice":       entry,
+		"markPrice":        mark,
+		"unRealizedProfit": uPnL,
 	}}, nil
+}
+
+// DebugPlaceTestTrade places a deterministic 1-contract bracket order on the
+// resolved SIM account for end-to-end proof (Plan 4.11 dashboard: signal →
+// NT8 SIM fill → position). It BYPASSES the AI + risk gate — a debug harness,
+// NOT a trading path — and is reachable only via the SIM-gated
+// /api/debug/nt-test-trade endpoint. SL/TP are priced off the latest cached
+// MNQ bar (20pt stop / 40pt target → ~2:1). side = "short" else long.
+func (t *TCPTrader) DebugPlaceTestTrade(side string) (map[string]interface{}, error) {
+	bars := t.server.BarCache().Get(t.symbol, "5m")
+	if len(bars) == 0 {
+		return nil, fmt.Errorf("ninjatrader/tcp: no %s bars cached; cannot price a test trade (recompile/connect NT8 first)", t.symbol)
+	}
+	price := bars[len(bars)-1].C
+	tick := InstrumentTickSize(t.symbol)
+	if side == "short" {
+		_ = t.SetStopLoss(t.symbol, "short", 1, RoundToTick(price+20, tick))
+		_ = t.SetTakeProfit(t.symbol, "short", 1, RoundToTick(price-40, tick))
+		return t.OpenShort(t.symbol, 1, 1)
+	}
+	_ = t.SetStopLoss(t.symbol, "long", 1, RoundToTick(price-20, tick))
+	_ = t.SetTakeProfit(t.symbol, "long", 1, RoundToTick(price+40, tick))
+	return t.OpenLong(t.symbol, 1, 1)
 }
 
 func (t *TCPTrader) FormatQuantity(symbol string, quantity float64) (string, error) {

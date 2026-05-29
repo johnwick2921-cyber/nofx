@@ -77,6 +77,13 @@ type TCPServer struct {
 	barsSubscribe BarsSubscribePayload // sent on each (re)connect after flushPending
 	barsSubMu     sync.RWMutex         // protects barsSubscribe
 
+	// Plan 4.11 — latest real account snapshot from the C# AddOn
+	// (account_balance frame). Replaces the $50k mock in
+	// TCPTrader.GetBalance once the first frame arrives.
+	acctMu      sync.RWMutex
+	acctBalance AccountBalancePayload
+	acctValid   bool
+
 	// Connection state — single concurrent client (spec L4359).
 	connMu        sync.Mutex
 	conn          net.Conn
@@ -156,6 +163,16 @@ func NewTCPServer(logger *slog.Logger) *TCPServer {
 // relay (Stage 4). The cache is goroutine-safe; readers receive snapshot
 // copies via Get and never block writers for long.
 func (s *TCPServer) BarCache() *BarCache { return s.barCache }
+
+// AccountState returns the latest account_balance snapshot received from the
+// C# AddOn (Plan 4.11) and whether one has arrived yet. TCPTrader.GetBalance
+// uses it to serve the real SIM account instead of the $50k mock; ok=false
+// means no frame yet (caller falls back to a documented placeholder).
+func (s *TCPServer) AccountState() (AccountBalancePayload, bool) {
+	s.acctMu.RLock()
+	defer s.acctMu.RUnlock()
+	return s.acctBalance, s.acctValid
+}
 
 // SetBarsSubscribe overrides the auto-subscribe parameters sent on each
 // (re)connect. Stage 3 will call this with the active strategy's
@@ -515,6 +532,19 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 				continue
 			}
 			s.enqueueBarUpdate(p.Symbol, p.Timeframe, p.Bars)
+
+		case FrameAccountBalance:
+			// Plan 4.11 — real NT account snapshot. Store the latest;
+			// TCPTrader.GetBalance serves it instead of the $50k mock.
+			var p AccountBalancePayload
+			if err := json.Unmarshal(env.Payload, &p); err != nil {
+				s.logger.Warn("tcp_server: bad account_balance payload", "err", err)
+				continue
+			}
+			s.acctMu.Lock()
+			s.acctBalance = p
+			s.acctValid = true
+			s.acctMu.Unlock()
 
 		default:
 			s.logger.Warn("tcp_server: unknown frame type", "type", env.Type)

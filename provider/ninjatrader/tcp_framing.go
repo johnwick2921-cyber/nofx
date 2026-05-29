@@ -72,6 +72,27 @@ const (
 	FrameBarsUnsubscribe FrameType = "bars_unsubscribe"
 )
 
+// Plan 4.11 — real NT account balance. C#-AddOn → Go-server, additive frame
+// (same envelope: 4-byte BE length + JSON {type, payload}). The C# AddOn emits
+// it from the resolved Sim account on AccountItemUpdate + periodically, so the
+// dashboard shows the real SIM balance instead of the $50k mock. Existing
+// frames are unchanged.
+const FrameAccountBalance FrameType = "account_balance"
+
+// AccountBalancePayload carries an NT account snapshot. Fields map to
+// NinjaTrader AccountItem values (CashValue, BuyingPower, RealizedProfitLoss,
+// UnrealizedProfitLoss). NetLiquidation is the dashboard's "total equity"
+// (cash + unrealized PnL); the C# side sends it directly if NT exposes it,
+// else the Go side derives it as CashValue + UnrealizedPnL.
+type AccountBalancePayload struct {
+	Account        string  `json:"account"`         // e.g. "Sim101"
+	CashValue      float64 `json:"cash_value"`
+	BuyingPower    float64 `json:"buying_power"`
+	RealizedPnL    float64 `json:"realized_pnl"`
+	UnrealizedPnL  float64 `json:"unrealized_pnl"`
+	NetLiquidation float64 `json:"net_liquidation"` // total equity
+}
+
 // Bar is the compact 6-field OHLCV bar used in bars_historical and bar_update
 // frames (protocol §6-7). Volume is a float because NT8 tick-volume
 // instruments report fractional values.

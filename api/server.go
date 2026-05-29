@@ -341,6 +341,9 @@ Returns: [{"symbol":"<string>","side":"long|short","size":<float>,"entry_price":
 			s.routeWithSchema(protected, "GET", "/positions/history", "Closed position history",
 				`Query: ?trader_id=<EXACT trader_id from GET /api/my-traders>&limit=<int, default 20>`,
 				s.handlePositionHistory)
+			s.routeWithSchema(protected, "POST", "/debug/nt-test-trade", "DEBUG: deterministic 1-contract SIM test trade (futures/NT only)",
+				`Query: ?trader_id=<id>&side=long|short — places one MNQ bracket on the NT SIM account for end-to-end proof (signal→fill→position). SIM/futures only; bypasses AI + risk gate.`,
+				s.handleNTTestTrade)
 			s.routeWithSchema(protected, "GET", "/trades", "Trade records",
 				`Query: ?trader_id=<EXACT trader_id from GET /api/my-traders>&limit=<int, default 20>`,
 				s.handleTrades)
