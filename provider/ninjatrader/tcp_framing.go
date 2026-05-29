@@ -79,6 +79,14 @@ const (
 // frames are unchanged.
 const FrameAccountBalance FrameType = "account_balance"
 
+// accounts_list frame: C#-AddOn → Go-server, unsolicited event emitted on connect
+// and when NT8 accounts change. Reports all available accounts with SIM detection flag.
+const FrameAccountsList FrameType = "accounts_list"
+
+// AccountSelectPayload requests the C# AddOn to switch to a different account.
+// Go-server → C#-AddOn command.
+const FrameAccountSelect FrameType = "account_select"
+
 // AccountBalancePayload carries an NT account snapshot. Fields map to
 // NinjaTrader AccountItem values (CashValue, BuyingPower, RealizedProfitLoss,
 // UnrealizedProfitLoss). NetLiquidation is the dashboard's "total equity"
@@ -174,6 +182,26 @@ type BarUpdatePayload struct {
 type BarsUnsubscribePayload struct {
 	Symbol     string   `json:"symbol"`
 	Timeframes []string `json:"timeframes,omitempty"` // empty/nil = all for this symbol
+}
+
+// AccountInfo carries a single NT account's name + SIM flag.
+type AccountInfo struct {
+	Name  string `json:"name"`    // e.g. "Sim101" or "PropAcct"
+	IsSim bool   `json:"is_sim"`  // true if this is a simulation account
+}
+
+// AccountsListPayload reports all available NT accounts discovered by the C# AddOn.
+// Emitted unsolicited on connect and on account list change, so the Go server can
+// populate the UI's account selector and validate account_select commands.
+type AccountsListPayload struct {
+	Accounts []AccountInfo `json:"accounts"`
+}
+
+// AccountSelectPayload requests the C# AddOn to switch to a different account.
+// The AddOn unsubscribes from the old account's events, resolves the new account
+// by name, subscribes to its events, and re-emits account_balance immediately.
+type AccountSelectPayload struct {
+	Account string `json:"account"` // e.g. "Sim101"
 }
 
 // ErrFrameTooLarge signals the peer sent a length header > TCPMaxFrameBytes.

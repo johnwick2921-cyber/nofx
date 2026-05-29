@@ -2,6 +2,7 @@ import type {
   TraderInfo,
   TraderConfigData,
   CreateTraderRequest,
+  AccountsResponse,
 } from '../../types'
 import { API_BASE, httpClient } from './helpers'
 import { ApiError } from '../httpClient'
@@ -71,15 +72,23 @@ export const traderApi = {
     if (!result.success) throw new Error('Failed to stop trader')
   },
 
-  async toggleCompetition(traderId: string, showInCompetition: boolean): Promise<void> {
+  async toggleCompetition(
+    traderId: string,
+    showInCompetition: boolean
+  ): Promise<void> {
     const result = await httpClient.put(
       `${API_BASE}/traders/${traderId}/competition`,
       { show_in_competition: showInCompetition }
     )
-    if (!result.success) throw new Error('Failed to update competition visibility')
+    if (!result.success)
+      throw new Error('Failed to update competition visibility')
   },
 
-  async closePosition(traderId: string, symbol: string, side: string): Promise<{ message: string }> {
+  async closePosition(
+    traderId: string,
+    symbol: string,
+    side: string
+  ): Promise<{ message: string }> {
     const result = await httpClient.post<{ message: string }>(
       `${API_BASE}/traders/${traderId}/close-position`,
       { symbol, side }
@@ -118,6 +127,33 @@ export const traderApi = {
     if (!result.success) {
       throwApiError(
         result.message || 'Failed to update trader',
+        result.errorKey,
+        result.errorParams,
+        result.statusCode
+      )
+    }
+    return result.data!
+  },
+
+  async getAccounts(traderId: string): Promise<AccountsResponse> {
+    const result = await httpClient.get<AccountsResponse>(
+      `${API_BASE}/accounts?trader_id=${traderId}`
+    )
+    if (!result.success) throw new Error('Failed to fetch accounts')
+    return result.data!
+  },
+
+  async selectAccount(
+    traderId: string,
+    accountName: string
+  ): Promise<{ message: string }> {
+    const result = await httpClient.post<{ message: string }>(
+      `${API_BASE}/account/select?trader_id=${traderId}`,
+      { account: accountName }
+    )
+    if (!result.success) {
+      throwApiError(
+        result.message || 'Failed to select account',
         result.errorKey,
         result.errorParams,
         result.statusCode

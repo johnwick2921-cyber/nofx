@@ -85,6 +85,13 @@ type TCPServer struct {
 	acctBalance AccountBalancePayload
 	acctValid   bool
 
+	// Plan 4 Stage 4 — available accounts discovered by the C# AddOn
+	// (accounts_list frame). Emitted on connect and on account change.
+	// Thread-safe, read by the /api/accounts handler, written by readLoop.
+	accountsListMu sync.RWMutex
+	accountsList   []AccountInfo // immutable copy, slice
+	currentAccount string        // currently selected account name
+
 	// Connection state — single concurrent client (spec L4359).
 	connMu        sync.Mutex
 	conn          net.Conn
@@ -176,6 +183,57 @@ func (s *TCPServer) AccountState() (AccountBalancePayload, bool) {
 	return s.acctBalance, s.acctValid
 }
 
+// GetAccountsList returns the list of available NT accounts discovered by the
+// C# AddOn (Plan 4 Stage 4). Returns a copy of the account list and the current
+// account name. If no accounts_list frame has been received yet, returns nil + "".
+func (s *TCPServer) GetAccountsList() ([]AccountInfo, string) {
+	s.accountsListMu.RLock()
+	defer s.accountsListMu.RUnlock()
+	// Defensive copy so caller can't modify our internal list
+	var accounts []AccountInfo
+	if len(s.accountsList) > 0 {
+		accounts = make([]AccountInfo, len(s.accountsList))
+		copy(accounts, s.accountsList)
+	}
+	return accounts, s.currentAccount
+}
+
+// AccountsList returns the latest accounts_list payload received from the C# AddOn
+// and a boolean indicating if one has arrived yet. This is the test-facing version.
+// Production code calls GetAccountsList(). ok=false means no frame yet.
+func (s *TCPServer) AccountsList() (AccountsListPayload, bool) {
+	s.accountsListMu.RLock()
+	defer s.accountsListMu.RUnlock()
+	if len(s.accountsList) == 0 {
+		return AccountsListPayload{}, false
+	}
+	return AccountsListPayload{Accounts: s.accountsList}, true
+}
+
+// CurrentAccount returns the currently selected account name (nil/empty if none selected).
+// Test-facing accessor. Returns a copy of the account name, not a pointer to internal state.
+func (s *TCPServer) CurrentAccount() *string {
+	s.accountsListMu.RLock()
+	defer s.accountsListMu.RUnlock()
+	if s.currentAccount == "" {
+		return nil
+	}
+	// Return a pointer to a copy, not to internal state
+	acct := s.currentAccount
+	return &acct
+}
+
+// SetAccountsList updates the account list (called by readLoop on accounts_list frame)
+// and optionally sets the current account.
+func (s *TCPServer) SetAccountsList(accounts []AccountInfo, current string) {
+	s.accountsListMu.Lock()
+	defer s.accountsListMu.Unlock()
+	// Defensive copy of the slice
+	s.accountsList = make([]AccountInfo, len(accounts))
+	copy(s.accountsList, accounts)
+	s.currentAccount = current
+}
+
 // SetBarsSubscribe overrides the auto-subscribe parameters sent on each
 // (re)connect. Stage 3 will call this with the active strategy's
 // SelectedTimeframes; until then the server uses Balanced Strategy
@@ -255,6 +313,26 @@ func (s *TCPServer) SendClosePosition(payload ClosePositionPayload) error {
 	_ = c.SetWriteDeadline(time.Now().Add(5 * time.Second))
 	err := WriteFrame(c, FrameClosePosition, payload)
 	s.writeMu.Unlock()
+	return err
+}
+
+// SendAccountSelect tells the connected AddOn to switch to a different account.
+// Like SendClosePosition, this is an immediate command (not queued); if no
+// client is connected it errors so the caller can report it.
+func (s *TCPServer) SendAccountSelect(payload AccountSelectPayload) error {
+	s.connMu.Lock()
+	c := s.conn
+	s.connMu.Unlock()
+	if c == nil {
+		return fmt.Errorf("ninjatrader/tcp: no NT client connected")
+	}
+	s.writeMu.Lock()
+	_ = c.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	err := WriteFrame(c, FrameAccountSelect, payload)
+	s.writeMu.Unlock()
+	if err == nil {
+		s.logger.Info("tcp_server: account select sent", "account", payload.Account)
+	}
 	return err
 }
 
@@ -568,6 +646,49 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			s.acctBalance = p
 			s.acctValid = true
 			s.acctMu.Unlock()
+			// Update current account if it changed
+			s.accountsListMu.Lock()
+			s.currentAccount = p.Account
+			s.accountsListMu.Unlock()
+
+		case FrameAccountsList:
+			// Plan 4 Stage 4 — discover available accounts from the C# AddOn.
+			// The AddOn emits this unsolicited on connect and on account list change.
+			// Stores the list for dashboard UI and server-side account validation.
+			var p AccountsListPayload
+			if err := json.Unmarshal(env.Payload, &p); err != nil {
+				s.logger.Warn("tcp_server: bad accounts_list payload", "err", err)
+				continue
+			}
+			if len(p.Accounts) > 0 {
+				// Extract the current account from the first account_balance frame
+				// (the AddOn emits accounts_list then account_balance immediately after).
+				// For now, store the list; the current account is synced via account_balance.
+				s.accountsListMu.Lock()
+				s.accountsList = make([]AccountInfo, len(p.Accounts))
+				copy(s.accountsList, p.Accounts)
+				s.accountsListMu.Unlock()
+				s.logger.Info("tcp_server: updated accounts list",
+					"count", len(p.Accounts),
+					"accounts", func() []string {
+						var names []string
+						for _, a := range p.Accounts {
+							names = append(names, a.Name)
+						}
+						return names
+					}())
+			}
+
+		case FrameAccountSelect:
+			// Plan 4 Stage 4 — account selection received from the client
+			// (via the API handler). Validate that the account is in the list
+			// and is a SIM account. Reject live accounts.
+			var p AccountSelectPayload
+			if err := json.Unmarshal(env.Payload, &p); err != nil {
+				s.logger.Warn("tcp_server: bad account_select payload", "err", err)
+				continue
+			}
+			s.handleAccountSelect(p)
 
 		case FramePositionClose:
 			// Position-history fix — an OCO exit leg filled and the position
@@ -621,6 +742,39 @@ func (s *TCPServer) heartbeatLoop(ctx context.Context, c net.Conn) {
 			}
 		}
 	}
+}
+
+// handleAccountSelect validates an account_select request from the AddOn.
+// Only SIM accounts are permitted. Rejects live accounts and logs the result.
+// Updates CurrentAccount if the select succeeds.
+func (s *TCPServer) handleAccountSelect(p AccountSelectPayload) {
+	s.accountsListMu.RLock()
+	var isSim bool
+	found := false
+	for _, a := range s.accountsList {
+		if a.Name == p.Account {
+			isSim = a.IsSim
+			found = true
+			break
+		}
+	}
+	s.accountsListMu.RUnlock()
+
+	if !found {
+		s.logger.Warn("tcp_server: account_select for unknown account", "account", p.Account)
+		return
+	}
+
+	if !isSim {
+		s.logger.Warn("tcp_server: rejected account_select for live account", "account", p.Account)
+		return
+	}
+
+	// Update current account
+	s.accountsListMu.Lock()
+	s.currentAccount = p.Account
+	s.accountsListMu.Unlock()
+	s.logger.Info("tcp_server: account selected", "account", p.Account)
 }
 
 // flushPending writes any non-stale queued signals to the connected client.

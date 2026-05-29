@@ -12,6 +12,7 @@ package ninjatrader
 
 import (
 	"fmt"
+	"reflect"
 	"sync"
 	"time"
 
@@ -22,7 +23,7 @@ import (
 	"nofx/provider/databento"
 	ntwire "nofx/provider/ninjatrader"
 	"nofx/trader/types"
-)
+) // reflect used in GetBalance to notify parent AutoTrader
 
 // TCPTrader satisfies trader/types.Trader using the TCP bridge.
 type TCPTrader struct {
@@ -44,6 +45,11 @@ type TCPTrader struct {
 	// closeSyncOnce guards StartCloseSync so a re-entrant AutoTrader.Run never
 	// spawns a second consumer racing on the single ClosedPositions() channel.
 	closeSyncOnce sync.Once
+
+	// Plan 4 Stage 4 — reference to the parent AutoTrader (optional).
+	// Used to notify the AutoTrader when the first account_balance frame arrives.
+	// Set by transport.go after creating the trader.
+	parentAutoTrader interface{} // *AutoTrader (avoid circular import)
 }
 
 // Compile-time interface guard (ADR-007 pattern — mirrors CSV Trader).
@@ -194,6 +200,15 @@ func (t *TCPTrader) GetBalance() (map[string]interface{}, error) {
 	// arrives (AddOn connecting), report zeros so the dashboard shows "no data"
 	// rather than a fabricated balance; the C# emits on connect + periodically.
 	if acct, ok := t.server.AccountState(); ok {
+		// Plan 4 Stage 4 — notify parent AutoTrader that balance has arrived
+		// (used by defer-until-balance guard in runCycle).
+		// Use reflection to avoid circular import (trader/ninjatrader → trader).
+		if t.parentAutoTrader != nil {
+			if method := reflect.ValueOf(t.parentAutoTrader).MethodByName("SetHasReceivedBalance"); method.IsValid() {
+				method.Call([]reflect.Value{reflect.ValueOf(true)})
+			}
+		}
+
 		equity := acct.NetLiquidation
 		if equity == 0 {
 			equity = acct.CashValue + acct.UnrealizedPnL
@@ -302,6 +317,17 @@ func (t *TCPTrader) DebugPlaceTestTrade(side string) (map[string]interface{}, er
 // Read-only access; the relay polls Get(symbol, timeframe) for snapshots +
 // incremental updates.
 func (t *TCPTrader) BarCache() *ntwire.BarCache { return t.server.BarCache() }
+
+// GetServer exposes the underlying TCP server for API handlers (e.g., account selection).
+// Used by the /api/accounts and /api/account/select handlers to interact with the NT AddOn.
+func (t *TCPTrader) GetServer() *ntwire.TCPServer { return t.server }
+
+// SetParentAutoTrader sets the parent AutoTrader reference (Plan 4 Stage 4).
+// Called by transport.go after creating the TCPTrader. Used to notify when
+// the first account_balance frame arrives (defer-until-balance guard).
+func (t *TCPTrader) SetParentAutoTrader(parent interface{}) {
+	t.parentAutoTrader = parent
+}
 
 func (t *TCPTrader) FormatQuantity(symbol string, quantity float64) (string, error) {
 	return fmt.Sprintf("%.0f", quantity), nil

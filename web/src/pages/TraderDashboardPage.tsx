@@ -6,6 +6,7 @@ import { DecisionCard } from '../components/trader/DecisionCard'
 import { DecisionAudit } from '../components/trader/DecisionAudit'
 import { EmergencyFlatButton } from '../components/trader/EmergencyFlatButton'
 import { PositionHistory } from '../components/trader/PositionHistory'
+import { AccountSelector } from '../components/trader/AccountSelector'
 import { PunkAvatar, getTraderAvatar } from '../components/common/PunkAvatar'
 import { confirmToast, notify } from '../lib/notify'
 import { formatPrice, formatQuantity } from '../utils/format'
@@ -416,6 +417,17 @@ export function TraderDashboardPage({
                     className="bg-transparent text-sm font-medium cursor-pointer transition-colors text-nofx-text-main px-2 py-1"
                   />
                 </div>
+              )}
+
+              {/* Account Selector */}
+              {selectedTraderId && (
+                <AccountSelector
+                  traderId={selectedTraderId}
+                  onAccountChanged={() => {
+                    // Refetch account info when account changes
+                    mutate(`account-${selectedTraderId}`)
+                  }}
+                />
               )}
 
               {/* Wallet Address Display for Perp-DEX */}

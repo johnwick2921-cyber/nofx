@@ -67,6 +67,15 @@ func (at *AutoTrader) runCycle() error {
 		return fmt.Errorf("failed to build trading context: %w", err)
 	}
 
+	// Plan 4 Stage 4 — defer-until-balance guard (NinjaTrader TCP only)
+	// If equity is 0 and no account_balance frame has arrived yet, skip the cycle silently.
+	// This prevents phantom HOLD decisions while waiting for the AddOn to connect.
+	// Once the first account_balance arrives, equity > 0, and the gate opens normally.
+	if ctx.Account.TotalEquity == 0 && !at.HasReceivedBalance() {
+		// Silent return: no decision record, no log entry (to avoid noise during startup)
+		return nil
+	}
+
 	// Save equity snapshot independently (decoupled from AI decision, used for drawing profit curve)
 	// NOTE: Must be called BEFORE candidate coins check to ensure equity is always recorded
 	at.saveEquitySnapshot(ctx)
