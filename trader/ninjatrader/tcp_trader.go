@@ -256,6 +256,29 @@ func (t *TCPTrader) GetPositions() ([]map[string]interface{}, error) {
 	}}, nil
 }
 
+// DebugPlaceTestTrade places a deterministic 1-contract bracket order on the
+// resolved SIM account for end-to-end proof (Plan 4.11 dashboard: signal →
+// NT8 SIM fill → position). It BYPASSES the AI + risk gate — a debug harness,
+// NOT a trading path — and is reachable only via the SIM-gated
+// /api/debug/nt-test-trade endpoint. SL/TP are priced off the latest cached
+// MNQ bar (20pt stop / 40pt target → ~2:1). side = "short" else long.
+func (t *TCPTrader) DebugPlaceTestTrade(side string) (map[string]interface{}, error) {
+	bars := t.server.BarCache().Get(t.symbol, "5m")
+	if len(bars) == 0 {
+		return nil, fmt.Errorf("ninjatrader/tcp: no %s bars cached; cannot price a test trade (recompile/connect NT8 first)", t.symbol)
+	}
+	price := bars[len(bars)-1].C
+	tick := InstrumentTickSize(t.symbol)
+	if side == "short" {
+		_ = t.SetStopLoss(t.symbol, "short", 1, RoundToTick(price+20, tick))
+		_ = t.SetTakeProfit(t.symbol, "short", 1, RoundToTick(price-40, tick))
+		return t.OpenShort(t.symbol, 1, 1)
+	}
+	_ = t.SetStopLoss(t.symbol, "long", 1, RoundToTick(price-20, tick))
+	_ = t.SetTakeProfit(t.symbol, "long", 1, RoundToTick(price+40, tick))
+	return t.OpenLong(t.symbol, 1, 1)
+}
+
 func (t *TCPTrader) FormatQuantity(symbol string, quantity float64) (string, error) {
 	return fmt.Sprintf("%.0f", quantity), nil
 }
