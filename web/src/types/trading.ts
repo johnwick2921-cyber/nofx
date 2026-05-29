@@ -36,7 +36,7 @@ export interface Account {
 }
 
 export interface AccountsResponse {
-  current_account: string
+  current: string
   accounts: Account[]
 }
 
