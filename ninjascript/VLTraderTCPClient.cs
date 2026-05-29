@@ -737,51 +737,41 @@ namespace NinjaTrader.NinjaScript.AddOns
                 a.Name.StartsWith("TDFYG") || a.Name.StartsWith("MFFU"))
                 return false;
 
-            // Narrow to accounts on an ACTIVE connection. Exclude latent LFE slots.
-            // The heuristic: include only accounts that belong to the current primary
-            // connection (the one we're trading on). In NT8, all connected accounts
-            // should have consistent Connection.ConnectionStatus or Provider states.
-            try
+            // Include only real trading accounts (SIM and live funded accounts).
+            // Exclude the massive number of latent LFE slots that NT8 creates for
+            // each possible margin level but never uses. Real accounts are:
+            // - Sim* (simulation)
+            // - LFE* followed by exactly 15 digits (live funded, e.g. LFE05060792090061)
+            // - Playback* (backtest/replay accounts)
+            // - Backtest (generic backtest)
+            if (a.Name.StartsWith("Sim") || a.Name.StartsWith("Playback") ||
+                a.Name == "Backtest")
+                return true;
+
+            // For LFE accounts: only include if it's a real account number (15 digits).
+            // Exclude latent LFE slots that don't match the pattern.
+            if (a.Name.StartsWith("LFE"))
             {
-                // Check Account.Provider.Connection.ConnectionStatus
-                var provProp = a.GetType().GetProperty("Provider");
-                if (provProp != null)
+                string suffix = a.Name.Substring(3);
+                // Real LFE accounts have exactly 15-17 digit account numbers
+                if (suffix.Length >= 15 && suffix.Length <= 17)
                 {
-                    var provider = provProp.GetValue(a, null);
-                    if (provider != null)
+                    // Check if it's all digits (real account number)
+                    bool isNumeric = true;
+                    foreach (char c in suffix)
                     {
-                        var connProp = provider.GetType().GetProperty("Connection");
-                        if (connProp != null)
+                        if (!char.IsDigit(c))
                         {
-                            var conn = connProp.GetValue(provider, null);
-                            if (conn != null)
-                            {
-                                var statusProp = conn.GetType().GetProperty("ConnectionStatus");
-                                if (statusProp != null)
-                                {
-                                    var statusValue = statusProp.GetValue(conn, null);
-                                    if (statusValue != null)
-                                    {
-                                        bool isConnected = statusValue.ToString() == "Connected" ||
-                                                         (int)statusValue == 1; // Enum value for Connected
-                                        return isConnected;
-                                    }
-                                }
-                            }
+                            isNumeric = false;
+                            break;
                         }
                     }
+                    if (isNumeric) return true;
                 }
+                return false;
+            }
 
-                // Fallback: if we can't determine connection, be conservative and EXCLUDE
-                // (better to send too few accounts than too many latent slots)
-                return false;
-            }
-            catch (Exception ex)
-            {
-                LogWarn(string.Format("@@@ IsRealAccount reflection failed for {0}: {1}", a.Name, ex.Message));
-                // On error, exclude the account (fail-closed)
-                return false;
-            }
+            return false;
         }
 
         private void SendAccountsList()
