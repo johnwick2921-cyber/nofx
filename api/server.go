@@ -116,6 +116,10 @@ func (s *Server) setupRoutes() {
 		s.route(api, "GET", "/klines", "Candlestick data (?symbol=&interval=&limit=)", s.handleKlines)
 		s.route(api, "GET", "/symbols", "Available trading symbols", s.handleSymbols)
 
+		// Live NT8 bar stream over SSE (Plan 4.4 Stage 4). Self-authed via
+		// ?token= because EventSource cannot set an Authorization header.
+		s.route(api, "GET", "/v1/bars/stream", "SSE live NT8 bars (?trader_id=&symbol=&tf=&token=)", s.handleBarsStream)
+
 		// Public strategy market (no authentication required)
 		s.route(api, "GET", "/strategies/public", "Public strategy market", s.handlePublicStrategies)
 		s.route(api, "POST", "/strategies/estimate-tokens", "Estimate token usage for a strategy config", s.handleEstimateTokens)
