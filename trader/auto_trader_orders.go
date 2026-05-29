@@ -148,6 +148,16 @@ func (at *AutoTrader) executeOpenLongWithRecord(decision *kernel.Decision, actio
 		// Continue execution, doesn't affect trading
 	}
 
+	// CME futures (NT8) require SL/TP set BEFORE the entry — the AddOn places
+	// the market entry + protective OCO bracket atomically from the signal,
+	// which carries SL/TP. (Crypto sets them after the fill, below.) Without
+	// this, placeEntry errors "SetStopLoss and SetTakeProfit must be called
+	// before long".
+	if market.IsCMEFuturesSymbol(decision.Symbol) {
+		_ = at.trader.SetStopLoss(decision.Symbol, "LONG", quantity, decision.StopLoss)
+		_ = at.trader.SetTakeProfit(decision.Symbol, "LONG", quantity, decision.TakeProfit)
+	}
+
 	// Open position
 	order, err := at.trader.OpenLong(decision.Symbol, quantity, decision.Leverage)
 	if err != nil {
@@ -272,6 +282,16 @@ func (at *AutoTrader) executeOpenShortWithRecord(decision *kernel.Decision, acti
 	if err := at.trader.SetMarginMode(decision.Symbol, at.config.IsCrossMargin); err != nil {
 		logger.Infof("  ⚠️ Failed to set margin mode: %v", err)
 		// Continue execution, doesn't affect trading
+	}
+
+	// CME futures (NT8) require SL/TP set BEFORE the entry — the AddOn places
+	// the market entry + protective OCO bracket atomically from the signal,
+	// which carries SL/TP. (Crypto sets them after the fill, below.) Without
+	// this, placeEntry errors "SetStopLoss and SetTakeProfit must be called
+	// before short".
+	if market.IsCMEFuturesSymbol(decision.Symbol) {
+		_ = at.trader.SetStopLoss(decision.Symbol, "SHORT", quantity, decision.StopLoss)
+		_ = at.trader.SetTakeProfit(decision.Symbol, "SHORT", quantity, decision.TakeProfit)
 	}
 
 	// Open position
