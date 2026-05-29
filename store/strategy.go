@@ -1035,7 +1035,30 @@ Only enter positions when multiple signals resonate. Freely use any effective an
 		}
 	}
 
+	// CME futures (NT8) have no nofxos/claw402 crypto enrichment: the
+	// market-wide quant / OI-ranking / NetFlow-ranking / Price-ranking sources
+	// only return data for crypto and just burn cycles on the dead claw402 path
+	// (HTTP 402/404) for an index-futures instrument. Disable them so futures
+	// strategies don't pay that ~4-min-per-cycle tax (plan §5310: "NQ
+	// strategies just leave them disabled").
+	if isFuturesMode() {
+		config.Indicators.EnableQuantData = false
+		config.Indicators.EnableQuantOI = false
+		config.Indicators.EnableQuantNetflow = false
+		config.Indicators.EnableOIRanking = false
+		config.Indicators.EnableNetFlowRanking = false
+		config.Indicators.EnablePriceRanking = false
+	}
+
 	return config
+}
+
+// isFuturesMode reports whether the bot is running in CME-futures mode. Lives
+// in its own function because GetDefaultStrategyConfig shadows the `config`
+// package name with a local StrategyConfig variable.
+func isFuturesMode() bool {
+	c := config.Get()
+	return c != nil && c.TradingMode == "futures"
 }
 
 // Create create a strategy
