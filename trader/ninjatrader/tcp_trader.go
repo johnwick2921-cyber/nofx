@@ -279,6 +279,11 @@ func (t *TCPTrader) DebugPlaceTestTrade(side string) (map[string]interface{}, er
 	return t.OpenLong(t.symbol, 1, 1)
 }
 
+// BarCache exposes the live NT8 bar cache for the Stage 4 SSE chart relay.
+// Read-only access; the relay polls Get(symbol, timeframe) for snapshots +
+// incremental updates.
+func (t *TCPTrader) BarCache() *ntwire.BarCache { return t.server.BarCache() }
+
 func (t *TCPTrader) FormatQuantity(symbol string, quantity float64) (string, error) {
 	return fmt.Sprintf("%.0f", quantity), nil
 }
