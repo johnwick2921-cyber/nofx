@@ -241,6 +241,23 @@ func (s *TCPServer) SendSignal(payload SignalPayload) error {
 	return s.flushPending()
 }
 
+// SendClosePosition tells the connected AddOn to flatten the symbol's position.
+// Unlike SendSignal it is NOT queued — a close is an immediate command; if no
+// client is connected it errors so the caller can report it.
+func (s *TCPServer) SendClosePosition(payload ClosePositionPayload) error {
+	s.connMu.Lock()
+	c := s.conn
+	s.connMu.Unlock()
+	if c == nil {
+		return fmt.Errorf("ninjatrader/tcp: no NT client connected")
+	}
+	s.writeMu.Lock()
+	_ = c.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	err := WriteFrame(c, FrameClosePosition, payload)
+	s.writeMu.Unlock()
+	return err
+}
+
 // Fills returns the inbound fill channel. TCPTrader subscribes here.
 func (s *TCPServer) Fills() <-chan FillPayload { return s.fillCh }
 

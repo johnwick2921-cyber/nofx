@@ -135,16 +135,31 @@ func (t *TCPTrader) placeEntry(symbol, side string, quantity float64) (map[strin
 }
 
 func (t *TCPTrader) CloseLong(symbol string, quantity float64) (map[string]interface{}, error) {
-	// Plan 1.5 wire protocol does not (yet) define a "close" frame; per spec
-	// L4398-4406 only signal/fill/heartbeat/ack are wire types. Match CSV
-	// Trader semantics: positions close via SL/TP only. A future spec rev
-	// can add a close-side signal frame; until then this returns the same
-	// error the CSV Trader returns to keep behaviour consistent.
-	return nil, fmt.Errorf("ninjatrader/tcp: manual CloseLong not supported — position closes via SL/TP set at entry")
+	return t.sendClose("long", quantity)
 }
 
 func (t *TCPTrader) CloseShort(symbol string, quantity float64) (map[string]interface{}, error) {
-	return nil, fmt.Errorf("ninjatrader/tcp: manual CloseShort not supported — position closes via SL/TP set at entry")
+	return t.sendClose("short", quantity)
+}
+
+// sendClose asks the AddOn to flatten the symbol's position (close at market +
+// cancel the protective bracket). The resulting market-exit fill returns as a
+// position_close frame, which the close-sync records to history.
+func (t *TCPTrader) sendClose(side string, quantity float64) (map[string]interface{}, error) {
+	payload := ntwire.ClosePositionPayload{
+		Symbol:   t.symbol,
+		Side:     side,
+		Quantity: int(quantity),
+		SignalID: uuid.NewString(),
+	}
+	if err := t.server.SendClosePosition(payload); err != nil {
+		return nil, fmt.Errorf("ninjatrader/tcp: send close: %w", err)
+	}
+	return map[string]interface{}{
+		"status": "close_submitted",
+		"symbol": t.symbol,
+		"side":   side,
+	}, nil
 }
 
 func (t *TCPTrader) SetLeverage(symbol string, leverage int) error {

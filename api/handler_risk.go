@@ -98,8 +98,34 @@ func (s *Server) handleForceFlat(c *gin.Context) {
 
 	logger.Warnf("🔴 FORCE FLAT initiated by user (trader=%s)", traderID)
 
-	// Only ninjatrader bridge has a writer we can adapt today.
 	underlying := at.GetUnderlyingTrader()
+
+	// TCP bridge: real flatten via the AddOn (closes at market + cancels the
+	// protective bracket). CloseLong flattens regardless of the held side.
+	if ntTCP, ok := underlying.(*ntTrader.TCPTrader); ok {
+		if _, err := ntTCP.CloseLong("", 0); err != nil {
+			c.JSON(http.StatusOK, forceFlatResponse{
+				Triggered:    false,
+				TraderID:     traderID,
+				TimestampUTC: time.Now().UTC().Format(time.RFC3339),
+				Reason:       "flatten command failed: " + err.Error(),
+				LogMessage:   "force-flat: NT TCP flatten send failed",
+			})
+			return
+		}
+		// Also trip the kill-switch reset side-effect, as the CSV path does.
+		_ = kernel.MaybeForceFlat(traderID, &forceFlatSignalAdapter{writer: nil})
+		c.JSON(http.StatusOK, forceFlatResponse{
+			Triggered:          true,
+			TraderID:           traderID,
+			PositionsFlattened: 1,
+			TimestampUTC:       time.Now().UTC().Format(time.RFC3339),
+			LogMessage:         "force-flat: flatten sent to NinjaTrader (TCP bridge)",
+		})
+		return
+	}
+
+	// Only the ninjatrader CSV bridge has a writer we can adapt today.
 	ntInstance, ok := underlying.(*ntTrader.Trader)
 	if !ok {
 		c.JSON(http.StatusOK, forceFlatResponse{
