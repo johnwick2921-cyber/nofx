@@ -117,6 +117,7 @@ interface TraderDashboardPageProps {
   lastUpdate: string
   language: Language
   exchanges?: Exchange[]
+  onAccountChanged?: () => void // Called when account switches in AccountSelector
 }
 
 export function TraderDashboardPage({
@@ -138,6 +139,7 @@ export function TraderDashboardPage({
   onTraderSelect,
   onNavigateToTraders,
   exchanges,
+  onAccountChanged,
 }: TraderDashboardPageProps) {
   const [closingPosition, setClosingPosition] = useState<string | null>(null)
   const [selectedChartSymbol, setSelectedChartSymbol] = useState<
@@ -407,9 +409,7 @@ export function TraderDashboardPage({
               {/* Plan 4.5 — Account Selector (NT8 only) */}
               <AccountSelector
                 traderId={selectedTrader.trader_id}
-                onAccountChanged={() => {
-                  mutate(`account-${selectedTraderId}`)
-                }}
+                onAccountChanged={onAccountChanged}
               />
 
               {/* Trader Selector */}
