@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import useSWR from 'swr'
 import { api } from '../../lib/api'
 import { notify } from '../../lib/notify'
@@ -33,12 +33,23 @@ export function AccountSelector({
     mutate,
   } = useSWR<AccountsResponse>(
     traderId ? `accounts-${traderId}` : null,
-    () => api.getAccounts(traderId),
-    { revalidateOnFocus: false }
+    () => {
+      if (!traderId) return Promise.reject(new Error('No traderId'))
+      return api.getAccounts(traderId).catch((err) => {
+        console.error('AccountSelector: failed to fetch accounts', err)
+        throw err
+      })
+    },
+    { revalidateOnFocus: false, dedupingInterval: 5000 }
   )
 
-  const currentAccount = accountsData?.current_account
+  const currentAccount = accountsData?.current
   const accounts = accountsData?.accounts || []
+
+  // Memoize ref callback to prevent infinite setState loop
+  const handleTriggerRef = useCallback((el: HTMLButtonElement | null) => {
+    if (el) setTriggerRect(el.getBoundingClientRect())
+  }, [])
 
   // Update dropdown position when opened
   useEffect(() => {
@@ -119,9 +130,7 @@ export function AccountSelector({
   return (
     <div data-account-selector className="relative">
       <button
-        ref={(el) => {
-          if (el) setTriggerRect(el.getBoundingClientRect())
-        }}
+        ref={handleTriggerRef}
         onClick={() => setIsOpen(!isOpen)}
         onFocus={(e) => setTriggerRect(e.currentTarget.getBoundingClientRect())}
         className={cn(
