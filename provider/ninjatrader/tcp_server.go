@@ -573,6 +573,7 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			return
 		}
 
+		s.logger.Info("tcp_server: received frame", "type", env.Type)
 		switch env.Type {
 		case FrameFill:
 			var fill FillPayload

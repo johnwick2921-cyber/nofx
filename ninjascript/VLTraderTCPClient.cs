@@ -729,9 +729,10 @@ namespace NinjaTrader.NinjaScript.AddOns
 
         private bool IsRealAccount(Account a)
         {
-            // Skip NT8 internal accounts (auto-generated test/bracket accounts).
-            // These all have long UUID-like suffixes.
-            if (a.Name.StartsWith("FTPROPLUSM") || a.Name.StartsWith("FTPROPLUS") ||
+            // Skip NT8 internal/test accounts (auto-generated test/bracket accounts).
+            // These all have long UUID-like suffixes or are known test accounts.
+            if (a.Name == "Backtest" ||
+                a.Name.StartsWith("FTPROPLUSM") || a.Name.StartsWith("FTPROPLUS") ||
                 a.Name.StartsWith("TAKEPROFIT") || a.Name.StartsWith("TDFYSL") ||
                 a.Name.StartsWith("TDFYG") || a.Name.StartsWith("LFE") ||
                 a.Name.StartsWith("LFF") || a.Name.StartsWith("LBE") ||
