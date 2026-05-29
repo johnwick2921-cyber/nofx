@@ -63,7 +63,8 @@ type TCPServer struct {
 	pending   []timedSignal
 
 	// Inbound fills — TCPTrader subscribes via Fills().
-	fillCh chan FillPayload
+	fillCh  chan FillPayload
+	closeCh chan PositionClosePayload
 
 	// Plan 4.4 Stage 2 — bar ingest. Bar frames from the C# AddOn
 	// (bars_historical, bar_update) decode in the read loop and post to
@@ -148,6 +149,7 @@ func NewTCPServer(logger *slog.Logger) *TCPServer {
 	return &TCPServer{
 		addr:        TCPListenAddr,
 		fillCh:      make(chan FillPayload, fillChannelBuffer),
+		closeCh:     make(chan PositionClosePayload, fillChannelBuffer),
 		barCache:    NewBarCache(0),
 		barIngestCh: make(chan barIngestMsg, barIngestChannelBuffer),
 		barsSubscribe: BarsSubscribePayload{
@@ -241,6 +243,10 @@ func (s *TCPServer) SendSignal(payload SignalPayload) error {
 
 // Fills returns the inbound fill channel. TCPTrader subscribes here.
 func (s *TCPServer) Fills() <-chan FillPayload { return s.fillCh }
+
+// ClosedPositions returns the channel of position_close frames (SL/TP exits).
+// Consumed by the NT close-sync to mark trader_positions CLOSED.
+func (s *TCPServer) ClosedPositions() <-chan PositionClosePayload { return s.closeCh }
 
 // IsConnected reports whether a client is currently connected.
 func (s *TCPServer) IsConnected() bool {
@@ -545,6 +551,20 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			s.acctBalance = p
 			s.acctValid = true
 			s.acctMu.Unlock()
+
+		case FramePositionClose:
+			// Position-history fix — an OCO exit leg filled and the position
+			// went flat. Hand to the close-sync to record the close.
+			var p PositionClosePayload
+			if err := json.Unmarshal(env.Payload, &p); err != nil {
+				s.logger.Warn("tcp_server: bad position_close payload", "err", err)
+				continue
+			}
+			select {
+			case s.closeCh <- p:
+			default:
+				s.logger.Warn("tcp_server: close channel full, dropping", "signal_id", p.SignalID)
+			}
 
 		default:
 			s.logger.Warn("tcp_server: unknown frame type", "type", env.Type)

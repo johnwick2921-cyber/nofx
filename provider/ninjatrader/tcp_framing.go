@@ -93,6 +93,28 @@ type AccountBalancePayload struct {
 	NetLiquidation float64 `json:"net_liquidation"` // total equity
 }
 
+// Position-history fix — C#-AddOn → Go-server, additive frame (same envelope).
+// Emitted when an OCO exit leg (SL or TP) fills and the position goes flat, so
+// the Go side can mark the open trader_position CLOSED with the real exit price.
+// NT closes positions broker-side via the bracket; the bot never issues a
+// close_* order, and NT has no order-sync, so without this frame the open
+// position record never transitions to CLOSED and position history stays empty.
+const FramePositionClose FrameType = "position_close"
+
+// PositionClosePayload reports a closed (or partially closed) NT position.
+// PositionSide is the side that was HELD ("long"/"short"), not the exit order's
+// action. RealizedPnL is left to the Go side to compute against the recorded
+// entry × the futures point value (single source of truth: market.FuturesPointValue).
+type PositionClosePayload struct {
+	SignalID     string  `json:"signal_id"`     // entry signal_id, for correlation
+	Symbol       string  `json:"symbol"`        // root symbol, e.g. "MNQ"
+	PositionSide string  `json:"position_side"` // "long" | "short" (held side)
+	ExitPrice    float64 `json:"exit_price"`
+	Quantity     int     `json:"quantity"`
+	ExitReason   string  `json:"exit_reason"` // "sl" | "tp"
+	ExitTime     string  `json:"exit_time"`   // RFC3339
+}
+
 // Bar is the compact 6-field OHLCV bar used in bars_historical and bar_update
 // frames (protocol §6-7). Volume is a float because NT8 tick-volume
 // instruments report fractional values.

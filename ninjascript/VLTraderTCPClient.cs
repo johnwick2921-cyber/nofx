@@ -382,29 +382,50 @@ namespace NinjaTrader.NinjaScript.AddOns
         // === Fill subscription (spec L4398-4406) ===
         private void OnOrderUpdate(object sender, OrderEventArgs e)
         {
-            // Only emit fill frames for filled or rejected states; ignore the
-            // intermediate accepted/working transitions.
+            // Only act on filled/rejected states; ignore accepted/working.
             if (e.OrderState != OrderState.Filled
                 && e.OrderState != OrderState.Rejected
                 && e.OrderState != OrderState.PartFilled)
             {
                 return;
             }
+            if (e.Order == null) return;
 
-            // Oco group for the entry order is the signal_id; child orders use
-            // signal_id-sl / signal_id-tp. We only emit a fill for the entry
-            // and exits — both share the same Oco group so the Go side can
-            // correlate via signal_id.
-            string ocoId = e.Order != null ? e.Order.Oco : null;
-            if (string.IsNullOrEmpty(ocoId)) return;
+            // The order NAME encodes the OCO leg: entry = signal_id,
+            // exits = signal_id-sl / signal_id-tp. (Oco is the shared GROUP id
+            // = signal_id for all three, so leg detection must use Name.)
+            string orderName = e.Order.Name ?? "";
+            string ocoId     = e.Order.Oco;
+            if (string.IsNullOrEmpty(orderName) && string.IsNullOrEmpty(ocoId)) return;
 
-            // Trim "-sl" / "-tp" suffix if present (these are exit-leg fills).
-            string signalId = ocoId;
-            if (signalId.EndsWith("-sl") || signalId.EndsWith("-tp"))
+            // Base signal_id + which exit leg (if any).
+            string signalId = !string.IsNullOrEmpty(orderName) ? orderName : ocoId;
+            string exitReason = null;
+            if (signalId.EndsWith("-sl")) { exitReason = "sl"; signalId = signalId.Substring(0, signalId.Length - 3); }
+            else if (signalId.EndsWith("-tp")) { exitReason = "tp"; signalId = signalId.Substring(0, signalId.Length - 3); }
+
+            // Position-history fix: an exit-leg FILL means the position closed.
+            // Emit position_close (NOT a fill frame) carrying the real exit
+            // price so the Go side marks the open position CLOSED. Emit ONLY on
+            // a full Filled — PartFilled is transient (NT sends a final Filled;
+            // emitting per-partial would duplicate the close) and a rejection is
+            // an error. Exit legs never take the fill-frame path (that's for
+            // entries). Held side is the opposite of the exit action (Sell
+            // closed a long, BuyToCover closed a short).
+            if (exitReason != null)
             {
-                signalId = signalId.Substring(0, signalId.Length - 3);
+                if (e.OrderState == OrderState.Filled)
+                {
+                    string positionSide = (e.Order.OrderAction == OrderAction.BuyToCover) ? "short" : "long";
+                    string rootSymbol = "";
+                    try { rootSymbol = e.Order.Instrument.MasterInstrument.Name; } catch { }
+                    SendPositionCloseFrame(signalId, rootSymbol, positionSide,
+                                           e.AverageFillPrice, e.Filled, exitReason);
+                }
+                return;
             }
 
+            // Entry leg → fill-frame path (filled / partial / rejected).
             string status;
             switch (e.OrderState)
             {
@@ -449,6 +470,27 @@ namespace NinjaTrader.NinjaScript.AddOns
                 ["status"]         = status
             };
             WriteEnvelope("fill", payload);
+        }
+
+        // Position-history fix — emit a position_close frame when an OCO exit
+        // leg (SL/TP) fills. position_side is the side that was HELD. The Go
+        // side computes realized PnL against the recorded entry × the futures
+        // point value, so we send only the raw exit price here.
+        private void SendPositionCloseFrame(string signalId, string symbol,
+                                            string positionSide, double exitPrice,
+                                            int qty, string exitReason)
+        {
+            var payload = new Dictionary<string, object>
+            {
+                ["signal_id"]     = signalId,
+                ["symbol"]        = symbol ?? "",
+                ["position_side"] = positionSide,
+                ["exit_price"]    = exitPrice,
+                ["quantity"]      = qty,
+                ["exit_reason"]   = exitReason ?? "",
+                ["exit_time"]     = DateTime.UtcNow.ToString("o")
+            };
+            WriteEnvelope("position_close", payload);
         }
 
         // Plan 4.11 — emit the real NT SIM account balance as an account_balance
