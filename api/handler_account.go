@@ -21,8 +21,8 @@ type AccountInfo struct {
 
 // GetAccountsResponse is the response structure for GET /api/accounts.
 type GetAccountsResponse struct {
-	CurrentAccount string        `json:"current_account"` // currently selected account, or ""
-	Accounts       []AccountInfo `json:"accounts"`        // list of all available accounts
+	Current  string        `json:"current"`  // currently selected account, or ""
+	Accounts []AccountInfo `json:"accounts"` // list of all available accounts
 }
 
 // SelectAccountRequest is the request structure for POST /api/account/select.
@@ -73,8 +73,8 @@ func (s *Server) handleGetAccounts(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, GetAccountsResponse{
-		CurrentAccount: current,
-		Accounts:       apiAccounts,
+		Current:  current,
+		Accounts: apiAccounts,
 	})
 }
 

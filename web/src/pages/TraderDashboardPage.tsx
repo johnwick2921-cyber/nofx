@@ -6,7 +6,6 @@ import { DecisionCard } from '../components/trader/DecisionCard'
 import { DecisionAudit } from '../components/trader/DecisionAudit'
 import { EmergencyFlatButton } from '../components/trader/EmergencyFlatButton'
 import { PositionHistory } from '../components/trader/PositionHistory'
-import { AccountSelector } from '../components/trader/AccountSelector'
 import { PunkAvatar, getTraderAvatar } from '../components/common/PunkAvatar'
 import { confirmToast, notify } from '../lib/notify'
 import { formatPrice, formatQuantity } from '../utils/format'
@@ -400,17 +399,6 @@ export function TraderDashboardPage({
             <div className="flex items-center gap-4">
               {/* Plan 4 T23 — Emergency Flat (red, prominent, top-right) */}
               <EmergencyFlatButton traderId={selectedTrader.trader_id} />
-
-              {/* Account Selector */}
-              {selectedTraderId && (
-                <AccountSelector
-                  traderId={selectedTraderId}
-                  onAccountChanged={() => {
-                    // Refetch account info when account changes
-                    mutate(`account-${selectedTraderId}`)
-                  }}
-                />
-              )}
 
               {/* Wallet Address Display for Perp-DEX */}
               {exchanges && isPerpDex && (
