@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import ReactDOM from 'react-dom'
 import useSWR from 'swr'
 import { api } from '../../lib/api'
 import { notify } from '../../lib/notify'
@@ -166,63 +167,67 @@ export function AccountSelector({
         />
       </button>
 
-      {/* Dropdown Menu */}
-      {isOpen && (
-        <div
-          className="fixed z-[9999] rounded border border-nofx-gold/20 bg-[#0B0E11] shadow-xl shadow-black/50 max-h-64 overflow-y-auto"
-          style={{
-            top: `${dropdownPos.top}px`,
-            left: `${dropdownPos.left}px`,
-            minWidth: `${dropdownPos.width}px`,
-          }}
-        >
-          {accounts.length === 0 ? (
-            <div className="px-3 py-2 text-xs text-nofx-text-muted text-center">
-              Waiting for accounts...
-            </div>
-          ) : (
-            accounts.map((account) => (
-              <button
-                key={account.name}
-                onClick={() => {
-                  if (account.is_sim && !isSelecting) {
-                    handleSelectAccount(account.name)
+      {/* Dropdown Menu — Portal to body to escape parent overflow */}
+      {isOpen &&
+        typeof document !== 'undefined' &&
+        document.body &&
+        ReactDOM.createPortal(
+          <div
+            className="fixed z-[9999] rounded border border-nofx-gold/20 bg-[#0B0E11] shadow-xl shadow-black/50 max-h-64 overflow-y-auto"
+            style={{
+              top: `${dropdownPos.top}px`,
+              left: `${dropdownPos.left}px`,
+              minWidth: `${dropdownPos.width}px`,
+            }}
+          >
+            {accounts.length === 0 ? (
+              <div className="px-3 py-2 text-xs text-nofx-text-muted text-center">
+                Waiting for accounts...
+              </div>
+            ) : (
+              accounts.map((account) => (
+                <button
+                  key={account.name}
+                  onClick={() => {
+                    if (account.is_sim && !isSelecting) {
+                      handleSelectAccount(account.name)
+                    }
+                  }}
+                  disabled={!account.is_sim || isSelecting}
+                  title={
+                    !account.is_sim
+                      ? 'Live accounts are not selectable — only SIM accounts can be auto-traded'
+                      : ''
                   }
-                }}
-                disabled={!account.is_sim || isSelecting}
-                title={
-                  !account.is_sim
-                    ? 'Live accounts are not selectable — only SIM accounts can be auto-traded'
-                    : ''
-                }
-                className={cn(
-                  'w-full flex items-center gap-3 px-3 py-2 text-sm transition-colors border-b border-nofx-bg/30 last:border-b-0',
-                  account.is_sim
-                    ? cn(
-                        'text-nofx-text-main hover:bg-nofx-bg/50 cursor-pointer',
-                        account.is_current
-                          ? 'bg-nofx-gold/10 text-nofx-gold'
-                          : ''
-                      )
-                    : 'text-nofx-text-muted opacity-50 cursor-not-allowed bg-nofx-bg/20'
-                )}
-              >
-                <span className="flex-1 text-left truncate">
-                  {account.name}
-                  {!account.is_sim && (
-                    <span className="text-xs ml-2 opacity-70">
-                      (live — not selectable for auto-trade)
-                    </span>
+                  className={cn(
+                    'w-full flex items-center gap-3 px-3 py-2 text-sm transition-colors border-b border-nofx-bg/30 last:border-b-0',
+                    account.is_sim
+                      ? cn(
+                          'text-nofx-text-main hover:bg-nofx-bg/50 cursor-pointer',
+                          account.is_current
+                            ? 'bg-nofx-gold/10 text-nofx-gold'
+                            : ''
+                        )
+                      : 'text-nofx-text-muted opacity-50 cursor-not-allowed bg-nofx-bg/20'
                   )}
-                </span>
-                {account.is_current && (
-                  <Check className="w-4 h-4 text-nofx-gold shrink-0" />
-                )}
-              </button>
-            ))
-          )}
-        </div>
-      )}
+                >
+                  <span className="flex-1 text-left truncate">
+                    {account.name}
+                    {!account.is_sim && (
+                      <span className="text-xs ml-2 opacity-70">
+                        (live — not selectable for auto-trade)
+                      </span>
+                    )}
+                  </span>
+                  {account.is_current && (
+                    <Check className="w-4 h-4 text-nofx-gold shrink-0" />
+                  )}
+                </button>
+              ))
+            )}
+          </div>,
+          document.body
+        )}
     </div>
   )
 }
