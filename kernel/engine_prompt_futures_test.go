@@ -3,7 +3,101 @@ package kernel
 import (
 	"strings"
 	"testing"
+
+	"nofx/store"
 )
+
+// futuresTestEngine builds a StrategyEngine with a minimal futures-flavoured
+// config for the BuildFuturesDecisionSystemPrompt round-trip tests below.
+func futuresTestEngine() *StrategyEngine {
+	cfg := &store.StrategyConfig{
+		Language: "en",
+		RiskControl: store.RiskControlConfig{
+			MinConfidence:      75,
+			MinRiskRewardRatio: 1.5,
+			MaxPositions:       1,
+		},
+	}
+	return &StrategyEngine{config: cfg}
+}
+
+// TestFuturesDecisionPrompt_ParseableEnvelope is the core round-trip proof: a
+// futures-prompt-style AI response (the envelope BuildFuturesDecisionSystemPrompt
+// instructs) must parse cleanly through the SAME extractor the crypto path
+// uses, into a valid Decision with the standard 6-action enum.
+func TestFuturesDecisionPrompt_ParseableEnvelope(t *testing.T) {
+	aiResponse := "<reasoning>\n5m and 15m EMAs aligned bullish, RSI 58, ATR ~20pt. Long setup.\n</reasoning>\n\n" +
+		"<decision>\n```json\n[\n" +
+		`  {"symbol": "MNQ", "action": "open_long", "leverage": 1, "position_size_usd": 60000, "stop_loss": 21480.00, "take_profit": 21560.00, "confidence": 80}` +
+		"\n]\n```\n</decision>\n"
+
+	decisions, err := extractDecisions(aiResponse)
+	if err != nil {
+		t.Fatalf("extractDecisions failed on futures envelope: %v", err)
+	}
+	if len(decisions) != 1 {
+		t.Fatalf("got %d decisions, want 1", len(decisions))
+	}
+	d := decisions[0]
+	if d.Symbol != "MNQ" || d.Action != "open_long" {
+		t.Errorf("got symbol=%q action=%q, want MNQ/open_long", d.Symbol, d.Action)
+	}
+	if d.StopLoss != 21480.00 || d.TakeProfit != 21560.00 {
+		t.Errorf("stop/tp = %v/%v, want 21480/21560", d.StopLoss, d.TakeProfit)
+	}
+	if d.Confidence != 80 {
+		t.Errorf("confidence = %d, want 80", d.Confidence)
+	}
+}
+
+// TestFuturesDecisionPrompt_WaitParses confirms the no-trade form (a single
+// wait array) parses — the shape that replaces today's empty-parse "safe wait".
+func TestFuturesDecisionPrompt_WaitParses(t *testing.T) {
+	aiResponse := "<reasoning>No clean setup; chop.</reasoning>\n" +
+		"<decision>\n```json\n[{\"symbol\": \"MNQ\", \"action\": \"wait\"}]\n```\n</decision>"
+	decisions, err := extractDecisions(aiResponse)
+	if err != nil {
+		t.Fatalf("extractDecisions failed on wait: %v", err)
+	}
+	if len(decisions) != 1 || decisions[0].Action != "wait" || decisions[0].Symbol != "MNQ" {
+		t.Fatalf("wait decision parsed wrong: %+v", decisions)
+	}
+}
+
+// TestFuturesDecisionPrompt_Content asserts the futures system prompt carries
+// futures framing + the exact parser envelope, and does NOT frame MNQ as a
+// crypto perp (the framing that confused the model into empty JSON).
+func TestFuturesDecisionPrompt_Content(t *testing.T) {
+	e := futuresTestEngine()
+	p := e.BuildFuturesDecisionSystemPrompt(50000)
+
+	for _, s := range []string{"MNQ", "$2", "0.25", "<reasoning>", "<decision>", "open_long | open_short", "JSON array"} {
+		if !strings.Contains(p, s) {
+			t.Errorf("futures system prompt missing %q", s)
+		}
+	}
+	// Must not FRAME MNQ as a crypto perp. (Note: the prompt may MENTION
+	// "funding rate" only to tell the model to ignore it, so that term is
+	// allowed; USDT / BTC-ETH leverage tiers must be absent.)
+	lower := strings.ToLower(p)
+	for _, s := range []string{"usdt", "btc/eth"} {
+		if strings.Contains(lower, s) {
+			t.Errorf("futures system prompt unexpectedly contains crypto concept %q", s)
+		}
+	}
+}
+
+// TestFuturesVariant_Routing confirms BuildSystemPrompt routes "futures" to the
+// futures prompt, while other variants still produce the crypto assembly.
+func TestFuturesVariant_Routing(t *testing.T) {
+	e := futuresTestEngine()
+	if !strings.Contains(e.BuildSystemPrompt(50000, "futures"), "Micro E-mini Nasdaq-100") {
+		t.Errorf("futures variant did not route to the futures prompt")
+	}
+	if strings.Contains(e.BuildSystemPrompt(50000, "balanced"), "Micro E-mini Nasdaq-100") {
+		t.Errorf("balanced variant unexpectedly produced the futures prompt")
+	}
+}
 
 func TestBuildFuturesSystemPrompt_NoCryptoVocab(t *testing.T) {
 	p := BuildFuturesSystemPrompt(FuturesPromptConfig{

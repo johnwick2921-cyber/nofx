@@ -99,7 +99,13 @@ func (at *AutoTrader) runCycle() error {
 	at.logInfof("🤖 Requesting AI analysis and decision... [Strategy Engine]")
 	// Plan 4 Task 25 — decision latency timer (start)
 	decisionStart := time.Now()
-	aiDecision, err := kernel.GetFullDecisionWithStrategy(ctx, at.mcpClient, at.strategyEngine, "balanced")
+	// CME futures (NinjaTrader) select the futures system prompt; everything
+	// else keeps the crypto "balanced" variant.
+	promptVariant := "balanced"
+	if at.exchange == "ninjatrader" {
+		promptVariant = "futures"
+	}
+	aiDecision, err := kernel.GetFullDecisionWithStrategy(ctx, at.mcpClient, at.strategyEngine, promptVariant)
 	// Plan 4 Task 25 — decision metrics
 	telemetry.DecisionLatency.WithLabelValues(at.id).Observe(time.Since(decisionStart).Seconds())
 	if aiDecision != nil {
