@@ -416,6 +416,7 @@ function DashboardRoute() {
           )
         }}
         onNavigateToTraders={() => navigate(ROUTES.traders)}
+        onAccountChanged={handleAccountChanged}
         exchanges={exchanges}
       />
     </AppChrome>
