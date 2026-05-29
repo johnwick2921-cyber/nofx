@@ -199,52 +199,63 @@ export function AccountSelector({
                 Waiting for accounts...
               </div>
             ) : (
-              accounts.map((account) => (
-                <button
-                  key={account.name}
-                  onClick={() => {
-                    console.log(
-                      `AccountSelector: button clicked for ${account.name}, is_sim=${account.is_sim}, isSelecting=${isSelecting}`
-                    )
-                    if (account.is_sim && !isSelecting) {
-                      handleSelectAccount(account.name)
-                    } else {
+              accounts.map((account) => {
+                const isSimAccount = account.is_sim === true
+                const isDisabled = !isSimAccount || isSelecting
+
+                return (
+                  <button
+                    key={account.name}
+                    onMouseDown={(e) => {
                       console.log(
-                        `AccountSelector: click blocked - is_sim=${account.is_sim}, isSelecting=${isSelecting}`
+                        `[AccountSelector] button onMouseDown: ${account.name}`
                       )
-                    }
-                  }}
-                  disabled={!account.is_sim || isSelecting}
-                  title={
-                    !account.is_sim
-                      ? 'Live accounts are not selectable — only SIM accounts can be auto-traded'
-                      : ''
-                  }
-                  className={cn(
-                    'w-full flex items-center gap-3 px-3 py-2 text-sm transition-colors border-b border-nofx-bg/30 last:border-b-0',
-                    account.is_sim
-                      ? cn(
-                          'text-nofx-text-main hover:bg-nofx-bg/50 cursor-pointer',
-                          account.is_current
-                            ? 'bg-nofx-gold/10 text-nofx-gold'
-                            : ''
+                      e.preventDefault()
+                      e.stopPropagation()
+                      if (isSimAccount && !isSelecting) {
+                        console.log(
+                          `[AccountSelector] triggering handleSelectAccount(${account.name})`
                         )
-                      : 'text-nofx-text-muted opacity-50 cursor-not-allowed bg-nofx-bg/20'
-                  )}
-                >
-                  <span className="flex-1 text-left truncate">
-                    {account.name}
-                    {!account.is_sim && (
-                      <span className="text-xs ml-2 opacity-70">
-                        (live — not selectable for auto-trade)
-                      </span>
+                        handleSelectAccount(account.name)
+                      } else {
+                        console.log(
+                          `[AccountSelector] blocked: isSimAccount=${isSimAccount}, isSelecting=${isSelecting}`
+                        )
+                      }
+                    }}
+                    type="button"
+                    disabled={isDisabled}
+                    title={
+                      !isSimAccount
+                        ? 'Live accounts are not selectable — only SIM accounts can be auto-traded'
+                        : ''
+                    }
+                    className={cn(
+                      'w-full flex items-center gap-3 px-3 py-2 text-sm transition-colors border-b border-nofx-bg/30 last:border-b-0',
+                      isSimAccount
+                        ? cn(
+                            'text-nofx-text-main hover:bg-nofx-bg/50 cursor-pointer',
+                            account.is_current
+                              ? 'bg-nofx-gold/10 text-nofx-gold'
+                              : ''
+                          )
+                        : 'text-nofx-text-muted opacity-50 cursor-not-allowed bg-nofx-bg/20'
                     )}
-                  </span>
-                  {account.is_current && (
-                    <Check className="w-4 h-4 text-nofx-gold shrink-0" />
-                  )}
-                </button>
-              ))
+                  >
+                    <span className="flex-1 text-left truncate">
+                      {account.name}
+                      {!account.is_sim && (
+                        <span className="text-xs ml-2 opacity-70">
+                          (live — not selectable for auto-trade)
+                        </span>
+                      )}
+                    </span>
+                    {account.is_current && (
+                      <Check className="w-4 h-4 text-nofx-gold shrink-0" />
+                    )}
+                  </button>
+                )
+              })
             )}
           </div>,
           document.body
