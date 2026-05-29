@@ -75,6 +75,9 @@ namespace NinjaTrader.NinjaScript.AddOns
                 if (account != null)
                 {
                     account.OrderUpdate += OnOrderUpdate;
+                    // Plan 4.11 — emit the real account balance on cash/PnL
+                    // changes so the dashboard reflects the live SIM account.
+                    account.AccountItemUpdate += OnAccountItemUpdate;
                 }
                 // Plan 4.4 Stage 1 — instantiate the bars manager BEFORE the
                 // reader thread starts so an early bars_subscribe frame has a
@@ -103,6 +106,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                 if (account != null)
                 {
                     try { account.OrderUpdate -= OnOrderUpdate; } catch { }
+                    try { account.AccountItemUpdate -= OnAccountItemUpdate; } catch { }
                 }
                 try { barsManager?.DisposeAll(); } catch { }
                 try { stream?.Close(); } catch { }
@@ -144,6 +148,10 @@ namespace NinjaTrader.NinjaScript.AddOns
                     client.Connect(GO_SERVER_HOST, GO_SERVER_PORT);
                     stream = client.GetStream();
                     LogInfo("VLTraderTCPClient: connected");
+                    // Plan 4.11 — push the current account balance immediately
+                    // on (re)connect so the dashboard shows the real SIM
+                    // account without waiting for the next AccountItemUpdate.
+                    SendAccountBalance();
                     RunReadLoop(ct);
                 }
                 catch (Exception ex)
@@ -441,6 +449,54 @@ namespace NinjaTrader.NinjaScript.AddOns
                 ["status"]         = status
             };
             WriteEnvelope("fill", payload);
+        }
+
+        // Plan 4.11 — emit the real NT SIM account balance as an account_balance
+        // frame (replaces the Go-side $50k mock). Fired on (re)connect and on
+        // AccountItemUpdate. WriteEnvelope no-ops if not yet connected.
+        //
+        // FLAG: NT8 API — account.Get(AccountItem.X, Currency.UsDollar) and the
+        // AccountItem enum (CashValue/BuyingPower/RealizedProfitLoss/
+        // UnrealizedProfitLoss) match NT8 8.1. If the operator's build differs,
+        // adjust the enum names here (compile error will point right at it).
+        // NetLiquidation is derived (cash + unrealized) rather than via a
+        // possibly-absent AccountItem.NetLiquidation.
+        private void SendAccountBalance()
+        {
+            if (account == null) return;
+            try
+            {
+                double cash       = account.Get(AccountItem.CashValue, Currency.UsDollar);
+                double buying     = account.Get(AccountItem.BuyingPower, Currency.UsDollar);
+                double realized   = account.Get(AccountItem.RealizedProfitLoss, Currency.UsDollar);
+                double unrealized = account.Get(AccountItem.UnrealizedProfitLoss, Currency.UsDollar);
+                var payload = new Dictionary<string, object>
+                {
+                    ["account"]         = account.Name,
+                    ["cash_value"]      = cash,
+                    ["buying_power"]    = buying,
+                    ["realized_pnl"]    = realized,
+                    ["unrealized_pnl"]  = unrealized,
+                    ["net_liquidation"] = cash + unrealized
+                };
+                WriteEnvelope("account_balance", payload);
+            }
+            catch (Exception ex)
+            {
+                LogWarn("VLTraderTCPClient: account_balance emit failed: " + ex.Message);
+            }
+        }
+
+        private void OnAccountItemUpdate(object sender, AccountItemEventArgs e)
+        {
+            // Emit only on cash/PnL changes to limit frame churn.
+            if (e.AccountItem == AccountItem.CashValue
+                || e.AccountItem == AccountItem.BuyingPower
+                || e.AccountItem == AccountItem.RealizedProfitLoss
+                || e.AccountItem == AccountItem.UnrealizedProfitLoss)
+            {
+                SendAccountBalance();
+            }
         }
 
         private void SendAck(string acks)

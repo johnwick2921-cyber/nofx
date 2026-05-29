@@ -133,12 +133,14 @@ func (at *AutoTrader) GetAccountInfo() (map[string]interface{}, error) {
 	totalMarginUsed := 0.0
 	totalUnrealizedPnLCalculated := 0.0
 	for _, pos := range positions {
-		markPrice := pos["markPrice"].(float64)
-		quantity := pos["positionAmt"].(float64)
+		// Comma-ok asserts: NT futures positions may omit some Binance-style
+		// keys; a hard assert would panic /api/account (Plan 4.11 fix).
+		markPrice, _ := pos["markPrice"].(float64)
+		quantity, _ := pos["positionAmt"].(float64)
 		if quantity < 0 {
 			quantity = -quantity
 		}
-		unrealizedPnl := pos["unRealizedProfit"].(float64)
+		unrealizedPnl, _ := pos["unRealizedProfit"].(float64)
 		totalUnrealizedPnLCalculated += unrealizedPnl
 
 		leverage := 10
@@ -199,16 +201,19 @@ func (at *AutoTrader) GetPositions() ([]map[string]interface{}, error) {
 
 	var result []map[string]interface{}
 	for _, pos := range positions {
-		symbol := pos["symbol"].(string)
-		side := pos["side"].(string)
-		entryPrice := pos["entryPrice"].(float64)
-		markPrice := pos["markPrice"].(float64)
-		quantity := pos["positionAmt"].(float64)
+		// Comma-ok asserts: NT futures positions may omit some Binance-style
+		// keys (e.g. liquidationPrice); a hard assert would panic the API
+		// positions repackaging (Plan 4.11 fix).
+		symbol, _ := pos["symbol"].(string)
+		side, _ := pos["side"].(string)
+		entryPrice, _ := pos["entryPrice"].(float64)
+		markPrice, _ := pos["markPrice"].(float64)
+		quantity, _ := pos["positionAmt"].(float64)
 		if quantity < 0 {
 			quantity = -quantity
 		}
-		unrealizedPnl := pos["unRealizedProfit"].(float64)
-		liquidationPrice := pos["liquidationPrice"].(float64)
+		unrealizedPnl, _ := pos["unRealizedProfit"].(float64)
+		liquidationPrice, _ := pos["liquidationPrice"].(float64)
 
 		leverage := 10
 		if lev, ok := pos["leverage"].(float64); ok {

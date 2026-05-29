@@ -849,16 +849,16 @@ export function TraderDashboardPage({
                             )}
                             <td className="px-1 py-3 font-mono whitespace-nowrap text-right">
                               <span
-                                className={`font-bold ${pos.unrealized_pnl >= 0 ? 'text-nofx-green shadow-nofx-green' : 'text-nofx-red shadow-nofx-red'}`}
+                                className={`font-bold ${(pos.unrealized_pnl ?? 0) >= 0 ? 'text-nofx-green shadow-nofx-green' : 'text-nofx-red shadow-nofx-red'}`}
                                 style={{
                                   textShadow:
-                                    pos.unrealized_pnl >= 0
+                                    (pos.unrealized_pnl ?? 0) >= 0
                                       ? '0 0 10px rgba(14,203,129,0.3)'
                                       : '0 0 10px rgba(246,70,93,0.3)',
                                 }}
                               >
-                                {pos.unrealized_pnl >= 0 ? '+' : ''}
-                                {pos.unrealized_pnl.toFixed(2)}
+                                {(pos.unrealized_pnl ?? 0) >= 0 ? '+' : ''}
+                                {(pos.unrealized_pnl ?? 0).toFixed(2)}
                               </span>
                             </td>
                             {!isFutures && (
