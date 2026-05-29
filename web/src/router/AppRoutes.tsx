@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import useSWR from 'swr'
 import {
@@ -288,7 +288,7 @@ function DashboardRoute() {
     }
   )
 
-  const { data: account } = useSWR<AccountInfo>(
+  const { data: account, mutate: mutateAccount } = useSWR<AccountInfo>(
     selectedTraderId ? `account-${selectedTraderId}` : null,
     () => api.getAccount(selectedTraderId, true),
     {
@@ -310,7 +310,7 @@ function DashboardRoute() {
     }
   )
 
-  const { data: positions } = useSWR<Position[]>(
+  const { data: positions, mutate: mutatePositions } = useSWR<Position[]>(
     selectedTraderId ? `positions-${selectedTraderId}` : null,
     () => api.getPositions(selectedTraderId, true),
     {
@@ -332,7 +332,7 @@ function DashboardRoute() {
     }
   )
 
-  const { data: decisions } = useSWR<DecisionRecord[]>(
+  const { data: decisions, mutate: mutateDecisions } = useSWR<DecisionRecord[]>(
     selectedTraderId
       ? `decisions/latest-${selectedTraderId}-${decisionsLimit}`
       : null,
@@ -365,6 +365,16 @@ function DashboardRoute() {
       dedupingInterval: 20000,
     }
   )
+
+  // Handle account switch: invalidate all account-scoped caches
+  const handleAccountChanged = useCallback(() => {
+    console.log('[DashboardRoute] Account changed, refreshing all data')
+    // Invalidate all account-scoped SWR caches
+    mutateAccount() // Refresh balance
+    mutatePositions() // Refresh positions
+    mutateDecisions() // Refresh decisions
+    // Orders will auto-refresh through positions refresh
+  }, [mutateAccount, mutatePositions, mutateDecisions])
 
   useEffect(() => {
     if (account) {
@@ -498,11 +508,23 @@ export function AppRoutes() {
         />
         <Route
           path={ROUTES.traders}
-          element={isAuthenticated ? <TradersRoute /> : <Navigate to={ROUTES.login} replace />}
+          element={
+            isAuthenticated ? (
+              <TradersRoute />
+            ) : (
+              <Navigate to={ROUTES.login} replace />
+            )
+          }
         />
         <Route
           path={ROUTES.dashboard}
-          element={isAuthenticated ? <DashboardRoute /> : <Navigate to={ROUTES.login} replace />}
+          element={
+            isAuthenticated ? (
+              <DashboardRoute />
+            ) : (
+              <Navigate to={ROUTES.login} replace />
+            )
+          }
         />
         <Route
           path={ROUTES.strategy}
