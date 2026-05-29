@@ -66,6 +66,24 @@ func NewTCPTrader(server *ntwire.TCPServer, symbol string) *TCPTrader {
 	return t
 }
 
+// GetServer returns the underlying TCPServer for account management operations.
+// Used by the API handler to access account list and send selections.
+func (t *TCPTrader) GetServer() *ntwire.TCPServer {
+	return t.server
+}
+
+// ResetAccountState clears cached position/fill state on account switch.
+// Called after the C# AddOn re-subscribes to the new account, so GetPositions()
+// fetches fresh data instead of returning stale fills from the old account.
+func (t *TCPTrader) ResetAccountState() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.hasFill = false
+	t.lastFill = ntwire.FillPayload{}
+	t.stopLoss = make(map[string]float64)
+	t.takePrft = make(map[string]float64)
+}
+
 // --- Trader interface methods (19 total) ---
 
 func (t *TCPTrader) OpenLong(symbol string, quantity float64, leverage int) (map[string]interface{}, error) {
