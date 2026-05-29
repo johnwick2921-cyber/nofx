@@ -661,6 +661,7 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 				s.logger.Warn("tcp_server: bad accounts_list payload", "err", err)
 				continue
 			}
+			s.logger.Info("tcp_server: received accounts_list frame", "count", len(p.Accounts))
 			if len(p.Accounts) > 0 {
 				// Extract the current account from the first account_balance frame
 				// (the AddOn emits accounts_list then account_balance immediately after).
@@ -669,7 +670,7 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 				s.accountsList = make([]AccountInfo, len(p.Accounts))
 				copy(s.accountsList, p.Accounts)
 				s.accountsListMu.Unlock()
-				s.logger.Info("tcp_server: updated accounts list",
+				s.logger.Info("tcp_server: stored accounts",
 					"count", len(p.Accounts),
 					"accounts", func() []string {
 						var names []string
@@ -678,6 +679,8 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 						}
 						return names
 					}())
+			} else {
+				s.logger.Warn("tcp_server: accounts_list frame received but empty")
 			}
 
 		case FrameAccountSelect:
