@@ -33,6 +33,7 @@ export interface AccountInfo {
 export interface NTAccountInfo {
   name: string
   is_sim: boolean
+  is_current?: boolean
 }
 
 export interface AccountsResponse {
