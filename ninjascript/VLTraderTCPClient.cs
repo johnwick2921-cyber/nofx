@@ -212,9 +212,13 @@ namespace NinjaTrader.NinjaScript.AddOns
                     client = new TcpClient();
                     client.Connect(GO_SERVER_HOST, GO_SERVER_PORT);
                     stream = client.GetStream();
-                    LogInfo("VLTraderTCPClient: connected");
-                    // Send accounts_list first so the Go server knows about all accounts
+                    LogInfo("VLTraderTCPClient: CONNECTED");
+                    LogInfo("VLTraderTCPClient: About to call SendAccountsList");
+
+                    // Trigger on connect in case accounts are already loaded
                     SendAccountsList();
+                    LogInfo("VLTraderTCPClient: SendAccountsList completed");
+
                     // Plan 4.11 — push the current account balance immediately
                     // on (re)connect so the dashboard shows the real SIM
                     // account without waiting for the next AccountItemUpdate.
@@ -716,32 +720,65 @@ namespace NinjaTrader.NinjaScript.AddOns
         // SIM detection. Fired on connect so the Go server can populate the UI
         // account selector. Also used on account list change (if NT fires an event).
         // WriteEnvelope no-ops if not yet connected.
+        // Handler for when accounts become available
+        private void OnAccountStatusUpdate(object sender, AccountStatusEventArgs e)
+        {
+            LogInfo(string.Format("@@@ OnAccountStatusUpdate FIRED: {0}, status={1}", e.Account.Name, e.Status));
+            SendAccountsList();
+        }
+
+        private bool IsRealAccount(Account a)
+        {
+            // Skip NT8 internal accounts (auto-generated test/bracket accounts).
+            // These all have long UUID-like suffixes.
+            if (a.Name.StartsWith("FTPROPLUSM") || a.Name.StartsWith("FTPROPLUS") ||
+                a.Name.StartsWith("TAKEPROFIT") || a.Name.StartsWith("TDFYSL") ||
+                a.Name.StartsWith("TDFYG") || a.Name.StartsWith("LFE") ||
+                a.Name.StartsWith("LFF") || a.Name.StartsWith("LBE") ||
+                a.Name.StartsWith("LBF") || a.Name.StartsWith("MFFU"))
+                return false;
+            return true;
+        }
+
         private void SendAccountsList()
         {
+            LogInfo("@@@ SendAccountsList START");
+            var accountsList = new List<object>();
             try
             {
-                var accountsList = new List<object>();
                 lock (Account.All)
                 {
+                    LogInfo(string.Format("@@@ Account.All.Count={0}", Account.All.Count));
                     foreach (var a in Account.All)
                     {
-                        var acctInfo = new Dictionary<string, object>
+                        if (!IsRealAccount(a)) continue;
+                        if (accountsList.Count < 5)  // Log first 5
+                            LogInfo(string.Format("@@@   account[{0}]: {1}", accountsList.Count, a.Name));
+                        accountsList.Add(new Dictionary<string, object>
                         {
                             ["name"]   = a.Name,
                             ["is_sim"] = IsSimAccount(a)
-                        };
-                        accountsList.Add(acctInfo);
+                        });
                     }
                 }
-                var payload = new Dictionary<string, object>
-                {
-                    ["accounts"] = accountsList
-                };
-                WriteEnvelope("accounts_list", payload);
             }
             catch (Exception ex)
             {
-                LogWarn("VLTraderTCPClient: accounts_list emit failed: " + ex.Message);
+                LogWarn(string.Format("@@@ lock failed: {0}", ex.Message));
+                return;
+            }
+
+            LogInfo(string.Format("@@@ built list with {0} accounts, calling WriteEnvelope", accountsList.Count));
+            LogInfo(string.Format("@@@ stream status: {0}", stream == null ? "NULL" : "CONNECTED"));
+            var payload = new Dictionary<string, object> { ["accounts"] = accountsList };
+            try
+            {
+                WriteEnvelope("accounts_list", payload);
+                LogInfo(string.Format("@@@ WriteEnvelope succeeded, sent {0} accounts", accountsList.Count));
+            }
+            catch (Exception ex)
+            {
+                LogWarn(string.Format("@@@ WriteEnvelope FAILED: {0}", ex.Message));
             }
         }
 
