@@ -95,6 +95,43 @@ real-time — confirmed against live MNQ candles moving in NT8 on
 
 ---
 
+## Current State (2026-05-29)
+
+Status block — concise. All facts verified against `git` on `feat/nt8-stage4-chart` tip `703ad29d`, `origin/main` tip `efad9e54` (Merge PR #42). Tag count: 33; nt8 tags: 4 (`v1.0-nt8-stage3-dataspine`, `v1.0-nt8-futures-decisions`, `v1.0-nt8-restart-resilient`, `v1.0-nt8-contract-resolver`).
+
+### SHIPPED ON `main` (PR# / tag from git)
+
+- **Stage 3 data spine** — PR #38, tag `v1.0-nt8-stage3-dataspine`: kernel reads real NT8 MNQ bars from BarCache (not Binance/CoinAnk).
+- **Futures prompt** — PR #39: futures system prompt emits the existing parseable decision JSON; `AI_MAX_TOKENS` 2000 → 8000.
+- **Risk-gate + executor futures sizing** — PR #40, tag `v1.0-nt8-futures-decisions`: equity × 20 cap, 1–10 contracts.
+- **Fast cycles** — PR #41: dead crypto-enrichment flags off; ~30s cycles.
+- **N3 restart-resilience** — PR #42, tag `v1.0-nt8-restart-resilient`: C# re-emits `bars_historical` on re-subscribe.
+- Tag count: 33 total; nt8 tags = 4 (`stage3-dataspine`, `futures-decisions`, `restart-resilient`, `contract-resolver`).
+
+### ON BRANCH `feat/nt8-stage4-chart` (UNMERGED, operator-gated — 28 commits ahead of `origin/main`, 0 behind, strictly linear)
+
+- **Plan 4.11 real balance:** `account_balance` TCP frame; live account replaces $50k mock (proven ~$100k flowing). Commit `3792babb`.
+- **Stage 4 live chart:** `FuturesChart.tsx` (lightweight-charts v5) over SSE/BarCache; MNQ candles ticking. Commit `3e66b716`.
+- **Security/reliability:** SSE auth via short-lived single-use ticket (JWT out of URL — `73ecbf1f`); AI idle-watchdog 60→180/300s (`758be7d4`); liquidationPrice panic fixed.
+- **Position lifecycle:** `position_close` frame + close-sync (exit price, realized PnL, CLOSED state — `b874f817`); OCO bracket fix (entry alone, then SL+TP own OCO; was opening UNPROTECTED positions — `0a8ddd68` / `f36a6498`); manual close / Emergency Flat via `close_position` → `account.Flatten` (`a53e558e`).
+- **Account UI:** REPLACED the old static "mNQ sIM TEST" display column with a new NT-driven account selector dropdown (`2e222846` live selector + SIM gating; `aa9b8f44` filter internal accounts). The old column was a static trader/exchange label; the new one pulls live NT8 accounts.
+- **Account FILTER corrected to CONNECTED accounts only** (`Status && PriceStatus == Connected`, per NT staff guidance — tip commit `703ad29d`) so the dropdown shows the real NT8 set (Sim101 + active funded LFE), not all 42 of `Account.All`. SIM-safety gating: only SIM selectable; funded greyed + server-rejected (HTTP 400). `accounts_list` re-emits on TCP reconnect.
+
+### OPEN / KNOWN ISSUES
+
+- AccountSelector was REMOVED at one point (`312e7bb1`) to unblock a blank-page render crash, then RESTORED (`d46100ba`); current tip has the selector live with React-Portal escape (`fa0be202`).
+- Account SWITCH does not yet fully re-bind ALL account-scoped data (balance / positions / PnL / orders) to the selected account — only partial. Open.
+- SIM-only gate is HARDCODED in 3 layers (frontend grey-out, Go API HTTP 400, C#); no toggle yet. A config toggle (`ALLOW_LIVE_ACCOUNTS`, default false) is DESIGNED but not built.
+- `orderId` vs `signal_id` DB-persistence bug (flagged-separate; dashboard reads live fill-cache so proof unaffected).
+- **Security (deferred):** tokenless `/api/reset-password` (auth bypass); `/api/reset-account` wipes all users; `/login` session wipe. (SSE JWT-in-URL leak already fixed.)
+- Decision QUALITY / prompt tuning deferred (AI makes informed WAITs; good MNQ entries untested on SIM).
+
+### NT8 DEPLOY GOTCHA (cross-ref CLAUDE.md)
+
+C# compiles ONLY from `/mnt/c/Users/hoang/Documents/NinjaTrader 8/bin/Custom/AddOns/`, NOT the repo. Every C# change: `cp` → F5 → full NT8 restart.
+
+---
+
 > **Agent tooling available in this repo (registered 2026-05-25; hardened 2026-05-26):**
 > A Playwright MCP server is registered in `~/.claude.json` for project
 > `/home/hoang/nofx`. When you spawn agents that need to verify the React
