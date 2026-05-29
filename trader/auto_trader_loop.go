@@ -226,6 +226,10 @@ func (at *AutoTrader) runCycle() error {
 	logger.Info(strings.Repeat("-", 70))
 
 	// 8. Sort decisions: ensure close positions first, then open positions (prevent position stacking overflow)
+	if aiDecision == nil {
+		at.logWarnf("⚠️ AI returned no decision (nil), skipping cycle")
+		return nil
+	}
 	sortedDecisions := sortDecisionsByPriority(aiDecision.Decisions)
 
 	logger.Info("🔄 Execution order (optimized): Close positions first → Open positions later")

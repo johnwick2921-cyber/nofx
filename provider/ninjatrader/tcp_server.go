@@ -91,6 +91,11 @@ type TCPServer struct {
 	// Plan 1.5.6 alongside the FrameHeartbeat ack-write deadline fix.
 	writeMu sync.Mutex
 
+	// Account management (Plan 4.5 — account selector dropdown).
+	accountsMu sync.RWMutex
+	accounts   []AccountInfo // all available accounts from C# AddOn
+	currentAccount string    // currently selected account name
+
 	// Lifecycle.
 	cancel context.CancelFunc
 	wg     sync.WaitGroup
@@ -516,6 +521,25 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			}
 			s.enqueueBarUpdate(p.Symbol, p.Timeframe, p.Bars)
 
+		case FrameAccountsList:
+			// Plan 4.5 — account list from C# AddOn. Emitted when the AddOn
+			// starts or when the user selects a different account. Update the
+			// in-memory account cache for the API dropdown.
+			var p struct {
+				Current  string        `json:"current"`
+				Accounts []AccountInfo `json:"accounts"`
+			}
+			if err := json.Unmarshal(env.Payload, &p); err != nil {
+				s.logger.Warn("tcp_server: bad accounts_list payload", "err", err)
+				continue
+			}
+			// Use Current from frame if set; otherwise preserve existing current
+			current := p.Current
+			if current == "" {
+				_, current = s.GetAccountsList()
+			}
+			s.StoreAccountsList(p.Accounts, current)
+
 		default:
 			s.logger.Warn("tcp_server: unknown frame type", "type", env.Type)
 		}
@@ -609,4 +633,58 @@ func (s *TCPServer) closeConn() {
 		_ = s.conn.Close()
 		s.conn = nil
 	}
+}
+
+// GetAccountsList returns a snapshot of available accounts and the current account.
+// Safe for concurrent read; returns a copy to avoid external mutation.
+func (s *TCPServer) GetAccountsList() ([]AccountInfo, string) {
+	s.accountsMu.RLock()
+	defer s.accountsMu.RUnlock()
+	// Return a copy to prevent external modification
+	accountsCopy := make([]AccountInfo, len(s.accounts))
+	copy(accountsCopy, s.accounts)
+	return accountsCopy, s.currentAccount
+}
+
+// StoreAccountsList updates the in-memory account list received from the C# AddOn.
+// Called by the read loop when an accounts_list frame arrives.
+func (s *TCPServer) StoreAccountsList(accounts []AccountInfo, current string) {
+	s.accountsMu.Lock()
+	defer s.accountsMu.Unlock()
+	s.accounts = make([]AccountInfo, len(accounts))
+	copy(s.accounts, accounts)
+	s.currentAccount = current
+	s.logger.Info("tcp_server: stored accounts",
+		"count", len(s.accounts),
+		"current", current,
+		"accounts", accountsDebugString(accounts))
+}
+
+// SendAccountSelect tells the C# AddOn to switch to a different account.
+// Returns an error if no client is currently connected.
+func (s *TCPServer) SendAccountSelect(payload AccountSelectPayload) error {
+	s.connMu.Lock()
+	defer s.connMu.Unlock()
+	if s.conn == nil {
+		return fmt.Errorf("tcp_server: no client connected, cannot send account_select")
+	}
+	s.writeMu.Lock()
+	_ = s.conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	err := WriteFrame(s.conn, FrameAccountSelect, payload)
+	s.writeMu.Unlock()
+	if err != nil {
+		s.logger.Warn("tcp_server: send account_select", "err", err, "account", payload.Account)
+		return fmt.Errorf("tcp_server: send account_select: %w", err)
+	}
+	s.logger.Info("tcp_server: sent account_select", "account", payload.Account)
+	return nil
+}
+
+// accountsDebugString formats account list for logging.
+func accountsDebugString(accounts []AccountInfo) string {
+	names := make([]string, len(accounts))
+	for i, a := range accounts {
+		names[i] = a.Name
+	}
+	return "[" + fmt.Sprintf("%v", names)[1:len(fmt.Sprintf("%v", names))-1] + "]"
 }

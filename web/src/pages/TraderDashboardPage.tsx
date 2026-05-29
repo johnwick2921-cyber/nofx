@@ -6,6 +6,7 @@ import { DecisionCard } from '../components/trader/DecisionCard'
 import { DecisionAudit } from '../components/trader/DecisionAudit'
 import { EmergencyFlatButton } from '../components/trader/EmergencyFlatButton'
 import { PositionHistory } from '../components/trader/PositionHistory'
+import { AccountSelector } from '../components/trader/AccountSelector'
 import { PunkAvatar, getTraderAvatar } from '../components/common/PunkAvatar'
 import { confirmToast, notify } from '../lib/notify'
 import { formatPrice, formatQuantity } from '../utils/format'
@@ -402,6 +403,14 @@ export function TraderDashboardPage({
             <div className="flex items-center gap-4">
               {/* Plan 4 T23 — Emergency Flat (red, prominent, top-right) */}
               <EmergencyFlatButton traderId={selectedTrader.trader_id} />
+
+              {/* Plan 4.5 — Account Selector (NT8 only) */}
+              <AccountSelector
+                traderId={selectedTrader.trader_id}
+                onAccountChanged={() => {
+                  mutate(`account-${selectedTraderId}`)
+                }}
+              />
 
               {/* Trader Selector */}
               {traders && traders.length > 0 && (

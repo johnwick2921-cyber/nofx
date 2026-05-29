@@ -72,6 +72,13 @@ const (
 	FrameBarsUnsubscribe FrameType = "bars_unsubscribe"
 )
 
+// Plan 4.5 — account selection frame type.
+// Go-server → C#-AddOn account select (see tcp_server.SendAccountSelect).
+const (
+	FrameAccountsList    FrameType = "accounts_list"
+	FrameAccountSelect   FrameType = "account_select"
+)
+
 // Bar is the compact 6-field OHLCV bar used in bars_historical and bar_update
 // frames (protocol §6-7). Volume is a float because NT8 tick-volume
 // instruments report fractional values.
@@ -182,4 +189,18 @@ func marshalEnvelope(frameType FrameType, payload any) ([]byte, error) {
 		return nil, fmt.Errorf("tcp_framing: marshal envelope: %w", err)
 	}
 	return body, nil
+}
+
+// AccountInfo represents a NinjaTrader account available for selection.
+// Sent by the C# AddOn in accounts_list frame; used by the API to populate
+// the account dropdown with SIM/live status for filtering.
+type AccountInfo struct {
+	Name  string `json:"name"`   // e.g. "Sim101", "LFE05060792090061"
+	IsSim bool   `json:"is_sim"` // true if a SIM account, false if live/funded
+}
+
+// AccountSelectPayload is the Go-server → C#-AddOn account selection frame.
+// Tells the AddOn to switch to a different account and re-subscribe orders/fills.
+type AccountSelectPayload struct {
+	Account string `json:"account"` // account name to switch to, e.g. "Sim101"
 }
