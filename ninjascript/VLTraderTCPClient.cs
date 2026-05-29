@@ -731,8 +731,8 @@ namespace NinjaTrader.NinjaScript.AddOns
         {
             // Skip NT8 internal/test accounts (auto-generated test/bracket accounts).
             // These all have long UUID-like suffixes or are known test accounts.
-            if (a.Name == "Backtest" ||
-                a.Name.StartsWith("FTPROPLUSM") || a.Name.StartsWith("FTPROPLUS") ||
+            // NOTE: Backtest and Playback* are kept because they're valid trading accounts
+            if (a.Name.StartsWith("FTPROPLUSM") || a.Name.StartsWith("FTPROPLUS") ||
                 a.Name.StartsWith("TAKEPROFIT") || a.Name.StartsWith("TDFYSL") ||
                 a.Name.StartsWith("TDFYG") || a.Name.StartsWith("LFE") ||
                 a.Name.StartsWith("LFF") || a.Name.StartsWith("LBE") ||
@@ -882,11 +882,20 @@ namespace NinjaTrader.NinjaScript.AddOns
         // === Heartbeat loop (spec L4408: 30s interval) ===
         private void RunHeartbeatLoop(CancellationToken ct)
         {
+            int beatCount = 0;
             while (!ct.IsCancellationRequested)
             {
                 Thread.Sleep(HEARTBEAT_INTERVAL_MS);
                 if (ct.IsCancellationRequested) return;
                 WriteEnvelope("heartbeat", new Dictionary<string, object>());
+
+                // Periodic re-emit of accounts every 3 heartbeats (90s) to ensure
+                // Go always has them after a restart (not just on connect/change)
+                beatCount++;
+                if (beatCount % 3 == 0)
+                {
+                    SendAccountsList();
+                }
             }
         }
 
