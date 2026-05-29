@@ -322,6 +322,19 @@ func (t *TCPTrader) BarCache() *ntwire.BarCache { return t.server.BarCache() }
 // Used by the /api/accounts and /api/account/select handlers to interact with the NT AddOn.
 func (t *TCPTrader) GetServer() *ntwire.TCPServer { return t.server }
 
+// ResetAccountState clears cached fill/position state when switching accounts.
+// Called by the /api/account/select handler to ensure GetPositions() fetches fresh
+// data from the newly selected account (not stale cached fills from the old account).
+func (t *TCPTrader) ResetAccountState() {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.hasFill = false
+	t.lastFill = ntwire.FillPayload{}
+	t.stopLoss = map[string]float64{}
+	t.takePrft = map[string]float64{}
+	t.pending = map[string]string{}
+}
+
 // SetParentAutoTrader sets the parent AutoTrader reference (Plan 4 Stage 4).
 // Called by transport.go after creating the TCPTrader. Used to notify when
 // the first account_balance frame arrives (defer-until-balance guard).

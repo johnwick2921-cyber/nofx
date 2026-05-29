@@ -148,6 +148,14 @@ func (s *Server) handleSelectAccount(c *gin.Context) {
 		return
 	}
 
+	// Reset Go-side cached position/fill state so GetPositions() fetches fresh data
+	// from the newly selected account (not stale cached fills from the old account).
+	// This ensures balance, positions, PnL, orders all reflect the NEW account.
+	if tcpTrader, ok := autoTrader.GetUnderlyingTrader().(*ntTrader.TCPTrader); ok {
+		tcpTrader.ResetAccountState()
+		logger.Infof("api/account/select: reset Go cached state for %s", req.Account)
+	}
+
 	logger.Infof("api/account/select: switched to account %s (SIM=%v)", req.Account, targetAccount.IsSim)
 	c.JSON(http.StatusOK, gin.H{
 		"current_account": req.Account,
