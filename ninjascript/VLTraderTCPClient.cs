@@ -729,14 +729,24 @@ namespace NinjaTrader.NinjaScript.AddOns
 
         private bool IsRealAccount(Account a)
         {
+            if (a == null) return false;
+
             // Skip NT8 internal/test/bracket accounts (auto-generated).
-            // All other accounts (including Backtest, Playback*, LFE..., LFF..., LBE..., LBF...)
-            // are included and sent to Go. IsSimAccount marks them as SIM or funded (is_sim=false).
             if (a.Name.StartsWith("FTPROPLUSM") || a.Name.StartsWith("FTPROPLUS") ||
                 a.Name.StartsWith("TAKEPROFIT") || a.Name.StartsWith("TDFYSL") ||
                 a.Name.StartsWith("TDFYG") || a.Name.StartsWith("MFFU"))
                 return false;
-            return true;
+
+            // Narrow to accounts on a CONNECTED connection (the real active set).
+            // Account.Connection exposes the link to the data provider (Tradovate, etc).
+            // Only include accounts whose connection is currently connected.
+            try
+            {
+                if (a.Connection == null) return false;
+                // ConnectionStatus enum: Connecting, Connected, Disconnecting, Disconnected
+                return a.Connection.ConnectionStatus == NinjaTrader.Cbi.ConnectionStatus.Connected;
+            }
+            catch { return false; }
         }
 
         private void SendAccountsList()
