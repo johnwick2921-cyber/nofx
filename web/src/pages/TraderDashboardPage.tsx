@@ -401,21 +401,6 @@ export function TraderDashboardPage({
               {/* Plan 4 T23 — Emergency Flat (red, prominent, top-right) */}
               <EmergencyFlatButton traderId={selectedTrader.trader_id} />
 
-              {/* Trader Selector */}
-              {traders && traders.length > 0 && (
-                <div className="flex items-center gap-2 nofx-glass px-1 py-1 rounded-lg border border-white/5">
-                  <NofxSelect
-                    value={selectedTraderId || ''}
-                    onChange={(val) => onTraderSelect(val)}
-                    options={traders.map((t) => ({
-                      value: t.trader_id,
-                      label: t.trader_name,
-                    }))}
-                    className="bg-transparent text-sm font-medium cursor-pointer transition-colors text-nofx-text-main px-2 py-1"
-                  />
-                </div>
-              )}
-
               {/* Account Selector */}
               {selectedTraderId && (
                 <AccountSelector
