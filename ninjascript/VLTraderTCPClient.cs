@@ -54,6 +54,21 @@ namespace NinjaTrader.NinjaScript.AddOns
         private readonly Dictionary<string, double> signalTickSizeByOco = new Dictionary<string, double>();
         private readonly object signalMapLock = new object();
 
+        // Pending protective brackets, keyed by signal_id. The SL/TP are placed
+        // only AFTER the entry fills (see OnOrderUpdate) — placing them in the
+        // entry's OCO group caused NT to cancel them the instant the entry
+        // filled (OCO = one-cancels-other), leaving the position unprotected.
+        private readonly Dictionary<string, PendingBracket> pendingBrackets = new Dictionary<string, PendingBracket>();
+
+        private class PendingBracket
+        {
+            public Instrument  Instrument;
+            public OrderAction ExitAction;
+            public int         Qty;
+            public double      Sl;
+            public double      Tp;
+        }
+
         // Plan 4.4 Stage 1 — multi-timeframe BarsRequest subscriptions. Owns
         // its own state; calls back into SendFrame() which serializes through
         // writeLock so bar frames cannot interleave with signal/fill bytes.
@@ -116,24 +131,54 @@ namespace NinjaTrader.NinjaScript.AddOns
         }
 
         // === Account resolution ===
-        // For SIM testing: prefer "Sim101", else the first available account.
+        // Selection order (first match wins):
+        //   1. The account name in %USERPROFILE%\NofxTrader\account.txt
+        //      (operator-editable — one line, e.g. "Sim101" or "MyPropAcct").
+        //   2. "Sim101" (SIM default).
+        //   3. The first available account.
         private void ResolveAccount()
         {
+            string preferred = null;
+            try
+            {
+                string path = Path.Combine(
+                    Environment.GetEnvironmentVariable("USERPROFILE") ?? "",
+                    "NofxTrader", "account.txt");
+                if (File.Exists(path))
+                {
+                    preferred = File.ReadAllText(path).Trim();
+                    if (preferred.Length == 0) preferred = null;
+                }
+            }
+            catch (Exception ex)
+            {
+                LogWarn("VLTraderTCPClient: could not read account.txt: " + ex.Message);
+            }
+
             lock (Account.All)
             {
-                foreach (var a in Account.All)
+                if (preferred != null)
                 {
-                    if (a.Name == "Sim101") { account = a; return; }
+                    foreach (var a in Account.All)
+                        if (a.Name == preferred) { account = a; break; }
+                    if (account == null)
+                        LogWarn("VLTraderTCPClient: account.txt requested '" + preferred
+                                + "' but no such account — falling back");
                 }
-                if (Account.All.Count > 0) account = Account.All[0];
+                if (account == null)
+                    foreach (var a in Account.All)
+                        if (a.Name == "Sim101") { account = a; break; }
+                if (account == null && Account.All.Count > 0) account = Account.All[0];
             }
+
             if (account == null)
             {
                 LogWarn("VLTraderTCPClient: no account resolved; signals will be rejected");
             }
             else
             {
-                LogInfo("VLTraderTCPClient: using account " + account.Name);
+                LogInfo("VLTraderTCPClient: using account " + account.Name
+                        + (preferred != null && account.Name == preferred ? " (from account.txt)" : ""));
             }
         }
 
@@ -344,37 +389,43 @@ namespace NinjaTrader.NinjaScript.AddOns
                 signalTickSizeByOco[signalId] = tickSize;
             }
 
-            // OCO bracket: entry market + SL stop + TP limit, all sharing the
-            // signal_id as the OCO group id so fills can be correlated.
+            // Submit the ENTRY only; the protective SL/TP are placed once the
+            // entry fills (OnOrderUpdate → SubmitBracketOnEntryFill). Submitting
+            // all three in one OCO group cancels the SL/TP the instant the
+            // Market entry fills (OCO = one-cancels-other) — the position then
+            // has no working stop/target in NT8 and never auto-closes. The
+            // entry stands alone (empty OCO); SL+TP get their own OCO pair.
             try
             {
-                var ocoId = signalId;
                 var entryAction = side == "long" ? OrderAction.Buy : OrderAction.SellShort;
                 var exitAction  = side == "long" ? OrderAction.Sell : OrderAction.BuyToCover;
 
                 var entryOrder = account.CreateOrder(
                     instrument, entryAction, OrderType.Market, OrderEntry.Manual,
-                    TimeInForce.Day, qty, 0, 0, ocoId, signalId,
+                    TimeInForce.Day, qty, 0, 0, string.Empty, signalId,
                     Core.Globals.MaxDate, null);
 
-                var slOrder = account.CreateOrder(
-                    instrument, exitAction, OrderType.StopMarket, OrderEntry.Manual,
-                    TimeInForce.Day, qty, 0, sl, ocoId, signalId + "-sl",
-                    Core.Globals.MaxDate, null);
+                lock (signalMapLock)
+                {
+                    pendingBrackets[signalId] = new PendingBracket
+                    {
+                        Instrument = instrument,
+                        ExitAction = exitAction,
+                        Qty        = qty,
+                        Sl         = sl,
+                        Tp         = tp,
+                    };
+                }
 
-                var tpOrder = account.CreateOrder(
-                    instrument, exitAction, OrderType.Limit, OrderEntry.Manual,
-                    TimeInForce.Day, qty, tp, 0, ocoId, signalId + "-tp",
-                    Core.Globals.MaxDate, null);
-
-                account.Submit(new[] { entryOrder, slOrder, tpOrder });
-                LogInfo("VLTraderTCPClient: submitted OCO bracket signal_id=" + signalId
+                account.Submit(new[] { entryOrder });
+                LogInfo("VLTraderTCPClient: submitted entry signal_id=" + signalId
                         + " " + side + " " + qty + " " + symbol
-                        + " entry≈" + entry + " sl=" + sl + " tp=" + tp);
+                        + " entry≈" + entry + " (SL=" + sl + " TP=" + tp + " on fill)");
             }
             catch (Exception ex)
             {
                 LogWarn("VLTraderTCPClient: order submit failed: " + ex.Message);
+                lock (signalMapLock) { pendingBrackets.Remove(signalId); }
                 SendFillFrame(signalId, 0.0, side, qty, 0.0, "rejected");
             }
         }
@@ -435,6 +486,18 @@ namespace NinjaTrader.NinjaScript.AddOns
                 default:                    return;
             }
 
+            // Entry just filled → place the protective SL/TP now that the
+            // position exists (deferred from HandleSignal to dodge the OCO
+            // cancel-on-entry-fill bug). On rejection, drop the pending bracket.
+            if (e.OrderState == OrderState.Filled)
+            {
+                SubmitBracketOnEntryFill(signalId);
+            }
+            else if (e.OrderState == OrderState.Rejected)
+            {
+                lock (signalMapLock) { pendingBrackets.Remove(signalId); }
+            }
+
             string sideStr = (e.Order.OrderAction == OrderAction.Buy
                               || e.Order.OrderAction == OrderAction.BuyToCover)
                               ? "long"
@@ -470,6 +533,41 @@ namespace NinjaTrader.NinjaScript.AddOns
                 ["status"]         = status
             };
             WriteEnvelope("fill", payload);
+        }
+
+        // Place the protective SL + TP once the entry has filled. They share
+        // their OWN OCO group (signal_id-exit) so one cancels the other when
+        // triggered, and — crucially — they are NOT in the entry's OCO group,
+        // so the entry fill no longer cancels them. Names keep the -sl/-tp
+        // suffix so OnOrderUpdate routes their fills to position_close.
+        private void SubmitBracketOnEntryFill(string signalId)
+        {
+            PendingBracket b;
+            lock (signalMapLock)
+            {
+                if (!pendingBrackets.TryGetValue(signalId, out b)) return;
+                pendingBrackets.Remove(signalId); // idempotent: only place once
+            }
+            try
+            {
+                string exitOco = signalId + "-exit";
+                var slOrder = account.CreateOrder(
+                    b.Instrument, b.ExitAction, OrderType.StopMarket, OrderEntry.Manual,
+                    TimeInForce.Day, b.Qty, 0, b.Sl, exitOco, signalId + "-sl",
+                    Core.Globals.MaxDate, null);
+                var tpOrder = account.CreateOrder(
+                    b.Instrument, b.ExitAction, OrderType.Limit, OrderEntry.Manual,
+                    TimeInForce.Day, b.Qty, b.Tp, 0, exitOco, signalId + "-tp",
+                    Core.Globals.MaxDate, null);
+                account.Submit(new[] { slOrder, tpOrder });
+                LogInfo("VLTraderTCPClient: placed protective bracket signal_id=" + signalId
+                        + " sl=" + b.Sl + " tp=" + b.Tp);
+            }
+            catch (Exception ex)
+            {
+                LogWarn("VLTraderTCPClient: bracket submit failed signal_id=" + signalId
+                        + ": " + ex.Message);
+            }
         }
 
         // Position-history fix — emit a position_close frame when an OCO exit
