@@ -729,14 +729,12 @@ namespace NinjaTrader.NinjaScript.AddOns
 
         private bool IsRealAccount(Account a)
         {
-            // Skip NT8 internal/test accounts (auto-generated test/bracket accounts).
-            // These all have long UUID-like suffixes or are known test accounts.
-            // NOTE: Backtest and Playback* are kept because they're valid trading accounts
+            // Skip NT8 internal/test/bracket accounts (auto-generated).
+            // All other accounts (including Backtest, Playback*, LFE..., LFF..., LBE..., LBF...)
+            // are included and sent to Go. IsSimAccount marks them as SIM or funded (is_sim=false).
             if (a.Name.StartsWith("FTPROPLUSM") || a.Name.StartsWith("FTPROPLUS") ||
                 a.Name.StartsWith("TAKEPROFIT") || a.Name.StartsWith("TDFYSL") ||
-                a.Name.StartsWith("TDFYG") || a.Name.StartsWith("LFE") ||
-                a.Name.StartsWith("LFF") || a.Name.StartsWith("LBE") ||
-                a.Name.StartsWith("LBF") || a.Name.StartsWith("MFFU"))
+                a.Name.StartsWith("TDFYG") || a.Name.StartsWith("MFFU"))
                 return false;
             return true;
         }
