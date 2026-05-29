@@ -737,16 +737,52 @@ namespace NinjaTrader.NinjaScript.AddOns
                 a.Name.StartsWith("TDFYG") || a.Name.StartsWith("MFFU"))
                 return false;
 
-            // Narrow to accounts on a CONNECTED connection (the real active set).
-            // Account.Connection exposes the link to the data provider (Tradovate, etc).
-            // Only include accounts whose connection is currently connected.
+            // Narrow to accounts on an ACTIVE/CONNECTED provider. Exclude latent account slots.
+            // Use reflection to safely check Account properties for connection state.
             try
             {
-                if (a.Connection == null) return false;
-                // ConnectionStatus enum: Connecting, Connected, Disconnecting, Disconnected
-                return a.Connection.ConnectionStatus == NinjaTrader.Cbi.ConnectionStatus.Connected;
+                // Try Account.Connection.ConnectionStatus (NT8 8.1+)
+                var connProp = a.GetType().GetProperty("Connection");
+                if (connProp != null)
+                {
+                    var conn = connProp.GetValue(a, null);
+                    if (conn != null)
+                    {
+                        var statusProp = conn.GetType().GetProperty("ConnectionStatus");
+                        if (statusProp != null)
+                        {
+                            var status = statusProp.GetValue(conn, null);
+                            // Return true only if ConnectionStatus is 1 (Connected enum value)
+                            return status != null && status.ToString() == "Connected";
+                        }
+                    }
+                }
+
+                // Fallback: check Account.Provider connection (alternative approach)
+                var providerProp = a.GetType().GetProperty("Provider");
+                if (providerProp != null)
+                {
+                    var provider = providerProp.GetValue(a, null);
+                    if (provider != null)
+                    {
+                        var provStatusProp = provider.GetType().GetProperty("ConnectionStatus");
+                        if (provStatusProp != null)
+                        {
+                            var provStatus = provStatusProp.GetValue(provider, null);
+                            return provStatus != null && provStatus.ToString() == "Connected";
+                        }
+                    }
+                }
+
+                // Final fallback: if we can't determine connection state, include the account
+                // (err on the side of showing accounts rather than hiding them)
+                return true;
             }
-            catch { return false; }
+            catch
+            {
+                // If reflection fails, include the account (fail-open for real accounts)
+                return true;
+            }
         }
 
         private void SendAccountsList()
