@@ -46,6 +46,20 @@ export function AccountSelector({
   const currentAccount = accountsData?.current
   const accounts = accountsData?.accounts || []
 
+  // Debug logging
+  useEffect(() => {
+    console.log(
+      'AccountSelector DEBUG: currentAccount=',
+      currentAccount,
+      'accounts=',
+      accounts,
+      'isLoading=',
+      isLoading,
+      'error=',
+      error
+    )
+  }, [currentAccount, accounts, isLoading, error])
+
   // Memoize ref callback to prevent infinite setState loop
   const handleTriggerRef = useCallback((el: HTMLButtonElement | null) => {
     if (el) setTriggerRect(el.getBoundingClientRect())
