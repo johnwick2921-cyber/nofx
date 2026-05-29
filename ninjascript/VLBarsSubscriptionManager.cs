@@ -202,7 +202,20 @@ namespace NinjaTrader.NinjaScript.AddOns
             {
                 if (active.ContainsKey(key))
                 {
-                    logInfo("VLBarsSubscriptionManager: subscribe " + key + " — already active, ignoring");
+                    // N3 re-seed: the Go side re-subscribed to an already-active
+                    // subscription. This happens when the Go PROCESS restarts —
+                    // its in-memory BarCache is wiped, but our BarsRequest
+                    // survived (it is tied to NT8's data engine, not the Go TCP
+                    // socket). Re-emit the full historical window from the live
+                    // BarsRequest so the Go cache refills WITHOUT requiring a
+                    // full NT8 restart. We do NOT recreate the BarsRequest (the
+                    // live feed keeps running) — only resend the seed. Uses the
+                    // existing bars_historical frame, so it is wire-compatible
+                    // with any Go peer (no new frame type).
+                    var existing = active[key];
+                    existing.LastEmittedTimeUtcMs = 0; // reset dedup cursor -> full re-seed
+                    EmitHistorical(existing);          // resends bars_historical from req.Bars
+                    logInfo("VLBarsSubscriptionManager: re-seeded " + key + " on Go reconnect (N3)");
                     return;
                 }
 
