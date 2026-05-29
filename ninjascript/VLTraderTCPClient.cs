@@ -737,41 +737,34 @@ namespace NinjaTrader.NinjaScript.AddOns
                 a.Name.StartsWith("TDFYG") || a.Name.StartsWith("MFFU"))
                 return false;
 
-            // Include only real trading accounts (SIM and live funded accounts).
-            // Exclude the massive number of latent LFE slots that NT8 creates for
-            // each possible margin level but never uses. Real accounts are:
-            // - Sim* (simulation)
-            // - LFE* followed by exactly 15 digits (live funded, e.g. LFE05060792090061)
-            // - Playback* (backtest/replay accounts)
-            // - Backtest (generic backtest)
-            if (a.Name.StartsWith("Sim") || a.Name.StartsWith("Playback") ||
-                a.Name == "Backtest")
-                return true;
-
-            // For LFE accounts: only include if it's a real account number (15 digits).
-            // Exclude latent LFE slots that don't match the pattern.
-            if (a.Name.StartsWith("LFE"))
+            // Per NinjaTrader staff: filter to accounts on a FULLY CONNECTED connection.
+            // A connection is "green/fully connected" when BOTH Status and PriceStatus
+            // are ConnectionStatus.Connected (one can be up without the other).
+            try
             {
-                string suffix = a.Name.Substring(3);
-                // Real LFE accounts have exactly 15-17 digit account numbers
-                if (suffix.Length >= 15 && suffix.Length <= 17)
-                {
-                    // Check if it's all digits (real account number)
-                    bool isNumeric = true;
-                    foreach (char c in suffix)
-                    {
-                        if (!char.IsDigit(c))
-                        {
-                            isNumeric = false;
-                            break;
-                        }
-                    }
-                    if (isNumeric) return true;
-                }
+                if (a.Connection == null) return false;
+
+                // Check both Status and PriceStatus (per NT staff guidance).
+                // ConnectionStatus.Connected is the enum value we're matching.
+                var connStatus = a.Connection.Status;
+                var priceStatus = a.Connection.PriceStatus;
+
+                // Only include if BOTH are Connected (fully green in NT8 Control Center)
+                bool isConnected = (connStatus.ToString() == "Connected") &&
+                                  (priceStatus.ToString() == "Connected");
+
+                if (!isConnected) return false;
+
+                // If Status && PriceStatus filter isn't enough and Backtest/Playback
+                // still show as green, add a provider/name narrowing (not needed if
+                // only real accounts are green).
+                return true;
+            }
+            catch (Exception ex)
+            {
+                LogWarn(string.Format("@@@ IsRealAccount check failed for {0}: {1}", a.Name, ex.Message));
                 return false;
             }
-
-            return false;
         }
 
         private void SendAccountsList()
