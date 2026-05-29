@@ -182,6 +182,26 @@ namespace NinjaTrader.NinjaScript.AddOns
             }
         }
 
+        // === SIM detection ===
+        // Returns true if the account is a simulation account. Tries Account.Simulation
+        // property first (NT8 8.1+), then falls back to name pattern matching (Sim*).
+        private bool IsSimAccount(Account a)
+        {
+            if (a == null) return false;
+            try
+            {
+                // NT8 8.1+ exposes Account.Simulation property
+                var simProp = a.GetType().GetProperty("Simulation");
+                if (simProp != null && simProp.PropertyType == typeof(bool))
+                {
+                    return (bool)simProp.GetValue(a, null);
+                }
+            }
+            catch { }
+            // Fallback: name-based detection (Sim prefix is NT8 standard for SIM accounts)
+            return a.Name != null && a.Name.StartsWith("Sim");
+        }
+
         // === Connection loop with reconnect (spec L4415: every 5s) ===
         private void RunConnectionLoop(CancellationToken ct)
         {
@@ -193,6 +213,8 @@ namespace NinjaTrader.NinjaScript.AddOns
                     client.Connect(GO_SERVER_HOST, GO_SERVER_PORT);
                     stream = client.GetStream();
                     LogInfo("VLTraderTCPClient: connected");
+                    // Send accounts_list first so the Go server knows about all accounts
+                    SendAccountsList();
                     // Plan 4.11 — push the current account balance immediately
                     // on (re)connect so the dashboard shows the real SIM
                     // account without waiting for the next AccountItemUpdate.
@@ -282,6 +304,10 @@ namespace NinjaTrader.NinjaScript.AddOns
                 else if (type == "close_position")
                 {
                     HandleClosePosition(payload);
+                }
+                else if (type == "account_select")
+                {
+                    HandleAccountSelect(payload);
                 }
                 else if (type == "heartbeat")
                 {
@@ -462,6 +488,73 @@ namespace NinjaTrader.NinjaScript.AddOns
             }
         }
 
+        // === Account switching (Go-server → C#-AddOn command) ===
+        // Unsubscribe from the old account's events, resolve the new account by name,
+        // subscribe to its events, clear pending state tied to the old account,
+        // and re-emit account_balance for the new account.
+        private void HandleAccountSelect(Dictionary<string, object> p)
+        {
+            if (p == null) { LogWarn("VLTraderTCPClient: account_select empty payload"); return; }
+            try
+            {
+                string requestedAccount = GetString(p, "account");
+                if (string.IsNullOrEmpty(requestedAccount))
+                {
+                    LogWarn("VLTraderTCPClient: account_select missing account name");
+                    return;
+                }
+
+                // Resolve the requested account from Account.All
+                Account newAccount = null;
+                lock (Account.All)
+                {
+                    foreach (var a in Account.All)
+                        if (a.Name == requestedAccount) { newAccount = a; break; }
+                }
+
+                if (newAccount == null)
+                {
+                    LogWarn("VLTraderTCPClient: account_select account not found: " + requestedAccount);
+                    return;
+                }
+
+                // If already on that account, no-op
+                if (account == newAccount)
+                {
+                    LogInfo("VLTraderTCPClient: account_select already on " + requestedAccount);
+                    return;
+                }
+
+                // Unsubscribe from the old account's events
+                if (account != null)
+                {
+                    try { account.OrderUpdate -= OnOrderUpdate; } catch { }
+                    try { account.AccountItemUpdate -= OnAccountItemUpdate; } catch { }
+                }
+
+                // Switch to the new account and subscribe to its events
+                account = newAccount;
+                account.OrderUpdate += OnOrderUpdate;
+                account.AccountItemUpdate += OnAccountItemUpdate;
+
+                // Clear pending brackets and signal maps (tied to old account context)
+                lock (signalMapLock)
+                {
+                    signalEntryByOco.Clear();
+                    signalTickSizeByOco.Clear();
+                    pendingBrackets.Clear();
+                }
+
+                // Re-emit account_balance immediately for the new account
+                SendAccountBalance();
+                LogInfo("VLTraderTCPClient: switched to account " + account.Name);
+            }
+            catch (Exception ex)
+            {
+                LogWarn("VLTraderTCPClient: account_select failed: " + ex.Message);
+            }
+        }
+
         // === Fill subscription (spec L4398-4406) ===
         private void OnOrderUpdate(object sender, OrderEventArgs e)
         {
@@ -617,6 +710,39 @@ namespace NinjaTrader.NinjaScript.AddOns
                 ["exit_time"]     = DateTime.UtcNow.ToString("o")
             };
             WriteEnvelope("position_close", payload);
+        }
+
+        // Emit the accounts_list frame reporting all available NT accounts with
+        // SIM detection. Fired on connect so the Go server can populate the UI
+        // account selector. Also used on account list change (if NT fires an event).
+        // WriteEnvelope no-ops if not yet connected.
+        private void SendAccountsList()
+        {
+            try
+            {
+                var accountsList = new List<object>();
+                lock (Account.All)
+                {
+                    foreach (var a in Account.All)
+                    {
+                        var acctInfo = new Dictionary<string, object>
+                        {
+                            ["name"]   = a.Name,
+                            ["is_sim"] = IsSimAccount(a)
+                        };
+                        accountsList.Add(acctInfo);
+                    }
+                }
+                var payload = new Dictionary<string, object>
+                {
+                    ["accounts"] = accountsList
+                };
+                WriteEnvelope("accounts_list", payload);
+            }
+            catch (Exception ex)
+            {
+                LogWarn("VLTraderTCPClient: accounts_list emit failed: " + ex.Message);
+            }
         }
 
         // Plan 4.11 — emit the real NT SIM account balance as an account_balance

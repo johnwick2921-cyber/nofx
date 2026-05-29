@@ -391,6 +391,19 @@ Returns: {"trader_id":"<string>","daily_pnl_usd":<float>,"daily_loss_limit_usd":
 Returns: []DecisionRecord JSON ordered by timestamp DESC, including PromptVersion, AIModel, AILatencyMs, RiskCheck*, ExecutionStatus, FillPrice, FillLatencyMs.`,
 				s.handleDecisionAudit)
 
+			// Plan 4 Stage 4 — NinjaTrader account management
+			s.routeWithSchema(protected, "GET", "/accounts", "List available NT accounts (NinjaTrader TCP bridge only)",
+				`Query: ?trader_id=<EXACT trader_id from GET /api/my-traders>
+Returns: {"current":"<account name or empty>","accounts":[{"name":"<string>","is_sim":<bool>}]}
+Empty list + current=null means no accounts_list frame received yet (AddOn not connected).`,
+				s.handleGetAccounts)
+			s.routeWithSchema(protected, "POST", "/account/select", "Switch to a different NT account (SIM-only, server-side guard)",
+				`Query: ?trader_id=<EXACT trader_id from GET /api/my-traders>
+Body: {"account":"<account name, e.g. Sim101>"}
+Returns: {"current":"<new account name>","message":"<status>"}
+Server rejects non-SIM accounts (is_sim == false) with HTTP 400.`,
+				s.handleSelectAccount)
+
 		}
 	}
 }
