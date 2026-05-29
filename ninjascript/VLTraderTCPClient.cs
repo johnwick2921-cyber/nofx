@@ -737,51 +737,50 @@ namespace NinjaTrader.NinjaScript.AddOns
                 a.Name.StartsWith("TDFYG") || a.Name.StartsWith("MFFU"))
                 return false;
 
-            // Narrow to accounts on an ACTIVE/CONNECTED provider. Exclude latent account slots.
-            // Use reflection to safely check Account properties for connection state.
+            // Narrow to accounts on an ACTIVE connection. Exclude latent LFE slots.
+            // The heuristic: include only accounts that belong to the current primary
+            // connection (the one we're trading on). In NT8, all connected accounts
+            // should have consistent Connection.ConnectionStatus or Provider states.
             try
             {
-                // Try Account.Connection.ConnectionStatus (NT8 8.1+)
-                var connProp = a.GetType().GetProperty("Connection");
-                if (connProp != null)
+                // Check Account.Provider.Connection.ConnectionStatus
+                var provProp = a.GetType().GetProperty("Provider");
+                if (provProp != null)
                 {
-                    var conn = connProp.GetValue(a, null);
-                    if (conn != null)
-                    {
-                        var statusProp = conn.GetType().GetProperty("ConnectionStatus");
-                        if (statusProp != null)
-                        {
-                            var status = statusProp.GetValue(conn, null);
-                            // Return true only if ConnectionStatus is 1 (Connected enum value)
-                            return status != null && status.ToString() == "Connected";
-                        }
-                    }
-                }
-
-                // Fallback: check Account.Provider connection (alternative approach)
-                var providerProp = a.GetType().GetProperty("Provider");
-                if (providerProp != null)
-                {
-                    var provider = providerProp.GetValue(a, null);
+                    var provider = provProp.GetValue(a, null);
                     if (provider != null)
                     {
-                        var provStatusProp = provider.GetType().GetProperty("ConnectionStatus");
-                        if (provStatusProp != null)
+                        var connProp = provider.GetType().GetProperty("Connection");
+                        if (connProp != null)
                         {
-                            var provStatus = provStatusProp.GetValue(provider, null);
-                            return provStatus != null && provStatus.ToString() == "Connected";
+                            var conn = connProp.GetValue(provider, null);
+                            if (conn != null)
+                            {
+                                var statusProp = conn.GetType().GetProperty("ConnectionStatus");
+                                if (statusProp != null)
+                                {
+                                    var statusValue = statusProp.GetValue(conn, null);
+                                    if (statusValue != null)
+                                    {
+                                        bool isConnected = statusValue.ToString() == "Connected" ||
+                                                         (int)statusValue == 1; // Enum value for Connected
+                                        return isConnected;
+                                    }
+                                }
+                            }
                         }
                     }
                 }
 
-                // Final fallback: if we can't determine connection state, include the account
-                // (err on the side of showing accounts rather than hiding them)
-                return true;
+                // Fallback: if we can't determine connection, be conservative and EXCLUDE
+                // (better to send too few accounts than too many latent slots)
+                return false;
             }
-            catch
+            catch (Exception ex)
             {
-                // If reflection fails, include the account (fail-open for real accounts)
-                return true;
+                LogWarn(string.Format("@@@ IsRealAccount reflection failed for {0}: {1}", a.Name, ex.Message));
+                // On error, exclude the account (fail-closed)
+                return false;
             }
         }
 
