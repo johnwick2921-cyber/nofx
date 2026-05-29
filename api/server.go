@@ -116,9 +116,10 @@ func (s *Server) setupRoutes() {
 		s.route(api, "GET", "/klines", "Candlestick data (?symbol=&interval=&limit=)", s.handleKlines)
 		s.route(api, "GET", "/symbols", "Available trading symbols", s.handleSymbols)
 
-		// Live NT8 bar stream over SSE (Plan 4.4 Stage 4). Self-authed via
-		// ?token= because EventSource cannot set an Authorization header.
-		s.route(api, "GET", "/v1/bars/stream", "SSE live NT8 bars (?trader_id=&symbol=&tf=&token=)", s.handleBarsStream)
+		// Live NT8 bar stream over SSE (Plan 4.4 Stage 4). Self-authed via a
+		// short-lived ?ticket= (minted below) because EventSource cannot set an
+		// Authorization header and a JWT in the URL leaks into logs.
+		s.route(api, "GET", "/v1/bars/stream", "SSE live NT8 bars (?trader_id=&symbol=&tf=&ticket=)", s.handleBarsStream)
 
 		// Public strategy market (no authentication required)
 		s.route(api, "GET", "/strategies/public", "Public strategy market", s.handlePublicStrategies)
@@ -135,6 +136,8 @@ func (s *Server) setupRoutes() {
 		{
 			// Logout (add to blacklist)
 			s.route(protected, "POST", "/logout", "Logout (blacklist token)", s.handleLogout)
+			// Mint a short-lived single-use SSE ticket for the live bar stream (Stage 4).
+			s.route(protected, "POST", "/v1/bars/stream-ticket", "Mint a short-lived SSE stream ticket", s.handleBarsStreamTicket)
 			s.route(protected, "POST", "/onboarding/beginner", "Prepare beginner claw402 wallet and default model", s.handleBeginnerOnboarding)
 			s.route(protected, "GET", "/onboarding/beginner/current", "Get current beginner claw402 wallet", s.handleCurrentBeginnerWallet)
 			s.route(protected, "GET", "/agent/preferences", "Get persistent agent preferences", s.handleGetAgentPreferences)

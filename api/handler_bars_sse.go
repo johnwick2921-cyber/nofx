@@ -8,7 +8,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 
-	"nofx/auth"
 	ntTrader "nofx/trader/ninjatrader"
 )
 
@@ -24,19 +23,17 @@ import (
 // Stage-2 bar receive path, no BarCache pub/sub. Sends a one-shot snapshot then
 // ~1s incremental updates (re-send the in-progress bar + append new bars).
 func (s *Server) handleBarsStream(c *gin.Context) {
-	token := c.Query("token")
-	if token == "" || auth.IsTokenBlacklisted(token) {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing or blacklisted token"})
-		return
-	}
-	claims, err := auth.ValidateJWT(token)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired token"})
+	// Auth via a short-lived single-use ticket (minted by the protected
+	// /v1/bars/stream-ticket endpoint) — the long-lived JWT never appears in
+	// the URL. See stream_ticket.go.
+	userID, ok := consumeStreamTicket(c.Query("ticket"))
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "missing, invalid, or expired stream ticket"})
 		return
 	}
 	// Scope trader resolution to the caller, exactly like the protected routes
 	// (authMiddleware sets user_id; this route self-auths so we set it here).
-	c.Set("user_id", claims.UserID)
+	c.Set("user_id", userID)
 
 	symbol := c.DefaultQuery("symbol", "MNQ")
 	tf := c.DefaultQuery("tf", "5m")

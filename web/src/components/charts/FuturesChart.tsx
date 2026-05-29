@@ -7,6 +7,7 @@ import {
   CandlestickSeries,
   HistogramSeries,
 } from 'lightweight-charts'
+import { httpClient } from '../../lib/httpClient'
 
 // Raw bar off the SSE wire (provider/ninjatrader Bar — epoch-ms time).
 interface WireBar {
@@ -139,27 +140,21 @@ export function FuturesChart({
     }
   }, [])
 
-  // Open the SSE stream whenever the target changes.
+  // Open the SSE stream whenever the target changes. Auth uses a short-lived
+  // single-use ticket (minted via the authenticated POST endpoint) instead of
+  // a JWT in the URL — so on every (re)connect we mint a fresh ticket, which is
+  // why reconnection is handled manually rather than via EventSource's retry.
   useEffect(() => {
     didFitRef.current = false
     setError(null)
     setConnected(false)
     setBarCount(0)
 
-    const token = localStorage.getItem('auth_token')
-    if (!token) {
-      setError('Not authenticated')
-      return
-    }
+    let es: EventSource | null = null
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+    let closed = false
 
-    const params = new URLSearchParams({ symbol, tf: interval, token })
-    if (traderID) params.set('trader_id', traderID)
-    const url = `/api/v1/bars/stream?${params.toString()}`
-    const es = new EventSource(url)
-
-    es.addEventListener('open', () => setConnected(true))
-
-    es.addEventListener('snapshot', (e: MessageEvent) => {
+    const handleSnapshot = (e: MessageEvent) => {
       setConnected(true)
       try {
         const payload = JSON.parse(e.data) as { bars: WireBar[] | null }
@@ -182,9 +177,9 @@ export function FuturesChart({
       } catch (err) {
         console.error('[FuturesChart] bad snapshot:', err)
       }
-    })
+    }
 
-    es.addEventListener('bar', (e: MessageEvent) => {
+    const handleBar = (e: MessageEvent) => {
       try {
         const b = JSON.parse(e.data) as WireBar
         // update() updates the matching time or appends a newer one.
@@ -194,14 +189,58 @@ export function FuturesChart({
       } catch (err) {
         console.error('[FuturesChart] bad bar:', err)
       }
-    })
-
-    es.onerror = () => {
-      // EventSource auto-reconnects; surface the gap in the UI meanwhile.
-      setConnected(false)
     }
 
-    return () => es.close()
+    const scheduleReconnect = () => {
+      if (closed || reconnectTimer) return
+      reconnectTimer = setTimeout(() => {
+        reconnectTimer = null
+        connect()
+      }, 3000)
+    }
+
+    const connect = async () => {
+      if (closed) return
+      let ticket = ''
+      try {
+        const res = await httpClient.request<{ ticket?: string }>(
+          '/api/v1/bars/stream-ticket',
+          { method: 'POST', silent: true }
+        )
+        if (!res.success || !res.data?.ticket) {
+          scheduleReconnect()
+          return
+        }
+        ticket = res.data.ticket
+      } catch {
+        scheduleReconnect()
+        return
+      }
+      if (closed) return
+
+      const params = new URLSearchParams({ symbol, tf: interval, ticket })
+      if (traderID) params.set('trader_id', traderID)
+      es = new EventSource(`/api/v1/bars/stream?${params.toString()}`)
+      es.addEventListener('open', () => setConnected(true))
+      es.addEventListener('snapshot', handleSnapshot)
+      es.addEventListener('bar', handleBar)
+      es.onerror = () => {
+        // Ticket is single-use; reconnect with a fresh one rather than let
+        // EventSource retry the now-consumed ticket.
+        setConnected(false)
+        es?.close()
+        es = null
+        scheduleReconnect()
+      }
+    }
+
+    connect()
+
+    return () => {
+      closed = true
+      if (reconnectTimer) clearTimeout(reconnectTimer)
+      es?.close()
+    }
   }, [symbol, interval, traderID])
 
   return (
