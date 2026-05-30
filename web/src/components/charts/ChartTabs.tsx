@@ -314,7 +314,7 @@ export function ChartTabs({
 
         {/* Right: Symbol + Interval */}
         {activeTab === 'kline' && (
-          <div className="flex items-center gap-2 md:gap-3 w-full md:w-auto min-w-0">
+          <div className="flex flex-wrap items-center gap-2 md:gap-3 w-full md:w-auto min-w-0">
             {/* Symbol Dropdown */}
             <div className="shrink-0 relative" ref={dropdownRef}>
               {marketConfig.hasDropdown ? (
@@ -393,8 +393,10 @@ export function ChartTabs({
               )}
             </div>
 
-            {/* Interval Selector - Allow scrolling if needed */}
-            <div className="flex items-center bg-black/40 rounded border border-white/10 overflow-x-auto no-scrollbar max-w-[200px] md:max-w-none">
+            {/* Interval Selector — wrap so ALL timeframe buttons stay visible
+                (the old overflow-x-auto + flex-shrink clipped the row to ~2-4
+                buttons behind a hidden scrollbar; NT8 needs all 7 reachable). */}
+            <div className="flex flex-wrap items-center bg-black/40 rounded border border-white/10">
               {(marketType === 'ninjatrader'
                 ? NINJATRADER_INTERVALS
                 : INTERVALS
