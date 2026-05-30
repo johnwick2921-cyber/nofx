@@ -91,7 +91,8 @@ func (s *Server) handleStatistics(c *gin.Context) {
 		return
 	}
 
-	stats, err := trader.GetStore().Decision().GetStatistics(trader.GetID())
+	// ITEM 2 per-account: scope stats to the selected account when provided.
+	stats, err := trader.GetStore().Decision().GetStatistics(trader.GetID(), c.Query("account"))
 	if err != nil {
 		SafeInternalError(c, "Get statistics", err)
 		return
@@ -128,9 +129,12 @@ func (s *Server) handleEquityHistory(c *gin.Context) {
 		return
 	}
 
-	// Get equity historical data from new equity table
-	// Every 3 minutes per cycle: 10000 records = about 20 days of data
-	snapshots, err := s.store.Equity().GetLatest(traderID, 10000)
+	// Get equity historical data from new equity table.
+	// ITEM 2 per-account: when ?account= is provided, scope the curve to that
+	// account so its baseline (snapshots[0].Balance below) is the account's OWN
+	// first snapshot — not the first of a mixed series — and pre-migration rows
+	// (account='') are excluded (quarantined). Empty account = trader-global.
+	snapshots, err := s.store.Equity().GetLatestScoped(traderID, c.Query("account"), 10000)
 	if err != nil {
 		SafeInternalError(c, "Get historical data", err)
 		return

@@ -206,8 +206,10 @@ func (s *Server) handlePositionHistory(c *gin.Context) {
 		return
 	}
 
-	// Get closed positions
-	positions, err := store.Position().GetClosedPositions(trader.GetID(), limit)
+	// Get closed positions (ITEM 2 per-account: scope the list to the selected
+	// account when provided; aggregate stats below remain trader-scoped pending
+	// trade data — there are no closed positions yet to exercise them).
+	positions, err := store.Position().GetClosedPositions(trader.GetID(), limit, c.Query("account"))
 	if err != nil {
 		SafeInternalError(c, "Get position history", err)
 		return

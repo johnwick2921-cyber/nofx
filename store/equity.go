@@ -16,6 +16,11 @@ type EquityStore struct {
 type EquitySnapshot struct {
 	ID            int64     `gorm:"primaryKey;autoIncrement" json:"id"`
 	TraderID      string    `gorm:"column:trader_id;not null;index:idx_equity_trader_time" json:"trader_id"`
+	// Account is the NT sub-account this snapshot belongs to (ITEM 2 / Plan 4
+	// per-account). Empty for crypto traders and for pre-migration rows — an
+	// empty value is excluded by the account-scoped query (quarantine), so old
+	// mixed-account rows never pollute a per-account curve.
+	Account       string    `gorm:"column:account;not null;default:'';index:idx_equity_trader_account" json:"account"`
 	Timestamp     time.Time `gorm:"not null;index:idx_equity_trader_time,sort:desc;index:idx_equity_timestamp,sort:desc" json:"timestamp"`
 	TotalEquity   float64   `gorm:"column:total_equity;not null;default:0" json:"total_equity"`
 	Balance       float64   `gorm:"not null;default:0" json:"balance"`
@@ -77,6 +82,29 @@ func (s *EquityStore) GetLatest(traderID string, limit int) ([]*EquitySnapshot, 
 		snapshots[i], snapshots[j] = snapshots[j], snapshots[i]
 	}
 
+	return snapshots, nil
+}
+
+// GetLatestScoped is GetLatest but optionally scoped to a single account
+// (ITEM 2 per-account). When account != "" it filters by (trader_id, account)
+// so a per-account curve excludes other accounts AND pre-migration rows
+// (account=''). When account == "" it behaves exactly like GetLatest
+// (trader-global) — the path crypto traders and legacy callers take.
+func (s *EquityStore) GetLatestScoped(traderID, account string, limit int) ([]*EquitySnapshot, error) {
+	if account == "" {
+		return s.GetLatest(traderID, limit)
+	}
+	var snapshots []*EquitySnapshot
+	err := s.db.Where("trader_id = ? AND account = ?", traderID, account).
+		Order("timestamp DESC").
+		Limit(limit).
+		Find(&snapshots).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to query equity records: %w", err)
+	}
+	for i, j := 0, len(snapshots)-1; i < j; i, j = i+1, j-1 {
+		snapshots[i], snapshots[j] = snapshots[j], snapshots[i]
+	}
 	return snapshots, nil
 }
 

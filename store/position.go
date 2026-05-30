@@ -97,6 +97,9 @@ func formatDurationMs(ms int64) string {
 type TraderPosition struct {
 	ID                 int64   `gorm:"primaryKey;autoIncrement" json:"id"`
 	TraderID           string  `gorm:"column:trader_id;not null;index:idx_positions_trader" json:"trader_id"`
+	// Account is the NT sub-account this position belongs to (ITEM 2 per-account).
+	// Empty for crypto and pre-migration rows; excluded by account-scoped reads.
+	Account            string  `gorm:"column:account;not null;default:''" json:"account"`
 	ExchangeID         string  `gorm:"column:exchange_id;not null;default:'';index:idx_positions_exchange" json:"exchange_id"`
 	ExchangeType       string  `gorm:"column:exchange_type;not null;default:''" json:"exchange_type"`
 	ExchangePositionID string  `gorm:"column:exchange_position_id;not null;default:''" json:"exchange_position_id"`
@@ -380,11 +383,16 @@ func (s *PositionStore) GetOpenPositionBySymbol(traderID, symbol, side string) (
 	return nil, err
 }
 
-// GetClosedPositions gets closed positions
-func (s *PositionStore) GetClosedPositions(traderID string, limit int) ([]*TraderPosition, error) {
+// GetClosedPositions gets closed positions (optionally scoped to one account).
+// account=="" → trader-global (crypto + legacy); account!="" → only that NT
+// account's positions, excluding pre-migration rows (account='').
+func (s *PositionStore) GetClosedPositions(traderID string, limit int, account ...string) ([]*TraderPosition, error) {
 	var positions []*TraderPosition
-	err := s.db.Where("trader_id = ? AND status = ?", traderID, "CLOSED").
-		Order("exit_time DESC").
+	q := s.db.Where("trader_id = ? AND status = ?", traderID, "CLOSED")
+	if len(account) > 0 && account[0] != "" {
+		q = q.Where("account = ?", account[0])
+	}
+	err := q.Order("exit_time DESC").
 		Limit(limit).
 		Find(&positions).Error
 	if err != nil {

@@ -609,6 +609,21 @@ func (at *AutoTrader) GetUnderlyingTrader() Trader {
 	return at.trader
 }
 
+// currentAccountName returns the NT sub-account this trader is currently bound
+// to (ITEM 2 per-account attribution), or "" for crypto traders / before the
+// first account_balance frame. Stamped onto equity snapshots, positions, and
+// decision records so per-account reads can scope by it.
+func (at *AutoTrader) currentAccountName() string {
+	if ntTCP, ok := at.trader.(*ntTrader.TCPTrader); ok {
+		if server := ntTCP.GetServer(); server != nil {
+			if acct := server.CurrentAccount(); acct != nil {
+				return *acct
+			}
+		}
+	}
+	return ""
+}
+
 // HasReceivedBalance reports whether the NT account_balance frame has arrived (Plan 4 Stage 4).
 // Used by the defer-until-balance guard in runCycle to skip cycles until balance is available.
 func (at *AutoTrader) HasReceivedBalance() bool {

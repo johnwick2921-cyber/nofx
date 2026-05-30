@@ -19,6 +19,7 @@ func (at *AutoTrader) saveEquitySnapshot(ctx *kernel.Context) {
 
 	snapshot := &store.EquitySnapshot{
 		TraderID:      at.id,
+		Account:       at.currentAccountName(), // ITEM 2 per-account attribution
 		Timestamp:     time.Now().UTC(),
 		TotalEquity:   ctx.Account.TotalEquity,
 		Balance:       ctx.Account.TotalEquity - ctx.Account.UnrealizedPnL,
@@ -41,6 +42,7 @@ func (at *AutoTrader) saveDecision(record *store.DecisionRecord) error {
 	at.cycleNumber++
 	record.CycleNumber = at.cycleNumber
 	record.TraderID = at.id
+	record.Account = at.currentAccountName() // ITEM 2 per-account attribution
 
 	if record.Timestamp.IsZero() {
 		record.Timestamp = time.Now().UTC()
@@ -391,6 +393,7 @@ func (at *AutoTrader) recordPositionChange(orderID, symbol, side, action string,
 		nowMs := time.Now().UTC().UnixMilli()
 		pos := &store.TraderPosition{
 			TraderID:     at.id,
+			Account:      at.currentAccountName(), // ITEM 2 per-account attribution
 			ExchangeID:   at.exchangeID, // Exchange account UUID
 			ExchangeType: at.exchange,   // Exchange type: binance/bybit/okx/etc
 			Symbol:       symbol,
