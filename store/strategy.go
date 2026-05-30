@@ -1223,12 +1223,15 @@ func (c *StrategyConfig) applyMissingDefaults() {
 	def := GetDefaultStrategyConfig(c.Language)
 
 	// Coin source: a blank source_type with no static coins and no source flags
-	// means the block was never set -> adopt the default coin source so the
-	// engine's GetCandidateCoins switch does not hit its unknown-type default.
+	// means the block was never set. Default the TYPE to "static" — matching the
+	// engine-level guard in GetCandidateCoins (commit abda753d) so the two layers
+	// agree — rather than the crypto ai500 default, which would be wrong for a
+	// futures trader. An empty static list then degrades to the upstream
+	// "no candidates" path instead of the unknown-type hard error.
 	if c.CoinSource.SourceType == "" && len(c.CoinSource.StaticCoins) == 0 &&
 		!c.CoinSource.UseAI500 && !c.CoinSource.UseOITop && !c.CoinSource.UseOILow &&
 		!c.CoinSource.UseHyperAll && !c.CoinSource.UseHyperMain {
-		c.CoinSource = def.CoinSource
+		c.CoinSource.SourceType = "static"
 	}
 
 	// Klines: no selected timeframes and no primary timeframe means the block was
