@@ -278,9 +278,21 @@ function DashboardRoute() {
     }
   }, [selectedTraderId, selectedTraderSlug, traders])
 
+  // Issue 2F — the currently selected NT account (from /api/accounts). Shares
+  // the SWR cache with AccountSelector via the same key. Threaded into the
+  // account-scoped keys + query params below so switching accounts fetches that
+  // account's data instead of serving a trader-global cache entry.
+  const { data: accountsData } = useSWR(
+    selectedTraderId ? `accounts-${selectedTraderId}` : null,
+    () => api.getAccounts(selectedTraderId as string),
+    { revalidateOnFocus: false, dedupingInterval: 5000 }
+  )
+  const selectedAccount = accountsData?.current || ''
+  const acctSuffix = selectedAccount ? `-${selectedAccount}` : ''
+
   const { data: status } = useSWR<SystemStatus>(
-    selectedTraderId ? `status-${selectedTraderId}` : null,
-    () => api.getStatus(selectedTraderId, true),
+    selectedTraderId ? `status-${selectedTraderId}${acctSuffix}` : null,
+    () => api.getStatus(selectedTraderId, true, selectedAccount),
     {
       refreshInterval: 15000,
       revalidateOnFocus: false,
@@ -289,8 +301,8 @@ function DashboardRoute() {
   )
 
   const { data: account } = useSWR<AccountInfo>(
-    selectedTraderId ? `account-${selectedTraderId}` : null,
-    () => api.getAccount(selectedTraderId, true),
+    selectedTraderId ? `account-${selectedTraderId}${acctSuffix}` : null,
+    () => api.getAccount(selectedTraderId, true, selectedAccount),
     {
       refreshInterval: accountPollOff ? 0 : 15000,
       revalidateOnFocus: false,
@@ -311,8 +323,8 @@ function DashboardRoute() {
   )
 
   const { data: positions } = useSWR<Position[]>(
-    selectedTraderId ? `positions-${selectedTraderId}` : null,
-    () => api.getPositions(selectedTraderId, true),
+    selectedTraderId ? `positions-${selectedTraderId}${acctSuffix}` : null,
+    () => api.getPositions(selectedTraderId, true, selectedAccount),
     {
       refreshInterval: positionsPollOff ? 0 : 15000,
       revalidateOnFocus: false,
@@ -357,8 +369,8 @@ function DashboardRoute() {
   )
 
   const { data: stats } = useSWR<Statistics>(
-    selectedTraderId ? `statistics-${selectedTraderId}` : null,
-    () => api.getStatistics(selectedTraderId, true),
+    selectedTraderId ? `statistics-${selectedTraderId}${acctSuffix}` : null,
+    () => api.getStatistics(selectedTraderId, true, selectedAccount),
     {
       refreshInterval: 30000,
       revalidateOnFocus: false,
@@ -498,11 +510,23 @@ export function AppRoutes() {
         />
         <Route
           path={ROUTES.traders}
-          element={isAuthenticated ? <TradersRoute /> : <Navigate to={ROUTES.login} replace />}
+          element={
+            isAuthenticated ? (
+              <TradersRoute />
+            ) : (
+              <Navigate to={ROUTES.login} replace />
+            )
+          }
         />
         <Route
           path={ROUTES.dashboard}
-          element={isAuthenticated ? <DashboardRoute /> : <Navigate to={ROUTES.login} replace />}
+          element={
+            isAuthenticated ? (
+              <DashboardRoute />
+            ) : (
+              <Navigate to={ROUTES.login} replace />
+            )
+          }
         />
         <Route
           path={ROUTES.strategy}

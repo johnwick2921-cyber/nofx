@@ -167,6 +167,24 @@ func (at *AutoTrader) GetAccountInfo() (map[string]interface{}, error) {
 		logger.Infof("⚠️ Initial Balance abnormal: %.2f, cannot calculate P&L percentage", at.initialBalance)
 	}
 
+	// Issue 2B — NT8 multi-account: the bot's single global InitialBalance is NOT
+	// each NT sub-account's real starting equity, so (equity - InitialBalance)
+	// yields a fake P&L% (e.g. -30% on a 70000 SIM account vs a 100000 baseline).
+	// When the broker reports its own realized+unrealized P&L (NinjaTrader
+	// account_balance frame, flagged brokerNativePnL), use that as the displayed
+	// per-account P&L and derive the baseline as equity - pnl (this account's
+	// effective starting equity), so each account shows its OWN real P&L.
+	if broker, _ := balance["brokerNativePnL"].(bool); broker {
+		realized, _ := balance["totalRealizedProfit"].(float64)
+		unrealized, _ := balance["totalUnrealizedProfit"].(float64)
+		totalPnL = realized + unrealized
+		if base := totalEquity - totalPnL; base > 0 {
+			totalPnLPct = (totalPnL / base) * 100
+		} else {
+			totalPnLPct = 0
+		}
+	}
+
 	marginUsedPct := 0.0
 	if totalEquity > 0 {
 		marginUsedPct = (totalMarginUsed / totalEquity) * 100

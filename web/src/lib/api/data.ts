@@ -10,18 +10,28 @@ import type {
 import { API_BASE, httpClient } from './helpers'
 
 export const dataApi = {
-  async getStatus(traderId?: string, silent?: boolean): Promise<SystemStatus> {
+  async getStatus(
+    traderId?: string,
+    silent?: boolean,
+    account?: string
+  ): Promise<SystemStatus> {
+    const acct = account ? `&account=${encodeURIComponent(account)}` : ''
     const url = traderId
-      ? `${API_BASE}/status?trader_id=${traderId}`
+      ? `${API_BASE}/status?trader_id=${traderId}${acct}`
       : `${API_BASE}/status`
     const result = await httpClient.request<SystemStatus>(url, { silent })
     if (!result.success) throw new Error('Failed to fetch system status')
     return result.data!
   },
 
-  async getAccount(traderId?: string, silent?: boolean): Promise<AccountInfo> {
+  async getAccount(
+    traderId?: string,
+    silent?: boolean,
+    account?: string
+  ): Promise<AccountInfo> {
+    const acct = account ? `&account=${encodeURIComponent(account)}` : ''
     const url = traderId
-      ? `${API_BASE}/account?trader_id=${traderId}`
+      ? `${API_BASE}/account?trader_id=${traderId}${acct}`
       : `${API_BASE}/account`
     const result = await httpClient.request<AccountInfo>(url, { silent })
     if (!result.success) throw new Error('Failed to fetch account info')
@@ -30,10 +40,12 @@ export const dataApi = {
 
   async getPositions(
     traderId?: string,
-    silent?: boolean
+    silent?: boolean,
+    account?: string
   ): Promise<Position[]> {
+    const acct = account ? `&account=${encodeURIComponent(account)}` : ''
     const url = traderId
-      ? `${API_BASE}/positions?trader_id=${traderId}`
+      ? `${API_BASE}/positions?trader_id=${traderId}${acct}`
       : `${API_BASE}/positions`
     const result = await httpClient.request<Position[]>(url, { silent })
     if (!result.success) throw new Error('Failed to fetch positions')
@@ -70,10 +82,12 @@ export const dataApi = {
 
   async getStatistics(
     traderId?: string,
-    silent?: boolean
+    silent?: boolean,
+    account?: string
   ): Promise<Statistics> {
+    const acct = account ? `&account=${encodeURIComponent(account)}` : ''
     const url = traderId
-      ? `${API_BASE}/statistics?trader_id=${traderId}`
+      ? `${API_BASE}/statistics?trader_id=${traderId}${acct}`
       : `${API_BASE}/statistics`
     const result = await httpClient.request<Statistics>(url, { silent })
     if (!result.success) throw new Error('Failed to fetch statistics')
@@ -82,17 +96,22 @@ export const dataApi = {
 
   async getEquityHistory(
     traderId?: string,
-    silent?: boolean
+    silent?: boolean,
+    account?: string
   ): Promise<any[]> {
+    const acct = account ? `&account=${encodeURIComponent(account)}` : ''
     const url = traderId
-      ? `${API_BASE}/equity-history?trader_id=${traderId}`
+      ? `${API_BASE}/equity-history?trader_id=${traderId}${acct}`
       : `${API_BASE}/equity-history`
     const result = await httpClient.request<any[]>(url, { silent })
     if (!result.success) throw new Error('Failed to fetch equity history')
     return result.data!
   },
 
-  async getEquityHistoryBatch(traderIds: string[], hours?: number): Promise<any> {
+  async getEquityHistoryBatch(
+    traderIds: string[],
+    hours?: number
+  ): Promise<any> {
     const result = await httpClient.post<any>(
       `${API_BASE}/equity-history-batch`,
       { trader_ids: traderIds, hours: hours || 0 }

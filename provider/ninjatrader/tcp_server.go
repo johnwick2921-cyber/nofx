@@ -81,9 +81,8 @@ type TCPServer struct {
 	// Plan 4.11 — latest real account snapshot from the C# AddOn
 	// (account_balance frame). Replaces the $50k mock in
 	// TCPTrader.GetBalance once the first frame arrives.
-	acctMu      sync.RWMutex
-	acctBalance AccountBalancePayload
-	acctValid   bool
+	acctMu       sync.RWMutex
+	acctBalances map[string]AccountBalancePayload // per-account snapshots keyed by account name (Issue 2A)
 
 	// Plan 4 Stage 4 — available accounts discovered by the C# AddOn
 	// (accounts_list frame). Emitted on connect and on account change.
@@ -157,8 +156,9 @@ func NewTCPServer(logger *slog.Logger) *TCPServer {
 		addr:        TCPListenAddr,
 		fillCh:      make(chan FillPayload, fillChannelBuffer),
 		closeCh:     make(chan PositionClosePayload, fillChannelBuffer),
-		barCache:    NewBarCache(0),
-		barIngestCh: make(chan barIngestMsg, barIngestChannelBuffer),
+		barCache:     NewBarCache(0),
+		barIngestCh:  make(chan barIngestMsg, barIngestChannelBuffer),
+		acctBalances: make(map[string]AccountBalancePayload),
 		barsSubscribe: BarsSubscribePayload{
 			Symbol:     defaultAutoBarsSymbol,
 			Timeframes: append([]string(nil), defaultAutoBarsTimeframes...),
@@ -178,9 +178,25 @@ func (s *TCPServer) BarCache() *BarCache { return s.barCache }
 // uses it to serve the real SIM account instead of the $50k mock; ok=false
 // means no frame yet (caller falls back to a documented placeholder).
 func (s *TCPServer) AccountState() (AccountBalancePayload, bool) {
+	// Return the snapshot for the currently selected account. Balances are keyed
+	// per-account (Issue 2A) so switching accounts no longer clobbers one slot.
+	s.accountsListMu.RLock()
+	current := s.currentAccount
+	s.accountsListMu.RUnlock()
+	return s.AccountStateFor(current)
+}
+
+// AccountStateFor returns the latest account_balance snapshot for a specific
+// account name and whether one has arrived yet. ok=false for an unknown/empty
+// account (caller falls back to a documented placeholder).
+func (s *TCPServer) AccountStateFor(account string) (AccountBalancePayload, bool) {
 	s.acctMu.RLock()
 	defer s.acctMu.RUnlock()
-	return s.acctBalance, s.acctValid
+	if account == "" || s.acctBalances == nil {
+		return AccountBalancePayload{}, false
+	}
+	p, ok := s.acctBalances[account]
+	return p, ok
 }
 
 // GetAccountsList returns the list of available NT accounts discovered by the
@@ -644,8 +660,10 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 				continue
 			}
 			s.acctMu.Lock()
-			s.acctBalance = p
-			s.acctValid = true
+			if s.acctBalances == nil {
+				s.acctBalances = make(map[string]AccountBalancePayload)
+			}
+			s.acctBalances[p.Account] = p
 			s.acctMu.Unlock()
 			// Update current account if it changed
 			s.accountsListMu.Lock()

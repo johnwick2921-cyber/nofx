@@ -222,6 +222,13 @@ func (t *TCPTrader) GetBalance() (map[string]interface{}, error) {
 			"availableBalance":      avail,
 			"totalWalletBalance":    acct.CashValue,
 			"totalUnrealizedProfit": acct.UnrealizedPnL,
+			// Issue 2B — NT reports its own realized/unrealized P&L per account.
+			// brokerNativePnL signals GetAccountInfo to use realized+unrealized as
+			// the displayed P&L instead of (equity - global InitialBalance), which
+			// otherwise produces a fake % on any account whose real starting equity
+			// differs from the trader's single 100000 baseline.
+			"totalRealizedProfit": acct.RealizedPnL,
+			"brokerNativePnL":     true,
 		}, nil
 	}
 	return map[string]interface{}{
