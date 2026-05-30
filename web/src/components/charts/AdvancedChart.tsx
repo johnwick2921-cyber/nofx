@@ -116,6 +116,7 @@ export function AdvancedChart({
   const currentMarkersDataRef = useRef<any[]>([]) // Store current marker data
   const klineDataRef = useRef<Map<number, { volume: number; quoteVolume: number }>>(new Map()) // Store kline extra data
   const priceLinesRef = useRef<any[]>([]) // Store open order price lines
+  const latestKlinesRef = useRef<Kline[]>([]) // Most recent klines, for indicator re-render on toggle (1b)
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -147,6 +148,12 @@ export function AdvancedChart({
     { id: 'ema26', name: 'EMA26', enabled: false, color: '#FFD3B6', params: { period: 26 } },
     { id: 'bb', name: 'Bollinger Bands', enabled: false, color: '#9B59B6' },
   ])
+  // Mirror indicators into a ref so updateIndicators always reads the CURRENT
+  // config. updateIndicators is also called by the 5s data-refresh whose effect
+  // closure captured a stale `indicators` (deps lack it) — without this ref that
+  // refresh would clear the user's just-toggled indicators every 5s (1b).
+  const indicatorsRef = useRef(indicators)
+  indicatorsRef.current = indicators
 
   // Fetch kline data from service
   const fetchKlineData = async (symbol: string, interval: string) => {
@@ -534,6 +541,7 @@ export function AdvancedChart({
         const klineData = await fetchKlineData(symbol, interval)
         console.log('[AdvancedChart] Loaded', klineData.length, 'klines')
         candlestickSeriesRef.current.setData(klineData)
+        latestKlinesRef.current = klineData // keep latest for indicator toggle re-render (1b)
 
         // Store volume/quoteVolume data for tooltip
         klineDataRef.current.clear()
@@ -853,7 +861,7 @@ export function AdvancedChart({
     indicatorSeriesRef.current.clear()
 
     // Add enabled indicators
-    indicators.forEach(indicator => {
+    indicatorsRef.current.forEach(indicator => {
       if (!indicator.enabled || !chartRef.current) return
 
       if (indicator.id.startsWith('ma')) {
@@ -906,6 +914,16 @@ export function AdvancedChart({
       }
     })
   }
+
+  // 1b: redraw indicator overlays when the user toggles one. updateIndicators
+  // is otherwise only invoked on (re)load, so a toggle alone never redrew the
+  // series (stale closure). Idempotent — clears then re-adds enabled indicators.
+  useEffect(() => {
+    if (latestKlinesRef.current.length > 0) {
+      updateIndicators(latestKlinesRef.current)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [indicators])
 
   // Toggle indicator
   const toggleIndicator = (id: string) => {
