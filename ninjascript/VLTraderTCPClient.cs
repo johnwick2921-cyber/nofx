@@ -922,6 +922,19 @@ namespace NinjaTrader.NinjaScript.AddOns
                 {
                     SendAccountsList();
                 }
+
+                // Periodic poll of account balance every heartbeat (30s) — Tradovate's
+                // AccountItemUpdate doesn't fire reliably, so poll to ensure real balance
+                // populates even if AccountItemUpdate misses + connect-seed failed.
+                // If account not ready yet, skip + retry next beat.
+                try
+                {
+                    SendAccountBalance();
+                }
+                catch (Exception ex)
+                {
+                    LogWarn($"RunHeartbeatLoop: SendAccountBalance poll failed (will retry): {ex.Message}");
+                }
             }
         }
 
