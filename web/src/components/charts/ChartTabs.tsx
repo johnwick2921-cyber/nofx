@@ -16,7 +16,7 @@ interface ChartTabsProps {
 }
 
 type ChartTab = 'equity' | 'kline'
-type Interval = '1m' | '5m' | '15m' | '30m' | '1h' | '4h' | '1d'
+type Interval = '1m' | '3m' | '5m' | '15m' | '30m' | '1h' | '4h' | '1d'
 type MarketType =
   | 'hyperliquid'
   | 'crypto'
@@ -90,6 +90,20 @@ const INTERVALS: { value: Interval; label: string }[] = [
   { value: '30m', label: '30m' },
   { value: '1h', label: '1h' },
   { value: '4h', label: '4h' },
+  { value: '1d', label: '1d' },
+]
+
+// NinjaTrader (CME futures) chart timeframes — the set the NT8 AddOn
+// auto-subscribes (provider/ninjatrader/tcp_server.go defaultAutoBarsTimeframes):
+// 1m/3m/5m/15m/30m/1h/1d. Distinct from the crypto set above (has 3m, no 4h) so
+// every button maps to a subscribed BarCache series. Crypto INTERVALS untouched.
+const NINJATRADER_INTERVALS: { value: Interval; label: string }[] = [
+  { value: '1m', label: '1m' },
+  { value: '3m', label: '3m' },
+  { value: '5m', label: '5m' },
+  { value: '15m', label: '15m' },
+  { value: '30m', label: '30m' },
+  { value: '1h', label: '1h' },
   { value: '1d', label: '1d' },
 ]
 
@@ -381,7 +395,10 @@ export function ChartTabs({
 
             {/* Interval Selector - Allow scrolling if needed */}
             <div className="flex items-center bg-black/40 rounded border border-white/10 overflow-x-auto no-scrollbar max-w-[200px] md:max-w-none">
-              {INTERVALS.map((int) => (
+              {(marketType === 'ninjatrader'
+                ? NINJATRADER_INTERVALS
+                : INTERVALS
+              ).map((int) => (
                 <button
                   key={int.value}
                   onClick={() => setInterval(int.value)}
