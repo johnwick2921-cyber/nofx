@@ -128,14 +128,19 @@ type barIngestMsg struct {
 // will drop oldest-first to keep the socket read responsive.
 const barIngestChannelBuffer = 256
 
-// Plan 4.4 Stage 2 — default auto-subscribe parameters. These match the
-// Balanced Strategy's SelectedTimeframes (store/strategy.go) for the
-// active futures trader and prove the end-to-end bar pipe. Stage 3 will
-// replace these with a per-trader strategy lookup; for now the constants
-// validate the framing + cache + handler chain.
+// Plan 4.4 Stage 2 — default auto-subscribe parameters. The auto-subscribed set
+// is the CHART display set (the dashboard MNQ chart offers these timeframe
+// buttons), NOT the kernel's decision timeframes — the kernel reads the
+// strategy's SelectedTimeframes (store/strategy.go; currently [5m,15m,1h]) and
+// is unaffected by adding more chart subscriptions here. The C# AddOn
+// (VLBarsSubscriptionManager.MapTimeframe) subscribes whatever timeframes this
+// envelope lists; all 7 below are native NT8 BarsPeriodType (Minute 1/3/5/15/30,
+// Minute*60 = 1h, Day = 1d) so no AddOn change is needed. bars_back stays a
+// single value (the frozen wire carries one per envelope); 500 is the
+// spec-recommended depth across all timeframes.
 var (
 	defaultAutoBarsSymbol     = "MNQ"
-	defaultAutoBarsTimeframes = []string{"5m", "15m", "1h"}
+	defaultAutoBarsTimeframes = []string{"1m", "3m", "5m", "15m", "30m", "1h", "1d"}
 	defaultAutoBarsBack       = 500
 )
 
