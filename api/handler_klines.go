@@ -67,6 +67,13 @@ func (s *Server) handleKlines(c *gin.Context) {
 			SafeInternalError(c, "Get klines from Hyperliquid", err)
 			return
 		}
+	case "ninjatrader":
+		// CME futures (e.g. MNQ) via the live NT8 BarCache — the SAME feed the
+		// kernel reads (market.FuturesBarsProvider), so the chart matches
+		// decisions. No CoinAnk, no second source. Returns empty (HTTP 200, [])
+		// when the provider is unbound or the cache is cold (e.g. NT8 closed)
+		// instead of falling through to crypto.
+		klines = s.getKlinesFromNinjaTrader(symbol, interval, limit)
 	default:
 		// Crypto exchanges via CoinAnk
 		symbol = market.Normalize(symbol)
@@ -318,6 +325,38 @@ func (s *Server) getKlinesFromHyperliquid(symbol, interval string, limit int) ([
 	}
 
 	return klines, nil
+}
+
+// getKlinesFromNinjaTrader reads CME futures OHLCV from the live NT8 BarCache
+// via the market.FuturesBarsProvider hook (bound at TCP-server startup in
+// trader/ninjatrader/transport.go). This is the SAME feed the kernel uses for
+// decisions, so chart candles and AI decisions never diverge.
+//
+// Returns an empty slice (NOT nil, NOT an error) when:
+//   - the symbol is not a CME futures root (guards against a crypto symbol
+//     accidentally hitting this branch), or
+//   - the provider is unbound (no NT8 trader loaded yet), or
+//   - the cache is cold (NT8 disconnected / market closed → no bars yet).
+//
+// An empty 200 lets the chart render "no data" gracefully rather than 500ing
+// or falling back to crypto. The BarCache is only auto-subscribed for the
+// timeframes in provider/ninjatrader defaultAutoBarsTimeframes (5m/15m/1h), so
+// other intervals legitimately return empty until a strategy subscribes them.
+func (s *Server) getKlinesFromNinjaTrader(symbol, interval string, limit int) []market.Kline {
+	if !market.IsCMEFuturesSymbol(symbol) {
+		logger.Warnf("⚠️ klines: non-futures symbol %q requested on ninjatrader exchange", symbol)
+		return []market.Kline{}
+	}
+	provider := market.FuturesBarsProvider
+	if provider == nil {
+		logger.Warnf("⚠️ klines: FuturesBarsProvider unbound (no NT8 trader loaded); returning empty for %s", symbol)
+		return []market.Kline{}
+	}
+	klines := provider(symbol, interval, limit)
+	if klines == nil {
+		return []market.Kline{}
+	}
+	return klines
 }
 
 // handleSymbols returns available symbols for a given exchange
