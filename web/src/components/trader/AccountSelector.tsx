@@ -120,7 +120,7 @@ export function AccountSelector({
     }
   }
 
-  if (isLoading || !currentAccount) {
+  if (isLoading) {
     return (
       <div
         className="flex items-center gap-2 px-3 py-2 rounded border border-nofx-gold/20 bg-nofx-bg/30 text-sm text-nofx-text-muted"
