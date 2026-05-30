@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { EquityChart } from './EquityChart'
 import { AdvancedChart } from './AdvancedChart'
-import { FuturesChart } from './FuturesChart'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { t } from '../../i18n/translations'
 import { chartTabs, ts } from '../../i18n/strategy-translations'
@@ -18,7 +17,13 @@ interface ChartTabsProps {
 
 type ChartTab = 'equity' | 'kline'
 type Interval = '1m' | '5m' | '15m' | '30m' | '1h' | '4h' | '1d'
-type MarketType = 'hyperliquid' | 'crypto' | 'stocks' | 'forex' | 'metals'
+type MarketType =
+  | 'hyperliquid'
+  | 'crypto'
+  | 'stocks'
+  | 'forex'
+  | 'metals'
+  | 'ninjatrader'
 
 interface SymbolInfo {
   symbol: string
@@ -68,6 +73,14 @@ const MARKET_CONFIG = {
     color: 'amber',
     hasDropdown: false,
   },
+  ninjatrader: {
+    exchange: 'ninjatrader',
+    defaultSymbol: 'MNQ',
+    icon: '🥷',
+    labelKey: 'ninjatrader' as const,
+    color: 'red',
+    hasDropdown: false,
+  },
 }
 
 const INTERVALS: { value: Interval; label: string }[] = [
@@ -85,6 +98,7 @@ function getMarketTypeFromExchange(exchangeId: string | undefined): MarketType {
   if (!exchangeId) return 'hyperliquid'
   const lower = exchangeId.toLowerCase()
   if (lower.includes('hyperliquid')) return 'hyperliquid'
+  if (lower.includes('ninjatrader')) return 'ninjatrader'
   // Other exchanges default to crypto type
   return 'crypto'
 }
@@ -98,9 +112,7 @@ export function ChartTabs({
 }: ChartTabsProps) {
   const { language } = useLanguage()
   const [activeTab, setActiveTab] = useState<ChartTab>('equity')
-  const [chartSymbol, setChartSymbol] = useState<string>(
-    isFutures ? 'MNQ' : 'BTC'
-  )
+  const [chartSymbol, setChartSymbol] = useState<string>('BTC')
   const [interval, setInterval] = useState<Interval>('5m')
   const [symbolInput, setSymbolInput] = useState('')
   const [marketType, setMarketType] = useState<MarketType>(() =>
@@ -116,13 +128,6 @@ export function ChartTabs({
     const newMarketType = getMarketTypeFromExchange(exchangeId)
     setMarketType(newMarketType)
   }, [exchangeId])
-
-  // isFutures can flip true after mount (exchange data loads async). The
-  // initial-state default only fires once, so resync the symbol to the NT8
-  // contract here — otherwise FuturesChart would stream ?symbol=BTC forever.
-  useEffect(() => {
-    if (isFutures) setChartSymbol('MNQ')
-  }, [isFutures])
 
   // Determine exchange from market type
   const marketConfig = MARKET_CONFIG[marketType]
@@ -201,8 +206,8 @@ export function ChartTabs({
     e.preventDefault()
     if (symbolInput.trim()) {
       let symbol = symbolInput.trim().toUpperCase()
-      // Auto-append USDT suffix for crypto (never for CME futures like MNQ)
-      if (marketType === 'crypto' && !isFutures && !symbol.endsWith('USDT')) {
+      // Auto-append USDT suffix for crypto
+      if (marketType === 'crypto' && !symbol.endsWith('USDT')) {
         symbol = symbol + 'USDT'
       }
       setChartSymbol(symbol)
@@ -259,9 +264,8 @@ export function ChartTabs({
             <span className="md:hidden">Kline</span>
           </button>
 
-          {/* Market Type Pills - Only when kline active, HIDDEN on mobile to save space.
-              Hidden for NT futures: the only instrument is the NT8 contract (MNQ). */}
-          {activeTab === 'kline' && !isFutures && (
+          {/* Market Type Pills - Only when kline active, HIDDEN on mobile to save space */}
+          {activeTab === 'kline' && (
             <div className="hidden md:flex items-center gap-1 ml-2 border-l border-white/10 pl-2">
               {(Object.keys(MARKET_CONFIG) as MarketType[]).map((type) => {
                 const config = MARKET_CONFIG[type]
@@ -429,22 +433,14 @@ export function ChartTabs({
               transition={{ duration: 0.2 }}
               className="h-full w-full absolute inset-0"
             >
-              {isFutures ? (
-                <FuturesChart
-                  symbol={chartSymbol}
-                  interval={interval}
-                  traderID={traderId}
-                />
-              ) : (
-                <AdvancedChart
-                  symbol={chartSymbol}
-                  interval={interval}
-                  traderID={traderId}
-                  // Dynamic auto-sizing via ResizeObserver
-                  exchange={currentExchange}
-                  onSymbolChange={setChartSymbol}
-                />
-              )}
+              <AdvancedChart
+                symbol={chartSymbol}
+                interval={interval}
+                traderID={traderId}
+                // Dynamic auto-sizing via ResizeObserver
+                exchange={currentExchange}
+                onSymbolChange={setChartSymbol}
+              />
             </motion.div>
           )}
         </AnimatePresence>
