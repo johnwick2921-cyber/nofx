@@ -406,15 +406,22 @@ export function TraderDashboardPage({
                 <AccountSelector
                   traderId={selectedTraderId}
                   onAccountChanged={() => {
-                    // Invalidate all account-scoped SWR keys on account change
-                    // to force re-fetch of the new account's data
-                    Promise.all([
-                      mutate(`account-${selectedTraderId}`),
-                      mutate(`positions-${selectedTraderId}`),
-                      mutate(`status-${selectedTraderId}`),
-                      mutate(`statistics-${selectedTraderId}`),
-                      mutate(`equity-history-${selectedTraderId}`),
-                    ])
+                    // Invalidate every account-scoped SWR key for this trader on
+                    // account change so the new account's data is re-fetched.
+                    // Predicate match (startsWith) covers the account-suffixed
+                    // keys (Issue 2F: `account-<trader>-<account>`) AND the
+                    // `accounts-<trader>` key so the selected-account itself
+                    // refreshes and the suffixed keys re-key to the new account.
+                    mutate(
+                      (key) =>
+                        typeof key === 'string' &&
+                        (key.startsWith(`account-${selectedTraderId}`) ||
+                          key.startsWith(`accounts-${selectedTraderId}`) ||
+                          key.startsWith(`positions-${selectedTraderId}`) ||
+                          key.startsWith(`status-${selectedTraderId}`) ||
+                          key.startsWith(`statistics-${selectedTraderId}`) ||
+                          key.startsWith(`equity-history-${selectedTraderId}`))
+                    )
                   }}
                 />
               )}

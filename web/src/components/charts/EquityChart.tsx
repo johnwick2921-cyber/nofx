@@ -47,13 +47,25 @@ export function EquityChart({
   const { user, token } = useAuth()
   const [displayMode, setDisplayMode] = useState<'dollar' | 'percent'>('dollar')
 
+  // Issue 2F — selected NT account (shares the accounts-${traderId} SWR cache)
+  // so the equity/account keys are account-scoped and switching re-fetches.
+  const { data: accountsData } = useSWR(
+    user && token && traderId ? `accounts-${traderId}` : null,
+    () => api.getAccounts(traderId as string),
+    { revalidateOnFocus: false, dedupingInterval: 5000 }
+  )
+  const selectedAccount = accountsData?.current || ''
+  const acctSuffix = selectedAccount ? `-${selectedAccount}` : ''
+
   const {
     data: history,
     error,
     isLoading,
   } = useSWR<EquityPoint[]>(
-    user && token && traderId ? `equity-history-${traderId}` : null,
-    () => api.getEquityHistory(traderId, true),
+    user && token && traderId
+      ? `equity-history-${traderId}${acctSuffix}`
+      : null,
+    () => api.getEquityHistory(traderId, true, selectedAccount),
     {
       refreshInterval: 30000, // 30秒刷新（历史数据更新频率较低）
       revalidateOnFocus: false,
@@ -62,8 +74,8 @@ export function EquityChart({
   )
 
   const { data: account } = useSWR(
-    user && token && traderId ? `account-${traderId}` : null,
-    () => api.getAccount(traderId, true),
+    user && token && traderId ? `account-${traderId}${acctSuffix}` : null,
+    () => api.getAccount(traderId, true, selectedAccount),
     {
       refreshInterval: 15000, // 15秒刷新（配合后端缓存）
       revalidateOnFocus: false,
