@@ -33,6 +33,171 @@
 > "rename this variable in foo.go"). The read-first rule applies
 > ONLY when the prompt invokes plan content.
 
+> **STATUS (2026-05-30):** NT8 pipeline live on branch
+> `feat/nt8-stage4-chart` (tip `058e4a56`). Balance / account-switch /
+> coin-source / chart-wiring SHIPPED & VERIFIED this session; per-account
+> P&L A/B/F done, C/D/E migration open. See
+> `## Current State (2026-05-30, session-verified)` (immediately below) for
+> the current truth. Older claims about a `$50k mock balance`, `FuturesChart`
+> as the chart path, "decisions skip / unknown coin source", and a
+> `100000` P&L baseline are SUPERSEDED there (marked in place, not deleted).
+
+## Current State (2026-05-30, session-verified)
+
+> Current-truth snapshot for branch `feat/nt8-stage4-chart` (tip `d3c18f0f`
+> = origin). Supersedes contradicted older claims further down (each marked
+> in place with a pointer here; nothing deleted — history prevents repeating
+> mistakes). This feat branch diverged before main's PR #44 "Current State"
+> section, so this is the branch-local current-truth section.
+> Last refreshed 2026-05-30 (round 3): chart shipped, two non-bugs settled,
+> CGC indexed.
+
+### SHIPPED & VERIFIED (MAIN-verified live, pushed, backed up)
+
+- **Balance — real per-account equity auto-updates (no `$50k` mock).**
+  Fix = C# `SendAccountBalance` poll (`c4e2cb13`) + Go rebuild. **ROOT CAUSE
+  was a STALE GO BINARY** dropping frames as "unknown frame type" — see the
+  new STALE GO BINARY hard rule below.
+- **Account switch re-bind.** Frontend invalidates 5 SWR keys (`82bdca1c`:
+  account / positions / status / statistics / equity-history) +
+  `createPortal` / `mousedown` click-outside fix (`587a1386`). Cross-SIM
+  switching verified (Sim101 `100157` <-> SimAccount1 `70000`). LESSON: MAIN
+  re-verifying in the live browser caught the portal bug a subagent missed
+  by only inspecting the guard.
+- **SimAccount1 selectable; funded LFE gated** (UI disabled + HTTP 400)
+  (`587a1386`).
+- **Decisions — coin_source.** Set `static` MNQ in DB + DURABLE kernel guard
+  (`abda753d`: empty `SourceType` -> `static`, +2 tests).
+  `GetDefaultStrategyConfig` was ALREADY correct; the real defect was
+  `cmd/create-strategy` building a config without `coin_source` (still a
+  birth-defect — see STILL OPEN).
+- **Timeframe (blank-AI latent bug).** Strategy klines -> `[5m,15m,1h]`,
+  primary `5m` + `ParseConfig` backfill hardening (`05d3968e`; `058e4a56`
+  aligned its `coin_source` default to `"static"` to match the kernel guard).
+  NOTE: the **kernel AI timeframes stay `[5m,15m,1h]`**; the chart now shows
+  7 TF buttons (`d3c18f0f`) but that is CHART-SIDE display only — see below.
+- **Per-account P&L (Issue 2 A/B/F, `fcd8bb99`, WIRE-FREE).** Balance
+  single-slot -> `acctBalances` map keyed by account; P&L uses NT's OWN
+  realized/unrealized (baseline = `equity - pnl`, NOT `equity - 100000`);
+  frontend SWR keys account-scoped. The old `+0.16%` / `-30%` / `-50%`
+  figures were `100000`-baseline ARTIFACTS — NT reports `0.00%` real session
+  P&L.
+- **Chart — MNQ bars + indicators + B/S markers.** Wired via `273f85a3`
+  (ninjatrader klines branch: `AdvancedChart` reads the NT8 BarCache through
+  REST `/api/klines`, NOT the deleted `FuturesChart`; `bars_subscribe`
+  auto-sent on reconnect `tcp_server.go:431`, revert `cf5b76b3` never broke
+  streaming) + `f267d09e` (chart defaults to the trader's market symbol MNQ,
+  not BTC) + `3a3dfb31` (indicators redraw on toggle — fixed the stale-closure
+  clobber, so indicators NOW WORK on NT8/MNQ). **B/S is a MARKER TOGGLE, not
+  an order placer — there is no manual-order route, by design.** Saturday =
+  static historical MNQ bars; live ticks need RTH (Sun ~17:00 CT).
+
+### SETTLED NON-BUGS — do NOT re-investigate (confirmed 2026-05-30)
+
+- **`/api/config` HTTP 500 — NOT REAL / RESOLVED.** `handleGetSystemConfig`
+  (`server.go:420`) is a tiny handler returning 200 with hardcoded leverage +
+  an `initialized` bool; it has NO error path and cannot 500 (live curl =
+  200). It is DASHBOARD-ONLY and completely off the trader/kernel/manager
+  path. The "500" was a stale backlog note, not a real condition.
+- **"No prompt to trader" — NOT a bug; it is the CME WEEKEND GATE.**
+  DB-verified (`decision_records` #183–#190: `system_prompt`/`input_prompt`/
+  `raw_response`/`decision_json` empty, `ai_request_duration_ms`=0,
+  `candidate=["MNQ"]`, `success`=1). On a closed-market cycle the prompt is
+  GENUINELY NOT BUILT: `auto_trader_loop.go:runCycle` loads context (candidates
+  + klines — the "looks like loading"), logs the PRE-GATE banner "🤖 Requesting
+  AI…" (`:108`, misleading), then `engine_analysis.go:53 ShouldSkipDecisionCycle`
+  (CME closed, `engine.go:911`) returns `nil,nil` BEFORE `BuildSystemPrompt`/
+  `BuildUserPrompt` are ever reached → "No actionable decision (risk gate
+  HOLD)" → saved with empty prompt fields. `DecisionCard.tsx` renders prompt
+  sections conditionally, so gated cycles show no prompt. Confirmed 3×. Verify
+  prompts build + DeepSeek fires at RTH (Sun ~17:00 CT). (Optional cosmetic,
+  not a bug: move the `:108` banner to after the gate so weekend logs aren't
+  misleading.)
+
+### IN FLIGHT / PLANNED
+
+- **IN FLIGHT — chart 7-timeframe buttons (CHART-SIDE ONLY).** Chart-side is
+  committed (`d3c18f0f`: MNQ chart shows all 7 TF buttons, adds `3m`, drops
+  `4h`). Full task = C# subscribe 7 + Go serve 7 + chart show 7; the kernel AI
+  timeframes stay `[5m,15m,1h]` (do NOT widen the AI's TF set). On
+  `feat/nt8-stage4-chart`.
+- **PLANNED — Issue 2 C/D/E per-account equity-curve migration** (a real
+  schema migration, NOT done; the P&L CARDS are already correct, this is
+  cosmetic-historical): additive nullable account columns on
+  `trader_positions` + `trader_equity_snapshots`, per-account statistics
+  scoping, a per-account equity baseline, and backfill/quarantine of the ~160
+  mixed snapshot rows; key by account NAME; back up first. Frontend keys are
+  already account-aware, so the backend columns land cleanly. Do as a
+  dedicated migration when historical per-account curves are actually needed.
+- **PLANNED — Strategy-build plan (the Studio audit is done; these are audit
+  LEANINGS, to be LOCKED in a dedicated planning pass — not yet build steps):**
+  Option (a) reuse static+MNQ + harden edges — a1 USDT-append CME bypass,
+  a2 `applyMissingDefaults` on Create AND Update, a3 hard-restrict futures TFs
+  via exchange -> `IndicatorEditor`, a4 help text — PLUS the 7-TF STRATEGY
+  selector + preview parity + phantom cleanup (`UPDATE strategies SET
+  is_default=0 WHERE id=''` + add `ORDER BY` to GetDefault; NEVER touch
+  `578ac8f6`). Sequence: harden the Studio edges BEFORE the 7-TF Strategy
+  selector.
+
+### STILL OPEN / DEFERRED
+
+- **Durable:** `cmd/create-strategy` birth-defect (builds config without
+  `coin_source`) — the kernel guard protects but the cmd itself is still
+  wrong.
+- **Phantom** empty-id "MNQ SIM Default" `is_active=1` row (different user
+  `8ef641a7`) — report, do NOT delete (see the planned Studio phantom-cleanup
+  above).
+- **Misc deferred:** live chart-tick verify at RTH (Sun ~17:00 CT); security
+  batch (override `jwt_secret` default
+  `'default-jwt-secret-change-in-production'`, `/api/exchanges` unauth
+  exposure — the named upstream CVE-class issue); nofx->VL full rename (LAST);
+  `ALLOW_LIVE_ACCOUNTS` toggle (default false).
+- **Pre-existing flaky test** `TestMaybeResetDaily` (UTC-day-boundary), not
+  ours.
+
+### Environment / tooling
+
+- **CodeGraphContext (CGC) is now INDEXED for this repo** (FalkorDB Lite, `cgc`
+  CLI; nofx in `cgc list`). Hard Rule 0's tool order — CGC-first, then
+  grep/Read — is fully available going forward. (Earlier passes ran without it
+  and fell back to grep/Read; that limitation no longer applies.) See the
+  CodeGraphContext tooling blockquote near the Playwright block above for the
+  MCP registration + `cgc index . --force` refresh command.
+- **Doc relationship.** This canonical plan doc is the long-term source of
+  truth. A separate detailed working-log/archive (`nt8-account-pipeline-build-
+  plan.md`) is referenced in working sessions but is NOT present in the repo
+  at any path as of 2026-05-30 — if/when it lands, cross-reference (do NOT
+  merge) so the two don't drift.
+
+### Session SHA ledger (verified against git)
+
+| SHA | message |
+|---|---|
+| `273f85a3` | fix(nt8): live MNQ bars reach chart via klines ninjatrader branch |
+| `abda753d` | fix(kernel): empty coin source type defaults to static (stop per-cycle skip) |
+| `05d3968e` | fix(strategy): backfill default coin_source + klines on ParseConfig |
+| `fcd8bb99` | fix(nt8): per-account balance + NT-native P&L + account-scoped fetch (Issue 2 A/B/F) |
+| `058e4a56` | fix(strategy): blank coin_source defaults to 'static' (match kernel guard) |
+| `587a1386` | fix(nt8): make account dropdown rows selectable; funded stays gated |
+| `82bdca1c` | fix(nt8): account select re-binds dashboard data (invalidate 5 SWR keys on switch) |
+| `c4e2cb13` | fix(nt8): poll account_balance so real equity populates (Tradovate AccountItemUpdate doesn't fire) — kills $50k mock |
+| `f267d09e` | fix(nt8): chart defaults to the trader's market symbol (MNQ), not BTC |
+| `3a3dfb31` | fix(nt8): chart indicators redraw on toggle (stop stale-closure clobber) |
+| `d3c18f0f` | feat(nt8): MNQ chart shows all 7 timeframe buttons (adds 3m, drops 4h) **[BRANCH TIP = origin]** |
+
+### New rules logged this session (see also "Locked Data Architecture Decisions")
+
+- **NEW HARD RULE — STALE GO BINARY.** After ANY wire / parser / Go change,
+  `go build` + restart `./nofx-bin`. The tell is `unknown frame type type=X`
+  in `/tmp/backend.log` (the TCP slog sink — NOT `data/nofx_*.log`). This is
+  the twin of the NT8 AddOn `cp` -> Documents-AddOns -> F5 -> full-restart
+  rule. A stale Go binary silently drops new frame types and is why the
+  balance fix appeared not to work until rebuild.
+- **SESSION WAIVER (2026-05-30, Opus 4.8).** MAIN may spawn multiple
+  subagents with full freedom PROVIDED MAIN independently re-verifies
+  (the portal-bug catch above is why); reverts to general-purpose-only next
+  session unless re-waived.
+
 ## 2026-05-28 ARCHITECTURE PIVOT — NT8 as single data source (Databento dropped)
 
 > **READ THIS FIRST IF YOU ARE WORKING ON ANYTHING DATA-RELATED.**
@@ -141,6 +306,32 @@ real-time — confirmed against live MNQ candles moving in NT8 on
 > 4. Session restart required after registration changes. MCP tool schemas
 >    are sealed at session start; updates to `~/.claude.json` only take
 >    effect on the next `claude` invocation.
+
+> **CodeGraphContext (cgc) — query-before-read code graph (registered 2026-05-30):**
+> CodeGraphContext 0.4.0 is installed at `~/.local/bin/cgc` and registered as an
+> MCP server in `~/.claude.json` for project `/home/hoang/nofx` (local scope —
+> NOT a committed `.mcp.json`). Use the `mcp__cgc__*` tools to query code
+> structure BEFORE blindly reading files — e.g. `analyze_code_relationships`
+> (find_callers / find_callees / find_all_callers / call_chain / class_hierarchy
+> / dead_code / find_importers / who_modifies) and `execute_cypher_query` (direct
+> read-only Cypher over the graph). This is how you trace "who calls X / what
+> does Y depend on" across the Go + TS + C# tree without grepping the whole repo.
+>
+> - **Backend: FalkorDB Lite** — embedded, NO Docker required (this WSL2 distro
+>   has no Docker; FalkorDB/Neo4j server backends are therefore NOT used).
+>   `cgc doctor` is the health check.
+> - **Index:** `nofx` is indexed (1872 files). Refresh after code changes with
+>   `cgc index . --force` (plain `cgc index .` skips an already-indexed repo);
+>   `cgc watch /home/hoang/nofx` auto-updates on save. The index is local graph
+>   state, not in git.
+> - **Registration (re-apply on a fresh machine):**
+>   ```bash
+>   claude mcp add -s local cgc -- /home/hoang/.local/bin/cgc mcp start
+>   ```
+> - **Session restart required** (same caveat as Playwright above): the
+>   `mcp__cgc__*` tools only appear on the next `claude` invocation after
+>   registration; the CLI (`cgc query`, `cgc analyze`, `cgc find`) works
+>   immediately regardless.
 
 **Goal:** Get the nofx bot to fetch NQ futures OHLCV from Databento, ask the AI for a trade decision in futures-native vocabulary, write that decision to a CSV signal file, and have NinjaTrader (running on the user's Windows host with the open-source `claudetrader.cs` strategy attached to an MNQ chart) execute that decision in SIM mode — then tail the fills CSV back into the bot's database.
 
@@ -5087,6 +5278,12 @@ These 4 hazards are not in scope for Plan 1's SIM-only goal. Add them as Plan 1.
 
 ## `GetBalance` $50k mock — honest disclosure
 
+> **SUPERSEDED 2026-05-30** — the `$50k` mock is GONE. Real per-account
+> equity now auto-updates via the C# `SendAccountBalance` poll (`c4e2cb13`).
+> Root cause of it appearing stuck was a STALE GO BINARY, not the mock.
+> See `## Current State (2026-05-30, session-verified)`. Kept below for
+> history.
+
 [provider/ninjatrader/trader.go:GetBalance](provider/ninjatrader/trader.go) (per Task 7) returns hardcoded:
 
 ```go
@@ -7985,6 +8182,15 @@ rejection.)
 
 ## 2026-05-28 UI Data-Flow Audit (origin/main 4f0843e5, live app)
 
+> **PARTIALLY SUPERSEDED 2026-05-30** (branch `feat/nt8-stage4-chart`):
+> the "Balance = hardcoded `$50k` MOCK", "decisions skip / unknown coin
+> source" (new strategies born broken on `ai500`), and the Binance/`BTCUSDT`
+> chart findings are RESOLVED — real per-account balance (`c4e2cb13`),
+> `static` MNQ coin_source + kernel guard (`abda753d`/`058e4a56`), and the
+> NT8 chart wiring (`273f85a3`). The crypto-prompt-served-to-futures and the
+> remaining depth findings below still stand. See
+> `## Current State (2026-05-30, session-verified)`. Kept for history.
+
 Per-page findings against the live app on `origin/main` @ `4f0843e5`:
 
 - **Settings — healthiest.** All controls wired; save/persist
@@ -8042,11 +8248,15 @@ Reflects the audit + N11 convergence. Data plane unblocks everything.
   (`GetDefaultStrategyConfig` tweak OR boot migration — makes the N11
   flip survive a reseed).
 - **Stage 4 — FuturesChart + SSE relay** off the same NT8 feed →
-  fixes the Binance chart.
+  fixes the Binance chart. **SUPERSEDED 2026-05-30:** the chart path is
+  `AdvancedChart` reading the NT8 BarCache via REST `/api/klines`
+  (`273f85a3`), NOT `FuturesChart` (deleted) and NOT an SSE relay. See
+  `## Current State (2026-05-30, session-verified)`.
 
 ### 🟠 After (depends on data plane)
 
 - **Plan 4.11** — real NT balance (~150 LOC; fixes the $50k mock).
+  **DONE 2026-05-30** via `c4e2cb13` — see Current State.
 - MarketTicker → NT8 feed.
 
 ### 🟡 Quick wire-ups (zero-dependency)
