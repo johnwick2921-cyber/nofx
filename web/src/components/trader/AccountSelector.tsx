@@ -159,6 +159,7 @@ export function AccountSelector({
         document.body &&
         ReactDOM.createPortal(
           <div
+            data-account-selector
             className="fixed z-[9999] rounded border border-nofx-gold/20 bg-[#0B0E11] shadow-xl shadow-black/50 max-h-64 overflow-y-auto"
             style={{
               top: `${dropdownPos.top}px`,
