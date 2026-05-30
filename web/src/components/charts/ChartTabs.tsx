@@ -112,7 +112,9 @@ export function ChartTabs({
 }: ChartTabsProps) {
   const { language } = useLanguage()
   const [activeTab, setActiveTab] = useState<ChartTab>('equity')
-  const [chartSymbol, setChartSymbol] = useState<string>('BTC')
+  const [chartSymbol, setChartSymbol] = useState<string>(
+    () => MARKET_CONFIG[getMarketTypeFromExchange(exchangeId)].defaultSymbol
+  )
   const [interval, setInterval] = useState<Interval>('5m')
   const [symbolInput, setSymbolInput] = useState('')
   const [marketType, setMarketType] = useState<MarketType>(() =>
@@ -127,7 +129,14 @@ export function ChartTabs({
   useEffect(() => {
     const newMarketType = getMarketTypeFromExchange(exchangeId)
     setMarketType(newMarketType)
-  }, [exchangeId])
+    // Reset the chart symbol to the new market's default (e.g. MNQ for
+    // ninjatrader) so the chart doesn't keep requesting the previous market's
+    // symbol (default 'BTC') on the wrong exchange, which returns empty klines.
+    // An externally-selected symbol still wins via the selectedSymbol effect.
+    if (!selectedSymbol) {
+      setChartSymbol(MARKET_CONFIG[newMarketType].defaultSymbol)
+    }
+  }, [exchangeId, selectedSymbol])
 
   // Determine exchange from market type
   const marketConfig = MARKET_CONFIG[marketType]
