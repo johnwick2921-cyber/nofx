@@ -1207,7 +1207,47 @@ func (s *Strategy) ParseConfig() (*StrategyConfig, error) {
 	if err := json.Unmarshal([]byte(s.Config), &config); err != nil {
 		return nil, fmt.Errorf("failed to parse strategy configuration: %w", err)
 	}
+	config.applyMissingDefaults()
 	return &config, nil
+}
+
+// applyMissingDefaults backfills GetDefaultStrategyConfig values for config
+// blocks that were persisted empty, so a strategy saved without a coin_source
+// or without a klines block never silently falls back to a blank coin source
+// (kernel/engine.go default case "unknown coin source type") or to the crypto
+// "3m" primary timeframe (kernel/engine_analysis.go), which NT8 never subscribes
+// (it auto-subscribes 5m/15m/1h). Only genuinely-empty blocks are filled;
+// explicitly-set values are preserved. This is the durable twin of the
+// per-strategy DB fixes for coin_source and klines.
+func (c *StrategyConfig) applyMissingDefaults() {
+	def := GetDefaultStrategyConfig(c.Language)
+
+	// Coin source: a blank source_type with no static coins and no source flags
+	// means the block was never set -> adopt the default coin source so the
+	// engine's GetCandidateCoins switch does not hit its unknown-type default.
+	if c.CoinSource.SourceType == "" && len(c.CoinSource.StaticCoins) == 0 &&
+		!c.CoinSource.UseAI500 && !c.CoinSource.UseOITop && !c.CoinSource.UseOILow &&
+		!c.CoinSource.UseHyperAll && !c.CoinSource.UseHyperMain {
+		c.CoinSource = def.CoinSource
+	}
+
+	// Klines: no selected timeframes and no primary timeframe means the block was
+	// never set -> adopt the default timeframe set (5m/15m/1h, primary 5m), which
+	// matches the NT8 auto-subscribed set and avoids the engine "3m" fallback.
+	if len(c.Indicators.Klines.SelectedTimeframes) == 0 && c.Indicators.Klines.PrimaryTimeframe == "" {
+		c.Indicators.Klines.SelectedTimeframes = def.Indicators.Klines.SelectedTimeframes
+		c.Indicators.Klines.PrimaryTimeframe = def.Indicators.Klines.PrimaryTimeframe
+		c.Indicators.Klines.LongerTimeframe = def.Indicators.Klines.LongerTimeframe
+		c.Indicators.Klines.EnableMultiTimeframe = true
+		if c.Indicators.Klines.PrimaryCount == 0 {
+			c.Indicators.Klines.PrimaryCount = def.Indicators.Klines.PrimaryCount
+		}
+		if c.Indicators.Klines.LongerCount == 0 {
+			c.Indicators.Klines.LongerCount = def.Indicators.Klines.LongerCount
+		}
+		// raw OHLCV is required for AI analysis
+		c.Indicators.EnableRawKlines = true
+	}
 }
 
 // SetConfig set strategy configuration
