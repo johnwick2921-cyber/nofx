@@ -17,6 +17,7 @@ type DecisionStore struct {
 type DecisionRecordDB struct {
 	ID                  int64     `gorm:"primaryKey;autoIncrement"`
 	TraderID            string    `gorm:"column:trader_id;not null;index:idx_decision_records_trader_time"`
+	Account             string    `gorm:"column:account;not null;default:''"` // ITEM 2 per-account; '' for crypto/pre-migration (quarantined by account-scoped reads)
 	CycleNumber         int       `gorm:"column:cycle_number;not null"`
 	Timestamp           time.Time `gorm:"not null;index:idx_decision_records_trader_time,sort:desc;index:idx_decision_records_timestamp,sort:desc"`
 	SystemPrompt        string    `gorm:"column:system_prompt;default:''"`
@@ -48,6 +49,7 @@ func (DecisionRecordDB) TableName() string { return "decision_records" }
 type DecisionRecord struct {
 	ID                  int64              `json:"id"`
 	TraderID            string             `json:"trader_id"`
+	Account             string             `json:"account"`
 	CycleNumber         int                `json:"cycle_number"`
 	Timestamp           time.Time          `json:"timestamp"`
 	SystemPrompt        string             `json:"system_prompt"`
@@ -146,6 +148,7 @@ func (db *DecisionRecordDB) toRecord() *DecisionRecord {
 	record := &DecisionRecord{
 		ID:                  db.ID,
 		TraderID:            db.TraderID,
+		Account:             db.Account,
 		CycleNumber:         db.CycleNumber,
 		Timestamp:           db.Timestamp,
 		SystemPrompt:        db.SystemPrompt,
@@ -188,6 +191,7 @@ func (s *DecisionStore) LogDecision(record *DecisionRecord) error {
 
 	dbRecord := &DecisionRecordDB{
 		TraderID:            record.TraderID,
+		Account:             record.Account,
 		CycleNumber:         record.CycleNumber,
 		Timestamp:           record.Timestamp,
 		SystemPrompt:        record.SystemPrompt,
@@ -296,21 +300,40 @@ func (s *DecisionStore) CleanOldRecords(traderID string, days int) (int64, error
 	return result.RowsAffected, nil
 }
 
-// GetStatistics gets statistics information for specified trader
-func (s *DecisionStore) GetStatistics(traderID string) (*Statistics, error) {
+// GetStatistics gets statistics for a trader, optionally scoped to one NT
+// account (ITEM 2 per-account). account=="" → trader-global (crypto + legacy);
+// account!="" → cycles and positions for that account only, excluding
+// pre-migration rows (account=''). Scopes BOTH the decision-cycle counts and
+// the cross-table position counts.
+func (s *DecisionStore) GetStatistics(traderID string, account ...string) (*Statistics, error) {
 	stats := &Statistics{}
+	acct := ""
+	if len(account) > 0 {
+		acct = account[0]
+	}
 
 	var totalCount, successCount int64
-	s.db.Model(&DecisionRecordDB{}).Where("trader_id = ?", traderID).Count(&totalCount)
-	s.db.Model(&DecisionRecordDB{}).Where("trader_id = ? AND success = ?", traderID, true).Count(&successCount)
+	dq := s.db.Model(&DecisionRecordDB{}).Where("trader_id = ?", traderID)
+	sq := s.db.Model(&DecisionRecordDB{}).Where("trader_id = ? AND success = ?", traderID, true)
+	if acct != "" {
+		dq = dq.Where("account = ?", acct)
+		sq = sq.Where("account = ?", acct)
+	}
+	dq.Count(&totalCount)
+	sq.Count(&successCount)
 
 	stats.TotalCycles = int(totalCount)
 	stats.SuccessfulCycles = int(successCount)
 	stats.FailedCycles = stats.TotalCycles - stats.SuccessfulCycles
 
-	// Count from trader_positions table using raw query for cross-table
-	s.db.Raw("SELECT COUNT(*) FROM trader_positions WHERE trader_id = ?", traderID).Scan(&stats.TotalOpenPositions)
-	s.db.Raw("SELECT COUNT(*) FROM trader_positions WHERE trader_id = ? AND status = 'CLOSED'", traderID).Scan(&stats.TotalClosePositions)
+	// Count from trader_positions table (cross-table). Scope by account too.
+	if acct != "" {
+		s.db.Raw("SELECT COUNT(*) FROM trader_positions WHERE trader_id = ? AND account = ?", traderID, acct).Scan(&stats.TotalOpenPositions)
+		s.db.Raw("SELECT COUNT(*) FROM trader_positions WHERE trader_id = ? AND account = ? AND status = 'CLOSED'", traderID, acct).Scan(&stats.TotalClosePositions)
+	} else {
+		s.db.Raw("SELECT COUNT(*) FROM trader_positions WHERE trader_id = ?", traderID).Scan(&stats.TotalOpenPositions)
+		s.db.Raw("SELECT COUNT(*) FROM trader_positions WHERE trader_id = ? AND status = 'CLOSED'", traderID).Scan(&stats.TotalClosePositions)
+	}
 
 	return stats, nil
 }
