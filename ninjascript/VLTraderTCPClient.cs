@@ -74,6 +74,13 @@ namespace NinjaTrader.NinjaScript.AddOns
         // writeLock so bar frames cannot interleave with signal/fill bytes.
         private VLBarsSubscriptionManager barsManager;
 
+        // Phase 0 — data-feed reconnect recovery state. NT8 does NOT auto-resume
+        // a BarsRequest after the price feed drops, so we recreate them on
+        // recovery (VLBarsSubscriptionManager.OnConnectionReconnected). Guard so
+        // only a genuine was-lost -> Connected transition fires the recreate.
+        private readonly object connStatusLock = new object();
+        private bool dataFeedWasLost = false;
+
         protected override void OnStateChange()
         {
             if (State == State.SetDefaults)
@@ -100,6 +107,14 @@ namespace NinjaTrader.NinjaScript.AddOns
                 // bar frames inherit the same writeLock + encoder used by the
                 // proven signal/fill/heartbeat path.
                 barsManager = new VLBarsSubscriptionManager(SendFrame, LogInfo, LogWarn);
+
+                // Phase 0 — hook the NT8 data-feed status so BarsRequests get
+                // recreated when the NT8<->provider price feed recovers. Without
+                // this, NT8 silently stops delivering bars after a feed reconnect
+                // and the Go BarCache goes stale with no recovery. Static event
+                // across all connections; the handler filters on PriceStatus.
+                Connection.ConnectionStatusUpdate += OnVLConnectionStatusUpdate;
+
                 readerThread = new Thread(() => RunConnectionLoop(cts.Token))
                 {
                     IsBackground = true,
@@ -123,10 +138,62 @@ namespace NinjaTrader.NinjaScript.AddOns
                     try { account.OrderUpdate -= OnOrderUpdate; } catch { }
                     try { account.AccountItemUpdate -= OnAccountItemUpdate; } catch { }
                 }
+                try { Connection.ConnectionStatusUpdate -= OnVLConnectionStatusUpdate; } catch { }
                 try { barsManager?.DisposeAll(); } catch { }
                 try { stream?.Close(); } catch { }
                 try { client?.Close(); } catch { }
                 LogInfo("VLTraderTCPClient: AddOn Terminated");
+            }
+        }
+
+        // Phase 0 — data-feed reconnect recovery handler. Subscribed to the
+        // static Connection.ConnectionStatusUpdate in State.Active and
+        // unsubscribed in State.Terminated. NT8 raises this for every
+        // connection's status change on a background thread, so we work off a
+        // copy and keep the body light. DATA feed = PriceStatus (Status is the
+        // order/broker connection). We recreate BarsRequests only on a genuine
+        // data-feed recovery — PriceStatus was lost (or Disconnected) and is now
+        // Connected — which also covers the ConnectionLost -> Connecting ->
+        // Connected path. The existing OnConnectionReconnected() does the
+        // dispose + front-month re-resolve + re-subscribe.
+        private void OnVLConnectionStatusUpdate(object sender, ConnectionStatusEventArgs e)
+        {
+            // Multi-threading: NT8 staff guidance — copy the args, they may race
+            // ahead of us while we process.
+            ConnectionStatusEventArgs eCopy = e;
+            try
+            {
+                string priceStatus = eCopy.PriceStatus.ToString();
+                bool fireRecreate = false;
+
+                lock (connStatusLock)
+                {
+                    if (priceStatus == "ConnectionLost" || priceStatus == "Disconnected")
+                    {
+                        if (!dataFeedWasLost)
+                        {
+                            dataFeedWasLost = true;
+                            LogWarn("VLTraderTCPClient: data feed lost (PriceStatus="
+                                    + priceStatus + ") — BarsRequests will be recreated on recovery");
+                        }
+                    }
+                    else if (priceStatus == "Connected" && dataFeedWasLost)
+                    {
+                        dataFeedWasLost = false;  // clear inside the lock -> no double-fire
+                        fireRecreate = true;
+                    }
+                }
+
+                if (fireRecreate)
+                {
+                    LogInfo("VLTraderTCPClient: data feed recovered (PriceStatus=Connected) — "
+                            + "recreating BarsRequests via OnConnectionReconnected");
+                    barsManager?.OnConnectionReconnected();
+                }
+            }
+            catch (Exception ex)
+            {
+                LogWarn("VLTraderTCPClient: OnVLConnectionStatusUpdate failed: " + ex.Message);
             }
         }
 
