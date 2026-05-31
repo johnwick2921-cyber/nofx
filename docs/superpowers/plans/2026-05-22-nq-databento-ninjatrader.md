@@ -146,7 +146,48 @@
 > by the 2026-05-31 full 7-tab audit; the LOCKED Strategy build below
 > replaces them.
 
-**PLANNED — Strategy build (LOCKED 2026-05-31; the next big project).**
+**PLANNED — Universal CME Symbol (Path A) — CURRENT TOP PRIORITY
+(2026-05-31).** GOAL: type ANY CME instrument NT8 offers and have it
+resolve → subscribe → tick-round → size → display (chart Sym/Go input) →
+trade (strategy Symbol Source), through ONE source (NT8 BarCache — the same
+one-source path the kernel + chart already use, see the BarCache correction
+below). Instrument set: index `ES`/`NQ`/`YM`/`RTY` + micros
+`MES`/`MNQ`/`MYM`/`M2K` + energy `CL`/`NG` + metals `GC`/`SI` + rates
+`ZB`/`ZN`/`ZF`/`ZT`.
+
+Build order (**Strategy UI LAST**):
+- **Phase 0 — read-only trace** of the current single-symbol (MNQ) path end
+  to end: resolve, subscribe, tick-round, size, chart, strategy. Map every
+  place `MNQ`/`0.25` tick/point-value is assumed before changing anything.
+- **Wire contract (additive frame types, ADR-007 — ship Go + C# together):**
+  `instrument_subscribe` / `instrument_info` (carries NT8 tick size +
+  `point_value`) / `bar` keyed by `(symbol, TF)` / `instrument_unsubscribe`.
+- **C# AddOn:** `GetInstrument(<any>)` + null-handle guard +
+  `OnConnectionStatusUpdate` dispose-recreate (reconnect silently kills
+  `BarsRequest.Update`) + read `MasterInstrument` tick + `PointValue`, emit
+  on `instrument_info`. Deploy = cp → Documents AddOns → F5 → FULL restart.
+- **Go:** `isCMEFuturesSymbol` full root set (index/micro/energy/metal/rate);
+  per-instrument tick FROM THE WIRE (not the hardcoded `0.25`);
+  `point_value` fed into the prompt for correct contract sizing.
+- **Chart Sym/Go input + Strategy "Symbol Source"** both consume the SAME
+  wire (one source, no per-surface fork).
+- **Per-instrument roll** — each root rolls on its own calendar; manual roll
+  (NT does not auto-roll a running strategy).
+
+NT8 constraints to honor (from Plan 1.5 research): (1) the instrument must
+exist in / be subscribed on the NT8 connection; (2) reconnect kills
+`BarsRequest.Update` → dispose-recreate on `OnConnectionStatusUpdate`;
+(3) data-feed concurrent-subscription caps; (4) tick size + contract
+multiplier are PER-INSTRUMENT — read from NT8, never assume `0.25`/`$2`;
+(5) manual front-month roll. Bar timestamps are NT-local close-time →
+normalize to bar-open UTC at ingest.
+
+The LOCKED Strategy build below (14-TF selector + Futures variant + label
+universalization) is the **LAST** phase of this project — the Strategy UI
+lands AFTER the universal-symbol wire + resolve + chart paths are proven.
+
+**PLANNED — Strategy build (LOCKED 2026-05-31; the LAST phase of the
+Universal CME Symbol project above).**
 SCOPE LOCKED: creating a strategy must let the user select ANY of the 14
 timeframes `[1m,3m,5m,15m,30m,1h,2h,4h,6h,8h,12h,1d,3d,1w]`, and the system
 subscribes + pulls + feeds the AI those EXACT TFs (incl. a Windows NT8 C#
