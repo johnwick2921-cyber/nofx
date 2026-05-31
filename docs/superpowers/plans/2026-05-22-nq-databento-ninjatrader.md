@@ -33,14 +33,20 @@
 > "rename this variable in foo.go"). The read-first rule applies
 > ONLY when the prompt invokes plan content.
 
-> **STATUS (2026-05-30):** NT8 pipeline live on branch
-> `feat/nt8-stage4-chart` (tip `058e4a56`). Balance / account-switch /
-> coin-source / chart-wiring SHIPPED & VERIFIED this session; per-account
-> P&L A/B/F done, C/D/E migration open. See
-> `## Current State (2026-05-30, session-verified)` (immediately below) for
-> the current truth. Older claims about a `$50k mock balance`, `FuturesChart`
-> as the chart path, "decisions skip / unknown coin source", and a
-> `100000` P&L baseline are SUPERSEDED there (marked in place, not deleted).
+> **STATUS (2026-05-31):** NT8 pipeline live on branch
+> `feat/nt8-stage4-chart` (tip `0a67bfda`, includes `063bc311` +
+> `49017ff9` + `0a67bfda`). **DASHBOARD IS COMPLETE** — balance,
+> account-switch, per-account P&L, chart with all 7 TF buttons, and the
+> per-account equity curve (C/D/E) are all SHIPPED & VERIFIED. The
+> **Strategy Studio AUDIT is done (2026-05-31, full 7-tab pass)** and the
+> Strategy build is **PLANNED** (two stages, locked — see Current State).
+> See `## Current State (2026-05-30, session-verified)` (immediately below)
+> for the current truth. Older claims about a `$50k mock balance`,
+> `FuturesChart` as the chart path, "decisions skip / unknown coin source",
+> a `100000` P&L baseline, and **"kernel reads Binance klines"** are
+> SUPERSEDED in place (the kernel reads NT8 BarCache for CME futures on this
+> branch — verified `market/data.go:197-210`; Stage 3 source-swap is DONE
+> here). Markers added, nothing deleted.
 
 ## Current State (2026-05-30, session-verified)
 
@@ -91,6 +97,23 @@
   clobber, so indicators NOW WORK on NT8/MNQ). **B/S is a MARKER TOGGLE, not
   an order placer — there is no manual-order route, by design.** Saturday =
   static historical MNQ bars; live ticks need RTH (Sun ~17:00 CT).
+- **Chart shows all 7 TF buttons — root cause was a CSS CLIP (`063bc311`),
+  NOT a stale deploy / wrong array.** `d3c18f0f`'s 7-button list was already
+  live, but the interval row (`ChartTabs.tsx:397`) had `overflow-x-auto` +
+  `max-w-[200px]` inside a `min-w-0` flex toolbar → flex-shrink collapsed it
+  (`clientWidth 73` vs `scrollWidth 216`) → `30m`/`1h`/`1d` were clipped behind
+  a hidden scrollbar. Fix: flex-wrap the row so all 7 stay visible. LESSON:
+  headless Playwright read the DOM text ("7 buttons present") while the real
+  browser visually clipped 3 — measure visual visibility, not DOM presence.
+- **Per-account equity curve — ITEM 2 C/D/E migration SHIPPED (`49017ff9` +
+  `0a67bfda`).** Account column added to the 3 tables (`trader_positions`,
+  `trader_equity_snapshots`, `decision_records`) — additive / AutoMigrate /
+  idempotent; per-account equity baseline now comes from the SCOPED series'
+  first snapshot (NOT the trader-global `100000`); ~208 pre-existing mixed
+  rows QUARANTINED (`account=''`); crypto path unaffected; integrity_check ok.
+  Result: SimAccount1 now reads `70000`/`70000`/`+0%` (was `100000`/`-30%`/
+  the bogus "201" series). This is the durable backend for the per-account
+  P&L cards (which `fcd8bb99` already made correct on the card surface).
 
 ### SETTLED NON-BUGS — do NOT re-investigate (confirmed 2026-05-30)
 
@@ -116,28 +139,61 @@
 
 ### IN FLIGHT / PLANNED
 
-- **IN FLIGHT — chart 7-timeframe buttons (CHART-SIDE ONLY).** Chart-side is
-  committed (`d3c18f0f`: MNQ chart shows all 7 TF buttons, adds `3m`, drops
-  `4h`). Full task = C# subscribe 7 + Go serve 7 + chart show 7; the kernel AI
-  timeframes stay `[5m,15m,1h]` (do NOT widen the AI's TF set). On
-  `feat/nt8-stage4-chart`.
-- **PLANNED — Issue 2 C/D/E per-account equity-curve migration** (a real
-  schema migration, NOT done; the P&L CARDS are already correct, this is
-  cosmetic-historical): additive nullable account columns on
-  `trader_positions` + `trader_equity_snapshots`, per-account statistics
-  scoping, a per-account equity baseline, and backfill/quarantine of the ~160
-  mixed snapshot rows; key by account NAME; back up first. Frontend keys are
-  already account-aware, so the backend columns land cleanly. Do as a
-  dedicated migration when historical per-account curves are actually needed.
-- **PLANNED — Strategy-build plan (the Studio audit is done; these are audit
-  LEANINGS, to be LOCKED in a dedicated planning pass — not yet build steps):**
-  Option (a) reuse static+MNQ + harden edges — a1 USDT-append CME bypass,
-  a2 `applyMissingDefaults` on Create AND Update, a3 hard-restrict futures TFs
-  via exchange -> `IndicatorEditor`, a4 help text — PLUS the 7-TF STRATEGY
-  selector + preview parity + phantom cleanup (`UPDATE strategies SET
-  is_default=0 WHERE id=''` + add `ORDER BY` to GetDefault; NEVER touch
-  `578ac8f6`). Sequence: harden the Studio edges BEFORE the 7-TF Strategy
-  selector.
+> **SHIPPED 2026-05-31** — the former "chart 7-timeframe buttons" IN-FLIGHT
+> item and the "Issue 2 C/D/E per-account equity-curve migration" PLANNED
+> item are BOTH DONE; moved to SHIPPED & VERIFIED above (`063bc311`,
+> `49017ff9`, `0a67bfda`). The §7g Strategy audit "leanings" are SUPERSEDED
+> by the 2026-05-31 full 7-tab audit; the LOCKED Strategy build below
+> replaces them.
+
+**PLANNED — Strategy build (LOCKED 2026-05-31; the next big project).**
+SCOPE LOCKED: creating a strategy must let the user select ANY of the 14
+timeframes `[1m,3m,5m,15m,30m,1h,2h,4h,6h,8h,12h,1d,3d,1w]`, and the system
+subscribes + pulls + feeds the AI those EXACT TFs (incl. a Windows NT8 C#
+AddOn update). **Q1 DECIDED: the AI uses ALL selected TFs (no cap).**
+**Q2 DECIDED: all 14, C# updated.** This FLIPS the §7g `a3` leaning from
+"hard-restrict futures TFs to `[5m,15m,1h]`" → "make all 14 deliverable."
+
+- **STAGE 1 — UI + phantom (frontend + a few Go store/api + DB; NO C#, NO
+  wire).** Severity-ordered:
+  - **P1 🔴 — TAB2 CoinSource USDT→CME bypass** (`CoinSourceEditor.tsx:78`
+    + `:107`). The bypass has ZERO CME roots today → `MNQ`→`MNQUSDT` →
+    `IsCMEFuturesSymbol=false` → silently routes to the crypto branch →
+    futures decisions skip. **THE critical fix.** Plus the universal
+    'Symbol Source' rename + help text.
+  - **P2 🟠 — TAB3 indicator gating** (add a `variant` prop; hide
+    funding/OI/NetFlow/NofxOS for futures — also stops crypto vocab leaking
+    into the futures prompt via the shared `writeAvailableIndicators`) +
+    **TAB6 add a 'Futures' variant** to BOTH the preview and AI-Test selects
+    (`StrategyStudioPage.tsx:1198-1206` / `:1306-1314` — the futures prompt
+    `engine_prompt_futures.go` EXISTS but is currently UI-unreachable) +
+    **TAB4 universal risk labels** (BTC/ETH/Altcoin → Leverage/Tier; fix the
+    hardcoded `USDT` span at `RiskControlEditor.tsx:277-278`, NOT via i18n).
+  - **P3 🟡 — TAB5 futures persona + TAB1/7 cleanup.**
+  - **Cross-cutting phantom cleanup:** `UPDATE strategies SET is_default=0
+    WHERE id=''` + add `ORDER BY` to GetDefault (`store/strategy.go:1157`) —
+    NEVER touch `578ac8f6`.
+  - **LABEL RULE:** delete nothing; rename to UNIVERSAL (one label fits
+    crypto + futures; units dynamic).
+- **STAGE 2 — backend 14-TF delivery (C# → F5 + FULL restart).**
+  `MapTimeframe` → all 14 (the 7 MISSING are `2h`/`4h`/`6h`/`8h`/`12h`/`3d`/
+  `1w`; `tcp_server.go:143` auto-subscribes only 7) + the Go subscribe set
+  DRIVEN BY the strategy's `selected_timeframes` + kernel reads BarCache for
+  all selected (**ALREADY the path — no source-swap needed**, per the
+  BarCache correction in the Root Cause section below) + prompt feeds all
+  selected + the picker honest.
+
+  **i18n GOTCHA:** `strategy-translations.ts` is zh / en / **es (Spanish)**,
+  NOT `id` — new editor labels need an `es` value.
+
+  **FLAGGED (separate Plan 3, NOT relabel work) — Risk Control enforcement
+  bugs:** the `max_margin_usage` badge is prompt-only (not enforced);
+  `min_risk_reward_ratio` is ignored (hard `3.0` at
+  `engine_position.go:133`); position-value tiers are inert for MNQ.
+
+  **CLEAN SLATE:** the prior Stage-1 attempt was REVERTED — the phantom is
+  back to `is_default=1` on BOTH "MNQ SIM Default" rows, `store/strategy.go`
+  == HEAD, and `GetDefault().First()` is nondeterministic again.
 
 ### STILL OPEN / DEFERRED
 
@@ -183,7 +239,10 @@
 | `c4e2cb13` | fix(nt8): poll account_balance so real equity populates (Tradovate AccountItemUpdate doesn't fire) — kills $50k mock |
 | `f267d09e` | fix(nt8): chart defaults to the trader's market symbol (MNQ), not BTC |
 | `3a3dfb31` | fix(nt8): chart indicators redraw on toggle (stop stale-closure clobber) |
-| `d3c18f0f` | feat(nt8): MNQ chart shows all 7 timeframe buttons (adds 3m, drops 4h) **[BRANCH TIP = origin]** |
+| `d3c18f0f` | feat(nt8): MNQ chart shows all 7 timeframe buttons (adds 3m, drops 4h) |
+| `063bc311` | fix(nt8): chart timeframe row wraps so all 7 buttons stay visible |
+| `49017ff9` | feat(nt8): per-account equity/positions/statistics (ITEM 2 C/D/E migration) |
+| `0a67bfda` | fix(nt8): equity curve baseline is per-account, not trader-global 100000 **[BRANCH TIP = origin]** |
 
 ### New rules logged this session (see also "Locked Data Architecture Decisions")
 
@@ -8113,6 +8172,19 @@ bugs the audit surfaced.
 
 ## 2026-05-28 Root Cause — Kernel reads Binance klines, not NT8 BarCache
 
+> **SUPERSEDED 2026-05-31 (branch `feat/nt8-stage4-chart`) — the Stage 3
+> source-swap is DONE on this branch; the kernel reads NT8 BarCache for CME
+> futures, NEVER Binance/CoinAnk.** Verified live 2026-05-31 in
+> `market/data.go`: `isFutures := IsCMEFuturesSymbol(symbol)` (`:197`) →
+> the futures branch reads `FuturesBarsProvider(symbol, tf, 200)` — the
+> BarCache (`:204-210`, with a "no NT8 bar provider wired; skipping" guard);
+> `getKlinesFromCoinAnk(..., "binance", ...)` is the **non-futures `else`
+> branch only** (`:224`). The sibling 3m/4h helper does the same
+> (`:41-90`). **ONE SOURCE OF TRUTH CONFIRMED: chart + kernel both read NT8
+> BarCache.** The "reads Binance" diagnosis below was true on
+> `origin/main @ 4f0843e5` (where Stage 3 had not landed); it is no longer
+> true on this branch. Kept verbatim below for history.
+
 The two investigations converged on one cause:
 
 - **Engine-side (UI audit):** the trader's market-data map comes up
@@ -8164,6 +8236,13 @@ above — that post-mortem is preserved with a SUPERSEDED marker.)
   flip removed the coin-selection short-circuit; Stage 3 removes the
   data starvation. Two distinct gates: N11 cleared the first, Stage 3
   clears the second.
+- **UPDATE 2026-05-31 (branch `feat/nt8-stage4-chart`):** the second gate
+  is now CLEARED here too — Stage 3's source-swap is DONE on this branch
+  (kernel reads NT8 BarCache via `FuturesBarsProvider`,
+  `market/data.go:197-210`; see the SUPERSEDED marker on the Root Cause
+  section above). The empty-market-data starvation is resolved on this
+  branch; remaining WAITs are weekend-gate (CME closed), not data
+  starvation.
 
 ## 2026-05-28 — risk_check_passed is UNWIRED (not a rejection signal)
 
@@ -8235,18 +8314,36 @@ Reflects the audit + N11 convergence. Data plane unblocks everything.
 
 ### 🔴 BLOCKING (data plane)
 
+> **UPDATE 2026-05-31 — DASHBOARD COMPLETE on `feat/nt8-stage4-chart`.**
+> Stage 1 (C# bars) DONE, Stage 2 (Go bar handling) PROVEN, **Stage 3
+> (kernel reads NT8 BarCache) DONE** (`market/data.go:197-210`), **Stage 4
+> (chart) SHIPPED** (`273f85a3` AdvancedChart over `/api/klines` + the
+> `063bc311` 7-TF CSS-clip fix), and **Plan 4.11 (real balance) DONE**
+> (`c4e2cb13`) + per-account equity C/D/E (`49017ff9`/`0a67bfda`). The
+> data-plane chain is no longer blocking. **The next big project is the
+> Strategy build** (LOCKED — see `## Current State` → IN FLIGHT / PLANNED:
+> Stage 1 UI+phantom, then Stage 2 backend 14-TF delivery).
+
 - **Stage 1 — C# bars [DONE — `v1.0-nt8-contract-resolver`].**
 - **Stage 2 — Go bar handling [bars flow + cached, PROVEN].** N1/N3/N4/N5
   wire-design items pending IF not yet built — **confirm remaining**
   against the Stage 2 wire-design section above.
-- **Stage 3 — the pinpointed one-call fix.** Swap
-  `getKlinesFromCoinAnk` → `BarCache().Get(symbol, tf)` in the futures
-  branch (`market/data.go:192`). Turns WAIT into real decisions — **THE
-  unlock.** Fold in here: (a) the futures-prompt selection at
-  `auto_trader_loop.go:102` (route futures traders to
-  `engine_prompt_futures.go`), and (b) the reseed-durable default
-  (`GetDefaultStrategyConfig` tweak OR boot migration — makes the N11
-  flip survive a reseed).
+- **Stage 3 — the pinpointed one-call fix. ✅ DONE on
+  `feat/nt8-stage4-chart` (SUPERSEDED 2026-05-31).** The source-swap
+  shipped: the futures branch now reads the NT8 BarCache via the injected
+  `FuturesBarsProvider` (`market/data.go:197-210`), never
+  `getKlinesFromCoinAnk` (that is the non-futures `else` only, `:224`).
+  Verified live 2026-05-31. The N11 data-starvation cause is resolved by
+  this same Stage-3 work being present on the branch. (Original target text
+  below kept for history; the cited `market/data.go:192` line drifted —
+  the live branch is `:197-210`.) Remaining fold-ins still open: (a) the
+  futures-prompt selection (route futures traders to
+  `engine_prompt_futures.go` — tracked in the LOCKED Strategy build, Stage 1
+  P2 TAB6), and (b) the reseed-durable default
+  (`GetDefaultStrategyConfig`/boot migration — the phantom CLEAN SLATE note).
+  Original Stage-3 target: ~~Swap `getKlinesFromCoinAnk` →
+  `BarCache().Get(symbol, tf)` in the futures branch
+  (`market/data.go:192`).~~
 - **Stage 4 — FuturesChart + SSE relay** off the same NT8 feed →
   fixes the Binance chart. **SUPERSEDED 2026-05-30:** the chart path is
   `AdvancedChart` reading the NT8 BarCache via REST `/api/klines`
