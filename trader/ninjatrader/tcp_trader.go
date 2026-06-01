@@ -248,12 +248,31 @@ func (t *TCPTrader) GetPositions() ([]map[string]interface{}, error) {
 		acct = *a
 	}
 	if snap, ok := t.server.PositionsFor(acct); ok {
-		out := make([]map[string]interface{}, 0, len(snap))
+		// NT8-truth uPnL: the account_balance frame carries the account's LIVE
+		// unrealized P&L. When exactly ONE position is open, that total IS this
+		// position's uPnL — use it (and derive the mark) so the displayed P&L
+		// matches NT8, instead of marking off a stale 5m bar close. With multiple
+		// positions the account total can't be split per-position, so those fall
+		// back to the mark calc.
+		nonFlat := 0
+		for _, p := range snap {
+			if p.Quantity != 0 {
+				nonFlat++
+			}
+		}
+		var uPnLOverride *float64
+		if nonFlat == 1 {
+			if bal, ok := t.server.AccountStateFor(acct); ok {
+				v := bal.UnrealizedPnL
+				uPnLOverride = &v
+			}
+		}
+		out := make([]map[string]interface{}, 0, nonFlat)
 		for _, p := range snap {
 			if p.Quantity == 0 {
 				continue // flat — should not appear in a snapshot, but be safe
 			}
-			out = append(out, t.positionMap(p.Symbol, p.Side, float64(p.Quantity), p.AvgPrice))
+			out = append(out, t.positionMap(p.Symbol, p.Side, float64(p.Quantity), p.AvgPrice, uPnLOverride))
 		}
 		return out, nil
 	}
@@ -267,7 +286,7 @@ func (t *TCPTrader) GetPositions() ([]map[string]interface{}, error) {
 	fill := t.lastFill
 	t.mu.Unlock()
 	return []map[string]interface{}{
-		t.positionMap(t.symbol, fill.Side, float64(fill.Quantity), fill.FillPrice),
+		t.positionMap(t.symbol, fill.Side, float64(fill.Quantity), fill.FillPrice, nil),
 	}, nil
 }
 
@@ -275,19 +294,11 @@ func (t *TCPTrader) GetPositions() ([]map[string]interface{}, error) {
 // uPnL marked off the latest cached bar and the futures point value. Shared by
 // the NT8-snapshot path (truth) and the fill-derived fallback so both produce
 // the identical shape.
-func (t *TCPTrader) positionMap(symbol, side string, qty, entry float64) map[string]interface{} {
+func (t *TCPTrader) positionMap(symbol, side string, qty, entry float64, uPnLOverride *float64) map[string]interface{} {
 	sd := upperSideStr(side)
 
-	// Mark price from the live BarCache (latest 5m bar close); fall back to the
-	// entry if no bars are cached yet. This makes uPnL a real, moving number.
-	mark := entry
-	if bars := t.server.BarCache().Get(symbol, "5m"); len(bars) > 0 {
-		mark = bars[len(bars)-1].C
-	}
-
-	// Futures: contract point value (MNQ=$2/pt). uPnL = (mark-entry) × qty ×
-	// pointValue × direction. positionAmt is signed (short < 0) per the Binance
-	// convention GetAccountInfo expects.
+	// Futures: contract point value (MNQ=$2/pt). positionAmt is signed (short < 0)
+	// per the Binance convention GetAccountInfo expects.
 	pv := market.FuturesPointValue(symbol)
 	if pv <= 0 {
 		pv = 1
@@ -298,10 +309,32 @@ func (t *TCPTrader) positionMap(symbol, side string, qty, entry float64) map[str
 		dir = -1.0
 		signedQty = -qty
 	}
-	uPnL := (mark - entry) * dir * qty * pv
-	uPnLPct := 0.0
-	if entry > 0 {
-		uPnLPct = (mark - entry) / entry * 100 * dir
+
+	var mark, uPnL, uPnLPct float64
+	if uPnLOverride != nil {
+		// NT8-truth uPnL (account_balance UnrealizedPnL) — already correctly signed
+		// by NT8. Derive the mark so the displayed "Current" is consistent with it:
+		// long uPnL=(mark-entry)*qty*pv → mark=entry+uPnL/(qty*pv); short →
+		// mark=entry-uPnL/(qty*pv); i.e. mark = entry + dir*uPnL/(qty*pv).
+		uPnL = *uPnLOverride
+		mark = entry
+		if qty > 0 {
+			mark = entry + dir*uPnL/(qty*pv)
+		}
+		if entry > 0 {
+			uPnLPct = (mark - entry) / entry * 100 * dir
+		}
+	} else {
+		// Fallback (multi-position / no account snapshot yet): mark off the latest
+		// 5m BarCache close. Less precise than NT8's live uPnL but self-contained.
+		mark = entry
+		if bars := t.server.BarCache().Get(symbol, "5m"); len(bars) > 0 {
+			mark = bars[len(bars)-1].C
+		}
+		uPnL = (mark - entry) * dir * qty * pv
+		if entry > 0 {
+			uPnLPct = (mark - entry) / entry * 100 * dir
+		}
 	}
 
 	return map[string]interface{}{
