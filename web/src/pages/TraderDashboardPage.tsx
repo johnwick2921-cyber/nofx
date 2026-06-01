@@ -805,10 +805,12 @@ export function TraderDashboardPage({
                             </td>
                             <td className="px-1 py-3 whitespace-nowrap text-center">
                               <span
-                                className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${pos.side === 'long' ? 'bg-nofx-green/10 text-nofx-green shadow-[0_0_8px_rgba(14,203,129,0.2)]' : 'bg-nofx-red/10 text-nofx-red shadow-[0_0_8px_rgba(246,70,93,0.2)]'}`}
+                                className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${(pos.side || '').toLowerCase() === 'long' ? 'bg-nofx-green/10 text-nofx-green shadow-[0_0_8px_rgba(14,203,129,0.2)]' : 'bg-nofx-red/10 text-nofx-red shadow-[0_0_8px_rgba(246,70,93,0.2)]'}`}
                               >
                                 {t(
-                                  pos.side === 'long' ? 'long' : 'short',
+                                  (pos.side || '').toLowerCase() === 'long'
+                                    ? 'long'
+                                    : 'short',
                                   language
                                 )}
                               </span>
