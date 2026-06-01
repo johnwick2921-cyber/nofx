@@ -100,6 +100,11 @@ namespace NinjaTrader.NinjaScript.AddOns
                     // Plan 4.11 — emit the real account balance on cash/PnL
                     // changes so the dashboard reflects the live SIM account.
                     account.AccountItemUpdate += OnAccountItemUpdate;
+                    // Open-position read-back — emit the account's current open
+                    // positions on ANY change (incl. MANUAL trades in NT8) so the
+                    // Go side / AI always tracks NT8's real position. The initial
+                    // snapshot is also sent on connect + on account_select.
+                    account.PositionUpdate += OnPositionUpdate;
                 }
                 // Plan 4.4 Stage 1 — instantiate the bars manager BEFORE the
                 // reader thread starts so an early bars_subscribe frame has a
@@ -137,6 +142,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                 {
                     try { account.OrderUpdate -= OnOrderUpdate; } catch { }
                     try { account.AccountItemUpdate -= OnAccountItemUpdate; } catch { }
+                    try { account.PositionUpdate -= OnPositionUpdate; } catch { }
                 }
                 try { Connection.ConnectionStatusUpdate -= OnVLConnectionStatusUpdate; } catch { }
                 try { barsManager?.DisposeAll(); } catch { }
@@ -290,6 +296,11 @@ namespace NinjaTrader.NinjaScript.AddOns
                     // on (re)connect so the dashboard shows the real SIM
                     // account without waiting for the next AccountItemUpdate.
                     SendAccountBalance();
+                    // Open-position read-back — snapshot the selected account's
+                    // current open positions on (re)connect so the Go side
+                    // re-syncs the AI's tracked position after a restart/feed
+                    // reconnect (companion to the Phase 0 reconnect fix).
+                    SendOpenPositions(account);
                     RunReadLoop(ct);
                 }
                 catch (Exception ex)
@@ -601,12 +612,14 @@ namespace NinjaTrader.NinjaScript.AddOns
                 {
                     try { account.OrderUpdate -= OnOrderUpdate; } catch { }
                     try { account.AccountItemUpdate -= OnAccountItemUpdate; } catch { }
+                    try { account.PositionUpdate -= OnPositionUpdate; } catch { }
                 }
 
                 // Switch to the new account and subscribe to its events
                 account = newAccount;
                 account.OrderUpdate += OnOrderUpdate;
                 account.AccountItemUpdate += OnAccountItemUpdate;
+                account.PositionUpdate += OnPositionUpdate;
 
                 // Clear pending brackets and signal maps (tied to old account context)
                 lock (signalMapLock)
@@ -618,6 +631,12 @@ namespace NinjaTrader.NinjaScript.AddOns
 
                 // Re-emit account_balance immediately for the new account
                 SendAccountBalance();
+                // Open-position read-back — snapshot the NEWLY-SELECTED account's
+                // current open positions so the AI re-tracks the real position on
+                // switch-back (fixes the orphaned-position bug). NT8 reports
+                // positions on change only, so this on-select re-report is what
+                // repopulates the Go-side per-account cache.
+                SendOpenPositions(account);
                 LogInfo("VLTraderTCPClient: switched to account " + account.Name);
             }
             catch (Exception ex)
@@ -781,6 +800,123 @@ namespace NinjaTrader.NinjaScript.AddOns
                 ["exit_time"]     = DateTime.UtcNow.ToString("o")
             };
             WriteEnvelope("position_close", payload);
+        }
+
+        // Open-position read-back — emit the selected account's CURRENT open
+        // positions as a FULL snapshot. Called on connect, on account_select,
+        // and on any Account.PositionUpdate (incl. MANUAL trades in NT8). NT8 is
+        // the source of truth; before this the Go side only knew positions it
+        // opened itself (via fills), so it lost the position on account
+        // switch-back and never saw manual trades. The Go side REPLACES its
+        // per-account cache with this set (an empty list = the account is flat).
+        // Full snapshot from the (settled) live collection — used by the connect
+        // + account_select paths, where positions are already settled. Delegates
+        // to the evt-aware overload with no event override.
+        private void SendOpenPositions(Account acc)
+        {
+            SendOpenPositions(acc, null);
+        }
+
+        // Emit the account's open positions. When called from OnPositionUpdate
+        // (evt != null), the just-updated instrument's AveragePrice in the live
+        // acc.Positions collection has NOT settled to the new fill yet — it still
+        // holds the PRIOR netted average (the stale-entry bug). The
+        // PositionEventArgs carries the SETTLED account-level values at the event
+        // (NT staff + help guide: e.MarketPosition/e.Quantity/e.AveragePrice are
+        // "the actual account value at that time", unlike e.Position.* which is
+        // only the currently-updating position), so for THAT instrument we use
+        // evt's by-value fields. Other instruments + the connect/select snapshot
+        // (evt == null) read the settled collection directly.
+        private void SendOpenPositions(Account acc, PositionEventArgs evt)
+        {
+            if (acc == null) return;
+            try
+            {
+                // Copy the event values by-value up front (NT8 background-thread
+                // guidance — the args can race ahead while we process). qty==0 or
+                // Flat means the just-updated instrument went flat (close/remove).
+                string evtRoot = null;
+                MarketPosition evtMp = MarketPosition.Flat;
+                int evtQty = 0;
+                double evtAvg = 0;
+                if (evt != null && evt.Position != null)
+                {
+                    try { evtRoot = evt.Position.Instrument.MasterInstrument.Name; } catch { }
+                    evtMp = evt.MarketPosition;
+                    evtQty = evt.Quantity;
+                    evtAvg = evt.AveragePrice;
+                }
+
+                var list = new List<object>();
+                bool evtSeen = false;
+                // Background-thread safe: lock the Positions collection while
+                // enumerating (NT8 mutates it from worker threads).
+                lock (acc.Positions)
+                {
+                    foreach (Position pos in acc.Positions)
+                    {
+                        if (pos == null) continue;
+                        string root = "";
+                        try { root = pos.Instrument.MasterInstrument.Name; } catch { }
+
+                        MarketPosition mp = pos.MarketPosition;
+                        int qty = pos.Quantity;
+                        double avg = pos.AveragePrice;
+                        // Override the just-updated instrument with the SETTLED
+                        // event values (its collection avg is still stale here).
+                        if (evtRoot != null && root == evtRoot)
+                        {
+                            mp = evtMp; qty = evtQty; avg = evtAvg; evtSeen = true;
+                        }
+                        if (mp == MarketPosition.Flat || qty == 0)
+                            continue; // skip flat / closed entries
+                        list.Add(new Dictionary<string, object>
+                        {
+                            ["symbol"]    = root,
+                            ["side"]      = (mp == MarketPosition.Long) ? "long" : "short",
+                            ["quantity"]  = qty,
+                            ["avg_price"] = avg
+                        });
+                    }
+                }
+                // Edge: a brand-new position may not be in acc.Positions at the
+                // event instant — add it from the settled event values so we
+                // never under-report the just-opened position.
+                if (evtRoot != null && !evtSeen && evtMp != MarketPosition.Flat && evtQty != 0)
+                {
+                    list.Add(new Dictionary<string, object>
+                    {
+                        ["symbol"]    = evtRoot,
+                        ["side"]      = (evtMp == MarketPosition.Long) ? "long" : "short",
+                        ["quantity"]  = evtQty,
+                        ["avg_price"] = evtAvg
+                    });
+                }
+
+                var payload = new Dictionary<string, object>
+                {
+                    ["account"]   = acc.Name,
+                    ["positions"] = list
+                };
+                WriteEnvelope("positions", payload);
+                LogInfo("VLTraderTCPClient: sent positions snapshot account=" + acc.Name + " count=" + list.Count);
+            }
+            catch (Exception ex)
+            {
+                LogWarn("VLTraderTCPClient: SendOpenPositions failed: " + ex.Message);
+            }
+        }
+
+        // Account.PositionUpdate handler — fires on ANY position change for the
+        // subscribed account, INCLUDING a manual open/close in NT8. Raised on a
+        // background thread; we pass the event into SendOpenPositions so the
+        // just-updated instrument uses the SETTLED event average (the live
+        // acc.Positions average lags the fill at this instant — the stale-entry
+        // bug). A close/flat arrives as MarketPosition.Flat or Quantity 0.
+        private void OnPositionUpdate(object sender, PositionEventArgs e)
+        {
+            try { SendOpenPositions(account, e); }
+            catch (Exception ex) { LogWarn("VLTraderTCPClient: OnPositionUpdate failed: " + ex.Message); }
         }
 
         // Emit the accounts_list frame reporting all available NT accounts with

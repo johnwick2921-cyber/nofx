@@ -238,6 +238,27 @@ func (t *TCPTrader) GetBalance() (map[string]interface{}, error) {
 }
 
 func (t *TCPTrader) GetPositions() ([]map[string]interface{}, error) {
+	// Prefer the NT8-reported open positions for the SELECTED account — the
+	// source of truth. This survives account switch-back AND reflects positions
+	// opened MANUALLY in NT8 (the AddOn emits a `positions` snapshot on select /
+	// connect / PositionUpdate). The fill-derived cache below is only a fallback
+	// for before the position-reporting AddOn is deployed (no snapshot yet).
+	acct := ""
+	if a := t.server.CurrentAccount(); a != nil {
+		acct = *a
+	}
+	if snap, ok := t.server.PositionsFor(acct); ok {
+		out := make([]map[string]interface{}, 0, len(snap))
+		for _, p := range snap {
+			if p.Quantity == 0 {
+				continue // flat — should not appear in a snapshot, but be safe
+			}
+			out = append(out, t.positionMap(p.Symbol, p.Side, float64(p.Quantity), p.AvgPrice))
+		}
+		return out, nil
+	}
+
+	// Fallback (no NT8 snapshot yet): the single fill-derived position.
 	t.mu.Lock()
 	if !t.hasFill {
 		t.mu.Unlock()
@@ -245,29 +266,35 @@ func (t *TCPTrader) GetPositions() ([]map[string]interface{}, error) {
 	}
 	fill := t.lastFill
 	t.mu.Unlock()
+	return []map[string]interface{}{
+		t.positionMap(t.symbol, fill.Side, float64(fill.Quantity), fill.FillPrice),
+	}, nil
+}
 
-	side := upperSideStr(fill.Side)
-	qty := float64(fill.Quantity)
-	entry := fill.FillPrice
+// positionMap builds the UI/decision-context record for one open position, with
+// uPnL marked off the latest cached bar and the futures point value. Shared by
+// the NT8-snapshot path (truth) and the fill-derived fallback so both produce
+// the identical shape.
+func (t *TCPTrader) positionMap(symbol, side string, qty, entry float64) map[string]interface{} {
+	sd := upperSideStr(side)
 
 	// Mark price from the live BarCache (latest 5m bar close); fall back to the
-	// entry fill if no bars are cached yet. This makes uPnL a real, moving
-	// number instead of the {qty:1.0} stub with no mark.
+	// entry if no bars are cached yet. This makes uPnL a real, moving number.
 	mark := entry
-	if bars := t.server.BarCache().Get(t.symbol, "5m"); len(bars) > 0 {
+	if bars := t.server.BarCache().Get(symbol, "5m"); len(bars) > 0 {
 		mark = bars[len(bars)-1].C
 	}
 
 	// Futures: contract point value (MNQ=$2/pt). uPnL = (mark-entry) × qty ×
-	// pointValue × direction. positionAmt is signed (short < 0) per the
-	// Binance convention GetAccountInfo expects.
-	pv := market.FuturesPointValue(t.symbol)
+	// pointValue × direction. positionAmt is signed (short < 0) per the Binance
+	// convention GetAccountInfo expects.
+	pv := market.FuturesPointValue(symbol)
 	if pv <= 0 {
 		pv = 1
 	}
 	dir := 1.0
 	signedQty := qty
-	if side == "SHORT" {
+	if sd == "SHORT" {
 		dir = -1.0
 		signedQty = -qty
 	}
@@ -277,10 +304,10 @@ func (t *TCPTrader) GetPositions() ([]map[string]interface{}, error) {
 		uPnLPct = (mark - entry) / entry * 100 * dir
 	}
 
-	return []map[string]interface{}{{
+	return map[string]interface{}{
 		// snake_case — read by the UI Position type (web/src/types/trading.ts)
-		"symbol":             t.symbol,
-		"side":               side,
+		"symbol":             symbol,
+		"side":               sd,
 		"entry_price":        entry,
 		"mark_price":         mark,
 		"quantity":           qty,
@@ -294,7 +321,7 @@ func (t *TCPTrader) GetPositions() ([]map[string]interface{}, error) {
 		"entryPrice":       entry,
 		"markPrice":        mark,
 		"unRealizedProfit": uPnL,
-	}}, nil
+	}
 }
 
 // DebugPlaceTestTrade places a deterministic 1-contract bracket order on the
