@@ -138,6 +138,33 @@ type ClosePositionPayload struct {
 	SignalID string `json:"signal_id"`
 }
 
+// Open-position read-back — C#-AddOn → Go-server, additive snapshot frame (same
+// envelope: 4-byte BE length + JSON {type, payload}, snake_case). The AddOn
+// emits the selected account's CURRENT open positions: on account_select, on
+// connect, and on any Account.PositionUpdate (INCLUDING a MANUAL open/close in
+// NT8). This is the previously-missing position read-back — before it, Go only
+// knew positions it opened itself (via a fill), so it lost the position on
+// account switch-back and never saw manual trades. The frame is a FULL
+// per-account snapshot (the complete non-flat set); the Go side REPLACES
+// acctPositions[Account] with it, so a flat instrument simply drops out.
+const FramePositions FrameType = "positions"
+
+// OpenPosition is one non-flat NT position (per instrument) within a snapshot.
+type OpenPosition struct {
+	Symbol   string  `json:"symbol"`    // root symbol, e.g. "MNQ"
+	Side     string  `json:"side"`      // "long" | "short"
+	Quantity int     `json:"quantity"`  // contracts (NT8 nets per instrument)
+	AvgPrice float64 `json:"avg_price"` // NT8 Position.AveragePrice
+}
+
+// PositionsPayload is the C#-AddOn → Go-server open-position snapshot for one
+// account. Positions is the COMPLETE current non-flat set for Account (NT8 is
+// the source of truth); the Go side replaces its per-account cache with it.
+type PositionsPayload struct {
+	Account   string         `json:"account"`
+	Positions []OpenPosition `json:"positions"`
+}
+
 // Bar is the compact 6-field OHLCV bar used in bars_historical and bar_update
 // frames (protocol §6-7). Volume is a float because NT8 tick-volume
 // instruments report fractional values.

@@ -83,6 +83,11 @@ type TCPServer struct {
 	// TCPTrader.GetBalance once the first frame arrives.
 	acctMu       sync.RWMutex
 	acctBalances map[string]AccountBalancePayload // per-account snapshots keyed by account name (Issue 2A)
+	// Open-position read-back (positions frame) — per-account CURRENT open
+	// positions reported by the C# AddOn. Replaces the fill-only inference so
+	// GetPositions reflects NT8 truth across account switch-back + manual trades.
+	// Guarded by acctMu. Each frame REPLACES the account's slice (full snapshot).
+	acctPositions map[string][]OpenPosition
 
 	// Plan 4 Stage 4 — available accounts discovered by the C# AddOn
 	// (accounts_list frame). Emitted on connect and on account change.
@@ -163,7 +168,8 @@ func NewTCPServer(logger *slog.Logger) *TCPServer {
 		closeCh:     make(chan PositionClosePayload, fillChannelBuffer),
 		barCache:     NewBarCache(0),
 		barIngestCh:  make(chan barIngestMsg, barIngestChannelBuffer),
-		acctBalances: make(map[string]AccountBalancePayload),
+		acctBalances:  make(map[string]AccountBalancePayload),
+		acctPositions: make(map[string][]OpenPosition),
 		barsSubscribe: BarsSubscribePayload{
 			Symbol:     defaultAutoBarsSymbol,
 			Timeframes: append([]string(nil), defaultAutoBarsTimeframes...),
@@ -202,6 +208,25 @@ func (s *TCPServer) AccountStateFor(account string) (AccountBalancePayload, bool
 	}
 	p, ok := s.acctBalances[account]
 	return p, ok
+}
+
+// PositionsFor returns the latest open-position snapshot for an account and
+// whether a positions frame has arrived for it yet. ok=false means no snapshot
+// (caller falls back to the fill-derived cache). A non-nil empty slice means
+// the account is known-flat. Returns a defensive copy.
+func (s *TCPServer) PositionsFor(account string) ([]OpenPosition, bool) {
+	s.acctMu.RLock()
+	defer s.acctMu.RUnlock()
+	if account == "" || s.acctPositions == nil {
+		return nil, false
+	}
+	v, ok := s.acctPositions[account]
+	if !ok {
+		return nil, false
+	}
+	out := make([]OpenPosition, len(v))
+	copy(out, v)
+	return out, true
 }
 
 // GetAccountsList returns the list of available NT accounts discovered by the
@@ -730,6 +755,25 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			default:
 				s.logger.Warn("tcp_server: close channel full, dropping", "signal_id", p.SignalID)
 			}
+
+		case FramePositions:
+			// Open-position read-back — the C# AddOn's CURRENT open-position
+			// snapshot for an account (emitted on account_select, connect, and
+			// any PositionUpdate, incl. manual trades). REPLACE the per-account
+			// cache: an empty list means the account is flat. This is what lets
+			// GetPositions reflect NT8 truth after a switch-back / manual open.
+			var p PositionsPayload
+			if err := json.Unmarshal(env.Payload, &p); err != nil {
+				s.logger.Warn("tcp_server: bad positions payload", "err", err)
+				continue
+			}
+			s.acctMu.Lock()
+			if s.acctPositions == nil {
+				s.acctPositions = make(map[string][]OpenPosition)
+			}
+			s.acctPositions[p.Account] = p.Positions
+			s.acctMu.Unlock()
+			s.logger.Info("tcp_server: positions snapshot", "account", p.Account, "count", len(p.Positions))
 
 		default:
 			s.logger.Warn("tcp_server: unknown frame type", "type", env.Type)
