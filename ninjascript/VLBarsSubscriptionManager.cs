@@ -187,6 +187,25 @@ namespace NinjaTrader.NinjaScript.AddOns
                 return;
             }
 
+            // Phase 4 — emit the resolved instrument's REAL specs (NT8 ground
+            // truth) so Go can cross-check the hardcoded tables / source them.
+            // Synchronous DB lookup; safe immediately after GetInstrument resolves.
+            try
+            {
+                var mi = instrument.MasterInstrument;
+                sendFrame("instrument_info", new Dictionary<string, object>
+                {
+                    ["symbol"]      = mi.Name,
+                    ["contract"]    = instrument.FullName,
+                    ["point_value"] = mi.PointValue,
+                    ["tick_size"]   = mi.TickSize,
+                });
+            }
+            catch (Exception ex)
+            {
+                logWarn("VLBarsSubscriptionManager: instrument_info emit failed: " + ex.Message);
+            }
+
             foreach (var tf in timeframes)
             {
                 Subscribe(symbol, tf, barsBack, instrument);

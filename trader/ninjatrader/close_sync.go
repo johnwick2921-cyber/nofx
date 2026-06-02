@@ -42,7 +42,29 @@ func (t *TCPTrader) StartCloseSync(traderID, exchangeID, exchangeType string, st
 					r.Symbol, r.PositionSide, r.Reason, r.Account)
 			}
 		}()
-		logger.Infof("🔄 NinjaTrader close-sync started (records SL/TP + manual exits; alarms on rejected flattens)")
+		// Instrument-info watcher (Phase 4): NT8 reports the RESOLVED instrument's
+		// real specs. Cross-check the hardcoded tables — they are CME-correct, so a
+		// divergence is a drift signal worth surfacing. For a parked/unknown symbol
+		// (no table entry) NT8 is the only source. The tables stay authoritative for
+		// the math; this is defense-in-depth + drift detection.
+		go func() {
+			for in := range t.server.InstrumentInfo() {
+				tablePV := market.FuturesPointValue(in.Symbol)
+				tableTick := market.FuturesTickSize(in.Symbol)
+				switch {
+				case tablePV <= 0:
+					logger.Infof("📐 NT8 instrument_info %s (%s): point_value=%.4g tick=%.6g — no table entry (parked/unknown); NT8 is the source.",
+						in.Symbol, in.Contract, in.PointValue, in.TickSize)
+				case in.PointValue != tablePV || (tableTick > 0 && in.TickSize != tableTick):
+					logger.Warnf("🚨 instrument spec DRIFT %s (%s): NT8 point_value=%.4g tick=%.6g vs table point_value=%.4g tick=%.6g — verify the table.",
+						in.Symbol, in.Contract, in.PointValue, in.TickSize, tablePV, tableTick)
+				default:
+					logger.Infof("📐 NT8 instrument_info %s (%s): point_value=%.4g tick=%.6g — matches table ✓",
+						in.Symbol, in.Contract, in.PointValue, in.TickSize)
+				}
+			}
+		}()
+		logger.Infof("🔄 NinjaTrader close-sync started (records SL/TP + manual exits; alarms on rejected flattens; cross-checks NT8 instrument specs)")
 	})
 }
 
