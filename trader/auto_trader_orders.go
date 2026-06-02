@@ -36,6 +36,20 @@ func futuresOrderQuantity(symbol string, notionalUSD, price float64) float64 {
 
 // executeDecisionWithRecord executes AI decision and records detailed information
 func (at *AutoTrader) executeDecisionWithRecord(decision *kernel.Decision, actionRecord *store.DecisionAction) error {
+	// Feed-down gate (NinjaTrader, TRACK A): the SIM cannot fill without market
+	// data, so an entry/flatten issued while the feed is down is rejected ("no
+	// market data") — the upstream condition behind the phantom-close mess. Refuse
+	// opens AND closes until the feed is Connected; the position simply waits (the
+	// close path retries on the next cycle / reconnect). Default-ALLOW until a
+	// feed_status frame arrives, so a healthy bot is never false-halted.
+	switch decision.Action {
+	case "open_long", "open_short", "close_long", "close_short":
+		if down, status := at.ninjaFeedDown(); down {
+			at.logWarnf("⛔ feed-gate: %s %s skipped — NT8 price feed not Connected (status=%q); SIM would reject 'no market data'. Will act when the feed returns.", decision.Action, decision.Symbol, status)
+			return nil
+		}
+	}
+
 	switch decision.Action {
 	case "open_long":
 		return at.executeOpenLongWithRecord(decision, actionRecord)
@@ -53,9 +67,94 @@ func (at *AutoTrader) executeDecisionWithRecord(decision *kernel.Decision, actio
 	}
 }
 
+// reconcileFlattenTimeout / PollInterval bound the flatten-first await in
+// reconcileBeforeOpenNT — the auto-flatten polls NT8 net until flat, then opens.
+const (
+	reconcileFlattenTimeout      = 6 * time.Second
+	reconcileFlattenPollInterval = 500 * time.Millisecond
+)
+
+// ntHeldPosition returns the side ("long"/"short") NT8 currently holds for symbol,
+// or "" if flat / unreadable. Reads the NT8 positions snapshot via GetPositions.
+func (at *AutoTrader) ntHeldPosition(symbol string) string {
+	positions, err := at.trader.GetPositions()
+	if err != nil {
+		return "" // read error → treat as flat; the existing open-path checks + reconcile cover it
+	}
+	for _, pos := range positions {
+		if pos["symbol"] != symbol {
+			continue
+		}
+		amt, _ := pos["positionAmt"].(float64)
+		if amt > 0 {
+			if s, _ := pos["side"].(string); s != "" {
+				return s
+			}
+			return "long"
+		}
+	}
+	return ""
+}
+
+// reconcileBeforeOpenNT (TRACK B): NinjaTrader-only defense-in-depth run before an
+// entry. The bot is about to OPEN, so it believes it is flat; if NT8 still holds a
+// position for this symbol (an orphan), flatten-first AWAITING its own fill, then
+// allow the open. If the flatten cannot be confirmed flat (timeout / feed drop),
+// REFUSE the open — never compound onto an unreconciled net (the id=46 harm).
+// No-op for non-NT traders or when NT8 is flat.
+//
+// STEP-A note: the open path already refuses to open on a SAME-side held position,
+// and 0118ca77 (no phantom close → the bot knows it is still in a position) + the
+// Track-A feed gate prevent the orphan at the source. This adds AUTO-RECOVERY
+// (flatten + proceed instead of refusing every cycle) and widens to EITHER side.
+// It does NOT cure a stale snapshot (the actual id=46 bypass) — that is Track A +
+// 0118ca77; this acts only on a snapshot that positively reports a held position.
+func (at *AutoTrader) reconcileBeforeOpenNT(symbol, intendedSide string) error {
+	if at.exchange != "ninjatrader" {
+		return nil
+	}
+	// Never flatten into a dead feed (Track A also gates upstream; be defensive).
+	if down, status := at.ninjaFeedDown(); down {
+		return fmt.Errorf("reconcile-before-open: NT8 feed not Connected (%s) — refusing open", status)
+	}
+	held := at.ntHeldPosition(symbol)
+	if held == "" {
+		return nil // NT8 flat → proceed
+	}
+	at.logWarnf("🚨 reconcile-before-open: NT8 holds a %s %s before an intended %s open — flattening first (awaiting fill) to avoid compounding onto an orphan.", held, symbol, intendedSide)
+	var ferr error
+	if held == "long" {
+		_, ferr = at.trader.CloseLong(symbol, 0)
+	} else {
+		_, ferr = at.trader.CloseShort(symbol, 0)
+	}
+	if ferr != nil {
+		return fmt.Errorf("reconcile-before-open: flatten submit failed: %w", ferr)
+	}
+	// AWAIT its own fill: poll NT8 net until flat (bounded, feed-gated each tick).
+	// NOT fire-and-forget — the exact trap 0118ca77 fixed.
+	deadline := time.Now().Add(reconcileFlattenTimeout)
+	for time.Now().Before(deadline) {
+		time.Sleep(reconcileFlattenPollInterval)
+		if down, _ := at.ninjaFeedDown(); down {
+			return fmt.Errorf("reconcile-before-open: feed dropped during flatten — refusing open")
+		}
+		if at.ntHeldPosition(symbol) == "" {
+			at.logInfof("✅ reconcile-before-open: %s flattened + confirmed flat — proceeding to open.", symbol)
+			return nil
+		}
+	}
+	return fmt.Errorf("reconcile-before-open: flatten not confirmed flat within %s — refusing open (never compound)", reconcileFlattenTimeout)
+}
+
 // executeOpenLongWithRecord executes open long position and records detailed information
 func (at *AutoTrader) executeOpenLongWithRecord(decision *kernel.Decision, actionRecord *store.DecisionAction) error {
 	logger.Infof("  📈 Open long: %s", decision.Symbol)
+
+	// TRACK B — reconcile NT8 net before opening; flatten an orphan first or refuse.
+	if err := at.reconcileBeforeOpenNT(decision.Symbol, "long"); err != nil {
+		return err
+	}
 
 	// ⚠️ Get current positions for multiple checks
 	positions, err := at.trader.GetPositions()
@@ -192,6 +291,11 @@ func (at *AutoTrader) executeOpenLongWithRecord(decision *kernel.Decision, actio
 // executeOpenShortWithRecord executes open short position and records detailed information
 func (at *AutoTrader) executeOpenShortWithRecord(decision *kernel.Decision, actionRecord *store.DecisionAction) error {
 	logger.Infof("  📉 Open short: %s", decision.Symbol)
+
+	// TRACK B — reconcile NT8 net before opening; flatten an orphan first or refuse.
+	if err := at.reconcileBeforeOpenNT(decision.Symbol, "short"); err != nil {
+		return err
+	}
 
 	// ⚠️ Get current positions for multiple checks
 	positions, err := at.trader.GetPositions()

@@ -208,6 +208,12 @@ namespace NinjaTrader.NinjaScript.AddOns
                             + ") — recreating BarsRequests via OnConnectionReconnected");
                     barsManager?.OnConnectionReconnected();
                 }
+
+                // TRACK A — forward the price-feed status to Go so the bot can gate
+                // opens/closes when the feed is down (the SIM rejects "no market
+                // data" — the upstream condition behind the phantom-close mess).
+                // Emitted on every connection-status transition.
+                SendFeedStatusFrame(priceStatus);
             }
             catch (Exception ex)
             {
@@ -855,6 +861,19 @@ namespace NinjaTrader.NinjaScript.AddOns
                 ["reject_time"]   = DateTime.UtcNow.ToString("o")
             };
             WriteEnvelope("position_close_rejected", payload);
+        }
+
+        // TRACK A — emit the NT8 price-feed status so Go can gate opens/closes when
+        // the feed is down (the SIM rejects orders with "no market data"). Sent on
+        // every connection-status transition (OnVLConnectionStatusUpdate).
+        private void SendFeedStatusFrame(string priceStatus)
+        {
+            var payload = new Dictionary<string, object>
+            {
+                ["price_status"] = priceStatus ?? "",
+                ["time"]         = DateTime.UtcNow.ToString("o")
+            };
+            WriteEnvelope("feed_status", payload);
         }
 
         // Open-position read-back — emit the selected account's CURRENT open
