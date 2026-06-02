@@ -95,13 +95,17 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 	if ctx != nil {
 		MaybeResetDaily(time.Now())
 		limits := LoadRiskLimitsFromConfig()
-		// existingNotional from open positions (MarkPrice * Quantity).
-		existingNotional := 0.0
-		for _, p := range ctx.Positions {
-			existingNotional += p.MarkPrice * p.Quantity
-		}
-		// requestedNotional unknown at this point (no decision yet) → 0.
-		if err := limits.CheckPreTrade(ctx.Account.TotalPnL, len(ctx.Positions), 0, existingNotional); err != nil {
+		// Pre-prompt gate enforces ONLY daily-loss + concurrent-position (per the
+		// comment above). The NOTIONAL cap is intentionally NOT applied here: it is
+		// a futures-unaware crypto cap (RiskMaxNotionalUSD, default $50k) that any
+		// single open MNQ contract (~$61k notional) exceeds, which previously
+		// tripped EVERY cycle while a futures position was open and skipped it
+		// before BuildUserPrompt/the AI — so the AI could never see, manage, or
+		// close its own open position. Pass 0 for both requested + existing notional
+		// so this gate never trips on notional. Notional IS still enforced at
+		// EXECUTION time, futures-aware (engine_position.go: max position notional =
+		// equity × futuresMaxNotionalLeverage).
+		if err := limits.CheckPreTrade(ctx.Account.TotalPnL, len(ctx.Positions), 0, 0); err != nil {
 			logger.Warnf("⚠️ Plan 3 T21 risk gate tripped: %v — skipping decision cycle (HOLD)", err)
 			// Plan 4 Task 25 — gate instrumentation
 			telemetry.RiskGateTrips.WithLabelValues("task21_risk_limit").Inc()
