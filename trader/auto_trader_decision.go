@@ -310,6 +310,20 @@ func (at *AutoTrader) recordAndConfirmOrder(orderResult map[string]interface{}, 
 		return
 	}
 
+	// NinjaTrader has no order-sync; an NT8 position transitions to CLOSED ONLY via
+	// the position_close fill frame (trader/ninjatrader close_sync.recordClose —
+	// fill-confirmed and futures-point-value-correct), exactly as SL/TP exits do.
+	// A decision-driven close must NOT mark the DB CLOSED off the mark price before
+	// the NT8 exit actually fills: a rejected flatten (e.g. data feed down → SIM
+	// "no market data") would phantom-close a position NT8 still holds, and the next
+	// entry would net onto the orphan (the id=45→id=46 net-2 bug). So defer NT8
+	// closes to the fill frame. OPENS still record below (they create the position
+	// row); only closes defer. Crypto closes are handled by their own OrderSync above.
+	if at.exchange == "ninjatrader" && (action == "close_long" || action == "close_short") {
+		logger.Infof("  📝 NT close submitted (%s %s) — awaiting NT8 position_close fill confirmation (close-sync; not marking CLOSED off the mark)", symbol, action)
+		return
+	}
+
 	// For exchanges without OrderSync (e.g., Binance): record immediately and poll for fill data
 	orderRecord := at.createOrderRecord(orderID, symbol, action, positionSide, quantity, price, leverage)
 	if err := at.store.Order().CreateOrder(orderRecord); err != nil {

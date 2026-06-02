@@ -123,6 +123,25 @@ type PositionClosePayload struct {
 	ExitTime     string  `json:"exit_time"`   // RFC3339
 }
 
+// Rejected exit/flatten — C#-AddOn → Go-server, additive frame. The SIM (or
+// broker) REJECTED an exit/flatten order (e.g. "There is no market data available
+// to drive the simulation engine" while the Tradovate feed is down). The close did
+// NOT take effect — the position is STILL OPEN in NT8 — so the bot must not treat
+// it as closed. Pairs with the close routing (decision closes wait for the
+// position_close fill frame): this frame turns a silent rejected flatten into a
+// loud alarm so the orphan can't be netted onto by the next entry.
+const FramePositionCloseRejected FrameType = "position_close_rejected"
+
+// PositionCloseRejectedPayload reports a rejected exit/flatten order.
+type PositionCloseRejectedPayload struct {
+	SignalID     string `json:"signal_id"`     // order name (entry signal_id, or "Close" for a flatten)
+	Symbol       string `json:"symbol"`        // root symbol, e.g. "MNQ"
+	PositionSide string `json:"position_side"` // "long" | "short" (held side)
+	Reason       string `json:"reason"`        // NT8 reject comment, e.g. "There is no market data..."
+	Account      string `json:"account"`       // e.g. "Sim101"
+	RejectTime   string `json:"reject_time"`   // RFC3339
+}
+
 // Manual close — Go-server → C#-AddOn, additive frame. The AddOn flattens the
 // position for the symbol (account.Flatten), which closes at market AND cancels
 // the protective bracket so no orphaned SL/TP can re-open a position. The

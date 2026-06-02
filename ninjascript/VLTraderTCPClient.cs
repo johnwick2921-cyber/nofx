@@ -574,7 +574,13 @@ namespace NinjaTrader.NinjaScript.AddOns
                     return;
                 }
                 account.Flatten(new[] { instrument });
-                LogInfo("VLTraderTCPClient: flatten " + symbol + " (" + contract + ")");
+                // account.Flatten is async fire-and-forget: the actual fill (or a
+                // REJECT, e.g. "no market data" with the feed down) arrives later in
+                // OnOrderUpdate. This log means SUBMITTED, not closed — the close is
+                // confirmed only by the position_close fill frame (or reported failed
+                // by position_close_rejected).
+                LogInfo("VLTraderTCPClient: flatten submitted " + symbol + " (" + contract
+                        + ") — awaiting NT8 fill/reject (not yet closed)");
             }
             catch (Exception ex)
             {
@@ -699,6 +705,24 @@ namespace NinjaTrader.NinjaScript.AddOns
                     SendPositionCloseFrame(signalId, rootSymbol, positionSide,
                                            e.AverageFillPrice, e.Filled, exitReason ?? "manual");
                 }
+                else if (e.OrderState == OrderState.Rejected)
+                {
+                    // The SIM/broker REJECTED the exit/flatten (e.g. "There is no
+                    // market data available to drive the simulation engine" while the
+                    // data feed is down). The close did NOT take — the position is
+                    // STILL OPEN in NT8. Tell Go so it never records a phantom close
+                    // and raises an alarm (the id=45→id=46 net-2 root cause).
+                    string positionSide = (action == OrderAction.BuyToCover) ? "short" : "long";
+                    string rootSymbol = "";
+                    try { rootSymbol = e.Order.Instrument.MasterInstrument.Name; } catch { }
+                    string reason = "";
+                    try { reason = e.Comment ?? ""; } catch { }
+                    if (string.IsNullOrEmpty(reason)) { try { reason = e.Error.ToString(); } catch { } }
+                    SendPositionCloseRejectedFrame(signalId, rootSymbol, positionSide, reason);
+                    LogWarn("VLTraderTCPClient: exit/flatten REJECTED signal_id=" + signalId
+                            + " " + positionSide + " reason=" + reason
+                            + " — position STILL OPEN (not closed)");
+                }
                 return;
             }
 
@@ -812,6 +836,25 @@ namespace NinjaTrader.NinjaScript.AddOns
                 ["exit_time"]     = DateTime.UtcNow.ToString("o")
             };
             WriteEnvelope("position_close", payload);
+        }
+
+        // Emit when an exit/flatten order is REJECTED (e.g. SIM "no market data"
+        // while the feed is down). Tells Go the close did NOT take — the position
+        // is STILL OPEN in NT8 — so the bot must not record it closed. Mirrors
+        // SendPositionCloseFrame; reason carries the NT8 reject comment.
+        private void SendPositionCloseRejectedFrame(string signalId, string symbol,
+                                                    string positionSide, string reason)
+        {
+            var payload = new Dictionary<string, object>
+            {
+                ["signal_id"]     = signalId ?? "",
+                ["symbol"]        = symbol ?? "",
+                ["position_side"] = positionSide ?? "",
+                ["reason"]        = reason ?? "",
+                ["account"]       = account != null ? account.Name : "",
+                ["reject_time"]   = DateTime.UtcNow.ToString("o")
+            };
+            WriteEnvelope("position_close_rejected", payload);
         }
 
         // Open-position read-back — emit the selected account's CURRENT open

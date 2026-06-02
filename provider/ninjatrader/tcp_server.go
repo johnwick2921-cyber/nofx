@@ -63,8 +63,9 @@ type TCPServer struct {
 	pending   []timedSignal
 
 	// Inbound fills — TCPTrader subscribes via Fills().
-	fillCh  chan FillPayload
-	closeCh chan PositionClosePayload
+	fillCh   chan FillPayload
+	closeCh  chan PositionClosePayload
+	rejectCh chan PositionCloseRejectedPayload
 
 	// Plan 4.4 Stage 2 — bar ingest. Bar frames from the C# AddOn
 	// (bars_historical, bar_update) decode in the read loop and post to
@@ -166,6 +167,7 @@ func NewTCPServer(logger *slog.Logger) *TCPServer {
 		addr:        TCPListenAddr,
 		fillCh:      make(chan FillPayload, fillChannelBuffer),
 		closeCh:     make(chan PositionClosePayload, fillChannelBuffer),
+		rejectCh:    make(chan PositionCloseRejectedPayload, fillChannelBuffer),
 		barCache:     NewBarCache(0),
 		barIngestCh:  make(chan barIngestMsg, barIngestChannelBuffer),
 		acctBalances:  make(map[string]AccountBalancePayload),
@@ -388,6 +390,11 @@ func (s *TCPServer) Fills() <-chan FillPayload { return s.fillCh }
 // ClosedPositions returns the channel of position_close frames (SL/TP exits).
 // Consumed by the NT close-sync to mark trader_positions CLOSED.
 func (s *TCPServer) ClosedPositions() <-chan PositionClosePayload { return s.closeCh }
+
+// CloseRejections returns the channel of position_close_rejected frames — an
+// exit/flatten the SIM/broker rejected (e.g. "no market data" with the feed down).
+// The position is STILL OPEN in NT8; consumers must alarm, not record a close.
+func (s *TCPServer) CloseRejections() <-chan PositionCloseRejectedPayload { return s.rejectCh }
 
 // IsConnected reports whether a client is currently connected.
 func (s *TCPServer) IsConnected() bool {
@@ -774,6 +781,21 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			s.acctPositions[p.Account] = p.Positions
 			s.acctMu.Unlock()
 			s.logger.Info("tcp_server: positions snapshot", "account", p.Account, "count", len(p.Positions))
+
+		case FramePositionCloseRejected:
+			// An exit/flatten was REJECTED (e.g. SIM "no market data" while the
+			// feed is down). The position is STILL OPEN in NT8 — hand to the
+			// consumer to alarm; never record a close off a rejected flatten.
+			var p PositionCloseRejectedPayload
+			if err := json.Unmarshal(env.Payload, &p); err != nil {
+				s.logger.Warn("tcp_server: bad position_close_rejected payload", "err", err)
+				continue
+			}
+			select {
+			case s.rejectCh <- p:
+			default:
+				s.logger.Warn("tcp_server: reject channel full, dropping", "signal_id", p.SignalID)
+			}
 
 		default:
 			s.logger.Warn("tcp_server: unknown frame type", "type", env.Type)
