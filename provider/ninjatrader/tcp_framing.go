@@ -142,6 +142,18 @@ type PositionCloseRejectedPayload struct {
 	RejectTime   string `json:"reject_time"`   // RFC3339
 }
 
+// Feed status — C#-AddOn → Go-server, additive frame. Carries the NT8 price-feed
+// PriceStatus (from OnVLConnectionStatusUpdate). The bot gates opens/closes when
+// the feed is not Connected: the SIM rejects orders with "no market data", and
+// acting into a dead feed is the upstream condition behind the phantom-close mess.
+const FrameFeedStatus FrameType = "feed_status"
+
+// FeedStatusPayload reports the NT8 price-feed status.
+type FeedStatusPayload struct {
+	PriceStatus string `json:"price_status"` // "Connected" | "ConnectionLost" | "Connecting" | "Disconnected"
+	Time        string `json:"time"`         // RFC3339
+}
+
 // Manual close — Go-server → C#-AddOn, additive frame. The AddOn flattens the
 // position for the symbol (account.Flatten), which closes at market AND cancels
 // the protective bracket so no orphaned SL/TP can re-open a position. The

@@ -261,6 +261,14 @@ func (t *TCPTrader) GetBalance() (map[string]interface{}, error) {
 	}, nil
 }
 
+// IsFeedConnected reports whether the NT8 price feed is usable (delegates to the
+// TCP server's latest feed_status; default-allow until the first frame arrives).
+func (t *TCPTrader) IsFeedConnected() bool { return t.server.IsFeedConnected() }
+
+// FeedStatus returns the latest NT8 price-feed status string ("" until the first
+// feed_status frame).
+func (t *TCPTrader) FeedStatus() string { return t.server.FeedStatus() }
+
 func (t *TCPTrader) GetPositions() ([]map[string]interface{}, error) {
 	// Prefer the NT8-reported open positions for the SELECTED account — the
 	// source of truth. This survives account switch-back AND reflects positions

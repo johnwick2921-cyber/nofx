@@ -50,6 +50,26 @@ func (at *AutoTrader) logErrorf(format string, args ...interface{}) {
 	logger.Errorf("%s "+format, values...)
 }
 
+// ninjaFeedDown reports whether this is a NinjaTrader trader whose price feed is
+// explicitly NOT Connected. Used to gate opens/closes: the SIM rejects orders
+// with "no market data" while the feed is down (the upstream condition behind the
+// phantom-close mess). DEFAULT-ALLOW: returns false for non-NT traders and until
+// the first feed_status frame arrives, so a healthy bot is never false-halted.
+func (at *AutoTrader) ninjaFeedDown() (bool, string) {
+	if at.exchange != "ninjatrader" {
+		return false, ""
+	}
+	ntTCP, ok := at.trader.(*ntTrader.TCPTrader)
+	if !ok {
+		return false, ""
+	}
+	status := ntTCP.FeedStatus()
+	if ntTCP.IsFeedConnected() {
+		return false, status
+	}
+	return true, status
+}
+
 // AutoTraderConfig auto trading configuration (simplified version - AI makes all decisions)
 type AutoTraderConfig struct {
 	// Trader identification

@@ -67,6 +67,11 @@ type TCPServer struct {
 	closeCh  chan PositionClosePayload
 	rejectCh chan PositionCloseRejectedPayload
 
+	// Latest NT8 price-feed status (from the feed_status frame). Empty until the
+	// first frame; consumers DEFAULT-ALLOW on empty (never false-halt at startup).
+	feedMu     sync.RWMutex
+	feedStatus string
+
 	// Plan 4.4 Stage 2 — bar ingest. Bar frames from the C# AddOn
 	// (bars_historical, bar_update) decode in the read loop and post to
 	// barIngestCh via a NON-BLOCKING drop-oldest send (for bar_update) or
@@ -395,6 +400,27 @@ func (s *TCPServer) ClosedPositions() <-chan PositionClosePayload { return s.clo
 // exit/flatten the SIM/broker rejected (e.g. "no market data" with the feed down).
 // The position is STILL OPEN in NT8; consumers must alarm, not record a close.
 func (s *TCPServer) CloseRejections() <-chan PositionCloseRejectedPayload { return s.rejectCh }
+
+// FeedStatus returns the latest NT8 price-feed status ("" until the first
+// feed_status frame). Prefer IsFeedConnected for gating.
+func (s *TCPServer) FeedStatus() string {
+	s.feedMu.RLock()
+	defer s.feedMu.RUnlock()
+	return s.feedStatus
+}
+
+// IsFeedConnected reports whether the NT8 price feed is usable. DEFAULT-ALLOW:
+// before any feed_status frame is received (startup) it returns true so a healthy
+// bot is never false-halted on mere absence of the signal; it returns false ONLY
+// on an explicit non-"Connected" status (the SIM would reject "no market data").
+func (s *TCPServer) IsFeedConnected() bool {
+	s.feedMu.RLock()
+	defer s.feedMu.RUnlock()
+	if s.feedStatus == "" {
+		return true
+	}
+	return s.feedStatus == "Connected"
+}
 
 // IsConnected reports whether a client is currently connected.
 func (s *TCPServer) IsConnected() bool {
@@ -796,6 +822,20 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			default:
 				s.logger.Warn("tcp_server: reject channel full, dropping", "signal_id", p.SignalID)
 			}
+
+		case FrameFeedStatus:
+			// NT8 price-feed status. Store the latest; the AutoTrader gates
+			// opens/closes when it is not "Connected" (the SIM rejects orders
+			// with "no market data" while the feed is down).
+			var p FeedStatusPayload
+			if err := json.Unmarshal(env.Payload, &p); err != nil {
+				s.logger.Warn("tcp_server: bad feed_status payload", "err", err)
+				continue
+			}
+			s.feedMu.Lock()
+			s.feedStatus = p.PriceStatus
+			s.feedMu.Unlock()
+			s.logger.Info("tcp_server: feed status", "price_status", p.PriceStatus)
 
 		default:
 			s.logger.Warn("tcp_server: unknown frame type", "type", env.Type)
