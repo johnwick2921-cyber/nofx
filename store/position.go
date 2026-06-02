@@ -212,6 +212,17 @@ func (s *PositionStore) ClosePosition(id int64, exitPrice float64, exitOrderID s
 	}).Error
 }
 
+// UpdateEntryPrice overwrites a position's entry price. Used by the NinjaTrader
+// reconcile to anchor a stale decision-time entry (the 5m-mark reference) to the
+// broker-reported position average (NT8 Position.AveragePrice / AverageFillPrice).
+// Does NOT average — a direct replacement to the single source of truth.
+func (s *PositionStore) UpdateEntryPrice(id int64, entryPrice float64) error {
+	return s.db.Model(&TraderPosition{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"entry_price": entryPrice,
+		"updated_at":  time.Now().UTC().UnixMilli(),
+	}).Error
+}
+
 // UpdatePositionQuantityAndPrice updates position quantity and recalculates entry price
 func (s *PositionStore) UpdatePositionQuantityAndPrice(id int64, addQty float64, addPrice float64, addFee float64) error {
 	var pos TraderPosition

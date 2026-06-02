@@ -36,6 +36,13 @@ type TCPTrader struct {
 	lastFill ntwire.FillPayload
 	hasFill  bool
 
+	// lastEntrySignalID is the signal_id of the most recent ENTRY (open). It lets
+	// GetOrderStatus report ONLY the fill that belongs to the current entry (the
+	// fill frame echoes signal_id), so recordAndConfirmOrder records the real
+	// NT8 AverageFillPrice as entry_price instead of the stale 5m-mark reference.
+	// Cleared on close so a close-path poll never matches the entry fill.
+	lastEntrySignalID string
+
 	// pending tracks signal_id → side so we can correlate fills back to
 	// position state. Optional: not strictly needed for the 19-method
 	// interface, but cheap insurance.
@@ -45,6 +52,10 @@ type TCPTrader struct {
 	// closeSyncOnce guards StartCloseSync so a re-entrant AutoTrader.Run never
 	// spawns a second consumer racing on the single ClosedPositions() channel.
 	closeSyncOnce sync.Once
+
+	// reconcileOnce guards StartPositionReconcile (mirrors closeSyncOnce) so a
+	// re-entrant AutoTrader.Run never spawns a second reconcile goroutine.
+	reconcileOnce sync.Once
 
 	// Plan 4 Stage 4 — reference to the parent AutoTrader (optional).
 	// Used to notify the AutoTrader when the first account_balance frame arrives.
@@ -128,6 +139,12 @@ func (t *TCPTrader) placeEntry(symbol, side string, quantity float64) (map[strin
 	t.pending[signalID] = upperSide
 	t.pendingMu.Unlock()
 
+	// Mark this as the current entry so GetOrderStatus reports its fill (and only
+	// its fill) — the real NT8 AverageFillPrice becomes the recorded entry_price.
+	t.mu.Lock()
+	t.lastEntrySignalID = signalID
+	t.mu.Unlock()
+
 	if err := t.server.SendSignal(payload); err != nil {
 		return nil, fmt.Errorf("ninjatrader/tcp: send signal: %w", err)
 	}
@@ -152,6 +169,13 @@ func (t *TCPTrader) CloseShort(symbol string, quantity float64) (map[string]inte
 // cancel the protective bracket). The resulting market-exit fill returns as a
 // position_close frame, which the close-sync records to history.
 func (t *TCPTrader) sendClose(side string, quantity float64) (map[string]interface{}, error) {
+	// Clear the entry correlation so the close-path order poll does NOT match the
+	// lingering entry fill (which would record exit≈entry, PnL≈0). The real exit
+	// is recorded by close-sync off the position_close frame.
+	t.mu.Lock()
+	t.lastEntrySignalID = ""
+	t.mu.Unlock()
+
 	payload := ntwire.ClosePositionPayload{
 		Symbol:   t.symbol,
 		Side:     side,
@@ -416,13 +440,30 @@ func (t *TCPTrader) FormatQuantity(symbol string, quantity float64) (string, err
 func (t *TCPTrader) GetOrderStatus(symbol, orderID string) (map[string]interface{}, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if !t.hasFill {
+	// Report a fill ONLY when it belongs to the current entry (correlate by the
+	// echoed signal_id). This guards against a stale fill from a prior trade and
+	// against the entry fill leaking into a close-path poll (lastEntrySignalID is
+	// cleared on close). Until the matching fill arrives → "pending".
+	if !t.hasFill || t.lastEntrySignalID == "" || t.lastFill.SignalID != t.lastEntrySignalID {
 		return map[string]interface{}{"status": "pending"}, nil
 	}
+	// Canonical shape expected by recordAndConfirmOrder (auto_trader_decision.go)
+	// AND pollAndUpdateOrderStatus (handler_trader_status.go): status "FILLED"
+	// (uppercase) + key "avgPrice". The AddOn reports the real broker fill
+	// (AverageFillPrice) as lastFill.FillPrice — THIS is the NT8-truth entry that
+	// replaces the stale marketData.CurrentPrice (5m-mark) reference. Previously
+	// this returned "filled"/"price", which neither poller matched, so the entry
+	// was never upgraded from the frozen mark.
+	status := "FILLED"
+	if t.lastFill.Status == "rejected" {
+		status = "REJECTED"
+	}
 	return map[string]interface{}{
-		"status": t.lastFill.Status,
-		"price":  t.lastFill.FillPrice,
-		"side":   upperSideStr(t.lastFill.Side),
+		"status":      status,
+		"avgPrice":    t.lastFill.FillPrice,
+		"executedQty": float64(t.lastFill.Quantity),
+		"price":       t.lastFill.FillPrice, // back-compat (prior key)
+		"side":        upperSideStr(t.lastFill.Side),
 	}, nil
 }
 
