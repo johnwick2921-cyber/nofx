@@ -33,6 +33,19 @@
 > "rename this variable in foo.go"). The read-first rule applies
 > ONLY when the prompt invokes plan content.
 
+> **STATUS (2026-06-02):** branch `feat/nt8-stage4-chart` tip `cef42d61`.
+> SHIPPED since the last doc-sync (`2a0801b6`): the **bar-feed restart fix**
+> (`345bce2b` — resubscribe-on-Connected + fast `.Update` watchdog + ETH
+> hours; bars reattach ~14s after a clean restart, operator-verified) and
+> the **pre-prompt risk-gate fix** (`cef42d61` — the stale crypto notional
+> cap no longer trips in-position, so the AI can manage/close its own
+> futures position), plus 7 supporting NT8/chart fixes (`2f59fd7f`,
+> `7bc2dd8c`, `dde10cf1`, `86ed1535`, `b2fc0f3d`, `ae94adb5`, `0be1521b`).
+> **IN-FLIGHT (designed, NOT committed):** the phantom-close safety fix
+> (NT8-fill-confirmed closes + `position_close_rejected` frame). See
+> `## Current State — Round 5 (2026-06-02)` immediately below. The prior
+> 2026-05-31 status is retained beneath for history.
+
 > **STATUS (2026-05-31):** NT8 pipeline live on branch
 > `feat/nt8-stage4-chart` (tip `0a67bfda`, includes `063bc311` +
 > `49017ff9` + `0a67bfda`). **DASHBOARD IS COMPLETE** — balance,
@@ -47,6 +60,130 @@
 > SUPERSEDED in place (the kernel reads NT8 BarCache for CME futures on this
 > branch — verified `market/data.go:197-210`; Stage 3 source-swap is DONE
 > here). Markers added, nothing deleted.
+
+## Current State — Round 5 (2026-06-02): bar-feed + risk-gate SHIPPED; phantom-close IN-FLIGHT
+
+> Additive sync against git truth. Branch `feat/nt8-stage4-chart`, tip
+> `cef42d61`. 9 code commits landed since the last doc-sync (`2a0801b6`),
+> all on this branch. MAIN re-verified every line below against
+> `git show` / `grep` at file:line — only what the commits actually support
+> is recorded; runtime-only claims are tagged "operator-verified". The
+> Round-4 (2026-05-30/31) section below is unchanged.
+
+### SHIPPED & VERIFIED since `2a0801b6`
+
+- **Bar-feed restart freeze — FIXED (`345bce2b`; 2 `.cs`:
+  `VLBarsSubscriptionManager.cs` +172, `VLTraderTCPClient.cs` +22).** The
+  post-restart "frozen at 16:00 CT / 30523.75" chart is gone. Three
+  mechanisms (git-verified in the diff):
+  - **resubscribe-on-Connected** — BarsRequests recreate + resubscribe on
+    every transition into `PriceStatus==Connected` (via the
+    `OnConnectionReconnected()` path wired to
+    `Connection.ConnectionStatusUpdate` in `0be1521b`), covering a clean
+    startup `Disconnected→Connecting→Connected`, not just loss→recovery (the
+    old `dataFeedWasLost` guard was loss-only).
+  - **fast `.Update` watchdog** — if a (re)subscribe seeds historical but no
+    LIVE `.Update` arrives within `FAST_STALL_MS = 20s` (checked every
+    `WATCHDOG_PERIOD_MS = 15s`), recreate the instrument; capped at
+    `FAST_MAX_ATTEMPTS = 3` per dead window so a genuine closed-market gap
+    can't churn recreates.
+  - **75-min backstop KEPT** (`WATCHDOG_STALL_MS = 75 min`, > the 60-min
+    daily halt) + **ETH TradingHours** (`BARS_TRADING_HOURS = "CME US Index
+    Futures ETH"`) so bars survive the 16:00 CT session close.
+  - **VERIFIED LIVE (operator, 2026-06-02):** bars reattach within ~14s of a
+    clean restart and stream continuously.
+
+- **Pre-prompt risk-gate — FIXED (`cef42d61`; `kernel/engine_analysis.go`
+  +11/−7): the AI runs in-position again.** The pre-prompt gate was passing
+  the open futures position's notional into `CheckPreTrade`, tripping the
+  stale crypto notional cap (`RiskMaxNotionalUSD`, default $50k) that any
+  single MNQ contract (~$61k notional) exceeds → every in-position cycle was
+  skipped before `BuildUserPrompt` / the AI → empty dataless
+  `decision_records`. FIX (git-verified): the gate now calls
+  `CheckPreTrade(TotalPnL, len(Positions), 0, 0)` — enforcing ONLY
+  daily-loss + concurrent-position; notional is intentionally NOT checked
+  here. **Notional stays enforced futures-aware at EXECUTION**
+  (`engine_position.go`: `const futuresMaxNotionalLeverage = 20.0`,
+  `maxPositionValue = accountEquity × 20`). Net: the AI can manage/close its
+  own position via decisions, not only the NT8 OCO SL/TP.
+
+- **Supporting NT8 / chart fixes (also shipped since `2a0801b6`):**
+  - `2f59fd7f` — record entry from the NT8 fill / position average, not the
+    frozen 5m mark.
+  - `7bc2dd8c` — position uPnL from NT8's live `UnrealizedPnL`, not a stale
+    5m bar close.
+  - `dde10cf1` — position-card side label case-insensitive (NT8 `LONG` no
+    longer renders as `SHORT`).
+  - `86ed1535` — NT8 open-position read-back (emit on
+    select/connect/`PositionUpdate`, per-account cache, settled entry).
+  - `b2fc0f3d` — `BarCache.SeedHistorical` merges instead of replacing →
+    chart keeps depth across reconnects.
+  - `ae94adb5` — volume histogram sits in a bottom band, not overlaying
+    candles.
+  - `0be1521b` — wired the dead reconnect-recreate to
+    `Connection.ConnectionStatusUpdate` (the foundation `345bce2b` builds on).
+
+### IN-FLIGHT — phantom-close safety fix (DESIGNED, NOT COMMITTED)
+
+> NOT shipped. Tip is `cef42d61`; there is NO commit after it, and no
+> `position_close_rejected` symbol anywhere in the `.go`/`.cs` tree
+> (grep-confirmed 2026-06-02). Recorded here as the next fix to build.
+
+- **ROOT (PROVEN via NT8 trace, operator, 2026-06-02):** id=45's position
+  was never actually closed — 76+ flattens were REJECTED for ~4h ("no
+  market data" during a Tradovate feed outage) — yet the DB recorded it
+  CLOSED with a −19.25 **points-only** PnL (a non-fill / synthetic-mark
+  close path). id=46's single correct `Buy x1` then netted ONTO the
+  lingering contract (`operation=Add` → `quantity=2`). NT8's accounting was
+  correct; the bot's was wrong. Systemic — recurs on every feed flap.
+- **FIX (4 parts; both sides ship together):**
+  1. **C# flatten-reject detection** → emits a NEW `position_close_rejected`
+     wire frame.
+  2. **Go records a position CLOSED only on the NT8 exit `position_close`
+     (Filled)** — never on an AI decision, synthetic mark, or reconcile. On
+     a reject it keeps the position OPEN, alarms, and retries.
+  3. **Go reconcile-before-open** — alarm + flatten-first if the NT8 net ≠
+     intended, so a bad state is not compounded.
+  4. **feed-down gate** — no opens/closes while
+     `priceStatus == ConnectionLost`.
+- **NEW wire frame `position_close_rejected`** (additive per ADR-007; 4-byte
+  big-endian length prefix + JSON envelope; both sides ship together) — to
+  be added to the frozen wire-contract section when it lands.
+
+### SHA ledger addendum (verified against git, 2026-06-02)
+
+| SHA | message |
+|---|---|
+| `cef42d61` | fix(nt8): don't apply the crypto notional cap at the pre-prompt risk gate — let the AI run in-position **[BRANCH TIP]** |
+| `345bce2b` | fix(nt8): revive bar .Update fast after restart — resubscribe-on-Connected + fast watchdog (+ ETH hours) |
+| `2f59fd7f` | fix(nt8): record entry from NT8 fill/position avg, not the frozen 5m mark |
+| `7bc2dd8c` | fix(nt8): position uPnL from NT8's live UnrealizedPnL, not a stale 5m bar close |
+| `dde10cf1` | fix(dashboard): position-card side label case-insensitive — NT8 LONG no longer shows as SHORT |
+| `86ed1535` | feat(nt8): NT8 open-position read-back — emit on select/connect/PositionUpdate, per-account cache, settled entry |
+| `b2fc0f3d` | fix(nt8): BarCache.SeedHistorical merges instead of replacing — chart keeps depth across reconnects |
+| `ae94adb5` | fix(chart): volume histogram sits in a bottom band, not overlaying candles |
+| `0be1521b` | fix(nt8): wire the dead reconnect-recreate to Connection.ConnectionStatusUpdate |
+
+### Roadmap / open-items refresh (2026-06-02)
+
+- **Keystone VERIFY 1/2** (entry == NT8 fill end-to-end + the PnL cascade) —
+  now **UNBLOCKED**: bars stream continuously (`345bce2b`) and the AI runs
+  in-position (`cef42d61`), so the next held position self-captures the
+  proof. (Was blocked by the frozen feed + skipped cycles.)
+- **id=45 −19.25 points-only PnL anomaly** — should be eliminated by the
+  fill-confirmed close path (phantom-close fix, IN-FLIGHT); confirm on the
+  next real close, else flag a follow-up.
+- **B/S toggle button (FE)** — clicking does nothing. OPEN.
+- **TS6133 build-red** — `TraderDashboardPage.tsx:138` unused
+  `onTraderSelect` (~2 LOC). OPEN.
+- **THE BIG PROJECT — Universal CME Symbol (Path A), 5 phases** (recognition
+  → subscription + C# resolver → correctness → capstone) — NOT started;
+  phase plan retained in the IN FLIGHT/PLANNED section above. Current top
+  priority after the phantom-close fix.
+- **Project C — Strategy UI futures-awareness (Stage 1 / Stage 2)** — LAST.
+- **Deferred backlog (unchanged):** `GE` delisted by CME June 2023 (dead
+  root, not a bug); security batch (jwt default secret, tokenless reset
+  endpoints — "sec later"); `nofx→VL` rename (last).
 
 ## Current State (2026-05-30, session-verified)
 
