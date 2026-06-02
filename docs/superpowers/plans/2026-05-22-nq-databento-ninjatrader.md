@@ -33,6 +33,31 @@
 > "rename this variable in foo.go"). The read-first rule applies
 > ONLY when the prompt invokes plan content.
 
+> **STATUS (2026-06-02, latest — safety arc DEPLOYED + Universal CME P1/P2):**
+> branch `feat/nt8-stage4-chart` tip `dba04d01`. Two state changes since the
+> "safety arc COMPLETE" banner below (which was at tip `0f4c1268`, C# deploy
+> still pending):
+> 1. **Safety frames are now DEPLOYED + LIVE.** One clean NT8 restart activated
+>    the `feed_status` + `position_close_rejected` emits; `/tmp/backend.log`
+>    shows both decode with **0 "unknown frame type"**. The Go decoders were
+>    already live (`CloseRejections()` `tcp_server.go:425`,
+>    `position_close_rejected` decode `:840` → `close_sync.go:40`); the C# emit
+>    now fires on the next rejected flatten. id=54 SHORT already proved the
+>    fill-confirmed path end-to-end (closed **+96.50 ×pv**, real `exit_order_id`).
+> 2. **Universal CME Phase 1 + Phase 2 SHIPPED.** Phase 1 (`1620a5e7`) —
+>    recognize 18 CME roots with correct per-root multipliers (micro≠mini
+>    guaranteed by test: NQ $20 vs MNQ $2, ES $50 vs MES $5); FE no longer
+>    USDT-mangles CME symbols. Phase 2 (`dba04d01`) — the hardwired `"MNQ"`
+>    subscription is GONE (subscription follows the active symbol); index +
+>    treasury families resolve via a quarterly H/M/U/Z resolver
+>    (`VLContractResolver`, `RollDaysBeforeExpiry=8`), LIVE-verified
+>    `MNQ -> MNQ 06-26`. Energy/metals PARKED verifiably (clean
+>    `instrument_unresolved` log — no wrong-contract risk).
+> Three NT8/Tradovate **premise-refutations** recorded below (real API truth,
+> verified not assumed). **NEXT = Phase 3** (parameterize the MNQ-hardwired AI
+> prompt for the resolving families). See `## Current State — Round 6
+> (2026-06-02)` immediately below. All prior banners retained for history.
+
 > **STATUS (2026-06-02, later — safety arc COMPLETE):** branch
 > `feat/nt8-stage4-chart` tip `0f4c1268`. The phantom-close safety arc that was
 > "IN-FLIGHT" in the banner below is now **SHIPPED + live-verified**:
@@ -129,6 +154,116 @@
 > SUPERSEDED in place (the kernel reads NT8 BarCache for CME futures on this
 > branch — verified `market/data.go:197-210`; Stage 3 source-swap is DONE
 > here). Markers added, nothing deleted.
+
+## Current State — Round 6 (2026-06-02): safety arc DEPLOYED+LIVE; Universal CME Phase 1+2 SHIPPED
+
+> Additive sync against git truth at tip `dba04d01`. The execution-safety arc
+> (`0118ca77` fill-confirmed closes, `2fc07ea2` feed-down gate + reconcile,
+> `0f4c1268` real-trade markers) is fully documented in the "safety arc
+> COMPLETE" banner above — Round 6 records what changed AFTER that banner
+> (which was at tip `0f4c1268`): the safety frames are now **deployed + live**,
+> Universal CME **Phase 1+2 shipped**, energy/metals **parked verifiably**, and
+> the **three NT8/Tradovate premise-refutations** are captured as API truth.
+> MAIN re-verified every hash via `git show` and every code claim at file:line;
+> runtime/live claims are tagged "operator-verified". Round 5 below is intact.
+
+### SAFETY ARC — now DEPLOYED + LIVE-verified (state change from the banner above)
+
+The banner above closed with "Operator's remaining manual step: deploy the new
+C# (`cp` → F5 → one full NT8 restart)". That deploy **happened**:
+
+- One clean NT8 restart activated `feed_status` + `position_close_rejected`;
+  `/tmp/backend.log` shows both frames decode with **0 "unknown frame type"**
+  (operator-verified, 2026-06-02).
+- Decoder wiring (git-verified at file:line): `position_close_rejected` decode
+  `provider/ninjatrader/tcp_server.go:840` → `CloseRejections() <-chan`
+  `tcp_server.go:425` → consumed `trader/ninjatrader/close_sync.go:40`; the C#
+  emit is in `VLTraderTCPClient.cs`. Dedicated tests exist
+  (`tcp_server_close_rejected_test.go`, `tcp_server_feed_status_test.go`).
+- id=54 SHORT already proved the `0118ca77` fill-confirmed close path
+  end-to-end: closed **+96.50 ×`FuturesPointValue`**, `reason=tp`, real
+  `exit_order_id` — the id=45 `<nil>`/points-only phantom shape is gone. The
+  feed-up/feed-down race is closed: feed-up the flatten fills and `close_sync`
+  records first (decision-phantom harmlessly skipped); feed-down the flatten is
+  rejected and the position stays OPEN (no phantom-close).
+
+### Universal CME — Phase 1 recognition SHIPPED (`1620a5e7`)
+
+`market/futures_symbol.go` (+55) + test (+49), `store/strategy.go`,
+`web/.../CoinSourceEditor.tsx` (+194). Recognizes 18 CME roots with correct
+**per-root multipliers**; micro≠mini is guaranteed by test (NQ $20 vs MNQ $2,
+ES $50 vs MES $5). The FE no longer USDT-mangles a CME symbol (the
+`MNQ`→`MNQUSDT` crypto-bypass bug — see the Strategy-build P1🔴 — is handled
+for recognition). Recognition only: no subscription/resolution yet (that's
+Phase 2).
+
+### Universal CME — Phase 2 active-symbol subscription + resolver SHIPPED (`dba04d01`)
+
+`VLBarsSubscriptionManager.cs`, `VLContractResolver.cs`, `tcp_server.go`,
+`tcp_trader.go` + `tcp_trader_subscribe_test.go`.
+
+- **The hardwired `"MNQ"` bar subscription is GONE** — subscription now follows
+  the active symbol.
+- **Quarterly resolver** (`VLContractResolver`): INDEX (ES/NQ/YM/RTY +
+  micros MES/MNQ/MYM/M2K) and TREASURY (ZB/ZN/ZF/ZT, CBOT) resolve to the NT8
+  qualified front-month via H/M/U/Z (H=Mar, M=Jun, U=Sep, Z=Dec), rolling
+  `RollDaysBeforeExpiry=8` before expiry. **LIVE-verified: `MNQ -> MNQ 06-26`**
+  (correct front month, operator-verified 2026-06-02).
+
+### THE THREE NT8 / TRADOVATE PREMISE-REFUTATIONS (real API truth — verified, not assumed)
+
+These were assumptions that turned out FALSE on the NT8 AddOn API + the
+operator's Tradovate feed; recorded so the plan carries the real behavior:
+
+1. **Bare-root auto-routing is FALSE for the AddOn API.**
+   `Instrument.GetInstrument("MNQ")` returns **null** — a QUALIFIED
+   `"MNQ 06-26"` is required. So the AddOn computes the qualified quarterly
+   contract itself (`VLContractResolver`, `RollDaysBeforeExpiry=8`). (Refuted
+   in Phase 2.)
+2. **`GetNextExpiry` is UNBOOTSTRAPPABLE on Tradovate.** It needs a
+   `MasterInstrument`, which is obtained only from a qualified/continuous
+   `GetInstrument` — and **Tradovate has no continuous contracts** → null →
+   chicken-and-egg. This is exactly why the non-quarterly families (energy/
+   metals) can't use the calendar path yet. (Refuted in Phase 2.5; the
+   `VLContractResolver` header comment documents it.)
+3. **`GE` is NOT in our code.** The `"GE 03-26 Symbol is inaccessible"` log
+   carries NT8's own `|3|4|` prefix (not our AddOn's `|1|16|`). `GE` =
+   delisted Eurodollar; it is an NT8-environment artifact (a saved chart/
+   watchlist), silenced by an NT8-side cleanup — **not a code change**.
+
+### PARKED (verifiably; no wrong-contract risk)
+
+Energy (CL/MCL/NG — monthly) + metals (GC/MGC — GJMQVZ; SI — HKNUZ) are
+deliberately NOT in the quarterly resolver (their front month is not
+quarterly). They resolve to a clear `instrument_unresolved` log — **awaiting**
+a continuous-supporting data feed (which would enable `GetNextExpiry`, per
+refutation #2) or a testable C# roll path. NOT abandoned — cleanly deferred,
+with no risk of trading the wrong contract in the meantime.
+
+### Roadmap refresh (2026-06-02, Round 6)
+
+- **Safety arc: DONE + LIVE.** No blocking items.
+- **Resolver: covers the tradable quarterly families** (index + treasury).
+- **NEXT — Phase 3:** parameterize the MNQ-hardwired AI prompt —
+  `BuildFuturesDecisionSystemPrompt(symbol, equity)` — for the resolving
+  families.
+- **Phase 4:** `instrument_info` wire frame carrying NT8 tick + `point_value`,
+  and the 7→14 timeframe expansion (ties into the LOCKED Strategy build's
+  Stage 2 14-TF delivery).
+- **Energy/metals:** revive when a testable continuous/roll path exists
+  (refutation #2 is the gate).
+- **Strategy UI futures-awareness (Stage 1/Stage 2): LAST.**
+
+### SHA ledger addendum (Round 6, verified against git 2026-06-02)
+
+| SHA | message |
+|---|---|
+| `dba04d01` | feat(nt8): Phase 2 — drive bar subscription from the active symbol + resolver to all quarterly families **[BRANCH TIP]** |
+| `1620a5e7` | feat(symbol): Phase 1 — recognize 8 more CME futures roots (recognition only) |
+| `91d438a8` | chore(web,docs): drop unused onTraderSelect (tsc clean) + doc-sync NT8 safety arc |
+| `0f4c1268` | fix(web): NT8 chart markers source from real trades (trader_positions), not the sparse orders table |
+| `2fc07ea2` | feat(nt8): feed-down trading gate + reconcile-before-open flatten-first (deferred safety layers) |
+| `0118ca77` | fix(nt8): fill-confirm NT8 closes — a rejected flatten no longer phantom-closes |
 
 ## Current State — Round 5 (2026-06-02): bar-feed + risk-gate SHIPPED; phantom-close IN-FLIGHT
 
