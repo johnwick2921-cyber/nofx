@@ -154,6 +154,21 @@ type FeedStatusPayload struct {
 	Time        string `json:"time"`         // RFC3339
 }
 
+// instrument_info — C#-AddOn → Go-server, additive frame. Carries the RESOLVED
+// NT8 instrument's REAL contract specs (MasterInstrument.PointValue/.TickSize +
+// the qualified contract name) so Go can source ground-truth from NT8 and
+// cross-check the hardcoded FuturesPointValue/FuturesTickSize tables (drift
+// detection). The tables remain the fallback for parked/unresolved symbols.
+const FrameInstrumentInfo FrameType = "instrument_info"
+
+// InstrumentInfoPayload reports a resolved instrument's NT8 specs.
+type InstrumentInfoPayload struct {
+	Symbol     string  `json:"symbol"`      // root, e.g. "MNQ"
+	Contract   string  `json:"contract"`    // qualified, e.g. "MNQ 06-26"
+	PointValue float64 `json:"point_value"` // NT8 MasterInstrument.PointValue
+	TickSize   float64 `json:"tick_size"`   // NT8 MasterInstrument.TickSize
+}
+
 // Manual close — Go-server → C#-AddOn, additive frame. The AddOn flattens the
 // position for the symbol (account.Flatten), which closes at market AND cancels
 // the protective bracket so no orphaned SL/TP can re-open a position. The

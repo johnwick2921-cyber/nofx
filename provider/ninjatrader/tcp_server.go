@@ -66,6 +66,7 @@ type TCPServer struct {
 	fillCh   chan FillPayload
 	closeCh  chan PositionClosePayload
 	rejectCh chan PositionCloseRejectedPayload
+	instrCh  chan InstrumentInfoPayload
 
 	// Latest NT8 price-feed status (from the feed_status frame). Empty until the
 	// first frame; consumers DEFAULT-ALLOW on empty (never false-halt at startup).
@@ -151,7 +152,10 @@ const barIngestChannelBuffer = 256
 // spec-recommended depth across all timeframes.
 var (
 	defaultAutoBarsSymbol     = "MNQ"
-	defaultAutoBarsTimeframes = []string{"1m", "3m", "5m", "15m", "30m", "1h", "1d"}
+	// Phase 4b — the 14-timeframe chart set (was 7). Every entry is already
+	// supported by the AddOn's MapTimeframe + the Go normalizer; the running AddOn
+	// subscribes them on the bot's next reconnect (no NT8 redeploy needed for 4b).
+	defaultAutoBarsTimeframes = []string{"1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w"}
 	defaultAutoBarsBack       = 500
 )
 
@@ -173,6 +177,7 @@ func NewTCPServer(logger *slog.Logger) *TCPServer {
 		fillCh:      make(chan FillPayload, fillChannelBuffer),
 		closeCh:     make(chan PositionClosePayload, fillChannelBuffer),
 		rejectCh:    make(chan PositionCloseRejectedPayload, fillChannelBuffer),
+		instrCh:     make(chan InstrumentInfoPayload, fillChannelBuffer),
 		barCache:     NewBarCache(0),
 		barIngestCh:  make(chan barIngestMsg, barIngestChannelBuffer),
 		acctBalances:  make(map[string]AccountBalancePayload),
@@ -444,6 +449,11 @@ func (s *TCPServer) IsFeedConnected() bool {
 	}
 	return s.feedStatus == "Connected"
 }
+
+// InstrumentInfo returns the channel of instrument_info frames — the resolved
+// NT8 instrument's real specs (point value, tick). Consumers cross-check the
+// hardcoded FuturesPointValue/FuturesTickSize tables and surface any drift.
+func (s *TCPServer) InstrumentInfo() <-chan InstrumentInfoPayload { return s.instrCh }
 
 // IsConnected reports whether a client is currently connected.
 func (s *TCPServer) IsConnected() bool {
@@ -859,6 +869,20 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			s.feedStatus = p.PriceStatus
 			s.feedMu.Unlock()
 			s.logger.Info("tcp_server: feed status", "price_status", p.PriceStatus)
+
+		case FrameInstrumentInfo:
+			// Resolved NT8 instrument specs (point value, tick) — ground truth to
+			// cross-check the hardcoded tables. Hand to the consumer; non-blocking.
+			var p InstrumentInfoPayload
+			if err := json.Unmarshal(env.Payload, &p); err != nil {
+				s.logger.Warn("tcp_server: bad instrument_info payload", "err", err)
+				continue
+			}
+			select {
+			case s.instrCh <- p:
+			default:
+				s.logger.Warn("tcp_server: instrument channel full, dropping", "symbol", p.Symbol)
+			}
 
 		default:
 			s.logger.Warn("tcp_server: unknown frame type", "type", env.Type)
