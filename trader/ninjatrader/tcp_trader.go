@@ -76,6 +76,11 @@ func NewTCPTrader(server *ntwire.TCPServer, symbol string) *TCPTrader {
 		takePrft: map[string]float64{},
 		pending:  map[string]string{},
 	}
+	// Phase 2 — drive the bar subscription from THIS trader's symbol instead of
+	// the hardwired default "MNQ". On the next (re)connect the AddOn subscribes to
+	// this root and NT8 resolves the qualified front-month (VLContractResolver,
+	// quarterly families). MNQ is unchanged (it is just the symbol here too).
+	server.SetBarsSubscribeSymbol(symbol)
 	// Subscribe to inbound fills — update lastFill cache (mirrors CSV Trader).
 	go func() {
 		for fill := range server.Fills() {

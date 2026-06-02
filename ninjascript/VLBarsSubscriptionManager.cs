@@ -174,8 +174,16 @@ namespace NinjaTrader.NinjaScript.AddOns
             var instrument = Instrument.GetInstrument(contract);
             if (instrument == null)
             {
-                logWarn("VLBarsSubscriptionManager: instrument " + symbol
-                        + " (resolved to " + contract + ") not found");
+                // Clear unresolved signal (Phase 2) — no silent freeze. Either a
+                // non-quarterly root (energy CL/NG, metal GC/SI) whose front-month
+                // roll resolution is deferred (it passed through unchanged, so
+                // symbol == contract), or a contract not loaded in NT8's database.
+                bool passthrough = string.Equals(symbol, contract, StringComparison.OrdinalIgnoreCase);
+                logWarn("VLBarsSubscriptionManager: instrument_unresolved symbol=" + symbol
+                        + " resolved=" + contract
+                        + (passthrough
+                            ? " — root not a quarterly family; front-month roll resolution deferred (energy/metal)"
+                            : " — qualified contract not found in NT8 (not loaded?)"));
                 return;
             }
 

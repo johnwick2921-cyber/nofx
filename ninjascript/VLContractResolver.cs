@@ -28,14 +28,24 @@ namespace NinjaTrader.NinjaScript.AddOns
     /// </summary>
     public static class VLContractResolver
     {
-        // Whitelist of CME index/futures roots whose bare-root forms get
-        // mapped to the current front-month quarterly contract.
+        // Whitelist of CME roots whose bare-root forms get mapped to the current
+        // front-month QUARTERLY (H/M/U/Z) contract by the date logic below. Only
+        // quarterly-cycle families belong here. ENERGY (CL/MCL/NG — monthly) and
+        // METALS (GC/MGC — Feb/Apr/Jun/Aug/Oct/Dec; SI — Jan/Mar/May/Jul/Sep/Dec)
+        // are deliberately NOT listed: their front month is NOT quarterly, so this
+        // computation would pick the wrong contract. They are recognized in Go
+        // (Phase 1) but their NT8 front-month resolution needs the per-family roll
+        // calendar (MasterInstrument.GetNextExpiry) — a later phase. Until then an
+        // energy/metal root passes through unchanged and the BarsRequest path logs
+        // it as unresolved (see VLBarsSubscriptionManager) rather than mis-resolving.
         private static readonly string[] CMEFuturesRoots = new[]
         {
             "MNQ", "NQ",   // E-mini + Micro E-mini Nasdaq-100
             "MES", "ES",   // E-mini + Micro E-mini S&P 500
             "MYM", "YM",   // E-mini + Micro E-mini Dow
             "M2K", "RTY",  // Micro + E-mini Russell 2000
+            "ZB", "ZN",    // 30Y T-Bond + 10Y T-Note (CBOT, quarterly H/M/U/Z)
+            "ZF", "ZT",    // 5Y + 2Y T-Note (CBOT, quarterly H/M/U/Z)
         };
 
         // Days before the 3rd-Friday expiry at which we roll to the next
