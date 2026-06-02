@@ -518,10 +518,17 @@ func (s *Server) handlePreviewPrompt(c *gin.Context) {
 	// Create strategy engine to build prompt
 	engine := kernel.NewStrategyEngine(&req.Config)
 
-	// Build system prompt (using built-in method from strategy engine)
+	// Build system prompt (using built-in method from strategy engine). Phase 3:
+	// pass the strategy's symbol so a futures preview reflects the real instrument
+	// (defaults to MNQ; ignored on the crypto path).
+	previewSymbol := "MNQ"
+	if len(req.Config.CoinSource.StaticCoins) > 0 && req.Config.CoinSource.StaticCoins[0] != "" {
+		previewSymbol = req.Config.CoinSource.StaticCoins[0]
+	}
 	systemPrompt := engine.BuildSystemPrompt(
 		req.AccountEquity,
 		req.PromptVariant,
+		previewSymbol,
 	)
 
 	c.JSON(http.StatusOK, gin.H{
@@ -663,8 +670,12 @@ func (s *Server) handleStrategyTestRun(c *gin.Context) {
 		PriceRankingData:   priceRankingData,
 	}
 
-	// Build System Prompt
-	systemPrompt := engine.BuildSystemPrompt(1000.0, req.PromptVariant)
+	// Build System Prompt (Phase 3 — pass the strategy's symbol; defaults to MNQ).
+	previewSymbol := "MNQ"
+	if len(req.Config.CoinSource.StaticCoins) > 0 && req.Config.CoinSource.StaticCoins[0] != "" {
+		previewSymbol = req.Config.CoinSource.StaticCoins[0]
+	}
+	systemPrompt := engine.BuildSystemPrompt(1000.0, req.PromptVariant, previewSymbol)
 
 	// Build User Prompt (using real market data)
 	userPrompt := engine.BuildUserPrompt(testContext)

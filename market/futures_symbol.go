@@ -104,6 +104,27 @@ var futuresPointValues = map[string]float64{
 	"ZT":  2000.0,  // 2Y T-Note           ($2000 per pt — $200k face)
 }
 
+// futuresTickSizes maps a CME root to its minimum price increment (tick), in the
+// same decimal units the bot's bars use. Index ticks are simple decimals;
+// Treasuries quote in 32nds/64ths/128ths expressed as decimals (ZB 1/32=0.03125).
+// RESOLVING families only (index + treasury); energy/metals are parked (Phase 2.5)
+// so they are absent and callers default safely. Used by the futures system prompt
+// to align stops to the real instrument's tick.
+var futuresTickSizes = map[string]float64{
+	"NQ": 0.25, "MNQ": 0.25, "ES": 0.25, "MES": 0.25,
+	"RTY": 0.10, "M2K": 0.10, "YM": 1.0, "MYM": 1.0,
+	"ZB": 0.03125, "ZN": 0.015625, "ZF": 0.0078125, "ZT": 0.0078125,
+}
+
+// FuturesTickSize returns the tick size for a CME root (any symbol form), or 0 if
+// unknown (caller must treat 0 as "unknown"). Index + treasury only.
+func FuturesTickSize(symbol string) float64 {
+	if root := futuresRoot(symbol); root != "" {
+		return futuresTickSizes[root]
+	}
+	return 0
+}
+
 // FuturesPointValue returns the USD value of a 1.00-point move for one
 // contract of the given CME futures symbol (e.g. MNQ=2, NQ=20). Accepts any
 // symbol form (continuous "NQ.c.0", contract "NQM6", bare "MNQ", qualified
