@@ -14,12 +14,13 @@ import (
 // ============================================================================
 
 // BuildSystemPrompt builds System Prompt according to strategy configuration
-func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string) string {
-	// CME futures (NT8/MNQ) use a dedicated futures system prompt that emits
-	// the SAME <reasoning>/<decision> envelope this parser expects, but with
-	// futures framing. Early-return keeps the crypto assembly below untouched.
+func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant, symbol string) string {
+	// CME futures use a dedicated futures system prompt that emits the SAME
+	// <reasoning>/<decision> envelope this parser expects, but with futures
+	// framing for the ACTIVE symbol. Early-return keeps the crypto assembly below
+	// untouched (symbol is ignored on the crypto path).
 	if strings.ToLower(strings.TrimSpace(variant)) == "futures" {
-		return e.BuildFuturesDecisionSystemPrompt(accountEquity)
+		return e.BuildFuturesDecisionSystemPrompt(symbol, accountEquity)
 	}
 
 	var sb strings.Builder

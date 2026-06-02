@@ -218,7 +218,15 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 
 	// 2. Build System Prompt using strategy engine
 	riskConfig := engine.GetRiskControlConfig()
-	systemPrompt := engine.BuildSystemPrompt(ctx.Account.TotalEquity, variant)
+	// Active symbol for the futures system prompt (Phase 3): the open position's
+	// symbol, else the first candidate, else "MNQ". Ignored on the crypto path.
+	activeSymbol := "MNQ"
+	if len(ctx.Positions) > 0 && ctx.Positions[0].Symbol != "" {
+		activeSymbol = ctx.Positions[0].Symbol
+	} else if len(ctx.CandidateCoins) > 0 && ctx.CandidateCoins[0].Symbol != "" {
+		activeSymbol = ctx.CandidateCoins[0].Symbol
+	}
+	systemPrompt := engine.BuildSystemPrompt(ctx.Account.TotalEquity, variant, activeSymbol)
 
 	// 3. Build User Prompt using strategy engine
 	userPrompt := engine.BuildUserPrompt(ctx)
