@@ -170,6 +170,7 @@ namespace NinjaTrader.NinjaScript.AddOns
             try
             {
                 string priceStatus = eCopy.PriceStatus.ToString();
+                string prevPriceStatus = eCopy.PreviousPriceStatus.ToString();
                 bool fireRecreate = false;
 
                 lock (connStatusLock)
@@ -183,17 +184,28 @@ namespace NinjaTrader.NinjaScript.AddOns
                                     + priceStatus + ") — BarsRequests will be recreated on recovery");
                         }
                     }
-                    else if (priceStatus == "Connected" && dataFeedWasLost)
+                    else if (priceStatus == "Connected")
                     {
-                        dataFeedWasLost = false;  // clear inside the lock -> no double-fire
-                        fireRecreate = true;
+                        // Recreate on ANY transition INTO Connected — recovery
+                        // (dataFeedWasLost) AND a FRESH STARTUP (PreviousPriceStatus =
+                        // Connecting/Disconnected). The old loss-only guard left a clean
+                        // startup with no recreate, so .Update sat dead from the restart
+                        // until the slow 75-min watchdog. PreviousPriceStatus != Connected
+                        // means a real transition, so this fires once per connect (not on
+                        // repeated Connected events where the price feed never dropped).
+                        bool freshConnect = (prevPriceStatus != "Connected");
+                        if (dataFeedWasLost || freshConnect)
+                        {
+                            dataFeedWasLost = false;  // clear inside the lock -> no double-fire
+                            fireRecreate = true;
+                        }
                     }
                 }
 
                 if (fireRecreate)
                 {
-                    LogInfo("VLTraderTCPClient: data feed recovered (PriceStatus=Connected) — "
-                            + "recreating BarsRequests via OnConnectionReconnected");
+                    LogInfo("VLTraderTCPClient: data feed Connected (prev=" + prevPriceStatus
+                            + ") — recreating BarsRequests via OnConnectionReconnected");
                     barsManager?.OnConnectionReconnected();
                 }
             }
