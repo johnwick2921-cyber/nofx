@@ -278,7 +278,7 @@ func isCMEFuturesSymbol(symbol string) bool {
 		}
 		if strings.HasPrefix(upper, root) && len(upper) == len(root)+2 {
 			tail := upper[len(root):]
-			if isQuarterlyMonthStore(tail[0]) && tail[1] >= '0' && tail[1] <= '9' {
+			if isContractMonthStore(root, tail[0]) && tail[1] >= '0' && tail[1] <= '9' {
 				return true
 			}
 		}
@@ -298,7 +298,15 @@ var cmeFuturesRootsStore = map[string]struct{}{
 	"YM":  {},
 	"MYM": {},
 	"CL":  {},
+	"MCL": {},
+	"NG":  {},
 	"GC":  {},
+	"MGC": {},
+	"SI":  {},
+	"ZB":  {},
+	"ZN":  {},
+	"ZF":  {},
+	"ZT":  {},
 }
 
 func isQuarterlyMonthStore(b byte) bool {
@@ -307,6 +315,23 @@ func isQuarterlyMonthStore(b byte) bool {
 		return true
 	}
 	return false
+}
+
+// futuresMonthCodesStore mirrors market.futuresMonthCodes — per-root month codes
+// so contract-code recognition is family-correct: index/Treasury stay quarterly
+// (NQF6 not matched) while energy lists all 12 (NGF6 matched). Keep in sync with
+// cmeFuturesRootsStore (every root needs an entry).
+var futuresMonthCodesStore = map[string]string{
+	"NQ": "HMUZ", "MNQ": "HMUZ", "ES": "HMUZ", "MES": "HMUZ",
+	"RTY": "HMUZ", "M2K": "HMUZ", "YM": "HMUZ", "MYM": "HMUZ",
+	"ZB": "HMUZ", "ZN": "HMUZ", "ZF": "HMUZ", "ZT": "HMUZ",
+	"CL": "FGHJKMNQUVXZ", "MCL": "FGHJKMNQUVXZ", "NG": "FGHJKMNQUVXZ",
+	"GC": "GJMQVZ", "MGC": "GJMQVZ", "SI": "FHKNUZ",
+}
+
+// isContractMonthStore mirrors market.isContractMonth.
+func isContractMonthStore(root string, b byte) bool {
+	return strings.IndexByte(futuresMonthCodesStore[root], b) >= 0
 }
 
 func normalizeTimeframes(values []string) []string {
