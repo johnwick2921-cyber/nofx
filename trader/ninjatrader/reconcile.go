@@ -66,6 +66,7 @@ func (t *TCPTrader) reconcilePositions(traderID string, st *store.Store) {
 
 	// NT8-held positions keyed "SYMBOL|SIDE" → average price (canonical form).
 	held := make(map[string]float64, len(snap))
+	heldQty := make(map[string]float64, len(snap))
 	for _, p := range snap {
 		if p.Quantity == 0 {
 			continue
@@ -74,7 +75,9 @@ func (t *TCPTrader) reconcilePositions(traderID string, st *store.Store) {
 		if strings.EqualFold(p.Side, "short") {
 			side = "SHORT"
 		}
-		held[market.Normalize(p.Symbol)+"|"+side] = p.AvgPrice
+		key := market.Normalize(p.Symbol) + "|" + side
+		held[key] = p.AvgPrice
+		heldQty[key] = float64(p.Quantity)
 	}
 
 	rows, err := st.Position().GetOpenPositions(traderID)
@@ -99,6 +102,16 @@ func (t *TCPTrader) reconcilePositions(traderID string, st *store.Store) {
 					logger.Infof("🔧 reconcile: %s %s entry %.2f → NT8 avg %.2f (row %d)",
 						row.Symbol, row.Side, row.EntryPrice, avg, row.ID)
 				}
+			}
+			// (c) QTY TRUTH — alarm when NT8's held contract count diverges from the
+			// DB row. This is the id=45→id=46 net-2 tell: an unclosed prior contract
+			// (rejected flatten) the next entry netted onto, so NT8 holds 2 while the
+			// row says 1. Log-only (no auto-flatten): loudly flagging the divergence
+			// is the safe SIM action; the close routing now prevents the phantom that
+			// causes it, and the entry-anchor above keeps the price honest.
+			if hq, ok := heldQty[key]; ok && row.Quantity > 0 && hq != row.Quantity {
+				logger.Warnf("🚨 reconcile QTY DIVERGENCE: %s %s — NT8 holds %.0f but DB row %d has %.0f. Likely an unclosed prior contract netted onto by a later entry (id=45→46 class). DB qty NOT auto-changed — investigate.",
+					row.Symbol, row.Side, hq, row.ID, row.Quantity)
 			}
 		} else {
 			// Orphan — NT8 reports flat for this (symbol,side) but the row is OPEN.

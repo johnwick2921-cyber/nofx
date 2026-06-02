@@ -29,7 +29,20 @@ func (t *TCPTrader) StartCloseSync(traderID, exchangeID, exchangeType string, st
 				t.recordClose(traderID, exchangeID, exchangeType, st, pb, p)
 			}
 		}()
-		logger.Infof("🔄 NinjaTrader close-sync started (records SL/TP exits to position history)")
+		// Rejected exit/flatten watcher. The SIM/broker refused a close (e.g. "no
+		// market data" with the feed down). The position is STILL OPEN in NT8 — do
+		// NOT record a close; raise a loud alarm. Because decision-driven closes no
+		// longer mark the DB CLOSED off the mark (see auto_trader_decision.go), the
+		// position simply stays open: the next decision cycle re-issues the close (a
+		// natural bounded retry) and the periodic reconcile keeps the DB anchored to
+		// NT8 truth, so the orphan can't be netted onto by the next entry.
+		go func() {
+			for r := range t.server.CloseRejections() {
+				logger.Warnf("🚨 NT close REJECTED: %s %s — STILL OPEN in NT8, NOT recording closed (reason: %q, account: %s). Will retry on next decision cycle / reconnect.",
+					r.Symbol, r.PositionSide, r.Reason, r.Account)
+			}
+		}()
+		logger.Infof("🔄 NinjaTrader close-sync started (records SL/TP + manual exits; alarms on rejected flattens)")
 	})
 }
 
