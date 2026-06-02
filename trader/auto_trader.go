@@ -527,6 +527,10 @@ func (at *AutoTrader) Run() error {
 			ntTCP.SetParentAutoTrader(at)
 			ntTCP.StartCloseSync(at.id, at.exchangeID, at.exchange, at.store)
 			at.logInfof("🔄 NinjaTrader close-sync enabled (SL/TP exits → position history)")
+			// Anchor entry_price to the NT8 position average + clear orphan rows
+			// (the 5m-mark entry the AI-decision write records goes stale/frozen).
+			ntTCP.StartPositionReconcile(at.id, at.exchangeID, at.exchange, at.store)
+			at.logInfof("🔧 NinjaTrader position-reconcile enabled (entry→NT8 avg, orphan clear)")
 		}
 	}
 
