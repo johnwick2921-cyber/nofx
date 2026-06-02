@@ -33,6 +33,75 @@
 > "rename this variable in foo.go"). The read-first rule applies
 > ONLY when the prompt invokes plan content.
 
+> **STATUS (2026-06-02, later — safety arc COMPLETE):** branch
+> `feat/nt8-stage4-chart` tip `0f4c1268`. The phantom-close safety arc that was
+> "IN-FLIGHT" in the banner below is now **SHIPPED + live-verified**:
+>
+> - **`0118ca77` — fill-confirmed NT8 closes (phantom-close root fix).** A
+>   decision-driven close used to mark the DB CLOSED off the 5m mark via
+>   `recordAndConfirmOrder → recordPositionChange → ClosePositionFully` WITHOUT
+>   confirming the NT8 exit filled. During a Tradovate feed outage ~76 flatten
+>   ("Close" Sell Market) orders were REJECTED ("There is no market data available
+>   to drive the simulation engine"), so id=45 was never closed in NT8 yet the bot
+>   phantom-closed it locally (points-only PnL, `exit_order_id=<nil>`); id=46's next
+>   buy netted onto the orphan → NT8 net 2. Fix: ninjatrader decision closes now
+>   route through the `position_close` fill frame (`close_sync.recordClose` —
+>   fill-confirmed, ×`FuturesPointValue`), recorded ONLY on a confirmed NT8 exit
+>   (`auto_trader_decision.go`); this also fixed the points-only PnL for free. New
+>   `position_close_rejected` wire frame (C# emits on a rejected exit; Go decodes +
+>   alarms; the position stays OPEN so the next cycle retries). `reconcile.go` now
+>   alarms on a qty divergence (the id=45→46 tell).
+> - **`2fc07ea2` — feed-down trading gate + reconcile-before-open flatten-first.**
+>   New `feed_status` frame (C# `OnVLConnectionStatusUpdate` → Go); the AutoTrader
+>   gates opens AND closes when the NT8 price feed is not Connected (the SIM rejects
+>   "no market data"). DESIGN: **no false-halt** — `IsFeedConnected()` default-ALLOWs
+>   until the first frame and trips ONLY on an explicit non-Connected status.
+>   `reconcileBeforeOpenNT` flattens an orphan first **awaiting its OWN fill** (bounded
+>   `GetPositions` poll, feed-gated — NOT fire-and-forget) then opens, else REFUSES.
+>   RACE INSIGHT: feed-up, the flatten fills fast and `close_sync` records first
+>   (the decision phantom is harmlessly skipped — no open row); feed-down, the
+>   flatten is rejected and only the phantom used to record — now it doesn't.
+> - **`0f4c1268` — chart markers source from real trades.** The chart B/S markers
+>   bound to `/api/orders?status=FILLED`, which is sparse for NT8 (closes route
+>   through `close_sync` → `trader_positions`, not the orders table); a lone stale
+>   "zombie" order drew a misleading green "B". For `exchange==='ninjatrader'`,
+>   markers now source from `trader_positions` (entry + exit per position, correct
+>   B/S) via `/api/positions/history`. Crypto + the B/S visibility toggle unchanged.
+>
+> **VERDICTS this round (read-only diagnoses):**
+> - **Track C (Trade History):** the FE faithfully RENDERS the rows — no cache/
+>   transform bug (browser-confirmed `DISPLAY==DB`, `DB!=NT8`). The wrong numbers
+>   were poisoned OLD rows (id=45/46 phantom/doubled; legacy id=6/14 points-only);
+>   NEW closes are clean (×pv, real `exit_order_id`). The OLD rows were **repaired to
+>   NT8 truth this round** (DB write, see below).
+> - **Track D (B/S button):** NOT a bug — the green "B/S" button is the order-markers
+>   show/hide toggle (`AdvancedChart.tsx`, green = markers ON), not a side indicator;
+>   id=54 was correctly SHORT at every layer (DB/NT8/`/api/positions`/panel) and
+>   closed **+96.50 ×pv via the fill-confirmed path** (`reason=tp`, real
+>   `exit_order_id`) — proving the `0118ca77` path end-to-end. The stale green "B"
+>   was the zombie order (fixed by `0f4c1268` + the DB cleanup below).
+>
+> **DB cleanups this round (SIM historical, NT8-truth; backup taken first):**
+> - **Trade-history repair:** id=45 → exit 30533.25 / PnL −26.00; id=46 → entry
+>   30553.5 / PnL −40.50 (sum −66.50, the real 2-lot flatten @30533.25 split per
+>   lot); id=6 → +53.00 (×pv, exit 30573.75 confirmed real); id=14 → −353.50 (×pv,
+>   exit 30567.0 confirmed real). All `exit_order_id`→`Close`. None invented — every
+>   exit cross-checked against the NT8 trace.
+> - **Zombie order:** deleted the lone stale `trader_orders` id=1 (BUY, created
+>   05-31 @30464 but `avg_fill_price`/`filled_at` bumped to ~now/30615.5,
+>   `related_position_id=0`) that drew the misleading "B".
+> - **CI:** removed the unused `onTraderSelect` destructure in
+>   `TraderDashboardPage.tsx` → `tsc --noEmit` clean.
+>
+> **ROADMAP:** the NT8 execution-safety arc (fill-confirmed closes, feed gate,
+> reconcile-before-open, honest history + markers) is **COMPLETE and live-verified**
+> — no blocking items remain. Operator's remaining manual step: deploy the new C#
+> (`cp` → F5 → one full NT8 restart) to activate the `feed_status` +
+> `position_close_rejected` emits (the Go decoders + the close-routing root fix are
+> already live; the fixes degrade safely against the old C#). **NEXT project:**
+> Universal CME Symbol support (Path A, 5-phase); Strategy-UI futures-awareness last.
+> The prior `cef42d61` status (phantom-close IN-FLIGHT) is retained below for history.
+
 > **STATUS (2026-06-02):** branch `feat/nt8-stage4-chart` tip `cef42d61`.
 > SHIPPED since the last doc-sync (`2a0801b6`): the **bar-feed restart fix**
 > (`345bce2b` — resubscribe-on-Connected + fast `.Update` watchdog + ETH

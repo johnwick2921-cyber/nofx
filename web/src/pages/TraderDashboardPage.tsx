@@ -135,7 +135,8 @@ export function TraderDashboardPage({
   traders,
   tradersError,
   selectedTraderId,
-  onTraderSelect,
+  // onTraderSelect is accepted by the props type (callers pass it) but unused in
+  // this component — not destructured here to keep tsc --noEmit clean (TS6133).
   onNavigateToTraders,
   exchanges,
 }: TraderDashboardPageProps) {
