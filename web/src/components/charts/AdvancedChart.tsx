@@ -433,6 +433,79 @@ export function AdvancedChart({
     }
   }
 
+  // NinjaTrader-only: the orders table is sparse for NT8 (closes route through
+  // close_sync → trader_positions, NOT /api/orders), so the orders feed is stale/
+  // empty and a lone zombie order can draw a misleading marker at the wrong place.
+  // Source the markers from the REAL recorded trades instead: each trader_positions
+  // row → an entry marker (long=BUY/green "B", short=SELL/red "S") and, when closed,
+  // an exit marker (the opposite side). Same OrderMarker shape, so the existing
+  // marker-draw + B/S toggle are unchanged.
+  const fetchPositionMarkers = async (
+    traderID: string,
+    symbol: string
+  ): Promise<OrderMarker[]> => {
+    try {
+      const result = await httpClient.request(
+        `/api/positions/history?trader_id=${traderID}&limit=200`,
+        { silent: true }
+      )
+      const positions = result?.data?.positions || result?.data || []
+      const list = Array.isArray(positions) ? positions : []
+      const markers: OrderMarker[] = []
+
+      list.forEach((p: any) => {
+        const sym = p.symbol || p.Symbol
+        if (sym && symbol && sym !== symbol) return
+        const isLong = (p.side || p.Side || '').toUpperCase() === 'LONG'
+        const positionSide: 'long' | 'short' = isLong ? 'long' : 'short'
+
+        // Entry marker: a long is opened with a BUY, a short with a SELL.
+        const entryPrice = p.entry_price ?? p.EntryPrice
+        const entryTime = p.entry_time ?? p.EntryTime
+        if (entryPrice && entryTime) {
+          markers.push({
+            time: parseCustomTime(entryTime),
+            price: entryPrice,
+            side: positionSide,
+            rawSide: isLong ? 'buy' : 'sell',
+            action: 'open',
+            symbol: sym,
+          })
+        }
+
+        // Exit marker (closed only): a long exits with a SELL, a short with a
+        // BUY-to-cover.
+        const exitPrice = p.exit_price ?? p.ExitPrice
+        const exitTime = p.exit_time ?? p.ExitTime
+        const status = (p.status || p.Status || '').toUpperCase()
+        if (status === 'CLOSED' && exitPrice && exitTime) {
+          markers.push({
+            time: parseCustomTime(exitTime),
+            price: exitPrice,
+            side: positionSide,
+            rawSide: isLong ? 'sell' : 'buy',
+            action: 'close',
+            symbol: sym,
+          })
+        }
+      })
+
+      // Drop any rows with an unparseable time/price (parseCustomTime → 0).
+      const valid = markers.filter((m) => m.time > 0 && m.price > 0)
+      console.log(
+        '[AdvancedChart] Position-sourced markers (NT8):',
+        valid.length,
+        'from',
+        list.length,
+        'positions'
+      )
+      return valid
+    } catch (err) {
+      console.error('[AdvancedChart] Error fetching position markers:', err)
+      return []
+    }
+  }
+
   // Fetch exchange open orders (TP/SL)
   const fetchOpenOrders = async (
     traderID: string,
@@ -734,7 +807,13 @@ export function AdvancedChart({
         // 4. Fetch and display order markers
         if (traderID && candlestickSeriesRef.current) {
           console.log('[AdvancedChart] Starting to fetch orders...')
-          const orders = await fetchOrders(traderID, symbol)
+          // NinjaTrader: the orders table is sparse (real trades live in
+          // trader_positions), so source markers from the recorded positions;
+          // every other exchange keeps the filled-orders source unchanged.
+          const orders =
+            exchange === 'ninjatrader'
+              ? await fetchPositionMarkers(traderID, symbol)
+              : await fetchOrders(traderID, symbol)
           console.log('[AdvancedChart] Received orders:', orders)
 
           if (orders.length > 0) {
