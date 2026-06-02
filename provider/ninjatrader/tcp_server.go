@@ -299,6 +299,29 @@ func (s *TCPServer) SetBarsSubscribe(p BarsSubscribePayload) {
 	s.barsSubscribe = p
 }
 
+// SetBarsSubscribeSymbol overrides ONLY the auto-subscribe symbol (preserving the
+// configured timeframes + bars-back) so the bar subscription tracks the ACTIVE
+// trader's symbol instead of the hardwired default. Phase 2 — the ninjatrader
+// trader calls this with its symbol at creation; on the next (re)connect the
+// AddOn subscribes to that root and NT8 resolves the qualified front-month
+// contract (VLContractResolver). Empty symbol is ignored (keeps the default).
+func (s *TCPServer) SetBarsSubscribeSymbol(symbol string) {
+	if symbol == "" {
+		return
+	}
+	s.barsSubMu.Lock()
+	defer s.barsSubMu.Unlock()
+	s.barsSubscribe.Symbol = symbol
+}
+
+// BarsSubscribeSymbol returns the current auto-subscribe symbol (the root the
+// AddOn is told to stream). Exported for wiring/tests.
+func (s *TCPServer) BarsSubscribeSymbol() string {
+	s.barsSubMu.RLock()
+	defer s.barsSubMu.RUnlock()
+	return s.barsSubscribe.Symbol
+}
+
 func (s *TCPServer) currentBarsSubscribe() BarsSubscribePayload {
 	s.barsSubMu.RLock()
 	defer s.barsSubMu.RUnlock()
