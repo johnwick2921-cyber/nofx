@@ -107,6 +107,7 @@ interface TraderDashboardPageProps {
   status?: SystemStatus
   account?: AccountInfo
   accountFailed?: boolean
+  selectedAccount?: string
   positions?: Position[]
   positionsFailed?: boolean
   decisions?: DecisionRecord[]
@@ -124,6 +125,7 @@ export function TraderDashboardPage({
   status,
   account,
   accountFailed,
+  selectedAccount,
   positions,
   positionsFailed,
   decisions,
@@ -421,6 +423,9 @@ export function TraderDashboardPage({
                           key.startsWith(`positions-${selectedTraderId}`) ||
                           key.startsWith(`status-${selectedTraderId}`) ||
                           key.startsWith(`statistics-${selectedTraderId}`) ||
+                          key.startsWith(
+                            `decisions/latest-${selectedTraderId}`
+                          ) ||
                           key.startsWith(`equity-history-${selectedTraderId}`))
                     )
                   }}
@@ -675,7 +680,10 @@ export function TraderDashboardPage({
                 last 100 cycles
               </span>
             </div>
-            <DecisionAudit traderId={selectedTrader.trader_id} />
+            <DecisionAudit
+              traderId={selectedTrader.trader_id}
+              account={selectedAccount}
+            />
           </div>
         )}
 

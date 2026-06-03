@@ -64,13 +64,17 @@ export const dataApi = {
   async getLatestDecisions(
     traderId?: string,
     limit: number = 5,
-    silent?: boolean
+    silent?: boolean,
+    account?: string
   ): Promise<DecisionRecord[]> {
     const params = new URLSearchParams()
     if (traderId) {
       params.append('trader_id', traderId)
     }
     params.append('limit', limit.toString())
+    if (account) {
+      params.append('account', account)
+    }
 
     const result = await httpClient.request<DecisionRecord[]>(
       `${API_BASE}/decisions/latest?${params}`,
