@@ -625,6 +625,14 @@ export function StrategyStudioPage() {
   const fetchPromptPreview = async () => {
     if (!token || !editingConfig) return
     setIsLoadingPrompt(true)
+    // CME futures preview the dedicated futures system prompt — the live
+    // ninjatrader path forces variant 'futures' (auto_trader_loop.go); crypto
+    // keeps the tone preset. Computed inline (isFuturesStrategy is declared below).
+    const effectiveVariant = isCMEFutures(
+      getAIConfig(editingConfig)?.coin_source?.static_coins?.[0]
+    )
+      ? 'futures'
+      : selectedVariant
     try {
       const response = await fetch(
         `${API_BASE}/api/strategies/preview-prompt`,
@@ -637,7 +645,7 @@ export function StrategyStudioPage() {
           body: JSON.stringify({
             config: editingConfig,
             account_equity: 1000,
-            prompt_variant: selectedVariant,
+            prompt_variant: effectiveVariant,
           }),
         }
       )
@@ -656,6 +664,13 @@ export function StrategyStudioPage() {
     if (!token || !editingConfig || !selectedModelId) return
     setIsRunningAiTest(true)
     setAiTestResult(null)
+    // Futures test-run exercises the futures system prompt (mirrors the live
+    // ninjatrader variant); crypto keeps the tone preset.
+    const effectiveVariant = isCMEFutures(
+      getAIConfig(editingConfig)?.coin_source?.static_coins?.[0]
+    )
+      ? 'futures'
+      : selectedVariant
     try {
       const response = await fetch(`${API_BASE}/api/strategies/test-run`, {
         method: 'POST',
@@ -665,7 +680,7 @@ export function StrategyStudioPage() {
         },
         body: JSON.stringify({
           config: editingConfig,
-          prompt_variant: selectedVariant,
+          prompt_variant: effectiveVariant,
           ai_model_id: selectedModelId,
           run_real_ai: true,
         }),
@@ -740,6 +755,7 @@ export function StrategyStudioPage() {
           onChange={(coinSource) => updateAIConfig('coin_source', coinSource)}
           disabled={selectedStrategy?.is_default}
           language={language}
+          isFutures={isFuturesStrategy}
         />
       ),
     },
@@ -1087,7 +1103,11 @@ export function StrategyStudioPage() {
                       {tr('strategyType')}
                     </span>
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div
+                    className={`grid ${
+                      isFuturesStrategy ? 'grid-cols-1' : 'grid-cols-2'
+                    } gap-3`}
+                  >
                     <button
                       onClick={() => handleStrategyTypeChange('ai_trading')}
                       disabled={selectedStrategy?.is_default}
@@ -1108,29 +1128,40 @@ export function StrategyStudioPage() {
                         {tr('aiTradingDesc')}
                       </p>
                     </button>
-                    <button
-                      onClick={() => handleStrategyTypeChange('grid_trading')}
-                      disabled={selectedStrategy?.is_default}
-                      className={`p-3 rounded-lg border transition-all ${
-                        editingConfig.strategy_type === 'grid_trading'
-                          ? 'border-nofx-gold bg-nofx-gold/10'
-                          : 'border-nofx-border hover:border-nofx-gold/50'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 mb-1">
-                        <Activity
-                          className="w-4 h-4"
-                          style={{ color: '#0ECB81' }}
-                        />
-                        <span className="text-sm font-medium text-nofx-text">
-                          {tr('gridTrading')}
-                        </span>
-                      </div>
-                      <p className="text-xs text-nofx-text-muted text-left">
-                        {tr('gridTradingDesc')}
-                      </p>
-                    </button>
+                    {/* Grid trading is crypto-CEX-only (limit-order mesh); the
+                        NinjaTrader bridge is market-only, so grid cannot execute
+                        on CME futures — the option is hidden for a futures
+                        instrument and shown byte-identical for crypto. */}
+                    {!isFuturesStrategy && (
+                      <button
+                        onClick={() => handleStrategyTypeChange('grid_trading')}
+                        disabled={selectedStrategy?.is_default}
+                        className={`p-3 rounded-lg border transition-all ${
+                          editingConfig.strategy_type === 'grid_trading'
+                            ? 'border-nofx-gold bg-nofx-gold/10'
+                            : 'border-nofx-border hover:border-nofx-gold/50'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2 mb-1">
+                          <Activity
+                            className="w-4 h-4"
+                            style={{ color: '#0ECB81' }}
+                          />
+                          <span className="text-sm font-medium text-nofx-text">
+                            {tr('gridTrading')}
+                          </span>
+                        </div>
+                        <p className="text-xs text-nofx-text-muted text-left">
+                          {tr('gridTradingDesc')}
+                        </p>
+                      </button>
+                    )}
                   </div>
+                  {isFuturesStrategy && (
+                    <p className="text-xs mt-2 text-nofx-text-muted">
+                      {tr('gridTradingFuturesUnsupported')}
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -1214,13 +1245,22 @@ export function StrategyStudioPage() {
                 {/* Controls */}
                 <div className="flex items-center gap-2 flex-wrap">
                   <select
-                    value={selectedVariant}
+                    value={isFuturesStrategy ? 'futures' : selectedVariant}
                     onChange={(e) => setSelectedVariant(e.target.value)}
-                    className="px-2 py-1.5 rounded text-xs bg-nofx-bg border border-nofx-gold/20 text-nofx-text outline-none focus:border-nofx-gold"
+                    disabled={isFuturesStrategy}
+                    className="px-2 py-1.5 rounded text-xs bg-nofx-bg border border-nofx-gold/20 text-nofx-text outline-none focus:border-nofx-gold disabled:opacity-70"
                   >
-                    <option value="balanced">{tr('balanced')}</option>
-                    <option value="aggressive">{tr('aggressive')}</option>
-                    <option value="conservative">{tr('conservative')}</option>
+                    {isFuturesStrategy ? (
+                      <option value="futures">{tr('variantFutures')}</option>
+                    ) : (
+                      <>
+                        <option value="balanced">{tr('balanced')}</option>
+                        <option value="aggressive">{tr('aggressive')}</option>
+                        <option value="conservative">
+                          {tr('conservative')}
+                        </option>
+                      </>
+                    )}
                   </select>
                   <button
                     onClick={fetchPromptPreview}
@@ -1322,13 +1362,22 @@ export function StrategyStudioPage() {
 
                   <div className="flex items-center gap-2">
                     <select
-                      value={selectedVariant}
+                      value={isFuturesStrategy ? 'futures' : selectedVariant}
                       onChange={(e) => setSelectedVariant(e.target.value)}
-                      className="px-2 py-1.5 rounded text-xs bg-nofx-bg border border-nofx-gold/20 text-nofx-text"
+                      disabled={isFuturesStrategy}
+                      className="px-2 py-1.5 rounded text-xs bg-nofx-bg border border-nofx-gold/20 text-nofx-text disabled:opacity-70"
                     >
-                      <option value="balanced">{tr('balanced')}</option>
-                      <option value="aggressive">{tr('aggressive')}</option>
-                      <option value="conservative">{tr('conservative')}</option>
+                      {isFuturesStrategy ? (
+                        <option value="futures">{tr('variantFutures')}</option>
+                      ) : (
+                        <>
+                          <option value="balanced">{tr('balanced')}</option>
+                          <option value="aggressive">{tr('aggressive')}</option>
+                          <option value="conservative">
+                            {tr('conservative')}
+                          </option>
+                        </>
+                      )}
                     </select>
                     <button
                       onClick={runAiTest}

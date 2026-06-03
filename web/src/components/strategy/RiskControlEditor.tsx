@@ -151,62 +151,137 @@ export function RiskControlEditor({
           </>
         )}
 
-        {/* Position Value Ratio (Risk Control - CODE ENFORCED) */}
-        <div className="mb-2">
-          <p className="text-xs font-medium" style={{ color: '#0ECB81' }}>
-            {ts(riskControl.positionValueRatio, language)}
-          </p>
-          <p className="text-xs mt-1" style={{ color: '#848E9C' }}>
-            {ts(riskControl.positionValueRatioDesc, language)}
-          </p>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div
-            className="p-4 rounded-lg"
-            style={{ background: '#0B0E11', border: '1px solid #0ECB81' }}
-          >
-            <label className="block text-sm mb-1" style={{ color: '#EAECEF' }}>
-              {ts(riskControl.btcEthPositionValueRatio, language)}
-            </label>
-            <p className="text-xs mb-2" style={{ color: '#848E9C' }}>
-              {ts(riskControl.btcEthPositionValueRatioDesc, language)}
-            </p>
-            <div className="flex items-center gap-2">
-              <span
-                className="w-12 text-center font-mono"
-                style={{ color: '#0ECB81' }}
-              >
-                {config.btc_eth_max_position_value_ratio ?? 5}x
-              </span>
-              <span className="text-xs" style={{ color: '#848E9C' }}>
-                System enforced
-              </span>
+        {/* Position Value Ratio — crypto BTC/ETH + Altcoin tiers. CME futures
+            have no per-tier equity×ratio cap (the gate uses a notional ceiling
+            + contract sizing), so this block is crypto-only; futures get the
+            sizing panel below instead. */}
+        {!isFutures && (
+          <>
+            <div className="mb-2">
+              <p className="text-xs font-medium" style={{ color: '#0ECB81' }}>
+                {ts(riskControl.positionValueRatio, language)}
+              </p>
+              <p className="text-xs mt-1" style={{ color: '#848E9C' }}>
+                {ts(riskControl.positionValueRatioDesc, language)}
+              </p>
             </div>
-          </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div
+                className="p-4 rounded-lg"
+                style={{ background: '#0B0E11', border: '1px solid #0ECB81' }}
+              >
+                <label
+                  className="block text-sm mb-1"
+                  style={{ color: '#EAECEF' }}
+                >
+                  {ts(riskControl.btcEthPositionValueRatio, language)}
+                </label>
+                <p className="text-xs mb-2" style={{ color: '#848E9C' }}>
+                  {ts(riskControl.btcEthPositionValueRatioDesc, language)}
+                </p>
+                <div className="flex items-center gap-2">
+                  <span
+                    className="w-12 text-center font-mono"
+                    style={{ color: '#0ECB81' }}
+                  >
+                    {config.btc_eth_max_position_value_ratio ?? 5}x
+                  </span>
+                  <span className="text-xs" style={{ color: '#848E9C' }}>
+                    System enforced
+                  </span>
+                </div>
+              </div>
 
-          <div
-            className="p-4 rounded-lg"
-            style={{ background: '#0B0E11', border: '1px solid #0ECB81' }}
-          >
-            <label className="block text-sm mb-1" style={{ color: '#EAECEF' }}>
-              {ts(riskControl.altcoinPositionValueRatio, language)}
-            </label>
-            <p className="text-xs mb-2" style={{ color: '#848E9C' }}>
-              {ts(riskControl.altcoinPositionValueRatioDesc, language)}
-            </p>
-            <div className="flex items-center gap-2">
-              <span
-                className="w-12 text-center font-mono"
-                style={{ color: '#0ECB81' }}
+              <div
+                className="p-4 rounded-lg"
+                style={{ background: '#0B0E11', border: '1px solid #0ECB81' }}
               >
-                {config.altcoin_max_position_value_ratio ?? 1}x
-              </span>
-              <span className="text-xs" style={{ color: '#848E9C' }}>
-                System enforced
-              </span>
+                <label
+                  className="block text-sm mb-1"
+                  style={{ color: '#EAECEF' }}
+                >
+                  {ts(riskControl.altcoinPositionValueRatio, language)}
+                </label>
+                <p className="text-xs mb-2" style={{ color: '#848E9C' }}>
+                  {ts(riskControl.altcoinPositionValueRatioDesc, language)}
+                </p>
+                <div className="flex items-center gap-2">
+                  <span
+                    className="w-12 text-center font-mono"
+                    style={{ color: '#0ECB81' }}
+                  >
+                    {config.altcoin_max_position_value_ratio ?? 1}x
+                  </span>
+                  <span className="text-xs" style={{ color: '#848E9C' }}>
+                    System enforced
+                  </span>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          </>
+        )}
+
+        {/* Futures sizing — replaces the crypto value-ratio tiers for CME
+            futures (contract-based; notional ceiling = equity × 20). */}
+        {isFutures && (
+          <>
+            <div className="mb-2">
+              <p className="text-xs font-medium" style={{ color: '#0ECB81' }}>
+                {ts(riskControl.futuresSizing, language)}
+              </p>
+              <p className="text-xs mt-1" style={{ color: '#848E9C' }}>
+                {ts(riskControl.futuresSizingDesc, language)}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div
+                className="p-4 rounded-lg"
+                style={{ background: '#0B0E11', border: '1px solid #0ECB81' }}
+              >
+                <label
+                  className="block text-sm mb-1"
+                  style={{ color: '#EAECEF' }}
+                >
+                  {ts(riskControl.futuresNotionalCeiling, language)}
+                </label>
+                <p className="text-xs mb-2" style={{ color: '#848E9C' }}>
+                  {ts(riskControl.futuresNotionalCeilingDesc, language)}
+                </p>
+                <div className="flex items-center gap-2">
+                  <span
+                    className="w-12 text-center font-mono"
+                    style={{ color: '#0ECB81' }}
+                  >
+                    20x
+                  </span>
+                  <span className="text-xs" style={{ color: '#848E9C' }}>
+                    System enforced
+                  </span>
+                </div>
+              </div>
+
+              <div
+                className="p-4 rounded-lg"
+                style={{ background: '#0B0E11', border: '1px solid #0ECB81' }}
+              >
+                <label
+                  className="block text-sm mb-1"
+                  style={{ color: '#EAECEF' }}
+                >
+                  {ts(riskControl.futuresContractSizing, language)}
+                </label>
+                <p className="text-xs mb-2" style={{ color: '#848E9C' }}>
+                  {ts(riskControl.futuresContractSizingDesc, language)}
+                </p>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs" style={{ color: '#848E9C' }}>
+                    System enforced
+                  </span>
+                </div>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Risk Parameters */}
