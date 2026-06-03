@@ -60,7 +60,9 @@ func (s *Server) handleDecisionAudit(c *gin.Context) {
 		return
 	}
 
-	records, err := trader.GetStore().Decision().GetAuditRecords(traderID, since, limit)
+	// Scope to the selected account when provided (mirrors handleStatistics);
+	// empty → trader-global so crypto + legacy callers are unaffected.
+	records, err := trader.GetStore().Decision().GetAuditRecords(traderID, since, limit, c.Query("account"))
 	if err != nil {
 		SafeInternalError(c, "Get decision audit records", err)
 		return

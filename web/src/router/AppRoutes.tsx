@@ -346,9 +346,15 @@ function DashboardRoute() {
 
   const { data: decisions } = useSWR<DecisionRecord[]>(
     selectedTraderId
-      ? `decisions/latest-${selectedTraderId}-${decisionsLimit}`
+      ? `decisions/latest-${selectedTraderId}-${decisionsLimit}${acctSuffix}`
       : null,
-    () => api.getLatestDecisions(selectedTraderId, decisionsLimit, true),
+    () =>
+      api.getLatestDecisions(
+        selectedTraderId,
+        decisionsLimit,
+        true,
+        selectedAccount
+      ),
     {
       refreshInterval: decisionsPollOff ? 0 : 30000,
       revalidateOnFocus: false,
@@ -395,6 +401,7 @@ function DashboardRoute() {
         status={status}
         account={account}
         accountFailed={accountPollOff}
+        selectedAccount={selectedAccount}
         positions={positions}
         positionsFailed={positionsPollOff}
         decisions={decisions}

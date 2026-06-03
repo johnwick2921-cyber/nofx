@@ -62,7 +62,9 @@ func (s *Server) handleLatestDecisions(c *gin.Context) {
 		}
 	}
 
-	records, err := trader.GetStore().Decision().GetLatestRecords(trader.GetID(), limit)
+	// Scope to the selected account when provided (mirrors handleStatistics);
+	// empty → trader-global so crypto + legacy callers are unaffected.
+	records, err := trader.GetStore().Decision().GetLatestRecords(trader.GetID(), limit, c.Query("account"))
 	if err != nil {
 		SafeInternalError(c, "Get decision log", err)
 		return

@@ -54,12 +54,23 @@ func (s *PositionStore) GetPositionStats(traderID string) (map[string]interface{
 	return stats, nil
 }
 
-// GetFullStats gets complete trading statistics
-func (s *PositionStore) GetFullStats(traderID string) (*TraderStats, error) {
+// GetFullStats gets complete trading statistics, optionally scoped to one
+// account (mirrors GetClosedPositions): account=="" → trader-global (crypto +
+// legacy); account!="" → only that NT account's closed trades, excluding
+// pre-migration rows (account=''). Variadic so existing callers are unchanged.
+func (s *PositionStore) GetFullStats(traderID string, account ...string) (*TraderStats, error) {
 	stats := &TraderStats{}
+	acct := ""
+	if len(account) > 0 {
+		acct = account[0]
+	}
 
 	var count int64
-	if err := s.db.Model(&TraderPosition{}).Where("trader_id = ? AND status = ?", traderID, "CLOSED").Count(&count).Error; err != nil {
+	cq := s.db.Model(&TraderPosition{}).Where("trader_id = ? AND status = ?", traderID, "CLOSED")
+	if acct != "" {
+		cq = cq.Where("account = ?", acct)
+	}
+	if err := cq.Count(&count).Error; err != nil {
 		return nil, err
 	}
 	if count == 0 {
@@ -67,8 +78,11 @@ func (s *PositionStore) GetFullStats(traderID string) (*TraderStats, error) {
 	}
 
 	var positions []TraderPosition
-	err := s.db.Where("trader_id = ? AND status = ?", traderID, "CLOSED").
-		Order("exit_time ASC").
+	pq := s.db.Where("trader_id = ? AND status = ?", traderID, "CLOSED")
+	if acct != "" {
+		pq = pq.Where("account = ?", acct)
+	}
+	err := pq.Order("exit_time ASC").
 		Find(&positions).Error
 	if err != nil {
 		return nil, fmt.Errorf("failed to query position statistics: %w", err)
@@ -127,11 +141,17 @@ type RecentTrade struct {
 	HoldDuration string  `json:"hold_duration"`
 }
 
-// GetRecentTrades gets recent closed trades
-func (s *PositionStore) GetRecentTrades(traderID string, limit int) ([]RecentTrade, error) {
+// GetRecentTrades gets recent closed trades, optionally scoped to one account
+// (mirrors GetClosedPositions): account=="" → trader-global (crypto + legacy);
+// account!="" → only that NT account's trades, excluding pre-migration rows
+// (account=''). Variadic so existing callers stay trader-global unchanged.
+func (s *PositionStore) GetRecentTrades(traderID string, limit int, account ...string) ([]RecentTrade, error) {
 	var positions []TraderPosition
-	err := s.db.Where("trader_id = ? AND status = ?", traderID, "CLOSED").
-		Order("exit_time DESC").
+	q := s.db.Where("trader_id = ? AND status = ?", traderID, "CLOSED")
+	if len(account) > 0 && account[0] != "" {
+		q = q.Where("account = ?", account[0])
+	}
+	err := q.Order("exit_time DESC").
 		Limit(limit).
 		Find(&positions).Error
 	if err != nil {

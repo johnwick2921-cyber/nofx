@@ -223,11 +223,17 @@ func (s *DecisionStore) LogDecision(record *DecisionRecord) error {
 	return nil
 }
 
-// GetLatestRecords gets the latest N records for specified trader (sorted by time in ascending order: old to new)
-func (s *DecisionStore) GetLatestRecords(traderID string, n int) ([]*DecisionRecord, error) {
+// GetLatestRecords gets the latest N records for specified trader (sorted by time in ascending order: old to new),
+// optionally scoped to one account (mirrors GetClosedPositions): account=="" → trader-global
+// (crypto + legacy); account!="" → only that NT account's decisions, excluding pre-migration
+// rows (account=''). Variadic so existing callers stay trader-global unchanged.
+func (s *DecisionStore) GetLatestRecords(traderID string, n int, account ...string) ([]*DecisionRecord, error) {
 	var dbRecords []*DecisionRecordDB
-	err := s.db.Where("trader_id = ?", traderID).
-		Order("timestamp DESC").
+	q := s.db.Where("trader_id = ?", traderID)
+	if len(account) > 0 && account[0] != "" {
+		q = q.Where("account = ?", account[0])
+	}
+	err := q.Order("timestamp DESC").
 		Limit(n).
 		Find(&dbRecords).Error
 	if err != nil {
@@ -358,9 +364,12 @@ func (s *DecisionStore) GetAllStatistics() (*Statistics, error) {
 }
 
 // GetAuditRecords (Plan 4 Task 23) returns decision records for the audit endpoint.
-// Filters: traderID (required), since (UTC inclusive lower bound), limit (capped at maxLimit).
+// Filters: traderID (required), since (UTC inclusive lower bound), limit (capped at maxLimit),
+// and an optional account scope (mirrors GetClosedPositions): account=="" → trader-global
+// (crypto + legacy); account!="" → only that NT account's decisions, excluding pre-migration
+// rows (account=''). Variadic so existing callers stay trader-global unchanged.
 // Returns records ordered by timestamp DESC (newest first).
-func (s *DecisionStore) GetAuditRecords(traderID string, since time.Time, limit int) ([]*DecisionRecord, error) {
+func (s *DecisionStore) GetAuditRecords(traderID string, since time.Time, limit int, account ...string) ([]*DecisionRecord, error) {
 	if limit <= 0 {
 		limit = 100
 	}
@@ -375,6 +384,9 @@ func (s *DecisionStore) GetAuditRecords(traderID string, since time.Time, limit 
 	}
 	if !since.IsZero() {
 		q = q.Where("timestamp >= ?", since.UTC())
+	}
+	if len(account) > 0 && account[0] != "" {
+		q = q.Where("account = ?", account[0])
 	}
 
 	var dbRecords []*DecisionRecordDB

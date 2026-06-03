@@ -516,8 +516,10 @@ func (at *AutoTrader) buildTradingContext() (*kernel.Context, error) {
 
 	// 7. Add recent closed trades (if store is available)
 	if at.store != nil {
-		// Get recent 10 closed trades for AI context
-		recentTrades, err := at.store.Position().GetRecentTrades(at.id, 10)
+		// Get recent 10 closed trades for AI context, scoped to the ACTIVE
+		// account so a post-switch cycle does not carry the old account's
+		// trades into the prompt (empty account → trader-global fallback).
+		recentTrades, err := at.store.Position().GetRecentTrades(at.id, 10, at.currentAccountName())
 		if err != nil {
 			at.logWarnf("⚠️ Failed to get recent trades: %v", err)
 		} else {
@@ -546,8 +548,10 @@ func (at *AutoTrader) buildTradingContext() (*kernel.Context, error) {
 				})
 			}
 		}
-		// Get trading statistics for AI context
-		stats, err := at.store.Position().GetFullStats(at.id)
+		// Get trading statistics for AI context, scoped to the ACTIVE account so
+		// the prompt's aggregate stats reflect the current account (not the old
+		// one after a switch); empty account → trader-global fallback.
+		stats, err := at.store.Position().GetFullStats(at.id, at.currentAccountName())
 		if err != nil {
 			at.logWarnf("⚠️ Failed to get trading stats: %v", err)
 		} else if stats == nil {
