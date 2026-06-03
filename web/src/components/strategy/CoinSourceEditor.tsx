@@ -19,10 +19,6 @@ interface CoinSourceEditorProps {
   onChange: (config: CoinSourceConfig) => void
   disabled?: boolean
   language: string
-  // CME futures trade a single NT8 instrument — the AI500 / OI-ranking crypto
-  // data-provider sources have no futures equivalent, so only Static List is
-  // shown for futures (crypto keeps all four).
-  isFutures?: boolean
 }
 
 export function CoinSourceEditor({
@@ -30,21 +26,16 @@ export function CoinSourceEditor({
   onChange,
   disabled,
   language,
-  isFutures = false,
 }: CoinSourceEditorProps) {
   const [newCoin, setNewCoin] = useState('')
   const [newExcludedCoin, setNewExcludedCoin] = useState('')
 
-  const allSourceTypes = [
+  const sourceTypes = [
     { value: 'static', icon: List, color: '#848E9C' },
     { value: 'ai500', icon: Database, color: '#F0B90B' },
     { value: 'oi_top', icon: TrendingUp, color: '#0ECB81' },
     { value: 'oi_low', icon: TrendingDown, color: '#F6465D' },
   ] as const
-  // Futures: only the Static List source (single NT8 instrument); crypto: all 4.
-  const sourceTypes = isFutures
-    ? allSourceTypes.filter((s) => s.value === 'static')
-    : allSourceTypes
 
   // xyz dex assets (stocks, forex, commodities) - should NOT get USDT suffix
   const xyzDexAssets = new Set([
@@ -202,9 +193,7 @@ export function CoinSourceEditor({
         <label className="block text-sm font-medium mb-3 text-nofx-text">
           {ts(coinSource.sourceType, language)}
         </label>
-        <div
-          className={`grid ${isFutures ? 'grid-cols-1' : 'grid-cols-4'} gap-2`}
-        >
+        <div className="grid grid-cols-4 gap-2">
           {sourceTypes.map(({ value, icon: Icon, color }) => (
             <button
               key={value}
@@ -268,7 +257,7 @@ export function CoinSourceEditor({
                 value={newCoin}
                 onChange={(e) => setNewCoin(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAddCoin()}
-                placeholder={isFutures ? 'MNQ, NQ, ES...' : 'BTC, ETH, SOL...'}
+                placeholder="BTC, ETH, SOL..."
                 className="flex-1 px-4 py-2 rounded-lg bg-nofx-bg border border-nofx-gold/20 text-nofx-text"
               />
               <button
@@ -339,7 +328,7 @@ export function CoinSourceEditor({
       </div>
 
       {/* AI500 Options - only for ai500 mode */}
-      {!isFutures && config.source_type === 'ai500' && (
+      {config.source_type === 'ai500' && (
         <div className="p-4 rounded-lg bg-nofx-gold/5 border border-nofx-gold/20">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -397,7 +386,7 @@ export function CoinSourceEditor({
       )}
 
       {/* OI Top Options - only for oi_top mode */}
-      {!isFutures && config.source_type === 'oi_top' && (
+      {config.source_type === 'oi_top' && (
         <div className="p-4 rounded-lg bg-nofx-success/5 border border-nofx-success/20">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -456,7 +445,7 @@ export function CoinSourceEditor({
       )}
 
       {/* OI Low Options - only for oi_low mode */}
-      {!isFutures && config.source_type === 'oi_low' && (
+      {config.source_type === 'oi_low' && (
         <div className="p-4 rounded-lg bg-nofx-danger/5 border border-nofx-danger/20">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">

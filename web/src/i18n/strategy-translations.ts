@@ -392,39 +392,6 @@ export const riskControl = {
     en: 'Position notional value / equity, enforced by code',
     es: 'Valor nominal / equity',
   },
-  // CME futures sizing — replaces the crypto BTC/ETH+Altcoin value-ratio tiers.
-  // Futures are sized in contracts (point value); a notional ceiling caps gross
-  // exposure. The risk gate uses equity × 20 for CME symbols (engine_position.go).
-  futuresSizing: {
-    zh: '期货合约 sizing（代码强制）',
-    en: 'Futures Sizing (CODE ENFORCED)',
-    es: 'Dimensionamiento de Futuros (CÓDIGO)',
-  },
-  futuresSizingDesc: {
-    zh: '按合约张数计算；名义价值上限限制总敞口',
-    en: 'Sized in contracts; a notional ceiling caps gross exposure',
-    es: 'Por contratos; un techo nocional limita la exposición',
-  },
-  futuresNotionalCeiling: {
-    zh: '名义价值上限',
-    en: 'Notional Ceiling',
-    es: 'Techo Nocional',
-  },
-  futuresNotionalCeilingDesc: {
-    zh: '单仓最大名义价值 = 净值 × 20（防呆上限）',
-    en: 'Max position notional = equity × 20 (sanity cap)',
-    es: 'Nocional máx = equity × 20 (tope de seguridad)',
-  },
-  futuresContractSizing: {
-    zh: '合约张数计算',
-    en: 'Contract Sizing',
-    es: 'Tamaño por Contrato',
-  },
-  futuresContractSizingDesc: {
-    zh: '按品种点值换算为合约张数（NT8 instrument_info）',
-    en: "Sized in contracts via the instrument's point value (NT8 instrument_info)",
-    es: 'Por el valor del punto del instrumento (NT8 instrument_info)',
-  },
   btcEthPositionValueRatio: {
     zh: 'BTC/ETH 仓位价值比例',
     en: 'BTC/ETH Position Value Ratio',
