@@ -12,6 +12,7 @@ import {
 import type { CoinSourceConfig } from '../../types'
 import { coinSource, ts } from '../../i18n/strategy-translations'
 import { NofxSelect } from '../ui/select'
+import { isCMEFutures } from '../../lib/instrument'
 
 interface CoinSourceEditorProps {
   config: CoinSourceConfig
@@ -80,49 +81,8 @@ export function CoinSourceEditor({
     return xyzDexAssets.has(base)
   }
 
-  // CME futures roots (Phase 1 recognition) — real futures symbols, NOT crypto, so
-  // they must NOT get a "USDT" suffix (ES → ES, not ESUSDT). Each is its own root:
-  // micros and minis track the same underlying but differ in contract size/value.
-  // Mirrors the Go market.cmeFuturesRoots / store.cmeFuturesRootsStore tables.
-  const cmeFuturesRoots = new Set([
-    'NQ',
-    'MNQ',
-    'ES',
-    'MES',
-    'RTY',
-    'M2K',
-    'YM',
-    'MYM',
-    'CL',
-    'MCL',
-    'NG',
-    'GC',
-    'MGC',
-    'SI',
-    'ZB',
-    'ZN',
-    'ZF',
-    'ZT',
-  ])
-  const cmeMonthCodes = 'FGHJKMNQUVXZ'
-  const isCMEFutures = (symbol: string): boolean => {
-    const s = symbol.toUpperCase().trim()
-    if (s.includes('.C.')) return true // Databento continuous form (NQ.c.0, uppercased here)
-    if (cmeFuturesRoots.has(s)) return true
-    for (const root of cmeFuturesRoots) {
-      if (s.startsWith(root + '.') || s.startsWith(root + ' ')) return true
-      // contract-code form <ROOT><month-letter><year-digit>, e.g. MNQU6, NGF6
-      if (
-        s.length === root.length + 2 &&
-        s.startsWith(root) &&
-        cmeMonthCodes.includes(s[root.length]) &&
-        /[0-9]/.test(s[root.length + 1])
-      ) {
-        return true
-      }
-    }
-    return false
-  }
+  // CME-futures recognizer (Phase 1) now lives in web/src/lib/instrument.ts so the
+  // Strategy editors can condition crypto-only UI on it too — isCMEFutures imported.
 
   const MAX_STATIC_COINS = 10
 
