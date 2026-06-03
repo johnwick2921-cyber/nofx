@@ -452,6 +452,12 @@ export const riskControl = {
     en: 'Minimum notional value in USDT',
     es: 'Valor mínimo en USDT',
   },
+  // CME futures settle in USD — shown instead of the USDT description above.
+  minPositionSizeDescFutures: {
+    zh: 'USD 最小名义价值',
+    en: 'Minimum notional value in USD',
+    es: 'Valor mínimo en USD',
+  },
   minConfidence: {
     zh: '最小信心度',
     en: 'Min Confidence',
@@ -556,6 +562,12 @@ export const indicator = {
     zh: '持仓量、资金费率等市场情绪数据',
     en: 'OI, funding rate and market sentiment data',
     es: 'OI, funding rate',
+  },
+  // CME futures have no funding rate — subtitle drops it (OI still applies).
+  marketSentimentDescFutures: {
+    zh: '持仓量等市场情绪数据',
+    en: 'OI and market sentiment data',
+    es: 'OI y sentimiento de mercado',
   },
   quantData: { zh: '量化数据', en: 'Quant Data', es: 'Datos Quant' },
   quantDataDesc: {

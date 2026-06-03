@@ -7,6 +7,9 @@ interface RiskControlEditorProps {
   onChange: (config: RiskControlConfig) => void
   disabled?: boolean
   language: string
+  // CME futures (e.g. MNQ) size by contract count, not exchange leverage, and
+  // settle in USD — so the crypto leverage tiers are hidden and "USDT" → "USD".
+  isFutures?: boolean
 }
 
 export function RiskControlEditor({
@@ -14,6 +17,7 @@ export function RiskControlEditor({
   onChange,
   disabled,
   language,
+  isFutures = false,
 }: RiskControlEditorProps) {
   const updateField = <K extends keyof RiskControlConfig>(
     key: K,
@@ -57,75 +61,95 @@ export function RiskControlEditor({
           </div>
         </div>
 
-        {/* Trading Leverage (Exchange) */}
-        <div className="mb-2">
-          <p className="text-xs font-medium mb-2" style={{ color: '#F0B90B' }}>
-            {ts(riskControl.tradingLeverage, language)}
-          </p>
-        </div>
-        <div className="grid grid-cols-2 gap-4 mb-4">
-          <div
-            className="p-4 rounded-lg"
-            style={{ background: '#0B0E11', border: '1px solid #2B3139' }}
-          >
-            <label className="block text-sm mb-1" style={{ color: '#EAECEF' }}>
-              {ts(riskControl.btcEthLeverage, language)}
-            </label>
-            <p className="text-xs mb-2" style={{ color: '#848E9C' }}>
-              {ts(riskControl.btcEthLeverageDesc, language)}
-            </p>
-            <div className="flex items-center gap-2">
-              <input
-                type="range"
-                value={config.btc_eth_max_leverage ?? 5}
-                onChange={(e) =>
-                  updateField('btc_eth_max_leverage', parseInt(e.target.value))
-                }
-                disabled={disabled}
-                min={1}
-                max={20}
-                className="flex-1 accent-yellow-500"
-              />
-              <span
-                className="w-12 text-center font-mono"
+        {/* Trading Leverage (Exchange) — crypto-only; CME futures have no
+            exchange leverage (contract sizing handles exposure). */}
+        {!isFutures && (
+          <>
+            <div className="mb-2">
+              <p
+                className="text-xs font-medium mb-2"
                 style={{ color: '#F0B90B' }}
               >
-                {config.btc_eth_max_leverage ?? 5}x
-              </span>
+                {ts(riskControl.tradingLeverage, language)}
+              </p>
             </div>
-          </div>
+            <div className="grid grid-cols-2 gap-4 mb-4">
+              <div
+                className="p-4 rounded-lg"
+                style={{ background: '#0B0E11', border: '1px solid #2B3139' }}
+              >
+                <label
+                  className="block text-sm mb-1"
+                  style={{ color: '#EAECEF' }}
+                >
+                  {ts(riskControl.btcEthLeverage, language)}
+                </label>
+                <p className="text-xs mb-2" style={{ color: '#848E9C' }}>
+                  {ts(riskControl.btcEthLeverageDesc, language)}
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="range"
+                    value={config.btc_eth_max_leverage ?? 5}
+                    onChange={(e) =>
+                      updateField(
+                        'btc_eth_max_leverage',
+                        parseInt(e.target.value)
+                      )
+                    }
+                    disabled={disabled}
+                    min={1}
+                    max={20}
+                    className="flex-1 accent-yellow-500"
+                  />
+                  <span
+                    className="w-12 text-center font-mono"
+                    style={{ color: '#F0B90B' }}
+                  >
+                    {config.btc_eth_max_leverage ?? 5}x
+                  </span>
+                </div>
+              </div>
 
-          <div
-            className="p-4 rounded-lg"
-            style={{ background: '#0B0E11', border: '1px solid #2B3139' }}
-          >
-            <label className="block text-sm mb-1" style={{ color: '#EAECEF' }}>
-              {ts(riskControl.altcoinLeverage, language)}
-            </label>
-            <p className="text-xs mb-2" style={{ color: '#848E9C' }}>
-              {ts(riskControl.altcoinLeverageDesc, language)}
-            </p>
-            <div className="flex items-center gap-2">
-              <input
-                type="range"
-                value={config.altcoin_max_leverage ?? 5}
-                onChange={(e) =>
-                  updateField('altcoin_max_leverage', parseInt(e.target.value))
-                }
-                disabled={disabled}
-                min={1}
-                max={20}
-                className="flex-1 accent-yellow-500"
-              />
-              <span
-                className="w-12 text-center font-mono"
-                style={{ color: '#F0B90B' }}
+              <div
+                className="p-4 rounded-lg"
+                style={{ background: '#0B0E11', border: '1px solid #2B3139' }}
               >
-                {config.altcoin_max_leverage ?? 5}x
-              </span>
+                <label
+                  className="block text-sm mb-1"
+                  style={{ color: '#EAECEF' }}
+                >
+                  {ts(riskControl.altcoinLeverage, language)}
+                </label>
+                <p className="text-xs mb-2" style={{ color: '#848E9C' }}>
+                  {ts(riskControl.altcoinLeverageDesc, language)}
+                </p>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="range"
+                    value={config.altcoin_max_leverage ?? 5}
+                    onChange={(e) =>
+                      updateField(
+                        'altcoin_max_leverage',
+                        parseInt(e.target.value)
+                      )
+                    }
+                    disabled={disabled}
+                    min={1}
+                    max={20}
+                    className="flex-1 accent-yellow-500"
+                  />
+                  <span
+                    className="w-12 text-center font-mono"
+                    style={{ color: '#F0B90B' }}
+                  >
+                    {config.altcoin_max_leverage ?? 5}x
+                  </span>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          </>
+        )}
 
         {/* Position Value Ratio (Risk Control - CODE ENFORCED) */}
         <div className="mb-2">
@@ -211,7 +235,10 @@ export function RiskControlEditor({
                 type="number"
                 value={config.min_risk_reward_ratio ?? 3}
                 onChange={(e) =>
-                  updateField('min_risk_reward_ratio', parseFloat(e.target.value) || 3)
+                  updateField(
+                    'min_risk_reward_ratio',
+                    parseFloat(e.target.value) || 3
+                  )
                 }
                 disabled={disabled}
                 min={1}
@@ -238,7 +265,10 @@ export function RiskControlEditor({
               {ts(riskControl.maxMarginUsageDesc, language)}
             </p>
             <div className="flex items-center gap-2">
-              <span className="w-12 text-center font-mono" style={{ color: '#0ECB81' }}>
+              <span
+                className="w-12 text-center font-mono"
+                style={{ color: '#0ECB81' }}
+              >
                 {Math.round((config.max_margin_usage ?? 0.9) * 100)}%
               </span>
               <span className="text-xs" style={{ color: '#848E9C' }}>
@@ -267,14 +297,19 @@ export function RiskControlEditor({
               {ts(riskControl.minPositionSize, language)}
             </label>
             <p className="text-xs mb-2" style={{ color: '#848E9C' }}>
-              {ts(riskControl.minPositionSizeDesc, language)}
+              {ts(
+                isFutures
+                  ? riskControl.minPositionSizeDescFutures
+                  : riskControl.minPositionSizeDesc,
+                language
+              )}
             </p>
             <div className="flex items-center gap-2">
               <span className="font-mono text-lg" style={{ color: '#0ECB81' }}>
                 {config.min_position_size ?? 12}
               </span>
               <span className="ml-2" style={{ color: '#848E9C' }}>
-                USDT
+                {isFutures ? 'USD' : 'USDT'}
               </span>
               <span className="text-xs" style={{ color: '#848E9C' }}>
                 System enforced
@@ -304,7 +339,10 @@ export function RiskControlEditor({
                 max={100}
                 className="flex-1 accent-green-500"
               />
-              <span className="w-12 text-center font-mono" style={{ color: '#0ECB81' }}>
+              <span
+                className="w-12 text-center font-mono"
+                style={{ color: '#0ECB81' }}
+              >
                 {config.min_confidence ?? 75}
               </span>
             </div>

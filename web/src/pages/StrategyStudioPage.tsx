@@ -38,6 +38,7 @@ import type {
   GridStrategyConfig,
 } from '../types'
 import { confirmToast, notify } from '../lib/notify'
+import { isCMEFutures } from '../lib/instrument'
 import { CoinSourceEditor } from '../components/strategy/CoinSourceEditor'
 import { IndicatorEditor } from '../components/strategy/IndicatorEditor'
 import { RiskControlEditor } from '../components/strategy/RiskControlEditor'
@@ -191,7 +192,11 @@ export function StrategyStudioPage() {
       selectedStrategyIDRef.current = nextSelected?.id || ''
 
       if (!hasChangesRef.current || !preservedSelection) {
-        setEditingConfig(nextSelected?.config ? normalizeStrategyConfig(nextSelected.config) : null)
+        setEditingConfig(
+          nextSelected?.config
+            ? normalizeStrategyConfig(nextSelected.config)
+            : null
+        )
       }
       if (!nextSelected) {
         setEditingConfig(null)
@@ -696,6 +701,15 @@ export function StrategyStudioPage() {
   const currentStrategyType = editingConfig?.strategy_type || 'ai_trading'
   const currentAIConfig = editingConfig ? getAIConfig(editingConfig) : null
 
+  // The strategy's active instrument drives whether the editors show crypto-only
+  // UI (leverage tiers, USDT labels, funding-rate). A CME futures symbol in the
+  // coin source (e.g. MNQ) hides those; a crypto symbol keeps them. Derived from
+  // the first static coin — the same field the Go engine reads to pick the
+  // futures vs. crypto prompt (api/strategy preview passes static_coins[0]).
+  const isFuturesStrategy = isCMEFutures(
+    currentAIConfig?.coin_source?.static_coins?.[0]
+  )
+
   const configSections = [
     // Grid Config - only for grid_trading
     {
@@ -741,6 +755,7 @@ export function StrategyStudioPage() {
           onChange={(indicators) => updateAIConfig('indicators', indicators)}
           disabled={selectedStrategy?.is_default}
           language={language}
+          isFutures={isFuturesStrategy}
         />
       ),
     },
@@ -753,9 +768,12 @@ export function StrategyStudioPage() {
       content: currentAIConfig && (
         <RiskControlEditor
           config={currentAIConfig.risk_control}
-          onChange={(riskControl) => updateAIConfig('risk_control', riskControl)}
+          onChange={(riskControl) =>
+            updateAIConfig('risk_control', riskControl)
+          }
           disabled={selectedStrategy?.is_default}
           language={language}
+          isFutures={isFuturesStrategy}
         />
       ),
     },

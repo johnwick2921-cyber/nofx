@@ -1051,6 +1051,7 @@ export function TraderDashboardPage({
                     decision={decision}
                     language={language}
                     onSymbolClick={handleSymbolClick}
+                    isFutures={isFutures}
                   />
                 ))
               ) : decisionsFailed ? (
