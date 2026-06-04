@@ -8997,3 +8997,38 @@ a reconcile tick.
 still OPEN when reconcile runs → matches `status='OPEN'` → `reconcile_flat` → UI "—".
 So the honest-unknown fallback (commit `0c245344`) remains for the real feed-down case;
 this PART-1 fix simply stops reconcile from destroying the closes that WERE captured.
+
+## 2026-06-04 — PART 1b: flat-grace window closes the reconcile-FIRST race (SHIPPED, commit `6afb5adf`)
+
+**STATUS:** SHIPPED. Go-only, reconcile-side; `close_sync` BYTE-IDENTICAL; PART-1a
+status guard retained; crypto untouched. Go rebuild + restart done (clean).
+
+**PART-1a premature-claim correction:** PART 1a (`7786d845`, the status guard) was
+reported "live-verified" off a **single** close (row 123) — that was premature. The
+fuller data showed the guard only fixed the **close-sync-FIRST** ordering; **5 of 8**
+post-1a captured closes (rows 125–129) were **still** lost to `reconcile_flat $0` —
+matched by entry-price to their `📕` real-P&L log lines — via the **reconcile-FIRST**
+ordering (5 `🔧 closed orphan` / **0** `✓ already closed` lines = the guard's no-op
+branch never fired; reconcile always acted on a still-OPEN row).
+
+**Root cause (reconcile-FIRST):** NT8 publishes a **flat** positions snapshot (which
+reconcile's 20s poll reads) at/around the instant it sends the `position_close` frame,
+but that frame reaches close-sync a beat later. Reconcile orphan-closed the still-OPEN
+row first → close-sync then found no open row and **skipped** → the real ×point-value
+P&L was lost.
+
+**Fix (PART 1b):** a **flat-grace window**. [`trader/ninjatrader/tcp_trader.go`] adds a
+`flatSince` map (row id → first-seen-flat ms; reconcile-goroutine-only, no lock).
+[`trader/ninjatrader/reconcile.go`] `reconcilePositions` now, on first seeing a row
+NT8-flat-but-DB-open, records the time and **defers** the orphan-close; it only
+orphan-closes after the row has been continuously flat ≥ **`flatGraceMs` = 60s** (3
+reconcile cycles). close-sync records the real close within seconds → the row goes
+`CLOSED/sync` and is pruned from `flatSince` next pass. A **genuinely-uncaptured** row
+(no frame ever) is still OPEN after 60s → orphaned → `reconcile_flat` "—" (PART-2
+fallback, correct). The **PART-1a status guard stays** (covers the last-moment
+close-sync-first DB race). Together both orderings are closed.
+
+**Verify:** deterministic logic (defer-then-orphan) + a **multi-close** live watcher
+(target ≥4 captured closes keeping `sync`/real ×$2 P&L — NOT generalizing from one,
+per the PART-1a lesson). `go build`/`go vet`/tests green; restart clean, 0 "unknown
+frame type".
