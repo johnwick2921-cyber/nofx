@@ -8962,3 +8962,38 @@ rows. **Uncommitted-edits audit:** the session-start snapshot listed
 `store/position_query.go` / `store/decision.go` / `auto_trader_loop.go` as modified,
 but the working tree was **clean** (already committed in `24634b5a`) — nothing
 collided, nothing swept in.
+
+## 2026-06-04 — PART 1: reconcile status-guard stops the overwrite of close-sync's real P&L (SHIPPED, commit `7786d845`)
+
+**STATUS:** SHIPPED. Go-only, no C#. Additive — `close_sync` byte-identical, crypto
+untouched. Go rebuild + `./nofx-bin` restart done (clean, 0 "unknown frame type").
+
+**Root cause (PART-1, log-confirmed — refutes "missed frame"):** the `position_close`
+frame is NOT missed. close-sync **captures the real ×point-value P&L** on it (it
+commits first, event-driven) — then the 20s reconcile, working off a **stale
+open-positions snapshot**, **overwrites the same row** with the `$0` `reconcile_flat`
+placeholder. `ClosePosition` updated `WHERE id=?` with **no status guard**, so the
+stale write clobbered the just-recorded real close. Caught live: row=122 logged
+`pnl=2.00` at 08:14:57, reconcile orphan-closed it 20s later → DB `reconcile_flat $0`.
+The race is close-sync-first / reconcile-overwrites every time (logs show close-sync's
+`📕` precedes reconcile's `🔧` by up to ~20s). Not decision-specific — an SL exit was
+clobbered too.
+
+**Fix (Go-only):** [`store/position.go`] `ClosePosition` now updates
+`WHERE id=? AND status='OPEN'` and returns whether a row was actually closed. Once
+close-sync sets the row `CLOSED/sync`, reconcile's guarded UPDATE matches **0 rows**
+→ the real P&L stands (close-sync wins). [`trader/ninjatrader/reconcile.go`] uses the
+bool to log honestly: `🔧 closed orphan` only when it really closed a still-OPEN row,
+else `✓ already closed by close-sync (kept real P&L)`. `ClosePosition`'s **sole
+caller is reconcile** (verified), so close-sync (`ClosePositionFully`) and the crypto
+path are unaffected.
+
+**Proof (DB):** for CLOSED sync row id=121, the OLD `WHERE id=121` matches **1** (would
+clobber); the NEW `WHERE id=121 AND status='OPEN'` matches **0** (no-op, real P&L kept).
+A live-close watcher confirms the next captured close keeps `sync`/real ×$2 P&L through
+a reconcile tick.
+
+**PART 2 intact:** a genuinely-uncaptured close (no `position_close` frame at all) is
+still OPEN when reconcile runs → matches `status='OPEN'` → `reconcile_flat` → UI "—".
+So the honest-unknown fallback (commit `0c245344`) remains for the real feed-down case;
+this PART-1 fix simply stops reconcile from destroying the closes that WERE captured.
