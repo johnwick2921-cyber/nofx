@@ -119,15 +119,24 @@ func (t *TCPTrader) reconcilePositions(traderID string, st *store.Store) {
 			if nowMs-row.EntryTime < orphanGraceMs {
 				continue
 			}
-			// NT8 is FLAT but the exit fill was never captured (close-sync missed the
-			// position_close frame). We must clear the phantom, but the real exit price
-			// and realized P&L are UNKNOWN — record the marker (entry-as-exit / 0 are
-			// placeholders only). Every P&L stat/UI treats this as "unknown", NOT a
-			// false $0 breakeven. Never fabricate an exit NT8 didn't give us.
-			if err := st.Position().ClosePosition(row.ID, row.EntryPrice, "reconcile", 0, 0, store.CloseReasonReconcileFlat); err != nil {
+			// NT8 is FLAT for a row still OPEN in the DB. Either close-sync already
+			// recorded the real exit (then this is a no-op — the status guard keeps
+			// close-sync's win), or the position_close frame was genuinely never
+			// captured. ClosePosition is guarded on status='OPEN', so it can ONLY
+			// close a row close-sync hasn't — never clobber a real-P&L close. For a
+			// genuinely-uncaptured row the exit price + P&L are UNKNOWN, so we record
+			// the marker (entry-as-exit / 0 are placeholders); the UI shows "—", not a
+			// false $0. Never fabricate an exit NT8 didn't give us.
+			closed, err := st.Position().ClosePosition(row.ID, row.EntryPrice, "reconcile", 0, 0, store.CloseReasonReconcileFlat)
+			switch {
+			case err != nil:
 				logger.Warnf("ninjatrader/tcp: reconcile orphan-close failed (row %d): %v", row.ID, err)
-			} else {
+			case closed:
 				logger.Infof("🔧 reconcile: closed orphan %s %s (NT8 flat) row=%d", row.Symbol, row.Side, row.ID)
+			default:
+				// Row was already closed by close-sync between the snapshot and now —
+				// the status guard preserved close-sync's real ×pv P&L. No clobber.
+				logger.Infof("✓ reconcile: row=%d already closed by close-sync (kept real P&L); skip", row.ID)
 			}
 		}
 	}
