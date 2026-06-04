@@ -92,6 +92,16 @@ func formatDurationMs(ms int64) string {
 	return fmt.Sprintf("%dd%dh", days, remainingHours)
 }
 
+// CloseReasonReconcileFlat marks an NT8 orphan-close written by the position
+// reconcile loop when NT8 reports FLAT for a position whose real exit fill was
+// never captured by close-sync. Such a row has NO real exit price and NO known
+// realized P&L — reconcile.go records entry-as-exit / 0 only as a placeholder to
+// clear the phantom. P&L is genuinely UNKNOWN, so every P&L presenter/aggregator
+// treats this marker as "unknown" (excluded from stats; rendered "—" in the UI)
+// rather than a false breakeven. realized_pnl is a non-nullable float64, so the
+// marker — not a NULL/sentinel value — is the single source of truth for "unknown".
+const CloseReasonReconcileFlat = "reconcile_flat"
+
 // TraderPosition position record
 // All time fields use int64 millisecond timestamps (UTC) to avoid timezone issues
 type TraderPosition struct {

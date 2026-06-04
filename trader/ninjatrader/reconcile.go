@@ -119,7 +119,12 @@ func (t *TCPTrader) reconcilePositions(traderID string, st *store.Store) {
 			if nowMs-row.EntryTime < orphanGraceMs {
 				continue
 			}
-			if err := st.Position().ClosePosition(row.ID, row.EntryPrice, "reconcile", 0, 0, "reconcile_flat"); err != nil {
+			// NT8 is FLAT but the exit fill was never captured (close-sync missed the
+			// position_close frame). We must clear the phantom, but the real exit price
+			// and realized P&L are UNKNOWN — record the marker (entry-as-exit / 0 are
+			// placeholders only). Every P&L stat/UI treats this as "unknown", NOT a
+			// false $0 breakeven. Never fabricate an exit NT8 didn't give us.
+			if err := st.Position().ClosePosition(row.ID, row.EntryPrice, "reconcile", 0, 0, store.CloseReasonReconcileFlat); err != nil {
 				logger.Warnf("ninjatrader/tcp: reconcile orphan-close failed (row %d): %v", row.ID, err)
 			} else {
 				logger.Infof("🔧 reconcile: closed orphan %s %s (NT8 flat) row=%d", row.Symbol, row.Side, row.ID)

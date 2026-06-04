@@ -65,8 +65,11 @@ func (s *PositionStore) GetFullStats(traderID string, account ...string) (*Trade
 		acct = account[0]
 	}
 
+	// Exclude reconcile-flat orphan closes: their realized P&L is UNKNOWN (exit
+	// fill never captured), not a real $0 — counting them would skew win-rate /
+	// total P&L. They still appear in the position LIST (rendered "—").
 	var count int64
-	cq := s.db.Model(&TraderPosition{}).Where("trader_id = ? AND status = ?", traderID, "CLOSED")
+	cq := s.db.Model(&TraderPosition{}).Where("trader_id = ? AND status = ? AND close_reason <> ?", traderID, "CLOSED", CloseReasonReconcileFlat)
 	if acct != "" {
 		cq = cq.Where("account = ?", acct)
 	}
@@ -78,7 +81,7 @@ func (s *PositionStore) GetFullStats(traderID string, account ...string) (*Trade
 	}
 
 	var positions []TraderPosition
-	pq := s.db.Where("trader_id = ? AND status = ?", traderID, "CLOSED")
+	pq := s.db.Where("trader_id = ? AND status = ? AND close_reason <> ?", traderID, "CLOSED", CloseReasonReconcileFlat)
 	if acct != "" {
 		pq = pq.Where("account = ?", acct)
 	}
@@ -255,7 +258,8 @@ type SymbolStats struct {
 // GetSymbolStats gets per-symbol trading statistics
 func (s *PositionStore) GetSymbolStats(traderID string, limit int) ([]SymbolStats, error) {
 	var positions []TraderPosition
-	err := s.db.Where("trader_id = ? AND status = ?", traderID, "CLOSED").Find(&positions).Error
+	// Exclude reconcile-flat orphan closes (unknown P&L — see CloseReasonReconcileFlat).
+	err := s.db.Where("trader_id = ? AND status = ? AND close_reason <> ?", traderID, "CLOSED", CloseReasonReconcileFlat).Find(&positions).Error
 	if err != nil {
 		return nil, fmt.Errorf("failed to query symbol stats: %w", err)
 	}
@@ -395,7 +399,8 @@ type DirectionStats struct {
 // GetDirectionStats analyzes long vs short performance
 func (s *PositionStore) GetDirectionStats(traderID string) ([]DirectionStats, error) {
 	var positions []TraderPosition
-	err := s.db.Where("trader_id = ? AND status = ?", traderID, "CLOSED").Find(&positions).Error
+	// Exclude reconcile-flat orphan closes (unknown P&L — see CloseReasonReconcileFlat).
+	err := s.db.Where("trader_id = ? AND status = ? AND close_reason <> ?", traderID, "CLOSED", CloseReasonReconcileFlat).Find(&positions).Error
 	if err != nil {
 		return nil, fmt.Errorf("failed to query direction stats: %w", err)
 	}
