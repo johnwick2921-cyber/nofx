@@ -8905,3 +8905,60 @@ primary (NinjaTrader) broker.
   x-axis `toLocaleString('zh-CN')`.
 - **"Reset to default" writes Chinese prompt text for EN users**
   (`PromptSectionsEditor.tsx:14-43`).
+
+## 2026-06-04 — Trade-History P&L: honest "unknown" for reconcile-flat closes (SHIPPED, commit `0c245344`)
+
+**STATUS:** SHIPPED (PART 2 of 2). NT8-only, additive, crypto byte-identical,
+`close_sync` (the real-P&L path) untouched. Go rebuild + `./nofx-bin` restart
+done (clean start, 0 "unknown frame type"); FE `tsc` clean.
+
+**Symptom:** Dashboard → Trade History showed AI-decision closes at **P&L = $0**.
+
+**Root cause (diagnosed read-only, then confirmed at file:line):** the close
+pipeline is correct on the `close_sync` path — 80 rows recorded real ×point-value
+P&L (e.g. MNQ SHORT 30456.75→30473.25 = 16.5pt × $2 = −$33.00). The zero-P&L rows
+are **exclusively** `close_reason='reconcile_flat'` (≈24-25 rows): when a
+decision-driven flatten's NT8 `position_close` frame is never captured
+(`auto_trader_decision.go:313-325` leaves the row OPEN awaiting it), the 20s
+reconcile finds NT8 flat and orphan-closes the row at **entry price / $0**
+(`reconcile.go:122`) — a placeholder that **falsely reads as breakeven**. So it
+was neither a compute, store, display, nor multiplier bug — it was a reconcile
+placeholder presented as a real $0.
+
+**PART 1 (root cause — make decision closes reliably captured by close-sync):
+SCOPED OUT this pass.** Reliable `position_close` delivery for decision flattens
+is an NT8 **C# AddOn / feed-delivery** matter (or would require fabricating an
+exit) — both forbidden here (no C#; "NT8 is the source of truth, never fabricate
+an exit"). The existing design already retries on the next decision cycle and
+uses reconcile as the safety net. Options for a future pass: (a) C#-side guarantee
+a `position_close` frame for decision flattens; (b) a Go-side await/confirm before
+the cycle returns; (c) on reconcile, query NT8 for the real exit fill (needs bridge
+support). None shipped.
+
+**PART 2 (safety net — honest "unknown", not a false $0): SHIPPED.**
+- Premise refinement (reported): the brief suggested `realized_pnl` NULL/sentinel,
+  but the column is a **non-nullable `float64`** — NULL needs a `*float64` struct
+  change that ripples to every reader (high-cascade) and a numeric sentinel would be
+  silently summed by the stats loops. So the **existing `close_reason='reconcile_flat'`
+  marker** (already persisted, already plumbed to the FE via `trading.ts`) is the
+  single source of truth for "unknown"; every P&L presenter/aggregator now treats it
+  as unknown.
+- **BE** (`store/`): exclude `reconcile_flat` from all closed-position stat
+  aggregators — `GetFullStats`, `GetSymbolStats`, `GetDirectionStats`, and
+  `GetHistorySummary` (recent + streaks). Shared const `store.CloseReasonReconcileFlat`
+  (also wired into `reconcile.go`, de-magicking the literal — no behavior change).
+- **FE** (`PositionHistory.tsx`): render **"—"** (with an "exit not captured" tooltip)
+  for `reconcile_flat` rows instead of `+0.00 / 0.00%`, and exclude them from the
+  footer P&L total. The rows still appear in the list (honest: the close happened,
+  the P&L is unknown).
+- **DB proof (live `data/data.db`):** excluding `reconcile_flat` moves the trader's
+  win-rate from a diluted **35.2% → 46.2%** (over the 80 known-outcome trades;
+  wins=37 / losses=43 and total_pnl unchanged — the excluded rows were $0). The
+  ≈25 unknown closes remain in the position list (→ "—").
+
+**Not changed:** crypto close path (exchange order-sync, returns real P&L — never
+on this reconcile path); `close_sync` real-P&L recording; the 80 correct `sync`
+rows. **Uncommitted-edits audit:** the session-start snapshot listed
+`store/position_query.go` / `store/decision.go` / `auto_trader_loop.go` as modified,
+but the working tree was **clean** (already committed in `24634b5a`) — nothing
+collided, nothing swept in.
