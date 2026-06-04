@@ -32,6 +32,15 @@ const (
 	// orphanGraceMs: a row younger than this is not orphan-closed — its positions
 	// frame (PositionUpdate) may simply not have arrived yet after the open.
 	orphanGraceMs = 120_000
+	// flatGraceMs: once a row is observed NT8-flat-but-DB-open, reconcile waits this
+	// long before orphan-closing it. NT8 publishes a flat positions snapshot at/around
+	// the same instant it sends the position_close frame, but that frame reaches
+	// close-sync a beat later; orphan-closing immediately makes close-sync find no
+	// open row and skip → the real ×pv P&L is lost (the reconcile-FIRST race that the
+	// PART-1a status guard alone did NOT cover). 60s (3 reconcile cycles) is ample
+	// headroom for the frame + close-sync, while bounding how long a genuinely-
+	// uncaptured row lingers before it falls to reconcile_flat "—".
+	flatGraceMs = 60_000
 )
 
 // StartPositionReconcile launches the periodic reconcile goroutine (idempotent
@@ -86,6 +95,10 @@ func (t *TCPTrader) reconcilePositions(traderID string, st *store.Store) {
 		return
 	}
 	nowMs := time.Now().UTC().UnixMilli()
+	if t.flatSince == nil {
+		t.flatSince = make(map[int64]int64)
+	}
+	seenFlat := make(map[int64]bool) // rows observed flat-but-open this pass (for flatSince pruning)
 	for _, row := range rows {
 		// Only judge rows for the account NT8 is currently reporting (avoids
 		// closing another account's positions during a transient account switch).
@@ -119,25 +132,49 @@ func (t *TCPTrader) reconcilePositions(traderID string, st *store.Store) {
 			if nowMs-row.EntryTime < orphanGraceMs {
 				continue
 			}
-			// NT8 is FLAT for a row still OPEN in the DB. Either close-sync already
-			// recorded the real exit (then this is a no-op — the status guard keeps
-			// close-sync's win), or the position_close frame was genuinely never
-			// captured. ClosePosition is guarded on status='OPEN', so it can ONLY
-			// close a row close-sync hasn't — never clobber a real-P&L close. For a
-			// genuinely-uncaptured row the exit price + P&L are UNKNOWN, so we record
-			// the marker (entry-as-exit / 0 are placeholders); the UI shows "—", not a
-			// false $0. Never fabricate an exit NT8 didn't give us.
+			// FLAT-GRACE (the reconcile-FIRST race). NT8 reports this row FLAT in the
+			// snapshot at/around the same instant it sends the position_close frame, but
+			// that frame reaches close-sync a beat later. If we orphan-close the still-
+			// OPEN row now, close-sync then finds no open row and skips → the real ×pv
+			// P&L is lost. So DEFER: on first observing the row flat-but-open, record the
+			// time and skip; only orphan-close after it's been continuously flat
+			// ≥ flatGraceMs (close-sync gets first crack — it closes the row CLOSED/sync
+			// and the next pass prunes it below). A genuinely-uncaptured row (no frame
+			// ever) is still OPEN after the grace → orphaned → reconcile_flat "—".
+			seenFlat[row.ID] = true
+			if t.flatSince[row.ID] == 0 {
+				t.flatSince[row.ID] = nowMs
+				logger.Infof("⏳ reconcile: %s %s row=%d NT8-flat — deferring orphan-close (awaiting close-sync frame)", row.Symbol, row.Side, row.ID)
+				continue
+			}
+			if nowMs-t.flatSince[row.ID] < flatGraceMs {
+				continue // within grace — keep deferring to close-sync
+			}
+			// Past the grace and still flat+open → the position_close frame was
+			// genuinely never captured. Record the honest marker (exit/P&L UNKNOWN →
+			// UI "—"; entry-as-exit / 0 are placeholders). ClosePosition is guarded on
+			// status='OPEN' (PART-1a), so a last-moment close-sync win is still kept.
+			// Never fabricate an exit NT8 didn't give us.
 			closed, err := st.Position().ClosePosition(row.ID, row.EntryPrice, "reconcile", 0, 0, store.CloseReasonReconcileFlat)
+			delete(t.flatSince, row.ID)
 			switch {
 			case err != nil:
 				logger.Warnf("ninjatrader/tcp: reconcile orphan-close failed (row %d): %v", row.ID, err)
 			case closed:
-				logger.Infof("🔧 reconcile: closed orphan %s %s (NT8 flat) row=%d", row.Symbol, row.Side, row.ID)
+				logger.Infof("🔧 reconcile: closed orphan %s %s (NT8 flat ≥%ds, no frame) row=%d", row.Symbol, row.Side, flatGraceMs/1000, row.ID)
 			default:
 				// Row was already closed by close-sync between the snapshot and now —
 				// the status guard preserved close-sync's real ×pv P&L. No clobber.
 				logger.Infof("✓ reconcile: row=%d already closed by close-sync (kept real P&L); skip", row.ID)
 			}
+		}
+	}
+
+	// Prune flat-timers for rows no longer orphan-candidates (close-sync closed them,
+	// or NT8 re-holds them) so the map can't leak and a recycled row id starts fresh.
+	for id := range t.flatSince {
+		if !seenFlat[id] {
+			delete(t.flatSince, id)
 		}
 	}
 }
