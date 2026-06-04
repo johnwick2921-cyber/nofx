@@ -57,6 +57,13 @@ type TCPTrader struct {
 	// re-entrant AutoTrader.Run never spawns a second reconcile goroutine.
 	reconcileOnce sync.Once
 
+	// flatSince tracks, per open-position row id, the first time the reconcile loop
+	// observed it NT8-flat-but-DB-open (Unix ms). It implements the flat-grace
+	// window: reconcile defers orphan-closing a freshly-flat row so close-sync's
+	// position_close frame can arrive and record the real ×pv P&L first. Accessed
+	// ONLY from the single reconcile goroutine (reconcilePositions) → no lock needed.
+	flatSince map[int64]int64
+
 	// Plan 4 Stage 4 — reference to the parent AutoTrader (optional).
 	// Used to notify the AutoTrader when the first account_balance frame arrives.
 	// Set by transport.go after creating the trader.
