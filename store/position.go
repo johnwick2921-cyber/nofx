@@ -207,10 +207,17 @@ func (s *PositionStore) Create(pos *TraderPosition) error {
 	return s.db.Create(pos).Error
 }
 
-// ClosePosition closes position
-func (s *PositionStore) ClosePosition(id int64, exitPrice float64, exitOrderID string, realizedPnL float64, fee float64, closeReason string) error {
+// ClosePosition closes a still-OPEN position. The WHERE clause is guarded on
+// status='OPEN' so a stale-snapshot caller (the NT8 reconcile loop — its sole
+// caller) can NEVER overwrite a row that close-sync already closed with the real
+// ×point-value P&L. This kills the reconcile-overwrites-close-sync race: when
+// close-sync wins (it commits first, event-driven), the row is already CLOSED so
+// this UPDATE matches 0 rows and the real P&L stands. Returns whether a row was
+// actually closed (RowsAffected>0); false means it was already closed (the
+// desired no-op — close-sync's real-P&L close was kept).
+func (s *PositionStore) ClosePosition(id int64, exitPrice float64, exitOrderID string, realizedPnL float64, fee float64, closeReason string) (bool, error) {
 	nowMs := time.Now().UTC().UnixMilli()
-	return s.db.Model(&TraderPosition{}).Where("id = ?", id).Updates(map[string]interface{}{
+	res := s.db.Model(&TraderPosition{}).Where("id = ? AND status = ?", id, "OPEN").Updates(map[string]interface{}{
 		"exit_price":   exitPrice,
 		"exit_order_id": exitOrderID,
 		"exit_time":    nowMs,
@@ -219,7 +226,8 @@ func (s *PositionStore) ClosePosition(id int64, exitPrice float64, exitOrderID s
 		"status":       "CLOSED",
 		"close_reason": closeReason,
 		"updated_at":   nowMs,
-	}).Error
+	})
+	return res.RowsAffected > 0, res.Error
 }
 
 // UpdateEntryPrice overwrites a position's entry price. Used by the NinjaTrader
