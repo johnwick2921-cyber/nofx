@@ -9110,3 +9110,48 @@ type"); `account` column added; gate fires live for "sss". UI pick not exercised
 
 **ACTION REQUIRED (live-behavior change):** "sss" is now **gated** — pick its account
 (Sim101) in the dashboard to resume trading.
+
+## 2026-06-05 — Stage 2 PHASE 1: double-guard the LIVE account out of automated trading (SHIPPED, commit `dedc67f0`)
+
+**STATUS:** Phase 1 SHIPPED (Go live; **C# needs an F5** — see below). Additive; **no
+routing, no wire-frame change** (P2/P3). Crypto + the P&L fixes + the chart-TZ fix + the
+Stage-1 work untouched. Goal: make it **structurally impossible** for an automated order
+to reach the LIVE/funded account (`LFE05060792090061`) BEFORE per-order routing exists.
+
+**STEP A (refutations):** the research's "no typed sim/live property" is **REFUTED** — the
+C# `IsSimAccount` already uses the typed `Account.Simulation` (NT8 8.1+) with a `Sim`-name
+fallback ([VLTraderTCPClient.cs:279-296](#)), so the live account is already typed at
+selection. `NT_ALLOWED_ACCOUNTS` is currently **unset** → the allow-list is inactive (the
+SIM guard is the active rail); set it (e.g. `NT_ALLOWED_ACCOUNTS=Sim101`) to enforce a
+whitelist on top.
+
+**Double-guard (defense-in-depth) — the live account is rejected at BOTH order layers:**
+- **Go gate** ([trader/ninjatrader/tcp_trader.go]): `isAccountTradeable(name)` = the
+  account is **SIM** (per the C#-reported `GetAccountsList` IsSim, i.e. `Account.Simulation`)
+  **AND**, if `NT_ALLOWED_ACCOUNTS` is set, on that allow-list. **Fail-safe:** unknown →
+  false. Enforced at `placeEntry` (the entry-send chokepoint for OpenLong/OpenShort) —
+  refuses to even SEND the frame for a non-tradeable account. The live `LFE…` (IsSim=false)
+  → refused.
+- **C# gate** ([ninjascript/VLTraderTCPClient.cs] HandleSignal, right after the
+  `account==null` check, BEFORE `CreateOrder/Submit`): `if (!IsSimAccount(account))` →
+  reject (the hard live-block); `if (account.Connection == null || account.Connection.Status
+  != ConnectionStatus.Connected)` → reject (no submit to a disconnected account). No
+  fallback to another account. This is the last line before the order hits NT8.
+
+Each gate **independently** blocks the live account (verified by code: Go refuses at send;
+C# refuses at submit). **No per-order routing added** — one connection still trades one
+active account; the guards protect the single active account today and the routed account
+in P5.
+
+**⚠️ C# NEEDS AN F5 (no hot-reload):** the C# guard is in the repo `.cs` but the RUNNING
+NT8 AddOn still has the old binary until you: `cp ninjascript/VLTraderTCPClient.cs` →
+`Documents\NinjaTrader 8\bin\Custom\AddOns\` → **F5** in NT8 → **one clean full NT8
+restart**. Until then the **Go gate alone** is live (it already refuses to send a
+live-account order). *(If the F5 flags `account.Connection.Status`, remove that one line —
+the `IsSimAccount` guard alone still hard-blocks the live account.)*
+
+**Verify:** `go build`/`go vet`/`go test ./store ./trader ./trader/ninjatrader` green;
+restart clean (1 trader, 0 "unknown frame type" — no new frame in P1); "sss" on Sim101
+(SIM, allow-list empty) is **not** falsely blocked (no refusal logged). The live-account
+rejection is **code-verified** (I did not place a live order). Next: P2 = the wire-frame
+`account` field; P3 = the C# multi-account routing + per-account events.
