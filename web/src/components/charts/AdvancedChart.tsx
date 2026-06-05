@@ -9,6 +9,7 @@ import {
   LineSeries,
   HistogramSeries,
   createSeriesMarkers,
+  TickMarkType,
 } from 'lightweight-charts'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { httpClient } from '../../lib/httpClient'
@@ -20,6 +21,13 @@ import {
   type Kline,
 } from '../../utils/indicators'
 import { Settings, BarChart2 } from 'lucide-react'
+
+// CHART_TZ pins the chart's time axis + crosshair to an explicit timezone so the
+// displayed time is deterministic regardless of the viewing browser's locale.
+// lightweight-charts does NO timezone conversion — its time axis defaults to UTC.
+// We render in America/Chicago, which is both the operator's local zone AND the
+// CME exchange zone for the NT8 futures (MNQ) charts, so axis + crosshair agree.
+const CHART_TZ = 'America/Chicago'
 
 // Order marker interface
 interface OrderMarker {
@@ -592,6 +600,44 @@ export function AdvancedChart({
         borderVisible: true,
         rightOffset: 5,
         barSpacing: 8,
+        // Render the X-AXIS tick labels in CHART_TZ. Without this, lightweight-charts
+        // formats the axis in UTC (it does no timezone conversion), so a 05:10 UTC bar
+        // showed "05:10" instead of the local/exchange "00:10". Respect the tick
+        // granularity the library asks for (year/month/day/time).
+        tickMarkFormatter: (time: Time, tickMarkType: TickMarkType): string => {
+          const ms =
+            typeof time === 'number'
+              ? time * 1000
+              : typeof time === 'string'
+                ? new Date(time).getTime() // business-day string "YYYY-MM-DD"
+                : Date.UTC(time.year, time.month - 1, time.day) // BusinessDay
+          const d = new Date(ms)
+          switch (tickMarkType) {
+            case TickMarkType.Year:
+              return d.toLocaleString('zh-CN', {
+                year: 'numeric',
+                timeZone: CHART_TZ,
+              })
+            case TickMarkType.Month:
+              return d.toLocaleString('zh-CN', {
+                month: 'short',
+                timeZone: CHART_TZ,
+              })
+            case TickMarkType.DayOfMonth:
+              return d.toLocaleString('zh-CN', {
+                month: '2-digit',
+                day: '2-digit',
+                timeZone: CHART_TZ,
+              })
+            default: // Time / TimeWithSeconds — intraday ticks
+              return d.toLocaleString('zh-CN', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false,
+                timeZone: CHART_TZ,
+              })
+          }
+        },
       },
       handleScroll: {
         mouseWheel: true,
@@ -605,6 +651,8 @@ export function AdvancedChart({
         pinch: true,
       },
       localization: {
+        // Crosshair time label — pinned to the SAME CHART_TZ as the axis above so
+        // the two always agree (and are deterministic regardless of browser TZ).
         timeFormatter: (time: number) => {
           const date = new Date(time * 1000)
           return date.toLocaleString('zh-CN', {
@@ -613,6 +661,7 @@ export function AdvancedChart({
             hour: '2-digit',
             minute: '2-digit',
             hour12: false,
+            timeZone: CHART_TZ,
           })
         },
       },
