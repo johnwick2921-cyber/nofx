@@ -29,6 +29,22 @@ func (at *AutoTrader) runCycle() error {
 		return nil
 	}
 
+	// 0b. MULTI-ACCOUNT GATE (Stage 1): a NinjaTrader trader must have an EXPLICITLY
+	// chosen NT8 account before it trades — never auto-trade on whatever account NT8
+	// streams (that could be the LIVE account). The pick is persisted on the trader
+	// row by handleSelectAccount; until it's set, skip the whole cycle (no decision,
+	// no order). Re-read each cycle so a fresh pick opens the gate without a restart.
+	if at.exchange == "ninjatrader" {
+		chosenAccount := ""
+		if tr, err := at.store.Trader().GetByID(at.id); err == nil && tr != nil {
+			chosenAccount = tr.Account
+		}
+		if chosenAccount == "" {
+			at.logWarnf("🚫 No NT8 account selected for this trader — skipping cycle #%d. Pick an account in the dashboard to start trading.", at.callCount)
+			return nil
+		}
+	}
+
 	// Check USDC balance periodically for claw402 users (every 10 cycles)
 	if at.callCount%10 == 0 && store.IsClaw402Config(at.config.AIModel) {
 		at.checkClaw402Balance()

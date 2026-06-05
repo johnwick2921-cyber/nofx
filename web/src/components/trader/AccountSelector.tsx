@@ -44,7 +44,10 @@ export function AccountSelector({
     { revalidateOnFocus: false, dedupingInterval: 5000 }
   )
 
-  const currentAccount = accountsData?.current
+  // The trader's PERSISTED chosen account (multi-account Stage 1). "" = none chosen
+  // yet → the trader is GATED (does not trade). Show/highlight THIS, not the streamed
+  // `current` (which can drift on the NT8 account_balance stream).
+  const selectedAccount = accountsData?.selected || ''
   const accounts = accountsData?.accounts || []
 
   // Memoize ref callback to prevent infinite setState loop
@@ -85,7 +88,7 @@ export function AccountSelector({
   }, [isOpen, triggerRect])
 
   const handleSelectAccount = async (accountName: string) => {
-    if (accountName === currentAccount) {
+    if (accountName === selectedAccount) {
       setIsOpen(false)
       return
     }
@@ -143,7 +146,15 @@ export function AccountSelector({
         )}
       >
         <span className="truncate">
-          Account: <span className="font-semibold">{currentAccount}</span>
+          {selectedAccount ? (
+            <>
+              Account: <span className="font-semibold">{selectedAccount}</span>
+            </>
+          ) : (
+            <span className="font-semibold text-nofx-gold">
+              Select an account
+            </span>
+          )}
         </span>
         <ChevronDown
           className={cn(
@@ -191,7 +202,7 @@ export function AccountSelector({
                     account.is_sim
                       ? cn(
                           'text-nofx-text-main hover:bg-nofx-bg/50 cursor-pointer',
-                          account.is_current
+                          account.name === selectedAccount
                             ? 'bg-nofx-gold/10 text-nofx-gold'
                             : ''
                         )
@@ -206,7 +217,7 @@ export function AccountSelector({
                       </span>
                     )}
                   </span>
-                  {account.is_current && (
+                  {account.name === selectedAccount && (
                     <Check className="w-4 h-4 text-nofx-gold shrink-0" />
                   )}
                 </button>
