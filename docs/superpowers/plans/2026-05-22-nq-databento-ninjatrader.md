@@ -9032,3 +9032,32 @@ close-sync-first DB race). Together both orderings are closed.
 (target ≥4 captured closes keeping `sync`/real ×$2 P&L — NOT generalizing from one,
 per the PART-1a lesson). `go build`/`go vet`/tests green; restart clean, 0 "unknown
 frame type".
+
+## 2026-06-05 — Chart X-axis timezone: render local/exchange TZ, not UTC (SHIPPED, commit `86d0b1c1`)
+
+**STATUS:** SHIPPED. FE-only, additive. tsc clean; vite serves 200.
+
+**Root cause (diagnosed read-only first):** lightweight-charts v5 does **no** timezone
+conversion — its time **axis** defaults to UTC. `AdvancedChart` set a crosshair
+`localization.timeFormatter` (browser-local, correct) but **no
+`timeScale.tickMarkFormatter`**, so the X-axis tick labels rendered in **UTC** (a 05:10
+UTC bar read `05:10` instead of the local/exchange `00:10`, and evening bars showed
+tomorrow's date). **Pre-existing** (unchanged since the chart was built) — explicitly
+**NOT** caused by the P&L work or the 3 restarts: the running binary never restarted
+between "good" and "wrong", and `Bar.T` epochs are correct UTC and consistent across
+the midnight boundary (verified against decision-record bar labels Jun 4 vs Jun 5).
+
+**Fix (FE-only, `web/src/components/charts/AdvancedChart.tsx`):** add a
+`timeScale.tickMarkFormatter` that formats the axis in an explicit
+`CHART_TZ = 'America/Chicago'` (the operator's local **and** the CME exchange zone),
+respecting the tick granularity (year/month/day/time); and pin the crosshair
+`timeFormatter` to the **same** `CHART_TZ` so axis + crosshair always agree and are
+**deterministic regardless of the browser's TZ**. The candle `openTime` mapping is
+unchanged (the epoch is correct UTC — only the axis FORMATTING changed). `AdvancedChart`
+is the shared chart for crypto + futures, so crypto's axis is now local too (correct for
+a Chicago operator).
+
+**Verified (deterministic, in a real browser — JWT was 401 so the authed chart couldn't
+load):** 05:10 UTC → axis `00:10` (Chicago) vs the old `05:10` (UTC); crosshair `06/05
+00:10` agrees with the axis; date-boundary 02:00 UTC → `06-04` (Chicago), not the old
+`06-05` (UTC). The explicit `timeZone` makes it browser-independent.
