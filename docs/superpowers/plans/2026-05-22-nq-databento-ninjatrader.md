@@ -9061,3 +9061,52 @@ a Chicago operator).
 load):** 05:10 UTC → axis `00:10` (Chicago) vs the old `05:10` (UTC); crosshair `06/05
 00:10` agrees with the axis; date-boundary 02:00 UTC → `06-04` (Chicago), not the old
 `06-05` (UTC). The explicit `timeZone` makes it browser-independent.
+
+## 2026-06-05 — Multi-account STAGE 1: none-on-create + gate + persist-pick + allow-list (SHIPPED, commit `56f1642c`)
+
+**STATUS:** Stage 1 SHIPPED (Go+FE, **NO C#**). Additive; crypto + the P&L fixes (PART
+1a/1b) + the chart-TZ fix + the account-switch re-scope (24634b5a) all untouched.
+
+**THE CRUX (read-only, C#-confirmed) — why Stage 1 ≠ separation yet:** the NT8 AddOn
+holds a **single** `Account` field ([VLTraderTCPClient.cs:49](#)); orders are
+`account.CreateOrder/Submit` to that one ([:533-550](#)); the `signal` frame carries
+**no account** ([HandleSignal :460-467](#)); `account_select` switches the single field
+([:643](#)); and there is **one** TCP connection ([tcp_server.go:3,55,106-108](#)). So
+**one connection executes ONE active account** — true per-trader ROUTING needs Stage 2
+(a wire-frame `account` field + a multi-account C# AddOn + per-account events + F5).
+NinjaScript *can* hold multiple `Account` objects + submit per-account (`Account.All`
+lookup under `lock`), so Stage 2 is feasible — just out of this Go+FE pass.
+
+**Root cause (binding diagnosis):** `tcp_server.go:766` auto-binds `currentAccount` on
+every `account_balance` frame → a new trader silently traded the streamed account (incl.
+risk of the LIVE one); `handleSelectAccount` didn't persist + the pick was overwritten by
+the next frame (the `:954` tug-of-war); `traders` had no account column.
+
+**Stage 1 shipped (the stored CHOICE + gate + rails — NOT routing):**
+- **DB:** `traders.account` column ([store/trader.go](#)) + `UpdateAccount`; GORM
+  AutoMigrate adds it. New/migrated traders start `account=''` (**none-on-create**).
+- **GATE:** `runCycle` ([trader/auto_trader_loop.go](#)) skips the cycle for a
+  NinjaTrader trader whose `account==''` (re-read each cycle so a fresh pick opens it
+  without restart). Verified live: `🚫 No NT8 account selected … skipping cycle #1` for
+  "sss" — it does **not** trade until an account is picked, so it can never auto-land on
+  the LIVE account.
+- **PERSIST:** `handleSelectAccount` ([api/handler_account.go](#)) now `UpdateAccount`s
+  the pick per-trader so it **sticks** (survives restart; the stream can't unset it) and
+  the gate opens. `handleGetAccounts` returns `selected` (the persisted choice).
+- **ALLOW-LIST:** `config.AllowedNTAccounts` (env `NT_ALLOWED_ACCOUNTS`, comma-sep) —
+  if set, `handleSelectAccount` HARD-rejects any account not on it. The LIVE account is
+  also blocked by the pre-existing **SIM guard** (non-SIM → rejected). Double-guarded.
+- **FE:** `AccountSelector` shows/highlights the persisted `selected` (or "Select an
+  account" when none → gated); the pick auto-saves (no separate save).
+
+**Honest scope:** Stage 1 persists the **CHOICE** + **gates** + stamps; it does **NOT**
+route orders per-account yet — one connection still trades one active account. True
+per-AI separation = **Stage 2** (the C# wire-frame + multi-account routing + F5),
+DESIGNED + scoped, NOT built.
+
+**Verify:** `go build`/`go vet`/tests green; tsc clean; restart clean (0 "unknown frame
+type"); `account` column added; gate fires live for "sss". UI pick not exercised (JWT
+401 all session) — persist/allow-list verified by code + the store path.
+
+**ACTION REQUIRED (live-behavior change):** "sss" is now **gated** — pick its account
+(Sim101) in the dashboard to resume trading.
