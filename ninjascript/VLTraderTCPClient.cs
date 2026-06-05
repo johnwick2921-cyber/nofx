@@ -725,6 +725,16 @@ namespace NinjaTrader.NinjaScript.AddOns
                     LogWarn("VLTraderTCPClient: close_position instrument not found " + symbol);
                     return;
                 }
+                // ⚠️ PHASE 4 BOUNDARY — this close is ACCOUNT-BLIND: it flattens the
+                // ACTIVE `account`, not the account the position was routed to in Phase 3.
+                // Safe TODAY because Go sends no `account` field (close_position +
+                // SignalPayload carry none), so every position lives on the active account
+                // and this Flatten is always correct. BEFORE enabling cross-account ENTRY
+                // routing in Phase 5, you MUST route this close to the position's account
+                // too (track per-position account; mirror submitAccount here) — otherwise a
+                // routed position on SimB would be closed against the active SimA (wrong
+                // account + a phantom close). Same applies to the account_select bracket
+                // clear and the per-account position/balance snapshots (all Phase 4).
                 account.Flatten(new[] { instrument });
                 // account.Flatten is async fire-and-forget: the actual fill (or a
                 // REJECT, e.g. "no market data" with the feed down) arrives later in
