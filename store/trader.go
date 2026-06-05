@@ -30,6 +30,13 @@ type Trader struct {
 	IsRunning           bool      `gorm:"column:is_running;default:false" json:"is_running"`
 	IsCrossMargin       bool      `gorm:"column:is_cross_margin;default:true" json:"is_cross_margin"`
 	ShowInCompetition   bool      `gorm:"column:show_in_competition;default:true" json:"show_in_competition"`
+	// Account is the NT8 sub-account this trader is EXPLICITLY bound to trade on
+	// (multi-account Stage 1). Empty = none chosen yet → the trader is GATED (does
+	// not trade) until the user picks one. Persisted so the choice survives restart
+	// and is NOT overwritten by the NT8 account_balance stream. NOTE (Stage 1): this
+	// is the stored CHOICE + the trade gate; true per-trader order ROUTING to this
+	// account is Stage 2 (the wire-frame `account` field + the C# multi-account AddOn).
+	Account             string    `gorm:"column:account;default:''" json:"account"`
 	CreatedAt           time.Time `gorm:"column:created_at;autoCreateTime" json:"created_at"`
 	UpdatedAt           time.Time `gorm:"column:updated_at;autoUpdateTime" json:"updated_at"`
 
@@ -147,6 +154,16 @@ func (s *TraderStore) UpdateInitialBalance(userID, id string, newBalance float64
 	return s.db.Model(&Trader{}).
 		Where("id = ? AND user_id = ?", id, userID).
 		Update("initial_balance", newBalance).Error
+}
+
+// UpdateAccount persists the NT8 sub-account this trader is bound to trade on
+// (multi-account Stage 1). Called by handleSelectAccount so the pick STICKS
+// (survives restart + isn't clobbered by the account_balance stream) and the
+// trade gate can open. "" leaves the trader gated (no account chosen).
+func (s *TraderStore) UpdateAccount(userID, id, account string) error {
+	return s.db.Model(&Trader{}).
+		Where("id = ? AND user_id = ?", id, userID).
+		Update("account", account).Error
 }
 
 // UpdateCustomPrompt updates custom prompt

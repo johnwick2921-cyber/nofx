@@ -36,7 +36,8 @@ export interface Account {
 }
 
 export interface AccountsResponse {
-  current: string
+  current: string // the NT8 connection's streamed current account
+  selected?: string // the trader's PERSISTED chosen account ("" = none chosen → gated)
   accounts: Account[]
 }
 
