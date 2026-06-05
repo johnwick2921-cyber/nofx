@@ -493,6 +493,27 @@ namespace NinjaTrader.NinjaScript.AddOns
                 return;
             }
 
+            // SAFETY RAIL (Stage-2 Phase-1, defense-in-depth) — the LAST line before an
+            // order reaches NT8. NEVER submit on a non-SIM (live/funded) account, and
+            // never on a disconnected one. Do NOT fall back to another account — reject.
+            // The Go side + account_select already guard; this is the C# half of the
+            // double-guard, so a live order is structurally impossible even if an
+            // upstream check is bypassed.
+            if (!IsSimAccount(account))
+            {
+                LogWarn("VLTraderTCPClient: REFUSING order " + signalId + " — account '"
+                        + account.Name + "' is NOT a SIM account; live/funded accounts are never auto-traded");
+                SendFillFrame(signalId, 0.0, side, qty, 0.0, "rejected");
+                return;
+            }
+            if (account.Connection == null || account.Connection.Status != ConnectionStatus.Connected)
+            {
+                LogWarn("VLTraderTCPClient: REFUSING order " + signalId + " — account '"
+                        + account.Name + "' is not Connected");
+                SendFillFrame(signalId, 0.0, side, qty, 0.0, "rejected");
+                return;
+            }
+
             // Resolve the bare root ("MNQ") to the NT8 front-month
             // contract ("MNQ 06-26") via VLContractResolver (date-derived,
             // auto-rolls). NT8's Instrument.GetInstrument requires the
