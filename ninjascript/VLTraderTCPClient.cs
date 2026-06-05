@@ -738,7 +738,13 @@ namespace NinjaTrader.NinjaScript.AddOns
                 // → byte-identical today. GUARD: never flatten a non-SIM (LIVE) account —
                 // the resolved target must pass IsSimAccount or the close is refused.
                 Account closeTarget = null;
-                lock (posAcctLock) { positionAccountBySymbol.TryGetValue(symbol, out closeTarget); }
+                // Look up by the SAME normalized root the entry-fill populate used
+                // (MasterInstrument.Name), not the raw wire symbol — so a non-canonical
+                // close symbol can't miss the map and silently fall back to the active
+                // account. Defaults to the raw symbol if MasterInstrument is unavailable.
+                string posKey = symbol;
+                try { posKey = instrument.MasterInstrument.Name; } catch { }
+                lock (posAcctLock) { positionAccountBySymbol.TryGetValue(posKey, out closeTarget); }
                 if (closeTarget == null) closeTarget = account;
                 if (closeTarget == null || !IsSimAccount(closeTarget))
                 {
@@ -931,7 +937,11 @@ namespace NinjaTrader.NinjaScript.AddOns
                     if (e.Order.Account != null && !string.IsNullOrEmpty(entrySym))
                         lock (posAcctLock) { positionAccountBySymbol[entrySym] = e.Order.Account; }
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    LogWarn("VLTraderTCPClient: PHASE 4 — failed to record position account for "
+                            + signalId + ": " + ex.Message + " (a later close falls back to the active account)");
+                }
             }
             else if (e.OrderState == OrderState.Rejected)
             {
