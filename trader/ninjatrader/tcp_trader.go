@@ -18,6 +18,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"nofx/config"
 	"nofx/logger"
 	"nofx/market"
 	"nofx/provider/databento"
@@ -110,7 +111,56 @@ func (t *TCPTrader) OpenShort(symbol string, quantity float64, leverage int) (ma
 	return t.placeEntry(symbol, "short", quantity)
 }
 
+// activeAccountName is the NT8 account the connection will trade (the streamed
+// current account). "" before the first account frame.
+func (t *TCPTrader) activeAccountName() string {
+	if a := t.server.CurrentAccount(); a != nil {
+		return *a
+	}
+	return ""
+}
+
+// isAccountTradeable reports whether an order may be sent for `name`: it must be a
+// SIM account (per the C#-reported accounts list, which uses Account.Simulation) AND,
+// if NT_ALLOWED_ACCOUNTS is configured, on that allow-list. This is the hard
+// live/funded-account block (Stage-2 Phase-1). Fail-safe: unknown account → false.
+func (t *TCPTrader) isAccountTradeable(name string) bool {
+	if name == "" {
+		return false
+	}
+	accts, _ := t.server.GetAccountsList()
+	isSim := false
+	found := false
+	for _, a := range accts {
+		if a.Name == name {
+			isSim = a.IsSim
+			found = true
+			break
+		}
+	}
+	if !found || !isSim {
+		return false // unknown or non-SIM (incl. the live account) → never tradeable
+	}
+	if allow := config.Get().AllowedNTAccounts; len(allow) > 0 {
+		for _, a := range allow {
+			if a == name {
+				return true
+			}
+		}
+		return false // an allow-list is set and this account isn't on it
+	}
+	return true
+}
+
 func (t *TCPTrader) placeEntry(symbol, side string, quantity float64) (map[string]interface{}, error) {
+	// SAFETY RAIL (Stage-2 Phase-1, defense-in-depth): never SEND an entry for an
+	// account that isn't tradeable (SIM + allow-listed). The C# AddOn enforces this
+	// again right before submit; this refuses in Go before the frame is even sent.
+	// The LIVE/funded account is never tradeable.
+	if acct := t.activeAccountName(); !t.isAccountTradeable(acct) {
+		return nil, fmt.Errorf("ninjatrader/tcp: refusing %s entry — account %q is not tradeable (not on allow-list / not SIM)", side, acct)
+	}
+
 	// Expiry warning — defense in depth (mirrors CSV Trader).
 	if days := databento.DaysUntilExpiry(symbol, time.Now()); days >= 0 && days <= 5 {
 		logger.Warnf("ninjatrader/tcp: placing %s entry on %s within %d days of expiry — verify contract roll", side, symbol, days)
