@@ -9323,3 +9323,45 @@ deployed-copy grep; back-compat (one trader → resolves to Sim101). Cross-accou
 exercisable pre-P5 (no routed position exists). SIM-only; no live order placed. Next: P5 = Go sends
 the `account` field on the signal + the per-account channel demux + the per-account reporting
 subscription (activates true multi-account).
+
+## 2026-06-05 — Strategy Studio Phase 1 (Risk Control): STOP-report + architecture + Chunk 1 SHIPPED
+
+**STOP-and-report (premise refuted):** the manifest said the prop-firm guardrails "do NOT exist."
+MAIN audit found an **existing** `kernel/risk_limits.go` (`RiskLimits{MaxDailyLossUSD,
+MaxConcurrentTrades, MaxNotionalUSD, MaxContractsPerOrder}` + `CheckPreTrade`/`Classify`/`ForceFlat`
++ `MaybeResetDaily`), `kernel/cme_calendar.go` (`IsCMEOpen`), and `api/handler_risk.go`. Status,
+file:line-verified: daily-loss limit **EXISTS + LIVE** but **global-env** (`RISK_MAX_DAILY_LOSS_USD`
+default $500), uses **session-cumulative** P&L + **UTC** reset (`engine_analysis.go:108-112`,
+`config.go:67,134`); concurrent-trade cap EXISTS (env=2, overlaps per-strategy Max Positions);
+notional cap **wired-but-disabled** (passed `0,0` at `engine_analysis.go:108`); **MaxContractsPerOrder
+loaded but NEVER enforced** (absent from `CheckPreTrade`); daily-profit / max-daily-trades /
+blackout-gate / consistency **genuinely absent**. Building "new" gates on top would create
+conflicting real-money limits — so I stopped + got the architecture decided.
+
+**Architecture (owner-decided):** (1) **evolve the single existing gate to per-strategy** (read the
+Risk Control boxes; env = fallback), extend with the missing limits, enforce max-contracts, fix the
+notional, no duplicate gates; (2) **true daily-realized P&L on the CME session day** (Sun 5pm CT
+boundary), not session-cumulative + UTC.
+
+**CHUNK 1 SHIPPED (deep-dive fixes #7-8 — the FAKE boxes made REAL):**
+- **Min R/R** — `validateDecision` now reads the per-strategy `min_risk_reward_ratio` (threaded
+  through `parseFullDecisionResponse → validateDecisions → validateDecision`, sourced from
+  `riskConfig` at `engine_analysis.go:243-250`) instead of the hardcoded `3.0` at
+  `engine_position.go:133`. Unset (≤0) falls back to 3.0 (back-compat). Applies crypto + futures.
+- **Min Confidence** — a NEW gate check rejects an open with `d.Confidence < min_confidence` when
+  configured (`min_confidence` = 0 → disabled, back-compat). Was prompt-only (AI-guided); now
+  CODE ENFORCED.
+- **Tests:** `TestStrategyStudio_MinRRConfigDriven` (4:1 decision PASSES at minRR=3.0, REJECTED at
+  5.0 — proves config-driven) + `TestStrategyStudio_MinConfidenceGate` (conf-50 PASSES at gate-off,
+  REJECTED at min=75) — both green; all existing gate tests green. `go build`/`go vet` clean.
+  `TestMaybeResetDaily` fails on HEAD too (pre-existing, unrelated — to be examined when Chunk 2
+  touches the daily reset).
+
+**REMAINING CHUNKS (planned, NOT built — each its own safe chunk + Sunday behavior-proof):**
+Chunk 2 = the per-strategy daily guardrails (daily loss/profit, max daily trades) on true
+daily-realized P&L + CME-day reset; Chunk 3 = max-contracts (enforce the unenforced field) + the
+visible/editable equity×20 cap; Chunk 4 = time/news blackout (wire `IsCMEOpen`); Chunk 5 =
+consistency rule; Chunk 6 = the FE futures risk panel (contracts × point value, $-risk/trade,
+margin as $/contract) + all the new guardrail inputs + the honest Max-Margin relabel (fix the false
+"System enforced" label `skill_management_handlers.go:1166`). ADDITIVE; crypto byte-identical; the
+multi-account work + P&L fixes + chart-TZ untouched. SIM-only.
