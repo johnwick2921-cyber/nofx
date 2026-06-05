@@ -9212,3 +9212,62 @@ compile itself is the user's step. Back-compat handshake with the CURRENT binary
 this phase (the C# isn't live until the F5; no live order placed — SIM-only). Next: P3 = the
 C# per-order routing (submit to the resolved account + per-account events); P5 = Go sends the
 `account` field.
+
+## 2026-06-05 — Stage 2 PHASE 3: C# routes each order to the RESOLVED account (SHIPPED, C# only, back-compat)
+
+**STATUS:** Phase 3 SHIPPED (C# only; **needs an F5** — see below). Additive; **the per-order
+ROUTING** — the trade-copier submit. Still back-compat (absent `account` = active account =
+today). **NO Go send** (P5), **per-account balance/position snapshots + manual-close routing =
+P4**. Crypto + the P&L fixes (PART 1a/1b) + chart-TZ + Stage-1 + P1 + P2 all untouched. THE
+RISKIEST PHASE — a routing bug = an order on the wrong account; the P1 double-guard runs on
+EVERY routed submit, the LIVE `LFE…` account is hard-blocked as a routing target.
+
+**STEP A (MAIN-verified at file:line):** the P2 resolve block ([VLTraderTCPClient.cs:525-570](#))
+resolves+guards the target but submitted on the active account; the submit path
+(`account.CreateOrder/Submit` :609/:626) + the bracket (`account.CreateOrder/Submit` in
+`SubmitBracketOnEntryFill`) + the events (`account.OrderUpdate += OnOrderUpdate` :99) were ALL
+bound to the single active `account`. `OnOrderUpdate` ([:749-848](#)) is **account-agnostic for
+reads** (everything off `e.Order`) — so a routed account's fills process correctly IF its
+`OrderUpdate` is subscribed. Back-compat holds with **no Go change** (the Go wire struct
+`ntwire.SignalPayload` has no `account` field → P5).
+
+**The change (additive, C# only):**
+- **ROUTE** — `Account submitAccount = resolved ?? account;` then the entry
+  `submitAccount.CreateOrder(...)` + `submitAccount.Submit(...)`. The `PendingBracket` gains an
+  `Account` field (= `submitAccount`) so `SubmitBracketOnEntryFill` places the SL/TP on the SAME
+  account the entry routed to (`Account ba = b.Account ?? account`).
+- **FINAL GUARD (defense-in-depth, every routed submit)** — immediately before `CreateOrder`,
+  re-assert `IsSimAccount(submitAccount) && Connection.Connected` on the EXACT submit target, no
+  matter how chosen; fail → REFUSE+reject. The LIVE account can never be a submit target. (The
+  allow-list stays Go-side at `placeEntry` — no config channel into the AddOn.)
+- **PER-ACCOUNT FILLS** — `OnOrderUpdate` must fire for the routed account, so a dedup'd
+  `HashSet<Account> orderSubscribed` + `SubscribeOrderUpdate`/`UnsubscribeOrderUpdate` helpers
+  become the single source of truth; ALL OrderUpdate sub/unsub (the active-account init,
+  `account_select` swap, terminate) flow through them (behavior-preserving + no double-subscribe),
+  and the routed `submitAccount` is subscribed before submit.
+- **FALLBACK (back-compat)** — `resolved == null` (absent field, every order today) →
+  `submitAccount = account` → byte-identical to P2/today.
+- **KEPT deliberately:** `OrderEntry.Manual` (the proven SIM submit; `Automated` is orthogonal +
+  regression-risky — not required for routing) and the order name = `signalId` (the fill-matching
+  key; an explicit agent-id tag needs a wire field = P5).
+
+**Deferred to P4 (flagged, do NOT assume done):** per-account `AccountItemUpdate` (balance) +
+`PositionUpdate` (position snapshots) stay active-account-only; manual close (`account.Flatten`)
+routes to the active account. These don't affect the routed ENTRY→fill→SL/TP-close lifecycle
+(which flows through `OnOrderUpdate` + the bracket-on-stored-account), but full multi-account
+parity needs them.
+
+**⚠️ C# NEEDS AN F5 (no hot-reload):** the routing is in the repo `.cs` (already `cp`'d to
+`Documents\NinjaTrader 8\bin\Custom\AddOns\`) but the RUNNING AddOn has the old binary until you
+**F5** in NT8 → **one clean full NT8 restart**. Until the F5, the running AddOn ignores routing
+— and Go sends no `account` field anyway, so nothing changes.
+
+**Verify:** Go **untouched** (0 `.go` → no `nofx-bin` rebuild). The `.cs` edit is structurally
+balanced (delta vs HEAD = +8/+8 braces, +44/+44 parens, +0 brackets) — NinjaScript compiles
+inside NT8 on F5 (the user's step). Routing is **correct by construction** + verified by the
+deployed-copy grep (`submitAccount.CreateOrder/Submit`, bracket-follows-account, the final
+guard, `SubscribeOrderUpdate`). A live cross-account frame-injection isn't possible pre-Go-send
+(P5) — so the routing is NOT exercised by a live cross-account fill this phase; for the
+single-trader case `resolved == active`, the existing fully-subscribed path is unchanged.
+SIM-only; no live order placed. Next: P4 = per-account events/positions/balance + manual-close
+routing; P5 = Go sends the `account` field.

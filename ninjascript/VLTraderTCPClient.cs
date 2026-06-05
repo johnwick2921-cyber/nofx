@@ -60,6 +60,14 @@ namespace NinjaTrader.NinjaScript.AddOns
         // filled (OCO = one-cancels-other), leaving the position unprotected.
         private readonly Dictionary<string, PendingBracket> pendingBrackets = new Dictionary<string, PendingBracket>();
 
+        // PHASE 3 (per-order routing) — the set of accounts whose OrderUpdate we have
+        // hooked to OnOrderUpdate. The fill→bracket→fill-frame lifecycle must fire for
+        // EVERY account we route an order to, not just the active one. This set is the
+        // single source of truth, so we never double-subscribe (which would duplicate
+        // fills). Per-account balance/position snapshots remain Phase 4.
+        private readonly HashSet<Account> orderSubscribed = new HashSet<Account>();
+        private readonly object orderSubLock = new object();
+
         private class PendingBracket
         {
             public Instrument  Instrument;
@@ -67,6 +75,7 @@ namespace NinjaTrader.NinjaScript.AddOns
             public int         Qty;
             public double      Sl;
             public double      Tp;
+            public Account     Account;   // PHASE 3: the routed submit account (SL/TP follow the entry)
         }
 
         // Plan 4.4 Stage 1 — multi-timeframe BarsRequest subscriptions. Owns
@@ -96,7 +105,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                 ResolveAccount();
                 if (account != null)
                 {
-                    account.OrderUpdate += OnOrderUpdate;
+                    SubscribeOrderUpdate(account);   // PHASE 3: dedup'd OrderUpdate subscription
                     // Plan 4.11 — emit the real account balance on cash/PnL
                     // changes so the dashboard reflects the live SIM account.
                     account.AccountItemUpdate += OnAccountItemUpdate;
@@ -138,9 +147,14 @@ namespace NinjaTrader.NinjaScript.AddOns
             else if (State == State.Terminated)
             {
                 try { cts?.Cancel(); } catch { }
+                // PHASE 3: unsubscribe OrderUpdate from EVERY account we hooked (active + routed)
+                lock (orderSubLock)
+                {
+                    foreach (var a in orderSubscribed) { try { a.OrderUpdate -= OnOrderUpdate; } catch { } }
+                    orderSubscribed.Clear();
+                }
                 if (account != null)
                 {
-                    try { account.OrderUpdate -= OnOrderUpdate; } catch { }
                     try { account.AccountItemUpdate -= OnAccountItemUpdate; } catch { }
                     try { account.PositionUpdate -= OnPositionUpdate; } catch { }
                 }
@@ -291,6 +305,38 @@ namespace NinjaTrader.NinjaScript.AddOns
             catch { }
             // Fallback: name-based detection (Sim prefix is NT8 standard for SIM accounts)
             return a.Name != null && a.Name.StartsWith("Sim");
+        }
+
+        // === PHASE 3 — dedup'd OrderUpdate (un)subscription ===
+        // SubscribeOrderUpdate is idempotent: a no-op if the account is already hooked,
+        // so routing to the active account (or re-routing to an already-routed one) never
+        // double-hooks OnOrderUpdate (which would duplicate fills). ALL OrderUpdate
+        // subscribe/unsubscribe flows through these so `orderSubscribed` stays the single
+        // source of truth. (AccountItemUpdate/PositionUpdate stay active-account-only = P4.)
+        private void SubscribeOrderUpdate(Account a)
+        {
+            if (a == null) return;
+            bool added = false;
+            lock (orderSubLock)
+            {
+                if (!orderSubscribed.Contains(a))
+                {
+                    a.OrderUpdate += OnOrderUpdate;
+                    orderSubscribed.Add(a);
+                    added = true;
+                }
+            }
+            if (added) LogInfo("VLTraderTCPClient: subscribed OrderUpdate on account '" + a.Name + "'");
+        }
+        private void UnsubscribeOrderUpdate(Account a)
+        {
+            if (a == null) return;
+            lock (orderSubLock)
+            {
+                if (!orderSubscribed.Contains(a)) return;
+                try { a.OrderUpdate -= OnOrderUpdate; } catch { }
+                orderSubscribed.Remove(a);
+            }
         }
 
         // === Connection loop with reconnect (spec L4415: every 5s) ===
@@ -532,9 +578,9 @@ namespace NinjaTrader.NinjaScript.AddOns
             // / non-SIM / disconnected) is REJECTED here (reuse the P1 reject); we never
             // silently fall back to the active account when a specific one was requested.
             // An ABSENT/empty field skips this block entirely = today's behavior.
+            Account resolved = null;   // PHASE 3: the routed submit target (null = active-account fallback)
             if (!string.IsNullOrEmpty(targetAccount))
             {
-                Account resolved = null;
                 lock (Account.All)
                 {
                     foreach (var a in Account.All)
@@ -561,12 +607,10 @@ namespace NinjaTrader.NinjaScript.AddOns
                     SendFillFrame(signalId, 0.0, side, qty, 0.0, "rejected");
                     return;
                 }
-                // Resolved + guarded. Phase 2 LOGS ONLY — submission stays on the active
-                // account (routing is Phase 3). If the resolved account differs from the
-                // active one, that mismatch is expected this phase and surfaced in the log.
-                LogInfo("VLTraderTCPClient: signal " + signalId + " targets account '" + targetAccount
-                        + "' (resolved, sim, connected) — Phase 2 logs the resolution; submission "
-                        + "stays on active account '" + account.Name + "' (per-order routing is Phase 3)");
+                // Resolved + guarded — PHASE 3 ROUTES the submit to THIS account (below),
+                // not the active one. A named-but-bad target was already rejected above.
+                LogInfo("VLTraderTCPClient: signal " + signalId + " routed to account '" + targetAccount
+                        + "' (resolved, sim, connected)");
             }
 
             // Resolve the bare root ("MNQ") to the NT8 front-month
@@ -585,6 +629,30 @@ namespace NinjaTrader.NinjaScript.AddOns
                 SendFillFrame(signalId, 0.0, side, qty, 0.0, "rejected");
                 return;
             }
+
+            // PHASE 3 (per-order ROUTING) — submit to the RESOLVED account when the frame
+            // named one (already guarded above), else the active account (back-compat —
+            // every order today, since Go sends no account field until Phase 5). FINAL
+            // guard on the EXACT submit target (defense-in-depth): re-assert SIM + connected
+            // on the account that will receive CreateOrder, no matter how it was chosen —
+            // the LIVE account can never be a submit target. (The Go-side allow-list is
+            // enforced at placeEntry; there is no config channel into the AddOn.)
+            Account submitAccount = resolved ?? account;
+            if (!IsSimAccount(submitAccount)
+                || submitAccount.Connection == null
+                || submitAccount.Connection.Status != ConnectionStatus.Connected)
+            {
+                LogWarn("VLTraderTCPClient: REFUSING order " + signalId + " — submit target '"
+                        + (submitAccount != null ? submitAccount.Name : "<null>")
+                        + "' failed the final SIM/connected guard");
+                SendFillFrame(signalId, 0.0, side, qty, 0.0, "rejected");
+                return;
+            }
+            // The fill→bracket→fill-frame lifecycle (OnOrderUpdate) must fire for this
+            // account. Idempotent — a no-op when it is the already-subscribed active
+            // account. (Per-account balance/position snapshots + manual-close Flatten
+            // routing remain Phase 4.)
+            SubscribeOrderUpdate(submitAccount);
 
             // Track entry + tick size for slippage computation in fill emission.
             double tickSize = 0.25; // sensible NQ default; overridden if instrument exposes it
@@ -606,7 +674,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                 var entryAction = side == "long" ? OrderAction.Buy : OrderAction.SellShort;
                 var exitAction  = side == "long" ? OrderAction.Sell : OrderAction.BuyToCover;
 
-                var entryOrder = account.CreateOrder(
+                var entryOrder = submitAccount.CreateOrder(
                     instrument, entryAction, OrderType.Market, OrderEntry.Manual,
                     TimeInForce.Day, qty, 0, 0, string.Empty, signalId,
                     Core.Globals.MaxDate, null);
@@ -620,11 +688,13 @@ namespace NinjaTrader.NinjaScript.AddOns
                         Qty        = qty,
                         Sl         = sl,
                         Tp         = tp,
+                        Account    = submitAccount,   // PHASE 3: the bracket follows the entry's account
                     };
                 }
 
-                account.Submit(new[] { entryOrder });
+                submitAccount.Submit(new[] { entryOrder });
                 LogInfo("VLTraderTCPClient: submitted entry signal_id=" + signalId
+                        + " on account=" + submitAccount.Name
                         + " " + side + " " + qty + " " + symbol
                         + " entry≈" + entry + " (SL=" + sl + " TP=" + tp + " on fill)");
             }
@@ -710,14 +780,14 @@ namespace NinjaTrader.NinjaScript.AddOns
                 // Unsubscribe from the old account's events
                 if (account != null)
                 {
-                    try { account.OrderUpdate -= OnOrderUpdate; } catch { }
+                    UnsubscribeOrderUpdate(account);   // PHASE 3: dedup'd
                     try { account.AccountItemUpdate -= OnAccountItemUpdate; } catch { }
                     try { account.PositionUpdate -= OnPositionUpdate; } catch { }
                 }
 
                 // Switch to the new account and subscribe to its events
                 account = newAccount;
-                account.OrderUpdate += OnOrderUpdate;
+                SubscribeOrderUpdate(account);   // PHASE 3: dedup'd
                 account.AccountItemUpdate += OnAccountItemUpdate;
                 account.PositionUpdate += OnPositionUpdate;
 
@@ -879,16 +949,19 @@ namespace NinjaTrader.NinjaScript.AddOns
             }
             try
             {
+                // PHASE 3: the protective bracket is placed on the SAME account the entry
+                // routed to (stored in PendingBracket), not necessarily the active one.
+                Account ba = b.Account ?? account;
                 string exitOco = signalId + "-exit";
-                var slOrder = account.CreateOrder(
+                var slOrder = ba.CreateOrder(
                     b.Instrument, b.ExitAction, OrderType.StopMarket, OrderEntry.Manual,
                     TimeInForce.Day, b.Qty, 0, b.Sl, exitOco, signalId + "-sl",
                     Core.Globals.MaxDate, null);
-                var tpOrder = account.CreateOrder(
+                var tpOrder = ba.CreateOrder(
                     b.Instrument, b.ExitAction, OrderType.Limit, OrderEntry.Manual,
                     TimeInForce.Day, b.Qty, b.Tp, 0, exitOco, signalId + "-tp",
                     Core.Globals.MaxDate, null);
-                account.Submit(new[] { slOrder, tpOrder });
+                ba.Submit(new[] { slOrder, tpOrder });
                 LogInfo("VLTraderTCPClient: placed protective bracket signal_id=" + signalId
                         + " sl=" + b.Sl + " tp=" + b.Tp);
             }
