@@ -472,6 +472,14 @@ namespace NinjaTrader.NinjaScript.AddOns
                 return;
             }
 
+            // PHASE 2 (parse only, back-compat) — optional target account. GetString
+            // returns null when the field is absent (TryGetValue, not a throw), so
+            // today's Go frames (which omit it) leave this null → it falls through to
+            // the active account below, byte-identical to current behavior. This is NOT
+            // a new required field; the un-changed Go side keeps working. The actual
+            // per-order ROUTING that submits to this account is Phase 3.
+            string targetAccount = GetString(p, "account");
+
             // Spec L4414: stale signal rejection at 60s.
             if (DateTime.TryParse(ts, null,
                 System.Globalization.DateTimeStyles.RoundtripKind, out var sigTime))
@@ -512,6 +520,53 @@ namespace NinjaTrader.NinjaScript.AddOns
                         + account.Name + "' is not Connected");
                 SendFillFrame(signalId, 0.0, side, qty, 0.0, "rejected");
                 return;
+            }
+
+            // PHASE 2 (resolve + guard, NO routing yet) — if the frame named a target
+            // account, resolve it against Account.All (same pattern as account_select)
+            // and run the SAME double-guard on it (SIM + connected). This PROVES the
+            // parse → resolve → guard path end-to-end and LOGS the resolution. It does
+            // NOT change which account submits: the active `account` (already guarded
+            // above) still places the order — Phase 3 adds the per-order routing that
+            // actually submits to the resolved account. A named-but-bad target (unknown
+            // / non-SIM / disconnected) is REJECTED here (reuse the P1 reject); we never
+            // silently fall back to the active account when a specific one was requested.
+            // An ABSENT/empty field skips this block entirely = today's behavior.
+            if (!string.IsNullOrEmpty(targetAccount))
+            {
+                Account resolved = null;
+                lock (Account.All)
+                {
+                    foreach (var a in Account.All)
+                        if (a.Name == targetAccount) { resolved = a; break; }
+                }
+                if (resolved == null)
+                {
+                    LogWarn("VLTraderTCPClient: REFUSING order " + signalId + " — target account '"
+                            + targetAccount + "' not found in Account.All");
+                    SendFillFrame(signalId, 0.0, side, qty, 0.0, "rejected");
+                    return;
+                }
+                if (!IsSimAccount(resolved))
+                {
+                    LogWarn("VLTraderTCPClient: REFUSING order " + signalId + " — target account '"
+                            + targetAccount + "' is NOT a SIM account; live/funded accounts are never auto-traded");
+                    SendFillFrame(signalId, 0.0, side, qty, 0.0, "rejected");
+                    return;
+                }
+                if (resolved.Connection == null || resolved.Connection.Status != ConnectionStatus.Connected)
+                {
+                    LogWarn("VLTraderTCPClient: REFUSING order " + signalId + " — target account '"
+                            + targetAccount + "' is not Connected");
+                    SendFillFrame(signalId, 0.0, side, qty, 0.0, "rejected");
+                    return;
+                }
+                // Resolved + guarded. Phase 2 LOGS ONLY — submission stays on the active
+                // account (routing is Phase 3). If the resolved account differs from the
+                // active one, that mismatch is expected this phase and surfaced in the log.
+                LogInfo("VLTraderTCPClient: signal " + signalId + " targets account '" + targetAccount
+                        + "' (resolved, sim, connected) — Phase 2 logs the resolution; submission "
+                        + "stays on active account '" + account.Name + "' (per-order routing is Phase 3)");
             }
 
             // Resolve the bare root ("MNQ") to the NT8 front-month

@@ -9155,3 +9155,60 @@ restart clean (1 trader, 0 "unknown frame type" — no new frame in P1); "sss" o
 (SIM, allow-list empty) is **not** falsely blocked (no refusal logged). The live-account
 rejection is **code-verified** (I did not place a live order). Next: P2 = the wire-frame
 `account` field; P3 = the C# multi-account routing + per-account events.
+
+## 2026-06-05 — Stage 2 PHASE 2: the C# AddOn PARSES an optional `account` wire-frame field (SHIPPED, C# only, back-compat)
+
+**STATUS:** Phase 2 SHIPPED (C# only; **needs an F5** — see below). Additive; **back-compat
+PARSE side ONLY** — the protocol change lands parse-first so the un-changed Go side keeps
+working. **NO per-order routing** (still P3), **NO Go send** (still P5), **NO new required
+field**. Crypto + the P&L fixes (PART 1a/1b) + the chart-TZ fix + Stage-1 + the P1
+double-guard all untouched. Goal: the AddOn learns to READ an optional `account` from the
+signal frame, resolve + guard it, and FALL BACK to today's single active-account behavior
+when it is absent — so the wire contract can carry an account before any routing exists.
+
+**STEP A (MAIN-verified at file:line):**
+- **Parse** ([VLTraderTCPClient.cs:458-473](#)) — the strict fields (symbol/side/quantity/
+  entry/stop_loss/take_profit/signal_id/timestamp) parse inside a try/catch that rejects on
+  a missing field. `GetString` ([:1350-1354](#)) is `TryGetValue` → returns **null** on an
+  absent key (it does **not** throw). So the optional `account` read is placed **after** the
+  strict try (a missing `account` can never trip the "missing field" reject) → **back-compat
+  by construction**.
+- **Fallback** — the single `private Account account` ([:49](#)), switched by
+  `HandleAccountSelect` ([:622-690](#)); a no-`account`-field frame uses this active account
+  exactly as today.
+- **P1 guards** ([:502-523](#)) `IsSimAccount(account)` + `Connection.Status==Connected` —
+  intact + reused (same shape) on the resolved account.
+- **Resolve** — the canonical name→Account lookup `lock (Account.All) { foreach a … a.Name
+  == X }` ([:636-642](#), from `account_select`) reused verbatim.
+
+**The change (additive, C# only):**
+- **PARSE** ([:481](#)): `string targetAccount = GetString(p, "account");` — null/empty when
+  the field is absent (every order today, since Go does not send it yet → P5).
+- **RESOLVE + GUARD, NO ROUTING** ([:525-570](#)): if `targetAccount` is non-empty, resolve
+  it against `Account.All` and run the **same** double-guard (SIM + connected) on it, then
+  **LOG** the resolution (`signal … targets account 'X' (resolved, sim, connected) … Phase 2
+  logs the resolution; submission stays on active account 'Y' (per-order routing is Phase
+  3)`). A named-but-bad target (unknown / non-SIM / disconnected) is **REJECTED** here (reuse
+  the P1 reject — `SendFillFrame(…, "rejected")`); we never silently fall back to the active
+  account when a specific one was requested. The active `account` (guarded above) still
+  SUBMITS — **P3** adds the routing that submits to the resolved account.
+- **FALLBACK** ([back-compat]): an ABSENT/empty `account` skips the resolve block entirely →
+  byte-identical to today. The P1 double-guard still hard-blocks the LIVE `LFE…` account
+  (active or resolved).
+
+**⚠️ C# NEEDS AN F5 (no hot-reload):** the parse is in the repo `.cs` (already `cp`'d to
+`Documents\NinjaTrader 8\bin\Custom\AddOns\`) but the RUNNING NT8 AddOn has the old binary
+until you **F5** in NT8 → **one clean full NT8 restart**. The cp staged P1+P2 together (the
+AddOns copy predated P1), so one F5 deploys both. Until the F5, the running AddOn ignores
+any `account` field — and Go doesn't send one yet, so nothing changes. *(If the F5 flags
+`account.Connection.Status`, remove that one line — `IsSimAccount` alone still hard-blocks
+live.)*
+
+**Verify:** Go **untouched** (0 `.go` modified → no `nofx-bin` rebuild; pid 98629 from P1
+still running, cycle 381, MNQ "wait"). The `.cs` edit is brace-balanced (delta vs HEAD =
++6/+6 braces, +0 brackets; parens even) — NinjaScript compiles inside NT8 on F5, so the
+compile itself is the user's step. Back-compat handshake with the CURRENT binary is clean
+(0 "unknown frame type", 0 "signal payload missing field"). Parse+resolve is **code-verified**
+this phase (the C# isn't live until the F5; no live order placed — SIM-only). Next: P3 = the
+C# per-order routing (submit to the resolved account + per-account events); P5 = Go sends the
+`account` field.
