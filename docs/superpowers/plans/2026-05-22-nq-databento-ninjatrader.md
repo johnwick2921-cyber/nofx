@@ -9271,3 +9271,55 @@ guard, `SubscribeOrderUpdate`). A live cross-account frame-injection isn't possi
 single-trader case `resolved == active`, the existing fully-subscribed path is unchanged.
 SIM-only; no live order placed. Next: P4 = per-account events/positions/balance + manual-close
 routing; P5 = Go sends the `account` field.
+
+## 2026-06-05 — Stage 2 PHASE 4: per-account CLOSE + fill/close-frame account attribution (SHIPPED, C# only)
+
+**STATUS:** Phase 4 SHIPPED (C# only; **needs an F5**). Additive; fixes the P3 account-blind close
+and tags the reporting frames with the owning account. Back-compat (resolves to Sim101 today).
+**NO Go change** (audit: Go already keys every read by account + degrades to Sim101). **NO Go
+account-send** (P5). Crypto + P&L fixes (PART 1a/1b) + chart-TZ + Stage-1 + P1 + P2 + P3 untouched.
+
+**STEP A (3-track audit + MAIN re-verify at file:line):** all 3 tracks `back_compat_ok=true,
+forces_wire_or_go_send=false` — no STOP. Wire: `account_balance`/`positions` frames already carry
+`account` (tcp_framing.go:96/210); the `fill` frame (FillPayload :48) and `position_close`
+(SendPositionCloseFrame) did NOT; `position_close_rejected` stamped the **active** account (latent
+bug). `close_position` (Go→C#) carries no account → the close must resolve the account C#-side.
+`OnOrderUpdate` is account-agnostic (reads `e.Order.Account`). **Track-3 decisive:** Go needs ZERO
+changes — every read (`acctBalances[p.Account]` tcp_server.go:762, `acctPositions[p.Account]` :840,
+reconcile `row.Account!=acct` reconcile.go:105, the variadic-account store funcs) already keys by
+account; `recordClose` updates the entry row in place, inheriting its account stamp. Go decodes
+with plain `json.Unmarshal` (no `DisallowUnknownFields`) → the new `account` keys are silently
+ignored by the un-changed binary.
+
+**The change (additive, C# only):**
+- **PER-ACCOUNT CLOSE** — new `Dictionary<string,Account> positionAccountBySymbol` (root-symbol →
+  owning account): populated on **entry-fill** (`OnOrderUpdate` Filled, from `e.Order.Account`),
+  cleared on **exit-fill**. `HandleClosePosition` resolves the symbol's account (fallback the active
+  account → back-compat) and flattens **that** account, behind a **`IsSimAccount` guard** (a
+  non-SIM/LIVE resolved target → REFUSE, position left open). Keyed by root symbol because the Go
+  close generates a fresh UUID signal_id (tcp_trader.go) that can't match the entry.
+- **FILL ACCOUNT TAG** — `SendFillFrame` now carries `e.Order.Account.Name` (optional param,
+  default "" → the 10 reject/stale calls are unchanged).
+- **CLOSE-REPORT ACCOUNT FIX** — `SendPositionCloseFrame` now emits the account (was absent);
+  `SendPositionCloseRejectedFrame` now stamps `e.Order.Account` (fixes the latent active-account
+  bug). Both reachable today because `OrderUpdate` is already per-account (P3).
+
+**DEFERRED to P5 (flagged, NOT built):** the per-account **balance/position SUBSCRIPTION** +
+account-aware `OnPositionUpdate`/`OnAccountItemUpdate`/`SendAccountBalance(acc)`. Rationale: it is
+(a) dormant until cross-account routing (P5), and (b) **blocked anyway by the Go process-singleton
+TCPServer** (transport.go:31-53 — one fill/close channel + one streamed `CurrentAccount()`), which
+P5 must demux first. Building the C# reporting subscription now is premature subscription-lifecycle
+risk for zero reachable value; it belongs with P5's Go demux. The active account's balance/position
+already report correctly today.
+
+**⚠️ C# NEEDS AN F5 (no hot-reload):** cp'd to `Documents\NinjaTrader 8\bin\Custom\AddOns\`; **F5 in
+NT8 → one clean full restart**. Until then the running AddOn keeps the P3 binary; Go sends no
+account field, so nothing changes (back-compat).
+
+**Verify:** Go **untouched** (0 `.go` → no `nofx-bin` rebuild). `.cs` structurally balanced (Δ vs
+HEAD = +6/+6 braces, +28/+28 parens, +3/+3 brackets) — compiles inside NT8 on F5 (the user's step).
+The close-account resolution + fill/close account tags are **correct by construction** + the
+deployed-copy grep; back-compat (one trader → resolves to Sim101). Cross-account close isn't
+exercisable pre-P5 (no routed position exists). SIM-only; no live order placed. Next: P5 = Go sends
+the `account` field on the signal + the per-account channel demux + the per-account reporting
+subscription (activates true multi-account).

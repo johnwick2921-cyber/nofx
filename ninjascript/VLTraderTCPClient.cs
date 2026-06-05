@@ -68,6 +68,13 @@ namespace NinjaTrader.NinjaScript.AddOns
         private readonly HashSet<Account> orderSubscribed = new HashSet<Account>();
         private readonly object orderSubLock = new object();
 
+        // PHASE 4 (per-account close) — which account holds each open position, keyed by
+        // ROOT symbol (e.g. "MNQ"). Populated on entry-fill (from e.Order.Account) and
+        // cleared on exit-fill, so HandleClosePosition flattens the CORRECT account
+        // instead of the active one. Back-compat: one trader → resolves to Sim101.
+        private readonly Dictionary<string, Account> positionAccountBySymbol = new Dictionary<string, Account>();
+        private readonly object posAcctLock = new object();
+
         private class PendingBracket
         {
             public Instrument  Instrument;
@@ -725,24 +732,28 @@ namespace NinjaTrader.NinjaScript.AddOns
                     LogWarn("VLTraderTCPClient: close_position instrument not found " + symbol);
                     return;
                 }
-                // ⚠️ PHASE 4 BOUNDARY — this close is ACCOUNT-BLIND: it flattens the
-                // ACTIVE `account`, not the account the position was routed to in Phase 3.
-                // Safe TODAY because Go sends no `account` field (close_position +
-                // SignalPayload carry none), so every position lives on the active account
-                // and this Flatten is always correct. BEFORE enabling cross-account ENTRY
-                // routing in Phase 5, you MUST route this close to the position's account
-                // too (track per-position account; mirror submitAccount here) — otherwise a
-                // routed position on SimB would be closed against the active SimA (wrong
-                // account + a phantom close). Same applies to the account_select bracket
-                // clear and the per-account position/balance snapshots (all Phase 4).
-                account.Flatten(new[] { instrument });
-                // account.Flatten is async fire-and-forget: the actual fill (or a
-                // REJECT, e.g. "no market data" with the feed down) arrives later in
-                // OnOrderUpdate. This log means SUBMITTED, not closed — the close is
-                // confirmed only by the position_close fill frame (or reported failed
-                // by position_close_rejected).
+                // PHASE 4 — resolve the account that actually HOLDS this symbol's open
+                // position (recorded on entry-fill), and flatten THAT account, not the
+                // active one. Back-compat: one trader → the map misses (or returns Sim101)
+                // → byte-identical today. GUARD: never flatten a non-SIM (LIVE) account —
+                // the resolved target must pass IsSimAccount or the close is refused.
+                Account closeTarget = null;
+                lock (posAcctLock) { positionAccountBySymbol.TryGetValue(symbol, out closeTarget); }
+                if (closeTarget == null) closeTarget = account;
+                if (closeTarget == null || !IsSimAccount(closeTarget))
+                {
+                    LogWarn("VLTraderTCPClient: REFUSING close " + symbol + " — resolved account '"
+                            + (closeTarget != null ? closeTarget.Name : "<null>")
+                            + "' is not a SIM account; position left OPEN");
+                    return;
+                }
+                closeTarget.Flatten(new[] { instrument });
+                // Flatten is async fire-and-forget: the actual fill (or a REJECT, e.g. "no
+                // market data" with the feed down) arrives later in OnOrderUpdate. This log
+                // means SUBMITTED, not closed — the close is confirmed only by the
+                // position_close fill frame (or reported failed by position_close_rejected).
                 LogInfo("VLTraderTCPClient: flatten submitted " + symbol + " (" + contract
-                        + ") — awaiting NT8 fill/reject (not yet closed)");
+                        + ") on account=" + closeTarget.Name + " — awaiting NT8 fill/reject (not yet closed)");
             }
             catch (Exception ex)
             {
@@ -864,8 +875,13 @@ namespace NinjaTrader.NinjaScript.AddOns
                     string positionSide = (action == OrderAction.BuyToCover) ? "short" : "long";
                     string rootSymbol = "";
                     try { rootSymbol = e.Order.Instrument.MasterInstrument.Name; } catch { }
+                    string exitAcct = e.Order.Account != null ? e.Order.Account.Name
+                                      : (account != null ? account.Name : "");
                     SendPositionCloseFrame(signalId, rootSymbol, positionSide,
-                                           e.AverageFillPrice, e.Filled, exitReason ?? "manual");
+                                           e.AverageFillPrice, e.Filled, exitReason ?? "manual", exitAcct);
+                    // PHASE 4: the position closed → drop its account ownership.
+                    if (!string.IsNullOrEmpty(rootSymbol))
+                        lock (posAcctLock) { positionAccountBySymbol.Remove(rootSymbol); }
                 }
                 else if (e.OrderState == OrderState.Rejected)
                 {
@@ -880,7 +896,9 @@ namespace NinjaTrader.NinjaScript.AddOns
                     string reason = "";
                     try { reason = e.Comment ?? ""; } catch { }
                     if (string.IsNullOrEmpty(reason)) { try { reason = e.Error.ToString(); } catch { } }
-                    SendPositionCloseRejectedFrame(signalId, rootSymbol, positionSide, reason);
+                    string rejAcct = e.Order.Account != null ? e.Order.Account.Name
+                                     : (account != null ? account.Name : "");
+                    SendPositionCloseRejectedFrame(signalId, rootSymbol, positionSide, reason, rejAcct);
                     LogWarn("VLTraderTCPClient: exit/flatten REJECTED signal_id=" + signalId
                             + " " + positionSide + " reason=" + reason
                             + " — position STILL OPEN (not closed)");
@@ -904,6 +922,16 @@ namespace NinjaTrader.NinjaScript.AddOns
             if (e.OrderState == OrderState.Filled)
             {
                 SubmitBracketOnEntryFill(signalId);
+                // PHASE 4: record which account now holds this symbol's open position so a
+                // later close flattens the RIGHT account (not the active one). Sourced from
+                // the order's own account — account-agnostic, correct per routed account.
+                try
+                {
+                    string entrySym = e.Order.Instrument.MasterInstrument.Name;
+                    if (e.Order.Account != null && !string.IsNullOrEmpty(entrySym))
+                        lock (posAcctLock) { positionAccountBySymbol[entrySym] = e.Order.Account; }
+                }
+                catch { }
             }
             else if (e.OrderState == OrderState.Rejected)
             {
@@ -924,12 +952,15 @@ namespace NinjaTrader.NinjaScript.AddOns
             }
 
             SendFillFrame(signalId, e.AverageFillPrice, sideStr, e.Filled,
-                          slippageTicks, status);
+                          slippageTicks, status,
+                          e.Order.Account != null ? e.Order.Account.Name
+                              : (account != null ? account.Name : ""));
         }
 
         // === Write helpers ===
         private void SendFillFrame(string signalId, double fillPrice, string side,
-                                   int qty, double slippageTicks, string status)
+                                   int qty, double slippageTicks, string status,
+                                   string acctName = "")
         {
             var payload = new Dictionary<string, object>
             {
@@ -939,7 +970,10 @@ namespace NinjaTrader.NinjaScript.AddOns
                 ["side"]           = side,
                 ["quantity"]       = qty,
                 ["slippage_ticks"] = slippageTicks,
-                ["status"]         = status
+                ["status"]         = status,
+                // PHASE 4: which account this fill is on (e.Order.Account). Additive +
+                // back-compat: an un-updated Go binary ignores unknown JSON fields.
+                ["account"]        = acctName ?? ""
             };
             WriteEnvelope("fill", payload);
         }
@@ -988,7 +1022,8 @@ namespace NinjaTrader.NinjaScript.AddOns
         // point value, so we send only the raw exit price here.
         private void SendPositionCloseFrame(string signalId, string symbol,
                                             string positionSide, double exitPrice,
-                                            int qty, string exitReason)
+                                            int qty, string exitReason,
+                                            string acctName = "")
         {
             var payload = new Dictionary<string, object>
             {
@@ -998,6 +1033,10 @@ namespace NinjaTrader.NinjaScript.AddOns
                 ["exit_price"]    = exitPrice,
                 ["quantity"]      = qty,
                 ["exit_reason"]   = exitReason ?? "",
+                // PHASE 4: the account this close is on (was absent; the Go struct already
+                // has the field). e.Order.Account from the caller; "" → Go keeps today's
+                // in-place-row behavior (the entry row already holds the account).
+                ["account"]       = acctName ?? "",
                 ["exit_time"]     = DateTime.UtcNow.ToString("o")
             };
             WriteEnvelope("position_close", payload);
@@ -1008,7 +1047,8 @@ namespace NinjaTrader.NinjaScript.AddOns
         // is STILL OPEN in NT8 — so the bot must not record it closed. Mirrors
         // SendPositionCloseFrame; reason carries the NT8 reject comment.
         private void SendPositionCloseRejectedFrame(string signalId, string symbol,
-                                                    string positionSide, string reason)
+                                                    string positionSide, string reason,
+                                                    string acctName = null)
         {
             var payload = new Dictionary<string, object>
             {
@@ -1016,7 +1056,11 @@ namespace NinjaTrader.NinjaScript.AddOns
                 ["symbol"]        = symbol ?? "",
                 ["position_side"] = positionSide ?? "",
                 ["reason"]        = reason ?? "",
-                ["account"]       = account != null ? account.Name : "",
+                // PHASE 4 fix: stamp the account the rejected EXIT was on (e.Order.Account
+                // from the caller), NOT the active field — the active-account stamp was a
+                // latent bug once routing is live. Falls back to the active account for
+                // back-compat if the caller passes none.
+                ["account"]       = !string.IsNullOrEmpty(acctName) ? acctName : (account != null ? account.Name : ""),
                 ["reject_time"]   = DateTime.UtcNow.ToString("o")
             };
             WriteEnvelope("position_close_rejected", payload);
