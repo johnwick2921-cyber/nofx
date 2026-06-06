@@ -160,3 +160,44 @@ func TestResolveNotionalLeverage(t *testing.T) {
 		t.Fatalf("master off → 0 (no cap), got %v", got)
 	}
 }
+
+// --- Chunk 4 — time/news blackout window ---
+
+func TestInBlackoutWindow(t *testing.T) {
+	chicago, _ := time.LoadLocation("America/Chicago")
+	mk := func(h, m int) time.Time { return time.Date(2026, 6, 1, h, m, 0, 0, chicago) }
+
+	// window 13:25–13:35 CT (start inclusive, end exclusive)
+	if !InBlackoutWindow(mk(13, 30), "13:25", "13:35") {
+		t.Fatal("13:30 in [13:25,13:35) should be blackout")
+	}
+	if InBlackoutWindow(mk(13, 35), "13:25", "13:35") {
+		t.Fatal("13:35 == end (exclusive) should NOT be blackout")
+	}
+	if InBlackoutWindow(mk(13, 24), "13:25", "13:35") {
+		t.Fatal("13:24 before start should NOT be blackout")
+	}
+	if InBlackoutWindow(mk(9, 0), "13:25", "13:35") {
+		t.Fatal("09:00 outside should NOT be blackout")
+	}
+	// wraps midnight 23:00–01:00
+	if !InBlackoutWindow(mk(23, 30), "23:00", "01:00") {
+		t.Fatal("23:30 in wrap window should be blackout")
+	}
+	if !InBlackoutWindow(mk(0, 30), "23:00", "01:00") {
+		t.Fatal("00:30 in wrap window should be blackout")
+	}
+	if InBlackoutWindow(mk(2, 0), "23:00", "01:00") {
+		t.Fatal("02:00 outside wrap should NOT be blackout")
+	}
+	// malformed / empty / zero-width → false (a misconfig never silently halts)
+	if InBlackoutWindow(mk(13, 30), "", "13:35") {
+		t.Fatal("empty start should NOT block")
+	}
+	if InBlackoutWindow(mk(13, 30), "bad", "13:35") {
+		t.Fatal("malformed should NOT block")
+	}
+	if InBlackoutWindow(mk(13, 30), "13:30", "13:30") {
+		t.Fatal("zero-width window should NOT block")
+	}
+}

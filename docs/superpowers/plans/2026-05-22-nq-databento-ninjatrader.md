@@ -9415,3 +9415,21 @@ STILL blocked. REMAINING: Chunk 3 (max-contracts + visible equity×20), Chunk 4 
 **Sunday add:** max-contracts exceeded → clamped (logged); raise `MaxNotionalLeverage` → bigger
 position allowed; toggle a cap OFF → it stops binding. REMAINING: Chunk 4 (blackout), Chunk 5
 (consistency), Chunk 6 (FE + toggles UI + Max-Margin relabel + Playwright).
+
+**CHUNK 4 SHIPPED (time/news blackout window):**
+- **What:** a per-strategy daily **blackout window** (`BlackoutStartCT`/`BlackoutEndCT`, HH:MM in
+  America/Chicago) + toggle (`BlackoutEnabled`, default OFF). When master+toggle ON and `now` is in
+  `[start,end)` CT, the gate skips the decision cycle (HOLD); NT8-side SL/TP still protect open
+  positions. The session-hours gate (`IsCMEOpen`, Plan-3 Task-18) already existed; this adds the
+  configurable window.
+- **Where:** `kernel.InBlackoutWindow(now, startCT, endCT)` (handles midnight-wrap; empty/malformed
+  → false so a misconfig never silently halts) chained into the Chunk-2 gate block
+  (`engine_analysis.go`) as `else if`, so it only runs when master is ON and no daily guardrail
+  already tripped.
+- **Safety (by construction):** blackout lives in the kernel decision gate (HOLD only); never the
+  live-account block. Master OFF → blackout (+ daily limits) bypassed, logged.
+- **Tests:** `TestInBlackoutWindow` (in-window, end-exclusive, before-start, outside, midnight-wrap,
+  empty/malformed/zero-width) green; full kernel + store + trader green; build/vet clean. ADDITIVE.
+
+**Sunday add:** set a blackout window covering "now" → entries blocked in the window; outside →
+normal. REMAINING: Chunk 5 (consistency), Chunk 6 (FE + toggles UI + Max-Margin relabel + Playwright).

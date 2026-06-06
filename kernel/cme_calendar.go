@@ -1,6 +1,9 @@
 package kernel
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // IsCMEOpen reports whether CME Globex is open for index futures at the given time.
 // Globex hours (Chicago time):
@@ -54,6 +57,40 @@ func CMESessionDayStart(now time.Time) time.Time {
 // rollover for the daily-window reset.
 func CMESessionDayKey(now time.Time) string {
 	return CMESessionDayStart(now).Format("2006-01-02")
+}
+
+// InBlackoutWindow (Chunk 4) reports whether `now` (evaluated in America/Chicago)
+// falls within the daily [startCT, endCT] window (HH:MM, 24h, Chicago time). The
+// Strategy Studio time/news blackout guardrail uses it. An empty/malformed window
+// → false (a misconfig never silently halts trading). Supports windows that wrap
+// midnight (start > end); a zero-width window (start == end) is never in blackout.
+func InBlackoutWindow(now time.Time, startCT, endCT string) bool {
+	start, ok1 := parseHHMM(startCT)
+	end, ok2 := parseHHMM(endCT)
+	if !ok1 || !ok2 || start == end {
+		return false
+	}
+	chicago, err := time.LoadLocation("America/Chicago")
+	if err != nil {
+		chicago = time.UTC
+	}
+	ct := now.In(chicago)
+	cur := ct.Hour()*60 + ct.Minute()
+	if start < end {
+		return cur >= start && cur < end
+	}
+	return cur >= start || cur < end // wraps midnight
+}
+
+// parseHHMM parses "HH:MM" (24h) into minutes-since-midnight. ok=false on any
+// malformed/out-of-range input.
+func parseHHMM(s string) (int, bool) {
+	var h, m int
+	n, err := fmt.Sscanf(s, "%d:%d", &h, &m)
+	if err != nil || n != 2 || h < 0 || h > 23 || m < 0 || m > 59 {
+		return 0, false
+	}
+	return h*60 + m, true
 }
 
 // isCMEHoliday returns true if t falls on a CME-observed full-closure holiday.

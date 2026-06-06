@@ -942,6 +942,13 @@ type RiskControlConfig struct {
 	// now VISIBLE + EDITABLE. Toggle default ON (safety backstop).
 	MaxNotionalLeverage float64 `json:"max_notional_leverage,omitempty"`
 	NotionalCapEnabled  *bool   `json:"notional_cap_enabled,omitempty"`
+
+	// Chunk 4 — time/news BLACKOUT window (daily, HH:MM in America/Chicago). When
+	// enabled, the bot makes no new decisions inside [start,end] CT (NT8-side SL/TP
+	// still protect open positions). New guardrail → toggle defaults OFF.
+	BlackoutEnabled *bool  `json:"blackout_enabled,omitempty"`
+	BlackoutStartCT string `json:"blackout_start_ct,omitempty"`
+	BlackoutEndCT   string `json:"blackout_end_ct,omitempty"`
 }
 
 // NewStrategyStore creates a new StrategyStore
