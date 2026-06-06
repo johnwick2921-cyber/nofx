@@ -221,11 +221,17 @@ export function StrategyStudioPage() {
     selectedStrategyIDRef.current = selectedStrategy?.id || ''
   }, [selectedStrategy?.id])
 
-  // Phase 2: reflect the strategy's saved prompt mode in the dropdown when the
-  // selected strategy changes (empty → "balanced"; the live loop applies the
-  // venue fallback for an unset variant regardless of this display value).
+  // Phase 2 (Chunk C — honest preview): show the variant the LIVE bot will
+  // actually resolve, mirroring Go resolvePromptVariant — a saved variant wins;
+  // otherwise the venue rule (CME-futures symbol → "futures", else "balanced").
+  // So a futures strategy with no saved variant previews the REAL futures
+  // prompt (preview == live), not a misleading "balanced".
   useEffect(() => {
-    setSelectedVariant(selectedStrategy?.config?.prompt_variant || 'balanced')
+    const cfg = selectedStrategy?.config
+    const saved = cfg?.prompt_variant?.trim()
+    const ai = cfg ? getAIConfig(cfg) : null
+    const symbol = ai?.coin_source?.static_coins?.[0]
+    setSelectedVariant(saved || (isCMEFutures(symbol) ? 'futures' : 'balanced'))
   }, [selectedStrategy?.id])
 
   useEffect(() => {
