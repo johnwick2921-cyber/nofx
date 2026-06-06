@@ -151,6 +151,13 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 				logger.Warnf("⚠️ Strategy Studio blackout window active (%s–%s CT) — skipping decision cycle (HOLD)", rc.BlackoutStartCT, rc.BlackoutEndCT)
 				telemetry.RiskGateTrips.WithLabelValues("strategy_studio_blackout").Inc()
 				return nil, nil
+			} else if boolOrDefault(rc.ConsistencyEnabled, false) && ConsistencyBreached(ctx.DailyRealizedPnL, ctx.TotalRealizedPnL, rc.ConsistencyMaxDayPct) {
+				// Chunk 5 — consistency rule: today's realized profit is too large a
+				// share of total → go passive so this session-day does not exceed the
+				// configured % of total realized profit.
+				logger.Warnf("⚠️ Strategy Studio consistency rule: today's realized profit %.2f ≥ %.0f%% of total %.2f — skipping decision cycle (HOLD)", ctx.DailyRealizedPnL, rc.ConsistencyMaxDayPct, ctx.TotalRealizedPnL)
+				telemetry.RiskGateTrips.WithLabelValues("strategy_studio_consistency").Inc()
+				return nil, nil
 			}
 		}
 	}

@@ -9433,3 +9433,22 @@ position allowed; toggle a cap OFF → it stops binding. REMAINING: Chunk 4 (bla
 
 **Sunday add:** set a blackout window covering "now" → entries blocked in the window; outside →
 normal. REMAINING: Chunk 5 (consistency), Chunk 6 (FE + toggles UI + Max-Margin relabel + Playwright).
+
+**CHUNK 5 SHIPPED (consistency rule — the complex one):**
+- **Semantic (documented):** no single CME session-day's realized profit may exceed
+  `ConsistencyMaxDayPct`% of all-time total realized profit. `ConsistencyBreached(today, total, pct)`
+  triggers ONLY once there is prior-day profit (`total − today > 0`) so a fresh/single-day account
+  never self-locks on its first profitable day; losing days, zero total, or pct≤0 never breach. When
+  breached the gate skips new entries so today's profit stops growing past the allowed share.
+- **Data:** `today` = `ctx.DailyRealizedPnL` (Chunk 2); `total` = `ctx.TotalRealizedPnL` set in the
+  loop from `GetFullStats().TotalPnL`. Chained into the gate as the next `else if` (master+toggle
+  governed, default OFF).
+- **Tests:** `TestConsistencyBreached` (breach, boundary, under, first-day no-self-lock, losing day,
+  zero total, pct 0) green; full kernel + store + trader green; build/vet clean. ADDITIVE.
+
+**BACKEND GUARDRAIL LAYER COMPLETE (Chunks 1–5):** Min R/R, Min Confidence, daily loss/profit/
+max-trades (true CME-day realized P&L), max-contracts, editable equity×20 cap, time/news blackout,
+consistency — ALL gate-enforced, per-strategy + env fallback, master + per-guardrail toggles, every
+trip + every bypass LOGGED, no toggle disables the live-account block. REMAINING: **Chunk 6 = the FE**
+(futures risk panel + all guardrail inputs + per-guardrail/master toggle UI + Max-Margin relabel +
+Playwright FE-verify).

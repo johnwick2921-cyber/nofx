@@ -117,6 +117,7 @@ type Context struct {
 	// gate in engine_analysis.go).
 	DailyRealizedPnL float64 `json:"-"`
 	TradesToday      int     `json:"-"`
+	TotalRealizedPnL float64 `json:"-"` // all-time realized P&L (Chunk 5 consistency rule)
 }
 
 // Decision AI trading decision

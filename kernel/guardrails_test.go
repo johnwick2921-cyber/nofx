@@ -201,3 +201,34 @@ func TestInBlackoutWindow(t *testing.T) {
 		t.Fatal("zero-width window should NOT block")
 	}
 }
+
+// --- Chunk 5 — consistency rule ---
+
+func TestConsistencyBreached(t *testing.T) {
+	// today=600 of total=1000 (prior=400), pct=50 → 600 ≥ 500 → breach
+	if !ConsistencyBreached(600, 1000, 50) {
+		t.Fatal("today 600 ≥ 50% of 1000 should breach")
+	}
+	// boundary: today=500 of total=1000 (prior=500) → 500 ≥ 500 → breach
+	if !ConsistencyBreached(500, 1000, 50) {
+		t.Fatal("boundary 500 == 50% of 1000 should breach")
+	}
+	// today=400 of total=1000 (prior=600) → 400 < 500 → ok
+	if ConsistencyBreached(400, 1000, 50) {
+		t.Fatal("today 400 < 50% of 1000 should NOT breach")
+	}
+	// first profitable day: today==total (prior=0) → never self-lock
+	if ConsistencyBreached(1000, 1000, 50) {
+		t.Fatal("first profitable day (today==total) should NOT self-lock")
+	}
+	// losing day, zero total, or pct≤0 → never breach
+	if ConsistencyBreached(-100, 1000, 50) {
+		t.Fatal("losing day should not breach")
+	}
+	if ConsistencyBreached(600, 0, 50) {
+		t.Fatal("total 0 should not breach")
+	}
+	if ConsistencyBreached(600, 1000, 0) {
+		t.Fatal("pct 0 (disabled) should not breach")
+	}
+}
