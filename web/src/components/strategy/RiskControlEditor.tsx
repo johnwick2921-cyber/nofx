@@ -359,30 +359,60 @@ export function RiskControlEditor({
             </div>
           </div>
 
-          <div
-            className="p-4 rounded-lg"
-            style={{ background: '#0B0E11', border: '1px solid #0ECB81' }}
-          >
-            <label className="block text-sm mb-1" style={{ color: '#EAECEF' }}>
-              {ts(riskControl.maxMarginUsage, language)}
-            </label>
-            <p className="text-xs mb-2" style={{ color: '#848E9C' }}>
-              {ts(riskControl.maxMarginUsageDesc, language)}
-            </p>
-            <div className="flex items-center gap-2">
-              <span
-                className="w-12 text-center font-mono"
-                style={{ color: '#0ECB81' }}
+          {/* Max Margin Usage — crypto-only + ADVICE-ONLY. Stored as a 0-1
+              fraction, shown/edited as a percent. The value is NOT gate-enforced:
+              it only feeds the AI prompt (engine_prompt.go) as a hint — no code
+              blocks a trade for it (hence the honest "AI-guided" label). The
+              onChange clamps to [0.1,1.0] = [10,100]%, matching ClampLimits
+              (store/strategy.go) so the shown value always equals the saved value.
+              Hidden on futures (like the PVR tiles): "% margin usage" is a crypto-
+              margin concept; futures margin is a per-contract bond, surfaced in the
+              Futures Risk panel below. */}
+          {!isFutures && (
+            <div
+              className="p-4 rounded-lg"
+              style={{ background: '#0B0E11', border: '1px solid #0ECB81' }}
+            >
+              <label
+                className="block text-sm mb-1"
+                style={{ color: '#EAECEF' }}
               >
-                {Math.round((config.max_margin_usage ?? 0.9) * 100)}%
-              </span>
-              <span className="text-xs" style={{ color: '#F6465D' }}>
-                {isFutures
-                  ? 'futures = per-contract bond'
-                  : 'AI-guided (not enforced)'}
-              </span>
+                {ts(riskControl.maxMarginUsage, language)}
+              </label>
+              <p className="text-xs mb-2" style={{ color: '#848E9C' }}>
+                {ts(riskControl.maxMarginUsageDesc, language)}
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  value={Math.round((config.max_margin_usage ?? 0.9) * 100)}
+                  onChange={(e) =>
+                    updateField(
+                      'max_margin_usage',
+                      Math.min(
+                        1,
+                        Math.max(0.1, (parseFloat(e.target.value) || 90) / 100)
+                      )
+                    )
+                  }
+                  disabled={disabled}
+                  min={10}
+                  max={100}
+                  step={5}
+                  className="w-20 px-3 py-2 rounded font-mono"
+                  style={{
+                    background: '#1E2329',
+                    border: '1px solid #2B3139',
+                    color: '#EAECEF',
+                  }}
+                />
+                <span style={{ color: '#848E9C' }}>%</span>
+                <span className="text-xs" style={{ color: '#F6465D' }}>
+                  AI-guided (not enforced)
+                </span>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
