@@ -139,10 +139,17 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 				MaxDailyTrades:        rc.MaxDailyTrades,
 			}
 			if !g.MasterEnabled {
-				logger.Warnf("⚠️ Strategy Studio: risk guardrails DISABLED by master switch — daily limits NOT enforced this cycle")
+				logger.Warnf("⚠️ Strategy Studio: risk guardrails DISABLED by master switch — daily limits + blackout NOT enforced this cycle")
 			} else if _, gErr := g.Check(); gErr != nil {
 				logger.Warnf("⚠️ Strategy Studio daily guardrail tripped: %v — skipping decision cycle (HOLD)", gErr)
 				telemetry.RiskGateTrips.WithLabelValues("strategy_studio_daily").Inc()
+				return nil, nil
+			} else if boolOrDefault(rc.BlackoutEnabled, false) && InBlackoutWindow(time.Now(), rc.BlackoutStartCT, rc.BlackoutEndCT) {
+				// Chunk 4 — time/news blackout: go passive during a configured daily
+				// [start,end] CT window (master + toggle governed). NT8-side SL/TP
+				// still protect open positions; the bot just makes no new decisions.
+				logger.Warnf("⚠️ Strategy Studio blackout window active (%s–%s CT) — skipping decision cycle (HOLD)", rc.BlackoutStartCT, rc.BlackoutEndCT)
+				telemetry.RiskGateTrips.WithLabelValues("strategy_studio_blackout").Inc()
 				return nil, nil
 			}
 		}
