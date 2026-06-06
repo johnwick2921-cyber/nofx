@@ -9481,3 +9481,28 @@ Playwright FE-verify).
 **STRATEGY STUDIO PHASE 1 (RISK CONTROL) COMPLETE** — gates (Chunks 1-5) + FE (Chunk 6): every
 guardrail is gate-enforced, per-strategy + env fallback, master + per-guardrail toggles, every trip/
 bypass logged, no toggle disables the live-account block, and all of it is now settable on the page.
+
+## 2026-06-05 — Strategy Studio: two reported issues (diagnose + FE fix)
+
+**(A) "built but can't use anything" — DIAGNOSED, not a code bug.** The stored JWT **expired
+2026-05-30 23:43 UTC** (~6.25 days ago); `/api/strategies` returns **401** → "Failed to fetch
+strategies" → no strategy loads → the editor renders empty/disabled. Verified via Playwright (decoded
+the token's `exp`). Compounding by-design facts (not bugs): the editor is `disabled={selectedStrategy
+?.is_default}` (StrategyStudioPage.tsx:774) — **default/template strategies are read-only** (the Save
+button is hidden for `is_default`); and the Max-Positions / Min-Position-Size / PVR boxes are
+intentionally read-only "System enforced" displays. **Fix: re-login** (fresh token) → the strategy
+list loads → a **non-default** strategy is editable. No code change for (A).
+
+**(B) PVR labels lying on futures — FIXED (FE-only).** The Position-Value-Ratio section showed
+"CODE ENFORCED" / "System enforced" on BOTH paths, but the deep-dive proved PVR is **FAKE for
+futures** (the gate hardcodes equity×20, ignoring these ratios). The crypto PVR tiles are now hidden
+on the futures path — `RiskControlEditor.tsx` wraps the PVR section in `{!isFutures && (…)}` (mirroring
+the leverage-tier pattern). On futures the real size controls are **max-contracts + the editable
+equity×N notional cap** (already in the Chunk-6 Prop-Firm Guardrails section). **Crypto keeps the PVR
+tiles + "CODE ENFORCED"** (true there). Max-Positions + Min-Position-Size keep "System enforced" (REAL
+both per the deep-dive); Max-Margin was already relabeled honest in Chunk 6.
+
+**Verify:** `tsc --noEmit` 0 errors; `npm run build` ✓; Go untouched. The futures-vs-crypto render is
+**code-verified** (the `{!isFutures}` wrap) — a live Playwright render is **blocked by the expired
+JWT** (can't load a strategy); it'll show once re-authed. ADDITIVE; crypto byte-identical; the gates
+(Chunks 1-5) untouched.
