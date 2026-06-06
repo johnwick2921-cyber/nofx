@@ -9603,3 +9603,55 @@ lying i18n desc `maxMarginUsageDesc` ("enforced by code" / "由代码强制执�
 prompt USE of max_margin_usage is unchanged). ADDITIVE; crypto otherwise byte-identical; the gates
 (Chunks 1-5) + guardrails + PVR fix + the editable Max-Positions/Min-Position-Size + multi-account +
 P&L + chart-TZ all untouched. SIM-only; the live-account block untouched.
+
+
+## 2026-06-06 — Strategy Studio PHASE 2 CORE: the Mode dropdown is now REAL (3 safe chunks) — built + static-verified, behavior-verified Sunday
+
+**STATUS:** BUILT + STATIC-VERIFIED (market closed). The owner's saved Mode now drives the LIVE bot;
+"Futures" is selectable; the preview shows what the bot will actually run. LIVE behavior proof
+(pick a mode → the bot's next decision uses it) is on the SUNDAY list.
+
+Prior state (Phase-2 deep-dive map): the Mode dropdown was a **preview-only toy** — its value was
+local state sent only to the preview/test endpoints, NEVER saved; the live loop hardcoded the variant
+by venue (`auto_trader_loop.go`: ninjatrader→"futures", else→"balanced"); the dropdown had no
+"Futures" option; and a futures strategy's preview showed "balanced" while the bot ran the futures
+prompt (the "preview lies" gap). Three additive chunks fixed this:
+
+- **CHUNK A — `cad85169` (FE-only):** added a **"Futures"** option to both Mode `<select>`s (Prompt
+  Preview + AI Test tabs) + the `futures` i18n key (en/zh/id). The backend `BuildSystemPrompt` already
+  accepts `variant="futures"` (engine_prompt.go:22). tsc 0; Go untouched.
+- **CHUNK B — `84f5ea75` (KEYSTONE, Go + FE):** the dropdown pick now **persists** and **drives the
+  live bot**.
+  - `store/strategy.go`: `StrategyConfig` gains a top-level `prompt_variant` (json), threaded through
+    `MarshalJSON`/`UnmarshalJSON` so it persists with the strategy (omitempty → unset = absent).
+  - `trader/auto_trader_loop.go`: new pure helper **`resolvePromptVariant(exchange, saved)`** — a
+    non-empty saved variant WINS; when EMPTY it falls back to the ORIGINAL venue rule
+    (ninjatrader→futures, else balanced). The loop reads the saved variant **null-safely** (nil
+    engine/config → venue rule). **Back-compat guarantee: a no-variant strategy resolves EXACTLY as
+    before — byte-identical.**
+  - FE: `prompt_variant` added to the `StrategyConfig` type + to `normalizeStrategyConfig` (which
+    otherwise **strips** it on save — the keystone gotcha); the dropdown persists via `updateConfig`
+    and syncs from the saved value on strategy switch.
+  - Proven by unit tests: `TestResolvePromptVariant` (empty→venue-rule byte-identical; saved wins;
+    whitespace-trimmed) + `TestStrategyConfigPromptVariantRoundTrip` (persists top-level; unset
+    omitted; legacy config → ""). **Prompt-layer only — NO risk gate, NO live-account-block change.**
+- **CHUNK C — `843f0350` (FE-only, honest preview):** the dropdown/preview now initialize to the
+  variant the LIVE loop will **resolve** — mirroring `resolvePromptVariant`: saved wins, else the
+  venue rule by the strategy's symbol (`isCMEFutures(static_coins[0])` → "futures", else "balanced").
+  The preview endpoint already builds for the strategy's own symbol, so a futures strategy now previews
+  the **real futures prompt** (preview == live), not a misleading "balanced".
+
+**Static verify:** `go build ./...` clean; `go vet ./store ./trader` clean; `go test ./store ./trader
+./kernel` all green (incl. the 2 new keystone tests); `tsc --noEmit` 0; FE built; `nofx-bin` rebuilt +
+restarted clean (0 "unknown frame type"; trader `sss` = NinjaTrader/"MNQ SIM Default" auto-started — a
+default strategy with no saved variant → resolves to "futures" via the fallback, byte-identical).
+
+**SUNDAY behavior list (market open):** on a NON-DEFAULT strategy, set the Mode (e.g. Aggressive on a
+crypto strategy, or Futures on an MNQ strategy) → the bot's NEXT decision uses THAT prompt — confirm
+via Recent Decisions' "System Prompt" expander (the ground truth) + the cycle log; a no-variant
+strategy still runs the venue rule. SIM-only; never the LIVE LFE… account.
+
+**ADDITIVE; the Mode dropdown is now real (persist + live-read, venue-rule fallback); crypto
+byte-identical where no variant set; the Risk Control gates/guardrails/editable-boxes/label-sweep +
+multi-account (P1-P4) + P&L + chart-TZ ALL untouched; NO C#/wire change. SIM-only; the live-account
+block (broker layer) untouched + untoggleable.**
