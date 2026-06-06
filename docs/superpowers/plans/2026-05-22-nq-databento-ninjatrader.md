@@ -9564,3 +9564,42 @@ fallback" is satisfied with **zero Go change**.
 `ok` (Go byte-identical — pure regression proof). ADDITIVE; crypto byte-identical; the gates
 (Chunks 1-5) + guardrails + multi-account + P&L + chart-TZ all untouched. SIM-only; the live-account
 block untoggleable (broker layer, unchanged).
+
+
+## 2026-06-06 — Strategy Studio universal LABEL sweep + Max Margin (editable on crypto / hidden on futures) — FE only
+
+Two FE-only jobs, ADDITIVE, no Go/gate change, no enforced path touched.
+
+**JOB 1 — neutralized crypto-flavored labels on UNIVERSAL controls** (LABELS only — no per-instrument
+gating/hiding of data; that reverted pattern was NOT repeated). The Strategy Studio is one page for
+both crypto + CME futures, so "coins" on controls that serve both is wrong. Changed (all 3 locales
+zh/en/es) in `web/src/i18n/strategy-translations.ts`:
+- `maxPositionsDesc` (Risk Control): "Maximum **coins** held simultaneously" → "Maximum **positions**
+  held simultaneously".
+- `staticCoins` "Custom Coins"→"Custom Symbols"; `addCoin` "Add Coin"→"Add Symbol"; `staticDesc`
+  "…trading coins"→"…trading symbols"; `coins` (the "Up to N" unit) "coins"→"symbols";
+  `excludedCoins` "Excluded Coins"→"Excluded Symbols"; `excludedCoinsDesc` "These coins…"→"These
+  symbols…".
+And in `web/src/components/strategy/CoinSourceEditor.tsx` (hardcoded): the max-symbols toast
+"…coins allowed"→"…symbols allowed"; the two add-symbol placeholders "BTC, ETH, SOL…" / "BTC, ETH,
+DOGE…" → "e.g. MNQ, ES, BTC, ETH" (shows both futures + crypto).
+**LEFT crypto wording (deliberate, verified):** the Leverage sliders + PVR tiles (crypto-only, already
+hidden on futures via `{!isFutures}`); `minPositionSizeDesc` USDT (already has a `…Futures` USD variant
+chosen by `isFutures`); the `USD/USDT` unit (already `isFutures`-conditional); the AI500 / OI / NofxOS
+data-source descriptions (genuinely crypto data providers — neutralizing them would falsely imply they
+serve futures); GridConfig symbol options (grid = a separate strategy type).
+
+**JOB 2 — Max Margin Usage made EDITABLE (crypto) / HIDDEN (futures), stays ADVICE-ONLY.** In
+`RiskControlEditor.tsx` the read-only display span became a number input (percent), wired to
+`updateField('max_margin_usage', …)`, clamped to **[0.1,1.0] = [10,100]%** to match `ClampLimits`
+(store/strategy.go:116-120) so shown == saved. Wrapped in `{!isFutures && (…)}` (the SAME `isFutures`
+the PVR fix uses) → visible+editable on crypto, hidden on futures (margin-usage % is a crypto-margin
+concept; futures margin is a per-contract bond shown in the Futures Risk panel). **Stays advice-only:**
+the value still only feeds the AI prompt (`engine_prompt.go:73`) — NO gate enforcement was added. Its
+lying i18n desc `maxMarginUsageDesc` ("enforced by code" / "由代码强制执行") was corrected to the honest
+"AI-guided hint, not code-enforced".
+
+**Verify:** `tsc --noEmit` 0 errors; `npm run build` ✓; Go untouched (no gate/prompt code change — the
+prompt USE of max_margin_usage is unchanged). ADDITIVE; crypto otherwise byte-identical; the gates
+(Chunks 1-5) + guardrails + PVR fix + the editable Max-Positions/Min-Position-Size + multi-account +
+P&L + chart-TZ all untouched. SIM-only; the live-account block untouched.

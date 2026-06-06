@@ -103,8 +103,8 @@ export function CoinSourceEditor({
     if (currentCoins.length >= MAX_STATIC_COINS) {
       showToast(
         language === 'zh'
-          ? `最多添加 ${MAX_STATIC_COINS} 个币种`
-          : `Maximum ${MAX_STATIC_COINS} coins allowed`
+          ? `最多添加 ${MAX_STATIC_COINS} 个品种`
+          : `Maximum ${MAX_STATIC_COINS} symbols allowed`
       )
       return
     }
@@ -257,7 +257,7 @@ export function CoinSourceEditor({
                 value={newCoin}
                 onChange={(e) => setNewCoin(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleAddCoin()}
-                placeholder="BTC, ETH, SOL..."
+                placeholder="e.g. MNQ, ES, BTC, ETH"
                 className="flex-1 px-4 py-2 rounded-lg bg-nofx-bg border border-nofx-gold/20 text-nofx-text"
               />
               <button
@@ -313,7 +313,7 @@ export function CoinSourceEditor({
               value={newExcludedCoin}
               onChange={(e) => setNewExcludedCoin(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && handleAddExcludedCoin()}
-              placeholder="BTC, ETH, DOGE..."
+              placeholder="e.g. MNQ, ES, BTC, ETH"
               className="flex-1 px-4 py-2 rounded-lg text-sm bg-nofx-bg border border-nofx-gold/20 text-nofx-text"
             />
             <button

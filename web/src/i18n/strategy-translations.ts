@@ -17,11 +17,11 @@ export const coinSource = {
   oi_top: { zh: 'OI 持仓增加', en: 'OI Increase', es: 'Aumento OI' },
   oi_low: { zh: 'OI 持仓减少', en: 'OI Decrease', es: 'Disminución OI' },
   staticCoins: {
-    zh: '自定义币种',
-    en: 'Custom Coins',
-    es: 'Monedas Personalizadas',
+    zh: '自定义品种',
+    en: 'Custom Symbols',
+    es: 'Símbolos Personalizados',
   },
-  addCoin: { zh: '添加币种', en: 'Add Coin', es: 'Agregar Moneda' },
+  addCoin: { zh: '添加品种', en: 'Add Symbol', es: 'Agregar Símbolo' },
   useAI500: {
     zh: '启用 AI500 数据源',
     en: 'Enable AI500 Data Provider',
@@ -41,26 +41,26 @@ export const coinSource = {
   },
   oiLowLimit: { zh: '数量上限', en: 'Limit', es: 'Límite' },
   staticDesc: {
-    zh: '手动指定交易币种列表',
-    en: 'Manually specify trading coins',
-    es: 'Especificar monedas manualmente',
+    zh: '手动指定交易品种列表',
+    en: 'Manually specify trading symbols',
+    es: 'Especificar símbolos manualmente',
   },
   maxCoins: { zh: '最多', en: 'Up to', es: 'Hasta' },
-  coins: { zh: '个币种', en: 'coins', es: 'monedas' },
+  coins: { zh: '个品种', en: 'symbols', es: 'símbolos' },
   dataSourceConfig: {
     zh: '数据源配置',
     en: 'Data Source Configuration',
     es: 'Configuración de Fuente',
   },
   excludedCoins: {
-    zh: '排除币种',
-    en: 'Excluded Coins',
-    es: 'Monedas Excluidas',
+    zh: '排除品种',
+    en: 'Excluded Symbols',
+    es: 'Símbolos Excluidos',
   },
   excludedCoinsDesc: {
-    zh: '这些币种将从所有数据源中排除，不会被交易',
-    en: 'These coins will be excluded from all sources and will not be traded',
-    es: 'Estas monedas serán excluidas de todas las fuentes',
+    zh: '这些品种将从所有数据源中排除，不会被交易',
+    en: 'These symbols will be excluded from all sources and will not be traded',
+    es: 'Estos símbolos serán excluidos de todas las fuentes',
   },
   addExcludedCoin: {
     zh: '添加排除',
@@ -353,9 +353,9 @@ export const riskControl = {
     es: 'Máximo de Posiciones',
   },
   maxPositionsDesc: {
-    zh: '同时持有的最大币种数量',
-    en: 'Maximum coins held simultaneously',
-    es: 'Monedas máximas simultáneas',
+    zh: '同时持有的最大持仓数量',
+    en: 'Maximum positions held simultaneously',
+    es: 'Posiciones máximas simultáneas',
   },
   tradingLeverage: {
     zh: '交易杠杆（交易所杠杆）',
@@ -433,9 +433,9 @@ export const riskControl = {
     es: 'Uso Máximo de Margen (guía AI)',
   },
   maxMarginUsageDesc: {
-    zh: '保证金使用率上限，由代码强制执行',
-    en: 'Maximum margin utilization, enforced by code',
-    es: 'Límite de margen',
+    zh: '保证金使用率上限（AI 提示，非代码强制）',
+    en: 'Max margin utilization — AI-guided hint, not code-enforced',
+    es: 'Uso máximo de margen (guía AI, no forzado)',
   },
   entryRequirements: {
     zh: '开仓要求',
