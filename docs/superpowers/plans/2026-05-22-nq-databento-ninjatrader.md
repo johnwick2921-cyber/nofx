@@ -9516,3 +9516,51 @@ stuck state IS the "can't use anything." Fix: a small `isJwtExpired(token)` help
 now skip + CLEAR an expired token so the app shows the login page. tsc clean; FE build ✓; Go untouched.
 After this lands (vite HMR), a reload detects the dead token → `/login` → re-login → everything works
 (and the PVR-on-futures fix shows). ADDITIVE; FE-only; the gates + crypto untouched.
+
+
+## 2026-06-06 — Max Positions + Min Position Size made USER-EDITABLE (FE-only; supersedes the "keep System enforced" note above)
+
+**Goal:** the user wanted to SET Max Positions + Min Position Size themselves — they were read-only
+"System enforced" displays. (This corrects the 2026-06-05 note above that said they "keep System
+enforced".)
+
+**AUDIT (STEP A) — the premise that a gate-read change was needed is REFUTED; it's FE-only.** Both
+gates ALREADY read the per-strategy config value with a system default — exactly the Chunk-1 pattern:
+- **Max Positions:** `enforceMaxPositions` reads `RiskControl.MaxPositions`, default **3** when ≤0
+  (`trader/auto_trader_risk.go:266`). `ClampLimits` bounds it to **[1, 3]** on every save
+  (`api/strategy.go:205` create / `:316` update) AND at decision time (`kernel/engine_analysis.go:220`)
+  — the ceiling is the `MaxPositions = 3` const (`store/strategy.go:18,77`), which is reused as both
+  the default and the clamp ceiling.
+- **Min Position Size:** `enforceMinPositionSize` reads `RiskControl.MinPositionSize`, default **12**
+  when ≤0 (`trader/auto_trader_risk.go:249`). `ClampLimits` bounds it to **[10, 1000]**
+  (`store/strategy.go:122-126`, consts `MinPositionSize=10`/`MaxPositionSize=1000`).
+
+**FLOOR VERDICT (the critical safety question) — SAFE to expose.** Min Position Size has THREE
+independent guards: store-clamp ≥10, trader-gate ≥config, and the kernel reject-floor **12 general /
+60 BTC-ETH** (`kernel/engine_position.go:78-84`). A user value can therefore only ever **RAISE** the
+effective minimum — anything below the floor is still clamped/rejected (defense-in-depth). **No floor
+is removed; none is bypassed.** So min_position_size is exposed freely within [10,1000]. Max Positions
+has a genuine **ceiling of 3** (the const), so it is exposed within **[1,3]** (lets the user *tighten*
+to 1–2, e.g. a single MNQ position). Raising it above 3 is a separate product decision (the const
+comment is "Hard limits to prevent token explosion in AI requests") — **FLAGGED, not silently done**,
+mirroring Chunk 1 (Min R/R was exposed within its `[1,10]` clamp range, NOT by raising the const).
+
+**BUILD (FE-only, additive) — `web/src/components/strategy/RiskControlEditor.tsx`:**
+- Max Positions: the read-only `<span>` + "System enforced" → a `type="number"` input
+  (`min=1 max=3 step=1`) wired to `updateField('max_positions', …)`, with an **onChange clamp**
+  `Math.min(3, Math.max(1, …))` so the shown value always equals the saved value (no "typed 5, saved
+  3" surprise). Label → `user-set · enforced (range 1–3)`.
+- Min Position Size: same treatment, input (`min=10 max=1000 step=1`) wired to
+  `updateField('min_position_size', …)`, onChange clamp `Math.min(1000, Math.max(10, …))`, USD/USDT
+  unit preserved. Label → `user-set · enforced`.
+- Mirrors the existing Min R/R input exactly (same className/style/fallback). Both boxes render on
+  BOTH crypto + futures (outside the `!isFutures` gates) — correct, since the gate reads them on both.
+
+**No env var for these two** (unlike the Chunk-2–5 guardrails): the system default (3 / 12) IS the
+unset fallback, and the gate already reads the per-strategy value — so "per-strategy + system
+fallback" is satisfied with **zero Go change**.
+
+**Verify:** `tsc --noEmit` 0 errors; `go build ./...` clean; `go test ./store ./trader ./kernel` all
+`ok` (Go byte-identical — pure regression proof). ADDITIVE; crypto byte-identical; the gates
+(Chunks 1-5) + guardrails + multi-account + P&L + chart-TZ all untouched. SIM-only; the live-account
+block untoggleable (broker layer, unchanged).
