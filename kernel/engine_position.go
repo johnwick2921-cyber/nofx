@@ -18,16 +18,16 @@ const futuresMaxNotionalLeverage = 20.0
 // Decision Validation
 // ============================================================================
 
-func validateDecisions(decisions []Decision, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64, minRiskReward float64, minConfidence int) error {
+func validateDecisions(decisions []Decision, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64, minRiskReward float64, minConfidence int, maxNotionalLev float64) error {
 	for i := range decisions {
-		if err := validateDecision(&decisions[i], accountEquity, btcEthLeverage, altcoinLeverage, btcEthPosRatio, altcoinPosRatio, minRiskReward, minConfidence); err != nil {
+		if err := validateDecision(&decisions[i], accountEquity, btcEthLeverage, altcoinLeverage, btcEthPosRatio, altcoinPosRatio, minRiskReward, minConfidence, maxNotionalLev); err != nil {
 			return fmt.Errorf("decision #%d validation failed: %w", i+1, err)
 		}
 	}
 	return nil
 }
 
-func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64, minRiskReward float64, minConfidence int) error {
+func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64, minRiskReward float64, minConfidence int, maxNotionalLev float64) error {
 	validActions := map[string]bool{
 		"open_long":   true,
 		"open_short":  true,
@@ -48,10 +48,15 @@ func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoi
 		isFutures := market.IsCMEFuturesSymbol(d.Symbol)
 		switch {
 		case isFutures:
-			// CME futures are sized in contracts, not crypto USD ratio. Apply
-			// a notional sanity ceiling (equity × futuresMaxNotionalLeverage);
-			// the executor does the precise contract sizing + clamp.
-			maxPositionValue = accountEquity * futuresMaxNotionalLeverage
+			// CME futures: a notional sanity ceiling (equity × the configured
+			// multiplier; Chunk 3 made it editable, default 20). maxNotionalLev<=0
+			// → the cap is DISABLED (master/toggle off): use a huge ceiling so it
+			// never binds. The executor does the precise contract sizing + clamp.
+			if maxNotionalLev > 0 {
+				maxPositionValue = accountEquity * maxNotionalLev
+			} else {
+				maxPositionValue = accountEquity * 1e9
+			}
 		case d.Symbol == "BTCUSDT" || d.Symbol == "ETHUSDT":
 			maxLeverage = btcEthLeverage
 			posRatio = btcEthPosRatio
@@ -87,7 +92,7 @@ func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoi
 		if d.PositionSizeUSD > maxPositionValue+tolerance {
 			switch {
 			case isFutures:
-				return fmt.Errorf("%s futures notional cannot exceed %.0f USD (%.0fx account equity), actual: %.0f", d.Symbol, maxPositionValue, futuresMaxNotionalLeverage, d.PositionSizeUSD)
+				return fmt.Errorf("%s futures notional cannot exceed %.0f USD (%.0fx account equity), actual: %.0f", d.Symbol, maxPositionValue, maxNotionalLev, d.PositionSizeUSD)
 			case d.Symbol == "BTCUSDT" || d.Symbol == "ETHUSDT":
 				return fmt.Errorf("BTC/ETH single coin position value cannot exceed %.0f USDT (%.1fx account equity), actual: %.0f", maxPositionValue, posRatio, d.PositionSizeUSD)
 			default:

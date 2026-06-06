@@ -19,7 +19,7 @@ const maxFuturesContracts = 10.0
 // a clamped contract count for CME futures: contracts = notional / (price ×
 // pointValue), rounded, floored at 1, capped at maxFuturesContracts. Bypasses
 // the crypto notional/leverage margin model (futures margin is per-contract).
-func futuresOrderQuantity(symbol string, notionalUSD, price float64) float64 {
+func futuresOrderQuantity(symbol string, notionalUSD, price float64, maxContracts int) float64 {
 	pv := market.FuturesPointValue(symbol)
 	if pv <= 0 || price <= 0 {
 		return 1 // safe default: 1 contract
@@ -28,10 +28,24 @@ func futuresOrderQuantity(symbol string, notionalUSD, price float64) float64 {
 	if contracts < 1 {
 		contracts = 1
 	}
-	if contracts > maxFuturesContracts {
-		contracts = maxFuturesContracts
+	// Chunk 3 — max-contracts clamp (was a silent hardcoded 10). maxContracts<=0
+	// → no clamp (the guardrail is disabled by master/toggle). Log when clamping.
+	if maxContracts > 0 && contracts > float64(maxContracts) {
+		logger.Infof("  ⚠️ [RISK CONTROL] %s order %.0f contracts exceeds max %d — clamping to %d", symbol, contracts, maxContracts, maxContracts)
+		contracts = float64(maxContracts)
 	}
 	return contracts
+}
+
+// resolveMaxContracts returns the effective futures max-contracts clamp for this
+// trader's strategy (per-strategy value, else the 10-contract default), respecting
+// the master switch + the max-contracts toggle. 0 = no clamp (disabled).
+func (at *AutoTrader) resolveMaxContracts() int {
+	if at.config.StrategyConfig == nil {
+		return int(maxFuturesContracts)
+	}
+	rc := at.config.StrategyConfig.RiskControl
+	return kernel.ResolveMaxContracts(rc.GuardrailsEnabled, rc.MaxContractsEnabled, rc.MaxContractsPerOrder, int(maxFuturesContracts))
 }
 
 // executeDecisionWithRecord executes AI decision and records detailed information
@@ -212,7 +226,7 @@ func (at *AutoTrader) executeOpenLongWithRecord(decision *kernel.Decision, actio
 		// CME futures: size in contracts (notional / (price × point value)),
 		// clamped. Skip the crypto notional/leverage margin model — futures
 		// margin is per-contract, not notional/leverage.
-		quantity = futuresOrderQuantity(decision.Symbol, decision.PositionSizeUSD, marketData.CurrentPrice)
+		quantity = futuresOrderQuantity(decision.Symbol, decision.PositionSizeUSD, marketData.CurrentPrice, at.resolveMaxContracts())
 	} else {
 		// ⚠️ Auto-adjust position size if insufficient margin (crypto)
 		// Formula: totalRequired = positionSize/leverage + positionSize*0.001 + positionSize/leverage*0.01
@@ -353,7 +367,7 @@ func (at *AutoTrader) executeOpenShortWithRecord(decision *kernel.Decision, acti
 		// CME futures: size in contracts (notional / (price × point value)),
 		// clamped. Skip the crypto notional/leverage margin model — futures
 		// margin is per-contract, not notional/leverage.
-		quantity = futuresOrderQuantity(decision.Symbol, decision.PositionSizeUSD, marketData.CurrentPrice)
+		quantity = futuresOrderQuantity(decision.Symbol, decision.PositionSizeUSD, marketData.CurrentPrice, at.resolveMaxContracts())
 	} else {
 		// ⚠️ Auto-adjust position size if insufficient margin (crypto)
 		// Formula: totalRequired = positionSize/leverage + positionSize*0.001 + positionSize/leverage*0.01

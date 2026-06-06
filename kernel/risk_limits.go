@@ -233,3 +233,31 @@ func firstPositive(vals ...float64) float64 {
 	}
 	return 0
 }
+
+// ResolveMaxContracts (Chunk 3) returns the effective max-contracts clamp for a
+// futures order, respecting the master switch + the per-guardrail toggle. Returns
+// 0 = NO clamp (disabled by master/toggle). Per-strategy value overrides; def is
+// the fallback (the prior 10-contract default).
+func ResolveMaxContracts(masterEnabled, contractsEnabled *bool, perStrategy, def int) int {
+	if !boolOrDefault(masterEnabled, true) || !boolOrDefault(contractsEnabled, true) {
+		return 0
+	}
+	if perStrategy > 0 {
+		return perStrategy
+	}
+	return def
+}
+
+// ResolveNotionalLeverage (Chunk 3) returns the effective futures notional-ceiling
+// multiplier (max notional = equity × this), respecting the master + toggle.
+// Returns 0 = NO cap (disabled by master/toggle). Per-strategy value overrides;
+// def is the fallback (the prior equity×20 const).
+func ResolveNotionalLeverage(masterEnabled, notionalEnabled *bool, perStrategy, def float64) float64 {
+	if !boolOrDefault(masterEnabled, true) || !boolOrDefault(notionalEnabled, true) {
+		return 0
+	}
+	if perStrategy > 0 {
+		return perStrategy
+	}
+	return def
+}
