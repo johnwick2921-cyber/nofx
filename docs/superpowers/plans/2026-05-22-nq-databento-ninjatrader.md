@@ -9452,3 +9452,32 @@ consistency — ALL gate-enforced, per-strategy + env fallback, master + per-gua
 trip + every bypass LOGGED, no toggle disables the live-account block. REMAINING: **Chunk 6 = the FE**
 (futures risk panel + all guardrail inputs + per-guardrail/master toggle UI + Max-Margin relabel +
 Playwright FE-verify).
+
+**CHUNK 6 SHIPPED (the FE surfacing — Strategy Studio Phase 1 COMPLETE end-to-end):**
+- **Prop-Firm Guardrails section** added to `RiskControlEditor.tsx`: a **master switch** + a
+  `GuardrailRow` (label + on/off `Toggle` + value input) for daily loss, daily profit, max-daily-
+  trades, consistency %, max-contracts, the editable notional cap (equity × N), and a blackout
+  start/end window — each wired via `updateField('<exact_snake_case_key>')`.
+- **Wiring verified (MAIN, file:line):** all 17 FE keys match the `store.RiskControlConfig` JSON tags
+  the gates read 1:1 (`daily_loss_limit_usd`, …, `guardrails_enabled`); every FE toggle default
+  (`?? true`/`?? false`) matches its backend `boolOrDefault` default. So a saved value reaches the
+  exact gate field; an unset strategy shows the correct default toggle state.
+- **Futures risk panel** (futures path only): shows the real futures size knobs (≤ max contracts,
+  notional = equity × N, MNQ ≈ $2/pt). Crypto keeps its leverage/PVR tiers byte-identical (the panel
+  + the guardrails section render regardless, but the dead crypto knobs stay only on the crypto path).
+- **Honest relabel:** the false **"System enforced"** on Max Margin → `AI-guided (not enforced)` /
+  `futures = per-contract bond` in the FE (RiskControlEditor.tsx) AND the Go chat summary
+  (`skill_management_handlers.go:1166`, the one false tag — the others on 1163-1167 are genuinely
+  enforced).
+- **Safety:** the FE toggles set ONLY the guardrail `…_enabled`/master flags (kernel-gate config) —
+  no FE control touches the broker-layer live-account guard; the LIVE account stays hard-blocked.
+- **Verify:** `tsc --noEmit` clean; `npm run build` ✓; `go build` ✓ (the chat-string fix). Live
+  Playwright render of the panel is **blocked by an expired JWT** (the strategy fetch 401s — same as
+  all session); documented (screenshot) + the FE→config→gate wiring verified by code (all 17 keys
+  match) + the panel builds/type-checks. The save→persist + visual render go on the Sunday/next-auth
+  list. ADDITIVE; crypto byte-identical; the backend (Chunks 1-5) + multi-account + P&L + chart-TZ
+  untouched.
+
+**STRATEGY STUDIO PHASE 1 (RISK CONTROL) COMPLETE** — gates (Chunks 1-5) + FE (Chunk 6): every
+guardrail is gate-enforced, per-strategy + env fallback, master + per-guardrail toggles, every trip/
+bypass logged, no toggle disables the live-account block, and all of it is now settable on the page.
