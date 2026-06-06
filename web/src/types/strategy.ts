@@ -44,6 +44,10 @@ export interface StrategyConfig {
   // Language setting: "zh" for Chinese, "en" for English
   // Determines the language used for data formatting and prompt generation
   language?: 'zh' | 'en'
+  // Prompt mode persisted per-strategy (balanced/aggressive/conservative/
+  // scalping/futures). When unset, the live loop uses the venue rule
+  // (ninjatrader→futures, else balanced). Prompt-layer only — not a risk gate.
+  prompt_variant?: string
   // AI trading configuration. Legacy flat fields below are accepted only for
   // old data returned before the schema was split by strategy type.
   ai_config?: AIStrategyConfig

@@ -609,6 +609,14 @@ type StrategyConfig struct {
 	// language setting: "zh" for Chinese, "en" for English
 	// This determines the language used for data formatting and prompt generation
 	Language string `json:"language,omitempty"`
+
+	// PromptVariant selects the live AI prompt mode (balanced / aggressive /
+	// conservative / scalping / futures). Persisted per-strategy; when EMPTY the
+	// live loop falls back to the venue rule (ninjatrader→futures, else balanced)
+	// so existing strategies (no variant saved) are byte-identical. Prompt-layer
+	// only — it does NOT touch any risk gate or the live-account block.
+	PromptVariant string `json:"prompt_variant,omitempty"`
+
 	// AI trading configuration fields are kept on the Go struct for engine
 	// compatibility, but JSON persistence nests them under ai_config.
 	CoinSource     CoinSourceConfig     `json:"-"`
@@ -652,12 +660,14 @@ func (c StrategyConfig) MarshalJSON() ([]byte, error) {
 	out := struct {
 		StrategyType  string                 `json:"strategy_type"`
 		Language      string                 `json:"language,omitempty"`
+		PromptVariant string                 `json:"prompt_variant,omitempty"`
 		AIConfig      *AIStrategyConfig      `json:"ai_config,omitempty"`
 		GridConfig    *GridStrategyConfig    `json:"grid_config,omitempty"`
 		PublishConfig *PublishStrategyConfig `json:"publish_config,omitempty"`
 	}{
 		StrategyType:  strategyType,
 		Language:      c.Language,
+		PromptVariant: strings.TrimSpace(c.PromptVariant),
 		PublishConfig: c.PublishConfig,
 	}
 
@@ -682,6 +692,7 @@ func (c *StrategyConfig) UnmarshalJSON(data []byte) error {
 	type rawStrategyConfig struct {
 		StrategyType  string                 `json:"strategy_type"`
 		Language      string                 `json:"language"`
+		PromptVariant string                 `json:"prompt_variant"`
 		AIConfig      *AIStrategyConfig      `json:"ai_config"`
 		GridConfig    *GridStrategyConfig    `json:"grid_config"`
 		PublishConfig *PublishStrategyConfig `json:"publish_config"`
@@ -700,6 +711,7 @@ func (c *StrategyConfig) UnmarshalJSON(data []byte) error {
 
 	c.StrategyType = raw.StrategyType
 	c.Language = raw.Language
+	c.PromptVariant = strings.TrimSpace(raw.PromptVariant)
 	c.GridConfig = raw.GridConfig
 	c.PublishConfig = raw.PublishConfig
 
