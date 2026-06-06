@@ -931,6 +931,17 @@ type RiskControlConfig struct {
 	// Max ENTRIES per CME session-day. New guardrail → defaults OFF (nil).
 	MaxDailyTrades        int   `json:"max_daily_trades,omitempty"`
 	MaxDailyTradesEnabled *bool `json:"max_daily_trades_enabled,omitempty"`
+
+	// Chunk 3 — max CONTRACTS per futures order (clamp). Unset → the 10-contract
+	// default (the prior hidden const maxFuturesContracts). Toggle default ON.
+	MaxContractsPerOrder int   `json:"max_contracts_per_order,omitempty"`
+	MaxContractsEnabled  *bool `json:"max_contracts_enabled,omitempty"`
+
+	// Chunk 3 — futures NOTIONAL ceiling multiplier: max position notional =
+	// equity × this. Unset → 20 (the prior hidden const futuresMaxNotionalLeverage),
+	// now VISIBLE + EDITABLE. Toggle default ON (safety backstop).
+	MaxNotionalLeverage float64 `json:"max_notional_leverage,omitempty"`
+	NotionalCapEnabled  *bool   `json:"notional_cap_enabled,omitempty"`
 }
 
 // NewStrategyStore creates a new StrategyStore

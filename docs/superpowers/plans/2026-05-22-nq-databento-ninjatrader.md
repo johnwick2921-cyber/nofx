@@ -9391,3 +9391,27 @@ multi-account work + P&L fixes + chart-TZ untouched. SIM-only.
 blocked; daily-profit hit → entries blocked; master OFF → all bypass (logged) but live account
 STILL blocked. REMAINING: Chunk 3 (max-contracts + visible equity×20), Chunk 4 (blackout), Chunk 5
 (consistency), Chunk 6 (FE + toggles UI + Max-Margin relabel + Playwright).
+
+**CHUNK 3 SHIPPED (max-contracts + the visible/editable equity×20 cap):**
+- **Max contracts** — `futuresOrderQuantity` had a SILENT hardcoded clamp at `maxFuturesContracts =
+  10` (`auto_trader_orders.go:16`). Now it takes a resolved `maxContracts` (clamps + **logs**); the
+  caller uses `at.resolveMaxContracts()` → `kernel.ResolveMaxContracts(master, toggle, perStrategy,
+  10)`. Per-strategy `MaxContractsPerOrder` overrides; toggle/master OFF → `0` = no clamp.
+- **Visible equity×20 cap** — the hidden const `futuresMaxNotionalLeverage = 20.0` (used in
+  `validateDecision:54/:90` + `enforcePositionValueRatio:211`) is now the **editable multiplier**
+  `MaxNotionalLeverage` (default 20). `validateDecision` takes a 9th `maxNotionalLev` param
+  (resolved at the call site via `kernel.ResolveNotionalLeverage`); `enforcePositionValueRatio`
+  reads it directly. `<=0` → cap DISABLED (master/toggle off) → huge ceiling (never binds).
+- **Config:** `MaxContractsPerOrder`/`MaxContractsEnabled` + `MaxNotionalLeverage`/`NotionalCapEnabled`
+  added to `store.RiskControlConfig` (toggles `*bool`, plug into the Chunk-2 master framework).
+- **Safety (by construction):** these toggles only affect trade SIZE (contracts/notional) in the
+  trader+kernel gate — they never touch which account the order routes to. The live-account block
+  (placeEntry + C# IsSimAccount) is untoggleable.
+- **Tests:** `TestResolveMaxContracts` + `TestResolveNotionalLeverage` (per-strategy override, unset
+  → default, toggle off → no clamp, master off → no clamp) green; all existing futures-gate +
+  futures-quantity tests updated + green; full kernel + trader packages green; `go build`/`vet`
+  clean. ADDITIVE; crypto byte-identical (the leverage/PVR tiers unchanged).
+
+**Sunday add:** max-contracts exceeded → clamped (logged); raise `MaxNotionalLeverage` → bigger
+position allowed; toggle a cap OFF → it stops binding. REMAINING: Chunk 4 (blackout), Chunk 5
+(consistency), Chunk 6 (FE + toggles UI + Max-Margin relabel + Playwright).
