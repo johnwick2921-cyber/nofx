@@ -119,11 +119,33 @@ export function RiskControlEditor({
               {ts(riskControl.maxPositionsDesc, language)}
             </p>
             <div className="flex items-center gap-3">
-              <span className="font-mono text-lg" style={{ color: '#0ECB81' }}>
-                {config.max_positions ?? 3}
-              </span>
+              {/* User-set + code-enforced. ClampLimits bounds this to [1,3] on
+                  save AND at decision time (store/strategy.go ClampLimits, const
+                  MaxPositions=3) — the onChange clamp keeps the shown value equal
+                  to the saved value (no "typed 5, saved 3" surprise). To allow
+                  >3, raise the MaxPositions const (token-cost decision). */}
+              <input
+                type="number"
+                value={config.max_positions ?? 3}
+                onChange={(e) =>
+                  updateField(
+                    'max_positions',
+                    Math.min(3, Math.max(1, parseInt(e.target.value) || 1))
+                  )
+                }
+                disabled={disabled}
+                min={1}
+                max={3}
+                step={1}
+                className="w-20 px-3 py-2 rounded font-mono"
+                style={{
+                  background: '#1E2329',
+                  border: '1px solid #2B3139',
+                  color: '#EAECEF',
+                }}
+              />
               <span className="text-xs" style={{ color: '#848E9C' }}>
-                System enforced
+                user-set · enforced (range 1–3)
               </span>
             </div>
           </div>
@@ -390,14 +412,40 @@ export function RiskControlEditor({
               )}
             </p>
             <div className="flex items-center gap-2">
-              <span className="font-mono text-lg" style={{ color: '#0ECB81' }}>
-                {config.min_position_size ?? 12}
-              </span>
-              <span className="ml-2" style={{ color: '#848E9C' }}>
+              {/* User-set + code-enforced. ClampLimits bounds this to [10,1000]
+                  on save AND at decision time; the trader gate
+                  (enforceMinPositionSize) plus the kernel reject-floor (12 gen /
+                  60 BTC-ETH, engine_position.go) remain as defense-in-depth, so a
+                  user value only ever RAISES the effective minimum — never below
+                  the floor. The onChange clamp keeps shown == saved. */}
+              <input
+                type="number"
+                value={config.min_position_size ?? 12}
+                onChange={(e) =>
+                  updateField(
+                    'min_position_size',
+                    Math.min(
+                      1000,
+                      Math.max(10, parseFloat(e.target.value) || 12)
+                    )
+                  )
+                }
+                disabled={disabled}
+                min={10}
+                max={1000}
+                step={1}
+                className="w-24 px-3 py-2 rounded font-mono"
+                style={{
+                  background: '#1E2329',
+                  border: '1px solid #2B3139',
+                  color: '#EAECEF',
+                }}
+              />
+              <span className="ml-1" style={{ color: '#848E9C' }}>
                 {isFutures ? 'USD' : 'USDT'}
               </span>
               <span className="text-xs" style={{ color: '#848E9C' }}>
-                System enforced
+                user-set · enforced
               </span>
             </div>
           </div>
