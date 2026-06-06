@@ -9655,3 +9655,50 @@ strategy still runs the venue rule. SIM-only; never the LIVE LFE… account.
 byte-identical where no variant set; the Risk Control gates/guardrails/editable-boxes/label-sweep +
 multi-account (P1-P4) + P&L + chart-TZ ALL untouched; NO C#/wire change. SIM-only; the live-account
 block (broker layer) untouched + untoggleable.**
+
+
+## 2026-06-06 — Strategy Studio PHASE 2 CHANGE 4: the FUTURES prompt builder now honors the 4 structured boxes — built + static-verified, behavior Sunday
+
+**STATUS:** BUILT + STATIC-VERIFIED (market closed). Editing Role Definition / Trading Frequency /
+Entry Standards / Decision Process on a futures strategy now shapes the live futures prompt AND the
+preview. LIVE behavior proof on the SUNDAY list.
+
+Prior gap (deep-dive map): the crypto builder honored the 4 boxes (engine_prompt.go:38/93/105/118) but
+`engine_prompt_futures.go` IGNORED them — only Custom Prompt + Min R/R + Min Conf reached futures, so
+edited boxes ("Modified") went nowhere on an MNQ strategy.
+
+**BACKEND (engine_prompt_futures.go) — the only code change.** `BuildFuturesDecisionSystemPrompt` now
+reads `e.config.PromptSections` (mirroring the crypto override-or-default pattern):
+- **Role Definition** → override-or-default: box replaces the fixed CME role line when set; the
+  Instrument identity block stays FIXED.
+- **Trading Frequency** + **Entry Standards** → appended as their own section ONLY when set (the
+  futures builder had no such section before, so an empty box adds nothing → byte-identical).
+- **Decision Process** → override-or-default: box replaces the fixed 4-step section when set.
+- **FIXED, never box-driven:** the Instrument block, the Hard Constraints (risk rules), the Output
+  Format + Field Description (parser envelope), and the Custom Prompt append. The boxes change
+  instruction TEXT only — Risk Control + the output/risk rules are unchanged.
+
+**BACK-COMPAT PROOF (byte-identical when empty):** a golden of the pre-change futures prompt was
+captured (kernel/testdata/futures_mnq_empty.golden); `TestFuturesPromptEmptyBoxesByteIdentical` proves
+the empty-box output equals it EXACTLY — so existing futures strategies do not change.
+`TestFuturesPromptBoxesOverride` proves each set box reaches the prompt, empty boxes never inject the
+box-only sections, and the FIXED markers (Symbol, <reasoning>/<decision>, Hard Constraints) survive.
+
+**FE — NO change needed (refutes the assumed FE work).** The preview is backend-driven: the
+preview/test handler builds the engine from the POSTED config (api/strategy.go:581) and (Change-3
+honest preview) a futures strategy previews `variant="futures"`, so edited boxes now flow into the
+preview automatically. The editor already renders the 4 boxes as editable textareas for both markets
+(StrategyStudioPage.tsx:803, ungated) — there was no "not used on futures" state to fix.
+
+**Static verify:** go build clean; `go test ./store ./trader ./kernel` green (incl. the 2 new golden
+tests); nofx-bin rebuilt + restarted clean (0 "unknown frame type"; trader `sss` = NinjaTrader/"MNQ SIM
+Default" auto-started — empty boxes → byte-identical futures prompt). tsc unaffected (no FE change).
+
+**SUNDAY behavior list (market open):** on a futures strategy edit a box (e.g. Entry Standards) → the
+bot's NEXT decision's "System Prompt" (Recent Decisions = ground truth) contains the edited text; empty
+boxes → today's fixed futures prompt. SIM-only; never the LIVE LFE… account.
+
+**ADDITIVE; the futures builder honors the 4 boxes (override-or-default); empty boxes = today's fixed
+futures prompt (byte-identical, proven by golden test); boxes are TEXT-only (Risk Control + output
+format + hard risk rules FIXED); crypto + Risk Control + multi-account (P1-P4) + P&L + chart-TZ + Phase
+2 CORE all untouched; NO C#/wire/FE change. SIM-only; the live-account block untouched.**
