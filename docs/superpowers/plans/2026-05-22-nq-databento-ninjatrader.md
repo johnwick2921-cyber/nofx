@@ -9506,3 +9506,13 @@ both per the deep-dive); Max-Margin was already relabeled honest in Chunk 6.
 **code-verified** (the `{!isFutures}` wrap) — a live Playwright render is **blocked by the expired
 JWT** (can't load a strategy); it'll show once re-authed. ADDITIVE; crypto byte-identical; the gates
 (Chunks 1-5) untouched.
+
+
+**FOLLOW-UP — the REAL "can't use anything" root cause + fix (FE).** Deeper diagnosis: the app's
+`auth_token` expired 2026-06-04 (2 days ago) AND `AuthContext` init (`contexts/AuthContext.tsx:63,76`)
+called `setToken(savedToken)` WITHOUT checking expiry — so the app sat "logged in" while every API
+call 401'd, with no prompt to re-login (`from401`/`returnUrl` null, never bounced to `/login`). That
+stuck state IS the "can't use anything." Fix: a small `isJwtExpired(token)` helper; both init branches
+now skip + CLEAR an expired token so the app shows the login page. tsc clean; FE build ✓; Go untouched.
+After this lands (vite HMR), a reload detects the dead token → `/login` → re-login → everything works
+(and the PVR-on-futures fix shows). ADDITIVE; FE-only; the gates + crypto untouched.
