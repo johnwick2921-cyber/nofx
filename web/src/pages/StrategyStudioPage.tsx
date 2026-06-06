@@ -1221,6 +1221,7 @@ export function StrategyStudioPage() {
                     <option value="balanced">{tr('balanced')}</option>
                     <option value="aggressive">{tr('aggressive')}</option>
                     <option value="conservative">{tr('conservative')}</option>
+                    <option value="futures">{tr('futures')}</option>
                   </select>
                   <button
                     onClick={fetchPromptPreview}
@@ -1329,6 +1330,7 @@ export function StrategyStudioPage() {
                       <option value="balanced">{tr('balanced')}</option>
                       <option value="aggressive">{tr('aggressive')}</option>
                       <option value="conservative">{tr('conservative')}</option>
+                      <option value="futures">{tr('futures')}</option>
                     </select>
                     <button
                       onClick={runAiTest}
