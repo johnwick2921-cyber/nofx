@@ -949,6 +949,13 @@ type RiskControlConfig struct {
 	BlackoutEnabled *bool  `json:"blackout_enabled,omitempty"`
 	BlackoutStartCT string `json:"blackout_start_ct,omitempty"`
 	BlackoutEndCT   string `json:"blackout_end_ct,omitempty"`
+
+	// Chunk 5 — CONSISTENCY rule: no single CME session-day's realized profit may
+	// exceed this % of all-time total realized profit. Only triggers once there is
+	// prior-day profit (a fresh/single-day account never self-locks). New guardrail
+	// → toggle defaults OFF.
+	ConsistencyMaxDayPct float64 `json:"consistency_max_day_pct,omitempty"`
+	ConsistencyEnabled   *bool   `json:"consistency_enabled,omitempty"`
 }
 
 // NewStrategyStore creates a new StrategyStore

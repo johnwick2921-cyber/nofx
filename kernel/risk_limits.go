@@ -261,3 +261,21 @@ func ResolveNotionalLeverage(masterEnabled, notionalEnabled *bool, perStrategy, 
 	}
 	return def
 }
+
+// ConsistencyBreached (Chunk 5) reports whether today's realized profit exceeds
+// the configured share (pct%) of all-time total realized profit — the prop-firm
+// consistency rule ("no single day > X% of total"). SEMANTICS (documented): it
+// triggers ONLY once there is prior-day profit (totalProfit − todayProfit > 0),
+// so a fresh/single-day account never self-locks on its first profitable day; a
+// non-profitable day (todayProfit ≤ 0), a non-positive total, or pct ≤ 0 never
+// breach. When breached, the caller blocks new entries for the session-day so
+// today's profit stops growing past the allowed share.
+func ConsistencyBreached(todayProfit, totalProfit, pct float64) bool {
+	if pct <= 0 || todayProfit <= 0 || totalProfit <= 0 {
+		return false
+	}
+	if totalProfit-todayProfit <= 0 {
+		return false // first profitable day — nothing to be consistent against yet
+	}
+	return todayProfit >= (pct/100.0)*totalProfit
+}
