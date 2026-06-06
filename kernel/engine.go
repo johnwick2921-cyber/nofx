@@ -111,6 +111,12 @@ type Context struct {
 	BTCETHLeverage     int                                `json:"-"`
 	AltcoinLeverage    int                                `json:"-"`
 	Timeframes         []string                           `json:"-"`
+
+	// Strategy Studio P1 — daily-guardrail inputs measured on the CME session-day
+	// (set by the trader loop from the position store; read by the daily-guardrail
+	// gate in engine_analysis.go).
+	DailyRealizedPnL float64 `json:"-"`
+	TradesToday      int     `json:"-"`
 }
 
 // Decision AI trading decision

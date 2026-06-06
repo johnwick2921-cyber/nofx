@@ -9365,3 +9365,29 @@ consistency rule; Chunk 6 = the FE futures risk panel (contracts × point value,
 margin as $/contract) + all the new guardrail inputs + the honest Max-Margin relabel (fix the false
 "System enforced" label `skill_management_handlers.go:1166`). ADDITIVE; crypto byte-identical; the
 multi-account work + P&L fixes + chart-TZ untouched. SIM-only.
+
+**CHUNK 2 SHIPPED (daily loss/profit/max-trades on TRUE CME-day realized P&L + the reset-bug fix):**
+- **Evolved the ONE gate (no duplicate):** the env daily-loss in `CheckPreTrade` was on session-
+  cumulative `TotalPnL` (`engine_analysis.go:108`); now it passes `0` there (keeping only the
+  concurrent cap) and a new `DailyGuardrails.Check()` enforces daily-loss on **true daily-realized
+  P&L** over the CME session-day, plus the new **daily-profit** + **max-daily-trades** limits.
+- **Per-strategy + env fallback + toggles:** values from `store.RiskControlConfig`; daily-loss
+  falls back to `RISK_MAX_DAILY_LOSS_USD` via `firstPositive(perStrategy, env)`; a master switch
+  (`GuardrailsEnabled`, default ON) + per-guardrail `*bool` toggles (daily-loss default ON to
+  preserve the live gate; new ones OFF) via `boolOrDefault`. Master OFF → ALL bypassed (logged).
+- **True daily-realized P&L:** `CMESessionDayStart`/`CMESessionDayKey` (17:00 CT roll);
+  `store.GetSessionDayActivity` sums realized P&L (closed, excl. reconcile-flat) + counts entries
+  since the session start; the loop sets `ctx.DailyRealizedPnL`/`ctx.TradesToday`; the gate reads them.
+- **Reset bug FIXED:** `ResetDailyPnL` stamped `time.Now()` while `MaybeResetDaily(now)` used the
+  passed time → never agreed. Both now derive from `CMESessionDayKey(now)`. `TestMaybeResetDaily`
+  PASSES (was failing on HEAD).
+- **SAFETY (by construction):** the toggles live in the KERNEL decision gate (HOLD only); the
+  live-account block lives in the BROKER layer (P1/P3/P4 + C# IsSimAccount at placeEntry). Master
+  OFF lets the decision proceed but the order STILL hits the untoggleable live-account block.
+- **Tests:** 9 new (boundaries/master/toggles/env-fallback/CME-day) + `TestMaybeResetDaily` green;
+  full kernel green; `go build`/`vet` clean; store + trader green. ADDITIVE; crypto byte-identical.
+
+**Sunday behavior add:** tiny daily-loss → bot stops after a loss; max-daily-trades=1 → 2nd entry
+blocked; daily-profit hit → entries blocked; master OFF → all bypass (logged) but live account
+STILL blocked. REMAINING: Chunk 3 (max-contracts + visible equity×20), Chunk 4 (blackout), Chunk 5
+(consistency), Chunk 6 (FE + toggles UI + Max-Margin relabel + Playwright).
