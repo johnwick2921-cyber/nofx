@@ -12,6 +12,22 @@ import (
 	"time"
 )
 
+// resolvePromptVariant picks the live AI prompt mode (Strategy Studio Phase 2).
+// A non-empty per-strategy saved variant wins; otherwise the original venue
+// rule applies — CME futures (NinjaTrader) → "futures", everything else →
+// "balanced". This is the back-compat guarantee: an empty savedVariant resolves
+// EXACTLY as the pre-Phase-2 code, so strategies with no saved variant are
+// byte-identical. Prompt-layer only — it never touches a risk gate.
+func resolvePromptVariant(exchange, savedVariant string) string {
+	if v := strings.TrimSpace(savedVariant); v != "" {
+		return v
+	}
+	if exchange == "ninjatrader" {
+		return "futures"
+	}
+	return "balanced"
+}
+
 // runCycle runs one trading cycle (using AI full decision-making)
 func (at *AutoTrader) runCycle() error {
 	at.callCount++
@@ -124,12 +140,17 @@ func (at *AutoTrader) runCycle() error {
 	at.logInfof("🤖 Requesting AI analysis and decision... [Strategy Engine]")
 	// Plan 4 Task 25 — decision latency timer (start)
 	decisionStart := time.Now()
-	// CME futures (NinjaTrader) select the futures system prompt; everything
-	// else keeps the crypto "balanced" variant.
-	promptVariant := "balanced"
-	if at.exchange == "ninjatrader" {
-		promptVariant = "futures"
+	// Prompt mode (Strategy Studio Phase 2): a per-strategy saved variant wins;
+	// when NONE is saved we keep the original venue rule EXACTLY (see
+	// resolvePromptVariant) so strategies with no saved variant are byte-
+	// identical to the prior behavior. Read the saved variant null-safely.
+	savedVariant := ""
+	if eng := at.strategyEngine; eng != nil {
+		if cfg := eng.GetConfig(); cfg != nil {
+			savedVariant = cfg.PromptVariant
+		}
 	}
+	promptVariant := resolvePromptVariant(at.exchange, savedVariant)
 	aiDecision, err := kernel.GetFullDecisionWithStrategy(ctx, at.mcpClient, at.strategyEngine, promptVariant)
 	// Plan 4 Task 25 — decision metrics
 	telemetry.DecisionLatency.WithLabelValues(at.id).Observe(time.Since(decisionStart).Seconds())

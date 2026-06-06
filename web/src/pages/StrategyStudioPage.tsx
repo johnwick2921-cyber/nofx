@@ -74,6 +74,9 @@ const normalizeStrategyConfig = (config: StrategyConfig): StrategyConfig => {
   return {
     strategy_type: strategyType,
     language: config.language,
+    // Preserve the persisted prompt mode (Phase 2) — normalize otherwise strips
+    // any field not listed here, which would silently drop it on save.
+    prompt_variant: config.prompt_variant,
     ai_config: aiConfig || undefined,
     grid_config: config.grid_config,
     publish_config: config.publish_config,
@@ -216,6 +219,13 @@ export function StrategyStudioPage() {
 
   useEffect(() => {
     selectedStrategyIDRef.current = selectedStrategy?.id || ''
+  }, [selectedStrategy?.id])
+
+  // Phase 2: reflect the strategy's saved prompt mode in the dropdown when the
+  // selected strategy changes (empty → "balanced"; the live loop applies the
+  // venue fallback for an unset variant regardless of this display value).
+  useEffect(() => {
+    setSelectedVariant(selectedStrategy?.config?.prompt_variant || 'balanced')
   }, [selectedStrategy?.id])
 
   useEffect(() => {
@@ -1215,7 +1225,10 @@ export function StrategyStudioPage() {
                 <div className="flex items-center gap-2 flex-wrap">
                   <select
                     value={selectedVariant}
-                    onChange={(e) => setSelectedVariant(e.target.value)}
+                    onChange={(e) => {
+                      setSelectedVariant(e.target.value)
+                      updateConfig('prompt_variant', e.target.value)
+                    }}
                     className="px-2 py-1.5 rounded text-xs bg-nofx-bg border border-nofx-gold/20 text-nofx-text outline-none focus:border-nofx-gold"
                   >
                     <option value="balanced">{tr('balanced')}</option>
@@ -1324,7 +1337,10 @@ export function StrategyStudioPage() {
                   <div className="flex items-center gap-2">
                     <select
                       value={selectedVariant}
-                      onChange={(e) => setSelectedVariant(e.target.value)}
+                      onChange={(e) => {
+                        setSelectedVariant(e.target.value)
+                        updateConfig('prompt_variant', e.target.value)
+                      }}
                       className="px-2 py-1.5 rounded text-xs bg-nofx-bg border border-nofx-gold/20 text-nofx-text"
                     >
                       <option value="balanced">{tr('balanced')}</option>
