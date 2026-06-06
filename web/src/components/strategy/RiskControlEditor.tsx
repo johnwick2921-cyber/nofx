@@ -219,62 +219,77 @@ export function RiskControlEditor({
           </>
         )}
 
-        {/* Position Value Ratio (Risk Control - CODE ENFORCED) */}
-        <div className="mb-2">
-          <p className="text-xs font-medium" style={{ color: '#0ECB81' }}>
-            {ts(riskControl.positionValueRatio, language)}
-          </p>
-          <p className="text-xs mt-1" style={{ color: '#848E9C' }}>
-            {ts(riskControl.positionValueRatioDesc, language)}
-          </p>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div
-            className="p-4 rounded-lg"
-            style={{ background: '#0B0E11', border: '1px solid #0ECB81' }}
-          >
-            <label className="block text-sm mb-1" style={{ color: '#EAECEF' }}>
-              {ts(riskControl.btcEthPositionValueRatio, language)}
-            </label>
-            <p className="text-xs mb-2" style={{ color: '#848E9C' }}>
-              {ts(riskControl.btcEthPositionValueRatioDesc, language)}
-            </p>
-            <div className="flex items-center gap-2">
-              <span
-                className="w-12 text-center font-mono"
-                style={{ color: '#0ECB81' }}
-              >
-                {config.btc_eth_max_position_value_ratio ?? 5}x
-              </span>
-              <span className="text-xs" style={{ color: '#848E9C' }}>
-                System enforced
-              </span>
+        {/* Position Value Ratio — crypto-only (CODE ENFORCED for crypto). CME
+            futures do NOT use a USD value-ratio: they size by contract count + the
+            editable equity×N notional cap (Prop-Firm Guardrails section below). So
+            these crypto tiles are HIDDEN on futures — showing "CODE ENFORCED" /
+            "System enforced" there would be false (the futures gate uses equity×N,
+            not these ratios). Crypto keeps them (true for crypto). */}
+        {!isFutures && (
+          <>
+            <div className="mb-2">
+              <p className="text-xs font-medium" style={{ color: '#0ECB81' }}>
+                {ts(riskControl.positionValueRatio, language)}
+              </p>
+              <p className="text-xs mt-1" style={{ color: '#848E9C' }}>
+                {ts(riskControl.positionValueRatioDesc, language)}
+              </p>
             </div>
-          </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div
+                className="p-4 rounded-lg"
+                style={{ background: '#0B0E11', border: '1px solid #0ECB81' }}
+              >
+                <label
+                  className="block text-sm mb-1"
+                  style={{ color: '#EAECEF' }}
+                >
+                  {ts(riskControl.btcEthPositionValueRatio, language)}
+                </label>
+                <p className="text-xs mb-2" style={{ color: '#848E9C' }}>
+                  {ts(riskControl.btcEthPositionValueRatioDesc, language)}
+                </p>
+                <div className="flex items-center gap-2">
+                  <span
+                    className="w-12 text-center font-mono"
+                    style={{ color: '#0ECB81' }}
+                  >
+                    {config.btc_eth_max_position_value_ratio ?? 5}x
+                  </span>
+                  <span className="text-xs" style={{ color: '#848E9C' }}>
+                    System enforced
+                  </span>
+                </div>
+              </div>
 
-          <div
-            className="p-4 rounded-lg"
-            style={{ background: '#0B0E11', border: '1px solid #0ECB81' }}
-          >
-            <label className="block text-sm mb-1" style={{ color: '#EAECEF' }}>
-              {ts(riskControl.altcoinPositionValueRatio, language)}
-            </label>
-            <p className="text-xs mb-2" style={{ color: '#848E9C' }}>
-              {ts(riskControl.altcoinPositionValueRatioDesc, language)}
-            </p>
-            <div className="flex items-center gap-2">
-              <span
-                className="w-12 text-center font-mono"
-                style={{ color: '#0ECB81' }}
+              <div
+                className="p-4 rounded-lg"
+                style={{ background: '#0B0E11', border: '1px solid #0ECB81' }}
               >
-                {config.altcoin_max_position_value_ratio ?? 1}x
-              </span>
-              <span className="text-xs" style={{ color: '#848E9C' }}>
-                System enforced
-              </span>
+                <label
+                  className="block text-sm mb-1"
+                  style={{ color: '#EAECEF' }}
+                >
+                  {ts(riskControl.altcoinPositionValueRatio, language)}
+                </label>
+                <p className="text-xs mb-2" style={{ color: '#848E9C' }}>
+                  {ts(riskControl.altcoinPositionValueRatioDesc, language)}
+                </p>
+                <div className="flex items-center gap-2">
+                  <span
+                    className="w-12 text-center font-mono"
+                    style={{ color: '#0ECB81' }}
+                  >
+                    {config.altcoin_max_position_value_ratio ?? 1}x
+                  </span>
+                  <span className="text-xs" style={{ color: '#848E9C' }}>
+                    System enforced
+                  </span>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
+          </>
+        )}
       </div>
 
       {/* Risk Parameters */}
