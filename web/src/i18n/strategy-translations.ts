@@ -428,9 +428,9 @@ export const riskControl = {
     es: 'Ratio mínimo para entrada',
   },
   maxMarginUsage: {
-    zh: '最大保证金使用率（代码强制）',
-    en: 'Max Margin Usage (CODE ENFORCED)',
-    es: 'Uso Máximo de Margen (CÓDIGO)',
+    zh: '最大保证金使用率（AI 提示，非强制）',
+    en: 'Max Margin Usage (AI-guided, not enforced)',
+    es: 'Uso Máximo de Margen (guía AI)',
   },
   maxMarginUsageDesc: {
     zh: '保证金使用率上限，由代码强制执行',
@@ -468,6 +468,90 @@ export const riskControl = {
     en: 'AI confidence threshold for entry',
     es: 'Umbral de confianza AI',
   },
+
+  // === Strategy Studio Phase 1 — prop-firm guardrails (Chunk 6) ===
+  guardrailsTitle: {
+    zh: '防护栏（Prop-Firm 规则）',
+    en: 'Prop-Firm Guardrails',
+    es: 'Barreras Prop-Firm',
+  },
+  guardrailsDesc: {
+    zh: '硬性闸门：触发即阻止新开仓并记录原因；关闭则跳过（记录）。永不影响实盘账户拦截。',
+    en: 'Hard gates: each blocks new entries + logs when tripped; off = skipped (logged). Never affects the live-account block.',
+    es: 'Puertas duras: bloquean nuevas entradas + registran; off = omitido. No afecta el bloqueo de cuenta real.',
+  },
+  masterSwitch: {
+    zh: '风险防护栏总开关',
+    en: 'Risk guardrails',
+    es: 'Barreras de riesgo',
+  },
+  masterSwitchDesc: {
+    zh: '关闭则全部防护栏停用（记录）；实盘账户拦截始终生效，不可关闭。',
+    en: 'OFF disables ALL guardrails (logged). The live-account block stays ON always — untoggleable.',
+    es: 'OFF desactiva TODAS las barreras. El bloqueo de cuenta real siempre activo.',
+  },
+  dailyLossLimit: {
+    zh: '每日亏损上限 (USD)',
+    en: 'Daily loss limit (USD)',
+    es: 'Límite de pérdida diaria (USD)',
+  },
+  dailyProfitTarget: {
+    zh: '每日盈利目标 (USD)',
+    en: 'Daily profit target (USD)',
+    es: 'Objetivo de ganancia diaria (USD)',
+  },
+  maxDailyTrades: {
+    zh: '每日最大开仓次数',
+    en: 'Max daily trades',
+    es: 'Máx. operaciones diarias',
+  },
+  maxContractsField: {
+    zh: '单笔最大合约数',
+    en: 'Max contracts / order',
+    es: 'Máx. contratos / orden',
+  },
+  notionalCapField: {
+    zh: '名义上限倍数 (权益×N)',
+    en: 'Notional cap (equity × N)',
+    es: 'Tope nocional (capital × N)',
+  },
+  blackoutStart: {
+    zh: '禁止交易开始 (CT)',
+    en: 'Blackout start (CT)',
+    es: 'Inicio bloqueo (CT)',
+  },
+  blackoutEnd: {
+    zh: '禁止交易结束 (CT)',
+    en: 'Blackout end (CT)',
+    es: 'Fin bloqueo (CT)',
+  },
+  consistencyPctField: {
+    zh: '一致性上限 (单日 ≤ 总盈利 %)',
+    en: 'Consistency cap (day ≤ % of total)',
+    es: 'Consistencia (día ≤ % total)',
+  },
+  futuresRiskTitle: {
+    zh: '期货风险（每笔，约值）',
+    en: 'Futures Risk (per trade, est.)',
+    es: 'Riesgo Futuros (por op., est.)',
+  },
+  estContracts: {
+    zh: '约合合约数',
+    en: 'Est. contracts',
+    es: 'Contratos est.',
+  },
+  dollarRisk: {
+    zh: '每笔风险 ($)',
+    en: '$ risk / trade',
+    es: 'Riesgo $ / op.',
+  },
+  marginPerContract: {
+    zh: '保证金/合约 (约)',
+    en: 'Margin / contract (est.)',
+    es: 'Margen / contrato',
+  },
+  toggleOn: { zh: '开', en: 'On', es: 'On' },
+  toggleOff: { zh: '关', en: 'Off', es: 'Off' },
 }
 
 // ============================================================================
