@@ -105,11 +105,46 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 		// so this gate never trips on notional. Notional IS still enforced at
 		// EXECUTION time, futures-aware (engine_position.go: max position notional =
 		// equity × futuresMaxNotionalLeverage).
-		if err := limits.CheckPreTrade(ctx.Account.TotalPnL, len(ctx.Positions), 0, 0); err != nil {
+		// DAILY-LOSS is no longer enforced here on session-cumulative TotalPnL —
+		// Strategy Studio P1 EVOLVES it to TRUE daily-realized P&L below (pass 0
+		// for pnl so CheckPreTrade enforces ONLY the concurrent-position cap).
+		if err := limits.CheckPreTrade(0, len(ctx.Positions), 0, 0); err != nil {
 			logger.Warnf("⚠️ Plan 3 T21 risk gate tripped: %v — skipping decision cycle (HOLD)", err)
 			// Plan 4 Task 25 — gate instrumentation
 			telemetry.RiskGateTrips.WithLabelValues("task21_risk_limit").Inc()
 			return nil, nil
+		}
+
+		// Strategy Studio P1 — per-strategy DAILY guardrails on TRUE daily-realized
+		// P&L over the CME session-day (daily loss/profit + max-daily-trades). This
+		// EVOLVES the env daily-loss gate (no duplicate): per-strategy value
+		// overrides; env RISK_MAX_DAILY_LOSS_USD is the daily-loss fallback; the
+		// master + per-guardrail toggles govern enforcement. Controls ONLY the
+		// prop-firm guardrails — NEVER the SIM-only / live-account block (which is
+		// enforced untoggleably in the broker layer).
+		if engine != nil {
+			rc := engine.GetRiskControlConfig()
+			g := DailyGuardrails{
+				MasterEnabled:    boolOrDefault(rc.GuardrailsEnabled, true),
+				DailyRealizedPnL: ctx.DailyRealizedPnL,
+				TradesToday:      ctx.TradesToday,
+
+				DailyLossEnabled:  boolOrDefault(rc.DailyLossEnabled, true), // preserve the live daily-loss gate
+				DailyLossLimitUSD: firstPositive(rc.DailyLossLimitUSD, limits.MaxDailyLossUSD),
+
+				DailyProfitEnabled:   boolOrDefault(rc.DailyProfitEnabled, false),
+				DailyProfitTargetUSD: rc.DailyProfitTargetUSD,
+
+				MaxDailyTradesEnabled: boolOrDefault(rc.MaxDailyTradesEnabled, false),
+				MaxDailyTrades:        rc.MaxDailyTrades,
+			}
+			if !g.MasterEnabled {
+				logger.Warnf("⚠️ Strategy Studio: risk guardrails DISABLED by master switch — daily limits NOT enforced this cycle")
+			} else if _, gErr := g.Check(); gErr != nil {
+				logger.Warnf("⚠️ Strategy Studio daily guardrail tripped: %v — skipping decision cycle (HOLD)", gErr)
+				telemetry.RiskGateTrips.WithLabelValues("strategy_studio_daily").Inc()
+				return nil, nil
+			}
 		}
 	}
 	// ============================================================================

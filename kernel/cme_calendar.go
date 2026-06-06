@@ -31,6 +31,31 @@ func IsCMEOpen(t time.Time) bool {
 	}
 }
 
+// CMESessionDayStart returns the start of the CME trading session-day that
+// contains `now` — the most recent 17:00 America/Chicago boundary. The CME
+// index-futures session day rolls at 17:00 CT (the daily break), so daily
+// realized-P&L / trade-count guardrails measure realized P&L and entries from
+// this instant (not midnight UTC).
+func CMESessionDayStart(now time.Time) time.Time {
+	chicago, err := time.LoadLocation("America/Chicago")
+	if err != nil {
+		chicago = time.UTC
+	}
+	ct := now.In(chicago)
+	boundary := time.Date(ct.Year(), ct.Month(), ct.Day(), 17, 0, 0, 0, chicago)
+	if ct.Hour() < 17 {
+		boundary = boundary.AddDate(0, 0, -1)
+	}
+	return boundary
+}
+
+// CMESessionDayKey returns a stable key (the date of the session's 17:00 CT
+// start) for the CME session-day containing now. Used to detect a session
+// rollover for the daily-window reset.
+func CMESessionDayKey(now time.Time) string {
+	return CMESessionDayStart(now).Format("2006-01-02")
+}
+
 // isCMEHoliday returns true if t falls on a CME-observed full-closure holiday.
 // CME may have shortened-hours days (e.g. Good Friday, day after Thanksgiving),
 // but for v1 we treat shortened days as full closures and refuse to trade.

@@ -532,6 +532,17 @@ func (at *AutoTrader) buildTradingContext() (*kernel.Context, error) {
 
 	// 7. Add recent closed trades (if store is available)
 	if at.store != nil {
+		// Strategy Studio P1 — daily-guardrail inputs on the CME session-day:
+		// today's realized P&L (closed trades) + entry count, scoped to the active
+		// account. The kernel daily-guardrail gate (engine_analysis.go) reads these.
+		sinceMs := kernel.CMESessionDayStart(time.Now()).UnixMilli()
+		if dayPnL, dayTrades, derr := at.store.Position().GetSessionDayActivity(at.id, sinceMs, at.currentAccountName()); derr != nil {
+			at.logWarnf("⚠️ Failed to compute daily-guardrail activity: %v", derr)
+		} else {
+			ctx.DailyRealizedPnL = dayPnL
+			ctx.TradesToday = dayTrades
+		}
+
 		// Get recent 10 closed trades for AI context, scoped to the ACTIVE
 		// account so a post-switch cycle does not carry the old account's
 		// trades into the prompt (empty account → trader-global fallback).

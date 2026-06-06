@@ -54,6 +54,43 @@ func (s *PositionStore) GetPositionStats(traderID string) (map[string]interface{
 	return stats, nil
 }
 
+// GetSessionDayActivity returns the realized P&L (CLOSED trades, excluding
+// reconcile-flat orphans whose P&L is UNKNOWN) and the entry count (positions
+// OPENED) since sinceMs (Unix ms UTC), optionally scoped to one NT account.
+// Used by the Strategy Studio daily guardrails: daily loss/profit on realized
+// P&L, max-daily-trades on entries — both measured from the CME session-day
+// start. Variadic account mirrors GetClosedPositions/GetFullStats.
+func (s *PositionStore) GetSessionDayActivity(traderID string, sinceMs int64, account ...string) (realizedPnL float64, entries int, err error) {
+	acct := ""
+	if len(account) > 0 {
+		acct = account[0]
+	}
+
+	var pnl struct{ Total float64 }
+	pq := s.db.Model(&TraderPosition{}).
+		Select("COALESCE(SUM(realized_pnl), 0) as total").
+		Where("trader_id = ? AND status = ? AND close_reason <> ? AND exit_time >= ?",
+			traderID, "CLOSED", CloseReasonReconcileFlat, sinceMs)
+	if acct != "" {
+		pq = pq.Where("account = ?", acct)
+	}
+	if err = pq.Scan(&pnl).Error; err != nil {
+		return 0, 0, err
+	}
+
+	var cnt int64
+	cq := s.db.Model(&TraderPosition{}).
+		Where("trader_id = ? AND entry_time >= ?", traderID, sinceMs)
+	if acct != "" {
+		cq = cq.Where("account = ?", acct)
+	}
+	if err = cq.Count(&cnt).Error; err != nil {
+		return 0, 0, err
+	}
+
+	return pnl.Total, int(cnt), nil
+}
+
 // GetFullStats gets complete trading statistics, optionally scoped to one
 // account (mirrors GetClosedPositions): account=="" → trader-global (crypto +
 // legacy); account!="" → only that NT account's closed trades, excluding

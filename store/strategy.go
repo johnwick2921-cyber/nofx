@@ -910,6 +910,27 @@ type RiskControlConfig struct {
 	MinRiskRewardRatio float64 `json:"min_risk_reward_ratio"`
 	// Min AI confidence to open position (AI guided)
 	MinConfidence int `json:"min_confidence"`
+
+	// === Strategy Studio Phase 1 — prop-firm daily guardrails (per-strategy;
+	// env = fallback for the value; the per-guardrail toggle governs enforcement). ===
+
+	// Master switch: nil/true = guardrails active; false = ALL guardrails bypassed.
+	GuardrailsEnabled *bool `json:"guardrails_enabled,omitempty"`
+
+	// Daily realized-LOSS limit (USD, positive): loss ≥ this halts new entries for
+	// the CME session-day. Enabled defaults ON (nil) to preserve the existing live
+	// env daily-loss gate; the value falls back to RISK_MAX_DAILY_LOSS_USD when 0.
+	DailyLossLimitUSD float64 `json:"daily_loss_limit_usd,omitempty"`
+	DailyLossEnabled  *bool   `json:"daily_loss_enabled,omitempty"`
+
+	// Daily realized-PROFIT target (USD, positive): profit ≥ this stops new entries
+	// for the session-day. New guardrail → defaults OFF (nil).
+	DailyProfitTargetUSD float64 `json:"daily_profit_target_usd,omitempty"`
+	DailyProfitEnabled   *bool   `json:"daily_profit_enabled,omitempty"`
+
+	// Max ENTRIES per CME session-day. New guardrail → defaults OFF (nil).
+	MaxDailyTrades        int   `json:"max_daily_trades,omitempty"`
+	MaxDailyTradesEnabled *bool `json:"max_daily_trades_enabled,omitempty"`
 }
 
 // NewStrategyStore creates a new StrategyStore
