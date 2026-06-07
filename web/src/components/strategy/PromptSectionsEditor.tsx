@@ -78,19 +78,21 @@ export function PromptSectionsEditor({
   const defaults: PromptSectionsConfig = isFutures
     ? { ...defaultSections, ...futuresRoleDecision }
     : defaultSections
-  // Auto-expand a box that has actual SAVED content, so an edited strategy shows
-  // its text without a click; boxes with no saved content (showing only the
-  // default placeholder) stay collapsed. Re-computed per strategy via the `key`
-  // on this component in StrategyStudioPage (re-mounts on strategy switch).
+  // Open every box that has text to SHOW — its saved content OR the default
+  // shown for an empty box — so the full prompt is visible without clicking.
+  // (Keyed off the DISPLAYED value, not just saved content, so a box showing
+  // the market default — e.g. the futures CME role — also opens.) Re-computed
+  // per strategy via the `key` on this component in StrategyStudioPage.
   const [expandedSections, setExpandedSections] = useState<
     Record<string, boolean>
   >(() => {
-    const has = (k: keyof PromptSectionsConfig) => !!config?.[k]?.trim()
+    const shown = (k: keyof PromptSectionsConfig) =>
+      !!(config?.[k] || defaults[k] || '').trim()
     return {
-      role_definition: has('role_definition'),
-      trading_frequency: has('trading_frequency'),
-      entry_standards: has('entry_standards'),
-      decision_process: has('decision_process'),
+      role_definition: shown('role_definition'),
+      trading_frequency: shown('trading_frequency'),
+      entry_standards: shown('entry_standards'),
+      decision_process: shown('decision_process'),
     }
   })
 
@@ -213,8 +215,20 @@ export function PromptSectionsEditor({
                     {desc}
                   </p>
                   <textarea
+                    ref={(el) => {
+                      // Auto-grow to fit the full content (no inner scrollbar /
+                      // clipping) — height follows scrollHeight, floored at 120px.
+                      if (el) {
+                        el.style.height = 'auto'
+                        el.style.height = `${el.scrollHeight}px`
+                      }
+                    }}
                     value={value}
-                    onChange={(e) => updateSection(sectionKey, e.target.value)}
+                    onChange={(e) => {
+                      e.target.style.height = 'auto'
+                      e.target.style.height = `${e.target.scrollHeight}px`
+                      updateSection(sectionKey, e.target.value)
+                    }}
                     disabled={disabled}
                     rows={6}
                     className="w-full px-3 py-2 rounded-lg resize-y font-mono text-xs"
