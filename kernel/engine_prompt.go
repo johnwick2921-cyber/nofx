@@ -19,8 +19,11 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant, symbo
 	// <reasoning>/<decision> envelope this parser expects, but with futures
 	// framing for the ACTIVE symbol. Early-return keeps the crypto assembly below
 	// untouched (symbol is ignored on the crypto path).
-	if strings.ToLower(strings.TrimSpace(variant)) == "futures" {
-		return e.BuildFuturesDecisionSystemPrompt(symbol, accountEquity)
+	// "futures", "futures-balanced", "futures-aggressive", "futures-conservative"
+	// all route to the futures builder; the suffix selects the sub-mode (balanced
+	// = no extra block = byte-identical default). Crypto variants fall through.
+	if isFut, mode := futuresVariantMode(variant); isFut {
+		return e.buildFuturesPrompt(symbol, accountEquity, mode)
 	}
 
 	var sb strings.Builder
