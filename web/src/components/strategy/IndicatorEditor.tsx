@@ -1138,7 +1138,10 @@ export function IndicatorEditor({
                 label: 'oi',
                 desc: 'oiDesc',
                 color: '#34d399',
-                cryptoOnly: false,
+                // Open Interest is the Binance crypto-perp feed (empty zeros on
+                // CME futures). Hidden on futures like funding rate — no real
+                // futures OI is wired (NT8 bridge carries OHLCV only).
+                cryptoOnly: true,
               },
               {
                 key: 'enable_funding_rate',
