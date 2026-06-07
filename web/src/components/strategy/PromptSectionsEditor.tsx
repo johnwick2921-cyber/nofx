@@ -78,13 +78,20 @@ export function PromptSectionsEditor({
   const defaults: PromptSectionsConfig = isFutures
     ? { ...defaultSections, ...futuresRoleDecision }
     : defaultSections
+  // Auto-expand a box that has actual SAVED content, so an edited strategy shows
+  // its text without a click; boxes with no saved content (showing only the
+  // default placeholder) stay collapsed. Re-computed per strategy via the `key`
+  // on this component in StrategyStudioPage (re-mounts on strategy switch).
   const [expandedSections, setExpandedSections] = useState<
     Record<string, boolean>
-  >({
-    role_definition: false,
-    trading_frequency: false,
-    entry_standards: false,
-    decision_process: false,
+  >(() => {
+    const has = (k: keyof PromptSectionsConfig) => !!config?.[k]?.trim()
+    return {
+      role_definition: has('role_definition'),
+      trading_frequency: has('trading_frequency'),
+      entry_standards: has('entry_standards'),
+      decision_process: has('decision_process'),
+    }
   })
 
   const sections = [
