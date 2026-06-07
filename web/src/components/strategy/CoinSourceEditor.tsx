@@ -37,6 +37,16 @@ export function CoinSourceEditor({
     { value: 'oi_low', icon: TrendingDown, color: '#F6465D' },
   ] as const
 
+  // CME futures (e.g. MNQ) only use the Static symbol list — AI500 / OI rankings
+  // are crypto-only data feeds (and would make the engine fetch crypto data
+  // instead of trading MNQ). Hide them on futures (DISPLAY only — saved data is
+  // untouched) and treat the displayed type as Static there. Crypto shows all 4.
+  const isFutures = isCMEFutures(config.static_coins?.[0])
+  const visibleSourceTypes = isFutures
+    ? sourceTypes.filter((s) => s.value === 'static')
+    : sourceTypes
+  const effectiveSourceType = isFutures ? 'static' : config.source_type
+
   // xyz dex assets (stocks, forex, commodities) - should NOT get USDT suffix
   const xyzDexAssets = new Set([
     // Stocks
@@ -194,7 +204,7 @@ export function CoinSourceEditor({
           {ts(coinSource.sourceType, language)}
         </label>
         <div className="grid grid-cols-4 gap-2">
-          {sourceTypes.map(({ value, icon: Icon, color }) => (
+          {visibleSourceTypes.map(({ value, icon: Icon, color }) => (
             <button
               key={value}
               onClick={() =>
@@ -206,7 +216,7 @@ export function CoinSourceEditor({
               }
               disabled={disabled}
               className={`p-4 rounded-lg border transition-all ${
-                config.source_type === value
+                effectiveSourceType === value
                   ? 'ring-2 ring-nofx-gold bg-nofx-gold/10'
                   : 'hover:bg-white/5 bg-nofx-bg'
               } border-nofx-gold/20`}
@@ -227,7 +237,7 @@ export function CoinSourceEditor({
       </div>
 
       {/* Static Coins - only for static mode */}
-      {config.source_type === 'static' && (
+      {effectiveSourceType === 'static' && (
         <div>
           <label className="block text-sm font-medium mb-3 text-nofx-text">
             {ts(coinSource.staticCoins, language)}
@@ -328,7 +338,7 @@ export function CoinSourceEditor({
       </div>
 
       {/* AI500 Options - only for ai500 mode */}
-      {config.source_type === 'ai500' && (
+      {effectiveSourceType === 'ai500' && (
         <div className="p-4 rounded-lg bg-nofx-gold/5 border border-nofx-gold/20">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -386,7 +396,7 @@ export function CoinSourceEditor({
       )}
 
       {/* OI Top Options - only for oi_top mode */}
-      {config.source_type === 'oi_top' && (
+      {effectiveSourceType === 'oi_top' && (
         <div className="p-4 rounded-lg bg-nofx-success/5 border border-nofx-success/20">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -445,7 +455,7 @@ export function CoinSourceEditor({
       )}
 
       {/* OI Low Options - only for oi_low mode */}
-      {config.source_type === 'oi_low' && (
+      {effectiveSourceType === 'oi_low' && (
         <div className="p-4 rounded-lg bg-nofx-danger/5 border border-nofx-danger/20">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
