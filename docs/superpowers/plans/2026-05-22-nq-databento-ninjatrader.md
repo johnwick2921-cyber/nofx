@@ -9952,3 +9952,27 @@ futures prompt still lists "Funding rate" + "Funding Rate: 0.00e+00". Same one-l
 ADDITIVE; crypto byte-identical; OI prompt-data only (never gate) = low real-money risk;
 gates/guardrails/multi-account (P1-P4)/P&L/chart-TZ + Phase 2/3/4 work + the live-account block
 untouched. SIM-only.
+
+
+## 2026-06-07 — Indicator period-edit typing bug fixed (commit e70116e7)
+
+The EMA/RSI/ATR/BOLL period inputs (IndicatorEditor.tsx) parsed
+`split(',').map(parseInt).filter(n>0)` on EVERY keystroke and the value fell back to the default when
+empty — so on an EDITABLE strategy you couldn't type a comma (it reverted), couldn't clear (it snapped
+to the default), and editing across a comma collapsed the other value. You could not edit a multi-value
+period field character-by-character. (Diagnosed as bug (b); the (a) read-only-default lock —
+`disabled={selectedStrategy?.is_default}` — is a separate by-design behavior, not changed.)
+
+Fix (FE-only): extracted a `PeriodInput` component that holds the RAW typed text in local state while
+editing and parses → `number[]` ONLY on blur/commit (Enter blurs); when not editing it derives straight
+from the saved value (so strategy-switch / reset just work). The SAVED DATA SHAPE is unchanged —
+`onCommit` always passes a `number[]` (the default periods if the field was left empty), so
+`config[periodKey]` stays e.g. `ema_periods=[20,50]`.
+
+Verified live (owner session, no token forged): on an editable strategy, typing a comma → stays;
+clearing → stays empty while editing; leading/mid comma `",50"` → stays (fixable to `25,50`); blur
+sanitizes. Save persisted `ema_periods=[20,50,100]` as a `number[]` of ints (sqlite before/after), then
+restored to `[20,50]` (no net change). tsc 0; `npm run build` ✓; Go untouched. Periods are prompt-data
+(never gate); the period input passes `disabled` through, so default strategies stay read-only; the
+component is market-agnostic (crypto + futures identical). gates/guardrails/multi-account/P&L/chart-TZ +
+the live-account block untouched. SIM-only.
