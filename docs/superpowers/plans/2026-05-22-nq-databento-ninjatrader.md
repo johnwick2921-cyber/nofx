@@ -9911,3 +9911,44 @@ strategy → NofxOS/ranking controls hidden, a crypto strategy → shown. ADDITI
 byte-identical (golden); indicators never gate (low real-money risk); crypto byte-identical except the
 intended timeframe wording; gates/guardrails/multi-account (P1-P4)/P&L/chart-TZ + Phase 2/3 work + the
 live-account block untouched. SIM-only.
+
+
+## 2026-06-07 — Open Interest honesty fix: hide + disable OI on futures (commit pending)
+
+Follow-up from the OI investigation. "Open Interest" on a futures strategy was the Binance crypto-perp
+feed (`fapi/v1/openInterest`, market/data.go) → returns ZEROS for MNQ; the FE box was labeled "Futures
+open interest" (misleading); and the futures prompt LISTED OI as available, printed "Open Interest:
+Latest: 0.00 Average: 0.00", then said "ignore the empty OI" (a 3-way contradiction, one toggle away on
+OI-enabled strategies). Real futures OI isn't worth wiring (CME OI is once-daily EOD; the NT8 bridge
+carries OHLCV only). Fix mirrors (and extends) the funding-rate treatment:
+
+- **(1) FE — OI toggle hidden on futures.** IndicatorEditor.tsx OI toggle `cryptoOnly: false → true`, so
+  the existing `!cryptoOnly || !isFutures` filter hides it on futures (exactly like the funding-rate
+  toggle beside it). Crypto → OI shows as today. Verified live: the Market Sentiment grid shows only
+  Volume on MNQ (OI + Funding both hidden).
+- **(2) Go default — OI off on futures.** `ind.EnableOI = false` added to `applyFuturesIndicatorDefaults`
+  (store/strategy.go). A new futures strategy no longer lists/values OI. Defaults-only; existing saved
+  strategies NOT mutated (DB re-checked: 均衡/稳健/积极/New still enable_oi=true; MNQ SIM Default false).
+  Verified live: futures `/default-config` returns `enable_oi: false`.
+- **(3) Go fetch guard.** `getOpenInterestData` + `getFundingRate` now skip on futures in
+  `GetWithTimeframes` (market/data.go, behind the in-scope `isFutures`). MNQ values were always {0,0}/0
+  from the failed Binance call — identical result, minus the wasted round-trip per cycle.
+
+**Golden/tests:** kernel/engine_prompt_oi_test.go (OI availability line present IFF EnableOI — futures
+default drops it, crypto byte-identical); store/strategy_futures_indicators_test.go extended (futures
+default → EnableOI false). go build/vet/test (./store ./kernel ./trader ./market) green incl. existing
+goldens; tsc 0; `npm run build` ✓; nofx-bin restarted clean in futures mode (0 "unknown frame type");
+bot flat. OI is prompt-data and NEVER gates (engine_position.go reads zero Indicators.Enable*). The live
+bot (MNQ SIM Default, enable_oi=false) is unaffected today.
+
+**RECOMMENDATION (separate owner confirm):** the owner's EXISTING OI-enabled futures strategies
+(均衡/稳健/积极/New) keep enable_oi=true → they still show the zeros + contradiction until untoggled
+per-strategy in the Indicators UI (or a one-off owner-approved DB update). NOT auto-applied (no
+mass-mutation). **OBSERVED symmetric gap (out of scope):** funding rate has the same residual — its FE
+toggle is hidden (cryptoOnly:true) but `enable_funding_rate` stays TRUE in the futures default, so the
+futures prompt still lists "Funding rate" + "Funding Rate: 0.00e+00". Same one-line fix
+(`EnableFundingRate = false` in applyFuturesIndicatorDefaults) would close it — deferred.
+
+ADDITIVE; crypto byte-identical; OI prompt-data only (never gate) = low real-money risk;
+gates/guardrails/multi-account (P1-P4)/P&L/chart-TZ + Phase 2/3/4 work + the live-account block
+untouched. SIM-only.
