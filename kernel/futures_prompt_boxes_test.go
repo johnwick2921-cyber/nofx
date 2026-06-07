@@ -55,32 +55,61 @@ func TestFuturesPromptEmptyBoxesByteIdentical(t *testing.T) {
 	}
 }
 
-// TestFuturesPromptBoxesOverride proves each set box reaches the futures prompt,
-// and that empty boxes never inject the box-only sections.
-func TestFuturesPromptBoxesOverride(t *testing.T) {
+// TestFuturesPromptBoxesHonored proves the Chunk-1 (Option B) split: on futures,
+// Trading Frequency + Entry Standards boxes ARE honored, but Role Definition +
+// Decision Process are ALWAYS the fixed CME text (NOT box-driven). So a strategy
+// whose Role/Decision boxes hold crypto-default text cannot leak crypto framing.
+func TestFuturesPromptBoxesHonored(t *testing.T) {
 	boxed := boxedFuturesEngine().BuildFuturesDecisionSystemPrompt("MNQ", 50000)
+
+	// Frequency + Entry boxes ARE injected.
+	for _, s := range []string{"FREQ_BOX_SENTINEL", "ENTRY_BOX_SENTINEL"} {
+		if !strings.Contains(boxed, s) {
+			t.Errorf("futures prompt should honor the %q box", s)
+		}
+	}
+	// Role + Decision boxes are NOT injected (fixed CME text instead).
+	for _, s := range []string{"ROLE_BOX_SENTINEL", "DECISION_BOX_SENTINEL"} {
+		if strings.Contains(boxed, s) {
+			t.Errorf("futures prompt must NOT inject %q (Role/Decision are fixed on futures)", s)
+		}
+	}
+	// FIXED markers present regardless of boxes.
 	for _, s := range []string{
-		"ROLE_BOX_SENTINEL", "FREQ_BOX_SENTINEL", "ENTRY_BOX_SENTINEL", "DECISION_BOX_SENTINEL",
+		"professional CME", "Symbol: MNQ", "# Decision Process", "<reasoning>", "<decision>", "Hard Constraints (Risk Control)",
 	} {
 		if !strings.Contains(boxed, s) {
-			t.Errorf("futures prompt with boxes set is missing %q", s)
+			t.Errorf("boxed futures prompt lost FIXED marker %q", s)
 		}
 	}
 
+	// Empty boxes never inject the Frequency/Entry sections.
 	empty := emptyBoxFuturesEngine().BuildFuturesDecisionSystemPrompt("MNQ", 50000)
-	for _, s := range []string{
-		"ROLE_BOX_SENTINEL", "FREQ_BOX_SENTINEL", "ENTRY_BOX_SENTINEL", "DECISION_BOX_SENTINEL",
-	} {
+	for _, s := range []string{"FREQ_BOX_SENTINEL", "ENTRY_BOX_SENTINEL"} {
 		if strings.Contains(empty, s) {
 			t.Errorf("empty-box futures prompt unexpectedly contains %q", s)
 		}
 	}
+}
 
-	// FIXED parts must survive regardless of boxes (instrument + output format +
-	// risk rules are NOT box-driven).
-	for _, s := range []string{"Symbol: MNQ", "<reasoning>", "<decision>", "Hard Constraints (Risk Control)"} {
-		if !strings.Contains(boxed, s) {
-			t.Errorf("boxed futures prompt lost FIXED section marker %q", s)
-		}
+// TestFuturesPromptNoCryptoLeak is the Chunk-1 regression proof: a strategy whose
+// Role + Decision boxes hold the CRYPTO-default text (the real-world case that
+// leaked "professional cryptocurrency AI" / "候选币种" into the futures prompt
+// after Change 4) must render the FIXED CME role + decision, with NO crypto line.
+func TestFuturesPromptNoCryptoLeak(t *testing.T) {
+	e := futuresTestEngine()
+	e.config.PromptSections = store.PromptSectionsConfig{
+		RoleDefinition:  "# You are a professional cryptocurrency trading AI\n\nYour task is to make trading decisions.",
+		DecisionProcess: "# 决策流程\n1. 扫描候选币种 + 多时间框架",
+	}
+	p := e.BuildFuturesDecisionSystemPrompt("MNQ", 50000)
+	if strings.Contains(strings.ToLower(p), "cryptocurrency") {
+		t.Error("futures prompt LEAKED 'cryptocurrency' from the Role box")
+	}
+	if strings.Contains(p, "候选币种") {
+		t.Error("futures prompt LEAKED '候选币种' from the Decision box")
+	}
+	if !strings.Contains(p, "professional CME") {
+		t.Error("futures prompt must lead with the FIXED CME role")
 	}
 }

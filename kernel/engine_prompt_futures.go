@@ -52,14 +52,12 @@ func (e *StrategyEngine) BuildFuturesDecisionSystemPrompt(symbol string, account
 	// prompt exists to avoid. The market data in the user prompt is
 	// self-describing (current_price + OHLCV timeframe tables).
 
-	// 1. Role (editable via the Role Definition box; FIXED CME role when empty)
-	//    + instrument identity (ALWAYS FIXED — futures-specific, never box-driven).
-	if ps.RoleDefinition != "" {
-		sb.WriteString(ps.RoleDefinition)
-		sb.WriteString("\n\n")
-	} else {
-		sb.WriteString("# You are a professional CME " + category + " trading AI specializing in the " + inst.Desc + " (" + sym + ").\n\n")
-	}
+	// 1. Role + instrument identity — ALWAYS FIXED on futures (instrument-
+	// specific). Deliberately NOT box-driven: crypto-origin strategies carry a
+	// stale crypto-default Role Definition box ("professional cryptocurrency
+	// trading AI" / "专业的加密货币交易AI"), which must NOT leak into the futures
+	// prompt. (Trading Frequency + Entry Standards boxes ARE honored below.)
+	sb.WriteString("# You are a professional CME " + category + " trading AI specializing in the " + inst.Desc + " (" + sym + ").\n\n")
 	sb.WriteString("## Instrument\n")
 	sb.WriteString("- Symbol: " + sym + " (" + inst.Desc + " futures)\n")
 	sb.WriteString("- Tick size: " + tickStr + " " + pointWord + "s\n")
@@ -99,18 +97,14 @@ func (e *StrategyEngine) BuildFuturesDecisionSystemPrompt(symbol string, account
 		sb.WriteString("\n\n")
 	}
 
-	// 4. Decision process (editable via the Decision Process box; FIXED steps
-	// when empty — byte-identical to the prior fixed text).
-	if ps.DecisionProcess != "" {
-		sb.WriteString(ps.DecisionProcess)
-		sb.WriteString("\n\n")
-	} else {
-		sb.WriteString("# Decision Process\n")
-		sb.WriteString("1. If a position is open: should it be held, or closed (close_long/close_short) for profit/stop?\n")
-		sb.WriteString("2. If flat: do the 5m/15m/1h bars + indicators show a high-confidence directional setup?\n")
-		sb.WriteString("3. Write your chain of thought, THEN output the structured JSON decision.\n")
-		sb.WriteString("4. action=wait (no setup) and action=hold (keep current position) are valid, frequently-correct answers. Do NOT force a trade.\n\n")
-	}
+	// 4. Decision process — ALWAYS FIXED on futures (NOT box-driven: the crypto-
+	// default Decision box references "candidate coins / 候选币种", a crypto
+	// concept that must not leak into the futures prompt).
+	sb.WriteString("# Decision Process\n")
+	sb.WriteString("1. If a position is open: should it be held, or closed (close_long/close_short) for profit/stop?\n")
+	sb.WriteString("2. If flat: do the 5m/15m/1h bars + indicators show a high-confidence directional setup?\n")
+	sb.WriteString("3. Write your chain of thought, THEN output the structured JSON decision.\n")
+	sb.WriteString("4. action=wait (no setup) and action=hold (keep current position) are valid, frequently-correct answers. Do NOT force a trade.\n\n")
 
 	// 5. Output format — MUST match the existing parser exactly.
 	sb.WriteString("# Output Format (Strictly Follow)\n\n")
