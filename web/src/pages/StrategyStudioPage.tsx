@@ -83,6 +83,23 @@ const normalizeStrategyConfig = (config: StrategyConfig): StrategyConfig => {
   }
 }
 
+// Phase 2 two-field Market+Mode <-> saved prompt_variant. MARKET is DERIVED from
+// the strategy symbol (the source of truth — it cannot contradict the symbol), so
+// only MODE is user-chosen. The saved variant encodes both: crypto →
+// "balanced"|"aggressive"|"conservative"; futures → "futures" (balanced) |
+// "futures-aggressive" | "futures-conservative". Mirrors the Go futuresVariantMode.
+function combineVariant(isFutures: boolean, mode: string): string {
+  if (isFutures) return mode === 'balanced' ? 'futures' : `futures-${mode}`
+  return mode
+}
+function decomposeMode(variant: string | undefined): string {
+  const v = (variant || '').toLowerCase()
+  if (v.startsWith('futures-')) return v.slice('futures-'.length) || 'balanced'
+  if (v === 'futures' || v === '') return 'balanced'
+  if (v === 'aggressive' || v === 'conservative' || v === 'balanced') return v
+  return 'balanced'
+}
+
 export function StrategyStudioPage() {
   const { token } = useAuth()
   const { language } = useLanguage()
@@ -126,7 +143,7 @@ export function StrategyStudioPage() {
     config_summary: Record<string, unknown>
   } | null>(null)
   const [isLoadingPrompt, setIsLoadingPrompt] = useState(false)
-  const [selectedVariant, setSelectedVariant] = useState('balanced')
+  const [selectedMode, setSelectedMode] = useState('balanced')
 
   // AI Test Run states
   const [aiTestResult, setAiTestResult] = useState<{
@@ -221,17 +238,11 @@ export function StrategyStudioPage() {
     selectedStrategyIDRef.current = selectedStrategy?.id || ''
   }, [selectedStrategy?.id])
 
-  // Phase 2 (Chunk C — honest preview): show the variant the LIVE bot will
-  // actually resolve, mirroring Go resolvePromptVariant — a saved variant wins;
-  // otherwise the venue rule (CME-futures symbol → "futures", else "balanced").
-  // So a futures strategy with no saved variant previews the REAL futures
-  // prompt (preview == live), not a misleading "balanced".
+  // Phase 2 (Chunk 3 — two-field Market+Mode): MARKET is derived from the symbol
+  // (read-only, rendered live); only the MODE is restored from the saved variant
+  // on strategy switch. The preview/save recombine Market+Mode into the variant.
   useEffect(() => {
-    const cfg = selectedStrategy?.config
-    const saved = cfg?.prompt_variant?.trim()
-    const ai = cfg ? getAIConfig(cfg) : null
-    const symbol = ai?.coin_source?.static_coins?.[0]
-    setSelectedVariant(saved || (isCMEFutures(symbol) ? 'futures' : 'balanced'))
+    setSelectedMode(decomposeMode(selectedStrategy?.config?.prompt_variant))
   }, [selectedStrategy?.id])
 
   useEffect(() => {
@@ -653,7 +664,12 @@ export function StrategyStudioPage() {
           body: JSON.stringify({
             config: editingConfig,
             account_equity: 1000,
-            prompt_variant: selectedVariant,
+            prompt_variant: combineVariant(
+              isCMEFutures(
+                getAIConfig(editingConfig)?.coin_source?.static_coins?.[0]
+              ),
+              selectedMode
+            ),
           }),
         }
       )
@@ -681,7 +697,12 @@ export function StrategyStudioPage() {
         },
         body: JSON.stringify({
           config: editingConfig,
-          prompt_variant: selectedVariant,
+          prompt_variant: combineVariant(
+            isCMEFutures(
+              getAIConfig(editingConfig)?.coin_source?.static_coins?.[0]
+            ),
+            selectedMode
+          ),
           ai_model_id: selectedModelId,
           run_real_ai: true,
         }),
@@ -1229,18 +1250,31 @@ export function StrategyStudioPage() {
               <div className="p-3 space-y-3">
                 {/* Controls */}
                 <div className="flex items-center gap-2 flex-wrap">
+                  {/* MARKET — auto-set from the strategy symbol, READ-ONLY (the
+                      symbol is the source of truth; it cannot contradict it). */}
+                  <span
+                    title={tr('marketLockedHint')}
+                    className="px-2 py-1.5 rounded text-xs bg-nofx-bg border border-nofx-gold/20 text-nofx-text opacity-60 cursor-not-allowed select-none"
+                  >
+                    {tr('market')}:{' '}
+                    {isFuturesStrategy
+                      ? tr('marketFutures')
+                      : tr('marketCrypto')}
+                  </span>
                   <select
-                    value={selectedVariant}
+                    value={selectedMode}
                     onChange={(e) => {
-                      setSelectedVariant(e.target.value)
-                      updateConfig('prompt_variant', e.target.value)
+                      setSelectedMode(e.target.value)
+                      updateConfig(
+                        'prompt_variant',
+                        combineVariant(isFuturesStrategy, e.target.value)
+                      )
                     }}
                     className="px-2 py-1.5 rounded text-xs bg-nofx-bg border border-nofx-gold/20 text-nofx-text outline-none focus:border-nofx-gold"
                   >
                     <option value="balanced">{tr('balanced')}</option>
                     <option value="aggressive">{tr('aggressive')}</option>
                     <option value="conservative">{tr('conservative')}</option>
-                    <option value="futures">{tr('futures')}</option>
                   </select>
                   <button
                     onClick={fetchPromptPreview}
@@ -1341,18 +1375,29 @@ export function StrategyStudioPage() {
                   )}
 
                   <div className="flex items-center gap-2">
+                    <span
+                      title={tr('marketLockedHint')}
+                      className="px-2 py-1.5 rounded text-xs bg-nofx-bg border border-nofx-gold/20 text-nofx-text opacity-60 cursor-not-allowed select-none"
+                    >
+                      {tr('market')}:{' '}
+                      {isFuturesStrategy
+                        ? tr('marketFutures')
+                        : tr('marketCrypto')}
+                    </span>
                     <select
-                      value={selectedVariant}
+                      value={selectedMode}
                       onChange={(e) => {
-                        setSelectedVariant(e.target.value)
-                        updateConfig('prompt_variant', e.target.value)
+                        setSelectedMode(e.target.value)
+                        updateConfig(
+                          'prompt_variant',
+                          combineVariant(isFuturesStrategy, e.target.value)
+                        )
                       }}
                       className="px-2 py-1.5 rounded text-xs bg-nofx-bg border border-nofx-gold/20 text-nofx-text"
                     >
                       <option value="balanced">{tr('balanced')}</option>
                       <option value="aggressive">{tr('aggressive')}</option>
                       <option value="conservative">{tr('conservative')}</option>
-                      <option value="futures">{tr('futures')}</option>
                     </select>
                     <button
                       onClick={runAiTest}
