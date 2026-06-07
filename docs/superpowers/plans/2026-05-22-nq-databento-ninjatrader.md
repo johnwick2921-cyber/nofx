@@ -9798,3 +9798,28 @@ crypto line. SIM-only; never the LIVE LFE… account.
 crypto-default boxes, never a customized one); crypto builder + Risk Control + multi-account (P1-P4) +
 P&L + chart-TZ + Phase 2 sub-modes/two-dropdown all untouched; NO C#/wire change. SIM-only; the
 live-account block untouched + untoggleable.**
+
+
+## 2026-06-06 — Strategy Studio: specific CME futures Role default + hide crypto leverage in the Config box (commit 725c91f2)
+
+Two display/default FE+seed changes (no enforced behavior change):
+
+- **(1) Futures Role default = specific professional CME role.** After A+D the seed Role was generic
+  neutral ("professional trading AI"). Root nuance: `GetDefaultStrategyConfig(lang)` is market-agnostic,
+  but the futures builder's empty-box fallback is ALREADY the instrument-aware CME role. So the seed now
+  **omits Role + Decision** (store/strategy.go) — an empty box lets each market's builder supply the
+  correct default: futures → "professional CME index-futures trading AI specializing in <instrument>"
+  (engine_prompt_futures.go), crypto → the crypto role (engine_prompt.go). The FE editor's empty-box
+  default is market-aware too (`PromptSectionsEditor` gains `isFutures`: CME Role/Decision on futures,
+  neutral on crypto). **Default/fallback only — edit control intact (a typed Role overrides), saved user
+  boxes UNTOUCHED (not a migration), crypto builder default unchanged.** Proven: a NEW default-config
+  strategy's futures prompt leads with the specific CME role; crypto path unchanged.
+- **(2) Config box hides crypto leverage on futures.** The Prompt-Preview "Config" summary filters out
+  `btc_eth_leverage` + `altcoin_leverage` when `isFuturesStrategy` (mirrors the PVR `{!isFutures}`
+  pattern); `coin_source` / `primary_tf` / `max_positions` shown on both. The backend `config_summary`
+  is unchanged; the FE filters for display.
+
+**Static verify:** go build/vet/test green; tsc 0; FE built; nofx-bin restarted clean (0 "unknown frame
+type"). **SUNDAY:** a futures strategy with the default Role → the bot's next decision's "System Prompt"
+leads with the specific CME role. ADDITIVE; display/default only; crypto + Risk Control + multi-account
++ P&L + chart-TZ + Phase 2 work untouched; live-account block untouched. SIM-only.
