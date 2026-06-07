@@ -11,6 +11,7 @@ import {
   AlertCircle,
   Key,
 } from 'lucide-react'
+import { useState } from 'react'
 import type { IndicatorConfig } from '../../types'
 import { indicator, ts } from '../../i18n/strategy-translations'
 import { NofxSelect } from '../ui/select'
@@ -45,6 +46,64 @@ const allTimeframes = [
   { value: '3d', label: '3D', category: 'position' },
   { value: '1w', label: '1W', category: 'position' },
 ]
+
+// PeriodInput edits a multi-value indicator period field (EMA/RSI/ATR/BOLL,
+// stored as number[]). It holds the RAW typed text in local state WHILE editing
+// — so commas, clearing, and mid-string edits are all allowed — and parses →
+// number[] ONLY on blur/commit (Enter blurs). The saved shape is unchanged:
+// onCommit always receives a number[] (the default periods if left empty). When
+// not editing (draft === null) the field is derived straight from the saved
+// value, so a strategy switch / reset-to-default just works.
+function PeriodInput({
+  value,
+  defaultPeriods,
+  disabled,
+  onCommit,
+}: {
+  value?: number[]
+  defaultPeriods: string
+  disabled?: boolean
+  onCommit: (periods: number[]) => void
+}) {
+  const [draft, setDraft] = useState<string | null>(null)
+  const saved = value && value.length > 0 ? value.join(',') : defaultPeriods
+  const shown = draft ?? saved
+
+  const parse = (raw: string) =>
+    raw
+      .split(',')
+      .map((s) => parseInt(s.trim(), 10))
+      .filter((n) => !isNaN(n) && n > 0)
+
+  const commit = () => {
+    if (draft === null) return
+    let periods = parse(draft)
+    if (periods.length === 0) periods = parse(defaultPeriods) // empty → default
+    onCommit(periods)
+    setDraft(null)
+  }
+
+  return (
+    <input
+      type="text"
+      value={shown}
+      onFocus={() => !disabled && setDraft(saved)}
+      onChange={(e) => !disabled && setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+      }}
+      disabled={disabled}
+      placeholder={defaultPeriods}
+      className="w-full px-2 py-1 rounded text-[10px] text-center"
+      style={{
+        background: '#1E2329',
+        border: '1px solid #2B3139',
+        color: '#EAECEF',
+      }}
+    />
+  )
+}
 
 export function IndicatorEditor({
   config,
@@ -1066,29 +1125,17 @@ export function IndicatorEditor({
                   {ts(indicator[desc as keyof typeof indicator], language)}
                 </p>
                 {periodKey && config[key as keyof IndicatorConfig] && (
-                  <input
-                    type="text"
+                  <PeriodInput
                     value={
-                      (
-                        config[periodKey as keyof IndicatorConfig] as number[]
-                      )?.join(',') || defaultPeriods
+                      config[periodKey as keyof IndicatorConfig] as
+                        | number[]
+                        | undefined
                     }
-                    onChange={(e) => {
-                      if (disabled) return
-                      const periods = e.target.value
-                        .split(',')
-                        .map((s) => parseInt(s.trim()))
-                        .filter((n) => !isNaN(n) && n > 0)
-                      onChange({ ...config, [periodKey]: periods })
-                    }}
+                    defaultPeriods={defaultPeriods}
                     disabled={disabled}
-                    placeholder={defaultPeriods}
-                    className="w-full px-2 py-1 rounded text-[10px] text-center"
-                    style={{
-                      background: '#1E2329',
-                      border: '1px solid #2B3139',
-                      color: '#EAECEF',
-                    }}
+                    onCommit={(periods) =>
+                      onChange({ ...config, [periodKey]: periods })
+                    }
                   />
                 )}
               </div>
