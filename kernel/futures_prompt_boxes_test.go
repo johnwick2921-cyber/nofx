@@ -55,62 +55,57 @@ func TestFuturesPromptEmptyBoxesByteIdentical(t *testing.T) {
 	}
 }
 
-// TestFuturesPromptBoxesHonored proves the Chunk-1 (Option B) split: on futures,
-// Trading Frequency + Entry Standards boxes ARE honored, but Role Definition +
-// Decision Process are ALWAYS the fixed CME text (NOT box-driven). So a strategy
-// whose Role/Decision boxes hold crypto-default text cannot leak crypto framing.
+// TestFuturesPromptBoxesHonored proves A (full control restored): ALL 4 prompt
+// boxes reach the futures prompt — Role/Decision via override-or-default,
+// Frequency/Entry append-when-set. Empty boxes inject nothing (golden holds).
 func TestFuturesPromptBoxesHonored(t *testing.T) {
 	boxed := boxedFuturesEngine().BuildFuturesDecisionSystemPrompt("MNQ", 50000)
-
-	// Frequency + Entry boxes ARE injected.
-	for _, s := range []string{"FREQ_BOX_SENTINEL", "ENTRY_BOX_SENTINEL"} {
+	for _, s := range []string{
+		"ROLE_BOX_SENTINEL", "FREQ_BOX_SENTINEL", "ENTRY_BOX_SENTINEL", "DECISION_BOX_SENTINEL",
+	} {
 		if !strings.Contains(boxed, s) {
 			t.Errorf("futures prompt should honor the %q box", s)
 		}
 	}
-	// Role + Decision boxes are NOT injected (fixed CME text instead).
-	for _, s := range []string{"ROLE_BOX_SENTINEL", "DECISION_BOX_SENTINEL"} {
-		if strings.Contains(boxed, s) {
-			t.Errorf("futures prompt must NOT inject %q (Role/Decision are fixed on futures)", s)
-		}
-	}
-	// FIXED markers present regardless of boxes.
-	for _, s := range []string{
-		"professional CME", "Symbol: MNQ", "# Decision Process", "<reasoning>", "<decision>", "Hard Constraints (Risk Control)",
-	} {
+	// The Instrument identity + output format stay FIXED regardless of boxes.
+	for _, s := range []string{"Symbol: MNQ", "<reasoning>", "<decision>", "Hard Constraints (Risk Control)"} {
 		if !strings.Contains(boxed, s) {
 			t.Errorf("boxed futures prompt lost FIXED marker %q", s)
 		}
 	}
 
-	// Empty boxes never inject the Frequency/Entry sections.
+	// Empty boxes never inject the box sections.
 	empty := emptyBoxFuturesEngine().BuildFuturesDecisionSystemPrompt("MNQ", 50000)
-	for _, s := range []string{"FREQ_BOX_SENTINEL", "ENTRY_BOX_SENTINEL"} {
+	for _, s := range []string{
+		"ROLE_BOX_SENTINEL", "FREQ_BOX_SENTINEL", "ENTRY_BOX_SENTINEL", "DECISION_BOX_SENTINEL",
+	} {
 		if strings.Contains(empty, s) {
 			t.Errorf("empty-box futures prompt unexpectedly contains %q", s)
 		}
 	}
 }
 
-// TestFuturesPromptNoCryptoLeak is the Chunk-1 regression proof: a strategy whose
-// Role + Decision boxes hold the CRYPTO-default text (the real-world case that
-// leaked "professional cryptocurrency AI" / "候选币种" into the futures prompt
-// after Change 4) must render the FIXED CME role + decision, with NO crypto line.
-func TestFuturesPromptNoCryptoLeak(t *testing.T) {
+// TestFuturesPromptCustomRoleHonored is the A proof (full control): a futures
+// strategy with a CUSTOM Role + Decision box renders THAT text. The earlier
+// crypto-leak is fixed at the DATA layer (neutral defaults + a migration), NOT
+// by ignoring the box. Empty boxes still fall back to the fixed CME text.
+func TestFuturesPromptCustomRoleHonored(t *testing.T) {
 	e := futuresTestEngine()
 	e.config.PromptSections = store.PromptSectionsConfig{
-		RoleDefinition:  "# You are a professional cryptocurrency trading AI\n\nYour task is to make trading decisions.",
-		DecisionProcess: "# 决策流程\n1. 扫描候选币种 + 多时间框架",
+		RoleDefinition:  "# MY CUSTOM FUTURES DESK\nScalp MNQ with discipline.",
+		DecisionProcess: "# MY DECISION FLOW\n1. check trend 2. enter",
 	}
 	p := e.BuildFuturesDecisionSystemPrompt("MNQ", 50000)
-	if strings.Contains(strings.ToLower(p), "cryptocurrency") {
-		t.Error("futures prompt LEAKED 'cryptocurrency' from the Role box")
+	if !strings.Contains(p, "MY CUSTOM FUTURES DESK") {
+		t.Error("futures prompt must honor a custom Role box")
 	}
-	if strings.Contains(p, "候选币种") {
-		t.Error("futures prompt LEAKED '候选币种' from the Decision box")
+	if !strings.Contains(p, "MY DECISION FLOW") {
+		t.Error("futures prompt must honor a custom Decision box")
 	}
-	if !strings.Contains(p, "professional CME") {
-		t.Error("futures prompt must lead with the FIXED CME role")
+	// Empty boxes fall back to the fixed CME role (golden holds).
+	pe := emptyBoxFuturesEngine().BuildFuturesDecisionSystemPrompt("MNQ", 50000)
+	if !strings.Contains(pe, "professional CME") {
+		t.Error("empty Role box must fall back to the fixed CME role")
 	}
 }
 
