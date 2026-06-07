@@ -78,22 +78,15 @@ export function PromptSectionsEditor({
   const defaults: PromptSectionsConfig = isFutures
     ? { ...defaultSections, ...futuresRoleDecision }
     : defaultSections
-  // Open every box that has text to SHOW — its saved content OR the default
-  // shown for an empty box — so the full prompt is visible without clicking.
-  // (Keyed off the DISPLAYED value, not just saved content, so a box showing
-  // the market default — e.g. the futures CME role — also opens.) Re-computed
-  // per strategy via the `key` on this component in StrategyStudioPage.
+  // Boxes start COLLAPSED — click a header to expand. (When expanded, the
+  // textarea auto-grows to fit the full text.)
   const [expandedSections, setExpandedSections] = useState<
     Record<string, boolean>
-  >(() => {
-    const shown = (k: keyof PromptSectionsConfig) =>
-      !!(config?.[k] || defaults[k] || '').trim()
-    return {
-      role_definition: shown('role_definition'),
-      trading_frequency: shown('trading_frequency'),
-      entry_standards: shown('entry_standards'),
-      decision_process: shown('decision_process'),
-    }
+  >({
+    role_definition: false,
+    trading_frequency: false,
+    entry_standards: false,
+    decision_process: false,
   })
 
   const sections = [
