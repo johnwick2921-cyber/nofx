@@ -9752,3 +9752,49 @@ SIM-only; never the LIVE LFE… account.
 two-dropdown Market-auto-locked+Mode (symbol = source of truth); crypto + Risk Control + multi-account
 (P1-P4) + P&L + chart-TZ + Phase 2 CORE all untouched; NO C#/wire change. SIM-only; the live-account
 block untouched + untoggleable.**
+
+
+## 2026-06-06 — Strategy Studio PHASE 2 A+D: honor the boxes on futures (revert Option B) + replace stale crypto defaults — built + static-verified, behavior Sunday
+
+**STATUS:** BUILT + STATIC-VERIFIED. Option B (Chunk 1 of the prior round, 9387a7e2) took away the
+owner's ability to edit Role/Decision on futures — WRONG. The real problem was the stale CRYPTO-DEFAULT
+box content, not that the user shouldn't edit. So: **(A)** honor the boxes again (full control) + **(D)**
+replace the stale crypto data.
+
+- **A — `07fef1a4` (Go):** reverted Option B — the futures builder honors Role Definition + Decision
+  Process again (override-or-default: box when set, fixed CME text when empty). Frequency + Entry already
+  honored. Tests: `TestFuturesPromptBoxesHonored` (all 4 honored), `TestFuturesPromptCustomRoleHonored`
+  (custom Role/Decision rendered; empty → fixed CME); golden + sub-mode tests still pass.
+- **D1 — `0f84f5bb` (Go + FE):** neutralized the new-strategy box defaults — `store/strategy.go`
+  DefaultStrategyConfig (zh+en) + the FE `PromptSectionsEditor.defaultSections`: Role "professional
+  cryptocurrency trading AI" / "加密货币交易AI" → "professional trading AI" / "交易AI"; Decision
+  "candidate coins / 候选币种" → "the market / 市场". A new strategy never starts with crypto framing.
+  The crypto BUILDER defaults (`engine_prompt.go` else-branches) are untouched (crypto path correct).
+- **D2 — one-time DB migration (data, NOT in git):** a surgical byte-replace on `data.db` rewrote ONLY
+  boxes whose `role_definition`/`decision_process` EXACTLY equalled a known crypto default — **7
+  strategies** (均衡/稳健/积极 zh + New×3/Strategy Copy en). Dry-run preview confirmed the exact set;
+  applied; **verified against a pre-migration snapshot: 7 rows changed, integrity_ok (every
+  non-role/decision field byte-identical), 2 empty "MNQ SIM Default" untouched, 0 crypto boxes remain.**
+  Reversible from `~/nofx-backups/2026-06-06-phase2-D-migration/data.db.PRE-MIGRATION-snapshot`.
+
+**End-to-end proof:** rendering `均衡策略`'s real futures prompt now leads with **"# 你是一个专业的交易AI"**
+(the neutral role, **honored from the box** — A) — crypto? false, 候选币种? false, CME instrument
+present. So edit (the box, neutral) == preview (honored). The owner can now type ANY role/decision and
+the futures AI uses it.
+
+**Static verify:** `go build ./...` clean; `go test ./store ./trader ./kernel` green; `tsc --noEmit` 0;
+FE built; `nofx-bin` rebuilt + restarted clean (0 "unknown frame type", serves the migrated configs).
+
+**Note (minor, by design):** for an EMPTY-box strategy (e.g. MNQ SIM Default) the editor shows the
+generic neutral default text while the preview shows the instrument-specific fixed CME role — both
+non-crypto; the difference is a generic placeholder vs the instrument-aware prompt. For strategies with
+actual box content (all 7 migrated ones), edit == preview exactly.
+
+**SUNDAY behavior list:** on a futures strategy, edit the Role box → the bot's next decision's "System
+Prompt" (Recent Decisions = ground truth) uses YOUR text; a migrated strategy → the neutral role, no
+crypto line. SIM-only; never the LIVE LFE… account.
+
+**ADDITIVE behavior (boxes honored = full control) + a careful reversible DATA migration (only
+crypto-default boxes, never a customized one); crypto builder + Risk Control + multi-account (P1-P4) +
+P&L + chart-TZ + Phase 2 sub-modes/two-dropdown all untouched; NO C#/wire change. SIM-only; the
+live-account block untouched + untoggleable.**
