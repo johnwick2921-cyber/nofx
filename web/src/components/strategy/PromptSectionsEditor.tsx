@@ -11,6 +11,27 @@ interface PromptSectionsEditorProps {
   onChange: (config: PromptSectionsConfig) => void
   disabled?: boolean
   language: string
+  // CME futures (e.g. MNQ): the Role + Decision DEFAULTS shown for an empty box
+  // become the instrument-aware CME role (matching the prompt builder's futures
+  // fallback), instead of the crypto/neutral text.
+  isFutures?: boolean
+}
+
+// Role + Decision defaults shown when a box is EMPTY, on the futures path —
+// mirrors the quality of engine_prompt_futures.go's fixed CME role. (A user's
+// typed box always overrides; this is the default/placeholder only.)
+const futuresRoleDecision: Pick<
+  PromptSectionsConfig,
+  'role_definition' | 'decision_process'
+> = {
+  role_definition: `# You are a professional CME index-futures trading AI
+
+You trade CME index futures (e.g. MNQ / ES) with disciplined technical analysis and risk management. You size by contract count and tick-aligned stops — NOT crypto leverage.`,
+  decision_process: `# Decision Process
+
+1. If a position is open → hold, or close (close_long/close_short) for profit/stop?
+2. If flat → do the multi-timeframe bars + indicators show a high-confidence setup?
+3. Write your reasoning first, then output the structured JSON.`,
 }
 
 // Default prompt sections (same as backend defaults)
@@ -50,7 +71,13 @@ export function PromptSectionsEditor({
   onChange,
   disabled,
   language,
+  isFutures = false,
 }: PromptSectionsEditorProps) {
+  // Market-aware defaults: futures shows the CME Role/Decision; crypto keeps the
+  // neutral text. Frequency + Entry are market-neutral (shared).
+  const defaults: PromptSectionsConfig = isFutures
+    ? { ...defaultSections, ...futuresRoleDecision }
+    : defaultSections
   const [expandedSections, setExpandedSections] = useState<
     Record<string, boolean>
   >({
@@ -93,7 +120,7 @@ export function PromptSectionsEditor({
 
   const resetSection = (key: keyof PromptSectionsConfig) => {
     if (!disabled) {
-      onChange({ ...currentConfig, [key]: defaultSections[key] })
+      onChange({ ...currentConfig, [key]: defaults[key] })
     }
   }
 
@@ -102,7 +129,7 @@ export function PromptSectionsEditor({
   }
 
   const getValue = (key: keyof PromptSectionsConfig): string => {
-    return currentConfig[key] || defaultSections[key] || ''
+    return currentConfig[key] || defaults[key] || ''
   }
 
   return (
@@ -126,7 +153,7 @@ export function PromptSectionsEditor({
           const value = getValue(sectionKey)
           const isModified =
             currentConfig[sectionKey] !== undefined &&
-            currentConfig[sectionKey] !== defaultSections[sectionKey]
+            currentConfig[sectionKey] !== defaults[sectionKey]
 
           return (
             <div
