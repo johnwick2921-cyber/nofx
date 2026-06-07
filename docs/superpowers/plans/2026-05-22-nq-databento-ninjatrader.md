@@ -9823,3 +9823,24 @@ Two display/default FE+seed changes (no enforced behavior change):
 type"). **SUNDAY:** a futures strategy with the default Role → the bot's next decision's "System Prompt"
 leads with the specific CME role. ADDITIVE; display/default only; crypto + Risk Control + multi-account
 + P&L + chart-TZ + Phase 2 work untouched; live-account block untouched. SIM-only.
+
+
+## 2026-06-07 — Strategy Studio readability UX (FE-only): auto-expand edited boxes + taller preview + live auto-refresh (commit 97b60895)
+
+Three FE/UX-only fixes from the prior read-only diagnoses (the "1-line box" was a default-collapsed
+accordion; the preview was a 400px scroll pane; the preview only rebuilt on Refresh-click):
+
+- **(1) Auto-expand edited prompt boxes.** `PromptSectionsEditor` now initializes `expandedSections`
+  from the config — a box with non-empty SAVED content opens by default; empty boxes (showing only the
+  default placeholder) stay collapsed. Re-computed per strategy via a `key={selectedStrategy.id}` on the
+  component in StrategyStudioPage (re-mounts on strategy switch). So an edited strategy shows its box
+  text without clicking.
+- **(2) Taller preview.** The System Prompt `<pre>` `maxHeight` 400px → **70vh** (still `overflow-auto`),
+  so most of the prompt is visible without scrolling.
+- **(3) Live auto-refresh.** A debounced (500ms) `useEffect` re-runs `fetchPromptPreview` when
+  `editingConfig`/`selectedMode` change on the Prompt tab — edits reflect without clicking Refresh; the
+  manual Refresh button is kept. `fetchPromptPreview` already uses the live `editingConfig`.
+
+**FE/UX-only — NO Go/gate/prompt-content/behavior change** (the rendered prompt text is identical; Risk
+Control + the builder + multi-account + P&L + chart-TZ untouched); crypto byte-identical; live-account
+block untouched. tsc 0; `npm run build` ✓; Go untouched. SIM-only.
