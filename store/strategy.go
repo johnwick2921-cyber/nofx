@@ -1142,6 +1142,11 @@ func applyFuturesIndicatorDefaults(ind *IndicatorConfig) {
 	ind.EnableOIRanking = false
 	ind.EnableNetFlowRanking = false
 	ind.EnablePriceRanking = false
+	// Open Interest is the Binance crypto-perp feed too — it returns zeros for
+	// MNQ and the futures prompt already says to ignore it (no real futures OI
+	// is wired; the NT8 bridge carries OHLCV only). Off by default so a new
+	// futures strategy doesn't list/value an empty OI section.
+	ind.EnableOI = false
 	// (2) computed technical indicators ON for futures.
 	ind.EnableATR = true
 	ind.EnableEMA = true

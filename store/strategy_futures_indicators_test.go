@@ -11,6 +11,7 @@ func TestApplyFuturesIndicatorDefaults(t *testing.T) {
 	ind := IndicatorConfig{
 		EnableEMA: false, EnableRSI: false, EnableATR: false,
 		EnableMACD: false, EnableBOLL: false,
+		EnableOI:        true,
 		EnableQuantData: true, EnableQuantOI: true, EnableQuantNetflow: true,
 		EnableOIRanking: true, EnableNetFlowRanking: true, EnablePriceRanking: true,
 	}
@@ -19,6 +20,11 @@ func TestApplyFuturesIndicatorDefaults(t *testing.T) {
 	if !ind.EnableATR || !ind.EnableEMA || !ind.EnableRSI {
 		t.Errorf("futures default must enable ATR/EMA/RSI; got ATR=%v EMA=%v RSI=%v",
 			ind.EnableATR, ind.EnableEMA, ind.EnableRSI)
+	}
+	// Open Interest is the Binance crypto-perp feed (empty zeros on MNQ) — off on
+	// futures so a new strategy doesn't list/value an empty OI section.
+	if ind.EnableOI {
+		t.Errorf("futures default must disable Open Interest (crypto-perp feed, empty on MNQ); got EnableOI=%v", ind.EnableOI)
 	}
 	if ind.EnableQuantData || ind.EnableQuantOI || ind.EnableQuantNetflow ||
 		ind.EnableOIRanking || ind.EnableNetFlowRanking || ind.EnablePriceRanking {
