@@ -9866,3 +9866,48 @@ FE/UX-only, additive:
 (1 button); flipping the symbol to BTC → all 4 reappear; section title "数据源 / Data Source" both; New
 Strategy's saved symbol still MNQ (no mutation). tsc 0; build ok; Go untouched. Crypto byte-identical;
 gates/guardrails/prompt/multi-account/P&L/chart-TZ untouched; live-account block untouched. SIM-only.
+
+
+## 2026-06-07 — Strategy Studio Phase 4: timeframe-line fix + futures default indicators + NofxOS hide (commits a7ca000d / 2558ea2c / 0312a828)
+
+Three safe chunks (each audit → build → verify → commit), from the Phase-4 Indicators map + the
+timeframe diagnosis. ADDITIVE; indicators/timeframes are prompt-data and NEVER gate a trade
+(engine_position.go reads zero `Indicators.Enable*`).
+
+- **(A) Prompt timeframe line lists all selected TFs (Go — a7ca000d).** `writeAvailableIndicators`
+  (kernel/engine_prompt.go) named only `PrimaryTimeframe` + `LongerTimeframe` (the legacy 2-field model),
+  so a 3-timeframe selection (MNQ SIM Default = 5m/15m/1h) showed "5m + 1h" and dropped 15m — even though
+  the fetch (engine_analysis.go reads `SelectedTimeframes`) and the per-timeframe user-prompt loop
+  already feed the AI all selected TFs. Only the summary line under-reported. Extracted
+  `formatKlineTimeframes(kline)`: list every `SelectedTimeframes` entry; fall back to the prior
+  primary[+longer] wording ONLY when the list is empty (legacy configs → **byte-identical**). Shared by
+  the crypto `BuildSystemPrompt` + the live futures `buildFuturesPrompt`, so the crypto line updates too
+  (golden-tested). **Golden:** kernel/engine_prompt_timeframes_test.go locks the empty-list fallback
+  (byte-identical) + the all-listed behavior, end-to-end through the real method.
+- **(B) ATR/EMA/RSI enabled in the futures new-strategy default (Go — 2558ea2c).** The futures AI got raw
+  bars + volume only (EMA/MACD/RSI/ATR/BOLL default OFF). Extracted `applyFuturesIndicatorDefaults()`
+  (the existing NofxOS/ranking disable + the new ATR/EMA/RSI enable) inside `GetDefaultStrategyConfig`'s
+  `if isFuturesMode()` block — ATR (stop sizing) + EMA (trend) + RSI (momentum) on; MACD/BOLL left off.
+  **Defaults-only** (new-strategy template; FE create flow fetches /default-config); existing saved
+  strategies NOT mutated (verified: 均衡/稳健/积极/New still volume,oi,funding_rate; MNQ SIM Default
+  none). Crypto mode untouched (helper never called) → byte-identical. **Test:**
+  store/strategy_futures_indicators_test.go. **Recommendation (separate confirm):** to give the owner's
+  EXISTING MNQ strategies the same indicators, toggle EMA/RSI/ATR ON per-strategy in the Indicators UI
+  (or a one-off, owner-approved DB update) — NOT auto-applied here (no mass-mutation).
+- **(C) NofxOS + crypto-ranking feeds hidden on futures (FE — 0312a828).** The whole NofxOS Data
+  Provider section (Quant Data / Quant OI / NetFlow + OI/NetFlow/Price ranking + the API Key field)
+  rendered but was inert on futures (crypto-only; disabled by default; claw402 402/404 on CME). Wrapped
+  the section in `{!isFutures && (...)}` (the `isCMEFutures(static_coins[0])` → `isFuturesStrategy` flag,
+  passed as `isFutures`). Futures → not rendered; crypto → renders exactly as before. FE-only display
+  gate of already-inert controls; no saved-data mutation. (`git diff -w` shows the only change is the
+  wrap; the rest is prettier re-indent.)
+
+**Static verify (now):** go build/vet/test (./store ./kernel ./trader) green incl. both new tests +
+existing goldens; tsc 0; `npm run build` ✓; nofx-bin rebuilt + restarted clean in futures mode (0
+"unknown frame type" / panic / fatal); bot flat at restart (0 open positions). **SUNDAY (market open):**
+(A) a futures strategy → the bot's next decision's "System Prompt" lists all selected TFs; (B) a NEW
+futures strategy defaults ATR/EMA/RSI ON and they appear in the decision data; (C) Playwright — a futures
+strategy → NofxOS/ranking controls hidden, a crypto strategy → shown. ADDITIVE — old configs
+byte-identical (golden); indicators never gate (low real-money risk); crypto byte-identical except the
+intended timeframe wording; gates/guardrails/multi-account (P1-P4)/P&L/chart-TZ + Phase 2/3 work + the
+live-account block untouched. SIM-only.
