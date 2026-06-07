@@ -828,6 +828,7 @@ export function StrategyStudioPage() {
           }
           disabled={selectedStrategy?.is_default}
           language={language}
+          isFutures={isFuturesStrategy}
         />
       ),
     },
@@ -1301,8 +1302,16 @@ export function StrategyStudioPage() {
                         </span>
                       </div>
                       <div className="grid grid-cols-3 gap-2 text-xs">
-                        {Object.entries(promptPreview.config_summary || {}).map(
-                          ([key, value]) => (
+                        {Object.entries(promptPreview.config_summary || {})
+                          // Hide crypto-only leverage fields on futures (sized by
+                          // contracts, not leverage); shown on crypto.
+                          .filter(
+                            ([key]) =>
+                              !isFuturesStrategy ||
+                              (key !== 'btc_eth_leverage' &&
+                                key !== 'altcoin_leverage')
+                          )
+                          .map(([key, value]) => (
                             <div key={key}>
                               <div className="text-nofx-text-muted">
                                 {key.replace(/_/g, ' ')}
@@ -1311,8 +1320,7 @@ export function StrategyStudioPage() {
                                 {String(value)}
                               </div>
                             </div>
-                          )
-                        )}
+                          ))}
                       </div>
                     </div>
 
