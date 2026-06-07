@@ -1078,7 +1078,7 @@ func GetDefaultStrategyConfig(lang string) StrategyConfig {
 
 	if lang == "zh" {
 		config.PromptSections = PromptSectionsConfig{
-			RoleDefinition: `# 你是一个专业的加密货币交易AI
+			RoleDefinition: `# 你是一个专业的交易AI
 
 你的任务是根据提供的市场数据做出交易决策。你是一个经验丰富的量化交易员，擅长技术分析和风险管理。`,
 			TradingFrequency: `# ⏱️ 交易频率意识
@@ -1093,12 +1093,12 @@ func GetDefaultStrategyConfig(lang string) StrategyConfig {
 			DecisionProcess: `# 📋 决策流程
 
 1. 检查持仓 → 是否止盈/止损
-2. 扫描候选币种 + 多时间框架 → 是否存在强信号
+2. 扫描市场 + 多时间框架 → 是否存在强信号
 3. 先写思维链，再输出结构化JSON`,
 		}
 	} else {
 		config.PromptSections = PromptSectionsConfig{
-			RoleDefinition: `# You are a professional cryptocurrency trading AI
+			RoleDefinition: `# You are a professional trading AI
 
 Your task is to make trading decisions based on the provided market data. You are an experienced quantitative trader skilled in technical analysis and risk management.`,
 			TradingFrequency: `# ⏱️ Trading Frequency Awareness
@@ -1113,7 +1113,7 @@ Only enter positions when multiple signals resonate. Freely use any effective an
 			DecisionProcess: `# 📋 Decision Process
 
 1. Check positions → whether to take profit/stop loss
-2. Scan candidate coins + multi-timeframe → whether strong signals exist
+2. Scan the market + multi-timeframe → whether strong signals exist
 3. Write chain of thought first, then output structured JSON`,
 		}
 	}

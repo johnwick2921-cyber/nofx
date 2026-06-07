@@ -1,7 +1,10 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronRight, RotateCcw, FileText } from 'lucide-react'
 import type { PromptSectionsConfig } from '../../types'
-import { promptSections as promptSectionsI18n, ts } from '../../i18n/strategy-translations'
+import {
+  promptSections as promptSectionsI18n,
+  ts,
+} from '../../i18n/strategy-translations'
 
 interface PromptSectionsEditorProps {
   config: PromptSectionsConfig | undefined
@@ -12,7 +15,7 @@ interface PromptSectionsEditorProps {
 
 // Default prompt sections (same as backend defaults)
 const defaultSections: PromptSectionsConfig = {
-  role_definition: `# 你是专业的加密货币交易AI
+  role_definition: `# 你是专业的交易AI
 
 你专注于技术分析和风险管理，基于市场数据做出理性的交易决策。
 你的目标是在控制风险的前提下，捕捉高概率的交易机会。`,
@@ -37,7 +40,7 @@ const defaultSections: PromptSectionsConfig = {
   decision_process: `# 📋 决策流程
 
 1. 检查持仓 → 是否该止盈/止损
-2. 扫描候选币 + 多时间框 → 是否存在强信号
+2. 扫描市场 + 多时间框 → 是否存在强信号
 3. 评估风险回报比 → 是否满足最小要求
 4. 先写思维链，再输出结构化JSON`,
 }
@@ -48,7 +51,9 @@ export function PromptSectionsEditor({
   disabled,
   language,
 }: PromptSectionsEditorProps) {
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+  const [expandedSections, setExpandedSections] = useState<
+    Record<string, boolean>
+  >({
     role_definition: false,
     trading_frequency: false,
     entry_standards: false,
@@ -56,10 +61,26 @@ export function PromptSectionsEditor({
   })
 
   const sections = [
-    { key: 'role_definition', label: ts(promptSectionsI18n.roleDefinition, language), desc: ts(promptSectionsI18n.roleDefinitionDesc, language) },
-    { key: 'trading_frequency', label: ts(promptSectionsI18n.tradingFrequency, language), desc: ts(promptSectionsI18n.tradingFrequencyDesc, language) },
-    { key: 'entry_standards', label: ts(promptSectionsI18n.entryStandards, language), desc: ts(promptSectionsI18n.entryStandardsDesc, language) },
-    { key: 'decision_process', label: ts(promptSectionsI18n.decisionProcess, language), desc: ts(promptSectionsI18n.decisionProcessDesc, language) },
+    {
+      key: 'role_definition',
+      label: ts(promptSectionsI18n.roleDefinition, language),
+      desc: ts(promptSectionsI18n.roleDefinitionDesc, language),
+    },
+    {
+      key: 'trading_frequency',
+      label: ts(promptSectionsI18n.tradingFrequency, language),
+      desc: ts(promptSectionsI18n.tradingFrequencyDesc, language),
+    },
+    {
+      key: 'entry_standards',
+      label: ts(promptSectionsI18n.entryStandards, language),
+      desc: ts(promptSectionsI18n.entryStandardsDesc, language),
+    },
+    {
+      key: 'decision_process',
+      label: ts(promptSectionsI18n.decisionProcess, language),
+      desc: ts(promptSectionsI18n.decisionProcessDesc, language),
+    },
   ]
 
   const currentConfig = config || {}
@@ -103,7 +124,9 @@ export function PromptSectionsEditor({
           const sectionKey = key as keyof PromptSectionsConfig
           const isExpanded = expandedSections[key]
           const value = getValue(sectionKey)
-          const isModified = currentConfig[sectionKey] !== undefined && currentConfig[sectionKey] !== defaultSections[sectionKey]
+          const isModified =
+            currentConfig[sectionKey] !== undefined &&
+            currentConfig[sectionKey] !== defaultSections[sectionKey]
 
           return (
             <div
@@ -117,17 +140,29 @@ export function PromptSectionsEditor({
               >
                 <div className="flex items-center gap-2">
                   {isExpanded ? (
-                    <ChevronDown className="w-4 h-4" style={{ color: '#848E9C' }} />
+                    <ChevronDown
+                      className="w-4 h-4"
+                      style={{ color: '#848E9C' }}
+                    />
                   ) : (
-                    <ChevronRight className="w-4 h-4" style={{ color: '#848E9C' }} />
+                    <ChevronRight
+                      className="w-4 h-4"
+                      style={{ color: '#848E9C' }}
+                    />
                   )}
-                  <span className="text-sm font-medium" style={{ color: '#EAECEF' }}>
+                  <span
+                    className="text-sm font-medium"
+                    style={{ color: '#EAECEF' }}
+                  >
                     {label}
                   </span>
                   {isModified && (
                     <span
                       className="px-1.5 py-0.5 text-[10px] rounded"
-                      style={{ background: 'rgba(168, 85, 247, 0.15)', color: '#a855f7' }}
+                      style={{
+                        background: 'rgba(168, 85, 247, 0.15)',
+                        color: '#a855f7',
+                      }}
                     >
                       {ts(promptSectionsI18n.modified, language)}
                     </span>
