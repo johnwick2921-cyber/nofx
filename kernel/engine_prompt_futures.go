@@ -21,6 +21,41 @@ import (
 // tiers (leverage is fixed at 1 — futures margin is contract-based, handled by
 // the broker).
 func (e *StrategyEngine) BuildFuturesDecisionSystemPrompt(symbol string, accountEquity float64) string {
+	return e.buildFuturesPrompt(symbol, accountEquity, "balanced")
+}
+
+// futures sub-mode blocks (Phase 2) — TEXT only; they never change the Hard
+// Constraints / output format / Risk Control. "balanced" injects NO block.
+const (
+	futuresModeAggressive   = "## Mode: Aggressive\n- Favor acting on high-confidence setups earlier; a strong 5m/15m alignment can justify entry without waiting for full multi-timeframe confluence.\n- Still obey EVERY Hard Constraint above (R/R, min confidence, one position, tick-aligned stops).\n\n"
+	futuresModeConservative = "## Mode: Conservative\n- Act only on strong multi-timeframe confluence; prefer wait/hold in chop or on conflicting signals.\n- Be more selective; after a loss, wait for a clean fresh setup.\n- Still obey EVERY Hard Constraint above.\n\n"
+)
+
+// futuresVariantMode reports whether a prompt variant is a futures variant and
+// returns its sub-mode: "futures"/"futures-balanced" → (true,"balanced");
+// "futures-aggressive" → (true,"aggressive"); "futures-conservative" →
+// (true,"conservative"). Non-futures variants → (false,""). An unknown suffix
+// falls back to the no-block balanced default (safe).
+func futuresVariantMode(variant string) (bool, string) {
+	v := strings.ToLower(strings.TrimSpace(variant))
+	if v == "futures" {
+		return true, "balanced"
+	}
+	if strings.HasPrefix(v, "futures-") {
+		mode := strings.TrimPrefix(v, "futures-")
+		if mode == "" {
+			mode = "balanced"
+		}
+		return true, mode
+	}
+	return false, ""
+}
+
+// buildFuturesPrompt builds the CME futures system prompt for a sub-mode
+// ("balanced" | "aggressive" | "conservative"). A balanced/empty/unknown mode
+// injects NO "## Mode:" block, so it is byte-identical to the prior fixed
+// futures prompt (the golden). The sub-mode is TEXT only.
+func (e *StrategyEngine) buildFuturesPrompt(symbol string, accountEquity float64, mode string) string {
 	var sb strings.Builder
 	rc := e.config.RiskControl
 	ps := e.config.PromptSections // the 4 editable prompt boxes (Change 4)
@@ -75,6 +110,16 @@ func (e *StrategyEngine) BuildFuturesDecisionSystemPrompt(symbol string, account
 	sb.WriteString("- One position at a time. No averaging in / pyramiding.\n")
 	sb.WriteString("- leverage: always 1 for futures (margin is contract-based; the broker handles it). Do NOT use crypto leverage tiers.\n")
 	sb.WriteString("- position_size_usd: the contract notional you intend (≈ price × $" + pvInt + " × contracts). Keep it conservative (start with 1 contract).\n\n")
+
+	// 2a. Trading posture sub-mode (TEXT only; "balanced"/""/unknown = NO block =
+	// byte-identical default). Mirrors the crypto "## Mode:" injection and stays
+	// WITHIN the Hard Constraints above — it never changes the risk rules.
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "aggressive":
+		sb.WriteString(futuresModeAggressive)
+	case "conservative":
+		sb.WriteString(futuresModeConservative)
+	}
 
 	// 2b. Trading Frequency (editable). Appended ONLY when the box is set, so an
 	// empty box leaves the futures prompt byte-identical to the prior fixed text.
