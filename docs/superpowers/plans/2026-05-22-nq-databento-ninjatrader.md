@@ -9844,3 +9844,25 @@ accordion; the preview was a 400px scroll pane; the preview only rebuilt on Refr
 **FE/UX-only — NO Go/gate/prompt-content/behavior change** (the rendered prompt text is identical; Risk
 Control + the builder + multi-account + P&L + chart-TZ untouched); crypto byte-identical; live-account
 block untouched. tsc 0; `npm run build` ✓; Go untouched. SIM-only.
+
+
+## 2026-06-07 — Strategy Studio Phase 3: hide crypto data feeds on futures + rename "Coin Source" → "Data Source" (commit 3923df1c)
+
+FE/UX-only, additive:
+- **(1) Crypto data feeds hidden on futures.** CoinSourceEditor's Source-Type selector showed all 4
+  (Static / AI500 / OI-Top / OI-Low) on a futures strategy; AI500/OI are crypto-only feeds (would make
+  `GetCandidateCoins` fetch crypto data instead of trading MNQ). Now `isFutures = isCMEFutures(static_coins[0])`
+  → `visibleSourceTypes` shows ONLY Static on futures, and `effectiveSourceType` (= 'static' on futures)
+  drives the highlight + the option panels so the crypto panels also hide. **Display-only — saved data
+  untouched** (render-only hide; no mutation). Crypto shows all 4 (else-branch = byte-identical).
+- **(2) Label rename.** "Coin Source" → "Data Source" (i18n en/zh/id: the strategyStudio section title +
+  the trader-modal label). The config key `coin_source` / `static_coins` is UNCHANGED (the stored data
+  shape — no migration; saved strategies load fine).
+- **(3) Sweep.** The Data Source labels were already neutralized (Custom Symbols / Add Symbol / symbols /
+  Excluded Symbols); the remaining crypto terms are the AI500/OI feed descriptions — genuinely crypto-only
+  feeds (now hidden on futures) — left as-is.
+
+**Verified LIVE (owner's session, no token forged):** futures (MNQ) → the selector shows only "Static"
+(1 button); flipping the symbol to BTC → all 4 reappear; section title "数据源 / Data Source" both; New
+Strategy's saved symbol still MNQ (no mutation). tsc 0; build ok; Go untouched. Crypto byte-identical;
+gates/guardrails/prompt/multi-account/P&L/chart-TZ untouched; live-account block untouched. SIM-only.
