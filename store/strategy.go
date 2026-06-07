@@ -1107,22 +1107,45 @@ Only enter positions when multiple signals resonate. Freely use any effective an
 		}
 	}
 
-	// CME futures (NT8) have no nofxos/claw402 crypto enrichment: the
-	// market-wide quant / OI-ranking / NetFlow-ranking / Price-ranking sources
-	// only return data for crypto and just burn cycles on the dead claw402 path
-	// (HTTP 402/404) for an index-futures instrument. Disable them so futures
-	// strategies don't pay that ~4-min-per-cycle tax (plan §5310: "NQ
-	// strategies just leave them disabled").
+	// CME futures (NT8): tune the indicator DEFAULTS for a new futures strategy —
+	// disable the crypto-only NofxOS/ranking feeds and enable the technical
+	// indicators the futures prompt leans on. Defaults-only (new-strategy
+	// template); existing saved strategies are never mutated. See helper.
 	if isFuturesMode() {
-		config.Indicators.EnableQuantData = false
-		config.Indicators.EnableQuantOI = false
-		config.Indicators.EnableQuantNetflow = false
-		config.Indicators.EnableOIRanking = false
-		config.Indicators.EnableNetFlowRanking = false
-		config.Indicators.EnablePriceRanking = false
+		applyFuturesIndicatorDefaults(&config.Indicators)
 	}
 
 	return config
+}
+
+// applyFuturesIndicatorDefaults tunes the indicator defaults for a NEW
+// CME-futures strategy (called only when isFuturesMode()):
+//
+//  1. Disable the crypto-only NofxOS / market-wide ranking feeds — they return
+//     no data for an index-futures instrument and just burn the dead claw402
+//     path (HTTP 402/404) ~4 min/cycle (plan §5310: "NQ strategies just leave
+//     them disabled").
+//  2. Enable the computed technical indicators the futures prompt actually leans
+//     on — ATR (stop sizing), EMA (trend), RSI (momentum) — which otherwise
+//     default OFF, leaving the futures AI with raw bars + volume only. Periods
+//     are already seeded ([20,50] / [7,14] / [14]).
+//
+// Indicators are prompt-data and NEVER gate a trade (the gate reads only Risk
+// Control), so this is a defaults-only, prompt-input change. It runs only inside
+// GetDefaultStrategyConfig (the new-strategy template) — existing saved
+// strategies are never touched. MACD/BOLL are deliberately left off.
+func applyFuturesIndicatorDefaults(ind *IndicatorConfig) {
+	// (1) crypto-only feeds OFF on futures.
+	ind.EnableQuantData = false
+	ind.EnableQuantOI = false
+	ind.EnableQuantNetflow = false
+	ind.EnableOIRanking = false
+	ind.EnableNetFlowRanking = false
+	ind.EnablePriceRanking = false
+	// (2) computed technical indicators ON for futures.
+	ind.EnableATR = true
+	ind.EnableEMA = true
+	ind.EnableRSI = true
 }
 
 // isFuturesMode reports whether the bot is running in CME-futures mode. Lives
