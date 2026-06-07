@@ -163,16 +163,30 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant, symbo
 	return sb.String()
 }
 
+// formatKlineTimeframes renders the "Available Data" timeframe summary line. It
+// lists EVERY selected timeframe — matching what the fetch (engine_analysis.go
+// reads SelectedTimeframes) and the per-timeframe user-prompt loop actually feed
+// the AI — so the prompt no longer under-reports a 3-timeframe selection (e.g.
+// 5m/15m/1h) as just "primary + longer" (2). For legacy configs that predate
+// SelectedTimeframes (empty list) it falls back to the prior primary[+longer]
+// wording, producing byte-identical output to the pre-fix code.
+func formatKlineTimeframes(kline store.KlineConfig) string {
+	if len(kline.SelectedTimeframes) > 0 {
+		return fmt.Sprintf("- %s price series\n", strings.Join(kline.SelectedTimeframes, ", "))
+	}
+	// Legacy fallback (no SelectedTimeframes): primary + optional longer — the
+	// exact wording the code emitted before the SelectedTimeframes-aware fix.
+	if kline.EnableMultiTimeframe {
+		return fmt.Sprintf("- %s price series + %s K-line series\n", kline.PrimaryTimeframe, kline.LongerTimeframe)
+	}
+	return fmt.Sprintf("- %s price series\n", kline.PrimaryTimeframe)
+}
+
 func (e *StrategyEngine) writeAvailableIndicators(sb *strings.Builder) {
 	indicators := e.config.Indicators
 	kline := indicators.Klines
 
-	sb.WriteString(fmt.Sprintf("- %s price series", kline.PrimaryTimeframe))
-	if kline.EnableMultiTimeframe {
-		sb.WriteString(fmt.Sprintf(" + %s K-line series\n", kline.LongerTimeframe))
-	} else {
-		sb.WriteString("\n")
-	}
+	sb.WriteString(formatKlineTimeframes(kline))
 
 	if indicators.EnableEMA {
 		sb.WriteString("- EMA indicators")
