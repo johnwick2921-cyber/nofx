@@ -683,6 +683,18 @@ export function StrategyStudioPage() {
     }
   }
 
+  // Live preview: re-run the prompt preview (debounced 500ms) when the config or
+  // mode changes, so edits reflect without clicking Refresh. The manual Refresh
+  // button is kept. Only on the Prompt tab; debounced so it doesn't fire on
+  // every keystroke. fetchPromptPreview already uses the live editingConfig.
+  useEffect(() => {
+    if (!token || !editingConfig || activeRightTab !== 'prompt') return
+    const t = setTimeout(() => {
+      fetchPromptPreview()
+    }, 500)
+    return () => clearTimeout(t)
+  }, [editingConfig, selectedMode, activeRightTab, token])
+
   // Run AI test with real AI model
   const runAiTest = async () => {
     if (!token || !editingConfig || !selectedModelId) return
@@ -822,6 +834,7 @@ export function StrategyStudioPage() {
       forStrategyType: 'ai_trading' as const,
       content: currentAIConfig && (
         <PromptSectionsEditor
+          key={selectedStrategy?.id || 'none'}
           config={currentAIConfig.prompt_sections}
           onChange={(promptSections) =>
             updateAIConfig('prompt_sections', promptSections)
@@ -1340,7 +1353,7 @@ export function StrategyStudioPage() {
                       </div>
                       <pre
                         className="p-2 rounded-lg text-[11px] font-mono overflow-auto bg-nofx-bg border border-nofx-gold/20 text-nofx-text"
-                        style={{ maxHeight: '400px' }}
+                        style={{ maxHeight: '70vh' }}
                       >
                         {promptPreview.system_prompt}
                       </pre>
