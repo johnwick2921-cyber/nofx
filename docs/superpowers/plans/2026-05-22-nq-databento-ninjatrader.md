@@ -9702,3 +9702,53 @@ boxes → today's fixed futures prompt. SIM-only; never the LIVE LFE… account.
 futures prompt (byte-identical, proven by golden test); boxes are TEXT-only (Risk Control + output
 format + hard risk rules FIXED); crypto + Risk Control + multi-account (P1-P4) + P&L + chart-TZ + Phase
 2 CORE all untouched; NO C#/wire/FE change. SIM-only; the live-account block untouched.**
+
+
+## 2026-06-06 — Strategy Studio PHASE 2 — (B) crypto-leak fix + futures SUB-MODES + two-dropdown Market+Mode (3 chunks) — built + static-verified, behavior Sunday
+
+**STATUS:** BUILT + STATIC-VERIFIED (market closed). Fixes the Change-4 regression (futures preview led
+with a leaked crypto Role box), adds futures sub-modes, and a two-field Market(auto-locked)+Mode UI.
+LIVE behavior proof on the SUNDAY list.
+
+Root cause of the regression (diagnosed by rendering the real prompt): Change 4 (181f1a00) made the
+futures builder honor all 4 boxes, but EVERY non-default strategy carries crypto-DEFAULT box content
+(`role_definition` = "professional cryptocurrency trading AI" / "你是一个专业的加密货币交易AI";
+`decision_process` = "候选币种/coins"). So the futures prompt led with crypto framing. The live trader
+(`sss` → "MNQ SIM Default", empty boxes) was NOT affected; this was a preview-of-`均衡策略` issue + latent
+for any box-laden strategy assigned to a live futures trader.
+
+- **CHUNK 1 (B) — `9387a7e2` (Go):** on futures, **Role Definition + Decision Process are ALWAYS the
+  fixed CME text** (reverted JUST those two from Change 4); **Trading Frequency + Entry Standards stay
+  honored** (append-when-set); Custom Prompt + Min R/R + Min Conf unchanged. Proven: rendering
+  `均衡策略`'s REAL futures prompt now leads with "professional CME index-futures trading AI" — no
+  `cryptocurrency` / `加密货币` / `候选币种`. Tests: `TestFuturesPromptNoCryptoLeak`,
+  `TestFuturesPromptBoxesHonored`; golden `TestFuturesPromptEmptyBoxesByteIdentical` still passes.
+- **CHUNK 2 (SUBMODES) — `6b4976d5` (Go):** `BuildSystemPrompt` routes `futures` / `futures-balanced` /
+  `futures-aggressive` / `futures-conservative` via `futuresVariantMode` (was an exact `=="futures"`
+  that would have fallen through to crypto). `buildFuturesPrompt(symbol, equity, mode)` injects a
+  `## Mode:` block for aggressive/conservative; balanced/empty/unknown = NO block. Proven:
+  `TestFuturesSubModes` — `futures`/`futures-balanced` == the golden (byte-identical); aggressive/
+  conservative == balanced + ONLY their mode block (TEXT-only, Risk Control/output format untouched).
+  `resolvePromptVariant` unchanged (passes the saved variant through).
+- **CHUNK 3 (LAYOUT) — `e876ded7` (FE):** the single Mode dropdown → a **READ-ONLY Market field**
+  (left, derived from `isCMEFutures(static_coins[0])` — cannot contradict the symbol) **+ a Mode
+  dropdown** (right, Balanced/Aggressive/Conservative). `combineVariant`/`decomposeMode` map
+  Market+Mode ↔ the saved `prompt_variant` (crypto → balanced/aggressive/conservative; futures →
+  futures / futures-aggressive / futures-conservative), mirroring the Go `futuresVariantMode`. Preview +
+  AI-Test send the combined variant → a futures strategy now previews the FIXED CME role + the sub-mode
+  (no crypto line). i18n market/marketFutures/marketCrypto/marketLockedHint (en/zh/id).
+
+**Static verify:** `go build ./...` clean; `go test ./store ./trader ./kernel` green (incl. golden + the
+new tests); `tsc --noEmit` 0; FE built; `nofx-bin` rebuilt + restarted clean (0 "unknown frame type").
+
+**SUNDAY behavior list (market open):** on a futures strategy — (B) the bot's next decision's "System
+Prompt" (Recent Decisions = ground truth) leads with the CME role, no crypto line, reflects edited
+Frequency/Entry; (SUBMODES) Mode=Aggressive → the aggressive block appears, Balanced/no-variant →
+today's fixed prompt; (LAYOUT) Market shows "Futures" locked, Mode pick persists the combined variant.
+SIM-only; never the LIVE LFE… account.
+
+**ADDITIVE; (B) Role+Decision fixed on futures, Frequency+Entry honored; (SUBMODES) text-only sub-modes
+(Risk Control unchanged), futures-balanced = today's fixed prompt (byte-identical, golden); (LAYOUT)
+two-dropdown Market-auto-locked+Mode (symbol = source of truth); crypto + Risk Control + multi-account
+(P1-P4) + P&L + chart-TZ + Phase 2 CORE all untouched; NO C#/wire change. SIM-only; the live-account
+block untouched + untoggleable.**
