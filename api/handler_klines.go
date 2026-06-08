@@ -15,7 +15,6 @@ import (
 	"nofx/provider/coinank/coinank_enum"
 	"nofx/provider/hyperliquid"
 	"nofx/provider/twelvedata"
-	ntTrader "nofx/trader/ninjatrader"
 
 	"github.com/gin-gonic/gin"
 )
@@ -31,7 +30,6 @@ func (s *Server) handleKlines(c *gin.Context) {
 
 	interval := c.DefaultQuery("interval", "5m")
 	exchange := c.DefaultQuery("exchange", "binance") // Default to binance for backward compatibility
-	traderID := c.DefaultQuery("trader_id", "")       // Required for NT8
 	limitStr := c.DefaultQuery("limit", "1000")
 	limit, err := strconv.Atoi(limitStr)
 	if err != nil || limit <= 0 {
@@ -70,16 +68,12 @@ func (s *Server) handleKlines(c *gin.Context) {
 			return
 		}
 	case "ninjatrader":
-		// NT8 live BarCache (CME futures)
-		if traderID == "" {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "trader_id parameter required for NinjaTrader"})
-			return
-		}
-		klines, err = s.getKlinesFromNinjaTrader(traderID, symbol, interval, limit)
-		if err != nil {
-			SafeInternalError(c, "Get klines from NinjaTrader", err)
-			return
-		}
+		// CME futures (e.g. MNQ) via the live NT8 BarCache — the SAME feed the
+		// kernel reads (market.FuturesBarsProvider), so the chart matches
+		// decisions. No CoinAnk, no second source. Returns empty (HTTP 200, [])
+		// when the provider is unbound or the cache is cold (e.g. NT8 closed)
+		// instead of falling through to crypto.
+		klines = s.getKlinesFromNinjaTrader(symbol, interval, limit)
 	default:
 		// Crypto exchanges via CoinAnk
 		symbol = market.Normalize(symbol)
@@ -333,6 +327,38 @@ func (s *Server) getKlinesFromHyperliquid(symbol, interval string, limit int) ([
 	return klines, nil
 }
 
+// getKlinesFromNinjaTrader reads CME futures OHLCV from the live NT8 BarCache
+// via the market.FuturesBarsProvider hook (bound at TCP-server startup in
+// trader/ninjatrader/transport.go). This is the SAME feed the kernel uses for
+// decisions, so chart candles and AI decisions never diverge.
+//
+// Returns an empty slice (NOT nil, NOT an error) when:
+//   - the symbol is not a CME futures root (guards against a crypto symbol
+//     accidentally hitting this branch), or
+//   - the provider is unbound (no NT8 trader loaded yet), or
+//   - the cache is cold (NT8 disconnected / market closed → no bars yet).
+//
+// An empty 200 lets the chart render "no data" gracefully rather than 500ing
+// or falling back to crypto. The BarCache is only auto-subscribed for the
+// timeframes in provider/ninjatrader defaultAutoBarsTimeframes (5m/15m/1h), so
+// other intervals legitimately return empty until a strategy subscribes them.
+func (s *Server) getKlinesFromNinjaTrader(symbol, interval string, limit int) []market.Kline {
+	if !market.IsCMEFuturesSymbol(symbol) {
+		logger.Warnf("⚠️ klines: non-futures symbol %q requested on ninjatrader exchange", symbol)
+		return []market.Kline{}
+	}
+	provider := market.FuturesBarsProvider
+	if provider == nil {
+		logger.Warnf("⚠️ klines: FuturesBarsProvider unbound (no NT8 trader loaded); returning empty for %s", symbol)
+		return []market.Kline{}
+	}
+	klines := provider(symbol, interval, limit)
+	if klines == nil {
+		return []market.Kline{}
+	}
+	return klines
+}
+
 // handleSymbols returns available symbols for a given exchange
 func (s *Server) handleSymbols(c *gin.Context) {
 	exchange := c.DefaultQuery("exchange", "hyperliquid")
@@ -402,68 +428,4 @@ func (s *Server) handleSymbols(c *gin.Context) {
 		"symbols":  symbols,
 		"count":    len(symbols),
 	})
-}
-
-// getKlinesFromNinjaTrader fetches live bars from NT8 BarCache (CME futures)
-func (s *Server) getKlinesFromNinjaTrader(traderID, symbol, interval string, limit int) ([]market.Kline, error) {
-	// Get trader from manager
-	trader, err := s.traderManager.GetTrader(traderID)
-	if err != nil {
-		return nil, fmt.Errorf("trader not found: %w", err)
-	}
-
-	// Extract TCPServer from NinjaTrader trader
-	underlyingTrader := trader.GetUnderlyingTrader()
-	if underlyingTrader == nil {
-		return nil, fmt.Errorf("trader has no underlying implementation")
-	}
-
-	// Try to cast to TCPTrader to access BarCache
-	tcpTrader, ok := underlyingTrader.(*ntTrader.TCPTrader)
-	if !ok {
-		return nil, fmt.Errorf("trader is not a NinjaTrader TCP trader")
-	}
-
-	tcpServer := tcpTrader.GetServer()
-	if tcpServer == nil {
-		return nil, fmt.Errorf("TCP server not initialized")
-	}
-
-	// Map interval to timeframe (NT8 uses: "5m", "15m", "1h")
-	var timeframe string
-	switch interval {
-	case "5m":
-		timeframe = "5m"
-	case "15m":
-		timeframe = "15m"
-	case "1h", "60m":
-		timeframe = "1h"
-	default:
-		return nil, fmt.Errorf("unsupported interval for NT8: %s (supported: 5m, 15m, 1h)", interval)
-	}
-
-	// Get bars from BarCache
-	bars := tcpServer.BarCache().Get(symbol, timeframe)
-	if len(bars) == 0 {
-		logger.Infof("api/klines: NT8 BarCache empty for %s %s", symbol, timeframe)
-		return []market.Kline{}, nil
-	}
-
-	// Convert NT8 bars to market.Kline
-	klines := make([]market.Kline, len(bars))
-	for i, bar := range bars {
-		klines[i] = market.Kline{
-			OpenTime:    int64(bar.T),     // Unix ms
-			Open:        bar.O,
-			High:        bar.H,
-			Low:         bar.L,
-			Close:       bar.C,
-			Volume:      bar.V,
-			CloseTime:   int64(bar.T),    // Same as open for now (bar is completed)
-			QuoteVolume: bar.V * bar.C,   // Approximate: volume * close
-		}
-	}
-
-	logger.Infof("api/klines: NT8 returning %d bars for %s %s", len(klines), symbol, timeframe)
-	return klines, nil
 }

@@ -145,20 +145,137 @@ var (
 func ResetDailyPnL() {
 	dailyResetMu.Lock()
 	defer dailyResetMu.Unlock()
-	lastDailyResetDate = time.Now().UTC().Format("2006-01-02")
-	logger.Infof("Plan 3 T21: daily PnL window reset at %s UTC", lastDailyResetDate)
+	lastDailyResetDate = CMESessionDayKey(time.Now())
+	logger.Infof("Plan 3 T21: daily window manually reset to CME session-day %s", lastDailyResetDate)
 }
 
-// MaybeResetDaily checks for a UTC-date rollover since the last reset and
-// resets the daily window when it has. Returns true if a reset fired.
+// MaybeResetDaily checks for a CME session-day rollover (17:00 CT boundary)
+// since the last reset and resets the daily window when it has. Returns true if
+// a reset fired. Strategy Studio P1 fix: the reset key is derived from the
+// PASSED `now` (via CMESessionDayKey), not time.Now() — so the window is
+// deterministic + testable and rolls on the real session boundary, not UTC
+// midnight. (Previously ResetDailyPnL stamped time.Now() while the check used
+// the passed `now`, so they never agreed.)
 func MaybeResetDaily(now time.Time) bool {
-	today := now.UTC().Format("2006-01-02")
+	today := CMESessionDayKey(now)
 	dailyResetMu.Lock()
-	last := lastDailyResetDate
-	dailyResetMu.Unlock()
-	if last == "" || last != today {
-		ResetDailyPnL()
+	defer dailyResetMu.Unlock()
+	if lastDailyResetDate == "" || lastDailyResetDate != today {
+		lastDailyResetDate = today
+		logger.Infof("Plan 3 T21 / Strategy Studio: daily window reset to CME session-day %s", today)
 		return true
 	}
 	return false
+}
+
+// ============================================================================
+// Strategy Studio Phase 1 — per-strategy daily guardrails (evolves the gate).
+// ============================================================================
+
+// DailyGuardrails carries the RESOLVED per-strategy daily guardrail config (the
+// caller resolves per-strategy value → env fallback + the master/per-guardrail
+// toggles) plus the live daily-window state. Pure primitives so it is trivially
+// unit-testable, like CheckPreTrade.
+type DailyGuardrails struct {
+	MasterEnabled bool // master switch; false → ALL guardrails bypassed (caller logs)
+
+	DailyRealizedPnL float64 // realized P&L on the CME session-day (negative = net loss)
+	TradesToday      int     // entries taken on the CME session-day
+
+	DailyLossEnabled      bool
+	DailyLossLimitUSD     float64 // positive USD; loss ≥ this trips (force-flat class)
+	DailyProfitEnabled    bool
+	DailyProfitTargetUSD  float64 // positive USD; profit ≥ this trips (block-entry)
+	MaxDailyTradesEnabled bool
+	MaxDailyTrades        int
+}
+
+// Check evaluates the ENABLED daily guardrails. Master OFF → always allow (the
+// caller logs the bypass). Each guardrail is evaluated only when its toggle is
+// ON AND its value is configured (>0); a tripped guardrail returns a non-nil err
+// with a clear reason. Daily-loss → ForceFlat; profit-target / max-trades →
+// BlockEntry. NB: this controls ONLY the prop-firm guardrails — it can never
+// affect the SIM-only / live-account block (that is enforced separately in the
+// broker layer and is untoggleable).
+func (g DailyGuardrails) Check() (RiskLimitDecision, error) {
+	if !g.MasterEnabled {
+		return RiskAllow, nil
+	}
+	if g.DailyLossEnabled && g.DailyLossLimitUSD > 0 && g.DailyRealizedPnL <= -g.DailyLossLimitUSD {
+		return RiskForceFlat, fmt.Errorf("daily loss limit hit (realized today=%.2f, limit=-%.2f)", g.DailyRealizedPnL, g.DailyLossLimitUSD)
+	}
+	if g.DailyProfitEnabled && g.DailyProfitTargetUSD > 0 && g.DailyRealizedPnL >= g.DailyProfitTargetUSD {
+		return RiskBlockEntry, fmt.Errorf("daily profit target reached (realized today=%.2f, target=%.2f)", g.DailyRealizedPnL, g.DailyProfitTargetUSD)
+	}
+	if g.MaxDailyTradesEnabled && g.MaxDailyTrades > 0 && g.TradesToday >= g.MaxDailyTrades {
+		return RiskBlockEntry, fmt.Errorf("max daily trades reached (today=%d, max=%d)", g.TradesToday, g.MaxDailyTrades)
+	}
+	return RiskAllow, nil
+}
+
+// boolOrDefault resolves a three-state *bool toggle: nil → the default value.
+// Used so a guardrail's per-strategy "enabled" can be on/off/unset; unset
+// inherits the guardrail's safe default (daily-loss ON, new guardrails OFF).
+func boolOrDefault(p *bool, def bool) bool {
+	if p == nil {
+		return def
+	}
+	return *p
+}
+
+// firstPositive returns the first > 0 value — used for per-strategy value with
+// an env fallback: firstPositive(perStrategyValue, envValue).
+func firstPositive(vals ...float64) float64 {
+	for _, v := range vals {
+		if v > 0 {
+			return v
+		}
+	}
+	return 0
+}
+
+// ResolveMaxContracts (Chunk 3) returns the effective max-contracts clamp for a
+// futures order, respecting the master switch + the per-guardrail toggle. Returns
+// 0 = NO clamp (disabled by master/toggle). Per-strategy value overrides; def is
+// the fallback (the prior 10-contract default).
+func ResolveMaxContracts(masterEnabled, contractsEnabled *bool, perStrategy, def int) int {
+	if !boolOrDefault(masterEnabled, true) || !boolOrDefault(contractsEnabled, true) {
+		return 0
+	}
+	if perStrategy > 0 {
+		return perStrategy
+	}
+	return def
+}
+
+// ResolveNotionalLeverage (Chunk 3) returns the effective futures notional-ceiling
+// multiplier (max notional = equity × this), respecting the master + toggle.
+// Returns 0 = NO cap (disabled by master/toggle). Per-strategy value overrides;
+// def is the fallback (the prior equity×20 const).
+func ResolveNotionalLeverage(masterEnabled, notionalEnabled *bool, perStrategy, def float64) float64 {
+	if !boolOrDefault(masterEnabled, true) || !boolOrDefault(notionalEnabled, true) {
+		return 0
+	}
+	if perStrategy > 0 {
+		return perStrategy
+	}
+	return def
+}
+
+// ConsistencyBreached (Chunk 5) reports whether today's realized profit exceeds
+// the configured share (pct%) of all-time total realized profit — the prop-firm
+// consistency rule ("no single day > X% of total"). SEMANTICS (documented): it
+// triggers ONLY once there is prior-day profit (totalProfit − todayProfit > 0),
+// so a fresh/single-day account never self-locks on its first profitable day; a
+// non-profitable day (todayProfit ≤ 0), a non-positive total, or pct ≤ 0 never
+// breach. When breached, the caller blocks new entries for the session-day so
+// today's profit stops growing past the allowed share.
+func ConsistencyBreached(todayProfit, totalProfit, pct float64) bool {
+	if pct <= 0 || todayProfit <= 0 || totalProfit <= 0 {
+		return false
+	}
+	if totalProfit-todayProfit <= 0 {
+		return false // first profitable day — nothing to be consistent against yet
+	}
+	return todayProfit >= (pct/100.0)*totalProfit
 }

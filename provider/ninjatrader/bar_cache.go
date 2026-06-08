@@ -40,26 +40,80 @@ func NewBarCache(maxBars int) *BarCache {
 	}
 }
 
-// SeedHistorical replaces all cached bars for (symbol, timeframe) with the
-// provided slice. Called once per (symbol, timeframe) when the C# AddOn
-// emits its initial bars_historical frame after a fresh BarsRequest.
+// SeedHistorical MERGES the provided bars into the cache for (symbol,
+// timeframe). Called when the C# AddOn emits a bars_historical frame: the
+// initial seed after a fresh BarsRequest, a Go-reconnect re-seed (N3), OR a
+// data-feed reconnect recreate.
 //
-// If bars exceeds maxBars, only the tail (most recent maxBars bars) is
-// kept. The input is assumed to be ascending by t, matching the protocol
-// contract (vltrader_tcp_PROTOCOL.md §6).
+// MERGE, not replace: a re-seed can legitimately carry FEWER bars than the
+// cache already holds — e.g. a reconnect recreate whose BarsRequest only loaded
+// the current session, or an empty cursor-deduped frame. Replacing on such a
+// frame WIPED the deeper history we'd accumulated (the Phase-0 reconnect
+// regression: the chart collapsed to "today only"). Merging makes the persistent
+// ring durable — it never shrinks on a thinner re-seed, accumulates real depth
+// across sessions, survives reconnects, and lets a future deeper load fill in
+// older bars in front. Union is by bar time T; incoming wins on overlap
+// (freshest OHLCV for that bar); ascending order preserved; tail-capped at
+// maxBars. Both inputs are assumed ascending by T (protocol contract
+// vltrader_tcp_PROTOCOL.md §6).
 func (c *BarCache) SeedHistorical(symbol, timeframe string, bars []Bar) {
 	if symbol == "" || timeframe == "" {
 		return
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if len(bars) > c.maxBars {
-		bars = bars[len(bars)-c.maxBars:]
+	key := barKey(symbol, timeframe)
+	existing := c.bars[key]
+	if len(existing) == 0 {
+		// First seed for this key — copy the tail (detaches from caller's array).
+		if len(bars) > c.maxBars {
+			bars = bars[len(bars)-c.maxBars:]
+		}
+		stored := make([]Bar, len(bars))
+		copy(stored, bars)
+		c.bars[key] = stored
+		return
 	}
-	// Copy into a new slice to detach from the caller's backing array.
-	stored := make([]Bar, len(bars))
-	copy(stored, bars)
-	c.bars[barKey(symbol, timeframe)] = stored
+	if len(bars) == 0 {
+		// Empty re-seed (cursor-deduped reconnect frame) — keep what we have.
+		return
+	}
+	merged := mergeBarsByTime(existing, bars)
+	if len(merged) > c.maxBars {
+		merged = merged[len(merged)-c.maxBars:]
+	}
+	c.bars[key] = merged
+}
+
+// mergeBarsByTime merges two ascending-by-T bar slices into one ascending,
+// time-deduped slice. On equal T, the bar from `incoming` wins (it is the
+// freshest OHLCV for that bar boundary); bars present only in `existing`
+// (older history a thinner re-seed didn't carry) are preserved. Linear
+// two-pointer merge — both inputs must be ascending by T.
+func mergeBarsByTime(existing, incoming []Bar) []Bar {
+	out := make([]Bar, 0, len(existing)+len(incoming))
+	i, j := 0, 0
+	for i < len(existing) && j < len(incoming) {
+		switch {
+		case existing[i].T < incoming[j].T:
+			out = append(out, existing[i])
+			i++
+		case existing[i].T > incoming[j].T:
+			out = append(out, incoming[j])
+			j++
+		default: // same bar time — incoming is freshest
+			out = append(out, incoming[j])
+			i++
+			j++
+		}
+	}
+	for ; i < len(existing); i++ {
+		out = append(out, existing[i])
+	}
+	for ; j < len(incoming); j++ {
+		out = append(out, incoming[j])
+	}
+	return out
 }
 
 // Upsert merges streaming bar_update bars into the cache. For each input

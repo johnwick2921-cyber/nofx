@@ -17,11 +17,11 @@ export const coinSource = {
   oi_top: { zh: 'OI 持仓增加', en: 'OI Increase', es: 'Aumento OI' },
   oi_low: { zh: 'OI 持仓减少', en: 'OI Decrease', es: 'Disminución OI' },
   staticCoins: {
-    zh: '自定义币种',
-    en: 'Custom Coins',
-    es: 'Monedas Personalizadas',
+    zh: '自定义品种',
+    en: 'Custom Symbols',
+    es: 'Símbolos Personalizados',
   },
-  addCoin: { zh: '添加币种', en: 'Add Coin', es: 'Agregar Moneda' },
+  addCoin: { zh: '添加品种', en: 'Add Symbol', es: 'Agregar Símbolo' },
   useAI500: {
     zh: '启用 AI500 数据源',
     en: 'Enable AI500 Data Provider',
@@ -41,26 +41,26 @@ export const coinSource = {
   },
   oiLowLimit: { zh: '数量上限', en: 'Limit', es: 'Límite' },
   staticDesc: {
-    zh: '手动指定交易币种列表',
-    en: 'Manually specify trading coins',
-    es: 'Especificar monedas manualmente',
+    zh: '手动指定交易品种列表',
+    en: 'Manually specify trading symbols',
+    es: 'Especificar símbolos manualmente',
   },
   maxCoins: { zh: '最多', en: 'Up to', es: 'Hasta' },
-  coins: { zh: '个币种', en: 'coins', es: 'monedas' },
+  coins: { zh: '个品种', en: 'symbols', es: 'símbolos' },
   dataSourceConfig: {
     zh: '数据源配置',
     en: 'Data Source Configuration',
     es: 'Configuración de Fuente',
   },
   excludedCoins: {
-    zh: '排除币种',
-    en: 'Excluded Coins',
-    es: 'Monedas Excluidas',
+    zh: '排除品种',
+    en: 'Excluded Symbols',
+    es: 'Símbolos Excluidos',
   },
   excludedCoinsDesc: {
-    zh: '这些币种将从所有数据源中排除，不会被交易',
-    en: 'These coins will be excluded from all sources and will not be traded',
-    es: 'Estas monedas serán excluidas de todas las fuentes',
+    zh: '这些品种将从所有数据源中排除，不会被交易',
+    en: 'These symbols will be excluded from all sources and will not be traded',
+    es: 'Estos símbolos serán excluidos de todas las fuentes',
   },
   addExcludedCoin: {
     zh: '添加排除',
@@ -353,9 +353,9 @@ export const riskControl = {
     es: 'Máximo de Posiciones',
   },
   maxPositionsDesc: {
-    zh: '同时持有的最大币种数量',
-    en: 'Maximum coins held simultaneously',
-    es: 'Monedas máximas simultáneas',
+    zh: '同时持有的最大持仓数量',
+    en: 'Maximum positions held simultaneously',
+    es: 'Posiciones máximas simultáneas',
   },
   tradingLeverage: {
     zh: '交易杠杆（交易所杠杆）',
@@ -428,14 +428,14 @@ export const riskControl = {
     es: 'Ratio mínimo para entrada',
   },
   maxMarginUsage: {
-    zh: '最大保证金使用率（代码强制）',
-    en: 'Max Margin Usage (CODE ENFORCED)',
-    es: 'Uso Máximo de Margen (CÓDIGO)',
+    zh: '最大保证金使用率（AI 提示，非强制）',
+    en: 'Max Margin Usage (AI-guided, not enforced)',
+    es: 'Uso Máximo de Margen (guía AI)',
   },
   maxMarginUsageDesc: {
-    zh: '保证金使用率上限，由代码强制执行',
-    en: 'Maximum margin utilization, enforced by code',
-    es: 'Límite de margen',
+    zh: '保证金使用率上限（AI 提示，非代码强制）',
+    en: 'Max margin utilization — AI-guided hint, not code-enforced',
+    es: 'Uso máximo de margen (guía AI, no forzado)',
   },
   entryRequirements: {
     zh: '开仓要求',
@@ -452,6 +452,12 @@ export const riskControl = {
     en: 'Minimum notional value in USDT',
     es: 'Valor mínimo en USDT',
   },
+  // CME futures settle in USD — shown instead of the USDT description above.
+  minPositionSizeDescFutures: {
+    zh: 'USD 最小名义价值',
+    en: 'Minimum notional value in USD',
+    es: 'Valor mínimo en USD',
+  },
   minConfidence: {
     zh: '最小信心度',
     en: 'Min Confidence',
@@ -462,6 +468,90 @@ export const riskControl = {
     en: 'AI confidence threshold for entry',
     es: 'Umbral de confianza AI',
   },
+
+  // === Strategy Studio Phase 1 — prop-firm guardrails (Chunk 6) ===
+  guardrailsTitle: {
+    zh: '防护栏（Prop-Firm 规则）',
+    en: 'Prop-Firm Guardrails',
+    es: 'Barreras Prop-Firm',
+  },
+  guardrailsDesc: {
+    zh: '硬性闸门：触发即阻止新开仓并记录原因；关闭则跳过（记录）。永不影响实盘账户拦截。',
+    en: 'Hard gates: each blocks new entries + logs when tripped; off = skipped (logged). Never affects the live-account block.',
+    es: 'Puertas duras: bloquean nuevas entradas + registran; off = omitido. No afecta el bloqueo de cuenta real.',
+  },
+  masterSwitch: {
+    zh: '风险防护栏总开关',
+    en: 'Risk guardrails',
+    es: 'Barreras de riesgo',
+  },
+  masterSwitchDesc: {
+    zh: '关闭则全部防护栏停用（记录）；实盘账户拦截始终生效，不可关闭。',
+    en: 'OFF disables ALL guardrails (logged). The live-account block stays ON always — untoggleable.',
+    es: 'OFF desactiva TODAS las barreras. El bloqueo de cuenta real siempre activo.',
+  },
+  dailyLossLimit: {
+    zh: '每日亏损上限 (USD)',
+    en: 'Daily loss limit (USD)',
+    es: 'Límite de pérdida diaria (USD)',
+  },
+  dailyProfitTarget: {
+    zh: '每日盈利目标 (USD)',
+    en: 'Daily profit target (USD)',
+    es: 'Objetivo de ganancia diaria (USD)',
+  },
+  maxDailyTrades: {
+    zh: '每日最大开仓次数',
+    en: 'Max daily trades',
+    es: 'Máx. operaciones diarias',
+  },
+  maxContractsField: {
+    zh: '单笔最大合约数',
+    en: 'Max contracts / order',
+    es: 'Máx. contratos / orden',
+  },
+  notionalCapField: {
+    zh: '名义上限倍数 (权益×N)',
+    en: 'Notional cap (equity × N)',
+    es: 'Tope nocional (capital × N)',
+  },
+  blackoutStart: {
+    zh: '禁止交易开始 (CT)',
+    en: 'Blackout start (CT)',
+    es: 'Inicio bloqueo (CT)',
+  },
+  blackoutEnd: {
+    zh: '禁止交易结束 (CT)',
+    en: 'Blackout end (CT)',
+    es: 'Fin bloqueo (CT)',
+  },
+  consistencyPctField: {
+    zh: '一致性上限 (单日 ≤ 总盈利 %)',
+    en: 'Consistency cap (day ≤ % of total)',
+    es: 'Consistencia (día ≤ % total)',
+  },
+  futuresRiskTitle: {
+    zh: '期货风险（每笔，约值）',
+    en: 'Futures Risk (per trade, est.)',
+    es: 'Riesgo Futuros (por op., est.)',
+  },
+  estContracts: {
+    zh: '约合合约数',
+    en: 'Est. contracts',
+    es: 'Contratos est.',
+  },
+  dollarRisk: {
+    zh: '每笔风险 ($)',
+    en: '$ risk / trade',
+    es: 'Riesgo $ / op.',
+  },
+  marginPerContract: {
+    zh: '保证金/合约 (约)',
+    en: 'Margin / contract (est.)',
+    es: 'Margen / contrato',
+  },
+  toggleOn: { zh: '开', en: 'On', es: 'On' },
+  toggleOff: { zh: '关', en: 'Off', es: 'Off' },
 }
 
 // ============================================================================
@@ -556,6 +646,12 @@ export const indicator = {
     zh: '持仓量、资金费率等市场情绪数据',
     en: 'OI, funding rate and market sentiment data',
     es: 'OI, funding rate',
+  },
+  // CME futures have no funding rate — subtitle drops it (OI still applies).
+  marketSentimentDescFutures: {
+    zh: '持仓量等市场情绪数据',
+    en: 'OI and market sentiment data',
+    es: 'OI y sentimiento de mercado',
   },
   quantData: { zh: '量化数据', en: 'Quant Data', es: 'Datos Quant' },
   quantDataDesc: {
@@ -750,7 +846,7 @@ export const chartTabs = {
   forex: { zh: '外汇', en: 'Forex', es: 'Forex' },
   metals: { zh: '金属', en: 'Metals', es: 'Metales' },
   hyperliquid: { zh: 'HL', en: 'HL', es: 'HL' },
-  ninjatrader: { zh: 'NT8', en: 'NT8', es: 'NT8' },
+  ninjatrader: { zh: 'NT', en: 'NT', es: 'NT' },
 }
 
 // ============================================================================

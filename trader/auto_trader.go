@@ -50,6 +50,26 @@ func (at *AutoTrader) logErrorf(format string, args ...interface{}) {
 	logger.Errorf("%s "+format, values...)
 }
 
+// ninjaFeedDown reports whether this is a NinjaTrader trader whose price feed is
+// explicitly NOT Connected. Used to gate opens/closes: the SIM rejects orders
+// with "no market data" while the feed is down (the upstream condition behind the
+// phantom-close mess). DEFAULT-ALLOW: returns false for non-NT traders and until
+// the first feed_status frame arrives, so a healthy bot is never false-halted.
+func (at *AutoTrader) ninjaFeedDown() (bool, string) {
+	if at.exchange != "ninjatrader" {
+		return false, ""
+	}
+	ntTCP, ok := at.trader.(*ntTrader.TCPTrader)
+	if !ok {
+		return false, ""
+	}
+	status := ntTCP.FeedStatus()
+	if ntTCP.IsFeedConnected() {
+		return false, status
+	}
+	return true, status
+}
+
 // AutoTraderConfig auto trading configuration (simplified version - AI makes all decisions)
 type AutoTraderConfig struct {
 	// Trader identification
@@ -182,6 +202,12 @@ type AutoTrader struct {
 	consecutiveAIFailures int                // Consecutive AI call failures
 	safeMode              bool               // Safe mode: no new positions, protect existing ones
 	safeModeReason        string             // Why safe mode was activated
+
+	// Plan 4 Stage 4 — NinjaTrader TCP balance tracking (defer-until-balance guard)
+	// For NinjaTrader TCP traders, we track if account_balance frame has arrived yet.
+	// If equity == 0 and this is false, we skip the cycle silently (no phantom HOLD record).
+	hasReceivedBalance bool
+	balanceMutex       sync.RWMutex
 }
 
 // NewAutoTrader creates an automatic trader
@@ -329,6 +355,9 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize NinjaTrader: %w", err)
 		}
+		// Plan 4 Stage 4 — set parent reference for defer-until-balance guard.
+		// This is set AFTER the AutoTrader is partially initialized, so we defer
+		// it until later in NewAutoTrader.
 	default:
 		return nil, fmt.Errorf("unsupported trading platform: %s", config.Exchange)
 	}
@@ -507,6 +536,24 @@ func (at *AutoTrader) Run() error {
 		}
 	}
 
+	// Start NinjaTrader close-sync (TCP transport only). NT closes positions
+	// broker-side via the OCO bracket and has no order-sync, so this records
+	// SL/TP exits into position history (event-driven off position_close frames).
+	if at.exchange == "ninjatrader" {
+		if ntTCP, ok := at.trader.(*ntTrader.TCPTrader); ok && at.store != nil {
+			// Plan 4 Stage 4 — set parent reference for defer-until-balance guard.
+			// TCPTrader will call SetHasReceivedBalance(true) when the first
+			// account_balance frame arrives, so the runCycle defer-gate opens.
+			ntTCP.SetParentAutoTrader(at)
+			ntTCP.StartCloseSync(at.id, at.exchangeID, at.exchange, at.store)
+			at.logInfof("🔄 NinjaTrader close-sync enabled (SL/TP exits → position history)")
+			// Anchor entry_price to the NT8 position average + clear orphan rows
+			// (the 5m-mark entry the AI-decision write records goes stale/frozen).
+			ntTCP.StartPositionReconcile(at.id, at.exchangeID, at.exchange, at.store)
+			at.logInfof("🔧 NinjaTrader position-reconcile enabled (entry→NT8 avg, orphan clear)")
+		}
+	}
+
 	ticker := time.NewTicker(at.config.ScanInterval)
 	defer ticker.Stop()
 
@@ -584,6 +631,37 @@ func (at *AutoTrader) GetID() string {
 // This is used by grid trading and other components that need direct exchange access
 func (at *AutoTrader) GetUnderlyingTrader() Trader {
 	return at.trader
+}
+
+// currentAccountName returns the NT sub-account this trader is currently bound
+// to (ITEM 2 per-account attribution), or "" for crypto traders / before the
+// first account_balance frame. Stamped onto equity snapshots, positions, and
+// decision records so per-account reads can scope by it.
+func (at *AutoTrader) currentAccountName() string {
+	if ntTCP, ok := at.trader.(*ntTrader.TCPTrader); ok {
+		if server := ntTCP.GetServer(); server != nil {
+			if acct := server.CurrentAccount(); acct != nil {
+				return *acct
+			}
+		}
+	}
+	return ""
+}
+
+// HasReceivedBalance reports whether the NT account_balance frame has arrived (Plan 4 Stage 4).
+// Used by the defer-until-balance guard in runCycle to skip cycles until balance is available.
+func (at *AutoTrader) HasReceivedBalance() bool {
+	at.balanceMutex.RLock()
+	defer at.balanceMutex.RUnlock()
+	return at.hasReceivedBalance
+}
+
+// SetHasReceivedBalance marks that the NT account_balance frame has arrived.
+// Called by the TCPTrader when the first balance frame is received.
+func (at *AutoTrader) SetHasReceivedBalance(received bool) {
+	at.balanceMutex.Lock()
+	defer at.balanceMutex.Unlock()
+	at.hasReceivedBalance = received
 }
 
 // GetName gets trader name

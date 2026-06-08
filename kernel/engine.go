@@ -111,6 +111,13 @@ type Context struct {
 	BTCETHLeverage     int                                `json:"-"`
 	AltcoinLeverage    int                                `json:"-"`
 	Timeframes         []string                           `json:"-"`
+
+	// Strategy Studio P1 — daily-guardrail inputs measured on the CME session-day
+	// (set by the trader loop from the position store; read by the daily-guardrail
+	// gate in engine_analysis.go).
+	DailyRealizedPnL float64 `json:"-"`
+	TradesToday      int     `json:"-"`
+	TotalRealizedPnL float64 `json:"-"` // all-time realized P&L (Chunk 5 consistency rule)
 }
 
 // Decision AI trading decision
@@ -259,6 +266,18 @@ func (e *StrategyEngine) GetCandidateCoins() ([]CandidateCoin, error) {
 	symbolSources := make(map[string][]string)
 
 	coinSource := e.config.CoinSource
+
+	// Defensive guard (additive): a strategy whose stored config omits
+	// ai_config.coin_source (e.g. a hand-rolled config from cmd/create-strategy)
+	// deserializes to an empty SourceType, which previously fell through to the
+	// default branch ("unknown coin source type: ") and made the trader loop skip
+	// EVERY cycle. Treat an empty SourceType as "static" so StaticCoins are still
+	// used and an empty list degrades to the upstream "no candidates" path instead
+	// of a hard error. Does not change behavior for any explicitly-set source type.
+	if coinSource.SourceType == "" {
+		logger.Infof("⚠️  coin source type empty; defaulting to 'static' (additive guard)")
+		coinSource.SourceType = "static"
+	}
 
 	switch coinSource.SourceType {
 	case "static":

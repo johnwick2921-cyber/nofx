@@ -9,6 +9,7 @@ import {
   LineSeries,
   HistogramSeries,
   createSeriesMarkers,
+  TickMarkType,
 } from 'lightweight-charts'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { httpClient } from '../../lib/httpClient'
@@ -20,6 +21,13 @@ import {
   type Kline,
 } from '../../utils/indicators'
 import { Settings, BarChart2 } from 'lucide-react'
+
+// CHART_TZ pins the chart's time axis + crosshair to an explicit timezone so the
+// displayed time is deterministic regardless of the viewing browser's locale.
+// lightweight-charts does NO timezone conversion — its time axis defaults to UTC.
+// We render in America/Chicago, which is both the operator's local zone AND the
+// CME exchange zone for the NT8 futures (MNQ) charts, so axis + crosshair agree.
+const CHART_TZ = 'America/Chicago'
 
 // Order marker interface
 interface OrderMarker {
@@ -122,6 +130,7 @@ export function AdvancedChart({
     Map<number, { volume: number; quoteVolume: number }>
   >(new Map()) // Store kline extra data
   const priceLinesRef = useRef<any[]>([]) // Store open order price lines
+  const latestKlinesRef = useRef<Kline[]>([]) // Most recent klines, for indicator re-render on toggle (1b)
 
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -189,18 +198,18 @@ export function AdvancedChart({
     },
     { id: 'bb', name: 'Bollinger Bands', enabled: false, color: '#9B59B6' },
   ])
+  // Mirror indicators into a ref so updateIndicators always reads the CURRENT
+  // config. updateIndicators is also called by the 5s data-refresh whose effect
+  // closure captured a stale `indicators` (deps lack it) — without this ref that
+  // refresh would clear the user's just-toggled indicators every 5s (1b).
+  const indicatorsRef = useRef(indicators)
+  indicatorsRef.current = indicators
 
   // Fetch kline data from service
   const fetchKlineData = async (symbol: string, interval: string) => {
     try {
       const limit = 1500
-      let klineUrl = `/api/klines?symbol=${symbol}&interval=${interval}&limit=${limit}&exchange=${exchange}`
-
-      // NT8 requires trader_id parameter
-      if (exchange === 'ninjatrader' && traderID) {
-        klineUrl += `&trader_id=${traderID}`
-      }
-
+      const klineUrl = `/api/klines?symbol=${symbol}&interval=${interval}&limit=${limit}&exchange=${exchange}`
       const result = await httpClient.request(klineUrl, { silent: true })
 
       if (!result.success || !result.data) {
@@ -432,6 +441,79 @@ export function AdvancedChart({
     }
   }
 
+  // NinjaTrader-only: the orders table is sparse for NT8 (closes route through
+  // close_sync → trader_positions, NOT /api/orders), so the orders feed is stale/
+  // empty and a lone zombie order can draw a misleading marker at the wrong place.
+  // Source the markers from the REAL recorded trades instead: each trader_positions
+  // row → an entry marker (long=BUY/green "B", short=SELL/red "S") and, when closed,
+  // an exit marker (the opposite side). Same OrderMarker shape, so the existing
+  // marker-draw + B/S toggle are unchanged.
+  const fetchPositionMarkers = async (
+    traderID: string,
+    symbol: string
+  ): Promise<OrderMarker[]> => {
+    try {
+      const result = await httpClient.request(
+        `/api/positions/history?trader_id=${traderID}&limit=200`,
+        { silent: true }
+      )
+      const positions = result?.data?.positions || result?.data || []
+      const list = Array.isArray(positions) ? positions : []
+      const markers: OrderMarker[] = []
+
+      list.forEach((p: any) => {
+        const sym = p.symbol || p.Symbol
+        if (sym && symbol && sym !== symbol) return
+        const isLong = (p.side || p.Side || '').toUpperCase() === 'LONG'
+        const positionSide: 'long' | 'short' = isLong ? 'long' : 'short'
+
+        // Entry marker: a long is opened with a BUY, a short with a SELL.
+        const entryPrice = p.entry_price ?? p.EntryPrice
+        const entryTime = p.entry_time ?? p.EntryTime
+        if (entryPrice && entryTime) {
+          markers.push({
+            time: parseCustomTime(entryTime),
+            price: entryPrice,
+            side: positionSide,
+            rawSide: isLong ? 'buy' : 'sell',
+            action: 'open',
+            symbol: sym,
+          })
+        }
+
+        // Exit marker (closed only): a long exits with a SELL, a short with a
+        // BUY-to-cover.
+        const exitPrice = p.exit_price ?? p.ExitPrice
+        const exitTime = p.exit_time ?? p.ExitTime
+        const status = (p.status || p.Status || '').toUpperCase()
+        if (status === 'CLOSED' && exitPrice && exitTime) {
+          markers.push({
+            time: parseCustomTime(exitTime),
+            price: exitPrice,
+            side: positionSide,
+            rawSide: isLong ? 'sell' : 'buy',
+            action: 'close',
+            symbol: sym,
+          })
+        }
+      })
+
+      // Drop any rows with an unparseable time/price (parseCustomTime → 0).
+      const valid = markers.filter((m) => m.time > 0 && m.price > 0)
+      console.log(
+        '[AdvancedChart] Position-sourced markers (NT8):',
+        valid.length,
+        'from',
+        list.length,
+        'positions'
+      )
+      return valid
+    } catch (err) {
+      console.error('[AdvancedChart] Error fetching position markers:', err)
+      return []
+    }
+  }
+
   // Fetch exchange open orders (TP/SL)
   const fetchOpenOrders = async (
     traderID: string,
@@ -518,6 +600,44 @@ export function AdvancedChart({
         borderVisible: true,
         rightOffset: 5,
         barSpacing: 8,
+        // Render the X-AXIS tick labels in CHART_TZ. Without this, lightweight-charts
+        // formats the axis in UTC (it does no timezone conversion), so a 05:10 UTC bar
+        // showed "05:10" instead of the local/exchange "00:10". Respect the tick
+        // granularity the library asks for (year/month/day/time).
+        tickMarkFormatter: (time: Time, tickMarkType: TickMarkType): string => {
+          const ms =
+            typeof time === 'number'
+              ? time * 1000
+              : typeof time === 'string'
+                ? new Date(time).getTime() // business-day string "YYYY-MM-DD"
+                : Date.UTC(time.year, time.month - 1, time.day) // BusinessDay
+          const d = new Date(ms)
+          switch (tickMarkType) {
+            case TickMarkType.Year:
+              return d.toLocaleString('zh-CN', {
+                year: 'numeric',
+                timeZone: CHART_TZ,
+              })
+            case TickMarkType.Month:
+              return d.toLocaleString('zh-CN', {
+                month: 'short',
+                timeZone: CHART_TZ,
+              })
+            case TickMarkType.DayOfMonth:
+              return d.toLocaleString('zh-CN', {
+                month: '2-digit',
+                day: '2-digit',
+                timeZone: CHART_TZ,
+              })
+            default: // Time / TimeWithSeconds — intraday ticks
+              return d.toLocaleString('zh-CN', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false,
+                timeZone: CHART_TZ,
+              })
+          }
+        },
       },
       handleScroll: {
         mouseWheel: true,
@@ -531,6 +651,8 @@ export function AdvancedChart({
         pinch: true,
       },
       localization: {
+        // Crosshair time label — pinned to the SAME CHART_TZ as the axis above so
+        // the two always agree (and are deterministic regardless of browser TZ).
         timeFormatter: (time: number) => {
           const date = new Date(time * 1000)
           return date.toLocaleString('zh-CN', {
@@ -539,6 +661,7 @@ export function AdvancedChart({
             hour: '2-digit',
             minute: '2-digit',
             hour12: false,
+            timeZone: CHART_TZ,
           })
         },
       },
@@ -566,6 +689,14 @@ export function AdvancedChart({
       priceScaleId: '',
       lastValueVisible: false,
       priceLineVisible: false,
+    })
+    // Confine the volume overlay scale to a thin bottom band so it no longer
+    // renders full-height over the candles. priceScaleId:'' is its own overlay
+    // scale; without scaleMargins it defaults to the full pane. top:0.8 keeps
+    // volume in the bottom ~20%, clear of the candle rightPriceScale (which
+    // reserves bottom:0.25, ~line 401).
+    volumeSeries.priceScale().applyOptions({
+      scaleMargins: { top: 0.8, bottom: 0 },
     })
     volumeSeriesRef.current = volumeSeries as any
 
@@ -656,6 +787,7 @@ export function AdvancedChart({
         const klineData = await fetchKlineData(symbol, interval)
         console.log('[AdvancedChart] Loaded', klineData.length, 'klines')
         candlestickSeriesRef.current.setData(klineData)
+        latestKlinesRef.current = klineData // keep latest for indicator toggle re-render (1b)
 
         // Store volume/quoteVolume data for tooltip
         klineDataRef.current.clear()
@@ -724,7 +856,13 @@ export function AdvancedChart({
         // 4. Fetch and display order markers
         if (traderID && candlestickSeriesRef.current) {
           console.log('[AdvancedChart] Starting to fetch orders...')
-          const orders = await fetchOrders(traderID, symbol)
+          // NinjaTrader: the orders table is sparse (real trades live in
+          // trader_positions), so source markers from the recorded positions;
+          // every other exchange keeps the filled-orders source unchanged.
+          const orders =
+            exchange === 'ninjatrader'
+              ? await fetchPositionMarkers(traderID, symbol)
+              : await fetchOrders(traderID, symbol)
           console.log('[AdvancedChart] Received orders:', orders)
 
           if (orders.length > 0) {
@@ -1040,7 +1178,7 @@ export function AdvancedChart({
     indicatorSeriesRef.current.clear()
 
     // Add enabled indicators
-    indicators.forEach((indicator) => {
+    indicatorsRef.current.forEach((indicator) => {
       if (!indicator.enabled || !chartRef.current) return
 
       if (indicator.id.startsWith('ma')) {
@@ -1099,6 +1237,15 @@ export function AdvancedChart({
       }
     })
   }
+
+  // 1b: redraw indicator overlays when the user toggles one. updateIndicators
+  // is otherwise only invoked on (re)load, so a toggle alone never redrew the
+  // series (stale closure). Idempotent — clears then re-adds enabled indicators.
+  useEffect(() => {
+    if (latestKlinesRef.current.length > 0) {
+      updateIndicators(latestKlinesRef.current)
+    }
+  }, [indicators])
 
   // Toggle indicator
   const toggleIndicator = (id: string) => {

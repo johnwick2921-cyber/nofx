@@ -3,7 +3,6 @@ import type {
   TraderConfigData,
   CreateTraderRequest,
   AccountsResponse,
-  AccountInfo,
 } from '../../types'
 import { API_BASE, httpClient } from './helpers'
 import { ApiError } from '../httpClient'
@@ -140,41 +139,18 @@ export const traderApi = {
     const result = await httpClient.get<AccountsResponse>(
       `${API_BASE}/accounts?trader_id=${traderId}`
     )
-    if (!result.success) {
-      throwApiError(
-        result.message || 'Failed to fetch accounts',
-        result.errorKey,
-        result.errorParams,
-        result.statusCode
-      )
-    }
-    return result.data!
-  },
-
-  async getAccount(traderId: string, silent?: boolean): Promise<AccountInfo> {
-    const result = await httpClient.request<AccountInfo>(
-      `${API_BASE}/account?trader_id=${traderId}`,
-      { silent }
-    )
-    if (!result.success) {
-      throwApiError(
-        result.message || 'Failed to fetch account info',
-        result.errorKey,
-        result.errorParams,
-        result.statusCode
-      )
-    }
+    if (!result.success) throw new Error('Failed to fetch accounts')
     return result.data!
   },
 
   async selectAccount(
     traderId: string,
-    account: string
-  ): Promise<{ current_account: string; message: string }> {
-    const result = await httpClient.post<{
-      current_account: string
-      message: string
-    }>(`${API_BASE}/account/select?trader_id=${traderId}`, { account })
+    accountName: string
+  ): Promise<{ message: string }> {
+    const result = await httpClient.post<{ message: string }>(
+      `${API_BASE}/account/select?trader_id=${traderId}`,
+      { account: accountName }
+    )
     if (!result.success) {
       throwApiError(
         result.message || 'Failed to select account',

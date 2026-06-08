@@ -3,6 +3,8 @@ package kernel
 import (
 	"fmt"
 	"strings"
+
+	"nofx/market"
 )
 
 // BuildFuturesDecisionSystemPrompt builds the CME index-futures (MNQ) system
@@ -18,9 +20,45 @@ import (
 // tick-aligned stops. NO funding rate, NO open interest, NO crypto leverage
 // tiers (leverage is fixed at 1 — futures margin is contract-based, handled by
 // the broker).
-func (e *StrategyEngine) BuildFuturesDecisionSystemPrompt(accountEquity float64) string {
+func (e *StrategyEngine) BuildFuturesDecisionSystemPrompt(symbol string, accountEquity float64) string {
+	return e.buildFuturesPrompt(symbol, accountEquity, "balanced")
+}
+
+// futures sub-mode blocks (Phase 2) — TEXT only; they never change the Hard
+// Constraints / output format / Risk Control. "balanced" injects NO block.
+const (
+	futuresModeAggressive   = "## Mode: Aggressive\n- Favor acting on high-confidence setups earlier; a strong 5m/15m alignment can justify entry without waiting for full multi-timeframe confluence.\n- Still obey EVERY Hard Constraint above (R/R, min confidence, one position, tick-aligned stops).\n\n"
+	futuresModeConservative = "## Mode: Conservative\n- Act only on strong multi-timeframe confluence; prefer wait/hold in chop or on conflicting signals.\n- Be more selective; after a loss, wait for a clean fresh setup.\n- Still obey EVERY Hard Constraint above.\n\n"
+)
+
+// futuresVariantMode reports whether a prompt variant is a futures variant and
+// returns its sub-mode: "futures"/"futures-balanced" → (true,"balanced");
+// "futures-aggressive" → (true,"aggressive"); "futures-conservative" →
+// (true,"conservative"). Non-futures variants → (false,""). An unknown suffix
+// falls back to the no-block balanced default (safe).
+func futuresVariantMode(variant string) (bool, string) {
+	v := strings.ToLower(strings.TrimSpace(variant))
+	if v == "futures" {
+		return true, "balanced"
+	}
+	if strings.HasPrefix(v, "futures-") {
+		mode := strings.TrimPrefix(v, "futures-")
+		if mode == "" {
+			mode = "balanced"
+		}
+		return true, mode
+	}
+	return false, ""
+}
+
+// buildFuturesPrompt builds the CME futures system prompt for a sub-mode
+// ("balanced" | "aggressive" | "conservative"). A balanced/empty/unknown mode
+// injects NO "## Mode:" block, so it is byte-identical to the prior fixed
+// futures prompt (the golden). The sub-mode is TEXT only.
+func (e *StrategyEngine) buildFuturesPrompt(symbol string, accountEquity float64, mode string) string {
 	var sb strings.Builder
 	rc := e.config.RiskControl
+	ps := e.config.PromptSections // the 4 editable prompt boxes (Change 4)
 	minConf := rc.MinConfidence
 	if minConf <= 0 {
 		minConf = 60
@@ -30,62 +68,119 @@ func (e *StrategyEngine) BuildFuturesDecisionSystemPrompt(accountEquity float64)
 		minRR = 1.5
 	}
 
+	// Instrument identity from the ACTIVE symbol (Phase 3 — was hardwired MNQ).
+	// Resolving families (index + treasury) get their real name / point value /
+	// tick; parked/unknown symbols default to MNQ so the prompt never emits a
+	// blank or wrong instrument.
+	inst := describeFutures(symbol)
+	sym := inst.Symbol
+	category, pointWord, priceAdj := "index-futures", "index point", "index "
+	if inst.IsTreasury {
+		category, pointWord, priceAdj = "Treasury futures", "point", ""
+	}
+	tickStr := fmt.Sprintf("%g", inst.TickSize)
+	pvDec := fmt.Sprintf("%.2f", inst.PointValue)
+	pvInt := fmt.Sprintf("%g", inst.PointValue)
+
 	// NB: we deliberately do NOT prepend the crypto GetSchemaPrompt here — it
 	// describes USDT-perp fields and would re-introduce the crypto framing this
-	// prompt exists to avoid. The MNQ market data in the user prompt is
+	// prompt exists to avoid. The market data in the user prompt is
 	// self-describing (current_price + OHLCV timeframe tables).
 
-	// 1. Role + instrument.
-	sb.WriteString("# You are a professional CME index-futures trading AI specializing in the Micro E-mini Nasdaq-100 (MNQ).\n\n")
+	// 1. Role (editable via the Role Definition box; FIXED CME role when empty).
+	// Honored again — the owner's typed role reaches the futures prompt (full
+	// control). The earlier crypto leak is fixed at the DATA layer (the box
+	// defaults are neutral + a one-time migration cleaned the old crypto boxes),
+	// NOT by ignoring the box. The Instrument identity block below is ALWAYS
+	// FIXED (futures-specific, never box-driven).
+	if ps.RoleDefinition != "" {
+		sb.WriteString(ps.RoleDefinition)
+		sb.WriteString("\n\n")
+	} else {
+		sb.WriteString("# You are a professional CME " + category + " trading AI specializing in the " + inst.Desc + " (" + sym + ").\n\n")
+	}
 	sb.WriteString("## Instrument\n")
-	sb.WriteString("- Symbol: MNQ (Micro E-mini Nasdaq-100 futures)\n")
-	sb.WriteString("- Tick size: 0.25 index points\n")
-	sb.WriteString("- Contract multiplier: $2.00 per index point (1 point = $2)\n")
+	sb.WriteString("- Symbol: " + sym + " (" + inst.Desc + " futures)\n")
+	sb.WriteString("- Tick size: " + tickStr + " " + pointWord + "s\n")
+	sb.WriteString("- Contract multiplier: $" + pvDec + " per " + pointWord + " (1 point = $" + pvInt + ")\n")
 	sb.WriteString("- This is a FUTURES contract, NOT a crypto perpetual: there is NO funding rate and NO crypto-style open interest. Ignore any empty Funding Rate / Open Interest sections in the market data.\n")
 	sb.WriteString("- Session: CME futures hours (nearly 23h on weekdays, with a daily maintenance break). Do NOT assume 24/7 trading.\n\n")
 
 	// 2. Hard constraints.
 	sb.WriteString("# Hard Constraints (Risk Control)\n\n")
-	sb.WriteString("- Trade ONLY the MNQ symbol provided in the market data. Do NOT invent other symbols.\n")
-	sb.WriteString("- Every open_long / open_short MUST include stop_loss and take_profit as ABSOLUTE index prices (e.g. 21500.25), in tick increments (multiples of 0.25), NOT deltas.\n")
+	sb.WriteString("- Trade ONLY the " + sym + " symbol provided in the market data. Do NOT invent other symbols.\n")
+	sb.WriteString("- Every open_long / open_short MUST include stop_loss and take_profit as ABSOLUTE " + priceAdj + "prices (e.g. 21500.25), in tick increments (multiples of " + tickStr + "), NOT deltas.\n")
 	sb.WriteString("- Stop distance: roughly 1.5-3x ATR; sanity range ~15-50 points from entry.\n")
 	sb.WriteString(fmt.Sprintf("- Risk/Reward: reward must be at least %.2fx the risk (take_profit vs stop_loss distance from entry).\n", minRR))
 	sb.WriteString(fmt.Sprintf("- Min confidence to open: %d. Below that, use hold or wait.\n", minConf))
 	sb.WriteString("- One position at a time. No averaging in / pyramiding.\n")
 	sb.WriteString("- leverage: always 1 for futures (margin is contract-based; the broker handles it). Do NOT use crypto leverage tiers.\n")
-	sb.WriteString("- position_size_usd: the contract notional you intend (≈ price × $2 × contracts). Keep it conservative (start with 1 contract).\n\n")
+	sb.WriteString("- position_size_usd: the contract notional you intend (≈ price × $" + pvInt + " × contracts). Keep it conservative (start with 1 contract).\n\n")
+
+	// 2a. Trading posture sub-mode (TEXT only; "balanced"/""/unknown = NO block =
+	// byte-identical default). Mirrors the crypto "## Mode:" injection and stays
+	// WITHIN the Hard Constraints above — it never changes the risk rules.
+	switch strings.ToLower(strings.TrimSpace(mode)) {
+	case "aggressive":
+		sb.WriteString(futuresModeAggressive)
+	case "conservative":
+		sb.WriteString(futuresModeConservative)
+	}
+
+	// 2b. Trading Frequency (editable). Appended ONLY when the box is set, so an
+	// empty box leaves the futures prompt byte-identical to the prior fixed text.
+	if ps.TradingFrequency != "" {
+		sb.WriteString("# Trading Frequency\n")
+		sb.WriteString(ps.TradingFrequency)
+		sb.WriteString("\n\n")
+	}
 
 	// 3. Indicators available.
 	sb.WriteString("# Available Data\n")
-	sb.WriteString("Multi-timeframe MNQ bars (")
+	sb.WriteString("Multi-timeframe " + sym + " bars (")
 	e.writeAvailableIndicators(&sb)
 	sb.WriteString(fmt.Sprintf("Use confluence across timeframes. Confidence ≥ %d required to open.\n\n", minConf))
 
-	// 4. Decision process.
-	sb.WriteString("# Decision Process\n")
-	sb.WriteString("1. If a position is open: should it be held, or closed (close_long/close_short) for profit/stop?\n")
-	sb.WriteString("2. If flat: do the 5m/15m/1h bars + indicators show a high-confidence directional setup?\n")
-	sb.WriteString("3. Write your chain of thought, THEN output the structured JSON decision.\n")
-	sb.WriteString("4. action=wait (no setup) and action=hold (keep current position) are valid, frequently-correct answers. Do NOT force a trade.\n\n")
+	// 3b. Entry Standards (editable). Appended ONLY when set — empty = unchanged.
+	if ps.EntryStandards != "" {
+		sb.WriteString("# Entry Standards\n")
+		sb.WriteString(ps.EntryStandards)
+		sb.WriteString("\n\n")
+	}
+
+	// 4. Decision process (editable via the Decision Process box; FIXED steps
+	// when empty). Honored again — the owner's typed decision flow reaches the
+	// futures prompt. The crypto-default leak is fixed at the DATA layer, not by
+	// ignoring the box.
+	if ps.DecisionProcess != "" {
+		sb.WriteString(ps.DecisionProcess)
+		sb.WriteString("\n\n")
+	} else {
+		sb.WriteString("# Decision Process\n")
+		sb.WriteString("1. If a position is open: should it be held, or closed (close_long/close_short) for profit/stop?\n")
+		sb.WriteString("2. If flat: do the 5m/15m/1h bars + indicators show a high-confidence directional setup?\n")
+		sb.WriteString("3. Write your chain of thought, THEN output the structured JSON decision.\n")
+		sb.WriteString("4. action=wait (no setup) and action=hold (keep current position) are valid, frequently-correct answers. Do NOT force a trade.\n\n")
+	}
 
 	// 5. Output format — MUST match the existing parser exactly.
 	sb.WriteString("# Output Format (Strictly Follow)\n\n")
 	sb.WriteString("**Must use XML tags <reasoning> and <decision> to separate chain of thought and decision JSON, avoiding parsing errors**\n\n")
 	sb.WriteString("<reasoning>\n")
-	sb.WriteString("Your chain-of-thought analysis of the MNQ bars and indicators.\n")
+	sb.WriteString("Your chain-of-thought analysis of the " + sym + " bars and indicators.\n")
 	sb.WriteString("</reasoning>\n\n")
 	sb.WriteString("<decision>\n")
 	sb.WriteString("```json\n[\n")
-	sb.WriteString("  {\"symbol\": \"MNQ\", \"action\": \"open_long\", \"leverage\": 1, \"position_size_usd\": 60000, \"stop_loss\": 21480.00, \"take_profit\": 21560.00, \"confidence\": 80}\n")
+	sb.WriteString("  {\"symbol\": \"" + sym + "\", \"action\": \"open_long\", \"leverage\": 1, \"position_size_usd\": 60000, \"stop_loss\": 21480.00, \"take_profit\": 21560.00, \"confidence\": 80}\n")
 	sb.WriteString("]\n```\n")
 	sb.WriteString("</decision>\n\n")
 	sb.WriteString("When there is no good setup, output a single wait decision:\n")
-	sb.WriteString("<decision>\n```json\n[{\"symbol\": \"MNQ\", \"action\": \"wait\"}]\n```\n</decision>\n\n")
+	sb.WriteString("<decision>\n```json\n[{\"symbol\": \"" + sym + "\", \"action\": \"wait\"}]\n```\n</decision>\n\n")
 
 	// 6. Field description.
 	sb.WriteString("## Field Description\n")
 	sb.WriteString("- `action`: open_long | open_short | close_long | close_short | hold | wait\n")
-	sb.WriteString("- `symbol`: always \"MNQ\"\n")
+	sb.WriteString("- `symbol`: always \"" + sym + "\"\n")
 	sb.WriteString(fmt.Sprintf("- `confidence`: 0-100 (open only when ≥ %d)\n", minConf))
 	sb.WriteString("- `leverage`: 1 (futures)\n")
 	sb.WriteString("- Required when opening: stop_loss, take_profit, confidence (absolute tick-aligned prices)\n")
@@ -99,6 +194,57 @@ func (e *StrategyEngine) BuildFuturesDecisionSystemPrompt(accountEquity float64)
 	}
 
 	return sb.String()
+}
+
+// futuresInstrument is the per-symbol identity the futures decision prompt needs.
+type futuresInstrument struct {
+	Symbol     string  // bare root, e.g. "MNQ"
+	Desc       string  // "Micro E-mini Nasdaq-100"
+	PointValue float64 // $/point (market.FuturesPointValue)
+	TickSize   float64 // 0.25 (market.FuturesTickSize)
+	IsTreasury bool    // CBOT Treasury family (different price/point wording)
+}
+
+// futuresPromptDesc holds the prompt wording per RESOLVING-family root (index +
+// treasury, Phases 1-2). Energy/metals are parked (Phase 2.5) and intentionally
+// absent — describeFutures defaults them (and any unknown) to MNQ.
+var futuresPromptDesc = map[string]struct {
+	desc       string
+	isTreasury bool
+}{
+	"MNQ": {"Micro E-mini Nasdaq-100", false},
+	"NQ":  {"E-mini Nasdaq-100", false},
+	"ES":  {"E-mini S&P 500", false},
+	"MES": {"Micro E-mini S&P 500", false},
+	"RTY": {"E-mini Russell 2000", false},
+	"M2K": {"Micro E-mini Russell 2000", false},
+	"YM":  {"E-mini Dow", false},
+	"MYM": {"Micro E-mini Dow", false},
+	"ZB":  {"30-Year U.S. Treasury Bond", true},
+	"ZN":  {"10-Year U.S. T-Note", true},
+	"ZF":  {"5-Year U.S. T-Note", true},
+	"ZT":  {"2-Year U.S. T-Note", true},
+}
+
+// describeFutures resolves the instrument identity for the system prompt. A
+// resolving family gets its real name / point value / tick; anything else
+// (energy/metals parked, or unknown) safely defaults to MNQ so the prompt never
+// emits a blank or wrong instrument.
+func describeFutures(symbol string) futuresInstrument {
+	root := strings.ToUpper(strings.TrimSpace(symbol))
+	if i := strings.IndexByte(root, ' '); i > 0 {
+		root = root[:i] // "MNQ 06-26" -> "MNQ"
+	}
+	if i := strings.Index(root, ".C."); i > 0 {
+		root = root[:i] // "NQ.C.0" -> "NQ"
+	}
+	d, ok := futuresPromptDesc[root]
+	pv := market.FuturesPointValue(root)
+	tick := market.FuturesTickSize(root)
+	if !ok || pv <= 0 || tick <= 0 {
+		return futuresInstrument{"MNQ", "Micro E-mini Nasdaq-100", 2.0, 0.25, false}
+	}
+	return futuresInstrument{root, d.desc, pv, tick, d.isTreasury}
 }
 
 // FuturesPromptConfig captures the few parameters the system prompt needs

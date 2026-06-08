@@ -1,18 +1,42 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronRight, RotateCcw, FileText } from 'lucide-react'
 import type { PromptSectionsConfig } from '../../types'
-import { promptSections as promptSectionsI18n, ts } from '../../i18n/strategy-translations'
+import {
+  promptSections as promptSectionsI18n,
+  ts,
+} from '../../i18n/strategy-translations'
 
 interface PromptSectionsEditorProps {
   config: PromptSectionsConfig | undefined
   onChange: (config: PromptSectionsConfig) => void
   disabled?: boolean
   language: string
+  // CME futures (e.g. MNQ): the Role + Decision DEFAULTS shown for an empty box
+  // become the instrument-aware CME role (matching the prompt builder's futures
+  // fallback), instead of the crypto/neutral text.
+  isFutures?: boolean
+}
+
+// Role + Decision defaults shown when a box is EMPTY, on the futures path —
+// mirrors the quality of engine_prompt_futures.go's fixed CME role. (A user's
+// typed box always overrides; this is the default/placeholder only.)
+const futuresRoleDecision: Pick<
+  PromptSectionsConfig,
+  'role_definition' | 'decision_process'
+> = {
+  role_definition: `# You are a professional CME index-futures trading AI
+
+You trade CME index futures (e.g. MNQ / ES) with disciplined technical analysis and risk management. You size by contract count and tick-aligned stops — NOT crypto leverage.`,
+  decision_process: `# Decision Process
+
+1. If a position is open → hold, or close (close_long/close_short) for profit/stop?
+2. If flat → do the multi-timeframe bars + indicators show a high-confidence setup?
+3. Write your reasoning first, then output the structured JSON.`,
 }
 
 // Default prompt sections (same as backend defaults)
 const defaultSections: PromptSectionsConfig = {
-  role_definition: `# 你是专业的加密货币交易AI
+  role_definition: `# 你是专业的交易AI
 
 你专注于技术分析和风险管理，基于市场数据做出理性的交易决策。
 你的目标是在控制风险的前提下，捕捉高概率的交易机会。`,
@@ -37,7 +61,7 @@ const defaultSections: PromptSectionsConfig = {
   decision_process: `# 📋 决策流程
 
 1. 检查持仓 → 是否该止盈/止损
-2. 扫描候选币 + 多时间框 → 是否存在强信号
+2. 扫描市场 + 多时间框 → 是否存在强信号
 3. 评估风险回报比 → 是否满足最小要求
 4. 先写思维链，再输出结构化JSON`,
 }
@@ -47,8 +71,18 @@ export function PromptSectionsEditor({
   onChange,
   disabled,
   language,
+  isFutures = false,
 }: PromptSectionsEditorProps) {
-  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+  // Market-aware defaults: futures shows the CME Role/Decision; crypto keeps the
+  // neutral text. Frequency + Entry are market-neutral (shared).
+  const defaults: PromptSectionsConfig = isFutures
+    ? { ...defaultSections, ...futuresRoleDecision }
+    : defaultSections
+  // Boxes start COLLAPSED — click a header to expand. (When expanded, the
+  // textarea auto-grows to fit the full text.)
+  const [expandedSections, setExpandedSections] = useState<
+    Record<string, boolean>
+  >({
     role_definition: false,
     trading_frequency: false,
     entry_standards: false,
@@ -56,10 +90,26 @@ export function PromptSectionsEditor({
   })
 
   const sections = [
-    { key: 'role_definition', label: ts(promptSectionsI18n.roleDefinition, language), desc: ts(promptSectionsI18n.roleDefinitionDesc, language) },
-    { key: 'trading_frequency', label: ts(promptSectionsI18n.tradingFrequency, language), desc: ts(promptSectionsI18n.tradingFrequencyDesc, language) },
-    { key: 'entry_standards', label: ts(promptSectionsI18n.entryStandards, language), desc: ts(promptSectionsI18n.entryStandardsDesc, language) },
-    { key: 'decision_process', label: ts(promptSectionsI18n.decisionProcess, language), desc: ts(promptSectionsI18n.decisionProcessDesc, language) },
+    {
+      key: 'role_definition',
+      label: ts(promptSectionsI18n.roleDefinition, language),
+      desc: ts(promptSectionsI18n.roleDefinitionDesc, language),
+    },
+    {
+      key: 'trading_frequency',
+      label: ts(promptSectionsI18n.tradingFrequency, language),
+      desc: ts(promptSectionsI18n.tradingFrequencyDesc, language),
+    },
+    {
+      key: 'entry_standards',
+      label: ts(promptSectionsI18n.entryStandards, language),
+      desc: ts(promptSectionsI18n.entryStandardsDesc, language),
+    },
+    {
+      key: 'decision_process',
+      label: ts(promptSectionsI18n.decisionProcess, language),
+      desc: ts(promptSectionsI18n.decisionProcessDesc, language),
+    },
   ]
 
   const currentConfig = config || {}
@@ -72,7 +122,7 @@ export function PromptSectionsEditor({
 
   const resetSection = (key: keyof PromptSectionsConfig) => {
     if (!disabled) {
-      onChange({ ...currentConfig, [key]: defaultSections[key] })
+      onChange({ ...currentConfig, [key]: defaults[key] })
     }
   }
 
@@ -81,7 +131,7 @@ export function PromptSectionsEditor({
   }
 
   const getValue = (key: keyof PromptSectionsConfig): string => {
-    return currentConfig[key] || defaultSections[key] || ''
+    return currentConfig[key] || defaults[key] || ''
   }
 
   return (
@@ -103,7 +153,9 @@ export function PromptSectionsEditor({
           const sectionKey = key as keyof PromptSectionsConfig
           const isExpanded = expandedSections[key]
           const value = getValue(sectionKey)
-          const isModified = currentConfig[sectionKey] !== undefined && currentConfig[sectionKey] !== defaultSections[sectionKey]
+          const isModified =
+            currentConfig[sectionKey] !== undefined &&
+            currentConfig[sectionKey] !== defaults[sectionKey]
 
           return (
             <div
@@ -117,17 +169,29 @@ export function PromptSectionsEditor({
               >
                 <div className="flex items-center gap-2">
                   {isExpanded ? (
-                    <ChevronDown className="w-4 h-4" style={{ color: '#848E9C' }} />
+                    <ChevronDown
+                      className="w-4 h-4"
+                      style={{ color: '#848E9C' }}
+                    />
                   ) : (
-                    <ChevronRight className="w-4 h-4" style={{ color: '#848E9C' }} />
+                    <ChevronRight
+                      className="w-4 h-4"
+                      style={{ color: '#848E9C' }}
+                    />
                   )}
-                  <span className="text-sm font-medium" style={{ color: '#EAECEF' }}>
+                  <span
+                    className="text-sm font-medium"
+                    style={{ color: '#EAECEF' }}
+                  >
                     {label}
                   </span>
                   {isModified && (
                     <span
                       className="px-1.5 py-0.5 text-[10px] rounded"
-                      style={{ background: 'rgba(168, 85, 247, 0.15)', color: '#a855f7' }}
+                      style={{
+                        background: 'rgba(168, 85, 247, 0.15)',
+                        color: '#a855f7',
+                      }}
                     >
                       {ts(promptSectionsI18n.modified, language)}
                     </span>
@@ -144,8 +208,20 @@ export function PromptSectionsEditor({
                     {desc}
                   </p>
                   <textarea
+                    ref={(el) => {
+                      // Auto-grow to fit the full content (no inner scrollbar /
+                      // clipping) — height follows scrollHeight, floored at 120px.
+                      if (el) {
+                        el.style.height = 'auto'
+                        el.style.height = `${el.scrollHeight}px`
+                      }
+                    }}
                     value={value}
-                    onChange={(e) => updateSection(sectionKey, e.target.value)}
+                    onChange={(e) => {
+                      e.target.style.height = 'auto'
+                      e.target.style.height = `${e.target.scrollHeight}px`
+                      updateSection(sectionKey, e.target.value)
+                    }}
                     disabled={disabled}
                     rows={6}
                     className="w-full px-3 py-2 rounded-lg resize-y font-mono text-xs"

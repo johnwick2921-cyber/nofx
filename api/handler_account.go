@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"nofx/config"
 	"nofx/logger"
 	ntwire "nofx/provider/ninjatrader"
 	"nofx/trader"
@@ -21,7 +22,8 @@ type AccountInfo struct {
 
 // GetAccountsResponse is the response structure for GET /api/accounts.
 type GetAccountsResponse struct {
-	Current  string        `json:"current"`  // currently selected account, or ""
+	Current  string        `json:"current"`  // the NT8 connection's streamed current account
+	Selected string        `json:"selected"` // the trader's PERSISTED chosen account ("" = none → gated)
 	Accounts []AccountInfo `json:"accounts"` // list of all available accounts
 }
 
@@ -74,8 +76,17 @@ func (s *Server) handleGetAccounts(c *gin.Context) {
 		logger.Infof("api/accounts: account[%d]=%q is_sim=%v", i, a.Name, a.IsSim)
 	}
 
+	// The trader's PERSISTED chosen account (multi-account Stage 1) — "" means the
+	// user hasn't picked one yet, so the trader is gated (does not trade). The FE
+	// highlights this, not the streamed `current` (which can drift on the stream).
+	selected := ""
+	if tr, err := s.store.Trader().GetByID(traderID); err == nil && tr != nil {
+		selected = tr.Account
+	}
+
 	c.JSON(http.StatusOK, GetAccountsResponse{
 		Current:  current,
+		Selected: selected,
 		Accounts: apiAccounts,
 	})
 }
@@ -89,6 +100,7 @@ func (s *Server) handleSelectAccount(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "trader_id query parameter required"})
 		return
 	}
+	userID := c.GetString("user_id")
 
 	var req SelectAccountRequest
 	if err := c.BindJSON(&req); err != nil {
@@ -139,6 +151,25 @@ func (s *Server) handleSelectAccount(c *gin.Context) {
 		return
 	}
 
+	// ALLOW-LIST GUARD (multi-account safety rail): if NT_ALLOWED_ACCOUNTS is set,
+	// the chosen account MUST be on it — defense-in-depth so a funded/live account
+	// can never be bound even if it somehow passed the SIM check.
+	if allow := config.Get().AllowedNTAccounts; len(allow) > 0 {
+		permitted := false
+		for _, a := range allow {
+			if a == req.Account {
+				permitted = true
+				break
+			}
+		}
+		if !permitted {
+			logger.Warnf("api/account/select: %s not on the tradeable allow-list", req.Account)
+			c.JSON(http.StatusBadRequest,
+				gin.H{"error": fmt.Sprintf("account '%s' is not on the tradeable allow-list", req.Account)})
+			return
+		}
+	}
+
 	// Send the account select command to the C# AddOn
 	payload := ntwire.AccountSelectPayload{Account: req.Account}
 	if err := tcpServer.SendAccountSelect(payload); err != nil {
@@ -148,17 +179,22 @@ func (s *Server) handleSelectAccount(c *gin.Context) {
 		return
 	}
 
-	// Update the Go-side current account immediately (C# AddOn will send updated accounts_list frame)
-	accts, _ := tcpServer.GetAccountsList()
-	tcpServer.StoreAccountsList(accts, req.Account)
-	logger.Infof("api/account/select: updated current account to %s", req.Account)
-
 	// Reset Go-side cached position/fill state so GetPositions() fetches fresh data
 	// from the newly selected account (not stale cached fills from the old account).
 	// This ensures balance, positions, PnL, orders all reflect the NEW account.
 	if tcpTrader, ok := autoTrader.GetUnderlyingTrader().(*ntTrader.TCPTrader); ok {
 		tcpTrader.ResetAccountState()
 		logger.Infof("api/account/select: reset Go cached state for %s", req.Account)
+	}
+
+	// PERSIST the pick per-trader (multi-account Stage 1) so it STICKS: it survives
+	// restart and the account_balance stream can't unset it, and the trade gate
+	// (runCycle) opens for this trader. This is the stored CHOICE + the gate key;
+	// per-account order ROUTING is Stage 2 (the C# multi-account AddOn).
+	if err := s.store.Trader().UpdateAccount(userID, traderID, req.Account); err != nil {
+		logger.Warnf("api/account/select: failed to persist account %s for trader %s: %v", req.Account, traderID, err)
+	} else {
+		logger.Infof("api/account/select: persisted chosen account %s for trader %s", req.Account, traderID)
 	}
 
 	logger.Infof("api/account/select: switched to account %s (SIM=%v)", req.Account, targetAccount.IsSim)

@@ -18,16 +18,16 @@ const futuresMaxNotionalLeverage = 20.0
 // Decision Validation
 // ============================================================================
 
-func validateDecisions(decisions []Decision, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64) error {
+func validateDecisions(decisions []Decision, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64, minRiskReward float64, minConfidence int, maxNotionalLev float64) error {
 	for i := range decisions {
-		if err := validateDecision(&decisions[i], accountEquity, btcEthLeverage, altcoinLeverage, btcEthPosRatio, altcoinPosRatio); err != nil {
+		if err := validateDecision(&decisions[i], accountEquity, btcEthLeverage, altcoinLeverage, btcEthPosRatio, altcoinPosRatio, minRiskReward, minConfidence, maxNotionalLev); err != nil {
 			return fmt.Errorf("decision #%d validation failed: %w", i+1, err)
 		}
 	}
 	return nil
 }
 
-func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64) error {
+func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64, minRiskReward float64, minConfidence int, maxNotionalLev float64) error {
 	validActions := map[string]bool{
 		"open_long":   true,
 		"open_short":  true,
@@ -48,10 +48,15 @@ func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoi
 		isFutures := market.IsCMEFuturesSymbol(d.Symbol)
 		switch {
 		case isFutures:
-			// CME futures are sized in contracts, not crypto USD ratio. Apply
-			// a notional sanity ceiling (equity × futuresMaxNotionalLeverage);
-			// the executor does the precise contract sizing + clamp.
-			maxPositionValue = accountEquity * futuresMaxNotionalLeverage
+			// CME futures: a notional sanity ceiling (equity × the configured
+			// multiplier; Chunk 3 made it editable, default 20). maxNotionalLev<=0
+			// → the cap is DISABLED (master/toggle off): use a huge ceiling so it
+			// never binds. The executor does the precise contract sizing + clamp.
+			if maxNotionalLev > 0 {
+				maxPositionValue = accountEquity * maxNotionalLev
+			} else {
+				maxPositionValue = accountEquity * 1e9
+			}
 		case d.Symbol == "BTCUSDT" || d.Symbol == "ETHUSDT":
 			maxLeverage = btcEthLeverage
 			posRatio = btcEthPosRatio
@@ -87,7 +92,7 @@ func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoi
 		if d.PositionSizeUSD > maxPositionValue+tolerance {
 			switch {
 			case isFutures:
-				return fmt.Errorf("%s futures notional cannot exceed %.0f USD (%.0fx account equity), actual: %.0f", d.Symbol, maxPositionValue, futuresMaxNotionalLeverage, d.PositionSizeUSD)
+				return fmt.Errorf("%s futures notional cannot exceed %.0f USD (%.0fx account equity), actual: %.0f", d.Symbol, maxPositionValue, maxNotionalLev, d.PositionSizeUSD)
 			case d.Symbol == "BTCUSDT" || d.Symbol == "ETHUSDT":
 				return fmt.Errorf("BTC/ETH single coin position value cannot exceed %.0f USDT (%.1fx account equity), actual: %.0f", maxPositionValue, posRatio, d.PositionSizeUSD)
 			default:
@@ -130,9 +135,23 @@ func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoi
 			}
 		}
 
-		if riskRewardRatio < 3.0 {
-			return fmt.Errorf("risk/reward ratio too low (%.2f:1), must be ≥3.0:1 [risk: %.2f%% reward: %.2f%%] [stop loss: %.2f take profit: %.2f]",
-				riskRewardRatio, riskPercent, rewardPercent, d.StopLoss, d.TakeProfit)
+		// STRATEGY STUDIO PHASE 1: the R/R floor is now the per-strategy
+		// min_risk_reward_ratio (CODE ENFORCED), not a hardcoded 3.0. Unset (≤0)
+		// falls back to 3.0, preserving prior behavior. Applies to crypto + futures.
+		effRR := minRiskReward
+		if effRR <= 0 {
+			effRR = 3.0
+		}
+		if riskRewardRatio < effRR {
+			return fmt.Errorf("risk/reward ratio too low (%.2f:1), must be ≥%.1f:1 [risk: %.2f%% reward: %.2f%%] [stop loss: %.2f take profit: %.2f]",
+				riskRewardRatio, effRR, riskPercent, rewardPercent, d.StopLoss, d.TakeProfit)
+		}
+
+		// STRATEGY STUDIO PHASE 1: min confidence is now CODE ENFORCED — reject a
+		// low-confidence open when min_confidence is configured (0 = disabled →
+		// back-compat for strategies that never set it). Applies to crypto + futures.
+		if minConfidence > 0 && d.Confidence < minConfidence {
+			return fmt.Errorf("confidence too low (%d), must be ≥%d to open position", d.Confidence, minConfidence)
 		}
 	}
 

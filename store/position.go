@@ -92,11 +92,24 @@ func formatDurationMs(ms int64) string {
 	return fmt.Sprintf("%dd%dh", days, remainingHours)
 }
 
+// CloseReasonReconcileFlat marks an NT8 orphan-close written by the position
+// reconcile loop when NT8 reports FLAT for a position whose real exit fill was
+// never captured by close-sync. Such a row has NO real exit price and NO known
+// realized P&L — reconcile.go records entry-as-exit / 0 only as a placeholder to
+// clear the phantom. P&L is genuinely UNKNOWN, so every P&L presenter/aggregator
+// treats this marker as "unknown" (excluded from stats; rendered "—" in the UI)
+// rather than a false breakeven. realized_pnl is a non-nullable float64, so the
+// marker — not a NULL/sentinel value — is the single source of truth for "unknown".
+const CloseReasonReconcileFlat = "reconcile_flat"
+
 // TraderPosition position record
 // All time fields use int64 millisecond timestamps (UTC) to avoid timezone issues
 type TraderPosition struct {
 	ID                 int64   `gorm:"primaryKey;autoIncrement" json:"id"`
 	TraderID           string  `gorm:"column:trader_id;not null;index:idx_positions_trader" json:"trader_id"`
+	// Account is the NT sub-account this position belongs to (ITEM 2 per-account).
+	// Empty for crypto and pre-migration rows; excluded by account-scoped reads.
+	Account            string  `gorm:"column:account;not null;default:''" json:"account"`
 	ExchangeID         string  `gorm:"column:exchange_id;not null;default:'';index:idx_positions_exchange" json:"exchange_id"`
 	ExchangeType       string  `gorm:"column:exchange_type;not null;default:''" json:"exchange_type"`
 	ExchangePositionID string  `gorm:"column:exchange_position_id;not null;default:''" json:"exchange_position_id"`
@@ -194,10 +207,17 @@ func (s *PositionStore) Create(pos *TraderPosition) error {
 	return s.db.Create(pos).Error
 }
 
-// ClosePosition closes position
-func (s *PositionStore) ClosePosition(id int64, exitPrice float64, exitOrderID string, realizedPnL float64, fee float64, closeReason string) error {
+// ClosePosition closes a still-OPEN position. The WHERE clause is guarded on
+// status='OPEN' so a stale-snapshot caller (the NT8 reconcile loop — its sole
+// caller) can NEVER overwrite a row that close-sync already closed with the real
+// ×point-value P&L. This kills the reconcile-overwrites-close-sync race: when
+// close-sync wins (it commits first, event-driven), the row is already CLOSED so
+// this UPDATE matches 0 rows and the real P&L stands. Returns whether a row was
+// actually closed (RowsAffected>0); false means it was already closed (the
+// desired no-op — close-sync's real-P&L close was kept).
+func (s *PositionStore) ClosePosition(id int64, exitPrice float64, exitOrderID string, realizedPnL float64, fee float64, closeReason string) (bool, error) {
 	nowMs := time.Now().UTC().UnixMilli()
-	return s.db.Model(&TraderPosition{}).Where("id = ?", id).Updates(map[string]interface{}{
+	res := s.db.Model(&TraderPosition{}).Where("id = ? AND status = ?", id, "OPEN").Updates(map[string]interface{}{
 		"exit_price":   exitPrice,
 		"exit_order_id": exitOrderID,
 		"exit_time":    nowMs,
@@ -206,6 +226,18 @@ func (s *PositionStore) ClosePosition(id int64, exitPrice float64, exitOrderID s
 		"status":       "CLOSED",
 		"close_reason": closeReason,
 		"updated_at":   nowMs,
+	})
+	return res.RowsAffected > 0, res.Error
+}
+
+// UpdateEntryPrice overwrites a position's entry price. Used by the NinjaTrader
+// reconcile to anchor a stale decision-time entry (the 5m-mark reference) to the
+// broker-reported position average (NT8 Position.AveragePrice / AverageFillPrice).
+// Does NOT average — a direct replacement to the single source of truth.
+func (s *PositionStore) UpdateEntryPrice(id int64, entryPrice float64) error {
+	return s.db.Model(&TraderPosition{}).Where("id = ?", id).Updates(map[string]interface{}{
+		"entry_price": entryPrice,
+		"updated_at":  time.Now().UTC().UnixMilli(),
 	}).Error
 }
 
@@ -380,11 +412,16 @@ func (s *PositionStore) GetOpenPositionBySymbol(traderID, symbol, side string) (
 	return nil, err
 }
 
-// GetClosedPositions gets closed positions
-func (s *PositionStore) GetClosedPositions(traderID string, limit int) ([]*TraderPosition, error) {
+// GetClosedPositions gets closed positions (optionally scoped to one account).
+// account=="" → trader-global (crypto + legacy); account!="" → only that NT
+// account's positions, excluding pre-migration rows (account='').
+func (s *PositionStore) GetClosedPositions(traderID string, limit int, account ...string) ([]*TraderPosition, error) {
 	var positions []*TraderPosition
-	err := s.db.Where("trader_id = ? AND status = ?", traderID, "CLOSED").
-		Order("exit_time DESC").
+	q := s.db.Where("trader_id = ? AND status = ?", traderID, "CLOSED")
+	if len(account) > 0 && account[0] != "" {
+		q = q.Where("account = ?", account[0])
+	}
+	err := q.Order("exit_time DESC").
 		Limit(limit).
 		Find(&positions).Error
 	if err != nil {

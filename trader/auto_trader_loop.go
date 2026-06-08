@@ -12,6 +12,22 @@ import (
 	"time"
 )
 
+// resolvePromptVariant picks the live AI prompt mode (Strategy Studio Phase 2).
+// A non-empty per-strategy saved variant wins; otherwise the original venue
+// rule applies — CME futures (NinjaTrader) → "futures", everything else →
+// "balanced". This is the back-compat guarantee: an empty savedVariant resolves
+// EXACTLY as the pre-Phase-2 code, so strategies with no saved variant are
+// byte-identical. Prompt-layer only — it never touches a risk gate.
+func resolvePromptVariant(exchange, savedVariant string) string {
+	if v := strings.TrimSpace(savedVariant); v != "" {
+		return v
+	}
+	if exchange == "ninjatrader" {
+		return "futures"
+	}
+	return "balanced"
+}
+
 // runCycle runs one trading cycle (using AI full decision-making)
 func (at *AutoTrader) runCycle() error {
 	at.callCount++
@@ -27,6 +43,22 @@ func (at *AutoTrader) runCycle() error {
 	if !running {
 		at.logInfof("⏹ Trader is stopped, aborting cycle #%d", at.callCount)
 		return nil
+	}
+
+	// 0b. MULTI-ACCOUNT GATE (Stage 1): a NinjaTrader trader must have an EXPLICITLY
+	// chosen NT8 account before it trades — never auto-trade on whatever account NT8
+	// streams (that could be the LIVE account). The pick is persisted on the trader
+	// row by handleSelectAccount; until it's set, skip the whole cycle (no decision,
+	// no order). Re-read each cycle so a fresh pick opens the gate without a restart.
+	if at.exchange == "ninjatrader" {
+		chosenAccount := ""
+		if tr, err := at.store.Trader().GetByID(at.id); err == nil && tr != nil {
+			chosenAccount = tr.Account
+		}
+		if chosenAccount == "" {
+			at.logWarnf("🚫 No NT8 account selected for this trader — skipping cycle #%d. Pick an account in the dashboard to start trading.", at.callCount)
+			return nil
+		}
 	}
 
 	// Check USDC balance periodically for claw402 users (every 10 cycles)
@@ -67,6 +99,15 @@ func (at *AutoTrader) runCycle() error {
 		return fmt.Errorf("failed to build trading context: %w", err)
 	}
 
+	// Plan 4 Stage 4 — defer-until-balance guard (NinjaTrader TCP only)
+	// If equity is 0 and no account_balance frame has arrived yet, skip the cycle silently.
+	// This prevents phantom HOLD decisions while waiting for the AddOn to connect.
+	// Once the first account_balance arrives, equity > 0, and the gate opens normally.
+	if ctx.Account.TotalEquity == 0 && !at.HasReceivedBalance() {
+		// Silent return: no decision record, no log entry (to avoid noise during startup)
+		return nil
+	}
+
 	// Save equity snapshot independently (decoupled from AI decision, used for drawing profit curve)
 	// NOTE: Must be called BEFORE candidate coins check to ensure equity is always recorded
 	at.saveEquitySnapshot(ctx)
@@ -99,12 +140,17 @@ func (at *AutoTrader) runCycle() error {
 	at.logInfof("🤖 Requesting AI analysis and decision... [Strategy Engine]")
 	// Plan 4 Task 25 — decision latency timer (start)
 	decisionStart := time.Now()
-	// CME futures (NinjaTrader) select the futures system prompt; everything
-	// else keeps the crypto "balanced" variant.
-	promptVariant := "balanced"
-	if at.exchange == "ninjatrader" {
-		promptVariant = "futures"
+	// Prompt mode (Strategy Studio Phase 2): a per-strategy saved variant wins;
+	// when NONE is saved we keep the original venue rule EXACTLY (see
+	// resolvePromptVariant) so strategies with no saved variant are byte-
+	// identical to the prior behavior. Read the saved variant null-safely.
+	savedVariant := ""
+	if eng := at.strategyEngine; eng != nil {
+		if cfg := eng.GetConfig(); cfg != nil {
+			savedVariant = cfg.PromptVariant
+		}
 	}
+	promptVariant := resolvePromptVariant(at.exchange, savedVariant)
 	aiDecision, err := kernel.GetFullDecisionWithStrategy(ctx, at.mcpClient, at.strategyEngine, promptVariant)
 	// Plan 4 Task 25 — decision metrics
 	telemetry.DecisionLatency.WithLabelValues(at.id).Observe(time.Since(decisionStart).Seconds())
@@ -225,11 +271,18 @@ func (at *AutoTrader) runCycle() error {
 	// 8. Sort decisions: ensure close positions first, then open positions (prevent position stacking overflow)
 	logger.Info(strings.Repeat("-", 70))
 
-	// 8. Sort decisions: ensure close positions first, then open positions (prevent position stacking overflow)
+	// GetFullDecisionWithStrategy returns (nil, nil) when the risk gate HOLDs
+	// the cycle (e.g. Plan 3 T21 daily-loss limit) — there is no decision to
+	// execute. Guard before dereferencing aiDecision.Decisions below. (A real
+	// $0 balance in the brief pre-first-account_balance-frame window, Plan
+	// 4.11, can trip the gate and surface this otherwise-latent nil deref.)
 	if aiDecision == nil {
-		at.logWarnf("⚠️ AI returned no decision (nil), skipping cycle")
+		at.logInfof("ℹ️ No actionable decision this cycle (risk gate HOLD); skipping execution")
+		at.saveDecision(record)
 		return nil
 	}
+
+	// 8. Sort decisions: ensure close positions first, then open positions (prevent position stacking overflow)
 	sortedDecisions := sortDecisionsByPriority(aiDecision.Decisions)
 
 	logger.Info("🔄 Execution order (optimized): Close positions first → Open positions later")
@@ -355,11 +408,17 @@ func (at *AutoTrader) buildTradingContext() (*kernel.Context, error) {
 	currentPositionKeys := make(map[string]bool)
 
 	for _, pos := range positions {
-		symbol := pos["symbol"].(string)
-		side := pos["side"].(string)
-		entryPrice := pos["entryPrice"].(float64)
-		markPrice := pos["markPrice"].(float64)
-		quantity := pos["positionAmt"].(float64)
+		// Comma-ok every assert: NT futures positions omit Binance-only fields
+		// (e.g. liquidationPrice — futures have no liquidation), so an unchecked
+		// .(float64) on a missing key panics and takes down the whole bot.
+		symbol, _ := pos["symbol"].(string)
+		if symbol == "" {
+			continue
+		}
+		side, _ := pos["side"].(string)
+		entryPrice, _ := pos["entryPrice"].(float64)
+		markPrice, _ := pos["markPrice"].(float64)
+		quantity, _ := pos["positionAmt"].(float64)
 		if quantity < 0 {
 			quantity = -quantity // Short position quantity is negative, convert to positive
 		}
@@ -369,8 +428,8 @@ func (at *AutoTrader) buildTradingContext() (*kernel.Context, error) {
 			continue
 		}
 
-		unrealizedPnl := pos["unRealizedProfit"].(float64)
-		liquidationPrice := pos["liquidationPrice"].(float64)
+		unrealizedPnl, _ := pos["unRealizedProfit"].(float64)
+		liquidationPrice, _ := pos["liquidationPrice"].(float64)
 
 		// Calculate margin used (estimated)
 		leverage := 10 // Default value, should actually be fetched from position info
@@ -494,8 +553,21 @@ func (at *AutoTrader) buildTradingContext() (*kernel.Context, error) {
 
 	// 7. Add recent closed trades (if store is available)
 	if at.store != nil {
-		// Get recent 10 closed trades for AI context
-		recentTrades, err := at.store.Position().GetRecentTrades(at.id, 10)
+		// Strategy Studio P1 — daily-guardrail inputs on the CME session-day:
+		// today's realized P&L (closed trades) + entry count, scoped to the active
+		// account. The kernel daily-guardrail gate (engine_analysis.go) reads these.
+		sinceMs := kernel.CMESessionDayStart(time.Now()).UnixMilli()
+		if dayPnL, dayTrades, derr := at.store.Position().GetSessionDayActivity(at.id, sinceMs, at.currentAccountName()); derr != nil {
+			at.logWarnf("⚠️ Failed to compute daily-guardrail activity: %v", derr)
+		} else {
+			ctx.DailyRealizedPnL = dayPnL
+			ctx.TradesToday = dayTrades
+		}
+
+		// Get recent 10 closed trades for AI context, scoped to the ACTIVE
+		// account so a post-switch cycle does not carry the old account's
+		// trades into the prompt (empty account → trader-global fallback).
+		recentTrades, err := at.store.Position().GetRecentTrades(at.id, 10, at.currentAccountName())
 		if err != nil {
 			at.logWarnf("⚠️ Failed to get recent trades: %v", err)
 		} else {
@@ -524,8 +596,10 @@ func (at *AutoTrader) buildTradingContext() (*kernel.Context, error) {
 				})
 			}
 		}
-		// Get trading statistics for AI context
-		stats, err := at.store.Position().GetFullStats(at.id)
+		// Get trading statistics for AI context, scoped to the ACTIVE account so
+		// the prompt's aggregate stats reflect the current account (not the old
+		// one after a switch); empty account → trader-global fallback.
+		stats, err := at.store.Position().GetFullStats(at.id, at.currentAccountName())
 		if err != nil {
 			at.logWarnf("⚠️ Failed to get trading stats: %v", err)
 		} else if stats == nil {
@@ -533,6 +607,7 @@ func (at *AutoTrader) buildTradingContext() (*kernel.Context, error) {
 		} else if stats.TotalTrades == 0 {
 			at.logWarnf("⚠️ GetFullStats returned 0 trades")
 		} else {
+			ctx.TotalRealizedPnL = stats.TotalPnL // Chunk 5 — consistency-rule input (all-time realized P&L)
 			ctx.TradingStats = &kernel.TradingStats{
 				TotalTrades:    stats.TotalTrades,
 				WinRate:        stats.WinRate,

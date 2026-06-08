@@ -278,7 +278,7 @@ func isCMEFuturesSymbol(symbol string) bool {
 		}
 		if strings.HasPrefix(upper, root) && len(upper) == len(root)+2 {
 			tail := upper[len(root):]
-			if isQuarterlyMonthStore(tail[0]) && tail[1] >= '0' && tail[1] <= '9' {
+			if isContractMonthStore(root, tail[0]) && tail[1] >= '0' && tail[1] <= '9' {
 				return true
 			}
 		}
@@ -298,7 +298,15 @@ var cmeFuturesRootsStore = map[string]struct{}{
 	"YM":  {},
 	"MYM": {},
 	"CL":  {},
+	"MCL": {},
+	"NG":  {},
 	"GC":  {},
+	"MGC": {},
+	"SI":  {},
+	"ZB":  {},
+	"ZN":  {},
+	"ZF":  {},
+	"ZT":  {},
 }
 
 func isQuarterlyMonthStore(b byte) bool {
@@ -307,6 +315,23 @@ func isQuarterlyMonthStore(b byte) bool {
 		return true
 	}
 	return false
+}
+
+// futuresMonthCodesStore mirrors market.futuresMonthCodes — per-root month codes
+// so contract-code recognition is family-correct: index/Treasury stay quarterly
+// (NQF6 not matched) while energy lists all 12 (NGF6 matched). Keep in sync with
+// cmeFuturesRootsStore (every root needs an entry).
+var futuresMonthCodesStore = map[string]string{
+	"NQ": "HMUZ", "MNQ": "HMUZ", "ES": "HMUZ", "MES": "HMUZ",
+	"RTY": "HMUZ", "M2K": "HMUZ", "YM": "HMUZ", "MYM": "HMUZ",
+	"ZB": "HMUZ", "ZN": "HMUZ", "ZF": "HMUZ", "ZT": "HMUZ",
+	"CL": "FGHJKMNQUVXZ", "MCL": "FGHJKMNQUVXZ", "NG": "FGHJKMNQUVXZ",
+	"GC": "GJMQVZ", "MGC": "GJMQVZ", "SI": "FHKNUZ",
+}
+
+// isContractMonthStore mirrors market.isContractMonth.
+func isContractMonthStore(root string, b byte) bool {
+	return strings.IndexByte(futuresMonthCodesStore[root], b) >= 0
 }
 
 func normalizeTimeframes(values []string) []string {
@@ -584,6 +609,14 @@ type StrategyConfig struct {
 	// language setting: "zh" for Chinese, "en" for English
 	// This determines the language used for data formatting and prompt generation
 	Language string `json:"language,omitempty"`
+
+	// PromptVariant selects the live AI prompt mode (balanced / aggressive /
+	// conservative / scalping / futures). Persisted per-strategy; when EMPTY the
+	// live loop falls back to the venue rule (ninjatrader→futures, else balanced)
+	// so existing strategies (no variant saved) are byte-identical. Prompt-layer
+	// only — it does NOT touch any risk gate or the live-account block.
+	PromptVariant string `json:"prompt_variant,omitempty"`
+
 	// AI trading configuration fields are kept on the Go struct for engine
 	// compatibility, but JSON persistence nests them under ai_config.
 	CoinSource     CoinSourceConfig     `json:"-"`
@@ -627,12 +660,14 @@ func (c StrategyConfig) MarshalJSON() ([]byte, error) {
 	out := struct {
 		StrategyType  string                 `json:"strategy_type"`
 		Language      string                 `json:"language,omitempty"`
+		PromptVariant string                 `json:"prompt_variant,omitempty"`
 		AIConfig      *AIStrategyConfig      `json:"ai_config,omitempty"`
 		GridConfig    *GridStrategyConfig    `json:"grid_config,omitempty"`
 		PublishConfig *PublishStrategyConfig `json:"publish_config,omitempty"`
 	}{
 		StrategyType:  strategyType,
 		Language:      c.Language,
+		PromptVariant: strings.TrimSpace(c.PromptVariant),
 		PublishConfig: c.PublishConfig,
 	}
 
@@ -657,6 +692,7 @@ func (c *StrategyConfig) UnmarshalJSON(data []byte) error {
 	type rawStrategyConfig struct {
 		StrategyType  string                 `json:"strategy_type"`
 		Language      string                 `json:"language"`
+		PromptVariant string                 `json:"prompt_variant"`
 		AIConfig      *AIStrategyConfig      `json:"ai_config"`
 		GridConfig    *GridStrategyConfig    `json:"grid_config"`
 		PublishConfig *PublishStrategyConfig `json:"publish_config"`
@@ -675,6 +711,7 @@ func (c *StrategyConfig) UnmarshalJSON(data []byte) error {
 
 	c.StrategyType = raw.StrategyType
 	c.Language = raw.Language
+	c.PromptVariant = strings.TrimSpace(raw.PromptVariant)
 	c.GridConfig = raw.GridConfig
 	c.PublishConfig = raw.PublishConfig
 
@@ -885,6 +922,52 @@ type RiskControlConfig struct {
 	MinRiskRewardRatio float64 `json:"min_risk_reward_ratio"`
 	// Min AI confidence to open position (AI guided)
 	MinConfidence int `json:"min_confidence"`
+
+	// === Strategy Studio Phase 1 — prop-firm daily guardrails (per-strategy;
+	// env = fallback for the value; the per-guardrail toggle governs enforcement). ===
+
+	// Master switch: nil/true = guardrails active; false = ALL guardrails bypassed.
+	GuardrailsEnabled *bool `json:"guardrails_enabled,omitempty"`
+
+	// Daily realized-LOSS limit (USD, positive): loss ≥ this halts new entries for
+	// the CME session-day. Enabled defaults ON (nil) to preserve the existing live
+	// env daily-loss gate; the value falls back to RISK_MAX_DAILY_LOSS_USD when 0.
+	DailyLossLimitUSD float64 `json:"daily_loss_limit_usd,omitempty"`
+	DailyLossEnabled  *bool   `json:"daily_loss_enabled,omitempty"`
+
+	// Daily realized-PROFIT target (USD, positive): profit ≥ this stops new entries
+	// for the session-day. New guardrail → defaults OFF (nil).
+	DailyProfitTargetUSD float64 `json:"daily_profit_target_usd,omitempty"`
+	DailyProfitEnabled   *bool   `json:"daily_profit_enabled,omitempty"`
+
+	// Max ENTRIES per CME session-day. New guardrail → defaults OFF (nil).
+	MaxDailyTrades        int   `json:"max_daily_trades,omitempty"`
+	MaxDailyTradesEnabled *bool `json:"max_daily_trades_enabled,omitempty"`
+
+	// Chunk 3 — max CONTRACTS per futures order (clamp). Unset → the 10-contract
+	// default (the prior hidden const maxFuturesContracts). Toggle default ON.
+	MaxContractsPerOrder int   `json:"max_contracts_per_order,omitempty"`
+	MaxContractsEnabled  *bool `json:"max_contracts_enabled,omitempty"`
+
+	// Chunk 3 — futures NOTIONAL ceiling multiplier: max position notional =
+	// equity × this. Unset → 20 (the prior hidden const futuresMaxNotionalLeverage),
+	// now VISIBLE + EDITABLE. Toggle default ON (safety backstop).
+	MaxNotionalLeverage float64 `json:"max_notional_leverage,omitempty"`
+	NotionalCapEnabled  *bool   `json:"notional_cap_enabled,omitempty"`
+
+	// Chunk 4 — time/news BLACKOUT window (daily, HH:MM in America/Chicago). When
+	// enabled, the bot makes no new decisions inside [start,end] CT (NT8-side SL/TP
+	// still protect open positions). New guardrail → toggle defaults OFF.
+	BlackoutEnabled *bool  `json:"blackout_enabled,omitempty"`
+	BlackoutStartCT string `json:"blackout_start_ct,omitempty"`
+	BlackoutEndCT   string `json:"blackout_end_ct,omitempty"`
+
+	// Chunk 5 — CONSISTENCY rule: no single CME session-day's realized profit may
+	// exceed this % of all-time total realized profit. Only triggers once there is
+	// prior-day profit (a fresh/single-day account never self-locks). New guardrail
+	// → toggle defaults OFF.
+	ConsistencyMaxDayPct float64 `json:"consistency_max_day_pct,omitempty"`
+	ConsistencyEnabled   *bool   `json:"consistency_enabled,omitempty"`
 }
 
 // NewStrategyStore creates a new StrategyStore
@@ -993,11 +1076,13 @@ func GetDefaultStrategyConfig(lang string) StrategyConfig {
 		},
 	}
 
+	// Role + Decision are intentionally NOT seeded: an empty box lets each market's
+	// prompt builder supply the correct default — the instrument-aware CME role on
+	// futures (engine_prompt_futures.go), the crypto role on crypto
+	// (engine_prompt.go) — instead of one shared (market-wrong) seed. Frequency +
+	// Entry stay seeded (market-neutral). Saved user boxes are untouched.
 	if lang == "zh" {
 		config.PromptSections = PromptSectionsConfig{
-			RoleDefinition: `# 你是一个专业的加密货币交易AI
-
-你的任务是根据提供的市场数据做出交易决策。你是一个经验丰富的量化交易员，擅长技术分析和风险管理。`,
 			TradingFrequency: `# ⏱️ 交易频率意识
 
 - 优秀交易员：每天2-4笔 ≈ 每小时0.1-0.2笔
@@ -1007,17 +1092,9 @@ func GetDefaultStrategyConfig(lang string) StrategyConfig {
 			EntryStandards: `# 🎯 入场标准（严格）
 
 只在多个信号共振时入场。自由使用任何有效的分析方法，避免单一指标、信号矛盾、横盘震荡、或平仓后立即重新开仓等低质量行为。`,
-			DecisionProcess: `# 📋 决策流程
-
-1. 检查持仓 → 是否止盈/止损
-2. 扫描候选币种 + 多时间框架 → 是否存在强信号
-3. 先写思维链，再输出结构化JSON`,
 		}
 	} else {
 		config.PromptSections = PromptSectionsConfig{
-			RoleDefinition: `# You are a professional cryptocurrency trading AI
-
-Your task is to make trading decisions based on the provided market data. You are an experienced quantitative trader skilled in technical analysis and risk management.`,
 			TradingFrequency: `# ⏱️ Trading Frequency Awareness
 
 - Excellent trader: 2-4 trades per day ≈ 0.1-0.2 trades per hour
@@ -1027,30 +1104,53 @@ If you find yourself trading every cycle → standards are too low; if closing p
 			EntryStandards: `# 🎯 Entry Standards (Strict)
 
 Only enter positions when multiple signals resonate. Freely use any effective analysis methods, avoid low-quality behaviors such as single indicators, contradictory signals, sideways oscillation, or immediately restarting after closing positions.`,
-			DecisionProcess: `# 📋 Decision Process
-
-1. Check positions → whether to take profit/stop loss
-2. Scan candidate coins + multi-timeframe → whether strong signals exist
-3. Write chain of thought first, then output structured JSON`,
 		}
 	}
 
-	// CME futures (NT8) have no nofxos/claw402 crypto enrichment: the
-	// market-wide quant / OI-ranking / NetFlow-ranking / Price-ranking sources
-	// only return data for crypto and just burn cycles on the dead claw402 path
-	// (HTTP 402/404) for an index-futures instrument. Disable them so futures
-	// strategies don't pay that ~4-min-per-cycle tax (plan §5310: "NQ
-	// strategies just leave them disabled").
+	// CME futures (NT8): tune the indicator DEFAULTS for a new futures strategy —
+	// disable the crypto-only NofxOS/ranking feeds and enable the technical
+	// indicators the futures prompt leans on. Defaults-only (new-strategy
+	// template); existing saved strategies are never mutated. See helper.
 	if isFuturesMode() {
-		config.Indicators.EnableQuantData = false
-		config.Indicators.EnableQuantOI = false
-		config.Indicators.EnableQuantNetflow = false
-		config.Indicators.EnableOIRanking = false
-		config.Indicators.EnableNetFlowRanking = false
-		config.Indicators.EnablePriceRanking = false
+		applyFuturesIndicatorDefaults(&config.Indicators)
 	}
 
 	return config
+}
+
+// applyFuturesIndicatorDefaults tunes the indicator defaults for a NEW
+// CME-futures strategy (called only when isFuturesMode()):
+//
+//  1. Disable the crypto-only NofxOS / market-wide ranking feeds — they return
+//     no data for an index-futures instrument and just burn the dead claw402
+//     path (HTTP 402/404) ~4 min/cycle (plan §5310: "NQ strategies just leave
+//     them disabled").
+//  2. Enable the computed technical indicators the futures prompt actually leans
+//     on — ATR (stop sizing), EMA (trend), RSI (momentum) — which otherwise
+//     default OFF, leaving the futures AI with raw bars + volume only. Periods
+//     are already seeded ([20,50] / [7,14] / [14]).
+//
+// Indicators are prompt-data and NEVER gate a trade (the gate reads only Risk
+// Control), so this is a defaults-only, prompt-input change. It runs only inside
+// GetDefaultStrategyConfig (the new-strategy template) — existing saved
+// strategies are never touched. MACD/BOLL are deliberately left off.
+func applyFuturesIndicatorDefaults(ind *IndicatorConfig) {
+	// (1) crypto-only feeds OFF on futures.
+	ind.EnableQuantData = false
+	ind.EnableQuantOI = false
+	ind.EnableQuantNetflow = false
+	ind.EnableOIRanking = false
+	ind.EnableNetFlowRanking = false
+	ind.EnablePriceRanking = false
+	// Open Interest is the Binance crypto-perp feed too — it returns zeros for
+	// MNQ and the futures prompt already says to ignore it (no real futures OI
+	// is wired; the NT8 bridge carries OHLCV only). Off by default so a new
+	// futures strategy doesn't list/value an empty OI section.
+	ind.EnableOI = false
+	// (2) computed technical indicators ON for futures.
+	ind.EnableATR = true
+	ind.EnableEMA = true
+	ind.EnableRSI = true
 }
 
 // isFuturesMode reports whether the bot is running in CME-futures mode. Lives
@@ -1207,7 +1307,50 @@ func (s *Strategy) ParseConfig() (*StrategyConfig, error) {
 	if err := json.Unmarshal([]byte(s.Config), &config); err != nil {
 		return nil, fmt.Errorf("failed to parse strategy configuration: %w", err)
 	}
+	config.applyMissingDefaults()
 	return &config, nil
+}
+
+// applyMissingDefaults backfills GetDefaultStrategyConfig values for config
+// blocks that were persisted empty, so a strategy saved without a coin_source
+// or without a klines block never silently falls back to a blank coin source
+// (kernel/engine.go default case "unknown coin source type") or to the crypto
+// "3m" primary timeframe (kernel/engine_analysis.go), which NT8 never subscribes
+// (it auto-subscribes 5m/15m/1h). Only genuinely-empty blocks are filled;
+// explicitly-set values are preserved. This is the durable twin of the
+// per-strategy DB fixes for coin_source and klines.
+func (c *StrategyConfig) applyMissingDefaults() {
+	def := GetDefaultStrategyConfig(c.Language)
+
+	// Coin source: a blank source_type with no static coins and no source flags
+	// means the block was never set. Default the TYPE to "static" — matching the
+	// engine-level guard in GetCandidateCoins (commit abda753d) so the two layers
+	// agree — rather than the crypto ai500 default, which would be wrong for a
+	// futures trader. An empty static list then degrades to the upstream
+	// "no candidates" path instead of the unknown-type hard error.
+	if c.CoinSource.SourceType == "" && len(c.CoinSource.StaticCoins) == 0 &&
+		!c.CoinSource.UseAI500 && !c.CoinSource.UseOITop && !c.CoinSource.UseOILow &&
+		!c.CoinSource.UseHyperAll && !c.CoinSource.UseHyperMain {
+		c.CoinSource.SourceType = "static"
+	}
+
+	// Klines: no selected timeframes and no primary timeframe means the block was
+	// never set -> adopt the default timeframe set (5m/15m/1h, primary 5m), which
+	// matches the NT8 auto-subscribed set and avoids the engine "3m" fallback.
+	if len(c.Indicators.Klines.SelectedTimeframes) == 0 && c.Indicators.Klines.PrimaryTimeframe == "" {
+		c.Indicators.Klines.SelectedTimeframes = def.Indicators.Klines.SelectedTimeframes
+		c.Indicators.Klines.PrimaryTimeframe = def.Indicators.Klines.PrimaryTimeframe
+		c.Indicators.Klines.LongerTimeframe = def.Indicators.Klines.LongerTimeframe
+		c.Indicators.Klines.EnableMultiTimeframe = true
+		if c.Indicators.Klines.PrimaryCount == 0 {
+			c.Indicators.Klines.PrimaryCount = def.Indicators.Klines.PrimaryCount
+		}
+		if c.Indicators.Klines.LongerCount == 0 {
+			c.Indicators.Klines.LongerCount = def.Indicators.Klines.LongerCount
+		}
+		// raw OHLCV is required for AI analysis
+		c.Indicators.EnableRawKlines = true
+	}
 }
 
 // SetConfig set strategy configuration

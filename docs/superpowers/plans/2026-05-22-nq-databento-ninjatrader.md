@@ -33,6 +33,612 @@
 > "rename this variable in foo.go"). The read-first rule applies
 > ONLY when the prompt invokes plan content.
 
+> **STATUS (2026-06-02, latest — safety arc DEPLOYED + Universal CME P1/P2):**
+> branch `feat/nt8-stage4-chart` tip `dba04d01`. Two state changes since the
+> "safety arc COMPLETE" banner below (which was at tip `0f4c1268`, C# deploy
+> still pending):
+> 1. **Safety frames are now DEPLOYED + LIVE.** One clean NT8 restart activated
+>    the `feed_status` + `position_close_rejected` emits; `/tmp/backend.log`
+>    shows both decode with **0 "unknown frame type"**. The Go decoders were
+>    already live (`CloseRejections()` `tcp_server.go:425`,
+>    `position_close_rejected` decode `:840` → `close_sync.go:40`); the C# emit
+>    now fires on the next rejected flatten. id=54 SHORT already proved the
+>    fill-confirmed path end-to-end (closed **+96.50 ×pv**, real `exit_order_id`).
+> 2. **Universal CME Phase 1 + Phase 2 SHIPPED.** Phase 1 (`1620a5e7`) —
+>    recognize 18 CME roots with correct per-root multipliers (micro≠mini
+>    guaranteed by test: NQ $20 vs MNQ $2, ES $50 vs MES $5); FE no longer
+>    USDT-mangles CME symbols. Phase 2 (`dba04d01`) — the hardwired `"MNQ"`
+>    subscription is GONE (subscription follows the active symbol); index +
+>    treasury families resolve via a quarterly H/M/U/Z resolver
+>    (`VLContractResolver`, `RollDaysBeforeExpiry=8`), LIVE-verified
+>    `MNQ -> MNQ 06-26`. Energy/metals PARKED verifiably (clean
+>    `instrument_unresolved` log — no wrong-contract risk).
+> Three NT8/Tradovate **premise-refutations** recorded below (real API truth,
+> verified not assumed). **NEXT = Phase 3** (parameterize the MNQ-hardwired AI
+> prompt for the resolving families). See `## Current State — Round 6
+> (2026-06-02)` immediately below. All prior banners retained for history.
+
+> **STATUS (2026-06-02, later — safety arc COMPLETE):** branch
+> `feat/nt8-stage4-chart` tip `0f4c1268`. The phantom-close safety arc that was
+> "IN-FLIGHT" in the banner below is now **SHIPPED + live-verified**:
+>
+> - **`0118ca77` — fill-confirmed NT8 closes (phantom-close root fix).** A
+>   decision-driven close used to mark the DB CLOSED off the 5m mark via
+>   `recordAndConfirmOrder → recordPositionChange → ClosePositionFully` WITHOUT
+>   confirming the NT8 exit filled. During a Tradovate feed outage ~76 flatten
+>   ("Close" Sell Market) orders were REJECTED ("There is no market data available
+>   to drive the simulation engine"), so id=45 was never closed in NT8 yet the bot
+>   phantom-closed it locally (points-only PnL, `exit_order_id=<nil>`); id=46's next
+>   buy netted onto the orphan → NT8 net 2. Fix: ninjatrader decision closes now
+>   route through the `position_close` fill frame (`close_sync.recordClose` —
+>   fill-confirmed, ×`FuturesPointValue`), recorded ONLY on a confirmed NT8 exit
+>   (`auto_trader_decision.go`); this also fixed the points-only PnL for free. New
+>   `position_close_rejected` wire frame (C# emits on a rejected exit; Go decodes +
+>   alarms; the position stays OPEN so the next cycle retries). `reconcile.go` now
+>   alarms on a qty divergence (the id=45→46 tell).
+> - **`2fc07ea2` — feed-down trading gate + reconcile-before-open flatten-first.**
+>   New `feed_status` frame (C# `OnVLConnectionStatusUpdate` → Go); the AutoTrader
+>   gates opens AND closes when the NT8 price feed is not Connected (the SIM rejects
+>   "no market data"). DESIGN: **no false-halt** — `IsFeedConnected()` default-ALLOWs
+>   until the first frame and trips ONLY on an explicit non-Connected status.
+>   `reconcileBeforeOpenNT` flattens an orphan first **awaiting its OWN fill** (bounded
+>   `GetPositions` poll, feed-gated — NOT fire-and-forget) then opens, else REFUSES.
+>   RACE INSIGHT: feed-up, the flatten fills fast and `close_sync` records first
+>   (the decision phantom is harmlessly skipped — no open row); feed-down, the
+>   flatten is rejected and only the phantom used to record — now it doesn't.
+> - **`0f4c1268` — chart markers source from real trades.** The chart B/S markers
+>   bound to `/api/orders?status=FILLED`, which is sparse for NT8 (closes route
+>   through `close_sync` → `trader_positions`, not the orders table); a lone stale
+>   "zombie" order drew a misleading green "B". For `exchange==='ninjatrader'`,
+>   markers now source from `trader_positions` (entry + exit per position, correct
+>   B/S) via `/api/positions/history`. Crypto + the B/S visibility toggle unchanged.
+>
+> **VERDICTS this round (read-only diagnoses):**
+> - **Track C (Trade History):** the FE faithfully RENDERS the rows — no cache/
+>   transform bug (browser-confirmed `DISPLAY==DB`, `DB!=NT8`). The wrong numbers
+>   were poisoned OLD rows (id=45/46 phantom/doubled; legacy id=6/14 points-only);
+>   NEW closes are clean (×pv, real `exit_order_id`). The OLD rows were **repaired to
+>   NT8 truth this round** (DB write, see below).
+> - **Track D (B/S button):** NOT a bug — the green "B/S" button is the order-markers
+>   show/hide toggle (`AdvancedChart.tsx`, green = markers ON), not a side indicator;
+>   id=54 was correctly SHORT at every layer (DB/NT8/`/api/positions`/panel) and
+>   closed **+96.50 ×pv via the fill-confirmed path** (`reason=tp`, real
+>   `exit_order_id`) — proving the `0118ca77` path end-to-end. The stale green "B"
+>   was the zombie order (fixed by `0f4c1268` + the DB cleanup below).
+>
+> **DB cleanups this round (SIM historical, NT8-truth; backup taken first):**
+> - **Trade-history repair:** id=45 → exit 30533.25 / PnL −26.00; id=46 → entry
+>   30553.5 / PnL −40.50 (sum −66.50, the real 2-lot flatten @30533.25 split per
+>   lot); id=6 → +53.00 (×pv, exit 30573.75 confirmed real); id=14 → −353.50 (×pv,
+>   exit 30567.0 confirmed real). All `exit_order_id`→`Close`. None invented — every
+>   exit cross-checked against the NT8 trace.
+> - **Zombie order:** deleted the lone stale `trader_orders` id=1 (BUY, created
+>   05-31 @30464 but `avg_fill_price`/`filled_at` bumped to ~now/30615.5,
+>   `related_position_id=0`) that drew the misleading "B".
+> - **CI:** removed the unused `onTraderSelect` destructure in
+>   `TraderDashboardPage.tsx` → `tsc --noEmit` clean.
+>
+> **ROADMAP:** the NT8 execution-safety arc (fill-confirmed closes, feed gate,
+> reconcile-before-open, honest history + markers) is **COMPLETE and live-verified**
+> — no blocking items remain. Operator's remaining manual step: deploy the new C#
+> (`cp` → F5 → one full NT8 restart) to activate the `feed_status` +
+> `position_close_rejected` emits (the Go decoders + the close-routing root fix are
+> already live; the fixes degrade safely against the old C#). **NEXT project:**
+> Universal CME Symbol support (Path A, 5-phase); Strategy-UI futures-awareness last.
+> The prior `cef42d61` status (phantom-close IN-FLIGHT) is retained below for history.
+
+> **STATUS (2026-06-02):** branch `feat/nt8-stage4-chart` tip `cef42d61`.
+> SHIPPED since the last doc-sync (`2a0801b6`): the **bar-feed restart fix**
+> (`345bce2b` — resubscribe-on-Connected + fast `.Update` watchdog + ETH
+> hours; bars reattach ~14s after a clean restart, operator-verified) and
+> the **pre-prompt risk-gate fix** (`cef42d61` — the stale crypto notional
+> cap no longer trips in-position, so the AI can manage/close its own
+> futures position), plus 7 supporting NT8/chart fixes (`2f59fd7f`,
+> `7bc2dd8c`, `dde10cf1`, `86ed1535`, `b2fc0f3d`, `ae94adb5`, `0be1521b`).
+> **IN-FLIGHT (designed, NOT committed):** the phantom-close safety fix
+> (NT8-fill-confirmed closes + `position_close_rejected` frame). See
+> `## Current State — Round 5 (2026-06-02)` immediately below. The prior
+> 2026-05-31 status is retained beneath for history.
+
+> **STATUS (2026-05-31):** NT8 pipeline live on branch
+> `feat/nt8-stage4-chart` (tip `0a67bfda`, includes `063bc311` +
+> `49017ff9` + `0a67bfda`). **DASHBOARD IS COMPLETE** — balance,
+> account-switch, per-account P&L, chart with all 7 TF buttons, and the
+> per-account equity curve (C/D/E) are all SHIPPED & VERIFIED. The
+> **Strategy Studio AUDIT is done (2026-05-31, full 7-tab pass)** and the
+> Strategy build is **PLANNED** (two stages, locked — see Current State).
+> See `## Current State (2026-05-30, session-verified)` (immediately below)
+> for the current truth. Older claims about a `$50k mock balance`,
+> `FuturesChart` as the chart path, "decisions skip / unknown coin source",
+> a `100000` P&L baseline, and **"kernel reads Binance klines"** are
+> SUPERSEDED in place (the kernel reads NT8 BarCache for CME futures on this
+> branch — verified `market/data.go:197-210`; Stage 3 source-swap is DONE
+> here). Markers added, nothing deleted.
+
+## Current State — Round 6 (2026-06-02): safety arc DEPLOYED+LIVE; Universal CME Phase 1+2 SHIPPED
+
+> Additive sync against git truth at tip `dba04d01`. The execution-safety arc
+> (`0118ca77` fill-confirmed closes, `2fc07ea2` feed-down gate + reconcile,
+> `0f4c1268` real-trade markers) is fully documented in the "safety arc
+> COMPLETE" banner above — Round 6 records what changed AFTER that banner
+> (which was at tip `0f4c1268`): the safety frames are now **deployed + live**,
+> Universal CME **Phase 1+2 shipped**, energy/metals **parked verifiably**, and
+> the **three NT8/Tradovate premise-refutations** are captured as API truth.
+> MAIN re-verified every hash via `git show` and every code claim at file:line;
+> runtime/live claims are tagged "operator-verified". Round 5 below is intact.
+
+### SAFETY ARC — now DEPLOYED + LIVE-verified (state change from the banner above)
+
+The banner above closed with "Operator's remaining manual step: deploy the new
+C# (`cp` → F5 → one full NT8 restart)". That deploy **happened**:
+
+- One clean NT8 restart activated `feed_status` + `position_close_rejected`;
+  `/tmp/backend.log` shows both frames decode with **0 "unknown frame type"**
+  (operator-verified, 2026-06-02).
+- Decoder wiring (git-verified at file:line): `position_close_rejected` decode
+  `provider/ninjatrader/tcp_server.go:840` → `CloseRejections() <-chan`
+  `tcp_server.go:425` → consumed `trader/ninjatrader/close_sync.go:40`; the C#
+  emit is in `VLTraderTCPClient.cs`. Dedicated tests exist
+  (`tcp_server_close_rejected_test.go`, `tcp_server_feed_status_test.go`).
+- id=54 SHORT already proved the `0118ca77` fill-confirmed close path
+  end-to-end: closed **+96.50 ×`FuturesPointValue`**, `reason=tp`, real
+  `exit_order_id` — the id=45 `<nil>`/points-only phantom shape is gone. The
+  feed-up/feed-down race is closed: feed-up the flatten fills and `close_sync`
+  records first (decision-phantom harmlessly skipped); feed-down the flatten is
+  rejected and the position stays OPEN (no phantom-close).
+
+### Universal CME — Phase 1 recognition SHIPPED (`1620a5e7`)
+
+`market/futures_symbol.go` (+55) + test (+49), `store/strategy.go`,
+`web/.../CoinSourceEditor.tsx` (+194). Recognizes 18 CME roots with correct
+**per-root multipliers**; micro≠mini is guaranteed by test (NQ $20 vs MNQ $2,
+ES $50 vs MES $5). The FE no longer USDT-mangles a CME symbol (the
+`MNQ`→`MNQUSDT` crypto-bypass bug — see the Strategy-build P1🔴 — is handled
+for recognition). Recognition only: no subscription/resolution yet (that's
+Phase 2).
+
+### Universal CME — Phase 2 active-symbol subscription + resolver SHIPPED (`dba04d01`)
+
+`VLBarsSubscriptionManager.cs`, `VLContractResolver.cs`, `tcp_server.go`,
+`tcp_trader.go` + `tcp_trader_subscribe_test.go`.
+
+- **The hardwired `"MNQ"` bar subscription is GONE** — subscription now follows
+  the active symbol.
+- **Quarterly resolver** (`VLContractResolver`): INDEX (ES/NQ/YM/RTY +
+  micros MES/MNQ/MYM/M2K) and TREASURY (ZB/ZN/ZF/ZT, CBOT) resolve to the NT8
+  qualified front-month via H/M/U/Z (H=Mar, M=Jun, U=Sep, Z=Dec), rolling
+  `RollDaysBeforeExpiry=8` before expiry. **LIVE-verified: `MNQ -> MNQ 06-26`**
+  (correct front month, operator-verified 2026-06-02).
+
+### THE THREE NT8 / TRADOVATE PREMISE-REFUTATIONS (real API truth — verified, not assumed)
+
+These were assumptions that turned out FALSE on the NT8 AddOn API + the
+operator's Tradovate feed; recorded so the plan carries the real behavior:
+
+1. **Bare-root auto-routing is FALSE for the AddOn API.**
+   `Instrument.GetInstrument("MNQ")` returns **null** — a QUALIFIED
+   `"MNQ 06-26"` is required. So the AddOn computes the qualified quarterly
+   contract itself (`VLContractResolver`, `RollDaysBeforeExpiry=8`). (Refuted
+   in Phase 2.)
+2. **`GetNextExpiry` is UNBOOTSTRAPPABLE on Tradovate.** It needs a
+   `MasterInstrument`, which is obtained only from a qualified/continuous
+   `GetInstrument` — and **Tradovate has no continuous contracts** → null →
+   chicken-and-egg. This is exactly why the non-quarterly families (energy/
+   metals) can't use the calendar path yet. (Refuted in Phase 2.5; the
+   `VLContractResolver` header comment documents it.)
+3. **`GE` is NOT in our code.** The `"GE 03-26 Symbol is inaccessible"` log
+   carries NT8's own `|3|4|` prefix (not our AddOn's `|1|16|`). `GE` =
+   delisted Eurodollar; it is an NT8-environment artifact (a saved chart/
+   watchlist), silenced by an NT8-side cleanup — **not a code change**.
+
+### PARKED (verifiably; no wrong-contract risk)
+
+Energy (CL/MCL/NG — monthly) + metals (GC/MGC — GJMQVZ; SI — HKNUZ) are
+deliberately NOT in the quarterly resolver (their front month is not
+quarterly). They resolve to a clear `instrument_unresolved` log — **awaiting**
+a continuous-supporting data feed (which would enable `GetNextExpiry`, per
+refutation #2) or a testable C# roll path. NOT abandoned — cleanly deferred,
+with no risk of trading the wrong contract in the meantime.
+
+### Roadmap refresh (2026-06-02, Round 6)
+
+- **Safety arc: DONE + LIVE.** No blocking items.
+- **Resolver: covers the tradable quarterly families** (index + treasury).
+- **NEXT — Phase 3:** parameterize the MNQ-hardwired AI prompt —
+  `BuildFuturesDecisionSystemPrompt(symbol, equity)` — for the resolving
+  families.
+- **Phase 4:** `instrument_info` wire frame carrying NT8 tick + `point_value`,
+  and the 7→14 timeframe expansion (ties into the LOCKED Strategy build's
+  Stage 2 14-TF delivery).
+- **Energy/metals:** revive when a testable continuous/roll path exists
+  (refutation #2 is the gate).
+- **Strategy UI futures-awareness (Stage 1/Stage 2): LAST.**
+
+### SHA ledger addendum (Round 6, verified against git 2026-06-02)
+
+| SHA | message |
+|---|---|
+| `dba04d01` | feat(nt8): Phase 2 — drive bar subscription from the active symbol + resolver to all quarterly families **[BRANCH TIP]** |
+| `1620a5e7` | feat(symbol): Phase 1 — recognize 8 more CME futures roots (recognition only) |
+| `91d438a8` | chore(web,docs): drop unused onTraderSelect (tsc clean) + doc-sync NT8 safety arc |
+| `0f4c1268` | fix(web): NT8 chart markers source from real trades (trader_positions), not the sparse orders table |
+| `2fc07ea2` | feat(nt8): feed-down trading gate + reconcile-before-open flatten-first (deferred safety layers) |
+| `0118ca77` | fix(nt8): fill-confirm NT8 closes — a rejected flatten no longer phantom-closes |
+
+## Current State — Round 5 (2026-06-02): bar-feed + risk-gate SHIPPED; phantom-close IN-FLIGHT
+
+> Additive sync against git truth. Branch `feat/nt8-stage4-chart`, tip
+> `cef42d61`. 9 code commits landed since the last doc-sync (`2a0801b6`),
+> all on this branch. MAIN re-verified every line below against
+> `git show` / `grep` at file:line — only what the commits actually support
+> is recorded; runtime-only claims are tagged "operator-verified". The
+> Round-4 (2026-05-30/31) section below is unchanged.
+
+### SHIPPED & VERIFIED since `2a0801b6`
+
+- **Bar-feed restart freeze — FIXED (`345bce2b`; 2 `.cs`:
+  `VLBarsSubscriptionManager.cs` +172, `VLTraderTCPClient.cs` +22).** The
+  post-restart "frozen at 16:00 CT / 30523.75" chart is gone. Three
+  mechanisms (git-verified in the diff):
+  - **resubscribe-on-Connected** — BarsRequests recreate + resubscribe on
+    every transition into `PriceStatus==Connected` (via the
+    `OnConnectionReconnected()` path wired to
+    `Connection.ConnectionStatusUpdate` in `0be1521b`), covering a clean
+    startup `Disconnected→Connecting→Connected`, not just loss→recovery (the
+    old `dataFeedWasLost` guard was loss-only).
+  - **fast `.Update` watchdog** — if a (re)subscribe seeds historical but no
+    LIVE `.Update` arrives within `FAST_STALL_MS = 20s` (checked every
+    `WATCHDOG_PERIOD_MS = 15s`), recreate the instrument; capped at
+    `FAST_MAX_ATTEMPTS = 3` per dead window so a genuine closed-market gap
+    can't churn recreates.
+  - **75-min backstop KEPT** (`WATCHDOG_STALL_MS = 75 min`, > the 60-min
+    daily halt) + **ETH TradingHours** (`BARS_TRADING_HOURS = "CME US Index
+    Futures ETH"`) so bars survive the 16:00 CT session close.
+  - **VERIFIED LIVE (operator, 2026-06-02):** bars reattach within ~14s of a
+    clean restart and stream continuously.
+
+- **Pre-prompt risk-gate — FIXED (`cef42d61`; `kernel/engine_analysis.go`
+  +11/−7): the AI runs in-position again.** The pre-prompt gate was passing
+  the open futures position's notional into `CheckPreTrade`, tripping the
+  stale crypto notional cap (`RiskMaxNotionalUSD`, default $50k) that any
+  single MNQ contract (~$61k notional) exceeds → every in-position cycle was
+  skipped before `BuildUserPrompt` / the AI → empty dataless
+  `decision_records`. FIX (git-verified): the gate now calls
+  `CheckPreTrade(TotalPnL, len(Positions), 0, 0)` — enforcing ONLY
+  daily-loss + concurrent-position; notional is intentionally NOT checked
+  here. **Notional stays enforced futures-aware at EXECUTION**
+  (`engine_position.go`: `const futuresMaxNotionalLeverage = 20.0`,
+  `maxPositionValue = accountEquity × 20`). Net: the AI can manage/close its
+  own position via decisions, not only the NT8 OCO SL/TP.
+
+- **Supporting NT8 / chart fixes (also shipped since `2a0801b6`):**
+  - `2f59fd7f` — record entry from the NT8 fill / position average, not the
+    frozen 5m mark.
+  - `7bc2dd8c` — position uPnL from NT8's live `UnrealizedPnL`, not a stale
+    5m bar close.
+  - `dde10cf1` — position-card side label case-insensitive (NT8 `LONG` no
+    longer renders as `SHORT`).
+  - `86ed1535` — NT8 open-position read-back (emit on
+    select/connect/`PositionUpdate`, per-account cache, settled entry).
+  - `b2fc0f3d` — `BarCache.SeedHistorical` merges instead of replacing →
+    chart keeps depth across reconnects.
+  - `ae94adb5` — volume histogram sits in a bottom band, not overlaying
+    candles.
+  - `0be1521b` — wired the dead reconnect-recreate to
+    `Connection.ConnectionStatusUpdate` (the foundation `345bce2b` builds on).
+
+### IN-FLIGHT — phantom-close safety fix (DESIGNED, NOT COMMITTED)
+
+> NOT shipped. Tip is `cef42d61`; there is NO commit after it, and no
+> `position_close_rejected` symbol anywhere in the `.go`/`.cs` tree
+> (grep-confirmed 2026-06-02). Recorded here as the next fix to build.
+
+- **ROOT (PROVEN via NT8 trace, operator, 2026-06-02):** id=45's position
+  was never actually closed — 76+ flattens were REJECTED for ~4h ("no
+  market data" during a Tradovate feed outage) — yet the DB recorded it
+  CLOSED with a −19.25 **points-only** PnL (a non-fill / synthetic-mark
+  close path). id=46's single correct `Buy x1` then netted ONTO the
+  lingering contract (`operation=Add` → `quantity=2`). NT8's accounting was
+  correct; the bot's was wrong. Systemic — recurs on every feed flap.
+- **FIX (4 parts; both sides ship together):**
+  1. **C# flatten-reject detection** → emits a NEW `position_close_rejected`
+     wire frame.
+  2. **Go records a position CLOSED only on the NT8 exit `position_close`
+     (Filled)** — never on an AI decision, synthetic mark, or reconcile. On
+     a reject it keeps the position OPEN, alarms, and retries.
+  3. **Go reconcile-before-open** — alarm + flatten-first if the NT8 net ≠
+     intended, so a bad state is not compounded.
+  4. **feed-down gate** — no opens/closes while
+     `priceStatus == ConnectionLost`.
+- **NEW wire frame `position_close_rejected`** (additive per ADR-007; 4-byte
+  big-endian length prefix + JSON envelope; both sides ship together) — to
+  be added to the frozen wire-contract section when it lands.
+
+### SHA ledger addendum (verified against git, 2026-06-02)
+
+| SHA | message |
+|---|---|
+| `cef42d61` | fix(nt8): don't apply the crypto notional cap at the pre-prompt risk gate — let the AI run in-position **[BRANCH TIP]** |
+| `345bce2b` | fix(nt8): revive bar .Update fast after restart — resubscribe-on-Connected + fast watchdog (+ ETH hours) |
+| `2f59fd7f` | fix(nt8): record entry from NT8 fill/position avg, not the frozen 5m mark |
+| `7bc2dd8c` | fix(nt8): position uPnL from NT8's live UnrealizedPnL, not a stale 5m bar close |
+| `dde10cf1` | fix(dashboard): position-card side label case-insensitive — NT8 LONG no longer shows as SHORT |
+| `86ed1535` | feat(nt8): NT8 open-position read-back — emit on select/connect/PositionUpdate, per-account cache, settled entry |
+| `b2fc0f3d` | fix(nt8): BarCache.SeedHistorical merges instead of replacing — chart keeps depth across reconnects |
+| `ae94adb5` | fix(chart): volume histogram sits in a bottom band, not overlaying candles |
+| `0be1521b` | fix(nt8): wire the dead reconnect-recreate to Connection.ConnectionStatusUpdate |
+
+### Roadmap / open-items refresh (2026-06-02)
+
+- **Keystone VERIFY 1/2** (entry == NT8 fill end-to-end + the PnL cascade) —
+  now **UNBLOCKED**: bars stream continuously (`345bce2b`) and the AI runs
+  in-position (`cef42d61`), so the next held position self-captures the
+  proof. (Was blocked by the frozen feed + skipped cycles.)
+- **id=45 −19.25 points-only PnL anomaly** — should be eliminated by the
+  fill-confirmed close path (phantom-close fix, IN-FLIGHT); confirm on the
+  next real close, else flag a follow-up.
+- **B/S toggle button (FE)** — clicking does nothing. OPEN.
+- **TS6133 build-red** — `TraderDashboardPage.tsx:138` unused
+  `onTraderSelect` (~2 LOC). OPEN.
+- **THE BIG PROJECT — Universal CME Symbol (Path A), 5 phases** (recognition
+  → subscription + C# resolver → correctness → capstone) — NOT started;
+  phase plan retained in the IN FLIGHT/PLANNED section above. Current top
+  priority after the phantom-close fix.
+- **Project C — Strategy UI futures-awareness (Stage 1 / Stage 2)** — LAST.
+- **Deferred backlog (unchanged):** `GE` delisted by CME June 2023 (dead
+  root, not a bug); security batch (jwt default secret, tokenless reset
+  endpoints — "sec later"); `nofx→VL` rename (last).
+
+## Current State (2026-05-30, session-verified)
+
+> Current-truth snapshot for branch `feat/nt8-stage4-chart` (tip `d3c18f0f`
+> = origin). Supersedes contradicted older claims further down (each marked
+> in place with a pointer here; nothing deleted — history prevents repeating
+> mistakes). This feat branch diverged before main's PR #44 "Current State"
+> section, so this is the branch-local current-truth section.
+> Last refreshed 2026-05-30 (round 3): chart shipped, two non-bugs settled,
+> CGC indexed.
+
+### SHIPPED & VERIFIED (MAIN-verified live, pushed, backed up)
+
+- **Balance — real per-account equity auto-updates (no `$50k` mock).**
+  Fix = C# `SendAccountBalance` poll (`c4e2cb13`) + Go rebuild. **ROOT CAUSE
+  was a STALE GO BINARY** dropping frames as "unknown frame type" — see the
+  new STALE GO BINARY hard rule below.
+- **Account switch re-bind.** Frontend invalidates 5 SWR keys (`82bdca1c`:
+  account / positions / status / statistics / equity-history) +
+  `createPortal` / `mousedown` click-outside fix (`587a1386`). Cross-SIM
+  switching verified (Sim101 `100157` <-> SimAccount1 `70000`). LESSON: MAIN
+  re-verifying in the live browser caught the portal bug a subagent missed
+  by only inspecting the guard.
+- **SimAccount1 selectable; funded LFE gated** (UI disabled + HTTP 400)
+  (`587a1386`).
+- **Decisions — coin_source.** Set `static` MNQ in DB + DURABLE kernel guard
+  (`abda753d`: empty `SourceType` -> `static`, +2 tests).
+  `GetDefaultStrategyConfig` was ALREADY correct; the real defect was
+  `cmd/create-strategy` building a config without `coin_source` (still a
+  birth-defect — see STILL OPEN).
+- **Timeframe (blank-AI latent bug).** Strategy klines -> `[5m,15m,1h]`,
+  primary `5m` + `ParseConfig` backfill hardening (`05d3968e`; `058e4a56`
+  aligned its `coin_source` default to `"static"` to match the kernel guard).
+  NOTE: the **kernel AI timeframes stay `[5m,15m,1h]`**; the chart now shows
+  7 TF buttons (`d3c18f0f`) but that is CHART-SIDE display only — see below.
+- **Per-account P&L (Issue 2 A/B/F, `fcd8bb99`, WIRE-FREE).** Balance
+  single-slot -> `acctBalances` map keyed by account; P&L uses NT's OWN
+  realized/unrealized (baseline = `equity - pnl`, NOT `equity - 100000`);
+  frontend SWR keys account-scoped. The old `+0.16%` / `-30%` / `-50%`
+  figures were `100000`-baseline ARTIFACTS — NT reports `0.00%` real session
+  P&L.
+- **Chart — MNQ bars + indicators + B/S markers.** Wired via `273f85a3`
+  (ninjatrader klines branch: `AdvancedChart` reads the NT8 BarCache through
+  REST `/api/klines`, NOT the deleted `FuturesChart`; `bars_subscribe`
+  auto-sent on reconnect `tcp_server.go:431`, revert `cf5b76b3` never broke
+  streaming) + `f267d09e` (chart defaults to the trader's market symbol MNQ,
+  not BTC) + `3a3dfb31` (indicators redraw on toggle — fixed the stale-closure
+  clobber, so indicators NOW WORK on NT8/MNQ). **B/S is a MARKER TOGGLE, not
+  an order placer — there is no manual-order route, by design.** Saturday =
+  static historical MNQ bars; live ticks need RTH (Sun ~17:00 CT).
+- **Chart shows all 7 TF buttons — root cause was a CSS CLIP (`063bc311`),
+  NOT a stale deploy / wrong array.** `d3c18f0f`'s 7-button list was already
+  live, but the interval row (`ChartTabs.tsx:397`) had `overflow-x-auto` +
+  `max-w-[200px]` inside a `min-w-0` flex toolbar → flex-shrink collapsed it
+  (`clientWidth 73` vs `scrollWidth 216`) → `30m`/`1h`/`1d` were clipped behind
+  a hidden scrollbar. Fix: flex-wrap the row so all 7 stay visible. LESSON:
+  headless Playwright read the DOM text ("7 buttons present") while the real
+  browser visually clipped 3 — measure visual visibility, not DOM presence.
+- **Per-account equity curve — ITEM 2 C/D/E migration SHIPPED (`49017ff9` +
+  `0a67bfda`).** Account column added to the 3 tables (`trader_positions`,
+  `trader_equity_snapshots`, `decision_records`) — additive / AutoMigrate /
+  idempotent; per-account equity baseline now comes from the SCOPED series'
+  first snapshot (NOT the trader-global `100000`); ~208 pre-existing mixed
+  rows QUARANTINED (`account=''`); crypto path unaffected; integrity_check ok.
+  Result: SimAccount1 now reads `70000`/`70000`/`+0%` (was `100000`/`-30%`/
+  the bogus "201" series). This is the durable backend for the per-account
+  P&L cards (which `fcd8bb99` already made correct on the card surface).
+
+### SETTLED NON-BUGS — do NOT re-investigate (confirmed 2026-05-30)
+
+- **`/api/config` HTTP 500 — NOT REAL / RESOLVED.** `handleGetSystemConfig`
+  (`server.go:420`) is a tiny handler returning 200 with hardcoded leverage +
+  an `initialized` bool; it has NO error path and cannot 500 (live curl =
+  200). It is DASHBOARD-ONLY and completely off the trader/kernel/manager
+  path. The "500" was a stale backlog note, not a real condition.
+- **"No prompt to trader" — NOT a bug; it is the CME WEEKEND GATE.**
+  DB-verified (`decision_records` #183–#190: `system_prompt`/`input_prompt`/
+  `raw_response`/`decision_json` empty, `ai_request_duration_ms`=0,
+  `candidate=["MNQ"]`, `success`=1). On a closed-market cycle the prompt is
+  GENUINELY NOT BUILT: `auto_trader_loop.go:runCycle` loads context (candidates
+  + klines — the "looks like loading"), logs the PRE-GATE banner "🤖 Requesting
+  AI…" (`:108`, misleading), then `engine_analysis.go:53 ShouldSkipDecisionCycle`
+  (CME closed, `engine.go:911`) returns `nil,nil` BEFORE `BuildSystemPrompt`/
+  `BuildUserPrompt` are ever reached → "No actionable decision (risk gate
+  HOLD)" → saved with empty prompt fields. `DecisionCard.tsx` renders prompt
+  sections conditionally, so gated cycles show no prompt. Confirmed 3×. Verify
+  prompts build + DeepSeek fires at RTH (Sun ~17:00 CT). (Optional cosmetic,
+  not a bug: move the `:108` banner to after the gate so weekend logs aren't
+  misleading.)
+
+### IN FLIGHT / PLANNED
+
+> **SHIPPED 2026-05-31** — the former "chart 7-timeframe buttons" IN-FLIGHT
+> item and the "Issue 2 C/D/E per-account equity-curve migration" PLANNED
+> item are BOTH DONE; moved to SHIPPED & VERIFIED above (`063bc311`,
+> `49017ff9`, `0a67bfda`). The §7g Strategy audit "leanings" are SUPERSEDED
+> by the 2026-05-31 full 7-tab audit; the LOCKED Strategy build below
+> replaces them.
+
+**PLANNED — Universal CME Symbol (Path A) — CURRENT TOP PRIORITY
+(2026-05-31).** GOAL: type ANY CME instrument NT8 offers and have it
+resolve → subscribe → tick-round → size → display (chart Sym/Go input) →
+trade (strategy Symbol Source), through ONE source (NT8 BarCache — the same
+one-source path the kernel + chart already use, see the BarCache correction
+below). Instrument set: index `ES`/`NQ`/`YM`/`RTY` + micros
+`MES`/`MNQ`/`MYM`/`M2K` + energy `CL`/`NG` + metals `GC`/`SI` + rates
+`ZB`/`ZN`/`ZF`/`ZT`.
+
+Build order (**Strategy UI LAST**):
+- **Phase 0 — read-only trace** of the current single-symbol (MNQ) path end
+  to end: resolve, subscribe, tick-round, size, chart, strategy. Map every
+  place `MNQ`/`0.25` tick/point-value is assumed before changing anything.
+- **Wire contract (additive frame types, ADR-007 — ship Go + C# together):**
+  `instrument_subscribe` / `instrument_info` (carries NT8 tick size +
+  `point_value`) / `bar` keyed by `(symbol, TF)` / `instrument_unsubscribe`.
+- **C# AddOn:** `GetInstrument(<any>)` + null-handle guard +
+  `OnConnectionStatusUpdate` dispose-recreate (reconnect silently kills
+  `BarsRequest.Update`) + read `MasterInstrument` tick + `PointValue`, emit
+  on `instrument_info`. Deploy = cp → Documents AddOns → F5 → FULL restart.
+- **Go:** `isCMEFuturesSymbol` full root set (index/micro/energy/metal/rate);
+  per-instrument tick FROM THE WIRE (not the hardcoded `0.25`);
+  `point_value` fed into the prompt for correct contract sizing.
+- **Chart Sym/Go input + Strategy "Symbol Source"** both consume the SAME
+  wire (one source, no per-surface fork).
+- **Per-instrument roll** — each root rolls on its own calendar; manual roll
+  (NT does not auto-roll a running strategy).
+
+NT8 constraints to honor (from Plan 1.5 research): (1) the instrument must
+exist in / be subscribed on the NT8 connection; (2) reconnect kills
+`BarsRequest.Update` → dispose-recreate on `OnConnectionStatusUpdate`;
+(3) data-feed concurrent-subscription caps; (4) tick size + contract
+multiplier are PER-INSTRUMENT — read from NT8, never assume `0.25`/`$2`;
+(5) manual front-month roll. Bar timestamps are NT-local close-time →
+normalize to bar-open UTC at ingest.
+
+The LOCKED Strategy build below (14-TF selector + Futures variant + label
+universalization) is the **LAST** phase of this project — the Strategy UI
+lands AFTER the universal-symbol wire + resolve + chart paths are proven.
+
+**PLANNED — Strategy build (LOCKED 2026-05-31; the LAST phase of the
+Universal CME Symbol project above).**
+SCOPE LOCKED: creating a strategy must let the user select ANY of the 14
+timeframes `[1m,3m,5m,15m,30m,1h,2h,4h,6h,8h,12h,1d,3d,1w]`, and the system
+subscribes + pulls + feeds the AI those EXACT TFs (incl. a Windows NT8 C#
+AddOn update). **Q1 DECIDED: the AI uses ALL selected TFs (no cap).**
+**Q2 DECIDED: all 14, C# updated.** This FLIPS the §7g `a3` leaning from
+"hard-restrict futures TFs to `[5m,15m,1h]`" → "make all 14 deliverable."
+
+- **STAGE 1 — UI + phantom (frontend + a few Go store/api + DB; NO C#, NO
+  wire).** Severity-ordered:
+  - **P1 🔴 — TAB2 CoinSource USDT→CME bypass** (`CoinSourceEditor.tsx:78`
+    + `:107`). The bypass has ZERO CME roots today → `MNQ`→`MNQUSDT` →
+    `IsCMEFuturesSymbol=false` → silently routes to the crypto branch →
+    futures decisions skip. **THE critical fix.** Plus the universal
+    'Symbol Source' rename + help text.
+  - **P2 🟠 — TAB3 indicator gating** (add a `variant` prop; hide
+    funding/OI/NetFlow/NofxOS for futures — also stops crypto vocab leaking
+    into the futures prompt via the shared `writeAvailableIndicators`) +
+    **TAB6 add a 'Futures' variant** to BOTH the preview and AI-Test selects
+    (`StrategyStudioPage.tsx:1198-1206` / `:1306-1314` — the futures prompt
+    `engine_prompt_futures.go` EXISTS but is currently UI-unreachable) +
+    **TAB4 universal risk labels** (BTC/ETH/Altcoin → Leverage/Tier; fix the
+    hardcoded `USDT` span at `RiskControlEditor.tsx:277-278`, NOT via i18n).
+  - **P3 🟡 — TAB5 futures persona + TAB1/7 cleanup.**
+  - **Cross-cutting phantom cleanup:** `UPDATE strategies SET is_default=0
+    WHERE id=''` + add `ORDER BY` to GetDefault (`store/strategy.go:1157`) —
+    NEVER touch `578ac8f6`.
+  - **LABEL RULE:** delete nothing; rename to UNIVERSAL (one label fits
+    crypto + futures; units dynamic).
+- **STAGE 2 — backend 14-TF delivery (C# → F5 + FULL restart).**
+  `MapTimeframe` → all 14 (the 7 MISSING are `2h`/`4h`/`6h`/`8h`/`12h`/`3d`/
+  `1w`; `tcp_server.go:143` auto-subscribes only 7) + the Go subscribe set
+  DRIVEN BY the strategy's `selected_timeframes` + kernel reads BarCache for
+  all selected (**ALREADY the path — no source-swap needed**, per the
+  BarCache correction in the Root Cause section below) + prompt feeds all
+  selected + the picker honest.
+
+  **i18n GOTCHA:** `strategy-translations.ts` is zh / en / **es (Spanish)**,
+  NOT `id` — new editor labels need an `es` value.
+
+  **FLAGGED (separate Plan 3, NOT relabel work) — Risk Control enforcement
+  bugs:** the `max_margin_usage` badge is prompt-only (not enforced);
+  `min_risk_reward_ratio` is ignored (hard `3.0` at
+  `engine_position.go:133`); position-value tiers are inert for MNQ.
+
+  **CLEAN SLATE:** the prior Stage-1 attempt was REVERTED — the phantom is
+  back to `is_default=1` on BOTH "MNQ SIM Default" rows, `store/strategy.go`
+  == HEAD, and `GetDefault().First()` is nondeterministic again.
+
+### STILL OPEN / DEFERRED
+
+- **Durable:** `cmd/create-strategy` birth-defect (builds config without
+  `coin_source`) — the kernel guard protects but the cmd itself is still
+  wrong.
+- **Phantom** empty-id "MNQ SIM Default" `is_active=1` row (different user
+  `8ef641a7`) — report, do NOT delete (see the planned Studio phantom-cleanup
+  above).
+- **Misc deferred:** live chart-tick verify at RTH (Sun ~17:00 CT); security
+  batch (override `jwt_secret` default
+  `'default-jwt-secret-change-in-production'`, `/api/exchanges` unauth
+  exposure — the named upstream CVE-class issue); nofx->VL full rename (LAST);
+  `ALLOW_LIVE_ACCOUNTS` toggle (default false).
+- **Pre-existing flaky test** `TestMaybeResetDaily` (UTC-day-boundary), not
+  ours.
+
+### Environment / tooling
+
+- **CodeGraphContext (CGC) is now INDEXED for this repo** (FalkorDB Lite, `cgc`
+  CLI; nofx in `cgc list`). Hard Rule 0's tool order — CGC-first, then
+  grep/Read — is fully available going forward. (Earlier passes ran without it
+  and fell back to grep/Read; that limitation no longer applies.) See the
+  CodeGraphContext tooling blockquote near the Playwright block above for the
+  MCP registration + `cgc index . --force` refresh command.
+- **Doc relationship.** This canonical plan doc is the long-term source of
+  truth. A separate detailed working-log/archive (`nt8-account-pipeline-build-
+  plan.md`) is referenced in working sessions but is NOT present in the repo
+  at any path as of 2026-05-30 — if/when it lands, cross-reference (do NOT
+  merge) so the two don't drift.
+
+### Session SHA ledger (verified against git)
+
+| SHA | message |
+|---|---|
+| `273f85a3` | fix(nt8): live MNQ bars reach chart via klines ninjatrader branch |
+| `abda753d` | fix(kernel): empty coin source type defaults to static (stop per-cycle skip) |
+| `05d3968e` | fix(strategy): backfill default coin_source + klines on ParseConfig |
+| `fcd8bb99` | fix(nt8): per-account balance + NT-native P&L + account-scoped fetch (Issue 2 A/B/F) |
+| `058e4a56` | fix(strategy): blank coin_source defaults to 'static' (match kernel guard) |
+| `587a1386` | fix(nt8): make account dropdown rows selectable; funded stays gated |
+| `82bdca1c` | fix(nt8): account select re-binds dashboard data (invalidate 5 SWR keys on switch) |
+| `c4e2cb13` | fix(nt8): poll account_balance so real equity populates (Tradovate AccountItemUpdate doesn't fire) — kills $50k mock |
+| `f267d09e` | fix(nt8): chart defaults to the trader's market symbol (MNQ), not BTC |
+| `3a3dfb31` | fix(nt8): chart indicators redraw on toggle (stop stale-closure clobber) |
+| `d3c18f0f` | feat(nt8): MNQ chart shows all 7 timeframe buttons (adds 3m, drops 4h) |
+| `063bc311` | fix(nt8): chart timeframe row wraps so all 7 buttons stay visible |
+| `49017ff9` | feat(nt8): per-account equity/positions/statistics (ITEM 2 C/D/E migration) |
+| `0a67bfda` | fix(nt8): equity curve baseline is per-account, not trader-global 100000 **[BRANCH TIP = origin]** |
+
+### New rules logged this session (see also "Locked Data Architecture Decisions")
+
+- **NEW HARD RULE — STALE GO BINARY.** After ANY wire / parser / Go change,
+  `go build` + restart `./nofx-bin`. The tell is `unknown frame type type=X`
+  in `/tmp/backend.log` (the TCP slog sink — NOT `data/nofx_*.log`). This is
+  the twin of the NT8 AddOn `cp` -> Documents-AddOns -> F5 -> full-restart
+  rule. A stale Go binary silently drops new frame types and is why the
+  balance fix appeared not to work until rebuild.
+- **SESSION WAIVER (2026-05-30, Opus 4.8).** MAIN may spawn multiple
+  subagents with full freedom PROVIDED MAIN independently re-verifies
+  (the portal-bug catch above is why); reverts to general-purpose-only next
+  session unless re-waived.
+
 ## 2026-05-28 ARCHITECTURE PIVOT — NT8 as single data source (Databento dropped)
 
 > **READ THIS FIRST IF YOU ARE WORKING ON ANYTHING DATA-RELATED.**
@@ -178,6 +784,32 @@ C# compiles ONLY from `/mnt/c/Users/hoang/Documents/NinjaTrader 8/bin/Custom/Add
 > 4. Session restart required after registration changes. MCP tool schemas
 >    are sealed at session start; updates to `~/.claude.json` only take
 >    effect on the next `claude` invocation.
+
+> **CodeGraphContext (cgc) — query-before-read code graph (registered 2026-05-30):**
+> CodeGraphContext 0.4.0 is installed at `~/.local/bin/cgc` and registered as an
+> MCP server in `~/.claude.json` for project `/home/hoang/nofx` (local scope —
+> NOT a committed `.mcp.json`). Use the `mcp__cgc__*` tools to query code
+> structure BEFORE blindly reading files — e.g. `analyze_code_relationships`
+> (find_callers / find_callees / find_all_callers / call_chain / class_hierarchy
+> / dead_code / find_importers / who_modifies) and `execute_cypher_query` (direct
+> read-only Cypher over the graph). This is how you trace "who calls X / what
+> does Y depend on" across the Go + TS + C# tree without grepping the whole repo.
+>
+> - **Backend: FalkorDB Lite** — embedded, NO Docker required (this WSL2 distro
+>   has no Docker; FalkorDB/Neo4j server backends are therefore NOT used).
+>   `cgc doctor` is the health check.
+> - **Index:** `nofx` is indexed (1872 files). Refresh after code changes with
+>   `cgc index . --force` (plain `cgc index .` skips an already-indexed repo);
+>   `cgc watch /home/hoang/nofx` auto-updates on save. The index is local graph
+>   state, not in git.
+> - **Registration (re-apply on a fresh machine):**
+>   ```bash
+>   claude mcp add -s local cgc -- /home/hoang/.local/bin/cgc mcp start
+>   ```
+> - **Session restart required** (same caveat as Playwright above): the
+>   `mcp__cgc__*` tools only appear on the next `claude` invocation after
+>   registration; the CLI (`cgc query`, `cgc analyze`, `cgc find`) works
+>   immediately regardless.
 
 **Goal:** Get the nofx bot to fetch NQ futures OHLCV from Databento, ask the AI for a trade decision in futures-native vocabulary, write that decision to a CSV signal file, and have NinjaTrader (running on the user's Windows host with the open-source `claudetrader.cs` strategy attached to an MNQ chart) execute that decision in SIM mode — then tail the fills CSV back into the bot's database.
 
@@ -5124,6 +5756,12 @@ These 4 hazards are not in scope for Plan 1's SIM-only goal. Add them as Plan 1.
 
 ## `GetBalance` $50k mock — honest disclosure
 
+> **SUPERSEDED 2026-05-30** — the `$50k` mock is GONE. Real per-account
+> equity now auto-updates via the C# `SendAccountBalance` poll (`c4e2cb13`).
+> Root cause of it appearing stuck was a STALE GO BINARY, not the mock.
+> See `## Current State (2026-05-30, session-verified)`. Kept below for
+> history.
+
 [provider/ninjatrader/trader.go:GetBalance](provider/ninjatrader/trader.go) (per Task 7) returns hardcoded:
 
 ```go
@@ -7953,6 +8591,19 @@ bugs the audit surfaced.
 
 ## 2026-05-28 Root Cause — Kernel reads Binance klines, not NT8 BarCache
 
+> **SUPERSEDED 2026-05-31 (branch `feat/nt8-stage4-chart`) — the Stage 3
+> source-swap is DONE on this branch; the kernel reads NT8 BarCache for CME
+> futures, NEVER Binance/CoinAnk.** Verified live 2026-05-31 in
+> `market/data.go`: `isFutures := IsCMEFuturesSymbol(symbol)` (`:197`) →
+> the futures branch reads `FuturesBarsProvider(symbol, tf, 200)` — the
+> BarCache (`:204-210`, with a "no NT8 bar provider wired; skipping" guard);
+> `getKlinesFromCoinAnk(..., "binance", ...)` is the **non-futures `else`
+> branch only** (`:224`). The sibling 3m/4h helper does the same
+> (`:41-90`). **ONE SOURCE OF TRUTH CONFIRMED: chart + kernel both read NT8
+> BarCache.** The "reads Binance" diagnosis below was true on
+> `origin/main @ 4f0843e5` (where Stage 3 had not landed); it is no longer
+> true on this branch. Kept verbatim below for history.
+
 The two investigations converged on one cause:
 
 - **Engine-side (UI audit):** the trader's market-data map comes up
@@ -8004,6 +8655,13 @@ above — that post-mortem is preserved with a SUPERSEDED marker.)
   flip removed the coin-selection short-circuit; Stage 3 removes the
   data starvation. Two distinct gates: N11 cleared the first, Stage 3
   clears the second.
+- **UPDATE 2026-05-31 (branch `feat/nt8-stage4-chart`):** the second gate
+  is now CLEARED here too — Stage 3's source-swap is DONE on this branch
+  (kernel reads NT8 BarCache via `FuturesBarsProvider`,
+  `market/data.go:197-210`; see the SUPERSEDED marker on the Root Cause
+  section above). The empty-market-data starvation is resolved on this
+  branch; remaining WAITs are weekend-gate (CME closed), not data
+  starvation.
 
 ## 2026-05-28 — risk_check_passed is UNWIRED (not a rejection signal)
 
@@ -8021,6 +8679,15 @@ rejection.)
   into **Plan 4.14** (backend visibility panel).
 
 ## 2026-05-28 UI Data-Flow Audit (origin/main 4f0843e5, live app)
+
+> **PARTIALLY SUPERSEDED 2026-05-30** (branch `feat/nt8-stage4-chart`):
+> the "Balance = hardcoded `$50k` MOCK", "decisions skip / unknown coin
+> source" (new strategies born broken on `ai500`), and the Binance/`BTCUSDT`
+> chart findings are RESOLVED — real per-account balance (`c4e2cb13`),
+> `static` MNQ coin_source + kernel guard (`abda753d`/`058e4a56`), and the
+> NT8 chart wiring (`273f85a3`). The crypto-prompt-served-to-futures and the
+> remaining depth findings below still stand. See
+> `## Current State (2026-05-30, session-verified)`. Kept for history.
 
 Per-page findings against the live app on `origin/main` @ `4f0843e5`:
 
@@ -8066,24 +8733,46 @@ Reflects the audit + N11 convergence. Data plane unblocks everything.
 
 ### 🔴 BLOCKING (data plane)
 
+> **UPDATE 2026-05-31 — DASHBOARD COMPLETE on `feat/nt8-stage4-chart`.**
+> Stage 1 (C# bars) DONE, Stage 2 (Go bar handling) PROVEN, **Stage 3
+> (kernel reads NT8 BarCache) DONE** (`market/data.go:197-210`), **Stage 4
+> (chart) SHIPPED** (`273f85a3` AdvancedChart over `/api/klines` + the
+> `063bc311` 7-TF CSS-clip fix), and **Plan 4.11 (real balance) DONE**
+> (`c4e2cb13`) + per-account equity C/D/E (`49017ff9`/`0a67bfda`). The
+> data-plane chain is no longer blocking. **The next big project is the
+> Strategy build** (LOCKED — see `## Current State` → IN FLIGHT / PLANNED:
+> Stage 1 UI+phantom, then Stage 2 backend 14-TF delivery).
+
 - **Stage 1 — C# bars [DONE — `v1.0-nt8-contract-resolver`].**
 - **Stage 2 — Go bar handling [bars flow + cached, PROVEN].** N1/N3/N4/N5
   wire-design items pending IF not yet built — **confirm remaining**
   against the Stage 2 wire-design section above.
-- **Stage 3 — the pinpointed one-call fix.** Swap
-  `getKlinesFromCoinAnk` → `BarCache().Get(symbol, tf)` in the futures
-  branch (`market/data.go:192`). Turns WAIT into real decisions — **THE
-  unlock.** Fold in here: (a) the futures-prompt selection at
-  `auto_trader_loop.go:102` (route futures traders to
-  `engine_prompt_futures.go`), and (b) the reseed-durable default
-  (`GetDefaultStrategyConfig` tweak OR boot migration — makes the N11
-  flip survive a reseed).
+- **Stage 3 — the pinpointed one-call fix. ✅ DONE on
+  `feat/nt8-stage4-chart` (SUPERSEDED 2026-05-31).** The source-swap
+  shipped: the futures branch now reads the NT8 BarCache via the injected
+  `FuturesBarsProvider` (`market/data.go:197-210`), never
+  `getKlinesFromCoinAnk` (that is the non-futures `else` only, `:224`).
+  Verified live 2026-05-31. The N11 data-starvation cause is resolved by
+  this same Stage-3 work being present on the branch. (Original target text
+  below kept for history; the cited `market/data.go:192` line drifted —
+  the live branch is `:197-210`.) Remaining fold-ins still open: (a) the
+  futures-prompt selection (route futures traders to
+  `engine_prompt_futures.go` — tracked in the LOCKED Strategy build, Stage 1
+  P2 TAB6), and (b) the reseed-durable default
+  (`GetDefaultStrategyConfig`/boot migration — the phantom CLEAN SLATE note).
+  Original Stage-3 target: ~~Swap `getKlinesFromCoinAnk` →
+  `BarCache().Get(symbol, tf)` in the futures branch
+  (`market/data.go:192`).~~
 - **Stage 4 — FuturesChart + SSE relay** off the same NT8 feed →
-  fixes the Binance chart.
+  fixes the Binance chart. **SUPERSEDED 2026-05-30:** the chart path is
+  `AdvancedChart` reading the NT8 BarCache via REST `/api/klines`
+  (`273f85a3`), NOT `FuturesChart` (deleted) and NOT an SSE relay. See
+  `## Current State (2026-05-30, session-verified)`.
 
 ### 🟠 After (depends on data plane)
 
 - **Plan 4.11** — real NT balance (~150 LOC; fixes the $50k mock).
+  **DONE 2026-05-30** via `c4e2cb13` — see Current State.
 - MarketTicker → NT8 feed.
 
 ### 🟡 Quick wire-ups (zero-dependency)
@@ -8253,3 +8942,1074 @@ primary (NinjaTrader) broker.
   x-axis `toLocaleString('zh-CN')`.
 - **"Reset to default" writes Chinese prompt text for EN users**
   (`PromptSectionsEditor.tsx:14-43`).
+
+## 2026-06-04 — Trade-History P&L: honest "unknown" for reconcile-flat closes (SHIPPED, commit `0c245344`)
+
+**STATUS:** SHIPPED (PART 2 of 2). NT8-only, additive, crypto byte-identical,
+`close_sync` (the real-P&L path) untouched. Go rebuild + `./nofx-bin` restart
+done (clean start, 0 "unknown frame type"); FE `tsc` clean.
+
+**Symptom:** Dashboard → Trade History showed AI-decision closes at **P&L = $0**.
+
+**Root cause (diagnosed read-only, then confirmed at file:line):** the close
+pipeline is correct on the `close_sync` path — 80 rows recorded real ×point-value
+P&L (e.g. MNQ SHORT 30456.75→30473.25 = 16.5pt × $2 = −$33.00). The zero-P&L rows
+are **exclusively** `close_reason='reconcile_flat'` (≈24-25 rows): when a
+decision-driven flatten's NT8 `position_close` frame is never captured
+(`auto_trader_decision.go:313-325` leaves the row OPEN awaiting it), the 20s
+reconcile finds NT8 flat and orphan-closes the row at **entry price / $0**
+(`reconcile.go:122`) — a placeholder that **falsely reads as breakeven**. So it
+was neither a compute, store, display, nor multiplier bug — it was a reconcile
+placeholder presented as a real $0.
+
+**PART 1 (root cause — make decision closes reliably captured by close-sync):
+SCOPED OUT this pass.** Reliable `position_close` delivery for decision flattens
+is an NT8 **C# AddOn / feed-delivery** matter (or would require fabricating an
+exit) — both forbidden here (no C#; "NT8 is the source of truth, never fabricate
+an exit"). The existing design already retries on the next decision cycle and
+uses reconcile as the safety net. Options for a future pass: (a) C#-side guarantee
+a `position_close` frame for decision flattens; (b) a Go-side await/confirm before
+the cycle returns; (c) on reconcile, query NT8 for the real exit fill (needs bridge
+support). None shipped.
+
+**PART 2 (safety net — honest "unknown", not a false $0): SHIPPED.**
+- Premise refinement (reported): the brief suggested `realized_pnl` NULL/sentinel,
+  but the column is a **non-nullable `float64`** — NULL needs a `*float64` struct
+  change that ripples to every reader (high-cascade) and a numeric sentinel would be
+  silently summed by the stats loops. So the **existing `close_reason='reconcile_flat'`
+  marker** (already persisted, already plumbed to the FE via `trading.ts`) is the
+  single source of truth for "unknown"; every P&L presenter/aggregator now treats it
+  as unknown.
+- **BE** (`store/`): exclude `reconcile_flat` from all closed-position stat
+  aggregators — `GetFullStats`, `GetSymbolStats`, `GetDirectionStats`, and
+  `GetHistorySummary` (recent + streaks). Shared const `store.CloseReasonReconcileFlat`
+  (also wired into `reconcile.go`, de-magicking the literal — no behavior change).
+- **FE** (`PositionHistory.tsx`): render **"—"** (with an "exit not captured" tooltip)
+  for `reconcile_flat` rows instead of `+0.00 / 0.00%`, and exclude them from the
+  footer P&L total. The rows still appear in the list (honest: the close happened,
+  the P&L is unknown).
+- **DB proof (live `data/data.db`):** excluding `reconcile_flat` moves the trader's
+  win-rate from a diluted **35.2% → 46.2%** (over the 80 known-outcome trades;
+  wins=37 / losses=43 and total_pnl unchanged — the excluded rows were $0). The
+  ≈25 unknown closes remain in the position list (→ "—").
+
+**Not changed:** crypto close path (exchange order-sync, returns real P&L — never
+on this reconcile path); `close_sync` real-P&L recording; the 80 correct `sync`
+rows. **Uncommitted-edits audit:** the session-start snapshot listed
+`store/position_query.go` / `store/decision.go` / `auto_trader_loop.go` as modified,
+but the working tree was **clean** (already committed in `24634b5a`) — nothing
+collided, nothing swept in.
+
+## 2026-06-04 — PART 1: reconcile status-guard stops the overwrite of close-sync's real P&L (SHIPPED, commit `7786d845`)
+
+**STATUS:** SHIPPED. Go-only, no C#. Additive — `close_sync` byte-identical, crypto
+untouched. Go rebuild + `./nofx-bin` restart done (clean, 0 "unknown frame type").
+
+**Root cause (PART-1, log-confirmed — refutes "missed frame"):** the `position_close`
+frame is NOT missed. close-sync **captures the real ×point-value P&L** on it (it
+commits first, event-driven) — then the 20s reconcile, working off a **stale
+open-positions snapshot**, **overwrites the same row** with the `$0` `reconcile_flat`
+placeholder. `ClosePosition` updated `WHERE id=?` with **no status guard**, so the
+stale write clobbered the just-recorded real close. Caught live: row=122 logged
+`pnl=2.00` at 08:14:57, reconcile orphan-closed it 20s later → DB `reconcile_flat $0`.
+The race is close-sync-first / reconcile-overwrites every time (logs show close-sync's
+`📕` precedes reconcile's `🔧` by up to ~20s). Not decision-specific — an SL exit was
+clobbered too.
+
+**Fix (Go-only):** [`store/position.go`] `ClosePosition` now updates
+`WHERE id=? AND status='OPEN'` and returns whether a row was actually closed. Once
+close-sync sets the row `CLOSED/sync`, reconcile's guarded UPDATE matches **0 rows**
+→ the real P&L stands (close-sync wins). [`trader/ninjatrader/reconcile.go`] uses the
+bool to log honestly: `🔧 closed orphan` only when it really closed a still-OPEN row,
+else `✓ already closed by close-sync (kept real P&L)`. `ClosePosition`'s **sole
+caller is reconcile** (verified), so close-sync (`ClosePositionFully`) and the crypto
+path are unaffected.
+
+**Proof (DB):** for CLOSED sync row id=121, the OLD `WHERE id=121` matches **1** (would
+clobber); the NEW `WHERE id=121 AND status='OPEN'` matches **0** (no-op, real P&L kept).
+A live-close watcher confirms the next captured close keeps `sync`/real ×$2 P&L through
+a reconcile tick.
+
+**PART 2 intact:** a genuinely-uncaptured close (no `position_close` frame at all) is
+still OPEN when reconcile runs → matches `status='OPEN'` → `reconcile_flat` → UI "—".
+So the honest-unknown fallback (commit `0c245344`) remains for the real feed-down case;
+this PART-1 fix simply stops reconcile from destroying the closes that WERE captured.
+
+## 2026-06-04 — PART 1b: flat-grace window closes the reconcile-FIRST race (SHIPPED, commit `6afb5adf`)
+
+**STATUS:** SHIPPED. Go-only, reconcile-side; `close_sync` BYTE-IDENTICAL; PART-1a
+status guard retained; crypto untouched. Go rebuild + restart done (clean).
+
+**PART-1a premature-claim correction:** PART 1a (`7786d845`, the status guard) was
+reported "live-verified" off a **single** close (row 123) — that was premature. The
+fuller data showed the guard only fixed the **close-sync-FIRST** ordering; **5 of 8**
+post-1a captured closes (rows 125–129) were **still** lost to `reconcile_flat $0` —
+matched by entry-price to their `📕` real-P&L log lines — via the **reconcile-FIRST**
+ordering (5 `🔧 closed orphan` / **0** `✓ already closed` lines = the guard's no-op
+branch never fired; reconcile always acted on a still-OPEN row).
+
+**Root cause (reconcile-FIRST):** NT8 publishes a **flat** positions snapshot (which
+reconcile's 20s poll reads) at/around the instant it sends the `position_close` frame,
+but that frame reaches close-sync a beat later. Reconcile orphan-closed the still-OPEN
+row first → close-sync then found no open row and **skipped** → the real ×point-value
+P&L was lost.
+
+**Fix (PART 1b):** a **flat-grace window**. [`trader/ninjatrader/tcp_trader.go`] adds a
+`flatSince` map (row id → first-seen-flat ms; reconcile-goroutine-only, no lock).
+[`trader/ninjatrader/reconcile.go`] `reconcilePositions` now, on first seeing a row
+NT8-flat-but-DB-open, records the time and **defers** the orphan-close; it only
+orphan-closes after the row has been continuously flat ≥ **`flatGraceMs` = 60s** (3
+reconcile cycles). close-sync records the real close within seconds → the row goes
+`CLOSED/sync` and is pruned from `flatSince` next pass. A **genuinely-uncaptured** row
+(no frame ever) is still OPEN after 60s → orphaned → `reconcile_flat` "—" (PART-2
+fallback, correct). The **PART-1a status guard stays** (covers the last-moment
+close-sync-first DB race). Together both orderings are closed.
+
+**Verify:** deterministic logic (defer-then-orphan) + a **multi-close** live watcher
+(target ≥4 captured closes keeping `sync`/real ×$2 P&L — NOT generalizing from one,
+per the PART-1a lesson). `go build`/`go vet`/tests green; restart clean, 0 "unknown
+frame type".
+
+## 2026-06-05 — Chart X-axis timezone: render local/exchange TZ, not UTC (SHIPPED, commit `86d0b1c1`)
+
+**STATUS:** SHIPPED. FE-only, additive. tsc clean; vite serves 200.
+
+**Root cause (diagnosed read-only first):** lightweight-charts v5 does **no** timezone
+conversion — its time **axis** defaults to UTC. `AdvancedChart` set a crosshair
+`localization.timeFormatter` (browser-local, correct) but **no
+`timeScale.tickMarkFormatter`**, so the X-axis tick labels rendered in **UTC** (a 05:10
+UTC bar read `05:10` instead of the local/exchange `00:10`, and evening bars showed
+tomorrow's date). **Pre-existing** (unchanged since the chart was built) — explicitly
+**NOT** caused by the P&L work or the 3 restarts: the running binary never restarted
+between "good" and "wrong", and `Bar.T` epochs are correct UTC and consistent across
+the midnight boundary (verified against decision-record bar labels Jun 4 vs Jun 5).
+
+**Fix (FE-only, `web/src/components/charts/AdvancedChart.tsx`):** add a
+`timeScale.tickMarkFormatter` that formats the axis in an explicit
+`CHART_TZ = 'America/Chicago'` (the operator's local **and** the CME exchange zone),
+respecting the tick granularity (year/month/day/time); and pin the crosshair
+`timeFormatter` to the **same** `CHART_TZ` so axis + crosshair always agree and are
+**deterministic regardless of the browser's TZ**. The candle `openTime` mapping is
+unchanged (the epoch is correct UTC — only the axis FORMATTING changed). `AdvancedChart`
+is the shared chart for crypto + futures, so crypto's axis is now local too (correct for
+a Chicago operator).
+
+**Verified (deterministic, in a real browser — JWT was 401 so the authed chart couldn't
+load):** 05:10 UTC → axis `00:10` (Chicago) vs the old `05:10` (UTC); crosshair `06/05
+00:10` agrees with the axis; date-boundary 02:00 UTC → `06-04` (Chicago), not the old
+`06-05` (UTC). The explicit `timeZone` makes it browser-independent.
+
+## 2026-06-05 — Multi-account STAGE 1: none-on-create + gate + persist-pick + allow-list (SHIPPED, commit `56f1642c`)
+
+**STATUS:** Stage 1 SHIPPED (Go+FE, **NO C#**). Additive; crypto + the P&L fixes (PART
+1a/1b) + the chart-TZ fix + the account-switch re-scope (24634b5a) all untouched.
+
+**THE CRUX (read-only, C#-confirmed) — why Stage 1 ≠ separation yet:** the NT8 AddOn
+holds a **single** `Account` field ([VLTraderTCPClient.cs:49](#)); orders are
+`account.CreateOrder/Submit` to that one ([:533-550](#)); the `signal` frame carries
+**no account** ([HandleSignal :460-467](#)); `account_select` switches the single field
+([:643](#)); and there is **one** TCP connection ([tcp_server.go:3,55,106-108](#)). So
+**one connection executes ONE active account** — true per-trader ROUTING needs Stage 2
+(a wire-frame `account` field + a multi-account C# AddOn + per-account events + F5).
+NinjaScript *can* hold multiple `Account` objects + submit per-account (`Account.All`
+lookup under `lock`), so Stage 2 is feasible — just out of this Go+FE pass.
+
+**Root cause (binding diagnosis):** `tcp_server.go:766` auto-binds `currentAccount` on
+every `account_balance` frame → a new trader silently traded the streamed account (incl.
+risk of the LIVE one); `handleSelectAccount` didn't persist + the pick was overwritten by
+the next frame (the `:954` tug-of-war); `traders` had no account column.
+
+**Stage 1 shipped (the stored CHOICE + gate + rails — NOT routing):**
+- **DB:** `traders.account` column ([store/trader.go](#)) + `UpdateAccount`; GORM
+  AutoMigrate adds it. New/migrated traders start `account=''` (**none-on-create**).
+- **GATE:** `runCycle` ([trader/auto_trader_loop.go](#)) skips the cycle for a
+  NinjaTrader trader whose `account==''` (re-read each cycle so a fresh pick opens it
+  without restart). Verified live: `🚫 No NT8 account selected … skipping cycle #1` for
+  "sss" — it does **not** trade until an account is picked, so it can never auto-land on
+  the LIVE account.
+- **PERSIST:** `handleSelectAccount` ([api/handler_account.go](#)) now `UpdateAccount`s
+  the pick per-trader so it **sticks** (survives restart; the stream can't unset it) and
+  the gate opens. `handleGetAccounts` returns `selected` (the persisted choice).
+- **ALLOW-LIST:** `config.AllowedNTAccounts` (env `NT_ALLOWED_ACCOUNTS`, comma-sep) —
+  if set, `handleSelectAccount` HARD-rejects any account not on it. The LIVE account is
+  also blocked by the pre-existing **SIM guard** (non-SIM → rejected). Double-guarded.
+- **FE:** `AccountSelector` shows/highlights the persisted `selected` (or "Select an
+  account" when none → gated); the pick auto-saves (no separate save).
+
+**Honest scope:** Stage 1 persists the **CHOICE** + **gates** + stamps; it does **NOT**
+route orders per-account yet — one connection still trades one active account. True
+per-AI separation = **Stage 2** (the C# wire-frame + multi-account routing + F5),
+DESIGNED + scoped, NOT built.
+
+**Verify:** `go build`/`go vet`/tests green; tsc clean; restart clean (0 "unknown frame
+type"); `account` column added; gate fires live for "sss". UI pick not exercised (JWT
+401 all session) — persist/allow-list verified by code + the store path.
+
+**ACTION REQUIRED (live-behavior change):** "sss" is now **gated** — pick its account
+(Sim101) in the dashboard to resume trading.
+
+## 2026-06-05 — Stage 2 PHASE 1: double-guard the LIVE account out of automated trading (SHIPPED, commit `dedc67f0`)
+
+**STATUS:** Phase 1 SHIPPED (Go live; **C# needs an F5** — see below). Additive; **no
+routing, no wire-frame change** (P2/P3). Crypto + the P&L fixes + the chart-TZ fix + the
+Stage-1 work untouched. Goal: make it **structurally impossible** for an automated order
+to reach the LIVE/funded account (`LFE05060792090061`) BEFORE per-order routing exists.
+
+**STEP A (refutations):** the research's "no typed sim/live property" is **REFUTED** — the
+C# `IsSimAccount` already uses the typed `Account.Simulation` (NT8 8.1+) with a `Sim`-name
+fallback ([VLTraderTCPClient.cs:279-296](#)), so the live account is already typed at
+selection. `NT_ALLOWED_ACCOUNTS` is currently **unset** → the allow-list is inactive (the
+SIM guard is the active rail); set it (e.g. `NT_ALLOWED_ACCOUNTS=Sim101`) to enforce a
+whitelist on top.
+
+**Double-guard (defense-in-depth) — the live account is rejected at BOTH order layers:**
+- **Go gate** ([trader/ninjatrader/tcp_trader.go]): `isAccountTradeable(name)` = the
+  account is **SIM** (per the C#-reported `GetAccountsList` IsSim, i.e. `Account.Simulation`)
+  **AND**, if `NT_ALLOWED_ACCOUNTS` is set, on that allow-list. **Fail-safe:** unknown →
+  false. Enforced at `placeEntry` (the entry-send chokepoint for OpenLong/OpenShort) —
+  refuses to even SEND the frame for a non-tradeable account. The live `LFE…` (IsSim=false)
+  → refused.
+- **C# gate** ([ninjascript/VLTraderTCPClient.cs] HandleSignal, right after the
+  `account==null` check, BEFORE `CreateOrder/Submit`): `if (!IsSimAccount(account))` →
+  reject (the hard live-block); `if (account.Connection == null || account.Connection.Status
+  != ConnectionStatus.Connected)` → reject (no submit to a disconnected account). No
+  fallback to another account. This is the last line before the order hits NT8.
+
+Each gate **independently** blocks the live account (verified by code: Go refuses at send;
+C# refuses at submit). **No per-order routing added** — one connection still trades one
+active account; the guards protect the single active account today and the routed account
+in P5.
+
+**⚠️ C# NEEDS AN F5 (no hot-reload):** the C# guard is in the repo `.cs` but the RUNNING
+NT8 AddOn still has the old binary until you: `cp ninjascript/VLTraderTCPClient.cs` →
+`Documents\NinjaTrader 8\bin\Custom\AddOns\` → **F5** in NT8 → **one clean full NT8
+restart**. Until then the **Go gate alone** is live (it already refuses to send a
+live-account order). *(If the F5 flags `account.Connection.Status`, remove that one line —
+the `IsSimAccount` guard alone still hard-blocks the live account.)*
+
+**Verify:** `go build`/`go vet`/`go test ./store ./trader ./trader/ninjatrader` green;
+restart clean (1 trader, 0 "unknown frame type" — no new frame in P1); "sss" on Sim101
+(SIM, allow-list empty) is **not** falsely blocked (no refusal logged). The live-account
+rejection is **code-verified** (I did not place a live order). Next: P2 = the wire-frame
+`account` field; P3 = the C# multi-account routing + per-account events.
+
+## 2026-06-05 — Stage 2 PHASE 2: the C# AddOn PARSES an optional `account` wire-frame field (SHIPPED, C# only, back-compat)
+
+**STATUS:** Phase 2 SHIPPED (C# only; **needs an F5** — see below). Additive; **back-compat
+PARSE side ONLY** — the protocol change lands parse-first so the un-changed Go side keeps
+working. **NO per-order routing** (still P3), **NO Go send** (still P5), **NO new required
+field**. Crypto + the P&L fixes (PART 1a/1b) + the chart-TZ fix + Stage-1 + the P1
+double-guard all untouched. Goal: the AddOn learns to READ an optional `account` from the
+signal frame, resolve + guard it, and FALL BACK to today's single active-account behavior
+when it is absent — so the wire contract can carry an account before any routing exists.
+
+**STEP A (MAIN-verified at file:line):**
+- **Parse** ([VLTraderTCPClient.cs:458-473](#)) — the strict fields (symbol/side/quantity/
+  entry/stop_loss/take_profit/signal_id/timestamp) parse inside a try/catch that rejects on
+  a missing field. `GetString` ([:1350-1354](#)) is `TryGetValue` → returns **null** on an
+  absent key (it does **not** throw). So the optional `account` read is placed **after** the
+  strict try (a missing `account` can never trip the "missing field" reject) → **back-compat
+  by construction**.
+- **Fallback** — the single `private Account account` ([:49](#)), switched by
+  `HandleAccountSelect` ([:622-690](#)); a no-`account`-field frame uses this active account
+  exactly as today.
+- **P1 guards** ([:502-523](#)) `IsSimAccount(account)` + `Connection.Status==Connected` —
+  intact + reused (same shape) on the resolved account.
+- **Resolve** — the canonical name→Account lookup `lock (Account.All) { foreach a … a.Name
+  == X }` ([:636-642](#), from `account_select`) reused verbatim.
+
+**The change (additive, C# only):**
+- **PARSE** ([:481](#)): `string targetAccount = GetString(p, "account");` — null/empty when
+  the field is absent (every order today, since Go does not send it yet → P5).
+- **RESOLVE + GUARD, NO ROUTING** ([:525-570](#)): if `targetAccount` is non-empty, resolve
+  it against `Account.All` and run the **same** double-guard (SIM + connected) on it, then
+  **LOG** the resolution (`signal … targets account 'X' (resolved, sim, connected) … Phase 2
+  logs the resolution; submission stays on active account 'Y' (per-order routing is Phase
+  3)`). A named-but-bad target (unknown / non-SIM / disconnected) is **REJECTED** here (reuse
+  the P1 reject — `SendFillFrame(…, "rejected")`); we never silently fall back to the active
+  account when a specific one was requested. The active `account` (guarded above) still
+  SUBMITS — **P3** adds the routing that submits to the resolved account.
+- **FALLBACK** ([back-compat]): an ABSENT/empty `account` skips the resolve block entirely →
+  byte-identical to today. The P1 double-guard still hard-blocks the LIVE `LFE…` account
+  (active or resolved).
+
+**⚠️ C# NEEDS AN F5 (no hot-reload):** the parse is in the repo `.cs` (already `cp`'d to
+`Documents\NinjaTrader 8\bin\Custom\AddOns\`) but the RUNNING NT8 AddOn has the old binary
+until you **F5** in NT8 → **one clean full NT8 restart**. The cp staged P1+P2 together (the
+AddOns copy predated P1), so one F5 deploys both. Until the F5, the running AddOn ignores
+any `account` field — and Go doesn't send one yet, so nothing changes. *(If the F5 flags
+`account.Connection.Status`, remove that one line — `IsSimAccount` alone still hard-blocks
+live.)*
+
+**Verify:** Go **untouched** (0 `.go` modified → no `nofx-bin` rebuild; pid 98629 from P1
+still running, cycle 381, MNQ "wait"). The `.cs` edit is brace-balanced (delta vs HEAD =
++6/+6 braces, +0 brackets; parens even) — NinjaScript compiles inside NT8 on F5, so the
+compile itself is the user's step. Back-compat handshake with the CURRENT binary is clean
+(0 "unknown frame type", 0 "signal payload missing field"). Parse+resolve is **code-verified**
+this phase (the C# isn't live until the F5; no live order placed — SIM-only). Next: P3 = the
+C# per-order routing (submit to the resolved account + per-account events); P5 = Go sends the
+`account` field.
+
+## 2026-06-05 — Stage 2 PHASE 3: C# routes each order to the RESOLVED account (SHIPPED, C# only, back-compat)
+
+**STATUS:** Phase 3 SHIPPED (C# only; **needs an F5** — see below). Additive; **the per-order
+ROUTING** — the trade-copier submit. Still back-compat (absent `account` = active account =
+today). **NO Go send** (P5), **per-account balance/position snapshots + manual-close routing =
+P4**. Crypto + the P&L fixes (PART 1a/1b) + chart-TZ + Stage-1 + P1 + P2 all untouched. THE
+RISKIEST PHASE — a routing bug = an order on the wrong account; the P1 double-guard runs on
+EVERY routed submit, the LIVE `LFE…` account is hard-blocked as a routing target.
+
+**STEP A (MAIN-verified at file:line):** the P2 resolve block ([VLTraderTCPClient.cs:525-570](#))
+resolves+guards the target but submitted on the active account; the submit path
+(`account.CreateOrder/Submit` :609/:626) + the bracket (`account.CreateOrder/Submit` in
+`SubmitBracketOnEntryFill`) + the events (`account.OrderUpdate += OnOrderUpdate` :99) were ALL
+bound to the single active `account`. `OnOrderUpdate` ([:749-848](#)) is **account-agnostic for
+reads** (everything off `e.Order`) — so a routed account's fills process correctly IF its
+`OrderUpdate` is subscribed. Back-compat holds with **no Go change** (the Go wire struct
+`ntwire.SignalPayload` has no `account` field → P5).
+
+**The change (additive, C# only):**
+- **ROUTE** — `Account submitAccount = resolved ?? account;` then the entry
+  `submitAccount.CreateOrder(...)` + `submitAccount.Submit(...)`. The `PendingBracket` gains an
+  `Account` field (= `submitAccount`) so `SubmitBracketOnEntryFill` places the SL/TP on the SAME
+  account the entry routed to (`Account ba = b.Account ?? account`).
+- **FINAL GUARD (defense-in-depth, every routed submit)** — immediately before `CreateOrder`,
+  re-assert `IsSimAccount(submitAccount) && Connection.Connected` on the EXACT submit target, no
+  matter how chosen; fail → REFUSE+reject. The LIVE account can never be a submit target. (The
+  allow-list stays Go-side at `placeEntry` — no config channel into the AddOn.)
+- **PER-ACCOUNT FILLS** — `OnOrderUpdate` must fire for the routed account, so a dedup'd
+  `HashSet<Account> orderSubscribed` + `SubscribeOrderUpdate`/`UnsubscribeOrderUpdate` helpers
+  become the single source of truth; ALL OrderUpdate sub/unsub (the active-account init,
+  `account_select` swap, terminate) flow through them (behavior-preserving + no double-subscribe),
+  and the routed `submitAccount` is subscribed before submit.
+- **FALLBACK (back-compat)** — `resolved == null` (absent field, every order today) →
+  `submitAccount = account` → byte-identical to P2/today.
+- **KEPT deliberately:** `OrderEntry.Manual` (the proven SIM submit; `Automated` is orthogonal +
+  regression-risky — not required for routing) and the order name = `signalId` (the fill-matching
+  key; an explicit agent-id tag needs a wire field = P5).
+
+**Deferred to P4 (flagged, do NOT assume done):** per-account `AccountItemUpdate` (balance) +
+`PositionUpdate` (position snapshots) stay active-account-only; manual close (`account.Flatten`)
+routes to the active account. These don't affect the routed ENTRY→fill→SL/TP-close lifecycle
+(which flows through `OnOrderUpdate` + the bracket-on-stored-account), but full multi-account
+parity needs them.
+
+**⚠️ C# NEEDS AN F5 (no hot-reload):** the routing is in the repo `.cs` (already `cp`'d to
+`Documents\NinjaTrader 8\bin\Custom\AddOns\`) but the RUNNING AddOn has the old binary until you
+**F5** in NT8 → **one clean full NT8 restart**. Until the F5, the running AddOn ignores routing
+— and Go sends no `account` field anyway, so nothing changes.
+
+**Verify:** Go **untouched** (0 `.go` → no `nofx-bin` rebuild). The `.cs` edit is structurally
+balanced (delta vs HEAD = +8/+8 braces, +44/+44 parens, +0 brackets) — NinjaScript compiles
+inside NT8 on F5 (the user's step). Routing is **correct by construction** + verified by the
+deployed-copy grep (`submitAccount.CreateOrder/Submit`, bracket-follows-account, the final
+guard, `SubscribeOrderUpdate`). A live cross-account frame-injection isn't possible pre-Go-send
+(P5) — so the routing is NOT exercised by a live cross-account fill this phase; for the
+single-trader case `resolved == active`, the existing fully-subscribed path is unchanged.
+SIM-only; no live order placed. Next: P4 = per-account events/positions/balance + manual-close
+routing; P5 = Go sends the `account` field.
+
+## 2026-06-05 — Stage 2 PHASE 4: per-account CLOSE + fill/close-frame account attribution (SHIPPED, C# only)
+
+**STATUS:** Phase 4 SHIPPED (C# only; **needs an F5**). Additive; fixes the P3 account-blind close
+and tags the reporting frames with the owning account. Back-compat (resolves to Sim101 today).
+**NO Go change** (audit: Go already keys every read by account + degrades to Sim101). **NO Go
+account-send** (P5). Crypto + P&L fixes (PART 1a/1b) + chart-TZ + Stage-1 + P1 + P2 + P3 untouched.
+
+**STEP A (3-track audit + MAIN re-verify at file:line):** all 3 tracks `back_compat_ok=true,
+forces_wire_or_go_send=false` — no STOP. Wire: `account_balance`/`positions` frames already carry
+`account` (tcp_framing.go:96/210); the `fill` frame (FillPayload :48) and `position_close`
+(SendPositionCloseFrame) did NOT; `position_close_rejected` stamped the **active** account (latent
+bug). `close_position` (Go→C#) carries no account → the close must resolve the account C#-side.
+`OnOrderUpdate` is account-agnostic (reads `e.Order.Account`). **Track-3 decisive:** Go needs ZERO
+changes — every read (`acctBalances[p.Account]` tcp_server.go:762, `acctPositions[p.Account]` :840,
+reconcile `row.Account!=acct` reconcile.go:105, the variadic-account store funcs) already keys by
+account; `recordClose` updates the entry row in place, inheriting its account stamp. Go decodes
+with plain `json.Unmarshal` (no `DisallowUnknownFields`) → the new `account` keys are silently
+ignored by the un-changed binary.
+
+**The change (additive, C# only):**
+- **PER-ACCOUNT CLOSE** — new `Dictionary<string,Account> positionAccountBySymbol` (root-symbol →
+  owning account): populated on **entry-fill** (`OnOrderUpdate` Filled, from `e.Order.Account`),
+  cleared on **exit-fill**. `HandleClosePosition` resolves the symbol's account (fallback the active
+  account → back-compat) and flattens **that** account, behind a **`IsSimAccount` guard** (a
+  non-SIM/LIVE resolved target → REFUSE, position left open). Keyed by root symbol because the Go
+  close generates a fresh UUID signal_id (tcp_trader.go) that can't match the entry.
+- **FILL ACCOUNT TAG** — `SendFillFrame` now carries `e.Order.Account.Name` (optional param,
+  default "" → the 10 reject/stale calls are unchanged).
+- **CLOSE-REPORT ACCOUNT FIX** — `SendPositionCloseFrame` now emits the account (was absent);
+  `SendPositionCloseRejectedFrame` now stamps `e.Order.Account` (fixes the latent active-account
+  bug). Both reachable today because `OrderUpdate` is already per-account (P3).
+
+**DEFERRED to P5 (flagged, NOT built):** the per-account **balance/position SUBSCRIPTION** +
+account-aware `OnPositionUpdate`/`OnAccountItemUpdate`/`SendAccountBalance(acc)`. Rationale: it is
+(a) dormant until cross-account routing (P5), and (b) **blocked anyway by the Go process-singleton
+TCPServer** (transport.go:31-53 — one fill/close channel + one streamed `CurrentAccount()`), which
+P5 must demux first. Building the C# reporting subscription now is premature subscription-lifecycle
+risk for zero reachable value; it belongs with P5's Go demux. The active account's balance/position
+already report correctly today.
+
+**⚠️ C# NEEDS AN F5 (no hot-reload):** cp'd to `Documents\NinjaTrader 8\bin\Custom\AddOns\`; **F5 in
+NT8 → one clean full restart**. Until then the running AddOn keeps the P3 binary; Go sends no
+account field, so nothing changes (back-compat).
+
+**Verify:** Go **untouched** (0 `.go` → no `nofx-bin` rebuild). `.cs` structurally balanced (Δ vs
+HEAD = +6/+6 braces, +28/+28 parens, +3/+3 brackets) — compiles inside NT8 on F5 (the user's step).
+The close-account resolution + fill/close account tags are **correct by construction** + the
+deployed-copy grep; back-compat (one trader → resolves to Sim101). Cross-account close isn't
+exercisable pre-P5 (no routed position exists). SIM-only; no live order placed. Next: P5 = Go sends
+the `account` field on the signal + the per-account channel demux + the per-account reporting
+subscription (activates true multi-account).
+
+## 2026-06-05 — Strategy Studio Phase 1 (Risk Control): STOP-report + architecture + Chunk 1 SHIPPED
+
+**STOP-and-report (premise refuted):** the manifest said the prop-firm guardrails "do NOT exist."
+MAIN audit found an **existing** `kernel/risk_limits.go` (`RiskLimits{MaxDailyLossUSD,
+MaxConcurrentTrades, MaxNotionalUSD, MaxContractsPerOrder}` + `CheckPreTrade`/`Classify`/`ForceFlat`
++ `MaybeResetDaily`), `kernel/cme_calendar.go` (`IsCMEOpen`), and `api/handler_risk.go`. Status,
+file:line-verified: daily-loss limit **EXISTS + LIVE** but **global-env** (`RISK_MAX_DAILY_LOSS_USD`
+default $500), uses **session-cumulative** P&L + **UTC** reset (`engine_analysis.go:108-112`,
+`config.go:67,134`); concurrent-trade cap EXISTS (env=2, overlaps per-strategy Max Positions);
+notional cap **wired-but-disabled** (passed `0,0` at `engine_analysis.go:108`); **MaxContractsPerOrder
+loaded but NEVER enforced** (absent from `CheckPreTrade`); daily-profit / max-daily-trades /
+blackout-gate / consistency **genuinely absent**. Building "new" gates on top would create
+conflicting real-money limits — so I stopped + got the architecture decided.
+
+**Architecture (owner-decided):** (1) **evolve the single existing gate to per-strategy** (read the
+Risk Control boxes; env = fallback), extend with the missing limits, enforce max-contracts, fix the
+notional, no duplicate gates; (2) **true daily-realized P&L on the CME session day** (Sun 5pm CT
+boundary), not session-cumulative + UTC.
+
+**CHUNK 1 SHIPPED (deep-dive fixes #7-8 — the FAKE boxes made REAL):**
+- **Min R/R** — `validateDecision` now reads the per-strategy `min_risk_reward_ratio` (threaded
+  through `parseFullDecisionResponse → validateDecisions → validateDecision`, sourced from
+  `riskConfig` at `engine_analysis.go:243-250`) instead of the hardcoded `3.0` at
+  `engine_position.go:133`. Unset (≤0) falls back to 3.0 (back-compat). Applies crypto + futures.
+- **Min Confidence** — a NEW gate check rejects an open with `d.Confidence < min_confidence` when
+  configured (`min_confidence` = 0 → disabled, back-compat). Was prompt-only (AI-guided); now
+  CODE ENFORCED.
+- **Tests:** `TestStrategyStudio_MinRRConfigDriven` (4:1 decision PASSES at minRR=3.0, REJECTED at
+  5.0 — proves config-driven) + `TestStrategyStudio_MinConfidenceGate` (conf-50 PASSES at gate-off,
+  REJECTED at min=75) — both green; all existing gate tests green. `go build`/`go vet` clean.
+  `TestMaybeResetDaily` fails on HEAD too (pre-existing, unrelated — to be examined when Chunk 2
+  touches the daily reset).
+
+**REMAINING CHUNKS (planned, NOT built — each its own safe chunk + Sunday behavior-proof):**
+Chunk 2 = the per-strategy daily guardrails (daily loss/profit, max daily trades) on true
+daily-realized P&L + CME-day reset; Chunk 3 = max-contracts (enforce the unenforced field) + the
+visible/editable equity×20 cap; Chunk 4 = time/news blackout (wire `IsCMEOpen`); Chunk 5 =
+consistency rule; Chunk 6 = the FE futures risk panel (contracts × point value, $-risk/trade,
+margin as $/contract) + all the new guardrail inputs + the honest Max-Margin relabel (fix the false
+"System enforced" label `skill_management_handlers.go:1166`). ADDITIVE; crypto byte-identical; the
+multi-account work + P&L fixes + chart-TZ untouched. SIM-only.
+
+**CHUNK 2 SHIPPED (daily loss/profit/max-trades on TRUE CME-day realized P&L + the reset-bug fix):**
+- **Evolved the ONE gate (no duplicate):** the env daily-loss in `CheckPreTrade` was on session-
+  cumulative `TotalPnL` (`engine_analysis.go:108`); now it passes `0` there (keeping only the
+  concurrent cap) and a new `DailyGuardrails.Check()` enforces daily-loss on **true daily-realized
+  P&L** over the CME session-day, plus the new **daily-profit** + **max-daily-trades** limits.
+- **Per-strategy + env fallback + toggles:** values from `store.RiskControlConfig`; daily-loss
+  falls back to `RISK_MAX_DAILY_LOSS_USD` via `firstPositive(perStrategy, env)`; a master switch
+  (`GuardrailsEnabled`, default ON) + per-guardrail `*bool` toggles (daily-loss default ON to
+  preserve the live gate; new ones OFF) via `boolOrDefault`. Master OFF → ALL bypassed (logged).
+- **True daily-realized P&L:** `CMESessionDayStart`/`CMESessionDayKey` (17:00 CT roll);
+  `store.GetSessionDayActivity` sums realized P&L (closed, excl. reconcile-flat) + counts entries
+  since the session start; the loop sets `ctx.DailyRealizedPnL`/`ctx.TradesToday`; the gate reads them.
+- **Reset bug FIXED:** `ResetDailyPnL` stamped `time.Now()` while `MaybeResetDaily(now)` used the
+  passed time → never agreed. Both now derive from `CMESessionDayKey(now)`. `TestMaybeResetDaily`
+  PASSES (was failing on HEAD).
+- **SAFETY (by construction):** the toggles live in the KERNEL decision gate (HOLD only); the
+  live-account block lives in the BROKER layer (P1/P3/P4 + C# IsSimAccount at placeEntry). Master
+  OFF lets the decision proceed but the order STILL hits the untoggleable live-account block.
+- **Tests:** 9 new (boundaries/master/toggles/env-fallback/CME-day) + `TestMaybeResetDaily` green;
+  full kernel green; `go build`/`vet` clean; store + trader green. ADDITIVE; crypto byte-identical.
+
+**Sunday behavior add:** tiny daily-loss → bot stops after a loss; max-daily-trades=1 → 2nd entry
+blocked; daily-profit hit → entries blocked; master OFF → all bypass (logged) but live account
+STILL blocked. REMAINING: Chunk 3 (max-contracts + visible equity×20), Chunk 4 (blackout), Chunk 5
+(consistency), Chunk 6 (FE + toggles UI + Max-Margin relabel + Playwright).
+
+**CHUNK 3 SHIPPED (max-contracts + the visible/editable equity×20 cap):**
+- **Max contracts** — `futuresOrderQuantity` had a SILENT hardcoded clamp at `maxFuturesContracts =
+  10` (`auto_trader_orders.go:16`). Now it takes a resolved `maxContracts` (clamps + **logs**); the
+  caller uses `at.resolveMaxContracts()` → `kernel.ResolveMaxContracts(master, toggle, perStrategy,
+  10)`. Per-strategy `MaxContractsPerOrder` overrides; toggle/master OFF → `0` = no clamp.
+- **Visible equity×20 cap** — the hidden const `futuresMaxNotionalLeverage = 20.0` (used in
+  `validateDecision:54/:90` + `enforcePositionValueRatio:211`) is now the **editable multiplier**
+  `MaxNotionalLeverage` (default 20). `validateDecision` takes a 9th `maxNotionalLev` param
+  (resolved at the call site via `kernel.ResolveNotionalLeverage`); `enforcePositionValueRatio`
+  reads it directly. `<=0` → cap DISABLED (master/toggle off) → huge ceiling (never binds).
+- **Config:** `MaxContractsPerOrder`/`MaxContractsEnabled` + `MaxNotionalLeverage`/`NotionalCapEnabled`
+  added to `store.RiskControlConfig` (toggles `*bool`, plug into the Chunk-2 master framework).
+- **Safety (by construction):** these toggles only affect trade SIZE (contracts/notional) in the
+  trader+kernel gate — they never touch which account the order routes to. The live-account block
+  (placeEntry + C# IsSimAccount) is untoggleable.
+- **Tests:** `TestResolveMaxContracts` + `TestResolveNotionalLeverage` (per-strategy override, unset
+  → default, toggle off → no clamp, master off → no clamp) green; all existing futures-gate +
+  futures-quantity tests updated + green; full kernel + trader packages green; `go build`/`vet`
+  clean. ADDITIVE; crypto byte-identical (the leverage/PVR tiers unchanged).
+
+**Sunday add:** max-contracts exceeded → clamped (logged); raise `MaxNotionalLeverage` → bigger
+position allowed; toggle a cap OFF → it stops binding. REMAINING: Chunk 4 (blackout), Chunk 5
+(consistency), Chunk 6 (FE + toggles UI + Max-Margin relabel + Playwright).
+
+**CHUNK 4 SHIPPED (time/news blackout window):**
+- **What:** a per-strategy daily **blackout window** (`BlackoutStartCT`/`BlackoutEndCT`, HH:MM in
+  America/Chicago) + toggle (`BlackoutEnabled`, default OFF). When master+toggle ON and `now` is in
+  `[start,end)` CT, the gate skips the decision cycle (HOLD); NT8-side SL/TP still protect open
+  positions. The session-hours gate (`IsCMEOpen`, Plan-3 Task-18) already existed; this adds the
+  configurable window.
+- **Where:** `kernel.InBlackoutWindow(now, startCT, endCT)` (handles midnight-wrap; empty/malformed
+  → false so a misconfig never silently halts) chained into the Chunk-2 gate block
+  (`engine_analysis.go`) as `else if`, so it only runs when master is ON and no daily guardrail
+  already tripped.
+- **Safety (by construction):** blackout lives in the kernel decision gate (HOLD only); never the
+  live-account block. Master OFF → blackout (+ daily limits) bypassed, logged.
+- **Tests:** `TestInBlackoutWindow` (in-window, end-exclusive, before-start, outside, midnight-wrap,
+  empty/malformed/zero-width) green; full kernel + store + trader green; build/vet clean. ADDITIVE.
+
+**Sunday add:** set a blackout window covering "now" → entries blocked in the window; outside →
+normal. REMAINING: Chunk 5 (consistency), Chunk 6 (FE + toggles UI + Max-Margin relabel + Playwright).
+
+**CHUNK 5 SHIPPED (consistency rule — the complex one):**
+- **Semantic (documented):** no single CME session-day's realized profit may exceed
+  `ConsistencyMaxDayPct`% of all-time total realized profit. `ConsistencyBreached(today, total, pct)`
+  triggers ONLY once there is prior-day profit (`total − today > 0`) so a fresh/single-day account
+  never self-locks on its first profitable day; losing days, zero total, or pct≤0 never breach. When
+  breached the gate skips new entries so today's profit stops growing past the allowed share.
+- **Data:** `today` = `ctx.DailyRealizedPnL` (Chunk 2); `total` = `ctx.TotalRealizedPnL` set in the
+  loop from `GetFullStats().TotalPnL`. Chained into the gate as the next `else if` (master+toggle
+  governed, default OFF).
+- **Tests:** `TestConsistencyBreached` (breach, boundary, under, first-day no-self-lock, losing day,
+  zero total, pct 0) green; full kernel + store + trader green; build/vet clean. ADDITIVE.
+
+**BACKEND GUARDRAIL LAYER COMPLETE (Chunks 1–5):** Min R/R, Min Confidence, daily loss/profit/
+max-trades (true CME-day realized P&L), max-contracts, editable equity×20 cap, time/news blackout,
+consistency — ALL gate-enforced, per-strategy + env fallback, master + per-guardrail toggles, every
+trip + every bypass LOGGED, no toggle disables the live-account block. REMAINING: **Chunk 6 = the FE**
+(futures risk panel + all guardrail inputs + per-guardrail/master toggle UI + Max-Margin relabel +
+Playwright FE-verify).
+
+**CHUNK 6 SHIPPED (the FE surfacing — Strategy Studio Phase 1 COMPLETE end-to-end):**
+- **Prop-Firm Guardrails section** added to `RiskControlEditor.tsx`: a **master switch** + a
+  `GuardrailRow` (label + on/off `Toggle` + value input) for daily loss, daily profit, max-daily-
+  trades, consistency %, max-contracts, the editable notional cap (equity × N), and a blackout
+  start/end window — each wired via `updateField('<exact_snake_case_key>')`.
+- **Wiring verified (MAIN, file:line):** all 17 FE keys match the `store.RiskControlConfig` JSON tags
+  the gates read 1:1 (`daily_loss_limit_usd`, …, `guardrails_enabled`); every FE toggle default
+  (`?? true`/`?? false`) matches its backend `boolOrDefault` default. So a saved value reaches the
+  exact gate field; an unset strategy shows the correct default toggle state.
+- **Futures risk panel** (futures path only): shows the real futures size knobs (≤ max contracts,
+  notional = equity × N, MNQ ≈ $2/pt). Crypto keeps its leverage/PVR tiers byte-identical (the panel
+  + the guardrails section render regardless, but the dead crypto knobs stay only on the crypto path).
+- **Honest relabel:** the false **"System enforced"** on Max Margin → `AI-guided (not enforced)` /
+  `futures = per-contract bond` in the FE (RiskControlEditor.tsx) AND the Go chat summary
+  (`skill_management_handlers.go:1166`, the one false tag — the others on 1163-1167 are genuinely
+  enforced).
+- **Safety:** the FE toggles set ONLY the guardrail `…_enabled`/master flags (kernel-gate config) —
+  no FE control touches the broker-layer live-account guard; the LIVE account stays hard-blocked.
+- **Verify:** `tsc --noEmit` clean; `npm run build` ✓; `go build` ✓ (the chat-string fix). Live
+  Playwright render of the panel is **blocked by an expired JWT** (the strategy fetch 401s — same as
+  all session); documented (screenshot) + the FE→config→gate wiring verified by code (all 17 keys
+  match) + the panel builds/type-checks. The save→persist + visual render go on the Sunday/next-auth
+  list. ADDITIVE; crypto byte-identical; the backend (Chunks 1-5) + multi-account + P&L + chart-TZ
+  untouched.
+
+**STRATEGY STUDIO PHASE 1 (RISK CONTROL) COMPLETE** — gates (Chunks 1-5) + FE (Chunk 6): every
+guardrail is gate-enforced, per-strategy + env fallback, master + per-guardrail toggles, every trip/
+bypass logged, no toggle disables the live-account block, and all of it is now settable on the page.
+
+## 2026-06-05 — Strategy Studio: two reported issues (diagnose + FE fix)
+
+**(A) "built but can't use anything" — DIAGNOSED, not a code bug.** The stored JWT **expired
+2026-05-30 23:43 UTC** (~6.25 days ago); `/api/strategies` returns **401** → "Failed to fetch
+strategies" → no strategy loads → the editor renders empty/disabled. Verified via Playwright (decoded
+the token's `exp`). Compounding by-design facts (not bugs): the editor is `disabled={selectedStrategy
+?.is_default}` (StrategyStudioPage.tsx:774) — **default/template strategies are read-only** (the Save
+button is hidden for `is_default`); and the Max-Positions / Min-Position-Size / PVR boxes are
+intentionally read-only "System enforced" displays. **Fix: re-login** (fresh token) → the strategy
+list loads → a **non-default** strategy is editable. No code change for (A).
+
+**(B) PVR labels lying on futures — FIXED (FE-only).** The Position-Value-Ratio section showed
+"CODE ENFORCED" / "System enforced" on BOTH paths, but the deep-dive proved PVR is **FAKE for
+futures** (the gate hardcodes equity×20, ignoring these ratios). The crypto PVR tiles are now hidden
+on the futures path — `RiskControlEditor.tsx` wraps the PVR section in `{!isFutures && (…)}` (mirroring
+the leverage-tier pattern). On futures the real size controls are **max-contracts + the editable
+equity×N notional cap** (already in the Chunk-6 Prop-Firm Guardrails section). **Crypto keeps the PVR
+tiles + "CODE ENFORCED"** (true there). Max-Positions + Min-Position-Size keep "System enforced" (REAL
+both per the deep-dive); Max-Margin was already relabeled honest in Chunk 6.
+
+**Verify:** `tsc --noEmit` 0 errors; `npm run build` ✓; Go untouched. The futures-vs-crypto render is
+**code-verified** (the `{!isFutures}` wrap) — a live Playwright render is **blocked by the expired
+JWT** (can't load a strategy); it'll show once re-authed. ADDITIVE; crypto byte-identical; the gates
+(Chunks 1-5) untouched.
+
+
+**FOLLOW-UP — the REAL "can't use anything" root cause + fix (FE).** Deeper diagnosis: the app's
+`auth_token` expired 2026-06-04 (2 days ago) AND `AuthContext` init (`contexts/AuthContext.tsx:63,76`)
+called `setToken(savedToken)` WITHOUT checking expiry — so the app sat "logged in" while every API
+call 401'd, with no prompt to re-login (`from401`/`returnUrl` null, never bounced to `/login`). That
+stuck state IS the "can't use anything." Fix: a small `isJwtExpired(token)` helper; both init branches
+now skip + CLEAR an expired token so the app shows the login page. tsc clean; FE build ✓; Go untouched.
+After this lands (vite HMR), a reload detects the dead token → `/login` → re-login → everything works
+(and the PVR-on-futures fix shows). ADDITIVE; FE-only; the gates + crypto untouched.
+
+
+## 2026-06-06 — Max Positions + Min Position Size made USER-EDITABLE (FE-only; supersedes the "keep System enforced" note above)
+
+**Goal:** the user wanted to SET Max Positions + Min Position Size themselves — they were read-only
+"System enforced" displays. (This corrects the 2026-06-05 note above that said they "keep System
+enforced".)
+
+**AUDIT (STEP A) — the premise that a gate-read change was needed is REFUTED; it's FE-only.** Both
+gates ALREADY read the per-strategy config value with a system default — exactly the Chunk-1 pattern:
+- **Max Positions:** `enforceMaxPositions` reads `RiskControl.MaxPositions`, default **3** when ≤0
+  (`trader/auto_trader_risk.go:266`). `ClampLimits` bounds it to **[1, 3]** on every save
+  (`api/strategy.go:205` create / `:316` update) AND at decision time (`kernel/engine_analysis.go:220`)
+  — the ceiling is the `MaxPositions = 3` const (`store/strategy.go:18,77`), which is reused as both
+  the default and the clamp ceiling.
+- **Min Position Size:** `enforceMinPositionSize` reads `RiskControl.MinPositionSize`, default **12**
+  when ≤0 (`trader/auto_trader_risk.go:249`). `ClampLimits` bounds it to **[10, 1000]**
+  (`store/strategy.go:122-126`, consts `MinPositionSize=10`/`MaxPositionSize=1000`).
+
+**FLOOR VERDICT (the critical safety question) — SAFE to expose.** Min Position Size has THREE
+independent guards: store-clamp ≥10, trader-gate ≥config, and the kernel reject-floor **12 general /
+60 BTC-ETH** (`kernel/engine_position.go:78-84`). A user value can therefore only ever **RAISE** the
+effective minimum — anything below the floor is still clamped/rejected (defense-in-depth). **No floor
+is removed; none is bypassed.** So min_position_size is exposed freely within [10,1000]. Max Positions
+has a genuine **ceiling of 3** (the const), so it is exposed within **[1,3]** (lets the user *tighten*
+to 1–2, e.g. a single MNQ position). Raising it above 3 is a separate product decision (the const
+comment is "Hard limits to prevent token explosion in AI requests") — **FLAGGED, not silently done**,
+mirroring Chunk 1 (Min R/R was exposed within its `[1,10]` clamp range, NOT by raising the const).
+
+**BUILD (FE-only, additive) — `web/src/components/strategy/RiskControlEditor.tsx`:**
+- Max Positions: the read-only `<span>` + "System enforced" → a `type="number"` input
+  (`min=1 max=3 step=1`) wired to `updateField('max_positions', …)`, with an **onChange clamp**
+  `Math.min(3, Math.max(1, …))` so the shown value always equals the saved value (no "typed 5, saved
+  3" surprise). Label → `user-set · enforced (range 1–3)`.
+- Min Position Size: same treatment, input (`min=10 max=1000 step=1`) wired to
+  `updateField('min_position_size', …)`, onChange clamp `Math.min(1000, Math.max(10, …))`, USD/USDT
+  unit preserved. Label → `user-set · enforced`.
+- Mirrors the existing Min R/R input exactly (same className/style/fallback). Both boxes render on
+  BOTH crypto + futures (outside the `!isFutures` gates) — correct, since the gate reads them on both.
+
+**No env var for these two** (unlike the Chunk-2–5 guardrails): the system default (3 / 12) IS the
+unset fallback, and the gate already reads the per-strategy value — so "per-strategy + system
+fallback" is satisfied with **zero Go change**.
+
+**Verify:** `tsc --noEmit` 0 errors; `go build ./...` clean; `go test ./store ./trader ./kernel` all
+`ok` (Go byte-identical — pure regression proof). ADDITIVE; crypto byte-identical; the gates
+(Chunks 1-5) + guardrails + multi-account + P&L + chart-TZ all untouched. SIM-only; the live-account
+block untoggleable (broker layer, unchanged).
+
+
+## 2026-06-06 — Strategy Studio universal LABEL sweep + Max Margin (editable on crypto / hidden on futures) — FE only
+
+Two FE-only jobs, ADDITIVE, no Go/gate change, no enforced path touched.
+
+**JOB 1 — neutralized crypto-flavored labels on UNIVERSAL controls** (LABELS only — no per-instrument
+gating/hiding of data; that reverted pattern was NOT repeated). The Strategy Studio is one page for
+both crypto + CME futures, so "coins" on controls that serve both is wrong. Changed (all 3 locales
+zh/en/es) in `web/src/i18n/strategy-translations.ts`:
+- `maxPositionsDesc` (Risk Control): "Maximum **coins** held simultaneously" → "Maximum **positions**
+  held simultaneously".
+- `staticCoins` "Custom Coins"→"Custom Symbols"; `addCoin` "Add Coin"→"Add Symbol"; `staticDesc`
+  "…trading coins"→"…trading symbols"; `coins` (the "Up to N" unit) "coins"→"symbols";
+  `excludedCoins` "Excluded Coins"→"Excluded Symbols"; `excludedCoinsDesc` "These coins…"→"These
+  symbols…".
+And in `web/src/components/strategy/CoinSourceEditor.tsx` (hardcoded): the max-symbols toast
+"…coins allowed"→"…symbols allowed"; the two add-symbol placeholders "BTC, ETH, SOL…" / "BTC, ETH,
+DOGE…" → "e.g. MNQ, ES, BTC, ETH" (shows both futures + crypto).
+**LEFT crypto wording (deliberate, verified):** the Leverage sliders + PVR tiles (crypto-only, already
+hidden on futures via `{!isFutures}`); `minPositionSizeDesc` USDT (already has a `…Futures` USD variant
+chosen by `isFutures`); the `USD/USDT` unit (already `isFutures`-conditional); the AI500 / OI / NofxOS
+data-source descriptions (genuinely crypto data providers — neutralizing them would falsely imply they
+serve futures); GridConfig symbol options (grid = a separate strategy type).
+
+**JOB 2 — Max Margin Usage made EDITABLE (crypto) / HIDDEN (futures), stays ADVICE-ONLY.** In
+`RiskControlEditor.tsx` the read-only display span became a number input (percent), wired to
+`updateField('max_margin_usage', …)`, clamped to **[0.1,1.0] = [10,100]%** to match `ClampLimits`
+(store/strategy.go:116-120) so shown == saved. Wrapped in `{!isFutures && (…)}` (the SAME `isFutures`
+the PVR fix uses) → visible+editable on crypto, hidden on futures (margin-usage % is a crypto-margin
+concept; futures margin is a per-contract bond shown in the Futures Risk panel). **Stays advice-only:**
+the value still only feeds the AI prompt (`engine_prompt.go:73`) — NO gate enforcement was added. Its
+lying i18n desc `maxMarginUsageDesc` ("enforced by code" / "由代码强制执行") was corrected to the honest
+"AI-guided hint, not code-enforced".
+
+**Verify:** `tsc --noEmit` 0 errors; `npm run build` ✓; Go untouched (no gate/prompt code change — the
+prompt USE of max_margin_usage is unchanged). ADDITIVE; crypto otherwise byte-identical; the gates
+(Chunks 1-5) + guardrails + PVR fix + the editable Max-Positions/Min-Position-Size + multi-account +
+P&L + chart-TZ all untouched. SIM-only; the live-account block untouched.
+
+
+## 2026-06-06 — Strategy Studio PHASE 2 CORE: the Mode dropdown is now REAL (3 safe chunks) — built + static-verified, behavior-verified Sunday
+
+**STATUS:** BUILT + STATIC-VERIFIED (market closed). The owner's saved Mode now drives the LIVE bot;
+"Futures" is selectable; the preview shows what the bot will actually run. LIVE behavior proof
+(pick a mode → the bot's next decision uses it) is on the SUNDAY list.
+
+Prior state (Phase-2 deep-dive map): the Mode dropdown was a **preview-only toy** — its value was
+local state sent only to the preview/test endpoints, NEVER saved; the live loop hardcoded the variant
+by venue (`auto_trader_loop.go`: ninjatrader→"futures", else→"balanced"); the dropdown had no
+"Futures" option; and a futures strategy's preview showed "balanced" while the bot ran the futures
+prompt (the "preview lies" gap). Three additive chunks fixed this:
+
+- **CHUNK A — `cad85169` (FE-only):** added a **"Futures"** option to both Mode `<select>`s (Prompt
+  Preview + AI Test tabs) + the `futures` i18n key (en/zh/id). The backend `BuildSystemPrompt` already
+  accepts `variant="futures"` (engine_prompt.go:22). tsc 0; Go untouched.
+- **CHUNK B — `84f5ea75` (KEYSTONE, Go + FE):** the dropdown pick now **persists** and **drives the
+  live bot**.
+  - `store/strategy.go`: `StrategyConfig` gains a top-level `prompt_variant` (json), threaded through
+    `MarshalJSON`/`UnmarshalJSON` so it persists with the strategy (omitempty → unset = absent).
+  - `trader/auto_trader_loop.go`: new pure helper **`resolvePromptVariant(exchange, saved)`** — a
+    non-empty saved variant WINS; when EMPTY it falls back to the ORIGINAL venue rule
+    (ninjatrader→futures, else balanced). The loop reads the saved variant **null-safely** (nil
+    engine/config → venue rule). **Back-compat guarantee: a no-variant strategy resolves EXACTLY as
+    before — byte-identical.**
+  - FE: `prompt_variant` added to the `StrategyConfig` type + to `normalizeStrategyConfig` (which
+    otherwise **strips** it on save — the keystone gotcha); the dropdown persists via `updateConfig`
+    and syncs from the saved value on strategy switch.
+  - Proven by unit tests: `TestResolvePromptVariant` (empty→venue-rule byte-identical; saved wins;
+    whitespace-trimmed) + `TestStrategyConfigPromptVariantRoundTrip` (persists top-level; unset
+    omitted; legacy config → ""). **Prompt-layer only — NO risk gate, NO live-account-block change.**
+- **CHUNK C — `843f0350` (FE-only, honest preview):** the dropdown/preview now initialize to the
+  variant the LIVE loop will **resolve** — mirroring `resolvePromptVariant`: saved wins, else the
+  venue rule by the strategy's symbol (`isCMEFutures(static_coins[0])` → "futures", else "balanced").
+  The preview endpoint already builds for the strategy's own symbol, so a futures strategy now previews
+  the **real futures prompt** (preview == live), not a misleading "balanced".
+
+**Static verify:** `go build ./...` clean; `go vet ./store ./trader` clean; `go test ./store ./trader
+./kernel` all green (incl. the 2 new keystone tests); `tsc --noEmit` 0; FE built; `nofx-bin` rebuilt +
+restarted clean (0 "unknown frame type"; trader `sss` = NinjaTrader/"MNQ SIM Default" auto-started — a
+default strategy with no saved variant → resolves to "futures" via the fallback, byte-identical).
+
+**SUNDAY behavior list (market open):** on a NON-DEFAULT strategy, set the Mode (e.g. Aggressive on a
+crypto strategy, or Futures on an MNQ strategy) → the bot's NEXT decision uses THAT prompt — confirm
+via Recent Decisions' "System Prompt" expander (the ground truth) + the cycle log; a no-variant
+strategy still runs the venue rule. SIM-only; never the LIVE LFE… account.
+
+**ADDITIVE; the Mode dropdown is now real (persist + live-read, venue-rule fallback); crypto
+byte-identical where no variant set; the Risk Control gates/guardrails/editable-boxes/label-sweep +
+multi-account (P1-P4) + P&L + chart-TZ ALL untouched; NO C#/wire change. SIM-only; the live-account
+block (broker layer) untouched + untoggleable.**
+
+
+## 2026-06-06 — Strategy Studio PHASE 2 CHANGE 4: the FUTURES prompt builder now honors the 4 structured boxes — built + static-verified, behavior Sunday
+
+**STATUS:** BUILT + STATIC-VERIFIED (market closed). Editing Role Definition / Trading Frequency /
+Entry Standards / Decision Process on a futures strategy now shapes the live futures prompt AND the
+preview. LIVE behavior proof on the SUNDAY list.
+
+Prior gap (deep-dive map): the crypto builder honored the 4 boxes (engine_prompt.go:38/93/105/118) but
+`engine_prompt_futures.go` IGNORED them — only Custom Prompt + Min R/R + Min Conf reached futures, so
+edited boxes ("Modified") went nowhere on an MNQ strategy.
+
+**BACKEND (engine_prompt_futures.go) — the only code change.** `BuildFuturesDecisionSystemPrompt` now
+reads `e.config.PromptSections` (mirroring the crypto override-or-default pattern):
+- **Role Definition** → override-or-default: box replaces the fixed CME role line when set; the
+  Instrument identity block stays FIXED.
+- **Trading Frequency** + **Entry Standards** → appended as their own section ONLY when set (the
+  futures builder had no such section before, so an empty box adds nothing → byte-identical).
+- **Decision Process** → override-or-default: box replaces the fixed 4-step section when set.
+- **FIXED, never box-driven:** the Instrument block, the Hard Constraints (risk rules), the Output
+  Format + Field Description (parser envelope), and the Custom Prompt append. The boxes change
+  instruction TEXT only — Risk Control + the output/risk rules are unchanged.
+
+**BACK-COMPAT PROOF (byte-identical when empty):** a golden of the pre-change futures prompt was
+captured (kernel/testdata/futures_mnq_empty.golden); `TestFuturesPromptEmptyBoxesByteIdentical` proves
+the empty-box output equals it EXACTLY — so existing futures strategies do not change.
+`TestFuturesPromptBoxesOverride` proves each set box reaches the prompt, empty boxes never inject the
+box-only sections, and the FIXED markers (Symbol, <reasoning>/<decision>, Hard Constraints) survive.
+
+**FE — NO change needed (refutes the assumed FE work).** The preview is backend-driven: the
+preview/test handler builds the engine from the POSTED config (api/strategy.go:581) and (Change-3
+honest preview) a futures strategy previews `variant="futures"`, so edited boxes now flow into the
+preview automatically. The editor already renders the 4 boxes as editable textareas for both markets
+(StrategyStudioPage.tsx:803, ungated) — there was no "not used on futures" state to fix.
+
+**Static verify:** go build clean; `go test ./store ./trader ./kernel` green (incl. the 2 new golden
+tests); nofx-bin rebuilt + restarted clean (0 "unknown frame type"; trader `sss` = NinjaTrader/"MNQ SIM
+Default" auto-started — empty boxes → byte-identical futures prompt). tsc unaffected (no FE change).
+
+**SUNDAY behavior list (market open):** on a futures strategy edit a box (e.g. Entry Standards) → the
+bot's NEXT decision's "System Prompt" (Recent Decisions = ground truth) contains the edited text; empty
+boxes → today's fixed futures prompt. SIM-only; never the LIVE LFE… account.
+
+**ADDITIVE; the futures builder honors the 4 boxes (override-or-default); empty boxes = today's fixed
+futures prompt (byte-identical, proven by golden test); boxes are TEXT-only (Risk Control + output
+format + hard risk rules FIXED); crypto + Risk Control + multi-account (P1-P4) + P&L + chart-TZ + Phase
+2 CORE all untouched; NO C#/wire/FE change. SIM-only; the live-account block untouched.**
+
+
+## 2026-06-06 — Strategy Studio PHASE 2 — (B) crypto-leak fix + futures SUB-MODES + two-dropdown Market+Mode (3 chunks) — built + static-verified, behavior Sunday
+
+**STATUS:** BUILT + STATIC-VERIFIED (market closed). Fixes the Change-4 regression (futures preview led
+with a leaked crypto Role box), adds futures sub-modes, and a two-field Market(auto-locked)+Mode UI.
+LIVE behavior proof on the SUNDAY list.
+
+Root cause of the regression (diagnosed by rendering the real prompt): Change 4 (181f1a00) made the
+futures builder honor all 4 boxes, but EVERY non-default strategy carries crypto-DEFAULT box content
+(`role_definition` = "professional cryptocurrency trading AI" / "你是一个专业的加密货币交易AI";
+`decision_process` = "候选币种/coins"). So the futures prompt led with crypto framing. The live trader
+(`sss` → "MNQ SIM Default", empty boxes) was NOT affected; this was a preview-of-`均衡策略` issue + latent
+for any box-laden strategy assigned to a live futures trader.
+
+- **CHUNK 1 (B) — `9387a7e2` (Go):** on futures, **Role Definition + Decision Process are ALWAYS the
+  fixed CME text** (reverted JUST those two from Change 4); **Trading Frequency + Entry Standards stay
+  honored** (append-when-set); Custom Prompt + Min R/R + Min Conf unchanged. Proven: rendering
+  `均衡策略`'s REAL futures prompt now leads with "professional CME index-futures trading AI" — no
+  `cryptocurrency` / `加密货币` / `候选币种`. Tests: `TestFuturesPromptNoCryptoLeak`,
+  `TestFuturesPromptBoxesHonored`; golden `TestFuturesPromptEmptyBoxesByteIdentical` still passes.
+- **CHUNK 2 (SUBMODES) — `6b4976d5` (Go):** `BuildSystemPrompt` routes `futures` / `futures-balanced` /
+  `futures-aggressive` / `futures-conservative` via `futuresVariantMode` (was an exact `=="futures"`
+  that would have fallen through to crypto). `buildFuturesPrompt(symbol, equity, mode)` injects a
+  `## Mode:` block for aggressive/conservative; balanced/empty/unknown = NO block. Proven:
+  `TestFuturesSubModes` — `futures`/`futures-balanced` == the golden (byte-identical); aggressive/
+  conservative == balanced + ONLY their mode block (TEXT-only, Risk Control/output format untouched).
+  `resolvePromptVariant` unchanged (passes the saved variant through).
+- **CHUNK 3 (LAYOUT) — `e876ded7` (FE):** the single Mode dropdown → a **READ-ONLY Market field**
+  (left, derived from `isCMEFutures(static_coins[0])` — cannot contradict the symbol) **+ a Mode
+  dropdown** (right, Balanced/Aggressive/Conservative). `combineVariant`/`decomposeMode` map
+  Market+Mode ↔ the saved `prompt_variant` (crypto → balanced/aggressive/conservative; futures →
+  futures / futures-aggressive / futures-conservative), mirroring the Go `futuresVariantMode`. Preview +
+  AI-Test send the combined variant → a futures strategy now previews the FIXED CME role + the sub-mode
+  (no crypto line). i18n market/marketFutures/marketCrypto/marketLockedHint (en/zh/id).
+
+**Static verify:** `go build ./...` clean; `go test ./store ./trader ./kernel` green (incl. golden + the
+new tests); `tsc --noEmit` 0; FE built; `nofx-bin` rebuilt + restarted clean (0 "unknown frame type").
+
+**SUNDAY behavior list (market open):** on a futures strategy — (B) the bot's next decision's "System
+Prompt" (Recent Decisions = ground truth) leads with the CME role, no crypto line, reflects edited
+Frequency/Entry; (SUBMODES) Mode=Aggressive → the aggressive block appears, Balanced/no-variant →
+today's fixed prompt; (LAYOUT) Market shows "Futures" locked, Mode pick persists the combined variant.
+SIM-only; never the LIVE LFE… account.
+
+**ADDITIVE; (B) Role+Decision fixed on futures, Frequency+Entry honored; (SUBMODES) text-only sub-modes
+(Risk Control unchanged), futures-balanced = today's fixed prompt (byte-identical, golden); (LAYOUT)
+two-dropdown Market-auto-locked+Mode (symbol = source of truth); crypto + Risk Control + multi-account
+(P1-P4) + P&L + chart-TZ + Phase 2 CORE all untouched; NO C#/wire change. SIM-only; the live-account
+block untouched + untoggleable.**
+
+
+## 2026-06-06 — Strategy Studio PHASE 2 A+D: honor the boxes on futures (revert Option B) + replace stale crypto defaults — built + static-verified, behavior Sunday
+
+**STATUS:** BUILT + STATIC-VERIFIED. Option B (Chunk 1 of the prior round, 9387a7e2) took away the
+owner's ability to edit Role/Decision on futures — WRONG. The real problem was the stale CRYPTO-DEFAULT
+box content, not that the user shouldn't edit. So: **(A)** honor the boxes again (full control) + **(D)**
+replace the stale crypto data.
+
+- **A — `07fef1a4` (Go):** reverted Option B — the futures builder honors Role Definition + Decision
+  Process again (override-or-default: box when set, fixed CME text when empty). Frequency + Entry already
+  honored. Tests: `TestFuturesPromptBoxesHonored` (all 4 honored), `TestFuturesPromptCustomRoleHonored`
+  (custom Role/Decision rendered; empty → fixed CME); golden + sub-mode tests still pass.
+- **D1 — `0f84f5bb` (Go + FE):** neutralized the new-strategy box defaults — `store/strategy.go`
+  DefaultStrategyConfig (zh+en) + the FE `PromptSectionsEditor.defaultSections`: Role "professional
+  cryptocurrency trading AI" / "加密货币交易AI" → "professional trading AI" / "交易AI"; Decision
+  "candidate coins / 候选币种" → "the market / 市场". A new strategy never starts with crypto framing.
+  The crypto BUILDER defaults (`engine_prompt.go` else-branches) are untouched (crypto path correct).
+- **D2 — one-time DB migration (data, NOT in git):** a surgical byte-replace on `data.db` rewrote ONLY
+  boxes whose `role_definition`/`decision_process` EXACTLY equalled a known crypto default — **7
+  strategies** (均衡/稳健/积极 zh + New×3/Strategy Copy en). Dry-run preview confirmed the exact set;
+  applied; **verified against a pre-migration snapshot: 7 rows changed, integrity_ok (every
+  non-role/decision field byte-identical), 2 empty "MNQ SIM Default" untouched, 0 crypto boxes remain.**
+  Reversible from `~/nofx-backups/2026-06-06-phase2-D-migration/data.db.PRE-MIGRATION-snapshot`.
+
+**End-to-end proof:** rendering `均衡策略`'s real futures prompt now leads with **"# 你是一个专业的交易AI"**
+(the neutral role, **honored from the box** — A) — crypto? false, 候选币种? false, CME instrument
+present. So edit (the box, neutral) == preview (honored). The owner can now type ANY role/decision and
+the futures AI uses it.
+
+**Static verify:** `go build ./...` clean; `go test ./store ./trader ./kernel` green; `tsc --noEmit` 0;
+FE built; `nofx-bin` rebuilt + restarted clean (0 "unknown frame type", serves the migrated configs).
+
+**Note (minor, by design):** for an EMPTY-box strategy (e.g. MNQ SIM Default) the editor shows the
+generic neutral default text while the preview shows the instrument-specific fixed CME role — both
+non-crypto; the difference is a generic placeholder vs the instrument-aware prompt. For strategies with
+actual box content (all 7 migrated ones), edit == preview exactly.
+
+**SUNDAY behavior list:** on a futures strategy, edit the Role box → the bot's next decision's "System
+Prompt" (Recent Decisions = ground truth) uses YOUR text; a migrated strategy → the neutral role, no
+crypto line. SIM-only; never the LIVE LFE… account.
+
+**ADDITIVE behavior (boxes honored = full control) + a careful reversible DATA migration (only
+crypto-default boxes, never a customized one); crypto builder + Risk Control + multi-account (P1-P4) +
+P&L + chart-TZ + Phase 2 sub-modes/two-dropdown all untouched; NO C#/wire change. SIM-only; the
+live-account block untouched + untoggleable.**
+
+
+## 2026-06-06 — Strategy Studio: specific CME futures Role default + hide crypto leverage in the Config box (commit 725c91f2)
+
+Two display/default FE+seed changes (no enforced behavior change):
+
+- **(1) Futures Role default = specific professional CME role.** After A+D the seed Role was generic
+  neutral ("professional trading AI"). Root nuance: `GetDefaultStrategyConfig(lang)` is market-agnostic,
+  but the futures builder's empty-box fallback is ALREADY the instrument-aware CME role. So the seed now
+  **omits Role + Decision** (store/strategy.go) — an empty box lets each market's builder supply the
+  correct default: futures → "professional CME index-futures trading AI specializing in <instrument>"
+  (engine_prompt_futures.go), crypto → the crypto role (engine_prompt.go). The FE editor's empty-box
+  default is market-aware too (`PromptSectionsEditor` gains `isFutures`: CME Role/Decision on futures,
+  neutral on crypto). **Default/fallback only — edit control intact (a typed Role overrides), saved user
+  boxes UNTOUCHED (not a migration), crypto builder default unchanged.** Proven: a NEW default-config
+  strategy's futures prompt leads with the specific CME role; crypto path unchanged.
+- **(2) Config box hides crypto leverage on futures.** The Prompt-Preview "Config" summary filters out
+  `btc_eth_leverage` + `altcoin_leverage` when `isFuturesStrategy` (mirrors the PVR `{!isFutures}`
+  pattern); `coin_source` / `primary_tf` / `max_positions` shown on both. The backend `config_summary`
+  is unchanged; the FE filters for display.
+
+**Static verify:** go build/vet/test green; tsc 0; FE built; nofx-bin restarted clean (0 "unknown frame
+type"). **SUNDAY:** a futures strategy with the default Role → the bot's next decision's "System Prompt"
+leads with the specific CME role. ADDITIVE; display/default only; crypto + Risk Control + multi-account
++ P&L + chart-TZ + Phase 2 work untouched; live-account block untouched. SIM-only.
+
+
+## 2026-06-07 — Strategy Studio readability UX (FE-only): auto-expand edited boxes + taller preview + live auto-refresh (commit 97b60895)
+
+Three FE/UX-only fixes from the prior read-only diagnoses (the "1-line box" was a default-collapsed
+accordion; the preview was a 400px scroll pane; the preview only rebuilt on Refresh-click):
+
+- **(1) Auto-expand edited prompt boxes.** `PromptSectionsEditor` now initializes `expandedSections`
+  from the config — a box with non-empty SAVED content opens by default; empty boxes (showing only the
+  default placeholder) stay collapsed. Re-computed per strategy via a `key={selectedStrategy.id}` on the
+  component in StrategyStudioPage (re-mounts on strategy switch). So an edited strategy shows its box
+  text without clicking.
+- **(2) Taller preview.** The System Prompt `<pre>` `maxHeight` 400px → **70vh** (still `overflow-auto`),
+  so most of the prompt is visible without scrolling.
+- **(3) Live auto-refresh.** A debounced (500ms) `useEffect` re-runs `fetchPromptPreview` when
+  `editingConfig`/`selectedMode` change on the Prompt tab — edits reflect without clicking Refresh; the
+  manual Refresh button is kept. `fetchPromptPreview` already uses the live `editingConfig`.
+
+**FE/UX-only — NO Go/gate/prompt-content/behavior change** (the rendered prompt text is identical; Risk
+Control + the builder + multi-account + P&L + chart-TZ untouched); crypto byte-identical; live-account
+block untouched. tsc 0; `npm run build` ✓; Go untouched. SIM-only.
+
+
+## 2026-06-07 — Strategy Studio Phase 3: hide crypto data feeds on futures + rename "Coin Source" → "Data Source" (commit 3923df1c)
+
+FE/UX-only, additive:
+- **(1) Crypto data feeds hidden on futures.** CoinSourceEditor's Source-Type selector showed all 4
+  (Static / AI500 / OI-Top / OI-Low) on a futures strategy; AI500/OI are crypto-only feeds (would make
+  `GetCandidateCoins` fetch crypto data instead of trading MNQ). Now `isFutures = isCMEFutures(static_coins[0])`
+  → `visibleSourceTypes` shows ONLY Static on futures, and `effectiveSourceType` (= 'static' on futures)
+  drives the highlight + the option panels so the crypto panels also hide. **Display-only — saved data
+  untouched** (render-only hide; no mutation). Crypto shows all 4 (else-branch = byte-identical).
+- **(2) Label rename.** "Coin Source" → "Data Source" (i18n en/zh/id: the strategyStudio section title +
+  the trader-modal label). The config key `coin_source` / `static_coins` is UNCHANGED (the stored data
+  shape — no migration; saved strategies load fine).
+- **(3) Sweep.** The Data Source labels were already neutralized (Custom Symbols / Add Symbol / symbols /
+  Excluded Symbols); the remaining crypto terms are the AI500/OI feed descriptions — genuinely crypto-only
+  feeds (now hidden on futures) — left as-is.
+
+**Verified LIVE (owner's session, no token forged):** futures (MNQ) → the selector shows only "Static"
+(1 button); flipping the symbol to BTC → all 4 reappear; section title "数据源 / Data Source" both; New
+Strategy's saved symbol still MNQ (no mutation). tsc 0; build ok; Go untouched. Crypto byte-identical;
+gates/guardrails/prompt/multi-account/P&L/chart-TZ untouched; live-account block untouched. SIM-only.
+
+
+## 2026-06-07 — Strategy Studio Phase 4: timeframe-line fix + futures default indicators + NofxOS hide (commits a7ca000d / 2558ea2c / 0312a828)
+
+Three safe chunks (each audit → build → verify → commit), from the Phase-4 Indicators map + the
+timeframe diagnosis. ADDITIVE; indicators/timeframes are prompt-data and NEVER gate a trade
+(engine_position.go reads zero `Indicators.Enable*`).
+
+- **(A) Prompt timeframe line lists all selected TFs (Go — a7ca000d).** `writeAvailableIndicators`
+  (kernel/engine_prompt.go) named only `PrimaryTimeframe` + `LongerTimeframe` (the legacy 2-field model),
+  so a 3-timeframe selection (MNQ SIM Default = 5m/15m/1h) showed "5m + 1h" and dropped 15m — even though
+  the fetch (engine_analysis.go reads `SelectedTimeframes`) and the per-timeframe user-prompt loop
+  already feed the AI all selected TFs. Only the summary line under-reported. Extracted
+  `formatKlineTimeframes(kline)`: list every `SelectedTimeframes` entry; fall back to the prior
+  primary[+longer] wording ONLY when the list is empty (legacy configs → **byte-identical**). Shared by
+  the crypto `BuildSystemPrompt` + the live futures `buildFuturesPrompt`, so the crypto line updates too
+  (golden-tested). **Golden:** kernel/engine_prompt_timeframes_test.go locks the empty-list fallback
+  (byte-identical) + the all-listed behavior, end-to-end through the real method.
+- **(B) ATR/EMA/RSI enabled in the futures new-strategy default (Go — 2558ea2c).** The futures AI got raw
+  bars + volume only (EMA/MACD/RSI/ATR/BOLL default OFF). Extracted `applyFuturesIndicatorDefaults()`
+  (the existing NofxOS/ranking disable + the new ATR/EMA/RSI enable) inside `GetDefaultStrategyConfig`'s
+  `if isFuturesMode()` block — ATR (stop sizing) + EMA (trend) + RSI (momentum) on; MACD/BOLL left off.
+  **Defaults-only** (new-strategy template; FE create flow fetches /default-config); existing saved
+  strategies NOT mutated (verified: 均衡/稳健/积极/New still volume,oi,funding_rate; MNQ SIM Default
+  none). Crypto mode untouched (helper never called) → byte-identical. **Test:**
+  store/strategy_futures_indicators_test.go. **Recommendation (separate confirm):** to give the owner's
+  EXISTING MNQ strategies the same indicators, toggle EMA/RSI/ATR ON per-strategy in the Indicators UI
+  (or a one-off, owner-approved DB update) — NOT auto-applied here (no mass-mutation).
+- **(C) NofxOS + crypto-ranking feeds hidden on futures (FE — 0312a828).** The whole NofxOS Data
+  Provider section (Quant Data / Quant OI / NetFlow + OI/NetFlow/Price ranking + the API Key field)
+  rendered but was inert on futures (crypto-only; disabled by default; claw402 402/404 on CME). Wrapped
+  the section in `{!isFutures && (...)}` (the `isCMEFutures(static_coins[0])` → `isFuturesStrategy` flag,
+  passed as `isFutures`). Futures → not rendered; crypto → renders exactly as before. FE-only display
+  gate of already-inert controls; no saved-data mutation. (`git diff -w` shows the only change is the
+  wrap; the rest is prettier re-indent.)
+
+**Static verify (now):** go build/vet/test (./store ./kernel ./trader) green incl. both new tests +
+existing goldens; tsc 0; `npm run build` ✓; nofx-bin rebuilt + restarted clean in futures mode (0
+"unknown frame type" / panic / fatal); bot flat at restart (0 open positions). **SUNDAY (market open):**
+(A) a futures strategy → the bot's next decision's "System Prompt" lists all selected TFs; (B) a NEW
+futures strategy defaults ATR/EMA/RSI ON and they appear in the decision data; (C) Playwright — a futures
+strategy → NofxOS/ranking controls hidden, a crypto strategy → shown. ADDITIVE — old configs
+byte-identical (golden); indicators never gate (low real-money risk); crypto byte-identical except the
+intended timeframe wording; gates/guardrails/multi-account (P1-P4)/P&L/chart-TZ + Phase 2/3 work + the
+live-account block untouched. SIM-only.
+
+
+## 2026-06-07 — Open Interest honesty fix: hide + disable OI on futures (commit pending)
+
+Follow-up from the OI investigation. "Open Interest" on a futures strategy was the Binance crypto-perp
+feed (`fapi/v1/openInterest`, market/data.go) → returns ZEROS for MNQ; the FE box was labeled "Futures
+open interest" (misleading); and the futures prompt LISTED OI as available, printed "Open Interest:
+Latest: 0.00 Average: 0.00", then said "ignore the empty OI" (a 3-way contradiction, one toggle away on
+OI-enabled strategies). Real futures OI isn't worth wiring (CME OI is once-daily EOD; the NT8 bridge
+carries OHLCV only). Fix mirrors (and extends) the funding-rate treatment:
+
+- **(1) FE — OI toggle hidden on futures.** IndicatorEditor.tsx OI toggle `cryptoOnly: false → true`, so
+  the existing `!cryptoOnly || !isFutures` filter hides it on futures (exactly like the funding-rate
+  toggle beside it). Crypto → OI shows as today. Verified live: the Market Sentiment grid shows only
+  Volume on MNQ (OI + Funding both hidden).
+- **(2) Go default — OI off on futures.** `ind.EnableOI = false` added to `applyFuturesIndicatorDefaults`
+  (store/strategy.go). A new futures strategy no longer lists/values OI. Defaults-only; existing saved
+  strategies NOT mutated (DB re-checked: 均衡/稳健/积极/New still enable_oi=true; MNQ SIM Default false).
+  Verified live: futures `/default-config` returns `enable_oi: false`.
+- **(3) Go fetch guard.** `getOpenInterestData` + `getFundingRate` now skip on futures in
+  `GetWithTimeframes` (market/data.go, behind the in-scope `isFutures`). MNQ values were always {0,0}/0
+  from the failed Binance call — identical result, minus the wasted round-trip per cycle.
+
+**Golden/tests:** kernel/engine_prompt_oi_test.go (OI availability line present IFF EnableOI — futures
+default drops it, crypto byte-identical); store/strategy_futures_indicators_test.go extended (futures
+default → EnableOI false). go build/vet/test (./store ./kernel ./trader ./market) green incl. existing
+goldens; tsc 0; `npm run build` ✓; nofx-bin restarted clean in futures mode (0 "unknown frame type");
+bot flat. OI is prompt-data and NEVER gates (engine_position.go reads zero Indicators.Enable*). The live
+bot (MNQ SIM Default, enable_oi=false) is unaffected today.
+
+**RECOMMENDATION (separate owner confirm):** the owner's EXISTING OI-enabled futures strategies
+(均衡/稳健/积极/New) keep enable_oi=true → they still show the zeros + contradiction until untoggled
+per-strategy in the Indicators UI (or a one-off owner-approved DB update). NOT auto-applied (no
+mass-mutation). **OBSERVED symmetric gap (out of scope):** funding rate has the same residual — its FE
+toggle is hidden (cryptoOnly:true) but `enable_funding_rate` stays TRUE in the futures default, so the
+futures prompt still lists "Funding rate" + "Funding Rate: 0.00e+00". Same one-line fix
+(`EnableFundingRate = false` in applyFuturesIndicatorDefaults) would close it — deferred.
+
+ADDITIVE; crypto byte-identical; OI prompt-data only (never gate) = low real-money risk;
+gates/guardrails/multi-account (P1-P4)/P&L/chart-TZ + Phase 2/3/4 work + the live-account block
+untouched. SIM-only.
+
+
+## 2026-06-07 — Indicator period-edit typing bug fixed (commit e70116e7)
+
+The EMA/RSI/ATR/BOLL period inputs (IndicatorEditor.tsx) parsed
+`split(',').map(parseInt).filter(n>0)` on EVERY keystroke and the value fell back to the default when
+empty — so on an EDITABLE strategy you couldn't type a comma (it reverted), couldn't clear (it snapped
+to the default), and editing across a comma collapsed the other value. You could not edit a multi-value
+period field character-by-character. (Diagnosed as bug (b); the (a) read-only-default lock —
+`disabled={selectedStrategy?.is_default}` — is a separate by-design behavior, not changed.)
+
+Fix (FE-only): extracted a `PeriodInput` component that holds the RAW typed text in local state while
+editing and parses → `number[]` ONLY on blur/commit (Enter blurs); when not editing it derives straight
+from the saved value (so strategy-switch / reset just work). The SAVED DATA SHAPE is unchanged —
+`onCommit` always passes a `number[]` (the default periods if the field was left empty), so
+`config[periodKey]` stays e.g. `ema_periods=[20,50]`.
+
+Verified live (owner session, no token forged): on an editable strategy, typing a comma → stays;
+clearing → stays empty while editing; leading/mid comma `",50"` → stays (fixable to `25,50`); blur
+sanitizes. Save persisted `ema_periods=[20,50,100]` as a `number[]` of ints (sqlite before/after), then
+restored to `[20,50]` (no net change). tsc 0; `npm run build` ✓; Go untouched. Periods are prompt-data
+(never gate); the period input passes `disabled` through, so default strategies stay read-only; the
+component is market-agnostic (crypto + futures identical). gates/guardrails/multi-account/P&L/chart-TZ +
+the live-account block untouched. SIM-only.

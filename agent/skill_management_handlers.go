@@ -1163,7 +1163,7 @@ func formatStrategyCreateFinalConfirmation(lang string, session skillSession, cf
 				fmt.Sprintf("- 最大持仓数（System enforced）：%d", cfg.RiskControl.MaxPositions),
 				fmt.Sprintf("- BTC/ETH 单币仓位上限（System enforced）：账户权益 %.2f 倍", cfg.RiskControl.BTCETHMaxPositionValueRatio),
 				fmt.Sprintf("- 山寨币单币仓位上限（System enforced）：账户权益 %.2f 倍", cfg.RiskControl.AltcoinMaxPositionValueRatio),
-				fmt.Sprintf("- 最大保证金使用率（System enforced）：%.0f%%", cfg.RiskControl.MaxMarginUsage*100),
+				fmt.Sprintf("- 最大保证金使用率（AI 提示，非代码强制）：%.0f%%", cfg.RiskControl.MaxMarginUsage*100),
 				fmt.Sprintf("- 最小开仓金额（System enforced）：%.2f USDT", cfg.RiskControl.MinPositionSize),
 				fmt.Sprintf("- 角色定义：%s", compactSummaryText(cfg.PromptSections.RoleDefinition)),
 				fmt.Sprintf("- 交易频率规则：%s", compactSummaryText(cfg.PromptSections.TradingFrequency)),

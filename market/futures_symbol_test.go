@@ -98,6 +98,21 @@ func TestFuturesPointValue(t *testing.T) {
 		{"M2K", 5.0},
 		{"YM", 5.0},
 		{"MYM", 0.5},
+		// Phase 1 — new CME roots (recognition). Each its own multiplier
+		// (verified against cmegroup.com).
+		{"CL", 1000.0},
+		{"MCL", 100.0},
+		{"NG", 10000.0},
+		{"GC", 100.0},
+		{"MGC", 10.0},
+		{"SI", 5000.0},
+		{"ZB", 1000.0},
+		{"ZN", 1000.0},
+		{"ZF", 1000.0},
+		{"ZT", 2000.0},
+		// Monthly contract-code recognition (energy lists all 12 months).
+		{"NGF6", 10000.0},  // F = January
+		{"MCLZ6", 100.0},   // Z = December (MCL wins over CL — longest root)
 		// Non-futures / unknown → 0 (caller must not divide by it).
 		{"BTCUSDT", 0},
 		{"TSLA", 0},
@@ -106,6 +121,40 @@ func TestFuturesPointValue(t *testing.T) {
 	for _, c := range cases {
 		if got := FuturesPointValue(c.in); got != c.want {
 			t.Errorf("FuturesPointValue(%q) = %v, want %v", c.in, got, c.want)
+		}
+	}
+}
+
+// TestFuturesPointValue_MicroMiniDivergence asserts a micro NEVER inherits its
+// mini's multiplier — same underlying, DIFFERENT contract value (a micro is 1/10
+// of its mini). A wrong multiplier mis-values every PnL on that symbol (the id=45
+// missing-×pv class). This is the cheap catch for a copy-paste error in the table.
+func TestFuturesPointValue_MicroMiniDivergence(t *testing.T) {
+	pairs := []struct {
+		mini, micro     string
+		miniPV, microPV float64
+	}{
+		{"NQ", "MNQ", 20.0, 2.0},
+		{"ES", "MES", 50.0, 5.0},
+		{"YM", "MYM", 5.0, 0.5},
+		{"RTY", "M2K", 50.0, 5.0},
+		{"GC", "MGC", 100.0, 10.0},
+		{"CL", "MCL", 1000.0, 100.0},
+	}
+	for _, p := range pairs {
+		gotMini, gotMicro := FuturesPointValue(p.mini), FuturesPointValue(p.micro)
+		if gotMini != p.miniPV {
+			t.Errorf("%s point value = %v, want %v", p.mini, gotMini, p.miniPV)
+		}
+		if gotMicro != p.microPV {
+			t.Errorf("%s point value = %v, want %v", p.micro, gotMicro, p.microPV)
+		}
+		if gotMicro == gotMini {
+			t.Errorf("micro %s (%v) must NOT equal mini %s (%v) — micro inherited the mini's multiplier",
+				p.micro, gotMicro, p.mini, gotMini)
+		}
+		if gotMicro*10 != gotMini {
+			t.Errorf("micro %s should be 1/10 of mini %s: micro=%v mini=%v", p.micro, p.mini, gotMicro, gotMini)
 		}
 	}
 }

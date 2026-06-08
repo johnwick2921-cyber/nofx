@@ -38,6 +38,7 @@ import type {
   GridStrategyConfig,
 } from '../types'
 import { confirmToast, notify } from '../lib/notify'
+import { isCMEFutures } from '../lib/instrument'
 import { CoinSourceEditor } from '../components/strategy/CoinSourceEditor'
 import { IndicatorEditor } from '../components/strategy/IndicatorEditor'
 import { RiskControlEditor } from '../components/strategy/RiskControlEditor'
@@ -73,10 +74,30 @@ const normalizeStrategyConfig = (config: StrategyConfig): StrategyConfig => {
   return {
     strategy_type: strategyType,
     language: config.language,
+    // Preserve the persisted prompt mode (Phase 2) — normalize otherwise strips
+    // any field not listed here, which would silently drop it on save.
+    prompt_variant: config.prompt_variant,
     ai_config: aiConfig || undefined,
     grid_config: config.grid_config,
     publish_config: config.publish_config,
   }
+}
+
+// Phase 2 two-field Market+Mode <-> saved prompt_variant. MARKET is DERIVED from
+// the strategy symbol (the source of truth — it cannot contradict the symbol), so
+// only MODE is user-chosen. The saved variant encodes both: crypto →
+// "balanced"|"aggressive"|"conservative"; futures → "futures" (balanced) |
+// "futures-aggressive" | "futures-conservative". Mirrors the Go futuresVariantMode.
+function combineVariant(isFutures: boolean, mode: string): string {
+  if (isFutures) return mode === 'balanced' ? 'futures' : `futures-${mode}`
+  return mode
+}
+function decomposeMode(variant: string | undefined): string {
+  const v = (variant || '').toLowerCase()
+  if (v.startsWith('futures-')) return v.slice('futures-'.length) || 'balanced'
+  if (v === 'futures' || v === '') return 'balanced'
+  if (v === 'aggressive' || v === 'conservative' || v === 'balanced') return v
+  return 'balanced'
 }
 
 export function StrategyStudioPage() {
@@ -122,7 +143,7 @@ export function StrategyStudioPage() {
     config_summary: Record<string, unknown>
   } | null>(null)
   const [isLoadingPrompt, setIsLoadingPrompt] = useState(false)
-  const [selectedVariant, setSelectedVariant] = useState('balanced')
+  const [selectedMode, setSelectedMode] = useState('balanced')
 
   // AI Test Run states
   const [aiTestResult, setAiTestResult] = useState<{
@@ -191,7 +212,11 @@ export function StrategyStudioPage() {
       selectedStrategyIDRef.current = nextSelected?.id || ''
 
       if (!hasChangesRef.current || !preservedSelection) {
-        setEditingConfig(nextSelected?.config ? normalizeStrategyConfig(nextSelected.config) : null)
+        setEditingConfig(
+          nextSelected?.config
+            ? normalizeStrategyConfig(nextSelected.config)
+            : null
+        )
       }
       if (!nextSelected) {
         setEditingConfig(null)
@@ -211,6 +236,13 @@ export function StrategyStudioPage() {
 
   useEffect(() => {
     selectedStrategyIDRef.current = selectedStrategy?.id || ''
+  }, [selectedStrategy?.id])
+
+  // Phase 2 (Chunk 3 — two-field Market+Mode): MARKET is derived from the symbol
+  // (read-only, rendered live); only the MODE is restored from the saved variant
+  // on strategy switch. The preview/save recombine Market+Mode into the variant.
+  useEffect(() => {
+    setSelectedMode(decomposeMode(selectedStrategy?.config?.prompt_variant))
   }, [selectedStrategy?.id])
 
   useEffect(() => {
@@ -632,7 +664,12 @@ export function StrategyStudioPage() {
           body: JSON.stringify({
             config: editingConfig,
             account_equity: 1000,
-            prompt_variant: selectedVariant,
+            prompt_variant: combineVariant(
+              isCMEFutures(
+                getAIConfig(editingConfig)?.coin_source?.static_coins?.[0]
+              ),
+              selectedMode
+            ),
           }),
         }
       )
@@ -645,6 +682,18 @@ export function StrategyStudioPage() {
       setIsLoadingPrompt(false)
     }
   }
+
+  // Live preview: re-run the prompt preview (debounced 500ms) when the config or
+  // mode changes, so edits reflect without clicking Refresh. The manual Refresh
+  // button is kept. Only on the Prompt tab; debounced so it doesn't fire on
+  // every keystroke. fetchPromptPreview already uses the live editingConfig.
+  useEffect(() => {
+    if (!token || !editingConfig || activeRightTab !== 'prompt') return
+    const t = setTimeout(() => {
+      fetchPromptPreview()
+    }, 500)
+    return () => clearTimeout(t)
+  }, [editingConfig, selectedMode, activeRightTab, token])
 
   // Run AI test with real AI model
   const runAiTest = async () => {
@@ -660,7 +709,12 @@ export function StrategyStudioPage() {
         },
         body: JSON.stringify({
           config: editingConfig,
-          prompt_variant: selectedVariant,
+          prompt_variant: combineVariant(
+            isCMEFutures(
+              getAIConfig(editingConfig)?.coin_source?.static_coins?.[0]
+            ),
+            selectedMode
+          ),
           ai_model_id: selectedModelId,
           run_real_ai: true,
         }),
@@ -695,6 +749,15 @@ export function StrategyStudioPage() {
   // Get current strategy type (default to ai_trading if not set)
   const currentStrategyType = editingConfig?.strategy_type || 'ai_trading'
   const currentAIConfig = editingConfig ? getAIConfig(editingConfig) : null
+
+  // The strategy's active instrument drives whether the editors show crypto-only
+  // UI (leverage tiers, USDT labels, funding-rate). A CME futures symbol in the
+  // coin source (e.g. MNQ) hides those; a crypto symbol keeps them. Derived from
+  // the first static coin — the same field the Go engine reads to pick the
+  // futures vs. crypto prompt (api/strategy preview passes static_coins[0]).
+  const isFuturesStrategy = isCMEFutures(
+    currentAIConfig?.coin_source?.static_coins?.[0]
+  )
 
   const configSections = [
     // Grid Config - only for grid_trading
@@ -741,6 +804,7 @@ export function StrategyStudioPage() {
           onChange={(indicators) => updateAIConfig('indicators', indicators)}
           disabled={selectedStrategy?.is_default}
           language={language}
+          isFutures={isFuturesStrategy}
         />
       ),
     },
@@ -753,9 +817,12 @@ export function StrategyStudioPage() {
       content: currentAIConfig && (
         <RiskControlEditor
           config={currentAIConfig.risk_control}
-          onChange={(riskControl) => updateAIConfig('risk_control', riskControl)}
+          onChange={(riskControl) =>
+            updateAIConfig('risk_control', riskControl)
+          }
           disabled={selectedStrategy?.is_default}
           language={language}
+          isFutures={isFuturesStrategy}
         />
       ),
     },
@@ -767,12 +834,14 @@ export function StrategyStudioPage() {
       forStrategyType: 'ai_trading' as const,
       content: currentAIConfig && (
         <PromptSectionsEditor
+          key={selectedStrategy?.id || 'none'}
           config={currentAIConfig.prompt_sections}
           onChange={(promptSections) =>
             updateAIConfig('prompt_sections', promptSections)
           }
           disabled={selectedStrategy?.is_default}
           language={language}
+          isFutures={isFuturesStrategy}
         />
       ),
     },
@@ -1195,9 +1264,26 @@ export function StrategyStudioPage() {
               <div className="p-3 space-y-3">
                 {/* Controls */}
                 <div className="flex items-center gap-2 flex-wrap">
+                  {/* MARKET — auto-set from the strategy symbol, READ-ONLY (the
+                      symbol is the source of truth; it cannot contradict it). */}
+                  <span
+                    title={tr('marketLockedHint')}
+                    className="px-2 py-1.5 rounded text-xs bg-nofx-bg border border-nofx-gold/20 text-nofx-text opacity-60 cursor-not-allowed select-none"
+                  >
+                    {tr('market')}:{' '}
+                    {isFuturesStrategy
+                      ? tr('marketFutures')
+                      : tr('marketCrypto')}
+                  </span>
                   <select
-                    value={selectedVariant}
-                    onChange={(e) => setSelectedVariant(e.target.value)}
+                    value={selectedMode}
+                    onChange={(e) => {
+                      setSelectedMode(e.target.value)
+                      updateConfig(
+                        'prompt_variant',
+                        combineVariant(isFuturesStrategy, e.target.value)
+                      )
+                    }}
                     className="px-2 py-1.5 rounded text-xs bg-nofx-bg border border-nofx-gold/20 text-nofx-text outline-none focus:border-nofx-gold"
                   >
                     <option value="balanced">{tr('balanced')}</option>
@@ -1229,8 +1315,16 @@ export function StrategyStudioPage() {
                         </span>
                       </div>
                       <div className="grid grid-cols-3 gap-2 text-xs">
-                        {Object.entries(promptPreview.config_summary || {}).map(
-                          ([key, value]) => (
+                        {Object.entries(promptPreview.config_summary || {})
+                          // Hide crypto-only leverage fields on futures (sized by
+                          // contracts, not leverage); shown on crypto.
+                          .filter(
+                            ([key]) =>
+                              !isFuturesStrategy ||
+                              (key !== 'btc_eth_leverage' &&
+                                key !== 'altcoin_leverage')
+                          )
+                          .map(([key, value]) => (
                             <div key={key}>
                               <div className="text-nofx-text-muted">
                                 {key.replace(/_/g, ' ')}
@@ -1239,8 +1333,7 @@ export function StrategyStudioPage() {
                                 {String(value)}
                               </div>
                             </div>
-                          )
-                        )}
+                          ))}
                       </div>
                     </div>
 
@@ -1260,7 +1353,7 @@ export function StrategyStudioPage() {
                       </div>
                       <pre
                         className="p-2 rounded-lg text-[11px] font-mono overflow-auto bg-nofx-bg border border-nofx-gold/20 text-nofx-text"
-                        style={{ maxHeight: '400px' }}
+                        style={{ maxHeight: '70vh' }}
                       >
                         {promptPreview.system_prompt}
                       </pre>
@@ -1303,9 +1396,24 @@ export function StrategyStudioPage() {
                   )}
 
                   <div className="flex items-center gap-2">
+                    <span
+                      title={tr('marketLockedHint')}
+                      className="px-2 py-1.5 rounded text-xs bg-nofx-bg border border-nofx-gold/20 text-nofx-text opacity-60 cursor-not-allowed select-none"
+                    >
+                      {tr('market')}:{' '}
+                      {isFuturesStrategy
+                        ? tr('marketFutures')
+                        : tr('marketCrypto')}
+                    </span>
                     <select
-                      value={selectedVariant}
-                      onChange={(e) => setSelectedVariant(e.target.value)}
+                      value={selectedMode}
+                      onChange={(e) => {
+                        setSelectedMode(e.target.value)
+                        updateConfig(
+                          'prompt_variant',
+                          combineVariant(isFuturesStrategy, e.target.value)
+                        )
+                      }}
                       className="px-2 py-1.5 rounded text-xs bg-nofx-bg border border-nofx-gold/20 text-nofx-text"
                     >
                       <option value="balanced">{tr('balanced')}</option>

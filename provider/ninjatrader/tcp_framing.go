@@ -72,12 +72,144 @@ const (
 	FrameBarsUnsubscribe FrameType = "bars_unsubscribe"
 )
 
-// Plan 4.5 — account selection frame type.
-// Go-server → C#-AddOn account select (see tcp_server.SendAccountSelect).
-const (
-	FrameAccountsList    FrameType = "accounts_list"
-	FrameAccountSelect   FrameType = "account_select"
-)
+// Plan 4.11 — real NT account balance. C#-AddOn → Go-server, additive frame
+// (same envelope: 4-byte BE length + JSON {type, payload}). The C# AddOn emits
+// it from the resolved Sim account on AccountItemUpdate + periodically, so the
+// dashboard shows the real SIM balance instead of the $50k mock. Existing
+// frames are unchanged.
+const FrameAccountBalance FrameType = "account_balance"
+
+// accounts_list frame: C#-AddOn → Go-server, unsolicited event emitted on connect
+// and when NT8 accounts change. Reports all available accounts with SIM detection flag.
+const FrameAccountsList FrameType = "accounts_list"
+
+// AccountSelectPayload requests the C# AddOn to switch to a different account.
+// Go-server → C#-AddOn command.
+const FrameAccountSelect FrameType = "account_select"
+
+// AccountBalancePayload carries an NT account snapshot. Fields map to
+// NinjaTrader AccountItem values (CashValue, BuyingPower, RealizedProfitLoss,
+// UnrealizedProfitLoss). NetLiquidation is the dashboard's "total equity"
+// (cash + unrealized PnL); the C# side sends it directly if NT exposes it,
+// else the Go side derives it as CashValue + UnrealizedPnL.
+type AccountBalancePayload struct {
+	Account        string  `json:"account"`         // e.g. "Sim101"
+	CashValue      float64 `json:"cash_value"`
+	BuyingPower    float64 `json:"buying_power"`
+	RealizedPnL    float64 `json:"realized_pnl"`
+	UnrealizedPnL  float64 `json:"unrealized_pnl"`
+	NetLiquidation float64 `json:"net_liquidation"` // total equity
+}
+
+// Position-history fix — C#-AddOn → Go-server, additive frame (same envelope).
+// Emitted when an OCO exit leg (SL or TP) fills and the position goes flat, so
+// the Go side can mark the open trader_position CLOSED with the real exit price.
+// NT closes positions broker-side via the bracket; the bot never issues a
+// close_* order, and NT has no order-sync, so without this frame the open
+// position record never transitions to CLOSED and position history stays empty.
+const FramePositionClose FrameType = "position_close"
+
+// PositionClosePayload reports a closed (or partially closed) NT position.
+// PositionSide is the side that was HELD ("long"/"short"), not the exit order's
+// action. RealizedPnL is left to the Go side to compute against the recorded
+// entry × the futures point value (single source of truth: market.FuturesPointValue).
+type PositionClosePayload struct {
+	SignalID     string  `json:"signal_id"`     // entry signal_id, for correlation
+	Symbol       string  `json:"symbol"`        // root symbol, e.g. "MNQ"
+	PositionSide string  `json:"position_side"` // "long" | "short" (held side)
+	ExitPrice    float64 `json:"exit_price"`
+	Quantity     int     `json:"quantity"`
+	ExitReason   string  `json:"exit_reason"` // "sl" | "tp" | "manual"
+	ExitTime     string  `json:"exit_time"`   // RFC3339
+}
+
+// Rejected exit/flatten — C#-AddOn → Go-server, additive frame. The SIM (or
+// broker) REJECTED an exit/flatten order (e.g. "There is no market data available
+// to drive the simulation engine" while the Tradovate feed is down). The close did
+// NOT take effect — the position is STILL OPEN in NT8 — so the bot must not treat
+// it as closed. Pairs with the close routing (decision closes wait for the
+// position_close fill frame): this frame turns a silent rejected flatten into a
+// loud alarm so the orphan can't be netted onto by the next entry.
+const FramePositionCloseRejected FrameType = "position_close_rejected"
+
+// PositionCloseRejectedPayload reports a rejected exit/flatten order.
+type PositionCloseRejectedPayload struct {
+	SignalID     string `json:"signal_id"`     // order name (entry signal_id, or "Close" for a flatten)
+	Symbol       string `json:"symbol"`        // root symbol, e.g. "MNQ"
+	PositionSide string `json:"position_side"` // "long" | "short" (held side)
+	Reason       string `json:"reason"`        // NT8 reject comment, e.g. "There is no market data..."
+	Account      string `json:"account"`       // e.g. "Sim101"
+	RejectTime   string `json:"reject_time"`   // RFC3339
+}
+
+// Feed status — C#-AddOn → Go-server, additive frame. Carries the NT8 price-feed
+// PriceStatus (from OnVLConnectionStatusUpdate). The bot gates opens/closes when
+// the feed is not Connected: the SIM rejects orders with "no market data", and
+// acting into a dead feed is the upstream condition behind the phantom-close mess.
+const FrameFeedStatus FrameType = "feed_status"
+
+// FeedStatusPayload reports the NT8 price-feed status.
+type FeedStatusPayload struct {
+	PriceStatus string `json:"price_status"` // "Connected" | "ConnectionLost" | "Connecting" | "Disconnected"
+	Time        string `json:"time"`         // RFC3339
+}
+
+// instrument_info — C#-AddOn → Go-server, additive frame. Carries the RESOLVED
+// NT8 instrument's REAL contract specs (MasterInstrument.PointValue/.TickSize +
+// the qualified contract name) so Go can source ground-truth from NT8 and
+// cross-check the hardcoded FuturesPointValue/FuturesTickSize tables (drift
+// detection). The tables remain the fallback for parked/unresolved symbols.
+const FrameInstrumentInfo FrameType = "instrument_info"
+
+// InstrumentInfoPayload reports a resolved instrument's NT8 specs.
+type InstrumentInfoPayload struct {
+	Symbol     string  `json:"symbol"`      // root, e.g. "MNQ"
+	Contract   string  `json:"contract"`    // qualified, e.g. "MNQ 06-26"
+	PointValue float64 `json:"point_value"` // NT8 MasterInstrument.PointValue
+	TickSize   float64 `json:"tick_size"`   // NT8 MasterInstrument.TickSize
+}
+
+// Manual close — Go-server → C#-AddOn, additive frame. The AddOn flattens the
+// position for the symbol (account.Flatten), which closes at market AND cancels
+// the protective bracket so no orphaned SL/TP can re-open a position. The
+// flatten's market fill comes back as a position_close (reason "manual").
+const FrameClosePosition FrameType = "close_position"
+
+// ClosePositionPayload requests a flatten of the symbol's position. Quantity is
+// advisory (the AddOn flattens the whole position); Side is informational.
+type ClosePositionPayload struct {
+	Symbol   string `json:"symbol"`
+	Side     string `json:"side"` // "long" | "short" (informational)
+	Quantity int    `json:"quantity"`
+	SignalID string `json:"signal_id"`
+}
+
+// Open-position read-back — C#-AddOn → Go-server, additive snapshot frame (same
+// envelope: 4-byte BE length + JSON {type, payload}, snake_case). The AddOn
+// emits the selected account's CURRENT open positions: on account_select, on
+// connect, and on any Account.PositionUpdate (INCLUDING a MANUAL open/close in
+// NT8). This is the previously-missing position read-back — before it, Go only
+// knew positions it opened itself (via a fill), so it lost the position on
+// account switch-back and never saw manual trades. The frame is a FULL
+// per-account snapshot (the complete non-flat set); the Go side REPLACES
+// acctPositions[Account] with it, so a flat instrument simply drops out.
+const FramePositions FrameType = "positions"
+
+// OpenPosition is one non-flat NT position (per instrument) within a snapshot.
+type OpenPosition struct {
+	Symbol   string  `json:"symbol"`    // root symbol, e.g. "MNQ"
+	Side     string  `json:"side"`      // "long" | "short"
+	Quantity int     `json:"quantity"`  // contracts (NT8 nets per instrument)
+	AvgPrice float64 `json:"avg_price"` // NT8 Position.AveragePrice
+}
+
+// PositionsPayload is the C#-AddOn → Go-server open-position snapshot for one
+// account. Positions is the COMPLETE current non-flat set for Account (NT8 is
+// the source of truth); the Go side replaces its per-account cache with it.
+type PositionsPayload struct {
+	Account   string         `json:"account"`
+	Positions []OpenPosition `json:"positions"`
+}
 
 // Bar is the compact 6-field OHLCV bar used in bars_historical and bar_update
 // frames (protocol §6-7). Volume is a float because NT8 tick-volume
@@ -123,6 +255,26 @@ type BarUpdatePayload struct {
 type BarsUnsubscribePayload struct {
 	Symbol     string   `json:"symbol"`
 	Timeframes []string `json:"timeframes,omitempty"` // empty/nil = all for this symbol
+}
+
+// AccountInfo carries a single NT account's name + SIM flag.
+type AccountInfo struct {
+	Name  string `json:"name"`    // e.g. "Sim101" or "PropAcct"
+	IsSim bool   `json:"is_sim"`  // true if this is a simulation account
+}
+
+// AccountsListPayload reports all available NT accounts discovered by the C# AddOn.
+// Emitted unsolicited on connect and on account list change, so the Go server can
+// populate the UI's account selector and validate account_select commands.
+type AccountsListPayload struct {
+	Accounts []AccountInfo `json:"accounts"`
+}
+
+// AccountSelectPayload requests the C# AddOn to switch to a different account.
+// The AddOn unsubscribes from the old account's events, resolves the new account
+// by name, subscribes to its events, and re-emits account_balance immediately.
+type AccountSelectPayload struct {
+	Account string `json:"account"` // e.g. "Sim101"
 }
 
 // ErrFrameTooLarge signals the peer sent a length header > TCPMaxFrameBytes.
@@ -189,18 +341,4 @@ func marshalEnvelope(frameType FrameType, payload any) ([]byte, error) {
 		return nil, fmt.Errorf("tcp_framing: marshal envelope: %w", err)
 	}
 	return body, nil
-}
-
-// AccountInfo represents a NinjaTrader account available for selection.
-// Sent by the C# AddOn in accounts_list frame; used by the API to populate
-// the account dropdown with SIM/live status for filtering.
-type AccountInfo struct {
-	Name  string `json:"name"`   // e.g. "Sim101", "LFE05060792090061"
-	IsSim bool   `json:"is_sim"` // true if a SIM account, false if live/funded
-}
-
-// AccountSelectPayload is the Go-server → C#-AddOn account selection frame.
-// Tells the AddOn to switch to a different account and re-subscribe orders/fills.
-type AccountSelectPayload struct {
-	Account string `json:"account"` // account name to switch to, e.g. "Sim101"
 }

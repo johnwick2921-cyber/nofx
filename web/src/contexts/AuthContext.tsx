@@ -7,6 +7,21 @@ import { getPostAuthPath, setUserMode, type UserMode } from '../lib/onboarding'
 import { ROUTES } from '../router/paths'
 import { useLanguage } from './LanguageContext'
 
+// Returns true if a JWT is expired (or unparseable). Used so the app never trusts
+// a dead token on load — otherwise it sits "logged in" while every API call 401s
+// (the user is stuck on a broken page with no prompt to re-login).
+function isJwtExpired(token: string): boolean {
+  try {
+    const payload = JSON.parse(
+      atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/'))
+    )
+    if (!payload.exp) return false // no exp claim → don't force-expire
+    return payload.exp < Math.floor(Date.now() / 1000)
+  } catch {
+    return true // malformed token → treat as invalid
+  }
+}
+
 interface User {
   id: string
   email: string
@@ -60,9 +75,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         // No longer simulate login in admin mode; check local storage uniformly
         const savedToken = localStorage.getItem('auth_token')
         const savedUser = localStorage.getItem('auth_user')
-        if (savedToken && savedUser) {
+        if (savedToken && savedUser && !isJwtExpired(savedToken)) {
           setToken(savedToken)
           setUser(JSON.parse(savedUser))
+        } else if (savedToken && isJwtExpired(savedToken)) {
+          // Expired token → clear it so the app shows the login page instead of
+          // sitting "logged in" while every API call 401s (the stuck state).
+          localStorage.removeItem('auth_token')
+          localStorage.removeItem('auth_user')
         }
 
         setIsLoading(false)
@@ -73,9 +93,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const savedToken = localStorage.getItem('auth_token')
         const savedUser = localStorage.getItem('auth_user')
 
-        if (savedToken && savedUser) {
+        if (savedToken && savedUser && !isJwtExpired(savedToken)) {
           setToken(savedToken)
           setUser(JSON.parse(savedUser))
+        } else if (savedToken && isJwtExpired(savedToken)) {
+          localStorage.removeItem('auth_token')
+          localStorage.removeItem('auth_user')
         }
         setIsLoading(false)
       })

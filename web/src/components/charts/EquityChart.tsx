@@ -26,6 +26,7 @@ import {
 interface EquityPoint {
   timestamp: string
   total_equity: number
+  available_balance?: number // snap.Balance; first point = per-account baseline (ITEM 2)
   pnl: number
   pnl_pct: number
   cycle_number: number
@@ -47,13 +48,25 @@ export function EquityChart({
   const { user, token } = useAuth()
   const [displayMode, setDisplayMode] = useState<'dollar' | 'percent'>('dollar')
 
+  // Issue 2F — selected NT account (shares the accounts-${traderId} SWR cache)
+  // so the equity/account keys are account-scoped and switching re-fetches.
+  const { data: accountsData } = useSWR(
+    user && token && traderId ? `accounts-${traderId}` : null,
+    () => api.getAccounts(traderId as string),
+    { revalidateOnFocus: false, dedupingInterval: 5000 }
+  )
+  const selectedAccount = accountsData?.current || ''
+  const acctSuffix = selectedAccount ? `-${selectedAccount}` : ''
+
   const {
     data: history,
     error,
     isLoading,
   } = useSWR<EquityPoint[]>(
-    user && token && traderId ? `equity-history-${traderId}` : null,
-    () => api.getEquityHistory(traderId, true),
+    user && token && traderId
+      ? `equity-history-${traderId}${acctSuffix}`
+      : null,
+    () => api.getEquityHistory(traderId, true, selectedAccount),
     {
       refreshInterval: 30000, // 30秒刷新（历史数据更新频率较低）
       revalidateOnFocus: false,
@@ -62,8 +75,8 @@ export function EquityChart({
   )
 
   const { data: account } = useSWR(
-    user && token && traderId ? `account-${traderId}` : null,
-    () => api.getAccount(traderId, true),
+    user && token && traderId ? `account-${traderId}${acctSuffix}` : null,
+    () => api.getAccount(traderId, true, selectedAccount),
     {
       refreshInterval: 15000, // 15秒刷新（配合后端缓存）
       revalidateOnFocus: false,
@@ -149,13 +162,22 @@ export function EquityChart({
       ? validHistory.slice(-MAX_DISPLAY_POINTS)
       : validHistory
 
-  // 计算初始余额（优先从 account 获取配置的初始余额，备选从历史数据反推）
+  // 计算初始余额 baseline.
+  // ITEM 2 per-account: when an NT sub-account is selected, the equity series is
+  // already scoped to that account, so the baseline must be THIS account's own
+  // first-snapshot balance — NOT the trader-global configured initial_balance
+  // (which produced the cross-account "-30% / 100000" artifact over a mixed
+  // series). Crypto / legacy (no selected account) keeps the configured
+  // initial_balance, then falls back to the series.
+  const seriesBaseline = validHistory[0]
+    ? (validHistory[0].available_balance ??
+      validHistory[0].total_equity - validHistory[0].pnl)
+    : undefined
   const initialBalance =
-    account?.initial_balance || // 从交易员配置读取真实初始余额
-    (validHistory[0]
-      ? validHistory[0].total_equity - validHistory[0].pnl
-      : undefined) || // 备选：淨值 - 盈亏
-    1000 // 默认值（与创建交易员时的默认配置一致）
+    (selectedAccount ? seriesBaseline : account?.initial_balance) ||
+    seriesBaseline ||
+    account?.initial_balance ||
+    1000
 
   // 转换数据格式
   const chartData = displayHistory.map((point, index) => {

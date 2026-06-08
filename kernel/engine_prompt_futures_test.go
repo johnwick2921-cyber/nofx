@@ -69,7 +69,7 @@ func TestFuturesDecisionPrompt_WaitParses(t *testing.T) {
 // crypto perp (the framing that confused the model into empty JSON).
 func TestFuturesDecisionPrompt_Content(t *testing.T) {
 	e := futuresTestEngine()
-	p := e.BuildFuturesDecisionSystemPrompt(50000)
+	p := e.BuildFuturesDecisionSystemPrompt("MNQ", 50000)
 
 	for _, s := range []string{"MNQ", "$2", "0.25", "<reasoning>", "<decision>", "open_long | open_short", "JSON array"} {
 		if !strings.Contains(p, s) {
@@ -91,11 +91,62 @@ func TestFuturesDecisionPrompt_Content(t *testing.T) {
 // futures prompt, while other variants still produce the crypto assembly.
 func TestFuturesVariant_Routing(t *testing.T) {
 	e := futuresTestEngine()
-	if !strings.Contains(e.BuildSystemPrompt(50000, "futures"), "Micro E-mini Nasdaq-100") {
+	if !strings.Contains(e.BuildSystemPrompt(50000, "futures", "MNQ"), "Micro E-mini Nasdaq-100") {
 		t.Errorf("futures variant did not route to the futures prompt")
 	}
-	if strings.Contains(e.BuildSystemPrompt(50000, "balanced"), "Micro E-mini Nasdaq-100") {
+	if strings.Contains(e.BuildSystemPrompt(50000, "balanced", "MNQ"), "Micro E-mini Nasdaq-100") {
 		t.Errorf("balanced variant unexpectedly produced the futures prompt")
+	}
+}
+
+// TestFuturesDecisionPrompt_SymbolParameterized (Phase 3) asserts the prompt
+// reflects the ACTIVE symbol's real instrument + point value — not a hardwired
+// MNQ. The micro≠mini divergence (P1) must flow through: NQ says $20, MNQ $2.
+func TestFuturesDecisionPrompt_SymbolParameterized(t *testing.T) {
+	e := futuresTestEngine()
+	cases := []struct {
+		symbol   string
+		wantName string   // instrument description
+		wantHave []string // substrings that MUST appear (point value etc.)
+		wantGone []string // substrings that must NOT appear (no wrong instrument)
+	}{
+		{"MNQ", "Micro E-mini Nasdaq-100", []string{"$2.00 per index point", "Symbol: MNQ"}, nil},
+		{"NQ", "E-mini Nasdaq-100", []string{"$20.00 per index point", "Symbol: NQ"}, []string{"Symbol: MNQ"}},
+		{"ES", "E-mini S&P 500", []string{"$50.00 per index point", "Symbol: ES"}, []string{"Micro E-mini Nasdaq-100"}},
+		{"MES", "Micro E-mini S&P 500", []string{"$5.00 per index point", "Symbol: MES"}, nil},
+		{"ZB", "30-Year U.S. Treasury Bond", []string{"$1000.00 per point", "Symbol: ZB"}, []string{"index point"}},
+	}
+	for _, c := range cases {
+		p := e.BuildFuturesDecisionSystemPrompt(c.symbol, 50000)
+		if !strings.Contains(p, c.wantName) {
+			t.Errorf("%s prompt missing instrument name %q", c.symbol, c.wantName)
+		}
+		for _, s := range c.wantHave {
+			if !strings.Contains(p, s) {
+				t.Errorf("%s prompt missing %q (wrong/missing point value or symbol)", c.symbol, s)
+			}
+		}
+		for _, s := range c.wantGone {
+			if strings.Contains(p, s) {
+				t.Errorf("%s prompt unexpectedly contains %q (leaked another instrument)", c.symbol, s)
+			}
+		}
+	}
+
+	// micro≠mini: the same prompt builder must NOT give a micro its mini's $/point.
+	nq := e.BuildFuturesDecisionSystemPrompt("NQ", 50000)
+	mnq := e.BuildFuturesDecisionSystemPrompt("MNQ", 50000)
+	if strings.Contains(mnq, "$20.00 per index point") {
+		t.Error("MNQ prompt wrongly shows NQ's $20 point value (micro inherited the mini's multiplier)")
+	}
+	if strings.Contains(nq, "$2.00 per index point") {
+		t.Error("NQ prompt wrongly shows MNQ's $2 point value")
+	}
+
+	// Parked/unknown symbol defaults to MNQ (never a blank/wrong instrument).
+	parked := e.BuildFuturesDecisionSystemPrompt("CL", 50000)
+	if !strings.Contains(parked, "Micro E-mini Nasdaq-100") || !strings.Contains(parked, "Symbol: MNQ") {
+		t.Error("a parked symbol (CL) should default the prompt to MNQ, not emit a blank/wrong instrument")
 	}
 }
 

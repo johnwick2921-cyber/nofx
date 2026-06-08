@@ -29,16 +29,16 @@ export interface AccountInfo {
   margin_used_pct: number
 }
 
-// NinjaTrader account information (for account selector dropdown)
-export interface NTAccountInfo {
+export interface Account {
   name: string
   is_sim: boolean
-  is_current?: boolean
+  is_current: boolean
 }
 
 export interface AccountsResponse {
-  current: string
-  accounts: NTAccountInfo[]
+  current: string // the NT8 connection's streamed current account
+  selected?: string // the trader's PERSISTED chosen account ("" = none chosen → gated)
+  accounts: Account[]
 }
 
 export interface Position {

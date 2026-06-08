@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -19,7 +21,10 @@ const (
 )
 
 var (
-	DefaultTimeout = 120 * time.Second
+	// Overall request ceiling. Generous because reasoning models stream slowly
+	// (hidden reasoning + long completions); the idle-timeout watchdog in the
+	// streaming path catches genuinely hung connections sooner.
+	DefaultTimeout = 300 * time.Second
 
 	MaxRetryTimes = 3
 
@@ -732,9 +737,17 @@ func (client *Client) CallWithRequestStream(req *Request, onChunk func(string)) 
 		return "", err
 	}
 
-	// Idle-timeout watchdog: cancel the request if no SSE line arrives for 60 seconds.
-	// This breaks the scanner out of an indefinitely blocking Read on a hung connection.
-	const idleTimeout = 60 * time.Second
+	// Idle-timeout watchdog: cancel the request if no SSE line arrives within
+	// the window. This breaks the scanner out of an indefinitely blocking Read
+	// on a hung connection. Reasoning models (e.g. deepseek-v4-pro) can spend
+	// well over a minute on hidden reasoning before the first token streams, so
+	// the default is generous; tune via AI_STREAM_IDLE_TIMEOUT_SECS.
+	idleTimeout := 180 * time.Second
+	if v := os.Getenv("AI_STREAM_IDLE_TIMEOUT_SECS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			idleTimeout = time.Duration(n) * time.Second
+		}
+	}
 	ctx, cancel := context.WithCancel(contextFromRequest(req))
 	defer cancel()
 	resetCh := make(chan struct{}, 1)

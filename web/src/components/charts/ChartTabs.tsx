@@ -16,7 +16,21 @@ interface ChartTabsProps {
 }
 
 type ChartTab = 'equity' | 'kline'
-type Interval = '1m' | '5m' | '15m' | '30m' | '1h' | '4h' | '1d'
+type Interval =
+  | '1m'
+  | '3m'
+  | '5m'
+  | '15m'
+  | '30m'
+  | '1h'
+  | '2h'
+  | '4h'
+  | '6h'
+  | '8h'
+  | '12h'
+  | '1d'
+  | '3d'
+  | '1w'
 type MarketType =
   | 'hyperliquid'
   | 'crypto'
@@ -93,6 +107,26 @@ const INTERVALS: { value: Interval; label: string }[] = [
   { value: '1d', label: '1d' },
 ]
 
+// NinjaTrader (CME futures) chart timeframes — the 14-set the NT8 AddOn
+// auto-subscribes (provider/ninjatrader/tcp_server.go defaultAutoBarsTimeframes).
+// Every button maps to a subscribed BarCache series. Crypto INTERVALS untouched.
+const NINJATRADER_INTERVALS: { value: Interval; label: string }[] = [
+  { value: '1m', label: '1m' },
+  { value: '3m', label: '3m' },
+  { value: '5m', label: '5m' },
+  { value: '15m', label: '15m' },
+  { value: '30m', label: '30m' },
+  { value: '1h', label: '1h' },
+  { value: '2h', label: '2h' },
+  { value: '4h', label: '4h' },
+  { value: '6h', label: '6h' },
+  { value: '8h', label: '8h' },
+  { value: '12h', label: '12h' },
+  { value: '1d', label: '1d' },
+  { value: '3d', label: '3d' },
+  { value: '1w', label: '1w' },
+]
+
 // Infer market type from exchange ID
 function getMarketTypeFromExchange(exchangeId: string | undefined): MarketType {
   if (!exchangeId) return 'hyperliquid'
@@ -112,7 +146,9 @@ export function ChartTabs({
 }: ChartTabsProps) {
   const { language } = useLanguage()
   const [activeTab, setActiveTab] = useState<ChartTab>('equity')
-  const [chartSymbol, setChartSymbol] = useState<string>('BTC')
+  const [chartSymbol, setChartSymbol] = useState<string>(
+    () => MARKET_CONFIG[getMarketTypeFromExchange(exchangeId)].defaultSymbol
+  )
   const [interval, setInterval] = useState<Interval>('5m')
   const [symbolInput, setSymbolInput] = useState('')
   const [marketType, setMarketType] = useState<MarketType>(() =>
@@ -127,7 +163,14 @@ export function ChartTabs({
   useEffect(() => {
     const newMarketType = getMarketTypeFromExchange(exchangeId)
     setMarketType(newMarketType)
-  }, [exchangeId])
+    // Reset the chart symbol to the new market's default (e.g. MNQ for
+    // ninjatrader) so the chart doesn't keep requesting the previous market's
+    // symbol (default 'BTC') on the wrong exchange, which returns empty klines.
+    // An externally-selected symbol still wins via the selectedSymbol effect.
+    if (!selectedSymbol) {
+      setChartSymbol(MARKET_CONFIG[newMarketType].defaultSymbol)
+    }
+  }, [exchangeId, selectedSymbol])
 
   // Determine exchange from market type
   const marketConfig = MARKET_CONFIG[marketType]
@@ -291,7 +334,7 @@ export function ChartTabs({
 
         {/* Right: Symbol + Interval */}
         {activeTab === 'kline' && (
-          <div className="flex items-center gap-2 md:gap-3 w-full md:w-auto min-w-0">
+          <div className="flex flex-wrap items-center gap-2 md:gap-3 w-full md:w-auto min-w-0">
             {/* Symbol Dropdown */}
             <div className="shrink-0 relative" ref={dropdownRef}>
               {marketConfig.hasDropdown ? (
@@ -370,9 +413,14 @@ export function ChartTabs({
               )}
             </div>
 
-            {/* Interval Selector - Allow scrolling if needed */}
-            <div className="flex items-center bg-black/40 rounded border border-white/10 overflow-x-auto no-scrollbar max-w-[200px] md:max-w-none">
-              {INTERVALS.map((int) => (
+            {/* Interval Selector — wrap so ALL timeframe buttons stay visible
+                (the old overflow-x-auto + flex-shrink clipped the row to ~2-4
+                buttons behind a hidden scrollbar; NT8 needs all 7 reachable). */}
+            <div className="flex flex-wrap items-center bg-black/40 rounded border border-white/10">
+              {(marketType === 'ninjatrader'
+                ? NINJATRADER_INTERVALS
+                : INTERVALS
+              ).map((int) => (
                 <button
                   key={int.value}
                   onClick={() => setInterval(int.value)}
