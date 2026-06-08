@@ -10050,3 +10050,32 @@ prompt now shows `current_ema9/21/200`, per-TF `EMA9/EMA21/EMA200`, `BOLL10/BOLL
 EMA200 shows 1 value (correct — needs 200 bars). The grid/agent/futures-static readers + the gate +
 multi-account + the live-account block untouched. SIM-only. Propagated to the partner repo
 vlautoagenttraderv1 (same fix).
+
+
+## 2026-06-08 — Risk Control R/R input revert-on-clear bug fixed (commit cd3ff63d)
+
+Audit-then-fix. The owner reported "set R/R to 1:1 but the AI enforces 3:1." **Audit (Phase 1) REFUTED
+the EMA-class premise:** the R/R prompt (engine_prompt_futures.go:66/114) + gate (engine_position.go:141)
+are config-driven + code-enforced (live: the decision prompt injected "3.00x" — the *saved* value). The
+active strategy (Hoangvl/70695b25) is SAVED as min_rr=3; no strategy is saved at 1:1. The real cause is
+the **FE R/R input**: RiskControlEditor.tsx used `value={config.min_risk_reward_ratio ?? 3}` +
+`onChange={parseFloat(e.target.value) || 3}`, so clearing the box (empty → NaN → `|| 3`) or typing 0
+snapped it back to 3 — the owner's 1:1 never persisted. Same class as the indicator period-edit bug.
+
+Fix (FE-only, cd3ff63d): extracted `ClampedNumberInput` (mirrors the shipped `PeriodInput` pattern) —
+holds the raw typed text in local state while editing (clear + retype allowed), parses → clamps [1,10] →
+commits ONLY on blur (Enter blurs); an empty/invalid commit keeps the existing saved value (not a
+hardcoded 3). Applied to the min-R/R input ONLY. The saved shape (a number, clamped [1,10] by store
+ClampLimits) is unchanged. **The R/R prompt + gate are UNTOUCHED** (they were already correct — not
+weakened). tsc 0; `npm run build` ✓; Go untouched. Propagated to vlautoagenttraderv1.
+
+Coverage: code/DB/live-log-confirmed; the clear→type→commit behavior is code-deterministic — Playwright
+LIVE-verify was BLOCKED (the browser session expired → /login; no token forged), so the before/after
+typing + the persist-as-1 sqlite check await a re-authed session. **OTHER risk fields flagged (NOT fixed
+this pass — one bug at a time):** MaxMarginUsage is advisory-only (never gated, absent on futures); the
+active strategy has `guardrails_enabled=false` so all prop-firm guardrails (daily loss/profit, max
+trades, blackout, consistency, max contracts, notional cap) are BYPASSED — confirmed live
+(engine_analysis.go:142); the R/R unset-fallback mismatches (prompt 1.5 vs gate 3.0 when min_rr=0). The
+other number inputs in RiskControlEditor likely share the `|| default` revert pattern — a follow-up could
+reuse ClampedNumberInput for them. ADDITIVE; FE-only; saved shape unchanged; the gate/guardrails/
+multi-account/P&L/chart-TZ + the live-account block untouched. SIM-only.
