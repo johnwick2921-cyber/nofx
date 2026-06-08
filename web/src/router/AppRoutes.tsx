@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useState } from 'react'
+import { type ReactNode, useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import useSWR from 'swr'
 import {
@@ -278,9 +278,21 @@ function DashboardRoute() {
     }
   }, [selectedTraderId, selectedTraderSlug, traders])
 
+  // Issue 2F — the currently selected NT account (from /api/accounts). Shares
+  // the SWR cache with AccountSelector via the same key. Threaded into the
+  // account-scoped keys + query params below so switching accounts fetches that
+  // account's data instead of serving a trader-global cache entry.
+  const { data: accountsData } = useSWR(
+    selectedTraderId ? `accounts-${selectedTraderId}` : null,
+    () => api.getAccounts(selectedTraderId as string),
+    { revalidateOnFocus: false, dedupingInterval: 5000 }
+  )
+  const selectedAccount = accountsData?.current || ''
+  const acctSuffix = selectedAccount ? `-${selectedAccount}` : ''
+
   const { data: status } = useSWR<SystemStatus>(
-    selectedTraderId ? `status-${selectedTraderId}` : null,
-    () => api.getStatus(selectedTraderId, true),
+    selectedTraderId ? `status-${selectedTraderId}${acctSuffix}` : null,
+    () => api.getStatus(selectedTraderId, true, selectedAccount),
     {
       refreshInterval: 15000,
       revalidateOnFocus: false,
@@ -288,9 +300,9 @@ function DashboardRoute() {
     }
   )
 
-  const { data: account, mutate: mutateAccount } = useSWR<AccountInfo>(
-    selectedTraderId ? `account-${selectedTraderId}` : null,
-    () => api.getAccount(selectedTraderId, true),
+  const { data: account } = useSWR<AccountInfo>(
+    selectedTraderId ? `account-${selectedTraderId}${acctSuffix}` : null,
+    () => api.getAccount(selectedTraderId, true, selectedAccount),
     {
       refreshInterval: accountPollOff ? 0 : 15000,
       revalidateOnFocus: false,
@@ -310,9 +322,9 @@ function DashboardRoute() {
     }
   )
 
-  const { data: positions, mutate: mutatePositions } = useSWR<Position[]>(
-    selectedTraderId ? `positions-${selectedTraderId}` : null,
-    () => api.getPositions(selectedTraderId, true),
+  const { data: positions } = useSWR<Position[]>(
+    selectedTraderId ? `positions-${selectedTraderId}${acctSuffix}` : null,
+    () => api.getPositions(selectedTraderId, true, selectedAccount),
     {
       refreshInterval: positionsPollOff ? 0 : 15000,
       revalidateOnFocus: false,
@@ -332,11 +344,17 @@ function DashboardRoute() {
     }
   )
 
-  const { data: decisions, mutate: mutateDecisions } = useSWR<DecisionRecord[]>(
+  const { data: decisions } = useSWR<DecisionRecord[]>(
     selectedTraderId
-      ? `decisions/latest-${selectedTraderId}-${decisionsLimit}`
+      ? `decisions/latest-${selectedTraderId}-${decisionsLimit}${acctSuffix}`
       : null,
-    () => api.getLatestDecisions(selectedTraderId, decisionsLimit, true),
+    () =>
+      api.getLatestDecisions(
+        selectedTraderId,
+        decisionsLimit,
+        true,
+        selectedAccount
+      ),
     {
       refreshInterval: decisionsPollOff ? 0 : 30000,
       revalidateOnFocus: false,
@@ -357,24 +375,14 @@ function DashboardRoute() {
   )
 
   const { data: stats } = useSWR<Statistics>(
-    selectedTraderId ? `statistics-${selectedTraderId}` : null,
-    () => api.getStatistics(selectedTraderId, true),
+    selectedTraderId ? `statistics-${selectedTraderId}${acctSuffix}` : null,
+    () => api.getStatistics(selectedTraderId, true, selectedAccount),
     {
       refreshInterval: 30000,
       revalidateOnFocus: false,
       dedupingInterval: 20000,
     }
   )
-
-  // Handle account switch: invalidate all account-scoped caches
-  const handleAccountChanged = useCallback(() => {
-    console.log('[DashboardRoute] Account changed, refreshing all data')
-    // Invalidate all account-scoped SWR caches
-    mutateAccount() // Refresh balance
-    mutatePositions() // Refresh positions
-    mutateDecisions() // Refresh decisions
-    // Orders will auto-refresh through positions refresh
-  }, [mutateAccount, mutatePositions, mutateDecisions])
 
   useEffect(() => {
     if (account) {
@@ -393,6 +401,7 @@ function DashboardRoute() {
         status={status}
         account={account}
         accountFailed={accountPollOff}
+        selectedAccount={selectedAccount}
         positions={positions}
         positionsFailed={positionsPollOff}
         decisions={decisions}
@@ -416,7 +425,6 @@ function DashboardRoute() {
           )
         }}
         onNavigateToTraders={() => navigate(ROUTES.traders)}
-        onAccountChanged={handleAccountChanged}
         exchanges={exchanges}
       />
     </AppChrome>

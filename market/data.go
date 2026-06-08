@@ -264,14 +264,18 @@ func GetWithTimeframes(symbol string, timeframes []string, primaryTimeframe stri
 	priceChange1h := calculatePriceChangeByBars(primaryKlines, primaryTimeframe, 60) // 1 hour
 	priceChange4h := calculatePriceChangeByBars(primaryKlines, primaryTimeframe, 240) // 4 hours
 
-	// Get OI data
-	oiData, err := getOpenInterestData(symbol)
-	if err != nil {
-		oiData = &OIData{Latest: 0, Average: 0}
+	// Get OI + Funding Rate (Binance crypto-perp feeds). CME futures have no
+	// Binance symbol, so these return zeros anyway and just waste a round-trip
+	// per cycle — skip them on futures. oiData stays {0,0} and fundingRate stays
+	// 0 (identical to the prior values for MNQ), but no network call is made.
+	oiData := &OIData{Latest: 0, Average: 0}
+	var fundingRate float64
+	if !isFutures {
+		if d, oiErr := getOpenInterestData(symbol); oiErr == nil {
+			oiData = d
+		}
+		fundingRate, _ = getFundingRate(symbol)
 	}
-
-	// Get Funding Rate
-	fundingRate, _ := getFundingRate(symbol)
 
 	return &Data{
 		Symbol:        symbol,

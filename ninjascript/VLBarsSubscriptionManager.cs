@@ -39,6 +39,7 @@
 #region Using declarations
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using NinjaTrader.Cbi;
 using NinjaTrader.Data;
 #endregion
@@ -80,6 +81,38 @@ namespace NinjaTrader.NinjaScript.AddOns
         // sufficient for EMA200/RSI14 warmup).
         private const int DEFAULT_BARS_BACK = 500;
 
+        // Extended/overnight (Globex) session template. Applied to every
+        // BarsRequest so the series includes the EVENING session and .Update
+        // keeps firing past the 16:00 CT RTH close. NT8's default template for
+        // CME US Index Futures (ES/MES/MNQ/NQ). Without it the request inherits
+        // an RTH-bounded template and the bar feed FREEZES at the daily session
+        // close (observed 2026-06-01: stuck at 16:00 CT / 30523.75 while the
+        // live evening market ran ~30389, leaving the chart + AI stale).
+        private const string BARS_TRADING_HOURS = "CME US Index Futures ETH";
+
+        // Stall watchdog. NT8 can silently stop firing .Update (e.g. across a
+        // session boundary) with NO event — the old code logged nothing, so a
+        // stall was invisible. We stamp each entry on every emit; the watchdog
+        // logs the most-stale bar age each tick (visibility) and, if it exceeds
+        // WATCHDOG_STALL_MS, recreates all requests via the existing
+        // OnConnectionReconnected() path. The threshold is deliberately larger
+        // than the daily 16:00-17:00 CT maintenance halt (60 min) so the
+        // EXPECTED daily gap never false-triggers a recreate.
+        private const long WATCHDOG_PERIOD_MS = 15000L;        // check cadence (15s) — fast guard needs frequent ticks
+        private const long WATCHDOG_STALL_MS  = 75L * 60000L;  // 75 min backstop (> 60-min daily halt) — mid-session silent death
+        // Fast guard: a fresh (re)subscribe seeds historical but no LIVE .Update
+        // arrives — the proven post-restart dead window (was 75 min until the slow
+        // watchdog). Recreate within ~FAST_STALL_MS, capped at FAST_MAX_ATTEMPTS so a
+        // genuine no-data window (daily halt / closed market) can't churn recreates.
+        private const long FAST_STALL_MS     = 20000L;         // no live .Update within 20s of (re)subscribe => dead window
+        private const int  FAST_MAX_ATTEMPTS = 3;              // cap fast recreates per dead window
+        private Timer watchdogTimer;
+        private long  lastWatchdogRecreateUtcMs = 0;
+        private long  lastFastRecreateUtcMs = 0;
+        private int   fastRecreateAttempts = 0;
+        private long  lastAgeLogUtcMs = 0;
+        private readonly object watchdogLock = new object();
+
         public VLBarsSubscriptionManager(
             Action<string, Dictionary<string, object>> sendFrame,
             Action<string> logInfo,
@@ -88,6 +121,10 @@ namespace NinjaTrader.NinjaScript.AddOns
             this.sendFrame = sendFrame;
             this.logInfo   = logInfo  ?? (s => { });
             this.logWarn   = logWarn ?? (s => { });
+
+            // Start the stall watchdog (logs bar age each tick; recreates on a
+            // genuine stall). Ticks do nothing until a subscription is streaming.
+            watchdogTimer = new Timer(WatchdogTick, null, WATCHDOG_PERIOD_MS, WATCHDOG_PERIOD_MS);
         }
 
         // ==============================================================
@@ -137,9 +174,36 @@ namespace NinjaTrader.NinjaScript.AddOns
             var instrument = Instrument.GetInstrument(contract);
             if (instrument == null)
             {
-                logWarn("VLBarsSubscriptionManager: instrument " + symbol
-                        + " (resolved to " + contract + ") not found");
+                // Clear unresolved signal (Phase 2) — no silent freeze. Either a
+                // non-quarterly root (energy CL/NG, metal GC/SI) whose front-month
+                // roll resolution is deferred (it passed through unchanged, so
+                // symbol == contract), or a contract not loaded in NT8's database.
+                bool passthrough = string.Equals(symbol, contract, StringComparison.OrdinalIgnoreCase);
+                logWarn("VLBarsSubscriptionManager: instrument_unresolved symbol=" + symbol
+                        + " resolved=" + contract
+                        + (passthrough
+                            ? " — root not a quarterly family; front-month roll resolution deferred (energy/metal)"
+                            : " — qualified contract not found in NT8 (not loaded?)"));
                 return;
+            }
+
+            // Phase 4 — emit the resolved instrument's REAL specs (NT8 ground
+            // truth) so Go can cross-check the hardcoded tables / source them.
+            // Synchronous DB lookup; safe immediately after GetInstrument resolves.
+            try
+            {
+                var mi = instrument.MasterInstrument;
+                sendFrame("instrument_info", new Dictionary<string, object>
+                {
+                    ["symbol"]      = mi.Name,
+                    ["contract"]    = instrument.FullName,
+                    ["point_value"] = mi.PointValue,
+                    ["tick_size"]   = mi.TickSize,
+                });
+            }
+            catch (Exception ex)
+            {
+                logWarn("VLBarsSubscriptionManager: instrument_info emit failed: " + ex.Message);
             }
 
             foreach (var tf in timeframes)
@@ -236,7 +300,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                 //
                 //   var req = new BarsRequest(instrument, barsBack);
                 //   req.BarsPeriod = period;
-                //   req.TradingHoursInstance = TradingHours.Get("CME US Index Futures ETH");
+                //   req.TradingHours = TradingHours.Get("CME US Index Futures ETH");
                 //   req.Request((bars, err, msg) => { ... });
                 //   req.Update += (s, e) => { ... };
                 //
@@ -249,6 +313,18 @@ namespace NinjaTrader.NinjaScript.AddOns
                 {
                     request = new BarsRequest(instrument, barsBack);
                     request.BarsPeriod = period;
+                    // Force the EXTENDED (overnight/Globex) session so the series
+                    // includes the evening session and .Update keeps firing past
+                    // the 16:00 CT RTH close (the freeze fix). Non-fatal if the
+                    // template name is absent on this build — fall back to the
+                    // instrument default rather than dropping the subscription.
+                    try { request.TradingHours = TradingHours.Get(BARS_TRADING_HOURS); }
+                    catch (Exception thEx)
+                    {
+                        logWarn("VLBarsSubscriptionManager: TradingHours.Get(\"" + BARS_TRADING_HOURS
+                                + "\") failed for " + key + ": " + thEx.Message
+                                + " — using instrument default trading hours");
+                    }
                 }
                 catch (Exception ex)
                 {
@@ -264,7 +340,9 @@ namespace NinjaTrader.NinjaScript.AddOns
                     Timeframe = timeframe,
                     Request   = request,
                     LastEmittedTimeUtcMs = 0,
-                    HistoricalSent = false
+                    HistoricalSent = false,
+                    SubscribedAtUtcMs = NowUtcMs(), // fast-guard: start the no-live-.Update clock now
+                    LiveUpdateSeen = false
                 };
                 active[key] = entry;
 
@@ -340,6 +418,7 @@ namespace NinjaTrader.NinjaScript.AddOns
             }
 
             entry.HistoricalSent = true;
+            entry.LastUpdateUtcMs = NowUtcMs(); // watchdog: reset stall clock
             if (lastT > entry.LastEmittedTimeUtcMs)
                 entry.LastEmittedTimeUtcMs = lastT;
 
@@ -393,6 +472,8 @@ namespace NinjaTrader.NinjaScript.AddOns
             if (emitted.Count == 0) return;
 
             entry.LastEmittedTimeUtcMs = maxEmittedT;
+            entry.LastUpdateUtcMs = NowUtcMs(); // watchdog: live bar received
+            entry.LiveUpdateSeen = true;        // fast-guard: a real live .Update has fired since (re)subscribe
 
             var payload = new Dictionary<string, object>
             {
@@ -453,12 +534,123 @@ namespace NinjaTrader.NinjaScript.AddOns
             }
         }
 
+        // ==============================================================
+        // Stall watchdog — recreate-on-stall + visibility
+        // ==============================================================
+
+        /// <summary>
+        /// Periodic check (WATCHDOG_PERIOD_MS). Logs the most-stale active
+        /// subscription's bar age (so a stall is never silent), and if it
+        /// exceeds WATCHDOG_STALL_MS recreates all BarsRequests via the existing
+        /// OnConnectionReconnected() path. The threshold is larger than the daily
+        /// 16:00-17:00 CT maintenance halt so the expected daily gap (and, with a
+        /// re-arm guard, the weekend) does not churn recreates. This is a backstop
+        /// behind the primary fix (ETH trading hours, which should keep .Update
+        /// firing past the session close on its own).
+        /// </summary>
+        private void WatchdogTick(object state)
+        {
+            try
+            {
+                long now = NowUtcMs();
+                long oldest = long.MaxValue;
+                string staleKey = null;
+                bool anyDead = false; // (re)subscribed + historical sent, but NO live .Update within FAST_STALL_MS
+                int deadCount = 0;
+                lock (subsLock)
+                {
+                    foreach (var kv in active)
+                    {
+                        var e = kv.Value;
+                        if (!e.HistoricalSent) continue;
+                        if (!e.LiveUpdateSeen && now - e.SubscribedAtUtcMs >= FAST_STALL_MS) { anyDead = true; deadCount++; }
+                        if (e.LastUpdateUtcMs != 0 && e.LastUpdateUtcMs < oldest) { oldest = e.LastUpdateUtcMs; staleKey = e.Key; }
+                    }
+                }
+
+                // Visibility — throttled to ~1/min so the 15s cadence doesn't spam the log.
+                if (staleKey != null && now - lastAgeLogUtcMs >= 60000L)
+                {
+                    lastAgeLogUtcMs = now;
+                    logInfo("VLBarsSubscriptionManager: watchdog — most-stale " + staleKey
+                            + " bar age " + ((now - oldest) / 1000) + "s; dead-subscriptions=" + deadCount);
+                }
+
+                // FAST GUARD — the post-(re)subscribe dead window. Historical seeded but
+                // no live .Update arrived: recreate quickly (the proven OnConnectionReconnected
+                // revival). Bounded by FAST_MAX_ATTEMPTS so a real no-data window (halt/closed)
+                // cannot churn; the counter re-arms once a live .Update is seen anywhere.
+                if (!anyDead)
+                {
+                    if (fastRecreateAttempts != 0) fastRecreateAttempts = 0; // healthy → re-arm
+                }
+                else
+                {
+                    bool doFast = false;
+                    lock (watchdogLock)
+                    {
+                        if (fastRecreateAttempts < FAST_MAX_ATTEMPTS
+                            && now - lastFastRecreateUtcMs >= FAST_STALL_MS)
+                        {
+                            lastFastRecreateUtcMs = now;
+                            fastRecreateAttempts++;
+                            doFast = true;
+                        }
+                    }
+                    if (doFast)
+                    {
+                        logWarn("VLBarsSubscriptionManager: fast guard — " + deadCount
+                                + " subscription(s) seeded but no live .Update within " + (FAST_STALL_MS / 1000)
+                                + "s (attempt " + fastRecreateAttempts + "/" + FAST_MAX_ATTEMPTS
+                                + "); recreating all BarsRequests");
+                        OnConnectionReconnected();
+                        return; // recreate fired this tick; observe the result on subsequent ticks
+                    }
+                }
+
+                // 75-MIN BACKSTOP — catches a SILENT mid-session .Update death (live updates
+                // were flowing, then stopped, so the fast guard above does not apply).
+                if (staleKey == null) return;
+                long ageMs = now - oldest;
+                if (ageMs < WATCHDOG_STALL_MS) return;
+
+                bool doRecreate = false;
+                lock (watchdogLock)
+                {
+                    if (now - lastWatchdogRecreateUtcMs >= WATCHDOG_STALL_MS)
+                    {
+                        lastWatchdogRecreateUtcMs = now;
+                        doRecreate = true;
+                    }
+                }
+                if (doRecreate)
+                {
+                    logWarn("VLBarsSubscriptionManager: watchdog — bar feed stalled "
+                            + (ageMs / 1000) + "s (> " + (WATCHDOG_STALL_MS / 1000)
+                            + "s); recreating all BarsRequests");
+                    OnConnectionReconnected();
+                }
+            }
+            catch (Exception ex)
+            {
+                logWarn("VLBarsSubscriptionManager: watchdog tick failed: " + ex.Message);
+            }
+        }
+
+        private static long NowUtcMs()
+        {
+            return (long)((DateTime.UtcNow
+                - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalMilliseconds);
+        }
+
         /// <summary>
         /// Tear down all subscriptions. Called by VLTraderTCPClient at
         /// AddOn-Terminated time.
         /// </summary>
         public void DisposeAll()
         {
+            try { if (watchdogTimer != null) watchdogTimer.Dispose(); } catch { }
+            watchdogTimer = null;
             lock (subsLock)
             {
                 foreach (var kv in active) DisposeEntry(kv.Value);
@@ -620,6 +812,9 @@ namespace NinjaTrader.NinjaScript.AddOns
             public BarsRequest  Request;
             public long         LastEmittedTimeUtcMs;
             public bool         HistoricalSent;
+            public long         LastUpdateUtcMs;   // wall-clock UTC ms of last emit (stall watchdog)
+            public long         SubscribedAtUtcMs; // wall-clock UTC ms when this request was (re)subscribed — fast-guard baseline
+            public bool         LiveUpdateSeen;    // a genuine live .Update (OnBarsUpdate) has fired since (re)subscribe
         }
     }
 }

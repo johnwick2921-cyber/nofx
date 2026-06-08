@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { createPortal } from 'react-dom'
+import ReactDOM from 'react-dom'
 import useSWR from 'swr'
 import { api } from '../../lib/api'
 import { notify } from '../../lib/notify'
@@ -44,26 +44,11 @@ export function AccountSelector({
     { revalidateOnFocus: false, dedupingInterval: 5000 }
   )
 
-  const currentAccount = accountsData?.current
+  // The trader's PERSISTED chosen account (multi-account Stage 1). "" = none chosen
+  // yet → the trader is GATED (does not trade). Show/highlight THIS, not the streamed
+  // `current` (which can drift on the NT8 account_balance stream).
+  const selectedAccount = accountsData?.selected || ''
   const accounts = accountsData?.accounts || []
-
-  // Debug logging
-  useEffect(() => {
-    console.log(
-      'AccountSelector DEBUG: currentAccount=',
-      currentAccount,
-      'accounts=',
-      accounts,
-      'accounts[0].is_sim=',
-      accounts[0]?.is_sim,
-      'isLoading=',
-      isLoading,
-      'error=',
-      error,
-      'isSelecting=',
-      isSelecting
-    )
-  }, [currentAccount, accounts, isLoading, error, isSelecting])
 
   // Memoize ref callback to prevent infinite setState loop
   const handleTriggerRef = useCallback((el: HTMLButtonElement | null) => {
@@ -103,26 +88,15 @@ export function AccountSelector({
   }, [isOpen, triggerRect])
 
   const handleSelectAccount = async (accountName: string) => {
-    console.log(
-      `AccountSelector: handleSelectAccount called with ${accountName}, currentAccount=${currentAccount}, traderId=${traderId}`
-    )
-    if (accountName === currentAccount) {
-      console.log(
-        'AccountSelector: accountName === currentAccount, returning early'
-      )
+    if (accountName === selectedAccount) {
       setIsOpen(false)
       return
     }
 
     setIsSelecting(true)
     try {
-      console.log(
-        `AccountSelector: calling api.selectAccount(${traderId}, ${accountName})`
-      )
       await api.selectAccount(traderId, accountName)
       notify.success(`Account switched to ${accountName}`)
-      // Wait a moment for C# AddOn to send updated accounts_list, then refetch
-      await new Promise((r) => setTimeout(r, 500))
       await mutate()
       onAccountChanged?.()
     } catch (err) {
@@ -135,7 +109,7 @@ export function AccountSelector({
     }
   }
 
-  if (isLoading || accountsData === undefined) {
+  if (isLoading) {
     return (
       <div
         className="flex items-center gap-2 px-3 py-2 rounded border border-nofx-gold/20 bg-nofx-bg/30 text-sm text-nofx-text-muted"
@@ -172,8 +146,15 @@ export function AccountSelector({
         )}
       >
         <span className="truncate">
-          Account:{' '}
-          <span className="font-semibold">{currentAccount || '(none)'}</span>
+          {selectedAccount ? (
+            <>
+              Account: <span className="font-semibold">{selectedAccount}</span>
+            </>
+          ) : (
+            <span className="font-semibold text-nofx-gold">
+              Select an account
+            </span>
+          )}
         </span>
         <ChevronDown
           className={cn(
@@ -183,10 +164,13 @@ export function AccountSelector({
         />
       </button>
 
-      {/* Dropdown Menu (Portal to escape parent overflow) */}
+      {/* Dropdown Menu — Portal to body to escape parent overflow */}
       {isOpen &&
-        createPortal(
+        typeof document !== 'undefined' &&
+        document.body &&
+        ReactDOM.createPortal(
           <div
+            data-account-selector
             className="fixed z-[9999] rounded border border-nofx-gold/20 bg-[#0B0E11] shadow-xl shadow-black/50 max-h-64 overflow-y-auto"
             style={{
               top: `${dropdownPos.top}px`,
@@ -199,63 +183,45 @@ export function AccountSelector({
                 Waiting for accounts...
               </div>
             ) : (
-              accounts.map((account) => {
-                const isSimAccount = account.is_sim === true
-                const isDisabled = !isSimAccount || isSelecting
-
-                return (
-                  <button
-                    key={account.name}
-                    onMouseDown={(e) => {
-                      console.log(
-                        `[AccountSelector] button onMouseDown: ${account.name}`
-                      )
-                      e.preventDefault()
-                      e.stopPropagation()
-                      if (isSimAccount && !isSelecting) {
-                        console.log(
-                          `[AccountSelector] triggering handleSelectAccount(${account.name})`
-                        )
-                        handleSelectAccount(account.name)
-                      } else {
-                        console.log(
-                          `[AccountSelector] blocked: isSimAccount=${isSimAccount}, isSelecting=${isSelecting}`
-                        )
-                      }
-                    }}
-                    type="button"
-                    disabled={isDisabled}
-                    title={
-                      !isSimAccount
-                        ? 'Live accounts are not selectable — only SIM accounts can be auto-traded'
-                        : ''
+              accounts.map((account) => (
+                <button
+                  key={account.name}
+                  onClick={() => {
+                    if (account.is_sim && !isSelecting) {
+                      handleSelectAccount(account.name)
                     }
-                    className={cn(
-                      'w-full flex items-center gap-3 px-3 py-2 text-sm transition-colors border-b border-nofx-bg/30 last:border-b-0',
-                      isSimAccount
-                        ? cn(
-                            'text-nofx-text-main hover:bg-nofx-bg/50 cursor-pointer',
-                            account.is_current
-                              ? 'bg-nofx-gold/10 text-nofx-gold'
-                              : ''
-                          )
-                        : 'text-nofx-text-muted opacity-50 cursor-not-allowed bg-nofx-bg/20'
+                  }}
+                  disabled={!account.is_sim || isSelecting}
+                  title={
+                    !account.is_sim
+                      ? 'Live accounts are not selectable — only SIM accounts can be auto-traded'
+                      : ''
+                  }
+                  className={cn(
+                    'w-full flex items-center gap-3 px-3 py-2 text-sm transition-colors border-b border-nofx-bg/30 last:border-b-0',
+                    account.is_sim
+                      ? cn(
+                          'text-nofx-text-main hover:bg-nofx-bg/50 cursor-pointer',
+                          account.name === selectedAccount
+                            ? 'bg-nofx-gold/10 text-nofx-gold'
+                            : ''
+                        )
+                      : 'text-nofx-text-muted opacity-50 cursor-not-allowed bg-nofx-bg/20'
+                  )}
+                >
+                  <span className="flex-1 text-left truncate">
+                    {account.name}
+                    {!account.is_sim && (
+                      <span className="text-xs ml-2 opacity-70">
+                        (live — not selectable for auto-trade)
+                      </span>
                     )}
-                  >
-                    <span className="flex-1 text-left truncate">
-                      {account.name}
-                      {!account.is_sim && (
-                        <span className="text-xs ml-2 opacity-70">
-                          (live — not selectable for auto-trade)
-                        </span>
-                      )}
-                    </span>
-                    {account.is_current && (
-                      <Check className="w-4 h-4 text-nofx-gold shrink-0" />
-                    )}
-                  </button>
-                )
-              })
+                  </span>
+                  {account.name === selectedAccount && (
+                    <Check className="w-4 h-4 text-nofx-gold shrink-0" />
+                  )}
+                </button>
+              ))
             )}
           </div>,
           document.body

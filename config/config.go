@@ -51,6 +51,13 @@ type Config struct {
 	// NinjaTrader (CSV bridge for execution)
 	NinjaTraderDataDir string // e.g., "/mnt/c/Users/<u>/NofxTrader/data"
 
+	// AllowedNTAccounts is the allow-list of NT8 sub-account names a trader may be
+	// bound to (multi-account safety rail; env NT_ALLOWED_ACCOUNTS, comma-separated).
+	// Empty = no extra restriction beyond the server-side SIM-only guard. A non-empty
+	// list HARD-blocks selecting any account not on it (e.g. keep a funded account off
+	// the list so it can never be chosen). This is the rail Stage-2 routing will enforce.
+	AllowedNTAccounts []string
+
 	// Trading mode: "crypto" (default, original behavior) or "futures"
 	TradingMode string
 
@@ -116,6 +123,11 @@ func Init() {
 	cfg.DatabentoAPIKey = os.Getenv("DATABENTO_API_KEY")
 	cfg.DatabentoDataset = getEnvOrDefault("DATABENTO_DATASET", "GLBX.MDP3")
 	cfg.NinjaTraderDataDir = os.Getenv("NINJATRADER_DATA_DIR")
+	for _, a := range strings.Split(os.Getenv("NT_ALLOWED_ACCOUNTS"), ",") {
+		if a = strings.TrimSpace(a); a != "" {
+			cfg.AllowedNTAccounts = append(cfg.AllowedNTAccounts, a)
+		}
+	}
 	cfg.TradingMode = getEnvOrDefault("TRADING_MODE", "crypto")
 
 	// Plan 3 Task 21 — Risk limits

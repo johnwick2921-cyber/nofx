@@ -95,17 +95,70 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 	if ctx != nil {
 		MaybeResetDaily(time.Now())
 		limits := LoadRiskLimitsFromConfig()
-		// existingNotional from open positions (MarkPrice * Quantity).
-		existingNotional := 0.0
-		for _, p := range ctx.Positions {
-			existingNotional += p.MarkPrice * p.Quantity
-		}
-		// requestedNotional unknown at this point (no decision yet) → 0.
-		if err := limits.CheckPreTrade(ctx.Account.TotalPnL, len(ctx.Positions), 0, existingNotional); err != nil {
+		// Pre-prompt gate enforces ONLY daily-loss + concurrent-position (per the
+		// comment above). The NOTIONAL cap is intentionally NOT applied here: it is
+		// a futures-unaware crypto cap (RiskMaxNotionalUSD, default $50k) that any
+		// single open MNQ contract (~$61k notional) exceeds, which previously
+		// tripped EVERY cycle while a futures position was open and skipped it
+		// before BuildUserPrompt/the AI — so the AI could never see, manage, or
+		// close its own open position. Pass 0 for both requested + existing notional
+		// so this gate never trips on notional. Notional IS still enforced at
+		// EXECUTION time, futures-aware (engine_position.go: max position notional =
+		// equity × futuresMaxNotionalLeverage).
+		// DAILY-LOSS is no longer enforced here on session-cumulative TotalPnL —
+		// Strategy Studio P1 EVOLVES it to TRUE daily-realized P&L below (pass 0
+		// for pnl so CheckPreTrade enforces ONLY the concurrent-position cap).
+		if err := limits.CheckPreTrade(0, len(ctx.Positions), 0, 0); err != nil {
 			logger.Warnf("⚠️ Plan 3 T21 risk gate tripped: %v — skipping decision cycle (HOLD)", err)
 			// Plan 4 Task 25 — gate instrumentation
 			telemetry.RiskGateTrips.WithLabelValues("task21_risk_limit").Inc()
 			return nil, nil
+		}
+
+		// Strategy Studio P1 — per-strategy DAILY guardrails on TRUE daily-realized
+		// P&L over the CME session-day (daily loss/profit + max-daily-trades). This
+		// EVOLVES the env daily-loss gate (no duplicate): per-strategy value
+		// overrides; env RISK_MAX_DAILY_LOSS_USD is the daily-loss fallback; the
+		// master + per-guardrail toggles govern enforcement. Controls ONLY the
+		// prop-firm guardrails — NEVER the SIM-only / live-account block (which is
+		// enforced untoggleably in the broker layer).
+		if engine != nil {
+			rc := engine.GetRiskControlConfig()
+			g := DailyGuardrails{
+				MasterEnabled:    boolOrDefault(rc.GuardrailsEnabled, true),
+				DailyRealizedPnL: ctx.DailyRealizedPnL,
+				TradesToday:      ctx.TradesToday,
+
+				DailyLossEnabled:  boolOrDefault(rc.DailyLossEnabled, true), // preserve the live daily-loss gate
+				DailyLossLimitUSD: firstPositive(rc.DailyLossLimitUSD, limits.MaxDailyLossUSD),
+
+				DailyProfitEnabled:   boolOrDefault(rc.DailyProfitEnabled, false),
+				DailyProfitTargetUSD: rc.DailyProfitTargetUSD,
+
+				MaxDailyTradesEnabled: boolOrDefault(rc.MaxDailyTradesEnabled, false),
+				MaxDailyTrades:        rc.MaxDailyTrades,
+			}
+			if !g.MasterEnabled {
+				logger.Warnf("⚠️ Strategy Studio: risk guardrails DISABLED by master switch — daily limits + blackout NOT enforced this cycle")
+			} else if _, gErr := g.Check(); gErr != nil {
+				logger.Warnf("⚠️ Strategy Studio daily guardrail tripped: %v — skipping decision cycle (HOLD)", gErr)
+				telemetry.RiskGateTrips.WithLabelValues("strategy_studio_daily").Inc()
+				return nil, nil
+			} else if boolOrDefault(rc.BlackoutEnabled, false) && InBlackoutWindow(time.Now(), rc.BlackoutStartCT, rc.BlackoutEndCT) {
+				// Chunk 4 — time/news blackout: go passive during a configured daily
+				// [start,end] CT window (master + toggle governed). NT8-side SL/TP
+				// still protect open positions; the bot just makes no new decisions.
+				logger.Warnf("⚠️ Strategy Studio blackout window active (%s–%s CT) — skipping decision cycle (HOLD)", rc.BlackoutStartCT, rc.BlackoutEndCT)
+				telemetry.RiskGateTrips.WithLabelValues("strategy_studio_blackout").Inc()
+				return nil, nil
+			} else if boolOrDefault(rc.ConsistencyEnabled, false) && ConsistencyBreached(ctx.DailyRealizedPnL, ctx.TotalRealizedPnL, rc.ConsistencyMaxDayPct) {
+				// Chunk 5 — consistency rule: today's realized profit is too large a
+				// share of total → go passive so this session-day does not exceed the
+				// configured % of total realized profit.
+				logger.Warnf("⚠️ Strategy Studio consistency rule: today's realized profit %.2f ≥ %.0f%% of total %.2f — skipping decision cycle (HOLD)", ctx.DailyRealizedPnL, rc.ConsistencyMaxDayPct, ctx.TotalRealizedPnL)
+				telemetry.RiskGateTrips.WithLabelValues("strategy_studio_consistency").Inc()
+				return nil, nil
+			}
 		}
 	}
 	// ============================================================================
@@ -214,7 +267,15 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 
 	// 2. Build System Prompt using strategy engine
 	riskConfig := engine.GetRiskControlConfig()
-	systemPrompt := engine.BuildSystemPrompt(ctx.Account.TotalEquity, variant)
+	// Active symbol for the futures system prompt (Phase 3): the open position's
+	// symbol, else the first candidate, else "MNQ". Ignored on the crypto path.
+	activeSymbol := "MNQ"
+	if len(ctx.Positions) > 0 && ctx.Positions[0].Symbol != "" {
+		activeSymbol = ctx.Positions[0].Symbol
+	} else if len(ctx.CandidateCoins) > 0 && ctx.CandidateCoins[0].Symbol != "" {
+		activeSymbol = ctx.CandidateCoins[0].Symbol
+	}
+	systemPrompt := engine.BuildSystemPrompt(ctx.Account.TotalEquity, variant, activeSymbol)
 
 	// 3. Build User Prompt using strategy engine
 	userPrompt := engine.BuildUserPrompt(ctx)
@@ -235,6 +296,9 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 		riskConfig.AltcoinMaxLeverage,
 		riskConfig.BTCETHMaxPositionValueRatio,
 		riskConfig.AltcoinMaxPositionValueRatio,
+		riskConfig.MinRiskRewardRatio,
+		riskConfig.MinConfidence,
+		ResolveNotionalLeverage(riskConfig.GuardrailsEnabled, riskConfig.NotionalCapEnabled, riskConfig.MaxNotionalLeverage, futuresMaxNotionalLeverage),
 	)
 
 	if decision != nil {
@@ -341,7 +405,7 @@ func fetchMarketDataWithStrategy(ctx *Context, engine *StrategyEngine) error {
 // AI Response Parsing
 // ============================================================================
 
-func parseFullDecisionResponse(aiResponse string, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64) (*FullDecision, error) {
+func parseFullDecisionResponse(aiResponse string, accountEquity float64, btcEthLeverage, altcoinLeverage int, btcEthPosRatio, altcoinPosRatio float64, minRiskReward float64, minConfidence int, maxNotionalLev float64) (*FullDecision, error) {
 	cotTrace := extractCoTTrace(aiResponse)
 
 	decisions, err := extractDecisions(aiResponse)
@@ -352,7 +416,7 @@ func parseFullDecisionResponse(aiResponse string, accountEquity float64, btcEthL
 		}, fmt.Errorf("failed to extract decisions: %w", err)
 	}
 
-	if err := validateDecisions(decisions, accountEquity, btcEthLeverage, altcoinLeverage, btcEthPosRatio, altcoinPosRatio); err != nil {
+	if err := validateDecisions(decisions, accountEquity, btcEthLeverage, altcoinLeverage, btcEthPosRatio, altcoinPosRatio, minRiskReward, minConfidence, maxNotionalLev); err != nil {
 		return &FullDecision{
 			CoTTrace:  cotTrace,
 			Decisions: decisions,

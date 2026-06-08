@@ -42,6 +42,59 @@ func TestBarCache_Get_ReturnsSnapshotCopy(t *testing.T) {
 	}
 }
 
+// TestBarCache_SeedHistorical_MergePreservesDepth is the Phase-0 regression
+// guard: a reconnect recreate (or N3 re-seed) emits a bars_historical frame
+// that may carry FEWER bars than the cache already holds. SeedHistorical must
+// MERGE (not replace), so the deeper history survives and new bars are added.
+func TestBarCache_SeedHistorical_MergePreservesDepth(t *testing.T) {
+	c := NewBarCache(0)
+
+	// Initial deep seed: bars T=1..100.
+	deep := make([]Bar, 0, 100)
+	for i := int64(1); i <= 100; i++ {
+		deep = append(deep, Bar{T: i, C: float64(i)})
+	}
+	c.SeedHistorical("MNQ", "5m", deep)
+	if c.Count("MNQ", "5m") != 100 {
+		t.Fatalf("after deep seed Count=%d, want 100", c.Count("MNQ", "5m"))
+	}
+
+	// Reconnect recreate re-seeds a THINNER frame: only the recent tail +
+	// one new bar (T=99,100,101). Must NOT wipe the deeper 1..98.
+	c.SeedHistorical("MNQ", "5m", []Bar{
+		{T: 99, C: 99}, {T: 100, C: 100.5}, {T: 101, C: 101},
+	})
+	got := c.Get("MNQ", "5m")
+	if len(got) != 101 {
+		t.Fatalf("after thin re-seed Count=%d, want 101 (depth preserved + 1 new)", len(got))
+	}
+	if got[0].T != 1 {
+		t.Errorf("deeper history wiped: earliest T=%d, want 1", got[0].T)
+	}
+	if got[100].T != 101 {
+		t.Errorf("new bar not appended: last T=%d, want 101", got[100].T)
+	}
+	if got[99].C != 100.5 { // T=100 overlap — incoming (freshest) wins
+		t.Errorf("overlap not updated to freshest: T=100 C=%f, want 100.5", got[99].C)
+	}
+
+	// Empty re-seed (cursor-deduped reconnect frame) must preserve everything.
+	c.SeedHistorical("MNQ", "5m", []Bar{})
+	if c.Count("MNQ", "5m") != 101 {
+		t.Errorf("empty re-seed shrank cache: Count=%d, want 101", c.Count("MNQ", "5m"))
+	}
+
+	// A DEEPER (older) re-seed merges in front — proves future deepening works.
+	c.SeedHistorical("MNQ", "5m", []Bar{{T: -2, C: -2}, {T: -1, C: -1}, {T: 1, C: 1}})
+	got = c.Get("MNQ", "5m")
+	if got[0].T != -2 || got[1].T != -1 {
+		t.Errorf("older bars not prepended: %d,%d want -2,-1", got[0].T, got[1].T)
+	}
+	if len(got) != 103 {
+		t.Errorf("merge count wrong: %d, want 103", len(got))
+	}
+}
+
 func TestBarCache_Upsert_ReplaceSameT(t *testing.T) {
 	c := NewBarCache(0)
 	c.SeedHistorical("MNQ", "1m", []Bar{{T: 100, C: 21500.0}})

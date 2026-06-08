@@ -17,6 +17,7 @@ import (
 	hyperliquidtrader "nofx/trader/hyperliquid"
 	"nofx/trader/kucoin"
 	"nofx/trader/lighter"
+	ntTrader "nofx/trader/ninjatrader"
 	"nofx/trader/okx"
 
 	"github.com/gin-gonic/gin"
@@ -147,6 +148,43 @@ func (s *Server) handleClosePosition(c *gin.Context) {
 
 	if exchangeCfg == nil || !exchangeCfg.Enabled {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Exchange not configured or not enabled"})
+		return
+	}
+
+	// NinjaTrader: route to the LIVE running trader (bound to the active SIM
+	// account) and reuse the proven TCP flatten path, exactly as Emergency Flat
+	// does (handler_risk.go). The key-built tempTrader switch below has no
+	// ninjatrader case (it would 400) and could not reach the live TCPTrader
+	// anyway. Per-position close passes the symbol; quantity 0 = close all.
+	if exchangeCfg.ExchangeType == "ninjatrader" {
+		at, gtErr := s.traderManager.GetTrader(traderID)
+		if gtErr != nil {
+			SafeNotFound(c, "Trader")
+			return
+		}
+		ntTCP, ok := at.GetUnderlyingTrader().(*ntTrader.TCPTrader)
+		if !ok {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "NinjaTrader manual close requires the running TCP bridge (NT_TRANSPORT=tcp); CSV bridge closes via SL/TP only"})
+			return
+		}
+		var ntResult map[string]interface{}
+		var ntErr error
+		switch req.Side {
+		case "LONG":
+			ntResult, ntErr = ntTCP.CloseLong(req.Symbol, 0)
+		case "SHORT":
+			ntResult, ntErr = ntTCP.CloseShort(req.Symbol, 0)
+		default:
+			c.JSON(http.StatusBadRequest, gin.H{"error": "side must be LONG or SHORT"})
+			return
+		}
+		if ntErr != nil {
+			logger.Infof("❌ NT close failed: symbol=%s, side=%s, error=%v", req.Symbol, req.Side, ntErr)
+			SafeInternalError(c, "Close position", ntErr)
+			return
+		}
+		logger.Infof("✅ NT manual close sent: symbol=%s, side=%s", req.Symbol, req.Side)
+		c.JSON(http.StatusOK, gin.H{"message": "Position close sent to NinjaTrader", "result": ntResult})
 		return
 	}
 

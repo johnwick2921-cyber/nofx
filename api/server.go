@@ -116,6 +116,11 @@ func (s *Server) setupRoutes() {
 		s.route(api, "GET", "/klines", "Candlestick data (?symbol=&interval=&limit=)", s.handleKlines)
 		s.route(api, "GET", "/symbols", "Available trading symbols", s.handleSymbols)
 
+		// Live NT8 bar stream over SSE (Plan 4.4 Stage 4). Self-authed via a
+		// short-lived ?ticket= (minted below) because EventSource cannot set an
+		// Authorization header and a JWT in the URL leaks into logs.
+		s.route(api, "GET", "/v1/bars/stream", "SSE live NT8 bars (?trader_id=&symbol=&tf=&ticket=)", s.handleBarsStream)
+
 		// Public strategy market (no authentication required)
 		s.route(api, "GET", "/strategies/public", "Public strategy market", s.handlePublicStrategies)
 		s.route(api, "POST", "/strategies/estimate-tokens", "Estimate token usage for a strategy config", s.handleEstimateTokens)
@@ -131,6 +136,8 @@ func (s *Server) setupRoutes() {
 		{
 			// Logout (add to blacklist)
 			s.route(protected, "POST", "/logout", "Logout (blacklist token)", s.handleLogout)
+			// Mint a short-lived single-use SSE ticket for the live bar stream (Stage 4).
+			s.route(protected, "POST", "/v1/bars/stream-ticket", "Mint a short-lived SSE stream ticket", s.handleBarsStreamTicket)
 			s.route(protected, "POST", "/onboarding/beginner", "Prepare beginner claw402 wallet and default model", s.handleBeginnerOnboarding)
 			s.route(protected, "GET", "/onboarding/beginner/current", "Get current beginner claw402 wallet", s.handleCurrentBeginnerWallet)
 			s.route(protected, "GET", "/agent/preferences", "Get persistent agent preferences", s.handleGetAgentPreferences)
@@ -334,17 +341,6 @@ Returns: {"is_running":<bool>,"trader_id":"<string>"}`,
 				`Query: ?trader_id=<EXACT trader_id from GET /api/my-traders>
 Returns: {"balance":<float>,"equity":<float>,"unrealized_pnl":<float>,"initial_balance":<float>,"total_return_pct":<float>}`,
 				s.handleAccount)
-			s.routeWithSchema(protected, "GET", "/accounts", "List available NT accounts (NinjaTrader TCP bridge only)",
-				`Query: ?trader_id=<EXACT trader_id from GET /api/my-traders>
-Returns: {"current":"<account name or empty>","accounts":[{"name":"<string>","is_sim":<bool>}]}
-Empty list + current=null means no accounts_list frame received yet (AddOn not connected).`,
-				s.handleGetAccounts)
-			s.routeWithSchema(protected, "POST", "/account/select", "Switch to a different NT account (SIM-only, server-side guard)",
-				`Query: ?trader_id=<EXACT trader_id from GET /api/my-traders>
-Body: {"account":"<account name, e.g. Sim101>"}
-Returns: {"current_account":"<new account name>","message":"<status>"}
-Server rejects non-SIM accounts (is_sim == false) with HTTP 400.`,
-				s.handleSelectAccount)
 			s.routeWithSchema(protected, "GET", "/positions", "Current open positions",
 				`Query: ?trader_id=<EXACT trader_id from GET /api/my-traders>
 Returns: [{"symbol":"<string>","side":"long|short","size":<float>,"entry_price":<float>,"mark_price":<float>,"unrealized_pnl":<float>,"leverage":<int>}]`,
@@ -352,6 +348,9 @@ Returns: [{"symbol":"<string>","side":"long|short","size":<float>,"entry_price":
 			s.routeWithSchema(protected, "GET", "/positions/history", "Closed position history",
 				`Query: ?trader_id=<EXACT trader_id from GET /api/my-traders>&limit=<int, default 20>`,
 				s.handlePositionHistory)
+			s.routeWithSchema(protected, "POST", "/debug/nt-test-trade", "DEBUG: deterministic 1-contract SIM test trade (futures/NT only)",
+				`Query: ?trader_id=<id>&side=long|short — places one MNQ bracket on the NT SIM account for end-to-end proof (signal→fill→position). SIM/futures only; bypasses AI + risk gate.`,
+				s.handleNTTestTrade)
 			s.routeWithSchema(protected, "GET", "/trades", "Trade records",
 				`Query: ?trader_id=<EXACT trader_id from GET /api/my-traders>&limit=<int, default 20>`,
 				s.handleTrades)
@@ -391,6 +390,19 @@ Returns: {"trader_id":"<string>","daily_pnl_usd":<float>,"daily_loss_limit_usd":
 				`Query: ?trader_id=<EXACT trader_id>&since=<YYYY-MM-DD, default 7d ago>&limit=<int, default 100, max 1000>
 Returns: []DecisionRecord JSON ordered by timestamp DESC, including PromptVersion, AIModel, AILatencyMs, RiskCheck*, ExecutionStatus, FillPrice, FillLatencyMs.`,
 				s.handleDecisionAudit)
+
+			// Plan 4 Stage 4 — NinjaTrader account management
+			s.routeWithSchema(protected, "GET", "/accounts", "List available NT accounts (NinjaTrader TCP bridge only)",
+				`Query: ?trader_id=<EXACT trader_id from GET /api/my-traders>
+Returns: {"current":"<account name or empty>","accounts":[{"name":"<string>","is_sim":<bool>}]}
+Empty list + current=null means no accounts_list frame received yet (AddOn not connected).`,
+				s.handleGetAccounts)
+			s.routeWithSchema(protected, "POST", "/account/select", "Switch to a different NT account (SIM-only, server-side guard)",
+				`Query: ?trader_id=<EXACT trader_id from GET /api/my-traders>
+Body: {"account":"<account name, e.g. Sim101>"}
+Returns: {"current":"<new account name>","message":"<status>"}
+Server rejects non-SIM accounts (is_sim == false) with HTTP 400.`,
+				s.handleSelectAccount)
 
 		}
 	}

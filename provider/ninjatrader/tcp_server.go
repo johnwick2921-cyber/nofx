@@ -63,7 +63,15 @@ type TCPServer struct {
 	pending   []timedSignal
 
 	// Inbound fills — TCPTrader subscribes via Fills().
-	fillCh chan FillPayload
+	fillCh   chan FillPayload
+	closeCh  chan PositionClosePayload
+	rejectCh chan PositionCloseRejectedPayload
+	instrCh  chan InstrumentInfoPayload
+
+	// Latest NT8 price-feed status (from the feed_status frame). Empty until the
+	// first frame; consumers DEFAULT-ALLOW on empty (never false-halt at startup).
+	feedMu     sync.RWMutex
+	feedStatus string
 
 	// Plan 4.4 Stage 2 — bar ingest. Bar frames from the C# AddOn
 	// (bars_historical, bar_update) decode in the read loop and post to
@@ -76,6 +84,24 @@ type TCPServer struct {
 	barIngestCh   chan barIngestMsg
 	barsSubscribe BarsSubscribePayload // sent on each (re)connect after flushPending
 	barsSubMu     sync.RWMutex         // protects barsSubscribe
+
+	// Plan 4.11 — latest real account snapshot from the C# AddOn
+	// (account_balance frame). Replaces the $50k mock in
+	// TCPTrader.GetBalance once the first frame arrives.
+	acctMu       sync.RWMutex
+	acctBalances map[string]AccountBalancePayload // per-account snapshots keyed by account name (Issue 2A)
+	// Open-position read-back (positions frame) — per-account CURRENT open
+	// positions reported by the C# AddOn. Replaces the fill-only inference so
+	// GetPositions reflects NT8 truth across account switch-back + manual trades.
+	// Guarded by acctMu. Each frame REPLACES the account's slice (full snapshot).
+	acctPositions map[string][]OpenPosition
+
+	// Plan 4 Stage 4 — available accounts discovered by the C# AddOn
+	// (accounts_list frame). Emitted on connect and on account change.
+	// Thread-safe, read by the /api/accounts handler, written by readLoop.
+	accountsListMu sync.RWMutex
+	accountsList   []AccountInfo // immutable copy, slice
+	currentAccount string        // currently selected account name
 
 	// Connection state — single concurrent client (spec L4359).
 	connMu        sync.Mutex
@@ -90,11 +116,6 @@ type TCPServer struct {
 	// already uses lock(writeLock) for the same reason. Added in
 	// Plan 1.5.6 alongside the FrameHeartbeat ack-write deadline fix.
 	writeMu sync.Mutex
-
-	// Account management (Plan 4.5 — account selector dropdown).
-	accountsMu sync.RWMutex
-	accounts   []AccountInfo // all available accounts from C# AddOn
-	currentAccount string    // currently selected account name
 
 	// Lifecycle.
 	cancel context.CancelFunc
@@ -119,14 +140,22 @@ type barIngestMsg struct {
 // will drop oldest-first to keep the socket read responsive.
 const barIngestChannelBuffer = 256
 
-// Plan 4.4 Stage 2 — default auto-subscribe parameters. These match the
-// Balanced Strategy's SelectedTimeframes (store/strategy.go) for the
-// active futures trader and prove the end-to-end bar pipe. Stage 3 will
-// replace these with a per-trader strategy lookup; for now the constants
-// validate the framing + cache + handler chain.
+// Plan 4.4 Stage 2 — default auto-subscribe parameters. The auto-subscribed set
+// is the CHART display set (the dashboard MNQ chart offers these timeframe
+// buttons), NOT the kernel's decision timeframes — the kernel reads the
+// strategy's SelectedTimeframes (store/strategy.go; currently [5m,15m,1h]) and
+// is unaffected by adding more chart subscriptions here. The C# AddOn
+// (VLBarsSubscriptionManager.MapTimeframe) subscribes whatever timeframes this
+// envelope lists; all 7 below are native NT8 BarsPeriodType (Minute 1/3/5/15/30,
+// Minute*60 = 1h, Day = 1d) so no AddOn change is needed. bars_back stays a
+// single value (the frozen wire carries one per envelope); 500 is the
+// spec-recommended depth across all timeframes.
 var (
 	defaultAutoBarsSymbol     = "MNQ"
-	defaultAutoBarsTimeframes = []string{"5m", "15m", "1h"}
+	// Phase 4b — the 14-timeframe chart set (was 7). Every entry is already
+	// supported by the AddOn's MapTimeframe + the Go normalizer; the running AddOn
+	// subscribes them on the bot's next reconnect (no NT8 redeploy needed for 4b).
+	defaultAutoBarsTimeframes = []string{"1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w"}
 	defaultAutoBarsBack       = 500
 )
 
@@ -146,8 +175,13 @@ func NewTCPServer(logger *slog.Logger) *TCPServer {
 	return &TCPServer{
 		addr:        TCPListenAddr,
 		fillCh:      make(chan FillPayload, fillChannelBuffer),
-		barCache:    NewBarCache(0),
-		barIngestCh: make(chan barIngestMsg, barIngestChannelBuffer),
+		closeCh:     make(chan PositionClosePayload, fillChannelBuffer),
+		rejectCh:    make(chan PositionCloseRejectedPayload, fillChannelBuffer),
+		instrCh:     make(chan InstrumentInfoPayload, fillChannelBuffer),
+		barCache:     NewBarCache(0),
+		barIngestCh:  make(chan barIngestMsg, barIngestChannelBuffer),
+		acctBalances:  make(map[string]AccountBalancePayload),
+		acctPositions: make(map[string][]OpenPosition),
 		barsSubscribe: BarsSubscribePayload{
 			Symbol:     defaultAutoBarsSymbol,
 			Timeframes: append([]string(nil), defaultAutoBarsTimeframes...),
@@ -162,6 +196,102 @@ func NewTCPServer(logger *slog.Logger) *TCPServer {
 // copies via Get and never block writers for long.
 func (s *TCPServer) BarCache() *BarCache { return s.barCache }
 
+// AccountState returns the latest account_balance snapshot received from the
+// C# AddOn (Plan 4.11) and whether one has arrived yet. TCPTrader.GetBalance
+// uses it to serve the real SIM account instead of the $50k mock; ok=false
+// means no frame yet (caller falls back to a documented placeholder).
+func (s *TCPServer) AccountState() (AccountBalancePayload, bool) {
+	// Return the snapshot for the currently selected account. Balances are keyed
+	// per-account (Issue 2A) so switching accounts no longer clobbers one slot.
+	s.accountsListMu.RLock()
+	current := s.currentAccount
+	s.accountsListMu.RUnlock()
+	return s.AccountStateFor(current)
+}
+
+// AccountStateFor returns the latest account_balance snapshot for a specific
+// account name and whether one has arrived yet. ok=false for an unknown/empty
+// account (caller falls back to a documented placeholder).
+func (s *TCPServer) AccountStateFor(account string) (AccountBalancePayload, bool) {
+	s.acctMu.RLock()
+	defer s.acctMu.RUnlock()
+	if account == "" || s.acctBalances == nil {
+		return AccountBalancePayload{}, false
+	}
+	p, ok := s.acctBalances[account]
+	return p, ok
+}
+
+// PositionsFor returns the latest open-position snapshot for an account and
+// whether a positions frame has arrived for it yet. ok=false means no snapshot
+// (caller falls back to the fill-derived cache). A non-nil empty slice means
+// the account is known-flat. Returns a defensive copy.
+func (s *TCPServer) PositionsFor(account string) ([]OpenPosition, bool) {
+	s.acctMu.RLock()
+	defer s.acctMu.RUnlock()
+	if account == "" || s.acctPositions == nil {
+		return nil, false
+	}
+	v, ok := s.acctPositions[account]
+	if !ok {
+		return nil, false
+	}
+	out := make([]OpenPosition, len(v))
+	copy(out, v)
+	return out, true
+}
+
+// GetAccountsList returns the list of available NT accounts discovered by the
+// C# AddOn (Plan 4 Stage 4). Returns a copy of the account list and the current
+// account name. If no accounts_list frame has been received yet, returns nil + "".
+func (s *TCPServer) GetAccountsList() ([]AccountInfo, string) {
+	s.accountsListMu.RLock()
+	defer s.accountsListMu.RUnlock()
+	// Defensive copy so caller can't modify our internal list
+	var accounts []AccountInfo
+	if len(s.accountsList) > 0 {
+		accounts = make([]AccountInfo, len(s.accountsList))
+		copy(accounts, s.accountsList)
+	}
+	return accounts, s.currentAccount
+}
+
+// AccountsList returns the latest accounts_list payload received from the C# AddOn
+// and a boolean indicating if one has arrived yet. This is the test-facing version.
+// Production code calls GetAccountsList(). ok=false means no frame yet.
+func (s *TCPServer) AccountsList() (AccountsListPayload, bool) {
+	s.accountsListMu.RLock()
+	defer s.accountsListMu.RUnlock()
+	if len(s.accountsList) == 0 {
+		return AccountsListPayload{}, false
+	}
+	return AccountsListPayload{Accounts: s.accountsList}, true
+}
+
+// CurrentAccount returns the currently selected account name (nil/empty if none selected).
+// Test-facing accessor. Returns a copy of the account name, not a pointer to internal state.
+func (s *TCPServer) CurrentAccount() *string {
+	s.accountsListMu.RLock()
+	defer s.accountsListMu.RUnlock()
+	if s.currentAccount == "" {
+		return nil
+	}
+	// Return a pointer to a copy, not to internal state
+	acct := s.currentAccount
+	return &acct
+}
+
+// SetAccountsList updates the account list (called by readLoop on accounts_list frame)
+// and optionally sets the current account.
+func (s *TCPServer) SetAccountsList(accounts []AccountInfo, current string) {
+	s.accountsListMu.Lock()
+	defer s.accountsListMu.Unlock()
+	// Defensive copy of the slice
+	s.accountsList = make([]AccountInfo, len(accounts))
+	copy(s.accountsList, accounts)
+	s.currentAccount = current
+}
+
 // SetBarsSubscribe overrides the auto-subscribe parameters sent on each
 // (re)connect. Stage 3 will call this with the active strategy's
 // SelectedTimeframes; until then the server uses Balanced Strategy
@@ -172,6 +302,29 @@ func (s *TCPServer) SetBarsSubscribe(p BarsSubscribePayload) {
 	// Defensive copy of the timeframes slice to detach from caller storage.
 	p.Timeframes = append([]string(nil), p.Timeframes...)
 	s.barsSubscribe = p
+}
+
+// SetBarsSubscribeSymbol overrides ONLY the auto-subscribe symbol (preserving the
+// configured timeframes + bars-back) so the bar subscription tracks the ACTIVE
+// trader's symbol instead of the hardwired default. Phase 2 — the ninjatrader
+// trader calls this with its symbol at creation; on the next (re)connect the
+// AddOn subscribes to that root and NT8 resolves the qualified front-month
+// contract (VLContractResolver). Empty symbol is ignored (keeps the default).
+func (s *TCPServer) SetBarsSubscribeSymbol(symbol string) {
+	if symbol == "" {
+		return
+	}
+	s.barsSubMu.Lock()
+	defer s.barsSubMu.Unlock()
+	s.barsSubscribe.Symbol = symbol
+}
+
+// BarsSubscribeSymbol returns the current auto-subscribe symbol (the root the
+// AddOn is told to stream). Exported for wiring/tests.
+func (s *TCPServer) BarsSubscribeSymbol() string {
+	s.barsSubMu.RLock()
+	defer s.barsSubMu.RUnlock()
+	return s.barsSubscribe.Symbol
 }
 
 func (s *TCPServer) currentBarsSubscribe() BarsSubscribePayload {
@@ -227,8 +380,80 @@ func (s *TCPServer) SendSignal(payload SignalPayload) error {
 	return s.flushPending()
 }
 
+// SendClosePosition tells the connected AddOn to flatten the symbol's position.
+// Unlike SendSignal it is NOT queued — a close is an immediate command; if no
+// client is connected it errors so the caller can report it.
+func (s *TCPServer) SendClosePosition(payload ClosePositionPayload) error {
+	s.connMu.Lock()
+	c := s.conn
+	s.connMu.Unlock()
+	if c == nil {
+		return fmt.Errorf("ninjatrader/tcp: no NT client connected")
+	}
+	s.writeMu.Lock()
+	_ = c.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	err := WriteFrame(c, FrameClosePosition, payload)
+	s.writeMu.Unlock()
+	return err
+}
+
+// SendAccountSelect tells the connected AddOn to switch to a different account.
+// Like SendClosePosition, this is an immediate command (not queued); if no
+// client is connected it errors so the caller can report it.
+func (s *TCPServer) SendAccountSelect(payload AccountSelectPayload) error {
+	s.connMu.Lock()
+	c := s.conn
+	s.connMu.Unlock()
+	if c == nil {
+		return fmt.Errorf("ninjatrader/tcp: no NT client connected")
+	}
+	s.writeMu.Lock()
+	_ = c.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	err := WriteFrame(c, FrameAccountSelect, payload)
+	s.writeMu.Unlock()
+	if err == nil {
+		s.logger.Info("tcp_server: account select sent", "account", payload.Account)
+	}
+	return err
+}
+
 // Fills returns the inbound fill channel. TCPTrader subscribes here.
 func (s *TCPServer) Fills() <-chan FillPayload { return s.fillCh }
+
+// ClosedPositions returns the channel of position_close frames (SL/TP exits).
+// Consumed by the NT close-sync to mark trader_positions CLOSED.
+func (s *TCPServer) ClosedPositions() <-chan PositionClosePayload { return s.closeCh }
+
+// CloseRejections returns the channel of position_close_rejected frames — an
+// exit/flatten the SIM/broker rejected (e.g. "no market data" with the feed down).
+// The position is STILL OPEN in NT8; consumers must alarm, not record a close.
+func (s *TCPServer) CloseRejections() <-chan PositionCloseRejectedPayload { return s.rejectCh }
+
+// FeedStatus returns the latest NT8 price-feed status ("" until the first
+// feed_status frame). Prefer IsFeedConnected for gating.
+func (s *TCPServer) FeedStatus() string {
+	s.feedMu.RLock()
+	defer s.feedMu.RUnlock()
+	return s.feedStatus
+}
+
+// IsFeedConnected reports whether the NT8 price feed is usable. DEFAULT-ALLOW:
+// before any feed_status frame is received (startup) it returns true so a healthy
+// bot is never false-halted on mere absence of the signal; it returns false ONLY
+// on an explicit non-"Connected" status (the SIM would reject "no market data").
+func (s *TCPServer) IsFeedConnected() bool {
+	s.feedMu.RLock()
+	defer s.feedMu.RUnlock()
+	if s.feedStatus == "" {
+		return true
+	}
+	return s.feedStatus == "Connected"
+}
+
+// InstrumentInfo returns the channel of instrument_info frames — the resolved
+// NT8 instrument's real specs (point value, tick). Consumers cross-check the
+// hardcoded FuturesPointValue/FuturesTickSize tables and surface any drift.
+func (s *TCPServer) InstrumentInfo() <-chan InstrumentInfoPayload { return s.instrCh }
 
 // IsConnected reports whether a client is currently connected.
 func (s *TCPServer) IsConnected() bool {
@@ -460,6 +685,7 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			return
 		}
 
+		s.logger.Info("tcp_server: received frame", "type", env.Type)
 		switch env.Type {
 		case FrameFill:
 			var fill FillPayload
@@ -521,24 +747,142 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			}
 			s.enqueueBarUpdate(p.Symbol, p.Timeframe, p.Bars)
 
-		case FrameAccountsList:
-			// Plan 4.5 — account list from C# AddOn. Emitted when the AddOn
-			// starts or when the user selects a different account. Update the
-			// in-memory account cache for the API dropdown.
-			var p struct {
-				Current  string        `json:"current"`
-				Accounts []AccountInfo `json:"accounts"`
+		case FrameAccountBalance:
+			// Plan 4.11 — real NT account snapshot. Store the latest;
+			// TCPTrader.GetBalance serves it instead of the $50k mock.
+			var p AccountBalancePayload
+			if err := json.Unmarshal(env.Payload, &p); err != nil {
+				s.logger.Warn("tcp_server: bad account_balance payload", "err", err)
+				continue
 			}
+			s.acctMu.Lock()
+			if s.acctBalances == nil {
+				s.acctBalances = make(map[string]AccountBalancePayload)
+			}
+			s.acctBalances[p.Account] = p
+			s.acctMu.Unlock()
+			// Update current account if it changed
+			s.accountsListMu.Lock()
+			s.currentAccount = p.Account
+			s.accountsListMu.Unlock()
+
+		case FrameAccountsList:
+			// Plan 4 Stage 4 — discover available accounts from the C# AddOn.
+			// The AddOn emits this unsolicited on connect and on account list change.
+			// Stores the list for dashboard UI and server-side account validation.
+			var p AccountsListPayload
 			if err := json.Unmarshal(env.Payload, &p); err != nil {
 				s.logger.Warn("tcp_server: bad accounts_list payload", "err", err)
 				continue
 			}
-			// Use Current from frame if set; otherwise preserve existing current
-			current := p.Current
-			if current == "" {
-				_, current = s.GetAccountsList()
+			s.logger.Info("tcp_server: received accounts_list frame", "count", len(p.Accounts))
+			if len(p.Accounts) > 0 {
+				// Extract the current account from the first account_balance frame
+				// (the AddOn emits accounts_list then account_balance immediately after).
+				// For now, store the list; the current account is synced via account_balance.
+				s.accountsListMu.Lock()
+				s.accountsList = make([]AccountInfo, len(p.Accounts))
+				copy(s.accountsList, p.Accounts)
+				s.accountsListMu.Unlock()
+				s.logger.Info("tcp_server: stored accounts",
+					"count", len(p.Accounts),
+					"accounts", func() []string {
+						var names []string
+						for _, a := range p.Accounts {
+							names = append(names, a.Name)
+						}
+						return names
+					}())
+			} else {
+				s.logger.Warn("tcp_server: accounts_list frame received but empty")
 			}
-			s.StoreAccountsList(p.Accounts, current)
+
+		case FrameAccountSelect:
+			// Plan 4 Stage 4 — account selection received from the client
+			// (via the API handler). Validate that the account is in the list
+			// and is a SIM account. Reject live accounts.
+			var p AccountSelectPayload
+			if err := json.Unmarshal(env.Payload, &p); err != nil {
+				s.logger.Warn("tcp_server: bad account_select payload", "err", err)
+				continue
+			}
+			s.handleAccountSelect(p)
+
+		case FramePositionClose:
+			// Position-history fix — an OCO exit leg filled and the position
+			// went flat. Hand to the close-sync to record the close.
+			var p PositionClosePayload
+			if err := json.Unmarshal(env.Payload, &p); err != nil {
+				s.logger.Warn("tcp_server: bad position_close payload", "err", err)
+				continue
+			}
+			select {
+			case s.closeCh <- p:
+			default:
+				s.logger.Warn("tcp_server: close channel full, dropping", "signal_id", p.SignalID)
+			}
+
+		case FramePositions:
+			// Open-position read-back — the C# AddOn's CURRENT open-position
+			// snapshot for an account (emitted on account_select, connect, and
+			// any PositionUpdate, incl. manual trades). REPLACE the per-account
+			// cache: an empty list means the account is flat. This is what lets
+			// GetPositions reflect NT8 truth after a switch-back / manual open.
+			var p PositionsPayload
+			if err := json.Unmarshal(env.Payload, &p); err != nil {
+				s.logger.Warn("tcp_server: bad positions payload", "err", err)
+				continue
+			}
+			s.acctMu.Lock()
+			if s.acctPositions == nil {
+				s.acctPositions = make(map[string][]OpenPosition)
+			}
+			s.acctPositions[p.Account] = p.Positions
+			s.acctMu.Unlock()
+			s.logger.Info("tcp_server: positions snapshot", "account", p.Account, "count", len(p.Positions))
+
+		case FramePositionCloseRejected:
+			// An exit/flatten was REJECTED (e.g. SIM "no market data" while the
+			// feed is down). The position is STILL OPEN in NT8 — hand to the
+			// consumer to alarm; never record a close off a rejected flatten.
+			var p PositionCloseRejectedPayload
+			if err := json.Unmarshal(env.Payload, &p); err != nil {
+				s.logger.Warn("tcp_server: bad position_close_rejected payload", "err", err)
+				continue
+			}
+			select {
+			case s.rejectCh <- p:
+			default:
+				s.logger.Warn("tcp_server: reject channel full, dropping", "signal_id", p.SignalID)
+			}
+
+		case FrameFeedStatus:
+			// NT8 price-feed status. Store the latest; the AutoTrader gates
+			// opens/closes when it is not "Connected" (the SIM rejects orders
+			// with "no market data" while the feed is down).
+			var p FeedStatusPayload
+			if err := json.Unmarshal(env.Payload, &p); err != nil {
+				s.logger.Warn("tcp_server: bad feed_status payload", "err", err)
+				continue
+			}
+			s.feedMu.Lock()
+			s.feedStatus = p.PriceStatus
+			s.feedMu.Unlock()
+			s.logger.Info("tcp_server: feed status", "price_status", p.PriceStatus)
+
+		case FrameInstrumentInfo:
+			// Resolved NT8 instrument specs (point value, tick) — ground truth to
+			// cross-check the hardcoded tables. Hand to the consumer; non-blocking.
+			var p InstrumentInfoPayload
+			if err := json.Unmarshal(env.Payload, &p); err != nil {
+				s.logger.Warn("tcp_server: bad instrument_info payload", "err", err)
+				continue
+			}
+			select {
+			case s.instrCh <- p:
+			default:
+				s.logger.Warn("tcp_server: instrument channel full, dropping", "symbol", p.Symbol)
+			}
 
 		default:
 			s.logger.Warn("tcp_server: unknown frame type", "type", env.Type)
@@ -578,6 +922,39 @@ func (s *TCPServer) heartbeatLoop(ctx context.Context, c net.Conn) {
 			}
 		}
 	}
+}
+
+// handleAccountSelect validates an account_select request from the AddOn.
+// Only SIM accounts are permitted. Rejects live accounts and logs the result.
+// Updates CurrentAccount if the select succeeds.
+func (s *TCPServer) handleAccountSelect(p AccountSelectPayload) {
+	s.accountsListMu.RLock()
+	var isSim bool
+	found := false
+	for _, a := range s.accountsList {
+		if a.Name == p.Account {
+			isSim = a.IsSim
+			found = true
+			break
+		}
+	}
+	s.accountsListMu.RUnlock()
+
+	if !found {
+		s.logger.Warn("tcp_server: account_select for unknown account", "account", p.Account)
+		return
+	}
+
+	if !isSim {
+		s.logger.Warn("tcp_server: rejected account_select for live account", "account", p.Account)
+		return
+	}
+
+	// Update current account
+	s.accountsListMu.Lock()
+	s.currentAccount = p.Account
+	s.accountsListMu.Unlock()
+	s.logger.Info("tcp_server: account selected", "account", p.Account)
 }
 
 // flushPending writes any non-stale queued signals to the connected client.
@@ -633,58 +1010,4 @@ func (s *TCPServer) closeConn() {
 		_ = s.conn.Close()
 		s.conn = nil
 	}
-}
-
-// GetAccountsList returns a snapshot of available accounts and the current account.
-// Safe for concurrent read; returns a copy to avoid external mutation.
-func (s *TCPServer) GetAccountsList() ([]AccountInfo, string) {
-	s.accountsMu.RLock()
-	defer s.accountsMu.RUnlock()
-	// Return a copy to prevent external modification
-	accountsCopy := make([]AccountInfo, len(s.accounts))
-	copy(accountsCopy, s.accounts)
-	return accountsCopy, s.currentAccount
-}
-
-// StoreAccountsList updates the in-memory account list received from the C# AddOn.
-// Called by the read loop when an accounts_list frame arrives.
-func (s *TCPServer) StoreAccountsList(accounts []AccountInfo, current string) {
-	s.accountsMu.Lock()
-	defer s.accountsMu.Unlock()
-	s.accounts = make([]AccountInfo, len(accounts))
-	copy(s.accounts, accounts)
-	s.currentAccount = current
-	s.logger.Info("tcp_server: stored accounts",
-		"count", len(s.accounts),
-		"current", current,
-		"accounts", accountsDebugString(accounts))
-}
-
-// SendAccountSelect tells the C# AddOn to switch to a different account.
-// Returns an error if no client is currently connected.
-func (s *TCPServer) SendAccountSelect(payload AccountSelectPayload) error {
-	s.connMu.Lock()
-	defer s.connMu.Unlock()
-	if s.conn == nil {
-		return fmt.Errorf("tcp_server: no client connected, cannot send account_select")
-	}
-	s.writeMu.Lock()
-	_ = s.conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	err := WriteFrame(s.conn, FrameAccountSelect, payload)
-	s.writeMu.Unlock()
-	if err != nil {
-		s.logger.Warn("tcp_server: send account_select", "err", err, "account", payload.Account)
-		return fmt.Errorf("tcp_server: send account_select: %w", err)
-	}
-	s.logger.Info("tcp_server: sent account_select", "account", payload.Account)
-	return nil
-}
-
-// accountsDebugString formats account list for logging.
-func accountsDebugString(accounts []AccountInfo) string {
-	names := make([]string, len(accounts))
-	for i, a := range accounts {
-		names[i] = a.Name
-	}
-	return "[" + fmt.Sprintf("%v", names)[1:len(fmt.Sprintf("%v", names))-1] + "]"
 }

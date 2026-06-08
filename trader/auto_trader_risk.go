@@ -2,6 +2,7 @@ package trader
 
 import (
 	"fmt"
+	"nofx/kernel"
 	"nofx/logger"
 	"nofx/market"
 	"strings"
@@ -206,9 +207,14 @@ func (at *AutoTrader) enforcePositionValueRatio(positionSizeUSD float64, equity 
 	var maxPositionValueRatio float64
 	switch {
 	case market.IsCMEFuturesSymbol(symbol):
-		// CME futures: notional sanity ceiling (matches the risk gate). The
-		// precise contract sizing + clamp happens at order placement.
-		maxPositionValueRatio = futuresMaxNotionalLeverage
+		// CME futures: the editable notional ceiling multiplier (Chunk 3): max
+		// notional = equity × this. 0 → cap DISABLED (master/toggle off) → use a
+		// huge ratio so it never binds. Per-strategy value, else the equity×20
+		// const fallback.
+		maxPositionValueRatio = kernel.ResolveNotionalLeverage(riskControl.GuardrailsEnabled, riskControl.NotionalCapEnabled, riskControl.MaxNotionalLeverage, futuresMaxNotionalLeverage)
+		if maxPositionValueRatio <= 0 {
+			maxPositionValueRatio = 1e9
+		}
 	case isBTCETH(symbol):
 		maxPositionValueRatio = riskControl.BTCETHMaxPositionValueRatio
 		if maxPositionValueRatio <= 0 {

@@ -107,6 +107,7 @@ interface TraderDashboardPageProps {
   status?: SystemStatus
   account?: AccountInfo
   accountFailed?: boolean
+  selectedAccount?: string
   positions?: Position[]
   positionsFailed?: boolean
   decisions?: DecisionRecord[]
@@ -117,7 +118,6 @@ interface TraderDashboardPageProps {
   lastUpdate: string
   language: Language
   exchanges?: Exchange[]
-  onAccountChanged?: () => void // Called when account switches in AccountSelector
 }
 
 export function TraderDashboardPage({
@@ -125,6 +125,7 @@ export function TraderDashboardPage({
   status,
   account,
   accountFailed,
+  selectedAccount,
   positions,
   positionsFailed,
   decisions,
@@ -136,10 +137,10 @@ export function TraderDashboardPage({
   traders,
   tradersError,
   selectedTraderId,
-  onTraderSelect,
+  // onTraderSelect is accepted by the props type (callers pass it) but unused in
+  // this component — not destructured here to keep tsc --noEmit clean (TS6133).
   onNavigateToTraders,
   exchanges,
-  onAccountChanged,
 }: TraderDashboardPageProps) {
   const [closingPosition, setClosingPosition] = useState<string | null>(null)
   const [selectedChartSymbol, setSelectedChartSymbol] = useState<
@@ -392,9 +393,6 @@ export function TraderDashboardPage({
                 <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-nofx-green rounded-full border-2 border-[#0B0E11] shadow-[0_0_8px_rgba(14,203,129,0.8)] animate-pulse" />
               </div>
               <div className="flex flex-col">
-                <span className="text-3xl tracking-tight text-nofx-text font-semibold">
-                  {selectedTrader.trader_name}
-                </span>
                 <span className="text-xs font-mono text-nofx-text-muted opacity-60 flex items-center gap-2">
                   <div className="w-1.5 h-1.5 bg-nofx-gold rounded-full" />
                   ID: {selectedTrader.trader_id.slice(0, 8)}...
@@ -406,25 +404,32 @@ export function TraderDashboardPage({
               {/* Plan 4 T23 — Emergency Flat (red, prominent, top-right) */}
               <EmergencyFlatButton traderId={selectedTrader.trader_id} />
 
-              {/* Plan 4.5 — Account Selector (NT8 only) */}
-              <AccountSelector
-                traderId={selectedTrader.trader_id}
-                onAccountChanged={onAccountChanged}
-              />
-
-              {/* Trader Selector */}
-              {traders && traders.length > 0 && (
-                <div className="flex items-center gap-2 nofx-glass px-1 py-1 rounded-lg border border-white/5">
-                  <NofxSelect
-                    value={selectedTraderId || ''}
-                    onChange={(val) => onTraderSelect(val)}
-                    options={traders.map((t) => ({
-                      value: t.trader_id,
-                      label: t.trader_name,
-                    }))}
-                    className="bg-transparent text-sm font-medium cursor-pointer transition-colors text-nofx-text-main px-2 py-1"
-                  />
-                </div>
+              {/* Account Selector */}
+              {selectedTraderId && (
+                <AccountSelector
+                  traderId={selectedTraderId}
+                  onAccountChanged={() => {
+                    // Invalidate every account-scoped SWR key for this trader on
+                    // account change so the new account's data is re-fetched.
+                    // Predicate match (startsWith) covers the account-suffixed
+                    // keys (Issue 2F: `account-<trader>-<account>`) AND the
+                    // `accounts-<trader>` key so the selected-account itself
+                    // refreshes and the suffixed keys re-key to the new account.
+                    mutate(
+                      (key) =>
+                        typeof key === 'string' &&
+                        (key.startsWith(`account-${selectedTraderId}`) ||
+                          key.startsWith(`accounts-${selectedTraderId}`) ||
+                          key.startsWith(`positions-${selectedTraderId}`) ||
+                          key.startsWith(`status-${selectedTraderId}`) ||
+                          key.startsWith(`statistics-${selectedTraderId}`) ||
+                          key.startsWith(
+                            `decisions/latest-${selectedTraderId}`
+                          ) ||
+                          key.startsWith(`equity-history-${selectedTraderId}`))
+                    )
+                  }}
+                />
               )}
 
               {/* Wallet Address Display for Perp-DEX */}
@@ -675,7 +680,10 @@ export function TraderDashboardPage({
                 last 100 cycles
               </span>
             </div>
-            <DecisionAudit traderId={selectedTrader.trader_id} />
+            <DecisionAudit
+              traderId={selectedTrader.trader_id}
+              account={selectedAccount}
+            />
           </div>
         )}
 
@@ -806,10 +814,12 @@ export function TraderDashboardPage({
                             </td>
                             <td className="px-1 py-3 whitespace-nowrap text-center">
                               <span
-                                className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${pos.side === 'long' ? 'bg-nofx-green/10 text-nofx-green shadow-[0_0_8px_rgba(14,203,129,0.2)]' : 'bg-nofx-red/10 text-nofx-red shadow-[0_0_8px_rgba(246,70,93,0.2)]'}`}
+                                className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${(pos.side || '').toLowerCase() === 'long' ? 'bg-nofx-green/10 text-nofx-green shadow-[0_0_8px_rgba(14,203,129,0.2)]' : 'bg-nofx-red/10 text-nofx-red shadow-[0_0_8px_rgba(246,70,93,0.2)]'}`}
                               >
                                 {t(
-                                  pos.side === 'long' ? 'long' : 'short',
+                                  (pos.side || '').toLowerCase() === 'long'
+                                    ? 'long'
+                                    : 'short',
                                   language
                                 )}
                               </span>
@@ -858,16 +868,16 @@ export function TraderDashboardPage({
                             )}
                             <td className="px-1 py-3 font-mono whitespace-nowrap text-right">
                               <span
-                                className={`font-bold ${pos.unrealized_pnl >= 0 ? 'text-nofx-green shadow-nofx-green' : 'text-nofx-red shadow-nofx-red'}`}
+                                className={`font-bold ${(pos.unrealized_pnl ?? 0) >= 0 ? 'text-nofx-green shadow-nofx-green' : 'text-nofx-red shadow-nofx-red'}`}
                                 style={{
                                   textShadow:
-                                    pos.unrealized_pnl >= 0
+                                    (pos.unrealized_pnl ?? 0) >= 0
                                       ? '0 0 10px rgba(14,203,129,0.3)'
                                       : '0 0 10px rgba(246,70,93,0.3)',
                                 }}
                               >
-                                {pos.unrealized_pnl >= 0 ? '+' : ''}
-                                {pos.unrealized_pnl.toFixed(2)}
+                                {(pos.unrealized_pnl ?? 0) >= 0 ? '+' : ''}
+                                {(pos.unrealized_pnl ?? 0).toFixed(2)}
                               </span>
                             </td>
                             {!isFutures && (
@@ -1049,6 +1059,7 @@ export function TraderDashboardPage({
                     decision={decision}
                     language={language}
                     onSymbolClick={handleSymbolClick}
+                    isFutures={isFutures}
                   />
                 ))
               ) : decisionsFailed ? (

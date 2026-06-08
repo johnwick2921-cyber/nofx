@@ -19,6 +19,7 @@ func (at *AutoTrader) saveEquitySnapshot(ctx *kernel.Context) {
 
 	snapshot := &store.EquitySnapshot{
 		TraderID:      at.id,
+		Account:       at.currentAccountName(), // ITEM 2 per-account attribution
 		Timestamp:     time.Now().UTC(),
 		TotalEquity:   ctx.Account.TotalEquity,
 		Balance:       ctx.Account.TotalEquity - ctx.Account.UnrealizedPnL,
@@ -41,6 +42,7 @@ func (at *AutoTrader) saveDecision(record *store.DecisionRecord) error {
 	at.cycleNumber++
 	record.CycleNumber = at.cycleNumber
 	record.TraderID = at.id
+	record.Account = at.currentAccountName() // ITEM 2 per-account attribution
 
 	if record.Timestamp.IsZero() {
 		record.Timestamp = time.Now().UTC()
@@ -133,12 +135,14 @@ func (at *AutoTrader) GetAccountInfo() (map[string]interface{}, error) {
 	totalMarginUsed := 0.0
 	totalUnrealizedPnLCalculated := 0.0
 	for _, pos := range positions {
-		markPrice := pos["markPrice"].(float64)
-		quantity := pos["positionAmt"].(float64)
+		// Comma-ok asserts: NT futures positions may omit some Binance-style
+		// keys; a hard assert would panic /api/account (Plan 4.11 fix).
+		markPrice, _ := pos["markPrice"].(float64)
+		quantity, _ := pos["positionAmt"].(float64)
 		if quantity < 0 {
 			quantity = -quantity
 		}
-		unrealizedPnl := pos["unRealizedProfit"].(float64)
+		unrealizedPnl, _ := pos["unRealizedProfit"].(float64)
 		totalUnrealizedPnLCalculated += unrealizedPnl
 
 		leverage := 10
@@ -163,6 +167,24 @@ func (at *AutoTrader) GetAccountInfo() (map[string]interface{}, error) {
 		totalPnLPct = (totalPnL / at.initialBalance) * 100
 	} else {
 		logger.Infof("⚠️ Initial Balance abnormal: %.2f, cannot calculate P&L percentage", at.initialBalance)
+	}
+
+	// Issue 2B — NT8 multi-account: the bot's single global InitialBalance is NOT
+	// each NT sub-account's real starting equity, so (equity - InitialBalance)
+	// yields a fake P&L% (e.g. -30% on a 70000 SIM account vs a 100000 baseline).
+	// When the broker reports its own realized+unrealized P&L (NinjaTrader
+	// account_balance frame, flagged brokerNativePnL), use that as the displayed
+	// per-account P&L and derive the baseline as equity - pnl (this account's
+	// effective starting equity), so each account shows its OWN real P&L.
+	if broker, _ := balance["brokerNativePnL"].(bool); broker {
+		realized, _ := balance["totalRealizedProfit"].(float64)
+		unrealized, _ := balance["totalUnrealizedProfit"].(float64)
+		totalPnL = realized + unrealized
+		if base := totalEquity - totalPnL; base > 0 {
+			totalPnLPct = (totalPnL / base) * 100
+		} else {
+			totalPnLPct = 0
+		}
 	}
 
 	marginUsedPct := 0.0
@@ -199,16 +221,19 @@ func (at *AutoTrader) GetPositions() ([]map[string]interface{}, error) {
 
 	var result []map[string]interface{}
 	for _, pos := range positions {
-		symbol := pos["symbol"].(string)
-		side := pos["side"].(string)
-		entryPrice := pos["entryPrice"].(float64)
-		markPrice := pos["markPrice"].(float64)
-		quantity := pos["positionAmt"].(float64)
+		// Comma-ok asserts: NT futures positions may omit some Binance-style
+		// keys (e.g. liquidationPrice); a hard assert would panic the API
+		// positions repackaging (Plan 4.11 fix).
+		symbol, _ := pos["symbol"].(string)
+		side, _ := pos["side"].(string)
+		entryPrice, _ := pos["entryPrice"].(float64)
+		markPrice, _ := pos["markPrice"].(float64)
+		quantity, _ := pos["positionAmt"].(float64)
 		if quantity < 0 {
 			quantity = -quantity
 		}
-		unrealizedPnl := pos["unRealizedProfit"].(float64)
-		liquidationPrice := pos["liquidationPrice"].(float64)
+		unrealizedPnl, _ := pos["unRealizedProfit"].(float64)
+		liquidationPrice, _ := pos["liquidationPrice"].(float64)
 
 		leverage := 10
 		if lev, ok := pos["leverage"].(float64); ok {
@@ -282,6 +307,20 @@ func (at *AutoTrader) recordAndConfirmOrder(orderResult map[string]interface{}, 
 	switch at.exchange {
 	case "binance", "lighter", "hyperliquid", "bybit", "okx", "bitget", "aster", "kucoin", "gate":
 		logger.Infof("  📝 Order submitted (id: %s), will be synced by OrderSync", orderID)
+		return
+	}
+
+	// NinjaTrader has no order-sync; an NT8 position transitions to CLOSED ONLY via
+	// the position_close fill frame (trader/ninjatrader close_sync.recordClose —
+	// fill-confirmed and futures-point-value-correct), exactly as SL/TP exits do.
+	// A decision-driven close must NOT mark the DB CLOSED off the mark price before
+	// the NT8 exit actually fills: a rejected flatten (e.g. data feed down → SIM
+	// "no market data") would phantom-close a position NT8 still holds, and the next
+	// entry would net onto the orphan (the id=45→id=46 net-2 bug). So defer NT8
+	// closes to the fill frame. OPENS still record below (they create the position
+	// row); only closes defer. Crypto closes are handled by their own OrderSync above.
+	if at.exchange == "ninjatrader" && (action == "close_long" || action == "close_short") {
+		logger.Infof("  📝 NT close submitted (%s %s) — awaiting NT8 position_close fill confirmation (close-sync; not marking CLOSED off the mark)", symbol, action)
 		return
 	}
 
@@ -368,6 +407,7 @@ func (at *AutoTrader) recordPositionChange(orderID, symbol, side, action string,
 		nowMs := time.Now().UTC().UnixMilli()
 		pos := &store.TraderPosition{
 			TraderID:     at.id,
+			Account:      at.currentAccountName(), // ITEM 2 per-account attribution
 			ExchangeID:   at.exchangeID, // Exchange account UUID
 			ExchangeType: at.exchange,   // Exchange type: binance/bybit/okx/etc
 			Symbol:       symbol,

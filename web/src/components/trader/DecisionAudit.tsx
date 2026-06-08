@@ -44,6 +44,7 @@ interface DecisionAuditRow {
 
 interface Props {
   traderId: string
+  account?: string
 }
 
 // Flatten one cycle into one or more rows (one per nested decision action).
@@ -96,7 +97,7 @@ function fmtConfidence(c: number | undefined): string {
   return `${Math.round(c)}%`
 }
 
-export function DecisionAudit({ traderId }: Props) {
+export function DecisionAudit({ traderId, account }: Props) {
   const [records, setRecords] = useState<DecisionAuditRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -109,7 +110,8 @@ export function DecisionAudit({ traderId }: Props) {
     setError(null)
     const token = localStorage.getItem('auth_token') ?? ''
     fetch(
-      `/api/audit/decisions?trader_id=${encodeURIComponent(traderId)}&limit=100`,
+      `/api/audit/decisions?trader_id=${encodeURIComponent(traderId)}&limit=100` +
+        (account ? `&account=${encodeURIComponent(account)}` : ''),
       { headers: token ? { Authorization: `Bearer ${token}` } : {} }
     )
       .then(async (r) => {
@@ -129,7 +131,7 @@ export function DecisionAudit({ traderId }: Props) {
     return () => {
       cancelled = true
     }
-  }, [traderId])
+  }, [traderId, account])
 
   if (loading) {
     return (

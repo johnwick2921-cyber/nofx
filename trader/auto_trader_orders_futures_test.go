@@ -31,7 +31,7 @@ func TestFuturesOrderQuantity(t *testing.T) {
 		{"zero price default", "MNQ", 60000, 0, 1},
 	}
 	for _, c := range cases {
-		got := futuresOrderQuantity(c.symbol, c.notionalUSD, c.price)
+		got := futuresOrderQuantity(c.symbol, c.notionalUSD, c.price, int(maxFuturesContracts))
 		if got != c.want {
 			t.Errorf("%s: futuresOrderQuantity(%q, %.0f, %.2f) = %v, want %v",
 				c.name, c.symbol, c.notionalUSD, c.price, got, c.want)
