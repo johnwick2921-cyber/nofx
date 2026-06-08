@@ -1,7 +1,67 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Shield, AlertTriangle } from 'lucide-react'
 import type { RiskControlConfig } from '../../types'
 import { riskControl, ts } from '../../i18n/strategy-translations'
+
+// ClampedNumberInput edits a single clamped number (e.g. min R/R). It holds the
+// RAW typed text in local state WHILE editing — so clearing + retyping work — and
+// parses/clamps to [min,max] ONLY on blur/commit (Enter blurs). On an empty/invalid
+// commit it keeps the existing saved value (NOT a hardcoded default), so the field
+// no longer snaps back to the default the moment it's cleared. Mirrors the shipped
+// IndicatorEditor PeriodInput fix. The saved shape (a number) is unchanged.
+function ClampedNumberInput({
+  value,
+  fallback,
+  min,
+  max,
+  step,
+  disabled,
+  onCommit,
+}: {
+  value: number | undefined
+  fallback: number
+  min: number
+  max: number
+  step?: number
+  disabled?: boolean
+  onCommit: (n: number) => void
+}) {
+  const [draft, setDraft] = useState<string | null>(null)
+  const saved = String(value ?? fallback)
+  const shown = draft ?? saved
+
+  const commit = () => {
+    if (draft === null) return
+    let n = parseFloat(draft.trim())
+    if (isNaN(n)) n = value ?? fallback // empty/invalid → keep the saved value
+    n = Math.min(max, Math.max(min, n)) // clamp to match the backend ClampLimits
+    onCommit(n)
+    setDraft(null)
+  }
+
+  return (
+    <input
+      type="number"
+      value={shown}
+      onFocus={() => !disabled && setDraft(saved)}
+      onChange={(e) => !disabled && setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+      }}
+      disabled={disabled}
+      min={min}
+      max={max}
+      step={step}
+      className="w-20 px-3 py-2 rounded ml-2"
+      style={{
+        background: '#1E2329',
+        border: '1px solid #2B3139',
+        color: '#EAECEF',
+      }}
+    />
+  )
+}
 
 interface RiskControlEditorProps {
   config: RiskControlConfig
@@ -336,25 +396,14 @@ export function RiskControlEditor({
             </p>
             <div className="flex items-center">
               <span style={{ color: '#848E9C' }}>1:</span>
-              <input
-                type="number"
-                value={config.min_risk_reward_ratio ?? 3}
-                onChange={(e) =>
-                  updateField(
-                    'min_risk_reward_ratio',
-                    parseFloat(e.target.value) || 3
-                  )
-                }
-                disabled={disabled}
+              <ClampedNumberInput
+                value={config.min_risk_reward_ratio}
+                fallback={3}
                 min={1}
                 max={10}
                 step={0.5}
-                className="w-20 px-3 py-2 rounded ml-2"
-                style={{
-                  background: '#1E2329',
-                  border: '1px solid #2B3139',
-                  color: '#EAECEF',
-                }}
+                disabled={disabled}
+                onCommit={(n) => updateField('min_risk_reward_ratio', n)}
               />
             </div>
           </div>
