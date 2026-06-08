@@ -10079,3 +10079,33 @@ trades, blackout, consistency, max contracts, notional cap) are BYPASSED — con
 other number inputs in RiskControlEditor likely share the `|| default` revert pattern — a follow-up could
 reuse ClampedNumberInput for them. ADDITIVE; FE-only; saved shape unchanged; the gate/guardrails/
 multi-account/P&L/chart-TZ + the live-account block untouched. SIM-only.
+
+
+## 2026-06-08 — Stage 1.5: strategy SAVE now reloads the running trader (config live without restart) (commit 53ad62a1)
+
+Pipeline-audit headline fix. `handleUpdateStrategy` (api/strategy.go) persisted the config to the DB and
+returned — it NEVER reloaded the running trader, whose engine is a snapshot from trader-load
+(auto_trader.go:414 `NewStrategyEngine(config.StrategyConfig)`). So R/R, indicators, periods, every Risk
+Control setting were STALE until a manual restart (proven live: saved min_rr→2 at 17:16, but decisions
+through 17:21 still used 3 from the 08:43 load). The AI-model + Exchange save handlers already reload the
+trader; strategy saves just didn't.
+
+Fix (extend the EXISTING pattern — no new hot-reload framework): after the validated+clamped+persisted
+save, find the running trader(s) bound to this strategy (`Trader().List(userID)` filtered by
+`StrategyID`), `RemoveTrader` them, then `LoadUserTradersFromStore` to rebuild from the store. Verified
+SAFE at file:line: `RemoveTrader→Stop()` (auto_trader.go:617) clears only the in-memory flag — it does
+NOT persist `is_running=false` — so the reload AUTO-STARTS the trader (`addTraderFromStore` honors the DB
+`is_running`, trader_manager.go:743-755); `LoadUserTradersFromStore` skips traders already in memory
+(:444) so only the affected one reloads. The TCP bridge + BarCache are a shared SINGLETON → bars + the
+NT8 connection are preserved; an open position re-attaches on reload (NT8-side SL/TP guard it during the
+swap). On reload failure the request still succeeds (config saved) + logs — no crash.
+
+go build/vet/test (./api ./store ./kernel ./trader) green; nofx-bin rebuilt + restarted clean (0 errors,
+flat). **Live-confirmed (partial):** after the new binary loaded, cycle 169's decision prompt shows
+R/R=2.00 + BOLL=[10] — the owner's current saved config (was 3.00/[10,12]). The SAVE-triggered reload
+(save while running → next cycle uses the new value WITHOUT restart) is CODE-verified (proven AI-model
+pattern + the auto-start mechanism) and will log "Strategy X saved → reloaded N trader(s)" on the next
+save — the live save-trigger awaited a session (Playwright expired → /login; no token forged). No
+prompt/gate/FE change; the gate/guardrails/multi-account/P&L/chart-TZ + the live-account block untouched.
+Propagated to vlautoagenttraderv1 (4495b6a). SIM-only. (Note: a CME daily maintenance halt 16:00-17:00 CT
+produced empty "risk gate HOLD" cycles around the restart — expected, not this change.)
