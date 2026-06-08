@@ -153,8 +153,12 @@ func getKlinesFromHyperliquid(symbol, interval string, limit int) ([]Kline, erro
 	return klines, nil
 }
 
-// calculateTimeframeSeries calculates series data for a single timeframe
-func calculateTimeframeSeries(klines []Kline, timeframe string, count int) *TimeframeSeriesData {
+// calculateTimeframeSeries calculates series data for a single timeframe.
+// emaPeriods (optional) are the strategy-CONFIGURED EMA periods; when non-empty
+// an EMA series is computed per period into EMAByPeriod (in ADDITION to the
+// legacy fixed EMA20/EMA50 fields, which are always computed for back-compat
+// readers). When empty, output is byte-identical to the pre-change code.
+func calculateTimeframeSeries(klines []Kline, timeframe string, count int, emaPeriods []int) *TimeframeSeriesData {
 	if count <= 0 {
 		count = 10 // default
 	}
@@ -172,6 +176,14 @@ func calculateTimeframeSeries(klines []Kline, timeframe string, count int) *Time
 		BOLLUpper:   make([]float64, 0, count),
 		BOLLMiddle:  make([]float64, 0, count),
 		BOLLLower:   make([]float64, 0, count),
+	}
+	if len(emaPeriods) > 0 {
+		data.EMAByPeriod = make(map[int][]float64, len(emaPeriods))
+		for _, p := range emaPeriods {
+			if p > 0 {
+				data.EMAByPeriod[p] = make([]float64, 0, count)
+			}
+		}
 	}
 
 	// Get latest N data points based on count from config
@@ -205,6 +217,14 @@ func calculateTimeframeSeries(klines []Kline, timeframe string, count int) *Time
 		if i >= 49 {
 			ema50 := calculateEMA(klines[:i+1], 50)
 			data.EMA50Values = append(data.EMA50Values, ema50)
+		}
+
+		// Calculate the strategy-CONFIGURED EMA periods (e.g. 9/21/200) for each
+		// point — same "need `period` bars" guard as the fixed EMAs above.
+		for _, p := range emaPeriods {
+			if p > 0 && i >= p-1 {
+				data.EMAByPeriod[p] = append(data.EMAByPeriod[p], calculateEMA(klines[:i+1], p))
+			}
 		}
 
 		// Calculate MACD for each point

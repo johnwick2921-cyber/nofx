@@ -2,19 +2,35 @@ package market
 
 import "time"
 
+// IndicatorPeriods carries the strategy-configured indicator periods into the
+// market-data layer so the computed series use the USER's periods instead of the
+// historical hardcoded defaults (EMA 20/50, BOLL 20, RSI 7/14, ATR 14). Passed
+// (optionally, variadic) to GetWithTimeframes; an empty/zero value preserves the
+// legacy hardcoded output byte-for-byte. Wired incrementally: EMA first.
+type IndicatorPeriods struct {
+	EMA  []int
+	RSI  []int
+	ATR  []int
+	BOLL []int
+}
+
 // Data market data structure
 type Data struct {
-	Symbol            string
-	CurrentPrice      float64
-	PriceChange1h     float64 // 1-hour price change percentage
-	PriceChange4h     float64 // 4-hour price change percentage
-	CurrentEMA20      float64
-	CurrentMACD       float64
-	CurrentRSI7       float64
-	OpenInterest      *OIData
-	FundingRate       float64
-	IntradaySeries    *IntradayData
-	LongerTermContext *LongerTermData
+	Symbol        string
+	CurrentPrice  float64
+	PriceChange1h float64 // 1-hour price change percentage
+	PriceChange4h float64 // 4-hour price change percentage
+	CurrentEMA20  float64
+	// CurrentEMAByPeriod holds the latest EMA per CONFIGURED period (e.g.
+	// {9: …, 21: …, 200: …}). Populated only when periods are supplied; empty →
+	// readers fall back to CurrentEMA20 (legacy 20). Prompt-data only.
+	CurrentEMAByPeriod map[int]float64
+	CurrentMACD        float64
+	CurrentRSI7        float64
+	OpenInterest       *OIData
+	FundingRate        float64
+	IntradaySeries     *IntradayData
+	LongerTermContext  *LongerTermData
 	// Multi-timeframe data (new)
 	TimeframeData map[string]*TimeframeSeriesData `json:"timeframe_data,omitempty"`
 }
@@ -34,8 +50,12 @@ type TimeframeSeriesData struct {
 	Timeframe   string     `json:"timeframe"`    // Timeframe identifier, e.g. "5m", "15m", "1h"
 	Klines      []KlineBar `json:"klines"`       // Full OHLCV kline data
 	MidPrices   []float64  `json:"mid_prices"`   // Price series (deprecated, kept for compatibility)
-	EMA20Values []float64  `json:"ema20_values"` // EMA20 series
-	EMA50Values []float64  `json:"ema50_values"` // EMA50 series
+	EMA20Values []float64  `json:"ema20_values"` // EMA20 series (legacy fixed period; kept for back-compat readers)
+	EMA50Values []float64  `json:"ema50_values"` // EMA50 series (legacy fixed period; kept for back-compat readers)
+	// EMAByPeriod holds one EMA series per CONFIGURED period (e.g. 9/21/200).
+	// Populated only when periods are supplied to GetWithTimeframes; empty → the
+	// prompt falls back to EMA20Values/EMA50Values (byte-identical legacy output).
+	EMAByPeriod map[int][]float64 `json:"ema_by_period,omitempty"`
 	MACDValues  []float64  `json:"macd_values"`  // MACD series
 	RSI7Values  []float64  `json:"rsi7_values"`  // RSI7 series
 	RSI14Values []float64  `json:"rsi14_values"` // RSI14 series
