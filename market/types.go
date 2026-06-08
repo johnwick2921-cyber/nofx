@@ -57,14 +57,30 @@ type TimeframeSeriesData struct {
 	// prompt falls back to EMA20Values/EMA50Values (byte-identical legacy output).
 	EMAByPeriod map[int][]float64 `json:"ema_by_period,omitempty"`
 	MACDValues  []float64  `json:"macd_values"`  // MACD series
-	RSI7Values  []float64  `json:"rsi7_values"`  // RSI7 series
-	RSI14Values []float64  `json:"rsi14_values"` // RSI14 series
-	Volume      []float64  `json:"volume"`       // Volume series (deprecated, use Klines)
-	ATR14       float64    `json:"atr14"`        // ATR14
-	// Bollinger Bands (period 20, std dev multiplier 2)
+	RSI7Values  []float64  `json:"rsi7_values"`  // RSI7 series (legacy fixed period; back-compat)
+	RSI14Values []float64  `json:"rsi14_values"` // RSI14 series (legacy fixed period; back-compat)
+	// RSIByPeriod holds one RSI series per CONFIGURED period; empty → prompt falls
+	// back to RSI7Values/RSI14Values (byte-identical legacy output).
+	RSIByPeriod map[int][]float64 `json:"rsi_by_period,omitempty"`
+	Volume      []float64         `json:"volume"` // Volume series (deprecated, use Klines)
+	ATR14       float64           `json:"atr14"`  // ATR14 (legacy fixed period; back-compat)
+	// ATRByPeriod holds the latest ATR per CONFIGURED period; empty → prompt falls
+	// back to ATR14 (byte-identical legacy output).
+	ATRByPeriod map[int]float64 `json:"atr_by_period,omitempty"`
+	// Bollinger Bands (period 20, std dev multiplier 2) — legacy fixed; back-compat.
 	BOLLUpper  []float64 `json:"boll_upper"`  // Upper band
 	BOLLMiddle []float64 `json:"boll_middle"` // Middle band (SMA)
 	BOLLLower  []float64 `json:"boll_lower"`  // Lower band
+	// BOLLByPeriod holds Bollinger Bands per CONFIGURED period (std-dev mult fixed
+	// at 2); empty → prompt falls back to BOLLUpper/Middle/Lower (byte-identical).
+	BOLLByPeriod map[int]*BollBands `json:"boll_by_period,omitempty"`
+}
+
+// BollBands holds one Bollinger Bands triple (upper/middle/lower) for a period.
+type BollBands struct {
+	Upper  []float64 `json:"upper"`
+	Middle []float64 `json:"middle"`
+	Lower  []float64 `json:"lower"`
 }
 
 // OIData Open Interest data

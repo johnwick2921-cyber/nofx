@@ -165,10 +165,10 @@ func GetWithTimeframes(symbol string, timeframes []string, primaryTimeframe stri
 	symbol = Normalize(symbol)
 
 	// Strategy-configured indicator periods (optional). When absent, the computed
-	// series fall back to the legacy fixed periods byte-for-byte. EMA wired first.
-	var emaP []int
+	// series fall back to the legacy fixed periods byte-for-byte.
+	var ip IndicatorPeriods
 	if len(indPeriods) > 0 {
-		emaP = indPeriods[0].EMA
+		ip = indPeriods[0]
 	}
 
 	if len(timeframes) == 0 {
@@ -246,7 +246,7 @@ func GetWithTimeframes(symbol string, timeframes []string, primaryTimeframe stri
 		}
 
 		// Calculate series data for this timeframe (use count from config)
-		seriesData := calculateTimeframeSeries(klines, tf, count, emaP)
+		seriesData := calculateTimeframeSeries(klines, tf, count, ip)
 		timeframeData[tf] = seriesData
 	}
 
@@ -270,9 +270,9 @@ func GetWithTimeframes(symbol string, timeframes []string, primaryTimeframe stri
 	// Latest EMA per CONFIGURED period (e.g. {9,21,200}) — alongside the legacy
 	// CurrentEMA20. Empty when no periods supplied (back-compat readers use EMA20).
 	var currentEMAByPeriod map[int]float64
-	if len(emaP) > 0 {
-		currentEMAByPeriod = make(map[int]float64, len(emaP))
-		for _, p := range emaP {
+	if len(ip.EMA) > 0 {
+		currentEMAByPeriod = make(map[int]float64, len(ip.EMA))
+		for _, p := range ip.EMA {
 			if p > 0 {
 				currentEMAByPeriod[p] = calculateEMA(primaryKlines, p)
 			}
