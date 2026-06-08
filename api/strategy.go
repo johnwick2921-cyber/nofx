@@ -369,6 +369,37 @@ func (s *Server) handleUpdateStrategy(c *gin.Context) {
 	warnings := validateStrategyConfig(&mergedConfig)
 	warnings = append(warnings, store.StrategyClampWarnings(beforeClamp, mergedConfig, mergedConfig.Language)...)
 
+	// Reload the running trader(s) bound to this strategy so the saved config
+	// takes effect on the NEXT decision cycle WITHOUT a manual restart — the same
+	// mechanism the AI-model + Exchange save handlers use (RemoveTrader +
+	// LoadUserTradersFromStore). The config was validated + clamped + persisted
+	// above; the reload re-reads it from the store. RemoveTrader stops the
+	// in-memory loop, but Stop() does NOT persist is_running=false, so the reload
+	// auto-starts the trader (addTraderFromStore honors the DB is_running flag).
+	// The TCP bridge + BarCache are a shared singleton — bars + the NT8 connection
+	// are preserved; an open position is re-attached on reload (NT8-side SL/TP
+	// guard it during the brief swap). On reload failure the request still
+	// succeeds (the config is saved) and we log — we never crash the trader.
+	if s.traderManager != nil {
+		if traders, listErr := s.store.Trader().List(userID); listErr == nil {
+			reloaded := make([]string, 0, 1)
+			for _, t := range traders {
+				if t.StrategyID == strategyID {
+					logger.Infof("🔄 Strategy %s saved — removing trader %s from memory to reload with the new config", strategyID, t.ID)
+					s.traderManager.RemoveTrader(t.ID)
+					reloaded = append(reloaded, t.ID)
+				}
+			}
+			if len(reloaded) > 0 {
+				if rErr := s.traderManager.LoadUserTradersFromStore(s.store, userID); rErr != nil {
+					logger.Infof("⚠️ Strategy %s saved but trader reload failed: %v (config persisted; restart to apply)", strategyID, rErr)
+				} else {
+					logger.Infof("✓ Strategy %s saved → reloaded %d running trader(s) to apply the new config immediately: %v", strategyID, len(reloaded), reloaded)
+				}
+			}
+		}
+	}
+
 	response := gin.H{"message": "Strategy updated successfully"}
 	if len(warnings) > 0 {
 		response["warnings"] = warnings
