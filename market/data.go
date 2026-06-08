@@ -161,8 +161,15 @@ func GetWithExchange(symbol, exchange string) (*Data, error) {
 // timeframes: list of timeframes, e.g. ["5m", "15m", "1h", "4h"]
 // primaryTimeframe: primary timeframe (used for calculating current indicators), defaults to timeframes[0]
 // count: number of K-lines for each timeframe
-func GetWithTimeframes(symbol string, timeframes []string, primaryTimeframe string, count int) (*Data, error) {
+func GetWithTimeframes(symbol string, timeframes []string, primaryTimeframe string, count int, indPeriods ...IndicatorPeriods) (*Data, error) {
 	symbol = Normalize(symbol)
+
+	// Strategy-configured indicator periods (optional). When absent, the computed
+	// series fall back to the legacy fixed periods byte-for-byte. EMA wired first.
+	var emaP []int
+	if len(indPeriods) > 0 {
+		emaP = indPeriods[0].EMA
+	}
 
 	if len(timeframes) == 0 {
 		return nil, fmt.Errorf("at least one timeframe is required")
@@ -239,7 +246,7 @@ func GetWithTimeframes(symbol string, timeframes []string, primaryTimeframe stri
 		}
 
 		// Calculate series data for this timeframe (use count from config)
-		seriesData := calculateTimeframeSeries(klines, tf, count)
+		seriesData := calculateTimeframeSeries(klines, tf, count, emaP)
 		timeframeData[tf] = seriesData
 	}
 
@@ -260,6 +267,18 @@ func GetWithTimeframes(symbol string, timeframes []string, primaryTimeframe stri
 	currentMACD := calculateMACD(primaryKlines)
 	currentRSI7 := calculateRSI(primaryKlines, 7)
 
+	// Latest EMA per CONFIGURED period (e.g. {9,21,200}) — alongside the legacy
+	// CurrentEMA20. Empty when no periods supplied (back-compat readers use EMA20).
+	var currentEMAByPeriod map[int]float64
+	if len(emaP) > 0 {
+		currentEMAByPeriod = make(map[int]float64, len(emaP))
+		for _, p := range emaP {
+			if p > 0 {
+				currentEMAByPeriod[p] = calculateEMA(primaryKlines, p)
+			}
+		}
+	}
+
 	// Calculate price changes
 	priceChange1h := calculatePriceChangeByBars(primaryKlines, primaryTimeframe, 60) // 1 hour
 	priceChange4h := calculatePriceChangeByBars(primaryKlines, primaryTimeframe, 240) // 4 hours
@@ -278,15 +297,16 @@ func GetWithTimeframes(symbol string, timeframes []string, primaryTimeframe stri
 	}
 
 	return &Data{
-		Symbol:        symbol,
-		CurrentPrice:  currentPrice,
-		PriceChange1h: priceChange1h,
-		PriceChange4h: priceChange4h,
-		CurrentEMA20:  currentEMA20,
-		CurrentMACD:   currentMACD,
-		CurrentRSI7:   currentRSI7,
-		OpenInterest:  oiData,
-		FundingRate:   fundingRate,
+		Symbol:             symbol,
+		CurrentPrice:       currentPrice,
+		PriceChange1h:      priceChange1h,
+		PriceChange4h:      priceChange4h,
+		CurrentEMA20:       currentEMA20,
+		CurrentEMAByPeriod: currentEMAByPeriod,
+		CurrentMACD:        currentMACD,
+		CurrentRSI7:        currentRSI7,
+		OpenInterest:       oiData,
+		FundingRate:        fundingRate,
 		TimeframeData: timeframeData,
 	}, nil
 }

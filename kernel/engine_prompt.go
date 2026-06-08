@@ -5,6 +5,7 @@ import (
 	"nofx/market"
 	"nofx/provider/nofxos"
 	"nofx/store"
+	"sort"
 	"strings"
 	"time"
 )
@@ -534,7 +535,18 @@ func (e *StrategyEngine) formatMarketData(data *market.Data) string {
 	sb.WriteString(fmt.Sprintf("current_price = %.4f", data.CurrentPrice))
 
 	if indicators.EnableEMA {
-		sb.WriteString(fmt.Sprintf(", current_ema20 = %.3f", data.CurrentEMA20))
+		if len(data.CurrentEMAByPeriod) > 0 {
+			periods := make([]int, 0, len(data.CurrentEMAByPeriod))
+			for p := range data.CurrentEMAByPeriod {
+				periods = append(periods, p)
+			}
+			sort.Ints(periods)
+			for _, p := range periods {
+				sb.WriteString(fmt.Sprintf(", current_ema%d = %.3f", p, data.CurrentEMAByPeriod[p]))
+			}
+		} else {
+			sb.WriteString(fmt.Sprintf(", current_ema20 = %.3f", data.CurrentEMA20))
+		}
 	}
 
 	if indicators.EnableMACD {
@@ -657,11 +669,27 @@ func (e *StrategyEngine) formatTimeframeSeriesData(sb *strings.Builder, data *ma
 	}
 
 	if indicators.EnableEMA {
-		if len(data.EMA20Values) > 0 {
-			sb.WriteString(fmt.Sprintf("EMA20: %s\n", formatFloatSlice(data.EMA20Values)))
-		}
-		if len(data.EMA50Values) > 0 {
-			sb.WriteString(fmt.Sprintf("EMA50: %s\n", formatFloatSlice(data.EMA50Values)))
+		if len(data.EMAByPeriod) > 0 {
+			// Configured periods drive the labels + values (e.g. EMA9/EMA21/EMA200),
+			// sorted ascending for stable output.
+			periods := make([]int, 0, len(data.EMAByPeriod))
+			for p := range data.EMAByPeriod {
+				periods = append(periods, p)
+			}
+			sort.Ints(periods)
+			for _, p := range periods {
+				if len(data.EMAByPeriod[p]) > 0 {
+					sb.WriteString(fmt.Sprintf("EMA%d: %s\n", p, formatFloatSlice(data.EMAByPeriod[p])))
+				}
+			}
+		} else {
+			// Legacy fallback (no configured periods) — byte-identical to prior output.
+			if len(data.EMA20Values) > 0 {
+				sb.WriteString(fmt.Sprintf("EMA20: %s\n", formatFloatSlice(data.EMA20Values)))
+			}
+			if len(data.EMA50Values) > 0 {
+				sb.WriteString(fmt.Sprintf("EMA50: %s\n", formatFloatSlice(data.EMA50Values)))
+			}
 		}
 	}
 
