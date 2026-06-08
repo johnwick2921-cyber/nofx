@@ -10013,3 +10013,40 @@ restored to `[20,50]` (no net change). tsc 0; `npm run build` ✓; Go untouched.
 (never gate); the period input passes `disabled` through, so default strategies stay read-only; the
 component is market-agnostic (crypto + futures identical). gates/guardrails/multi-account/P&L/chart-TZ +
 the live-account block untouched. SIM-only.
+
+
+## 2026-06-08 — Indicator PERIODS now drive the math (was hardcoded EMA 20/50, BOLL 20) (commits b8064830 + bcf3a26c)
+
+Diagnosed bug: the market layer hardcoded EMA 20/50, BOLL 20, RSI 7/14, ATR 14 at every call-site; the
+strategy-configured periods (e.g. EMA 21/9/200, BOLL 10/12) were SAVED + listed in the prompt HEADER but
+NEVER computed — the AI received values labeled EMA20/EMA50, which is why it cited "EMA20/EMA50". RSI/ATR
+only looked right because the owner's values equalled the hardcoded defaults.
+
+Fix (additive refactor, 2 chunks):
+- **(Chunk 1 — EMA, b8064830).** Plumb the configured periods into the market layer:
+  `GetWithTimeframes` gains an optional variadic `market.IndicatorPeriods`; the decision
+  (engine_analysis.go) + preview (api/strategy.go) call-sites pass `config.Indicators.*Periods`.
+  `calculateTimeframeSeries` computes one EMA series per CONFIGURED period into
+  `TimeframeSeriesData.EMAByPeriod` (+ `Data.CurrentEMAByPeriod`), IN ADDITION to the legacy fixed
+  `EMA20Values/EMA50Values/CurrentEMA20` (kept untouched for the grid engine, agent chat, futures static
+  builder, and formatters — those readers are unchanged). The decision prompt labels the real periods
+  (EMA9/EMA21/EMA200, sorted), falling back to EMA20/EMA50 when no periods are configured.
+- **(Chunk 2 — BOLL/RSI/ATR, bcf3a26c).** Same pattern generalized via the `IndicatorPeriods` struct:
+  `BOLLByPeriod` (std-dev mult fixed at 2), `RSIByPeriod`, `ATRByPeriod`. Prompt labels RSI9/RSI21,
+  ATR10, BOLL10/BOLL12, with legacy fallback.
+
+ADDITIVE + back-compat: with the default config the *ByPeriod path computes byte-identically to the legacy
+fixed fields (same calc fns, same `i>=period-1` guards) — golden-tested
+(`market/data_emaperiods_test.go`: `EMAByPeriod[20]==EMA20Values`, `BOLLByPeriod[20]==BOLLUpper/...`,
+`RSIByPeriod[7/14]==RSI7/14Values`, `ATRByPeriod[14]==ATR14`; `kernel/engine_prompt_emaperiods_test.go`:
+labels + byte-identical legacy fallback). Indicators/periods are prompt-data and NEVER gate
+(engine_position.go reads zero EMA/period — re-confirmed). go build/vet/test (./market ./kernel ./store
+./trader ./api) green incl. all existing goldens; nofx-bin rebuilt + restarted clean (0 "unknown frame
+type"); bot flat at restart.
+
+**Verified LIVE (owner session decision_records, cycle 16):** the active trader's (Hoangvl) decision
+prompt now shows `current_ema9/21/200`, per-TF `EMA9/EMA21/EMA200`, `BOLL10/BOLL12 Upper/Middle/Lower`,
+`RSI7/RSI14`, `ATR14` — the configured periods, with the legacy EMA20/EMA50 + "BOLL Upper:" labels gone.
+EMA200 shows 1 value (correct — needs 200 bars). The grid/agent/futures-static readers + the gate +
+multi-account + the live-account block untouched. SIM-only. Propagated to the partner repo
+vlautoagenttraderv1 (same fix).
