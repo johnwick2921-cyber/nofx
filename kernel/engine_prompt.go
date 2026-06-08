@@ -698,22 +698,61 @@ func (e *StrategyEngine) formatTimeframeSeriesData(sb *strings.Builder, data *ma
 	}
 
 	if indicators.EnableRSI {
-		if len(data.RSI7Values) > 0 {
-			sb.WriteString(fmt.Sprintf("RSI7: %s\n", formatFloatSlice(data.RSI7Values)))
-		}
-		if len(data.RSI14Values) > 0 {
-			sb.WriteString(fmt.Sprintf("RSI14: %s\n", formatFloatSlice(data.RSI14Values)))
+		if len(data.RSIByPeriod) > 0 {
+			periods := make([]int, 0, len(data.RSIByPeriod))
+			for p := range data.RSIByPeriod {
+				periods = append(periods, p)
+			}
+			sort.Ints(periods)
+			for _, p := range periods {
+				if len(data.RSIByPeriod[p]) > 0 {
+					sb.WriteString(fmt.Sprintf("RSI%d: %s\n", p, formatFloatSlice(data.RSIByPeriod[p])))
+				}
+			}
+		} else {
+			if len(data.RSI7Values) > 0 {
+				sb.WriteString(fmt.Sprintf("RSI7: %s\n", formatFloatSlice(data.RSI7Values)))
+			}
+			if len(data.RSI14Values) > 0 {
+				sb.WriteString(fmt.Sprintf("RSI14: %s\n", formatFloatSlice(data.RSI14Values)))
+			}
 		}
 	}
 
-	if indicators.EnableATR && data.ATR14 > 0 {
-		sb.WriteString(fmt.Sprintf("ATR14: %.4f\n", data.ATR14))
+	if indicators.EnableATR {
+		if len(data.ATRByPeriod) > 0 {
+			periods := make([]int, 0, len(data.ATRByPeriod))
+			for p := range data.ATRByPeriod {
+				periods = append(periods, p)
+			}
+			sort.Ints(periods)
+			for _, p := range periods {
+				sb.WriteString(fmt.Sprintf("ATR%d: %.4f\n", p, data.ATRByPeriod[p]))
+			}
+		} else if data.ATR14 > 0 {
+			sb.WriteString(fmt.Sprintf("ATR14: %.4f\n", data.ATR14))
+		}
 	}
 
-	if indicators.EnableBOLL && len(data.BOLLUpper) > 0 {
-		sb.WriteString(fmt.Sprintf("BOLL Upper: %s\n", formatFloatSlice(data.BOLLUpper)))
-		sb.WriteString(fmt.Sprintf("BOLL Middle: %s\n", formatFloatSlice(data.BOLLMiddle)))
-		sb.WriteString(fmt.Sprintf("BOLL Lower: %s\n", formatFloatSlice(data.BOLLLower)))
+	if indicators.EnableBOLL {
+		if len(data.BOLLByPeriod) > 0 {
+			periods := make([]int, 0, len(data.BOLLByPeriod))
+			for p := range data.BOLLByPeriod {
+				periods = append(periods, p)
+			}
+			sort.Ints(periods)
+			for _, p := range periods {
+				if b := data.BOLLByPeriod[p]; b != nil && len(b.Upper) > 0 {
+					sb.WriteString(fmt.Sprintf("BOLL%d Upper: %s\n", p, formatFloatSlice(b.Upper)))
+					sb.WriteString(fmt.Sprintf("BOLL%d Middle: %s\n", p, formatFloatSlice(b.Middle)))
+					sb.WriteString(fmt.Sprintf("BOLL%d Lower: %s\n", p, formatFloatSlice(b.Lower)))
+				}
+			}
+		} else if len(data.BOLLUpper) > 0 {
+			sb.WriteString(fmt.Sprintf("BOLL Upper: %s\n", formatFloatSlice(data.BOLLUpper)))
+			sb.WriteString(fmt.Sprintf("BOLL Middle: %s\n", formatFloatSlice(data.BOLLMiddle)))
+			sb.WriteString(fmt.Sprintf("BOLL Lower: %s\n", formatFloatSlice(data.BOLLLower)))
+		}
 	}
 
 	sb.WriteString("\n")

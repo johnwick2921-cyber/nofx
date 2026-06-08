@@ -57,6 +57,50 @@ func TestFormatTimeframeSeriesData_EMAPeriods(t *testing.T) {
 	}
 }
 
+// TestFormatTimeframeSeriesData_BollRsiAtrLabels locks the RSI/ATR/BOLL labels:
+// configured periods → RSI9/RSI21, ATR10, BOLL10/BOLL12; none → legacy labels.
+func TestFormatTimeframeSeriesData_BollRsiAtrLabels(t *testing.T) {
+	eng := NewStrategyEngine(&store.StrategyConfig{})
+	ind := store.IndicatorConfig{EnableRSI: true, EnableATR: true, EnableBOLL: true}
+
+	// Legacy (no *ByPeriod) → fixed labels, byte-identical to prior output.
+	var legacy strings.Builder
+	eng.formatTimeframeSeriesData(&legacy, &market.TimeframeSeriesData{
+		RSI7Values: []float64{50, 51}, RSI14Values: []float64{55, 56},
+		ATR14:     12.5,
+		BOLLUpper: []float64{1, 2}, BOLLMiddle: []float64{3, 4}, BOLLLower: []float64{5, 6},
+	}, ind)
+	for _, w := range []string{"RSI7:", "RSI14:", "ATR14:", "BOLL Upper:", "BOLL Middle:", "BOLL Lower:"} {
+		if !strings.Contains(legacy.String(), w) {
+			t.Fatalf("legacy must emit %s; got:\n%s", w, legacy.String())
+		}
+	}
+
+	// Configured → period-labeled, no legacy labels.
+	var cfg strings.Builder
+	eng.formatTimeframeSeriesData(&cfg, &market.TimeframeSeriesData{
+		RSI7Values: []float64{50}, RSI14Values: []float64{55}, // present but ignored
+		ATR14: 12.5,
+		RSIByPeriod: map[int][]float64{21: {60, 61}, 9: {40, 41}},
+		ATRByPeriod: map[int]float64{10: 9.9},
+		BOLLByPeriod: map[int]*market.BollBands{
+			12: {Upper: []float64{1}, Middle: []float64{2}, Lower: []float64{3}},
+			10: {Upper: []float64{4}, Middle: []float64{5}, Lower: []float64{6}},
+		},
+	}, ind)
+	out := cfg.String()
+	for _, w := range []string{"RSI9:", "RSI21:", "ATR10:", "BOLL10 Upper:", "BOLL12 Upper:"} {
+		if !strings.Contains(out, w) {
+			t.Fatalf("configured must emit %s; got:\n%s", w, out)
+		}
+	}
+	for _, bad := range []string{"RSI7:", "RSI14:", "ATR14:", "BOLL Upper:"} {
+		if strings.Contains(out, bad) {
+			t.Fatalf("configured must NOT emit legacy %s; got:\n%s", bad, out)
+		}
+	}
+}
+
 // TestFormatMarketData_CurrentEMAByPeriod locks the summary line: configured
 // periods → "current_ema9/21/200 ="; none → legacy "current_ema20 =".
 func TestFormatMarketData_CurrentEMAByPeriod(t *testing.T) {

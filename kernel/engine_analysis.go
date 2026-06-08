@@ -350,8 +350,13 @@ func fetchMarketDataWithStrategy(ctx *Context, engine *StrategyEngine) error {
 	logger.Infof("📊 Strategy timeframes: %v, Primary: %s, Kline count: %d", timeframes, primaryTimeframe, klineCount)
 
 	// Strategy-configured indicator periods → the market layer computes the user's
-	// EMA periods (e.g. 9/21/200) instead of the legacy fixed 20/50.
-	indPeriods := market.IndicatorPeriods{EMA: config.Indicators.EMAPeriods}
+	// periods (e.g. EMA 9/21/200, BOLL 10/12) instead of the legacy fixed defaults.
+	indPeriods := market.IndicatorPeriods{
+		EMA:  config.Indicators.EMAPeriods,
+		RSI:  config.Indicators.RSIPeriods,
+		ATR:  config.Indicators.ATRPeriods,
+		BOLL: config.Indicators.BOLLPeriods,
+	}
 
 	// 1. First fetch data for position coins (must fetch)
 	for _, pos := range ctx.Positions {
