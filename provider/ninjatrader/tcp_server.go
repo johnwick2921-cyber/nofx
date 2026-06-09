@@ -19,6 +19,7 @@ import (
 	"log/slog"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -72,6 +73,12 @@ type TCPServer struct {
 	// first frame; consumers DEFAULT-ALLOW on empty (never false-halt at startup).
 	feedMu     sync.RWMutex
 	feedStatus string
+	// lastBarNano is the wall-clock (UnixNano) of the most recent LIVE bar_update.
+	// The feed_status frame is edge-triggered (sent only on CHANGE), so a momentary
+	// flap can latch a stale "Disconnected" that never self-heals. A recent
+	// bar_update proves the feed is actually delivering data — IsFeedConnected uses
+	// it to override a stale non-"Connected" status. 0 until the first live bar.
+	lastBarNano atomic.Int64
 
 	// Plan 4.4 Stage 2 — bar ingest. Bar frames from the C# AddOn
 	// (bars_historical, bar_update) decode in the read loop and post to
@@ -437,17 +444,30 @@ func (s *TCPServer) FeedStatus() string {
 	return s.feedStatus
 }
 
+// feedFreshWindow: a live bar_update within this window proves the NT8 feed is
+// actually delivering data, so IsFeedConnected treats it as connected even if the
+// last edge-triggered feed_status frame latched a stale "Disconnected".
+const feedFreshWindow = 90 * time.Second
+
 // IsFeedConnected reports whether the NT8 price feed is usable. DEFAULT-ALLOW:
 // before any feed_status frame is received (startup) it returns true so a healthy
-// bot is never false-halted on mere absence of the signal; it returns false ONLY
-// on an explicit non-"Connected" status (the SIM would reject "no market data").
+// bot is never false-halted on mere absence of the signal. On an explicit
+// non-"Connected" status it returns false — UNLESS a live bar_update arrived
+// within feedFreshWindow, which proves the feed is up regardless of a stale
+// edge-triggered status (feed_status is sent only on change, so a momentary flap
+// can latch a "Disconnected" that never self-heals while bars keep flowing).
 func (s *TCPServer) IsFeedConnected() bool {
 	s.feedMu.RLock()
-	defer s.feedMu.RUnlock()
-	if s.feedStatus == "" {
+	status := s.feedStatus
+	s.feedMu.RUnlock()
+	if status == "" || status == "Connected" {
 		return true
 	}
-	return s.feedStatus == "Connected"
+	// Stale-status override: trust live bars over an out-of-date status flag.
+	if last := s.lastBarNano.Load(); last > 0 && time.Since(time.Unix(0, last)) < feedFreshWindow {
+		return true
+	}
+	return false
 }
 
 // InstrumentInfo returns the channel of instrument_info frames — the resolved
@@ -602,6 +622,9 @@ func (s *TCPServer) drainBarIngest(ctx context.Context) {
 // loop stalls heartbeat receive → 60s ack timeout → server closes the
 // conn → spurious reconnect cycle.
 func (s *TCPServer) enqueueBarUpdate(symbol, timeframe string, bars []Bar) {
+	// Stamp the live-feed freshness signal (IsFeedConnected uses it to override a
+	// stale edge-triggered feed_status). Cheap atomic store on the hot path.
+	s.lastBarNano.Store(time.Now().UnixNano())
 	msg := barIngestMsg{historical: false, symbol: symbol, timeframe: timeframe, bars: bars}
 	select {
 	case s.barIngestCh <- msg:
