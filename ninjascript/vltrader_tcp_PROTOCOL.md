@@ -89,6 +89,23 @@ Outgoing fill notification.
 - `fill_time`: RFC3339 UTC.
 - `slippage_ticks`: `(fill_price - entry) / tick_size`, signed (positive = paid more than planned for a long, less than planned for a short).
 - `status`: `filled`, `rejected`, or `partial`. Rejected fills indicate NT8 refused the order; the Go side does NOT retry — manual operator intervention is required.
+- `symbol` (P5.2, protocol v2): the order's instrument root (e.g. `"MNQ"`), for multi-symbol attribution. EMPTY/absent = legacy (pre-v2) AddOn → the Go side attributes the fill to the trader's primary symbol. The Go fill consumer REJECTS (warn + drop) a non-empty symbol that doesn't match the trader's instrument — the split-brain defense.
+- `account` (Phase 4): the NT8 account the fill executed on.
+
+### 2b. `hello` (bidirectional) — P5.2, protocol v2
+
+The C# AddOn sends `hello` as the FIRST frame on every (re)connect; the Go server replies with its own `hello`.
+
+```json
+{ "type": "hello", "payload": { "protocol_version": 2, "source": "vltrader-addon" } }
+```
+
+**Semantics:**
+
+- `protocol_version`: the peer's wire generation (`ProtocolVersion` in `tcp_framing.go` == `PROTOCOL_VERSION` in `VLTraderTCPClient.cs`; v2 = symbol-tagged fills + this handshake). Bump ONLY with a lockstep C#+Go ship.
+- Go server on MISMATCH: logs `PROTOCOL VERSION MISMATCH — refusing connection` and CLOSES (never silently misparses). The AddOn's reconnect loop will retry + log its own mismatch warning from the server's reply.
+- Go server on a connection that NEVER sends hello: tolerated as a LEGACY (pre-v2) AddOn with a one-time warning — so the lockstep deploy window (new Go, not-yet-F5'd C#) cannot brick the bar feed.
+- `source`: `"vltrader-addon"` or `"nofx-go"` (diagnostics only).
 
 ### 3. `heartbeat` (bidirectional)
 

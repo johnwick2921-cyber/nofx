@@ -378,6 +378,18 @@ func (s *TCPServer) AddBarsSubscribeSymbols(symbols ...string) {
 	}
 }
 
+// SetExtraBarsSymbols REPLACES the extra-roots list (dedup vs the primary +
+// internally). The config path uses this on every trader (re)load so the
+// Exchange row is the source of truth — a removed symbol doesn't linger on the
+// process-singleton server across reloads. (AddBarsSubscribeSymbols appends —
+// used by the NT_EXTRA_SYMBOLS testing override, applied after this.)
+func (s *TCPServer) SetExtraBarsSymbols(symbols ...string) {
+	s.barsSubMu.Lock()
+	s.extraBarsSymbols = nil
+	s.barsSubMu.Unlock()
+	s.AddBarsSubscribeSymbols(symbols...)
+}
+
 // UnsubscribeBarsSymbol removes an EXTRA root from the auto-subscribe list and
 // sends a bars_unsubscribe frame so the AddOn disposes that root's BarsRequests
 // (its updates stop; other roots keep streaming — the P5.1 dispose-one proof,
@@ -419,6 +431,28 @@ func (s *TCPServer) UnsubscribeBarsSymbol(symbol string) error {
 	}
 	s.logger.Info("tcp_server: sent bars_unsubscribe", "symbol", symbol)
 	return nil
+}
+
+// isSubscribedBarsSymbol reports whether a symbol is in the subscribed set
+// (the primary or an extra root, case-insensitive). The bar ingest path uses
+// it to REJECT mistagged/unsubscribed bars loudly — the P5.2 split-brain
+// defense: a bar tagged symbol X may only ever reach cache[X], and only if X
+// was actually subscribed.
+func (s *TCPServer) isSubscribedBarsSymbol(symbol string) bool {
+	if symbol == "" {
+		return false
+	}
+	s.barsSubMu.RLock()
+	defer s.barsSubMu.RUnlock()
+	if strings.EqualFold(symbol, s.barsSubscribe.Symbol) {
+		return true
+	}
+	for _, extra := range s.extraBarsSymbols {
+		if strings.EqualFold(extra, symbol) {
+			return true
+		}
+	}
+	return false
 }
 
 // barsSubscribePayloads returns the ordered auto-subscribe frames: the primary
@@ -791,6 +825,14 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 		_ = c.Close()
 	}()
 
+	// P5.2 handshake state (per connection). helloSeen flips on a valid hello;
+	// a data frame arriving without one marks a LEGACY (pre-P5.2) AddOn —
+	// tolerated with a single warning so the lockstep deploy window (new Go,
+	// not-yet-F5'd C#) cannot brick the bar feed. An explicit version MISMATCH
+	// is refused in the FrameHello case below.
+	helloSeen := false
+	legacyWarned := false
+
 	for {
 		// No SetReadDeadline — ReadFrame blocks until a frame arrives OR
 		// the connection is closed (by the watcher above on shutdown, or
@@ -811,7 +853,47 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 		}
 
 		s.logger.Info("tcp_server: received frame", "type", env.Type)
+
+		// P5.2 — legacy detection: a data frame before any hello means a
+		// pre-P5.2 AddOn. Tolerated (warn once per connection) so the lockstep
+		// deploy window can't kill the feed; an explicit version mismatch is
+		// still refused in the FrameHello case.
+		if !helloSeen && !legacyWarned && env.Type != FrameHello && env.Type != FrameHeartbeat && env.Type != FrameAck {
+			legacyWarned = true
+			s.logger.Warn("tcp_server: data frame before hello — LEGACY (pre-P5.2) AddOn assumed",
+				"first_frame", env.Type,
+				"action", "redeploy the C# AddOn (cp → F5 → NT8 restart) to enable the protocol handshake")
+		}
+
 		switch env.Type {
+		case FrameHello:
+			// P5.2 handshake. Version MISMATCH → refuse the connection loudly
+			// (close; never silently misparse a different protocol generation).
+			// Matching hello → reply with ours so the AddOn can verify us too.
+			var p HelloPayload
+			if err := json.Unmarshal(env.Payload, &p); err != nil {
+				s.logger.Warn("tcp_server: bad hello payload", "err", err)
+				continue
+			}
+			if p.ProtocolVersion != ProtocolVersion {
+				s.logger.Error("tcp_server: PROTOCOL VERSION MISMATCH — refusing connection",
+					"peer_version", p.ProtocolVersion, "our_version", ProtocolVersion,
+					"source", p.Source,
+					"action", "redeploy the C# AddOn + Go binary in lockstep (cp → F5 → NT8 restart)")
+				return // closes the connection via the deferred cleanup
+			}
+			helloSeen = true
+			s.logger.Info("tcp_server: hello handshake OK",
+				"protocol_version", p.ProtocolVersion, "source", p.Source)
+			s.writeMu.Lock()
+			_ = c.SetWriteDeadline(time.Now().Add(5 * time.Second))
+			err := WriteFrame(c, FrameHello, HelloPayload{ProtocolVersion: ProtocolVersion, Source: "nofx-go"})
+			s.writeMu.Unlock()
+			if err != nil {
+				s.logger.Warn("tcp_server: write hello reply", "err", err)
+				return
+			}
+
 		case FrameFill:
 			var fill FillPayload
 			if err := json.Unmarshal(env.Payload, &fill); err != nil {
@@ -858,6 +940,13 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 				s.logger.Warn("tcp_server: bad bars_historical payload", "err", err)
 				continue
 			}
+			// P5.2 split-brain defense: a bar for a symbol we never subscribed
+			// is REJECTED loudly — write-to-own-cache only.
+			if !s.isSubscribedBarsSymbol(p.Symbol) {
+				s.logger.Warn("tcp_server: REJECTED bars_historical for unsubscribed symbol (split-brain defense)",
+					"symbol", p.Symbol, "timeframe", p.Timeframe, "bars", len(p.Bars))
+				continue
+			}
 			s.enqueueBarHistorical(p.Symbol, p.Timeframe, p.Bars)
 
 		case FrameBarUpdate:
@@ -868,6 +957,14 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			var p BarUpdatePayload
 			if err := json.Unmarshal(env.Payload, &p); err != nil {
 				s.logger.Warn("tcp_server: bad bar_update payload", "err", err)
+				continue
+			}
+			// P5.2 split-brain defense (mirrors bars_historical above). Note:
+			// bar_update for a just-unsubscribed symbol can race in-flight —
+			// rejected here, which is exactly the desired teardown semantics.
+			if !s.isSubscribedBarsSymbol(p.Symbol) {
+				s.logger.Warn("tcp_server: REJECTED bar_update for unsubscribed symbol (split-brain defense)",
+					"symbol", p.Symbol, "timeframe", p.Timeframe, "bars", len(p.Bars))
 				continue
 			}
 			s.enqueueBarUpdate(p.Symbol, p.Timeframe, p.Bars)

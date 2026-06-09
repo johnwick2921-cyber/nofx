@@ -12,9 +12,7 @@ package ninjatrader
 
 import (
 	"fmt"
-	"os"
 	"reflect"
-	"strings"
 	"sync"
 	"time"
 
@@ -91,17 +89,21 @@ func NewTCPTrader(server *ntwire.TCPServer, symbol string) *TCPTrader {
 	// this root and NT8 resolves the qualified front-month (VLContractResolver,
 	// quarterly families). MNQ is unchanged (it is just the symbol here too).
 	server.SetBarsSubscribeSymbol(symbol)
-	// P5.1 — EXTRA symbol roots streamed alongside the primary (bars-only; no
-	// trading path reads them until P5.4 — the strategy/gate/order paths stay
-	// bound to the primary). Comma-separated env, e.g. NT_EXTRA_SYMBOLS=ES,NQ.
-	// Unset → single-symbol behavior byte-identical.
-	if extras := strings.TrimSpace(os.Getenv("NT_EXTRA_SYMBOLS")); extras != "" {
-		server.AddBarsSubscribeSymbols(strings.Split(extras, ",")...)
-		logger.Infof("📡 P5.1 extra bar subscriptions (bars-only): %s (primary: %s)", extras, symbol)
-	}
+	// P5.2 — extra bar-subscription roots (bars-only until P5.4) are wired by
+	// transport.go AFTER this constructor: the config symbols-list REPLACES the
+	// extras (source of truth per (re)load), then the NT_EXTRA_SYMBOLS testing
+	// override appends. Both dedup against the real primary set above.
 	// Subscribe to inbound fills — update lastFill cache (mirrors CSV Trader).
 	go func() {
 		for fill := range server.Fills() {
+			// P5.2 split-brain defense: a symbol-tagged fill for a DIFFERENT
+			// instrument must never be attributed to this trader. Empty symbol
+			// = legacy (pre-P5.2) AddOn → assumed primary (back-compat).
+			if fill.Symbol != "" && !equalSymbol(fill.Symbol, symbol) {
+				logger.Warnf("⚠️ ninjatrader/tcp: REJECTED fill for symbol %q (this trader trades %q) — signal_id=%s (split-brain defense)",
+					fill.Symbol, symbol, fill.SignalID)
+				continue
+			}
 			t.mu.Lock()
 			t.lastFill = fill
 			t.hasFill = true
