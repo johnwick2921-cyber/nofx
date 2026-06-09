@@ -10131,3 +10131,39 @@ fresh-bar-overrides + stale-bar-does-not). go build/vet/test (./provider/ninjatr
 nofx-bin restarted clean (0 errors). Immediate unblock = a prior bare restart (feedStatus resets to
 default-allow); this commit is the DURABLE fix so a future flap can't re-latch. No prompt/gate/FE change;
 the gate/guardrails/multi-account/live-account block untouched. Propagated to vlautoagenttraderv1. SIM-only.
+
+
+## 2026-06-09 — P5.1 MULTI-SYMBOL SIM PROOF: MNQ+ES streaming concurrently (commit b989ad9f)
+
+Stage P5.1 of the P5 multi-symbol upgrade (the attached P5 plan = the spec). STEP-A finding: the C# AddOn
+was ALREADY multi-symbol capable — VLBarsSubscriptionManager's registry is keyed SYMBOL|TF (one
+BarsRequest per key, per the plan's BarsRequest-not-AddDataSeries decision), HandleBarsSubscribe doesn't
+tear down other roots, OnConnectionReconnected (= the plan's ResubscribeAll) + the stall watchdog iterate
+ALL entries, dispose discipline exists, the TCP writer is lock-serialized, bar frames already carry the
+symbol, and VLContractResolver whitelists MNQ/NQ/ES/MES/YM/RTY/Z* (quarterly H/M/U/Z, roll = 3rd Friday −
+8 days). The ONLY gap: the Go server auto-subscribed a single symbol. **P5.1 was therefore Go-only — no
+C# change, no F5/NT8 restart.**
+
+Build (b989ad9f): TCPServer.extraBarsSymbols + AddBarsSubscribeSymbols (dedup, primary excluded);
+sendAutoBarsSubscribe sends one bars_subscribe per root (primary FIRST, extras clone its
+timeframes/bars-back); UnsubscribeBarsSymbol removes an extra + sends bars_unsubscribe (PRIMARY refused —
+the trading feed can never be torn down); NT_EXTRA_SYMBOLS env (unset → single-symbol byte-identical);
+POST /api/debug/nt-bars-unsubscribe (futures-only, mirrors nt-test-trade). GOLDEN
+(multisymbol_subscribe_test.go): no-extras → exactly ONE frame deep-equal to the legacy payload
+([MNQ]-only byte-identical); extras order/dedup; primary-refusal; state-removed-even-disconnected.
+
+**Live proofs (CME reopen 17:00 CT, all PASS):** (1) concurrent streaming — MNQ+ES 1m caches advancing
+together (17:03→17:04→…; MNQ ~29060, ES ~7378 — correct per-symbol prices, zero cache bleed; cache keys
+SYMBOL|TF isolated); (2) ES front-month resolution — instrument_info "ES 06-26 point_value=50 tick=0.25
+matches table ✓"; (3) dispose-one — unsubscribe ES @17:04:25 → ES froze @17:05 while MNQ advanced to
+17:08; primary (MNQ) unsubscribe REFUSED; (4) reconnect-resubscribe — Go restart → BOTH roots re-subscribed
++ re-seeded (incl. ES whose BarsRequests had just been disposed), both advancing again @17:10. NOT yet
+proven (needs the owner at NT8): the true broker-feed-drop reconnect (Tradovate disconnect/reconnect →
+OnConnectionReconnected restores BOTH) — the code path is symbol-agnostic and production-proven for MNQ.
+
+Bars-only: the strategy/gate/order paths stay bound to the primary (kernel fetches only static_coins; no
+ES trading path until P5.4); the live-account block is account-scoped + untouched; SIM-only. Rollback =
+remove NT_EXTRA_SYMBOLS from .env (single-symbol behavior is golden-locked byte-identical). Partner repo
+NOT synced (per the P5 dispatch: only after full P5 verification). HARD STOP — awaiting the owner's
+go/no-go for P5.2 (symbol-as-list config + symbol on EVERY frame + protocol_version handshake, C#+Go
+lockstep).
