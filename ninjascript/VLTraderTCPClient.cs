@@ -38,6 +38,10 @@ namespace NinjaTrader.NinjaScript.AddOns
         private const int    HEARTBEAT_INTERVAL_MS   = 30000; // spec L4408
         private const int    RECONNECT_INTERVAL_MS   = 5000;  // spec L4415
         private const int    STALE_SIGNAL_AGE_SECONDS = 60;   // spec L4414
+        // P5.2 wire-protocol generation. v2 = symbol-tagged fills + the hello
+        // handshake. MUST match provider/ninjatrader/tcp_framing.go
+        // ProtocolVersion — bump ONLY with a lockstep C#+Go ship.
+        private const int    PROTOCOL_VERSION        = 2;
         private const int    MAX_FRAME_BYTES         = 1 << 20; // 1 MB, spec L4376
 
         // === State ===
@@ -357,6 +361,12 @@ namespace NinjaTrader.NinjaScript.AddOns
                     client.Connect(GO_SERVER_HOST, GO_SERVER_PORT);
                     stream = client.GetStream();
                     LogInfo("VLTraderTCPClient: CONNECTED");
+
+                    // P5.2 — hello MUST be the FIRST frame so the Go server
+                    // can version-check before any data. On a mismatch the
+                    // server refuses (closes); we land back in the reconnect
+                    // loop with its loud mismatch log explaining why.
+                    SendHello();
                     LogInfo("VLTraderTCPClient: About to call SendAccountsList");
 
                     // Trigger on connect in case accounts are already loaded
@@ -481,6 +491,25 @@ namespace NinjaTrader.NinjaScript.AddOns
                     // Plan 4.4 Stage 1 — forward to the bars manager.
                     barsManager?.HandleBarsUnsubscribe(payload);
                 }
+                else if (type == "hello")
+                {
+                    // P5.2 — the Go server's hello reply. A version mismatch is
+                    // logged LOUDLY (the server side refuses mismatched clients;
+                    // this is the symmetric check so the operator sees it from
+                    // the NT8 Output window too).
+                    int goVersion = 0;
+                    try { goVersion = GetInt(payload, "protocol_version"); } catch { }
+                    if (goVersion != PROTOCOL_VERSION)
+                    {
+                        LogWarn("VLTraderTCPClient: *** PROTOCOL VERSION MISMATCH *** Go server v"
+                                + goVersion + " vs AddOn v" + PROTOCOL_VERSION
+                                + " — redeploy the C# AddOn + Go binary in LOCKSTEP (cp → F5 → NT8 restart)");
+                    }
+                    else
+                    {
+                        LogInfo("VLTraderTCPClient: hello handshake OK (protocol v" + goVersion + ")");
+                    }
+                }
                 else
                 {
                     LogWarn("VLTraderTCPClient: unknown frame type " + type);
@@ -542,7 +571,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                 {
                     LogWarn("VLTraderTCPClient: stale signal " + signalId
                             + " (age " + ageSec.ToString("F1") + "s) — rejecting");
-                    SendFillFrame(signalId, 0.0, side, qty, 0.0, "rejected");
+                    SendFillFrame(signalId, 0.0, side, qty, 0.0, "rejected", symbol: symbol);
                     return;
                 }
             }
@@ -550,7 +579,7 @@ namespace NinjaTrader.NinjaScript.AddOns
             if (account == null)
             {
                 LogWarn("VLTraderTCPClient: no account — rejecting signal " + signalId);
-                SendFillFrame(signalId, 0.0, side, qty, 0.0, "rejected");
+                SendFillFrame(signalId, 0.0, side, qty, 0.0, "rejected", symbol: symbol);
                 return;
             }
 
@@ -564,14 +593,14 @@ namespace NinjaTrader.NinjaScript.AddOns
             {
                 LogWarn("VLTraderTCPClient: REFUSING order " + signalId + " — account '"
                         + account.Name + "' is NOT a SIM account; live/funded accounts are never auto-traded");
-                SendFillFrame(signalId, 0.0, side, qty, 0.0, "rejected");
+                SendFillFrame(signalId, 0.0, side, qty, 0.0, "rejected", symbol: symbol);
                 return;
             }
             if (account.Connection == null || account.Connection.Status != ConnectionStatus.Connected)
             {
                 LogWarn("VLTraderTCPClient: REFUSING order " + signalId + " — account '"
                         + account.Name + "' is not Connected");
-                SendFillFrame(signalId, 0.0, side, qty, 0.0, "rejected");
+                SendFillFrame(signalId, 0.0, side, qty, 0.0, "rejected", symbol: symbol);
                 return;
             }
 
@@ -597,21 +626,21 @@ namespace NinjaTrader.NinjaScript.AddOns
                 {
                     LogWarn("VLTraderTCPClient: REFUSING order " + signalId + " — target account '"
                             + targetAccount + "' not found in Account.All");
-                    SendFillFrame(signalId, 0.0, side, qty, 0.0, "rejected");
+                    SendFillFrame(signalId, 0.0, side, qty, 0.0, "rejected", symbol: symbol);
                     return;
                 }
                 if (!IsSimAccount(resolved))
                 {
                     LogWarn("VLTraderTCPClient: REFUSING order " + signalId + " — target account '"
                             + targetAccount + "' is NOT a SIM account; live/funded accounts are never auto-traded");
-                    SendFillFrame(signalId, 0.0, side, qty, 0.0, "rejected");
+                    SendFillFrame(signalId, 0.0, side, qty, 0.0, "rejected", symbol: symbol);
                     return;
                 }
                 if (resolved.Connection == null || resolved.Connection.Status != ConnectionStatus.Connected)
                 {
                     LogWarn("VLTraderTCPClient: REFUSING order " + signalId + " — target account '"
                             + targetAccount + "' is not Connected");
-                    SendFillFrame(signalId, 0.0, side, qty, 0.0, "rejected");
+                    SendFillFrame(signalId, 0.0, side, qty, 0.0, "rejected", symbol: symbol);
                     return;
                 }
                 // Resolved + guarded — PHASE 3 ROUTES the submit to THIS account (below),
@@ -633,7 +662,7 @@ namespace NinjaTrader.NinjaScript.AddOns
             {
                 LogWarn("VLTraderTCPClient: instrument " + symbol
                         + " (resolved to " + contract + ") not found — rejecting");
-                SendFillFrame(signalId, 0.0, side, qty, 0.0, "rejected");
+                SendFillFrame(signalId, 0.0, side, qty, 0.0, "rejected", symbol: symbol);
                 return;
             }
 
@@ -652,7 +681,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                 LogWarn("VLTraderTCPClient: REFUSING order " + signalId + " — submit target '"
                         + (submitAccount != null ? submitAccount.Name : "<null>")
                         + "' failed the final SIM/connected guard");
-                SendFillFrame(signalId, 0.0, side, qty, 0.0, "rejected");
+                SendFillFrame(signalId, 0.0, side, qty, 0.0, "rejected", symbol: symbol);
                 return;
             }
             // The fill→bracket→fill-frame lifecycle (OnOrderUpdate) must fire for this
@@ -709,7 +738,7 @@ namespace NinjaTrader.NinjaScript.AddOns
             {
                 LogWarn("VLTraderTCPClient: order submit failed: " + ex.Message);
                 lock (signalMapLock) { pendingBrackets.Remove(signalId); }
-                SendFillFrame(signalId, 0.0, side, qty, 0.0, "rejected");
+                SendFillFrame(signalId, 0.0, side, qty, 0.0, "rejected", symbol: symbol);
             }
         }
 
@@ -961,16 +990,37 @@ namespace NinjaTrader.NinjaScript.AddOns
                 }
             }
 
+            // P5.2 — tag the fill with the order's instrument root for
+            // multi-symbol attribution (same accessor PHASE 4 uses above).
+            string fillSymbol = "";
+            try { fillSymbol = e.Order.Instrument.MasterInstrument.Name; } catch { }
+
             SendFillFrame(signalId, e.AverageFillPrice, sideStr, e.Filled,
                           slippageTicks, status,
                           e.Order.Account != null ? e.Order.Account.Name
-                              : (account != null ? account.Name : ""));
+                              : (account != null ? account.Name : ""),
+                          fillSymbol);
         }
 
         // === Write helpers ===
+
+        /// <summary>
+        /// P5.2 handshake — sent as the FIRST frame on every (re)connect so the
+        /// Go server can version-check before any data flows. The server replies
+        /// with its own hello (handled in HandleFrame) or refuses on mismatch.
+        /// </summary>
+        private void SendHello()
+        {
+            WriteEnvelope("hello", new Dictionary<string, object>
+            {
+                ["protocol_version"] = PROTOCOL_VERSION,
+                ["source"]           = "vltrader-addon"
+            });
+        }
+
         private void SendFillFrame(string signalId, double fillPrice, string side,
                                    int qty, double slippageTicks, string status,
-                                   string acctName = "")
+                                   string acctName = "", string symbol = "")
         {
             var payload = new Dictionary<string, object>
             {
@@ -983,7 +1033,11 @@ namespace NinjaTrader.NinjaScript.AddOns
                 ["status"]         = status,
                 // PHASE 4: which account this fill is on (e.Order.Account). Additive +
                 // back-compat: an un-updated Go binary ignores unknown JSON fields.
-                ["account"]        = acctName ?? ""
+                ["account"]        = acctName ?? "",
+                // P5.2: which INSTRUMENT this fill is for (multi-symbol
+                // attribution). Empty = unknown; the Go side treats empty as the
+                // primary trading symbol (legacy-compatible).
+                ["symbol"]         = symbol ?? ""
             };
             WriteEnvelope("fill", payload);
         }

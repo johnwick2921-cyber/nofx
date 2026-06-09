@@ -45,14 +45,36 @@ type SignalPayload struct {
 }
 
 // FillPayload is the C#-AddOn → Go-server fill frame per spec L4398-4406.
+// P5.2 adds Symbol (the order's root, e.g. "MNQ") so multi-symbol fills are
+// attributable. Empty = legacy AddOn (pre-P5.2) → consumers treat it as the
+// primary trading symbol (back-compat; new field is additive JSON).
 type FillPayload struct {
 	SignalID      string  `json:"signal_id"`
+	Symbol        string  `json:"symbol,omitempty"` // P5.2 — order's root symbol; empty = legacy (primary)
 	FillPrice     float64 `json:"fill_price"`
 	FillTime      string  `json:"fill_time"` // RFC3339
 	Side          string  `json:"side"`
 	Quantity      int     `json:"quantity"`
 	SlippageTicks float64 `json:"slippage_ticks"`
 	Status        string  `json:"status"` // "filled" | "rejected" | "partial"
+}
+
+// P5.2 — protocol handshake. The C# AddOn sends `hello` as the FIRST frame on
+// every (re)connect; the Go server replies with its own `hello`. On an explicit
+// VERSION MISMATCH the server refuses the connection with a loud log (never
+// silently misparse). A connection that never sends hello is a LEGACY AddOn
+// (pre-P5.2): tolerated with a warning so the lockstep deploy window (new Go,
+// not-yet-F5'd C#) cannot brick the bar feed.
+const FrameHello FrameType = "hello"
+
+// ProtocolVersion is the current wire protocol generation. v2 = P5.2
+// (symbol-tagged fills + hello handshake). Bump ONLY with a lockstep C#+Go ship.
+const ProtocolVersion = 2
+
+// HelloPayload identifies the peer + its protocol generation.
+type HelloPayload struct {
+	ProtocolVersion int    `json:"protocol_version"`
+	Source          string `json:"source"` // "vltrader-addon" | "nofx-go"
 }
 
 // AckPayload acknowledges a heartbeat or a specific signal_id per spec L4410.

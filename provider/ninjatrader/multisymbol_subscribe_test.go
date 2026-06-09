@@ -1,6 +1,8 @@
 package ninjatrader
 
 import (
+	"bytes"
+	"encoding/json"
 	"reflect"
 	"testing"
 )
@@ -48,6 +50,73 @@ func TestAddBarsSubscribeSymbols(t *testing.T) {
 			t.Fatalf("extra %s must clone the primary's timeframes+bars_back; got %+v vs primary %+v",
 				got[i].Symbol, got[i], got[0])
 		}
+	}
+}
+
+// TestSetExtraBarsSymbols_ReplaceSemantics locks the P5.2 reload rule: the
+// config list REPLACES the extras on every trader (re)load (a symbol removed
+// from the Exchange row must not linger on the process-singleton server).
+func TestSetExtraBarsSymbols_ReplaceSemantics(t *testing.T) {
+	s := NewTCPServer(nil)
+	s.SetBarsSubscribeSymbol("MNQ")
+	s.AddBarsSubscribeSymbols("ES", "NQ") // previous load's extras
+	s.SetExtraBarsSymbols("RTY")          // new config: only RTY
+
+	got := s.barsSubscribePayloads()
+	if len(got) != 2 || got[0].Symbol != "MNQ" || got[1].Symbol != "RTY" {
+		t.Fatalf("SetExtraBarsSymbols must REPLACE (want MNQ+RTY); got %+v", got)
+	}
+	// Replace-with-nothing → primary only (the [MNQ]-only golden again).
+	s.SetExtraBarsSymbols()
+	if got := s.barsSubscribePayloads(); len(got) != 1 || got[0].Symbol != "MNQ" {
+		t.Fatalf("SetExtraBarsSymbols() must clear extras; got %+v", got)
+	}
+}
+
+// TestIsSubscribedBarsSymbol_SplitBrainDefense locks the P5.2 mistagged-bar
+// rejection predicate: only the primary + registered extras pass; an
+// unsubscribed/mistagged symbol (or empty) is rejected.
+func TestIsSubscribedBarsSymbol_SplitBrainDefense(t *testing.T) {
+	s := NewTCPServer(nil)
+	s.SetBarsSubscribeSymbol("MNQ")
+	s.AddBarsSubscribeSymbols("ES")
+
+	for _, ok := range []string{"MNQ", "mnq", "ES", "es"} {
+		if !s.isSubscribedBarsSymbol(ok) {
+			t.Fatalf("%q must be accepted (subscribed)", ok)
+		}
+	}
+	for _, bad := range []string{"NQ", "BTCUSDT", ""} {
+		if s.isSubscribedBarsSymbol(bad) {
+			t.Fatalf("%q must be REJECTED (not subscribed — split-brain defense)", bad)
+		}
+	}
+}
+
+// TestHelloFraming_RoundTrip locks the P5.2 handshake encoding: a hello frame
+// survives Write→Read with the version + source intact, and the current
+// ProtocolVersion constant is 2 (bump ONLY with a lockstep C#+Go ship).
+func TestHelloFraming_RoundTrip(t *testing.T) {
+	if ProtocolVersion != 2 {
+		t.Fatalf("ProtocolVersion = %d; P5.2 ships v2 — a bump requires a lockstep C#+Go deploy", ProtocolVersion)
+	}
+	var buf bytes.Buffer
+	if err := WriteFrame(&buf, FrameHello, HelloPayload{ProtocolVersion: ProtocolVersion, Source: "vltrader-addon"}); err != nil {
+		t.Fatal(err)
+	}
+	env, err := ReadFrame(&buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if env.Type != FrameHello {
+		t.Fatalf("type = %s; want hello", env.Type)
+	}
+	var p HelloPayload
+	if err := json.Unmarshal(env.Payload, &p); err != nil {
+		t.Fatal(err)
+	}
+	if p.ProtocolVersion != 2 || p.Source != "vltrader-addon" {
+		t.Fatalf("payload round-trip mismatch: %+v", p)
 	}
 }
 
