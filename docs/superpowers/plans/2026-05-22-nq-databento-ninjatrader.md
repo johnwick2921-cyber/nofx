@@ -10194,9 +10194,11 @@ GOLDENS green: SplitSymbolList shim; SetExtraBarsSymbols replace; isSubscribedBa
 round-trip + v2 pin; the P5.1 [MNQ]-only byte-identical golden still green. go build/vet/test + tsc + FE
 build clean.
 
-**Deploy state:** Go side LIVE (restart 18:12 CT) — legacy mode confirmed working exactly as designed
-(one-time "LEGACY (pre-P5.2) AddOn assumed" warning, both subscribes sent, bars flowing, 0 errors). C#
-v2 staged to the Windows AddOns folder (all 3 .cs copied, v2 marker verified) — **awaiting the owner's
-F5 compile + full NT8 restart** to complete the lockstep. After F5 verify: "hello handshake OK
-(protocol v2)" in the Go log, bars resume for MNQ+ES, fills symbol-tagged on the next trade, 0 "unknown
-frame type". SIM-only; the live-account block untouched; partner repo not synced (post-P5 only).
+**Deploy state — LOCKSTEP COMPLETE + VERIFIED (owner F5'd + NT8 restarted 18:53 CT):** the v2 AddOn's
+FIRST frame was hello → Go log "hello handshake OK protocol_version=2 source=vltrader-addon"; both
+subscribes re-sent; both instrument_infos re-emitted (MNQ 06-26 + ES 06-26 re-resolved); MNQ + ES bars
+advancing live post-F5 (both on the current 18:56 bar); 0 "unknown frame type"/panic since the v2
+connect (rule 11 clean, both sides v2); 0 LEGACY warnings since v2. The legacy-tolerance path was also
+live-proven during the 18:12→18:53 window (old AddOn + new Go: one warning, feed unbroken). Fill
+symbol-tagging is golden-tested + deployed; the live tag appears on the next fill. SIM-only; the
+live-account block untouched; partner repo not synced (post-P5 only).
