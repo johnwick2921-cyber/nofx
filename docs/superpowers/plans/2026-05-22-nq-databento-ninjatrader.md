@@ -10167,3 +10167,36 @@ remove NT_EXTRA_SYMBOLS from .env (single-symbol behavior is golden-locked byte-
 NOT synced (per the P5 dispatch: only after full P5 verification). HARD STOP — awaiting the owner's
 go/no-go for P5.2 (symbol-as-list config + symbol on EVERY frame + protocol_version handshake, C#+Go
 lockstep).
+
+
+## 2026-06-09 — P5.2 WIRE v2: symbols-as-list + symbol-tagged fills + hello handshake (commit 8932e93e; lockstep deploy in flight)
+
+Owner GO on P5.1 → P5.2 built (protocol v2, C#+Go in lockstep):
+- **Config symbols-as-list (compat shim):** the Exchange row's NT instrument field accepts a comma list
+  ("MNQ,ES,NQ") — `SplitSymbolList` (trader/ninjatrader/transport.go): FIRST = the PRIMARY (trading)
+  symbol, rest = extra bar-subscription roots. A single symbol = the one-element case → byte-identical,
+  zero migration. transport REPLACES the singleton server's extras from config on every trader (re)load
+  (`SetExtraBarsSymbols` — a removed symbol can't linger), then appends the NT_EXTRA_SYMBOLS testing
+  override. CSV transport logs + ignores extras.
+- **hello/protocol_version handshake (v2):** the AddOn sends hello{protocol_version,source} FIRST; the Go
+  server REFUSES a mismatch loudly (closes — never silently misparses) + replies with its own hello. A
+  connection that never sends hello = LEGACY AddOn → tolerated with a one-time warning so the lockstep
+  deploy window can't brick the feed. ProtocolVersion(Go) == PROTOCOL_VERSION(C#) == 2.
+- **Symbol-tagged fills:** FillPayload.Symbol (C# sends the order's instrument root; rejected paths echo
+  the signal's symbol). Empty = legacy → primary. The TCPTrader fill consumer REJECTS a mismatched
+  non-empty symbol (split-brain defense, warn+drop).
+- **Mistagged-bar rejection:** bars frames for a symbol outside the subscribed set (primary+extras) are
+  REJECTED before ingest (write-to-own-cache only) — golden-tested predicate.
+- **FE:** the NT Instrument field documents the comma-list form (placeholder + help line).
+- **Protocol doc:** §2b hello + fill.symbol (additive).
+
+GOLDENS green: SplitSymbolList shim; SetExtraBarsSymbols replace; isSubscribedBarsSymbol; hello framing
+round-trip + v2 pin; the P5.1 [MNQ]-only byte-identical golden still green. go build/vet/test + tsc + FE
+build clean.
+
+**Deploy state:** Go side LIVE (restart 18:12 CT) — legacy mode confirmed working exactly as designed
+(one-time "LEGACY (pre-P5.2) AddOn assumed" warning, both subscribes sent, bars flowing, 0 errors). C#
+v2 staged to the Windows AddOns folder (all 3 .cs copied, v2 marker verified) — **awaiting the owner's
+F5 compile + full NT8 restart** to complete the lockstep. After F5 verify: "hello handshake OK
+(protocol v2)" in the Go log, bars resume for MNQ+ES, fills symbol-tagged on the next trade, 0 "unknown
+frame type". SIM-only; the live-account block untouched; partner repo not synced (post-P5 only).
