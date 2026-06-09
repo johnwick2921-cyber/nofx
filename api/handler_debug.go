@@ -9,6 +9,42 @@ import (
 	ntTrader "nofx/trader/ninjatrader"
 )
 
+// handleNTBarsUnsubscribe drops an EXTRA bar subscription at runtime (P5.1
+// dispose-one proof / P5.3 building block). Futures-mode only; the primary
+// (trading) symbol is refused at the TCP-server layer, so this can never tear
+// down the live trader's feed. Bars-only — no order/position path involved.
+func (s *Server) handleNTBarsUnsubscribe(c *gin.Context) {
+	if cfg := config.Get(); cfg == nil || cfg.TradingMode != "futures" {
+		SafeBadRequest(c, "bars unsubscribe is futures-mode only")
+		return
+	}
+	_, traderID, err := s.getTraderFromQuery(c)
+	if err != nil {
+		SafeBadRequest(c, "Invalid trader ID")
+		return
+	}
+	trader, err := s.traderManager.GetTrader(traderID)
+	if err != nil {
+		SafeNotFound(c, "Trader")
+		return
+	}
+	nt, ok := trader.GetUnderlyingTrader().(*ntTrader.TCPTrader)
+	if !ok {
+		SafeBadRequest(c, "trader is not an NT8 TCP trader (NT_TRANSPORT=tcp required)")
+		return
+	}
+	symbol := c.Query("symbol")
+	if symbol == "" {
+		SafeBadRequest(c, "symbol is required")
+		return
+	}
+	if err := nt.DebugUnsubscribeBars(symbol); err != nil {
+		SafeInternalError(c, "NT bars unsubscribe", err)
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"ok": true, "symbol": symbol})
+}
+
 // handleNTTestTrade places a deterministic 1-contract SIM bracket order on the
 // NT trader for end-to-end dashboard proof (Plan 4.11: signal → NT8 SIM fill →
 // position). Futures/SIM only; bypasses the AI + risk gate. NOT a trading path

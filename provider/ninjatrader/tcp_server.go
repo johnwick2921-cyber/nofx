@@ -18,6 +18,7 @@ import (
 	"io"
 	"log/slog"
 	"net"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -90,7 +91,14 @@ type TCPServer struct {
 	barCache      *BarCache
 	barIngestCh   chan barIngestMsg
 	barsSubscribe BarsSubscribePayload // sent on each (re)connect after flushPending
-	barsSubMu     sync.RWMutex         // protects barsSubscribe
+	barsSubMu     sync.RWMutex         // protects barsSubscribe + extraBarsSymbols
+	// P5.1 — EXTRA symbol roots auto-subscribed alongside the primary on each
+	// (re)connect, with the SAME timeframes/bars-back as the primary (one
+	// bars_subscribe frame per root). Empty by default → exactly one frame, the
+	// pre-P5 single-symbol behavior byte-identical. The C# manager registry is
+	// keyed SYMBOL|TF, so extra roots stream concurrently and independently;
+	// its reconnect ResubscribeAll + watchdog already iterate ALL entries.
+	extraBarsSymbols []string
 
 	// Plan 4.11 — latest real account snapshot from the C# AddOn
 	// (account_balance frame). Replaces the $50k mock in
@@ -344,6 +352,98 @@ func (s *TCPServer) currentBarsSubscribe() BarsSubscribePayload {
 	}
 }
 
+// AddBarsSubscribeSymbols registers EXTRA symbol roots (e.g. "ES", "NQ") to be
+// auto-subscribed alongside the primary on each (re)connect, sharing the
+// primary's timeframes + bars-back. Blank entries, duplicates, and the primary
+// itself are skipped (case-insensitive). P5.1 — with no extras registered the
+// server's behavior is byte-identical to the single-symbol code.
+func (s *TCPServer) AddBarsSubscribeSymbols(symbols ...string) {
+	s.barsSubMu.Lock()
+	defer s.barsSubMu.Unlock()
+	for _, sym := range symbols {
+		sym = strings.TrimSpace(sym)
+		if sym == "" || strings.EqualFold(sym, s.barsSubscribe.Symbol) {
+			continue
+		}
+		dup := false
+		for _, existing := range s.extraBarsSymbols {
+			if strings.EqualFold(existing, sym) {
+				dup = true
+				break
+			}
+		}
+		if !dup {
+			s.extraBarsSymbols = append(s.extraBarsSymbols, sym)
+		}
+	}
+}
+
+// UnsubscribeBarsSymbol removes an EXTRA root from the auto-subscribe list and
+// sends a bars_unsubscribe frame so the AddOn disposes that root's BarsRequests
+// (its updates stop; other roots keep streaming — the P5.1 dispose-one proof,
+// and the P5.3 runtime-remove building block). The PRIMARY symbol (the live
+// trader's instrument) is refused — never tear down the trading feed. Removal
+// from the list happens even if the send fails (not connected), so a later
+// reconnect won't re-subscribe the dropped root.
+func (s *TCPServer) UnsubscribeBarsSymbol(symbol string) error {
+	symbol = strings.TrimSpace(symbol)
+	if symbol == "" {
+		return fmt.Errorf("tcp_server: unsubscribe: empty symbol")
+	}
+	s.barsSubMu.Lock()
+	if strings.EqualFold(symbol, s.barsSubscribe.Symbol) {
+		s.barsSubMu.Unlock()
+		return fmt.Errorf("tcp_server: refusing to unsubscribe the PRIMARY symbol %q (the live trader's feed)", symbol)
+	}
+	kept := s.extraBarsSymbols[:0]
+	for _, existing := range s.extraBarsSymbols {
+		if !strings.EqualFold(existing, symbol) {
+			kept = append(kept, existing)
+		}
+	}
+	s.extraBarsSymbols = kept
+	s.barsSubMu.Unlock()
+
+	s.connMu.Lock()
+	c := s.conn
+	s.connMu.Unlock()
+	if c == nil {
+		return fmt.Errorf("tcp_server: unsubscribe %s: not connected (removed from auto-subscribe list)", symbol)
+	}
+	s.writeMu.Lock()
+	_ = c.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	err := WriteFrame(c, FrameBarsUnsubscribe, BarsUnsubscribePayload{Symbol: symbol})
+	s.writeMu.Unlock()
+	if err != nil {
+		return fmt.Errorf("tcp_server: send bars_unsubscribe %s: %w", symbol, err)
+	}
+	s.logger.Info("tcp_server: sent bars_unsubscribe", "symbol", symbol)
+	return nil
+}
+
+// barsSubscribePayloads returns the ordered auto-subscribe frames: the primary
+// first (the exact pre-P5 payload), then one clone per extra root with only the
+// symbol swapped. No extras → exactly [primary], byte-identical to the old
+// single-frame behavior.
+func (s *TCPServer) barsSubscribePayloads() []BarsSubscribePayload {
+	s.barsSubMu.RLock()
+	defer s.barsSubMu.RUnlock()
+	out := make([]BarsSubscribePayload, 0, 1+len(s.extraBarsSymbols))
+	out = append(out, BarsSubscribePayload{
+		Symbol:     s.barsSubscribe.Symbol,
+		Timeframes: append([]string(nil), s.barsSubscribe.Timeframes...),
+		BarsBack:   s.barsSubscribe.BarsBack,
+	})
+	for _, sym := range s.extraBarsSymbols {
+		out = append(out, BarsSubscribePayload{
+			Symbol:     sym,
+			Timeframes: append([]string(nil), s.barsSubscribe.Timeframes...),
+			BarsBack:   s.barsSubscribe.BarsBack,
+		})
+	}
+	return out
+}
+
 // Start binds the listener and spins up the accept loop. The returned error
 // is non-nil only if the bind fails. Stop releases the port.
 func (s *TCPServer) Start(ctx context.Context) error {
@@ -564,30 +664,32 @@ func (s *TCPServer) acceptLoop(ctx context.Context) {
 	}
 }
 
-// sendAutoBarsSubscribe emits the configured bars_subscribe frame on a
-// freshly-accepted connection. Failure here is non-fatal — the C# side
-// will simply not start streaming bars; the next reconnect retries. We
-// log a warn so the operator sees the failure.
+// sendAutoBarsSubscribe emits the configured bars_subscribe frame(s) on a
+// freshly-accepted connection — the primary symbol first, then one frame per
+// extra root (P5.1). Failure here is non-fatal — the C# side will simply not
+// start streaming bars; the next reconnect retries. We log a warn so the
+// operator sees the failure.
 func (s *TCPServer) sendAutoBarsSubscribe(c net.Conn) {
-	payload := s.currentBarsSubscribe()
-	if payload.Symbol == "" || len(payload.Timeframes) == 0 {
-		// No subscription configured — Stage 2 default always populates
-		// this, but defend against an explicit empty override.
-		return
+	for _, payload := range s.barsSubscribePayloads() {
+		if payload.Symbol == "" || len(payload.Timeframes) == 0 {
+			// No subscription configured — Stage 2 default always populates
+			// this, but defend against an explicit empty override.
+			continue
+		}
+		s.writeMu.Lock()
+		_ = c.SetWriteDeadline(time.Now().Add(5 * time.Second))
+		err := WriteFrame(c, FrameBarsSubscribe, payload)
+		s.writeMu.Unlock()
+		if err != nil {
+			s.logger.Warn("tcp_server: send bars_subscribe", "err", err,
+				"symbol", payload.Symbol, "timeframes", payload.Timeframes)
+			continue
+		}
+		s.logger.Info("tcp_server: sent bars_subscribe",
+			"symbol", payload.Symbol,
+			"timeframes", payload.Timeframes,
+			"bars_back", payload.BarsBack)
 	}
-	s.writeMu.Lock()
-	_ = c.SetWriteDeadline(time.Now().Add(5 * time.Second))
-	err := WriteFrame(c, FrameBarsSubscribe, payload)
-	s.writeMu.Unlock()
-	if err != nil {
-		s.logger.Warn("tcp_server: send bars_subscribe", "err", err,
-			"symbol", payload.Symbol, "timeframes", payload.Timeframes)
-		return
-	}
-	s.logger.Info("tcp_server: sent bars_subscribe",
-		"symbol", payload.Symbol,
-		"timeframes", payload.Timeframes,
-		"bars_back", payload.BarsBack)
 }
 
 // drainBarIngest consumes the bar ingest channel and applies updates to

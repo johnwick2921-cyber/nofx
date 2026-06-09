@@ -12,7 +12,9 @@ package ninjatrader
 
 import (
 	"fmt"
+	"os"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -89,6 +91,14 @@ func NewTCPTrader(server *ntwire.TCPServer, symbol string) *TCPTrader {
 	// this root and NT8 resolves the qualified front-month (VLContractResolver,
 	// quarterly families). MNQ is unchanged (it is just the symbol here too).
 	server.SetBarsSubscribeSymbol(symbol)
+	// P5.1 — EXTRA symbol roots streamed alongside the primary (bars-only; no
+	// trading path reads them until P5.4 — the strategy/gate/order paths stay
+	// bound to the primary). Comma-separated env, e.g. NT_EXTRA_SYMBOLS=ES,NQ.
+	// Unset → single-symbol behavior byte-identical.
+	if extras := strings.TrimSpace(os.Getenv("NT_EXTRA_SYMBOLS")); extras != "" {
+		server.AddBarsSubscribeSymbols(strings.Split(extras, ",")...)
+		logger.Infof("📡 P5.1 extra bar subscriptions (bars-only): %s (primary: %s)", extras, symbol)
+	}
 	// Subscribe to inbound fills — update lastFill cache (mirrors CSV Trader).
 	go func() {
 		for fill := range server.Fills() {
@@ -457,6 +467,14 @@ func (t *TCPTrader) positionMap(symbol, side string, qty, entry float64, uPnLOve
 // NOT a trading path — and is reachable only via the SIM-gated
 // /api/debug/nt-test-trade endpoint. SL/TP are priced off the latest cached
 // MNQ bar (20pt stop / 40pt target → ~2:1). side = "short" else long.
+// DebugUnsubscribeBars drops an EXTRA bar subscription at runtime (P5.1
+// dispose-one proof / P5.3 building block): removes the root from the
+// auto-subscribe list and sends bars_unsubscribe so the AddOn disposes that
+// root's BarsRequests. The primary (trading) symbol is refused server-side.
+func (t *TCPTrader) DebugUnsubscribeBars(symbol string) error {
+	return t.server.UnsubscribeBarsSymbol(symbol)
+}
+
 func (t *TCPTrader) DebugPlaceTestTrade(side string) (map[string]interface{}, error) {
 	bars := t.server.BarCache().Get(t.symbol, "5m")
 	if len(bars) == 0 {
