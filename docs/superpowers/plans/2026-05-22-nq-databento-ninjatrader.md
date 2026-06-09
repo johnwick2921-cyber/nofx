@@ -10109,3 +10109,25 @@ save — the live save-trigger awaited a session (Playwright expired → /login;
 prompt/gate/FE change; the gate/guardrails/multi-account/P&L/chart-TZ + the live-account block untouched.
 Propagated to vlautoagenttraderv1 (4495b6a). SIM-only. (Note: a CME daily maintenance halt 16:00-17:00 CT
 produced empty "risk gate HOLD" cycles around the restart — expected, not this change.)
+
+
+## 2026-06-08 — feed-gate stale-status latch fixed: IsFeedConnected overrides with live bars (commit 2b9138b9)
+
+Owner-reported + corrected diagnosis: the AI's LONG decisions weren't entering — initially mis-attributed
+to "feed down," but the owner correctly noted NT8 was connected. Real bug: the NT8 `feed_status` frame is
+EDGE-TRIGGERED (sent only on change), and `IsFeedConnected` latched it. A momentary connect/disconnect
+flap at 19:53 ended on "Disconnected" and NT8 never re-sent "Connected" on reconnect — so the feed-gate
+(auto_trader_orders.go:62) skipped EVERY open order for ~3.5h (11 skips, 21:01→23:23) even though bars
+flowed continuously (~1M/hour, hours 20/21/22/23) and the feed was demonstrably live. The decisions were
+otherwise valid (conf 75, R/R ≥ min); the order path works (earlier fills 13:11/18:54).
+
+Fix (Go-only, no C# change): `provider/ninjatrader/tcp_server.go` tracks the wall-clock of the most recent
+live `bar_update` (`lastBarNano atomic.Int64`, stamped in `enqueueBarUpdate` on the hot path);
+`IsFeedConnected` now returns true when a bar arrived within `feedFreshWindow` (90s), overriding a stale
+non-"Connected" status. The bar stream is the real proof the feed is up; a TRUE outage stops the bars →
+the override expires → the legacy status-based `false` is restored. DEFAULT-ALLOW (empty status) +
+"Connected" behavior unchanged. Golden: provider/ninjatrader/feed_freshness_test.go (5 cases incl.
+fresh-bar-overrides + stale-bar-does-not). go build/vet/test (./provider/ninjatrader ./trader/...) green;
+nofx-bin restarted clean (0 errors). Immediate unblock = a prior bare restart (feedStatus resets to
+default-allow); this commit is the DURABLE fix so a future flap can't re-latch. No prompt/gate/FE change;
+the gate/guardrails/multi-account/live-account block untouched. Propagated to vlautoagenttraderv1. SIM-only.
