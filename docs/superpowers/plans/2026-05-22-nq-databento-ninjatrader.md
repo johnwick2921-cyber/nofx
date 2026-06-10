@@ -10231,3 +10231,30 @@ interval edit applies live once the new binary is running.
 Cost note: at 1-minute the claw402 runway estimator (EstimateRunway, scanMinutes=1) correctly reports
 ~3× the daily AI cost vs 3-minute. SIM-only; gates/guardrails/live-account block untouched. Partner
 repo sync HELD — P5.3 is mid-flight in a concurrent session; sync at the next stable boundary.
+
+
+## 2026-06-09 — P5.3 RUNTIME SYMBOL ADD/REMOVE + subscription acks (commit afb9abb3; acks await one F5)
+
+GO on P5.2 → P5.3 built + live-verified (the remove path existed from P5.1; this adds the runtime ADD,
+lifecycle acks, clean teardown, and the flag-gated owner API):
+- **Runtime ADD:** `SubscribeBarsSymbol` registers an extra root (survives reconnect) + sends
+  bars_subscribe NOW when connected (clones the primary's timeframes/bars-back). Primary-dup refused.
+- **Acks (C#→Go, additive):** subscribed{symbol,resolved_contract} / unsubscribed{symbol,removed} /
+  subscribe_error{symbol,reason} — a typo'd symbol now fails LOUDLY Go-side. Go tracks per-symbol state
+  (pending/subscribed/error/unsubscribed); a pre-ack AddOn just stays "pending" (bars still flow).
+- **Clean teardown:** UnsubscribeBarsSymbol PURGES the symbol's cached bars (BarCache.PurgeSymbol — every
+  timeframe, case-insensitive, primary untouchable) + records the state. No per-symbol goroutines exist
+  (single drain + shared cache) → nothing to leak by design.
+- **Owner API (futures-only, flag NT_RUNTIME_SYMBOLS=true; default OFF = the static P5.2 list = the
+  rollback):** GET /api/nt/symbols (always readable: primary + states + flag), POST ?symbol=NQ (add),
+  DELETE ?symbol=NQ (remove). Protocol doc §9.
+
+**LIVE proofs (19:06-19:09 CT, CME open, pre-F5 — the current AddOn handles subscribe/unsubscribe; only
+the acks need the new C#):** POST add NQ → "sent runtime bars_subscribe NQ" → instrument_info NQ 06-26
+(pv=20 ✓) → **THREE symbols streaming concurrently** (MNQ+ES+NQ all on the same live 1m bar — the P5
+headline goal at the data layer); DELETE NQ → unsubscribed + **cache PURGED** (MNQ+ES untouched); 3
+add/remove churn cycles → threads 15→16 (runtime noise, no leak), 0 errors; DELETE MNQ (primary) →
+REFUSED; the state view shows NQ "unsubscribed". Tests: PurgeSymbol, runtime-add semantics, ack framing
+round-trips, unsubscribe-purges-cache — green; [MNQ]-only golden intact. C# ack emits staged to the
+AddOns folder — ONE F5 + NT8 restart activates them (post-F5 expected: states flip to "subscribed" with
+contracts). SIM-only; the live-account block untouched; partner repo not synced (post-P5).
