@@ -11,7 +11,10 @@
 // + copy-on-read for snapshots, so reads never block writes for long.
 package ninjatrader
 
-import "sync"
+import (
+	"strings"
+	"sync"
+)
 
 // DefaultBarCacheMaxBars is the per-(symbol, timeframe) ring-buffer
 // capacity. 1024 covers EMA200 + ATR14 + 4-hour intraday history at 1m
@@ -206,6 +209,27 @@ func (c *BarCache) Keys() [][2]string {
 		out = append(out, [2]string{s, t})
 	}
 	return out
+}
+
+// PurgeSymbol removes EVERY timeframe's cached bars for a symbol (P5.3 clean
+// teardown after bars_unsubscribe — a removed symbol must not leave stale data
+// for the chart/API to read). Case-insensitive on the symbol half of the key.
+// Returns the number of (symbol|timeframe) entries removed.
+func (c *BarCache) PurgeSymbol(symbol string) int {
+	if symbol == "" {
+		return 0
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	removed := 0
+	for k := range c.bars {
+		s, _, ok := splitBarKey(k)
+		if ok && strings.EqualFold(s, symbol) {
+			delete(c.bars, k)
+			removed++
+		}
+	}
+	return removed
 }
 
 // barKey encodes (symbol, timeframe) as a single map key. We deliberately

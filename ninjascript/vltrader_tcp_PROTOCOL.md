@@ -238,6 +238,23 @@ for this symbol." The AddOn disposes the affected `BarsRequest`s, stops
 emitting `bar_update` frames for them, and removes them from its
 subscription registry.
 
+### 9. `subscribed` / `unsubscribed` / `subscribe_error` (C# AddOn → Go server) — P5.3
+
+Subscription lifecycle acks, sent by the AddOn in response to `bars_subscribe` / `bars_unsubscribe`:
+
+```json
+{ "type": "subscribed",      "payload": { "symbol": "NQ", "resolved_contract": "NQ 06-26" } }
+{ "type": "unsubscribed",    "payload": { "symbol": "NQ", "removed": 14 } }
+{ "type": "subscribe_error", "payload": { "symbol": "XYZ", "reason": "qualified contract 'XYZ 06-26' not found in NT8 (not loaded?)" } }
+```
+
+**Semantics:**
+
+- `subscribed`: emitted after the BarsRequests open, with the resolved front-month (`instrument.FullName`). The Go side marks the symbol `subscribed` (visible via `GET /api/nt/symbols`).
+- `unsubscribed`: emitted after `bars_unsubscribe` disposal; `removed` counts the disposed `(symbol|timeframe)` subscriptions (0 = wasn't subscribed).
+- `subscribe_error`: a FAILED subscribe (instrument unresolved / not in NT8's DB) — surfaces Go-side instead of dying silently in the NT8 Output window.
+- ADDITIVE: a pre-P5.3 AddOn never sends these (the Go state shows `pending`; bars still flow). A pre-P5.3 Go logs them as unknown frames (harmless warn) — ship Go before the AddOn F5, as with v2.
+
 ## Failure modes
 
 - **TCP disconnect**: the server holds the signal queue; on reconnect, it sends pending signals with their original timestamps. The C# AddOn may reject signals older than 60s as stale (emits a `status=rejected` fill).

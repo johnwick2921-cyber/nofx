@@ -77,6 +77,38 @@ type HelloPayload struct {
 	Source          string `json:"source"` // "vltrader-addon" | "nofx-go"
 }
 
+// P5.3 — subscription acks (C#-AddOn → Go-server). The AddOn confirms or
+// rejects each bars_subscribe/bars_unsubscribe so the Go side (and the owner
+// API) sees subscription state without reading the NT8 Output window. ADDITIVE:
+// a pre-P5.3 AddOn simply never sends them (state shows "pending").
+const (
+	FrameSubscribed     FrameType = "subscribed"
+	FrameUnsubscribed   FrameType = "unsubscribed"
+	FrameSubscribeError FrameType = "subscribe_error"
+)
+
+// SubscribedPayload acks a successful bars_subscribe: the root + the resolved
+// front-month contract the BarsRequests were opened against.
+type SubscribedPayload struct {
+	Symbol           string `json:"symbol"`
+	ResolvedContract string `json:"resolved_contract"`
+}
+
+// UnsubscribedPayload acks a bars_unsubscribe; Removed counts the disposed
+// (symbol|timeframe) subscriptions.
+type UnsubscribedPayload struct {
+	Symbol  string `json:"symbol"`
+	Removed int    `json:"removed"`
+}
+
+// SubscribeErrorPayload reports a FAILED bars_subscribe (instrument unresolved
+// / not in NT8's DB) so a typo'd symbol fails loudly Go-side instead of dying
+// silently in the NT8 Output window.
+type SubscribeErrorPayload struct {
+	Symbol string `json:"symbol"`
+	Reason string `json:"reason"`
+}
+
 // AckPayload acknowledges a heartbeat or a specific signal_id per spec L4410.
 type AckPayload struct {
 	Acks string `json:"acks"` // "heartbeat" or "<signal_id>"

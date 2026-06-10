@@ -100,6 +100,12 @@ type TCPServer struct {
 	// its reconnect ResubscribeAll + watchdog already iterate ALL entries.
 	extraBarsSymbols []string
 
+	// P5.3 — per-symbol subscription state, fed by the AddOn's ack frames
+	// (subscribed / unsubscribed / subscribe_error). "pending" until an ack
+	// arrives (a pre-P5.3 AddOn never acks → stays pending; bars still flow).
+	subStateMu sync.RWMutex
+	subStates  map[string]SymbolSubState
+
 	// Plan 4.11 — latest real account snapshot from the C# AddOn
 	// (account_balance frame). Replaces the $50k mock in
 	// TCPTrader.GetBalance once the first frame arrives.
@@ -378,6 +384,91 @@ func (s *TCPServer) AddBarsSubscribeSymbols(symbols ...string) {
 	}
 }
 
+// SymbolSubState is one symbol's subscription lifecycle as seen Go-side (P5.3).
+// State: "pending" (subscribe sent, no ack yet — also a pre-P5.3 AddOn that
+// never acks), "subscribed" (+Contract), "error" (+Reason), "unsubscribed".
+type SymbolSubState struct {
+	State     string    `json:"state"`
+	Contract  string    `json:"contract,omitempty"`
+	Reason    string    `json:"reason,omitempty"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (s *TCPServer) setSubState(symbol, state, contract, reason string) {
+	if symbol == "" {
+		return
+	}
+	s.subStateMu.Lock()
+	if s.subStates == nil {
+		s.subStates = make(map[string]SymbolSubState)
+	}
+	s.subStates[strings.ToUpper(symbol)] = SymbolSubState{
+		State: state, Contract: contract, Reason: reason, UpdatedAt: time.Now(),
+	}
+	s.subStateMu.Unlock()
+}
+
+// BarsSubscriptionStates snapshots the per-symbol subscription lifecycle for
+// the owner API: every currently-configured root (primary + extras) plus any
+// symbol that still has a recorded state (e.g. just-unsubscribed).
+func (s *TCPServer) BarsSubscriptionStates() map[string]SymbolSubState {
+	out := make(map[string]SymbolSubState)
+	s.subStateMu.RLock()
+	for k, v := range s.subStates {
+		out[k] = v
+	}
+	s.subStateMu.RUnlock()
+	// Configured roots with no ack yet → pending placeholder.
+	for _, p := range s.barsSubscribePayloads() {
+		k := strings.ToUpper(p.Symbol)
+		if _, ok := out[k]; !ok && p.Symbol != "" {
+			out[k] = SymbolSubState{State: "pending"}
+		}
+	}
+	return out
+}
+
+// SubscribeBarsSymbol ADDS an extra root at runtime (P5.3): registers it (the
+// next reconnect re-subscribes it too) and — if the AddOn is connected — sends
+// the bars_subscribe frame NOW, cloning the primary's timeframes/bars-back.
+// The C# side acks with subscribed{resolved_contract} or subscribe_error.
+func (s *TCPServer) SubscribeBarsSymbol(symbol string) error {
+	symbol = strings.TrimSpace(symbol)
+	if symbol == "" {
+		return fmt.Errorf("tcp_server: subscribe: empty symbol")
+	}
+	s.barsSubMu.RLock()
+	isPrimary := strings.EqualFold(symbol, s.barsSubscribe.Symbol)
+	payload := BarsSubscribePayload{
+		Symbol:     symbol,
+		Timeframes: append([]string(nil), s.barsSubscribe.Timeframes...),
+		BarsBack:   s.barsSubscribe.BarsBack,
+	}
+	s.barsSubMu.RUnlock()
+	if isPrimary {
+		return fmt.Errorf("tcp_server: %q is already the PRIMARY symbol", symbol)
+	}
+	s.AddBarsSubscribeSymbols(symbol) // idempotent (dedup)
+	s.setSubState(symbol, "pending", "", "")
+
+	s.connMu.Lock()
+	c := s.conn
+	s.connMu.Unlock()
+	if c == nil {
+		return fmt.Errorf("tcp_server: subscribe %s: not connected (registered; will subscribe on reconnect)", symbol)
+	}
+	s.writeMu.Lock()
+	_ = c.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	err := WriteFrame(c, FrameBarsSubscribe, payload)
+	s.writeMu.Unlock()
+	if err != nil {
+		return fmt.Errorf("tcp_server: send bars_subscribe %s: %w", symbol, err)
+	}
+	s.logger.Info("tcp_server: sent runtime bars_subscribe", "symbol", symbol,
+		"timeframes", payload.Timeframes, "bars_back", payload.BarsBack)
+	return nil
+}
+
 // SetExtraBarsSymbols REPLACES the extra-roots list (dedup vs the primary +
 // internally). The config path uses this on every trader (re)load so the
 // Exchange row is the source of truth — a removed symbol doesn't linger on the
@@ -415,6 +506,12 @@ func (s *TCPServer) UnsubscribeBarsSymbol(symbol string) error {
 	}
 	s.extraBarsSymbols = kept
 	s.barsSubMu.Unlock()
+
+	// P5.3 clean teardown: drop the symbol's cached bars (write-to-own-cache's
+	// counterpart — removed symbol leaves no stale data) + record the state.
+	// Safe: the PRIMARY was refused above, so the trading cache is untouchable.
+	s.barCache.PurgeSymbol(symbol)
+	s.setSubState(symbol, "unsubscribed", "", "")
 
 	s.connMu.Lock()
 	c := s.conn
@@ -719,6 +816,7 @@ func (s *TCPServer) sendAutoBarsSubscribe(c net.Conn) {
 				"symbol", payload.Symbol, "timeframes", payload.Timeframes)
 			continue
 		}
+		s.setSubState(payload.Symbol, "pending", "", "") // P5.3 — awaiting the AddOn's ack
 		s.logger.Info("tcp_server: sent bars_subscribe",
 			"symbol", payload.Symbol,
 			"timeframes", payload.Timeframes,
@@ -931,6 +1029,37 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 		case FrameSignal:
 			// Clients don't send signals; ignore but log.
 			s.logger.Warn("tcp_server: unexpected signal frame from client")
+
+		case FrameSubscribed:
+			// P5.3 — the AddOn confirmed a bars_subscribe with the resolved
+			// front-month contract.
+			var p SubscribedPayload
+			if err := json.Unmarshal(env.Payload, &p); err != nil {
+				s.logger.Warn("tcp_server: bad subscribed payload", "err", err)
+				continue
+			}
+			s.setSubState(p.Symbol, "subscribed", p.ResolvedContract, "")
+			s.logger.Info("tcp_server: subscription ACK", "symbol", p.Symbol, "contract", p.ResolvedContract)
+
+		case FrameUnsubscribed:
+			var p UnsubscribedPayload
+			if err := json.Unmarshal(env.Payload, &p); err != nil {
+				s.logger.Warn("tcp_server: bad unsubscribed payload", "err", err)
+				continue
+			}
+			s.setSubState(p.Symbol, "unsubscribed", "", "")
+			s.logger.Info("tcp_server: unsubscribe ACK", "symbol", p.Symbol, "removed", p.Removed)
+
+		case FrameSubscribeError:
+			// P5.3 — a FAILED subscribe (e.g. instrument not in NT8's DB)
+			// surfaces Go-side instead of dying silently in the NT8 Output.
+			var p SubscribeErrorPayload
+			if err := json.Unmarshal(env.Payload, &p); err != nil {
+				s.logger.Warn("tcp_server: bad subscribe_error payload", "err", err)
+				continue
+			}
+			s.setSubState(p.Symbol, "error", "", p.Reason)
+			s.logger.Warn("tcp_server: SUBSCRIBE FAILED", "symbol", p.Symbol, "reason", p.Reason)
 
 		case FrameBarsHistorical:
 			// Plan 4.4 Stage 2 — one-shot per (symbol, timeframe) after
