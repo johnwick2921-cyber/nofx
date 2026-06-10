@@ -10202,3 +10202,32 @@ connect (rule 11 clean, both sides v2); 0 LEGACY warnings since v2. The legacy-t
 live-proven during the 18:12→18:53 window (old AddOn + new Go: one warning, feed unbroken). Fill
 symbol-tagging is golden-tested + deployed; the live tag appears on the next fill. SIM-only; the
 live-account block untouched; partner repo not synced (post-P5 only).
+
+## 2026-06-09 — AI scan-interval minimum lowered 3 → 1 minute (commit d06617a2)
+
+Owner scalps and wants 1-minute decision scans; the Create-Trader modal rejected anything below 3.
+EVERY floor site moved to 1 (additive — existing traders at 3+ behave byte-identically; 3 stays the
+default for blank/unset):
+
+- FE input clamp `Math.max(3→1, …)` + `min="3"→"1"` — web/src/components/trader/TraderConfigModal.tsx
+  (~:401-410); blank/invalid input still falls back to 3.
+- BE create clamp — api/handler_trader.go (~:426): was `<3 → 3` (silent bump), now `<=0 → 3` (default
+  for unset); any positive value accepted.
+- BE update clamp — api/handler_trader.go (~:617): the `else if <3 → 3` bump REMOVED; `<=0 → keep
+  existing` unchanged.
+- Hint text honest in en/zh/id (translations.ts scanIntervalRecommend): "Recommended: 3-10; minimum 1 —
+  1-minute scanning increases AI-call frequency/cost and may be limited by decision latency."
+- Engine: NO floor exists — manager/trader_manager.go:650 converts minutes verbatim;
+  store/trader.go:29 keeps gorm default:3.
+
+OVERLAP ANSWER (definitive, auto_trader.go:557-600): the scan loop is `time.NewTicker(interval)` +
+`runCycle()` executed ON the loop goroutine — cycles are strictly sequential, overlap is IMPOSSIBLE,
+no reentrancy guard needed. If a cycle runs LONGER than the interval (e.g. 90s at 1-min): Go's ticker
+buffers at most ONE pending tick and DROPS the rest, so the next cycle starts immediately after the
+long one ends, skipped ticks are simply gone, and the cadence realigns — cycles never queue up or run
+concurrently. Trader-update reloads+restarts the running trader (handler_trader.go:698-708), so an
+interval edit applies live once the new binary is running.
+
+Cost note: at 1-minute the claw402 runway estimator (EstimateRunway, scanMinutes=1) correctly reports
+~3× the daily AI cost vs 3-minute. SIM-only; gates/guardrails/live-account block untouched. Partner
+repo sync HELD — P5.3 is mid-flight in a concurrent session; sync at the next stable boundary.
