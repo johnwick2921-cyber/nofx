@@ -422,10 +422,12 @@ func (s *Server) handleCreateTrader(c *gin.Context) {
 		systemPromptTemplate = req.SystemPromptTemplate
 	}
 
-	// Set scan interval default value
+	// Set scan interval default value. Minimum lowered 3 → 1 (2026-06-09,
+	// scalper request): any positive value is accepted; unset/invalid (<= 0)
+	// still defaults to the recommended 3.
 	scanIntervalMinutes := req.ScanIntervalMinutes
-	if scanIntervalMinutes < 3 {
-		scanIntervalMinutes = 3 // Default 3 minutes, not allowed to be less than 3
+	if scanIntervalMinutes <= 0 {
+		scanIntervalMinutes = 3 // unset → the recommended default
 	}
 
 	// Query exchange actual balance, override user input
@@ -616,9 +618,8 @@ func (s *Server) handleUpdateTrader(c *gin.Context) {
 	logger.Infof("📊 Update trader scan_interval: req=%d, existing=%d", req.ScanIntervalMinutes, existingTrader.ScanIntervalMinutes)
 	if scanIntervalMinutes <= 0 {
 		scanIntervalMinutes = existingTrader.ScanIntervalMinutes // Keep original value
-	} else if scanIntervalMinutes < 3 {
-		scanIntervalMinutes = 3
 	}
+	// Minimum lowered 3 → 1 (2026-06-09): any positive value is accepted.
 	logger.Infof("📊 Final scan_interval_minutes: %d", scanIntervalMinutes)
 
 	// Set system prompt template
