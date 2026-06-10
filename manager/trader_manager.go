@@ -703,6 +703,9 @@ func (tm *TraderManager) addTraderFromStore(traderCfg *store.Trader, aiModelCfg 
 		traderConfig.NinjaTraderDataDir = exchangeCfg.NTDataDir
 		if exchangeCfg.NTInstrumentName != "" {
 			traderConfig.NinjaTraderSymbol = exchangeCfg.NTInstrumentName
+			// P5.4 — bind the trader to its persisted NT8 sub-account (set by
+			// account-select). Empty = the AddOn's active account (legacy).
+			traderConfig.NinjaTraderAccount = traderCfg.Account
 		}
 	}
 

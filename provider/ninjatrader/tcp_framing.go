@@ -35,6 +35,11 @@ type Envelope struct {
 // SignalPayload is the Go-server → C#-AddOn signal frame per spec L4387-4396.
 type SignalPayload struct {
 	Symbol     string  `json:"symbol"`
+	// Account (P5.4): the NT8 sub-account this order must submit on. EMPTY =
+	// legacy → the AddOn's active account (byte-identical wire via omitempty).
+	// When set, the AddOn's Phase-2/3 resolve+guard+route path (already
+	// shipped) submits to THIS account — per-(symbol,account) routing.
+	Account    string  `json:"account,omitempty"`
 	Side       string  `json:"side"`        // "long" | "short"
 	Quantity   int     `json:"quantity"`
 	Entry      float64 `json:"entry"`       // tick-rounded

@@ -25,6 +25,10 @@ import (
 type Config struct {
 	DataDir string // /mnt/c/Users/<u>/NofxTrader/data
 	Symbol  string // e.g. "MNQ" (informational only; NT uses chart's instrument)
+	// Account (P5.4): the NT8 sub-account this trader is bound to trade on
+	// (store.Trader.Account, persisted by account-select). Empty = the AddOn's
+	// active account (legacy single-trader behavior).
+	Account string
 }
 
 // Trader satisfies trader/types.Trader using the CSV bridge.

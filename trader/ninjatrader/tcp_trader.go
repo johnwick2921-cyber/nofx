@@ -13,6 +13,7 @@ package ninjatrader
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"sync"
 	"time"
 
@@ -30,6 +31,10 @@ import (
 type TCPTrader struct {
 	server *ntwire.TCPServer
 	symbol string // for tick rounding selection
+	// boundAccount (P5.4): the NT8 sub-account this trader trades on
+	// (store.Trader.Account). Empty = the AddOn's active account (legacy).
+	// When set, signals carry it and the AddOn's Phase-3 routing submits there.
+	boundAccount string
 
 	mu       sync.Mutex
 	stopLoss map[string]float64 // key: "<symbol>:<side>"
@@ -76,13 +81,19 @@ var _ types.Trader = (*TCPTrader)(nil)
 
 // NewTCPTrader wraps an already-Started TCPServer with the Trader interface.
 // The server's lifecycle is owned by the caller (transport.go).
-func NewTCPTrader(server *ntwire.TCPServer, symbol string) *TCPTrader {
+func NewTCPTrader(server *ntwire.TCPServer, symbol string, account ...string) *TCPTrader {
 	t := &TCPTrader{
 		server:   server,
 		symbol:   symbol,
 		stopLoss: map[string]float64{},
 		takePrft: map[string]float64{},
 		pending:  map[string]string{},
+	}
+	if len(account) > 0 {
+		t.boundAccount = strings.TrimSpace(account[0])
+	}
+	if t.boundAccount != "" {
+		logger.Infof("🔗 ninjatrader/tcp: trader %s BOUND to account %s (P5.4 per-(symbol,account) routing)", symbol, t.boundAccount)
 	}
 	// Phase 2 — drive the bar subscription from THIS trader's symbol instead of
 	// the hardwired default "MNQ". On the next (re)connect the AddOn subscribes to
@@ -172,8 +183,12 @@ func (t *TCPTrader) placeEntry(symbol, side string, quantity float64) (map[strin
 	// account that isn't tradeable (SIM + allow-listed). The C# AddOn enforces this
 	// again right before submit; this refuses in Go before the frame is even sent.
 	// The LIVE/funded account is never tradeable.
-	if acct := t.activeAccountName(); !t.isAccountTradeable(acct) {
-		return nil, fmt.Errorf("ninjatrader/tcp: refusing %s entry — account %q is not tradeable (not on allow-list / not SIM)", side, acct)
+	tradeAcct := t.boundAccount
+	if tradeAcct == "" {
+		tradeAcct = t.activeAccountName()
+	}
+	if !t.isAccountTradeable(tradeAcct) {
+		return nil, fmt.Errorf("ninjatrader/tcp: refusing %s entry — account %q is not tradeable (not on allow-list / not SIM)", side, tradeAcct)
 	}
 
 	// Expiry warning — defense in depth (mirrors CSV Trader).
@@ -204,6 +219,7 @@ func (t *TCPTrader) placeEntry(symbol, side string, quantity float64) (map[strin
 	signalID := uuid.NewString()
 	payload := ntwire.SignalPayload{
 		Symbol:     t.symbol,
+		Account:    t.boundAccount, // P5.4 — empty = legacy (AddOn's active account)
 		Side:       side, // lowercase per spec L4390
 		Quantity:   int(quantity),
 		Entry:      entry,
