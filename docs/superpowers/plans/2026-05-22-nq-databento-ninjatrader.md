@@ -10258,3 +10258,7 @@ REFUSED; the state view shows NQ "unsubscribed". Tests: PurgeSymbol, runtime-add
 round-trips, unsubscribe-purges-cache — green; [MNQ]-only golden intact. C# ack emits staged to the
 AddOns folder — ONE F5 + NT8 restart activates them (post-F5 expected: states flip to "subscribed" with
 contracts). SIM-only; the live-account block untouched; partner repo not synced (post-P5).
+
+**P5.3 ACKS VERIFIED (owner F5 19:38 CT):** the v2+acks AddOn reconnected → hello OK → "subscription ACK
+MNQ (MNQ 06-26)" + "subscription ACK ES (ES 06-26)"; GET /api/nt/symbols shows both "subscribed" with
+resolved contracts, NQ "unsubscribed" from the earlier runtime removal. 0 errors. P5.3 COMPLETE.
