@@ -95,7 +95,10 @@ func NewTCPTrader(server *ntwire.TCPServer, symbol string) *TCPTrader {
 	// override appends. Both dedup against the real primary set above.
 	// Subscribe to inbound fills — update lastFill cache (mirrors CSV Trader).
 	go func() {
-		for fill := range server.Fills() {
+		// P5.4 — router-fed per-symbol stream (no cross-trader racing). The
+		// channel CLOSES when a reloaded trader re-subscribes, ending this
+		// goroutine (fixes the pre-P5.4 reload leak).
+		for fill := range server.SubscribeFillsFor(symbol) {
 			// P5.2 split-brain defense: a symbol-tagged fill for a DIFFERENT
 			// instrument must never be attributed to this trader. Empty symbol
 			// = legacy (pre-P5.2) AddOn → assumed primary (back-compat).
