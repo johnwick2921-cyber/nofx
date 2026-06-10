@@ -115,6 +115,7 @@ type AutoTraderConfig struct {
 	// NinjaTrader CSV bridge configuration
 	NinjaTraderDataDir string // /mnt/c/Users/<u>/NofxTrader/data
 	NinjaTraderSymbol  string // e.g. "MNQ" (informational; NT uses chart's instrument)
+	NinjaTraderAccount string // P5.4 — the NT8 sub-account this trader is bound to (store.Trader.Account); empty = active account
 
 	// Hyperliquid configuration
 	HyperliquidPrivateKey  string
@@ -351,6 +352,7 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 		trader, err = ntTrader.NewTraderFromEnv(ntTrader.Config{
 			DataDir: config.NinjaTraderDataDir,
 			Symbol:  config.NinjaTraderSymbol,
+			Account: config.NinjaTraderAccount, // P5.4 per-trader account binding
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize NinjaTrader: %w", err)

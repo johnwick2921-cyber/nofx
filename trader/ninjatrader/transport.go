@@ -104,7 +104,7 @@ func NewTraderFromEnv(cfg Config) (types.Trader, error) {
 		if err != nil {
 			return nil, err
 		}
-		t := NewTCPTrader(server, cfg.Symbol) // sets the PRIMARY subscribe symbol first
+		t := NewTCPTrader(server, cfg.Symbol, cfg.Account) // registers the trading symbol + binds the account
 		// REPLACE the extras from config (source of truth on every trader
 		// (re)load — a symbol removed from the Exchange row must not linger on
 		// the process-singleton server), then append the NT_EXTRA_SYMBOLS
