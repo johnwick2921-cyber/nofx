@@ -110,7 +110,7 @@ func NewTraderFromEnv(cfg Config) (types.Trader, error) {
 		// the process-singleton server), then append the NT_EXTRA_SYMBOLS
 		// testing override. Both run AFTER the primary is set so dedup is
 		// against the real primary (e.g. "NQ,MNQ" keeps MNQ under primary NQ).
-		server.SetExtraBarsSymbols(extras...)
+		server.SetExtraBarsSymbolsFor(cfg.Symbol, extras...)
 		if env := strings.TrimSpace(os.Getenv("NT_EXTRA_SYMBOLS")); env != "" {
 			server.AddBarsSubscribeSymbols(strings.Split(env, ",")...)
 			fmt.Printf("📡 NT_EXTRA_SYMBOLS override active: %s (config extras: %v, primary: %s)\n", env, extras, cfg.Symbol)

@@ -53,23 +53,67 @@ func TestAddBarsSubscribeSymbols(t *testing.T) {
 	}
 }
 
-// TestSetExtraBarsSymbols_ReplaceSemantics locks the P5.2 reload rule: the
-// config list REPLACES the extras on every trader (re)load (a symbol removed
-// from the Exchange row must not linger on the process-singleton server).
+// TestSetExtraBarsSymbols_ReplaceSemantics locks the P5.4 owner-keyed reload
+// rule: a trader's (re)load REPLACES only ITS OWN config extras — a second
+// owner's load can't wipe the first's, and env/runtime adds (extraBarsSymbols)
+// survive config replaces.
 func TestSetExtraBarsSymbols_ReplaceSemantics(t *testing.T) {
 	s := NewTCPServer(nil)
 	s.SetBarsSubscribeSymbol("MNQ")
-	s.AddBarsSubscribeSymbols("ES", "NQ") // previous load's extras
-	s.SetExtraBarsSymbols("RTY")          // new config: only RTY
+	s.SetExtraBarsSymbolsFor("MNQ", "ES", "NQ") // owner MNQ's config extras
+	s.SetExtraBarsSymbolsFor("MNQ", "RTY")      // MNQ reloads: only RTY now
 
 	got := s.barsSubscribePayloads()
 	if len(got) != 2 || got[0].Symbol != "MNQ" || got[1].Symbol != "RTY" {
-		t.Fatalf("SetExtraBarsSymbols must REPLACE (want MNQ+RTY); got %+v", got)
+		t.Fatalf("an owner's reload must REPLACE its own extras (want MNQ+RTY); got %+v", got)
 	}
-	// Replace-with-nothing → primary only (the [MNQ]-only golden again).
-	s.SetExtraBarsSymbols()
-	if got := s.barsSubscribePayloads(); len(got) != 1 || got[0].Symbol != "MNQ" {
-		t.Fatalf("SetExtraBarsSymbols() must clear extras; got %+v", got)
+	// A SECOND owner's load must NOT wipe the first's extras.
+	s.SetBarsSubscribeSymbol("ES") // trader 2 registers (P5.4: appends, no overwrite)
+	s.SetExtraBarsSymbolsFor("ES") // trader 2 has no extras
+	got = s.barsSubscribePayloads()
+	want := map[string]bool{"MNQ": true, "RTY": true, "ES": true}
+	if len(got) != 3 {
+		t.Fatalf("trader2's load must not wipe trader1's extras; got %+v", got)
+	}
+	for _, p := range got {
+		if !want[p.Symbol] {
+			t.Fatalf("unexpected root %q in %+v", p.Symbol, got)
+		}
+	}
+	// Replace-with-nothing for owner MNQ → its extras gone; ES (trading) stays.
+	s.SetExtraBarsSymbolsFor("MNQ")
+	if got := s.barsSubscribePayloads(); len(got) != 2 {
+		t.Fatalf("clearing MNQ's extras must leave MNQ+ES; got %+v", got)
+	}
+}
+
+// TestTradingSymbolRegistry locks the P5.4 no-overwrite rule: the first
+// registration claims the primary slot (replacing the hardwired default);
+// a second trader's registration APPENDS (the first trader's feed survives);
+// re-registration is idempotent; trading roots are unsubscribe-refused.
+func TestTradingSymbolRegistry(t *testing.T) {
+	s := NewTCPServer(nil)
+	s.SetBarsSubscribeSymbol("MNQ") // trader 1 — claims primary (replaces default)
+	s.SetBarsSubscribeSymbol("ES")  // trader 2 — APPENDS (the P5.4 fix)
+	s.SetBarsSubscribeSymbol("mnq") // trader 1 reload — idempotent
+
+	if got := s.BarsSubscribeSymbol(); got != "MNQ" {
+		t.Fatalf("primary slot must stay the FIRST registration; got %q", got)
+	}
+	roots := s.TradingSymbols()
+	if len(roots) != 2 || roots[0] != "MNQ" || roots[1] != "ES" {
+		t.Fatalf("registry must hold both trading roots; got %v", roots)
+	}
+	got := s.barsSubscribePayloads()
+	if len(got) != 2 || got[0].Symbol != "MNQ" || got[1].Symbol != "ES" {
+		t.Fatalf("both trading roots must subscribe (primary first); got %+v", got)
+	}
+	// BOTH trading roots are unsubscribe-refused (not just the primary).
+	if err := s.UnsubscribeBarsSymbol("ES"); err == nil {
+		t.Fatal("unsubscribing a registered TRADING symbol must be refused")
+	}
+	if err := s.UnsubscribeBarsSymbol("MNQ"); err == nil {
+		t.Fatal("unsubscribing the primary must be refused")
 	}
 }
 
