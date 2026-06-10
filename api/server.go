@@ -354,6 +354,15 @@ Returns: [{"symbol":"<string>","side":"long|short","size":<float>,"entry_price":
 			s.routeWithSchema(protected, "POST", "/debug/nt-bars-unsubscribe", "DEBUG: drop an EXTRA bar subscription (P5.1 dispose-one proof; futures/NT only)",
 				`Query: ?trader_id=<id>&symbol=<extra root, e.g. ES> — sends bars_unsubscribe so the AddOn disposes that root's BarsRequests. The PRIMARY trading symbol is refused. Bars-only; no order path.`,
 				s.handleNTBarsUnsubscribe)
+			s.routeWithSchema(protected, "GET", "/nt/symbols", "P5.3: current NT bar-subscription set + lifecycle states (read-only)",
+				`Query: ?trader_id=<id> — returns {primary, states{SYMBOL:{state,contract,reason}}, runtime_enabled}`,
+				s.handleNTSymbolsList)
+			s.routeWithSchema(protected, "POST", "/nt/symbols", "P5.3: ADD an extra bar-subscription root at runtime (flag NT_RUNTIME_SYMBOLS)",
+				`Query: ?trader_id=<id>&symbol=<root, e.g. NQ> — subscribes NOW (no restart); the AddOn acks subscribed/subscribe_error. Bars-only.`,
+				s.handleNTSymbolsAdd)
+			s.routeWithSchema(protected, "DELETE", "/nt/symbols", "P5.3: REMOVE an extra bar-subscription root at runtime (flag NT_RUNTIME_SYMBOLS)",
+				`Query: ?trader_id=<id>&symbol=<root> — unsubscribes + purges its cached bars. The PRIMARY trading symbol is refused.`,
+				s.handleNTSymbolsRemove)
 			s.routeWithSchema(protected, "GET", "/trades", "Trade records",
 				`Query: ?trader_id=<EXACT trader_id from GET /api/my-traders>&limit=<int, default 20>`,
 				s.handleTrades)

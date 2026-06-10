@@ -179,11 +179,19 @@ namespace NinjaTrader.NinjaScript.AddOns
                 // roll resolution is deferred (it passed through unchanged, so
                 // symbol == contract), or a contract not loaded in NT8's database.
                 bool passthrough = string.Equals(symbol, contract, StringComparison.OrdinalIgnoreCase);
+                string reason = passthrough
+                    ? "root not a quarterly family; front-month roll resolution deferred (energy/metal)"
+                    : "qualified contract '" + contract + "' not found in NT8 (not loaded?)";
                 logWarn("VLBarsSubscriptionManager: instrument_unresolved symbol=" + symbol
-                        + " resolved=" + contract
-                        + (passthrough
-                            ? " — root not a quarterly family; front-month roll resolution deferred (energy/metal)"
-                            : " — qualified contract not found in NT8 (not loaded?)"));
+                        + " resolved=" + contract + " — " + reason);
+                // P5.3 — surface the failure Go-side (subscribe_error ack) so a
+                // bad symbol fails loudly in the bot instead of only in the
+                // NT8 Output window.
+                sendFrame("subscribe_error", new Dictionary<string, object>
+                {
+                    ["symbol"] = symbol,
+                    ["reason"] = reason
+                });
                 return;
             }
 
@@ -210,6 +218,17 @@ namespace NinjaTrader.NinjaScript.AddOns
             {
                 Subscribe(symbol, tf, barsBack, instrument);
             }
+
+            // P5.3 — positive ack with the resolved front-month so the Go side
+            // (and the owner API) sees the subscription state without the NT8
+            // Output window. Sent after the Subscribe loop; per-timeframe
+            // failures (unsupported tf) are logged above and don't veto the
+            // symbol-level ack.
+            sendFrame("subscribed", new Dictionary<string, object>
+            {
+                ["symbol"]            = symbol,
+                ["resolved_contract"] = instrument.FullName
+            });
         }
 
         /// <summary>
@@ -251,6 +270,14 @@ namespace NinjaTrader.NinjaScript.AddOns
                     active.Remove(key);
                     logInfo("VLBarsSubscriptionManager: unsubscribed " + key);
                 }
+
+                // P5.3 — teardown ack (count of disposed symbol|timeframe
+                // subscriptions; 0 means the symbol wasn't subscribed).
+                sendFrame("unsubscribed", new Dictionary<string, object>
+                {
+                    ["symbol"]  = symbol,
+                    ["removed"] = toRemove.Count
+                });
             }
         }
 

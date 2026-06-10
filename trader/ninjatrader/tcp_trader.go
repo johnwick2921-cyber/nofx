@@ -477,6 +477,32 @@ func (t *TCPTrader) DebugUnsubscribeBars(symbol string) error {
 	return t.server.UnsubscribeBarsSymbol(symbol)
 }
 
+// P5.3 — runtime symbol management for the owner API (flag-gated upstream).
+// Bars-only: extras never touch the trading/gate/order paths (P5.4 lifts that).
+
+// RuntimeSubscribeBars adds an extra bar-subscription root NOW (no restart).
+func (t *TCPTrader) RuntimeSubscribeBars(symbol string) error {
+	return t.server.SubscribeBarsSymbol(symbol)
+}
+
+// RuntimeUnsubscribeBars removes an extra root NOW (primary refused) + purges
+// its cached bars.
+func (t *TCPTrader) RuntimeUnsubscribeBars(symbol string) error {
+	return t.server.UnsubscribeBarsSymbol(symbol)
+}
+
+// BarsSubscriptionStates exposes the per-symbol subscription lifecycle
+// (pending/subscribed/error/unsubscribed, with contract/reason).
+func (t *TCPTrader) BarsSubscriptionStates() map[string]ntwire.SymbolSubState {
+	return t.server.BarsSubscriptionStates()
+}
+
+// BarsPrimarySymbol is the trading symbol (the root that can never be
+// unsubscribed at runtime).
+func (t *TCPTrader) BarsPrimarySymbol() string {
+	return t.server.BarsSubscribeSymbol()
+}
+
 func (t *TCPTrader) DebugPlaceTestTrade(side string) (map[string]interface{}, error) {
 	bars := t.server.BarCache().Get(t.symbol, "5m")
 	if len(bars) == 0 {
