@@ -148,7 +148,8 @@ export const translations = {
     configureAIModels: 'Configure AI Models',
     configureExchanges: 'Configure Exchanges',
     aiScanInterval: 'AI Scan Decision Interval (minutes)',
-    scanIntervalRecommend: 'Recommended: 3-10 minutes',
+    scanIntervalRecommend:
+      'Recommended: 3-10 minutes; minimum 1 — 1-minute scanning increases AI-call frequency/cost and may be limited by decision latency',
     useTestnet: 'Use Testnet',
     enabled: 'Enabled',
     save: 'Save',
@@ -1537,7 +1538,8 @@ export const translations = {
     configureAIModels: '配置AI模型',
     configureExchanges: '配置交易所',
     aiScanInterval: 'AI 扫描决策间隔 (分钟)',
-    scanIntervalRecommend: '建议: 3-10分钟',
+    scanIntervalRecommend:
+      '建议: 3-10分钟；最低 1 分钟 — 1 分钟扫描会提高 AI 调用频率/成本，且可能受决策延迟限制',
     useTestnet: '使用测试网',
     enabled: '启用',
     save: '保存',
@@ -2850,7 +2852,8 @@ export const translations = {
     configureAIModels: 'Konfigurasi Model AI',
     configureExchanges: 'Konfigurasi Bursa',
     aiScanInterval: 'Interval Keputusan AI (menit)',
-    scanIntervalRecommend: 'Disarankan: 3-10 menit',
+    scanIntervalRecommend:
+      'Disarankan: 3-10 menit; minimum 1 — pemindaian 1 menit meningkatkan frekuensi/biaya panggilan AI dan dapat dibatasi oleh latensi keputusan',
     useTestnet: 'Gunakan Testnet',
     enabled: 'Aktif',
     save: 'Simpan',
