@@ -99,6 +99,17 @@ type TCPServer struct {
 	// keyed SYMBOL|TF, so extra roots stream concurrently and independently;
 	// its reconnect ResubscribeAll + watchdog already iterate ALL entries.
 	extraBarsSymbols []string
+	// P5.4 — the TRADING-symbol registry. Every TCPTrader REGISTERS its symbol
+	// (SetBarsSubscribeSymbol no longer overwrites): the FIRST registration
+	// claims the legacy primary slot (template for timeframes/bars-back);
+	// subsequent different roots append. All registered roots are subscribed,
+	// refused by UnsubscribeBarsSymbol, and used by the fan-out router.
+	tradingSymbols    []string
+	primaryRegistered bool
+	// P5.4 — config extras keyed by the OWNING trader's primary symbol, so one
+	// trader's (re)load REPLACES only ITS OWN extras (a second trader's load no
+	// longer wipes the first's). Key "" = the legacy unowned slot.
+	extrasByOwner map[string][]string
 
 	// P5.3 — per-symbol subscription state, fed by the AddOn's ack frames
 	// (subscribed / unsubscribed / subscribe_error). "pending" until an ack
@@ -331,13 +342,42 @@ func (s *TCPServer) SetBarsSubscribe(p BarsSubscribePayload) {
 // trader calls this with its symbol at creation; on the next (re)connect the
 // AddOn subscribes to that root and NT8 resolves the qualified front-month
 // contract (VLContractResolver). Empty symbol is ignored (keeps the default).
+// P5.4: this is now a REGISTRATION, not an overwrite — the FIRST registered
+// trader claims the legacy primary slot (replacing the hardwired default);
+// subsequent DIFFERENT roots are appended to the trading registry so a second
+// trader (e.g. ES) can never silently kill the first trader's (MNQ) bar feed.
 func (s *TCPServer) SetBarsSubscribeSymbol(symbol string) {
 	if symbol == "" {
 		return
 	}
 	s.barsSubMu.Lock()
 	defer s.barsSubMu.Unlock()
-	s.barsSubscribe.Symbol = symbol
+	if !s.primaryRegistered {
+		// First trader registration — claim the primary slot (legacy behavior:
+		// the default "MNQ" template symbol is replaced by the real trader's).
+		s.barsSubscribe.Symbol = symbol
+		s.primaryRegistered = true
+		s.tradingSymbols = []string{symbol}
+		return
+	}
+	for _, t := range s.tradingSymbols {
+		if strings.EqualFold(t, symbol) {
+			return // idempotent re-registration (trader reload)
+		}
+	}
+	s.tradingSymbols = append(s.tradingSymbols, symbol)
+	s.logger.Info("tcp_server: registered ADDITIONAL trading symbol (P5.4 multi-trader)",
+		"symbol", symbol, "primary", s.barsSubscribe.Symbol)
+}
+
+// TradingSymbols returns the registered trading roots (primary first).
+func (s *TCPServer) TradingSymbols() []string {
+	s.barsSubMu.RLock()
+	defer s.barsSubMu.RUnlock()
+	if len(s.tradingSymbols) == 0 {
+		return []string{s.barsSubscribe.Symbol}
+	}
+	return append([]string(nil), s.tradingSymbols...)
 }
 
 // BarsSubscribeSymbol returns the current auto-subscribe symbol (the root the
@@ -438,15 +478,15 @@ func (s *TCPServer) SubscribeBarsSymbol(symbol string) error {
 		return fmt.Errorf("tcp_server: subscribe: empty symbol")
 	}
 	s.barsSubMu.RLock()
-	isPrimary := strings.EqualFold(symbol, s.barsSubscribe.Symbol)
+	isTrading := s.isTradingSymbolLocked(symbol)
 	payload := BarsSubscribePayload{
 		Symbol:     symbol,
 		Timeframes: append([]string(nil), s.barsSubscribe.Timeframes...),
 		BarsBack:   s.barsSubscribe.BarsBack,
 	}
 	s.barsSubMu.RUnlock()
-	if isPrimary {
-		return fmt.Errorf("tcp_server: %q is already the PRIMARY symbol", symbol)
+	if isTrading {
+		return fmt.Errorf("tcp_server: %q is already a TRADING symbol", symbol)
 	}
 	s.AddBarsSubscribeSymbols(symbol) // idempotent (dedup)
 	s.setSubState(symbol, "pending", "", "")
@@ -469,16 +509,29 @@ func (s *TCPServer) SubscribeBarsSymbol(symbol string) error {
 	return nil
 }
 
-// SetExtraBarsSymbols REPLACES the extra-roots list (dedup vs the primary +
-// internally). The config path uses this on every trader (re)load so the
-// Exchange row is the source of truth — a removed symbol doesn't linger on the
-// process-singleton server across reloads. (AddBarsSubscribeSymbols appends —
-// used by the NT_EXTRA_SYMBOLS testing override, applied after this.)
-func (s *TCPServer) SetExtraBarsSymbols(symbols ...string) {
+// SetExtraBarsSymbolsFor REPLACES one OWNER's config-extras list (P5.4: keyed
+// by the owning trader's primary symbol, so trader B's (re)load replaces only
+// ITS extras — trader A's survive). The Exchange row stays the source of truth
+// per trader; a symbol removed from a row doesn't linger for that owner.
+func (s *TCPServer) SetExtraBarsSymbolsFor(owner string, symbols ...string) {
 	s.barsSubMu.Lock()
-	s.extraBarsSymbols = nil
-	s.barsSubMu.Unlock()
-	s.AddBarsSubscribeSymbols(symbols...)
+	defer s.barsSubMu.Unlock()
+	if s.extrasByOwner == nil {
+		s.extrasByOwner = make(map[string][]string)
+	}
+	clean := make([]string, 0, len(symbols))
+	for _, sym := range symbols {
+		if sym = strings.TrimSpace(sym); sym != "" {
+			clean = append(clean, sym)
+		}
+	}
+	s.extrasByOwner[strings.ToUpper(owner)] = clean
+}
+
+// SetExtraBarsSymbols is the legacy unowned form (owner "") — kept for tests
+// and single-trader back-compat.
+func (s *TCPServer) SetExtraBarsSymbols(symbols ...string) {
+	s.SetExtraBarsSymbolsFor("", symbols...)
 }
 
 // UnsubscribeBarsSymbol removes an EXTRA root from the auto-subscribe list and
@@ -494,9 +547,9 @@ func (s *TCPServer) UnsubscribeBarsSymbol(symbol string) error {
 		return fmt.Errorf("tcp_server: unsubscribe: empty symbol")
 	}
 	s.barsSubMu.Lock()
-	if strings.EqualFold(symbol, s.barsSubscribe.Symbol) {
+	if s.isTradingSymbolLocked(symbol) {
 		s.barsSubMu.Unlock()
-		return fmt.Errorf("tcp_server: refusing to unsubscribe the PRIMARY symbol %q (the live trader's feed)", symbol)
+		return fmt.Errorf("tcp_server: refusing to unsubscribe TRADING symbol %q (a live trader's feed)", symbol)
 	}
 	kept := s.extraBarsSymbols[:0]
 	for _, existing := range s.extraBarsSymbols {
@@ -505,6 +558,17 @@ func (s *TCPServer) UnsubscribeBarsSymbol(symbol string) error {
 		}
 	}
 	s.extraBarsSymbols = kept
+	// Also drop it from every owner's config-extras list (an explicit runtime
+	// removal overrides config until that owner's next reload re-asserts it).
+	for owner, extras := range s.extrasByOwner {
+		keptO := extras[:0]
+		for _, e := range extras {
+			if !strings.EqualFold(e, symbol) {
+				keptO = append(keptO, e)
+			}
+		}
+		s.extrasByOwner[owner] = keptO
+	}
 	s.barsSubMu.Unlock()
 
 	// P5.3 clean teardown: drop the symbol's cached bars (write-to-own-cache's
@@ -541,31 +605,66 @@ func (s *TCPServer) isSubscribedBarsSymbol(symbol string) bool {
 	}
 	s.barsSubMu.RLock()
 	defer s.barsSubMu.RUnlock()
-	if strings.EqualFold(symbol, s.barsSubscribe.Symbol) {
-		return true
-	}
-	for _, extra := range s.extraBarsSymbols {
-		if strings.EqualFold(extra, symbol) {
+	for _, root := range s.subscribedRootsLocked() {
+		if strings.EqualFold(root, symbol) {
 			return true
 		}
 	}
 	return false
 }
 
+// isTradingSymbolLocked: symbol is a REGISTERED trading root (or the primary
+// slot) — never tear these down at runtime. Caller holds barsSubMu.
+func (s *TCPServer) isTradingSymbolLocked(symbol string) bool {
+	if strings.EqualFold(symbol, s.barsSubscribe.Symbol) {
+		return true
+	}
+	for _, t := range s.tradingSymbols {
+		if strings.EqualFold(t, symbol) {
+			return true
+		}
+	}
+	return false
+}
+
+// subscribedRootsLocked returns the dedup'd union of every root to subscribe,
+// primary FIRST: trading registry, then per-owner config extras, then the
+// unowned (env/runtime) extras. Caller holds barsSubMu (read).
+func (s *TCPServer) subscribedRootsLocked() []string {
+	seen := map[string]bool{}
+	out := make([]string, 0, 4)
+	add := func(sym string) {
+		if sym == "" || seen[strings.ToUpper(sym)] {
+			return
+		}
+		seen[strings.ToUpper(sym)] = true
+		out = append(out, sym)
+	}
+	add(s.barsSubscribe.Symbol)
+	for _, t := range s.tradingSymbols {
+		add(t)
+	}
+	for _, extras := range s.extrasByOwner {
+		for _, e := range extras {
+			add(e)
+		}
+	}
+	for _, e := range s.extraBarsSymbols {
+		add(e)
+	}
+	return out
+}
+
 // barsSubscribePayloads returns the ordered auto-subscribe frames: the primary
-// first (the exact pre-P5 payload), then one clone per extra root with only the
-// symbol swapped. No extras → exactly [primary], byte-identical to the old
-// single-frame behavior.
+// first (the exact pre-P5 payload), then one clone per additional root with
+// only the symbol swapped. Single trader + no extras → exactly [primary],
+// byte-identical to the old single-frame behavior.
 func (s *TCPServer) barsSubscribePayloads() []BarsSubscribePayload {
 	s.barsSubMu.RLock()
 	defer s.barsSubMu.RUnlock()
-	out := make([]BarsSubscribePayload, 0, 1+len(s.extraBarsSymbols))
-	out = append(out, BarsSubscribePayload{
-		Symbol:     s.barsSubscribe.Symbol,
-		Timeframes: append([]string(nil), s.barsSubscribe.Timeframes...),
-		BarsBack:   s.barsSubscribe.BarsBack,
-	})
-	for _, sym := range s.extraBarsSymbols {
+	roots := s.subscribedRootsLocked()
+	out := make([]BarsSubscribePayload, 0, len(roots))
+	for _, sym := range roots {
 		out = append(out, BarsSubscribePayload{
 			Symbol:     sym,
 			Timeframes: append([]string(nil), s.barsSubscribe.Timeframes...),
