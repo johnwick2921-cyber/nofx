@@ -10262,3 +10262,32 @@ contracts). SIM-only; the live-account block untouched; partner repo not synced 
 **P5.3 ACKS VERIFIED (owner F5 19:38 CT):** the v2+acks AddOn reconnected → hello OK → "subscription ACK
 MNQ (MNQ 06-26)" + "subscription ACK ES (ES 06-26)"; GET /api/nt/symbols shows both "subscribed" with
 resolved contracts, NQ "unsubscribed" from the earlier runtime removal. 0 errors. P5.3 COMPLETE.
+
+## 2026-06-09 — P5.4 A+B+C: agent-per-symbol foundations (commits a3b4087f / 67b070fa / 77fd2d03; live)
+
+STEP-A audit found the C# AddOn's per-order routing already shipped (Phase 2 parse + Phase 3
+submit-to-target + Phase 4 per-symbol close memory) and four Go-side blockers. Built in 3 chunks, all
+golden-tested, ZERO C# changes:
+
+- **A (a3b4087f) — trading-symbol registry:** SetBarsSubscribeSymbol REGISTERS (first claims the primary
+  slot, replacing the hardwired default; later roots append) — a second trader can't kill the first's bar
+  feed. Config extras keyed by OWNER (SetExtraBarsSymbolsFor) — one trader's reload can't wipe another's.
+  UnsubscribeBars + runtime-subscribe refuse ANY registered trading root.
+- **B (67b070fa) — symbol-routed fan-out:** one lazy router consumes fills/closes/rejects/instrument_info
+  and dispatches by symbol to per-symbol subscriber channels (SubscribeFillsFor/ClosesFor/RejectsFor/
+  InstrumentInfoFor) — no more multi-consumer racing (the audit's fill-loss + recordClose cross-
+  contamination). Legacy empty-symbol → primary. Resubscribe CLOSES the prior channel, terminating a
+  reloaded-away trader's consumer (fixes the pre-P5.4 reload leak). NewTCPTrader + close_sync converted.
+- **C (77fd2d03) — account binding + signal.account:** store.Trader.Account flows trader_manager →
+  AutoTraderConfig → ninjatrader.Config → TCPTrader.boundAccount; signals carry account (omitempty —
+  unbound wire byte-identical); placeEntry validates the BOUND account against the SIM/allow-list gate
+  (the live/funded block applies identically). This ACTIVATES the AddOn's Phase-3 routing.
+
+**Deployed + single-trader live-verified (20:37 CT):** "trader MNQ BOUND to account Sim101"; hello v2;
+MNQ+ES subscribed + ACK'd; bars flowing both; 0 errors. All suites + the [MNQ]-only goldens green.
+
+**REMAINING for P5.4 sign-off (owner-gated):** the LIVE two-trader proof — create a 2nd trader row (ES
+strategy with static_coins=["ES"], own Exchange row with NTInstrumentName="ES", bound to a 2nd SIM
+account; set SIM accounts' Max Position Size = 0 in NT8 per the plan) → verify independent decisions,
+fills attributed per (symbol,account), zero cross-talk, no "exceeds max position", the live-account
+block holding for ALL symbols. Partner repo sync remains post-P5-verification.
