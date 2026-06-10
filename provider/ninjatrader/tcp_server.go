@@ -135,6 +135,19 @@ type TCPServer struct {
 	accountsList   []AccountInfo // immutable copy, slice
 	currentAccount string        // currently selected account name
 
+	// P5.4 — symbol-routed fan-out. ONE router goroutine per source channel
+	// (fills/closes/rejects/instrument_info) consumes it and dispatches by the
+	// payload's symbol to per-symbol subscriber channels, so multiple traders
+	// never race on the shared channels (the audit's message-loss/cross-
+	// contamination bug). Legacy EMPTY-symbol payloads route to the PRIMARY
+	// trading symbol. Re-subscribing a symbol CLOSES the prior channel, which
+	// terminates a dead (reloaded-away) trader instance's consumer goroutine.
+	subsMu     sync.Mutex
+	fillSubs   map[string]chan FillPayload
+	closeSubs  map[string]chan PositionClosePayload
+	rejectSubs map[string]chan PositionCloseRejectedPayload
+	instrSubs  map[string]chan InstrumentInfoPayload
+
 	// Connection state — single concurrent client (spec L4359).
 	connMu        sync.Mutex
 	conn          net.Conn
@@ -150,9 +163,115 @@ type TCPServer struct {
 	writeMu sync.Mutex
 
 	// Lifecycle.
-	cancel context.CancelFunc
-	wg     sync.WaitGroup
-	logger *slog.Logger
+	cancel     context.CancelFunc
+	wg         sync.WaitGroup
+	logger     *slog.Logger
+	runCtx     context.Context // set in Start; the lazy router goroutine binds to it
+	routerOnce sync.Once
+}
+
+// ============================================================================
+// P5.4 — symbol-routed fan-out (fills / closes / rejects / instrument_info)
+// ============================================================================
+
+// ensureRouters lazily starts the single router goroutine the first time any
+// per-symbol subscription is created. Legacy direct consumers of Fills() etc.
+// (tests) keep working as long as nothing subscribes — once a subscriber
+// exists, ALL production consumption goes through the router.
+func (s *TCPServer) ensureRouters() {
+	s.routerOnce.Do(func() {
+		ctx := s.runCtx
+		if ctx == nil {
+			ctx = context.Background()
+		}
+		go s.runRouters(ctx)
+	})
+}
+
+func (s *TCPServer) runRouters(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case p := <-s.fillCh:
+			dispatchBySymbol(s, s.fillSubs, p.Symbol, p, "fill")
+		case p := <-s.closeCh:
+			dispatchBySymbol(s, s.closeSubs, p.Symbol, p, "position_close")
+		case p := <-s.rejectCh:
+			dispatchBySymbol(s, s.rejectSubs, p.Symbol, p, "close_rejected")
+		case p := <-s.instrCh:
+			dispatchBySymbol(s, s.instrSubs, p.Symbol, p, "instrument_info")
+		}
+	}
+}
+
+// dispatchBySymbol routes one payload to the symbol's subscriber. EMPTY symbol
+// (legacy AddOn) routes to the PRIMARY trading symbol. No subscriber → logged
+// drop (Warn for order-path frames — those are never silent). The send happens
+// under subsMu, mutually exclusive with the close-on-resubscribe, so a send on
+// a closed channel is impossible.
+func dispatchBySymbol[T any](s *TCPServer, subs map[string]chan T, symbol string, p T, kind string) {
+	key := strings.ToUpper(strings.TrimSpace(symbol))
+	if key == "" {
+		key = strings.ToUpper(s.BarsSubscribeSymbol())
+	}
+	s.subsMu.Lock()
+	ch := subs[key]
+	if ch == nil {
+		s.subsMu.Unlock()
+		if kind == "instrument_info" {
+			s.logger.Info("tcp_server: instrument_info with no trader subscriber (data-only symbol)", "symbol", symbol)
+		} else {
+			s.logger.Warn("tcp_server: "+kind+" with NO subscriber — dropped", "symbol", symbol, "payload", fmt.Sprintf("%+v", p))
+		}
+		return
+	}
+	select {
+	case ch <- p:
+	default:
+		s.logger.Warn("tcp_server: "+kind+" subscriber full — dropped", "symbol", symbol)
+	}
+	s.subsMu.Unlock()
+}
+
+// subscribeFor installs (or REPLACES) the symbol's subscriber channel. The
+// previous channel is closed, which terminates a stale (reloaded-away) trader
+// instance's consumer goroutine — fixing the pre-P5.4 reload leak where every
+// trader reload added another competing consumer forever.
+func subscribeFor[T any](s *TCPServer, subs *map[string]chan T, symbol string) <-chan T {
+	s.ensureRouters()
+	key := strings.ToUpper(strings.TrimSpace(symbol))
+	s.subsMu.Lock()
+	defer s.subsMu.Unlock()
+	if *subs == nil {
+		*subs = make(map[string]chan T)
+	}
+	if old, ok := (*subs)[key]; ok {
+		close(old)
+	}
+	ch := make(chan T, fillChannelBuffer)
+	(*subs)[key] = ch
+	return ch
+}
+
+// SubscribeFillsFor returns this symbol's fill stream (router-fed).
+func (s *TCPServer) SubscribeFillsFor(symbol string) <-chan FillPayload {
+	return subscribeFor(s, &s.fillSubs, symbol)
+}
+
+// SubscribeClosesFor returns this symbol's position_close stream.
+func (s *TCPServer) SubscribeClosesFor(symbol string) <-chan PositionClosePayload {
+	return subscribeFor(s, &s.closeSubs, symbol)
+}
+
+// SubscribeRejectsFor returns this symbol's close-rejection stream.
+func (s *TCPServer) SubscribeRejectsFor(symbol string) <-chan PositionCloseRejectedPayload {
+	return subscribeFor(s, &s.rejectSubs, symbol)
+}
+
+// SubscribeInstrumentInfoFor returns this symbol's instrument_info stream.
+func (s *TCPServer) SubscribeInstrumentInfoFor(symbol string) <-chan InstrumentInfoPayload {
+	return subscribeFor(s, &s.instrSubs, symbol)
 }
 
 // barIngestMsg is the internal envelope passed from the socket read loop
@@ -684,6 +803,7 @@ func (s *TCPServer) Start(ctx context.Context) error {
 	s.listener = ln
 	cctx, cancel := context.WithCancel(ctx)
 	s.cancel = cancel
+	s.runCtx = cctx // P5.4 — the lazy fan-out router binds to the server lifetime
 	s.wg.Add(2)
 	go s.acceptLoop(cctx)
 	// Plan 4.4 Stage 2 — bar ingest drain goroutine, decouples cache
