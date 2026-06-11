@@ -10364,3 +10364,18 @@ placeholder TEMPLATES; the installer detects user/repo/node (nvm-aware) at insta
 and guards .env for NT_TRANSPORT=tcp — fully portable to the partner's machine.
 NT_TRANSPORT=tcp also added to .env.example in both repos. Root-gated re-install +
 kill-restart proofs = owner: `sudo bash deploy/install-autostart.sh`.
+
+## 2026-06-10 — autostart 209 round 2: units go JOURNAL-ONLY (the actual fix)
+
+The /var/log/nofx + root-ExecStartPre redesign ALSO 209'd: StandardOutput= applies to EVERY Exec*
+line and the append-file is opened in the forked child BEFORE exec — the pre-step died at stdout
+setup without executing. Root causes stacked: (1) /tmp: fs.protected_regular denies opening another
+user's file in a sticky dir (the /tmp logs flip-flopped owner root↔hoang across attempts);
+(2) any unit-level file sink on this WSL2 systemd risks the same child-setup failure. FIX: journal
+sink only (no file-open in the child → cannot 209) — journalctl -u nofx / -u nofx-web; tooling
+note: services no longer write /tmp/backend.log (manual nohup fallback still does). Units keep
+StartLimitIntervalSec=0 + Restart=on-failure/5s (never permanently dead). Installer unchanged except
+log hints (already idempotent: stops old units, kills strays, reset-failed, enable --now).
+OWNER ACTION: sudo bash deploy/install-autostart.sh — then the kill→≤5s + 3×-restart proofs run
+unprivileged. During the broken window the bot+frontend were manually restored (21:37, bars flowing,
+:3000 HTTP 200). /tmp/backend.log confirmed truncated (21 MB, was 11 GB). SIM-only; no trading code.
