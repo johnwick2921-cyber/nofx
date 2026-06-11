@@ -1,0 +1,20 @@
+# NOFX frontend (Vite dev server, port 3000, proxies /api → :8080) — the same
+# serve mode the operator uses today (the Go binary does NOT serve web/dist).
+# Installed alongside nofx.service by deploy/install-autostart.sh.
+
+[Unit]
+Description=NOFX frontend (vite dev server :3000)
+After=network.target nofx.service
+
+[Service]
+Type=simple
+User=hoang
+WorkingDirectory=/home/hoang/nofx/web
+ExecStart=/usr/bin/npm run dev
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:/tmp/frontend.log
+StandardError=append:/tmp/frontend.log
+
+[Install]
+WantedBy=multi-user.target
