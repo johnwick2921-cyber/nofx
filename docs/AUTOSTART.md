@@ -34,22 +34,30 @@ The installer detects your **user** (from sudo), your **clone path** (its own
 location), and your **node/npm** (from your own shell — nvm-aware), renders
 the templates in `deploy/`, and installs + enables two units:
 
-| Unit | What | Real log | Tooling symlink |
-|---|---|---|---|
-| `nofx.service` | `./nofx-bin` from the clone root (reads `.env`, `data/data.db`) | `/var/log/nofx/backend.log` | `/tmp/backend.log` |
-| `nofx-web.service` | `npm run dev` in `web/` (vite :3000, proxies /api → :8080) | `/var/log/nofx/web.log` | `/tmp/frontend.log` |
+| Unit | What | Logs |
+|---|---|---|
+| `nofx.service` | `./nofx-bin` from the clone root (reads `.env`, `data/data.db`) | `journalctl -u nofx -f` |
+| `nofx-web.service` | `npm run dev` in `web/` (vite :3000, proxies /api → :8080) | `journalctl -u nofx-web -f` |
 
 Re-running the installer is safe and is also the upgrade path: after a
 `git pull` that changes the templates, just run it again.
 
-**Why logs are NOT in /tmp:** Ubuntu's `fs.protected_regular` sysctl refuses
-to open an existing file in sticky world-writable `/tmp` when the opener
-isn't its owner. A systemd unit logging into `/tmp` therefore dies with
-`Failed to set up standard output: Permission denied` (exit `209/STDOUT`)
-**before the binary even runs** — this took the bot down once. Real logs now
-live in `/var/log/nofx`; the `/tmp` names are refreshed as symlinks on every
-start so `grep /tmp/backend.log` and all existing tooling work unchanged.
-`journalctl -u nofx` additionally keeps history across reboots.
+**Why logs are the JOURNAL (and never unit-level files):** two file designs
+both died with `Failed to set up standard output: Permission denied` (exit
+`209/STDOUT`) **before the binary even ran** on this WSL2 systemd:
+1. `append:/tmp/backend.log` — Ubuntu's `fs.protected_regular` sysctl refuses
+   to open another user's file in sticky world-writable `/tmp`, and the /tmp
+   logs end up owned by whichever side (root vs user) created them first.
+2. `append:/var/log/nofx/...` + a root `ExecStartPre` to prep the dir — the
+   `StandardOutput=` directive applies to EVERY `Exec*` line, and systemd
+   opens the append-file in the forked child BEFORE exec, so even the
+   root-prefixed pre-step died at stdout setup without running at all.
+The journal sink has no file-open in the child, so it cannot 209. Do NOT
+reintroduce `StandardOutput=` file directives or a log-file `ExecStartPre`.
+**Tooling note:** the services no longer write `/tmp/backend.log` — use
+`journalctl -u nofx` (it also keeps history across reboots). A MANUAL
+fallback launch (`nohup ./nofx-bin >> /tmp/backend.log 2>&1 &`) still writes
+the /tmp file as before.
 
 **Never permanently dead:** the units use `StartLimitIntervalSec=0` with
 `Restart=on-failure` / `RestartSec=5`. A persistent failure will retry every

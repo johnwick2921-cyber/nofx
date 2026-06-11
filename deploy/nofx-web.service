@@ -8,10 +8,11 @@
 # the path is baked in. PATH= puts that directory first so npm's
 # `#!/usr/bin/env node` shebang resolves to the same node.
 #
-# Log design identical to nofx.service (see the comments there): real log in
-# /var/log/nofx via LogsDirectory (never /tmp — fs.protected_regular trap),
-# /tmp/frontend.log kept as a tooling symlink, StartLimitIntervalSec=0 so the
-# unit can never end up permanently dead.
+# LOGGING = THE JOURNAL (journalctl -u nofx-web -f). Unit-level file
+# redirection (append:/tmp, then append:/var/log + a root ExecStartPre)
+# failed twice on this WSL2 systemd with 209/STDOUT before npm ever ran —
+# full post-mortem in nofx.service. NEVER reintroduce StandardOutput=
+# file directives or a log-file ExecStartPre here.
 
 [Unit]
 Description=NOFX frontend (vite dev server :3000)
@@ -23,13 +24,9 @@ Type=simple
 User=__NOFX_USER__
 WorkingDirectory=__NOFX_DIR__/web
 Environment=PATH=__NODE_DIR__:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-LogsDirectory=nofx
-ExecStartPre=+/bin/sh -c 'touch /var/log/nofx/web.log; chown __NOFX_USER__: /var/log/nofx/web.log; ln -sfn /var/log/nofx/web.log /tmp/frontend.log'
 ExecStart=__NODE_DIR__/npm run dev
 Restart=on-failure
 RestartSec=5
-StandardOutput=append:/var/log/nofx/web.log
-StandardError=append:/var/log/nofx/web.log
 
 [Install]
 WantedBy=multi-user.target

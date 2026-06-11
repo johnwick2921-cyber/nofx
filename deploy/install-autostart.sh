@@ -113,8 +113,9 @@ echo
 echo "→ listeners (8080=API, 3000=UI; 36974 binds once a ninjatrader trader loads):"
 ss -tlnp | grep -E ':(8080|3000|36974)' || echo "  (none yet — check journalctl -u nofx -u nofx-web)"
 echo
-echo "→ log locations (real files in /var/log/nofx; /tmp names are symlinks for tooling):"
-ls -l /tmp/backend.log /tmp/frontend.log 2>/dev/null || true
+echo "→ logs are in the JOURNAL (unit-level file logging 209s on this WSL2 systemd):"
+echo "    journalctl -u nofx -f        # backend"
+echo "    journalctl -u nofx-web -f    # frontend"
 echo
 echo "✓ done. Crash-restart proof:"
 echo "    sudo kill -9 \$(pgrep -x nofx-bin); sleep 6; pgrep -x nofx-bin && echo RESTARTED"
