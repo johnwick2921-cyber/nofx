@@ -14,6 +14,7 @@
 // Click a row to expand the Reasoning panel.
 
 import { Fragment, useEffect, useState } from 'react'
+import { useAutoRefresh, REFRESH_HISTORY_MS } from '../../lib/autoRefresh'
 
 interface DecisionActionRecord {
   action: string
@@ -132,6 +133,22 @@ export function DecisionAudit({ traderId, account }: Props) {
       cancelled = true
     }
   }, [traderId, account])
+
+  // Silent background refresh (auto-refresh layer): new decision cycles
+  // appear without re-opening the tab; no loading flash, errors keep the
+  // last good data (the hook backs off on failures).
+  useAutoRefresh(async () => {
+    if (!traderId) return
+    const token = localStorage.getItem('auth_token') ?? ''
+    const r = await fetch(
+      `/api/audit/decisions?trader_id=${encodeURIComponent(traderId)}&limit=100` +
+        (account ? `&account=${encodeURIComponent(account)}` : ''),
+      { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+    )
+    if (!r.ok) throw new Error(`HTTP ${r.status}`)
+    const data = await r.json()
+    setRecords(Array.isArray(data) ? (data as DecisionAuditRow[]) : [])
+  }, REFRESH_HISTORY_MS)
 
   if (loading) {
     return (

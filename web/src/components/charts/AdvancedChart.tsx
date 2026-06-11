@@ -13,6 +13,7 @@ import {
 } from 'lightweight-charts'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { httpClient } from '../../lib/httpClient'
+import { REFRESH_CHART_MS, REFRESH_OPEN_ORDERS_MS } from '../../lib/autoRefresh'
 import { t } from '../../i18n/translations'
 import {
   calculateSMA,
@@ -1054,8 +1055,17 @@ export function AdvancedChart({
 
     loadData(false) // Initial load
 
-    // Real-time auto-refresh (every 5 seconds)
-    const refreshInterval = setInterval(() => loadData(true), 5000)
+    // Real-time auto-refresh. Skip the tick while the tab is hidden (Page
+    // Visibility) or while the previous request is still in flight (no
+    // request pileup on a slow backend).
+    let refreshing = false
+    const refreshInterval = setInterval(() => {
+      if (document.hidden || refreshing) return
+      refreshing = true
+      Promise.resolve(loadData(true)).finally(() => {
+        refreshing = false
+      })
+    }, REFRESH_CHART_MS)
     return () => clearInterval(refreshInterval)
   }, [symbol, interval, traderID, exchange])
 
@@ -1138,8 +1148,16 @@ export function AdvancedChart({
     // Initial load (delay 1s to wait for chart initialization)
     const initialTimeout = setTimeout(loadOpenOrders, 1000)
 
-    // Refresh open orders every 60 seconds
-    const openOrdersInterval = setInterval(loadOpenOrders, 60000)
+    // Refresh open orders (gentle cadence — exchange API). Skip while hidden
+    // or while the previous request is still in flight.
+    let ordersRefreshing = false
+    const openOrdersInterval = setInterval(() => {
+      if (document.hidden || ordersRefreshing) return
+      ordersRefreshing = true
+      Promise.resolve(loadOpenOrders()).finally(() => {
+        ordersRefreshing = false
+      })
+    }, REFRESH_OPEN_ORDERS_MS)
 
     return () => {
       clearTimeout(initialTimeout)

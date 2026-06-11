@@ -7,9 +7,12 @@
 # - WorkingDirectory matters: .env (godotenv) + data/data.db resolve relative
 #   to it. NT_TRANSPORT=tcp now lives in .env (moved from ~/.bashrc, which a
 #   service never reads).
-# - StandardOutput keeps /tmp/backend.log so all existing tooling/diagnostics
-#   work unchanged; /tmp clears on boot, but `journalctl -u nofx` keeps
-#   history across reboots.
+# - /tmp/backend.log is kept via SHELL redirection in ExecStart (not
+#   systemd's StandardOutput=append:) — on this WSL2 systemd, append: fails
+#   with "Failed to set up standard output: Permission denied" (status=209/
+#   STDOUT, proven 2026-06-10: nofx died in 1ms, nofx-web crash-looped 127×).
+#   Shell redirection as User=hoang provably works (it is exactly how the
+#   manual runs wrote the same file). journalctl -u nofx also keeps history.
 # - Restart=on-failure + RestartSec=5: a crash auto-restarts in ≤5s; the NT8
 #   AddOn (TCP client) retries every 5s, so it reconnects on its own.
 
@@ -21,11 +24,9 @@ After=network.target
 Type=simple
 User=hoang
 WorkingDirectory=/home/hoang/nofx
-ExecStart=/home/hoang/nofx/nofx-bin
+ExecStart=/bin/sh -c 'exec /home/hoang/nofx/nofx-bin >> /tmp/backend.log 2>&1'
 Restart=on-failure
 RestartSec=5
-StandardOutput=append:/tmp/backend.log
-StandardError=append:/tmp/backend.log
 
 [Install]
 WantedBy=multi-user.target

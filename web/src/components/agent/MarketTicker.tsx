@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { httpClient } from '../../lib/httpClient'
+import { useAutoRefresh, REFRESH_TICKER_MS } from '../../lib/autoRefresh'
 // icons reserved for future use
 
 interface TickerData {
@@ -44,11 +45,9 @@ export function MarketTicker() {
     }
   }
 
-  useEffect(() => {
-    fetchTickers()
-    const interval = setInterval(fetchTickers, 15000)
-    return () => clearInterval(interval)
-  }, [])
+  // Shared auto-refresh: skip-if-in-flight, pause on hidden tab, error
+  // backoff (replaces the bare setInterval).
+  useAutoRefresh(fetchTickers, REFRESH_TICKER_MS, { runOnMount: true })
 
   const formatPrice = (price: string) => {
     const n = parseFloat(price)
