@@ -10304,3 +10304,48 @@ NT8 "On startup, connect to" auto-connects the feed (the AddOn already retries e
 fragility fixed: NT_TRANSPORT=tcp lived ONLY in ~/.bashrc (a service start would silently fall back
 to the CSV transport) — moved into .env (gitignored, local). ZERO trading-code change; SIM-only
 gates untouched. Full-reboot proof pending the owner's restart.
+
+## 2026-06-10 — FE auto-refresh layer: every display surface self-updates (commit 2af59c93)
+
+THE F5 ROOT CAUSE was not missing polling — most surfaces already polled (SWR refreshInterval in the
+route wrappers + scattered setIntervals). It was a PERMANENT POLL-KILL LATCH on exactly the three
+surfaces the owner stares at: account/positions/decisions set refreshInterval→0 after 2 failed retries
+(AppRoutes onErrorRetry), and with revalidateOnFocus:false the onSuccess unlatch could never fire again
+— every bot restart/deploy froze those panels until a full F5 or trader switch.
+
+SHIPPED (FE-only):
+- web/src/lib/autoRefresh.ts (NEW): named interval constants (positions/status/account/decisions 5s,
+  chart 5s, open-orders 60s, equity 10s, history/logs 10s, ticker 15s, backoff-resume 30s);
+  usePollResume (the latch fix — failed-state UI kept, polling auto-resumes after 30s);
+  useAutoRefresh (skip-if-in-flight, pause on document.hidden + instant refresh on return,
+  exponential error backoff ×2..×8, unmount cleanup).
+- Latch fix wired to the 3 dashboard surfaces; all wrapper intervals lifted to the constants.
+- Gaps wired: PositionHistory (trade history, silent 10s — pagination/filter/sort/scroll all separate
+  local state, never yanked), DecisionAudit (decisions tab, silent 10s), AdvancedChart kline 5s +
+  open-orders 60s (in-flight + hidden guards added), MarketTicker + GridRiskPanel (converted from bare
+  setInterval to useAutoRefresh).
+- NO-CLOBBER fixes (pre-existing holes the inventory exposed): (1) Strategy Studio focus-refetch
+  replaced selectedStrategy unconditionally → unsaved name/description/Publish-toggle edits silently
+  reverted on alt-tab; now guarded by the same hasChangesRef rule as editingConfig. (2) Recent
+  Decisions cards were keyed by ARRAY INDEX → an expanded card re-attached to a DIFFERENT decision
+  when a refetch prepended; now keyed timestamp+cycle_number.
+- DELIBERATE non-polls (refutation/no-clobber): Settings lists (polling them resets an OPEN
+  ExchangeConfigModal's unsaved fields incl. just-imported keys via its init-from-props effect —
+  modal must become snapshot-on-open first); the shared accounts-SWR key (polling re-keys ALL
+  account-scoped data if NT8's `current` drifts — the Issue-2F regression); Strategy Studio editors
+  (editor page; its existing focus-refetch + preview debounce stay). AgentChat streams (SSE) + FAQ
+  (static) unchanged. EquityChart already polled (10s/30s SWR) — untouched.
+- SWR surfaces pause on hidden tabs by default (refreshWhenHidden=false); the new hook mirrors that
+  for raw pollers. Manual refresh buttons unchanged. Editors/forms excluded throughout.
+
+ALSO FIXED (found mid-verify): deploy/nofx.service + nofx-web.service shipped dead-on-arrival —
+systemd's StandardOutput=append:/tmp/...log fails on this WSL2 ("Failed to set up standard output:
+Permission denied", status=209/STDOUT; bot died in 1ms, frontend crash-looped 127×, frontend DOWN from
+~21:07). Fix: shell redirection in ExecStart (exec ... >> log 2>&1). OWNER ACTION:
+`sudo bash deploy/install-autostart.sh` to redeploy the units (then stop the manual processes).
+Until then the frontend runs manually again (restarted 21:20) and the bot stays on the manual process.
+
+Verification: tsc + npm build green. Playwright: browser reachable but the stored token is EXPIRED →
+authenticated live proofs (update-without-F5 ticks, typing-survives, hidden-tab network quiet) are
+OWNER-GATED: log in once, then watch the dashboard update on its own. /tmp/backend.log note: 11 GB —
+rotation recommended. Partner repo sync HELD (P5.4 mid-flight; sync at the next stable boundary).
