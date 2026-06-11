@@ -10409,3 +10409,17 @@ prompt → slower, costlier") that never blocks. The prompt path
 (`formatKlineTimeframes`) already lists all N selected — golden extended with a
 7-timeframe case. Existing strategies + defaults are byte-identical (≤4
 selections are unaffected by the relaxed clamp).
+
+## 2026-06-11 — AgentBeta 400 fixed: DB row id was sent as the AI model name (d55d397a)
+
+Owner-reported 400 ("you passed 8ef641a7-…_deepseek") root-caused to agent/agent.go's
+registry path: empty CustomModelName (legal "use default") was replaced with model.ID —
+the ai_models ROW ID — and the DeepSeek client's SetAPIKey overwrote its default with it.
+AgentBeta chat only; the trading loop / Strategy Studio test / Telegram all pass empty
+through correctly (provider keeps deepseek-chat) and decision_records showed zero failures
+(live success proven mid-diagnosis). DB clean — empty custom_model_name is legal. Fix:
+fallback deleted; the effective model (ClientEmbedder.BaseClient().Model) is returned for
+logs/display. Regression test TestLoadAIClientEmptyCustomModelNameNeverSendsRowID (golden:
+row id must never reach the wire). Deployed live via rebuild + systemd on-failure restart;
+hello v2 clean, trader re-bound to Sim101. AgentBeta chat end-proof = owner (UI + real
+API call); code path + test verified.
