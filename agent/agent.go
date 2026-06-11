@@ -172,7 +172,7 @@ func (a *Agent) loadAIClientFromStoreUser(storeUserID string) (mcp.AIClient, str
 			if client := mcp.NewAIClientByProvider(provider); client != nil {
 				// An empty modelName must pass through as-is: every registered
 				// provider client keeps its own default model on an empty custom
-				// name (deepseek → deepseek-chat), same contract as the trading
+				// name (deepseek → deepseek-v4-pro), same contract as the trading
 				// loop, Strategy Studio test, and Telegram paths. Never substitute
 				// model.ID — a DB row id ("<uuid>_deepseek") is not an API model
 				// name and providers reject it with a 400.
@@ -342,7 +342,7 @@ func resolveModelRuntimeConfig(provider, customAPIURL, customModelName, fallback
 		model string
 	}
 	defaults := map[string]providerDefaults{
-		"deepseek": {url: "https://api.deepseek.com/v1", model: "deepseek-chat"},
+		"deepseek": {url: "https://api.deepseek.com/v1", model: "deepseek-v4-pro"},
 		"qwen":     {url: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen3-max"},
 		"openai":   {url: "https://api.openai.com/v1", model: "gpt-5.2"},
 		"claude":   {url: "https://api.anthropic.com/v1", model: "claude-opus-4-6"},

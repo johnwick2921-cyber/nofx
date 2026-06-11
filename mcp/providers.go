@@ -17,7 +17,7 @@ const (
 
 	// Default DeepSeek configuration (used as fallback in NewClient)
 	DefaultDeepSeekBaseURL = "https://api.deepseek.com"
-	DefaultDeepSeekModel   = "deepseek-chat"
+	DefaultDeepSeekModel   = "deepseek-v4-pro"
 
 	// Default Qwen configuration (used by WithQwenConfig convenience option)
 	DefaultQwenBaseURL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
