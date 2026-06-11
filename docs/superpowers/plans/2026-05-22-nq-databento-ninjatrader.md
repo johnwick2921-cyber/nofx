@@ -10349,3 +10349,18 @@ Verification: tsc + npm build green. Playwright: browser reachable but the store
 authenticated live proofs (update-without-F5 ticks, typing-survives, hidden-tab network quiet) are
 OWNER-GATED: log in once, then watch the dashboard update on its own. /tmp/backend.log note: 11 GB —
 rotation recommended. Partner repo sync HELD (P5.4 mid-flight; sync at the next stable boundary).
+
+## 2026-06-10 (late) — Autostart 209/STDOUT crash fixed + deploy made universal
+
+First install crashed BOTH units at stdout setup: append: targets in /tmp + Ubuntu
+fs.protected_regular=2 (denies opening another user's existing file in sticky /tmp) →
+"Failed to set up standard output: Permission denied" → 209/STDOUT, binary never ran
+(1ms), nofx-web looped to 142 restarts, bot DOWN. Recovered live first (rm the offending
+/tmp file → web unit self-healed; backend via nohup), then redesigned: real logs in
+/var/log/nofx (LogsDirectory=), /tmp/backend.log + /tmp/frontend.log refreshed as
+SYMLINKS each start (all tooling + nohup fallback unchanged), StartLimitIntervalSec=0 so
+a failure can loop (journalctl-visible) but never strand the bot dead. Units are now
+placeholder TEMPLATES; the installer detects user/repo/node (nvm-aware) at install time
+and guards .env for NT_TRANSPORT=tcp — fully portable to the partner's machine.
+NT_TRANSPORT=tcp also added to .env.example in both repos. Root-gated re-install +
+kill-restart proofs = owner: `sudo bash deploy/install-autostart.sh`.
