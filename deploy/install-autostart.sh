@@ -1,34 +1,121 @@
 #!/usr/bin/env bash
-# NOFX auto-start installer (WSL side). Run ONCE as root:
+# NOFX auto-start installer (WSL2/Linux with systemd). Run ONCE from YOUR clone:
 #   sudo bash deploy/install-autostart.sh
 #
-# What it does:
-#   1. Stops any manually-launched nofx-bin / vite (frees ports 8080/3000/36974).
-#   2. Installs nofx.service + nofx-web.service into /etc/systemd/system.
-#   3. Enables + starts both (auto-start on every WSL boot; auto-restart ≤5s on crash).
-# Idempotent — safe to re-run after editing the unit files.
+# Universal by design — NOTHING machine-specific lives in the committed unit
+# templates. Everything is detected at install time:
+#   - repo dir     = this script's own location (any clone path works)
+#   - target user  = the user who invoked sudo (SUDO_USER)
+#   - node/npm     = ABSOLUTE paths from that user's own shell, nvm-aware
+#                    (systemd services never read ~/.bashrc, so an nvm node
+#                    is invisible to services unless its path is baked in)
+#
+# Idempotent — safe to re-run any time (e.g. after `git pull` brings new unit
+# templates); it re-renders and reinstalls over whatever is there, including
+# older broken installs.
 set -euo pipefail
-cd "$(dirname "$0")/.."
 
-echo "→ stopping any manually-launched processes..."
-pkill -x nofx-bin 2>/dev/null && sleep 2 || true
-pkill -f "node /home/hoang/nofx/web/node_modules/.bin/vite" 2>/dev/null || true
-pkill -f "npm run dev" 2>/dev/null || true
-sleep 1
+if [ "$(id -u)" -ne 0 ]; then
+  echo "ERROR: must run as root:  sudo bash deploy/install-autostart.sh" >&2
+  exit 1
+fi
 
-echo "→ installing systemd units..."
-cp deploy/nofx.service deploy/nofx-web.service /etc/systemd/system/
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd -P)"
+NOFX_DIR="$(cd "$SCRIPT_DIR/.." && pwd -P)"
+
+TARGET_USER="${SUDO_USER:-}"
+if [ -z "$TARGET_USER" ] || [ "$TARGET_USER" = "root" ]; then
+  TARGET_USER="$(stat -c '%U' "$NOFX_DIR")"   # fallback: owner of the checkout
+fi
+if [ -z "$TARGET_USER" ] || [ "$TARGET_USER" = "root" ]; then
+  echo "ERROR: could not determine the target user — run via sudo from your normal account." >&2
+  exit 1
+fi
+TARGET_HOME="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
+
+if [ ! -x "$NOFX_DIR/nofx-bin" ]; then
+  echo "⚠ WARNING: $NOFX_DIR/nofx-bin not found or not executable."
+  echo "  Build it first:  cd $NOFX_DIR && go build -o nofx-bin ."
+  echo "  Installing anyway — the backend unit will retry every 5s until the binary exists."
+fi
+
+# --- node/npm detection (nvm-aware) ------------------------------------------
+# 1. login shell (-l): loads ~/.profile, which loads nvm on most setups
+# 2. interactive shell (-i): covers nvm installed only in ~/.bashrc
+# 3. newest node under ~/.nvm directly
+# 4. system PATH as last resort
+detect_node() {
+  local n
+  n="$(sudo -u "$TARGET_USER" bash -lc 'command -v node' 2>/dev/null | tail -1)" || true
+  if [ -z "${n:-}" ]; then
+    n="$(sudo -u "$TARGET_USER" bash -ic 'command -v node' 2>/dev/null | tail -1)" || true
+  fi
+  if [ -z "${n:-}" ] && [ -n "$TARGET_HOME" ]; then
+    n="$(ls -1d "$TARGET_HOME"/.nvm/versions/node/*/bin/node 2>/dev/null | sort -V | tail -1)" || true
+  fi
+  if [ -z "${n:-}" ]; then
+    n="$(command -v node 2>/dev/null)" || true
+  fi
+  echo "${n:-}"
+}
+NODE_BIN="$(detect_node)"
+if [ -z "$NODE_BIN" ]; then
+  echo "ERROR: node not found for user $TARGET_USER. Install Node.js (or set an nvm default alias) and re-run." >&2
+  exit 1
+fi
+NODE_DIR="$(dirname "$NODE_BIN")"
+if [ ! -x "$NODE_DIR/npm" ]; then
+  echo "ERROR: npm not found next to node ($NODE_DIR) — broken Node install?" >&2
+  exit 1
+fi
+
+echo "→ detected: user=$TARGET_USER  repo=$NOFX_DIR  node=$NODE_DIR"
+
+# --- .env guard ---------------------------------------------------------------
+# Services read env ONLY via .env (godotenv) — never ~/.bashrc. A missing
+# NT_TRANSPORT silently falls back to the deprecated CSV bridge.
+if [ -f "$NOFX_DIR/.env" ]; then
+  if ! grep -q '^NT_TRANSPORT=' "$NOFX_DIR/.env"; then
+    printf '\n# Added by deploy/install-autostart.sh — services never read ~/.bashrc\nNT_TRANSPORT=tcp\n' >> "$NOFX_DIR/.env"
+    echo "⚠ NOTICE: NT_TRANSPORT was missing from .env — appended NT_TRANSPORT=tcp."
+    echo "  (Without it the bot silently uses the deprecated CSV path instead of the TCP bridge.)"
+  fi
+else
+  echo "⚠ WARNING: $NOFX_DIR/.env not found. Copy .env.example to .env and configure it,"
+  echo "  or the service will run with defaults (including an INSECURE default JWT secret)."
+fi
+
+# --- stop previous instances ----------------------------------------------------
+echo "→ stopping any previous instances (units, nohup launches, stray vite)..."
+systemctl stop nofx nofx-web 2>/dev/null || true
+pkill -x nofx-bin 2>/dev/null || true
+pkill -f "node $NOFX_DIR/web/node_modules/.bin/vite" 2>/dev/null || true
+sleep 2
+
+# --- render templates + install -------------------------------------------------
+echo "→ rendering unit templates and installing to /etc/systemd/system..."
+for u in nofx.service nofx-web.service; do
+  sed -e "s|__NOFX_USER__|$TARGET_USER|g" \
+      -e "s|__NOFX_DIR__|$NOFX_DIR|g" \
+      -e "s|__NODE_DIR__|$NODE_DIR|g" \
+      "$SCRIPT_DIR/$u" > "/etc/systemd/system/$u"
+done
 systemctl daemon-reload
+systemctl reset-failed nofx nofx-web 2>/dev/null || true
 systemctl enable --now nofx nofx-web
 
 sleep 4
 echo
 echo "→ status:"
-systemctl --no-pager --lines=0 status nofx | head -3
-systemctl --no-pager --lines=0 status nofx-web | head -3
+systemctl --no-pager --lines=0 status nofx 2>/dev/null | sed -n '1,4p' || true
+systemctl --no-pager --lines=0 status nofx-web 2>/dev/null | sed -n '1,4p' || true
 echo
-echo "→ listeners (expect :8080 now; :36974 binds when the ninjatrader trader loads):"
-ss -tlnp | grep -E ':(8080|3000|36974)' || true
+echo "→ listeners (8080=API, 3000=UI; 36974 binds once a ninjatrader trader loads):"
+ss -tlnp | grep -E ':(8080|3000|36974)' || echo "  (none yet — check journalctl -u nofx -u nofx-web)"
 echo
-echo "✓ done. Crash-proof: kill the PID and watch systemd bring it back:"
-echo "    pgrep -x nofx-bin; sudo kill -9 \$(pgrep -x nofx-bin); sleep 6; pgrep -x nofx-bin"
+echo "→ log locations (real files in /var/log/nofx; /tmp names are symlinks for tooling):"
+ls -l /tmp/backend.log /tmp/frontend.log 2>/dev/null || true
+echo
+echo "✓ done. Crash-restart proof:"
+echo "    sudo kill -9 \$(pgrep -x nofx-bin); sleep 6; pgrep -x nofx-bin && echo RESTARTED"
+echo "  Windows-side steps (Task Scheduler / NT8): see docs/AUTOSTART.md"

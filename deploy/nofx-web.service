@@ -1,21 +1,35 @@
-# NOFX frontend (Vite dev server, port 3000, proxies /api → :8080) — the same
-# serve mode the operator uses today (the Go binary does NOT serve web/dist).
-# Installed alongside nofx.service by deploy/install-autostart.sh.
+# NOFX frontend (Vite dev server :3000, proxies /api -> :8080) — systemd unit
+# TEMPLATE. The placeholders are filled in by deploy/install-autostart.sh;
+# nothing machine-specific is hardcoded here.
+#
+# __NODE_DIR__ is the ABSOLUTE directory containing node+npm, detected from
+# the target user's own shell at install time. This is deliberate: systemd
+# never reads ~/.bashrc, so nvm-managed node is invisible to services unless
+# the path is baked in. PATH= puts that directory first so npm's
+# `#!/usr/bin/env node` shebang resolves to the same node.
+#
+# Log design identical to nofx.service (see the comments there): real log in
+# /var/log/nofx via LogsDirectory (never /tmp — fs.protected_regular trap),
+# /tmp/frontend.log kept as a tooling symlink, StartLimitIntervalSec=0 so the
+# unit can never end up permanently dead.
 
 [Unit]
 Description=NOFX frontend (vite dev server :3000)
 After=network.target nofx.service
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-User=hoang
-WorkingDirectory=/home/hoang/nofx/web
-# Shell redirection instead of StandardOutput=append: — the latter fails on
-# this WSL2 systemd ("Failed to set up standard output: Permission denied",
-# status=209/STDOUT; proven 2026-06-10 with a 127-restart crash loop).
-ExecStart=/bin/sh -c 'exec /usr/bin/npm run dev >> /tmp/frontend.log 2>&1'
+User=__NOFX_USER__
+WorkingDirectory=__NOFX_DIR__/web
+Environment=PATH=__NODE_DIR__:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+LogsDirectory=nofx
+ExecStartPre=+/bin/sh -c 'touch /var/log/nofx/web.log; chown __NOFX_USER__: /var/log/nofx/web.log; ln -sfn /var/log/nofx/web.log /tmp/frontend.log'
+ExecStart=__NODE_DIR__/npm run dev
 Restart=on-failure
 RestartSec=5
+StandardOutput=append:/var/log/nofx/web.log
+StandardError=append:/var/log/nofx/web.log
 
 [Install]
 WantedBy=multi-user.target
