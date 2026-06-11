@@ -1,0 +1,31 @@
+# NOFX trading backend — systemd unit (WSL2, systemd enabled).
+# Install: sudo bash deploy/install-autostart.sh   (or manually:
+#   sudo cp deploy/nofx.service /etc/systemd/system/ && sudo systemctl daemon-reload
+#   && sudo systemctl enable --now nofx)
+#
+# Notes:
+# - WorkingDirectory matters: .env (godotenv) + data/data.db resolve relative
+#   to it. NT_TRANSPORT=tcp now lives in .env (moved from ~/.bashrc, which a
+#   service never reads).
+# - StandardOutput keeps /tmp/backend.log so all existing tooling/diagnostics
+#   work unchanged; /tmp clears on boot, but `journalctl -u nofx` keeps
+#   history across reboots.
+# - Restart=on-failure + RestartSec=5: a crash auto-restarts in ≤5s; the NT8
+#   AddOn (TCP client) retries every 5s, so it reconnects on its own.
+
+[Unit]
+Description=NOFX trading backend (NT8 TCP bridge, SIM-only)
+After=network.target
+
+[Service]
+Type=simple
+User=hoang
+WorkingDirectory=/home/hoang/nofx
+ExecStart=/home/hoang/nofx/nofx-bin
+Restart=on-failure
+RestartSec=5
+StandardOutput=append:/tmp/backend.log
+StandardError=append:/tmp/backend.log
+
+[Install]
+WantedBy=multi-user.target
