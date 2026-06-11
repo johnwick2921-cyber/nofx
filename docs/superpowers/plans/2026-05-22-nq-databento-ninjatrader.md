@@ -10291,3 +10291,16 @@ strategy with static_coins=["ES"], own Exchange row with NTInstrumentName="ES", 
 account; set SIM accounts' Max Position Size = 0 in NT8 per the plan) → verify independent decisions,
 fills attributed per (symbol,account), zero cross-talk, no "exceeds max position", the live-account
 block holding for ALL symbols. Partner repo sync remains post-P5-verification.
+## 2026-06-10 — Auto-start on reboot (infra-only; commit 42b93057)
+
+Survives a Windows reboot with zero manual steps. WSL side: systemd units `deploy/nofx.service`
+(./nofx-bin, WorkingDirectory=/home/hoang/nofx so .env+SQLite resolve, Restart=on-failure 5s, log →
+/tmp/backend.log + journalctl) and `deploy/nofx-web.service` (vite :3000), installed by ONE owner
+command `sudo bash deploy/install-autostart.sh` (no passwordless sudo on this box — install is
+owner-run; crash-restart proof lands then). systemd was ALREADY enabled on Ubuntu-24.04 — no
+wsl --shutdown needed. Windows side (docs/AUTOSTART.md): Task Scheduler at-logon task
+(`wsl.exe -d Ubuntu-24.04 --exec /bin/true`, 30s delay) boots the VM; shell:startup NT8 shortcut +
+NT8 "On startup, connect to" auto-connects the feed (the AddOn already retries every 5s). Latent
+fragility fixed: NT_TRANSPORT=tcp lived ONLY in ~/.bashrc (a service start would silently fall back
+to the CSV transport) — moved into .env (gitignored, local). ZERO trading-code change; SIM-only
+gates untouched. Full-reboot proof pending the owner's restart.
