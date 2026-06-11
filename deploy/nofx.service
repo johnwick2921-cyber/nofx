@@ -4,20 +4,23 @@
 # which detects your user, clone path, and node location. Nothing
 # machine-specific is hardcoded here, so the same file works on any clone.
 #
-# Design notes:
-# - Logs live in /var/log/nofx (LogsDirectory= creates it, owned by the unit
-#   user). NEVER point logging at a file in /tmp: Ubuntu's
-#   fs.protected_regular sysctl denies opening an existing file in a sticky
-#   world-writable dir when the opener isn't its owner -> "Failed to set up
-#   standard output: Permission denied" -> exit 209/STDOUT, the binary never
-#   runs. (Proven 2026-06-10: nofx died in 1ms, nofx-web crash-looped 142x.)
-#   The same trap hits shell redirection (>>) whenever the /tmp file is owned
-#   by another user, so moving logs out of /tmp is the only robust fix.
-# - ExecStartPre (the + prefix = runs as root) replaces /tmp/backend.log with
-#   a SYMLINK to the real log, so all existing tooling (grep /tmp/backend.log)
-#   keeps working unchanged. /tmp clears on boot; the link is refreshed every
-#   start. It also chowns the log to the unit user so a manual fallback launch
-#   (nohup ./nofx-bin >> /tmp/backend.log) still works.
+# LOGGING = THE JOURNAL, ON PURPOSE. Read with:  journalctl -u nofx -f
+# Two file-logging designs both died with exit 209/STDOUT BEFORE the binary
+# ever ran on this WSL2 systemd (proven 2026-06-10):
+#   1) StandardOutput=append:/tmp/backend.log — Ubuntu's fs.protected_regular
+#      sysctl denies opening a file you don't own in a sticky world-writable
+#      dir; /tmp log files end up owned by whichever side (root vs user)
+#      created them first, so the open fails as soon as ownership mismatches.
+#   2) StandardOutput=append:/var/log/nofx/... + a root ExecStartPre to
+#      prep the dir — ALSO 209, because StandardOutput= applies to EVERY
+#      Exec* line: systemd sets up the append-file stdout in the forked
+#      child BEFORE exec'ing the command, so even the root-prefixed
+#      ExecStartPre died at stdout setup without running one instruction.
+# The journal sink has no file-open step in the child → cannot 209. NEVER
+# reintroduce StandardOutput=/StandardError= file directives or a log-file
+# ExecStartPre here. (If app-level file logging is ever wanted, it belongs
+# INSIDE the Go app — it owns its cwd and opens files as itself.)
+#
 # - StartLimitIntervalSec=0 disables the start-rate limiter: with
 #   Restart=on-failure + RestartSec=5 a persistent failure retries forever
 #   (visible in journalctl -u nofx) instead of leaving the bot permanently
@@ -35,13 +38,9 @@ StartLimitIntervalSec=0
 Type=simple
 User=__NOFX_USER__
 WorkingDirectory=__NOFX_DIR__
-LogsDirectory=nofx
-ExecStartPre=+/bin/sh -c 'touch /var/log/nofx/backend.log; chown __NOFX_USER__: /var/log/nofx/backend.log; ln -sfn /var/log/nofx/backend.log /tmp/backend.log'
 ExecStart=__NOFX_DIR__/nofx-bin
 Restart=on-failure
 RestartSec=5
-StandardOutput=append:/var/log/nofx/backend.log
-StandardError=append:/var/log/nofx/backend.log
 
 [Install]
 WantedBy=multi-user.target
