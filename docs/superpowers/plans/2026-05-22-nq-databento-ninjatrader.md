@@ -10423,3 +10423,13 @@ logs/display. Regression test TestLoadAIClientEmptyCustomModelNameNeverSendsRowI
 row id must never reach the wire). Deployed live via rebuild + systemd on-failure restart;
 hello v2 clean, trader re-bound to Sim101. AgentBeta chat end-proof = owner (UI + real
 API call); code path + test verified.
+
+## 2026-06-11 — DeepSeek default → deepseek-v4-pro system-wide
+
+Owner directive: auto-set pro at the API level. DefaultDeepSeekModel = deepseek-v4-pro
+(mcp/providers.go) — every empty-custom-name path (trading loop, AgentBeta, Studio test,
+Telegram) now resolves to the reasoning tier automatically; explicit Custom Model Name
+still overrides. Catalogs/presets/FE placeholders aligned; grid gorm default deliberately
+left (live-DB schema-migration risk, dormant subsystem). Live: first cycle on pro
+succeeded — 55.46s AI call (vs ~8s on chat), decision 769 saved. Watch: with a 1m scan
+interval, ~55s calls stretch the effective cycle cadence.
