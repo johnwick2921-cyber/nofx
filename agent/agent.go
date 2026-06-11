@@ -170,10 +170,18 @@ func (a *Agent) loadAIClientFromStoreUser(storeUserID string) (mcp.AIClient, str
 			// Use the provider registry for providers like claw402 that have their own
 			// client implementation (x402 payment, custom auth, etc.).
 			if client := mcp.NewAIClientByProvider(provider); client != nil {
-				if modelName == "" {
-					modelName = model.ID
-				}
+				// An empty modelName must pass through as-is: every registered
+				// provider client keeps its own default model on an empty custom
+				// name (deepseek → deepseek-chat), same contract as the trading
+				// loop, Strategy Studio test, and Telegram paths. Never substitute
+				// model.ID — a DB row id ("<uuid>_deepseek") is not an API model
+				// name and providers reject it with a 400.
 				client.SetAPIKey(apiKey, customAPIURL, modelName)
+				if modelName == "" {
+					if embedder, ok := client.(mcp.ClientEmbedder); ok {
+						modelName = embedder.BaseClient().Model
+					}
+				}
 				a.log().Info("agent AI client selected (provider registry)", "store_user_id", candidateUserID, "model_id", model.ID, "provider", provider, "model", modelName)
 				return client, modelName, true
 			}
