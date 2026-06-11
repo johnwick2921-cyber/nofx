@@ -48,6 +48,16 @@ func TestFormatKlineTimeframes_Golden(t *testing.T) {
 			in:   store.KlineConfig{PrimaryTimeframe: "5m", SelectedTimeframes: []string{"5m"}},
 			want: "- 5m price series\n",
 		},
+		{
+			// De-cap proof (>4, above the old artificial max): every selected
+			// timeframe must appear in the line — nothing is truncated to 4.
+			name: "seven selected (above the old max-4 cap)",
+			in: store.KlineConfig{
+				PrimaryTimeframe: "5m", EnableMultiTimeframe: true,
+				SelectedTimeframes: []string{"1m", "5m", "15m", "1h", "4h", "1d", "1w"},
+			},
+			want: "- 1m, 5m, 15m, 1h, 4h, 1d, 1w price series\n",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

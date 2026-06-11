@@ -12,6 +12,8 @@ import {
   Key,
 } from 'lucide-react'
 import { useState } from 'react'
+import useSWR from 'swr'
+import { api } from '../../lib/api'
 import type { IndicatorConfig } from '../../types'
 import { indicator, ts } from '../../i18n/strategy-translations'
 import { NofxSelect } from '../ui/select'
@@ -112,6 +114,33 @@ export function IndicatorEditor({
   language,
   isFutures = false,
 }: IndicatorEditorProps) {
+  // Capability list (single source of truth) — fetched from the backend
+  // (store.SupportedTimeframes). Falls back to the local allTimeframes values
+  // if the request fails, so the selector never goes empty. The local table
+  // still supplies label + category (presentation); the backend decides which
+  // values are actually selectable, so the menu can't drift from what the
+  // engine/NT8 actually serves.
+  const { data: tfCapability } = useSWR(
+    'supported-timeframes',
+    api.getSupportedTimeframes,
+    {
+      revalidateOnFocus: false,
+      dedupingInterval: 600000,
+      shouldRetryOnError: false,
+    }
+  )
+  const capabilityValues =
+    tfCapability?.timeframes ?? allTimeframes.map((t) => t.value)
+  const softWarnAbove = tfCapability?.soft_warn_above ?? 6
+  const availableTimeframes = [
+    ...allTimeframes.filter((t) => capabilityValues.includes(t.value)),
+    // Defensive: a capability value with no local label/category (shouldn't
+    // happen — the Go parity test keeps the lists in lockstep).
+    ...capabilityValues
+      .filter((v) => !allTimeframes.some((t) => t.value === v))
+      .map((v) => ({ value: v, label: v, category: 'position' as const })),
+  ]
+
   // Get currently selected timeframes
   const selectedTimeframes = config.klines.selected_timeframes || [
     config.klines.primary_timeframe,
@@ -141,19 +170,22 @@ export function IndicatorEditor({
         })
       }
     } else {
-      if (current.length >= 4) {
-        // Show toast notification
+      // Soft advisory above the threshold — NEVER a hard block (this replaced
+      // the old artificial max-4 cap). The timeframe is still added; we just
+      // warn that more timeframes = a bigger AI prompt → slower, costlier
+      // decisions. capped by the backend MaxTimeframes (the real capability).
+      if (current.length >= softWarnAbove) {
         const toast = document.createElement('div')
         toast.textContent =
           language === 'zh'
-            ? '最多选择 4 个时间维度'
-            : 'Maximum 4 timeframes allowed'
+            ? `已选 ${current.length + 1} 个时间维度：维度越多，AI 提示词越大，决策更慢、成本更高`
+            : `${current.length + 1} timeframes selected — more means a bigger AI prompt: slower, costlier decisions`
         toast.className =
           'fixed top-4 left-1/2 -translate-x-1/2 px-4 py-2 rounded-lg text-sm z-50 shadow-lg'
-        toast.style.cssText = 'background:#F6465D;color:#fff;'
+        toast.style.cssText = 'background:#F0B90B;color:#000;'
         document.body.appendChild(toast)
-        setTimeout(() => toast.remove(), 2000)
-        return
+        setTimeout(() => toast.remove(), 2600)
+        // fall through — do NOT return; the timeframe is still selected
       }
       current.push(tf)
       onChange({
@@ -946,7 +978,7 @@ export function IndicatorEditor({
             <div className="space-y-1.5">
               {(['scalp', 'intraday', 'swing', 'position'] as const).map(
                 (category) => {
-                  const categoryTfs = allTimeframes.filter(
+                  const categoryTfs = availableTimeframes.filter(
                     (tf) => tf.category === category
                   )
                   return (
