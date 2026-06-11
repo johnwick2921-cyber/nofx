@@ -1,32 +1,47 @@
-# NOFX trading backend — systemd unit (WSL2, systemd enabled).
-# Install: sudo bash deploy/install-autostart.sh   (or manually:
-#   sudo cp deploy/nofx.service /etc/systemd/system/ && sudo systemctl daemon-reload
-#   && sudo systemctl enable --now nofx)
+# NOFX trading backend — systemd unit TEMPLATE.
+# Do NOT copy this file by hand: the placeholders are filled in at install
+# time by deploy/install-autostart.sh (run: sudo bash deploy/install-autostart.sh),
+# which detects your user, clone path, and node location. Nothing
+# machine-specific is hardcoded here, so the same file works on any clone.
 #
-# Notes:
+# Design notes:
+# - Logs live in /var/log/nofx (LogsDirectory= creates it, owned by the unit
+#   user). NEVER point logging at a file in /tmp: Ubuntu's
+#   fs.protected_regular sysctl denies opening an existing file in a sticky
+#   world-writable dir when the opener isn't its owner -> "Failed to set up
+#   standard output: Permission denied" -> exit 209/STDOUT, the binary never
+#   runs. (Proven 2026-06-10: nofx died in 1ms, nofx-web crash-looped 142x.)
+#   The same trap hits shell redirection (>>) whenever the /tmp file is owned
+#   by another user, so moving logs out of /tmp is the only robust fix.
+# - ExecStartPre (the + prefix = runs as root) replaces /tmp/backend.log with
+#   a SYMLINK to the real log, so all existing tooling (grep /tmp/backend.log)
+#   keeps working unchanged. /tmp clears on boot; the link is refreshed every
+#   start. It also chowns the log to the unit user so a manual fallback launch
+#   (nohup ./nofx-bin >> /tmp/backend.log) still works.
+# - StartLimitIntervalSec=0 disables the start-rate limiter: with
+#   Restart=on-failure + RestartSec=5 a persistent failure retries forever
+#   (visible in journalctl -u nofx) instead of leaving the bot permanently
+#   dead. Tradeoff: a truly broken config loops every 5s until fixed.
 # - WorkingDirectory matters: .env (godotenv) + data/data.db resolve relative
-#   to it. NT_TRANSPORT=tcp now lives in .env (moved from ~/.bashrc, which a
-#   service never reads).
-# - /tmp/backend.log is kept via SHELL redirection in ExecStart (not
-#   systemd's StandardOutput=append:) — on this WSL2 systemd, append: fails
-#   with "Failed to set up standard output: Permission denied" (status=209/
-#   STDOUT, proven 2026-06-10: nofx died in 1ms, nofx-web crash-looped 127×).
-#   Shell redirection as User=hoang provably works (it is exactly how the
-#   manual runs wrote the same file). journalctl -u nofx also keeps history.
-# - Restart=on-failure + RestartSec=5: a crash auto-restarts in ≤5s; the NT8
-#   AddOn (TCP client) retries every 5s, so it reconnects on its own.
+#   to it. Services never read ~/.bashrc — every env var the bot needs must
+#   be in .env (NT_TRANSPORT=tcp included; see .env.example).
 
 [Unit]
 Description=NOFX trading backend (NT8 TCP bridge, SIM-only)
 After=network.target
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-User=hoang
-WorkingDirectory=/home/hoang/nofx
-ExecStart=/bin/sh -c 'exec /home/hoang/nofx/nofx-bin >> /tmp/backend.log 2>&1'
+User=__NOFX_USER__
+WorkingDirectory=__NOFX_DIR__
+LogsDirectory=nofx
+ExecStartPre=+/bin/sh -c 'touch /var/log/nofx/backend.log; chown __NOFX_USER__: /var/log/nofx/backend.log; ln -sfn /var/log/nofx/backend.log /tmp/backend.log'
+ExecStart=__NOFX_DIR__/nofx-bin
 Restart=on-failure
 RestartSec=5
+StandardOutput=append:/var/log/nofx/backend.log
+StandardError=append:/var/log/nofx/backend.log
 
 [Install]
 WantedBy=multi-user.target
