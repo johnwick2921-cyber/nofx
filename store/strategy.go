@@ -12,11 +12,35 @@ import (
 	"gorm.io/gorm"
 )
 
+// SupportedTimeframes is the SINGLE SOURCE OF TRUTH for the Strategy Studio
+// timeframe selector: every interval the engine can genuinely serve end-to-end.
+// For NT8 futures these are exactly the timeframes the AddOn auto-subscribes and
+// streams into the BarCache (provider/ninjatrader defaultAutoBarsTimeframes —
+// kept in lockstep by TestDefaultAutoBarsTimeframes_MatchesSupported); the live
+// BarCache serves all of them per-series (there is NO Go-side aggregation, so an
+// interval outside this set — e.g. 2m — would yield empty futures klines). For
+// crypto, CoinAnk serves the same standard intervals. The frontend fetches this
+// list via GET /api/strategies/timeframes instead of hardcoding its own copy.
+var SupportedTimeframes = []string{
+	"1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w",
+}
+
+// SoftWarnTimeframesAbove is the advisory threshold: selecting more than this
+// many timeframes is allowed but warns (bigger AI prompt → slower, costlier
+// decisions). It is NEVER a hard block (that was the old artificial max-4 cap).
+const SoftWarnTimeframesAbove = 6
+
+// MaxTimeframes caps SelectedTimeframes at the full supported capability. It was
+// a hard 4 — an artificial limit that silently truncated configs on save; the AI
+// prompt (formatKlineTimeframes) and the per-timeframe analysis loop both handle
+// N timeframes. The clamp now only guards against absurd input beyond the real
+// capability, never the legitimate 5-14 range.
+var MaxTimeframes = len(SupportedTimeframes)
+
 // Hard limits to prevent token explosion in AI requests
 const (
 	MaxCandidateCoins = 10
 	MaxPositions      = 3
-	MaxTimeframes     = 4
 	MinKlineCount     = 10
 	MaxKlineCount     = 30
 	MinLeverage       = 1

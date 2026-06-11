@@ -10379,3 +10379,33 @@ log hints (already idempotent: stops old units, kills strays, reset-failed, enab
 OWNER ACTION: sudo bash deploy/install-autostart.sh — then the kill→≤5s + 3×-restart proofs run
 unprivileged. During the broken window the bot+frontend were manually restored (21:37, bars flowing,
 :3000 HTTP 200). /tmp/backend.log confirmed truncated (21 MB, was 11 GB). SIM-only; no trading code.
+
+---
+
+## Timeframe selector — capability-driven (single source of truth) + de-cap (2026-06-11)
+
+The Strategy Studio timeframe selector was hardcoded twice and hard-capped at 4
+selections. Replaced with a capability-driven design.
+
+**Capability (verified, not assumed):** NT8 is **per-series, NO Go aggregation**
+— the live BarCache serves exactly the timeframes the AddOn auto-subscribes
+(`provider/ninjatrader/tcp_server.go` `defaultAutoBarsTimeframes`), and an
+interval outside that set (probed: `2m`) returns 0 bars. So the genuine
+end-to-end capability is the fixed 14-set
+`1m,3m,5m,15m,30m,1h,2h,4h,6h,8h,12h,1d,3d,1w` (crypto/CoinAnk serves the same
+standard intervals). No new C#/wire work was needed — all 14 are already
+streamed; this was a de-cap + de-dup, not "enable arbitrary intervals."
+
+**Single source of truth:** `store.SupportedTimeframes` (the 14). Served via
+`GET /api/strategies/timeframes` (also returns `soft_warn_above` + `max`); the
+frontend fetches it instead of hardcoding a copy (falls back to a local list on
+error). `provider/ninjatrader/timeframes_parity_test.go` keeps the NT8
+auto-subscribe set in lockstep with `store.SupportedTimeframes` (drift fails CI).
+
+**De-cap:** the hard max-4 (FE toast + BE `MaxTimeframes=4` truncation) is gone.
+`MaxTimeframes = len(SupportedTimeframes)` (14); the FE shows an **advisory**
+amber toast above `SoftWarnTimeframesAbove = 6` ("more timeframes = bigger AI
+prompt → slower, costlier") that never blocks. The prompt path
+(`formatKlineTimeframes`) already lists all N selected — golden extended with a
+7-timeframe case. Existing strategies + defaults are byte-identical (≤4
+selections are unaffected by the relaxed clamp).

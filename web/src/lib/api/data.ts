@@ -10,6 +10,22 @@ import type {
 import { API_BASE, httpClient } from './helpers'
 
 export const dataApi = {
+  // Supported kline timeframes — single source of truth for the Strategy Studio
+  // selector (mirrors store.SupportedTimeframes; never hardcode a second copy).
+  async getSupportedTimeframes(): Promise<{
+    timeframes: string[]
+    soft_warn_above: number
+    max: number
+  }> {
+    const result = await httpClient.request<{
+      timeframes: string[]
+      soft_warn_above: number
+      max: number
+    }>(`${API_BASE}/strategies/timeframes`, { silent: true })
+    if (!result.success) throw new Error('Failed to fetch supported timeframes')
+    return result.data!
+  },
+
   async getStatus(
     traderId?: string,
     silent?: boolean,
