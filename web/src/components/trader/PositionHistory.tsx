@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { api } from '../../lib/api'
+import { useAutoRefresh, REFRESH_HISTORY_MS } from '../../lib/autoRefresh'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { t, type Language } from '../../i18n/translations'
 import { MetricTooltip } from '../common/MetricTooltip'
@@ -435,6 +436,23 @@ export function PositionHistory({ traderId }: PositionHistoryProps) {
       fetchData()
     }
   }, [traderId, pageSize])
+
+  // Silent background refresh (auto-refresh layer): re-pulls the same window
+  // WITHOUT the loading spinner, so new closed trades appear on their own.
+  // Pagination/filter/sort/scroll all live in separate local state and are
+  // untouched by a data update — the owner is never yanked off their page.
+  useAutoRefresh(async () => {
+    if (!traderId) return
+    const data = await api.getPositionHistory(
+      traderId,
+      Math.max(200, pageSize * 5),
+      true
+    )
+    setPositions(data.positions || [])
+    setStats(data.stats)
+    setSymbolStats(data.symbol_stats || [])
+    setDirectionStats(data.direction_stats || [])
+  }, REFRESH_HISTORY_MS)
 
   // Get unique symbols for filter
   const uniqueSymbols = useMemo(() => {

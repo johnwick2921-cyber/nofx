@@ -1053,9 +1053,12 @@ export function TraderDashboardPage({
               style={{ maxHeight: 'calc(100vh - 280px)' }}
             >
               {decisions && decisions.length > 0 ? (
-                decisions.map((decision, i) => (
+                decisions.map((decision) => (
                   <DecisionCard
-                    key={i}
+                    // Stable identity (timestamp+cycle), NOT the array index:
+                    // a background refetch that prepends a new decision must
+                    // not re-attach an expanded card to a different decision.
+                    key={`${decision.timestamp}-${decision.cycle_number}`}
                     decision={decision}
                     language={language}
                     onSymbolClick={handleSymbolClick}

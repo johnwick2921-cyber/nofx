@@ -208,7 +208,15 @@ export function StrategyStudioPage() {
       const nextSelected =
         preservedSelection || active || nextStrategies[0] || null
 
-      setSelectedStrategy(nextSelected)
+      // No-clobber: while the user has UNSAVED changes and their selection
+      // still exists server-side, keep the LOCAL selectedStrategy object —
+      // unsaved name/description edits and Publish/Config-visible toggles
+      // live on it, and replacing it with the server copy silently reverted
+      // them on every focus-refetch (pre-existing hole, fixed with the
+      // auto-refresh layer). editingConfig was already guarded the same way.
+      if (!hasChangesRef.current || !preservedSelection) {
+        setSelectedStrategy(nextSelected)
+      }
       selectedStrategyIDRef.current = nextSelected?.id || ''
 
       if (!hasChangesRef.current || !preservedSelection) {

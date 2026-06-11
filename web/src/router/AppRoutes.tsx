@@ -24,6 +24,17 @@ import { SettingsPage } from '../pages/SettingsPage'
 import { StrategyStudioPage } from '../pages/StrategyStudioPage'
 import { TraderDashboardPage } from '../pages/TraderDashboardPage'
 import { useAuth } from '../contexts/AuthContext'
+import {
+  usePollResume,
+  REFRESH_TRADERS_MS,
+  REFRESH_TRADERS_DASH_MS,
+  REFRESH_EXCHANGES_MS,
+  REFRESH_STATUS_MS,
+  REFRESH_ACCOUNT_MS,
+  REFRESH_POSITIONS_MS,
+  REFRESH_DECISIONS_MS,
+  REFRESH_STATS_MS,
+} from '../lib/autoRefresh'
 import { useLanguage } from '../contexts/LanguageContext'
 import { useSystemConfig } from '../hooks/useSystemConfig'
 import { t } from '../i18n/translations'
@@ -199,7 +210,7 @@ function TradersRoute({
     user && token ? 'traders-route' : null,
     api.getTraders,
     {
-      refreshInterval: 5000,
+      refreshInterval: REFRESH_TRADERS_MS,
       shouldRetryOnError: false,
     }
   )
@@ -231,21 +242,27 @@ function DashboardRoute() {
   const [selectedTraderId, setSelectedTraderId] = useState<string | undefined>()
   const [lastUpdate, setLastUpdate] = useState<string>('--:--:--')
   const [decisionsLimit, setDecisionsLimit] = useState(5)
-  const [accountPollOff, setAccountPollOff] = useState(false)
-  const [positionsPollOff, setPositionsPollOff] = useState(false)
-  const [decisionsPollOff, setDecisionsPollOff] = useState(false)
+  // Auto-resuming poll gates (was: permanent pollOff latches that froze the
+  // surface until F5 — see lib/autoRefresh.ts). Failed-state UI is unchanged;
+  // polling now self-heals after the backoff window.
+  const accountGate = usePollResume()
+  const positionsGate = usePollResume()
+  const decisionsGate = usePollResume()
+  const clearAccountGate = accountGate.clear
+  const clearPositionsGate = positionsGate.clear
+  const clearDecisionsGate = decisionsGate.clear
 
   useEffect(() => {
-    setAccountPollOff(false)
-    setPositionsPollOff(false)
-    setDecisionsPollOff(false)
+    clearAccountGate()
+    clearPositionsGate()
+    clearDecisionsGate()
   }, [selectedTraderId])
 
   const { data: traders, error: tradersError } = useSWR<TraderInfo[]>(
     user && token ? 'traders-dashboard' : null,
     () => api.getTraders(true),
     {
-      refreshInterval: 10000,
+      refreshInterval: REFRESH_TRADERS_DASH_MS,
       shouldRetryOnError: false,
     }
   )
@@ -254,7 +271,7 @@ function DashboardRoute() {
     user && token ? 'exchanges-dashboard' : null,
     api.getExchangeConfigs,
     {
-      refreshInterval: 60000,
+      refreshInterval: REFRESH_EXCHANGES_MS,
       shouldRetryOnError: false,
     }
   )
@@ -294,9 +311,9 @@ function DashboardRoute() {
     selectedTraderId ? `status-${selectedTraderId}${acctSuffix}` : null,
     () => api.getStatus(selectedTraderId, true, selectedAccount),
     {
-      refreshInterval: 15000,
+      refreshInterval: REFRESH_STATUS_MS,
       revalidateOnFocus: false,
-      dedupingInterval: 10000,
+      dedupingInterval: 3000,
     }
   )
 
@@ -304,20 +321,18 @@ function DashboardRoute() {
     selectedTraderId ? `account-${selectedTraderId}${acctSuffix}` : null,
     () => api.getAccount(selectedTraderId, true, selectedAccount),
     {
-      refreshInterval: accountPollOff ? 0 : 15000,
+      refreshInterval: accountGate.off ? 0 : REFRESH_ACCOUNT_MS,
       revalidateOnFocus: false,
-      dedupingInterval: 10000,
+      dedupingInterval: 3000,
       onErrorRetry: (_err, _key, _config, revalidate, { retryCount }) => {
         if (retryCount >= 2) {
-          setAccountPollOff(true)
+          accountGate.latch() // pauses polling; auto-resumes after backoff
           return
         }
         setTimeout(() => revalidate({ retryCount }), 500)
       },
       onSuccess: () => {
-        if (accountPollOff) {
-          setAccountPollOff(false)
-        }
+        accountGate.clear()
       },
     }
   )
@@ -326,20 +341,18 @@ function DashboardRoute() {
     selectedTraderId ? `positions-${selectedTraderId}${acctSuffix}` : null,
     () => api.getPositions(selectedTraderId, true, selectedAccount),
     {
-      refreshInterval: positionsPollOff ? 0 : 15000,
+      refreshInterval: positionsGate.off ? 0 : REFRESH_POSITIONS_MS,
       revalidateOnFocus: false,
-      dedupingInterval: 10000,
+      dedupingInterval: 3000,
       onErrorRetry: (_err, _key, _config, revalidate, { retryCount }) => {
         if (retryCount >= 2) {
-          setPositionsPollOff(true)
+          positionsGate.latch() // pauses polling; auto-resumes after backoff
           return
         }
         setTimeout(() => revalidate({ retryCount }), 500)
       },
       onSuccess: () => {
-        if (positionsPollOff) {
-          setPositionsPollOff(false)
-        }
+        positionsGate.clear()
       },
     }
   )
@@ -356,20 +369,18 @@ function DashboardRoute() {
         selectedAccount
       ),
     {
-      refreshInterval: decisionsPollOff ? 0 : 30000,
+      refreshInterval: decisionsGate.off ? 0 : REFRESH_DECISIONS_MS,
       revalidateOnFocus: false,
-      dedupingInterval: 20000,
+      dedupingInterval: 3000,
       onErrorRetry: (_err, _key, _config, revalidate, { retryCount }) => {
         if (retryCount >= 2) {
-          setDecisionsPollOff(true)
+          decisionsGate.latch() // pauses polling; auto-resumes after backoff
           return
         }
         setTimeout(() => revalidate({ retryCount }), 500)
       },
       onSuccess: () => {
-        if (decisionsPollOff) {
-          setDecisionsPollOff(false)
-        }
+        decisionsGate.clear()
       },
     }
   )
@@ -378,7 +389,7 @@ function DashboardRoute() {
     selectedTraderId ? `statistics-${selectedTraderId}${acctSuffix}` : null,
     () => api.getStatistics(selectedTraderId, true, selectedAccount),
     {
-      refreshInterval: 30000,
+      refreshInterval: REFRESH_STATS_MS,
       revalidateOnFocus: false,
       dedupingInterval: 20000,
     }
@@ -400,12 +411,12 @@ function DashboardRoute() {
         selectedTrader={selectedTrader}
         status={status}
         account={account}
-        accountFailed={accountPollOff}
+        accountFailed={accountGate.off}
         selectedAccount={selectedAccount}
         positions={positions}
-        positionsFailed={positionsPollOff}
+        positionsFailed={positionsGate.off}
         decisions={decisions}
-        decisionsFailed={decisionsPollOff}
+        decisionsFailed={decisionsGate.off}
         decisionsLimit={decisionsLimit}
         onDecisionsLimitChange={setDecisionsLimit}
         stats={stats}

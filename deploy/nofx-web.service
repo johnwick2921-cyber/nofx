@@ -10,11 +10,12 @@ After=network.target nofx.service
 Type=simple
 User=hoang
 WorkingDirectory=/home/hoang/nofx/web
-ExecStart=/usr/bin/npm run dev
+# Shell redirection instead of StandardOutput=append: — the latter fails on
+# this WSL2 systemd ("Failed to set up standard output: Permission denied",
+# status=209/STDOUT; proven 2026-06-10 with a 127-restart crash loop).
+ExecStart=/bin/sh -c 'exec /usr/bin/npm run dev >> /tmp/frontend.log 2>&1'
 Restart=on-failure
 RestartSec=5
-StandardOutput=append:/tmp/frontend.log
-StandardError=append:/tmp/frontend.log
 
 [Install]
 WantedBy=multi-user.target
