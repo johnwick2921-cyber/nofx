@@ -14,7 +14,7 @@ import (
 // "use the provider default" state) must NEVER be replaced by the DB row id
 // ("<uuid>_deepseek") — providers reject a row id as the model name. The
 // agent must pass the empty name through so the provider client keeps its
-// default (deepseek → deepseek-chat), like every other AI path, and report
+// default (deepseek → deepseek-v4-pro), like every other AI path, and report
 // that effective default as the selected model name.
 func TestLoadAIClientEmptyCustomModelNameNeverSendsRowID(t *testing.T) {
 	dbPath := filepath.Join(t.TempDir(), "agent-model-name.db")

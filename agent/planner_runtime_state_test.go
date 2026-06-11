@@ -804,7 +804,7 @@ func TestResolveModelRuntimeConfigUsesProviderDefaults(t *testing.T) {
 	if url != "https://api.deepseek.com/v1" {
 		t.Fatalf("unexpected deepseek default url: %q", url)
 	}
-	if model != "deepseek-chat" {
+	if model != "deepseek-v4-pro" {
 		t.Fatalf("unexpected deepseek default model: %q", model)
 	}
 
