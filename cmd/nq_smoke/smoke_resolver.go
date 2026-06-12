@@ -14,7 +14,7 @@ import (
 // CME contract code (e.g. NQM6 / NQU6 / NQZ6 / NQH7) via Databento symbology.
 // Skips cleanly when DATABENTO_API_KEY is not set.
 func runResolverSmoke() {
-	_ = godotenv.Load("/home/hoang/nofx/.env")
+	_ = godotenv.Load() // .env from the working directory (run from the repo root)
 	apiKey := os.Getenv("DATABENTO_API_KEY")
 	if apiKey == "" {
 		fmt.Println("SKIP resolver: DATABENTO_API_KEY not set")

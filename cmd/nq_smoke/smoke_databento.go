@@ -15,7 +15,7 @@ import (
 // Skips cleanly when DATABENTO_API_KEY is not set so this can run in CI without
 // network credentials.
 func runDatabentoSmoke() {
-	_ = godotenv.Load("/home/hoang/nofx/.env")
+	_ = godotenv.Load() // .env from the working directory (run from the repo root)
 	apiKey := os.Getenv("DATABENTO_API_KEY")
 	if apiKey == "" {
 		fmt.Println("SKIP databento: DATABENTO_API_KEY not set")

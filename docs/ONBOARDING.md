@@ -103,7 +103,7 @@ Prerequisites:
 Clone + build:
 
 ```bash
-git clone https://github.com/johnwick2921-cyber/nofx.git
+git clone <your-repo-url>
 cd nofx
 
 # Backend
@@ -264,4 +264,4 @@ Plan 7 (this onboarding doc + the 7 ADRs + CONTRIBUTING) is the final canonical 
 - **Architecture decision records:** `docs/adr/ADR-001..ADR-007`.
 - **Upstream architecture docs (historical reference only):** `https://github.com/NoFxAiOS/nofx/tree/dev/docs/architecture` — useful for the strategy-engine design vocabulary. **Stale-path warning** in CLAUDE.md: upstream cites `decision/engine.go`, locally it's `kernel/engine.go`.
 - **Agent persona (NOFXi assistant spec):** `agents.md` (Chinese).
-- **Persistent memory across Claude Code sessions:** `~/.claude/projects/-home-hoang-nofx/memory/`.
+- **Persistent memory across Claude Code sessions:** `~/.claude/projects/<project-slug>/memory/`.
