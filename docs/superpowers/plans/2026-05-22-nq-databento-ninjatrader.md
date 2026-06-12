@@ -10450,3 +10450,19 @@ owner (classifier blocks me): `cd ~/vlautoagenttraderv1 && git push --force orig
 Side-finding: local nofx history has one unreadable old object (21a15f98…) — HEAD tree
 fully intact (archive/build/push fine); deep-clone-from-local fails; origin is the good
 copy.
+
+## 2026-06-12 — June→September contract roll executed + the chart-bug root cause
+
+The "all charts buggy" report = the ROLL, in two acts. (1) The resolver is DYNAMIC
+(VLContractResolver.ResolveFrontMonthContractAt on every bars_subscribe + order submit —
+never startup-cached); the owner's ~01:30 CT NT8 restart already moved the stream to
+MNQ/ES 09-26 (ack'd; June roll date was Jun 11). (2) BUT the bot's BarCache still held
+06-26 bars: the September seed at re-subscribe carried no history (NT8 had just started),
+and mergeBarsByTime PRESERVES old bars the seed doesn't cover → every timeframe kept
+June-priced history with a +232.75-pt cliff at the 06:29:30Z switch minute (measured on
+1m; ~ the Jun/Sep carry basis). FIX = bot restart while flat (position from 01:33 was
+already closed): cache wiped → N3 re-seed from the now-September BarsRequests → 500
+pure-09-26 bars per timeframe. Verified: 1m seam GONE (max move 52.75 pts, live bars),
+deeper TFs show single-contract September levels (the 06-11 17:30 move re-priced from
+28744→29087 to 29031→29374 = the basis, proving the re-seed). Procedure doc:
+docs/CONTRACT-ROLL.md (quarterly: flat → NT8 restart → bot restart → verify ack).
