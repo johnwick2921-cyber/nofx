@@ -10433,3 +10433,20 @@ still overrides. Catalogs/presets/FE placeholders aligned; grid gorm default del
 left (live-DB schema-migration risk, dormant subsystem). Live: first cycle on pro
 succeeded — 55.46s AI call (vs ~8s on chat), decision 769 saved. Watch: with a 1m scan
 interval, ~55s calls stretch the effective cycle cadence.
+
+## 2026-06-11 — vlauto mirror prepared + install made fully universal (3ab61978)
+
+Owner decision: vlauto's CONTENTS now mirror nofx main exactly (repo/URL kept; fresh
+single-commit history — partner re-clones). Portability commit 3ab61978: nq_smoke's
+hardcoded /home/<user>/nofx/.env → godotenv.Load() cwd; ONBOARDING + the vltrader rename
+doc genericized (C:\Users\<you>); INSTALL.md (root) = complete generic setup (packages,
+.env w/ NT_TRANSPORT=tcp, AddOn deploy, autostart). Fresh-clone simulation PASSED (clean
+tree → go build + npm install/build, documented steps only). Mirror commit 75bcb57 in
+vlauto = nofx tree 3ab61978 MINUS internal docs (web/CLAUDE.md, docs/superpowers,
+docs/internal — root CLAUDE.md was never tracked); builds+tests green there; secret scan
+0 machine names, no private state (only upstream's dead public nofxos key + an obvious
+fake test key). Old vlauto main kept as branch backup-pre-mirror-20260611. Force-push =
+owner (classifier blocks me): `cd ~/vlautoagenttraderv1 && git push --force origin main`.
+Side-finding: local nofx history has one unreadable old object (21a15f98…) — HEAD tree
+fully intact (archive/build/push fine); deep-clone-from-local fails; origin is the good
+copy.
