@@ -50,7 +50,7 @@ func main() {
 			return
 		}
 	}
-	_ = godotenv.Load("/home/hoang/nofx/.env")
+	_ = godotenv.Load() // .env from the working directory (run from the repo root)
 
 	dbKey := os.Getenv("DATABENTO_API_KEY")
 	if dbKey == "" {
