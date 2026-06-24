@@ -10466,3 +10466,22 @@ pure-09-26 bars per timeframe. Verified: 1m seam GONE (max move 52.75 pts, live 
 deeper TFs show single-contract September levels (the 06-11 17:30 move re-priced from
 28744→29087 to 29031→29374 = the basis, proving the re-seed). Procedure doc:
 docs/CONTRACT-ROLL.md (quarterly: flat → NT8 restart → bot restart → verify ack).
+
+## 2026-06-24 — AddOn gap self-heal: rebuild the BarsRequest on bot reconnect (was a frozen N3 snapshot)
+
+Root cause of "chart gap that won't fix even after bot restart": the AddOn's per-(symbol,tf)
+BarsRequest survives a Go-process restart, and the old N3 path (VLBarsSubscriptionManager.cs
+Subscribe, the active.ContainsKey branch) merely RE-EMITTED that surviving request's window
+(EmitHistorical(existing)) without recreating it. A BarsRequest that straddled a feed outage
+(feed drops ~16:00, resumes next afternoon) holds that hole FOREVER and never backfills —
+even though NT8's own DB fills the gap from the provider — so every bot restart re-sent last
+night's hole. FIX (C#, AddOn redeploy required): the N3 branch now DISPOSES + RECREATES the
+BarsRequest (→ N4), so a fresh request re-reads NT8's now-complete DB across the full barsBack
+lookback and the gap self-heals on the next bot restart. DEFAULT_BARS_BACK 500→2000 so the
+reconnect-rebuild path (OnConnectionReconnected, line ~554) and fallback look back far enough
+to span an overnight gap (500=~8h was shorter than the outage). Go side already correct:
+mergeBarsByTime (bar_cache.go) is a time-ordered union that ACCEPTS backfilled interior bars
+into a hole (not append-only), and defaultAutoBarsBack=2000/maxBars=2500 shipped in be0c9860.
+Go build/vet/test green; the Go bars_subscribe frame is unchanged (goldens unaffected). The
+friend MUST redeploy the AddOn: cp ninjascript/*.cs → Documents AddOns → F5 → clean NT8
+restart (the restart itself re-seeds with 2000 from the full DB → fills last night).
