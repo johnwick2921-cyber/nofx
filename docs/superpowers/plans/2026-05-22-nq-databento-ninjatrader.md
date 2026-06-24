@@ -10485,3 +10485,20 @@ into a hole (not append-only), and defaultAutoBarsBack=2000/maxBars=2500 shipped
 Go build/vet/test green; the Go bars_subscribe frame is unchanged (goldens unaffected). The
 friend MUST redeploy the AddOn: cp ninjascript/*.cs → Documents AddOns → F5 → clean NT8
 restart (the restart itself re-seeds with 2000 from the full DB → fills last night).
+
+## 2026-06-24 — Auto-heal completes: feed-resume recreate already wired; add flap debounce
+
+STEP-A finding: the auto-heal-on-feed-resume ALREADY EXISTS. VLTraderTCPClient.cs hooks
+Connection.ConnectionStatusUpdate (line ~141) and on a data-feed recovery (PriceStatus →
+Connected after a loss/fresh-connect) calls barsManager.OnConnectionReconnected() (line ~259)
+— dispose+recreate ALL BarsRequests. This is the SAME code path the manual Tradovate
+disconnect/reconnect triggers (which the owner confirmed heals the gap) — so a natural feed
+resume already runs it, no manual step. The reason an overnight gap didn't auto-heal: the
+recreate's lookback was DEFAULT_BARS_BACK=500 (~8h) — shorter than the outage — fixed to 2000
+(~33h) in cde27cc2. Go merge fills interior gaps (mergeBarsByTime union, confirmed). This
+commit adds the only missing piece per spec: a 30s flap DEBOUNCE (lastRecreateUtc /
+RecreateDebounce) so the now-deep/expensive refetch coalesces a rapidly-flapping feed into one
+rebuild instead of thrashing; first-connect + genuine resume still fire once; the 20s
+FAST_STALL fast-guard backstops a .Update that dies inside the cooldown. No-gap/startup
+behavior preserved; Go bars_subscribe frame unchanged (goldens green). C# AddOn change →
+redeploy required (cp ninjascript/*.cs → AddOns → F5 → NT8 restart).
