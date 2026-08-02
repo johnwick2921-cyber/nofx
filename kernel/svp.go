@@ -37,27 +37,14 @@ const (
 	// Value Area (classic 70%).
 	SVPValueAreaPercent = 0.70
 
-	// SVPBarInterval is the ONE bar interval the SVP is built from EVERYWHERE:
-	// the chart endpoint (api/handler_svp.go) AND the AI prompt
-	// (engine_analysis.go) both call FuturesBarsProvider(sym, SVPBarInterval,
-	// SVPBarCount) so the POC/VAH/VAL the trader SEES on the chart is byte-
-	// identical to the POC/VAH/VAL the AI ACTS ON (ONE source of truth / display
-	// trust). The value is "1m" — the interval the AI has ALWAYS used — so wiring
-	// the AI's SVP call through this constant is byte-for-byte identical to the
-	// prior hardcoded "1m"/2000 (HARD REQUIREMENT: zero AI-path change). The chart
-	// is display-only and must MATCH the AI, so it uses this same 1m and ignores
-	// its own display timeframe.
-	//
-	// Tradeoff (accepted, display-only): 1m at the 2000-bar cache cap spans ~1.4
-	// days, so the chart shows ~2 session profiles — exactly the window the AI
-	// computes over — instead of the ~7-day 5m view. Multi-day (5m) is what commit
-	// f548c35b introduced, and it is what DESYNCED the chart from the AI; matching
-	// the AI again means reverting to 1m. Restoring a wider view would require
-	// changing the AI's SVP input (out of scope) or a separately-labeled
-	// display-only context layer.
-	SVPBarInterval = "1m"
-	// SVPBarCount is the number of bars both SVP paths request (the BarCache cap).
-	SVPBarCount = 2000
+	// AISVPBarInterval / AISVPBarCount are the bars the AI computes its SVP prompt
+	// line from (kernel/engine_analysis.go). This is INDEPENDENT of the chart: the
+	// chart is a display indicator that profiles whatever candle data it is showing
+	// at its selected timeframe (see api/handler_svp.go), while the AI always
+	// profiles 1m bars for its own reasoning. Keep this AI value fixed — changing
+	// it alters the AI prompt (a trading-behavior change).
+	AISVPBarInterval = "1m"
+	AISVPBarCount    = 2000
 
 	// The SVP session is the CME futures trading day: it opens at 17:00 CT and
 	// RESETS every 17:00 CT (the daily-break roll). This is anchored to
