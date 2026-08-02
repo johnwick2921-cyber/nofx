@@ -14,11 +14,13 @@ import (
 // CME futures symbol: POC / VAH / VAL and the histogram bins for the developing
 // and prior RTH sessions.
 //
-// ONE source of truth: it reads the SAME live NT8 1-minute bars the AI kernel
-// uses (market.FuturesBarsProvider) and runs the SAME kernel.BuildSVPProfile
-// engine — the chart never recomputes the profile itself. The SVP is always
-// built from 1m bars regardless of the chart's display interval, so the ?interval
-// query param is intentionally ignored here.
+// ONE source of truth: it reads the SAME live NT8 bars the AI kernel uses
+// (market.FuturesBarsProvider at the shared kernel.SVPBarInterval / SVPBarCount)
+// and runs the SAME kernel.BuildSVPProfile engine — the chart never recomputes
+// the profile itself. The SVP is always built from the fixed SVPBarInterval (1m,
+// the interval the AI uses) regardless of the chart's display interval, so the
+// ?interval query param is intentionally ignored here; this is what guarantees
+// the POC/VAH/VAL the trader sees equals the POC/VAH/VAL the AI acts on.
 //
 // A cold/empty cache, an unbound provider, or a non-futures symbol returns a
 // well-formed zero-value 200 (empty bins) — NEVER a 500 and never a crypto
@@ -41,16 +43,13 @@ func (s *Server) handleKlinesSVP(c *gin.Context) {
 		c.JSON(http.StatusOK, empty)
 		return
 	}
-	// Profile the SAME timeframe the chart is displaying so the SVP covers the
-	// same visible range (like TradingView). A 5m chart spans ~5+ days → several
-	// session profiles; a 1m chart spans ~1 day. Default 5m. We pull up to 2000
-	// bars (the cache cap) so more historical sessions are available; sessions
-	// that fall off the visible chart are simply skipped by the renderer.
-	interval := c.Query("interval")
-	if interval == "" {
-		interval = "5m"
-	}
-	bars := provider(symbol, interval, 2000)
+	// ONE source of truth: build the profile from the fixed SVPBarInterval /
+	// SVPBarCount the AI prompt uses (kernel/engine_analysis.go), NOT the chart's
+	// display timeframe. The ?interval query param is intentionally IGNORED — this
+	// is what guarantees the POC/VAH/VAL the trader sees equals the values the AI
+	// acts on, regardless of which candle timeframe the chart is set to.
+	// 1m/2000 matches the AI's exact input (~2 session profiles / ~1.4 days).
+	bars := provider(symbol, kernel.SVPBarInterval, kernel.SVPBarCount)
 	if len(bars) == 0 {
 		c.JSON(http.StatusOK, empty)
 		return
