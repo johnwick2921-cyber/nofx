@@ -1,5 +1,27 @@
 # NQ Trading via Databento + NinjaTrader — Implementation Plan
 
+> **2026-08-06 — Full tunable inventory + bug sweep (read-only) + 3 casing/label fixes.**
+> Shipped (nofx `3c6d8695`, vlauto `72c73b3`; both pushed):
+> - `c99e3d74` drawdown-monitor side-casing (P&L sign + emergency-close switch) — same
+>   uppercase-NT8-side class as the breakeven fix `d3d60c32`.
+> - `17ccc96d` reconcile-before-open flattened the WRONG side of a long orphan
+>   (uppercase side → CloseShort → blocked all entries).
+> - `3c6d8695` SafeFallback decision symbol `"ALL"` → `"(no decision)"` (cosmetic).
+> **Not deployed to the running binary yet** — needs a rebuild + restart to go live.
+> **Key non-bug findings (LISTED, not changed — behavior-changing / owner-decision):**
+> (a) The recorded "R/R prompt-1.5 vs gate-3.0 mismatch" is NOT live — `ClampLimits()`
+>     runs first on the engine's pointer config (`engine_analysis.go:220`) and floors
+>     unset min_rr to `MinRiskReward=1.0`, so both the prompt and gate read 1.0; the
+>     1.5/3.0 fallbacks are dead code. Same for min_confidence (clamp floors 0→50).
+> (b) Live strategy `a5b7662e` has `guardrails_enabled=FALSE` → notional cap +
+>     contract clamp + daily-loss/profit/trade/blackout/consistency all DISABLED;
+>     futures position size is effectively uncapped. Posture fact, not a bug.
+> (c) Drawdown monitor defaults position leverage to 10 for futures (should be ~1) —
+>     inflates PnL% ~10×; intertwined with the 5%/40% thresholds (see report).
+> (d) `min_position_size`/`max_margin_usage` not enforced on the futures path;
+>     `RISK_MAX_CONTRACTS_PER_ORDER` (env) and `LongerCount` are dead knobs.
+> Full control-map + %-self-serve in the session report.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 > **Canonical plan read-first protocol (added 2026-05-25):**
