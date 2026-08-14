@@ -15,13 +15,15 @@ running rev 3624a2a4 (HEAD ancestor, FE-only since) ✓ · both traders cycling 
 
 Legend: ⬜ not started · 🔧 in progress · ✅ done+committed · 🚀 pushed
 
-### P0 · FOUNDATIONS
-- 🔧 **P0.1** day_plan config JSON — both hand-rolled codecs (store/strategy.go:731-823), ROOT placement, round-trip golden FIRST
-- ⬜ **P0.2** plans / plan_overlays tables + decisions FK — append-only, PK(plan_id,version), json_valid, WAL + single-writer goroutine
-- ⬜ **P0.3** session registry — CT-anchored ASIA/LONDON/NY (read/flat/killzones/enabled), NY-only; half-day truth hook
-- ⬜ **P0.4** scenario-fact evaluator (Go) — distance/closes_beyond/sweep/acceptance/reclaim/reject/level_still_valid, fixtures FIRST
-- ⬜ **P0.5** level-state table — identity-keyed (times_tested, consumed, freshness) + durable session-profile store (RECON #2)
-- ⬜ **P0 EXIT BAR** — suite green (build/vet/test/-race/tsc/npm) · goldens deliberate-only · config-truth 4-step · push · checkpoint report
+### P0 · FOUNDATIONS ✅ COMPLETE (pushed)
+- ✅ **P0.1** `d1851dac` day_plan config JSON — both codecs, ROOT placement, round-trip golden FIRST + MergeStrategyConfig survival (`+config-truth`)
+- ✅ **P0.2** `0a974d31` plans/plan_overlays append-only + decision FK + WAL + single-writer goroutine (25-way concurrent proof, -race clean)
+- ✅ **P0.3** `6a0d233b` CT-anchored session registry — ASIA/LONDON/NY, NY-only enabled, killzones, half-day hook (dormant); NOT yet wired to live gate (P2)
+- ✅ **P0.4** `b51ab5c2` scenario-fact evaluator (keystone) — distance/closes_beyond/sweep/acceptance/reclaim/reject/still_valid, 11 fixture tests
+- ✅ **P0.5** `041e4450` level-state table — identity-keyed (times_tested/consumed/freshness A→B→C), cross-session persist; snapshot writer = P1 (RECON #2)
+- ✅ **P0 EXIT BAR** — build/vet/`test ./...`/-race(store,kernel) green · goldens untouched · config-truth locked · zero FE touched (tsc/npm N/A)
+
+**P0 zone flag for owner:** NY flat encoded 14:45 CT (= 15:45 ET, pre-close). Admin-editable, not yet live. Confirm at ★ OWNER RESTART 1.
 
 ### P1 · THE MAP — ⬜ (detectors, scorer, regime, key-levels into executor prompt, calendar) · ★ OWNER RESTART 1 after clock
 ### P2 · THE CLOCK — ⬜ (bar-close cadence, skip-while-open gate BUILD, last_entry/eod_flat, MAE/MFE) · ★ OWNER RESTART 1
@@ -33,3 +35,4 @@ Legend: ⬜ not started · 🔧 in progress · ✅ done+committed · 🚀 pushed
 
 ## Checkpoint log
 - **2026-08-14 ~18:10 CT** — STEP 0 PASS. Spec + heartbeat committed. P0 recon workflow launched. Starting P0.1 (golden-first).
+- **2026-08-14 ~18:40 CT** — **P0 · FOUNDATIONS COMPLETE.** All 5 items committed (d1851dac / 0a974d31 / 6a0d233b / b51ab5c2 / 041e4450) + config-truth test. EXIT BAR green (build/vet/test/-race). All ADDITIVE + dormant until wired (P1-P4) — the running bot (rev 3624a2a4, PID 363618) is untouched; NEW tables + WAL activate only at the next owner-driven rebuild+restart (★ RESTART 1). Report: docs/superpowers/reports/2026-08-14-dayplan-p0-foundations.md. NEXT: P1 · THE MAP (detectors + scorer + regime + key-levels prompt block + calendar).
