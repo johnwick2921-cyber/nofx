@@ -34,7 +34,16 @@ Legend: ⬜ not started · 🔧 in progress · ✅ done+committed · 🚀 pushed
 - ✅ **P1.7** `c42a629c` KEY LEVELS block wired into the LIVE futures prompt (gated on day_plan; existing goldens byte-identical; NEW enabled golden)
 - ✅ **P1.3** `a450adfc` durable session-profile store + 17:00-CT snapshot writer + nPOC detector (RECON #2); restart-safe, dormant
 - ✅ **P1.8** `09579af3` calendar fetcher (ForexFactory + static T1 fallback, graceful outage) + replay-frozen per-day slice store
-### P2 · THE CLOCK — ⬜ (bar-close cadence, skip-while-open gate BUILD, last_entry/eod_flat, MAE/MFE) · ★ OWNER RESTART 1
+### P2 · THE CLOCK — ✅ COMPLETE (5/5, pushed) · ★ OWNER RESTART 1 procedure below
+- ✅ **P2.1** `069500c9` true bar-close cadence (gated; barCloseGate + tickOnce; scan-timer default unchanged)
+- ✅ **P2.2** `3bb7a730` skip-while-open gate (RECON #5 built; holding → skip AI cycle; bracket/breakeven independent)
+- ✅ **P2.3** `21c57118` last_entry (13:00 CT) + eod_flat (14:45 CT, close-path flatten, half-day pull-in)
+- ✅ **P2.4** `a43d006d` MAE/MFE + entry-confidence (additive columns; ComputeExcursion; close-time compute)
+- ✅ **P2.5** `b0151d98` cmd/dayplan-arm (guarded/idempotent/dry-run arm tool)
+- ✅ **EXIT BAR** build/vet/`test ./...`/-race green · NO golden touched · config-truth (persistence proven)
+- **★ RESTART 1 handoff** in docs/superpowers/reports/2026-08-14-dayplan-p2-clock.md (stop→rebuild→backup→arm→start + 5-line VERIFY)
+
+### P2 · (old placeholder) — superseded above
 ### P3 · THE PLANNER — ⬜ (per-session read jobs, planner-model binding, spec input pkg, schema-strict fail-closed, prompt reorder, advisory)
 ### P4 · THE CARD — ⬜ (SessionTabs/timeline/HandoverBanner/PlanCard, chart overlay, alert center, Studio block, /api/plan/*)
 ### P5 · THE DOOR — ⬜ (overlay API, edit sheet + bulk-add, conflict chip, Ask-Planner, adherence grade, digest, stats gate, blind-mark prep) · ★ OWNER RESTART 2
@@ -42,6 +51,7 @@ Legend: ⬜ not started · 🔧 in progress · ✅ done+committed · 🚀 pushed
 ---
 
 ## Checkpoint log
+- **2026-08-14 ~22:45 CT** — **P2 · THE CLOCK COMPLETE (5/5).** Bar-close cadence, skip-while-open (RECON #5 built), last_entry/eod_flat clock + enforcement, MAE/MFE + confidence, arm tool. 5 commits (069500c9→b0151d98). EXIT BAR green (build/vet/test/-race trader+kernel+store); NO golden touched (P2 has no prompt changes); all GATED on day_plan → running bot untouched. ★ RESTART 1 handoff (stop→rebuild→backup→arm→start + 5-line VERIFY) in the p2-clock report. NEXT after ★1: **P3 · THE PLANNER**. Report: docs/superpowers/reports/2026-08-14-dayplan-p2-clock.md.
 - **2026-08-14 ~18:10 CT** — STEP 0 PASS. Spec + heartbeat committed. P0 recon workflow launched. Starting P0.1 (golden-first).
 - **2026-08-14 ~18:40 CT** — **P0 · FOUNDATIONS COMPLETE.** All 5 items committed (d1851dac / 0a974d31 / 6a0d233b / b51ab5c2 / 041e4450) + config-truth test. EXIT BAR green (build/vet/test/-race). All ADDITIVE + dormant until wired (P1-P4) — the running bot (rev 3624a2a4, PID 363618) is untouched; NEW tables + WAL activate only at the next owner-driven rebuild+restart (★ RESTART 1). Report: docs/superpowers/reports/2026-08-14-dayplan-p0-foundations.md. NEXT: P1 · THE MAP (detectors + scorer + regime + key-levels prompt block + calendar).
 - **2026-08-14 ~20:30 CT** — **P1 · THE MAP COMPLETE (8/8).** Finished the remaining 4: P1.4 zones (f138b7f3), P1.7 live-prompt wire (c42a629c, gated on day_plan → existing goldens byte-identical, ONE new enabled golden), P1.3 durable store + snapshot writer + nPOC (a450adfc, dormant + restart-safe), P1.8 calendar (09579af3, graceful outage + replay-frozen slice). EXIT BAR green: build/vet/`test ./...`/-race(kernel+store+trader+calendar). Goldens: only the NEW futures_mnq_keylevels.golden; all existing UNCHANGED. Report: docs/superpowers/reports/2026-08-14-dayplan-p1b-map.md. All additive+dormant; running bot untouched. NEXT: **P2 · THE CLOCK** (bar-close cadence, skip-while-open gate, last_entry/eod_flat, MAE/MFE) → then ★ OWNER RESTART 1.
