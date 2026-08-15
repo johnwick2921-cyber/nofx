@@ -6,7 +6,7 @@
 |---|--------|------|
 | F0.1 | `2985e50f` | Producer HOISTED above the session gate (needs no market/NT8/account; weekend boots now ignite). Plain logs: `📅 fetched N events — stored M day slice(s)` / `📅 fallback static — stored …` / `📅 skip-fresh` (once per trade date). Injectable fetch seam |
 | F0.2 | `3d91e574` | FF 404/outage → static T1 fallback **stores rows** (`source=static`): owner-editable `calendar_static_t1.json` (env `NOFX_CALENDAR_STATIC` overrides), template ships with the confirmed week red — FOMC Minutes Wed 08-19 13:00 CT. Blackout coverage no longer depends on feed availability |
-| F0.3 | `174a8884` | Freshness: skip-fresh honors only `source=forexfactory`; static/none slices are stale → re-fetch (1h throttle) + `UpsertSliceUpgrade` replaces them on feed recovery; live rows stay FROZEN (replay rule unchanged). New trade dates re-fetch by absence → Sunday week-roll covered |
+| F0.3 | `5578966a` | Freshness: skip-fresh honors only `source=forexfactory`; static/none slices are stale → re-fetch (1h throttle) + `UpsertSliceUpgrade` replaces them on feed recovery; live rows stay FROZEN (replay rule unchanged). New trade dates re-fetch by absence → Sunday week-roll covered |
 | F0.4 | `c886b359` | Test matrix, all asserting storage: `TestF0FetchOKStores` · `TestF0Fallback404StoresStatic` · `TestF0SkipFreshNoRefetch` (fatal-if-called stub) · `TestF0StaticUpgradesToLive` (+frozen re-check) — PASS |
 
 STEP 0 receipts: HEAD `cf66b016` ≥ train head `0f79fb4f` ✓ · landed train = W1–W10 marked FINAL in DAYPLAN-IN-PROGRESS.md (no W11/W12 markers exist anywhere in tree — dispatch naming assumed complete per that FINAL block) ✓ · `git diff HEAD` empty (5 "M" files were stat-only) ✓ · live bot untouched ✓.
