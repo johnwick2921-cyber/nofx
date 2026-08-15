@@ -44,13 +44,20 @@ Legend: ⬜ not started · 🔧 in progress · ✅ done+committed · 🚀 pushed
 - **★ RESTART 1 handoff** in docs/superpowers/reports/2026-08-14-dayplan-p2-clock.md (stop→rebuild→backup→arm→start + 5-line VERIFY)
 
 ### P2 · (old placeholder) — superseded above
-### P3 · THE PLANNER — ⬜ (per-session read jobs, planner-model binding, spec input pkg, schema-strict fail-closed, prompt reorder, advisory)
+### P3 · THE PLANNER — 🔧 IN PROGRESS (2/6, pushed) · dormant until ★ RESTART 2 (after P5)
+- ✅ **P3.1** `389c0c9e` session gates — entries only inside an ENABLED session window (NY-only) + no-trade sub-windows (first-5m, lunch); gated/dormant
+- ✅ **P3.2** `05703a08` planner model binding (RECON #12) — resolvePlannerClient, pinned ID, empty→primary
+- ⬜ **P3.3** read jobs (planner core: per-session read at registry times, input package, schema-strict fail-closed JSON, plan rows) — NEXT SESSION (large)
+- ⬜ **P3.4** executor injection / prompt reorder (RECON #4; plan block to prefix + status tail; GOLDEN REGEN deliberate) — NEXT SESSION
+- ⬜ **P3.5** advisory mode (cite scenario_id; match-rate via B6) — NEXT SESSION
+- ⬜ **P3.6** lifecycle (re-plan, activation window, scenario re-arm, sticky owner levels, digest writers, restart recovery) — NEXT SESSION
 ### P4 · THE CARD — ⬜ (SessionTabs/timeline/HandoverBanner/PlanCard, chart overlay, alert center, Studio block, /api/plan/*)
 ### P5 · THE DOOR — ⬜ (overlay API, edit sheet + bulk-add, conflict chip, Ask-Planner, adherence grade, digest, stats gate, blind-mark prep) · ★ OWNER RESTART 2
 
 ---
 
 ## Checkpoint log
+- **2026-08-15 ~00:15 CT** — **P3 · THE PLANNER CHECKPOINT (2/6).** ★1 confirmed done (owner rebuilt+restarted 08-14 23:06, new binary PID 778475, day_plan armed, KEY LEVELS + cadence live). Built the two contained foundational items: session gates (P3.1, 389c0c9e) + planner model binding (P3.2, 05703a08). Suite + -race green; NO golden touched; all additive+dormant until ★ RESTART 2 (after P5). REMAINING (next session, budget-edge checkpoint): **P3.3 read jobs / AI planner core** (input package, schema-strict fail-closed, plan rows), **P3.4 prompt reorder + golden regen** (RECON #4), **P3.5 advisory**, **P3.6 lifecycle + restart recovery** — plus the exit-bar's 3 assembled samples (need the planner running). Report: docs/superpowers/reports/2026-08-15-dayplan-p3-planner.md.
 - **2026-08-14 ~22:45 CT** — **P2 · THE CLOCK COMPLETE (5/5).** Bar-close cadence, skip-while-open (RECON #5 built), last_entry/eod_flat clock + enforcement, MAE/MFE + confidence, arm tool. 5 commits (069500c9→b0151d98). EXIT BAR green (build/vet/test/-race trader+kernel+store); NO golden touched (P2 has no prompt changes); all GATED on day_plan → running bot untouched. ★ RESTART 1 handoff (stop→rebuild→backup→arm→start + 5-line VERIFY) in the p2-clock report. NEXT after ★1: **P3 · THE PLANNER**. Report: docs/superpowers/reports/2026-08-14-dayplan-p2-clock.md.
 - **2026-08-14 ~18:10 CT** — STEP 0 PASS. Spec + heartbeat committed. P0 recon workflow launched. Starting P0.1 (golden-first).
 - **2026-08-14 ~18:40 CT** — **P0 · FOUNDATIONS COMPLETE.** All 5 items committed (d1851dac / 0a974d31 / 6a0d233b / b51ab5c2 / 041e4450) + config-truth test. EXIT BAR green (build/vet/test/-race). All ADDITIVE + dormant until wired (P1-P4) — the running bot (rev 3624a2a4, PID 363618) is untouched; NEW tables + WAL activate only at the next owner-driven rebuild+restart (★ RESTART 1). Report: docs/superpowers/reports/2026-08-14-dayplan-p0-foundations.md. NEXT: P1 · THE MAP (detectors + scorer + regime + key-levels prompt block + calendar).
