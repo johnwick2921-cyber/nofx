@@ -25,12 +25,23 @@ gate ran (all mtimes today, CT):
 ```
 
 Between this session's first `git status` (2 dirty files) and a re-check ~2 min later,
-the dirty set grew 2 → 8+ files, tests included. [B] This is the W-train build session
-(the one that committed W11 at 12:46) still running — mid-W11b/W12 — meaning the
-acceptance dispatch fired **before the build train finished**. W12/F0 (Miss 1) are most
-plausibly *in creation right now*, not forgotten. Running Parts A–D concurrently would
-race the writer and certify a moving target; the STOP below stands regardless of the
-other misses.
+the dirty set grew 2 → 8+ files, tests included. Then at **12:51:10** the writer COMMITTED
+`174a8884 feat(dayplan): F0.3 — Sunday feed-roll freshness` [A] — so this is the W-train
+build session (the one that committed W11 at 12:46) still running, **actively landing the
+W11b/W12/F0 items the dispatch expects**. The acceptance dispatch simply fired before the
+build train finished. Running Parts A–D concurrently would certify a moving target; the
+STOP stands regardless of the other misses.
+
+**Race foul — documented, not repaired [A]:** this gate session's `git commit --amend`
+(intended for its own report commit `b30fb8cc`) raced the writer's F0.3 commit and rewrote
+it: **`174a8884` → `5578966a`** (same F0.3 content + message, this report's interim edits
+folded in). A guarded `git update-ref` restore was attempted and **blocked by the
+permission classifier**; equivalent history surgery was deliberately not retried — with a
+live concurrent writer, append-only is the only safe mode. Net state: **no content lost**;
+F0.3 lives in `5578966a` under its original message; `174a8884` dangles but still resolves
+via `git show` (reflog-retained). **⚠ Build session: if your ledger cites F0.3 as
+`174a8884`, re-cite it as `5578966a`.** Lesson: never amend/rebase in this repo while
+another session is active.
 
 ---
 
