@@ -10,6 +10,30 @@ REHEARSAL row written, live DB untouched**. This report is the only artifact + o
 
 ---
 
+## OVERRIDING FINDING — an ACTIVE build session is writing the tree DURING this gate [A]
+
+The dirty tree is not stale leftovers — it is **live work in flight**. Observed while this
+gate ran (all mtimes today, CT):
+
+```
+12:46:38  W11 committed (cbf12870, HEAD)
+12:47:52  kernel/level_state_provider.go created ("W11b" header)
+12:48:38–12:49:58  engine_analysis / restart_test / regime_baseline /
+                   auto_trader_dayplan / auto_trader_planner / handler_plan modified
+12:50:50  trader/auto_trader_calendar.go modified
+12:51:14  kernel/level_state_provider_test.go created  ← 14s before observation
+```
+
+Between this session's first `git status` (2 dirty files) and a re-check ~2 min later,
+the dirty set grew 2 → 8+ files, tests included. [B] This is the W-train build session
+(the one that committed W11 at 12:46) still running — mid-W11b/W12 — meaning the
+acceptance dispatch fired **before the build train finished**. W12/F0 (Miss 1) are most
+plausibly *in creation right now*, not forgotten. Running Parts A–D concurrently would
+race the writer and certify a moving target; the STOP below stands regardless of the
+other misses.
+
+---
+
 ## STEP 0 evidence (all [A] unless noted)
 
 ### Miss 1 — W12 + F0 do not exist (SEV: blocker for the gate-as-specified)
@@ -70,6 +94,8 @@ records no content hash, so this **cannot be proven**, and STEP 0 demands proof.
 
 ## What re-arms the gate (ordered)
 
+0. **Let the in-flight build session FINISH and land** (commit + push W11b/W12/F0 + report
+   sections). Do not run acceptance concurrently with the writer.
 1. **Decide W11b**: finish + test + commit it (as W12?), or stash/revert it. Tree → clean.
 2. **Reconcile the numbering**: write the W11 (+W11b/W12, F0) sections into the wireup-train
    report — or correct the dispatch's expected list to W1–W11. Name F0 explicitly if it
