@@ -52,3 +52,33 @@ It also clears the 2026-08-15 acceptance-rehearsal leftovers (2 expired plans + 
 ## Files
 
 Seeder `trader/demo_seed_test.go` (idempotent, `NOFX_DEMO_SEED=1`, no paid call — the JSON goes through the real `ParsePlanDoc`/`ValidatePlanDoc`) and verifier `trader/demo_verify_test.go` (`NOFX_DEMO_VERIFY=1`, read-only, replays the exact `/api/plan/today` data path). Both left **untracked** per the dispatch's "commit report only" — say the word and I'll commit them.
+
+---
+
+## ADDENDUM — isolated PREVIEW stack (added 00:25 CT, because the card showed "Night")
+
+The owner opened the dashboard at ~00:45 CT and correctly got **Night — markets quiet**. That
+is not a bug: `handlePlanToday` hardcodes `kernel.DefaultSessionRegistry()`
+(`api/handler_plan.go:67`), so the card renders only while an *enabled* session is active — NY
+08:30–15:00 CT. No config change can move it; the admin session-registry is not consulted here
+(the D1 residual). So a second, throwaway stack now serves the demo immediately:
+
+| | live (untouched) | preview |
+|---|---|---|
+| API | `127.0.0.1:8080` — real DB, real traders running | `127.0.0.1:8232` — **copy** of the DB, all traders `is_running=0` |
+| UI | `127.0.0.1:3000` | **`127.0.0.1:3001`** ← open this |
+| binary | `nofx-bin` @ HEAD, no demo code | `nofx-preview` (scratchpad) with an env-gated session override |
+
+Safeguards: the override lives **only** in the preview binary (`strings` confirms the live
+binary has zero occurrences); the source patch was reverted immediately after the build and the
+tree is clean at HEAD; the preview runs on a WAL-safe DB copy with every trader forced
+non-running; its log shows no order/NT8 activity; JWT is still enforced (`/api/plan/today`
+unauthenticated → 401). Log in at `:3001` with your normal credentials.
+
+**Stop the preview when done** (removes everything, touches nothing live):
+```bash
+pkill -f nofx-preview; pkill -f vite.preview.config.ts
+rm -f /home/hoang/nofx/web/vite.preview.config.ts
+rm -rf /tmp/claude-1000/-home-hoang-nofx/*/scratchpad/preview
+```
+The live seed on the real DB still needs the SQL cleanup above before Monday.
