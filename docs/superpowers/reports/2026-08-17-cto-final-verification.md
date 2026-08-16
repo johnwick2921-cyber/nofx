@@ -1,6 +1,6 @@
-# SYSTEM VERIFIED — 28 remaining, 0 blocking
+# SYSTEM VERIFIED — 41 remaining, 0 blocking
 
-Read-only audit of `/home/hoang/nofx` @ `5472f316`, Sunday 2026-08-16 (market closed). 22 agents (13 hardcode/pipeline + 9 matrix/checklist) plus my own verification of every claim I report. **Six fixes shipped** — five trivial+safe, one a regression this audit found in my own W15.C change. Everything else is listed with a size. **Nothing found is blocking for Monday's SIM open**, but items 1–4 and 9 change what the bot actually does and should be decided before you enable more sessions.
+Read-only audit of `/home/hoang/nofx` @ `5472f316`, Sunday 2026-08-16 (market closed). 22 agents (13 hardcode/pipeline + 9 matrix/checklist) plus my own verification of every claim I report. **Seven fixes shipped** — six trivial+safe, one a regression this audit found in my own W15.C change. Everything else is listed with a size. **Nothing found is blocking for Monday's SIM open**, but items 1–4 and 9 change what the bot actually does and should be decided before you enable more sessions.
 
 Evidence tiers: **[A]** = I read the exact line or ran it and saw output · **[B]** = strong inference · **[C]** = speculation. Every finding below is [A] unless marked.
 
@@ -156,17 +156,17 @@ The spec calls these *"hard gates (R:R≥3, conf≥65, guardrails, armor) always
 
 | # | Item | Verdict |
 |---|---|---|
-| 5.1 | Safety precedence | ⏳ **NOT COMPLETED** — the one item this run did not finish (see below) |
+| 5.1 | **Safety precedence** | ⚠️ **FINDING** (order verified; 2 side doors) |
 | 5.2 | **The SIM lock** | ✅ **VERIFIED** |
 | 5.3 | **Hold-lock + exit integrity** | ⚠️ **FINDING** (HIGH) |
 | 5.4 | **Money math on the live path** | ✅ **VERIFIED** |
 | 5.5 | **Time correctness** | ⚠️ **FINDING** (MEDIUM) |
-| 5.6 | Idempotency + restart | ✅ **PARTIAL** — `-race` clean across all packages; rest in appendix |
+| 5.6 | **Idempotency + restart** | ⚠️ **FINDING** (HIGH — digest/plan races, memory-only state) |
 | 5.7 | **Fail-closed coverage** | ⚠️ **FINDING** (MEDIUM-HIGH) |
 | 5.8 | **Data hygiene** | ⚠️ **FINDING** (MEDIUM) |
 | 5.9 | **Secret safety** | ⚠️ **FINDING — 1 FIXED** |
 | 5.10 | **Observability** | ⚠️ **FINDING** (3 blind spots) |
-| 5.11 | Owner's daily loop | ⚠️ **FINDING** (gate-block reasons are in-memory only) |
+| 5.11 | **Owner's daily loop** | ⚠️ **FINDING** — 3 of 5 questions unanswerable |
 | 5.12 | **Rollback** | ⚠️ **FINDING — FIXED** (`6fe92f16`) |
 
 **5.2 SIM LOCK — VERIFIED.** Entries are **double-guarded**: Go `placeEntry` (`tcp_trader.go:234-241`) refuses an unbound trader outright (no fallback to the shared active account) and refuses `!isAccountTradeable` (must be found **and** `IsSim` **and** on `AllowedNTAccounts` if set); C# `VLTraderTCPClient.cs:772` re-checks `IsSimAccount` as the last line before submit and rejects. Closes are **single-guarded in C#** (`HandleClosePosition:969`) — it refuses and leaves the position OPEN rather than flattening a live account, which is the right call. Enumerated every widening path: `AllowedNTAccounts` can only **narrow**; the PlanDoc schema has **no account field**, so neither planner output nor an owner overlay can influence account selection; no bypass/force-live flag exists anywhere. `/api/debug/nt-test-trade` is JWT-protected + futures-only and bypasses the AI+risk gates **by design**, but still passes the SIM lock and the B3 dedupe/rate breaker.
@@ -203,7 +203,29 @@ Most routes 401; `/api/traders` returns `[]` unauthenticated, so nothing is know
 - **B3 rate breaker (order runaway).** `tcp_trader.go:251` logs only, and its counter is filed under the process-wide `""` trader bucket.
 - **Silent LLM drift.** `ValidatePlanDoc` bounds levels only from **above** (`plan_doc.go:101`) — a plan with **zero levels** validates so long as it has one scenario with an id, and `Trigger`/`Invalid` are never checked non-empty. A degraded planner response is stored `lifecycle="active"` and the card renders it as a normal plan. *(Agent called this BLOCKING; downgraded to HIGH — the Go-computed KEY LEVELS block is independent and the hard gates are unaffected, so a hollow plan cannot itself cause a bad trade. It is an honesty defect.)*
 
-**5.1 SAFETY PRECEDENCE — NOT COMPLETED.** The agent tasked with constructing a fixture that violates each gate in turn had not returned when this report was finalised. I verified the gate *inventory* by reading (armor → confidence → R:R → session window → killzone/no-trade → last-entry → T1 blackout → plan mode → guardrails → size cap, plus feed-down, dead-man, clock-drift, boot-integrity and B3 at the order chokepoint), and confirmed independently that **no plan content or owner overlay can reach any gate threshold** — the PlanDoc schema has no risk fields and every threshold is read from `RiskControl`/`DayPlan` config. What I did **not** do is prove each refusal with an executed fixture. Treat 5.1 as unverified and re-run it.
+**5.1 SAFETY PRECEDENCE — VERIFIED ORDER, 2 SIDE DOORS.** The real chain in `executeDecisionWithRecord` (`auto_trader_orders.go:128-289`), in runtime order: feed-down :137 · dead-man :151 · A4 freeze :167 · boot integrity :182 · consecutive-loss :199 · last-entry :216 · session gate :230 · plan-mode :244 · approval :258. Post-gate open path: reconcile-before-open :398 · max-positions :409 · same-side refusal :414 · position-value ratio :446 · max-contracts clamp :458. Per-decision validation (armor, R:R, confidence) runs earlier in `kernel/engine_position.go:34-196`.
+
+**PROVEN POSITIVE, as the checklist demands: no plan content and no owner overlay can influence or skip any hard gate.** The only gate that reads plan content is plan-mode, it sits 8th of 9 — after every hard gate — and can only ADD a restriction. Overlays are RFC-6902 patches against the PlanDoc, which has no risk fields at all.
+
+Deviations from the expected chain, all verified: **there is no killzone gate** — `InKillzone` is used only for post-trade A–F grading (`kernel/adherence.go:104`); armor runs before, not after, the gates. Two authenticated **side doors bypass all nine gates**: `POST /debug/nt-test-trade` (documented harness — still passes the SIM lock and B3) and the Emergency-Flat path. And one config, not plan, CAN disable a family wholesale: `risk_control.guardrails_enabled=false` skips daily loss/profit/max-trades, the blackout window and the consistency rule in one switch — your deliberate learning mode.
+
+Also found here and **fixed** (`f7fa2d3c`): every gate sets `Success=false` + a reason and returns nil, but the caller's else-branch overwrote it with `Success=true` and logged "✓ succeeded" — so **every refused entry was recorded and displayed as an executed one**. That is the root of 5.11 Q3 being unanswerable: the record asserted the opposite outcome while the reason sat unused in the same struct.
+
+**5.6 IDEMPOTENCY + RESTART — FINDING.** `-race` clean on every package; a 25-goroutine concurrent `AppendPlan` produced no duplicate version and no gap; `TestPlanRestartRecovery` passes. Real gaps:
+- **Digest identity has no trader scope** but its text is ONE trader's P&L (`planner.go:411-431` computes per-trader, `store/digest.go:24-31` keys on symbol+date+session+kind). With two MNQ day-plan traders live, whichever wins the race writes a digest both then read. HIGH.
+- **Planner-read dedupe is read → full AI call → write** with no in-flight guard, so two cycles can both pass the check and write two plan versions. HIGH.
+- **Digest and alert dedupe are check-then-insert with no unique index** — duplicates are possible under concurrency. HIGH, size S (add the index).
+- **Memory-only state lost on restart**: `peakPnLCache` (disarms the give-back drawdown close), `safeMode`/`consecutiveAIFailures` (re-arms entries after 3 AI failures), `lastBarCloseMs` (re-runs one cycle). MEDIUM.
+- `stopUntil` is read but **never written anywhere** — the risk-control pause is inert.
+- The live `2026-08-15:NY` rows carry `lifecycle='expired'`, which **no code path writes** — evidence of an out-of-band edit.
+
+**5.7 FAIL-CLOSED — FINDING (expanded).** An agent wrote, ran and deleted a probe proving the compound case: with an empty `MarketDataMap`, price-sanity, stale-data, clock-drift **and** R:R all skip together and `open_long` proceeds. Beyond the T1 calendar fail-open I found: the **T22 stale-data gate is unreachable in production** (guarded by `len(MarketDataMap) > 0`, empty pre-fetch); **`placeEntry` never checks the TCP link**, so an entry issued while NT8 is disconnected queues in `pending`; a **DB write failure right after a real fill** logs at INFO and creates an invisible live position (the P0 fill alert is in the else-branch); a **DB read error silently disables the daily-loss and max-trades caps** (zero values used); and **zero of the eight external-dependency failure modes emits an alert**.
+
+**5.11 OWNER LOOP — FINDING, 3 of 5 unanswerable.** Q1 (today's plan) ✅ and Q4-partial. The gaps:
+- **Q2 "which play is armed?" — unanswerable.** The card's scenario status is a passthrough of `system_config` key `scenario_status:<plan_id>`, and the ONLY writer in the repo is `cmd/sandbox-seed/main.go:274`. In production the key never exists, so every scenario paints the same fallback.
+- **Q3 "why was an entry refused?" — was actively wrong, now fixed** (`f7fa2d3c`). Still no UI surface: `/api/risk/gate-blocks` has **zero frontend consumers** and the counters are in-memory.
+- **Q4 "what did I change?" — adds are attributable (👤 chip), edits and deletes are not**: they go through the overlay path with no version bump, no op list, no owner marker.
+- **Q5 "what did the AI propose and what did I do?" — declining renders "Applied — card updated"** and persists nothing (`AskPlannerPanel.tsx:228-238` sets local state only).
 
 **5.11 OWNER LOOP — FINDING.** `telemetry.IncGateBlock` is an **in-memory map** (`telemetry/gate_blocks.go:40-47`) — counters reset on restart and there is no `gate_blocks` table. So "why was an entry refused?" has no durable record; the journal line is the only trace and it is not in the UI. Full screen-by-screen answers in the appendix.
 
@@ -251,6 +273,19 @@ Most routes 401; `/api/traders` returns `[]` unauthenticated, so nothing is know
 | 26 | `expired`/`died`/`superseded` never written → HandoverBanner is dead code | LOW-MED | M | Either write the lifecycle transitions or drop the banner |
 | 27 | Post-apply gold flash never renders (`data-flash` handed to a component that spreads nothing) | LOW | S | Spread the attribute in `ZoneRow`, or drop it |
 | 28 | `night` (registry) and `runnable_sessions` (strategy) are two authorities in one payload | LOW | S | Derive `night` from the same resolver once item 1 lands |
+| 29 | Scenario status has no production writer — every play paints the same fallback (Q2 unanswerable) | HIGH | M | Compute status in the executor; the seeder is the only writer today |
+| 30 | `/api/risk/gate-blocks` has **zero** frontend consumers (Q3 has no surface) | HIGH | M | Render refusals on the card; pairs with #12 |
+| 31 | Owner edits/deletes leave no visible trace (Q4) | HIGH | M | Stamp overlay ops with an owner marker + show an op list |
+| 32 | Declining an Ask-Planner proposal renders "Applied — card updated" (Q5) | HIGH | S | Distinguish declined from applied; persist the decision |
+| 33 | Session digest is keyed without trader scope but holds one trader's P&L | HIGH | M | Add trader_id to the digest identity |
+| 34 | Planner-read dedupe is read → AI call → write with no in-flight guard | HIGH | M | Hold a claim row / in-flight flag across the call |
+| 35 | Digest + alert dedupe are check-then-insert with no unique index | HIGH | S | Add unique indexes on the identity columns |
+| 36 | T22 stale-data gate unreachable in production (`len(MarketDataMap) > 0`) | HIGH | S | Move the check after the fetch |
+| 37 | `placeEntry` never checks the TCP link — entries queue while NT8 is disconnected | HIGH | S | Call `IsConnected()` before sending |
+| 38 | DB write failure after a real fill → invisible live position, INFO log only | HIGH | S | Emit P0 on the error branch |
+| 39 | DB read error silently disables the daily-loss and max-trades caps | HIGH | S | Fail closed on the error |
+| 40 | Memory-only state lost on restart (peakPnL, safeMode, lastBarCloseMs); `stopUntil` never written | MED | M | Persist or re-derive; delete the inert field |
+| 41 | Zero of the 8 external-dependency failure modes emits an alert | MED | M | Wire `emitAlert` into each fail path |
 
 ---
 
@@ -266,6 +301,7 @@ Six commits. **No change to the decision, sizing, or order-routing path.**
 | `e33532e2` | owner door scoped to the LIVE session — **regression fix** | FE gating, fails closed |
 | `2427c850` | Ask-Planner reads plan_final, not the base doc | one handler, same fallback |
 | `637b137a` | NO-TRADE renders as NO-TRADE, not gold ACTIVE | FE label only |
+| `f7fa2d3c` | gate-refused entries no longer recorded as successful | record/display only |
 
 ```bash
 cd /home/hoang/nofx && git pull
@@ -295,5 +331,7 @@ SELECT 'demo rows left:  '||(
  +(SELECT COUNT(*) FROM day_plan_alerts WHERE event_id LIKE 'demo:%')
  +(SELECT COUNT(*) FROM trader_positions WHERE source='demo_seed'));"
 ```
+
+**Note on `deploy/RELEASE`:** your working tree holds `5472f316` uncommitted. After pulling these commits and rebuilding, that value no longer matches the binary — the re-arm step above is not optional, or the bot boots with `TRADING REFUSED`.
 
 **Before Monday, the two config decisions that are yours:** switch ASIA+LONDON off until item 1 lands, and decide whether R:R 1.0 / confidence 50 is what you want the bot trading at (item 4).
