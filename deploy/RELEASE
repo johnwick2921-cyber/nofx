@@ -1,0 +1,5 @@
+# INTENDED RELEASE — the git revision this deployment is supposed to be running.
+# The bot asserts its own embedded vcs.revision against this at boot; a mismatch
+# REFUSES TRADING (entries blocked, P0 alert, everything else read-only).
+# Update this in the same commit/step as a deploy. A short sha is fine (prefix match).
+# Leave the value blank to disable the assertion (logs the revision, never refuses).
