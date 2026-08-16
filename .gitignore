@@ -157,3 +157,7 @@ PR_DESCRIPTION.md
 
 # Playwright MCP cache (per-session, not for commit)
 .playwright-mcp/
+
+# sandbox (isolated test instance) — never commit its DB or binary
+data/sandbox.db*
+.sandbox/
