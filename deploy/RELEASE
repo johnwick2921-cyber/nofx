@@ -3,3 +3,4 @@
 # REFUSES TRADING (entries blocked, P0 alert, everything else read-only).
 # Update this in the same commit/step as a deploy. A short sha is fine (prefix match).
 # Leave the value blank to disable the assertion (logs the revision, never refuses).
+1a87a9e40e92bca65be97e3cdc64643385c23f51
