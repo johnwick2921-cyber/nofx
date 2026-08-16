@@ -4,6 +4,17 @@ Run against `docs/VL-VERIFICATION-CHECKLIST.md` v1 (committed `02ebb9e3` **befor
 
 **STEP 0** — HEAD `02ebb9e3` (≥ 909d3a48 ✓) · live bot PID 322463 on `909d3a48` · tree clean-ish · no other session writing the repo.
 
+> ## ⛔ CORRECTION (2026-08-17, P0 investigation)
+>
+> **Rows B5, B6 and the Section E R:R / confidence / size-cap entries below are WRONG — my audit query read `risk_control` at the top level, but it is nested under `ai_config`.** The live values are `min_risk_reward_ratio: 3`, `min_confidence: 65`, `max_contracts_per_order: 2`, `hold_discipline: true` on both running strategies, and the effective gate values after `ClampLimits()` are 3.00 / 65 / 2 / true.
+>
+> Corrected states: **B5 ✅** (cap 2, and master-independent — the agent I "corrected" was right) · **B6 ✅** (hold-lock ON) · Section E **R:R ✅ MATCH · confidence ✅ MATCH · size cap ✅ MATCH**. B11's finding ③ (39 non-re-derivable rows) and the W12 inverted-note finding ① stand. Guardrails master remains OFF by the owner's decision.
+>
+> Revised header count: **43 ✅ · 17 owner-to-verify · 25 pending · 9 NOT DONE (0 blocking)**.
+>
+> Pinned by `kernel/risk_config_truth_test.go`.
+
+
 ---
 
 ## SECTION A — THE MACHINE IS WHAT YOU THINK IT IS

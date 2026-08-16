@@ -4,6 +4,17 @@ Read-only audit of `/home/hoang/nofx` @ `5472f316`, Sunday 2026-08-16 (market cl
 
 Evidence tiers: **[A]** = I read the exact line or ran it and saw output · **[B]** = strong inference · **[C]** = speculation. Every finding below is [A] unless marked.
 
+> ## ⛔ CORRECTION (2026-08-17, P0 investigation)
+>
+> **The "empty risk_control" headline below is WRONG, and the error was mine.** `risk_control` is nested under `ai_config` — exactly where the hand-rolled codec writes it (`store/strategy.go:763-769` / `:806-811`). My audit query read the **top level**, found nothing, and defaulted the miss to `{}`.
+>
+> The live values were correct all along: **`min_risk_reward_ratio: 3` · `min_confidence: 65` · `max_contracts_per_order: 2` · `hold_discipline: true` · `breakeven_enabled: true`**, on BOTH running strategies. Proven by loading the real stored JSON through the production codec: after `ClampLimits()` the effective gate values are **minRR=3.00 · minConf=65 · maxContracts=2 · holdLock=true**.
+>
+> Therefore, in the table and prose below: **R:R gate = ✅ MATCH (3.0)**, **confidence gate = ✅ MATCH (65)**, **size cap = ✅ MATCH (2)**, and the §5.3 finding "hold-lock is OFF on both live traders" is **withdrawn**. `guardrails_enabled: false` is unchanged and remains the owner's deliberate decision.
+>
+> Pinned against recurrence by `kernel/risk_config_truth_test.go` (`TestRiskConfigLivesUnderAIConfig`).
+
+
 ---
 
 ## STEP 0
