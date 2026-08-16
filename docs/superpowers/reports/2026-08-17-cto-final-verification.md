@@ -156,16 +156,16 @@ The spec calls these *"hard gates (R:R≥3, conf≥65, guardrails, armor) always
 
 | # | Item | Verdict |
 |---|---|---|
-| 5.1 | Safety precedence | *(phase-2 agent; appendix)* |
+| 5.1 | Safety precedence | ⏳ **NOT COMPLETED** — the one item this run did not finish (see below) |
 | 5.2 | **The SIM lock** | ✅ **VERIFIED** |
-| 5.3 | Hold-lock + exit integrity | *(phase-2 agent; appendix)* |
+| 5.3 | **Hold-lock + exit integrity** | ⚠️ **FINDING** (HIGH) |
 | 5.4 | **Money math on the live path** | ✅ **VERIFIED** |
 | 5.5 | **Time correctness** | ⚠️ **FINDING** (MEDIUM) |
 | 5.6 | Idempotency + restart | ✅ **PARTIAL** — `-race` clean across all packages; rest in appendix |
 | 5.7 | **Fail-closed coverage** | ⚠️ **FINDING** (MEDIUM-HIGH) |
 | 5.8 | **Data hygiene** | ⚠️ **FINDING** (MEDIUM) |
 | 5.9 | **Secret safety** | ⚠️ **FINDING — 1 FIXED** |
-| 5.10 | Observability | *(phase-2 agent; appendix)* |
+| 5.10 | **Observability** | ⚠️ **FINDING** (3 blind spots) |
 | 5.11 | Owner's daily loop | ⚠️ **FINDING** (gate-block reasons are in-memory only) |
 | 5.12 | **Rollback** | ⚠️ **FINDING — FIXED** (`6fe92f16`) |
 
@@ -190,6 +190,20 @@ POST http://<lan-ip>:3000/api/reset-password → 410   (P0 gating still in force
 ```
 
 Most routes 401; `/api/traders` returns `[]` unauthenticated, so nothing is known to have leaked — the defect is that the control was bypassable at all. **Fixed** (`a84d6ae2`) to `127.0.0.1`; safe because WSL2 runs `networkingMode=mirrored` and the sandbox UI has bound loopback throughout. Takes effect next dev-server start. Otherwise: `.env` is untracked; no key-shaped strings in tracked source beyond test fixtures; the one key in `web/dist` is `cm_568c67eae410d912c54c`, the **known-dead public NofxOS default** (`provider/nofxos/client.go:19`, returns HTTP 402), not your secret.
+
+**5.3 EXIT INTEGRITY — FINDING.** The hold-lock gate itself is correct and tested (`go test ./trader/ -run TestHoldLock` → 4/4 PASS, including the suppression log). Three gaps:
+- **Hold-lock is OFF on both live traders.** `hold_discipline_enabled` is absent from both strategies' `risk_control` (verified in the live DB), so `holdLockSuppressesClose` returns false immediately — the AI *can* close a protected position by opinion today. This is the same class as your deliberate guardrails-master-OFF: a decision awaiting you, not a code defect. *(An agent called this BLOCKING; I downgraded it — the feature works, it is simply not switched on, and switching it on is a one-field config change.)*
+- **`holdLockSuppressesClose` only inspects `close_long`/`close_short`.** An AI `open_*` decision can still reach the reconcile-before-open flatten path (`auto_trader_orders.go:398,677` → `:336-370`) and close a live NT8 position. HIGH, size M.
+- **`enforceEODFlat` only flattens STORE-known positions** (`auto_trader_clock.go:229`) — an NT8 orphan is never flattened — and it sits below two early returns in `runCycle` (`auto_trader_loop.go:153`, after the isRunning and multi-account gates), so a stopped trader never reaches EOD-flat. MEDIUM.
+- Confirmed positive: **EOD-flat does bypass hold-lock** (RECON #10) — it calls `at.trader.CloseLong/CloseShort` directly and never enters `executeDecisionWithRecord`. Proven by code; no test exercises it.
+
+**5.10 OBSERVABILITY — FINDING, 3 blind spots of 5.** Present and correct: **dark regime** (P1 alert, wired end-to-end) and **plan lifecycle/close** alerts — 9 `emitAlert` production sites total. Blind spots, all journald-only with nothing in-app:
+- **Clock jump / host sleep.** `kernel/clock_drift.go:78` does block entries on >60s drift (I saw it fire in the test run) but only logs + increments an in-memory counter — no `emitAlert`. Worse, a laptop that suspends past a session's read *window* means **no plan is ever written for that session** and nothing says so.
+- **Reconciliation break / A4 FREEZE.** `reconcile.go:135,149` logs `🚨 QTY DIVERGENCE` and `🚨 A4 FREEZE … trader FROZEN` at Error level — the owner-facing surface has neither.
+- **B3 rate breaker (order runaway).** `tcp_trader.go:251` logs only, and its counter is filed under the process-wide `""` trader bucket.
+- **Silent LLM drift.** `ValidatePlanDoc` bounds levels only from **above** (`plan_doc.go:101`) — a plan with **zero levels** validates so long as it has one scenario with an id, and `Trigger`/`Invalid` are never checked non-empty. A degraded planner response is stored `lifecycle="active"` and the card renders it as a normal plan. *(Agent called this BLOCKING; downgraded to HIGH — the Go-computed KEY LEVELS block is independent and the hard gates are unaffected, so a hollow plan cannot itself cause a bad trade. It is an honesty defect.)*
+
+**5.1 SAFETY PRECEDENCE — NOT COMPLETED.** The agent tasked with constructing a fixture that violates each gate in turn had not returned when this report was finalised. I verified the gate *inventory* by reading (armor → confidence → R:R → session window → killzone/no-trade → last-entry → T1 blackout → plan mode → guardrails → size cap, plus feed-down, dead-man, clock-drift, boot-integrity and B3 at the order chokepoint), and confirmed independently that **no plan content or owner overlay can reach any gate threshold** — the PlanDoc schema has no risk fields and every threshold is read from `RiskControl`/`DayPlan` config. What I did **not** do is prove each refusal with an executed fixture. Treat 5.1 as unverified and re-run it.
 
 **5.11 OWNER LOOP — FINDING.** `telemetry.IncGateBlock` is an **in-memory map** (`telemetry/gate_blocks.go:40-47`) — counters reset on restart and there is no `gate_blocks` table. So "why was an entry refused?" has no durable record; the journal line is the only trace and it is not in the UI. Full screen-by-screen answers in the appendix.
 
