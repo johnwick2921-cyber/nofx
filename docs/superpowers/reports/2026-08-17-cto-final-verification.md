@@ -1,6 +1,6 @@
-# SYSTEM VERIFIED — 20 remaining, 0 blocking
+# SYSTEM VERIFIED — 28 remaining, 0 blocking
 
-Read-only audit of `/home/hoang/nofx` @ `5472f316`, Sunday 2026-08-16 (market closed). 13 hardcode/pipeline agents + my own verification of every claim I report. Three trivial+safe fixes shipped (`6fe92f16`, `a84d6ae2`, `9dffec72`); everything else is listed with a size. **Nothing found is blocking for Monday's SIM open**, but items 1–4 and 9 change what the bot actually does and should be decided before you enable more sessions.
+Read-only audit of `/home/hoang/nofx` @ `5472f316`, Sunday 2026-08-16 (market closed). 22 agents (13 hardcode/pipeline + 9 matrix/checklist) plus my own verification of every claim I report. **Six fixes shipped** — five trivial+safe, one a regression this audit found in my own W15.C change. Everything else is listed with a size. **Nothing found is blocking for Monday's SIM open**, but items 1–4 and 9 change what the bot actually does and should be decided before you enable more sessions.
 
 Evidence tiers: **[A]** = I read the exact line or ran it and saw output · **[B]** = strong inference · **[C]** = speculation. Every finding below is [A] unless marked.
 
@@ -95,7 +95,17 @@ last_entry_ct=12:45   eod_flat_ct=14:45   eod warning correctly absent at the wi
 
 Caveat on the toggles: they are live in the *config* sense (written, persisted, read by the scheduler and the outer entry gate) but land in the 7-site gap above — so "LIVE" here means the control works, not that enabling ASIA yields a working session.
 
-Remaining interactive elements were verdicted by three agents (day-plan block, plan card + alert centre, card states + executor indicators); results are appended in `2026-08-17-cto-matrix-appendix.md` when that phase completes. Nothing in the completed portion contradicts the previous matrix.
+Three agents verdicted the rest (day-plan block: 19 LIVE / 2 BROKEN / 5 DISPLAY-ONLY / 1 READ-ONLY / 1 MISSING · plan card + alerts: 13 LIVE / 5 BROKEN / 6 DISPLAY-ONLY / 2 MISSING / 1 READ-ONLY). I re-verified every BROKEN claim; all held. **Three were trivial+safe and are fixed** (`e33532e2`, `2427c850`, `637b137a`); the rest are in REMAINING.
+
+**M1 · The owner door was mutating the wrong session — my regression, now fixed.** Making the tabs real (`e943f9c3`) let the card show a *sibling* session, but `/plan/overlay`, `/plan/ask` and `/plan/realign` all re-derive the session from `ActiveSession(now)` **server-side** and take no session argument. `doorEnabled` was `!!traderId` and never checked which session was displayed — so editing a level while looking at ASIA would have written the overlay onto NY's plan_final, silently. Fixed by gating the door on `plan.is_active !== false` (the flag the same commit already added), with a visible reason line instead of a mute disabled surface. `e33532e2`.
+
+**M2 · Ask-Planner argued about a document the owner had already edited — fixed.** `handlePlanAsk` unmarshalled `row.Doc` directly while the card folds overlays and re-align uses `resolvePlanFinal`. Owner edits were invisible to the one path built for owner dialogue. `2427c850`.
+
+**M3 · A NO-TRADE plan rendered as a gold "ACTIVE" chip — fixed.** `store/plan.go` is append-only with no lifecycle mutator, so `expired`/`died`/`superseded` are **never written**; `no_trade` **is** (fail-closed / re-plans exhausted). It was the one value missing from `LifecycleChip`'s map, so `?? map.active` painted the fail-closed plan as live. `637b137a`. *(Consequence not fixed: `HandoverBanner` requires the three unreachable values, so it is dead in production.)*
+
+**Card states.** reading / active / night / disabled / fail-closed / no-plan / warming / DEGRADED all render and are reachable. `expired` is **not** — nothing ever writes it. One more honesty gap: `vix_level` is structurally dark forever (no VIX feed; `kernel/regime.go:94` requires `VIX > 0`), so a perfectly healthy read starts at **1/7 dark** and the DEGRADED threshold effectively means "three more must also fail". The live `2026-08-15:NY` v2 doc says "regime/VIX absent" in its own reasoning.
+
+**Executor indicators — one regression.** Timeframes, EMA/MACD/RSI/ATR/BOLL (with configured periods driving the math), SVP and the crypto-only hides are all intact. But **Volume is half-inert on futures**: `formatTimeframeSeriesData` (`kernel/engine_prompt.go:710-719`) writes the OHLCV header and volume column unconditionally whenever `len(data.Klines) > 0` — always true on the NT8 path — and `EnableVolume` only gates the mid-prices fallback at `:724`. Turning Volume off does not remove volume from the prompt.
 
 ---
 
@@ -219,12 +229,29 @@ Most routes 401; `/api/traders` returns `[]` unauthenticated, so nothing is know
 | 18 | `"MNQ"` hardcoded at 6 api sites + 2 FE | LOW | M | Blocks multi-symbol later, harmless today |
 | 19 | AI cost rates hardcoded (`handler_plan.go:1276`) | LOW | S | Read from the model price map |
 | 20 | FE-only rules with no backend counterpart (conflict band 3pts, near 12pts, instruction verbs) | LOW | S | Either back them with Go or label them as UI heuristics |
+| 21 | Deleting a 👤 owner level leaves the `owner_levels` row active — sticky levels return on the next plan | MED | S | `planApi.deleteOwnerLevel` and `OwnerLevelStore.Delete/MarkConsumed` have **no production caller**; wire the delete |
+| 22 | `vix_level` is dark forever → DEGRADED baseline is 1/7 on a healthy read | MED | S | Exclude `vix_level` from the count until a VIX feed exists, or wire one |
+| 23 | Volume toggle half-inert on the futures prompt path | MED | S | Gate the OHLCV volume column on `EnableVolume` (`engine_prompt.go:710-719`) |
+| 24 | No `test` op is ever emitted → the §42 overlay concurrency guard is never armed | MED | S | Emit a `test` op with the level's current value so a stale index 409s |
+| 25 | `replan_cap=0` / `realign_cap=0` are unreachable (FE offers 0; Go reads `> 0`) | LOW-MED | S | Use `>= 0` like the per-session twin already does, or raise the FE min to 1 |
+| 26 | `expired`/`died`/`superseded` never written → HandoverBanner is dead code | LOW-MED | M | Either write the lifecycle transitions or drop the banner |
+| 27 | Post-apply gold flash never renders (`data-flash` handed to a component that spreads nothing) | LOW | S | Spread the attribute in `ZoneRow`, or drop it |
+| 28 | `night` (registry) and `runnable_sessions` (strategy) are two authorities in one payload | LOW | S | Derive `night` from the same resolver once item 1 lands |
 
 ---
 
 ## DEPLOY HANDOFF
 
-Nothing changed in the trading path. Three commits: `6fe92f16` (docs), `a84d6ae2` (dev-server bind), `9dffec72` (tests only).
+Six commits. **No change to the decision, sizing, or order-routing path.**
+
+| Commit | What | Risk |
+|---|---|---|
+| `6fe92f16` | RESTORE.md: binary rollback + the mandatory RELEASE re-arm | docs only |
+| `a84d6ae2` | dev UI binds loopback (was proxying the LAN into :8080) | dev server only |
+| `9dffec72` | tests pinning three defects | tests only |
+| `e33532e2` | owner door scoped to the LIVE session — **regression fix** | FE gating, fails closed |
+| `2427c850` | Ask-Planner reads plan_final, not the base doc | one handler, same fallback |
+| `637b137a` | NO-TRADE renders as NO-TRADE, not gold ACTIVE | FE label only |
 
 ```bash
 cd /home/hoang/nofx && git pull
