@@ -182,7 +182,7 @@ The rule that ends guessing: **a system is finished when every SECTION A and B r
 | Scenario anchor level missing from schema (dots sometimes blank) | S | ⬜ |
 | Stale-data drift half needs TF-aware thresholds | M | ⬜ |
 | Force re-read button | M | ⬜ |
-| Plan history browser component | S–M | ⬜ |
+| Plan history browser component | S–M | ✅ BUILT 2026-08-17 — `GET /plan/versions` + `?version=N` on `/plan/today`; chips are buttons that open the version they name, marked HISTORICAL with the death reason and a diff vs the successor (745f84f7, f630ceea) |
 | Killzone gate (currently grading-only) | S–M | ⬜ |
 | R3 panel unverified in a real browser (auth blocks Playwright) | — | verify by eye |
 | approval_required has no grant UI | M | deliberately deferred |
