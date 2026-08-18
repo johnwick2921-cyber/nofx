@@ -1,5 +1,5 @@
 # TOTAL END-TO-END INVESTIGATION — WHY ZERO TRADES (2026-08-19)
-**Dominant cause: the bot HAS been proposing valid trades, but a clock-drift guard deployed 2026-08-13 converted every entry to `wait` because the WSL clock runs 2.5–7.5 minutes behind the NT8 feed — FIXED (signals now stamped with the feed clock, rev 1a6dcf74d0d7, boot 14:27:35 CT, goldens PASS).**
+**Dominant cause: a clock-drift guard (C2, deployed 2026-08-13 = last-fill day) converted every proposed entry to `wait` because the WSL clock runs 2.5–7.5 min behind the NT8 feed — 11 kills observed (6 today + 5 Aug 17, older logs rotated, real total ≥11), replay 9/9 done, LIVE-VERIFIED: NO (no entry proposed since the 14:27 CT fix — after the 13:00 no-entry window; next proof at ASIA 17:00 / tomorrow NY). FIXED (signals feed-stamped, rev 1a6dcf74d0d7, goldens PASS).**
 
 ## Timeline of zero
 - Fills daily Jun 2 → Aug 13. **Last fill ever: 2026-08-13 14:49:31 CT.** Zero fills Aug 14–18.
@@ -12,8 +12,11 @@
 - 4/10: "poor R:R / chasing at the lows"; 3/10: "no trade inside sideways zone" (owner's line); 2/10: 12:00–13:30 lunch window; 5/10: "oversold, needs a reclaim that hasn't printed".
 - 08:47:28 CT the model PROPOSED S1 long (stop 29630.75, TP 29919, 4.08:1, conf 62) — R:R PASS logged, then drift-guarded to wait. 11:08:31 an open_short met the same fate.
 
-## A/B on the owner's 3 lines (10-cycle-equivalent, today's 3:1 cycles)
-<PENDING — lean replay running>
+## A/B on the owner's 3 lines (replaying today's drift-killed cycles, 9/9 calls)
+- 08:47 S1: a=wait · b=open_long · c=wait — removing the 3 owner lines reproduced
+  the exact entry the guard killed (the one decisive signal).
+- 09:13 breakdown: all wait · 13:27 lunch: all wait (no-variant delta on those
+  two cycles; single sample per variant, temp 0.5 — directional, not conclusive).
 
 ## Pipeline verdicts (hop-by-hop, production data)
 - bars→detectors→scorer→key levels→prompt: **COMPLETE** (S/D drop at levels_score.go:167/168 + max-8 cap verified).
@@ -40,6 +43,10 @@
 1) Our day-plan scenario gating (rally-only shorts, no replan-on-flip). 2) The C2 drift guard (now fixed). 3) DeepSeek 402 nightly balance drain. 4) Owner's "no trade inside sideway zone" + sideways-oscillation lines. 5) WSL clock drift. The one artifact that would settle it: his full assembled prompt + gate log for a single shared minute.
 
 ## Verdict & actions
+- Latency-as-drift hypothesis: DISPROVEN — the drift check uses a fresh
+  `time.Now()` AFTER the AI call (engine_analysis.go:449); kills show drift ≫
+  AI duration (11:08: AI 83s vs drift 388s; 08:47: 110s vs 452s). Genuine
+  inter-machine skew, still ~2–3 min at 14:37 CT post-fix.
 - Fixed and deployed: feed-stamped signals + guard now warn-only + 402 loud log (1a6dcf74d0d7).
 - Owner: top up DeepSeek balance / enable auto-recharge; fix the WSL clock (wsl --shutdown or NTP) as belt-and-suspenders.
 - Next code fix (sized): replan when the planner's flip/death text fires, and require a breakdown scenario when price opens below PDL.
