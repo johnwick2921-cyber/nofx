@@ -199,6 +199,58 @@ fake clock.
 
 Plus: E5 interaction-edge ordering guard (`59e98d3c`, `c0e5ce43`).
 
+### P10 — Scan interval = real cadence (OWNER RULING; addendum)
+
+**Sequencing note:** the addendum says "after Phase 9", but **no Phase 9
+dispatch was ever received** (the phantom-position dispatch referenced a
+"post-exit rescan addendum" as future work). Phase 10 lands now; the
+number 9 stays reserved. Phase 9, when dispatched, must consume the
+reconciled position source (PR #50's guarded path), which is this
+branch's parent — the ordering is satisfied by construction.
+
+**Ruling implemented:** the Studio scan interval is the ACTUAL decision
+cadence. `traders.cadence_mode` (Studio/DB, per-trader like
+scan_interval): **"interval" (new default — every scheduler tick runs a
+full cycle on the LATEST bar state, forming bar included)** |
+"bar_close" (the legacy day-plan P2 gate, byte-identical, selectable).
+Garbage/empty resolve to interval — junk never silently invents the
+stricter gate. The only interval-mode skip besides existing gates is
+the 10.4 dedup: identical newest-primary-bar signature
+(open/high/low/close/volume) AND flat → `cycle_skip=no_new_data`
+logged, no paid call burned; any bar mutation or an open position runs
+the cycle (the #49 in-position heartbeat is never deduped).
+
+**Prompt honesty (10.2):** the market block now labels the newest bar
+per timeframe — `current 5m bar: FORMING (closes 10:35 CT) — prior
+bars closed` / `current 5m bar: CLOSED at 10:35 CT (next close 10:40
+CT)` — rendered against the P7 snapshot instant
+(`SetPromptSnapshotMs`), futures-only, absent when no snapshot (all
+prompt goldens byte-identical — verified). "Wait for the close" is now
+the AI's documented judgment, not a code gate.
+
+**Boot line (10.3):** `📊 Loading trader hoang: ScanIntervalMinutes=2
+(source=Studio/DB), cadence=interval 2m0s, mode=interval (DB empty →
+default)` — source + resolved behavior named.
+
+**Studio UI (10.5):** the config modal's interval field gains an
+Interval/Bar-close toggle; help text states plainly (en/zh/id): "AI
+evaluates every N minutes (mode=interval), including the forming bar."
+vs "AI evaluates once per closed primary bar; the interval only sets
+check frequency (mode=bar_close)." Saving remove+reloads the trader —
+**E16: mode switch applies WITHOUT a bot restart.**
+
+**In-flight (10.6):** unchanged by design — the scheduler is
+sequential; ticks during a 60–110s AI call drop (one may buffer),
+so back-to-back cycles after long calls are expected and logged
+honestly by the cadence data itself.
+
+**COST NOTE (owner accepted):** measured BEFORE (bar_close, this
+morning 08:22–09:22): 10 cycles/hour ≈ 10 AI calls/h. Expected AFTER
+(interval 2m, 60–110s calls, dedup active): ~18–25 calls/h during
+sessions (~2–2.5×). Measured-after lands with the E6 soak. E17
+(supersession-discard rate under interval mode) is reported from the
+same soak window and feeds the parked discard-burn dispatch.
+
 ## 2. Canonical gate evaluation order (2.4) — standing documentation
 
 Five stages; a decision survives ALL to reach the wire. Full [A]
