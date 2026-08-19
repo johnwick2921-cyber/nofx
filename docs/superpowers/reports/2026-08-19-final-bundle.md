@@ -75,6 +75,8 @@ Five deferrals in the first 41 minutes, every kicked cycle landing at close+1s. 
 | Unexpected refusals / false B4 stales at period tails | 0 (#48 behavior intact live) | — |
 | Cycle spacing | ~120-124s on timer ticks; dodge kicks legally rephase to close+1s | interval cadence honored |
 
+**ADDENDUM — full-hour soak (17:00–18:00 CT, 12 five-min closes):** 29 paid calls (~29/h, all entry-type — flat the whole window) · 7 dodge-kicked cycles (8 deferrals), every kick at close+1s · supersession discards **1/29 = 3.4% vs the 18.5% baseline**, and the one discard was a free quiet WAIT → **0 lost entries** · 0 re-eval refusals · 0 "Failed" badges · 0 watcher/trailing/post-exit anomalies. Post-soak: the anatomy census (PR #56) found 3 defects in this bundle's code (market-blind watcher, swallowable post-exit kick, dodge-ring pollution) — fixed + deployed as **PR #57 / rev `39554ea8`** at 18:10 CT in the same evening's flat window.
+
 ## 6 · Regression proof
 
 Full `go test ./... -count=1`: **27 packages ok, 0 FAIL** (remainder no-test packages). Named suites re-run green: timegates/stale/gate-order/desync/breakeven/intrade/skip (trader) + stale/gate/clock (kernel). FE: vitest **257 passed / 1 failed** — the failure is the documented pre-existing "NoFx logo" case (+ the pre-existing e2e collection error); `npm run build` clean. `go vet ./...` clean.
