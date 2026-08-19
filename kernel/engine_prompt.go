@@ -39,6 +39,14 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant, symbo
 	sb.WriteString("\n\n")
 	sb.WriteString("---\n\n")
 
+	// P0 timezone fix — the labelled clock goes FIRST, before any window
+	// bound, so the model can never pair an unlabelled window with a UTC
+	// clock (owner rule: CT is canonical everywhere).
+	if e.clockContextLine != "" {
+		sb.WriteString(e.clockContextLine)
+		sb.WriteString("\n\n")
+	}
+
 	// 1. Role definition (editable)
 	if promptSections.RoleDefinition != "" {
 		sb.WriteString(promptSections.RoleDefinition)
@@ -133,6 +141,9 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant, symbo
 	// 7. Output format
 	sb.WriteString("# Output Format (Strictly Follow)\n\n")
 	sb.WriteString("**Must use XML tags <reasoning> and <decision> to separate chain of thought and decision JSON, avoiding parsing errors**\n\n")
+	// P0 2026-08-19 — decision-FIRST strict contract (same truncation guard as
+	// the futures builder).
+	sb.WriteString("Output the <decision> JSON block FIRST — it is MANDATORY and must appear in every response. THEN write <reasoning>: ≤200 words, decision-focused, no restating the input data. If you are running out of room, drop reasoning — never drop <decision>.\n\n")
 	sb.WriteString("## Format Requirements\n\n")
 	sb.WriteString("<reasoning>\n")
 	sb.WriteString("Your chain of thought analysis...\n")
@@ -707,10 +718,10 @@ func (e *StrategyEngine) formatMarketData(data *market.Data) string {
 
 func (e *StrategyEngine) formatTimeframeSeriesData(sb *strings.Builder, data *market.TimeframeSeriesData, indicators store.IndicatorConfig) {
 	if len(data.Klines) > 0 {
-		sb.WriteString("Time(UTC)      Open      High      Low       Close     Volume\n")
+		sb.WriteString("Time(CT)       Open      High      Low       Close     Volume\n")
 		for i, k := range data.Klines {
-			t := time.Unix(k.Time/1000, 0).UTC()
-			timeStr := t.Format("01-02 15:04")
+			t := time.Unix(k.Time/1000, 0).In(CTLocation())
+			timeStr := TableTimeCT(t)
 			marker := ""
 			if i == len(data.Klines)-1 {
 				marker = "  <- current"

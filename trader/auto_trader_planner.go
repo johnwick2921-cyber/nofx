@@ -135,10 +135,7 @@ func (at *AutoTrader) maybeResetStatsOnModelChange(exactModel string) {
 
 // plannerTradeDateCT returns the trade_date (CT calendar date) a read belongs to.
 func plannerTradeDateCT(now time.Time) string {
-	loc, err := time.LoadLocation("America/Chicago")
-	if err != nil {
-		loc = time.UTC
-	}
+	loc := kernel.CTLocation()
 	return now.In(loc).Format("2006-01-02")
 }
 
@@ -199,6 +196,10 @@ func (at *AutoTrader) maybeRunSessionReadsAt(now time.Time) {
 		}
 		existing, err := at.store.Plan().GetLatestPlanForTraderSession(tradeDate, s.Name, at.id)
 		if err != nil {
+			// P0-cleanup — a DB read error must not silently skip the
+			// session's plan read (the plan simply never appears).
+			at.logErrorf("🚨 planner session-read skipped: GetLatestPlanForTraderSession %s %s failed: %v", tradeDate, s.Name, err)
+			telemetry.RecordError(at.id, "plan_read_failed", "GetLatestPlanForTraderSession: "+err.Error(), telemetry.CostDecisionLost)
 			continue
 		}
 		if existing == nil {
@@ -438,7 +439,24 @@ func (at *AutoTrader) describeActivePlanDeath(row *store.PlanDB) (kernel.PlanDea
 	if row.CreatedAt.IsZero() {
 		sinceMs = 0
 	}
+	// P0.3 (2026-08-19) — the planner's own stated death/flip conditions are now
+	// MACHINE-EVALUATED (they used to be display-only prose; on 2026-08-18 the
+	// plan's death text fired at ~09:00 and nothing re-planned). The structured
+	// predicate runs first; the legacy all-levels-consumed check stays as the
+	// fallback for old stored plans.
+	killer, fired := kernel.PlanDeathOrFlipSince(doc, bars, at.acceptanceRuleFor(row.Session), sinceMs, now.UnixMilli())
+	if fired {
+		return kernel.PlanDeathDetail{Killer: killer, Price: priceOf(bars)}, true
+	}
 	return kernel.DescribePlanDeath(doc, bars, at.acceptanceRuleFor(row.Session), sinceMs, now.UnixMilli())
+}
+
+// priceOf returns the latest closed close of the bar series (0 if empty).
+func priceOf(bars []market.Kline) float64 {
+	if len(bars) == 0 {
+		return 0
+	}
+	return bars[len(bars)-1].Close
 }
 
 // noTradeLevelMap assembles the CURRENT detector/scorer output as plan levels
@@ -458,7 +476,7 @@ func (at *AutoTrader) noTradeLevelMap() []kernel.PlanLevel {
 	}
 	now := time.Now()
 	maxLevels, _, _ := resolveSessionPlanCfg(at.dayPlanCfg(), "")
-	scored, _, _ := kernel.AssembleScoredLevels(bars, at.sessionRegistry(now), symbol, maxLevels, now, at.proximityFilterATR())
+	scored, _, _ := kernel.AssembleScoredLevels(at.id, bars, at.sessionRegistry(now), symbol, maxLevels, now, at.proximityFilterATR())
 
 	out := make([]kernel.PlanLevel, 0, len(scored)+4)
 	if owned, err := at.store.OwnerLevel().ListActive(symbol); err == nil {
@@ -562,8 +580,19 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimed(session, tradeDate, trigg
 	hash := shortHash(prompt)
 	// W3 — HARD red-news blackout lines auto-written into the plan (§80).
 	t1Lines := kernel.T1NoTradeLines(input.Calendar)
+	// P0.1/P0.2 (2026-08-19) — write-time facts: both-side levels, continuation
+	// scenario on gaps. PDH/PDL come from the detector universe (seated or raw).
+	facts := kernel.PlanFacts{Price: input.Price, DATR: input.DATR}
+	for _, l := range input.Levels {
+		switch l.Kind {
+		case kernel.KindPDH:
+			facts.PDH = l.Price
+		case kernel.KindPDL:
+			facts.PDL = l.Price
+		}
+	}
 	// W11 — carry the frozen indicator mirror + ai_config hash to the write site.
-	at.runPlannerReadCoreWithTrigger(session, tradeDate, triggerOverride, modelID, hash, input.IndicatorsBlock, input.AIConfigHash, func() (string, error) {
+	at.runPlannerReadCoreWithFacts(session, tradeDate, triggerOverride, modelID, hash, input.IndicatorsBlock, input.AIConfigHash, facts, func() (string, error) {
 		return client.CallWithMessages(plannerSystemPrompt, prompt)
 	}, t1Lines...)
 	return true
@@ -589,10 +618,16 @@ func (at *AutoTrader) runPlannerReadCore(session, tradeDate, modelID, promptHash
 }
 
 // runPlannerReadCoreWithTrigger is runPlannerReadCore with an explicit
-// trigger_reason. ITEM 3 (2026-08-17): an owner-forced re-read must be
-// distinguishable in the stored history from the scheduled one, so the version
-// list can show WHO asked for it. An empty override keeps the scheduled label.
+// trigger_reason and NO facts (schema-only validation — legacy callers/tests).
 func (at *AutoTrader) runPlannerReadCoreWithTrigger(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash string, call func() (string, error), extraNoTrade ...string) (int, string, error) {
+	return at.runPlannerReadCoreWithFacts(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, kernel.PlanFacts{}, call, extraNoTrade...)
+}
+
+// runPlannerReadCoreWithFacts is the production core: same retry/fail-closed
+// loop PLUS the P0.1/P0.2 facts validation (both-side levels, continuation
+// scenario on gaps, duplicate/target reachability). Legacy callers keep the
+// facts-free signature (schema-only validation).
+func (at *AutoTrader) runPlannerReadCoreWithFacts(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash string, facts kernel.PlanFacts, call func() (string, error), extraNoTrade ...string) (int, string, error) {
 	// H4/H5 — validation must accept EXACTLY what the config allows: the resolved
 	// max_levels / scenario_cap (hard ceilings 12/5). Before this the parse
 	// hardcoded 8/3, so raising either setting made EVERY read fail-closed into a
@@ -611,6 +646,13 @@ func (at *AutoTrader) runPlannerReadCoreWithTrigger(session, tradeDate, triggerO
 		d, perr := kernel.ParsePlanDocCapped(raw, maxLevels, scenarioCap)
 		if perr != nil {
 			lastErr = perr
+			continue
+		}
+		// P0.1/P0.2 (2026-08-19) — facts rules: both-side levels, continuation
+		// scenario on a gap out of the prior range, no duplicate seats, reachable
+		// targets. A plan that fails these is NOT shipped (retry → fail-closed).
+		if verr := kernel.ValidatePlanDocWithFacts(d, facts, maxLevels, scenarioCap); verr != nil {
+			lastErr = verr
 			continue
 		}
 		doc = d
@@ -763,7 +805,7 @@ func (at *AutoTrader) assemblePlannerInput(session, tradeDate string) kernel.Pla
 	if kernel.NakedPOCProvider != nil {
 		extra = kernel.NakedPOCProvider(symbol)
 	}
-	scored, price, dATR := kernel.AssembleScoredLevels(bars, reg, symbol, maxLevels, now, at.proximityFilterATR(), extra...)
+	scored, price, dATR := kernel.AssembleScoredLevels(at.id, bars, reg, symbol, maxLevels, now, at.proximityFilterATR(), extra...)
 
 	// P3.6-C — STICKY OWNER LEVELS: always seated, tagged 👤, persisted across
 	// sessions. Prepended so they lead the ranked table.
@@ -807,7 +849,7 @@ func (at *AutoTrader) assemblePlannerInput(session, tradeDate string) kernel.Pla
 	if slice, err := at.store.Calendar().GetSlice(tradeDate); err == nil && slice != nil {
 		var evs []calendar.Event
 		if json.Unmarshal([]byte(slice.EventsJSON), &evs) == nil {
-			loc, _ := time.LoadLocation("America/Chicago")
+			loc := kernel.CTLocation()
 			if loc == nil {
 				loc = time.UTC
 			}
@@ -871,6 +913,7 @@ func (at *AutoTrader) assemblePlannerInput(session, tradeDate string) kernel.Pla
 	return kernel.PlannerInput{
 		TradeDate:        tradeDate,
 		Session:          session,
+		Now:              now, // P0 timezone — the planner's labelled CT clock
 		ReadKind:         session + " scheduled read (stored+cached data)",
 		Price:            price,
 		DATR:             dATR,
@@ -936,6 +979,15 @@ func (at *AutoTrader) maybeWriteDigests() {
 	if inDailyRollWindow(now) && at.eveningDigestEnabled() {
 		sessions, _ := at.store.Digest().SessionDigests(at.id, symbol, tradeDate)
 		text := kernel.FormatDailyDigest(tradeDate, "", len(sessions), entries, pnl)
+		if ll := at.learningDigestLine(); ll != "" {
+			text += "\n" + ll
+		}
+		if el := telemetry.ErrorDigestLine(at.id); el != "" {
+			text += "\n" + el
+		}
+		if el := telemetry.ErrorDigestLine(at.id); el != "" {
+			text += "\n" + el
+		}
 		if wrote, _ := at.store.Digest().SaveIfAbsent(&store.DigestDB{
 			TraderID: at.id,
 			Symbol:   symbol, TradeDate: tradeDate, Kind: "daily", Text: text, CreatedAt: now.UnixMilli(),
@@ -943,6 +995,26 @@ func (at *AutoTrader) maybeWriteDigests() {
 			at.logInfof("📓 daily digest written %s.", tradeDate)
 		}
 	}
+}
+
+// learningDigestLine renders the learning-loop line (avg MAE/MFE + adherence
+// grades, linkable to plan versions) from the last graded closed positions.
+// P0-cleanup (2026-08-19) — MAE/MFE + grades now reach the digest.
+func (at *AutoTrader) learningDigestLine() string {
+	if at.store == nil {
+		return ""
+	}
+	rows, err := at.store.Position().GetGradedClosedPositions(at.id, 20)
+	if err != nil || len(rows) == 0 {
+		return ""
+	}
+	trades := make([]kernel.LearningTrade, 0, len(rows))
+	for _, p := range rows {
+		trades = append(trades, kernel.LearningTrade{
+			MAE: p.MAE, MFE: p.MFE, Grade: p.AdherenceGrade, PlanVersion: p.PlanVersion,
+		})
+	}
+	return kernel.LearningLine(trades)
 }
 
 // storedReplanCap resolves the re-plan cap for (plan owner, session) from the
@@ -1026,7 +1098,13 @@ func installActivePlanProvider(at *AutoTrader, st *store.Store) {
 			replansLeft := store.ReplansLeftFrom(row.Version,
 				store.GetResetBaseline(st, row.TradeDate, sess.Name),
 				storedReplanCap(st, row.StrategyID, sess.Name))
-			return &kernel.ActivePlan{Doc: doc, Session: sess.Name, Version: row.Version, ReplansLeft: replansLeft}
+			// P0-cleanup — decision records carry the full plan attribution
+			// (plan_id, plan_version, overlay_version).
+			overlayVersion := 0
+			if ovs, err := st.Plan().ListOverlays(row.PlanID, row.Version); err == nil {
+				overlayVersion = len(ovs)
+			}
+			return &kernel.ActivePlan{Doc: doc, Session: sess.Name, Version: row.Version, ReplansLeft: replansLeft, BirthMs: row.CreatedAt.UnixMilli(), PlanID: row.PlanID, OverlayVersion: overlayVersion}
 		},
 	})
 	// P0-A — loud startup/runtime assertion: if MORE THAN ONE day-plan trader

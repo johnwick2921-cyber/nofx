@@ -46,7 +46,7 @@ Re-armable same day (pros re-trade levels) BUT: freshness decrements each play (
 - **⚡ Conflict chip:** overlapping owner/AI elements with opposing instructions → owner wins on execution, AI's kept ghosted, both logged.
 
 ## Enforcement + trust
-- **plan_mode dial:** advisory (ship first: cite scenario_id, measure match-rate) → direction (side must match a live scenario) → strict (Go-verified trigger required). Promotion by demonstrated competence only. Plan restricts, never compels; hard gates (R:R≥3, conf≥65, guardrails, armor) always outrank it; plan governs ENTRIES ONLY.
+- **plan_mode dial:** advisory (ship first: cite scenario_id, measure match-rate) → direction (side must match a live scenario) → strict (Go-verified trigger required). Promotion by demonstrated competence only. Plan restricts, never compels; hard gates (R:R≥3, conf≥60 [owner-dated 2026-08-18; was 65], guardrails, armor) always outrank it; plan governs ENTRIES ONLY.
 - **Trust ladder:** (1) fixture unit tests + golden days, tick-exact · (2) owner blind-mark calibration (~10 historical days, owner marks FIRST) · (3) matched-random reaction stats in replay — each level type must beat random ~5pp and A>B>C or it's demoted/cut · (4) evening digest logs which levels reacted.
 
 ---

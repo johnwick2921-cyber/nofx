@@ -16,7 +16,7 @@ const validPlanJSON = `{
     {"id": "S1", "trigger": "sweep 15480 then reclaim", "condition": "sweep_reclaim", "direction": "long", "target_chain": [15550, 15620], "invalid": "2x5m < 15470", "quality": "A"},
     {"id": "S2", "trigger": "reject 15620", "condition": "reject", "direction": "short", "target_chain": [15550], "invalid": "acceptance > 15625", "quality": "B"}
   ],
-  "no_trade": ["first 5m", "12:00-13:30 lunch"],
+  "no_trade": ["first 5m", "12:00-13:30 CT lunch"],
   "death_condition": "acceptance above 15620 kills the fade thesis",
   "day_type": "balance"
 }`
@@ -89,5 +89,67 @@ func TestExtractJSONObjectBalanced(t *testing.T) {
 	got := extractJSONObject(in)
 	if got != `{"a": {"b": 1}, "s": "has } brace"}` {
 		t.Fatalf("extract = %q", got)
+	}
+}
+
+// P0.2 (2026-08-19) — the 2026-08-18 NY plan is the regression case: gap-down
+// with a short whose trigger required a rally back above price. It must be
+// REJECTED so the planner writes a real breakdown play.
+func TestValidatePlanDocWithFactsRejectsRallyOnlyShortOnGapDown(t *testing.T) {
+	doc := &PlanDoc{
+		Reasoning: "balance day",
+		Bias:      PlanBias{Direction: "neutral", Conviction: "low", FlipCondition: "n/a"},
+		Levels: []PlanLevel{
+			{Price: 29680.75, Label: "ONL", Grade: "A"},
+			{Price: 29853, Label: "PDL", Grade: "A"},
+			{Price: 29919, Label: "PDC", Grade: "A"},
+			{Price: 30079, Label: "RTH-L", Grade: "A"},
+			{Price: 29400, Label: "RN 29400", Grade: "B"},
+			{Price: 29360, Label: "PWL", Grade: "A"},
+			{Price: 29300, Label: "RN 29300", Grade: "B"},
+		},
+		Scenarios: []PlanScenario{
+			{ID: "S3", Trigger: "Rally into 29853 PDL / 29919 PDC stalls and a 5m rejection prints",
+				Condition: "reject", Direction: "short", TargetChain: []float64{29680.75},
+				Invalid: "5m close above 29919", Quality: "B"},
+		},
+		NoTrade:        []string{"first 5m"},
+		DeathCondition: "n/a",
+	}
+	facts := PlanFacts{Price: 29687.5, DATR: 300, PDL: 29853, PDH: 30054}
+	err := ValidatePlanDocWithFacts(doc, facts, 8, 3)
+	if err == nil {
+		t.Fatalf("rally-only short on a gap-down day must be REJECTED")
+	}
+	if !strings.Contains(err.Error(), "short scenario's trigger") {
+		t.Fatalf("wrong rejection reason: %v", err)
+	}
+}
+
+// P0.2b — a reachable breakdown short passes.
+func TestValidatePlanDocWithFactsAcceptsBreakdownShort(t *testing.T) {
+	doc := &PlanDoc{
+		Reasoning: "gap-down continuation",
+		Bias:      PlanBias{Direction: "short", Conviction: "medium", FlipCondition: "n/a"},
+		Levels: []PlanLevel{
+			{Price: 29680.75, Label: "ONL", Grade: "A"},
+			{Price: 29853, Label: "PDL", Grade: "A"},
+			{Price: 29919, Label: "PDC", Grade: "A"},
+			{Price: 30079, Label: "RTH-L", Grade: "A"},
+			{Price: 29400, Label: "RN 29400", Grade: "B"},
+			{Price: 29360, Label: "PWL", Grade: "A"},
+			{Price: 29300, Label: "RN 29300", Grade: "B"},
+		},
+		Scenarios: []PlanScenario{
+			{ID: "S1", Trigger: "5m close below 29680.75 ONL and a failed retest",
+				Condition: "breakout_retest", Direction: "short", TargetChain: []float64{29400, 29360},
+				Invalid: "5m close back above 29680.75", Quality: "A"},
+		},
+		NoTrade:        []string{"first 5m"},
+		DeathCondition: "n/a",
+	}
+	facts := PlanFacts{Price: 29687.5, DATR: 300, PDL: 29853, PDH: 30054}
+	if err := ValidatePlanDocWithFacts(doc, facts, 8, 3); err != nil {
+		t.Fatalf("reachable breakdown short must pass: %v", err)
 	}
 }
