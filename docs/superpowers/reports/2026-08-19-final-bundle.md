@@ -4,7 +4,7 @@
 
 ## 1 · Executive summary
 
-Shipped all six phases + the 8 wire-fixes: honest logs (WARN promotion + journald conf), discard-burn (dodge + superseded-entry re-eval + quiet waits), the in-position **watcher** (ai_watch default, watch-only, hysteresis rails, scoring table), **trailing profit** (Risk Control, default OFF), **post-exit rescan** (default ON, B7-vetoed), the Ask-Planner stuck-send fix (30s-vs-300s timeout + latched busy), and wire-fixes 6.1–6.8 (incl. the 65-vs-60 default alignment and a 516/516 entry-confidence backfill). Deferred: journald conf APPLY (root-only — owner runs `sudo bash deploy/install-journald.sh`; the WARN→DB path already works without it). Zero C# AddOn changes, as mandated. Bot healthier: **Y** — every trade event now survives journald flood into the dashboard, 18.5% of paid calls stop dying at bar closes, the AI watches its own thesis in-position with zero order authority, and a fresh cycle fires the moment a trade closes. Single biggest residual risk: the watcher's observer prompt quality is unproven against a live position until one occurs (rails cap the blast radius at "one dashboard WARN"). PR: **#___** (§10).
+Shipped all six phases + the 8 wire-fixes: honest logs (WARN promotion + journald conf), discard-burn (dodge + superseded-entry re-eval + quiet waits), the in-position **watcher** (ai_watch default, watch-only, hysteresis rails, scoring table), **trailing profit** (Risk Control, default OFF), **post-exit rescan** (default ON, B7-vetoed), the Ask-Planner stuck-send fix (30s-vs-300s timeout + latched busy), and wire-fixes 6.1–6.8 (incl. the 65-vs-60 default alignment and a 516/516 entry-confidence backfill). Deferred: journald conf APPLY (root-only — owner runs `sudo bash deploy/install-journald.sh`; the WARN→DB path already works without it). Zero C# AddOn changes, as mandated. Bot healthier: **Y** — every trade event now survives journald flood into the dashboard, 18.5% of paid calls stop dying at bar closes, the AI watches its own thesis in-position with zero order authority, and a fresh cycle fires the moment a trade closes. Single biggest residual risk: the watcher's observer prompt quality is unproven against a live position until one occurs (rails cap the blast radius at "one dashboard WARN"). PR: **#55** (§10).
 
 ## 2 · Per-phase ledger (17 commits, one logical change each; all green before the next phase started)
 
@@ -110,4 +110,4 @@ Risks: observer-prompt quality unproven until a live position (rails bound the i
 
 ## 10 · PR
 
-**#___** — parsed from the `gh pr create` output URL (stated in the chat delivery).
+**#55** — https://github.com/johnwick2921-cyber/nofx/pull/55, parsed from the `gh pr create` output URL.
