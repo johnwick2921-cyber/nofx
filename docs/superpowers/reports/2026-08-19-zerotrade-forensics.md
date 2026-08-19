@@ -119,4 +119,4 @@ Re-evaluated all 32 lost proposals (6 K5-refused + 26 K1-converted) against HEAD
 
 ## 10 · PR
 
-(inserted after creation — see commit)
+https://github.com/johnwick2921-cyber/nofx/pull/46 — **#46** (parsed from the `gh pr create` output URL).
