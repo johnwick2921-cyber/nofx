@@ -99,6 +99,13 @@ func (e *StrategyEngine) buildFuturesPrompt(symbol string, accountEquity float64
 	} else {
 		sb.WriteString("# You are a professional CME " + category + " trading AI specializing in the " + inst.Desc + " (" + sym + ").\n\n")
 	}
+	// P0 timezone fix — labelled clock before every window bound, right after
+	// the persona header (owner rule: CT is canonical everywhere).
+	if e.clockContextLine != "" {
+		sb.WriteString(e.clockContextLine)
+		sb.WriteString("\n\n")
+	}
+
 	sb.WriteString("## Instrument\n")
 	sb.WriteString("- Symbol: " + sym + " (" + inst.Desc + " futures)\n")
 	sb.WriteString("- Tick size: " + tickStr + " " + pointWord + "s\n")
@@ -200,6 +207,11 @@ func (e *StrategyEngine) buildFuturesPrompt(symbol string, accountEquity float64
 	// 5. Output format — MUST match the existing parser exactly.
 	sb.WriteString("# Output Format (Strictly Follow)\n\n")
 	sb.WriteString("**Must use XML tags <reasoning> and <decision> to separate chain of thought and decision JSON, avoiding parsing errors**\n\n")
+	// P0 2026-08-19 — decision-FIRST strict contract: the <decision> block is
+	// MANDATORY and must be emitted before any reasoning, so even a truncated
+	// response still carries the decision. Reasoning is brief and decision-focused;
+	// never restate the input data.
+	sb.WriteString("Output the <decision> JSON block FIRST — it is MANDATORY and must appear in every response. THEN write <reasoning>: ≤200 words, decision-focused, no restating the input data. If you are running out of room, drop reasoning — never drop <decision>.\n\n")
 	sb.WriteString("<reasoning>\n")
 	sb.WriteString("Your chain-of-thought analysis of the " + sym + " bars and indicators.\n")
 	sb.WriteString("</reasoning>\n\n")

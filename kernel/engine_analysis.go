@@ -162,6 +162,15 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 			}
 			if !g.MasterEnabled {
 				logger.Warnf("⚠️ Strategy Studio: risk guardrails master OFF — daily loss/profit/trade limits + blackout NOT enforced this cycle (futures SIZE caps — notional×N ceiling + per-order contract clamp — REMAIN enforced; master-independent venue safety, hardening D3)")
+				// P0-cleanup (2026-08-19) — SOFT-ALERT: show what the cage
+				// WOULD have caught without ever blocking.
+				for _, hit := range g.CheckSoft() {
+					logger.Warnf("🔍 guardrail WOULD have tripped (master OFF, not enforced): %s", hit)
+					telemetry.RecordError(ctx.TraderID, "guardrail_would_trip", hit, telemetry.CostNone)
+					if SoftGuardrailFunc != nil {
+						SoftGuardrailFunc(ctx.TraderID, hit)
+					}
+				}
 			} else if _, gErr := g.Check(); gErr != nil {
 				logger.Warnf("⚠️ Strategy Studio daily guardrail tripped: %v — skipping decision cycle (HOLD)", gErr)
 				telemetry.RiskGateTrips.WithLabelValues("strategy_studio_daily").Inc()
@@ -291,12 +300,22 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 	if cfg := engine.GetConfig(); cfg != nil {
 		svpOn = cfg.Indicators.EnableSVP
 	}
+	// P5.4 — ONE PROMPT, ONE SNAPSHOT: SVP, KEY LEVELS and PLAN STATUS used to
+	// call FuturesBarsProvider separately, so one prompt carried prices ~2pt /
+	// ~2min apart and distances were computed off the older snapshot. Fetch the
+	// 1m cache ONCE per cycle; every section derives from it at a single now.
+	var snapshotBars []market.Kline
+	snapshotNow := time.Now()
+	// P0 timezone — ONE labelled clock per prompt, derived from the same
+	// snapshot instant as every other section (one snapshot → one clock).
+	engine.SetClockContext("## Clock\n" + ClockCTAndUTC(snapshotNow) + " — ALL times in this prompt are CT (America/Chicago), including every session/window bound. Never apply CT window numbers to a UTC clock.")
+	if market.FuturesBarsProvider != nil {
+		snapshotBars = market.FuturesBarsProvider(activeSymbol, AISVPBarInterval, AISVPBarCount)
+	}
 	if isFut, _ := futuresVariantMode(variant); isFut && svpOn {
 		svpLine := ""
-		if market.FuturesBarsProvider != nil {
-			if bars := market.FuturesBarsProvider(activeSymbol, AISVPBarInterval, AISVPBarCount); len(bars) > 0 {
-				svpLine = FormatSVPLine(BuildSVPProfile(bars, time.Now()))
-			}
+		if len(snapshotBars) > 0 {
+			svpLine = FormatSVPLine(BuildSVPProfile(snapshotBars, snapshotNow))
 		}
 		engine.SetSVPContext(svpLine)
 		if svpLine == "" {
@@ -329,18 +348,16 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 	}
 	if isFut, _ := futuresVariantMode(variant); isFut && planOn {
 		klBlock := ""
-		if market.FuturesBarsProvider != nil {
-			if bars := market.FuturesBarsProvider(activeSymbol, AISVPBarInterval, AISVPBarCount); len(bars) > 0 {
-				// nPOC from the durable session-profile store (P1.3), when the
-				// trader layer has wired the provider; nil → none.
-				var extra []DetectedLevel
-				if NakedPOCProvider != nil {
-					extra = NakedPOCProvider(activeSymbol)
-				}
-				// H7 — the registry is the admin registry the DECIDING trader
-				// resolves (per-trader provider; never another trader's).
-				klBlock = BuildKeyLevelsBlock(bars, ResolvedSessionRegistryFor(ctx.TraderID), activeSymbol, maxLevels, time.Now(), proximityK, extra...)
+		if len(snapshotBars) > 0 {
+			// nPOC from the durable session-profile store (P1.3), when the
+			// trader layer has wired the provider; nil → none.
+			var extra []DetectedLevel
+			if NakedPOCProvider != nil {
+				extra = NakedPOCProvider(activeSymbol)
 			}
+			// H7 — the registry is the admin registry the DECIDING trader
+			// resolves (per-trader provider; never another trader's).
+			klBlock = BuildKeyLevelsBlock(ctx.TraderID, snapshotBars, ResolvedSessionRegistryFor(ctx.TraderID), activeSymbol, maxLevels, snapshotNow, proximityK, extra...)
 		}
 		engine.SetKeyLevelsContext(klBlock)
 		if klBlock == "" {
@@ -367,11 +384,9 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 			}
 			block := RenderPlanBlock(plan.Doc, plan.Session)
 			status := ""
-			if market.FuturesBarsProvider != nil {
-				if bars := market.FuturesBarsProvider(activeSymbol, AISVPBarInterval, AISVPBarCount); len(bars) > 0 {
-					_, price, dATR := AssembleScoredLevels(bars, ResolvedSessionRegistryFor(ctx.TraderID), activeSymbol, maxLevels, time.Now(), proximityK)
-					status = RenderPlanStatus(activeSymbol, plan.Doc, bars, price, dATR, rule, plan.ReplansLeft, time.Now().UnixMilli())
-				}
+			if len(snapshotBars) > 0 {
+				_, price, dATR := AssembleScoredLevels(ctx.TraderID, snapshotBars, ResolvedSessionRegistryFor(ctx.TraderID), activeSymbol, maxLevels, snapshotNow, proximityK)
+				status = RenderPlanStatus(ctx.TraderID, activeSymbol, plan.Doc, snapshotBars, price, dATR, rule, plan.ReplansLeft, snapshotNow.UnixMilli(), plan.BirthMs)
 			}
 			engine.SetPlanContext(block, status)
 		}
@@ -477,8 +492,10 @@ func applyReentryCooldown(fd *FullDecision, ctx *Context, cooldownMinutes int, n
 		}
 		if remaining, reason, blocked := discipline.ReentryBlocked(ctx.TraderID, d.Symbol, side, cooldownMinutes, atr15From(md), md.CurrentPrice, nowMs); blocked {
 			logger.Warnf("⛔ re-entry cooldown: %s %s → WAIT — %s (%ds left).", d.Symbol, d.Action, reason, remaining)
+			d.RefusalReason = "re-entry cooldown: " + reason
 			d.Action = "wait"
 			telemetry.IncGateBlock(ctx.TraderID, "reentry_cooldown")
+			telemetry.RecordError(ctx.TraderID, "entry_refused", "re-entry cooldown: "+reason, telemetry.CostTradeLost)
 		}
 	}
 }
@@ -489,6 +506,10 @@ func applyReentryCooldown(fd *FullDecision, ctx *Context, cooldownMinutes int, n
 // (nil = success) and callErr (a transport error, returned immediately). A caller
 // that sees a non-nil parseErr should skip the cycle with a named reason.
 func callWithSchemaRetry(mcpClient mcp.AIClient, systemPrompt, userPrompt string, parse func(string) (*FullDecision, error), maxRetries int) (decision *FullDecision, raw string, dur time.Duration, parseErr, callErr error) {
+	// P5.5 — the last non-empty output survives even when a LATER retry errors
+	// (e.g. the 180s cap): the owner's record keeps what the model actually
+	// said, instead of an empty raw_response with no explanation.
+	lastRaw := ""
 	for attempt := 0; ; attempt++ {
 		up := userPrompt
 		if attempt > 0 {
@@ -500,12 +521,15 @@ func callWithSchemaRetry(mcpClient mcp.AIClient, systemPrompt, userPrompt string
 		resp, cErr := mcpClient.CallWithMessages(systemPrompt, up)
 		dur = time.Since(start)
 		if cErr != nil {
-			return nil, "", dur, nil, cErr
+			return nil, lastRaw, dur, nil, cErr
+		}
+		if strings.TrimSpace(resp) != "" {
+			lastRaw = resp
 		}
 		raw = resp
 		decision, parseErr = parse(resp)
 		if parseErr == nil || attempt >= maxRetries {
-			return decision, raw, dur, parseErr, nil
+			return decision, lastRaw, dur, parseErr, nil
 		}
 		logger.Warnf("⚠️ AI response parse failed (attempt %d/%d) — retrying with the error fed back: %v",
 			attempt+1, maxRetries+1, parseErr)
@@ -541,8 +565,10 @@ func applyPriceSanity(fd *FullDecision, ctx *Context) {
 		if reason, bad := priceSanityViolation(side, entryRef, d.StopLoss, d.TakeProfit, atr15, md.CurrentPrice); bad {
 			logger.Warnf("⛔ price-sanity REJECT: %s %s → neutralized to WAIT — %s [AI stop=%.4f target=%.4f, price=%.4f, ATR15=%.4f].",
 				d.Symbol, d.Action, reason, d.StopLoss, d.TakeProfit, md.CurrentPrice, atr15)
+			d.RefusalReason = "price-sanity: " + reason
 			d.Action = "wait"
 			telemetry.IncGateBlock(ctx.TraderID, "price_sanity")
+			telemetry.RecordError(ctx.TraderID, "entry_refused", "price-sanity: "+reason, telemetry.CostTradeLost)
 		}
 	}
 }

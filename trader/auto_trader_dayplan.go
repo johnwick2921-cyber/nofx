@@ -2,6 +2,7 @@ package trader
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -46,9 +47,17 @@ func (at *AutoTrader) snapshotSessionProfiles() {
 	st := at.store
 	nakedPOCProviderOnce.Do(func() {
 		installNakedPOCProvider(st)
-		installLevelStateProvider(st) // W11b — surface persisted freshness/consumed
+		installLevelStateProvider(at, st) // W11b — surface persisted freshness/consumed
 	})
 	installActivePlanProvider(at, st)
+	// P0-cleanup (2026-08-19) — soft-alert: guardrails that WOULD have tripped
+	// (master OFF) reach the owner's alert feed; they never block.
+	kernel.SoftGuardrailFunc = func(trader, what string) {
+		at.emitAlert("P1", "guardrail-would-have-tripped",
+			fmt.Sprintf("soft-guardrail:%s:%s", trader, shortHash(what)),
+			"Guardrail would have tripped (not enforced)",
+			what+" — the guardrails master is OFF (owner decision); nothing was blocked. This is what the cage would have caught.")
+	}
 
 	bars := market.FuturesBarsProvider(symbol, kernel.AISVPBarInterval, kernel.AISVPBarCount)
 	if len(bars) == 0 {
@@ -111,9 +120,10 @@ func sessionHiLoFromBins(bins []kernel.SVPBin) (hi, lo float64) {
 // surfacing: consumed levels ROLE-FLIP (flipped label, reduced score) instead of
 // disappearing; PLAN STATUS annotates them; P1d aging heals scars across
 // session-days. Unknown level → "" (fresh).
-func installLevelStateProvider(st *store.Store) {
-	kernel.LevelStateProvider = func(symbol string, l kernel.DetectedLevel) string {
-		key := store.MakeLevelKey(symbol, kernel.LevelTypeFromLabel(l.Label), "", kernel.LevelBinIndex(l.Price))
+func installLevelStateProvider(at *AutoTrader, st *store.Store) {
+	_ = at
+	kernel.LevelStateProvider = func(traderID, symbol string, l kernel.DetectedLevel) string {
+		key := store.MakeLevelKey(traderID, symbol, kernel.LevelTypeFromLabel(l.Label), "", kernel.LevelBinIndex(l.Price))
 		cur, err := st.LevelState().Get(key)
 		if err != nil || cur == nil {
 			return "" // no persisted state → fresh (pre-W11b behavior)

@@ -79,7 +79,7 @@ func (at *AutoTrader) runCycle() error {
 	at.callCount++
 
 	logger.Info("\n" + strings.Repeat("=", 70) + "\n")
-	logger.Infof("⏰ %s - AI decision cycle #%d", time.Now().Format("2006-01-02 15:04:05"), at.callCount)
+	logger.Infof("⏰ %s - AI decision cycle #%d", kernel.FormatCT(time.Now()), at.callCount)
 	logger.Info(strings.Repeat("=", 70))
 
 	// 0. Check if trader is stopped (early exit to prevent trades after Stop() is called)
@@ -139,6 +139,9 @@ func (at *AutoTrader) runCycle() error {
 	if summary := telemetry.RolloverGateBlocks(kernel.CMESessionDayStart(time.Now()).UnixMilli()); summary != "" {
 		at.logInfof("📊 %s", summary)
 	}
+	// P0-cleanup — the structured error-event day rolls on the same boundary
+	// (idempotent: same-day calls adopt the day; a changed day resets the table).
+	telemetry.SetErrorSessionDay(kernel.CMESessionDayStart(time.Now()).UnixMilli())
 
 	// P1.3 — DURABLE SESSION-PROFILE SNAPSHOT (day-plan). Gated (futures +
 	// day_plan enabled) → DORMANT by default; idempotent → restart-safe, no
@@ -248,7 +251,10 @@ func (at *AutoTrader) runCycle() error {
 	// This prevents phantom HOLD decisions while waiting for the AddOn to connect.
 	// Once the first account_balance arrives, equity > 0, and the gate opens normally.
 	if ctx.Account.TotalEquity == 0 && !at.HasReceivedBalance() {
-		// Silent return: no decision record, no log entry (to avoid noise during startup)
+		// P0-cleanup (2026-08-19) — was a completely silent return (no row,
+		// no log). Now it logs once per boot and records the skip.
+		at.logWarnf("⏳ skipping decision cycle #%d — no balance frame yet (equity 0, waiting for the NT8 AddOn)", at.callCount)
+		telemetry.RecordError(at.id, "no_balance_frame", "equity 0 and no account_balance frame received yet", telemetry.CostNone)
 		return nil
 	}
 
@@ -332,6 +338,24 @@ func (at *AutoTrader) runCycle() error {
 		if len(aiDecision.Decisions) > 0 {
 			decisionJSON, _ := json.MarshalIndent(aiDecision.Decisions, "", "  ")
 			record.DecisionJSON = string(decisionJSON)
+			// P0-cleanup (2026-08-19) — a gate/armor refusal must never
+			// look like a plain wait: every rewrite carries its reason
+			// into the execution log.
+			for _, d := range aiDecision.Decisions {
+				if d.RefusalReason != "" {
+					record.ExecutionLog = append(record.ExecutionLog, "ENTRY REFUSED: "+d.RefusalReason)
+				}
+			}
+			// P0-cleanup — plan attribution: every decision names the plan
+			// it followed (plan_id/version/overlay) + the cited scenario.
+			if ap := kernel.ActivePlanFor(at.id, at.futuresSymbol()); ap != nil {
+				record.PlanID = ap.PlanID
+				record.PlanVersion = ap.Version
+				record.OverlayVersion = ap.OverlayVersion
+			}
+			if aiDecision.Decisions[0].CitedScenario != "" {
+				record.CitedScenarioID = aiDecision.Decisions[0].CitedScenario
+			}
 		}
 	}
 
@@ -349,6 +373,20 @@ func (at *AutoTrader) runCycle() error {
 		at.consecutiveAIFailures++
 		record.Success = false
 		record.ErrorMessage = fmt.Sprintf("Failed to get AI decision: %v", err)
+
+		// P0-cleanup — structured error event (type stable, cause plain,
+		// cost named). 402 = payment; else decision lost.
+		if strings.Contains(err.Error(), "402") || strings.Contains(err.Error(), "Insufficient Balance") {
+			telemetry.RecordError(at.id, "ai_payment_402", err.Error(), telemetry.CostDecisionLost)
+		} else {
+			telemetry.RecordError(at.id, "ai_call_failed", err.Error(), telemetry.CostDecisionLost)
+		}
+
+		// P0 2026-08-18 — DeepSeek "Insufficient Balance" (HTTP 402) silently
+		// killed 139 overnight cycles today. Make it unmissable.
+		if strings.Contains(err.Error(), "402") || strings.Contains(err.Error(), "Insufficient Balance") {
+			at.logErrorf("💸 DEEPSEEK PAYMENT FAILURE (402 Insufficient Balance) — cycles are dying with NO decision. Top up the DeepSeek account (api.deepseek.com). trader=%s", at.id)
+		}
 
 		// Activate safe mode after 3 consecutive failures
 		if at.consecutiveAIFailures >= 3 && !at.safeMode {
@@ -447,6 +485,16 @@ func (at *AutoTrader) runCycle() error {
 		// the owner (P1 feed), so "how many setups is the format eating?" is
 		// answerable instead of invisible. Deduped per cycle so each loss shows.
 		if reason == "schema_parse_failed" {
+			// P5.5 — keep a truncated copy of the decision-less output on
+			// the record itself, so the owner sees WHAT was lost without
+			// opening the raw-response blob.
+			if snip := aiDecision.RawResponse; snip != "" {
+				if len(snip) > 240 {
+					snip = snip[:240] + "…"
+				}
+				record.ExecutionLog = append(record.ExecutionLog,
+					"last model output (truncated): "+strings.ReplaceAll(snip, "\n", " "))
+			}
 			at.emitAlert("P1", "decision-unparseable",
 				fmt.Sprintf("unparseable:%s:%d", at.id, at.callCount),
 				"Decision unparseable — safe wait",
@@ -626,10 +674,7 @@ func (at *AutoTrader) noteCMESessionEdge(open bool) {
 	if !open {
 		_, reason := kernel.CMEClosedReason(time.Now())
 		next := kernel.NextCMEOpen(time.Now())
-		chicago, err := time.LoadLocation("America/Chicago")
-		if err != nil {
-			chicago = time.UTC
-		}
+		chicago := kernel.CTLocation()
 		at.logInfof("🌙 CME closed (%s) — next open %s", reason, next.In(chicago).Format("Mon 2006-01-02 15:04 MST"))
 	} else if prev != nil {
 		at.logInfof("☀️ CME open — resuming.")
@@ -823,7 +868,7 @@ func (at *AutoTrader) buildTradingContext() (*kernel.Context, error) {
 
 	// 6. Build context
 	ctx := &kernel.Context{
-		CurrentTime:     time.Now().UTC().Format("2006-01-02 15:04:05 UTC"),
+		CurrentTime:     kernel.FormatCT(time.Now()), // CT canonical (P0 timezone)
 		RuntimeMinutes:  int(time.Since(at.startTime).Minutes()),
 		CallCount:       at.callCount,
 		TraderID:        at.id, // B6: per-trader gate-block counters
@@ -868,11 +913,11 @@ func (at *AutoTrader) buildTradingContext() (*kernel.Context, error) {
 				// Convert Unix timestamps to formatted strings for AI readability
 				entryTimeStr := ""
 				if trade.EntryTime > 0 {
-					entryTimeStr = time.Unix(trade.EntryTime, 0).UTC().Format("01-02 15:04 UTC")
+					entryTimeStr = kernel.FormatCT(time.Unix(trade.EntryTime, 0))
 				}
 				exitTimeStr := ""
 				if trade.ExitTime > 0 {
-					exitTimeStr = time.Unix(trade.ExitTime, 0).UTC().Format("01-02 15:04 UTC")
+					exitTimeStr = kernel.FormatCT(time.Unix(trade.ExitTime, 0))
 				}
 
 				ctx.RecentOrders = append(ctx.RecentOrders, kernel.RecentOrder{
