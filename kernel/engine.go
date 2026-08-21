@@ -127,9 +127,13 @@ type Context struct {
 	HTFVetoTF      string `json:"-"`
 	// G4 (regime wave 2026-08-21) — transition stand-down inputs (the trader
 	// maintains the state machine from the cycle's structure snapshot + plan).
-	TransitionActive   bool                       `json:"-"`
-	TransitionDir      string                     `json:"-"` // plan bias "long"|"short" — paused direction
-	TransitionDetail   string                     `json:"-"`
+	TransitionActive bool   `json:"-"`
+	TransitionDir    string `json:"-"` // plan bias "long"|"short" — paused direction
+	TransitionDetail string `json:"-"`
+	// G6 (regime wave 2026-08-21) — loss-streak pause inputs (the trader
+	// computes the session streak; the gate refuses ALL new opens while held).
+	LossStreakPaused   bool                       `json:"-"`
+	LossStreakMsg      string                     `json:"-"`
 	QuantDataMap       map[string]*QuantData      `json:"-"`
 	OIRankingData      *nofxos.OIRankingData      `json:"-"` // Market-wide OI ranking data
 	NetFlowRankingData *nofxos.NetFlowRankingData `json:"-"` // Market-wide fund flow ranking data
