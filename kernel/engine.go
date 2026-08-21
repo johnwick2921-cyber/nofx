@@ -106,23 +106,27 @@ type Context struct {
 	// asserts every tag == TraderID (the deciding trader); a mismatch is cross-trader
 	// contamination → the cycle is skipped. Prompt-data only (json:"-"), so a
 	// matching-tag context is byte-identical.
-	OwnerTags          map[string]string                  `json:"-"`
-	Account            AccountInfo                        `json:"account"`
-	Positions          []PositionInfo                     `json:"positions"`
-	CandidateCoins     []CandidateCoin                    `json:"candidate_coins"`
-	PromptVariant      string                             `json:"prompt_variant,omitempty"`
-	TradingStats       *TradingStats                      `json:"trading_stats,omitempty"`
-	RecentOrders       []RecentOrder                      `json:"recent_orders,omitempty"`
-	MarketDataMap      map[string]*market.Data            `json:"-"`
-	MultiTFMarket      map[string]map[string]*market.Data `json:"-"`
-	OITopDataMap       map[string]*OITopData              `json:"-"`
-	QuantDataMap       map[string]*QuantData              `json:"-"`
-	OIRankingData      *nofxos.OIRankingData              `json:"-"` // Market-wide OI ranking data
-	NetFlowRankingData *nofxos.NetFlowRankingData         `json:"-"` // Market-wide fund flow ranking data
-	PriceRankingData   *nofxos.PriceRankingData           `json:"-"` // Market-wide price gainers/losers
-	BTCETHLeverage     int                                `json:"-"`
-	AltcoinLeverage    int                                `json:"-"`
-	Timeframes         []string                           `json:"-"`
+	OwnerTags      map[string]string                  `json:"-"`
+	Account        AccountInfo                        `json:"account"`
+	Positions      []PositionInfo                     `json:"positions"`
+	CandidateCoins []CandidateCoin                    `json:"candidate_coins"`
+	PromptVariant  string                             `json:"prompt_variant,omitempty"`
+	TradingStats   *TradingStats                      `json:"trading_stats,omitempty"`
+	RecentOrders   []RecentOrder                      `json:"recent_orders,omitempty"`
+	MarketDataMap  map[string]*market.Data            `json:"-"`
+	MultiTFMarket  map[string]map[string]*market.Data `json:"-"`
+	OITopDataMap   map[string]*OITopData              `json:"-"`
+	// G2 (regime wave 2026-08-21) — per-cycle machine structure snapshot
+	// (per-TF trend + swings + events); the HTF veto and the prompt line read
+	// it. Prompt-invisible (json:"-"); set by the trader loop each cycle.
+	Structure          map[string]StructureState  `json:"-"`
+	QuantDataMap       map[string]*QuantData      `json:"-"`
+	OIRankingData      *nofxos.OIRankingData      `json:"-"` // Market-wide OI ranking data
+	NetFlowRankingData *nofxos.NetFlowRankingData `json:"-"` // Market-wide fund flow ranking data
+	PriceRankingData   *nofxos.PriceRankingData   `json:"-"` // Market-wide price gainers/losers
+	BTCETHLeverage     int                        `json:"-"`
+	AltcoinLeverage    int                        `json:"-"`
+	Timeframes         []string                   `json:"-"`
 
 	// Strategy Studio P1 — daily-guardrail inputs measured on the CME session-day
 	// (set by the trader loop from the position store; read by the daily-guardrail

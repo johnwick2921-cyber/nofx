@@ -81,8 +81,15 @@ func AcceptanceIntervalMinutes(rule string) int {
 	return acceptanceTFMinutes(rule)
 }
 
+// StructureAggregateToMinutes (G2, regime wave 2026-08-21) aggregates the 1m
+// cache for the STRUCTURE detectors (5m/15m/1h) through the same bucket
+// function every acceptance consumer uses. The structure snapshot reads
+// buckets, not acceptance, but the bucket math stays single-sourced here.
+func StructureAggregateToMinutes(bars []market.Kline, tfMinutes int) []market.Kline {
+	return aggregateToMinutes(bars, tfMinutes)
+}
+
 // AcceptanceBars resolves the series acceptance facts must be counted on.
-//
 // The acceptance rule NAMES the timeframe — "2x5m" means two consecutive
 // 5-MINUTE closes, "15m-close" means one 15-minute close — while the raw
 // counters (ClosesBeyond / Acceptance / LevelStillValid) count BARS of whatever

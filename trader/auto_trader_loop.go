@@ -6,6 +6,7 @@ import (
 	"nofx/config"
 	"nofx/kernel"
 	"nofx/logger"
+	"nofx/market"
 	"nofx/mcp"
 	"nofx/store"
 	"nofx/telemetry"
@@ -288,6 +289,18 @@ func (at *AutoTrader) runCycle() error {
 		record.ErrorMessage = fmt.Sprintf("Failed to build trading context: %v", err)
 		at.saveDecision(record)
 		return fmt.Errorf("failed to build trading context: %w", err)
+	}
+
+	// G2 (regime wave 2026-08-21) — per-cycle STRUCTURE snapshot: computed from
+	// the same 1m cache every other futures consumer reads, threaded into the
+	// executor prompt (engine_prompt.go) and persisted on the decision row —
+	// G1/G4/G8's input and future forensics' gold.
+	if market.FuturesBarsProvider != nil {
+		bars1m := market.FuturesBarsProvider(at.futuresSymbol(), kernel.AISVPBarInterval, kernel.AISVPBarCount)
+		ctx.Structure = kernel.StructureSnapshot(bars1m, time.Now().UnixMilli())
+		if blob, jerr := json.Marshal(ctx.Structure); jerr == nil {
+			record.StructureJSON = string(blob)
+		}
 	}
 
 	// Plan 4 Stage 4 — defer-until-balance guard (NinjaTrader TCP only)
