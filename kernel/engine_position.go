@@ -216,6 +216,15 @@ func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoi
 				return fmt.Errorf("%s", msg)
 			}
 		}
+
+		// G6 (regime wave 2026-08-21) — LOSS-STREAK PAUSE (master-independent
+		// armor): N consecutive losing closes pause ALL new entries until the
+		// timer or session end. Position management and the watcher untouched.
+		if ctx != nil && ctx.LossStreakPaused {
+			telemetry.IncGateBlock(ctx.TraderID, "loss_streak")
+			logger.Warnf("🧊 LOSS-STREAK PAUSE %s %s: %s", d.Symbol, d.Action, ctx.LossStreakMsg)
+			return fmt.Errorf("%s", ctx.LossStreakMsg)
+		}
 	}
 
 	return nil

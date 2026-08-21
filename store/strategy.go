@@ -767,6 +767,17 @@ type RegimeConfig struct {
 	// unconfirmed counter-trend CHoCH/MSS is outstanding. nil → ON; false =
 	// today's pre-wave behavior.
 	TransitionStanddown *bool `json:"transition_standdown,omitempty"`
+	// LossStreakN (G6): N consecutive losing closes pause entries. nil → 4;
+	// 0 = OFF (absent=off armor convention; the shipped default lives here).
+	LossStreakN *int `json:"loss_streak_n,omitempty"`
+}
+
+// LossStreakNValue resolves the streak length (nil → 4; 0 → off).
+func (c *StrategyConfig) LossStreakNValue() int {
+	if c.Regime == nil || c.Regime.LossStreakN == nil {
+		return 4
+	}
+	return *c.Regime.LossStreakN
 }
 
 // HTFVetoEnabled resolves the shipped default (nil/absent → ON).

@@ -319,6 +319,10 @@ func (at *AutoTrader) runCycle() error {
 	// wires the executor gate + the plan-card chip mirror.
 	at.observeTransitionStanddown(ctx)
 
+	// G6 (regime wave 2026-08-21) — loss-streak pause observer (session-scoped,
+	// master-independent): N consecutive losers pause new entries.
+	at.observeLossStreak(ctx)
+
 	// Plan 4 Stage 4 — defer-until-balance guard (NinjaTrader TCP only)
 	// If equity is 0 and no account_balance frame has arrived yet, skip the cycle silently.
 	// This prevents phantom HOLD decisions while waiting for the AddOn to connect.
