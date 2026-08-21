@@ -1,10 +1,61 @@
 package kernel
 
 import (
+	"fmt"
 	"strings"
 
 	"nofx/market"
 )
+
+// MarkConsumedScenarios (G5, regime wave 2026-08-21) — at plan write AND at
+// re-align, scenarios whose trigger level is CONSUMED are demoted: quality
+// capped at C + the consumed badge. Advisory — the AI may still judge a
+// re-test of a consumed level valid; the info is what was missing. Returns the
+// demoted count. consumed maps the plan level prices already role-flipped.
+func MarkConsumedScenarios(doc *PlanDoc, consumed map[float64]bool) int {
+	if doc == nil || len(consumed) == 0 || len(doc.Scenarios) == 0 {
+		return 0
+	}
+	n := 0
+	for i := range doc.Scenarios {
+		if doc.Scenarios[i].Consumed {
+			continue
+		}
+		if pricesInText(doc.Scenarios[i].Trigger, consumed) {
+			doc.Scenarios[i].Consumed = true
+			if qualityRank(doc.Scenarios[i].Quality) > qualityRank("C") {
+				doc.Scenarios[i].Quality = "C"
+			}
+			n++
+		}
+	}
+	return n
+}
+
+// pricesInText reports whether ANY consumed level price appears (rendered as
+// "%.2f") in the prose trigger.
+func pricesInText(text string, consumed map[float64]bool) bool {
+	for p := range consumed {
+		if strings.Contains(text, fmt.Sprintf("%.2f", p)) {
+			return true
+		}
+	}
+	return false
+}
+
+// qualityRank orders A+ > A > B > C.
+func qualityRank(q string) int {
+	switch strings.ToUpper(strings.TrimSpace(q)) {
+	case "A+":
+		return 4
+	case "A":
+		return 3
+	case "B":
+		return 2
+	default:
+		return 1
+	}
+}
 
 // P0.4 — SCENARIO-FACT EVALUATOR (the keystone).
 //

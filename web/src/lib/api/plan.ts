@@ -28,6 +28,8 @@ export interface PlanScenario {
   target_chain: number[]
   invalid: string
   quality: string // A+ | A | B
+  /** G5 (regime wave) — trigger level was consumed at write time. */
+  consumed?: boolean
 }
 
 export interface PlanDoc {

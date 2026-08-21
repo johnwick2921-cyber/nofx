@@ -60,6 +60,14 @@ function ScenarioRow({
         <span title="quality is INFORMATIONAL (D3 ruling) — the planner's own read; no gate, sizing, or filter consumes it">
           <QualityChip quality={scenario.quality} />
         </span>
+        {scenario.consumed && (
+          <span
+            className="text-[10px] uppercase"
+            style={{ color: 'var(--vl-gold)', fontFamily: 'var(--vl-font-ui)' }}
+          >
+            level consumed
+          </span>
+        )}
         <span
           className="text-[11px] uppercase"
           style={{ color: dirColor, fontFamily: 'var(--vl-font-ui)' }}

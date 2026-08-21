@@ -52,6 +52,10 @@ type PlanScenario struct {
 	// Confirm (C1) — REQUIRED after the grace window; see PlanConfirm.
 	Confirm *PlanConfirm `json:"confirm,omitempty"`
 	Quality string       `json:"quality"` // A+ | A | B
+	// G5 (regime wave 2026-08-21) — true when the trigger level was CONSUMED at
+	// write/re-align time: quality is capped at C and the card badges it
+	// "level consumed". Advisory — never a gate.
+	Consumed bool `json:"consumed,omitempty"`
 }
 
 // PlanDoc is the full plan (stored as the plans.doc JSON).
