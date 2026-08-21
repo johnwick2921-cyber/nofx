@@ -119,7 +119,12 @@ type Context struct {
 	// G2 (regime wave 2026-08-21) — per-cycle machine structure snapshot
 	// (per-TF trend + swings + events); the HTF veto and the prompt line read
 	// it. Prompt-invisible (json:"-"); set by the trader loop each cycle.
-	Structure          map[string]StructureState  `json:"-"`
+	Structure map[string]StructureState `json:"-"`
+	// G1 (regime wave 2026-08-21) — HTF veto gate inputs: the Studio toggle
+	// (default ON) and the veto timeframe (env HTF_VETO_TF, default 1h).
+	// Prompt-invisible; set by the trader loop each cycle.
+	HTFVetoEnabled     bool                       `json:"-"`
+	HTFVetoTF          string                     `json:"-"`
 	QuantDataMap       map[string]*QuantData      `json:"-"`
 	OIRankingData      *nofxos.OIRankingData      `json:"-"` // Market-wide OI ranking data
 	NetFlowRankingData *nofxos.NetFlowRankingData `json:"-"` // Market-wide fund flow ranking data

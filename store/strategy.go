@@ -748,6 +748,29 @@ type StrategyConfig struct {
 	// pointer emits no day_plan key, keeping every existing strategy
 	// byte-identical.
 	DayPlan *DayPlanConfig `json:"day_plan,omitempty"`
+
+	// Regime (G1, regime wave 2026-08-21) — the regime gates' Studio block.
+	// Additive + nil-pointer-safe: a nil block emits no regime key, keeping
+	// every existing strategy byte-identical. Pointer fields resolve shipped
+	// defaults in the accessors (HTFVetoEnabled: nil → ON — dispatch 1.3).
+	Regime *RegimeConfig `json:"regime,omitempty"`
+}
+
+// RegimeConfig holds the regime-wave Studio toggles (G1 HTF veto now; G4
+// transition stand-down joins later in the wave).
+type RegimeConfig struct {
+	// HTFVeto: refuse NEW entries opposing the CONFIRMED HTF trend (G2
+	// structure). nil → ON (shipped default per dispatch 1.3); false = today's
+	// pre-wave behavior.
+	HTFVeto *bool `json:"htf_veto,omitempty"`
+}
+
+// HTFVetoEnabled resolves the shipped default (nil/absent → ON).
+func (c *StrategyConfig) HTFVetoEnabled() bool {
+	if c.Regime == nil || c.Regime.HTFVeto == nil {
+		return true
+	}
+	return *c.Regime.HTFVeto
 }
 
 // AIStrategyConfig contains fields only used by AI trading strategies.
@@ -781,12 +804,14 @@ func (c StrategyConfig) MarshalJSON() ([]byte, error) {
 		GridConfig    *GridStrategyConfig    `json:"grid_config,omitempty"`
 		PublishConfig *PublishStrategyConfig `json:"publish_config,omitempty"`
 		DayPlan       *DayPlanConfig         `json:"day_plan,omitempty"`
+		Regime        *RegimeConfig          `json:"regime,omitempty"`
 	}{
 		StrategyType:  strategyType,
 		Language:      c.Language,
 		PromptVariant: strings.TrimSpace(c.PromptVariant),
 		PublishConfig: c.PublishConfig,
 		DayPlan:       c.DayPlan,
+		Regime:        c.Regime,
 	}
 
 	if strategyType == "grid_trading" {
@@ -815,6 +840,7 @@ func (c *StrategyConfig) UnmarshalJSON(data []byte) error {
 		GridConfig    *GridStrategyConfig    `json:"grid_config"`
 		PublishConfig *PublishStrategyConfig `json:"publish_config"`
 		DayPlan       *DayPlanConfig         `json:"day_plan"`
+		Regime        *RegimeConfig          `json:"regime"`
 
 		CoinSource     *CoinSourceConfig     `json:"coin_source"`
 		Indicators     *IndicatorConfig      `json:"indicators"`
@@ -834,6 +860,7 @@ func (c *StrategyConfig) UnmarshalJSON(data []byte) error {
 	c.GridConfig = raw.GridConfig
 	c.PublishConfig = raw.PublishConfig
 	c.DayPlan = raw.DayPlan
+	c.Regime = raw.Regime
 
 	if raw.AIConfig != nil {
 		c.CoinSource = raw.AIConfig.CoinSource
