@@ -287,6 +287,16 @@ func PlanDeathOrFlipSinceFresh(doc PlanDoc, bars []market.Kline, rule string, si
 			continue
 		}
 		if fired, reason := PlanConditionFiredSince(cc.c, bars, sinceMs, now); fired {
+			// G3 (regime wave 2026-08-21) — FLIP HYSTERESIS: a freshly-written
+			// plan cannot flip back within FLIP_MIN_HOLD_MIN of its birth.
+			// Death is evaluated FIRST above, so a breached death line always
+			// wins during the hold — the hold only suppresses the flip leg.
+			if cc.name == "flip" {
+				if age := now - sinceMs; sinceMs > 0 && age < FlipMinHoldMin()*60_000 {
+					skipped = append(skipped, "flip=hold (plan age "+ageString(age)+" < "+strconv.FormatInt(FlipMinHoldMin(), 10)+"min)")
+					continue
+				}
+			}
 			if cc.name == "death" {
 				return "death-condition: " + reason, true, skipped
 			}
