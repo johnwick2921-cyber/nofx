@@ -381,10 +381,14 @@ export function DecisionCard({
             wj
           ) {
             let ws = ''
+            let sc = 'none'
             try {
-              ws =
-                (JSON.parse(wj) as { accepted_status?: string })
-                  .accepted_status || ''
+              const parsed = JSON.parse(wj) as {
+                accepted_status?: string
+                structure_conflict?: string
+              }
+              ws = parsed.accepted_status || ''
+              sc = parsed.structure_conflict || 'none'
             } catch {
               /* raw */
             }
@@ -394,9 +398,17 @@ export function DecisionCard({
                 : ws === 'weakening'
                   ? '#F0B90B'
                   : '#0ECB81'
+            // G8 — structure dot beside the 👁 badge: none/warning/confirmed
+            // (2-consecutive hysteresis applied backend-side).
+            const scc =
+              sc === 'confirmed'
+                ? '#F6465D'
+                : sc === 'warning'
+                  ? '#F0B90B'
+                  : '#0ECB81'
             return (
               <div
-                className="px-4 py-1.5 rounded-full text-xs font-bold tracking-wider"
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold tracking-wider"
                 style={{
                   background: `${c}26`,
                   color: c,
@@ -405,6 +417,15 @@ export function DecisionCard({
                 title={wj}
               >
                 👁 {ws || 'watch'}
+                <span
+                  title={`structure_conflict: ${sc}`}
+                  style={{
+                    width: 7,
+                    height: 7,
+                    borderRadius: 999,
+                    background: scc,
+                  }}
+                />
               </div>
             )
           }

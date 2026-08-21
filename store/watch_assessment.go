@@ -23,11 +23,15 @@ type WatchAssessment struct {
 	Timestamp   int64  `gorm:"column:timestamp;not null" json:"timestamp"` // unix ms
 
 	// The read itself.
-	Status            string `gorm:"column:status;default:''" json:"status"`                       // raw model status (post-parse)
-	AcceptedStatus    string `gorm:"column:accepted_status;default:''" json:"accepted_status"`     // after hysteresis rails R1/R2
+	Status            string `gorm:"column:status;default:''" json:"status"`                   // raw model status (post-parse)
+	AcceptedStatus    string `gorm:"column:accepted_status;default:''" json:"accepted_status"` // after hysteresis rails R1/R2
 	Confidence        int    `gorm:"column:confidence;default:0" json:"confidence"`
 	InvalidationCited string `gorm:"column:invalidation_cited;default:''" json:"invalidation_cited"`
 	Note              string `gorm:"column:note;default:''" json:"note"`
+	// G8 (regime wave 2026-08-21) — structure_conflict per assessment
+	// (backfilled '' for history): none | warning | confirmed, after the
+	// 2-consecutive hysteresis. The badge dot reads this.
+	StructureConflict string  `gorm:"column:structure_conflict;default:''" json:"structure_conflict"`
 	PriceAtRead       float64 `gorm:"column:price_at_read;default:0" json:"price_at_read"`
 	Warned            bool    `gorm:"column:warned;default:false" json:"warned"` // this read fired the R3 WARN
 

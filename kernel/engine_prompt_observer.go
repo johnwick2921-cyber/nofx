@@ -33,6 +33,10 @@ type ObserverInput struct {
 	BreakevenFired  bool
 	TrailLevel      float64 // 0 = trail not armed
 	PrevStatus      string  // last accepted status (context, not authority)
+	// G8 (regime wave 2026-08-21) — the Go-computed structure line (trends +
+	// swings + latest events); the observer judges the conflict question
+	// against THIS machine truth, not its own re-derivation.
+	StructureLine string
 }
 
 // ObserverAssessment is the schema-enforced watch response.
@@ -41,6 +45,9 @@ type ObserverAssessment struct {
 	InvalidationCited string `json:"invalidation_cited,omitempty"`
 	Note              string `json:"note"`
 	Confidence        int    `json:"confidence"`
+	// G8 (regime wave 2026-08-21) — the observer's structure verdict:
+	// none | warning | confirmed (judged against the machine structure line).
+	StructureConflict string `json:"structure_conflict"`
 	// ActionIgnored is set by the PARSER (never the model): the response carried
 	// an action-like field, which the watcher ignores and logs.
 	ActionIgnored bool `json:"-"`
@@ -81,10 +88,15 @@ func (e *StrategyEngine) BuildObserverSystemPrompt(in ObserverInput, snapshotMs 
 		thesis = "(no stated thesis recorded — judge only the stated stop/target levels)"
 	}
 	sb.WriteString("```\n" + thesis + "\n```\n\n")
-	sb.WriteString("## YOUR QUESTION (answer EXACTLY this)\n")
-	sb.WriteString("Has the ORIGINAL stated invalidation condition triggered? Judge only against the stated thesis above — do NOT re-analyze the market for new trades, do NOT propose actions, do NOT second-guess the stop/target placement.\n\n")
+	if line := strings.TrimSpace(in.StructureLine); line != "" {
+		sb.WriteString("## MACHINE STRUCTURE (Go-computed — the conflict question below is judged against THIS, cite the event)\n")
+		sb.WriteString(line + "\n\n")
+	}
+	sb.WriteString("## YOUR QUESTIONS (answer EXACTLY these)")
+	sb.WriteString("\n1. Has the ORIGINAL stated invalidation condition triggered? Judge only against the stated thesis above — do NOT re-analyze the market for new trades, do NOT propose actions, do NOT second-guess the stop/target placement.")
+	sb.WriteString("\n2. Does current machine structure CONTRADICT the position's direction? structure_conflict: none | warning | confirmed — 'confirmed' requires confidence ≥70 AND a cited structure event (BOS/CHoCH/MSS) against the direction; 'warning' = opposed trend without a decisive event.\n\n")
 	sb.WriteString("## RESPONSE — one JSON object, nothing else\n")
-	sb.WriteString("{\n  \"thesis_status\": \"intact\" | \"weakening\" | \"invalidated\",\n  \"invalidation_cited\": \"REQUIRED iff invalidated — quote the stated condition that triggered\",\n  \"note\": \"one short paragraph\",\n  \"confidence\": 0-100\n}\n")
+	sb.WriteString("{\n  \"thesis_status\": \"intact\" | \"weakening\" | \"invalidated\",\n  \"invalidation_cited\": \"REQUIRED iff invalidated — quote the stated condition that triggered\",\n  \"structure_conflict\": \"none\" | \"warning\" | \"confirmed\",\n  \"note\": \"one short paragraph\",\n  \"confidence\": 0-100\n}\n")
 	sb.WriteString("Any action-like field (action/close/open/etc.) in your response is IGNORED and logged.\n")
 	return sb.String()
 }
@@ -111,6 +123,14 @@ func ParseObserverAssessment(raw string) (*ObserverAssessment, error) {
 	case "intact", "weakening", "invalidated":
 	default:
 		return nil, fmt.Errorf("thesis_status %q not in enum", a.ThesisStatus)
+	}
+	switch a.StructureConflict {
+	case "", "none", "warning", "confirmed":
+		if a.StructureConflict == "" {
+			a.StructureConflict = "none"
+		}
+	default:
+		return nil, fmt.Errorf("structure_conflict %q not in enum", a.StructureConflict)
 	}
 	if a.Confidence < 0 {
 		a.Confidence = 0
