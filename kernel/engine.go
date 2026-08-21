@@ -123,8 +123,13 @@ type Context struct {
 	// G1 (regime wave 2026-08-21) — HTF veto gate inputs: the Studio toggle
 	// (default ON) and the veto timeframe (env HTF_VETO_TF, default 1h).
 	// Prompt-invisible; set by the trader loop each cycle.
-	HTFVetoEnabled     bool                       `json:"-"`
-	HTFVetoTF          string                     `json:"-"`
+	HTFVetoEnabled bool   `json:"-"`
+	HTFVetoTF      string `json:"-"`
+	// G4 (regime wave 2026-08-21) — transition stand-down inputs (the trader
+	// maintains the state machine from the cycle's structure snapshot + plan).
+	TransitionActive   bool                       `json:"-"`
+	TransitionDir      string                     `json:"-"` // plan bias "long"|"short" — paused direction
+	TransitionDetail   string                     `json:"-"`
 	QuantDataMap       map[string]*QuantData      `json:"-"`
 	OIRankingData      *nofxos.OIRankingData      `json:"-"` // Market-wide OI ranking data
 	NetFlowRankingData *nofxos.NetFlowRankingData `json:"-"` // Market-wide fund flow ranking data

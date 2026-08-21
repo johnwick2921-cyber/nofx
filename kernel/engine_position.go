@@ -203,6 +203,19 @@ func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoi
 				return fmt.Errorf("%s", msg)
 			}
 		}
+
+		// G4 (regime wave 2026-08-21) — TRANSITION STAND-DOWN: while an
+		// unconfirmed counter-trend CHoCH/MSS is outstanding on the plan's bias
+		// TF, NEW entries in the PLAN'S direction are paused (the card shows
+		// "⏸ TRANSITION"). Counter-direction entries are never paused by this —
+		// the flip owns that job. ctx == nil → dormant.
+		if ctx != nil && ctx.TransitionActive {
+			if blocked, msg := TransitionStanddownVerdict(d.Action, ctx.TransitionActive, ctx.TransitionDir, ctx.TransitionDetail); blocked {
+				telemetry.IncGateBlock(ctx.TraderID, "transition_standdown")
+				logger.Warnf("⏸ TRANSITION STAND-DOWN %s %s: %s", d.Symbol, d.Action, msg)
+				return fmt.Errorf("%s", msg)
+			}
+		}
 	}
 
 	return nil

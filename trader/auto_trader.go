@@ -354,40 +354,45 @@ type AutoTrader struct {
 	lastHalfDaySeedDay     string       // P4 half-days producer: once-per-CME-session-day throttle
 	lastCycleBarSig        string       // P10.4 no-new-data dedup: newest primary-TF bar signature at last cycle
 	ai402OutageStartMs     int64        // P5 402-outage latch (0 = no outage) — one banner per outage
-	lastAIBalanceDay       string       // P5 daily balance poll throttle (AI_BALANCE_WARN)
-	isRunning              bool
-	isRunningMutex         sync.RWMutex          // Mutex to protect isRunning flag
-	startTime              time.Time             // System start time
-	callCount              int                   // AI call count
-	positionFirstSeenTime  map[string]int64      // Position first seen time (symbol_side -> timestamp in milliseconds)
-	stopMonitorCh          chan struct{}         // Used to stop monitoring goroutine
-	monitorWg              sync.WaitGroup        // Used to wait for monitoring goroutine to finish
-	kickCh                 chan string           // discard-burn/post-exit: one-shot deferred-cycle kicks into the run loop (reason payload)
-	kickPending            atomic.Bool           // at most one kick armed at a time (CAS)
-	skipDodgeOnce          bool                  // a dodge-kicked cycle must not re-dodge at the boundary (run-loop goroutine only)
-	skipCadenceOnce        bool                  // U2: a post_exit kick bypasses the cadence gates exactly once (run-loop goroutine only)
-	cycleTrigger           string                // why this cycle fired: "" (timer) | "stale_dodge" | "post_exit" (run-loop goroutine only)
-	aiCallMs               [aiCallRingSize]int64 // last-N AI call durations (run-loop goroutine only)
-	aiCallIdx              int
-	aiCallN                int
-	peakPnLCache           map[string]float64     // Peak profit cache (symbol -> peak P&L percentage)
-	peakPnLCacheMutex      sync.RWMutex           // Cache read-write lock
-	breakevenDone          map[string]bool        // auto-breakeven: "symbol_side" already moved to breakeven (idempotent; reset on flat)
-	entryTheses            map[string]entryThesis // Phase 3: original entry decision per "symbol_side" (run-loop goroutine)
-	watchStates            map[string]*watchState // Phase 3: watcher hysteresis state per "symbol_side" (run-loop goroutine)
-	trailStates            map[string]*trailState // Phase 3B: trailing-stop state per "symbol_SIDE" (guarded by trailMu — monitor + watcher goroutines)
-	trailMu                sync.Mutex             // guards trailStates
-	postExitSeen           map[int64]bool         // Phase 4: position IDs whose post-exit rescan already fired (guarded by postExitMu)
-	postExitMu             sync.Mutex
-	breakevenMu            sync.Mutex      // guards breakevenDone (lazy-inited)
-	lastBalanceSyncTime    time.Time       // Last balance sync time
-	userID                 string          // User ID
-	gridState              *GridState      // Grid trading state (only used when StrategyType == "grid_trading")
-	claw402WalletAddr      string          // Claw402 wallet address (derived from private key at start)
-	consecutiveAIFailures  int             // Consecutive AI call failures
-	safeMode               bool            // Safe mode: no new positions, protect existing ones
-	safeModeReason         string          // Why safe mode was activated
-	deadMan                deadManWatchdog // B5 dead-man watchdog: NT8 link-gap → block NEW entries until reconciled (zero value = live/allowed; touched only from runCycle)
+	// G4 (regime wave 2026-08-21) — transition stand-down state + the G4.6 MSS
+	// wake dedupe key (plan:version:eventInstant — one planner wake per MSS).
+	transition            kernel.TransitionState
+	transitionClosedAtMs  int64 // G4: last closed trigger — the same event must not reopen the stand-down
+	lastMSSWakeKey        string
+	lastAIBalanceDay      string // P5 daily balance poll throttle (AI_BALANCE_WARN)
+	isRunning             bool
+	isRunningMutex        sync.RWMutex          // Mutex to protect isRunning flag
+	startTime             time.Time             // System start time
+	callCount             int                   // AI call count
+	positionFirstSeenTime map[string]int64      // Position first seen time (symbol_side -> timestamp in milliseconds)
+	stopMonitorCh         chan struct{}         // Used to stop monitoring goroutine
+	monitorWg             sync.WaitGroup        // Used to wait for monitoring goroutine to finish
+	kickCh                chan string           // discard-burn/post-exit: one-shot deferred-cycle kicks into the run loop (reason payload)
+	kickPending           atomic.Bool           // at most one kick armed at a time (CAS)
+	skipDodgeOnce         bool                  // a dodge-kicked cycle must not re-dodge at the boundary (run-loop goroutine only)
+	skipCadenceOnce       bool                  // U2: a post_exit kick bypasses the cadence gates exactly once (run-loop goroutine only)
+	cycleTrigger          string                // why this cycle fired: "" (timer) | "stale_dodge" | "post_exit" (run-loop goroutine only)
+	aiCallMs              [aiCallRingSize]int64 // last-N AI call durations (run-loop goroutine only)
+	aiCallIdx             int
+	aiCallN               int
+	peakPnLCache          map[string]float64     // Peak profit cache (symbol -> peak P&L percentage)
+	peakPnLCacheMutex     sync.RWMutex           // Cache read-write lock
+	breakevenDone         map[string]bool        // auto-breakeven: "symbol_side" already moved to breakeven (idempotent; reset on flat)
+	entryTheses           map[string]entryThesis // Phase 3: original entry decision per "symbol_side" (run-loop goroutine)
+	watchStates           map[string]*watchState // Phase 3: watcher hysteresis state per "symbol_side" (run-loop goroutine)
+	trailStates           map[string]*trailState // Phase 3B: trailing-stop state per "symbol_SIDE" (guarded by trailMu — monitor + watcher goroutines)
+	trailMu               sync.Mutex             // guards trailStates
+	postExitSeen          map[int64]bool         // Phase 4: position IDs whose post-exit rescan already fired (guarded by postExitMu)
+	postExitMu            sync.Mutex
+	breakevenMu           sync.Mutex      // guards breakevenDone (lazy-inited)
+	lastBalanceSyncTime   time.Time       // Last balance sync time
+	userID                string          // User ID
+	gridState             *GridState      // Grid trading state (only used when StrategyType == "grid_trading")
+	claw402WalletAddr     string          // Claw402 wallet address (derived from private key at start)
+	consecutiveAIFailures int             // Consecutive AI call failures
+	safeMode              bool            // Safe mode: no new positions, protect existing ones
+	safeModeReason        string          // Why safe mode was activated
+	deadMan               deadManWatchdog // B5 dead-man watchdog: NT8 link-gap → block NEW entries until reconciled (zero value = live/allowed; touched only from runCycle)
 
 	// Plan 4 Stage 4 — NinjaTrader TCP balance tracking (defer-until-balance guard)
 	// For NinjaTrader TCP traders, we track if account_balance frame has arrived yet.

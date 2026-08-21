@@ -212,6 +212,9 @@ func (at *AutoTrader) maybeRunSessionReadsAt(now time.Time) {
 		if existing.Lifecycle != "active" {
 			continue // no_trade / died → done for the session
 		}
+		// G4.6 (addendum, regime wave) — a fresh structure MSS on the plan's
+		// bias TF is the FOURTH planner wake-up (one per MSS event, deduped).
+		at.maybeWakePlannerOnMSS(s.Name, tradeDate, existing)
 		// P3.6 — RE-PLAN ON DEATH (cap replan_cap/session → NO-TRADE).
 		if detail, dead := at.describeActivePlanDeath(existing); dead {
 			replanCap := at.replanCapFor(s.Name) // W9 — per-session override wins

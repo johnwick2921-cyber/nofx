@@ -301,7 +301,7 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 		// A1/A4 (fail-register wave): verdict basis (machine vs prose-anchor
 		// heuristic) + unevaluable scenario ids — the card renders them
 		// distinctly instead of dressing a heuristic as a machine verdict.
-		"scenario_meta": s.scenarioMeta(traderID, row.PlanID),
+		"scenario_meta":  s.scenarioMeta(traderID, row.PlanID),
 		"overlay_errors": overlayErrStrings,
 		// ITEM 4 — owner edits that could NOT be re-anchored onto this version.
 		// Never dropped silently: the card asks for review.
@@ -971,6 +971,26 @@ func (s *Server) handlePlanReset(c *gin.Context) {
 		return
 	}
 	c.JSON(200, gin.H{"ok": true, "gate": gate})
+}
+
+// transitionState reads the G4 stand-down mirror for this plan version. Absent
+// (the normal case) → nil, and the card shows no chip.
+func (s *Server) transitionState(planID string, version int) *kernel.TransitionState {
+	if s.store == nil {
+		return nil
+	}
+	raw, _ := s.store.GetSystemConfig(store.TransitionKey(planID, version))
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	var out kernel.TransitionState
+	if json.Unmarshal([]byte(raw), &out) != nil {
+		return nil
+	}
+	if !out.Active {
+		return nil
+	}
+	return &out
 }
 
 // uncarriedEdits reads the review list a re-plan parked for this version.
@@ -2031,6 +2051,7 @@ func (s *Server) scenarioStatus(traderID, planID string) map[string]string {
 	}
 	return m
 }
+
 // scenarioMeta (A1/A4) reads the basis/unevaluable envelope; nil when absent.
 func (s *Server) scenarioMeta(traderID, planID string) map[string]any {
 	if s.store == nil {
@@ -2046,4 +2067,3 @@ func (s *Server) scenarioMeta(traderID, planID string) map[string]any {
 	}
 	return m
 }
-
