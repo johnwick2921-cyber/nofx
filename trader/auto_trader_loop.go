@@ -313,6 +313,12 @@ func (at *AutoTrader) runCycle() error {
 	}
 	ctx.HTFVetoTF = kernel.HTFVetoTF()
 
+	// G4 (regime wave 2026-08-21) — transition stand-down state machine: opens
+	// on an unconfirmed counter-trend CHoCH/MSS on the plan's bias TF (15m),
+	// closes on flip/re-plan, BOS resumption or the TRANSITION_MAX_MIN cap;
+	// wires the executor gate + the plan-card chip mirror.
+	at.observeTransitionStanddown(ctx)
+
 	// Plan 4 Stage 4 — defer-until-balance guard (NinjaTrader TCP only)
 	// If equity is 0 and no account_balance frame has arrived yet, skip the cycle silently.
 	// This prevents phantom HOLD decisions while waiting for the AddOn to connect.

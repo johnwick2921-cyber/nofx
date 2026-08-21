@@ -763,6 +763,10 @@ type RegimeConfig struct {
 	// structure). nil → ON (shipped default per dispatch 1.3); false = today's
 	// pre-wave behavior.
 	HTFVeto *bool `json:"htf_veto,omitempty"`
+	// TransitionStanddown (G4): pause plan-direction entries while an
+	// unconfirmed counter-trend CHoCH/MSS is outstanding. nil → ON; false =
+	// today's pre-wave behavior.
+	TransitionStanddown *bool `json:"transition_standdown,omitempty"`
 }
 
 // HTFVetoEnabled resolves the shipped default (nil/absent → ON).
@@ -771,6 +775,14 @@ func (c *StrategyConfig) HTFVetoEnabled() bool {
 		return true
 	}
 	return *c.Regime.HTFVeto
+}
+
+// TransitionStanddownEnabled resolves the shipped default (nil/absent → ON).
+func (c *StrategyConfig) TransitionStanddownEnabled() bool {
+	if c.Regime == nil || c.Regime.TransitionStanddown == nil {
+		return true
+	}
+	return *c.Regime.TransitionStanddown
 }
 
 // AIStrategyConfig contains fields only used by AI trading strategies.

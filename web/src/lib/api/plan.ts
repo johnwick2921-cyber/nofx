@@ -106,8 +106,12 @@ export interface PlanToday {
   /** The RESOLVED re-plan cap (config, never a literal). */
   replan_cap?: number
   /** ITEM 4 — owner edits a re-plan could not re-anchor onto this version. */
-  uncarried_edits?: UncarriedEdit[]
-  /** ITEM 15 — true when ?version= served a superseded version, not the latest. */
+  uncarried_edits?: UncarriedEdit[] /** G4 (regime wave) — transition stand-down chip (nil/absent = closed). */
+  transition?: {
+    active: boolean
+    dir: string
+    detail: string
+  } | null /** ITEM 15 — true when ?version= served a superseded version, not the latest. */
   historical?: boolean
   /** ITEM 15 — the newest stored version, so the card can offer the way back. */
   latest_version?: number
