@@ -778,22 +778,46 @@ func resolveSessionPlanCfg(dp *store.DayPlanConfig, session string) (maxLevels i
 // interval; every other configured TF is requested verbatim. A nil fetch (no
 // bars provider) marks every TF unavailable — the planner is told the read-set
 // truth instead of a hardcoded claim that diverges from planner_timeframes (H9).
+// structureSummaryLines (G2, regime wave 2026-08-21) — the REAL machine
+// structure detector replaces the old "read/unavailable" placeholder: per-TF
+// trend + newest swing + the latest BOS/CHoCH/MSS/SWEEP event, computed from
+// the same 1m cache the executor reads (kernel.StructureSnapshot).
 func structureSummaryLines(fetch func(tf string, count int) []market.Kline, timeframes []string) []string {
-	lines := make([]string, 0, len(timeframes))
+	lines := make([]string, 0, len(timeframes)+1)
+	var bars1m []market.Kline
+	if fetch != nil {
+		bars1m = fetch(kernel.AISVPBarInterval, kernel.AISVPBarCount)
+	}
+	snap := kernel.StructureSnapshot(bars1m, time.Now().UnixMilli())
 	for _, tf := range timeframes {
-		req := tf
-		if tf == "D" {
-			req = "1d"
-		}
-		read := false
-		if fetch != nil {
-			read = len(fetch(req, 300)) > 0
-		}
-		if read {
-			lines = append(lines, tf+": structure read")
-		} else {
+		st, ok := snap[tf]
+		if !ok {
 			lines = append(lines, tf+": unavailable")
+			continue
 		}
+		label := st.Trend
+		if st.Swing != nil {
+			label += fmt.Sprintf(" (%s %.2f @%s)", st.Swing.Kind, st.Swing.Price, kernel.ClockCT(time.UnixMilli(st.Swing.TimeMs)))
+		}
+		lines = append(lines, tf+": "+label)
+	}
+	var lastEv *kernel.StructureEvent
+	var lastTF string
+	for _, tf := range kernel.StructureTFs {
+		st, ok := snap[tf]
+		if !ok {
+			continue
+		}
+		for i := range st.LastEvents {
+			if lastEv == nil || st.LastEvents[i].TimeMs > lastEv.TimeMs {
+				e := st.LastEvents[i]
+				lastEv = &e
+				lastTF = tf
+			}
+		}
+	}
+	if lastEv != nil {
+		lines = append(lines, fmt.Sprintf("last event: %s-%s %s @%s", lastEv.Type, lastEv.Dir, lastTF, kernel.ClockCT(time.UnixMilli(lastEv.TimeMs))))
 	}
 	return lines
 }

@@ -430,6 +430,13 @@ func (e *StrategyEngine) BuildUserPrompt(ctx *Context) string {
 	}
 	sb.WriteString("\n")
 
+	// G2 (regime wave 2026-08-21) — the machine structure line, advisory:
+	// per-TF trend + swings + the latest BOS/CHoCH/MSS/SWEEP event. The AI
+	// judges; no gate lives here (G1/G4 consume the same snapshot in Go).
+	if e.isFuturesInstrument() && len(ctx.Structure) > 0 {
+		sb.WriteString(StructurePromptLine(ctx.Structure) + "\n\n")
+	}
+
 	// Get language for market data formatting
 	nofxosLang := nofxos.LangEnglish
 	if e.GetLanguage() == LangChinese {

@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"nofx/kernel"
 	"nofx/market"
 	"nofx/store"
 )
@@ -23,7 +24,8 @@ func TestStructureSummaryLinesFetchConfiguredSet(t *testing.T) {
 	}
 	lines := structureSummaryLines(fetch, []string{"D", "4h", "1h", "15m"})
 
-	wantReq := []string{"1d", "4h", "1h", "15m"} // "D" maps to the provider's "1d"
+	// G2: the detector computes from the shared 1m cache — one fetch.
+	wantReq := []string{kernel.AISVPBarInterval}
 	if len(requested) != len(wantReq) {
 		t.Fatalf("fetched set = %v, want %v", requested, wantReq)
 	}
@@ -32,7 +34,9 @@ func TestStructureSummaryLinesFetchConfiguredSet(t *testing.T) {
 			t.Fatalf("fetch[%d] = %q, want %q", i, requested[i], r)
 		}
 	}
-	wantLines := []string{"D: structure read", "4h: structure read", "1h: structure read", "15m: structure read"}
+	// One bar cannot confirm swings → detector TFs read RANGING; non-detector
+	// TFs (D/4h) stay unavailable — honest, never "structure read".
+	wantLines := []string{"D: unavailable", "4h: unavailable", "1h: RANGING", "15m: RANGING"}
 	if len(lines) != len(wantLines) {
 		t.Fatalf("prompt lines = %v, want %v", lines, wantLines)
 	}
@@ -44,8 +48,8 @@ func TestStructureSummaryLinesFetchConfiguredSet(t *testing.T) {
 }
 
 func TestStructureSummaryLinesMissingTFSurfacesUnavailable(t *testing.T) {
-	// 4h is dark: the provider has no bars for it. The line must say so — never
-	// claim a read that did not happen.
+	// 4h is outside the detector set: the line must say so — never claim a
+	// read that did not happen.
 	fetch := func(tf string, count int) []market.Kline {
 		if tf == "4h" {
 			return nil
@@ -54,7 +58,7 @@ func TestStructureSummaryLinesMissingTFSurfacesUnavailable(t *testing.T) {
 		return []market.Kline{{OpenTime: now - 600_000, Close: 100, CloseTime: now - 300_000}}
 	}
 	lines := structureSummaryLines(fetch, []string{"D", "4h", "1h"})
-	want := []string{"D: structure read", "4h: unavailable", "1h: structure read"}
+	want := []string{"D: unavailable", "4h: unavailable", "1h: RANGING"}
 	for i, l := range want {
 		if lines[i] != l {
 			t.Fatalf("line[%d] = %q, want %q (all: %v)", i, lines[i], l, lines)
@@ -98,7 +102,7 @@ func TestAssemblePlannerInputHonestStructureLines(t *testing.T) {
 
 	input := at.assemblePlannerInput("NY", "2026-08-15")
 	got := input.StructureSummary
-	want := []string{"D: structure read", "4h: unavailable", "1h: structure read", "15m: structure read"}
+	want := []string{"D: unavailable", "4h: unavailable", "1h: RANGING", "15m: RANGING"}
 	if len(got) != len(want) {
 		t.Fatalf("planner input structure lines = %v, want %v", got, want)
 	}
