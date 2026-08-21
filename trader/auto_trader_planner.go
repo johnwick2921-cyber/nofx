@@ -418,9 +418,18 @@ func (at *AutoTrader) describeActivePlanDeath(row *store.PlanDB) (kernel.PlanDea
 	// plan's death text fired at ~09:00 and nothing re-planned). The structured
 	// predicate runs first; the legacy all-levels-consumed check stays as the
 	// fallback for old stored plans.
-	killer, fired := kernel.PlanDeathOrFlipSince(doc, bars, at.acceptanceRuleFor(row.Session), sinceMs, now.UnixMilli())
+	// G7 (2026-08-21) — freshness-gated: a condition whose rule-TF series is
+	// provably stale is SKIPPED (logged flip_eval_skipped), never guessed. A
+	// fully-stale cycle defers the whole death check to the next fresh one.
+	killer, fired, skipped := kernel.PlanDeathOrFlipSinceFresh(doc, bars, at.acceptanceRuleFor(row.Session), sinceMs, now.UnixMilli())
+	for _, s := range skipped {
+		at.logWarnf("flip_eval_skipped plan=%s v%d %s", row.PlanID, row.Version, s)
+	}
 	if fired {
 		return kernel.PlanDeathDetail{Killer: killer, Price: priceOf(bars)}, true
+	}
+	if len(skipped) > 0 {
+		return kernel.PlanDeathDetail{}, false
 	}
 	return kernel.DescribePlanDeath(doc, bars, at.acceptanceRuleFor(row.Session), sinceMs, now.UnixMilli())
 }

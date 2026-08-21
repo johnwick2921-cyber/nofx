@@ -590,6 +590,32 @@ func formingBarLine(tf string, tfData *market.TimeframeSeriesData, snapshotMs in
 		tf, ClockCT(time.UnixMilli(closeMs)), ClockCT(time.UnixMilli(closeMs+iv)))
 }
 
+// staleTFLabel (G7) appends a staleness warning under a TF table when the
+// newest CLOSED bar is older than period + FLIP_EVAL_MAX_STALE_S — the same
+// cap the flip/death evaluator uses, so the prompt and the evaluator can never
+// disagree about what "stale" means. Futures only; renders nothing when fresh.
+func staleTFLabel(tf string, tfData *market.TimeframeSeriesData, snapshotMs int64) string {
+	if snapshotMs <= 0 || tfData == nil || len(tfData.Klines) == 0 {
+		return ""
+	}
+	iv := tfIntervalMs(tf)
+	if iv <= 0 {
+		return ""
+	}
+	newest := tfData.Klines[len(tfData.Klines)-1]
+	closeMs := newest.Time + iv
+	if closeMs > snapshotMs {
+		return "" // forming — not stale by definition
+	}
+	age := snapshotMs - closeMs
+	capMs := FlipEvalMaxStaleMs()
+	if age <= iv+capMs {
+		return ""
+	}
+	return fmt.Sprintf("⚠️ %s data stale: newest close %s is %.0fs old (period %.0fs + cap %.0fs)\n\n",
+		tf, ClockCT(time.UnixMilli(closeMs)), float64(age)/1000, float64(iv)/1000, float64(capMs)/1000)
+}
+
 func (e *StrategyEngine) formatMarketData(data *market.Data) string {
 	var sb strings.Builder
 	indicators := e.config.Indicators
@@ -676,6 +702,7 @@ func (e *StrategyEngine) formatMarketData(data *market.Data) string {
 				// only; snapshot 0 (tests/legacy) renders nothing.
 				if e.isFuturesInstrument() {
 					sb.WriteString(formingBarLine(tf, tfData, e.promptSnapshotMs))
+					sb.WriteString(staleTFLabel(tf, tfData, e.promptSnapshotMs))
 				}
 			}
 		}

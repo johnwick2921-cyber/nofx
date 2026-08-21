@@ -3,6 +3,7 @@ package kernel
 import (
 	"fmt"
 	"math"
+	"strconv"
 
 	"nofx/market"
 )
@@ -261,4 +262,55 @@ func orZero(c *PlanCondition) PlanCondition {
 		return PlanCondition{}
 	}
 	return *c
+}
+
+// PlanDeathOrFlipSinceFresh is PlanDeathOrFlipSince plus the G7 staleness
+// gate: a condition whose rule-TF series is provably stale is SKIPPED this
+// cycle (it neither fires nor clears — the next fresh cycle judges it) and is
+// reported in skipped for the flip_eval_skipped log. The legacy
+// all-levels-consumed fallback is guarded the same way. Semantics on fresh
+// bars are byte-identical to PlanDeathOrFlipSince.
+func PlanDeathOrFlipSinceFresh(doc PlanDoc, bars []market.Kline, rule string, sinceMs, now int64) (killer string, fired bool, skipped []string) {
+	conds := []struct {
+		name string
+		c    PlanCondition
+	}{
+		{"death", orZero(doc.DeathStructured)},
+		{"flip", orZero(doc.FlipStructured)},
+	}
+	for _, cc := range conds {
+		if cc.c.Price <= 0 {
+			continue
+		}
+		if allowed, age, why := FlipEvalAllowed(bars, cc.c.Rule, now); !allowed {
+			skipped = append(skipped, cc.name+"="+why+" (age "+ageString(age)+")")
+			continue
+		}
+		if fired, reason := PlanConditionFiredSince(cc.c, bars, sinceMs, now); fired {
+			if cc.name == "death" {
+				return "death-condition: " + reason, true, skipped
+			}
+			to := doc.FlipStructured.FlipTo
+			if to == "" {
+				to = "the other side"
+			}
+			return "flip-condition: " + reason + " → bias " + to, true, skipped
+		}
+	}
+	if allowed, age, why := FlipEvalAllowed(bars, rule, now); allowed {
+		if PlanIsDeadSince(doc, bars, rule, sinceMs, now) {
+			return "all levels consumed", true, skipped
+		}
+	} else {
+		skipped = append(skipped, "legacy-consumption="+why+" (age "+ageString(age)+")")
+	}
+	return "", false, skipped
+}
+
+// ageString renders a millisecond age for the skip log ("stale_bars (age 125s)").
+func ageString(ms int64) string {
+	if ms <= 0 {
+		return "0s"
+	}
+	return strconv.FormatInt(ms/1000, 10) + "s"
 }
