@@ -303,6 +303,16 @@ func (at *AutoTrader) runCycle() error {
 		}
 	}
 
+	// G1 (regime wave 2026-08-21) — HTF veto inputs: Studio toggle (default ON,
+	// nil-safe) + the veto timeframe (env HTF_VETO_TF, default 1h). The gate
+	// itself runs inside validateDecision (after min-conf, before sizing).
+	if sc := at.GetStrategyConfig(); sc != nil {
+		ctx.HTFVetoEnabled = sc.HTFVetoEnabled()
+	} else {
+		ctx.HTFVetoEnabled = true // shipped default when no config is present
+	}
+	ctx.HTFVetoTF = kernel.HTFVetoTF()
+
 	// Plan 4 Stage 4 — defer-until-balance guard (NinjaTrader TCP only)
 	// If equity is 0 and no account_balance frame has arrived yet, skip the cycle silently.
 	// This prevents phantom HOLD decisions while waiting for the AddOn to connect.

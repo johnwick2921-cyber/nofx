@@ -190,6 +190,19 @@ func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoi
 		if minConfidence > 0 && d.Confidence < minConfidence {
 			return fmt.Errorf("confidence too low (%d), must be ≥%d to open position", d.Confidence, minConfidence)
 		}
+
+		// G1 (regime wave 2026-08-21) — HTF VETO. Position in the gate chain:
+		// AFTER the min-confidence gate, BEFORE the decision proceeds to sizing
+		// and execution. An entry opposing the CONFIRMED HTF trend (G2) is
+		// refused; RANGING/unconfirmed and detector-unavailable FAIL OPEN
+		// (WARN + pass). ctx == nil (unit tests) → gate dormant.
+		if ctx != nil && ctx.HTFVetoEnabled {
+			if blocked, msg := HTFVetoVerdict(ctx.Structure, d.Action, ctx.HTFVetoTF); blocked {
+				telemetry.IncGateBlock(ctx.TraderID, "htf_veto")
+				logger.Warnf("🛡️ HTF VETO %s %s: %s", d.Symbol, d.Action, msg)
+				return fmt.Errorf("%s", msg)
+			}
+		}
 	}
 
 	return nil
