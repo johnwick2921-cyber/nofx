@@ -640,6 +640,12 @@ func (at *AutoTrader) runPlannerReadCoreWithFacts(session, tradeDate, triggerOve
 			lastErr = perr
 			continue
 		}
+		// G5 (regime wave 2026-08-21) — at plan write, scenarios whose trigger
+		// level is CONSUMED are demoted (quality capped C + badge). Advisory —
+		// the info is what was missing, never a gate.
+		if n := at.demoteConsumedScenarios(session, d); n > 0 {
+			at.logWarnf("🗓️ G5: %d scenario(s) demoted to C — trigger level consumed at %s write.", n, session)
+		}
 		// P0.1/P0.2 (2026-08-19) — facts rules: both-side levels, continuation
 		// scenario on a gap out of the prior range, no duplicate seats, reachable
 		// targets. A plan that fails these is NOT shipped (retry → fail-closed).
@@ -781,6 +787,35 @@ func resolveSessionPlanCfg(dp *store.DayPlanConfig, session string) (maxLevels i
 // interval; every other configured TF is requested verbatim. A nil fetch (no
 // bars provider) marks every TF unavailable — the planner is told the read-set
 // truth instead of a hardcoded claim that diverges from planner_timeframes (H9).
+// consumedLevels (G5) computes which plan levels are CONSUMED right now using
+// the same facts evaluator the card reads (EvaluateLevelFacts → StillValid).
+func (at *AutoTrader) consumedLevels(bars []market.Kline, levels []kernel.PlanLevel, rule string, now int64) map[float64]bool {
+	if len(bars) == 0 {
+		return nil
+	}
+	out := map[float64]bool{}
+	for _, l := range levels {
+		if kernel.EvaluateLevelFacts(bars, l.Price, kernel.DirAbove, rule, 3, now).StillValid {
+			continue
+		}
+		out[l.Price] = true
+	}
+	return out
+}
+
+// demoteConsumedScenarios (G5) applies the write-time demotion.
+func (at *AutoTrader) demoteConsumedScenarios(session string, d *kernel.PlanDoc) int {
+	if market.FuturesBarsProvider == nil {
+		return 0
+	}
+	bars := market.FuturesBarsProvider(at.futuresSymbol(), kernel.AISVPBarInterval, kernel.AISVPBarCount)
+	if len(bars) == 0 {
+		return 0
+	}
+	consumed := at.consumedLevels(bars, d.Levels, at.acceptanceRuleFor(session), time.Now().UnixMilli())
+	return kernel.MarkConsumedScenarios(d, consumed)
+}
+
 // structureSummaryLines (G2, regime wave 2026-08-21) — the REAL machine
 // structure detector replaces the old "read/unavailable" placeholder: per-TF
 // trend + newest swing + the latest BOS/CHoCH/MSS/SWEEP event, computed from
@@ -954,6 +989,22 @@ func (at *AutoTrader) assemblePlannerInput(session, tradeDate string) kernel.Pla
 			body)
 	}
 
+	// G5 (regime wave 2026-08-21) — consumed levels at read time, listed so the
+	// planner works around them.
+	var consumedLines []string
+	if len(bars) > 0 {
+		lvls := make([]kernel.PlanLevel, len(scored))
+		for i, s := range scored {
+			lvls[i] = kernel.PlanLevel{Price: s.Price, Label: s.Label}
+		}
+		consumed := at.consumedLevels(bars, lvls, at.acceptanceRuleFor(session), now.UnixMilli())
+		for _, s := range scored {
+			if consumed[s.Price] {
+				consumedLines = append(consumedLines, fmt.Sprintf("%.2f %s", s.Price, s.Label))
+			}
+		}
+	}
+
 	return kernel.PlannerInput{
 		TradeDate:        tradeDate,
 		Session:          session,
@@ -964,6 +1015,7 @@ func (at *AutoTrader) assemblePlannerInput(session, tradeDate string) kernel.Pla
 		Regime:           regime,
 		Levels:           scored,
 		StructureSummary: structure,
+		ConsumedLevels:   consumedLines,
 		Calendar:         calEvents,
 		DigestChain:      digestChain,
 		Warming:          warming,

@@ -30,12 +30,15 @@ type PlannerInput struct {
 	Regime           RegimeBlock
 	Levels           []ScoredLevel // Go-ranked, graded (P1.5) — the decision-critical block
 	StructureSummary []string      // one line per timeframe
-	OvernightStory   string
-	PriorDayStory    string
-	Calendar         []PlannerCalendarEvent // session-sliced (P1.8)
-	DigestChain      []string               // session digests + dailies + one-liners
-	OwnerNote        string
-	Warming          string // non-empty → cold-start / WARMING annotation
+	// G5 (regime wave 2026-08-21) — levels already CONSUMED at read time (role-
+	// flipped), listed so the planner works around them. Advisory.
+	ConsumedLevels []string
+	OvernightStory string
+	PriorDayStory  string
+	Calendar       []PlannerCalendarEvent // session-sliced (P1.8)
+	DigestChain    []string               // session digests + dailies + one-liners
+	OwnerNote      string
+	Warming        string // non-empty → cold-start / WARMING annotation
 	// W11 — the executor's indicator mirror (per-TF EMA/RSI/ATR/BOLL/MACD, driven by
 	// ai_config toggles), rendered once by RenderPlannerIndicatorBlock. Empty → the
 	// block is omitted (disabled state = byte-identical prompt). AIConfigHash is the
@@ -81,6 +84,17 @@ func BuildPlannerPrompt(in PlannerInput) string {
 
 	// Ranked level table — the decision-critical block, high-salience.
 	b.WriteString("## Ranked levels (Go-graded; you never re-sort)\n")
+
+	// G5 (regime wave 2026-08-21) — consumed levels listed explicitly: the
+	// planner must plan AROUND them (a re-test is a NEW setup, never a fresh
+	// tag). Advisory — Go facts, AI judgment.
+	if len(in.ConsumedLevels) > 0 {
+		b.WriteString("## Consumed levels (already role-flipped — plan AROUND them; a re-test is a NEW setup)\n")
+		for _, s := range in.ConsumedLevels {
+			b.WriteString("- " + s + "\n")
+		}
+		b.WriteString("\n")
+	}
 	if len(in.Levels) == 0 {
 		b.WriteString("(none in range — warming forward)\n")
 	} else {
