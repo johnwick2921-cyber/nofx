@@ -20,6 +20,22 @@ import (
 
 const DefaultFlipEvalMaxStaleSeconds = 90
 
+// DefaultFlipMinHoldMinutes (G3, regime wave 2026-08-21) — a freshly-written
+// plan cannot flip BACK within this hold unless the death line is breached
+// (death always wins — it is evaluated first). Prevents the double-flip chop
+// a shift day invites.
+const DefaultFlipMinHoldMinutes = 30
+
+// FlipMinHoldMin resolves the hold window (env FLIP_MIN_HOLD_MIN, default 30).
+func FlipMinHoldMin() int64 {
+	if v := os.Getenv("FLIP_MIN_HOLD_MIN"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			return int64(n)
+		}
+	}
+	return DefaultFlipMinHoldMinutes
+}
+
 // FlipEvalMaxStaleMs resolves the staleness cap (env FLIP_EVAL_MAX_STALE_S,
 // default 90s) as milliseconds.
 func FlipEvalMaxStaleMs() int64 {
