@@ -159,6 +159,10 @@ type watchState struct {
 	Warned        bool   // R3: one WARN per episode
 	BestPts       float64
 	WorstPts      float64
+	// G8 (regime wave 2026-08-21) — structure-conflict hysteresis: the stored
+	// verdict only colors after 2 consecutive identical non-none reads.
+	SCVerdict string // current accepted structure verdict
+	SCConsec  int    // consecutive identical non-none reads
 }
 
 type watchRailKnobs struct{ minConf, minHold, warnConsec int }
@@ -312,7 +316,8 @@ func (at *AutoTrader) runWatchCycle(ctx *kernel.Context, record *store.DecisionR
 		AgeMinutes: int((time.Now().UnixMilli() - p.EntryTime) / 60_000),
 		PnLPoints:  pnlPts, MFEPoints: st.BestPts, MAEPoints: st.WorstPts,
 		CurrentStop: curStop, BreakevenFired: beFired, TrailLevel: trailLvl,
-		PrevStatus: prevStatus,
+		PrevStatus:    prevStatus,
+		StructureLine: kernel.StructurePromptLine(ctx.Structure),
 	}
 	record.AccountState = store.AccountSnapshot{
 		TotalBalance:          ctx.Account.TotalEquity,
@@ -359,17 +364,39 @@ func (at *AutoTrader) runWatchCycle(ctx *kernel.Context, record *store.DecisionR
 	newSt, accepted, warn := applyWatchRails(*st, a.ThesisStatus, a.Confidence, a.InvalidationCited, liveWatchRailKnobs())
 	*st = newSt
 
+	// G8 (regime wave 2026-08-21) — structure-conflict hysteresis: a non-none
+	// verdict colors the badge only after 2 consecutive identical reads; any
+	// change resets the run. Zero order authority — this feeds only the dot.
+	scAccepted := st.SCVerdict
+	if a.StructureConflict == st.SCVerdict && a.StructureConflict != "none" && a.StructureConflict != "" {
+		st.SCConsec++
+	} else {
+		st.SCConsec = 0
+		if a.StructureConflict != "" && a.StructureConflict != "none" {
+			st.SCConsec = 1
+		}
+	}
+	if st.SCConsec >= 2 && a.StructureConflict != "" {
+		scAccepted = a.StructureConflict
+	}
+
 	if warn {
 		// R3 WARN — Phase 1 path (WARN → journald + log_events + dashboard).
 		// R4: this feeds NOTHING else — no gate, no prompt, no post-exit context.
 		at.logWarnf("⚠ THESIS INVALIDATED (%d×): %s — %s %s (conf %d). Watch-only: bracket/rails keep managing the trade.",
 			st.ConsecInvalid, a.InvalidationCited, p.Symbol, p.Side, a.Confidence)
+		// G8 — the strongest honest signal: thesis invalidated AND structure
+		// confirmed-conflict. Watch-only; zero order authority.
+		if scAccepted == "confirmed" {
+			at.logWarnf("👁 STRUCTURE CONFIRMED-CONFLICT — thesis invalidated AND machine structure contradicts the %s %s position (badge red). Watch-only: nothing emitted.", p.Symbol, p.Side)
+		}
 	}
 
 	wj, _ := json.Marshal(map[string]any{
 		"thesis_status":      a.ThesisStatus,
 		"accepted_status":    accepted,
 		"invalidation_cited": a.InvalidationCited,
+		"structure_conflict": scAccepted,
 		"note":               a.Note,
 		"confidence":         a.Confidence,
 		"warned":             warn,
@@ -387,6 +414,7 @@ func (at *AutoTrader) runWatchCycle(ctx *kernel.Context, record *store.DecisionR
 			Status:    a.ThesisStatus, AcceptedStatus: accepted, Confidence: a.Confidence,
 			InvalidationCited: a.InvalidationCited, Note: a.Note,
 			PriceAtRead: curPrice, Warned: warn,
+			StructureConflict: scAccepted,
 		})
 	}
 	return nil
