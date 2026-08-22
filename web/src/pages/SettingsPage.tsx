@@ -42,6 +42,18 @@ export function SettingsPage() {
   const { language } = useLanguage()
   const [activeTab, setActiveTab] = useState<Tab>('account')
 
+  // Running revision (vcs.revision of the deployed binary) — bug reports can be
+  // checked against this without a shell (master-audit finding 5.6).
+  const [revision, setRevision] = useState('')
+  useEffect(() => {
+    fetch('/api/config')
+      .then((r) => r.json())
+      .then((c) => {
+        if (c && c.revision) setRevision(c.revision)
+      })
+      .catch(() => {})
+  }, [])
+
   // Account state
   const [newPassword, setNewPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
@@ -788,6 +800,11 @@ export function SettingsPage() {
             language={language}
           />
         </div>
+      )}
+      {revision && (
+        <p className="mt-4 text-center text-[10px] text-zinc-600 font-mono">
+          running rev {revision}
+        </p>
       )}
     </div>
   )

@@ -1057,34 +1057,38 @@ export function StrategyStudioPage() {
                       >
                         <Download className="w-3 h-3" />
                       </button>
+                      {/* Duplicate is the escape hatch for the locked default
+                          (Studio Phase 6): make the copy visible on it too. */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          handleDuplicateStrategy(strategy.id)
+                        }}
+                        className="p-1 rounded hover:bg-white/10 text-nofx-text-muted hover:text-white"
+                        title={
+                          strategy.is_default
+                            ? tr('duplicateToEditHint')
+                            : tr('duplicate')
+                        }
+                      >
+                        <Copy className="w-3 h-3" />
+                      </button>
                       {!strategy.is_default && (
-                        <>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleDuplicateStrategy(strategy.id)
-                            }}
-                            className="p-1 rounded hover:bg-white/10 text-nofx-text-muted hover:text-white"
-                            title={tr('duplicate')}
-                          >
-                            <Copy className="w-3 h-3" />
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleDeleteStrategy(strategy.id)
-                            }}
-                            disabled={strategy.is_active}
-                            className="p-1 rounded hover:bg-nofx-danger/20 text-nofx-danger disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                            title={
-                              strategy.is_active
-                                ? tr('cannotDeleteActiveStrategy')
-                                : tr('deleteTooltip')
-                            }
-                          >
-                            <Trash2 className="w-3 h-3" />
-                          </button>
-                        </>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleDeleteStrategy(strategy.id)
+                          }}
+                          disabled={strategy.is_active}
+                          className="p-1 rounded hover:bg-nofx-danger/20 text-nofx-danger disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                          title={
+                            strategy.is_active
+                              ? tr('cannotDeleteActiveStrategy')
+                              : tr('deleteTooltip')
+                          }
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
                       )}
                     </div>
                   </div>
@@ -1246,11 +1250,20 @@ export function StrategyStudioPage() {
                     </button>
                     <button
                       onClick={() => handleStrategyTypeChange('grid_trading')}
-                      disabled={selectedStrategy?.is_default}
+                      disabled={
+                        selectedStrategy?.is_default || isFuturesStrategy
+                      }
+                      title={
+                        isFuturesStrategy
+                          ? tr('gridFuturesDisabled')
+                          : undefined
+                      }
                       className={`p-3 rounded-lg border transition-all ${
-                        editingConfig.strategy_type === 'grid_trading'
-                          ? 'border-nofx-gold bg-nofx-gold/10'
-                          : 'border-nofx-border hover:border-nofx-gold/50'
+                        isFuturesStrategy
+                          ? 'border-nofx-border opacity-50 cursor-not-allowed'
+                          : editingConfig.strategy_type === 'grid_trading'
+                            ? 'border-nofx-gold bg-nofx-gold/10'
+                            : 'border-nofx-border hover:border-nofx-gold/50'
                       }`}
                     >
                       <div className="flex items-center gap-2 mb-1">
@@ -1263,7 +1276,9 @@ export function StrategyStudioPage() {
                         </span>
                       </div>
                       <p className="text-xs text-nofx-text-muted text-left">
-                        {tr('gridTradingDesc')}
+                        {isFuturesStrategy
+                          ? tr('gridFuturesDesc')
+                          : tr('gridTradingDesc')}
                       </p>
                     </button>
                   </div>

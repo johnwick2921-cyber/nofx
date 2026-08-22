@@ -229,6 +229,21 @@ export const planStrings = {
     zh: '同一计划链再读一次 · 消耗额度',
     id: 'Satu rencana lagi di rantai yang sama · pakai jatah',
   },
+  approveCaption: {
+    en: 'Grant entries for this session-day',
+    zh: '授权本交易日的开仓',
+    id: 'Izinkan entri untuk hari sesi ini',
+  },
+  approveDone: {
+    en: 'Plan approved — entries flow for this CME session-day',
+    zh: '计划已批准 — 本 CME 交易日允许开仓',
+    id: 'Rencana disetujui — entri diizinkan untuk hari sesi CME ini',
+  },
+  approveFailed: {
+    en: 'Approve failed — see server logs',
+    zh: '批准失败 — 请查看服务端日志',
+    id: 'Persetujuan gagal — lihat log server',
+  },
   askAnyway: { en: 'Ask the planner', zh: '询问规划师', id: 'Tanya perencana' },
   askContextHistorical: {
     en: 'HISTORICAL CONTEXT — answering about the last stored plan, not a live one',
