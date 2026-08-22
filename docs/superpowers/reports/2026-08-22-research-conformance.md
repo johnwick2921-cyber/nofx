@@ -175,7 +175,22 @@ blocked, Σ delta 0.00.**
 | MSS displacement (corrected ATR) | 10:30 up-bar 83.75 pts = **1.08×** vs 1.5×Wilder (under); largest up-body 111.75 = 2.17× (07:00, not a CHoCH) |
 | intrabar beyond 29470.25, no close | 60 min (06:30/07:00/10:30/10:45) |
 
-### 4.3 08-22 replay — pending Sunday's data (queued, same tables).
+### 4.3 08-22 E2 replay scope — pending Sunday's data (same tables), EXPANDED
+
+G6 runs **THREE ways**, Σ PnL delta per variant, **both days** (08-21 and 08-22):
+
+| Variant | N | Pause | Loss-class (EffectivePnL) | Σ delta 08-21 | Σ delta 08-22 |
+|---|---|---|---|---|---|
+| A — shipped | 4 | 60 min | `< 0` (zero resets) | known: **0.00** (§4.1) | TBD Sunday |
+| B — research v5 §C.6 | 3 | 30 min | `< 0` (zero resets) | TBD | TBD |
+| C — ≤0 reset | 4 | 60 min | `≤ 0` (zero increments; resets only on strictly positive) | known: would have blocked 543+544 → **−150.00** (§4.1) | TBD |
+
+Notes: B is C.6 verbatim (`state["consecutive_losses"] >= 3` →
+"LOCKOUT: 3 consecutive losses, halted for 30 min", reset on any non-negative
+close). C is the shipped N/duration with the zero-neutral loss-class the earlier
+would-have analysis used. "Σ delta" = Σ PnL of entries the variant would have
+blocked, same convention as §4.1. Decision on N/pause/loss-class stays in the
+owner queue until this table is full.
 
 ---
 
@@ -196,8 +211,14 @@ blocked, Σ delta 0.00.**
 | veto TF / dominance ladder | research has no ladder (readout only) | HTF_VETO_TF=1h | 15m veto overlaps G4 |
 | min-conf | conf≥65 hard gate | 60 (owner config) | stricter entries |
 | trail mult | 1.5×ATR at +2.0R | 2.0×ATR, config arm | tighter trailing stops |
-| loss_streak N + zero-PnL class | not in research | 4; 0.00 resets | 543/544 fates on 08-21 (see §4.1) |
+| loss_streak N / pause / zero-PnL class | v5 §C.6: **3** losers / **30 min**, pnl<0, zero resets (corrected 2026-08-22 — audit had mis-graded this as not-in-research) | 4 / 60 min, pnl_corrected<0, zero resets | 3-way replay Σ delta both days (§4.3) |
 | structure ATR (fixed) | nautilus/Wilder | now Wilder | — (conformance bug, not calibration) |
+
+### Lineage gaps (owner queue, added 2026-08-22)
+
+| Gap | Evidence | Size | Decision gates |
+|---|---|---|---|
+| Exit-fill persistence — NT8 SIM path | `trader_fills` holds the 3 entry fills of 542/543/544 (prices match stored entries to the tick) but **zero exit fills**; `trader_orders` window empty → stored exit prices (e.g. 29400.0, 29475.75) cannot be re-derived from the wire. Entry-side lineage is clean; exit-side PnL provenance rests on `trader_positions` alone | **M** (persist NT8 execution/fill events for exit legs in `trader_fills` + backfill rule; wire schema already carries fills on the C# side) | post-soak forensics decision; no behavior change
 
 ### Regression proof
 
