@@ -57,6 +57,19 @@ export function DisciplinePanel({
     .filter(Boolean)
     .join(' ')
 
+  // MAE/MFE viz (4.4) — same averaging rule as the digest learning line:
+  // count only trades carrying excursion data (mae > 0 || mfe > 0).
+  const excursions = trades.trades.filter((t) => t.mae > 0 || t.mfe > 0)
+  const avgMAE =
+    excursions.length > 0
+      ? excursions.reduce((s, t) => s + t.mae, 0) / excursions.length
+      : 0
+  const avgMFE =
+    excursions.length > 0
+      ? excursions.reduce((s, t) => s + t.mfe, 0) / excursions.length
+      : 0
+  const excMax = Math.max(avgMAE, avgMFE, 0.01)
+
   return (
     <div
       className="flex flex-col gap-1 rounded-lg px-3 py-2 text-xs"
@@ -84,6 +97,49 @@ export function DisciplinePanel({
           </span>
         )}
       </div>
+      {excursions.length > 0 && (
+        <div className="flex items-center gap-2">
+          <span className="font-semibold" style={{ color: 'var(--vl-muted)' }}>
+            {en ? 'MAE/MFE' : 'MAE/MFE'}
+          </span>
+          <span className="font-mono" style={{ color: 'var(--vl-short)' }}>
+            −{avgMAE.toFixed(1)}
+          </span>
+          <span
+            className="font-mono"
+            style={{ color: 'var(--vl-long, #26a69a)' }}
+          >
+            +{avgMFE.toFixed(1)}
+          </span>
+          <span style={{ color: 'var(--vl-muted)' }}>
+            pts · n={excursions.length}
+          </span>
+          <span className="flex items-center gap-0.5">
+            <span
+              title={`avg MAE ${avgMAE.toFixed(1)} pts`}
+              style={{
+                display: 'inline-block',
+                width: `${Math.max(4, (avgMAE / excMax) * 48)}px`,
+                height: '4px',
+                borderRadius: '2px',
+                background: 'var(--vl-short)',
+                opacity: 0.85,
+              }}
+            />
+            <span
+              title={`avg MFE ${avgMFE.toFixed(1)} pts`}
+              style={{
+                display: 'inline-block',
+                width: `${Math.max(4, (avgMFE / excMax) * 48)}px`,
+                height: '4px',
+                borderRadius: '2px',
+                background: 'var(--vl-long, #26a69a)',
+                opacity: 0.85,
+              }}
+            />
+          </span>
+        </div>
+      )}
       <div className="flex items-baseline gap-2">
         <span className="font-semibold" style={{ color: 'var(--vl-muted)' }}>
           {en ? 'RANDOM-GATE' : '随机对照'}
