@@ -702,6 +702,12 @@ func (e *StrategyEngine) formatMarketData(data *market.Data) string {
 			if tfData, ok := data.TimeframeData[tf]; ok {
 				sb.WriteString(fmt.Sprintf("=== %s Timeframe (oldest → latest) ===\n\n", strings.ToUpper(tf)))
 				e.formatTimeframeSeriesData(&sb, tfData, indicators)
+				// P10.3 — no-data honesty: a timeframe with
+				// neither bars nor mid prices is stated, never
+				// silently omitted (master-audit v1 finding 8.5).
+				if len(tfData.Klines) == 0 && len(tfData.MidPrices) == 0 {
+					sb.WriteString("⚠️ no data available for this timeframe this cycle (feed warming up or down) — do NOT infer prices.\n\n")
+				}
 				// P10.2 — prompt honesty (owner ruling: interval cadence runs
 				// cycles MID-BAR): label the newest bar FORMING/CLOSED so the
 				// AI knows what it is looking at and may itself choose to wait
