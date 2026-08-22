@@ -114,8 +114,11 @@ type swing struct {
 	high   bool
 }
 
-// simpleATR14 computes the classic ATR(14) on closed bars (true range; the
-// first bar's range seeds the series).
+// simpleATR14 computes the classic ATR(14) on closed bars with WILDER
+// smoothing — the variant the research's nautilus ATR and nofx/market's
+// calculateATR both use. Conformance audit C-ATR1 (2026-08-22): this file
+// previously used a plain SMA, which read ~43% low on the 08-21 15m series
+// and silently loosened the min-swing and MSS-displacement thresholds.
 func simpleATR14(highs, lows, closes []float64) float64 {
 	if len(closes) == 0 {
 		return 0
@@ -123,8 +126,8 @@ func simpleATR14(highs, lows, closes []float64) float64 {
 	if len(closes) == 1 {
 		return highs[0] - lows[0]
 	}
-	trs := make([]float64, 0, len(closes))
-	trs = append(trs, highs[0]-lows[0])
+	trs := make([]float64, len(closes))
+	trs[0] = highs[0] - lows[0]
 	for i := 1; i < len(closes); i++ {
 		tr := highs[i] - lows[i]
 		if hc := highs[i] - closes[i-1]; hc > tr {
@@ -133,17 +136,25 @@ func simpleATR14(highs, lows, closes []float64) float64 {
 		if lc := closes[i-1] - lows[i]; lc > tr {
 			tr = lc
 		}
-		trs = append(trs, tr)
+		trs[i] = tr
 	}
 	n := 14
-	if len(trs) < n {
-		n = len(trs)
+	if len(trs) <= n {
+		sum := 0.0
+		for i := 1; i < len(trs); i++ {
+			sum += trs[i]
+		}
+		return sum / float64(len(trs)-1)
 	}
 	sum := 0.0
-	for _, t := range trs[len(trs)-n:] {
-		sum += t
+	for i := 1; i <= n; i++ {
+		sum += trs[i]
 	}
-	return sum / float64(n)
+	atr := sum / float64(n)
+	for i := n + 1; i < len(trs); i++ {
+		atr = (atr*float64(n-1) + trs[i]) / float64(n)
+	}
+	return atr
 }
 
 // ComputeStructureState runs the swing engine + event detectors on one TF's

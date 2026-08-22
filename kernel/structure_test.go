@@ -205,6 +205,28 @@ func TestG2Replay_ShiftDay15m(t *testing.T) {
 	}
 }
 
+func TestStructureATRMatchesMarketWilder(t *testing.T) {
+	// C-ATR1 conformance pin: the structure engine's ATR must equal nofx/market's
+	// Wilder-smoothed calculateATR on the same series (research: nautilus ATR).
+	bars := upFixture()
+	klines := make([]market.Kline, len(bars))
+	highs := make([]float64, len(bars))
+	lows := make([]float64, len(bars))
+	closes := make([]float64, len(bars))
+	for i, b := range bars {
+		klines[i] = market.Kline{OpenTime: b.Time, Open: b.Open, High: b.High, Low: b.Low, Close: b.Close}
+		highs[i], lows[i], closes[i] = b.High, b.Low, b.Close
+	}
+	want := market.ExportCalculateATR(klines, 14)
+	got := simpleATR14(highs, lows, closes)
+	if got <= 0 || want <= 0 {
+		t.Fatalf("ATR must be positive: got %v want %v", got, want)
+	}
+	if diff := got - want; diff < -0.0001 || diff > 0.0001 {
+		t.Fatalf("structure ATR %.6f != market Wilder ATR %.6f", got, want)
+	}
+}
+
 func TestStructurePromptLine(t *testing.T) {
 	snap := map[string]StructureState{
 		"15m": {Trend: "TRENDING_DOWN", Swing: &SwingRef{Kind: "LL", Price: 29346, TimeMs: hourMs(10, 15)},
