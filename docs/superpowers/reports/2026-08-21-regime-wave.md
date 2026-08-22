@@ -51,6 +51,47 @@ Honest machine truth, pinned by tests (`TestG1Replay_ShiftDayVetoes`, `TestG4Rep
 Σ pnl_corrected delta vs the real −492.00: **0.00**. No entry is blocked on 08-21 — the day's 1h never confirmed a trend by the 3-swing standard and no 15m close-through ever occurred. The wave's day-1 value is the mechanism + honest detection (flip fires ~10 min earlier on a fresh feed), not retroactive saves.
 **08-22 (addendum)**: no rows yet (last close 08-21 10:51 CT). Will run after Sunday's sessions and classify its losers by the forensics taxonomy (faithful-but-wrong / transition / post-flip).
 
+### 4.1 G6 SEQUENCING — explicit replay with real close timestamps
+
+Real close order (exit_time, CT) with EffectivePnL:
+
+| # | close CT | pnl | streak (shipped rule: pnl < 0) |
+|---|----------|-----|-------------------------------|
+| 533 | 08-20 19:12:43 | −54.50 | 1 |
+| 534 | 08-20 20:49:55 | −66.00 | 2 |
+| 535 | 08-20 21:20:57 | −31.00 | 3 |
+| 536 | 08-20 23:27:34 | +124.00 | reset |
+| 537 | 08-21 01:35:40 | −79.50 | 1 |
+| 538 | 08-21 01:45:01 | +30.50 | reset |
+| 539 | 08-21 05:00:11 | −84.50 | 1 |
+| 540 | 08-21 06:01:16 | −98.00 | 2 |
+| 541 | 08-21 08:13:42 | −83.00 | **3** |
+| 542 | 08-21 09:27:42 | **0.00** | reset (0 is NOT < 0) |
+| 543 | 08-21 10:34:30 | −88.50 | 1 |
+| 544 | 08-21 10:51:49 | −61.50 | 2 |
+
+- **The streak never reaches 4**: max = 3 (539,540,541 by 08:13:42). 542's zero PnL resets it, so 543 = 1 and 544 = 2.
+- **Session scope**: all 12 closes fall inside ONE CME session-day (08-20 17:00 → 08-21 17:00 CT). G6 is session-day-scoped by design — the LONDON→NY boundary (08:30) does NOT reset the streak, and it did not matter here: the run was broken by 542's 0.0, not by a boundary.
+- **Pause windows that WOULD have opened** (hypothetical rules): (a) if pnl ≤ 0 counted: streak 4 at 542 close 09:27:42 → pause until 10:27:42 CT → would have refused 543 (entry 10:12:43 CT) → −88.50 saved; (b) if 0.00 were neutral: streak 4 at 543 close 10:34:30 → pause until 11:34:30 CT → would have refused 544 → −61.50 saved. Under the shipped rule: NO pause opens on 08-21.
+- **E2 restated with ALL gates active incl. G6**: 0 blocked; Σ pnl_corrected delta vs −492.00 stays **0.00**.
+
+### 4.2 NEAR-MISS TABLE (08-21, real 15m/1h bars — measured, not felt)
+
+| Metric | Near-miss value | Binding constraint |
+|---|---|---|
+| CHoCH-up close-through | **71.0 pts short** (max post-flush 15m close 29417.50 @11:30 vs swing high 29488.50 @10:45) | no close ever broke the 10:45 swing high |
+| Flip line 29470.25 (upside close after the crash) | **18.5 pts short** (max close 29451.75 @10:30; pre-crash 06:00–06:15 closes were above the line) | — |
+| 15m 3-swing trend grade | **Δ=0.00 pts — the two lows were EQUAL (29220.25 twice)**, so the low-pair can never confirm UP or DOWN | equal-low refused TRENDING_DOWN all day; full-day pairs mixed → RANGING at every probe (05:00/08:45/11:30/15:00) |
+| 1h 3-swing trend grade | max 3 confirmed swings at any entry instant (H 29399.75, L 29321.25, H 29539.75); the 4th (L 29220.25 @09:00) confirms ~11:00+ and the pairs are MIXED (up-pair highs, down-pair lows) | RANGING at every probe (03:54/08:49/10:47/14:45) |
+| MSS displacement | the 10:30 up-bar body was **83.75 pts ≈ 2.9×ATR (≥ 1.5× threshold)** — displacement present, but no trend grade to attach the CHoCH to (the RANGING branch never emits CHoCH/MSS) | the trend grade, not the displacement, was the blocker |
+| Intrabar beyond the flip line without a close beyond | **60 min** across 4 bars (06:30, 07:00, 10:30, 10:45) | — |
+
+Read-out: the binding constraints on 08-21 were (1) the equal-low pair — a 0.00-pt margin — and (2) mixed swing pairs on both TFs. No calibration of swing window/min-move changes an equal low into a strictly-lower low; the day was genuinely two-sided on closes. The stand-down's only real trigger path that day was a 15m close ≥ 29488.50 (71 pts away).
+
+## 4.3 Research files — cherry-pick CONFIRMED landed
+
+The 7 research files existed on branch `docs/research-import-shift-forensics` (commit `f573b38f`, "docs: import plan-card design research (7)") but had never been cherry-picked onto the wave branch — the report's decision queue was correct. **Cherry-picked onto `feat/regime-wave` now**: `docs/research/plan-card/` holds the Final Build Plan v5, the Implementation Plan, FULL-SPEC, PLAN-CARD-DESIGN-SYSTEM, Strategy-Studio-Complete-Plan, Build Plan v3 and the config mockup (md + docx + html). The specs cite the smart-money-concepts library vocabulary (BOS/CHoCH/SWEEP) but do not hardcode different NQ swing constants than shipped — the near-miss table above is the calibration evidence either way.
+
 ## 5. E3 / E4 / E5
 
 - E3 (live stored prompt with STRUCTURE line + gate-order doc): gate-order doc shipped (`docs/regime-wave/gate-order.md`, matches observed order). Live-prompt quote is pending a live market cycle — weekend cycles carry no market data (expected); the Sunday soak captures it.
@@ -63,16 +104,18 @@ Honest machine truth, pinned by tests (`TestG1Replay_ShiftDayVetoes`, `TestG4Rep
 
 ## 7. Found-not-fixed
 
-- `docs/research/plan-card/*` (7 research files) and `docs/superpowers/reports/2026-08-21-shift-day-loss-forensics.md` are NOT in this repo — built from the dispatch text + `docs/market-regime-classification-en.md` §6.4 vocabulary; calibration constants are env-tunable (`STRUCTURE_SWING_K`, `STRUCTURE_MIN_SWING_ATR`, `STRUCTURE_MSS_BODY_ATR`).
+- ~~`docs/research/plan-card/*` missing~~ — RESOLVED 2026-08-21 (cherry-picked `f573b38f` onto the wave branch; see §4.3).
+- `docs/superpowers/reports/2026-08-21-shift-day-loss-forensics.md` is not in this repo — the E2 day-1 numbers come from the position store + stored prompts directly.
 - journald flood suppression can still hide latch log lines (rate limit raised, but NT8 floods ~58k lines/min) — the durable alert rows are the load-bearing surface.
 - Pre-existing FE test exclusions + guardrail-master OFF (owner's dated choice) unchanged.
 
 ## 8. Owner decision queue
 
-1. **G1 calibration**: on 08-21 the 3-swing standard vetoed 0/12. Loosening (`STRUCTURE_SWING_K=1`, lower `STRUCTURE_MIN_SWING_ATR`) would have let the 1h confirm earlier — the dispatch's "expected: most" was based on research values that are absent from this repo. Pick the calibration or ship as-is.
-2. **LOSS_STREAK_N value**: shipped 4; the dispatch left the exact N to the research (absent) — confirm 4.
-3. **Veto TF choice**: `HTF_VETO_TF=1h` shipped; 15m veto would catch more but overlaps G4's stand-down.
-4. **08-22 replay + classification** pending Sunday's data; will complete E2 then.
+1. **G1/G4 calibration — now with numbers**: the 08-21 binding constraint was the equal-low pair (Δ 0.00) + mixed pairs on both TFs, not the swing window or min-move. The stand-down's real trigger path was a 15m close ≥ 29488.50 (71 pts away); the 10:30 up-bar had MSS displacement (2.9×ATR) but no trend grade to attach it to. Calibration options (if wanted): a "close ≥ swing high" CHoCH variant in RANGING, or an extra pair-lookback — both are behavior changes to decide with the near-miss table in hand.
+2. **G6 zero-PnL classification**: 542's 0.00 is the pivot of the day — counting it as a loser would have paused 543 (−88.50); neutrality would have paused 544 (−61.50). The shipped rule (pnl < 0) treats 0 as a reset. Confirm or change.
+3. **LOSS_STREAK_N value**: shipped 4; the dispatch left the exact N to the research (now present, no hardcoded N found) — confirm 4.
+4. **Veto TF choice**: `HTF_VETO_TF=1h` shipped; 15m veto would overlap G4's stand-down.
+5. **08-22 replay + classification** pending Sunday's data; will complete E2 then (same table + near-miss columns).
 
 ## 9. Residual risk
 
