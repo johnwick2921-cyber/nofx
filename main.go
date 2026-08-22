@@ -230,6 +230,9 @@ func main() {
 	// by the trader loop). At boot the NT8 wire may not be up yet — the line
 	// says "none" honestly rather than waiting.
 	kernel.LogClockHealth("boot", "MNQ")
+	// REGIME WAVE (Cutover 2, 2026-08-21) — one boot line per regime knob:
+	// value + source, so the boot block self-documents the wave's enforcement.
+	kernel.LogRegimeBootLedger()
 	// P1.4 (ledger-close 2026-08-19) — clock-guard block: live host-RTC drift,
 	// guard-timer freshness, last resync/check state. Log-only, best-effort.
 	kernel.LogClockGuardBoot()
