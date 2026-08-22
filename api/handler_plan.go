@@ -337,6 +337,7 @@ func planLevelFacts(symbol string, doc kernel.PlanDoc, now time.Time, rule strin
 			"price":         l.Price,
 			"label":         l.Label,
 			"grade":         l.Grade,
+			"machine_grade": l.MachineGrade,
 			"instruction":   l.Instruction,
 			"distance":      f.DistancePoints,
 			"sweep":         f.Swept,

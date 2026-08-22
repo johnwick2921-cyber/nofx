@@ -24,8 +24,14 @@ type PlanBias struct {
 type PlanLevel struct {
 	Price       float64 `json:"price"`
 	Label       string  `json:"label"`       // provenance chip: PDH, ONH, nPOC·Tue, RN, EQH…
-	Grade       string  `json:"grade"`       // A | B | C
+	Grade       string  `json:"grade"`       // A | B | C (MODEL-written)
 	Instruction string  `json:"instruction"` // instruction verb, e.g. "fade", "reclaim-long"
+	// MachineGrade is the deterministic detector-side grade (type × freshness ×
+	// confluence × HTF — levels_score.go) stamped at plan write by matching the
+	// plan level back to the Go-ranked candidate table. Empty when no match
+	// (owner levels grade A by design; unseated detector levels have none).
+	// Master-audit finding 8.4: the card used to show ONLY the model's grade.
+	MachineGrade string `json:"machine_grade,omitempty"`
 }
 
 // PlanScenario is one if/then play in the formal grammar.

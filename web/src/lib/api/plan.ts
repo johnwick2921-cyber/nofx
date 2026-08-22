@@ -47,6 +47,9 @@ export interface PlanLevelFact {
   price: number
   label: string
   grade: string
+  // machine_grade: the deterministic detector-side grade stamped at plan write
+  // (type × freshness × confluence × HTF). Absent on legacy rows / unmatched.
+  machine_grade?: string
   instruction: string
   distance: number // signed distance in points (backend-computed)
   sweep: boolean

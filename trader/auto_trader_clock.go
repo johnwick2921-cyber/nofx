@@ -459,6 +459,80 @@ func (at *AutoTrader) enforceEODFlatAt(now time.Time) bool {
 	return true
 }
 
+// t1ForceFlatLead is how many minutes BEFORE a T1 (red-news) blackout starts
+// that existing positions are force-closed (research v5 C.5: FOMC/NFP positions
+// forced closed at T-2 min; the blackout itself starts T1BlackoutMinutes before
+// the event, so closing at blackout−2min is strictly earlier = safer).
+const t1ForceFlatLead = 2
+
+// t1ForceFlatDue reports whether nowMin (CT minute-of-day) falls inside
+// [window.Start − lead, window.End] for any T1 window, returning the matching
+// label ("" = not due). Wrap-aware, same range math as kernel.InT1Blackout.
+func t1ForceFlatDue(nowMin int, windows []kernel.CTWindow, lead int) string {
+	for _, w := range windows {
+		start := (w.Start - lead + 1440) % 1440
+		in := false
+		if w.End >= start {
+			in = nowMin >= start && nowMin <= w.End
+		} else {
+			in = nowMin >= start || nowMin <= w.End
+		}
+		if in {
+			return w.Label
+		}
+	}
+	return ""
+}
+
+// enforceT1ForceFlat closes any open position from t1ForceFlatLead minutes
+// before each T1 blackout window through the end of that window. Same shape as
+// enforceEODFlatAt: gated dormant (day_plan), never invents a flatten outside
+// an active session, close is retried each cycle while positions remain open
+// (GetOpenPositions only returns open ones, so retries are naturally
+// idempotent). Windows come from currentT1Windows — so the fail-closed static
+// fallback protects this path too.
+func (at *AutoTrader) enforceT1ForceFlat() bool {
+	return at.enforceT1ForceFlatAt(time.Now())
+}
+
+func (at *AutoTrader) enforceT1ForceFlatAt(now time.Time) bool {
+	if !at.dayPlanEnabled() || at.store == nil || at.trader == nil {
+		return false
+	}
+	if _, ok := at.sessionRegistry(now).ActiveSession(now); !ok {
+		return false // no active session — never flatten from an invented clock
+	}
+	windows := at.currentT1Windows(now)
+	if len(windows) == 0 {
+		return false
+	}
+	due := t1ForceFlatDue(ctMinutesNow(now), windows, t1ForceFlatLead)
+	if due == "" {
+		return false
+	}
+	positions, err := at.store.Position().GetOpenPositions(at.id)
+	if err != nil || len(positions) == 0 {
+		return false
+	}
+	at.logWarnf("📰 T1-FORCE-FLAT (%s): flattening %d open position(s) — red-news forced close at T-%dmin (research v5 C.5).", due, len(positions), t1ForceFlatLead)
+	for _, p := range positions {
+		var e error
+		if strings.EqualFold(p.Side, "LONG") {
+			_, e = at.trader.CloseLong(p.Symbol, 0) // 0 = close all
+		} else {
+			_, e = at.trader.CloseShort(p.Symbol, 0)
+		}
+		if e != nil {
+			at.logErrorf("📰 T1-FORCE-FLAT: close %s %s failed: %v", p.Symbol, p.Side, e)
+			continue
+		}
+		if err := at.trader.CancelStopOrders(p.Symbol); err != nil {
+			at.logWarnf("📰 T1-FORCE-FLAT: cancel bracket %s failed (non-fatal): %v", p.Symbol, err)
+		}
+	}
+	return true
+}
+
 // recordExcursionForClosedSymbol (P2.4) processes the just-closed trade for the
 // AI-emitted-close path. W5 — the SAME analytics also fire from the loop poll for
 // real exits (NT8 OCO / EOD-flat / manual), so no exit path is missed.
