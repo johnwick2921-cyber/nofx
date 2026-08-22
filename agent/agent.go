@@ -6,12 +6,12 @@
 package agent
 
 import (
-	"nofx/kernel"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
+	"nofx/kernel"
 	"os"
 	"sort"
 	"strconv"
@@ -203,6 +203,8 @@ func (a *Agent) loadAIClientFromStoreUser(storeUserID string) (mcp.AIClient, str
 			httpClient := &http.Client{Timeout: 60 * time.Second}
 			client := mcp.NewClient(mcp.WithHTTPClient(httpClient))
 			client.SetAPIKey(apiKey, customAPIURL, modelName)
+			mcp.ApplyThinking(client, model.ThinkingMode, model.ReasoningEffort)
+			mcp.ApplyThinking(client, model.ThinkingMode, model.ReasoningEffort)
 			a.log().Info("agent AI client selected", "store_user_id", candidateUserID, "model_id", model.ID, "model", modelName)
 			return client, modelName, true
 		}

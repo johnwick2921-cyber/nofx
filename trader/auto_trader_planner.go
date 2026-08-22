@@ -71,6 +71,12 @@ func (at *AutoTrader) resolvePlannerClient() (mcp.AIClient, string) {
 		at.logWarnf("🧠 planner model %q unresolved by the registry → falling back to primary %q", modelID, exact)
 		return at.mcpClient, exact
 	}
+	// 4.5 — per-model thinking knobs override the env defaults (best-effort).
+	if at.store != nil {
+		if row, err := at.store.AIModel().GetByID(modelID); err == nil && row != nil {
+			mcp.ApplyThinking(client, row.ThinkingMode, row.ReasoningEffort)
+		}
+	}
 	// Mirror the primary key resolution (provider-specific overrides).
 	apiKey := at.config.CustomAPIKey
 	customURL := at.config.CustomAPIURL

@@ -511,6 +511,13 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 	if mcpClient == nil {
 		mcpClient = mcp.New()
 	}
+	// 4.5 — per-model thinking knobs override the env defaults (best-effort row
+	// lookup; a miss keeps the env defaults).
+	if st != nil {
+		if row, err := st.AIModel().GetByID(aiModel); err == nil && row != nil {
+			mcp.ApplyThinking(mcpClient, row.ThinkingMode, row.ReasoningEffort)
+		}
+	}
 
 	// P0-latency — the timeout applied here is the ONE config-driven AI timeout
 	// (mcp.ResolvedAITimeout). NOTE (audit 2026-08-18): with an EMPTY
