@@ -25,6 +25,13 @@ type Config struct {
 	TopP        float64 // 0 = not sent
 	UseFullURL  bool
 
+	// DeepSeek thinking mode (https://api-docs.deepseek.com/guides/thinking_mode):
+	// thinking {type: enabled|disabled} + reasoning_effort low|high|max.
+	// Docs: thinking mode is ON by default with effort high; "max" is the true
+	// maximum (medium/xhigh map to high). Empty string = omit from the request.
+	ThinkingMode    string // "enabled" (default) | "disabled" | ""
+	ReasoningEffort string // "max" (default) | "high" | "low" | ""
+
 	// Retry configuration
 	MaxRetries      int
 	RetryWaitBase   time.Duration
@@ -53,6 +60,8 @@ func DefaultConfig() *Config {
 		MaxTokens:       getEnvInt("AI_MAX_TOKENS", 32768),
 		Temperature:     getEnvFloat("AI_TEMPERATURE", MCPClientTemperature),
 		TopP:            getEnvFloat("AI_TOP_P", 0), // 0 = omit from the request
+		ThinkingMode:    getEnvString("DEEPSEEK_THINKING_MODE", "enabled"),
+		ReasoningEffort: getEnvString("AI_REASONING_EFFORT", "max"),
 		MaxRetries:      getEnvInt("AI_MAX_RETRIES", MaxRetryTimes),
 		RetryWaitBase:   time.Duration(getEnvInt("AI_RETRY_BACKOFF_SECONDS", 2)) * time.Second,
 		Timeout:         ResolvedAITimeout(),
@@ -116,6 +125,8 @@ type EffectiveAIParams struct {
 	TimeoutSeconds      int
 	MaxRetries          int
 	RetryBackoffSeconds int
+	ThinkingMode        string
+	ReasoningEffort     string
 
 	MaxTokensSet    bool
 	TemperatureSet  bool
@@ -123,6 +134,8 @@ type EffectiveAIParams struct {
 	TimeoutSet      bool
 	MaxRetriesSet   bool
 	RetryBackoffSet bool
+	ThinkingSet     bool
+	ReasoningSet    bool
 }
 
 // EffectiveAIParamsSnapshot reports the env-driven values currently in force,
@@ -137,6 +150,8 @@ func EffectiveAIParamsSnapshot(model string) EffectiveAIParams {
 		TimeoutSeconds:      int(cfg.Timeout / time.Second),
 		MaxRetries:          cfg.MaxRetries,
 		RetryBackoffSeconds: int(cfg.RetryWaitBase / time.Second),
+		ThinkingMode:        cfg.ThinkingMode,
+		ReasoningEffort:     cfg.ReasoningEffort,
 		MaxTokensSet:        os.Getenv("AI_MAX_TOKENS") != "",
 		TemperatureSet:      os.Getenv("AI_TEMPERATURE") != "",
 		TopPSet:             os.Getenv("AI_TOP_P") != "",
@@ -148,6 +163,8 @@ func EffectiveAIParamsSnapshot(model string) EffectiveAIParams {
 		TimeoutSet:      os.Getenv("AI_HTTP_TIMEOUT_SECONDS") != "" || os.Getenv("AI_TIMEOUT_SECONDS") != "",
 		MaxRetriesSet:   os.Getenv("AI_MAX_RETRIES") != "",
 		RetryBackoffSet: os.Getenv("AI_RETRY_BACKOFF_SECONDS") != "",
+		ThinkingSet:     os.Getenv("DEEPSEEK_THINKING_MODE") != "",
+		ReasoningSet:    os.Getenv("AI_REASONING_EFFORT") != "",
 	}
 }
 
