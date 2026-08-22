@@ -220,6 +220,15 @@ func (at *AutoTrader) runCycle() error {
 		return nil
 	}
 
+	// W3.4 — T1 FORCE-FLAT (research v5 C.5): from T-2min before each red-news
+	// blackout through the window, force-close open positions (FOMC/NFP must
+	// never ride through the event). Also before skip-while-open; when no
+	// positions remain it no-ops and the cycle continues into the blackout
+	// no-trade gate (which blocks new entries).
+	if at.enforceT1ForceFlat() {
+		return nil
+	}
+
 	// PHASE 3.5 — clock health at each SESSION ROLL (log-only). Detects the
 	// active-session name changing between cycles (incl. →night as ""). Hoisted
 	// ABOVE skip-while-open (in-position silence fix 2026-08-19): a session roll
