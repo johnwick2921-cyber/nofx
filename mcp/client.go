@@ -827,6 +827,35 @@ func applyDeepSeekThinkingDefaults(body map[string]any, cfg *Config) {
 	}
 }
 
+// SetThinking overrides the env-default DeepSeek thinking knobs with per-model
+// values (4.5 API auto max). Empty keeps the env-derived default.
+func (c *Client) SetThinking(mode, effort string) {
+	if c == nil {
+		return
+	}
+	if mode != "" {
+		c.Cfg.ThinkingMode = mode
+	}
+	if effort != "" {
+		c.Cfg.ReasoningEffort = effort
+	}
+}
+
+// ValidateThinkingKnobs whitelists the two DeepSeek fields; empty = inherit.
+func ValidateThinkingKnobs(mode, effort string) error {
+	switch mode {
+	case "", "enabled", "disabled":
+	default:
+		return fmt.Errorf("thinking_mode must be enabled|disabled (got %q)", mode)
+	}
+	switch effort {
+	case "", "low", "high", "max":
+	default:
+		return fmt.Errorf("reasoning_effort must be low|high|max (got %q)", effort)
+	}
+	return nil
+}
+
 // CallWithRequestStream streams the LLM response via SSE (Server-Sent Events).
 // onChunk is called with the full accumulated text so far after each received chunk.
 // Returns the complete final text when the stream ends.
