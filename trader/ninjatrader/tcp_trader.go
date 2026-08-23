@@ -425,6 +425,18 @@ func (t *TCPTrader) CloseShort(symbol string, quantity float64) (map[string]inte
 // cancel the protective bracket). The resulting market-exit fill returns as a
 // position_close frame, which the close-sync records to history.
 func (t *TCPTrader) sendClose(side string, quantity float64) (map[string]interface{}, error) {
+	return t.sendCloseAt(side, quantity, 0)
+}
+
+// CloseWithLimit (4.3) submits a LIMIT exit at limitPrice instead of an
+// immediate market flatten. The market fallback is a follow-up sendClose
+// (limit 0) from the caller after its own budget elapses. LimitPrice <= 0 is
+// identical to sendClose.
+func (t *TCPTrader) CloseWithLimit(symbol string, side string, quantity float64, limitPrice float64) (map[string]interface{}, error) {
+	return t.sendCloseAt(side, quantity, limitPrice)
+}
+
+func (t *TCPTrader) sendCloseAt(side string, quantity float64, limitPrice float64) (map[string]interface{}, error) {
 	// Clear the entry correlation so the close-path order poll does NOT match the
 	// lingering entry fill (which would record exit≈entry, PnL≈0). The real exit
 	// is recorded by close-sync off the position_close frame.
@@ -434,12 +446,13 @@ func (t *TCPTrader) sendClose(side string, quantity float64) (map[string]interfa
 	t.mu.Unlock()
 
 	payload := ntwire.ClosePositionPayload{
-		Symbol:   t.symbol,
-		Side:     side,
-		Quantity: int(quantity),
-		SignalID: uuid.NewString(),
-		Account:  t.boundAccount, // A2 (G1) — identity stamp
-		TraderID: tid,
+		Symbol:     t.symbol,
+		Side:       side,
+		Quantity:   int(quantity),
+		LimitPrice: limitPrice,
+		SignalID:   uuid.NewString(),
+		Account:    t.boundAccount, // A2 (G1) — identity stamp
+		TraderID:   tid,
 	}
 	if err := t.server.SendClosePosition(payload); err != nil {
 		return nil, fmt.Errorf("ninjatrader/tcp: send close: %w", err)

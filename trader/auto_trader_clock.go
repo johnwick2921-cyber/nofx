@@ -440,21 +440,7 @@ func (at *AutoTrader) enforceEODFlatAt(now time.Time) bool {
 	}
 	at.logWarnf("🕒 EOD-FLAT (%s): session close — flattening %d open position(s) via the trader close path.", flat, len(positions))
 	for _, p := range positions {
-		var e error
-		if strings.EqualFold(p.Side, "LONG") {
-			_, e = at.trader.CloseLong(p.Symbol, 0) // 0 = close all
-		} else {
-			_, e = at.trader.CloseShort(p.Symbol, 0)
-		}
-		if e != nil {
-			at.logErrorf("🕒 EOD-FLAT: close %s %s failed: %v", p.Symbol, p.Side, e)
-			continue
-		}
-		// Cancel the resting OCO bracket after the flatten (belt-and-suspenders;
-		// the OCO also auto-cancels its other leg on the close fill).
-		if err := at.trader.CancelStopOrders(p.Symbol); err != nil {
-			at.logWarnf("🕒 EOD-FLAT: cancel bracket %s failed (non-fatal): %v", p.Symbol, err)
-		}
+		at.flattenPosition(p, "🕒 EOD-FLAT")
 	}
 	return true
 }
@@ -464,6 +450,113 @@ func (at *AutoTrader) enforceEODFlatAt(now time.Time) bool {
 // forced closed at T-2 min; the blackout itself starts T1BlackoutMinutes before
 // the event, so closing at blackout−2min is strictly earlier = safer).
 const t1ForceFlatLead = 2
+
+// limitClosePrice computes the favorable-side limit exit price for the 4.3
+// limit-then-market flatten: LONG exits at close + ticks*tick, SHORT at
+// close − ticks*tick. Returns 0 when the inputs can't produce a sane price.
+func limitClosePrice(close float64, ticks int, tick float64, long bool) float64 {
+	if ticks <= 0 || tick <= 0 || close <= 0 {
+		return 0
+	}
+	if long {
+		return close + float64(ticks)*tick
+	}
+	return close - float64(ticks)*tick
+}
+
+// flattenPosition (4.3) closes ONE open position. With the dormant default
+// (LimitCloseTicks 0) it is byte-identical to the historical market flatten:
+// market close + bracket cancel. When enabled it FIRST places a limit exit
+// LimitCloseTicks beyond the latest 1m bar close (favorable side; entry-price
+// fallback when bars are unavailable), KEEPS the protective bracket during the
+// limit's life (the C# cancels it on the limit fill), and schedules a market
+// fallback after LimitCloseMarketAfterS — the fallback re-checks the
+// open-position table, so a filled limit no-ops.
+func (at *AutoTrader) flattenPosition(p *store.TraderPosition, tag string) {
+	side := "LONG"
+	if !strings.EqualFold(p.Side, "LONG") {
+		side = "SHORT"
+	}
+	closeMarket := func() bool {
+		var e error
+		if side == "LONG" {
+			_, e = at.trader.CloseLong(p.Symbol, 0) // 0 = close all
+		} else {
+			_, e = at.trader.CloseShort(p.Symbol, 0)
+		}
+		if e != nil {
+			at.logErrorf("%s: close %s %s failed: %v", tag, p.Symbol, p.Side, e)
+			return false
+		}
+		return true
+	}
+
+	ticks := at.config.LimitCloseTicks
+	if ticks <= 0 {
+		// Dormant default — byte-identical to the historical flatten.
+		if closeMarket() {
+			if err := at.trader.CancelStopOrders(p.Symbol); err != nil {
+				at.logWarnf("%s: cancel bracket %s failed (non-fatal): %v", tag, p.Symbol, err)
+			}
+		}
+		return
+	}
+
+	// Limit-then-market (active only when EOD_FLAT_LIMIT_TICKS > 0).
+	ref := 0.0
+	if market.FuturesBarsProvider != nil {
+		if bars := market.FuturesBarsProvider(p.Symbol, "1m", 3); len(bars) > 0 {
+			ref = bars[len(bars)-1].Close
+		}
+	}
+	if ref <= 0 {
+		ref = p.EntryPrice
+	}
+	limit := limitClosePrice(ref, ticks, market.FuturesTickSize(p.Symbol), side == "LONG")
+	type limitCloser interface {
+		CloseWithLimit(symbol, side string, quantity float64, limitPrice float64) (map[string]interface{}, error)
+	}
+	lc, ok := at.trader.(limitCloser)
+	if !ok || limit <= 0 {
+		// No limit support or no sane reference — market close, bracket cancel.
+		if closeMarket() {
+			_ = at.trader.CancelStopOrders(p.Symbol)
+		}
+		return
+	}
+	if _, err := lc.CloseWithLimit(p.Symbol, side, 0, limit); err != nil {
+		at.logWarnf("%s: limit close %s %s failed (%v) — market fallback now", tag, p.Symbol, p.Side, err)
+		closeMarket()
+		_ = at.trader.CancelStopOrders(p.Symbol)
+		return
+	}
+	at.logInfof("%s: limit exit submitted %s %s @ %.2f (market fallback in %ds)",
+		tag, p.Symbol, side, limit, at.config.LimitCloseMarketAfterS)
+	after := time.Duration(at.config.LimitCloseMarketAfterS) * time.Second
+	if after <= 0 {
+		after = 10 * time.Second
+	}
+	sym, sd := p.Symbol, side
+	time.AfterFunc(after, func() {
+		if at.store == nil {
+			return
+		}
+		if open, err := at.store.Position().GetOpenPositions(at.id); err == nil {
+			for _, po := range open {
+				if market.Normalize(po.Symbol) == market.Normalize(sym) && strings.EqualFold(po.Side, sd) {
+					at.logWarnf("%s: limit unfilled after %ds — market flatten %s %s", tag, int(after.Seconds()), sym, sd)
+					if sd == "LONG" {
+						_, _ = at.trader.CloseLong(po.Symbol, 0)
+					} else {
+						_, _ = at.trader.CloseShort(po.Symbol, 0)
+					}
+					_ = at.trader.CancelStopOrders(po.Symbol)
+					return
+				}
+			}
+		}
+	})
+}
 
 // t1ForceFlatDue reports whether nowMin (CT minute-of-day) falls inside
 // [window.Start − lead, window.End] for any T1 window, returning the matching
@@ -516,19 +609,7 @@ func (at *AutoTrader) enforceT1ForceFlatAt(now time.Time) bool {
 	}
 	at.logWarnf("📰 T1-FORCE-FLAT (%s): flattening %d open position(s) — red-news forced close at T-%dmin (research v5 C.5).", due, len(positions), t1ForceFlatLead)
 	for _, p := range positions {
-		var e error
-		if strings.EqualFold(p.Side, "LONG") {
-			_, e = at.trader.CloseLong(p.Symbol, 0) // 0 = close all
-		} else {
-			_, e = at.trader.CloseShort(p.Symbol, 0)
-		}
-		if e != nil {
-			at.logErrorf("📰 T1-FORCE-FLAT: close %s %s failed: %v", p.Symbol, p.Side, e)
-			continue
-		}
-		if err := at.trader.CancelStopOrders(p.Symbol); err != nil {
-			at.logWarnf("📰 T1-FORCE-FLAT: cancel bracket %s failed (non-fatal): %v", p.Symbol, err)
-		}
+		at.flattenPosition(p, "📰 T1-FORCE-FLAT")
 	}
 	return true
 }
