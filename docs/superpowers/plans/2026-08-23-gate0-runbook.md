@@ -25,6 +25,8 @@ B (research 3/30) = 0.00 · C (≤0-reset) = −88.50**.
 - [ ] Run the replay against the G6 variant table.
 - [ ] Confirm the computed deltas match the pre-computed values (they are a
       pin, not a prediction — a mismatch is a replay-harness bug, stop and fix).
+      **NOTE (08-23): the G6 loss-streak gate was REMOVED by owner order — the
+      loss-streak variant of this replay is moot; skip it.**
 
 ## 3. Calibration pass — 7 owner decisions
 
@@ -35,7 +37,7 @@ B (research 3/30) = 0.00 · C (≤0-reset) = −88.50**.
 | 3 | HTF veto TF | 1h | 15m | ruling |
 | 4 | min confidence | 60 | 65 | ruling |
 | 5 | trail multiplier | 2.0 | 1.5 | gates wave-3 item 3.1 |
-| 6 | loss streak | 4/60 | 3/30 (v5 C.6) | G6 replay above |
+| 6 | loss streak | ~~4/60~~ **REMOVED by owner 08-23** | ~~3/30 (v5 C.6)~~ | moot — G6 deleted |
 | 7 | target R:R | ≥3 (FULL-SPEC) | 2.5 (v5) | research-internal conflict |
 
 - [ ] Log every ruling with the changed value + ledger line.
