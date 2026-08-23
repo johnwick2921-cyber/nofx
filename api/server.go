@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"nofx/auth"
 	"nofx/crypto"
+	"nofx/kernel"
 	"nofx/logger"
 	"nofx/manager"
 	"nofx/store"
@@ -581,8 +582,9 @@ Server rejects non-SIM accounts (is_sim == false) with HTTP 400.`,
 // handleHealth Health check
 func (s *Server) handleHealth(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
-		"status": "ok",
-		"time":   c.Request.Context().Value("time"),
+		"status":   "ok",
+		"time":     c.Request.Context().Value("time"),
+		"revision": kernel.RunningRevision(),
 	})
 }
 
@@ -590,8 +592,12 @@ func (s *Server) handleHealth(c *gin.Context) {
 func (s *Server) handleGetSystemConfig(c *gin.Context) {
 	userCount, _ := s.store.User().Count()
 	c.JSON(http.StatusOK, gin.H{
-		"initialized":      userCount > 0,
-		"btc_eth_leverage": 10,
+		"initialized": userCount > 0,
+		// RunningRevision is the vcs.revision embedded in THIS binary — bug
+		// reports can now be checked against the running rev without a shell
+		// (master-audit v1 finding 5.6).
+		"revision":          kernel.RunningRevision(),
+		"btc_eth_leverage":  10,
 		"altcoin_leverage": 5,
 		// SANDBOX (isolated demo instance) → the UI paints a permanent banner so a
 		// sandbox can never be mistaken for the live system. false in production.

@@ -15,6 +15,7 @@ import { SessionPlanCard } from './SessionPlanCard'
 import { DisciplinePanel } from './DisciplinePanel'
 import { RereadButton } from './RereadButton'
 import { ResetButton } from './ResetButton'
+import { ApproveButton } from './ApproveButton'
 import { AlertCenter } from './AlertCenter'
 import { GateBlocksPanel } from './GateBlocksPanel'
 import { SESSION_BANDS, type SessionName } from './sessionConfig'
@@ -94,8 +95,25 @@ export function PlanCard({
           P6 — the owner RESET sits beside it: both visible, one explanatory
           line each, so the two escape hatches can never be mistaken for one
           another (re-read = one more plan on the same chain, spends budget ·
-          reset = abandons the chain, restores the full budget). */}
+          reset = abandons the chain, restores the full budget). The Approve
+          action is the plan-header grant (approval_required flow). */}
       <div className="flex items-start justify-end gap-4">
+        <div className="flex flex-col items-end gap-1">
+          <ApproveButton
+            traderId={traderId}
+            language={language}
+            onDone={() => mutate()}
+          />
+          <span
+            className="text-[9px]"
+            style={{
+              color: 'var(--vl-faint)',
+              fontFamily: 'var(--vl-font-ui)',
+            }}
+          >
+            {tp('approveCaption', language)}
+          </span>
+        </div>
         <div className="flex flex-col items-end gap-1">
           <RereadButton
             traderId={traderId}
