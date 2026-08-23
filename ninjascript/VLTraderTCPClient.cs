@@ -106,6 +106,9 @@ namespace NinjaTrader.NinjaScript.AddOns
         private class PlacedBracket
         {
             public Order       SlOrder;     // the live resting stop order (movable)
+            public Order       TpOrder;     // 4.3: the live take-profit order — tracked so
+                                           // CancelBracketFor can cancel BOTH legs after a
+                                           // limit exit fills (an orphaned TP could re-enter)
             public Account     Account;
             public Instrument  Instrument;
             public OrderAction ExitAction;
@@ -1426,7 +1429,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                 {
                     placedBrackets[signalId] = new PlacedBracket
                     {
-                        SlOrder = slOrder, Account = ba, Instrument = b.Instrument,
+                        SlOrder = slOrder, TpOrder = tpOrder, Account = ba, Instrument = b.Instrument,
                         ExitAction = b.ExitAction, Qty = b.Qty, ExitOco = exitOco, TickSize = tick,
                     };
                 }
