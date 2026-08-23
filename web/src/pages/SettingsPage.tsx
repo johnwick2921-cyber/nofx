@@ -1,13 +1,25 @@
 import { useState, useEffect } from 'react'
 import { toast } from 'sonner'
-import { User, Cpu, Building2, MessageCircle, Eye, EyeOff, ChevronRight, Plus, Pencil } from 'lucide-react'
+import {
+  User,
+  Cpu,
+  Building2,
+  MessageCircle,
+  Eye,
+  EyeOff,
+  ChevronRight,
+  Plus,
+  Pencil,
+  Trash2,
+} from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
 import { useLanguage } from '../contexts/LanguageContext'
+import { t } from '../i18n/translations'
 import { api } from '../lib/api'
 import { ExchangeConfigModal } from '../components/trader/ExchangeConfigModal'
 import { TelegramConfigModal } from '../components/trader/TelegramConfigModal'
 import { ModelConfigModal } from '../components/trader/ModelConfigModal'
-import type { Exchange, AIModel } from '../types'
+import type { Exchange, AIModel, TraderInfo } from '../types'
 
 type Tab = 'account' | 'models' | 'exchanges' | 'telegram'
 
@@ -41,6 +53,14 @@ export function SettingsPage() {
   const [showModelModal, setShowModelModal] = useState(false)
   const [editingModel, setEditingModel] = useState<string | null>(null)
 
+  // "Add another entry" inline form state (keyed by provider of the row it
+  // hangs off). A provider can now hold multiple rows, so this lets the user
+  // add a SECOND named key without touching the existing row.
+  const [addEntryProvider, setAddEntryProvider] = useState<string | null>(null)
+  const [addEntryName, setAddEntryName] = useState('')
+  const [addEntryKey, setAddEntryKey] = useState('')
+  const [addEntrySaving, setAddEntrySaving] = useState(false)
+
   // Exchanges state
   const [exchanges, setExchanges] = useState<Exchange[]>([])
   const [showExchangeModal, setShowExchangeModal] = useState(false)
@@ -66,12 +86,12 @@ export function SettingsPage() {
   // Fetch data when tabs are visited
   useEffect(() => {
     if (activeTab === 'models') {
-      refreshModelConfigs()
-        .catch(() => toast.error('Failed to load AI models'))
+      refreshModelConfigs().catch(() => toast.error('Failed to load AI models'))
     }
     if (activeTab === 'exchanges') {
-      refreshExchangeConfigs()
-        .catch(() => toast.error('Failed to load exchanges'))
+      refreshExchangeConfigs().catch(() =>
+        toast.error('Failed to load exchanges')
+      )
     }
   }, [activeTab])
 
@@ -81,7 +101,8 @@ export function SettingsPage() {
       refreshExchangeConfigs().catch(() => {})
     }
     window.addEventListener('agent-config-refresh', handleRefresh)
-    return () => window.removeEventListener('agent-config-refresh', handleRefresh)
+    return () =>
+      window.removeEventListener('agent-config-refresh', handleRefresh)
   }, [])
 
   const handleChangePassword = async (e: React.FormEvent) => {
@@ -107,7 +128,9 @@ export function SettingsPage() {
       toast.success('Password updated successfully')
       setNewPassword('')
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update password')
+      toast.error(
+        err instanceof Error ? err.message : 'Failed to update password'
+      )
     } finally {
       setChangingPassword(false)
     }
@@ -117,39 +140,92 @@ export function SettingsPage() {
     modelId: string,
     apiKey: string,
     customApiUrl?: string,
-    customModelName?: string
+    customModelName?: string,
+    name?: string
   ) => {
     try {
       const existingModel = configuredModels.find((m) => m.id === modelId)
       const modelTemplate = supportedModels.find((m) => m.id === modelId)
       const modelToUpdate = existingModel || modelTemplate
-      if (!modelToUpdate) { toast.error('Model not found'); return }
+      if (!modelToUpdate) {
+        toast.error('Model not found')
+        return
+      }
+
+      // NEW-ENTRY GUARD (fixes "+ Add Model overwrites an existing provider"):
+      // when adding via the catalog (not editing a specific row) for a provider that
+      // ALREADY has a configured entry, CREATE a new named row instead of sending a
+      // bare-provider key that the backend's legacy-match would use to overwrite the
+      // existing entry. Wallet providers (claw402/blockrun) keep their reconfigure flow.
+      const provider = modelToUpdate.provider || ''
+      const isWalletProvider =
+        provider === 'claw402' || provider.startsWith('blockrun')
+      const providerAlreadyConfigured =
+        !existingModel && configuredModels.some((m) => m.provider === provider)
+      if (providerAlreadyConfigured && !isWalletProvider) {
+        const sameProviderCount = configuredModels.filter(
+          (m) => m.provider === provider
+        ).length
+        const baseName = modelToUpdate.name || provider
+        await api.createModelEntry({
+          provider,
+          name: `${baseName} ${sameProviderCount + 1}`,
+          api_key: apiKey,
+          custom_api_url: customApiUrl || undefined,
+          custom_model_name: customModelName || undefined,
+          enabled: true,
+        })
+        toast.success('Model entry added')
+        await refreshModelConfigs()
+        setShowModelModal(false)
+        setEditingModel(null)
+        return
+      }
 
       let updatedModels: AIModel[]
       if (existingModel) {
         updatedModels = configuredModels.map((m) =>
           m.id === modelId
-            ? { ...m, apiKey, customApiUrl: customApiUrl || '', customModelName: customModelName || '', enabled: true }
+            ? {
+                ...m,
+                apiKey,
+                customApiUrl: customApiUrl || '',
+                customModelName: customModelName || '',
+                enabled: true,
+                name: name?.trim() ? name.trim() : m.name,
+              }
             : m
         )
       } else {
-        updatedModels = [...configuredModels, {
-          ...modelToUpdate,
-          apiKey,
-          customApiUrl: customApiUrl || '',
-          customModelName: customModelName || '',
-          enabled: true,
-        }]
+        updatedModels = [
+          ...configuredModels,
+          {
+            ...modelToUpdate,
+            apiKey,
+            customApiUrl: customApiUrl || '',
+            customModelName: customModelName || '',
+            enabled: true,
+          },
+        ]
       }
 
       const request = {
         models: Object.fromEntries(
-          updatedModels.map((m) => [m.provider, {
-            enabled: m.enabled,
-            api_key: m.apiKey || '',
-            custom_api_url: m.customApiUrl || '',
-            custom_model_name: m.customModelName || '',
-          }])
+          updatedModels.map((m) => [
+            // Key by row id so editing one entry updates exactly that row
+            // (a provider can now have multiple rows). Newly-configured
+            // providers whose row doesn't exist yet still send a bare-provider
+            // id from the supportedModels template — the backend's scoped
+            // legacy path handles bare ids.
+            m.id,
+            {
+              name: m.name || '',
+              enabled: m.enabled,
+              api_key: m.apiKey || '',
+              custom_api_url: m.customApiUrl || '',
+              custom_model_name: m.customModelName || '',
+            },
+          ])
         ),
       }
       await api.updateModelConfigs(request)
@@ -163,27 +239,68 @@ export function SettingsPage() {
   }
 
   const handleDeleteModel = async (modelId: string) => {
+    if (!window.confirm(t('confirmDeleteModel', language))) return
     try {
-      const updatedModels = configuredModels.map((m) =>
-        m.id === modelId ? { ...m, apiKey: '', customApiUrl: '', customModelName: '', enabled: false } : m
-      )
-      const request = {
-        models: Object.fromEntries(
-          updatedModels.map((m) => [m.provider, {
-            enabled: m.enabled,
-            api_key: m.apiKey || '',
-            custom_api_url: m.customApiUrl || '',
-            custom_model_name: m.customModelName || '',
-          }])
-        ),
+      // DETERMINISTIC binding pre-check: the backend 409 "in use by traders" was
+      // being silently swallowed, so the owner saw nothing on delete. Check the
+      // binding client-side and REFUSE with a clear, trader-named message that
+      // always renders — instead of relying on the swallowed 409.
+      const traders = await api.getTraders(true).catch(() => [] as TraderInfo[])
+      const bound = (traders || []).filter((tr) => tr.ai_model === modelId)
+      if (bound.length > 0) {
+        const names = bound.map((tr) => `"${tr.trader_name}"`).join(', ')
+        toast.error(
+          `Can't delete — trader ${names} uses this entry. Switch that trader's model first.`,
+          { duration: 8000 }
+        )
+        return
       }
-      await api.updateModelConfigs(request)
-      await refreshModelConfigs()
+      await api.deleteModelEntry(modelId)
+      // Feedback BEFORE closing/refreshing — firing it after the refresh setState
+      // was preventing the toast from rendering at all.
+      toast.success('Model config removed', { duration: 4000 })
       setShowModelModal(false)
       setEditingModel(null)
-      toast.success('Model config removed')
-    } catch {
-      toast.error('Failed to remove model config')
+      await refreshModelConfigs()
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : ''
+      toast.error(msg || t('cannotDeleteModelInUse', language), {
+        duration: 8000,
+      })
+    }
+  }
+
+  const openAddEntry = (provider: string) => {
+    setAddEntryProvider(provider)
+    setAddEntryName('')
+    setAddEntryKey('')
+  }
+
+  const cancelAddEntry = () => {
+    setAddEntryProvider(null)
+    setAddEntryName('')
+    setAddEntryKey('')
+  }
+
+  const handleCreateEntry = async () => {
+    if (!addEntryProvider || !addEntryName.trim() || !addEntryKey.trim()) return
+    setAddEntrySaving(true)
+    try {
+      await api.createModelEntry({
+        provider: addEntryProvider,
+        name: addEntryName.trim(),
+        api_key: addEntryKey.trim(),
+        enabled: true,
+      })
+      toast.success('Model entry added')
+      cancelAddEntry()
+      await refreshModelConfigs()
+    } catch (err) {
+      toast.error(
+        err instanceof Error ? err.message : 'Failed to add model entry'
+      )
+    } finally {
+      setAddEntrySaving(false)
     }
   }
 
@@ -202,7 +319,10 @@ export function SettingsPage() {
     lighterWalletAddr?: string,
     lighterPrivateKey?: string,
     lighterApiKeyPrivateKey?: string,
-    lighterApiKeyIndex?: number
+    lighterApiKeyIndex?: number,
+    ntDataDir?: string,
+    ntInstrumentName?: string,
+    ntDefaultContractQty?: number
   ) => {
     try {
       if (exchangeId) {
@@ -222,11 +342,14 @@ export function SettingsPage() {
               lighter_private_key: lighterPrivateKey || '',
               lighter_api_key_private_key: lighterApiKeyPrivateKey || '',
               lighter_api_key_index: lighterApiKeyIndex || 0,
+              nt_data_dir: ntDataDir || '',
+              nt_instrument_name: ntInstrumentName || '',
+              nt_default_contract_qty: ntDefaultContractQty || 0,
             },
           },
         }
         await api.updateExchangeConfigsEncrypted(request)
-      toast.success('Exchange config updated')
+        toast.success('Exchange config updated')
       } else {
         const createRequest = {
           exchange_type: exchangeType,
@@ -244,9 +367,12 @@ export function SettingsPage() {
           lighter_private_key: lighterPrivateKey || '',
           lighter_api_key_private_key: lighterApiKeyPrivateKey || '',
           lighter_api_key_index: lighterApiKeyIndex || 0,
+          nt_data_dir: ntDataDir || '',
+          nt_instrument_name: ntInstrumentName || '',
+          nt_default_contract_qty: ntDefaultContractQty || 0,
         }
         await api.createExchangeEncrypted(createRequest)
-      toast.success('Exchange account created')
+        toast.success('Exchange account created')
       }
       await refreshExchangeConfigs()
       setShowExchangeModal(false)
@@ -276,7 +402,10 @@ export function SettingsPage() {
   ]
 
   return (
-    <div className="min-h-screen pt-20 pb-12 px-4" style={{ background: '#0B0E11' }}>
+    <div
+      className="min-h-screen pt-20 pb-12 px-4"
+      style={{ background: '#0B0E11' }}
+    >
       <div className="max-w-2xl mx-auto">
         <h1 className="text-xl font-bold text-white mb-6">Settings</h1>
 
@@ -287,9 +416,10 @@ export function SettingsPage() {
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
               className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-all
-                ${activeTab === tab.key
-                  ? 'bg-nofx-gold text-black'
-                  : 'text-zinc-400 hover:text-white'
+                ${
+                  activeTab === tab.key
+                    ? 'bg-nofx-gold text-black'
+                    : 'text-zinc-400 hover:text-white'
                 }`}
             >
               {tab.icon}
@@ -300,7 +430,6 @@ export function SettingsPage() {
 
         {/* Tab Content */}
         <div className="bg-zinc-900/60 backdrop-blur-xl border border-zinc-800/80 rounded-2xl p-6">
-
           {/* Account Tab */}
           {activeTab === 'account' && (
             <div className="space-y-6">
@@ -310,10 +439,14 @@ export function SettingsPage() {
               </div>
 
               <div className="border-t border-zinc-800 pt-6">
-                <h3 className="text-sm font-semibold text-white mb-4">Change Password</h3>
+                <h3 className="text-sm font-semibold text-white mb-4">
+                  Change Password
+                </h3>
                 <form onSubmit={handleChangePassword} className="space-y-4">
                   <div>
-                    <label className="block text-xs font-medium text-zinc-400 mb-2">New Password</label>
+                    <label className="block text-xs font-medium text-zinc-400 mb-2">
+                      New Password
+                    </label>
                     <div className="relative">
                       <input
                         type={showPassword ? 'text' : 'password'}
@@ -328,7 +461,11 @@ export function SettingsPage() {
                         onClick={() => setShowPassword(!showPassword)}
                         className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors"
                       >
-                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        {showPassword ? (
+                          <EyeOff size={16} />
+                        ) : (
+                          <Eye size={16} />
+                        )}
                       </button>
                     </div>
                   </div>
@@ -349,16 +486,26 @@ export function SettingsPage() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <p className="text-sm text-zinc-400">
-                  {configuredModels.length} model{configuredModels.length !== 1 ? 's' : ''} configured
+                  {configuredModels.length} model
+                  {configuredModels.length !== 1 ? 's' : ''} configured
                 </p>
                 <button
-                  onClick={() => { setEditingModel(null); setShowModelModal(true) }}
+                  onClick={() => {
+                    setEditingModel(null)
+                    setShowModelModal(true)
+                  }}
                   className="flex items-center gap-1.5 text-xs font-medium bg-nofx-gold/10 hover:bg-nofx-gold/20 text-nofx-gold px-3 py-1.5 rounded-lg transition-colors"
                 >
                   <Plus size={14} />
                   Add Model
                 </button>
               </div>
+
+              {configuredModels.length > 0 && (
+                <p className="text-xs text-zinc-500 -mt-2">
+                  {t('multiKeyHint', language)}
+                </p>
+              )}
 
               {configuredModels.length === 0 ? (
                 <div className="text-center py-8 text-zinc-600 text-sm">
@@ -367,32 +514,109 @@ export function SettingsPage() {
               ) : (
                 <div className="space-y-2">
                   {configuredModels.map((model) => (
-                    <button
-                      key={model.id}
-                      onClick={() => { setEditingModel(model.id); setShowModelModal(true) }}
-                      className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700/50 transition-colors group"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-zinc-700 flex items-center justify-center">
-                          <Cpu size={14} className="text-zinc-300" />
+                    <div key={model.id}>
+                      <div className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700/50 transition-colors group">
+                        {/* Clickable edit region */}
+                        <button
+                          onClick={() => {
+                            setEditingModel(model.id)
+                            setShowModelModal(true)
+                          }}
+                          className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                        >
+                          <div className="w-8 h-8 rounded-lg bg-zinc-700 flex items-center justify-center shrink-0">
+                            <Cpu size={14} className="text-zinc-300" />
+                          </div>
+                          <div className="text-left min-w-0">
+                            <p className="text-sm font-medium text-white truncate">
+                              {model.name}
+                            </p>
+                            <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                              <p className="text-xs text-zinc-500">
+                                {model.provider}
+                              </p>
+                              {configBadge('API Key', !!model.has_api_key)}
+                              {model.customModelName
+                                ? configBadge('Custom Model', true)
+                                : null}
+                              {model.customApiUrl
+                                ? configBadge('Base URL', true)
+                                : null}
+                            </div>
+                          </div>
+                        </button>
+                        <div className="flex items-center gap-2 shrink-0 ml-2">
+                          <span
+                            className={`text-xs px-2 py-0.5 rounded-full ${model.enabled ? 'bg-emerald-500/10 text-emerald-400' : 'bg-zinc-700 text-zinc-500'}`}
+                          >
+                            {model.enabled ? 'Active' : 'Inactive'}
+                          </span>
+                          <button
+                            onClick={() => openAddEntry(model.provider)}
+                            title={t('addModelEntry', language)}
+                            className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-nofx-gold border border-nofx-gold/40 hover:bg-nofx-gold/10 transition-colors shrink-0"
+                          >
+                            <Plus size={12} />
+                            {t('addKeyShort', language)}
+                          </button>
+                          <button
+                            onClick={() => handleDeleteModel(model.id)}
+                            title={t('deleteModelEntry', language)}
+                            className="p-1.5 rounded-lg text-zinc-500 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                          <Pencil
+                            size={14}
+                            className="text-zinc-600 group-hover:text-zinc-400 transition-colors"
+                          />
                         </div>
-                        <div className="text-left">
-                          <p className="text-sm font-medium text-white">{model.name}</p>
-                          <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                            <p className="text-xs text-zinc-500">{model.provider}</p>
-                            {configBadge('API Key', !!model.has_api_key)}
-                            {model.customModelName ? configBadge('Custom Model', true) : null}
-                            {model.customApiUrl ? configBadge('Base URL', true) : null}
+                      </div>
+
+                      {/* Inline "add another entry" form for this provider */}
+                      {addEntryProvider === model.provider && (
+                        <div className="mt-2 mb-1 mx-1 p-3 rounded-xl bg-zinc-900/70 border border-zinc-700/60 space-y-2">
+                          <p className="text-xs text-zinc-400">
+                            {t('addModelEntry', language)} — {model.provider}
+                          </p>
+                          <input
+                            type="text"
+                            value={addEntryName}
+                            onChange={(e) => setAddEntryName(e.target.value)}
+                            placeholder={t('entryName', language)}
+                            className="w-full bg-zinc-950/80 border border-zinc-700/80 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-nofx-gold/60"
+                          />
+                          <input
+                            type="password"
+                            value={addEntryKey}
+                            onChange={(e) => setAddEntryKey(e.target.value)}
+                            placeholder={t('enterAPIKey', language)}
+                            className="w-full bg-zinc-950/80 border border-zinc-700/80 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-nofx-gold/60"
+                          />
+                          <div className="flex justify-end gap-2 pt-1">
+                            <button
+                              onClick={cancelAddEntry}
+                              className="px-3 py-1.5 text-xs rounded-lg bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition-colors"
+                            >
+                              {t('cancel', language)}
+                            </button>
+                            <button
+                              onClick={handleCreateEntry}
+                              disabled={
+                                addEntrySaving ||
+                                !addEntryName.trim() ||
+                                !addEntryKey.trim()
+                              }
+                              className="px-3 py-1.5 text-xs rounded-lg bg-nofx-gold text-black font-medium hover:bg-yellow-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {addEntrySaving
+                                ? t('saving', language)
+                                : t('addModelEntry', language)}
+                            </button>
                           </div>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${model.enabled ? 'bg-emerald-500/10 text-emerald-400' : 'bg-zinc-700 text-zinc-500'}`}>
-                          {model.enabled ? 'Active' : 'Inactive'}
-                        </span>
-                        <Pencil size={14} className="text-zinc-600 group-hover:text-zinc-400 transition-colors" />
-                      </div>
-                    </button>
+                      )}
+                    </div>
                   ))}
                 </div>
               )}
@@ -404,10 +628,14 @@ export function SettingsPage() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <p className="text-sm text-zinc-400">
-                  {exchanges.length} account{exchanges.length !== 1 ? 's' : ''} connected
+                  {exchanges.length} account{exchanges.length !== 1 ? 's' : ''}{' '}
+                  connected
                 </p>
                 <button
-                  onClick={() => { setEditingExchange(null); setShowExchangeModal(true) }}
+                  onClick={() => {
+                    setEditingExchange(null)
+                    setShowExchangeModal(true)
+                  }}
                   className="flex items-center gap-1.5 text-xs font-medium bg-nofx-gold/10 hover:bg-nofx-gold/20 text-nofx-gold px-3 py-1.5 rounded-lg transition-colors"
                 >
                   <Plus size={14} />
@@ -421,32 +649,68 @@ export function SettingsPage() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {exchanges.map((exchange) => (
-                    <button
-                      key={exchange.id}
-                      onClick={() => { setEditingExchange(exchange.id); setShowExchangeModal(true) }}
-                      className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700/50 transition-colors group"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-zinc-700 flex items-center justify-center">
-                          <Building2 size={14} className="text-zinc-300" />
-                        </div>
-                        <div className="text-left">
-                          <p className="text-sm font-medium text-white">{exchange.account_name || exchange.name}</p>
-                          <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                            <p className="text-xs text-zinc-500 capitalize">{exchange.exchange_type || exchange.type}</p>
-                            {configBadge('API Key', !!exchange.has_api_key)}
-                            {configBadge('Secret', !!exchange.has_secret_key)}
-                            {exchange.has_passphrase ? configBadge('Passphrase', true) : null}
-                            {exchange.hyperliquidWalletAddr ? configBadge('Wallet', true) : null}
-                            {exchange.has_aster_private_key ? configBadge('Aster Key', true) : null}
-                            {exchange.has_lighter_private_key || exchange.has_lighter_api_key_private_key ? configBadge('Lighter Key', true) : null}
+                  {exchanges.map((exchange) => {
+                    const isNinjaTrader =
+                      (exchange.exchange_type || exchange.type) ===
+                      'ninjatrader'
+                    return (
+                      <button
+                        key={exchange.id}
+                        onClick={() => {
+                          setEditingExchange(exchange.id)
+                          setShowExchangeModal(true)
+                        }}
+                        className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-zinc-800/50 hover:bg-zinc-800 border border-zinc-700/50 transition-colors group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg bg-zinc-700 flex items-center justify-center">
+                            <Building2 size={14} className="text-zinc-300" />
+                          </div>
+                          <div className="text-left">
+                            <p className="text-sm font-medium text-white">
+                              {exchange.account_name || exchange.name}
+                            </p>
+                            <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                              <p className="text-xs text-zinc-500 capitalize">
+                                {exchange.exchange_type || exchange.type}
+                              </p>
+                              {isNinjaTrader ? (
+                                configBadge('TCP Bridge', true)
+                              ) : (
+                                <>
+                                  {configBadge(
+                                    'API Key',
+                                    !!exchange.has_api_key
+                                  )}
+                                  {configBadge(
+                                    'Secret',
+                                    !!exchange.has_secret_key
+                                  )}
+                                  {exchange.has_passphrase
+                                    ? configBadge('Passphrase', true)
+                                    : null}
+                                  {exchange.hyperliquidWalletAddr
+                                    ? configBadge('Wallet', true)
+                                    : null}
+                                  {exchange.has_aster_private_key
+                                    ? configBadge('Aster Key', true)
+                                    : null}
+                                  {exchange.has_lighter_private_key ||
+                                  exchange.has_lighter_api_key_private_key
+                                    ? configBadge('Lighter Key', true)
+                                    : null}
+                                </>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                      <ChevronRight size={14} className="text-zinc-600 group-hover:text-zinc-400 transition-colors" />
-                    </button>
-                  ))}
+                        <ChevronRight
+                          size={14}
+                          className="text-zinc-600 group-hover:text-zinc-400 transition-colors"
+                        />
+                      </button>
+                    )
+                  })}
                 </div>
               )}
             </div>
@@ -456,7 +720,8 @@ export function SettingsPage() {
           {activeTab === 'telegram' && (
             <div className="space-y-4">
               <p className="text-sm text-zinc-400">
-                Connect a Telegram bot to receive trading notifications and interact with your traders.
+                Connect a Telegram bot to receive trading notifications and
+                interact with your traders.
               </p>
               <button
                 onClick={() => setShowTelegramModal(true)}
@@ -466,9 +731,14 @@ export function SettingsPage() {
                   <div className="w-8 h-8 rounded-lg bg-[#0088cc]/20 flex items-center justify-center">
                     <MessageCircle size={14} className="text-[#0088cc]" />
                   </div>
-                  <span className="text-sm font-medium text-white">Configure Telegram Bot</span>
+                  <span className="text-sm font-medium text-white">
+                    Configure Telegram Bot
+                  </span>
                 </div>
-                <ChevronRight size={14} className="text-zinc-600 group-hover:text-zinc-400 transition-colors" />
+                <ChevronRight
+                  size={14}
+                  className="text-zinc-600 group-hover:text-zinc-400 transition-colors"
+                />
               </button>
             </div>
           )}
@@ -484,7 +754,10 @@ export function SettingsPage() {
             editingModelId={editingModel}
             onSave={handleSaveModel}
             onDelete={handleDeleteModel}
-            onClose={() => { setShowModelModal(false); setEditingModel(null) }}
+            onClose={() => {
+              setShowModelModal(false)
+              setEditingModel(null)
+            }}
             language={language}
           />
         </div>
@@ -498,7 +771,10 @@ export function SettingsPage() {
             editingExchangeId={editingExchange}
             onSave={handleSaveExchange}
             onDelete={handleDeleteExchange}
-            onClose={() => { setShowExchangeModal(false); setEditingExchange(null) }}
+            onClose={() => {
+              setShowExchangeModal(false)
+              setEditingExchange(null)
+            }}
             language={language}
           />
         </div>

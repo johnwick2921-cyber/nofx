@@ -8,7 +8,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -19,7 +22,10 @@ const (
 )
 
 var (
-	DefaultTimeout = 120 * time.Second
+	// Overall request ceiling. Generous because reasoning models stream slowly
+	// (hidden reasoning + long completions); the idle-timeout watchdog in the
+	// streaming path catches genuinely hung connections sooner.
+	DefaultTimeout = 300 * time.Second
 
 	MaxRetryTimes = 3
 
@@ -43,6 +49,12 @@ var (
 
 	// TokenUsageCallback is called after each AI request with token usage info
 	TokenUsageCallback func(usage TokenUsage)
+
+	// TruncatedResponses counts finish_reason=length responses — the P0
+	// 2026-08-19 disease where the whole output budget was spent on reasoning
+	// and the decision block never got emitted. Surfaced in the startup AI-params
+	// line and bumped with a WARN log on every occurrence.
+	TruncatedResponses atomic.Int64
 )
 
 // TokenUsage represents token usage from AI API response
@@ -82,6 +94,12 @@ type Client struct {
 	// When provider.DeepSeekClient embeds Client, Hooks point to DeepSeekClient
 	// This way methods called in Call() are automatically dispatched to the overridden version
 	Hooks ClientHooks
+
+	// lastFinishReason holds the most recent response's finish_reason for the
+	// structured ai_call log (atomic: the planner client is shared between the
+	// executor loop and the Ask-Planner API). Claude overrides ParseMCPResponse
+	// and does not set it — those calls log finish_reason=unknown.
+	lastFinishReason atomic.Value
 }
 
 // New creates default client (backward compatible)
@@ -162,8 +180,50 @@ func (client *Client) SetAPIKey(apiKey, apiURL, customModel string) {
 	client.Model = customModel
 }
 
+// ResolvedModel returns the EXACT model string this client calls (client.Model,
+// set to the provider default or a custom override) — never a provider alias.
+func (client *Client) ResolvedModel() string { return client.Model }
+
 func (client *Client) SetTimeout(timeout time.Duration) {
 	client.HTTPClient.Timeout = timeout
+}
+
+// logAICall emits ONE structured line per AI call so the next timeout is
+// self-diagnosing instead of a forensic hunt (incident 2026-08-18: the only
+// evidence was a bare duration and a generic net/http error string).
+//
+//	ai_call model=<m> duration_ms=<d> finish_reason=<r> ok=<bool>
+//	  + on failure: timeout_source=client|context|transport deadline_s=<n>
+func (client *Client) logAICall(start time.Time, callErr error) {
+	if client.Log == nil {
+		return
+	}
+	durMs := time.Since(start).Milliseconds()
+	finish := "unknown"
+	if v, ok := client.lastFinishReason.Load().(string); ok && callErr == nil {
+		finish = v
+	}
+	if callErr == nil {
+		client.Log.Infof("ai_call model=%s duration_ms=%d finish_reason=%s ok=true",
+			client.Model, durMs, finish)
+		return
+	}
+	// Which deadline actually fired. net/http wraps them all in the same
+	// "context deadline exceeded" text, hence the incident's ambiguity.
+	msg := callErr.Error()
+	source := "transport"
+	switch {
+	case strings.Contains(msg, "Client.Timeout"):
+		source = "client" // http.Client.Timeout — the whole-request ceiling
+	case strings.Contains(msg, "context deadline exceeded"), strings.Contains(msg, "context canceled"):
+		source = "context" // a caller-supplied ctx (stream idle watchdog, agent paths)
+	}
+	deadline := int64(0)
+	if client.HTTPClient != nil {
+		deadline = int64(client.HTTPClient.Timeout / time.Second)
+	}
+	client.Log.Warnf("ai_call model=%s duration_ms=%d finish_reason=n/a ok=false timeout_source=%s deadline_s=%d err=%q",
+		client.Model, durMs, source, deadline, msg)
 }
 
 // CallWithMessages template method - fixed retry flow (cannot be overridden)
@@ -182,7 +242,9 @@ func (client *Client) CallWithMessages(systemPrompt, userPrompt string) (string,
 		}
 
 		// Call the fixed single-call flow
+		callStart := time.Now()
 		result, err := client.Hooks.Call(systemPrompt, userPrompt)
+		client.logAICall(callStart, err)
 		if err == nil {
 			if attempt > 1 {
 				client.Log.Infof("✓ AI API retry succeeded")
@@ -246,11 +308,18 @@ func (client *Client) BuildMCPRequestBody(systemPrompt, userPrompt string) map[s
 		"messages":    messages,
 		"temperature": client.Cfg.Temperature, // Use configured temperature
 	}
+	// P0 2026-08-19 — top_p only when the operator set it (0 = omit, provider default).
+	if client.Cfg.TopP > 0 {
+		requestBody["top_p"] = client.Cfg.TopP
+	}
 	// OpenAI newer models use max_completion_tokens instead of max_tokens
 	if client.Provider == ProviderOpenAI {
 		requestBody["max_completion_tokens"] = client.MaxTokens
 	} else {
 		requestBody["max_tokens"] = client.MaxTokens
+	}
+	if client.Provider == ProviderDeepSeek {
+		applyDeepSeekThinkingDefaults(requestBody, client.Cfg)
 	}
 	return requestBody
 }
@@ -282,6 +351,7 @@ func (client *Client) ParseMCPResponseFull(body []byte) (*LLMResponse, error) {
 				ReasoningContent string     `json:"reasoning_content"`
 				ToolCalls        []ToolCall `json:"tool_calls"`
 			} `json:"message"`
+			FinishReason *string `json:"finish_reason"`
 		} `json:"choices"`
 		Usage struct {
 			PromptTokens     int `json:"prompt_tokens"`
@@ -307,6 +377,31 @@ func (client *Client) ParseMCPResponseFull(body []byte) (*LLMResponse, error) {
 			CompletionTokens: result.Usage.CompletionTokens,
 			TotalTokens:      result.Usage.TotalTokens,
 		})
+	}
+
+	// P0 2026-08-19 — finish_reason=length means the decision was TRUNCATED
+	// (the max_tokens=2000 disease). Count it, shout about it, and surface the
+	// effective parameters so the owner can see what is in force.
+	if len(result.Choices) > 0 && result.Choices[0].FinishReason != nil {
+		if *result.Choices[0].FinishReason == "length" {
+			TruncatedResponses.Add(1)
+			client.Log.Warnf("🚨 [%s] finish_reason=length — response TRUNCATED at %d completion tokens (prompt %d). The decision block may be missing.",
+				client.String(), result.Usage.CompletionTokens, result.Usage.PromptTokens)
+		}
+	}
+
+	// P0 2026-08-19 — local per-call evidence for the live-verification report:
+	// completion tokens + finish_reason on every response, so median tokens and
+	// stop/length counts are computable from journalctl (telemetry only ships
+	// off-box, which left this invisible before).
+	if client.Log != nil {
+		finish := "unset"
+		if len(result.Choices) > 0 && result.Choices[0].FinishReason != nil {
+			finish = *result.Choices[0].FinishReason
+		}
+		client.Log.Infof("📊 AI call complete: completion=%d prompt=%d finish_reason=%s",
+			result.Usage.CompletionTokens, result.Usage.PromptTokens, finish)
+		client.lastFinishReason.Store(finish)
 	}
 
 	msg := result.Choices[0].Message
@@ -676,6 +771,11 @@ func (client *Client) BuildRequestBodyFromRequest(req *Request) map[string]any {
 
 	if req.TopP != nil {
 		requestBody["top_p"] = *req.TopP
+	} else if client.Cfg != nil && client.Cfg.TopP > 0 {
+		// Same fallback temperature and max_tokens already have on this path:
+		// the Request builder used to DROP the configured AI_TOP_P entirely
+		// (class 7 — the Call path honored it, this one didn't).
+		requestBody["top_p"] = client.Cfg.TopP
 	}
 
 	if req.FrequencyPenalty != nil {
@@ -702,7 +802,29 @@ func (client *Client) BuildRequestBodyFromRequest(req *Request) map[string]any {
 		requestBody["stream"] = true
 	}
 
+	if client.Provider == ProviderDeepSeek {
+		applyDeepSeekThinkingDefaults(requestBody, client.Cfg)
+	}
+
 	return requestBody
+}
+
+// applyDeepSeekThinkingDefaults injects the DeepSeek thinking-mode parameters
+// into the request body for deepseek providers. Docs:
+// https://api-docs.deepseek.com/guides/thinking_mode — thinking {type: enabled/
+// disabled} + reasoning_effort low|high|max (max is the true maximum; medium/
+// xhigh map to high). Empty cfg values omit the key so a per-request override
+// stays possible. These params only take effect for deepseek models.
+func applyDeepSeekThinkingDefaults(body map[string]any, cfg *Config) {
+	if cfg == nil {
+		return
+	}
+	if cfg.ThinkingMode != "" {
+		body["thinking"] = map[string]any{"type": cfg.ThinkingMode}
+	}
+	if cfg.ReasoningEffort != "" {
+		body["reasoning_effort"] = cfg.ReasoningEffort
+	}
 }
 
 // CallWithRequestStream streams the LLM response via SSE (Server-Sent Events).
@@ -732,9 +854,17 @@ func (client *Client) CallWithRequestStream(req *Request, onChunk func(string)) 
 		return "", err
 	}
 
-	// Idle-timeout watchdog: cancel the request if no SSE line arrives for 60 seconds.
-	// This breaks the scanner out of an indefinitely blocking Read on a hung connection.
-	const idleTimeout = 60 * time.Second
+	// Idle-timeout watchdog: cancel the request if no SSE line arrives within
+	// the window. This breaks the scanner out of an indefinitely blocking Read
+	// on a hung connection. Reasoning models (e.g. deepseek-v4-pro) can spend
+	// well over a minute on hidden reasoning before the first token streams, so
+	// the default is generous; tune via AI_STREAM_IDLE_TIMEOUT_SECS.
+	idleTimeout := 180 * time.Second
+	if v := os.Getenv("AI_STREAM_IDLE_TIMEOUT_SECS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			idleTimeout = time.Duration(n) * time.Second
+		}
+	}
 	ctx, cancel := context.WithCancel(contextFromRequest(req))
 	defer cancel()
 	resetCh := make(chan struct{}, 1)

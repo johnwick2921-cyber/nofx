@@ -203,6 +203,12 @@ func (s *Server) handleCreateStrategy(c *gin.Context) {
 	}
 	beforeClamp := *req.Config
 	req.Config.ClampLimits()
+	// F11c — reject absurd indicator periods (e.g. 9999) at save with a clear error,
+	// never a silently-empty series.
+	if err := req.Config.ValidateIndicatorPeriods(); err != nil {
+		SafeBadRequest(c, err.Error())
+		return
+	}
 	hadPublishConfig := req.Config.PublishConfig != nil
 	isPublic := req.IsPublic
 	configVisible := req.ConfigVisible
@@ -285,6 +291,10 @@ func (s *Server) handleUpdateStrategy(c *gin.Context) {
 		Config        json.RawMessage `json:"config"` // raw JSON so we can merge
 		IsPublic      bool            `json:"is_public"`
 		ConfigVisible bool            `json:"config_visible"`
+		// F11b — the FE sets this true only after the user confirms a strategy-type
+		// switch dialog that names the ai_config (indicators/risk/prompt) that would
+		// be lost. Absent/false → the AI config is preserved across the switch.
+		ConfirmTypeSwitch bool `json:"confirm_type_switch"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -298,6 +308,9 @@ func (s *Server) handleUpdateStrategy(c *gin.Context) {
 		// If existing config is corrupt, start from zero
 		mergedConfig = store.StrategyConfig{}
 	}
+	// F11b — snapshot the pre-patch config so a strategy-type switch can't destroy
+	// the AI-config bundle unless the user explicitly confirmed the loss.
+	baseConfig := mergedConfig
 
 	// Apply incoming config on top while preserving nested fields that were not sent.
 	if len(req.Config) > 0 && string(req.Config) != "null" {
@@ -312,8 +325,19 @@ func (s *Server) handleUpdateStrategy(c *gin.Context) {
 			return
 		}
 	}
+	// F11b — preserve the AI config across an unconfirmed strategy-type switch.
+	if mergedConfig.StrategyType != baseConfig.StrategyType && !req.ConfirmTypeSwitch {
+		mergedConfig = store.PreserveAIConfigOnTypeSwitch(baseConfig, mergedConfig, false)
+		logger.Warnf("🛡️ strategy %s: preserved ai_config across %q→%q type switch (no confirm_type_switch flag)", strategyID, baseConfig.StrategyType, mergedConfig.StrategyType)
+	}
 	beforeClamp := mergedConfig
 	mergedConfig.ClampLimits()
+	// F11c — reject absurd indicator periods (e.g. 9999) at save with a clear error,
+	// never a silently-empty series.
+	if err := mergedConfig.ValidateIndicatorPeriods(); err != nil {
+		SafeBadRequest(c, err.Error())
+		return
+	}
 
 	// Preserve existing name/description when not supplied
 	name := req.Name
@@ -368,6 +392,37 @@ func (s *Server) handleUpdateStrategy(c *gin.Context) {
 	// Validate merged configuration and collect warnings
 	warnings := validateStrategyConfig(&mergedConfig)
 	warnings = append(warnings, store.StrategyClampWarnings(beforeClamp, mergedConfig, mergedConfig.Language)...)
+
+	// Reload the running trader(s) bound to this strategy so the saved config
+	// takes effect on the NEXT decision cycle WITHOUT a manual restart — the same
+	// mechanism the AI-model + Exchange save handlers use (RemoveTrader +
+	// LoadUserTradersFromStore). The config was validated + clamped + persisted
+	// above; the reload re-reads it from the store. RemoveTrader stops the
+	// in-memory loop, but Stop() does NOT persist is_running=false, so the reload
+	// auto-starts the trader (addTraderFromStore honors the DB is_running flag).
+	// The TCP bridge + BarCache are a shared singleton — bars + the NT8 connection
+	// are preserved; an open position is re-attached on reload (NT8-side SL/TP
+	// guard it during the brief swap). On reload failure the request still
+	// succeeds (the config is saved) and we log — we never crash the trader.
+	if s.traderManager != nil {
+		if traders, listErr := s.store.Trader().List(userID); listErr == nil {
+			reloaded := make([]string, 0, 1)
+			for _, t := range traders {
+				if t.StrategyID == strategyID {
+					logger.Infof("🔄 Strategy %s saved — removing trader %s from memory to reload with the new config", strategyID, t.ID)
+					s.traderManager.RemoveTrader(t.ID)
+					reloaded = append(reloaded, t.ID)
+				}
+			}
+			if len(reloaded) > 0 {
+				if rErr := s.traderManager.LoadUserTradersFromStore(s.store, userID); rErr != nil {
+					logger.Infof("⚠️ Strategy %s saved but trader reload failed: %v (config persisted; restart to apply)", strategyID, rErr)
+				} else {
+					logger.Infof("✓ Strategy %s saved → reloaded %d running trader(s) to apply the new config immediately: %v", strategyID, len(reloaded), reloaded)
+				}
+			}
+		}
+	}
 
 	response := gin.H{"message": "Strategy updated successfully"}
 	if len(warnings) > 0 {
@@ -488,6 +543,19 @@ func (s *Server) handleGetDefaultStrategyConfig(c *gin.Context) {
 	c.JSON(http.StatusOK, defaultConfig)
 }
 
+// handleGetSupportedTimeframes returns the single source of truth for the
+// Strategy Studio timeframe selector: the full set the engine can genuinely
+// serve (store.SupportedTimeframes), plus the advisory soft-warn threshold.
+// The frontend renders this instead of a hardcoded copy, so the menu can never
+// drift from what the backend / NT8 AddOn actually streams.
+func (s *Server) handleGetSupportedTimeframes(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"timeframes":      store.SupportedTimeframes,
+		"soft_warn_above": store.SoftWarnTimeframesAbove,
+		"max":             store.MaxTimeframes,
+	})
+}
+
 // handlePreviewPrompt Preview prompt generated by strategy
 func (s *Server) handlePreviewPrompt(c *gin.Context) {
 	userID := c.GetString("user_id")
@@ -518,10 +586,17 @@ func (s *Server) handlePreviewPrompt(c *gin.Context) {
 	// Create strategy engine to build prompt
 	engine := kernel.NewStrategyEngine(&req.Config)
 
-	// Build system prompt (using built-in method from strategy engine)
+	// Build system prompt (using built-in method from strategy engine). Phase 3:
+	// pass the strategy's symbol so a futures preview reflects the real instrument
+	// (defaults to MNQ; ignored on the crypto path).
+	previewSymbol := "MNQ"
+	if len(req.Config.CoinSource.StaticCoins) > 0 && req.Config.CoinSource.StaticCoins[0] != "" {
+		previewSymbol = req.Config.CoinSource.StaticCoins[0]
+	}
 	systemPrompt := engine.BuildSystemPrompt(
 		req.AccountEquity,
 		req.PromptVariant,
+		previewSymbol,
 	)
 
 	c.JSON(http.StatusOK, gin.H{
@@ -613,7 +688,13 @@ func (s *Server) handleStrategyTestRun(c *gin.Context) {
 	// Get real market data (using multiple timeframes)
 	marketDataMap := make(map[string]*market.Data)
 	for _, coin := range candidates {
-		data, err := market.GetWithTimeframes(coin.Symbol, timeframes, primaryTimeframe, klineCount)
+		data, err := market.GetWithTimeframes(coin.Symbol, timeframes, primaryTimeframe, klineCount,
+			market.IndicatorPeriods{
+				EMA:  req.Config.Indicators.EMAPeriods,
+				RSI:  req.Config.Indicators.RSIPeriods,
+				ATR:  req.Config.Indicators.ATRPeriods,
+				BOLL: req.Config.Indicators.BOLLPeriods,
+			})
 		if err != nil {
 			// If getting data for a coin fails, log but continue
 			fmt.Printf("⚠️  Failed to get market data for %s: %v\n", coin.Symbol, err)
@@ -640,7 +721,7 @@ func (s *Server) handleStrategyTestRun(c *gin.Context) {
 
 	// Build real context (for generating User Prompt)
 	testContext := &kernel.Context{
-		CurrentTime:    time.Now().UTC().Format("2006-01-02 15:04:05 UTC"),
+		CurrentTime:    kernel.FormatCT(time.Now()),
 		RuntimeMinutes: 0,
 		CallCount:      1,
 		Account: kernel.AccountInfo{
@@ -663,8 +744,12 @@ func (s *Server) handleStrategyTestRun(c *gin.Context) {
 		PriceRankingData:   priceRankingData,
 	}
 
-	// Build System Prompt
-	systemPrompt := engine.BuildSystemPrompt(1000.0, req.PromptVariant)
+	// Build System Prompt (Phase 3 — pass the strategy's symbol; defaults to MNQ).
+	previewSymbol := "MNQ"
+	if len(req.Config.CoinSource.StaticCoins) > 0 && req.Config.CoinSource.StaticCoins[0] != "" {
+		previewSymbol = req.Config.CoinSource.StaticCoins[0]
+	}
+	systemPrompt := engine.BuildSystemPrompt(1000.0, req.PromptVariant, previewSymbol)
 
 	// Build User Prompt (using real market data)
 	userPrompt := engine.BuildUserPrompt(testContext)

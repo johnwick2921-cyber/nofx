@@ -19,6 +19,7 @@ type staticAIClient struct {
 }
 
 func (c *staticAIClient) SetAPIKey(apiKey string, customURL string, customModel string) {}
+func (c *staticAIClient) ResolvedModel() string { return "mock-model" }
 func (c *staticAIClient) SetTimeout(timeout time.Duration)                              {}
 func (c *staticAIClient) CallWithMessages(systemPrompt, userPrompt string) (string, error) {
 	return c.response, nil
@@ -372,7 +373,7 @@ func TestHydrateCreateTraderSlotReferencesNormalizesExchangeIDFromVisibleName(t 
 	}
 	a := New(nil, st, DefaultConfig(), slog.Default())
 
-	exchangeID, err := st.Exchange().Create("default", "okx", "小偶", true, "api-test", "secret-test", "pass", false, "", false, "", "", "", "", "", "", 0)
+	exchangeID, err := st.Exchange().Create("default", "okx", "小偶", true, "api-test", "secret-test", "pass", false, "", false, "", "", "", "", "", "", 0, "", "", 0)
 	if err != nil {
 		t.Fatalf("seed exchange: %v", err)
 	}
@@ -737,7 +738,7 @@ func TestBuildTraderCreateMissingPromptListsAllMissingSlots(t *testing.T) {
 	if err := st.AIModel().UpdateWithName("default", "default_deepseek", "DeepSeek AI", true, "sk-test-12345", "", "deepseek-chat"); err != nil {
 		t.Fatalf("seed model: %v", err)
 	}
-	exchangeID, err := st.Exchange().Create("default", "okx", "OKX 主账户", true, "api-test", "secret-test", "pass", false, "", false, "", "", "", "", "", "", 0)
+	exchangeID, err := st.Exchange().Create("default", "okx", "OKX 主账户", true, "api-test", "secret-test", "pass", false, "", false, "", "", "", "", "", "", 0, "", "", 0)
 	if err != nil {
 		t.Fatalf("seed exchange: %v", err)
 	}
@@ -912,7 +913,10 @@ func TestAIStrategySystemEnforcedFieldsAreDisplayedButNotEditable(t *testing.T) 
 		},
 	}
 	reply := formatStrategyCreateFinalConfirmation("zh", session, cfg)
-	for _, want := range []string{"最大持仓数（System enforced）", "BTC/ETH 单币仓位上限（System enforced）", "最大保证金使用率（System enforced）", "最小开仓金额（System enforced）"} {
+	// Max Margin is displayed as an advisory ("AI 提示，非代码强制") in the create
+	// summary — it was reclassified from code-enforced to advisory — yet the Agent
+	// still cannot patch it (asserted below). The other three remain System enforced.
+	for _, want := range []string{"最大持仓数（System enforced）", "BTC/ETH 单币仓位上限（System enforced）", "最大保证金使用率（AI 提示，非代码强制）", "最小开仓金额（System enforced）"} {
 		if !strings.Contains(reply, want) {
 			t.Fatalf("expected final summary to display %q, got: %s", want, reply)
 		}

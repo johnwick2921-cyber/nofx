@@ -4,17 +4,44 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
+	"nofx/config"
+
 	"gorm.io/gorm"
 )
+
+// SupportedTimeframes is the SINGLE SOURCE OF TRUTH for the Strategy Studio
+// timeframe selector: every interval the engine can genuinely serve end-to-end.
+// For NT8 futures these are exactly the timeframes the AddOn auto-subscribes and
+// streams into the BarCache (provider/ninjatrader defaultAutoBarsTimeframes —
+// kept in lockstep by TestDefaultAutoBarsTimeframes_MatchesSupported); the live
+// BarCache serves all of them per-series (there is NO Go-side aggregation, so an
+// interval outside this set — e.g. 2m — would yield empty futures klines). For
+// crypto, CoinAnk serves the same standard intervals. The frontend fetches this
+// list via GET /api/strategies/timeframes instead of hardcoding its own copy.
+var SupportedTimeframes = []string{
+	"1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w",
+}
+
+// SoftWarnTimeframesAbove is the advisory threshold: selecting more than this
+// many timeframes is allowed but warns (bigger AI prompt → slower, costlier
+// decisions). It is NEVER a hard block (that was the old artificial max-4 cap).
+const SoftWarnTimeframesAbove = 6
+
+// MaxTimeframes caps SelectedTimeframes at the full supported capability. It was
+// a hard 4 — an artificial limit that silently truncated configs on save; the AI
+// prompt (formatKlineTimeframes) and the per-timeframe analysis loop both handle
+// N timeframes. The clamp now only guards against absurd input beyond the real
+// capability, never the legitimate 5-14 range.
+var MaxTimeframes = len(SupportedTimeframes)
 
 // Hard limits to prevent token explosion in AI requests
 const (
 	MaxCandidateCoins = 10
 	MaxPositions      = 3
-	MaxTimeframes     = 4
 	MinKlineCount     = 10
 	MaxKlineCount     = 30
 	MinLeverage       = 1
@@ -32,7 +59,63 @@ const (
 	MaxConfidence     = 100
 )
 
+// SAFE DEFAULTS FOR AN UNSET RISK FIELD (P0 follow-up, 2026-08-17).
+//
+// ClampLimits used to treat "unset" and "explicitly low" identically: a zero
+// value was raised only to the RANGE FLOOR (R:R 1.0 / confidence 50), which is
+// the LOOSEST setting the system permits. So a strategy that simply never set
+// these ran at the most permissive bar available — unset silently WIDENED risk.
+//
+// An absent value now resolves to the RESEARCHED value instead
+// (docs/VL-DAYPLAN-FULL-SPEC.md: R:R ≥ 3.0, confidence ≥ 65). An EXPLICIT value
+// is untouched apart from the existing range clamp, so an owner who deliberately
+// configures 1.5 still gets 1.5 — this changes the default, never a choice.
+const (
+	SafeDefaultMinRiskReward = 3.0
+	// SafeDefaultMinConfidence — 6.1 (final-bundle 2026-08-19): ONE default,
+	// shared by the ClampLimits gate default AND the futures prompt default.
+	// Was 65 here vs a literal 60 in engine_prompt_futures.go — an UNSET
+	// strategy was told "open ≥60" and then judged at ≥65, silently discarding
+	// 60-64 setups (PR #54 finding). Aligned to 60 per owner ruling; an
+	// explicitly stored value (the active strategy stores 60) is untouched.
+	SafeDefaultMinConfidence = 60
+)
+
 // ClampLimits enforces product-level limits on strategy config to prevent token overflow.
+// MaxIndicatorPeriod is the largest allowed indicator period. Beyond this a series
+// can never warm up within the fetch/cache depth (2500 cap), so it would silently
+// render an EMPTY series — reject at save instead (F11c).
+const MaxIndicatorPeriod = 500
+
+// ValidateIndicatorPeriods (F11c) rejects out-of-range indicator periods at save:
+// each configured EMA/RSI/ATR/BOLL period must be > 0 and ≤ MaxIndicatorPeriod. An
+// absurd value like 9999 is a hard error here, never a silently-empty series.
+// Empty period lists are fine (they fall back to the legacy fixed periods).
+func (c *StrategyConfig) ValidateIndicatorPeriods() error {
+	check := func(name string, ps []int) error {
+		for _, p := range ps {
+			if p <= 0 || p > MaxIndicatorPeriod {
+				return fmt.Errorf("%s period %d is out of range — each indicator period must be between 1 and %d", name, p, MaxIndicatorPeriod)
+			}
+		}
+		return nil
+	}
+	for _, f := range []struct {
+		name string
+		ps   []int
+	}{
+		{"EMA", c.Indicators.EMAPeriods},
+		{"RSI", c.Indicators.RSIPeriods},
+		{"ATR", c.Indicators.ATRPeriods},
+		{"BOLL", c.Indicators.BOLLPeriods},
+	} {
+		if err := check(f.name, f.ps); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (c *StrategyConfig) ClampLimits() {
 	c.NormalizeProductSchema()
 
@@ -105,6 +188,12 @@ func (c *StrategyConfig) ClampLimits() {
 	}
 
 	// Clamp risk parameters and entry requirements.
+	// UNSET (zero) → the researched default, NOT the range floor. See the
+	// SafeDefault* block: the old behavior made "never configured" the loosest
+	// possible setting.
+	if c.RiskControl.MinRiskRewardRatio == 0 {
+		c.RiskControl.MinRiskRewardRatio = SafeDefaultMinRiskReward
+	}
 	if c.RiskControl.MinRiskRewardRatio < MinRiskReward {
 		c.RiskControl.MinRiskRewardRatio = MinRiskReward
 	}
@@ -122,6 +211,9 @@ func (c *StrategyConfig) ClampLimits() {
 	}
 	if c.RiskControl.MinPositionSize > MaxPositionSize {
 		c.RiskControl.MinPositionSize = MaxPositionSize
+	}
+	if c.RiskControl.MinConfidence == 0 {
+		c.RiskControl.MinConfidence = SafeDefaultMinConfidence
 	}
 	if c.RiskControl.MinConfidence < MinConfidence {
 		c.RiskControl.MinConfidence = MinConfidence
@@ -235,8 +327,16 @@ func normalizeSymbols(values []string) []string {
 	out := make([]string, 0, len(values))
 	seen := make(map[string]bool, len(values))
 	for _, value := range splitLooseStringList(values) {
-		value = strings.ToUpper(strings.TrimSpace(value))
-		value = strings.Trim(value, "，,;； ")
+		value = strings.TrimSpace(value)
+		// Task 12 / Cluster D — CME futures symbols keep their case
+		// (NQ.c.0 not NQ.C.0). Uppercasing breaks the Databento
+		// continuous symbology convention. Crypto path unchanged.
+		if isCMEFuturesSymbol(value) {
+			value = strings.Trim(value, "，,;； ")
+		} else {
+			value = strings.ToUpper(value)
+			value = strings.Trim(value, "，,;； ")
+		}
 		if value == "" || seen[value] {
 			continue
 		}
@@ -244,6 +344,84 @@ func normalizeSymbols(values []string) []string {
 		out = append(out, value)
 	}
 	return out
+}
+
+// isCMEFuturesSymbol mirrors market.IsCMEFuturesSymbol. Duplicated here
+// because store/ deliberately does not depend on market/. Keep the two
+// in lockstep — see market/futures_symbol.go for the canonical version
+// + documentation.
+func isCMEFuturesSymbol(symbol string) bool {
+	s := strings.TrimSpace(symbol)
+	if s == "" {
+		return false
+	}
+	if strings.Contains(s, ".c.") {
+		return true
+	}
+	upper := strings.ToUpper(s)
+	if _, ok := cmeFuturesRootsStore[upper]; ok {
+		return true
+	}
+	for root := range cmeFuturesRootsStore {
+		if strings.HasPrefix(upper, root+".") {
+			return true
+		}
+		if strings.HasPrefix(upper, root) && len(upper) == len(root)+2 {
+			tail := upper[len(root):]
+			if isContractMonthStore(root, tail[0]) && tail[1] >= '0' && tail[1] <= '9' {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// cmeFuturesRootsStore mirrors market.cmeFuturesRoots. See note on
+// isCMEFuturesSymbol above.
+var cmeFuturesRootsStore = map[string]struct{}{
+	"NQ":  {},
+	"MNQ": {},
+	"ES":  {},
+	"MES": {},
+	"RTY": {},
+	"M2K": {},
+	"YM":  {},
+	"MYM": {},
+	"CL":  {},
+	"MCL": {},
+	"NG":  {},
+	"GC":  {},
+	"MGC": {},
+	"SI":  {},
+	"ZB":  {},
+	"ZN":  {},
+	"ZF":  {},
+	"ZT":  {},
+}
+
+func isQuarterlyMonthStore(b byte) bool {
+	switch b {
+	case 'H', 'M', 'U', 'Z':
+		return true
+	}
+	return false
+}
+
+// futuresMonthCodesStore mirrors market.futuresMonthCodes — per-root month codes
+// so contract-code recognition is family-correct: index/Treasury stay quarterly
+// (NQF6 not matched) while energy lists all 12 (NGF6 matched). Keep in sync with
+// cmeFuturesRootsStore (every root needs an entry).
+var futuresMonthCodesStore = map[string]string{
+	"NQ": "HMUZ", "MNQ": "HMUZ", "ES": "HMUZ", "MES": "HMUZ",
+	"RTY": "HMUZ", "M2K": "HMUZ", "YM": "HMUZ", "MYM": "HMUZ",
+	"ZB": "HMUZ", "ZN": "HMUZ", "ZF": "HMUZ", "ZT": "HMUZ",
+	"CL": "FGHJKMNQUVXZ", "MCL": "FGHJKMNQUVXZ", "NG": "FGHJKMNQUVXZ",
+	"GC": "GJMQVZ", "MGC": "GJMQVZ", "SI": "FHKNUZ",
+}
+
+// isContractMonthStore mirrors market.isContractMonth.
+func isContractMonthStore(root string, b byte) bool {
+	return strings.IndexByte(futuresMonthCodesStore[root], b) >= 0
 }
 
 func normalizeTimeframes(values []string) []string {
@@ -362,6 +540,25 @@ func MergeStrategyConfig(base StrategyConfig, patch map[string]any) (StrategyCon
 		return StrategyConfig{}, err
 	}
 	return merged, nil
+}
+
+// PreserveAIConfigOnTypeSwitch (F11b) guards against the grid-switch ai_config
+// DESTROYER: when a strategy's TYPE changes, the AI-config bundle (coin source,
+// indicators, risk control, prompt sections, custom prompt) must NOT be silently
+// destroyed. Unless the caller explicitly confirmed the loss, `merged` gets its AI
+// bundle restored from `base`, so switching ai→grid (and back) never loses it. With
+// confirmed==true (the FE sent it after showing a dialog naming what's lost), the
+// caller's merged config stands.
+func PreserveAIConfigOnTypeSwitch(base, merged StrategyConfig, confirmed bool) StrategyConfig {
+	if confirmed || base.StrategyType == merged.StrategyType {
+		return merged
+	}
+	merged.CoinSource = base.CoinSource
+	merged.Indicators = base.Indicators
+	merged.RiskControl = base.RiskControl
+	merged.PromptSections = base.PromptSections
+	merged.CustomPrompt = base.CustomPrompt
+	return merged
 }
 
 func DefaultGridStrategyConfig() GridStrategyConfig {
@@ -521,6 +718,14 @@ type StrategyConfig struct {
 	// language setting: "zh" for Chinese, "en" for English
 	// This determines the language used for data formatting and prompt generation
 	Language string `json:"language,omitempty"`
+
+	// PromptVariant selects the live AI prompt mode (balanced / aggressive /
+	// conservative / scalping / futures). Persisted per-strategy; when EMPTY the
+	// live loop falls back to the venue rule (ninjatrader→futures, else balanced)
+	// so existing strategies (no variant saved) are byte-identical. Prompt-layer
+	// only — it does NOT touch any risk gate or the live-account block.
+	PromptVariant string `json:"prompt_variant,omitempty"`
+
 	// AI trading configuration fields are kept on the Go struct for engine
 	// compatibility, but JSON persistence nests them under ai_config.
 	CoinSource     CoinSourceConfig     `json:"-"`
@@ -536,6 +741,59 @@ type StrategyConfig struct {
 	// stores the authoritative booleans on Strategy, but config JSON may carry
 	// this object for agent/frontend schema consistency.
 	PublishConfig *PublishStrategyConfig `json:"publish_config,omitempty"`
+
+	// DayPlan is the optional per-strategy Day Plan settings block (P0.1). ROOT
+	// placement (sibling of strategy_type) so a grid switch — which drops
+	// ai_config — never drops it (RECON #1). Additive + defaults-off: a nil
+	// pointer emits no day_plan key, keeping every existing strategy
+	// byte-identical.
+	DayPlan *DayPlanConfig `json:"day_plan,omitempty"`
+
+	// Regime (G1, regime wave 2026-08-21) — the regime gates' Studio block.
+	// Additive + nil-pointer-safe: a nil block emits no regime key, keeping
+	// every existing strategy byte-identical. Pointer fields resolve shipped
+	// defaults in the accessors (HTFVetoEnabled: nil → ON — dispatch 1.3).
+	Regime *RegimeConfig `json:"regime,omitempty"`
+}
+
+// RegimeConfig holds the regime-wave Studio toggles (G1 HTF veto now; G4
+// transition stand-down joins later in the wave).
+type RegimeConfig struct {
+	// HTFVeto: refuse NEW entries opposing the CONFIRMED HTF trend (G2
+	// structure). nil → ON (shipped default per dispatch 1.3); false = today's
+	// pre-wave behavior.
+	HTFVeto *bool `json:"htf_veto,omitempty"`
+	// TransitionStanddown (G4): pause plan-direction entries while an
+	// unconfirmed counter-trend CHoCH/MSS is outstanding. nil → ON; false =
+	// today's pre-wave behavior.
+	TransitionStanddown *bool `json:"transition_standdown,omitempty"`
+	// LossStreakN (G6): N consecutive losing closes pause entries. nil → 4;
+	// 0 = OFF (absent=off armor convention; the shipped default lives here).
+	LossStreakN *int `json:"loss_streak_n,omitempty"`
+}
+
+// LossStreakNValue resolves the streak length (nil → 4; 0 → off).
+func (c *StrategyConfig) LossStreakNValue() int {
+	if c.Regime == nil || c.Regime.LossStreakN == nil {
+		return 4
+	}
+	return *c.Regime.LossStreakN
+}
+
+// HTFVetoEnabled resolves the shipped default (nil/absent → ON).
+func (c *StrategyConfig) HTFVetoEnabled() bool {
+	if c.Regime == nil || c.Regime.HTFVeto == nil {
+		return true
+	}
+	return *c.Regime.HTFVeto
+}
+
+// TransitionStanddownEnabled resolves the shipped default (nil/absent → ON).
+func (c *StrategyConfig) TransitionStanddownEnabled() bool {
+	if c.Regime == nil || c.Regime.TransitionStanddown == nil {
+		return true
+	}
+	return *c.Regime.TransitionStanddown
 }
 
 // AIStrategyConfig contains fields only used by AI trading strategies.
@@ -564,13 +822,19 @@ func (c StrategyConfig) MarshalJSON() ([]byte, error) {
 	out := struct {
 		StrategyType  string                 `json:"strategy_type"`
 		Language      string                 `json:"language,omitempty"`
+		PromptVariant string                 `json:"prompt_variant,omitempty"`
 		AIConfig      *AIStrategyConfig      `json:"ai_config,omitempty"`
 		GridConfig    *GridStrategyConfig    `json:"grid_config,omitempty"`
 		PublishConfig *PublishStrategyConfig `json:"publish_config,omitempty"`
+		DayPlan       *DayPlanConfig         `json:"day_plan,omitempty"`
+		Regime        *RegimeConfig          `json:"regime,omitempty"`
 	}{
 		StrategyType:  strategyType,
 		Language:      c.Language,
+		PromptVariant: strings.TrimSpace(c.PromptVariant),
 		PublishConfig: c.PublishConfig,
+		DayPlan:       c.DayPlan,
+		Regime:        c.Regime,
 	}
 
 	if strategyType == "grid_trading" {
@@ -594,9 +858,12 @@ func (c *StrategyConfig) UnmarshalJSON(data []byte) error {
 	type rawStrategyConfig struct {
 		StrategyType  string                 `json:"strategy_type"`
 		Language      string                 `json:"language"`
+		PromptVariant string                 `json:"prompt_variant"`
 		AIConfig      *AIStrategyConfig      `json:"ai_config"`
 		GridConfig    *GridStrategyConfig    `json:"grid_config"`
 		PublishConfig *PublishStrategyConfig `json:"publish_config"`
+		DayPlan       *DayPlanConfig         `json:"day_plan"`
+		Regime        *RegimeConfig          `json:"regime"`
 
 		CoinSource     *CoinSourceConfig     `json:"coin_source"`
 		Indicators     *IndicatorConfig      `json:"indicators"`
@@ -612,8 +879,11 @@ func (c *StrategyConfig) UnmarshalJSON(data []byte) error {
 
 	c.StrategyType = raw.StrategyType
 	c.Language = raw.Language
+	c.PromptVariant = strings.TrimSpace(raw.PromptVariant)
 	c.GridConfig = raw.GridConfig
 	c.PublishConfig = raw.PublishConfig
+	c.DayPlan = raw.DayPlan
+	c.Regime = raw.Regime
 
 	if raw.AIConfig != nil {
 		c.CoinSource = raw.AIConfig.CoinSource
@@ -643,6 +913,306 @@ func (c *StrategyConfig) UnmarshalJSON(data []byte) error {
 		c.StrategyType = "grid_trading"
 	}
 	return nil
+}
+
+// DayPlanConfig is the per-strategy Day Plan settings block (spec PAGE 2 field
+// list). Additive + defaults-off: a nil *DayPlanConfig (absent day_plan) leaves
+// an existing strategy byte-identical, and PlanEnabled=false is the master
+// switch even when the block is present. Lives at ROOT of StrategyConfig.
+type DayPlanConfig struct {
+	// PlanEnabled is the master switch (default false = off).
+	PlanEnabled bool `json:"plan_enabled"`
+	// PlannerModel is the reasoner binding from the multi-key registry; empty
+	// falls back to the strategy's primary model (RECON #9).
+	PlannerModel string `json:"planner_model,omitempty"`
+	// PlanMode: advisory (default) | direction | strict. Promotion by evidence.
+	PlanMode string `json:"plan_mode,omitempty"`
+	// PlannerTimeframes are the structure-summary TFs (default D,4h,1h,15m).
+	PlannerTimeframes []string `json:"planner_timeframes,omitempty"`
+	// ProximityFilterATR: day-trade lock, 0.5–3.0 (default 1.5).
+	ProximityFilterATR float64 `json:"proximity_filter_atr,omitempty"`
+	// MaxLevels: level table cap, 3–12 (default 8).
+	MaxLevels int `json:"max_levels,omitempty"`
+	// ScenarioCap: scenarios cap, 1–5 (default 3).
+	ScenarioCap int `json:"scenario_cap,omitempty"`
+	// AcceptanceRule: 2x5m (default) | 15m-close.
+	AcceptanceRule string `json:"acceptance_rule,omitempty"`
+	// ReplanCap: re-reads per session, 0–4 (default 2).
+	ReplanCap int `json:"replan_cap,omitempty"`
+	// SessionsEnabled: subset of NY | ASIA | LONDON (default [NY]); each other
+	// session earns enablement via replay + NY match-rate evidence.
+	SessionsEnabled []string `json:"sessions_enabled,omitempty"`
+	// ApprovalRequired: OFF (default) = fully automatic.
+	ApprovalRequired bool `json:"approval_required"`
+	// EveningDigest: 17:30 evening digest (default true).
+	EveningDigest bool `json:"evening_digest"`
+	// RealignCap (W13): max AUTO plan re-alignments per plan/session (default 5,
+	// 0 → default). Beyond it the card falls back to a manual "Re-align plan"
+	// button, so the owner keeps the capability without unbounded spend.
+	RealignCap int `json:"realign_cap,omitempty"`
+	// LastEntryCT (P2.3) blocks NEW entries after this America/Chicago time
+	// (default 13:00 CT = 14:00 ET). Empty → the default.
+	LastEntryCT string `json:"last_entry_ct,omitempty"`
+	// EODFlatCT (P2.3) force-flattens open positions at this America/Chicago time
+	// (default 14:45 CT = 15:45 ET); a registered half-day early-close pulls it in.
+	EODFlatCT string `json:"eod_flat_ct,omitempty"`
+	// Sessions holds minimal per-session overrides; absent/nil fields inherit
+	// from the strategy-level values above (⚪ inherit / 🔸 override).
+	Sessions []DayPlanSessionOverride `json:"sessions,omitempty"`
+}
+
+// DayPlanSessionOverride is a minimal per-session override. Every field is a
+// pointer: nil means "inherit from the strategy-level DayPlanConfig", a set
+// value overrides only that field for the named session.
+type DayPlanSessionOverride struct {
+	Session        string  `json:"session"` // NY | ASIA | LONDON
+	Enable         *bool   `json:"enable,omitempty"`
+	ReplanCap      *int    `json:"replan_cap,omitempty"`
+	PlanMode       *string `json:"plan_mode,omitempty"`
+	AcceptanceRule *string `json:"acceptance_rule,omitempty"`
+	MinGrade       *string `json:"min_grade,omitempty"` // A | B | C
+	MaxTrades      *int    `json:"max_trades,omitempty"`
+	// LastEntryOffsetMin: minutes BEFORE this session's end after which NEW
+	// entries are refused (P2 session-scope redesign, 2026-08-18). Replaces the
+	// old day-scoped 13:00 CT cutoff, which blocked every entry from 13:00 CT to
+	// midnight — i.e. permanently blocked Asia evenings. nil → default 15.
+	LastEntryOffsetMin *int `json:"last_entry_offset_min,omitempty"`
+	// EODFlatOffsetMin: minutes before this session's end at which any open
+	// position is force-flattened. Same day-scope disease as last-entry (the
+	// 14:45 CT literal would have flattened an Asia position on sight the moment
+	// the last-entry fix landed). nil → default 15.
+	EODFlatOffsetMin *int `json:"eod_flat_offset_min,omitempty"`
+}
+
+// DefaultLastEntryOffsetMin / DefaultEODFlatOffsetMin are the session-relative
+// defaults (minutes before session end). 15 preserves the NY flat feel
+// (15:00−15 = 14:45, exactly the old EODFlatCT default).
+const (
+	DefaultLastEntryOffsetMin = 15
+	DefaultEODFlatOffsetMin   = 15
+)
+
+// LastEntryOffsetFor resolves the per-session last-entry offset (minutes before
+// session end). Override → default. Config only — no caller may carry a literal.
+func (c *DayPlanConfig) LastEntryOffsetFor(session string) int {
+	if ov := c.SessionOverride(session); ov != nil && ov.LastEntryOffsetMin != nil && *ov.LastEntryOffsetMin >= 0 {
+		return *ov.LastEntryOffsetMin
+	}
+	return DefaultLastEntryOffsetMin
+}
+
+// EODFlatOffsetFor resolves the per-session EOD-flat offset (minutes before
+// session end). Override → default.
+func (c *DayPlanConfig) EODFlatOffsetFor(session string) int {
+	if ov := c.SessionOverride(session); ov != nil && ov.EODFlatOffsetMin != nil && *ov.EODFlatOffsetMin >= 0 {
+		return *ov.EODFlatOffsetMin
+	}
+	return DefaultEODFlatOffsetMin
+}
+
+// SessionOverride returns the named session's override block, or nil. Shared by
+// the trader gates, the kernel prompt path, and the API card renderer so all
+// three resolve a per-session setting the SAME way.
+func (c *DayPlanConfig) SessionOverride(session string) *DayPlanSessionOverride {
+	if c == nil {
+		return nil
+	}
+	for i := range c.Sessions {
+		if strings.EqualFold(c.Sessions[i].Session, session) {
+			return &c.Sessions[i]
+		}
+	}
+	return nil
+}
+
+// DefaultAcceptanceRule is the shipped acceptance rule (2 consecutive 5m closes
+// beyond the level). The alternative is "15m-close".
+const DefaultAcceptanceRule = "2x5m"
+
+// AcceptanceRuleFor resolves the acceptance rule for a session: per-session
+// override → strategy-level → the shipped default. Before this existed, the
+// per-session override was persisted and rendered but read by NOTHING — every
+// consumer went straight to the strategy-level field.
+func (c *DayPlanConfig) AcceptanceRuleFor(session string) string {
+	rule := DefaultAcceptanceRule
+	if c != nil && strings.TrimSpace(c.AcceptanceRule) != "" {
+		rule = c.AcceptanceRule
+	}
+	if ov := c.SessionOverride(session); ov != nil && ov.AcceptanceRule != nil && strings.TrimSpace(*ov.AcceptanceRule) != "" {
+		rule = *ov.AcceptanceRule
+	}
+	return strings.TrimSpace(rule)
+}
+
+// ReplanCapFor resolves the re-read cap for a session: per-session override →
+// strategy-level → the shipped default of 2. A 0 override is meaningful (no
+// re-plan after death), hence the >= 0 test rather than > 0.
+func (c *DayPlanConfig) ReplanCapFor(session string) int {
+	n := 2
+	if c != nil && c.ReplanCap > 0 {
+		n = c.ReplanCap
+	}
+	if ov := c.SessionOverride(session); ov != nil && ov.ReplanCap != nil && *ov.ReplanCap >= 0 {
+		n = *ov.ReplanCap
+	}
+	return n
+}
+
+// ReplansUsed / MayReplan / ReplansLeft are the ONE definition of the re-plan
+// budget. Every consumer — the enforcer, the card and the executor prompt — must
+// go through these, so a literal budget can never disagree with the config again
+// (installActivePlanProvider once carried a hardcoded 2 and told the AI it had 0
+// re-plans left while the card said 2).
+//
+// SEMANTICS, settled 2026-08-17. The cap counts RE-PLANS, not versions and not
+// deaths. Version 1 is the session's first read and costs nothing; each
+// subsequent REAL plan version is one re-plan. So:
+//
+//	replan_cap = N  ⇒  at most N re-plans  ⇒  real versions v1…v(N+1)
+//	the (N+1)th death  ⇒  NO-TRADE for the session
+//
+// The NO-TRADE row is a TERMINAL MARKER, not a re-plan. It consumes a version
+// number because the plans table is append-only, which is why cap=4 legitimately
+// produces a row labelled "v6": v1…v5 are the five real plans (four re-plans) and
+// v6 is the marker. That is correct behaviour, and it is exactly what read as
+// "the cap didn't work" on 2026-08-16.
+
+// ReplansUsed is how many re-plans a version number represents.
+func ReplansUsed(version int) int {
+	return ReplansUsedFrom(version, 1)
+}
+
+// MayReplan reports whether another REAL plan version may be written after the
+// given version died. False ⇒ the session sits out with a NO-TRADE marker.
+func MayReplan(version, cap int) bool { return MayReplanFrom(version, 1, cap) }
+
+// ReplansLeftFor is what the card and the executor prompt must both display.
+func ReplansLeftFor(version, cap int) int {
+	return ReplansLeftFrom(version, 1, cap)
+}
+
+// ── OWNER RESET (2026-08-17) — a reset re-opens the budget for ONE chain ──────
+//
+// The owner reset marks the current chain ABANDONED (the rows stay — plans are
+// append-only, history and death reasons preserved) and re-arms the session's
+// re-plan budget from a new baseline: the version at which the reset happened.
+// Everything above (ReplansUsed/MayReplan/ReplansLeftFor) is baseline 1 — the
+// original chain — and these From-variants are the SAME math from a later
+// baseline, so every consumer reads one consistent budget.
+
+// ReplansUsedFrom counts re-plans relative to a baseline version.
+func ReplansUsedFrom(version, baseline int) int {
+	if baseline < 1 {
+		baseline = 1
+	}
+	if version < baseline {
+		return 0
+	}
+	return version - baseline
+}
+
+// MayReplanFrom is MayReplan measured from a baseline version (the reset seam).
+func MayReplanFrom(version, baseline, cap int) bool { return ReplansUsedFrom(version, baseline) < cap }
+
+// ReplansLeftFrom is ReplansLeftFor measured from a baseline version.
+func ReplansLeftFrom(version, baseline, cap int) int {
+	if n := cap - ReplansUsedFrom(version, baseline); n > 0 {
+		return n
+	}
+	return 0
+}
+
+// ResetBaselineKey is the system_config key holding the reset seam version for
+// one (trade_date, session).
+func ResetBaselineKey(tradeDate, session string) string {
+	return "dayplan_reset:" + tradeDate + ":" + session
+}
+
+// ScenarioStatusKey is the system_config key holding a trader's live scenario
+// statuses. P0-A (2026-08-18): the key used to be "scenario_status:<plan_id>"
+// — with two day-plan traders sharing a plan_id, the last writer's statuses
+// governed both cards. Trader-scoped so one trader's scenario facts can never
+// reach another's card.
+func ScenarioStatusKey(traderID, planID string) string {
+	return "scenario_status:" + traderID + ":" + planID
+}
+
+// ScenarioMetaKey (A1/A4, fail-register wave) — sibling of ScenarioStatusKey:
+// {"basis":{"S1":"machine|heuristic"},"unevaluable":["S3"]} so the card can
+// render heuristic verdicts distinctly and name unevaluable scenarios.
+func ScenarioMetaKey(traderID, planID string) string {
+	return "scenario_meta:" + traderID + ":" + planID
+}
+
+// SetResetBaseline records the version the reset chain starts measuring from.
+func SetResetBaseline(st *Store, tradeDate, session string, version int) error {
+	if st == nil {
+		return fmt.Errorf("store required")
+	}
+	if version < 1 {
+		return fmt.Errorf("baseline version must be >= 1, got %d", version)
+	}
+	return st.SetSystemConfig(ResetBaselineKey(tradeDate, session), strconv.Itoa(version))
+}
+
+// GetResetBaseline returns the reset baseline for (trade_date, session); 1 when
+// none was recorded (the original chain). A malformed value falls back to 1 —
+// a bad marker can never inflate or destroy budget.
+func GetResetBaseline(st *Store, tradeDate, session string) int {
+	if st == nil {
+		return 1
+	}
+	raw, _ := st.GetSystemConfig(ResetBaselineKey(tradeDate, session))
+	if n, err := strconv.Atoi(strings.TrimSpace(raw)); err == nil && n >= 1 {
+		return n
+	}
+	return 1
+}
+
+// MaxTradesFor resolves the per-session entry cap. ok=false means NO cap is
+// configured for this session (the shipped behavior — the strategy-level daily
+// guardrail still applies). A 0 cap is meaningful: no entries this session.
+func (c *DayPlanConfig) MaxTradesFor(session string) (int, bool) {
+	if ov := c.SessionOverride(session); ov != nil && ov.MaxTrades != nil && *ov.MaxTrades >= 0 {
+		return *ov.MaxTrades, true
+	}
+	return 0, false
+}
+
+// PlanModeFor resolves the plan-restriction mode for a session: per-session
+// override → strategy-level → "advisory".
+func (c *DayPlanConfig) PlanModeFor(session string) string {
+	mode := "advisory"
+	if c != nil && strings.TrimSpace(c.PlanMode) != "" {
+		mode = c.PlanMode
+	}
+	if ov := c.SessionOverride(session); ov != nil && ov.PlanMode != nil && strings.TrimSpace(*ov.PlanMode) != "" {
+		mode = *ov.PlanMode
+	}
+	return strings.ToLower(strings.TrimSpace(mode))
+}
+
+// DefaultDayPlanConfig returns the spec default block (plan OFF). It is NOT
+// injected into GetDefaultStrategyConfig — creating a strategy leaves day_plan
+// absent (byte-identical) until the owner opts in; the frontend/creation flow
+// seeds this when the block is first turned on.
+func DefaultDayPlanConfig() *DayPlanConfig {
+	return &DayPlanConfig{
+		PlanEnabled:        false,
+		PlanMode:           "advisory",
+		PlannerTimeframes:  []string{"D", "4h", "1h", "15m"},
+		ProximityFilterATR: 1.5,
+		MaxLevels:          8,
+		ScenarioCap:        3,
+		AcceptanceRule:     "2x5m",
+		ReplanCap:          2,
+		SessionsEnabled:    []string{"NY"},
+		ApprovalRequired:   false,
+		EveningDigest:      true,
+		RealignCap:         5,
+		LastEntryCT:        "13:00", // 14:00 ET
+		EODFlatCT:          "14:45", // 15:45 ET
+	}
 }
 
 // GridStrategyConfig grid trading specific configuration
@@ -735,6 +1305,7 @@ type IndicatorConfig struct {
 	EnableVolume      bool `json:"enable_volume"`
 	EnableOI          bool `json:"enable_oi"`           // open interest
 	EnableFundingRate bool `json:"enable_funding_rate"` // funding rate
+	EnableSVP         bool `json:"enable_svp"`          // session volume profile → futures AI prompt line (POC/VAH/VAL); default OFF
 	// EMA period configuration
 	EMAPeriods []int `json:"ema_periods,omitempty"` // default [20, 50]
 	// RSI period configuration
@@ -822,6 +1393,96 @@ type RiskControlConfig struct {
 	MinRiskRewardRatio float64 `json:"min_risk_reward_ratio"`
 	// Min AI confidence to open position (AI guided)
 	MinConfidence int `json:"min_confidence"`
+
+	// === Strategy Studio Phase 1 — prop-firm daily guardrails (per-strategy;
+	// env = fallback for the value; the per-guardrail toggle governs enforcement). ===
+
+	// Master switch: nil/true = guardrails active; false = ALL guardrails bypassed.
+	GuardrailsEnabled *bool `json:"guardrails_enabled,omitempty"`
+
+	// Daily realized-LOSS limit (USD, positive): loss ≥ this halts new entries for
+	// the CME session-day. Enabled defaults ON (nil) to preserve the existing live
+	// env daily-loss gate; the value falls back to RISK_MAX_DAILY_LOSS_USD when 0.
+	DailyLossLimitUSD float64 `json:"daily_loss_limit_usd,omitempty"`
+	DailyLossEnabled  *bool   `json:"daily_loss_enabled,omitempty"`
+
+	// Daily realized-PROFIT target (USD, positive): profit ≥ this stops new entries
+	// for the session-day. New guardrail → defaults OFF (nil).
+	DailyProfitTargetUSD float64 `json:"daily_profit_target_usd,omitempty"`
+	DailyProfitEnabled   *bool   `json:"daily_profit_enabled,omitempty"`
+
+	// Max ENTRIES per CME session-day. New guardrail → defaults OFF (nil).
+	MaxDailyTrades        int   `json:"max_daily_trades,omitempty"`
+	MaxDailyTradesEnabled *bool `json:"max_daily_trades_enabled,omitempty"`
+
+	// D1 — CONSECUTIVE-LOSS halt: after this many consecutive LOSING closed trades
+	// in the CME session-day, block NEW entries until the next session (open-pos
+	// management via SL/TP is unaffected). 0 = OFF. Resets on a winning/break-even
+	// close or a new session. New guardrail → default 0 (off). NOT gated by the
+	// guardrails master switch — it is a per-strategy circuit breaker.
+	ConsecutiveLossHalt int `json:"consecutive_loss_halt,omitempty"`
+
+	// B7 — RE-ENTRY COOLDOWN: after a STOP-LOSS exit, block a SAME-DIRECTION
+	// re-entry on that symbol for this many minutes OR until price moves ≥ 1×ATR15
+	// away from the stop — whichever comes first. Per-trader; opposite direction and
+	// other symbols are never blocked. FE default 20; 0 = OFF (existing strategies
+	// stay off until set). Not gated by the guardrails master switch.
+	ReentryCooldownMinutes int `json:"reentry_cooldown_minutes,omitempty"`
+
+	// Chunk 3 — max CONTRACTS per futures order (clamp). Unset → the 2-contract
+	// default (the prior hidden const maxFuturesContracts). Toggle default ON.
+	MaxContractsPerOrder int `json:"max_contracts_per_order,omitempty"`
+	// Deprecated (6.4 ruling B): the enabled toggle never had a reader — the
+	// contracts clamp is always-on venue safety. Field kept so old stored
+	// configs still parse; nothing reads it, the UI no longer writes it.
+	MaxContractsEnabled *bool `json:"max_contracts_enabled,omitempty"`
+
+	// Chunk 3 — futures NOTIONAL ceiling multiplier: max position notional =
+	// equity × this. Unset → 20 (the prior hidden const futuresMaxNotionalLeverage),
+	// now VISIBLE + EDITABLE. Toggle default ON (safety backstop).
+	MaxNotionalLeverage float64 `json:"max_notional_leverage,omitempty"`
+	// Deprecated (6.4 ruling B): same as MaxContractsEnabled — parse-only.
+	NotionalCapEnabled *bool `json:"notional_cap_enabled,omitempty"`
+
+	// Chunk 4 — time/news BLACKOUT window (daily, HH:MM in America/Chicago). When
+	// enabled, the bot makes no new decisions inside [start,end] CT (NT8-side SL/TP
+	// still protect open positions). New guardrail → toggle defaults OFF.
+	BlackoutEnabled *bool  `json:"blackout_enabled,omitempty"`
+	BlackoutStartCT string `json:"blackout_start_ct,omitempty"`
+	BlackoutEndCT   string `json:"blackout_end_ct,omitempty"`
+
+	// Chunk 5 — CONSISTENCY rule: no single CME session-day's realized profit may
+	// exceed this % of all-time total realized profit. Only triggers once there is
+	// prior-day profit (a fresh/single-day account never self-locks). New guardrail
+	// → toggle defaults OFF.
+	ConsistencyMaxDayPct float64 `json:"consistency_max_day_pct,omitempty"`
+	ConsistencyEnabled   *bool   `json:"consistency_enabled,omitempty"`
+
+	// Hold-lock ("Hold discipline"): when ON, once a position is OPEN the bot
+	// SUPPRESSES an AI-initiated close — the trade rides to the stop/target the
+	// AI set (a real OCO bracket resting at the exchange), instead of the AI
+	// bailing on noise minutes in. Only AI decisions are gated; Emergency Flat
+	// and the drawdown monitor bypass it. New feature → default OFF (nil/false).
+	HoldDisciplineEnabled *bool `json:"hold_discipline,omitempty"`
+
+	// Auto-breakeven (NT8 futures): once an open position is BreakevenTriggerPoints
+	// in profit, move its stop to entry (breakeven) so a winner can't turn into a
+	// loss. The move is sent to the AddOn (move_stop frame), which modifies the
+	// resting bracket in place. New feature → default OFF; trigger defaults to 50.
+	BreakevenEnabled       *bool   `json:"breakeven_enabled,omitempty"`
+	BreakevenTriggerPoints float64 `json:"breakeven_trigger_points,omitempty"`
+
+	// Trailing profit (final-bundle Phase 3B, 2026-08-19; NT8 futures only).
+	// Mechanical, deterministic, zero AI: once ARMED (per trailing_arm), each 60s
+	// monitor beat computes trail = best_price_since_entry ∓ mult×ATR(period,5m)
+	// and ratchets the resting stop via the proven move_stop path — never
+	// backward, never below entry after breakeven fired. DEFAULT OFF.
+	TrailingEnabled   *bool   `json:"trailing_enabled,omitempty"`
+	TrailingATRMult   float64 `json:"trailing_atr_mult,omitempty"`   // default 2.0
+	TrailingATRPeriod int     `json:"trailing_atr_period,omitempty"` // default 14 (5m ATR)
+	// TrailingArm: "after_breakeven" (default) | "after_trigger_points" | "immediate".
+	TrailingArm       string  `json:"trailing_arm,omitempty"`
+	TrailingArmPoints float64 `json:"trailing_arm_points,omitempty"` // used iff after_trigger_points
 }
 
 // NewStrategyStore creates a new StrategyStore
@@ -839,6 +1500,32 @@ func (s *StrategyStore) initDefaultData() error {
 	return nil
 }
 
+// defaultCoinSource returns the seed coin source for a fresh strategy.
+// Futures mode (TRADING_MODE=futures) seeds the single NT8 instrument as a
+// static coin so a reseeded DB does not revert to the dead ai500 pool (the
+// reseed-durable counterpart to the runtime N11 flip). Crypto mode keeps the
+// ai500 default.
+func defaultCoinSource() CoinSourceConfig {
+	if cfg := config.Get(); cfg != nil && cfg.TradingMode == "futures" {
+		return CoinSourceConfig{
+			SourceType:  "static",
+			StaticCoins: []string{"MNQ"},
+			AI500Limit:  3,
+			OITopLimit:  3,
+			OILowLimit:  3,
+		}
+	}
+	return CoinSourceConfig{
+		SourceType: "ai500",
+		UseAI500:   true,
+		AI500Limit: 3,
+		UseOITop:   false,
+		OITopLimit: 3,
+		UseOILow:   false,
+		OILowLimit: 3,
+	}
+}
+
 // GetDefaultStrategyConfig returns the default strategy configuration for the given language
 func GetDefaultStrategyConfig(lang string) StrategyConfig {
 	// Normalize language to "zh" or "en"
@@ -848,16 +1535,8 @@ func GetDefaultStrategyConfig(lang string) StrategyConfig {
 	}
 
 	config := StrategyConfig{
-		Language: normalizedLang,
-		CoinSource: CoinSourceConfig{
-			SourceType: "ai500",
-			UseAI500:   true,
-			AI500Limit: 3,
-			UseOITop:   false,
-			OITopLimit: 3,
-			UseOILow:   false,
-			OILowLimit: 3,
-		},
+		Language:   normalizedLang,
+		CoinSource: defaultCoinSource(),
 		Indicators: IndicatorConfig{
 			Klines: KlineConfig{
 				PrimaryTimeframe:     "5m",
@@ -912,11 +1591,13 @@ func GetDefaultStrategyConfig(lang string) StrategyConfig {
 		},
 	}
 
+	// Role + Decision are intentionally NOT seeded: an empty box lets each market's
+	// prompt builder supply the correct default — the instrument-aware CME role on
+	// futures (engine_prompt_futures.go), the crypto role on crypto
+	// (engine_prompt.go) — instead of one shared (market-wrong) seed. Frequency +
+	// Entry stay seeded (market-neutral). Saved user boxes are untouched.
 	if lang == "zh" {
 		config.PromptSections = PromptSectionsConfig{
-			RoleDefinition: `# 你是一个专业的加密货币交易AI
-
-你的任务是根据提供的市场数据做出交易决策。你是一个经验丰富的量化交易员，擅长技术分析和风险管理。`,
 			TradingFrequency: `# ⏱️ 交易频率意识
 
 - 优秀交易员：每天2-4笔 ≈ 每小时0.1-0.2笔
@@ -926,17 +1607,9 @@ func GetDefaultStrategyConfig(lang string) StrategyConfig {
 			EntryStandards: `# 🎯 入场标准（严格）
 
 只在多个信号共振时入场。自由使用任何有效的分析方法，避免单一指标、信号矛盾、横盘震荡、或平仓后立即重新开仓等低质量行为。`,
-			DecisionProcess: `# 📋 决策流程
-
-1. 检查持仓 → 是否止盈/止损
-2. 扫描候选币种 + 多时间框架 → 是否存在强信号
-3. 先写思维链，再输出结构化JSON`,
 		}
 	} else {
 		config.PromptSections = PromptSectionsConfig{
-			RoleDefinition: `# You are a professional cryptocurrency trading AI
-
-Your task is to make trading decisions based on the provided market data. You are an experienced quantitative trader skilled in technical analysis and risk management.`,
 			TradingFrequency: `# ⏱️ Trading Frequency Awareness
 
 - Excellent trader: 2-4 trades per day ≈ 0.1-0.2 trades per hour
@@ -946,15 +1619,61 @@ If you find yourself trading every cycle → standards are too low; if closing p
 			EntryStandards: `# 🎯 Entry Standards (Strict)
 
 Only enter positions when multiple signals resonate. Freely use any effective analysis methods, avoid low-quality behaviors such as single indicators, contradictory signals, sideways oscillation, or immediately restarting after closing positions.`,
-			DecisionProcess: `# 📋 Decision Process
-
-1. Check positions → whether to take profit/stop loss
-2. Scan candidate coins + multi-timeframe → whether strong signals exist
-3. Write chain of thought first, then output structured JSON`,
 		}
 	}
 
+	// CME futures (NT8): tune the indicator DEFAULTS for a new futures strategy —
+	// disable the crypto-only NofxOS/ranking feeds and enable the technical
+	// indicators the futures prompt leans on. Defaults-only (new-strategy
+	// template); existing saved strategies are never mutated. See helper.
+	if isFuturesMode() {
+		applyFuturesIndicatorDefaults(&config.Indicators)
+	}
+
 	return config
+}
+
+// applyFuturesIndicatorDefaults tunes the indicator defaults for a NEW
+// CME-futures strategy (called only when isFuturesMode()):
+//
+//  1. Disable the crypto-only NofxOS / market-wide ranking feeds — they return
+//     no data for an index-futures instrument and just burn the dead claw402
+//     path (HTTP 402/404) ~4 min/cycle (plan §5310: "NQ strategies just leave
+//     them disabled").
+//  2. Enable the computed technical indicators the futures prompt actually leans
+//     on — ATR (stop sizing), EMA (trend), RSI (momentum) — which otherwise
+//     default OFF, leaving the futures AI with raw bars + volume only. Periods
+//     are already seeded ([20,50] / [7,14] / [14]).
+//
+// Indicators are prompt-data and NEVER gate a trade (the gate reads only Risk
+// Control), so this is a defaults-only, prompt-input change. It runs only inside
+// GetDefaultStrategyConfig (the new-strategy template) — existing saved
+// strategies are never touched. MACD/BOLL are deliberately left off.
+func applyFuturesIndicatorDefaults(ind *IndicatorConfig) {
+	// (1) crypto-only feeds OFF on futures.
+	ind.EnableQuantData = false
+	ind.EnableQuantOI = false
+	ind.EnableQuantNetflow = false
+	ind.EnableOIRanking = false
+	ind.EnableNetFlowRanking = false
+	ind.EnablePriceRanking = false
+	// Open Interest is the Binance crypto-perp feed too — it returns zeros for
+	// MNQ and the futures prompt already says to ignore it (no real futures OI
+	// is wired; the NT8 bridge carries OHLCV only). Off by default so a new
+	// futures strategy doesn't list/value an empty OI section.
+	ind.EnableOI = false
+	// (2) computed technical indicators ON for futures.
+	ind.EnableATR = true
+	ind.EnableEMA = true
+	ind.EnableRSI = true
+}
+
+// isFuturesMode reports whether the bot is running in CME-futures mode. Lives
+// in its own function because GetDefaultStrategyConfig shadows the `config`
+// package name with a local StrategyConfig variable.
+func isFuturesMode() bool {
+	c := config.Get()
+	return c != nil && c.TradingMode == "futures"
 }
 
 // Create create a strategy
@@ -1103,7 +1822,50 @@ func (s *Strategy) ParseConfig() (*StrategyConfig, error) {
 	if err := json.Unmarshal([]byte(s.Config), &config); err != nil {
 		return nil, fmt.Errorf("failed to parse strategy configuration: %w", err)
 	}
+	config.applyMissingDefaults()
 	return &config, nil
+}
+
+// applyMissingDefaults backfills GetDefaultStrategyConfig values for config
+// blocks that were persisted empty, so a strategy saved without a coin_source
+// or without a klines block never silently falls back to a blank coin source
+// (kernel/engine.go default case "unknown coin source type") or to the crypto
+// "3m" primary timeframe (kernel/engine_analysis.go), which NT8 never subscribes
+// (it auto-subscribes 5m/15m/1h). Only genuinely-empty blocks are filled;
+// explicitly-set values are preserved. This is the durable twin of the
+// per-strategy DB fixes for coin_source and klines.
+func (c *StrategyConfig) applyMissingDefaults() {
+	def := GetDefaultStrategyConfig(c.Language)
+
+	// Coin source: a blank source_type with no static coins and no source flags
+	// means the block was never set. Default the TYPE to "static" — matching the
+	// engine-level guard in GetCandidateCoins (commit abda753d) so the two layers
+	// agree — rather than the crypto ai500 default, which would be wrong for a
+	// futures trader. An empty static list then degrades to the upstream
+	// "no candidates" path instead of the unknown-type hard error.
+	if c.CoinSource.SourceType == "" && len(c.CoinSource.StaticCoins) == 0 &&
+		!c.CoinSource.UseAI500 && !c.CoinSource.UseOITop && !c.CoinSource.UseOILow &&
+		!c.CoinSource.UseHyperAll && !c.CoinSource.UseHyperMain {
+		c.CoinSource.SourceType = "static"
+	}
+
+	// Klines: no selected timeframes and no primary timeframe means the block was
+	// never set -> adopt the default timeframe set (5m/15m/1h, primary 5m), which
+	// matches the NT8 auto-subscribed set and avoids the engine "3m" fallback.
+	if len(c.Indicators.Klines.SelectedTimeframes) == 0 && c.Indicators.Klines.PrimaryTimeframe == "" {
+		c.Indicators.Klines.SelectedTimeframes = def.Indicators.Klines.SelectedTimeframes
+		c.Indicators.Klines.PrimaryTimeframe = def.Indicators.Klines.PrimaryTimeframe
+		c.Indicators.Klines.LongerTimeframe = def.Indicators.Klines.LongerTimeframe
+		c.Indicators.Klines.EnableMultiTimeframe = true
+		if c.Indicators.Klines.PrimaryCount == 0 {
+			c.Indicators.Klines.PrimaryCount = def.Indicators.Klines.PrimaryCount
+		}
+		if c.Indicators.Klines.LongerCount == 0 {
+			c.Indicators.Klines.LongerCount = def.Indicators.Klines.LongerCount
+		}
+		// raw OHLCV is required for AI analysis
+		c.Indicators.EnableRawKlines = true
+	}
 }
 
 // SetConfig set strategy configuration

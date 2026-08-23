@@ -261,8 +261,8 @@ func (a *Agent) handleAIChoice(storeUserID string, userID int64, text string, st
 	lower := strings.ToLower(strings.TrimSpace(text))
 
 	models := map[string]struct{ provider, model, url string }{
-		"deepseek": {"deepseek", "deepseek-chat", "https://api.deepseek.com/v1"},
-		"1":        {"deepseek", "deepseek-chat", "https://api.deepseek.com/v1"},
+		"deepseek": {"deepseek", "deepseek-v4-pro", "https://api.deepseek.com/v1"},
+		"1":        {"deepseek", "deepseek-v4-pro", "https://api.deepseek.com/v1"},
 		"qwen":     {"qwen", "qwen-plus", "https://dashscope.aliyuncs.com/compatible-mode/v1"},
 		"通义":       {"qwen", "qwen-plus", "https://dashscope.aliyuncs.com/compatible-mode/v1"},
 		"2":        {"qwen", "qwen-plus", "https://dashscope.aliyuncs.com/compatible-mode/v1"},
@@ -458,6 +458,7 @@ func (a *Agent) saveSetupExchange(storeUserID string, state *SetupState) (string
 				hlWallet, hlUnified,
 				"", "", "",
 				"", "", "", 0,
+				"", "", 0,
 			); err != nil {
 				return "", err
 			}
@@ -475,6 +476,7 @@ func (a *Agent) saveSetupExchange(storeUserID string, state *SetupState) (string
 		hlWallet, hlUnified,
 		"", "", "",
 		"", "", "", 0,
+		"", "", 0,
 	)
 }
 

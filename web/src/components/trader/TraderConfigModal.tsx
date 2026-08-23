@@ -1,8 +1,21 @@
 import { useState, useEffect } from 'react'
-import type { AIModel, Exchange, CreateTraderRequest, Strategy, TraderConfigData } from '../../types'
+import type {
+  AIModel,
+  Exchange,
+  CreateTraderRequest,
+  Strategy,
+  TraderConfigData,
+} from '../../types'
 import { useLanguage } from '../../contexts/LanguageContext'
 import { t } from '../../i18n/translations'
-import { Pencil, Plus, X as IconX, Sparkles, ExternalLink, UserPlus } from 'lucide-react'
+import {
+  Pencil,
+  Plus,
+  X as IconX,
+  Sparkles,
+  ExternalLink,
+  UserPlus,
+} from 'lucide-react'
 import { httpClient } from '../../lib/httpClient'
 import { NofxSelect } from '../ui/select'
 
@@ -13,24 +26,40 @@ function getShortName(fullName: string): string {
 }
 
 function getStrategyAIConfig(strategy: Strategy) {
-  return strategy.config.ai_config || (
-    strategy.config.coin_source && strategy.config.risk_control
+  return (
+    strategy.config.ai_config ||
+    (strategy.config.coin_source && strategy.config.risk_control
       ? {
           coin_source: strategy.config.coin_source,
           risk_control: strategy.config.risk_control,
         }
-      : null
+      : null)
   )
 }
 
 // 交易所注册链接配置
-const EXCHANGE_REGISTRATION_LINKS: Record<string, { url: string; hasReferral?: boolean }> = {
-  binance: { url: 'https://www.binance.com/join?ref=NOFXENG', hasReferral: true },
+const EXCHANGE_REGISTRATION_LINKS: Record<
+  string,
+  { url: string; hasReferral?: boolean }
+> = {
+  binance: {
+    url: 'https://www.binance.com/join?ref=NOFXENG',
+    hasReferral: true,
+  },
   okx: { url: 'https://www.okx.com/join/1865360', hasReferral: true },
   bybit: { url: 'https://partner.bybit.com/b/83856', hasReferral: true },
-  hyperliquid: { url: 'https://app.hyperliquid.xyz/join/AITRADING', hasReferral: true },
-  aster: { url: 'https://www.asterdex.com/en/referral/fdfc0e', hasReferral: true },
-  lighter: { url: 'https://app.lighter.xyz/?referral=68151432', hasReferral: true },
+  hyperliquid: {
+    url: 'https://app.hyperliquid.xyz/join/AITRADING',
+    hasReferral: true,
+  },
+  aster: {
+    url: 'https://www.asterdex.com/en/referral/fdfc0e',
+    hasReferral: true,
+  },
+  lighter: {
+    url: 'https://app.lighter.xyz/?referral=68151432',
+    hasReferral: true,
+  },
 }
 // 表单内部状态类型
 interface FormState {
@@ -42,6 +71,8 @@ interface FormState {
   is_cross_margin: boolean
   show_in_competition: boolean
   scan_interval_minutes: number
+  cadence_mode: string
+  position_mode: string
 }
 
 interface TraderConfigModalProps {
@@ -72,6 +103,8 @@ export function TraderConfigModal({
     is_cross_margin: true,
     show_in_competition: true,
     scan_interval_minutes: 3,
+    cadence_mode: 'interval',
+    position_mode: 'ai_watch',
   })
   const [isSaving, setIsSaving] = useState(false)
   const [strategies, setStrategies] = useState<Strategy[]>([])
@@ -80,17 +113,25 @@ export function TraderConfigModal({
   useEffect(() => {
     const fetchStrategies = async () => {
       try {
-        const result = await httpClient.get<{ strategies: Strategy[] }>('/api/strategies')
+        const result = await httpClient.get<{ strategies: Strategy[] }>(
+          '/api/strategies'
+        )
         if (result.success && result.data?.strategies) {
           const strategyList = result.data.strategies
           setStrategies(strategyList)
           // 如果没有选择策略，默认选中激活的策略
           if (!formData.strategy_id && !isEditMode) {
-            const activeStrategy = strategyList.find(s => s.is_active)
+            const activeStrategy = strategyList.find((s) => s.is_active)
             if (activeStrategy) {
-              setFormData(prev => ({ ...prev, strategy_id: activeStrategy.id }))
+              setFormData((prev) => ({
+                ...prev,
+                strategy_id: activeStrategy.id,
+              }))
             } else if (strategyList.length > 0) {
-              setFormData(prev => ({ ...prev, strategy_id: strategyList[0].id }))
+              setFormData((prev) => ({
+                ...prev,
+                strategy_id: strategyList[0].id,
+              }))
             }
           }
         }
@@ -108,6 +149,11 @@ export function TraderConfigModal({
       setFormData({
         ...traderData,
         strategy_id: traderData.strategy_id || '',
+        cadence_mode:
+          (traderData as { cadence_mode?: string }).cadence_mode || 'interval',
+        position_mode:
+          (traderData as { position_mode?: string }).position_mode ||
+          'ai_watch',
       })
     } else if (!isEditMode) {
       setFormData({
@@ -118,6 +164,8 @@ export function TraderConfigModal({
         is_cross_margin: true,
         show_in_competition: true,
         scan_interval_minutes: 3,
+        cadence_mode: 'interval',
+        position_mode: 'ai_watch',
       })
     }
   }, [traderData, isEditMode, availableModels, availableExchanges])
@@ -145,17 +193,19 @@ export function TraderConfigModal({
         is_cross_margin: formData.is_cross_margin,
         show_in_competition: formData.show_in_competition,
         scan_interval_minutes: formData.scan_interval_minutes,
+        cadence_mode: formData.cadence_mode,
+        position_mode: formData.position_mode,
       }
 
       await onSave(saveData)
     } catch (error) {
-       console.error(t('saveFailed', language) + ':', error)
+      console.error(t('saveFailed', language) + ':', error)
     } finally {
       setIsSaving(false)
     }
   }
 
-  const selectedStrategy = strategies.find(s => s.id === formData.strategy_id)
+  const selectedStrategy = strategies.find((s) => s.id === formData.strategy_id)
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm p-4 overflow-y-auto">
@@ -176,10 +226,14 @@ export function TraderConfigModal({
             </div>
             <div>
               <h2 className="text-xl font-bold text-[#EAECEF]">
-                {isEditMode ? t('editTrader', language) : t('createTrader', language)}
+                {isEditMode
+                  ? t('editTrader', language)
+                  : t('createTrader', language)}
               </h2>
               <p className="text-sm text-[#848E9C] mt-1">
-                {isEditMode ? t('editTraderConfig', language) : t('selectStrategyAndConfigParams', language)}
+                {isEditMode
+                  ? t('editTraderConfig', language)
+                  : t('selectStrategyAndConfigParams', language)}
               </p>
             </div>
           </div>
@@ -199,7 +253,8 @@ export function TraderConfigModal({
           {/* Basic Info */}
           <div className="bg-[#0B0E11] border border-[#2B3139] rounded-lg p-5">
             <h3 className="text-lg font-semibold text-[#EAECEF] mb-5 flex items-center gap-2">
-              <span className="text-[#F0B90B]">1</span> {t('basicConfig', language)}
+              <span className="text-[#F0B90B]">1</span>{' '}
+              {t('basicConfig', language)}
             </h3>
             <div className="space-y-4">
               <div>
@@ -213,29 +268,37 @@ export function TraderConfigModal({
                     handleInputChange('trader_name', e.target.value)
                   }
                   className="w-full px-3 py-2 bg-[#0B0E11] border border-[#2B3139] rounded text-[#EAECEF] focus:border-[#F0B90B] focus:outline-none"
-                   placeholder={t('enterTraderNamePlaceholder', language)}
+                  placeholder={t('enterTraderNamePlaceholder', language)}
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm text-[#EAECEF] block mb-2">
-                  {t('aiModelRequired', language)}
+                    {t('aiModelRequired', language)}
                   </label>
                   <NofxSelect
                     value={formData.ai_model}
-                    onChange={(val) =>
-                      handleInputChange('ai_model', val)
-                    }
+                    onChange={(val) => handleInputChange('ai_model', val)}
                     className="w-full px-3 py-2 bg-[#0B0E11] border border-[#2B3139] rounded text-[#EAECEF]"
                     options={availableModels.map((model) => ({
                       value: model.id,
-                      label: getShortName(model.name || model.id).toUpperCase(),
+                      // Full name (not short-name) so two entries of the SAME
+                      // provider stay tellable apart; append provider in parens
+                      // when the name doesn't already mention it.
+                      label:
+                        (model.name || model.id) +
+                        (model.provider &&
+                        !(model.name || '')
+                          .toLowerCase()
+                          .includes(model.provider.toLowerCase())
+                          ? ` (${model.provider})`
+                          : ''),
                     }))}
                   />
                 </div>
                 <div>
                   <label className="text-sm text-[#EAECEF] block mb-2">
-                  {t('exchangeRequired', language)}
+                    {t('exchangeRequired', language)}
                   </label>
                   <NofxSelect
                     value={formData.exchange_id}
@@ -243,35 +306,44 @@ export function TraderConfigModal({
                     className="w-full px-3 py-2 bg-[#0B0E11] border border-[#2B3139] rounded text-[#EAECEF]"
                     options={availableExchanges.map((exchange) => ({
                       value: exchange.id,
-                      label: getShortName(exchange.name || exchange.exchange_type || exchange.id).toUpperCase()
-                        + (exchange.account_name ? ` - ${exchange.account_name}` : ''),
+                      label:
+                        getShortName(
+                          exchange.name || exchange.exchange_type || exchange.id
+                        ).toUpperCase() +
+                        (exchange.account_name
+                          ? ` - ${exchange.account_name}`
+                          : ''),
                     }))}
                   />
                   {/* Exchange Registration Link */}
-                  {formData.exchange_id && (() => {
-                    // Find the selected exchange to get its type
-                    const selectedExchange = availableExchanges.find(e => e.id === formData.exchange_id)
-                    const exchangeType = selectedExchange?.exchange_type?.toLowerCase() || ''
-                    const regLink = EXCHANGE_REGISTRATION_LINKS[exchangeType]
-                    if (!regLink) return null
-                    return (
-                      <a
-                        href={regLink.url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="mt-2 inline-flex items-center gap-1.5 text-xs text-[#848E9C] hover:text-[#F0B90B] transition-colors"
-                      >
-                        <UserPlus className="w-3.5 h-3.5" />
-                        <span>{t('noExchangeAccount', language)}</span>
-                        {regLink.hasReferral && (
-                          <span className="px-1.5 py-0.5 bg-[#F0B90B]/10 text-[#F0B90B] rounded text-[10px]">
-                            {t('discount', language)}
-                          </span>
-                        )}
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
-                    )
-                  })()}
+                  {formData.exchange_id &&
+                    (() => {
+                      // Find the selected exchange to get its type
+                      const selectedExchange = availableExchanges.find(
+                        (e) => e.id === formData.exchange_id
+                      )
+                      const exchangeType =
+                        selectedExchange?.exchange_type?.toLowerCase() || ''
+                      const regLink = EXCHANGE_REGISTRATION_LINKS[exchangeType]
+                      if (!regLink) return null
+                      return (
+                        <a
+                          href={regLink.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-2 inline-flex items-center gap-1.5 text-xs text-[#848E9C] hover:text-[#F0B90B] transition-colors"
+                        >
+                          <UserPlus className="w-3.5 h-3.5" />
+                          <span>{t('noExchangeAccount', language)}</span>
+                          {regLink.hasReferral && (
+                            <span className="px-1.5 py-0.5 bg-[#F0B90B]/10 text-[#F0B90B] rounded text-[10px]">
+                              {t('discount', language)}
+                            </span>
+                          )}
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )
+                    })()}
                 </div>
               </div>
             </div>
@@ -280,7 +352,8 @@ export function TraderConfigModal({
           {/* Strategy Selection */}
           <div className="bg-[#0B0E11] border border-[#2B3139] rounded-lg p-5">
             <h3 className="text-lg font-semibold text-[#EAECEF] mb-5 flex items-center gap-2">
-              <span className="text-[#F0B90B]">2</span> {t('selectTradingStrategy', language)}
+              <span className="text-[#F0B90B]">2</span>{' '}
+              {t('selectTradingStrategy', language)}
               <Sparkles className="w-4 h-4 text-[#F0B90B]" />
             </h3>
             <div className="space-y-4">
@@ -290,21 +363,26 @@ export function TraderConfigModal({
                 </label>
                 <NofxSelect
                   value={formData.strategy_id}
-                  onChange={(val) =>
-                    handleInputChange('strategy_id', val)
-                  }
+                  onChange={(val) => handleInputChange('strategy_id', val)}
                   className="w-full px-3 py-2 bg-[#0B0E11] border border-[#2B3139] rounded text-[#EAECEF]"
                   options={[
                     { value: '', label: t('noStrategyManual', language) },
                     ...strategies.map((strategy) => ({
                       value: strategy.id,
-                      label: strategy.name + (strategy.is_active ? t('strategyActive', language) : '') + (strategy.is_default ? t('strategyDefault', language) : ''),
+                      label:
+                        strategy.name +
+                        (strategy.is_active
+                          ? t('strategyActive', language)
+                          : '') +
+                        (strategy.is_default
+                          ? t('strategyDefault', language)
+                          : ''),
                     })),
                   ]}
                 />
                 {strategies.length === 0 && (
-                    <p className="text-xs text-[#848E9C] mt-2">
-                      {t('noStrategyHint', language)}
+                  <p className="text-xs text-[#848E9C] mt-2">
+                    {t('noStrategyHint', language)}
                   </p>
                 )}
               </div>
@@ -323,30 +401,52 @@ export function TraderConfigModal({
                     )}
                   </div>
                   <p className="text-sm text-[#848E9C] mb-2">
-                    {selectedStrategy.description || (language === 'zh' ? '无描述' : 'No description')}
+                    {selectedStrategy.description ||
+                      (language === 'zh' ? '无描述' : 'No description')}
                   </p>
-                  {selectedStrategy.config.strategy_type === 'grid_trading' && selectedStrategy.config.grid_config ? (
+                  {selectedStrategy.config.strategy_type === 'grid_trading' &&
+                  selectedStrategy.config.grid_config ? (
                     <div className="grid grid-cols-2 gap-2 text-xs text-[#848E9C]">
-                      <div>{language === 'zh' ? '交易对' : 'Symbol'}: {selectedStrategy.config.grid_config.symbol || '-'}</div>
-                      <div>{language === 'zh' ? '网格数' : 'Grids'}: {selectedStrategy.config.grid_config.grid_count}</div>
-                    </div>
-                  ) : (() => {
-                    const aiConfig = getStrategyAIConfig(selectedStrategy)
-                    if (!aiConfig) return null
-                    return (
-                      <div className="grid grid-cols-2 gap-2 text-xs text-[#848E9C]">
-                        <div>
-                          {t('coinSource', language)}: {aiConfig.coin_source.source_type === 'static' ? '固定币种' :
-                            aiConfig.coin_source.source_type === 'ai500' ? 'AI500' :
-                            aiConfig.coin_source.source_type === 'oi_top' ? 'OI Top' :
-                            aiConfig.coin_source.source_type === 'oi_low' ? 'OI Low' : '-'}
-                        </div>
-                        <div>
-                          {t('marginLimit', language)}: {((aiConfig.risk_control?.max_margin_usage || 0.9) * 100).toFixed(0)}%
-                        </div>
+                      <div>
+                        {language === 'zh' ? '交易对' : 'Symbol'}:{' '}
+                        {selectedStrategy.config.grid_config.symbol || '-'}
                       </div>
-                    )
-                  })()}
+                      <div>
+                        {language === 'zh' ? '网格数' : 'Grids'}:{' '}
+                        {selectedStrategy.config.grid_config.grid_count}
+                      </div>
+                    </div>
+                  ) : (
+                    (() => {
+                      const aiConfig = getStrategyAIConfig(selectedStrategy)
+                      if (!aiConfig) return null
+                      return (
+                        <div className="grid grid-cols-2 gap-2 text-xs text-[#848E9C]">
+                          <div>
+                            {t('coinSource', language)}:{' '}
+                            {aiConfig.coin_source.source_type === 'static'
+                              ? '固定币种'
+                              : aiConfig.coin_source.source_type === 'ai500'
+                                ? 'AI500'
+                                : aiConfig.coin_source.source_type === 'oi_top'
+                                  ? 'OI Top'
+                                  : aiConfig.coin_source.source_type ===
+                                      'oi_low'
+                                    ? 'OI Low'
+                                    : '-'}
+                          </div>
+                          <div>
+                            {t('marginLimit', language)}:{' '}
+                            {(
+                              (aiConfig.risk_control?.max_margin_usage || 0.9) *
+                              100
+                            ).toFixed(0)}
+                            %
+                          </div>
+                        </div>
+                      )
+                    })()
+                  )}
                 </div>
               )}
             </div>
@@ -355,7 +455,8 @@ export function TraderConfigModal({
           {/* Trading Parameters */}
           <div className="bg-[#0B0E11] border border-[#2B3139] rounded-lg p-5">
             <h3 className="text-lg font-semibold text-[#EAECEF] mb-5 flex items-center gap-2">
-              <span className="text-[#F0B90B]">3</span> {t('tradingParams', language)}
+              <span className="text-[#F0B90B]">3</span>{' '}
+              {t('tradingParams', language)}
             </h3>
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -399,19 +500,133 @@ export function TraderConfigModal({
                     value={formData.scan_interval_minutes}
                     onChange={(e) => {
                       const parsedValue = Number(e.target.value)
+                      // Minimum lowered 3 → 1 (scalper request); 3 stays the
+                      // default when the field is blank/invalid.
                       const safeValue = Number.isFinite(parsedValue)
-                        ? Math.max(3, parsedValue)
+                        ? Math.max(1, parsedValue)
                         : 3
                       handleInputChange('scan_interval_minutes', safeValue)
                     }}
                     className="w-full px-3 py-2 bg-[#0B0E11] border border-[#2B3139] rounded text-[#EAECEF] focus:border-[#F0B90B] focus:outline-none"
-                    min="3"
+                    min="1"
                     max="60"
                     step="1"
                   />
                   <p className="text-xs text-gray-500 mt-1">
                     {t('scanIntervalRecommend', language)}
                   </p>
+                  {/* P10 (owner ruling 2026-08-19) — cadence mode, with the
+                      help text that kills the interval-vs-bar-close ambiguity.
+                      Inline en/zh/id (PauseButton precedent). */}
+                  <div className="mt-3">
+                    <label className="text-sm text-[#EAECEF] block mb-2">
+                      {language === 'zh'
+                        ? '决策节奏模式'
+                        : language === 'id'
+                          ? 'Mode irama keputusan'
+                          : 'Decision cadence mode'}
+                    </label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        data-testid="cadence-interval"
+                        onClick={() =>
+                          handleInputChange('cadence_mode', 'interval')
+                        }
+                        className={`flex-1 px-3 py-2 rounded text-sm ${
+                          formData.cadence_mode !== 'bar_close'
+                            ? 'bg-[#F0B90B] text-black'
+                            : 'bg-[#0B0E11] text-[#848E9C] border border-[#2B3139]'
+                        }`}
+                      >
+                        Interval
+                      </button>
+                      <button
+                        type="button"
+                        data-testid="cadence-bar-close"
+                        onClick={() =>
+                          handleInputChange('cadence_mode', 'bar_close')
+                        }
+                        className={`flex-1 px-3 py-2 rounded text-sm ${
+                          formData.cadence_mode === 'bar_close'
+                            ? 'bg-[#F0B90B] text-black'
+                            : 'bg-[#0B0E11] text-[#848E9C] border border-[#2B3139]'
+                        }`}
+                      >
+                        Bar close
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {formData.cadence_mode !== 'bar_close'
+                        ? language === 'zh'
+                          ? `AI 每 ${formData.scan_interval_minutes} 分钟评估一次（mode=interval），包含未收盘的当前K线。`
+                          : language === 'id'
+                            ? `AI mengevaluasi setiap ${formData.scan_interval_minutes} menit (mode=interval), termasuk bar yang sedang terbentuk.`
+                            : `AI evaluates every ${formData.scan_interval_minutes} minutes (mode=interval), including the forming bar.`
+                        : language === 'zh'
+                          ? '每根主周期K线收盘后评估一次；间隔只决定检查频率（mode=bar_close）。'
+                          : language === 'id'
+                            ? 'AI mengevaluasi sekali per bar utama yang tertutup; interval hanya frekuensi pengecekan (mode=bar_close).'
+                            : 'AI evaluates once per closed primary bar; the interval only sets check frequency (mode=bar_close).'}
+                    </p>
+                  </div>
+                  {/* Phase 3 (final-bundle 2026-08-19) — in-position mode. ai_watch
+                      is the NEW DEFAULT: the AI runs full watch cycles while a
+                      position is open but has ZERO order authority (bracket +
+                      breakeven/trailing manage the trade; hold-lock stays the
+                      bottom rail). bracket_only = the legacy silent skip. */}
+                  <div className="mt-3">
+                    <label className="text-sm text-[#EAECEF] block mb-2">
+                      {language === 'zh'
+                        ? '持仓期间 AI 模式'
+                        : language === 'id'
+                          ? 'Mode AI saat posisi terbuka'
+                          : 'In-position AI mode'}
+                    </label>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        data-testid="position-mode-ai-watch"
+                        onClick={() =>
+                          handleInputChange('position_mode', 'ai_watch')
+                        }
+                        className={`flex-1 px-3 py-2 rounded text-sm ${
+                          formData.position_mode !== 'bracket_only'
+                            ? 'bg-[#F0B90B] text-black'
+                            : 'bg-[#0B0E11] text-[#848E9C] border border-[#2B3139]'
+                        }`}
+                      >
+                        👁 AI watch
+                      </button>
+                      <button
+                        type="button"
+                        data-testid="position-mode-bracket-only"
+                        onClick={() =>
+                          handleInputChange('position_mode', 'bracket_only')
+                        }
+                        className={`flex-1 px-3 py-2 rounded text-sm ${
+                          formData.position_mode === 'bracket_only'
+                            ? 'bg-[#F0B90B] text-black'
+                            : 'bg-[#0B0E11] text-[#848E9C] border border-[#2B3139]'
+                        }`}
+                      >
+                        Bracket only
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {formData.position_mode !== 'bracket_only'
+                        ? language === 'zh'
+                          ? '持仓时 AI 每周期观察原始入场论点（仅记录，零下单权限）；出场仍由止损/止盈托架与机械规则管理。'
+                          : language === 'id'
+                            ? 'Saat memegang posisi, AI mengamati tesis entri asli tiap siklus (hanya catatan, nol otoritas order); bracket + rel mekanis tetap mengelola exit.'
+                            : 'While holding, the AI observes the original entry thesis each cycle (recorded only — ZERO order authority); the bracket + mechanical rails still manage the exit.'
+                        : language === 'zh'
+                          ? '持仓时不调用 AI（旧行为）；托架与机械规则管理离场。'
+                          : language === 'id'
+                            ? 'Tanpa panggilan AI saat memegang posisi (perilaku lama); bracket mengelola exit.'
+                            : 'No AI calls while holding (legacy behavior); the bracket manages the exit.'}
+                    </p>
+                  </div>
                 </div>
               </div>
 
@@ -423,7 +638,9 @@ export function TraderConfigModal({
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={() => handleInputChange('show_in_competition', true)}
+                    onClick={() =>
+                      handleInputChange('show_in_competition', true)
+                    }
                     className={`flex-1 px-3 py-2 rounded text-sm ${
                       formData.show_in_competition
                         ? 'bg-[#F0B90B] text-black'
@@ -434,7 +651,9 @@ export function TraderConfigModal({
                   </button>
                   <button
                     type="button"
-                    onClick={() => handleInputChange('show_in_competition', false)}
+                    onClick={() =>
+                      handleInputChange('show_in_competition', false)
+                    }
                     className={`flex-1 px-3 py-2 rounded text-sm ${
                       !formData.show_in_competition
                         ? 'bg-[#F0B90B] text-black'
@@ -444,8 +663,8 @@ export function TraderConfigModal({
                     {t('hide', language)}
                   </button>
                 </div>
-                  <p className="text-xs text-[#848E9C] mt-1">
-                    {t('hiddenInCompetition', language)}
+                <p className="text-xs text-[#848E9C] mt-1">
+                  {t('hiddenInCompetition', language)}
                 </p>
               </div>
 
@@ -468,10 +687,8 @@ export function TraderConfigModal({
                   {t('autoFetchBalanceInfo', language)}
                 </span>
               </div>
-
             </div>
           </div>
-
         </div>
 
         {/* Footer */}
@@ -493,7 +710,11 @@ export function TraderConfigModal({
               }
               className="px-8 py-3 bg-gradient-to-r from-[#F0B90B] to-[#E1A706] text-black rounded-lg hover:from-[#E1A706] hover:to-[#D4951E] transition-all duration-200 disabled:bg-[#848E9C] disabled:cursor-not-allowed font-medium shadow-lg"
             >
-              {isSaving ? t('saving', language) : isEditMode ? t('editTrader', language) : t('createTraderButton', language)}
+              {isSaving
+                ? t('saving', language)
+                : isEditMode
+                  ? t('editTrader', language)
+                  : t('createTraderButton', language)}
             </button>
           )}
         </div>

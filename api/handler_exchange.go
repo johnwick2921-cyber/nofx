@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 
 	"nofx/config"
@@ -27,10 +28,10 @@ type ExchangeConfig struct {
 // SafeExchangeConfig Safe exchange configuration structure (does not contain sensitive information)
 type SafeExchangeConfig struct {
 	ID                    string `json:"id"`            // UUID
-	ExchangeType          string `json:"exchange_type"` // "binance", "bybit", "okx", "hyperliquid", "aster", "lighter"
+	ExchangeType          string `json:"exchange_type"` // "binance", "bybit", "okx", "hyperliquid", "aster", "lighter", "ninjatrader"
 	AccountName           string `json:"account_name"`  // User-defined account name
 	Name                  string `json:"name"`          // Display name
-	Type                  string `json:"type"`          // "cex" or "dex"
+	Type                  string `json:"type"`          // "cex", "dex", "futures"
 	Enabled               bool   `json:"enabled"`
 	HasAPIKey             bool   `json:"has_api_key"`
 	HasSecretKey          bool   `json:"has_secret_key"`
@@ -43,6 +44,10 @@ type SafeExchangeConfig struct {
 	LighterWalletAddr     string `json:"lighterWalletAddr"` // LIGHTER wallet address (not sensitive)
 	HasLighterPrivateKey  bool   `json:"has_lighter_private_key"`
 	HasLighterAPIKey      bool   `json:"has_lighter_api_key_private_key"`
+	// NinjaTrader CSV bridge (no secrets — all non-sensitive)
+	NTDataDir            string `json:"nt_data_dir,omitempty"`
+	NTInstrumentName     string `json:"nt_instrument_name,omitempty"`
+	NTDefaultContractQty int    `json:"nt_default_contract_qty,omitempty"`
 }
 
 func safeExchangeConfigFromStore(exchange *store.Exchange) SafeExchangeConfig {
@@ -64,6 +69,9 @@ func safeExchangeConfigFromStore(exchange *store.Exchange) SafeExchangeConfig {
 		LighterWalletAddr:     exchange.LighterWalletAddr,
 		HasLighterPrivateKey:  exchange.LighterPrivateKey != "",
 		HasLighterAPIKey:      exchange.LighterAPIKeyPrivateKey != "",
+		NTDataDir:             exchange.NTDataDir,
+		NTInstrumentName:      exchange.NTInstrumentName,
+		NTDefaultContractQty:  exchange.NTDefaultContractQty,
 	}
 }
 
@@ -83,12 +91,16 @@ type UpdateExchangeConfigRequest struct {
 		LighterPrivateKey       string `json:"lighter_private_key"`
 		LighterAPIKeyPrivateKey string `json:"lighter_api_key_private_key"`
 		LighterAPIKeyIndex      int    `json:"lighter_api_key_index"`
+		// NinjaTrader CSV bridge configuration
+		NTDataDir            string `json:"nt_data_dir"`
+		NTInstrumentName     string `json:"nt_instrument_name"`
+		NTDefaultContractQty int    `json:"nt_default_contract_qty"`
 	} `json:"exchanges"`
 }
 
 // CreateExchangeRequest request structure for creating a new exchange account
 type CreateExchangeRequest struct {
-	ExchangeType            string `json:"exchange_type" binding:"required"` // "binance", "bybit", "okx", "hyperliquid", "aster", "lighter"
+	ExchangeType            string `json:"exchange_type" binding:"required"` // "binance", "bybit", "okx", "hyperliquid", "aster", "lighter", "ninjatrader"
 	AccountName             string `json:"account_name"`                     // User-defined account name
 	Enabled                 bool   `json:"enabled"`
 	APIKey                  string `json:"api_key"`
@@ -104,6 +116,10 @@ type CreateExchangeRequest struct {
 	LighterPrivateKey       string `json:"lighter_private_key"`
 	LighterAPIKeyPrivateKey string `json:"lighter_api_key_private_key"`
 	LighterAPIKeyIndex      int    `json:"lighter_api_key_index"`
+	// NinjaTrader CSV bridge configuration (no API key required)
+	NTDataDir            string `json:"nt_data_dir"`
+	NTInstrumentName     string `json:"nt_instrument_name"`
+	NTDefaultContractQty int    `json:"nt_default_contract_qty"`
 }
 
 // handleGetExchangeConfigs Get exchange configurations
@@ -241,6 +257,18 @@ func (s *Server) handleUpdateExchangeConfigs(c *gin.Context) {
 		if effectiveLighterWalletAddr == "" {
 			effectiveLighterWalletAddr = strings.TrimSpace(existing.LighterWalletAddr)
 		}
+		effectiveNTDataDir := strings.TrimSpace(exchangeData.NTDataDir)
+		if effectiveNTDataDir == "" {
+			effectiveNTDataDir = strings.TrimSpace(existing.NTDataDir)
+		}
+		effectiveNTInstrumentName := strings.TrimSpace(exchangeData.NTInstrumentName)
+		if effectiveNTInstrumentName == "" {
+			effectiveNTInstrumentName = strings.TrimSpace(existing.NTInstrumentName)
+		}
+		effectiveNTDefaultContractQty := exchangeData.NTDefaultContractQty
+		if effectiveNTDefaultContractQty == 0 {
+			effectiveNTDefaultContractQty = existing.NTDefaultContractQty
+		}
 		if missing := store.MissingRequiredExchangeCredentialFields(
 			existing.ExchangeType,
 			effectiveAPIKey,
@@ -252,6 +280,7 @@ func (s *Server) handleUpdateExchangeConfigs(c *gin.Context) {
 			effectiveAsterPrivateKey,
 			effectiveLighterWalletAddr,
 			effectiveLighterAPIKeyPrivateKey,
+			effectiveNTDataDir,
 		); len(missing) > 0 {
 			c.JSON(http.StatusBadRequest, gin.H{
 				"error":          fmt.Sprintf("Missing required exchange fields: %s", strings.Join(missing, ", ")),
@@ -266,7 +295,7 @@ func (s *Server) handleUpdateExchangeConfigs(c *gin.Context) {
 			tradersToReload[t.ID] = true
 		}
 
-		err = s.store.Exchange().Update(userID, exchangeID, true, exchangeData.APIKey, exchangeData.SecretKey, exchangeData.Passphrase, exchangeData.Testnet, effectiveHyperliquidWalletAddr, exchangeData.HyperliquidUnifiedAcct, effectiveAsterUser, effectiveAsterSigner, exchangeData.AsterPrivateKey, effectiveLighterWalletAddr, exchangeData.LighterPrivateKey, exchangeData.LighterAPIKeyPrivateKey, exchangeData.LighterAPIKeyIndex)
+		err = s.store.Exchange().Update(userID, exchangeID, true, exchangeData.APIKey, exchangeData.SecretKey, exchangeData.Passphrase, exchangeData.Testnet, effectiveHyperliquidWalletAddr, exchangeData.HyperliquidUnifiedAcct, effectiveAsterUser, effectiveAsterSigner, exchangeData.AsterPrivateKey, effectiveLighterWalletAddr, exchangeData.LighterPrivateKey, exchangeData.LighterAPIKeyPrivateKey, exchangeData.LighterAPIKeyIndex, effectiveNTDataDir, effectiveNTInstrumentName, effectiveNTDefaultContractQty)
 		if err != nil {
 			SafeInternalError(c, fmt.Sprintf("Update exchange %s", exchangeID), err)
 			return
@@ -288,7 +317,27 @@ func (s *Server) handleUpdateExchangeConfigs(c *gin.Context) {
 		// Don't return error here since exchange config was successfully updated to database
 	}
 
-	logger.Infof("✓ Exchange config updated: %+v", req.Exchanges)
+	// SECURITY (P0 S5): this used to be `logger.Infof(... "%+v", req.Exchanges)`,
+	// which wrote PLAINTEXT exchange API keys, secret keys, passphrases and wallet
+	// private keys into data/nofx_*.log (mode 0644, retained indefinitely). Every
+	// secret-bearing field is masked; non-secret fields stay readable for support.
+	safe := make([]string, 0, len(req.Exchanges))
+	for exchangeID, e := range req.Exchanges {
+		parts := []string{fmt.Sprintf("enabled:%v", e.Enabled)}
+		for label, secret := range map[string]string{
+			"key": e.APIKey, "secret": e.SecretKey, "pass": e.Passphrase,
+			"aster_pk": e.AsterPrivateKey, "lighter_pk": e.LighterPrivateKey,
+			"lighter_api_pk": e.LighterAPIKeyPrivateKey,
+		} {
+			if secret != "" {
+				parts = append(parts, label+":"+MaskSensitiveString(secret))
+			}
+		}
+		sort.Strings(parts)
+		safe = append(safe, fmt.Sprintf("%s{%s}", exchangeID, strings.Join(parts, " ")))
+	}
+	sort.Strings(safe)
+	logger.Infof("✓ Exchange config updated: %s", strings.Join(safe, " "))
 	c.JSON(http.StatusOK, gin.H{"message": "Exchange configuration updated"})
 }
 
@@ -347,6 +396,7 @@ func (s *Server) handleCreateExchange(c *gin.Context) {
 	validTypes := map[string]bool{
 		"binance": true, "bybit": true, "okx": true, "bitget": true,
 		"hyperliquid": true, "aster": true, "lighter": true, "gate": true, "kucoin": true, "indodax": true,
+		"ninjatrader": true,
 	}
 	if !validTypes[req.ExchangeType] {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid exchange type: %s", req.ExchangeType)})
@@ -363,6 +413,7 @@ func (s *Server) handleCreateExchange(c *gin.Context) {
 		req.AsterPrivateKey,
 		req.LighterWalletAddr,
 		req.LighterAPIKeyPrivateKey,
+		req.NTDataDir,
 	); len(missing) > 0 {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"error":          fmt.Sprintf("Missing required exchange fields: %s", strings.Join(missing, ", ")),
@@ -378,6 +429,7 @@ func (s *Server) handleCreateExchange(c *gin.Context) {
 		req.HyperliquidWalletAddr, req.HyperliquidUnifiedAcct,
 		req.AsterUser, req.AsterSigner, req.AsterPrivateKey,
 		req.LighterWalletAddr, req.LighterPrivateKey, req.LighterAPIKeyPrivateKey, req.LighterAPIKeyIndex,
+		req.NTDataDir, req.NTInstrumentName, req.NTDefaultContractQty,
 	)
 	if err != nil {
 		logger.Infof("❌ Failed to create exchange account: %v", err)
@@ -449,6 +501,7 @@ func (s *Server) handleGetSupportedExchanges(c *gin.Context) {
 		{ExchangeType: "hyperliquid", Name: "Hyperliquid", Type: "dex"},
 		{ExchangeType: "aster", Name: "Aster DEX", Type: "dex"},
 		{ExchangeType: "lighter", Name: "LIGHTER DEX", Type: "dex"},
+		{ExchangeType: "ninjatrader", Name: "NinjaTrader", Type: "futures"},
 		{ExchangeType: "alpaca", Name: "Alpaca (US Stocks)", Type: "stock"},
 		{ExchangeType: "forex", Name: "Forex (TwelveData)", Type: "forex"},
 		{ExchangeType: "metals", Name: "Metals (TwelveData)", Type: "metals"},

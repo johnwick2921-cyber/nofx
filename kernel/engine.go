@@ -6,13 +6,15 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
+	"nofx/config"
 	"nofx/logger"
 	"nofx/market"
+	"nofx/provider/databento"
 	"nofx/provider/hyperliquid"
 	"nofx/provider/nofxos"
 	"nofx/security"
 	"nofx/store"
+	"os"
 	"strings"
 	"time"
 )
@@ -90,31 +92,73 @@ type RecentOrder struct {
 
 // Context trading context (complete information passed to AI)
 type Context struct {
-	CurrentTime        string                             `json:"current_time"`
-	RuntimeMinutes     int                                `json:"runtime_minutes"`
-	CallCount          int                                `json:"call_count"`
-	Account            AccountInfo                        `json:"account"`
-	Positions          []PositionInfo                     `json:"positions"`
-	CandidateCoins     []CandidateCoin                    `json:"candidate_coins"`
-	PromptVariant      string                             `json:"prompt_variant,omitempty"`
-	TradingStats       *TradingStats                      `json:"trading_stats,omitempty"`
-	RecentOrders       []RecentOrder                      `json:"recent_orders,omitempty"`
-	MarketDataMap      map[string]*market.Data            `json:"-"`
-	MultiTFMarket      map[string]map[string]*market.Data `json:"-"`
-	OITopDataMap       map[string]*OITopData              `json:"-"`
-	QuantDataMap       map[string]*QuantData              `json:"-"`
-	OIRankingData      *nofxos.OIRankingData              `json:"-"` // Market-wide OI ranking data
-	NetFlowRankingData *nofxos.NetFlowRankingData         `json:"-"` // Market-wide fund flow ranking data
-	PriceRankingData   *nofxos.PriceRankingData           `json:"-"` // Market-wide price gainers/losers
-	BTCETHLeverage     int                                `json:"-"`
-	AltcoinLeverage    int                                `json:"-"`
-	Timeframes         []string                           `json:"-"`
+	CurrentTime    string `json:"current_time"`
+	RuntimeMinutes int    `json:"runtime_minutes"`
+	CallCount      int    `json:"call_count"`
+	TraderID       string `json:"-"` // B6: identity for per-trader gate-block counters (set by the trader loop; never serialized)
+	// SnapshotMs is WHEN this context's market data was assembled (epoch ms).
+	// The B4 stale-feed guard evaluates against THIS clock, not post-AI-call
+	// time, so a legal slow call can never turn a live-at-snapshot feed into
+	// "stale" (stale-bar dispatch 2026-08-19). Prompt-invisible (json:"-").
+	SnapshotMs int64 `json:"-"`
+	// A5 (G5) — prompt-ownership tags: field-name → owning trader_id for each
+	// account-scoped context field the trader populates. Final prompt assembly
+	// asserts every tag == TraderID (the deciding trader); a mismatch is cross-trader
+	// contamination → the cycle is skipped. Prompt-data only (json:"-"), so a
+	// matching-tag context is byte-identical.
+	OwnerTags      map[string]string                  `json:"-"`
+	Account        AccountInfo                        `json:"account"`
+	Positions      []PositionInfo                     `json:"positions"`
+	CandidateCoins []CandidateCoin                    `json:"candidate_coins"`
+	PromptVariant  string                             `json:"prompt_variant,omitempty"`
+	TradingStats   *TradingStats                      `json:"trading_stats,omitempty"`
+	RecentOrders   []RecentOrder                      `json:"recent_orders,omitempty"`
+	MarketDataMap  map[string]*market.Data            `json:"-"`
+	MultiTFMarket  map[string]map[string]*market.Data `json:"-"`
+	OITopDataMap   map[string]*OITopData              `json:"-"`
+	// G2 (regime wave 2026-08-21) — per-cycle machine structure snapshot
+	// (per-TF trend + swings + events); the HTF veto and the prompt line read
+	// it. Prompt-invisible (json:"-"); set by the trader loop each cycle.
+	Structure map[string]StructureState `json:"-"`
+	// G1 (regime wave 2026-08-21) — HTF veto gate inputs: the Studio toggle
+	// (default ON) and the veto timeframe (env HTF_VETO_TF, default 1h).
+	// Prompt-invisible; set by the trader loop each cycle.
+	HTFVetoEnabled bool   `json:"-"`
+	HTFVetoTF      string `json:"-"`
+	// G4 (regime wave 2026-08-21) — transition stand-down inputs (the trader
+	// maintains the state machine from the cycle's structure snapshot + plan).
+	TransitionActive bool   `json:"-"`
+	TransitionDir    string `json:"-"` // plan bias "long"|"short" — paused direction
+	TransitionDetail string `json:"-"`
+	// G6 (regime wave 2026-08-21) — loss-streak pause inputs (the trader
+	// computes the session streak; the gate refuses ALL new opens while held).
+	LossStreakPaused   bool                       `json:"-"`
+	LossStreakMsg      string                     `json:"-"`
+	QuantDataMap       map[string]*QuantData      `json:"-"`
+	OIRankingData      *nofxos.OIRankingData      `json:"-"` // Market-wide OI ranking data
+	NetFlowRankingData *nofxos.NetFlowRankingData `json:"-"` // Market-wide fund flow ranking data
+	PriceRankingData   *nofxos.PriceRankingData   `json:"-"` // Market-wide price gainers/losers
+	BTCETHLeverage     int                        `json:"-"`
+	AltcoinLeverage    int                        `json:"-"`
+	Timeframes         []string                   `json:"-"`
+
+	// Strategy Studio P1 — daily-guardrail inputs measured on the CME session-day
+	// (set by the trader loop from the position store; read by the daily-guardrail
+	// gate in engine_analysis.go).
+	DailyRealizedPnL float64 `json:"-"`
+	TradesToday      int     `json:"-"`
+	TotalRealizedPnL float64 `json:"-"` // all-time realized P&L (Chunk 5 consistency rule)
 }
 
 // Decision AI trading decision
 type Decision struct {
 	Symbol string `json:"symbol"`
 	Action string `json:"action"` // Standard: "open_long", "open_short", "close_long", "close_short", "hold", "wait"
+
+	// P0-cleanup (2026-08-19) — when a gate/armor rewrites an entry to wait,
+	// the refusal reason rides the decision so the record shows WHY, never a
+	// bare unexplained wait (the C2 lesson).
+	RefusalReason string `json:"refusal_reason,omitempty"`
 	// Grid actions: "place_buy_limit", "place_sell_limit", "cancel_order", "cancel_all_orders", "pause_grid", "resume_grid", "adjust_grid"
 
 	// Opening position parameters
@@ -133,6 +177,11 @@ type Decision struct {
 	Confidence int     `json:"confidence,omitempty"` // Confidence level (0-100)
 	RiskUSD    float64 `json:"risk_usd,omitempty"`   // Maximum USD risk
 	Reasoning  string  `json:"reasoning"`
+
+	// P3.5 (advisory) — the plan scenario the executor cited for this decision,
+	// or "off-plan". Empty when day_plan is inactive. Advisory only: it never
+	// gates the trade (plan restricts, never compels; hard gates outrank).
+	CitedScenario string `json:"cited_scenario,omitempty"`
 }
 
 // FullDecision AI's complete decision (including chain of thought)
@@ -144,6 +193,12 @@ type FullDecision struct {
 	RawResponse         string     `json:"raw_response"`
 	Timestamp           time.Time  `json:"timestamp"`
 	AIRequestDurationMs int64      `json:"ai_request_duration_ms,omitempty"`
+	// F10 — when a guardrail/gate holds the cycle (no actionable decision), the
+	// engine returns a FullDecision with SkipReason set (and empty Decisions)
+	// instead of (nil, nil), so the caller can stamp the record truthfully
+	// (execution_status="guardrail_skip" + reason) rather than leaving a
+	// silently-empty success. Empty on a normal decision cycle.
+	SkipReason string `json:"skip_reason,omitempty"`
 }
 
 // QuantData quantitative data structure (fund flow, position changes, price changes)
@@ -184,7 +239,63 @@ type OIDeltaData struct {
 type StrategyEngine struct {
 	config       *store.StrategyConfig
 	nofxosClient *nofxos.Client
+
+	// svpContextLine is the per-cycle Session Volume Profile line threaded in from
+	// the decision loop (engine_analysis.go), where the live bars are reachable.
+	// The engine itself has no bar access, so this is set right before
+	// BuildSystemPrompt and consumed by the futures prompt when svp_enabled is ON.
+	// Empty by default → the futures prompt is byte-identical (golden safe).
+	svpContextLine string
+
+	// keyLevelsContextLine is the per-cycle day-plan KEY LEVELS block (P1.7),
+	// threaded in from the decision loop like svpContextLine. Consumed by the
+	// futures prompt ONLY when day_plan is enabled AND the line is non-empty, so
+	// the default (day_plan off) keeps the futures prompt byte-identical.
+	keyLevelsContextLine string
+
+	// planBlockLine / planStatusLine are the P3.4 executor plan injection: the
+	// byte-stable PLAN BLOCK (cached prefix) and the dynamic PLAN STATUS tail.
+	// Non-empty planBlockLine (day_plan on + an active plan) triggers the RECON #4
+	// reorder — SVP/KEY-LEVELS move to the end alongside PLAN STATUS. Empty (no
+	// active plan) → the prompt is unchanged.
+	planBlockLine  string
+	planStatusLine string
+
+	// clockContextLine is the per-cycle labelled clock (P0 timezone fix):
+	// "## Clock\n07:06 CT (12:06 UTC) — ALL times in this prompt are CT…".
+	// Threaded in from the decision loop (one snapshot → one clock) and emitted
+	// by BOTH the futures and crypto prompt builders. Empty → byte-identical.
+	clockContextLine string
+	// promptSnapshotMs (P10.2): the cycle's snapshot instant for the forming-
+	// bar label in the market block. 0 = no label (tests/legacy paths).
+	promptSnapshotMs int64
 }
+
+// SetSVPContext sets the Session Volume Profile line used by the futures prompt
+// for the next BuildSystemPrompt call. Pass "" to inject nothing.
+func (e *StrategyEngine) SetSVPContext(line string) { e.svpContextLine = line }
+
+// SetKeyLevelsContext sets the day-plan KEY LEVELS block used by the futures
+// prompt for the next BuildSystemPrompt call. Pass "" to inject nothing.
+func (e *StrategyEngine) SetKeyLevelsContext(line string) { e.keyLevelsContextLine = line }
+
+// SetPlanContext sets the P3.4 executor plan injection: the byte-stable PLAN
+// BLOCK (prefix) and the dynamic PLAN STATUS tail. Pass ("","") for no active
+// plan (prompt unchanged).
+func (e *StrategyEngine) SetPlanContext(planBlock, planStatus string) {
+	e.planBlockLine = planBlock
+	e.planStatusLine = planStatus
+}
+
+// SetClockContext sets the labelled per-cycle clock line (P0 timezone fix)
+// emitted by both prompt builders. Pass "" to inject nothing.
+func (e *StrategyEngine) SetClockContext(line string) { e.clockContextLine = line }
+
+// SetPromptSnapshotMs (P10.2) hands the cycle's snapshot instant to the market
+// -block renderer so the newest bar can be labelled FORMING/CLOSED honestly —
+// interval cadence runs cycles mid-bar and the AI must know what it is looking
+// at. 0 (tests/legacy) renders no label — goldens stay byte-identical.
+func (e *StrategyEngine) SetPromptSnapshotMs(ms int64) { e.promptSnapshotMs = ms }
 
 // NewStrategyEngine creates strategy execution engine.
 // claw402WalletKey is optional — if provided, nofxos data requests are routed through claw402.
@@ -257,6 +368,18 @@ func (e *StrategyEngine) GetCandidateCoins() ([]CandidateCoin, error) {
 	symbolSources := make(map[string][]string)
 
 	coinSource := e.config.CoinSource
+
+	// Defensive guard (additive): a strategy whose stored config omits
+	// ai_config.coin_source (e.g. a hand-rolled config from cmd/create-strategy)
+	// deserializes to an empty SourceType, which previously fell through to the
+	// default branch ("unknown coin source type: ") and made the trader loop skip
+	// EVERY cycle. Treat an empty SourceType as "static" so StaticCoins are still
+	// used and an empty list degrades to the upstream "no candidates" path instead
+	// of a hard error. Does not change behavior for any explicitly-set source type.
+	if coinSource.SourceType == "" {
+		logger.Infof("⚠️  coin source type empty; defaulting to 'static' (additive guard)")
+		coinSource.SourceType = "static"
+	}
 
 	switch coinSource.SourceType {
 	case "static":
@@ -873,4 +996,50 @@ func detectLanguage(text string) Language {
 		}
 	}
 	return LangEnglish
+}
+
+// ============================================================================
+// Plan 2 Task 18 — CME session gating (owned by T18; T19 must not edit this block)
+// ============================================================================
+
+// ShouldSkipDecisionCycle reports whether the AI decision cycle should be
+// skipped because the CME futures market is currently closed. Returns true
+// only when TradingMode == "futures" AND IsCMEOpen(time.Now()) == false.
+// In crypto mode this is always false (24/7 markets).
+//
+// Callers (e.g. GetFullDecisionWithStrategy in engine_analysis.go) should
+// invoke this at the top of each decision cycle BEFORE any expensive work
+// like fetching klines or building prompts.
+func ShouldSkipDecisionCycle() bool {
+	if config.Get().TradingMode != "futures" {
+		return false
+	}
+	if IsCMEOpen(time.Now()) {
+		return false
+	}
+	logger.Info("CME closed, skipping decision cycle")
+	return true
+}
+
+// ============================================================================
+// Plan 2 Task 19 — Contract roll detection
+// Block new entries within 5 days of CME quarterly expiry to avoid being
+// caught in low-liquidity rollover periods. Owned by T19.
+// ============================================================================
+
+// ShouldBlockEntryForExpiry reports whether new entries for the given CME
+// futures contract should be blocked because the contract is within 5 days
+// of its quarterly expiry. The second return value is the resolved days-
+// until-expiry (or -1 when not in futures mode).
+//
+// In crypto mode this is always (false, -1) — crypto has no expiry.
+// Unparseable symbols pass through (days=999) so they never trigger the
+// block — a deliberately permissive fallback that prefers false negatives
+// over false positives.
+func ShouldBlockEntryForExpiry(symbol string, now time.Time) (bool, int) {
+	if config.Get().TradingMode != "futures" {
+		return false, -1
+	}
+	days := databento.DaysUntilExpiry(symbol, now)
+	return days >= 0 && days <= 5, days
 }
