@@ -1163,6 +1163,10 @@ namespace NinjaTrader.NinjaScript.AddOns
                 signalId = signalId.Substring(0, signalId.Length - 3);
                 CancelBracketFor(signalId);
             }
+
+            var action = e.Order.OrderAction;
+            bool isExit = (action == OrderAction.Sell || action == OrderAction.BuyToCover);
+
             // position_close with the real exit price (reason from the leg name,
             // else "manual"). Only on a full Filled — PartFilled is transient (NT
             // sends a final Filled; per-partial would duplicate the close) and a
