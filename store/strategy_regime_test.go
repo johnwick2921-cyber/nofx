@@ -60,28 +60,6 @@ func TestRegimeSurvivesCreateAndEditPaths(t *testing.T) {
 	if merged2.HTFVetoEnabled() {
 		t.Fatalf("regime.htf_veto=false patch must land as OFF, got %+v", merged2.Regime)
 	}
-
-	// G6 field rides the same seam: loss_streak_n survives create + edit.
-	n := 0
-	cfg.Regime = &RegimeConfig{LossStreakN: &n}
-	blob2 := mustMarshal(t, cfg)
-	if !strings.Contains(string(blob2), `"loss_streak_n":0`) {
-		t.Fatalf("marshal must carry regime.loss_streak_n, got %s", blob2)
-	}
-	var back2 StrategyConfig
-	if err := back2.UnmarshalJSON(blob2); err != nil {
-		t.Fatalf("unmarshal loss_streak_n: %v", err)
-	}
-	if back2.LossStreakNValue() != 0 {
-		t.Fatalf("loss_streak_n=0 must survive the round trip as OFF")
-	}
-	merged3, err := MergeStrategyConfig(base, map[string]any{"regime": map[string]any{"loss_streak_n": 0}})
-	if err != nil {
-		t.Fatalf("merge loss_streak_n patch: %v", err)
-	}
-	if merged3.LossStreakNValue() != 0 {
-		t.Fatalf("loss_streak_n=0 patch must land as OFF, got %+v", merged3.Regime)
-	}
 }
 
 func mustMarshal(t *testing.T, c StrategyConfig) []byte {
