@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
 	"nofx/logger"
 	"os"
 	"strconv"
@@ -69,6 +70,12 @@ func (at *AutoTrader) resolvePlannerClient() (mcp.AIClient, string) {
 		exact := at.pinExactModel(at.mcpClient, primaryModel)
 		at.logWarnf("🧠 planner model %q unresolved by the registry → falling back to primary %q", modelID, exact)
 		return at.mcpClient, exact
+	}
+	// 4.5 — per-model thinking knobs override the env defaults (best-effort).
+	if at.store != nil {
+		if row, err := at.store.AIModel().GetByID(modelID); err == nil && row != nil {
+			mcp.ApplyThinking(client, row.ThinkingMode, row.ReasoningEffort)
+		}
 	}
 	// Mirror the primary key resolution (provider-specific overrides).
 	apiKey := at.config.CustomAPIKey
@@ -575,6 +582,9 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimed(session, tradeDate, trigg
 	// P0.1/P0.2 (2026-08-19) — write-time facts: both-side levels, continuation
 	// scenario on gaps. PDH/PDL come from the detector universe (seated or raw).
 	facts := kernel.PlanFacts{Price: input.Price, DATR: input.DATR}
+	// 8.4 — machine grades from the Go-ranked candidate table, keyed by rounded
+	// price so the write-site stamp can match the model's levels.
+	machineGrades := map[float64]string{}
 	for _, l := range input.Levels {
 		switch l.Kind {
 		case kernel.KindPDH:
@@ -582,9 +592,12 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimed(session, tradeDate, trigg
 		case kernel.KindPDL:
 			facts.PDL = l.Price
 		}
+		if l.Grade != "" {
+			machineGrades[math.Round(l.Price*100)/100] = l.Grade
+		}
 	}
 	// W11 — carry the frozen indicator mirror + ai_config hash to the write site.
-	at.runPlannerReadCoreWithFacts(session, tradeDate, triggerOverride, modelID, hash, input.IndicatorsBlock, input.AIConfigHash, facts, func() (string, error) {
+	at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, hash, input.IndicatorsBlock, input.AIConfigHash, facts, machineGrades, func() (string, error) {
 		return client.CallWithMessages(plannerSystemPrompt, prompt)
 	}, t1Lines...)
 	return true
@@ -620,6 +633,15 @@ func (at *AutoTrader) runPlannerReadCoreWithTrigger(session, tradeDate, triggerO
 // scenario on gaps, duplicate/target reachability). Legacy callers keep the
 // facts-free signature (schema-only validation).
 func (at *AutoTrader) runPlannerReadCoreWithFacts(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash string, facts kernel.PlanFacts, call func() (string, error), extraNoTrade ...string) (int, string, error) {
+	return at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, facts, nil, call, extraNoTrade...)
+}
+
+// runPlannerReadCoreWithFactsGrades is the production core + the machine-grade
+// stamp (master-audit finding 8.4): machineGrades maps rounded level price →
+// deterministic detector grade from the Go-ranked candidate table; plan levels
+// that match get their machine grade persisted for the card to display beside
+// the model-written one.
+func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash string, facts kernel.PlanFacts, machineGrades map[float64]string, call func() (string, error), extraNoTrade ...string) (int, string, error) {
 	// H4/H5 — validation must accept EXACTLY what the config allows: the resolved
 	// max_levels / scenario_cap (hard ceilings 12/5). Before this the parse
 	// hardcoded 8/3, so raising either setting made EVERY read fail-closed into a
@@ -682,6 +704,17 @@ func (at *AutoTrader) runPlannerReadCoreWithFacts(session, tradeDate, triggerOve
 			}
 		} else {
 			at.noteConfirmCompliantSession()
+		}
+	}
+
+	// 8.4 — stamp the deterministic machine grade beside the model-written one
+	// (matched back to the Go-ranked candidate table by price). The card can then
+	// show both, so a model's A next to a machine C is visible at a glance.
+	if doc != nil && len(machineGrades) > 0 {
+		for i := range doc.Levels {
+			if g, ok := machineGrades[math.Round(doc.Levels[i].Price*100)/100]; ok && g != "" {
+				doc.Levels[i].MachineGrade = g
+			}
 		}
 	}
 

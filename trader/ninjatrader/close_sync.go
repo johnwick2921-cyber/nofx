@@ -1,6 +1,7 @@
 package ninjatrader
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -165,6 +166,21 @@ func (t *TCPTrader) recordClose(
 		attributedQty, p.ExitPrice, 0, realizedPnL, exitMs, p.SignalID); err != nil {
 		logger.Warnf("ninjatrader/tcp: record close failed (%s %s): %v", symbol, side, err)
 	} else {
+		// 4.2 — exit-fill persistence (NT8 SIM lineage): entries record fills in
+		// trader_fills (executeDecisionWithRecord poll path), exits NEVER did — NT
+		// closes return early there and wait for THIS frame. Write the tick-exact
+		// exit fill now, keyed deterministically on the owning position row so a
+		// retransmitted position_close frame can never double-count (CreateFill
+		// dedupes on exchange_trade_id).
+		if fill := buildExitFill(owner, exchangeID, exchangeType, symbol, side,
+			p.ExitPrice, attributedQty, realizedPnL, exitMs, p.SignalID); fill != nil {
+			if err := st.Order().CreateFill(fill); err != nil {
+				logger.Warnf("ninjatrader/tcp: exit fill record failed (%s %s): %v", symbol, side, err)
+			} else {
+				logger.Infof("📊 exit fill recorded: %s %s qty=%.2f @ %.2f (tick-exact, pnl %.2f)",
+					symbol, side, attributedQty, p.ExitPrice, realizedPnL)
+			}
+		}
 		// Phase 4 (final-bundle): notify the owning trader — one post-exit rescan.
 		if OnPositionClosed != nil {
 			OnPositionClosed(owner.TraderID, owner.ID)
@@ -196,3 +212,38 @@ func (t *TCPTrader) recordClose(
 // position close (close_sync priced close, reconcile priced/flat close)
 // triggers exactly one post-exit rescan for the OWNING trader. Nil = no-op.
 var OnPositionClosed func(traderID string, positionID int64)
+
+// buildExitFill constructs the deterministic trader_fills row for an NT8 exit
+// (4.2). The exchange_trade_id is keyed on the owning position row id — one
+// close, one row, no double-count even if the position_close frame retransmits
+// (CreateFill dedupes). Side uses the fill convention (close_long = SELL,
+// close_short = BUY), matching recordOrderFill. Nil only when the owner row is
+// absent (caller already dropped those closes).
+func buildExitFill(owner *store.TraderPosition, exchangeID, exchangeType, symbol, side string,
+	exitPrice, qty, pnl float64, exitMs int64, signalID string) *store.TraderFill {
+	if owner == nil {
+		return nil
+	}
+	fillSide := "BUY"
+	if side == "LONG" {
+		fillSide = "SELL"
+	}
+	return &store.TraderFill{
+		TraderID:        owner.TraderID,
+		ExchangeID:      exchangeID,
+		ExchangeType:    exchangeType,
+		OrderID:         0,
+		ExchangeOrderID: signalID,
+		ExchangeTradeID: fmt.Sprintf("nt8-exit-%d", owner.ID),
+		Symbol:          market.Normalize(symbol),
+		Side:            fillSide,
+		Price:           exitPrice,
+		Quantity:        qty,
+		QuoteQuantity:   exitPrice * qty,
+		Commission:      0,
+		CommissionAsset: "USD",
+		RealizedPnL:     pnl,
+		IsMaker:         false,
+		CreatedAt:       exitMs,
+	}
+}

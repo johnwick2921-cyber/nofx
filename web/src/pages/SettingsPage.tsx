@@ -153,7 +153,9 @@ export function SettingsPage() {
     apiKey: string,
     customApiUrl?: string,
     customModelName?: string,
-    name?: string
+    name?: string,
+    thinkingMode?: string,
+    reasoningEffort?: string
   ) => {
     try {
       const existingModel = configuredModels.find((m) => m.id === modelId)
@@ -203,6 +205,8 @@ export function SettingsPage() {
                 apiKey,
                 customApiUrl: customApiUrl || '',
                 customModelName: customModelName || '',
+                thinkingMode: thinkingMode || '',
+                reasoningEffort: reasoningEffort || '',
                 enabled: true,
                 name: name?.trim() ? name.trim() : m.name,
               }
@@ -216,6 +220,8 @@ export function SettingsPage() {
             apiKey,
             customApiUrl: customApiUrl || '',
             customModelName: customModelName || '',
+            thinkingMode: thinkingMode || '',
+            reasoningEffort: reasoningEffort || '',
             enabled: true,
           },
         ]
@@ -236,6 +242,8 @@ export function SettingsPage() {
               api_key: m.apiKey || '',
               custom_api_url: m.customApiUrl || '',
               custom_model_name: m.customModelName || '',
+              thinking_mode: m.thinkingMode || undefined,
+              reasoning_effort: m.reasoningEffort || undefined,
             },
           ])
         ),
@@ -553,6 +561,12 @@ export function SettingsPage() {
                                 : null}
                               {model.customApiUrl
                                 ? configBadge('Base URL', true)
+                                : null}
+                              {model.reasoningEffort
+                                ? configBadge(
+                                    `think:${model.reasoningEffort}`,
+                                    true
+                                  )
                                 : null}
                             </div>
                           </div>
