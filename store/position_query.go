@@ -34,7 +34,7 @@ func (s *PositionStore) GetPositionStats(traderID string) (map[string]interface{
 	var r result
 
 	err := s.db.Model(&TraderPosition{}).
-		Select("COUNT(*) as total, SUM(CASE WHEN realized_pnl > 0 THEN 1 ELSE 0 END) as wins, COALESCE(SUM(realized_pnl), 0) as total_pnl, COALESCE(SUM(fee), 0) as total_fee").
+		Select("COUNT(*) as total, SUM(CASE WHEN COALESCE(pnl_corrected, realized_pnl) > 0 THEN 1 ELSE 0 END) as wins, COALESCE(SUM(COALESCE(pnl_corrected, realized_pnl)), 0) as total_pnl, COALESCE(SUM(fee), 0) as total_fee").
 		Where("trader_id = ? AND status = ?", traderID, "CLOSED").
 		Scan(&r).Error
 	if err != nil {
@@ -54,12 +54,90 @@ func (s *PositionStore) GetPositionStats(traderID string) (map[string]interface{
 	return stats, nil
 }
 
-// GetFullStats gets complete trading statistics
-func (s *PositionStore) GetFullStats(traderID string) (*TraderStats, error) {
-	stats := &TraderStats{}
+// CountConsecutiveLossesSince returns the number of consecutive LOSING closed
+// trades at the TAIL of this trader's closed-trade history since sinceMs (the CME
+// session-day start, Unix ms UTC). A winning or break-even close (realized_pnl >= 0)
+// ends the streak; reconcile_flat orphans (unknown P&L) are excluded. Used by the
+// D1 consecutive-loss halt. Scoped by trader_id (each trader's closes are recorded
+// under its own id).
+func (s *PositionStore) CountConsecutiveLossesSince(traderID string, sinceMs int64) (int, error) {
+	var rows []TraderPosition
+	err := s.db.
+		Where("trader_id = ? AND status = ? AND close_reason <> ? AND exit_time >= ?",
+			traderID, "CLOSED", CloseReasonReconcileFlat, sinceMs).
+		Order("exit_time DESC").
+		Find(&rows).Error
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, r := range rows {
+		if r.EffectivePnL() < 0 {
+			n++
+		} else {
+			break // a win / break-even ends the losing streak
+		}
+	}
+	return n, nil
+}
 
+// GetSessionDayActivity returns the realized P&L (CLOSED trades, excluding
+// reconcile-flat orphans whose P&L is UNKNOWN) and the entry count (positions
+// OPENED) since sinceMs (Unix ms UTC), optionally scoped to one NT account.
+// Used by the Strategy Studio daily guardrails: daily loss/profit on realized
+// P&L, max-daily-trades on entries — both measured from the CME session-day
+// start. Variadic account mirrors GetClosedPositions/GetFullStats.
+func (s *PositionStore) GetSessionDayActivity(traderID string, sinceMs int64, account ...string) (realizedPnL float64, entries int, err error) {
+	acct := ""
+	if len(account) > 0 {
+		acct = account[0]
+	}
+
+	var pnl struct{ Total float64 }
+	pq := s.db.Model(&TraderPosition{}).
+		Select("COALESCE(SUM(COALESCE(pnl_corrected, realized_pnl)), 0) as total") /* P0 2026-08-20: corrections win */.
+		Where("trader_id = ? AND status = ? AND close_reason <> ? AND exit_time >= ?",
+			traderID, "CLOSED", CloseReasonReconcileFlat, sinceMs)
+	if acct != "" {
+		pq = pq.Where("account = ?", acct)
+	}
+	if err = pq.Scan(&pnl).Error; err != nil {
+		return 0, 0, err
+	}
+
+	var cnt int64
+	cq := s.db.Model(&TraderPosition{}).
+		Where("trader_id = ? AND entry_time >= ?", traderID, sinceMs)
+	if acct != "" {
+		cq = cq.Where("account = ?", acct)
+	}
+	if err = cq.Count(&cnt).Error; err != nil {
+		return 0, 0, err
+	}
+
+	return pnl.Total, int(cnt), nil
+}
+
+// GetFullStats gets complete trading statistics, optionally scoped to one
+// account (mirrors GetClosedPositions): account=="" → trader-global (crypto +
+// legacy); account!="" → only that NT account's closed trades, excluding
+// pre-migration rows (account=''). Variadic so existing callers are unchanged.
+func (s *PositionStore) GetFullStats(traderID string, account ...string) (*TraderStats, error) {
+	stats := &TraderStats{}
+	acct := ""
+	if len(account) > 0 {
+		acct = account[0]
+	}
+
+	// Exclude reconcile-flat orphan closes: their realized P&L is UNKNOWN (exit
+	// fill never captured), not a real $0 — counting them would skew win-rate /
+	// total P&L. They still appear in the position LIST (rendered "—").
 	var count int64
-	if err := s.db.Model(&TraderPosition{}).Where("trader_id = ? AND status = ?", traderID, "CLOSED").Count(&count).Error; err != nil {
+	cq := s.db.Model(&TraderPosition{}).Where("trader_id = ? AND status = ? AND close_reason <> ?", traderID, "CLOSED", CloseReasonReconcileFlat)
+	if acct != "" {
+		cq = cq.Where("account = ?", acct)
+	}
+	if err := cq.Count(&count).Error; err != nil {
 		return nil, err
 	}
 	if count == 0 {
@@ -67,8 +145,11 @@ func (s *PositionStore) GetFullStats(traderID string) (*TraderStats, error) {
 	}
 
 	var positions []TraderPosition
-	err := s.db.Where("trader_id = ? AND status = ?", traderID, "CLOSED").
-		Order("exit_time ASC").
+	pq := s.db.Where("trader_id = ? AND status = ? AND close_reason <> ?", traderID, "CLOSED", CloseReasonReconcileFlat)
+	if acct != "" {
+		pq = pq.Where("account = ?", acct)
+	}
+	err := pq.Order("exit_time ASC").
 		Find(&positions).Error
 	if err != nil {
 		return nil, fmt.Errorf("failed to query position statistics: %w", err)
@@ -79,16 +160,16 @@ func (s *PositionStore) GetFullStats(traderID string) (*TraderStats, error) {
 
 	for _, pos := range positions {
 		stats.TotalTrades++
-		stats.TotalPnL += pos.RealizedPnL
+		stats.TotalPnL += pos.EffectivePnL()
 		stats.TotalFee += pos.Fee
-		pnls = append(pnls, pos.RealizedPnL)
+		pnls = append(pnls, pos.EffectivePnL())
 
-		if pos.RealizedPnL > 0 {
+		if pos.EffectivePnL() > 0 {
 			stats.WinTrades++
-			totalWin += pos.RealizedPnL
-		} else if pos.RealizedPnL < 0 {
+			totalWin += pos.EffectivePnL()
+		} else if pos.EffectivePnL() < 0 {
 			stats.LossTrades++
-			totalLoss += -pos.RealizedPnL
+			totalLoss += -pos.EffectivePnL()
 		}
 	}
 
@@ -127,11 +208,17 @@ type RecentTrade struct {
 	HoldDuration string  `json:"hold_duration"`
 }
 
-// GetRecentTrades gets recent closed trades
-func (s *PositionStore) GetRecentTrades(traderID string, limit int) ([]RecentTrade, error) {
+// GetRecentTrades gets recent closed trades, optionally scoped to one account
+// (mirrors GetClosedPositions): account=="" → trader-global (crypto + legacy);
+// account!="" → only that NT account's trades, excluding pre-migration rows
+// (account=''). Variadic so existing callers stay trader-global unchanged.
+func (s *PositionStore) GetRecentTrades(traderID string, limit int, account ...string) ([]RecentTrade, error) {
 	var positions []TraderPosition
-	err := s.db.Where("trader_id = ? AND status = ?", traderID, "CLOSED").
-		Order("exit_time DESC").
+	q := s.db.Where("trader_id = ? AND status = ?", traderID, "CLOSED")
+	if len(account) > 0 && account[0] != "" {
+		q = q.Where("account = ?", account[0])
+	}
+	err := q.Order("exit_time DESC").
 		Limit(limit).
 		Find(&positions).Error
 	if err != nil {
@@ -145,7 +232,7 @@ func (s *PositionStore) GetRecentTrades(traderID string, limit int) ([]RecentTra
 			Side:        strings.ToLower(pos.Side),
 			EntryPrice:  pos.EntryPrice,
 			ExitPrice:   pos.ExitPrice,
-			RealizedPnL: pos.RealizedPnL,
+			RealizedPnL: pos.EffectivePnL(),
 			EntryTime:   pos.EntryTime / 1000, // Convert ms to seconds for API compatibility
 		}
 
@@ -235,7 +322,8 @@ type SymbolStats struct {
 // GetSymbolStats gets per-symbol trading statistics
 func (s *PositionStore) GetSymbolStats(traderID string, limit int) ([]SymbolStats, error) {
 	var positions []TraderPosition
-	err := s.db.Where("trader_id = ? AND status = ?", traderID, "CLOSED").Find(&positions).Error
+	// Exclude reconcile-flat orphan closes (unknown P&L — see CloseReasonReconcileFlat).
+	err := s.db.Where("trader_id = ? AND status = ? AND close_reason <> ?", traderID, "CLOSED", CloseReasonReconcileFlat).Find(&positions).Error
 	if err != nil {
 		return nil, fmt.Errorf("failed to query symbol stats: %w", err)
 	}
@@ -251,8 +339,8 @@ func (s *PositionStore) GetSymbolStats(traderID string, limit int) ([]SymbolStat
 		}
 		s := symbolMap[pos.Symbol]
 		s.TotalTrades++
-		s.TotalPnL += pos.RealizedPnL
-		if pos.RealizedPnL > 0 {
+		s.TotalPnL += pos.EffectivePnL()
+		if pos.EffectivePnL() > 0 {
 			s.WinTrades++
 		}
 
@@ -341,8 +429,8 @@ func (s *PositionStore) GetHoldingTimeStats(traderID string) ([]HoldingTimeStats
 
 		r := rangeStats[rangeKey]
 		r.count++
-		r.totalPnL += pos.RealizedPnL
-		if pos.RealizedPnL > 0 {
+		r.totalPnL += pos.EffectivePnL()
+		if pos.EffectivePnL() > 0 {
 			r.wins++
 		}
 	}
@@ -375,7 +463,8 @@ type DirectionStats struct {
 // GetDirectionStats analyzes long vs short performance
 func (s *PositionStore) GetDirectionStats(traderID string) ([]DirectionStats, error) {
 	var positions []TraderPosition
-	err := s.db.Where("trader_id = ? AND status = ?", traderID, "CLOSED").Find(&positions).Error
+	// Exclude reconcile-flat orphan closes (unknown P&L — see CloseReasonReconcileFlat).
+	err := s.db.Where("trader_id = ? AND status = ? AND close_reason <> ?", traderID, "CLOSED", CloseReasonReconcileFlat).Find(&positions).Error
 	if err != nil {
 		return nil, fmt.Errorf("failed to query direction stats: %w", err)
 	}
@@ -387,8 +476,8 @@ func (s *PositionStore) GetDirectionStats(traderID string) ([]DirectionStats, er
 		}
 		s := sideStats[pos.Side]
 		s.TradeCount++
-		s.TotalPnL += pos.RealizedPnL
-		if pos.RealizedPnL > 0 {
+		s.TotalPnL += pos.EffectivePnL()
+		if pos.EffectivePnL() > 0 {
 			s.WinRate++
 		}
 	}

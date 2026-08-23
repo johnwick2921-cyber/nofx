@@ -153,8 +153,13 @@ func getKlinesFromHyperliquid(symbol, interval string, limit int) ([]Kline, erro
 	return klines, nil
 }
 
-// calculateTimeframeSeries calculates series data for a single timeframe
-func calculateTimeframeSeries(klines []Kline, timeframe string, count int) *TimeframeSeriesData {
+// calculateTimeframeSeries calculates series data for a single timeframe.
+// ip carries the strategy-CONFIGURED indicator periods (optional); for each
+// non-empty list a series is computed per period into the *ByPeriod maps, IN
+// ADDITION to the legacy fixed fields (EMA20/50, BOLL 20, RSI 7/14, ATR 14),
+// which are always computed for back-compat readers. With an empty/zero ip the
+// output is byte-identical to the pre-change code.
+func calculateTimeframeSeries(klines []Kline, timeframe string, count int, ip IndicatorPeriods) *TimeframeSeriesData {
 	if count <= 0 {
 		count = 10 // default
 	}
@@ -172,6 +177,30 @@ func calculateTimeframeSeries(klines []Kline, timeframe string, count int) *Time
 		BOLLUpper:   make([]float64, 0, count),
 		BOLLMiddle:  make([]float64, 0, count),
 		BOLLLower:   make([]float64, 0, count),
+	}
+	if len(ip.EMA) > 0 {
+		data.EMAByPeriod = make(map[int][]float64, len(ip.EMA))
+		for _, p := range ip.EMA {
+			if p > 0 {
+				data.EMAByPeriod[p] = make([]float64, 0, count)
+			}
+		}
+	}
+	if len(ip.RSI) > 0 {
+		data.RSIByPeriod = make(map[int][]float64, len(ip.RSI))
+		for _, p := range ip.RSI {
+			if p > 0 {
+				data.RSIByPeriod[p] = make([]float64, 0, count)
+			}
+		}
+	}
+	if len(ip.BOLL) > 0 {
+		data.BOLLByPeriod = make(map[int]*BollBands, len(ip.BOLL))
+		for _, p := range ip.BOLL {
+			if p > 0 {
+				data.BOLLByPeriod[p] = &BollBands{}
+			}
+		}
 	}
 
 	// Get latest N data points based on count from config
@@ -207,6 +236,14 @@ func calculateTimeframeSeries(klines []Kline, timeframe string, count int) *Time
 			data.EMA50Values = append(data.EMA50Values, ema50)
 		}
 
+		// Calculate the strategy-CONFIGURED EMA periods (e.g. 9/21/200) for each
+		// point — same "need `period` bars" guard as the fixed EMAs above.
+		for _, p := range ip.EMA {
+			if p > 0 && i >= p-1 {
+				data.EMAByPeriod[p] = append(data.EMAByPeriod[p], calculateEMA(klines[:i+1], p))
+			}
+		}
+
 		// Calculate MACD for each point
 		if i >= 25 {
 			macd := calculateMACD(klines[:i+1])
@@ -223,6 +260,13 @@ func calculateTimeframeSeries(klines []Kline, timeframe string, count int) *Time
 			data.RSI14Values = append(data.RSI14Values, rsi14)
 		}
 
+		// Configured RSI periods (same i>=period guard as RSI7/RSI14 above).
+		for _, p := range ip.RSI {
+			if p > 0 && i >= p {
+				data.RSIByPeriod[p] = append(data.RSIByPeriod[p], calculateRSI(klines[:i+1], p))
+			}
+		}
+
 		// Calculate Bollinger Bands (period 20, std dev multiplier 2)
 		if i >= 19 {
 			upper, middle, lower := calculateBOLL(klines[:i+1], 20, 2.0)
@@ -230,10 +274,31 @@ func calculateTimeframeSeries(klines []Kline, timeframe string, count int) *Time
 			data.BOLLMiddle = append(data.BOLLMiddle, middle)
 			data.BOLLLower = append(data.BOLLLower, lower)
 		}
+
+		// Configured BOLL periods (std-dev multiplier fixed at 2; same i>=period-1
+		// guard as the fixed period-20 BOLL above).
+		for _, p := range ip.BOLL {
+			if p > 0 && i >= p-1 {
+				u, m, l := calculateBOLL(klines[:i+1], p, 2.0)
+				if b := data.BOLLByPeriod[p]; b != nil {
+					b.Upper = append(b.Upper, u)
+					b.Middle = append(b.Middle, m)
+					b.Lower = append(b.Lower, l)
+				}
+			}
+		}
 	}
 
-	// Calculate ATR14
+	// Calculate ATR14 (legacy fixed) + the configured ATR periods (latest value).
 	data.ATR14 = calculateATR(klines, 14)
+	if len(ip.ATR) > 0 {
+		data.ATRByPeriod = make(map[int]float64, len(ip.ATR))
+		for _, p := range ip.ATR {
+			if p > 0 {
+				data.ATRByPeriod[p] = calculateATR(klines, p)
+			}
+		}
+	}
 
 	return data
 }

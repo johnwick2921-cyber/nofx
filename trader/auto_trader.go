@@ -2,7 +2,6 @@ package trader
 
 import (
 	"fmt"
-	"github.com/ethereum/go-ethereum/crypto"
 	"nofx/kernel"
 	"nofx/logger"
 	"nofx/mcp"
@@ -18,10 +17,15 @@ import (
 	"nofx/trader/indodax"
 	"nofx/trader/kucoin"
 	"nofx/trader/lighter"
+	ntTrader "nofx/trader/ninjatrader"
 	"nofx/trader/okx"
 	"nofx/wallet"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
+
+	"github.com/ethereum/go-ethereum/crypto"
 )
 
 func (at *AutoTrader) logTag() string {
@@ -49,6 +53,176 @@ func (at *AutoTrader) logErrorf(format string, args ...interface{}) {
 	logger.Errorf("%s "+format, values...)
 }
 
+// ninjaFeedDown reports whether this is a NinjaTrader trader whose price feed is
+// explicitly NOT Connected. Used to gate opens/closes: the SIM rejects orders
+// with "no market data" while the feed is down (the upstream condition behind the
+// phantom-close mess). DEFAULT-ALLOW: returns false for non-NT traders and until
+// the first feed_status frame arrives, so a healthy bot is never false-halted.
+func (at *AutoTrader) ninjaFeedDown() (bool, string) {
+	if at.exchange != "ninjatrader" {
+		return false, ""
+	}
+	ntTCP, ok := at.trader.(*ntTrader.TCPTrader)
+	if !ok {
+		return false, ""
+	}
+	status := ntTCP.FeedStatus()
+	if ntTCP.IsFeedConnected() {
+		return false, status
+	}
+	return true, status
+}
+
+// ninjaLinkConnected reports the RAW NT8 TCP link status for this trader, and
+// whether the watchdog applies at all (ok=false for non-NT traders → the dead-man
+// watchdog is never engaged, so crypto is byte-identical).
+func (at *AutoTrader) ninjaLinkConnected() (connected, ok bool) {
+	if at.exchange != "ninjatrader" {
+		return false, false
+	}
+	ntTCP, isNT := at.trader.(*ntTrader.TCPTrader)
+	if !isNT {
+		return false, false
+	}
+	return ntTCP.IsConnected(), true
+}
+
+// driveDeadManWatchdog (B5) advances the dead-man watchdog once per cycle from the
+// NT8 TCP link. A dropped link blocks NEW entries (open-position management/exits
+// are never gated); on reconnect it sweeps any unfilled entries and holds entries
+// blocked until a clean positions/orders reconciliation, then auto-resumes. Called
+// from runCycle; non-NT traders are a no-op.
+func (at *AutoTrader) driveDeadManWatchdog() {
+	connected, ok := at.ninjaLinkConnected()
+	if !ok {
+		return
+	}
+	switch at.deadMan.step(connected, at.watchdogReconcileClean) {
+	case wdWentDown:
+		at.logWarnf("🚨 dead-man watchdog: NT8 TCP link DOWN — NEW entries BLOCKED until a clean reconciliation. Open positions & exits are unaffected.")
+	case wdReconnected:
+		at.logWarnf("🔌 dead-man watchdog: NT8 TCP link back UP — sweeping unfilled entries; entries stay BLOCKED until a clean positions/orders reconciliation.")
+		at.cancelUnfilledEntriesAfterReconnect()
+	case wdResumed:
+		at.logInfof("✅ dead-man watchdog: clean positions/orders reconciliation — NEW entries RESUMED.")
+	}
+}
+
+// watchdogReconcileClean is the reconcile probe: the link is considered reconciled
+// when it answers BOTH a positions and an open-orders query without error (the
+// fill-confirmed position source of truth is refreshed by StartPositionReconcile in
+// the background; here we just require the link to respond cleanly). A one-cycle
+// defer after reconnect (see deadManWatchdog.step) lets the 15s positions cache
+// expire and a fresh frame arrive before this probes.
+func (at *AutoTrader) watchdogReconcileClean() bool {
+	if _, err := at.trader.GetPositions(); err != nil {
+		return false
+	}
+	if _, err := at.trader.GetOpenOrders(""); err != nil {
+		return false
+	}
+	return true
+}
+
+// cancelUnfilledEntriesAfterReconnect sweeps resting UNFILLED entry orders on
+// reconnect. On the live NT8 path this is a documented no-op: entries are MARKET
+// orders that fill or reject instantly (no resting unfilled entries), and the Go
+// side has no order-cancel wire command (CancelAllOrders/CancelStopOrders return
+// "not supported"; GetOpenOrders is empty) — exposing one is a Part A (C# AddOn)
+// change. The real protection is the block-until-reconcile gate. If a future Part A
+// surfaces resting entry orders + a cancel frame, wire the cancellation HERE.
+func (at *AutoTrader) cancelUnfilledEntriesAfterReconnect() {
+	orders, err := at.trader.GetOpenOrders("")
+	if err != nil || len(orders) == 0 {
+		return
+	}
+	at.logWarnf("dead-man watchdog: %d working order(s) visible post-reconnect — entry cancellation is a Part A AddOn capability (no-op on the current market-order path).", len(orders))
+}
+
+// maybeMoveStopToBreakeven (auto-breakeven, NT8 futures only): once an open
+// position is at least breakeven_trigger_points in profit, move its stop to the
+// entry price (breakeven), ONCE per position. Opt-in per strategy, default OFF.
+// The move is a wire command to the AddOn (it modifies the live bracket in
+// place) — it never closes the position. Idempotent via breakevenDone, which is
+// cleared when the position goes flat (pruneBreakevenDone).
+func (at *AutoTrader) maybeMoveStopToBreakeven(symbol, side string, entryPrice, markPrice float64) {
+	if at.exchange != "ninjatrader" || at.config.StrategyConfig == nil {
+		return
+	}
+	fire, pts := breakevenTrigger(at.config.StrategyConfig.RiskControl, side, entryPrice, markPrice)
+	if !fire {
+		return
+	}
+	key := symbol + "_" + side
+	at.breakevenMu.Lock()
+	if at.breakevenDone == nil {
+		at.breakevenDone = make(map[string]bool)
+	}
+	if at.breakevenDone[key] {
+		at.breakevenMu.Unlock()
+		return
+	}
+	at.breakevenDone[key] = true
+	at.breakevenMu.Unlock()
+
+	ntTCP, ok := at.trader.(*ntTrader.TCPTrader)
+	if !ok {
+		return
+	}
+	if err := ntTCP.MoveStopToBreakeven(side, entryPrice); err != nil {
+		logger.Warnf("⚠️ auto-breakeven: move-stop send failed for %s %s: %v", symbol, side, err)
+		at.breakevenMu.Lock()
+		at.breakevenDone[key] = false // let it retry next cycle
+		at.breakevenMu.Unlock()
+		return
+	}
+	// WARN (honest-logs 2026-08-19): a stop amendment is an owner-visible event —
+	// WARN reaches the log_events DB sink + dashboard even when journald's
+	// frame-flood suppression is dropping INFO lines (the "breakeven not
+	// moving" false alarm was exactly this line being invisible).
+	logger.Warnf("🎯 auto-breakeven: %s %s +%.1f pts in profit → stop moved to breakeven (entry %.2f)",
+		symbol, side, pts, entryPrice)
+}
+
+// breakevenTrigger is the pure decision for auto-breakeven: given the strategy's
+// breakeven config and a position's side/entry/mark, it returns whether the stop
+// should move to breakeven now and the current points in profit. Default trigger
+// is 50 points when unset. Testable without any broker/NT8 dependency.
+func breakevenTrigger(rc store.RiskControlConfig, side string, entry, mark float64) (bool, float64) {
+	if !hlBool(rc.BreakevenEnabled, false) {
+		return false, 0
+	}
+	trigger := rc.BreakevenTriggerPoints
+	if trigger <= 0 {
+		trigger = 50
+	}
+	// Normalise side casing once. The sole production caller (checkPositionDrawdown)
+	// feeds pos["side"] from NT8's GetPositions/positionMap, which emits UPPERCASE
+	// "LONG"/"SHORT" (upperSideStr). A case-sensitive == "long" never matched, so the
+	// profit math was inverted: breakeven never armed on a winning trade and would
+	// only "fire" on a loser. Compare lowercase so either casing works.
+	var pts float64
+	if strings.ToLower(side) == "long" {
+		pts = mark - entry
+	} else {
+		pts = entry - mark
+	}
+	return pts >= trigger, pts
+}
+
+// pruneBreakevenDone clears the breakeven idempotency flag for any position that
+// is no longer open (so a fresh trade on the same symbol/side re-arms breakeven).
+// openKeys is the set of "symbol_side" currently open this cycle.
+func (at *AutoTrader) pruneBreakevenDone(openKeys map[string]bool) {
+	at.breakevenMu.Lock()
+	defer at.breakevenMu.Unlock()
+	for k := range at.breakevenDone {
+		if !openKeys[k] {
+			delete(at.breakevenDone, k)
+		}
+	}
+}
+
 // AutoTraderConfig auto trading configuration (simplified version - AI makes all decisions)
 type AutoTraderConfig struct {
 	// Trader identification
@@ -57,7 +231,7 @@ type AutoTraderConfig struct {
 	AIModel string // AI model: "qwen" or "deepseek"
 
 	// Trading platform selection
-	Exchange   string // Exchange type: "binance", "bybit", "okx", "bitget", "gate", "hyperliquid", "aster" or "lighter"
+	Exchange   string // Exchange type: "binance", "bybit", "okx", "bitget", "gate", "hyperliquid", "aster", "lighter", "indodax", or "ninjatrader"
 	ExchangeID string // Exchange account UUID (for multi-account support)
 
 	// Binance API configuration
@@ -91,6 +265,11 @@ type AutoTraderConfig struct {
 	IndodaxAPIKey    string
 	IndodaxSecretKey string
 
+	// NinjaTrader CSV bridge configuration
+	NinjaTraderDataDir string // /mnt/c/Users/<u>/NofxTrader/data
+	NinjaTraderSymbol  string // e.g. "MNQ" (informational; NT uses chart's instrument)
+	NinjaTraderAccount string // P5.4 — the NT8 sub-account this trader is bound to (store.Trader.Account); empty = active account
+
 	// Hyperliquid configuration
 	HyperliquidPrivateKey  string
 	HyperliquidWalletAddr  string
@@ -122,6 +301,14 @@ type AutoTraderConfig struct {
 
 	// Scan configuration
 	ScanInterval time.Duration // Scan interval (recommended 3 minutes)
+	// CadenceMode (P10): "interval" (default — every tick runs a full cycle on
+	// the latest bar state) | "bar_close" (legacy: one cycle per closed
+	// primary-TF bar). Resolved via cadenceMode(); only meaningful for day-plan
+	// futures traders (crypto/plan-off always ran per-tick).
+	CadenceMode string
+	// PositionMode (Phase 3): "ai_watch" (default — watch cycles while holding,
+	// zero order authority) | "bracket_only" (legacy skip-while-open).
+	PositionMode string
 
 	// Account configuration
 	InitialBalance float64 // Initial balance (for P&L calculation, must be set manually)
@@ -143,40 +330,134 @@ type AutoTraderConfig struct {
 
 // AutoTrader automatic trader
 type AutoTrader struct {
-	id                    string // Trader unique identifier
-	name                  string // Trader display name
-	aiModel               string // AI model name
-	exchange              string // Trading platform type (binance/bybit/etc)
-	exchangeID            string // Exchange account UUID
-	showInCompetition     bool   // Whether to show in competition page
-	config                AutoTraderConfig
-	trader                Trader // Use Trader interface (supports multiple platforms)
-	mcpClient             mcp.AIClient
-	store                 *store.Store           // Data storage (decision records, etc.)
-	strategyEngine        *kernel.StrategyEngine // Strategy engine (uses strategy configuration)
-	cycleNumber           int                    // Current cycle number
-	initialBalance        float64
-	dailyPnL              float64
-	customPrompt          string // Custom trading strategy prompt
-	overrideBasePrompt    bool   // Whether to override base prompt
-	lastResetTime         time.Time
-	stopUntil             time.Time
-	isRunning             bool
-	isRunningMutex        sync.RWMutex       // Mutex to protect isRunning flag
-	startTime             time.Time          // System start time
-	callCount             int                // AI call count
-	positionFirstSeenTime map[string]int64   // Position first seen time (symbol_side -> timestamp in milliseconds)
-	stopMonitorCh         chan struct{}      // Used to stop monitoring goroutine
-	monitorWg             sync.WaitGroup     // Used to wait for monitoring goroutine to finish
-	peakPnLCache          map[string]float64 // Peak profit cache (symbol -> peak P&L percentage)
-	peakPnLCacheMutex     sync.RWMutex       // Cache read-write lock
-	lastBalanceSyncTime   time.Time          // Last balance sync time
-	userID                string             // User ID
-	gridState             *GridState         // Grid trading state (only used when StrategyType == "grid_trading")
-	claw402WalletAddr     string             // Claw402 wallet address (derived from private key at start)
-	consecutiveAIFailures int                // Consecutive AI call failures
-	safeMode              bool               // Safe mode: no new positions, protect existing ones
-	safeModeReason        string             // Why safe mode was activated
+	id                string // Trader unique identifier
+	name              string // Trader display name
+	aiModel           string // AI model name
+	exchange          string // Trading platform type (binance/bybit/etc)
+	exchangeID        string // Exchange account UUID
+	showInCompetition bool   // Whether to show in competition page
+	config            AutoTraderConfig
+	trader            Trader // Use Trader interface (supports multiple platforms)
+	mcpClient         mcp.AIClient
+	store             *store.Store           // Data storage (decision records, etc.)
+	strategyEngine    *kernel.StrategyEngine // Strategy engine (uses strategy configuration)
+	cycleNumber       int                    // Current cycle number
+	initialBalance    float64
+	dailyPnL          float64
+	// lastClockHealthSession: which session the last clock-health line was
+	// logged for (PHASE 3.5) — one line per session roll, not per tick.
+	lastClockHealthSession string
+	lastResetTime          time.Time
+	pauseUntilMs           atomic.Int64 // P2 stop_until producer state (unix ms; 0 = not paused) — see auto_trader_pause.go
+	pauseStoreMu           sync.Mutex   // E7-v2: orders memory-vs-store pause writes (expiry CAS vs concurrent re-pause)
+	lastRollWarnContract   string       // P3 roll gate: dedupes the unresolved-contract WARN per contract-string change
+	lastHalfDaySeedDay     string       // P4 half-days producer: once-per-CME-session-day throttle
+	lastCycleBarSig        string       // P10.4 no-new-data dedup: newest primary-TF bar signature at last cycle
+	ai402OutageStartMs     int64        // P5 402-outage latch (0 = no outage) — one banner per outage
+	// G4 (regime wave 2026-08-21) — transition stand-down state + the G4.6 MSS
+	// wake dedupe key (plan:version:eventInstant — one planner wake per MSS).
+	transition             kernel.TransitionState
+	transitionClosedAtMs   int64 // G4: last closed trigger — the same event must not reopen the stand-down
+	lastMSSWakeKey         string
+	lastLossStreakAlertKey string // G6: one banner per session-day streak
+	lastAIBalanceDay       string // P5 daily balance poll throttle (AI_BALANCE_WARN)
+	isRunning              bool
+	isRunningMutex         sync.RWMutex          // Mutex to protect isRunning flag
+	startTime              time.Time             // System start time
+	callCount              int                   // AI call count
+	positionFirstSeenTime  map[string]int64      // Position first seen time (symbol_side -> timestamp in milliseconds)
+	stopMonitorCh          chan struct{}         // Used to stop monitoring goroutine
+	monitorWg              sync.WaitGroup        // Used to wait for monitoring goroutine to finish
+	kickCh                 chan string           // discard-burn/post-exit: one-shot deferred-cycle kicks into the run loop (reason payload)
+	kickPending            atomic.Bool           // at most one kick armed at a time (CAS)
+	skipDodgeOnce          bool                  // a dodge-kicked cycle must not re-dodge at the boundary (run-loop goroutine only)
+	skipCadenceOnce        bool                  // U2: a post_exit kick bypasses the cadence gates exactly once (run-loop goroutine only)
+	cycleTrigger           string                // why this cycle fired: "" (timer) | "stale_dodge" | "post_exit" (run-loop goroutine only)
+	aiCallMs               [aiCallRingSize]int64 // last-N AI call durations (run-loop goroutine only)
+	aiCallIdx              int
+	aiCallN                int
+	peakPnLCache           map[string]float64     // Peak profit cache (symbol -> peak P&L percentage)
+	peakPnLCacheMutex      sync.RWMutex           // Cache read-write lock
+	breakevenDone          map[string]bool        // auto-breakeven: "symbol_side" already moved to breakeven (idempotent; reset on flat)
+	entryTheses            map[string]entryThesis // Phase 3: original entry decision per "symbol_side" (run-loop goroutine)
+	watchStates            map[string]*watchState // Phase 3: watcher hysteresis state per "symbol_side" (run-loop goroutine)
+	trailStates            map[string]*trailState // Phase 3B: trailing-stop state per "symbol_SIDE" (guarded by trailMu — monitor + watcher goroutines)
+	trailMu                sync.Mutex             // guards trailStates
+	postExitSeen           map[int64]bool         // Phase 4: position IDs whose post-exit rescan already fired (guarded by postExitMu)
+	postExitMu             sync.Mutex
+	breakevenMu            sync.Mutex      // guards breakevenDone (lazy-inited)
+	lastBalanceSyncTime    time.Time       // Last balance sync time
+	userID                 string          // User ID
+	gridState              *GridState      // Grid trading state (only used when StrategyType == "grid_trading")
+	claw402WalletAddr      string          // Claw402 wallet address (derived from private key at start)
+	consecutiveAIFailures  int             // Consecutive AI call failures
+	safeMode               bool            // Safe mode: no new positions, protect existing ones
+	safeModeReason         string          // Why safe mode was activated
+	deadMan                deadManWatchdog // B5 dead-man watchdog: NT8 link-gap → block NEW entries until reconciled (zero value = live/allowed; touched only from runCycle)
+
+	// Plan 4 Stage 4 — NinjaTrader TCP balance tracking (defer-until-balance guard)
+	// For NinjaTrader TCP traders, we track if account_balance frame has arrived yet.
+	// If equity == 0 and this is false, we skip the cycle silently (no phantom HOLD record).
+	hasReceivedBalance bool
+	balanceMutex       sync.RWMutex
+
+	// PART A — CME session gate. Tracks the last-observed market open/closed
+	// state so the loop logs the open⇄closed transition once (not every cycle).
+	// nil = not yet observed. Touched only from runCycle (single goroutine), so
+	// no mutex is required.
+	cmePrevOpen *bool
+
+	// P2.1 — bar-close cadence: CloseTime (ms) of the last primary-TF bar we ran
+	// a cycle for. Only meaningful when barCloseCadenceActive() (day_plan futures);
+	// otherwise the scan timer drives the loop unchanged. Touched only from Run's
+	// single goroutine, so no mutex is required.
+	lastBarCloseMs int64
+
+	// P3.6-D — night mode: last-observed night/day state for edge-triggered
+	// transition events. nil = unobserved (a restart starts here → no spurious
+	// edge). Touched only from runCycle (single goroutine).
+	nightPrev *bool
+	// W16/R1 — last scenario-status blob written, so the per-scenario log line
+	// fires on CHANGE rather than every cycle.
+	scenarioStateLog string
+
+	// P5.5 — the last entry's plan citation, captured in recordPlanCitation and
+	// consumed once by the very next position-open stamp (single-goroutine loop).
+	lastCitation planCitation
+
+	// W3 — throttle for the calendar producer (retry the FF fetch ≤1/hour on
+	// outage; a stored slice short-circuits it). Touched only from runCycle.
+	lastCalFetch time.Time
+	// P0.6 (2026-08-19) — calendar fail-closed alert, once per trade date.
+	lastCalFailClosedAlert string
+	// F0 — calendar test seams + log dedupe: calFetch overrides the live FF
+	// fetch in tests (nil → calendar.DefaultFetch); lastCalSkipDate makes the
+	// "skip-fresh" line log once per trade date, not every 3-min cycle.
+	calFetch        func() ([]byte, error)
+	lastCalSkipDate string
+	// lastAlertPruneDay throttles the acked-P2 alert-feed prune to once per
+	// CME session-day (B-fix: PruneAckedOlderThan had no production caller).
+	lastAlertPruneDay string
+
+	// P2 — regime health from the most recent planner read (dark-field count +
+	// DEGRADED verdict), stamped onto the plan row at the write site.
+	lastRegimeHealth kernel.RegimeHealth
+
+	// W8 — admin session-registry cache. Loaded from system_config and refreshed
+	// once per CME session-day so an edit is honored by the NEXT session-day's
+	// gates (never mid-session — a running session's windows never move under it).
+	regMu       sync.Mutex
+	regCache    kernel.SessionRegistry
+	regCacheDay string
+}
+
+// planCitation is the transient plan-link snapshot stamped onto a new position.
+type planCitation struct {
+	planVersion int
+	scenarioID  string
+	matched     bool
+	band        string // B3 (F6): "" | "ok" | "off_band" | "struct"
+	valid       bool
 }
 
 // NewAutoTrader creates an automatic trader
@@ -230,6 +511,16 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 	if mcpClient == nil {
 		mcpClient = mcp.New()
 	}
+
+	// P0-latency — the timeout applied here is the ONE config-driven AI timeout
+	// (mcp.ResolvedAITimeout). NOTE (audit 2026-08-18): with an EMPTY
+	// day_plan.planner_model binding, resolvePlannerClient returns THIS SAME
+	// client — the old claim that "the planner read uses its OWN client" is only
+	// true when a planner model is explicitly bound. Sharing is now harmless
+	// because executor and planner resolve the identical timeout, but the
+	// comment was wrong and hid a class-7 hazard. Crypto cadence untouched; the
+	// stale-bar discard in runCycle is the second half of the guarantee.
+	applyDecisionCallTimeout(mcpClient, config.Exchange)
 
 	// Payment providers (claw402) ignore customURL
 	switch aiModel {
@@ -312,6 +603,22 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 	case "indodax":
 		logger.Infof("🏦 [%s] Using Indodax Spot trading", config.Name)
 		trader = indodax.NewIndodaxTrader(config.IndodaxAPIKey, config.IndodaxSecretKey)
+	case "ninjatrader":
+		logger.Infof("🏦 [%s] Using NinjaTrader (transport via NT_TRANSPORT env, CME futures via SIM)", config.Name)
+		if config.NinjaTraderDataDir == "" {
+			return nil, fmt.Errorf("ninjatrader requires NinjaTraderDataDir (set the NT8 data dir on the exchange row (Settings → Exchange → nt_data_dir); the NINJATRADER_DATA_DIR env is not read by the live path)")
+		}
+		trader, err = ntTrader.NewTraderFromEnv(ntTrader.Config{
+			DataDir: config.NinjaTraderDataDir,
+			Symbol:  config.NinjaTraderSymbol,
+			Account: config.NinjaTraderAccount, // P5.4 per-trader account binding
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to initialize NinjaTrader: %w", err)
+		}
+		// Plan 4 Stage 4 — set parent reference for defer-until-balance guard.
+		// This is set AFTER the AutoTrader is partially initialized, so we defer
+		// it until later in NewAutoTrader.
 	default:
 		return nil, fmt.Errorf("unsupported trading platform: %s", config.Exchange)
 	}
@@ -388,6 +695,7 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 		isRunning:             false,
 		positionFirstSeenTime: make(map[string]int64),
 		stopMonitorCh:         make(chan struct{}),
+		kickCh:                make(chan string, 4),
 		monitorWg:             sync.WaitGroup{},
 		peakPnLCache:          make(map[string]float64),
 		peakPnLCacheMutex:     sync.RWMutex{},
@@ -402,8 +710,24 @@ func (at *AutoTrader) Run() error {
 	at.isRunning = true
 	at.isRunningMutex.Unlock()
 
+	// B1 (T3): an unmapped primary timeframe is a BOOT FAIL, never a silent
+	// 60s default corrupting the bar-close gate / supersession watermark.
+	if at.exchange == "ninjatrader" {
+		if _, ok := kernel.TFDurationMs(at.primaryTimeframe()); !ok {
+			return fmt.Errorf("primary_timeframe %q is not in the timeframe table (kernel/timeframes.go) — refusing to run on a corrupt bar clock", at.primaryTimeframe())
+		}
+	}
 	at.stopMonitorCh = make(chan struct{})
+	at.kickCh = make(chan string, 4) // fresh kick channel per Run (restart-safe)
+	at.kickPending.Store(false)
+	registerPostExitDispatch(at) // Phase 4: close events → one post-exit rescan
 	at.startTime = time.Now()
+
+	// P2 (ledger-close 2026-08-19) — restore an owner pause across restart.
+	at.loadPersistedPause()
+	// E1 — the per-trader ledger boot block (sessions/cutoffs, pause, cadence,
+	// roll, balance-alert). The process half prints in main.go.
+	at.logLedgerBootBlock(time.Now())
 
 	logger.Info("🚀 AI-driven automatic trading system started")
 	at.logInfof("💰 Initial balance: %.2f USDT", at.initialBalance)
@@ -490,6 +814,24 @@ func (at *AutoTrader) Run() error {
 		}
 	}
 
+	// Start NinjaTrader close-sync (TCP transport only). NT closes positions
+	// broker-side via the OCO bracket and has no order-sync, so this records
+	// SL/TP exits into position history (event-driven off position_close frames).
+	if at.exchange == "ninjatrader" {
+		if ntTCP, ok := at.trader.(*ntTrader.TCPTrader); ok && at.store != nil {
+			// Plan 4 Stage 4 — set parent reference for defer-until-balance guard.
+			// TCPTrader will call SetHasReceivedBalance(true) when the first
+			// account_balance frame arrives, so the runCycle defer-gate opens.
+			ntTCP.SetParentAutoTrader(at)
+			ntTCP.StartCloseSync(at.id, at.exchangeID, at.exchange, at.store)
+			at.logInfof("🔄 NinjaTrader close-sync enabled (SL/TP exits → position history)")
+			// Anchor entry_price to the NT8 position average + clear orphan rows
+			// (the 5m-mark entry the AI-decision write records goes stale/frozen).
+			ntTCP.StartPositionReconcile(at.id, at.exchangeID, at.exchange, at.store)
+			at.logInfof("🔧 NinjaTrader position-reconcile enabled (entry→NT8 avg, orphan clear)")
+		}
+	}
+
 	ticker := time.NewTicker(at.config.ScanInterval)
 	defer ticker.Stop()
 
@@ -503,16 +845,10 @@ func (at *AutoTrader) Run() error {
 		}
 	}
 
-	// Execute immediately on first run
-	if isGridStrategy {
-		if err := at.RunGridCycle(); err != nil {
-			at.logErrorf("❌ Grid execution failed: %v", err)
-		}
-	} else {
-		if err := at.runCycle(); err != nil {
-			at.logErrorf("❌ Execution failed: %v", err)
-		}
-	}
+	// Execute immediately on first run. Under bar-close cadence (P2.1) this runs
+	// once on the last CLOSED primary-TF bar and sets the watermark, then the loop
+	// idles until the next bar closes; the scan-timer default is unchanged.
+	at.tickOnce(isGridStrategy)
 
 	for {
 		at.isRunningMutex.RLock()
@@ -525,15 +861,25 @@ func (at *AutoTrader) Run() error {
 
 		select {
 		case <-ticker.C:
-			if isGridStrategy {
-				if err := at.RunGridCycle(); err != nil {
-					at.logErrorf("❌ Grid execution failed: %v", err)
-				}
-			} else {
-				if err := at.runCycle(); err != nil {
-					at.logErrorf("❌ Execution failed: %v", err)
-				}
+			// The loop is single-goroutine: a tick that fires while a cycle is
+			// still running WAITS here (the ticker drops missed ticks), so an
+			// in-flight AI read is structurally never cancelled by the next
+			// tick. Log the overrun so a slow call is visible, not mysterious.
+			tickStart := time.Now()
+			at.tickOnce(isGridStrategy)
+			if d := time.Since(tickStart); d > at.config.ScanInterval {
+				at.logWarnf("⏱ cycle overran the scan interval (%v > %v) — next tick delayed, in-flight work never cancelled; intervening ticks skipped",
+					d.Round(time.Millisecond), at.config.ScanInterval)
 			}
+		case reason := <-at.kickCh:
+			// Discard-burn 2.1 / post-exit 4.x: a deferred one-shot cycle. Same
+			// single-goroutine guarantee as the ticker case — a kick that fires
+			// mid-cycle waits here, never cancels in-flight work.
+			at.kickPending.Store(false)
+			at.cycleTrigger = reason
+			at.noteKick(reason)
+			at.tickOnce(isGridStrategy)
+			at.cycleTrigger = ""
 		case <-at.stopMonitorCh:
 			at.logInfof("⏹ Stop signal received, exiting automatic trading main loop")
 			return nil
@@ -553,8 +899,9 @@ func (at *AutoTrader) Stop() {
 	at.isRunning = false
 	at.isRunningMutex.Unlock()
 
-	close(at.stopMonitorCh) // Notify monitoring goroutine to stop
-	at.monitorWg.Wait()     // Wait for monitoring goroutine to finish
+	unregisterPostExitDispatch(at) // Phase 4: stop routing close events here
+	close(at.stopMonitorCh)        // Notify monitoring goroutine to stop
+	at.monitorWg.Wait()            // Wait for monitoring goroutine to finish
 	logger.Info("⏹ Automatic trading system stopped")
 }
 
@@ -567,6 +914,40 @@ func (at *AutoTrader) GetID() string {
 // This is used by grid trading and other components that need direct exchange access
 func (at *AutoTrader) GetUnderlyingTrader() Trader {
 	return at.trader
+}
+
+// currentAccountName returns the NT sub-account THIS trader is bound to (ITEM 2
+// per-account attribution), or "" for crypto traders / an unbound trader.
+// Stamped onto equity snapshots, positions, and decision records, and used to
+// scope per-account stat reads — so it MUST be the trader's OWN bound account.
+//
+// G6 fix: reads the trader's boundAccount, NOT server.CurrentAccount(). The
+// shared streamed "current" account flaps to whichever account's account_balance
+// frame landed last (and, since 88b54e8b, ALL sim accounts stream), so stamping
+// it cross-attributed records between two same-symbol traders (15m's SimAccount1
+// orders recorded under Sim101, and vice-versa). boundAccount is stable per
+// trader and matches the account each order actually executes on.
+func (at *AutoTrader) currentAccountName() string {
+	if ntTCP, ok := at.trader.(*ntTrader.TCPTrader); ok {
+		return ntTCP.BoundAccount()
+	}
+	return ""
+}
+
+// HasReceivedBalance reports whether the NT account_balance frame has arrived (Plan 4 Stage 4).
+// Used by the defer-until-balance guard in runCycle to skip cycles until balance is available.
+func (at *AutoTrader) HasReceivedBalance() bool {
+	at.balanceMutex.RLock()
+	defer at.balanceMutex.RUnlock()
+	return at.hasReceivedBalance
+}
+
+// SetHasReceivedBalance marks that the NT account_balance frame has arrived.
+// Called by the TCPTrader when the first balance frame is received.
+func (at *AutoTrader) SetHasReceivedBalance(received bool) {
+	at.balanceMutex.Lock()
+	defer at.balanceMutex.Unlock()
+	at.hasReceivedBalance = received
 }
 
 // GetName gets trader name
@@ -592,16 +973,6 @@ func (at *AutoTrader) GetShowInCompetition() bool {
 // SetShowInCompetition sets whether trader should be shown in competition
 func (at *AutoTrader) SetShowInCompetition(show bool) {
 	at.showInCompetition = show
-}
-
-// SetCustomPrompt sets custom trading strategy prompt
-func (at *AutoTrader) SetCustomPrompt(prompt string) {
-	at.customPrompt = prompt
-}
-
-// SetOverrideBasePrompt sets whether to override base prompt
-func (at *AutoTrader) SetOverrideBasePrompt(override bool) {
-	at.overrideBasePrompt = override
 }
 
 // GetSystemPromptTemplate gets current system prompt template name (from strategy config)

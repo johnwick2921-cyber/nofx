@@ -12,17 +12,17 @@ export interface AIModel {
 }
 
 export interface TelegramConfig {
-  token_masked: string    // Masked token like "123456:ABC***XYZ"
-  is_bound: boolean       // Whether a user has sent /start
-  bound_chat_id?: number  // The bound chat ID (if any)
-  model_id?: string       // AI model selected for Telegram replies
+  token_masked: string // Masked token like "123456:ABC***XYZ"
+  is_bound: boolean // Whether a user has sent /start
+  bound_chat_id?: number // The bound chat ID (if any)
+  model_id?: string // AI model selected for Telegram replies
 }
 
 export interface Exchange {
-  id: string                     // UUID (empty for supported exchange templates)
-  exchange_type: string          // "binance", "bybit", "okx", "hyperliquid", "aster", "lighter"
-  account_name: string           // User-defined account name
-  name: string                   // Display name
+  id: string // UUID (empty for supported exchange templates)
+  exchange_type: string // "binance", "bybit", "okx", "hyperliquid", "aster", "lighter"
+  account_name: string // User-defined account name
+  name: string // Display name
   type: 'cex' | 'dex'
   enabled: boolean
   has_api_key?: boolean
@@ -30,7 +30,7 @@ export interface Exchange {
   has_passphrase?: boolean
   apiKey?: string
   secretKey?: string
-  passphrase?: string            // OKX specific
+  passphrase?: string // OKX specific
   testnet?: boolean
   // Hyperliquid specific
   hyperliquidWalletAddr?: string
@@ -74,8 +74,8 @@ export interface ExchangeAccountStateResponse {
 }
 
 export interface CreateExchangeRequest {
-  exchange_type: string          // "binance", "bybit", "okx", "hyperliquid", "aster", "lighter"
-  account_name: string           // User-defined account name
+  exchange_type: string // "binance", "bybit", "okx", "hyperliquid", "aster", "lighter", "ninjatrader"
+  account_name: string // User-defined account name
   enabled: boolean
   api_key?: string
   secret_key?: string
@@ -89,6 +89,10 @@ export interface CreateExchangeRequest {
   lighter_private_key?: string
   lighter_api_key_private_key?: string
   lighter_api_key_index?: number
+  // NinjaTrader specific
+  nt_data_dir?: string
+  nt_instrument_name?: string
+  nt_default_contract_qty?: number
 }
 
 export interface CreateTraderRequest {
@@ -97,6 +101,8 @@ export interface CreateTraderRequest {
   exchange_id: string
   strategy_id?: string // 策略ID（新版，使用保存的策略配置）
   scan_interval_minutes?: number
+  cadence_mode?: string // P10: 'interval' (default) | 'bar_close' (legacy)
+  position_mode?: string // Phase 3: 'ai_watch' (default) | 'bracket_only' (legacy skip)
   is_cross_margin?: boolean
   show_in_competition?: boolean // 是否在竞技场显示
   // 以下字段为向后兼容保留，新版使用策略配置
@@ -113,6 +119,7 @@ export interface CreateTraderRequest {
 export interface UpdateModelConfigRequest {
   models: {
     [key: string]: {
+      name?: string
       enabled: boolean
       api_key: string
       custom_api_url?: string
@@ -140,6 +147,10 @@ export interface UpdateExchangeConfigRequest {
       lighter_private_key?: string
       lighter_api_key_private_key?: string
       lighter_api_key_index?: number
+      // NinjaTrader specific
+      nt_data_dir?: string
+      nt_instrument_name?: string
+      nt_default_contract_qty?: number
     }
   }
 }

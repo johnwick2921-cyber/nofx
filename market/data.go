@@ -38,12 +38,24 @@ func GetWithExchange(symbol, exchange string) (*Data, error) {
 
 	// Check if this is an xyz dex asset (use Hyperliquid API)
 	isXyzAsset := IsXyzDexAsset(symbol)
+	// CME futures (NT8) read the live BarCache via the injected provider —
+	// never CoinAnk. BarCache holds 5m/15m/1h (not 3m/4h), so we map 5m->short
+	// and 1h->longer. Crypto path below is untouched.
+	isFutures := IsCMEFuturesSymbol(symbol)
 
 	// For hyperliquid exchange, also use Hyperliquid API
 	useHyperliquidAPI := isXyzAsset || strings.ToLower(exchange) == "hyperliquid"
 
 	// Get 3-minute K-line data (or 5-minute for xyz assets as 3m may not be available)
-	if useHyperliquidAPI {
+	if isFutures {
+		if FuturesBarsProvider == nil {
+			return nil, fmt.Errorf("%s: CME futures but no NT8 bar provider wired", symbol)
+		}
+		klines3m = FuturesBarsProvider(symbol, "5m", 200)
+		if len(klines3m) == 0 {
+			return nil, fmt.Errorf("%s: no NT8 5m bars cached", symbol)
+		}
+	} else if useHyperliquidAPI {
 		// Use Hyperliquid API for xyz dex assets (use 5m since 3m may not be available)
 		klines3m, err = getKlinesFromHyperliquid(symbol, "5m", 100)
 		if err != nil {
@@ -63,8 +75,13 @@ func GetWithExchange(symbol, exchange string) (*Data, error) {
 		return nil, fmt.Errorf("%s data is stale, possible cache failure", symbol)
 	}
 
-	// Get 4-hour K-line data
-	if useHyperliquidAPI {
+	// Get 4-hour K-line data (futures: use 1h from BarCache as the longer TF)
+	if isFutures {
+		klines4h = FuturesBarsProvider(symbol, "1h", 200)
+		if len(klines4h) == 0 {
+			return nil, fmt.Errorf("%s: no NT8 1h bars cached", symbol)
+		}
+	} else if useHyperliquidAPI {
 		klines4h, err = getKlinesFromHyperliquid(symbol, "4h", 100)
 		if err != nil {
 			return nil, fmt.Errorf("Failed to get 4-hour K-line from Hyperliquid: %v", err)
@@ -144,8 +161,41 @@ func GetWithExchange(symbol, exchange string) (*Data, error) {
 // timeframes: list of timeframes, e.g. ["5m", "15m", "1h", "4h"]
 // primaryTimeframe: primary timeframe (used for calculating current indicators), defaults to timeframes[0]
 // count: number of K-lines for each timeframe
-func GetWithTimeframes(symbol string, timeframes []string, primaryTimeframe string, count int) (*Data, error) {
+// clampInt clamps v to [lo, hi].
+func clampInt(v, lo, hi int) int {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
+}
+
+// maxConfiguredPeriod returns the largest configured indicator period across all
+// families (EMA/RSI/ATR/BOLL), or 0 when none are configured. Drives the F8 fetch
+// depth so the longest-period series (e.g. EMA200) can fully warm up.
+func maxConfiguredPeriod(ip IndicatorPeriods) int {
+	m := 0
+	for _, fam := range [][]int{ip.EMA, ip.RSI, ip.ATR, ip.BOLL} {
+		for _, p := range fam {
+			if p > m {
+				m = p
+			}
+		}
+	}
+	return m
+}
+
+func GetWithTimeframes(symbol string, timeframes []string, primaryTimeframe string, count int, indPeriods ...IndicatorPeriods) (*Data, error) {
 	symbol = Normalize(symbol)
+
+	// Strategy-configured indicator periods (optional). When absent, the computed
+	// series fall back to the legacy fixed periods byte-for-byte.
+	var ip IndicatorPeriods
+	if len(indPeriods) > 0 {
+		ip = indPeriods[0]
+	}
 
 	if len(timeframes) == 0 {
 		return nil, fmt.Errorf("at least one timeframe is required")
@@ -168,28 +218,50 @@ func GetWithTimeframes(symbol string, timeframes []string, primaryTimeframe stri
 		timeframes = append([]string{primaryTimeframe}, timeframes...)
 	}
 
+	// F8 — fetch depth. Each series value for a period-P indicator needs P prior
+	// bars, so to render a full `count`-length series for the LONGEST configured
+	// period (e.g. EMA200) we must fetch maxPeriod + count bars — not a flat 200,
+	// which left EMA200 a 1-value warm-up stub. Clamp to [200, 2500]: 200 = the
+	// legacy floor (never fetch less than before); 2500 = the BarCache cap.
+	fetchDepth := clampInt(maxConfiguredPeriod(ip)+count, 200, 2500)
+
 	// Store data for all timeframes
 	timeframeData := make(map[string]*TimeframeSeriesData)
 	var primaryKlines []Kline
 
 	// Check if this is an xyz dex asset (use Hyperliquid API)
 	isXyzAsset := IsXyzDexAsset(symbol)
+	// CME futures (NQ.c.0 / MNQ / ...) read the live NT8 bar feed via the
+	// injected FuturesBarsProvider — NEVER CoinAnk. Crypto path below is
+	// untouched.
+	isFutures := IsCMEFuturesSymbol(symbol)
 
 	// Get K-line data for each timeframe
 	for _, tf := range timeframes {
 		var klines []Kline
 		var err error
 
-		if isXyzAsset {
+		if isFutures {
+			// NT8 futures: read closed bars from the BarCache (Stage 3).
+			if FuturesBarsProvider == nil {
+				logger.Infof("⚠️ %s %s: CME futures symbol but no NT8 bar provider wired; skipping", symbol, tf)
+				continue
+			}
+			klines = FuturesBarsProvider(symbol, tf, fetchDepth)
+			if len(klines) == 0 {
+				logger.Infof("⚠️ %s %s: no NT8 bars cached yet", symbol, tf)
+				continue
+			}
+		} else if isXyzAsset {
 			// Use Hyperliquid API for xyz dex assets
-			klines, err = getKlinesFromHyperliquid(symbol, tf, 200)
+			klines, err = getKlinesFromHyperliquid(symbol, tf, fetchDepth)
 			if err != nil {
 				logger.Infof("⚠️ Failed to get %s %s K-line from Hyperliquid: %v", symbol, tf, err)
 				continue
 			}
 		} else {
 			// Use CoinAnk for regular crypto assets (default to Binance)
-			klines, err = getKlinesFromCoinAnk(symbol, tf, "binance", 200)
+			klines, err = getKlinesFromCoinAnk(symbol, tf, "binance", fetchDepth)
 			if err != nil {
 				logger.Infof("⚠️ Failed to get %s %s K-line from CoinAnk: %v", symbol, tf, err)
 				continue
@@ -207,7 +279,7 @@ func GetWithTimeframes(symbol string, timeframes []string, primaryTimeframe stri
 		}
 
 		// Calculate series data for this timeframe (use count from config)
-		seriesData := calculateTimeframeSeries(klines, tf, count)
+		seriesData := calculateTimeframeSeries(klines, tf, count, ip)
 		timeframeData[tf] = seriesData
 	}
 
@@ -228,29 +300,60 @@ func GetWithTimeframes(symbol string, timeframes []string, primaryTimeframe stri
 	currentMACD := calculateMACD(primaryKlines)
 	currentRSI7 := calculateRSI(primaryKlines, 7)
 
+	// Latest EMA per CONFIGURED period (e.g. {9,21,200}) — alongside the legacy
+	// CurrentEMA20. Empty when no periods supplied (back-compat readers use EMA20).
+	var currentEMAByPeriod map[int]float64
+	if len(ip.EMA) > 0 {
+		currentEMAByPeriod = make(map[int]float64, len(ip.EMA))
+		for _, p := range ip.EMA {
+			if p > 0 {
+				currentEMAByPeriod[p] = calculateEMA(primaryKlines, p)
+			}
+		}
+	}
+
+	// F9 — latest RSI per CONFIGURED period (e.g. {14}), so the snapshot label is
+	// honest (current_rsi14, not a hardcoded current_rsi7). Empty when no periods
+	// supplied → the prompt falls back to the legacy period-7 line.
+	var currentRSIByPeriod map[int]float64
+	if len(ip.RSI) > 0 {
+		currentRSIByPeriod = make(map[int]float64, len(ip.RSI))
+		for _, p := range ip.RSI {
+			if p > 0 {
+				currentRSIByPeriod[p] = calculateRSI(primaryKlines, p)
+			}
+		}
+	}
+
 	// Calculate price changes
 	priceChange1h := calculatePriceChangeByBars(primaryKlines, primaryTimeframe, 60) // 1 hour
 	priceChange4h := calculatePriceChangeByBars(primaryKlines, primaryTimeframe, 240) // 4 hours
 
-	// Get OI data
-	oiData, err := getOpenInterestData(symbol)
-	if err != nil {
-		oiData = &OIData{Latest: 0, Average: 0}
+	// Get OI + Funding Rate (Binance crypto-perp feeds). CME futures have no
+	// Binance symbol, so these return zeros anyway and just waste a round-trip
+	// per cycle — skip them on futures. oiData stays {0,0} and fundingRate stays
+	// 0 (identical to the prior values for MNQ), but no network call is made.
+	oiData := &OIData{Latest: 0, Average: 0}
+	var fundingRate float64
+	if !isFutures {
+		if d, oiErr := getOpenInterestData(symbol); oiErr == nil {
+			oiData = d
+		}
+		fundingRate, _ = getFundingRate(symbol)
 	}
 
-	// Get Funding Rate
-	fundingRate, _ := getFundingRate(symbol)
-
 	return &Data{
-		Symbol:        symbol,
-		CurrentPrice:  currentPrice,
-		PriceChange1h: priceChange1h,
-		PriceChange4h: priceChange4h,
-		CurrentEMA20:  currentEMA20,
-		CurrentMACD:   currentMACD,
-		CurrentRSI7:   currentRSI7,
-		OpenInterest:  oiData,
-		FundingRate:   fundingRate,
+		Symbol:             symbol,
+		CurrentPrice:       currentPrice,
+		PriceChange1h:      priceChange1h,
+		PriceChange4h:      priceChange4h,
+		CurrentEMA20:       currentEMA20,
+		CurrentEMAByPeriod: currentEMAByPeriod,
+		CurrentMACD:        currentMACD,
+		CurrentRSI7:        currentRSI7,
+		CurrentRSIByPeriod: currentRSIByPeriod,
+		OpenInterest:       oiData,
+		FundingRate:        fundingRate,
 		TimeframeData: timeframeData,
 	}, nil
 }
@@ -433,9 +536,13 @@ func Format(data *Data) string {
 func formatTimeframeData(sb *strings.Builder, data *TimeframeSeriesData) {
 	// Use OHLCV table format if kline data is available
 	if len(data.Klines) > 0 {
-		sb.WriteString("Time(UTC)      Open      High      Low       Close     Volume\n")
+		sb.WriteString("Time(CT)       Open      High      Low       Close     Volume\n")
 		for i, k := range data.Klines {
-			t := time.Unix(k.Time/1000, 0).UTC()
+			// v1-audit #4 (fail-register wave): the chat table now renders CT
+			// like every trading prompt (kernel/tz.go is the contract; market/
+			// cannot import kernel, so the location loads here with the same
+			// canonical zone name).
+			t := time.Unix(k.Time/1000, 0).In(chatTableCT())
 			timeStr := t.Format("01-02 15:04")
 			marker := ""
 			if i == len(data.Klines)-1 {
@@ -554,7 +661,17 @@ func IsXyzDexAsset(symbol string) bool {
 // Normalize normalizes symbol
 // For crypto: ensures it's a USDT trading pair
 // For xyz dex assets (stocks, forex, commodities): uses xyz: prefix without USDT suffix
+// For CME futures (Task 12): preserves case (NQ.c.0 not NQ.C.0) and never appends USDT.
+//
+//	Databento's continuous symbology requires the lowercase `.c.` suffix
+//	and rejects uppercased / USDT-suffixed forms. Detection via the
+//	shared helper IsCMEFuturesSymbol — keep the early-return BEFORE the
+//	ToUpper below or the symbol is irreversibly corrupted.
 func Normalize(symbol string) string {
+	// Task 12 / Cluster D — CME futures bypass crypto normalization.
+	if IsCMEFuturesSymbol(symbol) {
+		return strings.TrimSpace(symbol)
+	}
 	symbol = strings.ToUpper(symbol)
 
 	// Check if this is an xyz dex asset
@@ -693,4 +810,14 @@ func isStaleData(klines []Kline, symbol string) bool {
 	// Price frozen but has volume: might be extremely low volatility market, allow but log warning
 	logger.Infof("⚠️  %s detected extreme price stability (no fluctuation for %d consecutive periods), but volume is normal", symbol, stalePriceThreshold)
 	return false
+}
+
+
+// chatTableCT loads America/Chicago for the chat-path OHLCV table (the one
+// former Time(UTC) site outside the tz-guard dirs — v1 audit §1.1).
+func chatTableCT() *time.Location {
+	if loc, err := time.LoadLocation("America/Chicago"); err == nil {
+		return loc
+	}
+	return time.UTC
 }

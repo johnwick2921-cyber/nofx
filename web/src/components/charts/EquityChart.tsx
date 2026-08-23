@@ -26,6 +26,7 @@ import {
 interface EquityPoint {
   timestamp: string
   total_equity: number
+  available_balance?: number // snap.Balance; first point = per-account baseline (ITEM 2)
   pnl: number
   pnl_pct: number
   cycle_number: number
@@ -34,16 +35,38 @@ interface EquityPoint {
 interface EquityChartProps {
   traderId?: string
   embedded?: boolean // 嵌入模式（不显示外层卡片）
+  isFutures?: boolean // NT futures: show USD instead of USDT (Plan 4.3.1)
 }
 
-export function EquityChart({ traderId, embedded = false }: EquityChartProps) {
+export function EquityChart({
+  traderId,
+  embedded = false,
+  isFutures = false,
+}: EquityChartProps) {
+  const currencyLabel = isFutures ? 'USD' : 'USDT'
   const { language } = useLanguage()
   const { user, token } = useAuth()
   const [displayMode, setDisplayMode] = useState<'dollar' | 'percent'>('dollar')
 
-  const { data: history, error, isLoading } = useSWR<EquityPoint[]>(
-    user && token && traderId ? `equity-history-${traderId}` : null,
-    () => api.getEquityHistory(traderId, true),
+  // Issue 2F — selected NT account (shares the accounts-${traderId} SWR cache)
+  // so the equity/account keys are account-scoped and switching re-fetches.
+  const { data: accountsData } = useSWR(
+    user && token && traderId ? `accounts-${traderId}` : null,
+    () => api.getAccounts(traderId as string),
+    { revalidateOnFocus: false, dedupingInterval: 5000 }
+  )
+  const selectedAccount = accountsData?.current || ''
+  const acctSuffix = selectedAccount ? `-${selectedAccount}` : ''
+
+  const {
+    data: history,
+    error,
+    isLoading,
+  } = useSWR<EquityPoint[]>(
+    user && token && traderId
+      ? `equity-history-${traderId}${acctSuffix}`
+      : null,
+    () => api.getEquityHistory(traderId, true, selectedAccount),
     {
       refreshInterval: 30000, // 30秒刷新（历史数据更新频率较低）
       revalidateOnFocus: false,
@@ -52,8 +75,8 @@ export function EquityChart({ traderId, embedded = false }: EquityChartProps) {
   )
 
   const { data: account } = useSWR(
-    user && token && traderId ? `account-${traderId}` : null,
-    () => api.getAccount(traderId, true),
+    user && token && traderId ? `account-${traderId}${acctSuffix}` : null,
+    () => api.getAccount(traderId, true, selectedAccount),
     {
       refreshInterval: 15000, // 15秒刷新（配合后端缓存）
       revalidateOnFocus: false,
@@ -66,7 +89,10 @@ export function EquityChart({ traderId, embedded = false }: EquityChartProps) {
     return (
       <div className={embedded ? 'p-6' : 'binance-card p-6'}>
         {!embedded && (
-          <h3 className="text-lg font-semibold mb-6" style={{ color: '#EAECEF' }}>
+          <h3
+            className="text-lg font-semibold mb-6"
+            style={{ color: '#EAECEF' }}
+          >
             {t('accountEquityCurve', language)}
           </h3>
         )}
@@ -108,7 +134,10 @@ export function EquityChart({ traderId, embedded = false }: EquityChartProps) {
     return (
       <div className={embedded ? 'p-6' : 'binance-card p-6'}>
         {!embedded && (
-          <h3 className="text-lg font-semibold mb-6" style={{ color: '#EAECEF' }}>
+          <h3
+            className="text-lg font-semibold mb-6"
+            style={{ color: '#EAECEF' }}
+          >
             {t('accountEquityCurve', language)}
           </h3>
         )}
@@ -127,19 +156,28 @@ export function EquityChart({ traderId, embedded = false }: EquityChartProps) {
 
   // 限制显示最近的数据点（性能优化）
   // 如果数据超过2000个点，只显示最近2000个
-  const MAX_DISPLAY_POINTS = 2000
+  const MAX_DISPLAY_POINTS = 10000
   const displayHistory =
     validHistory.length > MAX_DISPLAY_POINTS
       ? validHistory.slice(-MAX_DISPLAY_POINTS)
       : validHistory
 
-  // 计算初始余额（优先从 account 获取配置的初始余额，备选从历史数据反推）
+  // 计算初始余额 baseline.
+  // ITEM 2 per-account: when an NT sub-account is selected, the equity series is
+  // already scoped to that account, so the baseline must be THIS account's own
+  // first-snapshot balance — NOT the trader-global configured initial_balance
+  // (which produced the cross-account "-30% / 100000" artifact over a mixed
+  // series). Crypto / legacy (no selected account) keeps the configured
+  // initial_balance, then falls back to the series.
+  const seriesBaseline = validHistory[0]
+    ? (validHistory[0].available_balance ??
+      validHistory[0].total_equity - validHistory[0].pnl)
+    : undefined
   const initialBalance =
-    account?.initial_balance || // 从交易员配置读取真实初始余额
-    (validHistory[0]
-      ? validHistory[0].total_equity - validHistory[0].pnl
-      : undefined) || // 备选：淨值 - 盈亏
-    1000 // 默认值（与创建交易员时的默认配置一致）
+    (selectedAccount ? seriesBaseline : account?.initial_balance) ||
+    seriesBaseline ||
+    account?.initial_balance ||
+    1000
 
   // 转换数据格式
   const chartData = displayHistory.map((point, index) => {
@@ -195,14 +233,15 @@ export function EquityChart({ traderId, embedded = false }: EquityChartProps) {
             Cycle #{data.cycle != null ? data.cycle : '—'}
           </div>
           <div className="font-bold mono" style={{ color: '#EAECEF' }}>
-            {data.raw_equity.toFixed(2)} USDT
+            {data.raw_equity.toFixed(2)} {currencyLabel}
           </div>
           <div
             className="text-sm mono font-bold"
             style={{ color: data.raw_pnl >= 0 ? '#0ECB81' : '#F6465D' }}
           >
             {data.raw_pnl >= 0 ? '+' : ''}
-            {data.raw_pnl.toFixed(2)} USDT ({data.raw_pnl_pct >= 0 ? '+' : ''}
+            {data.raw_pnl.toFixed(2)} {currencyLabel} (
+            {data.raw_pnl_pct >= 0 ? '+' : ''}
             {data.raw_pnl_pct}%)
           </div>
         </div>
@@ -212,7 +251,11 @@ export function EquityChart({ traderId, embedded = false }: EquityChartProps) {
   }
 
   return (
-    <div className={embedded ? 'p-3 sm:p-5' : 'binance-card p-3 sm:p-5 animate-fade-in'}>
+    <div
+      className={
+        embedded ? 'p-3 sm:p-5' : 'binance-card p-3 sm:p-5 animate-fade-in'
+      }
+    >
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-4">
         <div className="flex-1">
@@ -234,7 +277,7 @@ export function EquityChart({ traderId, embedded = false }: EquityChartProps) {
                 className="text-base sm:text-lg ml-1"
                 style={{ color: '#848E9C' }}
               >
-                USDT
+                {currencyLabel}
               </span>
             </span>
             <div className="flex items-center gap-2 flex-wrap">
@@ -265,7 +308,7 @@ export function EquityChart({ traderId, embedded = false }: EquityChartProps) {
                 style={{ color: '#848E9C' }}
               >
                 ({isProfit ? '+' : ''}
-                {currentValue.raw_pnl.toFixed(2)} USDT)
+                {currentValue.raw_pnl.toFixed(2)} {currencyLabel})
               </span>
             </div>
           </div>
@@ -289,7 +332,7 @@ export function EquityChart({ traderId, embedded = false }: EquityChartProps) {
                 : { background: 'transparent', color: '#848E9C' }
             }
           >
-            <DollarSign className="w-4 h-4" /> USDT
+            <DollarSign className="w-4 h-4" /> {currencyLabel}
           </button>
           <button
             onClick={() => setDisplayMode('percent')}
@@ -318,7 +361,7 @@ export function EquityChart({ traderId, embedded = false }: EquityChartProps) {
           position: 'relative',
         }}
       >
-        {/* NOFX Watermark */}
+        {/* VL Watermark */}
         <div
           style={{
             position: 'absolute',
@@ -332,7 +375,7 @@ export function EquityChart({ traderId, embedded = false }: EquityChartProps) {
             fontFamily: 'monospace',
           }}
         >
-          NOFX
+          VL
         </div>
         <ResponsiveContainer width="100%" height={280}>
           <LineChart
@@ -416,7 +459,7 @@ export function EquityChart({ traderId, embedded = false }: EquityChartProps) {
             className="text-xs sm:text-sm font-bold mono"
             style={{ color: '#EAECEF' }}
           >
-            {initialBalance.toFixed(2)} USDT
+            {initialBalance.toFixed(2)} {currencyLabel}
           </div>
         </div>
         <div
@@ -433,7 +476,7 @@ export function EquityChart({ traderId, embedded = false }: EquityChartProps) {
             className="text-xs sm:text-sm font-bold mono"
             style={{ color: '#EAECEF' }}
           >
-            {currentValue.raw_equity.toFixed(2)} USDT
+            {currentValue.raw_equity.toFixed(2)} {currencyLabel}
           </div>
         </div>
         <div

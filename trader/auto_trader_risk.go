@@ -2,10 +2,18 @@ package trader
 
 import (
 	"fmt"
+	"nofx/kernel"
 	"nofx/logger"
+	"nofx/market"
 	"strings"
 	"time"
 )
+
+// futuresMaxNotionalLeverage mirrors kernel.futuresMaxNotionalLeverage: the
+// notional sanity ceiling for CME futures (max notional = equity × this).
+// Kept in lockstep with the risk gate so the executor cap matches what the
+// gate already accepted.
+const futuresMaxNotionalLeverage = 20.0
 
 // startDrawdownMonitor starts drawdown monitoring
 func (at *AutoTrader) startDrawdownMonitor() {
@@ -21,7 +29,7 @@ func (at *AutoTrader) startDrawdownMonitor() {
 		for {
 			select {
 			case <-ticker.C:
-				at.checkPositionDrawdown()
+				at.monitorTick(time.Now())
 			case <-at.stopMonitorCh:
 				logger.Info("⏹ Stopped position drawdown monitoring")
 				return
@@ -30,8 +38,33 @@ func (at *AutoTrader) startDrawdownMonitor() {
 	}()
 }
 
+// monitorTick is one wall-clock monitor beat (every minute, independent of the
+// decision cycle). The feed watch lives HERE, not in runCycle (in-position
+// silence fix 2026-08-19): under bar-close cadence a dead feed stops the
+// cycles themselves, and skip-while-open silenced them while holding — so the
+// decision cycle could never report the outage that mattered most.
+func (at *AutoTrader) monitorTick(now time.Time) {
+	at.checkFeedDown(now)
+	at.checkPositionDrawdown()
+}
+
+// positionPnLPct computes a position's leveraged P&L percent. Side is normalized:
+// NT8 GetPositions/positionMap emits UPPERCASE "LONG"/"SHORT" (upperSideStr), so a
+// case-sensitive == "long" ran the SHORT formula for every NT8 long — inverting the
+// sign so a winning long produced negative pct and the drawdown-close condition
+// (>5% profit) could never fire on a long. Compare lowercase so either casing works.
+func positionPnLPct(side string, entryPrice, markPrice float64, leverage int) float64 {
+	if strings.ToLower(side) == "long" {
+		return ((markPrice - entryPrice) / entryPrice) * float64(leverage) * 100
+	}
+	return ((entryPrice - markPrice) / entryPrice) * float64(leverage) * 100
+}
+
 // checkPositionDrawdown checks position drawdown situation
 func (at *AutoTrader) checkPositionDrawdown() {
+	if at.trader == nil {
+		return // no broker bound (shutdown race / test harness)
+	}
 	// Get current positions
 	positions, err := at.trader.GetPositions()
 	if err != nil {
@@ -39,6 +72,7 @@ func (at *AutoTrader) checkPositionDrawdown() {
 		return
 	}
 
+	openKeys := make(map[string]bool)
 	for _, pos := range positions {
 		symbol := pos["symbol"].(string)
 		side := pos["side"].(string)
@@ -55,18 +89,21 @@ func (at *AutoTrader) checkPositionDrawdown() {
 			continue
 		}
 
+		// Auto-breakeven: once far enough in profit, move the stop to entry (once
+		// per position; opt-in, default OFF). Runs alongside the drawdown check.
+		openKeys[symbol+"_"+side] = true
+		at.maybeMoveStopToBreakeven(symbol, side, entryPrice, markPrice)
+		// Phase 3B — trailing profit (opt-in, default OFF): additive beat on the
+		// same monitor, after breakeven so the BE floor is visible to the rails.
+		at.maybeTrailStop(symbol, side, entryPrice, markPrice)
+
 		// Calculate current P&L percentage
 		leverage := 10 // Default value
 		if lev, ok := pos["leverage"].(float64); ok {
 			leverage = int(lev)
 		}
 
-		var currentPnLPct float64
-		if side == "long" {
-			currentPnLPct = ((markPrice - entryPrice) / entryPrice) * float64(leverage) * 100
-		} else {
-			currentPnLPct = ((entryPrice - markPrice) / entryPrice) * float64(leverage) * 100
-		}
+		currentPnLPct := positionPnLPct(side, entryPrice, markPrice, leverage)
 
 		// Construct unique position identifier (distinguish long/short)
 		posKey := symbol + "_" + side
@@ -110,11 +147,17 @@ func (at *AutoTrader) checkPositionDrawdown() {
 				symbol, side, currentPnLPct, peakPnLPct, drawdownPct)
 		}
 	}
+	// Re-arm breakeven for any position that has since gone flat.
+	at.pruneBreakevenDone(openKeys)
+	at.pruneTrailStates(openKeys)
 }
 
 // emergencyClosePosition emergency close position function
 func (at *AutoTrader) emergencyClosePosition(symbol, side string) error {
-	switch side {
+	// Normalize: NT8 GetPositions emits UPPERCASE side; a lowercase-only switch hit
+	// default → "unknown position direction" and the drawdown safety-close could not
+	// execute. Compare lowercase (the sole caller passes pos["side"] from GetPositions).
+	switch strings.ToLower(side) {
 	case "long":
 		order, err := at.trader.CloseLong(symbol, 0) // 0 = close all
 		if err != nil {
@@ -197,12 +240,22 @@ func (at *AutoTrader) enforcePositionValueRatio(positionSizeUSD float64, equity 
 
 	// Get the appropriate position value ratio limit
 	var maxPositionValueRatio float64
-	if isBTCETH(symbol) {
+	switch {
+	case market.IsCMEFuturesSymbol(symbol):
+		// CME futures: the notional ceiling multiplier (max notional = equity ×
+		// this). Hardening D3 (audit F2): ALWAYS ON — master-independent venue
+		// safety. Per-strategy value overrides, else the equity×20 venue default.
+		// Never 0; the guard below is belt-and-suspenders.
+		maxPositionValueRatio = kernel.ResolveNotionalLeverage(riskControl.MaxNotionalLeverage, futuresMaxNotionalLeverage)
+		if maxPositionValueRatio <= 0 {
+			maxPositionValueRatio = futuresMaxNotionalLeverage
+		}
+	case isBTCETH(symbol):
 		maxPositionValueRatio = riskControl.BTCETHMaxPositionValueRatio
 		if maxPositionValueRatio <= 0 {
 			maxPositionValueRatio = 5.0 // Default: 5x for BTC/ETH
 		}
-	} else {
+	default:
 		maxPositionValueRatio = riskControl.AltcoinMaxPositionValueRatio
 		if maxPositionValueRatio <= 0 {
 			maxPositionValueRatio = 1.0 // Default: 1x for altcoins

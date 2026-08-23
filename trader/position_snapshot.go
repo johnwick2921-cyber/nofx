@@ -2,10 +2,12 @@ package trader
 
 import (
 	"fmt"
+	"strings"
+	"time"
+
 	"nofx/logger"
 	"nofx/market"
 	"nofx/store"
-	"time"
 )
 
 // CreatePositionSnapshot gets current real positions from exchange and creates snapshot positions
@@ -58,9 +60,11 @@ func CreatePositionSnapshot(traderID, exchangeID, exchangeType string, trader Tr
 			continue
 		}
 
-		// Determine position side
+		// Determine position side. NB: GetPositions/positionMap emits UPPERCASE
+		// ("SHORT"/"LONG"), so a case-sensitive == "short" never matched and a
+		// short was mislabeled LONG. Use EqualFold to accept either casing.
 		side := "LONG"
-		if sideStr == "short" {
+		if strings.EqualFold(sideStr, "short") {
 			side = "SHORT"
 		}
 

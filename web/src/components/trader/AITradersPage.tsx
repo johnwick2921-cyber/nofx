@@ -11,6 +11,7 @@ import type {
 import { useLanguage } from '../../contexts/LanguageContext'
 import { t } from '../../i18n/translations'
 import { useAuth } from '../../contexts/AuthContext'
+import { loadStoredTraderId } from '../../router/selectedTrader'
 import { TraderConfigModal } from './TraderConfigModal'
 import { DeepVoidBackground } from '../common/DeepVoidBackground'
 import { ExchangeConfigModal } from './ExchangeConfigModal'
@@ -18,11 +19,7 @@ import { TelegramConfigModal } from './TelegramConfigModal'
 import { ModelConfigModal } from './ModelConfigModal'
 import { ConfigStatusGrid } from './ConfigStatusGrid'
 import { TradersList } from './TradersList'
-import {
-  Bot,
-  Plus,
-  MessageCircle,
-} from 'lucide-react'
+import { Bot, Plus, MessageCircle } from 'lucide-react'
 import { confirmToast } from '../../lib/notify'
 import { toast } from 'sonner'
 
@@ -34,6 +31,9 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
   const { language } = useLanguage()
   const { user, token } = useAuth()
   const navigate = useNavigate()
+  // The persisted selection — marks the active trader in the list (survives the
+  // trip to the dashboard and back; the dashboard writes it on every View).
+  const activeTraderId = loadStoredTraderId()
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [showEditModal, setShowEditModal] = useState(false)
   const [showModelModal, setShowModelModal] = useState(false)
@@ -45,8 +45,12 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
   const [allModels, setAllModels] = useState<AIModel[]>([])
   const [allExchanges, setAllExchanges] = useState<Exchange[]>([])
   const [supportedModels, setSupportedModels] = useState<AIModel[]>([])
-  const [visibleTraderAddresses, setVisibleTraderAddresses] = useState<Set<string>>(new Set())
-  const [visibleExchangeAddresses, setVisibleExchangeAddresses] = useState<Set<string>>(new Set())
+  const [visibleTraderAddresses, setVisibleTraderAddresses] = useState<
+    Set<string>
+  >(new Set())
+  const [visibleExchangeAddresses, setVisibleExchangeAddresses] = useState<
+    Set<string>
+  >(new Set())
   const [copiedId, setCopiedId] = useState<string | null>(null)
 
   const loadConfigs = async () => {
@@ -56,11 +60,7 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
       return
     }
 
-    const [
-      modelConfigs,
-      exchangeConfigs,
-      models,
-    ] = await Promise.all([
+    const [modelConfigs, exchangeConfigs, models] = await Promise.all([
       api.getModelConfigs(),
       api.getExchangeConfigs(),
       api.getSupportedModels(),
@@ -72,7 +72,7 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
 
   // Toggle wallet address visibility for a trader
   const toggleTraderAddressVisibility = (traderId: string) => {
-    setVisibleTraderAddresses(prev => {
+    setVisibleTraderAddresses((prev) => {
       const next = new Set(prev)
       if (next.has(traderId)) {
         next.delete(traderId)
@@ -85,7 +85,7 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
 
   // Toggle wallet address visibility for an exchange
   const toggleExchangeAddressVisibility = (exchangeId: string) => {
-    setVisibleExchangeAddresses(prev => {
+    setVisibleExchangeAddresses((prev) => {
       const next = new Set(prev)
       if (next.has(exchangeId)) {
         next.delete(exchangeId)
@@ -107,17 +107,18 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
     }
   }
 
-  const { data: traders, mutate: mutateTraders, isLoading: isTradersLoading } = useSWR<TraderInfo[]>(
-    user && token ? 'traders' : null,
-    api.getTraders,
-    { refreshInterval: 5000 }
-  )
+  const {
+    data: traders,
+    mutate: mutateTraders,
+    isLoading: isTradersLoading,
+  } = useSWR<TraderInfo[]>(user && token ? 'traders' : null, api.getTraders, {
+    refreshInterval: 5000,
+  })
 
   useEffect(() => {
-    loadConfigs()
-      .catch((error) => {
-        console.error('Failed to load configs:', error)
-      })
+    loadConfigs().catch((error) => {
+      console.error('Failed to load configs:', error)
+    })
   }, [user, token])
 
   useEffect(() => {
@@ -127,7 +128,8 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
       })
     }
     window.addEventListener('agent-config-refresh', handleRefresh)
-    return () => window.removeEventListener('agent-config-refresh', handleRefresh)
+    return () =>
+      window.removeEventListener('agent-config-refresh', handleRefresh)
   }, [user, token])
 
   const configuredModels =
@@ -180,14 +182,11 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
   }
 
   const getExchangeUsageInfo = (exchangeId: string) => {
-    const usingTraders = traders?.filter((tr) => tr.exchange_id === exchangeId) || []
+    const usingTraders =
+      traders?.filter((tr) => tr.exchange_id === exchangeId) || []
     const runningCount = usingTraders.filter((tr) => tr.is_running).length
     const totalCount = usingTraders.length
     return { runningCount, totalCount, usingTraders }
-  }
-
-  const isModelUsedByAnyTrader = (modelId: string) => {
-    return traders?.some((tr) => tr.ai_model === modelId) || false
   }
 
   const isExchangeUsedByAnyTrader = (exchangeId: string) => {
@@ -263,6 +262,12 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
         scan_interval_minutes: data.scan_interval_minutes,
         is_cross_margin: data.is_cross_margin,
         show_in_competition: data.show_in_competition,
+        // 6.2 (final-bundle): cadence_mode used to be DROPPED here — the P10
+        // toggle persisted on CREATE only, an owner could never switch an
+        // existing trader's cadence from the UI (PR #53/#54 register row 3).
+        cadence_mode: data.cadence_mode,
+        // Phase 3: in-position mode must survive EDIT, not just create.
+        position_mode: (data as { position_mode?: string }).position_mode,
       }
 
       await api.updateTrader(editingTrader.trader_id, request)
@@ -297,10 +302,10 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
     try {
       if (running) {
         await api.stopTrader(traderId)
-      toast.success(t('aiTradersToast.stopped', language))
+        toast.success(t('aiTradersToast.stopped', language))
       } else {
         await api.startTrader(traderId)
-      toast.success(t('aiTradersToast.started', language))
+        toast.success(t('aiTradersToast.started', language))
       }
 
       await mutateTraders()
@@ -310,11 +315,18 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
     }
   }
 
-  const handleToggleCompetition = async (traderId: string, currentShowInCompetition: boolean) => {
+  const handleToggleCompetition = async (
+    traderId: string,
+    currentShowInCompetition: boolean
+  ) => {
     try {
       const newValue = !currentShowInCompetition
       await api.toggleCompetition(traderId, newValue)
-      toast.success(newValue ? t('aiTradersToast.showInCompetition', language) : t('aiTradersToast.hideInCompetition', language))
+      toast.success(
+        newValue
+          ? t('aiTradersToast.showInCompetition', language)
+          : t('aiTradersToast.hideInCompetition', language)
+      )
 
       await mutateTraders()
     } catch (error) {
@@ -337,103 +349,41 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
     }
   }
 
-  const handleDeleteConfig = async <T extends { id: string }>(config: {
-    id: string
-    type: 'model' | 'exchange'
-    checkInUse: (id: string) => boolean
-    getUsingTraders: (id: string) => any[]
-    cannotDeleteKey: string
-    confirmDeleteKey: string
-    allItems: T[] | undefined
-    clearFields: (item: T) => T
-    buildRequest: (items: T[]) => any
-    updateApi: (request: any) => Promise<void>
-    refreshApi: () => Promise<T[]>
-    setItems: (items: T[]) => void
-    closeModal: () => void
-    errorKey: string
-  }) => {
-    if (config.checkInUse(config.id)) {
-      const usingTraders = config.getUsingTraders(config.id)
-      const traderNames = usingTraders.map((tr) => tr.trader_name).join(', ')
+  const handleDeleteModelConfig = async (modelId: string) => {
+    if (!window.confirm(t('confirmDeleteModel', language))) return
+    // Deterministic binding refusal (the old path soft-blanked + PUT-by-provider,
+    // which corrupted multi-entry providers and never deleted). Refuse clearly when
+    // a trader is bound; otherwise do a REAL delete by exact id.
+    const bound = getTradersUsingModel(modelId)
+    if (bound.length > 0) {
+      const names = bound.map((tr) => `"${tr.trader_name}"`).join(', ')
       toast.error(
-        `${t(config.cannotDeleteKey, language)} · ${t('tradersUsing', language)}: ${traderNames} · ${t('pleaseDeleteTradersFirst', language)}`
+        `Can't delete — trader ${names} uses this entry. Switch that trader's model first.`,
+        { duration: 8000 }
       )
       return
     }
-
-    {
-      const ok = await confirmToast(t(config.confirmDeleteKey, language))
-      if (!ok) return
-    }
-
     try {
-      const updatedItems =
-        config.allItems?.map((item) =>
-          item.id === config.id ? config.clearFields(item) : item
-        ) || []
-
-      const request = config.buildRequest(updatedItems)
-      await config.updateApi(request)
-      toast.success(t('aiTradersToast.configUpdated', language))
-
-      const refreshedItems = await config.refreshApi()
-      config.setItems(refreshedItems)
-
-      config.closeModal()
-    } catch (error) {
-      console.error(`Failed to delete ${config.type} config:`, error)
-      toast.error(t(config.errorKey, language))
+      await api.deleteModelEntry(modelId)
+      toast.success('Model config removed', { duration: 4000 })
+      setShowModelModal(false)
+      setEditingModel(null)
+      const refreshed = await api.getModelConfigs()
+      setAllModels(refreshed)
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : ''
+      toast.error(msg || t('cannotDeleteModelInUse', language), {
+        duration: 8000,
+      })
     }
-  }
-
-  const handleDeleteModelConfig = async (modelId: string) => {
-    await handleDeleteConfig({
-      id: modelId,
-      type: 'model',
-      checkInUse: isModelUsedByAnyTrader,
-      getUsingTraders: getTradersUsingModel,
-      cannotDeleteKey: 'cannotDeleteModelInUse',
-      confirmDeleteKey: 'confirmDeleteModel',
-      allItems: allModels,
-      clearFields: (m) => ({
-        ...m,
-        apiKey: '',
-        customApiUrl: '',
-        customModelName: '',
-        enabled: false,
-      }),
-      buildRequest: (models) => ({
-        models: Object.fromEntries(
-          models.map((model) => [
-            model.provider,
-            {
-              enabled: model.enabled,
-              api_key: model.apiKey || '',
-              custom_api_url: model.customApiUrl || '',
-              custom_model_name: model.customModelName || '',
-            },
-          ])
-        ),
-      }),
-      updateApi: api.updateModelConfigs,
-      refreshApi: api.getModelConfigs,
-      setItems: (items) => {
-        setAllModels([...items])
-      },
-      closeModal: () => {
-        setShowModelModal(false)
-        setEditingModel(null)
-      },
-      errorKey: 'deleteConfigFailed',
-    })
   }
 
   const handleSaveModelConfig = async (
     modelId: string,
     apiKey: string,
     customApiUrl?: string,
-    customModelName?: string
+    customModelName?: string,
+    name?: string
   ) => {
     try {
       const existingModel = allModels?.find((m) => m.id === modelId)
@@ -446,17 +396,48 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
         return
       }
 
+      // NEW-ENTRY GUARD (mirror SettingsPage 0285fb0c): adding via the catalog for a
+      // provider that ALREADY has a configured entry must CREATE a new row, not send a
+      // bare-provider key that the backend legacy-match uses to OVERWRITE the existing
+      // one. Wallet providers (claw402/blockrun) keep their reconfigure flow.
+      const provider = modelToUpdate.provider || ''
+      const isWalletProvider =
+        provider === 'claw402' || provider.startsWith('blockrun')
+      const providerAlreadyConfigured =
+        !existingModel && (allModels || []).some((m) => m.provider === provider)
+      if (providerAlreadyConfigured && !isWalletProvider) {
+        const sameProviderCount = (allModels || []).filter(
+          (m) => m.provider === provider
+        ).length
+        const baseName = modelToUpdate.name || provider
+        await api.createModelEntry({
+          provider,
+          name: `${baseName} ${sameProviderCount + 1}`,
+          api_key: apiKey,
+          custom_api_url: customApiUrl || undefined,
+          custom_model_name: customModelName || undefined,
+          enabled: true,
+        })
+        toast.success(t('aiTradersToast.modelConfigUpdated', language))
+        const created = await api.getModelConfigs()
+        setAllModels(created)
+        setShowModelModal(false)
+        setEditingModel(null)
+        return
+      }
+
       if (existingModel) {
         updatedModels =
           allModels?.map((m) =>
             m.id === modelId
               ? {
-                ...m,
-                apiKey,
-                customApiUrl: customApiUrl || '',
-                customModelName: customModelName || '',
-                enabled: true,
-              }
+                  ...m,
+                  apiKey,
+                  customApiUrl: customApiUrl || '',
+                  customModelName: customModelName || '',
+                  enabled: true,
+                  name: name?.trim() ? name.trim() : m.name,
+                }
               : m
           ) || []
       } else {
@@ -473,8 +454,12 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
       const request = {
         models: Object.fromEntries(
           updatedModels.map((model) => [
-            model.provider,
+            // Key by row id (not provider) so editing one entry updates exactly that
+            // row; a provider can now have multiple rows. First-time providers send a
+            // bare-provider template id which the backend's scoped legacy path creates.
+            model.id,
             {
+              name: model.name || '',
               enabled: model.enabled,
               api_key: model.apiKey || '',
               custom_api_url: model.customApiUrl || '',
@@ -540,7 +525,10 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
     lighterWalletAddr?: string,
     lighterPrivateKey?: string,
     lighterApiKeyPrivateKey?: string,
-    lighterApiKeyIndex?: number
+    lighterApiKeyIndex?: number,
+    ntDataDir?: string,
+    ntInstrumentName?: string,
+    ntDefaultContractQty?: number
   ) => {
     try {
       if (exchangeId) {
@@ -571,7 +559,7 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
         }
 
         await api.updateExchangeConfigsEncrypted(request)
-      toast.success(t('aiTradersToast.exchangeConfigUpdated', language))
+        toast.success(t('aiTradersToast.exchangeConfigUpdated', language))
       } else {
         const createRequest = {
           exchange_type: exchangeType,
@@ -589,10 +577,13 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
           lighter_private_key: lighterPrivateKey || '',
           lighter_api_key_private_key: lighterApiKeyPrivateKey || '',
           lighter_api_key_index: lighterApiKeyIndex || 0,
+          nt_data_dir: ntDataDir || '',
+          nt_instrument_name: ntInstrumentName || '',
+          nt_default_contract_qty: ntDefaultContractQty || 0,
         }
 
         await api.createExchangeEncrypted(createRequest)
-      toast.success(t('aiTradersToast.exchangeCreated', language))
+        toast.success(t('aiTradersToast.exchangeCreated', language))
       }
 
       const refreshedExchanges = await api.getExchangeConfigs()
@@ -675,7 +666,10 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
 
             <button
               onClick={() => setShowCreateModal(true)}
-              disabled={configuredModels.length === 0 || configuredExchanges.length === 0}
+              disabled={
+                configuredModels.length === 0 ||
+                configuredExchanges.length === 0
+              }
               className="group relative px-6 py-2 rounded text-xs font-bold font-mono uppercase tracking-wider transition-all disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap overflow-hidden bg-nofx-gold text-black hover:bg-yellow-400 shadow-[0_0_20px_rgba(240,185,11,0.2)] hover:shadow-[0_0_30px_rgba(240,185,11,0.4)]"
             >
               <span className="relative z-10 flex items-center gap-2">
@@ -709,11 +703,13 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
           traders={traders}
           isLoading={isTradersLoading}
           allExchanges={allExchanges}
+          models={allModels}
           configuredModelsCount={configuredModels.length}
           configuredExchangesCount={configuredExchanges.length}
           visibleTraderAddresses={visibleTraderAddresses}
           copiedId={copiedId}
           language={language}
+          activeTraderId={activeTraderId}
           onTraderSelect={onTraderSelect}
           onNavigate={(path) => navigate(path)}
           onEditTrader={handleEditTrader}

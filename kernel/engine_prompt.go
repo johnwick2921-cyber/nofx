@@ -2,9 +2,11 @@ package kernel
 
 import (
 	"fmt"
+	"nofx/logger"
 	"nofx/market"
 	"nofx/provider/nofxos"
 	"nofx/store"
+	"sort"
 	"strings"
 	"time"
 )
@@ -14,7 +16,18 @@ import (
 // ============================================================================
 
 // BuildSystemPrompt builds System Prompt according to strategy configuration
-func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string) string {
+func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant, symbol string) string {
+	// CME futures use a dedicated futures system prompt that emits the SAME
+	// <reasoning>/<decision> envelope this parser expects, but with futures
+	// framing for the ACTIVE symbol. Early-return keeps the crypto assembly below
+	// untouched (symbol is ignored on the crypto path).
+	// "futures", "futures-balanced", "futures-aggressive", "futures-conservative"
+	// all route to the futures builder; the suffix selects the sub-mode (balanced
+	// = no extra block = byte-identical default). Crypto variants fall through.
+	if isFut, mode := futuresVariantMode(variant); isFut {
+		return e.buildFuturesPrompt(symbol, accountEquity, mode)
+	}
+
 	var sb strings.Builder
 	riskControl := e.config.RiskControl
 	promptSections := e.config.PromptSections
@@ -25,6 +38,14 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 	sb.WriteString(schemaPrompt)
 	sb.WriteString("\n\n")
 	sb.WriteString("---\n\n")
+
+	// P0 timezone fix — the labelled clock goes FIRST, before any window
+	// bound, so the model can never pair an unlabelled window with a UTC
+	// clock (owner rule: CT is canonical everywhere).
+	if e.clockContextLine != "" {
+		sb.WriteString(e.clockContextLine)
+		sb.WriteString("\n\n")
+	}
 
 	// 1. Role definition (editable)
 	if promptSections.RoleDefinition != "" {
@@ -120,6 +141,9 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 	// 7. Output format
 	sb.WriteString("# Output Format (Strictly Follow)\n\n")
 	sb.WriteString("**Must use XML tags <reasoning> and <decision> to separate chain of thought and decision JSON, avoiding parsing errors**\n\n")
+	// P0 2026-08-19 — decision-FIRST strict contract (same truncation guard as
+	// the futures builder).
+	sb.WriteString("Output the <decision> JSON block FIRST — it is MANDATORY and must appear in every response. THEN write <reasoning>: ≤200 words, decision-focused, no restating the input data. If you are running out of room, drop reasoning — never drop <decision>.\n\n")
 	sb.WriteString("## Format Requirements\n\n")
 	sb.WriteString("<reasoning>\n")
 	sb.WriteString("Your chain of thought analysis...\n")
@@ -152,16 +176,47 @@ func (e *StrategyEngine) BuildSystemPrompt(accountEquity float64, variant string
 	return sb.String()
 }
 
+// formatKlineTimeframes renders the "Available Data" timeframe summary line. It
+// lists EVERY selected timeframe — matching what the fetch (engine_analysis.go
+// reads SelectedTimeframes) and the per-timeframe user-prompt loop actually feed
+// the AI — so the prompt no longer under-reports a 3-timeframe selection (e.g.
+// 5m/15m/1h) as just "primary + longer" (2). For legacy configs that predate
+// SelectedTimeframes (empty list) it falls back to the prior primary[+longer]
+// wording, producing byte-identical output to the pre-fix code.
+func formatKlineTimeframes(kline store.KlineConfig) string {
+	if len(kline.SelectedTimeframes) > 0 {
+		// B10 (audit F7): the primary_timeframe is ALWAYS fetched + rendered as a
+		// table, so announce it too — even when the user left it out of
+		// selected_timeframes — otherwise the model receives a table it was never
+		// told about. Appended at the end (copy; never mutate the config slice).
+		tfs := kline.SelectedTimeframes
+		if kline.PrimaryTimeframe != "" {
+			found := false
+			for _, tf := range tfs {
+				if tf == kline.PrimaryTimeframe {
+					found = true
+					break
+				}
+			}
+			if !found {
+				tfs = append(append([]string{}, tfs...), kline.PrimaryTimeframe)
+			}
+		}
+		return fmt.Sprintf("- %s price series\n", strings.Join(tfs, ", "))
+	}
+	// Legacy fallback (no SelectedTimeframes): primary + optional longer — the
+	// exact wording the code emitted before the SelectedTimeframes-aware fix.
+	if kline.EnableMultiTimeframe {
+		return fmt.Sprintf("- %s price series + %s K-line series\n", kline.PrimaryTimeframe, kline.LongerTimeframe)
+	}
+	return fmt.Sprintf("- %s price series\n", kline.PrimaryTimeframe)
+}
+
 func (e *StrategyEngine) writeAvailableIndicators(sb *strings.Builder) {
 	indicators := e.config.Indicators
 	kline := indicators.Klines
 
-	sb.WriteString(fmt.Sprintf("- %s price series", kline.PrimaryTimeframe))
-	if kline.EnableMultiTimeframe {
-		sb.WriteString(fmt.Sprintf(" + %s K-line series\n", kline.LongerTimeframe))
-	} else {
-		sb.WriteString("\n")
-	}
+	sb.WriteString(formatKlineTimeframes(kline))
 
 	if indicators.EnableEMA {
 		sb.WriteString("- EMA indicators")
@@ -207,11 +262,14 @@ func (e *StrategyEngine) writeAvailableIndicators(sb *strings.Builder) {
 		sb.WriteString("- Open Interest (OI) data\n")
 	}
 
-	if indicators.EnableFundingRate {
+	if indicators.EnableFundingRate && !e.isFuturesInstrument() {
 		sb.WriteString("- Funding rate\n")
 	}
 
-	if len(e.config.CoinSource.StaticCoins) > 0 || e.config.CoinSource.UseAI500 || e.config.CoinSource.UseOITop {
+	// F11a — AI500 / OI_Top are crypto screening concepts; a futures strategy trades
+	// a single static symbol and never screens by them, so suppress this line on
+	// futures (like funding via B8) instead of advertising a filter the model can't use.
+	if !e.isFuturesInstrument() && (len(e.config.CoinSource.StaticCoins) > 0 || e.config.CoinSource.UseAI500 || e.config.CoinSource.UseOITop) {
 		sb.WriteString("- AI500 / OI_Top filter tags (if available)\n")
 	}
 
@@ -372,6 +430,13 @@ func (e *StrategyEngine) BuildUserPrompt(ctx *Context) string {
 	}
 	sb.WriteString("\n")
 
+	// G2 (regime wave 2026-08-21) — the machine structure line, advisory:
+	// per-TF trend + swings + the latest BOS/CHoCH/MSS/SWEEP event. The AI
+	// judges; no gate lives here (G1/G4 consume the same snapshot in Go).
+	if e.isFuturesInstrument() && len(ctx.Structure) > 0 {
+		sb.WriteString(StructurePromptLine(ctx.Structure) + "\n\n")
+	}
+
 	// Get language for market data formatting
 	nofxosLang := nofxos.LangEnglish
 	if e.GetLanguage() == LangChinese {
@@ -500,6 +565,64 @@ func (e *StrategyEngine) formatCoinSourceTag(sources []string) string {
 // Market Data Formatting
 // ============================================================================
 
+// isFuturesInstrument reports whether this engine's primary instrument is a CME
+// futures contract. Crypto-only prompt content (funding rate — B8/audit F4) is
+// suppressed when true: the futures instrument block states there is no funding
+// rate, so emitting a "Funding rate" line was self-contradictory. Uses the
+// configured static symbol.
+func (e *StrategyEngine) isFuturesInstrument() bool {
+	coins := e.config.CoinSource.StaticCoins
+	return len(coins) > 0 && market.IsCMEFuturesSymbol(coins[0])
+}
+
+// formingBarLine (P10.2) renders the newest bar's honesty label for one
+// timeframe: "current 5m bar: FORMING (closes 10:35 CT) — prior bars closed"
+// while the bar is still open at the snapshot instant, else a CLOSED line
+// naming the next close. Empty when snapshot/interval/bars are unavailable.
+func formingBarLine(tf string, tfData *market.TimeframeSeriesData, snapshotMs int64) string {
+	if snapshotMs <= 0 || tfData == nil || len(tfData.Klines) == 0 {
+		return ""
+	}
+	iv := tfIntervalMs(tf)
+	if iv <= 0 {
+		return "" // only intraday TFs carry the label (1m/5m/15m…)
+	}
+	newest := tfData.Klines[len(tfData.Klines)-1]
+	closeMs := newest.Time + iv
+	if closeMs > snapshotMs {
+		return fmt.Sprintf("current %s bar: FORMING (closes %s) — prior bars closed\n\n",
+			tf, ClockCT(time.UnixMilli(closeMs)))
+	}
+	return fmt.Sprintf("current %s bar: CLOSED at %s (next close %s)\n\n",
+		tf, ClockCT(time.UnixMilli(closeMs)), ClockCT(time.UnixMilli(closeMs+iv)))
+}
+
+// staleTFLabel (G7) appends a staleness warning under a TF table when the
+// newest CLOSED bar is older than period + FLIP_EVAL_MAX_STALE_S — the same
+// cap the flip/death evaluator uses, so the prompt and the evaluator can never
+// disagree about what "stale" means. Futures only; renders nothing when fresh.
+func staleTFLabel(tf string, tfData *market.TimeframeSeriesData, snapshotMs int64) string {
+	if snapshotMs <= 0 || tfData == nil || len(tfData.Klines) == 0 {
+		return ""
+	}
+	iv := tfIntervalMs(tf)
+	if iv <= 0 {
+		return ""
+	}
+	newest := tfData.Klines[len(tfData.Klines)-1]
+	closeMs := newest.Time + iv
+	if closeMs > snapshotMs {
+		return "" // forming — not stale by definition
+	}
+	age := snapshotMs - closeMs
+	capMs := FlipEvalMaxStaleMs()
+	if age <= iv+capMs {
+		return ""
+	}
+	return fmt.Sprintf("⚠️ %s data stale: newest close %s is %.0fs old (period %.0fs + cap %.0fs)\n\n",
+		tf, ClockCT(time.UnixMilli(closeMs)), float64(age)/1000, float64(iv)/1000, float64(capMs)/1000)
+}
+
 func (e *StrategyEngine) formatMarketData(data *market.Data) string {
 	var sb strings.Builder
 	indicators := e.config.Indicators
@@ -509,7 +632,28 @@ func (e *StrategyEngine) formatMarketData(data *market.Data) string {
 	sb.WriteString(fmt.Sprintf("current_price = %.4f", data.CurrentPrice))
 
 	if indicators.EnableEMA {
-		sb.WriteString(fmt.Sprintf(", current_ema20 = %.3f", data.CurrentEMA20))
+		if len(data.CurrentEMAByPeriod) > 0 {
+			periods := make([]int, 0, len(data.CurrentEMAByPeriod))
+			for p := range data.CurrentEMAByPeriod {
+				periods = append(periods, p)
+			}
+			sort.Ints(periods)
+			for _, p := range periods {
+				v := data.CurrentEMAByPeriod[p]
+				// F11d — never emit "current_ema200 = 0.000" on thin bar depth (an EMA
+				// can't be 0 for a real instrument; 0 means calculateEMA had <period
+				// bars). Omit it + log, rather than feeding the model a fake zero.
+				if v <= 0 {
+					logger.Infof("ℹ️ current_ema%d omitted for %s — thin bar depth (needs %d bars); EMA not warmed up.", p, data.Symbol, p)
+					continue
+				}
+				sb.WriteString(fmt.Sprintf(", current_ema%d = %.3f", p, v))
+			}
+		} else if data.CurrentEMA20 > 0 {
+			sb.WriteString(fmt.Sprintf(", current_ema20 = %.3f", data.CurrentEMA20))
+		} else {
+			logger.Infof("ℹ️ current_ema20 omitted for %s — thin bar depth (needs 20 bars); EMA not warmed up.", data.Symbol)
+		}
 	}
 
 	if indicators.EnableMACD {
@@ -517,12 +661,29 @@ func (e *StrategyEngine) formatMarketData(data *market.Data) string {
 	}
 
 	if indicators.EnableRSI {
-		sb.WriteString(fmt.Sprintf(", current_rsi7 = %.3f", data.CurrentRSI7))
+		// F9 — honest snapshot label: use the FIRST CONFIGURED RSI period (smallest,
+		// deterministic) so hoang's [14] renders current_rsi14, not a hardcoded
+		// current_rsi7. No configured periods → the legacy period-7 line.
+		if len(data.CurrentRSIByPeriod) > 0 {
+			periods := make([]int, 0, len(data.CurrentRSIByPeriod))
+			for p := range data.CurrentRSIByPeriod {
+				periods = append(periods, p)
+			}
+			sort.Ints(periods)
+			p := periods[0]
+			sb.WriteString(fmt.Sprintf(", current_rsi%d = %.3f", p, data.CurrentRSIByPeriod[p]))
+		} else {
+			sb.WriteString(fmt.Sprintf(", current_rsi7 = %.3f", data.CurrentRSI7))
+		}
 	}
 
 	sb.WriteString("\n\n")
 
-	if indicators.EnableOI || indicators.EnableFundingRate {
+	// B8 (audit F4): funding rate is a crypto-perp concept — suppress it entirely on
+	// CME futures even when the toggle is on (the instrument block states there is
+	// none), so the prompt is no longer self-contradictory.
+	fundingOn := indicators.EnableFundingRate && !e.isFuturesInstrument()
+	if indicators.EnableOI || fundingOn {
 		sb.WriteString(fmt.Sprintf("Additional data for %s:\n\n", data.Symbol))
 
 		if indicators.EnableOI && data.OpenInterest != nil {
@@ -530,7 +691,7 @@ func (e *StrategyEngine) formatMarketData(data *market.Data) string {
 				data.OpenInterest.Latest, data.OpenInterest.Average))
 		}
 
-		if indicators.EnableFundingRate {
+		if fundingOn {
 			sb.WriteString(fmt.Sprintf("Funding Rate: %.2e\n\n", data.FundingRate))
 		}
 	}
@@ -541,6 +702,15 @@ func (e *StrategyEngine) formatMarketData(data *market.Data) string {
 			if tfData, ok := data.TimeframeData[tf]; ok {
 				sb.WriteString(fmt.Sprintf("=== %s Timeframe (oldest → latest) ===\n\n", strings.ToUpper(tf)))
 				e.formatTimeframeSeriesData(&sb, tfData, indicators)
+				// P10.2 — prompt honesty (owner ruling: interval cadence runs
+				// cycles MID-BAR): label the newest bar FORMING/CLOSED so the
+				// AI knows what it is looking at and may itself choose to wait
+				// for the close — its judgment now, not a code gate. Futures
+				// only; snapshot 0 (tests/legacy) renders nothing.
+				if e.isFuturesInstrument() {
+					sb.WriteString(formingBarLine(tf, tfData, e.promptSnapshotMs))
+					sb.WriteString(staleTFLabel(tf, tfData, e.promptSnapshotMs))
+				}
 			}
 		}
 	} else {
@@ -612,10 +782,10 @@ func (e *StrategyEngine) formatMarketData(data *market.Data) string {
 
 func (e *StrategyEngine) formatTimeframeSeriesData(sb *strings.Builder, data *market.TimeframeSeriesData, indicators store.IndicatorConfig) {
 	if len(data.Klines) > 0 {
-		sb.WriteString("Time(UTC)      Open      High      Low       Close     Volume\n")
+		sb.WriteString("Time(CT)       Open      High      Low       Close     Volume\n")
 		for i, k := range data.Klines {
-			t := time.Unix(k.Time/1000, 0).UTC()
-			timeStr := t.Format("01-02 15:04")
+			t := time.Unix(k.Time/1000, 0).In(CTLocation())
+			timeStr := TableTimeCT(t)
 			marker := ""
 			if i == len(data.Klines)-1 {
 				marker = "  <- current"
@@ -631,12 +801,41 @@ func (e *StrategyEngine) formatTimeframeSeriesData(sb *strings.Builder, data *ma
 		}
 	}
 
+	// W11 — the indicator-state lines are extracted to FormatIndicatorState so the
+	// day-plan planner prompt can mirror the EXACT block the executor renders.
+	FormatIndicatorState(sb, data, indicators)
+
+	sb.WriteString("\n")
+}
+
+// FormatIndicatorState writes the toggle-gated, configured-period-aware indicator
+// lines (EMA/MACD/RSI/ATR/BOLL) for one timeframe's series — the SAME indicator
+// state the executor prompt renders. Extracted (W11) so the planner INDICATORS
+// mirror is byte-identical to the executor's, never a re-derivation. Pure: reads
+// only `data` + `indicators`; emits nothing for disabled toggles / empty series.
+func FormatIndicatorState(sb *strings.Builder, data *market.TimeframeSeriesData, indicators store.IndicatorConfig) {
 	if indicators.EnableEMA {
-		if len(data.EMA20Values) > 0 {
-			sb.WriteString(fmt.Sprintf("EMA20: %s\n", formatFloatSlice(data.EMA20Values)))
-		}
-		if len(data.EMA50Values) > 0 {
-			sb.WriteString(fmt.Sprintf("EMA50: %s\n", formatFloatSlice(data.EMA50Values)))
+		if len(data.EMAByPeriod) > 0 {
+			// Configured periods drive the labels + values (e.g. EMA9/EMA21/EMA200),
+			// sorted ascending for stable output.
+			periods := make([]int, 0, len(data.EMAByPeriod))
+			for p := range data.EMAByPeriod {
+				periods = append(periods, p)
+			}
+			sort.Ints(periods)
+			for _, p := range periods {
+				if len(data.EMAByPeriod[p]) > 0 {
+					sb.WriteString(fmt.Sprintf("EMA%d: %s\n", p, formatFloatSlice(data.EMAByPeriod[p])))
+				}
+			}
+		} else {
+			// Legacy fallback (no configured periods) — byte-identical to prior output.
+			if len(data.EMA20Values) > 0 {
+				sb.WriteString(fmt.Sprintf("EMA20: %s\n", formatFloatSlice(data.EMA20Values)))
+			}
+			if len(data.EMA50Values) > 0 {
+				sb.WriteString(fmt.Sprintf("EMA50: %s\n", formatFloatSlice(data.EMA50Values)))
+			}
 		}
 	}
 
@@ -645,25 +844,62 @@ func (e *StrategyEngine) formatTimeframeSeriesData(sb *strings.Builder, data *ma
 	}
 
 	if indicators.EnableRSI {
-		if len(data.RSI7Values) > 0 {
-			sb.WriteString(fmt.Sprintf("RSI7: %s\n", formatFloatSlice(data.RSI7Values)))
+		if len(data.RSIByPeriod) > 0 {
+			periods := make([]int, 0, len(data.RSIByPeriod))
+			for p := range data.RSIByPeriod {
+				periods = append(periods, p)
+			}
+			sort.Ints(periods)
+			for _, p := range periods {
+				if len(data.RSIByPeriod[p]) > 0 {
+					sb.WriteString(fmt.Sprintf("RSI%d: %s\n", p, formatFloatSlice(data.RSIByPeriod[p])))
+				}
+			}
+		} else {
+			if len(data.RSI7Values) > 0 {
+				sb.WriteString(fmt.Sprintf("RSI7: %s\n", formatFloatSlice(data.RSI7Values)))
+			}
+			if len(data.RSI14Values) > 0 {
+				sb.WriteString(fmt.Sprintf("RSI14: %s\n", formatFloatSlice(data.RSI14Values)))
+			}
 		}
-		if len(data.RSI14Values) > 0 {
-			sb.WriteString(fmt.Sprintf("RSI14: %s\n", formatFloatSlice(data.RSI14Values)))
+	}
+
+	if indicators.EnableATR {
+		if len(data.ATRByPeriod) > 0 {
+			periods := make([]int, 0, len(data.ATRByPeriod))
+			for p := range data.ATRByPeriod {
+				periods = append(periods, p)
+			}
+			sort.Ints(periods)
+			for _, p := range periods {
+				sb.WriteString(fmt.Sprintf("ATR%d: %.4f\n", p, data.ATRByPeriod[p]))
+			}
+		} else if data.ATR14 > 0 {
+			sb.WriteString(fmt.Sprintf("ATR14: %.4f\n", data.ATR14))
 		}
 	}
 
-	if indicators.EnableATR && data.ATR14 > 0 {
-		sb.WriteString(fmt.Sprintf("ATR14: %.4f\n", data.ATR14))
+	if indicators.EnableBOLL {
+		if len(data.BOLLByPeriod) > 0 {
+			periods := make([]int, 0, len(data.BOLLByPeriod))
+			for p := range data.BOLLByPeriod {
+				periods = append(periods, p)
+			}
+			sort.Ints(periods)
+			for _, p := range periods {
+				if b := data.BOLLByPeriod[p]; b != nil && len(b.Upper) > 0 {
+					sb.WriteString(fmt.Sprintf("BOLL%d Upper: %s\n", p, formatFloatSlice(b.Upper)))
+					sb.WriteString(fmt.Sprintf("BOLL%d Middle: %s\n", p, formatFloatSlice(b.Middle)))
+					sb.WriteString(fmt.Sprintf("BOLL%d Lower: %s\n", p, formatFloatSlice(b.Lower)))
+				}
+			}
+		} else if len(data.BOLLUpper) > 0 {
+			sb.WriteString(fmt.Sprintf("BOLL Upper: %s\n", formatFloatSlice(data.BOLLUpper)))
+			sb.WriteString(fmt.Sprintf("BOLL Middle: %s\n", formatFloatSlice(data.BOLLMiddle)))
+			sb.WriteString(fmt.Sprintf("BOLL Lower: %s\n", formatFloatSlice(data.BOLLLower)))
+		}
 	}
-
-	if indicators.EnableBOLL && len(data.BOLLUpper) > 0 {
-		sb.WriteString(fmt.Sprintf("BOLL Upper: %s\n", formatFloatSlice(data.BOLLUpper)))
-		sb.WriteString(fmt.Sprintf("BOLL Middle: %s\n", formatFloatSlice(data.BOLLMiddle)))
-		sb.WriteString(fmt.Sprintf("BOLL Lower: %s\n", formatFloatSlice(data.BOLLLower)))
-	}
-
-	sb.WriteString("\n")
 }
 
 func (e *StrategyEngine) formatQuantData(data *QuantData) string {

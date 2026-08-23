@@ -6,6 +6,7 @@
 package agent
 
 import (
+	"nofx/kernel"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -170,10 +171,18 @@ func (a *Agent) loadAIClientFromStoreUser(storeUserID string) (mcp.AIClient, str
 			// Use the provider registry for providers like claw402 that have their own
 			// client implementation (x402 payment, custom auth, etc.).
 			if client := mcp.NewAIClientByProvider(provider); client != nil {
-				if modelName == "" {
-					modelName = model.ID
-				}
+				// An empty modelName must pass through as-is: every registered
+				// provider client keeps its own default model on an empty custom
+				// name (deepseek → deepseek-v4-pro), same contract as the trading
+				// loop, Strategy Studio test, and Telegram paths. Never substitute
+				// model.ID — a DB row id ("<uuid>_deepseek") is not an API model
+				// name and providers reject it with a 400.
 				client.SetAPIKey(apiKey, customAPIURL, modelName)
+				if modelName == "" {
+					if embedder, ok := client.(mcp.ClientEmbedder); ok {
+						modelName = embedder.BaseClient().Model
+					}
+				}
 				a.log().Info("agent AI client selected (provider registry)", "store_user_id", candidateUserID, "model_id", model.ID, "provider", provider, "model", modelName)
 				return client, modelName, true
 			}
@@ -334,7 +343,7 @@ func resolveModelRuntimeConfig(provider, customAPIURL, customModelName, fallback
 		model string
 	}
 	defaults := map[string]providerDefaults{
-		"deepseek": {url: "https://api.deepseek.com/v1", model: "deepseek-chat"},
+		"deepseek": {url: "https://api.deepseek.com/v1", model: "deepseek-v4-pro"},
 		"qwen":     {url: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen3-max"},
 		"openai":   {url: "https://api.openai.com/v1", model: "gpt-5.2"},
 		"claude":   {url: "https://api.anthropic.com/v1", model: "claude-opus-4-6"},
@@ -630,7 +639,7 @@ func (a *Agent) buildSystemPromptForStoreUser(lang, storeUserID string) string {
 - **诚实是第一原则** — 不确定就说不确定，没数据就说没数据。绝不编造。
 - 用中文回复。
 
-当前时间: %s`, traderInfo, watchlist, skillCatalog, time.Now().Format("2006-01-02 15:04:05"))
+当前时间: %s`, traderInfo, watchlist, skillCatalog, kernel.FormatCT(time.Now()))
 	}
 
 	return fmt.Sprintf(`You are NOFXi, a professional AI trading agent. Not a chatbot — a trading partner.
@@ -717,7 +726,7 @@ You can call these tools to take action:
 - Lead with the conclusion, then the reason.
 - **Honesty is rule #1** — uncertain = say uncertain, no data = say no data.
 
-Current time: %s`, traderInfo, watchlist, skillCatalog, time.Now().Format("2006-01-02 15:04:05"))
+Current time: %s`, traderInfo, watchlist, skillCatalog, kernel.FormatCT(time.Now()))
 }
 
 // gatherContext collects real-time market data relevant to the user's message.
@@ -883,7 +892,7 @@ func (a *Agent) handleStatus(L string) string {
 	if a.aiClient != nil {
 		ai = "✅"
 	}
-	return fmt.Sprintf(a.msg(L, "status"), rc, tc, wc, ai, time.Now().Format("2006-01-02 15:04:05"))
+	return fmt.Sprintf(a.msg(L, "status"), rc, tc, wc, ai, kernel.FormatCT(time.Now()))
 }
 
 // noAIFallback — when no AI is available, still try to be useful.

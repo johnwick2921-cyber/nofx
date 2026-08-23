@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"nofx/kernel"
+	"nofx/logger"
 	"nofx/mcp"
 	"nofx/safe"
 	"nofx/security"
@@ -28,6 +29,7 @@ import (
 	"nofx/trader/indodax"
 	"nofx/trader/kucoin"
 	"nofx/trader/lighter"
+	ntTrader "nofx/trader/ninjatrader"
 	"nofx/trader/okx"
 )
 
@@ -185,21 +187,19 @@ func (a *Agent) ensureUniqueModelName(storeUserID, name, excludeID string) error
 	return nil
 }
 
+// findModelByProvider resolves the deterministic winner among rows sharing a provider
+// (enabled + most-recent, via store.PickProviderModel). With multiple entries per
+// provider this returns the primary — never a silent first-by-id — and logs the choice.
 func (a *Agent) findModelByProvider(storeUserID, provider string) (*store.AIModel, error) {
 	models, err := a.store.AIModel().List(storeUserID)
 	if err != nil {
 		return nil, err
 	}
-	normalizedProvider := strings.ToLower(strings.TrimSpace(provider))
-	for _, model := range models {
-		if model == nil {
-			continue
-		}
-		if strings.ToLower(strings.TrimSpace(model.Provider)) == normalizedProvider {
-			return model, nil
-		}
+	chosen, n := store.PickProviderModel(models, provider)
+	if chosen != nil && n > 1 {
+		logger.Warnf("⚠️ findModelByProvider %q → %d entries; using enabled+most-recent id=%s", provider, n, chosen.ID)
 	}
-	return nil, nil
+	return chosen, nil
 }
 
 func (a *Agent) ensureUniqueExchangeAccountName(storeUserID, accountName, excludeID string) error {
@@ -1094,6 +1094,11 @@ func buildTraderExchangeProbe(exchangeCfg *store.Exchange, userID string) (trade
 			exchangeCfg.LighterAPIKeyIndex,
 			false,
 		)
+	case "ninjatrader":
+		return ntTrader.New(ntTrader.Config{
+			DataDir: exchangeCfg.NTDataDir,
+			Symbol:  exchangeCfg.NTInstrumentName,
+		}), nil
 	default:
 		return nil, fmt.Errorf("unsupported exchange type: %s", exchangeCfg.ExchangeType)
 	}
@@ -1523,6 +1528,7 @@ func (a *Agent) toolManageExchangeConfig(storeUserID, argsJSON string) string {
 			strings.TrimSpace(args.LighterPrivateKey),
 			strings.TrimSpace(args.LighterAPIKeyPrivateKey),
 			lighterIndex,
+			"", "", 0, // NinjaTrader fields not exposed via the agent tool
 		)
 		if err != nil {
 			return fmt.Sprintf(`{"error":"failed to create exchange config: %s"}`, err)
@@ -1654,6 +1660,7 @@ func (a *Agent) toolManageExchangeConfig(storeUserID, argsJSON string) string {
 			strings.TrimSpace(args.LighterPrivateKey),
 			strings.TrimSpace(args.LighterAPIKeyPrivateKey),
 			lighterIndex,
+			"", "", 0, // NinjaTrader fields not exposed via the agent tool
 		); err != nil {
 			return fmt.Sprintf(`{"error":"failed to update exchange config: %s"}`, err)
 		}
@@ -3369,11 +3376,11 @@ func (a *Agent) toolGetTradeHistory(argsJSON string) string {
 
 			entryTime := ""
 			if pos.EntryTime > 0 {
-				entryTime = time.Unix(pos.EntryTime/1000, 0).Format("2006-01-02 15:04")
+				entryTime = kernel.FormatCT(time.Unix(pos.EntryTime/1000, 0))
 			}
 			exitTime := ""
 			if pos.ExitTime > 0 {
-				exitTime = time.Unix(pos.ExitTime/1000, 0).Format("2006-01-02 15:04")
+				exitTime = kernel.FormatCT(time.Unix(pos.ExitTime/1000, 0))
 			}
 
 			trades = append(trades, map[string]any{
