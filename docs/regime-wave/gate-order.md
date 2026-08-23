@@ -21,6 +21,7 @@ open actions)
 7. **G6 — loss-streak pause** (`loss_streak`: N consecutive losers in the
    session pause ALL new opens for `LOSS_STREAK_PAUSE_MIN` (60) or session end.
    Master-independent). Studio `regime.loss_streak_n` (default 4, 0 = off).
+   **REMOVED 2026-08-23 (owner override) — commit 5126e57c.**
 8. Sizing caps + execution (pre-existing).
 
 Advisory-only (never gates): G2 structure line (prompts), G5 consumed-level

@@ -102,8 +102,7 @@ runCycle (trader/auto_trader_loop.go)
   │   TRANSITION_MAX_MIN (45) closes it → ctx.Transition*
   ├─ G6 observer: observeLossStreak(ctx) — session-scoped streak of
   │   EffectivePnL<0 closes; loss_streak_n (Studio, nil→4, 0=off) ×
-  │   LOSS_STREAK_PAUSE_MIN (60) → ctx.LossStreak*
-  ↓
+  │   LOSS_STREAK_PAUSE_MIN (60) → ctx.LossStreak*│   **REMOVED 2026-08-23 (owner override) — commit 5126e57c. No longer exists.**  ↓
   system prompt (clock line → instrument → plan block → PLAN STATUS) +
   user prompt (market tables per TF, forming/closed labels, G7 staleness
   labels, G2 STRUCTURE line)
