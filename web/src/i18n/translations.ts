@@ -1119,6 +1119,12 @@ export const translations = {
         'Token estimate exceeds 128K. AI requests may fail for some models.',
       gridSwitchConfirm:
         'Switch to Grid trading? Your AI configuration (indicators, risk control, prompt, coin source) is set aside — it is preserved and restored if you switch back. Continue?',
+      gridFuturesDisabled:
+        'Grid needs resting limit orders; the NinjaTrader futures path is market-only',
+      gridFuturesDesc:
+        'Grid cannot run on CME futures — use AI Trading with protective stops.',
+      duplicateToEditHint:
+        'This default strategy is locked (shared fallback). Duplicate to edit a copy.',
       tokenEstimating: 'Estimating...',
       tokenTooltip: 'Based on 200K context',
     },
@@ -2458,6 +2464,11 @@ export const translations = {
       tokenExceedWarning: 'Token 估算超过 128K，部分模型请求可能失败',
       gridSwitchConfirm:
         '切换到网格交易？您的 AI 配置（指标、风控、提示词、币种来源）将被保留，切换回来时会自动恢复。是否继续？',
+      gridFuturesDisabled:
+        '网格需要挂单限价单；NinjaTrader 期货路径仅支持市价单',
+      gridFuturesDesc: '网格无法运行于 CME 期货——请使用带保护止损的 AI 交易。',
+      duplicateToEditHint:
+        '此默认策略已锁定（共享回退）。请复制副本后进行编辑。',
       tokenEstimating: '预估中...',
       tokenTooltip: '基于 200K 上下文计算',
     },
