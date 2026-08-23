@@ -51,7 +51,7 @@ type Config struct {
 	TwelveDataKey   string // TwelveData API key for forex & metals
 
 	// Databento (NQ futures data)
-	DatabentoAPIKey  string
+	DatabentoAPIKey string
 
 	// NinjaTrader (CSV bridge for execution)
 
@@ -68,9 +68,17 @@ type Config struct {
 	// Plan 3 Task 21 — Risk limits (hard server-side kill switches).
 	// Defaults: $500 daily loss, 2 concurrent trades, $50k notional, 5 contracts/order.
 	// Zero value disables the corresponding check.
-	RiskMaxDailyLossUSD      float64 // RISK_MAX_DAILY_LOSS_USD
-	RiskMaxConcurrentTrades  int     // RISK_MAX_CONCURRENT_TRADES
-	RiskMaxNotionalUSD       float64 // RISK_MAX_NOTIONAL_USD
+	RiskMaxDailyLossUSD     float64 // RISK_MAX_DAILY_LOSS_USD
+	RiskMaxConcurrentTrades int     // RISK_MAX_CONCURRENT_TRADES
+	RiskMaxNotionalUSD      float64 // RISK_MAX_NOTIONAL_USD
+
+	// 4.3 — limit-then-market EOD/T1 flatten (research v5 "slippage budgeted").
+	// DORMANT by default: 0/0 = pure market flatten, byte-identical behavior.
+	// LimitCloseTicks > 0 makes the session/T1 flatten FIRST place a limit exit
+	// that many ticks beyond the latest bar close (favorable side) and fall back
+	// to a market flatten after LimitCloseMarketAfterSec seconds.
+	LimitCloseTicks        int // EOD_FLAT_LIMIT_TICKS
+	LimitCloseMarketAfterS int // EOD_FLAT_MARKET_AFTER_SEC
 }
 
 // Init initializes global configuration (from .env)
@@ -153,6 +161,9 @@ func Init() {
 	// Plan 3 Task 21 — Risk limits
 	cfg.RiskMaxDailyLossUSD = getEnvFloat("RISK_MAX_DAILY_LOSS_USD", 500)
 	cfg.RiskMaxConcurrentTrades = getEnvInt("RISK_MAX_CONCURRENT_TRADES", 2)
+	// 4.3 — limit-then-market flatten (dormant by default).
+	cfg.LimitCloseTicks = getEnvInt("EOD_FLAT_LIMIT_TICKS", 0)
+	cfg.LimitCloseMarketAfterS = getEnvInt("EOD_FLAT_MARKET_AFTER_SEC", 0)
 	// Deprecated-in-practice (6.8): loaded but enforced nowhere — the only
 	// CheckPreTrade caller passes 0 notional by design; futures notional is
 	// capped by strategy max_notional_leverage instead. Kept for struct compat.

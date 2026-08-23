@@ -301,6 +301,13 @@ type AutoTraderConfig struct {
 
 	// Scan configuration
 	ScanInterval time.Duration // Scan interval (recommended 3 minutes)
+	// 4.3 — limit-then-market EOD/T1 flatten (research v5 "slippage budgeted").
+	// DORMANT by default: LimitCloseTicks 0 = pure market flatten (byte-identical
+	// to the historical behavior). > 0 places a limit exit LimitCloseTicks beyond
+	// the latest bar close first, then market-flattens any remainder after
+	// LimitCloseMarketAfterS seconds.
+	LimitCloseTicks        int
+	LimitCloseMarketAfterS int
 	// CadenceMode (P10): "interval" (default — every tick runs a full cycle on
 	// the latest bar state) | "bar_close" (legacy: one cycle per closed
 	// primary-TF bar). Resolved via cadenceMode(); only meaningful for day-plan
@@ -510,6 +517,13 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 	}
 	if mcpClient == nil {
 		mcpClient = mcp.New()
+	}
+	// 4.5 — per-model thinking knobs override the env defaults (best-effort row
+	// lookup; a miss keeps the env defaults).
+	if st != nil {
+		if row, err := st.AIModel().GetByID(aiModel); err == nil && row != nil {
+			mcp.ApplyThinking(mcpClient, row.ThinkingMode, row.ReasoningEffort)
+		}
 	}
 
 	// P0-latency — the timeout applied here is the ONE config-driven AI timeout

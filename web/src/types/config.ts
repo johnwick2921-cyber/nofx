@@ -7,6 +7,8 @@ export interface AIModel {
   apiKey?: string
   customApiUrl?: string
   customModelName?: string
+  thinkingMode?: string
+  reasoningEffort?: string
   walletAddress?: string
   balanceUsdc?: string
 }
@@ -124,6 +126,8 @@ export interface UpdateModelConfigRequest {
       api_key: string
       custom_api_url?: string
       custom_model_name?: string
+      thinking_mode?: string
+      reasoning_effort?: string
     }
   }
 }

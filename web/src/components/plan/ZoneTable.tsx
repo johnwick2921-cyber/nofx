@@ -85,6 +85,18 @@ function ZoneRow({
 
       <ProvenanceChip label={fact.label} />
       <GradeChip grade={fact.grade} />
+      {/* Machine grade (8.4): the deterministic detector-side grade stamped at
+          plan write. Shown beside the model's when it differs — a model A next
+          to a machine C is visible at a glance. */}
+      {fact.machine_grade && fact.machine_grade !== fact.grade && (
+        <span
+          className="inline-flex items-center gap-0.5 text-[9px] font-mono"
+          style={{ color: 'var(--vl-faint)' }}
+          title="machine grade — detector-side (type × freshness × confluence × HTF)"
+        >
+          m:{fact.machine_grade}
+        </span>
+      )}
       <FreshDot fresh={fresh} language={language} />
 
       <div className="flex items-center justify-end gap-2">

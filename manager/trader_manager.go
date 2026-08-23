@@ -3,6 +3,7 @@ package manager
 import (
 	"context"
 	"fmt"
+	"nofx/config"
 	"nofx/logger"
 	"nofx/store"
 	"nofx/trader"
@@ -117,7 +118,6 @@ func (tm *TraderManager) StopAll() {
 // (6.8 deprecation sweep) AutoStartRunningTraders removed — zero callers
 // [A, PR #54]: the real boot restore reads is_running directly in
 // addTraderFromStore (see the auto-start goroutine below in this file).
-
 
 // GetComparisonData retrieves comparison data
 func (tm *TraderManager) GetComparisonData() (map[string]interface{}, error) {
@@ -612,11 +612,14 @@ func (tm *TraderManager) addTraderFromStore(traderCfg *store.Trader, aiModelCfg 
 		CustomModelName:       aiModelCfg.CustomModelName,
 		ScanInterval:          time.Duration(traderCfg.ScanIntervalMinutes) * time.Minute,
 		CadenceMode:           traderCfg.CadenceMode,
-		PositionMode:          traderCfg.PositionMode,
-		InitialBalance:        traderCfg.InitialBalance,
-		IsCrossMargin:         traderCfg.IsCrossMargin,
-		ShowInCompetition:     traderCfg.ShowInCompetition,
-		StrategyConfig:        strategyConfig,
+		// 4.3 — limit-then-market flatten knobs (dormant 0/0 = market flatten).
+		LimitCloseTicks:        config.Get().LimitCloseTicks,
+		LimitCloseMarketAfterS: config.Get().LimitCloseMarketAfterS,
+		PositionMode:           traderCfg.PositionMode,
+		InitialBalance:         traderCfg.InitialBalance,
+		IsCrossMargin:          traderCfg.IsCrossMargin,
+		ShowInCompetition:      traderCfg.ShowInCompetition,
+		StrategyConfig:         strategyConfig,
 	}
 
 	// P10 — the boot line names the cadence SOURCE + resolved behavior, so the
