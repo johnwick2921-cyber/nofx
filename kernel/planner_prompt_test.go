@@ -43,3 +43,24 @@ func TestBuildPlannerPrompt(t *testing.T) {
 func TestSamplePlannerPrompt(t *testing.T) {
 	t.Logf("\n%s", BuildPlannerPrompt(samplePlannerInput()))
 }
+
+// F0.4-T2 (2026-08-24) — T2 caution events must NEVER become no-trade stops:
+// the calendar section says so per-event, and the output contract forbids it.
+// Live finding: the model added "Bessent Speaks (T2)" to no_trade on its own.
+func TestPlannerPromptT2CautionIsNeverNoTrade(t *testing.T) {
+	in := samplePlannerInput()
+	in.Calendar = []PlannerCalendarEvent{
+		{TimeCT: "13:00", Currency: "USD", Title: "Treasury Sec Bessent Speaks", Impact: "T2"},
+		{TimeCT: "09:30", Currency: "USD", Title: "CPI", Impact: "T1"},
+	}
+	p := BuildPlannerPrompt(in)
+	for _, want := range []string{
+		"Treasury Sec Bessent Speaks", "caution — NOT a no-trade blackout",
+		"CPI", "HARD no-trade blackout — MUST be added to no_trade",
+		"T2 caution event is NEVER added to no_trade",
+	} {
+		if !strings.Contains(p, want) {
+			t.Fatalf("prompt missing %q\n---\n%s", want, p)
+		}
+	}
+}
