@@ -30,6 +30,11 @@ type PlannerInput struct {
 	Regime           RegimeBlock
 	Levels           []ScoredLevel // Go-ranked, graded (P1.5) — the decision-critical block
 	StructureSummary []string      // one line per timeframe
+	// G2.2 (2026-08-24) — nearest in-band HTF zones (S/D/FVG/OB), graded, for a
+	// dedicated prompt section. They exist in the data but lose the top-8 seat
+	// race to structural levels (cluster collapse + seat priority), so the model
+	// never saw them before. Advisory confluence — never standalone triggers.
+	HTFZones []ScoredLevel
 	// G5 (regime wave 2026-08-21) — levels already CONSUMED at read time (role-
 	// flipped), listed so the planner works around them. Advisory.
 	ConsumedLevels []string
@@ -120,6 +125,21 @@ func BuildPlannerPrompt(in PlannerInput) string {
 		b.WriteString("\n")
 	}
 
+	// G2.2 (2026-08-24) — HTF zones as their own section: the top-8 seat race
+	// hides them from the ranked table, but a 1h/4h base is exactly the
+	// large-account reference the plan should know about.
+	if len(in.HTFZones) > 0 {
+		b.WriteString("## HTF zones (nearest first — confluence references, NEVER standalone triggers)\n")
+		for _, z := range in.HTFZones {
+			sign := "+"
+			if z.Distance < 0 {
+				sign = "-"
+			}
+			fmt.Fprintf(&b, "  %-9.2f %-14s grade %s  %s%.1f (HTF zone)\n", z.Price, z.Label, z.Grade, sign, absF(z.Distance))
+		}
+		b.WriteString("\n")
+	}
+
 	if in.OvernightStory != "" || in.PriorDayStory != "" {
 		b.WriteString("## Auction story\n")
 		if in.PriorDayStory != "" {
@@ -180,7 +200,7 @@ func plannerOutputContract(maxLevels, maxScenarios int) string {
 		`  "flip": {"price": <level>, "side": "below|above", "rule": "2x5m|15m_close|5m_close", "flip_to": "long|short"},` + "\n" +
 		`  "day_type": "trend|balance|<optional>"` + "\n" +
 		"}\n" +
-		"Rules: levels chosen ONLY from the ranked table above; S/D & FVG are confluence, never standalone. " +
+		"Rules: levels chosen ONLY from the ranked table above (plus the HTF zones section when present — you MUST include at least ONE HTF zone row in your levels as a confluence reference, never as a standalone trigger); S/D & FVG are confluence, never standalone. " +
 		"The scenario MIX must follow the regime + day_type: a trend-down day gets breakdown/pullback-short plays, a trend-up day the reverse, balance days get two-sided plays — do NOT default to 2 longs + 1 rally-rejection short on every day. " +
 		"If price sits BELOW PDL you MUST write a continuation short; ABOVE PDH, a continuation long. " +
 		"death.flip objects are MACHINE-EVALUATED — choose levels from your level list and a rule; they must match the prose lines. " +

@@ -922,8 +922,9 @@ func (at *AutoTrader) assemblePlannerInput(session, tradeDate string) kernel.Pla
 	// candidate pool (before this, every detector ran on the 1m slice only).
 	// G2.1 — one observability line per read so a missing-zone question is
 	// answered with facts, not theories.
+	var htfLevels []kernel.DetectedLevel
 	if market.FuturesBarsProvider != nil {
-		htfLevels := kernel.DetectHTFLevels(func(tf string, count int) []market.Kline {
+		htfLevels = kernel.DetectHTFLevels(func(tf string, count int) []market.Kline {
 			return market.FuturesBarsProvider(symbol, tf, count)
 		}, timeframes, symbol, now)
 		if len(htfLevels) > 0 {
@@ -938,6 +939,25 @@ func (at *AutoTrader) assemblePlannerInput(session, tradeDate string) kernel.Pla
 		extra = append(extra, htfLevels...)
 	}
 	scored, price, dATR := kernel.AssembleScoredLevels(at.id, bars, reg, symbol, maxLevels, now, at.proximityFilterATR(), extra...)
+
+	// G2.2 (2026-08-24) — the nearest in-band HTF ZONES become their own prompt
+	// section: the top-8 seat race hides them, but the model must know where the
+	// 1h/4h bases are.
+	var htfZoneScored []kernel.ScoredLevel
+	if len(htfLevels) > 0 && price > 0 && dATR > 0 {
+		zones := make([]kernel.DetectedLevel, 0, len(htfLevels))
+		for _, l := range htfLevels {
+			switch l.Kind {
+			case kernel.KindSupply, kernel.KindDemand, kernel.KindFVG, kernel.KindOB:
+				zones = append(zones, l)
+			}
+		}
+		if len(zones) > 0 {
+			// ScoreLevels filters to the ±proximity band and returns nearest-first.
+			zs := kernel.ScoreLevels(zones, price, dATR, nil, 4, at.proximityFilterATR())
+			htfZoneScored = zs
+		}
+	}
 
 	// P3.6-C — STICKY OWNER LEVELS: always seated, tagged 👤, persisted across
 	// sessions. Prepended so they lead the ranked table.
@@ -1067,6 +1087,7 @@ func (at *AutoTrader) assemblePlannerInput(session, tradeDate string) kernel.Pla
 		DATR:             dATR,
 		Regime:           regime,
 		Levels:           scored,
+		HTFZones:         htfZoneScored,
 		StructureSummary: structure,
 		ConsumedLevels:   consumedLines,
 		Calendar:         calEvents,
