@@ -920,10 +920,22 @@ func (at *AutoTrader) assemblePlannerInput(session, tradeDate string) kernel.Pla
 	// G2/G3 (2026-08-24) — per-TF swing/zone detection on the CONFIGURED
 	// planner timeframes: real 1h/4h support/resistance now enters the
 	// candidate pool (before this, every detector ran on the 1m slice only).
+	// G2.1 — one observability line per read so a missing-zone question is
+	// answered with facts, not theories.
 	if market.FuturesBarsProvider != nil {
-		extra = append(extra, kernel.DetectHTFLevels(func(tf string, count int) []market.Kline {
+		htfLevels := kernel.DetectHTFLevels(func(tf string, count int) []market.Kline {
 			return market.FuturesBarsProvider(symbol, tf, count)
-		}, timeframes, symbol, now)...)
+		}, timeframes, symbol, now)
+		if len(htfLevels) > 0 {
+			counts := map[string]int{}
+			for _, l := range htfLevels {
+				counts[l.Label]++
+			}
+			at.logInfof("🗺️ G2 HTF detection @%s: %d level(s) %v", session, len(htfLevels), counts)
+		} else {
+			at.logInfof("🗺️ G2 HTF detection @%s: 0 levels — no swings/zones found on %v", session, timeframes)
+		}
+		extra = append(extra, htfLevels...)
 	}
 	scored, price, dATR := kernel.AssembleScoredLevels(at.id, bars, reg, symbol, maxLevels, now, at.proximityFilterATR(), extra...)
 
