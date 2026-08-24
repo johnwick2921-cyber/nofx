@@ -56,7 +56,13 @@ type DetectedLevel struct {
 	Label      string    `json:"label"`          // display label, e.g. "PDH", "RN 15500", "nPOC·Tue"
 	OriginDate string    `json:"origin_date"`    // YYYY-MM-DD of formation
 	HTF        bool      `json:"htf"`            // higher-timeframe origin
-	Info       string    `json:"info,omitempty"` // extra (gap size, fill state, ...)
+	// TF is the DETECTION timeframe ("1m"…"4h"; "" = the 1m slice). Drives the
+	// v3 zone evidence tiers (owner-approved 2026-08-24).
+	TF string `json:"tf,omitempty"`
+	// ZonePattern classifies an S/D zone as "reversal" (RBD/DBR — strongest) or
+	// "continuation" (RBR/DBD — weaker). "" = unknown (older detections).
+	ZonePattern string `json:"zone_pattern,omitempty"`
+	Info        string `json:"info,omitempty"` // extra (gap size, fill state, ...)
 }
 
 // lineLevel builds a single-price DetectedLevel (Lo==Hi==price).

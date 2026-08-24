@@ -126,10 +126,26 @@ func SupplyDemandZones(bars []market.Kline, atr float64, now time.Time) []Detect
 			d := cb[j+1]
 			move := d.Close - d.Open
 			origin := time.UnixMilli(d.OpenTime).In(loc).Format("2006-01-02")
+			// v3 (2026-08-24) — pattern classification: the leg BEFORE the base
+			// vs the departure. Opposite signs → reversal (RBD/DBR, strongest);
+			// same sign → continuation (RBR/DBD, weaker).
+			pattern := ""
+			if i > 0 {
+				leg := cb[i-1].Close - cb[i-1].Open
+				if (leg >= 0) != (move >= 0) {
+					pattern = "reversal"
+				} else {
+					pattern = "continuation"
+				}
+			}
 			if move >= departure {
-				out = append(out, zoneLevel(KindDemand, baseLo, baseHi, "Demand", origin))
+				zl := zoneLevel(KindDemand, baseLo, baseHi, "Demand", origin)
+				zl.ZonePattern = pattern
+				out = append(out, zl)
 			} else if -move >= departure {
-				out = append(out, zoneLevel(KindSupply, baseLo, baseHi, "Supply", origin))
+				zl := zoneLevel(KindSupply, baseLo, baseHi, "Supply", origin)
+				zl.ZonePattern = pattern
+				out = append(out, zl)
 			}
 		}
 		i = j + 1
