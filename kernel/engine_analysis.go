@@ -450,12 +450,8 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 	// A6 (F12): with an ACTIVE plan, an open decision MUST carry cited_scenario
 	// ("S1"… or "off-plan") — the retry loop feeds the miss back to the model
 	// instead of letting every adherence grade silently degrade to D.
-	// C-gate (2026-08-24, owner "B and up only"): a decision citing a C-quality
-	// scenario is refused — C means the trigger level was consumed at write time
-	// (the 2026-08-24 streak included two adherence-A losses on exactly those).
 	isFutForCite, _ := futuresVariantMode(variant)
-	activePlan := ActivePlanFor(ctx.TraderID, activeSymbol)
-	planActiveForCite := isFutForCite && activePlan != nil
+	planActiveForCite := isFutForCite && ActivePlanFor(ctx.TraderID, activeSymbol) != nil
 	parse := func(resp string) (*FullDecision, error) {
 		fd, err := parseFullDecisionResponse(
 			resp,
@@ -472,9 +468,6 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 		if err == nil && fd != nil && planActiveForCite {
 			if cErr := requireCitedScenario(fd); cErr != nil {
 				return fd, cErr
-			}
-			if qErr := requireScenarioQualityAboveC(fd, activePlan); qErr != nil {
-				return fd, qErr
 			}
 		}
 		return fd, err
@@ -1008,37 +1001,6 @@ func requireCitedScenario(fd *FullDecision) error {
 		d := &fd.Decisions[i]
 		if (d.Action == "open_long" || d.Action == "open_short") && strings.TrimSpace(d.CitedScenario) == "" {
 			return fmt.Errorf("missing required field cited_scenario on %s %s — set the plan scenario id (\"S1\"…) or \"off-plan\"", d.Action, d.Symbol)
-		}
-	}
-	return nil
-}
-
-// requireScenarioQualityAboveC (C-gate, 2026-08-24, owner "B and up only"): an
-// open decision citing a C-quality scenario is refused. C is the G5 machine
-// demote — the trigger level was consumed at write time — and the 2026-08-24
-// streak (-462) included two adherence-A losses on exactly those. Off-plan
-// citations and unknown ids pass (the A6 rule owns the id format).
-func requireScenarioQualityAboveC(fd *FullDecision, plan *ActivePlan) error {
-	if fd == nil || plan == nil {
-		return nil
-	}
-	for i := range fd.Decisions {
-		d := &fd.Decisions[i]
-		if d.Action != "open_long" && d.Action != "open_short" {
-			continue
-		}
-		cited := strings.TrimSpace(d.CitedScenario)
-		if cited == "" || strings.EqualFold(cited, "off-plan") {
-			continue
-		}
-		for _, s := range plan.Doc.Scenarios {
-			if s.ID != cited {
-				continue
-			}
-			if strings.EqualFold(strings.TrimSpace(s.Quality), "C") {
-				return fmt.Errorf("cited_scenario %s has quality C (trigger level consumed at write) — C scenarios are NOT tradeable; cite a B-or-better scenario or write a fresh off-plan setup", s.ID)
-			}
-			break
 		}
 	}
 	return nil

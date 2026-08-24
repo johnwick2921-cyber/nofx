@@ -130,15 +130,8 @@ func RenderPlanBlock(doc PlanDoc, session string) string {
 	}
 	b.WriteString("Scenarios:\n")
 	for _, s := range doc.Scenarios {
-		qTag := s.Quality
-		if strings.EqualFold(strings.TrimSpace(s.Quality), "C") {
-			// C-gate (2026-08-24, owner): C = trigger level consumed at write.
-			// The executor REFUSES entries citing C scenarios — say so in the
-			// block so the model re-judges instead of retry-looping.
-			qTag = "C·CONSUMED (NOT tradeable)"
-		}
 		fmt.Fprintf(&b, "  %s [%s] %s %s: %s → %s · invalid %s\n",
-			s.ID, qTag, s.Condition, s.Direction, s.Trigger, joinFloats(s.TargetChain), s.Invalid)
+			s.ID, s.Quality, s.Condition, s.Direction, s.Trigger, joinFloats(s.TargetChain), s.Invalid)
 	}
 	if len(doc.NoTrade) > 0 {
 		b.WriteString("No-trade: " + strings.Join(doc.NoTrade, " · ") + "\n")
