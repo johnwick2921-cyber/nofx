@@ -105,7 +105,11 @@ var (
 	levelGrades       = map[string]bool{"A": true, "B": true, "C": true}
 	scenarioConds     = map[string]bool{"reclaim": true, "hold": true, "sweep_reclaim": true, "reject": true, "acceptance": true, "breakout_retest": true}
 	scenarioDirs      = map[string]bool{"long": true, "short": true}
-	scenarioQualities = map[string]bool{"A+": true, "A": true, "B": true}
+	// C is ACCEPTED: it is the G5 machine-demoted state (trigger level consumed
+	// at write/re-align time), never a model-written grade. The write path runs
+	// demoteConsumedScenarios BEFORE validation, so rejecting C made every
+	// consumed-trigger plan fail-closed (London/ASIA 2026-08-23/24).
+	scenarioQualities = map[string]bool{"A+": true, "A": true, "B": true, "C": true}
 )
 
 const (
@@ -226,7 +230,7 @@ func ValidatePlanDocWithCaps(d *PlanDoc, maxLevels, maxScenarios int) error {
 			return fmt.Errorf("scenario[%d].direction %q invalid (long|short)", i, s.Direction)
 		}
 		if !scenarioQualities[s.Quality] {
-			return fmt.Errorf("scenario[%d].quality %q invalid (A+|A|B)", i, s.Quality)
+			return fmt.Errorf("scenario[%d].quality %q invalid (A+|A|B|C — C is the G5 machine-demoted 'level consumed' state)", i, s.Quality)
 		}
 		for j, t := range s.TargetChain {
 			if t <= 0 {

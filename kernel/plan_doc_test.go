@@ -153,3 +153,18 @@ func TestValidatePlanDocWithFactsAcceptsBreakdownShort(t *testing.T) {
 		t.Fatalf("reachable breakdown short must pass: %v", err)
 	}
 }
+
+// Regression: G5 machine demote caps consumed-trigger scenarios to C, and the
+// write path validates AFTER the demote — rejecting C made every
+// consumed-trigger plan fail-closed (London 08-24 v1, ASIA 08-23 v1..v4).
+func TestValidatePlanDocAcceptsG5DemotedCQuality(t *testing.T) {
+	doc, err := ParsePlanDoc(validPlanJSON)
+	if err != nil {
+		t.Fatalf("fixture must parse: %v", err)
+	}
+	doc.Scenarios[0].Quality = "C"
+	doc.Scenarios[0].Consumed = true
+	if err := ValidatePlanDoc(doc); err != nil {
+		t.Fatalf("C-quality scenario (G5 demote state) must validate: %v", err)
+	}
+}
