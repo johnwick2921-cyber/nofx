@@ -541,6 +541,22 @@ export const planApi = {
     return { ok: false, error: res.message }
   },
 
+  // ── W9 approve ──
+  async postPlanApprove(
+    traderId: string
+  ): Promise<{ approved?: boolean; session_day?: string }> {
+    const res = await httpClient.request<{
+      approved?: boolean
+      session_day?: string
+    }>(`${API_BASE}/plan/approve`, {
+      method: 'POST',
+      data: { trader_id: traderId },
+    })
+    if (!res.success || !res.data)
+      throw new Error(res.message || 'approve failed')
+    return res.data
+  },
+
   // ── P5.5 / P5.6 read models ──
   async getPlanTrades(
     traderId: string,

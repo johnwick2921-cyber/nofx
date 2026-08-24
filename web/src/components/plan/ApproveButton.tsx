@@ -10,28 +10,8 @@ import { useState } from 'react'
 import { toast } from 'sonner'
 import type { Language } from '../../i18n/translations'
 import { tp } from '../../i18n/plan-translations'
+import { planApi } from '../../lib/api/plan'
 import { guardedCall } from '../../lib/api/guarded'
-
-async function postApprove(
-  traderId: string
-): Promise<{ approved?: boolean; session_day?: string }> {
-  const res = await fetch('/api/plan/approve', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ trader_id: traderId }),
-  })
-  if (!res.ok) {
-    let msg = `HTTP ${res.status}`
-    try {
-      const j = await res.json()
-      if (j && j.error) msg = String(j.error)
-    } catch {
-      /* non-JSON body — keep the status message */
-    }
-    throw new Error(msg)
-  }
-  return res.json()
-}
 
 export function ApproveButton({
   traderId,
@@ -49,7 +29,7 @@ export function ApproveButton({
     if (!traderId || busy) return
     setBusy(true)
     try {
-      const g = await guardedCall(() => postApprove(traderId))
+      const g = await guardedCall(() => planApi.postPlanApprove(traderId))
       if (g.ok && g.value.approved) {
         toast.success(tp('approveDone', language))
         onDone?.()
