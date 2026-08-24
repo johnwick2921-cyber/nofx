@@ -168,3 +168,20 @@ func TestValidatePlanDocAcceptsG5DemotedCQuality(t *testing.T) {
 		t.Fatalf("C-quality scenario (G5 demote state) must validate: %v", err)
 	}
 }
+
+// P0.4-C (2026-08-24): near-duplicate plan levels merge before validation —
+// ASIA v2 failed-closed because the model wrote two levels 2.13 pts apart.
+func TestCollapsePlanLevels(t *testing.T) {
+	in := []PlanLevel{
+		{Price: 100.00, Label: "A", Grade: "B"},
+		{Price: 101.50, Label: "B", Grade: "A"}, // 1.5 from the first → merge, higher grade wins
+		{Price: 200.00, Label: "C", Grade: "C"},
+	}
+	out, n := CollapsePlanLevels(in, 3.0)
+	if n != 1 || len(out) != 2 {
+		t.Fatalf("collapsed n=%d len=%d, want 1/2", n, len(out))
+	}
+	if out[0].Label != "B" || out[0].Grade != "A" {
+		t.Fatalf("survivor must be the higher grade: %+v", out[0])
+	}
+}

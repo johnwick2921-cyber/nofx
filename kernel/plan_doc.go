@@ -144,6 +144,51 @@ func resolvePlanCaps(maxLevels, maxScenarios int) (maxL, maxS int) {
 	return maxL, maxS
 }
 
+// CollapsePlanLevels merges plan levels closer than tol points into ONE entry
+// (the P0.4 cluster rule, applied to the model's own output — 2026-08-24 ASIA
+// v2 fail-closed because the model wrote two levels 2.13 pts apart and the
+// duplicate-seat validation burned all retries). The survivor is the higher
+// grade; ties keep the first. Consumed ORs across the merge. Pure.
+func CollapsePlanLevels(levels []PlanLevel, tol float64) ([]PlanLevel, int) {
+	if len(levels) < 2 || tol <= 0 {
+		return levels, 0
+	}
+	out := make([]PlanLevel, 0, len(levels))
+	merged := 0
+	for _, l := range levels {
+		hit := -1
+		for i, o := range out {
+			if math.Abs(o.Price-l.Price) <= tol {
+				hit = i
+				break
+			}
+		}
+		if hit < 0 {
+			out = append(out, l)
+			continue
+		}
+		merged++
+		old := out[hit]
+		if planGradeRank(l.Grade) > planGradeRank(old.Grade) {
+			out[hit] = l
+		}
+	}
+	return out, merged
+}
+
+// planGradeRank ranks a level grade A > B > C (unknown → 0).
+func planGradeRank(g string) int {
+	switch strings.ToUpper(strings.TrimSpace(g)) {
+	case "A":
+		return 3
+	case "B":
+		return 2
+	case "C":
+		return 1
+	}
+	return 0
+}
+
 // ParsePlanDoc extracts the JSON object from raw model output (tolerating
 // surrounding prose / code fences), unmarshals it, and validates it against the
 // schema at the SHIPPED caps (8 levels / 3 scenarios). Any failure → error, which
