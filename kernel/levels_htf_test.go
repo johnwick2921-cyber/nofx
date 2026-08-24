@@ -104,20 +104,18 @@ func TestDetectHTFLevelsEQH(t *testing.T) {
 	}
 }
 
-// TestHTFZoneGradesBCovers the scorer cap: an HTF zone with confluence may
-// reach B; a 1m (non-HTF) zone stays C.
+// TestHTFZoneGradesBCovers the v3 floors: 15m/1h zones floor B (cap B),
+// 1m zones stay C, 4h zones may reach A with confluence.
 func TestHTFZoneGradesB(t *testing.T) {
 	dATR := 100.0
 	price := 1000.0
-	mkZone := func(htf bool) []DetectedLevel {
-		lv := []DetectedLevel{{Kind: KindDemand, Price: 1000, Lo: 995, Hi: 1005, Label: "Demand·1h", HTF: htf}}
+	mkZone := func(tf string) []DetectedLevel {
+		lv := []DetectedLevel{{Kind: KindDemand, Price: 1000, Lo: 995, Hi: 1005, Label: "Demand·" + tf, HTF: true, TF: tf}}
 		for i := 0; i < 5; i++ { // 5 neighbors inside confBand (0.10×dATR=10)
 			lv = append(lv, DetectedLevel{Kind: KindRound, Price: 1001 + float64(i), Lo: 1001 + float64(i), Hi: 1001 + float64(i), Label: "RN"})
 		}
 		return lv
 	}
-	htf := ScoreLevels(mkZone(true), price, dATR, nil, 8, 1.5)
-	non := ScoreLevels(mkZone(false), price, dATR, nil, 8, 1.5)
 	gradeOf := func(s []ScoredLevel) string {
 		for _, l := range s {
 			if l.Kind == KindDemand {
@@ -126,11 +124,24 @@ func TestHTFZoneGradesB(t *testing.T) {
 		}
 		return ""
 	}
-	if g := gradeOf(htf); g != "B" {
-		t.Fatalf("HTF zone with 5 confluence = %q, want B (score %.2f)", g, htf[0].Score)
+	if g := gradeOf(ScoreLevels(mkZone("1h"), price, dATR, nil, 8, 1.5)); g != "B" {
+		t.Fatalf("1h zone with 5 confluence = %q, want B (floor/cap)", g)
 	}
-	if g := gradeOf(non); g != "C" {
-		t.Fatalf("non-HTF zone with 5 confluence = %q, want C", g)
+	if g := gradeOf(ScoreLevels(mkZone("1m"), price, dATR, nil, 8, 1.5)); g != "C" {
+		t.Fatalf("1m zone with 5 confluence = %q, want C (never above)", g)
+	}
+	if g := gradeOf(ScoreLevels(mkZone("4h"), price, dATR, nil, 8, 1.5)); g != "A" {
+		t.Fatalf("4h zone with 5 confluence = %q, want A (v3 allows A on 4h)", g)
+	}
+}
+
+// TestZoneReversalBonus covers v3 pattern classification: RBD/DBR (reversal)
+// outgrades RBR/DBD (continuation) at the same TF.
+func TestZoneReversalBonus(t *testing.T) {
+	rev := DetectedLevel{Kind: KindSupply, Price: 1000, Lo: 995, Hi: 1005, Label: "Supply·1h", HTF: true, TF: "1h", ZonePattern: "reversal"}
+	cont := DetectedLevel{Kind: KindSupply, Price: 1000, Lo: 995, Hi: 1005, Label: "Supply·1h", HTF: true, TF: "1h", ZonePattern: "continuation"}
+	if eR, eC := zoneEvidence(rev), zoneEvidence(cont); eR <= eC {
+		t.Fatalf("reversal zone evidence %.3f must exceed continuation %.3f", eR, eC)
 	}
 }
 

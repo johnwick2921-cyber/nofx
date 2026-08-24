@@ -91,6 +91,61 @@ func isZoneKind(k LevelKind) bool {
 	return false
 }
 
+// ── v3 zone grading (owner-approved 2026-08-24, research-grounded) ──────────
+// Evidence = kindBase(TF) × reversalBonus × TFmult × freshness × (1+0.2·conf).
+// Ground: freshness · departure speed · HTF alignment (SMC quality filters);
+// RBD/DBR (reversal) > RBR/DBD (continuation). 1m zones stay C (noise); 15m/1h
+// floor B, cap B; 4h may reach A with confluence.
+
+// zoneEvidenceByKind maps kind → TF tier → base evidence. Tiers: 1m / 15m / 1h / 4h.
+var zoneEvidenceByKind = map[LevelKind]map[string]float64{
+	KindOB:     {"1m": 0.40, "15m": 0.50, "1h": 0.60, "4h": 0.72},
+	KindFVG:    {"1m": 0.35, "15m": 0.45, "1h": 0.55, "4h": 0.65},
+	KindSupply: {"1m": 0.35, "15m": 0.45, "1h": 0.55, "4h": 0.65},
+	KindDemand: {"1m": 0.35, "15m": 0.45, "1h": 0.55, "4h": 0.65},
+}
+
+// zoneTFMult is the "HTF alignment" multiplier per detection timeframe tier.
+var zoneTFMult = map[string]float64{"1m": 1.0, "15m": 1.1, "1h": 1.2, "4h": 1.3}
+
+// zoneReversalBonus rewards RBD/DBR (reversal) over RBR/DBD (continuation).
+const zoneReversalBonus = 1.1
+
+// zoneTierFor maps a detection timeframe string to one of the four v3 tiers
+// ("" and short TFs → 1m; 30m → 15m; 2h → 1h; 6h/8h/12h → 4h).
+func zoneTierFor(tf string) string {
+	switch strings.ToLower(strings.TrimSpace(tf)) {
+	case "", "1m", "3m", "5m":
+		return "1m"
+	case "30m":
+		return "15m"
+	case "2h":
+		return "1h"
+	case "6h", "8h", "12h":
+		return "4h"
+	default:
+		return strings.ToLower(strings.TrimSpace(tf))
+	}
+}
+
+// zoneEvidence computes the v3 base evidence for a zone level (kind × TF tier ×
+// reversal pattern). Unknown TF → 1m tier (noise floor).
+func zoneEvidence(l DetectedLevel) float64 {
+	tier := zoneTierFor(l.TF)
+	table, ok := zoneEvidenceByKind[l.Kind]
+	if !ok {
+		return 0.30
+	}
+	base, ok := table[tier]
+	if !ok {
+		base = table["1m"]
+	}
+	if l.ZonePattern == "reversal" {
+		base *= zoneReversalBonus
+	}
+	return base
+}
+
 // isTodayPriority marks the kinds that get first seats at the cap.
 func isTodayPriority(k LevelKind) bool {
 	switch k {
@@ -176,18 +231,33 @@ func ScoreLevels(levels []DetectedLevel, price, dATR float64, freshness func(Det
 		if l.HTF {
 			htf = 1.2
 		}
-		score := typeEvidence(l.Kind) * fm * (1 + 0.20*float64(conf)) * htf
+		var score float64
+		if isZoneKind(l.Kind) {
+			// v3 zone grading: kindBase × TFmult × freshness × confluence.
+			score = zoneEvidence(l) * fm * (1 + 0.20*float64(conf)) * zoneTFMult[zoneTierFor(l.TF)]
+		} else {
+			score = typeEvidence(l.Kind) * fm * (1 + 0.20*float64(conf)) * htf
+		}
 		grade := gradeFromScore(score)
 		if isZoneKind(l.Kind) {
-			// P0.1: 1m zones are confluence-only, never above C. G2/G3
-			// (2026-08-24): HTF zones (1h/4h bases) may reach B — large-account
-			// auctions don't need a crowd — but never A.
-			if l.HTF {
-				if grade == "A" {
+			// v3 floors/caps: 1m zones never above C; 15m/1h floor B, cap B;
+			// 4h floor B and may reach A with confluence (the professionals'
+			// level — research: HTF alignment).
+			switch zoneTierFor(l.TF) {
+			case "15m", "1h":
+				if grade == "C" {
+					grade = "B"
+				} else if grade == "A" {
 					grade = "B"
 				}
-			} else if grade != "C" {
-				grade = "C"
+			case "4h":
+				if grade == "C" {
+					grade = "B"
+				}
+			default: // 1m tier
+				if grade != "C" {
+					grade = "C"
+				}
 			}
 		}
 		scored = append(scored, ScoredLevel{

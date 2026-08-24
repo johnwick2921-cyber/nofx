@@ -136,8 +136,10 @@ func isHTFDetectionTF(tf string) bool {
 
 // tagHTFLevel marks a detected level with its HTF origin + a TF-suffixed label
 // ("EQH·1h", "Demand·4h") so the ranked table and the card show provenance.
+// Also sets the structured TF field the v3 zone tiers grade on.
 func tagHTFLevel(l DetectedLevel, tf string) DetectedLevel {
 	l.HTF = true
+	l.TF = tf
 	l.Label = l.Label + "·" + tf
 	return l
 }
