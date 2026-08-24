@@ -133,9 +133,9 @@ func BuildPlannerPrompt(in PlannerInput) string {
 		b.WriteString("  (no filtered events)\n")
 	} else {
 		for _, e := range in.Calendar {
-			tag := "caution"
+			tag := "caution — NOT a no-trade blackout; keep trading with normal discretion"
 			if e.Impact == "T1" {
-				tag = "HARD no-trade blackout"
+				tag = "HARD no-trade blackout — MUST be added to no_trade"
 			}
 			fmt.Fprintf(&b, "  %s %s %s — %s (%s)\n", e.TimeCT, e.Currency, e.Impact, e.Title, tag)
 		}
@@ -182,6 +182,7 @@ func plannerOutputContract(maxLevels, maxScenarios int) string {
 		"death.flip objects are MACHINE-EVALUATED — choose levels from your level list and a rule; they must match the prose lines. " +
 		"Every scenario's confirm{} is MACHINE-EVALUATED the same way: rule + ref_price + side, and ref_price MUST equal a number written in that scenario's trigger/invalid prose. " +
 		"target_chain is GUIDANCE for the executor AI (which sets the actual take_profit) — it is validated for reachability at write time but never enforced at execution (D2 ruling). " +
+		"no_trade may contain ONLY the fixed session windows (first 5m, lunch) plus T1 HARD-blackout lines from the calendar — a T2 caution event is NEVER added to no_trade and never stops entries. " +
 		"Respect the no-trade windows. If you cannot form a credible plan, say so in reasoning and output a neutral/no-trade plan.\n"
 }
 

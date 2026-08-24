@@ -95,8 +95,10 @@ func TestF0Fallback404StoresStatic(t *testing.T) {
 
 func TestF0SkipFreshNoRefetch(t *testing.T) {
 	at, st := f0Trader(t)
+	now := nowOnCT(t, "2026-08-19")
 	if _, err := st.Calendar().SaveSliceIfAbsent(&store.CalendarSliceDB{
 		TradeDate: "2026-08-19", Source: "forexfactory", EventsJSON: `[]`,
+		CreatedAt: now.Add(-time.Hour).UnixMilli(), // F0.4: fresh (<3h) → skip
 	}); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
@@ -105,10 +107,47 @@ func TestF0SkipFreshNoRefetch(t *testing.T) {
 		return nil, nil
 	}
 
-	at.maybeFetchCalendar(nowOnCT(t, "2026-08-19"))
+	at.maybeFetchCalendar(now)
 	// and the once-per-date skip log dedupe latch is set
 	if at.lastCalSkipDate != "2026-08-19" {
 		t.Fatalf("skip-fresh latch not set: %q", at.lastCalSkipDate)
+	}
+}
+
+// F0.4 — a LIVE slice older than the 3h freshness window re-fetches, and a
+// CHANGED payload updates it in place (same-day corrections) while an unchanged
+// payload leaves it byte-identical (replay integrity).
+func TestF0StaleLiveSliceRefreshesWhenChanged(t *testing.T) {
+	at, st := f0Trader(t)
+	now := nowOnCT(t, "2026-08-19")
+	if _, err := st.Calendar().SaveSliceIfAbsent(&store.CalendarSliceDB{
+		TradeDate: "2026-08-19", Source: "forexfactory",
+		EventsJSON: `[{"time":"2026-08-19T19:00:00Z","currency":"USD","title":"old title","impact":"T1"}]`,
+		CreatedAt:  now.Add(-4 * time.Hour).UnixMilli(),
+	}); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	at.calFetch = func() ([]byte, error) { return ffFixture("2026-08-19"), nil }
+
+	at.maybeFetchCalendar(now)
+
+	slice, _ := st.Calendar().GetSlice("2026-08-19")
+	if slice == nil {
+		t.Fatal("slice missing")
+	}
+	var evs []calendar.Event
+	if err := json.Unmarshal([]byte(slice.EventsJSON), &evs); err != nil || len(evs) != 2 {
+		t.Fatalf("stale live slice not refreshed with the changed feed: %s", slice.EventsJSON)
+	}
+
+	// unchanged second fetch (same fixture) must NOT rewrite the row.
+	at.lastCalFetch = time.Time{} // clear throttle
+	at.calFetch = func() ([]byte, error) { return ffFixture("2026-08-19"), nil }
+	before := slice.EventsJSON
+	at.maybeFetchCalendar(now)
+	after, _ := st.Calendar().GetSlice("2026-08-19")
+	if after == nil || after.EventsJSON != before {
+		t.Fatal("unchanged feed must not rewrite the live slice")
 	}
 }
 
