@@ -917,6 +917,14 @@ func (at *AutoTrader) assemblePlannerInput(session, tradeDate string) kernel.Pla
 	if kernel.NakedPOCProvider != nil {
 		extra = kernel.NakedPOCProvider(symbol)
 	}
+	// G2/G3 (2026-08-24) — per-TF swing/zone detection on the CONFIGURED
+	// planner timeframes: real 1h/4h support/resistance now enters the
+	// candidate pool (before this, every detector ran on the 1m slice only).
+	if market.FuturesBarsProvider != nil {
+		extra = append(extra, kernel.DetectHTFLevels(func(tf string, count int) []market.Kline {
+			return market.FuturesBarsProvider(symbol, tf, count)
+		}, timeframes, symbol, now)...)
+	}
 	scored, price, dATR := kernel.AssembleScoredLevels(at.id, bars, reg, symbol, maxLevels, now, at.proximityFilterATR(), extra...)
 
 	// P3.6-C — STICKY OWNER LEVELS: always seated, tagged 👤, persisted across

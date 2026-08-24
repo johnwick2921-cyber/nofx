@@ -2,6 +2,7 @@ package kernel
 
 import (
 	"math"
+	"strings"
 	"time"
 
 	"nofx/market"
@@ -70,6 +71,75 @@ func AssembleScoredLevels(traderID string, bars []market.Kline, reg SessionRegis
 	// all-fresh (byte-identical to the pre-W11b output the goldens capture).
 	scored = ScoreLevels(all, price, dATR, levelFreshnessFn(traderID, symbol), maxLevels, proximityK)
 	return scored, price, dATR
+}
+
+// DetectHTFLevels (G2/G3, 2026-08-24) — per-TF swing/zone detection on the
+// CONFIGURED higher timeframes, so real 1h/4h support/resistance enters the
+// candidate pool (before this, every detector ran on the 1m slice only). Every
+// output carries HTF=true: the scorer's ×1.2 multiplier and the P0.1
+// standalone-zone rule then apply. TFs below 15m and "D" are skipped —
+// intraday noise adds nothing, and the daily anchors are already covered by
+// ExtractMultiDayLevels. Cluster tolerance scales with the TF's own ATR
+// (3 ticks is meaningless on a 1h bar).
+func DetectHTFLevels(fetch func(tf string, count int) []market.Kline, timeframes []string, symbol string, now time.Time) []DetectedLevel {
+	if fetch == nil || len(timeframes) == 0 {
+		return nil
+	}
+	tick := market.FuturesTickSize(symbol)
+	if tick <= 0 {
+		tick = 0.25
+	}
+	seen := map[string]bool{}
+	var out []DetectedLevel
+	for _, tf := range timeframes {
+		tf = strings.ToLower(strings.TrimSpace(tf))
+		if tf == "" || seen[tf] || !isHTFDetectionTF(tf) {
+			continue
+		}
+		seen[tf] = true
+		cb := closedBars(fetch(tf, 500), now)
+		if len(cb) < 5 {
+			continue
+		}
+		atr := market.ExportCalculateATR(cb, 14)
+		if atr <= 0 {
+			atr = 0.002 * cb[len(cb)-1].Close
+		}
+		tol := 3 * tick
+		if alt := 0.15 * atr; alt > tol {
+			tol = alt
+		}
+		for _, l := range EqualHighsLows(cb, tol, now) {
+			out = append(out, tagHTFLevel(l, tf))
+		}
+		for _, l := range SupplyDemandZones(cb, atr, now) {
+			out = append(out, tagHTFLevel(l, tf))
+		}
+		for _, l := range FairValueGaps(cb, atr, now) {
+			out = append(out, tagHTFLevel(l, tf))
+		}
+		for _, l := range OrderBlocks(cb, atr, now) {
+			out = append(out, tagHTFLevel(l, tf))
+		}
+	}
+	return out
+}
+
+// isHTFDetectionTF lists the timeframes DetectHTFLevels runs on (≥15m, not "D").
+func isHTFDetectionTF(tf string) bool {
+	switch tf {
+	case "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h":
+		return true
+	}
+	return false
+}
+
+// tagHTFLevel marks a detected level with its HTF origin + a TF-suffixed label
+// ("EQH·1h", "Demand·4h") so the ranked table and the card show provenance.
+func tagHTFLevel(l DetectedLevel, tf string) DetectedLevel {
+	l.HTF = true
+	l.Label = l.Label + "·" + tf
+	return l
 }
 
 // DailyATRProxy estimates the daily ATR from intraday bars by averaging each

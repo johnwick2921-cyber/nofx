@@ -178,8 +178,17 @@ func ScoreLevels(levels []DetectedLevel, price, dATR float64, freshness func(Det
 		}
 		score := typeEvidence(l.Kind) * fm * (1 + 0.20*float64(conf)) * htf
 		grade := gradeFromScore(score)
-		if isZoneKind(l.Kind) && grade < "C" { // zones capped at C
-			grade = "C"
+		if isZoneKind(l.Kind) {
+			// P0.1: 1m zones are confluence-only, never above C. G2/G3
+			// (2026-08-24): HTF zones (1h/4h bases) may reach B — large-account
+			// auctions don't need a crowd — but never A.
+			if l.HTF {
+				if grade == "A" {
+					grade = "B"
+				}
+			} else if grade != "C" {
+				grade = "C"
+			}
 		}
 		scored = append(scored, ScoredLevel{
 			DetectedLevel: l,
@@ -222,6 +231,11 @@ func ScoreLevels(levels []DetectedLevel, price, dATR float64, freshness func(Det
 	// that left the model with "no trigger" for 110 points of breakdown). When
 	// the pure top-N leaves one side under-supplied while candidates exist,
 	// swap in the best in-band levels from the missing side.
+	// G2/G3/G6 (2026-08-24) — seatHTF first: the model only ever sees the
+	// top-N table, so HTF swing/zone levels must WIN seats to reach the plan.
+	// The P0.1 side-balance pass may still swap a promoted seat if a side ends
+	// under-supplied (the hard rule wins).
+	scored = seatHTF(scored, maxLevels)
 	scored = seatBothSides(scored, maxLevels)
 
 	if len(scored) > maxLevels {
@@ -320,6 +334,99 @@ const MinSideLevels = 3
 // order (priority, then score). Pure + deterministic: only swaps the WEAKEST
 // currently-seated entries of the over-supplied side for the STRONGEST
 // un-seated candidates of the under-supplied side.
+// isHTFSwingZone reports whether a scored level is an HTF-origin swing/zone
+// (EQH/EQL/S/D/FVG/OB with the HTF flag) — the kinds the seatHTF guarantee
+// protects. Multi-day anchors (PDH/PWL…) are today-priority and don't need it.
+func isHTFSwingZone(l ScoredLevel) bool {
+	if !l.HTF {
+		return false
+	}
+	switch l.Kind {
+	case KindEQH, KindEQL, KindSupply, KindDemand, KindFVG, KindOB:
+		return true
+	}
+	return false
+}
+
+// seatHTF (G2/G3/G6, 2026-08-24) — promote up to 2 HTF swing/zone levels into
+// the head seats (the top-N table is all the model sees). Demotes the weakest
+// non-today-priority, non-HTF entries to make room. Runs on the FULL sorted
+// list before seatBothSides; takes no action when nothing was cut.
+func seatHTF(scored []ScoredLevel, maxLevels int) []ScoredLevel {
+	if maxLevels <= 0 {
+		maxLevels = DefaultMaxLevels
+	}
+	if len(scored) <= maxLevels {
+		return scored
+	}
+	const maxHTFSeats = 2
+	head := append([]ScoredLevel(nil), scored[:maxLevels]...)
+	tail := append([]ScoredLevel(nil), scored[maxLevels:]...)
+	seated := 0
+	for _, l := range head {
+		if isHTFSwingZone(l) {
+			seated++
+		}
+	}
+	need := maxHTFSeats - seated
+	if need <= 0 {
+		return scored
+	}
+	var cands []ScoredLevel
+	for _, l := range tail {
+		if isHTFSwingZone(l) {
+			cands = append(cands, l)
+		}
+	}
+	for need > 0 {
+		if len(cands) == 0 {
+			break
+		}
+		dropIdx := -1
+		for i := len(head) - 1; i >= 0; i-- {
+			if isTodayPriority(head[i].Kind) || isHTFSwingZone(head[i]) {
+				continue
+			}
+			dropIdx = i
+			break
+		}
+		if dropIdx < 0 {
+			break
+		}
+		cand := cands[0]
+		cands = cands[1:]
+		// Remove the candidate from the tail (it now sits in the head) and
+		// move the demoted head entry into the tail.
+		for i, l := range tail {
+			if l.Price == cand.Price && l.Kind == cand.Kind && l.Label == cand.Label && l.HTF == cand.HTF {
+				tail = append(tail[:i], tail[i+1:]...)
+				break
+			}
+		}
+		tail = append(tail, head[dropIdx])
+		head = append(head[:dropIdx], head[dropIdx+1:]...)
+		head = append(head, cand)
+		need--
+	}
+	out := append(head, tail...)
+	// Restore strict seating order (same sort as the pre-pass).
+	sort.SliceStable(out, func(i, j int) bool {
+		pi, pj := isTodayPriority(out[i].Kind), isTodayPriority(out[j].Kind)
+		if pi != pj {
+			return pi
+		}
+		if out[i].Score != out[j].Score {
+			return out[i].Score > out[j].Score
+		}
+		di, dj := math.Abs(out[i].Distance), math.Abs(out[j].Distance)
+		if di != dj {
+			return di < dj
+		}
+		return out[i].Price < out[j].Price
+	})
+	return out
+}
+
 func seatBothSides(scored []ScoredLevel, maxLevels int) []ScoredLevel {
 	if maxLevels <= 0 {
 		maxLevels = DefaultMaxLevels
@@ -408,12 +515,16 @@ func RenderKeyLevelsBlock(scored []ScoredLevel, price float64) string {
 		if s.Confluence > 0 {
 			fresh = fmt.Sprintf("%s·x%d", s.Fresh, s.Confluence)
 		}
+		label := s.Label
+		if isHTFSwingZone(s) {
+			label = label + " (HTF)"
+		}
 		sign := "+"
 		if s.Distance < 0 {
 			sign = "-"
 		}
-		fmt.Fprintf(&b, "  %-9.2f %-14s %s  %-9s %s%.1f\n",
-			s.Price, s.Label, s.Grade, fresh, sign, math.Abs(s.Distance))
+		fmt.Fprintf(&b, "  %-9.2f %-20s %s  %-9s %s%.1f\n",
+			s.Price, label, s.Grade, fresh, sign, math.Abs(s.Distance))
 	}
 	// W-why-no-trades (2026-08-18): "do not chase price between them" was the
 	// base-prompt line the model quoted while waiting cycle after cycle (0/3

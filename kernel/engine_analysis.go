@@ -378,6 +378,14 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 			if NakedPOCProvider != nil {
 				extra = NakedPOCProvider(activeSymbol)
 			}
+			// G2/G3 (2026-08-24) — the executor's KEY LEVELS block gets the
+			// same HTF swing/zone pass (1h+4h default; the planner uses the
+			// owner's configured planner_timeframes set).
+			if market.FuturesBarsProvider != nil {
+				extra = append(extra, DetectHTFLevels(func(tf string, count int) []market.Kline {
+					return market.FuturesBarsProvider(activeSymbol, tf, count)
+				}, []string{"1h", "4h"}, activeSymbol, snapshotNow)...)
+			}
 			// H7 — the registry is the admin registry the DECIDING trader
 			// resolves (per-trader provider; never another trader's).
 			klBlock = BuildKeyLevelsBlock(ctx.TraderID, snapshotBars, ResolvedSessionRegistryFor(ctx.TraderID), activeSymbol, maxLevels, snapshotNow, proximityK, extra...)
