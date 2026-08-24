@@ -301,3 +301,20 @@ func TestAcceptanceIntervalMinutes(t *testing.T) {
 		}
 	}
 }
+
+// P0.4-D (2026-08-24): right after a plan write, the BarsSince window can hold
+// only a FORMING bar (no closed close yet). The old code returned lc=0 there,
+// rendering every distance as the negative of the level price (the "Dist −29082"
+// display bug on ASIA v3). referenceClose must fall back to the latest bar close.
+func TestEvaluateLevelFactsFormingBarReference(t *testing.T) {
+	nowMs := int64(1_000_000)
+	forming := market.Kline{Close: 29120.25, CloseTime: nowMs + 60_000} // not closed
+	bars := []market.Kline{forming}
+	f := EvaluateLevelFacts(bars, 29082.5, DirAbove, "2x5m", 3, nowMs)
+	if f.LatestClose != 29120.25 {
+		t.Fatalf("LatestClose=%v, want forming-bar close 29120.25", f.LatestClose)
+	}
+	if f.DistancePoints != 37.75 {
+		t.Fatalf("DistancePoints=%v, want +37.75 (29120.25 - 29082.50)", f.DistancePoints)
+	}
+}

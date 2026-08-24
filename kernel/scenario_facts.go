@@ -224,6 +224,23 @@ func latestClosedClose(bars []market.Kline, nowMs int64) (float64, bool) {
 	return 0, false
 }
 
+// referenceClose is the price reference for relative facts (distance, dir,
+// acceptance). It prefers the latest CLOSED close; when the window has no
+// closed bar yet — the classic case is the first minute after a plan write,
+// where BarsSince keeps only post-birth bars and the sole bar is still
+// forming — it falls back to the latest bar's close. Returning 0 there made
+// every distance render as the NEGATIVE of the level price (0 - level), the
+// "Dist −29082" display bug on 2026-08-24 ASIA v3.
+func referenceClose(bars []market.Kline, nowMs int64) (float64, bool) {
+	if lc, ok := latestClosedClose(bars, nowMs); ok {
+		return lc, true
+	}
+	if len(bars) > 0 {
+		return bars[len(bars)-1].Close, true
+	}
+	return 0, false
+}
+
 // ClosesBeyond counts the most-recent CONSECUTIVE closed bars whose close is
 // strictly beyond level in dir. The run breaks at the first closed bar not
 // beyond. Trailing not-yet-closed bars are skipped. This is the "closes-beyond n"
@@ -370,7 +387,7 @@ func LevelStillValidOn(bars []market.Kline, level float64, rule string, nowMs in
 // the scenario's expected direction; rule is the acceptance rule; lookback bounds
 // sweep/reclaim/reject scans (0 → default 3).
 func EvaluateLevelFacts(bars []market.Kline, level float64, dir int, rule string, lookback int, nowMs int64) LevelFacts {
-	lc, _ := latestClosedClose(bars, nowMs)
+	lc, _ := referenceClose(bars, nowMs)
 	// Acceptance, closes-beyond and validity are counted on the timeframe the
 	// RULE names (2x5m → 5-minute bars; 15m-close → 15-minute bars), never on
 	// the source series' own length. Sweep/reclaim/reject stay on the source
