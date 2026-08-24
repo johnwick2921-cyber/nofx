@@ -103,7 +103,11 @@ func BuildPlannerPrompt(in PlannerInput) string {
 			if l.Distance < 0 {
 				sign = "-"
 			}
-			fmt.Fprintf(&b, "  %-9.2f %-14s grade %s  %-8s %s%.1f\n", l.Price, l.Label, l.Grade, l.Fresh, sign, absF(l.Distance))
+			label := l.Label
+			if isHTFSwingZone(l) {
+				label = label + " (HTF)"
+			}
+			fmt.Fprintf(&b, "  %-9.2f %-20s grade %s  %-8s %s%.1f\n", l.Price, label, l.Grade, l.Fresh, sign, absF(l.Distance))
 		}
 	}
 	b.WriteString("\n")

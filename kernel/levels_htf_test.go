@@ -1,0 +1,182 @@
+package kernel
+
+import (
+	"testing"
+	"time"
+
+	"nofx/market"
+)
+
+// htfKlines builds `n` 1h bars (OpenTime step = 1h), all closed before `now`.
+func htfKlines(n int, o, h, l, c []float64, now time.Time) []market.Kline {
+	out := make([]market.Kline, n)
+	start := now.Add(-time.Duration(n) * time.Hour).Truncate(time.Hour)
+	for i := 0; i < n; i++ {
+		out[i] = market.Kline{
+			OpenTime:  start.Add(time.Duration(i) * time.Hour).UnixMilli(),
+			Open:      o[i], High: h[i], Low: l[i], Close: c[i],
+			CloseTime: start.Add(time.Duration(i)*time.Hour + time.Hour - 1).UnixMilli(),
+		}
+	}
+	return out
+}
+
+// TestDetectHTFLevelsDemandZone covers G2/G3: a 1h base+departure becomes a
+// "Demand·1h" zone with HTF=true, and intraday/daily TFs are skipped.
+func TestDetectHTFLevelsDemandZone(t *testing.T) {
+	now := time.Date(2026, 8, 24, 14, 0, 0, 0, time.UTC)
+	n := 21
+	o, h, l, c := make([]float64, n), make([]float64, n), make([]float64, n), make([]float64, n)
+	for i := 0; i < n; i++ {
+		o[i], c[i] = 100, 100.1 // small bodies (0.1)
+		h[i], l[i] = 101, 99
+	}
+	// departure candle: big up move
+	o[n-1], c[n-1] = 100, 110
+	h[n-1], l[n-1] = 110.5, 99.5
+
+	fetch := func(tf string, count int) []market.Kline {
+		if tf != "1h" {
+			return nil
+		}
+		return htfKlines(n, o, h, l, c, now)
+	}
+	got := DetectHTFLevels(fetch, []string{"1m", "5m", "1h", "D"}, "MNQ", now)
+	var demand *DetectedLevel
+	for i := range got {
+		if got[i].Kind == KindDemand {
+			demand = &got[i]
+		}
+	}
+	if demand == nil {
+		t.Fatalf("expected a Demand zone from the 1h base+departure, got %d levels", len(got))
+	}
+	if !demand.HTF {
+		t.Fatalf("1h demand zone must carry HTF=true: %+v", demand)
+	}
+	if demand.Label != "Demand·1h" {
+		t.Fatalf("label = %q, want \"Demand·1h\"", demand.Label)
+	}
+}
+
+// TestDetectHTFLevelsEQH covers the 1h swing side: two strict pivot highs
+// within tolerance become "EQH·1h" with HTF=true.
+func TestDetectHTFLevelsEQH(t *testing.T) {
+	now := time.Date(2026, 8, 24, 14, 0, 0, 0, time.UTC)
+	n := 30
+	o, h, l, c := make([]float64, n), make([]float64, n), make([]float64, n), make([]float64, n)
+	for i := 0; i < n; i++ {
+		o[i], c[i] = 100, 100.5
+		h[i], l[i] = 103, 97 // range 6 → ATR14 ≈ 6 → tol ≈ 0.9
+	}
+	// two strict pivot highs (isolated by 2 bars each side) within tolerance
+	h[6], h[6+0] = 110.0, 110.0
+	h[16] = 110.6
+	for i := 4; i <= 8; i++ {
+		if i != 6 {
+			h[i] = 104
+		}
+	}
+	for i := 14; i <= 18; i++ {
+		if i != 16 {
+			h[i] = 104
+		}
+	}
+
+	fetch := func(tf string, count int) []market.Kline {
+		if tf != "1h" {
+			return nil
+		}
+		return htfKlines(n, o, h, l, c, now)
+	}
+	got := DetectHTFLevels(fetch, []string{"1h"}, "MNQ", now)
+	var eqh *DetectedLevel
+	for i := range got {
+		if got[i].Kind == KindEQH {
+			eqh = &got[i]
+		}
+	}
+	if eqh == nil {
+		t.Fatalf("expected EQH·1h from two 1h pivot highs, got %d levels", len(got))
+	}
+	if !eqh.HTF || eqh.Label != "EQH·1h" {
+		t.Fatalf("bad HTF tag/label: %+v", eqh)
+	}
+}
+
+// TestHTFZoneGradesBCovers the scorer cap: an HTF zone with confluence may
+// reach B; a 1m (non-HTF) zone stays C.
+func TestHTFZoneGradesB(t *testing.T) {
+	dATR := 100.0
+	price := 1000.0
+	mkZone := func(htf bool) []DetectedLevel {
+		lv := []DetectedLevel{{Kind: KindDemand, Price: 1000, Lo: 995, Hi: 1005, Label: "Demand·1h", HTF: htf}}
+		for i := 0; i < 5; i++ { // 5 neighbors inside confBand (0.10×dATR=10)
+			lv = append(lv, DetectedLevel{Kind: KindRound, Price: 1001 + float64(i), Lo: 1001 + float64(i), Hi: 1001 + float64(i), Label: "RN"})
+		}
+		return lv
+	}
+	htf := ScoreLevels(mkZone(true), price, dATR, nil, 8, 1.5)
+	non := ScoreLevels(mkZone(false), price, dATR, nil, 8, 1.5)
+	gradeOf := func(s []ScoredLevel) string {
+		for _, l := range s {
+			if l.Kind == KindDemand {
+				return l.Grade
+			}
+		}
+		return ""
+	}
+	if g := gradeOf(htf); g != "B" {
+		t.Fatalf("HTF zone with 5 confluence = %q, want B (score %.2f)", g, htf[0].Score)
+	}
+	if g := gradeOf(non); g != "C" {
+		t.Fatalf("non-HTF zone with 5 confluence = %q, want C", g)
+	}
+}
+
+// TestSeatHTFPromotesSwingLevels covers G6: up to 2 HTF swing/zone levels win
+// seats over weaker non-priority entries so the model's top-N table sees them.
+func TestSeatHTFPromotesSwingLevels(t *testing.T) {
+	scored := make([]ScoredLevel, 0, 10)
+	for i := 0; i < 8; i++ { // weak round numbers fill the head
+		scored = append(scored, ScoredLevel{
+			DetectedLevel: DetectedLevel{Kind: KindRound, Price: 990 + float64(i), Label: "RN"},
+			Score: 0.4, Grade: "C", Fresh: "fresh", Distance: 990 + float64(i) - 1000,
+		})
+	}
+	for i := 0; i < 2; i++ { // HTF swings lost the cut
+		scored = append(scored, ScoredLevel{
+			DetectedLevel: DetectedLevel{Kind: KindEQH, Price: 1100 + float64(i), Label: "EQH·1h", HTF: true},
+			Score: 0.84, Grade: "B", Fresh: "fresh", Distance: 100 + float64(i),
+		})
+	}
+	out := seatHTF(scored, 8)
+	head, tail := out[:8], out[8:]
+	htfInHead := 0
+	for _, l := range head {
+		if isHTFSwingZone(l) {
+			htfInHead++
+		}
+	}
+	if htfInHead != 2 {
+		t.Fatalf("seatHTF promoted %d HTF levels (want 2); head: %+v", htfInHead, head)
+	}
+	if len(tail) != 2 || isHTFSwingZone(tail[0]) || isHTFSwingZone(tail[1]) {
+		t.Fatalf("demoted entries must be the weak non-HTF ones: %+v", tail)
+	}
+	// today-priority entries must never be demoted
+	pri := []ScoredLevel{
+		{DetectedLevel: DetectedLevel{Kind: KindPDH, Price: 1200, Label: "PDH", HTF: true}, Score: 1.4, Grade: "A", Fresh: "fresh", Distance: 200},
+	}
+	all := append(pri, scored...)
+	out2 := seatHTF(all, 8)
+	priSeated := false
+	for _, l := range out2[:8] {
+		if l.Kind == KindPDH {
+			priSeated = true
+		}
+	}
+	if !priSeated {
+		t.Fatal("seatHTF demoted a today-priority level")
+	}
+}
