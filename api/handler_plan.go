@@ -61,6 +61,17 @@ func (s *Server) planRules(traderID, session, tradeDate string, version int) (ru
 	return rule, mode, replansLeft
 }
 
+// approvalRequired resolves the strategy's approval_required flag (W9): ON =
+// entries wait for the owner's plan-header Approve per CME session-day.
+func (s *Server) approvalRequired(traderID string) bool {
+	if at, err := s.traderManager.GetTrader(traderID); err == nil && at != nil {
+		if cfg := at.GetStrategyConfig(); cfg != nil && cfg.DayPlan != nil {
+			return cfg.DayPlan.ApprovalRequired
+		}
+	}
+	return false
+}
+
 // planRulesWithCap also returns the RESOLVED re-plan cap, so the card can say
 // "4 of 4 re-plans spent" instead of re-deriving a number it does not have.
 // The budget is measured from the chain baseline (P6 owner reset) — the same
@@ -158,7 +169,8 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 	base := gin.H{
 		"found": false, "trade_date": tradeDate, "session": sessName, "night": night,
 		"mode": mode, "acceptance_rule": rule, "reading": reading,
-		"active_session": activeName, "is_active": sessName != "" && sessName == activeName,
+		"approval_required": s.approvalRequired(traderID),
+		"active_session":    activeName, "is_active": sessName != "" && sessName == activeName,
 		"runnable_sessions": runnable,
 	}
 	// An EXPLICITLY requested session is readable whether or not it is the live one
@@ -263,15 +275,16 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 		"version":    row.Version,
 		"reading":    reading,
 		// ITEM 15 — the card marks itself HISTORICAL and offers the way back.
-		"historical":     historical,
-		"latest_version": latestVersion,
-		"trigger_reason": row.TriggerReason,
-		"created_at":     row.CreatedAt,
-		"overlay_count":  len(overlays),
-		"lifecycle":      row.Lifecycle,
-		"model_id":       row.ModelID,
-		"night":          false,
-		"mode":           mode,
+		"historical":        historical,
+		"latest_version":    latestVersion,
+		"trigger_reason":    row.TriggerReason,
+		"created_at":        row.CreatedAt,
+		"overlay_count":     len(overlays),
+		"lifecycle":         row.Lifecycle,
+		"model_id":          row.ModelID,
+		"night":             false,
+		"mode":              mode,
+		"approval_required": s.approvalRequired(traderID),
 		// which session this payload IS, vs which one is live right now
 		"active_session":    activeName,
 		"is_active":         sessName == activeName,

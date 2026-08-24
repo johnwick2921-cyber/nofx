@@ -81,6 +81,8 @@ export interface PlanToday {
   session: string
   night: boolean
   mode: string // advisory | direction | strict
+  /** W9 — strategy approval_required ON = the owner must Approve per session-day. */
+  approval_required?: boolean
   /** UI-verification (2026-08-18) — a planner read is in flight for this chain. */
   reading?: boolean
   version?: number

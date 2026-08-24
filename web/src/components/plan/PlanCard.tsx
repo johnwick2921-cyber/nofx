@@ -99,11 +99,13 @@ export function PlanCard({
           action is the plan-header grant (approval_required flow). */}
       <div className="flex items-start justify-end gap-4">
         <div className="flex flex-col items-end gap-1">
-          <ApproveButton
-            traderId={traderId}
-            language={language}
-            onDone={() => mutate()}
-          />
+          {plan?.approval_required === true && (
+            <ApproveButton
+              traderId={traderId}
+              language={language}
+              onDone={() => mutate()}
+            />
+          )}
           <span
             className="text-[9px]"
             style={{
