@@ -64,3 +64,22 @@ func TestPlannerPromptT2CautionIsNeverNoTrade(t *testing.T) {
 		}
 	}
 }
+
+// G2.2 (2026-08-24) — the HTF zones section: zones that lose the top-8 seat
+// race still reach the model as a dedicated confluence section.
+func TestPlannerPromptHTFZonesSection(t *testing.T) {
+	in := samplePlannerInput()
+	in.HTFZones = []ScoredLevel{
+		{DetectedLevel: DetectedLevel{Kind: KindDemand, Price: 29050, Label: "Demand·1h", HTF: true}, Grade: "B", Fresh: "fresh", Distance: -100},
+		{DetectedLevel: DetectedLevel{Kind: KindSupply, Price: 29300, Label: "Supply·4h", HTF: true}, Grade: "C", Fresh: "fresh", Distance: 150},
+	}
+	p := BuildPlannerPrompt(in)
+	for _, want := range []string{
+		"## HTF zones", "Demand·1h", "Supply·4h", "(HTF zone)",
+		"you MUST include at least ONE HTF zone row",
+	} {
+		if !strings.Contains(p, want) {
+			t.Fatalf("prompt missing %q\n---\n%s", want, p)
+		}
+	}
+}
