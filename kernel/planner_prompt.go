@@ -200,7 +200,7 @@ func plannerOutputContract(maxLevels, maxScenarios int) string {
 		`  "flip": {"price": <level>, "side": "below|above", "rule": "2x5m|15m_close|5m_close", "flip_to": "long|short"},` + "\n" +
 		`  "day_type": "trend|balance|<optional>"` + "\n" +
 		"}\n" +
-		"Rules: levels chosen ONLY from the ranked table above (plus the HTF zones section when present — you MUST include at least ONE HTF zone row in your levels as a confluence reference, never as a standalone trigger); S/D & FVG are confluence, never standalone. " +
+		"Rules: levels chosen ONLY from the ranked table above (plus the HTF zones section when present — you MUST include at least ONE HTF zone row in your levels as a confluence reference, never as a standalone trigger); levels MUST be at least 3 points apart — near-duplicates are merged by the system; S/D & FVG are confluence, never standalone. " +
 		"The scenario MIX must follow the regime + day_type: a trend-down day gets breakdown/pullback-short plays, a trend-up day the reverse, balance days get two-sided plays — do NOT default to 2 longs + 1 rally-rejection short on every day. " +
 		"If price sits BELOW PDL you MUST write a continuation short; ABOVE PDH, a continuation long. " +
 		"death.flip objects are MACHINE-EVALUATED — choose levels from your level list and a rule; they must match the prose lines. " +

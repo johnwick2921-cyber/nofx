@@ -668,6 +668,14 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		if n := at.demoteConsumedScenarios(session, d); n > 0 {
 			at.logWarnf("🗓️ G5: %d scenario(s) demoted to C — trigger level consumed at %s write.", n, session)
 		}
+		// P0.4-C (2026-08-24) — the model may write near-duplicate levels (2.13
+		// pts apart killed ASIA v2 with the duplicate-seat rule). Collapse them
+		// with the same cluster tolerance the scorer uses, instead of burning
+		// the retries → fail-closed session.
+		if collapsed, n := kernel.CollapsePlanLevels(d.Levels, kernel.LevelClusterTicks*0.25); n > 0 {
+			d.Levels = collapsed
+			at.logWarnf("📐 plan level auto-collapse: %d near-duplicate level(s) merged at %s write.", n, session)
+		}
 		// P0.1/P0.2 (2026-08-19) — facts rules: both-side levels, continuation
 		// scenario on a gap out of the prior range, no duplicate seats, reachable
 		// targets. A plan that fails these is NOT shipped (retry → fail-closed).
