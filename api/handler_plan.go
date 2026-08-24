@@ -339,6 +339,12 @@ func planLevelFacts(symbol string, doc kernel.PlanDoc, now time.Time, rule strin
 			break
 		}
 	}
+	// Zero-reference guard (2026-08-24): right after a plan write, the only
+	// bars may be forming ones, leaving price at 0 and every distance rendered
+	// as the negative of the level price. Fall back to the latest bar close.
+	if price == 0 && len(bars) > 0 {
+		price = bars[len(bars)-1].Close
+	}
 	out := make([]gin.H, 0, len(doc.Levels))
 	for _, l := range doc.Levels {
 		dir := kernel.DirAbove

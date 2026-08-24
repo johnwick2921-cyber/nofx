@@ -116,7 +116,7 @@ func DescribePlanDeath(doc PlanDoc, bars []market.Kline, rule string, sinceMs, n
 		return PlanDeathDetail{}, false
 	}
 	judge := AcceptanceBars(barsSince(bars, sinceMs), rule)
-	price, _ := latestClosedClose(judge, now)
+	price, _ := referenceClose(judge, now)
 	d := PlanDeathDetail{Price: price}
 	last := ""
 	for _, l := range doc.Levels {
