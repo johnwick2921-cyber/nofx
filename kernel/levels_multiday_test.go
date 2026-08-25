@@ -34,21 +34,25 @@ func TestExtractMultiDayLevels(t *testing.T) {
 	now := time.Date(2026, 8, 14, 10, 0, 0, 0, loc)
 
 	bars := []market.Kline{
-		// prior month (July) + prior week (Aug 3-9) singletons
+		// prior month (July) + prior week (Aug 3-9) singletons — THIN, omitted.
 		barAt(loc, 2026, 7, 20, 12, 0, 14750, 14800, 14700, 14750),
 		barAt(loc, 2026, 8, 5, 12, 0, 15050, 15100, 15000, 15050),
-		// two days ago (08-12)
-		barAt(loc, 2026, 8, 12, 12, 0, 15250, 15300, 15200, 15250),
-		// prior calendar day 08-13 — RTH (NY) then evening Asia
-		barAt(loc, 2026, 8, 13, 9, 0, 15540, 15580, 15500, 15540),  // NY
-		barAt(loc, 2026, 8, 13, 14, 0, 15500, 15560, 15450, 15550), // NY (RTH low 15450)
-		barAt(loc, 2026, 8, 13, 18, 0, 15570, 15620, 15560, 15600), // Asia of futures-day 08-13 (also calendar 08-13)
+	}
+	// Prior calendar day 08-13 with FULL coverage (P0.4-F: ≥900 closed bars) —
+	// flat 15520 fill across 00:00-16:59, then the specific RTH/extreme bars.
+	for mi := 0; mi < 17*60; mi++ {
+		bars = append(bars, barAt(loc, 2026, 8, 13, mi/60, mi%60, 15520, 15530, 15510, 15520))
+	}
+	bars = append(bars,
+		barAt(loc, 2026, 8, 13, 9, 0, 15540, 15580, 15500, 15540),  // NY (RTHH 15580)
+		barAt(loc, 2026, 8, 13, 14, 0, 15500, 15560, 15450, 15550), // NY (RTHL 15450)
+		barAt(loc, 2026, 8, 13, 18, 0, 15570, 15620, 15560, 15600), // Asia (day high 15620, close 15600)
 		// current overnight (futures-day 08-13): more Asia (after midnight) + London
 		barAt(loc, 2026, 8, 14, 0, 30, 15600, 15610, 15530, 15570), // Asia (calendar 08-14)
 		barAt(loc, 2026, 8, 14, 4, 0, 15550, 15590, 15480, 15500),  // London
 		// today's developing RTH (closed 09:00 bar) — not itself a level
 		barAt(loc, 2026, 8, 14, 9, 0, 15600, 15650, 15550, 15600), // NY
-	}
+	)
 
 	m := levelMap(ExtractMultiDayLevels(bars, reg, now))
 
@@ -64,10 +68,8 @@ func TestExtractMultiDayLevels(t *testing.T) {
 		KindLDNL: 15480, // overnight London low
 		KindONH:  15620, // composite
 		KindONL:  15480,
-		KindPWH:  15100,
-		KindPWL:  15000,
-		KindPMH:  14800,
-		KindPML:  14700,
+		// P0.4-F: prior week/month buckets with singleton coverage are THIN —
+		// HTF anchors are omitted rather than fabricated from a 1-bar window.
 	}
 	for k, v := range want {
 		got, ok := m[k]
@@ -78,8 +80,35 @@ func TestExtractMultiDayLevels(t *testing.T) {
 			t.Fatalf("%s = %v want %v", k, got, v)
 		}
 	}
+	for _, k := range []LevelKind{KindPWH, KindPWL, KindPMH, KindPML} {
+		if _, ok := m[k]; ok {
+			t.Fatalf("thin-coverage bucket must NOT emit %s (P0.4-F)", k)
+		}
+	}
 	if len(m) != len(want) {
 		t.Fatalf("unexpected extra levels: got %d kinds, want %d (%v)", len(m), len(want), m)
+	}
+}
+
+// TestExtractMultiDayLevelsTruncatedPriorDay (P0.4-F, 2026-08-25) — a prior-day
+// bucket with only a few closed bars (bot-down gap / fresh boot) must NOT emit
+// PDH/PDL/PDC. Live proof: ASIA v4 anchored flip on "PDL 29263.25" which was
+// Friday's close region read off a Friday-afternoon-only bucket.
+func TestExtractMultiDayLevelsTruncatedPriorDay(t *testing.T) {
+	loc := chicago()
+	reg := DefaultSessionRegistry()
+	now := time.Date(2026, 8, 14, 10, 0, 0, 0, loc)
+	bars := []market.Kline{
+		// prior day 08-13: only 3 closed bars (truncated afternoon) — NOT covered.
+		barAt(loc, 2026, 8, 13, 12, 0, 15540, 15580, 15500, 15540),
+		barAt(loc, 2026, 8, 13, 13, 0, 15500, 15560, 15450, 15550),
+		barAt(loc, 2026, 8, 13, 14, 0, 15570, 15620, 15560, 15600),
+	}
+	m := levelMap(ExtractMultiDayLevels(bars, reg, now))
+	for _, k := range []LevelKind{KindPDH, KindPDL, KindPDC, KindRTHH, KindRTHL} {
+		if _, ok := m[k]; ok {
+			t.Fatalf("truncated prior-day bucket must NOT emit %s (P0.4-F)", k)
+		}
 	}
 }
 

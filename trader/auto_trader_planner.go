@@ -452,6 +452,56 @@ func priceOf(bars []market.Kline) float64 {
 	return bars[len(bars)-1].Close
 }
 
+// warnFlipDeathSanity (P0.4-F, 2026-08-25) — advisory checks at plan write:
+// the 11-plan audit found 7/11 active plans with a flip that can never fire
+// (death preempts it), flip==death degeneracy, or a flip/death anchored on a
+// level absent from the plan's own list. These are WARN-only by design — the
+// machine evaluator + fail-closed path stay the enforcers; this just makes the
+// defect visible in the journal at write time instead of after a session.
+func (at *AutoTrader) warnFlipDeathSanity(d *kernel.PlanDoc) {
+	if d == nil {
+		return
+	}
+	levelPrice := func(p float64) bool {
+		for _, l := range d.Levels {
+			if math.Abs(l.Price-p) <= 3.0 {
+				return true
+			}
+		}
+		return false
+	}
+	if d.DeathStructured != nil && d.DeathStructured.Price > 0 && !levelPrice(d.DeathStructured.Price) {
+		at.logWarnf("⚠️ flip/death sanity: death{price %.2f} matches NO level in this plan's list (orphan anchor).", d.DeathStructured.Price)
+	}
+	if d.FlipStructured != nil && d.FlipStructured.Price > 0 && !levelPrice(d.FlipStructured.Price) {
+		at.logWarnf("⚠️ flip/death sanity: flip{price %.2f} matches NO level in this plan's list (orphan anchor).", d.FlipStructured.Price)
+	}
+	if d.DeathStructured != nil && d.FlipStructured != nil && d.DeathStructured.Price > 0 && d.FlipStructured.Price > 0 {
+		dd, ff := d.DeathStructured, d.FlipStructured
+		if math.Abs(dd.Price-ff.Price) <= 0.01 && dd.Side == ff.Side && dd.Rule == ff.Rule {
+			at.logWarnf("⚠️ flip/death sanity: flip == death (%.2f %s %s) — flip_to fires at the same tick the plan dies; void.", ff.Price, ff.Side, ff.Rule)
+		}
+		// death preempts flip when death sits closer in the same direction
+		// with an easier/equal rule.
+		easier := func(rule string) int {
+			switch rule {
+			case "15m_close":
+				return 1
+			case "5m_close":
+				return 2
+			default: // 2x5m
+				return 3
+			}
+		}
+		if dd.Side == ff.Side && easier(dd.Rule) <= easier(ff.Rule) {
+			up := dd.Side == "above"
+			if (up && dd.Price <= ff.Price) || (!up && dd.Price >= ff.Price) {
+				at.logWarnf("⚠️ flip/death sanity: death (%.2f %s %s) preempts flip (%.2f %s %s) — flip likely unreachable.", dd.Price, dd.Side, dd.Rule, ff.Price, ff.Side, ff.Rule)
+			}
+		}
+	}
+}
+
 // noTradeLevelMap assembles the CURRENT detector/scorer output as plan levels
 // for a NO-TRADE doc (P7) — the same pipeline every other surface uses
 // (bars → AssembleScoredLevels at the resolved proximity + max_levels), with the
@@ -700,6 +750,11 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 			lastErr = verr
 			continue
 		}
+		// P0.4-F (2026-08-25) — advisory flip/death sanity (never a gate; the
+		// machine evaluator is the enforcer). 11-plan audit found 7/11 active
+		// plans with flip unreachable/void: death preempting flip, flip==death,
+		// or flip anchored on a level absent from the plan's own list.
+		at.warnFlipDeathSanity(d)
 		doc = d
 		break
 	}
