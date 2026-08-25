@@ -119,8 +119,6 @@ func (s *Server) setupRoutes() {
 		s.route(api, "GET", "/traders/:id/public-config", "Public trader configuration", s.handleGetPublicTraderConfig)
 
 		// Market data (no authentication required)
-		s.route(api, "GET", "/klines", "Candlestick data (?symbol=&interval=&limit=)", s.handleKlines)
-		s.route(api, "GET", "/klines/svp", "Session Volume Profile (?symbol=&exchange=ninjatrader) — server-computed POC/VAH/VAL + histogram bins", s.handleKlinesSVP)
 		s.route(api, "GET", "/symbols", "Available trading symbols", s.handleSymbols)
 
 		// Live NT8 bar stream over SSE (Plan 4.4 Stage 4). Self-authed via a
@@ -147,6 +145,11 @@ func (s *Server) setupRoutes() {
 		// Routes requiring authentication
 		protected := api.Group("/", s.authMiddleware(), s.planTraderOwnership())
 		{
+			// Market data — JWT-protected (C4, 2026-08-25): candle history +
+			// SVP moved out of the public group; the FE httpClient always
+			// attaches the Bearer token, and the agent calls handlers in-process.
+			s.route(protected, "GET", "/klines", "Candlestick data (?symbol=&interval=&limit=)", s.handleKlines)
+			s.route(protected, "GET", "/klines/svp", "Session Volume Profile (?symbol=&exchange=ninjatrader) — server-computed POC/VAH/VAL + histogram bins", s.handleKlinesSVP)
 			// Logout (add to blacklist)
 			s.route(protected, "POST", "/logout", "Logout (blacklist token)", s.handleLogout)
 			// Mint a short-lived single-use SSE ticket for the live bar stream (Stage 4).
