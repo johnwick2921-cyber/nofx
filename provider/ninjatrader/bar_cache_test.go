@@ -272,3 +272,24 @@ func TestBarCache_Concurrent(t *testing.T) {
 		t.Error("cache empty after concurrent writes")
 	}
 }
+
+// C11 (2026-08-25) — per-TF close-time math: every subscribed timeframe in
+// defaultAutoBarsTimeframes must map to its exact millisecond duration (the
+// pre-C11 fallthrough silently treated 6h/8h/12h/3d/1w as 1m, shifting open
+// stamps and CloseTime).
+func TestTimeframeMsAllAutoBarsTFs(t *testing.T) {
+	want := map[string]int64{
+		"1m": 60_000, "3m": 180_000, "5m": 300_000, "15m": 900_000,
+		"30m": 1_800_000, "1h": 3_600_000, "2h": 7_200_000, "4h": 14_400_000,
+		"6h": 21_600_000, "8h": 28_800_000, "12h": 43_200_000,
+		"1d": 86_400_000, "3d": 259_200_000, "1w": 604_800_000,
+	}
+	for _, tf := range defaultAutoBarsTimeframes {
+		if got := timeframeMs(tf); got != want[tf] {
+			t.Fatalf("timeframeMs(%q) = %d, want %d", tf, got, want[tf])
+		}
+	}
+	if got := timeframeMs("unknown"); got != 60_000 {
+		t.Fatalf("unknown TF must fall back to 1m, got %d", got)
+	}
+}

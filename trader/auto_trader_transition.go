@@ -176,6 +176,9 @@ func (at *AutoTrader) maybeWakePlannerOnMSS(session, tradeDate string, row *stor
 	}
 	at.lastMSSWakeKey = key
 	at.logWarnf("🗓️ structure MSS on %s %s (%s) — waking the planner (G4.6, 4th wake-up).", session, tradeDate, mss.Detail)
+	// C5 — an MSS wake strands owner overlays exactly like a death re-plan does:
+	// make the loss audible BEFORE the read (the P1 alert names the count).
+	at.warnIfReplanOrphansOverlays(row)
 	// P0.4-G — carry the prior plan's levels for continuity (the owner's
 	// complaint: every re-plan dropped the old map and the anchors moved).
 	_ = at.runPlannerReadWithTriggerClaimedCtx(session, tradeDate, "structure_mss", "structure MSS: "+mss.Detail, priorPlanLevelLines(row))
