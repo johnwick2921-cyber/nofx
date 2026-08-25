@@ -48,6 +48,19 @@ func (at *AutoTrader) ResolvePlannerClient() (mcp.AIClient, string) {
 // resolvePlannerClient returns the AI client for the planner + the resolved
 // (pinned) model ID. Empty binding → the executor's primary client. A model that
 // the registry can't resolve → the primary client (never a silent nil).
+// ownerUserID resolves the owning user's id for C2 owner-level scoping (sticky
+// levels are per-user now; an empty id degrades to the legacy '' bucket).
+func (at *AutoTrader) ownerUserID() string {
+	if at.store == nil {
+		return ""
+	}
+	t, err := at.store.Trader().Get(at.id)
+	if err != nil || t == nil {
+		return ""
+	}
+	return t.UserID
+}
+
 func (at *AutoTrader) resolvePlannerClient() (mcp.AIClient, string) {
 	primaryModel := at.aiModel
 	if primaryModel == "" {
@@ -526,7 +539,7 @@ func (at *AutoTrader) noTradeLevelMap() []kernel.PlanLevel {
 	scored, _, _ := kernel.AssembleScoredLevels(at.id, bars, at.sessionRegistry(now), symbol, maxLevels, now, at.proximityFilterATR())
 
 	out := make([]kernel.PlanLevel, 0, len(scored)+4)
-	if owned, err := at.store.OwnerLevel().ListActive(symbol); err == nil {
+	if owned, err := at.store.OwnerLevel().ListActiveForUser(at.ownerUserID(), symbol); err == nil {
 		for _, o := range owned {
 			label := "👤 " + o.Label
 			out = append(out, kernel.PlanLevel{Price: o.Price, Label: label, Grade: "A", Instruction: "monitor"})
@@ -1116,7 +1129,7 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 
 	// P3.6-C — STICKY OWNER LEVELS: always seated, tagged 👤, persisted across
 	// sessions. Prepended so they lead the ranked table.
-	if owned, err := at.store.OwnerLevel().ListActive(symbol); err == nil && len(owned) > 0 {
+	if owned, err := at.store.OwnerLevel().ListActiveForUser(at.ownerUserID(), symbol); err == nil && len(owned) > 0 {
 		ownerScored := make([]kernel.ScoredLevel, 0, len(owned))
 		for _, o := range owned {
 			label := "👤 " + o.Label

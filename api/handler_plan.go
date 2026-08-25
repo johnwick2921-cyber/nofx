@@ -47,6 +47,48 @@ func maxI(a, b int) int {
 	return b
 }
 
+// C1 (2026-08-25) — cross-user IDOR gate for every /api/plan/* route. Handlers
+// previously trusted ?trader_id blindly: any authenticated user could read or
+// mutate another user's trader plan by guessing a trader id. Mounted on the
+// protected group; it fires only for /api/plan/ paths and 404s (not 403 — never
+// leak trader existence) when the JWT user does not own the queried trader.
+func (s *Server) planTraderOwnership() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !strings.HasPrefix(c.FullPath(), "/api/plan/") {
+			c.Next()
+			return
+		}
+		traderID := strings.TrimSpace(c.Query("trader_id"))
+		if traderID == "" {
+			c.Next() // the handler's own "trader_id is required" governs
+			return
+		}
+		if !s.traderOwnedBy(c.GetString("user_id"), traderID) {
+			SafeNotFound(c, "Trader")
+			c.Abort()
+			return
+		}
+		c.Next()
+	}
+}
+
+// traderOwnedBy reports whether the trader id belongs to the JWT user (C1/C3).
+func (s *Server) traderOwnedBy(userID, traderID string) bool {
+	if userID == "" || traderID == "" {
+		return false
+	}
+	rows, err := s.store.Trader().List(userID)
+	if err != nil {
+		return false
+	}
+	for _, t := range rows {
+		if t.ID == traderID {
+			return true
+		}
+	}
+	return false
+}
+
 // planRules resolves THE RULEBOOK THE GATES ACTUALLY RUN for one trader+session:
 // the acceptance rule, the plan-restriction mode, and the remaining re-plan
 // budget. W15.B — every one of these was HARDCODED here ("2x5m", "advisory", a
@@ -255,7 +297,7 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 	}
 
 	owners := map[int64]*store.OwnerLevelDB{}
-	if rows, oErr := s.store.OwnerLevel().ListActive(symbol); oErr == nil {
+	if rows, oErr := s.store.OwnerLevel().ListActiveForUser(c.GetString("user_id"), symbol); oErr == nil {
 		for _, r := range rows {
 			owners[roundKey(r.Price)] = r
 		}
@@ -759,7 +801,7 @@ func (s *Server) handlePlanOverlay(c *gin.Context) {
 	}
 	for _, wt := range throughs {
 		if wt.price > 0 && wt.label != "" {
-			_, _ = s.store.OwnerLevel().UpdateNoteTag(symbol, wt.price, wt.label, wt.note, wt.tag)
+			_, _ = s.store.OwnerLevel().UpdateNoteTag(c.GetString("user_id"), symbol, wt.price, wt.label, wt.note, wt.tag)
 		}
 	}
 	c.JSON(200, gin.H{"overlay_version": overlayVersion, "plan_version": planVersion, "origin": origin})
@@ -1573,6 +1615,11 @@ func (s *Server) handlePlanOwnerLevel(c *gin.Context) {
 		SafeNotFound(c, "Trader")
 		return
 	}
+	// C1 — body-carried trader_id bypasses the query-based middleware gate.
+	if !s.traderOwnedBy(c.GetString("user_id"), traderID) {
+		SafeNotFound(c, "Trader")
+		return
+	}
 	symbol := strings.TrimSpace(body.Symbol)
 	if symbol == "" {
 		symbol = "MNQ"
@@ -1592,6 +1639,7 @@ func (s *Server) handlePlanOwnerLevel(c *gin.Context) {
 		Label:       strings.TrimSpace(body.Label),
 		Note:        strings.TrimSpace(body.Note),
 		ScenarioTag: strings.TrimSpace(body.ScenarioTag),
+		UserID:      c.GetString("user_id"), // C2 — stamp the creator
 		CreatedAt:   time.Now().Unix(), // no autoCreateTime on this table
 	}
 	if err := s.store.OwnerLevel().Save(lvl); err != nil {
@@ -1621,11 +1669,16 @@ func (s *Server) handlePlanOwnerLevelDelete(c *gin.Context) {
 		SafeNotFound(c, "Trader")
 		return
 	}
+	// C1 — body-carried trader_id bypasses the query-based middleware gate.
+	if !s.traderOwnedBy(c.GetString("user_id"), traderID) {
+		SafeNotFound(c, "Trader")
+		return
+	}
 	if body.ID <= 0 {
 		SafeBadRequest(c, "id is required")
 		return
 	}
-	if err := s.store.OwnerLevel().Delete(body.ID); err != nil {
+	if err := s.store.OwnerLevel().DeleteForUser(body.ID, c.GetString("user_id")); err != nil {
 		SafeInternalError(c, "delete owner level", err)
 		return
 	}
