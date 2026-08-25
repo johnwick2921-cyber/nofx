@@ -585,6 +585,18 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimed(session, tradeDate, trigg
 	// 8.4 — machine grades from the Go-ranked candidate table, keyed by rounded
 	// price so the write-site stamp can match the model's levels.
 	machineGrades := map[float64]string{}
+	record := func(price float64, grade string) {
+		if grade == "" {
+			return
+		}
+		k := math.Round(price*100) / 100
+		// Collision rule: keep the STRONGER grade per rounded price — an
+		// owner "A" prepended first is never clobbered by a same-price
+		// detector entry later in the slice.
+		if old, ok := machineGrades[k]; !ok || kernel.GradeRank(grade) > kernel.GradeRank(old) {
+			machineGrades[k] = grade
+		}
+	}
 	for _, l := range input.Levels {
 		switch l.Kind {
 		case kernel.KindPDH:
@@ -592,9 +604,14 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimed(session, tradeDate, trigg
 		case kernel.KindPDL:
 			facts.PDL = l.Price
 		}
-		if l.Grade != "" {
-			machineGrades[math.Round(l.Price*100)/100] = l.Grade
-		}
+		record(l.Price, l.Grade)
+	}
+	// The HTF zones section rows lost the top-N seat race and are not in
+	// input.Levels — but the model reads them and may write them into the
+	// plan (live proof: ASIA v3's Supply·4h row went unstamped). Merge their
+	// grades into the same map so those rows get stamped too.
+	for _, z := range input.HTFZones {
+		record(z.Price, z.Grade)
 	}
 	// W11 — carry the frozen indicator mirror + ai_config hash to the write site.
 	at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, hash, input.IndicatorsBlock, input.AIConfigHash, facts, machineGrades, func() (string, error) {

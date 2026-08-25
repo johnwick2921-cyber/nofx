@@ -177,7 +177,7 @@ func BuildPlannerPrompt(in PlannerInput) string {
 		b.WriteString("## Owner note\n  " + in.OwnerNote + "\n\n")
 	}
 
-	b.WriteString(plannerOutputContract(in.MaxLevels, in.ScenarioCap))
+	b.WriteString(plannerOutputContract(in.MaxLevels, in.ScenarioCap, len(in.HTFZones) > 0))
 	return b.String()
 }
 
@@ -186,8 +186,12 @@ func BuildPlannerPrompt(in PlannerInput) string {
 // ask for what validation will accept, so a raised max_levels/scenario_cap both
 // gets requested AND passes instead of fail-closing every read against a
 // hardcoded 8/3.
-func plannerOutputContract(maxLevels, maxScenarios int) string {
+func plannerOutputContract(maxLevels, maxScenarios int, hasHTFZones bool) string {
 	maxL, maxS := resolvePlanCaps(maxLevels, maxScenarios)
+	htfRule := ""
+	if hasHTFZones {
+		htfRule = " — plus the HTF zones section, where you MUST include at least ONE HTF zone row in your levels as a confluence reference, never as a standalone trigger"
+	}
 	return "## OUTPUT — one JSON object, reasoning FIRST, no prose outside it\n" +
 		"{\n" +
 		`  "reasoning": "<your read: what the auction is doing and why this plan — ≤200 words, decision-focused>",` + "\n" +
@@ -200,7 +204,7 @@ func plannerOutputContract(maxLevels, maxScenarios int) string {
 		`  "flip": {"price": <level>, "side": "below|above", "rule": "2x5m|15m_close|5m_close", "flip_to": "long|short"},` + "\n" +
 		`  "day_type": "trend|balance|<optional>"` + "\n" +
 		"}\n" +
-		"Rules: levels chosen ONLY from the ranked table above (plus the HTF zones section when present — you MUST include at least ONE HTF zone row in your levels as a confluence reference, never as a standalone trigger); levels MUST be at least 3 points apart — near-duplicates are merged by the system; S/D & FVG are confluence, never standalone. " +
+		"Rules: levels chosen ONLY from the ranked table above" + htfRule + "; levels MUST be at least 3 points apart — near-duplicates are merged by the system; S/D & FVG are confluence, never standalone. " +
 		"The scenario MIX must follow the regime + day_type: a trend-down day gets breakdown/pullback-short plays, a trend-up day the reverse, balance days get two-sided plays — do NOT default to 2 longs + 1 rally-rejection short on every day. " +
 		"If price sits BELOW PDL you MUST write a continuation short; ABOVE PDH, a continuation long. " +
 		"death.flip objects are MACHINE-EVALUATED — choose levels from your level list and a rule; they must match the prose lines. " +
