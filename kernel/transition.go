@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 )
 
 // G4 (regime wave, 2026-08-21) — TRANSITION STAND-DOWN: when G2 emits a
@@ -42,8 +43,19 @@ type TransitionState struct {
 	PlanVersion int    `json:"plan_version,omitempty"`
 }
 
-// TransitionStanddownVerdict is the pure gate: (blocked, refusal message).
-// action is open_long/open_short; dir is the plan's bias direction; active +
+// ExecutorPlanDeadVerdict (C6, 2026-08-25) — while the active day plan is
+// machine-dead (or planless with day_plan on), NEW entries are refused; closes
+// and management actions pass. The executor re-evaluates the plan's death on
+// the SAME bars every cycle, so entries stop the moment the condition fires —
+// not minutes later when the planner's session read wakes up.
+func ExecutorPlanDeadVerdict(action, reason string) (bool, string) {
+	if strings.HasPrefix(action, "open_") {
+		return true, "executor plan gate — " + reason
+	}
+	return false, ""
+}
+
+// TransitionStanddownVerdict is the pure gate: (blocked, refusal message).// action is open_long/open_short; dir is the plan's bias direction; active +
 // detail come from the trader's TransitionState. Empty refusal = pass.
 func TransitionStanddownVerdict(action string, active bool, dir, detail string) (bool, string) {
 	if !active {

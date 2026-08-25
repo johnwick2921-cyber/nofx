@@ -53,22 +53,22 @@ func TestResetBaselinePersistence(t *testing.T) {
 	t.Cleanup(func() { _ = st.Close() })
 
 	// Absent → the original chain baseline.
-	if got := GetResetBaseline(st, "2026-08-18", "NY"); got != 1 {
+	if got := GetResetBaseline(st, "tid-1", "2026-08-18", "NY"); got != 1 {
 		t.Fatalf("absent marker = %d, want 1", got)
 	}
-	if err := SetResetBaseline(st, "2026-08-18", "NY", 7); err != nil {
+	if err := SetResetBaseline(st, "tid-1", "2026-08-18", "NY", 7); err != nil {
 		t.Fatalf("set: %v", err)
 	}
-	if got := GetResetBaseline(st, "2026-08-18", "NY"); got != 7 {
+	if got := GetResetBaseline(st, "tid-1", "2026-08-18", "NY"); got != 7 {
 		t.Fatalf("round-trip = %d, want 7", got)
 	}
 	// Per-session scoping: another session keeps the original baseline.
-	if got := GetResetBaseline(st, "2026-08-18", "ASIA"); got != 1 {
+	if got := GetResetBaseline(st, "tid-1", "2026-08-18", "ASIA"); got != 1 {
 		t.Fatalf("ASIA must keep baseline 1, got %d", got)
 	}
 	// A malformed value can never inflate or destroy budget.
-	_ = st.SetSystemConfig(ResetBaselineKey("2026-08-18", "LONDON"), "not-a-number")
-	if got := GetResetBaseline(st, "2026-08-18", "LONDON"); got != 1 {
+	_ = st.SetSystemConfig(ResetBaselineKey("tid-1", "2026-08-18", "LONDON"), "not-a-number")
+	if got := GetResetBaseline(st, "tid-1", "2026-08-18", "LONDON"); got != 1 {
 		t.Fatalf("malformed marker = %d, want the safe fallback 1", got)
 	}
 }

@@ -216,6 +216,17 @@ func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoi
 				return fmt.Errorf("%s", msg)
 			}
 		}
+
+		// C6 (2026-08-25) — EXECUTOR DEAD-PLAN GATE: when the active day plan
+		// is machine-dead (or planless with day_plan on), NEW entries are
+		// refused. Position management (closes/trails) is NOT blocked.
+		if ctx != nil && ctx.ExecutorPlanDead != "" {
+			if blocked, msg := ExecutorPlanDeadVerdict(d.Action, ctx.ExecutorPlanDead); blocked {
+				telemetry.IncGateBlock(ctx.TraderID, "executor_plan_dead")
+				logger.Warnf("🚧 EXECUTOR PLAN GATE %s %s: %s", d.Symbol, d.Action, msg)
+				return fmt.Errorf("%s", msg)
+			}
+		}
 	}
 
 	return nil

@@ -49,7 +49,7 @@ func (at *AutoTrader) ResolvePlannerClient() (mcp.AIClient, string) {
 // (pinned) model ID. Empty binding → the executor's primary client. A model that
 // the registry can't resolve → the primary client (never a silent nil).
 // ownerUserID resolves the owning user's id for C2 owner-level scoping (sticky
-// levels are per-user now; an empty id degrades to the legacy '' bucket).
+// levels are per-user now; an empty id degrades to the legacy ” bucket).
 func (at *AutoTrader) ownerUserID() string {
 	if at.store == nil {
 		return ""
@@ -232,16 +232,20 @@ func (at *AutoTrader) maybeRunSessionReadsAt(now time.Time) {
 		if existing.Lifecycle != "active" {
 			continue // no_trade / died → done for the session
 		}
-		// G4.6 (addendum, regime wave) — a fresh structure MSS on the plan's
-		// bias TF is the FOURTH planner wake-up (one per MSS event, deduped).
-		at.maybeWakePlannerOnMSS(s.Name, tradeDate, existing)
+		// C5 (2026-08-25) — DEATH CHECK FIRST: a dead vN must not also fire an
+		// MSS wake this cycle — the wake dedupes by (plan,version,event), so a
+		// same-cycle re-plan would re-wake on the SAME event under the NEW
+		// version and double-append. G4.6 MSS wake runs only when no death was
+		// handled below.
+		handledDeath := false
 		// P3.6 — RE-PLAN ON DEATH (cap replan_cap/session → NO-TRADE).
 		if detail, dead := at.describeActivePlanDeath(existing); dead {
+			handledDeath = true
 			replanCap := at.replanCapFor(s.Name) // W9 — per-session override wins
 			// P6 — the budget is measured from the CURRENT chain baseline (an
 			// owner reset re-arms it; the default baseline is 1 = the original
 			// chain). Every consumer reads the same seam.
-			baseline := store.GetResetBaseline(at.store, tradeDate, s.Name)
+			baseline := store.GetResetBaseline(at.store, at.id, tradeDate, s.Name)
 			// A death must never again be an unexplained line. On 2026-08-16 six
 			// plans died in 25 minutes and the only record was five identical
 			// "DIED" lines with no condition and no price.
@@ -277,11 +281,15 @@ func (at *AutoTrader) maybeRunSessionReadsAt(now time.Time) {
 				}
 			}
 		}
+		if !handledDeath {
+			// G4.6 (addendum, regime wave) — a fresh structure MSS on the
+			// plan's bias TF is the FOURTH planner wake-up (one per MSS
+			// event, deduped).
+			at.maybeWakePlannerOnMSS(s.Name, tradeDate, existing)
+		}
 	}
 }
 
-// warnIfReplanOrphansOverlays makes a known data loss AUDIBLE.
-//
 // Owner overlays are keyed (plan_id, plan_version) and every reader resolves
 // them against the LATEST version, so appending a new version silently orphans
 // every edit attached to the old one: the card stops showing them and, worse, the
@@ -459,6 +467,43 @@ func (at *AutoTrader) describeActivePlanDeath(row *store.PlanDB) (kernel.PlanDea
 		return kernel.PlanDeathDetail{}, false
 	}
 	return kernel.DescribePlanDeath(doc, bars, at.acceptanceRuleFor(row.Session), sinceMs, now.UnixMilli())
+}
+
+// executorPlanDeadReason (C6 / S2-1, 2026-08-25) — the executor evaluates the
+// ACTIVE plan's death with the SAME machine predicate the planner uses, so a
+// dead-but-not-yet-replanned plan stops producing entries the moment the
+// condition fires. A day_plan trader with no active plan (no_trade / budget
+// exhausted / never written) is refused too: planless futures entries are not
+// allowed. Empty string = no block.
+func (at *AutoTrader) executorPlanDeadReason() string {
+	sc := at.GetStrategyConfig()
+	if sc == nil || sc.DayPlan == nil || !sc.DayPlan.PlanEnabled {
+		return ""
+	}
+	if at.store == nil {
+		return "day_plan on but store unavailable — planless entries refused"
+	}
+	now := time.Now()
+	reg := at.sessionRegistry(now)
+	sess, ok := reg.ActiveSession(now)
+	if !ok {
+		return ""
+	}
+	tradeDate, okDate := kernel.PlanChainTradeDate(sess, now)
+	if !okDate {
+		tradeDate = plannerTradeDateCT(now)
+	}
+	row, err := at.store.Plan().GetLatestPlanForTraderSession(tradeDate, sess.Name, at.id)
+	if err != nil || row == nil {
+		return "no active day plan for this session (day_plan on) — planless entries refused"
+	}
+	if row.Lifecycle != "active" {
+		return fmt.Sprintf("plan lifecycle %q — entries refused", row.Lifecycle)
+	}
+	if detail, dead := at.describeActivePlanDeath(row); dead {
+		return "active plan is MACHINE-DEAD (" + detail.Killer + ") — entries refused until the planner re-plans"
+	}
+	return ""
 }
 
 // priceOf returns the latest closed close of the bar series (0 if empty).
@@ -1266,10 +1311,10 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 		// H4/H5 — the prompt asks for EXACTLY what validation accepts: the
 		// resolved max_levels / scenario_cap (never a hardcoded 8/3 the owner
 		// cannot raise).
-		MaxLevels:        maxLevels,
-		ScenarioCap:      at.scenarioCap(),
-		PriorPlanKiller:  priorKiller,
-		PriorPlanLevels:  priorLevels,
+		MaxLevels:       maxLevels,
+		ScenarioCap:     at.scenarioCap(),
+		PriorPlanKiller: priorKiller,
+		PriorPlanLevels: priorLevels,
 	}
 }
 
@@ -1445,7 +1490,7 @@ func installActivePlanProvider(at *AutoTrader, st *store.Store) {
 			// AI was being told 0. P6 — the budget is measured from the chain baseline
 			// (an owner reset re-arms it), same seam the death path reads.
 			replansLeft := store.ReplansLeftFrom(row.Version,
-				store.GetResetBaseline(st, row.TradeDate, sess.Name),
+				store.GetResetBaseline(st, at.id, row.TradeDate, sess.Name),
 				storedReplanCap(st, row.StrategyID, sess.Name))
 			// P0-cleanup — decision records carry the full plan attribution
 			// (plan_id, plan_version, overlay_version).

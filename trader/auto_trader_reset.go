@@ -105,7 +105,7 @@ func (at *AutoTrader) ForceReset(now time.Time) (ResetRefusal, error) {
 	// single-writer): the abandoned chain ends at vN, and the next read is the new
 	// chain's v1 — free, exactly like the original chain's first read — with the
 	// full re-plan budget in front of it.
-	if err := store.SetResetBaseline(at.store, tradeDate, gate.Session, row.Version+1); err != nil {
+	if err := store.SetResetBaseline(at.store, at.id, tradeDate, gate.Session, row.Version+1); err != nil {
 		return gate, fmt.Errorf("could not record the reset marker: %w", err)
 	}
 	at.logInfof("🗓️ OWNER RESET %s %s — chain abandoned at v%d; budget re-armed (%d re-plans).",
