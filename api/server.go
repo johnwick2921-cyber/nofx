@@ -749,6 +749,22 @@ func (s *Server) getTraderFromQuery(c *gin.Context) (*manager.TraderManager, str
 		}
 	}
 
+	// C3 (2026-08-25) — PUBLIC endpoints (competition, equity-history, SSE
+	// ticket) have NO JWT user_id, so there is no ownership to enforce: return
+	// the explicitly-queried trader after an existence check. An empty
+	// trader_id stays an error — public callers must name the trader they want
+	// (the old ids[0] global fallback is gone).
+	if userID == "" {
+		if traderID == "" {
+			return nil, "", fmt.Errorf("No available traders")
+		}
+		t, gerr := s.store.Trader().Get(traderID)
+		if gerr != nil || t == nil {
+			return nil, "", fmt.Errorf("No available traders")
+		}
+		return s.traderManager, traderID, nil
+	}
+
 	if traderID == "" {
 		// C3 (2026-08-25) — NO global fallback: a user with no traders used to
 		// receive ids[0] — the FIRST trader in the process, i.e. ANOTHER user's
