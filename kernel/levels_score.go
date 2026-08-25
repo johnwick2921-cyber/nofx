@@ -3,7 +3,9 @@ package kernel
 import (
 	"fmt"
 	"math"
+	"os"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -145,6 +147,45 @@ func zoneTierFor(tf string) string {
 	}
 }
 
+// ConfluenceCap (C14, 2026-08-25) — the confluence count is capped before it
+// multiplies the score: research shows diminishing returns beyond ~3 confirming
+// levels, and an uncapped count let a crowded price cluster inflate its own
+// grade. Env CONFLUENCE_CAP overrides; the value is a USER knob, never a
+// hardcoded rule.
+func ConfluenceCap() int {
+	if v := os.Getenv("CONFLUENCE_CAP"); v != "" {
+		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n >= 0 {
+			return n
+		}
+	}
+	return 3
+}
+
+// zoneSizeMult (C13 / A5, 2026-08-25) — the zone-size axis: a tight small base
+// is stronger than an oversized one (S/D literature: a wide zone is a poorly
+// defined decision point). Banded 0.5..1.25 in daily-ATR units; a missing
+// [Lo,Hi] (line levels, not zones) is neutral 1.0.
+func zoneSizeMult(lo, hi, atr float64) float64 {
+	if lo <= 0 || hi < lo || atr <= 0 {
+		return 1.0
+	}
+	size := (hi - lo) / atr
+	switch {
+	case size <= 0.30:
+		return 1.25
+	case size <= 0.60:
+		return 1.10
+	case size <= 1.00:
+		return 1.0
+	case size <= 1.50:
+		return 0.85
+	case size <= 2.50:
+		return 0.70
+	default:
+		return 0.50
+	}
+}
+
 // zoneEvidence computes the v3 base evidence for a zone level (kind × TF tier ×
 // reversal pattern). Unknown TF → 1m tier (noise floor).
 func zoneEvidence(l DetectedLevel) float64 {
@@ -236,6 +277,12 @@ func ScoreLevels(levels []DetectedLevel, price, dATR float64, freshness func(Det
 				conf++
 			}
 		}
+		// C14 (2026-08-25) — diminishing returns: the confluence count feeding
+		// the score is capped (env CONFLUENCE_CAP, default 3).
+		effConf := float64(conf)
+		if capC := ConfluenceCap(); conf > capC {
+			effConf = float64(capC)
+		}
 		if isZoneKind(l.Kind) && conf == 0 {
 			// P0.1 (2026-08-19) — a zone with an HTF origin seats on its own
 			// merit (grade C): large-account auctions don't need a crowd. Pure
@@ -250,10 +297,10 @@ func ScoreLevels(levels []DetectedLevel, price, dATR float64, freshness func(Det
 		}
 		var score float64
 		if isZoneKind(l.Kind) {
-			// v3 zone grading: kindBase × TFmult × freshness × confluence.
-			score = zoneEvidence(l) * fm * (1 + 0.20*float64(conf)) * zoneTFMult[zoneTierFor(l.TF)]
+			// v3 zone grading: kindBase × size × TFmult × freshness × confluence.
+			score = zoneEvidence(l) * zoneSizeMult(l.Lo, l.Hi, dATR) * fm * (1 + 0.20*effConf) * zoneTFMult[zoneTierFor(l.TF)]
 		} else {
-			score = typeEvidence(l.Kind) * fm * (1 + 0.20*float64(conf)) * htf
+			score = typeEvidence(l.Kind) * fm * (1 + 0.20*effConf) * htf
 		}
 		grade := gradeFromScore(score)
 		if isZoneKind(l.Kind) {

@@ -159,8 +159,18 @@ func timeframeMs(timeframe string) int64 {
 		return 7_200_000
 	case "4h":
 		return 14_400_000
+	case "6h": // C11 (2026-08-25) — previously fell through to 1m
+		return 21_600_000
+	case "8h":
+		return 28_800_000
+	case "12h":
+		return 43_200_000
 	case "1d", "1D":
 		return 86_400_000
+	case "3d": // C11 — previously fell through to 1m
+		return 259_200_000
+	case "1w", "1W":
+		return 604_800_000
 	default:
 		return 60_000
 	}
