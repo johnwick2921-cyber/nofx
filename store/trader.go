@@ -117,6 +117,21 @@ func (s *TraderStore) List(userID string) ([]*Trader, error) {
 }
 
 // UpdateStatus updates trader running status
+// Get loads ONE trader by id (no user filter — callers must own-scope; the API
+// ownership gates do). Used by the C1/C2 ownership checks and the planner's
+// owner-level scoping.
+func (s *TraderStore) Get(id string) (*Trader, error) {
+	var t Trader
+	err := s.db.Where("id = ?", id).First(&t).Error
+	if err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &t, nil
+}
+
 func (s *TraderStore) UpdateStatus(userID, id string, isRunning bool) error {
 	return s.db.Model(&Trader{}).
 		Where("id = ? AND user_id = ?", id, userID).

@@ -740,28 +740,35 @@ func (s *Server) getTraderFromQuery(c *gin.Context) (*manager.TraderManager, str
 	traderID := c.Query("trader_id")
 
 	// Ensure user's traders are loaded into memory
-	err := s.traderManager.LoadUserTradersFromStore(s.store, userID)
-	if err != nil {
-		logger.Infof("⚠️ Failed to load traders for user %s: %v", userID, err)
+	if s.traderManager != nil {
+		if err := s.traderManager.LoadUserTradersFromStore(s.store, userID); err != nil {
+			logger.Infof("⚠️ Failed to load traders for user %s: %v", userID, err)
+		}
 	}
 
 	if traderID == "" {
-		// If no trader_id specified, return first trader for this user
-		ids := s.traderManager.GetTraderIDs()
-		if len(ids) == 0 {
-			return nil, "", fmt.Errorf("No available traders")
-		}
-
-		// Get user's trader list, prioritize returning user's own traders
+		// C3 (2026-08-25) — NO global fallback: a user with no traders used to
+		// receive ids[0] — the FIRST trader in the process, i.e. ANOTHER user's
+		// trader (cross-user leak). Now the answer is strictly the user's own.
 		userTraders, err := s.store.Trader().List(userID)
 		if err == nil && len(userTraders) > 0 {
 			traderID = userTraders[0].ID
 		} else {
-			traderID = ids[0]
+			return nil, "", fmt.Errorf("No available traders")
 		}
 	}
-
-	return s.traderManager, traderID, nil
+	// C1/C3 — an explicit ?trader_id must belong to the JWT user (404-class
+	// error; the handler maps it without leaking trader existence).
+	userTraders, err := s.store.Trader().List(userID)
+	if err != nil || len(userTraders) == 0 {
+		return nil, "", fmt.Errorf("No available traders")
+	}
+	for _, t := range userTraders {
+		if t.ID == traderID {
+			return s.traderManager, traderID, nil
+		}
+	}
+	return nil, "", fmt.Errorf("No available traders")
 }
 
 // authMiddleware JWT authentication middleware
