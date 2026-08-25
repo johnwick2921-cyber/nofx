@@ -48,6 +48,15 @@ const DefaultMaxLevels = 8
 
 var levelGradeRank = map[string]int{"A": 3, "B": 2, "C": 1}
 
+// GradeRank orders a level grade A > B > C (unknown/empty → 0). Exported for
+// the write-site machine-grade stamp's collision rule.
+func GradeRank(g string) int {
+	if r, ok := levelGradeRank[strings.ToUpper(strings.TrimSpace(g))]; ok {
+		return r
+	}
+	return 0
+}
+
 // FilterLevelsByMinGrade drops levels graded below minGrade (A > B > C). An empty
 // or unknown minGrade is a no-op (no filter). Owner levels grade "A", so they
 // survive any minGrade (they are always seated by design).
@@ -112,7 +121,10 @@ var zoneTFMult = map[string]float64{"1m": 1.0, "15m": 1.1, "1h": 1.2, "4h": 1.3}
 const zoneReversalBonus = 1.1
 
 // zoneTierFor maps a detection timeframe string to one of the four v3 tiers
-// ("" and short TFs → 1m; 30m → 15m; 2h → 1h; 6h/8h/12h → 4h).
+// ("" and short TFs → 1m; 30m → 15m; 2h → 1h; 6h/8h/12h → 4h). ANY unknown TF
+// falls back to "1m" — a raw pass-through used to miss the zoneTFMult table
+// and ZERO the entire zone score (the comment said "noise floor" but the code
+// returned the unknown TF as-is).
 func zoneTierFor(tf string) string {
 	switch strings.ToLower(strings.TrimSpace(tf)) {
 	case "", "1m", "3m", "5m":
@@ -124,7 +136,12 @@ func zoneTierFor(tf string) string {
 	case "6h", "8h", "12h":
 		return "4h"
 	default:
-		return strings.ToLower(strings.TrimSpace(tf))
+		// Keep the known tier names as-is; anything else → 1m (noise floor),
+		// never a missing-map zero.
+		if _, ok := zoneTFMult[strings.ToLower(strings.TrimSpace(tf))]; ok {
+			return strings.ToLower(strings.TrimSpace(tf))
+		}
+		return "1m"
 	}
 }
 

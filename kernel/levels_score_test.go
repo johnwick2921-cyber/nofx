@@ -185,3 +185,27 @@ func TestScoreLevelsHTFZoneSeatsAlone(t *testing.T) {
 		t.Fatalf("HTF zone did not seat: %+v", got)
 	}
 }
+
+// P0.4-E (2026-08-24 audit): an unknown TF must fall back to the "1m" tier —
+// a raw pass-through missed the zoneTFMult table and zeroed the whole score.
+func TestZoneTierForUnknownFallsBackTo1m(t *testing.T) {
+	if got := zoneTierFor("D"); got != "1m" {
+		t.Fatalf("zoneTierFor(D) = %q, want 1m (noise floor, never a zero mult)", got)
+	}
+	if got := zoneTierFor(""); got != "1m" {
+		t.Fatalf("zoneTierFor(\"\") = %q, want 1m", got)
+	}
+	for tf, want := range map[string]string{"30m": "15m", "2h": "1h", "6h": "4h", "8h": "4h", "12h": "4h", "15m": "15m", "1h": "1h", "4h": "4h"} {
+		if got := zoneTierFor(tf); got != want {
+			t.Fatalf("zoneTierFor(%s) = %q, want %q", tf, got, want)
+		}
+	}
+}
+
+// P0.4-E (2026-08-24 audit): GradeRank orders A > B > C with unknown = 0 —
+// the machine-grade stamp keeps the stronger grade on a rounded-price collision.
+func TestGradeRank(t *testing.T) {
+	if GradeRank("A") <= GradeRank("B") || GradeRank("B") <= GradeRank("C") || GradeRank("C") <= GradeRank("") {
+		t.Fatal("GradeRank ordering wrong: want A > B > C > unknown")
+	}
+}
