@@ -672,7 +672,7 @@ func (at *AutoTrader) PlannerReadInFlight(tradeDate, session string) bool {
 // THIS call claimed the read (false = another read was already in flight and
 // this one skipped). The wrapper keeps the old signature for existing callers.
 func (at *AutoTrader) runPlannerReadWithTriggerClaimed(session, tradeDate, triggerOverride string) bool {
-	return at.runPlannerReadWithTriggerClaimedCtx(session, tradeDate, triggerOverride, "", nil)
+	return at.runPlannerReadWithTriggerClaimedCtx(session, tradeDate, triggerOverride, "", nil, true)
 }
 
 // runPlannerReadWithTriggerClaimedCtx (P0.4-G, 2026-08-25) is the claimed read
@@ -680,7 +680,12 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimed(session, tradeDate, trigg
 // priorLevels (the previous version's levels for map continuity). A flip-fired
 // killer carries a MANDATORY bias the new plan must honor; the prior levels keep
 // the map from being rebuilt from scratch every re-plan.
-func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, triggerOverride, priorKiller string, priorLevels []string) bool {
+//
+// failClosed=true (scheduled reads, death re-plans, owner re-reads/resets): a
+// read that fails every retry writes the terminal NO-TRADE marker.
+// failClosed=false (W6 wake reads): the wake is OPPORTUNISTIC — if the re-read
+// fails, the still-active plan keeps trading and nothing is written.
+func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, triggerOverride, priorKiller string, priorLevels []string, failClosed bool) bool {
 	if !at.dayPlanEnabled() || at.store == nil {
 		return false
 	}
@@ -758,7 +763,7 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 	}
 	requiredBias := kernel.FlipToDirection(priorKiller)
 	// W11 — carry the frozen indicator mirror + ai_config hash to the write site.
-	at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, hash, input.IndicatorsBlock, input.AIConfigHash, requiredBias, facts, machineGrades, machineLabels, func() (string, error) {
+	at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, hash, input.IndicatorsBlock, input.AIConfigHash, requiredBias, facts, machineGrades, machineLabels, failClosed, func() (string, error) {
 		return client.CallWithMessages(plannerSystemPrompt, prompt)
 	}, t1Lines...)
 	return true
@@ -774,7 +779,7 @@ func (at *AutoTrader) runPlannerRead(session, tradeDate string) {
 // plan's killer line + its levels ride into the prompt (flip bias enforced at
 // write, level-set continuity).
 func (at *AutoTrader) runPlannerReadWithCtx(session, tradeDate, priorKiller string, priorLevels []string) {
-	_ = at.runPlannerReadWithTriggerClaimedCtx(session, tradeDate, "", priorKiller, priorLevels)
+	_ = at.runPlannerReadWithTriggerClaimedCtx(session, tradeDate, "", priorKiller, priorLevels, true)
 }
 
 // priorPlanLevelLines renders the previous version's levels as "price label"
@@ -818,7 +823,7 @@ func (at *AutoTrader) runPlannerReadCoreWithTrigger(session, tradeDate, triggerO
 // scenario on gaps, duplicate/target reachability). Legacy callers keep the
 // facts-free signature (schema-only validation).
 func (at *AutoTrader) runPlannerReadCoreWithFacts(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash string, facts kernel.PlanFacts, call func() (string, error), extraNoTrade ...string) (int, string, error) {
-	return at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, "", facts, nil, nil, call, extraNoTrade...)
+	return at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, "", facts, nil, nil, true, call, extraNoTrade...)
 }
 
 // runPlannerReadCoreWithFactsGrades is the production core + the machine-grade
@@ -826,7 +831,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFacts(session, tradeDate, triggerOve
 // deterministic detector grade from the Go-ranked candidate table; plan levels
 // that match get their machine grade persisted for the card to display beside
 // the model-written one.
-func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, requiredBias string, facts kernel.PlanFacts, machineGrades map[float64]string, machineLabels map[float64]string, call func() (string, error), extraNoTrade ...string) (int, string, error) {
+func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, requiredBias string, facts kernel.PlanFacts, machineGrades map[float64]string, machineLabels map[float64]string, failClosed bool, call func() (string, error), extraNoTrade ...string) (int, string, error) {
 	// H4/H5 — validation must accept EXACTLY what the config allows: the resolved
 	// max_levels / scenario_cap (hard ceilings 12/5). Before this the parse
 	// hardcoded 8/3, so raising either setting made EVERY read fail-closed into a
@@ -955,6 +960,15 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		trigger = triggerOverride
 	}
 	if doc == nil {
+		// W6-C (2026-08-25) — wake reads are NON-fatal: a failed wake re-read
+		// must NOT no-trade a session whose active plan is still alive (live
+		// bug 2026-08-25: a seated-OB invalidation wake's re-read timed out and
+		// the fail-closed marker killed a healthy ASIA v1). Wake failures keep
+		// the active plan and simply skip the wake.
+		if !failClosed {
+			at.logWarnf("🗓️ wake re-read failed for %s %s (benign — active plan kept): %v", tradeDate, session, lastErr)
+			return 0, "kept_active", nil
+		}
 		// P7 — the fail-closed doc still carries the map: levels from the current
 		// detector/scorer output (same pipeline), scenarios empty, explicit reason.
 		doc = kernel.NoTradePlanDocWithLevels(

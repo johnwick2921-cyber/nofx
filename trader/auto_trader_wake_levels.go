@@ -274,8 +274,14 @@ func (at *AutoTrader) maybeWakePlannerOnLevelEvents(session, tradeDate string, r
 	at.lastPlannerWakeAt = now
 	at.logWarnf("🗓️ level wake %s on %s %s — waking the planner (W6, 5th wake-up).", ev.desc, session, tradeDate)
 	at.warnIfReplanOrphansOverlays(row)
-	_ = at.runPlannerReadWithTriggerClaimedCtx(session, tradeDate, "level_event", "level event: "+ev.desc, priorPlanLevelLines(row))
-	if fresh, fErr := at.store.Plan().GetLatestPlanForTraderSession(tradeDate, session, at.id); fErr == nil && fresh != nil && fresh.Version != row.Version {
-		at.carryOwnerEditsInto(fresh.PlanID, row.Version, fresh.Version)
-	}
+	// W6-C (2026-08-25) — the wake re-read is NON-fatal (a failed read keeps the
+	// active plan; failClosed=false) and ASYNC so a slow/timing-out planner can
+	// never stall the decision loop (live bug: a 2×300s retry chain blocked 14
+	// minutes of cycles and then no-traded a healthy session).
+	go func() {
+		_ = at.runPlannerReadWithTriggerClaimedCtx(session, tradeDate, "level_event", "level event: "+ev.desc, priorPlanLevelLines(row), false)
+		if fresh, fErr := at.store.Plan().GetLatestPlanForTraderSession(tradeDate, session, at.id); fErr == nil && fresh != nil && fresh.Version != row.Version {
+			at.carryOwnerEditsInto(fresh.PlanID, row.Version, fresh.Version)
+		}
+	}()
 }
