@@ -74,40 +74,6 @@ namespace NinjaTrader.NinjaScript.AddOns
         /// </summary>
         private readonly Dictionary<string, BarsRequestEntry> active =
             new Dictionary<string, BarsRequestEntry>();
-
-        // C12 (2026-08-25) — dedup-cursor persistence across GO reconnects.
-        // The N4 rebuild path disposes + recreates every subscription so a
-        // fresh BarsRequest can re-read NT8's DB and self-heal feed holes, but
-        // that re-bursts the whole window (2000×14 bars) even on a HOT
-        // reconnect where the Go side already holds everything. A FRESH cursor
-        // (≤ CURSOR_RESTORE_MAX_AGE_MS) is restored onto the rebuilt entry so
-        // dedup skips already-emitted bars; a STALE cursor (overnight bot
-        // downtime) is deliberately NOT restored, preserving the gap
-        // self-heal for the bars the Go side never saw.
-        private static readonly Dictionary<string, long> PersistedCursor =
-            new Dictionary<string, long>();
-        private const long CURSOR_RESTORE_MAX_AGE_MS = 4L * 3600_000;
-
-        private static long RestoreCursor(string key)
-        {
-            lock (PersistedCursor)
-            {
-                long v;
-                if (PersistedCursor.TryGetValue(key, out v)
-                    && (NowUtcMs() - v) <= CURSOR_RESTORE_MAX_AGE_MS)
-                    return v;
-                return 0;
-            }
-        }
-
-        private static void PersistCursor(string key, long cursorMs)
-        {
-            if (cursorMs <= 0) return;
-            lock (PersistedCursor)
-            {
-                PersistedCursor[key] = cursorMs;
-            }
-        }
         private readonly object subsLock = new object();
 
         // Default historical depth when bars_subscribe.bars_back is omitted,
@@ -415,7 +381,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                     Symbol    = symbol,
                     Timeframe = timeframe,
                     Request   = request,
-                    LastEmittedTimeUtcMs = RestoreCursor(key), // C12 — hot-reconnect cursor survives the rebuild
+                    LastEmittedTimeUtcMs = 0,
                     HistoricalSent = false,
                     SubscribedAtUtcMs = NowUtcMs(), // fast-guard: start the no-live-.Update clock now
                     LiveUpdateSeen = false
@@ -459,9 +425,6 @@ namespace NinjaTrader.NinjaScript.AddOns
         private void DisposeEntry(BarsRequestEntry entry)
         {
             if (entry == null) return;
-            // C12 — the dedup cursor outlives the entry so a hot reconnect's
-            // rebuilt subscription starts past bars the Go side already holds.
-            PersistCursor(entry.Key, entry.LastEmittedTimeUtcMs);
             try { entry.Request.Dispose(); } catch { }
         }
 
