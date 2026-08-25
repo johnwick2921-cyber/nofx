@@ -233,6 +233,12 @@ func (at *AutoTrader) GetPositions() ([]map[string]interface{}, error) {
 	}
 
 	var result []map[string]interface{}
+	// Non-nil empty slice: the /api/positions route documents an ARRAY ([]), and
+	// some clients (and the dashboard's defensive .map paths) mishandle a JSON
+	// null when flat. Encode the flat state as [] — never null.
+	if len(positions) == 0 {
+		return []map[string]interface{}{}, nil
+	}
 	for _, pos := range positions {
 		// Comma-ok asserts: NT futures positions may omit some Binance-style
 		// keys (e.g. liquidationPrice); a hard assert would panic the API
