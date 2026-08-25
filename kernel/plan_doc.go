@@ -341,8 +341,19 @@ func ValidatePlanDocWithCaps(d *PlanDoc, maxLevels, maxScenarios int) error {
 	return nil
 }
 
-// PlanFacts is the Go-computed reality the planner's plan must conform to —
-// written at plan time so the P0.1/P0.2 rules are enforced, not requested.
+// FlipToDirection parses the flip direction out of a killer line
+// ("flip-condition: ... → bias long") — "long"/"short", "" otherwise. Used by
+// the write site to enforce that a flip-triggered re-plan honors the flip.
+func FlipToDirection(killer string) string {
+	k := strings.ToLower(killer)
+	if i := strings.Index(k, "bias long"); i >= 0 {
+		return "long"
+	}
+	if i := strings.Index(k, "bias short"); i >= 0 {
+		return "short"
+	}
+	return ""
+}
 type PlanFacts struct {
 	Price float64 // reference price at read time
 	DATR  float64 // daily ATR proxy

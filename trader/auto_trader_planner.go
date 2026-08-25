@@ -251,7 +251,11 @@ func (at *AutoTrader) maybeRunSessionReadsAt(now time.Time) {
 						fmt.Sprintf("%s plan died %d× this session", s.Name, existing.Version),
 						fmt.Sprintf("Killed by: %s. This is the last re-plan before the session sits out.", detail.Killer))
 				}
-				at.runPlannerRead(s.Name, tradeDate) // appends a new version
+				// P0.4-G (2026-08-25) — carry the killer + the prior plan's
+				// levels into the re-plan: the map keeps continuity (no more
+				// rebuilt-from-scratch level sets) and a fired flip's bias is
+				// enforced at write.
+				at.runPlannerReadWithCtx(s.Name, tradeDate, detail.Killer, priorPlanLevelLines(existing))
 				// ITEM 4 — the owner's levels are sticky: re-establish them on the
 				// version just written, re-anchored by price. Anything that cannot
 				// be re-anchored is parked for review, never dropped.
@@ -604,6 +608,15 @@ func (at *AutoTrader) PlannerReadInFlight(tradeDate, session string) bool {
 // THIS call claimed the read (false = another read was already in flight and
 // this one skipped). The wrapper keeps the old signature for existing callers.
 func (at *AutoTrader) runPlannerReadWithTriggerClaimed(session, tradeDate, triggerOverride string) bool {
+	return at.runPlannerReadWithTriggerClaimedCtx(session, tradeDate, triggerOverride, "", nil)
+}
+
+// runPlannerReadWithTriggerClaimedCtx (P0.4-G, 2026-08-25) is the claimed read
+// with the prior-plan context: priorKiller (the dead plan's killer line) and
+// priorLevels (the previous version's levels for map continuity). A flip-fired
+// killer carries a MANDATORY bias the new plan must honor; the prior levels keep
+// the map from being rebuilt from scratch every re-plan.
+func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, triggerOverride, priorKiller string, priorLevels []string) bool {
 	if !at.dayPlanEnabled() || at.store == nil {
 		return false
 	}
@@ -624,7 +637,7 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimed(session, tradeDate, trigg
 		at.logErrorf("🗓️ planner: no client resolved for %s %s", tradeDate, session)
 		return true
 	}
-	input := at.assemblePlannerInput(session, tradeDate)
+	input := at.assemblePlannerInputWithCtx(session, tradeDate, priorKiller, priorLevels)
 	prompt := kernel.BuildPlannerPrompt(input)
 	hash := shortHash(prompt)
 	// W3 — HARD red-news blackout lines auto-written into the plan (§80).
@@ -663,8 +676,9 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimed(session, tradeDate, trigg
 	for _, z := range input.HTFZones {
 		record(z.Price, z.Grade)
 	}
+	requiredBias := kernel.FlipToDirection(priorKiller)
 	// W11 — carry the frozen indicator mirror + ai_config hash to the write site.
-	at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, hash, input.IndicatorsBlock, input.AIConfigHash, facts, machineGrades, func() (string, error) {
+	at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, hash, input.IndicatorsBlock, input.AIConfigHash, requiredBias, facts, machineGrades, func() (string, error) {
 		return client.CallWithMessages(plannerSystemPrompt, prompt)
 	}, t1Lines...)
 	return true
@@ -674,6 +688,30 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimed(session, tradeDate, trigg
 // and persists the plan (or a fail-closed NO-TRADE plan).
 func (at *AutoTrader) runPlannerRead(session, tradeDate string) {
 	at.runPlannerReadWithTrigger(session, tradeDate, "")
+}
+
+// runPlannerReadWithCtx (P0.4-G, 2026-08-25) is the re-plan form: the dead
+// plan's killer line + its levels ride into the prompt (flip bias enforced at
+// write, level-set continuity).
+func (at *AutoTrader) runPlannerReadWithCtx(session, tradeDate, priorKiller string, priorLevels []string) {
+	_ = at.runPlannerReadWithTriggerClaimedCtx(session, tradeDate, "", priorKiller, priorLevels)
+}
+
+// priorPlanLevelLines renders the previous version's levels as "price label"
+// lines for the continuity block (empty when the stored doc is unreadable).
+func priorPlanLevelLines(row *store.PlanDB) []string {
+	if row == nil {
+		return nil
+	}
+	var doc kernel.PlanDoc
+	if json.Unmarshal([]byte(row.Doc), &doc) != nil {
+		return nil
+	}
+	lines := make([]string, 0, len(doc.Levels))
+	for _, l := range doc.Levels {
+		lines = append(lines, fmt.Sprintf("%.2f %s", l.Price, l.Label))
+	}
+	return lines
 }
 
 // runPlannerReadWithTrigger is runPlannerReadWithTriggerClaimed with the old
@@ -700,7 +738,7 @@ func (at *AutoTrader) runPlannerReadCoreWithTrigger(session, tradeDate, triggerO
 // scenario on gaps, duplicate/target reachability). Legacy callers keep the
 // facts-free signature (schema-only validation).
 func (at *AutoTrader) runPlannerReadCoreWithFacts(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash string, facts kernel.PlanFacts, call func() (string, error), extraNoTrade ...string) (int, string, error) {
-	return at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, facts, nil, call, extraNoTrade...)
+	return at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, "", facts, nil, call, extraNoTrade...)
 }
 
 // runPlannerReadCoreWithFactsGrades is the production core + the machine-grade
@@ -708,7 +746,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFacts(session, tradeDate, triggerOve
 // deterministic detector grade from the Go-ranked candidate table; plan levels
 // that match get their machine grade persisted for the card to display beside
 // the model-written one.
-func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash string, facts kernel.PlanFacts, machineGrades map[float64]string, call func() (string, error), extraNoTrade ...string) (int, string, error) {
+func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, requiredBias string, facts kernel.PlanFacts, machineGrades map[float64]string, call func() (string, error), extraNoTrade ...string) (int, string, error) {
 	// H4/H5 — validation must accept EXACTLY what the config allows: the resolved
 	// max_levels / scenario_cap (hard ceilings 12/5). Before this the parse
 	// hardcoded 8/3, so raising either setting made EVERY read fail-closed into a
@@ -742,6 +780,15 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		if collapsed, n := kernel.CollapsePlanLevels(d.Levels, kernel.LevelClusterTicks*0.25); n > 0 {
 			d.Levels = collapsed
 			at.logWarnf("📐 plan level auto-collapse: %d near-duplicate level(s) merged at %s write.", n, session)
+		}
+		// P0.4-G (2026-08-25) — flip-fired re-plan bias enforcement: the prior
+		// plan's flip ALREADY FIRED on machine-evaluated bars, so the new plan's
+		// bias MUST match the flipped direction. Live bug: ASIA v3's flip fired
+		// "→ bias long" but v4 came back short-biased — the flip was honored by
+		// the evaluator and ignored by the re-planner.
+		if requiredBias != "" && strings.ToLower(strings.TrimSpace(d.Bias.Direction)) != requiredBias {
+			lastErr = fmt.Errorf("prior plan flip already fired → bias %s is MANDATORY, got %q — the flip cannot be re-written away", requiredBias, d.Bias.Direction)
+			continue
 		}
 		// P0.1/P0.2 (2026-08-19) — facts rules: both-side levels, continuation
 		// scenario on a gap out of the prior range, no duplicate seats, reachable
@@ -979,6 +1026,13 @@ func structureSummaryLines(fetch func(tf string, count int) []market.Kline, time
 // HONORS the day_plan config (max_levels, per-session min_grade, timeframes) —
 // edits apply at the NEXT read (never mid-plan).
 func (at *AutoTrader) assemblePlannerInput(session, tradeDate string) kernel.PlannerInput {
+	return at.assemblePlannerInputWithCtx(session, tradeDate, "", nil)
+}
+
+// assemblePlannerInputWithCtx (P0.4-G, 2026-08-25) is assemblePlannerInput with
+// the prior-plan context for re-plans: the dead plan's killer line and its
+// levels (map continuity).
+func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKiller string, priorLevels []string) kernel.PlannerInput {
 	symbol := at.futuresSymbol()
 	now := time.Now()
 	reg := at.sessionRegistry(now) // W8
@@ -1178,8 +1232,10 @@ func (at *AutoTrader) assemblePlannerInput(session, tradeDate string) kernel.Pla
 		// H4/H5 — the prompt asks for EXACTLY what validation accepts: the
 		// resolved max_levels / scenario_cap (never a hardcoded 8/3 the owner
 		// cannot raise).
-		MaxLevels:   maxLevels,
-		ScenarioCap: at.scenarioCap(),
+		MaxLevels:        maxLevels,
+		ScenarioCap:      at.scenarioCap(),
+		PriorPlanKiller:  priorKiller,
+		PriorPlanLevels:  priorLevels,
 	}
 }
 

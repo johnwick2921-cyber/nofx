@@ -185,3 +185,17 @@ func TestCollapsePlanLevels(t *testing.T) {
 		t.Fatalf("survivor must be the higher grade: %+v", out[0])
 	}
 }
+
+// P0.4-G (2026-08-25): the write site must parse the flip direction out of a
+// killer line so a flip-triggered re-plan enforces the flipped bias.
+func TestFlipToDirection(t *testing.T) {
+	if got := FlipToDirection("flip-condition: 2x5m close above 29154.38 (2× 5m closes) → bias long"); got != "long" {
+		t.Fatalf("long killer → %q", got)
+	}
+	if got := FlipToDirection("flip-condition: 15m close below 29200.00 → bias short"); got != "short" {
+		t.Fatalf("short killer → %q", got)
+	}
+	if got := FlipToDirection("death-condition: all levels consumed"); got != "" {
+		t.Fatalf("death killer → %q, want empty", got)
+	}
+}
