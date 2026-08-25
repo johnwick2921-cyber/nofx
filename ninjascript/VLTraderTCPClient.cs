@@ -107,7 +107,7 @@ namespace NinjaTrader.NinjaScript.AddOns
         {
             public Order       SlOrder;     // the live resting stop order (movable)
             public Order       TpOrder;     // 4.3: the live take-profit order — tracked so
-                                           // CancelBracketFor can cancel BOTH legs after a
+                                           // CancelBracketsFor can cancel BOTH legs after a
                                            // limit exit fills (an orphaned TP could re-enter)
             public Account     Account;
             public Instrument  Instrument;

@@ -92,7 +92,7 @@ sends the market fallback as a later `close_position` frame WITHOUT
 - `limit_price` (4.3): 0/absent = market flatten (historical, byte-identical
   framing). `> 0` = submit a LIMIT exit at this price. The order is named
   `<signal_id>-lx`; its fill routes to `position_close` with reason `"limit"`
-  and cancels the still-live SL/TP bracket legs (`CancelBracketFor`) so they
+  and cancels the still-live SL/TP bracket legs (`CancelBracketsFor`) so they
   can never re-enter the now-flat position.
 - All other fields unchanged (identity stamp, account routing, SIM-only guard).
 
