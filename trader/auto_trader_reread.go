@@ -102,6 +102,21 @@ func (at *AutoTrader) ForceReread(now time.Time) (RereadRefusal, error) {
 		fmt.Sprintf("%s plan re-read on request", gate.Session),
 		fmt.Sprintf("You asked for a fresh read of the %s plan. It spends one of the %d re-reads for this session.",
 			gate.Session, gate.ReplanCap))
-	at.runPlannerReadWithTrigger(gate.Session, tradeDate, "owner_reread")
+	// C9 (2026-08-25) — capture the claim result: a lost claim (another read
+	// already in flight) or a failed preflight must be an HONEST outcome, not a
+	// silent success.
+	performed := at.runPlannerReadWithTriggerClaimedCtx(gate.Session, tradeDate, "owner_reread", "", nil)
+	if !performed {
+		return RereadRefusal{
+			Allowed: true, // the budget gate passed; the read itself was skipped
+			Session: gate.Session,
+			Reason:  "a planner read for this session was already in flight (or the bar window is stale) — this re-read did not run; retry after it completes",
+		}, nil
+	}
+	// C9 — sticky owner edits survive the owner re-read, exactly like the death
+	// and MSS-wake paths.
+	if fresh, fErr := at.store.Plan().GetLatestPlanForTraderSession(tradeDate, gate.Session, at.id); fErr == nil && fresh != nil && fresh.Version != gate.Version {
+		at.carryOwnerEditsInto(fresh.PlanID, gate.Version, fresh.Version)
+	}
 	return gate, nil
 }
