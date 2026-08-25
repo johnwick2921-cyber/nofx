@@ -199,3 +199,22 @@ func TestFlipToDirection(t *testing.T) {
 		t.Fatalf("death killer → %q, want empty", got)
 	}
 }
+
+// P0.4-H (2026-08-25): a plan level at a machine-table price must carry the
+// table's structural label — the LONDON v1 "PDH 29297.75" phantom.
+func TestMislabeledStructuralLevels(t *testing.T) {
+	d := &PlanDoc{Levels: []PlanLevel{
+		{Price: 29297.75, Label: "PDH"},
+		{Price: 29195, Label: "EQL"},
+	}}
+	ml := map[float64]string{29297.75: "OB(bear)·4h", 29195: "EQL"}
+	mis := MislabeledStructuralLevels(d, ml)
+	if len(mis) != 1 || !strings.Contains(mis[0], "OB(bear)·4h") {
+		t.Fatalf("mislabel = %v, want the PDH-vs-OB mismatch only", mis)
+	}
+	// Matching structural labels pass.
+	d2 := &PlanDoc{Levels: []PlanLevel{{Price: 29290.5, Label: "PDH"}}}
+	if m := MislabeledStructuralLevels(d2, map[float64]string{29290.5: "PDH"}); len(m) != 0 {
+		t.Fatalf("exact structural match flagged: %v", m)
+	}
+}

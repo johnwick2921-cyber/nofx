@@ -648,6 +648,7 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 	// 8.4 — machine grades from the Go-ranked candidate table, keyed by rounded
 	// price so the write-site stamp can match the model's levels.
 	machineGrades := map[float64]string{}
+	machineLabels := map[float64]string{} // P0.4-H: price → detector label
 	record := func(price float64, grade string) {
 		if grade == "" {
 			return
@@ -660,6 +661,15 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 			machineGrades[k] = grade
 		}
 	}
+	recordLabel := func(price float64, label string) {
+		if label == "" {
+			return
+		}
+		k := math.Round(price*100) / 100
+		if _, ok := machineLabels[k]; !ok {
+			machineLabels[k] = label
+		}
+	}
 	for _, l := range input.Levels {
 		switch l.Kind {
 		case kernel.KindPDH:
@@ -668,6 +678,7 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 			facts.PDL = l.Price
 		}
 		record(l.Price, l.Grade)
+		recordLabel(l.Price, l.Label)
 	}
 	// The HTF zones section rows lost the top-N seat race and are not in
 	// input.Levels — but the model reads them and may write them into the
@@ -675,10 +686,11 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 	// grades into the same map so those rows get stamped too.
 	for _, z := range input.HTFZones {
 		record(z.Price, z.Grade)
+		recordLabel(z.Price, z.Label)
 	}
 	requiredBias := kernel.FlipToDirection(priorKiller)
 	// W11 — carry the frozen indicator mirror + ai_config hash to the write site.
-	at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, hash, input.IndicatorsBlock, input.AIConfigHash, requiredBias, facts, machineGrades, func() (string, error) {
+	at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, hash, input.IndicatorsBlock, input.AIConfigHash, requiredBias, facts, machineGrades, machineLabels, func() (string, error) {
 		return client.CallWithMessages(plannerSystemPrompt, prompt)
 	}, t1Lines...)
 	return true
@@ -738,7 +750,7 @@ func (at *AutoTrader) runPlannerReadCoreWithTrigger(session, tradeDate, triggerO
 // scenario on gaps, duplicate/target reachability). Legacy callers keep the
 // facts-free signature (schema-only validation).
 func (at *AutoTrader) runPlannerReadCoreWithFacts(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash string, facts kernel.PlanFacts, call func() (string, error), extraNoTrade ...string) (int, string, error) {
-	return at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, "", facts, nil, call, extraNoTrade...)
+	return at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, "", facts, nil, nil, call, extraNoTrade...)
 }
 
 // runPlannerReadCoreWithFactsGrades is the production core + the machine-grade
@@ -746,7 +758,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFacts(session, tradeDate, triggerOve
 // deterministic detector grade from the Go-ranked candidate table; plan levels
 // that match get their machine grade persisted for the card to display beside
 // the model-written one.
-func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, requiredBias string, facts kernel.PlanFacts, machineGrades map[float64]string, call func() (string, error), extraNoTrade ...string) (int, string, error) {
+func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, requiredBias string, facts kernel.PlanFacts, machineGrades map[float64]string, machineLabels map[float64]string, call func() (string, error), extraNoTrade ...string) (int, string, error) {
 	// H4/H5 — validation must accept EXACTLY what the config allows: the resolved
 	// max_levels / scenario_cap (hard ceilings 12/5). Before this the parse
 	// hardcoded 8/3, so raising either setting made EVERY read fail-closed into a
@@ -788,6 +800,15 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		// the evaluator and ignored by the re-planner.
 		if requiredBias != "" && strings.ToLower(strings.TrimSpace(d.Bias.Direction)) != requiredBias {
 			lastErr = fmt.Errorf("prior plan flip already fired → bias %s is MANDATORY, got %q — the flip cannot be re-written away", requiredBias, d.Bias.Direction)
+			continue
+		}
+		// P0.4-H (2026-08-25) — label provenance: a plan level whose price
+		// matches a machine-table row must NOT re-label it as a DIFFERENT
+		// structural anchor. Live bug: LONDON v1 labeled 29297.75 "PDH" when
+		// the table row at that price is a zone and the true prior-day high
+		// was 29290.5 — the flip anchor rode a phantom label.
+		if mis := kernel.MislabeledStructuralLevels(d, machineLabels); len(mis) > 0 {
+			lastErr = fmt.Errorf("level label provenance: %s — copy the machine table's label for these prices", strings.Join(mis, "; "))
 			continue
 		}
 		// P0.1/P0.2 (2026-08-19) — facts rules: both-side levels, continuation
