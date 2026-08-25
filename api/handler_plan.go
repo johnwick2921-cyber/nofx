@@ -1,9 +1,11 @@
 package api
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"sort"
 	"strconv"
 	"strings"
@@ -59,6 +61,21 @@ func (s *Server) planTraderOwnership() gin.HandlerFunc {
 			return
 		}
 		traderID := strings.TrimSpace(c.Query("trader_id"))
+		// Body-carried trader_id (POST/PUT handlers accept it as an alternative
+		// to the query) is probed WITHOUT consuming the body: the bytes are read
+		// and restored so the handler's ShouldBindJSON still sees them.
+		if traderID == "" && c.Request != nil && c.Request.Body != nil &&
+			(c.Request.Method == "POST" || c.Request.Method == "PUT") {
+			if raw, err := io.ReadAll(c.Request.Body); err == nil {
+				c.Request.Body = io.NopCloser(bytes.NewReader(raw))
+				var probe struct {
+					TraderID string `json:"trader_id"`
+				}
+				if json.Unmarshal(raw, &probe) == nil {
+					traderID = strings.TrimSpace(probe.TraderID)
+				}
+			}
+		}
 		if traderID == "" {
 			c.Next() // the handler's own "trader_id is required" governs
 			return
@@ -1640,7 +1657,7 @@ func (s *Server) handlePlanOwnerLevel(c *gin.Context) {
 		Note:        strings.TrimSpace(body.Note),
 		ScenarioTag: strings.TrimSpace(body.ScenarioTag),
 		UserID:      c.GetString("user_id"), // C2 — stamp the creator
-		CreatedAt:   time.Now().Unix(), // no autoCreateTime on this table
+		CreatedAt:   time.Now().Unix(),      // no autoCreateTime on this table
 	}
 	if err := s.store.OwnerLevel().Save(lvl); err != nil {
 		SafeInternalError(c, "save owner level", err)

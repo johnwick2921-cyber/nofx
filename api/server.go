@@ -145,7 +145,7 @@ func (s *Server) setupRoutes() {
 		s.route(api, "POST", "/reset-password", "DISABLED — always 410 (no verification path)", s.handleResetPasswordDisabled)
 
 		// Routes requiring authentication
-		protected := api.Group("/", s.authMiddleware())
+		protected := api.Group("/", s.authMiddleware(), s.planTraderOwnership())
 		{
 			// Logout (add to blacklist)
 			s.route(protected, "POST", "/logout", "Logout (blacklist token)", s.handleLogout)
