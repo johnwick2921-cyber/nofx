@@ -692,8 +692,12 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 	}
 	client, modelID := at.resolvePlannerClient()
 	if client == nil {
+		// C9 (2026-08-25) — HONEST failure: return false so the reread path
+		// reports the real outcome instead of a silent "success" that wrote
+		// nothing (the fail-closed NO-TRADE write lives in the retry core,
+		// which this branch never reached).
 		at.logErrorf("🗓️ planner: no client resolved for %s %s", tradeDate, session)
-		return true
+		return false
 	}
 	input := at.assemblePlannerInputWithCtx(session, tradeDate, priorKiller, priorLevels)
 	prompt := kernel.BuildPlannerPrompt(input)

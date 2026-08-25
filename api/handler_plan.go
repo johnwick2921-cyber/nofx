@@ -49,14 +49,18 @@ func maxI(a, b int) int {
 	return b
 }
 
-// C1 (2026-08-25) — cross-user IDOR gate for every /api/plan/* route. Handlers
-// previously trusted ?trader_id blindly: any authenticated user could read or
-// mutate another user's trader plan by guessing a trader id. Mounted on the
-// protected group; it fires only for /api/plan/ paths and 404s (not 403 — never
-// leak trader existence) when the JWT user does not own the queried trader.
+// C1 (2026-08-25) — cross-user IDOR gate for every /api/plan/* AND /api/risk/*
+// route that carries a trader_id. Handlers previously trusted ?trader_id (or a
+// body-carried one) blindly: any authenticated user could read or mutate another
+// user's trader by guessing a trader id (plan docs, force-flat, clear-freeze...).
+// Mounted on the protected group; it fires only for those path prefixes and 404s
+// (not 403 — never leak trader existence) when the JWT user does not own the
+// queried trader. Global risk feeds (/risk/freezes, /risk/gate-blocks,
+// /risk/errors) carry no trader_id and pass through unchanged.
 func (s *Server) planTraderOwnership() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if !strings.HasPrefix(c.FullPath(), "/api/plan/") {
+		p := c.FullPath()
+		if !strings.HasPrefix(p, "/api/plan/") && !strings.HasPrefix(p, "/api/risk/") {
 			c.Next()
 			return
 		}
@@ -1632,7 +1636,7 @@ func (s *Server) handlePlanOwnerLevel(c *gin.Context) {
 		SafeNotFound(c, "Trader")
 		return
 	}
-	// C1 — body-carried trader_id bypasses the query-based middleware gate.
+	// C1 — defense in depth (the group middleware now probes body trader_id too).
 	if !s.traderOwnedBy(c.GetString("user_id"), traderID) {
 		SafeNotFound(c, "Trader")
 		return
@@ -1686,7 +1690,7 @@ func (s *Server) handlePlanOwnerLevelDelete(c *gin.Context) {
 		SafeNotFound(c, "Trader")
 		return
 	}
-	// C1 — body-carried trader_id bypasses the query-based middleware gate.
+	// C1 — defense in depth (the group middleware now probes body trader_id too).
 	if !s.traderOwnedBy(c.GetString("user_id"), traderID) {
 		SafeNotFound(c, "Trader")
 		return

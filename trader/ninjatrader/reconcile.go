@@ -109,6 +109,13 @@ func (t *TCPTrader) reconcilePositions(traderID, exchangeID, exchangeType string
 	for _, sid := range staleSignals {
 		delete(t.pending, sid)
 		delete(t.pendingAt, sid)
+		// Hygiene: a swept signal can never fill, so it must not stay as the
+		// "current entry" for GetOrderStatus either.
+		t.mu.Lock()
+		if t.lastEntrySignalID == sid {
+			t.lastEntrySignalID = ""
+		}
+		t.mu.Unlock()
 	}
 	t.pendingMu.Unlock()
 	if len(staleSignals) > 0 {
