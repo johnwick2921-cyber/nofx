@@ -416,6 +416,42 @@ export const planStrings = {
     zh: '最大重新校准次数',
     id: 'Maks penyelarasan ulang',
   },
+  // W6 (2026-08-25) — planner wake-up knobs (level events).
+  wakeHeader: {
+    en: 'Planner wake-ups',
+    zh: '规划师唤醒',
+    id: 'Bangun perencana',
+  },
+  wakeOn15mZone: {
+    en: 'Wake on 15m zones',
+    zh: '15m 供需区唤醒',
+    id: 'Bangun di zona 15m',
+  },
+  wakeOnHTFZone: {
+    en: 'Wake on HTF zones (1h/4h)',
+    zh: 'HTF 供需区唤醒 (1h/4h)',
+    id: 'Bangun di zona HTF (1j/4j)',
+  },
+  wakeOnHTFOB: {
+    en: 'Wake on HTF order blocks',
+    zh: 'HTF 订单块唤醒',
+    id: 'Bangun di order block HTF',
+  },
+  wakeOnSeatedInvalidation: {
+    en: 'Wake on seated-level invalidation',
+    zh: '坐稳位失效唤醒',
+    id: 'Bangun saat invalidasi level',
+  },
+  wakeOnIFVG: {
+    en: 'Wake on iFVG inversion',
+    zh: 'iFVG 反转唤醒',
+    id: 'Bangun saat iFVG',
+  },
+  wakeMinInterval: {
+    en: 'Min wake interval (min)',
+    zh: '唤醒最小间隔（分钟）',
+    id: 'Interval bangun min (mnt)',
+  },
   // W15.C follow-up — the owner door only opens on the LIVE session, because every
   // mutating endpoint resolves the active session server-side.
   siblingReadOnly: {

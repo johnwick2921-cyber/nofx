@@ -165,6 +165,16 @@ func (at *AutoTrader) maybeWakePlannerOnMSS(session, tradeDate string, row *stor
 	if at.lastMSSWakeKey == key {
 		return // one wake per MSS event
 	}
+	// W6 — the MSS wake shares the planner-wake clock with the level-event
+	// wake: both fire at most once per wake_min_interval_min, whichever
+	// class goes first. This makes the two wake classes budget-parity
+	// siblings instead of a same-cycle double fire.
+	if at.config.StrategyConfig != nil && at.config.StrategyConfig.DayPlan != nil &&
+		!at.lastPlannerWakeAt.IsZero() &&
+		time.Since(at.lastPlannerWakeAt) < time.Duration(at.config.StrategyConfig.DayPlan.WakeMinIntervalMinutes())*time.Minute {
+		at.logWarnf("🗓️ structure MSS on %s %s — SKIPPED: within wake_min_interval_min of the last planner wake (%s).", session, tradeDate, time.Since(at.lastPlannerWakeAt).Round(time.Second))
+		return
+	}
 	// C5 (2026-08-25) — an MSS wake consumes the same per-session re-plan budget
 	// as a death; once exhausted the session must sit out instead of appending
 	// versions forever on repeated structure events.
@@ -175,6 +185,7 @@ func (at *AutoTrader) maybeWakePlannerOnMSS(session, tradeDate string, row *stor
 		return
 	}
 	at.lastMSSWakeKey = key
+	at.lastPlannerWakeAt = time.Now() // W6 — shared wake clock
 	at.logWarnf("🗓️ structure MSS on %s %s (%s) — waking the planner (G4.6, 4th wake-up).", session, tradeDate, mss.Detail)
 	// C5 — an MSS wake strands owner overlays exactly like a death re-plan does:
 	// make the loss audible BEFORE the read (the P1 alert names the count).

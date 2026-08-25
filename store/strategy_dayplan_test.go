@@ -29,6 +29,13 @@ func fullDayPlan() *DayPlanConfig {
 		Sessions: []DayPlanSessionOverride{
 			{Session: "NY"}, // all-inherit override (every pointer nil)
 		},
+		// W6 (2026-08-25) — wake knobs participate in the wire golden.
+		WakeOn15mZone:            wakeBoolPtr(true),
+		WakeOnHTFZone:            wakeBoolPtr(true),
+		WakeOnHTFOB:              true,
+		WakeOnSeatedInvalidation: wakeBoolPtr(true),
+		WakeOnIFVG:               wakeBoolPtr(true),
+		WakeMinIntervalMin:       10,
 	}
 }
 
@@ -36,13 +43,59 @@ func fullDayPlan() *DayPlanConfig {
 // future refactor that renames/reorders a field is caught. DayPlanConfig is a
 // plain struct (no custom codec) → json.Marshal is deterministic.
 func TestDayPlanConfigGolden(t *testing.T) {
-	const golden = `{"plan_enabled":true,"planner_model":"deepseek-reasoner","plan_mode":"advisory","planner_timeframes":["D","4h","1h","15m"],"proximity_filter_atr":1.5,"max_levels":8,"scenario_cap":3,"acceptance_rule":"2x5m","replan_cap":2,"sessions_enabled":["NY"],"approval_required":false,"evening_digest":true,"sessions":[{"session":"NY"}]}`
+	const golden = `{"plan_enabled":true,"planner_model":"deepseek-reasoner","plan_mode":"advisory","planner_timeframes":["D","4h","1h","15m"],"proximity_filter_atr":1.5,"max_levels":8,"scenario_cap":3,"acceptance_rule":"2x5m","replan_cap":2,"sessions_enabled":["NY"],"approval_required":false,"evening_digest":true,"sessions":[{"session":"NY"}],"wake_on_15m_zone":true,"wake_on_htf_zone":true,"wake_on_htf_ob":true,"wake_on_seated_invalidation":true,"wake_on_ifvg":true,"wake_min_interval_min":10}`
 	got, err := json.Marshal(fullDayPlan())
 	if err != nil {
 		t.Fatalf("marshal day plan: %v", err)
 	}
 	if string(got) != golden {
 		t.Fatalf("day_plan golden mismatch:\n got: %s\nwant: %s", string(got), golden)
+	}
+}
+
+// TestDayPlanWakeKnobDefaults locks the W6 knob resolution seam: nil config or
+// unset pointer → ON (except HTF OBs, OFF); explicit false disables; interval
+// 0 → 10.
+func TestDayPlanWakeKnobDefaults(t *testing.T) {
+	var nilCfg *DayPlanConfig
+	if !nilCfg.WakeOn15mZoneEnabled() || !nilCfg.WakeOnHTFZoneEnabled() ||
+		!nilCfg.WakeOnSeatedInvalidationEnabled() || !nilCfg.WakeOnIFVGEnabled() {
+		t.Fatalf("nil config must resolve every ON-default knob to ON")
+	}
+	if nilCfg.WakeOnHTFOBEnabled() {
+		t.Fatalf("nil config must resolve HTF-OB knob to OFF")
+	}
+	if nilCfg.WakeMinIntervalMinutes() != 10 {
+		t.Fatalf("nil config interval = %d want 10", nilCfg.WakeMinIntervalMinutes())
+	}
+
+	empty := &DayPlanConfig{}
+	if !empty.WakeOn15mZoneEnabled() || !empty.WakeOnHTFZoneEnabled() {
+		t.Fatalf("unset pointers must resolve to ON (defaults)")
+	}
+
+	off := false
+	c := &DayPlanConfig{
+		WakeOn15mZone:            &off,
+		WakeOnHTFZone:            &off,
+		WakeOnHTFOB:              false,
+		WakeOnSeatedInvalidation: &off,
+		WakeOnIFVG:               &off,
+		WakeMinIntervalMin:       25,
+	}
+	if c.WakeOn15mZoneEnabled() || c.WakeOnHTFZoneEnabled() ||
+		c.WakeOnSeatedInvalidationEnabled() || c.WakeOnIFVGEnabled() ||
+		c.WakeOnHTFOBEnabled() {
+		t.Fatalf("explicit false must disable")
+	}
+	if c.WakeMinIntervalMinutes() != 25 {
+		t.Fatalf("interval = %d want 25", c.WakeMinIntervalMinutes())
+	}
+
+	if d := DefaultDayPlanConfig(); !d.WakeOn15mZoneEnabled() || !d.WakeOnHTFZoneEnabled() ||
+		!d.WakeOnSeatedInvalidationEnabled() || !d.WakeOnIFVGEnabled() ||
+		d.WakeOnHTFOBEnabled() || d.WakeMinIntervalMinutes() != 10 {
+		t.Fatalf("DefaultDayPlanConfig must seed ON/OFF/10 defaults")
 	}
 }
 

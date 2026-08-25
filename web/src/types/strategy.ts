@@ -96,6 +96,14 @@ export interface DayPlanConfig {
   /** W13 auto re-align ceiling per plan (default 5). Go reads it; the FE type
    *  was missing it entirely, so the value could never be edited from the app. */
   realign_cap?: number
+  /** W6 (2026-08-25) — planner wake-up knobs (level events). Pointer-bool
+   *  semantics mirror Go: absent = ON for these five except HTF OBs (OFF). */
+  wake_on_15m_zone?: boolean
+  wake_on_htf_zone?: boolean
+  wake_on_htf_ob?: boolean
+  wake_on_seated_invalidation?: boolean
+  wake_on_ifvg?: boolean
+  wake_min_interval_min?: number
   sessions?: DayPlanSessionOverride[]
 }
 

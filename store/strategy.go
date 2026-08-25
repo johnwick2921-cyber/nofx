@@ -948,6 +948,15 @@ type DayPlanConfig struct {
 	// Sessions holds minimal per-session overrides; absent/nil fields inherit
 	// from the strategy-level values above (⚪ inherit / 🔸 override).
 	Sessions []DayPlanSessionOverride `json:"sessions,omitempty"`
+	// ── W6 wake wave (2026-08-25) — event-diff planner wake-ups. All knobs, no
+	// hardcode. Pointer bools are ON by default (an explicit false disables);
+	// WakeOnHTFOB is a plain bool (OFF by default). WakeMinIntervalMin ≤ 0 → 10.
+	WakeOn15mZone            *bool `json:"wake_on_15m_zone,omitempty"`            // 15m reversal S/D zones + 15m FVG formations
+	WakeOnHTFZone            *bool `json:"wake_on_htf_zone,omitempty"`            // 1h/4h S/D zones (any pattern)
+	WakeOnHTFOB              bool  `json:"wake_on_htf_ob,omitempty"`              // 1h/4h order blocks (OFF default)
+	WakeOnSeatedInvalidation *bool `json:"wake_on_seated_invalidation,omitempty"` // seated zone-kind level closed beyond noise band
+	WakeOnIFVG               *bool `json:"wake_on_ifvg,omitempty"`                // filled→inverted FVGs, any tier
+	WakeMinIntervalMin       int   `json:"wake_min_interval_min,omitempty"`       // minutes between ANY planner wakes (default 10)
 }
 
 // DayPlanSessionOverride is a minimal per-session override. Every field is a
@@ -1203,7 +1212,64 @@ func DefaultDayPlanConfig() *DayPlanConfig {
 		RealignCap:         5,
 		LastEntryCT:        "13:00", // 14:00 ET
 		EODFlatCT:          "14:45", // 15:45 ET
+		// W6 (2026-08-25) — wake wave defaults: ON except HTF OBs; 10-min
+		// minimum spacing between planner wake-ups.
+		WakeOn15mZone:            wakeBoolPtr(true),
+		WakeOnHTFZone:            wakeBoolPtr(true),
+		WakeOnHTFOB:              false,
+		WakeOnSeatedInvalidation: wakeBoolPtr(true),
+		WakeOnIFVG:               wakeBoolPtr(true),
+		WakeMinIntervalMin:       10,
 	}
+}
+
+func wakeBoolPtr(v bool) *bool { return &v }
+
+// DefaultWakeMinIntervalMin is the shipped wake spacing (minutes).
+const DefaultWakeMinIntervalMin = 10
+
+// WakeOn15mZoneEnabled / WakeOnHTFZoneEnabled / WakeOnHTFOBEnabled /
+// WakeOnSeatedInvalidationEnabled / WakeOnIFVGEnabled / WakeMinIntervalMinutes
+// are the ONE resolution seam for the W6 wake knobs: nil config or unset
+// pointer → the shipped default (ON, except HTF OBs). Every consumer must go
+// through these so a knob can never silently flip between callers.
+func (c *DayPlanConfig) WakeOn15mZoneEnabled() bool {
+	if c == nil || c.WakeOn15mZone == nil {
+		return true
+	}
+	return *c.WakeOn15mZone
+}
+
+func (c *DayPlanConfig) WakeOnHTFZoneEnabled() bool {
+	if c == nil || c.WakeOnHTFZone == nil {
+		return true
+	}
+	return *c.WakeOnHTFZone
+}
+
+func (c *DayPlanConfig) WakeOnHTFOBEnabled() bool {
+	return c != nil && c.WakeOnHTFOB
+}
+
+func (c *DayPlanConfig) WakeOnSeatedInvalidationEnabled() bool {
+	if c == nil || c.WakeOnSeatedInvalidation == nil {
+		return true
+	}
+	return *c.WakeOnSeatedInvalidation
+}
+
+func (c *DayPlanConfig) WakeOnIFVGEnabled() bool {
+	if c == nil || c.WakeOnIFVG == nil {
+		return true
+	}
+	return *c.WakeOnIFVG
+}
+
+func (c *DayPlanConfig) WakeMinIntervalMinutes() int {
+	if c == nil || c.WakeMinIntervalMin <= 0 {
+		return DefaultWakeMinIntervalMin
+	}
+	return c.WakeMinIntervalMin
 }
 
 // GridStrategyConfig grid trading specific configuration
