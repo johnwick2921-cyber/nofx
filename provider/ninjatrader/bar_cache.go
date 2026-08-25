@@ -145,6 +145,8 @@ func timeframeMs(timeframe string) int64 {
 	switch timeframe {
 	case "1m":
 		return 60_000
+	case "2m": // parity with kernel.TFDurationMs
+		return 120_000
 	case "3m":
 		return 180_000
 	case "5m":

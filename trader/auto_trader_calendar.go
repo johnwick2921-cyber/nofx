@@ -72,6 +72,13 @@ func (at *AutoTrader) maybeFetchCalendar(now time.Time) {
 					upgraded++
 				}
 			} else if err == nil {
+				// C10/D2 (2026-08-25) — the past-date freeze: a corrected
+				// payload for a PAST trade-date must NOT overwrite the frozen
+				// replay slice. Only TODAY's slice accepts live corrections.
+				todayCT := now.In(kernel.CTLocation()).Format("2006-01-02")
+				if date != todayCT {
+					continue
+				}
 				if changed, cerr := at.store.Calendar().UpdateLiveSliceIfChanged(row); cerr == nil && changed {
 					at.logInfof("📅 calendar: %s slice corrected by the fresh feed", date)
 				} else if cerr != nil {

@@ -419,6 +419,12 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 				_, price, dATR := AssembleScoredLevels(ctx.TraderID, snapshotBars, ResolvedSessionRegistryFor(ctx.TraderID), activeSymbol, maxLevels, snapshotNow, proximityK)
 				SetPlanDATR(ctx.TraderID, dATR) // B3: the citation band check reads this
 				status = RenderPlanStatus(ctx.TraderID, activeSymbol, plan.Doc, snapshotBars, price, dATR, rule, plan.ReplansLeft, snapshotNow.UnixMilli(), plan.BirthMs)
+				// C6 (2026-08-25) — the model must SEE the dead-plan verdict
+				// BEFORE citing scenarios, not learn it from a post-call
+				// refusal. The validateDecision gate stays the hard stop.
+				if ctx.ExecutorPlanDead != "" {
+					status += "\n⚠ ACTIVE PLAN IS MACHINE-DEAD: " + ctx.ExecutorPlanDead + " — do NOT cite its scenarios; entries are refused (position management only)."
+				}
 				// C1 (F3): machine-computed confirmation lines per scenario —
 				// advisory truth the model reasons FROM, never a gate.
 				if cl := RenderConfirmLines(plan.Doc, snapshotBars, plan.BirthMs, snapshotNow.UnixMilli()); cl != "" {

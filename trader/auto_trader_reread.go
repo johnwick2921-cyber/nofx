@@ -102,6 +102,15 @@ func (at *AutoTrader) ForceReread(now time.Time) (RereadRefusal, error) {
 		fmt.Sprintf("%s plan re-read on request", gate.Session),
 		fmt.Sprintf("You asked for a fresh read of the %s plan. It spends one of the %d re-reads for this session.",
 			gate.Session, gate.ReplanCap))
+	// C9/D6 (2026-08-25) — re-verify the budget against the LATEST row right
+	// before the read: a death re-plan racing this request could already have
+	// spent the last re-plan (the pre-claim CanForceReread TOCTOU).
+	if latest, lErr := at.store.Plan().GetLatestPlanForTraderSession(tradeDate, gate.Session, at.id); lErr == nil && latest != nil {
+		baseline := store.GetResetBaseline(at.store, at.id, tradeDate, gate.Session)
+		if !store.MayReplanFrom(latest.Version, baseline, gate.ReplanCap) {
+			return RereadRefusal{Allowed: false, Session: gate.Session, Reason: "the re-read budget was spent by a concurrent re-plan — try the owner reset instead"}, nil
+		}
+	}
 	// C9 (2026-08-25) — capture the claim result: a lost claim (another read
 	// already in flight) or a failed preflight must be an HONEST outcome, not a
 	// silent success.
