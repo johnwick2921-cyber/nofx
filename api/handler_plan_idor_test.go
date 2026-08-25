@@ -94,7 +94,8 @@ func TestGetTraderFromQueryNoGlobalFallback(t *testing.T) {
 	}
 	for _, tc := range cases {
 		rec := httptest.NewRecorder()
-		router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/test?as_user="+tc.asUser+tc.query, nil))		if rec.Code != tc.want {
+		router.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/test?as_user="+tc.asUser+tc.query, nil))
+		if rec.Code != tc.want {
 			t.Fatalf("%s: expected %d, got %d body=%s", tc.name, tc.want, rec.Code, rec.Body.String())
 		}
 		if tc.wantID != "" && !strings.Contains(rec.Body.String(), tc.wantID) {
