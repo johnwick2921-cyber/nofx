@@ -44,6 +44,19 @@ type PlannerInput struct {
 	DigestChain    []string               // session digests + dailies + one-liners
 	OwnerNote      string
 	Warming        string // non-empty → cold-start / WARMING annotation
+	// PriorPlanKiller (P0.4-G, 2026-08-25) — when this read re-plans a DEAD
+	// plan, the killer line (e.g. "flip-condition: 2x5m close above X → bias
+	// long"). Rendered as a MANDATORY context block: a flip that already fired
+	// on machine-evaluated bars must be honored in the new plan's bias, not
+	// silently re-written (live bug: ASIA v3 flip fired → bias long, but v4
+	// came back short-biased). Empty → no block (first reads / owner resets).
+	PriorPlanKiller string
+	// PriorPlanLevels (P0.4-G) — the PREVIOUS version's levels, carried into
+	// every re-plan so the map keeps continuity instead of being rebuilt from
+	// scratch each time (the owner's complaint: every re-run dropped all old
+	// levels and the flip anchor kept moving). Rendered as a carry-over block;
+	// the model keeps or re-anchors them, never silently loses the set.
+	PriorPlanLevels []string
 	// W11 — the executor's indicator mirror (per-TF EMA/RSI/ATR/BOLL/MACD, driven by
 	// ai_config toggles), rendered once by RenderPlannerIndicatorBlock. Empty → the
 	// block is omitted (disabled state = byte-identical prompt). AIConfigHash is the
@@ -175,6 +188,20 @@ func BuildPlannerPrompt(in PlannerInput) string {
 	}
 	if strings.TrimSpace(in.OwnerNote) != "" {
 		b.WriteString("## Owner note\n  " + in.OwnerNote + "\n\n")
+	}
+	if strings.TrimSpace(in.PriorPlanKiller) != "" {
+		b.WriteString("## Prior plan invalidation (MANDATORY context)\n  " + in.PriorPlanKiller + "\n")
+		if FlipToDirection(in.PriorPlanKiller) != "" {
+			b.WriteString("  This is a flip-condition — the bias flip has ALREADY FIRED on machine-evaluated bars; your new plan MUST use that flipped direction, never the old bias.\n")
+		}
+		b.WriteString("\n")
+	}
+	if len(in.PriorPlanLevels) > 0 {
+		b.WriteString("## Prior plan levels (continuity — carry over or re-anchor by price, do not silently drop the set)\n")
+		for _, l := range in.PriorPlanLevels {
+			b.WriteString("- " + l + "\n")
+		}
+		b.WriteString("\n")
 	}
 
 	b.WriteString(plannerOutputContract(in.MaxLevels, in.ScenarioCap, len(in.HTFZones) > 0))
