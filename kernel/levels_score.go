@@ -87,7 +87,7 @@ func typeEvidence(k LevelKind) float64 {
 		return 0.70
 	case KindRound, KindGap:
 		return 0.55
-	case KindSupply, KindDemand, KindFVG, KindOB:
+	case KindSupply, KindDemand, KindFVG, KindIFVG, KindOB:
 		return 0.30 // confluence-only, never standalone
 	default:
 		return 0.50
@@ -96,7 +96,7 @@ func typeEvidence(k LevelKind) float64 {
 
 func isZoneKind(k LevelKind) bool {
 	switch k {
-	case KindSupply, KindDemand, KindFVG, KindOB:
+	case KindSupply, KindDemand, KindFVG, KindIFVG, KindOB:
 		return true
 	}
 	return false
@@ -112,6 +112,7 @@ func isZoneKind(k LevelKind) bool {
 var zoneEvidenceByKind = map[LevelKind]map[string]float64{
 	KindOB:     {"1m": 0.40, "15m": 0.50, "1h": 0.60, "4h": 0.72},
 	KindFVG:    {"1m": 0.35, "15m": 0.45, "1h": 0.55, "4h": 0.65},
+	KindIFVG:   {"1m": 0.35, "15m": 0.45, "1h": 0.55, "4h": 0.65},
 	KindSupply: {"1m": 0.35, "15m": 0.45, "1h": 0.55, "4h": 0.65},
 	KindDemand: {"1m": 0.35, "15m": 0.45, "1h": 0.55, "4h": 0.65},
 }
@@ -476,7 +477,7 @@ func isHTFSwingZone(l ScoredLevel) bool {
 		return false
 	}
 	switch l.Kind {
-	case KindEQH, KindEQL, KindSupply, KindDemand, KindFVG, KindOB:
+	case KindEQH, KindEQL, KindSupply, KindDemand, KindFVG, KindIFVG, KindOB:
 		return true
 	}
 	return false

@@ -41,6 +41,13 @@ const DEFAULT_DAY_PLAN: DayPlanConfig = {
   last_entry_ct: '13:00',
   eod_flat_ct: '14:45',
   realign_cap: 5,
+  // W6 (2026-08-25) — wake knobs: ON except HTF OBs; 10-min spacing.
+  wake_on_15m_zone: true,
+  wake_on_htf_zone: true,
+  wake_on_htf_ob: false,
+  wake_on_seated_invalidation: true,
+  wake_on_ifvg: true,
+  wake_min_interval_min: 10,
 }
 
 // NY's window end — the EOD flat must not sit AFTER it, or the session gate
@@ -524,6 +531,64 @@ export function DayPlanEditor({ config, onChange, disabled, language }: Props) {
               disabled={bodyDisabled}
             />
           </FieldRow>
+
+          {/* W6 (2026-08-25) — planner wake-up knobs: level-event wakes.
+              Absent = ON (mirrors Go pointer-bool defaults); HTF OBs OFF. */}
+          <div
+            className="mt-1 pt-2"
+            style={{ borderTop: '1px solid var(--vl-hair)' }}
+          >
+            <span
+              className="text-[10px] uppercase tracking-widest"
+              style={{ color: 'var(--vl-faint)' }}
+            >
+              {tp('wakeHeader', language)}
+            </span>
+            <FieldRow label={tp('wakeOn15mZone', language)}>
+              <Toggle
+                on={cfg.wake_on_15m_zone !== false}
+                onChange={(v) => update('wake_on_15m_zone', v)}
+                disabled={bodyDisabled}
+              />
+            </FieldRow>
+            <FieldRow label={tp('wakeOnHTFZone', language)}>
+              <Toggle
+                on={cfg.wake_on_htf_zone !== false}
+                onChange={(v) => update('wake_on_htf_zone', v)}
+                disabled={bodyDisabled}
+              />
+            </FieldRow>
+            <FieldRow label={tp('wakeOnHTFOB', language)}>
+              <Toggle
+                on={cfg.wake_on_htf_ob === true}
+                onChange={(v) => update('wake_on_htf_ob', v)}
+                disabled={bodyDisabled}
+              />
+            </FieldRow>
+            <FieldRow label={tp('wakeOnSeatedInvalidation', language)}>
+              <Toggle
+                on={cfg.wake_on_seated_invalidation !== false}
+                onChange={(v) => update('wake_on_seated_invalidation', v)}
+                disabled={bodyDisabled}
+              />
+            </FieldRow>
+            <FieldRow label={tp('wakeOnIFVG', language)}>
+              <Toggle
+                on={cfg.wake_on_ifvg !== false}
+                onChange={(v) => update('wake_on_ifvg', v)}
+                disabled={bodyDisabled}
+              />
+            </FieldRow>
+            <FieldRow label={tp('wakeMinInterval', language)}>
+              <NumberField
+                value={cfg.wake_min_interval_min ?? 10}
+                min={5}
+                max={120}
+                onChange={(v) => update('wake_min_interval_min', v)}
+                disabled={bodyDisabled}
+              />
+            </FieldRow>
+          </div>
         </div>
 
         {/* sessions accordion */}

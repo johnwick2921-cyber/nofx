@@ -286,6 +286,12 @@ func (at *AutoTrader) maybeRunSessionReadsAt(now time.Time) {
 			// plan's bias TF is the FOURTH planner wake-up (one per MSS
 			// event, deduped).
 			at.maybeWakePlannerOnMSS(s.Name, tradeDate, existing)
+			// W6 (2026-08-25) — level events (fresh zones/FVGs/OBs/iFVGs the
+			// plan never saw + seated-level invalidations) are the FIFTH
+			// wake-up. Death-first ordering is preserved: this runs only
+			// when no death was handled above, and it shares the MSS wake's
+			// min-interval throttle + per-session budget.
+			at.maybeWakePlannerOnLevelEvents(s.Name, tradeDate, existing)
 		}
 	}
 }

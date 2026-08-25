@@ -363,9 +363,15 @@ type AutoTrader struct {
 	ai402OutageStartMs     int64        // P5 402-outage latch (0 = no outage) — one banner per outage
 	// G4 (regime wave 2026-08-21) — transition stand-down state + the G4.6 MSS
 	// wake dedupe key (plan:version:eventInstant — one planner wake per MSS).
-	transition            kernel.TransitionState
-	transitionClosedAtMs  int64 // G4: last closed trigger — the same event must not reopen the stand-down
-	lastMSSWakeKey        string
+	transition           kernel.TransitionState
+	transitionClosedAtMs int64 // G4: last closed trigger — the same event must not reopen the stand-down
+	lastMSSWakeKey       string
+	// W6 (2026-08-25) — level-event wake state: the dedupe key
+	// (plan:version:kind:label:tier:birth) and the SHARED planner-wake clock
+	// (deaths don't reset it; MSS + level wakes do, so the two wake classes
+	// can never double-fire inside one wake_min_interval_min window).
+	lastLevelWakeKey      string
+	lastPlannerWakeAt     time.Time
 	lastAIBalanceDay      string // P5 daily balance poll throttle (AI_BALANCE_WARN)
 	isRunning             bool
 	isRunningMutex        sync.RWMutex          // Mutex to protect isRunning flag

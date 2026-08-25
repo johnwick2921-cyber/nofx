@@ -42,6 +42,7 @@ const (
 	KindSupply LevelKind = "SUPPLY" // supply zone
 	KindDemand LevelKind = "DEMAND" // demand zone
 	KindFVG    LevelKind = "FVG"    // fair-value gap
+	KindIFVG   LevelKind = "IFVG"   // inverse FVG (filled gap, inverted polarity)
 	KindOB     LevelKind = "OB"     // order block
 	KindOwner  LevelKind = "OWNER"  // sticky owner-set level (P3.6-C)
 )
@@ -50,12 +51,12 @@ const (
 // a line, Lo == Hi == Price. HTF marks a higher-timeframe origin (grading input).
 type DetectedLevel struct {
 	Kind       LevelKind `json:"kind"`
-	Price      float64   `json:"price"`          // line price (zones: midpoint)
-	Lo         float64   `json:"lo"`             // zone bottom (== Price for a line)
-	Hi         float64   `json:"hi"`             // zone top (== Price for a line)
-	Label      string    `json:"label"`          // display label, e.g. "PDH", "RN 15500", "nPOC·Tue"
-	OriginDate string    `json:"origin_date"`    // YYYY-MM-DD of formation
-	HTF        bool      `json:"htf"`            // higher-timeframe origin
+	Price      float64   `json:"price"`       // line price (zones: midpoint)
+	Lo         float64   `json:"lo"`          // zone bottom (== Price for a line)
+	Hi         float64   `json:"hi"`          // zone top (== Price for a line)
+	Label      string    `json:"label"`       // display label, e.g. "PDH", "RN 15500", "nPOC·Tue"
+	OriginDate string    `json:"origin_date"` // YYYY-MM-DD of formation
+	HTF        bool      `json:"htf"`         // higher-timeframe origin
 	// TF is the DETECTION timeframe ("1m"…"4h"; "" = the 1m slice). Drives the
 	// v3 zone evidence tiers (owner-approved 2026-08-24).
 	TF string `json:"tf,omitempty"`
@@ -63,6 +64,11 @@ type DetectedLevel struct {
 	// "continuation" (RBR/DBD — weaker). "" = unknown (older detections).
 	ZonePattern string `json:"zone_pattern,omitempty"`
 	Info        string `json:"info,omitempty"` // extra (gap size, fill state, ...)
+	// FormedAtMs is the formation birth instant (bar open time of the candle
+	// that completed the pattern), in unix ms. 0 = unknown/older detections.
+	// The W6 wake loop (2026-08-25) diffs this against the plan row's birth
+	// time to find events the plan never saw.
+	FormedAtMs int64 `json:"formed_at_ms,omitempty"`
 }
 
 // lineLevel builds a single-price DetectedLevel (Lo==Hi==price).

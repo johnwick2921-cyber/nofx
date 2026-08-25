@@ -51,6 +51,9 @@ func TestSupplyDemandZones(t *testing.T) {
 	if z.Lo != 15498 || z.Hi != 15508 {
 		t.Fatalf("demand zone = [%v,%v] want [15498,15508]", z.Lo, z.Hi)
 	}
+	if z.FormedAtMs != bars[2].OpenTime {
+		t.Fatalf("zone formed_at = %d want %d (departure bar)", z.FormedAtMs, bars[2].OpenTime)
+	}
 }
 
 func TestFairValueGaps(t *testing.T) {
@@ -68,18 +71,77 @@ func TestFairValueGaps(t *testing.T) {
 	if f.Lo != 15505 || f.Hi != 15520 {
 		t.Fatalf("FVG = [%v,%v] want [15505,15520]", f.Lo, f.Hi)
 	}
+	if f.FormedAtMs != bars[2].OpenTime {
+		t.Fatalf("FVG formed_at = %d want %d", f.FormedAtMs, bars[2].OpenTime)
+	}
 }
 
 func TestFairValueGapsFilled(t *testing.T) {
-	// same gap, then a bar that trades fully through it → not emitted.
+	// A wick fully through the gap but a close INSIDE it does not invert (SMC:
+	// inversion needs a stay-through CLOSE beyond the gap edge).
 	bars := series([][4]float64{
 		{15500, 15505, 15498, 15503},
 		{15510, 15530, 15508, 15525},
 		{15528, 15540, 15520, 15535},
-		{15530, 15522, 15500, 15505}, // low 15500 ≤ 15505, high 15522 ≥ 15520 → fills
+		{15520, 15522, 15499, 15512}, // wick 15499–15522 through, close 15512 inside
 	})
-	if got := FairValueGaps(bars, 10, time.UnixMilli(nowAfter(bars))); len(got) != 0 {
-		t.Fatalf("filled FVG must not be emitted, got %v", got)
+	lvls := FairValueGaps(bars, 10, time.UnixMilli(nowAfter(bars)))
+	f, ok := firstOfKind(lvls, KindFVG)
+	if !ok {
+		t.Fatalf("wick-through with close inside must stay an FVG, got %v", lvls)
+	}
+	if f.Lo != 15505 || f.Hi != 15520 {
+		t.Fatalf("FVG = [%v,%v] want [15505,15520]", f.Lo, f.Hi)
+	}
+	if _, inv := firstOfKind(lvls, KindIFVG); inv {
+		t.Fatalf("close inside the gap must NOT invert, got %v", lvls)
+	}
+}
+
+func TestFairValueGapsInvertsOnCloseThrough(t *testing.T) {
+	// Bullish gap [15505,15520]; a later CLOSE below the gap low flips it to a
+	// bearish iFVG (resistance) with the same bounds — W6 (2026-08-25).
+	bars := series([][4]float64{
+		{15500, 15505, 15498, 15503},
+		{15510, 15530, 15508, 15525},
+		{15528, 15540, 15520, 15535},
+		{15530, 15532, 15500, 15502}, // close 15502 < 15505 → inversion
+	})
+	lvls := FairValueGaps(bars, 10, time.UnixMilli(nowAfter(bars)))
+	f, ok := firstOfKind(lvls, KindIFVG)
+	if !ok {
+		t.Fatalf("close-through fill must emit an iFVG, got %v", lvls)
+	}
+	if f.Lo != 15505 || f.Hi != 15520 || f.Label != "iFVG(bear)" {
+		t.Fatalf("iFVG = [%v,%v] %q want [15505,15520] iFVG(bear)", f.Lo, f.Hi, f.Label)
+	}
+	if f.Info != "filled→inverted" {
+		t.Fatalf("iFVG info = %q want filled→inverted", f.Info)
+	}
+	if f.FormedAtMs != bars[2].OpenTime {
+		t.Fatalf("iFVG formed_at = %d want %d", f.FormedAtMs, bars[2].OpenTime)
+	}
+	if _, still := firstOfKind(lvls, KindFVG); still {
+		t.Fatalf("an inverted gap must not ALSO emit a plain FVG, got %v", lvls)
+	}
+}
+
+func TestFairValueGapsBearishInversion(t *testing.T) {
+	// Bearish gap: bar0.Low 15522 > bar2.High 15512 → gap [15512,15522]; a later
+	// close ABOVE the gap high flips it to a bullish iFVG (support).
+	bars := series([][4]float64{
+		{15525, 15540, 15522, 15535},
+		{15510, 15512, 15500, 15505},
+		{15510, 15512, 15500, 15505},
+		{15518, 15530, 15516, 15524}, // close 15524 > 15522 → inversion
+	})
+	lvls := FairValueGaps(bars, 10, time.UnixMilli(nowAfter(bars)))
+	f, ok := firstOfKind(lvls, KindIFVG)
+	if !ok {
+		t.Fatalf("bearish close-through fill must emit an iFVG, got %v", lvls)
+	}
+	if f.Lo != 15512 || f.Hi != 15522 || f.Label != "iFVG(bull)" {
+		t.Fatalf("iFVG = [%v,%v] %q want [15512,15522] iFVG(bull)", f.Lo, f.Hi, f.Label)
 	}
 }
 
@@ -97,6 +159,9 @@ func TestOrderBlocks(t *testing.T) {
 	}
 	if ob.Lo != 15495 || ob.Hi != 15505 || ob.Label != "OB(bull)" {
 		t.Fatalf("OB = [%v,%v] %q want [15495,15505] OB(bull)", ob.Lo, ob.Hi, ob.Label)
+	}
+	if ob.FormedAtMs != bars[2].OpenTime {
+		t.Fatalf("OB formed_at = %d want %d (displacement bar)", ob.FormedAtMs, bars[2].OpenTime)
 	}
 }
 

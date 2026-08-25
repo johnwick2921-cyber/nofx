@@ -141,10 +141,12 @@ func SupplyDemandZones(bars []market.Kline, atr float64, now time.Time) []Detect
 			if move >= departure {
 				zl := zoneLevel(KindDemand, baseLo, baseHi, "Demand", origin)
 				zl.ZonePattern = pattern
+				zl.FormedAtMs = d.OpenTime // W6: birth = departure bar
 				out = append(out, zl)
 			} else if -move >= departure {
 				zl := zoneLevel(KindSupply, baseLo, baseHi, "Supply", origin)
 				zl.ZonePattern = pattern
+				zl.FormedAtMs = d.OpenTime // W6: birth = departure bar
 				out = append(out, zl)
 			}
 		}
@@ -154,8 +156,12 @@ func SupplyDemandZones(bars []market.Kline, atr float64, now time.Time) []Detect
 }
 
 // FairValueGaps finds 3-candle imbalances: bullish when bar[i-2].High < bar[i].Low
-// (gap between them), bearish when bar[i-2].Low > bar[i].High. Only UNFILLED gaps
-// (no later bar has traded back through the gap) are emitted.
+// (gap between them), bearish when bar[i-2].Low > bar[i].High. UNFILLED gaps are
+// emitted as KindFVG. W6 (2026-08-25): a gap whose far edge is later VIOLATED BY
+// A CLOSE is no longer dropped — it is emitted as KindIFVG with INVERTED
+// polarity (filled bullish FVG → bearish iFVG resistance; filled bearish FVG →
+// bullish iFVG support), keeping the original bounds. Research-grounded: a
+// stay-through close beyond the gap edge flips the imbalance's role.
 func FairValueGaps(bars []market.Kline, minGap float64, now time.Time) []DetectedLevel {
 	cb := closedBars(bars, now)
 	if len(cb) < 3 {
@@ -166,26 +172,46 @@ func FairValueGaps(bars []market.Kline, minGap float64, now time.Time) []Detecte
 	for i := 2; i < len(cb); i++ {
 		a, c := cb[i-2], cb[i]
 		var gLo, gHi float64
+		var bullish bool
 		switch {
 		case a.High < c.Low && c.Low-a.High >= minGap:
 			gLo, gHi = a.High, c.Low
+			bullish = true
 		case a.Low > c.High && a.Low-c.High >= minGap:
 			gLo, gHi = c.High, a.Low
+			bullish = false
 		default:
 			continue
 		}
-		filled := false
+		origin := time.UnixMilli(c.OpenTime).In(loc).Format("2006-01-02")
+		// W6 inversion: a later CLOSE beyond the far edge (below a bullish
+		// gap's low, above a bearish gap's high) flips the imbalance.
+		inverted := false
 		for j := i + 1; j < len(cb); j++ {
-			if cb[j].Low <= gLo && cb[j].High >= gHi {
-				filled = true
+			if bullish && cb[j].Close < gLo {
+				inverted = true
+				break
+			}
+			if !bullish && cb[j].Close > gHi {
+				inverted = true
 				break
 			}
 		}
-		if filled {
+		if inverted {
+			lvl := zoneLevel(KindIFVG, gLo, gHi, "iFVG", origin)
+			if bullish {
+				lvl.Label = "iFVG(bear)" // flipped to resistance
+			} else {
+				lvl.Label = "iFVG(bull)" // flipped to support
+			}
+			lvl.Info = "filled→inverted"
+			lvl.FormedAtMs = c.OpenTime
+			out = append(out, lvl)
 			continue
 		}
-		origin := time.UnixMilli(c.OpenTime).In(loc).Format("2006-01-02")
-		out = append(out, zoneLevel(KindFVG, gLo, gHi, "FVG", origin))
+		lvl := zoneLevel(KindFVG, gLo, gHi, "FVG", origin)
+		lvl.FormedAtMs = c.OpenTime
+		out = append(out, lvl)
 	}
 	return out
 }
@@ -208,14 +234,18 @@ func OrderBlocks(bars []market.Kline, atr float64, now time.Time) []DetectedLeve
 			// bullish displacement → last down candle before it
 			for j := i - 1; j >= 0; j-- {
 				if cb[j].Close < cb[j].Open {
-					out = append(out, zoneLevel(KindOB, cb[j].Low, cb[j].High, "OB(bull)", origin))
+					zl := zoneLevel(KindOB, cb[j].Low, cb[j].High, "OB(bull)", origin)
+					zl.FormedAtMs = cb[i].OpenTime // W6: birth = displacement bar
+					out = append(out, zl)
 					break
 				}
 			}
 		} else if -move >= displacement {
 			for j := i - 1; j >= 0; j-- {
 				if cb[j].Close > cb[j].Open {
-					out = append(out, zoneLevel(KindOB, cb[j].Low, cb[j].High, "OB(bear)", origin))
+					zl := zoneLevel(KindOB, cb[j].Low, cb[j].High, "OB(bear)", origin)
+					zl.FormedAtMs = cb[i].OpenTime // W6: birth = displacement bar
+					out = append(out, zl)
 					break
 				}
 			}
