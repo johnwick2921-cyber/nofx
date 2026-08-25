@@ -216,6 +216,30 @@ func TestCollectWakeCandidatesSeatedInvalidation(t *testing.T) {
 	}
 }
 
+// TestWakeReadFailureKeepsActivePlan is the W6-C regression (2026-08-25 live
+// bug): a wake re-read that fails every retry must NOT fail-close the session —
+// the still-active plan keeps trading and no row is written.
+func TestWakeReadFailureKeepsActivePlan(t *testing.T) {
+	at, st := resetTrader(t, store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true, ReplanCap: 4}})
+	at.mcpClient = &errorDecisionClient{} // every planner call fails
+	tradeDate := "2026-08-25"
+	if _, err := st.Plan().AppendPlan(&store.PlanDB{
+		PlanID: store.MakePlanID(tradeDate, "NY"), StrategyID: "trader-1",
+		TradeDate: tradeDate, Session: "NY", Lifecycle: "active",
+		Doc: `{"bias":{"direction":"neutral"},"levels":[]}`,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	performed := at.runPlannerReadWithTriggerClaimedCtx("NY", tradeDate, "level_event", "level event: x", nil, false)
+	if !performed {
+		t.Fatalf("the wake read must run (claimed) even though it will fail")
+	}
+	row, _ := st.Plan().GetLatestPlanForSession(tradeDate, "NY")
+	if row == nil || row.Version != 1 || row.Lifecycle != "active" {
+		t.Fatalf("a failed wake read must write NOTHING — latest row = %+v", row)
+	}
+}
+
 func TestMaybeWakePlannerOnLevelEventsThrottleDedupe(t *testing.T) {
 	st, err := store.New(filepath.Join(t.TempDir(), "t.db"))
 	if err != nil {

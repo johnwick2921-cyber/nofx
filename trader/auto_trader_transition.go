@@ -192,9 +192,14 @@ func (at *AutoTrader) maybeWakePlannerOnMSS(session, tradeDate string, row *stor
 	at.warnIfReplanOrphansOverlays(row)
 	// P0.4-G — carry the prior plan's levels for continuity (the owner's
 	// complaint: every re-plan dropped the old map and the anchors moved).
-	_ = at.runPlannerReadWithTriggerClaimedCtx(session, tradeDate, "structure_mss", "structure MSS: "+mss.Detail, priorPlanLevelLines(row))
-	// C5 — sticky owner edits survive the MSS wake exactly like the death path.
-	if fresh, fErr := at.store.Plan().GetLatestPlanForTraderSession(tradeDate, session, at.id); fErr == nil && fresh != nil && fresh.Version != row.Version {
-		at.carryOwnerEditsInto(fresh.PlanID, row.Version, fresh.Version)
-	}
+	// W6-C (2026-08-25) — the wake re-read is NON-fatal (a failed read keeps
+	// the active plan; failClosed=false) and runs ASYNC so a slow/timing-out
+	// planner can never stall the decision loop for minutes.
+	go func() {
+		_ = at.runPlannerReadWithTriggerClaimedCtx(session, tradeDate, "structure_mss", "structure MSS: "+mss.Detail, priorPlanLevelLines(row), false)
+		// C5 — sticky owner edits survive the MSS wake exactly like the death path.
+		if fresh, fErr := at.store.Plan().GetLatestPlanForTraderSession(tradeDate, session, at.id); fErr == nil && fresh != nil && fresh.Version != row.Version {
+			at.carryOwnerEditsInto(fresh.PlanID, row.Version, fresh.Version)
+		}
+	}()
 }
