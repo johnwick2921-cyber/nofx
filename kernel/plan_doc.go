@@ -354,6 +354,62 @@ func FlipToDirection(killer string) string {
 	}
 	return ""
 }
+
+// structuralLabels are the detector-anchored label prefixes the model may NOT
+// re-invent: a plan level whose price matches a machine-table row must carry
+// the table's label, or the plan ships a phantom anchor (LONDON v1: "PDH
+// 29297.75" when the true prior-day high was 29290.5).
+var structuralLabels = map[string]bool{
+	"PDH": true, "PDL": true, "PDC": true,
+	"RTH-H": true, "RTH-L": true,
+	"ONH": true, "ONL": true,
+	"AS-H": true, "AS-L": true,
+	"LDN-H": true, "LDN-L": true,
+	"PWH": true, "PWL": true, "PMH": true, "PML": true,
+	"EQH": true, "EQL": true,
+}
+
+// structuralPrefix returns the leading structural token of a label (e.g.
+// "PDL", "EQH·4h" → "EQH"), "" when the label isn't structural. Only the "·"
+// separator is split — RTH-H/AS-H/LDN-H are exact structural labels.
+func structuralPrefix(label string) string {
+	l := strings.TrimSpace(label)
+	if i := strings.Index(l, "·"); i > 0 {
+		l = l[:i]
+	}
+	if structuralLabels[l] {
+		return l
+	}
+	return ""
+}
+
+// MislabeledStructuralLevels (P0.4-H, 2026-08-25) reports plan levels whose
+// rounded price matches a machine-table row but whose label is a DIFFERENT
+// structural anchor than the table's. Rounded-price keying mirrors the
+// machine-grade stamp. Empty = clean. Pure.
+func MislabeledStructuralLevels(d *PlanDoc, machineLabels map[float64]string) []string {
+	if d == nil || len(machineLabels) == 0 {
+		return nil
+	}
+	var out []string
+	for _, l := range d.Levels {
+		k := math.Round(l.Price*100) / 100
+		ml, ok := machineLabels[k]
+		if !ok {
+			continue // not a machine-table price — free label
+		}
+		mp := structuralPrefix(ml)
+		lp := structuralPrefix(l.Label)
+		// Flag when EITHER side is a structural anchor and they disagree:
+		// the LONDON v1 phantom was the model writing "PDH" (structural) over
+		// a machine row whose label is a ZONE (non-structural). A structural
+		// label may never be re-invented for a table price.
+		if (mp != "" || lp != "") && mp != lp {
+			out = append(out, fmt.Sprintf("%.2f labeled %q but the machine table says %q", l.Price, l.Label, ml))
+		}
+	}
+	return out
+}
 type PlanFacts struct {
 	Price float64 // reference price at read time
 	DATR  float64 // daily ATR proxy
