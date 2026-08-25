@@ -165,9 +165,22 @@ func (at *AutoTrader) maybeWakePlannerOnMSS(session, tradeDate string, row *stor
 	if at.lastMSSWakeKey == key {
 		return // one wake per MSS event
 	}
+	// C5 (2026-08-25) — an MSS wake consumes the same per-session re-plan budget
+	// as a death; once exhausted the session must sit out instead of appending
+	// versions forever on repeated structure events.
+	cap := at.replanCapFor(session)
+	baseline := store.GetResetBaseline(at.store, at.id, tradeDate, session)
+	if !store.MayReplanFrom(row.Version, baseline, cap) {
+		at.logWarnf("🗓️ structure MSS on %s %s — planner wake SKIPPED: re-plan budget exhausted (%d/%d).", session, tradeDate, store.ReplansUsedFrom(row.Version, baseline), cap)
+		return
+	}
 	at.lastMSSWakeKey = key
 	at.logWarnf("🗓️ structure MSS on %s %s (%s) — waking the planner (G4.6, 4th wake-up).", session, tradeDate, mss.Detail)
 	// P0.4-G — carry the prior plan's levels for continuity (the owner's
 	// complaint: every re-plan dropped the old map and the anchors moved).
 	_ = at.runPlannerReadWithTriggerClaimedCtx(session, tradeDate, "structure_mss", "structure MSS: "+mss.Detail, priorPlanLevelLines(row))
+	// C5 — sticky owner edits survive the MSS wake exactly like the death path.
+	if fresh, fErr := at.store.Plan().GetLatestPlanForTraderSession(tradeDate, session, at.id); fErr == nil && fresh != nil && fresh.Version != row.Version {
+		at.carryOwnerEditsInto(fresh.PlanID, row.Version, fresh.Version)
+	}
 }

@@ -328,6 +328,11 @@ func (at *AutoTrader) runCycle() error {
 	// wires the executor gate + the plan-card chip mirror.
 	at.observeTransitionStanddown(ctx)
 
+	// C6 (2026-08-25) — executor dead-plan gate input: re-evaluate the active
+	// plan's death on the SAME bars every cycle; entries are refused inside
+	// validateDecision (management/closes proceed).
+	ctx.ExecutorPlanDead = at.executorPlanDeadReason()
+
 	// Plan 4 Stage 4 — defer-until-balance guard (NinjaTrader TCP only)
 	// If equity is 0 and no account_balance frame has arrived yet, skip the cycle silently.
 	// This prevents phantom HOLD decisions while waiting for the AddOn to connect.

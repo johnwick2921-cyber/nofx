@@ -89,11 +89,11 @@ func TestForceResetWritesFreshChainAndRestoresBudget(t *testing.T) {
 
 	// The marker records the seam at v7 (latest+1) → the new chain's first plan
 	// is its v1, free, with the FULL budget restored.
-	if got := store.GetResetBaseline(st, tradeDate, "NY"); got != 7 {
+	if got := store.GetResetBaseline(st, "trader-1", tradeDate, "NY"); got != 7 {
 		t.Fatalf("baseline = %d, want 7", got)
 	}
 	// Budget restored: v7 measured from baseline 7 has the FULL cap.
-	if left := store.ReplansLeftFrom(7, store.GetResetBaseline(st, tradeDate, "NY"), 4); left != 4 {
+	if left := store.ReplansLeftFrom(7, store.GetResetBaseline(st, "trader-1", tradeDate, "NY"), 4); left != 4 {
 		t.Fatalf("replans left after reset = %d, want 4", left)
 	}
 	// The new row is an ACTIVE plan (NO-TRADE cleared), trigger "owner reset".

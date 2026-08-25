@@ -56,6 +56,10 @@ const (
 	// frame that arrived while the position was untracked can be consumed with
 	// its real exit price.
 	untrackedGraceMs = 60_000
+	// entryConfirmGraceMs (C8, 2026-08-25): an entry whose signal never produced
+	// a fill within this window is dropped from the pending map (rejected /
+	// AddOn drop) — it must never linger as a would-be position.
+	entryConfirmGraceMs = 45_000
 )
 
 // StartPositionReconcile launches the periodic reconcile goroutine (idempotent
@@ -88,6 +92,31 @@ func (t *TCPTrader) reconcilePositions(traderID, exchangeID, exchangeType string
 	if !ok {
 		// NT8 has not reported positions for this account — do NOT touch the DB.
 		return
+	}
+
+	// C8 (2026-08-25) — sweep stale UNCONFIRMED entries: a pending signal that
+	// never produced a fill (NT8 rejected it, or the AddOn dropped the frame)
+	// must not linger as a would-be position. Drop it and alarm; NT8 truth is
+	// what the snapshot below says.
+	t.pendingMu.Lock()
+	var staleSignals []string
+	cutoff := time.Now().UTC().UnixMilli() - entryConfirmGraceMs
+	for sid, atMs := range t.pendingAt {
+		if atMs < cutoff {
+			staleSignals = append(staleSignals, sid)
+		}
+	}
+	for _, sid := range staleSignals {
+		delete(t.pending, sid)
+		delete(t.pendingAt, sid)
+	}
+	t.pendingMu.Unlock()
+	if len(staleSignals) > 0 {
+		suffix := "y"
+		if len(staleSignals) > 1 {
+			suffix = "ies"
+		}
+		logger.Warnf("🧹 C8 reconcile: dropped %d UNCONFIRMED pending entr%s (no fill within %ds) — NT8 never confirmed; no position recorded.", len(staleSignals), suffix, entryConfirmGraceMs/1000)
 	}
 
 	// NT8-held positions keyed "SYMBOL|SIDE" → average price (canonical form).

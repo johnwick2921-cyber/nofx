@@ -128,7 +128,7 @@ func (s *Server) planRulesWithCap(traderID, session, tradeDate string, version i
 	rule = dp.AcceptanceRuleFor(session)
 	mode = dp.PlanModeFor(session)
 	replanCap = dp.ReplanCapFor(session)
-	replansLeft = store.ReplansLeftFrom(version, store.GetResetBaseline(s.store, tradeDate, session), replanCap)
+	replansLeft = store.ReplansLeftFrom(version, store.GetResetBaseline(s.store, traderID, tradeDate, session), replanCap)
 	return rule, mode, replansLeft, replanCap
 }
 

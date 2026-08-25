@@ -1112,9 +1112,11 @@ func ReplansLeftFrom(version, baseline, cap int) int {
 }
 
 // ResetBaselineKey is the system_config key holding the reset seam version for
-// one (trade_date, session).
-func ResetBaselineKey(tradeDate, session string) string {
-	return "dayplan_reset:" + tradeDate + ":" + session
+// one (trader, trade_date, session). C7 (2026-08-25) — trader-scoped: the key
+// used to be (trade_date, session), so two day-plan traders sharing a session
+// shared the reset seam and one trader's reset re-armed the other's budget.
+func ResetBaselineKey(traderID, tradeDate, session string) string {
+	return "dayplan_reset:" + traderID + ":" + tradeDate + ":" + session
 }
 
 // ScenarioStatusKey is the system_config key holding a trader's live scenario
@@ -1134,24 +1136,24 @@ func ScenarioMetaKey(traderID, planID string) string {
 }
 
 // SetResetBaseline records the version the reset chain starts measuring from.
-func SetResetBaseline(st *Store, tradeDate, session string, version int) error {
+func SetResetBaseline(st *Store, traderID, tradeDate, session string, version int) error {
 	if st == nil {
 		return fmt.Errorf("store required")
 	}
 	if version < 1 {
 		return fmt.Errorf("baseline version must be >= 1, got %d", version)
 	}
-	return st.SetSystemConfig(ResetBaselineKey(tradeDate, session), strconv.Itoa(version))
+	return st.SetSystemConfig(ResetBaselineKey(traderID, tradeDate, session), strconv.Itoa(version))
 }
 
 // GetResetBaseline returns the reset baseline for (trade_date, session); 1 when
 // none was recorded (the original chain). A malformed value falls back to 1 —
 // a bad marker can never inflate or destroy budget.
-func GetResetBaseline(st *Store, tradeDate, session string) int {
+func GetResetBaseline(st *Store, traderID, tradeDate, session string) int {
 	if st == nil {
 		return 1
 	}
-	raw, _ := st.GetSystemConfig(ResetBaselineKey(tradeDate, session))
+	raw, _ := st.GetSystemConfig(ResetBaselineKey(traderID, tradeDate, session))
 	if n, err := strconv.Atoi(strings.TrimSpace(raw)); err == nil && n >= 1 {
 		return n
 	}
