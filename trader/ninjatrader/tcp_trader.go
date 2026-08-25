@@ -91,6 +91,15 @@ type TCPTrader struct {
 	// freeze so an in-flight fill doesn't false-freeze. Reconcile goroutine only → no lock.
 	divergeSince map[int64]int64
 
+	// untrackedSince tracks, per "SYMBOL|SIDE" key, the first time reconcile
+	// observed NT8 HOLDING a position for which this trader has NO open row
+	// (a manual NT8 entry, or an entry whose fill was never recorded). It
+	// debounces materializing an OPEN row (Source="reconcile") so a bot-opened
+	// row — which lands within seconds — is never double-created, while a
+	// genuinely untracked position becomes trackable (and its later close
+	// records real P&L instead of being dropped). Reconcile goroutine only.
+	untrackedSince map[string]int64
+
 	// Plan 4 Stage 4 — reference to the parent AutoTrader (optional).
 	// Used to notify the AutoTrader when the first account_balance frame arrives.
 	// Set by transport.go after creating the trader.

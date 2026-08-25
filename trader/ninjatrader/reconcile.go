@@ -48,6 +48,14 @@ const (
 	// momentarily in flight, so a single-pass divergence is within tolerance. 60s
 	// (3 reconcile passes) matches the other reconcile grace windows.
 	reconcileDivergenceGraceMs = 60_000
+	// untrackedGraceMs: an NT8-held position with NO open DB row (manual NT8
+	// entry / unrecorded fill) must PERSIST this long before reconcile
+	// materializes an OPEN row for it. A bot-opened row lands within seconds of
+	// its fill, so 60s (3 passes) only ever fires for genuinely untracked
+	// positions — and still beats the 120s priced-close park grace, so a close
+	// frame that arrived while the position was untracked can be consumed with
+	// its real exit price.
+	untrackedGraceMs = 60_000
 )
 
 // StartPositionReconcile launches the periodic reconcile goroutine (idempotent
@@ -61,7 +69,7 @@ func (t *TCPTrader) StartPositionReconcile(traderID, exchangeID, exchangeType st
 			ticker := time.NewTicker(reconcileInterval)
 			defer ticker.Stop()
 			for range ticker.C {
-				t.reconcilePositions(traderID, st)
+				t.reconcilePositions(traderID, exchangeID, exchangeType, st)
 			}
 		}()
 		logger.Infof("🔧 NinjaTrader position-reconcile started (anchors entry_price to NT8 avg + clears orphan rows)")
@@ -69,7 +77,7 @@ func (t *TCPTrader) StartPositionReconcile(traderID, exchangeID, exchangeType st
 }
 
 // reconcilePositions runs one reconcile pass. See file header for semantics.
-func (t *TCPTrader) reconcilePositions(traderID string, st *store.Store) {
+func (t *TCPTrader) reconcilePositions(traderID, exchangeID, exchangeType string, st *store.Store) {
 	// Reconcile against THIS trader's OWN bound account, not the shared connection
 	// CurrentAccount() (display-switchable). Otherwise viewing another account would
 	// make reconcile read the WRONG account's positions and mis-clear this trader's
@@ -196,9 +204,9 @@ func (t *TCPTrader) reconcilePositions(traderID string, st *store.Store) {
 					}
 				}
 				closed, perr := st.Position().ClosePosition(row.ID, exitPx, "reconcile_priced", pnl, 0, "sync")
-			if perr == nil && closed && OnPositionClosed != nil {
-				OnPositionClosed(row.TraderID, row.ID) // Phase 4: post-exit rescan
-			}
+				if perr == nil && closed && OnPositionClosed != nil {
+					OnPositionClosed(row.TraderID, row.ID) // Phase 4: post-exit rescan
+				}
 				delete(t.flatSince, row.ID)
 				if perr != nil {
 					logger.Warnf("ninjatrader/tcp: reconcile priced-close failed (row %d): %v", row.ID, perr)
@@ -235,6 +243,107 @@ func (t *TCPTrader) reconcilePositions(traderID string, st *store.Store) {
 	for id := range t.flatSince {
 		if !seenFlat[id] {
 			delete(t.flatSince, id)
+		}
+	}
+
+	// (e) UNTRACKED NT8 POSITIONS — NT8 holds a position this trader has NO open
+	// row for (a MANUAL NT8 entry, or an entry whose fill was never recorded).
+	// The row-driven loop above never sees these, so they were invisible to
+	// history: when they later closed, close-sync found no owner row, DROPPED
+	// the priced close, and the real P&L was lost forever (2026-08-25 incident:
+	// manual SHORT @29310 held 8.5 min, closed by the bot @29350.50 → −81.00
+	// realized, never recorded). Fix: after untrackedGraceMs of persistence —
+	// a bot-opened row lands within seconds of its fill, so this only fires for
+	// genuinely untracked positions — materialize an OPEN row anchored to the
+	// NT8 average (Source="reconcile", Account=bound account) so close-sync can
+	// record the real exit + ×pv P&L. A priced close parked while the position
+	// was still untracked is consumed immediately, preserving the real exit.
+	if t.untrackedSince == nil {
+		t.untrackedSince = make(map[string]int64)
+	}
+	seenHeld := make(map[string]bool)
+	for key, avg := range held {
+		seenHeld[key] = true
+		sym, side := key, "LONG"
+		if i := strings.LastIndex(key, "|"); i >= 0 {
+			sym, side = key[:i], key[i+1:]
+		}
+		// Authoritative account-aware check (not the row list): a row owned by a
+		// different account must not mask a held position on OUR bound account.
+		owner, oerr := st.Position().GetOpenPositionByAccountSymbol(acct, sym, side)
+		if oerr != nil {
+			logger.Warnf("ninjatrader/tcp: reconcile untracked owner lookup failed (%s %s acct=%q): %v", sym, side, acct, oerr)
+			continue
+		}
+		if owner != nil {
+			delete(t.untrackedSince, key) // tracked now — drop any debounce
+			continue
+		}
+		if t.untrackedSince[key] == 0 {
+			t.untrackedSince[key] = nowMs
+			logger.Infof("🧩 reconcile: NT8 holds UNTRACKED position %s %s @ avg %.2f (no open row) — materializing after %ds if it persists", sym, side, avg, untrackedGraceMs/1000)
+			continue
+		}
+		if nowMs-t.untrackedSince[key] < untrackedGraceMs {
+			continue
+		}
+		qty := heldQty[key]
+		if qty <= 0 {
+			qty = 1
+		}
+		row := &store.TraderPosition{
+			TraderID:           traderID,
+			ExchangeID:         exchangeID,
+			ExchangeType:       exchangeType,
+			ExchangePositionID: fmt.Sprintf("reconcile_%s_%s_%d", sym, side, nowMs),
+			Symbol:             sym,
+			Side:               side,
+			Quantity:           qty,
+			EntryQuantity:      qty,
+			EntryPrice:         avg,
+			EntryTime:          nowMs,
+			Leverage:           1,
+			Status:             "OPEN",
+			Source:             "reconcile",
+			Account:            acct,
+			CreatedAt:          nowMs,
+			UpdatedAt:          nowMs,
+		}
+		if err := st.Position().CreateOpenPosition(row); err != nil {
+			logger.Warnf("ninjatrader/tcp: reconcile materialize untracked %s %s failed: %v", sym, side, err)
+			delete(t.untrackedSince, key) // retry on a later pass
+			continue
+		}
+		logger.Warnf("🧩 reconcile: MATERIALIZED untracked NT8 position %s %s qty=%.0f @ %.2f (acct=%s) — manual/NT8-side entry now tracked; its close will record real P&L", sym, side, qty, avg, acct)
+		delete(t.untrackedSince, key)
+		// A close frame may have arrived while the row was still untracked (the
+		// DROPPED → parked path). Consume it now with the real exit + ×pv P&L.
+		if exitPx, okp := takePricedClose(acct, sym, side, nowMs); okp {
+			pv := market.FuturesPointValue(sym)
+			if pv <= 0 {
+				pv = 1
+			}
+			pnl := 0.0
+			if side == "LONG" {
+				pnl = (exitPx - avg) * qty * pv
+			} else {
+				pnl = (avg - exitPx) * qty * pv
+			}
+			if closed, perr := st.Position().ClosePosition(row.ID, exitPx, "reconcile_priced", pnl, 0, "sync"); perr == nil && closed {
+				if OnPositionClosed != nil {
+					OnPositionClosed(traderID, row.ID)
+				}
+				logger.Infof("💵 reconcile: untracked %s %s closed with parked exit %.2f pnl=%.2f (was untracked when the frame arrived)", sym, side, exitPx, pnl)
+			} else if perr != nil {
+				logger.Warnf("ninjatrader/tcp: reconcile untracked priced-close failed (row %d): %v", row.ID, perr)
+			}
+		}
+	}
+	// Prune untracked debounces for positions NT8 no longer holds (closed before
+	// materialization) so the map can't leak.
+	for key := range t.untrackedSince {
+		if !seenHeld[key] {
+			delete(t.untrackedSince, key)
 		}
 	}
 }
