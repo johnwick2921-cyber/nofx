@@ -6,12 +6,16 @@ import (
 
 // LogVolumeWaveBoot (Pack B, owner override 2026-08-26) — the boot-line ledger
 // for the volume wave: one line per shipped knob so the boot block
-// self-documents the cutover (dispatch: boot adds these).
+// self-documents the cutover (dispatch: boot adds these). S-wave (2026-08-26):
+// proximity is per-trader config now (owner retune 0.3 → ±~105pt), so the boot
+// line states the resolver instead of a constant.
 func LogVolumeWaveBoot() {
-	logger.Infof("🎛 volume wave: detectors=on · seats=%d · proximity=%.1f · family-confluence(cap=%d) · zone-ladder=1.0/0.6/0.3/0.15 · roles=on(overrides=%v) · bias_ctx=on",
-		DefaultMaxLevels, ActivationWindowK, ConfluenceCap(), IsRoleOverridden())
+	logger.Infof("🎛 volume wave: detectors=on · seats=%d · proximity=cfg(resolved per-trader; retuned 0.3) · family-confluence(cap=%d) · zone-ladder=1.0/0.6/0.3/0.15 · roles=on(overrides=%v) · bias_ctx=on · tier1+=VAH/VAL/SETT/nPOC (R-A13)",
+		DefaultMaxLevels, ConfluenceCap(), IsRoleOverridden())
 	logger.Infof("🎯 touch telemetry: band=%dt(%.1fpt) max_bars=%d vol_lookback=%d approach=%d — advisory, zero gates",
 		TouchBandTicks(), TouchBandPoints(), TouchEpisodeMaxBars(), TouchVolLookback(), TouchApproachBars())
 	logger.Infof("📐 fvg_entry: on min_disp=%.1f×ATR ce_width=%.0fpt lookback=%d bars — advisory, zero gates",
 		FvgEntryMinDispATR(), FvgEntryCEWidthPts(), FvgEntryLookbackBars())
+	logger.Infof("🔧 S-wave (2026-08-26): stale_confirm=%.1f×ATR5m · eod_flat=session-end (NY 14:45 CT, R-A15)",
+		StaleConfirmATR())
 }

@@ -249,11 +249,14 @@ func isTodayPriority(k LevelKind) bool {
 const Tier1ProximityTicks = 12
 
 // isTier1Kind marks the Tier-1 structural family (today's anchors + week/month
-// extremes). Tier-1 rows are exempt from the min_grade cut (spec: "min_grade
-// Tier-1 exception") and anchor the pattern-above-C gate.
+// extremes + R-A13 volume anchors). Tier-1 rows are exempt from the min_grade
+// cut (spec: "min_grade Tier-1 exception") and anchor the pattern-above-C gate.
+// R-A13 (owner ruling, S-wave 2026-08-26): VAH/VAL/SETT/nPOC JOIN the set —
+// volume levels are the institutional references the B2 gate must honor.
 func isTier1Kind(k LevelKind) bool {
 	switch k {
-	case KindPDH, KindPDL, KindPDC, KindRTHH, KindRTHL, KindORH, KindORL, KindONH, KindONL, KindPWH, KindPWL, KindPMH, KindPML:
+	case KindPDH, KindPDL, KindPDC, KindRTHH, KindRTHL, KindORH, KindORL, KindONH, KindONL, KindPWH, KindPWL, KindPMH, KindPML,
+		KindVAH, KindVAL, KindSETT, KindNPOC:
 		return true
 	}
 	return false
@@ -273,6 +276,10 @@ func IsTier1Label(label string) bool {
 	case l == "ONH", l == "ONL", l == "OR-H", l == "OR-L":
 		return true
 	case l == "PWH", l == "PWL", l == "PMH", l == "PML":
+		return true
+	// R-A13 (S-wave 2026-08-26) — volume anchors join Tier-1 (both emission
+	// paths share the nPOC prefix).
+	case l == "VAH", l == "VAL", l == "SETT", strings.HasPrefix(l, "NPOC"):
 		return true
 	}
 	return false

@@ -993,11 +993,13 @@ type DayPlanSessionOverride struct {
 }
 
 // DefaultLastEntryOffsetMin / DefaultEODFlatOffsetMin are the session-relative
-// defaults (minutes before session end). 15 preserves the NY flat feel
-// (15:00−15 = 14:45, exactly the old EODFlatCT default).
+// defaults (minutes before session end). R-A15 (owner ruling, S-wave
+// 2026-08-26): EOD flat = the session END — NY flattens at 14:45 CT (the
+// standing R5 ruling), not the drifted 14:30. Last-entry keeps its 15-min
+// lead (entries stop 14:30, flat at 14:45).
 const (
 	DefaultLastEntryOffsetMin = 15
-	DefaultEODFlatOffsetMin   = 15
+	DefaultEODFlatOffsetMin   = 0
 )
 
 // LastEntryOffsetFor resolves the per-session last-entry offset (minutes before
