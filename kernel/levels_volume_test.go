@@ -237,6 +237,31 @@ func TestSeatVolumeFamily(t *testing.T) {
 	}
 }
 
+// TestRoleMismatchesWarn locks the E4 validator: a magnet used as a breakout
+// trigger and a liquidity level faded with a plain reject both produce
+// WARN-only mismatch lines (never a rejection).
+func TestRoleMismatchesWarn(t *testing.T) {
+	doc := PlanDoc{
+		Levels: []PlanLevel{
+			{Price: 100, Label: "VWAP"},
+			{Price: 110, Label: "ONH"},
+		},
+		Scenarios: []PlanScenario{
+			{ID: "S1", Condition: "breakout_retest", Direction: "long", Confirm: &PlanConfirm{Rule: "1x5m_close", RefPrice: 100, Side: "above"}},
+			{ID: "S2", Condition: "reject", Direction: "short", Confirm: &PlanConfirm{Rule: "1x5m_close", RefPrice: 110, Side: "below"}},
+		},
+	}
+	ms := RoleMismatches(&doc)
+	if len(ms) != 2 {
+		t.Fatalf("RoleMismatches = %d lines, want 2 (magnet breakout + liquidity reject): %v", len(ms), ms)
+	}
+	for _, m := range ms {
+		if !containsStr(m, "S1") && !containsStr(m, "S2") {
+			t.Fatalf("mismatch line lost scenario id: %q", m)
+		}
+	}
+}
+
 func containsStr(s, sub string) bool {
 	return len(s) >= len(sub) && (s == sub || len(s) > 0 && indexOf(s, sub) >= 0)
 }
