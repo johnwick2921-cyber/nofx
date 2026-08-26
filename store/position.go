@@ -153,6 +153,18 @@ type TraderPosition struct {
 	// the cited scenario — "" legacy | "ok" | "off_band" | "struct".
 	PlanBand        string `gorm:"column:plan_band;default:''" json:"plan_band,omitempty"`
 	AdherenceGrade  string `gorm:"column:adherence_grade;default:''" json:"adherence_grade"`
+	// S3 (mega-research 2026-08-26) — full plan attribution at entry-write time.
+	// plan_id / plan_trade_date / plan_session are stamped from the ACTIVE plan
+	// the entry decision cited, NEVER reconstructed later: the version-leak class
+	// (register S3: versions are per (date,session) and leak across handoffs,
+	// e.g. pos 563 plan_version=9 vs LONDON max v2) is impossible when the link
+	// is captured at decision time. Empty for crypto / reconcile rows.
+	PlanID        string `gorm:"column:plan_id;default:'';index:idx_positions_plan" json:"plan_id"`
+	PlanTradeDate string `gorm:"column:plan_trade_date;default:''" json:"plan_trade_date"`
+	PlanSession   string `gorm:"column:plan_session;default:''" json:"plan_session"`
+	// PlanLinkNote carries backfill verdicts: "" (live stamp) |
+	// "backfill:<reason>" | "unresolvable:<reason>" (never a guessed join).
+	PlanLinkNote string `gorm:"column:plan_link_note;default:''" json:"plan_link_note"`
 }
 
 // TableName returns the table name
@@ -180,12 +192,22 @@ func (s *PositionStore) UpdateExcursion(id int64, mae, mfe float64) error {
 // SetPlanLink stamps the cited scenario + plan version + direction-match onto a
 // position at OPEN (P5.5). Additive; only called when day_plan is enabled.
 func (s *PositionStore) SetPlanLink(id int64, planVersion int, citedScenarioID string, matched bool, band string) error {
+	return s.SetPlanLinkFull(id, planVersion, citedScenarioID, matched, band, "", "", "")
+}
+
+// SetPlanLinkFull stamps the cited scenario + plan IDENTITY onto a position at
+// OPEN (S3, mega-research 2026-08-26). planID/tradeDate/session come from the
+// ACTIVE plan the entry cited — never from a later reconstruction.
+func (s *PositionStore) SetPlanLinkFull(id int64, planVersion int, citedScenarioID string, matched bool, band, planID, tradeDate, session string) error {
 	return s.db.Model(&TraderPosition{}).Where("id = ?", id).
 		Updates(map[string]any{
 			"plan_version":      planVersion,
 			"cited_scenario_id": citedScenarioID,
 			"plan_matched":      matched,
 			"plan_band":         band, // B3 (F6) — structural verdict, forward-only
+			"plan_id":           planID,
+			"plan_trade_date":   tradeDate,
+			"plan_session":      session,
 		}).Error
 }
 
@@ -276,6 +298,31 @@ func (s *PositionStore) InitTables() error {
 		if !strings.Contains(err.Error(), "already exists") && !strings.Contains(err.Error(), "UNIQUE constraint failed") {
 			return fmt.Errorf("failed to create unique index: %w", err)
 		}
+	}
+
+	// S3 (mega-research 2026-08-26) — position_plan_join: the ONE canonical join
+	// used by all analysis/expectancy queries. plan_id-first (stamped at entry),
+	// so the legacy (date, session, trader, version) reconstruction is never the
+	// primary path. Unresolvable rows keep plan_id='UNRESOLVABLE' and fall into
+	// the LEFT-JOIN NULL side — counted, never silently dropped.
+	var viewSQL string
+	if s.isPostgres() {
+		viewSQL = `CREATE OR REPLACE VIEW position_plan_join AS
+SELECT p.id AS position_id, p.trader_id, p.symbol, p.plan_id AS pos_plan_id,
+       p.plan_trade_date, p.plan_session, p.plan_version, p.cited_scenario_id, p.plan_link_note,
+       pl.plan_id AS plans_plan_id, pl.version AS plans_version, pl.doc
+FROM trader_positions p
+LEFT JOIN plans pl ON pl.plan_id = p.plan_id AND pl.version = p.plan_version`
+	} else {
+		viewSQL = `CREATE VIEW IF NOT EXISTS position_plan_join AS
+SELECT p.id AS position_id, p.trader_id, p.symbol, p.plan_id AS pos_plan_id,
+       p.plan_trade_date, p.plan_session, p.plan_version, p.cited_scenario_id, p.plan_link_note,
+       pl.plan_id AS plans_plan_id, pl.version AS plans_version, pl.doc
+FROM trader_positions p
+LEFT JOIN plans pl ON pl.plan_id = p.plan_id AND pl.version = p.plan_version`
+	}
+	if err := s.db.Exec(viewSQL).Error; err != nil {
+		return fmt.Errorf("failed to create position_plan_join view: %w", err)
 	}
 
 	return nil
