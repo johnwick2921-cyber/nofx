@@ -317,7 +317,11 @@ func (at *AutoTrader) runWatchCycle(ctx *kernel.Context, record *store.DecisionR
 	if market.FuturesBarsProvider != nil {
 		if bars := market.FuturesBarsProvider(p.Symbol, "1m", kernel.AISVPBarCount); len(bars) > 0 {
 			now := time.Now()
-			if sc, _, _ := kernel.AssembleScoredLevels(at.id, bars, kernel.ResolvedSessionRegistryFor(at.id), p.Symbol, 8, now, 1.5); len(sc) > 0 {
+			// S1 (mega-research 2026-08-26) — the watcher's hardcoded 1.5
+			// proximity literal survived the config retune (0.3); the seated log
+			// exposed it (±459pt vs the executor's ±92pt). Resolve like every
+			// other path.
+			if sc, _, _ := kernel.AssembleScoredLevels(at.id, bars, kernel.ResolvedSessionRegistryFor(at.id), p.Symbol, 8, now, at.proximityFilterATR()); len(sc) > 0 {
 				atr := market.ExportCalculateATR(bars, 14)
 				for _, ep := range kernel.TouchUpdate(at.id, p.Symbol, bars, sc, atr, now) {
 					if kernel.TouchEpisodeSink != nil {
