@@ -124,6 +124,11 @@ type swing struct {
 // calculateATR both use. Conformance audit C-ATR1 (2026-08-22): this file
 // previously used a plain SMA, which read ~43% low on the 08-21 15m series
 // and silently loosened the min-swing and MSS-displacement thresholds.
+
+// SimpleATR14 exports the ATR helper for replays: join bars+atr by timestamp
+// via store.BarHistoryStore.BarsBetween, then recompute the same value here.
+func SimpleATR14(highs, lows, closes []float64) float64 { return simpleATR14(highs, lows, closes) }
+
 func simpleATR14(highs, lows, closes []float64) float64 {
 	if len(closes) == 0 {
 		return 0
