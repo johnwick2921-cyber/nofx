@@ -543,6 +543,7 @@ func scoreLevelsPool(levels []DetectedLevel, price, dATR float64, freshness func
 	// under-supplied (the hard rule wins).
 	scored = seatHTF(scored, maxLevels)
 	scored = seatBothSides(scored, maxLevels)
+	scored = SeatVolumeFamily(scored, maxLevels) // Pack B (2026-08-26) — E1 volume-family seat
 
 	if len(scored) > maxLevels {
 		scored = scored[:maxLevels]
@@ -595,6 +596,7 @@ func ScoreLevelsMinGrade(levels []DetectedLevel, price, dATR float64, freshness 
 	})
 	filtered = seatHTF(filtered, eff)
 	filtered = seatBothSides(filtered, eff)
+	filtered = SeatVolumeFamily(filtered, eff) // Pack B — same guarantee after the min_grade cut
 	if len(filtered) > eff {
 		filtered = filtered[:eff]
 	}
@@ -733,6 +735,81 @@ func isHTFSeatEligible(l ScoredLevel) bool {
 		return true
 	}
 	return isZoneKind(l.Kind) && l.ZonePattern == "reversal"
+}
+
+// isVolumeFamilyKind (Pack B, 2026-08-26) — the kinds the volume-family seat
+// guarantee protects: VWAP family, profile family, pdVWAP/SETT/MID-O.
+func isVolumeFamilyKind(k LevelKind) bool {
+	switch k {
+	case KindVWAP, KindEVWAP, KindPDVWAP, KindPOC, KindNPOC, KindVAH, KindVAL, KindSETT, KindMIDO:
+		return true
+	}
+	return false
+}
+
+// SeatVolumeFamily (Pack B, 2026-08-26) — reserve ONE seat for the volume
+// family when an in-band volume level exists (the E1 acceptance: the first
+// plan's seated table carries VWAP/POC). Priority anchors + HTF seats are
+// protected; the weakest demotable non-priority head entry is swapped out.
+// No-op when a volume level is already seated or nothing was cut.
+func SeatVolumeFamily(scored []ScoredLevel, maxLevels int) []ScoredLevel {
+	if maxLevels <= 0 {
+		maxLevels = DefaultMaxLevels
+	}
+	if len(scored) <= maxLevels {
+		return scored
+	}
+	head := append([]ScoredLevel(nil), scored[:maxLevels]...)
+	tail := append([]ScoredLevel(nil), scored[maxLevels:]...)
+	for _, l := range head {
+		if isVolumeFamilyKind(l.Kind) {
+			return scored // already seated
+		}
+	}
+	best := -1
+	for i, l := range tail {
+		if !isVolumeFamilyKind(l.Kind) {
+			continue
+		}
+		if best < 0 || l.Score > tail[best].Score {
+			best = i
+		}
+	}
+	if best < 0 {
+		return scored
+	}
+	cand := tail[best]
+	dropIdx := -1
+	for i := len(head) - 1; i >= 0; i-- {
+		if isTodayPriority(head[i].Kind) || isHTFSeatEligible(head[i]) || isVolumeFamilyKind(head[i].Kind) {
+			continue
+		}
+		dropIdx = i
+		break
+	}
+	if dropIdx < 0 {
+		return scored // everything in the head is protected
+	}
+	tail = append(tail[:best], tail[best+1:]...)
+	tail = append(tail, head[dropIdx])
+	head = append(head[:dropIdx], head[dropIdx+1:]...)
+	head = append(head, cand)
+	out := append(head, tail...)
+	sort.SliceStable(out, func(i, j int) bool {
+		pi, pj := isTodayPriority(out[i].Kind), isTodayPriority(out[j].Kind)
+		if pi != pj {
+			return pi
+		}
+		if out[i].Score != out[j].Score {
+			return out[i].Score > out[j].Score
+		}
+		di, dj := math.Abs(out[i].Distance), math.Abs(out[j].Distance)
+		if di != dj {
+			return di < dj
+		}
+		return out[i].Price < out[j].Price
+	})
+	return out
 }
 
 // is1HSDZone reports whether a scored level is a 1h-tier supply/demand zone —
