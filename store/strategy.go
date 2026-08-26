@@ -957,6 +957,9 @@ type DayPlanConfig struct {
 	WakeOnSeatedInvalidation *bool `json:"wake_on_seated_invalidation,omitempty"` // seated zone-kind level closed beyond noise band
 	WakeOnIFVG               *bool `json:"wake_on_ifvg,omitempty"`                // filled→inverted FVGs, any tier
 	WakeMinIntervalMin       int   `json:"wake_min_interval_min,omitempty"`       // minutes between ANY planner wakes (default 10)
+	// Seat1HZone (1h wave, 2026-08-25) — reserve one of the two HTF seats for
+	// an in-band 1h S/D zone when one exists (pointer-bool, DEFAULT ON).
+	Seat1HZone *bool `json:"seat_1h_zone,omitempty"`
 }
 
 // DayPlanSessionOverride is a minimal per-session override. Every field is a
@@ -1220,6 +1223,8 @@ func DefaultDayPlanConfig() *DayPlanConfig {
 		WakeOnSeatedInvalidation: wakeBoolPtr(true),
 		WakeOnIFVG:               wakeBoolPtr(true),
 		WakeMinIntervalMin:       30,
+		// 1h wave (2026-08-25) — seat guarantee DEFAULT ON.
+		Seat1HZone: wakeBoolPtr(true),
 	}
 }
 
@@ -1273,6 +1278,15 @@ func (c *DayPlanConfig) WakeMinIntervalMinutes() int {
 		return DefaultWakeMinIntervalMin
 	}
 	return c.WakeMinIntervalMin
+}
+
+// Seat1HZoneEnabled is the ONE resolution seam for the 1h-wave seat knob:
+// nil config or unset pointer → ON (the shipped default).
+func (c *DayPlanConfig) Seat1HZoneEnabled() bool {
+	if c == nil || c.Seat1HZone == nil {
+		return true
+	}
+	return *c.Seat1HZone
 }
 
 // GridStrategyConfig grid trading specific configuration

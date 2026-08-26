@@ -1193,6 +1193,12 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 		if len(zones) > 0 {
 			// ScoreLevels filters to the ±proximity band and returns nearest-first.
 			zs := kernel.ScoreLevels(zones, price, dATR, nil, 4, at.proximityFilterATR())
+			// 1h wave (2026-08-25) — the cap-4 MUST keep a 1h S/D zone when one
+			// is in band, so the prompt's conditional 1h mandate has data to
+			// point at. Gated by the seat_1h_zone knob (default ON).
+			if at.dayPlanCfg().Seat1HZoneEnabled() {
+				zs = kernel.Seat1HZone(zs, 4)
+			}
 			htfZoneScored = zs
 		}
 	}
