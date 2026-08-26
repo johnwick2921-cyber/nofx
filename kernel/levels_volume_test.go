@@ -267,6 +267,27 @@ func TestRoleMismatchesWarn(t *testing.T) {
 	}
 }
 
+// TestPlannerPromptCarriesRoleAndBias locks E3 on the PLANNER side: the
+// planner prompt renders the ROLE column, the 5-line playbook, the bias_ctx
+// facts line and the ≤5-line noise gate.
+func TestPlannerPromptCarriesRoleAndBias(t *testing.T) {
+	in := PlannerInput{
+		TradeDate: "2026-08-26", Session: "NY", ReadKind: "test", Price: 29200, DATR: 180,
+		Levels: []ScoredLevel{
+			{DetectedLevel: DetectedLevel{Kind: KindVWAP, Price: 29250, Label: "VWAP"}, Grade: "A", Fresh: "fresh", Distance: 50, Role: RoleMagnetMeanRevert},
+			{DetectedLevel: DetectedLevel{Kind: KindONH, Price: 29300, Label: "ONH"}, Grade: "A", Fresh: "fresh", Distance: 100, Role: RoleLiquidityBreak},
+		},
+		MaxLevels: 8, ScenarioCap: 3,
+		BiasCtx: "bias_ctx: price 29200.00 · 50.0 vs VWAP 29250.00 · nearest magnet VWAP (+50.0) · nearest liquidity ONH (+100.0)",
+	}
+	p := BuildPlannerPrompt(in)
+	for _, want := range []string{"magnet_meanrevert", "liquidity_break", "role playbook", "bias_ctx:", "NOISE FILTER"} {
+		if !containsStr(p, want) {
+			t.Fatalf("planner prompt missing %q", want)
+		}
+	}
+}
+
 func containsStr(s, sub string) bool {
 	return len(s) >= len(sub) && (s == sub || len(s) > 0 && indexOf(s, sub) >= 0)
 }
