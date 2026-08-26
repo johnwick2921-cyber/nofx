@@ -34,6 +34,7 @@ type Store struct {
 	sessionProfile  *SessionProfileStore
 	barHistory      *BarHistoryStore
 	levelStats      *LevelStatsStore
+	touchEpisodes   *TouchEpisodeStore
 	calendarSlice   *CalendarSliceStore
 	digest          *DigestStore
 	ownerLevel      *OwnerLevelStore
@@ -381,6 +382,16 @@ func (s *Store) LevelStats() *LevelStatsStore {
 		s.levelStats = NewLevelStatsStore(s.gdb)
 	}
 	return s.levelStats
+}
+
+// TouchEpisodes gets the T1 touch-telemetry store (2026-08-26).
+func (s *Store) TouchEpisodes() *TouchEpisodeStore {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.touchEpisodes == nil {
+		s.touchEpisodes = NewTouchEpisodeStore(s.gdb)
+	}
+	return s.touchEpisodes
 }
 
 // SessionProfile gets the durable session-profile storage.
