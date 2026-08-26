@@ -300,7 +300,8 @@ func closeSide5m(ring []market.Kline, level float64, from string, nowMs int64) s
 
 // volRatio: episode volume ÷ average volume of the bars before the episode.
 func volRatio(ring []market.Kline, openedAtMs int64, lookback int) float64 {
-	var pre, preN, ep float64
+	var ep float64
+	var pre []float64
 	opened := false
 	for _, b := range ring {
 		if !opened && b.OpenTime >= openedAtMs {
@@ -309,18 +310,24 @@ func volRatio(ring []market.Kline, openedAtMs int64, lookback int) float64 {
 		if opened {
 			ep += b.Volume
 		} else {
-			pre += b.Volume
-			preN++
+			pre = append(pre, b.Volume)
 		}
 	}
-	if preN > float64(lookback) {
-		// Only the last `lookback` pre-bars count.
-		_ = pre
+	// A14 (mega-research 2026-08-26) — the old branch
+	// `if preN > float64(lookback) { _ = pre }` was DEAD CODE: the baseline
+	// averaged ALL pre-episode bars (up to ~45). Fix: only the last `lookback`
+	// pre-bars count (TOUCH_VOL_LOOKBACK, default 20 — as documented).
+	if lookback > 0 && len(pre) > lookback {
+		pre = pre[len(pre)-lookback:]
 	}
-	if preN <= 0 || pre == 0 {
+	var preSum float64
+	for _, v := range pre {
+		preSum += v
+	}
+	if len(pre) == 0 || preSum <= 0 {
 		return 0
 	}
-	return ep / (pre / preN)
+	return ep / (preSum / float64(len(pre)))
 }
 
 // approachATR: pts covered in the approach window ÷ ATR (0 = n/a).
