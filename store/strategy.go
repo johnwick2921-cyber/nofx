@@ -957,6 +957,13 @@ type DayPlanConfig struct {
 	WakeOnSeatedInvalidation *bool `json:"wake_on_seated_invalidation,omitempty"` // seated zone-kind level closed beyond noise band
 	WakeOnIFVG               *bool `json:"wake_on_ifvg,omitempty"`                // filled→inverted FVGs, any tier
 	WakeMinIntervalMin       int   `json:"wake_min_interval_min,omitempty"`       // minutes between ANY planner wakes (default 10)
+	// Seat1HZone (1h wave, 2026-08-25) — reserve one of the two HTF seats for
+	// an in-band 1h S/D zone when one exists (pointer-bool, DEFAULT ON).
+	Seat1HZone *bool `json:"seat_1h_zone,omitempty"`
+	// MinScenarioQuality (R4, 2026-08-25) — the per-strategy scenario quality
+	// floor (A | B | C). Default C = no restriction (today's behavior,
+	// byte-identical). Per-session override below (like min_grade).
+	MinScenarioQuality string `json:"min_scenario_quality,omitempty"`
 }
 
 // DayPlanSessionOverride is a minimal per-session override. Every field is a
@@ -970,6 +977,9 @@ type DayPlanSessionOverride struct {
 	AcceptanceRule *string `json:"acceptance_rule,omitempty"`
 	MinGrade       *string `json:"min_grade,omitempty"` // A | B | C
 	MaxTrades      *int    `json:"max_trades,omitempty"`
+	// MinScenarioQuality (R4, 2026-08-25) — per-session scenario quality floor
+	// (A | B | C); nil inherits the strategy-level value.
+	MinScenarioQuality *string `json:"min_scenario_quality,omitempty"`
 	// LastEntryOffsetMin: minutes BEFORE this session's end after which NEW
 	// entries are refused (P2 session-scope redesign, 2026-08-18). Replaces the
 	// old day-scoped 13:00 CT cutoff, which blocked every entry from 13:00 CT to
@@ -1179,6 +1189,17 @@ func (c *DayPlanConfig) MaxTradesFor(session string) (int, bool) {
 	return 0, false
 }
 
+// MinGradeFor (grading audit §4.7, 2026-08-25) resolves the per-session
+// min_grade floor: per-session override → "" (no filter). The ONE resolution
+// seam so the kernel executor path (KEY LEVELS + PLAN STATUS) and the trader
+// planner path can never disagree on the floor.
+func (c *DayPlanConfig) MinGradeFor(session string) string {
+	if ov := c.SessionOverride(session); ov != nil && ov.MinGrade != nil {
+		return strings.ToUpper(strings.TrimSpace(*ov.MinGrade))
+	}
+	return ""
+}
+
 // PlanModeFor resolves the plan-restriction mode for a session: per-session
 // override → strategy-level → "advisory".
 func (c *DayPlanConfig) PlanModeFor(session string) string {
@@ -1220,6 +1241,10 @@ func DefaultDayPlanConfig() *DayPlanConfig {
 		WakeOnSeatedInvalidation: wakeBoolPtr(true),
 		WakeOnIFVG:               wakeBoolPtr(true),
 		WakeMinIntervalMin:       30,
+		// 1h wave (2026-08-25) — seat guarantee DEFAULT ON.
+		Seat1HZone: wakeBoolPtr(true),
+		// R4 (2026-08-25) — scenario quality floor DEFAULT C (no restriction).
+		MinScenarioQuality: "C",
 	}
 }
 
@@ -1273,6 +1298,29 @@ func (c *DayPlanConfig) WakeMinIntervalMinutes() int {
 		return DefaultWakeMinIntervalMin
 	}
 	return c.WakeMinIntervalMin
+}
+
+// Seat1HZoneEnabled is the ONE resolution seam for the 1h-wave seat knob:
+// nil config or unset pointer → ON (the shipped default).
+func (c *DayPlanConfig) Seat1HZoneEnabled() bool {
+	if c == nil || c.Seat1HZone == nil {
+		return true
+	}
+	return *c.Seat1HZone
+}
+
+// MinScenarioQualityFor (R4, 2026-08-25) resolves the scenario quality floor:
+// per-session override → strategy-level → "C" (no restriction). The ONE
+// resolution seam so the kernel gate and the Studio card can never disagree.
+func (c *DayPlanConfig) MinScenarioQualityFor(session string) string {
+	floor := "C"
+	if c != nil && strings.TrimSpace(c.MinScenarioQuality) != "" {
+		floor = strings.ToUpper(strings.TrimSpace(c.MinScenarioQuality))
+	}
+	if ov := c.SessionOverride(session); ov != nil && ov.MinScenarioQuality != nil && strings.TrimSpace(*ov.MinScenarioQuality) != "" {
+		floor = strings.ToUpper(strings.TrimSpace(*ov.MinScenarioQuality))
+	}
+	return floor
 }
 
 // GridStrategyConfig grid trading specific configuration

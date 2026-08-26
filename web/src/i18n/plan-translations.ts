@@ -452,6 +452,16 @@ export const planStrings = {
     zh: '唤醒最小间隔（分钟）',
     id: 'Interval bangun min (mnt)',
   },
+  seat1HZone: {
+    en: 'Guarantee a 1h S/D seat',
+    zh: '保证 1h 供需区座位',
+    id: 'Jamin kursi zona 1j',
+  },
+  minScenarioQuality: {
+    en: 'Min scenario quality',
+    zh: '最小场景质量',
+    id: 'Kualitas skenario min',
+  },
   // W15.C follow-up — the owner door only opens on the LIVE session, because every
   // mutating endpoint resolves the active session server-side.
   siblingReadOnly: {

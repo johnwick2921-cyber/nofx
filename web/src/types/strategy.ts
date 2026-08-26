@@ -73,6 +73,7 @@ export interface DayPlanSessionOverride {
   plan_mode?: string
   acceptance_rule?: string
   min_grade?: string // A | B | C
+  min_scenario_quality?: string // A | B | C (R4, 2026-08-25)
   max_trades?: number
 }
 
@@ -104,6 +105,12 @@ export interface DayPlanConfig {
   wake_on_seated_invalidation?: boolean
   wake_on_ifvg?: boolean
   wake_min_interval_min?: number
+  /** 1h wave (2026-08-25) — reserve one of the two HTF seats for an in-band
+   *  1h S/D zone when one exists. Absent = ON (mirrors Go pointer-bool). */
+  seat_1h_zone?: boolean
+  /** R4 (2026-08-25) — scenario quality floor: A | B | C. Default C = no
+   *  restriction. */
+  min_scenario_quality?: string
   sessions?: DayPlanSessionOverride[]
 }
 

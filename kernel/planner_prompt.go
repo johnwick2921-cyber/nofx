@@ -204,7 +204,19 @@ func BuildPlannerPrompt(in PlannerInput) string {
 		b.WriteString("\n")
 	}
 
-	b.WriteString(plannerOutputContract(in.MaxLevels, in.ScenarioCap, len(in.HTFZones) > 0))
+	// 1h wave (2026-08-25) — the conditional 1h S/D mandate: emitted only when
+	// a 1h supply/demand zone is actually rendered in the HTF zones section
+	// (same conditional pattern as the G2.2 HTF mandate fix — a rule that asks
+	// for something absent burns retries).
+	has1HSD := false
+	for _, z := range in.HTFZones {
+		if is1HSDZone(z) {
+			has1HSD = true
+			break
+		}
+	}
+
+	b.WriteString(plannerOutputContract(in.MaxLevels, in.ScenarioCap, len(in.HTFZones) > 0, has1HSD))
 	return b.String()
 }
 
@@ -213,18 +225,21 @@ func BuildPlannerPrompt(in PlannerInput) string {
 // ask for what validation will accept, so a raised max_levels/scenario_cap both
 // gets requested AND passes instead of fail-closing every read against a
 // hardcoded 8/3.
-func plannerOutputContract(maxLevels, maxScenarios int, hasHTFZones bool) string {
+func plannerOutputContract(maxLevels, maxScenarios int, hasHTFZones, has1HSDZone bool) string {
 	maxL, maxS := resolvePlanCaps(maxLevels, maxScenarios)
 	htfRule := ""
 	if hasHTFZones {
 		htfRule = " — plus the HTF zones section, where you MUST include at least ONE HTF zone row in your levels as a confluence reference, never as a standalone trigger"
+	}
+	if has1HSDZone {
+		htfRule += " — the nearest 1h supply/demand zone row in that section MUST be one of your included rows (setup-rung context, never a standalone trigger)"
 	}
 	return "## OUTPUT — one JSON object, reasoning FIRST, no prose outside it\n" +
 		"{\n" +
 		`  "reasoning": "<your read: what the auction is doing and why this plan — ≤200 words, decision-focused>",` + "\n" +
 		`  "bias": {"direction": "long|short|neutral", "conviction": "high|medium|low", "flip_condition": "<explicit>"},` + "\n" +
 		fmt.Sprintf(`  "levels": [{"price": <n>, "label": "<PDH|ONH|nPOC…>", "grade": "A|B|C", "instruction": "<verb>"}],  // max %d, MUST include ≥3 below AND ≥3 above the current price`, maxL) + "\n" +
-		fmt.Sprintf(`  "scenarios": [{"id": "S1", "trigger": "<setup>", "condition": "reclaim|hold|sweep_reclaim|reject|acceptance|breakout_retest", "direction": "long|short", "target_chain": [<n>,…], "invalid": "<line>", "quality": "A+|A|B", "confirm": {"rule": "touch|1x5m_close|2x5m_close|15m_close", "ref_price": <n>, "side": "above|below"}}],  // 1..%d — confirm{} is REQUIRED per scenario`, maxS) + "\n" +
+		fmt.Sprintf(`  "scenarios": [{"id": "S1", "trigger": "<setup>", "condition": "reclaim|hold|sweep_reclaim|reject|acceptance|breakout_retest", "direction": "long|short", "target_chain": [<n>,…], "invalid": "<line>", "quality": "A+|A|B|C", "confirm": {"rule": "touch|1x5m_close|2x5m_close|15m_close", "ref_price": <n>, "side": "above|below"}}],  // 1..%d — confirm{} is REQUIRED per scenario`, maxS) + "\n" +
 		`  "no_trade": ["first 5m (CT)", "12:00-13:30 CT lunch", "<calendar blackouts>"],` + "\n" +
 		`  "death_condition": "<the single line that invalidates this whole plan>",` + "\n" +
 		`  "death": {"price": <level>, "side": "below|above", "rule": "2x5m|15m_close|5m_close"},` + "\n" +
@@ -233,6 +248,7 @@ func plannerOutputContract(maxLevels, maxScenarios int, hasHTFZones bool) string
 		"}\n" +
 		"Rules: levels chosen ONLY from the ranked table above" + htfRule + "; levels MUST be at least 3 points apart — near-duplicates are merged by the system; S/D & FVG are confluence, never standalone. " +
 		"Copy the EXACT label from the table row for the price you choose — never re-label a table level as a different anchor (a zone price relabeled 'PDH/PDL/PDC' is a phantom level and is REJECTED at write). " +
+		"Quality: A+ = highest-conviction setup, A = strong, B = workable, C = machine-demoted (trigger level consumed at write — G5) — use C honestly for a demoted setup, never as a default. " +
 		"The scenario MIX must follow the regime + day_type: a trend-down day gets breakdown/pullback-short plays, a trend-up day the reverse, balance days get two-sided plays — do NOT default to 2 longs + 1 rally-rejection short on every day. " +
 		"If price sits BELOW PDL you MUST write a continuation short; ABOVE PDH, a continuation long. " +
 		"death.flip objects are MACHINE-EVALUATED — choose levels from your level list and a rule; they must match the prose lines. " +

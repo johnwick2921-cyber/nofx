@@ -2,7 +2,10 @@ package kernel
 
 import (
 	"math"
+	"os"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"nofx/market"
@@ -155,6 +158,28 @@ func SupplyDemandZones(bars []market.Kline, atr float64, now time.Time) []Detect
 	return out
 }
 
+// FVGNoiseFloorPoints (grading audit §4.4, 2026-08-25) — the minimum FVG gap
+// width in POINTS. Research: requiring a 1×ATR gap has no external support and
+// kills the published 20–80 pt NQ sweet spot; the floor is instead
+// max(2×tick, 2.0 pts) — any-gap detection with a noise floor, plus the
+// size weighting zoneSizeMult already applies at scoring.
+const FVGNoiseFloorPoints = 2.0
+
+// fvgMinGapPoints resolves the FVG detection gap floor for a symbol:
+// max(2 ticks, the noise floor). Ticks below the floor (e.g. MNQ 0.25 → 0.50)
+// never raise it.
+func fvgMinGapPoints(symbol string) float64 {
+	tick := market.FuturesTickSize(symbol)
+	if tick <= 0 {
+		tick = 0.25
+	}
+	floor := FVGNoiseFloorPoints
+	if 2*tick > floor {
+		floor = 2 * tick
+	}
+	return floor
+}
+
 // FairValueGaps finds 3-candle imbalances: bullish when bar[i-2].High < bar[i].Low
 // (gap between them), bearish when bar[i-2].Low > bar[i].High. UNFILLED gaps are
 // emitted as KindFVG. W6 (2026-08-25): a gap whose far edge is later VIOLATED BY
@@ -216,9 +241,31 @@ func FairValueGaps(bars []market.Kline, minGap float64, now time.Time) []Detecte
 	return out
 }
 
-// OrderBlocks finds the last opposing candle before a displacement ≥1.5×ATR:
-// a big up move → the last DOWN candle before it (bullish OB); a big down move →
-// the last UP candle before it (bearish OB). Zone = that candle's [low,high].
+// OBLookbackBarsDefault (grading audit §4.5, 2026-08-25) — the order-block
+// pairing scan bound. An unbounded scan can pair a displacement with an
+// opposing candle HOURS back (a stale, meaningless OB); research supports a
+// tight lookback. Env OB_LOOKBACK_BARS overrides; the value is a USER knob,
+// never a hardcoded rule.
+const OBLookbackBarsDefault = 8
+
+// obLookbackBars resolves the OB pairing lookback (env OB_LOOKBACK_BARS,
+// default 8 bars).
+func obLookbackBars() int {
+	if v := os.Getenv("OB_LOOKBACK_BARS"); v != "" {
+		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n >= 1 {
+			return n
+		}
+	}
+	return OBLookbackBarsDefault
+}
+
+// OBLookbackBars is the exported read for boot/observability lines.
+func OBLookbackBars() int { return obLookbackBars() }
+
+// OrderBlocks finds the last opposing candle within a bounded lookback before a
+// displacement ≥1.5×ATR: a big up move → the last DOWN candle before it (bullish
+// OB); a big down move → the last UP candle before it (bearish OB). Zone = that
+// candle's [low,high].
 func OrderBlocks(bars []market.Kline, atr float64, now time.Time) []DetectedLevel {
 	cb := closedBars(bars, now)
 	if atr <= 0 || len(cb) < 2 {
@@ -226,13 +273,14 @@ func OrderBlocks(bars []market.Kline, atr float64, now time.Time) []DetectedLeve
 	}
 	loc := chicago()
 	displacement := 1.5 * atr
+	lookback := obLookbackBars() // bounded scan (§4.5) — never pairs across hours
 	var out []DetectedLevel
 	for i := 1; i < len(cb); i++ {
 		move := cb[i].Close - cb[i].Open
 		origin := time.UnixMilli(cb[i].OpenTime).In(loc).Format("2006-01-02")
 		if move >= displacement {
-			// bullish displacement → last down candle before it
-			for j := i - 1; j >= 0; j-- {
+			// bullish displacement → last down candle before it (bounded)
+			for j := i - 1; j >= 0 && i-j <= lookback; j-- {
 				if cb[j].Close < cb[j].Open {
 					zl := zoneLevel(KindOB, cb[j].Low, cb[j].High, "OB(bull)", origin)
 					zl.FormedAtMs = cb[i].OpenTime // W6: birth = displacement bar
@@ -241,7 +289,7 @@ func OrderBlocks(bars []market.Kline, atr float64, now time.Time) []DetectedLeve
 				}
 			}
 		} else if -move >= displacement {
-			for j := i - 1; j >= 0; j-- {
+			for j := i - 1; j >= 0 && i-j <= lookback; j-- {
 				if cb[j].Close > cb[j].Open {
 					zl := zoneLevel(KindOB, cb[j].Low, cb[j].High, "OB(bear)", origin)
 					zl.FormedAtMs = cb[i].OpenTime // W6: birth = displacement bar

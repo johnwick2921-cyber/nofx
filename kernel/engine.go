@@ -135,6 +135,12 @@ type Context struct {
 	// position management (closes/trails) proceeds. Set by the trader loop each
 	// cycle; prompt-invisible.
 	ExecutorPlanDead   string                     `json:"-"`
+	// R4 (2026-08-25) — min_scenario_quality gate inputs: the resolved floor
+	// ("A"|"B"|"C", default C = no restriction) + the active plan's scenario
+	// quality map (id → quality). Set by the trader loop each cycle;
+	// prompt-invisible.
+	MinScenarioQuality  string            `json:"-"`
+	PlanScenarioQuality map[string]string `json:"-"`
 	QuantDataMap       map[string]*QuantData      `json:"-"`
 	OIRankingData      *nofxos.OIRankingData      `json:"-"` // Market-wide OI ranking data
 	NetFlowRankingData *nofxos.NetFlowRankingData `json:"-"` // Market-wide fund flow ranking data

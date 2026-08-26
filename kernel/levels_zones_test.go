@@ -1,6 +1,7 @@
 package kernel
 
 import (
+	"os"
 	"testing"
 	"time"
 )
@@ -171,5 +172,65 @@ func TestZonesAreConfluenceOnlyInScorer(t *testing.T) {
 	scored := ScoreLevels([]DetectedLevel{zone}, 15530, 200, nil, 8, 1.5)
 	if len(scored) != 0 {
 		t.Fatalf("standalone zone must be excluded by the scorer, got %v", scored)
+	}
+}
+
+// R2 4.4 (2026-08-25) — the FVG detection floor is max(2×tick, noise floor),
+// not 1×ATR: a 3-pt gap must detect (MNQ tick 0.25 → floor 2.0).
+func TestFVGMinGapNoiseFloor(t *testing.T) {
+	if got := fvgMinGapPoints("MNQ"); got != FVGNoiseFloorPoints {
+		t.Fatalf("fvgMinGapPoints(MNQ) = %v want %v (2×tick=0.5 < floor)", got, FVGNoiseFloorPoints)
+	}
+	// bar0.High 15505 < bar2.Low 15508 → gap 3.0 ≥ floor 2.0 → FVG detected.
+	bars := series([][4]float64{
+		{15500, 15505, 15498, 15503},
+		{15510, 15520, 15508, 15518},
+		{15515, 15525, 15508, 15522},
+	})
+	fvgs := FairValueGaps(bars, fvgMinGapPoints("MNQ"), time.UnixMilli(nowAfter(bars)))
+	if _, ok := firstOfKind(fvgs, KindFVG); !ok {
+		t.Fatalf("3-pt gap must detect under the noise floor, got %v", fvgs)
+	}
+	// A sub-floor gap must NOT detect.
+	tiny := series([][4]float64{
+		{15500, 15501, 15499, 15500.5},
+		{15501, 15502, 15501, 15501.5},
+		{15502, 15503, 15502, 15502.5}, // gap ~1.0 < 2.0
+	})
+	if fvgs := FairValueGaps(tiny, fvgMinGapPoints("MNQ"), time.UnixMilli(nowAfter(bars))); len(fvgs) != 0 {
+		t.Fatalf("sub-floor gap must not detect, got %v", fvgs)
+	}
+}
+
+// R2 4.5 (2026-08-25) — the OB pairing scan is bounded: an opposing candle
+// OUTSIDE the lookback window must never pair with a displacement.
+func TestOBLookbackBounded(t *testing.T) {
+	defer os.Unsetenv("OB_LOOKBACK_BARS")
+	if err := os.Setenv("OB_LOOKBACK_BARS", "3"); err != nil {
+		t.Fatal(err)
+	}
+	if got := obLookbackBars(); got != 3 {
+		t.Fatalf("obLookbackBars() = %d want 3 (env override)", got)
+	}
+	// Down candle at bar0, then 3 neutral candles, then the displacement at
+	// bar4: distance 4 > lookback 3 → NO OB.
+	bars := series([][4]float64{
+		{15500, 15505, 15495, 15498}, // the only down candle (far outside window)
+		{15500, 15502, 15499, 15501},
+		{15501, 15503, 15500, 15502},
+		{15502, 15504, 15501, 15503},
+		{15503, 15545, 15502, 15540}, // displacement up (body 37)
+	})
+	obs := OrderBlocks(bars, 20, time.UnixMilli(nowAfter(bars)))
+	if _, ok := firstOfKind(obs, KindOB); ok {
+		t.Fatalf("opposing candle outside the lookback must NOT pair, got %v", obs)
+	}
+	// Same window with lookback 5 → pairs.
+	if err := os.Setenv("OB_LOOKBACK_BARS", "5"); err != nil {
+		t.Fatal(err)
+	}
+	obs = OrderBlocks(bars, 20, time.UnixMilli(nowAfter(bars)))
+	if _, ok := firstOfKind(obs, KindOB); !ok {
+		t.Fatalf("opposing candle inside the lookback must pair, got %v", obs)
 	}
 }

@@ -333,6 +333,19 @@ func (at *AutoTrader) runCycle() error {
 	// validateDecision (management/closes proceed).
 	ctx.ExecutorPlanDead = at.executorPlanDeadReason()
 
+	// R4 (2026-08-25) — min_scenario_quality gate inputs: the resolved floor
+	// (default C = no restriction) + the active plan's scenario qualities.
+	ctx.MinScenarioQuality = "C"
+	ctx.PlanScenarioQuality = map[string]string{}
+	if sc := at.GetStrategyConfig(); sc != nil && sc.DayPlan != nil {
+		ctx.MinScenarioQuality = sc.DayPlan.MinScenarioQualityFor(at.activeSessionName(time.Now()))
+		if ap := kernel.ActivePlanFor(at.id, at.futuresSymbol()); ap != nil {
+			for _, s := range ap.Doc.Scenarios {
+				ctx.PlanScenarioQuality[s.ID] = s.Quality
+			}
+		}
+	}
+
 	// Plan 4 Stage 4 — defer-until-balance guard (NinjaTrader TCP only)
 	// If equity is 0 and no account_balance frame has arrived yet, skip the cycle silently.
 	// This prevents phantom HOLD decisions while waiting for the AddOn to connect.

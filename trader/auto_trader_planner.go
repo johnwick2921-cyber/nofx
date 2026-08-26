@@ -576,7 +576,7 @@ func (at *AutoTrader) warnFlipDeathSanity(d *kernel.PlanDoc) {
 // sticky owner levels prepended like the planner input. Returns nil when the
 // detector genuinely has nothing (no bars provider / no bars), which the doc
 // turns into the explicit "detector data unavailable" line.
-func (at *AutoTrader) noTradeLevelMap() []kernel.PlanLevel {
+func (at *AutoTrader) noTradeLevelMap(session string) []kernel.PlanLevel {
 	symbol := at.futuresSymbol()
 	if market.FuturesBarsProvider == nil {
 		return nil
@@ -586,8 +586,10 @@ func (at *AutoTrader) noTradeLevelMap() []kernel.PlanLevel {
 		return nil
 	}
 	now := time.Now()
-	maxLevels, _, _ := resolveSessionPlanCfg(at.dayPlanCfg(), "")
-	scored, _, _ := kernel.AssembleScoredLevels(at.id, bars, at.sessionRegistry(now), symbol, maxLevels, now, at.proximityFilterATR())
+	maxLevels, minGrade, _ := resolveSessionPlanCfg(at.dayPlanCfg(), session)
+	// R2 4.7 (2026-08-25) — fail-closed maps obey min_grade: a NO-TRADE doc's
+	// level map must match what an active plan would have carried.
+	scored, _, _ := kernel.AssembleScoredLevelsMinGrade(at.id, bars, at.sessionRegistry(now), symbol, maxLevels, now, at.proximityFilterATR(), minGrade)
 
 	out := make([]kernel.PlanLevel, 0, len(scored)+4)
 	if owned, err := at.store.OwnerLevel().ListActiveForUser(at.ownerUserID(), symbol); err == nil {
@@ -608,7 +610,7 @@ func (at *AutoTrader) writeNoTradePlan(session, tradeDate, reason string) {
 	// decision must never erase the map: the fail-closed doc carries the current
 	// detector/scorer output (owner sticky levels included) so the card keeps
 	// showing the map under the NO-TRADE banner. Unavailable detector data says so.
-	doc := kernel.NoTradePlanDocWithLevels(reason, at.noTradeLevelMap())
+	doc := kernel.NoTradePlanDocWithLevels(reason, at.noTradeLevelMap(session))
 	docJSON, _ := json.Marshal(doc)
 	_, err := at.store.Plan().AppendPlan(&store.PlanDB{
 		PlanID: at.store.Plan().ResolvePlanID(tradeDate, session, at.id), StrategyID: at.id,
@@ -973,7 +975,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		// P7 — the fail-closed doc still carries the map: levels from the current
 		// detector/scorer output (same pipeline), scenarios empty, explicit reason.
 		doc = kernel.NoTradePlanDocWithLevels(
-			fmt.Sprintf("read failed after retries: %v", lastErr), at.noTradeLevelMap())
+			fmt.Sprintf("read failed after retries: %v", lastErr), at.noTradeLevelMap(session))
 		lifecycle = "no_trade"
 		trigger = "planner_fail_closed"
 		at.logErrorf("🚨 PLANNER FAIL-CLOSED %s %s: %v — writing a NO-TRADE plan (never stale, never uncalibrated).", tradeDate, session, lastErr)
@@ -1176,7 +1178,12 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 		}
 		extra = append(extra, htfLevels...)
 	}
-	scored, price, dATR := kernel.AssembleScoredLevels(at.id, bars, reg, symbol, maxLevels, now, at.proximityFilterATR(), extra...)
+	scored, price, dATR := kernel.AssembleScoredLevelsMinGrade(at.id, bars, reg, symbol, maxLevels, now, at.proximityFilterATR(), minGrade, extra...)
+	// 1h wave (2026-08-25) — the ranked table's HTF seats guarantee an in-band
+	// 1h S/D zone when one exists. Gated by the seat_1h_zone knob (default ON).
+	if dp != nil && dp.Seat1HZoneEnabled() {
+		scored = kernel.Seat1HZone(scored, maxLevels)
+	}
 
 	// G2.2 (2026-08-24) — the nearest in-band HTF ZONES become their own prompt
 	// section: the top-8 seat race hides them, but the model must know where the
@@ -1193,6 +1200,12 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 		if len(zones) > 0 {
 			// ScoreLevels filters to the ±proximity band and returns nearest-first.
 			zs := kernel.ScoreLevels(zones, price, dATR, nil, 4, at.proximityFilterATR())
+			// 1h wave (2026-08-25) — the cap-4 MUST keep a 1h S/D zone when one
+			// is in band, so the prompt's conditional 1h mandate has data to
+			// point at. Gated by the seat_1h_zone knob (default ON).
+			if at.dayPlanCfg().Seat1HZoneEnabled() {
+				zs = kernel.Seat1HZone(zs, 4)
+			}
 			htfZoneScored = zs
 		}
 	}
@@ -1214,8 +1227,12 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 		scored = append(ownerScored, scored...)
 	}
 
-	// Per-session min_grade filter (owner levels grade A → always survive).
-	scored = kernel.FilterLevelsByMinGrade(scored, minGrade)
+		// Per-session min_grade filter (owner levels grade A → always survive).
+		// R2 4.6/4.7 (2026-08-25) — the filter now runs inside
+		// AssembleScoredLevelsMinGrade on a 2× pool so the cut REFILLS seats
+		// from the same side instead of thinning the table; this final pass
+		// keeps the owner-prepended levels above the floor.
+		scored = kernel.FilterLevelsByMinGrade(scored, minGrade)
 
 	var daily, hour1, min5, min5Long []market.Kline
 	if market.FuturesBarsProvider != nil {

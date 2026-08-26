@@ -64,6 +64,11 @@ func (at *AutoTrader) recordLevelState() {
 	// LIVE near price (here). Naming the constant at the call site kills the
 	// ambiguity.
 	active := kernel.ActivePlanLevels(plan.Doc.Levels, price, dATR, kernel.ActivationWindowK)
+	// R2 4.7 (2026-08-25) — level-state writers obey min_grade: sub-floor
+	// levels get no persisted state (the table they came from can't have them).
+	if _, minGrade, _ := resolveSessionPlanCfg(at.dayPlanCfg(), at.activeSessionName(now)); minGrade != "" {
+		active = kernel.FilterPlanLevelsByMinGrade(active, minGrade)
+	}
 	for _, l := range active {
 		typ := kernel.LevelTypeFromLabel(l.Label)
 		bin := kernel.LevelBinIndex(l.Price)

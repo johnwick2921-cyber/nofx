@@ -48,6 +48,10 @@ const DEFAULT_DAY_PLAN: DayPlanConfig = {
   wake_on_seated_invalidation: true,
   wake_on_ifvg: true,
   wake_min_interval_min: 30,
+  // 1h wave (2026-08-25) — 1h S/D seat guarantee DEFAULT ON.
+  seat_1h_zone: true,
+  // R4 (2026-08-25) — scenario quality floor DEFAULT C (no restriction).
+  min_scenario_quality: 'C',
 }
 
 // NY's window end — the EOD flat must not sit AFTER it, or the session gate
@@ -588,6 +592,25 @@ export function DayPlanEditor({ config, onChange, disabled, language }: Props) {
                 disabled={bodyDisabled}
               />
             </FieldRow>
+            <FieldRow label={tp('seat1HZone', language)}>
+              <Toggle
+                on={cfg.seat_1h_zone !== false}
+                onChange={(v) => update('seat_1h_zone', v)}
+                disabled={bodyDisabled}
+              />
+            </FieldRow>
+            <FieldRow label={tp('minScenarioQuality', language)}>
+              <Segmented
+                options={[
+                  { key: 'A', label: 'A' },
+                  { key: 'B', label: 'B' },
+                  { key: 'C', label: 'C' },
+                ]}
+                value={cfg.min_scenario_quality ?? 'C'}
+                onChange={(v) => update('min_scenario_quality', v)}
+                disabled={bodyDisabled}
+              />
+            </FieldRow>
           </div>
         </div>
 
@@ -720,6 +743,30 @@ export function DayPlanEditor({ config, onChange, disabled, language }: Props) {
                         ]}
                         value={ov?.min_grade}
                         onChange={(v) => setSessionField(s, 'min_grade', v)}
+                        disabled={bodyDisabled}
+                      />
+                    </OverrideRow>
+                    <OverrideRow
+                      label={tp('minScenarioQuality', language)}
+                      overridden={ov?.min_scenario_quality !== undefined}
+                      onToggle={(on) =>
+                        on
+                          ? setSessionField(s, 'min_scenario_quality', 'C')
+                          : clearSessionField(s, 'min_scenario_quality')
+                      }
+                      disabled={bodyDisabled}
+                      language={language}
+                    >
+                      <Segmented
+                        options={[
+                          { key: 'A', label: 'A' },
+                          { key: 'B', label: 'B' },
+                          { key: 'C', label: 'C' },
+                        ]}
+                        value={ov?.min_scenario_quality}
+                        onChange={(v) =>
+                          setSessionField(s, 'min_scenario_quality', v)
+                        }
                         disabled={bodyDisabled}
                       />
                     </OverrideRow>
