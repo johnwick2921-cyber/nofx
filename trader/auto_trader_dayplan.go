@@ -162,6 +162,20 @@ func installNakedPOCProvider(st *store.Store) {
 		if market.FuturesBarsProvider != nil {
 			bars = market.FuturesBarsProvider(symbol, kernel.AISVPBarInterval, kernel.AISVPBarCount)
 		}
+		// S4 (mega-research 2026-08-26) — the 2000-bar slice covers ~2 sessions
+		// but the provider feeds up to 30 stored POCs; a POC touched on day 3
+		// could never retire. The bars table supplies the historical leg.
+		if len(bars) > 0 {
+			earliest := bars[0].OpenTime
+			if old, err := st.BarHistory().BarsBetween(symbol, "1m", 0, earliest); err == nil && len(old) > 0 {
+				combined := make([]market.Kline, 0, len(old)+len(bars))
+				for _, b := range old {
+					combined = append(combined, market.Kline{OpenTime: b.OpenTimeMs, CloseTime: b.OpenTimeMs + 59_999, Open: b.O, High: b.H, Low: b.L, Close: b.C, Volume: b.V})
+				}
+				combined = append(combined, bars...)
+				bars = combined
+			}
+		}
 		return kernel.NakedPOCs(pocs, bars, now)
 	}
 }

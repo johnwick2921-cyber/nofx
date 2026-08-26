@@ -45,7 +45,9 @@ func NakedPOCs(pocs []PriorPOC, bars []market.Kline, now time.Time) []DetectedLe
 				continue
 			}
 			bDate := CMESessionDayKey(time.UnixMilli(b.OpenTime))
-			if bDate > p.SessionDate && b.Low <= p.POC && b.High >= p.POC {
+			// A4/S4 — ±1-tick retire tolerance (nPOCRetireTick): a graze inside
+			// the tick band keeps the POC naked; the bar must bracket beyond it.
+			if bDate > p.SessionDate && b.Low <= p.POC-nPOCRetireTick && b.High >= p.POC+nPOCRetireTick {
 				tested = true
 				break
 			}
