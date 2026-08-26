@@ -175,15 +175,10 @@ func (at *AutoTrader) maybeWakePlannerOnMSS(session, tradeDate string, row *stor
 		at.logWarnf("🗓️ structure MSS on %s %s — SKIPPED: within wake_min_interval_min of the last planner wake (%s).", session, tradeDate, time.Since(at.lastPlannerWakeAt).Round(time.Second))
 		return
 	}
-	// C5 (2026-08-25) — an MSS wake consumes the same per-session re-plan budget
-	// as a death; once exhausted the session must sit out instead of appending
-	// versions forever on repeated structure events.
-	cap := at.replanCapFor(session)
-	baseline := store.GetResetBaseline(at.store, at.id, tradeDate, session)
-	if !store.MayReplanFrom(row.Version, baseline, cap) {
-		at.logWarnf("🗓️ structure MSS on %s %s — planner wake SKIPPED: re-plan budget exhausted (%d/%d).", session, tradeDate, store.ReplansUsedFrom(row.Version, baseline), cap)
-		return
-	}
+	// W6-D (2026-08-25) — wakes are UNLIMITED and spend NO budget: an MSS wake
+	// can never consume the death re-plan cap, and can never cause a
+	// replans_exhausted NO-TRADE. The dedupe key + the shared min-interval
+	// throttle are the only frequency limits.
 	at.lastMSSWakeKey = key
 	at.lastPlannerWakeAt = time.Now() // W6 — shared wake clock
 	at.logWarnf("🗓️ structure MSS on %s %s (%s) — waking the planner (G4.6, 4th wake-up).", session, tradeDate, mss.Detail)

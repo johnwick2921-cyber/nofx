@@ -65,8 +65,8 @@ func TestDayPlanWakeKnobDefaults(t *testing.T) {
 	if nilCfg.WakeOnHTFOBEnabled() {
 		t.Fatalf("nil config must resolve HTF-OB knob to OFF")
 	}
-	if nilCfg.WakeMinIntervalMinutes() != 10 {
-		t.Fatalf("nil config interval = %d want 10", nilCfg.WakeMinIntervalMinutes())
+	if nilCfg.WakeMinIntervalMinutes() != 30 {
+		t.Fatalf("nil config interval = %d want 30", nilCfg.WakeMinIntervalMinutes())
 	}
 
 	empty := &DayPlanConfig{}
@@ -94,8 +94,8 @@ func TestDayPlanWakeKnobDefaults(t *testing.T) {
 
 	if d := DefaultDayPlanConfig(); !d.WakeOn15mZoneEnabled() || !d.WakeOnHTFZoneEnabled() ||
 		!d.WakeOnSeatedInvalidationEnabled() || !d.WakeOnIFVGEnabled() ||
-		d.WakeOnHTFOBEnabled() || d.WakeMinIntervalMinutes() != 10 {
-		t.Fatalf("DefaultDayPlanConfig must seed ON/OFF/10 defaults")
+		d.WakeOnHTFOBEnabled() || d.WakeMinIntervalMinutes() != 30 {
+		t.Fatalf("DefaultDayPlanConfig must seed ON/OFF/30 defaults")
 	}
 }
 
