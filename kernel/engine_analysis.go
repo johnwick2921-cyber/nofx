@@ -474,6 +474,11 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 				if cl := RenderScenarioTouchTies(ctx.TraderID, activeSymbol, &plan.Doc, price); cl != "" {
 					status += "\n" + cl
 				}
+				// FVG ENTRY MODEL (2026-08-26) — live machine state per
+				// fvg_entry scenario (the gap IS the band; distal = invalidation).
+				if cl := RenderFvgEntryLines(plan.Doc, snapshotBars, plan.BirthMs, snapshotNow.UnixMilli()); cl != "" {
+					status += "\n" + cl
+				}
 			}
 			engine.SetPlanContext(block, status)
 		}
