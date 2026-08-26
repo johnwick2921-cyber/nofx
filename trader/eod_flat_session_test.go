@@ -17,22 +17,25 @@ import (
 
 func TestEODFlatIsSessionScoped(t *testing.T) {
 	reg := kernel.DefaultSessionRegistry()
-	var dp *store.DayPlanConfig // nil → default offset 15
+	var dp *store.DayPlanConfig // nil → default offset (R-A15: 0 = session end)
 
+	// R-A15 (owner ruling, S-wave 2026-08-26) — EOD flat = the session END:
+	// ASIA 02:00, LONDON 08:30, NY 14:45. The old 15-min offset drifted NY to
+	// 14:30 while every surface claimed 14:45. With offset 0, NO in-session
+	// instant is past the flat — the flatten fires when the session ends.
 	for _, tc := range []struct {
 		name     string
 		date, tm string
 		wantFlat bool // is this instant past the ACTIVE session's flat?
 	}{
 		// The instant that mattered: 21:00 CT inside ASIA. Old code: flatten
-		// (21:00 >= 14:45). New: ASIA flat is 01:45 (02:00−15) — do NOT flatten.
+		// (21:00 >= 14:45). New: ASIA flat = 02:00 — do NOT flatten.
 		{"asia 21:00 not flat", "2026-08-18", "21:00", false},
-		{"asia 01:50 flat (wrapped)", "2026-08-19", "01:50", true},
+		{"asia 01:50 not flat (flat = 02:00)", "2026-08-19", "01:50", false},
 		{"london 05:00 not flat", "2026-08-18", "05:00", false},
-		{"london 08:20 flat", "2026-08-18", "08:20", true},
-		// NY: end 14:45 − 15 = 14:30.
+		{"london 08:20 not flat (flat = 08:30)", "2026-08-18", "08:20", false},
 		{"ny 14:00 not flat", "2026-08-18", "14:00", false},
-		{"ny 14:35 flat", "2026-08-18", "14:35", true},
+		{"ny 14:35 not flat (flat = 14:45)", "2026-08-18", "14:35", false},
 	} {
 		now := ctTimeAt(t, tc.date, tc.tm)
 		sess, ok := reg.ActiveSession(now)
@@ -45,6 +48,20 @@ func TestEODFlatIsSessionScoped(t *testing.T) {
 		}
 		if got := pastSessionCutoff(now, sess, flatMin); got != tc.wantFlat {
 			t.Errorf("%s: pastFlat=%v want %v (session %s)", tc.name, got, tc.wantFlat, sess.Name)
+		}
+	}
+
+	// The resolved flat times ARE the session ends (R-A15: one number each).
+	for _, tc := range []struct{ sess, wantHHMM string }{
+		{"ASIA", "02:00"}, {"LONDON", "08:30"}, {"NY", "14:45"},
+	} {
+		def, okS := reg.SessionByName(tc.sess)
+		if !okS {
+			t.Fatalf("registry missing %s", tc.sess)
+		}
+		_, hhmm, okC := sessionCutoffCT(def, dp.EODFlatOffsetFor(def.Name))
+		if !okC || hhmm != tc.wantHHMM {
+			t.Errorf("%s flat = %q, want %q (R-A15)", tc.sess, hhmm, tc.wantHHMM)
 		}
 	}
 }

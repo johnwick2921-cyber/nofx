@@ -84,6 +84,17 @@ func TestW9Resolvers(t *testing.T) {
 	if at.proximityFilterATR() != kernel.ActivationWindowK || at.scenarioCap() != 3 {
 		t.Fatal("out-of-range proximity/scenario must fall back to defaults")
 	}
+	// S1 (mega-research 2026-08-26) — the 0.1 lower clamp: the owner's 0.3
+	// retune is legal; below 0.1 falls back.
+	dp.ProximityFilterATR = 0.3
+	dp.ScenarioCap = 3
+	if at.proximityFilterATR() != 0.3 {
+		t.Fatal("proximity 0.3 must be accepted (S1 clamp widened)")
+	}
+	dp.ProximityFilterATR = 0.05
+	if at.proximityFilterATR() != kernel.ActivationWindowK {
+		t.Fatal("proximity below 0.1 must fall back to default")
+	}
 }
 
 // W9 — the plan-mode entry gate: advisory never blocks; direction blocks entries

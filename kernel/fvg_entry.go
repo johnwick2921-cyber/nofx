@@ -132,6 +132,11 @@ func validateOneFvgEntry(s PlanScenario, bars []market.Kline, symbol string, ori
 	found := false
 	var impulse float64
 	for i := len(cb) - 3; i >= 0 && i >= len(cb)-lookback-3+1; i-- {
+		// A6 — session-break guard (same rule as the detector): a triple that
+		// straddles the halt/weekend is a phantom gap, never a valid entry.
+		if !fvgWindowContiguous(cb, i+2) {
+			continue
+		}
 		var gapLo, gapHi float64
 		// Dispatch convention: index 0 = NEWEST candle, 2 = oldest.
 		// bullish: low[0] > high[2] → the newest candle gapped UP away from the

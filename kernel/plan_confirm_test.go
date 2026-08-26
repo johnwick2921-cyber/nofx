@@ -79,33 +79,62 @@ func TestRenderConfirmLines(t *testing.T) {
 	}
 }
 
-// ADDENDUM S (2026-08-26) — the stale parenthetical math: |now − ref| must be
-// STRICTLY greater than STALE_CONFIRM_ATR (default 1.0) × dATR; NOT MET, zero
-// dATR, or a missing context suppresses the annotation.
+// S2 (mega-research 2026-08-26) — the stale parenthetical is ATR5m-based:
+// |now − ref| must be STRICTLY greater than STALE_CONFIRM_ATR (default 2.0) ×
+// ATR5m; a missing ATR fail-opens (silent skip); NOT MET never annotates.
 func TestStaleConfirmAnnotationMath(t *testing.T) {
-	if got := StaleConfirmATR(); got != 1.0 {
-		t.Fatalf("default STALE_CONFIRM_ATR must be 1.0, got %v", got)
+	if got := StaleConfirmATR(); got != 2.0 {
+		t.Fatalf("default STALE_CONFIRM_ATR must be 2.0 (register S2), got %v", got)
 	}
 	met := func(ref float64) ConfirmVerdict {
 		return ConfirmVerdict{Rule: "1x5m_close", RefPrice: ref, Side: "above", Met: true, Detail: "d"}
 	}
 	s := PlanScenario{ID: "S1", Direction: "long"}
-	// 2.0 pts drift vs 1.0 × 1.5 = 1.5 pts threshold → stale.
-	if a := staleConfirmAnnotation(s, met(100), 102.0, 1.5); !strings.Contains(a, "stale — written 100.00 context, price now 102.00; treat as expired") {
-		t.Fatalf("2.0 > 1.5 must be stale, got %q", a)
+	// atr=1.0, default 2.0×: fires at 2.1, silent at 1.9 (strict inequality).
+	if a := staleConfirmAnnotation(s, met(100), 102.1, 1.0); !strings.Contains(a, "stale — written 100.00 context, price now 102.10; treat as expired") {
+		t.Fatalf("2.1 > 2.0×1.0 must be stale, got %q", a)
 	}
-	// 1.4 ≤ 1.5 → NOT stale (strict inequality).
-	if a := staleConfirmAnnotation(s, met(100), 101.4, 1.5); a != "" {
-		t.Fatalf("1.4 ≤ 1.5 must NOT be stale, got %q", a)
+	if a := staleConfirmAnnotation(s, met(100), 101.9, 1.0); a != "" {
+		t.Fatalf("1.9 ≤ 2.0×1.0 must NOT be stale, got %q", a)
 	}
-	// dATR = 0 (no bars / caller without levels) suppresses the annotation.
+	// env override: 1.0× fires at 1.1.
+	t.Setenv("STALE_CONFIRM_ATR", "1.0")
+	if a := staleConfirmAnnotation(s, met(100), 101.1, 1.0); !strings.Contains(a, "stale") {
+		t.Fatalf("env override 1.0× must fire at 1.1, got %q", a)
+	}
+	// missing ATR → fail-open: skip the annotation, never gate.
 	if a := staleConfirmAnnotation(s, met(100), 120, 0); a != "" {
-		t.Fatalf("dATR=0 must suppress, got %q", a)
+		t.Fatalf("ATR=0 must fail-open silent, got %q", a)
 	}
 	// NOT MET never gets the stale tag.
 	notMet := ConfirmVerdict{Rule: "1x5m_close", RefPrice: 100, Side: "above", Met: false, Detail: "d"}
 	if a := staleConfirmAnnotation(s, notMet, 120, 1.0); a != "" {
 		t.Fatalf("NOT MET must not be annotated, got %q", a)
+	}
+}
+
+// S2 — StaleConfirmATR5m: 5m-bucket Wilder ATR14 from the 1m snapshot; 0 when
+// the series is too short for a Wilder seed.
+func TestStaleConfirmATR5m(t *testing.T) {
+	if got := StaleConfirmATR5m(nil); got != 0 {
+		t.Fatalf("empty bars → 0, got %v", got)
+	}
+	base := int64(1_700_003_600_000)
+	base -= base % 300_000
+	// 80 one-minute bars of growing closes (16 five-min buckets) → non-zero
+	// Wilder ATR14 on the 5m aggregation.
+	bars := make([]market.Kline, 80)
+	for i := range bars {
+		o := base + int64(i)*60_000
+		c := 100.0 + float64(i)
+		bars[i] = market.Kline{OpenTime: o, CloseTime: o + 59_999, Open: c - 1, High: c + 1, Low: c - 2, Close: c}
+	}
+	if got := StaleConfirmATR5m(bars); got <= 0 {
+		t.Fatalf("80-bar 1m series must yield ATR > 0, got %v", got)
+	}
+	// under 14 five-min buckets (69 one-min bars) → no Wilder seed → 0.
+	if got := StaleConfirmATR5m(bars[:20]); got != 0 {
+		t.Fatalf("short series must fail-open to 0, got %v", got)
 	}
 }
 
@@ -120,11 +149,11 @@ func TestRenderConfirmLinesStaleConflict(t *testing.T) {
 		{ID: "S1", Direction: "long", Confirm: &PlanConfirm{Rule: "1x5m_close", RefPrice: 100, Side: "above"}},
 		{ID: "S3", Direction: "short", Confirm: &PlanConfirm{Rule: "1x5m_close", RefPrice: 110, Side: "below"}},
 	}}
-	out := RenderConfirmLines(doc, bars, base-1, base+5*60_000, 103.0, 1.5)
+	out := RenderConfirmLines(doc, bars, base-1, base+5*60_000, 104.0, 1.5)
 	for _, want := range []string{
 		"S1 confirm:", "S3 confirm:",
-		"stale — written 100.00 context, price now 103.00; treat as expired",
-		"stale — written 110.00 context, price now 103.00; treat as expired",
+		"stale — written 100.00 context, price now 104.00; treat as expired",
+		"stale — written 110.00 context, price now 104.00; treat as expired",
 		"CONFLICT: opposing confirms MET — structural ambiguity, default WAIT unless fresh trigger",
 	} {
 		if !strings.Contains(out, want) {

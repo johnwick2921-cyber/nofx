@@ -466,7 +466,17 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 				// C1 (F3): machine-computed confirmation lines per scenario —
 				// advisory truth the model reasons FROM, never a gate. ADDENDUM S
 				// (2026-08-26) adds the stale-annotation + CONFLICT trailer.
-				if cl := RenderConfirmLines(plan.Doc, snapshotBars, plan.BirthMs, snapshotNow.UnixMilli(), price, dATR); cl != "" {
+				// S2 (mega-research) — the stale unit is now 5m Wilder ATR14:
+				// prefer the min-SL gate's structure ATR, fall back to computing
+				// it from the 1m snapshot, fail-open on missing.
+				atr5m := 0.0
+				if st, ok := ctx.Structure["5m"]; ok {
+					atr5m = st.Atr
+				}
+				if atr5m <= 0 {
+					atr5m = StaleConfirmATR5m(snapshotBars)
+				}
+				if cl := RenderConfirmLines(plan.Doc, snapshotBars, plan.BirthMs, snapshotNow.UnixMilli(), price, atr5m); cl != "" {
 					status += "\n" + cl
 				}
 				// T3 (2026-08-26) — scenario tie-in: a scenario whose trigger
