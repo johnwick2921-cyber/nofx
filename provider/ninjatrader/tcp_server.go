@@ -1265,6 +1265,21 @@ func (s *TCPServer) drainBarIngest(ctx context.Context) {
 			} else {
 				s.barCache.Upsert(msg.symbol, msg.timeframe, msg.bars)
 			}
+			// Bar persistence (2026-08-26) — fan-out AFTER the cache write, in
+			// its own goroutine: a slow/failing DB must never stall the drain
+			// (backpressure invariant) or the socket read loop.
+			//
+			// Live bar_update frames carry ONLY the forming bar (NT8 does not
+			// re-emit the just-closed bar at the boundary), so live candidates
+			// come from the cache tail — the cache always holds the final
+			// closed bars. Historical replays persist from the frame batch.
+			var persistBars []Bar
+			if msg.historical {
+				persistBars = ClosedBarsOnly(msg.bars, msg.timeframe, time.Now().UnixMilli())
+			} else {
+				persistBars = ClosedCacheTail(s.barCache.Get, msg.symbol, msg.timeframe, time.Now().UnixMilli(), 8)
+			}
+			fanOutBarPersist(s.logger.Warn, msg.historical, msg.symbol, msg.timeframe, persistBars)
 		}
 	}
 }
