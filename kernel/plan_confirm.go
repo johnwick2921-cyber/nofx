@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"nofx/logger"
 	"nofx/market"
 )
 
@@ -69,28 +70,54 @@ func EvaluateConfirm(c PlanConfirm, bars []market.Kline, sinceMs, nowMs int64) C
 	return v
 }
 
-// StaleConfirmATR is the staleness threshold in 5m dATR multiples (env
-// STALE_CONFIRM_ATR, default 1.0). Citation: ADDENDUM S pins 1.0 × dATR; the
-// 2026-08-26 quiet-day audit's double-MET event ran price 47.25 pts off the
-// written 29416.00 context ≈ 2.2× dATR (21.8) — a full dATR of drift is the
-// agreed "stale" floor.
+// StaleConfirmATR is the staleness threshold in 5m Wilder ATR14 multiples (env
+// STALE_CONFIRM_ATR, default 2.0). Citation: register S2 (mega-research
+// 2026-08-26) — the shipped 1.0×dATR unit (~350pt daily-range proxy) marked
+// only 38/2,908 (1.3%) of the week's MET confirms stale; at 2.0×ATR5m (~40-70
+// pt) the rule marks ~37%, matching the empirical stale mass (median |price−ref|
+// = 58.75 pt). The old dATR path is DELETED — this is ATR-only.
 func StaleConfirmATR() float64 {
 	if v := os.Getenv("STALE_CONFIRM_ATR"); v != "" {
 		if n, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err == nil && n > 0 {
 			return n
 		}
 	}
-	return 1.0
+	return 2.0
+}
+
+// staleConfirmATRLogged guards the fail-open log (once per process) so a
+// missing 5m ATR doesn't spam the prompt path every cycle.
+var staleConfirmATRLogged bool
+
+// StaleConfirmATR5m computes the Wilder ATR14 on 5m buckets of the 1m snapshot
+// — the same math the min-SL gate uses via the 5m structure ATR. 0 = unavailable.
+func StaleConfirmATR5m(bars []market.Kline) float64 {
+	if len(bars) == 0 {
+		return 0
+	}
+	five := AggregateBars(bars, 5*60_000)
+	if len(five) < 14 {
+		return 0
+	}
+	return market.ExportCalculateATR(five, 14)
 }
 
 // staleConfirmAnnotation builds the "(stale — …)" parenthetical for a MET
-// confirm whose ref context has drifted > STALE_CONFIRM_ATR × dATR from the
-// current price since plan write. The context is the confirm's own RefPrice
-// (validated into the prose at write time), overridden by the FVG distal
-// anchor when the scenario is an fvg_entry play. Advisory text only — never
-// a gate; the AI stays the judge.
-func staleConfirmAnnotation(s PlanScenario, v ConfirmVerdict, nowPrice, dATR float64) string {
-	if !v.Met || dATR <= 0 || nowPrice <= 0 {
+// confirm whose ref context has drifted > STALE_CONFIRM_ATR × ATR5m from the
+// current price since plan write (register S2: ATR-only, the dATR path is gone).
+// The context is the confirm's own RefPrice (validated into the prose at write
+// time), overridden by the FVG distal anchor when the scenario is an fvg_entry
+// play. FAIL-OPEN: a missing 5m ATR skips the annotation (logged once), never
+// gates. Advisory text only — the AI stays the judge.
+func staleConfirmAnnotation(s PlanScenario, v ConfirmVerdict, nowPrice, atr5m float64) string {
+	if !v.Met || nowPrice <= 0 {
+		return ""
+	}
+	if atr5m <= 0 {
+		if !staleConfirmATRLogged {
+			staleConfirmATRLogged = true
+			logger.Warnf("⚠️ stale-confirm annotation skipped this cycle: 5m ATR unavailable (fail-open)")
+		}
 		return ""
 	}
 	ctx := v.RefPrice
@@ -102,7 +129,7 @@ func staleConfirmAnnotation(s PlanScenario, v ConfirmVerdict, nowPrice, dATR flo
 	if ctx <= 0 {
 		return ""
 	}
-	if math.Abs(nowPrice-ctx) > StaleConfirmATR()*dATR {
+	if math.Abs(nowPrice-ctx) > StaleConfirmATR()*atr5m {
 		return fmt.Sprintf("(stale — written %.2f context, price now %.2f; treat as expired)", ctx, nowPrice)
 	}
 	return ""
@@ -119,7 +146,7 @@ func staleConfirmAnnotation(s PlanScenario, v ConfirmVerdict, nowPrice, dATR flo
 //  2. CONFLICT: opposite-direction confirms MET in the same cycle get one
 //     trailing line "CONFLICT: opposing confirms MET — structural ambiguity,
 //     default WAIT unless fresh trigger".
-func RenderConfirmLines(doc PlanDoc, bars []market.Kline, sinceMs, nowMs int64, nowPrice, dATR float64) string {
+func RenderConfirmLines(doc PlanDoc, bars []market.Kline, sinceMs, nowMs int64, nowPrice, atr5m float64) string {
 	var b strings.Builder
 	metLong, metShort := false, false
 	for _, s := range doc.Scenarios {
@@ -144,7 +171,7 @@ func RenderConfirmLines(doc PlanDoc, bars []market.Kline, sinceMs, nowMs int64, 
 			case "short":
 				metShort = true
 			}
-			if a := staleConfirmAnnotation(s, v, nowPrice, dATR); a != "" {
+			if a := staleConfirmAnnotation(s, v, nowPrice, atr5m); a != "" {
 				met += " " + a
 			}
 		}
