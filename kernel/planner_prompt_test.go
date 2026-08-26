@@ -33,9 +33,19 @@ func TestBuildPlannerPrompt(t *testing.T) {
 		"REGIME: trend D=up", "Ranked levels", "PDH", "Calendar", "FOMC", "HARD no-trade blackout",
 		"Owner note", "respect PDH", `"reasoning"`, "sweep_reclaim", "death_condition",
 		`"quality": "A+|A|B|C"`, "C = machine-demoted",
+		// A1/A2 (2026-08-26) — anchor-role truth + condition×session guidance.
+		"Anchor roles", "LIQUIDITY/BREAKOUT references", "Fade ONLY on a confirmed sweep-reclaim",
+		"Condition×session guidance", "reject-based setups are best in NY RTH",
+		"sweep_reclaim requires the reclaim CLOSE",
 	} {
 		if !strings.Contains(p, want) {
 			t.Fatalf("planner prompt missing %q\n---\n%s", want, p)
+		}
+	}
+	// A1 — the old fade-resistance framing must be gone.
+	for _, old := range []string{"fade resistance", "ONH is resistance — fade it", "fade the ONH"} {
+		if strings.Contains(strings.ToLower(p), old) {
+			t.Fatalf("stale ONH fade framing %q must be absent", old)
 		}
 	}
 }

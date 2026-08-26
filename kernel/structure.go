@@ -105,6 +105,11 @@ type StructureState struct {
 	Trend      string           `json:"trend"` // TRENDING_UP | TRENDING_DOWN | RANGING
 	Swing      *SwingRef        `json:"swing,omitempty"`
 	LastEvents []StructureEvent `json:"last_events,omitempty"`
+	// Atr (A3 min-SL gate, 2026-08-26) — ATR(14) Wilder on THIS TF's closed bars,
+	// computed by the same simpleATR14 the swing engine already uses. Exposed so
+	// the entry gate can size the minimum stop distance against the real 5m ATR
+	// instead of a hardcoded width (research: 15/27 week losers stopped-too-tight).
+	Atr float64 `json:"atr,omitempty"`
 }
 
 type swing struct {
@@ -185,6 +190,7 @@ func ComputeStructureState(klines []market.KlineBar, tfMinutes int, atr float64,
 	if atr <= 0 {
 		atr = simpleATR14(highs, lows, closes)
 	}
+	out.Atr = atr // A3 (2026-08-26) — per-TF ATR(14) Wilder for the min-SL gate
 
 	// 1. fractal swings (window k), alternating high/low, min-move filtered.
 	k := structureSwingK()

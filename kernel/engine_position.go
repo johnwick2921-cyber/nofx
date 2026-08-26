@@ -191,6 +191,59 @@ func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoi
 			return fmt.Errorf("confidence too low (%d), must be ≥%d to open position", d.Confidence, minConfidence)
 		}
 
+		// A3 (2026-08-26) — MIN-SL VALIDATION. Research-grounded: 15/27 week
+		// losers stopped-too-tight (MFE ≥ 0.5×SL before the stop-out). Two legs:
+		//  (1) |entry−SL| ≥ MIN_SL_ATR_MULT × ATR(14, 5m Wilder) — env, default
+		//      1.0, 0 = off. The ATR rides ctx.Structure["5m"].Atr (same series
+		//      the swing engine uses; no hardcoded width).
+		//  (2) Level clearance: for a cited scenario, the SL must sit BEYOND the
+		//      anchor level/zone far edge by ≥ MinSLTickClearance ticks — stops
+		//      parked at the level itself get run (week evidence: 5/5 biggest
+		//      losers stopped 5–44 pts from any seated level).
+		// Refusal feeds the existing re-validate retry ("sl_too_tight: … widen or
+		// skip"). Fail-open: no ATR / no anchor → WARN + pass.
+		if ctx != nil && (d.Action == "open_long" || d.Action == "open_short") {
+			if mult := MinSLATRMult(); mult > 0 && entryRef > 0 && d.StopLoss > 0 {
+				atr := 0.0
+				if st, ok := ctx.Structure["5m"]; ok {
+					atr = st.Atr
+				}
+				if atr > 0 {
+					dist := 0.0
+					if d.Action == "open_long" {
+						dist = entryRef - d.StopLoss
+					} else {
+						dist = d.StopLoss - entryRef
+					}
+					if blocked, msg := MinSLVerdict(d.Action, dist, atr, mult); blocked {
+						telemetry.IncGateBlock(ctx.TraderID, "min_sl_gate")
+						logger.Warnf("🛑 MIN-SL REJECT %s %s: %s", d.Symbol, d.Action, msg)
+						return fmt.Errorf("%s", msg)
+					}
+				} else {
+					logger.Warnf("🛑 MIN-SL SKIPPED %s %s — no 5m ATR in structure snapshot (fail-open)", d.Symbol, d.Action)
+				}
+				// Leg 2 — level clearance for a cited scenario anchor.
+				if anchor, ok := MinSLAnchorFor(ctx, d); ok {
+					tick := market.FuturesTickSize(d.Symbol)
+					if tick <= 0 {
+						tick = 0.25
+					}
+					clear := float64(MinSLTickClearance) * tick
+					violated := false
+					if d.Action == "open_long" {
+						violated = d.StopLoss > anchor-clear
+					} else {
+						violated = d.StopLoss < anchor+clear
+					}
+					if violated {
+						telemetry.IncGateBlock(ctx.TraderID, "min_sl_gate")
+						return fmt.Errorf("sl_too_tight: stop %.2f does not clear the cited level %.2f by ≥%d tick(s) — widen or skip", d.StopLoss, anchor, MinSLTickClearance)
+					}
+				}
+			}
+		}
+
 		// G1 (regime wave 2026-08-21) — HTF VETO. Position in the gate chain:
 		// AFTER the min-confidence gate, BEFORE the decision proceeds to sizing
 		// and execution. An entry opposing the CONFIRMED HTF trend (G2) is
