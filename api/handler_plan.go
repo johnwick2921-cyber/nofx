@@ -323,7 +323,7 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 			owners[roundKey(r.Price)] = r
 		}
 	}
-	facts, price := planLevelFacts(traderID, symbol, doc, now, rule, owners, row.CreatedAt.UnixMilli())
+	facts, price, fvgStates := planLevelFacts(traderID, symbol, doc, now, rule, owners, row.CreatedAt.UnixMilli())
 	// The budget depends on the plan's version, known only now.
 	_, _, replansLeft, replanCap := s.planRulesWithCap(traderID, sessName, tradeDate, row.Version)
 	warming := ""
@@ -378,6 +378,9 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 		// heuristic) + unevaluable scenario ids — the card renders them
 		// distinctly instead of dressing a heuristic as a machine verdict.
 		"scenario_meta":  s.scenarioMeta(traderID, row.PlanID),
+		// FVG ENTRY MODEL (2026-08-26) — per-scenario gap-band live states for
+		// the card chips (IN_ZONE/ABOVE/BELOW/FILLED_INVALID + touch number).
+		"fvg_states": fvgStates,
 		"overlay_errors": overlayErrStrings,
 		// ITEM 4 — owner edits that could NOT be re-anchored onto this version.
 		// Never dropped silently: the card asks for review.
@@ -385,14 +388,15 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 	})
 }
 
-// planLevelFacts computes per-level live facts from the latest 1m bars.
-func planLevelFacts(traderID, symbol string, doc kernel.PlanDoc, now time.Time, rule string, owners map[int64]*store.OwnerLevelDB, birthMs int64) ([]gin.H, float64) {
+// planLevelFacts computes per-level live facts from the latest 1m bars. Also
+// returns the per-scenario fvg_entry live states (FVG ENTRY MODEL, 2026-08-26).
+func planLevelFacts(traderID, symbol string, doc kernel.PlanDoc, now time.Time, rule string, owners map[int64]*store.OwnerLevelDB, birthMs int64) ([]gin.H, float64, []kernel.FvgScenarioState) {
 	if market.FuturesBarsProvider == nil {
-		return nil, 0
+		return nil, 0, nil
 	}
 	bars := market.FuturesBarsProvider(symbol, "1m", kernel.AISVPBarCount)
 	if len(bars) == 0 {
-		return nil, 0
+		return nil, 0, nil
 	}
 	nowMs := now.UnixMilli()
 	price := 0.0
@@ -459,7 +463,7 @@ func planLevelFacts(traderID, symbol string, doc kernel.PlanDoc, now time.Time, 
 		}
 		out = append(out, row)
 	}
-	return out, price
+	return out, price, kernel.FvgScenarioStatesFor(doc, bars, birthMs, now.UnixMilli())
 }
 
 // roundKey buckets a price to the instrument tick so an owner level entered as

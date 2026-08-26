@@ -120,6 +120,7 @@ export function ScenarioList({
   scenarios,
   statusMap,
   meta,
+  fvgStates,
   language,
 }: {
   scenarios: PlanScenario[]
@@ -139,6 +140,17 @@ export function ScenarioList({
       }
     >
   }
+  /** FVG ENTRY MODEL (2026-08-26) — per-scenario gap-band live states (advisory). */
+  fvgStates?: Array<{
+    id: string
+    fvg_lo: number
+    fvg_hi: number
+    ce: number
+    entry_mode: string
+    state: string
+    touch_number: number
+    met: boolean
+  }>
   language: Language
 }) {
   return (
@@ -210,6 +222,26 @@ export function ScenarioList({
                         : 'confirm not met'}
                     </span>
                   )}
+                  {fvgStates?.find((f) => f.id === s.id) && (() => {
+                    const f = fvgStates.find((x) => x.id === s.id)!
+                    const tone =
+                      f.state === 'FILLED_INVALID'
+                        ? 'var(--vl-short)'
+                        : f.state === 'IN_ZONE'
+                          ? 'var(--vl-long)'
+                          : 'var(--vl-muted)'
+                    return (
+                      <span
+                        data-testid={`fvg-chip-${s.id}`}
+                        className="text-[9px] font-bold px-1.5 py-0.5 rounded"
+                        title={`fvg_entry gap ${f.fvg_lo}–${f.fvg_hi} (CE ${f.ce}, mode ${f.entry_mode}) — ${f.state}${f.touch_number > 0 ? ` · touch #${f.touch_number}` : ''} (machine-computed, advisory)`}
+                        style={{ color: tone, border: '1px solid var(--vl-hair)' }}
+                      >
+                        {f.state}
+                        {f.touch_number > 0 ? ` · #${f.touch_number}` : ''}
+                      </span>
+                    )
+                  })()}
                 </div>
               )}
             </div>
