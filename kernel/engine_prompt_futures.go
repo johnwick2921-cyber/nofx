@@ -183,6 +183,9 @@ func (e *StrategyEngine) buildFuturesPrompt(symbol string, accountEquity float64
 	if e.config.DayPlan != nil && e.config.DayPlan.PlanEnabled && e.keyLevelsContextLine != "" && !planActive {
 		sb.WriteString(e.keyLevelsContextLine)
 		sb.WriteString("\n\n")
+		if e.biasContextLine != "" {
+			sb.WriteString(e.biasContextLine + "\n\n")
+		}
 	}
 
 	// 3b. Entry Standards (editable). Appended ONLY when set — empty = unchanged.
@@ -254,6 +257,9 @@ func (e *StrategyEngine) buildFuturesPrompt(symbol string, accountEquity float64
 		}
 		if e.keyLevelsContextLine != "" {
 			sb.WriteString(e.keyLevelsContextLine + "\n\n")
+			if e.biasContextLine != "" {
+				sb.WriteString(e.biasContextLine + "\n\n")
+			}
 		}
 		if e.planStatusLine != "" {
 			sb.WriteString(e.planStatusLine + "\n")

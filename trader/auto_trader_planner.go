@@ -899,6 +899,11 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		// plans with flip unreachable/void: death preempting flip, flip==death,
 		// or flip anchored on a level absent from the plan's own list.
 		at.warnFlipDeathSanity(d)
+		// ADDENDUM (1) — role-vs-scenario validator: WARN only (never a fail);
+		// the AI keeps judgment, the journal makes mismatches visible at write.
+		for _, m := range kernel.RoleMismatches(d) {
+			at.logWarnf("🧭 role mismatch: %s", m)
+		}
 		doc = d
 		break
 	}
@@ -1350,6 +1355,9 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 		Warming:          warming,
 		IndicatorsBlock:  indicatorsBlock,
 		AIConfigHash:     aiConfigHash,
+		// ADDENDUM (2) — bias-context facts line (VWAP/PDC/value area/magnet/
+		// liquidity). Facts only; the AI judges direction.
+		BiasCtx: kernel.ComputeBiasContext(bars, scored, now).Line(),
 		// H4/H5 — the prompt asks for EXACTLY what validation accepts: the
 		// resolved max_levels / scenario_cap (never a hardcoded 8/3 the owner
 		// cannot raise).

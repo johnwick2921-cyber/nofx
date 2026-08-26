@@ -260,6 +260,11 @@ type StrategyEngine struct {
 	// the default (day_plan off) keeps the futures prompt byte-identical.
 	keyLevelsContextLine string
 
+	// biasContextLine is the per-cycle bias-context facts line (addendum 2,
+	// 2026-08-26) — rendered right after the KEY LEVELS block in the futures
+	// prompt. Empty → byte-identical.
+	biasContextLine string
+
 	// planBlockLine / planStatusLine are the P3.4 executor plan injection: the
 	// byte-stable PLAN BLOCK (cached prefix) and the dynamic PLAN STATUS tail.
 	// Non-empty planBlockLine (day_plan on + an active plan) triggers the RECON #4
@@ -285,6 +290,9 @@ func (e *StrategyEngine) SetSVPContext(line string) { e.svpContextLine = line }
 // SetKeyLevelsContext sets the day-plan KEY LEVELS block used by the futures
 // prompt for the next BuildSystemPrompt call. Pass "" to inject nothing.
 func (e *StrategyEngine) SetKeyLevelsContext(line string) { e.keyLevelsContextLine = line }
+
+// SetBiasContext sets the per-cycle bias-context facts line (addendum 2).
+func (e *StrategyEngine) SetBiasContext(line string) { e.biasContextLine = line }
 
 // SetPlanContext sets the P3.4 executor plan injection: the byte-stable PLAN
 // BLOCK (prefix) and the dynamic PLAN STATUS tail. Pass ("","") for no active
