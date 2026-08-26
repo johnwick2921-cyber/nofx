@@ -204,7 +204,19 @@ func BuildPlannerPrompt(in PlannerInput) string {
 		b.WriteString("\n")
 	}
 
-	b.WriteString(plannerOutputContract(in.MaxLevels, in.ScenarioCap, len(in.HTFZones) > 0))
+	// 1h wave (2026-08-25) — the conditional 1h S/D mandate: emitted only when
+	// a 1h supply/demand zone is actually rendered in the HTF zones section
+	// (same conditional pattern as the G2.2 HTF mandate fix — a rule that asks
+	// for something absent burns retries).
+	has1HSD := false
+	for _, z := range in.HTFZones {
+		if is1HSDZone(z) {
+			has1HSD = true
+			break
+		}
+	}
+
+	b.WriteString(plannerOutputContract(in.MaxLevels, in.ScenarioCap, len(in.HTFZones) > 0, has1HSD))
 	return b.String()
 }
 
@@ -213,11 +225,14 @@ func BuildPlannerPrompt(in PlannerInput) string {
 // ask for what validation will accept, so a raised max_levels/scenario_cap both
 // gets requested AND passes instead of fail-closing every read against a
 // hardcoded 8/3.
-func plannerOutputContract(maxLevels, maxScenarios int, hasHTFZones bool) string {
+func plannerOutputContract(maxLevels, maxScenarios int, hasHTFZones, has1HSDZone bool) string {
 	maxL, maxS := resolvePlanCaps(maxLevels, maxScenarios)
 	htfRule := ""
 	if hasHTFZones {
 		htfRule = " — plus the HTF zones section, where you MUST include at least ONE HTF zone row in your levels as a confluence reference, never as a standalone trigger"
+	}
+	if has1HSDZone {
+		htfRule += " — the nearest 1h supply/demand zone row in that section MUST be one of your included rows (setup-rung context, never a standalone trigger)"
 	}
 	return "## OUTPUT — one JSON object, reasoning FIRST, no prose outside it\n" +
 		"{\n" +
