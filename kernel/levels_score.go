@@ -23,8 +23,11 @@ type ScoredLevel struct {
 	Grade      string  `json:"grade"`      // A | B | C
 	Fresh      string  `json:"fresh"`      // freshness label: fresh | tested | B | C
 	Score      float64 `json:"score"`      // deterministic composite
-	Confluence int     `json:"confluence"` // # other in-band levels clustered nearby
+	Confluence int     `json:"confluence"` // # other in-band FAMILIES clustered nearby
 	Distance   float64 `json:"distance"`   // signed points from price (level - price)
+	// Role is the machine-assigned level_role (addendum 1, 2026-08-26) —
+	// rendered as a column in both prompts and the executor KEY LEVELS block.
+	Role LevelRole `json:"role,omitempty"`
 }
 
 // freshLabel normalizes a level-state freshness grade to a display label.
@@ -69,7 +72,9 @@ func FilterLevelsByMinGrade(scored []ScoredLevel, minGrade string) []ScoredLevel
 	}
 	out := make([]ScoredLevel, 0, len(scored))
 	for _, l := range scored {
-		if levelGradeRank[strings.ToUpper(l.Grade)] >= min {
+		// B2 (2026-08-26) — min_grade Tier-1 exception: Tier-1 structural rows
+		// survive ANY min_grade cut (the map must always carry today's anchors).
+		if levelGradeRank[strings.ToUpper(l.Grade)] >= min || isTier1Kind(l.Kind) {
 			out = append(out, l)
 		}
 	}
@@ -83,6 +88,17 @@ func typeEvidence(k LevelKind) float64 {
 		return 1.0 // strong structural / HTF references
 	case KindONH, KindONL, KindNPOC:
 		return 0.85
+	// Pack B (owner override 2026-08-26) — VOLUME FAMILY weights, provisional:
+	// the B4 level_stats forward-validation table is the 2-week verdict that
+	// re-weights these (spec: no volume wave was ever live-validated before).
+	case KindVWAP, KindPOC:
+		return 0.90
+	case KindEVWAP, KindPDVWAP:
+		return 0.85
+	case KindVAH, KindVAL, KindSETT:
+		return 0.80
+	case KindMIDO:
+		return 0.60
 	case KindASH, KindASL, KindLDNH, KindLDNL, KindORH, KindORL, KindIBH, KindIBL, KindEQH, KindEQL:
 		return 0.70
 	case KindRound, KindGap:
@@ -224,6 +240,102 @@ func isTodayPriority(k LevelKind) bool {
 	return false
 }
 
+// ── Pack B tiering (B2, owner override 2026-08-26) ─────────────────────────
+
+// Tier1ProximityTicks is the B2 spec constant: a pattern (zone) may grade
+// above C ONLY within 12 ticks of a Tier-1 anchor. 12 MNQ ticks = 3.00 points.
+const Tier1ProximityTicks = 12
+
+// isTier1Kind marks the Tier-1 structural family (today's anchors + week/month
+// extremes). Tier-1 rows are exempt from the min_grade cut (spec: "min_grade
+// Tier-1 exception") and anchor the pattern-above-C gate.
+func isTier1Kind(k LevelKind) bool {
+	switch k {
+	case KindPDH, KindPDL, KindPDC, KindRTHH, KindRTHL, KindORH, KindORL, KindONH, KindONL, KindPWH, KindPWL, KindPMH, KindPML:
+		return true
+	}
+	return false
+}
+
+// IsTier1Kind is the exported form for the write-site validator + level_stats.
+func IsTier1Kind(k LevelKind) bool { return isTier1Kind(k) }
+
+// IsTier1Label matches a plan-doc label (PDH, ONH, nPOC·Tue…) to the Tier-1
+// family for the min-grade exception on []PlanLevel surfaces (labels are all
+// those surfaces carry).
+func IsTier1Label(label string) bool {
+	l := strings.ToUpper(strings.TrimSpace(label))
+	switch {
+	case l == "PDH", l == "PDL", l == "PDC", strings.HasPrefix(l, "RTH-"):
+		return true
+	case l == "ONH", l == "ONL", l == "OR-H", l == "OR-L":
+		return true
+	case l == "PWH", l == "PWL", l == "PMH", l == "PML":
+		return true
+	}
+	return false
+}
+
+// withinTier1Proximity reports whether a pattern level sits within
+// Tier1ProximityTicks of a Tier-1 anchor (band-aware: zones measure from their
+// NEAREST band edge, so a wide zone doesn't piggyback on distance).
+func withinTier1Proximity(l DetectedLevel, pool []DetectedLevel, price float64) bool {
+	// MNQ tick = 0.25 (the same constant clusterToleranceFor uses) → 12 ticks =
+	// 3.00 points. `price` is the anchor for the fallback only.
+	_ = price
+	tol := Tier1ProximityTicks * 0.25
+	dist := func(p float64) float64 {
+		switch {
+		case l.Lo < l.Hi && p < l.Lo:
+			return l.Lo - p
+		case l.Lo < l.Hi && p > l.Hi:
+			return p - l.Hi
+		default:
+			return 0
+		}
+	}
+	for _, o := range pool {
+		if !isTier1Kind(o.Kind) {
+			continue
+		}
+		if math.Abs(o.Price-l.Price) <= tol || dist(o.Price) <= tol {
+			return true
+		}
+	}
+	return false
+}
+
+// levelFamily (B3) buckets kinds into confluence FAMILIES — distinct-family
+// confluence counting never double-counts a family (VWAP+1σ+VWAP−1σ are ONE
+// family, not three confirming levels).
+func levelFamily(k LevelKind) string {
+	switch k {
+	case KindVWAP, KindEVWAP, KindPDVWAP:
+		return "vwap"
+	case KindPOC, KindNPOC, KindVAH, KindVAL:
+		return "profile"
+	case KindPDH, KindPDL, KindPDC, KindRTHH, KindRTHL, KindSETT:
+		return "prior"
+	case KindPWH, KindPWL, KindPMH, KindPML:
+		return "anchor"
+	case KindONH, KindONL, KindASH, KindASL, KindLDNH, KindLDNL, KindORH, KindORL, KindIBH, KindIBL, KindMIDO:
+		return "overnight"
+	case KindEQH, KindEQL:
+		return "liquidity"
+	case KindSupply, KindDemand, KindFVG, KindIFVG, KindOB:
+		return "zone"
+	case KindRound:
+		return "round"
+	case KindGap:
+		return "gap"
+	default:
+		return "other"
+	}
+}
+
+// FamilyFor exposes the family bucket for level_stats + reports.
+func FamilyFor(k LevelKind) string { return levelFamily(k) }
+
 // freshMult maps a freshness grade to a score multiplier. "" → fresh.
 // P1c design rule: a consumed level is NOT zeroed (that deleted the map's best
 // levels) — it role-flips and stays seated at a reduced score.
@@ -237,6 +349,25 @@ func freshMult(f string) float64 {
 		return 0.6
 	case "done", "consumed":
 		return 0.5 // role-flipped, still on the map
+	default:
+		return 1.0
+	}
+}
+
+// zoneFreshMult is the Pack B (2026-08-26) ZONE freshness ladder — 1.0 / 0.6 /
+// 0.3 / 0.15. Zones (S/D/FVG/IFVG/OB) decay hard: a twice-tested base is
+// mostly printed. ANCHORS (line levels) keep the original ladder — "anchors
+// no-decay" per spec, i.e. the volume ladder applies to ZONES ONLY.
+func zoneFreshMult(f string) float64 {
+	switch strings.ToLower(strings.TrimSpace(f)) {
+	case "", "a", "fresh":
+		return 1.0
+	case "b":
+		return 0.6
+	case "c", "tested":
+		return 0.3
+	case "done", "consumed":
+		return 0.15
 	default:
 		return 1.0
 	}
@@ -281,16 +412,30 @@ func scoreLevelsPool(levels []DetectedLevel, price, dATR float64, freshness func
 			fRaw = freshness(l)
 		}
 		fm := freshMult(fRaw)
+		if isZoneKind(l.Kind) {
+			// Pack B (2026-08-26) — the zone freshness ladder is steeper than
+			// the anchor ladder (1.0/0.6/0.3/0.15 vs 1.0/0.8/0.6/0.5).
+			fm = zoneFreshMult(fRaw)
+		}
 		if fm == 0 {
 			continue // consumed
 		}
+		// B3 (2026-08-26) — confluence counts DISTINCT FAMILIES within the
+		// cluster band, never raw levels: three VWAP-band rows are one family
+		// and must not triple-inflate the grade. Capped (C14, env
+		// CONFLUENCE_CAP, default 3) before it multiplies the score.
 		conf := 0
+		seenFamilies := map[string]bool{}
 		for _, o := range inBand {
 			if o.Price == l.Price && o.Kind == l.Kind && o.Label == l.Label {
 				continue
 			}
 			if math.Abs(o.Price-l.Price) <= confBand {
-				conf++
+				fam := levelFamily(o.Kind)
+				if fam != levelFamily(l.Kind) && !seenFamilies[fam] {
+					seenFamilies[fam] = true
+					conf++
+				}
 			}
 		}
 		// C14 (2026-08-25) — diminishing returns: the confluence count feeding
@@ -342,6 +487,13 @@ func scoreLevelsPool(levels []DetectedLevel, price, dATR float64, freshness func
 					grade = "C"
 				}
 			}
+			// B2 (2026-08-26) — pattern-above-C only within
+			// TIER1_PROXIMITY_TICKS of a Tier-1 anchor: a pattern (zone) earns
+			// grade B/A ONLY when it sits beside a Tier-1 structural level.
+			// Otherwise the pattern is a context mark, grade C.
+			if grade != "C" && !withinTier1Proximity(l, inBand, price) {
+				grade = "C"
+			}
 		}
 		scored = append(scored, ScoredLevel{
 			DetectedLevel: l,
@@ -350,6 +502,7 @@ func scoreLevelsPool(levels []DetectedLevel, price, dATR float64, freshness func
 			Score:         score,
 			Confluence:    conf,
 			Distance:      l.Price - price,
+			Role:          RoleFor(l, fRaw),
 		})
 	}
 
@@ -461,7 +614,8 @@ func FilterPlanLevelsByMinGrade(levels []PlanLevel, minGrade string) []PlanLevel
 	}
 	out := make([]PlanLevel, 0, len(levels))
 	for _, l := range levels {
-		if levelGradeRank[strings.ToUpper(strings.TrimSpace(l.Grade))] >= min {
+		// B2 — Tier-1 labels exempt from the min_grade cut (see above).
+		if levelGradeRank[strings.ToUpper(l.Grade)] >= min || IsTier1Label(l.Label) {
 			out = append(out, l)
 		}
 	}
@@ -567,6 +721,20 @@ func isHTFSwingZone(l ScoredLevel) bool {
 	return false
 }
 
+// isHTFSeatEligible (B2, 2026-08-26) — the HTF seat rule: Tier-1 structural
+// kinds OR displacement patterns (reversal zones) only. HTF continuation zones
+// and HTF EQH/EQL no longer outrank the Tier-1/volume map for the 2 seatHTF
+// seats (owner: seats are for decision-relevant references, not context).
+func isHTFSeatEligible(l ScoredLevel) bool {
+	if !l.HTF {
+		return false
+	}
+	if isTier1Kind(l.Kind) {
+		return true
+	}
+	return isZoneKind(l.Kind) && l.ZonePattern == "reversal"
+}
+
 // is1HSDZone reports whether a scored level is a 1h-tier supply/demand zone —
 // the kind the 1h-wave seat guarantee protects (research: the 1h is the
 // setup rung; its S/D bases are the large-account references day traders
@@ -619,7 +787,7 @@ func Seat1HZone(scored []ScoredLevel, maxLevels int) []ScoredLevel {
 	cand := tail[best]
 	dropIdx := -1
 	for i := len(head) - 1; i >= 0; i-- {
-		if isTodayPriority(head[i].Kind) || isHTFSwingZone(head[i]) {
+		if isTodayPriority(head[i].Kind) || isHTFSeatEligible(head[i]) {
 			continue
 		}
 		dropIdx = i
@@ -667,7 +835,7 @@ func seatHTF(scored []ScoredLevel, maxLevels int) []ScoredLevel {
 	tail := append([]ScoredLevel(nil), scored[maxLevels:]...)
 	seated := 0
 	for _, l := range head {
-		if isHTFSwingZone(l) {
+		if isHTFSeatEligible(l) {
 			seated++
 		}
 	}
@@ -677,7 +845,7 @@ func seatHTF(scored []ScoredLevel, maxLevels int) []ScoredLevel {
 	}
 	var cands []ScoredLevel
 	for _, l := range tail {
-		if isHTFSwingZone(l) {
+		if isHTFSeatEligible(l) {
 			cands = append(cands, l)
 		}
 	}
@@ -687,7 +855,7 @@ func seatHTF(scored []ScoredLevel, maxLevels int) []ScoredLevel {
 		}
 		dropIdx := -1
 		for i := len(head) - 1; i >= 0; i-- {
-			if isTodayPriority(head[i].Kind) || isHTFSwingZone(head[i]) {
+			if isTodayPriority(head[i].Kind) || isHTFSeatEligible(head[i]) {
 				continue
 			}
 			dropIdx = i
@@ -822,17 +990,22 @@ func RenderKeyLevelsBlock(scored []ScoredLevel, price float64) string {
 		if isHTFSwingZone(s) {
 			label = label + " (HTF)"
 		}
+		role := string(s.Role)
+		if role == "" {
+			role = string(RoleReactZone)
+		}
 		sign := "+"
 		if s.Distance < 0 {
 			sign = "-"
 		}
-		fmt.Fprintf(&b, "  %-9.2f %-20s %s  %-9s %s%.1f\n",
-			s.Price, label, s.Grade, fresh, sign, math.Abs(s.Distance))
+		fmt.Fprintf(&b, "  %-9.2f %-20s %s  %-9s %-15s %s%.1f\n",
+			s.Price, label, s.Grade, fresh, role, sign, math.Abs(s.Distance))
 	}
 	// W-why-no-trades (2026-08-18): "do not chase price between them" was the
 	// base-prompt line the model quoted while waiting cycle after cycle (0/3
 	// stripped-prompt replays produced an entry). Between levels, a confirmed
 	// momentum/breakout setup stays tradeable.
-	b.WriteString("Anchor: react AT these levels (grade A>B>C); between them, a confirmed momentum/breakout may still be traded.")
+	b.WriteString("Anchor: react AT these levels (grade A>B>C); between them, a confirmed momentum/breakout may still be traded.\n")
+	b.WriteString(RoleLegend)
 	return b.String()
 }
