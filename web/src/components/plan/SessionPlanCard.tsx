@@ -678,6 +678,25 @@ export function SessionPlanCard({
         </div>
       )}
 
+      {/* P0-relax (2026-08-27) — thin-side note: the machine map itself was
+          short on a side; the plan was written with a WARN, not failed. */}
+      {!!doc.thin_side && (
+        <div
+          data-testid="thin-side-note"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 mb-1"
+          style={{
+            background: 'var(--vl-gold-dim)',
+            border: '1px solid var(--vl-gold-line)',
+            borderRadius: 'var(--vl-radius-inner)',
+            fontFamily: 'var(--vl-font-ui)',
+          }}
+        >
+          <span className="text-[10px]" style={{ color: 'var(--vl-gold)' }}>
+            ⚖ {doc.thin_side}
+          </span>
+        </div>
+      )}
+
       {/* bias */}
       <BiasBlock bias={doc.bias} language={language} />
 

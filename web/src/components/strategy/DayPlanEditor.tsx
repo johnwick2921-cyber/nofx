@@ -52,6 +52,9 @@ const DEFAULT_DAY_PLAN: DayPlanConfig = {
   seat_1h_zone: true,
   // R4 (2026-08-25) — scenario quality floor DEFAULT C (no restriction).
   min_scenario_quality: 'C',
+  // P0-relax (2026-08-27) — side-quota floor DEFAULT 2 (owner ruling; the
+  // old hard ≥3 stays reachable by setting 3).
+  min_side_levels: 2,
 }
 
 // C3 — the legacy day-scoped clock controls (last_entry_ct / eod_flat_ct) were
@@ -162,6 +165,7 @@ function NumberField({
   step = 1,
   onChange,
   disabled,
+  testId,
 }: {
   value?: number
   min: number
@@ -169,6 +173,7 @@ function NumberField({
   step?: number
   onChange: (v: number) => void
   disabled?: boolean
+  testId?: string
 }) {
   return (
     <input
@@ -178,6 +183,7 @@ function NumberField({
       max={max}
       step={step}
       disabled={disabled}
+      data-testid={testId}
       onChange={(e) => {
         const n = parseFloat(e.target.value)
         if (!Number.isNaN(n)) onChange(Math.min(max, Math.max(min, n)))
@@ -551,6 +557,16 @@ export function DayPlanEditor({ config, onChange, disabled, language }: Props) {
                 disabled={bodyDisabled}
               />
             </FieldRow>
+            <FieldRow label={tp('minSideLevels', language)}>
+              <NumberField
+                value={cfg.min_side_levels ?? 2}
+                min={1}
+                max={8}
+                onChange={(v) => update('min_side_levels', v)}
+                disabled={bodyDisabled}
+                testId="min-side-levels"
+              />
+            </FieldRow>
           </div>
         </div>
 
@@ -706,6 +722,27 @@ export function DayPlanEditor({ config, onChange, disabled, language }: Props) {
                         value={ov?.min_scenario_quality}
                         onChange={(v) =>
                           setSessionField(s, 'min_scenario_quality', v)
+                        }
+                        disabled={bodyDisabled}
+                      />
+                    </OverrideRow>
+                    <OverrideRow
+                      label={tp('minSideLevels', language)}
+                      overridden={ov?.min_side_levels !== undefined}
+                      onToggle={(on) =>
+                        on
+                          ? setSessionField(s, 'min_side_levels', 2)
+                          : clearSessionField(s, 'min_side_levels')
+                      }
+                      disabled={bodyDisabled}
+                      language={language}
+                    >
+                      <NumberField
+                        value={ov?.min_side_levels}
+                        min={1}
+                        max={8}
+                        onChange={(v) =>
+                          setSessionField(s, 'min_side_levels', v)
                         }
                         disabled={bodyDisabled}
                       />
