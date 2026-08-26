@@ -204,6 +204,15 @@ func BuildPlannerPrompt(in PlannerInput) string {
 		b.WriteString("\n")
 	}
 
+	// A1 (2026-08-26) — anchor-role truth: ONH/ONL are liquidity references,
+	// not fade walls. Week evidence: ONH entries 14 · 21.4% win · −131 — the
+	// fade framing lost; the research stat (broken intraday ~94% of days,
+	// 2,827-day NQ sample) says they break nearly always. Advisory — no block.
+	b.WriteString("## Anchor roles (week evidence, advisory)\n")
+	b.WriteString("  ONH/ONL = LIQUIDITY/BREAKOUT references — broken intraday ~94% of days (2,827-day NQ sample). ")
+	b.WriteString("Fade ONLY on a confirmed sweep-reclaim (wick through + close back inside on the decision TF). ")
+	b.WriteString("Otherwise treat them as targets / breakout-retest anchors, never fade walls.\n\n")
+
 	// 1h wave (2026-08-25) — the conditional 1h S/D mandate: emitted only when
 	// a 1h supply/demand zone is actually rendered in the HTF zones section
 	// (same conditional pattern as the G2.2 HTF mandate fix — a rule that asks
