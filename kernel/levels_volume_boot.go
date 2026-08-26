@@ -12,4 +12,6 @@ func LogVolumeWaveBoot() {
 		DefaultMaxLevels, ActivationWindowK, ConfluenceCap(), IsRoleOverridden())
 	logger.Infof("🎯 touch telemetry: band=%dt(%.1fpt) max_bars=%d vol_lookback=%d approach=%d — advisory, zero gates",
 		TouchBandTicks(), TouchBandPoints(), TouchEpisodeMaxBars(), TouchVolLookback(), TouchApproachBars())
+	logger.Infof("📐 fvg_entry: on min_disp=%.1f×ATR ce_width=%.0fpt lookback=%d bars — advisory, zero gates",
+		FvgEntryMinDispATR(), FvgEntryCEWidthPts(), FvgEntryLookbackBars())
 }

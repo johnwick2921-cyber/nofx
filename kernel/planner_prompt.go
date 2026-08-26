@@ -264,7 +264,7 @@ func plannerOutputContract(maxLevels, maxScenarios int, hasHTFZones, has1HSDZone
 		`  "reasoning": "<your read: what the auction is doing and why this plan — ≤200 words, decision-focused>",` + "\n" +
 		`  "bias": {"direction": "long|short|neutral", "conviction": "high|medium|low", "flip_condition": "<explicit>"},` + "\n" +
 		fmt.Sprintf(`  "levels": [{"price": <n>, "label": "<PDH|ONH|nPOC…>", "grade": "A|B|C", "instruction": "<verb>"}],  // max %d, MUST include ≥3 below AND ≥3 above the current price`, maxL) + "\n" +
-		fmt.Sprintf(`  "scenarios": [{"id": "S1", "trigger": "<setup>", "condition": "reclaim|hold|sweep_reclaim|reject|acceptance|breakout_retest", "direction": "long|short", "target_chain": [<n>,…], "invalid": "<line>", "quality": "A+|A|B|C", "confirm": {"rule": "touch|1x5m_close|2x5m_close|15m_close", "ref_price": <n>, "side": "above|below"}}],  // 1..%d — confirm{} is REQUIRED per scenario`, maxS) + "\n" +
+		fmt.Sprintf(`  "scenarios": [{"id": "S1", "trigger": "<setup>", "condition": "reclaim|hold|sweep_reclaim|reject|acceptance|breakout_retest|fvg_entry", "direction": "long|short", "target_chain": [<n>,…], "invalid": "<line>", "quality": "A+|A|B|C", "confirm": {"rule": "touch|1x5m_close|2x5m_close|15m_close", "ref_price": <n>, "side": "above|below"}, "fvg": {"fvg_lo": <n>, "fvg_hi": <n>, "entry_mode": "edge|ce", "displacement_atr": <n>, "origin_level": "<label>", "direction": "long|short"}}],  // 1..%d — confirm{} is REQUIRED per scenario; fvg{} REQUIRED iff condition=="fvg_entry" (ce is COMPUTED, never written)`, maxS) + "\n" +
 		`  "no_trade": ["first 5m (CT)", "12:00-13:30 CT lunch", "<calendar blackouts>"],` + "\n" +
 		`  "death_condition": "<the single line that invalidates this whole plan>",` + "\n" +
 		`  "death": {"price": <level>, "side": "below|above", "rule": "2x5m|15m_close|5m_close"},` + "\n" +
@@ -288,6 +288,8 @@ func plannerOutputContract(maxLevels, maxScenarios int, hasHTFZones, has1HSDZone
 		// at most 5 near-duplicate LINE rows (within 3 points of each other);
 		// keep the strongest anchor, drop the crowd.
 		"NOISE FILTER (≤5): at most 5 of your included level rows may be line-levels clustered within 3 points of each other — keep the strongest of any such cluster, never a crowd. " +
+		// FVG ENTRY MODEL (2026-08-26) — the 5th condition's ≤6-line playbook.
+		"FVG ENTRY (fvg_entry): author when displacement off a Tier-1 level (VWAP/POC/PDH/PDL/ON/IB/fresh S/D) leaves a FRESH gap toward the trade direction · prefer the FIRST retrace (the freshness ladder applies to the gap as a zone) · entry_mode=ce for gaps > 20pts, edge for tighter · SL beyond the DISTAL edge · targets chain to the next liquidity (EQH/EQL, ON, PDH/PDL). Citations: NQ gap sweet spot 20–80pts; 1h+ fill ~70–80%; displacement floor per MSS research. " +
 		"no_trade may contain ONLY the fixed session windows (first 5m, lunch) plus T1 HARD-blackout lines from the calendar — a T2 caution event is NEVER added to no_trade and never stops entries. " +
 		"Respect the no-trade windows. If you cannot form a credible plan, say so in reasoning and output a neutral/no-trade plan.\n"
 }
