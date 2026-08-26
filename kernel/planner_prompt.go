@@ -68,6 +68,9 @@ type PlannerInput struct {
 	// "max 8 / 1..3" contract as before.
 	MaxLevels   int
 	ScenarioCap int
+	// BiasCtx (addendum 2, 2026-08-26) — the per-cycle bias-context facts line
+	// (price vs VWAP/PDC, value area, nearest magnet/liquidity). Facts only.
+	BiasCtx string
 }
 
 // BuildPlannerPrompt assembles the planner prompt: reasoning-first instruction,
@@ -125,10 +128,23 @@ func BuildPlannerPrompt(in PlannerInput) string {
 			if isHTFSwingZone(l) {
 				label = label + " (HTF)"
 			}
-			fmt.Fprintf(&b, "  %-9.2f %-20s grade %s  %-8s %s%.1f\n", l.Price, label, l.Grade, l.Fresh, sign, absF(l.Distance))
+			role := string(l.Role)
+			if role == "" {
+				role = string(RoleReactZone)
+			}
+			fmt.Fprintf(&b, "  %-9.2f %-20s grade %s  %-8s %-15s %s%.1f\n", l.Price, label, l.Grade, l.Fresh, role, sign, absF(l.Distance))
 		}
 	}
 	b.WriteString("\n")
+
+	// ADDENDUM (1) — the role playbook (machine facts; your judgment stays).
+	b.WriteString("## Level roles (machine-assigned, 5-line playbook)\n")
+	b.WriteString(RoleLegend + "\n")
+
+	// ADDENDUM (2) — bias-context: facts only, AI judges.
+	if in.BiasCtx != "" {
+		b.WriteString(in.BiasCtx + "\n\n")
+	}
 
 	if len(in.StructureSummary) > 0 {
 		b.WriteString("## Structure (1 line/TF)\n")
@@ -264,10 +280,14 @@ func plannerOutputContract(maxLevels, maxScenarios int, hasHTFZones, has1HSDZone
 		"The flip and death MUST be DIFFERENT events: never the same level AND same rule for both (a flip at the same tick death fires is void). A short-biased plan's flip sits BELOW its death line or uses a stricter rule, so the flip can actually fire. " +
 		"Every scenario's confirm{} is MACHINE-EVALUATED the same way: rule + ref_price + side, and ref_price MUST equal a number written in that scenario's trigger/invalid prose. " +
 		"target_chain is GUIDANCE for the executor AI (which sets the actual take_profit) — it is validated for reachability at write time but never enforced at execution (D2 ruling). " +
-		// A2 (2026-08-26) — condition×session guidance from the week ledger:
+	// A2 (2026-08-26) — condition×session guidance from the week ledger:
 		// reject 75% win +665 in NY RTH vs acceptance 0% −157 and sweep_reclaim
 		// 0% −192. Advisory truth, not a hard rule.
 		"Condition×session guidance (week evidence): reject-based setups are best in NY RTH (75% win, +665 this week); acceptance needs a clear displacement or skip (0% win this week); sweep_reclaim requires the reclaim CLOSE on the decision TF, never the wick alone (0% win this week). " +
+		// B3 (2026-08-26) — the ≤5-line noise-filter gate: the plan may include
+		// at most 5 near-duplicate LINE rows (within 3 points of each other);
+		// keep the strongest anchor, drop the crowd.
+		"NOISE FILTER (≤5): at most 5 of your included level rows may be line-levels clustered within 3 points of each other — keep the strongest of any such cluster, never a crowd. " +
 		"no_trade may contain ONLY the fixed session windows (first 5m, lunch) plus T1 HARD-blackout lines from the calendar — a T2 caution event is NEVER added to no_trade and never stops entries. " +
 		"Respect the no-trade windows. If you cannot form a credible plan, say so in reasoning and output a neutral/no-trade plan.\n"
 }

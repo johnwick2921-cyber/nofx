@@ -233,6 +233,10 @@ func main() {
 	// REGIME WAVE (Cutover 2, 2026-08-21) — one boot line per regime knob:
 	// value + source, so the boot block self-documents the wave's enforcement.
 	kernel.LogRegimeBootLedger()
+	// PACK B (2026-08-26) — volume wave boot line: one line per shipped knob so
+	// the boot block self-documents the wave (dispatch: boot adds the knobs).
+	kernel.ApplyRoleMapOverrides(os.Getenv("LEVEL_ROLE_MAP"))
+	kernel.LogVolumeWaveBoot()
 	// P1.4 (ledger-close 2026-08-19) — clock-guard block: live host-RTC drift,
 	// guard-timer freshness, last resync/check state. Log-only, best-effort.
 	kernel.LogClockGuardBoot()

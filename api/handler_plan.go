@@ -323,7 +323,7 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 			owners[roundKey(r.Price)] = r
 		}
 	}
-	facts, price := planLevelFacts(symbol, doc, now, rule, owners, row.CreatedAt.UnixMilli())
+	facts, price := planLevelFacts(traderID, symbol, doc, now, rule, owners, row.CreatedAt.UnixMilli())
 	// The budget depends on the plan's version, known only now.
 	_, _, replansLeft, replanCap := s.planRulesWithCap(traderID, sessName, tradeDate, row.Version)
 	warming := ""
@@ -386,7 +386,7 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 }
 
 // planLevelFacts computes per-level live facts from the latest 1m bars.
-func planLevelFacts(symbol string, doc kernel.PlanDoc, now time.Time, rule string, owners map[int64]*store.OwnerLevelDB, birthMs int64) ([]gin.H, float64) {
+func planLevelFacts(traderID, symbol string, doc kernel.PlanDoc, now time.Time, rule string, owners map[int64]*store.OwnerLevelDB, birthMs int64) ([]gin.H, float64) {
 	if market.FuturesBarsProvider == nil {
 		return nil, 0
 	}
@@ -415,13 +415,26 @@ func planLevelFacts(symbol string, doc kernel.PlanDoc, now time.Time, rule strin
 			dir = kernel.DirBelow
 		}
 		f := kernel.EvaluateLevelFacts(kernel.BarsSince(bars, birthMs), l.Price, dir, rule, 3, nowMs)
+		// Zero-reference regression guard (2026-08-26, "dist wrong again"): right
+		// after a re-plan, birthMs ≈ now → BarsSince is EMPTY → referenceClose
+		// returns 0 → DistancePoints = 0 − level (the card showed −29095 etc.).
+		// Distance is a SNAPSHOT fact — compute it against the zero-guarded
+		// current price directly; the sweep/acceptance fields keep the
+		// birth-scoped bars.
+		distance := f.DistancePoints
+		if price > 0 {
+			distance = kernel.SignedDistancePoints(price, l.Price)
+		}
 		row := gin.H{
 			"price":         l.Price,
 			"label":         l.Label,
 			"grade":         l.Grade,
 			"machine_grade": l.MachineGrade,
 			"instruction":   l.Instruction,
-			"distance":      f.DistancePoints,
+			"distance":      distance,
+			// T4 (2026-08-26) — live touch chip state for the card row
+			// (approaching | touching | rejected | accepted | "").
+			"touch_state": kernel.TouchStateForCard(traderID, symbol, l.Label, l.Price, price, now.UnixMilli()),
 			"sweep":         f.Swept,
 			"closes_beyond": maxI(f.ClosesBeyondUp, f.ClosesBeyondDown),
 			"accept_have":   f.AcceptHave,

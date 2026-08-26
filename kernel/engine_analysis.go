@@ -354,6 +354,7 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 	// same 1m bars and thread ONE block into the system prompt. Gated identically
 	// to SVP → disabled (the default) / empty keeps the golden byte-identical.
 	engine.SetKeyLevelsContext("")
+	engine.SetBiasContext("")
 	planOn := false
 	maxLevels := DefaultMaxLevels
 	proximityK := ActivationWindowK
@@ -399,6 +400,27 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 				}
 			}
 			klBlock = BuildKeyLevelsBlockOpts(ctx.TraderID, snapshotBars, ResolvedSessionRegistryFor(ctx.TraderID), activeSymbol, maxLevels, snapshotNow, proximityK, seat1h, minGrade, extra...)
+			// ADDENDUM (2) — bias-context facts line, computed from the same
+			// scored pool + bars (never a second data source).
+			if klBlock != "" {
+				if sc, _, _ := AssembleScoredLevelsMinGrade(ctx.TraderID, snapshotBars, ResolvedSessionRegistryFor(ctx.TraderID), activeSymbol, maxLevels, snapshotNow, proximityK, minGrade, extra...); len(sc) > 0 {
+					bc := ComputeBiasContext(snapshotBars, sc, snapshotNow)
+					engine.SetBiasContext(bc.Line())
+					// T1/T2 (2026-08-26) — touch telemetry: feed the registry,
+					// persist closed episodes via the sink, and append the live
+					// TOUCH lines (max 2 nearest) to the executor KEY LEVELS.
+					// Advisory — zero gates.
+					atrT := market.ExportCalculateATR(snapshotBars, 14)
+					for _, ep := range TouchUpdate(ctx.TraderID, activeSymbol, snapshotBars, sc, atrT, snapshotNow) {
+						if TouchEpisodeSink != nil {
+							TouchEpisodeSink(ep)
+						}
+					}
+					if tl := RenderTouchLines(ctx.TraderID, activeSymbol, bc.Price, 2); tl != "" {
+						klBlock += "\n" + tl
+					}
+				}
+			}
 		}
 		engine.SetKeyLevelsContext(klBlock)
 		if klBlock == "" {
@@ -444,6 +466,12 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 				// C1 (F3): machine-computed confirmation lines per scenario —
 				// advisory truth the model reasons FROM, never a gate.
 				if cl := RenderConfirmLines(plan.Doc, snapshotBars, plan.BirthMs, snapshotNow.UnixMilli()); cl != "" {
+					status += "\n" + cl
+				}
+				// T3 (2026-08-26) — scenario tie-in: a scenario whose trigger
+				// level has an OPEN touch episode gets the live shape appended
+				// to its confirm advisory. No new gates — advisory law stands.
+				if cl := RenderScenarioTouchTies(ctx.TraderID, activeSymbol, &plan.Doc, price); cl != "" {
 					status += "\n" + cl
 				}
 			}

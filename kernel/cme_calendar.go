@@ -108,6 +108,19 @@ func CMESessionDayKey(now time.Time) string {
 	return CMESessionDayStart(now).Format("2006-01-02")
 }
 
+// NextSessionRollCT returns the NEXT 17:00 CT boundary strictly after `now`
+// (the daily roll instant). Used by the B4 level_stats nightly job to sleep
+// until the next evaluation window.
+func NextSessionRollCT(now time.Time) time.Time {
+	chicago := CTLocation()
+	ct := now.In(chicago)
+	boundary := time.Date(ct.Year(), ct.Month(), ct.Day(), 17, 0, 0, 0, chicago)
+	if !ct.Before(boundary) {
+		boundary = boundary.AddDate(0, 0, 1)
+	}
+	return boundary
+}
+
 // InBlackoutWindow (Chunk 4) reports whether `now` (evaluated in America/Chicago)
 // falls within the daily [startCT, endCT] window (HH:MM, 24h, Chicago time). The
 // Strategy Studio time/news blackout guardrail uses it. An empty/malformed window
