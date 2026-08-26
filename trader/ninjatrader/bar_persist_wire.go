@@ -43,12 +43,22 @@ func WireBarPersistence(st *store.Store) {
 			}
 		})
 		// Boot backfill + prune loop: the singleton server starts lazily on the
-		// first trader load; poll for it briefly, then flush the cache.
+		// first trader load; poll for it briefly, then flush the cache. The
+		// AddOn's bars_historical replay lands a few seconds after our restart,
+		// so retry while the flush stays empty.
 		go func() {
 			for i := 0; i < 90; i++ {
 				server, err := getOrStartTCPServer()
 				if err == nil && server != nil && server.BarCache() != nil {
-					backfillBars(bh, server)
+					backfilled := backfillBars(bh, server)
+					if backfilled == 0 {
+						// Cache still empty (replay in flight) — retry a few
+						// times; the live persister catches bars regardless.
+						for r := 0; r < 20 && backfilled == 0; r++ {
+							time.Sleep(15 * time.Second)
+							backfilled = backfillBars(bh, server)
+						}
+					}
 					go pruneLoop(bh)
 					return
 				}
@@ -60,8 +70,10 @@ func WireBarPersistence(st *store.Store) {
 }
 
 // backfillBars flushes every closed bar the cache already holds (idempotent —
-// INSERT OR IGNORE) and logs the spec boot line.
-func backfillBars(bh *store.BarHistoryStore, server *ntwire.TCPServer) {
+// INSERT OR IGNORE) and logs the spec boot line. Returns the flushed count so
+// the caller can retry while the AddOn's bars_historical replay is still
+// arriving (the cache is empty for the first seconds after a Go restart).
+func backfillBars(bh *store.BarHistoryStore, server *ntwire.TCPServer) int {
 	now := time.Now().UnixMilli()
 	total := 0
 	for _, pair := range server.BarCache().AllPairs() {
@@ -83,6 +95,7 @@ func backfillBars(bh *store.BarHistoryStore, server *ntwire.TCPServer) {
 	count, _ := bh.Count()
 	logger.Infof("📦 bars: persisting %d symbol×tf retention=%dd rows=%d (backfilled %d)",
 		pairs, store.BarRetentionDays(), count, total)
+	return total
 }
 
 // pruneLoop runs the retention prune at boot and then daily.
