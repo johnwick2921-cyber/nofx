@@ -542,8 +542,8 @@ func scoreLevelsPool(levels []DetectedLevel, price, dATR float64, freshness func
 	// The P0.1 side-balance pass may still swap a promoted seat if a side ends
 	// under-supplied (the hard rule wins).
 	scored = seatHTF(scored, maxLevels)
-	scored = seatBothSides(scored, maxLevels)
 	scored = SeatVolumeFamily(scored, maxLevels) // Pack B (2026-08-26) — E1 volume-family seat
+	scored = seatBothSides(scored, maxLevels)
 
 	if len(scored) > maxLevels {
 		scored = scored[:maxLevels]
@@ -595,8 +595,8 @@ func ScoreLevelsMinGrade(levels []DetectedLevel, price, dATR float64, freshness 
 		return filtered[i].Price < filtered[j].Price
 	})
 	filtered = seatHTF(filtered, eff)
-	filtered = seatBothSides(filtered, eff)
 	filtered = SeatVolumeFamily(filtered, eff) // Pack B — same guarantee after the min_grade cut
+	filtered = seatBothSides(filtered, eff)
 	if len(filtered) > eff {
 		filtered = filtered[:eff]
 	}
@@ -1011,10 +1011,12 @@ func seatBothSides(scored []ScoredLevel, maxLevels int) []ScoredLevel {
 				}
 			}
 			// Drop the weakest seated levels of the OPPOSITE side to make room.
+			// Pack B (2026-08-26) — a seated volume-family row is protected from
+			// this swap (the E1 seat guarantee wins over side rebalance).
 			for len(cands) > 0 && need > 0 {
 				dropIdx := -1
 				for i := len(seated) - 1; i >= 0; i-- {
-					if (seated[i].Distance < 0) != below {
+					if (seated[i].Distance < 0) != below && !isVolumeFamilyKind(seated[i].Kind) {
 						dropIdx = i
 						break
 					}
