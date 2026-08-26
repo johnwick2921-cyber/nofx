@@ -16,6 +16,14 @@ import {
   detectConflicts,
 } from './levelState'
 
+// T4 (2026-08-26) — live touch chip per level row. Telemetry only.
+const TOUCH_CHIPS: Record<string, { glyph: string; color: string }> = {
+  approaching: { glyph: '○', color: 'var(--vl-muted)' },
+  touching: { glyph: '◐', color: 'var(--vl-gold)' },
+  rejected: { glyph: '✕', color: '#34d399' },
+  accepted: { glyph: '▲', color: '#f87171' },
+}
+
 function ZoneRow({
   fact,
   index,
@@ -33,6 +41,7 @@ function ZoneRow({
 }) {
   const fresh = levelFresh(fact)
   const near = levelNear(fact)
+  const touchChip = fact.touch_state ? TOUCH_CHIPS[fact.touch_state] : undefined
   const consumed = fresh === 'consumed'
   const isOwner = fact.origin === 'OWNER'
   const priceWords = `${fmtPrice(fact.price)}` // announced value
@@ -109,6 +118,17 @@ function ZoneRow({
             }}
           >
             {fact.scenario_id}
+          </span>
+        )}
+        {/* T4 (2026-08-26) — live touch chip: ○ approaching · ◐ touching · ✕
+            rejected · ▲ accepted. Telemetry only — zero order authority. */}
+        {touchChip && (
+          <span
+            title={`touch: ${fact.touch_state}`}
+            className="text-[11px]"
+            style={{ color: touchChip.color }}
+          >
+            {touchChip.glyph}
           </span>
         )}
         <span
