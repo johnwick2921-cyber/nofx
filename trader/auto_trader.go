@@ -469,7 +469,13 @@ type planCitation struct {
 	scenarioID  string
 	matched     bool
 	band        string // B3 (F6): "" | "ok" | "off_band" | "struct"
-	valid       bool
+	// S3 (mega-research 2026-08-26) — the ACTIVE plan's identity at DECISION
+	// time. Stamped onto the position at open so a session handoff can never
+	// re-attribute an entry to the prior session's plan.
+	planID    string
+	tradeDate string
+	session   string
+	valid     bool
 }
 
 // NewAutoTrader creates an automatic trader

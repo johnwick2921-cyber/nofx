@@ -713,7 +713,7 @@ func marketRef(symbol string, now time.Time) (lastPrice, dATR float64) {
 			break
 		}
 	}
-	dATR = kernel.DailyATRProxy(bars, now)
+	dATR = kernel.DailyRangeProxy(bars, now)
 	return lastPrice, dATR
 }
 

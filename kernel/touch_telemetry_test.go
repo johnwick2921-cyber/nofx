@@ -144,6 +144,33 @@ func TestTouchPenetrationMath(t *testing.T) {
 	}
 }
 
+// A14 (mega-research 2026-08-26) — the volRatio lookback branch was dead code:
+// the baseline averaged ALL pre-bars. Now only the last `lookback` pre-bars
+// count. A distant volume burst must NOT damp a quiet recent baseline.
+func TestTouchVolRatioLookbackTruncates(t *testing.T) {
+	start := time.Date(2026, 8, 26, 14, 0, 0, 0, time.UTC)
+	var ring []market.Kline
+	add := func(n int, vol float64) {
+		for i := 0; i < n; i++ {
+			ms := start.Add(time.Duration(len(ring)) * time.Minute).UnixMilli()
+			ring = append(ring, market.Kline{OpenTime: ms, CloseTime: ms + 59_999, Open: 100, High: 101, Low: 99, Close: 100, Volume: vol})
+		}
+	}
+	add(5, 1000) // distant burst — must be dropped by the 20-bar truncation
+	add(20, 1)   // the actual recent baseline
+	add(1, 30)   // the episode bar
+	openAt := ring[len(ring)-1].OpenTime
+	got := volRatio(ring, openAt, 20)
+	// Old (dead-branch) behavior: baseline ≈ (5000+20)/25 ≈ 201 → ratio ≈ 0.15.
+	if got < 15 {
+		t.Fatalf("vol ratio = %.2f, want ≥15 (lookback truncation must exclude the distant burst)", got)
+	}
+	// Boundary: lookback=3 uses exactly the last 3 pre-bars.
+	if v := volRatio(ring, openAt, 3); v != 30.0 {
+		t.Fatalf("lookback=3 baseline must be the last 3 pre-bars (vol 1 each): got %.2f", v)
+	}
+}
+
 // TestTouchVolRatioAndApproach (T5) — volume ratio against the pre-episode
 // average and approach speed in ATR multiples.
 func TestTouchVolRatioAndApproach(t *testing.T) {

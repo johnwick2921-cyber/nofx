@@ -53,7 +53,7 @@ func AssembleScoredLevels(traderID string, bars []market.Kline, reg SessionRegis
 	if price <= 0 {
 		return nil, 0, 0
 	}
-	dATR = DailyATRProxy(bars, now)
+	dATR = DailyRangeProxy(bars, now)
 	if dATR <= 0 {
 		dATR = 0.008 * price // fallback until the map warms
 	}
@@ -78,6 +78,10 @@ func AssembleScoredLevels(traderID string, bars []market.Kline, reg SessionRegis
 	all = append(all, OrderBlocks(bars, atr, now)...)
 	all = append(all, VolumeLevels(bars, now)...) // Pack B (2026-08-26) — volume family
 	all = append(all, extraLevels...) // nPOC etc. from the durable store (P1.3)
+	// S4 (mega-research 2026-08-26) — nPOC is emitted twice (in-kernel 120-bin
+	// POC + store-fed SVP-row POC; prices can differ by >1pt). Dedupe on
+	// (kind, price within 1 tick) BEFORE scoring so one POC = one seat.
+	all = dedupeSameKind(all)
 
 	// W11b — persisted level-state (freshness A→B→C, consumed) now surfaces: the
 	// trader installs LevelStateProvider over store.LevelStateStore. Nil provider →
@@ -101,7 +105,7 @@ func AssembleScoredLevelsMinGrade(traderID string, bars []market.Kline, reg Sess
 	if price <= 0 {
 		return nil, 0, 0
 	}
-	dATR = DailyATRProxy(bars, now)
+	dATR = DailyRangeProxy(bars, now)
 	if dATR <= 0 {
 		dATR = 0.008 * price // fallback until the map warms
 	}
@@ -126,9 +130,33 @@ func AssembleScoredLevelsMinGrade(traderID string, bars []market.Kline, reg Sess
 	all = append(all, OrderBlocks(bars, atr, now)...)
 	all = append(all, VolumeLevels(bars, now)...) // Pack B (2026-08-26) — volume family
 	all = append(all, extraLevels...) // nPOC etc. from the durable store (P1.3)
+	// S4 — same dedupe as AssembleScoredLevels (one POC = one seat).
+	all = dedupeSameKind(all)
 
 	scored = ScoreLevelsMinGrade(all, price, dATR, levelFreshnessFn(traderID, symbol), maxLevels, proximityK, minGrade)
 	return scored, price, dATR
+}
+
+// dedupeSameKind collapses same-kind duplicates within 1 MNQ tick (register
+// S4, mega-research 2026-08-26: the dual nPOC emission paths could seat one
+// POC twice). First occurrence wins (deterministic — detector order, with
+// store-fed extras appended last).
+func dedupeSameKind(levels []DetectedLevel) []DetectedLevel {
+	const dedupeTick = 0.25 // MNQ tick (the same constant Tier1ProximityTicks cites)
+	out := make([]DetectedLevel, 0, len(levels))
+	for _, l := range levels {
+		dup := false
+		for _, o := range out {
+			if o.Kind == l.Kind && math.Abs(o.Price-l.Price) <= dedupeTick {
+				dup = true
+				break
+			}
+		}
+		if !dup {
+			out = append(out, l)
+		}
+	}
+	return out
 }
 
 // DetectHTFLevels (G2/G3, 2026-08-24) — per-TF swing/zone detection on the
@@ -202,11 +230,13 @@ func tagHTFLevel(l DetectedLevel, tf string) DetectedLevel {
 	return l
 }
 
-// DailyATRProxy estimates the daily ATR from intraday bars by averaging each
-// COMPLETED CME session-day's range (the developing day is skipped). 0 when no
-// completed day is present — the caller falls back. Improves as the cache /
-// durable store warms forward.
-func DailyATRProxy(bars []market.Kline, now time.Time) float64 {
+// DailyRangeProxy estimates the typical daily range from intraday bars by
+// averaging each COMPLETED CME session-day's range (the developing day is
+// skipped). 0 when no completed day is present — the caller falls back.
+// Improves as the cache / durable store warms forward.
+// S1 (mega-research 2026-08-26) — RENAMED from DailyATRProxy: this is a
+// session-day H−L range mean, NOT an ATR. The name now says so.
+func DailyRangeProxy(bars []market.Kline, now time.Time) float64 {
 	cb := closedBars(bars, now)
 	if len(cb) == 0 {
 		return 0

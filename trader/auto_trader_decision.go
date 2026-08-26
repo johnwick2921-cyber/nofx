@@ -473,8 +473,10 @@ func (at *AutoTrader) recordPositionChange(orderID, symbol, side, action string,
 			logger.Warnf("📗 Position OPENED [%s] %s %s qty=%.2f @ %.4f", at.id[:8], symbol, side, quantity, price)
 			// P5.5 — stamp the plan link captured in recordPlanCitation onto this
 			// open (day_plan-gated → dormant for crypto). Consumed once.
+			// S3 — full link: plan_id/date/session from the ACTIVE plan at
+			// decision time (never reconstructed later).
 			if at.dayPlanEnabled() && at.lastCitation.valid {
-				_ = at.store.Position().SetPlanLink(pos.ID, at.lastCitation.planVersion, at.lastCitation.scenarioID, at.lastCitation.matched, at.lastCitation.band)
+				_ = at.store.Position().SetPlanLinkFull(pos.ID, at.lastCitation.planVersion, at.lastCitation.scenarioID, at.lastCitation.matched, at.lastCitation.band, at.lastCitation.planID, at.lastCitation.tradeDate, at.lastCitation.session)
 				at.lastCitation.valid = false
 			}
 			// W6 — P0 fill alert.

@@ -79,20 +79,25 @@ func vwapAndStdev(bars []market.Kline) (vwap, sd float64) {
 	return vwap, sd
 }
 
-// ── extended VWAP (overnight anchor) ───────────────────────────────────────
+// ── extended VWAP (since-cash-close anchor) ────────────────────────────────
 
-// EVWAPLevels (B1) — extended VWAP anchored at the PRIOR session-day's 16:00 CT
-// close (the CME settle boundary), so it spans the close hour + the whole
-// overnight + today's session. Overnight-positioned funds mark eVWAP; the
-// distance between session VWAP and eVWAP measures overnight inventory.
+// EVWAPLevels (B1) — extended VWAP anchored at the most recent 15:00 CT CASH
+// CLOSE (RTH close), spanning the close hour + the whole overnight + today's
+// session. Overnight-positioned funds mark eVWAP; the distance between session
+// VWAP and eVWAP measures overnight inventory.
+//
+// A2 (mega-research 2026-08-26) — the old 16:00 CT anchor was a DEGENERATE
+// DUPLICATE of session VWAP: no bars exist 16:00–17:00 CT (maintenance halt),
+// so both windows were byte-identical and eVWAP burned a seat for nothing.
+// 15:00 CT makes it a real, distinct object ("since-cash-close" VWAP).
 func EVWAPLevels(bars []market.Kline, now time.Time) []DetectedLevel {
 	cb := closedBars(bars, now)
 	if len(cb) == 0 {
 		return nil
 	}
 	ct := now.In(CTLocation())
-	anchorCT := time.Date(ct.Year(), ct.Month(), ct.Day(), 16, 0, 0, 0, CTLocation())
-	if ct.Hour() < 16 {
+	anchorCT := time.Date(ct.Year(), ct.Month(), ct.Day(), 15, 0, 0, 0, CTLocation())
+	if ct.Hour() < 15 {
 		anchorCT = anchorCT.AddDate(0, 0, -1)
 	}
 	anchorMs := anchorCT.UnixMilli()
@@ -233,13 +238,18 @@ func profileLevels(bars []market.Kline, dayKey, prefix string) []DetectedLevel {
 
 // ── naked POC (10-session retire-on-touch) ────────────────────────────────
 
+// nPOCRetireTick is the retire-on-touch tolerance (register A4: the spec's
+// ±1-tick rule). A bar retires a naked POC only when it brackets BEYOND
+// ±1 tick — a 0.01-pt graze no longer consumes the magnet. MNQ tick = 0.25.
+const nPOCRetireTick = 0.25
+
 // NakedPOCLevels (B1) — prior session-days' POC that price has NOT traded
 // back through since birth = naked POC (unfinished business; price revisits).
-// RETIRE-ON-TOUCH: any later session bar whose range covers the POC retires it
-// (it has been revisited → no longer naked). Older than 10 sessions → retired
-// regardless (spec). The live cache covers ~2 sessions; the 10-session window
-// becomes fully exercisable as the 90-day bars table warms (forward
-// validation, B4).
+// RETIRE-ON-TOUCH: any later session bar whose range covers the POC ±1 tick
+// retires it (it has been revisited → no longer naked). Older than 10 sessions
+// → retired regardless (spec). The live cache covers ~2 sessions; the
+// 10-session window becomes fully exercisable as the 90-day bars table warms
+// forward (validation, B4).
 func NakedPOCLevels(bars []market.Kline, now time.Time) []DetectedLevel {
 	cb := closedBars(bars, now)
 	if len(cb) == 0 {
@@ -281,7 +291,9 @@ func NakedPOCLevels(bars []market.Kline, now time.Time) []DetectedLevel {
 			if b.OpenTime <= d.birth {
 				continue
 			}
-			if b.Low <= d.poc && b.High >= d.poc {
+			// A4/S4 — ±1-tick tolerance: a graze inside the tick band does NOT
+			// retire the POC; the bar must bracket beyond ±1 tick.
+			if b.Low <= d.poc-nPOCRetireTick && b.High >= d.poc+nPOCRetireTick {
 				touched = true
 				break
 			}
@@ -289,7 +301,7 @@ func NakedPOCLevels(bars []market.Kline, now time.Time) []DetectedLevel {
 		if touched {
 			continue // retire-on-touch
 		}
-		out = append(out, lineLevel(KindNPOC, d.poc, "nPOC·"+d.day[5:], d.day, false))
+		out = append(out, lineLevel(KindNPOC, d.poc, "nPOC·"+d.day, d.day, false))
 	}
 	return out
 }

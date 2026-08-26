@@ -50,7 +50,7 @@ func TestP0BAsiaReadFiresAt1655WhileMarketClosed(t *testing.T) {
 	prev := market.FuturesBarsProvider
 	t.Cleanup(func() { market.FuturesBarsProvider = prev })
 	market.FuturesBarsProvider = func(symbol, tf string, count int) []market.Kline {
-		// Stored-data path: supply a realistic prior session so DailyATRProxy
+		// Stored-data path: supply a realistic prior session so DailyRangeProxy
 		// resolves (~100 pts) instead of the thin one-bar fallback that the
 		// P0.2 target-reachability rule would trip over.
 		now := time.Now().UnixMilli()
