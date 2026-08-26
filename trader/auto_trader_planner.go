@@ -938,6 +938,12 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		for _, m := range kernel.RoleMismatches(d) {
 			at.logWarnf("🧭 role mismatch: %s", m)
 		}
+		// A2 (planner-contract wave 2026-08-26) — setup-chain validator:
+		// WARN only when an fvg_entry lacks a sweep_reclaim precursor at a
+		// non-A/B origin (the bare-gap null result). Never a fail.
+		for _, m := range kernel.ChainWarnings(*d) {
+			at.logWarnf("🔗 chain warning: %s", m)
+		}
 		doc = d
 		break
 	}
@@ -1392,6 +1398,8 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 		// ADDENDUM (2) — bias-context facts line (VWAP/PDC/value area/magnet/
 		// liquidity). Facts only; the AI judges direction.
 		BiasCtx: kernel.ComputeBiasContext(bars, scored, now).Line(),
+		// A1 — the STRUCTURED bias context for the BIAS-TREE section.
+		BiasCtxFacts: kernel.ComputeBiasContext(bars, scored, now),
 		// H4/H5 — the prompt asks for EXACTLY what validation accepts: the
 		// resolved max_levels / scenario_cap (never a hardcoded 8/3 the owner
 		// cannot raise).
