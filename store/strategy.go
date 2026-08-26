@@ -1219,14 +1219,17 @@ func DefaultDayPlanConfig() *DayPlanConfig {
 		WakeOnHTFOB:              false,
 		WakeOnSeatedInvalidation: wakeBoolPtr(true),
 		WakeOnIFVG:               wakeBoolPtr(true),
-		WakeMinIntervalMin:       10,
+		WakeMinIntervalMin:       30,
 	}
 }
 
 func wakeBoolPtr(v bool) *bool { return &v }
 
-// DefaultWakeMinIntervalMin is the shipped wake spacing (minutes).
-const DefaultWakeMinIntervalMin = 10
+// DefaultWakeMinIntervalMin is the shipped wake spacing (minutes). W6-D
+// (2026-08-25): raised 10 → 30 — wakes are unlimited (no budget), so the
+// interval is the ONLY frequency guard; 30 min keeps unlimited wakes from
+// churning the plan book.
+const DefaultWakeMinIntervalMin = 30
 
 // WakeOn15mZoneEnabled / WakeOnHTFZoneEnabled / WakeOnHTFOBEnabled /
 // WakeOnSeatedInvalidationEnabled / WakeOnIFVGEnabled / WakeMinIntervalMinutes

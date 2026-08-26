@@ -852,12 +852,13 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 			lastErr = perr
 			continue
 		}
-		// G5 (regime wave 2026-08-21) — at plan write, scenarios whose trigger
-		// level is CONSUMED are demoted (quality capped C + badge). Advisory —
-		// the info is what was missing, never a gate.
-		if n := at.demoteConsumedScenarios(session, d); n > 0 {
-			at.logWarnf("🗓️ G5: %d scenario(s) demoted to C — trigger level consumed at %s write.", n, session)
-		}
+		// W6-D (2026-08-25) — the G5 write-time demotion is REMOVED: stamping
+		// scenarios consumed + C at plan birth contradicted P1c (a consumed
+		// level's RETOUCH is the tradeable role-flip event) and poisoned 88%
+		// of scenarios at write (42/48 on 2026-08-25). The LIVE per-cycle
+		// evaluator still tracks consumption — scenarios demote only when a
+		// level is actually re-touched after the plan is born, never at
+		// birth. demoteConsumedScenarios stays for reference/tests only.
 		// P0.4-C (2026-08-24) — the model may write near-duplicate levels (2.13
 		// pts apart killed ASIA v2 with the duplicate-seat rule). Collapse them
 		// with the same cluster tolerance the scorer uses, instead of burning

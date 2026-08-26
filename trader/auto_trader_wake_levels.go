@@ -20,10 +20,10 @@ import (
 // seat. This is deterministic change detection (research: CUSUM/change-point
 // family), not statistical detection: the detector output is diffed against the
 // plan row's birth time (row.CreatedAt), a wake fires for the newest event, and
-// wake_min_interval_min is the false-alarm/detection-delay knob. Every wake
-// shares the per-session re-plan budget (MayReplanFrom) and preserves the
-// death-first ordering of maybeRunSessionReadsAt (deaths are handled before any
-// wake runs).
+// wake_min_interval_min is the false-alarm/detection-delay knob. W6-D: wakes are
+// unlimited and spend NO re-plan budget — only deaths consume replan_cap, so a
+// wake can never dark a session. Death-first ordering in maybeRunSessionReadsAt
+// is preserved (deaths are handled before any wake runs).
 
 // levelWakeCandidate is one wakeable event, already filtered by the knobs.
 type levelWakeCandidate struct {
@@ -228,9 +228,10 @@ func seatedLevelSide(label string) string {
 
 // maybeWakePlannerOnLevelEvents is the W6 wake entry: fires AT MOST one planner
 // wake per cycle on the newest level event, throttled by wake_min_interval_min
-// (shared with the MSS wake via lastPlannerWakeAt), deduped per
-// (plan,version,kind,label,tier,birth), and budgeted by the same per-session
-// re-plan cap as deaths. Death-first ordering is preserved by the caller.
+// (shared with the MSS wake via lastPlannerWakeAt) and deduped per
+// (plan,version,kind,label,tier,birth). W6-D: wakes are UNLIMITED and spend NO
+// budget — the per-session re-plan cap belongs to deaths alone. Death-first
+// ordering is preserved by the caller.
 func (at *AutoTrader) maybeWakePlannerOnLevelEvents(session, tradeDate string, row *store.PlanDB) {
 	if market.FuturesBarsProvider == nil || at.store == nil || row == nil {
 		return
@@ -261,15 +262,11 @@ func (at *AutoTrader) maybeWakePlannerOnLevelEvents(session, tradeDate string, r
 			ev.desc, session, tradeDate, now.Sub(at.lastPlannerWakeAt).Round(time.Second), cfg.WakeMinIntervalMinutes())
 		return
 	}
-	// C5 budget parity: a level wake consumes the same per-session re-plan
-	// budget as a death or MSS; once exhausted the session sits out.
-	cap := at.replanCapFor(session)
-	baseline := store.GetResetBaseline(at.store, at.id, tradeDate, session)
-	if !store.MayReplanFrom(row.Version, baseline, cap) {
-		at.logWarnf("🗓️ level wake %s on %s %s — SKIPPED: re-plan budget exhausted (%d/%d).",
-			ev.desc, session, tradeDate, store.ReplansUsedFrom(row.Version, baseline), cap)
-		return
-	}
+	// W6-D (2026-08-25) — wakes are UNLIMITED and count against NOTHING: a wake
+	// re-plan must never consume the death budget, and can never be the cause of
+	// a replans_exhausted NO-TRADE (live bug 19:35 CT: 4 wake re-plans ate the
+	// whole budget and a later death darked the session). Only the dedupe key +
+	// the min-interval throttle limit wake frequency; deaths keep their own cap.
 	at.lastLevelWakeKey = ev.key
 	at.lastPlannerWakeAt = now
 	at.logWarnf("🗓️ level wake %s on %s %s — waking the planner (W6, 5th wake-up).", ev.desc, session, tradeDate)

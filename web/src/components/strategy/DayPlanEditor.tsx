@@ -47,7 +47,7 @@ const DEFAULT_DAY_PLAN: DayPlanConfig = {
   wake_on_htf_ob: false,
   wake_on_seated_invalidation: true,
   wake_on_ifvg: true,
-  wake_min_interval_min: 10,
+  wake_min_interval_min: 30,
 }
 
 // NY's window end — the EOD flat must not sit AFTER it, or the session gate
@@ -581,7 +581,7 @@ export function DayPlanEditor({ config, onChange, disabled, language }: Props) {
             </FieldRow>
             <FieldRow label={tp('wakeMinInterval', language)}>
               <NumberField
-                value={cfg.wake_min_interval_min ?? 10}
+                value={cfg.wake_min_interval_min ?? 30}
                 min={5}
                 max={120}
                 onChange={(v) => update('wake_min_interval_min', v)}
