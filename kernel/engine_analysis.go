@@ -354,6 +354,7 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 	// same 1m bars and thread ONE block into the system prompt. Gated identically
 	// to SVP → disabled (the default) / empty keeps the golden byte-identical.
 	engine.SetKeyLevelsContext("")
+	engine.SetBiasContext("")
 	planOn := false
 	maxLevels := DefaultMaxLevels
 	proximityK := ActivationWindowK
@@ -399,6 +400,13 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 				}
 			}
 			klBlock = BuildKeyLevelsBlockOpts(ctx.TraderID, snapshotBars, ResolvedSessionRegistryFor(ctx.TraderID), activeSymbol, maxLevels, snapshotNow, proximityK, seat1h, minGrade, extra...)
+			// ADDENDUM (2) — bias-context facts line, computed from the same
+			// scored pool + bars (never a second data source).
+			if klBlock != "" {
+				if sc, _, _ := AssembleScoredLevelsMinGrade(ctx.TraderID, snapshotBars, ResolvedSessionRegistryFor(ctx.TraderID), activeSymbol, maxLevels, snapshotNow, proximityK, minGrade, extra...); len(sc) > 0 {
+					engine.SetBiasContext(ComputeBiasContext(snapshotBars, sc, snapshotNow).Line())
+				}
+			}
 		}
 		engine.SetKeyLevelsContext(klBlock)
 		if klBlock == "" {
