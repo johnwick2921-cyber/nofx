@@ -32,6 +32,7 @@ func TestBuildPlannerPrompt(t *testing.T) {
 		"DAY-PLAN READER", "trade_date 2026-08-14 · session NY",
 		"REGIME: trend D=up", "Ranked levels", "PDH", "Calendar", "FOMC", "HARD no-trade blackout",
 		"Owner note", "respect PDH", `"reasoning"`, "sweep_reclaim", "death_condition",
+		`"quality": "A+|A|B|C"`, "C = machine-demoted",
 	} {
 		if !strings.Contains(p, want) {
 			t.Fatalf("planner prompt missing %q\n---\n%s", want, p)
