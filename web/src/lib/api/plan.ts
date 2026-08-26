@@ -539,6 +539,36 @@ export const planApi = {
     return res.success && res.data ? res.data : null
   },
 
+  // C8 (README §9) — structured risk errors (P0-cleanup table). The dashboard
+  // 402 banner watches this for the ai_payment_402 class.
+  async getRiskErrors(traderId?: string): Promise<{
+    rows?: Array<{
+      trader: string
+      type: string
+      cause: string
+      cost: string
+      count: number
+      decisions_lost: number
+      trades_lost: number
+    }>
+    summary?: string
+  } | null> {
+    const qs = traderId ? `?trader_id=${encodeURIComponent(traderId)}` : ''
+    const res = await httpClient.request<{
+      rows?: Array<{
+        trader: string
+        type: string
+        cause: string
+        cost: string
+        count: number
+        decisions_lost: number
+        trades_lost: number
+      }>
+      summary?: string
+    }>(`${API_BASE}/risk/errors${qs}`, { silent: true })
+    return res.success && res.data ? res.data : null
+  },
+
   async applyAsk(
     traderId: string,
     qaId: number,
