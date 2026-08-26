@@ -104,6 +104,21 @@ func (c *BarCache) DroppedPlaceholders() int64 {
 	return c.dropped
 }
 
+// AllPairs enumerates every (symbol, timeframe) pair currently held — the
+// boot-backfill entry point for bar persistence.
+func (c *BarCache) AllPairs() [][2]string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	out := make([][2]string, 0, len(c.bars))
+	for k := range c.bars {
+		parts := strings.SplitN(k, "|", 2)
+		if len(parts) == 2 {
+			out = append(out, [2]string{parts[0], parts[1]})
+		}
+	}
+	return out
+}
+
 // ── CANONICAL TIME CONTRACT (2026-08-19, chart-timestamp dispatch) ──────────
 //
 //	A Bar's T in THIS CACHE is the bar's OPEN time, epoch ms UTC.
