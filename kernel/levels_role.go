@@ -110,8 +110,11 @@ func RoleFor(l DetectedLevel, fresh string) LevelRole {
 	case "done", "consumed":
 		return RoleTargetOnly // consumed → role-flipped, target only
 	}
-	if l.HTF && !isTier1Kind(l.Kind) {
-		return RoleTargetOnly // far-HTF: context reference, never a trigger
+	// far-HTF (spec: target_only) applies to HTF CONTEXT marks — continuation
+	// zones only. Volume-family HTF rows (nPOC·wk is HTF per naked_poc.go) keep
+	// their base role: the spec lists nPOC under magnet_meanrevert explicitly.
+	if l.HTF && isZoneKind(l.Kind) && l.ZonePattern != "reversal" {
+		return RoleTargetOnly
 	}
 	base, ok := defaultRoleMap[l.Kind]
 	if roleOverrides != nil {
