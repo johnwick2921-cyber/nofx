@@ -117,3 +117,10 @@ Cutover (`fb066e6b`) and fix (`85f6badb`):
 Level-system deep verification (queued dispatch): Part 1 detector recomputation
 from stored bars and Part 4 reaction reality now have a timestamped OHLCV substrate
 (1m MNQ back to 2026-05-28, 90d rolling) plus a replay-join ATR helper.
+
+**REFUSAL AUTOPSY (owner scope add 2026-08-26, runs inside the Sep 3 deep
+verification):** for every gate refusal since Aug 26 (`sl_too_tight`, HTF veto,
+`min_scenario_quality`, stale) replay what the market did next — would the
+refused entry have hit its stated TP before its SL? Output table:
+`refusals · would-have-won · would-have-lost · Σ hypothetical`, with a
+per-gate verdict: **SAVING MONEY** or **COSTING MONEY**.
