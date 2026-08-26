@@ -31,7 +31,7 @@ func TestBuildKeyLevelsBlock(t *testing.T) {
 	}
 }
 
-func TestDailyATRProxy(t *testing.T) {
+func TestDailyRangeProxy(t *testing.T) {
 	loc := chicago()
 	now := time.Date(2026, 8, 14, 10, 0, 0, 0, loc)
 	// Two completed session-days with 100-pt ranges → proxy ≈ 100.
@@ -40,7 +40,7 @@ func TestDailyATRProxy(t *testing.T) {
 		barAt(loc, 2026, 8, 12, 12, 0, 15100, 15150, 15050, 15120), // day B range 100
 		barAt(loc, 2026, 8, 14, 9, 0, 15590, 15650, 15550, 15600),  // developing (skipped)
 	}
-	if d := DailyATRProxy(bars, now); d < 90 || d > 110 {
+	if d := DailyRangeProxy(bars, now); d < 90 || d > 110 {
 		t.Fatalf("daily ATR proxy = %v want ≈100", d)
 	}
 }

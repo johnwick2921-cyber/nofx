@@ -127,10 +127,13 @@ func (at *AutoTrader) SessionRunnable(s *kernel.SessionDef) (bool, string) {
 	return at.sessionRunnable(s)
 }
 
-// proximityFilterATR is the level activation half-width in daily-ATR multiples
-// (day-trade lock). Valid 0.5–3.0; anything else → the default 1.5.
+// proximityFilterATR is the level activation half-width in daily-range-proxy
+// multiples (day-trade lock). Valid 0.1–3.0; anything else → the default 1.5.
+// S1 (mega-research 2026-08-26) — the 0.5 lower clamp made sane values
+// unreachable when the proxy runs ~350pt (0.5×350 = ±175pt); 0.1 allows the
+// owner's 0.3 retune (±~105pt).
 func (at *AutoTrader) proximityFilterATR() float64 {
-	if dp := at.dayPlanCfg(); dp != nil && dp.ProximityFilterATR >= 0.5 && dp.ProximityFilterATR <= 3.0 {
+	if dp := at.dayPlanCfg(); dp != nil && dp.ProximityFilterATR >= 0.1 && dp.ProximityFilterATR <= 3.0 {
 		return dp.ProximityFilterATR
 	}
 	return kernel.ActivationWindowK // 1.5
