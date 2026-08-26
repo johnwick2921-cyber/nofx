@@ -1669,11 +1669,17 @@ func (at *AutoTrader) recordPlanCitation(d *kernel.Decision) {
 		at.logInfof("📋 advisory: %s cited %s (direction mismatch; plan v%d).", d.Action, res.Cited, ap.Version)
 	}
 	// P5.5 — capture the citation so the next position-open stamps its plan link.
+	// S3 — also capture the active plan's IDENTITY (plan id / trade date /
+	// session) at decision time; the position row then carries an unambiguous
+	// join key even across session handoffs (register S3).
 	at.lastCitation = planCitation{
 		planVersion: ap.Version,
 		scenarioID:  res.Cited, // "" when off-plan
 		matched:     res.Matched,
 		band:        band,
+		planID:      ap.PlanID,
+		tradeDate:   kernel.PlanTradeDateFor(ap),
+		session:     ap.Session,
 		valid:       true,
 	}
 }

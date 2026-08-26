@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"nofx/market"
 )
@@ -27,6 +28,25 @@ type ActivePlan struct {
 	// P0-cleanup (2026-08-19) — full attribution for decision records.
 	PlanID         string
 	OverlayVersion int
+}
+
+// PlanTradeDateFor derives the active plan's trade date: the date prefix of the
+// plan id when it parses ("2026-08-15:NY"), else the CME session-day of BirthMs.
+// S3 (mega-research 2026-08-26) — the entry-time attribution stamp needs this
+// date without ever reconstructing from the position's own entry time.
+func PlanTradeDateFor(ap *ActivePlan) string {
+	if ap == nil {
+		return ""
+	}
+	if i := strings.Index(ap.PlanID, ":"); i > 0 {
+		if _, err := time.Parse("2006-01-02", ap.PlanID[:i]); err == nil {
+			return ap.PlanID[:i]
+		}
+	}
+	if ap.BirthMs > 0 {
+		return CMESessionDayKey(time.UnixMilli(ap.BirthMs))
+	}
+	return ""
 }
 
 // TraderPlanProviders is the per-trader seam between the trader layer and the
