@@ -161,8 +161,13 @@ func TestRoleAssignment(t *testing.T) {
 	if RoleFor(DetectedLevel{Kind: KindVWAP}, "done") != RoleTargetOnly {
 		t.Fatal("consumed VWAP must role-flip to target_only")
 	}
+	// far-HTF: a 4h CONTINUATION zone is context → target_only; a weekly nPOC
+	// (HTF) keeps its magnet role (spec: nPOC = magnet_meanrevert).
 	if RoleFor(DetectedLevel{Kind: KindFVG, HTF: true, TF: "4h"}, "") != RoleTargetOnly {
-		t.Fatal("far-HTF zone must be target_only")
+		t.Fatal("far-HTF continuation zone must be target_only")
+	}
+	if RoleFor(DetectedLevel{Kind: KindNPOC, HTF: true}, "") != RoleMagnetMeanRevert {
+		t.Fatal("HTF nPOC must keep magnet_meanrevert (spec grammar)")
 	}
 	// Env override wins.
 	ApplyRoleMapOverrides("VWAP=liquidity_break")
