@@ -1182,6 +1182,17 @@ func (c *DayPlanConfig) MaxTradesFor(session string) (int, bool) {
 	return 0, false
 }
 
+// MinGradeFor (grading audit §4.7, 2026-08-25) resolves the per-session
+// min_grade floor: per-session override → "" (no filter). The ONE resolution
+// seam so the kernel executor path (KEY LEVELS + PLAN STATUS) and the trader
+// planner path can never disagree on the floor.
+func (c *DayPlanConfig) MinGradeFor(session string) string {
+	if ov := c.SessionOverride(session); ov != nil && ov.MinGrade != nil {
+		return strings.ToUpper(strings.TrimSpace(*ov.MinGrade))
+	}
+	return ""
+}
+
 // PlanModeFor resolves the plan-restriction mode for a session: per-session
 // override → strategy-level → "advisory".
 func (c *DayPlanConfig) PlanModeFor(session string) string {
