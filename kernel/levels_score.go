@@ -794,22 +794,11 @@ func SeatVolumeFamily(scored []ScoredLevel, maxLevels int) []ScoredLevel {
 	tail = append(tail, head[dropIdx])
 	head = append(head[:dropIdx], head[dropIdx+1:]...)
 	head = append(head, cand)
-	out := append(head, tail...)
-	sort.SliceStable(out, func(i, j int) bool {
-		pi, pj := isTodayPriority(out[i].Kind), isTodayPriority(out[j].Kind)
-		if pi != pj {
-			return pi
-		}
-		if out[i].Score != out[j].Score {
-			return out[i].Score > out[j].Score
-		}
-		di, dj := math.Abs(out[i].Distance), math.Abs(out[j].Distance)
-		if di != dj {
-			return di < dj
-		}
-		return out[i].Price < out[j].Price
-	})
-	return out
+	// NOTE: no re-sort here — a general score re-sort would deterministically
+	// re-seat the demoted row (its score outranks the volume candidate; that's
+	// why it held the seat) and silently undo the E1 guarantee. The downstream
+	// nearest-first sort handles display order.
+	return append(head, tail...)
 }
 
 // is1HSDZone reports whether a scored level is a 1h-tier supply/demand zone —
