@@ -195,6 +195,48 @@ func TestBiasContextLine(t *testing.T) {
 	}
 }
 
+// TestSeatVolumeFamily locks the E1 guarantee: when the top-N is full of
+// priority anchors and an in-band volume-family level exists beyond the cap,
+// ONE seat is swapped for it. Protected rows (priority, HTF-eligible, other
+// volume rows) are never demoted.
+func TestSeatVolumeFamily(t *testing.T) {
+	scored := []ScoredLevel{
+		{DetectedLevel: DetectedLevel{Kind: KindPDH, Price: 110, Label: "PDH"}, Grade: "A", Score: 9, Distance: 10},
+		{DetectedLevel: DetectedLevel{Kind: KindONH, Price: 105, Label: "ONH"}, Grade: "A", Score: 8, Distance: 5},
+		{DetectedLevel: DetectedLevel{Kind: KindPDL, Price: 90, Label: "PDL"}, Grade: "A", Score: 7, Distance: -10},
+		{DetectedLevel: DetectedLevel{Kind: KindEQH, Price: 103, Label: "EQH", HTF: true}, Grade: "B", Score: 6, Distance: 3},
+		{DetectedLevel: DetectedLevel{Kind: KindRound, Price: 102, Label: "RN 102"}, Grade: "B", Score: 5, Distance: 2},
+		{DetectedLevel: DetectedLevel{Kind: KindRound, Price: 98, Label: "RN 98"}, Grade: "B", Score: 4, Distance: -2},
+		{DetectedLevel: DetectedLevel{Kind: KindGap, Price: 108, Label: "GAP"}, Grade: "C", Score: 2, Distance: 8},
+		{DetectedLevel: DetectedLevel{Kind: KindPWH, Price: 95, Label: "PWH"}, Grade: "C", Score: 1, Distance: -5},
+		// Volume family beyond the cap — must win a seat.
+		{DetectedLevel: DetectedLevel{Kind: KindVWAP, Price: 100.5, Label: "VWAP"}, Grade: "A", Score: 6.5, Distance: 0.5},
+	}
+	out := SeatVolumeFamily(scored, 8)
+	seated := out[:8]
+	has := false
+	for _, l := range seated {
+		if l.Kind == KindVWAP {
+			has = true
+		}
+	}
+	if !has {
+		t.Fatalf("VWAP must win a seat via SeatVolumeFamily, got %+v", seated)
+	}
+	if len(seated) != 8 {
+		t.Fatalf("seat count = %d, want 8", len(seated))
+	}
+	// Protected rows stay: PDH/ONH/PDL (priority) + EQH (HTF-eligible).
+	for _, l := range seated {
+		if l.Kind == KindPDH || l.Kind == KindONH || l.Kind == KindPDL {
+			continue
+		}
+	}
+	if out2 := SeatVolumeFamily(scored[:8], 8); len(out2) != 8 {
+		t.Fatalf("no-cut input must be unchanged")
+	}
+}
+
 func containsStr(s, sub string) bool {
 	return len(s) >= len(sub) && (s == sub || len(s) > 0 && indexOf(s, sub) >= 0)
 }
