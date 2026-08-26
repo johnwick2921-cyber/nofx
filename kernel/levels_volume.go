@@ -79,20 +79,25 @@ func vwapAndStdev(bars []market.Kline) (vwap, sd float64) {
 	return vwap, sd
 }
 
-// ── extended VWAP (overnight anchor) ───────────────────────────────────────
+// ── extended VWAP (since-cash-close anchor) ────────────────────────────────
 
-// EVWAPLevels (B1) — extended VWAP anchored at the PRIOR session-day's 16:00 CT
-// close (the CME settle boundary), so it spans the close hour + the whole
-// overnight + today's session. Overnight-positioned funds mark eVWAP; the
-// distance between session VWAP and eVWAP measures overnight inventory.
+// EVWAPLevels (B1) — extended VWAP anchored at the most recent 15:00 CT CASH
+// CLOSE (RTH close), spanning the close hour + the whole overnight + today's
+// session. Overnight-positioned funds mark eVWAP; the distance between session
+// VWAP and eVWAP measures overnight inventory.
+//
+// A2 (mega-research 2026-08-26) — the old 16:00 CT anchor was a DEGENERATE
+// DUPLICATE of session VWAP: no bars exist 16:00–17:00 CT (maintenance halt),
+// so both windows were byte-identical and eVWAP burned a seat for nothing.
+// 15:00 CT makes it a real, distinct object ("since-cash-close" VWAP).
 func EVWAPLevels(bars []market.Kline, now time.Time) []DetectedLevel {
 	cb := closedBars(bars, now)
 	if len(cb) == 0 {
 		return nil
 	}
 	ct := now.In(CTLocation())
-	anchorCT := time.Date(ct.Year(), ct.Month(), ct.Day(), 16, 0, 0, 0, CTLocation())
-	if ct.Hour() < 16 {
+	anchorCT := time.Date(ct.Year(), ct.Month(), ct.Day(), 15, 0, 0, 0, CTLocation())
+	if ct.Hour() < 15 {
 		anchorCT = anchorCT.AddDate(0, 0, -1)
 	}
 	anchorMs := anchorCT.UnixMilli()
