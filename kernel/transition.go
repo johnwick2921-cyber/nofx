@@ -55,6 +55,38 @@ func ExecutorPlanDeadVerdict(action, reason string) (bool, string) {
 	return false, ""
 }
 
+// MinScenarioQualityVerdict (R4, 2026-08-25) — the min_scenario_quality knob's
+// gate verdict. FAIL-OPEN: non-opens and citations that do not resolve to a
+// known scenario are never blocked by this knob (advisory surfaces own those
+// cases); only a cited scenario grading BELOW the floor blocks. Floor "C" =
+// no restriction (nothing grades below C, and qualityRank(C)=1 can't gate).
+func MinScenarioQualityVerdict(action, cited, floor string, qualities map[string]string) (bool, string) {
+	if action != "open_long" && action != "open_short" {
+		return false, ""
+	}
+	if qualities == nil {
+		return false, ""
+	}
+	f := qualityRank(floor)
+	if f < 2 { // only A or B floors can block anything
+		return false, ""
+	}
+	c := strings.ToUpper(strings.TrimSpace(cited))
+	if c == "" || c == "OFF-PLAN" {
+		return false, ""
+	}
+	q, ok := qualities[c]
+	if !ok || strings.TrimSpace(q) == "" {
+		return false, ""
+	}
+	if qualityRank(q) < f {
+		return true, fmt.Sprintf("cited scenario %s quality %q is below min_scenario_quality %s", c, q, strings.ToUpper(strings.TrimSpace(floor)))
+	}
+	return false, ""
+}
+
+
+
 // TransitionStanddownVerdict is the pure gate: (blocked, refusal message).// action is open_long/open_short; dir is the plan's bias direction; active +
 // detail come from the trader's TransitionState. Empty refusal = pass.
 func TransitionStanddownVerdict(action string, active bool, dir, detail string) (bool, string) {

@@ -960,6 +960,10 @@ type DayPlanConfig struct {
 	// Seat1HZone (1h wave, 2026-08-25) — reserve one of the two HTF seats for
 	// an in-band 1h S/D zone when one exists (pointer-bool, DEFAULT ON).
 	Seat1HZone *bool `json:"seat_1h_zone,omitempty"`
+	// MinScenarioQuality (R4, 2026-08-25) — the per-strategy scenario quality
+	// floor (A | B | C). Default C = no restriction (today's behavior,
+	// byte-identical). Per-session override below (like min_grade).
+	MinScenarioQuality string `json:"min_scenario_quality,omitempty"`
 }
 
 // DayPlanSessionOverride is a minimal per-session override. Every field is a
@@ -973,6 +977,9 @@ type DayPlanSessionOverride struct {
 	AcceptanceRule *string `json:"acceptance_rule,omitempty"`
 	MinGrade       *string `json:"min_grade,omitempty"` // A | B | C
 	MaxTrades      *int    `json:"max_trades,omitempty"`
+	// MinScenarioQuality (R4, 2026-08-25) — per-session scenario quality floor
+	// (A | B | C); nil inherits the strategy-level value.
+	MinScenarioQuality *string `json:"min_scenario_quality,omitempty"`
 	// LastEntryOffsetMin: minutes BEFORE this session's end after which NEW
 	// entries are refused (P2 session-scope redesign, 2026-08-18). Replaces the
 	// old day-scoped 13:00 CT cutoff, which blocked every entry from 13:00 CT to
@@ -1236,6 +1243,8 @@ func DefaultDayPlanConfig() *DayPlanConfig {
 		WakeMinIntervalMin:       30,
 		// 1h wave (2026-08-25) — seat guarantee DEFAULT ON.
 		Seat1HZone: wakeBoolPtr(true),
+		// R4 (2026-08-25) — scenario quality floor DEFAULT C (no restriction).
+		MinScenarioQuality: "C",
 	}
 }
 
@@ -1298,6 +1307,20 @@ func (c *DayPlanConfig) Seat1HZoneEnabled() bool {
 		return true
 	}
 	return *c.Seat1HZone
+}
+
+// MinScenarioQualityFor (R4, 2026-08-25) resolves the scenario quality floor:
+// per-session override → strategy-level → "C" (no restriction). The ONE
+// resolution seam so the kernel gate and the Studio card can never disagree.
+func (c *DayPlanConfig) MinScenarioQualityFor(session string) string {
+	floor := "C"
+	if c != nil && strings.TrimSpace(c.MinScenarioQuality) != "" {
+		floor = strings.ToUpper(strings.TrimSpace(c.MinScenarioQuality))
+	}
+	if ov := c.SessionOverride(session); ov != nil && ov.MinScenarioQuality != nil && strings.TrimSpace(*ov.MinScenarioQuality) != "" {
+		floor = strings.ToUpper(strings.TrimSpace(*ov.MinScenarioQuality))
+	}
+	return floor
 }
 
 // GridStrategyConfig grid trading specific configuration
