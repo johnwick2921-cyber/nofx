@@ -204,6 +204,15 @@ func BuildPlannerPrompt(in PlannerInput) string {
 		b.WriteString("\n")
 	}
 
+	// A1 (2026-08-26) — anchor-role truth: ONH/ONL are liquidity references,
+	// not fade walls. Week evidence: ONH entries 14 · 21.4% win · −131 — the
+	// fade framing lost; the research stat (broken intraday ~94% of days,
+	// 2,827-day NQ sample) says they break nearly always. Advisory — no block.
+	b.WriteString("## Anchor roles (week evidence, advisory)\n")
+	b.WriteString("  ONH/ONL = LIQUIDITY/BREAKOUT references — broken intraday ~94% of days (2,827-day NQ sample). ")
+	b.WriteString("Fade ONLY on a confirmed sweep-reclaim (wick through + close back inside on the decision TF). ")
+	b.WriteString("Otherwise treat them as targets / breakout-retest anchors, never fade walls.\n\n")
+
 	// 1h wave (2026-08-25) — the conditional 1h S/D mandate: emitted only when
 	// a 1h supply/demand zone is actually rendered in the HTF zones section
 	// (same conditional pattern as the G2.2 HTF mandate fix — a rule that asks
@@ -255,6 +264,10 @@ func plannerOutputContract(maxLevels, maxScenarios int, hasHTFZones, has1HSDZone
 		"The flip and death MUST be DIFFERENT events: never the same level AND same rule for both (a flip at the same tick death fires is void). A short-biased plan's flip sits BELOW its death line or uses a stricter rule, so the flip can actually fire. " +
 		"Every scenario's confirm{} is MACHINE-EVALUATED the same way: rule + ref_price + side, and ref_price MUST equal a number written in that scenario's trigger/invalid prose. " +
 		"target_chain is GUIDANCE for the executor AI (which sets the actual take_profit) — it is validated for reachability at write time but never enforced at execution (D2 ruling). " +
+		// A2 (2026-08-26) — condition×session guidance from the week ledger:
+		// reject 75% win +665 in NY RTH vs acceptance 0% −157 and sweep_reclaim
+		// 0% −192. Advisory truth, not a hard rule.
+		"Condition×session guidance (week evidence): reject-based setups are best in NY RTH (75% win, +665 this week); acceptance needs a clear displacement or skip (0% win this week); sweep_reclaim requires the reclaim CLOSE on the decision TF, never the wick alone (0% win this week). " +
 		"no_trade may contain ONLY the fixed session windows (first 5m, lunch) plus T1 HARD-blackout lines from the calendar — a T2 caution event is NEVER added to no_trade and never stops entries. " +
 		"Respect the no-trade windows. If you cannot form a credible plan, say so in reasoning and output a neutral/no-trade plan.\n"
 }
