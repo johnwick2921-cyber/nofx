@@ -183,6 +183,29 @@ func fvgMinGapPoints(symbol string) float64 {
 // FairValueGaps finds 3-candle imbalances: bullish when bar[i-2].High < bar[i].Low
 // (gap between them), bearish when bar[i-2].Low > bar[i].High. UNFILLED gaps are
 // emitted as KindFVG. W6 (2026-08-25): a gap whose far edge is later VIOLATED BY
+// fvgWindowContiguous guards the 3-candle FVG window against session breaks
+// (register A6, mega-research 2026-08-26): candles separated by more than 3×
+// the bar interval straddle the 16:00-17:00 CT halt, a weekend, or a data gap
+// — never a real imbalance. A DST shift keeps 1m bars 60s apart → passes.
+func fvgWindowContiguous(cb []market.Kline, i int) bool {
+	if i < 2 || i >= len(cb) {
+		return false
+	}
+	// The series' own interval: the MINIMUM positive delta among the last 10
+	// bars (the TF interval; duplicate timestamps don't count).
+	iv := int64(0)
+	for j := len(cb) - 1; j >= 1 && j >= len(cb)-10; j-- {
+		d := cb[j].OpenTime - cb[j-1].OpenTime
+		if d > 0 && (iv == 0 || d < iv) {
+			iv = d
+		}
+	}
+	if iv <= 0 {
+		return false
+	}
+	return cb[i].OpenTime-cb[i-2].OpenTime <= 3*iv
+}
+
 // A CLOSE is no longer dropped — it is emitted as KindIFVG with INVERTED
 // polarity (filled bullish FVG → bearish iFVG resistance; filled bearish FVG →
 // bullish iFVG support), keeping the original bounds. Research-grounded: a
@@ -195,6 +218,10 @@ func FairValueGaps(bars []market.Kline, minGap float64, now time.Time) []Detecte
 	loc := chicago()
 	var out []DetectedLevel
 	for i := 2; i < len(cb); i++ {
+		// A6 — session-break guard: halt/weekend-straddling triples are noise.
+		if !fvgWindowContiguous(cb, i) {
+			continue
+		}
 		a, c := cb[i-2], cb[i]
 		var gLo, gHi float64
 		var bullish bool
