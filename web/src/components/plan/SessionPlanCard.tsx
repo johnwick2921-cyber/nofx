@@ -793,6 +793,16 @@ export function SessionPlanCard({
                 scenario_meta?: {
                   basis?: Record<string, string>
                   unevaluable?: string[]
+                  confirm?: Record<
+                    string,
+                    {
+                      rule: string
+                      ref_price: number
+                      side: string
+                      met: boolean
+                      detail: string
+                    }
+                  >
                 }
               }
             ).scenario_meta

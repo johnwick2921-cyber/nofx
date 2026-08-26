@@ -102,7 +102,21 @@ export interface PlanToday {
   // Per-scenario live status keyed by scenario id (executor-phase; absent now).
   scenario_status?: Record<string, ScenarioStatusValue>
   // A1/A4: verdict basis ("machine"|"heuristic") + scenarios with no anchor
-  scenario_meta?: { basis?: Record<string, string>; unevaluable?: string[] }
+  scenario_meta?: {
+    basis?: Record<string, string>
+    unevaluable?: string[]
+    // C1 (fail-register wave) — per-scenario confirm verdicts.
+    confirm?: Record<
+      string,
+      {
+        rule: string
+        ref_price: number
+        side: string
+        met: boolean
+        detail: string
+      }
+    >
+  }
   /** W15.B — the acceptance rule the executor evaluates these levels with. */
   acceptance_rule?: string
   /** W15.B — which session is LIVE right now, regardless of the tab requested. */
