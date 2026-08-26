@@ -45,6 +45,29 @@ func runTouch(uid, symbol string, bars []market.Kline, lv []ScoredLevel, atr flo
 	return out
 }
 
+// TestTouchPenetrationEpisodeScoped locks the live-caught bug: a PRE-episode
+// bar 83pts beyond the level must NOT count as penetration (the 14:50:54 live
+// line said "through 83pt" while the episode was 4pts-wide).
+func TestTouchPenetrationEpisodeScoped(t *testing.T) {
+	uid := "t-epscoped"
+	start := time.Date(2026, 8, 26, 14, 0, 0, 0, time.UTC)
+	bars := touchBars(start, [][5]float64{
+		{180, 181, 179, 180, 5},  // pre-episode, FAR above the level
+		{179, 180, 178, 179, 5},
+		{99, 100.5, 98.5, 100, 8}, // touch from below (dist 0)
+		{100, 100.8, 99.6, 100.2, 8},
+		{104.6, 106, 104.6, 105, 5}, // leaves band
+	})
+	lv := touchLevels(100)
+	closed := runTouch(uid, "MNQ", bars, lv, 2.0, 5)
+	if len(closed) != 1 {
+		t.Fatalf("want 1 closed episode, got %d", len(closed))
+	}
+	if closed[0].PenetrationPts > 6.0 {
+		t.Fatalf("penetration = %.2f — pre-episode bars leaked in (want ≤ 6)", closed[0].PenetrationPts)
+	}
+}
+
 // TestTouchEpisodeOpenClose (T5) — an episode opens when price comes within the
 // band, stays ONE episode across consecutive in-band bars (dedup), and closes
 // when price leaves the band.

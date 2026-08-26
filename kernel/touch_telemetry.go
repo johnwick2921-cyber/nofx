@@ -178,12 +178,17 @@ func TouchUpdate(traderID, symbol string, bars []market.Kline, levels []ScoredLe
 		// BarsIn counts the RING bars inside the episode (deterministic under
 		// any call cadence, not call-counting).
 		ep.BarsIn = 0
+		var epBars []market.Kline
 		for _, b := range st.ring {
 			if b.OpenTime >= ep.OpenedAtMs {
 				ep.BarsIn++
+				epBars = append(epBars, b)
 			}
 		}
-		pen, wick, body := penetrationStats(st.ring, l.Price, ep.approachFrom)
+		// Penetration is measured on EPISODE bars only — pre-episode ring bars
+		// (kept for the vol-ratio/approach windows) must never count as
+		// "through" the level.
+		pen, wick, body := penetrationStats(epBars, l.Price, ep.approachFrom)
 		ep.PenetrationPts, ep.WickPenPts, ep.BodyPenPts = pen, wick, body
 		// Close side (1m): the current bar's close vs approach side.
 		ep.Close1m = closeSide(last.Close, l.Price, ep.approachFrom)
