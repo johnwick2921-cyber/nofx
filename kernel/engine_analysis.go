@@ -464,8 +464,9 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 					status += "\n⚠ ACTIVE PLAN IS MACHINE-DEAD: " + ctx.ExecutorPlanDead + " — do NOT cite its scenarios; entries are refused (position management only)."
 				}
 				// C1 (F3): machine-computed confirmation lines per scenario —
-				// advisory truth the model reasons FROM, never a gate.
-				if cl := RenderConfirmLines(plan.Doc, snapshotBars, plan.BirthMs, snapshotNow.UnixMilli()); cl != "" {
+				// advisory truth the model reasons FROM, never a gate. ADDENDUM S
+				// (2026-08-26) adds the stale-annotation + CONFLICT trailer.
+				if cl := RenderConfirmLines(plan.Doc, snapshotBars, plan.BirthMs, snapshotNow.UnixMilli(), price, dATR); cl != "" {
 					status += "\n" + cl
 				}
 				// T3 (2026-08-26) — scenario tie-in: a scenario whose trigger
