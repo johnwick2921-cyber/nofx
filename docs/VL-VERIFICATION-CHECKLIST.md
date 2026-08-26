@@ -166,7 +166,7 @@ The rule that ends guessing: **a system is finished when every SECTION A and B r
 | G3 | Match-rate measured | ≥100 decisions with scenario citations |
 | G4 | Stats gate progressing | Raw counts accumulating toward n≈1565 per level type; **no green verdict before then** |
 | G5 | Regime coverage | Trend, range, news, and gap days all sampled |
-| G6 | 100+ closed trades | The first point at which expectancy means anything |
+| — | 100+ closed trades | The first point at which expectancy means anything (G6 loss-streak pause REMOVED 2026-08-23, owner override — commit 5126e57c) |
 | G7 | Advisory → Direction | Only after G1, G3, and 2 clean weeks |
 | G8 | Direction → Strict | Only after G4, G5, and 200–300 trades |
 | G9 | SIM → real capital | 200–500 trades, multiple regimes, guardrails master ON, slippage measured |
@@ -196,7 +196,8 @@ The rule that ends guessing: **a system is finished when every SECTION A and B r
 
 **Building is finished when:** every row in A, B, C, D, E is ✅.
 
-**Proving is finished when:** every row in F is ✅ and G1–G6 are complete.
+**Proving is finished when:** every row in F is ✅ and G1–G5 are complete
+(G6 loss-streak pause REMOVED 2026-08-23, owner override — commit 5126e57c).
 
 **Ready for real money when:** G7, G8, G9 are met, the guardrails master is ON, and Section H has no unresolved item marked as a safety concern.
 
