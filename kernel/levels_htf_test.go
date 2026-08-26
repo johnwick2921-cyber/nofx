@@ -104,8 +104,9 @@ func TestDetectHTFLevelsEQH(t *testing.T) {
 	}
 }
 
-// TestHTFZoneGradesBCovers the v3 floors: 15m/1h zones floor B (cap B),
-// 1m zones stay C, 4h zones may reach A with confluence.
+// TestHTFZoneGradesB covers the v3 floors: 15m zones floor B cap B, 1m zones
+// stay C, 1h zones may reach A with confluence (1h wave, 2026-08-25), 4h zones
+// may reach A with confluence.
 func TestHTFZoneGradesB(t *testing.T) {
 	dATR := 100.0
 	price := 1000.0
@@ -124,11 +125,14 @@ func TestHTFZoneGradesB(t *testing.T) {
 		}
 		return ""
 	}
-	if g := gradeOf(ScoreLevels(mkZone("1h"), price, dATR, nil, 8, 1.5)); g != "B" {
-		t.Fatalf("1h zone with 5 confluence = %q, want B (floor/cap)", g)
+	if g := gradeOf(ScoreLevels(mkZone("1h"), price, dATR, nil, 8, 1.5)); g != "A" {
+		t.Fatalf("1h zone with 5 confluence = %q, want A (1h wave: 1h cap A)", g)
 	}
 	if g := gradeOf(ScoreLevels(mkZone("1m"), price, dATR, nil, 8, 1.5)); g != "C" {
 		t.Fatalf("1m zone with 5 confluence = %q, want C (never above)", g)
+	}
+	if g := gradeOf(ScoreLevels(mkZone("15m"), price, dATR, nil, 8, 1.5)); g != "B" {
+		t.Fatalf("15m zone with 5 confluence = %q, want B (15m stays capped below A)", g)
 	}
 	if g := gradeOf(ScoreLevels(mkZone("4h"), price, dATR, nil, 8, 1.5)); g != "A" {
 		t.Fatalf("4h zone with 5 confluence = %q, want A (v3 allows A on 4h)", g)
@@ -189,5 +193,53 @@ func TestSeatHTFPromotesSwingLevels(t *testing.T) {
 	}
 	if !priSeated {
 		t.Fatal("seatHTF demoted a today-priority level")
+	}
+}
+
+// TestSeat1HZonePromotesInBandSD covers the 1h wave (2026-08-25): when the
+// head holds no 1h S/D zone but the tail has one, the strongest tail candidate
+// wins a seat by demoting the weakest non-priority, non-HTF head entry.
+func TestSeat1HZonePromotesInBandSD(t *testing.T) {
+	mk := func(kind LevelKind, tf string, price, score float64, grade string) ScoredLevel {
+		return ScoredLevel{
+			DetectedLevel: DetectedLevel{Kind: kind, Price: price, Label: "L·" + tf, TF: tf},
+			Score: score, Grade: grade, Fresh: "fresh", Distance: price - 1000,
+		}
+	}
+	scored := []ScoredLevel{
+		mk(KindRound, "1m", 990, 0.5, "C"),
+		mk(KindRound, "1m", 991, 0.5, "C"),
+		mk(KindRound, "1m", 992, 0.5, "C"),
+		mk(KindEQH, "4h", 1200, 0.84, "B"),
+		mk(KindEQH, "4h", 1201, 0.84, "B"),
+		mk(KindSupply, "4h", 1210, 0.7, "B"),
+		mk(KindRound, "1m", 993, 0.5, "C"),
+		mk(KindRound, "1m", 994, 0.5, "C"),
+		// tail candidate: a 1h S/D zone that seatHTF left out
+		mk(KindDemand, "1h", 950, 0.9, "B"),
+	}
+	out := Seat1HZone(scored, 8)
+	head, tail := out[:8], out[8:]
+	seated1h := false
+	for _, l := range head {
+		if is1HSDZone(l) {
+			seated1h = true
+		}
+	}
+	if !seated1h {
+		t.Fatalf("Seat1HZone did not promote the 1h S/D zone; head: %+v", head)
+	}
+	if len(tail) != 1 || isHTFSwingZone(tail[0]) || is1HSDZone(tail[0]) {
+		t.Fatalf("demoted entry must be a weak non-HTF level: %+v", tail)
+	}
+	// No-op when nothing was cut.
+	if out2 := Seat1HZone(scored[:6], 8); len(out2) != 6 {
+		t.Fatalf("no-cut case must be a no-op, got %d", len(out2))
+	}
+	// No-op when a 1h S/D zone is already seated.
+	seated := append([]ScoredLevel{mk(KindSupply, "1h", 940, 0.9, "B")}, scored...)
+	out3 := Seat1HZone(seated, 8)
+	if len(out3) != len(seated) {
+		t.Fatalf("already-seated case must be a no-op")
 	}
 }
