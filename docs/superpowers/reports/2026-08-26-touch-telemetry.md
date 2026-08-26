@@ -43,8 +43,12 @@ Seated level rows render a live touch chip: ○ approaching · ◐ touching · �
 
 ## Live episode quote
 
-- Open (executor prompt, 14:47:55 UTC): `TOUCH: PDC 29228.50 · 1st touch · none · n/a · shape: forming`
-- Closed (touch_episodes row): *(quote below)*
+- **Live OPEN episode** (executor prompt, 14:47:55 UTC — price within the 4-pt band of PDC):
+  `TOUCH: PDC 29228.50 · 1st touch · none · n/a · shape: forming`
+- **Sim CLOSED episode** (T5 golden fixture `TestTouchPenetrationMath`): level 100, approach from below →
+  `penetration 6.0pt (wick 6.0 / body 5.0) · close_1m accept · shape acceptance`.
+  A live closed row will land in `touch_episodes` when price re-enters a seated level's band
+  (post-fix market moved 13+ pts clear of every seated level; the sink fires on episode close).
 
 ## Live-caught bug fixed before the report closed
 
