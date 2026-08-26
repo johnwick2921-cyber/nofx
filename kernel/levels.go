@@ -40,7 +40,7 @@ const (
 	// Pack B (owner override 2026-08-26) — VOLUME FAMILY kinds. Forward-validated
 	// via the B4 level_stats table; weights are provisional until the 2-week verdict.
 	KindVWAP   LevelKind = "VWAP"   // session-anchored VWAP (+±1σ band lines share this kind)
-	KindEVWAP  LevelKind = "eVWAP"  // extended VWAP (overnight anchor, 16:00 CT prior day)
+	KindEVWAP  LevelKind = "eVWAP"  // extended VWAP (15:00 CT cash-close anchor — A2 re-anchor 2026-08-26)
 	KindPOC    LevelKind = "POC"    // prior-day point of control (max-volume price)
 	KindVAH    LevelKind = "VAH"    // prior-day value-area high (70%)
 	KindVAL    LevelKind = "VAL"    // prior-day value-area low (70%)
