@@ -54,9 +54,9 @@ const DEFAULT_DAY_PLAN: DayPlanConfig = {
   min_scenario_quality: 'C',
 }
 
-// NY's window end — the EOD flat must not sit AFTER it, or the session gate
-// would call NY open after the day was already flattened (the P3 drift band).
-const NY_WINDOW_END_CT = '14:45'
+// C3 — the legacy day-scoped clock controls (last_entry_ct / eod_flat_ct) were
+// HIDDEN on 2026-08-26: both are unreachable since the P2 session-scope rework
+// (trader/auto_trader_clock.go: "nothing evaluates it"). Stored values survive.
 
 const ALL_SESSIONS: SessionName[] = ['NY', 'ASIA', 'LONDON']
 
@@ -194,37 +194,6 @@ function NumberField({
   )
 }
 
-/** HH:MM (America/Chicago) input for the day-trader clock times. */
-function TimeField({
-  value,
-  onChange,
-  disabled,
-  testId,
-}: {
-  value?: string
-  onChange: (v: string) => void
-  disabled?: boolean
-  testId?: string
-}) {
-  return (
-    <input
-      type="time"
-      value={value ?? ''}
-      disabled={disabled}
-      data-testid={testId}
-      onChange={(e) => onChange(e.target.value)}
-      className="vl-num text-[12px] px-1.5 py-0.5"
-      style={{
-        background: 'var(--vl-card-2)',
-        border: '1px solid var(--vl-hair)',
-        borderRadius: 'var(--vl-radius-chip)',
-        color: 'var(--vl-ivory)',
-        opacity: disabled ? 0.5 : 1,
-      }}
-    />
-  )
-}
-
 function FieldRow({
   label,
   children,
@@ -255,12 +224,6 @@ export function DayPlanEditor({ config, onChange, disabled, language }: Props) {
   const cfg = config ?? DEFAULT_DAY_PLAN
   const enabled = cfg.plan_enabled === true
   const [openSession, setOpenSession] = useState<SessionName | null>('NY')
-
-  // An EOD flat set AFTER NY's window end reopens the P3 drift band: the session
-  // gate would still call NY open on a day already flattened. Warn, don't clamp —
-  // the owner may be running a session whose window genuinely ends later.
-  const eodAfterWindow =
-    (cfg.eod_flat_ct ?? '14:45').localeCompare(NY_WINDOW_END_CT) > 0
 
   const update = <K extends keyof DayPlanConfig>(
     key: K,
@@ -498,34 +461,11 @@ export function DayPlanEditor({ config, onChange, disabled, language }: Props) {
             />
           </FieldRow>
 
-          {/* W15.B — THE DAY-TRADER CLOCK. Both times were already read by the
-              live gates (entryBlockedByLastEntry / enforceEODFlat) but had NO
-              control: the only way to change them was a CLI. */}
-          <FieldRow label={tp('lastEntry', language)}>
-            <TimeField
-              value={cfg.last_entry_ct ?? '13:00'}
-              onChange={(v) => update('last_entry_ct', v)}
-              disabled={bodyDisabled}
-              testId="last-entry-ct"
-            />
-          </FieldRow>
-          <FieldRow label={tp('eodFlat', language)}>
-            <TimeField
-              value={cfg.eod_flat_ct ?? '14:45'}
-              onChange={(v) => update('eod_flat_ct', v)}
-              disabled={bodyDisabled}
-              testId="eod-flat-ct"
-            />
-          </FieldRow>
-          {eodAfterWindow && (
-            <div
-              className="text-[10px] leading-snug pb-1"
-              style={{ color: 'var(--vl-short)' }}
-              data-testid="eod-flat-warning"
-            >
-              ⚠ {tp('eodFlatWarning', language)}
-            </div>
-          )}
+          {/* C3 — last_entry_ct / eod_flat_ct are LEGACY day-scoped clock
+              fields, UNREACHABLE since the P2 session-scope rework
+              (trader/auto_trader_clock.go:257-317: "nothing evaluates it").
+              The live gates read the session registry instead. Hidden, not
+              removed, so old stored values survive untouched. */}
           <FieldRow label={tp('realignCap', language)}>
             <NumberField
               value={cfg.realign_cap ?? 5}
