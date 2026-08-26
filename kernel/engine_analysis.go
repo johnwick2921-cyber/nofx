@@ -388,7 +388,17 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 			}
 			// H7 — the registry is the admin registry the DECIDING trader
 			// resolves (per-trader provider; never another trader's).
-			klBlock = BuildKeyLevelsBlock(ctx.TraderID, snapshotBars, ResolvedSessionRegistryFor(ctx.TraderID), activeSymbol, maxLevels, snapshotNow, proximityK, extra...)
+			// R2 4.6/4.7 + 1h wave (2026-08-25) — the executor block now
+			// obeys the SAME seat_1h_zone + min_grade rules as the planner.
+			seat1h := true
+			minGrade := ""
+			if cfg := engine.GetConfig(); cfg != nil && cfg.DayPlan != nil {
+				seat1h = cfg.DayPlan.Seat1HZoneEnabled()
+				if p := ActivePlanFor(ctx.TraderID, activeSymbol); p != nil {
+					minGrade = cfg.DayPlan.MinGradeFor(p.Session)
+				}
+			}
+			klBlock = BuildKeyLevelsBlockOpts(ctx.TraderID, snapshotBars, ResolvedSessionRegistryFor(ctx.TraderID), activeSymbol, maxLevels, snapshotNow, proximityK, seat1h, minGrade, extra...)
 		}
 		engine.SetKeyLevelsContext(klBlock)
 		if klBlock == "" {
@@ -418,7 +428,13 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 			if len(snapshotBars) > 0 {
 				_, price, dATR := AssembleScoredLevels(ctx.TraderID, snapshotBars, ResolvedSessionRegistryFor(ctx.TraderID), activeSymbol, maxLevels, snapshotNow, proximityK)
 				SetPlanDATR(ctx.TraderID, dATR) // B3: the citation band check reads this
-				status = RenderPlanStatus(ctx.TraderID, activeSymbol, plan.Doc, snapshotBars, price, dATR, rule, plan.ReplansLeft, snapshotNow.UnixMilli(), plan.BirthMs)
+				// R2 4.7 (2026-08-25) — PLAN STATUS obeys the per-session
+				// min_grade floor so the executor tail and the table agree.
+				minGrade := ""
+				if cfg := engine.GetConfig(); cfg != nil && cfg.DayPlan != nil {
+					minGrade = cfg.DayPlan.MinGradeFor(plan.Session)
+				}
+				status = RenderPlanStatusMinGrade(ctx.TraderID, activeSymbol, plan.Doc, snapshotBars, price, dATR, rule, plan.ReplansLeft, snapshotNow.UnixMilli(), plan.BirthMs, minGrade)
 				// C6 (2026-08-25) — the model must SEE the dead-plan verdict
 				// BEFORE citing scenarios, not learn it from a post-call
 				// refusal. The validateDecision gate stays the hard stop.

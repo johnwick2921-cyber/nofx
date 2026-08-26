@@ -249,6 +249,11 @@ func freshMult(f string) float64 {
 // (the owner's proximity_filter_atr; ≤0 → the spec constant 1.5) — the band
 // OUTSIDE which no level is generated or seated.
 func ScoreLevels(levels []DetectedLevel, price, dATR float64, freshness func(DetectedLevel) string, maxLevels int, proximityK float64) []ScoredLevel {
+	return scoreLevelsPool(levels, price, dATR, freshness, maxLevels, proximityK)
+}
+
+// scoreLevelsPool is the full scorer (lock → grade → collapse → seat → top-N).
+func scoreLevelsPool(levels []DetectedLevel, price, dATR float64, freshness func(DetectedLevel) string, maxLevels int, proximityK float64) []ScoredLevel {
 	if price <= 0 || dATR <= 0 {
 		return nil
 	}
@@ -390,11 +395,77 @@ func ScoreLevels(levels []DetectedLevel, price, dATR float64, freshness func(Det
 		scored = scored[:maxLevels]
 	}
 
-	// Output nearest-first for the executor table.
+// Output nearest-first for the executor table.
 	sort.SliceStable(scored, func(i, j int) bool {
 		return math.Abs(scored[i].Distance) < math.Abs(scored[j].Distance)
 	})
 	return scored
+}
+
+// ScoreLevelsMinGrade (grading audit §4.6/4.7, 2026-08-25) — ScoreLevels with
+// a minGrade floor that CANNOT gut a side of the table: the scorer runs on a
+// 2× pool, the sub-floor rows are filtered, and seatBothSides re-balances
+// AFTER the filter from the surviving pool, so a min_grade cut refills seats
+// with in-band same-side candidates instead of leaving the executor/planner
+// table one-sided. Empty minGrade → byte-identical to ScoreLevels.
+func ScoreLevelsMinGrade(levels []DetectedLevel, price, dATR float64, freshness func(DetectedLevel) string, maxLevels int, proximityK float64, minGrade string) []ScoredLevel {
+	eff := maxLevels
+	if eff <= 0 {
+		eff = DefaultMaxLevels
+	}
+	if price <= 0 || dATR <= 0 {
+		return nil
+	}
+	pool := scoreLevelsPool(levels, price, dATR, freshness, eff*2, proximityK)
+	filtered := FilterLevelsByMinGrade(pool, minGrade)
+	if minGrade == "" || len(filtered) <= eff {
+		if len(filtered) > eff {
+			filtered = filtered[:eff]
+		}
+		return filtered
+	}
+	// Re-seat the filtered pool with the SAME seating rules as ScoreLevels so
+	// the both-side guarantee (P0.1) holds after the cut.
+	sort.SliceStable(filtered, func(i, j int) bool {
+		pi, pj := isTodayPriority(filtered[i].Kind), isTodayPriority(filtered[j].Kind)
+		if pi != pj {
+			return pi
+		}
+		if filtered[i].Score != filtered[j].Score {
+			return filtered[i].Score > filtered[j].Score
+		}
+		di, dj := math.Abs(filtered[i].Distance), math.Abs(filtered[j].Distance)
+		if di != dj {
+			return di < dj
+		}
+		return filtered[i].Price < filtered[j].Price
+	})
+	filtered = seatHTF(filtered, eff)
+	filtered = seatBothSides(filtered, eff)
+	if len(filtered) > eff {
+		filtered = filtered[:eff]
+	}
+	sort.SliceStable(filtered, func(i, j int) bool {
+		return math.Abs(filtered[i].Distance) < math.Abs(filtered[j].Distance)
+	})
+	return filtered
+}
+
+// FilterPlanLevelsByMinGrade (grading audit §4.7, 2026-08-25) — the plan-doc
+// twin of FilterLevelsByMinGrade, for surfaces that consume []PlanLevel
+// (PLAN STATUS, level-state writers). Empty/unknown minGrade is a no-op.
+func FilterPlanLevelsByMinGrade(levels []PlanLevel, minGrade string) []PlanLevel {
+	min, ok := levelGradeRank[strings.ToUpper(strings.TrimSpace(minGrade))]
+	if !ok {
+		return levels
+	}
+	out := make([]PlanLevel, 0, len(levels))
+	for _, l := range levels {
+		if levelGradeRank[strings.ToUpper(strings.TrimSpace(l.Grade))] >= min {
+			out = append(out, l)
+		}
+	}
+	return out
 }
 
 func gradeFromScore(s float64) string {
