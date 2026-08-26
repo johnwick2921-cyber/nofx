@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"nofx/kernel"
+	"nofx/market"
 	"nofx/store"
 )
 
@@ -309,6 +310,25 @@ func (at *AutoTrader) runWatchCycle(ctx *kernel.Context, record *store.DecisionR
 	}
 	prevStatus := st.Status
 
+	// T2 (2026-08-26) — touch telemetry for the watcher: feed the registry from
+	// the same 1m bars + seated map, then render the nearest 2 TOUCH lines.
+	// Advisory — zero gates, zero order authority.
+	touchLines := ""
+	if market.FuturesBarsProvider != nil {
+		if bars := market.FuturesBarsProvider(p.Symbol, "1m", kernel.AISVPBarCount); len(bars) > 0 {
+			now := time.Now()
+			if sc, _, _ := kernel.AssembleScoredLevels(at.id, bars, kernel.ResolvedSessionRegistryFor(at.id), p.Symbol, 8, now, 1.5); len(sc) > 0 {
+				atr := market.ExportCalculateATR(bars, 14)
+				for _, ep := range kernel.TouchUpdate(at.id, p.Symbol, bars, sc, atr, now) {
+					if kernel.TouchEpisodeSink != nil {
+						kernel.TouchEpisodeSink(ep)
+					}
+				}
+				touchLines = kernel.RenderTouchLines(at.id, p.Symbol, curPrice, 2)
+			}
+		}
+	}
+
 	in := kernel.ObserverInput{
 		Symbol: p.Symbol, Side: p.Side,
 		EntryPrice: p.EntryPrice, StopLoss: th.StopLoss, TakeProfit: th.TakeProfit,
@@ -318,6 +338,7 @@ func (at *AutoTrader) runWatchCycle(ctx *kernel.Context, record *store.DecisionR
 		CurrentStop: curStop, BreakevenFired: beFired, TrailLevel: trailLvl,
 		PrevStatus:    prevStatus,
 		StructureLine: kernel.StructurePromptLine(ctx.Structure),
+		TouchLines:    touchLines,
 	}
 	record.AccountState = store.AccountSnapshot{
 		TotalBalance:          ctx.Account.TotalEquity,
