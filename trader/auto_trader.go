@@ -639,6 +639,8 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 		// replay/calibration. Idempotent (once); nil-safe; never blocks the loop.
 		if st != nil {
 			ntTrader.WireBarPersistence(st)
+			// B4 (2026-08-26) — level_stats nightly forward validation.
+			ntTrader.WireLevelStatsNightly(st, config.ID)
 		}
 		// Plan 4 Stage 4 — set parent reference for defer-until-balance guard.
 		// This is set AFTER the AutoTrader is partially initialized, so we defer

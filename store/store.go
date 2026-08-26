@@ -33,6 +33,7 @@ type Store struct {
 	levelState      *LevelStateStore
 	sessionProfile  *SessionProfileStore
 	barHistory      *BarHistoryStore
+	levelStats      *LevelStatsStore
 	calendarSlice   *CalendarSliceStore
 	digest          *DigestStore
 	ownerLevel      *OwnerLevelStore
@@ -370,6 +371,16 @@ func (s *Store) BarHistory() *BarHistoryStore {
 		s.barHistory = NewBarHistoryStore(s.gdb)
 	}
 	return s.barHistory
+}
+
+// LevelStats gets the B4 forward-validation store (2026-08-26).
+func (s *Store) LevelStats() *LevelStatsStore {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.levelStats == nil {
+		s.levelStats = NewLevelStatsStore(s.gdb)
+	}
+	return s.levelStats
 }
 
 // SessionProfile gets the durable session-profile storage.
