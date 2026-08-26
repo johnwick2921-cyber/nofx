@@ -52,6 +52,7 @@ export interface PlanLevelFact {
   machine_grade?: string
   instruction: string
   distance: number // signed distance in points (backend-computed)
+  touch_state?: string // T4 (2026-08-26): approaching | touching | rejected | accepted | ""
   sweep: boolean
   closes_beyond: number
   accept_have: number

@@ -323,7 +323,7 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 			owners[roundKey(r.Price)] = r
 		}
 	}
-	facts, price := planLevelFacts(symbol, doc, now, rule, owners, row.CreatedAt.UnixMilli())
+	facts, price := planLevelFacts(traderID, symbol, doc, now, rule, owners, row.CreatedAt.UnixMilli())
 	// The budget depends on the plan's version, known only now.
 	_, _, replansLeft, replanCap := s.planRulesWithCap(traderID, sessName, tradeDate, row.Version)
 	warming := ""
@@ -386,7 +386,7 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 }
 
 // planLevelFacts computes per-level live facts from the latest 1m bars.
-func planLevelFacts(symbol string, doc kernel.PlanDoc, now time.Time, rule string, owners map[int64]*store.OwnerLevelDB, birthMs int64) ([]gin.H, float64) {
+func planLevelFacts(traderID, symbol string, doc kernel.PlanDoc, now time.Time, rule string, owners map[int64]*store.OwnerLevelDB, birthMs int64) ([]gin.H, float64) {
 	if market.FuturesBarsProvider == nil {
 		return nil, 0
 	}
@@ -432,6 +432,9 @@ func planLevelFacts(symbol string, doc kernel.PlanDoc, now time.Time, rule strin
 			"machine_grade": l.MachineGrade,
 			"instruction":   l.Instruction,
 			"distance":      distance,
+			// T4 (2026-08-26) — live touch chip state for the card row
+			// (approaching | touching | rejected | accepted | "").
+			"touch_state": kernel.TouchStateForCard(traderID, symbol, l.Label, l.Price, price, now.UnixMilli()),
 			"sweep":         f.Swept,
 			"closes_beyond": maxI(f.ClosesBeyondUp, f.ClosesBeyondDown),
 			"accept_have":   f.AcceptHave,
