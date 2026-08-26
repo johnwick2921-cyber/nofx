@@ -18,4 +18,5 @@ func LogVolumeWaveBoot() {
 		FvgEntryMinDispATR(), FvgEntryCEWidthPts(), FvgEntryLookbackBars())
 	logger.Infof("🔧 S-wave (2026-08-26): stale_confirm=%.1f×ATR5m · eod_flat=session-end (NY 14:45 CT, R-A15)",
 		StaleConfirmATR())
+	logger.Infof("📜 planner playbook (2026-08-26): playbook=v2 bias_tree=on chain_after=on no_trade_gates=on killzone_weights=on stop_doing=on — ALL ADVISORY, zero new gates")
 }
