@@ -32,6 +32,7 @@ type Store struct {
 	plan            *PlanStore
 	levelState      *LevelStateStore
 	sessionProfile  *SessionProfileStore
+	barHistory      *BarHistoryStore
 	calendarSlice   *CalendarSliceStore
 	digest          *DigestStore
 	ownerLevel      *OwnerLevelStore
@@ -359,6 +360,16 @@ func (s *Store) LevelState() *LevelStateStore {
 		s.levelState = NewLevelStateStore(s.gdb)
 	}
 	return s.levelState
+}
+
+// BarHistory gets the closed-bar persistence store (2026-08-26).
+func (s *Store) BarHistory() *BarHistoryStore {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.barHistory == nil {
+		s.barHistory = NewBarHistoryStore(s.gdb)
+	}
+	return s.barHistory
 }
 
 // SessionProfile gets the durable session-profile storage.

@@ -635,6 +635,11 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 		if err != nil {
 			return nil, fmt.Errorf("failed to initialize NinjaTrader: %w", err)
 		}
+		// Bar persistence (2026-08-26) — closed-bar history writer for
+		// replay/calibration. Idempotent (once); nil-safe; never blocks the loop.
+		if st != nil {
+			ntTrader.WireBarPersistence(st)
+		}
 		// Plan 4 Stage 4 — set parent reference for defer-until-balance guard.
 		// This is set AFTER the AutoTrader is partially initialized, so we defer
 		// it until later in NewAutoTrader.

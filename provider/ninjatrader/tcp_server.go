@@ -1265,6 +1265,10 @@ func (s *TCPServer) drainBarIngest(ctx context.Context) {
 			} else {
 				s.barCache.Upsert(msg.symbol, msg.timeframe, msg.bars)
 			}
+			// Bar persistence (2026-08-26) — fan-out AFTER the cache write, in
+			// its own goroutine: a slow/failing DB must never stall the drain
+			// (backpressure invariant) or the socket read loop.
+			fanOutBarPersist(s.logger.Warn, msg.historical, msg.symbol, msg.timeframe, msg.bars)
 		}
 	}
 }
