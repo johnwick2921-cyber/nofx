@@ -35,7 +35,7 @@ CTO's claimed tail "topN(8)→proximity(1.5)" is inverted — proximity is step 
 
 `PlanDoc`: reasoning · bias{direction,conviction,flip_condition} · levels[]{price,label,grade,instruction,machine_grade} · scenarios[]{id,trigger,condition,direction,target_chain,invalid,confirm{rule,ref_price,side},quality,consumed,**fvg{lo,hi,ce,entry_mode,displacement_atr,origin_level,direction}**} · no_trade[] · death_condition · day_type · death{price,side,rule,flip_to} · flip{…}.
 Enforced: all enums (`plan_doc.go:54-76`), caps, both-side levels, continuation-on-gap, duplicate seats, reachable targets, label provenance, flip-fired bias, confirm{} after grace, **fvg re-verification**. Advisory: instruction verbs, quality letters, reasoning prose.
-**Condition types = 6, not 5**: reclaim · hold · sweep_reclaim · reject · acceptance · breakout_retest · **fvg_entry** (new today, PR #79).
+**Condition types = 7, not 5**: reclaim · hold · sweep_reclaim · reject · acceptance · breakout_retest · **fvg_entry** (new today, PR #79).
 
 ## 6. Post-birth lifecycle — CONFIRM
 
