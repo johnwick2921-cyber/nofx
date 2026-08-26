@@ -765,7 +765,7 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 	}
 	requiredBias := kernel.FlipToDirection(priorKiller)
 	// W11 — carry the frozen indicator mirror + ai_config hash to the write site.
-	at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, hash, input.IndicatorsBlock, input.AIConfigHash, requiredBias, facts, machineGrades, machineLabels, failClosed, func() (string, error) {
+	at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, hash, input.IndicatorsBlock, input.AIConfigHash, requiredBias, facts, machineGrades, machineLabels, htfLabels(input), failClosed, func() (string, error) {
 		return client.CallWithMessages(plannerSystemPrompt, prompt)
 	}, t1Lines...)
 	return true
@@ -801,7 +801,20 @@ func priorPlanLevelLines(row *store.PlanDB) []string {
 	return lines
 }
 
-// runPlannerReadWithTrigger is runPlannerReadWithTriggerClaimed with the old
+// htfLabels maps the planner's HTF-zone section prices → labels (the fvg
+// origin-level check accepts a seated-table OR HTF-section anchor).
+func htfLabels(in kernel.PlannerInput) map[float64]string {
+	if len(in.HTFZones) == 0 {
+		return nil
+	}
+	out := make(map[float64]string, len(in.HTFZones))
+	for _, z := range in.HTFZones {
+		out[z.Price] = z.Label
+	}
+	return out
+}
+
+// runPlannerReadCoreWithTrigger is runPlannerReadWithTriggerClaimed with the old
 // signature (claim result discarded) for existing callers.
 func (at *AutoTrader) runPlannerReadWithTrigger(session, tradeDate, triggerOverride string) {
 	_ = at.runPlannerReadWithTriggerClaimed(session, tradeDate, triggerOverride)
@@ -825,7 +838,7 @@ func (at *AutoTrader) runPlannerReadCoreWithTrigger(session, tradeDate, triggerO
 // scenario on gaps, duplicate/target reachability). Legacy callers keep the
 // facts-free signature (schema-only validation).
 func (at *AutoTrader) runPlannerReadCoreWithFacts(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash string, facts kernel.PlanFacts, call func() (string, error), extraNoTrade ...string) (int, string, error) {
-	return at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, "", facts, nil, nil, true, call, extraNoTrade...)
+	return at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, "", facts, nil, nil, nil, true, call, extraNoTrade...)
 }
 
 // runPlannerReadCoreWithFactsGrades is the production core + the machine-grade
@@ -833,7 +846,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFacts(session, tradeDate, triggerOve
 // deterministic detector grade from the Go-ranked candidate table; plan levels
 // that match get their machine grade persisted for the card to display beside
 // the model-written one.
-func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, requiredBias string, facts kernel.PlanFacts, machineGrades map[float64]string, machineLabels map[float64]string, failClosed bool, call func() (string, error), extraNoTrade ...string) (int, string, error) {
+func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, requiredBias string, facts kernel.PlanFacts, machineGrades map[float64]string, machineLabels map[float64]string, htfLabels map[float64]string, failClosed bool, call func() (string, error), extraNoTrade ...string) (int, string, error) {
 	// H4/H5 — validation must accept EXACTLY what the config allows: the resolved
 	// max_levels / scenario_cap (hard ceilings 12/5). Before this the parse
 	// hardcoded 8/3, so raising either setting made EVERY read fail-closed into a
@@ -893,6 +906,27 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		if verr := kernel.ValidatePlanDocWithFacts(d, facts, maxLevels, scenarioCap); verr != nil {
 			lastErr = verr
 			continue
+		}
+		// FVG ENTRY MODEL (2026-08-26) — write-time re-verification from stored
+		// bars: the 3-candle relation, the gap floor, the displacement body vs
+		// 5m ATR, and the origin-level membership. A fake/stale gap fails the
+		// retry loop (the planner re-writes or the plan ships without it).
+			if kernel.HasFvgScenario(d) {
+			var fvgBars []market.Kline
+			if market.FuturesBarsProvider != nil {
+				fvgBars = market.FuturesBarsProvider(at.futuresSymbol(), "1m", kernel.AISVPBarCount)
+			}
+			origin := make(map[string]bool, len(machineLabels)+len(htfLabels)+1)
+			for _, lbl := range machineLabels {
+				origin[lbl] = true
+			}
+			for _, lbl := range htfLabels {
+				origin[lbl] = true
+			}
+			if verr := kernel.ValidateFvgEntryScenarios(d, fvgBars, at.futuresSymbol(), origin, time.Now()); verr != nil {
+				lastErr = verr
+				continue
+			}
 		}
 		// P0.4-F (2026-08-25) — advisory flip/death sanity (never a gate; the
 		// machine evaluator is the enforcer). 11-plan audit found 7/11 active

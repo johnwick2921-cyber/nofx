@@ -796,6 +796,22 @@ export function SessionPlanCard({
         <ScenarioList
           scenarios={doc.scenarios}
           statusMap={plan.scenario_status}
+          fvgStates={
+            (
+              plan as {
+                fvg_states?: Array<{
+                  id: string
+                  fvg_lo: number
+                  fvg_hi: number
+                  ce: number
+                  entry_mode: string
+                  state: string
+                  touch_number: number
+                  met: boolean
+                }>
+              }
+            ).fvg_states
+          }
           meta={
             (
               plan as {
