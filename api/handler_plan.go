@@ -415,13 +415,23 @@ func planLevelFacts(symbol string, doc kernel.PlanDoc, now time.Time, rule strin
 			dir = kernel.DirBelow
 		}
 		f := kernel.EvaluateLevelFacts(kernel.BarsSince(bars, birthMs), l.Price, dir, rule, 3, nowMs)
+		// Zero-reference regression guard (2026-08-26, "dist wrong again"): right
+		// after a re-plan, birthMs ≈ now → BarsSince is EMPTY → referenceClose
+		// returns 0 → DistancePoints = 0 − level (the card showed −29095 etc.).
+		// Distance is a SNAPSHOT fact — compute it against the zero-guarded
+		// current price directly; the sweep/acceptance fields keep the
+		// birth-scoped bars.
+		distance := f.DistancePoints
+		if price > 0 {
+			distance = kernel.SignedDistancePoints(price, l.Price)
+		}
 		row := gin.H{
 			"price":         l.Price,
 			"label":         l.Label,
 			"grade":         l.Grade,
 			"machine_grade": l.MachineGrade,
 			"instruction":   l.Instruction,
-			"distance":      f.DistancePoints,
+			"distance":      distance,
 			"sweep":         f.Swept,
 			"closes_beyond": maxI(f.ClosesBeyondUp, f.ClosesBeyondDown),
 			"accept_have":   f.AcceptHave,
