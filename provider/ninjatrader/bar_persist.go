@@ -40,6 +40,32 @@ func ClosedBarsOnly(bars []Bar, tf string, nowMs int64) []Bar {
 	return out
 }
 
+// ClosedCacheTail returns up to `window` of the most-recent CLOSED bars from
+// the cache (sorted ascending by T, oldest first). Live bar_update frames
+// only ever carry the FORMING bar — NT8 does not re-emit the just-closed bar
+// at the minute boundary — so the live persistence path reads the final
+// closed bars from the cache itself (which always holds them) instead of the
+// frame. A window of 8 covers multi-minute gaps between frames.
+func ClosedCacheTail(get func(symbol, tf string) []Bar, symbol, tf string, nowMs int64, window int) []Bar {
+	dur := timeframeMs(tf)
+	if dur <= 0 {
+		dur = 60_000
+	}
+	all := get(symbol, tf)
+	closed := make([]Bar, 0, window)
+	for i := len(all) - 1; i >= 0 && len(closed) < window; i-- {
+		if all[i].T+dur <= nowMs {
+			closed = append(closed, all[i])
+		}
+	}
+	// Reverse to restore ascending order (InsertBars expects any order, but
+	// ascending keeps logs sane).
+	for l, r := 0, len(closed)-1; l < r; l, r = l+1, r-1 {
+		closed[l], closed[r] = closed[r], closed[l]
+	}
+	return closed
+}
+
 // fanOutBarPersist invokes the installed persister in its own goroutine with
 // a panic guard, so a persister failure can never propagate into the drain
 // loop. warn is the package's WARN sink (injected for tests).
