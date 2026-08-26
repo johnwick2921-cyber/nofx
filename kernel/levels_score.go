@@ -105,16 +105,26 @@ func isZoneKind(k LevelKind) bool {
 // ── v3 zone grading (owner-approved 2026-08-24, research-grounded) ──────────
 // Evidence = kindBase(TF) × reversalBonus × TFmult × freshness × (1+0.2·conf).
 // Ground: freshness · departure speed · HTF alignment (SMC quality filters);
-// RBD/DBR (reversal) > RBR/DBD (continuation). 1m zones stay C (noise); 15m/1h
-// floor B, cap B; 4h may reach A with confluence.
+// RBD/DBR (reversal) > RBR/DBD (continuation). 1m zones stay C (noise); 15m
+// floor B, cap B; 1h floor B, cap A (1h wave, 2026-08-25); 4h may reach A.
+//
+// R3 note (grading audit §4.1, 2026-08-25): zoneEvidenceByKind ALREADY tiers by
+// TF and zoneTFMult multiplies AGAIN, so the EFFECTIVE 4h:1m spread is ≈2.3×
+// (0.72/0.40 × 1.3/1.0 = 1.80 × 1.30), not the 1.3× a raw TFmult reading
+// suggests. DOCUMENTED, NOT CHANGED — the 1h-wave calibration numbers are
+// computed against this formula and 4h seniority rides TFMult 1.3 vs 1.2.
+// Revisit after the 1h wave has live data (owner queue).
 
 // zoneEvidenceByKind maps kind → TF tier → base evidence. Tiers: 1m / 15m / 1h / 4h.
+// 1h values raised by the 1h wave (2026-08-25, owner R1): the 1h is the
+// setup/context rung of the intraday ladder (4H trend → 1H setup → 15M entry);
+// its zones may now reach A with confluence like 4h.
 var zoneEvidenceByKind = map[LevelKind]map[string]float64{
-	KindOB:     {"1m": 0.40, "15m": 0.50, "1h": 0.60, "4h": 0.72},
-	KindFVG:    {"1m": 0.35, "15m": 0.45, "1h": 0.55, "4h": 0.65},
-	KindIFVG:   {"1m": 0.35, "15m": 0.45, "1h": 0.55, "4h": 0.65},
-	KindSupply: {"1m": 0.35, "15m": 0.45, "1h": 0.55, "4h": 0.65},
-	KindDemand: {"1m": 0.35, "15m": 0.45, "1h": 0.55, "4h": 0.65},
+	KindOB:     {"1m": 0.40, "15m": 0.50, "1h": 0.70, "4h": 0.72},
+	KindFVG:    {"1m": 0.35, "15m": 0.45, "1h": 0.65, "4h": 0.65},
+	KindIFVG:   {"1m": 0.35, "15m": 0.45, "1h": 0.65, "4h": 0.65},
+	KindSupply: {"1m": 0.35, "15m": 0.45, "1h": 0.65, "4h": 0.65},
+	KindDemand: {"1m": 0.35, "15m": 0.45, "1h": 0.65, "4h": 0.65},
 }
 
 // zoneTFMult is the "HTF alignment" multiplier per detection timeframe tier.
@@ -239,6 +249,11 @@ func freshMult(f string) float64 {
 // (the owner's proximity_filter_atr; ≤0 → the spec constant 1.5) — the band
 // OUTSIDE which no level is generated or seated.
 func ScoreLevels(levels []DetectedLevel, price, dATR float64, freshness func(DetectedLevel) string, maxLevels int, proximityK float64) []ScoredLevel {
+	return scoreLevelsPool(levels, price, dATR, freshness, maxLevels, proximityK)
+}
+
+// scoreLevelsPool is the full scorer (lock → grade → collapse → seat → top-N).
+func scoreLevelsPool(levels []DetectedLevel, price, dATR float64, freshness func(DetectedLevel) string, maxLevels int, proximityK float64) []ScoredLevel {
 	if price <= 0 || dATR <= 0 {
 		return nil
 	}
@@ -305,14 +320,17 @@ func ScoreLevels(levels []DetectedLevel, price, dATR float64, freshness func(Det
 		}
 		grade := gradeFromScore(score)
 		if isZoneKind(l.Kind) {
-			// v3 floors/caps: 1m zones never above C; 15m/1h floor B, cap B;
-			// 4h floor B and may reach A with confluence (the professionals'
-			// level — research: HTF alignment).
+			// v3 floors/caps: 1m zones never above C; 15m floor B, cap B
+			// (entry TF, not a zone-defining TF — research R20); 1h floor B,
+			// cap A (1h wave 2026-08-25 — setup/context rung may reach A with
+			// confluence); 4h floor B and may reach A (the professionals' level).
 			switch zoneTierFor(l.TF) {
-			case "15m", "1h":
-				if grade == "C" {
+			case "15m":
+				if grade != "B" {
 					grade = "B"
-				} else if grade == "A" {
+				}
+			case "1h":
+				if grade == "C" {
 					grade = "B"
 				}
 			case "4h":
@@ -377,11 +395,77 @@ func ScoreLevels(levels []DetectedLevel, price, dATR float64, freshness func(Det
 		scored = scored[:maxLevels]
 	}
 
-	// Output nearest-first for the executor table.
+// Output nearest-first for the executor table.
 	sort.SliceStable(scored, func(i, j int) bool {
 		return math.Abs(scored[i].Distance) < math.Abs(scored[j].Distance)
 	})
 	return scored
+}
+
+// ScoreLevelsMinGrade (grading audit §4.6/4.7, 2026-08-25) — ScoreLevels with
+// a minGrade floor that CANNOT gut a side of the table: the scorer runs on a
+// 2× pool, the sub-floor rows are filtered, and seatBothSides re-balances
+// AFTER the filter from the surviving pool, so a min_grade cut refills seats
+// with in-band same-side candidates instead of leaving the executor/planner
+// table one-sided. Empty minGrade → byte-identical to ScoreLevels.
+func ScoreLevelsMinGrade(levels []DetectedLevel, price, dATR float64, freshness func(DetectedLevel) string, maxLevels int, proximityK float64, minGrade string) []ScoredLevel {
+	eff := maxLevels
+	if eff <= 0 {
+		eff = DefaultMaxLevels
+	}
+	if price <= 0 || dATR <= 0 {
+		return nil
+	}
+	pool := scoreLevelsPool(levels, price, dATR, freshness, eff*2, proximityK)
+	filtered := FilterLevelsByMinGrade(pool, minGrade)
+	if minGrade == "" || len(filtered) <= eff {
+		if len(filtered) > eff {
+			filtered = filtered[:eff]
+		}
+		return filtered
+	}
+	// Re-seat the filtered pool with the SAME seating rules as ScoreLevels so
+	// the both-side guarantee (P0.1) holds after the cut.
+	sort.SliceStable(filtered, func(i, j int) bool {
+		pi, pj := isTodayPriority(filtered[i].Kind), isTodayPriority(filtered[j].Kind)
+		if pi != pj {
+			return pi
+		}
+		if filtered[i].Score != filtered[j].Score {
+			return filtered[i].Score > filtered[j].Score
+		}
+		di, dj := math.Abs(filtered[i].Distance), math.Abs(filtered[j].Distance)
+		if di != dj {
+			return di < dj
+		}
+		return filtered[i].Price < filtered[j].Price
+	})
+	filtered = seatHTF(filtered, eff)
+	filtered = seatBothSides(filtered, eff)
+	if len(filtered) > eff {
+		filtered = filtered[:eff]
+	}
+	sort.SliceStable(filtered, func(i, j int) bool {
+		return math.Abs(filtered[i].Distance) < math.Abs(filtered[j].Distance)
+	})
+	return filtered
+}
+
+// FilterPlanLevelsByMinGrade (grading audit §4.7, 2026-08-25) — the plan-doc
+// twin of FilterLevelsByMinGrade, for surfaces that consume []PlanLevel
+// (PLAN STATUS, level-state writers). Empty/unknown minGrade is a no-op.
+func FilterPlanLevelsByMinGrade(levels []PlanLevel, minGrade string) []PlanLevel {
+	min, ok := levelGradeRank[strings.ToUpper(strings.TrimSpace(minGrade))]
+	if !ok {
+		return levels
+	}
+	out := make([]PlanLevel, 0, len(levels))
+	for _, l := range levels {
+		if levelGradeRank[strings.ToUpper(strings.TrimSpace(l.Grade))] >= min {
+			out = append(out, l)
+		}
+	}
+	return out
 }
 
 func gradeFromScore(s float64) string {
@@ -481,6 +565,90 @@ func isHTFSwingZone(l ScoredLevel) bool {
 		return true
 	}
 	return false
+}
+
+// is1HSDZone reports whether a scored level is a 1h-tier supply/demand zone —
+// the kind the 1h-wave seat guarantee protects (research: the 1h is the
+// setup rung; its S/D bases are the large-account references day traders
+// respect). TF survives into ScoredLevel via DetectedLevel.TF.
+func is1HSDZone(l ScoredLevel) bool {
+	if zoneTierFor(l.TF) != "1h" {
+		return false
+	}
+	switch l.Kind {
+	case KindSupply, KindDemand:
+		return true
+	}
+	return false
+}
+
+// Seat1HZone (1h wave, 2026-08-25 — research §4 item 2, owner R1) — reserve
+// ONE of the two HTF seats for an in-band 1h supply/demand zone when one
+// exists. seatHTF fills both seats with the strongest HTF swing/zones, which
+// are 4h every time (4h evidence outranks 1h); this post-pass swaps the
+// weakest demotable head entry for the best 1h S/D zone in the tail. No-op
+// when a 1h S/D zone is already seated, when nothing was cut, or when no
+// candidate exists. Pure + deterministic; the seat_1h_zone knob gates the
+// CALL SITE, never this function.
+func Seat1HZone(scored []ScoredLevel, maxLevels int) []ScoredLevel {
+	if maxLevels <= 0 {
+		maxLevels = DefaultMaxLevels
+	}
+	if len(scored) <= maxLevels {
+		return scored
+	}
+	head := append([]ScoredLevel(nil), scored[:maxLevels]...)
+	tail := append([]ScoredLevel(nil), scored[maxLevels:]...)
+	for _, l := range head {
+		if is1HSDZone(l) {
+			return scored // already seated
+		}
+	}
+	best := -1
+	for i, l := range tail {
+		if !is1HSDZone(l) {
+			continue
+		}
+		if best < 0 || l.Score > tail[best].Score {
+			best = i
+		}
+	}
+	if best < 0 {
+		return scored
+	}
+	cand := tail[best]
+	dropIdx := -1
+	for i := len(head) - 1; i >= 0; i-- {
+		if isTodayPriority(head[i].Kind) || isHTFSwingZone(head[i]) {
+			continue
+		}
+		dropIdx = i
+		break
+	}
+	if dropIdx < 0 {
+		return scored // everything in the head is protected
+	}
+	tail = append(tail[:best], tail[best+1:]...)
+	tail = append(tail, head[dropIdx])
+	head = append(head[:dropIdx], head[dropIdx+1:]...)
+	head = append(head, cand)
+	out := append(head, tail...)
+	// Restore strict seating order (same sort as the seatHTF post-pass).
+	sort.SliceStable(out, func(i, j int) bool {
+		pi, pj := isTodayPriority(out[i].Kind), isTodayPriority(out[j].Kind)
+		if pi != pj {
+			return pi
+		}
+		if out[i].Score != out[j].Score {
+			return out[i].Score > out[j].Score
+		}
+		di, dj := math.Abs(out[i].Distance), math.Abs(out[j].Distance)
+		if di != dj {
+			return di < dj
+		}
+		return out[i].Price < out[j].Price
+	})
+	return out
 }
 
 // seatHTF (G2/G3/G6, 2026-08-24) — promote up to 2 HTF swing/zone levels into

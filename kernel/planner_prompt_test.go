@@ -32,6 +32,7 @@ func TestBuildPlannerPrompt(t *testing.T) {
 		"DAY-PLAN READER", "trade_date 2026-08-14 · session NY",
 		"REGIME: trend D=up", "Ranked levels", "PDH", "Calendar", "FOMC", "HARD no-trade blackout",
 		"Owner note", "respect PDH", `"reasoning"`, "sweep_reclaim", "death_condition",
+		`"quality": "A+|A|B|C"`, "C = machine-demoted",
 	} {
 		if !strings.Contains(p, want) {
 			t.Fatalf("planner prompt missing %q\n---\n%s", want, p)
@@ -70,16 +71,39 @@ func TestPlannerPromptT2CautionIsNeverNoTrade(t *testing.T) {
 func TestPlannerPromptHTFZonesSection(t *testing.T) {
 	in := samplePlannerInput()
 	in.HTFZones = []ScoredLevel{
-		{DetectedLevel: DetectedLevel{Kind: KindDemand, Price: 29050, Label: "Demand·1h", HTF: true}, Grade: "B", Fresh: "fresh", Distance: -100},
-		{DetectedLevel: DetectedLevel{Kind: KindSupply, Price: 29300, Label: "Supply·4h", HTF: true}, Grade: "C", Fresh: "fresh", Distance: 150},
+		{DetectedLevel: DetectedLevel{Kind: KindDemand, Price: 29050, Label: "Demand·1h", HTF: true, TF: "1h"}, Grade: "B", Fresh: "fresh", Distance: -100},
+		{DetectedLevel: DetectedLevel{Kind: KindSupply, Price: 29300, Label: "Supply·4h", HTF: true, TF: "4h"}, Grade: "C", Fresh: "fresh", Distance: 150},
 	}
 	p := BuildPlannerPrompt(in)
 	for _, want := range []string{
 		"## HTF zones", "Demand·1h", "Supply·4h", "(HTF zone)",
 		"you MUST include at least ONE HTF zone row",
+		"the nearest 1h supply/demand zone row in that section MUST be one of your included rows",
 	} {
 		if !strings.Contains(p, want) {
 			t.Fatalf("prompt missing %q\n---\n%s", want, p)
 		}
+	}
+}
+
+// 1h wave (2026-08-25) — the 1h mandate is CONDITIONAL: no 1h S/D zone in the
+// section → the mandate line must NOT appear (same conditional pattern as the
+// G2.2 HTF mandate fix).
+func TestPlannerPrompt1HMandateConditional(t *testing.T) {
+	in := samplePlannerInput()
+	in.HTFZones = []ScoredLevel{
+		{DetectedLevel: DetectedLevel{Kind: KindSupply, Price: 29300, Label: "Supply·4h", HTF: true, TF: "4h"}, Grade: "C", Fresh: "fresh", Distance: 150},
+	}
+	p := BuildPlannerPrompt(in)
+	if !strings.Contains(p, "you MUST include at least ONE HTF zone row") {
+		t.Fatalf("HTF mandate must stay when zones exist: %s", p)
+	}
+	if strings.Contains(p, "nearest 1h supply/demand zone") {
+		t.Fatalf("1h mandate must be absent without a 1h S/D zone: %s", p)
+	}
+	in.HTFZones = nil
+	p = BuildPlannerPrompt(in)
+	if strings.Contains(p, "you MUST include at least ONE HTF zone row") {
+		t.Fatalf("HTF mandate must be absent without zones: %s", p)
 	}
 }

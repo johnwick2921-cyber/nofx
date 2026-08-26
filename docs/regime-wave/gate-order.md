@@ -1,7 +1,8 @@
 # Regime wave — executor gate order + planner wake-ups (2026-08-21)
 
 Observed from the shipped code (this order is load-bearing — do not reorder
-without a wave).
+without a wave). **As-built at the 1h-wave cutover rev (see `deploy/RELEASE`)**
+— updated 2026-08-25 for the G6 removal, W6 wake semantics, and the R4 gate.
 
 ## Executor entry gate chain (kernel/engine_position.go, `validateDecision`,
 open actions)
@@ -18,11 +19,13 @@ open actions)
    plan's bias TF 15m; counter-direction untouched; closes on flip/re-plan,
    BOS resumption, or `TRANSITION_MAX_MIN` (45)). Studio
    `regime.transition_standdown` (default ON).
-7. **G6 — loss-streak pause** (`loss_streak`: N consecutive losers in the
-   session pause ALL new opens for `LOSS_STREAK_PAUSE_MIN` (60) or session end.
-   Master-independent). Studio `regime.loss_streak_n` (default 4, 0 = off).
-   **REMOVED 2026-08-23 (owner override) — commit 5126e57c.**
-8. Sizing caps + execution (pre-existing).
+7. **C6 — executor dead-plan gate** (2026-08-25): while the active plan is
+   machine-dead (or planless with day_plan on), new entries are refused;
+   management proceeds.
+8. **R4 — min-scenario-quality gate** (2026-08-25): `min_scenario_quality`
+   floor (A|B, default C = no restriction) refuses entries citing a scenario
+   graded below the floor. Fail-open on off-plan/unknown citations.
+9. Sizing caps + execution (pre-existing).
 
 Advisory-only (never gates): G2 structure line (prompts), G5 consumed-level
 policy (demotion + badge), G7 flip-eval freshness (skips the transition

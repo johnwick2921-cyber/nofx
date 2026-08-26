@@ -19,6 +19,36 @@ func TestExecutorPlanDeadVerdict(t *testing.T) {
 	}
 }
 
+// R4 (2026-08-25) — the min_scenario_quality knob's verdict: fail-open on
+// unknown citations, block only sub-floor scenario citations.
+func TestMinScenarioQualityVerdict(t *testing.T) {
+	qualities := map[string]string{"S1": "A", "S2": "B", "S3": "C"}
+	if blocked, _ := MinScenarioQualityVerdict("open_long", "S2", "A", qualities); !blocked {
+		t.Fatal("S2 (B) must block under floor A")
+	}
+	if blocked, _ := MinScenarioQualityVerdict("open_long", "S1", "A", qualities); blocked {
+		t.Fatal("S1 (A) must pass under floor A")
+	}
+	if blocked, _ := MinScenarioQualityVerdict("open_long", "S3", "B", qualities); !blocked {
+		t.Fatal("S3 (C) must block under floor B")
+	}
+	if blocked, _ := MinScenarioQualityVerdict("open_short", "S3", "C", qualities); blocked {
+		t.Fatal("floor C must never block")
+	}
+	if blocked, _ := MinScenarioQualityVerdict("open_long", "S9", "A", qualities); blocked {
+		t.Fatal("unknown scenario must fail open")
+	}
+	if blocked, _ := MinScenarioQualityVerdict("open_long", "off-plan", "A", qualities); blocked {
+		t.Fatal("off-plan citation must fail open")
+	}
+	if blocked, _ := MinScenarioQualityVerdict("close_long", "S3", "A", qualities); blocked {
+		t.Fatal("management actions are never blocked")
+	}
+	if blocked, _ := MinScenarioQualityVerdict("open_long", "S2", "A", nil); blocked {
+		t.Fatal("nil quality map → dormant")
+	}
+}
+
 func TestTransitionStanddownVerdict(t *testing.T) {
 	// Active + same direction → refused with the full message.
 	blocked, msg := TransitionStanddownVerdict("open_short", true, "short", "CHoCH-up 15m @29470.25 10:45")

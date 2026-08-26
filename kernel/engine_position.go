@@ -227,6 +227,18 @@ func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoi
 				return fmt.Errorf("%s", msg)
 			}
 		}
+
+		// R4 (2026-08-25) — min_scenario_quality gate: with a floor of A or B,
+		// an entry citing a scenario graded below the floor is refused. Default
+		// C = no restriction (today's behavior byte-identical). ctx == nil →
+		// dormant. Position management is NOT blocked.
+		if ctx != nil && ctx.MinScenarioQuality != "" && ctx.MinScenarioQuality != "C" {
+			if blocked, msg := MinScenarioQualityVerdict(d.Action, d.CitedScenario, ctx.MinScenarioQuality, ctx.PlanScenarioQuality); blocked {
+				telemetry.IncGateBlock(ctx.TraderID, "scenario_below_min_quality")
+				logger.Warnf("🚧 SCENARIO QUALITY GATE %s %s: %s", d.Symbol, d.Action, msg)
+				return fmt.Errorf("%s", msg)
+			}
+		}
 	}
 
 	return nil

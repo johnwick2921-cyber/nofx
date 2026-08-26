@@ -151,6 +151,14 @@ func RenderPlanBlock(doc PlanDoc, session string) string {
 // left, and per-level Go facts (distance/sweep/closes-beyond/acceptance/valid)
 // from the P0.4 evaluator.
 func RenderPlanStatus(traderID, symbol string, doc PlanDoc, bars []market.Kline, price, dATR float64, rule string, replansLeft int, now, birthMs int64) string {
+	return RenderPlanStatusMinGrade(traderID, symbol, doc, bars, price, dATR, rule, replansLeft, now, birthMs, "")
+}
+
+// RenderPlanStatusMinGrade (grading audit §4.7, 2026-08-25) — RenderPlanStatus
+// with the min_grade floor applied to the live level list: the executor's
+// PLAN STATUS tail must not show rows below the owner's floor (the planner
+// table and the executor block now enforce it; the status tail must agree).
+func RenderPlanStatusMinGrade(traderID, symbol string, doc PlanDoc, bars []market.Kline, price, dATR float64, rule string, replansLeft int, now, birthMs int64, minGrade string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "# PLAN STATUS (live) — facts=Go, judgment=you\nprice %.2f · re-plans left %d\n", price, replansLeft)
 	if rule == "" {
@@ -159,6 +167,7 @@ func RenderPlanStatus(traderID, symbol string, doc PlanDoc, bars []market.Kline,
 	lookback := 3
 	// Activation window (P3.6): only levels within 1.5×dATR are live candidates.
 	active := ActivePlanLevels(doc.Levels, price, dATR, ActivationWindowK)
+	active = FilterPlanLevelsByMinGrade(active, minGrade)
 	if hidden := len(doc.Levels) - len(active); hidden > 0 {
 		fmt.Fprintf(&b, "(%d level(s) outside the %.1f×dATR activation window — re-arm when price returns)\n", hidden, ActivationWindowK)
 	}

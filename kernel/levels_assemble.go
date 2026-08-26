@@ -18,9 +18,21 @@ import (
 // (no closed bars / no in-band levels) so the caller injects nothing.
 // proximityK is the resolved day-trade lock width (≤0 → spec constant 1.5).
 func BuildKeyLevelsBlock(traderID string, bars []market.Kline, reg SessionRegistry, symbol string, maxLevels int, now time.Time, proximityK float64, extraLevels ...DetectedLevel) string {
-	scored, price, _ := AssembleScoredLevels(traderID, bars, reg, symbol, maxLevels, now, proximityK, extraLevels...)
+	return BuildKeyLevelsBlockOpts(traderID, bars, reg, symbol, maxLevels, now, proximityK, false, "", extraLevels...)
+}
+
+// BuildKeyLevelsBlockOpts (grading audit §4.6/4.7 + 1h wave, 2026-08-25) —
+// BuildKeyLevelsBlock with the seat_1h_zone guarantee and the minGrade floor
+// applied. The executor KEY LEVELS block must obey the SAME rules as the
+// planner table (one-sided tables and sub-min rows reached the executor before
+// this).
+func BuildKeyLevelsBlockOpts(traderID string, bars []market.Kline, reg SessionRegistry, symbol string, maxLevels int, now time.Time, proximityK float64, seat1HZone bool, minGrade string, extraLevels ...DetectedLevel) string {
+	scored, price, _ := AssembleScoredLevelsMinGrade(traderID, bars, reg, symbol, maxLevels, now, proximityK, minGrade, extraLevels...)
 	if price <= 0 {
 		return ""
+	}
+	if seat1HZone {
+		scored = Seat1HZone(scored, maxLevels)
 	}
 	return RenderKeyLevelsBlock(scored, price)
 }
@@ -62,7 +74,7 @@ func AssembleScoredLevels(traderID string, bars []market.Kline, reg SessionRegis
 	all = append(all, GapLevels(bars, atr, 1.0, now)...)
 	all = append(all, EqualHighsLows(bars, tol, now)...)
 	all = append(all, SupplyDemandZones(bars, atr, now)...)
-	all = append(all, FairValueGaps(bars, atr, now)...)
+	all = append(all, FairValueGaps(bars, fvgMinGapPoints(symbol), now)...)
 	all = append(all, OrderBlocks(bars, atr, now)...)
 	all = append(all, extraLevels...) // nPOC etc. from the durable store (P1.3)
 
@@ -70,6 +82,50 @@ func AssembleScoredLevels(traderID string, bars []market.Kline, reg SessionRegis
 	// trader installs LevelStateProvider over store.LevelStateStore. Nil provider →
 	// all-fresh (byte-identical to the pre-W11b output the goldens capture).
 	scored = ScoreLevels(all, price, dATR, levelFreshnessFn(traderID, symbol), maxLevels, proximityK)
+	return scored, price, dATR
+}
+
+// AssembleScoredLevelsMinGrade (grading audit §4.6/4.7, 2026-08-25) is
+// AssembleScoredLevels with a minGrade floor: the scorer runs on a 2× pool so
+// a sub-floor row filtered OUT can be replaced by an in-band same-side
+// candidate — seatBothSides re-balances AFTER the filter, so the minGrade cut
+// can never leave the executor/planner table one-sided when candidates exist.
+// Empty minGrade → byte-identical to AssembleScoredLevels.
+func AssembleScoredLevelsMinGrade(traderID string, bars []market.Kline, reg SessionRegistry, symbol string, maxLevels int, now time.Time, proximityK float64, minGrade string, extraLevels ...DetectedLevel) (scored []ScoredLevel, price, dATR float64) {
+	cb := closedBars(bars, now)
+	if len(cb) == 0 {
+		return nil, 0, 0
+	}
+	price = cb[len(cb)-1].Close
+	if price <= 0 {
+		return nil, 0, 0
+	}
+	dATR = DailyATRProxy(bars, now)
+	if dATR <= 0 {
+		dATR = 0.008 * price // fallback until the map warms
+	}
+	atr := market.ExportCalculateATR(cb, 14)
+	if atr <= 0 {
+		atr = dATR / 20
+	}
+	tick := market.FuturesTickSize(symbol)
+	if tick <= 0 {
+		tick = 0.25
+	}
+	tol := 3 * tick
+
+	var all []DetectedLevel
+	all = append(all, ExtractMultiDayLevels(bars, reg, now)...)
+	all = append(all, RoundNumberLevels(price, dATR, proximityK)...)
+	all = append(all, OpeningRangeLevels(bars, reg, now)...)
+	all = append(all, GapLevels(bars, atr, 1.0, now)...)
+	all = append(all, EqualHighsLows(bars, tol, now)...)
+	all = append(all, SupplyDemandZones(bars, atr, now)...)
+	all = append(all, FairValueGaps(bars, fvgMinGapPoints(symbol), now)...)
+	all = append(all, OrderBlocks(bars, atr, now)...)
+	all = append(all, extraLevels...) // nPOC etc. from the durable store (P1.3)
+
+	scored = ScoreLevelsMinGrade(all, price, dATR, levelFreshnessFn(traderID, symbol), maxLevels, proximityK, minGrade)
 	return scored, price, dATR
 }
 
