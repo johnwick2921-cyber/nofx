@@ -367,6 +367,17 @@ func RoleMismatches(doc *PlanDoc) []string {
 	}
 	var out []string
 	for _, sc := range doc.Scenarios {
+		// FVG ENTRY MODEL (2026-08-26) — an fvg_entry anchored to a
+		// liquidity_break origin gets the SAME sweep-reclaim caution WARN as
+		// other plays (no exemption): the origin is a liquidity pool, the gap
+		// entry is a fade of that pool.
+		if strings.EqualFold(strings.TrimSpace(sc.Condition), "fvg_entry") && sc.Fvg != nil {
+			if RoleForLabel(sc.Fvg.OriginLevel) == RoleLiquidityBreak {
+				out = append(out, fmt.Sprintf("S%s fvg_entry anchored on %s (liquidity_break) — sweep-reclaim caution: enter only on a confirmed reclaim close, never the wick alone",
+					sc.ID, sc.Fvg.OriginLevel))
+			}
+			continue
+		}
 		if sc.Confirm == nil || sc.Confirm.RefPrice <= 0 {
 			continue
 		}
