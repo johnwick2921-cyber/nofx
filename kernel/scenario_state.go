@@ -83,6 +83,16 @@ const anchorTolerance = 2.0
 // mode to avoid — it would attach a confident status to a scenario we never
 // actually identified.
 func ScenarioAnchor(s PlanScenario, levels []PlanLevel) (float64, bool) {
+	// FVG ENTRY MODEL (2026-08-26) — the scenario's anchor is the DISTAL edge
+	// (long → fvg_lo, short → fvg_hi): the min-SL clearance leg must be measured
+	// against the invalidation side, and the level-clearance rule then accepts
+	// SL = distal ± 2 ticks naturally.
+	if s.Fvg != nil && s.Fvg.Lo > 0 && s.Fvg.Hi > 0 {
+		if strings.EqualFold(s.Fvg.Direction, "long") {
+			return s.Fvg.Lo, true
+		}
+		return s.Fvg.Hi, true
+	}
 	for _, text := range []string{s.Trigger, s.Invalid} {
 		for _, loc := range priceToken.FindAllStringIndex(text, -1) {
 			tok := text[loc[0]:loc[1]]

@@ -124,18 +124,22 @@ runCycle (trader/auto_trader_loop.go)
        3. F1 real R:R from the actual entry reference (entry = snapshot price,
           AI limit wins) vs min_risk_reward_ratio (default 3.0, floor 1.0)
        4. min-confidence (SafeDefaultMinConfidence=60; config wins)
-       5. 🚫 G1 HTF VETO — opposed vs CONFIRMED 1h structure refused
+       5. 🚫 A3 MIN-SL (2026-08-26) — |entry−SL| ≥ MIN_SL_ATR_MULT (env,
+          default 1.0) × ATR(14, 5m Wilder) AND the stop clears the cited
+          anchor level/zone far edge by ≥ MinSLTickClearance (2) ticks;
+          env 0 = off
+       6. 🚫 G1 HTF VETO — opposed vs CONFIRMED 1h structure refused
           ("htf_veto: short vs 1h TRENDING_UP (BOS …)"), RANGING/unavailable
           fail-open WARN
-       6. 🚫 G4 TRANSITION STAND-DOWN — plan-direction entries paused while an
+       7. 🚫 G4 TRANSITION STAND-DOWN — plan-direction entries paused while an
           unconfirmed counter-trend CHoCH/MSS is open; counter-direction
           untouched
-       7. 🚫 C6 EXECUTOR DEAD-PLAN GATE — the machine-dead plan verdict blocks
+       8. 🚫 C6 EXECUTOR DEAD-PLAN GATE — the machine-dead plan verdict blocks
           new entries (management proceeds)
-       8. 🚫 R4 MIN-SCENARIO-QUALITY (2026-08-25) — min_scenario_quality floor
+       9. 🚫 R4 MIN-SCENARIO-QUALITY (2026-08-25) — min_scenario_quality floor
           (A|B; default C = no restriction): an entry citing a scenario graded
           below the floor is refused; fail-open on off-plan/unknown citations
-       9. sizing caps (futures notional ceiling + per-order clamp)
+       10. sizing caps (futures notional ceiling + per-order clamp)
   ↓
   executeDecisionWithRecord → NT8 SIM order via the same TCP AddOn → ACK →
   fill → position row (frozen plan_id/version/scenario at entry)

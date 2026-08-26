@@ -51,17 +51,34 @@ type PlanConfirm struct {
 type PlanScenario struct {
 	ID          string    `json:"id"`           // S1, S2, S3
 	Trigger     string    `json:"trigger"`      // the setup description
-	Condition   string    `json:"condition"`    // reclaim|hold|sweep_reclaim|reject|acceptance|breakout_retest
+	Condition   string    `json:"condition"`    // reclaim|hold|sweep_reclaim|reject|acceptance|breakout_retest|fvg_entry
 	Direction   string    `json:"direction"`    // long | short
 	TargetChain []float64 `json:"target_chain"` // ordered targets
 	Invalid     string    `json:"invalid"`      // invalidation
 	// Confirm (C1) — REQUIRED after the grace window; see PlanConfirm.
 	Confirm *PlanConfirm `json:"confirm,omitempty"`
 	Quality string       `json:"quality"` // A+ | A | B
+	// Fvg (FVG ENTRY MODEL, 2026-08-26) — machine-verified gap-entry play:
+	// condition=="fvg_entry" REQUIRES this object. Every field is re-verified
+	// from stored bars at write time (ValidateFvgEntryScenarios) — the model
+	// declares, the math verifies.
+	Fvg *PlanFvgEntry `json:"fvg,omitempty"`
 	// G5 (regime wave 2026-08-21) — true when the trigger level was CONSUMED at
 	// write/re-align time: quality is capped at C and the card badges it
 	// "level consumed". Advisory — never a gate.
 	Consumed bool `json:"consumed,omitempty"`
+}
+
+// PlanFvgEntry is the machine-verifiable schema of an fvg_entry scenario.
+// ce is COMPUTED (midpoint) — a declared ce is re-checked, never trusted.
+type PlanFvgEntry struct {
+	Lo          float64 `json:"fvg_lo"`
+	Hi          float64 `json:"fvg_hi"`
+	CE          float64 `json:"ce"`
+	EntryMode   string  `json:"entry_mode"` // edge | ce (ce for gaps > FVG_CE_WIDTH_PTS)
+	DisplacementATR float64 `json:"displacement_atr"` // impulse body in 5m ATR multiples (0 = let the validator compute)
+	OriginLevel string  `json:"origin_level"` // the Tier-1/seated anchor the displacement left
+	Direction   string  `json:"direction"`    // long | short (must equal scenario direction)
 }
 
 // PlanDoc is the full plan (stored as the plans.doc JSON).
@@ -103,7 +120,7 @@ var (
 	biasDirections    = map[string]bool{"long": true, "short": true, "neutral": true}
 	biasConvictions   = map[string]bool{"high": true, "medium": true, "low": true}
 	levelGrades       = map[string]bool{"A": true, "B": true, "C": true}
-	scenarioConds     = map[string]bool{"reclaim": true, "hold": true, "sweep_reclaim": true, "reject": true, "acceptance": true, "breakout_retest": true}
+	scenarioConds     = map[string]bool{"reclaim": true, "hold": true, "sweep_reclaim": true, "reject": true, "acceptance": true, "breakout_retest": true, "fvg_entry": true}
 	scenarioDirs      = map[string]bool{"long": true, "short": true}
 	// C is ACCEPTED: it is the G5 machine-demoted state (trigger level consumed
 	// at write/re-align time), never a model-written grade. The write path runs
