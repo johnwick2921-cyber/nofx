@@ -781,7 +781,11 @@ func SeatVolumeFamily(scored []ScoredLevel, maxLevels int) []ScoredLevel {
 	cand := tail[best]
 	dropIdx := -1
 	for i := len(head) - 1; i >= 0; i-- {
-		if isTodayPriority(head[i].Kind) || isHTFSeatEligible(head[i]) || isVolumeFamilyKind(head[i].Kind) {
+		// Protect A-grade Tier-1 anchors, HTF-eligible seats and other volume
+		// rows; B-grade/consumed anchors (target_only in practice) are
+		// displaceable — the E1 guarantee must hold even when every seat is an
+		// anchor (the live 2026-08-26 map: 8/8 seats were priority anchors).
+		if (isTier1Kind(head[i].Kind) && head[i].Grade == "A") || isHTFSeatEligible(head[i]) || isVolumeFamilyKind(head[i].Kind) {
 			continue
 		}
 		dropIdx = i
