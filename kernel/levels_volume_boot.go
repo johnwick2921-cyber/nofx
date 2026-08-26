@@ -10,4 +10,6 @@ import (
 func LogVolumeWaveBoot() {
 	logger.Infof("🎛 volume wave: detectors=on · seats=%d · proximity=%.1f · family-confluence(cap=%d) · zone-ladder=1.0/0.6/0.3/0.15 · roles=on(overrides=%v) · bias_ctx=on",
 		DefaultMaxLevels, ActivationWindowK, ConfluenceCap(), IsRoleOverridden())
+	logger.Infof("🎯 touch telemetry: band=%dt(%.1fpt) max_bars=%d vol_lookback=%d approach=%d — advisory, zero gates",
+		TouchBandTicks(), TouchBandPoints(), TouchEpisodeMaxBars(), TouchVolLookback(), TouchApproachBars())
 }

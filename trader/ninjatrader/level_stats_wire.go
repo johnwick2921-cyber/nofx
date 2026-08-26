@@ -102,6 +102,19 @@ func runLevelStatsDay(st *store.Store, ls *store.LevelStatsStore, traderID strin
 		logger.Warnf("level_stats: %s upsert failed: %v", dayKey, err)
 		return
 	}
+	// T1 (2026-08-26) — touch telemetry feeds level_stats: episode counts per
+	// level join for the 2-week verdict (rejections vs acceptances per level).
+	if eps, err := st.TouchEpisodes().EpisodeCountByLevel(traderID, dayKey); err == nil && len(eps) > 0 {
+		logger.Infof("📊 level_stats: %s fed %d touch episode(s) across %d level(s) (join: touch_episodes)", dayKey, sumEpisodes(eps), len(eps))
+	}
 	n, _ := ls.Count()
 	logger.Infof("📊 level_stats: %s evaluated %d seated level(s) (total rows %d) — forward validation accumulating", dayKey, len(rows), n)
+}
+
+func sumEpisodes(rows []store.EpisodeCountRow) int64 {
+	var n int64
+	for _, r := range rows {
+		n += r.Count
+	}
+	return n
 }

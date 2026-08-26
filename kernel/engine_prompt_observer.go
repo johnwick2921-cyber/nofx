@@ -37,6 +37,9 @@ type ObserverInput struct {
 	// swings + latest events); the observer judges the conflict question
 	// against THIS machine truth, not its own re-derivation.
 	StructureLine string
+	// TouchLines (T2 telemetry addendum, 2026-08-26) — the live TOUCH lines
+	// for active level episodes (facts, advisory). Empty → section omitted.
+	TouchLines string
 }
 
 // ObserverAssessment is the schema-enforced watch response.
@@ -90,6 +93,12 @@ func (e *StrategyEngine) BuildObserverSystemPrompt(in ObserverInput, snapshotMs 
 	sb.WriteString("```\n" + thesis + "\n```\n\n")
 	if line := strings.TrimSpace(in.StructureLine); line != "" {
 		sb.WriteString("## MACHINE STRUCTURE (Go-computed — the conflict question below is judged against THIS, cite the event)\n")
+		sb.WriteString(line + "\n\n")
+	}
+	// T2 (2026-08-26) — live touch telemetry (facts, advisory): one TOUCH line
+	// per active episode, nearest 2. Zero order authority.
+	if line := strings.TrimSpace(in.TouchLines); line != "" {
+		sb.WriteString("## TOUCH (live level reactions — facts, advisory)\n")
 		sb.WriteString(line + "\n\n")
 	}
 	sb.WriteString("## YOUR QUESTIONS (answer EXACTLY these)")
