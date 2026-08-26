@@ -7,6 +7,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"nofx/logger"
 )
 
 // P1.5 — CONFLUENCE SCORER → graded TOP-8.
@@ -395,6 +397,9 @@ func scoreLevelsPool(levels []DetectedLevel, price, dATR float64, freshness func
 		proximityK = ActivationWindowK
 	}
 	band := proximityK * dATR
+	// S1 (mega-research 2026-08-26) — confBand = 0.10 × daily-range proxy:
+	// ±35pt at dATR≈350 — wide enough that distant rows count as "confluence".
+	// Documented, not changed here (the proximity re-tune is config-side).
 	confBand := 0.10 * dATR // cluster tolerance
 
 	// Proximity filter (day-trade lock).
@@ -548,6 +553,11 @@ func scoreLevelsPool(levels []DetectedLevel, price, dATR float64, freshness func
 	if len(scored) > maxLevels {
 		scored = scored[:maxLevels]
 	}
+
+	// S1/A13 (mega-research 2026-08-26) — the seated table was never logged, so
+	// per-hour in-band counts were unmeasurable for Sep-3. One line per planner
+	// read makes the pre/post proximity re-tune pool size observable.
+	logger.Infof("🗺️ seated %d/%d in-band levels (proximity band ±%.0fpt, %d of them retained)", len(scored), len(inBand), band, len(scored))
 
 // Output nearest-first for the executor table.
 	sort.SliceStable(scored, func(i, j int) bool {

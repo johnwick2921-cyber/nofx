@@ -53,7 +53,7 @@ func AssembleScoredLevels(traderID string, bars []market.Kline, reg SessionRegis
 	if price <= 0 {
 		return nil, 0, 0
 	}
-	dATR = DailyATRProxy(bars, now)
+	dATR = DailyRangeProxy(bars, now)
 	if dATR <= 0 {
 		dATR = 0.008 * price // fallback until the map warms
 	}
@@ -101,7 +101,7 @@ func AssembleScoredLevelsMinGrade(traderID string, bars []market.Kline, reg Sess
 	if price <= 0 {
 		return nil, 0, 0
 	}
-	dATR = DailyATRProxy(bars, now)
+	dATR = DailyRangeProxy(bars, now)
 	if dATR <= 0 {
 		dATR = 0.008 * price // fallback until the map warms
 	}
@@ -202,11 +202,13 @@ func tagHTFLevel(l DetectedLevel, tf string) DetectedLevel {
 	return l
 }
 
-// DailyATRProxy estimates the daily ATR from intraday bars by averaging each
-// COMPLETED CME session-day's range (the developing day is skipped). 0 when no
-// completed day is present — the caller falls back. Improves as the cache /
-// durable store warms forward.
-func DailyATRProxy(bars []market.Kline, now time.Time) float64 {
+// DailyRangeProxy estimates the typical daily range from intraday bars by
+// averaging each COMPLETED CME session-day's range (the developing day is
+// skipped). 0 when no completed day is present — the caller falls back.
+// Improves as the cache / durable store warms forward.
+// S1 (mega-research 2026-08-26) — RENAMED from DailyATRProxy: this is a
+// session-day H−L range mean, NOT an ATR. The name now says so.
+func DailyRangeProxy(bars []market.Kline, now time.Time) float64 {
 	cb := closedBars(bars, now)
 	if len(cb) == 0 {
 		return 0
