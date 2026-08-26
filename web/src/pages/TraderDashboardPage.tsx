@@ -153,6 +153,26 @@ export function TraderDashboardPage({
     string | undefined
   >(undefined)
   const [chartUpdateKey, setChartUpdateKey] = useState<number>(0)
+  // C4 (README §9) — the debug strip's SYSTEM_STATUS was a static lie.
+  // Poll the real /api/health (status + running revision) every 30s.
+  const [health, setHealth] = useState<{ status?: string; revision?: string }>(
+    {}
+  )
+  useEffect(() => {
+    let live = true
+    const poll = () => {
+      fetch('/api/health')
+        .then((r) => r.json())
+        .then((j) => live && setHealth(j))
+        .catch(() => live && setHealth({ status: 'unreachable' }))
+    }
+    poll()
+    const iv = setInterval(poll, 30_000)
+    return () => {
+      live = false
+      clearInterval(iv)
+    }
+  }, [])
   const chartSectionRef = useRef<HTMLDivElement>(null)
   const [showWalletAddress, setShowWalletAddress] = useState<boolean>(false)
   const [copiedAddress, setCopiedAddress] = useState<boolean>(false)
@@ -571,7 +591,24 @@ export function TraderDashboardPage({
 
         {/* Debug Info */}
         <div className="mb-4 px-3 py-1.5 rounded bg-black/40 border border-white/5 text-[10px] font-mono text-nofx-text-muted flex justify-between items-center opacity-60 hover:opacity-100 transition-opacity">
-          <span style={{ color: '#0ECB81' }}>SYSTEM_STATUS::ONLINE</span>
+          <span
+            style={{
+              color:
+                health.status === undefined
+                  ? '#8C8C8C'
+                  : health.status === 'ok'
+                    ? '#0ECB81'
+                    : '#F6465D',
+            }}
+          >
+            SYSTEM_STATUS::
+            {health.status === undefined
+              ? '…'
+              : health.status === 'ok'
+                ? 'ONLINE'
+                : String(health.status).toUpperCase()}
+            {health.revision ? ` · REV::${health.revision}` : ''}
+          </span>
           {account ? (
             <div className="flex gap-4">
               <span>LAST_UPDATE::{lastUpdate}</span>
