@@ -186,8 +186,17 @@ func RenderPlanStatusMinGrade(traderID, symbol string, doc PlanDoc, bars []marke
 		if !f.StillValid {
 			valid = "CONSUMED"
 		}
+		// Zero-reference regression guard (2026-08-26, same class as the card's
+		// "dist wrong again"): a fresh re-plan makes BarsSince empty →
+		// DistancePoints = 0 − level. Distance is a snapshot fact — use the
+		// caller's current price (nonzero; engine_analysis computes it from the
+		// closed bars), falling back to the evaluator value only when it is 0.
+		dist := f.DistancePoints
+		if price > 0 {
+			dist = SignedDistancePoints(price, l.Price)
+		}
 		fmt.Fprintf(&b, "  %.2f %s: dist %+.1f · sweep=%s · closes-beyond %d · acceptance %d/%d · %s",
-			l.Price, l.Label, f.DistancePoints, sweep, maxInt(f.ClosesBeyondUp, f.ClosesBeyondDown), f.AcceptHave, f.AcceptNeed, valid)
+			l.Price, l.Label, dist, sweep, maxInt(f.ClosesBeyondUp, f.ClosesBeyondDown), f.AcceptHave, f.AcceptNeed, valid)
 		// W11b — append persisted cross-session state so a level burned in an EARLIER
 		// session reads burned NOW (not just consumed-this-session). Only emitted when
 		// there IS persisted state → nil provider = byte-identical to the pre-W11b line.

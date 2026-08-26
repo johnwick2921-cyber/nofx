@@ -76,6 +76,7 @@ func AssembleScoredLevels(traderID string, bars []market.Kline, reg SessionRegis
 	all = append(all, SupplyDemandZones(bars, atr, now)...)
 	all = append(all, FairValueGaps(bars, fvgMinGapPoints(symbol), now)...)
 	all = append(all, OrderBlocks(bars, atr, now)...)
+	all = append(all, VolumeLevels(bars, now)...) // Pack B (2026-08-26) — volume family
 	all = append(all, extraLevels...) // nPOC etc. from the durable store (P1.3)
 
 	// W11b — persisted level-state (freshness A→B→C, consumed) now surfaces: the
@@ -123,6 +124,7 @@ func AssembleScoredLevelsMinGrade(traderID string, bars []market.Kline, reg Sess
 	all = append(all, SupplyDemandZones(bars, atr, now)...)
 	all = append(all, FairValueGaps(bars, fvgMinGapPoints(symbol), now)...)
 	all = append(all, OrderBlocks(bars, atr, now)...)
+	all = append(all, VolumeLevels(bars, now)...) // Pack B (2026-08-26) — volume family
 	all = append(all, extraLevels...) // nPOC etc. from the durable store (P1.3)
 
 	scored = ScoreLevelsMinGrade(all, price, dATR, levelFreshnessFn(traderID, symbol), maxLevels, proximityK, minGrade)

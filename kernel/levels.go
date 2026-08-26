@@ -37,6 +37,16 @@ const (
 	KindIBH    LevelKind = "IB-H"   // initial-balance high
 	KindIBL    LevelKind = "IB-L"   // initial-balance low
 	KindNPOC   LevelKind = "nPOC"   // naked point of control
+	// Pack B (owner override 2026-08-26) — VOLUME FAMILY kinds. Forward-validated
+	// via the B4 level_stats table; weights are provisional until the 2-week verdict.
+	KindVWAP   LevelKind = "VWAP"   // session-anchored VWAP (+±1σ band lines share this kind)
+	KindEVWAP  LevelKind = "eVWAP"  // extended VWAP (overnight anchor, 16:00 CT prior day)
+	KindPOC    LevelKind = "POC"    // prior-day point of control (max-volume price)
+	KindVAH    LevelKind = "VAH"    // prior-day value-area high (70%)
+	KindVAL    LevelKind = "VAL"    // prior-day value-area low (70%)
+	KindPDVWAP LevelKind = "pdVWAP" // prior-day session VWAP
+	KindSETT   LevelKind = "SETT"   // prior settlement (16:00 CT close)
+	KindMIDO   LevelKind = "MID-O"  // overnight range midpoint
 	KindEQH    LevelKind = "EQH"    // equal highs (liquidity)
 	KindEQL    LevelKind = "EQL"    // equal lows (liquidity)
 	KindSupply LevelKind = "SUPPLY" // supply zone

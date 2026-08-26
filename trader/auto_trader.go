@@ -639,6 +639,24 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 		// replay/calibration. Idempotent (once); nil-safe; never blocks the loop.
 		if st != nil {
 			ntTrader.WireBarPersistence(st)
+			// B4 (2026-08-26) — level_stats nightly forward validation.
+			ntTrader.WireLevelStatsNightly(st, config.ID)
+			// T1 (2026-08-26) — touch-telemetry sink: persist closed episodes
+			// (advisory; append-only). One sink per process.
+			if te := st.TouchEpisodes(); te != nil {
+				if err := te.Migrate(); err == nil {
+					kernel.SetTouchEpisodeSink(func(ep kernel.TouchEpisode) {
+						_ = te.Insert(store.TouchEpisodeDB{
+							TraderID: ep.TraderID, SessionDay: kernel.CMESessionDayKey(time.UnixMilli(ep.ClosedAtMs)),
+							Symbol: ep.Symbol, Label: ep.Label, LevelPrice: ep.LevelPrice,
+							Number: ep.Number, OpenedAtMs: ep.OpenedAtMs, ClosedAtMs: ep.ClosedAtMs,
+							BarsIn: ep.BarsIn, PenetrationPts: ep.PenetrationPts, WickPenPts: ep.WickPenPts,
+							BodyPenPts: ep.BodyPenPts, Close1m: ep.Close1m, Close5m: ep.Close5m,
+							VolRatio: ep.VolRatio, ApproachATR: ep.ApproachATR, Shape: ep.Shape,
+						})
+					})
+				}
+			}
 		}
 		// Plan 4 Stage 4 — set parent reference for defer-until-balance guard.
 		// This is set AFTER the AutoTrader is partially initialized, so we defer

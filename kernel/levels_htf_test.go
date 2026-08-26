@@ -104,9 +104,10 @@ func TestDetectHTFLevelsEQH(t *testing.T) {
 	}
 }
 
-// TestHTFZoneGradesB covers the v3 floors: 15m zones floor B cap B, 1m zones
-// stay C, 1h zones may reach A with confluence (1h wave, 2026-08-25), 4h zones
-// may reach A with confluence.
+// TestHTFZoneGradesB covers the v3 floors + the Pack B B2 gate (2026-08-26):
+// 15m zones floor B cap B, 1m zones stay C, and a pattern grades ABOVE C only
+// within TIER1_PROXIMITY_TICKS of a Tier-1 anchor (the 1h/4h "may reach A with
+// confluence" path now requires the Tier-1 proximity in addition to confluence).
 func TestHTFZoneGradesB(t *testing.T) {
 	dATR := 100.0
 	price := 1000.0
@@ -117,6 +118,12 @@ func TestHTFZoneGradesB(t *testing.T) {
 		}
 		return lv
 	}
+	mkZoneWithTier1 := func(tf string) []DetectedLevel {
+		// A PDH anchor within 12 ticks (3.00 pts) of the zone band edge.
+		lv := mkZone(tf)
+		lv = append(lv, DetectedLevel{Kind: KindPDH, Price: 1001, Lo: 1001, Hi: 1001, Label: "PDH"})
+		return lv
+	}
 	gradeOf := func(s []ScoredLevel) string {
 		for _, l := range s {
 			if l.Kind == KindDemand {
@@ -125,17 +132,21 @@ func TestHTFZoneGradesB(t *testing.T) {
 		}
 		return ""
 	}
-	if g := gradeOf(ScoreLevels(mkZone("1h"), price, dATR, nil, 8, 1.5)); g != "A" {
-		t.Fatalf("1h zone with 5 confluence = %q, want A (1h wave: 1h cap A)", g)
+	// B2: no Tier-1 anchor → pattern stays C even with confluence.
+	if g := gradeOf(ScoreLevels(mkZone("1h"), price, dATR, nil, 8, 1.5)); g != "C" {
+		t.Fatalf("1h zone with 5 confluence, no Tier-1 anchor = %q, want C (B2 pattern-above-C gate)", g)
+	}
+	if g := gradeOf(ScoreLevels(mkZoneWithTier1("1h"), price, dATR, nil, 8, 1.5)); g != "A" {
+		t.Fatalf("1h zone with 5 confluence + Tier-1 anchor = %q, want A (1h wave: 1h cap A)", g)
 	}
 	if g := gradeOf(ScoreLevels(mkZone("1m"), price, dATR, nil, 8, 1.5)); g != "C" {
 		t.Fatalf("1m zone with 5 confluence = %q, want C (never above)", g)
 	}
-	if g := gradeOf(ScoreLevels(mkZone("15m"), price, dATR, nil, 8, 1.5)); g != "B" {
-		t.Fatalf("15m zone with 5 confluence = %q, want B (15m stays capped below A)", g)
+	if g := gradeOf(ScoreLevels(mkZoneWithTier1("15m"), price, dATR, nil, 8, 1.5)); g != "B" {
+		t.Fatalf("15m zone with confluence + Tier-1 anchor = %q, want B (15m stays capped below A)", g)
 	}
-	if g := gradeOf(ScoreLevels(mkZone("4h"), price, dATR, nil, 8, 1.5)); g != "A" {
-		t.Fatalf("4h zone with 5 confluence = %q, want A (v3 allows A on 4h)", g)
+	if g := gradeOf(ScoreLevels(mkZoneWithTier1("4h"), price, dATR, nil, 8, 1.5)); g != "A" {
+		t.Fatalf("4h zone with confluence + Tier-1 anchor = %q, want A (v3 allows A on 4h)", g)
 	}
 }
 
