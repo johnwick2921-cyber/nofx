@@ -428,7 +428,7 @@ export function DayPlanEditor({ config, onChange, disabled, language }: Props) {
           <FieldRow label={tp('proximity', language)}>
             <input
               type="range"
-              min={0.5}
+              min={0.1}
               max={3.0}
               step={0.1}
               value={cfg.proximity_filter_atr ?? 1.5}
