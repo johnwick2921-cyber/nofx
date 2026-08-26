@@ -52,6 +52,9 @@ func (at *AutoTrader) snapshotSessionProfiles() {
 		// day-plan knobs so a config question is answered from the log.
 		at.logInfof("🗺️ day-plan knobs: seat_1h_zone=%v min_scenario_quality=%s ob_lookback_bars=%d",
 			dp.Seat1HZoneEnabled(), dp.MinScenarioQualityFor(""), kernel.OBLookbackBars())
+		// A3 (2026-08-26) — min-SL guard observability (0 = off).
+		at.logInfof("🛑 min-sl guard: atr_mult=%.1f level_clearance=%dtick(s)",
+			kernel.MinSLATRMult(), kernel.MinSLTickClearance)
 	})
 	installActivePlanProvider(at, st)
 	// P0-cleanup (2026-08-19) — soft-alert: guardrails that WOULD have tripped
