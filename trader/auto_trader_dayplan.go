@@ -48,6 +48,10 @@ func (at *AutoTrader) snapshotSessionProfiles() {
 	nakedPOCProviderOnce.Do(func() {
 		installNakedPOCProvider(st)
 		installLevelStateProvider(at, st) // W11b — surface persisted freshness/consumed
+		// 1h wave + R4 (2026-08-25) — one boot observability line for the new
+		// day-plan knobs so a config question is answered from the log.
+		at.logInfof("🗺️ day-plan knobs: seat_1h_zone=%v min_scenario_quality=%s ob_lookback_bars=%d",
+			dp.Seat1HZoneEnabled(), dp.MinScenarioQualityFor(""), kernel.OBLookbackBars())
 	})
 	installActivePlanProvider(at, st)
 	// P0-cleanup (2026-08-19) — soft-alert: guardrails that WOULD have tripped

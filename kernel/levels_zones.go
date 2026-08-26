@@ -259,6 +259,9 @@ func obLookbackBars() int {
 	return OBLookbackBarsDefault
 }
 
+// OBLookbackBars is the exported read for boot/observability lines.
+func OBLookbackBars() int { return obLookbackBars() }
+
 // OrderBlocks finds the last opposing candle within a bounded lookback before a
 // displacement ≥1.5×ATR: a big up move → the last DOWN candle before it (bullish
 // OB); a big down move → the last UP candle before it (bearish OB). Zone = that
