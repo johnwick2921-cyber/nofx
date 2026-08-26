@@ -87,7 +87,6 @@ export interface PlanToday {
   /** UI-verification (2026-08-18) — a planner read is in flight for this chain. */
   reading?: boolean
   version?: number
-  overlay_count?: number
   lifecycle?: string // active | expired | died | superseded
   model_id?: string
   doc?: PlanDoc
@@ -133,8 +132,6 @@ export interface PlanToday {
   historical?: boolean
   /** ITEM 15 — the newest stored version, so the card can offer the way back. */
   latest_version?: number
-  /** ITEM 15 — why this version was written (session open / death condition / …). */
-  trigger_reason?: string
   created_at?: string
 }
 
