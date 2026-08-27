@@ -8,7 +8,7 @@ import type { PlanScenario, ScenarioStatusValue } from '../../lib/api/plan'
 import { StatusDot, type ScenarioStatus } from './chips'
 import { fmtPrice } from './levelState'
 
-function QualityChip({ quality }: { quality: string }) {
+export function QualityChip({ quality }: { quality: string }) {
   const q = quality || 'B'
   // C7 — A/A+ use the A token (was: A got the B token); B and C get their own.
   const color =
@@ -29,6 +29,75 @@ function QualityChip({ quality }: { quality: string }) {
       }}
     >
       {q}
+    </span>
+  )
+}
+
+export type ConfirmVerdict = {
+  rule: string
+  ref_price: number
+  side: string
+  met: boolean
+  detail: string
+}
+
+// ConfirmChip (guide-export 2026-08-27) — the machine confirm verdict chip
+// (CONFIRM MET / confirm not met). Advisory; never a gate.
+export function ConfirmChip({ id, c }: { id: string; c: ConfirmVerdict }) {
+  return (
+    <span
+      data-testid={`confirm-chip-${id}`}
+      className="text-[9px] font-bold px-1.5 py-0.5 rounded"
+      title={`${c.rule} ${c.side} ${c.ref_price} — ${c.detail} (machine-computed, advisory)`}
+      style={
+        c.met
+          ? {
+              color: 'var(--vl-long)',
+              border: '1px solid rgba(63,191,143,0.35)',
+            }
+          : {
+              color: 'var(--vl-muted)',
+              border: '1px solid var(--vl-hair)',
+            }
+      }
+    >
+      {c.met ? 'CONFIRM MET' : 'confirm not met'}
+    </span>
+  )
+}
+
+export type FvgState = {
+  id: string
+  fvg_lo: number
+  fvg_hi: number
+  ce: number
+  entry_mode: string
+  state: string
+  touch_number: number
+  met: boolean
+}
+
+// FvgStateChip (guide-export 2026-08-27) — the fvg_entry gap-band live state
+// (IN-ZONE / ABOVE / BELOW / FILLED_INVALID). Advisory; never a gate.
+export function FvgStateChip({ f }: { f: FvgState }) {
+  const tone =
+    f.state === 'FILLED_INVALID'
+      ? 'var(--vl-short)'
+      : f.state === 'IN_ZONE'
+        ? 'var(--vl-long)'
+        : 'var(--vl-muted)'
+  return (
+    <span
+      data-testid={`fvg-chip-${f.id}`}
+      className="text-[9px] font-bold px-1.5 py-0.5 rounded"
+      title={`fvg_entry gap ${f.fvg_lo}–${f.fvg_hi} (CE ${f.ce}, mode ${f.entry_mode}) — ${f.state}${f.touch_number > 0 ? ` · touch #${f.touch_number}` : ''} (machine-computed, advisory)`}
+      style={{
+        color: tone,
+        border: '1px solid var(--vl-hair)',
+      }}
+    >
+      {f.state}
+      {f.touch_number > 0 ? ` · #${f.touch_number}` : ''}
     </span>
   )
 }
@@ -208,51 +277,11 @@ export function ScenarioList({
                     language={language}
                   />
                   {meta?.confirm?.[s.id] && (
-                    <span
-                      data-testid={`confirm-chip-${s.id}`}
-                      className="text-[9px] font-bold px-1.5 py-0.5 rounded"
-                      title={`${meta.confirm[s.id].rule} ${meta.confirm[s.id].side} ${meta.confirm[s.id].ref_price} — ${meta.confirm[s.id].detail} (machine-computed, advisory)`}
-                      style={
-                        meta.confirm[s.id].met
-                          ? {
-                              color: 'var(--vl-long)',
-                              border: '1px solid rgba(63,191,143,0.35)',
-                            }
-                          : {
-                              color: 'var(--vl-muted)',
-                              border: '1px solid var(--vl-hair)',
-                            }
-                      }
-                    >
-                      {meta.confirm[s.id].met
-                        ? 'CONFIRM MET'
-                        : 'confirm not met'}
-                    </span>
+                    <ConfirmChip id={s.id} c={meta.confirm[s.id]} />
                   )}
-                  {fvgStates?.find((f) => f.id === s.id) &&
-                    (() => {
-                      const f = fvgStates.find((x) => x.id === s.id)!
-                      const tone =
-                        f.state === 'FILLED_INVALID'
-                          ? 'var(--vl-short)'
-                          : f.state === 'IN_ZONE'
-                            ? 'var(--vl-long)'
-                            : 'var(--vl-muted)'
-                      return (
-                        <span
-                          data-testid={`fvg-chip-${s.id}`}
-                          className="text-[9px] font-bold px-1.5 py-0.5 rounded"
-                          title={`fvg_entry gap ${f.fvg_lo}–${f.fvg_hi} (CE ${f.ce}, mode ${f.entry_mode}) — ${f.state}${f.touch_number > 0 ? ` · touch #${f.touch_number}` : ''} (machine-computed, advisory)`}
-                          style={{
-                            color: tone,
-                            border: '1px solid var(--vl-hair)',
-                          }}
-                        >
-                          {f.state}
-                          {f.touch_number > 0 ? ` · #${f.touch_number}` : ''}
-                        </span>
-                      )
-                    })()}
+                  {fvgStates?.find((f) => f.id === s.id) && (
+                    <FvgStateChip f={fvgStates.find((x) => x.id === s.id)!} />
+                  )}
                 </div>
               )}
             </div>
