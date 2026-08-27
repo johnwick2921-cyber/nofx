@@ -114,6 +114,10 @@ func main() {
 	// the 37 wrong recorded-PnL rows (originals preserved; readers COALESCE).
 	st.CorrectHistoricalPnL()
 
+	// T7 (2026-08-27) — stamp pnl_corrected on EVERY reconstructable closed MNQ
+	// row (the column must be complete, not just the disagreements).
+	st.BackfillPnlCorrectedAll()
+
 	// Initialize installation ID for experience improvement (anonymous statistics)
 	initInstallationID(st)
 

@@ -185,6 +185,11 @@ func (t *TCPTrader) recordClose(
 		if OnPositionClosed != nil {
 			OnPositionClosed(owner.TraderID, owner.ID)
 		}
+		// T7 (2026-08-27) — the close path stamps pnl_corrected on the
+		// row immediately (same recompute the readers COALESCE to), so the
+		// column is non-NULL on every NEW close. The Δ≥$0.50 class-killer
+		// WARN lives inside the stamp.
+		st.StampPnlCorrectedOnClose(owner.ID, realizedPnL, realizedPnL)
 		// WARN (honest-logs 2026-08-19): a position close with realized P&L is
 		// owner-visible truth — must reach the log_events sink + dashboard even
 		// under journald frame-flood suppression.
