@@ -30,16 +30,34 @@ func TestBarInsertAndDedup(t *testing.T) {
 	if err := st.InsertBars(rows); err != nil {
 		t.Fatalf("insert: %v", err)
 	}
-	if err := st.InsertBars(rows); err != nil { // restart backfill → OR IGNORE
+	// NEW (F5): a re-inserted revision UPDATES the row (the natural key is
+	// unique) — the old INSERT OR IGNORE kept the stale first write.
+	rev := []BarHistoryDB{mkBar("MNQ", "1m", 1000, 1.5)}
+	if err := st.InsertBars(rev); err != nil {
 		t.Fatalf("re-insert: %v", err)
 	}
 	n, _ := st.Count()
 	if n != 2 {
-		t.Fatalf("count = %d want 2 (dedup on restart)", n)
+		t.Fatalf("count = %d want 2 (upsert on the natural key)", n)
 	}
 	got, err := st.BarsBetween("MNQ", "1m", 0, 3000)
 	if err != nil || len(got) != 2 {
 		t.Fatalf("BarsBetween = %d rows err=%v", len(got), err)
+	}
+	for _, b := range got {
+		if b.OpenTimeMs == 1000 && b.C != 1.5 {
+			t.Fatalf("revision update must win: close=%.2f want 1.5", b.C)
+		}
+	}
+	// NEW (F5): non-1m TFs are NOT stored (aggregates derive on read).
+	if err := st.InsertBars([]BarHistoryDB{mkBar("MNQ", "5m", 3000, 3.0)}); err != nil {
+		t.Fatalf("5m insert: %v", err)
+	}
+	if n, _ := st.Count(); n != 2 {
+		t.Fatalf("count after 5m insert = %d want 2 (1m-only storage)", n)
+	}
+	if dups, tfs, _, err := st.BarsIntegrity(); err != nil || dups != 0 || len(tfs) != 1 || tfs[0] != "1m" {
+		t.Fatalf("integrity = dups:%d tfs:%v err:%v, want 0/[1m]", dups, tfs, err)
 	}
 }
 

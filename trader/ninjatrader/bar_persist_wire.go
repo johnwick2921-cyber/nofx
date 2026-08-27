@@ -98,8 +98,22 @@ func backfillBars(bh *store.BarHistoryStore, server *ntwire.TCPServer) int {
 	return total
 }
 
-// pruneLoop runs the retention prune at boot and then daily.
+// pruneLoop runs the retention prune + the NIGHTLY INTEGRITY CHECK (F5,
+// 2026-08-27) at boot and then daily: duplicate natural-key groups must be 0
+// and only tf='1m' may be stored (aggregates derive on read). WARN on drift.
 func pruneLoop(bh *store.BarHistoryStore) {
+	integrityCheck := func() {
+		dups, tfs, total, err := bh.BarsIntegrity()
+		if err != nil {
+			logger.Warnf("bars: integrity check failed: %v", err)
+			return
+		}
+		if dups > 0 || len(tfs) != 1 || (len(tfs) == 1 && tfs[0] != "1m") {
+			logger.Warnf("🚨 bars integrity DRIFT: dups=%d tfs=%v total=%d (expected dups=0, tfs=[1m]) — replay/calibration readers must not trust stored aggregates", dups, tfs, total)
+			return
+		}
+		logger.Infof("✅ bars integrity OK: dups=0 tfs=1m total=%d", total)
+	}
 	pruneOnce := func() {
 		cutoff := store.RetentionCutoffMs(time.Now())
 		if cutoff <= 0 {
@@ -112,9 +126,11 @@ func pruneLoop(bh *store.BarHistoryStore) {
 		}
 	}
 	pruneOnce()
+	integrityCheck()
 	t := time.NewTicker(24 * time.Hour)
 	defer t.Stop()
 	for range t.C {
 		pruneOnce()
+		integrityCheck()
 	}
 }
