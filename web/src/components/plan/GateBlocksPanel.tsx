@@ -49,7 +49,7 @@ export function GateBlocksPanel({
     if (!traderId) return
     let alive = true
     const load = async () => {
-      const res = await planApi.getGateBlocks()
+      const res = await planApi.getGateBlocks(traderId)
       if (!alive || !res) return
       const mine = res.by_trader?.[traderId] ?? {}
       // Process-wide gates (B3) are filed under the empty trader id; show them too

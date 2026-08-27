@@ -67,6 +67,11 @@ type PlanScenario struct {
 	// write/re-align time: quality is capped at C and the card badges it
 	// "level consumed". Advisory — never a gate.
 	Consumed bool `json:"consumed,omitempty"`
+	// A2 (planner-contract wave 2026-08-26) — optional setup-chain link: the
+	// id of the scenario this play FOLLOWS (e.g. an fvg_entry SHOULD declare
+	// the sweep_reclaim that swept the origin pool). Validator WARNs (never
+	// fails) when an fvg_entry lacks a sweep precursor at a non-A/B origin.
+	ChainAfter string `json:"chain_after,omitempty"`
 }
 
 // PlanFvgEntry is the machine-verifiable schema of an fvg_entry scenario.

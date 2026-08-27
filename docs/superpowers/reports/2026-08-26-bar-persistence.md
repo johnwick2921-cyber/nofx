@@ -124,3 +124,12 @@ verification):** for every gate refusal since Aug 26 (`sl_too_tight`, HTF veto,
 refused entry have hit its stated TP before its SL? Output table:
 `refusals · would-have-won · would-have-lost · Σ hypothetical`, with a
 per-gate verdict: **SAVING MONEY** or **COSTING MONEY**.
+
+**B1 RESOLUTION RULE (planner-contract wave 2026-08-26, MANDATORY for all
+Sep-3 replay + refusal-autopsy tooling):** every hypothetical stop/target hit
+test MUST resolve on **1m bars** — never on the 2-min decision/confirm bar.
+The MPM look-ahead trap measured a 73%→50% edge degradation when resolution
+was coarsened to the 2-min bar (a TP/SL inside a 2-min bar gets judged by
+whichever extreme the aggregator orders first). Fixture:
+`scripts/mpm_resolution_fixture.py` proves the difference on a synthetic
+series (1m: TP first; 2-min aggregated: SL first).
