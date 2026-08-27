@@ -139,6 +139,22 @@ func (s *Server) approvalRequired(traderID string) bool {
 // "4 of 4 re-plans spent" instead of re-deriving a number it does not have.
 // The budget is measured from the chain baseline (P6 owner reset) — the same
 // seam the death path and the executor provider read.
+// armedMapFor builds the scenario→state map the card chips read (Wave 2).
+func (s *Server) armedMapFor(planID string) map[string]gin.H {
+	out := map[string]gin.H{}
+	if s.store == nil || planID == "" {
+		return out
+	}
+	rows, err := s.store.ArmedOrders().ListForPlan(planID)
+	if err != nil {
+		return out
+	}
+	for _, r := range rows {
+		out[r.Scenario] = gin.H{"state": r.State, "reason": r.StateReason, "entry_px": r.EntryPx}
+	}
+	return out
+}
+
 func (s *Server) planRulesWithCap(traderID, session, tradeDate string, version int) (rule, mode string, replansLeft, replanCap int) {
 	var dp *store.DayPlanConfig
 	if at, err := s.traderManager.GetTrader(traderID); err == nil && at != nil {
@@ -337,6 +353,8 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 		"session":    sessName,
 		"version":    row.Version,
 		"reading":    reading,
+		// Wave 2 armed orders — the per-scenario arm state for the card chips.
+		"armed":           s.armedMapFor(row.PlanID),
 		// ITEM 15 — the card marks itself HISTORICAL and offers the way back.
 		"historical":        historical,
 		"latest_version":    latestVersion,

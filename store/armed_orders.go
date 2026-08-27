@@ -124,6 +124,13 @@ func (s *ArmedOrderStore) SetSignal(id int64, signalID string) error {
 		Update("signal_id", signalID).Error
 }
 
+// ListForPlan returns every armed row of one plan chain (card render + API).
+func (s *ArmedOrderStore) ListForPlan(planID string) ([]ArmedOrderDB, error) {
+	var out []ArmedOrderDB
+	err := s.db.Where("plan_id = ?", planID).Order("id").Find(&out).Error
+	return out, err
+}
+
 // Touch refreshes UpdatedAt (the stale-working reconnect safety net reads it).
 func (s *ArmedOrderStore) Touch(id int64) error {
 	return s.db.Model(&ArmedOrderDB{}).Where("id = ?", id).

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"nofx/kernel"
+	ntwire "nofx/provider/ninjatrader"
 	"nofx/store"
 )
 
@@ -120,5 +121,41 @@ func TestArmedCancelOnNoActivePlan(t *testing.T) {
 	at.maybeManageArmedOrders(nil)
 	if rows, err := st.ArmedOrders().ListNonTerminal(); err != nil || len(rows) != 0 {
 		t.Fatalf("no active plan must cancel arms (rows=%d err=%v)", len(rows), err)
+	}
+}
+
+// PHASE 4 — the order_update event machine: filled → filled+lineage path,
+// rejected/cancelled → disarmed with a reason (never silent).
+func TestArmedOrderUpdateTransitions(t *testing.T) {
+	at, st := resetTrader(t, store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true}})
+	ledger := st.ArmedOrders()
+	if err := ledger.UpsertArm(&store.ArmedOrderDB{TraderID: at.id, PlanID: "2026-08-27:NY:trader-1", Version: 1, Session: "NY", Scenario: "S1", Side: "long", EntryPx: 100, StopPx: 95, TargetPx: 110, State: "working", SignalID: "sig-1"}); err != nil {
+		t.Fatal(err)
+	}
+	at.onArmedOrderUpdate(ntwire.OrderUpdatePayload{SignalID: "sig-1", State: "filled", FillPrice: 100.5}, ledger)
+	rows, _ := ledger.ListForPlan("2026-08-27:NY:trader-1")
+	if len(rows) != 1 || rows[0].State != "filled" {
+		t.Fatalf("filled transition: %+v", rows)
+	}
+	_ = ledger.SetState(rows[0].ID, "working", "")
+	at.onArmedOrderUpdate(ntwire.OrderUpdatePayload{SignalID: "sig-1", State: "rejected"}, ledger)
+	rows, _ = ledger.ListForPlan("2026-08-27:NY:trader-1")
+	if rows[0].State != "cancelled" || rows[0].StateReason == "" {
+		t.Fatalf("reject must disarm with a reason: %+v", rows[0])
+	}
+}
+
+// PHASE 4 — short twin of the R:R arm gate (long side covered elsewhere).
+func TestArmedGateRRShortTwin(t *testing.T) {
+	at, _ := resetTrader(t, store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true}})
+	at.config.StrategyConfig.RiskControl = store.RiskControlConfig{MinRiskRewardRatio: 3}
+	sc := kernel.PlanScenario{ID: "S1", Condition: "reject", Direction: "short", Quality: "A",
+		Arm: &kernel.PlanArmSpec{Enabled: true, Entry: 100, Stop: 105, Target: 90}} // R:R (100−90)/(105−100)=2.0 < 3.0
+	if v := at.armGateVerdict(sc, "short", nil, 0, "", at.config.StrategyConfig); v == "" {
+		t.Fatal("short arm R:R 2.0 below min 3.0 must be refused")
+	}
+	sc.Arm.Target = 85 // R:R 3.0 → pass
+	if v := at.armGateVerdict(sc, "short", nil, 0, "", at.config.StrategyConfig); v != "" {
+		t.Fatalf("short arm R:R 3.0 must pass, got %q", v)
 	}
 }
