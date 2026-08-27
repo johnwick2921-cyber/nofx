@@ -33,6 +33,7 @@ type Store struct {
 	levelState      *LevelStateStore
 	sessionProfile  *SessionProfileStore
 	barHistory      *BarHistoryStore
+	armedOrders     *ArmedOrderStore
 	levelStats      *LevelStatsStore
 	touchEpisodes   *TouchEpisodeStore
 	calendarSlice   *CalendarSliceStore
@@ -211,6 +212,9 @@ func (s *Store) initTables() error {
 	if err := s.MatchedRandom().initTables(); err != nil {
 		return fmt.Errorf("failed to initialize matched_random tables: %w", err)
 	}
+	if err := s.ArmedOrders().Migrate(); err != nil {
+		return fmt.Errorf("failed to initialize armed_orders table: %w", err)
+	}
 	return nil
 }
 
@@ -372,6 +376,16 @@ func (s *Store) BarHistory() *BarHistoryStore {
 		s.barHistory = NewBarHistoryStore(s.gdb)
 	}
 	return s.barHistory
+}
+
+// ArmedOrders gets the armed-orders ledger (Wave 2, 2026-08-27).
+func (s *Store) ArmedOrders() *ArmedOrderStore {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.armedOrders == nil {
+		s.armedOrders = NewArmedOrderStore(s.gdb)
+	}
+	return s.armedOrders
 }
 
 // LevelStats gets the B4 forward-validation store (2026-08-26).

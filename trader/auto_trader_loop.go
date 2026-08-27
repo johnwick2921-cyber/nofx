@@ -390,6 +390,9 @@ func (at *AutoTrader) runCycle() error {
 	// plan's death on the SAME bars every cycle; entries are refused inside
 	// validateDecision (management/closes proceed).
 	ctx.ExecutorPlanDead = at.executorPlanDeadReason()
+	// Wave 2 armed orders (2026-08-27) — Phase 1 arming contract. No-op until a
+	// plan carries arm specs; cancels on dormant/session-end per 1.4/2.4.
+	at.maybeManageArmedOrders(ctx.Structure)
 
 	// R4 (2026-08-25) — min_scenario_quality gate inputs: the resolved floor
 	// (default C = no restriction) + the active plan's scenario qualities.
