@@ -1401,6 +1401,7 @@ func (s *TCPServer) RequestDeepBarsBackfill(symbol, timeframe string, barsBack i
 	}
 	payload := BarsSubscribePayload{Symbol: symbol, Timeframes: []string{timeframe}, BarsBack: barsBack}
 	s.writeMu.Lock()
+	_ = c.SetWriteDeadline(time.Now().Add(5 * time.Second)) // the conn's last deadline may be stale/expired
 	err := WriteFrame(c, FrameBarsSubscribe, payload)
 	s.writeMu.Unlock()
 	if err != nil {
