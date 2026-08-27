@@ -71,11 +71,11 @@ type TCPServer struct {
 	pending   []timedSignal
 
 	// Inbound fills — TCPTrader subscribes via Fills().
-	fillCh   chan FillPayload
-	closeCh  chan PositionClosePayload
+	fillCh     chan FillPayload
+	closeCh    chan PositionClosePayload
 	orderUpdCh chan OrderUpdatePayload
-	rejectCh chan PositionCloseRejectedPayload
-	instrCh  chan InstrumentInfoPayload
+	rejectCh   chan PositionCloseRejectedPayload
+	instrCh    chan InstrumentInfoPayload
 
 	// Latest NT8 price-feed status (from the feed_status frame). Empty until the
 	// first frame; consumers DEFAULT-ALLOW on empty (never false-halt at startup).
@@ -149,11 +149,11 @@ type TCPServer struct {
 	// contamination bug). Legacy EMPTY-symbol payloads route to the PRIMARY
 	// trading symbol. Re-subscribing a symbol CLOSES the prior channel, which
 	// terminates a dead (reloaded-away) trader instance's consumer goroutine.
-	subsMu     sync.Mutex
-	fillSubs   map[string]chan FillPayload
-	closeSubs  map[string]chan PositionClosePayload
-	rejectSubs map[string]chan PositionCloseRejectedPayload
-	instrSubs  map[string]chan InstrumentInfoPayload
+	subsMu       sync.Mutex
+	fillSubs     map[string]chan FillPayload
+	closeSubs    map[string]chan PositionClosePayload
+	rejectSubs   map[string]chan PositionCloseRejectedPayload
+	instrSubs    map[string]chan InstrumentInfoPayload
 	orderUpdSubs map[string]chan OrderUpdatePayload
 
 	// Connection state — single concurrent client (spec L4359).
@@ -438,9 +438,9 @@ func NewTCPServer(logger *slog.Logger) *TCPServer {
 		logger = slog.Default()
 	}
 	return &TCPServer{
-		addr:          ListenAddr(),
-		fillCh:        make(chan FillPayload, fillChannelBuffer),
-		orderUpdCh:    make(chan OrderUpdatePayload, fillChannelBuffer),		closeCh:       make(chan PositionClosePayload, fillChannelBuffer),
+		addr:       ListenAddr(),
+		fillCh:     make(chan FillPayload, fillChannelBuffer),
+		orderUpdCh: make(chan OrderUpdatePayload, fillChannelBuffer), closeCh: make(chan PositionClosePayload, fillChannelBuffer),
 		rejectCh:      make(chan PositionCloseRejectedPayload, fillChannelBuffer),
 		instrCh:       make(chan InstrumentInfoPayload, fillChannelBuffer),
 		barCache:      NewBarCache(0),
@@ -1486,7 +1486,7 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			if err := json.Unmarshal(env.Payload, &fill); err != nil {
 				s.logger.Warn("tcp_server: bad fill payload", "err", err)
 				continue
-			}			// A2 (G1) — verify the echoed identity against the pending op. A mismatch
+			} // A2 (G1) — verify the echoed identity against the pending op. A mismatch
 			// (forged/cross-wired fill) is NOT processed; the owning trader is frozen.
 			if !s.verifyInbound("fill", fill.Seq, fill.TraderID, fill.Account, fill.SignalID) {
 				continue
@@ -1507,6 +1507,7 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			// PHASE 2 armed orders — informational state-change frame; routes
 			// to per-(symbol,account) subscribers like fills. No strict echo
 			// verify (advisory event; the terminal fill/close frames keep it).
+			s.logger.Info("tcp_server: order_update raw payload", "raw", string(env.Payload))
 			var oup OrderUpdatePayload
 			if err := json.Unmarshal(env.Payload, &oup); err != nil {
 				s.logger.Warn("tcp_server: bad order_update payload", "err", err)
