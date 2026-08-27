@@ -24,6 +24,22 @@ const TOUCH_CHIPS: Record<string, { glyph: string; color: string }> = {
   accepted: { glyph: '▲', color: '#f87171' },
 }
 
+// TouchChip (guide-export 2026-08-27) — the real touch-state glyph chip.
+export function TouchChip({ state }: { state: string }) {
+  const c = TOUCH_CHIPS[state]
+  if (!c) return null
+  return (
+    <span
+      aria-label={`touch ${state}`}
+      title={`touch ${state}`}
+      className="text-[10px] leading-none"
+      style={{ color: c.color, fontFamily: 'var(--vl-font-ui)' }}
+    >
+      {c.glyph}
+    </span>
+  )
+}
+
 function ZoneRow({
   fact,
   index,
