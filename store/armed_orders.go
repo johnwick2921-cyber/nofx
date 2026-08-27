@@ -116,3 +116,16 @@ func (s *ArmedOrderStore) SetState(id int64, state, reason string) error {
 	return s.db.Model(&ArmedOrderDB{}).Where("id = ?", id).
 		Updates(map[string]any{"state": state, "state_reason": reason}).Error
 }
+
+// SetSignal records the wire signal_id once the resting limit is placed
+// (armed → working transition).
+func (s *ArmedOrderStore) SetSignal(id int64, signalID string) error {
+	return s.db.Model(&ArmedOrderDB{}).Where("id = ?", id).
+		Update("signal_id", signalID).Error
+}
+
+// Touch refreshes UpdatedAt (the stale-working reconnect safety net reads it).
+func (s *ArmedOrderStore) Touch(id int64) error {
+	return s.db.Model(&ArmedOrderDB{}).Where("id = ?", id).
+		Update("updated_at", time.Now()).Error
+}

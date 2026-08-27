@@ -2,13 +2,52 @@ package trader
 
 import (
 	"fmt"
+	"math"
+	"os"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"nofx/kernel"
 	"nofx/market"
+	ntwire "nofx/provider/ninjatrader"
+	ntTrader "nofx/trader/ninjatrader"
 	"nofx/store"
 )
+
+// armedPlaceTicks is the placement band (ARM_PLACE_TICKS, default 100): the
+// resting limit is placed once price comes within this many ticks of entry.
+func armedPlaceTicks() int {
+	if v := os.Getenv("ARM_PLACE_TICKS"); v != "" {
+		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n > 0 {
+			return n
+		}
+	}
+	return 100
+}
+
+// armedWorkingStaleMin is the reconnect/reconcile safety net
+// (ARM_WORKING_STALE_MIN, default 15): a working row with no order_update for
+// this long is cancelled with an honest reason.
+func armedWorkingStaleMin() int {
+	if v := os.Getenv("ARM_WORKING_STALE_MIN"); v != "" {
+		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n > 0 {
+			return n
+		}
+	}
+	return 15
+}
+
+// armedSubs holds each trader's order_update stream (created once per trader).
+var armedSubs sync.Map
+
+// armedTrader type-asserts the bound trader to the TCPTrader (nil when the
+// trader is crypto or unwired — the engine then stays dormant).
+func (at *AutoTrader) armedTrader() *ntTrader.TCPTrader {
+	nt, _ := at.trader.(*ntTrader.TCPTrader)
+	return nt
+}
 
 // ARMED-ORDER EXECUTOR — Wave 2 (2026-08-27).
 //
@@ -108,6 +147,128 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 			}
 			at.logInfof("⚔️ armed %s %s %s limit %.2f SL %.2f TP %.2f (tick-managed placement is Phase 2)", plan.Session, sc.ID, side, sc.Arm.Entry, sc.Arm.Stop, sc.Arm.Target)
 		}
+	}
+
+	// PHASE 2 — placement engine (armed → working within the tick band), wire
+	// cancel/modify, and the order_update event machine.
+	at.runArmedPlacement(bars)
+}
+
+// runArmedPlacement drives the armed→working transition, the churn guard, and
+// the order_update event machine. No-op unless a TCPTrader is bound.
+func (at *AutoTrader) runArmedPlacement(bars []market.Kline) {
+	nt := at.armedTrader()
+	if nt == nil {
+		return
+	}
+	ledger := at.store.ArmedOrders()
+	if ledger == nil {
+		return
+	}
+	now := time.Now()
+	price := 0.0
+	if len(bars) > 0 {
+		price = bars[len(bars)-1].Close
+	}
+	tick := market.FuturesTickSize(at.futuresSymbol())
+	if tick <= 0 {
+		tick = 0.25
+	}
+	band := float64(armedPlaceTicks()) * tick
+
+	rows, err := ledger.ListNonTerminal()
+	if err != nil {
+		return
+	}
+	for _, r := range rows {
+		if r.TraderID != at.id {
+			continue
+		}
+		switch r.State {
+		case "armed":
+			if price > 0 && math.Abs(price-r.EntryPx) <= band {
+				sid, perr := nt.PlaceLimitEntry(at.futuresSymbol(), r.Side, 1, r.EntryPx, r.StopPx, r.TargetPx)
+				if perr != nil {
+					at.logWarnf("📌 armed place failed %s: %v", r.Scenario, perr)
+					continue
+				}
+				_ = ledger.SetSignal(r.ID, sid)
+				_ = ledger.SetState(r.ID, "working", "")
+				at.logInfof("📌 armed %s → WORKING limit %.2f signal=%s (band ±%.0ft)", r.Scenario, r.EntryPx, sid, band/tick)
+			}
+		case "working":
+			// reconnect/reconcile safety net: no order_update for the stale window.
+			if now.Sub(r.UpdatedAt) > time.Duration(armedWorkingStaleMin())*time.Minute {
+				if r.SignalID != "" {
+					_ = nt.CancelOrder(r.SignalID)
+				}
+				_ = ledger.SetState(r.ID, "cancelled", "no order_update within stale window (reconnect/reconcile)")
+				at.logWarnf("✕ armed %s cancelled — no order_update for %dm (reconnect/reconcile)", r.Scenario, armedWorkingStaleMin())
+			}
+		}
+	}
+	at.consumeArmedOrderUpdates(nt, ledger)
+}
+
+// consumeArmedOrderUpdates subscribes (once) to the trader's order_update
+// stream and drains pending events into the ledger.
+func (at *AutoTrader) consumeArmedOrderUpdates(nt *ntTrader.TCPTrader, ledger *store.ArmedOrderStore) {
+	v, _ := armedSubs.LoadOrStore(at.id, nt.OrderUpdates())
+	ch, ok := v.(<-chan ntwire.OrderUpdatePayload)
+	if !ok {
+		return
+	}
+	for {
+		select {
+		case u := <-ch:
+			at.onArmedOrderUpdate(u, ledger)
+		default:
+			return
+		}
+	}
+}
+
+// onArmedOrderUpdate applies one NT8 order state change to the armed ledger.
+func (at *AutoTrader) onArmedOrderUpdate(u ntwire.OrderUpdatePayload, ledger *store.ArmedOrderStore) {
+	rows, err := ledger.ListNonTerminal()
+	if err != nil {
+		return
+	}
+	for _, r := range rows {
+		if r.TraderID != at.id || r.SignalID != u.SignalID {
+			continue
+		}
+		switch strings.ToLower(u.State) {
+		case "filled", "partfilled":
+			_ = ledger.SetState(r.ID, "filled", "fill@"+strconv.FormatFloat(u.FillPrice, 'f', 2, 64))
+			_ = ledger.Touch(r.ID)
+			at.stampArmedFillLineage(r, u.FillPrice)
+			at.logInfof("⚡ armed fill %s @ %.2f (entry_class=armed_fill — stale_reeval NOT applied)", r.Scenario, u.FillPrice)
+		case "rejected":
+			_ = ledger.SetState(r.ID, "cancelled", "NT8 reject")
+			at.logWarnf("✕ armed %s NT8-REJECTED — disarmed", r.Scenario)
+		case "cancelled":
+			_ = ledger.SetState(r.ID, "cancelled", "cancelled in NT8")
+			at.logInfof("✕ armed %s cancelled in NT8", r.Scenario)
+		}
+		return
+	}
+}
+
+// stampArmedFillLineage links the freshly-filled position row to the plan the
+// arm cited — the same fields AI entries carry (S3 SetPlanLinkFull).
+func (at *AutoTrader) stampArmedFillLineage(r store.ArmedOrderDB, fillPrice float64) {
+	pos, err := at.store.Position().GetOpenPositionBySymbol(at.id, at.futuresSymbol(), r.Side)
+	if err != nil || pos == nil {
+		at.logWarnf("⚡ armed fill %s @ %.2f: no open position row to stamp (err=%v)", r.Scenario, fillPrice, err)
+		return
+	}
+	tradeDate := r.PlanID
+	if i := strings.Index(r.PlanID, ":"); i > 0 {
+		tradeDate = r.PlanID[:i]
+	}
+	if err := at.store.Position().SetPlanLinkFull(pos.ID, r.Version, r.Scenario, true, "armed_fill", r.PlanID, tradeDate, r.Session); err != nil {
+		at.logWarnf("⚡ armed fill lineage stamp failed: %v", err)
 	}
 }
 
