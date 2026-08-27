@@ -2,13 +2,18 @@ package trader
 
 import (
 	"encoding/json"
+	"sync"
 	"time"
 
 	"nofx/kernel"
+	"nofx/logger"
 	"nofx/market"
 	"nofx/store"
 	"nofx/telemetry"
 )
+
+// repairConsumedOnce runs the T4 legacy-row repair exactly once per process.
+var repairConsumedOnce sync.Once
 
 // W7 — LEVEL-STATE WRITER (the audit's dead wire: store.LevelStateStore —
 // times_tested / consumed / freshness / re-arm cooldown — had ZERO production
@@ -57,6 +62,14 @@ func (at *AutoTrader) recordLevelState() {
 	rule := at.acceptanceRuleFor(at.activeSessionName(now))
 
 	ls := at.store.LevelState()
+	// T4 invariant repair (forensics hygiene 2026-08-28): legacy consumed rows
+	// without their consuming touch are stamped once per process — a consumed
+	// row always carries times_tested ≥ 1 from here on.
+	repairConsumedOnce.Do(func() {
+		if n, err := ls.RepairConsumedWithoutTouch(); err == nil && n > 0 {
+			logger.Infof("🩹 level-state repair: %d legacy consumed rows stamped with their consuming touch (T4 invariant)", n)
+		}
+	})
 	// H3 — the ACTIVATION WINDOW (hide levels >1.5×ATR from the candidate set) is
 	// a SPEC INTERNAL CONSTANT, not the owner's proximity_filter_atr. The two were
 	// cross-fed here: proximity_filter_atr governs which levels are GENERATED and

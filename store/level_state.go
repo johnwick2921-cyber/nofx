@@ -225,6 +225,24 @@ func (s *LevelStateStore) MarkConsumed(levelKey string, nowMs int64) error {
 	return res.Error
 }
 
+// RepairConsumedWithoutTouch (T4, forensics hygiene 2026-08-28) backfills the
+// legacy consumed=1 / times_tested=0 rows left by the pre-level-truth writer
+// (it marked consumed without recording the consuming touch). Idempotent —
+// after one pass no rows match. Stamps times_tested=1 and, where missing,
+// derives last_play_ms from created_at.
+func (s *LevelStateStore) RepairConsumedWithoutTouch() (int64, error) {
+	if s == nil || s.db == nil {
+		return 0, nil
+	}
+	res := s.db.Model(&LevelStateDB{}).
+		Where("consumed = ? AND times_tested = ?", true, 0).
+		Updates(map[string]any{
+			"times_tested": 1,
+			"last_play_ms": gorm.Expr("CASE WHEN last_play_ms = 0 THEN CAST(strftime('%s', created_at) AS INTEGER) * 1000 ELSE last_play_ms END"),
+		})
+	return res.RowsAffected, res.Error
+}
+
 // ResetBurns (P1b repair) clears every burned mark so the WINDOWED
 // re-evaluation can rebuild consumption honestly from bars. Decayed rows land
 // on FreshnessC (tested×2) — a repair never resurrects a level as fresh A.

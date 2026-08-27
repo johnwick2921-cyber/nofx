@@ -383,11 +383,20 @@ type barIngestMsg struct {
 	bars       []Bar
 }
 
-// barIngestChannelBuffer caps the bar ingest channel. Sized so a brief
-// scheduler hiccup in the drain goroutine doesn't drop bar_updates on the
-// floor under normal load; a sustained backlog under pathological load
-// will drop oldest-first to keep the socket read responsive.
-const barIngestChannelBuffer = 256
+// barIngestChannelBuffer caps the bar ingest channel. FORENSICS HYGIENE
+// (2026-08-28): the 2026-08-27 17:00 CT Globex reopen flooded ~507 frames/s
+// and overran the old fixed 256 — 1399 drop-oldest evictions in ~4 minutes
+// (zero closes lost, but the margin was structurally thin). The cap is now
+// INGEST_QUEUE_CAP (default 1024); the live high-water mark is tracked and
+// surfaced in the 1-line/min ingest summary (peak_depth).
+func ingestQueueCap() int {
+	if v := os.Getenv("INGEST_QUEUE_CAP"); v != "" {
+		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n > 0 {
+			return n
+		}
+	}
+	return 1024
+}
 
 // Plan 4.4 Stage 2 — default auto-subscribe parameters. The auto-subscribed set
 // is the CHART display set (the dashboard MNQ chart offers these timeframe
@@ -461,7 +470,7 @@ func NewTCPServer(logger *slog.Logger) *TCPServer {
 		rejectCh:      make(chan PositionCloseRejectedPayload, fillChannelBuffer),
 		instrCh:       make(chan InstrumentInfoPayload, fillChannelBuffer),
 		barCache:      NewBarCache(0),
-		barIngestCh:   make(chan barIngestMsg, barIngestChannelBuffer),
+		barIngestCh:   make(chan barIngestMsg, ingestQueueCap()),
 		acctBalances:  make(map[string]AccountBalancePayload),
 		acctPositions: make(map[string][]OpenPosition),
 		barsSubscribe: BarsSubscribePayload{
@@ -1486,6 +1495,32 @@ func (s *TCPServer) drainBarIngest(ctx context.Context) {
 // This path MUST NOT block the socket read loop. Blocking the read
 // loop stalls heartbeat receive → 60s ack timeout → server closes the
 // conn → spurious reconnect cycle.
+// ingestPeakDepth is the high-water mark of the ingest channel (session-
+// scoped: reset at the 17:00 CT CME session roll). ingestPeakDay is the
+// session-day the peak belongs to.
+var (
+	ingestPeakDepth atomic.Int64
+	ingestPeakDay   atomic.Int64 // yyyymmdd at last reset
+)
+
+// sampleIngestDepth updates the peak-depth high-water mark and resets it at
+// the CME 17:00 CT session roll (per-session peak, FORENSICS HYGIENE).
+func sampleIngestDepth(depth int) {
+	now := time.Now()
+	day := int64(now.Year()*10000 + int(now.Month())*100 + now.Day())
+	if now.Hour() == 17 {
+		if ingestPeakDay.CompareAndSwap(ingestPeakDay.Load(), day) && ingestPeakDay.Load() == day {
+			ingestPeakDepth.Store(0)
+		}
+	}
+	for {
+		cur := ingestPeakDepth.Load()
+		if int64(depth) <= cur || ingestPeakDepth.CompareAndSwap(cur, int64(depth)) {
+			return
+		}
+	}
+}
+
 func (s *TCPServer) enqueueBarUpdate(symbol, timeframe string, bars []Bar) {
 	// Stamp the live-feed freshness signal (IsFeedConnected uses it to override a
 	// stale edge-triggered feed_status). Cheap atomic store on the hot path.
@@ -1493,21 +1528,23 @@ func (s *TCPServer) enqueueBarUpdate(symbol, timeframe string, bars []Bar) {
 	msg := barIngestMsg{historical: false, symbol: symbol, timeframe: timeframe, bars: bars}
 	select {
 	case s.barIngestCh <- msg:
+		sampleIngestDepth(len(s.barIngestCh))
 		return
 	default:
 	}
 	// Channel full — drop oldest (counted, summarized 1-line/min), retry.
+	sampleIngestDepth(len(s.barIngestCh))
 	select {
 	case <-s.barIngestCh:
 		ingestDropOld.Add(1)
-		ingestDropSummary(s.logger.Warn)
+		ingestDropSummary()
 	default:
 	}
 	select {
 	case s.barIngestCh <- msg:
 	default:
 		ingestDropCur.Add(1)
-		ingestDropSummary(s.logger.Warn)
+		ingestDropSummary()
 	}
 }
 
@@ -1525,7 +1562,7 @@ func (s *TCPServer) enqueueBarHistorical(symbol, timeframe string, bars []Bar) {
 		return
 	case <-time.After(2 * time.Second):
 		ingestDropHist.Add(1)
-		ingestDropSummary(s.logger.Warn)
+		ingestDropSummary()
 	}
 }
 

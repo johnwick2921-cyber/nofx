@@ -7,9 +7,11 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"nofx/kernel"
+	"nofx/logger"
 	"nofx/market"
 	ntwire "nofx/provider/ninjatrader"
 	"nofx/store"
@@ -313,14 +315,63 @@ func (at *AutoTrader) consumeArmedOrderUpdates(nt *ntTrader.TCPTrader, ledger *s
 	}
 }
 
+// Armed order_update frame receipt — FORENSICS HYGIENE (2026-08-28): the
+// per-frame INFO log at this site ate 1.48GB of journal in one hour
+// (25k lines/s during an NT8 order_update storm at 13:35-14:35 CT, the
+// 3.6h-retention S-finding). The frame is now logged at DEBUG sampled 1-in-N
+// (T8 pattern) and the receive path stays provable via a 1-line/min INFO
+// summary with per-state counts.
+var (
+	armedOUFrames  atomic.Int64 // frames since the last summary
+	armedOUSample  atomic.Int64 // per-frame sample counter
+	armedOUByState sync.Map     // state string -> *atomic.Int64
+	armedOULastSum atomic.Int64 // unix secs of the last summary
+)
+
+func armedOrderUpdateLogSample() int64 {
+	if v := os.Getenv("ARMED_ORDER_UPDATE_LOG_SAMPLE"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 0 {
+			return n
+		}
+	}
+	return 500
+}
+
+func logArmedOrderUpdateSummary() {
+	now := time.Now().Unix()
+	if now-armedOULastSum.Load() < 60 {
+		return
+	}
+	if !armedOULastSum.CompareAndSwap(armedOULastSum.Load(), now) {
+		return
+	}
+	n := armedOUFrames.Swap(0)
+	var b strings.Builder
+	fmt.Fprintf(&b, "📡 armed order_update summary (1-line/min): frames=%d", n)
+	armedOUByState.Range(func(k, v any) bool {
+		if c := v.(*atomic.Int64).Swap(0); c > 0 {
+			fmt.Fprintf(&b, " %s=%d", k, c)
+		}
+		return true
+	})
+	logger.Infof("%s", b.String())
+}
+
 // onArmedOrderUpdate applies one NT8 order state change to the armed ledger.
 func (at *AutoTrader) onArmedOrderUpdate(u ntwire.OrderUpdatePayload, ledger *store.ArmedOrderStore) {
-	// Frame-receipt log (2026-08-27, cutover confirmation wave): every
-	// order_update frame FROM NT8 is logged with its content so the C#
-	// dispatcher's receive path is provable from the journal, even when no
-	// non-terminal ledger row matches (e.g. after an optimistic seam flip).
-	at.logInfof("📡 armed order_update frame: state=%s signal=%s acct=%s fill=%.2f",
-		u.State, u.SignalID, u.Account, u.FillPrice)
+	// Frame-receipt proof (cutover confirmation wave): the C# dispatcher's
+	// receive path stays provable from the journal via the 1-line/min summary;
+	// the per-frame content is DEBUG + 1-in-N sampled (FORENSICS HYGIENE —
+	// this was the 1.48GB/hour journal flood).
+	armedOUFrames.Add(1)
+	if c, _ := armedOUByState.LoadOrStore(u.State, &atomic.Int64{}); c.(*atomic.Int64).Add(1) == 0 {
+		_ = c // kept for clarity: the value-add already happened
+	}
+	if armedOUSample.Add(1)%armedOrderUpdateLogSample() == 0 {
+		logger.Debugf("📡 armed order_update frame: state=%s signal=%s acct=%s fill=%.2f",
+			u.State, u.SignalID, u.Account, u.FillPrice)
+	}
+	logArmedOrderUpdateSummary()
 	rows, err := ledger.ListNonTerminal()
 	if err != nil {
 		return

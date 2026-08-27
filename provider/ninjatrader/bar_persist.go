@@ -22,16 +22,17 @@ import (
 const barPersistQueueCap = 1024
 
 var (
-	barPersister   atomic.Value // func(historical bool, symbol, tf string, bars []Bar)
-	barPersistCh   chan persistMsg
-	persistOnce    sync.Once
-	persistDropped atomic.Int64 // queue-full drops (self-healing via cache tail)
-	persistFlushed atomic.Int64 // closed bars handed to the persister
-	persistLastSum atomic.Int64 // unix seconds of the last drop summary
-	ingestDropOld  atomic.Int64 // ingest channel drop-oldest events
-	ingestDropCur  atomic.Int64 // ingest channel drop-current events
-	ingestDropHist atomic.Int64 // historical batch drops
-	ingestLastSum  atomic.Int64
+	barPersister         atomic.Value // func(historical bool, symbol, tf string, bars []Bar)
+	barPersistCh         chan persistMsg
+	persistOnce          sync.Once
+	persistDropped       atomic.Int64 // queue-full drops (self-healing via cache tail)
+	persistDroppedCloses atomic.Int64 // CLOSED bars lost on queue-full drops (must stay 0)
+	persistFlushed       atomic.Int64 // closed bars handed to the persister
+	persistLastSum       atomic.Int64 // unix seconds of the last drop summary
+	ingestDropOld        atomic.Int64 // ingest channel drop-oldest events
+	ingestDropCur        atomic.Int64 // ingest channel drop-current events
+	ingestDropHist       atomic.Int64 // historical batch drops
+	ingestLastSum        atomic.Int64
 )
 
 type persistMsg struct {
@@ -100,8 +101,8 @@ func barPersistSummary() {
 		return
 	}
 	if persistLastSum.CompareAndSwap(persistLastSum.Load(), now) {
-		logger.Warnf("bars: persist queue summary: dropped=%d flushed=%d (queue-full drops self-heal via the cache tail)",
-			persistDropped.Swap(0), persistFlushed.Load())
+		logger.Warnf("bars: persist queue summary: queue_drops=%d closes_dropped=%d flushed=%d (closes_dropped must be 0 — queue-full drops self-heal via the cache tail)",
+			persistDropped.Swap(0), persistDroppedCloses.Swap(0), persistFlushed.Load())
 	}
 }
 
@@ -166,19 +167,29 @@ func fanOutBarPersist(warn func(msg string, kv ...interface{}), historical bool,
 	case barPersistCh <- persistMsg{historical: historical, symbol: symbol, tf: tf, bars: bars}:
 	default:
 		persistDropped.Add(1)
+		// Honest counters (FORENSICS HYGIENE 2026-08-28): queue-full drops of
+		// CLOSED bars are counted separately from intra-bar ingest evictions.
+		// closes_dropped must stay 0 — the next frame re-derives the closed
+		// tail, but a nonzero value means the self-heal lagged a full window.
+		persistDroppedCloses.Add(int64(len(bars)))
 		barPersistSummary()
 	}
 }
 
 // ingestDropSummary logs the 1-line/minute ingest-drop summary in place of
-// the old per-drop WARN flood (A-1, 2026-08-28).
-func ingestDropSummary(warn func(msg string, kv ...interface{})) {
+// the old per-drop WARN flood (A-1, 2026-08-28). FORENSICS HYGIENE: the
+// counters are now labeled honestly — the ingest channel carries FORMING
+// intra-bar updates only (closed bars are re-derived from the cache tail
+// after the drain, so a dropped CLOSE is impossible here BY CONSTRUCTION),
+// and the persist queue reports queue_drops and closes_dropped separately.
+func ingestDropSummary() {
 	now := time.Now().Unix()
 	if now-ingestLastSum.Load() < 60 {
 		return
 	}
 	if ingestLastSum.CompareAndSwap(ingestLastSum.Load(), now) {
-		warn("bars: ingest drop summary: dropped_oldest=%d dropped_current=%d dropped_historical=%d (1-line/min; forming frames self-heal on the next tick)",
-			ingestDropOld.Swap(0), ingestDropCur.Swap(0), ingestDropHist.Swap(0))
+		logger.Warnf("bars: ingest drop summary: intrabar_dropped=%d current_dropped=%d historical_dropped=%d peak_depth=%d/%d (1-line/min; intra-bar drops self-heal on the next tick — closed bars are NEVER dropped on this path)",
+			ingestDropOld.Swap(0), ingestDropCur.Swap(0), ingestDropHist.Swap(0),
+			ingestPeakDepth.Load(), ingestQueueCap())
 	}
 }
