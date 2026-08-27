@@ -813,6 +813,16 @@ export function SessionPlanCard({
         <ScenarioList
           scenarios={doc.scenarios}
           statusMap={plan.scenario_status}
+          armedStates={
+            (
+              plan as {
+                armed?: Record<
+                  string,
+                  { state: string; reason?: string; entry_px?: number }
+                >
+              }
+            ).armed
+          }
           fvgStates={
             (
               plan as {

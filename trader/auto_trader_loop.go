@@ -393,6 +393,10 @@ func (at *AutoTrader) runCycle() error {
 	// Wave 2 armed orders (2026-08-27) — Phase 1 arming contract. No-op until a
 	// plan carries arm specs; cancels on dormant/session-end per 1.4/2.4.
 	at.maybeManageArmedOrders(ctx.Structure)
+	// Phase 3 — the executor prompt shows its resting orders' live state.
+	if eng := at.strategyEngine; eng != nil {
+		eng.SetArmedContext(at.armedLines())
+	}
 
 	// R4 (2026-08-25) — min_scenario_quality gate inputs: the resolved floor
 	// (default C = no restriction) + the active plan's scenario qualities.

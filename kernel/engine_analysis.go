@@ -356,6 +356,7 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 	// to SVP → disabled (the default) / empty keeps the golden byte-identical.
 	engine.SetKeyLevelsContext("")
 	engine.SetBiasContext("")
+	engine.SetArmedContext("")
 	planOn := false
 	maxLevels := DefaultMaxLevels
 	proximityK := ActivationWindowK

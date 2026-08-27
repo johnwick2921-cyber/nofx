@@ -121,6 +121,8 @@ export interface PlanToday {
       }
     >
   }
+  /** Wave 2 armed orders — per-scenario arm state for the card chips. */
+  armed?: Record<string, { state: string; reason?: string; entry_px?: number }>
   /** W15.B — the acceptance rule the executor evaluates these levels with. */
   acceptance_rule?: string
   /** W15.B — which session is LIVE right now, regardless of the tab requested. */

@@ -192,15 +192,85 @@ function ScenarioRow({
   )
 }
 
+export function ArmedChip({
+  arm,
+}: {
+  arm?: { state: string; reason?: string }
+}) {
+  if (!arm) return null
+  switch (arm.state) {
+    case 'armed':
+      return (
+        <span
+          data-testid={`armed-chip`}
+          className="text-[9px] font-bold px-1.5 py-0.5 rounded"
+          style={{
+            color: 'var(--vl-gold)',
+            border: '1px solid var(--vl-gold-line)',
+          }}
+        >
+          ⏳ armed
+        </span>
+      )
+    case 'working':
+      return (
+        <span
+          data-testid={`armed-chip`}
+          className="text-[9px] font-bold px-1.5 py-0.5 rounded vl-pulse"
+          style={{
+            color: 'var(--vl-gold)',
+            border: '1px solid var(--vl-gold-line)',
+          }}
+        >
+          📌 working
+        </span>
+      )
+    case 'filled':
+      return (
+        <span
+          data-testid={`armed-chip`}
+          className="text-[9px] font-bold px-1.5 py-0.5 rounded"
+          style={{
+            color: 'var(--vl-long)',
+            border: '1px solid rgba(63,191,143,0.35)',
+          }}
+        >
+          ⚡ filled
+        </span>
+      )
+    case 'cancelled':
+      return (
+        <span
+          data-testid={`armed-chip`}
+          className="text-[9px] font-bold px-1.5 py-0.5 rounded"
+          title={arm.reason ?? ''}
+          style={{
+            color: 'var(--vl-short)',
+            border: '1px solid rgba(224,108,108,0.4)',
+          }}
+        >
+          ✕ cancelled{arm.reason ? ` · ${arm.reason}` : ''}
+        </span>
+      )
+  }
+  return null
+}
+
 export function ScenarioList({
   scenarios,
   statusMap,
   meta,
   fvgStates,
+  armedStates,
   language,
 }: {
   scenarios: PlanScenario[]
   statusMap?: Record<string, ScenarioStatusValue>
+  /** Wave 2 armed orders — per-scenario arm state (⏳/📌/⚡/✕+reason). */
+  armedStates?: Record<
+    string,
+    { state: string; reason?: string; entry_px?: number }
+  >
   /** A1/A4/C1 (fail-register wave): verdict basis, unevaluable ids, confirm verdicts */
   meta?: {
     basis?: Record<string, string>
@@ -282,6 +352,8 @@ export function ScenarioList({
                   {fvgStates?.find((f) => f.id === s.id) && (
                     <FvgStateChip f={fvgStates.find((x) => x.id === s.id)!} />
                   )}
+                  {/* Wave 2 armed orders — the arm state chip (⏳/📌/⚡/✕). */}
+                  <ArmedChip arm={armedStates?.[s.id]} />
                 </div>
               )}
             </div>

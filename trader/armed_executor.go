@@ -146,12 +146,56 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 				continue
 			}
 			at.logInfof("⚔️ armed %s %s %s limit %.2f SL %.2f TP %.2f (tick-managed placement is Phase 2)", plan.Session, sc.ID, side, sc.Arm.Entry, sc.Arm.Stop, sc.Arm.Target)
+		} else {
+			// CHURN GUARD (2.1): re-spec a working arm's bracket only when the
+			// plan moved SL or TP by ≥ 2 ticks (cancel+re-place on modify).
+			tick := market.FuturesTickSize(at.futuresSymbol())
+			if tick <= 0 {
+				tick = 0.25
+			}
+			if row.State == "working" && row.SignalID != "" &&
+				(math.Abs(row.StopPx-sc.Arm.Stop) >= 2*tick || math.Abs(row.TargetPx-sc.Arm.Target) >= 2*tick) {
+				if nt := at.armedTrader(); nt != nil {
+					_ = nt.ModifyBracket(row.SignalID, sc.Arm.Stop, sc.Arm.Target)
+					at.logInfof("📌 armed %s bracket modify (churn guard) SL %.2f→%.2f TP %.2f→%.2f",
+						sc.ID, row.StopPx, sc.Arm.Stop, row.TargetPx, sc.Arm.Target)
+				}
+			}
+			row.EntryPx, row.StopPx, row.TargetPx = sc.Arm.Entry, sc.Arm.Stop, sc.Arm.Target
+			row.Version = plan.Version
+			_ = ledger.UpsertArm(row)
 		}
 	}
 
 	// PHASE 2 — placement engine (armed → working within the tick band), wire
 	// cancel/modify, and the order_update event machine.
 	at.runArmedPlacement(bars)
+}
+
+// armedLines renders the per-cycle ARMED: lines for the executor prompt.
+func (at *AutoTrader) armedLines() string {
+	if at.store == nil {
+		return ""
+	}
+	rows, err := at.store.ArmedOrders().ListNonTerminal()
+	if err != nil || len(rows) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	for _, r := range rows {
+		if r.TraderID != at.id {
+			continue
+		}
+		glyph := map[string]string{"armed": "⏳ armed", "working": "📌 working"}[r.State]
+		if glyph == "" {
+			continue
+		}
+		fmt.Fprintf(&b, "ARMED: %s %s %s limit %.2f SL %.2f TP %.2f (%s)\n", r.Scenario, r.Side, r.State, r.EntryPx, r.StopPx, r.TargetPx, glyph)
+	}
+	if b.Len() == 0 {
+		return ""
+	}
+	return b.String()
 }
 
 // runArmedPlacement drives the armed→working transition, the churn guard, and

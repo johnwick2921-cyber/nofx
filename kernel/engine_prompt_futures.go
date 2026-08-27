@@ -188,6 +188,13 @@ func (e *StrategyEngine) buildFuturesPrompt(symbol string, accountEquity float64
 		}
 	}
 
+	// Wave 2 armed orders — the executor sees its resting orders' live state
+	// (⏳ armed / 📌 working / ⚡ filled / ✕ cancelled+reason). Rendered whenever
+	// non-empty, plan active or not.
+	if e.armedContextLine != "" {
+		sb.WriteString(e.armedContextLine + "\n\n")
+	}
+
 	// 3b. Entry Standards (editable). Appended ONLY when set — empty = unchanged.
 	if ps.EntryStandards != "" {
 		sb.WriteString("# Entry Standards\n")
