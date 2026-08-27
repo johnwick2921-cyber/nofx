@@ -276,17 +276,36 @@ func (at *AutoTrader) reconcileStaleWorking(ledger *store.ArmedOrderStore, rows 
 	}
 }
 
-// consumeArmedOrderUpdates subscribes (once) to the trader's order_update
+// consumeArmedOrderUpdates subscribes ONCE to the trader's order_update
 // stream and drains pending events into the ledger.
+//
+// 2026-08-27 bug: the old code called nt.OrderUpdates() as the LoadOrStore
+// argument on EVERY cycle — the argument is evaluated first, and
+// SubscribeOrderUpdatesFor CLOSES+replaces the channel on each subscribe.
+// The map then held a closed channel forever: the drain read 310,808
+// zero-value payloads in 15s at 13:34:48 and the consumer was permanently
+// dead. Now: subscribe only on the miss path, and self-heal (delete the map
+// entry) if the channel is ever closed.
 func (at *AutoTrader) consumeArmedOrderUpdates(nt *ntTrader.TCPTrader, ledger *store.ArmedOrderStore) {
-	v, _ := armedSubs.LoadOrStore(at.id, nt.OrderUpdates())
+	v, ok := armedSubs.Load(at.id)
+	if !ok {
+		// Subscribe exactly once. A concurrent miss would re-subscribe and
+		// close the first channel — harmless here (one cycle goroutine per
+		// trader), and the closed-channel branch below self-heals.
+		v, _ = armedSubs.LoadOrStore(at.id, nt.OrderUpdates())
+	}
 	ch, ok := v.(<-chan ntwire.OrderUpdatePayload)
 	if !ok {
 		return
 	}
 	for {
 		select {
-		case u := <-ch:
+		case u, open := <-ch:
+			if !open {
+				armedSubs.Delete(at.id)
+				at.logWarnf("📡 armed order_update channel closed — re-subscribing next cycle")
+				return
+			}
 			at.onArmedOrderUpdate(u, ledger)
 		default:
 			return
