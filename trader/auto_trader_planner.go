@@ -869,11 +869,13 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		raw, err := call()
 		if err != nil {
 			lastErr = err
+			at.logWarnf("📐 planner attempt %d/3 failed: %v", attempt, err)
 			continue
 		}
 		d, perr := kernel.ParsePlanDocCapped(raw, maxLevels, scenarioCap)
 		if perr != nil {
 			lastErr = perr
+			at.logWarnf("📐 planner attempt %d/3 parse/schema rejected: %v", attempt, perr)
 			continue
 		}
 		// W6-D (2026-08-25) — the G5 write-time demotion is REMOVED: stamping
@@ -898,6 +900,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		// the evaluator and ignored by the re-planner.
 		if requiredBias != "" && strings.ToLower(strings.TrimSpace(d.Bias.Direction)) != requiredBias {
 			lastErr = fmt.Errorf("prior plan flip already fired → bias %s is MANDATORY, got %q — the flip cannot be re-written away", requiredBias, d.Bias.Direction)
+			at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, lastErr)
 			continue
 		}
 		// P0.4-H (2026-08-25) — label provenance: a plan level whose price
@@ -907,6 +910,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		// was 29290.5 — the flip anchor rode a phantom label.
 		if mis := kernel.MislabeledStructuralLevels(d, machineLabels); len(mis) > 0 {
 			lastErr = fmt.Errorf("level label provenance: %s — copy the machine table's label for these prices", strings.Join(mis, "; "))
+			at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, lastErr)
 			continue
 		}
 		// P0.1-relax (2026-08-27) — facts rules, machine-aware side quota:
@@ -917,6 +921,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		// reachable targets. Everything else fails → retry → fail-closed.
 		if thin, verr := kernel.ValidatePlanDocWithFactsMachine(d, facts, machineLabels, sideQuota, maxLevels, scenarioCap); verr != nil {
 			lastErr = verr
+			at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, verr)
 			continue
 		} else if len(thin) > 0 {
 			for _, n := range thin {
@@ -942,6 +947,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 			}
 			if verr := kernel.ValidateFvgEntryScenarios(d, fvgBars, at.futuresSymbol(), origin, time.Now()); verr != nil {
 				lastErr = verr
+				at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, verr)
 				continue
 			}
 		}
