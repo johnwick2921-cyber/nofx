@@ -53,6 +53,10 @@ func SessionVWAPLevels(bars []market.Kline, now time.Time) []DetectedLevel {
 		lineLevel(KindVWAP, vwap, "VWAP", day, false),
 		lineLevel(KindVWAP, vwap+sd, "VWAP+1σ", day, false),
 		lineLevel(KindVWAP, vwap-sd, "VWAP−1σ", day, false),
+		// Level-truth wave (2026-08-27) — ±2σ bands EMITTED at 0.85 per owner
+		// ruling (the dispatched spec listed them; the emission was missing).
+		lineLevel(KindVWAP2S, vwap+2*sd, "VWAP+2σ", day, false),
+		lineLevel(KindVWAP2S, vwap-2*sd, "VWAP−2σ", day, false),
 	}
 }
 

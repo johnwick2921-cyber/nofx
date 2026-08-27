@@ -42,8 +42,8 @@ func TestSessionVWAPMoves(t *testing.T) {
 	})
 	now := start.Add(3 * time.Minute)
 	lv := SessionVWAPLevels(bars1, now)
-	if len(lv) != 3 {
-		t.Fatalf("SessionVWAPLevels = %d levels, want 3 (VWAP, +1σ, −1σ)", len(lv))
+	if len(lv) != 5 {
+		t.Fatalf("SessionVWAPLevels = %d levels, want 5 (VWAP, ±1σ, ±2σ — T5 emission)", len(lv))
 	}
 	// VWAP must be volume-weighted: bars 1-3 tp = 100, 101, 102 → 101.
 	if math.Abs(lv[0].Price-101) > 0.01 {
@@ -64,7 +64,7 @@ func TestSessionVWAPMoves(t *testing.T) {
 	}, more...))
 	now2 := start.Add(12 * time.Minute)
 	lv2 := SessionVWAPLevels(bars2, now2)
-	if len(lv2) != 3 || lv2[0].Price <= 104 {
+	if len(lv2) != 5 || lv2[0].Price <= 104 {
 		t.Fatalf("VWAP after higher bars = %+v, want > 104", lv2)
 	}
 }

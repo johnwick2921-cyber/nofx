@@ -54,6 +54,9 @@ const (
 	// THE 43%-missed-turns fix: intraday swing turns get seats as react_zone.
 	KindSWGH LevelKind = "SWG-H" // recent swing high (5m/15m fractal extreme)
 	KindSWGL LevelKind = "SWG-L" // recent swing low
+	// Level-truth wave (2026-08-27) — ±2σ fair-value bands EMITTED at 0.85 per
+	// owner ruling (the dispatched spec listed them; they were missing).
+	KindVWAP2S LevelKind = "VWAP±2σ" // session VWAP ±2σ band lines
 	KindSupply LevelKind = "SUPPLY" // supply zone
 	KindDemand LevelKind = "DEMAND" // demand zone
 	KindFVG    LevelKind = "FVG"    // fair-value gap
