@@ -50,8 +50,8 @@ func (at *AutoTrader) snapshotSessionProfiles() {
 		installLevelStateProvider(at, st) // W11b — surface persisted freshness/consumed
 		// 1h wave + R4 (2026-08-25) — one boot observability line for the new
 		// day-plan knobs so a config question is answered from the log.
-		at.logInfof("🗺️ day-plan knobs: seat_1h_zone=%v min_scenario_quality=%s ob_lookback_bars=%d",
-			dp.Seat1HZoneEnabled(), dp.MinScenarioQualityFor(""), kernel.OBLookbackBars())
+		at.logInfof("🗺️ day-plan knobs: seat_1h_zone=%v min_scenario_quality=%s ob_lookback_bars=%d min_side_levels=%d",
+			dp.Seat1HZoneEnabled(), dp.MinScenarioQualityFor(""), kernel.OBLookbackBars(), dp.MinSideLevelsFor(""))
 		// A3 (2026-08-26) — min-SL guard observability (0 = off).
 		at.logInfof("🛑 min-sl guard: atr_mult=%.1f level_clearance=%dtick(s)",
 			kernel.MinSLATRMult(), kernel.MinSLTickClearance)

@@ -443,9 +443,16 @@ export const planStrings = {
   },
   minScenarioQuality: {
     en: 'Min scenario quality',
-    zh: '最小场景质量',
+    zh: '最低场景质量',
     id: 'Kualitas skenario min',
   },
+  // P0-relax (2026-08-27) — per-side level floor (default 2; 3 = old hard rule).
+  minSideLevels: {
+    en: 'Min levels per side',
+    zh: '每侧最低价位数量',
+    id: 'Level min per sisi',
+  },
+
   // W15.C follow-up — the owner door only opens on the LIVE session, because every
   // mutating endpoint resolves the active session server-side.
   siblingReadOnly: {
