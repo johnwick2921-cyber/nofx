@@ -1,9 +1,9 @@
 # NOFX / VL SYSTEM — OPERATOR'S MANUAL + FULL UI REFERENCE
 
-- **Branch:** `docs/system-readme` · **Docs-only** (zero code changes) · verified against the running code @ `6b5d17ca` (S-wave cutover, boot `goldens PASS`).
+- **Branch:** `docs/system-readme` (merged to dev) · **Docs-only** (zero code changes) · refreshed to the running rev **`717acd34`** (2026-08-27 S-dispatch; boot `BOOT INTEGRITY OK — rev 717acd34e52b +dirty · goldens PASS`; `+dirty` = only the untracked `.env.bak.0825-2157`).
 - **Verify-first law:** every row below was written after reading the FE component, the API handler, and the engine path behind it. Cites are `file:line` (or `[report]`). Where code disagrees with this or older docs, CODE wins; anything unverifiable is marked `[UNVERIFIED]`.
 - **Audience:** the owner (mobile — short sentences, tables), then any fresh agent.
-- **Discrepancies found while writing:** collected in §9 — nothing was fixed.
+- **Discrepancies found while writing:** collected in §9 — fixed in the 2026-08-27 planner-contract wave (C1–C9) + P0-relax wave; statuses updated below.
 
 ---
 
@@ -443,18 +443,25 @@ news) · CT America/Chicago time · SIM simulated account · uPnL unrealized P&L
 PF profit factor · MAE/MFE max adverse/favorable excursion · RN round number ·
 HTF higher timeframe · TF timeframe · KZ killzone · CoT chain of thought.
 
-## 9. DISCREPANCIES FOUND (fix NOTHING — report only)
+## 9. DISCREPANCIES FOUND (status @ running rev `717acd34`)
 
-1. **[BUG]** `⏸ TRANSITION` chip is dead — `transitionState` (`api/handler_plan.go:1078`) is never called, so `plan.transition` never reaches the card (`SessionPlanCard.tsx:685-705`).
-2. **[BUG]** `last_entry_ct` / `eod_flat_ct` are vestigial UI fields — live gates use the per-session offsets (`auto_trader_clock.go:260,299-302`), which have **no UI control** at all.
-3. **[DIVERGENCE]** Proximity slider stops at 0.5 (`DayPlanEditor.tsx:429-431`) but the planner resolver honors 0.1–3.0 (`auto_trader_planconfig.go:145-150`) — values in (0.1, 0.5) can't be set from the UI.
-4. **[BUG]** Dashboard `SYSTEM_STATUS::ONLINE` debug strip is a static string, not a health probe; real health is `GET /api/health` (unpolled by any component).
-5. **[BUG]** `GateBlocksPanel` ignores the endpoint's `summary` and pulls every trader's counters client-side (`GateBlocksPanel.tsx:54-61`); the API has no trader filter.
-6. **[BUG]** `PlanToday.scenario_meta` FE type lacks `confirm` (`web/src/lib/api/plan.ts:102`) — confirm chips work only through a loose cast (`SessionPlanCard.tsx:810-820`).
-7. **[MISLABEL]** scenario quality `A` renders grey via token `--vl-grade-b` (`ScenarioList.tsx:16`); direction color treats `neutral` as short-red (`:40`).
-8. **[NOT PRESENT]** role badges, `fresh·xN`, and `◆ new since plan` do not exist in the FE (only the instruction verb, freshness dot, and `data-flash` after realign).
-9. **[DEAD]** `trigger_reason` from `/api/plan/today` is typed but never rendered; `overlay_count` likewise; unused column-header translation keys.
-10. **[GAP]** no 402/payment banner anywhere in the UI; `/api/risk/status`, `/api/risk/freezes`, `/api/risk/errors`, `/api/ai-costs` have no FE consumers.
-11. **[NOTE]** consumed levels are **dimmed**, not struck-through; strike-through = conflict-ghosted rows (`ZoneTable.tsx:58,69`).
-12. **[NOTE]** Approve button has no confirmation modal (by design, W9 comment `ApproveButton.tsx:1-10`).
+1. **[FIXED]** `⏸ TRANSITION` chip removed (C2, `92bf01ed` wave) — backend `transitionState` still uncalled by design.
+2. **[FIXED]** `last_entry_ct` / `eod_flat_ct` hidden (C3) — live gates use per-session offsets (`LastEntryOffsetFor`/`EODFlatOffsetFor`, defaults 15/0 min).
+3. **[FIXED]** Proximity slider floor 0.1 (C1) — matches resolver clamp 0.1–3.0.
+4. **[FIXED]** SYSTEM_STATUS strip live from `GET /api/health` every 30s + shows REV (C4).
+5. **[FIXED]** gate-blocks `?trader_id=` filter (C5) — server scopes to the trader + process-wide `""` key.
+6. **[FIXED]** `scenario_meta.confirm` typed + loose cast removed (C6).
+7. **[FIXED]** quality A uses `--vl-grade-a`; neutral direction renders muted (C7).
+8. **[QUEUE]** role badges / `fresh·xN` / `◆ new since plan` — feature work, not a bug.
+9. **[FIXED]** dead `trigger_reason`/`overlay_count` types + unused i18n keys removed (C9).
+10. **[FIXED]** 402 banner on the dashboard polling `/api/risk/errors` for `ai_payment_402` (C8).
+11. **[BY DESIGN]** consumed levels dimmed (not struck); strike = conflict-ghost.
+12. **[BY DESIGN]** Approve is one-click (toast), no modal.
+
+## 10. 2026-08-27 WAVES (as-built @ `717acd34`)
+
+- **Planner contract (A1–A5):** BIAS-TREE section (6 branches, `bias-tree:` reasoning quote required) · `chain_after` link + `ChainWarnings` (WARN) · no-trade gates (≤8 lines) · killzone weighting · STOP-DOING. Boot line `📜 planner playbook: playbook=v2 …`.
+- **P0 side-quota relax:** `ValidatePlanDocWithFactsMachine` — machine-thin side (the assembled map itself has < quota) → **WARN + write** with a `thin_side` note (card ⚖ chip); AI-caused omission → still rejected; 0-on-a-side / empty map → hard fail-closed. Knob **`min_side_levels`** (Studio, base + per-session; env `MIN_SIDE_LEVELS`; default 2, 3 = the old hard rule). Boot line `⚖ side-quota (P0-relax): min_side=cfg(default 2 …)`.
+- **Bias-tree facts fix:** `BiasContext` carries PDH/PDL/PDC and the write site stamps them from the FULL detector universe (`ApplyUniverseDayAnchors`) — post-roll reads no longer render "no PDH/PDL anchor"; branch-5 premium/discount now anchors on the DEALING RANGE (PDH/PDL) with `BEYOND range high/low (extended)` for out-of-range prices (no more >100% figures).
+- **Observability:** every planner-attempt rejection now logs `📐 planner attempt N/3 …` (was silent).
 
