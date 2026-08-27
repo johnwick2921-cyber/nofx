@@ -19,6 +19,7 @@ import (
 	"log/slog"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -65,6 +66,9 @@ type TCPServer struct {
 	// bumps these; a 60s reporter line answers "feed or math" in one glance.
 	framesTotal     atomic.Int64
 	lastFrameUnixMs atomic.Int64
+	// T8 (2026-08-27) — bar_update frame-log sampler (INFO spam ate the
+	// journald cap in <1 day; the frame is DEBUG-sampled 1-in-N now).
+	frameLogN atomic.Int64
 
 	// Pending signals to flush on (re)connect (spec L4414).
 	pendingMu sync.Mutex
@@ -433,6 +437,18 @@ func ListenAddr() string {
 
 // NewTCPServer constructs a server bound to ListenAddr(). The listener is
 // not opened until Start. Pass nil to use the default slog logger.
+
+// barUpdateLogSample — T8 (2026-08-27): the per-frame bar_update log sampler
+// (INFO spam ate the journald cap; DEBUG + 1-in-N now). Zero literals.
+func barUpdateLogSample() int64 {
+	if v := os.Getenv("BAR_UPDATE_LOG_SAMPLE"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 0 {
+			return n
+		}
+	}
+	return 500
+}
+
 func NewTCPServer(logger *slog.Logger) *TCPServer {
 	if logger == nil {
 		logger = slog.Default()
@@ -1439,7 +1455,19 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			return
 		}
 
-		s.logger.Info("tcp_server: received frame", "type", env.Type)
+		// T8 (2026-08-27) — per-frame INFO spam (7.5M bar_update lines/day)
+		// consumed the journald 2G cap in <24h, destroying forensics. bar_update
+		// now logs at DEBUG, sampled 1-in-N (BAR_UPDATE_LOG_SAMPLE, default 500
+		// ≈ one line per ~2 min at 4 bars/s); every other frame type keeps its
+		// unconditional INFO.
+		if env.Type == FrameBarUpdate {
+			n := s.frameLogN.Add(1)
+			if n%barUpdateLogSample() == 0 {
+				s.logger.Debug("tcp_server: received frame (sampled)", "type", env.Type, "sample_every", barUpdateLogSample())
+			}
+		} else {
+			s.logger.Info("tcp_server: received frame", "type", env.Type)
+		}
 
 		// P5.2 — legacy detection: a data frame before any hello means a
 		// pre-P5.2 AddOn. Tolerated (warn once per connection) so the lockstep
