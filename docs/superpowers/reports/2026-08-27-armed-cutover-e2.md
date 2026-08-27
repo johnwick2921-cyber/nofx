@@ -63,21 +63,101 @@ debug seam is OFF.
   `lifecycle=active`, budget `replan_cap=4`.
 - `flip.rule = 2x5m` (canonical — b1 live), no fvg scenario authored (b2 live).
 
-## E2 chain (quoted from the log)
+## E2 chain, run 1 (Go-optimistic only — superseded)
 
 ```
 🧪 TEST-E2 arm → WORKING limit 29580.00 signal=88a1eb20-2e90-4573-be8e-2e7d5b6b9417 (seam)
 🧪 TEST-E2 cancel sent signal=88a1eb20-2e90-4573-be8e-2e7d5b6b9417 (row 1 → cancelled)
 ```
 
-Ledger row 1: `state=working` (place) → `state=cancelled` (cancel) — the full
-armed-orders chain ran on the real TCP wire into NT8 SIM.
+Ledger row 1 went `working → cancelled`, but BOTH transitions were written by
+the seam (optimistic Go-side state). The owner asked whether NT8 order_update
+FRAMES drove them — they did not. Investigation found the NT8 AddOn was still
+the pre-Phase-2 build (AddOns folder copy dated Aug 25 15:10, md5 `f6c8426a` ≠
+repo `8411d403`, zero `SendOrderUpdateFrame` calls; Phase-2 C# commit
+`ecb1961b` 08-27 08:48 was never copied in). See the confirmation run below.
+
+## E2 confirmation run (frames FROM NT8 — the airtight proof)
+
+After the owner's F5 + full NT8 restart (new AddOn live, verified by
+`bars_historical` replay + fresh heartbeat ~13:29), the seam ran again and the
+journal captured the C# dispatcher's order_update frames verbatim.
+
+### Place leg — TEST-E2 row 4 (signal `f3ba7740-a561-4581-b526-a6bcf5d9c009`)
+
+```
+13:42:40 tcp_server: order_update raw payload raw="{\"signal_id\":\"f3ba7740-…\",\"state\":\"initialized\",\"symbol\":\"MNQ\",\"account\":\"Sim101\",\"seq\":1}"
+13:42:40 tcp_server: order_update raw payload raw="{\"signal_id\":\"f3ba7740-…\",\"state\":\"submitted\",…}"
+13:42:40 tcp_server: order_update raw payload raw="{\"signal_id\":\"f3ba7740-…\",\"state\":\"accepted\",…}"
+13:42:40 tcp_server: order_update raw payload raw="{\"signal_id\":\"f3ba7740-…\",\"state\":\"working\",…}"
+```
+
+### Cancel leg
+
+```
+13:43:13 … \"state\":\"cancelpending\" …
+13:43:13 … \"state\":\"cancelsubmitted\" …
+13:43:13 … \"state\":\"cancelled\" …
+```
+
+### Consumer drain (armed ledger channel → ledger)
+
+```
+13:44:11 📡 armed order_update frame: state=initialized   signal=f3ba7740-… acct=Sim101
+13:44:11 📡 armed order_update frame: state=submitted     signal=f3ba7740-… acct=Sim101
+13:44:11 📡 armed order_update frame: state=accepted      signal=f3ba7740-… acct=Sim101
+13:44:11 📡 armed order_update frame: state=working       signal=f3ba7740-… acct=Sim101
+13:44:11 📡 armed order_update frame: state=cancelpending signal=f3ba7740-… acct=Sim101
+13:44:11 📡 armed order_update frame: state=cancelsubmitted signal=f3ba7740-… acct=Sim101
+13:44:11 📡 armed order_update frame: state=cancelled     signal=f3ba7740-… acct=Sim101
+```
+
+All 7 state transitions for the TEST-E2 order arrived from NT8 through the C#
+dispatcher and drained into the armed consumer. **C# receive path PROVEN.**
+
+### Wave-2 consumer bug found and fixed during the confirmation
+
+`consumeArmedOrderUpdates` called `nt.OrderUpdates()` on EVERY cycle as the
+`LoadOrStore` argument — the argument is evaluated first, and
+`SubscribeOrderUpdatesFor` CLOSES+replaces the channel on each subscribe. The
+map then held a closed channel forever: at 13:34:48 the drain read **310,808**
+zero-value payloads in 15s (closed-channel select spin) and the armed consumer
+was permanently deaf. Fixed (`cb41ade7`): subscribe only on the miss path,
+delete the map entry + re-subscribe if the channel is ever closed. This bug
+would have silently killed the production armed lifecycle (working rows never
+seeing fills/cancels) — it is the reason the first confirmation attempt showed
+empty payloads while the raw frames on the wire were perfect.
+
+### Stuck-order cleanup
+
+Test row 3 (`efe72b44`, entry 29050) was placed during a binary swap and never
+cancelled — the owner saw it stuck in the NT8 Orders tab. Cancelled via the
+seam; `/api/open-orders?symbol=MNQ` now returns `[]` and all four TEST-E2
+ledger rows are `cancelled`.
+
+## Boot lines (final, verified)
+
+```
+🔐 BOOT INTEGRITY OK — rev 66413785add3 +dirty · built 2026-08-27T18:50:33Z · expected 66413785 · goldens PASS
+⚔️ armed_orders=on place_band=100t stale_working=15m test_seam=off (resting limits fill at the authorized price; stale_reeval NOT applied)
+```
 
 ## Seam state
 
 `ARMED_TEST_SEAM` removed from `.env`; boot line confirms `test_seam=off`.
 The endpoint now refuses (`ARMED_TEST_SEAM is off`) — it cannot place orders
 unarmed.
+
+## Deploy notes (confirmation wave)
+
+- Final code commits on dev: `cb41ade7` (consumer fix), `66413785` (debug-dump
+  strip), release markers pushed; final binary built at `66413785` with vcs
+  stamping.
+- Worktree (`git worktree add`) builds do NOT get `vcs.revision` stamped (Go
+  1.25) → `<no-vcs>` → BOOT INTEGRITY REFUSED. The deploy rule stands: build
+  from a real checkout — a `git clone` at the exact code commit stamps
+  correctly.
+- `NOFX_EXPECTED_REVISION` env overrides `deploy/RELEASE` if ever needed.
 
 ## Incident disclosure
 
