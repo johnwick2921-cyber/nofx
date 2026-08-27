@@ -95,6 +95,9 @@ func typeEvidence(k LevelKind) float64 {
 	// re-weights these (spec: no volume wave was ever live-validated before).
 	case KindVWAP, KindPOC:
 		return 0.90
+	// Level-truth wave (2026-08-27) — ±2σ bands EMITTED at 0.85 (owner ruling).
+	case KindVWAP2S:
+		return 0.85
 	// Level-truth wave (2026-08-27) — swing points are anchor-class evidence:
 	// the structure engine already filtered them (k fractal + min-move ATR),
 	// so they carry structural weight and decay on the ANCHOR ladder.
@@ -324,7 +327,7 @@ func withinTier1Proximity(l DetectedLevel, pool []DetectedLevel, price float64) 
 // family, not three confirming levels).
 func levelFamily(k LevelKind) string {
 	switch k {
-	case KindVWAP, KindEVWAP, KindPDVWAP:
+	case KindVWAP, KindEVWAP, KindPDVWAP, KindVWAP2S:
 		return "vwap"
 	case KindPOC, KindNPOC, KindVAH, KindVAL:
 		return "profile"
@@ -585,12 +588,23 @@ func scoreLevelsPool(levels []DetectedLevel, price, dATR float64, freshness func
 // with in-band same-side candidates instead of leaving the executor/planner
 // table one-sided. Empty minGrade → byte-identical to ScoreLevels.
 func ScoreLevelsMinGrade(levels []DetectedLevel, price, dATR float64, freshness func(DetectedLevel) string, maxLevels int, proximityK float64, minGrade string) []ScoredLevel {
+	seated, _ := ScoreLevelsMinGradeFull(levels, price, dATR, freshness, maxLevels, proximityK, minGrade)
+	return seated
+}
+
+// ScoreLevelsMinGradeFull is ScoreLevelsMinGrade returning the GRADED PRE-SEAT
+// POOL alongside the seated result. Level-truth wave (2026-08-27) — the planner
+// write site uses the pool for machine-grade stamping: a level the model copies
+// from the prompt that LOST the seat race (e.g. a far nPOC) must still get its
+// machine grade stamped, so the stamp map now records EVERY graded candidate,
+// not just the seated top-N.
+func ScoreLevelsMinGradeFull(levels []DetectedLevel, price, dATR float64, freshness func(DetectedLevel) string, maxLevels int, proximityK float64, minGrade string) ([]ScoredLevel, []ScoredLevel) {
 	eff := maxLevels
 	if eff <= 0 {
 		eff = DefaultMaxLevels
 	}
 	if price <= 0 || dATR <= 0 {
-		return nil
+		return nil, nil
 	}
 	pool := scoreLevelsPool(levels, price, dATR, freshness, eff*2, proximityK)
 	filtered := FilterLevelsByMinGrade(pool, minGrade)
@@ -598,7 +612,7 @@ func ScoreLevelsMinGrade(levels []DetectedLevel, price, dATR float64, freshness 
 		if len(filtered) > eff {
 			filtered = filtered[:eff]
 		}
-		return filtered
+		return filtered, pool
 	}
 	// Re-seat the filtered pool with the SAME seating rules as ScoreLevels so
 	// the both-side guarantee (P0.1) holds after the cut.
@@ -625,7 +639,7 @@ func ScoreLevelsMinGrade(levels []DetectedLevel, price, dATR float64, freshness 
 	sort.SliceStable(filtered, func(i, j int) bool {
 		return math.Abs(filtered[i].Distance) < math.Abs(filtered[j].Distance)
 	})
-	return filtered
+	return filtered, pool
 }
 
 // FilterPlanLevelsByMinGrade (grading audit §4.7, 2026-08-25) — the plan-doc
@@ -763,7 +777,7 @@ func isHTFSeatEligible(l ScoredLevel) bool {
 // guarantee protects: VWAP family, profile family, pdVWAP/SETT/MID-O.
 func isVolumeFamilyKind(k LevelKind) bool {
 	switch k {
-	case KindVWAP, KindEVWAP, KindPDVWAP, KindPOC, KindNPOC, KindVAH, KindVAL, KindSETT, KindMIDO:
+	case KindVWAP, KindEVWAP, KindPDVWAP, KindVWAP2S, KindPOC, KindNPOC, KindVAH, KindVAL, KindSETT, KindMIDO, KindSWGH, KindSWGL:
 		return true
 	}
 	return false

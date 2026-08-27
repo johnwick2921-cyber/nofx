@@ -880,6 +880,14 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 		record(l.Price, l.Grade)
 		recordLabel(l.Price, l.Label)
 	}
+	// Level-truth wave (2026-08-27) — record EVERY graded pool candidate, not
+	// just the seated top-N: a level the model copies from the prompt that lost
+	// the seat race (a far nPOC, a carried swing) must still get its machine
+	// grade stamped (the 256/795 stamp-gap regression).
+	for _, pl := range input.Pool {
+		record(pl.Price, pl.Grade)
+		recordLabel(pl.Price, pl.Label)
+	}
 	// S-dispatch (2026-08-27) — the P0.2 gap rules' PDH/PDL must come from the
 	// universe too: the seated loop above skips them post-roll and the gap
 	// continuation rules silently went unevaluated (PDH/PDL = 0 = "unknown").
@@ -984,6 +992,56 @@ func (at *AutoTrader) runPlannerReadCoreWithFacts(session, tradeDate, triggerOve
 }
 
 // runPlannerReadCoreWithFactsGrades is the production core + the machine-grade
+// carryMachineGrades (level-truth wave, 2026-08-27) stamps doc levels that the
+// current pool could not match (carried nPOC / out-of-seat rows) with the
+// PREVIOUS version's machine grade for the same rounded price. A level reused
+// across versions keeps its machine verdict instead of silently losing the
+// stamp. Fetches the latest prior version for (tradeDate, session, at.id) —
+// at stamp time the new version has not been appended yet, so "latest" IS the
+// prior version.
+func (at *AutoTrader) carryMachineGrades(tradeDate, session string, doc *kernel.PlanDoc) {
+	if at.store == nil || doc == nil {
+		return
+	}
+	prev, err := at.store.Plan().GetLatestPlanForTraderSession(tradeDate, session, at.id)
+	if err != nil || prev == nil {
+		return
+	}
+	pd := kernel.PlanDoc{}
+	if json.Unmarshal([]byte(prev.Doc), &pd) != nil {
+		return
+	}
+	carry := map[float64]string{}
+	for _, l := range pd.Levels {
+		if l.Price <= 0 {
+			continue
+		}
+		g := l.MachineGrade
+		if g == "" {
+			g = l.Grade
+		}
+		if g == "" {
+			continue
+		}
+		k := math.Round(l.Price*100) / 100
+		// Keep the stronger carry grade on price collisions.
+		if old, ok := carry[k]; !ok || kernel.GradeRank(g) > kernel.GradeRank(old) {
+			carry[k] = g
+		}
+	}
+	if len(carry) == 0 {
+		return
+	}
+	for i := range doc.Levels {
+		if doc.Levels[i].MachineGrade != "" {
+			continue
+		}
+		if g, ok := carry[math.Round(doc.Levels[i].Price*100)/100]; ok {
+			doc.Levels[i].MachineGrade = g
+		}
+	}
+}
+
 // stamp (master-audit finding 8.4): machineGrades maps rounded level price →
 // deterministic detector grade from the Go-ranked candidate table; plan levels
 // that match get their machine grade persisted for the card to display beside
@@ -1141,6 +1199,12 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 				doc.Levels[i].MachineGrade = g
 			}
 		}
+	}
+	// Level-truth wave (2026-08-27) — carry-forward: rows the model reuses from
+	// the PREVIOUS version keep that version's machine grade when the current
+	// pool has no stamp for the price (carried nPOC / out-of-seat rows).
+	if doc != nil {
+		at.carryMachineGrades(tradeDate, session, doc)
 	}
 
 	// W3 — auto-write the HARD red-news no-trade blackouts into the plan (§80),
@@ -1379,7 +1443,7 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 		}
 		extra = append(extra, htfLevels...)
 	}
-	scored, price, dATR := kernel.AssembleScoredLevelsMinGrade(at.id, bars, reg, symbol, maxLevels, now, at.proximityFilterATR(), minGrade, extra...)
+	scored, pool, price, dATR := kernel.AssembleScoredLevelsFullMinGrade(at.id, bars, reg, symbol, maxLevels, now, at.proximityFilterATR(), minGrade, extra...)
 	// 1h wave (2026-08-25) — the ranked table's HTF seats guarantee an in-band
 	// 1h S/D zone when one exists. Gated by the seat_1h_zone knob (default ON).
 	if dp != nil && dp.Seat1HZoneEnabled() {
@@ -1549,6 +1613,7 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 		DATR:             dATR,
 		Regime:           regime,
 		Levels:           scored,
+		Pool:             pool,
 		HTFZones:         htfZoneScored,
 		StructureSummary: structure,
 		ConsumedLevels:   consumedLines,
