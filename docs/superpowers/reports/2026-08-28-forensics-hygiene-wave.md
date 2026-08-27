@@ -116,3 +116,5 @@ plan write that carries .125-price rows.
   DailyRangeProxy).
 - Re-measure retention at the next reopen boundary; counters through the next
   17:00 flood; strict-gate first cited-scenario quote at the next entry.
+
+Pinned: https://github.com/johnwick2921-cyber/nofx/blob/8b55822fa6e6ba3dd5332e0eedd4a516e6a17571/docs/superpowers/reports/2026-08-28-forensics-hygiene-wave.md
