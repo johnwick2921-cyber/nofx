@@ -11,9 +11,67 @@ import (
 	"nofx/store"
 	"nofx/telemetry"
 	"nofx/wallet"
+	"os"
 	"strings"
 	"time"
 )
+
+// reasoningWire maps a reasoning knob (off|fast|low|high|max) to DeepSeek wire
+// values (thinking mode + reasoning_effort). "fast" maps to effort "low" —
+// DeepSeek only accepts low|high|max, and low is the cheapest/fastest.
+// Returns (mode, effort, label).
+func reasoningWire(raw, def string) (string, string, string) {
+	v := strings.ToLower(strings.TrimSpace(raw))
+	if v == "" {
+		v = def
+	}
+	switch v {
+	case "off":
+		return "disabled", "", "off"
+	case "fast":
+		return "enabled", "low", "fast→low"
+	case "low":
+		return "enabled", "low", "low"
+	case "high":
+		return "enabled", "high", "high"
+	case "max":
+		return "enabled", "max", "max"
+	}
+	// unknown knob — fall back to the cheapest safe wire values, never recurse.
+	switch def {
+	case "off":
+		return "disabled", "", "off"
+	case "max":
+		return "enabled", "max", "max"
+	case "high":
+		return "enabled", "high", "high"
+	}
+	return "enabled", "low", "low"
+}
+
+// execReasoningWire is the EXECUTOR in-loop thinking (AI_EXEC_REASONING,
+// default fast) — entries must land fresh.
+func execReasoningWire() (string, string) {
+	m, e, _ := reasoningWire(os.Getenv("AI_EXEC_REASONING"), "fast")
+	return m, e
+}
+
+func execReasoningLabel() string {
+	_, _, l := reasoningWire(os.Getenv("AI_EXEC_REASONING"), "fast")
+	return l
+}
+
+// planReasoningWire is the PLANNER read thinking (AI_PLAN_REASONING, default
+// max) — full reasoning is reserved for the once-per-session plan reads.
+func planReasoningWire() (string, string) {
+	m, e, _ := reasoningWire(os.Getenv("AI_PLAN_REASONING"), "max")
+	return m, e
+}
+
+func planReasoningLabel() string {
+	_, _, l := reasoningWire(os.Getenv("AI_PLAN_REASONING"), "max")
+	return l
+}
 
 // resolvePromptVariant picks the live AI prompt mode (Strategy Studio Phase 2).
 // A non-empty per-strategy saved variant wins; otherwise the original venue
@@ -424,6 +482,12 @@ func (at *AutoTrader) runCycle() error {
 	at.logInfof("🤖 Requesting AI analysis and decision... [Strategy Engine]")
 	// Plan 4 Task 25 — decision latency timer (start)
 	decisionStart := time.Now()
+	// LATENCY ROUTING (plan-lifecycle wave, 2026-08-27) — executor in-loop
+	// calls run CHEAP thinking (AI_EXEC_REASONING, default fast → wire effort
+	// low) so entries stop landing stale; reasoning=max is reserved for planner
+	// reads. Re-asserted per call because the planner may share this client.
+	eMode, eEffort := execReasoningWire()
+	mcp.ApplyThinking(at.mcpClient, eMode, eEffort)
 	// P0-latency — capture the bar this decision will be computed on (the latest
 	// closed primary bar). If a NEWER bar closes while the AI call is in flight,
 	// the decision is discarded below instead of being acted on stale data.
@@ -460,7 +524,7 @@ func (at *AutoTrader) runCycle() error {
 		// actually reads; it was never written in production (always 0). Mirror
 		// the measured duration so the audit column shows the real number.
 		record.AILatencyMs = aiDecision.AIRequestDurationMs
-		at.logInfof("⏱️ AI call duration: %.2f seconds", float64(record.AIRequestDurationMs)/1000)
+		at.logInfof("⏱️ AI call (reasoning=%s) duration: %.2f seconds", execReasoningLabel(), float64(record.AIRequestDurationMs)/1000)
 		record.ExecutionLog = append(record.ExecutionLog,
 			fmt.Sprintf("AI call duration: %d ms", record.AIRequestDurationMs))
 	}
