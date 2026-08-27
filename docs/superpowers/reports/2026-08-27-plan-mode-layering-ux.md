@@ -4,7 +4,7 @@ FE + docs only. Cutover may ride any flat window — no urgency; the Go boot is
 unaffected (no binary change, no `deploy/RELEASE` bump).
 
 Branch `fix/plan-mode-tristate` · code commit `da2da019b402907c4db12c9fd4584bbb1207a637` (immutable).
-Report pinned via the branch-qualified URL below (commit-ref form; resolves at every branch head).
+Report pinned via the commit-ref URL below — re-pinned to the dev merge commit `00533398` (the file exists at that exact commit, so the URL always resolves).
 
 ## What shipped
 
@@ -71,4 +71,4 @@ string can never be read as an override.
 ## Pinned report
 
 Commit-ref URL (canon — blob-SHA 404s on this repo):
-`https://github.com/johnwick2921-cyber/nofx/blob/fix/plan-mode-tristate/docs/superpowers/reports/2026-08-27-plan-mode-layering-ux.md`
+`https://github.com/johnwick2921-cyber/nofx/blob/00533398eea9c9958b8fb4dcbb6f6fbb297d81f6/docs/superpowers/reports/2026-08-27-plan-mode-layering-ux.md`
