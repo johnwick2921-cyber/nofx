@@ -37,3 +37,21 @@
   - [ ] pnl_corrected non-NULL on the newest closes (boot backfill + close-path)
   - [ ] journald volume delta (post-deploy: expect ~20–30k lines/day vs 7.5M)
 - **Report:** this file, pinned by commit-ref URL.
+
+---
+
+## CUTOVER EXECUTED 2026-08-27 14:29 CT (owner "go", reachable + acking)
+
+**FLAT-GATE PASS (14:28:55 CT):** DB `OPEN=0` · NT8 truth `positions snapshot account=Sim101 count=0` + `SimAccount1 count=0` (14:28:52) · API `[]`.
+
+**Boot (14:29:14 CT, PID 3055713):**
+```
+🔐 BOOT INTEGRITY OK — rev 6fc09ad39fba +dirty · built 2026-08-27T19:13:46Z · expected 6fc09ad39fba · goldens PASS
+```
+Plus: `🧬 plan lifecycle: hysteresis=buffer0.5×ATR14 …` · `⚔️ armed_orders=on place_band=100t stale_working=15m test_seam=off` · `✅ bars integrity OK: dups=0 tfs=1m total=8302`.
+
+**E-proofs collected:**
+1. **pnl_corrected backfill fired at boot:** `⚖️ pnl-backfill complete: 171 stamped · 0 class-killer disagreements · 0 skipped of 171 candidates.` — non-NULL count 37 → **208** (the 354 still NULL are pre-Aug-6 legacy rows, out of scope by design).
+2. **level_stats growing:** 28 → **74 rows across 3 session-days** (08-24: 28 · 08-25: 28 · 08-26: 18) via the T1 backfill; the nightly writer now LOGS skip reasons (`📊 level_stats: … no plan versions — skipped`) instead of swallowing them.
+3. **journald volume delta:** bar_update INFO lines = **0/min** (was ~5,000/min); the 7.5M-lines/day flood is gone — multi-day retention restored.
+4. **unstamped=0:** AWAITING the first plan written by the new binary (latest plan NY v5 14:04 CT predates the cutover; pre-cutover state: `Demand·1h` unstamped). The no-trade/fail-closed writer now stamps every level (T2 golden `TestT2NoTradeDocStampsAll`).
