@@ -7,6 +7,15 @@ import (
 	"nofx/telemetry"
 )
 
+// GateRefusalError is a NON-FIXABLE risk-gate refusal (C6 executor plan gate).
+// The bounded parse-retry loop must NOT feed it back to the model as a parse
+// error — the model cannot fix a missing/dead plan, and yesterday the three
+// blind NY proposals each burned a retry loop instead of surfacing as a clean
+// logged risk_check_error (F2, 2026-08-27-london-drought.md).
+type GateRefusalError struct{ Reason string }
+
+func (e *GateRefusalError) Error() string { return e.Reason }
+
 // futuresMaxNotionalLeverage is the notional sanity ceiling for CME futures
 // in the risk gate: max position notional = equity × this. Futures are
 // leveraged instruments (a $50k account holds ~$60k MNQ notional on ~$2.2k
@@ -277,7 +286,10 @@ func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoi
 			if blocked, msg := ExecutorPlanDeadVerdict(d.Action, ctx.ExecutorPlanDead); blocked {
 				telemetry.IncGateBlock(ctx.TraderID, "executor_plan_dead")
 				logger.Warnf("🚧 EXECUTOR PLAN GATE %s %s: %s", d.Symbol, d.Action, msg)
-				return fmt.Errorf("%s", msg)
+				// HONEST C6 (2026-08-27): a typed gate refusal — returned to the
+				// caller as a clean, logged risk_check_error, NEVER a parse-error
+				// retry loop (the model cannot fix a missing plan).
+				return &GateRefusalError{Reason: msg}
 			}
 		}
 

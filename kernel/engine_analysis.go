@@ -2,6 +2,7 @@ package kernel
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"nofx/config"
 	"nofx/discipline"
@@ -405,6 +406,14 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 			if klBlock != "" {
 				if sc, _, _ := AssembleScoredLevelsMinGrade(ctx.TraderID, snapshotBars, ResolvedSessionRegistryFor(ctx.TraderID), activeSymbol, maxLevels, snapshotNow, proximityK, minGrade, extra...); len(sc) > 0 {
 					bc := ComputeBiasContext(snapshotBars, sc, snapshotNow)
+					// FIX 8 (F6, 2026-08-27) — the executor's bias_ctx PDC read
+					// "n/a" post-roll because the day anchors sat outside the
+					// seated band. Same family as the bias-tree fix: day anchors
+					// are FACTS at any distance — stamp them from the FULL
+					// detector universe (seated values win).
+					if univ := ExtractMultiDayLevels(snapshotBars, ResolvedSessionRegistryFor(ctx.TraderID), snapshotNow); len(univ) > 0 {
+						ApplyUniverseDayAnchors(&bc, univ)
+					}
 					engine.SetBiasContext(bc.Line())
 					// T1/T2 (2026-08-26) — touch telemetry: feed the registry,
 					// persist closed episodes via the sink, and append the live
@@ -508,6 +517,15 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 	// 3. Build User Prompt using strategy engine
 	userPrompt := engine.BuildUserPrompt(ctx)
 
+	// HONEST C6 / F2 (2026-08-27) — when NO active plan exists (or it is
+	// dormant/dead), the refusal must be VISIBLE IN-PROMPT. The PLAN STATUS
+	// tail only renders when a plan block exists, so the planless case gets
+	// its own standalone warning appended to the user prompt itself — the AI
+	// stops proposing blind entries (yesterday's 3 open_long at 13:52-14:00).
+	if ActivePlanFor(ctx.TraderID, activeSymbol) == nil && ctx.ExecutorPlanDead != "" {
+		userPrompt += "\n\n⚠ NO ACTIVE PLAN — entries will be refused (C6): " + ctx.ExecutorPlanDead + "\nPosition management only; do NOT propose new entries this cycle."
+	}
+
 	// 4-5. Call AI + parse, with B2a schema-strict BOUNDED RETRY (callWithSchemaRetry):
 	// a malformed/missing-field/rule-invalid response is retried up to maxParseRetries
 	// with the parse error fed back; still bad → skip the cycle with a NAMED reason
@@ -544,6 +562,14 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 		return nil, fmt.Errorf("AI API call failed: %w", callErr)
 	}
 	if parseErr != nil {
+		// HONEST C6 (2026-08-27) — a typed gate refusal (missing/dead plan) is
+		// NOT a parse failure: no retry happened, and the real reason rides the
+		// skip so the loop stamps a named risk_check_error.
+		var gateErr *GateRefusalError
+		if errors.As(parseErr, &gateErr) {
+			logger.Warnf("🚧 C6 executor plan gate refused (no retry): %s", gateErr.Reason)
+			return &FullDecision{SkipReason: "executor_plan_gate: " + gateErr.Reason, SystemPrompt: systemPrompt, UserPrompt: userPrompt, RawResponse: aiResponse}, nil
+		}
 		logger.Warnf("🚫 schema_parse_failed: AI response unparseable after %d attempts — skipping decision cycle (HOLD). Last error: %v",
 			maxParseRetries+1, parseErr)
 		// F10 — a real AI call happened; preserve the prompts/response so the record
@@ -650,6 +676,12 @@ func callWithSchemaRetry(mcpClient mcp.AIClient, systemPrompt, userPrompt string
 		raw = resp
 		decision, parseErr = parse(resp)
 		if parseErr == nil || attempt >= maxRetries {
+			return decision, lastRaw, dur, parseErr, nil
+		}
+		// HONEST C6 (2026-08-27) — a gate refusal is not model-fixable; return
+		// it immediately instead of feeding it back as a parse error.
+		var gateErr *GateRefusalError
+		if errors.As(parseErr, &gateErr) {
 			return decision, lastRaw, dur, parseErr, nil
 		}
 		logger.Warnf("⚠️ AI response parse failed (attempt %d/%d) — retrying with the error fed back: %v",
