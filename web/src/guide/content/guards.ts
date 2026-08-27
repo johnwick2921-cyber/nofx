@@ -1,0 +1,166 @@
+import { GUIDE_BUILT_REV, type GuideSection } from '../types'
+
+export const guards: GuideSection = {
+  id: 'guards',
+  num: 6,
+  title: 'Guards & Safety',
+  tagline: 'What can hard-block a trade vs what only informs.',
+  asBuiltRev: GUIDE_BUILT_REV,
+  blocks: [
+    { kind: 'h', text: 'CAN-HARD-BLOCK vs ADVISORY-ONLY (the truth table)' },
+    {
+      kind: 'table',
+      head: ['Gate', 'Kind', 'What it does'],
+      rows: [
+        [
+          'SIM lock (isAccountTradeable)',
+          'HARD',
+          'Refuses non-SIM accounts at account routing — the bot cannot go live.',
+        ],
+        [
+          'Feed down / dead-man / freeze / boot integrity',
+          'HARD',
+          'No bars, no bridge, no trading — cycle skipped or refused.',
+        ],
+        [
+          'plan_mode direction/strict',
+          'HARD',
+          'Refuses entries against plan bias (direction) or without a cited scenario (strict); no plan + direction/strict = no trades.',
+        ],
+        [
+          'min_confidence',
+          'HARD',
+          'Confidence below the floor (default 60) → entry refused.',
+        ],
+        [
+          'MIN-SL (env MIN_SL_ATR_MULT, 1.0)',
+          'HARD',
+          'Stop closer than the floor (×ATR + 2-tick clearance) → refused.',
+        ],
+        [
+          'HTF veto',
+          'HARD',
+          'Entry against the HTF regime at a veto anchor → refused.',
+        ],
+        [
+          'T1 red news blackout',
+          'HARD',
+          'No entries in the ±15m window around T1 events (calendar).',
+        ],
+        [
+          'Lunch / session windows / EOD flat',
+          'HARD',
+          'Clock gates: no entries 12:00–13:30 CT; flat at session end.',
+        ],
+        [
+          'Consecutive-loss halt (guardrails ON)',
+          'HARD',
+          'N losers in a row → halt (guardrails master must be ON).',
+        ],
+        [
+          'Side-quota (0-on-a-side / empty map)',
+          'HARD',
+          'A one-sided plan or an empty machine map fail-closes the read.',
+        ],
+        [
+          'Confirm MET / stale-MET',
+          'ADVISORY',
+          'Informs the AI + card. Never blocks.',
+        ],
+        ['Touch chips ○◐✕▲', 'ADVISORY', 'Telemetry only.'],
+        [
+          'fvg IN-ZONE/ABOVE/BELOW/FILLED_INVALID',
+          'ADVISORY',
+          'Informs. Never blocks.',
+        ],
+        [
+          'quality A+/A/B/C + m: machine grade',
+          'ADVISORY',
+          'Informational (D3 ruling) — no gate consumes them.',
+        ],
+        ['scenario status dots', 'ADVISORY', 'Read-only backend state.'],
+        ['thin-side ⚖ note', 'ADVISORY', 'Warn at write, plan ships.'],
+        [
+          'chain warnings / role mismatches',
+          'ADVISORY',
+          'Warn at write, never a fail.',
+        ],
+      ],
+    },
+    { kind: 'h', text: 'The refusal decoder' },
+    {
+      kind: 'callout',
+      title: 'every refusal is a named string — here is the translation',
+      items: [
+        {
+          title: 'confidence too low (N), must be ≥M',
+          body: "The AI's confidence was under min_confidence. Not a bug — the bar.",
+          cite: 'kernel/engine_position.go:188',
+        },
+        {
+          title: 'no matched scenario cited (strict mode)',
+          body: "plan_mode=strict and the action didn't cite an armed S#. The plan is the law.",
+          cite: 'trader/auto_trader_planconfig.go:206-249',
+        },
+        {
+          title: 'against the plan (direction mode)',
+          body: 'The bias is long and the entry is short. Advisory says fine; direction says no.',
+        },
+        {
+          title: '|entry−SL| below MIN_SL_ATR_MULT × ATR',
+          body: 'The stop is too tight for the volatility floor.',
+          cite: 'kernel/engine_position.go:196',
+        },
+        {
+          title: 'past last-entry time · outside session window · lunch',
+          body: 'Clock gates — see Section 2 timeline.',
+        },
+        {
+          title: 'only N levels above price … must carry ≥Q on EACH side',
+          body: 'AI-caused omission (the map had them) → the read retries; machine-caused → now a ⚖ WARN and the plan writes.',
+          cite: 'kernel/plan_doc.go ValidatePlanDocWithFactsMachine',
+        },
+        {
+          title: 'awaiting approval',
+          body: 'approval_required is ON and nobody approved this session-day. Tap Approve.',
+        },
+        {
+          title: 'gate-block counters',
+          body: '"Refused this session" panel shows every label + count; reset at the 17:00 roll and on restart.',
+          cite: 'web/src/components/plan/GateBlocksPanel.tsx',
+        },
+      ],
+    },
+    { kind: 'h', text: 'plan_mode — the three levels' },
+    {
+      kind: 'table',
+      head: ['Mode', 'Blocks', 'Allows'],
+      rows: [
+        [
+          'advisory (default)',
+          'Nothing',
+          'Everything — the plan informs, the AI decides.',
+        ],
+        [
+          'direction',
+          'Entries against the plan bias',
+          'Entries with the bias; anything not direction-conflicting.',
+        ],
+        [
+          'strict',
+          'Entries not citing an armed scenario; ANY entry with no active plan',
+          'Only on-plan, scenario-cited entries.',
+        ],
+      ],
+    },
+    {
+      kind: 'p',
+      text: 'Strict\'s warning, plain: "no plan = no trades" — a fail-closed day in strict mode is a flat day, by design. Strict is the optional NY experiment. Per-session overrides exist (Strategy → Day Plan → Sessions).',
+    },
+    { kind: 'h', text: 'Guardrails + SIM lock' },
+    {
+      kind: 'p',
+      text: 'Risk guardrails: the master switch (default ON, currently OFF by owner ruling — the boot log says "master OFF") arms daily loss/profit/trade limits, consecutive-loss halt, re-entry cooldown, blackout windows, max-contracts and notional caps. The always-on pair (max contracts/order, notional cap) needs no toggle. Would-have-tripped counters are visible in the dashboard. SIM lock: every account list is filtered to SIM; the bot cannot route to a live NT account — do not try.',
+    },
+  ],
+}
