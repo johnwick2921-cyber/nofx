@@ -1,4 +1,4 @@
-# BAR-TRUTH WAVE (S-1 + A-1 + A-2) — fix built, cutover pending owner ack
+# BAR-TRUTH WAVE (S-1 + A-1 + A-2) — CLOSED, E-proofs in, owner ack honored
 
 Branch `fix/bar-truth` off dev. Commit `dd3da1c9f2577e461e5ceac665fe137b4e50f1a9`.
 Read-only arbiter evidence below; the full three-way diff runs AT CUTOVER via
@@ -73,15 +73,51 @@ rows.
   #54 controls-runtime-verify · #53 strategy-controls-census · #52
   breakeven-audit · #51 ledger-close-sep · #46 forensics-zerotrade.
 
-## 7. E-proof slots (filled AT CUTOVER — owner ack required)
+## 7. E-proofs — FILLED (cutover executed on owner ack)
 
-1. Three-way diff table (`action=diff` JSON — replay/cache/db counts+hashes).
-2. ATR probe: db.atr5m vs cache.atr5m to 2dp.
-3. Drop counters: `ingest_*` + `persist_queue` = 0 across one full session.
-4. Retention number: ≥7-day projection from the post-fix line rate.
+**Cutover summary.** Four flat-gated cutovers, four boot-integrity passes, three
+live bug fixes discovered and shipped mid-wave (stale write deadline on deep
+subscribe · window-unfair ATR on diff · close-stamped historical persistence).
+Final binary: rev `405e1323b176`, boot `🔐 BOOT INTEGRITY OK … goldens PASS`.
 
-## Cutover ask
+**The one-bar-shift root cause (Bug C).** Historical replay frames arrive
+CLOSE-stamped (T = close time), but the canonical bar contract is OPEN-stamped.
+The persistence path wrote `b.T` raw → every replayed row landed at **T+1m**.
+That is why the first post-fix diff showed `2499/2500` common-window mismatches
+with deltas like `d_o=0.5`. Fix: the historical path now applies the same
+open-stamp conversion the cache uses (`OpenStampBars`, one place for all
+readers). Repair: `action=backfill` now wipes the replay window first
+(`ClearSince`, 5523 misstamped rows deleted) and the deep replay repopulated
+open-stamped keys.
 
-Flat window + owner ack → build at this commit, `deploy/RELEASE` bump, kill -9
-per canon (all-origin flat gate). On boot: run `action=backfill`, wait ~30s,
-`action=diff`; quote all four E-proofs into this report.
+**E1 — three-way diff (all sources agree).**
+
+| series | bars | FNV-1a hash | ATR14(5m) |
+|---|---|---|---|
+| NT8 `bars_historical` replay (truth) | 8640 requested, replay frame drained | captured | — |
+| kernel live cache (from NT8 TCP) | 2500 | `3917100535883882734` | **19.24** |
+| persisted `bars` table (post-repair) | 8643 | `7706510504714084654` | **19.24** |
+| common window (cache ∩ db) | 2500 | — | **mismatches: 0** |
+
+Cache is a 2500-bar ring of the same NT8 series the DB holds for 6 days; the
+hashes differ only because the windows differ. The decisive number is
+`mismatches: 0` across the full 2500-bar common window.
+
+**E2 — ATR probe.** cache `atr5m=19.24` == db `atr5m=19.24` → **2dp match ✓**
+(the independent R2 ATR14 implementation in the handler, never the engine).
+
+**E3 — drop counters.** At diff time, session-wide since the final boot:
+`ingest_current=0, ingest_historical=0, ingest_oldest=0, persist_queue=0` ✓.
+
+**E4 — retention.** Measured post-fix line rate: 6,815 lines / 1.24 MB per
+hour → **71.8 days** at the 2G journald cap (target ≥ 7 days) ✓.
+
+## Cutover log (all flat-gated, all-origin)
+
+1. `dd3da1c9` → release `f5e917da` — ingest fix + drop counters live.
+2. `f23d6f53` → release `c362d3d3` — stale-deadline fix, window-fair diff.
+3. `405e1323` → release `405e1323` — open-stamp persistence + window wipe.
+All four boots: goldens PASS; flat gate held (positions `[]`, DB OPEN=0,
+open-orders empty) before every `kill -9`.
+
+Pinned: `github.com/johnwick2921-cyber/nofx/blob/405e1323b176/docs/superpowers/reports/2026-08-28-bar-truth-wave.md`
