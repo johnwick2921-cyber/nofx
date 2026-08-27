@@ -345,6 +345,29 @@ export function SessionPlanCard({
           {tp('readingBanner', language)}
         </div>
       )}
+      {/* DORMANT (plan-lifecycle wave, 2026-08-27) — flip/death line breached;
+          entries blocked until price closes back (auto re-arm, same version). */}
+      {plan.lifecycle === 'dormant' && (
+        <div
+          data-testid="dormant-banner"
+          className="flex items-center gap-2 px-3 py-2 text-[12px]"
+          style={{
+            background: 'rgba(212,175,55,0.08)',
+            border: '1px solid var(--vl-gold-line)',
+            borderRadius: 'var(--vl-radius-chip)',
+            color: 'var(--vl-gold)',
+          }}
+        >
+          <span aria-hidden>⏸</span>
+          <span>
+            dormant:{' '}
+            {(plan.trigger_reason ?? '').replace(/^dormant:/, '') ||
+              'flip/death line breached'}{' '}
+            — entries blocked until price closes back (auto re-arm, same
+            version)
+          </span>
+        </div>
+      )}
       {/* header — wraps: at 390px a v6 chip row + SUPERSEDED + DEGRADED overflowed
           the 316px card interior by ~41px and pushed the ✎/💬 buttons off the card. */}
       <div className="flex flex-wrap items-center justify-between gap-2">

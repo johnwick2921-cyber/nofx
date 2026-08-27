@@ -279,6 +279,28 @@ func (s *PlanStore) AppendPlan(p *PlanDB) (int, error) {
 	return assigned, err
 }
 
+// UpdatePlanLifecycle (plan-lifecycle wave, 2026-08-27) mutates ONE existing
+// plan row's lifecycle + trigger_reason in place — the dormant/re-arm transition
+// changes STATE, not version (the chain is append-only for VERSIONS, not for
+// state markers). Idempotent; WHERE-scoped to (plan_id, version).
+func (s *PlanStore) UpdatePlanLifecycle(planID string, version int, lifecycle, triggerReason string) error {
+	if planID == "" || version <= 0 {
+		return fmt.Errorf("plan_id and version required")
+	}
+	return s.enqueue(func(db *gorm.DB) error {
+		res := db.Model(&PlanDB{}).
+			Where("plan_id = ? AND version = ?", planID, version).
+			Updates(map[string]any{"lifecycle": lifecycle, "trigger_reason": triggerReason})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return fmt.Errorf("plan row %s v%d not found", planID, version)
+		}
+		return nil
+	})
+}
+
 // AppendOverlay appends a new overlay version for (plan_id, plan_version).
 // Returns the assigned overlay_version.
 func (s *PlanStore) AppendOverlay(o *PlanOverlayDB) (int, error) {
