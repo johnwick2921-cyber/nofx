@@ -23,8 +23,8 @@ describe('knob spec completeness', () => {
     s.blocks.flatMap((b) => (b.kind === 'knobs' ? b.knobs : []))
   )
 
-  it('has at least 20 knob cards (Section 7 census)', () => {
-    expect(allKnobs.length).toBeGreaterThanOrEqual(20)
+  it('has exactly 35 knob cards (Section 7 census = live-page control count)', () => {
+    expect(allKnobs).toHaveLength(35)
   })
 
   it('every knob card fills all ten mandatory fields', () => {
