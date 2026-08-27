@@ -132,13 +132,13 @@ func validateArmSpecs(d *PlanDoc) error {
 // PlanFvgEntry is the machine-verifiable schema of an fvg_entry scenario.
 // ce is COMPUTED (midpoint) — a declared ce is re-checked, never trusted.
 type PlanFvgEntry struct {
-	Lo          float64 `json:"fvg_lo"`
-	Hi          float64 `json:"fvg_hi"`
-	CE          float64 `json:"ce"`
-	EntryMode   string  `json:"entry_mode"` // edge | ce (ce for gaps > FVG_CE_WIDTH_PTS)
+	Lo              float64 `json:"fvg_lo"`
+	Hi              float64 `json:"fvg_hi"`
+	CE              float64 `json:"ce"`
+	EntryMode       string  `json:"entry_mode"`       // edge | ce (ce for gaps > FVG_CE_WIDTH_PTS)
 	DisplacementATR float64 `json:"displacement_atr"` // impulse body in 5m ATR multiples (0 = let the validator compute)
-	OriginLevel string  `json:"origin_level"` // the Tier-1/seated anchor the displacement left
-	Direction   string  `json:"direction"`    // long | short (must equal scenario direction)
+	OriginLevel     string  `json:"origin_level"`     // the Tier-1/seated anchor the displacement left
+	Direction       string  `json:"direction"`        // long | short (must equal scenario direction)
 }
 
 // PlanDoc is the full plan (stored as the plans.doc JSON).
@@ -183,11 +183,11 @@ var (
 )
 
 var (
-	biasDirections    = map[string]bool{"long": true, "short": true, "neutral": true}
-	biasConvictions   = map[string]bool{"high": true, "medium": true, "low": true}
-	levelGrades       = map[string]bool{"A": true, "B": true, "C": true}
-	scenarioConds     = map[string]bool{"reclaim": true, "hold": true, "sweep_reclaim": true, "reject": true, "acceptance": true, "breakout_retest": true, "fvg_entry": true}
-	scenarioDirs      = map[string]bool{"long": true, "short": true}
+	biasDirections  = map[string]bool{"long": true, "short": true, "neutral": true}
+	biasConvictions = map[string]bool{"high": true, "medium": true, "low": true}
+	levelGrades     = map[string]bool{"A": true, "B": true, "C": true}
+	scenarioConds   = map[string]bool{"reclaim": true, "hold": true, "sweep_reclaim": true, "reject": true, "acceptance": true, "breakout_retest": true, "fvg_entry": true}
+	scenarioDirs    = map[string]bool{"long": true, "short": true}
 	// C is ACCEPTED: it is the G5 machine-demoted state (trigger level consumed
 	// at write/re-align time), never a model-written grade. The write path runs
 	// demoteConsumedScenarios BEFORE validation, so rejecting C made every
@@ -394,6 +394,18 @@ func ValidatePlanDocWithCaps(d *PlanDoc, maxLevels, maxScenarios int) error {
 		if cond.c == nil {
 			continue
 		}
+		// b1 (2026-08-27) — rule alias normalization: the planner's vocabulary
+		// has "2x5m_close" (2 consecutive 5m closes), the schema's canonical
+		// spelling is "2x5m". Normalize at parse so the STORED doc carries the
+		// canonical form (same aliasing confirmRules/scenario_facts already
+		// accept; previously the structured flip/death path rejected the model's
+		// own spelling and every retry failed closed).
+		switch cond.c.Rule {
+		case "2x5m_close":
+			cond.c.Rule = "2x5m"
+		case "1x5m_close":
+			cond.c.Rule = "5m_close"
+		}
 		if cond.c.Price <= 0 {
 			return fmt.Errorf("%s.price %v invalid (must be > 0)", cond.name, cond.c.Price)
 		}
@@ -498,6 +510,7 @@ func MislabeledStructuralLevels(d *PlanDoc, machineLabels map[float64]string) []
 	}
 	return out
 }
+
 type PlanFacts struct {
 	Price float64 // reference price at read time
 	DATR  float64 // daily ATR proxy

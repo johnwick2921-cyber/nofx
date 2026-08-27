@@ -39,11 +39,17 @@ type PlannerInput struct {
 	// flipped), listed so the planner works around them. Advisory.
 	ConsumedLevels []string
 
+	// FreshFVGs (level-truth wave b2, 2026-08-27) — the machine's fresh-gap
+	// candidate list the planner may author fvg_entry from. Empty list means
+	// NO fvg_entry may be authored (the write-site validator refuses anything
+	// else).
+	FreshFVGs []FreshFvg
+
 	// Pool (level-truth wave, 2026-08-27) — the graded PRE-SEAT candidate pool
 	// the assembly produced. NOT rendered: the write site uses it for the
 	// machine-grade stamp map so pool levels that lost the seat race still get
 	// stamped when the model copies them into the plan.
-	Pool []ScoredLevel
+	Pool           []ScoredLevel
 	OvernightStory string
 	PriorDayStory  string
 	Calendar       []PlannerCalendarEvent // session-sliced (P1.8)
@@ -245,6 +251,21 @@ func BuildPlannerPrompt(in PlannerInput) string {
 		}
 		b.WriteString("\n")
 	}
+
+	// Level-truth wave b2 (2026-08-27) — the machine's fresh-gap candidates.
+	// The write-site validator re-checks every declared fvg{} against exactly
+	// this list; the model must author ONLY from it (it used to invent stale
+	// gaps and every read failed closed).
+	b.WriteString("## FRESH FVGs (machine-computed candidates — author fvg_entry ONLY from this list; if empty, do NOT author any fvg_entry)\n")
+	if len(in.FreshFVGs) == 0 {
+		b.WriteString("(none fresh right now)\n\n")
+	} else {
+		for _, g := range in.FreshFVGs {
+			b.WriteString(fmt.Sprintf("  %s %.2f–%.2f (age %d bars, displacement %.2f×ATR5m)\n",
+				g.Direction, g.Lo, g.Hi, g.AgeBars, g.DispATR))
+		}
+		b.WriteString("\n")
+	}
 	if len(in.Levels) == 0 {
 		b.WriteString("(none in range — warming forward)\n")
 	} else {
@@ -438,15 +459,14 @@ func plannerOutputContract(maxLevels, maxScenarios int, hasHTFZones, has1HSDZone
 		"The scenario MIX must follow the regime + day_type: a trend-down day gets breakdown/pullback-short plays, a trend-up day the reverse, balance days get two-sided plays — do NOT default to 2 longs + 1 rally-rejection short on every day. " +
 		"If price sits BELOW PDL you MUST write a continuation short; ABOVE PDH, a continuation long. " +
 		"A1: your reasoning MUST open by naming the bias-tree branch you took (e.g. \"bias-tree: inside-day long LOW\"), then argue from it. " +
-		"A2: an fvg_entry SHOULD chain after a sweep_reclaim (chain_after: S#) — bare gaps at non-A/B origins get a WARN at write, not a reject. " +
-		"death.flip objects are MACHINE-EVALUATED — choose levels from your level list and a rule; they must match the prose lines. " +
+		"A2: an fvg_entry SHOULD chain after a sweep_reclaim (chain_after: S#) — bare gaps at non-A/B origins get a WARN at write, not a reject. " + "A2b (machine grounding, 2026-08-27): author an fvg_entry scenario ONLY from the ## FRESH FVGs list above — copy its direction and lo–hi EXACTLY. If the list is empty, do NOT author any fvg_entry (invented/stale gaps are REJECTED at write). " + "death.flip objects are MACHINE-EVALUATED — choose levels from your level list and a rule; they must match the prose lines. " +
 		"The flip and death MUST be DIFFERENT events: never the same level AND same rule for both (a flip at the same tick death fires is void). A short-biased plan's flip sits BELOW its death line or uses a stricter rule, so the flip can actually fire. " +
 		"Every scenario's confirm{} is MACHINE-EVALUATED the same way: rule + ref_price + side, and ref_price MUST equal a number written in that scenario's trigger/invalid prose. " +
 		"target_chain is GUIDANCE for the executor AI (which sets the actual take_profit) — it is validated for reachability at write time but never enforced at execution (D2 ruling). " +
 		// WAVE 2 armed orders (2026-08-27) — the arming authorization. The LLM
 		// chooses WHAT to arm; Go manages WHEN it fills (tick-level).
 		"ARMED ORDERS: for a PRICE-DETERMINISTIC setup you may AUTHORIZE a resting limit order via arm{} — enabled:true + EXACT entry/stop/target. Arm ONLY: fvg_entry (limit at the gap CE, or the gap edge when entry_mode=edge), breakout_retest (limit at the retest level), reject (limit at the level ∓1 tick). NEVER arm acceptance or a raw sweep_reclaim — they need a close-confirm first and stay on the AI path. Long: stop < entry < target. Short: target < entry < stop. Arm only your best A/B-setup (quality matters — the arm gate enforces min_scenario_quality); the system places it within a tick band, manages it tick-level, and cancels it on veto/dormant/session-end. " +
-	// A2 (2026-08-26) — condition×session guidance from the week ledger:
+		// A2 (2026-08-26) — condition×session guidance from the week ledger:
 		// reject 75% win +665 in NY RTH vs acceptance 0% −157 and sweep_reclaim
 		// 0% −192. Advisory truth, not a hard rule.
 		"Condition×session guidance (week evidence): reject-based setups are best in NY RTH (75% win, +665 this week); acceptance needs a clear displacement or skip (0% win this week); sweep_reclaim requires the reclaim CLOSE on the decision TF, never the wick alone (0% win this week). " +

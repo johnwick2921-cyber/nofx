@@ -60,8 +60,8 @@ func (at *AutoTrader) snapshotSessionProfiles() {
 		at.logInfof("🧬 plan lifecycle: hysteresis=buffer%.1f×ATR14 confirm=%dclose(s) · flip/death→dormant+auto-rearm (version unchanged, budget untouched) · exec_reasoning=%s plan_reasoning=%s",
 			kernel.FlipATRBuffer(), kernel.FlipConfirmCloses(), execReasoningLabel(), planReasoningLabel())
 		// Wave 2 armed orders (Phase 2, 2026-08-27) — placement engine mode.
-		at.logInfof("⚔️ armed_orders=on place_band=%dt stale_working=%dm (resting limits fill at the authorized price; stale_reeval NOT applied)",
-			armedPlaceTicks(), armedWorkingStaleMin())
+		at.logInfof("⚔️ armed_orders=on place_band=%dt stale_working=%dm test_seam=%s (resting limits fill at the authorized price; stale_reeval NOT applied)",
+			armedPlaceTicks(), armedWorkingStaleMin(), armedSeamStateLabel())
 	})
 	installActivePlanProvider(at, st)
 	// P0-cleanup (2026-08-19) — soft-alert: guardrails that WOULD have tripped

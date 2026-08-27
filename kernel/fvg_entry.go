@@ -49,6 +49,80 @@ func FvgEntryCEWidthPts() float64 {
 // FvgCe is the midpoint entry of a gap (computed, never model-written).
 func FvgCe(lo, hi float64) float64 { return (lo + hi) / 2 }
 
+// FreshFvg is ONE machine-verified candidate gap the planner may author an
+// fvg_entry scenario from (level-truth wave b2, 2026-08-27). The write-site
+// validator was rejecting model-declared gaps because the model was BLIND —
+// it never saw the real candidates. This list is the cure.
+type FreshFvg struct {
+	Direction string  `json:"direction"` // long | short
+	Lo        float64 `json:"lo"`
+	Hi        float64 `json:"hi"`
+	AgeBars   int     `json:"age_bars"` // bars since the gap's newest candle
+	DispATR   float64 `json:"disp_atr"` // impulse body in 5m Wilder ATR(14)
+}
+
+// FreshFvgCandidates scans the closed bars with the SAME 3-candle gap test the
+// write-site validator uses (bullish: low[i] > high[i+2] mirrored; session-break
+// guard; gap floor ≥ max(2×tick, noise floor); displacement body ≥
+// FvgEntryMinDispATR × ATR14(5m)) and returns every qualifying gap within
+// FvgEntryLookbackBars, newest first. Empty → the planner is told to author NO
+// fvg_entry scenario.
+func FreshFvgCandidates(bars []market.Kline, symbol string, now time.Time) []FreshFvg {
+	cb := closedBars(bars, now)
+	if len(cb) < 3 {
+		return nil
+	}
+	tick := market.FuturesTickSize(symbol)
+	if tick <= 0 {
+		tick = 0.25
+	}
+	fiveM := AggregateBars(cb, 5*60_000)
+	atr5 := 0.0
+	if len(fiveM) >= 15 {
+		atr5 = market.ExportCalculateATR(fiveM, 14)
+	}
+	lookback := len(cb)
+	if lookback > FvgEntryLookbackBars() {
+		lookback = FvgEntryLookbackBars()
+	}
+	floor := math.Max(2*tick, fvgMinGapPoints(symbol))
+	var out []FreshFvg
+	for i := len(cb) - 3; i >= 0 && i >= len(cb)-lookback-3+1; i-- {
+		if !fvgWindowContiguous(cb, i+2) {
+			continue
+		}
+		// newest candle = cb[i+2] (the impulse); gap measured between cb[i]
+		// (oldest of the three) and cb[i+2].
+		var dir string
+		var gapLo, gapHi float64
+		if cb[i+2].Low > cb[i].High {
+			dir, gapLo, gapHi = "long", cb[i].High, cb[i+2].Low
+		} else if cb[i+2].High < cb[i].Low {
+			dir, gapLo, gapHi = "short", cb[i+2].High, cb[i].Low
+		} else {
+			continue
+		}
+		if gapHi-gapLo < floor {
+			continue
+		}
+		impulse := math.Abs(cb[i+2].Close - cb[i+2].Open)
+		dispATR := 0.0
+		if atr5 > 0 {
+			dispATR = impulse / atr5
+			if dispATR < FvgEntryMinDispATR() {
+				continue
+			}
+		}
+		out = append(out, FreshFvg{
+			Direction: dir, Lo: gapLo, Hi: gapHi,
+			AgeBars: len(cb) - 1 - (i + 2), DispATR: round2(dispATR),
+		})
+	}
+	return out
+}
+
+func round2(v float64) float64 { return math.Round(v*100) / 100 }
+
 // HasFvgScenario reports whether the plan carries an fvg_entry scenario
 // (the write site gates the bar re-verification on this).
 func HasFvgScenario(d *PlanDoc) bool {
@@ -68,15 +142,16 @@ func HasFvgScenario(d *PlanDoc) bool {
 // ValidateFvgEntryScenarios re-verifies every fvg_entry scenario against the
 // STORED 1m bars (the planner may hallucinate or cite a stale gap). Checks,
 // each with a citation comment:
-//   1. the 3-candle relation (bullish: low[i] > high[i+2]; bearish mirrored)
-//      exists within the last FvgEntryLookbackBars and matches the declared
-//      gap within 2 ticks;
-//   2. gap size ≥ max(2×tick, the existing FVG gap floor) — reuses
-//      fvgMinGapPoints;
-//   3. displacement body ≥ FvgEntryMinDispATR × Wilder ATR14(5m) (5m bars
-//      aggregated from the 1m series);
-//   4. origin_level exists in the seated table or the HTF section (labels);
-//   5. entry_mode=ce requires the gap wider than FvgEntryCEWidthPts.
+//  1. the 3-candle relation (bullish: low[i] > high[i+2]; bearish mirrored)
+//     exists within the last FvgEntryLookbackBars and matches the declared
+//     gap within 2 ticks;
+//  2. gap size ≥ max(2×tick, the existing FVG gap floor) — reuses
+//     fvgMinGapPoints;
+//  3. displacement body ≥ FvgEntryMinDispATR × Wilder ATR14(5m) (5m bars
+//     aggregated from the 1m series);
+//  4. origin_level exists in the seated table or the HTF section (labels);
+//  5. entry_mode=ce requires the gap wider than FvgEntryCEWidthPts.
+//
 // Failure → error → the existing planner retry loop consumes it (fail-closed).
 func ValidateFvgEntryScenarios(d *PlanDoc, bars []market.Kline, symbol string, originLabels map[string]bool, now time.Time) error {
 	if d == nil {

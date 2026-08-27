@@ -12,8 +12,8 @@ import (
 	"nofx/kernel"
 	"nofx/market"
 	ntwire "nofx/provider/ninjatrader"
-	ntTrader "nofx/trader/ninjatrader"
 	"nofx/store"
+	ntTrader "nofx/trader/ninjatrader"
 )
 
 // armedPlaceTicks is the placement band (ARM_PLACE_TICKS, default 100): the
@@ -408,4 +408,114 @@ func (at *AutoTrader) cancelArmedOrders(reason string) int {
 		}
 	}
 	return n
+}
+
+// ── E2 DEBUG SEAM (2026-08-27, level-truth wave ruling "a") ─────────────────
+// POST /api/armed/test-arm drives the REAL placement path with a TEST-E2 row so
+// the armed-orders cutover can be proven end-to-end (place → 📌 working in the
+// NT8 Orders tab → cancel → ✕ chain) even when the planner can't produce an
+// active plan. Gated by env ARMED_TEST_SEAM=on (default OFF) AND the bound
+// account being SIM — a debug endpoint that places orders must not exist
+// unarmed.
+
+// armedTestSeamOn reads the env gate.
+func armedTestSeamOn() bool {
+	v := strings.ToLower(strings.TrimSpace(os.Getenv("ARMED_TEST_SEAM")))
+	return v == "on" || v == "1" || v == "true"
+}
+
+// armedSeamStateLabel is the boot-line spelling of the seam state.
+func armedSeamStateLabel() string {
+	if armedTestSeamOn() {
+		return "ON"
+	}
+	return "off"
+}
+
+// armedSeamDenied returns the blocker when the seam is gated off ("" = allowed).
+func (at *AutoTrader) armedSeamDenied() string {
+	if !armedTestSeamOn() {
+		return "ARMED_TEST_SEAM is off"
+	}
+	if !strings.EqualFold(at.currentAccountName(), "Sim101") {
+		return "seam is SIM-only (bound account " + at.currentAccountName() + ")"
+	}
+	return ""
+}
+
+// TestArmPlace places a resting limit on the REAL wire path (TCPTrader
+// PlaceLimitEntry — the same call runArmedPlacement makes) with a ledger row
+// tagged TEST-E2, skipping the price band (the tester pins the price).
+func (at *AutoTrader) TestArmPlace(side string, entry, stop, target float64) (store.ArmedOrderDB, error) {
+	var out store.ArmedOrderDB
+	if reason := at.armedSeamDenied(); reason != "" {
+		return out, fmt.Errorf("test-arm denied: %s", reason)
+	}
+	nt := at.armedTrader()
+	if nt == nil {
+		return out, fmt.Errorf("no TCPTrader bound")
+	}
+	ledger := at.store.ArmedOrders()
+	if ledger == nil {
+		return out, fmt.Errorf("no armed ledger")
+	}
+	side = strings.ToLower(strings.TrimSpace(side))
+	if side != "long" && side != "short" {
+		return out, fmt.Errorf("side must be long|short")
+	}
+	if entry <= 0 || stop <= 0 || target <= 0 {
+		return out, fmt.Errorf("entry/stop/target must be > 0")
+	}
+	sid, perr := nt.PlaceLimitEntry(at.futuresSymbol(), side, 1, entry, stop, target)
+	if perr != nil {
+		return out, perr
+	}
+	row := &store.ArmedOrderDB{
+		TraderID: at.id,
+		PlanID:   "TEST-E2:" + sid,
+		Session:  "TEST-E2",
+		Scenario: "TEST-E2",
+		Side:     side,
+		EntryPx:  entry,
+		StopPx:   stop,
+		TargetPx: target,
+	}
+	if err := ledger.UpsertArm(row); err != nil {
+		return out, fmt.Errorf("ledger upsert: %w", err)
+	}
+	_ = ledger.SetSignal(row.ID, sid)
+	_ = ledger.SetState(row.ID, "working", "")
+	at.logInfof("🧪 TEST-E2 arm → WORKING limit %.2f signal=%s (seam)", entry, sid)
+	return *row, nil
+}
+
+// TestArmCancel cancels a seam row's NT8 order on the real wire and flips the
+// row to cancelled with an honest reason.
+func (at *AutoTrader) TestArmCancel(signalID string) error {
+	if reason := at.armedSeamDenied(); reason != "" {
+		return fmt.Errorf("test-arm denied: %s", reason)
+	}
+	nt := at.armedTrader()
+	if nt == nil {
+		return fmt.Errorf("no TCPTrader bound")
+	}
+	ledger := at.store.ArmedOrders()
+	if ledger == nil {
+		return fmt.Errorf("no armed ledger")
+	}
+	signalID = strings.TrimSpace(signalID)
+	if signalID == "" {
+		return fmt.Errorf("signal_id required")
+	}
+	if err := nt.CancelOrder(signalID); err != nil {
+		return fmt.Errorf("cancel on wire: %w", err)
+	}
+	rows, _ := ledger.ListNonTerminal()
+	for _, r := range rows {
+		if r.TraderID == at.id && r.SignalID == signalID {
+			_ = ledger.SetState(r.ID, "cancelled", "test seam cancel")
+			at.logInfof("🧪 TEST-E2 cancel sent signal=%s (row %d → cancelled)", signalID, r.ID)
+		}
+	}
+	return nil
 }

@@ -1066,7 +1066,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		// bars: the 3-candle relation, the gap floor, the displacement body vs
 		// 5m ATR, and the origin-level membership. A fake/stale gap fails the
 		// retry loop (the planner re-writes or the plan ships without it).
-			if kernel.HasFvgScenario(d) {
+		if kernel.HasFvgScenario(d) {
 			var fvgBars []market.Kline
 			if market.FuturesBarsProvider != nil {
 				fvgBars = market.FuturesBarsProvider(at.futuresSymbol(), "1m", kernel.AISVPBarCount)
@@ -1428,12 +1428,12 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 		scored = append(ownerScored, scored...)
 	}
 
-		// Per-session min_grade filter (owner levels grade A → always survive).
-		// R2 4.6/4.7 (2026-08-25) — the filter now runs inside
-		// AssembleScoredLevelsMinGrade on a 2× pool so the cut REFILLS seats
-		// from the same side instead of thinning the table; this final pass
-		// keeps the owner-prepended levels above the floor.
-		scored = kernel.FilterLevelsByMinGrade(scored, minGrade)
+	// Per-session min_grade filter (owner levels grade A → always survive).
+	// R2 4.6/4.7 (2026-08-25) — the filter now runs inside
+	// AssembleScoredLevelsMinGrade on a 2× pool so the cut REFILLS seats
+	// from the same side instead of thinning the table; this final pass
+	// keeps the owner-prepended levels above the floor.
+	scored = kernel.FilterLevelsByMinGrade(scored, minGrade)
 
 	var daily, hour1, min5, min5Long []market.Kline
 	if market.FuturesBarsProvider != nil {
@@ -1552,11 +1552,14 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 		HTFZones:         htfZoneScored,
 		StructureSummary: structure,
 		ConsumedLevels:   consumedLines,
-		Calendar:         calEvents,
-		DigestChain:      digestChain,
-		Warming:          warming,
-		IndicatorsBlock:  indicatorsBlock,
-		AIConfigHash:     aiConfigHash,
+		// Level-truth wave b2 (2026-08-27): the machine's fresh-gap candidate
+		// list — the ONLY gaps the planner may author fvg_entry from.
+		FreshFVGs:       kernel.FreshFvgCandidates(bars, symbol, now),
+		Calendar:        calEvents,
+		DigestChain:     digestChain,
+		Warming:         warming,
+		IndicatorsBlock: indicatorsBlock,
+		AIConfigHash:    aiConfigHash,
 		// ADDENDUM (2) — bias-context facts line (VWAP/PDC/value area/magnet/
 		// liquidity). Facts only; the AI judges direction.
 		// S-dispatch (2026-08-27) — the BIAS-TREE facts must carry the

@@ -499,7 +499,12 @@ Fetch a specific version's full doc with GET /plan/today?version=<n>.`,
 				s.handlePlanResetStatus)
 			s.routeWithSchema(protected, "POST", "/plan/reset", "Reset the session's plan chain (abandon + fresh budget + fresh plan)",
 				`Body: {"trader_id":"<id>"}. Marks the current chain ABANDONED (append-only history preserved), restores the budget to replan_cap, clears NO-TRADE state, and runs a fresh read with trigger_reason "owner reset". 409 with {error, gate} when refused. Owner sticky levels carry by price identity.`,
-				s.handlePlanReset)
+				s.handlePlanReset) // E2 DEBUG SEAM (2026-08-27) — drives the REAL armed
+			// placement path with a TEST-E2 row. Env-gated
+			// (ARMED_TEST_SEAM=on, default OFF) + SIM-only.
+			s.routeWithSchema(protected, "POST", "/armed/test-arm", "E2 seam: place/cancel a TEST-E2 armed order on the real path (env-gated + SIM-only)",
+				`Body: {"trader_id":"<id>","action":"place","side":"long","entry":1,"stop":1,"target":1} or {"action":"cancel","signal_id":"<sid>"}.`,
+				s.handleArmedTestArm)
 			s.routeWithSchema(protected, "GET", "/plan/alerts", "In-app alert feed (P0/P1/P2) + unacked count",
 				`Query: ?trader_id=<EXACT trader_id>. Returns: {alerts:[{id,level,kind,title,body,acked,created_at}], unacked:<int>}`,
 				s.handlePlanAlerts)
@@ -599,8 +604,8 @@ func (s *Server) handleGetSystemConfig(c *gin.Context) {
 		// RunningRevision is the vcs.revision embedded in THIS binary — bug
 		// reports can now be checked against the running rev without a shell
 		// (master-audit v1 finding 5.6).
-		"revision":          kernel.RunningRevision(),
-		"btc_eth_leverage":  10,
+		"revision":         kernel.RunningRevision(),
+		"btc_eth_leverage": 10,
 		"altcoin_leverage": 5,
 		// SANDBOX (isolated demo instance) → the UI paints a permanent banner so a
 		// sandbox can never be mistaken for the live system. false in production.
