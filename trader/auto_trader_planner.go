@@ -229,7 +229,35 @@ func (at *AutoTrader) maybeRunSessionReadsAt(now time.Time) {
 			at.runPlannerRead(s.Name, tradeDate) // first read this session-day
 			continue
 		}
+		// PLAN-LIFECYCLE WAVE (2026-08-27) — DEACTIVATE-AND-REARM: a plan whose
+		// flip/death line fired goes DORMANT (same version, no replan-budget
+		// burn) and re-arms automatically when price closes back on the valid
+		// side (same hysteresis). Structural replans (MSS wake, session read,
+		// owner) still write new versions.
+		if existing.Lifecycle == "dormant" {
+			if cleared, why := at.describeDormantCleared(existing); cleared {
+				if err := at.store.Plan().UpdatePlanLifecycle(existing.PlanID, existing.Version, "active", "rearmed:"+why); err != nil {
+					at.logErrorf("⚡ plan re-arm write failed: %v", err)
+					continue
+				}
+				_ = at.store.SetSystemConfig(dormantSinceKey(existing), "0")
+				at.logInfof("⚡ plan %s %s v%d REARMED — %s", tradeDate, s.Name, existing.Version, why)
+				continue // wakes resume next cycle after a re-arm
+			}
+			// FIX 5 (F3, 2026-08-27) — DORMANT KEEPS EYES: while dormant, level
+			// events still wake the PLANNER for a FRESH read (new version). The
+			// dormant row is NEVER flipped active here — re-arm happens ONLY via
+			// the close-back predicate above. Never resurrect dormant entries.
+			at.maybeWakePlannerOnLevelEvents(s.Name, tradeDate, existing)
+			continue
+		}
 		if existing.Lifecycle != "active" {
+			// FIX 5 (F3) — a no_trade plan keeps its seats live too: level events
+			// wake the planner for a fresh read instead of leaving the session
+			// blind (yesterday: OR-H 12:30 + ONH 13:30 touches woke nothing).
+			if existing.Lifecycle == "no_trade" {
+				at.maybeWakePlannerOnLevelEvents(s.Name, tradeDate, existing)
+			}
 			continue // no_trade / died → done for the session
 		}
 		// C5 (2026-08-25) — DEATH CHECK FIRST: a dead vN must not also fire an
@@ -241,6 +269,26 @@ func (at *AutoTrader) maybeRunSessionReadsAt(now time.Time) {
 		// P3.6 — RE-PLAN ON DEATH (cap replan_cap/session → NO-TRADE).
 		if detail, dead := at.describeActivePlanDeath(existing); dead {
 			handledDeath = true
+			// PLAN-LIFECYCLE WAVE: a STRUCTURED flip/death-line hit goes DORMANT
+			// instead of burning a re-plan (wick-noise protection; the rearm
+			// predicate above restores it). The legacy all-levels-consumed
+			// death keeps the original re-plan-with-cap path.
+			if strings.HasPrefix(detail.Killer, "flip-condition:") || strings.HasPrefix(detail.Killer, "death-condition:") {
+				marker := "dormant:flip:" + detail.Killer
+				if strings.HasPrefix(detail.Killer, "death-condition:") {
+					marker = "dormant:death:" + detail.Killer
+				}
+				if err := at.store.Plan().UpdatePlanLifecycle(existing.PlanID, existing.Version, "dormant", marker); err != nil {
+					at.logErrorf("😴 dormant write failed: %v", err)
+				} else {
+					// flap guard — record WHEN the plan went dormant (the re-arm
+					// predicate refuses before DORMANT_MIN_HOLD_MIN has elapsed).
+					_ = at.store.SetSystemConfig(dormantSinceKey(existing), strconv.FormatInt(time.Now().UnixMilli(), 10))
+					at.logInfof("😴 plan %s %s v%d DORMANT — %s (entries blocked; auto re-arms when price closes back; replan budget untouched)",
+						tradeDate, s.Name, existing.Version, detail.Killer)
+				}
+				continue // skip MSS/level wakes while dormant (re-arm path above runs first next cycle)
+			}
 			replanCap := at.replanCapFor(s.Name) // W9 — per-session override wins
 			// P6 — the budget is measured from the CURRENT chain baseline (an
 			// owner reset re-arms it; the default baseline is 1 = the original
@@ -434,6 +482,17 @@ func (at *AutoTrader) storeUncarriedEdits(planID string, version int, items []ke
 // death definition with zero production callers; the live path is
 // describeActivePlanDeath (structured death → flip → legacy consumption).
 
+// testNow is a test-only clock seam (nil in production).
+var testNow func() time.Time
+
+// traderNow returns the clock the plan-lifecycle evaluators use.
+func traderNow() time.Time {
+	if testNow != nil {
+		return testNow()
+	}
+	return time.Now()
+}
+
 // describeActivePlanDeath is activePlanIsDead plus the EVIDENCE. Same window,
 // same timeframe, same verdict — the explanation is derived from the decision
 // rather than reconstructed alongside it, so the two cannot disagree.
@@ -449,7 +508,7 @@ func (at *AutoTrader) describeActivePlanDeath(row *store.PlanDB) (kernel.PlanDea
 	if len(bars) == 0 {
 		return kernel.PlanDeathDetail{}, false
 	}
-	now := time.Now()
+	now := traderNow()
 	sinceMs := row.CreatedAt.UnixMilli()
 	if row.CreatedAt.IsZero() {
 		sinceMs = 0
@@ -489,7 +548,7 @@ func (at *AutoTrader) executorPlanDeadReason() string {
 	if at.store == nil {
 		return "day_plan on but store unavailable — planless entries refused"
 	}
-	now := time.Now()
+	now := traderNow()
 	reg := at.sessionRegistry(now)
 	sess, ok := reg.ActiveSession(now)
 	if !ok {
@@ -503,6 +562,13 @@ func (at *AutoTrader) executorPlanDeadReason() string {
 	if err != nil || row == nil {
 		return "no active day plan for this session (day_plan on) — planless entries refused"
 	}
+	if row.Lifecycle == "dormant" {
+		reason := strings.TrimPrefix(row.TriggerReason, "dormant:")
+		if reason == "" || reason == row.TriggerReason {
+			reason = "flip/death line breached"
+		}
+		return fmt.Sprintf("plan dormant (%s) — entries refused until price closes back on the valid side", reason)
+	}
 	if row.Lifecycle != "active" {
 		return fmt.Sprintf("plan lifecycle %q — entries refused", row.Lifecycle)
 	}
@@ -510,6 +576,56 @@ func (at *AutoTrader) executorPlanDeadReason() string {
 		return "active plan is MACHINE-DEAD (" + detail.Killer + ") — entries refused until the planner re-plans"
 	}
 	return ""
+}
+
+// dormantSinceKey keys the dormancy timestamp (flap guard) in system_config.
+func dormantSinceKey(row *store.PlanDB) string {
+	return fmt.Sprintf("plan_dormant_since:%s:%d", row.PlanID, row.Version)
+}
+
+// describeDormantCleared evaluates the SAME structured condition that put the
+// plan dormant (marker prefix in trigger_reason) and reports whether price has
+// closed back on the valid side (the re-arm half of the hysteresis pair).
+// The flap guard refuses re-arm until DORMANT_MIN_HOLD_MIN has elapsed.
+func (at *AutoTrader) describeDormantCleared(row *store.PlanDB) (bool, string) {
+	if market.FuturesBarsProvider == nil || row == nil {
+		return false, ""
+	}
+	var doc kernel.PlanDoc
+	if json.Unmarshal([]byte(row.Doc), &doc) != nil {
+		return false, ""
+	}
+	c := kernel.PlanCondition{}
+	if strings.HasPrefix(row.TriggerReason, "dormant:death:") {
+		if doc.DeathStructured != nil {
+			c = *doc.DeathStructured
+		}
+	} else if doc.FlipStructured != nil {
+		c = *doc.FlipStructured
+	}
+	if c.Price <= 0 {
+		return true, "no machine condition (re-arm immediately)"
+	}
+	// flap guard — a plan that JUST went dormant cannot re-arm instantly.
+	if hold := kernel.DormantMinHoldMin(); hold > 0 {
+		if v, err := at.store.GetSystemConfig(dormantSinceKey(row)); err == nil && v != "" && v != "0" {
+			if since, err := strconv.ParseInt(v, 10, 64); err == nil {
+				if elapsed := time.Since(time.UnixMilli(since)); elapsed < time.Duration(hold)*time.Minute {
+					return false, "" // still inside the min-dormant hold
+				}
+			}
+		}
+	}
+	bars := market.FuturesBarsProvider(at.futuresSymbol(), kernel.AISVPBarInterval, kernel.AISVPBarCount)
+	if len(bars) == 0 {
+		return false, ""
+	}
+	now := traderNow()
+	sinceMs := row.CreatedAt.UnixMilli()
+	if row.CreatedAt.IsZero() {
+		sinceMs = 0
+	}
+	return kernel.PlanConditionClearedSince(c, bars, sinceMs, now.UnixMilli())
 }
 
 // priceOf returns the latest closed close of the bar series (0 if empty).
@@ -783,8 +899,16 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 	}
 	requiredBias := kernel.FlipToDirection(priorKiller)
 	// W11 — carry the frozen indicator mirror + ai_config hash to the write site.
+	// LATENCY ROUTING (plan-lifecycle wave, 2026-08-27) — planner reads keep
+	// FULL reasoning (AI_PLAN_REASONING, default max); the executor loop runs
+	// cheap. Re-asserted per call because the client may be shared.
+	pMode, pEffort := planReasoningWire()
 	at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, hash, input.IndicatorsBlock, input.AIConfigHash, requiredBias, facts, machineGrades, machineLabels, htfLabels(input), failClosed, sideQuota, func() (string, error) {
-		return client.CallWithMessages(plannerSystemPrompt, prompt)
+		mcp.ApplyThinking(client, pMode, pEffort)
+		start := time.Now()
+		raw, err := client.CallWithMessages(plannerSystemPrompt, prompt)
+		at.logInfof("🧠 planner call (reasoning=%s wire=%s/%s) completed in %.1fs", planReasoningLabel(), pMode, pEffort, time.Since(start).Seconds())
+		return raw, err
 	}, t1Lines...)
 	return true
 }

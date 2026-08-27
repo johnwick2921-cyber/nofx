@@ -55,6 +55,10 @@ func (at *AutoTrader) snapshotSessionProfiles() {
 		// A3 (2026-08-26) — min-SL guard observability (0 = off).
 		at.logInfof("🛑 min-sl guard: atr_mult=%.1f level_clearance=%dtick(s)",
 			kernel.MinSLATRMult(), kernel.MinSLTickClearance)
+		// PLAN-LIFECYCLE WAVE (2026-08-27) — hysteresis + dormant/re-arm +
+		// latency routing observability, so the mode is answerable from the log.
+		at.logInfof("🧬 plan lifecycle: hysteresis=buffer%.1f×ATR14 confirm=%dclose(s) · flip/death→dormant+auto-rearm (version unchanged, budget untouched) · exec_reasoning=%s plan_reasoning=%s",
+			kernel.FlipATRBuffer(), kernel.FlipConfirmCloses(), execReasoningLabel(), planReasoningLabel())
 	})
 	installActivePlanProvider(at, st)
 	// P0-cleanup (2026-08-19) — soft-alert: guardrails that WOULD have tripped
