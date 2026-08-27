@@ -154,6 +154,14 @@ func openStampBars(bars []Bar, timeframe string) []Bar {
 	return out
 }
 
+// OpenStampBars (exported, BAR-TRUTH 2026-08-28) applies the canonical
+// close-stamp → open-stamp conversion ONCE for every reader. The persistence
+// path must use it too — historical replay frames arrive close-stamped, and
+// without it the DB rows landed at T+1m (2499/2500 common-window mismatches).
+func OpenStampBars(bars []Bar, timeframe string) []Bar {
+	return openStampBars(bars, timeframe)
+}
+
 // timeframeMs mirrors the coded TF vocabulary (bars_market_bridge.go keeps the
 // kernel-side twin; both fall back to 1m).
 func timeframeMs(timeframe string) int64 {

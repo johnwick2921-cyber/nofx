@@ -68,15 +68,26 @@ func (s *Server) handleBarTruthArbiter(c *gin.Context) {
 		if back <= 0 {
 			back = 8640 // 6 days of 1m — covers the 08-24+ retention window
 		}
+		// BAR-TRUTH: wipe the replay window FIRST so previously-misstamped rows
+		// (close-stamped at T+1m from the pre-fix replay) can never survive as
+		// spurious extras; the fresh replay repopulates with open-stamped keys.
+		if s.store != nil && s.store.BarHistory() != nil {
+			since := time.Now().UnixMilli() - int64(back)*int64(60_000) - 60_000
+			if n, cerr := s.store.BarHistory().ClearSince(sym, tf, since); cerr == nil {
+				c.JSON(http.StatusAccepted, gin.H{
+					"ok": true, "action": "backfill", "symbol": sym,
+					"timeframe": tf, "bars_back": back, "cleared_rows": n,
+					"note": "window cleared; deep bars_subscribe sent — run action=diff after ~30s.",
+				})
+			} else {
+				c.JSON(http.StatusConflict, gin.H{"error": "clear failed: " + cerr.Error()})
+				return
+			}
+		}
 		if err := nt.RequestDeepBarsBackfill(sym, tf, back); err != nil {
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 			return
 		}
-		c.JSON(http.StatusAccepted, gin.H{
-			"ok": true, "action": "backfill", "symbol": sym,
-			"timeframe": tf, "bars_back": back,
-			"note": "deep bars_subscribe sent on the live connection; the replay lands in the cache + persister. Run action=diff after ~30s.",
-		})
 		return
 	case "diff":
 		replay := nt.BarTruthEndCapture()

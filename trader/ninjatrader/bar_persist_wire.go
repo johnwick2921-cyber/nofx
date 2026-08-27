@@ -28,6 +28,11 @@ func WireBarPersistence(st *store.Store) {
 		}
 		ntwire.SetBarPersister(func(historical bool, symbol, tf string, bars []ntwire.Bar) {
 			closed := ntwire.ClosedBarsOnly(bars, tf, time.Now().UnixMilli())
+			if historical {
+				// BAR-TRUTH 2026-08-28: replay frames arrive CLOSE-stamped -
+				// apply the cache's open-stamp conversion (the 2499/2500 mismatch root cause).
+				closed = ntwire.OpenStampBars(closed, tf)
+			}
 			if len(closed) == 0 {
 				return
 			}

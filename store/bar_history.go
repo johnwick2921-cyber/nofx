@@ -58,14 +58,15 @@ func NewBarHistoryStore(db *gorm.DB) *BarHistoryStore { return &BarHistoryStore{
 
 // Migrate creates the bars table + the natural-key unique index (additive +
 // idempotent). On SQLite it also runs the ONE-SHOT integrity migration:
-//   (1) a safety copy `bars_pre_dedupe_<date>` of the pre-fix table (if absent),
-//   (2) DELETE keeping max(rowid) per (symbol, tf, open_time_ms) — 2026-08-26
-//       live table held 17,695 duplicate revisions (F5, 2026-08-27-london-
-//       drought.md), written by the old INSERT OR IGNORE against a table with
-//       no real unique constraint,
-//   (3) CREATE UNIQUE INDEX on the natural key so the constraint is real,
-//   (4) DELETE tf != '1m' rows — 5m/15m are DERIVED ON READ from 1m (the
-//       stored NT8 aggregates were inconsistent with their 1m constituents).
+//
+//	(1) a safety copy `bars_pre_dedupe_<date>` of the pre-fix table (if absent),
+//	(2) DELETE keeping max(rowid) per (symbol, tf, open_time_ms) — 2026-08-26
+//	    live table held 17,695 duplicate revisions (F5, 2026-08-27-london-
+//	    drought.md), written by the old INSERT OR IGNORE against a table with
+//	    no real unique constraint,
+//	(3) CREATE UNIQUE INDEX on the natural key so the constraint is real,
+//	(4) DELETE tf != '1m' rows — 5m/15m are DERIVED ON READ from 1m (the
+//	    stored NT8 aggregates were inconsistent with their 1m constituents).
 //
 // Idempotent: the heavy steps run only while the unique index is absent; every
 // later boot is a no-op.
@@ -145,6 +146,18 @@ func (s *BarHistoryStore) InsertBars(rows []BarHistoryDB) error {
 		}
 	}
 	return nil
+}
+
+// ClearSince deletes rows with open_time_ms >= sinceMs for (symbol, tf) — the
+// BAR-TRUTH backfill wipes the window BEFORE a deep replay repopulates it, so
+// previously-misstamped rows can never survive as spurious extras.
+func (s *BarHistoryStore) ClearSince(symbol, tf string, sinceMs int64) (int64, error) {
+	if s == nil || s.db == nil {
+		return 0, nil
+	}
+	res := s.db.Where("symbol = ? AND tf = ? AND open_time_ms >= ?", symbol, tf, sinceMs).
+		Delete(&BarHistoryDB{})
+	return res.RowsAffected, res.Error
 }
 
 // BarsIntegrity returns the nightly integrity triple: duplicate natural-key
