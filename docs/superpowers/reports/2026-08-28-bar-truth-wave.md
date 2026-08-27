@@ -120,4 +120,4 @@ hour → **71.8 days** at the 2G journald cap (target ≥ 7 days) ✓.
 All four boots: goldens PASS; flat gate held (positions `[]`, DB OPEN=0,
 open-orders empty) before every `kill -9`.
 
-Pinned: `github.com/johnwick2921-cyber/nofx/blob/405e1323b176/docs/superpowers/reports/2026-08-28-bar-truth-wave.md`
+Pinned: `github.com/johnwick2921-cyber/nofx/blob/5677025e63439a3f7bd263619ec9672f986383b8/docs/superpowers/reports/2026-08-28-bar-truth-wave.md`
