@@ -87,7 +87,6 @@ export interface PlanToday {
   /** UI-verification (2026-08-18) — a planner read is in flight for this chain. */
   reading?: boolean
   version?: number
-  overlay_count?: number
   lifecycle?: string // active | expired | died | superseded
   model_id?: string
   doc?: PlanDoc
@@ -102,7 +101,21 @@ export interface PlanToday {
   // Per-scenario live status keyed by scenario id (executor-phase; absent now).
   scenario_status?: Record<string, ScenarioStatusValue>
   // A1/A4: verdict basis ("machine"|"heuristic") + scenarios with no anchor
-  scenario_meta?: { basis?: Record<string, string>; unevaluable?: string[] }
+  scenario_meta?: {
+    basis?: Record<string, string>
+    unevaluable?: string[]
+    // C1 (fail-register wave) — per-scenario confirm verdicts.
+    confirm?: Record<
+      string,
+      {
+        rule: string
+        ref_price: number
+        side: string
+        met: boolean
+        detail: string
+      }
+    >
+  }
   /** W15.B — the acceptance rule the executor evaluates these levels with. */
   acceptance_rule?: string
   /** W15.B — which session is LIVE right now, regardless of the tab requested. */
@@ -114,17 +127,11 @@ export interface PlanToday {
   /** The RESOLVED re-plan cap (config, never a literal). */
   replan_cap?: number
   /** ITEM 4 — owner edits a re-plan could not re-anchor onto this version. */
-  uncarried_edits?: UncarriedEdit[] /** G4 (regime wave) — transition stand-down chip (nil/absent = closed). */
-  transition?: {
-    active: boolean
-    dir: string
-    detail: string
-  } | null /** ITEM 15 — true when ?version= served a superseded version, not the latest. */
+  uncarried_edits?: UncarriedEdit[]
+  /** ITEM 15 — true when ?version= served a superseded version, not the latest. */
   historical?: boolean
   /** ITEM 15 — the newest stored version, so the card can offer the way back. */
   latest_version?: number
-  /** ITEM 15 — why this version was written (session open / death condition / …). */
-  trigger_reason?: string
   created_at?: string
 }
 
@@ -514,16 +521,48 @@ export const planApi = {
 
   // W16/R3 — the gate-block tally (in-memory, per CME session-day). It has been
   // served since B6 with no frontend consumer at all.
-  async getGateBlocks(): Promise<{
+  // C5 (README §9) — trader-scoped fetch: backend filters to this trader + "".
+  async getGateBlocks(traderId?: string): Promise<{
     session_day_utc?: string
     summary?: string
     by_trader?: Record<string, Record<string, number>>
   } | null> {
+    const qs = traderId ? `?trader_id=${encodeURIComponent(traderId)}` : ''
     const res = await httpClient.request<{
       session_day_utc?: string
       summary?: string
       by_trader?: Record<string, Record<string, number>>
-    }>(`${API_BASE}/risk/gate-blocks`, { silent: true })
+    }>(`${API_BASE}/risk/gate-blocks${qs}`, { silent: true })
+    return res.success && res.data ? res.data : null
+  },
+
+  // C8 (README §9) — structured risk errors (P0-cleanup table). The dashboard
+  // 402 banner watches this for the ai_payment_402 class.
+  async getRiskErrors(traderId?: string): Promise<{
+    rows?: Array<{
+      trader: string
+      type: string
+      cause: string
+      cost: string
+      count: number
+      decisions_lost: number
+      trades_lost: number
+    }>
+    summary?: string
+  } | null> {
+    const qs = traderId ? `?trader_id=${encodeURIComponent(traderId)}` : ''
+    const res = await httpClient.request<{
+      rows?: Array<{
+        trader: string
+        type: string
+        cause: string
+        cost: string
+        count: number
+        decisions_lost: number
+        trades_lost: number
+      }>
+      summary?: string
+    }>(`${API_BASE}/risk/errors${qs}`, { silent: true })
     return res.success && res.data ? res.data : null
   },
 

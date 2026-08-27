@@ -71,6 +71,107 @@ type PlannerInput struct {
 	// BiasCtx (addendum 2, 2026-08-26) — the per-cycle bias-context facts line
 	// (price vs VWAP/PDC, value area, nearest magnet/liquidity). Facts only.
 	BiasCtx string
+	// BiasCtxFacts (A1, planner-contract wave 2026-08-26) — the STRUCTURED bias
+	// context the BIAS-TREE section computes from (price, PDH/PDL/PDC, value
+	// area, nearest liquidity). Filled by the same site as BiasCtx.
+	BiasCtxFacts BiasContext
+}
+
+// RenderBiasTree (A1, planner-contract wave 2026-08-26) — the machine-computed
+// bias decision tree. Facts only + the branch the facts CURRENTLY match; the
+// planner states which branch it took (contract requirement). Premium/discount
+// = position within the value-area range; the draw = nearest opposing
+// liquidity pool (the runner target).
+func RenderBiasTree(price float64, levels []ScoredLevel, bc BiasContext) string {
+	pdh, pdl, pdc := 0.0, 0.0, 0.0
+	for _, l := range levels {
+		switch l.Kind {
+		case KindPDH:
+			pdh = l.Price
+		case KindPDL:
+			pdl = l.Price
+		case KindPDC:
+			pdc = l.Price
+		}
+	}
+	var b strings.Builder
+	b.WriteString("## BIAS-TREE (machine branches — your reasoning MUST state the branch you took, e.g. \"bias-tree: inside-day long LOW\")\n")
+	b.WriteString("  1. close > PDH → bull-continuation, conviction HIGH\n")
+	b.WriteString("  2. sweep of PDH + close back inside → bear, conviction MEDIUM  (mirror: sweep PDL + close inside → bull MEDIUM)\n")
+	b.WriteString("  3. inside the day (between PDH/PDL) → direction of close vs PDC (prior close), conviction LOW\n")
+	b.WriteString("  4. closed OUTSIDE the prior day's range but now inside → NO bias (write neutral; trade the structure, not a thesis)\n")
+	b.WriteString("  5. premium/discount: longs ONLY below the 50% mark of the dealing range, shorts ONLY above it\n")
+	b.WriteString("  6. draw-on-liquidity: the runner target is the DRAW — the nearest opposing liquidity pool beyond the first target\n")
+	fmt.Fprintf(&b, "  computed: PDH %.2f · PDL %.2f · PDC %.2f", pdh, pdl, pdc)
+	if bc.VAH > 0 && bc.VAL > 0 && price > 0 {
+		lo, hi := bc.VAL, bc.VAH
+		if lo > hi {
+			lo, hi = hi, lo
+		}
+		fmt.Fprintf(&b, " · value area %.2f–%.2f", lo, hi)
+		if hi > lo {
+			pos := (price - lo) / (hi - lo)
+			if pos >= 0.5 {
+				fmt.Fprintf(&b, " · price at %.0f%% of the range (PREMIUM — longs disallowed by branch 5)", pos*100)
+			} else {
+				fmt.Fprintf(&b, " · price at %.0f%% of the range (DISCOUNT — shorts disallowed by branch 5)", pos*100)
+			}
+		}
+	}
+	if price > 0 && pdh > 0 && price > pdh {
+		b.WriteString(" · facts match branch 1 (close > PDH)")
+	} else if price > 0 && pdl > 0 && price < pdl {
+		b.WriteString(" · facts match branch 1 mirror (close < PDL)")
+	} else if price > 0 && pdh > 0 && pdl > 0 && pdc > 0 && price < pdh && price > pdl {
+		dir := "flat"
+		if price > pdc {
+			dir = "long"
+		} else if price < pdc {
+			dir = "short"
+		}
+		fmt.Fprintf(&b, " · facts match branch 3 (inside day; close %s PDC → %s LOW)", dir, dir)
+	}
+	if bc.NearestLiquidity != "" {
+		b.WriteString(" · draw/liquidity: " + bc.NearestLiquidity)
+	}
+	b.WriteString("\n\n")
+	return b.String()
+}
+
+// ChainWarnings (A2, planner-contract wave) — validator WARN, never a fail:
+// an fvg_entry scenario without a chain_after sweep precursor and whose origin
+// level is not a fresh A/B zone is the bare-gap setup the research's raw-FVG
+// null result warns about (no edge without the sweep → displacement chain).
+func ChainWarnings(doc PlanDoc) []string {
+	var out []string
+	gradeOf := func(label string) string {
+		for _, l := range doc.Levels {
+			if strings.EqualFold(strings.TrimSpace(l.Label), strings.TrimSpace(label)) {
+				return l.Grade
+			}
+		}
+		return ""
+	}
+	byID := map[string]PlanScenario{}
+	for _, s := range doc.Scenarios {
+		byID[strings.ToUpper(strings.TrimSpace(s.ID))] = s
+	}
+	for _, s := range doc.Scenarios {
+		if !strings.EqualFold(strings.TrimSpace(s.Condition), "fvg_entry") || s.Fvg == nil {
+			continue
+		}
+		hasPrecursor := false
+		if ref := strings.ToUpper(strings.TrimSpace(s.ChainAfter)); ref != "" {
+			if p, ok := byID[ref]; ok && strings.EqualFold(strings.TrimSpace(p.Condition), "sweep_reclaim") {
+				hasPrecursor = true
+			}
+		}
+		originGrade := strings.ToUpper(gradeOf(s.Fvg.OriginLevel))
+		if !hasPrecursor && originGrade != "A" && originGrade != "B" {
+			out = append(out, fmt.Sprintf("fvg_entry %s has no sweep_reclaim precursor (chain_after) and origin %q is not a fresh A/B zone — the bare-gap setup has no standalone edge (raw-FVG null, 40k sample); consider chaining it after a sweep play", s.ID, s.Fvg.OriginLevel))
+		}
+	}
+	return out
 }
 
 // BuildPlannerPrompt assembles the planner prompt: reasoning-first instruction,
@@ -229,6 +330,38 @@ func BuildPlannerPrompt(in PlannerInput) string {
 	b.WriteString("Fade ONLY on a confirmed sweep-reclaim (wick through + close back inside on the decision TF). ")
 	b.WriteString("Otherwise treat them as targets / breakout-retest anchors, never fade walls.\n\n")
 
+	// A1 (planner-contract wave 2026-08-26) — BIAS DECISION TREE replaces
+	// free-form bias guidance. Machine-computed branches; the planner names
+	// the branch it took (contract requirement).
+	if in.Price > 0 {
+		b.WriteString(RenderBiasTree(in.Price, in.Levels, in.BiasCtxFacts))
+	}
+
+	// A2 — priority setup chain: the sweep → displacement → FVG-retrace play.
+	b.WriteString("## Priority setup — THE CHAIN (A2, week evidence, advisory)\n")
+	b.WriteString("  The A-setup: sweep of a pool → displacement → FVG retrace at a Tier-1/fresh-zone origin, inside a killzone. ")
+	b.WriteString("fvg_entry scenarios SHOULD declare \"chain_after\": \"S#\" naming the sweep_reclaim that swept the origin pool. ")
+	b.WriteString("entry_mode=ce is the DEFAULT; edge only for A-grade HTF-confluent origins. Stop beyond the sweep extreme; T1 = first opposing pool; the runner = the draw. ")
+	b.WriteString("Citation: raw-FVG carries no standalone edge (40k-sample null) — the edge is conditional on the sweep→displacement chain.\n\n")
+
+	// A3 — no-trade gates (≤8 lines, advisory — the plan declares them; the
+	// executor still sees every cycle).
+	b.WriteString("## No-trade gates (advisory — declare in no_trade or skip the day)\n")
+	b.WriteString("  - balance-day (open inside prior value area AND VAs overlap) → edges-only, or skip\n")
+	b.WriteString("  - opening gap >1.2×ATR or open outside the prior range → NEVER fade; the gap is a target\n")
+	b.WriteString("  - no A/B zone in reach AND no pool swept by 10:30 ET → declare the skip in the plan\n")
+	b.WriteString("  - lunch 11:30–13:30 ET: no new entries (the system hard-gates 12:00–13:30 CT)\n")
+	b.WriteString("  - Tier-1 news → stand aside until a fresh post-news swing prints\n\n")
+
+	// A4 — killzone weighting (advisory, not a gate).
+	b.WriteString("## Killzone weighting (advisory)\n")
+	b.WriteString("  NY AM 08:30–11:00 ET is the primary window; 10:00–11:00 ET is the premium FVG window; mind the macro minutes. ")
+	b.WriteString("Conviction: down on Monday, up Thursday/Friday.\n\n")
+
+	// A5 — stop-doing line: bare acceptance entries have no edge.
+	b.WriteString("## STOP-DOING (week evidence, advisory)\n")
+	b.WriteString("  acceptance entries WITHOUT a prior sweep + displacement are 0% win evidence — skip them (A5).\n\n")
+
 	// 1h wave (2026-08-25) — the conditional 1h S/D mandate: emitted only when
 	// a 1h supply/demand zone is actually rendered in the HTF zones section
 	// (same conditional pattern as the G2.2 HTF mandate fix — a rule that asks
@@ -264,7 +397,7 @@ func plannerOutputContract(maxLevels, maxScenarios int, hasHTFZones, has1HSDZone
 		`  "reasoning": "<your read: what the auction is doing and why this plan — ≤200 words, decision-focused>",` + "\n" +
 		`  "bias": {"direction": "long|short|neutral", "conviction": "high|medium|low", "flip_condition": "<explicit>"},` + "\n" +
 		fmt.Sprintf(`  "levels": [{"price": <n>, "label": "<PDH|ONH|nPOC…>", "grade": "A|B|C", "instruction": "<verb>"}],  // max %d, MUST include ≥3 below AND ≥3 above the current price`, maxL) + "\n" +
-		fmt.Sprintf(`  "scenarios": [{"id": "S1", "trigger": "<setup>", "condition": "reclaim|hold|sweep_reclaim|reject|acceptance|breakout_retest|fvg_entry", "direction": "long|short", "target_chain": [<n>,…], "invalid": "<line>", "quality": "A+|A|B|C", "confirm": {"rule": "touch|1x5m_close|2x5m_close|15m_close", "ref_price": <n>, "side": "above|below"}, "fvg": {"fvg_lo": <n>, "fvg_hi": <n>, "entry_mode": "edge|ce", "displacement_atr": <n>, "origin_level": "<label>", "direction": "long|short"}}],  // 1..%d — confirm{} is REQUIRED per scenario; fvg{} REQUIRED iff condition=="fvg_entry" (ce is COMPUTED, never written)`, maxS) + "\n" +
+		fmt.Sprintf(`  "scenarios": [{"id": "S1", "trigger": "<setup>", "condition": "reclaim|hold|sweep_reclaim|reject|acceptance|breakout_retest|fvg_entry", "direction": "long|short", "target_chain": [<n>,…], "invalid": "<line>", "quality": "A+|A|B|C", "chain_after": "<S# of the sweep_reclaim this fvg_entry follows, or omit>", "confirm": {"rule": "touch|1x5m_close|2x5m_close|15m_close", "ref_price": <n>, "side": "above|below"}, "fvg": {"fvg_lo": <n>, "fvg_hi": <n>, "entry_mode": "edge|ce", "displacement_atr": <n>, "origin_level": "<label>", "direction": "long|short"}}],  // 1..%d — confirm{} is REQUIRED per scenario; fvg{} REQUIRED iff condition=="fvg_entry" (ce is COMPUTED, never written); chain_after is OPTIONAL and names the setup-chain precursor`, maxS) + "\n" +
 		`  "no_trade": ["first 5m (CT)", "12:00-13:30 CT lunch", "<calendar blackouts>"],` + "\n" +
 		`  "death_condition": "<the single line that invalidates this whole plan>",` + "\n" +
 		`  "death": {"price": <level>, "side": "below|above", "rule": "2x5m|15m_close|5m_close"},` + "\n" +
@@ -276,6 +409,8 @@ func plannerOutputContract(maxLevels, maxScenarios int, hasHTFZones, has1HSDZone
 		"Quality: A+ = highest-conviction setup, A = strong, B = workable, C = machine-demoted (trigger level consumed at write — G5) — use C honestly for a demoted setup, never as a default. " +
 		"The scenario MIX must follow the regime + day_type: a trend-down day gets breakdown/pullback-short plays, a trend-up day the reverse, balance days get two-sided plays — do NOT default to 2 longs + 1 rally-rejection short on every day. " +
 		"If price sits BELOW PDL you MUST write a continuation short; ABOVE PDH, a continuation long. " +
+		"A1: your reasoning MUST open by naming the bias-tree branch you took (e.g. \"bias-tree: inside-day long LOW\"), then argue from it. " +
+		"A2: an fvg_entry SHOULD chain after a sweep_reclaim (chain_after: S#) — bare gaps at non-A/B origins get a WARN at write, not a reject. " +
 		"death.flip objects are MACHINE-EVALUATED — choose levels from your level list and a rule; they must match the prose lines. " +
 		"The flip and death MUST be DIFFERENT events: never the same level AND same rule for both (a flip at the same tick death fires is void). A short-biased plan's flip sits BELOW its death line or uses a stricter rule, so the flip can actually fire. " +
 		"Every scenario's confirm{} is MACHINE-EVALUATED the same way: rule + ref_price + side, and ref_price MUST equal a number written in that scenario's trigger/invalid prose. " +

@@ -10,12 +10,13 @@ import { fmtPrice } from './levelState'
 
 function QualityChip({ quality }: { quality: string }) {
   const q = quality || 'B'
+  // C7 — A/A+ use the A token (was: A got the B token); B and C get their own.
   const color =
-    q === 'A+'
-      ? 'var(--vl-gold)'
-      : q === 'A'
+    q === 'A+' || q === 'A'
+      ? 'var(--vl-grade-a)'
+      : q === 'B'
         ? 'var(--vl-grade-b)'
-        : 'var(--vl-faint)'
+        : 'var(--vl-grade-c)'
   return (
     <span
       className="text-[10px] font-bold"
@@ -42,7 +43,13 @@ function ScenarioRow({
   language: Language
 }) {
   const dir = (scenario.direction || '').toLowerCase()
-  const dirColor = dir === 'long' ? 'var(--vl-long)' : 'var(--vl-short)'
+  // C7 — a direction that isn't long/short renders neutral, not short-red.
+  const dirColor =
+    dir === 'long'
+      ? 'var(--vl-long)'
+      : dir === 'short'
+        ? 'var(--vl-short)'
+        : 'var(--vl-muted)'
   return (
     <div
       role="row"
@@ -222,26 +229,30 @@ export function ScenarioList({
                         : 'confirm not met'}
                     </span>
                   )}
-                  {fvgStates?.find((f) => f.id === s.id) && (() => {
-                    const f = fvgStates.find((x) => x.id === s.id)!
-                    const tone =
-                      f.state === 'FILLED_INVALID'
-                        ? 'var(--vl-short)'
-                        : f.state === 'IN_ZONE'
-                          ? 'var(--vl-long)'
-                          : 'var(--vl-muted)'
-                    return (
-                      <span
-                        data-testid={`fvg-chip-${s.id}`}
-                        className="text-[9px] font-bold px-1.5 py-0.5 rounded"
-                        title={`fvg_entry gap ${f.fvg_lo}–${f.fvg_hi} (CE ${f.ce}, mode ${f.entry_mode}) — ${f.state}${f.touch_number > 0 ? ` · touch #${f.touch_number}` : ''} (machine-computed, advisory)`}
-                        style={{ color: tone, border: '1px solid var(--vl-hair)' }}
-                      >
-                        {f.state}
-                        {f.touch_number > 0 ? ` · #${f.touch_number}` : ''}
-                      </span>
-                    )
-                  })()}
+                  {fvgStates?.find((f) => f.id === s.id) &&
+                    (() => {
+                      const f = fvgStates.find((x) => x.id === s.id)!
+                      const tone =
+                        f.state === 'FILLED_INVALID'
+                          ? 'var(--vl-short)'
+                          : f.state === 'IN_ZONE'
+                            ? 'var(--vl-long)'
+                            : 'var(--vl-muted)'
+                      return (
+                        <span
+                          data-testid={`fvg-chip-${s.id}`}
+                          className="text-[9px] font-bold px-1.5 py-0.5 rounded"
+                          title={`fvg_entry gap ${f.fvg_lo}–${f.fvg_hi} (CE ${f.ce}, mode ${f.entry_mode}) — ${f.state}${f.touch_number > 0 ? ` · touch #${f.touch_number}` : ''} (machine-computed, advisory)`}
+                          style={{
+                            color: tone,
+                            border: '1px solid var(--vl-hair)',
+                          }}
+                        >
+                          {f.state}
+                          {f.touch_number > 0 ? ` · #${f.touch_number}` : ''}
+                        </span>
+                      )
+                    })()}
                 </div>
               )}
             </div>

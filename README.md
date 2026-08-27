@@ -5,6 +5,9 @@
   <strong>Any market. Any model. Pay with USDC, not API keys.</strong>
 </p>
 
+> **Operator's manual + full UI reference (verified against code):**
+> [docs/README-VL-SYSTEM.md](docs/README-VL-SYSTEM.md)
+
 <p align="center">
   <a href="https://github.com/NoFxAiOS/nofx/stargazers"><img src="https://img.shields.io/github/stars/NoFxAiOS/nofx?style=for-the-badge" alt="Stars"></a>
   <a href="https://github.com/NoFxAiOS/nofx/releases"><img src="https://img.shields.io/github/v/release/NoFxAiOS/nofx?style=for-the-badge" alt="Release"></a>

@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { mutate } from 'swr'
 import { api } from '../lib/api'
+import { planApi } from '../lib/api/plan'
 import { ChartTabs } from '../components/charts/ChartTabs'
 import { DecisionCard } from '../components/trader/DecisionCard'
 import { DecisionAudit } from '../components/trader/DecisionAudit'
@@ -153,6 +154,49 @@ export function TraderDashboardPage({
     string | undefined
   >(undefined)
   const [chartUpdateKey, setChartUpdateKey] = useState<number>(0)
+  // C4 (README §9) — the debug strip's SYSTEM_STATUS was a static lie.
+  // Poll the real /api/health (status + running revision) every 30s.
+  const [health, setHealth] = useState<{ status?: string; revision?: string }>(
+    {}
+  )
+  useEffect(() => {
+    let live = true
+    const poll = () => {
+      fetch('/api/health')
+        .then((r) => r.json())
+        .then((j) => live && setHealth(j))
+        .catch(() => live && setHealth({ status: 'unreachable' }))
+    }
+    poll()
+    const iv = setInterval(poll, 30_000)
+    return () => {
+      live = false
+      clearInterval(iv)
+    }
+  }, [])
+
+  // C8 (README §9) — restore the 402 banner: poll the structured risk-error
+  // table; any ai_payment_402 row for THIS trader latches a red banner until
+  // the first successful call clears it (backend auto-acks the P0 alert).
+  const [ai402, setAi402] = useState<{ cause: string; count: number } | null>(
+    null
+  )
+  useEffect(() => {
+    if (!selectedTraderId) return
+    let live = true
+    const poll = async () => {
+      const res = await planApi.getRiskErrors(selectedTraderId)
+      if (!live) return
+      const row = res?.rows?.find((r) => r.type === 'ai_payment_402')
+      setAi402(row ? { cause: row.cause, count: row.count } : null)
+    }
+    void poll()
+    const iv = setInterval(poll, 30_000)
+    return () => {
+      live = false
+      clearInterval(iv)
+    }
+  }, [selectedTraderId])
   const chartSectionRef = useRef<HTMLDivElement>(null)
   const [showWalletAddress, setShowWalletAddress] = useState<boolean>(false)
   const [copiedAddress, setCopiedAddress] = useState<boolean>(false)
@@ -569,9 +613,48 @@ export function TraderDashboardPage({
           </div>
         </div>
 
+        {/* C8 — AI 402 banner: latched while the risk-error table holds an
+            ai_payment_402 row for this trader; clears on the first success. */}
+        {ai402 && (
+          <div
+            data-testid="ai-402-banner"
+            className="mb-4 px-3 py-2 rounded border text-xs font-mono flex items-center gap-2"
+            style={{
+              background: 'rgba(240,70,93,0.08)',
+              border: '1px solid #F6465D',
+              color: '#F6465D',
+            }}
+          >
+            <span aria-hidden>⚠</span>
+            <span>
+              AI CREDIT EXHAUSTED — provider returned HTTP 402 (Insufficient
+              Balance); decision cycles are failing ({ai402.count} this
+              session). Top up, then the banner clears on the first successful
+              call.
+            </span>
+          </div>
+        )}
+
         {/* Debug Info */}
         <div className="mb-4 px-3 py-1.5 rounded bg-black/40 border border-white/5 text-[10px] font-mono text-nofx-text-muted flex justify-between items-center opacity-60 hover:opacity-100 transition-opacity">
-          <span style={{ color: '#0ECB81' }}>SYSTEM_STATUS::ONLINE</span>
+          <span
+            style={{
+              color:
+                health.status === undefined
+                  ? '#8C8C8C'
+                  : health.status === 'ok'
+                    ? '#0ECB81'
+                    : '#F6465D',
+            }}
+          >
+            SYSTEM_STATUS::
+            {health.status === undefined
+              ? '…'
+              : health.status === 'ok'
+                ? 'ONLINE'
+                : String(health.status).toUpperCase()}
+            {health.revision ? ` · REV::${health.revision}` : ''}
+          </span>
           {account ? (
             <div className="flex gap-4">
               <span>LAST_UPDATE::{lastUpdate}</span>

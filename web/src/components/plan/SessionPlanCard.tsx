@@ -678,31 +678,6 @@ export function SessionPlanCard({
         </div>
       )}
 
-      {/* G4 (regime wave) — transition stand-down chip: plan-direction entries
-          are paused while an unconfirmed counter-trend CHoCH/MSS is open. */}
-      {!!plan.transition?.active && (
-        <div
-          data-testid="transition-chip"
-          className="flex flex-col gap-1 px-2.5 py-2"
-          style={{
-            background: 'var(--vl-gold-dim)',
-            border: '1px solid var(--vl-gold-line)',
-            borderRadius: 'var(--vl-radius-inner)',
-            fontFamily: 'var(--vl-font-ui)',
-          }}
-        >
-          <span
-            className="text-[10px] font-bold uppercase tracking-wider"
-            style={{ color: 'var(--vl-gold)' }}
-          >
-            ⏸ TRANSITION — awaiting confirmation
-          </span>
-          <span className="text-[11px]" style={{ color: 'var(--vl-muted)' }}>
-            {plan.transition.detail}
-          </span>
-        </div>
-      )}
-
       {/* bias */}
       <BiasBlock bias={doc.bias} language={language} />
 
@@ -818,6 +793,16 @@ export function SessionPlanCard({
                 scenario_meta?: {
                   basis?: Record<string, string>
                   unevaluable?: string[]
+                  confirm?: Record<
+                    string,
+                    {
+                      rule: string
+                      ref_price: number
+                      side: string
+                      met: boolean
+                      detail: string
+                    }
+                  >
                 }
               }
             ).scenario_meta
