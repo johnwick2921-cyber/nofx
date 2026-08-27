@@ -35,10 +35,23 @@ func (s *PositionStore) GetPositionStats(traderID string) (map[string]interface{
 
 	err := s.db.Model(&TraderPosition{}).
 		Select("COUNT(*) as total, SUM(CASE WHEN COALESCE(pnl_corrected, realized_pnl) > 0 THEN 1 ELSE 0 END) as wins, COALESCE(SUM(COALESCE(pnl_corrected, realized_pnl)), 0) as total_pnl, COALESCE(SUM(fee), 0) as total_fee").
-		Where("trader_id = ? AND status = ?", traderID, "CLOSED").
+		// A-2 (2026-08-28, bar-truth wave): legacy CLOSED rows with
+		// pnl_corrected NULL (317 sync + 37 reconcile_flat — never
+		// re-verified against stored prices) are EXCLUDED from every
+		// ruled-from aggregate: no silent NULLs in any table we rule
+		// from. The excluded count is surfaced for visibility.
+		Where("trader_id = ? AND status = ? AND pnl_corrected IS NOT NULL", traderID, "CLOSED").
 		Scan(&r).Error
 	if err != nil {
 		return nil, err
+	}
+
+	// A-2 — the excluded class, surfaced (never silently folded in).
+	var excluded int64
+	if err := s.db.Model(&TraderPosition{}).
+		Where("trader_id = ? AND status = ? AND pnl_corrected IS NULL", traderID, "CLOSED").
+		Count(&excluded).Error; err == nil {
+		stats["excluded_null_pnl"] = excluded
 	}
 
 	stats["total_trades"] = r.Total
@@ -63,7 +76,9 @@ func (s *PositionStore) GetPositionStats(traderID string) (map[string]interface{
 func (s *PositionStore) CountConsecutiveLossesSince(traderID string, sinceMs int64) (int, error) {
 	var rows []TraderPosition
 	err := s.db.
-		Where("trader_id = ? AND status = ? AND close_reason <> ? AND exit_time >= ?",
+		// A-2 (2026-08-28): exclude legacy unverified rows from the loss
+		// streak too (reconcile_flat already excluded).
+		Where("trader_id = ? AND status = ? AND close_reason <> ? AND pnl_corrected IS NOT NULL AND exit_time >= ?",
 			traderID, "CLOSED", CloseReasonReconcileFlat, sinceMs).
 		Order("exit_time DESC").
 		Find(&rows).Error
@@ -96,7 +111,9 @@ func (s *PositionStore) GetSessionDayActivity(traderID string, sinceMs int64, ac
 	var pnl struct{ Total float64 }
 	pq := s.db.Model(&TraderPosition{}).
 		Select("COALESCE(SUM(COALESCE(pnl_corrected, realized_pnl)), 0) as total") /* P0 2026-08-20: corrections win */.
-		Where("trader_id = ? AND status = ? AND close_reason <> ? AND exit_time >= ?",
+		// A-2 (2026-08-28): no silent NULLs — legacy unverified rows are
+		// excluded from the guardrail P&L too.
+		Where("trader_id = ? AND status = ? AND close_reason <> ? AND pnl_corrected IS NOT NULL AND exit_time >= ?",
 			traderID, "CLOSED", CloseReasonReconcileFlat, sinceMs)
 	if acct != "" {
 		pq = pq.Where("account = ?", acct)

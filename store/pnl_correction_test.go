@@ -72,13 +72,15 @@ func TestCorrectHistoricalPnL(t *testing.T) {
 		t.Fatal("EffectivePnL must fall back to realized_pnl when uncorrected")
 	}
 
-	// The session-day guardrail sum reads the CORRECTED value.
+	// The session-day guardrail sum reads the CORRECTED value. A-2
+	// (2026-08-28): the clean row is UNCORRECTED (pnl_corrected NULL) and is
+	// therefore EXCLUDED from the ruled-from sum — no silent NULLs.
 	pnl, _, err := st.Position().GetSessionDayActivity("tr1", exitMs-86400_000)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if want := -69.428572 + 20.0; math.Abs(pnl-want) > 0.01 {
-		t.Fatalf("session-day sum = %.4f, want corrected %.4f (raw would be %.4f)", pnl, want, bad.RealizedPnL+20.0)
+	if want := -69.428572; math.Abs(pnl-want) > 0.01 {
+		t.Fatalf("session-day sum = %.4f, want corrected %.4f (uncorrected row excluded by A-2; raw would be %.4f)", pnl, want, bad.RealizedPnL+20.0)
 	}
 
 	// Idempotent: flag set, second run touches nothing further.

@@ -405,6 +405,11 @@ Returns: [{"symbol":"<string>","side":"long|short","quantity":<float>,"entry_pri
 			s.routeWithSchema(protected, "DELETE", "/nt/symbols", "P5.3: REMOVE an extra bar-subscription root at runtime (flag NT_RUNTIME_SYMBOLS)",
 				`Query: ?trader_id=<id>&symbol=<root> — unsubscribes + purges its cached bars. The PRIMARY trading symbol is refused.`,
 				s.handleNTSymbolsRemove)
+			// BAR-TRUTH WAVE (2026-08-28) — deep backfill + three-way
+			// arbiter (S-1): NT8 replay truth vs cache vs persisted bars.
+			s.routeWithSchema(protected, "POST", "/nt/bar-arbiter", "Owner: deep bars backfill + NT8/cache/DB three-way diff (BAR-TRUTH)",
+				`Body: {"trader_id":"<id>","action":"backfill"|"diff","symbol":"MNQ","timeframe":"1m","bars_back":8640}. backfill sends a one-shot deep bars_subscribe; diff returns the three-way counts+hashes+ATR14(5m)+deltas+drops.`,
+				s.handleBarTruthArbiter)
 			s.routeWithSchema(protected, "GET", "/trades", "Trade records",
 				`Query: ?trader_id=<EXACT trader_id from GET /api/my-traders>&limit=<int, default 20>`,
 				s.handleTrades)

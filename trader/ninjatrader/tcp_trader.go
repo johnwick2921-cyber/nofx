@@ -839,6 +839,30 @@ func (t *TCPTrader) RuntimeUnsubscribeBars(symbol string) error {
 	return t.server.UnsubscribeBarsSymbol(symbol)
 }
 
+// RequestDeepBarsBackfill (BAR-TRUTH WAVE 2026-08-28) sends a one-shot deep
+// bars_subscribe on the live connection (arbiter/backfill). The auto-subscribe
+// state is untouched.
+func (t *TCPTrader) RequestDeepBarsBackfill(symbol, timeframe string, barsBack int) error {
+	return t.server.RequestDeepBarsBackfill(symbol, timeframe, barsBack)
+}
+
+// BarTruthEndCapture returns the captured NT8-truth replay batches (empty when
+// no capture window ran) for the three-way diff.
+func (t *TCPTrader) BarTruthEndCapture() map[string]ntwire.BarTruthBatch {
+	return t.server.EndBarTruthCapture()
+}
+
+// BarTruthDrops returns the BAR-TRUTH drop counters (ingest + persist queue).
+func (t *TCPTrader) BarTruthDrops() (int64, int64, int64, int64) {
+	return t.server.BarTruthDrops()
+}
+
+// BarTruthCache returns the kernel cache snapshot for (symbol, tf) — nil when
+// the pair has no bars.
+func (t *TCPTrader) BarTruthCache(symbol, tf string) []ntwire.Bar {
+	return t.server.BarCache().Get(symbol, tf)
+}
+
 // BarsSubscriptionStates exposes the per-symbol subscription lifecycle
 // (pending/subscribed/error/unsubscribed, with contract/reason).
 func (t *TCPTrader) BarsSubscriptionStates() map[string]ntwire.SymbolSubState {

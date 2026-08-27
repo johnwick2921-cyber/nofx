@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net"
 	"os"
 	"strconv"
@@ -1281,7 +1282,135 @@ func (s *TCPServer) acceptLoop(ctx context.Context) {
 	}
 }
 
-// sendAutoBarsSubscribe emits the configured bars_subscribe frame(s) on a
+// ── BAR-TRUTH WAVE (2026-08-28) — deep backfill + three-way arbiter ────────
+// S-1 demanded an arbiter: NT8 truth (the deep replay frames) vs the kernel
+// cache vs the persisted bars table. The replay capture records count + FNV
+// hash per (symbol,tf) during a capture window; the API then diffs the three.
+
+type barTruthCapture struct {
+	mu      sync.Mutex
+	active  bool
+	batches map[string]BarTruthBatch
+}
+
+type BarTruthBatch struct {
+	Count  int    `json:"count"`
+	Hash   uint64 `json:"hash"` // FNV-1a over T,O,H,L,C,V
+	LastT  int64  `json:"last_t"`
+	Symbol string `json:"symbol"`
+	TF     string `json:"tf"`
+}
+
+// fnvAddBar folds one bar into an FNV-1a running hash (bit-exact over the
+// 8-byte fields) so two bar sets with identical content always hash equal.
+func fnvAddBar(h uint64, b Bar) uint64 {
+	if h == 0 {
+		h = 14695981039346656037
+	}
+	write := func(v float64) uint64 {
+		u := math.Float64bits(v)
+		for i := 0; i < 8; i++ {
+			h ^= (u >> (8 * i)) & 0xFF
+			h *= 1099511628211
+		}
+		return h
+	}
+	h = write(float64(b.T))
+	h = write(b.O)
+	h = write(b.H)
+	h = write(b.L)
+	h = write(b.C)
+	h = write(b.V)
+	return h
+}
+
+var truthCapture barTruthCapture
+
+func (s *TCPServer) beginBarTruthCapture(symbol, tf string) {
+	truthCapture.mu.Lock()
+	defer truthCapture.mu.Unlock()
+	truthCapture.active = true
+	truthCapture.batches = map[string]BarTruthBatch{}
+	_ = symbol
+	_ = tf
+}
+
+func (s *TCPServer) captureBarTruthReplay(symbol, tf string, bars []Bar) {
+	truthCapture.mu.Lock()
+	defer truthCapture.mu.Unlock()
+	if !truthCapture.active || len(bars) == 0 {
+		return
+	}
+	key := symbol + "|" + tf
+	b := truthCapture.batches[key]
+	b.Symbol, b.TF = symbol, tf
+	b.Count += len(bars)
+	for _, x := range bars {
+		b.Hash = fnvAddBar(b.Hash, x)
+		if x.T > b.LastT {
+			b.LastT = x.T
+		}
+	}
+	truthCapture.batches[key] = b
+}
+
+func (s *TCPServer) endBarTruthCapture() map[string]BarTruthBatch {
+	truthCapture.mu.Lock()
+	defer truthCapture.mu.Unlock()
+	truthCapture.active = false
+	out := truthCapture.batches
+	truthCapture.batches = nil
+	return out
+}
+
+// EndBarTruthCapture (exported) returns the captured replay batches and closes
+// the window. Empty when no capture was active.
+func (s *TCPServer) EndBarTruthCapture() map[string]BarTruthBatch {
+	return s.endBarTruthCapture()
+}
+
+// BarTruthDrops returns the BAR-TRUTH drop counters (ingest oldest/current/
+// historical + persist queue) for the E-proof drop-zero check.
+func (s *TCPServer) BarTruthDrops() (oldest, current, historical, persist int64) {
+	return ingestDropOld.Load(), ingestDropCur.Load(), ingestDropHist.Load(), persistDropped.Load()
+}
+
+// FNVBarSet folds a bar set into (count, FNV-1a hash) for the three-way diff.
+func FNVBarSet(bars []Bar) (int, uint64) {
+	h := uint64(14695981039346656037)
+	for _, b := range bars {
+		h = fnvAddBar(h, b)
+	}
+	return len(bars), h
+}
+
+// RequestDeepBarsBackfill sends a one-shot bars_subscribe on the LIVE
+// connection with an enlarged BarsBack for one symbol/timeframe so the AddOn
+// replays deep history (the auto-subscribe state is untouched — the next
+// reconnect restores the standard back).
+func (s *TCPServer) RequestDeepBarsBackfill(symbol, timeframe string, barsBack int) error {
+	if barsBack <= 0 {
+		barsBack = 8640 // 6 days of 1m — covers the 08-24+ retention window
+	}
+	s.beginBarTruthCapture(symbol, timeframe)
+	s.connMu.Lock()
+	c := s.conn
+	s.connMu.Unlock()
+	if c == nil {
+		return fmt.Errorf("no live NT8 connection")
+	}
+	payload := BarsSubscribePayload{Symbol: symbol, Timeframes: []string{timeframe}, BarsBack: barsBack}
+	s.writeMu.Lock()
+	err := WriteFrame(c, FrameBarsSubscribe, payload)
+	s.writeMu.Unlock()
+	if err != nil {
+		return fmt.Errorf("bars_subscribe write: %w", err)
+	}
+	s.logger.Info("tcp_server: sent DEEP bars_subscribe (bar-truth arbiter)",
+		"symbol", symbol, "timeframe", timeframe, "bars_back", barsBack)
+	return nil
+}
+
 // freshly-accepted connection — the primary symbol first, then one frame per
 // extra root (P5.1). Failure here is non-fatal — the C# side will simply not
 // start streaming bars; the next reconnect retries. We log a warn so the
@@ -1366,18 +1495,18 @@ func (s *TCPServer) enqueueBarUpdate(symbol, timeframe string, bars []Bar) {
 		return
 	default:
 	}
-	// Channel full — drop oldest, log once, retry.
+	// Channel full — drop oldest (counted, summarized 1-line/min), retry.
 	select {
 	case <-s.barIngestCh:
-		s.logger.Warn("tcp_server: bar ingest backpressure — dropped oldest update",
-			"symbol", symbol, "timeframe", timeframe)
+		ingestDropOld.Add(1)
+		ingestDropSummary(s.logger.Warn)
 	default:
 	}
 	select {
 	case s.barIngestCh <- msg:
 	default:
-		s.logger.Warn("tcp_server: bar ingest backpressure — dropping current update",
-			"symbol", symbol, "timeframe", timeframe)
+		ingestDropCur.Add(1)
+		ingestDropSummary(s.logger.Warn)
 	}
 }
 
@@ -1394,8 +1523,8 @@ func (s *TCPServer) enqueueBarHistorical(symbol, timeframe string, bars []Bar) {
 	case s.barIngestCh <- msg:
 		return
 	case <-time.After(2 * time.Second):
-		s.logger.Warn("tcp_server: bar ingest backpressure — dropped historical (drain stuck)",
-			"symbol", symbol, "timeframe", timeframe, "bars", len(bars))
+		ingestDropHist.Add(1)
+		ingestDropSummary(s.logger.Warn)
 	}
 }
 

@@ -23,6 +23,10 @@ func TestCountConsecutiveLossesSince(t *testing.T) {
 			Status: "CLOSED", CloseReason: reason,
 			EntryTime: exitMs - 1, ExitTime: exitMs, CreatedAt: exitMs, UpdatedAt: exitMs,
 		}
+		// A-2 (2026-08-28): rows ruled-from must carry a verified correction —
+		// NULL pnl_corrected rows are EXCLUDED from the streak query.
+		pnlCopy := pnl
+		p.PnlCorrected = &pnlCopy
 		// Insert the CLOSED row directly — PositionStore.Create is the entry-path
 		// constructor and force-sets status=OPEN, which this query filters out.
 		if err := ps.db.Create(p).Error; err != nil {
