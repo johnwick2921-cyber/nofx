@@ -49,6 +49,11 @@ const (
 	KindMIDO   LevelKind = "MID-O"  // overnight range midpoint
 	KindEQH    LevelKind = "EQH"    // equal highs (liquidity)
 	KindEQL    LevelKind = "EQL"    // equal lows (liquidity)
+	// Level-truth wave (2026-08-27) — SWING-POINT kinds: recent 5m/15m fractal
+	// swing highs/lows (the structure engine's swing detector, same k/min-move).
+	// THE 43%-missed-turns fix: intraday swing turns get seats as react_zone.
+	KindSWGH LevelKind = "SWG-H" // recent swing high (5m/15m fractal extreme)
+	KindSWGL LevelKind = "SWG-L" // recent swing low
 	KindSupply LevelKind = "SUPPLY" // supply zone
 	KindDemand LevelKind = "DEMAND" // demand zone
 	KindFVG    LevelKind = "FVG"    // fair-value gap

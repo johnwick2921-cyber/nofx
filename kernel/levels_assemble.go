@@ -77,6 +77,8 @@ func AssembleScoredLevels(traderID string, bars []market.Kline, reg SessionRegis
 	all = append(all, FairValueGaps(bars, fvgMinGapPoints(symbol), now)...)
 	all = append(all, OrderBlocks(bars, atr, now)...)
 	all = append(all, VolumeLevels(bars, now)...) // Pack B (2026-08-26) — volume family
+	// Level-truth wave (2026-08-27) — recent 5m/15m fractal swings (T3).
+	all = append(all, SwingPointLevels(bars, now)...)
 	all = append(all, extraLevels...) // nPOC etc. from the durable store (P1.3)
 	// S4 (mega-research 2026-08-26) — nPOC is emitted twice (in-kernel 120-bin
 	// POC + store-fed SVP-row POC; prices can differ by >1pt). Dedupe on
@@ -129,12 +131,62 @@ func AssembleScoredLevelsMinGrade(traderID string, bars []market.Kline, reg Sess
 	all = append(all, FairValueGaps(bars, fvgMinGapPoints(symbol), now)...)
 	all = append(all, OrderBlocks(bars, atr, now)...)
 	all = append(all, VolumeLevels(bars, now)...) // Pack B (2026-08-26) — volume family
+	// Level-truth wave (2026-08-27) — recent 5m/15m fractal swings (T3).
+	all = append(all, SwingPointLevels(bars, now)...)
 	all = append(all, extraLevels...) // nPOC etc. from the durable store (P1.3)
 	// S4 — same dedupe as AssembleScoredLevels (one POC = one seat).
 	all = dedupeSameKind(all)
 
-	scored = ScoreLevelsMinGrade(all, price, dATR, levelFreshnessFn(traderID, symbol), maxLevels, proximityK, minGrade)
+	scored, _ = ScoreLevelsMinGradeFull(all, price, dATR, levelFreshnessFn(traderID, symbol), maxLevels, proximityK, minGrade)
 	return scored, price, dATR
+}
+
+// AssembleScoredLevelsFullMinGrade (level-truth wave, 2026-08-27) is
+// AssembleScoredLevelsMinGrade returning the graded PRE-SEAT pool alongside the
+// seated result. The planner write site records EVERY pool grade into its
+// machine-grade stamp map, so a level the model copies from the prompt that
+// LOST the seat race (a far nPOC, a carried swing) still gets stamped — the
+// stamp-gap regression fix (256/795 rows unstamped).
+func AssembleScoredLevelsFullMinGrade(traderID string, bars []market.Kline, reg SessionRegistry, symbol string, maxLevels int, now time.Time, proximityK float64, minGrade string, extraLevels ...DetectedLevel) (seated, pool []ScoredLevel, price, dATR float64) {
+	cb := closedBars(bars, now)
+	if len(cb) == 0 {
+		return nil, nil, 0, 0
+	}
+	price = cb[len(cb)-1].Close
+	if price <= 0 {
+		return nil, nil, 0, 0
+	}
+	dATR = DailyRangeProxy(bars, now)
+	if dATR <= 0 {
+		dATR = 0.008 * price // fallback until the map warms
+	}
+	atr := market.ExportCalculateATR(cb, 14)
+	if atr <= 0 {
+		atr = dATR / 20
+	}
+	tick := market.FuturesTickSize(symbol)
+	if tick <= 0 {
+		tick = 0.25
+	}
+	tol := 3 * tick
+
+	var all []DetectedLevel
+	all = append(all, ExtractMultiDayLevels(bars, reg, now)...)
+	all = append(all, RoundNumberLevels(price, dATR, proximityK)...)
+	all = append(all, OpeningRangeLevels(bars, reg, now)...)
+	all = append(all, GapLevels(bars, atr, 1.0, now)...)
+	all = append(all, EqualHighsLows(bars, tol, now)...)
+	all = append(all, SupplyDemandZones(bars, atr, now)...)
+	all = append(all, FairValueGaps(bars, fvgMinGapPoints(symbol), now)...)
+	all = append(all, OrderBlocks(bars, atr, now)...)
+	all = append(all, VolumeLevels(bars, now)...) // Pack B (2026-08-26) — volume family
+	// Level-truth wave (2026-08-27) — recent 5m/15m fractal swings (T3).
+	all = append(all, SwingPointLevels(bars, now)...)
+	all = append(all, extraLevels...) // nPOC etc. from the durable store (P1.3)
+	all = dedupeSameKind(all)
+
+	seated, pool = ScoreLevelsMinGradeFull(all, price, dATR, levelFreshnessFn(traderID, symbol), maxLevels, proximityK, minGrade)
+	return seated, pool, price, dATR
 }
 
 // dedupeSameKind collapses same-kind duplicates within 1 MNQ tick (register

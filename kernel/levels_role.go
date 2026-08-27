@@ -37,6 +37,7 @@ var defaultRoleMap = map[LevelKind]LevelRole{
 	KindIBH: RoleLiquidityBreak, KindIBL: RoleLiquidityBreak, KindORH: RoleLiquidityBreak, KindORL: RoleLiquidityBreak,
 	KindASH: RoleLiquidityBreak, KindASL: RoleLiquidityBreak, KindLDNH: RoleLiquidityBreak, KindLDNL: RoleLiquidityBreak,
 	KindPDH: RoleReactZone, KindPDL: RoleReactZone, KindRTHH: RoleReactZone, KindRTHL: RoleReactZone,
+	KindSWGH: RoleReactZone, KindSWGL: RoleReactZone,
 	KindVAH: RoleReactZone, KindVAL: RoleReactZone,
 	KindPWH: RoleReactZone, KindPWL: RoleReactZone, KindPMH: RoleReactZone, KindPML: RoleReactZone,
 	KindSupply: RoleReactZone, KindDemand: RoleReactZone, KindFVG: RoleReactZone, KindIFVG: RoleReactZone, KindOB: RoleReactZone,

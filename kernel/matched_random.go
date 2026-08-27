@@ -45,6 +45,8 @@ func LevelTypeFromLabel(label string) string {
 		return "round-number"
 	case has(l, "EQH"), has(l, "EQL"), has(l, "EQ"):
 		return "equal-H/L"
+	case has(l, "SWG"):
+		return "swing-point"
 	case has(l, "FVG"), has(l, "OB"), has(l, "S/D"), has(l, "SUPPLY"), has(l, "DEMAND"), has(l, "ZONE"):
 		return "S/D+FVG/OB"
 	default:

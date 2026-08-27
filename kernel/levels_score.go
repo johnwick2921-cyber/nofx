@@ -95,6 +95,11 @@ func typeEvidence(k LevelKind) float64 {
 	// re-weights these (spec: no volume wave was ever live-validated before).
 	case KindVWAP, KindPOC:
 		return 0.90
+	// Level-truth wave (2026-08-27) — swing points are anchor-class evidence:
+	// the structure engine already filtered them (k fractal + min-move ATR),
+	// so they carry structural weight and decay on the ANCHOR ladder.
+	case KindSWGH, KindSWGL:
+		return 0.85
 	case KindEVWAP, KindPDVWAP:
 		return 0.85
 	case KindVAH, KindVAL, KindSETT:
