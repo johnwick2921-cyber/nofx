@@ -25,36 +25,34 @@ func TestConditionRuleAsAuthored(t *testing.T) {
 	}
 }
 
-// V3 companion: a 5m_close death fires on exactly ONE close-beyond (with the
-// touch-gate satisfied) and the reason names the authored rule.
-func TestFiveMCloseDeathFiresOnOneClose(t *testing.T) {
+// PLAN-LIFECYCLE WAVE (2026-08-27) — OLD: a 5m_close death fired on ONE close.
+// NEW: FLIP_CONFIRM_CLOSES (default 2) floors every structured death/flip, so
+// one 5m close beyond does NOT fire and two consecutive do (anti-whipsaw).
+func TestFiveMCloseDeathNeedsConfirmFloor(t *testing.T) {
 	c := PlanCondition{Price: 100, Side: "below", Rule: "5m_close"}
-	// 1m source bars: a touch of the level, then one aggregated 5m bucket
-	// closing below it. AcceptanceBars aggregates 1m → 5m.
 	mk := func(openMs int64, h, l, cl float64) market.Kline {
 		return market.Kline{OpenTime: openMs, CloseTime: openMs + 59_999, High: h, Low: l, Close: cl, Open: cl}
 	}
-	var bars []market.Kline
 	base := int64(1_700_000_000_000) - (int64(1_700_000_000_000) % 300_000) // 5m-aligned
-	// bucket 1 (touch, closes above): lows touch 100
-	for i := int64(0); i < 5; i++ {
+	var bars []market.Kline
+	for i := int64(0); i < 5; i++ { // bucket 1 (touch, closes above)
 		bars = append(bars, mk(base+i*60_000, 101, 99.9, 100.5))
 	}
-	// bucket 2: closes below 100
-	for i := int64(5); i < 10; i++ {
+	for i := int64(5); i < 10; i++ { // bucket 2 closes below
 		bars = append(bars, mk(base+i*60_000, 100.2, 99.0, 99.2))
 	}
-	fired, reason := PlanConditionFiredSince(c, bars, base-1, base+10*60_000)
+	if fired, reason := PlanConditionFiredSince(c, bars, base-1, base+10*60_000); fired {
+		t.Fatalf("NEW: one 5m close must NOT fire under the confirm floor (reason=%q)", reason)
+	}
+	// second below-bucket → fires, reason names the authored rule.
+	for i := int64(10); i < 15; i++ {
+		bars = append(bars, mk(base+i*60_000, 100.2, 99.0, 99.2))
+	}
+	fired, reason := PlanConditionFiredSince(c, bars, base-1, base+15*60_000)
 	if !fired {
-		t.Fatalf("one 5m close beyond must fire a 5m_close death (reason=%q)", reason)
+		t.Fatalf("two consecutive closes must fire (reason=%q)", reason)
 	}
 	if !strings.Contains(reason, "5m_close") {
 		t.Fatalf("reason %q must name the authored rule", reason)
-	}
-	// And a 2x5m rule on the SAME bars must NOT fire (only one bucket closed
-	// beyond) — the phantom mapping would have made these identical.
-	c2 := PlanCondition{Price: 100, Side: "below", Rule: "2x5m"}
-	if fired2, _ := PlanConditionFiredSince(c2, bars, base-1, base+10*60_000); fired2 {
-		t.Fatal("2x5m must still need TWO closes — one bucket fired it")
 	}
 }

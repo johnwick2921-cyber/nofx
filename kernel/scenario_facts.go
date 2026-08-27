@@ -241,6 +241,17 @@ func referenceClose(bars []market.Kline, nowMs int64) (float64, bool) {
 	return 0, false
 }
 
+// RuleClosesBeyond aggregates bars to the rule TF and counts the most-recent
+// CONSECUTIVE closed bars whose close is beyond level in dir. Exported for the
+// plan-lifecycle hysteresis evaluator (kernel/plan_lifecycle.go) so the
+// hardcoded-interval guard sees every raw counter resolve through this file.
+func RuleClosesBeyond(bars []market.Kline, level float64, dir int, rule string, nowMs int64) int {
+	return ClosesBeyond(AcceptanceBars(bars, rule), level, dir, nowMs)
+}
+
+// RuleAcceptanceNeed returns the acceptance close count for a rule.
+func RuleAcceptanceNeed(rule string) int { return acceptanceNeed(rule) }
+
 // ClosesBeyond counts the most-recent CONSECUTIVE closed bars whose close is
 // strictly beyond level in dir. The run breaks at the first closed bar not
 // beyond. Trailing not-yet-closed bars are skipped. This is the "closes-beyond n"
