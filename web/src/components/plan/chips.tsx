@@ -266,6 +266,7 @@ export function LifecycleChip({
         | 'lifecycleDied'
         | 'lifecycleSuperseded'
         | 'lifecycleNoTrade'
+        | 'lifecycleDormant'
     }
   > = {
     active: { color: 'var(--vl-gold)', key: 'lifecycleActive' },
@@ -278,6 +279,9 @@ export function LifecycleChip({
     // chip — the one lifecycle value production actually writes, displayed as its
     // opposite. A plan that is sitting the session out must never look live.
     no_trade: { color: 'var(--vl-short)', key: 'lifecycleNoTrade' },
+    // 'dormant' (plan-lifecycle wave, 2026-08-27) — flip/death line breached;
+    // entries blocked until price closes back. Not a terminal state.
+    dormant: { color: 'var(--vl-gold-dim)', key: 'lifecycleDormant' },
   }
   const m = map[lifecycle] ?? map.active
   return (

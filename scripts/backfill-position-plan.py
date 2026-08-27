@@ -8,8 +8,10 @@ position from 2026-08-19 UTC onward. NEVER guesses:
   - 'off-plan' cite                -> plan_id='UNRESOLVABLE', note 'unresolvable:off-plan-cite'
   - plan_version=0                 -> plan_id='UNRESOLVABLE', note 'unresolvable:no-version'
   - no matching plan row           -> plan_id='UNRESOLVABLE', note 'unresolvable:no-plan-row'
-Idempotent: rows already stamped (plan_id != '' and != 'UNRESOLVABLE') or
-already noted are skipped. Run: python3 scripts/backfill-position-plan.py [db]
+Idempotent: only rows with a LIVE stamp (valid plan_id + empty note) are
+skipped; rows previously backfilled (backfill:*) or marked unresolvable are
+re-evaluated against the corrected session-instance date rules (FIX 8).
+Run: python3 scripts/backfill-position-plan.py [db]
 """
 import json
 import shutil
@@ -27,18 +29,27 @@ db = sqlite3.connect(DB)
 db.row_factory = sqlite3.Row
 
 def session_of(ms):
+    # Session-INSTANCE windows (kernel/session_registry.go): ASIA 17:00→02:00
+    # (wraps midnight), LONDON 02:00→08:30, NY 08:30→14:45. 14:45–17:00 is the
+    # maintenance gap (no entries can exist there).
     t = datetime.fromtimestamp(ms / 1000, CHI)
     hm = t.hour * 60 + t.minute
     if t.hour >= 17 or t.hour < 2:
         return "ASIA"
-    if hm < 510:
+    if hm < 8 * 60 + 30:
         return "LONDON"
     return "NY"
 
 def session_date_of(ms):
+    # The CHAIN date = the calendar date the session INSTANCE started
+    # (kernel.PlanChainTradeDate / SessionInstanceStart), NOT the 17:00-roll
+    # date. FIX 8 (F4, 2026-08-27): the old 17:00-roll rule stamped a LONDON
+    # entry on 08-26 with 2026-08-25 — yesterday's plan — which is exactly how
+    # position #562 got the wrong plan link.
     t = datetime.fromtimestamp(ms / 1000, CHI)
-    if t.hour < 17:
-        t = t - timedelta(days=1)
+    if t.hour < 2:
+        # ASIA instance started 17:00 the previous day.
+        return (t - timedelta(days=1)).strftime("%Y-%m-%d")
     return t.strftime("%Y-%m-%d")
 
 def cols():
@@ -73,10 +84,10 @@ resolved = unresolvable = skipped = 0
 reasons = {}
 for p in positions:
     pid, note = p["plan_id"], p["plan_link_note"]
-    if pid and pid != "UNRESOLVABLE":
-        skipped += 1
-        continue
-    if note:
+    # FIX 8 (F4): rows stamped by the OLD (wrong-date) backfill or left
+    # unresolvable are RE-EVALUATED; only live stamps (empty note + valid
+    # plan_id) are skipped.
+    if pid and pid != "UNRESOLVABLE" and (note or "") == "":
         skipped += 1
         continue
     td, sess = session_date_of(p["entry_time"]), session_of(p["entry_time"])

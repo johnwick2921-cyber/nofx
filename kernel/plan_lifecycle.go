@@ -3,7 +3,9 @@ package kernel
 import (
 	"fmt"
 	"math"
+	"os"
 	"strconv"
+	"strings"
 
 	"nofx/market"
 )
@@ -205,6 +207,15 @@ func conditionRule(c PlanCondition) string {
 // rule timeframe, windowed to what happened AFTER the plan was written
 // (P1c touch-gate: the level must have been touched in-window before acceptance
 // counts). Returns (fired, human reason).
+//
+// PLAN-LIFECYCLE HYSTERESIS (2026-08-27): invalidation requires ALL of
+//   (a) CLOSE-based only — wicks through the line do nothing (the touch gate
+//       brackets the RAW line; the count below is closes beyond the BUFFERED
+//       line, so a wick alone can never count);
+//   (b) the line buffered by FLIP_ATR_BUFFER (default 0.5) × ATR14(5m) beyond
+//       the stated level;
+//   (c) FLIP_CONFIRM_CLOSES (default 2) CONSECUTIVE decision-TF closes beyond.
+// A single close beyond the raw line inside the buffer no longer invalidates.
 func PlanConditionFiredSince(c PlanCondition, bars []market.Kline, sinceMs, nowMs int64) (bool, string) {
 	if c.Price <= 0 {
 		return false, ""
@@ -222,17 +233,106 @@ func PlanConditionFiredSince(c PlanCondition, bars []market.Kline, sinceMs, nowM
 	if c.Side == "above" {
 		dir = DirAbove
 	}
-	f := EvaluateLevelFacts(w, c.Price, dir, rule, 3, nowMs)
+	// (b) buffered line — ATR14 on 5m buckets; a thin window (ATR=0) degrades
+	// to the raw line, never to an invented buffer.
+	buf := FlipATRBuffer() * market.ExportCalculateATR(AcceptanceBars(w, "2x5m"), 14)
+	if buf < 0 {
+		buf = 0
+	}
+	line := c.Price - buf
+	if c.Side == "above" {
+		line = c.Price + buf
+	}
+	// (c) consecutive closes beyond the buffered line, floored at the confirm count.
+	n := RuleClosesBeyond(w, line, dir, rule, nowMs)
+	need := RuleAcceptanceNeed(rule)
+	if need < FlipConfirmCloses() {
+		need = FlipConfirmCloses()
+	}
 	sideWord := "below"
-	n := f.ClosesBeyondDown
 	if c.Side == "above" {
 		sideWord = "above"
-		n = f.ClosesBeyondUp
 	}
-	if n >= f.AcceptNeed {
-		return true, fmt.Sprintf("%s close %s %.2f (%d× %dm closes)", c.Rule, sideWord, c.Price, n, AcceptanceIntervalMinutes(rule))
+	if n >= need {
+		return true, fmt.Sprintf("%s close %s %.2f (buffer %.1f×ATR14, %d× %dm closes)", c.Rule, sideWord, line, FlipATRBuffer(), n, AcceptanceIntervalMinutes(rule))
 	}
 	return false, ""
+}
+
+// PlanConditionClearedSince is the REARM half of the hysteresis pair: the
+// dormant plan re-arms when price closes back on the VALID side of the same
+// buffered line (opposite side, same buffer magnitude, same consecutive-close
+// count). A condition with no price re-arms immediately (nothing to judge).
+func PlanConditionClearedSince(c PlanCondition, bars []market.Kline, sinceMs, nowMs int64) (bool, string) {
+	if c.Price <= 0 {
+		return true, "no machine condition (re-arm immediately)"
+	}
+	rule := conditionRule(c)
+	w := BarsSince(bars, sinceMs)
+	if len(w) == 0 {
+		return false, ""
+	}
+	buf := FlipATRBuffer() * market.ExportCalculateATR(AcceptanceBars(w, "2x5m"), 14)
+	if buf < 0 {
+		buf = 0
+	}
+	// valid side is the OPPOSITE of the fired side, judged on the SAME buffered
+	// line mirrored across the raw level (below-condition → closes above
+	// price+buffer; above-condition → closes below price−buffer). Symmetric.
+	dir := DirAbove
+	line := c.Price + buf
+	if c.Side == "above" {
+		dir = DirBelow
+		line = c.Price - buf
+	}
+	n := RuleClosesBeyond(w, line, dir, rule, nowMs)
+	need := RuleAcceptanceNeed(rule)
+	if need < FlipConfirmCloses() {
+		need = FlipConfirmCloses()
+	}
+	sideWord := "above"
+	if c.Side == "above" {
+		sideWord = "below"
+	}
+	if n >= need {
+		return true, fmt.Sprintf("%s close back %s %.2f (buffer %.1f×ATR14, %d× %dm closes)", c.Rule, sideWord, line, FlipATRBuffer(), n, AcceptanceIntervalMinutes(rule))
+	}
+	return false, ""
+}
+
+// FlipATRBuffer is the deadband, in ATR14(5m) multiples, added to a structured
+// death/flip line before closes count against it (FLIP_ATR_BUFFER, default 0.5).
+func FlipATRBuffer() float64 {
+	if v := strings.TrimSpace(os.Getenv("FLIP_ATR_BUFFER")); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil && f >= 0 {
+			return f
+		}
+	}
+	return 0.5
+}
+
+// FlipConfirmCloses is the minimum CONSECUTIVE decision-TF closes beyond the
+// buffered line required for invalidation/re-arm (FLIP_CONFIRM_CLOSES, default 2).
+func FlipConfirmCloses() int {
+	if v := strings.TrimSpace(os.Getenv("FLIP_CONFIRM_CLOSES")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 1 && n <= 5 {
+			return n
+		}
+	}
+	return 2
+}
+
+// DormantMinHoldMin is the flap guard: a plan that just went dormant cannot
+// re-arm until this many minutes have passed (DORMANT_MIN_HOLD_MIN, default 5).
+// Together with the buffered-close re-arm predicate it stops dormant→rearm→
+// dormant cycling in chop (one state-change per 5m at most).
+func DormantMinHoldMin() int64 {
+	if v := strings.TrimSpace(os.Getenv("DORMANT_MIN_HOLD_MIN")); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n >= 0 {
+			return n
+		}
+	}
+	return 5
 }
 
 // PlanDeathOrFlipSince reports whether the plan died by ANY machine path since

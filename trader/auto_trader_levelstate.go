@@ -193,8 +193,13 @@ func (at *AutoTrader) recordScenarioState() {
 	// the expired projection is the API's job when it serves a rolled plan.
 	// H3 — the activation-window k is the SPEC INTERNAL CONSTANT (see
 	// recordLevelState); proximity_filter_atr governs generation/seating only.
+	// FIX 7 (F1, 2026-08-27) — evaluate triggers ONLY on bars closed AFTER the
+	// plan was born: the full-cache evaluation let pre-plan sweeps/rejects read
+	// as "triggered now" (the 13 false-positive machine-trigger lines of
+	// 2026-08-26). The status stays DISPLAY-ONLY — never execution-wired.
+	windowed := kernel.BarsSince(bars, plan.BirthMs)
 	statuses, evals := kernel.EvaluatePlanScenarios(
-		plan.Doc, bars, price, dATR, kernel.ActivationWindowK, rule, true, now.UnixMilli())
+		plan.Doc, windowed, price, dATR, kernel.ActivationWindowK, rule, true, now.UnixMilli())
 
 	if len(statuses) == 0 {
 		// Nothing resolvable — say nothing rather than write an empty verdict.
@@ -236,7 +241,8 @@ func (at *AutoTrader) recordScenarioState() {
 		at.scenarioStateLog = string(blob)
 		for _, e := range evals {
 			if e.HasAnchor {
-				at.logInfof("🎯 scenario %s → %s @ %.2f (%s)", e.ID, e.Status, e.Anchor, e.Reason)
+				// FIX 7 (F1) — the label says what it is: an ESTIMATE.
+				at.logInfof("🎯 scenario %s → ≈%s @ %.2f (%s — display-only estimate, never execution-wired)", e.ID, e.Status, e.Anchor, e.Reason)
 			} else {
 				// A4: unevaluable is owner-relevant — WARN so it reaches the
 				// log_events sink + dashboard, not just the file log.

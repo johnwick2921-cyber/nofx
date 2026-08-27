@@ -56,7 +56,19 @@ type BarHistoryStore struct {
 // NewBarHistoryStore constructs the sub-store.
 func NewBarHistoryStore(db *gorm.DB) *BarHistoryStore { return &BarHistoryStore{db: db} }
 
-// Migrate creates the bars table + the time-ordered index (additive + idempotent).
+// Migrate creates the bars table + the natural-key unique index (additive +
+// idempotent). On SQLite it also runs the ONE-SHOT integrity migration:
+//   (1) a safety copy `bars_pre_dedupe_<date>` of the pre-fix table (if absent),
+//   (2) DELETE keeping max(rowid) per (symbol, tf, open_time_ms) — 2026-08-26
+//       live table held 17,695 duplicate revisions (F5, 2026-08-27-london-
+//       drought.md), written by the old INSERT OR IGNORE against a table with
+//       no real unique constraint,
+//   (3) CREATE UNIQUE INDEX on the natural key so the constraint is real,
+//   (4) DELETE tf != '1m' rows — 5m/15m are DERIVED ON READ from 1m (the
+//       stored NT8 aggregates were inconsistent with their 1m constituents).
+//
+// Idempotent: the heavy steps run only while the unique index is absent; every
+// later boot is a no-op.
 func (s *BarHistoryStore) Migrate() error {
 	if s == nil || s.db == nil {
 		return fmt.Errorf("store required")
@@ -64,13 +76,44 @@ func (s *BarHistoryStore) Migrate() error {
 	if err := s.db.AutoMigrate(&BarHistoryDB{}); err != nil {
 		return err
 	}
+	if s.db.Dialector.Name() == "sqlite" {
+		var hasUnique int64
+		if err := s.db.Raw("SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='idx_bars_sym_tf_time_unique'").Scan(&hasUnique).Error; err != nil {
+			return err
+		}
+		if hasUnique == 0 {
+			// (1) pre-dedupe safety copy (besides the systemd-timer backups).
+			today := time.Now().Format("2006-01-02")
+			backup := "bars_pre_dedupe_" + today
+			if err := s.db.Exec(`CREATE TABLE IF NOT EXISTS "` + backup + `" AS SELECT * FROM bars`).Error; err != nil {
+				return err
+			}
+			// (2) keep max(rowid) per natural key.
+			if err := s.db.Exec("DELETE FROM bars WHERE rowid NOT IN (SELECT MAX(rowid) FROM bars GROUP BY symbol, tf, open_time_ms)").Error; err != nil {
+				return err
+			}
+			// (4) 1m-only storage — aggregates derive on read.
+			if err := s.db.Exec("DELETE FROM bars WHERE tf <> '1m'").Error; err != nil {
+				return err
+			}
+		}
+		// (3) the REAL unique constraint (idempotent; replaces the old plain index).
+		if err := s.db.Exec("DROP INDEX IF EXISTS idx_bars_sym_tf_time").Error; err != nil {
+			return err
+		}
+		if err := s.db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_bars_sym_tf_time_unique ON bars(symbol, tf, open_time_ms)").Error; err != nil {
+			return err
+		}
+		return nil
+	}
 	return s.db.Exec("CREATE INDEX IF NOT EXISTS idx_bars_sym_tf_time ON bars(symbol, tf, open_time_ms DESC)").Error
 }
 
-// InsertBars upserts closed bars with INSERT OR IGNORE (idempotent across
-// restarts/backfills — a re-seeded historical batch never duplicates). A
-// failure returns the error; the caller logs WARN and never blocks the
-// trade loop on it.
+// InsertBars upserts closed 1m bars on the natural key — a revision of an
+// already-stored bar UPDATES (close/volume move on forming-bar snapshots), and
+// the unique index makes duplication impossible (F5: the old INSERT OR IGNORE
+// wrote 17,695 duplicate revisions because the table had no real constraint).
+// Only tf="1m" rows are stored: 5m/15m aggregates are DERIVED ON READ from 1m.
 func (s *BarHistoryStore) InsertBars(rows []BarHistoryDB) error {
 	if s == nil || s.db == nil || len(rows) == 0 {
 		return nil
@@ -85,15 +128,41 @@ func (s *BarHistoryStore) InsertBars(rows []BarHistoryDB) error {
 		placeholders := make([]string, 0, len(chunk))
 		args := make([]interface{}, 0, len(chunk)*8)
 		for _, r := range chunk {
+			if r.TF != "1m" {
+				continue // derive-on-read: only 1m is stored
+			}
 			placeholders = append(placeholders, "(?,?,?,?,?,?,?,?)")
 			args = append(args, r.Symbol, r.TF, r.OpenTimeMs, r.O, r.H, r.L, r.C, r.V)
 		}
-		q := "INSERT OR IGNORE INTO bars(symbol, tf, open_time_ms, o, h, l, c, v) VALUES " + strings.Join(placeholders, ",")
+		if len(placeholders) == 0 {
+			continue
+		}
+		q := "INSERT INTO bars(symbol, tf, open_time_ms, o, h, l, c, v) VALUES " +
+			strings.Join(placeholders, ",") +
+			" ON CONFLICT(symbol, tf, open_time_ms) DO UPDATE SET o=excluded.o, h=excluded.h, l=excluded.l, c=excluded.c, v=excluded.v"
 		if err := s.db.Exec(q, args...).Error; err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// BarsIntegrity returns the nightly integrity triple: duplicate natural-key
+// groups (must be 0), the distinct tfs present (must be {"1m"}), and total rows.
+func (s *BarHistoryStore) BarsIntegrity() (dups int64, tfs []string, total int64, err error) {
+	if s == nil || s.db == nil {
+		return 0, nil, 0, fmt.Errorf("store required")
+	}
+	if err = s.db.Raw("SELECT COUNT(*) FROM (SELECT symbol, tf, open_time_ms FROM bars GROUP BY symbol, tf, open_time_ms HAVING COUNT(*) > 1)").Scan(&dups).Error; err != nil {
+		return 0, nil, 0, err
+	}
+	if err = s.db.Raw("SELECT DISTINCT tf FROM bars ORDER BY tf").Scan(&tfs).Error; err != nil {
+		return 0, nil, 0, err
+	}
+	if err = s.db.Model(&BarHistoryDB{}).Count(&total).Error; err != nil {
+		return 0, nil, 0, err
+	}
+	return dups, tfs, total, nil
 }
 
 // Count returns the persisted bar count (boot line + growth proof).

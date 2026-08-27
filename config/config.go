@@ -79,6 +79,19 @@ type Config struct {
 	// to a market flatten after LimitCloseMarketAfterSec seconds.
 	LimitCloseTicks        int // EOD_FLAT_LIMIT_TICKS
 	LimitCloseMarketAfterS int // EOD_FLAT_MARKET_AFTER_SEC
+
+	// Plan-lifecycle wave (hysteresis + rearm, 2026-08-27):
+	// FlipATRBuffer is the deadband beyond a structured flip/death line before
+	// closes count against it (FLIP_ATR_BUFFER × ATR14(5m), default 0.5).
+	// FlipConfirmCloses is the minimum CONSECUTIVE decision-TF closes beyond the
+	// buffered line required for invalidation (FLIP_CONFIRM_CLOSES, default 2).
+	FlipATRBuffer     float64
+	FlipConfirmCloses int
+	// Latency routing: executor in-loop calls run cheap thinking
+	// (AI_EXEC_REASONING: off|fast|low|high|max, default fast = wire effort low);
+	// planner reads keep full reasoning (AI_PLAN_REASONING, default max).
+	AIExecReasoning string
+	AIPlanReasoning string
 }
 
 // Init initializes global configuration (from .env)
@@ -164,6 +177,11 @@ func Init() {
 	// 4.3 — limit-then-market flatten (dormant by default).
 	cfg.LimitCloseTicks = getEnvInt("EOD_FLAT_LIMIT_TICKS", 0)
 	cfg.LimitCloseMarketAfterS = getEnvInt("EOD_FLAT_MARKET_AFTER_SEC", 0)
+	// Plan-lifecycle wave (hysteresis + rearm, 2026-08-27).
+	cfg.FlipATRBuffer = getEnvFloat("FLIP_ATR_BUFFER", 0.5)
+	cfg.FlipConfirmCloses = getEnvInt("FLIP_CONFIRM_CLOSES", 2)
+	cfg.AIExecReasoning = getEnvOrDefault("AI_EXEC_REASONING", "fast")
+	cfg.AIPlanReasoning = getEnvOrDefault("AI_PLAN_REASONING", "max")
 	// Deprecated-in-practice (6.8): loaded but enforced nowhere — the only
 	// CheckPreTrade caller passes 0 notional by design; futures notional is
 	// capped by strategy max_notional_leverage instead. Kept for struct compat.
