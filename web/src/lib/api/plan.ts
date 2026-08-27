@@ -90,7 +90,9 @@ export interface PlanToday {
   /** UI-verification (2026-08-18) — a planner read is in flight for this chain. */
   reading?: boolean
   version?: number
-  lifecycle?: string // active | expired | died | superseded
+  lifecycle?: string // active | expired | died | superseded | no_trade | dormant
+  /** why this row is in its state — "dormant:flip-condition: …" for dormant plans */
+  trigger_reason?: string
   model_id?: string
   doc?: PlanDoc
   level_facts?: PlanLevelFact[]
