@@ -153,8 +153,7 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 			if tick <= 0 {
 				tick = 0.25
 			}
-			if row.State == "working" && row.SignalID != "" &&
-				(math.Abs(row.StopPx-sc.Arm.Stop) >= 2*tick || math.Abs(row.TargetPx-sc.Arm.Target) >= 2*tick) {
+			if row.State == "working" && churnNeedsModify(row.StopPx, row.TargetPx, sc.Arm.Stop, sc.Arm.Target, tick) {
 				if nt := at.armedTrader(); nt != nil {
 					_ = nt.ModifyBracket(row.SignalID, sc.Arm.Stop, sc.Arm.Target)
 					at.logInfof("📌 armed %s bracket modify (churn guard) SL %.2f→%.2f TP %.2f→%.2f",
@@ -240,18 +239,41 @@ func (at *AutoTrader) runArmedPlacement(bars []market.Kline) {
 				_ = ledger.SetState(r.ID, "working", "")
 				at.logInfof("📌 armed %s → WORKING limit %.2f signal=%s (band ±%.0ft)", r.Scenario, r.EntryPx, sid, band/tick)
 			}
-		case "working":
-			// reconnect/reconcile safety net: no order_update for the stale window.
-			if now.Sub(r.UpdatedAt) > time.Duration(armedWorkingStaleMin())*time.Minute {
-				if r.SignalID != "" {
-					_ = nt.CancelOrder(r.SignalID)
-				}
-				_ = ledger.SetState(r.ID, "cancelled", "no order_update within stale window (reconnect/reconcile)")
-				at.logWarnf("✕ armed %s cancelled — no order_update for %dm (reconnect/reconcile)", r.Scenario, armedWorkingStaleMin())
-			}
 		}
 	}
+	// reconnect/reconcile safety net (separate pass — cancelFn is the wire seam).
+	at.reconcileStaleWorking(ledger, rows, now, armedWorkingStaleMin(), func(sid string) { _ = nt.CancelOrder(sid) })
 	at.consumeArmedOrderUpdates(nt, ledger)
+}
+
+// churnNeedsModify — the churn guard predicate: the plan re-spec'd a working
+// arm's SL or TP by ≥ 2 ticks (2.1). Pure for tests.
+func churnNeedsModify(oldStop, oldTarget, newStop, newTarget, tick float64) bool {
+	return math.Abs(oldStop-newStop) >= 2*tick || math.Abs(oldTarget-newTarget) >= 2*tick
+}
+
+// workingStale — the reconnect predicate: no order_update for the stale window.
+func workingStale(updatedAt, now time.Time, staleMin int) bool {
+	return now.Sub(updatedAt) > time.Duration(staleMin)*time.Minute
+}
+
+// reconcileStaleWorking cancels working rows that have seen no order_update for
+// the stale window (reconnect safety net). cancelFn issues the NT8 cancel — the
+// ledger flips to cancelled with the reason regardless.
+func (at *AutoTrader) reconcileStaleWorking(ledger *store.ArmedOrderStore, rows []store.ArmedOrderDB, now time.Time, staleMin int, cancelFn func(signalID string)) {
+	for _, r := range rows {
+		if r.TraderID != at.id || r.State != "working" {
+			continue
+		}
+		if !workingStale(r.UpdatedAt, now, staleMin) {
+			continue
+		}
+		if r.SignalID != "" && cancelFn != nil {
+			cancelFn(r.SignalID)
+		}
+		_ = ledger.SetState(r.ID, "cancelled", "no order_update within stale window (reconnect/reconcile)")
+		at.logWarnf("✕ armed %s cancelled — no order_update for %dm (reconnect/reconcile)", r.Scenario, staleMin)
+	}
 }
 
 // consumeArmedOrderUpdates subscribes (once) to the trader's order_update

@@ -159,3 +159,69 @@ func TestArmedGateRRShortTwin(t *testing.T) {
 		t.Fatalf("short arm R:R 3.0 must pass, got %q", v)
 	}
 }
+
+// PHASE 4 — churn guard predicate (2.1): only a ≥2-tick SL/TP re-spec re-modifies.
+func TestArmedChurnPredicate(t *testing.T) {
+	tick := 0.25
+	if churnNeedsModify(95, 110, 95.25, 110, tick) {
+		t.Fatal("1-tick SL move must NOT trigger the churn guard")
+	}
+	if !churnNeedsModify(95, 110, 95.5, 110, tick) {
+		t.Fatal("2-tick SL move must trigger the churn guard")
+	}
+	if !churnNeedsModify(95, 110, 95, 110.75, tick) {
+		t.Fatal("3-tick TP move must trigger the churn guard")
+	}
+	if churnNeedsModify(95, 110, 95, 110, tick) {
+		t.Fatal("no-op re-spec must not trigger")
+	}
+}
+
+// PHASE 4 — reconnect predicate: stale only past the full window.
+func TestArmedStalePredicate(t *testing.T) {
+	now := time.Now()
+	if workingStale(now.Add(-14*time.Minute), now, 15) {
+		t.Fatal("14m < 15m stale window must be fresh")
+	}
+	if !workingStale(now.Add(-16*time.Minute), now, 15) {
+		t.Fatal("16m > 15m stale window must be stale")
+	}
+}
+
+// PHASE 4 — reconnect/reconcile wire: the stale working row gets its NT8 cancel
+// (recorded via the seam) AND flips to cancelled with the reason.
+func TestArmedReconcileStaleWorking(t *testing.T) {
+	at, st := resetTrader(t, store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true}})
+	ledger := st.ArmedOrders()
+	now := time.Now()
+	row := &store.ArmedOrderDB{TraderID: at.id, PlanID: "2026-08-27:NY:trader-1", Version: 1, Session: "NY", Scenario: "S1",
+		Side: "long", EntryPx: 100, StopPx: 95, TargetPx: 110, State: "working", SignalID: "sig-9", UpdatedAt: now.Add(-20 * time.Minute)}
+	if err := ledger.UpsertArm(row); err != nil {
+		t.Fatal(err)
+	}
+	fresh := &store.ArmedOrderDB{TraderID: at.id, PlanID: "2026-08-27:NY:trader-1", Version: 1, Session: "NY", Scenario: "S2",
+		Side: "long", EntryPx: 101, StopPx: 96, TargetPx: 111, State: "working", SignalID: "sig-10", UpdatedAt: now}
+	if err := ledger.UpsertArm(fresh); err != nil {
+		t.Fatal(err)
+	}
+	rows, err := ledger.ListNonTerminal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cancelled []string
+	at.reconcileStaleWorking(ledger, rows, now, 15, func(sid string) { cancelled = append(cancelled, sid) })
+	if len(cancelled) != 1 || cancelled[0] != "sig-9" {
+		t.Fatalf("cancelFn = %v, want exactly sig-9", cancelled)
+	}
+	rows, _ = ledger.ListForPlan("2026-08-27:NY:trader-1")
+	byScenario := map[string]string{}
+	for _, r := range rows {
+		byScenario[r.Scenario] = r.State
+	}
+	if byScenario["S1"] != "cancelled" {
+		t.Fatalf("stale S1 state = %q, want cancelled", byScenario["S1"])
+	}
+	if byScenario["S2"] != "working" {
+		t.Fatalf("fresh S2 state = %q, want working", byScenario["S2"])
+	}
+}
