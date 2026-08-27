@@ -485,6 +485,8 @@ func (at *AutoTrader) TestArmPlace(side string, entry, stop, target float64) (st
 	}
 	_ = ledger.SetSignal(row.ID, sid)
 	_ = ledger.SetState(row.ID, "working", "")
+	row.SignalID = sid
+	row.State = "working"
 	at.logInfof("🧪 TEST-E2 arm → WORKING limit %.2f signal=%s (seam)", entry, sid)
 	return *row, nil
 }
