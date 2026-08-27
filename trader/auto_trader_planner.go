@@ -764,6 +764,15 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 		record(l.Price, l.Grade)
 		recordLabel(l.Price, l.Label)
 	}
+	// S-dispatch (2026-08-27) — the P0.2 gap rules' PDH/PDL must come from the
+	// universe too: the seated loop above skips them post-roll and the gap
+	// continuation rules silently went unevaluated (PDH/PDL = 0 = "unknown").
+	if facts.PDH <= 0 {
+		facts.PDH = input.BiasCtxFacts.PDH
+	}
+	if facts.PDL <= 0 {
+		facts.PDL = input.BiasCtxFacts.PDL
+	}
 	// The HTF zones section rows lost the top-N seat race and are not in
 	// input.Levels — but the model reads them and may write them into the
 	// plan (live proof: ASIA v3's Supply·4h row went unstamped). Merge their
@@ -1401,6 +1410,12 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 		}
 	}
 
+	// S-dispatch (2026-08-27) — bias facts for the BIAS-TREE, with the
+	// universe day-anchors stamped on (post-roll the seated table drops
+	// PDH/PDL — the 17:46/19:02 ASIA reads rendered "no PDH/PDL anchor").
+	bcFacts := kernel.ComputeBiasContext(bars, scored, now)
+	kernel.ApplyUniverseDayAnchors(&bcFacts, kernel.ExtractMultiDayLevels(bars, reg, now))
+
 	return kernel.PlannerInput{
 		TradeDate:        tradeDate,
 		Session:          session,
@@ -1420,9 +1435,12 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 		AIConfigHash:     aiConfigHash,
 		// ADDENDUM (2) — bias-context facts line (VWAP/PDC/value area/magnet/
 		// liquidity). Facts only; the AI judges direction.
-		BiasCtx: kernel.ComputeBiasContext(bars, scored, now).Line(),
-		// A1 — the STRUCTURED bias context for the BIAS-TREE section.
-		BiasCtxFacts: kernel.ComputeBiasContext(bars, scored, now),
+		// S-dispatch (2026-08-27) — the BIAS-TREE facts must carry the
+		// prior-day anchors at ANY distance: post-roll the seated table can
+		// drop PDH/PDL (out of the proximity band) and the tree rendered
+		// "no PDH/PDL anchor". Stamp the universe anchors onto the facts.
+		BiasCtx:      bcFacts.Line(),
+		BiasCtxFacts: bcFacts,
 		// H4/H5 — the prompt asks for EXACTLY what validation accepts: the
 		// resolved max_levels / scenario_cap (never a hardcoded 8/3 the owner
 		// cannot raise).

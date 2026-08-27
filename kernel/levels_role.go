@@ -152,6 +152,7 @@ type BiasContext struct {
 	Price      float64
 	VWAP       float64 // 0 = n/a
 	PDC        float64 // 0 = n/a
+	PDH, PDL   float64 // prior-day anchors; 0 = n/a (the BIAS-TREE deals in these)
 	VAH, VAL   float64 // value area; 0,0 = n/a
 	NearestMagnet    string
 	NearestLiquidity string
@@ -169,9 +170,19 @@ func ComputeBiasContext(bars []market.Kline, scored []ScoredLevel, now time.Time
 		bc.VWAP = v
 	}
 	for _, l := range scored {
-		if l.Kind == KindPDC {
-			bc.PDC = l.Price
-			break
+		switch l.Kind {
+		case KindPDC:
+			if bc.PDC <= 0 {
+				bc.PDC = l.Price
+			}
+		case KindPDH:
+			if bc.PDH <= 0 {
+				bc.PDH = l.Price
+			}
+		case KindPDL:
+			if bc.PDL <= 0 {
+				bc.PDL = l.Price
+			}
 		}
 	}
 	prof := profileLevels(cb, "", "")
@@ -209,6 +220,34 @@ func ComputeBiasContext(bars []market.Kline, scored []ScoredLevel, now time.Time
 	bc.NearestMagnet = nearest(magnets)
 	bc.NearestLiquidity = nearest(liquid)
 	return bc
+}
+
+// ApplyUniverseDayAnchors (S-dispatch, 2026-08-27) fills PDH/PDL/PDC from the
+// FULL detector universe when the seated table lacked them. The 17:00 CT
+// session roll can leave the prior-day anchors outside the proximity band
+// (live proof: the 17:46/19:02 ASIA reads rendered "no PDH/PDL anchor" — the
+// prior-day PDH sat ~640pt above price and never seated). Day anchors are
+// FACTS at any distance; seating must not gate them.
+func ApplyUniverseDayAnchors(bc *BiasContext, all []DetectedLevel) {
+	if bc == nil {
+		return
+	}
+	for _, l := range all {
+		switch l.Kind {
+		case KindPDH:
+			if bc.PDH <= 0 {
+				bc.PDH = l.Price
+			}
+		case KindPDL:
+			if bc.PDL <= 0 {
+				bc.PDL = l.Price
+			}
+		case KindPDC:
+			if bc.PDC <= 0 {
+				bc.PDC = l.Price
+			}
+		}
+	}
 }
 
 // VAState renders the value-area position ("" when no profile).
