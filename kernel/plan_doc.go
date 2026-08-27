@@ -73,6 +73,60 @@ type PlanScenario struct {
 	// the sweep_reclaim that swept the origin pool). Validator WARNs (never
 	// fails) when an fvg_entry lacks a sweep precursor at a non-A/B origin.
 	ChainAfter string `json:"chain_after,omitempty"`
+	// Arm (Wave 2 armed orders, 2026-08-27) — the AI's AUTHORIZATION to arm
+	// this scenario as a resting order with exact deterministic prices. The
+	// LLM chooses WHAT to arm; Go manages WHEN it fills (advisory law holds).
+	// Only armable conditions (fvg_entry, breakout_retest, reject) may carry
+	// an enabled Arm; acceptance / raw sweep_reclaim stay on the AI path.
+	Arm *PlanArmSpec `json:"arm,omitempty"`
+}
+
+// PlanArmSpec is the machine-manageable arming contract for one scenario.
+// Entry is the resting LIMIT price; Stop/Target form the bracket. Long:
+// stop < entry < target. Short: target < entry < stop.
+type PlanArmSpec struct {
+	Enabled bool    `json:"enabled"` // the arming authorization itself
+	Entry   float64 `json:"entry"`   // resting limit price
+	Stop    float64 `json:"stop"`    // bracket stop
+	Target  float64 `json:"target"`  // bracket target
+}
+
+// ArmSpecValid checks the arming contract of one scenario. ok=false with a
+// reason when the contract is malformed or the condition is not armable.
+func ArmSpecValid(sc PlanScenario) error {
+	if sc.Arm == nil || !sc.Arm.Enabled {
+		return nil // not armed — nothing to validate
+	}
+	if !ArmableCondition(sc.Condition) {
+		return fmt.Errorf("arm enabled on non-armable condition %q (fvg_entry | breakout_retest | reject only)", sc.Condition)
+	}
+	a := sc.Arm
+	if a.Entry <= 0 || a.Stop <= 0 || a.Target <= 0 {
+		return fmt.Errorf("arm on %s needs exact entry/stop/target > 0 (got %.2f/%.2f/%.2f)", sc.ID, a.Entry, a.Stop, a.Target)
+	}
+	dir := strings.ToLower(strings.TrimSpace(sc.Direction))
+	if dir == "long" {
+		if !(a.Stop < a.Entry && a.Entry < a.Target) {
+			return fmt.Errorf("arm on %s long: stop %.2f < entry %.2f < target %.2f required", sc.ID, a.Stop, a.Entry, a.Target)
+		}
+	} else if dir == "short" {
+		if !(a.Target < a.Entry && a.Entry < a.Stop) {
+			return fmt.Errorf("arm on %s short: target %.2f < entry %.2f < stop %.2f required", sc.ID, a.Target, a.Entry, a.Stop)
+		}
+	}
+	return nil
+}
+
+func validateArmSpecs(d *PlanDoc) error {
+	if d == nil {
+		return nil
+	}
+	for _, sc := range d.Scenarios {
+		if err := ArmSpecValid(sc); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // PlanFvgEntry is the machine-verifiable schema of an fvg_entry scenario.
@@ -366,6 +420,11 @@ func ValidatePlanDocWithCaps(d *PlanDoc, maxLevels, maxScenarios int) error {
 		if !numberNearInText(d.Bias.FlipCondition, d.FlipStructured.Price, 2.0) {
 			return fmt.Errorf("flip{price %.2f} does not match any number in bias.flip_condition prose %q", d.FlipStructured.Price, d.Bias.FlipCondition)
 		}
+	}
+	// Wave 2 armed orders (2026-08-27) — the arm authorization must be coherent:
+	// only armable conditions, exact prices, sane long/short ordering.
+	if err := validateArmSpecs(d); err != nil {
+		return err
 	}
 	return nil
 }

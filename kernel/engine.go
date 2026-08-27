@@ -265,6 +265,11 @@ type StrategyEngine struct {
 	// prompt. Empty → byte-identical.
 	biasContextLine string
 
+	// armedContextLine (Wave 2 armed orders, 2026-08-27) — the per-cycle ARMED
+	// order status lines (⏳/📌/⚡/✕ per armed scenario). Rendered when non-empty;
+	// empty (no arms) → byte-identical prompt.
+	armedContextLine string
+
 	// planBlockLine / planStatusLine are the P3.4 executor plan injection: the
 	// byte-stable PLAN BLOCK (cached prefix) and the dynamic PLAN STATUS tail.
 	// Non-empty planBlockLine (day_plan on + an active plan) triggers the RECON #4
@@ -293,6 +298,9 @@ func (e *StrategyEngine) SetKeyLevelsContext(line string) { e.keyLevelsContextLi
 
 // SetBiasContext sets the per-cycle bias-context facts line (addendum 2).
 func (e *StrategyEngine) SetBiasContext(line string) { e.biasContextLine = line }
+
+// SetArmedContext sets the per-cycle ARMED order status lines (Wave 2).
+func (e *StrategyEngine) SetArmedContext(line string) { e.armedContextLine = line }
 
 // SetPlanContext sets the P3.4 executor plan injection: the byte-stable PLAN
 // BLOCK (prefix) and the dynamic PLAN STATUS tail. Pass ("","") for no active

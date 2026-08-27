@@ -73,6 +73,7 @@ type TCPServer struct {
 	// Inbound fills — TCPTrader subscribes via Fills().
 	fillCh   chan FillPayload
 	closeCh  chan PositionClosePayload
+	orderUpdCh chan OrderUpdatePayload
 	rejectCh chan PositionCloseRejectedPayload
 	instrCh  chan InstrumentInfoPayload
 
@@ -153,6 +154,7 @@ type TCPServer struct {
 	closeSubs  map[string]chan PositionClosePayload
 	rejectSubs map[string]chan PositionCloseRejectedPayload
 	instrSubs  map[string]chan InstrumentInfoPayload
+	orderUpdSubs map[string]chan OrderUpdatePayload
 
 	// Connection state — single concurrent client (spec L4359).
 	connMu        sync.Mutex
@@ -230,6 +232,10 @@ func (s *TCPServer) runRouters(ctx context.Context) {
 			// instrument_info carries no account (spec cross-check) → every
 			// subscriber of the symbol gets it (both same-symbol traders).
 			broadcastToSymbol(s, s.instrSubs, p.Symbol, p, "instrument_info")
+		case p := <-s.orderUpdCh:
+			// PHASE 2 armed orders — order state changes route per (symbol,account)
+			// like fills, so each trader sees only its own working orders.
+			dispatchToOwner(s, s.orderUpdSubs, p.Symbol, p.Account, p, "order_update")
 		}
 	}
 }
@@ -338,6 +344,12 @@ func (s *TCPServer) SubscribeFillsFor(symbol, account string) <-chan FillPayload
 	return subscribeFor(s, &s.fillSubs, symbol, account)
 }
 
+// SubscribeOrderUpdatesFor returns the order-state stream for (symbol, account)
+// — PHASE 2 armed orders.
+func (s *TCPServer) SubscribeOrderUpdatesFor(symbol, account string) <-chan OrderUpdatePayload {
+	return subscribeFor(s, &s.orderUpdSubs, symbol, account)
+}
+
 // SubscribeClosesFor returns the position_close stream for (symbol, account).
 func (s *TCPServer) SubscribeClosesFor(symbol, account string) <-chan PositionClosePayload {
 	return subscribeFor(s, &s.closeSubs, symbol, account)
@@ -428,7 +440,7 @@ func NewTCPServer(logger *slog.Logger) *TCPServer {
 	return &TCPServer{
 		addr:          ListenAddr(),
 		fillCh:        make(chan FillPayload, fillChannelBuffer),
-		closeCh:       make(chan PositionClosePayload, fillChannelBuffer),
+		orderUpdCh:    make(chan OrderUpdatePayload, fillChannelBuffer),		closeCh:       make(chan PositionClosePayload, fillChannelBuffer),
 		rejectCh:      make(chan PositionCloseRejectedPayload, fillChannelBuffer),
 		instrCh:       make(chan InstrumentInfoPayload, fillChannelBuffer),
 		barCache:      NewBarCache(0),
@@ -1025,6 +1037,40 @@ func (s *TCPServer) SendMoveStop(payload MoveStopPayload) error {
 	return err
 }
 
+// SendCancelOrder (PHASE 2 armed orders) asks the AddOn to cancel a working
+// resting limit entry and/or its bracket legs. Immediate command.
+func (s *TCPServer) SendCancelOrder(payload CancelOrderPayload) error {
+	s.connMu.Lock()
+	c := s.conn
+	s.connMu.Unlock()
+	if c == nil {
+		return fmt.Errorf("ninjatrader/tcp: no NT client connected")
+	}
+	payload.Seq = s.assignSeqRegister(payload.TraderID, payload.Account, payload.SignalID)
+	s.writeMu.Lock()
+	_ = c.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	err := WriteFrame(c, FrameCancelOrder, payload)
+	s.writeMu.Unlock()
+	return err
+}
+
+// SendModifyBracket (PHASE 2 armed orders) asks the AddOn to modify the live
+// bracket SL/TP in place (the safe Change pattern). Immediate command.
+func (s *TCPServer) SendModifyBracket(payload ModifyBracketPayload) error {
+	s.connMu.Lock()
+	c := s.conn
+	s.connMu.Unlock()
+	if c == nil {
+		return fmt.Errorf("ninjatrader/tcp: no NT client connected")
+	}
+	payload.Seq = s.assignSeqRegister(payload.TraderID, payload.Account, payload.SignalID)
+	s.writeMu.Lock()
+	_ = c.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	err := WriteFrame(c, FrameModifyBracket, payload)
+	s.writeMu.Unlock()
+	return err
+}
+
 // SendAccountSelect tells the connected AddOn to switch to a different account.
 // Like SendClosePosition, this is an immediate command (not queued); if no
 // client is connected it errors so the caller can report it.
@@ -1440,8 +1486,7 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			if err := json.Unmarshal(env.Payload, &fill); err != nil {
 				s.logger.Warn("tcp_server: bad fill payload", "err", err)
 				continue
-			}
-			// A2 (G1) — verify the echoed identity against the pending op. A mismatch
+			}			// A2 (G1) — verify the echoed identity against the pending op. A mismatch
 			// (forged/cross-wired fill) is NOT processed; the owning trader is frozen.
 			if !s.verifyInbound("fill", fill.Seq, fill.TraderID, fill.Account, fill.SignalID) {
 				continue
@@ -1456,6 +1501,21 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			case s.fillCh <- fill:
 			default:
 				s.logger.Warn("tcp_server: fill channel full, dropping", "signal_id", fill.SignalID)
+			}
+
+		case FrameOrderUpdate:
+			// PHASE 2 armed orders — informational state-change frame; routes
+			// to per-(symbol,account) subscribers like fills. No strict echo
+			// verify (advisory event; the terminal fill/close frames keep it).
+			var oup OrderUpdatePayload
+			if err := json.Unmarshal(env.Payload, &oup); err != nil {
+				s.logger.Warn("tcp_server: bad order_update payload", "err", err)
+				continue
+			}
+			select {
+			case s.orderUpdCh <- oup:
+			default:
+				s.logger.Warn("tcp_server: order_update channel full, dropping", "signal_id", oup.SignalID)
 			}
 
 		case FrameAck:

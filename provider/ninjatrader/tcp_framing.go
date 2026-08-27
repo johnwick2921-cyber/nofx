@@ -53,6 +53,11 @@ type SignalPayload struct {
 	// acted for the originator. omitempty → a pre-v3 wire stays byte-identical.
 	TraderID string `json:"trader_id,omitempty"`
 	Seq      uint64 `json:"seq,omitempty"`
+	// PHASE 2 armed orders (additive, back-compat): OrderType "market" (default)
+	// | "limit" + LimitPrice for RESTING limit entries. A pre-Phase-2 AddOn
+	// ignores unknown fields → market, byte-identical to today.
+	OrderType  string  `json:"order_type,omitempty"`
+	LimitPrice float64 `json:"limit_price,omitempty"`
 }
 
 // FillPayload is the C#-AddOn → Go-server fill frame per spec L4398-4406.
@@ -102,8 +107,52 @@ type HelloPayload struct {
 	Source          string `json:"source"` // "vltrader-addon" | "nofx-go"
 }
 
-// P5.3 — subscription acks (C#-AddOn → Go-server). The AddOn confirms or
-// rejects each bars_subscribe/bars_unsubscribe so the Go side (and the owner
+// PHASE 2 armed orders — order-management frames (Go-server → C#-AddOn) +
+// the order_update event frame (C#-AddOn → Go-server).
+const (
+	FrameCancelOrder   FrameType = "cancel_order"
+	FrameModifyBracket FrameType = "modify_bracket"
+	FrameOrderUpdate   FrameType = "order_update"
+)
+
+// CancelOrderPayload asks the AddOn to cancel a working resting limit entry
+// and/or its live bracket legs (managed Account.Cancel, idempotent).
+type CancelOrderPayload struct {
+	Symbol   string `json:"symbol"`
+	SignalID string `json:"signal_id"`
+	Account  string `json:"account,omitempty"`
+	TraderID string `json:"trader_id,omitempty"`
+	Seq      uint64 `json:"seq,omitempty"`
+}
+
+// ModifyBracketPayload asks the AddOn to modify the live bracket IN PLACE
+// (same safe Change pattern as move_stop). NewStopLoss/NewTakeProfit ≤ 0 =
+// leave that leg untouched.
+type ModifyBracketPayload struct {
+	Symbol       string  `json:"symbol"`
+	SignalID     string  `json:"signal_id"`
+	NewStopLoss  float64 `json:"new_stop_loss,omitempty"`
+	NewTakeProfit float64 `json:"new_take_profit,omitempty"`
+	Account  string `json:"account,omitempty"`
+	TraderID string `json:"trader_id,omitempty"`
+	Seq      uint64 `json:"seq,omitempty"`
+}
+
+// OrderUpdatePayload is every NT8 order-state change (deduped per order name)
+// — the armed engine's working/cancelled/filled visibility.
+type OrderUpdatePayload struct {
+	SignalID  string  `json:"signal_id"`
+	OrderName string  `json:"order_name"`
+	State     string  `json:"state"` // accepted|working|partfilled|filled|rejected|cancelled
+	FillPrice float64 `json:"fill_price"`
+	Quantity  int     `json:"quantity"`
+	Symbol    string  `json:"symbol"`
+	Account   string  `json:"account"`
+	TraderID  string  `json:"trader_id,omitempty"`
+	Seq       uint64  `json:"seq,omitempty"`
+}
+
+// P5.3 — subscription acks (C#-AddOn → Go-server). The AddOn confirms or// rejects each bars_subscribe/bars_unsubscribe so the Go side (and the owner
 // API) sees subscription state without reading the NT8 Output window. ADDITIVE:
 // a pre-P5.3 AddOn simply never sends them (state shows "pending").
 const (

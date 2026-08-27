@@ -398,6 +398,82 @@ func (t *TCPTrader) placeEntry(symbol, side string, quantity float64) (map[strin
 	}, nil
 }
 
+// PlaceLimitEntry (PHASE 2 armed orders) places a RESTING limit entry with its
+// bracket prices — the armed-order engine's wire call. Same safety rails as
+// placeEntry (bound account + SIM + B3 guard); the AddOn submits OrderType.Limit
+// and defers SL/TP to SubmitBracketOnEntryFill, identical to market entries.
+func (t *TCPTrader) PlaceLimitEntry(symbol, side string, quantity float64, limitPx, sl, tp float64) (string, error) {
+	tradeAcct := t.boundAccount
+	if tradeAcct == "" {
+		return "", fmt.Errorf("ninjatrader/tcp: refusing armed %s entry on %s — trader has no bound account", side, symbol)
+	}
+	if !t.isAccountTradeable(tradeAcct) {
+		return "", fmt.Errorf("ninjatrader/tcp: refusing armed %s entry — account %q is not tradeable (not on allow-list / not SIM)", side, tradeAcct)
+	}
+	if t.guard != nil {
+		key := fmt.Sprintf("armed|%s|%s|%s|%.0f", tradeAcct, upperSideStr(side), symbol, quantity)
+		if _, ok := t.guard.admit(key, time.Now().UnixMilli()); !ok {
+			return "", fmt.Errorf("ninjatrader/tcp: armed entry not admitted — %s", "B3 dupe/rate guard")
+		}
+	}
+	tick := InstrumentTickSize(t.symbol)
+	entry := RoundToTick(limitPx, tick)
+	sl = RoundToTick(sl, tick)
+	tp = RoundToTick(tp, tick)
+	tid := t.traderID
+	signalID := uuid.NewString()
+	payload := ntwire.SignalPayload{
+		Symbol:     t.symbol,
+		Account:    t.boundAccount,
+		TraderID:   tid,
+		Side:       side,
+		Quantity:   int(quantity),
+		Entry:      entry,
+		StopLoss:   sl,
+		TakeProfit: tp,
+		SignalID:   signalID,
+		Timestamp:  t.feedNowUTC(symbol).Format(time.RFC3339),
+		OrderType:  "limit",
+		LimitPrice: entry,
+	}
+	if err := assertBoundAccount("armed-entry", symbol, payload.Account, t.boundAccount); err != nil {
+		logger.Errorf("🚨 %v — REFUSING to submit armed entry", err)
+		return "", err
+	}
+	t.pendingMu.Lock()
+	t.pending[signalID] = upperSideStr(side)
+	t.pendingAt[signalID] = time.Now().UTC().UnixMilli()
+	t.pendingMu.Unlock()
+	t.mu.Lock()
+	t.lastEntrySignalID = signalID
+	t.mu.Unlock()
+	if err := t.server.SendSignal(payload); err != nil {
+		return "", fmt.Errorf("ninjatrader/tcp: send armed signal: %w", err)
+	}
+	return signalID, nil
+}
+
+// CancelOrder (PHASE 2 armed orders) cancels a working resting limit entry
+// and/or its bracket legs on the AddOn side.
+func (t *TCPTrader) CancelOrder(signalID string) error {
+	return t.server.SendCancelOrder(ntwire.CancelOrderPayload{
+		Symbol: t.symbol, SignalID: signalID, Account: t.boundAccount, TraderID: t.traderID,
+	})
+}
+
+// ModifyBracket (PHASE 2 armed orders) modifies the live bracket SL/TP in place.
+func (t *TCPTrader) ModifyBracket(signalID string, newSL, newTP float64) error {
+	return t.server.SendModifyBracket(ntwire.ModifyBracketPayload{
+		Symbol: t.symbol, SignalID: signalID, NewStopLoss: newSL, NewTakeProfit: newTP,
+		Account: t.boundAccount, TraderID: t.traderID,
+	})
+}
+
+// OrderUpdates returns THIS trader's order_update stream (per symbol+account).
+func (t *TCPTrader) OrderUpdates() <-chan ntwire.OrderUpdatePayload {
+	return t.server.SubscribeOrderUpdatesFor(t.symbol, t.boundAccount)
+}
+
 // MoveStopToBreakeven asks the AddOn to move the resting stop for THIS trader's
 // current open position (the last entry's signal_id) to newStop, tick-rounded —
 // WITHOUT closing the position. Errors (no-op) if there is no tracked open entry.
