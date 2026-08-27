@@ -296,6 +296,12 @@ func (at *AutoTrader) consumeArmedOrderUpdates(nt *ntTrader.TCPTrader, ledger *s
 
 // onArmedOrderUpdate applies one NT8 order state change to the armed ledger.
 func (at *AutoTrader) onArmedOrderUpdate(u ntwire.OrderUpdatePayload, ledger *store.ArmedOrderStore) {
+	// Frame-receipt log (2026-08-27, cutover confirmation wave): every
+	// order_update frame FROM NT8 is logged with its content so the C#
+	// dispatcher's receive path is provable from the journal, even when no
+	// non-terminal ledger row matches (e.g. after an optimistic seam flip).
+	at.logInfof("📡 armed order_update frame: state=%s signal=%s acct=%s fill=%.2f",
+		u.State, u.SignalID, u.Account, u.FillPrice)
 	rows, err := ledger.ListNonTerminal()
 	if err != nil {
 		return
