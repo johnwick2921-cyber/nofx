@@ -1507,7 +1507,6 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			// PHASE 2 armed orders — informational state-change frame; routes
 			// to per-(symbol,account) subscribers like fills. No strict echo
 			// verify (advisory event; the terminal fill/close frames keep it).
-			s.logger.Info("tcp_server: order_update raw payload", "raw", string(env.Payload))
 			var oup OrderUpdatePayload
 			if err := json.Unmarshal(env.Payload, &oup); err != nil {
 				s.logger.Warn("tcp_server: bad order_update payload", "err", err)
