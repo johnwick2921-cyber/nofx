@@ -203,9 +203,26 @@ func (s *LevelStateStore) RecordPlay(levelKey string, nowMs int64) (string, erro
 // MarkConsumed consumes a level (price accepted through it) — it ROLE-FLIPS
 // (support↔resistance) and stays on the map; it is never deleted. Ageing
 // (AgedFreshness) later heals the scar across sessions.
-func (s *LevelStateStore) MarkConsumed(levelKey string) error {
-	return s.db.Model(&LevelStateDB{}).Where("level_key = ?", levelKey).
-		Updates(map[string]any{"consumed": true, "freshness": FreshnessDone}).Error
+// MarkConsumed consumes a level (price accepted through it) — it ROLE-FLIPS
+// (support↔resistance) and STAYS on the map at reduced weight.
+// Level-truth wave (2026-08-27) — consumption IS a touch by definition
+// (ConsumedSince requires LevelTouchedOn), but the old writer marked consumed
+// without recording the play when the level was born already-accepted — rows
+// read consumed=1 with times_tested=0 and last_play_ms=0 (8 live zones). The
+// consuming touch is now recorded: a consumed row always carries ≥1 touch.
+func (s *LevelStateStore) MarkConsumed(levelKey string, nowMs int64) error {
+	if nowMs <= 0 {
+		nowMs = time.Now().UnixMilli()
+	}
+	res := s.db.Model(&LevelStateDB{}).
+		Where("level_key = ? AND consumed = ?", levelKey, false).
+		Updates(map[string]any{
+			"consumed":     true,
+			"freshness":    FreshnessDone,
+			"times_tested": gorm.Expr("CASE WHEN last_play_ms = 0 THEN 1 ELSE times_tested END"),
+			"last_play_ms": gorm.Expr("CASE WHEN last_play_ms = 0 THEN ? ELSE last_play_ms END", nowMs),
+		})
+	return res.Error
 }
 
 // ResetBurns (P1b repair) clears every burned mark so the WINDOWED

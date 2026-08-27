@@ -88,7 +88,7 @@ func TestMarkConsumed(t *testing.T) {
 	ls := newLevelStateStore(t).LevelState()
 	l := poc("MNQ", "2026-08-14", 1, 100)
 	_ = ls.EnsureLevel(l)
-	if err := ls.MarkConsumed(l.LevelKey); err != nil {
+	if err := ls.MarkConsumed(l.LevelKey, 0); err != nil {
 		t.Fatalf("mark: %v", err)
 	}
 	got, _ := ls.Get(l.LevelKey)
@@ -138,7 +138,7 @@ func TestListValidExcludesConsumedAndDone(t *testing.T) {
 	_ = ls.EnsureLevel(fresh)
 	_ = ls.EnsureLevel(used)
 	_ = ls.EnsureLevel(done)
-	_ = ls.MarkConsumed(used.LevelKey)
+	_ = ls.MarkConsumed(used.LevelKey, 0)
 	for i := 0; i < 3; i++ {
 		_, _ = ls.DecrementFreshness(done.LevelKey) // A->B->C->done
 	}

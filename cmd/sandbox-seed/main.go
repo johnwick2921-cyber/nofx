@@ -170,7 +170,7 @@ func main() {
 			Symbol: *symbol, LevelType: ls.typ, BinIndex: bin, Price: ls.price, Freshness: ls.fresh,
 		})
 		if ls.cons {
-			_ = st.LevelState().MarkConsumed(key)
+			_ = st.LevelState().MarkConsumed(key, 0)
 		}
 		for i := 0; i < ls.tests; i++ {
 			_ = st.LevelState().RecordTest(key)

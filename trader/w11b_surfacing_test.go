@@ -30,7 +30,7 @@ func TestW11bLevelStateProviderReadsStore(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("ensure: %v", err)
 	}
-	if err := st.LevelState().MarkConsumed(key); err != nil {
+	if err := st.LevelState().MarkConsumed(key, 0); err != nil {
 		t.Fatalf("consume: %v", err)
 	}
 

@@ -120,7 +120,7 @@ func (at *AutoTrader) recordLevelState() {
 		}
 
 		if kernel.ConsumedSince(bars, l.Price, rule, sinceMs, nowMs) {
-			_ = ls.MarkConsumed(key) // touched AND accepted through in-window → role-flip
+			_ = ls.MarkConsumed(key, nowMs) // touched AND accepted through in-window → role-flip
 			continue
 		}
 
