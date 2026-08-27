@@ -33,6 +33,23 @@ describe('DayPlanEditor', () => {
     )
   })
 
+  it('min-side-levels knob renders the default 2 and writes through onChange (P0-relax)', () => {
+    const onChange = vi.fn()
+    render(
+      <DayPlanEditor
+        config={{ plan_enabled: true }}
+        onChange={onChange}
+        language="en"
+      />
+    )
+    const knob = screen.getByTestId('min-side-levels') as HTMLInputElement
+    expect(knob.value).toBe('2') // == kernel.DefaultSideQuota
+    fireEvent.change(knob, { target: { value: '3' } })
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ min_side_levels: 3 })
+    )
+  })
+
   it('a per-session override toggle sets then clears the field', () => {
     const onChange = vi.fn()
     const cfg: DayPlanConfig = { plan_enabled: true }

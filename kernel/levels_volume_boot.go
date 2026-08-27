@@ -19,4 +19,5 @@ func LogVolumeWaveBoot() {
 	logger.Infof("🔧 S-wave (2026-08-26): stale_confirm=%.1f×ATR5m · eod_flat=session-end (NY 14:45 CT, R-A15)",
 		StaleConfirmATR())
 	logger.Infof("📜 planner playbook (2026-08-26): playbook=v2 bias_tree=on chain_after=on no_trade_gates=on killzone_weights=on stop_doing=on — ALL ADVISORY, zero new gates")
+	logger.Infof("⚖️ side-quota (P0-relax 2026-08-27): min_side=cfg(default %d, MIN_SIDE_LEVELS env, %d = old hard rule) · HTF+owner rows counted · machine-thin side=WARN+write(thin_side note) · 0-side/empty-map=fail-closed", DefaultSideQuota, MinSideLevels)
 }
