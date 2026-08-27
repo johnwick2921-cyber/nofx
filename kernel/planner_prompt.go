@@ -83,15 +83,25 @@ type PlannerInput struct {
 // = position within the value-area range; the draw = nearest opposing
 // liquidity pool (the runner target).
 func RenderBiasTree(price float64, levels []ScoredLevel, bc BiasContext) string {
-	pdh, pdl, pdc := 0.0, 0.0, 0.0
+	// S-dispatch (2026-08-27) — the structured bias facts win: post-roll the
+	// seated table can drop PDH/PDL (out of the proximity band) and the tree
+	// rendered "no PDH/PDL anchor". Fall back to the seated scan for legacy
+	// callers/tests that only pass levels.
+	pdh, pdl, pdc := bc.PDH, bc.PDL, bc.PDC
 	for _, l := range levels {
 		switch l.Kind {
 		case KindPDH:
-			pdh = l.Price
+			if pdh <= 0 {
+				pdh = l.Price
+			}
 		case KindPDL:
-			pdl = l.Price
+			if pdl <= 0 {
+				pdl = l.Price
+			}
 		case KindPDC:
-			pdc = l.Price
+			if pdc <= 0 {
+				pdc = l.Price
+			}
 		}
 	}
 	var b strings.Builder
@@ -103,19 +113,31 @@ func RenderBiasTree(price float64, levels []ScoredLevel, bc BiasContext) string 
 	b.WriteString("  5. premium/discount: longs ONLY below the 50% mark of the dealing range, shorts ONLY above it\n")
 	b.WriteString("  6. draw-on-liquidity: the runner target is the DRAW — the nearest opposing liquidity pool beyond the first target\n")
 	fmt.Fprintf(&b, "  computed: PDH %.2f · PDL %.2f · PDC %.2f", pdh, pdl, pdc)
-	if bc.VAH > 0 && bc.VAL > 0 && price > 0 {
-		lo, hi := bc.VAL, bc.VAH
+	// S-dispatch (2026-08-27) — the branch-5 premium/discount anchor is the
+	// DEALING RANGE (prior-day swing hi/lo = PDH/PDL), not the value area. The
+	// VA can be a few points wide (the 17:46 read printed "376% of range" off
+	// a ~30pt VA); a beyond-range price now renders "beyond range (extended)"
+	// instead of a >100% percentage. Value area stays as the fallback when
+	// the day anchors are unknown.
+	lo, hi := pdl, pdh
+	if lo <= 0 || hi <= 0 || hi <= lo {
+		lo, hi = bc.VAL, bc.VAH
 		if lo > hi {
 			lo, hi = hi, lo
 		}
-		fmt.Fprintf(&b, " · value area %.2f–%.2f", lo, hi)
-		if hi > lo {
-			pos := (price - lo) / (hi - lo)
-			if pos >= 0.5 {
-				fmt.Fprintf(&b, " · price at %.0f%% of the range (PREMIUM — longs disallowed by branch 5)", pos*100)
-			} else {
-				fmt.Fprintf(&b, " · price at %.0f%% of the range (DISCOUNT — shorts disallowed by branch 5)", pos*100)
-			}
+	}
+	if hi > lo && price > 0 {
+		fmt.Fprintf(&b, " · dealing range %.2f–%.2f", lo, hi)
+		pos := (price - lo) / (hi - lo)
+		switch {
+		case pos > 1:
+			b.WriteString(" · price BEYOND range high (extended) — longs disallowed by branch 5 (premium)")
+		case pos < 0:
+			b.WriteString(" · price BEYOND range low (extended) — shorts disallowed by branch 5 (discount)")
+		case pos >= 0.5:
+			fmt.Fprintf(&b, " · price at %.0f%% of the range (PREMIUM — longs disallowed by branch 5)", pos*100)
+		default:
+			fmt.Fprintf(&b, " · price at %.0f%% of the range (DISCOUNT — shorts disallowed by branch 5)", pos*100)
 		}
 	}
 	if price > 0 && pdh > 0 && price > pdh {
