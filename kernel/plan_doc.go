@@ -132,13 +132,13 @@ func validateArmSpecs(d *PlanDoc) error {
 // PlanFvgEntry is the machine-verifiable schema of an fvg_entry scenario.
 // ce is COMPUTED (midpoint) — a declared ce is re-checked, never trusted.
 type PlanFvgEntry struct {
-	Lo              float64 `json:"fvg_lo"`
-	Hi              float64 `json:"fvg_hi"`
-	CE              float64 `json:"ce"`
-	EntryMode       string  `json:"entry_mode"`       // edge | ce (ce for gaps > FVG_CE_WIDTH_PTS)
+	Lo          float64 `json:"fvg_lo"`
+	Hi          float64 `json:"fvg_hi"`
+	CE          float64 `json:"ce"`
+	EntryMode   string  `json:"entry_mode"` // edge | ce (ce for gaps > FVG_CE_WIDTH_PTS)
 	DisplacementATR float64 `json:"displacement_atr"` // impulse body in 5m ATR multiples (0 = let the validator compute)
-	OriginLevel     string  `json:"origin_level"`     // the Tier-1/seated anchor the displacement left
-	Direction       string  `json:"direction"`        // long | short (must equal scenario direction)
+	OriginLevel string  `json:"origin_level"` // the Tier-1/seated anchor the displacement left
+	Direction   string  `json:"direction"`    // long | short (must equal scenario direction)
 }
 
 // PlanDoc is the full plan (stored as the plans.doc JSON).
@@ -183,11 +183,11 @@ var (
 )
 
 var (
-	biasDirections  = map[string]bool{"long": true, "short": true, "neutral": true}
-	biasConvictions = map[string]bool{"high": true, "medium": true, "low": true}
-	levelGrades     = map[string]bool{"A": true, "B": true, "C": true}
-	scenarioConds   = map[string]bool{"reclaim": true, "hold": true, "sweep_reclaim": true, "reject": true, "acceptance": true, "breakout_retest": true, "fvg_entry": true}
-	scenarioDirs    = map[string]bool{"long": true, "short": true}
+	biasDirections    = map[string]bool{"long": true, "short": true, "neutral": true}
+	biasConvictions   = map[string]bool{"high": true, "medium": true, "low": true}
+	levelGrades       = map[string]bool{"A": true, "B": true, "C": true}
+	scenarioConds     = map[string]bool{"reclaim": true, "hold": true, "sweep_reclaim": true, "reject": true, "acceptance": true, "breakout_retest": true, "fvg_entry": true}
+	scenarioDirs      = map[string]bool{"long": true, "short": true}
 	// C is ACCEPTED: it is the G5 machine-demoted state (trigger level consumed
 	// at write/re-align time), never a model-written grade. The write path runs
 	// demoteConsumedScenarios BEFORE validation, so rejecting C made every
@@ -394,18 +394,6 @@ func ValidatePlanDocWithCaps(d *PlanDoc, maxLevels, maxScenarios int) error {
 		if cond.c == nil {
 			continue
 		}
-		// b1 (2026-08-27) — rule alias normalization: the planner's vocabulary
-		// has "2x5m_close" (2 consecutive 5m closes), the schema's canonical
-		// spelling is "2x5m". Normalize at parse so the STORED doc carries the
-		// canonical form (same aliasing confirmRules/scenario_facts already
-		// accept; previously the structured flip/death path rejected the model's
-		// own spelling and every retry failed closed).
-		switch cond.c.Rule {
-		case "2x5m_close":
-			cond.c.Rule = "2x5m"
-		case "1x5m_close":
-			cond.c.Rule = "5m_close"
-		}
 		if cond.c.Price <= 0 {
 			return fmt.Errorf("%s.price %v invalid (must be > 0)", cond.name, cond.c.Price)
 		}
@@ -510,7 +498,6 @@ func MislabeledStructuralLevels(d *PlanDoc, machineLabels map[float64]string) []
 	}
 	return out
 }
-
 type PlanFacts struct {
 	Price float64 // reference price at read time
 	DATR  float64 // daily ATR proxy
@@ -807,8 +794,78 @@ func NoTradePlanDocWithLevels(reason string, levels []PlanLevel) *PlanDoc {
 		doc.NoTrade = append(doc.NoTrade, "detector data unavailable — no level map could be assembled")
 		return doc
 	}
+	// Level-truth wave (2026-08-27) — the NO-TRADE doc is MACHINE-AUTHORED:
+	// every level's grade IS the machine grade. Stamp it explicitly so no-trade
+	// plans stop contributing unstamped rows to the card (256/795 regression).
+	for i := range levels {
+		if levels[i].MachineGrade == "" {
+			levels[i].MachineGrade = levels[i].Grade
+		}
+	}
 	doc.Levels = levels
 	return doc
+}
+
+// StampMachineGrades (level-truth wave, 2026-08-27) stamps doc levels from a
+// rounded-price → grade map (the write site's machineGrades). Returns how many
+// rows it stamped. Pure — the write site and the golden regression test share
+// this exact stamping so the test IS the write path.
+func StampMachineGrades(doc *PlanDoc, grades map[float64]string) int {
+	if doc == nil || len(grades) == 0 {
+		return 0
+	}
+	n := 0
+	for i := range doc.Levels {
+		if doc.Levels[i].MachineGrade != "" {
+			continue
+		}
+		if g, ok := grades[math.Round(doc.Levels[i].Price*100)/100]; ok && g != "" {
+			doc.Levels[i].MachineGrade = g
+			n++
+		}
+	}
+	return n
+}
+
+// CarryMachineGrades (level-truth wave, 2026-08-27) stamps doc levels from the
+// PREVIOUS version's levels (rounded-price → grade, strongest wins on
+// collisions). Returns how many rows it carried. Pure — shared with
+// AutoTrader.carryMachineGrades.
+func CarryMachineGrades(doc *PlanDoc, prior []PlanLevel) int {
+	if doc == nil || len(prior) == 0 {
+		return 0
+	}
+	carry := map[float64]string{}
+	for _, l := range prior {
+		if l.Price <= 0 {
+			continue
+		}
+		g := l.MachineGrade
+		if g == "" {
+			g = l.Grade
+		}
+		if g == "" {
+			continue
+		}
+		k := math.Round(l.Price*100) / 100
+		if old, ok := carry[k]; !ok || GradeRank(g) > GradeRank(old) {
+			carry[k] = g
+		}
+	}
+	if len(carry) == 0 {
+		return 0
+	}
+	n := 0
+	for i := range doc.Levels {
+		if doc.Levels[i].MachineGrade != "" {
+			continue
+		}
+		if g, ok := carry[math.Round(doc.Levels[i].Price*100)/100]; ok {
+			doc.Levels[i].MachineGrade = g
+			n++
+		}
+	}
+	return n
 }
 
 // scenarioIDRe — A5 (F11): "S1".."S99", the convention everything keys on.
