@@ -18,7 +18,8 @@ const dayPlan: KnobSpec[] = [
     recommended:
       '⭐ ADVISORY — auto-trade without hard blocks until you trust the plan writer (strict is the optional NY experiment).',
     whenToTouch: 'When you want the planner to have teeth (or to remove them).',
-    perSession: 'Yes — session override wins over strategy value.',
+    perSession:
+      'Yes — tri-state per session: inherit global / advisory / direction / strict. Session override wins; inherit (blank) = the global row above.',
   },
   {
     label: 'Proximity filter',
@@ -34,7 +35,8 @@ const dayPlan: KnobSpec[] = [
       '⭐ 0.3 — the current owner value; matched the detector band after the A2.1 retune.',
     whenToTouch:
       'If the card looks too crowded or too empty for the daily range.',
-    perSession: 'Yes — session override wins.',
+    perSession:
+      'Yes — session override wins; inherit (blank) = the strategy-level value.',
   },
   {
     label: 'Max levels',
@@ -78,7 +80,8 @@ const dayPlan: KnobSpec[] = [
     recommended: '⭐ 2 — one re-read after an early death, then sit out.',
     whenToTouch:
       "Raise for violent trend days where one death shouldn't end the session.",
-    perSession: 'Yes — session override wins (ReplanCapFor).',
+    perSession:
+      'Yes — session override wins; inherit (blank) = the strategy-level value (ReplanCapFor).',
   },
   {
     label: 'Acceptance window',
@@ -90,7 +93,8 @@ const dayPlan: KnobSpec[] = [
     systemDefault: '2×5m',
     recommended: '⭐ 2×5m — current config.',
     whenToTouch: 'If acceptance plays keep getting cut by the confirm clock.',
-    perSession: 'Yes — session override wins.',
+    perSession:
+      'Yes — session override wins; inherit (blank) = the strategy-level value.',
   },
   {
     label: 'Require approval',
@@ -142,7 +146,8 @@ const dayPlan: KnobSpec[] = [
     systemDefault: 'C',
     recommended: "⭐ C — grade is advisory; don't hide plays with it.",
     whenToTouch: 'Only if the card gets cluttered with junk scenarios.',
-    perSession: 'Yes — session override wins.',
+    perSession:
+      'Yes — session override wins; inherit (blank) = the strategy-level row above.',
   },
   {
     label: 'Min levels per side',
@@ -158,7 +163,8 @@ const dayPlan: KnobSpec[] = [
     recommended:
       '⭐ 2 — symmetric enough to trade, tolerant enough not to false-fail.',
     whenToTouch: 'Raise to 3 for the strict old behavior.',
-    perSession: 'Yes — session override → strategy → env.',
+    perSession:
+      'Yes — session override wins; inherit (blank) → strategy-level → env.',
   },
   {
     label: '1h anchor seat',
@@ -459,12 +465,13 @@ const sessions: KnobSpec[] = [
   {
     label: 'Session overrides (ASIA / LONDON / NY)',
     where: 'Strategy → Day Plan → Sessions accordion',
-    what: 'Per-session override rows: min grade, min scenario quality, min side levels, max trades, plan mode, max re-plans, acceptance window.',
+    what: 'Per-session override rows: min grade, min scenario quality, min side levels, max trades, plan mode, max re-plans, acceptance window. Min grade, quality, max trades and plan mode are tri-state: inherit (blank) = the strategy-level row; an explicit value wins. Stored values that EQUAL the strategy level are auto-migrated to inherit.',
     trader:
       'The current rows: min_grade B · min_scenario_quality C · min_side_levels 2 · max_trades 3 · plan_mode advisory · max re-plans 2 · acceptance 2×5m.',
     consumer:
       'store/strategy.go:921-975 (per-session resolvers) · trader/auto_trader_planconfig.go:158-168',
-    range: 'per-session rows, each optional (blank = inherit)',
+    range:
+      'per-session rows; the four tri-state knobs inherit (blank) = strategy value, explicit = override',
     systemDefault:
       'ASIA 16:55 read 17:00→02:00 · LONDON 01:55 02:00→08:30 · NY 08:25 08:30→14:45 (all EOD-flat)',
     recommended:

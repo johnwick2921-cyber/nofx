@@ -3,7 +3,7 @@
 // fields (⚪ inherit / 🔸 override).
 
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, within } from '@testing-library/react'
 import { DayPlanEditor } from './DayPlanEditor'
 import type { DayPlanConfig } from '../../types/strategy'
 
@@ -50,15 +50,158 @@ describe('DayPlanEditor', () => {
     )
   })
 
-  it('a per-session override toggle sets then clears the field', () => {
+  it('a per-session tri-state knob sets then inherits (clears) the field', () => {
     const onChange = vi.fn()
     const cfg: DayPlanConfig = { plan_enabled: true }
     render(<DayPlanEditor config={cfg} onChange={onChange} language="en" />)
-    // NY accordion is open by default; toggle the min-grade override on
-    const minGradeBtn = screen.getByRole('button', { name: /Min grade/i })
-    fireEvent.click(minGradeBtn)
+    // NY accordion is open by default; pick B on the min-grade tri-state
+    const seg = screen.getByTestId('session-min-grade-NY')
+    fireEvent.click(within(seg).getByRole('button', { name: 'B' }))
     const call = onChange.mock.calls[0][0] as DayPlanConfig
     expect(call.sessions?.find((s) => s.session === 'NY')?.min_grade).toBe('B')
+    // inherit clears the field again (stores nothing)
+    onChange.mockClear()
+    fireEvent.click(within(seg).getByRole('button', { name: 'inherit' }))
+    const next = onChange.mock.calls[0][0] as DayPlanConfig
+    expect(
+      next.sessions?.find((s) => s.session === 'NY')?.min_grade
+    ).toBeUndefined()
+  })
+
+  it('session plan_mode tri-state stores nothing on inherit and writes explicit values', () => {
+    const onChange = vi.fn()
+    render(
+      <DayPlanEditor
+        config={{ plan_enabled: true }}
+        onChange={onChange}
+        language="en"
+      />
+    )
+    const seg = screen.getByTestId('session-plan-mode-NY')
+    // default = inherit (no stored field)
+    fireEvent.click(within(seg).getByRole('button', { name: 'STRICT' }))
+    let next = onChange.mock.calls[0][0] as DayPlanConfig
+    expect(next.sessions?.find((s) => s.session === 'NY')?.plan_mode).toBe(
+      'strict'
+    )
+    onChange.mockClear()
+    fireEvent.click(within(seg).getByRole('button', { name: 'inherit' }))
+    next = onChange.mock.calls[0][0] as DayPlanConfig
+    expect(
+      next.sessions?.find((s) => s.session === 'NY')?.plan_mode
+    ).toBeUndefined()
+  })
+
+  it('migrates a stored override EQUAL to the global value to inherit (S layering)', () => {
+    const onChange = vi.fn()
+    const cfg: DayPlanConfig = {
+      plan_enabled: true,
+      plan_mode: 'strict',
+      min_scenario_quality: 'C',
+      sessions: [
+        { session: 'NY', plan_mode: 'strict', min_scenario_quality: 'C' },
+        { session: 'ASIA', plan_mode: 'advisory' },
+      ],
+    }
+    render(<DayPlanEditor config={cfg} onChange={onChange} language="en" />)
+    // the mount migration emits the cleaned config (equals-global dropped)
+    expect(onChange).toHaveBeenCalled()
+    const cleaned = onChange.mock.calls
+      .map((c) => c[0] as DayPlanConfig)
+      .find((x) => x !== cfg)
+    expect(cleaned).toBeTruthy()
+    const ny = cleaned?.sessions?.find((s) => s.session === 'NY')
+    expect(ny?.plan_mode).toBeUndefined()
+    expect(ny?.min_scenario_quality).toBeUndefined()
+    // a REAL differing override survives
+    const asia = cleaned?.sessions?.find((s) => s.session === 'ASIA')
+    expect(asia?.plan_mode).toBe('advisory')
+  })
+
+  it('the global plan_mode row shows the live effect when sessions override (S layering)', () => {
+    const onChange = vi.fn()
+    render(
+      <DayPlanEditor
+        config={{
+          plan_enabled: true,
+          plan_mode: 'strict',
+          sessions: [
+            { session: 'NY', plan_mode: 'advisory' },
+            { session: 'ASIA', plan_mode: 'advisory' },
+          ],
+        }}
+        onChange={onChange}
+        language="en"
+      />
+    )
+    const warn = screen.getByTestId('plan-mode-override-warning')
+    expect(warn.textContent).toContain('STRICT')
+    expect(warn.textContent).toContain('NY')
+    expect(warn.textContent).toContain('ASIA')
+    expect(warn.textContent).toContain('⚠')
+  })
+
+  // S layering (2026-08-27) — PUT-path verification: an inherit edit must
+  // REMOVE the stored key from the serialized payload (JSON.stringify drops
+  // undefined), never write null/'' that the Go resolver could read as an
+  // override. Both the CREATE and EDIT paths are locked here.
+  it('PUT edit path: setting a session plan_mode to inherit serializes WITHOUT the key', () => {
+    const onChange = vi.fn()
+    render(
+      <DayPlanEditor
+        config={{
+          plan_enabled: true,
+          plan_mode: 'strict',
+          sessions: [{ session: 'NY', plan_mode: 'advisory' }],
+        }}
+        onChange={onChange}
+        language="en"
+      />
+    )
+    const seg = screen.getByTestId('session-plan-mode-NY')
+    fireEvent.click(within(seg).getByRole('button', { name: 'inherit' }))
+    const next = onChange.mock.calls[0][0] as DayPlanConfig
+    const ny = next.sessions?.find((s) => s.session === 'NY')
+    expect(ny?.plan_mode).toBeUndefined()
+    // the exact wire shape the PUT sends: no key, not null and not ''
+    const wire = JSON.stringify(ny)
+    expect(wire.includes('"plan_mode"')).toBe(false)
+  })
+
+  it('PUT create path: a fresh config with all four tri-state knobs on inherit serializes WITHOUT the keys', () => {
+    const onChange = vi.fn()
+    const { rerender } = render(
+      <DayPlanEditor
+        config={{ plan_enabled: true }}
+        onChange={onChange}
+        language="en"
+      />
+    )
+    // pick STRICT, re-render with the emitted config (controlled component),
+    // then back to inherit
+    const seg = screen.getByTestId('session-plan-mode-NY')
+    fireEvent.click(within(seg).getByRole('button', { name: 'STRICT' }))
+    const strictCfg = onChange.mock.calls[0][0] as DayPlanConfig
+    rerender(
+      <DayPlanEditor config={strictCfg} onChange={onChange} language="en" />
+    )
+    fireEvent.click(
+      within(screen.getByTestId('session-plan-mode-NY')).getByRole('button', {
+        name: 'inherit',
+      })
+    )
+    const next = onChange.mock.calls[1][0] as DayPlanConfig
+    const ny = next.sessions?.find((s) => s.session === 'NY')
+    expect(ny?.plan_mode).toBeUndefined()
+    const wire = JSON.stringify(ny)
+    for (const key of [
+      'plan_mode',
+      'min_grade',
+      'min_scenario_quality',
+      'max_trades',
+    ]) {
+      expect(wire.includes(`"${key}"`)).toBe(false)
+    }
   })
 
   it('planner timeframes are an editable multiselect (toggle in/out)', () => {

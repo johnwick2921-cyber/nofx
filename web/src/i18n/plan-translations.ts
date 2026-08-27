@@ -491,6 +491,14 @@ export const planStrings = {
   sessionsHeader: { en: 'Sessions', zh: '交易时段', id: 'Sesi' },
   inherit: { en: 'inherit', zh: '继承', id: 'warisi' },
   override: { en: 'override', zh: '覆盖', id: 'ganti' },
+  // S (2026-08-27) — plan-mode layering honesty: the global row shows the live
+  // effect, and the session tri-state knobs default to inherit.
+  planModeOverriddenIn: {
+    en: '{mode} — overridden in: {sessions} ⚠',
+    zh: '{mode} — 已在以下时段被覆盖: {sessions} ⚠',
+    id: '{mode} — ditimpa di: {sessions} ⚠',
+  },
+  customValue: { en: 'custom', zh: '自定义', id: 'kustom' },
   windows: { en: 'Windows', zh: '时间窗口', id: 'Jendela' },
 
   // ── P5.2 edit sheet + bulk add (LABELS translate; stored tokens stay English) ──

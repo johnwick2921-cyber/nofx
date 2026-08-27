@@ -4,7 +4,7 @@
 // Additive + defaults-off: absent day_plan leaves a strategy byte-identical, and
 // plan_enabled=false is the master switch. Killzones are shown as ACTIVE windows.
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { Language } from '../../i18n/translations'
 import { tp } from '../../i18n/plan-translations'
 import type {
@@ -121,15 +121,19 @@ function Segmented({
   value,
   onChange,
   disabled,
+  testId,
 }: {
   options: { key: string; label: string }[]
   value?: string
   onChange: (v: string) => void
   disabled?: boolean
+  /** stable hook for tests (S layering, 2026-08-27) */
+  testId?: string
 }) {
   return (
     <div
       className="inline-flex"
+      data-testid={testId}
       style={{
         border: '1px solid var(--vl-hair)',
         borderRadius: 'var(--vl-radius-chip)',
@@ -226,10 +230,47 @@ const MODE_OPTS = (language: Language) => [
   { key: 'strict', label: tp('modeStrict', language) },
 ]
 
+// S (2026-08-27) — plan-mode layering honesty, part 1b: a stored per-session
+// override EQUAL to the strategy-level value was never a deliberate override —
+// migrate it to inherit (drop the field). Pure + idempotent; the component
+// re-emits the cleaned config on mount so the next save persists the migration.
+function migrateEqualOverrides(config?: DayPlanConfig): DayPlanConfig {
+  const base = config ?? DEFAULT_DAY_PLAN
+  const list = base.sessions
+  if (!list || list.length === 0) return base
+  const globalMode = base.plan_mode ?? 'advisory'
+  const globalQuality = base.min_scenario_quality ?? 'C'
+  let changed = false
+  const sessions = list.map((s) => {
+    let next = s
+    if (s.plan_mode !== undefined && s.plan_mode === globalMode) {
+      next = { ...next, plan_mode: undefined }
+      changed = true
+    }
+    if (
+      s.min_scenario_quality !== undefined &&
+      s.min_scenario_quality === globalQuality
+    ) {
+      next = { ...next, min_scenario_quality: undefined }
+      changed = true
+    }
+    return next
+  })
+  return changed ? { ...base, sessions } : base
+}
+
 export function DayPlanEditor({ config, onChange, disabled, language }: Props) {
-  const cfg = config ?? DEFAULT_DAY_PLAN
+  const cfg = migrateEqualOverrides(config ?? DEFAULT_DAY_PLAN)
   const enabled = cfg.plan_enabled === true
   const [openSession, setOpenSession] = useState<SessionName | null>('NY')
+
+  // S (2026-08-27) — push the equals-global migration upstream once so the
+  // parent (and the next save) persists the cleaned config.
+  useEffect(() => {
+    if (config && migrateEqualOverrides(config) !== config) {
+      onChange(migrateEqualOverrides(config))
+    }
+  }, [])
 
   const update = <K extends keyof DayPlanConfig>(
     key: K,
@@ -288,6 +329,12 @@ export function DayPlanEditor({ config, onChange, disabled, language }: Props) {
 
   const bodyDisabled = disabled || !enabled
 
+  // S (2026-08-27) — sessions that carry a plan_mode override DIFFERENT from
+  // the global row (equals-global already migrated to inherit above).
+  const overriddenPlanSessions = (cfg.sessions ?? [])
+    .filter((s) => s.plan_mode !== undefined)
+    .map((s) => s.session)
+
   return (
     <div
       className="flex flex-col gap-2"
@@ -333,6 +380,23 @@ export function DayPlanEditor({ config, onChange, disabled, language }: Props) {
             disabled={bodyDisabled}
           />
         </FieldRow>
+        {/* S (2026-08-27) — the global row states its LIVE effect: when any
+            session overrides, the effective mode differs per session. */}
+        {overriddenPlanSessions.length > 0 && (
+          <div
+            data-testid="plan-mode-override-warning"
+            className="text-[10px] px-1"
+            style={{
+              color: 'var(--vl-gold)',
+              fontFamily: 'var(--vl-font-ui)',
+            }}
+          >
+            {tp('planModeOverriddenIn', language, {
+              mode: (cfg.plan_mode ?? 'advisory').toUpperCase(),
+              sessions: overriddenPlanSessions.join(', '),
+            })}
+          </div>
+        )}
 
         {/* planner reads — an EDITABLE timeframe multiselect (which structure
             TFs the planner summarizes). Applies at the NEXT read, never mid-plan. */}
@@ -679,53 +743,54 @@ export function DayPlanEditor({ config, onChange, disabled, language }: Props) {
                         ⚠ {tp('dstWarning', language)}
                       </div>
                     )}
-                    {/* override rows: min_grade · max_trades · plan_mode · replan_cap · acceptance */}
-                    <OverrideRow
+                    {/* S (2026-08-27) — tri-state rows: inherit (default,
+                        stores NOTHING) / explicit values. The old ⚪/🔸 toggle
+                        was honest but the equals-global case made it look like
+                        a deliberate override when it wasn't. */}
+                    <TriStateRow
                       label={tp('minGrade', language)}
                       overridden={ov?.min_grade !== undefined}
-                      onToggle={(on) =>
-                        on
-                          ? setSessionField(s, 'min_grade', 'B')
-                          : clearSessionField(s, 'min_grade')
-                      }
-                      disabled={bodyDisabled}
                       language={language}
                     >
                       <Segmented
+                        testId={`session-min-grade-${s}`}
                         options={[
+                          { key: 'inherit', label: tp('inherit', language) },
                           { key: 'A', label: 'A' },
                           { key: 'B', label: 'B' },
                           { key: 'C', label: 'C' },
                         ]}
-                        value={ov?.min_grade}
-                        onChange={(v) => setSessionField(s, 'min_grade', v)}
-                        disabled={bodyDisabled}
-                      />
-                    </OverrideRow>
-                    <OverrideRow
-                      label={tp('minScenarioQuality', language)}
-                      overridden={ov?.min_scenario_quality !== undefined}
-                      onToggle={(on) =>
-                        on
-                          ? setSessionField(s, 'min_scenario_quality', 'C')
-                          : clearSessionField(s, 'min_scenario_quality')
-                      }
-                      disabled={bodyDisabled}
-                      language={language}
-                    >
-                      <Segmented
-                        options={[
-                          { key: 'A', label: 'A' },
-                          { key: 'B', label: 'B' },
-                          { key: 'C', label: 'C' },
-                        ]}
-                        value={ov?.min_scenario_quality}
+                        value={ov?.min_grade ?? 'inherit'}
                         onChange={(v) =>
-                          setSessionField(s, 'min_scenario_quality', v)
+                          v === 'inherit'
+                            ? clearSessionField(s, 'min_grade')
+                            : setSessionField(s, 'min_grade', v)
                         }
                         disabled={bodyDisabled}
                       />
-                    </OverrideRow>
+                    </TriStateRow>
+                    <TriStateRow
+                      label={tp('minScenarioQuality', language)}
+                      overridden={ov?.min_scenario_quality !== undefined}
+                      language={language}
+                    >
+                      <Segmented
+                        testId={`session-quality-${s}`}
+                        options={[
+                          { key: 'inherit', label: tp('inherit', language) },
+                          { key: 'A', label: 'A' },
+                          { key: 'B', label: 'B' },
+                          { key: 'C', label: 'C' },
+                        ]}
+                        value={ov?.min_scenario_quality ?? 'inherit'}
+                        onChange={(v) =>
+                          v === 'inherit'
+                            ? clearSessionField(s, 'min_scenario_quality')
+                            : setSessionField(s, 'min_scenario_quality', v)
+                        }
+                        disabled={bodyDisabled}
+                      />
+                    </TriStateRow>
                     <OverrideRow
                       label={tp('minSideLevels', language)}
                       overridden={ov?.min_side_levels !== undefined}
@@ -747,43 +812,64 @@ export function DayPlanEditor({ config, onChange, disabled, language }: Props) {
                         disabled={bodyDisabled}
                       />
                     </OverrideRow>
-                    <OverrideRow
+                    <TriStateRow
                       label={tp('maxTrades', language)}
                       overridden={ov?.max_trades !== undefined}
-                      onToggle={(on) =>
-                        on
-                          ? setSessionField(s, 'max_trades', 3)
-                          : clearSessionField(s, 'max_trades')
-                      }
-                      disabled={bodyDisabled}
                       language={language}
                     >
-                      <NumberField
-                        value={ov?.max_trades}
-                        min={0}
-                        max={20}
-                        onChange={(v) => setSessionField(s, 'max_trades', v)}
-                        disabled={bodyDisabled}
-                      />
-                    </OverrideRow>
-                    <OverrideRow
+                      <div className="flex items-center gap-1">
+                        <Segmented
+                          testId={`session-max-trades-${s}`}
+                          options={[
+                            { key: 'inherit', label: tp('inherit', language) },
+                            {
+                              key: 'custom',
+                              label: tp('customValue', language),
+                            },
+                          ]}
+                          value={
+                            ov?.max_trades === undefined ? 'inherit' : 'custom'
+                          }
+                          onChange={(v) =>
+                            v === 'inherit'
+                              ? clearSessionField(s, 'max_trades')
+                              : setSessionField(s, 'max_trades', 3)
+                          }
+                          disabled={bodyDisabled}
+                        />
+                        {ov?.max_trades !== undefined && (
+                          <NumberField
+                            value={ov.max_trades}
+                            min={0}
+                            max={20}
+                            onChange={(v) =>
+                              setSessionField(s, 'max_trades', v)
+                            }
+                            disabled={bodyDisabled}
+                          />
+                        )}
+                      </div>
+                    </TriStateRow>
+                    <TriStateRow
                       label={tp('planMode', language)}
                       overridden={ov?.plan_mode !== undefined}
-                      onToggle={(on) =>
-                        on
-                          ? setSessionField(s, 'plan_mode', 'advisory')
-                          : clearSessionField(s, 'plan_mode')
-                      }
-                      disabled={bodyDisabled}
                       language={language}
                     >
                       <Segmented
-                        options={MODE_OPTS(language)}
-                        value={ov?.plan_mode}
-                        onChange={(v) => setSessionField(s, 'plan_mode', v)}
+                        testId={`session-plan-mode-${s}`}
+                        options={[
+                          { key: 'inherit', label: tp('inherit', language) },
+                          ...MODE_OPTS(language),
+                        ]}
+                        value={ov?.plan_mode ?? 'inherit'}
+                        onChange={(v) =>
+                          v === 'inherit'
+                            ? clearSessionField(s, 'plan_mode')
+                            : setSessionField(s, 'plan_mode', v)
+                        }
                         disabled={bodyDisabled}
                       />
-                    </OverrideRow>
+                    </TriStateRow>
                     <OverrideRow
                       label={tp('maxReplans', language)}
                       overridden={ov?.replan_cap !== undefined}
@@ -833,6 +919,34 @@ export function DayPlanEditor({ config, onChange, disabled, language }: Props) {
           })}
         </div>
       </div>
+    </div>
+  )
+}
+
+// S (2026-08-27) — tri-state override row: the control is ALWAYS visible and
+// its first option is "inherit" (stores nothing). ⚪/🔸 chip reports the state.
+function TriStateRow({
+  label,
+  overridden,
+  language,
+  children,
+}: {
+  label: string
+  overridden: boolean
+  language: Language
+  children: React.ReactNode
+}) {
+  return (
+    <div className="flex items-center justify-between gap-2 py-1">
+      <span
+        className="inline-flex items-center gap-1.5 text-[11px]"
+        style={{ color: overridden ? 'var(--vl-gold)' : 'var(--vl-faint)' }}
+        title={overridden ? tp('override', language) : tp('inherit', language)}
+      >
+        <span aria-hidden>{overridden ? '🔸' : '⚪'}</span>
+        <span>{label}</span>
+      </span>
+      <div className="flex items-center gap-1">{children}</div>
     </div>
   )
 }
