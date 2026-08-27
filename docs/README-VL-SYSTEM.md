@@ -110,6 +110,26 @@ Bars live in the NT8 BarCache (in-memory) and persist to the `bars` table
 | target_only | override only: consumed/done freshness, or HTF continuation zones |
 
 8. **Seating**: collapse (≤3.00pt clusters) → priority sort → `seatHTF` (≤2, Tier-1-or-reversal)
+
+#### Level-truth wave (2026-08-27) — deployed values ARE the documented truth
+
+- **SWG-H / SWG-L** (swing-point lines, 5m+15m structure fractals, role
+  `react_zone`): `typeEvidence 0.85`, freshness on the **anchor ladder**
+  (`1.0/0.8/0.6/0.5`), recent-only lookback (5m: 144 bars · 15m: 96 bars, ≤3 per
+  side per TF). Fixes the measured 43–86% of 5m swing turns with no seated level
+  within ±8pt.
+- **VWAP±2σ** (fair-value band lines): `typeEvidence 0.85`, VWAP family
+  (one confluence family with VWAP/eVWAP/pdVWAP), anchor ladder. The σ is the
+  volume-weighted standard deviation of typical prices over the **CME
+  session-day window** (17:00 CT → read) — hand-calc verified 2026-08-27; the
+  apparent "87pt σ" on range days is the legitimate session-day width, not an
+  accumulation bug (`kernel/levels_volume.go` `vwapAndStdev`).
+- **Standing rulings reconfirmed:** iFVG stays at `.35/.45/.65/.65` · anchors
+  keep decay (`1.0/0.8/0.6/0.5`) · ±1σ shares the VWAP kind · zone floors/caps
+  unchanged (1m→C · 15m→B · 1h/4h floor B).
+- **pnl_corrected (T7):** every closed row now carries `pnl_corrected`
+  (close-path stamp + boot backfill); readers `COALESCE(pnl_corrected,
+  realized_pnl)`. Disagreements ≥ $0.50 log the class-killer WARN.
    → `SeatVolumeFamily` (≥1 volume seat) → `seatBothSides` (≥3 per side) → topN(8)
    → nearest-first (`:544-567, 724-825, 971-1047`).
 9. Dedupe: same-kind within 1 tick collapses (S4, `kernel/levels_assemble.go` `dedupeSameKind`).
