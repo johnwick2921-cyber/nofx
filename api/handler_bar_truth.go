@@ -90,6 +90,11 @@ func (s *Server) handleBarTruthArbiter(c *gin.Context) {
 			dbCount, dbHash = ntwire.FNVBarSet(dbBars)
 		}
 
+		// ATR is window-sensitive — compare ONLY the common T window so a
+		// trimmed cache (2500) can't disagree with an 8-day DB on window
+		// alone (the 2dp E-proof must compare like with like).
+		cacheCommon, dbCommon := intersectByT(cacheBars, dbBars)
+
 		type dbDiff struct {
 			T  int64   `json:"t"`
 			O  float64 `json:"o"` // cache values
@@ -102,22 +107,17 @@ func (s *Server) handleBarTruthArbiter(c *gin.Context) {
 			DC float64 `json:"d_c"`
 		}
 		var deltas []dbDiff
-		byT := map[int64]ntwire.Bar{}
-		for _, b := range dbBars {
-			byT[b.T] = b
-		}
-		for _, cb := range cacheBars {
-			db, found := byT[cb.T]
-			if !found || db.O != cb.O || db.H != cb.H || db.L != cb.L || db.C != cb.C {
+		mismatches := 0
+		for i := range cacheCommon {
+			cb, db := cacheCommon[i], dbCommon[i]
+			if db.O != cb.O || db.H != cb.H || db.L != cb.L || db.C != cb.C {
+				mismatches++
 				if len(deltas) < 5 {
-					dd := dbDiff{T: cb.T, O: cb.O, H: cb.H, L: cb.L, C: cb.C}
-					if found {
-						dd.DO = round2a(cb.O - db.O)
-						dd.DH = round2a(cb.H - db.H)
-						dd.DL = round2a(cb.L - db.L)
-						dd.DC = round2a(cb.C - db.C)
-					}
-					deltas = append(deltas, dd)
+					deltas = append(deltas, dbDiff{
+						T: cb.T, O: cb.O, H: cb.H, L: cb.L, C: cb.C,
+						DO: round2a(cb.O - db.O), DH: round2a(cb.H - db.H),
+						DL: round2a(cb.L - db.L), DC: round2a(cb.C - db.C),
+					})
 				}
 			}
 		}
@@ -126,10 +126,11 @@ func (s *Server) handleBarTruthArbiter(c *gin.Context) {
 			"ok": true, "action": "diff", "symbol": sym, "timeframe": tf,
 			"replay": replay,
 			"cache": gin.H{"count": cacheCount, "hash": cacheHash,
-				"atr5m": round2a(independentATR14(aggregate5m(cacheBars)))},
+				"atr5m": round2a(independentATR14(aggregate5m(cacheCommon)))},
 			"db": gin.H{"count": dbCount, "hash": dbHash,
-				"atr5m": round2a(independentATR14(aggregate5m(dbBars)))},
-			"deltas": deltas,
+				"atr5m": round2a(independentATR14(aggregate5m(dbCommon)))},
+			"common_window": gin.H{"count": len(cacheCommon), "mismatches": mismatches},
+			"deltas":        deltas,
 			"drops": gin.H{"ingest_oldest": oldest, "ingest_current": cur,
 				"ingest_historical": hist, "persist_queue": persist},
 		})
@@ -193,6 +194,23 @@ func dbRows5(st *store.Store, sym, tf string) []ntwire.Bar {
 		out = append(out, ntwire.Bar{T: r.OpenTimeMs, O: r.O, H: r.H, L: r.L, C: r.C, V: r.V})
 	}
 	return out
+}
+
+// intersectByT returns both series restricted to their common timestamps
+// (ascending), so the ATR comparison is window-fair.
+func intersectByT(a, b []ntwire.Bar) ([]ntwire.Bar, []ntwire.Bar) {
+	m := map[int64]ntwire.Bar{}
+	for _, x := range a {
+		m[x.T] = x
+	}
+	var ac, bc []ntwire.Bar
+	for _, y := range b {
+		if x, ok := m[y.T]; ok {
+			ac = append(ac, x)
+			bc = append(bc, y)
+		}
+	}
+	return ac, bc
 }
 
 func round2a(v float64) float64 { return math.Round(v*100) / 100 }
