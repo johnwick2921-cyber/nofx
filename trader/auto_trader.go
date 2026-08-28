@@ -351,6 +351,10 @@ type AutoTrader struct {
 	cycleNumber       int                    // Current cycle number
 	initialBalance    float64
 	dailyPnL          float64
+	// F3 fast-market wake reads (waterfall-class wave, 2026-08-28): the price
+	// at the last successful plan write + a one-shot flag for the next read.
+	lastPlanWritePrice atomic.Uint64 // math.Float64bits
+	fastTapePending    atomic.Bool
 	// lastClockHealthSession: which session the last clock-health line was
 	// logged for (PHASE 3.5) — one line per session roll, not per tick.
 	lastClockHealthSession string

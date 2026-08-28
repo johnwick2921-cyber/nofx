@@ -1,0 +1,294 @@
+package kernel
+
+import (
+	"fmt"
+	"math"
+	"os"
+	"strconv"
+	"strings"
+
+	"nofx/market"
+)
+
+// BreakdownContinue — the WATERFALL-CLASS play (F1, 2026-08-28). The 8th
+// scenario condition: momentum-follow through a broken level, the class the
+// plan lacked during the 2026-08-28 -347pt crash (missed-200pt report:
+// bias right, trigger set wrong for a waterfall — every authored short was a
+// retest-FADE and no continuation entry existed, $0-by-own-rules).
+//
+//   - breakdown_continue: SHORT — N closes BELOW a stated level with
+//     displacement ≥ BD_MIN_DISP_ATR × ATR5m and no reclaim close; entry =
+//     the pullback-that-fails (shallow retrace < BD_MAX_PULLBACK × the
+//     breakdown leg that cannot reclaim the level) or immediate on the 2nd
+//     confirming close (entry_mode).
+//   - breakup_continue:  the LONG mirror.
+//
+// ARMABLE: the retest entry is a resting limit AT the broken level — exactly
+// where an order beats a 2-minute brain. The arm chains on confirm leg 1
+// (breakdown confirmed) and rests at the level until price retests it.
+
+// PlanBreakdownContinue is the machine-verifiable schema of a
+// breakdown_continue / breakup_continue scenario (fvg-style: the model
+// declares, the validator re-checks the facts from bars).
+type PlanBreakdownContinue struct {
+	Level      float64 `json:"level"`                // the broken level (the retest)
+	LevelLabel string  `json:"level_label"`          // display label, e.g. "VWAP 29657.39"
+	EntryMode  string  `json:"entry_mode"`           // pullback | immediate
+	BreakLeg   float64 `json:"break_leg,omitempty"`  // declared displacement in pts (0 = validator computes)
+	Pullback   float64 `json:"pullback,omitempty"`   // declared max pullback in pts (0 = auto BD_MAX_PULLBACK × leg)
+}
+
+// ---- env knobs (zero literals) ----
+
+func bdMinDispATR() float64 {
+	if v := os.Getenv("BD_MIN_DISP_ATR"); v != "" {
+		if n, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err == nil && n > 0 {
+			return n
+		}
+	}
+	return 1.0
+}
+
+func bdMaxPullbackFrac() float64 {
+	if v := os.Getenv("BD_MAX_PULLBACK"); v != "" {
+		if n, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err == nil && n > 0 && n < 1 {
+			return n
+		}
+	}
+	return 0.4
+}
+
+func bdConfirmCloses() int {
+	if v := os.Getenv("BD_CONFIRM_CLOSES"); v != "" {
+		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n > 0 {
+			return n
+		}
+	}
+	return 2
+}
+
+func bdMaxLevelDistATR() float64 {
+	if v := os.Getenv("BD_MAX_LEVEL_DIST_ATR"); v != "" {
+		if n, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err == nil && n > 0 {
+			return n
+		}
+	}
+	// 5.0 — generous on purpose: the reference case (2026-08-28 v4, VWAP 57pts
+	// behind price at birth) must validate. The retest may never come (that is
+	// what the arm is for — it rests, correctly unfilled, if price never returns).
+	return 5.0
+}
+
+func bdMinSLATR() float64 {
+	if v := os.Getenv("BD_MIN_SL_ATR"); v != "" {
+		if n, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err == nil && n > 0 {
+			return n
+		}
+	}
+	return 1.0
+}
+
+// IsBreakdownCondition reports whether the condition string is one of the two
+// waterfall-class plays.
+func IsBreakdownCondition(condition string) bool {
+	c := strings.ToLower(strings.TrimSpace(condition))
+	return c == "breakdown_continue" || c == "breakup_continue"
+}
+
+// HasBreakdownScenario reports whether any scenario is waterfall-class.
+func HasBreakdownScenario(d *PlanDoc) bool {
+	if d == nil {
+		return false
+	}
+	for _, s := range d.Scenarios {
+		if IsBreakdownCondition(s.Condition) {
+			return true
+		}
+	}
+	return false
+}
+
+// breakdownShort reports whether the play is the SHORT mirror.
+func breakdownShort(condition string) bool {
+	return strings.EqualFold(strings.TrimSpace(condition), "breakdown_continue")
+}
+
+// BreakdownState is the machine-evaluated two-leg trigger state of one
+// waterfall-class scenario against the 1m snapshot.
+type BreakdownState struct {
+	Leg1Met     bool    // N closes beyond the level (the breakdown)
+	Leg2Met     bool    // the retest that failed to reclaim (pullback) / auto with leg1 (immediate)
+	Reclaimed   bool    // a close came back across the level — the play is void
+	BreakLegPts float64 // measured displacement (max excursion beyond the level)
+	LastClose   float64 // last evaluated close
+}
+
+// BreakdownContinueState evaluates both trigger legs from the 1m bars.
+// sinceMs scopes the tape to the plan's birth (bars before birth are ignored).
+// Leg 1 uses the same BEST-RUN semantics as EvaluateConfirm (the longest
+// consecutive run of closes beyond the level — a single non-beyond close
+// resets the run, matching the plan-status "best run N/M" convention).
+func BreakdownContinueState(sc PlanScenario, bars []market.Kline, sinceMs, nowMs int64) BreakdownState {
+	var st BreakdownState
+	if !IsBreakdownCondition(sc.Condition) || sc.Breakdown == nil || sc.Breakdown.Level <= 0 {
+		return st
+	}
+	lvl := sc.Breakdown.Level
+	short := breakdownShort(sc.Condition)
+	need := bdConfirmCloses()
+	run, bestRun := 0, 0
+	leg1At := int64(0)
+	for _, b := range bars {
+		if b.OpenTime < sinceMs || b.CloseTime > nowMs {
+			continue // closed bars within the plan's window only
+		}
+		cl := b.Close
+		st.LastClose = cl
+		beyond := (short && cl < lvl) || (!short && cl > lvl)
+		if beyond {
+			run++
+			if run > bestRun {
+				bestRun = run
+			}
+			if run >= need && leg1At == 0 {
+				leg1At = b.OpenTime
+			}
+			var exc float64
+			if short {
+				exc = lvl - b.Low
+			} else {
+				exc = b.High - lvl
+			}
+			if exc > st.BreakLegPts {
+				st.BreakLegPts = exc
+			}
+		} else {
+			if leg1At > 0 {
+				st.Reclaimed = true // a close back across voids the breakdown
+			}
+			run = 0
+		}
+	}
+	st.Leg1Met = leg1At > 0 && !st.Reclaimed
+	if !st.Leg1Met {
+		return st
+	}
+	if strings.EqualFold(strings.TrimSpace(sc.Breakdown.EntryMode), "immediate") {
+		// Immediate mode enters on the 2nd confirming close — leg 1 IS the entry
+		// signal; leg 2 is post-entry management (never a separate trigger).
+		st.Leg2Met = true
+		return st
+	}
+	// Pullback mode: after leg1, price must TOUCH back into the level and then
+	// close back beyond it once (the failed retest). The touch is detected as
+	// any bar whose range intersects the level after leg1At.
+	touched := false
+	for _, b := range bars {
+		if b.OpenTime <= leg1At || b.CloseTime > nowMs {
+			continue
+		}
+		if (short && b.High >= lvl) || (!short && b.Low <= lvl) {
+			touched = true
+		}
+		if touched {
+			if (short && b.Close < lvl) || (!short && b.Close > lvl) {
+				st.Leg2Met = true
+				break
+			}
+		}
+	}
+	return st
+}
+
+// ValidateBreakdownContinueScenarios re-verifies every waterfall-class scenario
+// against the bars at write time (the model declares, the math verifies).
+// price is the current price at write; atr5m the 5m Wilder ATR14.
+func ValidateBreakdownContinueScenarios(d *PlanDoc, bars []market.Kline, atr5m, price float64, nowMs int64) error {
+	if d == nil {
+		return nil
+	}
+	for i := range d.Scenarios {
+		s := &d.Scenarios[i]
+		if !IsBreakdownCondition(s.Condition) {
+			continue
+		}
+		if s.Breakdown == nil {
+			return fmt.Errorf("%s %s requires the breakdown{} facts object (level + entry_mode)", s.ID, s.Condition)
+		}
+		bd := s.Breakdown
+		short := breakdownShort(s.Condition)
+		if short && !strings.EqualFold(strings.TrimSpace(s.Direction), "short") {
+			return fmt.Errorf("%s breakdown_continue must be SHORT (got %s)", s.ID, s.Direction)
+		}
+		if !short && !strings.EqualFold(strings.TrimSpace(s.Direction), "long") {
+			return fmt.Errorf("%s breakup_continue must be LONG (got %s)", s.ID, s.Direction)
+		}
+		if bd.Level <= 0 {
+			return fmt.Errorf("%s breakdown{} needs level > 0", s.ID)
+		}
+		if atr5m > 0 && price > 0 && math.Abs(price-bd.Level) > bdMaxLevelDistATR()*atr5m {
+			return fmt.Errorf("%s broken level %.2f is %.1f pts from price %.2f (> %.1f×ATR5m=%.1f — the retest is unreachable; author a nearer broken level)",
+				s.ID, bd.Level, math.Abs(price-bd.Level), price, bdMaxLevelDistATR(), bdMaxLevelDistATR()*atr5m)
+		}
+		if !strings.EqualFold(strings.TrimSpace(bd.EntryMode), "pullback") &&
+			!strings.EqualFold(strings.TrimSpace(bd.EntryMode), "immediate") {
+			return fmt.Errorf("%s breakdown{} entry_mode must be pullback|immediate (got %q)", s.ID, bd.EntryMode)
+		}
+		// Facts: the tape must show the breakdown (or the arm's resting entry is
+		// authorized blind). Allow authoring BEFORE the final confirming close
+		// only in immediate mode (the 2nd close is the trigger itself).
+		st := BreakdownContinueState(*s, bars, 0, nowMs)
+		if !st.Leg1Met {
+			return fmt.Errorf("%s %s: the tape shows NO %d×5m breakdown through %.2f yet (%d confirming closes, no reclaim check) — author it only after the displacement exists (or set entry_mode=immediate and accept the 2nd-close trigger)",
+				s.ID, s.Condition, bdConfirmCloses(), bd.Level, 0)
+		}
+		if atr5m > 0 && st.BreakLegPts < bdMinDispATR()*atr5m {
+			return fmt.Errorf("%s %s: measured displacement %.2f pts < BD_MIN_DISP_ATR %.1f×ATR5m (%.1f pts) — not a displacement move, author a normal reject/retest play instead",
+				s.ID, s.Condition, st.BreakLegPts, bdMinDispATR(), bdMinDispATR()*atr5m)
+		}
+		if bd.DeclaredBreakLeg() > 0 && st.BreakLegPts > 0 {
+			_ = bd // declared leg accepted; the machine value is what the arm uses
+		}
+		if s.Arm != nil && s.Arm.Enabled {
+			if !strings.EqualFold(strings.TrimSpace(bd.EntryMode), "pullback") {
+				return fmt.Errorf("%s %s arm requires entry_mode=pullback (an immediate-mode entry cannot rest as a limit)", s.ID, s.Condition)
+			}
+			if !s.Arm.WaitConfirm {
+				return fmt.Errorf("%s %s arm requires wait_confirm:true (it must chain on confirm leg 1 before resting at the level)", s.ID, s.Condition)
+			}
+			if s.Confirm == nil {
+				return fmt.Errorf("%s %s arm requires a confirm{} (leg 1) to chain on", s.ID, s.Condition)
+			}
+			if atr5m > 0 && math.Abs(s.Arm.Entry-s.Arm.Stop) < bdMinSLATR()*atr5m {
+				return fmt.Errorf("%s %s arm stop distance %.2f pts < %.1f×ATR5m (%.1f pts) — respect min-SL", s.ID, s.Condition,
+					math.Abs(s.Arm.Entry-s.Arm.Stop), bdMinSLATR(), bdMinSLATR()*atr5m)
+			}
+		}
+	}
+	return nil
+}
+
+// DeclaredBreakLeg surfaces the declared displacement (0 = auto).
+func (b *PlanBreakdownContinue) DeclaredBreakLeg() float64 {
+	if b == nil {
+		return 0
+	}
+	return b.BreakLeg
+}
+
+// BreakdownContinueEntryPx derives the resting entry for an armed
+// waterfall-class scenario: the broken level, offset one tick INTO the trade's
+// favor (short → level + tick, long → level − tick) — the same convention as
+// reject arms.
+func BreakdownContinueEntryPx(sc PlanScenario, tick float64) float64 {
+	if !IsBreakdownCondition(sc.Condition) || sc.Breakdown == nil || sc.Breakdown.Level <= 0 {
+		return 0
+	}
+	if tick <= 0 {
+		tick = 0.25
+	}
+	if breakdownShort(sc.Condition) {
+		return sc.Breakdown.Level + tick
+	}
+	return sc.Breakdown.Level - tick
+}

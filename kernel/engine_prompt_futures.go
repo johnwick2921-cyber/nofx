@@ -246,8 +246,9 @@ func (e *StrategyEngine) buildFuturesPrompt(symbol string, accountEquity float64
 	sb.WriteString("- **IMPORTANT**: all numeric values must be concrete numbers, NOT formulas (e.g. `21480.00`, not `21500 - 20`).\n")
 	sb.WriteString("- Plan target chains are guidance — YOU set take_profit (D2 ruling); the R:R gate is the only TP constraint.\n")
 	sb.WriteString("- `cited_scenario`: REQUIRED on every open when a DAY PLAN is shown — the plan scenario id (\"S1\"…) you are trading, or \"off-plan\" for a valid non-plan setup. (A6/F12: this used to live only inside the plan block; a contract-literal model omitted it and every adherence grade silently degraded to D.)\n")
-		sb.WriteString("- ARMED PATH (autopsy-response): if a scenario confirm is MET and you decline on timing/extension grounds, the retrace is already covered by the plan's wait_confirm arm (it rests at the retrace level and fills without you) — prefer leaving that arm live over waiting for a cleaner touch; do not chase, and do not skip the retrace.\n")
-		sb.WriteString("- The <decision> block MUST be a JSON array, even for a single decision.\n\n")
+	sb.WriteString("- F4 (waterfall-class wave): if you see a valid breakdown/continuation thesis (a level broken with displacement and no reclaim) but the DAY PLAN has no matching scenario, SAY SO in your wait reasoning with the exact phrase `no breakdown scenario authored` — the system counts these; the planning gap must be visible, never silent.\n")
+	sb.WriteString("- ARMED PATH (autopsy-response): if a scenario confirm is MET and you decline on timing/extension grounds, the retrace is already covered by the plan's wait_confirm arm (it rests at the retrace level and fills without you) — prefer leaving that arm live over waiting for a cleaner touch; do not chase, and do not skip the retrace.\n")
+	sb.WriteString("- The <decision> block MUST be a JSON array, even for a single decision.\n\n")
 
 	if e.config.CustomPrompt != "" {
 		sb.WriteString("# Personalized Strategy\n\n")

@@ -12,6 +12,7 @@ import (
 	"nofx/telemetry"
 	"nofx/wallet"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -70,6 +71,30 @@ func planReasoningWire() (string, string) {
 
 func planReasoningLabel() string {
 	_, _, l := reasoningWire(os.Getenv("AI_PLAN_REASONING"), "max")
+	return l
+}
+
+// fastMarketATR — F3 (waterfall-class wave, 2026-08-28): the drift threshold in
+// ATR5m multiples (FAST_MARKET_ATR, default 1.5). A wake read whose price has
+// moved more than this since the last plan write runs on the fast wire.
+func fastMarketATR() float64 {
+	if v := os.Getenv("FAST_MARKET_ATR"); v != "" {
+		if n, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err == nil && n > 0 {
+			return n
+		}
+	}
+	return 1.5
+}
+
+// fastMarketReasoningWire — F3: FAST_MARKET_REASONING, default fast. Fast-tape
+// reads must return fast (<120s target), not deep-think 6-minute answers.
+func fastMarketReasoningWire() (string, string) {
+	m, e, _ := reasoningWire(os.Getenv("FAST_MARKET_REASONING"), "fast")
+	return m, e
+}
+
+func fastMarketReasoningLabel() string {
+	_, _, l := reasoningWire(os.Getenv("FAST_MARKET_REASONING"), "fast")
 	return l
 }
 

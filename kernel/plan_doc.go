@@ -52,7 +52,7 @@ type PlanConfirm struct {
 type PlanScenario struct {
 	ID          string    `json:"id"`           // S1, S2, S3
 	Trigger     string    `json:"trigger"`      // the setup description
-	Condition   string    `json:"condition"`    // reclaim|hold|sweep_reclaim|reject|acceptance|breakout_retest|fvg_entry
+	Condition   string    `json:"condition"`    // reclaim|hold|sweep_reclaim|reject|acceptance|breakout_retest|fvg_entry|breakdown_continue|breakup_continue
 	Direction   string    `json:"direction"`    // long | short
 	TargetChain []float64 `json:"target_chain"` // ordered targets
 	Invalid     string    `json:"invalid"`      // invalidation
@@ -64,6 +64,15 @@ type PlanScenario struct {
 	// from stored bars at write time (ValidateFvgEntryScenarios) — the model
 	// declares, the math verifies.
 	Fvg *PlanFvgEntry `json:"fvg,omitempty"`
+	// Breakdown (WATERFALL-CLASS, 2026-08-28) — machine-verified momentum-follow
+	// play: condition=="breakdown_continue"|"breakup_continue" REQUIRES this
+	// object (ValidateBreakdownContinueScenarios re-checks the displacement from
+	// bars at write time).
+	Breakdown *PlanBreakdownContinue `json:"breakdown,omitempty"`
+	// Confirm2 (F2 two-leg confirm rendering, 2026-08-28) — the optional SECOND
+	// trigger leg (e.g. the retest-fail leg of a two-leg setup). A partial
+	// (leg 1 MET, leg 2 not) never renders as a bare "MET".
+	Confirm2 *PlanConfirm `json:"confirm2,omitempty"`
 	// G5 (regime wave 2026-08-21) — true when the trigger level was CONSUMED at
 	// write/re-align time: quality is capped at C and the card badges it
 	// "level consumed". Advisory — never a gate.
@@ -108,8 +117,24 @@ func ArmSpecValid(sc PlanScenario) error {
 		if sc.Confirm == nil {
 			return fmt.Errorf("sweep_reclaim arm on %s requires a confirm{} object to chain on", sc.ID)
 		}
+	} else if IsBreakdownCondition(sc.Condition) {
+		// Waterfall-class arms (2026-08-28): the resting limit sits AT the broken
+		// level and chains on confirm leg 1 — exactly the pullback-that-fails
+		// entry the play describes. Immediate-mode entries cannot rest.
+		if sc.Breakdown == nil {
+			return fmt.Errorf("%s arm requires the breakdown{} facts object", sc.ID)
+		}
+		if !strings.EqualFold(strings.TrimSpace(sc.Breakdown.EntryMode), "pullback") {
+			return fmt.Errorf("%s arm requires entry_mode=pullback (immediate-mode entries are AI-path only)", sc.ID)
+		}
+		if !sc.Arm.WaitConfirm {
+			return fmt.Errorf("%s arm requires wait_confirm:true (it chains on confirm leg 1 before resting at the level)", sc.ID)
+		}
+		if sc.Confirm == nil {
+			return fmt.Errorf("%s arm requires a confirm{} (leg 1) to chain on", sc.ID)
+		}
 	} else if !ArmableCondition(sc.Condition) {
-		return fmt.Errorf("arm enabled on non-armable condition %q (fvg_entry | reject only; sweep_reclaim via wait_confirm; breakout_retest is a normal AI play and never arms — GAR-F4)", sc.Condition)
+		return fmt.Errorf("arm enabled on non-armable condition %q (fvg_entry | reject | breakdown_continue | breakup_continue; sweep_reclaim via wait_confirm; breakout_retest is a normal AI play and never arms — GAR-F4)", sc.Condition)
 	}
 	a := sc.Arm
 	if a.Entry <= 0 || a.Stop <= 0 || a.Target <= 0 {

@@ -12,9 +12,11 @@ import "strings"
 // first and stay on the AI path. breakout_retest was EXCLUDED by the
 // grand-audit response wave (F4, 2026-08-28): its replay expectancy is negative
 // at every R-floor, so it stays a normal AI play and is never armed.
+// breakdown_continue/breakup_continue (waterfall-class, 2026-08-28) ARE
+// armable: the retest entry rests AT the broken level.
 func ArmableCondition(condition string) bool {
 	switch strings.ToLower(strings.TrimSpace(condition)) {
-	case "fvg_entry", "reject":
+	case "fvg_entry", "reject", "breakdown_continue", "breakup_continue":
 		return true
 	}
 	return false
@@ -50,6 +52,8 @@ func ArmedEntryPx(sc PlanScenario, anchor float64, tick float64) float64 {
 			return anchor + tick
 		}
 		return anchor - tick
+	case "breakdown_continue", "breakup_continue":
+		return BreakdownContinueEntryPx(sc, tick)
 	}
 	return 0
 }
