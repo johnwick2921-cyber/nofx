@@ -172,6 +172,29 @@ func RenderBiasTree(price float64, levels []ScoredLevel, bc BiasContext) string 
 	return b.String()
 }
 
+// FantasyTargetWarnings (autopsy-response wave, 2026-08-27) — advisory WARN,
+// never a fail: an armed scenario whose PLANNED R:R exceeds 6 is a
+// fantasy-target flag (the 3.28–22.88 R losers in the refusal autopsy).
+func FantasyTargetWarnings(doc PlanDoc) []string {
+	var out []string
+	for _, s := range doc.Scenarios {
+		a := s.Arm
+		if a == nil || !a.Enabled || a.Entry <= 0 || a.Stop <= 0 || a.Target <= 0 {
+			continue
+		}
+		risk := a.Entry - a.Stop
+		reward := a.Target - a.Entry
+		if strings.EqualFold(strings.TrimSpace(s.Direction), "short") {
+			risk = a.Stop - a.Entry
+			reward = a.Entry - a.Target
+		}
+		if risk > 0 && reward/risk > 6.0 {
+			out = append(out, fmt.Sprintf("%s: planned R %.1f (entry %.2f stop %.2f target %.2f) — fantasy-target flag", s.ID, reward/risk, a.Entry, a.Stop, a.Target))
+		}
+	}
+	return out
+}
+
 // ChainWarnings (A2, planner-contract wave) — validator WARN, never a fail:
 // an fvg_entry scenario without a chain_after sweep precursor and whose origin
 // level is not a fresh A/B zone is the bare-gap setup the research's raw-FVG
@@ -465,7 +488,10 @@ func plannerOutputContract(maxLevels, maxScenarios int, hasHTFZones, has1HSDZone
 		"target_chain is GUIDANCE for the executor AI (which sets the actual take_profit) — it is validated for reachability at write time but never enforced at execution (D2 ruling). " +
 		// WAVE 2 armed orders (2026-08-27) — the arming authorization. The LLM
 		// chooses WHAT to arm; Go manages WHEN it fills (tick-level).
-		"ARMED ORDERS: for a PRICE-DETERMINISTIC setup you may AUTHORIZE a resting limit order via arm{} — enabled:true + EXACT entry/stop/target. Arm ONLY: fvg_entry (limit at the gap CE, or the gap edge when entry_mode=edge), breakout_retest (limit at the retest level), reject (limit at the level ∓1 tick). NEVER arm acceptance or a raw sweep_reclaim — they need a close-confirm first and stay on the AI path. Long: stop < entry < target. Short: target < entry < stop. Arm only your best A/B-setup (quality matters — the arm gate enforces min_scenario_quality); the system places it within a tick band, manages it tick-level, and cancels it on veto/dormant/session-end. " +
+			// Autopsy-response wave: armable A/B setups SHOULD carry arm{} (the
+			// resting order is the fast path); sweep_reclaim retraces chain via
+			// wait_confirm; fantasy targets (planned R > 6) are WARN-flagged.
+			"ARMED ORDERS (the resting order IS the fast path — prefer it over a 2-minute debate at the touch): every fvg_entry / breakout_retest / reject scenario you author at quality A or B SHOULD carry arm{} — enabled:true + EXACT entry/stop/target. A setup the planner believes in gets a resting order, not a mid-touch argument. Long: stop < entry < target. Short: target < entry < stop. CHAINED ARMS: when a sweep_reclaim you believe in confirms, its RETRACE entry should already be resting — author that retrace as its own arm with wait_confirm:true, or add wait_confirm:true to the sweep scenario's arm: the system holds the arm dormant until the scenario's confirm{} is machine-MET, then places it (the sweep fast path). NEVER arm acceptance or a raw sweep WITHOUT the wait_confirm chain. Keep targets REAL: a planned R:R above ~6 is a fantasy target and gets WARN-flagged at write. The system places arms within a tick band, manages them tick-level, and cancels on veto/dormant/session-end. " +
 		// A2 (2026-08-26) — condition×session guidance from the week ledger:
 		// reject 75% win +665 in NY RTH vs acceptance 0% −157 and sweep_reclaim
 		// 0% −192. Advisory truth, not a hard rule.

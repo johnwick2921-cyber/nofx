@@ -136,6 +136,16 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 		if sc.Arm == nil || !sc.Arm.Enabled {
 			continue
 		}
+		// S2b chained arm (autopsy-response wave): wait_confirm arms stay DORMANT
+		// until the scenario's own confirm{} is machine-MET — the sweep_reclaim
+		// retrace fast path (the S3-class 7/7 replay winners had no fast path).
+		if sc.Arm.WaitConfirm && sc.Confirm != nil {
+			v := kernel.EvaluateConfirm(*sc.Confirm, bars, plan.BirthMs, now.UnixMilli())
+			if !v.Met {
+				continue
+			}
+			at.logInfof("⚔️ arm %s wait_confirm MET — arming the retrace", sc.ID)
+		}
 		// gates AT ARM TIME — a resting order is a pre-passed entry; each gate
 		// input that changes materially later triggers a cancel (1.3).
 		if verdict := at.armGateVerdict(sc, doc.Bias.Direction, snap, atr5m, minQuality, cfg); verdict != "" {

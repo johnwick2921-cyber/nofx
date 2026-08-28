@@ -85,10 +85,11 @@ type PlanScenario struct {
 // Entry is the resting LIMIT price; Stop/Target form the bracket. Long:
 // stop < entry < target. Short: target < entry < stop.
 type PlanArmSpec struct {
-	Enabled bool    `json:"enabled"` // the arming authorization itself
-	Entry   float64 `json:"entry"`   // resting limit price
-	Stop    float64 `json:"stop"`    // bracket stop
-	Target  float64 `json:"target"`  // bracket target
+	Enabled     bool    `json:"enabled"`               // the arming authorization itself
+	Entry       float64 `json:"entry"`                 // resting limit price
+	Stop        float64 `json:"stop"`                  // bracket stop
+	Target      float64 `json:"target"`                // bracket target
+	WaitConfirm bool    `json:"wait_confirm,omitempty"` // chain-arm: rest until the scenario's confirm{} is MET (sweep_reclaim retrace fast path, autopsy-response wave)
 }
 
 // ArmSpecValid checks the arming contract of one scenario. ok=false with a
@@ -97,8 +98,18 @@ func ArmSpecValid(sc PlanScenario) error {
 	if sc.Arm == nil || !sc.Arm.Enabled {
 		return nil // not armed — nothing to validate
 	}
-	if !ArmableCondition(sc.Condition) {
-		return fmt.Errorf("arm enabled on non-armable condition %q (fvg_entry | breakout_retest | reject only)", sc.Condition)
+	// Autopsy-response wave (2026-08-27): sweep_reclaim becomes armable ONLY
+	// as a CHAINED arm (wait_confirm) — the arm rests until the scenario's own
+	// confirm{} is machine-MET, then the retrace entry goes live.
+	if strings.EqualFold(strings.TrimSpace(sc.Condition), "sweep_reclaim") {
+		if !sc.Arm.WaitConfirm {
+			return fmt.Errorf("sweep_reclaim arm on %s requires wait_confirm:true (the retrace arm must chain on its confirm)", sc.ID)
+		}
+		if sc.Confirm == nil {
+			return fmt.Errorf("sweep_reclaim arm on %s requires a confirm{} object to chain on", sc.ID)
+		}
+	} else if !ArmableCondition(sc.Condition) {
+		return fmt.Errorf("arm enabled on non-armable condition %q (fvg_entry | breakout_retest | reject only; sweep_reclaim via wait_confirm)", sc.Condition)
 	}
 	a := sc.Arm
 	if a.Entry <= 0 || a.Stop <= 0 || a.Target <= 0 {

@@ -1158,6 +1158,13 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		for _, m := range kernel.ChainWarnings(*d) {
 			at.logWarnf("🔗 chain warning: %s", m)
 		}
+		// Autopsy-response wave (2026-08-27) — fantasy-target advisory:
+		// an armed scenario with planned R:R > 6 gets WARN-flagged (the
+		// 3.28–22.88-R loser class). Never a fail.
+		for _, m := range kernel.FantasyTargetWarnings(*d) {
+			at.logWarnf("🔮 fantasy-target warning: %s", m)
+		}
+
 		doc = d
 		break
 	}
