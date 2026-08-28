@@ -77,6 +77,41 @@ func (at *AutoTrader) armedTrader() *ntTrader.TCPTrader {
 // unless day_plan is on and armed specs exist. snap is the structure snapshot
 // for the HTF veto gate.
 
+// declineHadFreshMet (S5, autopsy-response wave) — true when the active plan
+// has a scenario whose confirm{} is machine-MET and NOT stale at this instant:
+// the honest-wait leak the autopsy quantified (declines while a FRESH confirm
+// was live). Mirrors RenderConfirmLines' staleness rule.
+func (at *AutoTrader) declineHadFreshMet() bool {
+	plan := kernel.ActivePlanFor(at.id, at.futuresSymbol())
+	if plan == nil {
+		return false
+	}
+	var bars []market.Kline
+	if market.FuturesBarsProvider != nil {
+		bars = market.FuturesBarsProvider(at.futuresSymbol(), kernel.AISVPBarInterval, kernel.AISVPBarCount)
+	}
+	if len(bars) == 0 {
+		return false
+	}
+	nowMs := time.Now().UnixMilli()
+	nowPrice := bars[len(bars)-1].Close
+	atr5m := market.ExportCalculateATR(kernel.AcceptanceBars(bars, "2x5m"), 14)
+	for _, s := range plan.Doc.Scenarios {
+		if s.Confirm == nil {
+			continue
+		}
+		v := kernel.EvaluateConfirm(*s.Confirm, bars, plan.BirthMs, nowMs)
+		if !v.Met {
+			continue
+		}
+		if atr5m > 0 && math.Abs(nowPrice-s.Confirm.RefPrice) > kernel.StaleConfirmATR()*atr5m {
+			continue // stale-MET is NOT the leak class
+		}
+		return true
+	}
+	return false
+}
+
 func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureState) {
 	if !at.dayPlanEnabled() || at.store == nil || at.exchange != "ninjatrader" {
 		return

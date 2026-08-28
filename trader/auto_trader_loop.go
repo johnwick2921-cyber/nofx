@@ -748,6 +748,12 @@ func (at *AutoTrader) runCycle() error {
 			at.logInfof("ℹ️ superseded_wait — the AI call spanned a %s close but the decision was wait/hold-only; discarded quietly (free).", at.primaryTimeframe())
 			stampGuardrailSkip(record, "superseded_wait")
 			telemetry.IncGateBlock(at.id, "superseded_wait")
+			// S5 (autopsy-response wave) — the honest-wait leak gauge: a decline
+			// while a FRESH confirm was MET is the exact class the autopsy
+			// quantified (+$1,763 hypothetical in the 08-26→27 window).
+			if at.declineHadFreshMet() {
+				telemetry.IncGateBlock(at.id, "decline_fresh_met")
+			}
 			at.saveDecision(record)
 			return nil
 		default:

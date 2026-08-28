@@ -1164,7 +1164,17 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		for _, m := range kernel.FantasyTargetWarnings(*d) {
 			at.logWarnf("🔮 fantasy-target warning: %s", m)
 		}
-
+		// S5 (autopsy-response wave) — arm-authored counter: one tick per
+		// arm{} spec written; the before/after gauge of the arming mandate.
+		nArms := 0
+		for _, s := range d.Scenarios {
+			if s.Arm != nil && s.Arm.Enabled {
+				nArms++
+			}
+		}
+		for i := 0; i < nArms; i++ {
+			telemetry.IncGateBlock(at.id, "arm_authored")
+		}
 		doc = d
 		break
 	}
