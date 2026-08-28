@@ -51,3 +51,44 @@ Zero deploys, zero restarts, zero config/env writes. Live DB only READ (the F2 i
 
 ## CUTOVER STATUS
 **Ready for a single cutover** — one deploy covers all six. Awaiting the owner's explicit "go cutover". Post-cutover E-proofs: planner calls log `cap=65536` and no new `finish_reason=length`; next wake re-read lands a new version instead of freezing; `closes_dropped` stays 0 through the next stall; #567's row carries version 12 / band `armed_fill`; the REFUSED spam is one line per arm-spec.
+
+---
+
+# CUTOVER RECORD (2026-08-28, owner-acked ×2)
+
+## Swap 1 — main wave (07:28:10 CT)
+- Flat-gate ALL-ORIGIN PASS: DB `OPEN=0` · NT8 `positions snapshot account=Sim101 count=0` + `account=SimAccount1 count=0` @ 07:27:27 · API `/api/positions` `[]` ×2 @ 07:27:57 · armed_orders non-terminal=0.
+- `nofx-bin` 67d2d10e → `nofx-bin.prev.londonfix`; new binary `b4dc8345` (clean-clone build, vcs.revision == dev tip); `deploy/RELEASE=b4dc8345`; marker commit pushed; `kill -9 3299799`.
+- Boot block (07:28:15, PID 3433125):
+  - `🔐 BOOT INTEGRITY OK — rev b4dc8345905d · built 2026-08-28T12:25:25Z · expected b4dc8345 · goldens PASS`
+  - `🛑 min-sl guard: atr_mult=1.0 level_clearance=2tick(s)`
+  - `🧬 plan lifecycle: hysteresis=buffer0.5×ATR14 confirm=2close(s) · flip/death→dormant+auto-rearm … exec_reasoning=fast→low plan_reasoning=max`
+  - `⚔️ armed_orders=on place_band=100t stale_working=15m test_seam=off arm_rr=2.0 (gate-at-arm only; market-entry floor 3.0 unchanged)`
+  - `📐 planner cap: plan_max_tokens=65536 (AI_PLAN_MAX_TOKENS; default 65536) · truncation → 🚨 WARN, never silent`
+  - `✅ bars integrity OK: dups=0 tfs=1m total=14622`
+- **Defect found post-boot:** the `🩹 RepairArmedLineage` line was absent — the startup repair CALL never landed in commit 0085a2b7 (materialization-time stamp was live; the #567 back-fill call was missing). Fix committed as `2738d158` ("hotfix: wire RepairArmedLineage into StartPositionReconcile"), full `go test ./...` green at that sha.
+
+## Swap 2 — hotfix (07:39:16 CT, owner "GO HOTFIX")
+- Flat-gate: DB `OPEN=0` · NT8 `count=0` ×2 @ 07:38:27 · API `[]` @ 07:38:44 · one non-terminal arm: row 7 LONDON S4 `state=armed` (authorization only, no signal → nothing resting on the wire; survives the restart in the ledger — the protocol WAIT clause targets `working` arms).
+- `nofx-bin` b4dc8345 → `nofx-bin.prev.londonfix2`; new binary `2738d158` (vcs.revision == dev tip, clean); `deploy/RELEASE=2738d158`; marker commit pushed; `kill -9 3433125`.
+- Boot block (07:39:21, PID 3441452):
+  - `🔐 BOOT INTEGRITY OK — rev 2738d158ee58 · built 2026-08-28T12:32:09Z · expected 2738d158 · goldens PASS`
+  - **`🩹 RepairArmedLineage: stamped 1 position(s) with their armed-fill plan linkage (the #567 class)`**
+  - `🧬 plan lifecycle …` · `⚔️ armed_orders=on … arm_rr=2.0 …` · `📐 planner cap: plan_max_tokens=65536 …` — all intact.
+
+## #567 LINEAGE PROOF (fresh DB query @ 07:40)
+`id=567 · plan_version=12 · cited_scenario_id=S1 · plan_band=armed_fill · adherence_grade=B · plan_id=2026-08-27:ASIA:8d5c… · plan_session=ASIA`
+The F grade was cleared by the repair and W5 regraded the close with the armed-fill plan in hand → **B**. Grade ≠ F ✓.
+
+## POST-BOOT SANITY (first minutes)
+- `/api/status` 200 · `/api/positions` `[]` · cycles resuming (cycle #1 at boot, cadence healthy) · `✅ bars integrity OK: dups=0 tfs=1m total=14644` · ingest `intrabar_dropped=0 … peak_depth=0/4096`.
+- `🧠 planner model: empty binding → using primary, pinned "deepseek-v4-pro"` @ 07:30:15 (CONFIRM-1 live evidence — no legacy alias on the wire; `deepseek-reasoner` exists only in the deprecated claw402 payment route table).
+- CONFIRM-2: the 32768 ceiling was OUR `.env AI_MAX_TOKENS=32768` → `mcp/config.go:60` `getEnvInt("AI_MAX_TOKENS", 32768)`; provider probed ceiling 393216 accepted.
+- One notice (not a regression): `🚨 CLOCK EARLY-WARNING [session-roll:LONDON]: |drift| 37755ms` — pre-existing WSL2 time-sync machinery, log-only, under the 60s tolerance.
+- The LONDON S4 `armed` row survived the restart in the ledger (id 7, still `armed`).
+
+## PENDING E-PROOFS (tonight)
+1. **17:05 CT** — nightly level_stats solo night #2 (evaluates 08-27) → `evaluated N>0`.
+2. **17:00 CT Globex reopen** — `peak_depth < 4096` AND `closes_dropped=0` through the flood.
+3. Next planner read — `cap=65536` in the log, zero `finish_reason=length`, wake re-reads succeeding (the London-freeze class dead).
+4. First session-end with a WORKING arm — cancel-first wire proof (still the FIX-1 pending E-proof).
