@@ -37,3 +37,17 @@
 - Flat gate all-origin (DB OPEN + NT8 `count=0` snapshots + API) → owner ack → swap → `kill -9` → boot quoted.
 - **E-proof:** the first naturally-authored `arm{}` in a plan written by the new binary (and, on its first sweep_reclaim, a `wait_confirm` chained arm going live).
 - Binary prebuilt at dev `c21ad24a3a10`.
+
+---
+
+## CUTOVER EXECUTED 2026-08-27 21:27:36 CT (owner "GO", reachable + acking)
+
+**FLAT-GATE PASS (21:27:20 CT):** DB `OPEN=0` · NT8 truth `positions snapshot account=Sim101 count=0` + `SimAccount1 count=0` (21:26:54) · API `[]`.
+
+**Boot:**
+```
+🔐 BOOT INTEGRITY OK — rev c21ad24a3a10 +dirty · built 2026-08-28T01:18:24Z · expected c21ad24a3a10 · goldens PASS
+```
+PID 3231415. Plus the S1 line: `⚔️ armed_orders=on place_band=100t stale_working=15m test_seam=off arm_rr=2.0 (gate-at-arm only; market-entry floor 3.0 unchanged) …`
+
+**E-proof status:** awaiting the first naturally-authored `arm{}` (next planner write under the new binary; the boot carries no plan yet).
