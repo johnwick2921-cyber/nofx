@@ -131,6 +131,19 @@ func (s *ArmedOrderStore) ListForPlan(planID string) ([]ArmedOrderDB, error) {
 	return out, err
 }
 
+// ListFilled returns one trader's most recent FILLED rows, newest first
+// (F3, LONDON-FORENSICS 2026-08-28 — the lineage-repair matcher for
+// reconcile-materialized positions reads this).
+func (s *ArmedOrderStore) ListFilled(traderID string, limit int) ([]ArmedOrderDB, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	var out []ArmedOrderDB
+	err := s.db.Where("trader_id = ? AND state = 'filled'", traderID).
+		Order("updated_at DESC").Limit(limit).Find(&out).Error
+	return out, err
+}
+
 // Touch refreshes UpdatedAt (the stale-working reconnect safety net reads it).
 func (s *ArmedOrderStore) Touch(id int64) error {
 	return s.db.Model(&ArmedOrderDB{}).Where("id = ?", id).

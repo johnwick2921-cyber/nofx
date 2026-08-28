@@ -19,7 +19,7 @@ import (
 // frame re-derives the closed tail from the cache, and the boot backfill
 // covers anything older.
 
-const barPersistQueueCap = 1024
+const barPersistQueueCap = 4096
 
 var (
 	barPersister         atomic.Value // func(historical bool, symbol, tf string, bars []Bar)
@@ -154,6 +154,13 @@ func ClosedCacheTail(get func(symbol, tf string) []Bar, symbol, tf string, nowMs
 // CONSTRUCTION — intra-bar updates stay in-memory). Queue-full drops are
 // counted + summarized 1-line/min; they self-heal because the next live
 // frame re-derives the closed cache tail.
+//
+// F2 (LONDON-FORENSICS 2026-08-28) — CLOSES ARE SACRED: the 06:09 event
+// dropped 8 CLOSED bars (queue full while the GORM writer was stalled).
+// Queue-full now blocks-with-timeout (backpressure to the ingest drainer,
+// which the socket read loop never sees) instead of dropping; only after the
+// deadline does a close-carrying batch drop, and then it shouts ERROR — never
+// a silent counted drop.
 func fanOutBarPersist(warn func(msg string, kv ...interface{}), historical bool, symbol, tf string, bars []Bar) {
 	if len(bars) == 0 {
 		return
@@ -163,17 +170,54 @@ func fanOutBarPersist(warn func(msg string, kv ...interface{}), historical bool,
 		return
 	}
 	startPersistWorker()
+	msg := persistMsg{historical: historical, symbol: symbol, tf: tf, bars: bars}
 	select {
-	case barPersistCh <- persistMsg{historical: historical, symbol: symbol, tf: tf, bars: bars}:
+	case barPersistCh <- msg:
+		return
 	default:
-		persistDropped.Add(1)
-		// Honest counters (FORENSICS HYGIENE 2026-08-28): queue-full drops of
-		// CLOSED bars are counted separately from intra-bar ingest evictions.
-		// closes_dropped must stay 0 — the next frame re-derives the closed
-		// tail, but a nonzero value means the self-heal lagged a full window.
-		persistDroppedCloses.Add(int64(len(bars)))
-		barPersistSummary()
 	}
+	// Queue full. Closes (and historical batches) are sacred: bounded-blocking
+	// retry — backpressure, never a drop — then a LOUD last resort.
+	if historical || hasClosedBar(bars, tf) {
+		for attempt := 1; attempt <= 3; attempt++ {
+			select {
+			case barPersistCh <- msg:
+				return
+			case <-time.After(2 * time.Second):
+				logger.Warnf("bars: persist queue stalled %ds (attempt %d/3) — close-carrying batch waiting (closes are never dropped on this path)", attempt*2, attempt)
+			}
+		}
+		persistDropped.Add(1)
+		persistDroppedCloses.Add(int64(len(closedBarsOnly(bars, tf))))
+		logger.Errorf("bars: persist queue stalled 6s+ — %d CLOSED bar(s) dropped (closes_dropped must be 0; cache-tail re-derive + boot backfill cover the gap)", len(closedBarsOnly(bars, tf)))
+		barPersistSummary()
+		return
+	}
+	persistDropped.Add(1)
+	barPersistSummary()
+}
+
+// hasClosedBar reports whether the batch carries at least one CLOSED bar (open
+// time + tf duration ≤ now).
+func hasClosedBar(bars []Bar, tf string) bool {
+	return len(closedBarsOnly(bars, tf)) > 0
+}
+
+// closedBarsOnly filters to the bars whose CLOSE time has passed (same
+// contract as ClosedBarsOnly, exported for the drop accounting).
+func closedBarsOnly(bars []Bar, tf string) []Bar {
+	dur := timeframeMs(tf)
+	if dur <= 0 {
+		dur = 60_000
+	}
+	nowMs := time.Now().UnixMilli()
+	out := make([]Bar, 0, len(bars))
+	for _, b := range bars {
+		if b.T+dur <= nowMs {
+			out = append(out, b)
+		}
+	}
+	return out
 }
 
 // ingestDropSummary logs the 1-line/minute ingest-drop summary in place of

@@ -190,7 +190,13 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 		// gates AT ARM TIME — a resting order is a pre-passed entry; each gate
 		// input that changes materially later triggers a cancel (1.3).
 		if verdict := at.armGateVerdict(sc, doc.Bias.Direction, snap, atr5m, minQuality, cfg); verdict != "" {
-			at.logWarnf("⚔️ arm REFUSED %s %s: %s", plan.Session, sc.ID, verdict)
+			// F4 (LONDON-FORENSICS 2026-08-28) — log the REFUSED verdict ONCE
+			// per arm-spec (the same infeasible arm re-refused every cycle
+			// printed ~120 lines/session); silent until the spec changes.
+			key := plan.PlanID + ":" + strconv.Itoa(plan.Version) + ":" + sc.ID
+			if armRefusalChanged(&at.armRefusalLast, key, verdict) {
+				at.logWarnf("⚔️ arm REFUSED %s %s: %s", plan.Session, sc.ID, verdict)
+			}
 			continue
 		}
 		side := strings.ToLower(strings.TrimSpace(sc.Direction))
@@ -318,6 +324,20 @@ func (at *AutoTrader) runArmedPlacement(bars []market.Kline) {
 // arm's SL or TP by ≥ 2 ticks (2.1). Pure for tests.
 func churnNeedsModify(oldStop, oldTarget, newStop, newTarget, tick float64) bool {
 	return math.Abs(oldStop-newStop) >= 2*tick || math.Abs(oldTarget-newTarget) >= 2*tick
+}
+
+// armRefusalChanged (F4) — true when this arm-spec's refusal verdict is new or
+// changed (the caller logs); false when the identical verdict was already
+// logged for the same spec (the caller stays silent).
+func armRefusalChanged(last *map[string]string, key, verdict string) bool {
+	if *last == nil {
+		*last = map[string]string{}
+	}
+	if prev, ok := (*last)[key]; ok && prev == verdict {
+		return false
+	}
+	(*last)[key] = verdict
+	return true
 }
 
 // workingStale — the reconnect predicate: no order_update for the stale window.

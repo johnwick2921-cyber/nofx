@@ -45,6 +45,21 @@ func ctTime(t *testing.T, y int, mo time.Month, d, hh, mm int) time.Time {
 	return time.Date(y, mo, d, hh, mm, 0, 0, loc)
 }
 
+// waitPlan polls the plan store for the first read's write (F6, LONDON-
+// FORENSICS 2026-08-28: the first read is async so its 3-attempt planner call
+// can never stall the executor loop 19 minutes again).
+func waitPlan(t *testing.T, st *store.Store, tradeDate, session, traderID string) *store.PlanDB {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if row, _ := st.Plan().GetLatestPlanForTraderSession(tradeDate, session, traderID); row != nil {
+			return row
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	return nil
+}
+
 func TestP0BAsiaReadFiresAt1655WhileMarketClosed(t *testing.T) {
 	at, st := asiaClockTrader(t)
 	prev := market.FuturesBarsProvider
@@ -71,9 +86,9 @@ func TestP0BAsiaReadFiresAt1655WhileMarketClosed(t *testing.T) {
 
 	at.maybeRunSessionReadsAt(now)
 
-	row, err := st.Plan().GetLatestPlanForTraderSession("2026-08-18", "ASIA", "t1")
-	if err != nil || row == nil {
-		t.Fatalf("the 16:55 ASIA read must fire while the market is closed, row=%v err=%v", row, err)
+	row := waitPlan(t, st, "2026-08-18", "ASIA", "t1")
+	if row == nil {
+		t.Fatalf("the 16:55 ASIA read must fire while the market is closed")
 	}
 	if row.Lifecycle != "active" || row.TriggerReason != "ASIA_scheduled_read" {
 		t.Fatalf("plan row wrong: %+v", row)
@@ -90,7 +105,7 @@ func TestP0BAsiaReadDoesNotFireOutsideItsWindow(t *testing.T) {
 	// Sunday 16:55: the session INSTANCE opens Sunday 17:00 (live Globex) —
 	// reading is correct.
 	at.maybeRunSessionReadsAt(ctTime(t, 2026, 8, 23, 16, 55))
-	if row, _ := st.Plan().GetLatestPlanForTraderSession("2026-08-23", "ASIA", "t1"); row == nil {
+	if row := waitPlan(t, st, "2026-08-23", "ASIA", "t1"); row == nil {
 		t.Fatalf("Sunday 17:00 is a live session open — the 16:55 Sunday read must fire")
 	}
 }

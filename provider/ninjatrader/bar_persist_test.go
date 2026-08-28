@@ -54,12 +54,19 @@ func TestFanOutBarPersistQueueFullDropsCounted(t *testing.T) {
 	})
 	defer func() { close(block); SetBarPersister(nil) }()
 	persistDropped.Store(0)
+	persistDroppedCloses.Store(0)
+	// FORMING bars (open time = now) take the drop path; close-carrying batches
+	// now wait instead (F2, closes are sacred) — so this flood is intrabar-only.
+	nowMs := time.Now().UnixMilli()
 	// The worker consumes up to 256 into its batch before the blocking flush —
 	// flood well past channel cap + batch so drops are guaranteed.
 	for i := 0; i < barPersistQueueCap*2; i++ {
-		fanOutBarPersist(nil, false, "MNQ", "1m", []Bar{{T: int64(i)}})
+		fanOutBarPersist(nil, false, "MNQ", "1m", []Bar{{T: nowMs}})
 	}
 	if persistDropped.Load() == 0 {
 		t.Fatal("expected queue-full drops to be counted")
+	}
+	if persistDroppedCloses.Load() != 0 {
+		t.Fatalf("closes_dropped = %d — forming bars must never be counted as closes", persistDroppedCloses.Load())
 	}
 }

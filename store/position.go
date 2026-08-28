@@ -128,15 +128,15 @@ type TraderPosition struct {
 	// by a NEW value + note — the original is NEVER destructively edited
 	// (audit trail). Readers use EffectivePnL / COALESCE(pnl_corrected,
 	// realized_pnl).
-	PnlCorrected       *float64 `gorm:"column:pnl_corrected" json:"pnl_corrected,omitempty"`
-	PnlCorrectionNote  string   `gorm:"column:pnl_correction_note;default:''" json:"pnl_correction_note,omitempty"`
-	Fee                float64 `gorm:"column:fee;default:0" json:"fee"`
-	Leverage           int     `gorm:"column:leverage;default:1" json:"leverage"`
-	Status             string  `gorm:"column:status;default:OPEN;index:idx_positions_status" json:"status"`
-	CloseReason        string  `gorm:"column:close_reason;default:''" json:"close_reason"`
-	Source             string  `gorm:"column:source;default:system" json:"source"`
-	CreatedAt          int64   `gorm:"column:created_at" json:"created_at"` // Unix milliseconds UTC
-	UpdatedAt          int64   `gorm:"column:updated_at" json:"updated_at"` // Unix milliseconds UTC
+	PnlCorrected      *float64 `gorm:"column:pnl_corrected" json:"pnl_corrected,omitempty"`
+	PnlCorrectionNote string   `gorm:"column:pnl_correction_note;default:''" json:"pnl_correction_note,omitempty"`
+	Fee               float64  `gorm:"column:fee;default:0" json:"fee"`
+	Leverage          int      `gorm:"column:leverage;default:1" json:"leverage"`
+	Status            string   `gorm:"column:status;default:OPEN;index:idx_positions_status" json:"status"`
+	CloseReason       string   `gorm:"column:close_reason;default:''" json:"close_reason"`
+	Source            string   `gorm:"column:source;default:system" json:"source"`
+	CreatedAt         int64    `gorm:"column:created_at" json:"created_at"` // Unix milliseconds UTC
+	UpdatedAt         int64    `gorm:"column:updated_at" json:"updated_at"` // Unix milliseconds UTC
 	// P2.4 — excursion analytics (additive, futures day-plan): max adverse /
 	// favorable excursion over the hold (points) + the AI's entry confidence.
 	// Zero when not computed (crypto / pre-migration).
@@ -151,8 +151,8 @@ type TraderPosition struct {
 	PlanMatched     bool   `gorm:"column:plan_matched;default:false" json:"plan_matched"`
 	// PlanBand (B3/F6, fail-register wave): structural verdict of the entry vs
 	// the cited scenario — "" legacy | "ok" | "off_band" | "struct".
-	PlanBand        string `gorm:"column:plan_band;default:''" json:"plan_band,omitempty"`
-	AdherenceGrade  string `gorm:"column:adherence_grade;default:''" json:"adherence_grade"`
+	PlanBand       string `gorm:"column:plan_band;default:''" json:"plan_band,omitempty"`
+	AdherenceGrade string `gorm:"column:adherence_grade;default:''" json:"adherence_grade"`
 	// S3 (mega-research 2026-08-26) — full plan attribution at entry-write time.
 	// plan_id / plan_trade_date / plan_session are stamped from the ACTIVE plan
 	// the entry decision cited, NEVER reconstructed later: the version-leak class
@@ -509,6 +509,22 @@ func (s *PositionStore) GetOpenPositions(traderID string) ([]*TraderPosition, er
 	return positions, nil
 }
 
+// ListUnlinked returns recent positions with NO plan linkage (plan_version = 0)
+// — the F3 (LONDON-FORENSICS 2026-08-28) lineage-repair scan: a fill stamped
+// before the position row existed left plan_version 0.
+func (s *PositionStore) ListUnlinked(traderID string, limit int) ([]*TraderPosition, error) {
+	if limit <= 0 {
+		limit = 200
+	}
+	var out []*TraderPosition
+	err := s.db.Where("trader_id = ? AND plan_version = 0", traderID).
+		Order("entry_time DESC").Limit(limit).Find(&out).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to list unlinked positions: %w", err)
+	}
+	return out, nil
+}
+
 // GetOpenPositionBySymbol gets open position for specified symbol and direction
 func (s *PositionStore) GetOpenPositionBySymbol(traderID, symbol, side string) (*TraderPosition, error) {
 	var pos TraderPosition
@@ -719,7 +735,6 @@ func (s *PositionStore) ClosePositionWithAccurateData(id int64, exitPrice float6
 		"updated_at":    time.Now().UTC().UnixMilli(),
 	}).Error
 }
-
 
 // EffectivePnL returns the corrected realized P&L when a correction exists,
 // else the original (P0 pnl-record-integrity, 2026-08-20).

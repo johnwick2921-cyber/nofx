@@ -350,6 +350,10 @@ func (t *TCPTrader) reconcilePositions(traderID, exchangeID, exchangeType string
 			delete(t.untrackedSince, key) // retry on a later pass
 			continue
 		}
+		// F3 (LONDON-FORENSICS 2026-08-28) — stamp the armed-fill lineage NOW:
+		// the fill-time stamp failed because this row did not exist yet (live proof:
+		// pos #567 landed with plan_version 0 / adherence grade F).
+		StampArmedLineageIfMatched(st, traderID, row.ID, sym, side, avg)
 		logger.Warnf("🧩 reconcile: MATERIALIZED untracked NT8 position %s %s qty=%.0f @ %.2f (acct=%s) — manual/NT8-side entry now tracked; its close will record real P&L", sym, side, qty, avg, acct)
 		delete(t.untrackedSince, key)
 		// A close frame may have arrived while the row was still untracked (the
@@ -382,4 +386,64 @@ func (t *TCPTrader) reconcilePositions(traderID, exchangeID, exchangeType string
 			delete(t.untrackedSince, key)
 		}
 	}
+}
+
+// ── F3 (LONDON-FORENSICS 2026-08-28) — armed-fill lineage stamping ──────────
+// The fill-time stamp (armed executor) runs when the order_update frame lands,
+// but a reconcile-materialized position row does not exist yet at that instant
+// — live proof: pos #567, the first live armed fill, landed with
+// plan_version 0 / plan_band "" / adherence grade F. The materialization site
+// now stamps from the armed ledger, and the repair pass back-fills the class.
+
+// StampArmedLineageIfMatched stamps one position row with its armed-fill plan
+// linkage when a matching FILLED ledger row exists: same trader, same side, and
+// entry price within one tick of the ledger's entry. Returns true when stamped.
+func StampArmedLineageIfMatched(st *store.Store, traderID string, posID int64, sym, side string, entryPx float64) bool {
+	rows, err := st.ArmedOrders().ListFilled(traderID, 20)
+	if err != nil || len(rows) == 0 {
+		return false
+	}
+	tick := market.FuturesTickSize(sym)
+	if tick <= 0 {
+		tick = 0.25
+	}
+	for _, r := range rows {
+		if !strings.EqualFold(r.Side, side) {
+			continue
+		}
+		if r.EntryPx < entryPx-tick || r.EntryPx > entryPx+tick {
+			continue
+		}
+		tradeDate := r.PlanID
+		if i := strings.Index(r.PlanID, ":"); i > 0 {
+			tradeDate = r.PlanID[:i]
+		}
+		if err := st.Position().SetPlanLinkFull(posID, r.Version, r.Scenario, true, "armed_fill", r.PlanID, tradeDate, r.Session); err != nil {
+			logger.Warnf("🧩 reconcile: armed lineage stamp failed (pos %d): %v", posID, err)
+			return false
+		}
+		logger.Infof("🧩 reconcile: armed-fill lineage stamped — pos %d ← %s v%d %s (fill %.2f)", posID, r.PlanID, r.Version, r.Scenario, r.EntryPx)
+		return true
+	}
+	return false
+}
+
+// RepairArmedLineage back-fills plan linkage for this trader's positions that
+// have none (plan_version = 0). Idempotent: a stamped row leaves the scan.
+func RepairArmedLineage(st *store.Store, traderID string) int {
+	rows, err := st.Position().ListUnlinked(traderID, 200)
+	if err != nil {
+		logger.Warnf("🧩 reconcile: armed-lineage repair scan failed: %v", err)
+		return 0
+	}
+	n := 0
+	for _, p := range rows {
+		if p.PlanVersion != 0 {
+			continue
+		}
+		if StampArmedLineageIfMatched(st, traderID, p.ID, p.Symbol, p.Side, p.EntryPrice) {
+			n++
+		}
+	}
+	return n
 }

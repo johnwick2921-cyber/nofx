@@ -412,6 +412,12 @@ type AutoTrader struct {
 	// path (armedTrader().CancelOrder + the shared order_update subscription).
 	armedSyncSeam *armedSyncSeam
 
+	// armRefusalLast dedupes the every-cycle arm REFUSED log (F4, LONDON-
+	// FORENSICS 2026-08-28): one line per (plan, version, scenario, verdict);
+	// silent until the spec or the refusal reason changes. Run-loop goroutine
+	// only — no lock.
+	armRefusalLast map[string]string
+
 	// Plan 4 Stage 4 — NinjaTrader TCP balance tracking (defer-until-balance guard)
 	// For NinjaTrader TCP traders, we track if account_balance frame has arrived yet.
 	// If equity == 0 and this is false, we skip the cycle silently (no phantom HOLD record).

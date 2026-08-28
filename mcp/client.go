@@ -529,6 +529,37 @@ func (client *Client) String() string {
 // BaseClient returns the underlying *Client (satisfies ClientEmbedder interface).
 func (c *Client) BaseClient() *Client { return c }
 
+// ApplyMaxTokens overrides the completion cap on a concrete client for the
+// duration of one call scope and returns a restore func (LONDON-FORENSICS F1a,
+// 2026-08-28): planner reads get a bigger budget (AI_PLAN_MAX_TOKENS) without
+// permanently changing the shared executor client's cap. Follows the existing
+// ApplyThinking precedent (per-call mutation of the shared client).
+func ApplyMaxTokens(c AIClient, tokens int) func() {
+	bc, ok := c.(interface{ BaseClient() *Client })
+	if !ok || tokens <= 0 {
+		return func() {}
+	}
+	cl := bc.BaseClient()
+	prev := cl.MaxTokens
+	cl.MaxTokens = tokens
+	return func() { cl.MaxTokens = prev }
+}
+
+// LastFinishReason returns the most recent response's finish_reason for a
+// client ("" when the client never completed a call). Read-only helper for
+// the planner's truncation-aware diagnostics.
+func LastFinishReason(c AIClient) string {
+	bc, ok := c.(interface{ BaseClient() *Client })
+	if !ok {
+		return ""
+	}
+	if v := bc.BaseClient().lastFinishReason.Load(); v != nil {
+		s, _ := v.(string)
+		return s
+	}
+	return ""
+}
+
 // IsRetryableError determines if error is retryable (network errors, timeouts, etc.)
 func (client *Client) IsRetryableError(err error) bool {
 	errStr := err.Error()

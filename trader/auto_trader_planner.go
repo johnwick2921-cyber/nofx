@@ -226,7 +226,11 @@ func (at *AutoTrader) maybeRunSessionReadsAt(now time.Time) {
 			continue
 		}
 		if existing == nil {
-			at.runPlannerRead(s.Name, tradeDate) // first read this session-day
+			// F6 (LONDON-FORENSICS 2026-08-28) — the first read's planner call
+			// (300-500s observed) must not stall the executor loop: async, the
+			// same pattern as the W6/MSS wake re-reads. The plan-store dedupe
+			// keeps it one read per session-day.
+			go at.runPlannerRead(s.Name, tradeDate)
 			continue
 		}
 		// PLAN-LIFECYCLE WAVE (2026-08-27) — DEACTIVATE-AND-REARM: a plan whose
@@ -320,13 +324,19 @@ func (at *AutoTrader) maybeRunSessionReadsAt(now time.Time) {
 				// levels into the re-plan: the map keeps continuity (no more
 				// rebuilt-from-scratch level sets) and a fired flip's bias is
 				// enforced at write.
-				at.runPlannerReadWithCtx(s.Name, tradeDate, detail.Killer, priorPlanLevelLines(existing))
-				// ITEM 4 — the owner's levels are sticky: re-establish them on the
-				// version just written, re-anchored by price. Anything that cannot
-				// be re-anchored is parked for review, never dropped.
-				if fresh, fErr := at.store.Plan().GetLatestPlanForTraderSession(tradeDate, s.Name, at.id); fErr == nil && fresh != nil {
-					at.carryOwnerEditsInto(fresh.PlanID, existing.Version, fresh.Version)
-				}
+				// F6 (LONDON-FORENSICS 2026-08-28) — the death re-plan's planner
+				// call blocked the cycle 19m33s (the 02:14 overrun). Async, same
+				// pattern as the W6/MSS wake re-reads; the plan-store's single-
+				// writer queue serializes the writes.
+				go func() {
+					at.runPlannerReadWithCtx(s.Name, tradeDate, detail.Killer, priorPlanLevelLines(existing))
+					// ITEM 4 — the owner's levels are sticky: re-establish them on
+					// the version just written, re-anchored by price. Anything that
+					// cannot be re-anchored is parked for review, never dropped.
+					if fresh, fErr := at.store.Plan().GetLatestPlanForTraderSession(tradeDate, s.Name, at.id); fErr == nil && fresh != nil {
+						at.carryOwnerEditsInto(fresh.PlanID, existing.Version, fresh.Version)
+					}
+				}()
 			}
 		}
 		if !handledDeath {
@@ -913,12 +923,32 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 	pMode, pEffort := planReasoningWire()
 	at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, hash, input.IndicatorsBlock, input.AIConfigHash, requiredBias, facts, machineGrades, machineLabels, htfLabels(input), failClosed, sideQuota, func() (string, error) {
 		mcp.ApplyThinking(client, pMode, pEffort)
+		// F1a (LONDON-FORENSICS 2026-08-28) — planner completion budget:
+		// AI_PLAN_MAX_TOKENS (default 65536 = 2× the observed 32768-token
+		// truncation ceiling that killed the 02:23/02:31 wake re-reads).
+		restore := mcp.ApplyMaxTokens(client, aiPlanMaxTokens())
+		defer restore()
 		start := time.Now()
 		raw, err := client.CallWithMessages(plannerSystemPrompt, prompt)
-		at.logInfof("🧠 planner call (reasoning=%s wire=%s/%s) completed in %.1fs", planReasoningLabel(), pMode, pEffort, time.Since(start).Seconds())
+		if err == nil && mcp.LastFinishReason(client) == "length" {
+			at.logWarnf("📐 planner output TRUNCATED by the provider (finish_reason=length, cap=%d) — the plan JSON may be incomplete; retrying at the same cap will not fix truncation", aiPlanMaxTokens())
+		}
+		at.logInfof("🧠 planner call (reasoning=%s wire=%s/%s cap=%d) completed in %.1fs", planReasoningLabel(), pMode, pEffort, aiPlanMaxTokens(), time.Since(start).Seconds())
 		return raw, err
 	}, t1Lines...)
 	return true
+}
+
+// aiPlanMaxTokens is the planner completion budget (F1a, LONDON-FORENSICS
+// 2026-08-28): AI_PLAN_MAX_TOKENS, default 65536 — 2× the observed 32768-token
+// truncation ceiling. Provider ceiling is 393216 (probed 2026-08-19).
+func aiPlanMaxTokens() int {
+	if v := os.Getenv("AI_PLAN_MAX_TOKENS"); v != "" {
+		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n > 0 {
+			return n
+		}
+	}
+	return 65536
 }
 
 // runPlannerRead assembles the input package, calls the pinned planner client,
@@ -1119,6 +1149,19 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 				at.logWarnf("📉 side-quota relaxed: %s", n)
 			}
 			d.ThinSide = strings.Join(thin, " | ")
+		}
+		// F4 (LONDON-FORENSICS 2026-08-28) — arm feasibility WARN, never a
+		// fail: arms the gate-at-arm chain would refuse EVERY cycle (R:R <
+		// ARM_MIN_RR or stop < 1×ATR5m) are surfaced so the planner learns
+		// instead of printing ~120 REFUSED lines a session.
+		atr5m := 0.0
+		if market.FuturesBarsProvider != nil {
+			if b5 := market.FuturesBarsProvider(at.futuresSymbol(), "5m", kernel.AISVPBarCount); len(b5) > 0 {
+				atr5m = market.ExportCalculateATR(b5, 14)
+			}
+		}
+		for _, w := range kernel.ArmFeasibilityWarnings(d, atr5m, armMinRR(), kernel.MinSLATRMult()) {
+			at.logWarnf("⚔️ arm feasibility: %s (WARN — write proceeds; the gate-at-arm chain enforces)", w)
 		}
 		// FVG ENTRY MODEL (2026-08-26) — write-time re-verification from stored
 		// bars: the 3-candle relation, the gap floor, the displacement body vs

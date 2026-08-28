@@ -316,6 +316,94 @@ func ValidatePlanDoc(d *PlanDoc) error {
 	return ValidatePlanDocWithCaps(d, 0, 0)
 }
 
+// NormalizePlanDocRules (F1b, LONDON-FORENSICS 2026-08-28) canonicalizes every
+// confirm/flip/death rule spelling the model has been observed producing. The
+// audit (journal, 2026-08-23→28) found flip.rule "2x5m_close" (15 rejects) and
+// confirm.rule "5m_close" (2 rejects); the wider alias set mirrors the
+// scenario-facts vocabulary so future spellings normalize too. Unknown
+// spellings pass through unchanged — validation still rejects them honestly.
+func NormalizePlanDocRules(d *PlanDoc) {
+	if d == nil {
+		return
+	}
+	for i := range d.Scenarios {
+		if d.Scenarios[i].Confirm != nil {
+			d.Scenarios[i].Confirm.Rule = NormalizeConfirmRule(d.Scenarios[i].Confirm.Rule)
+		}
+	}
+	if d.FlipStructured != nil {
+		d.FlipStructured.Rule = NormalizeConditionRule(d.FlipStructured.Rule)
+	}
+	if d.DeathStructured != nil {
+		d.DeathStructured.Rule = NormalizeConditionRule(d.DeathStructured.Rule)
+	}
+}
+
+// NormalizeConfirmRule canonicalizes a confirm{} rule spelling.
+// Canonical: touch | 1x5m_close | 2x5m_close | 15m_close.
+func NormalizeConfirmRule(rule string) string {
+	switch strings.TrimSpace(rule) {
+	case "5m_close", "5m-close", "5mclose", "1x5m":
+		return "1x5m_close"
+	case "15m", "15m-close", "15mclose":
+		return "15m_close"
+	case "2x5m", "2x_5m":
+		return "2x5m_close"
+	}
+	return rule
+}
+
+// NormalizeConditionRule canonicalizes a death/flip structured rule spelling.
+// Canonical: 2x5m | 15m_close | 5m_close.
+func NormalizeConditionRule(rule string) string {
+	switch strings.TrimSpace(rule) {
+	case "2x5m_close", "2x_5m", "2x5":
+		return "2x5m"
+	case "15m", "15m-close", "15mclose":
+		return "15m_close"
+	case "1x5m_close", "1x5m", "5m-close", "5mclose":
+		return "5m_close"
+	}
+	return rule
+}
+
+// ArmFeasibilityWarnings (F4, LONDON-FORENSICS 2026-08-28) reports arms that
+// the gate-at-arm chain would refuse EVERY cycle: R:R below the arm minimum or
+// a stop tighter than minSLMult × ATR5m. Advisory only — the write succeeds
+// (the executor's hard gate is the enforcement); the planner learns instead of
+// burning 120 refusal lines a night.
+func ArmFeasibilityWarnings(d *PlanDoc, atr5m, minRR, minSLMult float64) []string {
+	if d == nil || atr5m <= 0 {
+		return nil
+	}
+	var out []string
+	for _, sc := range d.Scenarios {
+		a := sc.Arm
+		if a == nil || !a.Enabled {
+			continue
+		}
+		dist := a.Entry - a.Stop
+		if strings.EqualFold(sc.Direction, "short") {
+			dist = a.Stop - a.Entry
+		}
+		rr := 0.0
+		if dist > 0 && a.Entry > 0 {
+			if strings.EqualFold(sc.Direction, "short") {
+				rr = (a.Entry - a.Target) / dist
+			} else {
+				rr = (a.Target - a.Entry) / dist
+			}
+		}
+		if minRR > 0 && rr+1e-9 < minRR {
+			out = append(out, fmt.Sprintf("%s arm R:R %.2f below ARM_MIN_RR %.2f — the gate-at-arm chain will refuse it every cycle (target/stop infeasible)", sc.ID, rr, minRR))
+		}
+		if minSLMult > 0 && dist+1e-9 < minSLMult*atr5m {
+			out = append(out, fmt.Sprintf("%s arm stop %.2f too close (%.2f < %.2f = %.1f×ATR5m) — min-SL gate will refuse it", sc.ID, a.Stop, dist, minSLMult*atr5m, minSLMult))
+		}
+	}
+	return out
+}
+
 // ValidatePlanDocWithCaps enforces the schema-strict rules: required fields, enum
 // values, and counts at the RESOLVED caps (clamped to the 12/5 hard ceilings).
 // ≤0 → shipped defaults, so default callers are byte-identical to before.
@@ -324,6 +412,12 @@ func ValidatePlanDocWithCaps(d *PlanDoc, maxLevels, maxScenarios int) error {
 	if d == nil {
 		return fmt.Errorf("nil plan")
 	}
+	// F1b (LONDON-FORENSICS 2026-08-28) — ALIAS COMPLETION: the model has been
+	// rejected 15× this week for flip.rule "2x5m_close" and 2× for
+	// confirm.rule "5m_close". Normalize every observed spelling to the
+	// canonical enum BEFORE validation so a truncation-adjacent spelling never
+	// burns a planner retry again.
+	NormalizePlanDocRules(d)
 	if strings.TrimSpace(d.Reasoning) == "" {
 		return fmt.Errorf("reasoning is required (reasoning-first)")
 	}
