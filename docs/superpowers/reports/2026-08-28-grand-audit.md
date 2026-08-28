@@ -68,7 +68,7 @@ Zero new NULL `pnl_corrected` since deploy window; `max(|pnl_corrected − reali
 Rows by session_day: 08-24=28, 08-25=28, 08-26=18 (backfill runs). The per-trader nightly wiring (`levelStatsWired sync.Map`, `runLevelStatsDayAt`) landed today: **0/1 solo nights due — first solo run is 17:05 CT tonight** (evaluates 08-27). Skip reasons fire for the 15m trader. **PROVEN (night-1 E-proof pending by design).**
 
 ### A16 — touch_episodes ✅
-42 rows since window start, `MAX(opened_at_ms)=1787922120000` (live writes). **PROVEN.**
+137 rows since 08-27 02:00 CT, `MAX(opened_at_ms)=1787923320000` (live writes; canonical probe = `scripts/grand_audit_probes.py`). **PROVEN.**
 
 ### A17 — Missed-turns refreshed ✅
 `scripts/leveltruth_missed_turns.py` on live (repaired) bars: baseline 80.0/75.0/79.2% → with swing seats 65.0/60.0/66.7% (Δ −15.0/−15.0/−12.5 pts). Reproduces the T3 result independently. **PROVEN.**
