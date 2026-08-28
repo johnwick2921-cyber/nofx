@@ -69,6 +69,12 @@ func (t *TCPTrader) StartPositionReconcile(traderID, exchangeID, exchangeType st
 		return
 	}
 	t.reconcileOnce.Do(func() {
+		// F3 (LONDON-FORENSICS 2026-08-28) — one-time idempotent repair: positions
+		// materialized before the lineage stamp existed (live proof: pos #567)
+		// get their armed-fill plan linkage back from the armed ledger.
+		if n := RepairArmedLineage(st, traderID); n > 0 {
+			logger.Infof("🩹 RepairArmedLineage: stamped %d position(s) with their armed-fill plan linkage (the #567 class)", n)
+		}
 		go func() {
 			ticker := time.NewTicker(reconcileInterval)
 			defer ticker.Stop()
