@@ -66,3 +66,18 @@
 **Changed:** 21 files (+377/−40): kernel 7 + 4 test files, trader 5 + 3 test files, provider accessor, store 1, Guide card 1.
 
 **STOP — awaiting the owner's "go cutover".** Cutover notes for the next dispatch: build from a temp clone at the branch sha (worktree builds lose vcs stamping), flat-gate all origins, boot-line ack, then the owner clicks proximity 0.3 / min-conf 65 in Studio.
+
+---
+
+## POST-CLICK VERIFICATION (2026-08-28, 11:59 CT click)
+
+- **DB (quoted):** `0.3 | 60 | 2026-08-28 11:59:00` (strategy `a5b7662e`) — owner ruling: min_confidence stays **60**; the 60–64 band is judged by Sep-9 data at real n (protection lives in strict + R:R + min-SL + armed, not the conf knob).
+- **Seated line (verbatim):** `🗺️ seated 24/191 in-band levels (proximity band ±85pt, 24 of them retained)` and `🗺️ seated 12/170 in-band levels (proximity band ±85pt, 12 of them retained)` — band = 0.3 × DailyRangeProxy(≈283pt) = ±85pt, within the predicted ±91–110pt envelope (the proxy drifted 305→283 as days completed). The C6 "pool ~5–6" figure was the per-plan-doc in-band measure; the seated line counts the full generated universe (170–191 candidates, 12–24 in band, capped downstream by max_levels 12).
+- **Resolver on both consumers:** bot gate/watcher `trader/auto_trader_planconfig.go:139` → `kernel.ResolveProximityK` (`kernel/plan_lifecycle.go:25-30`) — live value proven by the ±85pt seated line; engine prompt path `kernel/engine_analysis.go:374` → the SAME `ResolveProximityK` (the old 0.5 floor is gone) — standing evidence: DB 0.3 + clamp test `TestResolveProximityK`; next scheduled planner read (ASIA 16:55 CT) is the fresh engine-path live proof.
+- **min_conf = 60 everywhere, zero 65 residue:** gate `kernel/engine_analysis.go:550` + `kernel/engine_position.go:197` + futures prompt `kernel/engine_prompt_futures.go:63` (fallback `store.SafeDefaultMinConfidence = 60`, `store/strategy.go:81`) — nothing clamps or defaults to 65.
+- **HTF veto:** `HTF_VETO_MODE=cross` live since 11:32:37 CT boot (`🛡️ htf veto: mode=cross tf=1h`).
+
+## SEP-9 CALIBRATION SCOPE ADDITIONS (owner ruling 2026-08-28)
+
+(a) **Confidence band 60–64 outcomes at full n** — re-judge the min-conf question from real Sep-9 data, not C4's tiny sample (n=3, −$217); the 65 deferral is conditional on this.
+(b) **Proximity distance-bucket reaction table** — level touch/react outcomes bucketed by distance-from-price at seat time (0–90 / 90–180 / 180+ pt), sourced from `level_stats` — the 0.3-vs-1.5 question re-judged from data.
