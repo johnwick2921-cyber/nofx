@@ -354,7 +354,7 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 		"version":    row.Version,
 		"reading":    reading,
 		// Wave 2 armed orders — the per-scenario arm state for the card chips.
-		"armed":           s.armedMapFor(row.PlanID),
+		"armed": s.armedMapFor(row.PlanID),
 		// ITEM 15 — the card marks itself HISTORICAL and offers the way back.
 		"historical":        historical,
 		"latest_version":    latestVersion,
@@ -395,10 +395,10 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 		// A1/A4 (fail-register wave): verdict basis (machine vs prose-anchor
 		// heuristic) + unevaluable scenario ids — the card renders them
 		// distinctly instead of dressing a heuristic as a machine verdict.
-		"scenario_meta":  s.scenarioMeta(traderID, row.PlanID),
+		"scenario_meta": s.scenarioMeta(traderID, row.PlanID),
 		// FVG ENTRY MODEL (2026-08-26) — per-scenario gap-band live states for
 		// the card chips (IN_ZONE/ABOVE/BELOW/FILLED_INVALID + touch number).
-		"fvg_states": fvgStates,
+		"fvg_states":     fvgStates,
 		"overlay_errors": overlayErrStrings,
 		// ITEM 4 — owner edits that could NOT be re-anchored onto this version.
 		// Never dropped silently: the card asks for review.
@@ -456,7 +456,7 @@ func planLevelFacts(traderID, symbol string, doc kernel.PlanDoc, now time.Time, 
 			"distance":      distance,
 			// T4 (2026-08-26) — live touch chip state for the card row
 			// (approaching | touching | rejected | accepted | "").
-			"touch_state": kernel.TouchStateForCard(traderID, symbol, l.Label, l.Price, price, now.UnixMilli()),
+			"touch_state":   kernel.TouchStateForCard(traderID, symbol, l.Label, l.Price, price, now.UnixMilli()),
 			"sweep":         f.Swept,
 			"closes_beyond": maxI(f.ClosesBeyondUp, f.ClosesBeyondDown),
 			"accept_have":   f.AcceptHave,

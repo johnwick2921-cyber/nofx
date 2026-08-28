@@ -28,6 +28,7 @@ type RiskLimits struct {
 	MaxDailyLossUSD      float64 // hard stop for the trading day (USD, positive number)
 	MaxConcurrentTrades  int     // open position cap (count)
 	MaxNotionalUSD       float64 // sum of (entry price * quantity) cap across open positions
+	MaxContractsPerOrder int     // single-order contract size cap
 }
 
 // RiskLimitDecision is the qualitative outcome of a pre-trade check.
@@ -102,6 +103,7 @@ func LoadRiskLimitsFromConfig() RiskLimits {
 		MaxDailyLossUSD:      c.RiskMaxDailyLossUSD,
 		MaxConcurrentTrades:  c.RiskMaxConcurrentTrades,
 		MaxNotionalUSD:       c.RiskMaxNotionalUSD,
+		MaxContractsPerOrder: c.RiskMaxContractsPerOrder,
 	}
 }
 
@@ -186,14 +188,6 @@ type DailyGuardrails struct {
 	DailyProfitTargetUSD  float64 // positive USD; profit ≥ this trips (block-entry)
 	MaxDailyTradesEnabled bool
 	MaxDailyTrades        int
-
-	// 6.3 (final-bundle 2026-08-19) — blackout + consistency join the soft
-	// audit. The caller precomputes the window/breach facts (CheckSoft stays
-	// pure); CONFIGURED means the owner set the values, regardless of toggles.
-	BlackoutConfigured   bool // start+end CT both set
-	InBlackoutNow        bool // precomputed InBlackoutWindow(now, …)
-	ConsistencyMaxDayPct float64
-	TotalRealizedPnL     float64
 }
 
 // CheckSoft evaluates every CONFIGURED limit (value > 0) regardless of toggles
@@ -210,14 +204,6 @@ func (g DailyGuardrails) CheckSoft() []string {
 	}
 	if g.MaxDailyTrades > 0 && g.TradesToday >= g.MaxDailyTrades {
 		hits = append(hits, fmt.Sprintf("max daily trades would trip (today=%d, max=%d)", g.TradesToday, g.MaxDailyTrades))
-	}
-	// 6.3 — the two checks that used to die SILENTLY under master OFF (PR #54:
-	// 69 live would-trip lines were trio-only; blackout/consistency never spoke).
-	if g.BlackoutConfigured && g.InBlackoutNow {
-		hits = append(hits, "blackout window would trip (inside the configured CT window)")
-	}
-	if g.ConsistencyMaxDayPct > 0 && ConsistencyBreached(g.DailyRealizedPnL, g.TotalRealizedPnL, g.ConsistencyMaxDayPct) {
-		hits = append(hits, fmt.Sprintf("consistency rule would trip (today=%.2f vs %.0f%% of total=%.2f)", g.DailyRealizedPnL, g.ConsistencyMaxDayPct, g.TotalRealizedPnL))
 	}
 	return hits
 }
@@ -269,8 +255,7 @@ func firstPositive(vals ...float64) float64 {
 // Hardening D3 (audit F2): this SIZE cap is ALWAYS ON for futures — it is venue
 // safety, NOT a prop-firm rule, so the guardrails master switch and the
 // max-contracts toggle govern ONLY daily limits/blackout, never this clamp.
-// Per-strategy value overrides (>0); else the venue default (2 contracts —
-// the researched fallback; 6.6: the old '10-contract' text was a comment lie).
+// Per-strategy value overrides (>0); else the venue default (10-contract).
 // NEVER returns 0 — a futures order can never be left unclamped.
 func ResolveMaxContracts(perStrategy, def int) int {
 	if perStrategy > 0 {

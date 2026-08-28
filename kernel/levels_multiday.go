@@ -219,8 +219,8 @@ func ExtractMultiDayLevels(bars []market.Kline, reg SessionRegistry, now time.Ti
 // prior-month ≥7 full days — with the ~33h 1m ring these can never pass, which
 // is CORRECT: those anchors must come from a multi-day source, not the ring.
 const (
-	priorDayMinBars   = 900 // 15h of 1m bars
-	priorWeekMinBars  = 4320 // 3 days
+	priorDayMinBars   = 900   // 15h of 1m bars
+	priorWeekMinBars  = 4320  // 3 days
 	priorMonthMinBars = 10080 // 7 days
 )
 

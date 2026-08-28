@@ -96,10 +96,10 @@ type TouchEpisode struct {
 
 // touchTracker is the per-(level) episode state machine.
 type touchLevelState struct {
-	opened   int // episodes ever opened this process (touch numbering)
-	active   *TouchEpisode
-	last     *TouchEpisode // last CLOSED episode (card chip state)
-	ring     []market.Kline
+	opened int // episodes ever opened this process (touch numbering)
+	active *TouchEpisode
+	last   *TouchEpisode // last CLOSED episode (card chip state)
+	ring   []market.Kline
 }
 
 // TouchRegistry is the process-wide telemetry state, keyed trader+symbol+level.

@@ -150,11 +150,11 @@ func IsRoleOverridden() bool { return len(roleOverrides) > 0 }
 // VWAP / PDC, value-area position, nearest magnet, nearest liquidity. Facts
 // only — no judgment, no recommendation.
 type BiasContext struct {
-	Price      float64
-	VWAP       float64 // 0 = n/a
-	PDC        float64 // 0 = n/a
-	PDH, PDL   float64 // prior-day anchors; 0 = n/a (the BIAS-TREE deals in these)
-	VAH, VAL   float64 // value area; 0,0 = n/a
+	Price            float64
+	VWAP             float64 // 0 = n/a
+	PDC              float64 // 0 = n/a
+	PDH, PDL         float64 // prior-day anchors; 0 = n/a (the BIAS-TREE deals in these)
+	VAH, VAL         float64 // value area; 0,0 = n/a
 	NearestMagnet    string
 	NearestLiquidity string
 }

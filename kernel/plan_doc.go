@@ -85,10 +85,10 @@ type PlanScenario struct {
 // Entry is the resting LIMIT price; Stop/Target form the bracket. Long:
 // stop < entry < target. Short: target < entry < stop.
 type PlanArmSpec struct {
-	Enabled     bool    `json:"enabled"`               // the arming authorization itself
-	Entry       float64 `json:"entry"`                 // resting limit price
-	Stop        float64 `json:"stop"`                  // bracket stop
-	Target      float64 `json:"target"`                // bracket target
+	Enabled     bool    `json:"enabled"`                // the arming authorization itself
+	Entry       float64 `json:"entry"`                  // resting limit price
+	Stop        float64 `json:"stop"`                   // bracket stop
+	Target      float64 `json:"target"`                 // bracket target
 	WaitConfirm bool    `json:"wait_confirm,omitempty"` // chain-arm: rest until the scenario's confirm{} is MET (sweep_reclaim retrace fast path, autopsy-response wave)
 }
 

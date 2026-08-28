@@ -32,6 +32,7 @@ func HTFVetoTF() string {
 //   - "1h"   (default): veto on the configured veto TF alone (today's behavior)
 //   - "cross": veto ONLY when 1h AND 4h both confirm the counter-trend
 //   - "4h"   : veto on the 4h trend alone
+//
 // Evidence for cross: the 2026-08-28 autopsy replayed 7 vetoed arms — the 1h
 // veto blocked 3 would-have-won entries (+$352) while 4h was RANGING at all 7
 // timestamps (it would have vetoed nothing). Unknown values fall back to "1h"

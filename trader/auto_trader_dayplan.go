@@ -62,12 +62,12 @@ func (at *AutoTrader) snapshotSessionProfiles() {
 		// Wave 2 armed orders (Phase 2, 2026-08-27) — placement engine mode.
 		at.logInfof("⚔️ armed_orders=on place_band=%dt stale_working=%dm test_seam=%s arm_rr=%.1f (gate-at-arm only; market-entry floor %.1f unchanged) (resting limits fill at the authorized price; stale_reeval NOT applied)",
 			armedPlaceTicks(), armedWorkingStaleMin(), armedSeamStateLabel(), armMinRR(), at.config.StrategyConfig.RiskControl.MinRiskRewardRatio) // F1a (LONDON-FORENSICS 2026-08-28) — planner completion budget boot line
-			// GAR-F1 (2026-08-28) — move_stop identity observability (the
-			// #566 dead-cell fix): materialized positions carry the armed
-			// ledger's signal identity so BE+40/trailing can address them.
-			at.logInfof("🩹 move_stop identity: materialized positions persist armed-ledger signal_id → entry_order_id; move_stop/trailing resolve it (GAR-F1)")
-			// GAR-F3 (2026-08-28) — HTF veto mode observability.
-			at.logInfof("🛡️ htf veto: mode=%s tf=%s (1h|cross|4h via HTF_VETO_MODE; cross = 1h AND 4h agree)", kernel.HTFVetoMode(), kernel.HTFVetoTF())
+		// GAR-F1 (2026-08-28) — move_stop identity observability (the
+		// #566 dead-cell fix): materialized positions carry the armed
+		// ledger's signal identity so BE+40/trailing can address them.
+		at.logInfof("🩹 move_stop identity: materialized positions persist armed-ledger signal_id → entry_order_id; move_stop/trailing resolve it (GAR-F1)")
+		// GAR-F3 (2026-08-28) — HTF veto mode observability.
+		at.logInfof("🛡️ htf veto: mode=%s tf=%s (1h|cross|4h via HTF_VETO_MODE; cross = 1h AND 4h agree)", kernel.HTFVetoMode(), kernel.HTFVetoTF())
 		// (the cutover verification quotes it): plan_max_tokens resolved from
 		// AI_PLAN_MAX_TOKENS, default 65536 = 2× the observed truncation ceiling.
 		at.logInfof("📐 planner cap: plan_max_tokens=%d (AI_PLAN_MAX_TOKENS; default 65536) · truncation → 🚨 WARN, never silent", aiPlanMaxTokens())

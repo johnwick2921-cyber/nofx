@@ -56,8 +56,8 @@ func fvgDoc(dir string) *PlanDoc {
 		Levels: []PlanLevel{{Price: 101.5, Label: "PDL"}, {Price: 106, Label: "PDH"}},
 		Scenarios: []PlanScenario{{
 			ID: "S1", Condition: "fvg_entry", Direction: dir, Trigger: "retrace into the gap",
-			Invalid:   "close through the distal edge",
-			Quality:   "A",
+			Invalid: "close through the distal edge",
+			Quality: "A",
 			Fvg: &PlanFvgEntry{Lo: lo, Hi: hi, CE: FvgCe(lo, hi), EntryMode: "edge",
 				OriginLevel: "PDL", Direction: dir},
 		}},

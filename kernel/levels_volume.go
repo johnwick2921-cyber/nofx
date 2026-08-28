@@ -261,9 +261,9 @@ func NakedPOCLevels(bars []market.Kline, now time.Time) []DetectedLevel {
 	}
 	curDay := CMESessionDayStart(now)
 	type dayPOC struct {
-		day    string
-		poc    float64
-		birth  int64 // first bar open of the day (touch comparisons start after)
+		day   string
+		poc   float64
+		birth int64 // first bar open of the day (touch comparisons start after)
 	}
 	var days []dayPOC
 	for d := 1; d <= 10; d++ {

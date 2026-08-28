@@ -32,8 +32,8 @@ import (
 
 // PlanDB is one immutable plan version. TableName → "plans".
 type PlanDB struct {
-	PlanID        string `gorm:"column:plan_id;primaryKey"`              // stable per (trade_date, session); see MakePlanID
-	Version       int    `gorm:"column:version;primaryKey"`              // append-only, 1-based
+	PlanID  string `gorm:"column:plan_id;primaryKey"` // stable per (trade_date, session); see MakePlanID
+	Version int    `gorm:"column:version;primaryKey"` // append-only, 1-based
 	// S3 (mega-research 2026-08-26) — SEMANTICS NOTE: this column stores the
 	// TRADER id, not the strategy id (historical; do NOT repurpose — analysis
 	// joins use position_plan_join, which keys on plan_id).

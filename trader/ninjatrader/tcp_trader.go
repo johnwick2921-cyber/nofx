@@ -503,10 +503,11 @@ func (t *TCPTrader) rememberEntryOrderID(symbol, side, signalID string) {
 }
 
 // resolveEntrySignalID picks the order identity for move_stop/trailing (GAR-F1):
-//   1. the in-process last entry signal (normal Go-side entries),
-//   2. the materialization cache (positions materialized this process), then
-//   3. the persisted row's entry_order_id (covers a restart AFTER the repair
-//      pass stamped it) — the #566 dead-cell fallback chain.
+//  1. the in-process last entry signal (normal Go-side entries),
+//  2. the materialization cache (positions materialized this process), then
+//  3. the persisted row's entry_order_id (covers a restart AFTER the repair
+//     pass stamped it) — the #566 dead-cell fallback chain.
+//
 // Empty = no usable identity (the caller reports the failure).
 func (t *TCPTrader) resolveEntrySignalID(symbol, side string) string {
 	key := keyFor(symbol, upperSideStr(side))

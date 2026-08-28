@@ -32,9 +32,9 @@ func TestS2SweepReclaimChainedArmValidation(t *testing.T) {
 
 func TestS2FantasyTargetWarnings(t *testing.T) {
 	doc := PlanDoc{Scenarios: []PlanScenario{
-		{ID: "S1", Direction: "long", Arm: &PlanArmSpec{Enabled: true, Entry: 100, Stop: 95, Target: 110}},   // R 2.0 → clean
-		{ID: "S2", Direction: "long", Arm: &PlanArmSpec{Enabled: true, Entry: 100, Stop: 98, Target: 120}},   // R 10.0 → warn
-		{ID: "S3", Direction: "short", Arm: &PlanArmSpec{Enabled: true, Entry: 100, Stop: 102, Target: 80}},   // R 10.0 short → warn
+		{ID: "S1", Direction: "long", Arm: &PlanArmSpec{Enabled: true, Entry: 100, Stop: 95, Target: 110}},  // R 2.0 → clean
+		{ID: "S2", Direction: "long", Arm: &PlanArmSpec{Enabled: true, Entry: 100, Stop: 98, Target: 120}},  // R 10.0 → warn
+		{ID: "S3", Direction: "short", Arm: &PlanArmSpec{Enabled: true, Entry: 100, Stop: 102, Target: 80}}, // R 10.0 short → warn
 		{ID: "S4", Direction: "long"}, // no arm → clean
 	}}
 	got := FantasyTargetWarnings(doc)

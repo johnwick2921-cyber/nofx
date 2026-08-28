@@ -574,7 +574,7 @@ func scoreLevelsPool(levels []DetectedLevel, price, dATR float64, freshness func
 	// read makes the pre/post proximity re-tune pool size observable.
 	logger.Infof("🗺️ seated %d/%d in-band levels (proximity band ±%.0fpt, %d of them retained)", len(scored), len(inBand), band, len(scored))
 
-// Output nearest-first for the executor table.
+	// Output nearest-first for the executor table.
 	sort.SliceStable(scored, func(i, j int) bool {
 		return math.Abs(scored[i].Distance) < math.Abs(scored[j].Distance)
 	})

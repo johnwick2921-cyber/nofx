@@ -51,9 +51,11 @@ type Config struct {
 	TwelveDataKey   string // TwelveData API key for forex & metals
 
 	// Databento (NQ futures data)
-	DatabentoAPIKey string
+	DatabentoAPIKey  string
+	DatabentoDataset string // e.g., "GLBX.MDP3"
 
 	// NinjaTrader (CSV bridge for execution)
+	NinjaTraderDataDir string // e.g., "/mnt/c/Users/<u>/NofxTrader/data"
 
 	// AllowedNTAccounts is the allow-list of NT8 sub-account names a trader may be
 	// bound to (multi-account safety rail; env NT_ALLOWED_ACCOUNTS, comma-separated).
@@ -68,30 +70,10 @@ type Config struct {
 	// Plan 3 Task 21 — Risk limits (hard server-side kill switches).
 	// Defaults: $500 daily loss, 2 concurrent trades, $50k notional, 5 contracts/order.
 	// Zero value disables the corresponding check.
-	RiskMaxDailyLossUSD     float64 // RISK_MAX_DAILY_LOSS_USD
-	RiskMaxConcurrentTrades int     // RISK_MAX_CONCURRENT_TRADES
-	RiskMaxNotionalUSD      float64 // RISK_MAX_NOTIONAL_USD
-
-	// 4.3 — limit-then-market EOD/T1 flatten (research v5 "slippage budgeted").
-	// DORMANT by default: 0/0 = pure market flatten, byte-identical behavior.
-	// LimitCloseTicks > 0 makes the session/T1 flatten FIRST place a limit exit
-	// that many ticks beyond the latest bar close (favorable side) and fall back
-	// to a market flatten after LimitCloseMarketAfterSec seconds.
-	LimitCloseTicks        int // EOD_FLAT_LIMIT_TICKS
-	LimitCloseMarketAfterS int // EOD_FLAT_MARKET_AFTER_SEC
-
-	// Plan-lifecycle wave (hysteresis + rearm, 2026-08-27):
-	// FlipATRBuffer is the deadband beyond a structured flip/death line before
-	// closes count against it (FLIP_ATR_BUFFER × ATR14(5m), default 0.5).
-	// FlipConfirmCloses is the minimum CONSECUTIVE decision-TF closes beyond the
-	// buffered line required for invalidation (FLIP_CONFIRM_CLOSES, default 2).
-	FlipATRBuffer     float64
-	FlipConfirmCloses int
-	// Latency routing: executor in-loop calls run cheap thinking
-	// (AI_EXEC_REASONING: off|fast|low|high|max, default fast = wire effort low);
-	// planner reads keep full reasoning (AI_PLAN_REASONING, default max).
-	AIExecReasoning string
-	AIPlanReasoning string
+	RiskMaxDailyLossUSD      float64 // RISK_MAX_DAILY_LOSS_USD
+	RiskMaxConcurrentTrades  int     // RISK_MAX_CONCURRENT_TRADES
+	RiskMaxNotionalUSD       float64 // RISK_MAX_NOTIONAL_USD
+	RiskMaxContractsPerOrder int     // RISK_MAX_CONTRACTS_PER_ORDER
 }
 
 // Init initializes global configuration (from .env)
@@ -160,10 +142,8 @@ func Init() {
 
 	// Databento + NinjaTrader (NQ futures path)
 	cfg.DatabentoAPIKey = os.Getenv("DATABENTO_API_KEY")
-	// (6.8) DATABENTO_DATASET + NINJATRADER_DATA_DIR loads removed — zero live
-	// readers [A, PR #54]: the databento client hardcodes its dataset and the
-	// NT8 data dir comes from the exchange row; only cmd/nq_smoke reads the env
-	// directly.
+	cfg.DatabentoDataset = getEnvOrDefault("DATABENTO_DATASET", "GLBX.MDP3")
+	cfg.NinjaTraderDataDir = os.Getenv("NINJATRADER_DATA_DIR")
 	for _, a := range strings.Split(os.Getenv("NT_ALLOWED_ACCOUNTS"), ",") {
 		if a = strings.TrimSpace(a); a != "" {
 			cfg.AllowedNTAccounts = append(cfg.AllowedNTAccounts, a)
@@ -174,21 +154,8 @@ func Init() {
 	// Plan 3 Task 21 — Risk limits
 	cfg.RiskMaxDailyLossUSD = getEnvFloat("RISK_MAX_DAILY_LOSS_USD", 500)
 	cfg.RiskMaxConcurrentTrades = getEnvInt("RISK_MAX_CONCURRENT_TRADES", 2)
-	// 4.3 — limit-then-market flatten (dormant by default).
-	cfg.LimitCloseTicks = getEnvInt("EOD_FLAT_LIMIT_TICKS", 0)
-	cfg.LimitCloseMarketAfterS = getEnvInt("EOD_FLAT_MARKET_AFTER_SEC", 0)
-	// Plan-lifecycle wave (hysteresis + rearm, 2026-08-27).
-	cfg.FlipATRBuffer = getEnvFloat("FLIP_ATR_BUFFER", 0.5)
-	cfg.FlipConfirmCloses = getEnvInt("FLIP_CONFIRM_CLOSES", 2)
-	cfg.AIExecReasoning = getEnvOrDefault("AI_EXEC_REASONING", "fast")
-	cfg.AIPlanReasoning = getEnvOrDefault("AI_PLAN_REASONING", "max")
-	// Deprecated-in-practice (6.8): loaded but enforced nowhere — the only
-	// CheckPreTrade caller passes 0 notional by design; futures notional is
-	// capped by strategy max_notional_leverage instead. Kept for struct compat.
 	cfg.RiskMaxNotionalUSD = getEnvFloat("RISK_MAX_NOTIONAL_USD", 50_000)
-	// (E2, fail-register wave): RISK_MAX_CONTRACTS_PER_ORDER removed — zero
-	// readers ever (the live clamp is strategy max_contracts_per_order else the
-	// researched 2).
+	cfg.RiskMaxContractsPerOrder = getEnvInt("RISK_MAX_CONTRACTS_PER_ORDER", 5)
 
 	// Database configuration
 	if v := os.Getenv("DB_TYPE"); v != "" {

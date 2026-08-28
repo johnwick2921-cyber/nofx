@@ -143,7 +143,7 @@ func TestStaleConfirmATR5m(t *testing.T) {
 // near its ref renders clean (no CONFLICT, no stale).
 func TestRenderConfirmLinesStaleConflict(t *testing.T) {
 	base := int64(1_700_003_600_000)
-	base -= base % 300_000 // 5m-aligned
+	base -= base % 300_000                             // 5m-aligned
 	bars := confirmBars(base, 105, 105, 105, 105, 105) // above 100 AND below 110
 	doc := PlanDoc{Scenarios: []PlanScenario{
 		{ID: "S1", Direction: "long", Confirm: &PlanConfirm{Rule: "1x5m_close", RefPrice: 100, Side: "above"}},

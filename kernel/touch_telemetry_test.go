@@ -52,7 +52,7 @@ func TestTouchPenetrationEpisodeScoped(t *testing.T) {
 	uid := "t-epscoped"
 	start := time.Date(2026, 8, 26, 14, 0, 0, 0, time.UTC)
 	bars := touchBars(start, [][5]float64{
-		{180, 181, 179, 180, 5},  // pre-episode, FAR above the level
+		{180, 181, 179, 180, 5}, // pre-episode, FAR above the level
 		{179, 180, 178, 179, 5},
 		{99, 100.5, 98.5, 100, 8}, // touch from below (dist 0)
 		{100, 100.8, 99.6, 100.2, 8},
@@ -115,7 +115,7 @@ func TestTouchPenetrationMath(t *testing.T) {
 	// Level at 100, approached from below.
 	bars := touchBars(start, [][5]float64{
 		{98, 99, 97, 98.5, 10},
-		{98.5, 100.2, 98.4, 99.8, 10}, // within band → OPEN; wick 0.2 through
+		{98.5, 100.2, 98.4, 99.8, 10},  // within band → OPEN; wick 0.2 through
 		{99.8, 102.0, 99.7, 99.9, 14},  // wick-through 2.0, close BACK below → reject
 		{99.9, 100.3, 99.6, 100.1, 12}, // wick 0.3, close THROUGH → accept
 		{100.1, 103, 100.0, 102.5, 16}, // close through → accept
@@ -180,7 +180,7 @@ func TestTouchVolRatioAndApproach(t *testing.T) {
 		{94, 95, 93, 94.5, 5}, // pre (beyond band)
 		{94, 95.5, 93.5, 95, 5},
 		{95, 96, 94, 95.5, 5},
-		{95, 97, 94.5, 96.5, 6},   // approach (dist 3 ≤ 4 → OPEN at min 4)
+		{95, 97, 94.5, 96.5, 6},     // approach (dist 3 ≤ 4 → OPEN at min 4)
 		{97, 100.5, 96.8, 99.8, 40}, // touch: vol 40 vs avg ~5 → ~8×
 		{99.8, 101, 99, 100.5, 30},
 		{104.6, 106, 104.6, 105, 5}, // whole range beyond the band → close
@@ -256,7 +256,7 @@ func TestTouchPromptRenderAndCard(t *testing.T) {
 	// After the episode max-bars it closes; force via bars past the band.
 	bars4 := append(bars3, market.Kline{
 		OpenTime: start.Add(5 * time.Minute).UnixMilli(), Open: 104.6, High: 106, Low: 104.6, Close: 105, Volume: 5,
-		CloseTime: start.Add(6 * time.Minute).UnixMilli() - 1,
+		CloseTime: start.Add(6*time.Minute).UnixMilli() - 1,
 	})
 	closed = TouchUpdate(uid2, "MNQ", bars4, lv2, 2.0, start.Add(6*time.Minute))
 	if len(closed) == 1 && closed[0].Shape == "rejection" {

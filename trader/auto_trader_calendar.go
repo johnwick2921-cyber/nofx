@@ -26,24 +26,15 @@ func (at *AutoTrader) maybeFetchCalendar(now time.Time) {
 		return
 	}
 	tradeDate := plannerTradeDateCT(now)
-	// F0.4 (2026-08-24) — a LIVE slice is only "fresh" for 3 hours; after that
-	// we re-fetch (throttled below) so SAME-DAY corrections (speaker
-	// cancellations, impact changes) propagate instead of freezing the morning
-	// snapshot. Past dates stay frozen (replay integrity).
-	const liveFreshness = 3 * time.Hour
 	if slice, _ := at.store.Calendar().GetSlice(tradeDate); slice != nil && slice.Source == string(calendar.SourceLive) {
-		age := now.Sub(time.UnixMilli(slice.CreatedAt))
-		if age < liveFreshness {
-			// skip-fresh — only a LIVE-source slice is fresh (F0.3: a static/none
-			// slice is stale and keeps re-fetching for upgrade, throttled below).
-			// Logged once per trade date, not every 3-min cycle.
-			if at.lastCalSkipDate != tradeDate {
-				at.lastCalSkipDate = tradeDate
-				at.logInfof("📅 calendar: skip-fresh — slice for %s already stored (src %s)", tradeDate, slice.Source)
-			}
-			return
+		// skip-fresh — only a LIVE-source slice is fresh (F0.3: a static/none
+		// slice is stale and keeps re-fetching for upgrade, throttled below).
+		// Logged once per trade date, not every 3-min cycle.
+		if at.lastCalSkipDate != tradeDate {
+			at.lastCalSkipDate = tradeDate
+			at.logInfof("📅 calendar: skip-fresh — slice for %s already stored (src %s)", tradeDate, slice.Source)
 		}
-		at.logInfof("📅 calendar: live slice for %s is %s old — re-fetching for same-day corrections", tradeDate, age.Truncate(time.Minute))
+		return
 	}
 	if !at.lastCalFetch.IsZero() && now.Sub(at.lastCalFetch) < time.Hour {
 		return // throttle outage retries
@@ -62,27 +53,12 @@ func (at *AutoTrader) maybeFetchCalendar(now time.Time) {
 			TradeDate: date, Source: string(res.Source), EventsJSON: string(js), CreatedAt: now.UnixMilli(),
 		}
 		if res.Source == calendar.SourceLive {
-			// live wins over a prior static/none guess (F0.3). A frozen live row
-			// still refreshes when the payload CHANGED (F0.4 — same-day
-			// corrections), but stays byte-identical otherwise (replay integrity).
+			// live wins over a prior static/none guess; live-over-live stays frozen.
 			if wrote, up, err := at.store.Calendar().UpsertSliceUpgrade(row); err == nil && wrote {
 				stored++
 				events += len(evs)
 				if up {
 					upgraded++
-				}
-			} else if err == nil {
-				// C10/D2 (2026-08-25) — the past-date freeze: a corrected
-				// payload for a PAST trade-date must NOT overwrite the frozen
-				// replay slice. Only TODAY's slice accepts live corrections.
-				todayCT := now.In(kernel.CTLocation()).Format("2006-01-02")
-				if date != todayCT {
-					continue
-				}
-				if changed, cerr := at.store.Calendar().UpdateLiveSliceIfChanged(row); cerr == nil && changed {
-					at.logInfof("📅 calendar: %s slice corrected by the fresh feed", date)
-				} else if cerr != nil {
-					at.logWarnf("📅 calendar: live-slice refresh for %s failed: %v", date, cerr)
 				}
 			}
 		} else if wrote, err := at.store.Calendar().SaveSliceIfAbsent(row); err == nil && wrote {

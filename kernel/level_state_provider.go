@@ -9,9 +9,7 @@ package kernel
 // Returns a level's persisted freshness grade ("A"|"B"|"C"|"done"|"") for a level
 // IDENTITY (type-from-label + price-bin, the same identity W7's writer uses).
 // "" = no persisted state = fresh (the pre-W11b behavior). "done"/"consumed" →
-// ScoreLevels role-flips the level at REDUCED weight (freshMult 0.5, label
-// "flipped"), never drops it (P1c — the map's best levels stay visible);
-// "B"/"C" → shown tested/B. Nil (tests,
+// ScoreLevels drops the level (freshMult 0); "B"/"C" → shown tested/B. Nil (tests,
 // goldens) → everything fresh → byte-identical output.
 // P0-cleanup (2026-08-19) — trader-scoped: the provider receives the deciding
 // trader's id so two day-plan traders never share burn/freshness state.

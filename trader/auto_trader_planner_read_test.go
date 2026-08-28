@@ -1,13 +1,10 @@
 package trader
 
 import (
-	"encoding/json"
 	"errors"
 	"path/filepath"
-	"strings"
 	"testing"
 
-	"nofx/kernel"
 	"nofx/store"
 )
 
@@ -66,67 +63,6 @@ func TestRunPlannerReadCoreFailClosed(t *testing.T) {
 	got, _ := at.store.Plan().GetLatestPlanForSession("2026-08-14", "NY")
 	if got == nil || got.Lifecycle != "no_trade" || got.TriggerReason != "planner_fail_closed" {
 		t.Fatalf("fail-closed plan not written correctly: %+v", got)
-	}
-}
-
-// P0-relax (2026-08-27) — write-site: a machine-caused thin side must WARN,
-// write the plan, and stamp the thin_side note onto the stored doc (the card
-// renders it). The machine map is what the prompt displayed (seated + owner +
-// HTF rows, price-keyed).
-const thinAbovePlanJSON = `{
-  "reasoning": "thin above: price sits at the top of the stack; only one level above in the map",
-  "bias": {"direction": "long", "conviction": "low", "flip_condition": "2x5m < 29500"},
-  "levels": [
-    {"price": 29500, "label": "PDL", "grade": "A", "instruction": "reclaim"},
-    {"price": 29550, "label": "RN 29550", "grade": "B", "instruction": "reclaim"},
-    {"price": 29600, "label": "RN 29600", "grade": "B", "instruction": "fade"},
-    {"price": 30000, "label": "RN 30000", "grade": "B", "instruction": "fade"}
-  ],
-  "scenarios": [{"id": "S1", "trigger": "hold 29550", "condition": "hold", "direction": "long", "target_chain": [29700], "invalid": "2x5m<29540", "quality": "B", "confirm": {"rule": "touch", "ref_price": 29550, "side": "below"}}],
-  "no_trade": ["first 5m"],
-  "death_condition": "acceptance above 30000",
-  "death": {"price": 30000, "side": "above", "rule": "2x5m"},
-  "flip": {"price": 29500, "side": "below", "rule": "2x5m", "flip_to": "short"},
-  "day_type": "balance"
-}`
-
-func TestRunPlannerReadMachineThinWritesWithNote(t *testing.T) {
-	at := plannerTestTrader(t)
-	facts := kernel.PlanFacts{Price: 29614, DATR: 300} // PDH/PDL 0 → gap rules skipped
-	machine := map[float64]string{30000: "RN 30000"}   // the map itself is thin above
-	ver, lc, err := at.runPlannerReadCoreWithFactsGrades("ASIA", "2026-08-26", "owner_reset",
-		"deepseek-v4-pro", "hashQ", "", "", "", facts, nil, machine, nil, true, 2,
-		func() (string, error) { return thinAbovePlanJSON, nil })
-	if err != nil || ver != 1 || lc != "active" {
-		t.Fatalf("machine-thin write: ver=%d lc=%q err=%v want active", ver, lc, err)
-	}
-	row, _ := at.store.Plan().GetLatestPlanForSession("2026-08-26", "ASIA")
-	if row == nil || row.TriggerReason != "owner_reset" {
-		t.Fatalf("stored row wrong: %+v", row)
-	}
-	var doc kernel.PlanDoc
-	if err := json.Unmarshal([]byte(row.Doc), &doc); err != nil {
-		t.Fatalf("doc unmarshal: %v", err)
-	}
-	if !strings.Contains(doc.ThinSide, "above") || !strings.Contains(doc.ThinSide, "machine map 1") {
-		t.Fatalf("thin_side note not stamped: %q", doc.ThinSide)
-	}
-}
-
-func TestRunPlannerReadAIOmissionFailsClosed(t *testing.T) {
-	at := plannerTestTrader(t)
-	facts := kernel.PlanFacts{Price: 29614, DATR: 300}
-	machine := map[float64]string{ // map HAS 3 above — the plan carries only 1
-		29500: "PDL", 29550: "RN 29550", 29600: "RN 29600",
-		30000: "RN 30000", 30100: "RN 30100", 30200: "RN 30200",
-	}
-	_, lc, err := at.runPlannerReadCoreWithFactsGrades("ASIA", "2026-08-26", "owner_reset",
-		"deepseek-v4-pro", "hashQ2", "", "", "", facts, nil, machine, nil, true, 2,
-		func() (string, error) { return thinAbovePlanJSON, nil })
-	// The fail-closed NO-TRADE WRITE succeeds (err nil) — the outcome is the
-	// lifecycle, never an error return.
-	if lc != "no_trade" || err != nil {
-		t.Fatalf("AI omission must fail-closed: lc=%q err=%v", lc, err)
 	}
 }
 

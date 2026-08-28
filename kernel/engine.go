@@ -96,58 +96,28 @@ type Context struct {
 	RuntimeMinutes int    `json:"runtime_minutes"`
 	CallCount      int    `json:"call_count"`
 	TraderID       string `json:"-"` // B6: identity for per-trader gate-block counters (set by the trader loop; never serialized)
-	// SnapshotMs is WHEN this context's market data was assembled (epoch ms).
-	// The B4 stale-feed guard evaluates against THIS clock, not post-AI-call
-	// time, so a legal slow call can never turn a live-at-snapshot feed into
-	// "stale" (stale-bar dispatch 2026-08-19). Prompt-invisible (json:"-").
-	SnapshotMs int64 `json:"-"`
 	// A5 (G5) — prompt-ownership tags: field-name → owning trader_id for each
 	// account-scoped context field the trader populates. Final prompt assembly
 	// asserts every tag == TraderID (the deciding trader); a mismatch is cross-trader
 	// contamination → the cycle is skipped. Prompt-data only (json:"-"), so a
 	// matching-tag context is byte-identical.
-	OwnerTags      map[string]string                  `json:"-"`
-	Account        AccountInfo                        `json:"account"`
-	Positions      []PositionInfo                     `json:"positions"`
-	CandidateCoins []CandidateCoin                    `json:"candidate_coins"`
-	PromptVariant  string                             `json:"prompt_variant,omitempty"`
-	TradingStats   *TradingStats                      `json:"trading_stats,omitempty"`
-	RecentOrders   []RecentOrder                      `json:"recent_orders,omitempty"`
-	MarketDataMap  map[string]*market.Data            `json:"-"`
-	MultiTFMarket  map[string]map[string]*market.Data `json:"-"`
-	OITopDataMap   map[string]*OITopData              `json:"-"`
-	// G2 (regime wave 2026-08-21) — per-cycle machine structure snapshot
-	// (per-TF trend + swings + events); the HTF veto and the prompt line read
-	// it. Prompt-invisible (json:"-"); set by the trader loop each cycle.
-	Structure map[string]StructureState `json:"-"`
-	// G1 (regime wave 2026-08-21) — HTF veto gate inputs: the Studio toggle
-	// (default ON) and the veto timeframe (env HTF_VETO_TF, default 1h).
-	// Prompt-invisible; set by the trader loop each cycle.
-	HTFVetoEnabled bool   `json:"-"`
-	HTFVetoTF      string `json:"-"`
-	// G4 (regime wave 2026-08-21) — transition stand-down inputs (the trader
-	// maintains the state machine from the cycle's structure snapshot + plan).
-	TransitionActive bool   `json:"-"`
-	TransitionDir    string `json:"-"` // plan bias "long"|"short" — paused direction
-	TransitionDetail string `json:"-"`
-	// C6 (2026-08-25) — executor dead-plan gate: non-empty when the active day
-	// plan is machine-dead (or planless with day_plan on). ENTRIES are refused;
-	// position management (closes/trails) proceeds. Set by the trader loop each
-	// cycle; prompt-invisible.
-	ExecutorPlanDead   string                     `json:"-"`
-	// R4 (2026-08-25) — min_scenario_quality gate inputs: the resolved floor
-	// ("A"|"B"|"C", default C = no restriction) + the active plan's scenario
-	// quality map (id → quality). Set by the trader loop each cycle;
-	// prompt-invisible.
-	MinScenarioQuality  string            `json:"-"`
-	PlanScenarioQuality map[string]string `json:"-"`
-	QuantDataMap       map[string]*QuantData      `json:"-"`
-	OIRankingData      *nofxos.OIRankingData      `json:"-"` // Market-wide OI ranking data
-	NetFlowRankingData *nofxos.NetFlowRankingData `json:"-"` // Market-wide fund flow ranking data
-	PriceRankingData   *nofxos.PriceRankingData   `json:"-"` // Market-wide price gainers/losers
-	BTCETHLeverage     int                        `json:"-"`
-	AltcoinLeverage    int                        `json:"-"`
-	Timeframes         []string                   `json:"-"`
+	OwnerTags          map[string]string                  `json:"-"`
+	Account            AccountInfo                        `json:"account"`
+	Positions          []PositionInfo                     `json:"positions"`
+	CandidateCoins     []CandidateCoin                    `json:"candidate_coins"`
+	PromptVariant      string                             `json:"prompt_variant,omitempty"`
+	TradingStats       *TradingStats                      `json:"trading_stats,omitempty"`
+	RecentOrders       []RecentOrder                      `json:"recent_orders,omitempty"`
+	MarketDataMap      map[string]*market.Data            `json:"-"`
+	MultiTFMarket      map[string]map[string]*market.Data `json:"-"`
+	OITopDataMap       map[string]*OITopData              `json:"-"`
+	QuantDataMap       map[string]*QuantData              `json:"-"`
+	OIRankingData      *nofxos.OIRankingData              `json:"-"` // Market-wide OI ranking data
+	NetFlowRankingData *nofxos.NetFlowRankingData         `json:"-"` // Market-wide fund flow ranking data
+	PriceRankingData   *nofxos.PriceRankingData           `json:"-"` // Market-wide price gainers/losers
+	BTCETHLeverage     int                                `json:"-"`
+	AltcoinLeverage    int                                `json:"-"`
+	Timeframes         []string                           `json:"-"`
 
 	// Strategy Studio P1 — daily-guardrail inputs measured on the CME session-day
 	// (set by the trader loop from the position store; read by the daily-guardrail
@@ -260,16 +230,6 @@ type StrategyEngine struct {
 	// the default (day_plan off) keeps the futures prompt byte-identical.
 	keyLevelsContextLine string
 
-	// biasContextLine is the per-cycle bias-context facts line (addendum 2,
-	// 2026-08-26) — rendered right after the KEY LEVELS block in the futures
-	// prompt. Empty → byte-identical.
-	biasContextLine string
-
-	// armedContextLine (Wave 2 armed orders, 2026-08-27) — the per-cycle ARMED
-	// order status lines (⏳/📌/⚡/✕ per armed scenario). Rendered when non-empty;
-	// empty (no arms) → byte-identical prompt.
-	armedContextLine string
-
 	// planBlockLine / planStatusLine are the P3.4 executor plan injection: the
 	// byte-stable PLAN BLOCK (cached prefix) and the dynamic PLAN STATUS tail.
 	// Non-empty planBlockLine (day_plan on + an active plan) triggers the RECON #4
@@ -283,9 +243,6 @@ type StrategyEngine struct {
 	// Threaded in from the decision loop (one snapshot → one clock) and emitted
 	// by BOTH the futures and crypto prompt builders. Empty → byte-identical.
 	clockContextLine string
-	// promptSnapshotMs (P10.2): the cycle's snapshot instant for the forming-
-	// bar label in the market block. 0 = no label (tests/legacy paths).
-	promptSnapshotMs int64
 }
 
 // SetSVPContext sets the Session Volume Profile line used by the futures prompt
@@ -295,12 +252,6 @@ func (e *StrategyEngine) SetSVPContext(line string) { e.svpContextLine = line }
 // SetKeyLevelsContext sets the day-plan KEY LEVELS block used by the futures
 // prompt for the next BuildSystemPrompt call. Pass "" to inject nothing.
 func (e *StrategyEngine) SetKeyLevelsContext(line string) { e.keyLevelsContextLine = line }
-
-// SetBiasContext sets the per-cycle bias-context facts line (addendum 2).
-func (e *StrategyEngine) SetBiasContext(line string) { e.biasContextLine = line }
-
-// SetArmedContext sets the per-cycle ARMED order status lines (Wave 2).
-func (e *StrategyEngine) SetArmedContext(line string) { e.armedContextLine = line }
 
 // SetPlanContext sets the P3.4 executor plan injection: the byte-stable PLAN
 // BLOCK (prefix) and the dynamic PLAN STATUS tail. Pass ("","") for no active
@@ -313,12 +264,6 @@ func (e *StrategyEngine) SetPlanContext(planBlock, planStatus string) {
 // SetClockContext sets the labelled per-cycle clock line (P0 timezone fix)
 // emitted by both prompt builders. Pass "" to inject nothing.
 func (e *StrategyEngine) SetClockContext(line string) { e.clockContextLine = line }
-
-// SetPromptSnapshotMs (P10.2) hands the cycle's snapshot instant to the market
-// -block renderer so the newest bar can be labelled FORMING/CLOSED honestly —
-// interval cadence runs cycles mid-bar and the AI must know what it is looking
-// at. 0 (tests/legacy) renders no label — goldens stay byte-identical.
-func (e *StrategyEngine) SetPromptSnapshotMs(ms int64) { e.promptSnapshotMs = ms }
 
 // NewStrategyEngine creates strategy execution engine.
 // claw402WalletKey is optional — if provided, nofxos data requests are routed through claw402.

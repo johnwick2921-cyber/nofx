@@ -129,13 +129,13 @@ type CancelOrderPayload struct {
 // (same safe Change pattern as move_stop). NewStopLoss/NewTakeProfit ≤ 0 =
 // leave that leg untouched.
 type ModifyBracketPayload struct {
-	Symbol       string  `json:"symbol"`
-	SignalID     string  `json:"signal_id"`
-	NewStopLoss  float64 `json:"new_stop_loss,omitempty"`
+	Symbol        string  `json:"symbol"`
+	SignalID      string  `json:"signal_id"`
+	NewStopLoss   float64 `json:"new_stop_loss,omitempty"`
 	NewTakeProfit float64 `json:"new_take_profit,omitempty"`
-	Account  string `json:"account,omitempty"`
-	TraderID string `json:"trader_id,omitempty"`
-	Seq      uint64 `json:"seq,omitempty"`
+	Account       string  `json:"account,omitempty"`
+	TraderID      string  `json:"trader_id,omitempty"`
+	Seq           uint64  `json:"seq,omitempty"`
 }
 
 // OrderUpdatePayload is every NT8 order-state change (deduped per order name)

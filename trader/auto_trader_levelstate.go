@@ -2,18 +2,13 @@ package trader
 
 import (
 	"encoding/json"
-	"sync"
 	"time"
 
 	"nofx/kernel"
-	"nofx/logger"
 	"nofx/market"
 	"nofx/store"
 	"nofx/telemetry"
 )
-
-// repairConsumedOnce runs the T4 legacy-row repair exactly once per process.
-var repairConsumedOnce sync.Once
 
 // W7 — LEVEL-STATE WRITER (the audit's dead wire: store.LevelStateStore —
 // times_tested / consumed / freshness / re-arm cooldown — had ZERO production
@@ -62,14 +57,6 @@ func (at *AutoTrader) recordLevelState() {
 	rule := at.acceptanceRuleFor(at.activeSessionName(now))
 
 	ls := at.store.LevelState()
-	// T4 invariant repair (forensics hygiene 2026-08-28): legacy consumed rows
-	// without their consuming touch are stamped once per process — a consumed
-	// row always carries times_tested ≥ 1 from here on.
-	repairConsumedOnce.Do(func() {
-		if n, err := ls.RepairConsumedWithoutTouch(); err == nil && n > 0 {
-			logger.Infof("🩹 level-state repair: %d legacy consumed rows stamped with their consuming touch (T4 invariant)", n)
-		}
-	})
 	// H3 — the ACTIVATION WINDOW (hide levels >1.5×ATR from the candidate set) is
 	// a SPEC INTERNAL CONSTANT, not the owner's proximity_filter_atr. The two were
 	// cross-fed here: proximity_filter_atr governs which levels are GENERATED and
@@ -77,11 +64,6 @@ func (at *AutoTrader) recordLevelState() {
 	// LIVE near price (here). Naming the constant at the call site kills the
 	// ambiguity.
 	active := kernel.ActivePlanLevels(plan.Doc.Levels, price, dATR, kernel.ActivationWindowK)
-	// R2 4.7 (2026-08-25) — level-state writers obey min_grade: sub-floor
-	// levels get no persisted state (the table they came from can't have them).
-	if _, minGrade, _ := resolveSessionPlanCfg(at.dayPlanCfg(), at.activeSessionName(now)); minGrade != "" {
-		active = kernel.FilterPlanLevelsByMinGrade(active, minGrade)
-	}
 	for _, l := range active {
 		typ := kernel.LevelTypeFromLabel(l.Label)
 		bin := kernel.LevelBinIndex(l.Price)
@@ -89,7 +71,7 @@ func (at *AutoTrader) recordLevelState() {
 
 		// Identity: create fresh (grade→initial freshness) or preserve prior state.
 		if err := ls.EnsureLevel(&store.LevelStateDB{
-			TraderID:  at.id, // P0-cleanup — trader-scoped identity
+			TraderID:   at.id, // P0-cleanup — trader-scoped identity
 			Symbol:    symbol,
 			LevelType: typ,
 			BinIndex:  bin,
@@ -133,7 +115,7 @@ func (at *AutoTrader) recordLevelState() {
 		}
 
 		if kernel.ConsumedSince(bars, l.Price, rule, sinceMs, nowMs) {
-			_ = ls.MarkConsumed(key, nowMs) // touched AND accepted through in-window → role-flip
+			_ = ls.MarkConsumed(key) // touched AND accepted through in-window → role-flip
 			continue
 		}
 
@@ -206,13 +188,8 @@ func (at *AutoTrader) recordScenarioState() {
 	// the expired projection is the API's job when it serves a rolled plan.
 	// H3 — the activation-window k is the SPEC INTERNAL CONSTANT (see
 	// recordLevelState); proximity_filter_atr governs generation/seating only.
-	// FIX 7 (F1, 2026-08-27) — evaluate triggers ONLY on bars closed AFTER the
-	// plan was born: the full-cache evaluation let pre-plan sweeps/rejects read
-	// as "triggered now" (the 13 false-positive machine-trigger lines of
-	// 2026-08-26). The status stays DISPLAY-ONLY — never execution-wired.
-	windowed := kernel.BarsSince(bars, plan.BirthMs)
 	statuses, evals := kernel.EvaluatePlanScenarios(
-		plan.Doc, windowed, price, dATR, kernel.ActivationWindowK, rule, true, now.UnixMilli())
+		plan.Doc, bars, price, dATR, kernel.ActivationWindowK, rule, true, now.UnixMilli())
 
 	if len(statuses) == 0 {
 		// Nothing resolvable — say nothing rather than write an empty verdict.
@@ -222,44 +199,18 @@ func (at *AutoTrader) recordScenarioState() {
 	if err != nil {
 		return
 	}
-	resolvedPlanID := at.store.Plan().ResolvePlanID(plannerTradeDateCT(now), plan.Session, at.id)
-	key := store.ScenarioStatusKey(at.id, resolvedPlanID)
+	key := store.ScenarioStatusKey(at.id, at.store.Plan().ResolvePlanID(plannerTradeDateCT(now), plan.Session, at.id))
 	if err := at.store.SetSystemConfig(key, string(blob)); err != nil {
 		at.logWarnf("🎯 scenario-state write failed for %s: %v", key, err)
 		return
-	}
-	// A1/A4 (fail-register wave) — persist the verdict BASIS (machine vs
-	// prose-anchor heuristic) and the unevaluable list, so the card renders
-	// honestly instead of dressing a heuristic as a machine verdict.
-	basis := map[string]string{}
-	var unevaluable []string
-	for _, e := range evals {
-		if e.HasAnchor {
-			basis[e.ID] = e.Basis
-		} else {
-			unevaluable = append(unevaluable, e.ID)
-		}
-	}
-	// C1: per-scenario confirm verdicts (MET / NOT MET) for the card chips.
-	confirms := map[string]kernel.ConfirmVerdict{}
-	for _, sc := range plan.Doc.Scenarios {
-		if sc.Confirm != nil {
-			confirms[sc.ID] = kernel.EvaluateConfirm(*sc.Confirm, bars, plan.BirthMs, now.UnixMilli())
-		}
-	}
-	if metaBlob, mErr := json.Marshal(map[string]any{"basis": basis, "unevaluable": unevaluable, "confirm": confirms}); mErr == nil {
-		_ = at.store.SetSystemConfig(store.ScenarioMetaKey(at.id, resolvedPlanID), string(metaBlob))
 	}
 	if at.scenarioStateLog != string(blob) {
 		at.scenarioStateLog = string(blob)
 		for _, e := range evals {
 			if e.HasAnchor {
-				// FIX 7 (F1) — the label says what it is: an ESTIMATE.
-				at.logInfof("🎯 scenario %s → ≈%s @ %.2f (%s — display-only estimate, never execution-wired)", e.ID, e.Status, e.Anchor, e.Reason)
+				at.logInfof("🎯 scenario %s → %s @ %.2f (%s)", e.ID, e.Status, e.Anchor, e.Reason)
 			} else {
-				// A4: unevaluable is owner-relevant — WARN so it reaches the
-				// log_events sink + dashboard, not just the file log.
-				at.logWarnf("🎯 scenario %s UNEVALUABLE — %s (instruction/trigger has no price that snaps to a plan level ±2pts)", e.ID, e.Reason)
+				at.logInfof("🎯 scenario %s → (no status) %s", e.ID, e.Reason)
 			}
 		}
 	}
