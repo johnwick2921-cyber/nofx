@@ -95,12 +95,37 @@ func (s *ArmedOrderStore) UpsertArm(row *ArmedOrderDB) error {
 	if row == nil || row.PlanID == "" || row.Scenario == "" {
 		return fmt.Errorf("plan_id and scenario required")
 	}
-	return s.db.Where("plan_id = ? AND scenario = ?", row.PlanID, row.Scenario).
-		Assign(map[string]any{
+	// PRE-REOPEN F3 (2026-08-28) — dead re-arm fix: a TERMINAL row for the same
+	// (plan, scenario) is re-authorized as a fresh armed row (new identity, no
+	// stale fill); a non-terminal row keeps its identity and only its prices
+	// are refreshed. The old Assign-based upsert left terminal rows terminal
+	// forever, so a legit same-scenario re-arm was impossible and the executor
+	// re-logged the dead row every cycle.
+	var existing ArmedOrderDB
+	err := s.db.Where("plan_id = ? AND scenario = ?", row.PlanID, row.Scenario).First(&existing).Error
+	if err == nil {
+		if existing.State == "armed" || existing.State == "working" {
+			row.ID = existing.ID
+			return s.db.Model(&existing).Updates(map[string]any{
+				"version": row.Version, "session": row.Session,
+				"side": row.Side, "entry_px": row.EntryPx, "stop_px": row.StopPx,
+				"target_px": row.TargetPx, "updated_at": row.UpdatedAt,
+			}).Error
+		}
+		// Terminal → RE-AUTHORIZE: fresh armed state, fresh lineage.
+		row.ID = existing.ID
+		return s.db.Model(&existing).Updates(map[string]any{
+			"state": "armed", "state_reason": "", "signal_id": "",
+			"entry_class": "", "fill_price": 0, "fill_quantity": 0,
 			"trader_id": row.TraderID, "version": row.Version, "session": row.Session,
-			"side": row.Side, "entry_px": row.EntryPx, "stop_px": row.StopPx, "target_px": row.TargetPx,
-		}).
-		FirstOrCreate(row).Error
+			"side": row.Side, "entry_px": row.EntryPx, "stop_px": row.StopPx,
+			"target_px": row.TargetPx, "created_at": row.CreatedAt, "updated_at": row.UpdatedAt,
+		}).Error
+	}
+	if err != gorm.ErrRecordNotFound {
+		return err
+	}
+	return s.db.Create(row).Error
 }
 
 // ListNonTerminal returns every armed order that is NOT in a terminal state.

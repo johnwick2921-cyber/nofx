@@ -148,12 +148,23 @@ func TestMoveStopUsesMaterializedIdentity(t *testing.T) {
 
 		tr := NewTCPTrader(s, "MNQ", "Sim101")
 		tr.mu.Lock()
-		tr.st = st                    // wired store (StartPositionReconcile does this live)
+		tr.st = st                            // wired store (StartPositionReconcile does this live)
 		tr.entryOrderID = map[string]string{} // empty cache → forces the DB fallback
 		tr.mu.Unlock()
 
-		if err := tr.MoveStopToBreakeven(tc.side, tc.be); err != nil {
-			t.Fatalf("%s: move-stop with materialized identity failed: %v", tc.side, err)
+		// The server registers the dialed conn in its accept loop (async) — the
+		// send can race it. Retry only the client-not-yet-registered error
+		// (PRE-REOPEN: this test flaked ~50% under -count=1 before this fix).
+		var moveErr error
+		for i := 0; i < 50; i++ {
+			moveErr = tr.MoveStopToBreakeven(tc.side, tc.be)
+			if moveErr == nil || !strings.Contains(moveErr.Error(), "no NT client connected") {
+				break
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+		if moveErr != nil {
+			t.Fatalf("%s: move-stop with materialized identity failed: %v", tc.side, moveErr)
 		}
 		select {
 		case p := <-frames:

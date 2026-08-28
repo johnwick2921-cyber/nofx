@@ -172,7 +172,7 @@ func (at *AutoTrader) maybeWakePlannerOnMSS(session, tradeDate string, row *stor
 	if at.config.StrategyConfig != nil && at.config.StrategyConfig.DayPlan != nil &&
 		!at.lastPlannerWakeAt.IsZero() &&
 		time.Since(at.lastPlannerWakeAt) < time.Duration(at.config.StrategyConfig.DayPlan.WakeMinIntervalMinutes())*time.Minute {
-		at.logWarnf("🗓️ structure MSS on %s %s — SKIPPED: within wake_min_interval_min of the last planner wake (%s).", session, tradeDate, time.Since(at.lastPlannerWakeAt).Round(time.Second))
+		at.logWarnf("🗓️ structure MSS on %s %s — SKIPPED: %.0fm elapsed < wake_min_interval_min (%dm).", session, tradeDate, time.Since(at.lastPlannerWakeAt).Minutes(), at.config.StrategyConfig.DayPlan.WakeMinIntervalMinutes())
 		return
 	}
 	// W6-D (2026-08-25) — wakes are UNLIMITED and spend NO budget: an MSS wake
