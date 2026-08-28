@@ -56,6 +56,11 @@ type PlannerInput struct {
 	DigestChain    []string               // session digests + dailies + one-liners
 	OwnerNote      string
 	Warming        string // non-empty → cold-start / WARMING annotation
+	// FastTape (F3 fast-market wake reads, 2026-08-28) — the read fires while
+	// the tape is moving fast; the prompt carries the note and the wire runs
+	// reasoning=medium (FAST_MARKET_REASONING).
+	FastTape     bool
+	FastTapeNote string
 	// PriorPlanKiller (P0.4-G, 2026-08-25) — when this read re-plans a DEAD
 	// plan, the killer line (e.g. "flip-condition: 2x5m close above X → bias
 	// long"). Rendered as a MANDATORY context block: a flip that already fired
@@ -283,6 +288,9 @@ func BuildPlannerPrompt(in PlannerInput) string {
 	if in.Warming != "" {
 		fmt.Fprintf(&b, "WARMING: %s (first-week honesty — narrate the machinery, not an edge).\n", in.Warming)
 	}
+	if in.FastTape {
+		fmt.Fprintf(&b, "⚡ FAST TAPE — %s. Write the SHORTEST valid plan you can: fewer scenarios, tight prose. A fast market does not reward long deliberation.\n", in.FastTapeNote)
+	}
 	b.WriteString("\n")
 
 	b.WriteString("## Regime\n" + in.Regime.Render() + "\n\n")
@@ -503,7 +511,7 @@ func plannerOutputContract(maxLevels, maxScenarios int, hasHTFZones, has1HSDZone
 		`  "reasoning": "<your read: what the auction is doing and why this plan — ≤200 words, decision-focused>",` + "\n" +
 		`  "bias": {"direction": "long|short|neutral", "conviction": "high|medium|low", "flip_condition": "<explicit>"},` + "\n" +
 		fmt.Sprintf(`  "levels": [{"price": <n>, "label": "<PDH|ONH|nPOC…>", "grade": "A|B|C", "instruction": "<verb>"}],  // max %d, MUST include ≥3 below AND ≥3 above the current price`, maxL) + "\n" +
-		fmt.Sprintf(`  "scenarios": [{"id": "S1", "trigger": "<setup>", "condition": "reclaim|hold|sweep_reclaim|reject|acceptance|breakout_retest|fvg_entry", "direction": "long|short", "target_chain": [<n>,…], "invalid": "<line>", "quality": "A+|A|B|C", "chain_after": "<S# of the sweep_reclaim this fvg_entry follows, or omit>", "confirm": {"rule": "touch|1x5m_close|2x5m_close|15m_close", "ref_price": <n>, "side": "above|below"}, "fvg": {"fvg_lo": <n>, "fvg_hi": <n>, "entry_mode": "edge|ce", "displacement_atr": <n>, "origin_level": "<label>", "direction": "long|short"}, "arm": {"enabled": true, "entry": <n>, "stop": <n>, "target": <n>}}],  // 1..%d — confirm{} is REQUIRED per scenario; fvg{} REQUIRED iff condition=="fvg_entry" (ce is COMPUTED, never written); chain_after is OPTIONAL; arm{} is OPTIONAL (see the ARMED ORDERS rule)`, maxS) + "\n" +
+		fmt.Sprintf(`  "scenarios": [{"id": "S1", "trigger": "<setup>", "condition": "reclaim|hold|sweep_reclaim|reject|acceptance|breakout_retest|fvg_entry|breakdown_continue|breakup_continue", "direction": "long|short", "target_chain": [<n>,…], "invalid": "<line>", "quality": "A+|A|B|C", "chain_after": "<S# of the sweep_reclaim this fvg_entry follows, or omit>", "confirm": {"rule": "touch|1x5m_close|2x5m_close|15m_close", "ref_price": <n>, "side": "above|below"}, "confirm2": {"rule": "<leg 2 rule>", "ref_price": <n>, "side": "above|below"} (OPTIONAL second trigger leg — a two-leg setup MUST carry both legs; the machine renders EVERY leg and a partial NEVER reads MET), "fvg": {"fvg_lo": <n>, "fvg_hi": <n>, "entry_mode": "edge|ce", "displacement_atr": <n>, "origin_level": "<label>", "direction": "long|short"}, "breakdown": {"level": <n>, "level_label": "<label>", "entry_mode": "pullback|immediate"} (REQUIRED iff condition==breakdown_continue|breakup_continue — see the WATERFALL PLAY rule), "arm": {"enabled": true, "entry": <n>, "stop": <n>, "target": <n>, "wait_confirm": true}}],  // 1..%d — confirm{} is REQUIRED per scenario; fvg{} REQUIRED iff condition=="fvg_entry" (ce is COMPUTED, never written); breakdown{} REQUIRED iff waterfall-class; chain_after is OPTIONAL; arm{} is OPTIONAL (see the ARMED ORDERS rule)`, maxS) + "\n" +
 		`  "no_trade": ["first 5m (CT)", "12:00-13:30 CT lunch", "<calendar blackouts>"],` + "\n" +
 		`  "death_condition": "<the single line that invalidates this whole plan>",` + "\n" +
 		`  "death": {"price": <level>, "side": "below|above", "rule": "2x5m|15m_close|5m_close"},` + "\n" +
@@ -525,13 +533,25 @@ func plannerOutputContract(maxLevels, maxScenarios int, hasHTFZones, has1HSDZone
 		// Autopsy-response wave: armable A/B setups SHOULD carry arm{} (the
 		// resting order is the fast path); sweep_reclaim retraces chain via
 		// wait_confirm; fantasy targets (planned R > 6) are WARN-flagged.
-		"ARMED ORDERS (the resting order IS the fast path — prefer it over a 2-minute debate at the touch): every fvg_entry / reject scenario you author at quality A or B SHOULD carry arm{} — enabled:true + EXACT entry/stop/target (breakout_retest stays a normal AI play: the machine never arms it — GAR-F4). A setup the planner believes in gets a resting order, not a mid-touch argument. Long: stop < entry < target. Short: target < entry < stop. CHAINED ARMS: when a sweep_reclaim you believe in confirms, its RETRACE entry should already be resting — author that retrace as its own arm with wait_confirm:true, or add wait_confirm:true to the sweep scenario's arm: the system holds the arm dormant until the scenario's confirm{} is machine-MET, then places it (the sweep fast path). NEVER arm acceptance or a raw sweep WITHOUT the wait_confirm chain. Keep targets REAL: a planned R:R above ~6 is a fantasy target and gets WARN-flagged at write. The system places arms within a tick band, manages them tick-level, and cancels on veto/dormant/session-end. FEASIBILITY CONTRACT: an arm{} MUST be gate-feasible or it is REFUSED every cycle and learns nothing — R:R = |target\u2212entry| \u00f7 |stop\u2212entry| must be \u2265 2.0 (ARM_MIN_RR) AND the stop distance must be \u2265 1.0\u00d7 the current 5m ATR (the facts list the session ATR5m — cite the live value; a 10-point stop when ATR5m is ~16 is an instant refuse). If your setup cannot meet BOTH, OMIT arm{} and let the AI path take it. " +
+		"ARMED ORDERS (the resting order IS the fast path — prefer it over a 2-minute debate at the touch): every fvg_entry / reject scenario you author at quality A or B SHOULD carry arm{} — enabled:true + EXACT entry/stop/target (breakout_retest stays a normal AI play: the machine never arms it — GAR-F4). A setup the planner believes in gets a resting order, not a mid-touch argument. Long: stop < entry < target. Short: target < entry < stop. CHAINED ARMS: when a sweep_reclaim you believe in confirms, its RETRACE entry should already be resting — author that retrace as its own arm with wait_confirm:true, or add wait_confirm:true to the sweep scenario's arm: the system holds the arm dormant until the scenario's confirm{} is machine-MET, then places it (the sweep fast path). NEVER arm acceptance or a raw sweep WITHOUT the wait_confirm chain. Keep targets REAL: a planned R:R above ~6 is a fantasy target and gets WARN-flagged at write. The system places arms within a tick band, manages them tick-level, and cancels on veto/dormant/session-end. FEASIBILITY CONTRACT: an arm{} MUST be gate-feasible or it is REFUSED every cycle and learns nothing — R:R = |target\u2212entry| \u00f7 |stop\u2212entry| must be \u2265 2.0 (ARM_MIN_RR) AND the stop distance must be \u2265 1.0\u00d7 the current 5m ATR (the facts list the session ATR5m — cite the live value; a 10-point stop when ATR5m is ~16 is an instant refuse). If your setup cannot meet BOTH, OMIT arm{} and let the AI path take it. WATERFALL ARMS (F1): a breakdown_continue / breakup_continue at quality A or B SHOULD carry arm{} with wait_confirm:true + entry_mode=pullback — the resting limit sits AT the broken level and chains on confirm leg 1, so the pullback-that-fails FILLS it (immediate-mode waterfall plays stay on the AI path). " +
 		// A2 (2026-08-26) — condition×session guidance from the week ledger:
 		// reject 75% win +665 in NY RTH vs acceptance 0% −157 and sweep_reclaim
 		// 0% −192. Advisory truth, not a hard rule.
 		"Condition×session guidance (week evidence): reject-based setups are best in NY RTH (75% win, +665 this week); acceptance needs a clear displacement or skip (0% win this week); sweep_reclaim requires the reclaim CLOSE on the decision TF, never the wick alone (0% win this week). " +
-		// B3 (2026-08-26) — the ≤5-line noise-filter gate: the plan may include
-		// at most 5 near-duplicate LINE rows (within 3 points of each other);
+		// WATERFALL PLAY (F1, 2026-08-28) — the momentum-follow class the 2026-08-28
+		// -347pt crash exposed (missed-200pt report: every authored short was a
+		// retest-FADE; no continuation entry existed, $0-by-own-rules). Author a
+		// breakdown_continue (short) / breakup_continue (long) when: one-sided
+		// delivery, a >1.2×ATR gap-and-go, or a waterfall after a failed rally.
+		// breakdown{} carries the broken LEVEL (the retest) + entry_mode
+		// (pullback = the shallow-retrace-that-fails entry, armable; immediate =
+		// enter on the 2nd confirming close, AI path). The confirm{} is leg 1
+		// (N closes beyond the level — machine-verified displacement ≥
+		// BD_MIN_DISP_ATR×ATR5m, no reclaim close at write); confirm2{} is leg 2
+		// (the retest that fails to reclaim). The machine renders both legs and a
+		// partial NEVER reads MET. Targets chain to the next liquidity below
+		// (above for longs); SL beyond the failed pullback extreme, ≥1×ATR5m.
+		"WATERFALL PLAY (F1): author breakdown_continue|breakup_continue when the tape shows one-sided delivery, a >1.2×ATR gap-and-go, or a waterfall after a failed rally — the momentum-follow class. breakdown{} = broken level + entry_mode; confirm = leg 1 (breakdown), confirm2 = leg 2 (failed retest). " + // B3 (2026-08-26) — the ≤5-line noise-filter gate: the plan may include		// at most 5 near-duplicate LINE rows (within 3 points of each other);
 		// keep the strongest anchor, drop the crowd.
 		"NOISE FILTER (≤5): at most 5 of your included level rows may be line-levels clustered within 3 points of each other — keep the strongest of any such cluster, never a crowd. " +
 		// FVG ENTRY MODEL (2026-08-26) — the 5th condition's ≤6-line playbook.

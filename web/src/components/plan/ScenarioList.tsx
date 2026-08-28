@@ -39,11 +39,20 @@ export type ConfirmVerdict = {
   side: string
   met: boolean
   detail: string
+  legs?: Array<{
+    met: boolean
+    rule: string
+    ref_price: number
+    side: string
+    detail: string
+  }>
 }
 
 // ConfirmChip (guide-export 2026-08-27) — the machine confirm verdict chip
-// (CONFIRM MET / confirm not met). Advisory; never a gate.
+// (CONFIRM MET / confirm not met). Advisory; never a gate. F2 (waterfall-class
+// wave): two-leg scenarios render the leg states — a partial never reads MET.
 export function ConfirmChip({ id, c }: { id: string; c: ConfirmVerdict }) {
+  const legs = c.legs && c.legs.length > 0
   return (
     <span
       data-testid={`confirm-chip-${id}`}
@@ -61,7 +70,11 @@ export function ConfirmChip({ id, c }: { id: string; c: ConfirmVerdict }) {
             }
       }
     >
-      {c.met ? 'CONFIRM MET' : 'confirm not met'}
+      {legs
+        ? `${c.met ? 'CONFIRM MET' : 'confirm not met'} (${c.legs!.map((l, i) => `${i + 1}/${c.legs!.length} ${l.met ? 'MET' : 'not met'}`).join(' · ')})`
+        : c.met
+          ? 'CONFIRM MET'
+          : 'confirm not met'}
     </span>
   )
 }

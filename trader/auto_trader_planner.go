@@ -839,6 +839,16 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 		return false
 	}
 	input := at.assemblePlannerInputWithCtx(session, tradeDate, priorKiller, priorLevels)
+	// F3 — FAST-MARKET WAKE READS (waterfall-class wave, 2026-08-28): when a wake
+	// fires with |price drift| since the last plan write > FAST_MARKET_ATR ×
+	// ATR5m, this read runs on the fast reasoning wire and the prompt carries a
+	// FAST TAPE line. The 361.6s / 90pt-stale wake-read class dies here.
+	if driftPts, driftAtr := at.fastMarketDrift(input.Price); driftPts > 0 {
+		input.FastTape = true
+		input.FastTapeNote = fmt.Sprintf("price has moved %.1f pts (%.1f×ATR5m) since the last plan write", driftPts, driftAtr)
+		at.fastTapePending.Store(true)
+		at.logInfof("🧠 planner mode: fast-market (drift %.1f pts = %.1f×ATR5m) — reasoning downgraded to %s for this read (F3)", driftPts, driftAtr, fastMarketReasoningLabel())
+	}
 	prompt := kernel.BuildPlannerPrompt(input)
 	hash := shortHash(prompt)
 	// W3 — HARD red-news blackout lines auto-written into the plan (§80).
@@ -921,6 +931,11 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 	// FULL reasoning (AI_PLAN_REASONING, default max); the executor loop runs
 	// cheap. Re-asserted per call because the client may be shared.
 	pMode, pEffort := planReasoningWire()
+	modeLabel := planReasoningLabel()
+	if at.fastTapePending.Swap(false) {
+		pMode, pEffort = fastMarketReasoningWire()
+		modeLabel = fastMarketReasoningLabel()
+	}
 	at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, hash, input.IndicatorsBlock, input.AIConfigHash, requiredBias, facts, machineGrades, machineLabels, htfLabels(input), failClosed, sideQuota, func() (string, error) {
 		mcp.ApplyThinking(client, pMode, pEffort)
 		// F1a (LONDON-FORENSICS 2026-08-28) — planner completion budget:
@@ -933,7 +948,7 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 		if err == nil && mcp.LastFinishReason(client) == "length" {
 			at.logWarnf("📐 planner output TRUNCATED by the provider (finish_reason=length, cap=%d) — the plan JSON may be incomplete; retrying at the same cap will not fix truncation", aiPlanMaxTokens())
 		}
-		at.logInfof("🧠 planner call (reasoning=%s wire=%s/%s cap=%d) completed in %.1fs", planReasoningLabel(), pMode, pEffort, aiPlanMaxTokens(), time.Since(start).Seconds())
+		at.logInfof("🧠 planner call (reasoning=%s wire=%s/%s cap=%d) completed in %.1fs", modeLabel, pMode, pEffort, aiPlanMaxTokens(), time.Since(start).Seconds())
 		return raw, err
 	}, t1Lines...)
 	return true
@@ -1076,6 +1091,34 @@ func (at *AutoTrader) carryMachineGrades(tradeDate, session string, doc *kernel.
 // deterministic detector grade from the Go-ranked candidate table; plan levels
 // that match get their machine grade persisted for the card to display beside
 // the model-written one.
+// recordPlanWritePrice (F3) snapshots the price at the last successful plan
+// write — the fast-market drift baseline for the next wake read.
+func (at *AutoTrader) recordPlanWritePrice(p float64) {
+	if p > 0 {
+		at.lastPlanWritePrice.Store(math.Float64bits(p))
+	}
+}
+
+// fastMarketDrift (F3) returns (driftPts, driftAtr) when the price has moved
+// more than FAST_MARKET_ATR × ATR5m since the last plan write; (0,0) otherwise.
+func (at *AutoTrader) fastMarketDrift(price float64) (float64, float64) {
+	last := math.Float64frombits(at.lastPlanWritePrice.Load())
+	if last <= 0 || price <= 0 {
+		return 0, 0
+	}
+	drift := math.Abs(price - last)
+	var bars []market.Kline
+	if market.FuturesBarsProvider != nil {
+		bars = market.FuturesBarsProvider(at.futuresSymbol(), "1m", kernel.AISVPBarCount)
+	}
+	atr5m := kernel.StaleConfirmATR5m(bars)
+	if atr5m <= 0 || drift <= fastMarketATR()*atr5m {
+		return 0, 0
+	}
+	return drift, drift / atr5m
+}
+
+// runPlannerReadCoreWithFactsGrades is the full write path (see its doc above).
 func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, requiredBias string, facts kernel.PlanFacts, machineGrades map[float64]string, machineLabels map[float64]string, htfLabels map[float64]string, failClosed bool, sideQuota int, call func() (string, error), extraNoTrade ...string) (int, string, error) {
 	// H4/H5 — validation must accept EXACTLY what the config allows: the resolved
 	// max_levels / scenario_cap (hard ceilings 12/5). Before this the parse
@@ -1180,6 +1223,21 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 				origin[lbl] = true
 			}
 			if verr := kernel.ValidateFvgEntryScenarios(d, fvgBars, at.futuresSymbol(), origin, time.Now()); verr != nil {
+				lastErr = verr
+				at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, verr)
+				continue
+			}
+		}
+		// F1 — waterfall-class validator (2026-08-28): every
+		// breakdown_continue / breakup_continue scenario is re-verified against
+		// the bars (displacement ≥ BD_MIN_DISP_ATR, no reclaim, reachable
+		// retest, arm chain rules). The model declares, the math verifies.
+		if kernel.HasBreakdownScenario(d) {
+			var bdBars []market.Kline
+			if market.FuturesBarsProvider != nil {
+				bdBars = market.FuturesBarsProvider(at.futuresSymbol(), "1m", kernel.AISVPBarCount)
+			}
+			if verr := kernel.ValidateBreakdownContinueScenarios(d, bdBars, kernel.StaleConfirmATR5m(bdBars), facts.Price, time.Now().UnixMilli()); verr != nil {
 				lastErr = verr
 				at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, verr)
 				continue
@@ -1350,6 +1408,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		return 0, lifecycle, err
 	}
 	at.logInfof("🗓️ PLAN written %s %s v%d (model %s, lifecycle %s, prompt %s, ai_config %s)", tradeDate, session, version, modelID, lifecycle, promptHash, aiConfigHash)
+	at.recordPlanWritePrice(facts.Price) // F3 fast-market drift baseline
 	// W6 — P1 plan-born/armed alert (active plans only; fail-closed already alerted P0).
 	if lifecycle == "active" {
 		at.emitAlert("P1", "armed", fmt.Sprintf("planborn:%s:%s:%d", tradeDate, session, version),

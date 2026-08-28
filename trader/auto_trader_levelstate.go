@@ -241,10 +241,12 @@ func (at *AutoTrader) recordScenarioState() {
 		}
 	}
 	// C1: per-scenario confirm verdicts (MET / NOT MET) for the card chips.
+	// F2 (waterfall-class wave) — two-leg scenarios report the OVERALL verdict
+	// plus every leg; a partial never renders as MET.
 	confirms := map[string]kernel.ConfirmVerdict{}
 	for _, sc := range plan.Doc.Scenarios {
-		if sc.Confirm != nil {
-			confirms[sc.ID] = kernel.EvaluateConfirm(*sc.Confirm, bars, plan.BirthMs, now.UnixMilli())
+		if sc.Confirm != nil || (kernel.IsBreakdownCondition(sc.Condition) && sc.Breakdown != nil) {
+			confirms[sc.ID] = kernel.EvaluateScenarioConfirm(sc, bars, plan.BirthMs, now.UnixMilli())
 		}
 	}
 	if metaBlob, mErr := json.Marshal(map[string]any{"basis": basis, "unevaluable": unevaluable, "confirm": confirms}); mErr == nil {
