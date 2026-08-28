@@ -443,6 +443,14 @@ func RepairArmedLineage(st *store.Store, traderID string) int {
 		}
 		if StampArmedLineageIfMatched(st, traderID, p.ID, p.Symbol, p.Side, p.EntryPrice) {
 			n++
+			// The F grade was CAUSED by the missing linkage — clear
+			// it so the W5 analytics regrade the close with the
+			// armed-fill plan in hand (grade ≠ F is the STEP-7 proof).
+			if p.Status == "CLOSED" && p.AdherenceGrade == "F" {
+				if err := st.Position().SetAdherence(p.ID, ""); err != nil {
+					logger.Warnf("🩹 RepairArmedLineage: adherence reset failed (pos %d): %v", p.ID, err)
+				}
+			}
 		}
 	}
 	return n

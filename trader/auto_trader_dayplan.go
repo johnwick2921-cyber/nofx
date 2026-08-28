@@ -60,8 +60,11 @@ func (at *AutoTrader) snapshotSessionProfiles() {
 		at.logInfof("🧬 plan lifecycle: hysteresis=buffer%.1f×ATR14 confirm=%dclose(s) · flip/death→dormant+auto-rearm (version unchanged, budget untouched) · exec_reasoning=%s plan_reasoning=%s",
 			kernel.FlipATRBuffer(), kernel.FlipConfirmCloses(), execReasoningLabel(), planReasoningLabel())
 		// Wave 2 armed orders (Phase 2, 2026-08-27) — placement engine mode.
-			at.logInfof("⚔️ armed_orders=on place_band=%dt stale_working=%dm test_seam=%s arm_rr=%.1f (gate-at-arm only; market-entry floor %.1f unchanged) (resting limits fill at the authorized price; stale_reeval NOT applied)",
-				armedPlaceTicks(), armedWorkingStaleMin(), armedSeamStateLabel(), armMinRR(), at.config.StrategyConfig.RiskControl.MinRiskRewardRatio)
+		at.logInfof("⚔️ armed_orders=on place_band=%dt stale_working=%dm test_seam=%s arm_rr=%.1f (gate-at-arm only; market-entry floor %.1f unchanged) (resting limits fill at the authorized price; stale_reeval NOT applied)",
+			armedPlaceTicks(), armedWorkingStaleMin(), armedSeamStateLabel(), armMinRR(), at.config.StrategyConfig.RiskControl.MinRiskRewardRatio) // F1a (LONDON-FORENSICS 2026-08-28) — planner completion budget boot line
+		// (the cutover verification quotes it): plan_max_tokens resolved from
+		// AI_PLAN_MAX_TOKENS, default 65536 = 2× the observed truncation ceiling.
+		at.logInfof("📐 planner cap: plan_max_tokens=%d (AI_PLAN_MAX_TOKENS; default 65536) · truncation → 🚨 WARN, never silent", aiPlanMaxTokens())
 	})
 	installActivePlanProvider(at, st)
 	// P0-cleanup (2026-08-19) — soft-alert: guardrails that WOULD have tripped
