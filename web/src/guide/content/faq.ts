@@ -4,7 +4,7 @@ export const faq: GuideSection = {
   id: 'faq',
   num: 12,
   title: 'FAQ',
-  tagline: 'The twelve questions everyone asks.',
+  tagline: 'The fourteen questions everyone asks.',
   asBuiltRev: GUIDE_BUILT_REV,
   blocks: [
     {
@@ -23,6 +23,20 @@ export const faq: GuideSection = {
           mechanism:
             'kernel/engine_position.go · trader/auto_trader_planconfig.go',
           link: '#guards',
+        },
+        {
+          q: 'Why did the HTF veto switch to cross mode?',
+          a: 'The 2026-08-28 autopsy replayed the 7 real vetoed arms: the 1h-only veto blocked 3 would-have-won entries (+$352) while 4h was RANGING at all 7 timestamps — it vetoed nothing the evidence supported. cross mode vetoes only when 1h AND 4h agree on the counter-trend, so the $352/0 split becomes impossible by construction.',
+          mechanism:
+            'HTF_VETO_MODE=cross in .env · kernel/htf_veto.go HTFVetoVerdict',
+          link: '#guards',
+        },
+        {
+          q: 'What happens on a fast-market wake?',
+          a: 'When price has drifted more than FAST_MARKET_ATR × ATR5m since the last plan write, a wake read re-plans with fast reasoning (FAST TAPE) instead of waiting out the stale plan — the plan gets eyes sooner exactly when the tape is moving.',
+          mechanism:
+            'trader/auto_trader_loop.go fastMarket… · FAST_MARKET_REASONING',
+          link: '#settings',
         },
         {
           q: 'Is any of this real money?',

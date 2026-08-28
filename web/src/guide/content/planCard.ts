@@ -38,7 +38,7 @@ export const planCard: GuideSection = {
         },
         {
           title: '5 · Scenario-row anatomy',
-          body: 'S# · condition (reclaim/hold/sweep_reclaim/reject/acceptance/breakout_retest/fvg_entry) · direction · quality A+/A/B/C (INFORMATIONAL — nothing gates on it) · confirm{} chip CONFIRM MET / not met (machine, advisory; stale ones say so) · fvg chip IN-ZONE/ABOVE/BELOW/FILLED_INVALID · chain_after: the S# this play FOLLOWS (e.g. fvg_entry after its sweep_reclaim) · targets a→b→c · invalid line.',
+          body: 'S# · condition (reclaim/hold/sweep_reclaim/reject/acceptance/breakout_retest/fvg_entry/breakdown_continue/breakup_continue) · direction · quality A+/A/B/C (INFORMATIONAL — nothing gates on it) · confirm{} chip CONFIRM MET / not met (machine, advisory; stale ones say so) · TWO-LEG confirms (breakdown/breakup plays) render leg-by-leg: "leg 1/2 MET · leg 2/2 NOT MET → overall NOT MET" — a partial never reads MET · fvg chip IN-ZONE/ABOVE/BELOW/FILLED_INVALID · chain_after: the S# this play FOLLOWS (e.g. fvg_entry after its sweep_reclaim) · targets a→b→c · invalid line.',
           cite: 'web/src/components/plan/ScenarioList.tsx',
         },
         {
@@ -60,6 +60,16 @@ export const planCard: GuideSection = {
           title: '9 · ⚖ thin-side note',
           body: 'Written when the assembled in-band map ITSELF had fewer than min_side_levels on a side — machine-caused, so the plan writes with a warn instead of failing. Not an error, not an AI mistake.',
           cite: 'kernel/plan_doc.go SideQuotaNote · SessionPlanCard.tsx:682',
+        },
+        {
+          title: '10 · Armed chips',
+          body: '⏳ armed = resting order placed, waiting on its confirm (wait_confirm) · 📌 working = resting at the broker · ⚡ filled = entry taken (the real fill) · ✕ cancelled/expired/refused. The arm is the fast path: it pre-commits the entry so the fill happens at the plan price, not after a 2-minute debate.',
+          cite: 'web/src/components/plan/ScenarioList.tsx:218-251',
+        },
+        {
+          title: '11 · 😴 dormant + auto-rearm',
+          body: 'Dormant = the plan (or its arm) was parked by a flip/death or no-active-plan — NOT dead. It auto-rearms when price closes back through the mirror buffer (0.5×ATR14, 2 decision-TF closes) and arms re-place on the next cycle.',
+          cite: 'kernel/plan_lifecycle.go (dormant + rearm) · trader/armed_executor.go',
         },
       ],
     },

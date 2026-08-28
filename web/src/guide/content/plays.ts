@@ -4,7 +4,7 @@ export const plays: GuideSection = {
   id: 'plays',
   num: 5,
   title: 'The Plays',
-  tagline: 'Seven condition templates + the A-setup chain.',
+  tagline: 'Eight condition templates + the A-setup chain.',
   asBuiltRev: GUIDE_BUILT_REV,
   blocks: [
     {
@@ -42,8 +42,18 @@ export const plays: GuideSection = {
         },
         {
           title: 'fvg_entry',
-          body: "Setup: the A-setup's finish — displacement leaves a gap → first retrace INTO the FVG → confirm: touch at the gap band. entry_mode ce by default (edge only for A-grade HTF-confluent origins); stop beyond the sweep extreme; T1 = first opposing pool; runner = the draw. chain_after links it to its sweep_reclaim.",
+          body: "Setup: the A-setup's finish — displacement leaves a gap → first retrace INTO the FVG → confirm: touch at the gap band. entry_mode ce by default (edge only for A-grade HTF-confluent origins); stop beyond the sweep extreme; T1 = first opposing pool; runner = the draw. chain_after links it to its sweep_reclaim. FVG DEMAND (A2c): a fresh machine gap matching your bias expects an fvg_entry — or a one-line reason why not.",
           tag: 'play 7',
+        },
+        {
+          title: 'breakdown_continue',
+          body: 'Setup: price closes BELOW a broken level with displacement ≥ 1.0×ATR5m (BD_MIN_DISP_ATR) and no reclaim close → the waterfall SHORT. Two-leg confirm: leg 1 = the breakdown close, leg 2 = the retest that FAILS to reclaim (pullback < 0.4× the break leg). entry_mode pullback rests at the broken level; immediate enters on the 2nd confirming close. Born 2026-08-28: the −347pt NY crash — bias right, but NO plan-legal continuation short existed (v4, S2 declined on the retest rule).',
+          tag: 'play 8 · −347',
+        },
+        {
+          title: 'breakup_continue',
+          body: 'The LONG mirror: closes ABOVE a broken level with displacement ≥ 1.0×ATR5m, no reclaim → continuation long; same two-leg confirm + pullback arm.',
+          tag: 'play 8b',
         },
       ],
     },

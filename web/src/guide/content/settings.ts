@@ -16,7 +16,7 @@ const dayPlan: KnobSpec[] = [
     range: 'advisory | direction | strict',
     systemDefault: 'advisory',
     recommended:
-      '⭐ ADVISORY — auto-trade without hard blocks until you trust the plan writer (strict is the optional NY experiment).',
+      '⭐ STRICT ×3 — the owner deliberately runs strict on ASIA/LONDON/NY (the plan is the law). ADVISORY remains the code fallback for anyone without a trusted plan writer.',
     whenToTouch: 'When you want the planner to have teeth (or to remove them).',
     perSession:
       'Yes — tri-state per session: inherit global / advisory / direction / strict. Session override wins; inherit (blank) = the global row above.',
@@ -33,7 +33,7 @@ const dayPlan: KnobSpec[] = [
     systemDefault:
       '1.5 (the CODE default — the 0.3 retune is a saved-value change in Strategy → Day Plan, never a code default; GAR-F2 archaeology: nothing ever reverted it)',
     recommended:
-      '⭐ 0.3 — the owner clicks this after the GAR wave lands; the shared clamp (0.1–3.0) now honors it on BOTH the bot gate and the engine path.',
+      '⭐ 0.3 — LIVE since 2026-08-28 11:59 (owner save); band = K × DailyRangeProxy (≈±85pt at 0.3) on BOTH the bot gate and the engine path.',
     whenToTouch:
       'If the card looks too crowded or too empty for the daily range.',
     perSession:
@@ -63,8 +63,8 @@ const dayPlan: KnobSpec[] = [
     consumer:
       'trader/auto_trader_planconfig.go:162 (scenarioCap) · kernel/planner_prompt.go:66 (resolved caps)',
     range: '1 – 5',
-    systemDefault: '3 (owner)',
-    recommended: '⭐ 3 — matches the current live config.',
+    systemDefault: '5 (owner, live)',
+    recommended: '⭐ 5 — the live scenario cap; 3 stays a fine default elsewhere.',
     whenToTouch: 'Raise if a fast market needs more play variants.',
     perSession: 'Yes.',
   },
@@ -160,9 +160,9 @@ const dayPlan: KnobSpec[] = [
       'store/strategy.go:967 (MinSideLevelsFor) · kernel/levels_score.go:720 (MinSideLevels)',
     range: '1 – 8',
     systemDefault:
-      '2 (owner) · env MIN_SIDE_LEVELS · kernel.DefaultSideQuota(2)',
+      '4 (owner, live) · env MIN_SIDE_LEVELS · kernel.DefaultSideQuota(2)',
     recommended:
-      '⭐ 2 — symmetric enough to trade, tolerant enough not to false-fail.',
+      '⭐ 4 — the live owner value (raised from 2); 2 remains the code fallback.',
     whenToTouch: 'Raise to 3 for the strict old behavior.',
     perSession:
       'Yes — session override wins; inherit (blank) → strategy-level → env.',
@@ -218,7 +218,7 @@ const risk: KnobSpec[] = [
     range: '50 – 100',
     systemDefault: '60 (owner)',
     recommended:
-      '⭐ 60 — current config; raising to 70+ costs entries without adding edge.',
+      '⭐ 60 — live config; Sep-9 ruling: the 65 raise is DEFERRED, not dead — the 60–64 band gets judged at full n (protection lives in strict + R:R + min-SL + armed meanwhile).',
     whenToTouch: 'Raise if the AI enters low-conviction junk too often.',
     perSession: 'No.',
   },
@@ -468,7 +468,7 @@ const sessions: KnobSpec[] = [
     where: 'Strategy → Day Plan → Sessions accordion',
     what: 'Per-session override rows: min grade, min scenario quality, min side levels, max trades, plan mode, max re-plans, acceptance window. Min grade, quality, max trades and plan mode are tri-state: inherit (blank) = the strategy-level row; an explicit value wins. Stored values that EQUAL the strategy level are auto-migrated to inherit.',
     trader:
-      'The current rows: min_grade B · min_scenario_quality C · min_side_levels 2 · max_trades 3 · plan_mode advisory · max re-plans 2 · acceptance 2×5m.',
+      'The current rows: min_grade B · min_scenario_quality C · min_side_levels 4 · max_trades 7/10/10 (ASIA/LONDON/NY) · plan_mode strict ×3 · max re-plans 4 · acceptance 2×5m.',
     consumer:
       'store/strategy.go:921-975 (per-session resolvers) · trader/auto_trader_planconfig.go:158-168',
     range:
@@ -500,6 +500,49 @@ export const settings: GuideSection = {
     { kind: 'knobs', knobs: risk },
     { kind: 'h', text: 'Session map' },
     { kind: 'knobs', knobs: sessions },
+    { kind: 'h', text: 'Env-only knobs (not Studio)' },
+    {
+      kind: 'callout',
+      title: 'The 9 env knobs — .env only, never a Studio slider',
+      items: [
+        {
+          title: 'ARM_MIN_RR = 2.0',
+          body: 'The gate-at-arm R:R floor for resting orders (the market-entry floor stays 3.0).',
+        },
+        {
+          title: 'HTF_VETO_MODE = cross',
+          body: 'Veto mode: 1h | cross | 4h — LIVE = cross (1h AND 4h must agree; the $352/0 autopsy).',
+        },
+        {
+          title: 'HTF_VETO_TF = 1h',
+          body: 'The veto timeframe when mode is 1h.',
+        },
+        {
+          title: 'FAST_MARKET_ATR = 1.5',
+          body: 'Wake-read fast threshold: |price drift| since the last write > K×ATR5m → fast re-plan.',
+        },
+        {
+          title: 'FAST_MARKET_REASONING = fast',
+          body: 'The reasoning wire for fast-market wake reads (FAST TAPE).',
+        },
+        {
+          title: 'BD_MIN_DISP_ATR = 1.0',
+          body: 'Breakdown/breakup displacement floor in ATR5m multiples.',
+        },
+        {
+          title: 'FVG_ENTRY_MIN_DISP_ATR = 1.5',
+          body: 'FVG displacement floor in ATR5m multiples.',
+        },
+        {
+          title: 'INGEST_QUEUE_CAP = 1024',
+          body: 'Bar-ingest queue depth (peak_depth is logged; 0 drops is the invariant).',
+        },
+        {
+          title: 'AI_PLAN_MAX_TOKENS = 65536',
+          body: 'Planner completion budget — truncation is a 🚨 WARN, never silent.',
+        },
+      ],
+    },
     { kind: 'h', text: 'The save ritual' },
     {
       kind: 'p',
