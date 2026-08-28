@@ -29,6 +29,20 @@ func armedPlaceTicks() int {
 	return 100
 }
 
+// armMinRR is the R:R floor for the GATE-AT-ARM chain only
+// (ARM_MIN_RR, default 2.0). Autopsy-response wave (2026-08-27): armed limits
+// fill AT the level (better entry by construction, no stale risk) and the one
+// refused arm replayed +$108 — the global entry floor (3.0) is NOT lowered;
+// AI-proposed market entries keep their own gate unchanged.
+func armMinRR() float64 {
+	if v := os.Getenv("ARM_MIN_RR"); v != "" {
+		if f, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err == nil && f > 0 {
+			return f
+		}
+	}
+	return 2.0
+}
+
 // armedWorkingStaleMin is the reconnect/reconcile safety net
 // (ARM_WORKING_STALE_MIN, default 15): a working row with no order_update for
 // this long is cancelled with an honest reason.
@@ -62,6 +76,7 @@ func (at *AutoTrader) armedTrader() *ntTrader.TCPTrader {
 // maybeManageArmedOrders runs every cycle (called from runCycle). It is a no-op
 // unless day_plan is on and armed specs exist. snap is the structure snapshot
 // for the HTF veto gate.
+
 func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureState) {
 	if !at.dayPlanEnabled() || at.store == nil || at.exchange != "ninjatrader" {
 		return
@@ -439,15 +454,17 @@ func (at *AutoTrader) armGateVerdict(sc kernel.PlanScenario, biasDirection strin
 			return fmt.Sprintf("quality %s below min_scenario_quality %s", sc.Quality, minQuality)
 		}
 	}
-	// R:R gate — the same floor the entry path enforces.
+	// R:R gate — ARM_MIN_RR (default 2.0), the gate-at-arm floor. Autopsy
+	// response (2026-08-27): resting limits fill AT the level (better entry by
+	// construction) — the global 3.0 floor for AI market entries is untouched.
 	rr := 0.0
 	if side == "long" && a.Entry > a.Stop && a.Stop > 0 {
 		rr = (a.Target - a.Entry) / (a.Entry - a.Stop)
 	} else if side == "short" && a.Stop > a.Entry && a.Entry > 0 {
 		rr = (a.Entry - a.Target) / (a.Stop - a.Entry)
 	}
-	if cfg.RiskControl.MinRiskRewardRatio > 0 && rr+1e-9 < cfg.RiskControl.MinRiskRewardRatio {
-		return fmt.Sprintf("R:R %.2f below min %.2f", rr, cfg.RiskControl.MinRiskRewardRatio)
+	if rr+1e-9 < armMinRR() {
+		return fmt.Sprintf("R:R %.2f below arm min %.2f", rr, armMinRR())
 	}
 	// min-SL — the same floor (×ATR5m) the entry path enforces.
 	if atr5m > 0 {

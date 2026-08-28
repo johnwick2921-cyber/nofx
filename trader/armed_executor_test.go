@@ -61,9 +61,15 @@ func TestArmedGateRefusesBadRR(t *testing.T) {
 	at, _ := resetTrader(t, store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true}})
 	at.config.StrategyConfig.RiskControl = store.RiskControlConfig{MinRiskRewardRatio: 4}
 	sc := kernel.PlanScenario{ID: "S1", Condition: "reject", Direction: "long", Quality: "A",
-		Arm: &kernel.PlanArmSpec{Enabled: true, Entry: 100, Stop: 95, Target: 110}} // R:R 2.0 < 4.0
+		Arm: &kernel.PlanArmSpec{Enabled: true, Entry: 100, Stop: 95, Target: 110}} // R:R 2.0
+	// S1 (autopsy-response 2026-08-27): the arm floor is ARM_MIN_RR, NOT the
+	// global config floor — a 4.0 GLOBAL floor does NOT block a 2.0 arm.
+	if v := at.armGateVerdict(sc, "long", nil, 0, "", at.config.StrategyConfig); v != "" {
+		t.Fatalf("arm R:R 2.0 must pass under the default arm floor (global 4.0 irrelevant), got %q", v)
+	}
+	t.Setenv("ARM_MIN_RR", "4")
 	if v := at.armGateVerdict(sc, "long", nil, 0, "", at.config.StrategyConfig); v == "" {
-		t.Fatal("R:R 2.0 below min 4.0 must be refused at arm time")
+		t.Fatal("arm R:R 2.0 below ARM_MIN_RR=4 must be refused at arm time")
 	}
 	// quality floor: a C scenario below min_scenario_quality=B must refuse.
 	scC := kernel.PlanScenario{ID: "S1", Condition: "reject", Direction: "long", Quality: "C",
@@ -148,11 +154,15 @@ func TestArmedOrderUpdateTransitions(t *testing.T) {
 // PHASE 4 — short twin of the R:R arm gate (long side covered elsewhere).
 func TestArmedGateRRShortTwin(t *testing.T) {
 	at, _ := resetTrader(t, store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true}})
-	at.config.StrategyConfig.RiskControl = store.RiskControlConfig{MinRiskRewardRatio: 3}
 	sc := kernel.PlanScenario{ID: "S1", Condition: "reject", Direction: "short", Quality: "A",
-		Arm: &kernel.PlanArmSpec{Enabled: true, Entry: 100, Stop: 105, Target: 90}} // R:R (100−90)/(105−100)=2.0 < 3.0
+		Arm: &kernel.PlanArmSpec{Enabled: true, Entry: 100, Stop: 105, Target: 90}} // R:R (100−90)/(105−100)=2.0
+	// S1: default arm floor 2.0 → a 2.0-R short arm passes (no config floor).
+	if v := at.armGateVerdict(sc, "short", nil, 0, "", at.config.StrategyConfig); v != "" {
+		t.Fatalf("short arm R:R 2.0 must pass under default ARM_MIN_RR, got %q", v)
+	}
+	t.Setenv("ARM_MIN_RR", "3")
 	if v := at.armGateVerdict(sc, "short", nil, 0, "", at.config.StrategyConfig); v == "" {
-		t.Fatal("short arm R:R 2.0 below min 3.0 must be refused")
+		t.Fatal("short arm R:R 2.0 below ARM_MIN_RR=3 must be refused")
 	}
 	sc.Arm.Target = 85 // R:R 3.0 → pass
 	if v := at.armGateVerdict(sc, "short", nil, 0, "", at.config.StrategyConfig); v != "" {
