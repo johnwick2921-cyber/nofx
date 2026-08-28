@@ -196,6 +196,23 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 			// GAR-F6 (2026-08-28): the comparison VALUE is the verdict CLASS,
 			// not the ATR-bearing string — live ATR drift re-logged the same
 			// refusal every few minutes (LONDON S4 min-SL 18.29→18.67).
+			// PRE-REOPEN F3 (2026-08-28) — the missing 1.3 clause: a gate input
+			// that changes materially while the arm is WORKING cancels it the
+			// same cycle (the LONDON S4 class stayed resting through repeated
+			// re-refusals until the 08:30 sweep).
+			if rows, lerr := ledger.ListNonTerminal(); lerr == nil {
+				for _, r := range rows {
+					if r.TraderID == at.id && r.PlanID == plan.PlanID && r.Scenario == sc.ID &&
+						r.State == "working" && r.SignalID != "" {
+						if nt := at.armedTrader(); nt != nil {
+							if cerr := nt.CancelOrder(r.SignalID); cerr == nil {
+								_ = ledger.SetState(r.ID, "cancelled", "gate changed: "+armRefusalClass(verdict))
+								at.logWarnf("✕ armed cancel (gate changed %s): %s %s", armRefusalClass(verdict), plan.Session, sc.ID)
+							}
+						}
+					}
+				}
+			}
 			key := plan.PlanID + ":" + strconv.Itoa(plan.Version) + ":" + sc.ID
 			if armRefusalChanged(&at.armRefusalLast, key, armRefusalClass(verdict)) {
 				at.logWarnf("⚔️ arm REFUSED %s %s: %s", plan.Session, sc.ID, verdict)
@@ -222,7 +239,14 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 				at.logWarnf("⚔️ arm write failed %s %s: %v", plan.Session, sc.ID, err)
 				continue
 			}
-			at.logInfof("⚔️ armed %s %s %s limit %.2f SL %.2f TP %.2f (tick-managed placement is Phase 2)", plan.Session, sc.ID, side, sc.Arm.Entry, sc.Arm.Stop, sc.Arm.Target)
+			// PRE-REOPEN F3 (2026-08-28) — the authored log fires ONCE per
+			// spec (dedup by plan:version:scenario + prices); the dead-row
+			// re-log spam (69+ lines/day) came from logging every cycle.
+			akey := plan.PlanID + ":" + strconv.Itoa(plan.Version) + ":" + sc.ID
+			aval := fmt.Sprintf("%s %.2f/%.2f/%.2f", side, sc.Arm.Entry, sc.Arm.Stop, sc.Arm.Target)
+			if armRefusalChanged(&at.armAuthoredLast, akey, aval) {
+				at.logInfof("⚔️ armed %s %s %s limit %.2f SL %.2f TP %.2f (tick-managed placement is Phase 2)", plan.Session, sc.ID, side, sc.Arm.Entry, sc.Arm.Stop, sc.Arm.Target)
+			}
 		} else {
 			// CHURN GUARD (2.1): re-spec a working arm's bracket only when the
 			// plan moved SL or TP by ≥ 2 ticks (cancel+re-place on modify).
@@ -505,7 +529,15 @@ func (at *AutoTrader) onArmedOrderUpdate(u ntwire.OrderUpdatePayload, ledger *st
 func (at *AutoTrader) stampArmedFillLineage(r store.ArmedOrderDB, fillPrice float64) {
 	pos, err := at.store.Position().GetOpenPositionBySymbol(at.id, at.futuresSymbol(), r.Side)
 	if err != nil || pos == nil {
-		at.logWarnf("⚡ armed fill %s @ %.2f: no open position row to stamp (err=%v)", r.Scenario, fillPrice, err)
+		// PRE-REOPEN F4 (2026-08-28) — the fill frame precedes position
+		// materialization (all 4 live fills hit this race). The LEDGER row
+		// carries the pending marker; the reconcile materialization path
+		// (StampArmedLineageIfMatched) completes the stamp and clears it.
+		if e2 := at.store.ArmedOrders().SetState(r.ID, "filled", fmt.Sprintf("%s;stamp_pending", r.StateReason)); e2 != nil {
+			at.logWarnf("⚡ armed fill %s: pending-marker write failed: %v", r.Scenario, e2)
+			return
+		}
+		at.logInfof("⚡ armed fill %s @ %.2f: position row not materialized yet — stamp pending (reconcile completes it)", r.Scenario, fillPrice)
 		return
 	}
 	tradeDate := r.PlanID

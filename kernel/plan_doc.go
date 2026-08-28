@@ -94,10 +94,10 @@ type PlanScenario struct {
 // Entry is the resting LIMIT price; Stop/Target form the bracket. Long:
 // stop < entry < target. Short: target < entry < stop.
 type PlanArmSpec struct {
-	Enabled     bool    `json:"enabled"`               // the arming authorization itself
-	Entry       float64 `json:"entry"`                 // resting limit price
-	Stop        float64 `json:"stop"`                  // bracket stop
-	Target      float64 `json:"target"`                // bracket target
+	Enabled     bool    `json:"enabled"`                // the arming authorization itself
+	Entry       float64 `json:"entry"`                  // resting limit price
+	Stop        float64 `json:"stop"`                   // bracket stop
+	Target      float64 `json:"target"`                 // bracket target
 	WaitConfirm bool    `json:"wait_confirm,omitempty"` // chain-arm: rest until the scenario's confirm{} is MET (sweep_reclaim retrace fast path, autopsy-response wave)
 }
 
@@ -222,7 +222,7 @@ var (
 	biasDirections  = map[string]bool{"long": true, "short": true, "neutral": true}
 	biasConvictions = map[string]bool{"high": true, "medium": true, "low": true}
 	levelGrades     = map[string]bool{"A": true, "B": true, "C": true}
-	scenarioConds   = map[string]bool{"reclaim": true, "hold": true, "sweep_reclaim": true, "reject": true, "acceptance": true, "breakout_retest": true, "fvg_entry": true}
+	scenarioConds   = map[string]bool{"reclaim": true, "hold": true, "sweep_reclaim": true, "reject": true, "acceptance": true, "breakout_retest": true, "fvg_entry": true, "breakdown_continue": true, "breakup_continue": true}
 	scenarioDirs    = map[string]bool{"long": true, "short": true}
 	// C is ACCEPTED: it is the G5 machine-demoted state (trigger level consumed
 	// at write/re-align time), never a model-written grade. The write path runs

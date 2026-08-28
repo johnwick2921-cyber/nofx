@@ -541,6 +541,10 @@ export const settings: GuideSection = {
           title: 'AI_PLAN_MAX_TOKENS = 65536',
           body: 'Planner completion budget — truncation is a 🚨 WARN, never silent.',
         },
+        {
+          title: 'PERSIST_STALL_WATCHDOG_S = 60',
+          body: 'Bar-persist silence alarm: no successful flush for N seconds → loud ERROR (the Friday ~2h GORM stall can never go silent again).',
+        },
       ],
     },
     { kind: 'h', text: 'The save ritual' },

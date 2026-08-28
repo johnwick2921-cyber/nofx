@@ -258,8 +258,8 @@ func (at *AutoTrader) maybeWakePlannerOnLevelEvents(session, tradeDate string, r
 	// Min-interval throttle shared with the MSS wake: ANY planner wake resets
 	// the clock, so a death/MSS/level cascade can't triple-spend one window.
 	if !at.lastPlannerWakeAt.IsZero() && now.Sub(at.lastPlannerWakeAt) < time.Duration(cfg.WakeMinIntervalMinutes())*time.Minute {
-		at.logWarnf("🗓️ level wake %s on %s %s — SKIPPED: %s elapsed < wake_min_interval_min (%d).",
-			ev.desc, session, tradeDate, now.Sub(at.lastPlannerWakeAt).Round(time.Second), cfg.WakeMinIntervalMinutes())
+		at.logWarnf("🗓️ level wake %s on %s %s — SKIPPED: %.0fm elapsed < wake_min_interval_min (%dm).",
+			ev.desc, session, tradeDate, now.Sub(at.lastPlannerWakeAt).Minutes(), cfg.WakeMinIntervalMinutes())
 		return
 	}
 	// W6-D (2026-08-25) — wakes are UNLIMITED and count against NOTHING: a wake

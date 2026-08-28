@@ -368,11 +368,11 @@ func (t *TCPTrader) reconcilePositions(traderID, exchangeID, exchangeType string
 		// F3 (LONDON-FORENSICS 2026-08-28) — stamp the armed-fill lineage NOW:
 		// the fill-time stamp failed because this row did not exist yet (live proof:
 		// pos #567 landed with plan_version 0 / adherence grade F).
-			// GAR-F1 (2026-08-28) — the returned signal identity is cached on the
-			// trader so move_stop/trailing can address the live bracket.
-			if _, sig := StampArmedLineageIfMatched(st, traderID, row.ID, sym, side, avg); sig != "" {
-				t.rememberEntryOrderID(sym, side, sig)
-			}
+		// GAR-F1 (2026-08-28) — the returned signal identity is cached on the
+		// trader so move_stop/trailing can address the live bracket.
+		if _, sig := StampArmedLineageIfMatched(st, traderID, row.ID, sym, side, avg); sig != "" {
+			t.rememberEntryOrderID(sym, side, sig)
+		}
 		logger.Warnf("🧩 reconcile: MATERIALIZED untracked NT8 position %s %s qty=%.0f @ %.2f (acct=%s) — manual/NT8-side entry now tracked; its close will record real P&L", sym, side, qty, avg, acct)
 		delete(t.untrackedSince, key)
 		// A close frame may have arrived while the row was still untracked (the
@@ -450,6 +450,12 @@ func StampArmedLineageIfMatched(st *store.Store, traderID string, posID int64, s
 			if err := st.Position().SetEntryOrderID(posID, r.SignalID); err != nil {
 				logger.Warnf("🧩 reconcile: armed entry-order-id stamp failed (pos %d): %v", posID, err)
 			}
+		}
+		// PRE-REOPEN F4 — the fill-time stamp deferred (position row didn't
+		// exist yet) leaves a stamp_pending marker on the ledger row; the
+		// materialization completes the stamp NOW and clears it.
+		if strings.HasSuffix(r.StateReason, ";stamp_pending") {
+			_ = st.ArmedOrders().SetState(r.ID, "filled", strings.TrimSuffix(r.StateReason, ";stamp_pending"))
 		}
 		logger.Infof("🧩 reconcile: armed-fill lineage stamped — pos %d ← %s v%d %s (fill %.2f, entry_id %s)", posID, r.PlanID, r.Version, r.Scenario, r.EntryPx, r.SignalID)
 		return true, r.SignalID

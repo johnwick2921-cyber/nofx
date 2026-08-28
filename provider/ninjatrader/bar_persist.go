@@ -1,6 +1,9 @@
 package ninjatrader
 
 import (
+	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -21,6 +24,18 @@ import (
 
 const barPersistQueueCap = 4096
 
+// persistWatchdogSeconds (PRE-REOPEN F2, 2026-08-28) — the bar-persist silence
+// alarm. The Friday 09:12–11:20 GORM stall went ~2h with only per-event 2s/4s
+// WARNs and one drop — a silent stall can now never outlive this window.
+func persistWatchdogSeconds() int64 {
+	if v := os.Getenv("PERSIST_STALL_WATCHDOG_S"); v != "" {
+		if n, err := strconv.ParseInt(strings.TrimSpace(v), 10, 64); err == nil && n >= 10 {
+			return n
+		}
+	}
+	return 60
+}
+
 var (
 	barPersister         atomic.Value // func(historical bool, symbol, tf string, bars []Bar)
 	barPersistCh         chan persistMsg
@@ -29,6 +44,8 @@ var (
 	persistDroppedCloses atomic.Int64 // CLOSED bars lost on queue-full drops (must stay 0)
 	persistFlushed       atomic.Int64 // closed bars handed to the persister
 	persistLastSum       atomic.Int64 // unix seconds of the last drop summary
+	persistLastFlushAt   atomic.Int64 // unix seconds of the last successful flush (F2 watchdog)
+	persistAlarmAt       atomic.Int64 // unix seconds of the last watchdog ERROR (dedup)
 	ingestDropOld        atomic.Int64 // ingest channel drop-oldest events
 	ingestDropCur        atomic.Int64 // ingest channel drop-current events
 	ingestDropHist       atomic.Int64 // historical batch drops

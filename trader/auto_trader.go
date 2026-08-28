@@ -421,6 +421,11 @@ type AutoTrader struct {
 	// silent until the spec or the refusal reason changes. Run-loop goroutine
 	// only — no lock.
 	armRefusalLast map[string]string
+	// armAuthoredLast dedupes the every-cycle "⚔️ armed" log (PRE-REOPEN F3,
+	// 2026-08-28) — the dead-row re-log spam (69+ lines/day) fired on every
+	// placement beat because the ledger row already existed. Log once per
+	// (plan:version:scenario) spec, again only when the prices change.
+	armAuthoredLast map[string]string
 
 	// Plan 4 Stage 4 — NinjaTrader TCP balance tracking (defer-until-balance guard)
 	// For NinjaTrader TCP traders, we track if account_balance frame has arrived yet.

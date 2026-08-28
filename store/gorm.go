@@ -31,13 +31,21 @@ func InitGorm(dbPath string) (*gorm.DB, error) {
 		return nil, fmt.Errorf("failed to open SQLite database: %w", err)
 	}
 
-	// Set connection pool for SQLite
+	// Set connection pool for SQLite. PRE-REOPEN F2 (2026-08-28): the old
+	// MaxOpenConns(1) serialized EVERYTHING on one connection — cycle-time
+	// reads/writes (position queries, level-state, decision_records) starved
+	// the bar-persist writer during Friday's 100k-frames/min spikes, stalling
+	// flushes 2–6s and dropping 8 closed bars at 11:20:06. SQLite WAL already
+	// enforces single-writer concurrency at the database level (readers share,
+	// writers serialize with busy_timeout=5000), so a small pool is safe and
+	// removes the artificial writer starvation.
 	sqlDB, err := db.DB()
 	if err != nil {
 		return nil, err
 	}
-	sqlDB.SetMaxOpenConns(1)
-	sqlDB.SetMaxIdleConns(1)
+	sqlDB.SetMaxOpenConns(4)
+	sqlDB.SetMaxIdleConns(4)
+	sqlDB.SetConnMaxLifetime(30 * time.Minute)
 
 	// Enable foreign keys for SQLite
 	db.Exec("PRAGMA foreign_keys = ON")
