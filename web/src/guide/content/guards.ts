@@ -40,7 +40,12 @@ export const guards: GuideSection = {
         [
           'HTF veto',
           'HARD',
-          'Entry against the HTF regime at a veto anchor → refused.',
+          'Entry against the HTF regime at a veto anchor → refused. MODE (HTF_VETO_MODE): 1h | cross | 4h — LIVE = cross: vetoes only when 1h AND 4h both agree (the 2026-08-28 autopsy: 1h-only blocked 3 would-have-won arms = +$352, 4h was RANGING at all 7 → cross blocks nothing the evidence doesn\'t support).',
+        ],
+        [
+          'ARM floors (ARM_MIN_RR 2.0)',
+          'HARD',
+          'The resting-order gate: R:R ≥ 2.0 AND stop ≥ 1.0×ATR5m or the arm is REFUSED every cycle. The 3.0 floor stays the FULL market-entry gate — a resting order pre-commits at a lower bar because the entry IS the plan.',
         ],
         [
           'T1 red news blackout',
