@@ -106,3 +106,45 @@ bot always sends after a handshake is established.)
 "go cutover". Deploy protocol at cutover: temp-clone build at merge sha →
 flat-gate (DB OPEN=0, armed non-terminal=0, API positions `[]`, NT8 positions 0)
 → binary swap → `kill -9` relaunch → boot poll + goldens.
+
+---
+
+# CUTOVER RECORD (2026-08-28, owner-acked "GO CUTOVER")
+
+## Merge + build
+- `fix/pre-reopen` (9e4a3ae0) → `dev` merge commit **`db9245dcccbab2bdd415d2c9ff4dadaadab7e7f2`** (pushed).
+- Temp-clone build at merge sha (`/tmp/nofx-cut`, clean tree): `vcs.revision=db9245dcccbab2bdd415d2c9ff4dadaadab7e7f2 · vcs.modified=false · vcs.time=2026-08-28T23:43:34Z` — matches merge sha exactly.
+
+## Flat-gate ALL-ORIGIN (market closed — trivially flat, all four quoted)
+- DB `trader_positions` status=OPEN: **0**
+- NT8 truth (live 30s cadence): `tcp_server: positions snapshot account=Sim101 count=0` + `account=SimAccount1 count=0` @ 18:47:31
+- API `GET /api/positions` (hoang trader): `[]`
+- `armed_orders` non-terminal (armed|working): **0** (+ risk: concurrent_trades=0, kill_switch armed)
+
+## Swap (18:49:50 CT)
+- `nofx-bin` 8666db0b → `nofx-bin.prev.prereopen`; new binary rev db9245dc; `deploy/RELEASE=db9245dcccbab2bdd415d2c9ff4dadaadab7e7f2`
+- `kill -9 3619700` → systemd relaunch (restart counter 84) → **PID 3747820**
+
+## Boot block (18:49:55, PID 3747820)
+- `🔐 BOOT INTEGRITY OK — rev db9245dcccba · built 2026-08-28T23:43:34Z · expected db9245dcccba · goldens PASS`
+- `🛡️ regime ledger: htf_veto=ON · htf_veto_tf=1h` + structure-engine/hysteresis/freshness lines
+- `🎛 volume wave: detectors=on · seats=8 · proximity=cfg(resolved per-trader; retuned 0.3) · family-confluence(cap=3) · zone-ladder=1.0/0.6/0.3/0.15 …`
+- `✅ bars integrity OK: dups=0 tfs=1m total=15646`
+- `🕰 clock-health [boot] … timesync{NTP=yes NTPSynchronized=yes} tolerance_ms=60000`
+- `🛡 clock-guard [boot] rtc_vs_go=0s · ntp_offset=+110.553ms · resync=unavailable-no-root`
+
+## The three knob quotes the boot block doesn't print (honest gap)
+- **pool=4** — proven AT RUNTIME instead: PID 3747820 holds **3 concurrent fds on data.db** (fds 6/9/12) — physically impossible under the old `MaxOpenConns(1)`; the 4-cap comes from the merge-sha source (`store/gorm.go`).
+- **watchdog** — no boot line by design (it logs only on stall); `PERSIST_STALL_WATCHDOG_S` unset → default **60s** floor 10, compiled at merge sha.
+- **9-condition schema** — `scenarioConds` now **9 entries** (7 canonical + `breakdown_continue` + `breakup_continue`) at `kernel/plan_doc.go` (merge sha). No boot line. The gate's only runtime caller is the planner's AI-response parse → first live exercise is Sunday 17:00 CT plan generation; merge-sha tests green (`TestPlanDocSchemaGateAcceptsWaterfallConditions`). No active plan exists this weekend, so the API overlay path (the only deterministic in-binary surface) is gated by "no active plan to edit". **If the owner wants a deterministic in-binary schema check, a micro-wave adding a boot schema-ledger line (or a `/api/plan/schema-check` dry-run) is the clean fix — say the word.**
+
+## arm_rr / veto / proximity intact
+- `ARM_MIN_RR` unset → default **2.0** (market-entry floor 3.0 unchanged) — day-plan boot line prints at first plan gen.
+- `.env:34 HTF_VETO_MODE=cross` + boot `htf_veto=ON · htf_veto_tf=1h`.
+- R8 strategy (a5b7662e) live config: `proximity_filter_atr=0.3 · min_side_levels=4 · max_levels=12 · scenario_cap=5 · plan_mode=strict`.
+
+## Post-boot
+- `GET /api/status`: `is_running=true · revision=db9245dcccba · exchange=ninjatrader · roll resolved (MNQ SEP26, 21d, not blocked)`
+- `GET /api/health`: `{status:ok, revision:db9245dcccba}`
+- **Zero ERRO/panic/FATAL** since boot (journal scan 18:49:55→).
+- Clock baseline before owner's script: `rtc_vs_go=0s · ntp_offset=+110.553ms` (healthy; script is the suspend/resume belt-and-suspenders).
