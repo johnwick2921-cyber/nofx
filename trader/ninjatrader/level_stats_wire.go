@@ -21,32 +21,49 @@ import (
 // waived backward replay was replaced with — the 2-week verdict on the volume
 // family's weights reads store.LevelStats().AggregateByGrade/Family.
 
-var levelStatsOnce sync.Once
+// levelStatsWired is the per-TRADER idempotency key. S-LIST CLOSER
+// (2026-08-27): the old sync.Once was GLOBAL — whichever trader constructed
+// first owned the nightly job for the whole process, and at boot that is the
+// non-running "15m" trader (constructed before the hoang trader), whose
+// strategy_id has NO plan rows. The nightly writer therefore evaluated 0 rows
+// every night even though the hoang trader's plans existed — the lookup was
+// fine (ListVersionsForTrader matches strategy_id = trader id); the WIRING was
+// bound to the wrong trader. Per-trader wiring ends the T1 saga.
+var levelStatsWired sync.Map
 
-// WireLevelStatsNightly starts the per-session-day evaluation loop. Idempotent
-// (once); nil-safe; never blocks the trade loop (own goroutine, own errors).
-// traderID is the owning AutoTrader's id (the TCP trader's own field is empty
-// until StartCloseSync runs later).
+// wireLevelStatsForTrader is the pure once-per-trader decision (true = start
+// this trader's job).
+func wireLevelStatsForTrader(traderID string) bool {
+	_, loaded := levelStatsWired.LoadOrStore(traderID, struct{}{})
+	return !loaded
+}
+
+// WireLevelStatsNightly starts the per-session-day evaluation loop for THIS
+// trader. Idempotent PER TRADER ID (not process-global); nil-safe; never
+// blocks the trade loop (own goroutine, own errors). traderID is the owning
+// AutoTrader's id (the TCP trader's own field is empty until StartCloseSync
+// runs later).
 func WireLevelStatsNightly(st *store.Store, traderID string) {
 	if st == nil || traderID == "" {
 		return
 	}
-	levelStatsOnce.Do(func() {
-		ls := st.LevelStats()
-		if err := ls.Migrate(); err != nil {
-			logger.Warnf("level_stats: migrate failed: %v", err)
-			return
+	if !wireLevelStatsForTrader(traderID) {
+		return // this trader's nightly job is already wired
+	}
+	ls := st.LevelStats()
+	if err := ls.Migrate(); err != nil {
+		logger.Warnf("level_stats: migrate failed: %v", err)
+		return
+	}
+	go func() {
+		_, _ = runLevelStatsDay(st, ls, traderID)
+		for {
+			// Next 17:05 CT boundary (the daily roll + 5m settling time).
+			next := kernel.NextSessionRollCT(time.Now()).Add(5 * time.Minute)
+			time.Sleep(time.Until(next))
+			_, _ = runLevelStatsDay(st, ls, traderID)
 		}
-		go func() {
-			runLevelStatsDay(st, ls, traderID)
-			for {
-				// Next 17:05 CT boundary (the daily roll + 5m settling time).
-				next := kernel.NextSessionRollCT(time.Now()).Add(5 * time.Minute)
-				time.Sleep(time.Until(next))
-				runLevelStatsDay(st, ls, traderID)
-			}
-		}()
-	})
+	}()
 }
 
 // runLevelStatsDay evaluates the PREVIOUS CME session-day (17:00→17:00 CT).
@@ -56,8 +73,14 @@ func WireLevelStatsNightly(st *store.Store, traderID string) {
 // (b) every skip reason was swallowed by a bare `continue`. Skip reasons are
 // now logged, and transient errors retry with backoff so the nightly evaluation
 // actually lands.
-func runLevelStatsDay(st *store.Store, ls *store.LevelStatsStore, traderID string) {
-	now := time.Now()
+func runLevelStatsDay(st *store.Store, ls *store.LevelStatsStore, traderID string) (int, error) {
+	return runLevelStatsDayAt(st, ls, traderID, time.Now())
+}
+
+// runLevelStatsDayAt is the injectable-clock body (the DB-copy proof test pins
+// a fixed instant so the day under evaluation is deterministic). Returns the
+// number of seated levels evaluated and a descriptive error on total failure.
+func runLevelStatsDayAt(st *store.Store, ls *store.LevelStatsStore, traderID string, now time.Time) (int, error) {
 	cur := kernel.CMESessionDayStart(now)
 	dayStart := cur.AddDate(0, 0, -1)
 	dayKey := dayStart.In(kernel.CTLocation()).Format("2006-01-02")
@@ -69,12 +92,12 @@ func runLevelStatsDay(st *store.Store, ls *store.LevelStatsStore, traderID strin
 		n, err := runLevelStatsDayOnce(st, ls, traderID, dayKey, dayStart.UnixMilli(), cur.UnixMilli(), now.UnixMilli())
 		if err == nil {
 			logger.Infof("📊 level_stats: %s evaluated %d seated level(s) (total rows %d) — forward validation accumulating", dayKey, n, mustCount(ls))
-			return
+			return n, nil
 		}
 		logger.Warnf("📊 level_stats: %s attempt %d failed: %v", dayKey, attempt, err)
 		if attempt >= 4 {
 			logger.Warnf("📊 level_stats: %s giving up after %d attempts — next run at the next session roll", dayKey, attempt)
-			return
+			return 0, err
 		}
 		time.Sleep(15 * time.Second)
 	}

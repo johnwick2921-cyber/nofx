@@ -386,16 +386,18 @@ type barIngestMsg struct {
 // barIngestChannelBuffer caps the bar ingest channel. FORENSICS HYGIENE
 // (2026-08-28): the 2026-08-27 17:00 CT Globex reopen flooded ~507 frames/s
 // and overran the old fixed 256 — 1399 drop-oldest evictions in ~4 minutes
-// (zero closes lost, but the margin was structurally thin). The cap is now
-// INGEST_QUEUE_CAP (default 1024); the live high-water mark is tracked and
-// surfaced in the 1-line/min ingest summary (peak_depth).
+// (zero closes lost, but the margin was structurally thin). The cap is
+// INGEST_QUEUE_CAP. S-LIST CLOSER (2026-08-27): the default was raised
+// 1024 → 4096 after the 2026-08-27 21:42 flood touched 1024/1024 (1
+// intrabar drop); the live high-water mark stays surfaced in the 1-line/min
+// ingest summary (peak_depth).
 func ingestQueueCap() int {
 	if v := os.Getenv("INGEST_QUEUE_CAP"); v != "" {
 		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n > 0 {
 			return n
 		}
 	}
-	return 1024
+	return 4096
 }
 
 // Plan 4.4 Stage 2 — default auto-subscribe parameters. The auto-subscribed set
@@ -1529,6 +1531,10 @@ func (s *TCPServer) enqueueBarUpdate(symbol, timeframe string, bars []Bar) {
 	select {
 	case s.barIngestCh <- msg:
 		sampleIngestDepth(len(s.barIngestCh))
+		// S-LIST CLOSER: the 1-line/min summary also fires on the CLEAN path
+		// (rate-limited inside), so peak_depth is observable after a reopen
+		// even when zero drops occurred — the E-proof line for FIX3.
+		ingestDropSummary()
 		return
 	default:
 	}

@@ -407,6 +407,11 @@ type AutoTrader struct {
 	safeModeReason        string          // Why safe mode was activated
 	deadMan               deadManWatchdog // B5 dead-man watchdog: NT8 link-gap → block NEW entries until reconciled (zero value = live/allowed; touched only from runCycle)
 
+	// armedSyncSeam — fixture seam for the synchronous armed cancel (S-list
+	// closer FIX1): wire cancel + ack stream + timeout. nil = production TCP
+	// path (armedTrader().CancelOrder + the shared order_update subscription).
+	armedSyncSeam *armedSyncSeam
+
 	// Plan 4 Stage 4 — NinjaTrader TCP balance tracking (defer-until-balance guard)
 	// For NinjaTrader TCP traders, we track if account_balance frame has arrived yet.
 	// If equity == 0 and this is false, we skip the cycle silently (no phantom HOLD record).

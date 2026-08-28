@@ -438,6 +438,22 @@ func (at *AutoTrader) enforceEODFlatAt(now time.Time) bool {
 	if err != nil || len(positions) == 0 {
 		return false
 	}
+	// S-LIST CLOSER (2026-08-27) — cancel ALL resting arms FIRST, synchronously
+	// (ack-waited, one retry), THEN flatten. This kills the ≤2m window where a
+	// working limit could fill after the flat (deep-verify hole 11). The same
+	// ordering guards the session-end branch (no active session above), the T1
+	// force-flat, and the dormancy path in maybeManageArmedOrders.
+	n, unacked := at.cancelArmedOrdersSync("session close — EOD flat")
+	if n > 0 {
+		at.logWarnf("🔒 EOD-FLAT: %d armed order(s) cancelled before flattening", n)
+	}
+	if unacked > 0 {
+		at.logWarnf("⚠️ EOD-FLAT: %d armed cancel(s) unacked after retry — flattening anyway (wire reconciles next cycle)", unacked)
+	}
+	// A fill that won the race mid-cancel must be flattened too — re-read.
+	if fresh, err2 := at.store.Position().GetOpenPositions(at.id); err2 == nil {
+		positions = fresh
+	}
 	at.logWarnf("🕒 EOD-FLAT (%s): session close — flattening %d open position(s) via the trader close path.", flat, len(positions))
 	for _, p := range positions {
 		at.flattenPosition(p, "🕒 EOD-FLAT")
@@ -606,6 +622,18 @@ func (at *AutoTrader) enforceT1ForceFlatAt(now time.Time) bool {
 	positions, err := at.store.Position().GetOpenPositions(at.id)
 	if err != nil || len(positions) == 0 {
 		return false
+	}
+	// S-LIST CLOSER — the SAME cancel-before-flatten ordering as EOD flat: a
+	// resting armed limit must not fill during the forced red-news close.
+	n, unacked := at.cancelArmedOrdersSync("T1 force-flat — red-news window")
+	if n > 0 {
+		at.logWarnf("🔒 T1-FORCE-FLAT: %d armed order(s) cancelled before flattening", n)
+	}
+	if unacked > 0 {
+		at.logWarnf("⚠️ T1-FORCE-FLAT: %d armed cancel(s) unacked after retry — flattening anyway", unacked)
+	}
+	if fresh, err2 := at.store.Position().GetOpenPositions(at.id); err2 == nil {
+		positions = fresh
 	}
 	at.logWarnf("📰 T1-FORCE-FLAT (%s): flattening %d open position(s) — red-news forced close at T-%dmin (research v5 C.5).", due, len(positions), t1ForceFlatLead)
 	for _, p := range positions {

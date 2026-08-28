@@ -143,8 +143,14 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 		}
 	}
 	if reason != "" {
-		if n := at.cancelArmedOrders(reason); n > 0 {
+		// S-list closer: synchronous (ack-waited) cancel on session end and
+		// dormancy too — the resting limit must be dead BEFORE any flatten or
+		// the next cycle, not up to 2m later.
+		if n, unacked := at.cancelArmedOrdersSync(reason); n > 0 {
 			at.logWarnf("🔒 armed cancel: %s — %d order(s) disarmed", reason, n)
+			if unacked > 0 {
+				at.logWarnf("⚠️ armed cancel: %d unacked after retry (ledger cancelled; wire reconciles next cycle)", unacked)
+			}
 		}
 		return
 	}
@@ -349,15 +355,10 @@ func (at *AutoTrader) reconcileStaleWorking(ledger *store.ArmedOrderStore, rows 
 // dead. Now: subscribe only on the miss path, and self-heal (delete the map
 // entry) if the channel is ever closed.
 func (at *AutoTrader) consumeArmedOrderUpdates(nt *ntTrader.TCPTrader, ledger *store.ArmedOrderStore) {
-	v, ok := armedSubs.Load(at.id)
-	if !ok {
-		// Subscribe exactly once. A concurrent miss would re-subscribe and
-		// close the first channel — harmless here (one cycle goroutine per
-		// trader), and the closed-channel branch below self-heals.
-		v, _ = armedSubs.LoadOrStore(at.id, nt.OrderUpdates())
-	}
-	ch, ok := v.(<-chan ntwire.OrderUpdatePayload)
-	if !ok {
+	// S-list closer: the subscription is now created via armedUpdateStream —
+	// subscribe exactly once on the miss path, never re-subscribing per cycle.
+	ch := at.armedUpdateStream(nt)
+	if ch == nil {
 		return
 	}
 	for {
@@ -546,6 +547,153 @@ func (at *AutoTrader) cancelArmedOrders(reason string) int {
 		}
 	}
 	return n
+}
+
+// ── S-LIST CLOSER (2026-08-27) — synchronous armed cancel ────────────────────
+// The EOD race (deep-verify hole 11): enforceEODFlatAt flattened POSITIONS
+// only, and the armed cancel ran on the NEXT cycle — a working limit could
+// fill up to one 2m cycle AFTER the flat. Every lifecycle path that flattens
+// or disarms around a session boundary (EOD flat, session end, dormancy, T1
+// force-flat) now cancels working arms FIRST, SYNCHRONOUSLY: the NT8 cancel
+// frame is sent, then the shared order_update stream is drained until the ack
+// lands or the deadline passes (one retry). Acked or not the ledger flips to
+// cancelled and the flatten proceeds — the cancel-before-flatten WIRE ORDER is
+// what kills the window, and the flatten is never held hostage by a stuck ack.
+
+// armedCancelAckTimeout is the per-order ack wait (ARMED_CANCEL_ACK_TIMEOUT_MS,
+// default 2000). One retry ⇒ a stuck ack costs ≤ 2× this before the flatten
+// proceeds.
+func armedCancelAckTimeout() time.Duration {
+	if v := os.Getenv("ARMED_CANCEL_ACK_TIMEOUT_MS"); v != "" {
+		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n > 0 {
+			return time.Duration(n) * time.Millisecond
+		}
+	}
+	return 2000 * time.Millisecond
+}
+
+// armedSyncSeam is the fixture seam for the synchronous cancel (nil = prod TCP).
+type armedSyncSeam struct {
+	Cancel  func(signalID string) error
+	Stream  func() <-chan ntwire.OrderUpdatePayload
+	Timeout time.Duration // 0 = armedCancelAckTimeout()
+}
+
+// armedUpdateStream returns THIS trader's shared order_update subscription,
+// creating it exactly once on the miss path. NEVER LoadOrStore with
+// nt.OrderUpdates() as the eager argument — the argument evaluates FIRST and
+// SubscribeOrderUpdatesFor closes+replaces the consumer's channel on every
+// cycle (the 2026-08-27 consumer-death bug).
+func (at *AutoTrader) armedUpdateStream(nt *ntTrader.TCPTrader) <-chan ntwire.OrderUpdatePayload {
+	if v, ok := armedSubs.Load(at.id); ok {
+		ch, _ := v.(<-chan ntwire.OrderUpdatePayload)
+		return ch
+	}
+	ch := nt.OrderUpdates()
+	v, _ := armedSubs.LoadOrStore(at.id, ch)
+	stored, _ := v.(<-chan ntwire.OrderUpdatePayload)
+	return stored
+}
+
+// cancelArmedOrdersSync cancels every non-terminal armed row for THIS trader
+// with ack-waited wire cancels (one retry per order). Returns the rows
+// cancelled and the rows whose ack never arrived (ledger flipped anyway).
+func (at *AutoTrader) cancelArmedOrdersSync(reason string) (n, unacked int) {
+	if at.store == nil {
+		return 0, 0
+	}
+	if s := at.armedSyncSeam; s != nil {
+		timeout := s.Timeout
+		if timeout <= 0 {
+			timeout = armedCancelAckTimeout()
+		}
+		return at.cancelArmedOrdersSyncWith(reason, timeout, s.Cancel, s.Stream)
+	}
+	nt := at.armedTrader()
+	if nt == nil {
+		return at.cancelArmedOrders(reason), 0
+	}
+	return at.cancelArmedOrdersSyncWith(reason, armedCancelAckTimeout(), nt.CancelOrder,
+		func() <-chan ntwire.OrderUpdatePayload { return at.armedUpdateStream(nt) })
+}
+
+// cancelArmedOrdersSyncWith is the pure body: per-row cancel + ack drain. Every
+// frame drained is applied through the SAME onArmedOrderUpdate the cycle
+// consumer uses, so no ledger state is lost and no second subscription is ever
+// made (a second subscribe would close the consumer's channel).
+func (at *AutoTrader) cancelArmedOrdersSyncWith(reason string, timeout time.Duration, cancelFn func(string) error, src func() <-chan ntwire.OrderUpdatePayload) (n, unacked int) {
+	ledger := at.store.ArmedOrders()
+	if ledger == nil {
+		return 0, 0
+	}
+	rows, err := ledger.ListNonTerminal()
+	if err != nil {
+		return 0, 0
+	}
+	var mine []store.ArmedOrderDB
+	for _, r := range rows {
+		if r.TraderID == at.id {
+			mine = append(mine, r)
+		}
+	}
+	for _, r := range mine {
+		if r.State != "working" || r.SignalID == "" || cancelFn == nil || src == nil {
+			_ = ledger.SetState(r.ID, "cancelled", reason)
+			n++
+			continue
+		}
+		acked := false
+		for attempt := 1; attempt <= 2 && !acked; attempt++ {
+			if err := cancelFn(r.SignalID); err != nil {
+				at.logWarnf("⚠️ armed sync cancel send %s signal=%s failed: %v", r.Scenario, r.SignalID, err)
+			}
+			ch := src()
+			if ch == nil {
+				break
+			}
+			deadline := time.Now().Add(timeout)
+			for !acked && ch != nil {
+				remaining := time.Until(deadline)
+				if remaining <= 0 {
+					break
+				}
+				timer := time.NewTimer(remaining)
+				select {
+				case u, open := <-ch:
+					timer.Stop()
+					if !open {
+						ch = nil // stream closed — the consumer self-heals next cycle
+						break
+					}
+					at.onArmedOrderUpdate(u, ledger)
+					acked = !at.armedRowStillActive(ledger, r.ID)
+				case <-timer.C:
+				}
+			}
+		}
+		if acked {
+			n++
+		} else {
+			_ = ledger.SetState(r.ID, "cancelled", reason+" (ack timeout — flatten proceeds)")
+			unacked++
+			at.logWarnf("⚠️ armed sync cancel UNACKED %s signal=%s after retry — ledger cancelled, flatten proceeds", r.Scenario, r.SignalID)
+		}
+	}
+	return n, unacked
+}
+
+// armedRowStillActive reports whether the ledger row is still non-terminal.
+func (at *AutoTrader) armedRowStillActive(ledger *store.ArmedOrderStore, id int64) bool {
+	rows, err := ledger.ListNonTerminal()
+	if err != nil {
+		return true // unknown → keep waiting until the deadline
+	}
+	for _, r := range rows {
+		if r.ID == id {
+			return true
+		}
+	}
+	return false
 }
 
 // ── E2 DEBUG SEAM (2026-08-27, level-truth wave ruling "a") ─────────────────
