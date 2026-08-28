@@ -193,8 +193,11 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 			// F4 (LONDON-FORENSICS 2026-08-28) — log the REFUSED verdict ONCE
 			// per arm-spec (the same infeasible arm re-refused every cycle
 			// printed ~120 lines/session); silent until the spec changes.
+			// GAR-F6 (2026-08-28): the comparison VALUE is the verdict CLASS,
+			// not the ATR-bearing string — live ATR drift re-logged the same
+			// refusal every few minutes (LONDON S4 min-SL 18.29→18.67).
 			key := plan.PlanID + ":" + strconv.Itoa(plan.Version) + ":" + sc.ID
-			if armRefusalChanged(&at.armRefusalLast, key, verdict) {
+			if armRefusalChanged(&at.armRefusalLast, key, armRefusalClass(verdict)) {
 				at.logWarnf("⚔️ arm REFUSED %s %s: %s", plan.Session, sc.ID, verdict)
 			}
 			continue
@@ -324,6 +327,25 @@ func (at *AutoTrader) runArmedPlacement(bars []market.Kline) {
 // arm's SL or TP by ≥ 2 ticks (2.1). Pure for tests.
 func churnNeedsModify(oldStop, oldTarget, newStop, newTarget, tick float64) bool {
 	return math.Abs(oldStop-newStop) >= 2*tick || math.Abs(oldTarget-newTarget) >= 2*tick
+}
+
+// armRefusalClass (GAR-F6) — the refusal's verdict CLASS, stripped of live
+// ATR numbers. The dedup key uses the class so an ATR drift (e.g. min-SL
+// "18.29×ATR5m" → "18.67×ATR5m") does not re-log the same refusal.
+func armRefusalClass(verdict string) string {
+	v := strings.ToLower(verdict)
+	switch {
+	case strings.HasPrefix(v, "r:r"):
+		return "rr"
+	case strings.Contains(v, "too close"):
+		return "min_sl"
+	case strings.Contains(v, "veto"):
+		return "veto"
+	case strings.Contains(v, "not armable") || strings.Contains(v, "non-armable"):
+		return "not_armable"
+	default:
+		return "other"
+	}
 }
 
 // armRefusalChanged (F4) — true when this arm-spec's refusal verdict is new or

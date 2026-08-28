@@ -15,6 +15,20 @@ import (
 // ActivationWindowK is the default activation half-width in daily-ATR multiples.
 const ActivationWindowK = 1.5
 
+// ResolveProximityK (grand-audit response F2, 2026-08-28) — the ONE clamp for
+// the day-trade lock value. Valid 0.1–3.0 (the Guide/UI range); anything else
+// falls back to the default. BOTH consumers (the bot gate proximityFilterATR
+// and the engine prompt path) resolve through here so a 0.3 owner retune can
+// never be silently dropped by a divergent clamp (the engine side alone still
+// had a 0.5 floor — the archaeology found no revert, the clamp never allowed
+// the retune on that path).
+func ResolveProximityK(v float64) float64 {
+	if v >= 0.1 && v <= 3.0 {
+		return v
+	}
+	return ActivationWindowK
+}
+
 // ActivePlanLevels filters plan levels to those currently within k×dATR of price
 // — the executor's live candidate set (the "activation window"). Levels beyond
 // re-activate when price returns. Pure: it never mutates the plan/cache. k≤0 →

@@ -217,6 +217,19 @@ func (s *PositionStore) SetAdherence(id int64, grade string) error {
 		Update("adherence_grade", grade).Error
 }
 
+// SetEntryOrderID stamps the entry order/signal identity onto a position row
+// (grand-audit response F1, 2026-08-28) — reconcile-materialized positions must
+// carry a usable order identity so move_stop/trailing can address them on the
+// wire. Idempotent: never overwrites a non-empty value.
+func (s *PositionStore) SetEntryOrderID(id int64, entryOrderID string) error {
+	if entryOrderID == "" {
+		return nil
+	}
+	return s.db.Model(&TraderPosition{}).
+		Where("id = ? AND (entry_order_id = '' OR entry_order_id IS NULL)", id).
+		Update("entry_order_id", entryOrderID).Error
+}
+
 // GetUngradedClosedPositions returns a trader's closed positions that have NO
 // adherence grade yet and closed at/after sinceMs (W5 — the loop poll grades every
 // real exit; the epoch excludes pre-day-plan history). Oldest exit first.

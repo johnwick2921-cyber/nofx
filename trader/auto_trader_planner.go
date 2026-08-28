@@ -1201,6 +1201,17 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		for _, m := range kernel.ChainWarnings(*d) {
 			at.logWarnf("🔗 chain warning: %s", m)
 		}
+		// GAR-F5 (2026-08-28) — FVG demand: fresh machine gaps existed and
+		// agreed with the plan bias but no fvg_entry was authored → WARN the
+		// missing one-line reason. Visibility only, never a fail.
+		if provider := market.FuturesBarsProvider; provider != nil {
+			if bars := provider(at.futuresSymbol(), "1m", kernel.AISVPBarCount); len(bars) > 0 {
+				fresh := kernel.FreshFvgCandidates(bars, at.futuresSymbol(), time.Now())
+				for _, m := range kernel.FvgDemandWarnings(*d, fresh) {
+					at.logWarnf("🎯 fvg demand: %s", m)
+				}
+			}
+		}
 		// Autopsy-response wave (2026-08-27) — fantasy-target advisory:
 		// an armed scenario with planned R:R > 6 gets WARN-flagged (the
 		// 3.28–22.88-R loser class). Never a fail.

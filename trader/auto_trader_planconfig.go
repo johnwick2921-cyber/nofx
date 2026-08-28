@@ -133,8 +133,10 @@ func (at *AutoTrader) SessionRunnable(s *kernel.SessionDef) (bool, string) {
 // unreachable when the proxy runs ~350pt (0.5×350 = ±175pt); 0.1 allows the
 // owner's 0.3 retune (±~105pt).
 func (at *AutoTrader) proximityFilterATR() float64 {
-	if dp := at.dayPlanCfg(); dp != nil && dp.ProximityFilterATR >= 0.1 && dp.ProximityFilterATR <= 3.0 {
-		return dp.ProximityFilterATR
+	if dp := at.dayPlanCfg(); dp != nil {
+		// GAR-F2 (2026-08-28): ONE shared clamp (0.1–3.0) with the engine
+		// prompt path — a 0.3 owner retune must behave identically on both.
+		return kernel.ResolveProximityK(dp.ProximityFilterATR)
 	}
 	return kernel.ActivationWindowK // 1.5
 }

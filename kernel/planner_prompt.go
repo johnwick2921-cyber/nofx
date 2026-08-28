@@ -195,6 +195,40 @@ func FantasyTargetWarnings(doc PlanDoc) []string {
 	return out
 }
 
+// FvgDemandWarnings (grand-audit response F5, 2026-08-28) — WARN-only demand
+// compliance: fresh machine FVGs existed AND at least one agreed with the plan
+// bias AND the plan authored NO fvg_entry scenario → the plan owes a one-line
+// reason. The reason is model prose (not reliably parseable), so this is a
+// visibility WARN at write, never a fail.
+func FvgDemandWarnings(doc PlanDoc, fresh []FreshFvg) []string {
+	if len(fresh) == 0 {
+		return nil
+	}
+	authored := false
+	for _, s := range doc.Scenarios {
+		if strings.EqualFold(strings.TrimSpace(s.Condition), "fvg_entry") {
+			authored = true
+			break
+		}
+	}
+	if authored {
+		return nil
+	}
+	bias := strings.ToLower(strings.TrimSpace(doc.Bias.Direction))
+	match := 0
+	for _, g := range fresh {
+		if bias == "" || bias == "neutral" || strings.EqualFold(g.Direction, bias) {
+			match++
+		}
+	}
+	if match == 0 {
+		return nil
+	}
+	return []string{fmt.Sprintf(
+		"%d fresh FVG candidate(s) agree with the %q bias but no fvg_entry was authored — the plan must state why not (one line in reasoning)",
+		match, bias)}
+}
+
 // ChainWarnings (A2, planner-contract wave) — validator WARN, never a fail:
 // an fvg_entry scenario without a chain_after sweep precursor and whose origin
 // level is not a fresh A/B zone is the bare-gap setup the research's raw-FVG
@@ -279,7 +313,7 @@ func BuildPlannerPrompt(in PlannerInput) string {
 	// The write-site validator re-checks every declared fvg{} against exactly
 	// this list; the model must author ONLY from it (it used to invent stale
 	// gaps and every read failed closed).
-	b.WriteString("## FRESH FVGs (machine-computed candidates — author fvg_entry ONLY from this list; if empty, do NOT author any fvg_entry)\n")
+	b.WriteString("## FRESH FVGs (machine-computed candidates — author fvg_entry ONLY from this list; if empty, do NOT author any fvg_entry; if NON-empty and a candidate's direction agrees with your bias, an fvg_entry is EXPECTED unless you state why not in one line)\n")
 	if len(in.FreshFVGs) == 0 {
 		b.WriteString("(none fresh right now)\n\n")
 	} else {
@@ -482,7 +516,7 @@ func plannerOutputContract(maxLevels, maxScenarios int, hasHTFZones, has1HSDZone
 		"The scenario MIX must follow the regime + day_type: a trend-down day gets breakdown/pullback-short plays, a trend-up day the reverse, balance days get two-sided plays — do NOT default to 2 longs + 1 rally-rejection short on every day. " +
 		"If price sits BELOW PDL you MUST write a continuation short; ABOVE PDH, a continuation long. " +
 		"A1: your reasoning MUST open by naming the bias-tree branch you took (e.g. \"bias-tree: inside-day long LOW\"), then argue from it. " +
-		"A2: an fvg_entry SHOULD chain after a sweep_reclaim (chain_after: S#) — bare gaps at non-A/B origins get a WARN at write, not a reject. " + "A2b (machine grounding, 2026-08-27): author an fvg_entry scenario ONLY from the ## FRESH FVGs list above — copy its direction and lo–hi EXACTLY. If the list is empty, do NOT author any fvg_entry (invented/stale gaps are REJECTED at write). " + "death.flip objects are MACHINE-EVALUATED — choose levels from your level list and a rule; they must match the prose lines. " +
+		"A2: an fvg_entry SHOULD chain after a sweep_reclaim (chain_after: S#) — bare gaps at non-A/B origins get a WARN at write, not a reject. " + "A2b (machine grounding, 2026-08-27): author an fvg_entry scenario ONLY from the ## FRESH FVGs list above — copy its direction and lo–hi EXACTLY. If the list is empty, do NOT author any fvg_entry (invented/stale gaps are REJECTED at write). " + "A2c (FVG demand, 2026-08-28): when ## FRESH FVGs is NON-empty and at least one candidate's direction agrees with your bias, you SHOULD author an fvg_entry from that candidate; if you decide not to, state the reason in ONE line in your reasoning (e.g. 'no fvg_entry: nearest fresh gap is 30pt away — outside my reach'). " + "death.flip objects are MACHINE-EVALUATED — choose levels from your level list and a rule; they must match the prose lines. " +
 		"The flip and death MUST be DIFFERENT events: never the same level AND same rule for both (a flip at the same tick death fires is void). A short-biased plan's flip sits BELOW its death line or uses a stricter rule, so the flip can actually fire. " +
 		"Every scenario's confirm{} is MACHINE-EVALUATED the same way: rule + ref_price + side, and ref_price MUST equal a number written in that scenario's trigger/invalid prose. " +
 		"target_chain is GUIDANCE for the executor AI (which sets the actual take_profit) — it is validated for reachability at write time but never enforced at execution (D2 ruling). " +
@@ -491,7 +525,7 @@ func plannerOutputContract(maxLevels, maxScenarios int, hasHTFZones, has1HSDZone
 		// Autopsy-response wave: armable A/B setups SHOULD carry arm{} (the
 		// resting order is the fast path); sweep_reclaim retraces chain via
 		// wait_confirm; fantasy targets (planned R > 6) are WARN-flagged.
-		"ARMED ORDERS (the resting order IS the fast path — prefer it over a 2-minute debate at the touch): every fvg_entry / breakout_retest / reject scenario you author at quality A or B SHOULD carry arm{} — enabled:true + EXACT entry/stop/target. A setup the planner believes in gets a resting order, not a mid-touch argument. Long: stop < entry < target. Short: target < entry < stop. CHAINED ARMS: when a sweep_reclaim you believe in confirms, its RETRACE entry should already be resting — author that retrace as its own arm with wait_confirm:true, or add wait_confirm:true to the sweep scenario's arm: the system holds the arm dormant until the scenario's confirm{} is machine-MET, then places it (the sweep fast path). NEVER arm acceptance or a raw sweep WITHOUT the wait_confirm chain. Keep targets REAL: a planned R:R above ~6 is a fantasy target and gets WARN-flagged at write. The system places arms within a tick band, manages them tick-level, and cancels on veto/dormant/session-end. FEASIBILITY CONTRACT: an arm{} MUST be gate-feasible or it is REFUSED every cycle and learns nothing — R:R = |target\u2212entry| \u00f7 |stop\u2212entry| must be \u2265 2.0 (ARM_MIN_RR) AND the stop distance must be \u2265 1.0\u00d7 the current 5m ATR (the facts list the session ATR5m — cite the live value; a 10-point stop when ATR5m is ~16 is an instant refuse). If your setup cannot meet BOTH, OMIT arm{} and let the AI path take it. " +
+		"ARMED ORDERS (the resting order IS the fast path — prefer it over a 2-minute debate at the touch): every fvg_entry / reject scenario you author at quality A or B SHOULD carry arm{} — enabled:true + EXACT entry/stop/target (breakout_retest stays a normal AI play: the machine never arms it — GAR-F4). A setup the planner believes in gets a resting order, not a mid-touch argument. Long: stop < entry < target. Short: target < entry < stop. CHAINED ARMS: when a sweep_reclaim you believe in confirms, its RETRACE entry should already be resting — author that retrace as its own arm with wait_confirm:true, or add wait_confirm:true to the sweep scenario's arm: the system holds the arm dormant until the scenario's confirm{} is machine-MET, then places it (the sweep fast path). NEVER arm acceptance or a raw sweep WITHOUT the wait_confirm chain. Keep targets REAL: a planned R:R above ~6 is a fantasy target and gets WARN-flagged at write. The system places arms within a tick band, manages them tick-level, and cancels on veto/dormant/session-end. FEASIBILITY CONTRACT: an arm{} MUST be gate-feasible or it is REFUSED every cycle and learns nothing — R:R = |target\u2212entry| \u00f7 |stop\u2212entry| must be \u2265 2.0 (ARM_MIN_RR) AND the stop distance must be \u2265 1.0\u00d7 the current 5m ATR (the facts list the session ATR5m — cite the live value; a 10-point stop when ATR5m is ~16 is an instant refuse). If your setup cannot meet BOTH, OMIT arm{} and let the AI path take it. " +
 		// A2 (2026-08-26) — condition×session guidance from the week ledger:
 		// reject 75% win +665 in NY RTH vs acceptance 0% −157 and sweep_reclaim
 		// 0% −192. Advisory truth, not a hard rule.

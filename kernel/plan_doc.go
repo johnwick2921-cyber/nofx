@@ -109,7 +109,7 @@ func ArmSpecValid(sc PlanScenario) error {
 			return fmt.Errorf("sweep_reclaim arm on %s requires a confirm{} object to chain on", sc.ID)
 		}
 	} else if !ArmableCondition(sc.Condition) {
-		return fmt.Errorf("arm enabled on non-armable condition %q (fvg_entry | breakout_retest | reject only; sweep_reclaim via wait_confirm)", sc.Condition)
+		return fmt.Errorf("arm enabled on non-armable condition %q (fvg_entry | reject only; sweep_reclaim via wait_confirm; breakout_retest is a normal AI play and never arms — GAR-F4)", sc.Condition)
 	}
 	a := sc.Arm
 	if a.Entry <= 0 || a.Stop <= 0 || a.Target <= 0 {

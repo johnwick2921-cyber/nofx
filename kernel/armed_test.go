@@ -9,12 +9,14 @@ import (
 // entry-price derivation).
 
 func TestArmableCondition(t *testing.T) {
-	for _, c := range []string{"fvg_entry", "breakout_retest", "reject"} {
+	for _, c := range []string{"fvg_entry", "reject"} {
 		if !ArmableCondition(c) {
 			t.Fatalf("%s must be armable", c)
 		}
 	}
-	for _, c := range []string{"acceptance", "sweep_reclaim", "hold", "reclaim"} {
+	// GAR-F4: breakout_retest was EXCLUDED (negative at every R-floor in the
+	// 2026-08-28 autopsy) — it stays a normal AI play and is never armed.
+	for _, c := range []string{"acceptance", "sweep_reclaim", "hold", "reclaim", "breakout_retest"} {
 		if ArmableCondition(c) {
 			t.Fatalf("%s must NOT be armable (close-confirm first → AI path)", c)
 		}

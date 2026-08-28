@@ -1198,6 +1198,12 @@ func (s *TCPServer) SetStaleSignalAgeForTest(d time.Duration) {
 // constructor default in place.
 func (s *TCPServer) SetAddrForTest(addr string) { s.addr = addr }
 
+// ListenAddrForTest returns the bound listen address (valid after Start) so
+// in-process fixtures can dial the real accept loop and observe sent frames.
+func (s *TCPServer) ListenAddrForTest() net.Addr {
+	return s.listener.Addr()
+}
+
 // SeedPositionsForTest injects a per-account open-position snapshot without a wire
 // frame (mirrors the FramePositions receive path). Tests only; production is fed by
 // the C# AddOn's `positions` frames.

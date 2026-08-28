@@ -368,9 +368,10 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 		// H1/H2 — the day-trade lock is THIS ENGINE's config (the deciding
 		// trader's strategy), never a process-global provider that could close
 		// over a different trader (P0-A).
-		if cfg.DayPlan.ProximityFilterATR >= 0.5 && cfg.DayPlan.ProximityFilterATR <= 3.0 {
-			proximityK = cfg.DayPlan.ProximityFilterATR
-		}
+		// GAR-F2 (2026-08-28): the old 0.5 floor silently dropped the owner's
+		// 0.3 retune on THIS path while the bot gate honored it — both sides
+		// now resolve through the one ResolveProximityK clamp (0.1–3.0).
+		proximityK = ResolveProximityK(cfg.DayPlan.ProximityFilterATR)
 	}
 	if isFut, _ := futuresVariantMode(variant); isFut && planOn {
 		klBlock := ""

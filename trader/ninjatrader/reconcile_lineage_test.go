@@ -90,7 +90,7 @@ func TestStampArmedLineageSkipsMismatchedEntry(t *testing.T) {
 	if err := st.Position().Create(pos); err != nil {
 		t.Fatal(err)
 	}
-	if StampArmedLineageIfMatched(st, "trader-1", pos.ID, "MNQ", "SHORT", 29500) {
+	if stamped, _ := StampArmedLineageIfMatched(st, "trader-1", pos.ID, "MNQ", "SHORT", 29500); stamped {
 		t.Fatal("a 121-pt entry mismatch must NOT match the ledger fill (tick window only)")
 	}
 }

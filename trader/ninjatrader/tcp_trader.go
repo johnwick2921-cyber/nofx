@@ -25,6 +25,7 @@ import (
 	"nofx/market"
 	"nofx/provider/databento"
 	ntwire "nofx/provider/ninjatrader"
+	"nofx/store"
 	"nofx/telemetry"
 	"nofx/trader/types"
 ) // reflect used in GetBalance to notify parent AutoTrader
@@ -64,6 +65,17 @@ type TCPTrader struct {
 	// NT8 AverageFillPrice as entry_price instead of the stale 5m-mark reference.
 	// Cleared on close so a close-path poll never matches the entry fill.
 	lastEntrySignalID string
+
+	// st is the store handle wired at StartPositionReconcile (GAR-F1). It lets
+	// MoveStopToBreakeven resolve a MATERIALIZED position's persisted entry
+	// order identity when no in-process entry signal exists — the #566 class
+	// where every move_stop send failed "no open entry to move the stop".
+	st *store.Store
+
+	// entryOrderID caches SYMBOL|SIDE → entry order/signal identity learned at
+	// reconcile materialization (GAR-F1) so move_stop/trailing can address
+	// positions that were never placed through a Go-side signal. Guarded by mu.
+	entryOrderID map[string]string
 
 	// pending tracks signal_id → side so we can correlate fills back to
 	// position state. Optional: not strictly needed for the 19-method
@@ -474,6 +486,46 @@ func (t *TCPTrader) OrderUpdates() <-chan ntwire.OrderUpdatePayload {
 	return t.server.SubscribeOrderUpdatesFor(t.symbol, t.boundAccount)
 }
 
+// rememberEntryOrderID caches the entry order/signal identity for a
+// reconcile-materialized position (GAR-F1). Called from the materialization
+// path; empty ids are ignored.
+func (t *TCPTrader) rememberEntryOrderID(symbol, side, signalID string) {
+	if signalID == "" {
+		return
+	}
+	key := keyFor(symbol, upperSideStr(side))
+	t.mu.Lock()
+	if t.entryOrderID == nil {
+		t.entryOrderID = make(map[string]string)
+	}
+	t.entryOrderID[key] = signalID
+	t.mu.Unlock()
+}
+
+// resolveEntrySignalID picks the order identity for move_stop/trailing (GAR-F1):
+//   1. the in-process last entry signal (normal Go-side entries),
+//   2. the materialization cache (positions materialized this process), then
+//   3. the persisted row's entry_order_id (covers a restart AFTER the repair
+//      pass stamped it) — the #566 dead-cell fallback chain.
+// Empty = no usable identity (the caller reports the failure).
+func (t *TCPTrader) resolveEntrySignalID(symbol, side string) string {
+	key := keyFor(symbol, upperSideStr(side))
+	t.mu.Lock()
+	sid := t.lastEntrySignalID
+	if sid == "" {
+		sid = t.entryOrderID[key]
+	}
+	st := t.st
+	t.mu.Unlock()
+	if sid == "" && st != nil {
+		if p, err := st.Position().GetOpenPositionByAccountSymbol(t.boundAccount, symbol, upperSideStr(side)); err == nil && p != nil && p.EntryOrderID != "" {
+			sid = p.EntryOrderID
+			t.rememberEntryOrderID(symbol, side, sid)
+		}
+	}
+	return sid
+}
+
 // MoveStopToBreakeven asks the AddOn to move the resting stop for THIS trader's
 // current open position (the last entry's signal_id) to newStop, tick-rounded —
 // WITHOUT closing the position. Errors (no-op) if there is no tracked open entry.
@@ -481,8 +533,8 @@ func (t *TCPTrader) OrderUpdates() <-chan ntwire.OrderUpdatePayload {
 // original protective stop keeps guarding the trade until the paired redeploy.
 func (t *TCPTrader) MoveStopToBreakeven(side string, newStop float64) error {
 	key := keyFor(t.symbol, upperSideStr(side))
+	sid := t.resolveEntrySignalID(t.symbol, side)
 	t.mu.Lock()
-	sid := t.lastEntrySignalID
 	cur := t.stopLoss[key]
 	tid := t.traderID // A2 (G1)
 	t.mu.Unlock()

@@ -51,6 +51,79 @@ func TestHTFVeto_MissingSnapshotFailsOpen(t *testing.T) {
 	}
 }
 
+// GAR-F3 (grand-audit response, 2026-08-28) — veto cross-check mode. Replay
+// fixture = the 7 REAL vetoed arms from the 2026-08-28 autopsy (C3 table):
+// the 1h-only veto blocked 3 would-have-won entries (+$352) while 4h was
+// RANGING at all 7 timestamps. Under "cross" (1h AND 4h both oppose) exactly
+// ZERO of the 7 are blocked; under "1h" the first three are.
+func TestHTFVeto_CrossModeAuditSeven(t *testing.T) {
+	cases := []struct {
+		side      string
+		t1, t4    string
+		block1h   bool
+		blockBoth bool
+	}{
+		{"short", "TRENDING_UP", "RANGING", true, false},   // 08-27 23:15 (would-won +$65)
+		{"short", "TRENDING_UP", "RANGING", true, false},   // 08-27 23:15 (would-won +$110)
+		{"long", "TRENDING_DOWN", "RANGING", true, false},  // 08-28 07:27 (would-won +$177)
+		{"long", "RANGING", "RANGING", false, false},       // 08-28 07:36
+		{"long", "RANGING", "RANGING", false, false},       // 08-28 08:17
+		{"long", "RANGING", "RANGING", false, false},       // 08-28 08:35
+		{"long", "RANGING", "RANGING", false, false},       // 08-28 08:35
+	}
+
+	t.Setenv("HTF_VETO_MODE", "cross")
+	for i, c := range cases {
+		snap := map[string]StructureState{"1h": {Trend: c.t1}, "4h": {Trend: c.t4}}
+		blocked, _ := HTFVetoVerdict(snap, "open_"+c.side, "1h")
+		if blocked != c.blockBoth {
+			t.Fatalf("case %d: cross-mode blocked=%v, want %v", i+1, blocked, c.blockBoth)
+		}
+	}
+
+	t.Setenv("HTF_VETO_MODE", "1h")
+	for i, c := range cases {
+		snap := map[string]StructureState{"1h": {Trend: c.t1}, "4h": {Trend: c.t4}}
+		blocked, _ := HTFVetoVerdict(snap, "open_"+c.side, "1h")
+		if blocked != c.block1h {
+			t.Fatalf("case %d: 1h-mode blocked=%v, want %v", i+1, blocked, c.block1h)
+		}
+	}
+
+	// cross blocks ONLY when BOTH TFs agree on the counter-trend.
+	t.Setenv("HTF_VETO_MODE", "cross")
+	both := map[string]StructureState{"1h": {Trend: "TRENDING_DOWN"}, "4h": {Trend: "TRENDING_DOWN"}}
+	blocked, msg := HTFVetoVerdict(both, "open_long", "1h")
+	if !blocked || !strings.Contains(msg, "cross") {
+		t.Fatalf("both-oppose long must block under cross, got %v %q", blocked, msg)
+	}
+
+	// A missing 4h snapshot FAILS OPEN for that TF under cross (never vetoes).
+	one := map[string]StructureState{"1h": {Trend: "TRENDING_DOWN"}}
+	if blocked, _ := HTFVetoVerdict(one, "open_long", "1h"); blocked {
+		t.Fatalf("cross with a missing 4h snapshot must fail open")
+	}
+
+	// 4h-only mode vetoes on the 4h trend alone.
+	t.Setenv("HTF_VETO_MODE", "4h")
+	snap4 := map[string]StructureState{"1h": {Trend: "RANGING"}, "4h": {Trend: "TRENDING_UP"}}
+	if blocked, _ := HTFVetoVerdict(snap4, "open_short", "1h"); !blocked {
+		t.Fatalf("4h mode must veto on the 4h trend alone")
+	}
+}
+
+// GAR-F3 — unknown mode values fall back to "1h" (never a silent new behavior).
+func TestHTFVeto_UnknownModeFallsBack(t *testing.T) {
+	t.Setenv("HTF_VETO_MODE", "sideways")
+	if HTFVetoMode() != "1h" {
+		t.Fatalf("unknown mode must fall back to 1h")
+	}
+	t.Setenv("HTF_VETO_MODE", "cross")
+	if HTFVetoMode() != "cross" {
+		t.Fatalf("cross must resolve")
+	}
+}
+
 // hourBars0821 is the real 1h table from the 2026-08-21 stored prompt
 // (rec 31587) — the series G1's veto replays against.
 func hourBars0821() []market.KlineBar {

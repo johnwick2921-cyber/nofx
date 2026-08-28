@@ -9,10 +9,12 @@ import "strings"
 
 // ArmableCondition reports whether a condition supports a price-deterministic
 // resting entry. acceptance and raw sweep_reclaim need close-confirmation
-// first and stay on the AI path.
+// first and stay on the AI path. breakout_retest was EXCLUDED by the
+// grand-audit response wave (F4, 2026-08-28): its replay expectancy is negative
+// at every R-floor, so it stays a normal AI play and is never armed.
 func ArmableCondition(condition string) bool {
 	switch strings.ToLower(strings.TrimSpace(condition)) {
-	case "fvg_entry", "breakout_retest", "reject":
+	case "fvg_entry", "reject":
 		return true
 	}
 	return false

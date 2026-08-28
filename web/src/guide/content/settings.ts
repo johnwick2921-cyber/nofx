@@ -24,15 +24,16 @@ const dayPlan: KnobSpec[] = [
   {
     label: 'Proximity filter',
     where: 'Strategy → Day Plan → slider 0.1–3.0',
-    what: 'The day-trade band around price that seats levels in the card (±K×ATR from the detector band).',
+    what: 'The day-trade band around price that seats levels in the card (±K × the daily-range proxy, ~±300pt × K on MNQ).',
     trader:
       'Higher = tighter card; lower = wider card. Far levels still feed the bias-tree anchors even when unseated.',
     consumer:
       'kernel/levels_score.go:389 (ScoreLevels proximityK) · trader/auto_trader_planconfig.go:47',
-    range: '0.1 – 3.0 (×ATR, clamped)',
-    systemDefault: '0.3 (retuned from 1.5 → ±~92-100pt on MNQ)',
+    range: '0.1 – 3.0 (× daily-range proxy, clamped)',
+    systemDefault:
+      '1.5 (the CODE default — the 0.3 retune is a saved-value change in Strategy → Day Plan, never a code default; GAR-F2 archaeology: nothing ever reverted it)',
     recommended:
-      '⭐ 0.3 — the current owner value; matched the detector band after the A2.1 retune.',
+      '⭐ 0.3 — the owner clicks this after the GAR wave lands; the shared clamp (0.1–3.0) now honors it on BOTH the bot gate and the engine path.',
     whenToTouch:
       'If the card looks too crowded or too empty for the daily range.',
     perSession:

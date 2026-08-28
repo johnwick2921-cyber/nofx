@@ -68,6 +68,15 @@ func (t *TCPTrader) StartPositionReconcile(traderID, exchangeID, exchangeType st
 	if st == nil {
 		return
 	}
+	// GAR-F1 — wire the store handle BEFORE the repair pass so the reconcile
+	// goroutine and MoveStopToBreakeven can resolve materialized rows' entry
+	// identities (the #566 dead-cell fix).
+	t.mu.Lock()
+	t.st = st
+	if t.entryOrderID == nil {
+		t.entryOrderID = make(map[string]string)
+	}
+	t.mu.Unlock()
 	t.reconcileOnce.Do(func() {
 		// F3 (LONDON-FORENSICS 2026-08-28) — one-time idempotent repair: positions
 		// materialized before the lineage stamp existed (live proof: pos #567)
@@ -359,7 +368,11 @@ func (t *TCPTrader) reconcilePositions(traderID, exchangeID, exchangeType string
 		// F3 (LONDON-FORENSICS 2026-08-28) — stamp the armed-fill lineage NOW:
 		// the fill-time stamp failed because this row did not exist yet (live proof:
 		// pos #567 landed with plan_version 0 / adherence grade F).
-		StampArmedLineageIfMatched(st, traderID, row.ID, sym, side, avg)
+			// GAR-F1 (2026-08-28) — the returned signal identity is cached on the
+			// trader so move_stop/trailing can address the live bracket.
+			if _, sig := StampArmedLineageIfMatched(st, traderID, row.ID, sym, side, avg); sig != "" {
+				t.rememberEntryOrderID(sym, side, sig)
+			}
 		logger.Warnf("🧩 reconcile: MATERIALIZED untracked NT8 position %s %s qty=%.0f @ %.2f (acct=%s) — manual/NT8-side entry now tracked; its close will record real P&L", sym, side, qty, avg, acct)
 		delete(t.untrackedSince, key)
 		// A close frame may have arrived while the row was still untracked (the
@@ -403,11 +416,14 @@ func (t *TCPTrader) reconcilePositions(traderID, exchangeID, exchangeType string
 
 // StampArmedLineageIfMatched stamps one position row with its armed-fill plan
 // linkage when a matching FILLED ledger row exists: same trader, same side, and
-// entry price within one tick of the ledger's entry. Returns true when stamped.
-func StampArmedLineageIfMatched(st *store.Store, traderID string, posID int64, sym, side string, entryPx float64) bool {
+// entry price within one tick of the ledger's entry. Returns (true, signalID)
+// when stamped — the signalID is the armed ledger's entry identity, persisted
+// as the row's entry_order_id (GAR-F1) so move_stop/trailing can address the
+// position on the wire.
+func StampArmedLineageIfMatched(st *store.Store, traderID string, posID int64, sym, side string, entryPx float64) (bool, string) {
 	rows, err := st.ArmedOrders().ListFilled(traderID, 20)
 	if err != nil || len(rows) == 0 {
-		return false
+		return false, ""
 	}
 	tick := market.FuturesTickSize(sym)
 	if tick <= 0 {
@@ -426,12 +442,19 @@ func StampArmedLineageIfMatched(st *store.Store, traderID string, posID int64, s
 		}
 		if err := st.Position().SetPlanLinkFull(posID, r.Version, r.Scenario, true, "armed_fill", r.PlanID, tradeDate, r.Session); err != nil {
 			logger.Warnf("🧩 reconcile: armed lineage stamp failed (pos %d): %v", posID, err)
-			return false
+			return false, ""
 		}
-		logger.Infof("🧩 reconcile: armed-fill lineage stamped — pos %d ← %s v%d %s (fill %.2f)", posID, r.PlanID, r.Version, r.Scenario, r.EntryPx)
-		return true
+		// GAR-F1 — the materialized row gets the armed ledger's signal identity
+		// so move_stop/trailing can find the live bracket (the #566 dead cell).
+		if r.SignalID != "" {
+			if err := st.Position().SetEntryOrderID(posID, r.SignalID); err != nil {
+				logger.Warnf("🧩 reconcile: armed entry-order-id stamp failed (pos %d): %v", posID, err)
+			}
+		}
+		logger.Infof("🧩 reconcile: armed-fill lineage stamped — pos %d ← %s v%d %s (fill %.2f, entry_id %s)", posID, r.PlanID, r.Version, r.Scenario, r.EntryPx, r.SignalID)
+		return true, r.SignalID
 	}
-	return false
+	return false, ""
 }
 
 // RepairArmedLineage back-fills plan linkage for this trader's positions that
@@ -447,7 +470,7 @@ func RepairArmedLineage(st *store.Store, traderID string) int {
 		if p.PlanVersion != 0 {
 			continue
 		}
-		if StampArmedLineageIfMatched(st, traderID, p.ID, p.Symbol, p.Side, p.EntryPrice) {
+		if stamped, _ := StampArmedLineageIfMatched(st, traderID, p.ID, p.Symbol, p.Side, p.EntryPrice); stamped {
 			n++
 			// The F grade was CAUSED by the missing linkage — clear
 			// it so the W5 analytics regrade the close with the
