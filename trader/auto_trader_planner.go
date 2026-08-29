@@ -869,27 +869,6 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 	// price so the write-site stamp can match the model's levels.
 	machineGrades := map[float64]string{}
 	machineLabels := map[float64]string{} // P0.4-H: price → detector label
-	record := func(price float64, grade string) {
-		if grade == "" {
-			return
-		}
-		k := math.Round(price*100) / 100
-		// Collision rule: keep the STRONGER grade per rounded price — an
-		// owner "A" prepended first is never clobbered by a same-price
-		// detector entry later in the slice.
-		if old, ok := machineGrades[k]; !ok || kernel.GradeRank(grade) > kernel.GradeRank(old) {
-			machineGrades[k] = grade
-		}
-	}
-	recordLabel := func(price float64, label string) {
-		if label == "" {
-			return
-		}
-		k := math.Round(price*100) / 100
-		if _, ok := machineLabels[k]; !ok {
-			machineLabels[k] = label
-		}
-	}
 	for _, l := range input.Levels {
 		switch l.Kind {
 		case kernel.KindPDH:
@@ -897,17 +876,10 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 		case kernel.KindPDL:
 			facts.PDL = l.Price
 		}
-		record(l.Price, l.Grade)
-		recordLabel(l.Price, l.Label)
 	}
-	// Level-truth wave (2026-08-27) — record EVERY graded pool candidate, not
-	// just the seated top-N: a level the model copies from the prompt that lost
-	// the seat race (a far nPOC, a carried swing) must still get its machine
-	// grade stamped (the 256/795 stamp-gap regression).
-	for _, pl := range input.Pool {
-		record(pl.Price, pl.Grade)
-		recordLabel(pl.Price, pl.Label)
-	}
+	// S1-wave A3 (2026-08-29) — the record loops moved into collectMachineGrades
+	// (pure, fixture-tested) and now include the FULL HTF-zone universe.
+	collectMachineGrades(input, machineGrades, machineLabels)
 	// S-dispatch (2026-08-27) — the P0.2 gap rules' PDH/PDL must come from the
 	// universe too: the seated loop above skips them post-roll and the gap
 	// continuation rules silently went unevaluated (PDH/PDL = 0 = "unknown").
@@ -916,14 +888,6 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 	}
 	if facts.PDL <= 0 {
 		facts.PDL = input.BiasCtxFacts.PDL
-	}
-	// The HTF zones section rows lost the top-N seat race and are not in
-	// input.Levels — but the model reads them and may write them into the
-	// plan (live proof: ASIA v3's Supply·4h row went unstamped). Merge their
-	// grades into the same map so those rows get stamped too.
-	for _, z := range input.HTFZones {
-		record(z.Price, z.Grade)
-		recordLabel(z.Price, z.Label)
 	}
 	requiredBias := kernel.FlipToDirection(priorKiller)
 	// W11 — carry the frozen indicator mirror + ai_config hash to the write site.
@@ -965,6 +929,11 @@ func aiPlanMaxTokens() int {
 	}
 	return 65536
 }
+
+// PlannerMaxTokens (S1-wave A4, 2026-08-29) — exported boot-line accessor so
+// the boot block prints BOTH caps (client vs planner) instead of the
+// misleading single 32768.
+func PlannerMaxTokens() int { return aiPlanMaxTokens() }
 
 // runPlannerRead assembles the input package, calls the pinned planner client,
 // and persists the plan (or a fail-closed NO-TRADE plan).
@@ -1093,6 +1062,51 @@ func (at *AutoTrader) carryMachineGrades(tradeDate, session string, doc *kernel.
 // the model-written one.
 // recordPlanWritePrice (F3) snapshots the price at the last successful plan
 // write — the fast-market drift baseline for the next wake read.
+// collectMachineGrades (S1-wave A3, 2026-08-29) — builds the write-site stamp
+// maps from EVERY level source the prompt renders: the seated table, the graded
+// pool, the cap-4 HTF-zones section, AND the full HTF-zone universe
+// (HTFZonesFull). The 13 Demand·1h escapes were universe rows the model wrote
+// from the key-levels block while the stamp map only knew the cap-4 section.
+func collectMachineGrades(in kernel.PlannerInput, grades, labels map[float64]string) {
+	record := func(price float64, grade string) {
+		if grade == "" {
+			return
+		}
+		k := math.Round(price*100) / 100
+		// Collision rule: keep the STRONGER grade per rounded price — an
+		// owner "A" prepended first is never clobbered by a same-price
+		// detector entry later in the slice.
+		if old, ok := grades[k]; !ok || kernel.GradeRank(grade) > kernel.GradeRank(old) {
+			grades[k] = grade
+		}
+	}
+	recordLabel := func(price float64, label string) {
+		if label == "" {
+			return
+		}
+		k := math.Round(price*100) / 100
+		if _, ok := labels[k]; !ok {
+			labels[k] = label
+		}
+	}
+	for _, l := range in.Levels {
+		record(l.Price, l.Grade)
+		recordLabel(l.Price, l.Label)
+	}
+	for _, pl := range in.Pool {
+		record(pl.Price, pl.Grade)
+		recordLabel(pl.Price, pl.Label)
+	}
+	for _, z := range in.HTFZones {
+		record(z.Price, z.Grade)
+		recordLabel(z.Price, z.Label)
+	}
+	for _, z := range in.HTFZonesFull {
+		record(z.Price, z.Grade)
+		recordLabel(z.Price, z.Label)
+	}
+}
+
 func (at *AutoTrader) recordPlanWritePrice(p float64) {
 	if p > 0 {
 		at.lastPlanWritePrice.Store(math.Float64bits(p))
@@ -1584,6 +1598,7 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 	// section: the top-8 seat race hides them, but the model must know where the
 	// 1h/4h bases are.
 	var htfZoneScored []kernel.ScoredLevel
+	var htfZonesFull []kernel.ScoredLevel // S1-wave A3 — uncapped stamp universe
 	if len(htfLevels) > 0 && price > 0 && dATR > 0 {
 		zones := make([]kernel.DetectedLevel, 0, len(htfLevels))
 		for _, l := range htfLevels {
@@ -1602,6 +1617,12 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 				zs = kernel.Seat1HZone(zs, 4)
 			}
 			htfZoneScored = zs
+			// S1-wave A3 (2026-08-29) — the FULL in-band graded HTF-zone
+			// universe (no cap) rides along for the write-site stamp: the
+			// model reads the whole key-levels block and may write zones the
+			// cap-4 section hid (the 13 Demand·1h escapes). Prompt rendering
+			// still uses the cap-4 HTFZones.
+			htfZonesFull = kernel.ScoreLevels(zones, price, dATR, nil, len(zones), at.proximityFilterATR())
 		}
 	}
 
@@ -1745,6 +1766,7 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 		Levels:           scored,
 		Pool:             pool,
 		HTFZones:         htfZoneScored,
+		HTFZonesFull:     htfZonesFull,
 		StructureSummary: structure,
 		ConsumedLevels:   consumedLines,
 		// Level-truth wave b2 (2026-08-27): the machine's fresh-gap candidate

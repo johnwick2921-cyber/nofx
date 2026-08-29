@@ -29,7 +29,7 @@
 - **Deploy:** build at dev HEAD → `deploy/RELEASE` = build sha → mv old binary → `kill -9` (systemd relaunch).
 - **Boot line to quote:** `🔐 BOOT INTEGRITY OK — rev <sha> · goldens PASS`.
 - **E-proofs:**
-  - [x] missed-turns delta (75–83% → 60–65%, scripted)
+  - [x] missed-turns delta (75–83% → 60–65%, scripted; n=per-session seat census, see the missed-turns script output — the 08-28 recompute at 0.3×ATR gives 60.9/59.1/72.7% for ASIA/LONDON/NY)
   - [x] σ hand-calc match (2dp on VWAP/−1σ)
   - [x] T7 Δ-rows = 0 on last-7d closes; corrected == raw
   - [ ] `level_stats` rows growing nightly (post-deploy, next session roll)

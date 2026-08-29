@@ -1,6 +1,7 @@
 package ninjatrader
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -75,6 +76,12 @@ func startPersistWorker() {
 		go func() {
 			ticker := time.NewTicker(300 * time.Millisecond)
 			defer ticker.Stop()
+			// S1 WIRE-UP (2026-08-29) — the F2 persist-silence watchdog, NOW
+			// actually wired: a 30s check against the last successful flush
+			// stamp. The pre-reopen wave shipped the atomics + knob resolver
+			// but never wrote or read them (declared-but-dead code, class 19).
+			watchdog := time.NewTicker(30 * time.Second)
+			defer watchdog.Stop()
 			var batch []persistMsg
 			flush := func() {
 				if len(batch) == 0 {
@@ -93,6 +100,10 @@ func startPersistWorker() {
 						}()
 						persistFlushed.Add(int64(len(m.bars)))
 					}
+					// S1 WIRE-UP — stamp EVERY successful flush (this one
+					// closure serves both the 256-batch and the 300ms ticker
+					// paths) so the silence watchdog has a heartbeat.
+					persistLastFlushAt.Store(time.Now().Unix())
 				}
 				batch = batch[:0]
 			}
@@ -105,10 +116,34 @@ func startPersistWorker() {
 					}
 				case <-ticker.C:
 					flush()
+				case <-watchdog.C:
+					if msg := persistWatchdogAlarmAt(time.Now().Unix()); msg != "" {
+						logger.Errorf("%s", msg)
+					}
 				}
 			}
 		}()
 	})
+}
+
+// persistWatchdogAlarmAt (S1 WIRE-UP, 2026-08-29) — the F2 persist-silence
+// watchdog, NOW WIRED: returns the loud ERROR text when no successful flush
+// has landed for persistWatchdogSeconds() (default 60s, min 10), deduped to
+// ONE alarm per watchdog window via persistAlarmAt. Returns "" when healthy.
+// A zero stamp (no flush yet — boot backfill in flight) never alarms cold.
+func persistWatchdogAlarmAt(now int64) string {
+	last := persistLastFlushAt.Load()
+	if last == 0 {
+		return ""
+	}
+	if now-last <= persistWatchdogSeconds() {
+		return ""
+	}
+	if now-persistAlarmAt.Load() < persistWatchdogSeconds() {
+		return ""
+	}
+	persistAlarmAt.Store(now)
+	return fmt.Sprintf("🔕 PERSIST WATCHDOG: no successful bar flush for %ds (queue_drops=%d) — the persist writer may be stalled (the 2026-08-28 GORM-stall class)", now-last, persistDropped.Load())
 }
 
 // barPersistSummary logs the 1-line/minute drop summary (no per-drop WARNs).

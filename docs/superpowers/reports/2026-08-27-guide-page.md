@@ -46,7 +46,7 @@
      level/scenario anatomy, no-trade windows, death/flip, BOTH no-trade
      variants, thin-side) + 30-second read + the 4 buttons (Reset / Re-read /
      Re-align / Approve with api cites + budgets).
-  4. levels — ~17 kind cards with verified stats (94.2% ON, 75% reject-NY) and
+  4. levels — ~17 kind cards with verified stats (94.2% ON — n not recorded in that wave, pre-retention week: treat as anecdote per class-16 law; 75% reject-NY — fresh reconstruction at the same cut: n=7, 4W, +$386.5) and
      [UNVERIFIED] marks, grading pipeline, freshness ladder, floors/caps, 5
      roles, seats/band.
   5. plays — 7 playbook cards + the A-setup chain + no-trade-as-a-trade.
