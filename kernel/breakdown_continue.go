@@ -31,11 +31,11 @@ import (
 // breakdown_continue / breakup_continue scenario (fvg-style: the model
 // declares, the validator re-checks the facts from bars).
 type PlanBreakdownContinue struct {
-	Level      float64 `json:"level"`                // the broken level (the retest)
-	LevelLabel string  `json:"level_label"`          // display label, e.g. "VWAP 29657.39"
-	EntryMode  string  `json:"entry_mode"`           // pullback | immediate
-	BreakLeg   float64 `json:"break_leg,omitempty"`  // declared displacement in pts (0 = validator computes)
-	Pullback   float64 `json:"pullback,omitempty"`   // declared max pullback in pts (0 = auto BD_MAX_PULLBACK × leg)
+	Level      float64 `json:"level"`               // the broken level (the retest)
+	LevelLabel string  `json:"level_label"`         // display label, e.g. "VWAP 29657.39"
+	EntryMode  string  `json:"entry_mode"`          // pullback | immediate
+	BreakLeg   float64 `json:"break_leg,omitempty"` // declared displacement in pts (0 = validator computes)
+	Pullback   float64 `json:"pullback,omitempty"`  // declared max pullback in pts (0 = auto BD_MAX_PULLBACK × leg)
 }
 
 // ---- env knobs (zero literals) ----
@@ -234,13 +234,21 @@ func ValidateBreakdownContinueScenarios(d *PlanDoc, bars []market.Kline, atr5m, 
 			!strings.EqualFold(strings.TrimSpace(bd.EntryMode), "immediate") {
 			return fmt.Errorf("%s breakdown{} entry_mode must be pullback|immediate (got %q)", s.ID, bd.EntryMode)
 		}
-		// Facts: the tape must show the breakdown (or the arm's resting entry is
-		// authorized blind). Allow authoring BEFORE the final confirming close
-		// only in immediate mode (the 2nd close is the trigger itself).
+		// Facts: the tape must show the displacement (or the arm's resting entry
+		// is authorized blind). Pullback authoring additionally requires the
+		// FULL leg 1 (N confirming closes). Immediate-mode authoring is legal
+		// as soon as the displacement exists — the 2nd confirming close is the
+		// ENTRY trigger itself, so requiring it at write time would make the
+		// play un-authorable mid-waterfall (PRE-SUNDAY F1 ruling: immediate is
+		// plan-authorable on the AI path only; arms stay pullback-only).
 		st := BreakdownContinueState(*s, bars, 0, nowMs)
-		if !st.Leg1Met {
+		immediate := strings.EqualFold(strings.TrimSpace(bd.EntryMode), "immediate")
+		if !immediate && !st.Leg1Met {
 			return fmt.Errorf("%s %s: the tape shows NO %d×5m breakdown through %.2f yet (%d confirming closes, no reclaim check) — author it only after the displacement exists (or set entry_mode=immediate and accept the 2nd-close trigger)",
 				s.ID, s.Condition, bdConfirmCloses(), bd.Level, 0)
+		}
+		if st.Reclaimed {
+			return fmt.Errorf("%s %s: a close came back across %.2f — the breakdown is void; author a reject/retest play instead", s.ID, s.Condition, bd.Level)
 		}
 		if atr5m > 0 && st.BreakLegPts < bdMinDispATR()*atr5m {
 			return fmt.Errorf("%s %s: measured displacement %.2f pts < BD_MIN_DISP_ATR %.1f×ATR5m (%.1f pts) — not a displacement move, author a normal reject/retest play instead",

@@ -128,10 +128,12 @@ func (s *ArmedOrderStore) UpsertArm(row *ArmedOrderDB) error {
 	return s.db.Create(row).Error
 }
 
-// ListNonTerminal returns every armed order that is NOT in a terminal state.
-func (s *ArmedOrderStore) ListNonTerminal() ([]ArmedOrderDB, error) {
+// ListNonTerminal returns ONE TRADER's armed orders that are NOT in a
+// terminal state. PRE-SUNDAY F4 (2026-08-28): the old unscoped scan crossed
+// trader boundaries the moment more than one trader runs.
+func (s *ArmedOrderStore) ListNonTerminal(traderID string) ([]ArmedOrderDB, error) {
 	var out []ArmedOrderDB
-	err := s.db.Where("state IN ('armed','working')").Order("id").Find(&out).Error
+	err := s.db.Where("trader_id = ? AND state IN ('armed','working')", traderID).Order("id").Find(&out).Error
 	return out, err
 }
 
@@ -140,6 +142,14 @@ func (s *ArmedOrderStore) ListNonTerminal() ([]ArmedOrderDB, error) {
 func (s *ArmedOrderStore) SetState(id int64, state, reason string) error {
 	return s.db.Model(&ArmedOrderDB{}).Where("id = ?", id).
 		Updates(map[string]any{"state": state, "state_reason": reason}).Error
+}
+
+// SetFillPrice records the actual fill price on a FILLED row (PRE-SUNDAY F2 —
+// the lineage matcher keys on this; entry_px drifts on re-arm and is NOT the
+// fill).
+func (s *ArmedOrderStore) SetFillPrice(id int64, fillPrice float64) error {
+	return s.db.Model(&ArmedOrderDB{}).Where("id = ?", id).
+		Update("fill_price", fillPrice).Error
 }
 
 // SetSignal records the wire signal_id once the resting limit is placed

@@ -2,6 +2,7 @@ package ninjatrader
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -420,6 +421,28 @@ func (t *TCPTrader) reconcilePositions(traderID, exchangeID, exchangeType string
 // when stamped — the signalID is the armed ledger's entry identity, persisted
 // as the row's entry_order_id (GAR-F1) so move_stop/trailing can address the
 // position on the wire.
+// armedFillPriceFor resolves the TRUE fill price of a filled ledger row.
+// PRE-SUNDAY F2 (2026-08-28): entry_px DRIFTS on re-arm — the v6 re-spec
+// overwrote the v1 entry that actually filled (#568: row entry 29702 vs real
+// fill 29642.00; #570: row entry 29480 vs fill 29463.25). The authoritative
+// value is fill_price (written at fill time) or the "fill@…" reason.
+func armedFillPriceFor(r store.ArmedOrderDB) float64 {
+	if r.FillPrice > 0 {
+		return r.FillPrice
+	}
+	if i := strings.Index(r.StateReason, "fill@"); i >= 0 {
+		rest := r.StateReason[i+len("fill@"):]
+		end := 0
+		for end < len(rest) && ((rest[end] >= '0' && rest[end] <= '9') || rest[end] == '.') {
+			end++
+		}
+		if v, err := strconv.ParseFloat(rest[:end], 64); err == nil && v > 0 {
+			return v
+		}
+	}
+	return r.EntryPx
+}
+
 func StampArmedLineageIfMatched(st *store.Store, traderID string, posID int64, sym, side string, entryPx float64) (bool, string) {
 	rows, err := st.ArmedOrders().ListFilled(traderID, 20)
 	if err != nil || len(rows) == 0 {
@@ -433,7 +456,8 @@ func StampArmedLineageIfMatched(st *store.Store, traderID string, posID int64, s
 		if !strings.EqualFold(r.Side, side) {
 			continue
 		}
-		if r.EntryPx < entryPx-tick || r.EntryPx > entryPx+tick {
+		fillPx := armedFillPriceFor(r)
+		if fillPx < entryPx-tick || fillPx > entryPx+tick {
 			continue
 		}
 		tradeDate := r.PlanID
@@ -457,7 +481,7 @@ func StampArmedLineageIfMatched(st *store.Store, traderID string, posID int64, s
 		if strings.HasSuffix(r.StateReason, ";stamp_pending") {
 			_ = st.ArmedOrders().SetState(r.ID, "filled", strings.TrimSuffix(r.StateReason, ";stamp_pending"))
 		}
-		logger.Infof("🧩 reconcile: armed-fill lineage stamped — pos %d ← %s v%d %s (fill %.2f, entry_id %s)", posID, r.PlanID, r.Version, r.Scenario, r.EntryPx, r.SignalID)
+		logger.Infof("🧩 reconcile: armed-fill lineage stamped — pos %d ← %s v%d %s (fill %.2f, entry_id %s)", posID, r.PlanID, r.Version, r.Scenario, armedFillPriceFor(r), r.SignalID)
 		return true, r.SignalID
 	}
 	return false, ""

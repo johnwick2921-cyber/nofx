@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 )
@@ -230,6 +231,18 @@ var (
 	// consumed-trigger plan fail-closed (London/ASIA 2026-08-23/24).
 	scenarioQualities = map[string]bool{"A+": true, "A": true, "B": true, "C": true}
 )
+
+// ScenarioSchemaLedger (PRE-SUNDAY F5) — one boot line listing the full
+// scenario-condition vocabulary (sorted) so a shipped schema change is visible
+// in the boot block without opening a prompt.
+func ScenarioSchemaLedger() string {
+	conds := make([]string, 0, len(scenarioConds))
+	for c := range scenarioConds {
+		conds = append(conds, c)
+	}
+	sort.Strings(conds)
+	return fmt.Sprintf("scenario schema: %d conditions [%s]", len(conds), strings.Join(conds, ", "))
+}
 
 const (
 	planMaxLevels    = 8 // shipped default; the owner's max_levels (3–12) may raise it

@@ -112,7 +112,7 @@ func TestBreakdownContinueValidatorRealTape(t *testing.T) {
 	bars, start := waterfallTape(29657.39)
 	plan := waterfallPlan()
 	plan.Scenarios[0].Arm.Stop = plan.Scenarios[0].Arm.Entry + 20.0 // ≥1×ATR15
-	writeTime := start.Add(26 * time.Minute) // 10:51 cut — the real v4 birth
+	writeTime := start.Add(26 * time.Minute)                        // 10:51 cut — the real v4 birth
 	price := 29600.0
 	// Write-time validation: displacement ≥ BD_MIN_DISP_ATR×ATR, no reclaim.
 	if err := ValidateBreakdownContinueScenarios(&plan, bars, 15.0, price, writeTime.UnixMilli()); err != nil {
@@ -223,5 +223,108 @@ func TestBreakdownArmRules(t *testing.T) {
 	long.Direction = "long"
 	if px := ArmedEntryPx(long, 0, 0.25); px != 29657.14 {
 		t.Fatalf("long retest entry want 29657.14, got %.2f", px)
+	}
+}
+
+// TestBreakdownImmediateAuthorableBeforeSecondClose — the PRE-SUNDAY F1 ruling:
+// immediate-mode authoring is legal as soon as the DISPLACEMENT exists (the 2nd
+// confirming close is the entry trigger itself, so requiring it at write time
+// would make the play un-authorable mid-waterfall). Pullback keeps the strict
+// full-leg-1 rule.
+func TestBreakdownImmediateAuthorableBeforeSecondClose(t *testing.T) {
+	start := time.Date(2026, 8, 28, 10, 46, 0, 0, time.Local)
+	lvl := 29657.39
+	bars := []market.Kline{
+		mkTapeBar(start, 29670, 29675, 29660, 29666),
+		mkTapeBar(start.Add(time.Minute), 29666, 29670, 29658, 29662),
+		// close ABOVE the level — still pre-breakdown.
+		mkTapeBar(start.Add(2*time.Minute), 29662, 29668, 29656, 29660),
+		// ONE beyond close so far, with real displacement: low = lvl − 1.3×ATR.
+		mkTapeBar(start.Add(3*time.Minute), 29655, 29658, lvl-19.5, lvl-10),
+	}
+	imm := PlanDoc{Scenarios: []PlanScenario{{
+		ID: "S1", Condition: "breakdown_continue", Direction: "short",
+		Breakdown: &PlanBreakdownContinue{Level: lvl, EntryMode: "immediate"},
+	}}}
+	if err := ValidateBreakdownContinueScenarios(&imm, bars, 15.0, lvl-10, bars[len(bars)-1].CloseTime); err != nil {
+		t.Fatalf("immediate authoring before the 2nd close must pass once displacement exists: %v", err)
+	}
+	pb := PlanDoc{Scenarios: []PlanScenario{{
+		ID: "S1", Condition: "breakdown_continue", Direction: "short",
+		Breakdown: &PlanBreakdownContinue{Level: lvl, EntryMode: "pullback"},
+	}}}
+	if err := ValidateBreakdownContinueScenarios(&pb, bars, 15.0, lvl-10, bars[len(bars)-1].CloseTime); err == nil {
+		t.Fatal("pullback mode must still require the full 2-close leg 1")
+	}
+	// No displacement at all → immediate is still rejected.
+	flat := PlanDoc{Scenarios: []PlanScenario{{
+		ID: "S1", Condition: "breakdown_continue", Direction: "short",
+		Breakdown: &PlanBreakdownContinue{Level: lvl, EntryMode: "immediate"},
+	}}}
+	if err := ValidateBreakdownContinueScenarios(&flat, bars[:3], 15.0, 29655, bars[2].CloseTime); err == nil || !strings.Contains(err.Error(), "displacement") {
+		t.Fatalf("immediate with zero displacement must be rejected, got %v", err)
+	}
+}
+
+// TestBreakdownImmediateFixturePassesGateChain — the dispatch fixture: the
+// 2026-08-28 10:48 leg of the −347pt crash. An immediate-mode plan-legal entry
+// (2nd confirming close) passes the FULL market-entry gate chain in replay:
+// min-SL ≥ 1.0×ATR5m, R:R ≥ 3.0 (min_risk_reward_ratio), confidence ≥ 60, and
+// the target fills on the real tape. (HTF veto: the 1h was already
+// TRENDING_DOWN that morning — a continuation short aligns, so cross-veto
+// passes; not unit-asserted here [B].)
+func TestBreakdownImmediateFixturePassesGateChain(t *testing.T) {
+	bars, start := waterfallTape(29657.39)
+	lvl, atr := 29657.39, 15.0
+	sc := PlanScenario{
+		ID: "S1", Trigger: "waterfall through VWAP 29657.39 continues",
+		Condition: "breakdown_continue", Direction: "short",
+		TargetChain: []float64{29524.50},
+		Quality:     "A",
+		Confirm:     &PlanConfirm{Rule: "2x5m_close", RefPrice: lvl, Side: "below"},
+		Breakdown:   &PlanBreakdownContinue{Level: lvl, LevelLabel: "VWAP 29657.39", EntryMode: "immediate"},
+	}
+	plan := PlanDoc{Bias: PlanBias{Direction: "short", Conviction: "medium"}, Scenarios: []PlanScenario{sc}}
+	writeTime := start.Add(26 * time.Minute) // 10:51 — the real v4 birth cut
+	if err := ValidateBreakdownContinueScenarios(&plan, bars, atr, 29600.0, writeTime.UnixMilli()); err != nil {
+		t.Fatalf("immediate plan rejected at the write cut: %v", err)
+	}
+	// Entry = the 2nd confirming close beyond the level (bar 22, 10:47).
+	entry := 29646.00
+	if bars[22].Close != entry || bars[22].Close >= lvl || bars[21].Close >= lvl {
+		t.Fatalf("fixture assumption broken: bars[21]=%.2f bars[22]=%.2f vs level %.2f", bars[21].Close, bars[22].Close, lvl)
+	}
+	// Pullback extreme = the high of the beyond-run through entry.
+	extreme := bars[21].High // 29671.50 — the run high before the 2nd close
+	for _, b := range bars[22:26] {
+		if b.High > extreme {
+			extreme = b.High
+		}
+	}
+	sl := extreme + 1.0*atr // beyond the pullback extreme by 1×ATR5m
+	tp := entry - 3.0*(sl-entry)
+	if sl-entry < 1.0*atr {
+		t.Fatalf("min-SL gate: risk %.2f < 1.0×ATR5m", sl-entry)
+	}
+	if rr := (entry - tp) / (sl - entry); rr < 3.0 {
+		t.Fatalf("R:R gate: %.2f < 3.0", rr)
+	}
+	if conf := 65; conf < 60 {
+		t.Fatalf("min-conf gate: %d < 60", conf)
+	}
+	// The real tape fills the target and never touches the stop.
+	hitTP, hitSL := false, false
+	for _, b := range bars[23:] {
+		if b.Low <= tp {
+			hitTP = true
+			break
+		}
+		if b.High >= sl {
+			hitSL = true
+			break
+		}
+	}
+	if hitSL || !hitTP {
+		t.Fatalf("replay: hitTP=%v hitSL=%v (SL %.2f TP %.2f) — the 10:48 leg must fill the target", hitTP, hitSL, sl, tp)
 	}
 }

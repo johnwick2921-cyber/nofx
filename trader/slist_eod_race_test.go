@@ -170,7 +170,7 @@ func TestSListEODFlatCancelsArmsBeforeFlatten(t *testing.T) {
 		}
 		ev := rt.snapshot()
 		assertWireOrder(t, side, ev)
-		rows, err := at.store.ArmedOrders().ListNonTerminal()
+		rows, err := at.store.ArmedOrders().ListNonTerminal(at.id)
 		if err != nil || len(rows) != 0 {
 			t.Fatalf("%s: armed rows still non-terminal: %+v err=%v", side, rows, err)
 		}
@@ -257,7 +257,7 @@ func TestSListDormancySyncCancelsWorkingArm(t *testing.T) {
 		Timeout: time.Second,
 	}
 	at.maybeManageArmedOrders(nil)
-	rows, err := st.ArmedOrders().ListNonTerminal()
+	rows, err := st.ArmedOrders().ListNonTerminal(at.id)
 	if err != nil || len(rows) != 0 {
 		t.Fatalf("dormant must cancel ALL arms (rows=%d err=%v)", len(rows), err)
 	}
@@ -279,7 +279,7 @@ func TestSListSessionEndSyncCancelsWorkingArm(t *testing.T) {
 	}
 	ev := rt.snapshot()
 	assertWireOrder(t, "long", ev)
-	rows, err := at.store.ArmedOrders().ListNonTerminal()
+	rows, err := at.store.ArmedOrders().ListNonTerminal(at.id)
 	if err != nil || len(rows) != 0 {
 		t.Fatalf("session-end must cancel ALL arms (rows=%d err=%v)", len(rows), err)
 	}
@@ -298,7 +298,7 @@ func TestSListSyncCancelSkipsOtherTraders(t *testing.T) {
 	if n != 0 {
 		t.Fatalf("sync cancel touched another trader's row (n=%d)", n)
 	}
-	rows, _ := st.ArmedOrders().ListNonTerminal()
+	rows, _ := st.ArmedOrders().ListNonTerminal("trader-2")
 	if len(rows) != 1 || rows[0].SignalID != "sig-other" {
 		t.Fatalf("other trader's working arm must survive: %+v", rows)
 	}

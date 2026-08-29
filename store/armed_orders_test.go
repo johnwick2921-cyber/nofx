@@ -55,7 +55,7 @@ func TestUpsertArmReauthorizesTerminalRow(t *testing.T) {
 		t.Fatalf("re-arm upsert: %v", err)
 	}
 
-	row, err := st.ListNonTerminal()
+	row, err := st.ListNonTerminal("t1")
 	if err != nil {
 		t.Fatalf("list non-terminal: %v", err)
 	}
@@ -125,5 +125,40 @@ func TestUpsertArmPreservesNonTerminalIdentity(t *testing.T) {
 	}
 	if got.EntryPx != 201 || got.StopPx != 199 || got.TargetPx != 206 || got.Version != 2 {
 		t.Fatalf("prices not refreshed: %+v", got)
+	}
+}
+
+// PRE-SUNDAY F2/F4 (2026-08-28) — fill_price is the lineage-matcher's
+// authoritative fill (entry_px drifts on re-arm); ListNonTerminal is
+// trader-scoped.
+func TestSetFillPriceAndTraderScopedList(t *testing.T) {
+	db := newArmedTestDB(t)
+	st := NewArmedOrderStore(db)
+	now := time.Now()
+	a := &ArmedOrderDB{TraderID: "t1", PlanID: "P1", Version: 1, Session: "NY",
+		Scenario: "S1", Side: "short", EntryPx: 29702.0, State: "armed", CreatedAt: now, UpdatedAt: now}
+	if err := st.UpsertArm(a); err != nil {
+		t.Fatal(err)
+	}
+	b := &ArmedOrderDB{TraderID: "t2", PlanID: "P2", Version: 1, Session: "NY",
+		Scenario: "S2", Side: "long", EntryPx: 100, State: "working", CreatedAt: now, UpdatedAt: now}
+	if err := st.UpsertArm(b); err != nil {
+		t.Fatal(err)
+	}
+	if rows, err := st.ListNonTerminal("t1"); err != nil || len(rows) != 1 || rows[0].Scenario != "S1" {
+		t.Fatalf("t1 scope: rows=%+v err=%v", rows, err)
+	}
+	if rows, err := st.ListNonTerminal("t2"); err != nil || len(rows) != 1 || rows[0].Scenario != "S2" {
+		t.Fatalf("t2 scope: rows=%+v err=%v", rows, err)
+	}
+	if err := st.SetFillPrice(a.ID, 29642.00); err != nil {
+		t.Fatal(err)
+	}
+	var got ArmedOrderDB
+	if err := db.Where("id = ?", a.ID).First(&got).Error; err != nil {
+		t.Fatal(err)
+	}
+	if got.FillPrice != 29642.00 {
+		t.Fatalf("fill_price = %.2f, want 29642.00", got.FillPrice)
 	}
 }
