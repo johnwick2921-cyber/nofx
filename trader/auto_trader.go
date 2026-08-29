@@ -22,6 +22,7 @@ import (
 	"nofx/wallet"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/crypto"
@@ -296,6 +297,11 @@ type AutoTraderConfig struct {
 
 	// Scan configuration
 	ScanInterval time.Duration // Scan interval (recommended 3 minutes)
+	// CadenceMode (P10): "interval" (default — every tick runs a full cycle on
+	// the latest bar state) | "bar_close" (legacy: one cycle per closed
+	// primary-TF bar). Resolved via cadenceMode(); only meaningful for day-plan
+	// futures traders (crypto/plan-off always ran per-tick).
+	CadenceMode string
 
 	// Account configuration
 	InitialBalance float64 // Initial balance (for P&L calculation, must be set manually)
@@ -317,43 +323,53 @@ type AutoTraderConfig struct {
 
 // AutoTrader automatic trader
 type AutoTrader struct {
-	id                    string // Trader unique identifier
-	name                  string // Trader display name
-	aiModel               string // AI model name
-	exchange              string // Trading platform type (binance/bybit/etc)
-	exchangeID            string // Exchange account UUID
-	showInCompetition     bool   // Whether to show in competition page
-	config                AutoTraderConfig
-	trader                Trader // Use Trader interface (supports multiple platforms)
-	mcpClient             mcp.AIClient
-	store                 *store.Store           // Data storage (decision records, etc.)
-	strategyEngine        *kernel.StrategyEngine // Strategy engine (uses strategy configuration)
-	cycleNumber           int                    // Current cycle number
-	initialBalance        float64
-	dailyPnL              float64
-	customPrompt          string // Custom trading strategy prompt
-	overrideBasePrompt    bool   // Whether to override base prompt
-	lastResetTime         time.Time
-	stopUntil             time.Time
-	isRunning             bool
-	isRunningMutex        sync.RWMutex       // Mutex to protect isRunning flag
-	startTime             time.Time          // System start time
-	callCount             int                // AI call count
-	positionFirstSeenTime map[string]int64   // Position first seen time (symbol_side -> timestamp in milliseconds)
-	stopMonitorCh         chan struct{}      // Used to stop monitoring goroutine
-	monitorWg             sync.WaitGroup     // Used to wait for monitoring goroutine to finish
-	peakPnLCache          map[string]float64 // Peak profit cache (symbol -> peak P&L percentage)
-	peakPnLCacheMutex     sync.RWMutex       // Cache read-write lock
-	breakevenDone         map[string]bool    // auto-breakeven: "symbol_side" already moved to breakeven (idempotent; reset on flat)
-	breakevenMu           sync.Mutex         // guards breakevenDone (lazy-inited)
-	lastBalanceSyncTime   time.Time          // Last balance sync time
-	userID                string             // User ID
-	gridState             *GridState         // Grid trading state (only used when StrategyType == "grid_trading")
-	claw402WalletAddr     string             // Claw402 wallet address (derived from private key at start)
-	consecutiveAIFailures int                // Consecutive AI call failures
-	safeMode              bool               // Safe mode: no new positions, protect existing ones
-	safeModeReason        string             // Why safe mode was activated
-	deadMan               deadManWatchdog    // B5 dead-man watchdog: NT8 link-gap → block NEW entries until reconciled (zero value = live/allowed; touched only from runCycle)
+	id                string // Trader unique identifier
+	name              string // Trader display name
+	aiModel           string // AI model name
+	exchange          string // Trading platform type (binance/bybit/etc)
+	exchangeID        string // Exchange account UUID
+	showInCompetition bool   // Whether to show in competition page
+	config            AutoTraderConfig
+	trader            Trader // Use Trader interface (supports multiple platforms)
+	mcpClient         mcp.AIClient
+	store             *store.Store           // Data storage (decision records, etc.)
+	strategyEngine    *kernel.StrategyEngine // Strategy engine (uses strategy configuration)
+	cycleNumber       int                    // Current cycle number
+	initialBalance    float64
+	dailyPnL          float64
+	// lastClockHealthSession: which session the last clock-health line was
+	// logged for (PHASE 3.5) — one line per session roll, not per tick.
+	lastClockHealthSession string
+	customPrompt           string // Custom trading strategy prompt
+	overrideBasePrompt     bool   // Whether to override base prompt
+	lastResetTime          time.Time
+	stopUntil              time.Time // LEGACY, dormant: consumer at loop:248, no producer — superseded by pauseUntilMs (P2 ledger-close)
+	pauseUntilMs           atomic.Int64 // P2 stop_until producer state (unix ms; 0 = not paused) — see auto_trader_pause.go
+	pauseStoreMu           sync.Mutex   // E7-v2: orders memory-vs-store pause writes (expiry CAS vs concurrent re-pause)
+	lastRollWarnContract   string       // P3 roll gate: dedupes the unresolved-contract WARN per contract-string change
+	lastHalfDaySeedDay     string       // P4 half-days producer: once-per-CME-session-day throttle
+	lastCycleBarSig        string       // P10.4 no-new-data dedup: newest primary-TF bar signature at last cycle
+	ai402OutageStartMs     int64        // P5 402-outage latch (0 = no outage) — one banner per outage
+	lastAIBalanceDay       string       // P5 daily balance poll throttle (AI_BALANCE_WARN)
+	isRunning              bool
+	isRunningMutex         sync.RWMutex       // Mutex to protect isRunning flag
+	startTime              time.Time          // System start time
+	callCount              int                // AI call count
+	positionFirstSeenTime  map[string]int64   // Position first seen time (symbol_side -> timestamp in milliseconds)
+	stopMonitorCh          chan struct{}      // Used to stop monitoring goroutine
+	monitorWg              sync.WaitGroup     // Used to wait for monitoring goroutine to finish
+	peakPnLCache           map[string]float64 // Peak profit cache (symbol -> peak P&L percentage)
+	peakPnLCacheMutex      sync.RWMutex       // Cache read-write lock
+	breakevenDone          map[string]bool    // auto-breakeven: "symbol_side" already moved to breakeven (idempotent; reset on flat)
+	breakevenMu            sync.Mutex         // guards breakevenDone (lazy-inited)
+	lastBalanceSyncTime    time.Time          // Last balance sync time
+	userID                 string             // User ID
+	gridState              *GridState         // Grid trading state (only used when StrategyType == "grid_trading")
+	claw402WalletAddr      string             // Claw402 wallet address (derived from private key at start)
+	consecutiveAIFailures  int                // Consecutive AI call failures
+	safeMode               bool               // Safe mode: no new positions, protect existing ones
+	safeModeReason         string             // Why safe mode was activated
+	deadMan                deadManWatchdog    // B5 dead-man watchdog: NT8 link-gap → block NEW entries until reconciled (zero value = live/allowed; touched only from runCycle)
 
 	// Plan 4 Stage 4 — NinjaTrader TCP balance tracking (defer-until-balance guard)
 	// For NinjaTrader TCP traders, we track if account_balance frame has arrived yet.
@@ -471,12 +487,14 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 		mcpClient = mcp.New()
 	}
 
-	// P0-latency — the futures decision call must finish inside the primary bar
-	// window, or the decision arrives on a bar the market has already left (owner
-	// evidence: worst normal call 293.7s > a whole 5m bar). The planner read uses
-	// its OWN client (auto_trader_planner.go), so this never caps a planner read.
-	// Crypto cadence is untouched. The stale-bar discard in runCycle is the second
-	// half of the same guarantee.
+	// P0-latency — the timeout applied here is the ONE config-driven AI timeout
+	// (mcp.ResolvedAITimeout). NOTE (audit 2026-08-18): with an EMPTY
+	// day_plan.planner_model binding, resolvePlannerClient returns THIS SAME
+	// client — the old claim that "the planner read uses its OWN client" is only
+	// true when a planner model is explicitly bound. Sharing is now harmless
+	// because executor and planner resolve the identical timeout, but the
+	// comment was wrong and hid a class-7 hazard. Crypto cadence untouched; the
+	// stale-bar discard in runCycle is the second half of the guarantee.
 	applyDecisionCallTimeout(mcpClient, config.Exchange)
 
 	// Payment providers (claw402) ignore customURL
@@ -669,6 +687,12 @@ func (at *AutoTrader) Run() error {
 	at.stopMonitorCh = make(chan struct{})
 	at.startTime = time.Now()
 
+	// P2 (ledger-close 2026-08-19) — restore an owner pause across restart.
+	at.loadPersistedPause()
+	// E1 — the per-trader ledger boot block (sessions/cutoffs, pause, cadence,
+	// roll, balance-alert). The process half prints in main.go.
+	at.logLedgerBootBlock(time.Now())
+
 	logger.Info("🚀 AI-driven automatic trading system started")
 	at.logInfof("💰 Initial balance: %.2f USDT", at.initialBalance)
 	at.logInfof("⚙️  Scan interval: %v", at.config.ScanInterval)
@@ -801,7 +825,16 @@ func (at *AutoTrader) Run() error {
 
 		select {
 		case <-ticker.C:
+			// The loop is single-goroutine: a tick that fires while a cycle is
+			// still running WAITS here (the ticker drops missed ticks), so an
+			// in-flight AI read is structurally never cancelled by the next
+			// tick. Log the overrun so a slow call is visible, not mysterious.
+			tickStart := time.Now()
 			at.tickOnce(isGridStrategy)
+			if d := time.Since(tickStart); d > at.config.ScanInterval {
+				at.logWarnf("⏱ cycle overran the scan interval (%v > %v) — next tick delayed, in-flight work never cancelled; intervening ticks skipped",
+					d.Round(time.Millisecond), at.config.ScanInterval)
+			}
 		case <-at.stopMonitorCh:
 			at.logInfof("⏹ Stop signal received, exiting automatic trading main loop")
 			return nil

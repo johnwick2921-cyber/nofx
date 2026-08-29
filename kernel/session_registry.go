@@ -41,13 +41,18 @@ type KillzoneCT struct {
 // SessionDef is one CT-anchored trading session. Windows may wrap midnight
 // (ASIA 17:00→02:00); all times are America/Chicago "HH:MM".
 type SessionDef struct {
-	Name          string       `json:"name"`
-	WindowStartCT string       `json:"window_start_ct"`
-	WindowEndCT   string       `json:"window_end_ct"`
-	ReadCT        string       `json:"read_ct"` // planner read time (≈5 min before open)
-	FlatCT        string       `json:"flat_ct"` // session-flat time
-	Killzones     []KillzoneCT `json:"killzones,omitempty"`
-	Enabled       bool         `json:"enabled"`
+	Name          string `json:"name"`
+	WindowStartCT string `json:"window_start_ct"`
+	WindowEndCT   string `json:"window_end_ct"`
+	ReadCT        string `json:"read_ct"` // planner read time (≈5 min before open)
+	// FlatCT: session-flat time. AUDIT NOTE (2026-08-18): no production path
+	// consumes this field or EffectiveFlatCT — the live flatten is session-
+	// scoped in trader/auto_trader_clock.go (enforceEODFlatAt: session end −
+	// eod_flat_offset_min), which by the WindowEndCT==FlatCT contract lands on
+	// the same instants. If these ever diverge, wire this field there first.
+	FlatCT    string       `json:"flat_ct"`
+	Killzones []KillzoneCT `json:"killzones,omitempty"`
+	Enabled   bool         `json:"enabled"`
 }
 
 // SessionRegistry is the global-admin session config.
@@ -164,6 +169,17 @@ func ValidateSessionRegistry(r SessionRegistry) error {
 			if _, ok := parseHHMM(kz.EndCT); !ok {
 				return fmt.Errorf("session %q killzone %q: end %q is not HH:MM", s.Name, kz.Name, kz.EndCT)
 			}
+		}
+	}
+	// P4 (ledger-close 2026-08-19) — validate HalfDays too: keys are session-day
+	// dates (YYYY-MM-DD), values early-close CT (HH:MM). Garbage was previously
+	// persistable through the API door and silently ignored at consumption.
+	for k, v := range r.HalfDays {
+		if _, err := time.Parse("2006-01-02", k); err != nil {
+			return fmt.Errorf("half_days key %q is not YYYY-MM-DD", k)
+		}
+		if _, ok := parseHHMM(v); !ok {
+			return fmt.Errorf("half_days[%q]: %q is not HH:MM (CT)", k, v)
 		}
 	}
 	return nil

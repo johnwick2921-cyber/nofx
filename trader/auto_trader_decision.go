@@ -80,9 +80,18 @@ func (at *AutoTrader) GetStatus() map[string]interface{} {
 		"call_count":      at.callCount,
 		"initial_balance": at.initialBalance,
 		"scan_interval":   at.config.ScanInterval.String(),
-		"stop_until":      at.stopUntil.Format(time.RFC3339),
+		// P2 (ledger-close 2026-08-19): stop_until now reports the REAL owner
+		// pause (auto_trader_pause.go). The legacy at.stopUntil field is dormant
+		// (never assigned) so the unpaused rendering is byte-identical.
+		"stop_until":      pauseStatusString(at),
 		"last_reset_time": at.lastResetTime.Format(time.RFC3339),
 		"ai_provider":     aiProvider,
+	}
+
+	// P3 (ledger-close 2026-08-19) — roll picture for the dashboard (3.6):
+	// resolved contract, expiry, window start, days remaining.
+	if at.exchange == "ninjatrader" {
+		result["roll"] = at.RollStatus(time.Now())
 	}
 
 	// Add strategy info

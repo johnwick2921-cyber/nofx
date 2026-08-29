@@ -202,6 +202,39 @@ func (at *AutoTrader) executeDecisionWithRecord(decision *kernel.Decision, actio
 		}
 	}
 
+	// P2 (ledger-close 2026-08-19) — stop_until OWNER PAUSE: the FIRST owner/
+	// policy gate (system-integrity gates above rank it; every policy gate below
+	// defers to it, so a paused refusal always NAMES the pause — gate-order
+	// contract 2.4/E5). Blocks NEW entries only; closes, EOD-flat, the 60s
+	// monitor guards, and NT8 brackets continue. Master-INDEPENDENT.
+	switch decision.Action {
+	case "open_long", "open_short":
+		if reason, paused := at.entryPaused(); paused {
+			at.logWarnf("⏸ stop_until: %s %s REFUSED — %s. Position management continues; entries resume on expiry or POST /api/traders/:id/resume.", decision.Symbol, decision.Action, reason)
+			telemetry.IncGateBlock(at.id, "stop_until")
+			actionRecord.Success = false
+			actionRecord.Error = "stop_until: " + reason
+			return nil
+		}
+	}
+
+	// P3 (ledger-close 2026-08-19) — CONTRACT-ROLL gate for the continuous
+	// symbol: within ROLL_BLOCK_DAYS_BEFORE_EXPIRY of the ACK-resolved front
+	// contract's third-Friday expiry, NEW entries are refused (the dated-code
+	// T19 gate never fires on bare "MNQ"). Runs AFTER stop_until (a paused
+	// refusal must name the pause — E5) and fail-opens when unresolved. Closes
+	// and position management are NEVER blocked; existing positions may exit.
+	switch decision.Action {
+	case "open_long", "open_short":
+		if reason, blocked := at.entryBlockedByRoll(time.Now()); blocked {
+			at.logWarnf("📅 contract-roll: %s %s REFUSED — %s. Position management continues; the resolver rolls to the next quarterly.", decision.Symbol, decision.Action, reason)
+			telemetry.IncGateBlock(at.id, "contract_roll_resolved")
+			actionRecord.Success = false
+			actionRecord.Error = "contract_roll: " + reason
+			return nil
+		}
+	}
+
 	// D1 — consecutive-loss halt: after N consecutive losing closed trades this CME
 	// session-day, block NEW entries until the next session. Closes (open-position
 	// management) are NEVER blocked. 0 = OFF.

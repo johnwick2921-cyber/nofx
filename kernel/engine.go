@@ -96,6 +96,11 @@ type Context struct {
 	RuntimeMinutes int    `json:"runtime_minutes"`
 	CallCount      int    `json:"call_count"`
 	TraderID       string `json:"-"` // B6: identity for per-trader gate-block counters (set by the trader loop; never serialized)
+	// SnapshotMs is WHEN this context's market data was assembled (epoch ms).
+	// The B4 stale-feed guard evaluates against THIS clock, not post-AI-call
+	// time, so a legal slow call can never turn a live-at-snapshot feed into
+	// "stale" (stale-bar dispatch 2026-08-19). Prompt-invisible (json:"-").
+	SnapshotMs int64 `json:"-"`
 	// A5 (G5) — prompt-ownership tags: field-name → owning trader_id for each
 	// account-scoped context field the trader populates. Final prompt assembly
 	// asserts every tag == TraderID (the deciding trader); a mismatch is cross-trader
@@ -243,6 +248,9 @@ type StrategyEngine struct {
 	// Threaded in from the decision loop (one snapshot → one clock) and emitted
 	// by BOTH the futures and crypto prompt builders. Empty → byte-identical.
 	clockContextLine string
+	// promptSnapshotMs (P10.2): the cycle's snapshot instant for the forming-
+	// bar label in the market block. 0 = no label (tests/legacy paths).
+	promptSnapshotMs int64
 }
 
 // SetSVPContext sets the Session Volume Profile line used by the futures prompt
@@ -264,6 +272,12 @@ func (e *StrategyEngine) SetPlanContext(planBlock, planStatus string) {
 // SetClockContext sets the labelled per-cycle clock line (P0 timezone fix)
 // emitted by both prompt builders. Pass "" to inject nothing.
 func (e *StrategyEngine) SetClockContext(line string) { e.clockContextLine = line }
+
+// SetPromptSnapshotMs (P10.2) hands the cycle's snapshot instant to the market
+// -block renderer so the newest bar can be labelled FORMING/CLOSED honestly —
+// interval cadence runs cycles mid-bar and the AI must know what it is looking
+// at. 0 (tests/legacy) renders no label — goldens stay byte-identical.
+func (e *StrategyEngine) SetPromptSnapshotMs(ms int64) { e.promptSnapshotMs = ms }
 
 // NewStrategyEngine creates strategy execution engine.
 // claw402WalletKey is optional — if provided, nofxos data requests are routed through claw402.

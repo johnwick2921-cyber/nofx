@@ -570,6 +570,12 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimed(session, tradeDate, trigg
 		return false
 	}
 	defer releasePlannerRead(key)
+	// U1 3.2 — never call the LLM on an empty/stale bar window (the 08-19
+	// outage produced 0-scenario fail-closed stubs this way). No plan row is
+	// written and no budget consumed; the read window retries next cycle.
+	if !at.plannerPreflight(session, tradeDate) {
+		return false
+	}
 	client, modelID := at.resolvePlannerClient()
 	if client == nil {
 		at.logErrorf("🗓️ planner: no client resolved for %s %s", tradeDate, session)
@@ -955,9 +961,18 @@ func (at *AutoTrader) maybeWriteDigests() {
 		if runnable, _ := at.sessionRunnable(s); !runnable {
 			continue
 		}
-		end, ok := hhmmToMin(s.WindowEndCT)
-		if !ok || ctMinutesNow(now) < end {
-			continue // session not closed yet
+		// Wrap-aware "is this session closed right now": the old test was
+		// ctMinutesNow(now) >= end — TRUE for the whole rest of the DAY once the
+		// end minute passed, so ASIA (end 02:00) read as "closed" at 21:00 CT
+		// while its evening leg was RUNNING, and a mid-session digest with
+		// mid-session P&L was written for the just-started instance (class 2).
+		// Not-in-window is the correct predicate: the most recent instance has
+		// ended, and sessionChainDate keys the digest to THAT instance's date.
+		if _, ok := hhmmToMin(s.WindowEndCT); !ok {
+			continue // malformed registry times — never digest on garbage
+		}
+		if s.InWindow(now) {
+			continue // session running — not closed yet
 		}
 		// P0-B — a session digest carries the SESSION INSTANCE's date, so the
 		// next read of the SAME session picks it up (ASIA closes 02:00 CT, after
