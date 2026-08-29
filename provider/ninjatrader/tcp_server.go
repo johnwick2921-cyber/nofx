@@ -1695,7 +1695,9 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 				continue
 			} // A2 (G1) — verify the echoed identity against the pending op. A mismatch
 			// (forged/cross-wired fill) is NOT processed; the owning trader is frozen.
-			if !s.verifyInbound("fill", fill.Seq, fill.TraderID, fill.Account, fill.SignalID) {
+			// W3 — pass the frame status: a rejected fill may echo account "" (the C#
+			// guard-reject path); the account leg alone is then tolerated.
+			if !s.verifyInbound("fill", fill.Seq, fill.TraderID, fill.Account, fill.SignalID, fill.Status) {
 				continue
 			}
 			// Retire ONLY a rejected fill (terminal — no position opened). A filled
@@ -1733,7 +1735,7 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			// heartbeat ack has seq==0 → tolerated). Non-terminal → do not retire.
 			var ack AckPayload
 			if err := json.Unmarshal(env.Payload, &ack); err == nil && ack.Seq != 0 {
-				_ = s.verifyInbound("ack", ack.Seq, ack.TraderID, ack.Account, ack.SignalID)
+				_ = s.verifyInbound("ack", ack.Seq, ack.TraderID, ack.Account, ack.SignalID, "")
 			}
 
 		case FrameHeartbeat:
@@ -1896,7 +1898,7 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			}
 			// A2 (G1) — verify the echoed identity; a mismatch freezes the trader and
 			// the close is NOT recorded (never record a close for the wrong originator).
-			if !s.verifyInbound("position_close", p.Seq, p.TraderID, p.Account, p.SignalID) {
+			if !s.verifyInbound("position_close", p.Seq, p.TraderID, p.Account, p.SignalID, "") {
 				continue
 			}
 			s.retirePending(p.Seq, p.SignalID)
@@ -1937,7 +1939,7 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			// A2 (G1) — verify the echoed identity before alarming on the reject. Do
 			// NOT retire: a rejected close means the position is STILL OPEN, so the
 			// entry op stays pending for the eventual real position_close.
-			if !s.verifyInbound("position_close_rejected", p.Seq, p.TraderID, p.Account, p.SignalID) {
+			if !s.verifyInbound("position_close_rejected", p.Seq, p.TraderID, p.Account, p.SignalID, "") {
 				continue
 			}
 			select {
@@ -2075,17 +2077,23 @@ func (s *TCPServer) flushPending() error {
 	s.pending = s.pending[:0]
 	s.pendingMu.Unlock()
 
-	for _, sig := range toSend {
+	for i, sig := range toSend {
 		s.writeMu.Lock()
 		_ = c.SetWriteDeadline(time.Now().Add(5 * time.Second))
 		err := WriteFrame(c, FrameSignal, sig)
 		s.writeMu.Unlock()
 		if err != nil {
-			// Re-queue the un-sent signals (including this one) for next flush.
+			// W2 (SUNDAY-SHIELD) — re-queue this signal AND the remaining
+			// unsent tail. The old code re-queued only the current one and
+			// DROPPED every later queued signal on a mid-flush conn death —
+			// a reconnect right after could lose armed entries silently.
 			s.pendingMu.Lock()
 			s.pending = append(s.pending, timedSignal{payload: sig, timestamp: now})
+			for _, rest := range toSend[i+1:] {
+				s.pending = append(s.pending, timedSignal{payload: rest, timestamp: now})
+			}
 			s.pendingMu.Unlock()
-			s.logger.Warn("tcp_server: flush signal failed", "err", err, "signal_id", sig.SignalID)
+			s.logger.Warn("tcp_server: flush signal failed", "err", err, "signal_id", sig.SignalID, "requeued", len(toSend)-i)
 			s.closeConn()
 			return err
 		}

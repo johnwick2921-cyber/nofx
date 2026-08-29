@@ -64,7 +64,8 @@ const dayPlan: KnobSpec[] = [
       'trader/auto_trader_planconfig.go:162 (scenarioCap) · kernel/planner_prompt.go:66 (resolved caps)',
     range: '1 – 5',
     systemDefault: '5 (owner, live)',
-    recommended: '⭐ 5 — the live scenario cap; 3 stays a fine default elsewhere.',
+    recommended:
+      '⭐ 5 — the live scenario cap; 3 stays a fine default elsewhere.',
     whenToTouch: 'Raise if a fast market needs more play variants.',
     perSession: 'Yes.',
   },
@@ -543,7 +544,7 @@ export const settings: GuideSection = {
         },
         {
           title: 'PERSIST_STALL_WATCHDOG_S = 60',
-          body: 'Bar-persist silence alarm: no successful flush for N seconds → loud ERROR (the Friday ~2h GORM stall can never go silent again).',
+          body: 'Bar-persist silence alarm: no successful flush for N seconds while live bar frames are FLOWING → loud ERROR (the Friday ~2h GORM stall can never go silent again). Frame-aware: an idle wire (weekend, the daily break, NT8 closed) stays silent — no cry-wolf.',
         },
       ],
     },
