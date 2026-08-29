@@ -149,7 +149,7 @@ PR_DESCRIPTION.md
 /nofx-server
 
 # Compiled binaries (defensive: also matched by nofx pattern but explicit is better)
-/nofx-bin
+nofx-bin*
 /nq_smoke
 
 # Local environment backups (not for commit)

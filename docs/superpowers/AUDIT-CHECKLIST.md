@@ -7,7 +7,7 @@ in CLAUDE.md).
 
 ---
 
-## PART 1 — THE 19 BUG CLASSES (name · root cause · probe · law)
+## PART 1 — THE 20 BUG CLASSES (name · root cause · probe · law)
 
 1. **Self-imposed caps.** Root cause: an AI/HTTP/token cap chosen without
    measuring the provider ceiling or the observed need (the 32768-token
@@ -142,6 +142,16 @@ in CLAUDE.md).
     alarm FIRE (simulated stall → the ERROR line fires exactly once, quoted;
     resumed flush → stamp advances, no repeat) — existence tests cannot catch
     this class. **Law:** a guard without a firing fixture is decoration.
+
+20. **Committed binaries / embedded secrets.** Root cause: `git add` of build
+    artifacts — 14 tracked `nofx-bin.old*` binaries embedded a live-era
+    DeepSeek `sk-` key in a PUBLIC repo (caught 2026-08-29 by T14's binary
+    scan; every text-only secret scan missed it). **Probe:** `git ls-files`
+    for binary artifacts + `strings`-scan EVERY tracked binary for `sk-`/
+    key patterns; confirm any embedded key's hash ≠ every live key's hash
+    (leak inert). **Law:** binaries are NEVER tracked; `.gitignore` covers
+    every binary glob; a history rewrite requires the owner's explicit
+    force-push ack and every clone/partner repo must re-clone.
 
 ---
 
