@@ -48,7 +48,7 @@ func TestArmedOrderUpsertAndGateRR(t *testing.T) {
 
 	at.maybeManageArmedOrders(nil)
 
-	rows, err := st.ArmedOrders().ListNonTerminal()
+	rows, err := st.ArmedOrders().ListNonTerminal(at.id)
 	if err != nil || len(rows) != 1 {
 		t.Fatalf("arm rows = %d err=%v want 1 (R:R 2.0 ≥ min 1.5 must pass at arm time)", len(rows), err)
 	}
@@ -111,7 +111,7 @@ func TestArmedCancelOnDormant(t *testing.T) {
 	}
 	installActivePlanProvider(at, st)
 	at.maybeManageArmedOrders(nil)
-	rows, err := st.ArmedOrders().ListNonTerminal()
+	rows, err := st.ArmedOrders().ListNonTerminal(at.id)
 	if err != nil || len(rows) != 0 {
 		t.Fatalf("non-terminal rows = %d err=%v — dormant must cancel ALL arms", len(rows), err)
 	}
@@ -125,7 +125,7 @@ func TestArmedCancelOnNoActivePlan(t *testing.T) {
 	}
 	_ = now
 	at.maybeManageArmedOrders(nil)
-	if rows, err := st.ArmedOrders().ListNonTerminal(); err != nil || len(rows) != 0 {
+	if rows, err := st.ArmedOrders().ListNonTerminal(at.id); err != nil || len(rows) != 0 {
 		t.Fatalf("no active plan must cancel arms (rows=%d err=%v)", len(rows), err)
 	}
 }
@@ -214,7 +214,7 @@ func TestArmedReconcileStaleWorking(t *testing.T) {
 	if err := ledger.UpsertArm(fresh); err != nil {
 		t.Fatal(err)
 	}
-	rows, err := ledger.ListNonTerminal()
+	rows, err := ledger.ListNonTerminal(at.id)
 	if err != nil {
 		t.Fatal(err)
 	}

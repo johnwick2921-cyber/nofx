@@ -47,12 +47,12 @@ export const plays: GuideSection = {
         },
         {
           title: 'breakdown_continue',
-          body: 'Setup: price closes BELOW a broken level with displacement ≥ 1.0×ATR5m (BD_MIN_DISP_ATR) and no reclaim close → the waterfall SHORT. Two-leg confirm: leg 1 = the breakdown close, leg 2 = the retest that FAILS to reclaim (pullback < 0.4× the break leg). entry_mode pullback rests at the broken level; immediate enters on the 2nd confirming close. Born 2026-08-28: the −347pt NY crash — bias right, but NO plan-legal continuation short existed (v4, S2 declined on the retest rule).',
+          body: 'Setup: price closes BELOW a broken level with displacement ≥ 1.0×ATR5m (BD_MIN_DISP_ATR) and no reclaim close → the waterfall SHORT. Two-leg confirm: leg 1 = the breakdown close, leg 2 = the retest that FAILS to reclaim (pullback < 0.4× the break leg). entry_mode pullback rests at the broken level (ARM path); immediate is now PLAN-AUTHORABLE on the AI path (market entry on the 2nd confirming close through the FULL gate chain — no arm; arms stay pullback-only). CHOOSE immediate for no-retest waterfalls (displacement expanding), pullback otherwise. Born 2026-08-28: the −347pt NY crash — bias right, but NO plan-legal continuation short existed (v4, S2 declined on the retest rule).',
           tag: 'play 8 · −347',
         },
         {
           title: 'breakup_continue',
-          body: 'The LONG mirror: closes ABOVE a broken level with displacement ≥ 1.0×ATR5m, no reclaim → continuation long; same two-leg confirm + pullback arm.',
+          body: 'The LONG mirror: closes ABOVE a broken level with displacement ≥ 1.0×ATR5m, no reclaim → continuation long; same two-leg confirm. entry_mode pullback = arm at the broken level; immediate = AI-path market entry on the 2nd confirming close (full gate chain, no arm) — choose immediate for no-retest breakouts, pullback otherwise.',
           tag: 'play 8b',
         },
       ],

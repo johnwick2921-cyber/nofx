@@ -200,7 +200,7 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 			// that changes materially while the arm is WORKING cancels it the
 			// same cycle (the LONDON S4 class stayed resting through repeated
 			// re-refusals until the 08:30 sweep).
-			if rows, lerr := ledger.ListNonTerminal(); lerr == nil {
+			if rows, lerr := ledger.ListNonTerminal(at.id); lerr == nil {
 				for _, r := range rows {
 					if r.TraderID == at.id && r.PlanID == plan.PlanID && r.Scenario == sc.ID &&
 						r.State == "working" && r.SignalID != "" {
@@ -225,7 +225,7 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 			Scenario: sc.ID, Side: side, EntryPx: sc.Arm.Entry, StopPx: sc.Arm.Stop, TargetPx: sc.Arm.Target,
 			State: "armed", EntryClass: "armed_fill", CreatedAt: now, UpdatedAt: now,
 		}
-		existing, err := ledger.ListNonTerminal()
+		existing, err := ledger.ListNonTerminal(at.id)
 		if err == nil {
 			for i := range existing {
 				if existing[i].TraderID == at.id && existing[i].PlanID == row.PlanID && existing[i].Scenario == sc.ID {
@@ -277,7 +277,7 @@ func (at *AutoTrader) armedLines() string {
 	if at.store == nil {
 		return ""
 	}
-	rows, err := at.store.ArmedOrders().ListNonTerminal()
+	rows, err := at.store.ArmedOrders().ListNonTerminal(at.id)
 	if err != nil || len(rows) == 0 {
 		return ""
 	}
@@ -320,7 +320,7 @@ func (at *AutoTrader) runArmedPlacement(bars []market.Kline) {
 	}
 	band := float64(armedPlaceTicks()) * tick
 
-	rows, err := ledger.ListNonTerminal()
+	rows, err := ledger.ListNonTerminal(at.id)
 	if err != nil {
 		return
 	}
@@ -499,7 +499,7 @@ func (at *AutoTrader) onArmedOrderUpdate(u ntwire.OrderUpdatePayload, ledger *st
 			u.State, u.SignalID, u.Account, u.FillPrice)
 	}
 	logArmedOrderUpdateSummary()
-	rows, err := ledger.ListNonTerminal()
+	rows, err := ledger.ListNonTerminal(at.id)
 	if err != nil {
 		return
 	}
@@ -510,6 +510,7 @@ func (at *AutoTrader) onArmedOrderUpdate(u ntwire.OrderUpdatePayload, ledger *st
 		switch strings.ToLower(u.State) {
 		case "filled", "partfilled":
 			_ = ledger.SetState(r.ID, "filled", "fill@"+strconv.FormatFloat(u.FillPrice, 'f', 2, 64))
+			_ = ledger.SetFillPrice(r.ID, u.FillPrice)
 			_ = ledger.Touch(r.ID)
 			at.stampArmedFillLineage(r, u.FillPrice)
 			at.logInfof("⚡ armed fill %s @ %.2f (entry_class=armed_fill — stale_reeval NOT applied)", r.Scenario, u.FillPrice)
@@ -606,7 +607,7 @@ func (at *AutoTrader) armGateVerdict(sc kernel.PlanScenario, biasDirection strin
 // cancelArmedOrders moves non-terminal rows for THIS trader to cancelled with a
 // reason. Returns the count.
 func (at *AutoTrader) cancelArmedOrders(reason string) int {
-	rows, err := at.store.ArmedOrders().ListNonTerminal()
+	rows, err := at.store.ArmedOrders().ListNonTerminal(at.id)
 	if err != nil {
 		return 0
 	}
@@ -700,7 +701,7 @@ func (at *AutoTrader) cancelArmedOrdersSyncWith(reason string, timeout time.Dura
 	if ledger == nil {
 		return 0, 0
 	}
-	rows, err := ledger.ListNonTerminal()
+	rows, err := ledger.ListNonTerminal(at.id)
 	if err != nil {
 		return 0, 0
 	}
@@ -758,7 +759,7 @@ func (at *AutoTrader) cancelArmedOrdersSyncWith(reason string, timeout time.Dura
 
 // armedRowStillActive reports whether the ledger row is still non-terminal.
 func (at *AutoTrader) armedRowStillActive(ledger *store.ArmedOrderStore, id int64) bool {
-	rows, err := ledger.ListNonTerminal()
+	rows, err := ledger.ListNonTerminal(at.id)
 	if err != nil {
 		return true // unknown → keep waiting until the deadline
 	}
@@ -872,7 +873,7 @@ func (at *AutoTrader) TestArmCancel(signalID string) error {
 	if err := nt.CancelOrder(signalID); err != nil {
 		return fmt.Errorf("cancel on wire: %w", err)
 	}
-	rows, _ := ledger.ListNonTerminal()
+	rows, _ := ledger.ListNonTerminal(at.id)
 	for _, r := range rows {
 		if r.TraderID == at.id && r.SignalID == signalID {
 			_ = ledger.SetState(r.ID, "cancelled", "test seam cancel")
