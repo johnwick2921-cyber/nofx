@@ -1,7 +1,7 @@
 # Sunday-Shield Wave — W1–W4 build & park record
 
 **Branch:** `fix/sunday-shield` · **Base:** `da0d6fe1` (dev tip) · **Rev target:** `b0549ff2`-era findings fixed, parked for the owner's "go cutover" (deploy target: today, well before Sunday 16:00 CT).
-**Commit-ref:** `%%COMMIT_REF%%`
+**Commit-ref:** `https://github.com/johnwick2921-cyber/nofx/blob/2639ad5c/docs/superpowers/plans/2026-08-29-sunday-shield-wave.md`
 
 ## What shipped in this wave
 
