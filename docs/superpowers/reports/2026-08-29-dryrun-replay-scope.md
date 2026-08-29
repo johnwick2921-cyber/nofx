@@ -34,3 +34,24 @@ The dispatch demands real DeepSeek planner calls with per-config reasoning. The 
 ## Verdict
 
 **Not built yet by design** — the size report is the deliverable this turn. Awaiting your ruling (A / B / C, and approval of the ~120-line shipped clock seam if A or B).
+
+---
+
+# RULING EXECUTION — go B via libfaketime: SMOKE GATE FAILED → CLEAN ABANDON (2026-08-29)
+
+Owner ruled: go B (NY slice) WITHOUT the clock seam, faking the clock at the OS layer via libfaketime, with an explicit fallback if it misbehaves with Go's monotonic clock.
+
+**What ran:**
+1. libfaketime built from source (user-local, no sudo): `/tmp/libfaketime/src/libfaketime.so.1` (ELF x86-64, 09:46).
+2. 5-minute smoke slice: a 2-line Go program printing `time.Now()` three ways — baseline, under `FAKETIME='2026-08-28 08:25:00' LD_PRELOAD=…`, and with `FAKETIME_DONT_FAKE_MONOTONIC=1`.
+
+**Result (quoted):**
+- baseline: `wall: 2026-08-29 09:47:14 CDT` → `+0.5s: 09:47:15`
+- under FAKETIME: `wall: 2026-08-29 09:47:15 CDT` (NOT moved — still real Saturday)
+- under FAKETIME + DONT_FAKE_MONOTONIC: `wall: 2026-08-29 09:47:15` (wall still NOT moved; only sleep timing normalized)
+
+**Root cause [A]:** Go resolves `clock_gettime` through the **vDSO**, not the libc symbol — `LD_PRELOAD` interception never sees the call, so libfaketime cannot move `time.Now()` in any Go binary. `ActiveSession(now)` would still see Saturday and the planner would refuse every plan. This is exactly the anticipated failure branch.
+
+**Disposition:** shadow session **CANCELLED cleanly** per the owner's fallback — tomorrow's (Sunday 17:00 CT) live-fire is the integration test. Harness not built; no code shipped; parked bot / live DB / NT8 untouched; worktree `~/nofx-dryrun` contains only this report. Done before the Sunday 15:00 CT deadline.
+
+**If the shadow is ever re-attempted, the only working levers are:** (a) the ~120-line clock seam (owner-declined this round), (b) a dedicated VM/container with a rewritten system clock (root + isolation, heavier), or (c) live-fire itself.
