@@ -35,6 +35,12 @@ type PlannerInput struct {
 	// race to structural levels (cluster collapse + seat priority), so the model
 	// never saw them before. Advisory confluence — never standalone triggers.
 	HTFZones []ScoredLevel
+	// HTFZonesFull (S1-wave A3, 2026-08-29) — the FULL in-band graded HTF-zone
+	// universe (uncapped). The prompt renders only the cap-4 HTFZones section,
+	// but the model also reads the whole key-levels block and may write zones
+	// the cap hid — the write-site stamp records this list so those rows carry
+	// their machine grade (the 13 Demand·1h escapes).
+	HTFZonesFull []ScoredLevel
 	// G5 (regime wave 2026-08-21) — levels already CONSUMED at read time (role-
 	// flipped), listed so the planner works around them. Advisory.
 	ConsumedLevels []string

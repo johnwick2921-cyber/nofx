@@ -7,7 +7,7 @@ in CLAUDE.md).
 
 ---
 
-## PART 1 — THE 18 BUG CLASSES (name · root cause · probe · law)
+## PART 1 — THE 19 BUG CLASSES (name · root cause · probe · law)
 
 1. **Self-imposed caps.** Root cause: an AI/HTTP/token cap chosen without
    measuring the provider ceiling or the observed need (the 32768-token
@@ -131,6 +131,17 @@ in CLAUDE.md).
     knob/play/chip/gate change: update `web/src/guide/content/*` + bump
     `GUIDE_BUILT_REV` to the shipped rev; the drift banner is a failsafe, not a
     maintenance strategy. **Law:** GUIDE CONTENT LAW.
+
+19. **Half-shipped guard.** Root cause: a wave declares the guard's state
+    (atomics, knob resolver, comments) but never wires the call sites — the
+    pre-reopen F2 persist watchdog shipped `persistLastFlushAt`/
+    `persistAlarmAt` + `persistWatchdogSeconds()` with ZERO `.Store`/`.Load`
+    usages, so the alarm could never fire (caught 2026-08-29 by the
+    pre-live-fire sweep). **Probe:** grep every guard atomic/knob for
+    `.Store`/`.Load` call sites AND ship a BEHAVIOR fixture that makes the
+    alarm FIRE (simulated stall → the ERROR line fires exactly once, quoted;
+    resumed flush → stamp advances, no repeat) — existence tests cannot catch
+    this class. **Law:** a guard without a firing fixture is decoration.
 
 ---
 
