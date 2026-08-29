@@ -46,6 +46,7 @@ var (
 	persistFlushed       atomic.Int64 // closed bars handed to the persister
 	persistLastSum       atomic.Int64 // unix seconds of the last drop summary
 	persistLastFlushAt   atomic.Int64 // unix seconds of the last successful flush (F2 watchdog)
+	persistLastFrameAt   atomic.Int64 // unix seconds of the last LIVE bar frame (W1 quiet-wire awareness)
 	persistAlarmAt       atomic.Int64 // unix seconds of the last watchdog ERROR (dedup)
 	ingestDropOld        atomic.Int64 // ingest channel drop-oldest events
 	ingestDropCur        atomic.Int64 // ingest channel drop-current events
@@ -131,6 +132,13 @@ func startPersistWorker() {
 // has landed for persistWatchdogSeconds() (default 60s, min 10), deduped to
 // ONE alarm per watchdog window via persistAlarmAt. Returns "" when healthy.
 // A zero stamp (no flush yet — boot backfill in flight) never alarms cold.
+//
+// SUNDAY-SHIELD W1 (2026-08-29) — FRAME-AWARE: the alarm fires ONLY when live
+// frames are FLOWING (persistLastFrameAt fresh) while flushes aren't. An idle
+// wire — weekend, the daily 16:00–17:00 break, NT8 closed — has no frames and
+// must stay SILENT: without this the alarm cried wolf 1/min for the whole
+// weekend (373 fires on the 2026-08-29 boot alone) and a real GORM stall
+// became indistinguishable from market-closed noise.
 func persistWatchdogAlarmAt(now int64) string {
 	last := persistLastFlushAt.Load()
 	if last == 0 {
@@ -138,6 +146,9 @@ func persistWatchdogAlarmAt(now int64) string {
 	}
 	if now-last <= persistWatchdogSeconds() {
 		return ""
+	}
+	if now-persistLastFrameAt.Load() > persistWatchdogSeconds() {
+		return "" // idle wire — no live frames within the window, nothing to stall
 	}
 	if now-persistAlarmAt.Load() < persistWatchdogSeconds() {
 		return ""
@@ -220,6 +231,12 @@ func fanOutBarPersist(warn func(msg string, kv ...interface{}), historical bool,
 	fn, ok := barPersister.Load().(func(bool, string, string, []Bar))
 	if !ok || fn == nil {
 		return
+	}
+	// W1 — stamp LIVE frame flow (never historical/backfill) so the silence
+	// watchdog can separate "stalled while bars flow" from "idle wire". A
+	// queue-full drop is still stamped: frames flowed, persistence didn't.
+	if !historical {
+		persistLastFrameAt.Store(time.Now().Unix())
 	}
 	startPersistWorker()
 	msg := persistMsg{historical: historical, symbol: symbol, tf: tf, bars: bars}
