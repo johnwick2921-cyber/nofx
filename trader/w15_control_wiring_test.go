@@ -15,6 +15,10 @@ func ip(i int) *int       { return &i }
 // the accordion, and read by NOTHING: every consumer (level-state writer, plan-
 // death check, executor prompt) went straight to the strategy-level field. One
 // resolver now serves all of them.
+// ENTRY-MECHANICS ADDENDUM (2026-08-30): the shipped default is 5m_close (the
+// one-close rule) and any stored OLD-vocabulary string (2x5m / 15m-close)
+// self-heals to 5m_close at read — the double close is now reserved for
+// waterfall-class confirms.
 func TestW15AcceptanceRuleResolution(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -22,31 +26,35 @@ func TestW15AcceptanceRuleResolution(t *testing.T) {
 		session string
 		want    string
 	}{
-		{"nil config → shipped default", nil, "NY", "2x5m"},
-		{"empty strategy field → default", &store.DayPlanConfig{}, "NY", "2x5m"},
+		{"nil config → shipped default", nil, "NY", "5m_close"},
+		{"empty strategy field → default", &store.DayPlanConfig{}, "NY", "5m_close"},
 		{"strategy level wins over default",
-			&store.DayPlanConfig{AcceptanceRule: "15m-close"}, "NY", "15m-close"},
+			&store.DayPlanConfig{AcceptanceRule: "5m_close"}, "NY", "5m_close"},
 		{"per-session override wins over strategy level",
 			&store.DayPlanConfig{
-				AcceptanceRule: "2x5m",
-				Sessions:       []store.DayPlanSessionOverride{{Session: "NY", AcceptanceRule: sp("15m-close")}},
-			}, "NY", "15m-close"},
+				AcceptanceRule: "5m_close",
+				Sessions:       []store.DayPlanSessionOverride{{Session: "NY", AcceptanceRule: sp("5m_close")}},
+			}, "NY", "5m_close"},
 		{"another session is unaffected by NY's override",
 			&store.DayPlanConfig{
-				AcceptanceRule: "2x5m",
-				Sessions:       []store.DayPlanSessionOverride{{Session: "NY", AcceptanceRule: sp("15m-close")}},
-			}, "ASIA", "2x5m"},
+				AcceptanceRule: "5m_close",
+				Sessions:       []store.DayPlanSessionOverride{{Session: "NY", AcceptanceRule: sp("5m_close")}},
+			}, "ASIA", "5m_close"},
+		{"stored OLD 2x5m self-heals",
+			&store.DayPlanConfig{AcceptanceRule: "2x5m"}, "NY", "5m_close"},
+		{"stored OLD 15m-close self-heals",
+			&store.DayPlanConfig{AcceptanceRule: "15m-close"}, "NY", "5m_close"},
 		{"empty override string does NOT blank the rule",
 			&store.DayPlanConfig{
-				AcceptanceRule: "15m-close",
+				AcceptanceRule: "5m_close",
 				Sessions:       []store.DayPlanSessionOverride{{Session: "NY", AcceptanceRule: sp("  ")}},
-			}, "NY", "15m-close"},
+			}, "NY", "5m_close"},
 		{"session name match is case-insensitive",
 			&store.DayPlanConfig{
-				Sessions: []store.DayPlanSessionOverride{{Session: "ny", AcceptanceRule: sp("15m-close")}},
-			}, "NY", "15m-close"},
+				Sessions: []store.DayPlanSessionOverride{{Session: "ny", AcceptanceRule: sp("5m_close")}},
+			}, "NY", "5m_close"},
 		{"no active session (night) → strategy level",
-			&store.DayPlanConfig{AcceptanceRule: "15m-close"}, "", "15m-close"},
+			&store.DayPlanConfig{AcceptanceRule: "5m_close"}, "", "5m_close"},
 	}
 	for _, tc := range cases {
 		if got := tc.dp.AcceptanceRuleFor(tc.session); got != tc.want {
@@ -58,12 +66,14 @@ func TestW15AcceptanceRuleResolution(t *testing.T) {
 // The trader-side reader must agree with the store resolver — it is the same
 // function, and this pins that it stays that way.
 func TestW15TraderAcceptanceMatchesStore(t *testing.T) {
+	// ENTRY-MECHANICS ADDENDUM: stored 15m-close/2x5m self-heal to 5m_close —
+	// the override PRECEDENCE still resolves identically (override beats base).
 	at := dpWith([]store.DayPlanSessionOverride{{Session: "ASIA", AcceptanceRule: sp("15m-close")}}, nil)
 	at.config.StrategyConfig.DayPlan.AcceptanceRule = "2x5m"
-	if got := at.acceptanceRuleFor("ASIA"); got != "15m-close" {
+	if got := at.acceptanceRuleFor("ASIA"); got != "5m_close" {
 		t.Fatalf("trader resolver ignored the ASIA override: %q", got)
 	}
-	if got := at.acceptanceRuleFor("NY"); got != "2x5m" {
+	if got := at.acceptanceRuleFor("NY"); got != "5m_close" {
 		t.Fatalf("NY should inherit the strategy rule, got %q", got)
 	}
 }

@@ -56,8 +56,14 @@ type SignalPayload struct {
 	// PHASE 2 armed orders (additive, back-compat): OrderType "market" (default)
 	// | "limit" + LimitPrice for RESTING limit entries. A pre-Phase-2 AddOn
 	// ignores unknown fields → market, byte-identical to today.
-	OrderType  string  `json:"order_type,omitempty"`
-	LimitPrice float64 `json:"limit_price,omitempty"`
+		// E7 (entry-mechanics 2026-08-30, additive): OrderType "stop_entry" +
+		// StopPrice for STOP-MARKET entries (breakout-retest fallback). A
+		// pre-E7 AddOn ignores the new fields and would place a MARKET order —
+		// the Go side therefore NEVER sends stop_entry frames unless the
+		// STOP_ENTRY_SEAM is ON (owner-enabled, proven far-side frames first).
+		OrderType  string  `json:"order_type,omitempty"`
+		LimitPrice float64 `json:"limit_price,omitempty"`
+		StopPrice  float64 `json:"stop_price,omitempty"`
 }
 
 // FillPayload is the C#-AddOn → Go-server fill frame per spec L4398-4406.

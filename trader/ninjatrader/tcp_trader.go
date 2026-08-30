@@ -465,10 +465,65 @@ func (t *TCPTrader) PlaceLimitEntry(symbol, side string, quantity float64, limit
 	return signalID, nil
 }
 
+// PlaceStopEntry (E7, entry-mechanics 2026-08-30) places a STOP-MARKET entry
+// (the breakout-retest fallback / breakdown immediate alternative) with the
+// same bracket-on-fill contract as limits. stopPx is the TRIGGER price (the
+// tick offset is applied by the caller). Back-compat law: the frame is
+// additive JSON — only send it when the far-side AddOn has proven it.
+func (t *TCPTrader) PlaceStopEntry(symbol, side string, quantity float64, stopPx, sl, tp float64) (string, error) {
+	tradeAcct := t.boundAccount
+	if tradeAcct == "" {
+		return "", fmt.Errorf("ninjatrader/tcp: refusing stop-entry %s on %s — trader has no bound account", side, symbol)
+	}
+	if !t.isAccountTradeable(tradeAcct) {
+		return "", fmt.Errorf("ninjatrader/tcp: refusing stop-entry %s — account %q is not tradeable (not on allow-list / not SIM)", side, tradeAcct)
+	}
+	if t.guard != nil {
+		key := fmt.Sprintf("stopentry|%s|%s|%s|%.0f", tradeAcct, upperSideStr(side), symbol, quantity)
+		if _, ok := t.guard.admit(key, time.Now().UnixMilli()); !ok {
+			return "", fmt.Errorf("ninjatrader/tcp: stop-entry not admitted — B3 dupe/rate guard")
+		}
+	}
+	tick := InstrumentTickSize(t.symbol)
+	entry := RoundToTick(stopPx, tick)
+	sl = RoundToTick(sl, tick)
+	tp = RoundToTick(tp, tick)
+	tid := t.traderID
+	signalID := uuid.NewString()
+	payload := ntwire.SignalPayload{
+		Symbol:     t.symbol,
+		Account:    t.boundAccount,
+		TraderID:   tid,
+		Side:       side,
+		Quantity:   int(quantity),
+		Entry:      entry,
+		StopLoss:   sl,
+		TakeProfit: tp,
+		SignalID:   signalID,
+		Timestamp:  t.feedNowUTC(symbol).Format(time.RFC3339),
+		OrderType:  "stop_entry",
+		StopPrice:  entry,
+	}
+	if err := assertBoundAccount("stop-entry", symbol, payload.Account, t.boundAccount); err != nil {
+		logger.Errorf("🚨 %v — REFUSING to submit stop-entry", err)
+		return "", err
+	}
+	t.pendingMu.Lock()
+	t.pending[signalID] = upperSideStr(side)
+	t.pendingAt[signalID] = time.Now().UTC().UnixMilli()
+	t.pendingMu.Unlock()
+	t.mu.Lock()
+	t.lastEntrySignalID = signalID
+	t.mu.Unlock()
+	if err := t.server.SendSignal(payload); err != nil {
+		return "", fmt.Errorf("ninjatrader/tcp: send stop-entry signal: %w", err)
+	}
+	return signalID, nil
+}
+
 // CancelOrder (PHASE 2 armed orders) cancels a working resting limit entry
 // and/or its bracket legs on the AddOn side.
-func (t *TCPTrader) CancelOrder(signalID string) error {
-	return t.server.SendCancelOrder(ntwire.CancelOrderPayload{
+func (t *TCPTrader) CancelOrder(signalID string) error {	return t.server.SendCancelOrder(ntwire.CancelOrderPayload{
 		Symbol: t.symbol, SignalID: signalID, Account: t.boundAccount, TraderID: t.traderID,
 	})
 }

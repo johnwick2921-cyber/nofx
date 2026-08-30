@@ -82,7 +82,7 @@ const thinAbovePlanJSON = `{
     {"price": 29600, "label": "RN 29600", "grade": "B", "instruction": "fade"},
     {"price": 30000, "label": "RN 30000", "grade": "B", "instruction": "fade"}
   ],
-  "scenarios": [{"id": "S1", "trigger": "hold 29550", "condition": "hold", "direction": "long", "target_chain": [29700], "invalid": "2x5m<29540", "quality": "B", "confirm": {"rule": "touch", "ref_price": 29550, "side": "below"}}],
+  "scenarios": [{"id": "S1", "trigger": "hold 29550", "condition": "hold", "direction": "long", "target_chain": [29700], "invalid": "2x5m<29540", "quality": "B", "confirm": {"rule": "time_hold", "ref_price": 29550, "side": "above"}}],
   "no_trade": ["first 5m"],
   "death_condition": "acceptance above 30000",
   "death": {"price": 30000, "side": "above", "rule": "2x5m"},

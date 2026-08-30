@@ -538,9 +538,24 @@ func (s *PositionStore) ListUnlinked(traderID string, limit int) ([]*TraderPosit
 	return out, nil
 }
 
+// ListClosedByEntryOrderIDs returns CLOSED positions whose entry_order_id is in
+// ids — E4 (entry-mechanics 2026-08-30): the split-sibling law looks up the
+// filled leg's position by its wire signal id to learn whether it STOPPED OUT.
+func (s *PositionStore) ListClosedByEntryOrderIDs(traderID string, ids []string) ([]*TraderPosition, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	var out []*TraderPosition
+	err := s.db.Where("trader_id = ? AND status = ? AND entry_order_id IN ?", traderID, "CLOSED", ids).
+		Order("exit_time DESC").Find(&out).Error
+	if err != nil {
+		return nil, fmt.Errorf("failed to list closed positions by entry order ids: %w", err)
+	}
+	return out, nil
+}
+
 // GetOpenPositionBySymbol gets open position for specified symbol and direction
-func (s *PositionStore) GetOpenPositionBySymbol(traderID, symbol, side string) (*TraderPosition, error) {
-	var pos TraderPosition
+func (s *PositionStore) GetOpenPositionBySymbol(traderID, symbol, side string) (*TraderPosition, error) {	var pos TraderPosition
 	err := s.db.Where("trader_id = ? AND symbol = ? AND side = ? AND status = ?", traderID, symbol, side, "OPEN").
 		Order("entry_time DESC").
 		First(&pos).Error

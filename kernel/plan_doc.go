@@ -94,12 +94,32 @@ type PlanScenario struct {
 // PlanArmSpec is the machine-manageable arming contract for one scenario.
 // Entry is the resting LIMIT price; Stop/Target form the bracket. Long:
 // stop < entry < target. Short: target < entry < stop.
+// E4 (entry-mechanics 2026-08-30): a sweep_reclaim arm may carry Legs — the
+// SPLIT entry (two child orders, shared plan lineage, independent OCO
+// brackets). When Legs is present the top-level Entry/Stop/Target mirror
+// Legs[0] (legacy readers stay coherent).
 type PlanArmSpec struct {
 	Enabled     bool    `json:"enabled"`                // the arming authorization itself
 	Entry       float64 `json:"entry"`                  // resting limit price
 	Stop        float64 `json:"stop"`                   // bracket stop
 	Target      float64 `json:"target"`                 // bracket target
 	WaitConfirm bool    `json:"wait_confirm,omitempty"` // chain-arm: rest until the scenario's confirm{} is MET (sweep_reclaim retrace fast path, autopsy-response wave)
+	// Legs (E4): the split entry. Exactly 2 when present, sweep_reclaim only.
+	// Leg 0 = the touch leg (wait_confirm false, resting AT the sweep ref);
+	// Leg 1 = the momentum leg (wait_confirm true, chains on 1m_mss or
+	// 1x5m_close). Either leg's stop-out cancels the sibling's unfilled order.
+	Legs []PlanArmLeg `json:"legs,omitempty"`
+}
+
+// PlanArmLeg is one child order of a split arm.
+type PlanArmLeg struct {
+	Entry       float64 `json:"entry"`                  // resting limit / stop-entry trigger price
+	Stop        float64 `json:"stop"`                   // bracket stop
+	Target      float64 `json:"target"`                 // bracket target
+	Size        int     `json:"size,omitempty"`         // contracts; 1 when absent
+	WaitConfirm bool    `json:"wait_confirm,omitempty"` // leg chains on its confirm rule before placement
+	Rule        string  `json:"rule,omitempty"`         // the confirm rule the leg chains on (1m_mss | 1x5m_close)
+	Kind        string  `json:"kind,omitempty"`         // limit (default) | stop_entry (E7)
 }
 
 // ArmSpecValid checks the arming contract of one scenario. ok=false with a
@@ -111,8 +131,10 @@ func ArmSpecValid(sc PlanScenario) error {
 	// Autopsy-response wave (2026-08-27): sweep_reclaim becomes armable ONLY
 	// as a CHAINED arm (wait_confirm) — the arm rests until the scenario's own
 	// confirm{} is machine-MET, then the retrace entry goes live.
+	// E4 (2026-08-30): the SPLIT entry replaces the single chain — the legacy
+	// wait_confirm requirement applies to single arms only.
 	if strings.EqualFold(strings.TrimSpace(sc.Condition), "sweep_reclaim") {
-		if !sc.Arm.WaitConfirm {
+		if len(sc.Arm.Legs) == 0 && !sc.Arm.WaitConfirm {
 			return fmt.Errorf("sweep_reclaim arm on %s requires wait_confirm:true (the retrace arm must chain on its confirm)", sc.ID)
 		}
 		if sc.Confirm == nil {
@@ -138,6 +160,46 @@ func ArmSpecValid(sc PlanScenario) error {
 		return fmt.Errorf("arm enabled on non-armable condition %q (fvg_entry | reject | breakdown_continue | breakup_continue; sweep_reclaim via wait_confirm; breakout_retest is a normal AI play and never arms — GAR-F4)", sc.Condition)
 	}
 	a := sc.Arm
+	// E4 (2026-08-30) — split-entry legs. sweep_reclaim ONLY for now; exactly
+	// two; leg 0 = the touch leg resting AT the sweep ref (no chain), leg 1 =
+	// the momentum leg chained on 1m_mss (1x5m_close accepted).
+	if len(a.Legs) > 0 {
+		if !strings.EqualFold(strings.TrimSpace(sc.Condition), "sweep_reclaim") {
+			return fmt.Errorf("arm legs on %s — arm_legs_sweep_reclaim_only (the split entry is the sweep_reclaim contract; other conditions arm single)", sc.Condition)
+		}
+		if len(a.Legs) != 2 {
+			return fmt.Errorf("arm on %s needs EXACTLY 2 legs (split contract), got %d", sc.ID, len(a.Legs))
+		}
+		if sc.Confirm == nil || sc.Confirm.Rule != "touch" {
+			return fmt.Errorf("arm on %s split requires confirm=touch at the sweep ref (leg 1 rests AT the level)", sc.ID)
+		}
+		if sc.Confirm2 == nil {
+			return fmt.Errorf("arm on %s split requires confirm2 (the leg-2 chain: 1m_mss or 1x5m_close)", sc.ID)
+		}
+		l0, l1 := a.Legs[0], a.Legs[1]
+		if l0.WaitConfirm {
+			return fmt.Errorf("arm on %s leg 1 must rest at the sweep ref (wait_confirm false) — it fills ON the touch", sc.ID)
+		}
+		if !l1.WaitConfirm {
+			return fmt.Errorf("arm on %s leg 2 must chain (wait_confirm true) on its confirm rule", sc.ID)
+		}
+		if l1.Rule != "1m_mss" && l1.Rule != "1x5m_close" {
+			return fmt.Errorf("arm on %s leg 2 rule %q — sweep_leg2_requires_mss_or_1x5m", sc.ID, l1.Rule)
+		}
+		if l1.Rule != sc.Confirm2.Rule {
+			return fmt.Errorf("arm on %s leg 2 rule %q must match confirm2.rule %q (the chain is the machine confirm)", sc.ID, l1.Rule, sc.Confirm2.Rule)
+		}
+		if l0.Kind != "" && l0.Kind != "limit" {
+			return fmt.Errorf("arm on %s leg 1 must be a limit (touch leg), got kind %q", sc.ID, l0.Kind)
+		}
+		if l1.Kind != "" && l1.Kind != "limit" && l1.Kind != "stop_entry" {
+			return fmt.Errorf("arm on %s leg 2 kind %q invalid (limit|stop_entry)", sc.ID, l1.Kind)
+		}
+		// The top-level fields mirror leg 1 for legacy readers.
+		if a.Entry != l0.Entry || a.Stop != l0.Stop || a.Target != l0.Target {
+			return fmt.Errorf("arm on %s top-level entry/stop/target must equal leg 1's (legacy readers read the top-level)", sc.ID)
+		}
+	}
 	if a.Entry <= 0 || a.Stop <= 0 || a.Target <= 0 {
 		return fmt.Errorf("arm on %s needs exact entry/stop/target > 0 (got %.2f/%.2f/%.2f)", sc.ID, a.Entry, a.Stop, a.Target)
 	}
@@ -146,9 +208,19 @@ func ArmSpecValid(sc PlanScenario) error {
 		if !(a.Stop < a.Entry && a.Entry < a.Target) {
 			return fmt.Errorf("arm on %s long: stop %.2f < entry %.2f < target %.2f required", sc.ID, a.Stop, a.Entry, a.Target)
 		}
+		for i, l := range a.Legs {
+			if !(l.Stop < l.Entry && l.Entry < l.Target) {
+				return fmt.Errorf("arm on %s long leg %d: stop %.2f < entry %.2f < target %.2f required", sc.ID, i+1, l.Stop, l.Entry, l.Target)
+			}
+		}
 	} else if dir == "short" {
 		if !(a.Target < a.Entry && a.Entry < a.Stop) {
 			return fmt.Errorf("arm on %s short: target %.2f < entry %.2f < stop %.2f required", sc.ID, a.Target, a.Entry, a.Stop)
+		}
+		for i, l := range a.Legs {
+			if !(l.Target < l.Entry && l.Entry < l.Stop) {
+				return fmt.Errorf("arm on %s short leg %d: target %.2f < entry %.2f < stop %.2f required", sc.ID, i+1, l.Target, l.Entry, l.Stop)
+			}
 		}
 	}
 	return nil
