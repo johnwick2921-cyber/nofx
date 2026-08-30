@@ -183,6 +183,11 @@ func LastNWOGs(bars1m []market.Kline, now time.Time, n int) []NWOG {
 		t := time.UnixMilli(b.OpenTime)
 		ct := t.In(CTLocation())
 		key := weekStartMonday(t).Format("2006-01-02")
+		if ct.Weekday() == time.Friday && ct.Hour() < 16 {
+			// The Friday close pairs with the FOLLOWING Sunday's open — the gap
+			// belongs to the next week (born at that Sunday 17:00 CT).
+			key = weekStartMonday(t).AddDate(0, 0, 7).Format("2006-01-02")
+		}
 		switch {
 		case ct.Weekday() == time.Friday && ct.Hour() < 16: // Friday last prints (≤16:00 CT)
 			if gaps[key] == nil {

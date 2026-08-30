@@ -47,7 +47,7 @@ func wkFixture() []market.Kline {
 	bars = append(bars, wkBar("2026-08-28", "15:57", 112, 114, 96, 98))
 	bars = append(bars, wkBar("2026-08-30", "17:00", 99, 99, 99, 99))
 	// Week 4 (Mon 2026-08-31) — IN PROGRESS at now (Wed 09-02 12:00 CT).
-	bars = append(bars, wkBar("2026-08-31", "17:03", 99, 102, 94, 101))
+	bars = append(bars, wkBar("2026-08-31", "17:03", 99, 102, 99, 101))
 	return bars
 }
 
@@ -99,23 +99,29 @@ func TestNWOGMathAndFill(t *testing.T) {
 	if len(gaps) != 3 {
 		t.Fatalf("want 3 weekend gaps, got %d: %+v", len(gaps), gaps)
 	}
-	// Gap A (born Sun 08-16 → week Mon 08-17): Fri close 105 → Sun open 106.
+	// Gap A (born Sun 08-16 → week Mon 08-17): Fri 08-14 close 105 → Sun open 106.
 	a := gaps[0]
 	if a.Born != "2026-08-17" || a.Lo != 105 || a.Hi != 106 || a.CE != 105.5 {
 		t.Fatalf("gap A = %+v, want born 08-17 lo 105 hi 106 ce 105.5", a)
 	}
-	// Gap B (born Sun 08-23 → week Mon 08-24): Fri close 112 → Sun open 113.
+	if !a.Filled {
+		t.Fatal("gap A CE 105.5 was traded through by week 2's 100–115 range → filled")
+	}
+	// Gap B (born Sun 08-23 → week Mon 08-24): Fri 08-21 close 112 → Sun open 113.
 	b := gaps[1]
 	if b.Born != "2026-08-24" || b.Lo != 112 || b.Hi != 113 || b.CE != 112.5 {
 		t.Fatalf("gap B = %+v, want born 08-24 lo 112 hi 113 ce 112.5", b)
 	}
-	// Gap C (born Sun 08-30 → week Mon 08-31): Fri close 98 → Sun open 99.
+	if !b.Filled {
+		t.Fatal("gap B CE 112.5 was traded through by week 3's 96–114 range → filled")
+	}
+	// Gap C (born Sun 08-30 → week Mon 08-31): Fri 08-28 close 98 → Sun open 99.
 	c := gaps[2]
 	if c.Born != "2026-08-31" || c.Lo != 98 || c.Hi != 99 || c.CE != 98.5 {
 		t.Fatalf("gap C = %+v, want born 08-31 lo 98 hi 99 ce 98.5", c)
 	}
-	if a.Filled || b.Filled || c.Filled {
-		t.Fatal("no bar trades through CE yet — all gaps unfilled")
+	if c.Filled {
+		t.Fatal("gap C CE 98.5: no post-birth bar trades through it (Mon 08-31 bar L=99) → unfilled")
 	}
 	// A later bar trading through gap C's CE fills it.
 	fill := wkBar("2026-09-01", "09:00", 98.4, 99.2, 98.0, 98.8)
