@@ -7,7 +7,7 @@ in CLAUDE.md).
 
 ---
 
-## PART 1 — THE 20 BUG CLASSES (name · root cause · probe · law)
+## PART 1 — THE 21 BUG CLASSES (name · root cause · probe · law)
 
 1. **Self-imposed caps.** Root cause: an AI/HTTP/token cap chosen without
    measuring the provider ceiling or the observed need (the 32768-token
@@ -152,6 +152,21 @@ in CLAUDE.md).
     (leak inert). **Law:** binaries are NEVER tracked; `.gitignore` covers
     every binary glob; a history rewrite requires the owner's explicit
     force-push ack and every clone/partner repo must re-clone.
+
+21. **Log-lie counters.** Root cause: a success log reports a WRITE DELTA or
+    a derived counter instead of the thing it claims — `maybeFetchCalendar`
+    logged "fetched 0 events" on every healthy fetch because frozen
+    `forexfactory` slices return `wrote=false` (`store/calendar.go:92-93`)
+    and the line counted stored rows, not fetched events (23 false zeros
+    08-27→08-29, caught by the 2026-08-29 news-feed forensics). A lying
+    success line is worse than silence: it masks healthy state as broken
+    and trains operators to ignore the signal. **Probe:** every "fetched N"
+    / "processed N" log line must count the OBJECT of the verb, with write
+    deltas logged separately; grep log lines against their counter
+    definitions. **Law:** counters log what they name. Also: independent
+    prompt re-renders (audit re-implementations) MUST enumerate EVERY input
+    source — T9's renderer omitted `calendar_slices` and printed a false
+    "(no filtered events)" for a populated prompt (same forensics).
 
 ---
 

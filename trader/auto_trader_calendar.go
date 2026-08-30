@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"nofx/calendar"
@@ -90,13 +91,17 @@ func (at *AutoTrader) maybeFetchCalendar(now time.Time) {
 			events += len(evs)
 		}
 	}
+	fetched := 0
+	for _, evs := range res.Days {
+		fetched += len(evs)
+	}
 	switch {
 	case res.Source == calendar.SourceLive && upgraded > 0:
-		at.logInfof("📅 calendar: fetched %d events — stored %d day slice(s) (src forexfactory, %d upgraded from static)", events, stored, upgraded)
+		at.logInfof("📅 calendar: fetched %d events — %d day slice(s) stored, %d upgraded (src forexfactory)", fetched, stored, upgraded)
 	case res.Source == calendar.SourceLive:
-		at.logInfof("📅 calendar: fetched %d events — stored %d day slice(s) (src forexfactory)", events, stored)
+		at.logInfof("📅 calendar: fetched %d events — %d day slice(s) stored (src forexfactory)", fetched, stored)
 	case stored > 0:
-		at.logWarnf("📅 calendar: fallback static — stored %d day slice(s), %d events (%s)", stored, events, res.Warning)
+		at.logWarnf("📅 calendar: fallback static — stored %d day slice(s), %d events (%s)", stored, fetched, res.Warning)
 	default:
 		at.logWarnf("📅 calendar: fetch failed, no static rows to store (%s) — retry in ≤1h", res.Warning)
 	}
@@ -121,7 +126,17 @@ func calendarStaticLoader() []calendar.Event {
 	if err := json.Unmarshal(raw, &evs); err != nil {
 		return nil
 	}
-	return evs
+	// NEWS-HYGIENE AMEND (2026-08-30) — the static file may carry NOTE entries
+	// (holidays, contract rolls, quad-witching) as owner annotations. They
+	// never gate and never reach the prompt: drop them here.
+	out := evs[:0]
+	for _, e := range evs {
+		if strings.EqualFold(strings.TrimSpace(string(e.Impact)), "note") || strings.TrimSpace(string(e.Impact)) == "" {
+			continue
+		}
+		out = append(out, e)
+	}
+	return out
 }
 
 // currentT1Windows returns the red-news HARD no-trade windows for the active
