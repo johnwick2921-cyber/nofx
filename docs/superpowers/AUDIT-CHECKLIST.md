@@ -7,7 +7,9 @@ in CLAUDE.md).
 
 ---
 
-## PART 1 — THE 20 BUG CLASSES (name · root cause · probe · law)
+## PART 1 — THE 22 BUG CLASSES (name · root cause · probe · law)
+
+_(Class 21 — log-lie counters — lands with `fix/news-hygiene`; the Monday merge reconciles the numbering.)_
 
 1. **Self-imposed caps.** Root cause: an AI/HTTP/token cap chosen without
    measuring the provider ceiling or the observed need (the 32768-token
@@ -152,6 +154,17 @@ in CLAUDE.md).
     (leak inert). **Law:** binaries are NEVER tracked; `.gitignore` covers
     every binary glob; a history rewrite requires the owner's explicit
     force-push ack and every clone/partner repo must re-clone.
+
+22. **Unprobed supply chain.** Root cause: dependency audits were never
+    automated — the F1 scan (2026-08-29) found 8 reachable Go
+    vulnerabilities (x/text, quic-go ×2, pgx, go-ethereum ×3, jwt/v5) and
+    14 npm findings incl. lodash + react-router HIGHs, all fixable by
+    patch/minor, none ever bumped. **Probe:** `govulncheck ./...`
+    (symbol-level reachability) + `npm audit --omit=dev` on EVERY wave;
+    weekly CI + Dependabot (security-only) keep it that way.
+    **Law:** CRITICAL/HIGH fixable by patch/minor bump in the SAME wave as
+    the finding; major-version upgrades are owner-ruled, never auto-merged
+    before a live-fire window.
 
 ---
 
