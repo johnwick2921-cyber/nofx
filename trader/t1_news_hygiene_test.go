@@ -1,6 +1,7 @@
 package trader
 
 import (
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -150,5 +151,35 @@ func TestT1NewsEntryBlockedInWindow(t *testing.T) {
 	why, blocked := sessionGateDecision(at.sessionRegistry(now), now, windows, nil)
 	if !blocked || !strings.Contains(why, "red-news blackout") {
 		t.Fatalf("entry gate must block with red-news reason; blocked=%v why=%q", blocked, why)
+	}
+}
+
+// TestCalendarStaticLoaderDropsNotes — the AMENDED static file may carry NOTE
+// annotations (holidays / contract rolls / quad-witching). They must never
+// gate and never reach the prompt: the loader drops them, T1/T2 pass through.
+func TestCalendarStaticLoaderDropsNotes(t *testing.T) {
+	dir := t.TempDir()
+	path := dir + "/cal.json"
+	writeFile := func(content string) {
+		t.Helper()
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatalf("write static file: %v", err)
+		}
+	}
+	t.Setenv("NOFX_CALENDAR_STATIC", path)
+
+	writeFile(`[
+	  {"time":"2026-09-04T12:30:00Z","currency":"USD","title":"NFP","impact":"T1"},
+	  {"time":"2026-09-10T12:30:00Z","currency":"USD","title":"Claims","impact":"T2"},
+	  {"time":"2026-09-07T00:00:00Z","currency":"USD","title":"NOTE: Labor Day","impact":"note"}
+	]`)
+	evs := calendarStaticLoader()
+	if len(evs) != 2 {
+		t.Fatalf("loader must drop note entries, got %d events", len(evs))
+	}
+	for _, e := range evs {
+		if strings.HasPrefix(e.Title, "NOTE:") || string(e.Impact) == "note" {
+			t.Fatalf("note entry leaked: %+v", e)
+		}
 	}
 }

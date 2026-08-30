@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"nofx/calendar"
@@ -125,7 +126,17 @@ func calendarStaticLoader() []calendar.Event {
 	if err := json.Unmarshal(raw, &evs); err != nil {
 		return nil
 	}
-	return evs
+	// NEWS-HYGIENE AMEND (2026-08-30) — the static file may carry NOTE entries
+	// (holidays, contract rolls, quad-witching) as owner annotations. They
+	// never gate and never reach the prompt: drop them here.
+	out := evs[:0]
+	for _, e := range evs {
+		if strings.EqualFold(strings.TrimSpace(string(e.Impact)), "note") || strings.TrimSpace(string(e.Impact)) == "" {
+			continue
+		}
+		out = append(out, e)
+	}
+	return out
 }
 
 // currentT1Windows returns the red-news HARD no-trade windows for the active
