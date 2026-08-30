@@ -1,0 +1,209 @@
+{
+  "doc": {
+    "reasoning": "bias-tree: branch 3 inside-day flat LOW at 19% of the 29437–29811 dealing range (discount — branch 5: longs only, shorts disallowed while the range holds). After the 1h down leg swept 29437 PDL (13:00 CT) the tape rebuilt 29478→29521 and now sits at PDC 29509.50 inside value — balance, not impulse (RV 91%, 15m/5m ranging). No fresh FVGs → no fvg_entry authored. Plan: buy the range at discount — sweep-reclaims of 29494.75 EQH (29502.88 OB·1h as confluence) and 29437 PDL, plus the 29521 breakout-retest toward the 29539 supply/29592 HTF EQL. The sole short is the conditional PDL breakdown (S4, AI path — no arm: an 18.31-ATR5m stop gives R:R\u003c2.0 to 29424). Arms S1/S2 wait-confirm, sized ≥1×ATR5m 18.31. Death: 15m close below 29424 EQL·1h.",
+    "bias": {
+      "direction": "long",
+      "conviction": "low",
+      "flip_condition": "A 2x5m close below 29437.00 PDL flips the plan to short — the breakdown leg S4 becomes the working scenario."
+    },
+    "levels": [
+      {
+        "price": 29424,
+        "label": "EQL·1h (HTF)",
+        "grade": "A",
+        "instruction": "guard"
+      },
+      {
+        "price": 29437,
+        "label": "PDL",
+        "grade": "A",
+        "instruction": "react"
+      },
+      {
+        "price": 29491.25,
+        "label": "EQH",
+        "grade": "A",
+        "instruction": "target"
+      },
+      {
+        "price": 29494.75,
+        "label": "EQH",
+        "grade": "A",
+        "instruction": "reclaim"
+      },
+      {
+        "price": 29502.88,
+        "label": "OB(bear)·1h",
+        "grade": "C",
+        "instruction": "confluence"
+      },
+      {
+        "price": 29509.5,
+        "label": "PDC",
+        "grade": "A",
+        "instruction": "measure"
+      },
+      {
+        "price": 29514.5,
+        "label": "EQL·15m (HTF)",
+        "grade": "A",
+        "instruction": "target"
+      },
+      {
+        "price": 29520,
+        "label": "EQL",
+        "grade": "A",
+        "instruction": "target"
+      },
+      {
+        "price": 29523.25,
+        "label": "EQL",
+        "grade": "A",
+        "instruction": "target"
+      },
+      {
+        "price": 29526.5,
+        "label": "EQL",
+        "grade": "A",
+        "instruction": "target"
+      },
+      {
+        "price": 29539.38,
+        "label": "Supply·1h",
+        "grade": "C",
+        "instruction": "confluence"
+      },
+      {
+        "price": 29592.5,
+        "label": "EQL·15m (HTF)",
+        "grade": "A",
+        "instruction": "target"
+      }
+    ],
+    "scenarios": [
+      {
+        "id": "S1",
+        "trigger": "Sweep of 29437.00 PDL (wick below) followed by a 5m close back above 29437.00 — reclaim close, never wick alone.",
+        "condition": "sweep_reclaim",
+        "direction": "long",
+        "target_chain": [
+          29491.25,
+          29509.5,
+          29514.5,
+          29539.38
+        ],
+        "invalid": "A 5m close back below 29424.00 EQL·1h before the arm fills voids the setup.",
+        "confirm": {
+          "rule": "1x5m_close",
+          "ref_price": 29437,
+          "side": "above"
+        },
+        "quality": "A",
+        "arm": {
+          "enabled": true,
+          "entry": 29441,
+          "stop": 29419,
+          "target": 29494.75,
+          "wait_confirm": true
+        }
+      },
+      {
+        "id": "S2",
+        "trigger": "Sweep of 29494.75 EQH (toward 29491.25) followed by a 5m close back above 29494.75 — the 29502.88 OB·1h sits just overhead as confluence.",
+        "condition": "sweep_reclaim",
+        "direction": "long",
+        "target_chain": [
+          29509.5,
+          29514.5,
+          29520,
+          29539.38
+        ],
+        "invalid": "A 5m close below 29491.25 EQH before the arm fills voids the setup.",
+        "confirm": {
+          "rule": "1x5m_close",
+          "ref_price": 29494.75,
+          "side": "above"
+        },
+        "quality": "B",
+        "arm": {
+          "enabled": true,
+          "entry": 29498,
+          "stop": 29479,
+          "target": 29539.38,
+          "wait_confirm": true
+        }
+      },
+      {
+        "id": "S3",
+        "trigger": "5m close above 29521.00 (15m LH) breaks the balance; enter only on a retest that holds above 29521.00.",
+        "condition": "breakout_retest",
+        "direction": "long",
+        "target_chain": [
+          29526.5,
+          29539.38,
+          29592.5
+        ],
+        "invalid": "A 5m close back below 29514.50 after the breakout voids the retest.",
+        "confirm": {
+          "rule": "1x5m_close",
+          "ref_price": 29521,
+          "side": "above"
+        },
+        "quality": "B",
+        "confirm2": {
+          "rule": "touch",
+          "ref_price": 29521,
+          "side": "above"
+        }
+      },
+      {
+        "id": "S4",
+        "trigger": "2x5m close below 29437.00 PDL — this is the flip leg of the plan, no blind front-running of the level.",
+        "condition": "breakdown_continue",
+        "direction": "short",
+        "target_chain": [
+          29424
+        ],
+        "invalid": "A 5m close back above 29437.00 before entry voids the breakdown.",
+        "confirm": {
+          "rule": "2x5m_close",
+          "ref_price": 29437,
+          "side": "below"
+        },
+        "quality": "B",
+        "breakdown": {
+          "level": 29437,
+          "level_label": "PDL",
+          "entry_mode": "pullback"
+        },
+        "confirm2": {
+          "rule": "1x5m_close",
+          "ref_price": 29437,
+          "side": "below"
+        }
+      }
+    ],
+    "no_trade": [
+      "first 5m (CT)",
+      "12:00-13:30 CT lunch"
+    ],
+    "death_condition": "A 15m close below 29424.00 EQL·1h kills the plan — the discount structure is gone; no more entries.",
+    "day_type": "balance",
+    "death": {
+      "price": 29424,
+      "side": "below",
+      "rule": "15m_close"
+    },
+    "flip": {
+      "price": 29437,
+      "side": "below",
+      "rule": "2x5m",
+      "flip_to": "short"
+    }
+  },
+  "note": "single-call dress rehearsal — the live write path would retry up to 2 more times on the same prompt (session path logs the reason, never appends it — only the weekly path appends); no retry was made here (hard budget: 2 real calls total)",
+  "reject_reasons": [
+    "ValidateBreakdownContinueScenarios: S4 breakdown_continue: the tape shows NO 2×5m breakdown through 29437.00 yet (0 confirming closes, no reclaim check) — author it only after the displacement exists (or set entry_mode=immediate and accept the 2nd-close trigger)"
+  ],
+  "status": "REJECTED_AT_WRITE_PATH"
+}

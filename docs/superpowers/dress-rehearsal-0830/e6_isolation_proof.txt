@@ -1,0 +1,103 @@
+# E6 — ISOLATION PROOF (dress-rehearsal-0830)
+
+## PRE-TEST BASELINE (captured BEFORE any harness write, 2026-08-30 ~13:5x CT)
+
+LIVE DB `/home/hoang/nofx/data/data.db` — opened `mode=ro` via sqlite3 CLI only:
+
+```
+$ sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro" "SELECT COUNT(*) FROM plans;"
+159
+```
+
+```
+$ sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro" "SELECT COUNT(*) FROM plans WHERE session='WEEKLY';"
+0
+```
+
+```
+$ sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro" "SELECT plan_id, version, trade_date, session, trigger_reason, lifecycle, model_id, length(doc), created_at FROM plans WHERE session='WEEKLY';"
+(no rows — empty result set)
+```
+
+```
+$ sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro" "SELECT MAX(rowid) FROM decision_records;"
+34740
+```
+
+```
+$ sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro" "SELECT COUNT(*) FROM armed_orders;"
+11
+```
+
+Live journal — harness/rehearsal lines (must stay 0):
+
+```
+$ journalctl -u nofx --no-pager --since "2026-08-30 10:00:00" | grep -cE "WEEKLY READ|PLAN written|vfverify|dress|rehearsal"
+0
+(exit=1 → grep counted zero matches)
+```
+
+Context on the live bot (read-only observation, NOT touched):
+- Live bot PID 482741 started ~09:41 CT today (checked 13:54 CT, elapsed 04:13:08).
+- Journal since 00:00 today contains exactly 2 `WEEKLY READ` lines, both from the
+  PREVIOUS process `nofx-bin[477513]` at 09:37:21/09:40:21:
+  `📅 WEEKLY READ starting for week 2026-08-24 (boot_backfill=true)` and
+  `📅 WEEKLY READ already in flight for week 2026-08-24 — skipping duplicate call.`
+  No `PLAN written` lines since 00:00. That boot-backfill attempt wrote NO row:
+  the LIVE `session='WEEKLY'` count is 0 (above). Tonight's 16:30 CT scheduler
+  remains the first real weekly write for the live system.
+- Current CT time at baseline capture: 2026-08-30 ~13:54 (Sunday) — before the
+  16:00 CT rehearsal deadline and before tonight's scheduled reads.
+
+Scratch DB pre-state (before this dispatch's writes):
+- `/tmp/nofx-vf-db/data.db` refreshed from LIVE via
+  `sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro" ".backup /tmp/nofx-vf-db/data.db"`.
+- Scratch mirrors LIVE at refresh: `SELECT COUNT(*) FROM plans` → 159,
+  `session='WEEKLY'` rows → 0.
+
+## POST-TEST RE-PROOF (captured AFTER d1 + d2 completed, 14:22 CT)
+
+Same LIVE checks, quoted verbatim:
+
+```
+$ sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro" "SELECT COUNT(*) FROM plans;"
+159
+```
+
+```
+$ sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro" "SELECT COUNT(*) FROM plans WHERE session='WEEKLY';"
+0
+```
+
+```
+$ sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro" "SELECT MAX(rowid) FROM decision_records;"
+34740
+```
+
+```
+$ sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro" "SELECT COUNT(*) FROM armed_orders;"
+11
+```
+
+```
+$ journalctl -u nofx --no-pager --since "2026-08-30 10:00:00" | grep -cE "WEEKLY READ|PLAN written|vfverify|dress|rehearsal"
+0
+(grep exit=1 → zero matches)
+```
+
+Scratch DB (the ONLY place the rehearsal wrote) post-state:
+
+```
+$ sqlite3 "file:/tmp/nofx-vf-db/data.db?mode=ro" "SELECT COUNT(*) FROM plans; SELECT COUNT(*) FROM plans WHERE session='WEEKLY';"
+160
+1
+```
+
+## W-4 verdict
+
+- LIVE plans count: 159 before = 159 after — unchanged ✓
+- LIVE decision_records MAX(rowid): 34740 before = 34740 after — unchanged ✓
+- LIVE armed_orders: 11 before = 11 after — unchanged ✓
+- LIVE `session='WEEKLY'` rows: 0 before = **0 after** ✓ — tonight's 16:30 CT scheduler remains the first real one; the rehearsal's single WEEKLY row exists ONLY in the scratch DB (0 → 1 there).
+- Live journal since 10:00 CT: 0 harness/rehearsal/weekly-read lines ✓ (the two pre-existing 09:37/09:40 `WEEKLY READ` lines are from the previous bot process's 2026-08-24 boot-backfill attempt, before the current bot PID 482741 started, and wrote no row — see the pre-test section).
+

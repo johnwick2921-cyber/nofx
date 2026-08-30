@@ -1,0 +1,214 @@
+# DAY-PLAN READER — CME MNQ futures
+You are a disciplined pro reading the market ONCE, carefully. Write ONE structured day plan for this session. Facts below are Go-computed; your job is JUDGMENT, not re-deriving the map.
+
+## Session
+trade_date 2026-08-30 · session ASIA · ASIA scheduled read (stored+cached data) · price 29509.50 · dATR 368.2
+clock 14:04 CT (19:04 UTC) — EVERY time in this prompt is CT (America/Chicago): session windows, read/flat times and the lunch no-trade (12:00–13:30 CT) are CT wall-clock. Never apply these numbers to a UTC clock.
+
+## Regime
+REGIME: trend D=n/a 1h=down · RV=91%-of-normal · VIX=n/a
+
+## Candles (oldest→latest)
+### 15m (last 12)
+Time(CT)       Open      High      Low       Close     Volume
+08-28 13:00    29515.5000 29521.5000 29488.5000 29489.5000 35349.00    
+08-28 13:15    29489.5000 29504.7500 29471.0000 29483.7500 34886.00    
+08-28 13:30    29483.2500 29506.5000 29476.0000 29490.7500 30089.00    
+08-28 13:45    29491.0000 29493.5000 29440.5000 29455.5000 36347.00    
+08-28 14:00    29456.2500 29491.2500 29443.5000 29479.2500 41044.00    
+08-28 14:15    29479.7500 29502.0000 29464.5000 29498.5000 28451.00    
+08-28 14:30    29498.5000 29513.0000 29483.0000 29503.0000 29098.00    
+08-28 14:45    29502.7500 29521.0000 29472.7500 29496.2500 68737.00    
+08-28 15:00    29496.2500 29507.7500 29478.0000 29488.2500 17911.00    
+08-28 15:15    29488.2500 29493.5000 29484.7500 29491.5000 4391.00     
+08-28 15:30    29491.5000 29508.5000 29485.2500 29507.2500 7007.00     
+08-28 15:45    29507.7500 29519.0000 29506.2500 29509.5000 6421.00       <- current
+
+### 1h (last 12)
+Time(CT)       Open      High      Low       Close     Volume
+08-28 04:00    29618.7500 29621.0000 29595.5000 29605.7500 17128.00    
+08-28 05:00    29606.0000 29624.7500 29592.5000 29622.0000 19351.00    
+08-28 06:00    29622.0000 29640.7500 29595.7500 29602.0000 28806.00    
+08-28 07:00    29602.0000 29667.0000 29597.2500 29658.5000 51258.00    
+08-28 08:00    29658.5000 29704.0000 29562.5000 29629.7500 313186.00   
+08-28 09:00    29629.7500 29798.7500 29505.5000 29796.5000 543876.00   
+08-28 10:00    29796.0000 29811.7500 29544.7500 29552.5000 357914.00   
+08-28 11:00    29552.7500 29592.2500 29464.5000 29502.0000 348894.00   
+08-28 12:00    29502.0000 29529.5000 29437.0000 29515.7500 220527.00   
+08-28 13:00    29515.5000 29521.5000 29440.5000 29455.5000 136671.00   
+08-28 14:00    29456.2500 29521.0000 29443.5000 29496.2500 167330.00   
+08-28 15:00    29496.2500 29519.0000 29478.0000 29509.5000 35730.00      <- current
+
+### 4h (last 8)
+Time(CT)       Open      High      Low       Close     Volume
+08-27 11:00    29597.2500 29704.0000 29526.5000 29692.2500 650625.00   
+08-27 15:00    29692.7500 29707.5000 29591.5000 29602.0000 100750.00   
+08-27 19:00    29601.7500 29707.2500 29593.5000 29668.0000 178843.00   
+08-27 23:00    29668.7500 29670.5000 29592.5000 29607.0000 114584.00   
+08-28 03:00    29606.5000 29640.7500 29577.7500 29602.0000 100914.00   
+08-28 07:00    29602.0000 29811.7500 29505.5000 29552.5000 1266234.00  
+08-28 11:00    29552.7500 29592.2500 29437.0000 29496.2500 873422.00   
+08-28 15:00    29496.2500 29519.0000 29478.0000 29509.5000 35730.00      <- current
+
+### daily session candles (last 8)
+Time(CT)       Open      High      Low       Close     Volume
+08-19 10:00    29623.2500 29667.2500 29485.0000 29559.0000 937079.00   
+08-19 17:00    29562.5000 29688.5000 29202.5000 29317.0000 2655920.00  
+08-20 17:00    29331.0000 29539.7500 29220.2500 29370.0000 2062159.00  
+08-23 17:00    29392.2500 29480.5000 28947.7500 29131.0000 2443794.00  
+08-24 17:00    29140.0000 29420.0000 29016.7500 29287.0000 2161983.00  
+08-25 17:00    29288.7500 29437.2500 29095.5000 29431.0000 2443438.00  
+08-26 17:00    29500.0000 29707.5000 29402.2500 29635.2500 2700061.00  
+08-27 17:00    29635.0000 29811.7500 29437.0000 29509.5000 2617654.00    <- current
+
+
+## Weekly Context
+WEEKLY: none
+
+## Indicators (executor mirror — your ai_config toggles, computed values)
+### 1h
+EMA50: [29477.7597, 29485.0338, 29492.2089, 29498.0831, 29502.0014, 29507.6092, 29511.5069, 29515.7321, 29519.2622, 29523.2911, 29526.3778, 29531.5590, 29535.4097, 29545.6485, 29545.9172, 29544.1949, 29543.0795, 29539.6450, 29537.9432, 29536.8278]
+RSI14: [59.7707, 58.4711, 58.7984, 56.1879, 51.9818, 55.7889, 52.1863, 53.2347, 51.8846, 53.4161, 51.2537, 56.5990, 53.3907, 65.5781, 46.4419, 43.6057, 44.5978, 41.1794, 44.2897, 45.3025]
+ATR14: 94.5585
+### 4h
+RSI14: [44.3654, 41.7598, 44.9129, 42.5134, 43.0083, 42.8841, 48.1292, 63.5867, 57.7660, 57.7755, 58.5687, 60.1699, 63.8152, 58.3516, 60.9824, 57.3751, 57.0770, 54.0819, 50.8184, 51.5599]
+ATR14: 156.1611
+### 1d
+ATR14: 0.0000
+### 15m
+EMA50: [29639.7334, 29633.8125, 29627.9571, 29623.0176, 29617.5758, 29611.7885, 29606.7772, 29603.2075, 29598.7484, 29594.2386, 29590.1802, 29584.8987, 29580.7556, 29577.5299, 29574.6071, 29571.5343, 29568.2682, 29565.2577, 29562.9829, 29560.8855]
+EMA200: [29538.5480, 29538.0525, 29537.5196, 29537.1662, 29536.6397, 29535.9766, 29535.4594, 29535.2633, 29534.8080, 29534.2999, 29533.8666, 29533.0868, 29532.5511, 29532.2123, 29531.9216, 29531.5667, 29531.1357, 29530.7413, 29530.5076, 29530.2985]
+RSI14: [42.3850, 37.9450, 37.6850, 39.5224, 38.2892, 37.2834, 38.9793, 42.7596, 40.5243, 40.0307, 40.9734, 37.7549, 41.1112, 43.7584, 44.3877, 43.5996, 42.6335, 43.1843, 45.8955, 46.2898]
+ATR14: 46.0239
+### 3m
+EMA50: [29497.5995, 29497.2329, 29496.5375, 29496.0556, 29495.7495, 29495.4162, 29495.1057, 29494.8369, 29494.6766, 29494.5520, 29494.4422, 29494.2974, 29494.3249, 29494.2632, 29494.7724, 29495.6343, 29496.1781, 29496.8770, 29497.5190, 29497.9889]
+EMA200: [29587.3380, 29586.3521, 29585.2888, 29584.2835, 29583.3279, 29582.3719, 29581.4279, 29580.5008, 29579.6077, 29578.7311, 29577.8656, 29576.9987, 29576.1828, 29575.3527, 29574.6750, 29574.0987, 29573.4559, 29572.8643, 29572.2711, 29571.6465]
+RSI14: [49.7892, 49.1381, 46.5867, 48.1603, 49.5093, 49.1649, 49.2599, 49.5646, 50.6286, 50.9629, 51.0818, 50.5538, 52.7872, 51.4620, 58.6643, 62.5818, 58.0595, 59.9920, 59.4999, 56.9832]
+ATR14: 12.2672
+### 5m
+EMA50: [29523.2729, 29522.3014, 29521.3288, 29520.5414, 29519.8535, 29518.7416, 29517.6341, 29516.7955, 29515.9016, 29514.5917, 29513.5587, 29512.6152, 29511.7382, 29510.9445, 29510.0349, 29509.3277, 29509.2462, 29509.4718, 29509.7867, 29509.7754]
+EMA200: [29608.1771, 29607.0858, 29605.9954, 29604.9531, 29603.9387, 29602.8199, 29601.7023, 29600.6530, 29599.5918, 29598.4267, 29597.3304, 29596.2574, 29595.2026, 29594.1708, 29593.1119, 29592.1058, 29591.2614, 29590.5026, 29589.7762, 29588.9774]
+RSI14: [47.8494, 51.2548, 50.9736, 52.0361, 52.5529, 48.8298, 48.5080, 50.5270, 49.7057, 45.6237, 47.9264, 48.4376, 48.7626, 49.3358, 47.6149, 49.7540, 56.6021, 59.6144, 60.5654, 56.0198]
+ATR14: 18.3084
+
+## Ranked levels (Go-graded; you never re-sort)
+## Consumed levels (already role-flipped — plan AROUND them; a re-test is a NEW setup)
+- 29505.50 EQL·15m
+- 29501.50 EQL
+- 29520.00 EQL
+- 29523.25 EQL
+- 29494.75 EQH
+- 29526.50 EQL
+- 29491.25 EQH
+- 29437.00 PDL
+- 29592.50 EQL·15m
+- 29424.00 EQL·1h
+
+## FRESH FVGs (machine-computed candidates — author fvg_entry ONLY from this list; if empty, do NOT author any fvg_entry; if NON-empty and a candidate's direction agrees with your bias, an fvg_entry is EXPECTED unless you state why not in one line)
+(none fresh right now)
+
+  29509.50  PDC                  grade A  fresh    pivot           +0.0
+  29505.50  EQL·15m (HTF)        grade A  fresh    liquidity_break -4.0
+  29514.50  EQL·15m (HTF)        grade A  fresh    liquidity_break +5.0
+  29501.50  EQL                  grade A  fresh    liquidity_break -8.0
+  29520.00  EQL                  grade A  fresh    liquidity_break +10.5
+  29523.25  EQL                  grade A  fresh    liquidity_break +13.8
+  29494.75  EQH                  grade A  fresh    liquidity_break -14.8
+  29526.50  EQL                  grade A  fresh    liquidity_break +17.0
+  29491.25  EQH                  grade A  fresh    liquidity_break -18.2
+  29437.00  PDL                  grade A  fresh    react_zone      -72.5
+  29592.50  EQL·15m (HTF)        grade A  fresh    liquidity_break +83.0
+  29424.00  EQL·1h (HTF)         grade A  fresh    liquidity_break -85.5
+
+## Level roles (machine-assigned, 5-line playbook)
+role playbook: magnet_meanrevert = price gravitates back (fade/reversion setups) · liquidity_break = resting stops (break or sweep-reclaim, never a blind fade) · react_zone = first-touch reaction reference (reject/hold evidence) · target_only = take-profit / invalid reference only, NEVER an entry trigger · pivot = the auction's fulcrum (bias flips measured against it).
+
+bias_ctx: price 29509.50 · 121.0 vs VWAP 29388.50 · 0.0 vs PDC 29509.50 · inside value area (29142.15–29566.95) · nearest magnet none · nearest liquidity EQL·15m (-4.0)
+
+## Structure (1 line/TF)
+  D: unavailable
+  4h: unavailable
+  1h: RANGING (LL 29437.00 @13:00 CT)
+  15m: RANGING (LH 29521.00 @15:00 CT)
+  5m: RANGING (LH 29519.00 @15:50 CT)
+
+## HTF zones (nearest first — confluence references, NEVER standalone triggers)
+  29502.88  OB(bear)·1h    grade C  -6.6 (HTF zone)
+  29539.38  Supply·1h      grade C  +29.9 (HTF zone)
+  29539.38  OB(bear)·1h    grade C  +29.9 (HTF zone)
+  29619.50  Supply·1h      grade C  +110.0 (HTF zone)
+
+## Calendar (this session's window — times CT)
+  (no filtered events)
+
+## Recent context (digest chain)
+  2026-08-28 (daily) — —
+3 session(s), 4 entries · realized +6.0
+outcome: green
+learning: avg MAE 27.3 · avg MFE 31.8 · adherence map[A:10 B:7 F:3] · plan v[1 12 6 5 9 1 7 2 1 2 2 2 2 1 4 3 3]
+errors today: 57 (types: guardrail_would_trip, no_balance_frame), decisions lost: 0
+errors today: 57 (types: guardrail_would_trip, no_balance_frame), decisions lost: 0
+  2026-08-27 (daily) — —
+3 session(s), 3 entries · realized -34.5
+outcome: red
+learning: avg MAE 33.6 · avg MFE 34.2 · adherence map[A:12 B:7 F:1] · plan v[6 5 9 1 7 2 1 2 2 2 2 1 4 3 3 3 8 3 2]
+errors today: 16 (types: guardrail_would_trip), decisions lost: 0
+errors today: 16 (types: guardrail_would_trip), decisions lost: 0
+  2026-08-26 (daily) — —
+3 session(s), 3 entries · realized -200.0
+outcome: red
+learning: avg MAE 33.3 · avg MFE 33.6 · adherence map[A:12 B:6 D:1 F:1] · plan v[9 1 7 2 1 2 2 2 2 1 4 3 3 3 8 3 2 1]
+errors today: 122 (types: guardrail_would_trip, no_balance_frame), decisions lost: 0
+errors today: 122 (types: guardrail_would_trip, no_balance_frame), decisions lost: 0
+  2026-08-25 (daily) — —
+  2026-08-24 (daily) — —
+  2026-08-21 (daily) — —
+  2026-08-20 (daily) — —
+
+## Anchor roles (week evidence, advisory)
+  ONH/ONL = LIQUIDITY/BREAKOUT references — broken intraday ~94% of days (2,827-day NQ sample). Fade ONLY on a confirmed sweep-reclaim (wick through + close back inside on the decision TF). Otherwise treat them as targets / breakout-retest anchors, never fade walls.
+
+## BIAS-TREE (machine branches — your reasoning MUST state the branch you took, e.g. "bias-tree: inside-day long LOW")
+  1. close > PDH → bull-continuation, conviction HIGH
+  2. sweep of PDH + close back inside → bear, conviction MEDIUM  (mirror: sweep PDL + close inside → bull MEDIUM)
+  3. inside the day (between PDH/PDL) → direction of close vs PDC (prior close), conviction LOW
+  4. closed OUTSIDE the prior day's range but now inside → NO bias (write neutral; trade the structure, not a thesis)
+  5. premium/discount: longs ONLY below the 50% mark of the dealing range, shorts ONLY above it
+  6. draw-on-liquidity: the runner target is the DRAW — the nearest opposing liquidity pool beyond the first target
+  computed: PDH 29811.75 · PDL 29437.00 · PDC 29509.50 · dealing range 29437.00–29811.75 · price at 19% of the range (DISCOUNT — shorts disallowed by branch 5) · facts match branch 3 (inside day; close flat PDC → flat LOW) · draw/liquidity: EQL·15m (-4.0)
+
+## Priority setup — THE CHAIN (A2, week evidence, advisory)
+  The A-setup: sweep of a pool → displacement → FVG retrace at a Tier-1/fresh-zone origin, inside a killzone. fvg_entry scenarios SHOULD declare "chain_after": "S#" naming the sweep_reclaim that swept the origin pool. entry_mode=ce is the DEFAULT; edge only for A-grade HTF-confluent origins. Stop beyond the sweep extreme; T1 = first opposing pool; the runner = the draw. Citation: raw-FVG carries no standalone edge (40k-sample null) — the edge is conditional on the sweep→displacement chain.
+
+## No-trade gates (advisory — declare in no_trade or skip the day)
+  - balance-day (open inside prior value area AND VAs overlap) → edges-only, or skip
+  - opening gap >1.2×ATR or open outside the prior range → NEVER fade; the gap is a target
+  - no A/B zone in reach AND no pool swept by 10:30 ET → declare the skip in the plan
+  - lunch 11:30–13:30 ET: no new entries (the system hard-gates 12:00–13:30 CT)
+  - Tier-1 news → stand aside until a fresh post-news swing prints
+
+## Killzone weighting (advisory)
+  NY AM 08:30–11:00 ET is the primary window; 10:00–11:00 ET is the premium FVG window; mind the macro minutes. Conviction: down on Monday, up Thursday/Friday.
+
+## STOP-DOING (week evidence, advisory)
+  acceptance entries WITHOUT a prior sweep + displacement are 0% win evidence — skip them (A5).
+
+## OUTPUT — one JSON object, reasoning FIRST, no prose outside it
+{
+  "reasoning": "<your read: what the auction is doing and why this plan — ≤200 words, decision-focused>",
+  "bias": {"direction": "long|short|neutral", "conviction": "high|medium|low", "flip_condition": "<explicit>"},
+  "levels": [{"price": <n>, "label": "<PDH|ONH|nPOC…>", "grade": "A|B|C", "instruction": "<verb>"}],  // max 12, MUST include ≥3 below AND ≥3 above the current price
+  "scenarios": [{"id": "S1", "trigger": "<setup>", "condition": "reclaim|hold|sweep_reclaim|reject|acceptance|breakout_retest|fvg_entry|breakdown_continue|breakup_continue", "direction": "long|short", "target_chain": [<n>,…], "invalid": "<line>", "quality": "A+|A|B|C", "chain_after": "<S# of the sweep_reclaim this fvg_entry follows, or omit>", "confirm": {"rule": "touch|1x5m_close|2x5m_close|15m_close", "ref_price": <n>, "side": "above|below"}, "confirm2": {"rule": "<leg 2 rule>", "ref_price": <n>, "side": "above|below"} (OPTIONAL second trigger leg — a two-leg setup MUST carry both legs; the machine renders EVERY leg and a partial NEVER reads MET), "fvg": {"fvg_lo": <n>, "fvg_hi": <n>, "entry_mode": "edge|ce", "displacement_atr": <n>, "origin_level": "<label>", "direction": "long|short"}, "breakdown": {"level": <n>, "level_label": "<label>", "entry_mode": "pullback|immediate"} (REQUIRED iff condition==breakdown_continue|breakup_continue — see the WATERFALL PLAY rule), "arm": {"enabled": true, "entry": <n>, "stop": <n>, "target": <n>, "wait_confirm": true}}],  // 1..5 — confirm{} is REQUIRED per scenario; fvg{} REQUIRED iff condition=="fvg_entry" (ce is COMPUTED, never written); breakdown{} REQUIRED iff waterfall-class; chain_after is OPTIONAL; arm{} is OPTIONAL (see the ARMED ORDERS rule)
+  "no_trade": ["first 5m (CT)", "12:00-13:30 CT lunch", "<calendar blackouts>"],
+  "death_condition": "<the single line that invalidates this whole plan>",
+  "death": {"price": <level>, "side": "below|above", "rule": "2x5m|15m_close|5m_close"},
+  "flip": {"price": <level>, "side": "below|above", "rule": "2x5m|15m_close|5m_close", "flip_to": "long|short"},
+  "day_type": "trend|balance|<optional>"
+}
+Rules: levels chosen ONLY from the ranked table above — plus the HTF zones section, where you MUST include at least ONE HTF zone row in your levels as a confluence reference, never as a standalone trigger — the nearest 1h supply/demand zone row in that section MUST be one of your included rows (setup-rung context, never a standalone trigger); levels MUST be at least 3 points apart — near-duplicates are merged by the system; S/D & FVG are confluence, never standalone. Copy the EXACT label from the table row for the price you choose — never re-label a table level as a different anchor (a zone price relabeled 'PDH/PDL/PDC' is a phantom level and is REJECTED at write). Quality: A+ = highest-conviction setup, A = strong, B = workable, C = machine-demoted (trigger level consumed at write — G5) — use C honestly for a demoted setup, never as a default. The scenario MIX must follow the regime + day_type: a trend-down day gets breakdown/pullback-short plays, a trend-up day the reverse, balance days get two-sided plays — do NOT default to 2 longs + 1 rally-rejection short on every day. If price sits BELOW PDL you MUST write a continuation short; ABOVE PDH, a continuation long. A1: your reasoning MUST open by naming the bias-tree branch you took (e.g. "bias-tree: inside-day long LOW"), then argue from it. A2: an fvg_entry SHOULD chain after a sweep_reclaim (chain_after: S#) — bare gaps at non-A/B origins get a WARN at write, not a reject. A2b (machine grounding, 2026-08-27): author an fvg_entry scenario ONLY from the ## FRESH FVGs list above — copy its direction and lo–hi EXACTLY. If the list is empty, do NOT author any fvg_entry (invented/stale gaps are REJECTED at write). A2c (FVG demand, 2026-08-28): when ## FRESH FVGs is NON-empty and at least one candidate's direction agrees with your bias, you SHOULD author an fvg_entry from that candidate; if you decide not to, state the reason in ONE line in your reasoning (e.g. 'no fvg_entry: nearest fresh gap is 30pt away — outside my reach'). death.flip objects are MACHINE-EVALUATED — choose levels from your level list and a rule; they must match the prose lines. The flip and death MUST be DIFFERENT events: never the same level AND same rule for both (a flip at the same tick death fires is void). A short-biased plan's flip sits BELOW its death line or uses a stricter rule, so the flip can actually fire. Every scenario's confirm{} is MACHINE-EVALUATED the same way: rule + ref_price + side, and ref_price MUST equal a number written in that scenario's trigger/invalid prose. target_chain is GUIDANCE for the executor AI (which sets the actual take_profit) — it is validated for reachability at write time but never enforced at execution (D2 ruling). ARMED ORDERS (the resting order IS the fast path — prefer it over a 2-minute debate at the touch): every fvg_entry / reject scenario you author at quality A or B SHOULD carry arm{} — enabled:true + EXACT entry/stop/target (breakout_retest stays a normal AI play: the machine never arms it — GAR-F4). A setup the planner believes in gets a resting order, not a mid-touch argument. Long: stop < entry < target. Short: target < entry < stop. CHAINED ARMS: when a sweep_reclaim you believe in confirms, its RETRACE entry should already be resting — author that retrace as its own arm with wait_confirm:true, or add wait_confirm:true to the sweep scenario's arm: the system holds the arm dormant until the scenario's confirm{} is machine-MET, then places it (the sweep fast path). NEVER arm acceptance or a raw sweep WITHOUT the wait_confirm chain. Keep targets REAL: a planned R:R above ~6 is a fantasy target and gets WARN-flagged at write. The system places arms within a tick band, manages them tick-level, and cancels on veto/dormant/session-end. FEASIBILITY CONTRACT: an arm{} MUST be gate-feasible or it is REFUSED every cycle and learns nothing — R:R = |target−entry| ÷ |stop−entry| must be ≥ 2.0 (ARM_MIN_RR) AND the stop distance must be ≥ 1.0× the current 5m ATR (the facts list the session ATR5m — cite the live value; a 10-point stop when ATR5m is ~16 is an instant refuse). If your setup cannot meet BOTH, OMIT arm{} and let the AI path take it. WATERFALL ARMS (F1): a breakdown_continue / breakup_continue at quality A or B SHOULD carry arm{} with wait_confirm:true + entry_mode=pullback — the resting limit sits AT the broken level and chains on confirm leg 1, so the pullback-that-fails FILLS it (immediate-mode waterfall plays stay on the AI path). Condition×session guidance (week evidence): reject-based setups are best in NY RTH (75% win, +665 this week); acceptance needs a clear displacement or skip (0% win this week); sweep_reclaim requires the reclaim CLOSE on the decision TF, never the wick alone (0% win this week). WATERFALL PLAY (F1): author breakdown_continue|breakup_continue when the tape shows one-sided delivery, a >1.2×ATR gap-and-go, or a waterfall after a failed rally — the momentum-follow class. breakdown{} = broken level + entry_mode; confirm = leg 1 (breakdown), confirm2 = leg 2 (failed retest). entry_mode=immediate is AI-path ONLY (no arm; the machine rejects immediate arms): the market entry fires on the 2nd confirming close and runs the FULL gate chain (min-SL ≥ 1.0×ATR5m, R:R ≥ min_risk_reward_ratio, min-conf, HTF veto) — CHOOSE immediate for no-retest waterfalls (one-sided delivery, displacement EXPANDING, price running away from the level): SL beyond the pullback extreme, target at the next liquidity pool. entry_mode=pullback is the ARM path (resting limit AT the broken level, chains on leg 1 — the pullback-that-fails FILLS it) — CHOOSE pullback when a retest is likely. NOISE FILTER (≤5): at most 5 of your included level rows may be line-levels clustered within 3 points of each other — keep the strongest of any such cluster, never a crowd. FVG ENTRY (fvg_entry): author when displacement off a Tier-1 level (VWAP/POC/PDH/PDL/ON/IB/fresh S/D) leaves a FRESH gap toward the trade direction · prefer the FIRST retrace (the freshness ladder applies to the gap as a zone) · entry_mode=ce for gaps > 20pts, edge for tighter · SL beyond the DISTAL edge · targets chain to the next liquidity (EQH/EQL, ON, PDH/PDL). Citations: NQ gap sweet spot 20–80pts; 1h+ fill ~70–80%; displacement floor per MSS research. no_trade may contain ONLY the fixed session windows (first 5m, lunch) plus T1 HARD-blackout lines from the calendar — a T2 caution event is NEVER added to no_trade and never stops entries. Respect the no-trade windows. If you cannot form a credible plan, say so in reasoning and output a neutral/no-trade plan. Candles are ground truth for structure; ranked levels and tags are summaries. On conflict, trust the candles and say so in the scenario rationale. Weekly guidance (soft law): counter-weekly scenarios are allowed but must state their justification (an HTF level or a sweep-reclaim of the draw); target chains toward the draw are preferred. The weekly bias never gates your plan.
+
+
+════ E1 FOOTER (dress-rehearsal-0830) ════
+chars=22391 bytes=22637 tokens(chars/4)=5597 %of65536=34.2%
+rendered=2026-08-30T14:04:22-05:00 CT from SCRATCH DB /tmp/nofx-vf-db/data.db (15646 bars rows)
+session=ASIA trade_date=2026-08-30 · builder=kernel.BuildPlannerPrompt (kernel/planner_prompt.go:309)

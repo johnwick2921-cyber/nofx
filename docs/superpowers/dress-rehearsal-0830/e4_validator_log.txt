@@ -1,0 +1,128 @@
+════ E4 VALIDATOR LOG — SESSION REHEARSAL (dress-rehearsal-0830) ════
+the ONE live session-planner call (run d1, 14:04:22 CT):
+  AI call: err=<nil> · elapsed=395.4s · raw bytes=4740 · finish_reason="stop" · resolved_model="deepseek-v4-pro"
+  (mcp/client.go:402: AI call complete: completion=26339 prompt=8304 finish_reason=stop)
+the chain verdicts below re-process the SAME raw response via the d1r replay (no second call):
+  the first harness pass had exited at the breakdown reject before emitting the
+  full chain + desk-review data; the replay re-runs the identical validator
+  chain + desk review over the identical bytes (e2 unchanged).
+════ d1 REPLAY (no AI call — re-processes e2_ai_response_raw.json) ════
+loaded raw from e2 (4740 bytes) — the SAME response the live call produced; no new call
+── validator chain start (mode=replay) ──
+ParsePlanDocCapped (schema gate incl. 9-condition enum): ACCEPTED (levels 12 ≤ 12 · scenarios 4)
+CollapsePlanLevels: nothing to merge (tolerance 12 ticks × 0.25)
+MislabeledStructuralLevels: clean
+ValidatePlanDocWithFactsMachine: ACCEPTED (sideQuota=4, thin-side notes: [])
+ValidateFvgEntryScenarios: n/a (no fvg_entry scenario)
+ValidateBreakdownContinueScenarios: REJECTED: S4 breakdown_continue: the tape shows NO 2×5m breakdown through 29437.00 yet (0 confirming closes, no reclaim check) — author it only after the displacement exists (or set entry_mode=immediate and accept the 2nd-close trigger)
+bias-tree branch: CITED ✓ — bias-tree: branch 3 inside-day flat LOW at 19% of the 29437–29811 dealing range (discount — branch 5: longs only, shorts disallowed while the range holds). After the 1h down leg swept 29437 PDL (13:00 CT) the tape rebuil…
+"per candles" citation present in 0 scenario line(s) — ABSENT (honest report)
+WRITE-PATH VERDICT: REJECTED (1 reject reason(s)) — the LIVE write path would retry up to 2 more times on the SAME prompt (the session path LOGS the reason, it does not append it — trader/auto_trader_planner.go:1146), then fail-closes to the NO-TRADE marker (:1386-1389); this rehearsal made NO retry (hard budget: 2 real calls total)
+e3 written: REJECTED envelope + parsed doc (6590 bytes)
+
+════ DESK-REVIEW DATA ════
+context: price=29509.50 dATR=368.2 ATR5m=18.31 tick=0.25 proximity_band=±552.3 pts minSL=18.31 cluster_tol=3.00 pts (12 ticks)
+structure: [D: unavailable 4h: unavailable 1h: RANGING (LL 29437.00 @13:00 CT) 15m: RANGING (LH 29521.00 @15:00 CT) 5m: RANGING (LH 29519.00 @15:50 CT)]
+bias-ctx line: bias_ctx: price 29509.50 · 121.0 vs VWAP 29388.50 · 0.0 vs PDC 29509.50 · inside value area (29142.15–29566.95) · nearest magnet none · nearest liquidity EQL·15m (-4.0)
+facts: PDH=29811.75 PDL=29437.00 PDC(biasCtx)=29509.50 price=29509.50
+weekly refs (compute only): PWH=29811.75 PWL=28947.75 PWC=29509.50 weekly_open=0.00 thin=true completed_weeks=2
+
+── 2.1 LEVEL TRUTH (doc row → real map object) ──
+  29424.00   EQL·1h (HTF)     grade=A machine_grade="" | exact-key=true label=true | nearest=[pool] 29424.00   kind=EQL       grade=A fresh="fresh" conf=19 score=1.344 | dist_pt=+0.00 (0.00×ATR5m) | EXACT (machine row @29424.00 EQL·1h/A)
+  29437.00   PDL              grade=A machine_grade="" | exact-key=true label=true | nearest=[pool] 29437.00   kind=PDL       grade=A fresh="fresh" conf=31 score=1.920 | dist_pt=+0.00 (0.00×ATR5m) | EXACT (machine row @29437.00 PDL/A)
+  29491.25   EQH              grade=A machine_grade="" | exact-key=true label=true | nearest=[pool] 29491.25   kind=EQH       grade=A fresh="fresh" conf=15 score=1.120 | dist_pt=+0.00 (0.00×ATR5m) | EXACT (machine row @29491.25 EQH/A)
+  29494.75   EQH              grade=A machine_grade="" | exact-key=true label=true | nearest=[pool] 29494.75   kind=EQH       grade=A fresh="fresh" conf=19 score=1.120 | dist_pt=+0.00 (0.00×ATR5m) | EXACT (machine row @29494.75 EQH/A)
+  29502.88   OB(bear)·1h      grade=C machine_grade="" | exact-key=true label=true | nearest=[pool] 29502.88   kind=OB        grade=C fresh="fresh" conf=0 score=1.050 | dist_pt=+0.01 (0.00×ATR5m) | EXACT (machine row @29502.88 OB(bear)·1h/C)
+  29509.50   PDC              grade=A machine_grade="" | exact-key=true label=true | nearest=[pool] 29509.50   kind=PDC       grade=A fresh="fresh" conf=27 score=1.920 | dist_pt=+0.00 (0.00×ATR5m) | EXACT (machine row @29509.50 PDC/A)
+  29514.50   EQL·15m (HTF)    grade=A machine_grade="" | exact-key=true label=true | nearest=[pool] 29514.50   kind=EQL       grade=A fresh="fresh" conf=35 score=1.344 | dist_pt=+0.00 (0.00×ATR5m) | EXACT (machine row @29514.50 EQL·15m/A)
+  29520.00   EQL              grade=A machine_grade="" | exact-key=true label=true | nearest=[pool] 29520.00   kind=EQL       grade=A fresh="fresh" conf=19 score=1.120 | dist_pt=+0.00 (0.00×ATR5m) | EXACT (machine row @29520.00 EQL/A)
+  29523.25   EQL              grade=A machine_grade="" | exact-key=true label=true | nearest=[pool] 29523.25   kind=EQL       grade=A fresh="fresh" conf=23 score=1.120 | dist_pt=+0.00 (0.00×ATR5m) | EXACT (machine row @29523.25 EQL/A)
+  29526.50   EQL              grade=A machine_grade="" | exact-key=true label=true | nearest=[pool] 29526.50   kind=EQL       grade=A fresh="fresh" conf=11 score=1.120 | dist_pt=+0.00 (0.00×ATR5m) | EXACT (machine row @29526.50 EQL/A)
+  29539.38   Supply·1h        grade=C machine_grade="" | exact-key=true label=true | nearest=[pool] 29539.38   kind=SUPPLY    grade=C fresh="fresh" conf=0 score=1.073 | dist_pt=+0.01 (0.00×ATR5m) | EXACT (machine row @29539.38 Supply·1h/C)
+  29592.50   EQL·15m (HTF)    grade=A machine_grade="" | exact-key=true label=true | nearest=[pool] 29592.50   kind=EQL       grade=A fresh="fresh" conf=29 score=1.176 | dist_pt=+0.00 (0.00×ATR5m) | EXACT (machine row @29592.50 EQL·15m/A)
+machine row count: grades=38 labels=38 pool=24 seated=12 htfzones=4 htfzonesfull=20
+
+── 2.2 STOP SANITY (arm scenarios) ──
+  S1 stop=29419.00 | stopDist=22.00 (≥minSL 18.31? true) | near structure OB(bear)·15m 29420.75 (kind=OB, 1.8 pts away) | tape: NEVER traded on the last stored session tape (session start 08-27 17:00 CT)
+  S2 stop=29479.00 | stopDist=19.00 (≥minSL 18.31? true) | near structure EQL 29479.00 (kind=EQL, 0.0 pts away) | tape: TRADED 61× — first at 08-28 11:21 CT
+
+── 2.3 TARGET REALISM (each scenario target vs real pools) ──
+  last session profiles (session_date/poc/vah/val): 2026-08-26{poc=29581.88 vah=29630.00 val=29508.75} · 2026-08-25{poc=29216.88 vah=29302.50 val=29188.75} · 2026-08-24{poc=29225.62 vah=29338.75 val=29202.50} · 2026-08-23{poc=29186.88 vah=29247.50 val=29006.25} · 2026-08-20{poc=29400.62 vah=29418.75 val=29282.50}
+  S1 target=29491.25 | AT pool EQH 29491.25 (kind=EQH grade=A) | dist_vs_pool=+0.00 pts (0.00×ATR5m) | -18.2 pts from price (-0.05×dATR; band=±552.3 pts → session-reachable)
+  S1 target=29509.50 | AT pool PDC 29509.50 (kind=PDC grade=A) | dist_vs_pool=+0.00 pts (0.00×ATR5m) | +0.0 pts from price (0.00×dATR; band=±552.3 pts → session-reachable)
+  S1 target=29514.50 | AT pool EQL·15m 29514.50 (kind=EQL grade=A) | dist_vs_pool=+0.00 pts (0.00×ATR5m) | +5.0 pts from price (0.01×dATR; band=±552.3 pts → session-reachable)
+  S1 target=29539.38 | AT pool Supply·1h 29539.38 (kind=SUPPLY grade=C) | dist_vs_pool=+0.01 pts (0.00×ATR5m) | +29.9 pts from price (0.08×dATR; band=±552.3 pts → session-reachable)
+  S1 target=29494.75 | AT pool EQH 29494.75 (kind=EQH grade=A) | dist_vs_pool=+0.00 pts (0.00×ATR5m) | -14.8 pts from price (-0.04×dATR; band=±552.3 pts → session-reachable)
+  S2 target=29509.50 | AT pool PDC 29509.50 (kind=PDC grade=A) | dist_vs_pool=+0.00 pts (0.00×ATR5m) | +0.0 pts from price (0.00×dATR; band=±552.3 pts → session-reachable)
+  S2 target=29514.50 | AT pool EQL·15m 29514.50 (kind=EQL grade=A) | dist_vs_pool=+0.00 pts (0.00×ATR5m) | +5.0 pts from price (0.01×dATR; band=±552.3 pts → session-reachable)
+  S2 target=29520.00 | AT pool EQL 29520.00 (kind=EQL grade=A) | dist_vs_pool=+0.00 pts (0.00×ATR5m) | +10.5 pts from price (0.03×dATR; band=±552.3 pts → session-reachable)
+  S2 target=29539.38 | AT pool Supply·1h 29539.38 (kind=SUPPLY grade=C) | dist_vs_pool=+0.01 pts (0.00×ATR5m) | +29.9 pts from price (0.08×dATR; band=±552.3 pts → session-reachable)
+  S2 target=29539.38 | AT pool Supply·1h 29539.38 (kind=SUPPLY grade=C) | dist_vs_pool=+0.01 pts (0.00×ATR5m) | +29.9 pts from price (0.08×dATR; band=±552.3 pts → session-reachable)
+  S3 target=29526.50 | AT pool EQL 29526.50 (kind=EQL grade=A) | dist_vs_pool=+0.00 pts (0.00×ATR5m) | +17.0 pts from price (0.05×dATR; band=±552.3 pts → session-reachable)
+  S3 target=29539.38 | AT pool Supply·1h 29539.38 (kind=SUPPLY grade=C) | dist_vs_pool=+0.01 pts (0.00×ATR5m) | +29.9 pts from price (0.08×dATR; band=±552.3 pts → session-reachable)
+  S3 target=29592.50 | AT pool EQL·15m 29592.50 (kind=EQL grade=A) | dist_vs_pool=+0.00 pts (0.00×ATR5m) | +83.0 pts from price (0.23×dATR; band=±552.3 pts → session-reachable)
+  S4 target=29424.00 | AT pool EQL·1h 29424.00 (kind=EQL grade=A) | dist_vs_pool=+0.00 pts (0.00×ATR5m) | -85.5 pts from price (-0.23×dATR; band=±552.3 pts → session-reachable)
+
+── 2.4 R:R RECOMPUTE (independent; 2dp) ──
+  S1 arm entry=29441.00 stop=29419.00 target=29494.75 | implied R:R=2.44 (model stated none — prices only) | arm-floor 2.0? true | decision-floor 3.00? false | wellFormed=true
+  S2 arm entry=29498.00 stop=29479.00 target=29539.38 | implied R:R=2.18 (model stated none — prices only) | arm-floor 2.0? true | decision-floor 3.00? false | wellFormed=true
+  S3 no-arm (AI path) — R:R decided by the executor at decision time; no model-stated R:R in the doc
+  S4 no-arm (AI path) — R:R decided by the executor at decision time; no model-stated R:R in the doc
+
+── 2.5 CONDITION LEGALITY (verbatim scenario objects) ──
+  S1: condition="sweep_reclaim" direction=long quality="A" armable=false
+      trigger: "Sweep of 29437.00 PDL (wick below) followed by a 5m close back above 29437.00 — reclaim close, never wick alone."
+      invalid: "A 5m close back below 29424.00 EQL·1h before the arm fills voids the setup."
+      confirm: rule="1x5m_close" ref_price=29437.00 side="above"
+      arm: {"enabled":true,"entry":29441,"stop":29419,"target":29494.75,"wait_confirm":true}
+      ArmSpecValid: OK
+  S2: condition="sweep_reclaim" direction=long quality="B" armable=false
+      trigger: "Sweep of 29494.75 EQH (toward 29491.25) followed by a 5m close back above 29494.75 — the 29502.88 OB·1h sits just overhead as confluence."
+      invalid: "A 5m close below 29491.25 EQH before the arm fills voids the setup."
+      confirm: rule="1x5m_close" ref_price=29494.75 side="above"
+      arm: {"enabled":true,"entry":29498,"stop":29479,"target":29539.38,"wait_confirm":true}
+      ArmSpecValid: OK
+  S3: condition="breakout_retest" direction=long quality="B" armable=false
+      trigger: "5m close above 29521.00 (15m LH) breaks the balance; enter only on a retest that holds above 29521.00."
+      invalid: "A 5m close back below 29514.50 after the breakout voids the retest."
+      confirm: rule="1x5m_close" ref_price=29521.00 side="above"
+      confirm2: rule="touch" ref_price=29521.00 side="above"
+  S4: condition="breakdown_continue" direction=short quality="B" armable=true
+      trigger: "2x5m close below 29437.00 PDL — this is the flip leg of the plan, no blind front-running of the level."
+      invalid: "A 5m close back above 29437.00 before entry voids the breakdown."
+      confirm: rule="2x5m_close" ref_price=29437.00 side="below"
+      confirm2: rule="1x5m_close" ref_price=29437.00 side="below"
+      breakdown: {"level":29437,"level_label":"PDL","entry_mode":"pullback"}
+      breakdown machine state: leg1=false leg2=false reclaimed=true measured_disp=489.25 pts last_close=29509.50
+
+── 2.6 BIAS (facts vs claims) ──
+  bias: long / low · flip_condition: "A 2x5m close below 29437.00 PDL flips the plan to short — the breakdown leg S4 becomes the working scenario."
+  reasoning (full): bias-tree: branch 3 inside-day flat LOW at 19% of the 29437–29811 dealing range (discount — branch 5: longs only, shorts disallowed while the range holds). After the 1h down leg swept 29437 PDL (13:00 CT) the tape rebuilt 29478→29521 and now sits at PDC 29509.50 inside value — balance, not impulse (RV 91%, 15m/5m ranging). No fresh FVGs → no fvg_entry authored. Plan: buy the range at discount — sweep-reclaims of 29494.75 EQH (29502.88 OB·1h as confluence) and 29437 PDL, plus the 29521 breakout-retest toward the 29539 supply/29592 HTF EQL. The sole short is the conditional PDL breakdown (S4, AI path — no arm: an 18.31-ATR5m stop gives R:R<2.0 to 29424). Arms S1/S2 wait-confirm, sized ≥1×ATR5m 18.31. Death: 15m close below 29424 EQL·1h.
+  day_type="balance" · death_condition="A 15m close below 29424.00 EQL·1h kills the plan — the discount structure is gone; no more entries."
+
+── 2.7 CANDLE USE ──
+  scenario lines mentioning candles: 0
+
+── 2.8 GATE PREDICTION (per scenario, plan-time computable) ──
+  veto mode="cross" · 1h=RANGING · 4h=unavailable · decision floor minRR=3.00 minConf=60 (conf is executor-time, plan-time N/A)
+  OVERRIDE: the write path REJECTED this plan (see the chain verdicts above) — tradeable % = 0 regardless of per-scenario math; the desk review proceeds for the record
+  S1 sweep_reclaim/long: veto1h=false veto4h=false cross_veto=false veto_applied=false | arm_ok=true | plan-time tradeable=true
+  S2 sweep_reclaim/long: veto1h=false veto4h=false cross_veto=false veto_applied=false | arm_ok=true | plan-time tradeable=true
+  S3 breakout_retest/long: veto1h=false veto4h=false cross_veto=false veto_applied=false | arm_ok=true | plan-time tradeable=true
+  S4 breakdown_continue/short: veto1h=false veto4h=false cross_veto=false veto_applied=false | arm_ok=true | plan-time tradeable=true
+  plan-time tradeable: 4/4 scenarios (100%) — confidence is the executor's at decision time; NOT predictable at plan time
+  FINAL tradeable: 0% — the plan never reaches the executor (write-path reject)
+
+── MACHINE ROWS (seated) ──
+  29592.50   kind=EQL       label=EQL·15m          grade=A fresh="fresh" conf=29 score=1.176 dist=+83.0 role=liquidity_break
+  29526.50   kind=EQL       label=EQL              grade=A fresh="fresh" conf=11 score=1.120 dist=+17.0 role=liquidity_break
+  29523.25   kind=EQL       label=EQL              grade=A fresh="fresh" conf=23 score=1.120 dist=+13.8 role=liquidity_break
+  29520.00   kind=EQL       label=EQL              grade=A fresh="fresh" conf=19 score=1.120 dist=+10.5 role=liquidity_break
+  29514.50   kind=EQL       label=EQL·15m          grade=A fresh="fresh" conf=35 score=1.344 dist=+5.0 role=liquidity_break
+  29509.50   kind=PDC       label=PDC              grade=A fresh="fresh" conf=27 score=1.920 dist=+0.0 role=pivot
+  29505.50   kind=EQL       label=EQL·15m          grade=A fresh="fresh" conf=19 score=1.344 dist=-4.0 role=liquidity_break
+  29501.50   kind=EQL       label=EQL              grade=A fresh="fresh" conf=23 score=1.120 dist=-8.0 role=liquidity_break
+  29494.75   kind=EQH       label=EQH              grade=A fresh="fresh" conf=19 score=1.120 dist=-14.8 role=liquidity_break
+  29491.25   kind=EQH       label=EQH              grade=A fresh="fresh" conf=15 score=1.120 dist=-18.2 role=liquidity_break
+  29437.00   kind=PDL       label=PDL              grade=A fresh="fresh" conf=31 score=1.920 dist=-72.5 role=react_zone
+  29424.00   kind=EQL       label=EQL·1h           grade=A fresh="fresh" conf=19 score=1.344 dist=-85.5 role=liquidity_break

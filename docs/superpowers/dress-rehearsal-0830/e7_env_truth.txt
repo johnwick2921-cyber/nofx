@@ -1,0 +1,22 @@
+════ E7 ENV TRUTH (dress-rehearsal-0830) — resolved at call time ════
+scratch ai_models row: id=8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek · name="DeepSeek AI" · provider=deepseek · enabled=1
+  custom_api_url="" · custom_model_name="" · thinking_mode="" · reasoning_effort="" · api_key len=92 (ENC:v1:za10zi)
+decrypted key: sk-ed…4681 (len 35, ENC:v1 AES-256-GCM, DATA_ENCRYPTION_KEY from /home/hoang/nofx/.env)
+fingerprint check (must be sk-e…4681): true
+model: client=mcp.NewAIClientByProvider("deepseek") → DefaultDeepSeekModel="deepseek-v4-pro" (mcp/providers.go:20)
+max_tokens: AI_PLAN_MAX_TOKENS="" → aiPlanMaxTokens()=65536 (trader/auto_trader_planner.go:924; default 65536)
+proximity: strategy day_plan.proximity_filter_atr=0.30 → kernel.ResolveProximityK=0.3 (kernel/plan_lifecycle.go:25)
+veto: HTF_VETO_MODE="cross" → kernel.HTFVetoMode()="cross" (kernel/htf_veto.go:39; cross = 1h AND 4h must agree)
+arm_rr: ARM_MIN_RR = 2.0 (fixed contract, kernel/planner_prompt.go:600 + plan_doc.go:413)
+min-RR floor (decision gate): risk_control.min_risk_reward_ratio=3.00 · min_confidence=60 (store.RiskControlConfig, live strategy row)
+min-SL: MIN_SL_ATR_MULT="" → kernel.MinSLATRMult()=1.00 (kernel/min_sl.go:33)
+PLANNER_CANDLES: env="" → kernel.PlannerCandlesEnabled()=true (kernel/weekly_knobs.go:121)
+BD_MIN_DISP_ATR: env="" (kernel/breakdown_continue.go:44)
+CONFLUENCE_CAP: env="" (default 3)
+session caps: max_levels=12 · scenario_cap=5 · side_quota=4 · min_grade="B" (resolved strategy config)
+market: price=29509.50 · dATR=368.2 · ATR5m=18.31 (StaleConfirmATR5m, kernel/plan_confirm.go)
+
+══ AT-CALL-TIME APPENDIX ══
+resolved_model at call time: "deepseek-v4-pro"
+finish_reason="stop" · elapsed=395.4s · raw bytes=4740
+err=<nil>
