@@ -1,7 +1,7 @@
 # News-Hygiene Micro-Wave — build & park record
 
 **Branch:** `fix/news-hygiene` · **Base:** `f08a300a` (rewritten dev) · **Deploy:** Monday flat window, before NFP Friday 2026-09-04. Parked for the owner's "go".
-**Commit-ref:** `%%COMMIT_REF%%`
+**Commit-ref:** `https://github.com/johnwick2921-cyber/nofx/blob/e3d125b0f1a532b2993af7ee57eab63ac3c996c6/docs/superpowers/plans/2026-08-29-news-hygiene-micro-wave.md`
 
 ## The T1 gate — quoted behavior (post-wave)
 
