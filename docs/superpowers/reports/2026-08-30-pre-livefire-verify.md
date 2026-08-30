@@ -248,3 +248,23 @@ stderr carried the AI-call logs; the live journal never saw them.
   19.75 ≥ 1×ATR5m), "per candles" ABSENT (honest). Weekly dry-run exact
   (2 weeks, thin_history, insufficient IPDA 20/40/60d). ISOLATION PROVEN.
 
+
+## P5 · VERDICT (orchestrator)
+
+| Area | Verdict | Evidence |
+|---|---|---|
+| Connections (P1) | READY | NT8 wire 13 fr/min age 12s · 0 reconnects · AddOn md5 ×3 MATCH · DB integrity ok / WAL / last bar 08-28 15:59 CT (weekend-expected) · systemd active (NRestarts 90 incl. 3 today's cutovers) · chrony 0.12s + rtc_vs_go 0s · **DeepSeek rotated key HTTP 200** (sk-e…4681) · FF true-count "fetched 13 events" · static NFP/CPI armed · env truth: proximity 0.3 · veto cross · ARM_MIN_RR 2.0 · PLANNER_CANDLES on · WEEKLY_READ_CT sun 16:30 |
+| Grades (P2) | READY (1 soft S) | weight table zero-drift; machine-path 6 EXACT / 0 DELTA; **P2-S1 phantom-PDL label** (29424.00 RTH-low vs machine prior-day 29402.25) — advisory label drift, fix spec ≤3 lines (label source or gate extension), owner-ruled post-NFP |
+| Prompt integrity (P3) | READY | 8,304 real tokens = 12.7% of 65,536 · candles 12/12 exact · "WEEKLY: none" exact · Calendar/FRESH FVGs empty = weekend-legit · **S-note**: Structure D/4h "unavailable" by construction while 4h candles render (cosmetic) |
+| AI round-trip (P4) | READY | finish_reason=stop · 9-condition gate ACCEPT · bias-tree cited · arm S2 well-formed (R:R 2.26, stop 19.75 ≥ 1×ATR5m) · "per candles" ABSENT (first-evidence pending, telemetry counts it) |
+| Isolation | READY | live plans 159→159 · decisions max-rowid 34740→34740 · armed 11→11 · zero harness lines in the live journal |
+| Weekly dry-run | READY | 2 completed weeks · thin_history=true · NWOG 08-24 filled · IPDA 40/60d insufficient — exactly what tonight's 16:30 read should author |
+
+**OWNER-PENDING (no deploy, no blocker):** (1) DeepSeek 2 row (15m trader) still holds the OLD key `sk-2…054c` — still HTTP 200, rotation incomplete; owner click in Settings. (2) P2-S1 phantom-PDL. (3) Structure D/4h note.
+
+## WATCHLIST (re-confirmed, expected lines)
+- **16:30 CT** — `📅 WEEKLY READ starting for week 2026-08-31` → `📅 WEEKLY READ written 2026-08-31 v1 bias=… conviction=low … thin=true` (depth-guard proof).
+- **16:55 CT** — `🛑 planner_preflight_refused … stale_bars` ×n (known, benign) → passes at first forming bar.
+- **17:00–17:04 CT** — `🗓️ PLAN written 2026-08-30 ASIA v1`; prompt carries `## Candles` + `## Weekly Context: WEEKLY: <bias>/low …`.
+- **17:05 CT** — `📊 level_stats: 2026-08-29 … giving up after 4 attempts` (known; real eval Monday 17:05).
+- Watchdog: silence throughout (0 🔕); persist summaries `closes_dropped=0` through the reopen flood.
