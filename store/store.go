@@ -34,6 +34,7 @@ type Store struct {
 	sessionProfile  *SessionProfileStore
 	barHistory      *BarHistoryStore
 	armedOrders     *ArmedOrderStore
+	abConfirm       *AbConfirmStore
 	levelStats      *LevelStatsStore
 	touchEpisodes   *TouchEpisodeStore
 	calendarSlice   *CalendarSliceStore
@@ -215,6 +216,9 @@ func (s *Store) initTables() error {
 	if err := s.ArmedOrders().Migrate(); err != nil {
 		return fmt.Errorf("failed to initialize armed_orders table: %w", err)
 	}
+	if err := s.AbConfirm().Migrate(); err != nil {
+		return fmt.Errorf("failed to initialize ab_confirm_log table: %w", err)
+	}
 	return nil
 }
 
@@ -386,6 +390,16 @@ func (s *Store) ArmedOrders() *ArmedOrderStore {
 		s.armedOrders = NewArmedOrderStore(s.gdb)
 	}
 	return s.armedOrders
+}
+
+// AbConfirm gets the E8 shadow A/B counterfactual table (2026-08-30).
+func (s *Store) AbConfirm() *AbConfirmStore {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.abConfirm == nil {
+		s.abConfirm = NewAbConfirmStore(s.gdb)
+	}
+	return s.abConfirm
 }
 
 // LevelStats gets the B4 forward-validation store (2026-08-26).

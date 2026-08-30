@@ -167,6 +167,46 @@ func TestSplitSiblingStopOutCancelsUnfilledLeg(t *testing.T) {
 	}
 }
 
+// TestLogShadowABWritesOnlyItsOwnTable — E8 zero-real-effect law at the store
+// level: the shadow logger writes ONLY ab_confirm_log (never the armed
+// ledger, never a plan row).
+func TestLogShadowABWritesOnlyItsOwnTable(t *testing.T) {
+	at, st := resetTrader(t, store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true}})
+	sc := kernel.PlanScenario{
+		ID: "S1", Condition: "reject", Direction: "long",
+		Confirm: &kernel.PlanConfirm{Rule: "touch", RefPrice: 100, Side: "above"},
+		Arm:     &kernel.PlanArmSpec{Enabled: true, Entry: 100, Stop: 95, Target: 110},
+	}
+	base := time.Now().Add(-30 * time.Minute).Truncate(time.Minute).UnixMilli()
+	closes := []float64{99, 100.5, 99, 99, 99, 101, 101, 101, 101, 101, 102, 102, 102, 102, 102, 104, 106, 108, 110, 110}
+	bars := make([]market.Kline, 0, len(closes))
+	for i, cl := range closes {
+		o := base + int64(i)*60_000
+		bars = append(bars, market.Kline{OpenTime: o, CloseTime: o + 59_999, Open: cl, High: cl + 0.5, Low: cl - 0.5, Close: cl})
+	}
+	plan := &kernel.ActivePlan{PlanID: "2026-08-28:NY:trader-1", Version: 3, Session: "NY", BirthMs: base - 1}
+	at.logShadowAB(plan, sc, bars, bars[len(bars)-1].CloseTime+1)
+
+	// The 4-rule counterfactual rows exist (touch/1x5m/2x5m present; MSS absent
+	// on this tape) — and NOTHING else changed.
+	var n int64
+	if err := st.DB().QueryRow("SELECT COUNT(*) FROM ab_confirm_log").Scan(&n); err != nil || n < 3 {
+		t.Fatalf("ab_confirm_log rows = %d err=%v, want ≥3", n, err)
+	}
+	arms, _ := st.ArmedOrders().ListNonTerminal(at.id)
+	if len(arms) != 0 {
+		t.Fatalf("shadow logger touched the armed ledger: %+v", arms)
+	}
+	if err := st.AbConfirm().Upsert(&store.AbConfirmLogDB{PlanID: plan.PlanID, Version: plan.Version,
+		Scenario: "S1", Rule: "touch", FillPx: 100, Outcome: "target"}); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	var n2 int64
+	if err := st.DB().QueryRow("SELECT COUNT(*) FROM ab_confirm_log").Scan(&n2); err != nil || n2 != n {
+		t.Fatalf("idempotent upsert created a duplicate: %d → %d", n, n2)
+	}
+}
+
 // TestStopEntryFallbackWindow — E7 pure twins: the breakout-retest fallback
 // goes live ONLY after RETEST_WAIT_BARS bars with no retest touch.
 func TestStopEntryFallbackWindow(t *testing.T) {

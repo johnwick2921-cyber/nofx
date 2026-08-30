@@ -343,6 +343,13 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 		}
 	}
 
+	// E8 (2026-08-30) — shadow A/B counterfactual logger (Sep-9's courtroom):
+	// per armed scenario, log the 4 rule counterfactuals once per plan version.
+	// ZERO effect on real paths — writes ONLY the ab_confirm_log table.
+	for _, sc := range doc.Scenarios {
+		at.logShadowAB(plan, sc, bars, now.UnixMilli())
+	}
+
 	// E4 (2026-08-30) — split-sibling law: EITHER leg's STOP-OUT cancels the
 	// sibling's unfilled order (no doubling into a failed level). Runs on the
 	// existing cancel machinery; session-end/news/dormant cancel paths already
@@ -357,6 +364,33 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 // biasDirectionFor normalizes the plan bias direction ("" → empty).
 func biasDirectionFor(dir string) string {
 	return strings.ToLower(strings.TrimSpace(dir))
+}
+
+// logShadowAB (E8) writes the 4 counterfactual confirm-fill rows for one armed
+// scenario — once per (plan, version, scenario, rule). Advisory/report-only:
+// nothing here feeds a gate or a prompt.
+func (at *AutoTrader) logShadowAB(plan *kernel.ActivePlan, sc kernel.PlanScenario, bars []market.Kline, nowMs int64) {
+	if at.store == nil || plan == nil || len(bars) == 0 {
+		return
+	}
+	rows := kernel.ShadowABForScenario(sc, bars, plan.BirthMs, nowMs)
+	if len(rows) == 0 {
+		return
+	}
+	ac := at.store.AbConfirm()
+	now := time.Now()
+	for _, r := range rows {
+		if ac.Has(plan.PlanID, plan.Version, sc.ID, r.Rule) {
+			continue
+		}
+		if err := ac.Upsert(&store.AbConfirmLogDB{
+			TraderID: at.id, PlanID: plan.PlanID, Version: plan.Version, Session: plan.Session,
+			Scenario: sc.ID, Rule: r.Rule, FillPx: r.FillPx, MFE: r.MFE, MAE: r.MAE,
+			Outcome: r.Outcome, TimeToFillMs: r.TimeToFillMs, CreatedAt: now, UpdatedAt: now,
+		}); err != nil {
+			at.logWarnf("ab-confirm shadow write failed %s %s: %v", sc.ID, r.Rule, err)
+		}
+	}
 }
 
 // splitSiblingCancelDecision (E4, pure) — given one split pair (legs of the

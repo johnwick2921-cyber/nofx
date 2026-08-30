@@ -51,13 +51,30 @@ export type ConfirmVerdict = {
 // ConfirmChip (guide-export 2026-08-27) — the machine confirm verdict chip
 // (CONFIRM MET / confirm not met). Advisory; never a gate. F2 (waterfall-class
 // wave): two-leg scenarios render the leg states — a partial never reads MET.
+// E5/E6 (entry-mechanics 2026-08-30): the new rule names render as-is.
+function confirmRuleLabel(rule: string): string {
+  switch (rule) {
+    case '1x5m_close':
+      return '1×5m'
+    case '2x5m_close':
+      return '2×5m'
+    case '1m_mss':
+      return '1m-MSS'
+    case 'time_hold':
+      return 'time-hold'
+    default:
+      return rule
+  }
+}
+
 export function ConfirmChip({ id, c }: { id: string; c: ConfirmVerdict }) {
   const legs = c.legs && c.legs.length > 0
+  const label = confirmRuleLabel(c.rule)
   return (
     <span
       data-testid={`confirm-chip-${id}`}
       className="text-[9px] font-bold px-1.5 py-0.5 rounded"
-      title={`${c.rule} ${c.side} ${c.ref_price} — ${c.detail} (machine-computed, advisory)`}
+      title={`${label} ${c.side} ${c.ref_price} — ${c.detail} (machine-computed, advisory)`}
       style={
         c.met
           ? {
@@ -71,10 +88,8 @@ export function ConfirmChip({ id, c }: { id: string; c: ConfirmVerdict }) {
       }
     >
       {legs
-        ? `${c.met ? 'CONFIRM MET' : 'confirm not met'} (${c.legs!.map((l, i) => `${i + 1}/${c.legs!.length} ${l.met ? 'MET' : 'not met'}`).join(' · ')})`
-        : c.met
-          ? 'CONFIRM MET'
-          : 'confirm not met'}
+        ? `${label} ${c.met ? 'MET' : 'not met'} (${c.legs!.map((l, i) => `${i + 1}/${c.legs!.length} ${l.met ? 'MET' : 'not met'}`).join(' · ')})`
+        : `${label} ${c.met ? 'MET' : 'not met'}`}
     </span>
   )
 }
@@ -205,12 +220,18 @@ function ScenarioRow({
   )
 }
 
+export type ArmLegState = { state: string; leg_index?: number; kind?: string }
+
 export function ArmedChip({
   arm,
 }: {
-  arm?: { state: string; reason?: string }
+  arm?: { state: string; reason?: string; legs?: ArmLegState[] }
 }) {
   if (!arm) return null
+  const legGlyphs = (s: string) =>
+    s === 'working' ? '📌' : s === 'filled' ? '⚡' : s === 'cancelled' ? '✕' : '⏳'
+  const splitLegs = arm.legs && arm.legs.length >= 2 ? arm.legs : null
+  const legLine = splitLegs ? ` · ${splitLegs.map((l) => `L${(l.leg_index ?? 0) + 1}${legGlyphs(l.state)}`).join(' ')}` : ''
   switch (arm.state) {
     case 'armed':
       return (
@@ -222,7 +243,7 @@ export function ArmedChip({
             border: '1px solid var(--vl-gold-line)',
           }}
         >
-          ⏳ armed
+          ⏳ armed{legLine}
         </span>
       )
     case 'working':
@@ -235,7 +256,7 @@ export function ArmedChip({
             border: '1px solid var(--vl-gold-line)',
           }}
         >
-          📌 working
+          📌 working{legLine}
         </span>
       )
     case 'filled':
@@ -248,7 +269,7 @@ export function ArmedChip({
             border: '1px solid rgba(63,191,143,0.35)',
           }}
         >
-          ⚡ filled
+          ⚡ filled{legLine}
         </span>
       )
     case 'cancelled':
@@ -262,7 +283,7 @@ export function ArmedChip({
             border: '1px solid rgba(224,108,108,0.4)',
           }}
         >
-          ✕ cancelled{arm.reason ? ` · ${arm.reason}` : ''}
+          ✕ cancelled{legLine}{arm.reason ? ` · ${arm.reason}` : ''}
         </span>
       )
   }

@@ -19,7 +19,7 @@ describe('DayPlanEditor', () => {
     const next = onChange.mock.calls[0][0] as DayPlanConfig
     expect(next.plan_enabled).toBe(true)
     expect(next.max_levels).toBe(8) // spec default carried through
-    expect(next.acceptance_rule).toBe('2x5m')
+    expect(next.acceptance_rule).toBe('5m_close')
   })
 
   it('changing max levels writes through onChange', () => {

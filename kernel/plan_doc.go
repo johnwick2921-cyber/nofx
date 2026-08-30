@@ -275,13 +275,13 @@ type PlanDoc struct {
 }
 
 // PlanCondition is a checkable predicate: price closes beyond `Price` on the
-// rule timeframe (`Rule`: "2x5m" | "15m_close" | "5m_close"), on `Side`
-// ("below" | "above"). `FlipTo` names the direction the bias flips to when the
-// flip condition fires ("" for death).
+// rule timeframe (`Rule`: "2x5m" | "5m_close"; E1 — the 15m variant is dead),
+// on `Side` ("below" | "above"). `FlipTo` names the direction the bias flips
+// to when the flip condition fires ("" for death).
 type PlanCondition struct {
 	Price  float64 `json:"price"`
 	Side   string  `json:"side"` // below | above
-	Rule   string  `json:"rule"` // 2x5m | 15m_close | 5m_close
+	Rule   string  `json:"rule"` // 2x5m | 5m_close (15m dead — E1)
 	FlipTo string  `json:"flip_to,omitempty"`
 }
 
