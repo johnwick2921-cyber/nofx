@@ -36,12 +36,16 @@ func wkFixture() []market.Kline {
 	// Week 1 (Mon 2026-08-10) — completed: O=100 H=110 L=95 C=105.
 	bars = append(bars, wkBar("2026-08-10", "17:00", 100, 108, 100, 107))
 	bars = append(bars, wkBar("2026-08-14", "15:59", 107, 110, 95, 105))
+	// Sunday opens (new week's first prints) — also birth the NWOGs.
+	bars = append(bars, wkBar("2026-08-16", "17:00", 106, 106, 106, 106))
 	// Week 2 (Mon 2026-08-17) — completed: O=106 H=115 L=100 C=112.
 	bars = append(bars, wkBar("2026-08-17", "17:01", 106, 109, 106, 108))
 	bars = append(bars, wkBar("2026-08-21", "15:58", 108, 115, 100, 112))
+	bars = append(bars, wkBar("2026-08-23", "17:00", 113, 113, 113, 113))
 	// Week 3 (Mon 2026-08-24) — completed: O=113 H=114 L=96 C=98.
 	bars = append(bars, wkBar("2026-08-24", "17:02", 113, 113, 112, 112))
 	bars = append(bars, wkBar("2026-08-28", "15:57", 112, 114, 96, 98))
+	bars = append(bars, wkBar("2026-08-30", "17:00", 99, 99, 99, 99))
 	// Week 4 (Mon 2026-08-31) — IN PROGRESS at now (Wed 09-02 12:00 CT).
 	bars = append(bars, wkBar("2026-08-31", "17:03", 99, 102, 94, 101))
 	return bars
@@ -92,26 +96,31 @@ func TestNWOGMathAndFill(t *testing.T) {
 	now := wkNow("2026-09-02", "12:00")
 	bars := wkFixture()
 	gaps := LastNWOGs(bars, now, 5)
-	if len(gaps) != 2 {
-		t.Fatalf("want 2 weekend gaps, got %d: %+v", len(gaps), gaps)
+	if len(gaps) != 3 {
+		t.Fatalf("want 3 weekend gaps, got %d: %+v", len(gaps), gaps)
 	}
 	// Gap A (born Sun 08-16 → week Mon 08-17): Fri close 105 → Sun open 106.
 	a := gaps[0]
 	if a.Born != "2026-08-17" || a.Lo != 105 || a.Hi != 106 || a.CE != 105.5 {
 		t.Fatalf("gap A = %+v, want born 08-17 lo 105 hi 106 ce 105.5", a)
 	}
-	// Gap B (born Sun 08-30 → week Mon 08-31): Fri close 98 → Sun open 99.
+	// Gap B (born Sun 08-23 → week Mon 08-24): Fri close 112 → Sun open 113.
 	b := gaps[1]
-	if b.Born != "2026-08-31" || b.Lo != 98 || b.Hi != 99 || b.CE != 98.5 {
-		t.Fatalf("gap B = %+v, want born 08-31 lo 98 hi 99 ce 98.5", b)
+	if b.Born != "2026-08-24" || b.Lo != 112 || b.Hi != 113 || b.CE != 112.5 {
+		t.Fatalf("gap B = %+v, want born 08-24 lo 112 hi 113 ce 112.5", b)
 	}
-	if a.Filled || b.Filled {
-		t.Fatal("no bar trades through CE yet — both gaps unfilled")
+	// Gap C (born Sun 08-30 → week Mon 08-31): Fri close 98 → Sun open 99.
+	c := gaps[2]
+	if c.Born != "2026-08-31" || c.Lo != 98 || c.Hi != 99 || c.CE != 98.5 {
+		t.Fatalf("gap C = %+v, want born 08-31 lo 98 hi 99 ce 98.5", c)
 	}
-	// A later bar trading through gap B's CE fills it.
+	if a.Filled || b.Filled || c.Filled {
+		t.Fatal("no bar trades through CE yet — all gaps unfilled")
+	}
+	// A later bar trading through gap C's CE fills it.
 	fill := wkBar("2026-09-01", "09:00", 98.4, 99.2, 98.0, 98.8)
-	if gaps2 := LastNWOGs(append(bars, fill), now, 5); !gaps2[1].Filled {
-		t.Fatal("a bar with H=99.2 L=98.0 through CE 98.5 must fill gap B")
+	if gaps2 := LastNWOGs(append(bars, fill), now, 5); !gaps2[2].Filled {
+		t.Fatal("a bar with H=99.2 L=98.0 through CE 98.5 must fill gap C")
 	}
 }
 
