@@ -100,7 +100,8 @@ func stopEntryFallbackDue(bars []market.Kline, entryPx, sinceMs, nowMs int64) bo
 	return closedSinceBirth >= need
 }
 
-func armedWorkingStaleMin() int {	if v := os.Getenv("ARM_WORKING_STALE_MIN"); v != "" {
+func armedWorkingStaleMin() int {
+	if v := os.Getenv("ARM_WORKING_STALE_MIN"); v != "" {
 		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n > 0 {
 			return n
 		}

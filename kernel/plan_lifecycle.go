@@ -224,12 +224,14 @@ func conditionRule(c PlanCondition) string {
 // counts). Returns (fired, human reason).
 //
 // PLAN-LIFECYCLE HYSTERESIS (2026-08-27): invalidation requires ALL of
-//   (a) CLOSE-based only — wicks through the line do nothing (the touch gate
-//       brackets the RAW line; the count below is closes beyond the BUFFERED
-//       line, so a wick alone can never count);
-//   (b) the line buffered by FLIP_ATR_BUFFER (default 0.5) × ATR14(5m) beyond
-//       the stated level;
-//   (c) FLIP_CONFIRM_CLOSES (default 2) CONSECUTIVE decision-TF closes beyond.
+//
+//	(a) CLOSE-based only — wicks through the line do nothing (the touch gate
+//	    brackets the RAW line; the count below is closes beyond the BUFFERED
+//	    line, so a wick alone can never count);
+//	(b) the line buffered by FLIP_ATR_BUFFER (default 0.5) × ATR14(5m) beyond
+//	    the stated level;
+//	(c) FLIP_CONFIRM_CLOSES (default 2) CONSECUTIVE decision-TF closes beyond.
+//
 // A single close beyond the raw line inside the buffer no longer invalidates.
 func PlanConditionFiredSince(c PlanCondition, bars []market.Kline, sinceMs, nowMs int64) (bool, string) {
 	if c.Price <= 0 {

@@ -15,12 +15,12 @@ import (
 
 // ShadowABRow is one counterfactual entry's replay verdict.
 type ShadowABRow struct {
-	Rule        string  // touch | 1x5m_close | 2x5m_close | 1m_mss
-	FillPx      float64 // the counterfactual fill (0 = never filled)
-	MFE         float64 // max favorable excursion in pts
-	MAE         float64 // max adverse excursion in pts
-	Outcome     string  // target | stop | open
-	TimeToFillMs int64  // fill bar open − sinceMs
+	Rule         string  // touch | 1x5m_close | 2x5m_close | 1m_mss
+	FillPx       float64 // the counterfactual fill (0 = never filled)
+	MFE          float64 // max favorable excursion in pts
+	MAE          float64 // max adverse excursion in pts
+	Outcome      string  // target | stop | open
+	TimeToFillMs int64   // fill bar open − sinceMs
 }
 
 // ShadowABForScenario computes the counterfactual rows for ONE armed scenario.

@@ -24,11 +24,11 @@ type AbConfirmLogDB struct {
 	Scenario string
 	Rule     string // touch | 1x5m_close | 2x5m_close | 1m_mss
 
-	FillPx      float64 // counterfactual fill price
-	MFE         float64 // max favorable excursion (pts, favorable sign)
-	MAE         float64 // max adverse excursion (pts)
-	Outcome     string  // target | stop | open (neither by snapshot end)
-	TimeToFillMs int64  // entry bar open − plan birth
+	FillPx       float64 // counterfactual fill price
+	MFE          float64 // max favorable excursion (pts, favorable sign)
+	MAE          float64 // max adverse excursion (pts)
+	Outcome      string  // target | stop | open (neither by snapshot end)
+	TimeToFillMs int64   // entry bar open − plan birth
 
 	CreatedAt time.Time
 	UpdatedAt time.Time

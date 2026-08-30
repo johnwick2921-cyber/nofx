@@ -34,14 +34,14 @@ func MSSMinDispATR() float64 { return mssMinDispATR() }
 
 // MSSVerdict is the machine-computed 1m-MSS state for one confirm object.
 type MSSVerdict struct {
-	Met        bool    // a qualifying 1m close broke the swing
-	SwingPrice float64 // the confirmed swing extreme (the line broken)
-	SwingHigh  bool    // true = the line was a swing HIGH (bullish break)
-	SwingTimeMs int64  // the swing bar's close instant (repo convention)
-	BreakClose float64 // the breaking 1m close
-	BreakTimeMs int64  // the breaking bar's open time
-	DispPts    float64 // |BreakClose − SwingPrice| on the breaking bar
-	Detail     string
+	Met         bool    // a qualifying 1m close broke the swing
+	SwingPrice  float64 // the confirmed swing extreme (the line broken)
+	SwingHigh   bool    // true = the line was a swing HIGH (bullish break)
+	SwingTimeMs int64   // the swing bar's close instant (repo convention)
+	BreakClose  float64 // the breaking 1m close
+	BreakTimeMs int64   // the breaking bar's open time
+	DispPts     float64 // |BreakClose − SwingPrice| on the breaking bar
+	Detail      string
 }
 
 // lastFractalSwing finds the LAST confirmed fractal swing of the wanted type

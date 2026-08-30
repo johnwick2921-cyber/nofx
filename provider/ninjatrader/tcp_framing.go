@@ -56,14 +56,14 @@ type SignalPayload struct {
 	// PHASE 2 armed orders (additive, back-compat): OrderType "market" (default)
 	// | "limit" + LimitPrice for RESTING limit entries. A pre-Phase-2 AddOn
 	// ignores unknown fields → market, byte-identical to today.
-		// E7 (entry-mechanics 2026-08-30, additive): OrderType "stop_entry" +
-		// StopPrice for STOP-MARKET entries (breakout-retest fallback). A
-		// pre-E7 AddOn ignores the new fields and would place a MARKET order —
-		// the Go side therefore NEVER sends stop_entry frames unless the
-		// STOP_ENTRY_SEAM is ON (owner-enabled, proven far-side frames first).
-		OrderType  string  `json:"order_type,omitempty"`
-		LimitPrice float64 `json:"limit_price,omitempty"`
-		StopPrice  float64 `json:"stop_price,omitempty"`
+	// E7 (entry-mechanics 2026-08-30, additive): OrderType "stop_entry" +
+	// StopPrice for STOP-MARKET entries (breakout-retest fallback). A
+	// pre-E7 AddOn ignores the new fields and would place a MARKET order —
+	// the Go side therefore NEVER sends stop_entry frames unless the
+	// STOP_ENTRY_SEAM is ON (owner-enabled, proven far-side frames first).
+	OrderType  string  `json:"order_type,omitempty"`
+	LimitPrice float64 `json:"limit_price,omitempty"`
+	StopPrice  float64 `json:"stop_price,omitempty"`
 }
 
 // FillPayload is the C#-AddOn → Go-server fill frame per spec L4398-4406.
@@ -135,13 +135,13 @@ type CancelOrderPayload struct {
 // (same safe Change pattern as move_stop). NewStopLoss/NewTakeProfit ≤ 0 =
 // leave that leg untouched.
 type ModifyBracketPayload struct {
-	Symbol       string  `json:"symbol"`
-	SignalID     string  `json:"signal_id"`
-	NewStopLoss  float64 `json:"new_stop_loss,omitempty"`
+	Symbol        string  `json:"symbol"`
+	SignalID      string  `json:"signal_id"`
+	NewStopLoss   float64 `json:"new_stop_loss,omitempty"`
 	NewTakeProfit float64 `json:"new_take_profit,omitempty"`
-	Account  string `json:"account,omitempty"`
-	TraderID string `json:"trader_id,omitempty"`
-	Seq      uint64 `json:"seq,omitempty"`
+	Account       string  `json:"account,omitempty"`
+	TraderID      string  `json:"trader_id,omitempty"`
+	Seq           uint64  `json:"seq,omitempty"`
 }
 
 // OrderUpdatePayload is every NT8 order-state change (deduped per order name)

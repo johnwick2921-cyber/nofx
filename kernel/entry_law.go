@@ -20,20 +20,20 @@ import (
 // 2x5m_close ONLY for breakdown/breakup continuations; fades enter on touch.
 
 type conditionEntryLaw struct {
-	Allowed  map[string]bool // confirm rules legal for Confirm / Confirm2
-	Style    string          // the required entry style (human, cited in rejections)
-	FadeTouch bool           // reject/fvg_entry: close-confirms on a fade are illegal
+	Allowed   map[string]bool // confirm rules legal for Confirm / Confirm2
+	Style     string          // the required entry style (human, cited in rejections)
+	FadeTouch bool            // reject/fvg_entry: close-confirms on a fade are illegal
 }
 
 var entryLaw = map[string]conditionEntryLaw{
 	"reject": {
-		Allowed: map[string]bool{"touch": true},
-		Style:   "touch-entry at the level (limit), stop behind structure by ≥2 ticks",
+		Allowed:   map[string]bool{"touch": true},
+		Style:     "touch-entry at the level (limit), stop behind structure by ≥2 ticks",
 		FadeTouch: true,
 	},
 	"fvg_entry": {
-		Allowed: map[string]bool{"touch": true},
-		Style:   "touch-entry inside the FVG (edge..CE band, checked vs the FRESH FVG list)",
+		Allowed:   map[string]bool{"touch": true},
+		Style:     "touch-entry inside the FVG (edge..CE band, checked vs the FRESH FVG list)",
 		FadeTouch: true,
 	},
 	"sweep_reclaim": {
