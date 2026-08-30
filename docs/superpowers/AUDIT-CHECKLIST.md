@@ -7,13 +7,7 @@ in CLAUDE.md).
 
 ---
 
-<<<<<<< HEAD
-## PART 1 — THE 21 BUG CLASSES (name · root cause · probe · law)
-=======
 ## PART 1 — THE 22 BUG CLASSES (name · root cause · probe · law)
-
-_(Class 21 — log-lie counters — lands with `fix/news-hygiene`; the Monday merge reconciles the numbering.)_
->>>>>>> fix/security-hygiene
 
 1. **Self-imposed caps.** Root cause: an AI/HTTP/token cap chosen without
    measuring the provider ceiling or the observed need (the 32768-token
