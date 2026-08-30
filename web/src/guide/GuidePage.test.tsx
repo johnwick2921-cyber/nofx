@@ -23,8 +23,8 @@ describe('knob spec completeness', () => {
     s.blocks.flatMap((b) => (b.kind === 'knobs' ? b.knobs : []))
   )
 
-  it('has exactly 35 knob cards (Section 7 census = live-page control count)', () => {
-    expect(allKnobs).toHaveLength(35)
+  it('has exactly 41 knob cards (Section 7 census = live-page control count; W7 +6 weekly knobs)', () => {
+    expect(allKnobs).toHaveLength(41)
   })
 
   it('every knob card fills all ten mandatory fields', () => {
@@ -51,10 +51,10 @@ describe('GuidePage', () => {
     vi.unstubAllGlobals()
   })
 
-  it('renders all 12 sections with deep-link ids', () => {
+  it('renders all 13 sections with deep-link ids', () => {
     render(<GuidePage />)
     expect(screen.getByTestId('guide-page')).toBeTruthy()
-    expect(GUIDE_SECTIONS).toHaveLength(12)
+    expect(GUIDE_SECTIONS).toHaveLength(13)
     for (const s of GUIDE_SECTIONS) {
       const el = document.getElementById(s.id)
       expect(el, `section id #${s.id}`).toBeTruthy()

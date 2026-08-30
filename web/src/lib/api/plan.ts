@@ -136,10 +136,26 @@ export interface PlanToday {
   /** ITEM 4 — owner edits a re-plan could not re-anchor onto this version. */
   uncarried_edits?: UncarriedEdit[]
   /** ITEM 15 — true when ?version= served a superseded version, not the latest. */
-  historical?: boolean
-  /** ITEM 15 — the newest stored version, so the card can offer the way back. */
+  historical?: boolean /** ITEM 15 — the newest stored version, so the card can offer the way back. */
   latest_version?: number
   created_at?: string
+  /** W7 (weekly-bias wave) — the Sunday weekly-bias doc for the current week
+   * (null → grey "none" chip). Advisory view only. */
+  weekly?: PlanWeekly | null
+}
+
+// W7 (weekly-bias wave) — /api/plan/today weekly payload.
+export interface PlanWeekly {
+  bias: string // bull | bear | neutral
+  conviction: string // low | med | high
+  draw_name: string
+  draw_px: number
+  invalidation_px: number
+  invalidation_basis: string
+  invalidated_at: string
+  narrative: string
+  weekly_levels: { name: string; px: number }[]
+  thin_history: boolean
 }
 
 // ── GET /api/plan/versions — every stored version of ONE session's plan ──

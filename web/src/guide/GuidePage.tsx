@@ -23,6 +23,7 @@ import { routines } from './content/routines'
 import { status } from './content/status'
 import { glossary } from './content/glossary'
 import { faq } from './content/faq'
+import { weeklyBias } from './content/weeklyBias'
 
 export const GUIDE_SECTIONS: GuideSection[] = [
   welcome,
@@ -37,6 +38,7 @@ export const GUIDE_SECTIONS: GuideSection[] = [
   status,
   glossary,
   faq,
+  weeklyBias,
 ]
 
 const ivory = { color: 'var(--vl-ivory)' }

@@ -12,6 +12,7 @@ import type {
   PlanVersionItem,
 } from '../../lib/api/plan'
 import { LifecycleChip, VersionChips } from './chips'
+import { WeeklyChip } from './WeeklyChip'
 import { BiasBlock } from './BiasBlock'
 import { ZoneTable } from './ZoneTable'
 import { ScenarioList } from './ScenarioList'
@@ -395,6 +396,8 @@ export function SessionPlanCard({
             lifecycle={plan.lifecycle ?? 'active'}
             language={language}
           />
+          {/* W7 (weekly-bias wave) — the WEEKLY chip (advisory view). */}
+          <WeeklyChip weekly={plan.weekly} />
           {plan.degraded && (
             <span
               data-testid="degraded-badge"
