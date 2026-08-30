@@ -64,6 +64,9 @@ type DecisionRecordDB struct {
 	PlanVersion     int    `gorm:"column:plan_version;default:0"`
 	OverlayVersion  int    `gorm:"column:overlay_version;default:0"`
 	CitedScenarioID string `gorm:"column:cited_scenario_id;default:''"`
+	// W5.3 (weekly-bias wave 2026-08-30) — draw-alignment tag for the weekly
+	// shadow study: toward_draw | away | neutral. Additive column, never a gate.
+	DrawAlign string `gorm:"column:draw_align;default:''"`
 }
 
 func (DecisionRecordDB) TableName() string { return "decision_records" }
@@ -109,6 +112,8 @@ type DecisionRecord struct {
 	PlanVersion     int    `json:"plan_version,omitempty"`
 	OverlayVersion  int    `json:"overlay_version,omitempty"`
 	CitedScenarioID string `json:"cited_scenario_id,omitempty"`
+	// W5.3 (weekly-bias wave) — draw-alignment tag: toward_draw | away | neutral.
+	DrawAlign string `json:"draw_align,omitempty"`
 }
 
 // AccountSnapshot account state snapshot
@@ -213,6 +218,8 @@ func (db *DecisionRecordDB) toRecord() *DecisionRecord {
 		PlanVersion:     db.PlanVersion,
 		OverlayVersion:  db.OverlayVersion,
 		CitedScenarioID: db.CitedScenarioID,
+		// W5.3 (weekly-bias wave) — draw-alignment tag.
+		DrawAlign: db.DrawAlign,
 	}
 	json.Unmarshal([]byte(db.CandidateCoins), &record.CandidateCoins)
 	json.Unmarshal([]byte(db.ExecutionLog), &record.ExecutionLog)
@@ -268,6 +275,8 @@ func (s *DecisionStore) LogDecision(record *DecisionRecord) error {
 		PlanVersion:     record.PlanVersion,
 		OverlayVersion:  record.OverlayVersion,
 		CitedScenarioID: record.CitedScenarioID,
+		// W5.3 (weekly-bias wave) — draw-alignment tag.
+		DrawAlign: record.DrawAlign,
 	}
 
 	if err := s.db.Create(dbRecord).Error; err != nil {

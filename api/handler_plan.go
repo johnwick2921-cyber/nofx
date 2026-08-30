@@ -28,6 +28,36 @@ func traderDayPlanEnabled(at *trader.AutoTrader) bool {
 	return cfg != nil && cfg.DayPlan != nil && cfg.DayPlan.PlanEnabled
 }
 
+// weeklyPayload (W7, weekly-bias wave) renders the WEEKLY chip payload for the
+// day-plan card: the current governed week's Sunday weekly-bias doc, or nil
+// (the card renders the grey "none" chip).
+func weeklyPayload(st *store.Store, traderID string, now time.Time) gin.H {
+	if st == nil {
+		return nil
+	}
+	monday := kernel.WeekGoverningMonday(now).Format("2006-01-02")
+	row, err := st.Plan().GetLatestPlanForTraderSession(monday, "WEEKLY", traderID)
+	if err != nil || row == nil {
+		return nil
+	}
+	var doc kernel.WeeklyDoc
+	if json.Unmarshal([]byte(row.Doc), &doc) != nil {
+		return nil
+	}
+	return gin.H{
+		"bias":               doc.Bias,
+		"conviction":         doc.Conviction,
+		"draw_name":          doc.Draw.Name,
+		"draw_px":            doc.Draw.Px,
+		"invalidation_px":    doc.Invalidation.Px,
+		"invalidation_basis": doc.Invalidation.Basis,
+		"invalidated_at":     doc.InvalidatedAt,
+		"narrative":          doc.Narrative,
+		"weekly_levels":      doc.WeeklyLevels,
+		"thin_history":       doc.ThinHistory,
+	}
+}
+
 // planOverlayMu serializes the read-fold-test-append span of an overlay write so
 // the §42 test-op concurrency guard is atomic (two racing writers can't both test
 // against the same stale plan_final and both append). Overlay writes are rare
@@ -251,6 +281,8 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 		"approval_required": s.approvalRequired(traderID),
 		"active_session":    activeName, "is_active": sessName != "" && sessName == activeName,
 		"runnable_sessions": runnable,
+		// W7 (weekly-bias wave) — the WEEKLY chip payload (null → grey "none").
+		"weekly": weeklyPayload(s.store, traderID, now),
 	}
 	// An EXPLICITLY requested session is readable whether or not it is the live one
 	// (that is the point of the tabs); without the param we keep the old gate.
@@ -354,7 +386,7 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 		"version":    row.Version,
 		"reading":    reading,
 		// Wave 2 armed orders — the per-scenario arm state for the card chips.
-		"armed":           s.armedMapFor(row.PlanID),
+		"armed": s.armedMapFor(row.PlanID),
 		// ITEM 15 — the card marks itself HISTORICAL and offers the way back.
 		"historical":        historical,
 		"latest_version":    latestVersion,
@@ -395,10 +427,10 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 		// A1/A4 (fail-register wave): verdict basis (machine vs prose-anchor
 		// heuristic) + unevaluable scenario ids — the card renders them
 		// distinctly instead of dressing a heuristic as a machine verdict.
-		"scenario_meta":  s.scenarioMeta(traderID, row.PlanID),
+		"scenario_meta": s.scenarioMeta(traderID, row.PlanID),
 		// FVG ENTRY MODEL (2026-08-26) — per-scenario gap-band live states for
 		// the card chips (IN_ZONE/ABOVE/BELOW/FILLED_INVALID + touch number).
-		"fvg_states": fvgStates,
+		"fvg_states":     fvgStates,
 		"overlay_errors": overlayErrStrings,
 		// ITEM 4 — owner edits that could NOT be re-anchored onto this version.
 		// Never dropped silently: the card asks for review.
@@ -456,7 +488,7 @@ func planLevelFacts(traderID, symbol string, doc kernel.PlanDoc, now time.Time, 
 			"distance":      distance,
 			// T4 (2026-08-26) — live touch chip state for the card row
 			// (approaching | touching | rejected | accepted | "").
-			"touch_state": kernel.TouchStateForCard(traderID, symbol, l.Label, l.Price, price, now.UnixMilli()),
+			"touch_state":   kernel.TouchStateForCard(traderID, symbol, l.Label, l.Price, price, now.UnixMilli()),
 			"sweep":         f.Swept,
 			"closes_beyond": maxI(f.ClosesBeyondUp, f.ClosesBeyondDown),
 			"accept_have":   f.AcceptHave,

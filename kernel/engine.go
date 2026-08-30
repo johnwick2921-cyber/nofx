@@ -134,20 +134,20 @@ type Context struct {
 	// plan is machine-dead (or planless with day_plan on). ENTRIES are refused;
 	// position management (closes/trails) proceeds. Set by the trader loop each
 	// cycle; prompt-invisible.
-	ExecutorPlanDead   string                     `json:"-"`
+	ExecutorPlanDead string `json:"-"`
 	// R4 (2026-08-25) — min_scenario_quality gate inputs: the resolved floor
 	// ("A"|"B"|"C", default C = no restriction) + the active plan's scenario
 	// quality map (id → quality). Set by the trader loop each cycle;
 	// prompt-invisible.
-	MinScenarioQuality  string            `json:"-"`
-	PlanScenarioQuality map[string]string `json:"-"`
-	QuantDataMap       map[string]*QuantData      `json:"-"`
-	OIRankingData      *nofxos.OIRankingData      `json:"-"` // Market-wide OI ranking data
-	NetFlowRankingData *nofxos.NetFlowRankingData `json:"-"` // Market-wide fund flow ranking data
-	PriceRankingData   *nofxos.PriceRankingData   `json:"-"` // Market-wide price gainers/losers
-	BTCETHLeverage     int                        `json:"-"`
-	AltcoinLeverage    int                        `json:"-"`
-	Timeframes         []string                   `json:"-"`
+	MinScenarioQuality  string                     `json:"-"`
+	PlanScenarioQuality map[string]string          `json:"-"`
+	QuantDataMap        map[string]*QuantData      `json:"-"`
+	OIRankingData       *nofxos.OIRankingData      `json:"-"` // Market-wide OI ranking data
+	NetFlowRankingData  *nofxos.NetFlowRankingData `json:"-"` // Market-wide fund flow ranking data
+	PriceRankingData    *nofxos.PriceRankingData   `json:"-"` // Market-wide price gainers/losers
+	BTCETHLeverage      int                        `json:"-"`
+	AltcoinLeverage     int                        `json:"-"`
+	Timeframes          []string                   `json:"-"`
 
 	// Strategy Studio P1 — daily-guardrail inputs measured on the CME session-day
 	// (set by the trader loop from the position store; read by the daily-guardrail
@@ -270,6 +270,12 @@ type StrategyEngine struct {
 	// empty (no arms) → byte-identical prompt.
 	armedContextLine string
 
+	// weeklyContextLine (W3, weekly-bias wave 2026-08-30) — the ONE-line
+	// executor context from the Sunday weekly read ("WEEKLY: bull/high · draw
+	// 30500.25"). Rendered when non-empty; empty (no weekly doc) →
+	// byte-identical prompt. Soft law — never changes any gate.
+	weeklyContextLine string
+
 	// planBlockLine / planStatusLine are the P3.4 executor plan injection: the
 	// byte-stable PLAN BLOCK (cached prefix) and the dynamic PLAN STATUS tail.
 	// Non-empty planBlockLine (day_plan on + an active plan) triggers the RECON #4
@@ -301,6 +307,10 @@ func (e *StrategyEngine) SetBiasContext(line string) { e.biasContextLine = line 
 
 // SetArmedContext sets the per-cycle ARMED order status lines (Wave 2).
 func (e *StrategyEngine) SetArmedContext(line string) { e.armedContextLine = line }
+
+// SetWeeklyContext (W3, weekly-bias wave) sets the one-line weekly context
+// for the executor prompt. Pass "" to inject nothing.
+func (e *StrategyEngine) SetWeeklyContext(line string) { e.weeklyContextLine = line }
 
 // SetPlanContext sets the P3.4 executor plan injection: the byte-stable PLAN
 // BLOCK (prefix) and the dynamic PLAN STATUS tail. Pass ("","") for no active

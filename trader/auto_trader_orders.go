@@ -131,6 +131,13 @@ func (at *AutoTrader) consecutiveLossHalted() (string, bool) {
 
 // executeDecisionWithRecord executes AI decision and records detailed information
 func (at *AutoTrader) executeDecisionWithRecord(decision *kernel.Decision, actionRecord *store.DecisionAction) error {
+	// W5.2 (weekly-bias wave) — SHADOW counter-trend annotation for entries.
+	// Log/counters ONLY: this call can never block, resize or re-grade the trade
+	// (the real gates below are untouched — W5.4 THE LAW).
+	if decision.Action == "open_long" || decision.Action == "open_short" {
+		at.applyWeeklyDecisionShadow(decision)
+	}
+
 	// Feed-down gate (NinjaTrader, TRACK A): the SIM cannot fill without market
 	// data, so an entry/flatten issued while the feed is down is rejected ("no
 	// market data") — the upstream condition behind the phantom-close mess. Refuse
