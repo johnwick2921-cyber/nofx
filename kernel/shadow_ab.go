@@ -66,8 +66,18 @@ func ShadowABForScenario(sc PlanScenario, bars []market.Kline, sinceMs, nowMs in
 		}
 	}
 	// close rules — the qualifying close beyond ref in side; 1x/2x count
-	// CONSECUTIVE 5m closes. barIdx maps back to the first 1m bar of the
-	// qualifying bucket so the replay starts at the true fill instant.
+	// CONSECUTIVE 5m closes. The fill bar is the FIRST 1m bar of the
+	// qualifying 5m bucket, found by OpenTime (bucket boundaries are
+	// absolute-epoch aligned, so index math like i*5 is WRONG when the window
+	// starts mid-bucket or spans <5 bars — the 2026-08-30 cutover panic).
+	barIdxForBucket := func(bucketOpenMs int64) int {
+		for j := range w {
+			if w[j].OpenTime >= bucketOpenMs {
+				return j
+			}
+		}
+		return 0
+	}
 	closeFill := func(rule string, need int) fillAt {
 		five := AggregateBars(w, 5*60_000)
 		run := 0
@@ -80,7 +90,7 @@ func ShadowABForScenario(sc PlanScenario, bars []market.Kline, sinceMs, nowMs in
 			if beyond {
 				run++
 				if run >= need {
-					return fillAt{rule, i * 5, b.Close}
+					return fillAt{rule, barIdxForBucket(b.OpenTime), b.Close}
 				}
 			} else {
 				run = 0
@@ -117,7 +127,7 @@ func ShadowABForScenario(sc PlanScenario, bars []market.Kline, sinceMs, nowMs in
 		// Replay from the fill bar forward: MFE/MAE vs stop/target. Intrabar
 		// stop+target ambiguity resolves AGAINST the trade (stop first, R9).
 		start := 0
-		if f.barIdx >= 0 {
+		if f.barIdx >= 0 && f.barIdx < len(w) {
 			start = f.barIdx
 			row.TimeToFillMs = w[f.barIdx].OpenTime - sinceMs
 		}

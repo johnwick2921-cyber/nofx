@@ -158,3 +158,41 @@ func TestShadowABMSSFill(t *testing.T) {
 		t.Fatalf("mss counterfactual missing: %+v", rows)
 	}
 }
+
+// TestShadowABWindowCrossingFiveMBoundary — the 2026-08-30 cutover panic
+// regression: a plan born ~3-4 bars ago, window crossing a 5m boundary, with a
+// beyond-close in the SECOND bucket. The old i*5 mapping indexed w[5] on a
+// 4-bar window → panic. Must return rows (or nil) and never panic.
+func TestShadowABWindowCrossingFiveMBoundary(t *testing.T) {
+	// Bars at :58,:59,:00,:01 — 4 bars spanning two 5m buckets (epoch-aligned).
+	base := int64(1_700_000_000_000) - (int64(1_700_000_000_000) % 300_000) // 5m-aligned
+	start := base - 2*60_000                                                // two bars BEFORE the boundary → bucket A
+	bars := []market.Kline{
+		// Bucket A closes 99 (NOT beyond ref 100) — bucket B closes 102 (beyond).
+		{OpenTime: start, CloseTime: start + 59_999, Open: 99, High: 99.2, Low: 98.8, Close: 99},
+		{OpenTime: start + 60_000, CloseTime: start + 119_999, Open: 99, High: 99.2, Low: 98.8, Close: 99},
+		{OpenTime: base, CloseTime: base + 59_999, Open: 102, High: 102.2, Low: 101.8, Close: 102},
+		{OpenTime: base + 60_000, CloseTime: base + 119_999, Open: 102, High: 102.2, Low: 101.8, Close: 102},
+	}
+	now := bars[len(bars)-1].CloseTime + 1
+	sc := abScenario() // long, ref 100 above, arm stop 95 target 110
+	sc.Confirm.Rule = "1x5m_close"
+	rows := ShadowABForScenario(sc, bars, start-1, now)
+	// The beyond-close is in the SECOND bucket — must not panic and must
+	// produce the 1x5m row at fill 102.
+	found := false
+	for _, r := range rows {
+		if r.Rule == "1x5m_close" {
+			found = true
+			if r.FillPx != 102 {
+				t.Fatalf("1x5m fill = %.2f, want 102", r.FillPx)
+			}
+		}
+		if r.Rule == "2x5m_close" {
+			t.Fatalf("2x5m must not fire on one qualifying bucket: %+v", rows)
+		}
+	}
+	if !found {
+		t.Fatalf("1x5m row missing on the boundary-crossing window: %+v", rows)
+	}
+}

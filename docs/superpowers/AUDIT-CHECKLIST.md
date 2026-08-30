@@ -7,7 +7,7 @@ in CLAUDE.md).
 
 ---
 
-## PART 1 — THE 22 BUG CLASSES (name · root cause · probe · law)
+## PART 1 — THE 23 BUG CLASSES (name · root cause · probe · law)
 
 1. **Self-imposed caps.** Root cause: an AI/HTTP/token cap chosen without
    measuring the provider ceiling or the observed need (the 32768-token
@@ -178,6 +178,20 @@ in CLAUDE.md).
     **Law:** CRITICAL/HIGH fixable by patch/minor bump in the SAME wave as
     the finding; major-version upgrades are owner-ruled, never auto-merged
     before a live-fire window.
+
+23. **Report-only path panicked the trading loop.** Root cause
+    (2026-08-30 entry-mechanics cutover): the E8 shadow A/B logger computed
+    the counterfactual fill bar as `bucket_index × 5` — WRONG when the plan
+    window starts mid-5m-bucket or spans <5 bars, so `w[5]` on a 4-bar
+    window panicked `maybeManageArmedOrders` → `runCycle` → the whole bot,
+    2 min after a clean boot. The shadow logger had zero gates downstream,
+    yet one bad index took trading down. **Probe:** every advisory/report
+    path MUST be panic-hardened — (a) boundary-safe index math proven by a
+    fixture that reproduces the exact window shape (crossing a 5m boundary
+    with 4 bars), (b) `recover()` at the call-site seam with a WARN, never
+    a silent swallow. **Law:** a report-only path may degrade to a warning,
+    never to a panic; the trading loop owns no `recover` blanket — each
+    advisory seam carries its own.
 
 ---
 

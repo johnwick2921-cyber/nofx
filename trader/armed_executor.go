@@ -349,8 +349,14 @@ func biasDirectionFor(dir string) string {
 
 // logShadowAB (E8) writes the 4 counterfactual confirm-fill rows for one armed
 // scenario — once per (plan, version, scenario, rule). Advisory/report-only:
-// nothing here feeds a gate or a prompt.
+// nothing here feeds a gate or a prompt. HARDENED (2026-08-30 cutover panic): a
+// report-only path must NEVER take the trading loop down — recover + log.
 func (at *AutoTrader) logShadowAB(plan *kernel.ActivePlan, sc kernel.PlanScenario, bars []market.Kline, nowMs int64) {
+	defer func() {
+		if r := recover(); r != nil {
+			at.logWarnf("⚠️ ab-confirm shadow recovered from panic: %v (report-only path — real paths untouched)", r)
+		}
+	}()
 	if at.store == nil || plan == nil || len(bars) == 0 {
 		return
 	}
