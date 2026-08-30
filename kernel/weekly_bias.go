@@ -65,11 +65,14 @@ type IPDARange struct {
 	PosPct float64
 }
 
-// weekStartMonday returns the Monday governing the CME week containing t. The
-// Sunday 17:00 CT session belongs to the FOLLOWING Monday's week (Sunday's
-// prints are the new week's first prints).
+// weekStartMonday returns the Monday governing the CME week containing t,
+// anchored on the CALENDAR date (not the session-day start — Sunday MORNING's
+// session-day is Saturday's, which would mis-map the week). The Sunday 17:00 CT
+// session belongs to the FOLLOWING Monday's week (Sunday's prints are the new
+// week's first prints).
 func weekStartMonday(t time.Time) time.Time {
-	d := CMESessionDayStart(t)
+	ct := t.In(CTLocation())
+	d := time.Date(ct.Year(), ct.Month(), ct.Day(), 0, 0, 0, 0, CTLocation())
 	if wd := d.Weekday(); wd == time.Sunday {
 		return d.AddDate(0, 0, 1)
 	}
