@@ -201,11 +201,12 @@ func levelTouched(bars []market.Kline, level float64, now int64) bool {
 }
 
 // conditionRule maps a PlanCondition.Rule to the acceptance-rule string the
-// counters understand. "15m_close" → one 15-minute close; everything else →
-// the default "2x5m" (two consecutive 5-minute closes).
+// counters understand. E1 (entry-mechanics 2026-08-30): the 15m condition
+// variant is DEAD — new authorship is schema-rejected
+// (condition_rule_15m_removed). Legacy stored docs keep evaluating below.
 func conditionRule(c PlanCondition) string {
 	switch c.Rule {
-	case "15m_close":
+	case "15m_close": // legacy: stored pre-entry-mechanics docs still evaluate
 		return "15m-close"
 	case "5m_close":
 		// A2 (fail-register wave, 2026-08-20): 5m_close used to silently map to

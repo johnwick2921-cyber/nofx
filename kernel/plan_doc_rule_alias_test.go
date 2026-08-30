@@ -18,20 +18,22 @@ func validAliasDoc() *PlanDoc {
 		Bias: PlanBias{
 			Direction:     "short",
 			Conviction:    "low",
-			FlipCondition: "15m close above 29671.88 flips bias to long",
+			FlipCondition: "5m close above 29671.88 flips bias to long",
 		},
 		Levels: []PlanLevel{
 			{Price: 29591.50, Label: "ONL", Grade: "A", Instruction: "fade"},
 		},
 		Scenarios: []PlanScenario{
 			{
-				ID: "S1", Trigger: "reject at 29642.00", Condition: "reject",
+				// E2: reject is now touch-only (fade_requires_touch), so the alias
+				// fixture uses reclaim — the condition where 1x5m_close is legal.
+				ID: "S1", Trigger: "reclaim below 29642.00", Condition: "reclaim",
 				Direction: "short", TargetChain: []float64{29550},
 				Invalid: "invalid above 29642.00", Quality: "B",
 				Confirm: &PlanConfirm{Rule: "5m_close", RefPrice: 29642.00, Side: "below"},
 			},
 		},
-		DeathCondition: "15m close above 29707.50 voids the plan",
+		DeathCondition: "5m close above 29707.50 voids the plan",
 		FlipStructured: &PlanCondition{Price: 29671.88, Side: "above", Rule: "2x5m_close", FlipTo: "long"},
 	}
 }
@@ -65,22 +67,38 @@ func TestPlanDocRuleAliasUnknownStillRejected(t *testing.T) {
 func TestPlanDocRuleAliasFullVocabulary(t *testing.T) {
 	for in, want := range map[string]string{
 		"5m_close": "1x5m_close", "5m-close": "1x5m_close", "5mclose": "1x5m_close", "1x5m": "1x5m_close",
-		"15m": "15m_close", "15m-close": "15m_close", "15mclose": "15m_close",
 		"2x5m": "2x5m_close", "2x_5m": "2x5m_close",
-		"touch": "touch", "1x5m_close": "1x5m_close", "2x5m_close": "2x5m_close", "15m_close": "15m_close",
+		"mss": "1m_mss", "1m-mss": "1m_mss", "1mmss": "1m_mss", "mss_1m": "1m_mss",
+		"time-hold": "time_hold", "timehold": "time_hold", "hold_time": "time_hold",
+		"touch": "touch", "1x5m_close": "1x5m_close", "2x5m_close": "2x5m_close", "1m_mss": "1m_mss", "time_hold": "time_hold",
 	} {
 		if got := NormalizeConfirmRule(in); got != want {
 			t.Errorf("NormalizeConfirmRule(%q) = %q, want %q", in, got, want)
 		}
 	}
+	// E1: 15m spellings NO LONGER normalize — they pass through so the
+	// validator rejects them with the NAMED confirm_rule_15m_removed message.
+	for _, in := range []string{"15m", "15m-close", "15mclose", "15m_close", "1x15m", "1x15m_close"} {
+		if got := NormalizeConfirmRule(in); got != in {
+			t.Errorf("NormalizeConfirmRule(%q) must pass through unchanged for the named rejection, got %q", in, got)
+		}
+		if !confirmRuleMentions15m(in) {
+			t.Errorf("confirmRuleMentions15m(%q) must be true", in)
+		}
+	}
 	for in, want := range map[string]string{
 		"2x5m_close": "2x5m", "2x_5m": "2x5m", "2x5": "2x5m",
-		"15m": "15m_close", "15m-close": "15m_close", "15mclose": "15m_close",
 		"1x5m_close": "5m_close", "1x5m": "5m_close", "5m-close": "5m_close", "5mclose": "5m_close",
-		"2x5m": "2x5m", "15m_close": "15m_close", "5m_close": "5m_close",
+		"2x5m": "2x5m", "5m_close": "5m_close",
 	} {
 		if got := NormalizeConditionRule(in); got != want {
 			t.Errorf("NormalizeConditionRule(%q) = %q, want %q", in, got, want)
+		}
+	}
+	// E1: 15m condition spellings pass through to the named rejection too.
+	for _, in := range []string{"15m", "15m-close", "15mclose", "15m_close"} {
+		if got := NormalizeConditionRule(in); got != in {
+			t.Errorf("NormalizeConditionRule(%q) must pass through unchanged for the named rejection, got %q", in, got)
 		}
 	}
 }

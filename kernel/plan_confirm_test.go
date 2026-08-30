@@ -17,7 +17,7 @@ func confirmBars(base int64, closes ...float64) []market.Kline {
 }
 
 // C1 — authored rule == evaluated rule (with A2's semantics): 1x5m_close needs
-// ONE 5m bucket beyond; 2x5m_close needs two; 15m_close one 15m bucket.
+// ONE 5m bucket beyond; 2x5m_close needs two. (E1: the 15m variant is dead.)
 func TestConfirmRuleIdentity(t *testing.T) {
 	base := int64(1_700_000_100_000)
 	base -= base % 900_000 // 15m-aligned
@@ -48,21 +48,51 @@ func TestConfirmDetailCarriesLastClose(t *testing.T) {
 	}
 }
 
-// Validator: confirm enum + object↔prose number agreement (the A3 contract).
+// Validator: confirm enum + object↔prose number agreement (the A3 contract) +
+// E1's named 15m rejection.
 func TestConfirmValidator(t *testing.T) {
 	d := validBaseDoc()
+	// E1 — the dead variant is rejected BY NAME (never a generic enum error).
 	d.Scenarios[0].Confirm = &PlanConfirm{Rule: "15m_close", RefPrice: 29648.25, Side: "above"}
+	if err := ValidatePlanDocWithCaps(d, 8, 3); err == nil || !strings.Contains(err.Error(), "confirm_rule_15m_removed") {
+		t.Fatalf("15m confirm must fail with the NAMED message (got %v)", err)
+	}
+	// E2 — a reject fade must carry a touch confirm (fade_requires_touch).
+	d = validBaseDoc()
+	d.Scenarios[0].Confirm = &PlanConfirm{Rule: "1x5m_close", RefPrice: 29648.25, Side: "below"}
+	if err := ValidatePlanDocWithCaps(d, 8, 3); err == nil || !strings.Contains(err.Error(), "fade_requires_touch") {
+		t.Fatalf("close-confirm on a reject fade must fail with fade_requires_touch (got %v)", err)
+	}
+	// The coherent shape for a reject: touch at the level, price in prose.
+	d = validBaseDoc()
+	d.Scenarios[0].Confirm = &PlanConfirm{Rule: "touch", RefPrice: 29648.25, Side: "below"}
 	if err := ValidatePlanDocWithCaps(d, 8, 3); err != nil {
-		t.Fatalf("coherent confirm must pass: %v", err)
+		t.Fatalf("coherent touch confirm must pass: %v", err)
 	}
 	d.Scenarios[0].Confirm.Rule = "3x1m"
 	if err := ValidatePlanDocWithCaps(d, 8, 3); err == nil || !strings.Contains(err.Error(), "confirm.rule") {
 		t.Fatalf("bad rule must fail (got %v)", err)
 	}
-	d.Scenarios[0].Confirm.Rule = "15m_close"
+	d.Scenarios[0].Confirm.Rule = "touch"
 	d.Scenarios[0].Confirm.RefPrice = 29000 // not in the prose
 	if err := ValidatePlanDocWithCaps(d, 8, 3); err == nil || !strings.Contains(err.Error(), "confirm.ref_price") {
 		t.Fatalf("prose mismatch must fail (got %v)", err)
+	}
+}
+
+// E1 — legacy stored docs still parse: a stored 15m confirm must remain
+// EVALUABLE by the acceptance machinery (legacy tolerance) even though new
+// authorship is schema-rejected. This is the load-path contract.
+func TestLegacy15mConfirmStillEvaluates(t *testing.T) {
+	base := int64(1_700_000_100_000)
+	base -= base % 900_000 // 15m-aligned
+	bars := confirmBars(base, 99, 99, 99, 99, 99)
+	legacy := PlanConfirm{Rule: "15m_close", RefPrice: 100, Side: "below"}
+	if v := EvaluateConfirm(legacy, bars, base-1, base+5*60_000); !v.Met {
+		t.Fatalf("a legacy stored 15m confirm must still evaluate MET (%s)", v.Detail)
+	}
+	if got := conditionRule(PlanCondition{Rule: "15m_close"}); got != "15m-close" {
+		t.Fatalf("legacy condition rule mapping changed: %q", got)
 	}
 }
 
@@ -72,7 +102,7 @@ func TestRenderConfirmLines(t *testing.T) {
 	if RenderConfirmLines(doc, nil, 0, 0, 0, 0) != "" {
 		t.Fatal("no confirm objects → no advisory block")
 	}
-	doc.Scenarios[0].Confirm = &PlanConfirm{Rule: "15m_close", RefPrice: 29648.25, Side: "above"}
+	doc.Scenarios[0].Confirm = &PlanConfirm{Rule: "touch", RefPrice: 29648.25, Side: "below"}
 	out := RenderConfirmLines(doc, confirmBars(1_700_000_100_000-(1_700_000_100_000%900_000), 99, 99, 99), 1, 1_700_000_400_000, 0, 0)
 	if !strings.Contains(out, "S1 confirm:") || !strings.Contains(out, "advisory") {
 		t.Fatalf("advisory block malformed:\n%s", out)

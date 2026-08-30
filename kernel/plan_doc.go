@@ -45,7 +45,7 @@ type PlanLevel struct {
 // judge (no new hard gate; the suppression class stays dead), but it reasons
 // from machine truth instead of re-deriving closes itself.
 type PlanConfirm struct {
-	Rule     string  `json:"rule"`      // touch | 1x5m_close | 2x5m_close | 15m_close
+	Rule     string  `json:"rule"`      // touch | 1x5m_close | 2x5m_close | 1m_mss | time_hold (E1: 15m dead)
 	RefPrice float64 `json:"ref_price"` // the price the closes are counted against
 	Side     string  `json:"side"`      // above | below
 }
@@ -214,8 +214,10 @@ type PlanCondition struct {
 }
 
 // conditionRules / conditionSides are the enums PlanCondition validates against.
+// E1 (entry-mechanics 2026-08-30): the 15m condition variant is DEAD — removed
+// from the enum chokepoint; new authorship is rejected (condition_rule_15m_removed).
 var (
-	conditionRules = map[string]bool{"2x5m": true, "15m_close": true, "5m_close": true}
+	conditionRules = map[string]bool{"2x5m": true, "5m_close": true}
 	conditionSides = map[string]bool{"below": true, "above": true}
 )
 
@@ -378,27 +380,30 @@ func NormalizePlanDocRules(d *PlanDoc) {
 }
 
 // NormalizeConfirmRule canonicalizes a confirm{} rule spelling.
-// Canonical: touch | 1x5m_close | 2x5m_close | 15m_close.
+// E1 (2026-08-30): 15m spellings are NOT normalized — they pass through and
+// the validator rejects them with confirm_rule_15m_removed (dead variant).
+// Canonical: touch | 1x5m_close | 2x5m_close | 1m_mss | time_hold.
 func NormalizeConfirmRule(rule string) string {
 	switch strings.TrimSpace(rule) {
 	case "5m_close", "5m-close", "5mclose", "1x5m":
 		return "1x5m_close"
-	case "15m", "15m-close", "15mclose":
-		return "15m_close"
 	case "2x5m", "2x_5m":
 		return "2x5m_close"
+	case "mss", "1m-mss", "1mmss", "mss_1m":
+		return "1m_mss"
+	case "hold_time", "timehold", "time-hold":
+		return "time_hold"
 	}
 	return rule
 }
 
 // NormalizeConditionRule canonicalizes a death/flip structured rule spelling.
-// Canonical: 2x5m | 15m_close | 5m_close.
+// E1 (2026-08-30): 15m spellings are NOT normalized — rejected at the chokepoint.
+// Canonical: 2x5m | 5m_close.
 func NormalizeConditionRule(rule string) string {
 	switch strings.TrimSpace(rule) {
 	case "2x5m_close", "2x_5m", "2x5":
 		return "2x5m"
-	case "15m", "15m-close", "15mclose":
-		return "15m_close"
 	case "1x5m_close", "1x5m", "5m-close", "5mclose":
 		return "5m_close"
 	}
@@ -513,8 +518,11 @@ func ValidatePlanDocWithCaps(d *PlanDoc, maxLevels, maxScenarios int) error {
 		// object↔prose contract). Absence is judged at the WRITE SITE (grace
 		// window), not here.
 		if s.Confirm != nil {
+			if confirmRuleMentions15m(s.Confirm.Rule) {
+				return fmt.Errorf("scenario[%d].confirm.rule %q — confirm_rule_15m_removed (the 15m confirm variant is dead; use touch|1x5m_close|2x5m_close|1m_mss|time_hold)", i, s.Confirm.Rule)
+			}
 			if !confirmRules[s.Confirm.Rule] {
-				return fmt.Errorf("scenario[%d].confirm.rule %q invalid (touch|1x5m_close|2x5m_close|15m_close)", i, s.Confirm.Rule)
+				return fmt.Errorf("scenario[%d].confirm.rule %q invalid (touch|1x5m_close|2x5m_close|1m_mss|time_hold)", i, s.Confirm.Rule)
 			}
 			if s.Confirm.Side != "above" && s.Confirm.Side != "below" {
 				return fmt.Errorf("scenario[%d].confirm.side %q invalid (above|below)", i, s.Confirm.Side)
@@ -524,6 +532,20 @@ func ValidatePlanDocWithCaps(d *PlanDoc, maxLevels, maxScenarios int) error {
 			}
 			if !numberNearInText(s.Trigger+" "+s.Invalid, s.Confirm.RefPrice, 2.0) {
 				return fmt.Errorf("scenario[%d].confirm.ref_price %.2f does not match any number in the trigger/invalid prose (object and prose must agree)", i, s.Confirm.RefPrice)
+			}
+		}
+		if s.Confirm2 != nil {
+			if confirmRuleMentions15m(s.Confirm2.Rule) {
+				return fmt.Errorf("scenario[%d].confirm2.rule %q — confirm_rule_15m_removed (the 15m confirm variant is dead; use touch|1x5m_close|2x5m_close|1m_mss|time_hold)", i, s.Confirm2.Rule)
+			}
+			if !confirmRules[s.Confirm2.Rule] {
+				return fmt.Errorf("scenario[%d].confirm2.rule %q invalid (touch|1x5m_close|2x5m_close|1m_mss|time_hold)", i, s.Confirm2.Rule)
+			}
+			if s.Confirm2.Side != "above" && s.Confirm2.Side != "below" {
+				return fmt.Errorf("scenario[%d].confirm2.side %q invalid (above|below)", i, s.Confirm2.Side)
+			}
+			if s.Confirm2.RefPrice <= 0 {
+				return fmt.Errorf("scenario[%d].confirm2.ref_price %v invalid", i, s.Confirm2.RefPrice)
 			}
 		}
 	}
@@ -540,11 +562,14 @@ func ValidatePlanDocWithCaps(d *PlanDoc, maxLevels, maxScenarios int) error {
 		if cond.c.Price <= 0 {
 			return fmt.Errorf("%s.price %v invalid (must be > 0)", cond.name, cond.c.Price)
 		}
+		if confirmRuleMentions15m(cond.c.Rule) {
+			return fmt.Errorf("%s.rule %q — condition_rule_15m_removed (the 15m condition variant is dead; use 2x5m|5m_close)", cond.name, cond.c.Rule)
+		}
 		if !conditionSides[cond.c.Side] {
 			return fmt.Errorf("%s.side %q invalid (below|above)", cond.name, cond.c.Side)
 		}
 		if !conditionRules[cond.c.Rule] {
-			return fmt.Errorf("%s.rule %q invalid (2x5m|15m_close|5m_close)", cond.name, cond.c.Rule)
+			return fmt.Errorf("%s.rule %q invalid (2x5m|5m_close)", cond.name, cond.c.Rule)
 		}
 		if cond.name == "flip" && cond.c.FlipTo != "" && !biasDirections[cond.c.FlipTo] {
 			return fmt.Errorf("flip.flip_to %q invalid (long|short)", cond.c.FlipTo)
@@ -567,6 +592,11 @@ func ValidatePlanDocWithCaps(d *PlanDoc, maxLevels, maxScenarios int) error {
 	// Wave 2 armed orders (2026-08-27) — the arm authorization must be coherent:
 	// only armable conditions, exact prices, sane long/short ordering.
 	if err := validateArmSpecs(d); err != nil {
+		return err
+	}
+	// E2 (entry-mechanics 2026-08-30) — the per-condition ENTRY LAW: one table,
+	// enum-keyed, condition → allowed confirm rules + required entry style.
+	if err := ValidateEntryLaw(d); err != nil {
 		return err
 	}
 	return nil
@@ -1054,5 +1084,17 @@ func numberNearInText(text string, want, tol float64) bool {
 }
 
 // confirmRules — C1 vocabulary. 1x5m_close maps to the A2-fixed "5m-close"
-// acceptance rule; 2x5m_close → "2x5m"; 15m_close → "15m-close".
-var confirmRules = map[string]bool{"touch": true, "1x5m_close": true, "2x5m_close": true, "15m_close": true}
+// acceptance rule; 2x5m_close → "2x5m". E1 (entry-mechanics 2026-08-30):
+// 15m_close REMOVED (dead variant — rejected with confirm_rule_15m_removed);
+// 1m_mss (E5) and time_hold (E6) added as machine primitives.
+var confirmRules = map[string]bool{"touch": true, "1x5m_close": true, "2x5m_close": true, "1m_mss": true, "time_hold": true}
+
+// confirmRuleMentions15m reports whether a rule spelling is (or normalizes
+// toward) the dead 15m variant — E1's named rejection key.
+func confirmRuleMentions15m(rule string) bool {
+	switch strings.ToLower(strings.TrimSpace(rule)) {
+	case "15m", "15m-close", "15mclose", "15m_close", "1x15m", "1x15m_close":
+		return true
+	}
+	return false
+}

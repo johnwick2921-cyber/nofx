@@ -8,13 +8,13 @@ import (
 func validBaseDoc() *PlanDoc {
 	return &PlanDoc{
 		Reasoning:      "r",
-		Bias:           PlanBias{Direction: "short", FlipCondition: "15m close above 29648.25 flips long"},
+		Bias:           PlanBias{Direction: "short", FlipCondition: "5m close above 29648.25 flips long"},
 		Levels:         []PlanLevel{{Price: 29648.25, Label: "OR-L", Grade: "A"}, {Price: 29441, Label: "PDL", Grade: "A"}},
-		Scenarios:      []PlanScenario{{ID: "S1", Trigger: "reject at 29648.25", Condition: "reject", Direction: "short", TargetChain: []float64{29441}, Invalid: "15m close above 29648.25", Quality: "B"}},
+		Scenarios:      []PlanScenario{{ID: "S1", Trigger: "reject at 29648.25", Condition: "reject", Direction: "short", TargetChain: []float64{29441}, Invalid: "5m close above 29648.25", Quality: "B"}},
 		NoTrade:        []string{"lunch"},
-		DeathCondition: "15m close below 29441.00 kills the plan",
-		DeathStructured: &PlanCondition{Price: 29441, Side: "below", Rule: "15m_close"},
-		FlipStructured:  &PlanCondition{Price: 29648.25, Side: "above", Rule: "15m_close", FlipTo: "long"},
+		DeathCondition: "5m close below 29441.00 kills the plan",
+		DeathStructured: &PlanCondition{Price: 29441, Side: "below", Rule: "5m_close"},
+		FlipStructured:  &PlanCondition{Price: 29648.25, Side: "above", Rule: "5m_close", FlipTo: "long"},
 	}
 }
 

@@ -33,7 +33,7 @@ const DEFAULT_DAY_PLAN: DayPlanConfig = {
   proximity_filter_atr: 1.5,
   max_levels: 8,
   scenario_cap: 3,
-  acceptance_rule: '2x5m',
+  acceptance_rule: '5m_close',
   replan_cap: 2,
   sessions_enabled: ['NY'],
   approval_required: false,
@@ -508,10 +508,9 @@ export function DayPlanEditor({ config, onChange, disabled, language }: Props) {
           <FieldRow label={tp('acceptance', language)}>
             <Segmented
               options={[
-                { key: '2x5m', label: '2×5m' },
-                { key: '15m-close', label: '15m' },
+                { key: '5m_close', label: '1×5m' },
               ]}
-              value={cfg.acceptance_rule ?? '2x5m'}
+              value={cfg.acceptance_rule ?? '5m_close'}
               onChange={(v) => update('acceptance_rule', v)}
               disabled={bodyDisabled}
             />
@@ -894,7 +893,7 @@ export function DayPlanEditor({ config, onChange, disabled, language }: Props) {
                       overridden={ov?.acceptance_rule !== undefined}
                       onToggle={(on) =>
                         on
-                          ? setSessionField(s, 'acceptance_rule', '2x5m')
+                          ? setSessionField(s, 'acceptance_rule', '5m_close')
                           : clearSessionField(s, 'acceptance_rule')
                       }
                       disabled={bodyDisabled}
@@ -902,8 +901,7 @@ export function DayPlanEditor({ config, onChange, disabled, language }: Props) {
                     >
                       <Segmented
                         options={[
-                          { key: '2x5m', label: '2×5m' },
-                          { key: '15m-close', label: '15m' },
+                          { key: '5m_close', label: '1×5m' },
                         ]}
                         value={ov?.acceptance_rule}
                         onChange={(v) =>
