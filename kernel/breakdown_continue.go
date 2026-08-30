@@ -58,13 +58,17 @@ func bdMaxPullbackFrac() float64 {
 	return 0.4
 }
 
+// bdConfirmCloses — E3 (entry-mechanics 2026-08-30): the breakdown floor
+// relaxes 2→1 confirming close (BD_MIN_CLOSES, default 1). Displacement
+// (BD_MIN_DISP_ATR) and the reclaim-check are UNCHANGED — the entry law now
+// rides on displacement quality, not on a double close.
 func bdConfirmCloses() int {
-	if v := os.Getenv("BD_CONFIRM_CLOSES"); v != "" {
+	if v := os.Getenv("BD_MIN_CLOSES"); v != "" {
 		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n > 0 {
 			return n
 		}
 	}
-	return 2
+	return 1
 }
 
 func bdMaxLevelDistATR() float64 {
@@ -243,12 +247,15 @@ func ValidateBreakdownContinueScenarios(d *PlanDoc, bars []market.Kline, atr5m, 
 		// plan-authorable on the AI path only; arms stay pullback-only).
 		st := BreakdownContinueState(*s, bars, 0, nowMs)
 		immediate := strings.EqualFold(strings.TrimSpace(bd.EntryMode), "immediate")
-		if !immediate && !st.Leg1Met {
-			return fmt.Errorf("%s %s: the tape shows NO %d×5m breakdown through %.2f yet (%d confirming closes, no reclaim check) — author it only after the displacement exists (or set entry_mode=immediate and accept the 2nd-close trigger)",
-				s.ID, s.Condition, bdConfirmCloses(), bd.Level, 0)
-		}
+		// Reclaimed FIRST: a close back across voids the play no matter how many
+		// confirming closes the floor requires — the honest message for the
+		// rehearsal-S4 class (E3 keeps this check unchanged).
 		if st.Reclaimed {
 			return fmt.Errorf("%s %s: a close came back across %.2f — the breakdown is void; author a reject/retest play instead", s.ID, s.Condition, bd.Level)
+		}
+		if !immediate && !st.Leg1Met {
+			return fmt.Errorf("%s %s: the tape shows NO confirming close beyond %.2f yet (%d confirming close(s) needed — BD_MIN_CLOSES, displacement + reclaim-check unchanged) — author it only after the displacement exists (or set entry_mode=immediate and accept the confirming-close trigger)",
+				s.ID, s.Condition, bd.Level, bdConfirmCloses())
 		}
 		if atr5m > 0 && st.BreakLegPts < bdMinDispATR()*atr5m {
 			return fmt.Errorf("%s %s: measured displacement %.2f pts < BD_MIN_DISP_ATR %.1f×ATR5m (%.1f pts) — not a displacement move, author a normal reject/retest play instead",

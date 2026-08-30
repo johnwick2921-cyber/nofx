@@ -46,6 +46,60 @@ func armMinRR() float64 {
 // armedWorkingStaleMin is the reconnect/reconcile safety net
 // (ARM_WORKING_STALE_MIN, default 15): a working row with no order_update for
 // this long is cancelled with an honest reason.
+// E7 (entry-mechanics 2026-08-30) — stop-entry knobs.
+// STOP_ENTRY_SEAM (default OFF): the stop_entry order path is NEVER sent on
+// the wire until the far-side AddOn has proven the frame (D-rule — an unproven
+// C# path must not ship at night). STOP_ENTRY_OFFSET_TICKS (default 2): the
+// stop trigger sits N ticks beyond the break candle for a stop-market entry.
+func stopEntrySeamOn() bool {
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("STOP_ENTRY_SEAM")), "on")
+}
+
+func stopEntryOffsetTicks() int {
+	if v := strings.TrimSpace(os.Getenv("STOP_ENTRY_OFFSET_TICKS")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return 2
+}
+
+func retestWaitBars() int {
+	if v := strings.TrimSpace(os.Getenv("RETEST_WAIT_BARS")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return 6
+}
+
+// stopEntryFallbackDue (E7, pure) — the breakout-retest fallback window: a
+// stop-entry leg is due when NO bar has touched its entry level within the
+// last RETEST_WAIT_BARS 1m bars AND at least RETEST_WAIT_BARS bars elapsed
+// since the plan's birth (no retest came → chase with a stop beyond the
+// break candle instead of waiting forever).
+func stopEntryFallbackDue(bars []market.Kline, entryPx, sinceMs, nowMs int64) bool {
+	need := retestWaitBars()
+	if len(bars) < need {
+		return false
+	}
+	var closedSinceBirth int
+	for i := len(bars) - 1; i >= 0 && closedSinceBirth < need; i-- {
+		b := bars[i]
+		if b.CloseTime >= nowMs {
+			continue
+		}
+		if b.OpenTime < sinceMs {
+			break
+		}
+		closedSinceBirth++
+		if b.Low <= float64(entryPx) && b.High >= float64(entryPx) {
+			return false // a retest touch came in-window — the limit logic owns it
+		}
+	}
+	return closedSinceBirth >= need
+}
+
 func armedWorkingStaleMin() int {
 	if v := os.Getenv("ARM_WORKING_STALE_MIN"); v != "" {
 		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n > 0 {
@@ -177,99 +231,267 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 		if sc.Arm == nil || !sc.Arm.Enabled {
 			continue
 		}
-		// S2b chained arm (autopsy-response wave): wait_confirm arms stay DORMANT
-		// until the scenario's own confirm{} is machine-MET — the sweep_reclaim
-		// retrace fast path (the S3-class 7/7 replay winners had no fast path).
-		if sc.Arm.WaitConfirm && sc.Confirm != nil {
-			v := kernel.EvaluateConfirm(*sc.Confirm, bars, plan.BirthMs, now.UnixMilli())
-			if !v.Met {
-				continue
-			}
-			at.logInfof("⚔️ arm %s wait_confirm MET — arming the retrace", sc.ID)
+		// E4 (2026-08-30) — split-entry legs: a two-leg arm writes one ledger
+		// row PER leg (LegIndex 0/1, LegCount 2). A single arm is leg 0 of a
+		// one-row pair (LegCount 0 = legacy shape).
+		legs := sc.Arm.Legs
+		if len(legs) == 0 {
+			legs = []kernel.PlanArmLeg{{Entry: sc.Arm.Entry, Stop: sc.Arm.Stop, Target: sc.Arm.Target,
+				WaitConfirm: sc.Arm.WaitConfirm, Rule: "touch", Kind: "limit"}}
 		}
-		// gates AT ARM TIME — a resting order is a pre-passed entry; each gate
-		// input that changes materially later triggers a cancel (1.3).
-		if verdict := at.armGateVerdict(sc, doc.Bias.Direction, snap, atr5m, minQuality, cfg); verdict != "" {
-			// F4 (LONDON-FORENSICS 2026-08-28) — log the REFUSED verdict ONCE
-			// per arm-spec (the same infeasible arm re-refused every cycle
-			// printed ~120 lines/session); silent until the spec changes.
-			// GAR-F6 (2026-08-28): the comparison VALUE is the verdict CLASS,
-			// not the ATR-bearing string — live ATR drift re-logged the same
-			// refusal every few minutes (LONDON S4 min-SL 18.29→18.67).
-			// PRE-REOPEN F3 (2026-08-28) — the missing 1.3 clause: a gate input
-			// that changes materially while the arm is WORKING cancels it the
-			// same cycle (the LONDON S4 class stayed resting through repeated
-			// re-refusals until the 08:30 sweep).
-			if rows, lerr := ledger.ListNonTerminal(at.id); lerr == nil {
-				for _, r := range rows {
-					if r.TraderID == at.id && r.PlanID == plan.PlanID && r.Scenario == sc.ID &&
-						r.State == "working" && r.SignalID != "" {
-						if nt := at.armedTrader(); nt != nil {
-							if cerr := nt.CancelOrder(r.SignalID); cerr == nil {
-								_ = ledger.SetState(r.ID, "cancelled", "gate changed: "+armRefusalClass(verdict))
-								at.logWarnf("✕ armed cancel (gate changed %s): %s %s", armRefusalClass(verdict), plan.Session, sc.ID)
+		legCount := 0
+		if len(sc.Arm.Legs) == 2 {
+			legCount = 2
+		}
+		for li, leg := range legs {
+			// S2b chained arm (autopsy-response wave): wait_confirm legs stay
+			// DORMANT until the chain confirm is machine-MET. E4: leg 1 chains
+			// on confirm2 (1m_mss|1x5m_close); a legacy single arm chains on
+			// its own confirm{}.
+			if leg.WaitConfirm {
+				chain := sc.Confirm2
+				if len(sc.Arm.Legs) == 0 {
+					chain = sc.Confirm
+				}
+				if chain == nil {
+					continue
+				}
+				v := kernel.EvaluateConfirm(*chain, bars, plan.BirthMs, now.UnixMilli())
+				if !v.Met {
+					continue
+				}
+				at.logInfof("⚔️ arm %s leg %d wait_confirm MET (%s) — arming", sc.ID, li+1, leg.Rule)
+			}
+			// gates AT ARM TIME — a resting order is a pre-passed entry; each gate
+			// input that changes materially later triggers a cancel (1.3).
+			if verdict := at.armGateVerdictFor(sc, leg, biasDirectionFor(doc.Bias.Direction), snap, atr5m, minQuality, cfg); verdict != "" {
+				// F4 (LONDON-FORENSICS 2026-08-28) — log the REFUSED verdict ONCE
+				// per arm-spec (the same infeasible arm re-refused every cycle
+				// printed ~120 lines/session); silent until the spec changes.
+				// GAR-F6 (2026-08-28): the comparison VALUE is the verdict CLASS,
+				// not the ATR-bearing string — live ATR drift re-logged the same
+				// refusal every few minutes (LONDON S4 min-SL 18.29→18.67).
+				// PRE-REOPEN F3 (2026-08-28) — the missing 1.3 clause: a gate input
+				// that changes materially while the arm is WORKING cancels it the
+				// same cycle (the LONDON S4 class stayed resting through repeated
+				// re-refusals until the 08:30 sweep).
+				if rows, lerr := ledger.ListNonTerminal(at.id); lerr == nil {
+					for _, r := range rows {
+						if r.TraderID == at.id && r.PlanID == plan.PlanID && r.Scenario == sc.ID &&
+							r.State == "working" && r.SignalID != "" {
+							if nt := at.armedTrader(); nt != nil {
+								if cerr := nt.CancelOrder(r.SignalID); cerr == nil {
+									_ = ledger.SetState(r.ID, "cancelled", "gate changed: "+armRefusalClass(verdict))
+									at.logWarnf("✕ armed cancel (gate changed %s): %s %s", armRefusalClass(verdict), plan.Session, sc.ID)
+								}
 							}
 						}
 					}
 				}
-			}
-			key := plan.PlanID + ":" + strconv.Itoa(plan.Version) + ":" + sc.ID
-			if armRefusalChanged(&at.armRefusalLast, key, armRefusalClass(verdict)) {
-				at.logWarnf("⚔️ arm REFUSED %s %s: %s", plan.Session, sc.ID, verdict)
-			}
-			continue
-		}
-		side := strings.ToLower(strings.TrimSpace(sc.Direction))
-		row := &store.ArmedOrderDB{
-			TraderID: at.id, PlanID: plan.PlanID, Version: plan.Version, Session: plan.Session,
-			Scenario: sc.ID, Side: side, EntryPx: sc.Arm.Entry, StopPx: sc.Arm.Stop, TargetPx: sc.Arm.Target,
-			State: "armed", EntryClass: "armed_fill", CreatedAt: now, UpdatedAt: now,
-		}
-		existing, err := ledger.ListNonTerminal(at.id)
-		if err == nil {
-			for i := range existing {
-				if existing[i].TraderID == at.id && existing[i].PlanID == row.PlanID && existing[i].Scenario == sc.ID {
-					row.ID = existing[i].ID // already in the ledger — leave state (churn guard applies to placement)
-					break
+				key := plan.PlanID + ":" + strconv.Itoa(plan.Version) + ":" + sc.ID + ":leg" + strconv.Itoa(li+1)
+				if armRefusalChanged(&at.armRefusalLast, key, armRefusalClass(verdict)) {
+					at.logWarnf("⚔️ arm REFUSED %s %s leg %d: %s", plan.Session, sc.ID, li+1, verdict)
 				}
-			}
-		}
-		if row.ID == 0 {
-			if err := ledger.UpsertArm(row); err != nil {
-				at.logWarnf("⚔️ arm write failed %s %s: %v", plan.Session, sc.ID, err)
 				continue
 			}
-			// PRE-REOPEN F3 (2026-08-28) — the authored log fires ONCE per
-			// spec (dedup by plan:version:scenario + prices); the dead-row
-			// re-log spam (69+ lines/day) came from logging every cycle.
-			akey := plan.PlanID + ":" + strconv.Itoa(plan.Version) + ":" + sc.ID
-			aval := fmt.Sprintf("%s %.2f/%.2f/%.2f", side, sc.Arm.Entry, sc.Arm.Stop, sc.Arm.Target)
-			if armRefusalChanged(&at.armAuthoredLast, akey, aval) {
-				at.logInfof("⚔️ armed %s %s %s limit %.2f SL %.2f TP %.2f (tick-managed placement is Phase 2)", plan.Session, sc.ID, side, sc.Arm.Entry, sc.Arm.Stop, sc.Arm.Target)
+			side := strings.ToLower(strings.TrimSpace(sc.Direction))
+			row := &store.ArmedOrderDB{
+				TraderID: at.id, PlanID: plan.PlanID, Version: plan.Version, Session: plan.Session,
+				Scenario: sc.ID, Side: side, EntryPx: leg.Entry, StopPx: leg.Stop, TargetPx: leg.Target,
+				State: "armed", EntryClass: "armed_fill", CreatedAt: now, UpdatedAt: now,
+				LegIndex: li, LegCount: legCount, Kind: leg.Kind,
 			}
-		} else {
-			// CHURN GUARD (2.1): re-spec a working arm's bracket only when the
-			// plan moved SL or TP by ≥ 2 ticks (cancel+re-place on modify).
-			tick := market.FuturesTickSize(at.futuresSymbol())
-			if tick <= 0 {
-				tick = 0.25
-			}
-			if row.State == "working" && churnNeedsModify(row.StopPx, row.TargetPx, sc.Arm.Stop, sc.Arm.Target, tick) {
-				if nt := at.armedTrader(); nt != nil {
-					_ = nt.ModifyBracket(row.SignalID, sc.Arm.Stop, sc.Arm.Target)
-					at.logInfof("📌 armed %s bracket modify (churn guard) SL %.2f→%.2f TP %.2f→%.2f",
-						sc.ID, row.StopPx, sc.Arm.Stop, row.TargetPx, sc.Arm.Target)
+			existing, err := ledger.ListNonTerminal(at.id)
+			if err == nil {
+				for i := range existing {
+					if existing[i].TraderID == at.id && existing[i].PlanID == row.PlanID && existing[i].Scenario == sc.ID && existing[i].LegIndex == row.LegIndex {
+						row.ID = existing[i].ID // already in the ledger — leave state (churn guard applies to placement)
+						break
+					}
 				}
 			}
-			row.EntryPx, row.StopPx, row.TargetPx = sc.Arm.Entry, sc.Arm.Stop, sc.Arm.Target
-			row.Version = plan.Version
-			_ = ledger.UpsertArm(row)
+			if row.ID == 0 {
+				if err := ledger.UpsertArm(row); err != nil {
+					at.logWarnf("⚔️ arm write failed %s %s leg %d: %v", plan.Session, sc.ID, li+1, err)
+					continue
+				}
+				// PRE-REOPEN F3 (2026-08-28) — the authored log fires ONCE per
+				// spec (dedup by plan:version:scenario + prices); the dead-row
+				// re-log spam (69+ lines/day) came from logging every cycle.
+				akey := plan.PlanID + ":" + strconv.Itoa(plan.Version) + ":" + sc.ID + ":leg" + strconv.Itoa(li+1)
+				aval := fmt.Sprintf("%s %.2f/%.2f/%.2f", side, leg.Entry, leg.Stop, leg.Target)
+				if armRefusalChanged(&at.armAuthoredLast, akey, aval) {
+					at.logInfof("⚔️ armed %s %s leg %d %s limit %.2f SL %.2f TP %.2f (tick-managed placement is Phase 2)", plan.Session, sc.ID, li+1, side, leg.Entry, leg.Stop, leg.Target)
+				}
+			} else {
+				// CHURN GUARD (2.1): re-spec a working arm's bracket only when the
+				// plan moved SL or TP by ≥ 2 ticks (cancel+re-place on modify).
+				tick := market.FuturesTickSize(at.futuresSymbol())
+				if tick <= 0 {
+					tick = 0.25
+				}
+				if row.State == "working" && churnNeedsModify(row.StopPx, row.TargetPx, leg.Stop, leg.Target, tick) {
+					if nt := at.armedTrader(); nt != nil {
+						_ = nt.ModifyBracket(row.SignalID, leg.Stop, leg.Target)
+						at.logInfof("📌 armed %s leg %d bracket modify (churn guard) SL %.2f→%.2f TP %.2f→%.2f",
+							sc.ID, li+1, row.StopPx, leg.Stop, row.TargetPx, leg.Target)
+					}
+				}
+				row.EntryPx, row.StopPx, row.TargetPx = leg.Entry, leg.Stop, leg.Target
+				row.Version = plan.Version
+				_ = ledger.UpsertArm(row)
+			}
 		}
 	}
 
+	// E8 (2026-08-30) — shadow A/B counterfactual logger (Sep-9's courtroom):
+	// per armed scenario, log the 4 rule counterfactuals once per plan version.
+	// ZERO effect on real paths — writes ONLY the ab_confirm_log table.
+	for _, sc := range doc.Scenarios {
+		at.logShadowAB(plan, sc, bars, now.UnixMilli())
+	}
+
+	// E4 (2026-08-30) — split-sibling law: EITHER leg's STOP-OUT cancels the
+	// sibling's unfilled order (no doubling into a failed level). Runs on the
+	// existing cancel machinery; session-end/news/dormant cancel paths already
+	// cover BOTH legs (cancel-all by trader).
+	at.cancelSplitSiblingOnStopOut(ledger)
+
 	// PHASE 2 — placement engine (armed → working within the tick band), wire
 	// cancel/modify, and the order_update event machine.
-	at.runArmedPlacement(bars)
+	at.runArmedPlacement(bars, plan.BirthMs)
+}
+
+// biasDirectionFor normalizes the plan bias direction ("" → empty).
+func biasDirectionFor(dir string) string {
+	return strings.ToLower(strings.TrimSpace(dir))
+}
+
+// logShadowAB (E8) writes the 4 counterfactual confirm-fill rows for one armed
+// scenario — once per (plan, version, scenario, rule). Advisory/report-only:
+// nothing here feeds a gate or a prompt.
+func (at *AutoTrader) logShadowAB(plan *kernel.ActivePlan, sc kernel.PlanScenario, bars []market.Kline, nowMs int64) {
+	if at.store == nil || plan == nil || len(bars) == 0 {
+		return
+	}
+	rows := kernel.ShadowABForScenario(sc, bars, plan.BirthMs, nowMs)
+	if len(rows) == 0 {
+		return
+	}
+	ac := at.store.AbConfirm()
+	now := time.Now()
+	for _, r := range rows {
+		if ac.Has(plan.PlanID, plan.Version, sc.ID, r.Rule) {
+			continue
+		}
+		if err := ac.Upsert(&store.AbConfirmLogDB{
+			TraderID: at.id, PlanID: plan.PlanID, Version: plan.Version, Session: plan.Session,
+			Scenario: sc.ID, Rule: r.Rule, FillPx: r.FillPx, MFE: r.MFE, MAE: r.MAE,
+			Outcome: r.Outcome, TimeToFillMs: r.TimeToFillMs, CreatedAt: now, UpdatedAt: now,
+		}); err != nil {
+			at.logWarnf("ab-confirm shadow write failed %s %s: %v", sc.ID, r.Rule, err)
+		}
+	}
+}
+
+// splitSiblingCancelDecision (E4, pure) — given one split pair (legs of the
+// same plan:scenario, LegCount=2) and the CLOSED positions of that trader,
+// decide which sibling rows to cancel: a FILLED leg whose position CLOSED at
+// its STOP (exit within 2 ticks of the leg's stop price) voids the level, so
+// the sibling's unfilled order must die — no doubling into a failed level.
+// A target-out or an open position cancels NOTHING.
+func splitSiblingCancelDecision(pair []store.ArmedOrderDB, closed []store.TraderPosition, tick float64) []store.ArmedOrderDB {
+	if tick <= 0 {
+		tick = 0.25
+	}
+	var out []store.ArmedOrderDB
+	stopHit := false
+	for _, leg := range pair {
+		if leg.State != "filled" || leg.SignalID == "" {
+			continue
+		}
+		for _, p := range closed {
+			if p.EntryOrderID != leg.SignalID || p.TraderID != leg.TraderID {
+				continue
+			}
+			if math.Abs(p.ExitPrice-leg.StopPx) <= 2*tick && math.Abs(p.ExitPrice-leg.TargetPx) > 2*tick {
+				stopHit = true // the filled leg stopped out
+			}
+		}
+	}
+	if !stopHit {
+		return nil
+	}
+	for _, leg := range pair {
+		if leg.State == "armed" || leg.State == "working" {
+			out = append(out, leg)
+		}
+	}
+	return out
+}
+
+// cancelSplitSiblingOnStopOut (E4) — the wire half of the split-sibling law,
+// riding the existing cancel machinery (cancel + ledger state + ack seam).
+func (at *AutoTrader) cancelSplitSiblingOnStopOut(ledger *store.ArmedOrderStore) {
+	if ledger == nil {
+		return
+	}
+	rows, err := ledger.ListNonTerminal(at.id)
+	if err != nil || len(rows) == 0 {
+		return
+	}
+	// Group split pairs.
+	pairs := map[string][]store.ArmedOrderDB{}
+	for _, r := range rows {
+		if r.TraderID != at.id || r.LegCount != 2 {
+			continue
+		}
+		key := r.PlanID + ":" + r.Scenario
+		pairs[key] = append(pairs[key], r)
+	}
+	if len(pairs) == 0 {
+		return
+	}
+	// Collect the filled legs' signal ids.
+	var sigs []string
+	for _, p := range pairs {
+		for _, r := range p {
+			if r.State == "filled" && r.SignalID != "" {
+				sigs = append(sigs, r.SignalID)
+			}
+		}
+	}
+	if len(sigs) == 0 {
+		return
+	}
+	closedPtrs, err := at.store.Position().ListClosedByEntryOrderIDs(at.id, sigs)
+	if err != nil || len(closedPtrs) == 0 {
+		return
+	}
+	closed := make([]store.TraderPosition, 0, len(closedPtrs))
+	for _, cp := range closedPtrs {
+		closed = append(closed, *cp)
+	}
+	tick := market.FuturesTickSize(at.futuresSymbol())
+	for _, p := range pairs {
+		for _, sibling := range splitSiblingCancelDecision(p, closed, tick) {
+			reason := "sibling stopped out — split contract (E4)"
+			nt := at.armedTrader()
+			if nt != nil && sibling.SignalID != "" {
+				if cerr := nt.CancelOrder(sibling.SignalID); cerr == nil {
+					_ = ledger.SetState(sibling.ID, "cancelled", reason)
+					at.logWarnf("✕ armed cancel %s %s leg %d: %s", sibling.Session, sibling.Scenario, sibling.LegIndex+1, reason)
+					continue
+				}
+			}
+			if sibling.SignalID == "" {
+				// Still just an authorization — kill it in the ledger; placement
+				// will never fire for it.
+				_ = ledger.SetState(sibling.ID, "cancelled", reason)
+				at.logWarnf("✕ armed cancel %s %s leg %d: %s", sibling.Session, sibling.Scenario, sibling.LegIndex+1, reason)
+			}
+		}
+	}
 }
 
 // armedLines renders the per-cycle ARMED: lines for the executor prompt.
@@ -290,7 +512,11 @@ func (at *AutoTrader) armedLines() string {
 		if glyph == "" {
 			continue
 		}
-		fmt.Fprintf(&b, "ARMED: %s %s %s limit %.2f SL %.2f TP %.2f (%s)\n", r.Scenario, r.Side, r.State, r.EntryPx, r.StopPx, r.TargetPx, glyph)
+		kind := "limit"
+		if r.Kind == "stop_entry" {
+			kind = "stop"
+		}
+		fmt.Fprintf(&b, "ARMED: %s %s %s %s %.2f SL %.2f TP %.2f (%s)\n", r.Scenario, r.Side, r.State, kind, r.EntryPx, r.StopPx, r.TargetPx, glyph)
 	}
 	if b.Len() == 0 {
 		return ""
@@ -300,7 +526,9 @@ func (at *AutoTrader) armedLines() string {
 
 // runArmedPlacement drives the armed→working transition, the churn guard, and
 // the order_update event machine. No-op unless a TCPTrader is bound.
-func (at *AutoTrader) runArmedPlacement(bars []market.Kline) {
+// sinceMs = the plan's birth (the E7 stop-entry fallback window is measured
+// from it).
+func (at *AutoTrader) runArmedPlacement(bars []market.Kline, sinceMs int64) {
 	nt := at.armedTrader()
 	if nt == nil {
 		return
@@ -330,6 +558,33 @@ func (at *AutoTrader) runArmedPlacement(bars []market.Kline) {
 		}
 		switch r.State {
 		case "armed":
+			// E7 — stop-entry legs (breakout-retest fallback / breakdown
+			// immediate alternative): never placed until the far-side AddOn
+			// proves the frame (STOP_ENTRY_SEAM) AND the no-retest window has
+			// elapsed (RETEST_WAIT_BARS). The stop trigger sits
+			// STOP_ENTRY_OFFSET_TICKS beyond the level.
+			if r.Kind == "stop_entry" {
+				if !stopEntrySeamOn() {
+					continue // seam off → the leg stays armed (never on the wire)
+				}
+				if !stopEntryFallbackDue(bars, int64(r.EntryPx), sinceMs, now.UnixMilli()) {
+					continue // still inside the retest window
+				}
+				offset := float64(stopEntryOffsetTicks()) * tick
+				trigger := r.EntryPx - offset
+				if r.Side == "long" {
+					trigger = r.EntryPx + offset
+				}
+				sid, perr := nt.PlaceStopEntry(at.futuresSymbol(), r.Side, 1, trigger, r.StopPx, r.TargetPx)
+				if perr != nil {
+					at.logWarnf("📌 stop-entry place failed %s: %v", r.Scenario, perr)
+					continue
+				}
+				_ = ledger.SetSignal(r.ID, sid)
+				_ = ledger.SetState(r.ID, "working", "")
+				at.logInfof("📌 armed %s → WORKING stop-entry %.2f signal=%s (no retest in %d bars, offset %dt)", r.Scenario, trigger, sid, retestWaitBars(), stopEntryOffsetTicks())
+				continue
+			}
 			if price > 0 && math.Abs(price-r.EntryPx) <= band {
 				sid, perr := nt.PlaceLimitEntry(at.futuresSymbol(), r.Side, 1, r.EntryPx, r.StopPx, r.TargetPx)
 				if perr != nil {
@@ -550,10 +805,20 @@ func (at *AutoTrader) stampArmedFillLineage(r store.ArmedOrderDB, fillPrice floa
 	}
 }
 
-// armGateVerdict runs the arm-time gate chain. Empty string = pass. The
-// min-confidence gate is N/A for arms — the AI's authorization IS the
-// confidence signal (no per-scenario confidence exists to check).
+// armGateVerdict runs the arm-time gate chain for a SINGLE arm (legacy shape).
+// Empty string = pass.
 func (at *AutoTrader) armGateVerdict(sc kernel.PlanScenario, biasDirection string, snap map[string]kernel.StructureState, atr5m float64, minQuality string, cfg *store.StrategyConfig) string {
+	if sc.Arm == nil {
+		return "no arm"
+	}
+	return at.armGateVerdictFor(sc, kernel.PlanArmLeg{Entry: sc.Arm.Entry, Stop: sc.Arm.Stop, Target: sc.Arm.Target}, biasDirection, snap, atr5m, minQuality, cfg)
+}
+
+// armGateVerdictFor runs the arm-time gate chain for ONE LEG's prices (E4: the
+// split legs gate independently — each leg is a pre-passed entry of its own).
+// The min-confidence gate is N/A for arms — the AI's authorization IS the
+// confidence signal (no per-scenario confidence exists to check).
+func (at *AutoTrader) armGateVerdictFor(sc kernel.PlanScenario, leg kernel.PlanArmLeg, biasDirection string, snap map[string]kernel.StructureState, atr5m float64, minQuality string, cfg *store.StrategyConfig) string {
 	a := sc.Arm
 	if err := kernel.ArmSpecValid(sc); err != nil {
 		return err.Error()
@@ -579,28 +844,29 @@ func (at *AutoTrader) armGateVerdict(sc kernel.PlanScenario, biasDirection strin
 	// response (2026-08-27): resting limits fill AT the level (better entry by
 	// construction) — the global 3.0 floor for AI market entries is untouched.
 	rr := 0.0
-	if side == "long" && a.Entry > a.Stop && a.Stop > 0 {
-		rr = (a.Target - a.Entry) / (a.Entry - a.Stop)
-	} else if side == "short" && a.Stop > a.Entry && a.Entry > 0 {
-		rr = (a.Entry - a.Target) / (a.Stop - a.Entry)
+	if side == "long" && leg.Entry > leg.Stop && leg.Stop > 0 {
+		rr = (leg.Target - leg.Entry) / (leg.Entry - leg.Stop)
+	} else if side == "short" && leg.Stop > leg.Entry && leg.Entry > 0 {
+		rr = (leg.Entry - leg.Target) / (leg.Stop - leg.Entry)
 	}
 	if rr+1e-9 < armMinRR() {
 		return fmt.Sprintf("R:R %.2f below arm min %.2f", rr, armMinRR())
 	}
 	// min-SL — the same floor (×ATR5m) the entry path enforces.
 	if atr5m > 0 {
-		dist := a.Entry - a.Stop
+		dist := leg.Entry - leg.Stop
 		if side == "short" {
-			dist = a.Stop - a.Entry
+			dist = leg.Stop - leg.Entry
 		}
 		if dist+1e-9 < kernel.MinSLATRMult()*atr5m {
-			return fmt.Sprintf("stop %.2f too close (%.2f < %.2f = %.1f×ATR5m)", a.Stop, dist, kernel.MinSLATRMult()*atr5m, kernel.MinSLATRMult())
+			return fmt.Sprintf("stop %.2f too close (%.2f < %.2f = %.1f×ATR5m)", leg.Stop, dist, kernel.MinSLATRMult()*atr5m, kernel.MinSLATRMult())
 		}
 	}
 	// HTF veto — the same veto the entry path enforces.
 	if blocked, vetoReason := kernel.HTFVetoVerdict(snap, "open_"+side, kernel.HTFVetoTF()); blocked {
 		return "HTF veto: " + vetoReason
 	}
+	_ = a
 	return ""
 }
 

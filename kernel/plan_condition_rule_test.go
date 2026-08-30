@@ -16,9 +16,11 @@ func TestConditionRuleAsAuthored(t *testing.T) {
 	if acceptanceNeed("5m-close") != 1 || acceptanceTFMinutes("5m-close") != 5 {
 		t.Fatal("5m-close must need exactly ONE 5-minute close")
 	}
-	// Regressions: the two existing rules unchanged.
+	// E1 (entry-mechanics 2026-08-30): 15m AUTHORSHIP is dead (schema rejects
+	// condition_rule_15m_removed) — the mapping below is LEGACY evaluation
+	// tolerance so stored pre-entry-mechanics docs keep evaluating.
 	if got := conditionRule(PlanCondition{Rule: "15m_close"}); got != "15m-close" || acceptanceNeed(got) != 1 || acceptanceTFMinutes(got) != 15 {
-		t.Fatal("15m_close semantics changed")
+		t.Fatal("legacy 15m_close evaluation semantics changed")
 	}
 	if got := conditionRule(PlanCondition{Rule: "2x5m"}); got != "2x5m" || acceptanceNeed(got) != 2 || acceptanceTFMinutes(got) != 5 {
 		t.Fatal("2x5m semantics changed")

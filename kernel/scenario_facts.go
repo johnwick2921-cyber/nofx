@@ -94,10 +94,12 @@ type LevelFacts struct {
 }
 
 // acceptanceNeed maps an acceptance rule to the number of consecutive closes
-// beyond required. "15m-close" → 1; "2x5m"/"2×5m"/default → 2.
+// beyond required. "15m-close" → 1 (LEGACY evaluation only — E1 killed 15m
+// AUTHORSHIP at the schema chokepoint, but stored pre-entry-mechanics docs
+// must keep evaluating); "2x5m"/"2×5m"/default → 2.
 func acceptanceNeed(rule string) int {
 	switch strings.ReplaceAll(strings.ToLower(strings.TrimSpace(rule)), "×", "x") {
-	case "15m-close", "15m", "15mclose", "15m_close":
+	case "15m-close", "15m", "15mclose", "15m_close": // legacy: stored docs only
 		return 1
 	case "5m-close", "5m_close", "1x5m", "1x5m_close":
 		return 1 // A2: one 5m close, as authored
@@ -109,7 +111,8 @@ func acceptanceNeed(rule string) int {
 }
 
 // acceptanceTFMinutes maps an acceptance rule to the BAR TIMEFRAME its N closes
-// are meant to be counted in. "2x5m" → 5-minute bars; "15m-close" → 15.
+// are meant to be counted in. "2x5m" → 5-minute bars; "15m-close" → 15 (LEGACY
+// evaluation only — E1 killed 15m authorship; stored docs still evaluate).
 //
 // This exists because the rule names a timeframe and the counting function does
 // not: ClosesBeyond counts *bars*, whatever length they happen to be. Feeding it
@@ -117,7 +120,7 @@ func acceptanceNeed(rule string) int {
 // acceptance) into "2 one-minute closes" (2 minutes) — see PlanIsDeadSince.
 func acceptanceTFMinutes(rule string) int {
 	switch strings.ReplaceAll(strings.ToLower(strings.TrimSpace(rule)), "×", "x") {
-	case "15m-close", "15m", "15mclose", "15m_close":
+	case "15m-close", "15m", "15mclose", "15m_close": // legacy: stored docs only
 		return 15
 	default:
 		return 5 // "2x5m", "5m-close" and the default rule

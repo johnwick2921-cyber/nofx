@@ -726,8 +726,11 @@ namespace NinjaTrader.NinjaScript.AddOns
             string ts;
             // PHASE 2 armed orders (additive, back-compat): order_type
             // "market" (default) | "limit" + limit_price for resting entries.
+            // E7 (entry-mechanics 2026-08-30): "stop_entry" + stop_price for
+            // STOP-MARKET entries (breakout-retest fallback).
             string orderType = "market";
             double limitPx = 0.0;
+            double stopPx = 0.0;
             try
             {
                 symbol   = GetString(p, "symbol");
@@ -746,6 +749,19 @@ namespace NinjaTrader.NinjaScript.AddOns
                     if (limitPx <= 0)
                     {
                         LogWarn("VLTraderTCPClient: limit signal " + signalId + " missing limit_price — rejecting");
+                        SendFillFrame(signalId, 0.0, side, qty, 0.0, "rejected", symbol: symbol);
+                        return;
+                    }
+                }
+                // E7 — a "stop_entry" signal places a STOP-MARKET entry at the
+                // trigger price (the tick offset was applied Go-side). Bracket
+                // on fill is identical to limits (SubmitBracketOnEntryFill).
+                if (orderType == "stop_entry")
+                {
+                    stopPx = GetDouble(p, "stop_price");
+                    if (stopPx <= 0)
+                    {
+                        LogWarn("VLTraderTCPClient: stop_entry signal " + signalId + " missing stop_price — rejecting");
                         SendFillFrame(signalId, 0.0, side, qty, 0.0, "rejected", symbol: symbol);
                         return;
                     }
@@ -943,10 +959,15 @@ namespace NinjaTrader.NinjaScript.AddOns
                 // PHASE 2 armed orders — a "limit" signal places a RESTING limit
                 // entry (fills fire OnOrderUpdate exactly like market entries;
                 // the SL/TP bracket still defers to SubmitBracketOnEntryFill).
-                bool isLimit = orderType == "limit" && limitPx > 0;
+                // E7 — a "stop_entry" signal places a STOP-MARKET entry at the
+                // trigger price (the tick offset was applied Go-side).
+                bool isLimit    = orderType == "limit" && limitPx > 0;
+                bool isStopEntry = orderType == "stop_entry" && stopPx > 0;
+                OrderType orderT = isLimit ? OrderType.Limit : (isStopEntry ? OrderType.StopMarket : OrderType.Market);
+                double orderPx  = isLimit ? limitPx : (isStopEntry ? stopPx : 0);
                 var entryOrder = submitAccount.CreateOrder(
-                    instrument, entryAction, isLimit ? OrderType.Limit : OrderType.Market, OrderEntry.Manual,
-                    TimeInForce.Day, qty, isLimit ? limitPx : 0, 0, string.Empty, signalId,
+                    instrument, entryAction, orderT, OrderEntry.Manual,
+                    TimeInForce.Day, qty, orderPx, 0, string.Empty, signalId,
                     Core.Globals.MaxDate, null);
 
                 lock (signalMapLock)
@@ -962,13 +983,15 @@ namespace NinjaTrader.NinjaScript.AddOns
                     };
                     // PHASE 2 armed orders — resting limit entries are cancelable.
                     if (isLimit) { workingEntries[signalId] = entryOrder; }
+                    // E7 — stop-market entries are cancelable the same way.
+                    if (isStopEntry) { workingEntries[signalId] = entryOrder; }
                 }
 
                 submitAccount.Submit(new[] { entryOrder });
                 LogInfo("VLTraderTCPClient: submitted entry signal_id=" + signalId
                         + " on account=" + submitAccount.Name
                         + " " + side + " " + qty + " " + symbol
-                        + (isLimit ? (" limit@" + limitPx) : (" entry≈" + entry))
+                        + (isLimit ? (" limit@" + limitPx) : (isStopEntry ? (" stop@" + stopPx) : (" entry≈" + entry)))
                         + " (SL=" + sl + " TP=" + tp + " on fill)");
             }
             catch (Exception ex)

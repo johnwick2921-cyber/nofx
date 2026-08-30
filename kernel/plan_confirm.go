@@ -15,9 +15,14 @@ import (
 // the SAME acceptance machinery as plan death (A2-consistent rule semantics).
 
 // confirmAcceptanceRule maps the confirm vocabulary onto acceptance rules.
+// E1 (entry-mechanics 2026-08-30): the 15m confirm variant is DEAD for
+// AUTHORSHIP (schema-rejected confirm_rule_15m_removed) — the mapping below is
+// LEGACY evaluation tolerance so stored pre-entry-mechanics docs keep
+// evaluating. 1m_mss and time_hold never route through the acceptance
+// machinery (they are evaluated by their own primitives).
 func confirmAcceptanceRule(rule string) string {
 	switch rule {
-	case "15m_close":
+	case "15m_close": // legacy: stored docs only
 		return "15m-close"
 	case "1x5m_close":
 		return "5m-close" // the A2-fixed one-close rule
@@ -57,6 +62,42 @@ func EvaluateConfirm(c PlanConfirm, bars []market.Kline, sinceMs, nowMs int64) C
 			}
 		}
 		v.Detail = "not touched since plan birth"
+		return v
+	}
+	// E5 (2026-08-30) — 1m-MSS: last confirmed 1m swing broken by a qualifying
+	// 1m close. Renders "1m-MSS: MET/NOT-MET (swing <px> @<t>)".
+	if c.Rule == "1m_mss" {
+		m := EvaluateMSS(w, c.Side, nowMs)
+		v.Met = m.Met
+		v.Detail = m.Detail
+		return v
+	}
+	// E6 (2026-08-30) — time_hold: price must HOLD beyond ref for
+	// ACCEPT_HOLD_MIN minutes of 1m closes with no close back across.
+	if c.Rule == "time_hold" {
+		need := AcceptHoldMin()
+		above := strings.EqualFold(c.Side, "above")
+		var run, best int
+		for _, b := range w {
+			if b.CloseTime >= nowMs {
+				continue // closed 1m bars only
+			}
+			beyond := (above && b.Close > c.RefPrice) || (!above && b.Close < c.RefPrice)
+			if beyond {
+				run++
+				if run > best {
+					best = run
+				}
+			} else {
+				run = 0
+			}
+		}
+		v.Met = best >= need
+		if best == 0 {
+			v.Detail = "no 1m close held beyond the ref yet"
+		} else {
+			v.Detail = fmt.Sprintf("price held %s %.2f for %d/%d min of 1m closes", c.Side, c.RefPrice, best, need)
+		}
 		return v
 	}
 	rule := confirmAcceptanceRule(c.Rule)
@@ -181,6 +222,17 @@ func EvaluateScenarioConfirm(s PlanScenario, bars []market.Kline, sinceMs, nowMs
 		Met: v1.Met && v2.Met, Detail: v2.Detail, Legs: []ConfirmVerdict{v1, v2}}
 }
 
+// AcceptHoldMin resolves ACCEPT_HOLD_MIN (E6, default 10) — the minutes of
+// 1m closes a time_hold confirm requires price to hold beyond its ref.
+func AcceptHoldMin() int {
+	if v := strings.TrimSpace(os.Getenv("ACCEPT_HOLD_MIN")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return 10
+}
+
 // firstConfirmFireMs returns the open time of the bar where the close-rule
 // confirm FIRST fired (the run reached the required count), 0 when not met.
 func firstConfirmFireMs(c PlanConfirm, bars []market.Kline, sinceMs, nowMs int64) int64 {
@@ -191,6 +243,35 @@ func firstConfirmFireMs(c PlanConfirm, bars []market.Kline, sinceMs, nowMs int64
 	if len(w) == 0 {
 		return 0
 	}
+	// E5 — 1m_mss fires at the breaking bar.
+	if c.Rule == "1m_mss" {
+		m := EvaluateMSS(w, c.Side, nowMs)
+		if m.Met {
+			return m.BreakTimeMs
+		}
+		return 0
+	}
+	// E6 — time_hold fires when the qualifying run completes (its first bar).
+	if c.Rule == "time_hold" {
+		need := AcceptHoldMin()
+		above := strings.EqualFold(c.Side, "above")
+		run := 0
+		for i, b := range w {
+			if b.CloseTime >= nowMs {
+				continue
+			}
+			beyond := (above && b.Close > c.RefPrice) || (!above && b.Close < c.RefPrice)
+			if beyond {
+				run++
+				if run >= need {
+					return w[i-run+1].OpenTime
+				}
+			} else {
+				run = 0
+			}
+		}
+		return 0
+	}
 	rule := confirmAcceptanceRule(c.Rule)
 	var dur, need int64
 	switch rule {
@@ -198,8 +279,6 @@ func firstConfirmFireMs(c PlanConfirm, bars []market.Kline, sinceMs, nowMs int64
 		dur, need = 5*60_000, 1
 	case "2x5m":
 		dur, need = 5*60_000, 2
-	case "15m-close":
-		dur, need = 15*60_000, 1
 	default:
 		return 0
 	}
@@ -232,7 +311,11 @@ func retestLegDetail(s PlanScenario, st BreakdownState) string {
 		return "waiting for the breakdown leg"
 	}
 	if strings.EqualFold(strings.TrimSpace(s.Breakdown.EntryMode), "immediate") {
-		return "immediate mode — entry signal is the 2nd confirming close"
+		// E3: entry signal is the confirming close (BD_MIN_CLOSES, default 1).
+		if bdConfirmCloses() > 1 {
+			return fmt.Sprintf("immediate mode — entry signal is the %dth confirming close", bdConfirmCloses())
+		}
+		return "immediate mode — entry signal is the confirming close"
 	}
 	if st.Leg2Met {
 		return "pullback failed to reclaim — entry live"

@@ -46,16 +46,11 @@ func barsHoveringAt(level float64, n int) []market.Kline {
 	var bars []market.Kline
 	for i := 0; i < n; i++ {
 		ct := base.Add(time.Duration(i) * time.Minute)
-		delta := 1.0
-		if i%2 == 0 {
-			delta = -1.0
-		}
-		px := level + delta
-		if i == n-1 {
-			px = level // last close exactly at the level
-		}
+		// ENTRY-MECHANICS ADDENDUM: closes EXACTLY at the level (highs/lows
+		// straddle it) — a close BEYOND would accept-through under the new
+		// one-close default (5m_close) and the re-touch alert would never fire.
 		bars = append(bars, market.Kline{
-			OpenTime: ct.UnixMilli(), Open: level, High: level + 3, Low: level - 3, Close: px,
+			OpenTime: ct.UnixMilli(), Open: level, High: level + 3, Low: level - 3, Close: level,
 			CloseTime: ct.Add(time.Minute).UnixMilli(),
 		})
 	}

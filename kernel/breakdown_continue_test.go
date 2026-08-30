@@ -175,6 +175,8 @@ func TestBreakdownContinueValidatorRejectsReclaimed(t *testing.T) {
 }
 
 // TestBreakupContinueMirror — the long twin validates and fires.
+// E3: under BD_MIN_CLOSES=1 the first beyond close completes leg 1, so the
+// touch-back in bar 1 IS the retest-that-fails → both legs MET.
 func TestBreakupContinueMirror(t *testing.T) {
 	start := time.Date(2026, 8, 28, 10, 0, 0, 0, time.Local)
 	lvl := 29464.50
@@ -192,8 +194,8 @@ func TestBreakupContinueMirror(t *testing.T) {
 		t.Fatalf("mirror rejected: %v", err)
 	}
 	st := BreakdownContinueState(plan.Scenarios[0], bars, 0, bars[len(bars)-1].CloseTime)
-	if !st.Leg1Met || st.Leg2Met {
-		t.Fatalf("mirror leg state wrong: %+v", st)
+	if !st.Leg1Met || !st.Leg2Met {
+		t.Fatalf("mirror leg state wrong (E3: single confirming close completes leg 1): %+v", st)
 	}
 }
 
@@ -226,11 +228,11 @@ func TestBreakdownArmRules(t *testing.T) {
 	}
 }
 
-// TestBreakdownImmediateAuthorableBeforeSecondClose — the PRE-SUNDAY F1 ruling:
-// immediate-mode authoring is legal as soon as the DISPLACEMENT exists (the 2nd
-// confirming close is the entry trigger itself, so requiring it at write time
-// would make the play un-authorable mid-waterfall). Pullback keeps the strict
-// full-leg-1 rule.
+// TestBreakdownImmediateAuthorableBeforeSecondClose — E3 (entry-mechanics
+// 2026-08-30): BD_MIN_CLOSES=1 relaxes the breakdown floor. Immediate-mode
+// authoring is legal as soon as the DISPLACEMENT exists; PULLBACK now needs
+// only the SINGLE confirming close (the displacement + reclaim-check carry the
+// quality gate — the double close is gone).
 func TestBreakdownImmediateAuthorableBeforeSecondClose(t *testing.T) {
 	start := time.Date(2026, 8, 28, 10, 46, 0, 0, time.Local)
 	lvl := 29657.39
@@ -247,14 +249,15 @@ func TestBreakdownImmediateAuthorableBeforeSecondClose(t *testing.T) {
 		Breakdown: &PlanBreakdownContinue{Level: lvl, EntryMode: "immediate"},
 	}}}
 	if err := ValidateBreakdownContinueScenarios(&imm, bars, 15.0, lvl-10, bars[len(bars)-1].CloseTime); err != nil {
-		t.Fatalf("immediate authoring before the 2nd close must pass once displacement exists: %v", err)
+		t.Fatalf("immediate authoring before the confirming close must pass once displacement exists: %v", err)
 	}
 	pb := PlanDoc{Scenarios: []PlanScenario{{
 		ID: "S1", Condition: "breakdown_continue", Direction: "short",
 		Breakdown: &PlanBreakdownContinue{Level: lvl, EntryMode: "pullback"},
 	}}}
-	if err := ValidateBreakdownContinueScenarios(&pb, bars, 15.0, lvl-10, bars[len(bars)-1].CloseTime); err == nil {
-		t.Fatal("pullback mode must still require the full 2-close leg 1")
+	// E3 fixture #1 — 1 close + displacement PASSES for pullback now.
+	if err := ValidateBreakdownContinueScenarios(&pb, bars, 15.0, lvl-10, bars[len(bars)-1].CloseTime); err != nil {
+		t.Fatalf("E3: pullback with ONE confirming close + displacement must now PASS: %v", err)
 	}
 	// No displacement at all → immediate is still rejected.
 	flat := PlanDoc{Scenarios: []PlanScenario{{

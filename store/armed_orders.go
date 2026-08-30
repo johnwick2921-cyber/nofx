@@ -37,6 +37,14 @@ type ArmedOrderDB struct {
 	FillPrice    float64
 	FillQuantity int
 
+	// E4 (entry-mechanics 2026-08-30) — split-entry legs: a two-leg arm writes
+	// TWO rows sharing (plan_id, scenario) distinguished by LegIndex. LegCount
+	// = the pair size (2 for split arms, 0 for legacy single arms). Kind =
+	// "limit" (default) | "stop_entry" (E7).
+	LegIndex int    `gorm:"default:0"`
+	LegCount int    `gorm:"default:0"`
+	Kind     string `gorm:"default:''"`
+
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -62,6 +70,9 @@ CREATE TABLE IF NOT EXISTS armed_orders (
 	signal_id     TEXT    NOT NULL DEFAULT '',
 	fill_price    REAL    NOT NULL DEFAULT 0,
 	fill_quantity INTEGER NOT NULL DEFAULT 0,
+	leg_index     INTEGER NOT NULL DEFAULT 0,
+	leg_count     INTEGER NOT NULL DEFAULT 0,
+	kind          TEXT    NOT NULL DEFAULT '',
 	created_at    DATETIME,
 	updated_at    DATETIME
 )`
@@ -74,7 +85,9 @@ type ArmedOrderStore struct {
 // NewArmedOrderStore constructs the sub-store.
 func NewArmedOrderStore(db *gorm.DB) *ArmedOrderStore { return &ArmedOrderStore{db: db} }
 
-// Migrate creates the table (sqlite: exact DDL; else AutoMigrate).
+// Migrate creates the table (sqlite: exact DDL; else AutoMigrate). E4 adds
+// the leg/kind columns idempotently for EXISTING databases (ALTER TABLE ADD
+// COLUMN is a no-op-safe guarded by pragma table_info).
 func (s *ArmedOrderStore) Migrate() error {
 	if s == nil || s.db == nil {
 		return fmt.Errorf("store required")
@@ -83,14 +96,31 @@ func (s *ArmedOrderStore) Migrate() error {
 		if err := s.db.Exec(armedOrdersDDL).Error; err != nil {
 			return err
 		}
+		for _, col := range []struct{ name, decl string }{
+			{"leg_index", "INTEGER NOT NULL DEFAULT 0"},
+			{"leg_count", "INTEGER NOT NULL DEFAULT 0"},
+			{"kind", "TEXT NOT NULL DEFAULT ''"},
+		} {
+			var n int64
+			if err := s.db.Raw("SELECT COUNT(*) FROM pragma_table_info('armed_orders') WHERE name = ?", col.name).Scan(&n).Error; err != nil {
+				return err
+			}
+			if n == 0 {
+				if err := s.db.Exec(fmt.Sprintf("ALTER TABLE armed_orders ADD COLUMN %s %s", col.name, col.decl)).Error; err != nil {
+					return err
+				}
+			}
+		}
 		return s.db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_armed_orders_plan_scenario ON armed_orders(plan_id, scenario)").Error
 	}
 	return s.db.AutoMigrate(&ArmedOrderDB{})
 }
 
-// UpsertArm writes/refreshes the arm row for (plan_id, scenario). Same key =
-// same row (state reset to armed only when the spec CHANGED materially —
-// entry/stop/target diff >= 2 ticks — the caller decides and passes reset).
+// UpsertArm writes/refreshes the arm row for (plan_id, scenario, leg_index).
+// Same key = same row (state reset to armed only when the spec CHANGED
+// materially — entry/stop/target diff >= 2 ticks — the caller decides and
+// passes reset). E4: leg rows of a split arm share (plan_id, scenario) and
+// differ by LegIndex.
 func (s *ArmedOrderStore) UpsertArm(row *ArmedOrderDB) error {
 	if row == nil || row.PlanID == "" || row.Scenario == "" {
 		return fmt.Errorf("plan_id and scenario required")
@@ -102,7 +132,7 @@ func (s *ArmedOrderStore) UpsertArm(row *ArmedOrderDB) error {
 	// forever, so a legit same-scenario re-arm was impossible and the executor
 	// re-logged the dead row every cycle.
 	var existing ArmedOrderDB
-	err := s.db.Where("plan_id = ? AND scenario = ?", row.PlanID, row.Scenario).First(&existing).Error
+	err := s.db.Where("plan_id = ? AND scenario = ? AND leg_index = ?", row.PlanID, row.Scenario, row.LegIndex).First(&existing).Error
 	if err == nil {
 		if existing.State == "armed" || existing.State == "working" {
 			row.ID = existing.ID
@@ -110,6 +140,7 @@ func (s *ArmedOrderStore) UpsertArm(row *ArmedOrderDB) error {
 				"version": row.Version, "session": row.Session,
 				"side": row.Side, "entry_px": row.EntryPx, "stop_px": row.StopPx,
 				"target_px": row.TargetPx, "updated_at": row.UpdatedAt,
+				"leg_count": row.LegCount, "kind": row.Kind,
 			}).Error
 		}
 		// Terminal → RE-AUTHORIZE: fresh armed state, fresh lineage.
@@ -119,7 +150,8 @@ func (s *ArmedOrderStore) UpsertArm(row *ArmedOrderDB) error {
 			"entry_class": "", "fill_price": 0, "fill_quantity": 0,
 			"trader_id": row.TraderID, "version": row.Version, "session": row.Session,
 			"side": row.Side, "entry_px": row.EntryPx, "stop_px": row.StopPx,
-			"target_px": row.TargetPx, "created_at": row.CreatedAt, "updated_at": row.UpdatedAt,
+			"target_px": row.TargetPx, "leg_count": row.LegCount, "kind": row.Kind,
+			"created_at": row.CreatedAt, "updated_at": row.UpdatedAt,
 		}).Error
 	}
 	if err != gorm.ErrRecordNotFound {

@@ -1042,9 +1042,13 @@ func (c *DayPlanConfig) SessionOverride(session string) *DayPlanSessionOverride 
 	return nil
 }
 
-// DefaultAcceptanceRule is the shipped acceptance rule (2 consecutive 5m closes
-// beyond the level). The alternative is "15m-close".
-const DefaultAcceptanceRule = "2x5m"
+// DefaultAcceptanceRule is the shipped acceptance rule. ENTRY-MECHANICS
+// ADDENDUM (2026-08-30): was "2x5m" (two consecutive 5m closes) — the new
+// per-condition entry law RESERVES 2x5m for waterfall-class plays, so the
+// config-level default becomes the one-close rule. Scenario confirms are
+// chosen by the per-condition law (kernel.ValidateEntryLaw), not by this
+// string — this only feeds legacy death/consumption evaluation.
+const DefaultAcceptanceRule = "5m_close"
 
 // AcceptanceRuleFor resolves the acceptance rule for a session: per-session
 // override → strategy-level → the shipped default. Before this existed, the
@@ -1058,7 +1062,80 @@ func (c *DayPlanConfig) AcceptanceRuleFor(session string) string {
 	if ov := c.SessionOverride(session); ov != nil && ov.AcceptanceRule != nil && strings.TrimSpace(*ov.AcceptanceRule) != "" {
 		rule = *ov.AcceptanceRule
 	}
-	return strings.TrimSpace(rule)
+	rule = strings.TrimSpace(rule)
+	// ENTRY-MECHANICS ADDENDUM (2026-08-30) — self-healing resolver: a stored
+	// "2x5m"/"15m-close" string would steer the executor prompt + death/
+	// consumption evaluation toward the OLD vocabulary and contradict the new
+	// validator (reject loops). Map it to the one-close rule at read; the boot
+	// repair (RepairAcceptanceRuleMigration) rewrites the stored rows.
+	switch strings.ToLower(rule) {
+	case "2x5m", "2x_5m", "2x5m_close", "15m-close", "15m", "15m_close", "15mclose":
+		return "5m_close"
+	}
+	return rule
+}
+
+// RepairAcceptanceRuleMigration (ENTRY-MECHANICS ADDENDUM, 2026-08-30) —
+// boot-time DB migration aligning stored acceptance rules with the new
+// per-condition entry law. The knob census (docs/knob-census, 39a0481e) found
+// day_plan.acceptance_rule="2x5m" at the strategy level AND per-session
+// acceptance="2x5m" on NY/ASIA/LONDON. Under the new law that string would
+// steer the executor prompt + death/consumption evaluation toward the double
+// close the law now RESERVES for waterfall-class plays — the prompt would
+// contradict the validator (reject loops). Rewrites "2x5m" → "5m_close"
+// (the one-close rule) in both spots, idempotently. Runs at boot BEFORE
+// LoadTradersFromStore so the loaded config is already aligned.
+func (s *StrategyStore) RepairAcceptanceRuleMigration() (baseMigrated, sessionMigrated int, err error) {
+	var all []Strategy
+	if err := s.db.Order("created_at DESC").Find(&all).Error; err != nil {
+		return 0, 0, err
+	}
+	for i := range all {
+		st := &all[i]
+		var raw map[string]any
+		if err := json.Unmarshal([]byte(st.Config), &raw); err != nil {
+			continue
+		}
+		changed := false
+		patchDayPlan := func(dp map[string]any) {
+			if v, ok := dp["acceptance_rule"].(string); ok && strings.TrimSpace(v) == "2x5m" {
+				dp["acceptance_rule"] = "5m_close"
+				baseMigrated++
+				changed = true
+			}
+			if sess, ok := dp["sessions"].([]any); ok {
+				for _, sv := range sess {
+					if m, ok := sv.(map[string]any); ok {
+						if v, ok := m["acceptance_rule"].(string); ok && strings.TrimSpace(v) == "2x5m" {
+							m["acceptance_rule"] = "5m_close"
+							sessionMigrated++
+							changed = true
+						}
+					}
+				}
+			}
+		}
+		// Stored shape has day_plan at the config top level; accept the nested
+		// ai_config spelling too so a legacy row can never hide the old string.
+		if dp, ok := raw["day_plan"].(map[string]any); ok {
+			patchDayPlan(dp)
+		}
+		if ac, ok := raw["ai_config"].(map[string]any); ok {
+			if dp, ok := ac["day_plan"].(map[string]any); ok {
+				patchDayPlan(dp)
+			}
+		}
+		if !changed {
+			continue
+		}
+		if b, mErr := json.Marshal(raw); mErr == nil {
+			st.Config = string(b)
+			if uErr := s.Update(st); uErr != nil {
+				return baseMigrated, sessionMigrated, uErr
+			}
+		}
+	}
+	return baseMigrated, sessionMigrated, nil
 }
 
 // ReplanCapFor resolves the re-read cap for a session: per-session override →

@@ -183,6 +183,15 @@ func main() {
 	// Create TraderManager
 	traderManager := manager.NewTraderManager()
 
+	// ENTRY-MECHANICS ADDENDUM (2026-08-30) — align stored acceptance rules
+	// with the new per-condition entry law BEFORE traders load their config
+	// (the old "2x5m" string would contradict the validator → reject loops).
+	if n1, n2, merr := st.Strategy().RepairAcceptanceRuleMigration(); merr != nil {
+		logger.Warnf("⚠️ acceptance-rule migration FAILED: %v (resolver self-heals at read; fix the DB row)", merr)
+	} else if n1+n2 > 0 {
+		logger.Infof("🩹 acceptance-rule migration: strategy-level=%d session=%d (2x5m → 5m_close)", n1, n2)
+	}
+
 	// Load all traders from database to memory (may auto-start traders with IsRunning=true)
 	if err := traderManager.LoadTradersFromStore(st); err != nil {
 		logger.Fatalf("❌ Failed to load traders: %v", err)

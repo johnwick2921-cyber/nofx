@@ -201,11 +201,12 @@ func levelTouched(bars []market.Kline, level float64, now int64) bool {
 }
 
 // conditionRule maps a PlanCondition.Rule to the acceptance-rule string the
-// counters understand. "15m_close" → one 15-minute close; everything else →
-// the default "2x5m" (two consecutive 5-minute closes).
+// counters understand. E1 (entry-mechanics 2026-08-30): the 15m condition
+// variant is DEAD — new authorship is schema-rejected
+// (condition_rule_15m_removed). Legacy stored docs keep evaluating below.
 func conditionRule(c PlanCondition) string {
 	switch c.Rule {
-	case "15m_close":
+	case "15m_close": // legacy: stored pre-entry-mechanics docs still evaluate
 		return "15m-close"
 	case "5m_close":
 		// A2 (fail-register wave, 2026-08-20): 5m_close used to silently map to
@@ -223,12 +224,14 @@ func conditionRule(c PlanCondition) string {
 // counts). Returns (fired, human reason).
 //
 // PLAN-LIFECYCLE HYSTERESIS (2026-08-27): invalidation requires ALL of
-//   (a) CLOSE-based only — wicks through the line do nothing (the touch gate
-//       brackets the RAW line; the count below is closes beyond the BUFFERED
-//       line, so a wick alone can never count);
-//   (b) the line buffered by FLIP_ATR_BUFFER (default 0.5) × ATR14(5m) beyond
-//       the stated level;
-//   (c) FLIP_CONFIRM_CLOSES (default 2) CONSECUTIVE decision-TF closes beyond.
+//
+//	(a) CLOSE-based only — wicks through the line do nothing (the touch gate
+//	    brackets the RAW line; the count below is closes beyond the BUFFERED
+//	    line, so a wick alone can never count);
+//	(b) the line buffered by FLIP_ATR_BUFFER (default 0.5) × ATR14(5m) beyond
+//	    the stated level;
+//	(c) FLIP_CONFIRM_CLOSES (default 2) CONSECUTIVE decision-TF closes beyond.
+//
 // A single close beyond the raw line inside the buffer no longer invalidates.
 func PlanConditionFiredSince(c PlanCondition, bars []market.Kline, sinceMs, nowMs int64) (bool, string) {
 	if c.Price <= 0 {

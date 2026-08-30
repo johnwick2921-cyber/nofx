@@ -170,6 +170,8 @@ func (s *Server) approvalRequired(traderID string) bool {
 // The budget is measured from the chain baseline (P6 owner reset) — the same
 // seam the death path and the executor provider read.
 // armedMapFor builds the scenario→state map the card chips read (Wave 2).
+// E4 (entry-mechanics 2026-08-30): a split arm has TWO rows (leg_index 0/1) —
+// the chip gets the per-leg states so the card shows the split contract.
 func (s *Server) armedMapFor(planID string) map[string]gin.H {
 	out := map[string]gin.H{}
 	if s.store == nil || planID == "" {
@@ -179,8 +181,23 @@ func (s *Server) armedMapFor(planID string) map[string]gin.H {
 	if err != nil {
 		return out
 	}
+	type legState struct {
+		State    string `json:"state"`
+		LegIndex int    `json:"leg_index"`
+		Kind     string `json:"kind,omitempty"`
+	}
 	for _, r := range rows {
-		out[r.Scenario] = gin.H{"state": r.State, "reason": r.StateReason, "entry_px": r.EntryPx}
+		cur, ok := out[r.Scenario]
+		if !ok {
+			cur = gin.H{"state": r.State, "reason": r.StateReason, "entry_px": r.EntryPx}
+		}
+		var legs []legState
+		if existing, ok := cur["legs"].([]legState); ok {
+			legs = existing
+		}
+		legs = append(legs, legState{State: r.State, LegIndex: r.LegIndex, Kind: r.Kind})
+		cur["legs"] = legs
+		out[r.Scenario] = cur
 	}
 	return out
 }
