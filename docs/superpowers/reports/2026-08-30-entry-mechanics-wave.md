@@ -119,6 +119,16 @@ Everything is parked as ONE branch (`feat/entry-mechanics`). Cutover decision:
 
 **Post-cutover watch:** 15-minute watchdog/flood watch clean (0 critical errors, 0 dropped closes).
 
+---
+
+# PANIC + ROLLBACK (17:12:47 CT) — and the fix
+
+Two minutes after the clean boot, the 15-min watch tripped: **`panic: runtime error: index out of range [5] with length 4`** in `kernel.ShadowABForScenario` (shadow_ab.go:122) via `logShadowAB ← maybeManageArmedOrders ← runCycle`. Root cause: the E8 close-rule fill mapped the 5m bucket back to the 1m bar with `bucket_index × 5` — wrong when the plan window starts mid-bucket or spans <5 bars (the ASIA v1 window was 4 bars crossing a 5m boundary). A report-only path took the trading loop down.
+
+**Rollback (tested, 17:14:49):** restored `nofx-bin.prev` (rev 23243670, md5 36c0c681) + `deploy/RELEASE=23243670af35` → boot 17:14:53 PID 728177 `🔐 BOOT INTEGRITY OK — rev 23243670af35 · goldens PASS`. The bot was flat the whole time; ASIA v1 + weekly v2 rows intact. The DB migrations from the new binary (armed_orders leg columns + 3-col index, acceptance_rule 5m_close, ab_confirm_log) are compatible with the old binary — 15+ min clean on the rollback.
+
+**Fix (dev `cd1d1de3`, marker v3 `4509ca9f`):** bucket→bar mapping by OpenTime (`barIdxForBucket`) + `recover()` at the `logShadowAB` seam (a report-only path may degrade to a warning, never a panic) + regression fixture `TestShadowABWindowCrossingFiveMBoundary` reproducing the exact 4-bar boundary-crossing shape (would have panicked the OLD code) + AUDIT-CHECKLIST class 23 appended. Full gates: go 27/27 ok. Binary rebuilt: `vcs.revision=cd1d1de3 · modified=false`, md5 `676c3b18` — **attempt #2 is one swap away, awaiting the owner's re-ack.**
+
 **E7 remains PARKED** for its own daytime cutover: NT8 copy → F5 → full restart → far-side stop_entry frames prove → then `STOP_ENTRY_SEAM=on`. Until then the seam is OFF and the Go side cannot emit a stop_entry frame.
 
 **Next-session live E-proof (pre-registered):** the NEXT authored plan (LONDON/NY) runs under the new law — expect touch-rules on fade scenarios (reject/fvg_entry), zero 2x5m outside waterfall-class; any violation is named in the validator reject log.
