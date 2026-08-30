@@ -2,6 +2,8 @@ package kernel
 
 import (
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 
 	"nofx/market"
@@ -76,6 +78,48 @@ func EntryLawFor(condition string) (conditionEntryLaw, bool) {
 // authors it gets the named rejection "2x5m_reserved".
 func twoX5mReserved(condition string) bool {
 	return !IsBreakdownCondition(condition)
+}
+
+// EntryLawBootLedger (ENTRY-MECHANICS E9, 2026-08-30) — one boot line per
+// entry knob so the boot block self-documents the wave's enforcement.
+func EntryLawBootLedger() string {
+	return fmt.Sprintf("entry law: bd_min_closes=%d bd_min_disp_atr=%.2f mss_min_disp_atr=%.2f accept_hold_min=%d stop_entry_offset_ticks=%d retest_wait_bars=%d stop_entry_seam=%s",
+		bdConfirmCloses(), bdMinDispATR(), MSSMinDispATR(), AcceptHoldMin(), StopEntryOffsetTicks(), RetestWaitBars(), seamWord(StopEntrySeamOn()))
+}
+
+func seamWord(on bool) string {
+	if on {
+		return "ON"
+	}
+	return "off"
+}
+
+// StopEntrySeamOn (E7) — the stop_entry order path is NEVER sent on the wire
+// until the far-side AddOn has proven the frame (D-rule). Default OFF.
+func StopEntrySeamOn() bool {
+	return strings.EqualFold(strings.TrimSpace(os.Getenv("STOP_ENTRY_SEAM")), "on")
+}
+
+// StopEntryOffsetTicks (E7, default 2) — the stop trigger sits N ticks beyond
+// the break candle for a stop-market entry.
+func StopEntryOffsetTicks() int {
+	if v := strings.TrimSpace(os.Getenv("STOP_ENTRY_OFFSET_TICKS")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return 2
+}
+
+// RetestWaitBars (E7, default 6) — the breakout-retest fallback window: no
+// retest touch within N bars → stop-entry beyond the break candle.
+func RetestWaitBars() int {
+	if v := strings.TrimSpace(os.Getenv("RETEST_WAIT_BARS")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return 6
 }
 
 // ValidateEntryLaw enforces the per-condition confirm law over a whole doc.

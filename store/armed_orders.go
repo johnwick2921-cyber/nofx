@@ -111,7 +111,14 @@ func (s *ArmedOrderStore) Migrate() error {
 				}
 			}
 		}
-		return s.db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_armed_orders_plan_scenario ON armed_orders(plan_id, scenario)").Error
+		// E4 (entry-mechanics 2026-08-30): the split entry writes TWO rows per
+		// (plan_id, scenario) distinguished by leg_index — the legacy 2-column
+		// unique index would reject the second leg. Replace it with the
+		// 3-column form (idempotent: DROP IF EXISTS + CREATE IF NOT EXISTS).
+		if err := s.db.Exec("DROP INDEX IF EXISTS idx_armed_orders_plan_scenario").Error; err != nil {
+			return err
+		}
+		return s.db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_armed_orders_plan_scenario ON armed_orders(plan_id, scenario, leg_index)").Error
 	}
 	return s.db.AutoMigrate(&ArmedOrderDB{})
 }

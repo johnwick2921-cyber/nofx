@@ -252,7 +252,12 @@ func main() {
 	kernel.LogVolumeWaveBoot() // PRE-SUNDAY F5 (2026-08-28) — scenario schema ledger: the full
 	// condition vocabulary in the boot block, so a schema change can never
 	// ship silently again (the 8th-condition parse-reject class).
-	logger.Infof("📜 %s", kernel.ScenarioSchemaLedger()) // P1.4 (ledger-close 2026-08-19) — clock-guard block: live host-RTC drift,
+	logger.Infof("📜 %s", kernel.ScenarioSchemaLedger())
+	// ENTRY-MECHANICS (E1-E9, 2026-08-30) — the confirm-rule enum + the entry
+	// knobs in the boot block: the 5-rule vocabulary and the seam state must be
+	// verifiable from the boot line alone (the owner's cutover checklist).
+	logger.Infof("🔐 %s", kernel.ConfirmRuleLedger())
+	logger.Infof("🎛 %s", kernel.EntryLawBootLedger()) // P1.4 (ledger-close 2026-08-19) — clock-guard block: live host-RTC drift,
 	// guard-timer freshness, last resync/check state. Log-only, best-effort.
 	kernel.LogClockGuardBoot()
 	// P4 (ledger-close 2026-08-19) — half-days boot line: loaded count + the

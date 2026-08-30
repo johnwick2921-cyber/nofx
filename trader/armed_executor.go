@@ -46,32 +46,12 @@ func armMinRR() float64 {
 // armedWorkingStaleMin is the reconnect/reconcile safety net
 // (ARM_WORKING_STALE_MIN, default 15): a working row with no order_update for
 // this long is cancelled with an honest reason.
-// E7 (entry-mechanics 2026-08-30) — stop-entry knobs.
-// STOP_ENTRY_SEAM (default OFF): the stop_entry order path is NEVER sent on
-// the wire until the far-side AddOn has proven the frame (D-rule — an unproven
-// C# path must not ship at night). STOP_ENTRY_OFFSET_TICKS (default 2): the
-// stop trigger sits N ticks beyond the break candle for a stop-market entry.
-func stopEntrySeamOn() bool {
-	return strings.EqualFold(strings.TrimSpace(os.Getenv("STOP_ENTRY_SEAM")), "on")
-}
-
-func stopEntryOffsetTicks() int {
-	if v := strings.TrimSpace(os.Getenv("STOP_ENTRY_OFFSET_TICKS")); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			return n
-		}
-	}
-	return 2
-}
-
-func retestWaitBars() int {
-	if v := strings.TrimSpace(os.Getenv("RETEST_WAIT_BARS")); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			return n
-		}
-	}
-	return 6
-}
+// E7 (entry-mechanics 2026-08-30) — stop-entry knobs. The resolvers live in
+// the kernel (kernel.StopEntrySeamOn / StopEntryOffsetTicks / RetestWaitBars)
+// so the boot ledger and the executor share one source of truth.
+func stopEntrySeamOn() bool     { return kernel.StopEntrySeamOn() }
+func stopEntryOffsetTicks() int { return kernel.StopEntryOffsetTicks() }
+func retestWaitBars() int       { return kernel.RetestWaitBars() }
 
 // stopEntryFallbackDue (E7, pure) — the breakout-retest fallback window: a
 // stop-entry leg is due when NO bar has touched its entry level within the

@@ -107,3 +107,28 @@ func TestAcceptanceRuleForSelfHeals(t *testing.T) {
 }
 
 func strPtr(s string) *string { return &s }
+
+// TestArmedOrderSplitLegsPersistUnderUniqueIndex — E4: two leg rows share
+// (plan_id, scenario); the migrated 3-column unique index must accept both.
+func TestArmedOrderSplitLegsPersistUnderUniqueIndex(t *testing.T) {
+	st, err := New(filepath.Join(t.TempDir(), "legs.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	ao := st.ArmedOrders()
+	for _, leg := range []ArmedOrderDB{
+		{TraderID: "t", PlanID: "p:NY", Version: 1, Session: "NY", Scenario: "S1", Side: "short",
+			EntryPx: 100, StopPx: 110, TargetPx: 80, State: "armed", LegIndex: 0, LegCount: 2},
+		{TraderID: "t", PlanID: "p:NY", Version: 1, Session: "NY", Scenario: "S1", Side: "short",
+			EntryPx: 98, StopPx: 106, TargetPx: 82, State: "armed", LegIndex: 1, LegCount: 2},
+	} {
+		if err := ao.UpsertArm(&leg); err != nil {
+			t.Fatalf("leg %d upsert failed under the split index: %v", leg.LegIndex, err)
+		}
+	}
+	rows, err := ao.ListNonTerminal("t")
+	if err != nil || len(rows) != 2 {
+		t.Fatalf("split rows = %d err=%v, want 2", len(rows), err)
+	}
+}

@@ -318,6 +318,18 @@ func ScenarioSchemaLedger() string {
 	return fmt.Sprintf("scenario schema: %d conditions [%s]", len(conds), strings.Join(conds, ", "))
 }
 
+// ConfirmRuleLedger (ENTRY-MECHANICS E1, 2026-08-30) — one boot line listing
+// the confirm-rule vocabulary (sorted) so the 5-rule enum (15m dead) is
+// visible in the boot block.
+func ConfirmRuleLedger() string {
+	rules := make([]string, 0, len(confirmRules))
+	for r := range confirmRules {
+		rules = append(rules, r)
+	}
+	sort.Strings(rules)
+	return fmt.Sprintf("confirm rules: %d [%s]", len(rules), strings.Join(rules, ", "))
+}
+
 const (
 	planMaxLevels    = 8 // shipped default; the owner's max_levels (3–12) may raise it
 	planMaxScenarios = 3 // shipped default; the owner's scenario_cap (1–5) may raise it

@@ -26,11 +26,11 @@ func splitSweepDoc() string {
 			ID: "S1", Trigger: "sweep of 29494.75 reclaim fails", Condition: "sweep_reclaim",
 			Direction: "short", TargetChain: []float64{29420}, Invalid: "invalid above 29494.75", Quality: "B",
 			Confirm:  &kernel.PlanConfirm{Rule: "touch", RefPrice: 29494.75, Side: "below"},
-			Confirm2: &kernel.PlanConfirm{Rule: "1m_mss", RefPrice: 29494.75, Side: "below"},
+			Confirm2: &kernel.PlanConfirm{Rule: "1x5m_close", RefPrice: 29494.75, Side: "below"},
 			Arm: &kernel.PlanArmSpec{Enabled: true, Entry: 29494.75, Stop: 29510.75, Target: 29450.75,
 				Legs: []kernel.PlanArmLeg{
-					{Entry: 29494.75, Stop: 29510.75, Target: 29450.75, Size: 1}, // leg 1: the touch leg
-					{Entry: 29486.00, Stop: 29504.00, Target: 29440.00, Size: 1, WaitConfirm: true, Rule: "1m_mss"}, // leg 2: chains on the MSS
+					{Entry: 29494.75, Stop: 29510.75, Target: 29450.75, Size: 1},                                        // leg 1: the touch leg
+					{Entry: 29486.00, Stop: 29504.00, Target: 29440.00, Size: 1, WaitConfirm: true, Rule: "1x5m_close"}, // leg 2: chains on the reclaim close
 				}},
 		}},
 		NoTrade: []string{}, DeathCondition: "n/a",
@@ -40,13 +40,23 @@ func splitSweepDoc() string {
 }
 
 func TestArmSpecSplitContractValidation(t *testing.T) {
-	// Legal split.
+	// Legal split (1m_mss leg-2 variant for the arm-spec contract only).
 	var d kernel.PlanDoc
 	if err := json.Unmarshal([]byte(splitSweepDoc()), &d); err != nil {
 		t.Fatal(err)
 	}
+	d.Scenarios[0].Arm.Legs[1].Rule = "1m_mss"
+	d.Scenarios[0].Confirm2.Rule = "1m_mss"
 	if err := kernel.ArmSpecValid(d.Scenarios[0]); err != nil {
 		t.Fatalf("legal sweep split must pass: %v", err)
+	}
+	// The 1x5m_close leg-2 alternative is also legal.
+	var dA kernel.PlanDoc
+	if err := json.Unmarshal([]byte(splitSweepDoc()), &dA); err != nil {
+		t.Fatal(err)
+	}
+	if err := kernel.ArmSpecValid(dA.Scenarios[0]); err != nil {
+		t.Fatalf("1x5m_close leg-2 split must pass: %v", err)
 	}
 	// Leg 2 with 2x5m → rejected.
 	d.Scenarios[0].Arm.Legs[1].Rule = "2x5m_close"
@@ -90,18 +100,19 @@ func TestSplitArmWritesTwoLedgerRows(t *testing.T) {
 	}
 	installActivePlanProvider(at, st)
 
-	// A bar tape where the leg-2 MSS confirm is ALREADY MET so both legs arm.
+	// A bar tape where the leg-2 confirm (1x5m_close below 29494.75) is ALREADY
+	// MET so both legs arm. The tape ends in the PAST (all buckets closed).
 	prevProvider := market.FuturesBarsProvider
 	market.FuturesBarsProvider = func(symbol string, tf string, n int) []market.Kline {
-		base := now.Add(-40 * time.Minute).Truncate(time.Minute).UnixMilli()
+		base := now.Add(-80 * time.Minute).Truncate(time.Minute).UnixMilli()
 		out := make([]market.Kline, 0, 80)
 		for i := 0; i < 80; i++ {
 			cl := 29490.0
 			if i < 70 {
-				cl = 29500.0 // quiet base
+				cl = 29495.0 // quiet base, slightly ABOVE the ref
 			}
 			if i >= 75 {
-				cl = 29480.0 // beyond the ref
+				cl = 29480.0 // a full 5m bucket beyond (below) the ref → leg-2 chain MET
 			}
 			o := base + int64(i)*60_000
 			out = append(out, market.Kline{OpenTime: o, CloseTime: o + 59_999, Open: cl, High: cl + 1, Low: cl - 1, Close: cl})
