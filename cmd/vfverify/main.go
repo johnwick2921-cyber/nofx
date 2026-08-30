@@ -580,8 +580,14 @@ func main() {
 		runP3()
 	case "p4":
 		runP4()
+	case "d1":
+		runD1()
+	case "d1r":
+		runD1Replay()
+	case "d2":
+		runD2()
 	default:
-		fmt.Fprintln(os.Stderr, "usage: vfverify <p2|p3|p4>")
+		fmt.Fprintln(os.Stderr, "usage: vfverify <p2|p3|p4|d1|d1r|d2>")
 		os.Exit(2)
 	}
 }
