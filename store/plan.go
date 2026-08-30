@@ -403,6 +403,16 @@ func UncarriedEditsKey(planID string, version int) string {
 	return fmt.Sprintf("uncarried_edits:%s:v%d", planID, version)
 }
 
+// TransitionKey names the system_config slot the G4 transition stand-down
+// state is mirrored to (the plan card's "⏸ TRANSITION" chip reads it). Empty
+// inputs → "" (callers skip persistence).
+func TransitionKey(planID string, version int) string {
+	if planID == "" {
+		return ""
+	}
+	return fmt.Sprintf("transition:%s:v%d", planID, version)
+}
+
 // ListVersions returns EVERY stored version of one session's plan, oldest first.
 //
 // The plans table has always been append-only (PRIMARY KEY (plan_id, version);

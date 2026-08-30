@@ -262,6 +262,12 @@ export function AITradersPage({ onTraderSelect }: AITradersPageProps) {
         scan_interval_minutes: data.scan_interval_minutes,
         is_cross_margin: data.is_cross_margin,
         show_in_competition: data.show_in_competition,
+        // 6.2 (final-bundle): cadence_mode used to be DROPPED here — the P10
+        // toggle persisted on CREATE only, an owner could never switch an
+        // existing trader's cadence from the UI (PR #53/#54 register row 3).
+        cadence_mode: data.cadence_mode,
+        // Phase 3: in-position mode must survive EDIT, not just create.
+        position_mode: (data as { position_mode?: string }).position_mode,
       }
 
       await api.updateTrader(editingTrader.trader_id, request)

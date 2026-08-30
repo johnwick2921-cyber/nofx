@@ -28,6 +28,8 @@ export interface PlanScenario {
   target_chain: number[]
   invalid: string
   quality: string // A+ | A | B
+  /** G5 (regime wave) — trigger level was consumed at write time. */
+  consumed?: boolean
 }
 
 export interface PlanDoc {
@@ -93,6 +95,8 @@ export interface PlanToday {
   degraded?: boolean
   // Per-scenario live status keyed by scenario id (executor-phase; absent now).
   scenario_status?: Record<string, ScenarioStatusValue>
+  // A1/A4: verdict basis ("machine"|"heuristic") + scenarios with no anchor
+  scenario_meta?: { basis?: Record<string, string>; unevaluable?: string[] }
   /** W15.B — the acceptance rule the executor evaluates these levels with. */
   acceptance_rule?: string
   /** W15.B — which session is LIVE right now, regardless of the tab requested. */
@@ -104,8 +108,12 @@ export interface PlanToday {
   /** The RESOLVED re-plan cap (config, never a literal). */
   replan_cap?: number
   /** ITEM 4 — owner edits a re-plan could not re-anchor onto this version. */
-  uncarried_edits?: UncarriedEdit[]
-  /** ITEM 15 — true when ?version= served a superseded version, not the latest. */
+  uncarried_edits?: UncarriedEdit[] /** G4 (regime wave) — transition stand-down chip (nil/absent = closed). */
+  transition?: {
+    active: boolean
+    dir: string
+    detail: string
+  } | null /** ITEM 15 — true when ?version= served a superseded version, not the latest. */
   historical?: boolean
   /** ITEM 15 — the newest stored version, so the card can offer the way back. */
   latest_version?: number
@@ -298,7 +306,12 @@ export const planApi = {
   ): Promise<{ ok: boolean; error?: string; gate?: RereadGate }> {
     const res = await httpClient.request<{ ok: boolean; gate: RereadGate }>(
       `${API_BASE}/plan/reread`,
-      { method: 'POST', data: { trader_id: traderId }, silent: true }
+      {
+        method: 'POST',
+        data: { trader_id: traderId },
+        silent: true,
+        timeoutMs: 320_000,
+      }
     )
     if (res.success && res.data) return { ok: true, gate: res.data.gate }
     return { ok: false, error: res.message || 'reread refused' }
@@ -323,7 +336,14 @@ export const planApi = {
   ): Promise<{ ok: boolean; error?: string; note?: string; gate?: ResetGate }> {
     const res = await httpClient.request<{ ok: boolean; gate: ResetGate }>(
       `${API_BASE}/plan/reset`,
-      { method: 'POST', data: { trader_id: traderId }, silent: true }
+      // The reset runs a SYNCHRONOUS planner read server-side (60-300s) — the
+      // 30s axios default was the stuck-dialog trigger (reset-dialog hotfix).
+      {
+        method: 'POST',
+        data: { trader_id: traderId },
+        silent: true,
+        timeoutMs: 320_000,
+      }
     )
     if (res.success && res.data) {
       return { ok: true, gate: res.data.gate, note: res.data.gate?.note }
@@ -422,6 +442,9 @@ export const planApi = {
         method: 'POST',
         data: { trader_id: traderId, symbol, question },
         silent: true,
+        // The planner's backend AI budget is 300s — the 30s instance default
+        // aborted every slow ask and latched the panel (stuck-send bug).
+        timeoutMs: 320_000,
       }
     )
     if (res.success && res.data) return { ok: true, data: res.data }
@@ -456,6 +479,7 @@ export const planApi = {
         method: 'POST',
         data: { trader_id: traderId, symbol, manual, change },
         silent: true,
+        timeoutMs: 320_000,
       }
     )
     if (!res.success || !res.data) {

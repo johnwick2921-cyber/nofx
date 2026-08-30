@@ -124,6 +124,12 @@ type TraderPosition struct {
 	ExitOrderID        string  `gorm:"column:exit_order_id;default:''" json:"exit_order_id"`
 	ExitTime           int64   `gorm:"column:exit_time;index:idx_positions_exit" json:"exit_time"` // Unix milliseconds UTC, 0 means not set
 	RealizedPnL        float64 `gorm:"column:realized_pnl;default:0" json:"realized_pnl"`
+	// P0 pnl-record-integrity (2026-08-20): a wrong recorded PnL is corrected
+	// by a NEW value + note — the original is NEVER destructively edited
+	// (audit trail). Readers use EffectivePnL / COALESCE(pnl_corrected,
+	// realized_pnl).
+	PnlCorrected       *float64 `gorm:"column:pnl_corrected" json:"pnl_corrected,omitempty"`
+	PnlCorrectionNote  string   `gorm:"column:pnl_correction_note;default:''" json:"pnl_correction_note,omitempty"`
 	Fee                float64 `gorm:"column:fee;default:0" json:"fee"`
 	Leverage           int     `gorm:"column:leverage;default:1" json:"leverage"`
 	Status             string  `gorm:"column:status;default:OPEN;index:idx_positions_status" json:"status"`
@@ -143,6 +149,9 @@ type TraderPosition struct {
 	PlanVersion     int    `gorm:"column:plan_version;default:0" json:"plan_version"`
 	CitedScenarioID string `gorm:"column:cited_scenario_id;default:''" json:"cited_scenario_id"`
 	PlanMatched     bool   `gorm:"column:plan_matched;default:false" json:"plan_matched"`
+	// PlanBand (B3/F6, fail-register wave): structural verdict of the entry vs
+	// the cited scenario — "" legacy | "ok" | "off_band" | "struct".
+	PlanBand        string `gorm:"column:plan_band;default:''" json:"plan_band,omitempty"`
 	AdherenceGrade  string `gorm:"column:adherence_grade;default:''" json:"adherence_grade"`
 }
 
@@ -170,12 +179,13 @@ func (s *PositionStore) UpdateExcursion(id int64, mae, mfe float64) error {
 
 // SetPlanLink stamps the cited scenario + plan version + direction-match onto a
 // position at OPEN (P5.5). Additive; only called when day_plan is enabled.
-func (s *PositionStore) SetPlanLink(id int64, planVersion int, citedScenarioID string, matched bool) error {
+func (s *PositionStore) SetPlanLink(id int64, planVersion int, citedScenarioID string, matched bool, band string) error {
 	return s.db.Model(&TraderPosition{}).Where("id = ?", id).
 		Updates(map[string]any{
 			"plan_version":      planVersion,
 			"cited_scenario_id": citedScenarioID,
 			"plan_matched":      matched,
+			"plan_band":         band, // B3 (F6) — structural verdict, forward-only
 		}).Error
 }
 
@@ -661,4 +671,14 @@ func (s *PositionStore) ClosePositionWithAccurateData(id int64, exitPrice float6
 		"close_reason":  closeReason,
 		"updated_at":    time.Now().UTC().UnixMilli(),
 	}).Error
+}
+
+
+// EffectivePnL returns the corrected realized P&L when a correction exists,
+// else the original (P0 pnl-record-integrity, 2026-08-20).
+func (p *TraderPosition) EffectivePnL() float64 {
+	if p.PnlCorrected != nil {
+		return *p.PnlCorrected
+	}
+	return p.RealizedPnL
 }

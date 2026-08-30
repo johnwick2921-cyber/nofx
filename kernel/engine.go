@@ -96,28 +96,51 @@ type Context struct {
 	RuntimeMinutes int    `json:"runtime_minutes"`
 	CallCount      int    `json:"call_count"`
 	TraderID       string `json:"-"` // B6: identity for per-trader gate-block counters (set by the trader loop; never serialized)
+	// SnapshotMs is WHEN this context's market data was assembled (epoch ms).
+	// The B4 stale-feed guard evaluates against THIS clock, not post-AI-call
+	// time, so a legal slow call can never turn a live-at-snapshot feed into
+	// "stale" (stale-bar dispatch 2026-08-19). Prompt-invisible (json:"-").
+	SnapshotMs int64 `json:"-"`
 	// A5 (G5) — prompt-ownership tags: field-name → owning trader_id for each
 	// account-scoped context field the trader populates. Final prompt assembly
 	// asserts every tag == TraderID (the deciding trader); a mismatch is cross-trader
 	// contamination → the cycle is skipped. Prompt-data only (json:"-"), so a
 	// matching-tag context is byte-identical.
-	OwnerTags          map[string]string                  `json:"-"`
-	Account            AccountInfo                        `json:"account"`
-	Positions          []PositionInfo                     `json:"positions"`
-	CandidateCoins     []CandidateCoin                    `json:"candidate_coins"`
-	PromptVariant      string                             `json:"prompt_variant,omitempty"`
-	TradingStats       *TradingStats                      `json:"trading_stats,omitempty"`
-	RecentOrders       []RecentOrder                      `json:"recent_orders,omitempty"`
-	MarketDataMap      map[string]*market.Data            `json:"-"`
-	MultiTFMarket      map[string]map[string]*market.Data `json:"-"`
-	OITopDataMap       map[string]*OITopData              `json:"-"`
-	QuantDataMap       map[string]*QuantData              `json:"-"`
-	OIRankingData      *nofxos.OIRankingData              `json:"-"` // Market-wide OI ranking data
-	NetFlowRankingData *nofxos.NetFlowRankingData         `json:"-"` // Market-wide fund flow ranking data
-	PriceRankingData   *nofxos.PriceRankingData           `json:"-"` // Market-wide price gainers/losers
-	BTCETHLeverage     int                                `json:"-"`
-	AltcoinLeverage    int                                `json:"-"`
-	Timeframes         []string                           `json:"-"`
+	OwnerTags      map[string]string                  `json:"-"`
+	Account        AccountInfo                        `json:"account"`
+	Positions      []PositionInfo                     `json:"positions"`
+	CandidateCoins []CandidateCoin                    `json:"candidate_coins"`
+	PromptVariant  string                             `json:"prompt_variant,omitempty"`
+	TradingStats   *TradingStats                      `json:"trading_stats,omitempty"`
+	RecentOrders   []RecentOrder                      `json:"recent_orders,omitempty"`
+	MarketDataMap  map[string]*market.Data            `json:"-"`
+	MultiTFMarket  map[string]map[string]*market.Data `json:"-"`
+	OITopDataMap   map[string]*OITopData              `json:"-"`
+	// G2 (regime wave 2026-08-21) — per-cycle machine structure snapshot
+	// (per-TF trend + swings + events); the HTF veto and the prompt line read
+	// it. Prompt-invisible (json:"-"); set by the trader loop each cycle.
+	Structure map[string]StructureState `json:"-"`
+	// G1 (regime wave 2026-08-21) — HTF veto gate inputs: the Studio toggle
+	// (default ON) and the veto timeframe (env HTF_VETO_TF, default 1h).
+	// Prompt-invisible; set by the trader loop each cycle.
+	HTFVetoEnabled bool   `json:"-"`
+	HTFVetoTF      string `json:"-"`
+	// G4 (regime wave 2026-08-21) — transition stand-down inputs (the trader
+	// maintains the state machine from the cycle's structure snapshot + plan).
+	TransitionActive bool   `json:"-"`
+	TransitionDir    string `json:"-"` // plan bias "long"|"short" — paused direction
+	TransitionDetail string `json:"-"`
+	// G6 (regime wave 2026-08-21) — loss-streak pause inputs (the trader
+	// computes the session streak; the gate refuses ALL new opens while held).
+	LossStreakPaused   bool                       `json:"-"`
+	LossStreakMsg      string                     `json:"-"`
+	QuantDataMap       map[string]*QuantData      `json:"-"`
+	OIRankingData      *nofxos.OIRankingData      `json:"-"` // Market-wide OI ranking data
+	NetFlowRankingData *nofxos.NetFlowRankingData `json:"-"` // Market-wide fund flow ranking data
+	PriceRankingData   *nofxos.PriceRankingData   `json:"-"` // Market-wide price gainers/losers
+	BTCETHLeverage     int                        `json:"-"`
+	AltcoinLeverage    int                        `json:"-"`
+	Timeframes         []string                   `json:"-"`
 
 	// Strategy Studio P1 — daily-guardrail inputs measured on the CME session-day
 	// (set by the trader loop from the position store; read by the daily-guardrail
@@ -243,6 +266,9 @@ type StrategyEngine struct {
 	// Threaded in from the decision loop (one snapshot → one clock) and emitted
 	// by BOTH the futures and crypto prompt builders. Empty → byte-identical.
 	clockContextLine string
+	// promptSnapshotMs (P10.2): the cycle's snapshot instant for the forming-
+	// bar label in the market block. 0 = no label (tests/legacy paths).
+	promptSnapshotMs int64
 }
 
 // SetSVPContext sets the Session Volume Profile line used by the futures prompt
@@ -264,6 +290,12 @@ func (e *StrategyEngine) SetPlanContext(planBlock, planStatus string) {
 // SetClockContext sets the labelled per-cycle clock line (P0 timezone fix)
 // emitted by both prompt builders. Pass "" to inject nothing.
 func (e *StrategyEngine) SetClockContext(line string) { e.clockContextLine = line }
+
+// SetPromptSnapshotMs (P10.2) hands the cycle's snapshot instant to the market
+// -block renderer so the newest bar can be labelled FORMING/CLOSED honestly —
+// interval cadence runs cycles mid-bar and the AI must know what it is looking
+// at. 0 (tests/legacy) renders no label — goldens stay byte-identical.
+func (e *StrategyEngine) SetPromptSnapshotMs(ms int64) { e.promptSnapshotMs = ms }
 
 // NewStrategyEngine creates strategy execution engine.
 // claw402WalletKey is optional — if provided, nofxos data requests are routed through claw402.

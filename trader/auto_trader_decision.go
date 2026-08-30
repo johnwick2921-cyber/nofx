@@ -80,9 +80,21 @@ func (at *AutoTrader) GetStatus() map[string]interface{} {
 		"call_count":      at.callCount,
 		"initial_balance": at.initialBalance,
 		"scan_interval":   at.config.ScanInterval.String(),
-		"stop_until":      at.stopUntil.Format(time.RFC3339),
+		// P2 (ledger-close 2026-08-19): stop_until now reports the REAL owner
+		// pause (auto_trader_pause.go). The legacy at.stopUntil field is dormant
+		// (never assigned) so the unpaused rendering is byte-identical.
+		"stop_until":      pauseStatusString(at),
 		"last_reset_time": at.lastResetTime.Format(time.RFC3339),
 		"ai_provider":     aiProvider,
+		// v1 audit §5.6 (E5): the running binary's revision, so a bug report
+		// can be checked against what is actually deployed without a shell.
+		"revision": kernel.RunningRevision(),
+	}
+
+	// P3 (ledger-close 2026-08-19) — roll picture for the dashboard (3.6):
+	// resolved contract, expiry, window start, days remaining.
+	if at.exchange == "ninjatrader" {
+		result["roll"] = at.RollStatus(time.Now())
 	}
 
 	// Add strategy info
@@ -450,11 +462,13 @@ func (at *AutoTrader) recordPositionChange(orderID, symbol, side, action string,
 				fmt.Sprintf("UNTRACKED %s %s @ %.2f — fill recorded at the broker, not in the DB", side, symbol, price),
 				"trader frozen for new entries · reconcile from NT8, then clear the freeze")
 		} else {
-			logger.Infof("  📊 Position recorded [%s] %s %s @ %.4f", at.id[:8], symbol, side, price)
+			// WARN (honest-logs 2026-08-19): a confirmed open is owner-visible
+			// truth — survives journald flood via the log_events sink.
+			logger.Warnf("📗 Position OPENED [%s] %s %s qty=%.2f @ %.4f", at.id[:8], symbol, side, quantity, price)
 			// P5.5 — stamp the plan link captured in recordPlanCitation onto this
 			// open (day_plan-gated → dormant for crypto). Consumed once.
 			if at.dayPlanEnabled() && at.lastCitation.valid {
-				_ = at.store.Position().SetPlanLink(pos.ID, at.lastCitation.planVersion, at.lastCitation.scenarioID, at.lastCitation.matched)
+				_ = at.store.Position().SetPlanLink(pos.ID, at.lastCitation.planVersion, at.lastCitation.scenarioID, at.lastCitation.matched, at.lastCitation.band)
 				at.lastCitation.valid = false
 			}
 			// W6 — P0 fill alert.

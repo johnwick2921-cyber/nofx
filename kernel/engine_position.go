@@ -190,6 +190,41 @@ func validateDecision(d *Decision, accountEquity float64, btcEthLeverage, altcoi
 		if minConfidence > 0 && d.Confidence < minConfidence {
 			return fmt.Errorf("confidence too low (%d), must be ≥%d to open position", d.Confidence, minConfidence)
 		}
+
+		// G1 (regime wave 2026-08-21) — HTF VETO. Position in the gate chain:
+		// AFTER the min-confidence gate, BEFORE the decision proceeds to sizing
+		// and execution. An entry opposing the CONFIRMED HTF trend (G2) is
+		// refused; RANGING/unconfirmed and detector-unavailable FAIL OPEN
+		// (WARN + pass). ctx == nil (unit tests) → gate dormant.
+		if ctx != nil && ctx.HTFVetoEnabled {
+			if blocked, msg := HTFVetoVerdict(ctx.Structure, d.Action, ctx.HTFVetoTF); blocked {
+				telemetry.IncGateBlock(ctx.TraderID, "htf_veto")
+				logger.Warnf("🛡️ HTF VETO %s %s: %s", d.Symbol, d.Action, msg)
+				return fmt.Errorf("%s", msg)
+			}
+		}
+
+		// G4 (regime wave 2026-08-21) — TRANSITION STAND-DOWN: while an
+		// unconfirmed counter-trend CHoCH/MSS is outstanding on the plan's bias
+		// TF, NEW entries in the PLAN'S direction are paused (the card shows
+		// "⏸ TRANSITION"). Counter-direction entries are never paused by this —
+		// the flip owns that job. ctx == nil → dormant.
+		if ctx != nil && ctx.TransitionActive {
+			if blocked, msg := TransitionStanddownVerdict(d.Action, ctx.TransitionActive, ctx.TransitionDir, ctx.TransitionDetail); blocked {
+				telemetry.IncGateBlock(ctx.TraderID, "transition_standdown")
+				logger.Warnf("⏸ TRANSITION STAND-DOWN %s %s: %s", d.Symbol, d.Action, msg)
+				return fmt.Errorf("%s", msg)
+			}
+		}
+
+		// G6 (regime wave 2026-08-21) — LOSS-STREAK PAUSE (master-independent
+		// armor): N consecutive losing closes pause ALL new entries until the
+		// timer or session end. Position management and the watcher untouched.
+		if ctx != nil && ctx.LossStreakPaused {
+			telemetry.IncGateBlock(ctx.TraderID, "loss_streak")
+			logger.Warnf("🧊 LOSS-STREAK PAUSE %s %s: %s", d.Symbol, d.Action, ctx.LossStreakMsg)
+			return fmt.Errorf("%s", ctx.LossStreakMsg)
+		}
 	}
 
 	return nil

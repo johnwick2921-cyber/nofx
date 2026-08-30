@@ -57,10 +57,12 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 	if ctx == nil {
 		return nil, fmt.Errorf("context is nil")
 	}
-	// Plan 2 Task 18: skip decision cycle when CME is closed (futures mode only).
-	// Returns nil decision + nil error so callers treat it as a clean no-op cycle.
+	// A10 (anatomy dedup ruling): the PRIMARY CME gate is the loop's
+	// cmeSessionClosedSkip (before context build/AI cost). This kernel twin is
+	// ASSERT-ONLY now: reaching it means the loop gate failed — it still HOLDs
+	// (safety preserved) but logs the assert so the dedup stays honest.
 	if ShouldSkipDecisionCycle() {
-		// Plan 4 Task 25 — gate instrumentation
+		logger.Warnf("🧪 assert: CME-closed reached the kernel gate — the loop's cmeSessionClosedSkip should have caught this cycle upstream")
 		telemetry.RiskGateTrips.WithLabelValues("task18_cme_closed").Inc()
 		telemetry.IncGateBlock(ctx.TraderID, "task18_cme_closed")
 		return holdCycle("cme_closed"), nil
@@ -159,6 +161,12 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 
 				MaxDailyTradesEnabled: boolOrDefault(rc.MaxDailyTradesEnabled, false),
 				MaxDailyTrades:        rc.MaxDailyTrades,
+
+				// 6.3 — soft-audit inputs for the two silent checks.
+				BlackoutConfigured:   rc.BlackoutStartCT != "" && rc.BlackoutEndCT != "",
+				InBlackoutNow:        InBlackoutWindow(time.Now(), rc.BlackoutStartCT, rc.BlackoutEndCT),
+				ConsistencyMaxDayPct: rc.ConsistencyMaxDayPct,
+				TotalRealizedPnL:     ctx.TotalRealizedPnL,
 			}
 			if !g.MasterEnabled {
 				logger.Warnf("⚠️ Strategy Studio: risk guardrails master OFF — daily loss/profit/trade limits + blackout NOT enforced this cycle (futures SIZE caps — notional×N ceiling + per-order contract clamp — REMAIN enforced; master-independent venue safety, hardening D3)")
@@ -255,11 +263,37 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 			estimate.Total, providerName, contextLimit)
 	}
 
+	// P7 (ledger-close 2026-08-19) — ONE SNAPSHOT INSTANT for the whole cycle.
+	// Previously the cycle carried four clocks (loop stamp T0 → market fetch T1
+	// → level/SVP snapshot T2 → post-AI gates T3): plan/level distance math read
+	// the bar cache seconds-to-minutes AFTER the market block in the SAME
+	// prompt (U4, the 2-min map skew). Capture ONE instant here, run the market
+	// fetch and the 1m snapshot window back-to-back against it, and re-stamp
+	// ctx.SnapshotMs so B4 evaluates at the instant the data was ACTUALLY
+	// assembled — which makes engine.go's SnapshotMs comment true.
+	snapshotNow := time.Now()
+	ctx.SnapshotMs = snapshotNow.UnixMilli()
+
 	// 1. Fetch market data using strategy config
 	if len(ctx.MarketDataMap) == 0 {
 		if err := fetchMarketDataWithStrategy(ctx, engine); err != nil {
 			return nil, fmt.Errorf("failed to fetch market data: %w", err)
 		}
+	}
+
+	// Active symbol for the futures system prompt (Phase 3): the open position's
+	// symbol, else the first candidate, else "MNQ". Ignored on the crypto path.
+	// (P7: hoisted next to the fetch so the 1m snapshot window below is read
+	// back-to-back with the market block — no second capture point.)
+	activeSymbol := "MNQ"
+	if len(ctx.Positions) > 0 && ctx.Positions[0].Symbol != "" {
+		activeSymbol = ctx.Positions[0].Symbol
+	} else if len(ctx.CandidateCoins) > 0 && ctx.CandidateCoins[0].Symbol != "" {
+		activeSymbol = ctx.CandidateCoins[0].Symbol
+	}
+	var snapshotBars []market.Kline
+	if market.FuturesBarsProvider != nil {
+		snapshotBars = market.FuturesBarsProvider(activeSymbol, AISVPBarInterval, AISVPBarCount)
 	}
 
 	// Ensure OITopDataMap is initialized
@@ -280,14 +314,6 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 
 	// 2. Build System Prompt using strategy engine
 	riskConfig := engine.GetRiskControlConfig()
-	// Active symbol for the futures system prompt (Phase 3): the open position's
-	// symbol, else the first candidate, else "MNQ". Ignored on the crypto path.
-	activeSymbol := "MNQ"
-	if len(ctx.Positions) > 0 && ctx.Positions[0].Symbol != "" {
-		activeSymbol = ctx.Positions[0].Symbol
-	} else if len(ctx.CandidateCoins) > 0 && ctx.CandidateCoins[0].Symbol != "" {
-		activeSymbol = ctx.CandidateCoins[0].Symbol
-	}
 	// SVP (Part B3): when svp_enabled is ON and we're on the futures prompt,
 	// compute the session volume profile from 1m bars (AISVPBarInterval/
 	// AISVPBarCount = "1m"/2000) and thread ONE line into the system prompt. This
@@ -300,18 +326,15 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 	if cfg := engine.GetConfig(); cfg != nil {
 		svpOn = cfg.Indicators.EnableSVP
 	}
-	// P5.4 — ONE PROMPT, ONE SNAPSHOT: SVP, KEY LEVELS and PLAN STATUS used to
-	// call FuturesBarsProvider separately, so one prompt carried prices ~2pt /
-	// ~2min apart and distances were computed off the older snapshot. Fetch the
-	// 1m cache ONCE per cycle; every section derives from it at a single now.
-	var snapshotBars []market.Kline
-	snapshotNow := time.Now()
-	// P0 timezone — ONE labelled clock per prompt, derived from the same
-	// snapshot instant as every other section (one snapshot → one clock).
-	engine.SetClockContext("## Clock\n" + ClockCTAndUTC(snapshotNow) + " — ALL times in this prompt are CT (America/Chicago), including every session/window bound. Never apply CT window numbers to a UTC clock.")
-	if market.FuturesBarsProvider != nil {
-		snapshotBars = market.FuturesBarsProvider(activeSymbol, AISVPBarInterval, AISVPBarCount)
-	}
+	// P5.4 — ONE PROMPT, ONE SNAPSHOT — extended by P7 (ledger-close 2026-08-19)
+	// to the WHOLE cycle: snapshotNow + snapshotBars are captured next to the
+	// market-block fetch above, so SVP, KEY LEVELS, PLAN STATUS *and* the
+	// market block all derive from one instant. The prompt self-documents that
+	// instant ("Snapshot: HH:MM:SS CT") so every stored prompt names its clock.
+	engine.SetClockContext("## Clock\n" + ClockCTAndUTC(snapshotNow) + " · Snapshot: " + ClockCTSeconds(snapshotNow) + " — ALL times in this prompt are CT (America/Chicago), including every session/window bound. Never apply CT window numbers to a UTC clock.")
+	// P10.2 — the market block labels the newest bar FORMING/CLOSED against
+	// this same instant (interval cadence runs cycles mid-bar).
+	engine.SetPromptSnapshotMs(snapshotNow.UnixMilli())
 	if isFut, _ := futuresVariantMode(variant); isFut && svpOn {
 		svpLine := ""
 		if len(snapshotBars) > 0 {
@@ -386,7 +409,13 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 			status := ""
 			if len(snapshotBars) > 0 {
 				_, price, dATR := AssembleScoredLevels(ctx.TraderID, snapshotBars, ResolvedSessionRegistryFor(ctx.TraderID), activeSymbol, maxLevels, snapshotNow, proximityK)
+				SetPlanDATR(ctx.TraderID, dATR) // B3: the citation band check reads this
 				status = RenderPlanStatus(ctx.TraderID, activeSymbol, plan.Doc, snapshotBars, price, dATR, rule, plan.ReplansLeft, snapshotNow.UnixMilli(), plan.BirthMs)
+				// C1 (F3): machine-computed confirmation lines per scenario —
+				// advisory truth the model reasons FROM, never a gate.
+				if cl := RenderConfirmLines(plan.Doc, snapshotBars, plan.BirthMs, snapshotNow.UnixMilli()); cl != "" {
+					status += "\n" + cl
+				}
 			}
 			engine.SetPlanContext(block, status)
 		}
@@ -410,8 +439,13 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 	// with the parse error fed back; still bad → skip the cycle with a NAMED reason
 	// (HOLD, never crash). schema_parse_failed is the named reason B6 will count.
 	const maxParseRetries = 2
+	// A6 (F12): with an ACTIVE plan, an open decision MUST carry cited_scenario
+	// ("S1"… or "off-plan") — the retry loop feeds the miss back to the model
+	// instead of letting every adherence grade silently degrade to D.
+	isFutForCite, _ := futuresVariantMode(variant)
+	planActiveForCite := isFutForCite && ActivePlanFor(ctx.TraderID, activeSymbol) != nil
 	parse := func(resp string) (*FullDecision, error) {
-		return parseFullDecisionResponse(
+		fd, err := parseFullDecisionResponse(
 			resp,
 			ctx.Account.TotalEquity,
 			riskConfig.BTCETHMaxLeverage,
@@ -423,6 +457,12 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 			ResolveNotionalLeverage(riskConfig.MaxNotionalLeverage, futuresMaxNotionalLeverage),
 			ctx, // F1: entry reference (current-price snapshot) + TraderID for rr_gate
 		)
+		if err == nil && fd != nil && planActiveForCite {
+			if cErr := requireCitedScenario(fd); cErr != nil {
+				return fd, cErr
+			}
+		}
+		return fd, err
 	}
 	decision, aiResponse, aiCallDuration, parseErr, callErr := callWithSchemaRetry(
 		mcpClient, systemPrompt, userPrompt, parse, maxParseRetries)
@@ -452,10 +492,17 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 	// stale (feed frozen); exits / open-position management are never touched.
 	applyStaleDataBlock(decision, ctx, time.Now().UnixMilli())
 
-	// C2 — clock-drift guard: refuse a NEW entry when the local clock is skewed
-	// >60s from the freshest feed timestamp (either direction); signals would be
-	// mis-timed / NT8-rejected. Exits untouched.
-	applyClockDriftBlock(decision, ctx, time.Now().UnixMilli())
+	// C2 — clock-drift OBSERVER (log-only; the entry block was retired — the
+	// stale "refuse a NEW entry" text was anatomy FAIL A10's comment lie).
+	// A9 (T5): evaluate the SNAPSHOT clock against the SNAPSHOT bars — the old
+	// post-call time.Now() read a legal 200-300s AI call as "drift", the exact
+	// hidden-clock defect class B4 was cured of (P8). Fail-open when the
+	// snapshot instant is absent.
+	c2Now := ctx.SnapshotMs
+	if c2Now <= 0 {
+		c2Now = time.Now().UnixMilli()
+	}
+	applyClockDriftBlock(decision, ctx, c2Now)
 
 	// B7 — re-entry cooldown: after a stop-loss exit, refuse a same-direction
 	// re-entry on that symbol until the cooldown elapses OR price moved ≥1×ATR15
@@ -934,5 +981,19 @@ func MaybeForceFlat(traderID string, signaler ForceFlatSignaler) error {
 	// After a force-flat, reset the daily PnL window so the operator can
 	// resume after they have addressed whatever tripped the kill switch.
 	ResetDailyPnL()
+	return nil
+}
+
+// requireCitedScenario (A6/F12, fail-register wave): with an active plan every
+// OPEN decision must name the scenario it trades ("S1"… or "off-plan"). Fed
+// back through the schema-retry loop, so a compliant model self-corrects
+// instead of silently costing every adherence grade.
+func requireCitedScenario(fd *FullDecision) error {
+	for i := range fd.Decisions {
+		d := &fd.Decisions[i]
+		if (d.Action == "open_long" || d.Action == "open_short") && strings.TrimSpace(d.CitedScenario) == "" {
+			return fmt.Errorf("missing required field cited_scenario on %s %s — set the plan scenario id (\"S1\"…) or \"off-plan\"", d.Action, d.Symbol)
+		}
+	}
 	return nil
 }

@@ -6,6 +6,7 @@ import (
 	"nofx/config"
 	"nofx/kernel"
 	"nofx/logger"
+	"nofx/market"
 	"nofx/mcp"
 	"nofx/store"
 	"nofx/telemetry"
@@ -44,15 +45,18 @@ func stampGuardrailSkip(record *store.DecisionRecord, reason string) {
 	record.ErrorMessage = "guardrail_skip: " + reason
 }
 
-// decisionCallTimeout caps ONE AI decision call so a cycle can always finish
-// inside the primary bar window. Owner evidence over 14 live days: normal calls
-// avg ~51s (max 293.7s), parse failures avg ~110s (max 182.2s) — a 294s call
-// exceeds an entire 5-minute bar window, so the decision would arrive after the
-// NEXT bar closed. 180s leaves ≥120s of a 5m bar for context build + execution
-// + order round-trips; a call that would run longer gets cut and (on parse
-// failure) retried with the JSON-only re-ask instead of silently eating the bar.
-// Crypto cadence is untouched — this is applied to the futures decision client.
-const decisionCallTimeout = 180 * time.Second
+// The decision-call timeout is CONFIG-DRIVEN (mcp.ResolvedAITimeout — env
+// AI_HTTP_TIMEOUT_SECONDS, default 300s), no literal left on the path.
+//
+// HISTORY of the literal this replaces: a 180s cap was chosen when normal calls
+// averaged ~51s, to keep a cycle inside one 5m bar. Then max_tokens was raised
+// from the truncating 2000 default and reasoning responses legitimately run
+// 150s+ — the observed 150565ms SUCCESSFUL call sat 30s under the cap, and the
+// slower tail died mid-read ("failed to read response: context deadline
+// exceeded"), every death a missed decision (incident 2026-08-18, zero-trade
+// cause A). A slow call that finishes is handled: staleBarDiscard() throws away
+// a decision computed on a bar the market has already moved past, so completing
+// late is safe while dying mid-read never is.
 
 // staleBarDiscard reports whether a decision must be DISCARDED because the bar
 // it was computed on (decisionBarCloseMs) is no longer the latest closed primary
@@ -61,18 +65,27 @@ const decisionCallTimeout = 180 * time.Second
 // haveBar=false (no bars / provider down) never discards: absent evidence, the
 // existing stale-data armor (B4) is the only judge. decisionBarCloseMs==0 means
 // the cycle never captured a bar (e.g. crypto) → never discards.
+func orNight(s string) string {
+	if s == "" {
+		return "night"
+	}
+	return s
+}
+
 func staleBarDiscard(decisionBarCloseMs, latestClosedMs int64, haveBar bool) bool {
 	return haveBar && decisionBarCloseMs > 0 && latestClosedMs > decisionBarCloseMs
 }
 
-// applyDecisionCallTimeout caps ONE AI decision call to fit inside the primary
-// bar window — futures (ninjatrader) only. Crypto and the planner client (a
-// separate client, auto_trader_planner.go) are untouched.
+// applyDecisionCallTimeout aligns the futures decision client with the ONE
+// config-driven AI timeout — futures (ninjatrader) only. Crypto and the planner
+// client (a separate client, auto_trader_planner.go) already inherit the same
+// resolved value through DefaultConfig, so executor and planner can no longer
+// diverge (the 180s-vs-300s split was defect class 7).
 func applyDecisionCallTimeout(mcpClient mcp.AIClient, exchange string) {
 	if mcpClient == nil || exchange != "ninjatrader" {
 		return
 	}
-	mcpClient.SetTimeout(decisionCallTimeout)
+	mcpClient.SetTimeout(mcp.ResolvedAITimeout())
 }
 
 func (at *AutoTrader) runCycle() error {
@@ -98,6 +111,15 @@ func (at *AutoTrader) runCycle() error {
 	// the session gate below skipped the entire cycle all weekend). Gated on
 	// day_plan; throttled; idempotent (skip-fresh).
 	at.maybeFetchCalendar(time.Now())
+
+	// P4 (ledger-close 2026-08-19) — HALF-DAYS PRODUCER, also above the session
+	// gate (same F0 reasoning: a weekend boot must seed Monday's early close
+	// BEFORE the open). Once per session-day; idempotent merge; fail-open.
+	at.maybeSeedHalfDays(time.Now())
+
+	// P5 (ledger-close 2026-08-19) — optional daily AI balance check
+	// (AI_BALANCE_WARN, default OFF). Never blocks; WARN + P1 below threshold.
+	at.maybeCheckAIBalance(time.Now())
 
 	// 0a. PART A — CME SESSION GATE (hoisted to the TOP, before the account gate
 	// and buildTradingContext). When the futures market is closed we skip the
@@ -198,15 +220,28 @@ func (at *AutoTrader) runCycle() error {
 		return nil
 	}
 
-	// P2.2 — SKIP-WHILE-OPEN. When day_plan is on and the strategy is already
-	// holding, skip the AI decision cycle entirely (calmer + cheaper than
-	// same-side refusal). The open trade is still managed by the NT8 bracket,
-	// auto-breakeven, and close-sync — all independent of this cycle. Gated →
-	// dormant by default.
-	if skip, why := at.skipWhileOpen(); skip {
-		at.logInfof("🧘 skip-while-open: holding %s — skipping decision cycle #%d (bracket/breakeven still manage the trade).", why, at.callCount)
-		return nil
+	// PHASE 3.5 — clock health at each SESSION ROLL (log-only). Detects the
+	// active-session name changing between cycles (incl. →night as ""). Hoisted
+	// ABOVE skip-while-open (in-position silence fix 2026-08-19): a session roll
+	// during a held trade must still be observed.
+	if at.config.Exchange == "ninjatrader" {
+		nowRoll := time.Now()
+		cur := ""
+		if sess, ok := at.sessionRegistry(nowRoll).ActiveSession(nowRoll); ok {
+			cur = sess.Name
+		}
+		if cur != at.lastClockHealthSession {
+			kernel.LogClockHealth("session-roll:"+orNight(cur), at.futuresSymbol())
+			at.lastClockHealthSession = cur
+		}
 	}
+
+	// P2.2 note — skip-while-open RELOCATED below buildTradingContext +
+	// saveEquitySnapshot (in-position silence fix 2026-08-19). Skipping HERE
+	// froze the equity curve and the decision feed for the whole life of every
+	// position (#521: 1 scan in 82 min; #522: 1 scan in 16 min — the owner's
+	// "updates stop while position open"). Only the AI call may be skipped, and
+	// only AFTER snapshot+broadcast.
 
 	// Check USDC balance periodically for claw402 users (every 10 cycles)
 	if at.callCount%10 == 0 && store.IsClaw402Config(at.config.AIModel) {
@@ -217,19 +252,29 @@ func (at *AutoTrader) runCycle() error {
 	record := &store.DecisionRecord{
 		ExecutionLog: []string{},
 		Success:      true,
+		CycleTrigger: at.cycleTrigger, // Phase 2/4: "" (timer) | "stale_dodge" | "post_exit"
+	}
+	if at.cycleTrigger == "post_exit" {
+		at.logInfof("↻ cycle_trigger=post_exit — immediate rescan after a position close (all gates apply; prompt identical to a timer cycle).")
 	}
 
-	// 1. Check if trading needs to be stopped
-	if time.Now().Before(at.stopUntil) {
-		remaining := at.stopUntil.Sub(time.Now())
-		at.logWarnf("⏸ Risk control: Trading paused, remaining %.0f minutes", remaining.Minutes())
-		record.Success = false
-		record.ErrorMessage = fmt.Sprintf("Risk control paused, remaining %.0f minutes", remaining.Minutes())
-		at.saveDecision(record)
-		return nil
-	}
+	// (A11, fail-register wave) The legacy at.stopUntil consumer that sat here
+	// is GONE — it had no producer anywhere (a pause switch that never was,
+	// anatomy order-correction #5) and blocked the WHOLE cycle, contradicting
+	// the owner pause contract. The ONE live pause is pauseUntilMs
+	// (auto_trader_pause.go), enforced entry-only in executeDecisionWithRecord.
 
-	// 2. Reset daily P&L (reset every day)
+	// U1 3.1 — the feed-down watch moved to monitorTick (the 60s wall-clock
+	// ticker in auto_trader_risk.go): inside this cycle it was doubly dead —
+	// skip-while-open returned before it while holding, and a dead feed stops
+	// the bar-close cadence, so the cycle that would report the outage never
+	// fired (in-position silence fix 2026-08-19).
+
+	// 2. Reset daily P&L. AUDIT NOTE (2026-08-18, report-only): this is a
+	// rolling-24h window where CME session-day scope is intended, AND nothing
+	// ever writes at.dailyPnL (grep: reset + one display read only) — it is a
+	// permanently-zero display field. Every real daily guard reads the store.
+	// Left as-is: wiring it up is a behavior change outside the timegate train.
 	if time.Since(at.lastResetTime) > 24*time.Hour {
 		at.dailyPnL = 0
 		at.lastResetTime = time.Now()
@@ -246,6 +291,38 @@ func (at *AutoTrader) runCycle() error {
 		return fmt.Errorf("failed to build trading context: %w", err)
 	}
 
+	// G2 (regime wave 2026-08-21) — per-cycle STRUCTURE snapshot: computed from
+	// the same 1m cache every other futures consumer reads, threaded into the
+	// executor prompt (engine_prompt.go) and persisted on the decision row —
+	// G1/G4/G8's input and future forensics' gold.
+	if market.FuturesBarsProvider != nil {
+		bars1m := market.FuturesBarsProvider(at.futuresSymbol(), kernel.AISVPBarInterval, kernel.AISVPBarCount)
+		ctx.Structure = kernel.StructureSnapshot(bars1m, time.Now().UnixMilli())
+		if blob, jerr := json.Marshal(ctx.Structure); jerr == nil {
+			record.StructureJSON = string(blob)
+		}
+	}
+
+	// G1 (regime wave 2026-08-21) — HTF veto inputs: Studio toggle (default ON,
+	// nil-safe) + the veto timeframe (env HTF_VETO_TF, default 1h). The gate
+	// itself runs inside validateDecision (after min-conf, before sizing).
+	if sc := at.GetStrategyConfig(); sc != nil {
+		ctx.HTFVetoEnabled = sc.HTFVetoEnabled()
+	} else {
+		ctx.HTFVetoEnabled = true // shipped default when no config is present
+	}
+	ctx.HTFVetoTF = kernel.HTFVetoTF()
+
+	// G4 (regime wave 2026-08-21) — transition stand-down state machine: opens
+	// on an unconfirmed counter-trend CHoCH/MSS on the plan's bias TF (15m),
+	// closes on flip/re-plan, BOS resumption or the TRANSITION_MAX_MIN cap;
+	// wires the executor gate + the plan-card chip mirror.
+	at.observeTransitionStanddown(ctx)
+
+	// G6 (regime wave 2026-08-21) — loss-streak pause observer (session-scoped,
+	// master-independent): N consecutive losers pause new entries.
+	at.observeLossStreak(ctx)
+
 	// Plan 4 Stage 4 — defer-until-balance guard (NinjaTrader TCP only)
 	// If equity is 0 and no account_balance frame has arrived yet, skip the cycle silently.
 	// This prevents phantom HOLD decisions while waiting for the AddOn to connect.
@@ -261,6 +338,40 @@ func (at *AutoTrader) runCycle() error {
 	// Save equity snapshot independently (decoupled from AI decision, used for drawing profit curve)
 	// NOTE: Must be called BEFORE candidate coins check to ensure equity is always recorded
 	at.saveEquitySnapshot(ctx)
+
+	// P2.2 — SKIP-WHILE-OPEN (relocated 2026-08-19, in-position silence fix).
+	// IN-POSITION CONTRACT: while holding, everything above still ran — session
+	// reads, EOD-flat, clock health, context build, equity snapshot — so the
+	// guards stay live and the dashboard keeps moving. ONLY the AI decision is
+	// skipped (spend saving), as a documented branch AFTER snapshot+broadcast,
+	// never before. The trade itself is managed outside this cycle: the NT8 OCO
+	// bracket, auto-breakeven (60s risk loop), and close-sync/reconcile. Gated
+	// on day_plan → dormant by default.
+	if skip, why := at.skipWhileOpen(); skip {
+		// Phase 3 (final-bundle): ai_watch is the DEFAULT in-position mode — a
+		// full WATCH-ONLY cycle replaces the silent skip (the watch row IS the
+		// heartbeat). bracket_only keeps the legacy skip byte-identical below.
+		if at.positionMode() == PositionModeWatch {
+			return at.runWatchCycle(ctx, record)
+		}
+		at.logInfof("🧘 skip-while-open: holding %s — AI decision skipped for cycle #%d (snapshot+equity recorded; bracket/breakeven manage the trade).", why, at.callCount)
+		record.Success = true
+		record.ExecutionLog = append(record.ExecutionLog,
+			fmt.Sprintf("skip-while-open: holding %s — AI decision skipped after snapshot+equity (in-position heartbeat)", why))
+		record.AccountState = store.AccountSnapshot{
+			TotalBalance:          ctx.Account.TotalEquity,
+			AvailableBalance:      ctx.Account.AvailableBalance,
+			TotalUnrealizedProfit: ctx.Account.UnrealizedPnL,
+			PositionCount:         ctx.Account.PositionCount,
+			InitialBalance:        at.initialBalance,
+		}
+		at.saveDecision(record)
+		return nil
+	}
+
+	// Phase 3 — flat again: clear watcher hysteresis + thesis memory so the next
+	// position starts a fresh episode.
+	at.pruneWatchState()
 
 	// If no candidate coins available, log but do not error
 	if len(ctx.CandidateCoins) == 0 {
@@ -308,6 +419,8 @@ func (at *AutoTrader) runCycle() error {
 	aiDecision, err := kernel.GetFullDecisionWithStrategy(ctx, at.mcpClient, at.strategyEngine, promptVariant)
 	// Plan 4 Task 25 — decision metrics
 	telemetry.DecisionLatency.WithLabelValues(at.id).Observe(time.Since(decisionStart).Seconds())
+	// Discard-burn 2.1 — feed the dodge's rolling average (last 20 calls).
+	at.recordAICallMs(time.Since(decisionStart).Milliseconds())
 	if aiDecision != nil {
 		for _, d := range aiDecision.Decisions {
 			status := "queued"
@@ -373,19 +486,24 @@ func (at *AutoTrader) runCycle() error {
 		at.consecutiveAIFailures++
 		record.Success = false
 		record.ErrorMessage = fmt.Sprintf("Failed to get AI decision: %v", err)
+		// P5 (ledger-close 2026-08-19) — typed class for one-query forensics.
+		record.ErrorClass = classifyAIError(err)
 
 		// P0-cleanup — structured error event (type stable, cause plain,
 		// cost named). 402 = payment; else decision lost.
-		if strings.Contains(err.Error(), "402") || strings.Contains(err.Error(), "Insufficient Balance") {
+		if record.ErrorClass == "ai_payment_402" {
 			telemetry.RecordError(at.id, "ai_payment_402", err.Error(), telemetry.CostDecisionLost)
 		} else {
 			telemetry.RecordError(at.id, "ai_call_failed", err.Error(), telemetry.CostDecisionLost)
 		}
 
 		// P0 2026-08-18 — DeepSeek "Insufficient Balance" (HTTP 402) silently
-		// killed 139 overnight cycles today. Make it unmissable.
-		if strings.Contains(err.Error(), "402") || strings.Contains(err.Error(), "Insufficient Balance") {
+		// killed 139 overnight cycles today. Make it unmissable. P5 adds the
+		// OUTAGE latch: one P0 banner per outage (event-id dedup), auto-cleared
+		// by the first successful call.
+		if record.ErrorClass == "ai_payment_402" {
 			at.logErrorf("💸 DEEPSEEK PAYMENT FAILURE (402 Insufficient Balance) — cycles are dying with NO decision. Top up the DeepSeek account (api.deepseek.com). trader=%s", at.id)
+			at.on402Failure(time.Now(), err)
 		}
 
 		// Activate safe mode after 3 consecutive failures
@@ -429,6 +547,8 @@ func (at *AutoTrader) runCycle() error {
 	if at.consecutiveAIFailures > 0 {
 		at.logInfof("✅ AI recovered after %d consecutive failures", at.consecutiveAIFailures)
 	}
+	// P5 — a success ends any latched 402 outage (banner auto-ack).
+	at.onAISuccess(time.Now())
 	at.consecutiveAIFailures = 0
 	if at.safeMode {
 		at.logInfof("🛡️ SAFE MODE DEACTIVATED — AI is working again. Resuming normal trading.")
@@ -510,15 +630,44 @@ func (at *AutoTrader) runCycle() error {
 	// stale bar. The loss is visible (P1 feed + gate-block counter) and the next
 	// cycle re-decides on the fresh bar. Crypto never captures a bar (0) → no-op.
 	if latest, ok := at.latestClosedPrimaryBarMs(); staleBarDiscard(decisionBarCloseMs, latest, ok) {
-		at.logWarnf("⏰ decision bar (close %d) is no longer the latest (close %d) — the AI call spanned a bar close; DISCARDING the decision.", decisionBarCloseMs, latest)
-		stampGuardrailSkip(record, "stale_bar_discarded")
-		telemetry.IncGateBlock(at.id, "stale_bar_discarded")
-		at.emitAlert("P1", "decision-stale-bar",
-			fmt.Sprintf("stalebar:%s:%d", at.id, at.callCount),
-			"Decision discarded — bar closed during AI call",
-			fmt.Sprintf("cycle %d: the AI call spanned a primary-bar close, so the decision was computed on a stale bar and was NOT acted on; the next cycle re-decides.", at.callCount))
-		at.saveDecision(record)
-		return nil
+		// Discard-burn 2.2 — the superseded set is no longer thrown away
+		// wholesale. Three classes:
+		//   wait/hold-only  → free, QUIET discard (no WARN, no alert — #51 E17
+		//                     showed these were pure noise, all supersessions
+		//                     were logged as losses).
+		//   entries-only    → mechanical re-eval against the fresh CLOSED bar;
+		//                     pass = execute, refuse = clean skip with reason.
+		//   contains close_* → legacy conservative discard, unchanged.
+		entries, closes := classifyDecisions(aiDecision.Decisions)
+		switch {
+		case closes > 0:
+			at.logWarnf("⏰ decision bar (close %d) is no longer the latest (close %d) — the AI call spanned a bar close; DISCARDING the decision (contains close actions).", decisionBarCloseMs, latest)
+			stampGuardrailSkip(record, "stale_bar_discarded")
+			telemetry.IncGateBlock(at.id, "stale_bar_discarded")
+			at.emitAlert("P1", "decision-stale-bar",
+				fmt.Sprintf("stalebar:%s:%d", at.id, at.callCount),
+				"Decision discarded — bar closed during AI call",
+				fmt.Sprintf("cycle %d: the AI call spanned a primary-bar close, so the decision was computed on a stale bar and was NOT acted on; the next cycle re-decides.", at.callCount))
+			at.saveDecision(record)
+			return nil
+		case entries == 0:
+			at.logInfof("ℹ️ superseded_wait — the AI call spanned a %s close but the decision was wait/hold-only; discarded quietly (free).", at.primaryTimeframe())
+			stampGuardrailSkip(record, "superseded_wait")
+			telemetry.IncGateBlock(at.id, "superseded_wait")
+			at.saveDecision(record)
+			return nil
+		default:
+			if v := at.reevalSupersededEntries(aiDecision.Decisions, ctx); !v.pass {
+				at.logWarnf("⛔ stale_reeval outcome=refused reason=%s — superseded entry did not survive the fresh %s bar; clean skip.", v.reason, at.primaryTimeframe())
+				stampGuardrailSkip(record, "stale_reeval_refused: "+v.reason)
+				telemetry.IncGateBlock(at.id, "stale_reeval_refused")
+				at.saveDecision(record)
+				return nil
+			}
+			at.logInfof("✅ stale_reeval outcome=pass — superseded entry re-validated against the fresh %s bar (stop untouched, drift < %.2f×ATR%d); executing.",
+				at.primaryTimeframe(), reevalDriftATRMult(), reevalATRPeriod)
+			record.ExecutionLog = append(record.ExecutionLog, "stale_reeval outcome=pass (superseded entry re-validated on the fresh bar)")
+		}
 	}
 
 	// 8. Sort decisions: ensure close positions first, then open positions (prevent position stacking overflow)
@@ -871,7 +1020,8 @@ func (at *AutoTrader) buildTradingContext() (*kernel.Context, error) {
 		CurrentTime:     kernel.FormatCT(time.Now()), // CT canonical (P0 timezone)
 		RuntimeMinutes:  int(time.Since(at.startTime).Minutes()),
 		CallCount:       at.callCount,
-		TraderID:        at.id, // B6: per-trader gate-block counters
+		TraderID:        at.id,                  // B6: per-trader gate-block counters
+		SnapshotMs:      time.Now().UnixMilli(), // B4 evaluates the feed at THIS instant, not post-call
 		BTCETHLeverage:  btcEthLeverage,
 		AltcoinLeverage: altcoinLeverage,
 		Account: kernel.AccountInfo{

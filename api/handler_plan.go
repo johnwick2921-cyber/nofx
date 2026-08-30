@@ -218,13 +218,23 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 	// bad overlay is skipped; the applied result is re-armored via ValidatePlanDoc
 	// and falls back to the base doc on failure (the plan-doc analog of B2 armor).
 	overlays, _ := s.store.Plan().ListOverlays(row.PlanID, row.Version)
+	var overlayErrStrings []string // A8: surfaced on the response below
 	if len(overlays) > 0 {
 		patches := make([]string, 0, len(overlays))
 		for _, ov := range overlays {
 			patches = append(patches, ov.Patch)
 		}
 		if base, mErr := json.Marshal(doc); mErr == nil {
-			final, _ := kernel.ApplyOverlayPatches(base, patches)
+			final, overlayErrs := kernel.ApplyOverlayPatches(base, patches)
+			// A8 (F14): a stored overlay that no longer applies must never be a
+			// silent no-op — the owner's edit visibly vanished. WARN (deduped
+			// by content via log_events) + expose on the response.
+			for _, oe := range overlayErrs {
+				if oe != nil {
+					overlayErrStrings = append(overlayErrStrings, oe.Error())
+					logger.Warnf("⚠️ plan overlay SKIPPED at read-merge (%s %s): %v — the owner edit in that patch is not in the rendered plan", row.PlanID, row.Session, oe)
+				}
+			}
 			var merged kernel.PlanDoc
 			if json.Unmarshal(final, &merged) == nil && kernel.ValidatePlanDocWithCaps(&merged, kernel.PlanHardMaxLevels, kernel.PlanHardMaxScenarios) == nil {
 				doc = merged // plan_final
@@ -288,6 +298,11 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 		// FE keeps its current fallback. The sandbox seeds it so all four states
 		// are visible. Replace the source when the executor computes it for real.
 		"scenario_status": scenarioStatusForLifecycle(s.scenarioStatus(traderID, row.PlanID), row.Lifecycle, doc),
+		// A1/A4 (fail-register wave): verdict basis (machine vs prose-anchor
+		// heuristic) + unevaluable scenario ids — the card renders them
+		// distinctly instead of dressing a heuristic as a machine verdict.
+		"scenario_meta":  s.scenarioMeta(traderID, row.PlanID),
+		"overlay_errors": overlayErrStrings,
 		// ITEM 4 — owner edits that could NOT be re-anchored onto this version.
 		// Never dropped silently: the card asks for review.
 		"uncarried_edits": s.uncarriedEdits(row.PlanID, row.Version),
@@ -956,6 +971,26 @@ func (s *Server) handlePlanReset(c *gin.Context) {
 		return
 	}
 	c.JSON(200, gin.H{"ok": true, "gate": gate})
+}
+
+// transitionState reads the G4 stand-down mirror for this plan version. Absent
+// (the normal case) → nil, and the card shows no chip.
+func (s *Server) transitionState(planID string, version int) *kernel.TransitionState {
+	if s.store == nil {
+		return nil
+	}
+	raw, _ := s.store.GetSystemConfig(store.TransitionKey(planID, version))
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	var out kernel.TransitionState
+	if json.Unmarshal([]byte(raw), &out) != nil {
+		return nil
+	}
+	if !out.Active {
+		return nil
+	}
+	return &out
 }
 
 // uncarriedEdits reads the review list a re-plan parked for this version.
@@ -2011,6 +2046,22 @@ func (s *Server) scenarioStatus(traderID, planID string) map[string]string {
 		return nil
 	}
 	var m map[string]string
+	if json.Unmarshal([]byte(raw), &m) != nil || len(m) == 0 {
+		return nil
+	}
+	return m
+}
+
+// scenarioMeta (A1/A4) reads the basis/unevaluable envelope; nil when absent.
+func (s *Server) scenarioMeta(traderID, planID string) map[string]any {
+	if s.store == nil {
+		return nil
+	}
+	raw, _ := s.store.GetSystemConfig(store.ScenarioMetaKey(traderID, planID))
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	var m map[string]any
 	if json.Unmarshal([]byte(raw), &m) != nil || len(m) == 0 {
 		return nil
 	}

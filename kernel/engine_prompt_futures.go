@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"nofx/market"
+	"nofx/store"
 )
 
 // BuildFuturesDecisionSystemPrompt builds the CME index-futures (MNQ) system
@@ -61,7 +62,9 @@ func (e *StrategyEngine) buildFuturesPrompt(symbol string, accountEquity float64
 	ps := e.config.PromptSections // the 4 editable prompt boxes (Change 4)
 	minConf := rc.MinConfidence
 	if minConf <= 0 {
-		minConf = 60
+		// 6.1 — the SAME constant the gate's clamp uses (store.SafeDefaultMinConfidence):
+		// prompt promise and gate threshold can no longer diverge for unset strategies.
+		minConf = store.SafeDefaultMinConfidence
 	}
 	minRR := rc.MinRiskRewardRatio
 	if minRR <= 0 {
@@ -217,7 +220,7 @@ func (e *StrategyEngine) buildFuturesPrompt(symbol string, accountEquity float64
 	sb.WriteString("</reasoning>\n\n")
 	sb.WriteString("<decision>\n")
 	sb.WriteString("```json\n[\n")
-	sb.WriteString("  {\"symbol\": \"" + sym + "\", \"action\": \"open_long\", \"leverage\": 1, \"position_size_usd\": 60000, \"stop_loss\": 21480.00, \"take_profit\": 21560.00, \"confidence\": 80}\n")
+	sb.WriteString("  {\"symbol\": \"" + sym + "\", \"action\": \"open_long\", \"leverage\": 1, \"position_size_usd\": 60000, \"stop_loss\": 21480.00, \"take_profit\": 21560.00, \"confidence\": 80, \"cited_scenario\": \"S1\"}\n")
 	sb.WriteString("]\n```\n")
 	sb.WriteString("</decision>\n\n")
 	sb.WriteString("When there is no good setup, output a single wait decision:\n")
@@ -231,6 +234,8 @@ func (e *StrategyEngine) buildFuturesPrompt(symbol string, accountEquity float64
 	sb.WriteString("- `leverage`: 1 (futures)\n")
 	sb.WriteString("- Required when opening: stop_loss, take_profit, confidence (absolute tick-aligned prices)\n")
 	sb.WriteString("- **IMPORTANT**: all numeric values must be concrete numbers, NOT formulas (e.g. `21480.00`, not `21500 - 20`).\n")
+	sb.WriteString("- Plan target chains are guidance — YOU set take_profit (D2 ruling); the R:R gate is the only TP constraint.\n")
+	sb.WriteString("- `cited_scenario`: REQUIRED on every open when a DAY PLAN is shown — the plan scenario id (\"S1\"…) you are trading, or \"off-plan\" for a valid non-plan setup. (A6/F12: this used to live only inside the plan block; a contract-literal model omitted it and every adherence grade silently degraded to D.)\n")
 	sb.WriteString("- The <decision> block MUST be a JSON array, even for a single decision.\n\n")
 
 	if e.config.CustomPrompt != "" {

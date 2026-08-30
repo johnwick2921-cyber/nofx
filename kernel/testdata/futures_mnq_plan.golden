@@ -26,7 +26,7 @@ Levels:
 Scenarios:
   S1 [A] sweep_reclaim long: sweep 21480 reclaim → 21500.00,21520.00 · invalid 2x5m<21470
 No-trade: first 5m · 12:00-13:30 CT lunch
-Plan dies if: acceptance above 21520
+Plan dies if: acceptance above 21520 (prose-only — AI-judged, no machine evaluation)
 Cite rule: your decision JSON MUST include "cited_scenario" = "S1"|"S2"|…|"off-plan".
 
 # Available Data
@@ -53,7 +53,7 @@ Your chain-of-thought analysis of the MNQ bars and indicators.
 <decision>
 ```json
 [
-  {"symbol": "MNQ", "action": "open_long", "leverage": 1, "position_size_usd": 60000, "stop_loss": 21480.00, "take_profit": 21560.00, "confidence": 80}
+  {"symbol": "MNQ", "action": "open_long", "leverage": 1, "position_size_usd": 60000, "stop_loss": 21480.00, "take_profit": 21560.00, "confidence": 80, "cited_scenario": "S1"}
 ]
 ```
 </decision>
@@ -72,6 +72,8 @@ When there is no good setup, output a single wait decision:
 - `leverage`: 1 (futures)
 - Required when opening: stop_loss, take_profit, confidence (absolute tick-aligned prices)
 - **IMPORTANT**: all numeric values must be concrete numbers, NOT formulas (e.g. `21480.00`, not `21500 - 20`).
+- Plan target chains are guidance — YOU set take_profit (D2 ruling); the R:R gate is the only TP constraint.
+- `cited_scenario`: REQUIRED on every open when a DAY PLAN is shown — the plan scenario id ("S1"…) you are trading, or "off-plan" for a valid non-plan setup. (A6/F12: this used to live only inside the plan block; a contract-literal model omitted it and every adherence grade silently degraded to D.)
 - The <decision> block MUST be a JSON array, even for a single decision.
 
 

@@ -72,7 +72,13 @@ const (
 // configures 1.5 still gets 1.5 — this changes the default, never a choice.
 const (
 	SafeDefaultMinRiskReward = 3.0
-	SafeDefaultMinConfidence = 65
+	// SafeDefaultMinConfidence — 6.1 (final-bundle 2026-08-19): ONE default,
+	// shared by the ClampLimits gate default AND the futures prompt default.
+	// Was 65 here vs a literal 60 in engine_prompt_futures.go — an UNSET
+	// strategy was told "open ≥60" and then judged at ≥65, silently discarding
+	// 60-64 setups (PR #54 finding). Aligned to 60 per owner ruling; an
+	// explicitly stored value (the active strategy stores 60) is untouched.
+	SafeDefaultMinConfidence = 60
 )
 
 // ClampLimits enforces product-level limits on strategy config to prevent token overflow.
@@ -742,6 +748,52 @@ type StrategyConfig struct {
 	// pointer emits no day_plan key, keeping every existing strategy
 	// byte-identical.
 	DayPlan *DayPlanConfig `json:"day_plan,omitempty"`
+
+	// Regime (G1, regime wave 2026-08-21) — the regime gates' Studio block.
+	// Additive + nil-pointer-safe: a nil block emits no regime key, keeping
+	// every existing strategy byte-identical. Pointer fields resolve shipped
+	// defaults in the accessors (HTFVetoEnabled: nil → ON — dispatch 1.3).
+	Regime *RegimeConfig `json:"regime,omitempty"`
+}
+
+// RegimeConfig holds the regime-wave Studio toggles (G1 HTF veto now; G4
+// transition stand-down joins later in the wave).
+type RegimeConfig struct {
+	// HTFVeto: refuse NEW entries opposing the CONFIRMED HTF trend (G2
+	// structure). nil → ON (shipped default per dispatch 1.3); false = today's
+	// pre-wave behavior.
+	HTFVeto *bool `json:"htf_veto,omitempty"`
+	// TransitionStanddown (G4): pause plan-direction entries while an
+	// unconfirmed counter-trend CHoCH/MSS is outstanding. nil → ON; false =
+	// today's pre-wave behavior.
+	TransitionStanddown *bool `json:"transition_standdown,omitempty"`
+	// LossStreakN (G6): N consecutive losing closes pause entries. nil → 4;
+	// 0 = OFF (absent=off armor convention; the shipped default lives here).
+	LossStreakN *int `json:"loss_streak_n,omitempty"`
+}
+
+// LossStreakNValue resolves the streak length (nil → 4; 0 → off).
+func (c *StrategyConfig) LossStreakNValue() int {
+	if c.Regime == nil || c.Regime.LossStreakN == nil {
+		return 4
+	}
+	return *c.Regime.LossStreakN
+}
+
+// HTFVetoEnabled resolves the shipped default (nil/absent → ON).
+func (c *StrategyConfig) HTFVetoEnabled() bool {
+	if c.Regime == nil || c.Regime.HTFVeto == nil {
+		return true
+	}
+	return *c.Regime.HTFVeto
+}
+
+// TransitionStanddownEnabled resolves the shipped default (nil/absent → ON).
+func (c *StrategyConfig) TransitionStanddownEnabled() bool {
+	if c.Regime == nil || c.Regime.TransitionStanddown == nil {
+		return true
+	}
+	return *c.Regime.TransitionStanddown
 }
 
 // AIStrategyConfig contains fields only used by AI trading strategies.
@@ -775,12 +827,14 @@ func (c StrategyConfig) MarshalJSON() ([]byte, error) {
 		GridConfig    *GridStrategyConfig    `json:"grid_config,omitempty"`
 		PublishConfig *PublishStrategyConfig `json:"publish_config,omitempty"`
 		DayPlan       *DayPlanConfig         `json:"day_plan,omitempty"`
+		Regime        *RegimeConfig          `json:"regime,omitempty"`
 	}{
 		StrategyType:  strategyType,
 		Language:      c.Language,
 		PromptVariant: strings.TrimSpace(c.PromptVariant),
 		PublishConfig: c.PublishConfig,
 		DayPlan:       c.DayPlan,
+		Regime:        c.Regime,
 	}
 
 	if strategyType == "grid_trading" {
@@ -809,6 +863,7 @@ func (c *StrategyConfig) UnmarshalJSON(data []byte) error {
 		GridConfig    *GridStrategyConfig    `json:"grid_config"`
 		PublishConfig *PublishStrategyConfig `json:"publish_config"`
 		DayPlan       *DayPlanConfig         `json:"day_plan"`
+		Regime        *RegimeConfig          `json:"regime"`
 
 		CoinSource     *CoinSourceConfig     `json:"coin_source"`
 		Indicators     *IndicatorConfig      `json:"indicators"`
@@ -828,6 +883,7 @@ func (c *StrategyConfig) UnmarshalJSON(data []byte) error {
 	c.GridConfig = raw.GridConfig
 	c.PublishConfig = raw.PublishConfig
 	c.DayPlan = raw.DayPlan
+	c.Regime = raw.Regime
 
 	if raw.AIConfig != nil {
 		c.CoinSource = raw.AIConfig.CoinSource
@@ -916,6 +972,42 @@ type DayPlanSessionOverride struct {
 	AcceptanceRule *string `json:"acceptance_rule,omitempty"`
 	MinGrade       *string `json:"min_grade,omitempty"` // A | B | C
 	MaxTrades      *int    `json:"max_trades,omitempty"`
+	// LastEntryOffsetMin: minutes BEFORE this session's end after which NEW
+	// entries are refused (P2 session-scope redesign, 2026-08-18). Replaces the
+	// old day-scoped 13:00 CT cutoff, which blocked every entry from 13:00 CT to
+	// midnight — i.e. permanently blocked Asia evenings. nil → default 15.
+	LastEntryOffsetMin *int `json:"last_entry_offset_min,omitempty"`
+	// EODFlatOffsetMin: minutes before this session's end at which any open
+	// position is force-flattened. Same day-scope disease as last-entry (the
+	// 14:45 CT literal would have flattened an Asia position on sight the moment
+	// the last-entry fix landed). nil → default 15.
+	EODFlatOffsetMin *int `json:"eod_flat_offset_min,omitempty"`
+}
+
+// DefaultLastEntryOffsetMin / DefaultEODFlatOffsetMin are the session-relative
+// defaults (minutes before session end). 15 preserves the NY flat feel
+// (15:00−15 = 14:45, exactly the old EODFlatCT default).
+const (
+	DefaultLastEntryOffsetMin = 15
+	DefaultEODFlatOffsetMin   = 15
+)
+
+// LastEntryOffsetFor resolves the per-session last-entry offset (minutes before
+// session end). Override → default. Config only — no caller may carry a literal.
+func (c *DayPlanConfig) LastEntryOffsetFor(session string) int {
+	if ov := c.SessionOverride(session); ov != nil && ov.LastEntryOffsetMin != nil && *ov.LastEntryOffsetMin >= 0 {
+		return *ov.LastEntryOffsetMin
+	}
+	return DefaultLastEntryOffsetMin
+}
+
+// EODFlatOffsetFor resolves the per-session EOD-flat offset (minutes before
+// session end). Override → default.
+func (c *DayPlanConfig) EODFlatOffsetFor(session string) int {
+	if ov := c.SessionOverride(session); ov != nil && ov.EODFlatOffsetMin != nil && *ov.EODFlatOffsetMin >= 0 {
+		return *ov.EODFlatOffsetMin
+	}
+	return DefaultEODFlatOffsetMin
 }
 
 // SessionOverride returns the named session's override block, or nil. Shared by
@@ -1043,6 +1135,13 @@ func ResetBaselineKey(tradeDate, session string) string {
 // reach another's card.
 func ScenarioStatusKey(traderID, planID string) string {
 	return "scenario_status:" + traderID + ":" + planID
+}
+
+// ScenarioMetaKey (A1/A4, fail-register wave) — sibling of ScenarioStatusKey:
+// {"basis":{"S1":"machine|heuristic"},"unevaluable":["S3"]} so the card can
+// render heuristic verdicts distinctly and name unevaluable scenarios.
+func ScenarioMetaKey(traderID, planID string) string {
+	return "scenario_meta:" + traderID + ":" + planID
 }
 
 // SetResetBaseline records the version the reset chain starts measuring from.
@@ -1330,16 +1429,20 @@ type RiskControlConfig struct {
 	// stay off until set). Not gated by the guardrails master switch.
 	ReentryCooldownMinutes int `json:"reentry_cooldown_minutes,omitempty"`
 
-	// Chunk 3 — max CONTRACTS per futures order (clamp). Unset → the 10-contract
+	// Chunk 3 — max CONTRACTS per futures order (clamp). Unset → the 2-contract
 	// default (the prior hidden const maxFuturesContracts). Toggle default ON.
-	MaxContractsPerOrder int   `json:"max_contracts_per_order,omitempty"`
-	MaxContractsEnabled  *bool `json:"max_contracts_enabled,omitempty"`
+	MaxContractsPerOrder int `json:"max_contracts_per_order,omitempty"`
+	// Deprecated (6.4 ruling B): the enabled toggle never had a reader — the
+	// contracts clamp is always-on venue safety. Field kept so old stored
+	// configs still parse; nothing reads it, the UI no longer writes it.
+	MaxContractsEnabled *bool `json:"max_contracts_enabled,omitempty"`
 
 	// Chunk 3 — futures NOTIONAL ceiling multiplier: max position notional =
 	// equity × this. Unset → 20 (the prior hidden const futuresMaxNotionalLeverage),
 	// now VISIBLE + EDITABLE. Toggle default ON (safety backstop).
 	MaxNotionalLeverage float64 `json:"max_notional_leverage,omitempty"`
-	NotionalCapEnabled  *bool   `json:"notional_cap_enabled,omitempty"`
+	// Deprecated (6.4 ruling B): same as MaxContractsEnabled — parse-only.
+	NotionalCapEnabled *bool `json:"notional_cap_enabled,omitempty"`
 
 	// Chunk 4 — time/news BLACKOUT window (daily, HH:MM in America/Chicago). When
 	// enabled, the bot makes no new decisions inside [start,end] CT (NT8-side SL/TP
@@ -1368,6 +1471,18 @@ type RiskControlConfig struct {
 	// resting bracket in place. New feature → default OFF; trigger defaults to 50.
 	BreakevenEnabled       *bool   `json:"breakeven_enabled,omitempty"`
 	BreakevenTriggerPoints float64 `json:"breakeven_trigger_points,omitempty"`
+
+	// Trailing profit (final-bundle Phase 3B, 2026-08-19; NT8 futures only).
+	// Mechanical, deterministic, zero AI: once ARMED (per trailing_arm), each 60s
+	// monitor beat computes trail = best_price_since_entry ∓ mult×ATR(period,5m)
+	// and ratchets the resting stop via the proven move_stop path — never
+	// backward, never below entry after breakeven fired. DEFAULT OFF.
+	TrailingEnabled   *bool   `json:"trailing_enabled,omitempty"`
+	TrailingATRMult   float64 `json:"trailing_atr_mult,omitempty"`   // default 2.0
+	TrailingATRPeriod int     `json:"trailing_atr_period,omitempty"` // default 14 (5m ATR)
+	// TrailingArm: "after_breakeven" (default) | "after_trigger_points" | "immediate".
+	TrailingArm       string  `json:"trailing_arm,omitempty"`
+	TrailingArmPoints float64 `json:"trailing_arm_points,omitempty"` // used iff after_trigger_points
 }
 
 // NewStrategyStore creates a new StrategyStore

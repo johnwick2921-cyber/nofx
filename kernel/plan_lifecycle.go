@@ -3,6 +3,7 @@ package kernel
 import (
 	"fmt"
 	"math"
+	"strconv"
 
 	"nofx/market"
 )
@@ -187,8 +188,15 @@ func levelTouched(bars []market.Kline, level float64, now int64) bool {
 // counters understand. "15m_close" → one 15-minute close; everything else →
 // the default "2x5m" (two consecutive 5-minute closes).
 func conditionRule(c PlanCondition) string {
-	if c.Rule == "15m_close" {
+	switch c.Rule {
+	case "15m_close":
 		return "15m-close"
+	case "5m_close":
+		// A2 (fail-register wave, 2026-08-20): 5m_close used to silently map to
+		// "2x5m" — a plan authored to die on ONE 5m close required TWO, and the
+		// death log printed the author's rule next to the count it did not use
+		// (anatomy FAIL F4). It now evaluates AS AUTHORED: one 5m close.
+		return "5m-close"
 	}
 	return "2x5m"
 }
@@ -254,4 +262,65 @@ func orZero(c *PlanCondition) PlanCondition {
 		return PlanCondition{}
 	}
 	return *c
+}
+
+// PlanDeathOrFlipSinceFresh is PlanDeathOrFlipSince plus the G7 staleness
+// gate: a condition whose rule-TF series is provably stale is SKIPPED this
+// cycle (it neither fires nor clears — the next fresh cycle judges it) and is
+// reported in skipped for the flip_eval_skipped log. The legacy
+// all-levels-consumed fallback is guarded the same way. Semantics on fresh
+// bars are byte-identical to PlanDeathOrFlipSince.
+func PlanDeathOrFlipSinceFresh(doc PlanDoc, bars []market.Kline, rule string, sinceMs, now int64) (killer string, fired bool, skipped []string) {
+	conds := []struct {
+		name string
+		c    PlanCondition
+	}{
+		{"death", orZero(doc.DeathStructured)},
+		{"flip", orZero(doc.FlipStructured)},
+	}
+	for _, cc := range conds {
+		if cc.c.Price <= 0 {
+			continue
+		}
+		if allowed, age, why := FlipEvalAllowed(bars, cc.c.Rule, now); !allowed {
+			skipped = append(skipped, cc.name+"="+why+" (age "+ageString(age)+")")
+			continue
+		}
+		if fired, reason := PlanConditionFiredSince(cc.c, bars, sinceMs, now); fired {
+			// G3 (regime wave 2026-08-21) — FLIP HYSTERESIS: a freshly-written
+			// plan cannot flip back within FLIP_MIN_HOLD_MIN of its birth.
+			// Death is evaluated FIRST above, so a breached death line always
+			// wins during the hold — the hold only suppresses the flip leg.
+			if cc.name == "flip" {
+				if age := now - sinceMs; sinceMs > 0 && age < FlipMinHoldMin()*60_000 {
+					skipped = append(skipped, "flip=hold (plan age "+ageString(age)+" < "+strconv.FormatInt(FlipMinHoldMin(), 10)+"min)")
+					continue
+				}
+			}
+			if cc.name == "death" {
+				return "death-condition: " + reason, true, skipped
+			}
+			to := doc.FlipStructured.FlipTo
+			if to == "" {
+				to = "the other side"
+			}
+			return "flip-condition: " + reason + " → bias " + to, true, skipped
+		}
+	}
+	if allowed, age, why := FlipEvalAllowed(bars, rule, now); allowed {
+		if PlanIsDeadSince(doc, bars, rule, sinceMs, now) {
+			return "all levels consumed", true, skipped
+		}
+	} else {
+		skipped = append(skipped, "legacy-consumption="+why+" (age "+ageString(age)+")")
+	}
+	return "", false, skipped
+}
+
+// ageString renders a millisecond age for the skip log ("stale_bars (age 125s)").
+func ageString(ms int64) string {
+	if ms <= 0 {
+		return "0s"
+	}
+	return strconv.FormatInt(ms/1000, 10) + "s"
 }

@@ -71,7 +71,7 @@ func (at *AutoTrader) recordLevelState() {
 
 		// Identity: create fresh (grade→initial freshness) or preserve prior state.
 		if err := ls.EnsureLevel(&store.LevelStateDB{
-			TraderID:   at.id, // P0-cleanup — trader-scoped identity
+			TraderID:  at.id, // P0-cleanup — trader-scoped identity
 			Symbol:    symbol,
 			LevelType: typ,
 			BinIndex:  bin,
@@ -199,10 +199,33 @@ func (at *AutoTrader) recordScenarioState() {
 	if err != nil {
 		return
 	}
-	key := store.ScenarioStatusKey(at.id, at.store.Plan().ResolvePlanID(plannerTradeDateCT(now), plan.Session, at.id))
+	resolvedPlanID := at.store.Plan().ResolvePlanID(plannerTradeDateCT(now), plan.Session, at.id)
+	key := store.ScenarioStatusKey(at.id, resolvedPlanID)
 	if err := at.store.SetSystemConfig(key, string(blob)); err != nil {
 		at.logWarnf("🎯 scenario-state write failed for %s: %v", key, err)
 		return
+	}
+	// A1/A4 (fail-register wave) — persist the verdict BASIS (machine vs
+	// prose-anchor heuristic) and the unevaluable list, so the card renders
+	// honestly instead of dressing a heuristic as a machine verdict.
+	basis := map[string]string{}
+	var unevaluable []string
+	for _, e := range evals {
+		if e.HasAnchor {
+			basis[e.ID] = e.Basis
+		} else {
+			unevaluable = append(unevaluable, e.ID)
+		}
+	}
+	// C1: per-scenario confirm verdicts (MET / NOT MET) for the card chips.
+	confirms := map[string]kernel.ConfirmVerdict{}
+	for _, sc := range plan.Doc.Scenarios {
+		if sc.Confirm != nil {
+			confirms[sc.ID] = kernel.EvaluateConfirm(*sc.Confirm, bars, plan.BirthMs, now.UnixMilli())
+		}
+	}
+	if metaBlob, mErr := json.Marshal(map[string]any{"basis": basis, "unevaluable": unevaluable, "confirm": confirms}); mErr == nil {
+		_ = at.store.SetSystemConfig(store.ScenarioMetaKey(at.id, resolvedPlanID), string(metaBlob))
 	}
 	if at.scenarioStateLog != string(blob) {
 		at.scenarioStateLog = string(blob)
@@ -210,7 +233,9 @@ func (at *AutoTrader) recordScenarioState() {
 			if e.HasAnchor {
 				at.logInfof("🎯 scenario %s → %s @ %.2f (%s)", e.ID, e.Status, e.Anchor, e.Reason)
 			} else {
-				at.logInfof("🎯 scenario %s → (no status) %s", e.ID, e.Reason)
+				// A4: unevaluable is owner-relevant — WARN so it reaches the
+				// log_events sink + dashboard, not just the file log.
+				at.logWarnf("🎯 scenario %s UNEVALUABLE — %s (instruction/trigger has no price that snaps to a plan level ±2pts)", e.ID, e.Reason)
 			}
 		}
 	}

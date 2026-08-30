@@ -136,7 +136,13 @@ func RenderPlanBlock(doc PlanDoc, session string) string {
 	if len(doc.NoTrade) > 0 {
 		b.WriteString("No-trade: " + strings.Join(doc.NoTrade, " · ") + "\n")
 	}
-	b.WriteString("Plan dies if: " + doc.DeathCondition + "\n")
+	deathSuffix := ""
+	if doc.DeathStructured == nil {
+		// A3 (F5): no structured object → nothing machine-evaluates this line;
+		// say so, so nobody (owner or model) assumes machine enforcement.
+		deathSuffix = " (prose-only — AI-judged, no machine evaluation)"
+	}
+	b.WriteString("Plan dies if: " + doc.DeathCondition + deathSuffix + "\n")
 	b.WriteString(`Cite rule: your decision JSON MUST include "cited_scenario" = "S1"|"S2"|…|"off-plan".`)
 	return b.String()
 }
@@ -156,7 +162,7 @@ func RenderPlanStatus(traderID, symbol string, doc PlanDoc, bars []market.Kline,
 	if hidden := len(doc.Levels) - len(active); hidden > 0 {
 		fmt.Fprintf(&b, "(%d level(s) outside the %.1f×dATR activation window — re-arm when price returns)\n", hidden, ActivationWindowK)
 	}
-		fresh := levelFreshnessFn(traderID, symbol) // W11b — persisted cross-session state (nil → none)
+	fresh := levelFreshnessFn(traderID, symbol) // W11b — persisted cross-session state (nil → none)
 	for _, l := range active {
 		dir := DirAbove
 		if l.Price < price {
@@ -219,6 +225,51 @@ type PlanCitationResult struct {
 // plan: empty/"off-plan"/unknown-id → off-plan; a known scenario → matched iff
 // the action's direction aligns with the scenario's. Advisory only — it never
 // gates the trade.
+// CitationStructure (B3/F6, fail-register wave) judges the ENTRY against the
+// cited scenario's stated structure: entry inside the scenario anchor's
+// activation band (1.5×dATR), SL on the protective side of the anchor, TP
+// direction-correct toward the target chain. "" (unknown/no anchor) is treated
+// as ok — fail-open, forward-only grading.
+func CitationStructure(action, cited string, doc PlanDoc, entry, sl, tp, dATR float64) string {
+	c := strings.TrimSpace(cited)
+	if c == "" || strings.EqualFold(c, "off-plan") || entry <= 0 || dATR <= 0 {
+		return ""
+	}
+	for _, s := range doc.Scenarios {
+		if !strings.EqualFold(s.ID, c) {
+			continue
+		}
+		anchor, ok := ScenarioAnchor(s, doc.Levels)
+		if !ok {
+			return "" // unevaluable scenario — no structural verdict
+		}
+		if absF(entry-anchor) > ActivationWindowK*dATR {
+			return "off_band"
+		}
+		long := action == "open_long"
+		if sl > 0 {
+			// protective side: a long's stop below the anchor zone, a short's above.
+			if long && sl >= anchor+ActivationWindowK*dATR {
+				return "struct"
+			}
+			if !long && sl <= anchor-ActivationWindowK*dATR {
+				return "struct"
+			}
+		}
+		if tp > 0 && len(s.TargetChain) > 0 {
+			// TP must point the trade's way relative to entry.
+			if long && tp <= entry {
+				return "struct"
+			}
+			if !long && tp >= entry {
+				return "struct"
+			}
+		}
+		return "ok"
+	}
+	return ""
+}
+
 func ClassifyCitation(action, cited string, doc PlanDoc) PlanCitationResult {
 	c := strings.TrimSpace(cited)
 	if c == "" || strings.EqualFold(c, "off-plan") || strings.EqualFold(c, "offplan") {
@@ -258,4 +309,20 @@ func maxInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// B3 (F6) — the last computed session dATR per trader, so the citation
+// structural check (which runs trader-side after the AI call) can band-judge
+// without re-assembling levels. Written at the plan-injection site.
+var planDATR sync.Map // traderID -> float64
+
+func SetPlanDATR(traderID string, dATR float64) { planDATR.Store(traderID, dATR) }
+
+func PlanDATRFor(traderID string) float64 {
+	if v, ok := planDATR.Load(traderID); ok {
+		if f, ok2 := v.(float64); ok2 {
+			return f
+		}
+	}
+	return 0
 }

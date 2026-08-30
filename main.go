@@ -17,10 +17,12 @@ import (
 	"nofx/store"
 	"nofx/telegram"
 	"nofx/telemetry"
+	"nofx/trader"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
@@ -84,6 +86,33 @@ func main() {
 		logger.Fatalf("❌ Failed to initialize database: %v", err)
 	}
 	defer st.Close()
+
+	// P6 (ledger-close 2026-08-19) — WARN+ERROR→DB log shipping. Attached
+	// AFTER the store exists (the logger boots first); non-blocking by the
+	// LogEventStore contract (select-default drop + single writer + daily
+	// LOG_DB_RETENTION_DAYS prune).
+	logger.AttachDBSink(func(tsMs int64, level, component, traderID, message, fieldsJSON string) {
+		st.LogEvent().Enqueue(store.LogEventDB{
+			TsUTC: tsMs, Level: level, Component: component,
+			TraderID: traderID, Message: message, FieldsJSON: fieldsJSON,
+		})
+	})
+	logger.Infof("🧾 log-shipping active: WARN+ → log_events (retention %s days; async, drop-on-overload)",
+		func() string {
+			if v := os.Getenv("LOG_DB_RETENTION_DAYS"); v != "" {
+				return v
+			}
+			return "30"
+		}())
+
+	// 6.7 (final-bundle) — one-time entry_confidence backfill from decision
+	// records (flag-guarded, WHERE-scoped, additive; feeds the watcher scoring
+	// table's history).
+	st.BackfillEntryConfidence()
+
+	// P0 pnl-record-integrity (2026-08-20) — one-time additive correction of
+	// the 37 wrong recorded-PnL rows (originals preserved; readers COALESCE).
+	st.CorrectHistoricalPnL()
 
 	// Initialize installation ID for experience improvement (anonymous statistics)
 	initInstallationID(st)
@@ -197,6 +226,19 @@ func main() {
 	} else {
 		logger.Infof("%s", integrity.Line())
 	}
+	// PHASE 3.5 — clock health at boot (log-only; repeated at each session roll
+	// by the trader loop). At boot the NT8 wire may not be up yet — the line
+	// says "none" honestly rather than waiting.
+	kernel.LogClockHealth("boot", "MNQ")
+	// REGIME WAVE (Cutover 2, 2026-08-21) — one boot line per regime knob:
+	// value + source, so the boot block self-documents the wave's enforcement.
+	kernel.LogRegimeBootLedger()
+	// P1.4 (ledger-close 2026-08-19) — clock-guard block: live host-RTC drift,
+	// guard-timer freshness, last resync/check state. Log-only, best-effort.
+	kernel.LogClockGuardBoot()
+	// P4 (ledger-close 2026-08-19) — half-days boot line: loaded count + the
+	// next upcoming early close. Fail-open on a bad file.
+	trader.LogHalfDaysBoot(time.Now())
 
 	// SANDBOX: a demo instance has no NT8 wire, so install a deterministic
 	// synthetic bar feed — without it level_facts/price/chart/armor are all empty.

@@ -23,6 +23,7 @@ import { BulkAddSheet } from './BulkAddSheet'
 import { AskPlannerPanel } from './AskPlannerPanel'
 import { RealignPanel, RealignButton, type RealignState } from './RealignPanel'
 import { api } from '../../lib/api'
+import { guardedCall } from '../../lib/api/guarded'
 import type { RealignChange } from '../../lib/api/plan'
 
 interface Props {
@@ -124,7 +125,16 @@ export function SessionPlanCard({
   const runRealign = async (change: RealignChange, manual = false) => {
     if (!traderId) return
     setRealign({ phase: 'reviewing' })
-    const res = await api.realignPlan(traderId, change, symbol, manual)
+    // Stuck-dialog class (reset hotfix): the realign is planner-backed (long);
+    // a thrown timeout used to strand the phase at 'reviewing' forever.
+    const g = await guardedCall(() =>
+      api.realignPlan(traderId, change, symbol, manual)
+    )
+    if (!g.ok) {
+      setRealign({ phase: 'failed' })
+      return
+    }
+    const res = g.value
     switch (res.status) {
       case 'proposal':
         setRealign({ phase: 'proposal', res })
@@ -668,6 +678,31 @@ export function SessionPlanCard({
         </div>
       )}
 
+      {/* G4 (regime wave) — transition stand-down chip: plan-direction entries
+          are paused while an unconfirmed counter-trend CHoCH/MSS is open. */}
+      {!!plan.transition?.active && (
+        <div
+          data-testid="transition-chip"
+          className="flex flex-col gap-1 px-2.5 py-2"
+          style={{
+            background: 'var(--vl-gold-dim)',
+            border: '1px solid var(--vl-gold-line)',
+            borderRadius: 'var(--vl-radius-inner)',
+            fontFamily: 'var(--vl-font-ui)',
+          }}
+        >
+          <span
+            className="text-[10px] font-bold uppercase tracking-wider"
+            style={{ color: 'var(--vl-gold)' }}
+          >
+            ⏸ TRANSITION — awaiting confirmation
+          </span>
+          <span className="text-[11px]" style={{ color: 'var(--vl-muted)' }}>
+            {plan.transition.detail}
+          </span>
+        </div>
+      )}
+
       {/* bias */}
       <BiasBlock bias={doc.bias} language={language} />
 
@@ -761,6 +796,16 @@ export function SessionPlanCard({
         <ScenarioList
           scenarios={doc.scenarios}
           statusMap={plan.scenario_status}
+          meta={
+            (
+              plan as {
+                scenario_meta?: {
+                  basis?: Record<string, string>
+                  unevaluable?: string[]
+                }
+              }
+            ).scenario_meta
+          }
           language={language}
         />
       )}

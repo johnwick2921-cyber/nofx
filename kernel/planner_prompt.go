@@ -30,12 +30,15 @@ type PlannerInput struct {
 	Regime           RegimeBlock
 	Levels           []ScoredLevel // Go-ranked, graded (P1.5) — the decision-critical block
 	StructureSummary []string      // one line per timeframe
-	OvernightStory   string
-	PriorDayStory    string
-	Calendar         []PlannerCalendarEvent // session-sliced (P1.8)
-	DigestChain      []string               // session digests + dailies + one-liners
-	OwnerNote        string
-	Warming          string // non-empty → cold-start / WARMING annotation
+	// G5 (regime wave 2026-08-21) — levels already CONSUMED at read time (role-
+	// flipped), listed so the planner works around them. Advisory.
+	ConsumedLevels []string
+	OvernightStory string
+	PriorDayStory  string
+	Calendar       []PlannerCalendarEvent // session-sliced (P1.8)
+	DigestChain    []string               // session digests + dailies + one-liners
+	OwnerNote      string
+	Warming        string // non-empty → cold-start / WARMING annotation
 	// W11 — the executor's indicator mirror (per-TF EMA/RSI/ATR/BOLL/MACD, driven by
 	// ai_config toggles), rendered once by RenderPlannerIndicatorBlock. Empty → the
 	// block is omitted (disabled state = byte-identical prompt). AIConfigHash is the
@@ -81,6 +84,17 @@ func BuildPlannerPrompt(in PlannerInput) string {
 
 	// Ranked level table — the decision-critical block, high-salience.
 	b.WriteString("## Ranked levels (Go-graded; you never re-sort)\n")
+
+	// G5 (regime wave 2026-08-21) — consumed levels listed explicitly: the
+	// planner must plan AROUND them (a re-test is a NEW setup, never a fresh
+	// tag). Advisory — Go facts, AI judgment.
+	if len(in.ConsumedLevels) > 0 {
+		b.WriteString("## Consumed levels (already role-flipped — plan AROUND them; a re-test is a NEW setup)\n")
+		for _, s := range in.ConsumedLevels {
+			b.WriteString("- " + s + "\n")
+		}
+		b.WriteString("\n")
+	}
 	if len(in.Levels) == 0 {
 		b.WriteString("(none in range — warming forward)\n")
 	} else {
@@ -155,7 +169,7 @@ func plannerOutputContract(maxLevels, maxScenarios int) string {
 		`  "reasoning": "<your read: what the auction is doing and why this plan — ≤200 words, decision-focused>",` + "\n" +
 		`  "bias": {"direction": "long|short|neutral", "conviction": "high|medium|low", "flip_condition": "<explicit>"},` + "\n" +
 		fmt.Sprintf(`  "levels": [{"price": <n>, "label": "<PDH|ONH|nPOC…>", "grade": "A|B|C", "instruction": "<verb>"}],  // max %d, MUST include ≥3 below AND ≥3 above the current price`, maxL) + "\n" +
-		fmt.Sprintf(`  "scenarios": [{"id": "S1", "trigger": "<setup>", "condition": "reclaim|hold|sweep_reclaim|reject|acceptance|breakout_retest", "direction": "long|short", "target_chain": [<n>,…], "invalid": "<line>", "quality": "A+|A|B"}],  // 1..%d`, maxS) + "\n" +
+		fmt.Sprintf(`  "scenarios": [{"id": "S1", "trigger": "<setup>", "condition": "reclaim|hold|sweep_reclaim|reject|acceptance|breakout_retest", "direction": "long|short", "target_chain": [<n>,…], "invalid": "<line>", "quality": "A+|A|B", "confirm": {"rule": "touch|1x5m_close|2x5m_close|15m_close", "ref_price": <n>, "side": "above|below"}}],  // 1..%d — confirm{} is REQUIRED per scenario`, maxS) + "\n" +
 		`  "no_trade": ["first 5m (CT)", "12:00-13:30 CT lunch", "<calendar blackouts>"],` + "\n" +
 		`  "death_condition": "<the single line that invalidates this whole plan>",` + "\n" +
 		`  "death": {"price": <level>, "side": "below|above", "rule": "2x5m|15m_close|5m_close"},` + "\n" +
@@ -166,6 +180,8 @@ func plannerOutputContract(maxLevels, maxScenarios int) string {
 		"The scenario MIX must follow the regime + day_type: a trend-down day gets breakdown/pullback-short plays, a trend-up day the reverse, balance days get two-sided plays — do NOT default to 2 longs + 1 rally-rejection short on every day. " +
 		"If price sits BELOW PDL you MUST write a continuation short; ABOVE PDH, a continuation long. " +
 		"death.flip objects are MACHINE-EVALUATED — choose levels from your level list and a rule; they must match the prose lines. " +
+		"Every scenario's confirm{} is MACHINE-EVALUATED the same way: rule + ref_price + side, and ref_price MUST equal a number written in that scenario's trigger/invalid prose. " +
+		"target_chain is GUIDANCE for the executor AI (which sets the actual take_profit) — it is validated for reachability at write time but never enforced at execution (D2 ruling). " +
 		"Respect the no-trade windows. If you cannot form a credible plan, say so in reasoning and output a neutral/no-trade plan.\n"
 }
 

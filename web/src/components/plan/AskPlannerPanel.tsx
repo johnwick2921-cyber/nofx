@@ -7,6 +7,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { toast } from 'sonner'
+import { PlanErrorBoundary } from './PlanErrorBoundary'
+import { guardedCall } from '../../lib/api/guarded'
 import type { Language } from '../../i18n/translations'
 import { tp } from '../../i18n/plan-translations'
 import { api } from '../../lib/api'
@@ -124,11 +126,14 @@ function PlannerReply({
         : tp('vConcede', language)
 
   const apply = async () => {
+    if (busy) return
     setBusy(true)
-    const res = await api.applyAsk(traderId, m.id, symbol)
+    const g = await guardedCall(() => api.applyAsk(traderId, m.id, symbol))
     setBusy(false)
-    if (!res.ok) {
-      toast.error(tp('saveFailed', language), { description: res.error })
+    if (!g.ok || !g.value.ok) {
+      toast.error(tp('saveFailed', language), {
+        description: g.ok ? g.value.error : g.error,
+      })
       return
     }
     setOutcome('applied')
@@ -137,11 +142,14 @@ function PlannerReply({
   }
 
   const decline = async () => {
+    if (busy) return
     setBusy(true)
-    const res = await api.declineAsk(traderId, m.id)
+    const g = await guardedCall(() => api.declineAsk(traderId, m.id))
     setBusy(false)
-    if (!res.ok) {
-      toast.error(tp('saveFailed', language), { description: res.error })
+    if (!g.ok || !g.value.ok) {
+      toast.error(tp('saveFailed', language), {
+        description: g.ok ? g.value.error : g.error,
+      })
       return // stay undecided rather than claim an outcome we did not persist
     }
     setOutcome('declined')
@@ -336,17 +344,33 @@ export function AskPlannerPanel({
 
   if (!open) return null
 
+  // Stuck-send fix (final-bundle Phase 5, 2026-08-19): the await used to sit
+  // between setBusy(true) and setBusy(false) with NO try/catch — any throw
+  // (the 30s axios timeout vs the planner's 300s budget was the live trigger)
+  // latched busy=true forever and the cleared input lost the question; only F5
+  // recovered. Now: busy ALWAYS resets (finally), any failure restores the
+  // input + toasts the reason, and the ask rides a 320s client budget.
   const send = async (q: string) => {
     const question = q.trim()
     if (!question || busy) return
     setBusy(true)
     setInput('')
-    const res = await api.askPlanner(traderId, question, symbol)
-    setBusy(false)
-    if (!res.ok) {
-      toast.error(tp('saveFailed', language), { description: res.error })
+    try {
+      // Shared never-latch pattern (guardedCall — reset-dialog hotfix, twin rule).
+      const g = await guardedCall(() =>
+        api.askPlanner(traderId, question, symbol)
+      )
+      const err = !g.ok ? g.error : g.value.ok ? null : g.value.error
+      if (err !== null) {
+        toast.error(tp('saveFailed', language), { description: err })
+        setInput(question) // the question is never lost
+      }
+      await refresh().catch(() => {
+        /* thread refresh failure is non-fatal — the reply lands on the next open */
+      })
+    } finally {
+      setBusy(false) // the button can never latch disabled again
     }
-    await refresh()
   }
 
   const shellStyle: React.CSSProperties = wide
@@ -437,39 +461,41 @@ export function AskPlannerPanel({
           className="flex-1 flex flex-col gap-2.5 px-3 py-3"
           style={{ overflowY: 'auto', minHeight: 200 }}
         >
-          {thread.length === 0 && (
-            <div
-              className="text-[11px] text-center py-6"
-              style={{ color: 'var(--vl-faint)' }}
-            >
-              {tp('askPlaceholder', language)}
-            </div>
-          )}
-          {thread.map((m) =>
-            m.role === 'owner' ? (
+          <PlanErrorBoundary>
+            {thread.length === 0 && (
               <div
-                key={m.id}
-                className="self-end max-w-[85%] text-[12px] px-3 py-2"
-                style={{
-                  background: 'var(--vl-gold-dim)',
-                  border: '1px solid var(--vl-gold-line)',
-                  borderRadius: '12px 12px 3px 12px',
-                  color: 'var(--vl-ivory)',
-                }}
+                className="text-[11px] text-center py-6"
+                style={{ color: 'var(--vl-faint)' }}
               >
-                {m.content}
+                {tp('askPlaceholder', language)}
               </div>
-            ) : (
-              <PlannerReply
-                key={m.id}
-                m={m}
-                traderId={traderId}
-                symbol={symbol}
-                language={language}
-                onApplied={onApplied}
-              />
-            )
-          )}
+            )}
+            {thread.map((m) =>
+              m.role === 'owner' ? (
+                <div
+                  key={m.id}
+                  className="self-end max-w-[85%] text-[12px] px-3 py-2"
+                  style={{
+                    background: 'var(--vl-gold-dim)',
+                    border: '1px solid var(--vl-gold-line)',
+                    borderRadius: '12px 12px 3px 12px',
+                    color: 'var(--vl-ivory)',
+                  }}
+                >
+                  {m.content}
+                </div>
+              ) : (
+                <PlannerReply
+                  key={m.id}
+                  m={m}
+                  traderId={traderId}
+                  symbol={symbol}
+                  language={language}
+                  onApplied={onApplied}
+                />
+              )
+            )}
+          </PlanErrorBoundary>
           {busy && (
             <div
               className="self-start text-[11px] px-2"

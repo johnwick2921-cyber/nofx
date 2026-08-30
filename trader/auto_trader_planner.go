@@ -5,6 +5,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"nofx/logger"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -209,6 +212,9 @@ func (at *AutoTrader) maybeRunSessionReadsAt(now time.Time) {
 		if existing.Lifecycle != "active" {
 			continue // no_trade / died → done for the session
 		}
+		// G4.6 (addendum, regime wave) — a fresh structure MSS on the plan's
+		// bias TF is the FOURTH planner wake-up (one per MSS event, deduped).
+		at.maybeWakePlannerOnMSS(s.Name, tradeDate, existing)
 		// P3.6 — RE-PLAN ON DEATH (cap replan_cap/session → NO-TRADE).
 		if detail, dead := at.describeActivePlanDeath(existing); dead {
 			replanCap := at.replanCapFor(s.Name) // W9 — per-session override wins
@@ -386,38 +392,9 @@ func (at *AutoTrader) storeUncarriedEdits(planID string, version int, items []ke
 	_ = at.store.SetSystemConfig(store.UncarriedEditsKey(planID, version), string(blob))
 }
 
-// activePlanIsDead reports whether the stored plan's thesis is spent (all its
-// levels accepted through) per the P0.4 evaluator over the live bars.
-func (at *AutoTrader) activePlanIsDead(row *store.PlanDB) bool {
-	if market.FuturesBarsProvider == nil {
-		return false
-	}
-	var doc kernel.PlanDoc
-	if json.Unmarshal([]byte(row.Doc), &doc) != nil {
-		return false
-	}
-	bars := market.FuturesBarsProvider(at.futuresSymbol(), kernel.AISVPBarInterval, kernel.AISVPBarCount)
-	if len(bars) == 0 {
-		return false
-	}
-	now := time.Now()
-	// Use the rule of the session whose plan this IS, not whichever session happens
-	// to be live at the check. activeSessionName returns "" outside every window,
-	// which silently fell back to the strategy-level rule — benign while every
-	// session shares "2x5m", but the moment one sets "15m-close" (need=1) the wrong
-	// rulebook would decide whether that session's plan lives or dies.
-	rule := at.acceptanceRuleFor(row.Session) // W15.B — per-session
-	// Judge the plan ONLY on what happened AFTER it was written. Feeding the full
-	// 2000-bar cache asked "was this level ever traded through in the last ~33
-	// hours", which is true of nearly any level once real history exists — so a
-	// brand-new plan was born dead and burned the whole re-plan budget in minutes
-	// (2026-08-16:ASIA v1..v5, then a levels:null NO-TRADE plan).
-	sinceMs := row.CreatedAt.UnixMilli()
-	if row.CreatedAt.IsZero() {
-		sinceMs = 0 // unknown write time → fall back to the old whole-window behavior
-	}
-	return kernel.PlanIsDeadSince(doc, bars, rule, sinceMs, now.UnixMilli())
-}
+// (A7/F13, fail-register wave) activePlanIsDead removed — a second, WEAKER
+// death definition with zero production callers; the live path is
+// describeActivePlanDeath (structured death → flip → legacy consumption).
 
 // describeActivePlanDeath is activePlanIsDead plus the EVIDENCE. Same window,
 // same timeframe, same verdict — the explanation is derived from the decision
@@ -444,9 +421,18 @@ func (at *AutoTrader) describeActivePlanDeath(row *store.PlanDB) (kernel.PlanDea
 	// plan's death text fired at ~09:00 and nothing re-planned). The structured
 	// predicate runs first; the legacy all-levels-consumed check stays as the
 	// fallback for old stored plans.
-	killer, fired := kernel.PlanDeathOrFlipSince(doc, bars, at.acceptanceRuleFor(row.Session), sinceMs, now.UnixMilli())
+	// G7 (2026-08-21) — freshness-gated: a condition whose rule-TF series is
+	// provably stale is SKIPPED (logged flip_eval_skipped), never guessed. A
+	// fully-stale cycle defers the whole death check to the next fresh one.
+	killer, fired, skipped := kernel.PlanDeathOrFlipSinceFresh(doc, bars, at.acceptanceRuleFor(row.Session), sinceMs, now.UnixMilli())
+	for _, s := range skipped {
+		at.logWarnf("flip_eval_skipped plan=%s v%d %s", row.PlanID, row.Version, s)
+	}
 	if fired {
 		return kernel.PlanDeathDetail{Killer: killer, Price: priceOf(bars)}, true
+	}
+	if len(skipped) > 0 {
+		return kernel.PlanDeathDetail{}, false
 	}
 	return kernel.DescribePlanDeath(doc, bars, at.acceptanceRuleFor(row.Session), sinceMs, now.UnixMilli())
 }
@@ -570,6 +556,12 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimed(session, tradeDate, trigg
 		return false
 	}
 	defer releasePlannerRead(key)
+	// U1 3.2 — never call the LLM on an empty/stale bar window (the 08-19
+	// outage produced 0-scenario fail-closed stubs this way). No plan row is
+	// written and no budget consumed; the read window retries next cycle.
+	if !at.plannerPreflight(session, tradeDate) {
+		return false
+	}
 	client, modelID := at.resolvePlannerClient()
 	if client == nil {
 		at.logErrorf("🗓️ planner: no client resolved for %s %s", tradeDate, session)
@@ -648,6 +640,12 @@ func (at *AutoTrader) runPlannerReadCoreWithFacts(session, tradeDate, triggerOve
 			lastErr = perr
 			continue
 		}
+		// G5 (regime wave 2026-08-21) — at plan write, scenarios whose trigger
+		// level is CONSUMED are demoted (quality capped C + badge). Advisory —
+		// the info is what was missing, never a gate.
+		if n := at.demoteConsumedScenarios(session, d); n > 0 {
+			at.logWarnf("🗓️ G5: %d scenario(s) demoted to C — trigger level consumed at %s write.", n, session)
+		}
 		// P0.1/P0.2 (2026-08-19) — facts rules: both-side levels, continuation
 		// scenario on a gap out of the prior range, no duplicate seats, reachable
 		// targets. A plan that fails these is NOT shipped (retry → fail-closed).
@@ -657,6 +655,34 @@ func (at *AutoTrader) runPlannerReadCoreWithFacts(session, tradeDate, triggerOve
 		}
 		doc = d
 		break
+	}
+	// A3 (F5, fail-register wave): a plan whose death/flip is prose-only has NO
+	// machine evaluation — the owner must know (the prompt line says it too).
+	if doc != nil && doc.DeathStructured == nil {
+		at.logWarnf("📜 plan death is PROSE-ONLY (no structured death{} object) — AI-judged, not machine-evaluated; only the all-levels-consumed fallback protects the chain.")
+	}
+	// C1 (F3) — DUAL-ACCEPT window: scenarios missing confirm{} are accepted
+	// with a WARN for the first CONFIRM_GRACE_SESSIONS (default 3) distinct
+	// plan sessions after this feature landed; afterwards the plan is REJECTED
+	// back into the retry loop (the planner model may lag the contract).
+	if doc != nil {
+		missing := 0
+		for _, sc := range doc.Scenarios {
+			if sc.Confirm == nil {
+				missing++
+			}
+		}
+		if missing > 0 {
+			if at.confirmGraceExhausted() {
+				lastErr = fmt.Errorf("%d scenario(s) missing the REQUIRED confirm{} object (grace window over)", missing)
+				at.logWarnf("📐 plan REJECTED: %v", lastErr)
+				doc = nil
+			} else {
+				at.logWarnf("📐 confirm-grace: %d scenario(s) missing confirm{} — accepted during the grace window (CONFIRM_GRACE_SESSIONS).", missing)
+			}
+		} else {
+			at.noteConfirmCompliantSession()
+		}
 	}
 
 	// W3 — auto-write the HARD red-news no-trade blackouts into the plan (§80),
@@ -761,22 +787,75 @@ func resolveSessionPlanCfg(dp *store.DayPlanConfig, session string) (maxLevels i
 // interval; every other configured TF is requested verbatim. A nil fetch (no
 // bars provider) marks every TF unavailable — the planner is told the read-set
 // truth instead of a hardcoded claim that diverges from planner_timeframes (H9).
+// consumedLevels (G5) computes which plan levels are CONSUMED right now using
+// the same facts evaluator the card reads (EvaluateLevelFacts → StillValid).
+func (at *AutoTrader) consumedLevels(bars []market.Kline, levels []kernel.PlanLevel, rule string, now int64) map[float64]bool {
+	if len(bars) == 0 {
+		return nil
+	}
+	out := map[float64]bool{}
+	for _, l := range levels {
+		if kernel.EvaluateLevelFacts(bars, l.Price, kernel.DirAbove, rule, 3, now).StillValid {
+			continue
+		}
+		out[l.Price] = true
+	}
+	return out
+}
+
+// demoteConsumedScenarios (G5) applies the write-time demotion.
+func (at *AutoTrader) demoteConsumedScenarios(session string, d *kernel.PlanDoc) int {
+	if market.FuturesBarsProvider == nil {
+		return 0
+	}
+	bars := market.FuturesBarsProvider(at.futuresSymbol(), kernel.AISVPBarInterval, kernel.AISVPBarCount)
+	if len(bars) == 0 {
+		return 0
+	}
+	consumed := at.consumedLevels(bars, d.Levels, at.acceptanceRuleFor(session), time.Now().UnixMilli())
+	return kernel.MarkConsumedScenarios(d, consumed)
+}
+
+// structureSummaryLines (G2, regime wave 2026-08-21) — the REAL machine
+// structure detector replaces the old "read/unavailable" placeholder: per-TF
+// trend + newest swing + the latest BOS/CHoCH/MSS/SWEEP event, computed from
+// the same 1m cache the executor reads (kernel.StructureSnapshot).
 func structureSummaryLines(fetch func(tf string, count int) []market.Kline, timeframes []string) []string {
-	lines := make([]string, 0, len(timeframes))
+	lines := make([]string, 0, len(timeframes)+1)
+	var bars1m []market.Kline
+	if fetch != nil {
+		bars1m = fetch(kernel.AISVPBarInterval, kernel.AISVPBarCount)
+	}
+	snap := kernel.StructureSnapshot(bars1m, time.Now().UnixMilli())
 	for _, tf := range timeframes {
-		req := tf
-		if tf == "D" {
-			req = "1d"
-		}
-		read := false
-		if fetch != nil {
-			read = len(fetch(req, 300)) > 0
-		}
-		if read {
-			lines = append(lines, tf+": structure read")
-		} else {
+		st, ok := snap[tf]
+		if !ok {
 			lines = append(lines, tf+": unavailable")
+			continue
 		}
+		label := st.Trend
+		if st.Swing != nil {
+			label += fmt.Sprintf(" (%s %.2f @%s)", st.Swing.Kind, st.Swing.Price, kernel.ClockCT(time.UnixMilli(st.Swing.TimeMs)))
+		}
+		lines = append(lines, tf+": "+label)
+	}
+	var lastEv *kernel.StructureEvent
+	var lastTF string
+	for _, tf := range kernel.StructureTFs {
+		st, ok := snap[tf]
+		if !ok {
+			continue
+		}
+		for i := range st.LastEvents {
+			if lastEv == nil || st.LastEvents[i].TimeMs > lastEv.TimeMs {
+				e := st.LastEvents[i]
+				lastEv = &e
+				lastTF = tf
+			}
+		}
+	}
+	if lastEv != nil {
+		lines = append(lines, fmt.Sprintf("last event: %s-%s %s @%s", lastEv.Type, lastEv.Dir, lastTF, kernel.ClockCT(time.UnixMilli(lastEv.TimeMs))))
 	}
 	return lines
 }
@@ -910,6 +989,22 @@ func (at *AutoTrader) assemblePlannerInput(session, tradeDate string) kernel.Pla
 			body)
 	}
 
+	// G5 (regime wave 2026-08-21) — consumed levels at read time, listed so the
+	// planner works around them.
+	var consumedLines []string
+	if len(bars) > 0 {
+		lvls := make([]kernel.PlanLevel, len(scored))
+		for i, s := range scored {
+			lvls[i] = kernel.PlanLevel{Price: s.Price, Label: s.Label}
+		}
+		consumed := at.consumedLevels(bars, lvls, at.acceptanceRuleFor(session), now.UnixMilli())
+		for _, s := range scored {
+			if consumed[s.Price] {
+				consumedLines = append(consumedLines, fmt.Sprintf("%.2f %s", s.Price, s.Label))
+			}
+		}
+	}
+
 	return kernel.PlannerInput{
 		TradeDate:        tradeDate,
 		Session:          session,
@@ -920,6 +1015,7 @@ func (at *AutoTrader) assemblePlannerInput(session, tradeDate string) kernel.Pla
 		Regime:           regime,
 		Levels:           scored,
 		StructureSummary: structure,
+		ConsumedLevels:   consumedLines,
 		Calendar:         calEvents,
 		DigestChain:      digestChain,
 		Warming:          warming,
@@ -955,9 +1051,18 @@ func (at *AutoTrader) maybeWriteDigests() {
 		if runnable, _ := at.sessionRunnable(s); !runnable {
 			continue
 		}
-		end, ok := hhmmToMin(s.WindowEndCT)
-		if !ok || ctMinutesNow(now) < end {
-			continue // session not closed yet
+		// Wrap-aware "is this session closed right now": the old test was
+		// ctMinutesNow(now) >= end — TRUE for the whole rest of the DAY once the
+		// end minute passed, so ASIA (end 02:00) read as "closed" at 21:00 CT
+		// while its evening leg was RUNNING, and a mid-session digest with
+		// mid-session P&L was written for the just-started instance (class 2).
+		// Not-in-window is the correct predicate: the most recent instance has
+		// ended, and sessionChainDate keys the digest to THAT instance's date.
+		if _, ok := hhmmToMin(s.WindowEndCT); !ok {
+			continue // malformed registry times — never digest on garbage
+		}
+		if s.InWindow(now) {
+			continue // session running — not closed yet
 		}
 		// P0-B — a session digest carries the SESSION INSTANCE's date, so the
 		// next read of the SAME session picks it up (ASIA closes 02:00 CT, after
@@ -1137,6 +1242,17 @@ func resolveActivePlanDoc(st *store.Store, row *store.PlanDB) (kernel.PlanDoc, b
 	var merged kernel.PlanDoc
 	// H4/H5 — re-validation integrity check at the HARD ceilings (12/5): a plan
 	// validly written under raised caps must survive overlay resolution.
+	if vErrDoc := func() error {
+		if err := json.Unmarshal(final, &merged); err != nil {
+			return err
+		}
+		return kernel.ValidatePlanDocWithCaps(&merged, kernel.PlanHardMaxLevels, kernel.PlanHardMaxScenarios)
+	}(); vErrDoc != nil {
+		// A8 (F14): the fallback-to-base is no longer silent — the owner's
+		// overlay is NOT in what the executor reads, and they must know.
+		// (free function — package logger, still WARN → log_events sink)
+		logger.Warnf("⚠️ merged plan+overlay FAILED re-validation for %s v%d (%v) — falling back to the BASE plan; the overlay edits are NOT active.", row.PlanID, row.Version, vErrDoc)
+	}
 	if json.Unmarshal(final, &merged) == nil && kernel.ValidatePlanDocWithCaps(&merged, kernel.PlanHardMaxLevels, kernel.PlanHardMaxScenarios) == nil {
 		return merged, true // plan_final
 	}
@@ -1165,6 +1281,9 @@ func (at *AutoTrader) recordPlanCitation(d *kernel.Decision) {
 		return
 	}
 	res := kernel.ClassifyCitation(d.Action, d.CitedScenario, ap.Doc)
+	// B3 (F6): structural verdict — entry in the cited scenario's band, SL/TP
+	// consistent. Forward-only; "" = unknown/fail-open.
+	band := kernel.CitationStructure(d.Action, d.CitedScenario, ap.Doc, d.Price, d.StopLoss, d.TakeProfit, kernel.PlanDATRFor(at.id))
 	switch {
 	case res.OffPlan:
 		telemetry.IncGateBlock(at.id, "plan_off_plan")
@@ -1181,6 +1300,45 @@ func (at *AutoTrader) recordPlanCitation(d *kernel.Decision) {
 		planVersion: ap.Version,
 		scenarioID:  res.Cited, // "" when off-plan
 		matched:     res.Matched,
+		band:        band,
 		valid:       true,
 	}
+}
+
+// ---- C1 (F3) confirm-grace window ------------------------------------------
+
+// confirmGraceSessions resolves CONFIRM_GRACE_SESSIONS (default 3).
+func confirmGraceSessions() int {
+	if v := os.Getenv("CONFIRM_GRACE_SESSIONS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			return n
+		}
+	}
+	return 3
+}
+
+const confirmGraceKey = "confirm_grace_sessions_seen"
+
+// confirmGraceExhausted reports whether the dual-accept window is over: after
+// CONFIRM_GRACE_SESSIONS distinct plan-write sessions, confirm{} is REQUIRED.
+func (at *AutoTrader) confirmGraceExhausted() bool {
+	if at.store == nil {
+		return false
+	}
+	raw, _ := at.store.GetSystemConfig(confirmGraceKey)
+	n, _ := strconv.Atoi(strings.TrimSpace(raw))
+	if n >= confirmGraceSessions() {
+		return true
+	}
+	_ = at.store.SetSystemConfig(confirmGraceKey, strconv.Itoa(n+1))
+	return false
+}
+
+// noteConfirmCompliantSession fast-forwards the grace window once the model
+// proves it authors confirm{} — no reason to keep accepting regressions.
+func (at *AutoTrader) noteConfirmCompliantSession() {
+	if at.store == nil {
+		return
+	}
+	_ = at.store.SetSystemConfig(confirmGraceKey, strconv.Itoa(confirmGraceSessions()))
 }

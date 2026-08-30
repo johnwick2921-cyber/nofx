@@ -430,6 +430,13 @@ func (e *StrategyEngine) BuildUserPrompt(ctx *Context) string {
 	}
 	sb.WriteString("\n")
 
+	// G2 (regime wave 2026-08-21) — the machine structure line, advisory:
+	// per-TF trend + swings + the latest BOS/CHoCH/MSS/SWEEP event. The AI
+	// judges; no gate lives here (G1/G4 consume the same snapshot in Go).
+	if e.isFuturesInstrument() && len(ctx.Structure) > 0 {
+		sb.WriteString(StructurePromptLine(ctx.Structure) + "\n\n")
+	}
+
 	// Get language for market data formatting
 	nofxosLang := nofxos.LangEnglish
 	if e.GetLanguage() == LangChinese {
@@ -568,6 +575,54 @@ func (e *StrategyEngine) isFuturesInstrument() bool {
 	return len(coins) > 0 && market.IsCMEFuturesSymbol(coins[0])
 }
 
+// formingBarLine (P10.2) renders the newest bar's honesty label for one
+// timeframe: "current 5m bar: FORMING (closes 10:35 CT) — prior bars closed"
+// while the bar is still open at the snapshot instant, else a CLOSED line
+// naming the next close. Empty when snapshot/interval/bars are unavailable.
+func formingBarLine(tf string, tfData *market.TimeframeSeriesData, snapshotMs int64) string {
+	if snapshotMs <= 0 || tfData == nil || len(tfData.Klines) == 0 {
+		return ""
+	}
+	iv := tfIntervalMs(tf)
+	if iv <= 0 {
+		return "" // only intraday TFs carry the label (1m/5m/15m…)
+	}
+	newest := tfData.Klines[len(tfData.Klines)-1]
+	closeMs := newest.Time + iv
+	if closeMs > snapshotMs {
+		return fmt.Sprintf("current %s bar: FORMING (closes %s) — prior bars closed\n\n",
+			tf, ClockCT(time.UnixMilli(closeMs)))
+	}
+	return fmt.Sprintf("current %s bar: CLOSED at %s (next close %s)\n\n",
+		tf, ClockCT(time.UnixMilli(closeMs)), ClockCT(time.UnixMilli(closeMs+iv)))
+}
+
+// staleTFLabel (G7) appends a staleness warning under a TF table when the
+// newest CLOSED bar is older than period + FLIP_EVAL_MAX_STALE_S — the same
+// cap the flip/death evaluator uses, so the prompt and the evaluator can never
+// disagree about what "stale" means. Futures only; renders nothing when fresh.
+func staleTFLabel(tf string, tfData *market.TimeframeSeriesData, snapshotMs int64) string {
+	if snapshotMs <= 0 || tfData == nil || len(tfData.Klines) == 0 {
+		return ""
+	}
+	iv := tfIntervalMs(tf)
+	if iv <= 0 {
+		return ""
+	}
+	newest := tfData.Klines[len(tfData.Klines)-1]
+	closeMs := newest.Time + iv
+	if closeMs > snapshotMs {
+		return "" // forming — not stale by definition
+	}
+	age := snapshotMs - closeMs
+	capMs := FlipEvalMaxStaleMs()
+	if age <= iv+capMs {
+		return ""
+	}
+	return fmt.Sprintf("⚠️ %s data stale: newest close %s is %.0fs old (period %.0fs + cap %.0fs)\n\n",
+		tf, ClockCT(time.UnixMilli(closeMs)), float64(age)/1000, float64(iv)/1000, float64(capMs)/1000)
+}
+
 func (e *StrategyEngine) formatMarketData(data *market.Data) string {
 	var sb strings.Builder
 	indicators := e.config.Indicators
@@ -647,6 +702,15 @@ func (e *StrategyEngine) formatMarketData(data *market.Data) string {
 			if tfData, ok := data.TimeframeData[tf]; ok {
 				sb.WriteString(fmt.Sprintf("=== %s Timeframe (oldest → latest) ===\n\n", strings.ToUpper(tf)))
 				e.formatTimeframeSeriesData(&sb, tfData, indicators)
+				// P10.2 — prompt honesty (owner ruling: interval cadence runs
+				// cycles MID-BAR): label the newest bar FORMING/CLOSED so the
+				// AI knows what it is looking at and may itself choose to wait
+				// for the close — its judgment now, not a code gate. Futures
+				// only; snapshot 0 (tests/legacy) renders nothing.
+				if e.isFuturesInstrument() {
+					sb.WriteString(formingBarLine(tf, tfData, e.promptSnapshotMs))
+					sb.WriteString(staleTFLabel(tf, tfData, e.promptSnapshotMs))
+				}
 			}
 		}
 	} else {
