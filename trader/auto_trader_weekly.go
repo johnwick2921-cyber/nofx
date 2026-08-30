@@ -292,7 +292,7 @@ func (at *AutoTrader) maybeCheckWeeklyInvalidation(now time.Time) {
 	}
 	oldBias := cur.Bias
 	cur.Bias = "neutral"
-	cur.InvalidatedAt = now.In(kernel.CTLocation()).Format("2006-01-02 15:04") + " CT"
+	cur.InvalidatedAt = kernel.FormatCT(now)
 	docJSON, _ := json.Marshal(&cur)
 	version, werr := at.store.Plan().AppendPlan(&store.PlanDB{
 		PlanID:        row.PlanID,
