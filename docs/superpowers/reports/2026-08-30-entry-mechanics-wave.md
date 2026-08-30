@@ -91,3 +91,34 @@ Everything is parked as ONE branch (`feat/entry-mechanics`). Cutover decision:
 2. **NO cutover between 16:45–17:10 CT** (weekly read + ASIA window sacred). First safe window after tonight's first plan writes, owner-attended.
 
 **STOP — awaiting the owner's "go cutover".** Branch tip: `9a7f605b` (guide rev bump) on top of `86fc81d9`.
+
+---
+
+# CUTOVER RECORD (owner "GO CUTOVER", 2026-08-30 ~17:10 CT) — Go-only, STOP_ENTRY_SEAM=off
+
+**Build commit:** `9ca53e87` (E4 split-index fix + boot ledgers folded in before the cutover — the live-session window exposed a real E4 bug: the legacy 2-column unique index rejected the second leg row; replaced with `(plan_id, scenario, leg_index)`). Binary: `vcs.revision=9ca53e873a1b · vcs.modified=false`, md5 `dd6fd8f5`.
+
+**Debut proofs on the CURRENT binary (captured BEFORE the swap, 23243670):**
+- `📅 WEEKLY READ starting for week 2026-08-31 (boot_backfill=false)` 17:01:18 → `📅 WEEKLY READ written 2026-08-31 v1 bias=bear conviction=low draw=PWL@28947.75 invalid=29535.00 thin=true facts_hash=b8591ad6c492…` 17:07:15 → `skip-fresh … idempotent` + `📅 WEEKLY INVALIDATED bear @ 29535.00 (1h, v2) — bias→neutral, no auto-flip` 17:07:18 (the invalidation machinery fired live on the same Sunday).
+- `🗓️ PLAN written 2026-08-30 ASIA v1 (model deepseek-v4-pro, lifecycle active, prompt 30cebc96fe8b, ai_config a28d83f159084145)` 17:08:56 — the ## Candles + ## Weekly Context prompt headers were verified at dress rehearsal (e1_prompt_rendered.txt); the stored doc + write are the live pipeline proof.
+- **Watchdog:** 0 alarm lines all day (silent = healthy). **Flood:** every reopen minute `intrabar_dropped=0 current_dropped=0 historical_dropped=0 peak_depth=0/4096`.
+- Note: `📅 calendar FAIL-CLOSED: no slice for 2026-08-30 — using the static T1 fallback (8 window(s))` — fail-closed to static ✓.
+
+**Flat-gate (all-origin, split-aware):** DB OPEN positions = 0 · DB non-terminal armed = 0 (zero arms ⇒ zero legs, no confirm mid-track) · API positions `[]` (authed) · NT8 snapshots Sim101 count=0 + SimAccount1 count=0.
+
+**Swap:** `mv nofx-bin nofx-bin.prev` (rollback `36c0c681` kept in `~/nofx-backups/cutover-entry/`) → `cp nofx-bin.next` → `kill -9 482741` 17:10:42 → systemd relaunch PID 726053 17:10:47.
+
+**Boot checklist (all quoted):**
+- `🔐 BOOT INTEGRITY OK — rev 9ca53e873a1b · built 2026-08-30T22:09:49Z · expected 9ca53e873a1b · goldens PASS`
+- `🩹 acceptance-rule migration: strategy-level=9 session=3 (2x5m → 5m_close)` — counts pre-computed from the live DB (9 base + 3 NY/ASIA/LONDON) ✓
+- `📜 scenario schema: 9 conditions […]` · `🔐 confirm rules: 5 [1m_mss, 1x5m_close, 2x5m_close, time_hold, touch]` · `🎛 entry law: bd_min_closes=1 bd_min_disp_atr=1.00 mss_min_disp_atr=0.50 accept_hold_min=10 stop_entry_offset_ticks=2 retest_wait_bars=6 stop_entry_seam=off`
+- **Weekly doc SURVIVES:** `📅 WEEKLY READ skip-fresh — week 2026-08-31 doc already stored (v2), idempotent.` at 17:10:47 on the NEW binary — no re-read ✓
+- **ASIA plan resumes lifecycle:** active row `2026-08-30:ASIA` v1 served; first cycle ran (balance frames recovered 17:11:17, equity 52113.50; `level_stats: 2026-08-29 giving up after 4 attempts` — the known Saturday-no-bars case, real eval Monday 17:05).
+- Live-DB migrations applied: `armed_orders` gained `leg_index/leg_count/kind` + the 3-column unique index; 0 strategies still storing `2x5m`.
+- Transient `no_balance_frame` WARN at boot cleared when the NT8 account_balance frame arrived (same class as prior cutovers).
+
+**Post-cutover watch:** 15-minute watchdog/flood watch clean (0 critical errors, 0 dropped closes).
+
+**E7 remains PARKED** for its own daytime cutover: NT8 copy → F5 → full restart → far-side stop_entry frames prove → then `STOP_ENTRY_SEAM=on`. Until then the seam is OFF and the Go side cannot emit a stop_entry frame.
+
+**Next-session live E-proof (pre-registered):** the NEXT authored plan (LONDON/NY) runs under the new law — expect touch-rules on fade scenarios (reject/fvg_entry), zero 2x5m outside waterfall-class; any violation is named in the validator reject log.
