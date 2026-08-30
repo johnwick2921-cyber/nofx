@@ -176,3 +176,27 @@ func TestDepthGuardCount(t *testing.T) {
 		t.Fatalf("completed week count = %d, want 3 (< 4 → thin_history)", n)
 	}
 }
+
+// TestWeekStartMondaySundayMorning — regression for the 2026-08-30 cutover bug:
+// Sunday MORNING (before 17:00 CT) must govern the FOLLOWING Monday's week
+// (the session-day anchor mis-mapped it one week back → the wrong-week
+// boot-backfill fired).
+func TestWeekStartMondaySundayMorning(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"2026-08-30 09:37", "2026-08-31"}, // Sunday morning → next Monday
+		{"2026-08-30 17:00", "2026-08-31"}, // Sunday 17:00 → new week's Monday
+		{"2026-08-31 08:00", "2026-08-31"}, // Monday
+		{"2026-08-28 15:59", "2026-08-24"}, // Friday → this week's Monday
+		{"2026-08-29 12:00", "2026-08-24"}, // Saturday → this week's Monday
+	}
+	for _, c := range cases {
+		ts, err := time.ParseInLocation("2006-01-02 15:04", c.in, CTLocation())
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := weekStartMonday(ts).Format("2006-01-02")
+		if got != c.want {
+			t.Fatalf("weekStartMonday(%s) = %s, want %s", c.in, got, c.want)
+		}
+	}
+}
