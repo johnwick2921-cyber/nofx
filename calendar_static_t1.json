@@ -1,3 +1,6 @@
 [
-  {"time": "2026-08-19T18:00:00Z", "currency": "USD", "title": "FOMC Meeting Minutes (static fallback)", "impact": "T1"}
+  {"time": "2026-09-04T12:30:00Z", "currency": "USD", "title": "Non-Farm Payrolls (NFP) (static fallback)", "impact": "T1"},
+  {"time": "2026-09-10T12:30:00Z", "currency": "USD", "title": "CPI m/m (static fallback)", "impact": "T1"},
+  {"time": "2026-09-16T18:00:00Z", "currency": "USD", "title": "FOMC Statement (static fallback)", "impact": "T1"},
+  {"time": "2026-09-16T18:30:00Z", "currency": "USD", "title": "FOMC Press Conference (static fallback)", "impact": "T1"}
 ]

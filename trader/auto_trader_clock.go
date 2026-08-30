@@ -619,21 +619,20 @@ func (at *AutoTrader) enforceT1ForceFlatAt(now time.Time) bool {
 	if due == "" {
 		return false
 	}
-	positions, err := at.store.Position().GetOpenPositions(at.id)
-	if err != nil || len(positions) == 0 {
-		return false
-	}
-	// S-LIST CLOSER — the SAME cancel-before-flatten ordering as EOD flat: a
-	// resting armed limit must not fill during the forced red-news close.
-	n, unacked := at.cancelArmedOrdersSync("T1 force-flat — red-news window")
+	// NEWS-HYGIENE (2026-08-29) — cancel FIRST, BEFORE the open-position
+	// check: a FLAT trader with a working armed limit must not let that
+	// limit fill into the print. The pre-wave order only cancelled when a
+	// position existed, so a resting limit survived the whole window.
+	n, unacked := at.cancelArmedOrdersSync("news_window")
 	if n > 0 {
-		at.logWarnf("🔒 T1-FORCE-FLAT: %d armed order(s) cancelled before flattening", n)
+		at.logWarnf("🔒 T1-FORCE-FLAT: %d armed order(s) cancelled before the red-news window", n)
 	}
 	if unacked > 0 {
-		at.logWarnf("⚠️ T1-FORCE-FLAT: %d armed cancel(s) unacked after retry — flattening anyway", unacked)
+		at.logWarnf("⚠️ T1-FORCE-FLAT: %d armed cancel(s) unacked after retry", unacked)
 	}
-	if fresh, err2 := at.store.Position().GetOpenPositions(at.id); err2 == nil {
-		positions = fresh
+	positions, err := at.store.Position().GetOpenPositions(at.id)
+	if err != nil || len(positions) == 0 {
+		return n+unacked > 0 // flat — the arm-cancel above is the whole job
 	}
 	at.logWarnf("📰 T1-FORCE-FLAT (%s): flattening %d open position(s) — red-news forced close at T-%dmin (research v5 C.5).", due, len(positions), t1ForceFlatLead)
 	for _, p := range positions {
