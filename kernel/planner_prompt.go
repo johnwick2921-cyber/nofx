@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"nofx/market"
 )
 
 // P3.3 — the planner input package (assembled into ONE prompt for the reasoner).
@@ -98,6 +100,17 @@ type PlannerInput struct {
 	// context the BIAS-TREE section computes from (price, PDH/PDL/PDC, value
 	// area, nearest liquidity). Filled by the same site as BiasCtx.
 	BiasCtxFacts BiasContext
+	// CandleTables (W2b, weekly-bias wave 2026-08-30) — the rendered
+	// "## Candles (oldest→latest)" block (12×15m · 12×1h · 8×4h · 8×daily),
+	// built by kernel.FormatCandleTable from the 1m slice via
+	// kernel.AggregateBars. Empty → the section is omitted (knob off / no
+	// bars). Candles are GROUND TRUTH for structure.
+	CandleTables string
+	// WeeklyCtx (W3, weekly-bias wave 2026-08-30) — the ≤3-line
+	// "## Weekly Context" block from the Sunday weekly read
+	// (kernel.WeeklyContextLine). "WEEKLY: none" renders when no doc exists —
+	// fail-open: a missing doc changes nothing else.
+	WeeklyCtx string
 }
 
 // RenderBiasTree (A1, planner-contract wave 2026-08-26) — the machine-computed
@@ -276,6 +289,30 @@ func ChainWarnings(doc PlanDoc) []string {
 	return out
 }
 
+// BuildPlannerCandleTables (W2b, weekly-bias wave 2026-08-30) renders the
+// "## Candles" block from the 1m slice: last 12×15m · 12×1h · 8×4h ·
+// 8×daily rows — the SAME aggregation helpers the planner already uses
+// (kernel.AggregateBars on the 1m slice; daily = session-day candles).
+// Empty input → "".
+func BuildPlannerCandleTables(bars1m []market.Kline) string {
+	if len(bars1m) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	render := func(title string, bars []market.Kline, n int) {
+		if len(bars) > n {
+			bars = bars[len(bars)-n:]
+		}
+		fmt.Fprintf(&b, "### %s\n", title)
+		FormatCandleTable(&b, KlineBars(bars), true)
+	}
+	render("15m (last 12)", AggregateBars(bars1m, 15*60*1000), 12)
+	render("1h (last 12)", AggregateBars(bars1m, 60*60*1000), 12)
+	render("4h (last 8)", AggregateBars(bars1m, 240*60*1000), 8)
+	render("daily session candles (last 8)", DailySessionBars(bars1m), 8)
+	return b.String()
+}
+
 // BuildPlannerPrompt assembles the planner prompt: reasoning-first instruction,
 // the input tables, and the schema-strict JSON contract. High-salience blocks
 // (ranked levels, T1 blackouts) are positioned prominently per the contract.
@@ -300,6 +337,27 @@ func BuildPlannerPrompt(in PlannerInput) string {
 	b.WriteString("\n")
 
 	b.WriteString("## Regime\n" + in.Regime.Render() + "\n\n")
+
+	// W2b (weekly-bias wave 2026-08-30) — the planner gets EYES: the raw
+	// candle tables. Ground truth for structure; ranked levels and tags are
+	// summaries. On conflict, trust the candles and say so in the scenario
+	// rationale. Omitted when the knob is off / no bars (fail-open).
+	if strings.TrimSpace(in.CandleTables) != "" {
+		b.WriteString("## Candles (oldest→latest)\n")
+		b.WriteString(in.CandleTables)
+		b.WriteString("\n")
+	}
+
+	// W3 (weekly-bias wave 2026-08-30) — the Sunday weekly-bias context line.
+	// Rendered ALWAYS (missing doc → "WEEKLY: none"): fail-open, a missing doc
+	// changes nothing else. Soft law — informational, never a gate.
+	b.WriteString("## Weekly Context\n")
+	if strings.TrimSpace(in.WeeklyCtx) == "" {
+		b.WriteString("WEEKLY: none\n")
+	} else {
+		b.WriteString(in.WeeklyCtx + "\n")
+	}
+	b.WriteString("\n")
 
 	// W11 — INDICATORS mirror: the SAME per-timeframe indicator state the executor
 	// sees, so the planner reasons on the exact indicators the trader trades on.
@@ -563,7 +621,11 @@ func plannerOutputContract(maxLevels, maxScenarios int, hasHTFZones, has1HSDZone
 		// FVG ENTRY MODEL (2026-08-26) — the 5th condition's ≤6-line playbook.
 		"FVG ENTRY (fvg_entry): author when displacement off a Tier-1 level (VWAP/POC/PDH/PDL/ON/IB/fresh S/D) leaves a FRESH gap toward the trade direction · prefer the FIRST retrace (the freshness ladder applies to the gap as a zone) · entry_mode=ce for gaps > 20pts, edge for tighter · SL beyond the DISTAL edge · targets chain to the next liquidity (EQH/EQL, ON, PDH/PDL). Citations: NQ gap sweet spot 20–80pts; 1h+ fill ~70–80%; displacement floor per MSS research. " +
 		"no_trade may contain ONLY the fixed session windows (first 5m, lunch) plus T1 HARD-blackout lines from the calendar — a T2 caution event is NEVER added to no_trade and never stops entries. " +
-		"Respect the no-trade windows. If you cannot form a credible plan, say so in reasoning and output a neutral/no-trade plan.\n"
+		"Respect the no-trade windows. If you cannot form a credible plan, say so in reasoning and output a neutral/no-trade plan. " +
+		// W2b (weekly-bias wave) — candle ground-truth law.
+		"Candles are ground truth for structure; ranked levels and tags are summaries. On conflict, trust the candles and say so in the scenario rationale. " +
+		// W3 (weekly-bias wave) — soft weekly law.
+		"Weekly guidance (soft law): counter-weekly scenarios are allowed but must state their justification (an HTF level or a sweep-reclaim of the draw); target chains toward the draw are preferred. The weekly bias never gates your plan.\n"
 }
 
 func absF(x float64) float64 {

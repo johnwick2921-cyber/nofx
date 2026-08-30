@@ -195,6 +195,12 @@ func (at *AutoTrader) runCycle() error {
 	// day_plan; throttled; idempotent (skip-fresh).
 	at.maybeFetchCalendar(time.Now())
 
+	// W2 (weekly-bias wave) — SUNDAY WEEKLY READ, hoisted above the session gate
+	// for the same F0 reason: the 16:30 CT Sunday read runs while the market is
+	// CLOSED, and a Monday-morning boot must backfill it before the open. Gated
+	// on day_plan; idempotent (a stored WEEKLY doc = never re-run).
+	at.maybeRunWeeklyRead(time.Now())
+
 	// P4 (ledger-close 2026-08-19) — HALF-DAYS PRODUCER, also above the session
 	// gate (same F0 reasoning: a weekend boot must seed Monday's early close
 	// BEFORE the open). Once per session-day; idempotent merge; fail-open.
@@ -265,6 +271,12 @@ func (at *AutoTrader) runCycle() error {
 	// state (a read fires whether flat or holding). (The W3 calendar producer runs
 	// earlier, above the session gate — F0.)
 	at.maybeRunSessionReads()
+
+	// W4 (weekly-bias wave) — MID-WEEK INVALIDATION WATCH, in the EXISTING cycle
+	// (no new loop): a CLOSED bar of the invalidation basis TF beyond the weekly
+	// invalidation price flips the WEEKLY doc bias→neutral (idempotent, once per
+	// week). Never auto-flips the opposite side; never a gate.
+	at.maybeCheckWeeklyInvalidation(time.Now())
 
 	// P3.6-A — DIGEST WRITERS: 3-line session digest at each session close + the
 	// daily roll-up at the trade-date close. Idempotent; gated → dormant.

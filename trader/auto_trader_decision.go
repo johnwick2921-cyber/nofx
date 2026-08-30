@@ -45,6 +45,11 @@ func (at *AutoTrader) saveDecision(record *store.DecisionRecord) error {
 	record.TraderID = at.id
 	record.Account = at.currentAccountName() // ITEM 2 per-account attribution
 
+	// W5.3 (weekly-bias wave) — draw-alignment tag on EVERY decision row:
+	// toward_draw | away | neutral. Stored on decision_records.draw_align
+	// (additive AutoMigrate column).
+	record.DrawAlign = at.weeklyDrawAlignTag(record)
+
 	if record.Timestamp.IsZero() {
 		record.Timestamp = time.Now().UTC()
 	}

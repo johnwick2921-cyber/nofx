@@ -186,6 +186,10 @@ func (e *StrategyEngine) buildFuturesPrompt(symbol string, accountEquity float64
 		if e.biasContextLine != "" {
 			sb.WriteString(e.biasContextLine + "\n\n")
 		}
+		// W3 (weekly-bias wave) — one-line weekly context (soft law).
+		if e.weeklyContextLine != "" {
+			sb.WriteString(e.weeklyContextLine + "\n\n")
+		}
 	}
 
 	// Wave 2 armed orders — the executor sees its resting orders' live state
@@ -272,6 +276,11 @@ func (e *StrategyEngine) buildFuturesPrompt(symbol string, accountEquity float64
 		}
 		if e.planStatusLine != "" {
 			sb.WriteString(e.planStatusLine + "\n")
+		}
+		// W3 (weekly-bias wave) — the weekly line is dynamic data: render it
+		// in the tail so a mid-week invalidation reaches the prompt.
+		if e.weeklyContextLine != "" {
+			sb.WriteString(e.weeklyContextLine + "\n")
 		}
 	}
 

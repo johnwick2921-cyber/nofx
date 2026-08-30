@@ -1400,6 +1400,22 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		if cap := at.scenarioCap(); cap > 0 && len(doc.Scenarios) > cap {
 			doc.Scenarios = doc.Scenarios[:cap]
 		}
+		// W2b (weekly-bias wave) — planner_candle_citations: count scenario
+		// prose lines citing the marker phrase "per candles" (the candle-table
+		// ground-truth law), log once per read.
+		cited := 0
+		for _, s := range doc.Scenarios {
+			for _, line := range strings.Split(s.Trigger+"\n"+s.Invalid, "\n") {
+				if strings.Contains(strings.ToLower(line), "per candles") {
+					cited++
+					telemetry.IncPlannerCandleCitation(at.id)
+				}
+			}
+		}
+		at.logInfof("📊 planner_candle_citations: %d scenario line(s) cite \"per candles\" this read.", cited)
+		// W5.1 (weekly-bias wave) — SHADOW confluence: view-only log + reorder
+		// counter. Never touches the seated list.
+		at.weeklyConfluenceShadow(tradeDate, session, doc.Levels)
 	}
 	docJSON, _ := json.Marshal(doc)
 	version, err := at.store.Plan().AppendPlan(&store.PlanDB{
@@ -1755,6 +1771,26 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 	bcFacts := kernel.ComputeBiasContext(bars, scored, now)
 	kernel.ApplyUniverseDayAnchors(&bcFacts, kernel.ExtractMultiDayLevels(bars, reg, now))
 
+	// W2b (weekly-bias wave) — PLANNER EYES: the raw candle tables (12×15m ·
+	// 12×1h · 8×4h · 8×daily) built from the 1m slice via kernel.AggregateBars.
+	// Candles are ground truth for structure. Knob PLANNER_CANDLES (default on).
+	var candleTables string
+	var bars1m []market.Kline
+	if market.FuturesBarsProvider != nil {
+		bars1m = market.FuturesBarsProvider(symbol, "1m", 12000)
+	}
+	if kernel.PlannerCandlesEnabled() {
+		candleTables = kernel.BuildPlannerCandleTables(bars1m)
+	}
+	// W3 (weekly-bias wave) — the Sunday weekly-bias context line (≤3 lines;
+	// "WEEKLY: none" when no doc — fail-open, nothing else changes).
+	weeklyDoc := at.weeklyDocCached(now)
+	nw := 0
+	if weeklyDoc != nil && weeklyDoc.ThinHistory {
+		nw = kernel.CompletedWeekCount(bars1m, now)
+	}
+	weeklyCtx := kernel.WeeklyContextLine(weeklyDoc, nw)
+
 	return kernel.PlannerInput{
 		TradeDate:        tradeDate,
 		Session:          session,
@@ -1792,6 +1828,10 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 		ScenarioCap:     at.scenarioCap(),
 		PriorPlanKiller: priorKiller,
 		PriorPlanLevels: priorLevels,
+		// W2b/W3 (weekly-bias wave) — the raw candle tables (planner eyes) and
+		// the weekly-bias context line (soft law, fail-open).
+		CandleTables: candleTables,
+		WeeklyCtx:    weeklyCtx,
 	}
 }
 
@@ -1977,6 +2017,9 @@ func installActivePlanProvider(at *AutoTrader, st *store.Store) {
 			}
 			return &kernel.ActivePlan{Doc: doc, Session: sess.Name, Version: row.Version, ReplansLeft: replansLeft, BirthMs: row.CreatedAt.UnixMilli(), PlanID: row.PlanID, OverlayVersion: overlayVersion}
 		},
+		// W3 (weekly-bias wave) — THIS trader's Sunday weekly-bias doc (nil →
+		// no executor line). Per-trader, like the plan provider above.
+		WeeklyDoc: func() *kernel.WeeklyDoc { return at.weeklyDocCached(time.Now()) },
 	})
 	// P0-A — loud startup/runtime assertion: if MORE THAN ONE day-plan trader
 	// has registered providers, announce per-trader isolation so the state is

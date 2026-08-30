@@ -481,6 +481,10 @@ type AutoTrader struct {
 	regMu       sync.Mutex
 	regCache    kernel.SessionRegistry
 	regCacheDay string
+
+	// W2 (weekly-bias wave 2026-08-30) — Sunday weekly read / mid-week
+	// invalidation / W5 shadow state. See trader/auto_trader_weekly.go.
+	weeklyState weeklyState
 }
 
 // planCitation is the transient plan-link snapshot stamped onto a new position.

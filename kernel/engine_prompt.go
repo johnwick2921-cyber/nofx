@@ -788,18 +788,7 @@ func (e *StrategyEngine) formatMarketData(data *market.Data) string {
 
 func (e *StrategyEngine) formatTimeframeSeriesData(sb *strings.Builder, data *market.TimeframeSeriesData, indicators store.IndicatorConfig) {
 	if len(data.Klines) > 0 {
-		sb.WriteString("Time(CT)       Open      High      Low       Close     Volume\n")
-		for i, k := range data.Klines {
-			t := time.Unix(k.Time/1000, 0).In(CTLocation())
-			timeStr := TableTimeCT(t)
-			marker := ""
-			if i == len(data.Klines)-1 {
-				marker = "  <- current"
-			}
-			sb.WriteString(fmt.Sprintf("%-14s %-9.4f %-9.4f %-9.4f %-9.4f %-12.2f%s\n",
-				timeStr, k.Open, k.High, k.Low, k.Close, k.Volume, marker))
-		}
-		sb.WriteString("\n")
+		FormatCandleTable(sb, data.Klines, true)
 	} else if len(data.MidPrices) > 0 {
 		sb.WriteString(fmt.Sprintf("Mid prices: %s\n\n", formatFloatSlice(data.MidPrices)))
 		if indicators.EnableVolume && len(data.Volume) > 0 {
@@ -812,6 +801,50 @@ func (e *StrategyEngine) formatTimeframeSeriesData(sb *strings.Builder, data *ma
 	FormatIndicatorState(sb, data, indicators)
 
 	sb.WriteString("\n")
+}
+
+// FormatCandleTable renders a labelled "Time(CT) Open High Low Close [Volume]"
+// table (oldest → latest) from klines — the ONE candle-table formatter the
+// repo uses. Extracted (W2b, weekly-bias wave 2026-08-30) so the session
+// planner's ## Candles block is rendered by the SAME code as the executor's
+// per-timeframe tables (never a second formatter). The newest row carries the
+// "  <- current" marker exactly as the executor always rendered it.
+func FormatCandleTable(sb *strings.Builder, klines []market.KlineBar, volume bool) {
+	if len(klines) == 0 {
+		return
+	}
+	if volume {
+		sb.WriteString("Time(CT)       Open      High      Low       Close     Volume\n")
+	} else {
+		sb.WriteString("Time(CT)       Open      High      Low       Close\n")
+	}
+	for i, k := range klines {
+		t := time.Unix(k.Time/1000, 0).In(CTLocation())
+		timeStr := TableTimeCT(t)
+		marker := ""
+		if i == len(klines)-1 {
+			marker = "  <- current"
+		}
+		if volume {
+			sb.WriteString(fmt.Sprintf("%-14s %-9.4f %-9.4f %-9.4f %-9.4f %-12.2f%s\n",
+				timeStr, k.Open, k.High, k.Low, k.Close, k.Volume, marker))
+		} else {
+			sb.WriteString(fmt.Sprintf("%-14s %-9.4f %-9.4f %-9.4f %-9.4f%s\n",
+				timeStr, k.Open, k.High, k.Low, k.Close, marker))
+		}
+	}
+	sb.WriteString("\n")
+}
+
+// KlineBars converts bar-cache Klines to prompt-table KlineBars
+// (Time = OpenTime) so the planner's candle tables and the executor's
+// timeframe tables share the ONE formatter.
+func KlineBars(klines []market.Kline) []market.KlineBar {
+	out := make([]market.KlineBar, 0, len(klines))
+	for _, k := range klines {
+		out = append(out, market.KlineBar{Time: k.OpenTime, Open: k.Open, High: k.High, Low: k.Low, Close: k.Close, Volume: k.Volume})
+	}
+	return out
 }
 
 // FormatIndicatorState writes the toggle-gated, configured-period-aware indicator

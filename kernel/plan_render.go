@@ -64,6 +64,9 @@ type TraderPlanProviders struct {
 	// registry is admin-global data, but the seam is per-trader so no
 	// process-global singleton can ever again close over one trader).
 	SessionRegistry func() SessionRegistry
+	// WeeklyDoc (W3, weekly-bias wave 2026-08-30) returns THIS trader's
+	// parsed Sunday weekly-bias doc (nil → none → no executor line).
+	WeeklyDoc func() *WeeklyDoc
 }
 
 // traderPlanProviders maps traderID → providers. traderID == "" is never stored
@@ -76,7 +79,7 @@ func SetTraderPlanProviders(traderID string, p TraderPlanProviders) {
 	if strings.TrimSpace(traderID) == "" {
 		return
 	}
-	if p.ActivePlan == nil && p.SessionRegistry == nil {
+	if p.ActivePlan == nil && p.SessionRegistry == nil && p.WeeklyDoc == nil {
 		traderPlanProviders.Delete(traderID)
 		return
 	}
@@ -110,6 +113,16 @@ func ActivePlanFor(traderID, symbol string) *ActivePlan {
 func HasTraderPlanProvider(traderID string) bool {
 	_, ok := TraderPlanProvidersFor(traderID)
 	return ok
+}
+
+// WeeklyDocFor (W3, weekly-bias wave) resolves the DECIDING trader's weekly
+// doc through its per-trader provider — never another trader's.
+func WeeklyDocFor(traderID string) *WeeklyDoc {
+	p, ok := TraderPlanProvidersFor(traderID)
+	if !ok || p.WeeklyDoc == nil {
+		return nil
+	}
+	return p.WeeklyDoc()
 }
 
 // TraderPlanProviderCount returns how many traders have providers registered
