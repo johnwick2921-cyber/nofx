@@ -1,0 +1,46 @@
+name: Security Scan (govulncheck + npm audit)
+
+# F1c (2026-08-29) — supply-chain gate: Go symbol-level vuln scan + npm
+# production audit. Weekly on dev + on every PR. Fails on CRITICAL/HIGH.
+on:
+  schedule:
+    - cron: '30 9 * * 1' # weekly, Monday 09:30 UTC
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches:
+      - dev
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  govulncheck:
+    name: govulncheck (Go)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Run govulncheck
+        uses: golang/govulncheck-action@v1
+        with:
+          go-version-input: '1.25.3'
+          go-package: ./...
+          fail-on-vuln: true
+
+  npm-audit:
+    name: npm audit --production
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install production deps
+        working-directory: web
+        run: npm ci --omit=dev
+      - name: Audit (fails on HIGH/CRITICAL)
+        working-directory: web
+        run: npm audit --omit=dev --audit-level=high
