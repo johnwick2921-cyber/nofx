@@ -86,6 +86,52 @@ func (at *AutoTrader) skipNoNewData(now time.Time) bool {
 	return true
 }
 
+// evaluateWallClockSessionReads (class 32, 2026-08-31) runs the scheduled
+// session reads on wall-clock, independent of bar arrival. It is invoked at the
+// TOP of tickOnce, BEFORE the bar-close gate and the no-new-data dedup, so a
+// quiet tape or the 16:00-17:00 CME halt can never delay a scheduled read.
+// When a read starts while the market is halted, it logs the halt-fired line
+// with the stored-bar age (4.3) so wall-clock authoring is never mistaken for a
+// data bug. Halt-fired authoring from last stored bars is RULED CORRECT (4.2):
+// a plan is structure judged on its facts snapshot; staleness at trade time is
+// the executor guards' job (stale_reeval, gate-at-arm, dormant/rearm).
+func (at *AutoTrader) evaluateWallClockSessionReads() {
+	now := traderNow()
+	fired := at.maybeRunSessionReadsAt(now)
+	if len(fired) == 0 {
+		return
+	}
+	if kernel.IsCMEOpen(now) {
+		return // live tape — the ordinary path, no halt line
+	}
+	newestCT, ageMin, have := newestStoredBarInfo(at.futuresSymbol(), at.primaryTimeframe(), now)
+	for _, f := range fired {
+		at.logInfof(haltSessionReadLine(f.Session, at.primaryTimeframe(), now, newestCT, ageMin, have))
+	}
+}
+
+// newestStoredBarInfo reports the newest stored bar for the halt-fired log line.
+func newestStoredBarInfo(symbol, tf string, now time.Time) (newestCT string, ageMin int, have bool) {
+	if market.FuturesBarsProvider == nil {
+		return "", 0, false
+	}
+	bars := market.FuturesBarsProvider(symbol, tf, 1)
+	if len(bars) == 0 {
+		return "", 0, false
+	}
+	b := bars[len(bars)-1]
+	return kernel.FormatCT(time.UnixMilli(b.OpenTime)), int(now.Sub(time.UnixMilli(b.OpenTime)).Minutes()), true
+}
+
+// haltSessionReadLine is the pure log-line builder for a read fired during a
+// CME halt (4.3) — fixture-tested for content and age math.
+func haltSessionReadLine(session, tf string, now time.Time, newestCT string, ageMin int, have bool) string {
+	if !have {
+		return fmt.Sprintf("🗓 session read fired during halt (%s) — authoring with NO stored bars (bar cache empty)", session)
+	}
+	return fmt.Sprintf("🗓 session read fired during halt (%s) — authoring from last stored bars (newest %s %s, age %dm)", session, tf, newestCT, ageMin)
+}
+
 // skipWhileOpen (P2.2) reports whether the AI decision cycle should be skipped
 // because the strategy is already holding a position — calmer and cheaper than
 // per-decision same-side refusal. GATED on day_plan → dormant by default. The
@@ -780,6 +826,15 @@ func (at *AutoTrader) tickOnce(isGrid bool) {
 		}
 		return
 	}
+	// CLASS 32 (owner ruling 2026-08-31) — scheduled session reads are
+	// WALL-CLOCK work, evaluated on EVERY tick BEFORE the data-gated skips.
+	// The bar-close gate and the no-new-data dedup idle the whole tick for
+	// minutes-to-hours whenever the tape is quiet (tonight the 16:00-17:00
+	// CME halt froze the bars, and the 16:30 ASIA read sat behind
+	// cycle_skip=no_new_data from 16:26 until the ~17:00:03 reopen tick —
+	// 30 minutes late, no error, no alarm, no plan at the open). A
+	// scheduled read must never inherit the market's calendar.
+	at.evaluateWallClockSessionReads()
 	// U2 (watcher-eyes hotfix): a post_exit kick is a PROMISED immediate rescan
 	// — it bypasses the bar-close gate and the no-new-data dedup exactly once
 	// (the dodge bypass rides skipDodgeOnce, set together in noteKick).
@@ -798,7 +853,7 @@ func (at *AutoTrader) tickOnce(isGrid bool) {
 			return // bar-close mode: no new primary-TF bar closed → idle this tick
 		}
 	}
-	if !bypassCadence && active && at.cadenceMode() == CadenceInterval && at.skipNoNewData(time.Now()) {
+	if !bypassCadence && active && at.cadenceMode() == CadenceInterval && at.skipNoNewData(traderNow()) {
 		return
 	}
 	// Discard-burn 2.1 — DODGE: starting a cycle just before the decision-TF's

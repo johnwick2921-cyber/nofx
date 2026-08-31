@@ -113,7 +113,7 @@ func (at *AutoTrader) plannerPreflight(session, tradeDate string) (ok bool) {
 	if market.FuturesBarsProvider == nil {
 		return true
 	}
-	now := time.Now()
+	now := traderNow() // class 32: wall-clock readers must agree on the trader clock (test seam; == time.Now() in prod)
 	age, haveBars := at.feedNewestBarAge(now)
 	if haveBars && age <= feedDownAfter() {
 		return true

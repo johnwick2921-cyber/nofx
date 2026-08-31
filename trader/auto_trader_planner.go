@@ -167,21 +167,32 @@ func shortHash(s string) string {
 	return hex.EncodeToString(sum[:6])
 }
 
+// SessionReadFired records a scheduled session read the scheduler JUST STARTED
+// (the planner call runs async — F6). Class 32 (2026-08-31): the wall-clock
+// tick path uses it to emit the halt-fired log line exactly once per started
+// read, and never for the ordinary live-tape path.
+type SessionReadFired struct {
+	Session   string
+	TradeDate string
+}
+
 // maybeRunSessionReads fires the per-session planner read at the registry read
 // time for each ENABLED session, once per session-day (idempotent via the plan
-// store). GATED on day_plan → dormant by default. Called per-cycle.
-func (at *AutoTrader) maybeRunSessionReads() {
-	at.maybeRunSessionReadsAt(time.Now())
+// store). GATED on day_plan → dormant by default. Called per-tick, BEFORE the
+// data-gated skips (class 32 — scheduled work is wall-clock, never bar-gated).
+func (at *AutoTrader) maybeRunSessionReads() []SessionReadFired {
+	return at.maybeRunSessionReadsAt(traderNow())
 }
 
 // maybeRunSessionReadsAt is maybeRunSessionReads with an injectable clock
 // (P0-B: the 16:55 closed-market read and the midnight wrap are time-sensitive
-// and unit-tested against a fixed `now`).
-func (at *AutoTrader) maybeRunSessionReadsAt(now time.Time) {
+// and unit-tested against a fixed `now`). Returns the reads it just started.
+func (at *AutoTrader) maybeRunSessionReadsAt(now time.Time) []SessionReadFired {
 	if !at.dayPlanEnabled() || at.store == nil {
-		return
+		return nil
 	}
 	reg := at.sessionRegistry(now) // W8 — admin registry from system_config (fallback default)
+	fired := make([]SessionReadFired, 0, 1)
 	for i := range reg.Sessions {
 		s := &reg.Sessions[i]
 		// W1 — fire the read ONLY inside this session's own read window. The
@@ -237,6 +248,7 @@ func (at *AutoTrader) maybeRunSessionReadsAt(now time.Time) {
 			// (300-500s observed) must not stall the executor loop: async, the
 			// same pattern as the W6/MSS wake re-reads. The plan-store dedupe
 			// keeps it one read per session-day.
+			fired = append(fired, SessionReadFired{Session: s.Name, TradeDate: tradeDate})
 			go at.runPlannerRead(s.Name, tradeDate)
 			continue
 		}
@@ -359,6 +371,7 @@ func (at *AutoTrader) maybeRunSessionReadsAt(now time.Time) {
 			at.maybeWakePlannerOnLevelEvents(s.Name, tradeDate, existing)
 		}
 	}
+	return fired
 }
 
 // Owner overlays are keyed (plan_id, plan_version) and every reader resolves

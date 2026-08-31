@@ -252,6 +252,21 @@ in CLAUDE.md).
     queries that must skip it and the queries that must see it are BOTH
     fixture-pinned in the same PR.
 
+32. **Time-scheduled action riding a data-gated cycle.** Root cause: the
+    session read (registry 16:30/01:30/08:00) was invoked INSIDE `runCycle`,
+    which `tickOnce` never enters when the bar-close gate or the no-new-data
+    dedup idles the tick. 2026-08-31 evidence: CME is halted 16:00-17:00 →
+    every cycle 16:26→16:38 logged `cycle_skip=no_new_data` → the 16:30 ASIA
+    read fired at ~17:00:03 with the reopen tick — 30 minutes late, no error,
+    no alarm, no plan at the open. Registry resolution, Sunday-defer (count=0)
+    and trader liveness were all correct. **Probe:** for every time-scheduled
+    action (reads, flats, rolls, weekly, digests), quote its invocation site
+    and ask "does anything the market's calendar does delay this?" — a halted
+    or quiet tape must never move wall-clock work. **Law:** scheduled work is
+    evaluated on wall-clock BEFORE the data-gated skips; data gates may skip
+    DATA work only. Halt-fired reads author from last stored bars and log
+    `🗓 session read fired during halt … (newest <tf> <ts>, age <n>m)`.
+
 ---
 
 ## PART 2 — PRE-AUDIT (standing hard rules)

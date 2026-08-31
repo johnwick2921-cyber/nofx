@@ -265,12 +265,12 @@ func (at *AutoTrader) runCycle() error {
 	// explicit. Gated → dormant. Restart during night resumes cleanly.
 	at.observeNightEdge()
 
-	// P3.3 — PLANNER READ JOBS: at each enabled session's registry read time, run
-	// the per-session planner read once (idempotent via the plan store) and persist
-	// the plan. GATED on day_plan → dormant by default; independent of position
-	// state (a read fires whether flat or holding). (The W3 calendar producer runs
-	// earlier, above the session gate — F0.)
-	at.maybeRunSessionReads()
+	// P3.3 — PLANNER READ JOBS: MOVED to tickOnce's wall-clock evaluation
+	// (class 32, 2026-08-31). The scheduled session read fires on wall-clock
+	// every tick, BEFORE the data-gated skips, so a quiet tape or the
+	// 16:00-17:00 CME halt can never delay it (tonight: the 16:30 ASIA read
+	// sat behind cycle_skip=no_new_data until ~17:00:03). See
+	// evaluateWallClockSessionReads in auto_trader_clock.go.
 
 	// W4 (weekly-bias wave) — MID-WEEK INVALIDATION WATCH, in the EXISTING cycle
 	// (no new loop): a CLOSED bar of the invalidation basis TF beyond the weekly
