@@ -75,6 +75,13 @@ type TCPServer struct {
 	pendingMu sync.Mutex
 	pending   []timedSignal
 
+	// E7 capability handshake (2026-08-30): the far-side AddOn's build id,
+	// reported on every heartbeat. Empty until the first heartbeat carries it.
+	// Frame types are gated on it (FarSideBuildE7) — an old AddOn that would
+	// mis-execute an unknown frame must never receive it (the 22:32 stop_entry
+	// test executed as MARKET on the pre-E7 AddOn).
+	farSideBuild atomic.Value // string
+
 	// Inbound fills — TCPTrader subscribes via Fills().
 	fillCh     chan FillPayload
 	closeCh    chan PositionClosePayload
@@ -488,6 +495,13 @@ func NewTCPServer(logger *slog.Logger) *TCPServer {
 // relay (Stage 4). The cache is goroutine-safe; readers receive snapshot
 // copies via Get and never block writers for long.
 func (s *TCPServer) BarCache() *BarCache { return s.barCache }
+
+// FarSideBuildID returns the far-side AddOn's reported build id ("" until the
+// first heartbeat carries it). E7 capability handshake (2026-08-30).
+func (s *TCPServer) FarSideBuildID() string {
+	v, _ := s.farSideBuild.Load().(string)
+	return v
+}
 
 // AccountState returns the latest account_balance snapshot received from the
 // C# AddOn (Plan 4.11) and whether one has arrived yet. TCPTrader.GetBalance
@@ -1739,6 +1753,14 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			}
 
 		case FrameHeartbeat:
+			// E7 capability handshake — the AddOn's build id (see farSideBuild).
+			var hb HeartbeatPayload
+			if err := json.Unmarshal(env.Payload, &hb); err == nil && hb.BuildID != "" {
+				if prev, _ := s.farSideBuild.Load().(string); prev != hb.BuildID {
+					s.farSideBuild.Store(hb.BuildID)
+					s.logger.Info("tcp_server: far-side AddOn build_id=" + hb.BuildID)
+				}
+			}
 			// Respond to peer heartbeat with an ack (spec L4410). Set our
 			// own write deadline — Go's net.Conn deadlines are PERSISTENT
 			// until reset, so without this the ack inherits whatever

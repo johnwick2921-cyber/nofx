@@ -150,7 +150,16 @@ func (s *ArmedOrderStore) UpsertArm(row *ArmedOrderDB) error {
 				"leg_count": row.LegCount, "kind": row.Kind,
 			}).Error
 		}
-		// Terminal → RE-AUTHORIZE: fresh armed state, fresh lineage.
+			// MANUAL-CANCEL-WINS (2026-08-30 E7 incident): a TERMINAL row is
+			// re-authorized ONLY on a plan VERSION change. The old
+			// re-authorize-every-cycle behavior was the re-place loop:
+			// terminal → armed → marketable fill → stop-out → terminal → armed…
+			// forever while the confirm stayed MET, so an owner/NT8 cancel
+			// never won. Same version + terminal = the row STAYS terminal.
+			if existing.Version == row.Version {
+				return nil
+			}
+			// New plan version → RE-AUTHORIZE: fresh armed state, fresh lineage.
 		row.ID = existing.ID
 		return s.db.Model(&existing).Updates(map[string]any{
 			"state": "armed", "state_reason": "", "signal_id": "",

@@ -471,6 +471,13 @@ func (t *TCPTrader) PlaceLimitEntry(symbol, side string, quantity float64, limit
 // tick offset is applied by the caller). Back-compat law: the frame is
 // additive JSON — only send it when the far-side AddOn has proven it.
 func (t *TCPTrader) PlaceStopEntry(symbol, side string, quantity float64, stopPx, sl, tp float64) (string, error) {
+	// E7 capability handshake (2026-08-30): the far-side AddOn must PROVE
+	// stop_entry support via its heartbeat build_id. An old AddOn executes an
+	// unknown frame type as MARKET (the 22:32 test filled at 29346.25 instead
+	// of resting at 28700) — refuse loudly, never send.
+	if bid := t.server.FarSideBuildID(); !ntwire.FarSideProven(bid, ntwire.FarSideBuildE7) {
+		return "", fmt.Errorf("ninjatrader/tcp: refusing stop-entry %s — far-side AddOn build %q does not prove stop_entry support (need ≥ %s); F5-compile + restart the new AddOn", side, bid, ntwire.FarSideBuildE7)
+	}
 	tradeAcct := t.boundAccount
 	if tradeAcct == "" {
 		return "", fmt.Errorf("ninjatrader/tcp: refusing stop-entry %s on %s — trader has no bound account", side, symbol)

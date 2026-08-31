@@ -561,6 +561,14 @@ func (at *AutoTrader) runArmedPlacement(bars []market.Kline, sinceMs int64) {
 				if r.Side == "long" {
 					trigger = r.EntryPx + offset
 				}
+				// WRONG-SIDE GUARD (2026-08-30 E7 incident class): a stop-market
+				// whose trigger the market has already traded through fires the
+				// instant it reaches NT8. Never place it — cancel the arm.
+				if price > 0 && limitMarketableWrongSide(price, trigger, r.Side) {
+					_ = ledger.SetState(r.ID, "cancelled", "trigger already traded through — never placed")
+					at.logWarnf("✕ armed %s stop-entry cancelled — price %.2f already %s the trigger %.2f (never placed)", r.Scenario, price, throughWord(r.Side), trigger)
+					continue
+				}
 				sid, perr := nt.PlaceStopEntry(at.futuresSymbol(), r.Side, 1, trigger, r.StopPx, r.TargetPx)
 				if perr != nil {
 					at.logWarnf("📌 stop-entry place failed %s: %v", r.Scenario, perr)
@@ -569,6 +577,15 @@ func (at *AutoTrader) runArmedPlacement(bars []market.Kline, sinceMs int64) {
 				_ = ledger.SetSignal(r.ID, sid)
 				_ = ledger.SetState(r.ID, "working", "")
 				at.logInfof("📌 armed %s → WORKING stop-entry %.2f signal=%s (no retest in %d bars, offset %dt)", r.Scenario, trigger, sid, retestWaitBars(), stopEntryOffsetTicks())
+				continue
+			}
+			if price > 0 && limitMarketableWrongSide(price, r.EntryPx, r.Side) {
+				// WRONG-SIDE GUARD (2026-08-30 E7 incident class): price has
+				// accepted through the level — a limit would fill INSTANTLY at
+				// a worse price (the S2 re-place loop: fill → stop-out →
+				// re-arm → fill…). Cancel the arm; manual-cancel-wins.
+				_ = ledger.SetState(r.ID, "cancelled", "level accepted through — marketable, never placed")
+				at.logWarnf("✕ armed %s cancelled — price %.2f already %s entry %.2f (marketable, never placed)", r.Scenario, price, throughWord(r.Side), r.EntryPx)
 				continue
 			}
 			if price > 0 && math.Abs(price-r.EntryPx) <= band {
@@ -586,6 +603,31 @@ func (at *AutoTrader) runArmedPlacement(bars []market.Kline, sinceMs int64) {
 	// reconnect/reconcile safety net (separate pass — cancelFn is the wire seam).
 	at.reconcileStaleWorking(ledger, rows, now, armedWorkingStaleMin(), func(sid string) { _ = nt.CancelOrder(sid) })
 	at.consumeArmedOrderUpdates(nt, ledger)
+}
+
+// limitMarketableWrongSide (E7 incident guard, pure) reports whether price has
+// already traded THROUGH a resting limit in the trade's direction — i.e. a
+// long's entry sits above the market (buy limit marketable) or a short's entry
+// sits below it. Placing in that state fills instantly at a worse price.
+func limitMarketableWrongSide(price, entry float64, side string) bool {
+	if price <= 0 || entry <= 0 {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(side)) {
+	case "long":
+		return price < entry
+	case "short":
+		return price > entry
+	}
+	return false
+}
+
+// throughWord is the human word for "the market has traded through" per side.
+func throughWord(side string) string {
+	if strings.EqualFold(side, "short") {
+		return "above"
+	}
+	return "below"
 }
 
 // churnNeedsModify — the churn guard predicate: the plan re-spec'd a working

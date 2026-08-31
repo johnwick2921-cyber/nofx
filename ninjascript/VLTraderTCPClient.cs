@@ -45,6 +45,10 @@ namespace NinjaTrader.NinjaScript.AddOns
         // provider/ninjatrader/tcp_framing.go ProtocolVersion — bump ONLY with a
         // lockstep C#+Go ship.
         private const int    PROTOCOL_VERSION        = 3;
+        // E7 capability handshake (2026-08-30): reported on every heartbeat so
+        // the Go side refuses frame types this build hasn't proven. Bump on any
+        // additive wire change; Go gates on FarSideBuildE7 in tcp_framing.go.
+        private const string  VL_BUILD_ID             = "2026-08-30-e7";
         private const int    MAX_FRAME_BYTES         = 1 << 20; // 1 MB, spec L4376
 
         // === State ===
@@ -2154,7 +2158,10 @@ namespace NinjaTrader.NinjaScript.AddOns
             {
                 Thread.Sleep(HEARTBEAT_INTERVAL_MS);
                 if (ct.IsCancellationRequested) return;
-                WriteEnvelope("heartbeat", new Dictionary<string, object>());
+                WriteEnvelope("heartbeat", new Dictionary<string, object>
+                {
+                    ["build_id"] = VL_BUILD_ID,
+                });
 
                 // Periodic re-emit of accounts every 3 heartbeats (90s) to ensure
                 // Go always has them after a restart (not just on connect/change)

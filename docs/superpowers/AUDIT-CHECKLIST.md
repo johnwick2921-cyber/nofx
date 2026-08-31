@@ -7,7 +7,7 @@ in CLAUDE.md).
 
 ---
 
-## PART 1 — THE 23 BUG CLASSES (name · root cause · probe · law)
+## PART 1 — THE 25 BUG CLASSES (name · root cause · probe · law)
 
 1. **Self-imposed caps.** Root cause: an AI/HTTP/token cap chosen without
    measuring the provider ceiling or the observed need (the 32768-token
@@ -192,6 +192,31 @@ in CLAUDE.md).
     a silent swallow. **Law:** a report-only path may degrade to a warning,
     never to a panic; the trading loop owns no `recover` blanket — each
     advisory seam carries its own.
+
+24. **Armed re-place loop (manual cancel did NOT win).** Root cause:
+    `UpsertArm` re-authorized TERMINAL rows every cycle while the confirm
+    stayed MET and the placement band allowed the wrong side — the
+    2026-08-30 S2 loop: terminal → armed → marketable fill (limit above
+    market) → instant stop-out → terminal → armed… 8 generations in 26 min;
+    an owner/NT8 cancel never stuck. **Probe:** (a) same-version
+    re-authorization fixture (terminal row + UpsertArm same version → stays
+    terminal; version bump → re-authorizes), (b) the wrong-side predicate
+    `limitMarketableWrongSide` (long limit below market / short above =
+    marketable, never placed), (c) journal has zero `WORKING` lines for a
+    terminal row. **Law:** MANUAL-CANCEL-WINS — a terminal row is
+    re-authorized ONLY on a plan-version change; a limit whose level the
+    price already accepted through is cancelled, never placed.
+
+25. **Far-side capability mismatch.** Root cause: the Go side sent a
+    `stop_entry` frame to a pre-E7 AddOn, which executed the UNKNOWN frame
+    type as MARKET — the 2026-08-30 test filled at 29346.25 instead of
+    resting at 28700 (the far-side proof exists precisely to catch this).
+    **Probe:** the AddOn reports a `build_id` on every heartbeat; the Go
+    side refuses any frame type the far side hasn't proven
+    (`FarSideProven` vs `FarSideBuildE7`) + a loopback fixture proving BOTH
+    the refusal (no/old build) and the release (new build). **Law:** NO
+    additive wire frame is sent before the far-side build proves it; a
+    capability gate ships with its own negative fixture.
 
 ---
 

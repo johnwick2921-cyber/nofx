@@ -200,8 +200,24 @@ type AckPayload struct {
 	Seq      uint64 `json:"seq,omitempty"`
 }
 
-// HeartbeatPayload is an empty struct — spec L4408 says empty payload.
-type HeartbeatPayload struct{}
+// HeartbeatPayload is the client (AddOn) heartbeat body. E7 CAPABILITY
+// HANDSHAKE (2026-08-30): the AddOn reports its BUILD_ID on every heartbeat;
+// the Go side refuses frame types the far side hasn't proven (see
+// FarSideBuildE7 / FarSideProven). Old AddOns send no build_id → "".
+type HeartbeatPayload struct {
+	BuildID string `json:"build_id"`
+}
+
+// FarSideBuildE7 is the minimum AddOn build that PROVES stop_entry support
+// (OrderType.StopMarket + stop_price parsing). ISO-date prefixes sort lexically.
+const FarSideBuildE7 = "2026-08-30-e7"
+
+// FarSideProven reports whether the far-side build id satisfies a minimum
+// build requirement. Unknown ("") NEVER satisfies — capability is proven by
+// receipt, not assumed.
+func FarSideProven(buildID, minBuild string) bool {
+	return buildID != "" && buildID >= minBuild
+}
 
 // Plan 4.4 Stage 2 — bar frame types (envelope format identical to signal/fill/heartbeat/ack: 4-byte big-endian length + JSON {type, payload}).
 // See ninjascript/vltrader_tcp_PROTOCOL.md sections 5-8 for field semantics.

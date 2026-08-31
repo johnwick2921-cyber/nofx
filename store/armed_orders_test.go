@@ -162,3 +162,80 @@ func TestSetFillPriceAndTraderScopedList(t *testing.T) {
 		t.Fatalf("fill_price = %.2f, want 29642.00", got.FillPrice)
 	}
 }
+
+// TestUpsertArmManualCancelWinsSameVersion — the 2026-08-30 E7-incident law:
+// a TERMINAL row (owner/NT8 cancel or a completed fill) must NOT be
+// re-authorized by the same plan version (the re-place loop: terminal → armed
+// → marketable fill → stop-out → terminal → armed … forever while the confirm
+// stayed MET). Manual cancel wins until the planner writes a NEW version.
+func TestUpsertArmManualCancelWinsSameVersion(t *testing.T) {
+	db := newArmedTestDB(t)
+	st := NewArmedOrderStore(db)
+	now := time.Now()
+	a := &ArmedOrderDB{TraderID: "t1", PlanID: "P1", Version: 2, Session: "ASIA",
+		Scenario: "S2", Side: "long", EntryPx: 29371.5, StopPx: 29350.0, TargetPx: 29420.0,
+		State: "armed", CreatedAt: now, UpdatedAt: now}
+	if err := st.UpsertArm(a); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetState(a.ID, "cancelled", "owner manual cancel"); err != nil {
+		t.Fatal(err)
+	}
+	// The executor's eval loop calls UpsertArm with State:"armed" every cycle.
+	retry := &ArmedOrderDB{TraderID: "t1", PlanID: "P1", Version: 2, Session: "ASIA",
+		Scenario: "S2", Side: "long", EntryPx: 29371.5, StopPx: 29350.0, TargetPx: 29420.0,
+		State: "armed", CreatedAt: now, UpdatedAt: now}
+	if err := st.UpsertArm(retry); err != nil {
+		t.Fatal(err)
+	}
+	var got ArmedOrderDB
+	if err := db.Where("id = ?", a.ID).First(&got).Error; err != nil {
+		t.Fatal(err)
+	}
+	if got.State != "cancelled" {
+		t.Fatalf("state = %q, want cancelled (manual cancel must win within the same version)", got.State)
+	}
+	// A FILLED row is equally protected (the fill→stop-out→re-arm half of the loop).
+	if err := st.SetState(a.ID, "filled", "fill@29347.25"); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.UpsertArm(retry); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Where("id = ?", a.ID).First(&got).Error; err != nil {
+		t.Fatal(err)
+	}
+	if got.State != "filled" {
+		t.Fatalf("state = %q, want filled (same version never resurrects a terminal row)", got.State)
+	}
+}
+
+// TestUpsertArmReauthorizesOnVersionBump — a NEW plan version is the sanctioned
+// re-arm path (the planner re-authored the scenario).
+func TestUpsertArmReauthorizesOnVersionBump(t *testing.T) {
+	db := newArmedTestDB(t)
+	st := NewArmedOrderStore(db)
+	now := time.Now()
+	a := &ArmedOrderDB{TraderID: "t1", PlanID: "P1", Version: 2, Session: "ASIA",
+		Scenario: "S2", Side: "long", EntryPx: 29371.5, StopPx: 29350.0, TargetPx: 29420.0,
+		State: "armed", CreatedAt: now, UpdatedAt: now}
+	if err := st.UpsertArm(a); err != nil {
+		t.Fatal(err)
+	}
+	if err := st.SetState(a.ID, "cancelled", "owner manual cancel"); err != nil {
+		t.Fatal(err)
+	}
+	next := &ArmedOrderDB{TraderID: "t1", PlanID: "P1", Version: 3, Session: "ASIA",
+		Scenario: "S2", Side: "long", EntryPx: 29371.5, StopPx: 29350.0, TargetPx: 29420.0,
+		State: "armed", CreatedAt: now, UpdatedAt: now}
+	if err := st.UpsertArm(next); err != nil {
+		t.Fatal(err)
+	}
+	var got ArmedOrderDB
+	if err := db.Where("id = ?", a.ID).First(&got).Error; err != nil {
+		t.Fatal(err)
+	}
+	if got.State != "armed" || got.Version != 3 {
+		t.Fatalf("state=%q version=%d, want armed v3 (version bump re-authorizes)", got.State, got.Version)
+	}
+}

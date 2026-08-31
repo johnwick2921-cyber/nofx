@@ -235,3 +235,28 @@ func TestArmedReconcileStaleWorking(t *testing.T) {
 		t.Fatalf("fresh S2 state = %q, want working", byScenario["S2"])
 	}
 }
+
+// TestLimitMarketableWrongSide — the pure wrong-side predicate behind the
+// placement guard that killed the 2026-08-30 S2 re-place loop (a marketable
+// limit fills instantly at a worse price and must never be placed).
+func TestLimitMarketableWrongSide(t *testing.T) {
+	cases := []struct {
+		price, entry float64
+		side         string
+		want         bool
+	}{
+		{29347.00, 29371.50, "long", true},  // market below a buy limit → marketable
+		{29380.00, 29371.50, "long", false}, // market above → resting pullback
+		{29347.00, 29371.50, "short", false},
+		{29390.00, 29371.50, "short", true}, // market above a sell limit → marketable
+		{0, 29371.50, "long", false},
+		{29347.00, 0, "long", false},
+		{29347.00, 29371.50, "LONG", true}, // case-insensitive
+		{29390.00, 29371.50, "SHORT", true},
+	}
+	for _, c := range cases {
+		if got := limitMarketableWrongSide(c.price, c.entry, c.side); got != c.want {
+			t.Fatalf("price=%.2f entry=%.2f side=%s: got %v want %v", c.price, c.entry, c.side, got, c.want)
+		}
+	}
+}

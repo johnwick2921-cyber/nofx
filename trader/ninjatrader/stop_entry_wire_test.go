@@ -72,7 +72,17 @@ func TestPlaceStopEntryFrameOnLoopback(t *testing.T) {
 		{"long", 29670.50, 29650.00, 29720.00},
 		{"short", 29400.25, 29420.75, 29350.00},
 	} {
-		s, st, _, frames := stopEntryServer(t)
+		s, st, conn, frames := stopEntryServer(t)
+
+		// E7 capability handshake: the far side proves stop_entry support by
+		// reporting its build id on the heartbeat (the 22:32 incident: an old
+		// AddOn executed the frame as MARKET because the Go side never checked).
+		if err := ntwire.WriteFrame(conn, ntwire.FrameHeartbeat, ntwire.HeartbeatPayload{BuildID: ntwire.FarSideBuildE7}); err != nil {
+			t.Fatalf("write heartbeat: %v", err)
+		}
+		for i := 0; i < 100 && !ntwire.FarSideProven(s.FarSideBuildID(), ntwire.FarSideBuildE7); i++ {
+			time.Sleep(10 * time.Millisecond)
+		}
 
 		tr := NewTCPTrader(s, "MNQ", "Sim101")
 		tr.mu.Lock()
@@ -111,6 +121,61 @@ func TestPlaceStopEntryFrameOnLoopback(t *testing.T) {
 		case <-time.After(3 * time.Second):
 			t.Fatalf("%s: no stop_entry frame arrived on the loopback", tc.side)
 		}
+	}
+}
+
+// TestPlaceStopEntryRefusedWithoutFarSideBuild — the capability handshake:
+// before the far side reports a build_id ≥ FarSideBuildE7, NO stop_entry frame
+// may leave the wire (the 2026-08-30 incident: an old AddOn executed the frame
+// as MARKET).
+func TestPlaceStopEntryRefusedWithoutFarSideBuild(t *testing.T) {
+	s, st, conn, frames := stopEntryServer(t)
+	_ = conn
+
+	tr := NewTCPTrader(s, "MNQ", "Sim101")
+	tr.mu.Lock()
+	tr.st = st
+	tr.mu.Unlock()
+
+	var err error
+	for i := 0; i < 50; i++ {
+		_, err = tr.PlaceStopEntry("MNQ", "short", 1, 28700.00, 28850.00, 28500.00)
+		if err == nil || !strings.Contains(err.Error(), "no NT client connected") {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if err == nil {
+		t.Fatal("stop-entry was sent without a far-side build id — the capability gate is broken")
+	}
+	if !strings.Contains(err.Error(), "does not prove stop_entry support") {
+		t.Fatalf("wrong refusal: %v", err)
+	}
+
+	// No signal frame may have reached the wire.
+	select {
+	case p := <-frames:
+		t.Fatalf("a frame leaked to the wire despite the gate: %+v", p)
+	case <-time.After(200 * time.Millisecond):
+		// expected silence
+	}
+
+	// An OLD build id (pre-E7) is equally refused.
+	if err := ntwire.WriteFrame(conn, ntwire.FrameHeartbeat, ntwire.HeartbeatPayload{BuildID: "2026-08-20"}); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 100 && s.FarSideBuildID() == ""; i++ {
+		time.Sleep(10 * time.Millisecond)
+	}
+	for i := 0; i < 50; i++ {
+		_, err = tr.PlaceStopEntry("MNQ", "short", 1, 28700.00, 28850.00, 28500.00)
+		if err == nil || !strings.Contains(err.Error(), "no NT client connected") {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if err == nil || !strings.Contains(err.Error(), "does not prove stop_entry support") {
+		t.Fatalf("old build id should refuse stop-entry: %v", err)
 	}
 }
 
