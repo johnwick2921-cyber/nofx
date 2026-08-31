@@ -55,24 +55,36 @@ breakdown-void defect. Legality = the OFFLINE schema gate
 (`ParsePlanDocCapped` + caps, byte-identical parse path); the facts validator
 cannot run offline because facts are not stored with the prompt (gap — see §5).
 
-| mode | wall | completion_tok | reasoning_chars | finish | legal | first defect |
-|---|---|---|---|---|---|---|
-| **AB_TABLE** | | | | | | |
+| mode | wall | completion_tok | prompt_tok | reasoning_chars | finish | legal | first defect |
+|---|---|---|---|---|---|---|---|
+| max | 419.5s | 27117 | 9406 | 87187 | stop | **true** | — |
+| fast | 324.0s | 22315 | 9314 | 71359 | stop | **false** | arm on S1 needs EXACTLY 2 legs (split contract), got 1 |
+
+N=1 honest reading: **fast saves only 23% of the wall (324s vs 419.5s)** — the
+streaming throughput is nearly identical (64.6 vs 68.9 t/s); the saving is
+fewer tokens (think chars drop just 18%), not faster thinking. And on this
+sample fast produced an ILLEGAL plan (the split-arm defect — the exact
+whack-a-mole class) while max produced a legal one. The repair retry already
+compresses retries by 58% with legality preserved; the latency-mode lever is
+weaker (23%) and cost legality here. Recommendation to the owner: **keep
+reasoning=max**; the cap/repair levers are where the time is. Re-run the A/B
+over ≥3 stored prompts before any final mode ruling.
 
 ## §5 — completion cap (report only, no changes)
 
 Observed completions this wave: full-author 30,421 tokens / 499.6s;
-repair 13,635 / 208.1s; prior 8 attempts 18.7k–33.1k (autopsy 168e5282).
-Throughput ≈ 61–66 t/s. **A cap that bounds an attempt at ~250s is ≈15k
-tokens — and 8/8 prior completions exceeded 15k, so a bare cap would truncate
-≈100% of full-author attempts.** The cap lever is a CEILING, not a speed
-lever. Ordering: (1) latency-mode ruling (A/B table above), (2) schema
-slimming (the emitted JSON's prose fields are the bulk of output — target a
-40-50% output cut → ~15-18k tokens ≈ 250-300s), (3) only then a cap (e.g.
-24k) as truncation insurance. Reasoning tokens ride inside the same stream —
-`reasoning_chars` shows think volume (102,847 chars on the full author) but
-the provider returns no reasoning-token count; the wall-time cost of max
-reasoning is exactly what the A/B quantifies.
+repair 13,635 / 208.1s; A/B 27,117 (max) / 22,315 (fast); prior 8 attempts
+18.7k–33.1k (autopsy 168e5282). Throughput ≈ 61–69 t/s. **A cap that bounds an
+attempt at ~250s is ≈15k tokens — and 8/8 prior completions exceeded 15k, so
+a bare cap would truncate ≈100% of full-author attempts.** The cap lever is a
+CEILING, not a speed lever. Ordering: (1) repair retry — SHIPPED, 58% faster
+retries, legality preserved; (2) schema slimming (the emitted JSON's prose
+fields are the bulk of output — target a 40-50% output cut → ~15-18k tokens ≈
+250-300s); (3) only then a cap (e.g. 24k) as truncation insurance. Latency
+mode is NOT recommended on the A/B evidence (23% saving, 1/1 illegal plan).
+Reasoning tokens ride inside the same stream — `reasoning_chars` shows think
+volume (102,847 chars on the live full author; 87,187 max / 71,359 fast in the
+A/B) but the provider returns no reasoning-token count.
 
 ## Instrumentation gaps (carried)
 
