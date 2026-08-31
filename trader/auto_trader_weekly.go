@@ -240,6 +240,10 @@ func (at *AutoTrader) runWeeklyRead(now time.Time, monday string, bootBackfill b
 
 // weeklyDocCached returns the parsed WEEKLY doc for the current governed week
 // (nil when absent/failed). Cached per week so per-cycle callers are cheap.
+// ONLY successful loads are cached — a negative (nil) result is retried next
+// call, so a cycle that runs before the Sunday weekly read lands can never pin
+// "WEEKLY: none" into the planner prompt for the rest of the week (the
+// 2026-08-31 owner-reported F1 miss).
 func (at *AutoTrader) weeklyDocCached(now time.Time) *kernel.WeeklyDoc {
 	if at.store == nil {
 		return nil
@@ -251,16 +255,16 @@ func (at *AutoTrader) weeklyDocCached(now time.Time) *kernel.WeeklyDoc {
 	if at.weeklyState.loaded {
 		return at.weeklyState.doc
 	}
-	at.weeklyState.loaded = true
 	row, err := at.store.Plan().GetLatestPlanForTraderSession(monday, "WEEKLY", at.id)
 	if err != nil || row == nil {
-		return nil
+		return nil // not cached — the next call retries the lookup
 	}
 	var doc kernel.WeeklyDoc
 	if json.Unmarshal([]byte(row.Doc), &doc) != nil {
-		return nil
+		return nil // not cached — the next call retries the lookup
 	}
 	at.weeklyState.doc = &doc
+	at.weeklyState.loaded = true
 	return &doc
 }
 

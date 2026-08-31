@@ -43,7 +43,7 @@ export const SESSION_BANDS: SessionBand[] = [
     name: 'ASIA',
     startMin: ctToMinutes('17:00'),
     endMin: ctToMinutes('02:00'), // wraps midnight
-    readMin: ctToMinutes('16:55'),
+    readMin: ctToMinutes('16:30'),
     flatMin: ctToMinutes('02:00'),
     killzones: [kz('asia_kz', '19:00', '23:00')],
     enabled: false,
@@ -53,7 +53,7 @@ export const SESSION_BANDS: SessionBand[] = [
     name: 'LONDON',
     startMin: ctToMinutes('02:00'),
     endMin: ctToMinutes('08:30'),
-    readMin: ctToMinutes('01:55'),
+    readMin: ctToMinutes('01:30'),
     flatMin: ctToMinutes('08:30'),
     killzones: [kz('london_kz', '02:00', '05:00')],
     enabled: false,
@@ -63,7 +63,7 @@ export const SESSION_BANDS: SessionBand[] = [
     name: 'NY',
     startMin: ctToMinutes('08:30'),
     endMin: ctToMinutes('14:45'), // = 15:45 ET; MUST equal flatMin (owner contract)
-    readMin: ctToMinutes('08:25'),
+    readMin: ctToMinutes('08:00'),
     flatMin: ctToMinutes('14:45'),
     killzones: [kz('ny_am', '08:30', '11:00'), kz('ny_pm', '13:00', '14:45')],
     enabled: true,

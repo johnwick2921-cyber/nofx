@@ -33,7 +33,7 @@ func TestAcceptanceSchedulerNextFire(t *testing.T) {
 		t.Logf("registry: %-6s enabled=%-5v window %s→%s read %s flat %s",
 			s.Name, s.Enabled, s.WindowStartCT, s.WindowEndCT, s.ReadCT, s.FlatCT)
 	}
-	if !ny.Enabled || ny.ReadCT != "08:25" {
+	if !ny.Enabled || ny.ReadCT != "08:00" {
 		t.Fatalf("NY session unexpected: enabled=%v read=%s", ny.Enabled, ny.ReadCT)
 	}
 
@@ -61,7 +61,7 @@ func TestAcceptanceSchedulerNextFire(t *testing.T) {
 	}
 	t.Logf("FIRST NY READ FIRES: %s", firstFire.Format("Mon 2006-01-02 15:04:05 MST"))
 
-	want := time.Date(2026, 8, 17, 8, 25, 0, 0, ct)
+	want := time.Date(2026, 8, 17, 8, 0, 0, 0, ct)
 	if !firstFire.Equal(want) {
 		t.Errorf("next-fire mismatch: got %s want %s", firstFire, want)
 	}
@@ -75,7 +75,7 @@ func TestAcceptanceSchedulerNextFire(t *testing.T) {
 	// The arithmetic, spelled out for the report.
 	t.Logf("arithmetic: now=Sat 19:55 CT → IsCMEOpen(Sat)=false (cme_calendar.go:26-27)")
 	t.Logf("            Sun 17:00+ → IsCMEOpen=true (line 28-29) BUT inSessionReadWindow(1020min ≥ 900=15:00 end)=false")
-	t.Logf("            Mon 08:25 → IsCMEOpen(Mon, hour!=16)=true AND read=505min ≤ 505 < 900 → FIRE")
+	t.Logf("            Mon 08:00 → IsCMEOpen(Mon, hour!=16)=true AND read=480min ≤ 505 < 900 → FIRE")
 	t.Logf("            plan key = (trade_date 2026-08-17, session NY); GetLatestPlanForSession=nil → runPlannerRead")
 }
 

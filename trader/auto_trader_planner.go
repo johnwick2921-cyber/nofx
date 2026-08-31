@@ -186,14 +186,21 @@ func (at *AutoTrader) maybeRunSessionReadsAt(now time.Time) {
 		s := &reg.Sessions[i]
 		// W1 — fire the read ONLY inside this session's own read window. The
 		// market-open test is made against the SESSION INSTANCE'S OPEN (P0-B):
-		// the ASIA read is designed for 16:55 CT, inside the 16:00–17:00 CME
-		// maintenance break, and the contract says it builds from STORED data
-		// while the market is closed — gating on IsCMEOpen(now) made that read
-		// UNREACHABLE (first ASIA read fired 17:12, post-open). Weekend/holiday
-		// protection is preserved: a session instance whose OPEN falls on a
-		// closed day never reads, and the death-check still runs through the
-		// wrapped tail (Friday 00:30 → Thursday 17:00 open → live).
+		// the ASIA read is designed for 16:30 CT (owner ruling 2026-08-31), inside
+		// the 16:00–17:00 CME maintenance break, and the contract says it builds
+		// from STORED data while the market is closed — gating on IsCMEOpen(now)
+		// made that read UNREACHABLE. Weekend/holiday protection is preserved:
+		// a session instance whose OPEN falls on a closed day never reads, and
+		// the death-check still runs through the wrapped tail.
 		if !inSessionReadWindow(now, s.ReadCT, s.WindowEndCT) {
+			continue
+		}
+		// A2 (owner ruling 2026-08-31) — Sunday sequencing: the weekly read
+		// fires Sunday 16:30, the same minute as the moved ASIA read. The ASIA
+		// read waits for this week's weekly doc to land; the per-cycle retry
+		// makes it fire right after the weekly write, with no timers.
+		if sundayAsiaDeferred(s, now, at.weeklyDocCached(now)) {
+			at.logInfof("⏳ ASIA read deferred — Sunday weekly doc not landed yet (weekly 16:30 → ASIA follows)")
 			continue
 		}
 		instOpen, okOpen := kernel.SessionInstanceStart(s, now)
@@ -1235,6 +1242,21 @@ func resolvePlannerRetryMode() string { return kernel.ResolvePlannerRetryMode() 
 // plannerStreamIdle delegates to the kernel resolver (AI_PLAN_STREAM_IDLE_SECS).
 func plannerStreamIdle() time.Duration {
 	return time.Duration(kernel.PlannerStreamIdleSeconds()) * time.Second
+}
+
+// sundayAsiaDeferred (A2, owner ruling 2026-08-31) — the Sunday sequencing
+// gate: the ASIA session read (now 16:30) defers while Sunday's weekly read
+// (also 16:30) has not yet landed this week's doc. Pure + fixture-tested; the
+// per-cycle retry makes the ASIA read fire right after the weekly write.
+// Weekdays (and a landed doc) defer nothing.
+func sundayAsiaDeferred(s *kernel.SessionDef, now time.Time, weeklyDoc *kernel.WeeklyDoc) bool {
+	if s == nil || s.Name != kernel.SessionAsia {
+		return false
+	}
+	if now.In(kernel.CTLocation()).Weekday() != time.Sunday {
+		return false
+	}
+	return weeklyDoc == nil
 }
 
 // estimatePromptTokens is the cheap ~4 chars/token estimate used in the

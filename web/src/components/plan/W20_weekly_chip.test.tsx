@@ -20,7 +20,7 @@ const bull: PlanWeekly = {
 }
 const bear: PlanWeekly = { ...bull, bias: 'bear', conviction: 'low' }
 const invalidated: PlanWeekly = {
-  ...bull,
+  ...bear, // an invalidated BEAR must display neutral, never the stale bias
   invalidated_at: '2026-08-28 10:15 CT',
 }
 
@@ -49,11 +49,13 @@ describe('WeeklyChip', () => {
     expect(chip.getAttribute('title')).toContain('WEEKLY: none')
   })
 
-  it('invalidated state — strikethrough + neutral tooltip', () => {
+  it('invalidated state — neutral label, NO strikethrough (owner ruling 2026-08-31)', () => {
     render(<WeeklyChip weekly={invalidated} />)
     const chip = screen.getByTestId('weekly-chip')
-    expect(chip.style.textDecoration).toBe('line-through')
+    expect(chip.textContent).toContain('WEEKLY neutral')
     expect(chip.getAttribute('title')).toContain('WEEKLY: neutral (invalidated')
+    expect(chip.style.textDecoration).not.toBe('line-through')
+    expect(chip.textContent).not.toContain('bear') // stale bias never shows
   })
 })
 

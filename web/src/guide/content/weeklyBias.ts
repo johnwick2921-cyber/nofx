@@ -29,7 +29,7 @@ export const weeklyBias: GuideSection = {
         },
         {
           title: 'Invalidation semantics',
-          body: 'Every weekly doc carries a MANDATORY invalidation price + basis ("1h close beyond <px>"). When a CLOSED bar of the basis TF crosses it mid-week, the doc flips bias→neutral with invalidated_at stamped — NEVER an auto-flip to the opposite side, and no re-read until next Sunday. The card renders the chip with a strikethrough.',
+          body: 'Every weekly doc carries a MANDATORY invalidation price + basis ("1h close beyond <px>"). When a CLOSED bar of the basis TF crosses it mid-week, the doc flips bias→neutral with invalidated_at stamped — NEVER an auto-flip to the opposite side, and no re-read until next Sunday. The chip renders "WEEKLY neutral" (tooltip carries the invalidated date) — an invalidated weekly is a VALID neutral state, never struck through (owner ruling 2026-08-31).',
         },
         {
           title: 'WARN mode annotates — it never blocks',

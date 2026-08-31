@@ -44,7 +44,7 @@ type SessionDef struct {
 	Name          string `json:"name"`
 	WindowStartCT string `json:"window_start_ct"`
 	WindowEndCT   string `json:"window_end_ct"`
-	ReadCT        string `json:"read_ct"` // planner read time (≈5 min before open)
+	ReadCT        string `json:"read_ct"` // planner authoring read time (owner ruling 2026-08-31: open−30)
 	// FlatCT: session-flat time. AUDIT NOTE (2026-08-18): no production path
 	// consumes this field or EffectiveFlatCT — the live flatten is session-
 	// scoped in trader/auto_trader_clock.go (enforceEODFlatAt: session end −
@@ -87,7 +87,7 @@ func DefaultSessionRegistry() SessionRegistry {
 				Name:          SessionAsia,
 				WindowStartCT: "17:00",
 				WindowEndCT:   "02:00", // wraps midnight
-				ReadCT:        "16:55",
+				ReadCT:        "16:30", // owner ruling 2026-08-31: open−30 (was 16:55)
 				FlatCT:        "02:00",
 				Killzones:     []KillzoneCT{{Name: "asia_kz", StartCT: "19:00", EndCT: "23:00"}},
 				Enabled:       false,
@@ -96,7 +96,7 @@ func DefaultSessionRegistry() SessionRegistry {
 				Name:          SessionLondon,
 				WindowStartCT: "02:00",
 				WindowEndCT:   "08:30",
-				ReadCT:        "01:55",
+				ReadCT:        "01:30", // owner ruling 2026-08-31: open−30 (was 01:55)
 				FlatCT:        "08:30",
 				Killzones:     []KillzoneCT{{Name: "london_kz", StartCT: "02:00", EndCT: "05:00"}},
 				Enabled:       false,
@@ -105,7 +105,7 @@ func DefaultSessionRegistry() SessionRegistry {
 				Name:          SessionNY,
 				WindowStartCT: "08:30",
 				WindowEndCT:   "14:45", // = 15:45 ET — session end == EOD flat (owner contract)
-				ReadCT:        "08:25",
+				ReadCT:        "08:00", // owner ruling 2026-08-31: open−30 (was 08:25)
 				FlatCT:        "14:45", // = 15:45 ET — same instant as WindowEndCT by contract
 				Killzones: []KillzoneCT{
 					{Name: "ny_am", StartCT: "08:30", EndCT: "11:00"},

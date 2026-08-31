@@ -14,19 +14,19 @@ export const tradingDay: GuideSection = {
           time: '17:00',
           label: 'Session roll + ASIA read',
           detail:
-            'The CME session-day rolls; the ASIA plan is read (scheduled read 16:55, session opens 17:00). Gate-block counters reset at the roll.',
+            'The CME session-day rolls; the ASIA plan is read (scheduled read 16:30, session opens 17:00 — open−30 per owner ruling 2026-08-31). Gate-block counters reset at the roll.',
         },
         {
-          time: '01:55',
+          time: '01:30',
           label: 'LONDON read',
           detail:
             'London plan read; session runs 02:00–08:30 CT. DST can shift the window ±1h (the card warns).',
         },
         {
-          time: '08:25',
+          time: '08:00',
           label: 'NY read',
           detail:
-            'The main event. NY runs 08:30–14:45 CT. The 08:25 read produces the plan the executor trades all day.',
+            'The main event. NY runs 08:30–14:45 CT. The 08:00 read produces the plan the executor trades all day.',
         },
         {
           time: '12:00–13:30',

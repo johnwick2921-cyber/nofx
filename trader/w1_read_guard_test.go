@@ -17,7 +17,7 @@ func w1CT(y int, mo time.Month, d, h, mi int) time.Time {
 
 // nyReadWouldFire is the EXACT predicate maybeRunSessionReads uses for NY.
 func nyReadWouldFire(now time.Time) bool {
-	return kernel.IsCMEOpen(now) && inSessionReadWindow(now, "08:25", "15:00")
+	return kernel.IsCMEOpen(now) && inSessionReadWindow(now, "08:00", "15:00")
 }
 
 func TestW1SundayReadGuard(t *testing.T) {
@@ -26,14 +26,14 @@ func TestW1SundayReadGuard(t *testing.T) {
 		at   time.Time
 		want bool
 	}{
-		{"Mon 08:25 → fire", w1CT(2026, 8, 17, 8, 25), true},
-		{"Mon 08:24 → not yet", w1CT(2026, 8, 17, 8, 24), false},
+		{"Mon 08:00 → fire", w1CT(2026, 8, 17, 8, 0), true},
+		{"Mon 07:59 → not yet", w1CT(2026, 8, 17, 7, 59), false},
 		{"Mon 14:59 → still in window", w1CT(2026, 8, 17, 14, 59), true},
 		{"Mon 15:00 → window closed", w1CT(2026, 8, 17, 15, 0), false},
 		{"Sun 17:00 reopen → NO spurious NY read", w1CT(2026, 8, 16, 17, 0), false},
 		{"Sun 20:00 → no", w1CT(2026, 8, 16, 20, 0), false},
 		{"Sat 10:00 → CME closed", w1CT(2026, 8, 15, 10, 0), false},
-		{"Fri 08:25 → fire", w1CT(2026, 8, 14, 8, 25), true},
+		{"Fri 08:00 → fire", w1CT(2026, 8, 14, 8, 0), true},
 	}
 	for _, c := range cases {
 		if got := nyReadWouldFire(c.at); got != c.want {
@@ -43,7 +43,7 @@ func TestW1SundayReadGuard(t *testing.T) {
 }
 
 // The whole-weekend sweep: NY read must be FALSE at every Sat + Sun step — no plan
-// is ever written for a weekend, so Monday's is built fresh at 08:25.
+// is ever written for a weekend, so Monday's is built fresh at 08:00.
 func TestW1WeekendSweepNoNYRead(t *testing.T) {
 	for _, day := range []int{15, 16} { // Sat, Sun
 		for h := 0; h < 24; h++ {
@@ -76,16 +76,16 @@ func TestW1DailyRollWindow(t *testing.T) {
 	}
 }
 
-// The ASIA wrap-around window is handled (16:55→02:00): Sunday 17:00 IS Monday's
+// The ASIA wrap-around window is handled (16:30→02:00): Sunday 17:00 IS Monday's
 // ASIA read time (spec: Sunday 17:00 = Asia of Monday's trade date).
 func TestW1AsiaWrapWindow(t *testing.T) {
-	if !inSessionReadWindow(w1CT(2026, 8, 16, 17, 0), "16:55", "02:00") {
+	if !inSessionReadWindow(w1CT(2026, 8, 16, 17, 0), "16:30", "02:00") {
 		t.Fatal("ASIA read window must include Sunday 17:00 (Monday's ASIA)")
 	}
-	if !inSessionReadWindow(w1CT(2026, 8, 17, 1, 0), "16:55", "02:00") {
+	if !inSessionReadWindow(w1CT(2026, 8, 17, 1, 0), "16:30", "02:00") {
 		t.Fatal("ASIA window must include 01:00 (wrapped past midnight)")
 	}
-	if inSessionReadWindow(w1CT(2026, 8, 17, 3, 0), "16:55", "02:00") {
+	if inSessionReadWindow(w1CT(2026, 8, 17, 3, 0), "16:30", "02:00") {
 		t.Fatal("ASIA window must EXCLUDE 03:00 (past 02:00 end)")
 	}
 }

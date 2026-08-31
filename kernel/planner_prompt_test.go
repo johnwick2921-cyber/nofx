@@ -9,7 +9,7 @@ func samplePlannerInput() PlannerInput {
 	return PlannerInput{
 		TradeDate: "2026-08-14",
 		Session:   "NY",
-		ReadKind:  "read 08:25 CT (live)",
+		ReadKind:  "read 08:00 CT (live)",
 		Price:     15600,
 		DATR:      120,
 		Regime:    RegimeBlock{TrendDaily: "up", Trend1h: "up", ATR14: 118, ATRRegime: "NORMAL", ATRPercentile: 55, VIXRegime: "unavailable"},

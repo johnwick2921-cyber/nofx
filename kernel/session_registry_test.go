@@ -26,7 +26,7 @@ func TestDefaultRegistryRows(t *testing.T) {
 	if !ok {
 		t.Fatalf("NY session missing")
 	}
-	if ny.ReadCT != "08:25" || ny.WindowStartCT != "08:30" || ny.FlatCT != "14:45" {
+	if ny.ReadCT != "08:00" || ny.WindowStartCT != "08:30" || ny.FlatCT != "14:45" {
 		t.Fatalf("NY row wrong: %+v", ny)
 	}
 	if !ny.Enabled {
@@ -37,7 +37,7 @@ func TestDefaultRegistryRows(t *testing.T) {
 	if asia.Enabled || london.Enabled {
 		t.Fatalf("ASIA/LONDON must be disabled by default")
 	}
-	if asia.ReadCT != "16:55" || london.ReadCT != "01:55" {
+	if asia.ReadCT != "16:30" || london.ReadCT != "01:30" {
 		t.Fatalf("read times wrong: asia=%s london=%s", asia.ReadCT, london.ReadCT)
 	}
 	if got := r.EnabledSessions(); !reflect.DeepEqual(got, []string{"NY"}) {
@@ -94,15 +94,15 @@ func TestActiveSessionBoundariesExclusive(t *testing.T) {
 func TestIsReadTime(t *testing.T) {
 	r := DefaultSessionRegistry()
 	ny, _ := r.SessionByName("NY")
-	if !ny.IsReadTime(ctTime(t, 8, 25)) {
-		t.Fatalf("08:25 should be NY read time")
+	if !ny.IsReadTime(ctTime(t, 8, 0)) {
+		t.Fatalf("08:00 should be NY read time")
 	}
-	if ny.IsReadTime(ctTime(t, 8, 24)) || ny.IsReadTime(ctTime(t, 8, 26)) {
-		t.Fatalf("only 08:25 exact should be NY read time")
+	if ny.IsReadTime(ctTime(t, 7, 59)) || ny.IsReadTime(ctTime(t, 8, 1)) {
+		t.Fatalf("only 08:00 exact should be NY read time")
 	}
 	asia, _ := r.SessionByName("ASIA")
-	if !asia.IsReadTime(ctTime(t, 16, 55)) {
-		t.Fatalf("16:55 should be ASIA read time")
+	if !asia.IsReadTime(ctTime(t, 16, 30)) {
+		t.Fatalf("16:30 should be ASIA read time")
 	}
 }
 

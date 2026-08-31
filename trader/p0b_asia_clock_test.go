@@ -1,6 +1,7 @@
 package trader
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"testing"
 	"time"
@@ -11,7 +12,7 @@ import (
 )
 
 // P0-B (2026-08-18) — ASIA CLOCK. Two defects, two guarantees:
-//  1. the designed 16:55 read must fire even though IsCMEOpen(now) is false
+//  1. the designed 16:30 read must fire even though IsCMEOpen(now) is false
 //     during the 16:00–17:00 CME maintenance break (it builds from STORED data);
 //  2. one session instance maps to EXACTLY one plan chain across the midnight
 //     trade-date roll — no second plan at 00:30 CT.
@@ -60,7 +61,7 @@ func waitPlan(t *testing.T, st *store.Store, tradeDate, session, traderID string
 	return nil
 }
 
-func TestP0BAsiaReadFiresAt1655WhileMarketClosed(t *testing.T) {
+func TestP0BAsiaReadFiresAt1630WhileMarketClosed(t *testing.T) {
 	at, st := asiaClockTrader(t)
 	prev := market.FuturesBarsProvider
 	t.Cleanup(func() { market.FuturesBarsProvider = prev })
@@ -78,17 +79,18 @@ func TestP0BAsiaReadFiresAt1655WhileMarketClosed(t *testing.T) {
 		return bars
 	}
 
-	// Tuesday 16:55 CT — the CME maintenance break. IsCMEOpen(now) == false.
-	now := ctTime(t, 2026, 8, 18, 16, 55)
+	// Tuesday 16:30 CT — the CME maintenance break (open−30 read, owner
+	// ruling 2026-08-31). IsCMEOpen(now) == false.
+	now := ctTime(t, 2026, 8, 18, 16, 30)
 	if kernel.IsCMEOpen(now) {
-		t.Fatalf("fixture: 16:55 must be inside the maintenance break (IsCMEOpen=false)")
+		t.Fatalf("fixture: 16:30 must be inside the maintenance break (IsCMEOpen=false)")
 	}
 
 	at.maybeRunSessionReadsAt(now)
 
 	row := waitPlan(t, st, "2026-08-18", "ASIA", "t1")
 	if row == nil {
-		t.Fatalf("the 16:55 ASIA read must fire while the market is closed")
+		t.Fatalf("the 16:30 ASIA read must fire while the market is closed")
 	}
 	if row.Lifecycle != "active" || row.TriggerReason != "ASIA_scheduled_read" {
 		t.Fatalf("plan row wrong: %+v", row)
@@ -97,16 +99,31 @@ func TestP0BAsiaReadFiresAt1655WhileMarketClosed(t *testing.T) {
 
 func TestP0BAsiaReadDoesNotFireOutsideItsWindow(t *testing.T) {
 	at, st := asiaClockTrader(t)
-	// 16:30 CT — before ReadCT 16:55. Nothing may fire.
-	at.maybeRunSessionReadsAt(ctTime(t, 2026, 8, 18, 16, 30))
+	// 16:29 CT — before ReadCT 16:30. Nothing may fire.
+	at.maybeRunSessionReadsAt(ctTime(t, 2026, 8, 18, 16, 29))
 	if row, _ := st.Plan().GetLatestPlanForTraderSession("2026-08-18", "ASIA", "t1"); row != nil {
-		t.Fatalf("16:30 is outside the read window — no plan may be written, got %+v", row)
+		t.Fatalf("16:29 is outside the read window — no plan may be written, got %+v", row)
 	}
-	// Sunday 16:55: the session INSTANCE opens Sunday 17:00 (live Globex) —
-	// reading is correct.
-	at.maybeRunSessionReadsAt(ctTime(t, 2026, 8, 23, 16, 55))
+	// Sunday 16:30 WITHOUT the weekly doc landed — the A2 sequencing gate defers.
+	at.maybeRunSessionReadsAt(ctTime(t, 2026, 8, 23, 16, 30))
+	time.Sleep(300 * time.Millisecond)
+	if row, _ := st.Plan().GetLatestPlanForTraderSession("2026-08-23", "ASIA", "t1"); row != nil {
+		t.Fatalf("Sunday 16:30 with no weekly doc must DEFER, got %+v", row)
+	}
+	// Land the weekly doc (governing week of Sunday 2026-08-23 → Monday 08-24).
+	monday := kernel.WeekGoverningMonday(ctTime(t, 2026, 8, 23, 16, 30)).Format("2006-01-02")
+	wj, _ := json.Marshal(kernel.WeeklyDoc{Bias: "neutral"})
+	if _, err := st.Plan().AppendPlan(&store.PlanDB{
+		PlanID:     st.Plan().ResolvePlanID(monday, "WEEKLY", at.id),
+		StrategyID: at.id, TradeDate: monday, Session: "WEEKLY",
+		TriggerReason: "test_weekly", Lifecycle: "active", Doc: string(wj),
+	}); err != nil {
+		t.Fatalf("weekly seed: %v", err)
+	}
+	// Now the Sunday read fires (weekly 16:30 → ASIA follows, same-cycle retry).
+	at.maybeRunSessionReadsAt(ctTime(t, 2026, 8, 23, 16, 31))
 	if row := waitPlan(t, st, "2026-08-23", "ASIA", "t1"); row == nil {
-		t.Fatalf("Sunday 17:00 is a live session open — the 16:55 Sunday read must fire")
+		t.Fatalf("Sunday 17:00 is a live session open — the 16:30 Sunday read must fire after the weekly doc lands")
 	}
 }
 

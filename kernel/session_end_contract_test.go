@@ -19,7 +19,7 @@ import (
 const (
 	wantNYStart = "08:30"
 	wantNYEnd   = "14:45" // = 15:45 ET
-	wantNYRead  = "08:25"
+	wantNYRead  = "08:00"
 	wantNYFlat  = "14:45" // MUST equal wantNYEnd
 )
 
@@ -103,7 +103,7 @@ func TestSessionEndSpecUnambiguous(t *testing.T) {
 		t.Skipf("spec not present: %v", err)
 	}
 	spec := string(b)
-	if strings.Contains(spec, "NY 08:30–15:45 (read 08:25)") {
+	if strings.Contains(spec, "NY 08:30–15:45 (read 08:00)") {
 		t.Fatal("spec still writes NY as 08:30–15:45 — that mixes CT (08:30) with ET (15:45)")
 	}
 	if !strings.Contains(spec, "14:45 CT") {

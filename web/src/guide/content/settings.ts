@@ -489,7 +489,7 @@ const sessions: KnobSpec[] = [
     range:
       'per-session rows; the four tri-state knobs inherit (blank) = strategy value, explicit = override',
     systemDefault:
-      'ASIA 16:55 read 17:00→02:00 · LONDON 01:55 02:00→08:30 · NY 08:25 08:30→14:45 (all EOD-flat)',
+      'ASIA 16:30 read 17:00→02:00 · LONDON 01:30 02:00→08:30 · NY 08:00 08:30→14:45 (all EOD-flat) — reads moved to open−30 by owner ruling 2026-08-31',
     recommended:
       '⭐ keep the current rows — they ARE the deployed session map.',
     whenToTouch: 'Only with a deliberate session-thesis change.',
