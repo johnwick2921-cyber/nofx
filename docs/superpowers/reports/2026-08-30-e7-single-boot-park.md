@@ -55,3 +55,14 @@ The clock-hold agent's uncommitted `f1_wrong_side_test.go` (strict AT-market bou
 ## Live state at park time
 
 Bot on the data-kill: plans `no_trade` (e7_incident_kill) · S2/S3 rows cancelled · Sim101 flat · 0 placements since 23:10:36.
+
+---
+
+## BOOT RESULT — 2026-08-31 00:08:38 CT (appended post-boot)
+
+- Flat gate 4/4: DB_OPEN=0 · ARMED_NT=0 · Sim101 count=0 · API `[]`.
+- **`🔐 BOOT INTEGRITY OK — rev 59dc94603e49 · goldens PASS`** · `🎛 entry law: … stop_entry_seam=ON` · `⚔️ armed_orders=on … test_seam=ON`. PID 932579.
+- **Handshake:** `00:08:52 tcp_server: far-side AddOn build_id=2026-08-30-e7` — the compiled 46699102 AddOn is live and proven.
+- **Proof #2 (Path B — accept on first place):** `place_stop` trigger 28700 → `ok:true`, signal `1deb5e23` → **RESTED** (77s, zero fills, state working, Sim101 flat — the old AddOn's market-execution class is dead) → `cancel` → `ok:true` → ledger `cancelled (test seam cancel)`.
+- **Cancel ack:** the far side answered with 3 `order_update` frames at 00:11:12 (receipt quoted); they were dropped by the armed consumer's no-subscriber guard (subscription is cycle-bound — observability gap, NOT a functional failure). Functional proof: **PROOF2_CLEAN_5MIN_NO_REAPPEAR** — 5 min × 30s ticks: placements=0 fills=0 panics=0 drops=0, Sim101 flat every tick.
+- **Post-boot note:** `ARMED_TEST_SEAM` stays on until the next maintenance restart (SIM-only + ownership-gated; turning it off now would need a second boot). The plan remains `no_trade` — the owner's reset/re-read activates real trading under the new law.
