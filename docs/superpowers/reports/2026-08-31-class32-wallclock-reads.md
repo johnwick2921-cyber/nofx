@@ -1,6 +1,26 @@
 # CLASS 32 — Scheduled reads must fire on wall-clock
 
-Date: 2026-08-31 CT · Wave: class32-wallclock-reads · Branch: `class32-wallclock-reads`
+Date: 2026-08-31 CT · Wave: class32-wallclock-reads · Branch: `class32-wallclock-reads` (merged → dev `ebc37e01`)
+
+**STATUS: STAGED-AND-GREEN — CUTOVER ON HOLD (owner unavailable for GO at 18:45 CT;
+dispatch 8.6: "Owner unavailable" means HOLD. No unattended deploys.)**
+
+Staged:
+- Build sha `ebc37e01d7dd5f19c0e0f0ffa962388e12988f58` — clean-clone build, `vcs.revision` matches, `vcs.modified=false`. Binary at `~/nofx-staged/nofx-32-bin`.
+- Marker `60ae142d` pushed: `deploy/RELEASE` = `ebc37e01…` + `GUIDE_BUILT_REV` = `ebc37e01…`.
+- Suites: `go build ./...` OK · `go test ./...` green · tsc 0 · vitest 36 files / 292 tests.
+- Flat gate pre-park (18:44-18:45 CT): DB open pos 0 · open orders 0 · armed nonterminal 0 · API positions `[]` · API open-orders MNQ `[]` · NT8 snapshots `account=Sim101 count=0` + `account=SimAccount1 count=0` @18:44:22.
+- Live bot untouched: rev `7004a7f1f726…` PID 1466535, ASIA v1 no_trade, window check passed (18:45 CT, not 16:45-17:10).
+
+Cutover runbook (on owner GO):
+1. `mv ~/nofx/nofx-bin ~/nofx/nofx-bin.prev.boot` → `cp ~/nofx-staged/nofx-32-bin ~/nofx/nofx-bin`
+2. `kill -9 <PID>` (SIGTERM exits 0 — no relaunch)
+3. Boot checklist within 90s: rev `ebc37e01` · `🔐 BOOT INTEGRITY OK` · goldens PASS · `🗓 session reads (owner ruling 2026-08-31, open−30)` line · `🔬 conditions` line (0C)
+4. Post-boot flat-gate re-quote (four legs).
+5. LIVE PROOF tomorrow ~16:35 CT: quote the actual ASIA read timestamp + the `🗓 session read fired during halt …` line.
+
+Rollback: `mv nofx-bin.prev.boot nofx-bin && <revert deploy/RELEASE> && kill -9 <PID>`
+(`nofx-bin.prev.boot` will hold the pre-wave live `7004a7f1f726…`.)
 
 ## Root cause (tonight's evidence)
 
