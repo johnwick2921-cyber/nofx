@@ -239,6 +239,23 @@ func resolveRequestedSession(reg kernel.SessionRegistry, want, activeName string
 
 // handlePlanToday GET /api/plan/today?trader_id=xxx[&symbol=MNQ] — the active
 // plan (overlay-resolved) + live per-level facts from the P0.4 evaluator.
+
+// planReadingFields derives the card's reading semantics FROM THE STORE (F7,
+// 2026-08-30). The raw in-flight claim is only "the planner is writing" while
+// NO row is committed; once a row exists the card renders that plan and a
+// running read is exposed as replan_in_flight instead. A failed read (benign
+// wake failures) therefore always lands back on the kept plan, never on a
+// stuck writing state.
+func planReadingFields(hasRow, inFlight bool) (reading, replanInFlight bool) {
+	if !hasRow {
+		return inFlight, false
+	}
+	if inFlight {
+		return false, true
+	}
+	return false, false
+}
+
 func (s *Server) handlePlanToday(c *gin.Context) {
 	traderID := strings.TrimSpace(c.Query("trader_id"))
 	if traderID == "" {
@@ -288,13 +305,25 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 	// UI-verification (2026-08-18): the card must SAY when a planner read is in
 	// flight — the owner reset while a death re-plan was writing and the UI
 	// showed nothing for minutes, which read as "the button does nothing".
-	reading := false
+	//
+	// F7 (2026-08-30): the reading status must derive from the STORE, not the
+	// raw in-flight claim. Wake re-reads hold the claim for 3-9 minutes each,
+	// back-to-back all evening, so a claim-keyed flag kept the card on "writing
+	// a fresh plan" for hours while a committed, tradeable plan row sat in the
+	// DB. Rule: "writing" ONLY while no row exists yet; once a row is committed
+	// the card renders the plan and a running read is exposed as
+	// replan_in_flight (a subtle chip, never the writing state).
+	inFlight := false
 	if at, aErr := s.traderManager.GetTrader(traderID); aErr == nil && at != nil {
-		reading = at.PlannerReadInFlight(tradeDate, sessName)
+		inFlight = at.PlannerReadInFlight(tradeDate, sessName)
 	}
+	row, rowErr := s.store.Plan().GetLatestPlanForTraderSession(tradeDate, sessName, traderID)
+	hasRow := rowErr == nil && row != nil
+	reading, replanInFlight := planReadingFields(hasRow, inFlight)
 	base := gin.H{
 		"found": false, "trade_date": tradeDate, "session": sessName, "night": night,
 		"mode": mode, "acceptance_rule": rule, "reading": reading,
+		"replan_in_flight":  replanInFlight,
 		"approval_required": s.approvalRequired(traderID),
 		"active_session":    activeName, "is_active": sessName != "" && sessName == activeName,
 		"runnable_sessions": runnable,
@@ -320,8 +349,7 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 		c.JSON(200, base)
 		return
 	}
-	row, err := s.store.Plan().GetLatestPlanForTraderSession(tradeDate, sessName, traderID)
-	if err != nil || row == nil {
+	if !hasRow {
 		c.JSON(200, base) // enabled but no plan yet (pre-★2) → graceful
 		return
 	}
@@ -402,6 +430,9 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 		"session":    sessName,
 		"version":    row.Version,
 		"reading":    reading,
+		// F7 — a read is running while THIS plan row is committed: the card
+		// renders the plan and shows a subtle re-reading chip, never "writing".
+		"replan_in_flight": replanInFlight,
 		// Wave 2 armed orders — the per-scenario arm state for the card chips.
 		"armed": s.armedMapFor(row.PlanID),
 		// ITEM 15 — the card marks itself HISTORICAL and offers the way back.

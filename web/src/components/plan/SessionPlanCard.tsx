@@ -228,6 +228,32 @@ export function SessionPlanCard({
     return <StatePanel icon="◌" title={tp('loading', language)} />
   }
   if (!plan || !plan.found) {
+    // F7 (2026-08-30) — a read is in flight and NOTHING is committed yet: say
+    // "writing" out loud instead of the bare no-plan card (which reads as
+    // broken). Once ANY row commits, the plan renders and a running read
+    // becomes the subtle replan chip below.
+    if (plan?.reading) {
+      return (
+        <>
+          <div
+            data-testid="reading-banner"
+            className="flex items-center gap-2 px-3 py-2 text-[12px]"
+            style={{
+              background: 'rgba(212,175,55,0.08)',
+              border: '1px solid var(--vl-gold-line)',
+              borderRadius: 'var(--vl-radius-chip)',
+              color: 'var(--vl-gold)',
+            }}
+          >
+            <span className="vl-spin" aria-hidden>
+              ◌
+            </span>
+            {tp('readingBanner', language)}
+          </div>
+          {noPlanAsk}
+        </>
+      )
+    }
     if (plan?.night || !plan?.session) {
       return (
         <>
@@ -327,14 +353,16 @@ export function SessionPlanCard({
     >
       {/* UI-verification (2026-08-18): the owner tapped Reset while a death
           re-plan was writing and the card showed NOTHING for minutes — the reset
-          worked but read as "does nothing". Say it out loud whenever the
-          planner is mid-read. */}
-      {plan.reading && (
+          worked but read as "does nothing". F7 (2026-08-30): once a plan row is
+          committed this is the subtle re-reading chip — NEVER the "writing a
+          fresh plan" banner, which used to stick for hours over a tradeable
+          plan while wake re-reads held the claim back-to-back. */}
+      {plan.replan_in_flight && (
         <div
-          data-testid="reading-banner"
+          data-testid="replan-chip"
           className="flex items-center gap-2 px-3 py-2 text-[12px]"
           style={{
-            background: 'rgba(212,175,55,0.08)',
+            background: 'rgba(212,175,55,0.06)',
             border: '1px solid var(--vl-gold-line)',
             borderRadius: 'var(--vl-radius-chip)',
             color: 'var(--vl-gold)',
@@ -343,7 +371,7 @@ export function SessionPlanCard({
           <span className="vl-spin" aria-hidden>
             ◌
           </span>
-          {tp('readingBanner', language)}
+          {tp('replanChip', language)}
         </div>
       )}
       {/* DORMANT (plan-lifecycle wave, 2026-08-27) — flip/death line breached;

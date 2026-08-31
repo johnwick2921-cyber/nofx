@@ -89,6 +89,13 @@ export interface PlanToday {
   approval_required?: boolean
   /** UI-verification (2026-08-18) — a planner read is in flight for this chain. */
   reading?: boolean
+  /**
+   * F7 (2026-08-30) — a planner read is in flight WHILE this plan row is
+   * committed. The card renders the plan normally and shows a subtle
+   * re-reading chip; `reading` (the "writing a fresh plan" state) is reserved
+   * for when NO plan row exists yet.
+   */
+  replan_in_flight?: boolean
   version?: number
   lifecycle?: string // active | expired | died | superseded | no_trade | dormant
   /** why this row is in its state — "dormant:flip-condition: …" for dormant plans */

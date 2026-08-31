@@ -92,6 +92,15 @@ func (at *AutoTrader) ForceReread(now time.Time) (RereadRefusal, error) {
 	if !gate.Allowed {
 		return gate, fmt.Errorf("%s", gate.Reason)
 	}
+	// F6 — CLOCK-HOLD (2026-08-30): an owner-requested re-read is also plan
+	// authoring — never run it on a clock known broken.
+	if deferred, widen, _, _ := at.clockHoldAuthoring(); deferred {
+		refusal := RereadRefusal{Allowed: false,
+			Reason: fmt.Sprintf("clock-hold: re-read deferred (|drift| %dms > tolerance %dms) — no plan written; fix the host clock / NTP, then re-read again (F6)",
+				widen, kernel.C2ToleranceMs())}
+		at.logErrorf("🕰 clock-hold: owner re-read DEFERRED — %s", refusal.Reason)
+		return refusal, fmt.Errorf("%s", refusal.Reason)
+	}
 	reg := at.sessionRegistry(now)
 	sess, _ := reg.ActiveSession(now)
 	tradeDate := sessionChainDate(sess, now)

@@ -140,6 +140,20 @@ in CLAUDE.md).
     pre-live-fire sweep). **Probe:** grep every guard atomic/knob for
     `.Store`/`.Load` call sites AND ship a BEHAVIOR fixture that makes the
     alarm FIRE (simulated stall → the ERROR line fires exactly once, quoted;
+
+20. **OS-side fix that silently regresses.** Root cause: an OS-level remediation
+    installs "successfully" but is handcuffed by a wrapper — chrony on WSL2 was
+    started by chronyd-starter.sh which detected a container + missing
+    CAP_SYS_TIME and appended `-x` ("Disabled control of system clock"), so
+    `makestep 1 -1` never stepped, and the cron fallback called a binary that
+    does not exist in the rootfs (`hwclock`). Result: 0.12s at 09:xx → −41s at
+    17:01, NTPSynchronized=no. **Probe:** after ANY host-clock remediation,
+    verify the fix's own mechanism actually fired (chronyc tracking shows a
+    step-capable daemon; `journalctl -u chrony` free of "Disabled control of
+    system clock") AND ship a machine-side escalation: at tolerance breach
+    defer NEW plan authoring (negative drift = feed-in-future = provably
+    broken) + widen T1 news windows by the measured drift. **Law:** the bot
+    must never trade on a clock it knows is broken.
     resumed flush → stamp advances, no repeat) — existence tests cannot catch
     this class. **Law:** a guard without a firing fixture is decoration.
 

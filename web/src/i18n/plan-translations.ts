@@ -220,6 +220,11 @@ export const planStrings = {
     zh: '规划器正在生成新计划 —— 卡片将在一两分钟内更新。',
     id: 'Planner sedang menulis rencana baru — kartu akan diperbarui dalam satu-dua menit.',
   },
+  replanChip: {
+    en: 'Planner re-reading… this plan stays live.',
+    zh: '规划器正在重读…… 当前计划保持有效。',
+    id: 'Planner membaca ulang… rencana ini tetap aktif.',
+  },
   resetCaption: {
     en: 'Abandons the chain · restores the full budget · new plan',
     zh: '放弃计划链 · 恢复全部额度 · 新计划',

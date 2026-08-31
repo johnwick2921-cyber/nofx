@@ -823,6 +823,16 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 		return false
 	}
 	defer releasePlannerRead(key)
+	// F6 — CLOCK-HOLD (2026-08-30): never author a new plan on a clock known
+	// broken (|local-vs-feed drift| > C2 tolerance). No plan row, no budget
+	// consumed, exits and armed management untouched; the read window retries
+	// next cycle once the clock heals. The same measurement widens the T1 news
+	// windows below (warn band and critical band alike).
+	holdDeferred, holdWiden, holdDrift, holdHave := at.clockHoldAuthoring()
+	if holdDeferred {
+		at.logErrorf("%s. Fix the host clock / NTP.", clockHoldDeferLine(tradeDate, session, holdWiden, kernel.C2ToleranceMs()))
+		return false
+	}
 	// U1 3.2 — never call the LLM on an empty/stale bar window (the 08-19
 	// outage produced 0-scenario fail-closed stubs this way). No plan row is
 	// written and no budget consumed; the read window retries next cycle.
@@ -853,6 +863,12 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 	hash := shortHash(prompt)
 	// W3 — HARD red-news blackout lines auto-written into the plan (§80).
 	t1Lines := kernel.T1NoTradeLines(input.Calendar)
+	// F6 — when the clock is measurably skewed (warn or critical band), widen
+	// the T1 windows by the drift so the red-news blackout survives it.
+	if holdHave && holdWiden > 0 {
+		t1Lines = kernel.T1NoTradeLinesDrift(input.Calendar, holdDrift)
+		at.logWarnf("🕰 clock-hold: T1 news windows widened by |drift| %dms for %s %s (F6)", holdWiden, tradeDate, session)
+	}
 	// P0-relax (2026-08-27) — the side-quota floor: Strategy Studio knob
 	// (min_side_levels, per-session override wins) → MIN_SIDE_LEVELS env →
 	// kernel.DefaultSideQuota (2).
@@ -916,6 +932,28 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 		return raw, err
 	}, t1Lines...)
 	return true
+}
+
+// clockHoldDriftFn is the F6 measurement seam: tests inject fake drift; the
+// production default measures the freshest feed bar (kernel.FeedClockDriftMs).
+var clockHoldDriftFn = func(symbol string) (int64, bool) {
+	return kernel.FeedClockDriftMs(symbol)
+}
+
+// clockHoldAuthoring returns the F6 clock-hold verdict for plan authoring:
+// deferred (true when |drift| > C2 tolerance), the widening band (0 = none),
+// and the raw measurement for the log lines.
+func (at *AutoTrader) clockHoldAuthoring() (deferred bool, widenMs int64, driftMs int64, have bool) {
+	driftMs, have = clockHoldDriftFn(at.futuresSymbol())
+	deferred, widenMs = kernel.ClockHoldDecision(driftMs, have, kernel.ClockWarnMs(), kernel.C2ToleranceMs())
+	return
+}
+
+// clockHoldDeferLine renders the exact authoring-deferred log line (pure, so
+// the F6 fixture can assert the wording the journal will carry).
+func clockHoldDeferLine(tradeDate, session string, widenMs, tolMs int64) string {
+	return fmt.Sprintf("🕰 clock-hold: planner authoring DEFERRED for %s %s (|drift| %dms > tolerance %dms) — no plan written, no budget consumed; exits and armed management unaffected (F6)",
+		tradeDate, session, widenMs, tolMs)
 }
 
 // aiPlanMaxTokens is the planner completion budget (F1a, LONDON-FORENSICS
