@@ -83,9 +83,10 @@ func TestRoundTrip_Heartbeat(t *testing.T) {
 	if env.Type != FrameHeartbeat {
 		t.Errorf("type: want %q got %q", FrameHeartbeat, env.Type)
 	}
-	// Empty payload is an empty JSON object per the encoder.
-	if string(env.Payload) != "{}" {
-		t.Errorf("payload: want \"{}\" got %q", string(env.Payload))
+	// E7 capability handshake (2026-08-30): heartbeat carries the build_id
+	// even when empty — the Go side reads it to refuse unproven frame types.
+	if string(env.Payload) != `{"build_id":""}` {
+		t.Errorf("payload: want %q got %q", `{"build_id":""}`, string(env.Payload))
 	}
 }
 

@@ -291,6 +291,10 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 				}
 			}
 			if row.ID == 0 {
+				// Manual-cancel-wins (E7 incident 2026-08-30): the re-author
+				// decision lives in store.UpsertArm — a TERMINAL row at the
+				// same plan version stays terminal; only a version change
+				// re-authorizes. No duplicate guard here.
 				if err := ledger.UpsertArm(row); err != nil {
 					at.logWarnf("⚔️ arm write failed %s %s leg %d: %v", plan.Session, sc.ID, li+1, err)
 					continue
@@ -615,9 +619,9 @@ func limitMarketableWrongSide(price, entry float64, side string) bool {
 	}
 	switch strings.ToLower(strings.TrimSpace(side)) {
 	case "long":
-		return price < entry
+		return entry >= price
 	case "short":
-		return price > entry
+		return entry <= price
 	}
 	return false
 }
