@@ -1104,6 +1104,56 @@ func (at *AutoTrader) TestArmPlace(side string, entry, stop, target float64) (st
 	return *row, nil
 }
 
+// TestArmPlaceStop (E7, entry-mechanics far-side proof) places a STOP-MARKET
+// entry on the REAL wire path (TCPTrader PlaceStopEntry — the same call the
+// breakdown stop-entry seam makes) with a TEST-E7 ledger row. The tester pins
+// the trigger FAR from the market so the order rests (never fills) until the
+// cancel proof. Same gates as TestArmPlace: env ARMED_TEST_SEAM=on AND SIM.
+func (at *AutoTrader) TestArmPlaceStop(side string, trigger, stop, target float64) (store.ArmedOrderDB, error) {
+	var out store.ArmedOrderDB
+	if reason := at.armedSeamDenied(); reason != "" {
+		return out, fmt.Errorf("test-arm denied: %s", reason)
+	}
+	nt := at.armedTrader()
+	if nt == nil {
+		return out, fmt.Errorf("no TCPTrader bound")
+	}
+	ledger := at.store.ArmedOrders()
+	if ledger == nil {
+		return out, fmt.Errorf("no armed ledger")
+	}
+	side = strings.ToLower(strings.TrimSpace(side))
+	if side != "long" && side != "short" {
+		return out, fmt.Errorf("side must be long|short")
+	}
+	if trigger <= 0 || stop <= 0 || target <= 0 {
+		return out, fmt.Errorf("entry(trigger)/stop/target must be > 0")
+	}
+	sid, perr := nt.PlaceStopEntry(at.futuresSymbol(), side, 1, trigger, stop, target)
+	if perr != nil {
+		return out, perr
+	}
+	row := &store.ArmedOrderDB{
+		TraderID: at.id,
+		PlanID:   "TEST-E7:" + sid,
+		Session:  "TEST-E7",
+		Scenario: "TEST-E7",
+		Side:     side,
+		EntryPx:  trigger,
+		StopPx:   stop,
+		TargetPx: target,
+	}
+	if err := ledger.UpsertArm(row); err != nil {
+		return out, fmt.Errorf("ledger upsert: %w", err)
+	}
+	_ = ledger.SetSignal(row.ID, sid)
+	_ = ledger.SetState(row.ID, "working", "")
+	row.SignalID = sid
+	row.State = "working"
+	at.logInfof("🧪 TEST-E7 stop-entry → WORKING stop_entry trigger %.2f signal=%s (seam)", trigger, sid)
+	return *row, nil
+}
+
 // TestArmCancel cancels a seam row's NT8 order on the real wire and flips the
 // row to cancelled with an honest reason.
 func (at *AutoTrader) TestArmCancel(signalID string) error {

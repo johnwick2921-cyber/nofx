@@ -58,6 +58,22 @@ func (s *Server) handleArmedTestArm(c *gin.Context) {
 				"state": row.State, "signal_id": row.SignalID,
 			},
 		})
+	case "place_stop":
+		// E7 far-side proof: stop-market entry on the REAL wire (PlaceStopEntry).
+		row, perr := at.TestArmPlaceStop(body.Side, body.Entry, body.Stop, body.Target)
+		if perr != nil {
+			c.JSON(409, gin.H{"error": perr.Error()})
+			return
+		}
+		c.JSON(200, gin.H{
+			"ok": true, "action": "place_stop",
+			"armed_order": gin.H{
+				"id": row.ID, "trader_id": row.TraderID, "plan_id": row.PlanID,
+				"scenario": row.Scenario, "side": row.Side,
+				"entry": row.EntryPx, "stop": row.StopPx, "target": row.TargetPx,
+				"state": row.State, "signal_id": row.SignalID,
+			},
+		})
 	case "cancel":
 		if cerr := at.TestArmCancel(strings.TrimSpace(body.SignalID)); cerr != nil {
 			c.JSON(409, gin.H{"error": cerr.Error()})
@@ -65,6 +81,6 @@ func (s *Server) handleArmedTestArm(c *gin.Context) {
 		}
 		c.JSON(200, gin.H{"ok": true, "action": "cancel", "signal_id": strings.TrimSpace(body.SignalID)})
 	default:
-		SafeBadRequest(c, "action must be place|cancel")
+		SafeBadRequest(c, "action must be place|place_stop|cancel")
 	}
 }
