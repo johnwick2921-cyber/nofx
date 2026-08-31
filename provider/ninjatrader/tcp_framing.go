@@ -205,7 +205,7 @@ type AckPayload struct {
 // the Go side refuses frame types the far side hasn't proven (see
 // FarSideBuildE7 / FarSideProven). Old AddOns send no build_id → "".
 type HeartbeatPayload struct {
-	BuildID string `json:"build_id"`
+	BuildID string `json:"build_id,omitempty"`
 }
 
 // FarSideBuildE7 is the minimum AddOn build that PROVES stop_entry support

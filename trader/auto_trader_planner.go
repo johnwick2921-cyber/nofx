@@ -916,7 +916,7 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 		pMode, pEffort = fastMarketReasoningWire()
 		modeLabel = fastMarketReasoningLabel()
 	}
-	at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, hash, input.IndicatorsBlock, input.AIConfigHash, requiredBias, facts, machineGrades, machineLabels, htfLabels(input), failClosed, sideQuota, func() (string, error) {
+	at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, hash, input.IndicatorsBlock, input.AIConfigHash, requiredBias, facts, machineGrades, machineLabels, htfLabels(input), failClosed, sideQuota, func(rejectBlock string) (string, error) {
 		mcp.ApplyThinking(client, pMode, pEffort)
 		// F1a (LONDON-FORENSICS 2026-08-28) — planner completion budget:
 		// AI_PLAN_MAX_TOKENS (default 65536 = 2× the observed 32768-token
@@ -924,7 +924,7 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 		restore := mcp.ApplyMaxTokens(client, aiPlanMaxTokens())
 		defer restore()
 		start := time.Now()
-		raw, err := client.CallWithMessages(plannerSystemPrompt, prompt)
+		raw, err := client.CallWithMessages(plannerSystemPrompt, prompt+rejectBlock)
 		if err == nil && mcp.LastFinishReason(client) == "length" {
 			at.logWarnf("📐 planner output TRUNCATED by the provider (finish_reason=length, cap=%d) — the plan JSON may be incomplete; retrying at the same cap will not fix truncation", aiPlanMaxTokens())
 		}
@@ -1040,7 +1040,10 @@ func (at *AutoTrader) runPlannerReadCoreWithTrigger(session, tradeDate, triggerO
 // scenario on gaps, duplicate/target reachability). Legacy callers keep the
 // facts-free signature (schema-only validation).
 func (at *AutoTrader) runPlannerReadCoreWithFacts(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash string, facts kernel.PlanFacts, call func() (string, error), extraNoTrade ...string) (int, string, error) {
-	return at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, "", facts, nil, nil, nil, true, kernel.MinSideLevels, call, extraNoTrade...)
+	// Legacy signature: no reject block (schema-only callers/tests).
+	return at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, "", facts, nil, nil, nil, true, kernel.MinSideLevels, func(rejectBlock string) (string, error) {
+		return call()
+	}, extraNoTrade...)
 }
 
 // runPlannerReadCoreWithFactsGrades is the production core + the machine-grade
@@ -1170,8 +1173,20 @@ func (at *AutoTrader) fastMarketDrift(price float64) (float64, float64) {
 	return drift, drift / atr5m
 }
 
+// plannerRejectBlock renders the retry-append tail (CHANGE 2, owner ruling
+// 2026-08-31): the previous attempt's validator reason VERBATIM plus a fixed
+// instruction. Port of the weekly retry pattern — the 2026-08-31 LONDON read
+// burned attempts 1+2 on the IDENTICAL split-arm reject because the session
+// retry never told the model why it was rejected.
+func plannerRejectBlock(err error) string {
+	if err == nil {
+		return ""
+	}
+	return "\n\n## PREVIOUS ATTEMPT REJECTED / Validator reason (verbatim):\n" + err.Error() + "\nFix ONLY this defect, keep the rest structurally identical."
+}
+
 // runPlannerReadCoreWithFactsGrades is the full write path (see its doc above).
-func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, requiredBias string, facts kernel.PlanFacts, machineGrades map[float64]string, machineLabels map[float64]string, htfLabels map[float64]string, failClosed bool, sideQuota int, call func() (string, error), extraNoTrade ...string) (int, string, error) {
+func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, requiredBias string, facts kernel.PlanFacts, machineGrades map[float64]string, machineLabels map[float64]string, htfLabels map[float64]string, failClosed bool, sideQuota int, call func(rejectBlock string) (string, error), extraNoTrade ...string) (int, string, error) {
 	// H4/H5 — validation must accept EXACTLY what the config allows: the resolved
 	// max_levels / scenario_cap (hard ceilings 12/5). Before this the parse
 	// hardcoded 8/3, so raising either setting made EVERY read fail-closed into a
@@ -1181,17 +1196,24 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 
 	var doc *kernel.PlanDoc
 	var lastErr error
+	// RETRY-APPEND-REJECT-REASON (owner ruling 2026-08-31): attempt N≥2 carries
+	// the PREVIOUS attempt's validator reason VERBATIM in the prompt tail — the
+	// 2026-08-31 LONDON read burned attempts 1+2 on the IDENTICAL split-arm
+	// reject because the retry never told the model why it was rejected.
+	rejectBlock := ""
 	for attempt := 1; attempt <= 3; attempt++ { // 1 + ≤2 retries
-		raw, err := call()
+		raw, err := call(rejectBlock)
 		if err != nil {
 			lastErr = err
 			at.logWarnf("📐 planner attempt %d/3 failed: %v", attempt, err)
+			rejectBlock = plannerRejectBlock(lastErr)
 			continue
 		}
 		d, perr := kernel.ParsePlanDocCapped(raw, maxLevels, scenarioCap)
 		if perr != nil {
 			lastErr = perr
 			at.logWarnf("📐 planner attempt %d/3 parse/schema rejected: %v", attempt, perr)
+			rejectBlock = plannerRejectBlock(lastErr)
 			continue
 		}
 		// W6-D (2026-08-25) — the G5 write-time demotion is REMOVED: stamping
@@ -1217,6 +1239,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		if requiredBias != "" && strings.ToLower(strings.TrimSpace(d.Bias.Direction)) != requiredBias {
 			lastErr = fmt.Errorf("prior plan flip already fired → bias %s is MANDATORY, got %q — the flip cannot be re-written away", requiredBias, d.Bias.Direction)
 			at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, lastErr)
+			rejectBlock = plannerRejectBlock(lastErr)
 			continue
 		}
 		// P0.4-H (2026-08-25) — label provenance: a plan level whose price
@@ -1227,16 +1250,19 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		if mis := kernel.MislabeledStructuralLevels(d, machineLabels); len(mis) > 0 {
 			lastErr = fmt.Errorf("level label provenance: %s — copy the machine table's label for these prices", strings.Join(mis, "; "))
 			at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, lastErr)
+			rejectBlock = plannerRejectBlock(lastErr)
 			continue
 		}
-		// P0.1-relax (2026-08-27) — facts rules, machine-aware side quota:
-		// both-side levels (0 on a side = hard fail; plan < quota while the
-		// machine map supplied ≥ quota = AI-caused omission = reject; machine
-		// map itself thin = WARN + write with a thin_side note), continuation
-		// scenario on a gap out of the prior range, no duplicate seats,
-		// reachable targets. Everything else fails → retry → fail-closed.
+		// P0.1-relax (2026-08-27, count-removal 2026-08-31) — facts rules,
+		// machine-aware side quota: both-side levels (0 on a side = hard fail;
+		// plan < quota while the machine map supplied ≥ quota = WARN-only per
+		// owner ruling 2026-08-31 — thin_side note, never a refusal; the
+		// machine map itself thin = WARN + write with a thin_side note),
+		// continuation scenario on a gap out of the prior range, no duplicate
+		// seats, reachable targets. Everything else fails → retry → fail-closed.
 		if thin, verr := kernel.ValidatePlanDocWithFactsMachine(d, facts, machineLabels, sideQuota, maxLevels, scenarioCap); verr != nil {
 			lastErr = verr
+			rejectBlock = plannerRejectBlock(lastErr)
 			at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, verr)
 			continue
 		} else if len(thin) > 0 {
@@ -1276,6 +1302,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 			}
 			if verr := kernel.ValidateFvgEntryScenarios(d, fvgBars, at.futuresSymbol(), origin, time.Now()); verr != nil {
 				lastErr = verr
+				rejectBlock = plannerRejectBlock(lastErr)
 				at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, verr)
 				continue
 			}
@@ -1291,6 +1318,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 			}
 			if verr := kernel.ValidateBreakdownContinueScenarios(d, bdBars, kernel.StaleConfirmATR5m(bdBars), facts.Price, time.Now().UnixMilli()); verr != nil {
 				lastErr = verr
+				rejectBlock = plannerRejectBlock(lastErr)
 				at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, verr)
 				continue
 			}

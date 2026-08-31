@@ -58,8 +58,8 @@ export const planCard: GuideSection = {
         },
         {
           title: '9 · ⚖ thin-side note',
-          body: 'Written when the assembled in-band map ITSELF had fewer than min_side_levels on a side — machine-caused, so the plan writes with a warn instead of failing. Not an error, not an AI mistake.',
-          cite: 'kernel/plan_doc.go SideQuotaNote · SessionPlanCard.tsx:682',
+          body: 'Written when a side came in short of min_side_levels — either the map itself was thin (machine-caused) or the AI copied fewer levels than the map offered. Both WARN-only since 2026-08-31 (owner ruling): the plan writes with the note instead of failing. Zero-side still fails closed.',
+          cite: 'kernel/plan_doc.go · SessionPlanCard.tsx:682',
         },
         {
           title: '10 · Armed chips',

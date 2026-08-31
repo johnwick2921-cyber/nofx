@@ -154,7 +154,7 @@ const dayPlan: KnobSpec[] = [
   {
     label: 'Min levels per side',
     where: 'Strategy → Day Plan → 1–8',
-    what: "Per-side floor for the card's level table (the P0 side-quota). Machine-thin side = ⚖ WARN + write; zero-side/empty map = fail-closed.",
+    what: "Per-side floor for the card's level table (the P0 side-quota). WARN-only per owner ruling 2026-08-31: an AI-caused short side writes with a ⚖ thin-side note (never a refusal), machine-thin side = ⚖ WARN + write; zero-side/empty map still fail-closed (2026-08-18 pathology).",
     trader:
       'This knob replaced the hard 3-level rule that sat ASIA out on 08-26.',
     consumer:

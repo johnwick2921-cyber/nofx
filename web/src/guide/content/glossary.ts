@@ -65,7 +65,7 @@ export const glossary: GuideSection = {
         },
         {
           term: 'Min-side quota',
-          def: 'Per-side level floor (min_side_levels). Thin side → ⚖ WARN; zero-side → fail-closed.',
+          def: 'Per-side level floor (min_side_levels). WARN-only per owner ruling 2026-08-31: machine-thin or AI-thin side → ⚖ thin-side note + write; zero-side → fail-closed.',
         },
         {
           term: 'No-trade',

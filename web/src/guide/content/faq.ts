@@ -62,7 +62,7 @@ export const faq: GuideSection = {
         },
         {
           q: 'Why does the card say ⚖ thin side?',
-          a: 'The assembled in-band map itself had fewer than min_side_levels on a side — a machine-caused shortage, so the plan writes with a warn instead of failing. Zero sides still fail-closed.',
+          a: 'Either the assembled in-band map itself had fewer than min_side_levels on a side, or the AI copied fewer levels than the map offered. Since 2026-08-31 both are WARN-only (owner ruling): the plan writes with a ⚖ note instead of failing. Zero sides still fail-closed.',
           link: '#plan-card',
         },
         {

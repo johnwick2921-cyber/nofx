@@ -96,7 +96,7 @@ func TestRunPlannerReadMachineThinWritesWithNote(t *testing.T) {
 	machine := map[float64]string{30000: "RN 30000"}   // the map itself is thin above
 	ver, lc, err := at.runPlannerReadCoreWithFactsGrades("ASIA", "2026-08-26", "owner_reset",
 		"deepseek-v4-pro", "hashQ", "", "", "", facts, nil, machine, nil, true, 2,
-		func() (string, error) { return thinAbovePlanJSON, nil })
+		func(rejectBlock string) (string, error) { return thinAbovePlanJSON, nil })
 	if err != nil || ver != 1 || lc != "active" {
 		t.Fatalf("machine-thin write: ver=%d lc=%q err=%v want active", ver, lc, err)
 	}
@@ -113,20 +113,60 @@ func TestRunPlannerReadMachineThinWritesWithNote(t *testing.T) {
 	}
 }
 
-func TestRunPlannerReadAIOmissionFailsClosed(t *testing.T) {
+func TestRunPlannerReadAIOmissionWarnsAndWrites(t *testing.T) {
 	at := plannerTestTrader(t)
 	facts := kernel.PlanFacts{Price: 29614, DATR: 300}
 	machine := map[float64]string{ // map HAS 3 above — the plan carries only 1
 		29500: "PDL", 29550: "RN 29550", 29600: "RN 29600",
 		30000: "RN 30000", 30100: "RN 30100", 30200: "RN 30200",
 	}
-	_, lc, err := at.runPlannerReadCoreWithFactsGrades("ASIA", "2026-08-26", "owner_reset",
+	ver, lc, err := at.runPlannerReadCoreWithFactsGrades("ASIA", "2026-08-26", "owner_reset",
 		"deepseek-v4-pro", "hashQ2", "", "", "", facts, nil, machine, nil, true, 2,
-		func() (string, error) { return thinAbovePlanJSON, nil })
-	// The fail-closed NO-TRADE WRITE succeeds (err nil) — the outcome is the
-	// lifecycle, never an error return.
-	if lc != "no_trade" || err != nil {
-		t.Fatalf("AI omission must fail-closed: lc=%q err=%v", lc, err)
+		func(rejectBlock string) (string, error) { return thinAbovePlanJSON, nil })
+	// Owner ruling 2026-08-31: AI omission WARNs + writes ACTIVE (was fail-closed).
+	if err != nil || ver != 1 || lc != "active" {
+		t.Fatalf("AI omission must write active with a WARN: ver=%d lc=%q err=%v", ver, lc, err)
+	}
+	row, _ := at.store.Plan().GetLatestPlanForSession("2026-08-26", "ASIA")
+	var doc kernel.PlanDoc
+	if err := json.Unmarshal([]byte(row.Doc), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(doc.ThinSide, "above") || !strings.Contains(doc.ThinSide, "owner ruling 2026-08-31") {
+		t.Fatalf("owner-ruling WARN note not stamped: %q", doc.ThinSide)
+	}
+}
+
+// TestRunPlannerReadRetryAppendRejectBlock — CHANGE 2 (owner ruling 2026-08-31):
+// attempt ≥2 carries the previous rejection VERBATIM; a clean attempt 1 sees no
+// block.
+func TestRunPlannerReadRetryAppendRejectBlock(t *testing.T) {
+	at := plannerTestTrader(t)
+	facts := kernel.PlanFacts{Price: 15550, DATR: 300}
+	machine := map[float64]string{15480: "PWL", 15700: "RN 15700"}
+	blocks := []string{}
+	_, lc, err := at.runPlannerReadCoreWithFactsGrades("ASIA", "2026-08-26", "owner_reset",
+		"deepseek-v4-pro", "hashQB", "", "", "", facts, nil, machine, nil, true, 2,
+		func(rejectBlock string) (string, error) {
+			blocks = append(blocks, rejectBlock)
+			if len(blocks) == 1 {
+				return "not json", nil // attempt 1 fails the parse gate
+			}
+			return validTraderPlanJSON, nil
+		})
+	if err != nil || lc != "active" {
+		t.Fatalf("retry-then-success: lc=%q err=%v", lc, err)
+	}
+	if len(blocks) != 2 {
+		t.Fatalf("expected 2 calls, got %d", len(blocks))
+	}
+	if blocks[0] != "" {
+		t.Fatalf("attempt 1 must see NO reject block, got %q", blocks[0])
+	}
+	if !strings.Contains(blocks[1], "## PREVIOUS ATTEMPT REJECTED / Validator reason (verbatim)") ||
+		!strings.Contains(blocks[1], "no JSON object found in planner output") ||
+		!strings.Contains(blocks[1], "Fix ONLY this defect") {
+		t.Fatalf("attempt 2 must carry the verbatim reject block, got %q", blocks[1])
 	}
 }
 

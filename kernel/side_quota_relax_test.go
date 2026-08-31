@@ -7,7 +7,8 @@ import (
 
 // P0-relax (2026-08-27) — the machine-aware side-quota validator. Owner ruling:
 // ≥3 fail-closed the whole 08-26 ASIA session over a machine-map shortage.
-// Matrix: machine-thin → WARN+write · AI-omission → reject · zero-side → fail ·
+// Matrix: machine-thin → WARN+write · AI-omission → WARN+write (owner
+// ruling 2026-08-31 — the per-side count no longer rejects) · zero-side → fail ·
 // empty map → fail · nil map → legacy hard fail · HTF+owner rows counted ·
 // knob 2 vs 3 · above/below symmetry.
 
@@ -67,13 +68,17 @@ func TestSideQuotaMachineThinBelowSymmetry(t *testing.T) {
 	}
 }
 
-func TestSideQuotaAICausedOmissionRejected(t *testing.T) {
+func TestSideQuotaAICausedOmissionWarns(t *testing.T) {
 	// Plan 1 above but the machine map offered 3 above → the AI dropped levels.
+	// Owner ruling 2026-08-31: the count no longer rejects — WARN note + write.
 	d := quotaDoc(3, 1, 100)
-	_, err := ValidatePlanDocWithFactsMachine(d, PlanFacts{Price: 100, DATR: 50},
+	thin, err := ValidatePlanDocWithFactsMachine(d, PlanFacts{Price: 100, DATR: 50},
 		machineMap(99, 98, 97, 101, 102, 103), 2, 8, 3)
-	if err == nil || !strings.Contains(err.Error(), "AI dropped levels") {
-		t.Fatalf("AI-caused omission must be rejected, got err=%v", err)
+	if err != nil {
+		t.Fatalf("AI-caused omission must WARN (never reject) after the 2026-08-31 ruling, got err=%v", err)
+	}
+	if len(thin) != 1 || !strings.Contains(thin[0], "above") || !strings.Contains(thin[0], "machine map 3") {
+		t.Fatalf("expected one 'above' WARN with the machine count, got %v", thin)
 	}
 }
 
@@ -118,13 +123,15 @@ func TestSideQuotaNilMachineLegacyHard(t *testing.T) {
 func TestSideQuotaHTFAndOwnerRowsCounted(t *testing.T) {
 	// Plan 1 above (101) / 3 below. Machine map above = 101 (seated) + 105
 	// (HTF-section row) + 110 (owner-sticky row). With HTF+owner counted the
-	// map has 3 above → AI omission → REJECT. If they were ignored the map
-	// would show 1 above → machine-thin WARN. The reject proves they count.
+	// map has 3 above → the WARN names the machine count (was REJECT pre-ruling).
 	d := quotaDoc(3, 1, 100)
-	_, err := ValidatePlanDocWithFactsMachine(d, PlanFacts{Price: 100, DATR: 50},
+	thin, err := ValidatePlanDocWithFactsMachine(d, PlanFacts{Price: 100, DATR: 50},
 		machineMap(99, 98, 97, 101, 105, 110), 2, 8, 3)
-	if err == nil || !strings.Contains(err.Error(), "AI dropped levels") {
-		t.Fatalf("HTF+owner rows must count toward the machine map (expected reject), got err=%v", err)
+	if err != nil {
+		t.Fatalf("count is WARN-only (2026-08-31 ruling), got err=%v", err)
+	}
+	if len(thin) != 1 || !strings.Contains(thin[0], "machine map 3") {
+		t.Fatalf("HTF+owner rows must count toward the WARN's machine count, got %v", thin)
 	}
 }
 
@@ -145,11 +152,14 @@ func TestSideQuotaKnobTwoVsThree(t *testing.T) {
 		// path; the knob keeps the machine-aware WARN semantics).
 		t.Fatalf("quota 3 with 2/2 machine map must still WARN (not fail): %v", err)
 	}
-	// Quota 3 with machine map 3/3 but plan 2/2 → AI omission → reject.
-	_, err = ValidatePlanDocWithFactsMachine(d, PlanFacts{Price: 100, DATR: 50},
+	// Quota 3 with machine map 3/3 but plan 2/2 → AI omission → WARN (2026-08-31 ruling).
+	thin, err = ValidatePlanDocWithFactsMachine(d, PlanFacts{Price: 100, DATR: 50},
 		machineMap(99, 98, 97, 101, 102, 103), 3, 8, 3)
-	if err == nil || !strings.Contains(err.Error(), "AI dropped levels") {
-		t.Fatalf("quota 3 with a full map and a 2/2 plan must reject, got err=%v", err)
+	if err != nil {
+		t.Fatalf("quota 3 with a full map and a 2/2 plan must WARN, got err=%v", err)
+	}
+	if len(thin) != 2 || !strings.Contains(thin[0], "owner ruling 2026-08-31") {
+		t.Fatalf("expected 2 owner-ruling WARN notes, got %v", thin)
 	}
 }
 

@@ -807,18 +807,18 @@ func ValidatePlanDocWithFacts(d *PlanDoc, facts PlanFacts, maxLevels, maxScenari
 // validator. `machine` is the prompt-visible universe keyed by rounded price
 // (seated table incl. owner-sticky levels + HTF-section rows merged); len==0
 // means the universe was empty/unknown. `sideQuota` is the resolved
-// MIN_SIDE_LEVELS floor.
+// MIN_SIDE_LEVELS floor (WARN threshold only since the 2026-08-31 ruling).
 //
-// Side-quota ruling (owner 2026-08-27, replacing the old hard ≥3):
+// Side-quota ruling history:
 //   - plan carries 0 on a side → HARD FAIL (the original one-sided-map
 //     pathology — a plan nobody can trade on that side).
 //   - machine map EMPTY → HARD FAIL (true safety floor — never write on an
 //     empty/unknown map).
-//   - plan < quota AND machine map also < quota on that side → MACHINE-CAUSED:
-//     WARN + proceed; the side is named in `thin` and stamped onto the plan's
-//     thin_side note.
-//   - plan < quota AND the machine map HAD ≥ quota on that side → AI-CAUSED
-//     omission (the AI dropped levels the table offered) → still REJECTED.
+//   - plan < quota on a side → WARN only (thin_side note), BOTH branches:
+//     machine-caused thin AND AI-caused omission. The per-side COUNT ceased
+//     to reject by OWNER RULING 2026-08-31 — a quota reject only ever
+//     produced a re-drafted plan that failed the same way (three identical
+//     rejections on 2026-08-31); the model must see the WARN, never die on it.
 //
 // All other rules (schema, duplicates, gap continuation, reachable targets,
 // targets-in-band) are byte-identical to the legacy validator.
@@ -882,19 +882,15 @@ func ValidatePlanDocWithFactsMachine(d *PlanDoc, facts PlanFacts, machine map[fl
 		if above == 0 {
 			return nil, fmt.Errorf("0 levels above price %.2f — the plan must carry ≥%d on EACH side (one-sided map is the 2026-08-18 pathology)", facts.Price, sideQuota)
 		}
+		// OWNER RULING 2026-08-31 — the per-side COUNT no longer rejects:
+		// below/above < quota is WARN-only on BOTH branches (machine-caused thin
+		// and AI-caused omission alike). The hard fails above (0 on a side) and
+		// the empty-map fail remain the data-earned guards.
 		if below < sideQuota {
-			if machineBelow < sideQuota {
-				thin = append(thin, SideQuotaNote("below", below, machineBelow))
-			} else {
-				return nil, fmt.Errorf("only %d levels below price %.2f but the machine table offered %d — the plan must carry ≥%d on EACH side (AI dropped levels the map supplied)", below, facts.Price, machineBelow, sideQuota)
-			}
+			thin = append(thin, fmt.Sprintf("thin-side: %d below (machine map %d) — count is WARN-only per owner ruling 2026-08-31 (previously rejected AI-caused omissions)", below, machineBelow))
 		}
 		if above < sideQuota {
-			if machineAbove < sideQuota {
-				thin = append(thin, SideQuotaNote("above", above, machineAbove))
-			} else {
-				return nil, fmt.Errorf("only %d levels above price %.2f but the machine table offered %d — the plan must carry ≥%d on EACH side (AI dropped levels the map supplied)", above, facts.Price, machineAbove, sideQuota)
-			}
+			thin = append(thin, fmt.Sprintf("thin-side: %d above (machine map %d) — count is WARN-only per owner ruling 2026-08-31 (previously rejected AI-caused omissions)", above, machineAbove))
 		}
 	}
 	// P0.2 — continuation scenario on a gap out of the prior range.

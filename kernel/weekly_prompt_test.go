@@ -191,8 +191,8 @@ func TestWeeklyContextLineAllStates(t *testing.T) {
 	if got := WeeklyExecutorLine(d); got != "WEEKLY: bull/high · draw 30500.25" {
 		t.Fatalf("proving line: executor line — got %q", got)
 	}
-	if got := WeeklyExecutorLine(inv); got != "" {
-		t.Fatalf("proving line: invalidated doc renders no executor line — got %q", got)
+	if got := WeeklyExecutorLine(inv); got != "WEEKLY: neutral (invalidated 2026-08-28 10:15 CT)" {
+		t.Fatalf("proving line: invalidated doc renders a neutral line — got %q", got)
 	}
 }
 
