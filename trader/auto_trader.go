@@ -462,6 +462,8 @@ type AutoTrader struct {
 	lastCalFetch time.Time
 	// P0.6 (2026-08-19) — calendar fail-closed alert, once per trade date.
 	lastCalFailClosedAlert string
+	// F6 (2026-08-30) — clock-hold T1-widening warn line, once per trade date.
+	lastClockWidenLog string
 	// F0 — calendar test seams + log dedupe: calFetch overrides the live FF
 	// fetch in tests (nil → calendar.DefaultFetch); lastCalSkipDate makes the
 	// "skip-fresh" line log once per trade date, not every 3-min cycle.

@@ -177,6 +177,18 @@ func (at *AutoTrader) currentT1Windows(now time.Time) []kernel.CTWindow {
 		at.logWarnf("📅 calendar FAIL-CLOSED: no slice for %s — using the static T1 fallback (%d window(s)) instead of zero protection",
 			tradeDate, len(windows))
 	}
+	// F6 — widen the hard no-trade windows by the measured clock drift so the
+	// red-news blackout survives a skewed clock (same decision the authoring
+	// gate uses; the warn line fires once per session-day, not per cycle).
+	if drift, ok := clockHoldDriftFn(at.futuresSymbol()); ok {
+		if _, widen := kernel.ClockHoldDecision(drift, true, kernel.ClockWarnMs(), kernel.C2ToleranceMs()); widen > 0 {
+			windows = kernel.WidenCTWindows(windows, widen)
+			if at.lastClockWidenLog != tradeDate {
+				at.lastClockWidenLog = tradeDate
+				at.logWarnf("🕰 clock-hold: T1 no-trade windows widened by |drift| %dms for %s %s (F6)", widen, tradeDate, sess.Name)
+			}
+		}
+	}
 	return windows
 }
 

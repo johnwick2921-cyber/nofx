@@ -69,6 +69,48 @@ func T1NoTradeLines(events []PlannerCalendarEvent) []string {
 	return out
 }
 
+// T1NoTradeLinesDrift is T1NoTradeLines with each window widened by the measured
+// clock drift (F6, 2026-08-30): a skewed clock shifts when an event actually
+// fires relative to the local clock, so the blackout must cover the uncertainty.
+func T1NoTradeLinesDrift(events []PlannerCalendarEvent, driftMs int64) []string {
+	var out []string
+	for _, w := range WidenCTWindows(T1BlackoutWindows(events), driftMs) {
+		out = append(out, "🔴 "+w.Label+" — HARD no-trade (red news)")
+	}
+	return out
+}
+
+// WidenCTWindows shifts every window's Start earlier and End later by
+// ceil(|driftMs|/60s) minutes (min 1) so blackout protection survives a skewed
+// clock. A zero/sub-minute drift returns the windows unchanged.
+func WidenCTWindows(windows []CTWindow, driftMs int64) []CTWindow {
+	m := driftWidenMinutes(driftMs)
+	if m <= 0 {
+		return windows
+	}
+	out := make([]CTWindow, 0, len(windows))
+	for _, w := range windows {
+		out = append(out, CTWindow{
+			Start: ((w.Start-m)%1440 + 1440) % 1440,
+			End:   (w.End + m) % 1440,
+			Label: fmt.Sprintf("%s +%dm (clock drift)", w.Label, m),
+		})
+	}
+	return out
+}
+
+// driftWidenMinutes rounds |driftMs| up to whole minutes (min 1 for any
+// positive drift).
+func driftWidenMinutes(driftMs int64) int {
+	if driftMs < 0 {
+		driftMs = -driftMs
+	}
+	if driftMs <= 0 {
+		return 0
+	}
+	return int((driftMs + 59_999) / 60_000)
+}
+
 // hhmmToMinK parses "HH:MM" → minutes-of-day (kernel-local; the trader has its own).
 func hhmmToMinK(s string) (int, bool) {
 	var h, m int

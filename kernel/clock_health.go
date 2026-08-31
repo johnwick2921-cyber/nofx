@@ -27,6 +27,10 @@ import (
 // Additive accessor; the guard's own threshold is untouched.
 func C2ToleranceMs() int64 { return clockDriftToleranceMs }
 
+// ClockWarnMs exposes the P1.3 early-warning threshold (F6 consumers need the
+// same band the clock-health logger uses).
+func ClockWarnMs() int64 { return clockWarnMs() }
+
 // clockWarnMs is the P1.3 early-warning threshold (ledger-close 2026-08-19):
 // CRITICAL fires at HALF the C2 tolerance so the operator hears about drift
 // BEFORE staleness verdicts and clock-health truth degrade. Env CLOCK_WARN_MS,
@@ -90,6 +94,9 @@ func LogClockHealth(tag, symbol string) {
 	if !haveBar {
 		line += " nt8_last_bar=none drift_ms=n/a"
 	}
+	// F6 (2026-08-30) — persist this measurement so the authoring gate and the
+	// news-window widening read the freshest clock truth without re-deriving it.
+	RecordClockDrift(drift, haveBar)
 	line += " timesync{" + timesyncStatus() + "} tolerance_ms=" + i64str(C2ToleranceMs())
 	logger.Infof("%s", line)
 
