@@ -869,17 +869,10 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 		t1Lines = kernel.T1NoTradeLinesDrift(input.Calendar, holdDrift)
 		at.logWarnf("🕰 clock-hold: T1 news windows widened by |drift| %dms for %s %s (F6)", holdWiden, tradeDate, session)
 	}
-	// P0-relax (2026-08-27) — the side-quota floor: Strategy Studio knob
-	// (min_side_levels, per-session override wins) → MIN_SIDE_LEVELS env →
-	// kernel.DefaultSideQuota (2).
-	sideQuota := kernel.SideQuotaFromEnv()
-	if dp := at.dayPlanCfg(); dp != nil {
-		if q := dp.MinSideLevelsFor(session); q > 0 {
-			sideQuota = q
-		}
-	}
-	// P0.1/P0.2 (2026-08-19) — write-time facts: both-side levels, continuation
-	// scenario on gaps. PDH/PDL come from the detector universe (seated or raw).
+	// P0.1/P0.2 (2026-08-19) — write-time facts: both-side levels (0-on-a-side
+	// hard fail since the owner ruling 2026-08-31 removed the count concept),
+	// continuation scenario on gaps. PDH/PDL come from the detector universe
+	// (seated or raw).
 	facts := kernel.PlanFacts{Price: input.Price, DATR: input.DATR}
 	// 8.4 — machine grades from the Go-ranked candidate table, keyed by rounded
 	// price so the write-site stamp can match the model's levels.
@@ -916,7 +909,7 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 		pMode, pEffort = fastMarketReasoningWire()
 		modeLabel = fastMarketReasoningLabel()
 	}
-	at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, hash, input.IndicatorsBlock, input.AIConfigHash, requiredBias, facts, machineGrades, machineLabels, htfLabels(input), failClosed, sideQuota, func(rejectBlock string) (string, error) {
+	at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, hash, input.IndicatorsBlock, input.AIConfigHash, requiredBias, facts, machineGrades, machineLabels, htfLabels(input), failClosed, func(rejectBlock string) (string, error) {
 		mcp.ApplyThinking(client, pMode, pEffort)
 		// F1a (LONDON-FORENSICS 2026-08-28) — planner completion budget:
 		// AI_PLAN_MAX_TOKENS (default 65536 = 2× the observed 32768-token
@@ -1041,7 +1034,7 @@ func (at *AutoTrader) runPlannerReadCoreWithTrigger(session, tradeDate, triggerO
 // facts-free signature (schema-only validation).
 func (at *AutoTrader) runPlannerReadCoreWithFacts(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash string, facts kernel.PlanFacts, call func() (string, error), extraNoTrade ...string) (int, string, error) {
 	// Legacy signature: no reject block (schema-only callers/tests).
-	return at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, "", facts, nil, nil, nil, true, kernel.MinSideLevels, func(rejectBlock string) (string, error) {
+	return at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, "", facts, nil, nil, nil, true, func(rejectBlock string) (string, error) {
 		return call()
 	}, extraNoTrade...)
 }
@@ -1186,7 +1179,7 @@ func plannerRejectBlock(err error) string {
 }
 
 // runPlannerReadCoreWithFactsGrades is the full write path (see its doc above).
-func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, requiredBias string, facts kernel.PlanFacts, machineGrades map[float64]string, machineLabels map[float64]string, htfLabels map[float64]string, failClosed bool, sideQuota int, call func(rejectBlock string) (string, error), extraNoTrade ...string) (int, string, error) {
+func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, requiredBias string, facts kernel.PlanFacts, machineGrades map[float64]string, machineLabels map[float64]string, htfLabels map[float64]string, failClosed bool, call func(rejectBlock string) (string, error), extraNoTrade ...string) (int, string, error) {
 	// H4/H5 — validation must accept EXACTLY what the config allows: the resolved
 	// max_levels / scenario_cap (hard ceilings 12/5). Before this the parse
 	// hardcoded 8/3, so raising either setting made EVERY read fail-closed into a
@@ -1253,23 +1246,15 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 			rejectBlock = plannerRejectBlock(lastErr)
 			continue
 		}
-		// P0.1-relax (2026-08-27, count-removal 2026-08-31) — facts rules,
-		// machine-aware side quota: both-side levels (0 on a side = hard fail;
-		// plan < quota while the machine map supplied ≥ quota = WARN-only per
-		// owner ruling 2026-08-31 — thin_side note, never a refusal; the
-		// machine map itself thin = WARN + write with a thin_side note),
-		// continuation scenario on a gap out of the prior range, no duplicate
-		// seats, reachable targets. Everything else fails → retry → fail-closed.
-		if thin, verr := kernel.ValidatePlanDocWithFactsMachine(d, facts, machineLabels, sideQuota, maxLevels, scenarioCap); verr != nil {
+		// P0.1 facts rules (count concept removed by owner ruling 2026-08-31):
+		// 0 on a side = hard fail; empty machine map = hard fail; continuation
+		// scenario on a gap out of the prior range, no duplicate seats,
+		// reachable targets. Everything else fails → retry → fail-closed.
+		if verr := kernel.ValidatePlanDocWithFactsMachine(d, facts, machineLabels, maxLevels, scenarioCap); verr != nil {
 			lastErr = verr
 			rejectBlock = plannerRejectBlock(lastErr)
 			at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, verr)
 			continue
-		} else if len(thin) > 0 {
-			for _, n := range thin {
-				at.logWarnf("📉 side-quota relaxed: %s", n)
-			}
-			d.ThinSide = strings.Join(thin, " | ")
 		}
 		// F4 (LONDON-FORENSICS 2026-08-28) — arm feasibility WARN, never a
 		// fail: arms the gate-at-arm chain would refuse EVERY cycle (R:R <

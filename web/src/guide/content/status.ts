@@ -15,7 +15,7 @@ export const status: GuideSection = {
         '🔐 BOOT INTEGRITY OK — rev <sha> [+dirty] · built <ts>',
         '    · expected <sha> · goldens PASS      ← code matches deploy record',
         '📜 planner playbook: playbook=v2 bias_tree=on …',
-        '⚖ side-quota (P0-relax): min_side=cfg(default 2 …)',
+        '🛡 plan facts guards: 0-side + empty map fail-closed …',
         '🎛 volume wave …   ← wave detector knobs',
         '🎯 touch telemetry …',
         '📐 fvg_entry …',

@@ -964,10 +964,9 @@ type DayPlanConfig struct {
 	// floor (A | B | C). Default C = no restriction (today's behavior,
 	// byte-identical). Per-session override below (like min_grade).
 	MinScenarioQuality string `json:"min_scenario_quality,omitempty"`
-	// MinSideLevels (P0-relax, 2026-08-27) — the per-side level floor for plan
-	// validation. nil → MIN_SIDE_LEVELS env → kernel.DefaultSideQuota (2).
-	// Set 3 to restore the pre-relax hard ≥3. Per-session override below.
-	MinSideLevels *int `json:"min_side_levels,omitempty"`
+	// min_side_levels REMOVED by owner ruling 2026-08-31 — the per-side count
+	// concept is deleted. Old stored JSON carrying the field still loads
+	// (encoding/json ignores unknown fields).
 }
 
 // DayPlanSessionOverride is a minimal per-session override. Every field is a
@@ -984,9 +983,6 @@ type DayPlanSessionOverride struct {
 	// MinScenarioQuality (R4, 2026-08-25) — per-session scenario quality floor
 	// (A | B | C); nil inherits the strategy-level value.
 	MinScenarioQuality *string `json:"min_scenario_quality,omitempty"`
-	// MinSideLevels (P0-relax, 2026-08-27) — per-session side-quota floor;
-	// nil inherits the strategy-level value.
-	MinSideLevels *int `json:"min_side_levels,omitempty"`
 	// LastEntryOffsetMin: minutes BEFORE this session's end after which NEW
 	// entries are refused (P2 session-scope redesign, 2026-08-18). Replaces the
 	// old day-scoped 13:00 CT cutoff, which blocked every entry from 13:00 CT to
@@ -1331,9 +1327,6 @@ func DefaultDayPlanConfig() *DayPlanConfig {
 		Seat1HZone: wakeBoolPtr(true),
 		// R4 (2026-08-25) — scenario quality floor DEFAULT C (no restriction).
 		MinScenarioQuality: "C",
-		// P0-relax (2026-08-27) — side-quota floor DEFAULT 2 (owner ruling; the
-		// old ≥3 stays reachable by setting 3).
-		MinSideLevels: intPtr(2),
 	}
 }
 
@@ -1414,26 +1407,10 @@ func (c *DayPlanConfig) MinScenarioQualityFor(session string) string {
 	return floor
 }
 
-// MinSideLevelsFor (P0-relax, 2026-08-27) resolves the per-side level floor:
-// per-session override → strategy-level → 0 (unset — the caller falls back to
-// the MIN_SIDE_LEVELS env → kernel.DefaultSideQuota). The ONE resolution seam
-// so the write-site validator and the Studio card can never disagree.
-func (c *DayPlanConfig) MinSideLevelsFor(session string) int {
-	if c == nil {
-		return 0
-	}
-	q := 0
-	if c.MinSideLevels != nil {
-		q = *c.MinSideLevels
-	}
-	if ov := c.SessionOverride(session); ov != nil && ov.MinSideLevels != nil {
-		q = *ov.MinSideLevels
-	}
-	if q < 1 {
-		return 0
-	}
-	return q
-}
+// MinSideLevelsFor REMOVED by owner ruling 2026-08-31 — the per-side count
+// concept is deleted from the system (knob, resolver, WARN, labels). Old
+// stored config JSON with "min_side_levels" loads harmlessly: encoding/json
+// ignores unknown fields on unmarshal.
 
 // GridStrategyConfig grid trading specific configuration
 type GridStrategyConfig struct {

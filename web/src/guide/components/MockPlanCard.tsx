@@ -58,21 +58,6 @@ export function MockPlanCard() {
         </div>
       </div>
 
-      {/* thin-side note (the ⚖ state) */}
-      <div
-        data-testid="thin-side-note"
-        className="px-2 py-1 rounded text-[10px]"
-        style={{
-          background: 'var(--vl-gold-dim)',
-          border: '1px solid var(--vl-gold-line)',
-          color: 'var(--vl-gold)',
-          fontFamily: 'var(--vl-font-ui)',
-        }}
-      >
-        ⚖ thin-side: 1 above (machine map 1) — machine-caused, written with a
-        thin side
-      </div>
-
       {/* bias block (real) */}
       <BiasBlock
         bias={{

@@ -61,8 +61,8 @@ export const faq: GuideSection = {
           link: '#plan-card',
         },
         {
-          q: 'Why does the card say ⚖ thin side?',
-          a: 'Either the assembled in-band map itself had fewer than min_side_levels on a side, or the AI copied fewer levels than the map offered. Since 2026-08-31 both are WARN-only (owner ruling): the plan writes with a ⚖ note instead of failing. Zero sides still fail-closed.',
+          q: 'Why did the card say ⚖ thin side?',
+          a: 'It no longer does — the thin-side concept is REMOVED (owner ruling 2026-08-31): per-side counts no longer exist — no knob, no WARN, no ⚖ note. The two surviving guards: a plan with 0 levels on a side fails closed (2026-08-18 one-sided-map pathology), and an empty machine map fails closed.',
           link: '#plan-card',
         },
         {

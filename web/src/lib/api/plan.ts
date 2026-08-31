@@ -40,9 +40,6 @@ export interface PlanDoc {
   no_trade: string[]
   death_condition: string
   day_type?: string
-  /** P0-relax (2026-08-27) — machine-caused thin-side note (written with a
-   *  WARN when the assembled map itself had < min_side_levels on a side). */
-  thin_side?: string
 }
 
 // ── live per-level facts from the P0.4 evaluator (one array, three renderers) ──

@@ -89,11 +89,11 @@ const dayPlan: KnobSpec[] = [
     label: 'Acceptance window',
     where: 'Strategy → Day Plan → Acceptance rule',
     what: 'The confirm clock for acceptance-type plays.',
-    trader: '2×5m = tight confirm; 15m = patient.',
+    trader: '5m_close = tight confirm; 15m = patient.',
     consumer: 'trader/auto_trader_planconfig.go:168 (acceptanceFor)',
-    range: '2×5m | 15m',
-    systemDefault: '2×5m',
-    recommended: '⭐ 2×5m — current config.',
+    range: '5m_close | 15m',
+    systemDefault: '5m_close',
+    recommended: '⭐ 5m_close — current config.',
     whenToTouch: 'If acceptance plays keep getting cut by the confirm clock.',
     perSession:
       'Yes — session override wins; inherit (blank) = the strategy-level value.',
@@ -150,23 +150,6 @@ const dayPlan: KnobSpec[] = [
     whenToTouch: 'Only if the card gets cluttered with junk scenarios.',
     perSession:
       'Yes — session override wins; inherit (blank) = the strategy-level row above.',
-  },
-  {
-    label: 'Min levels per side',
-    where: 'Strategy → Day Plan → 1–8',
-    what: "Per-side floor for the card's level table (the P0 side-quota). WARN-only per owner ruling 2026-08-31: an AI-caused short side writes with a ⚖ thin-side note (never a refusal), machine-thin side = ⚖ WARN + write; zero-side/empty map still fail-closed (2026-08-18 pathology).",
-    trader:
-      'This knob replaced the hard 3-level rule that sat ASIA out on 08-26.',
-    consumer:
-      'store/strategy.go:967 (MinSideLevelsFor) · kernel/levels_score.go:720 (MinSideLevels)',
-    range: '1 – 8',
-    systemDefault:
-      '4 (owner, live) · env MIN_SIDE_LEVELS · kernel.DefaultSideQuota(2)',
-    recommended:
-      '⭐ 4 — the live owner value (raised from 2); 2 remains the code fallback.',
-    whenToTouch: 'Raise to 3 for the strict old behavior.',
-    perSession:
-      'Yes — session override wins; inherit (blank) → strategy-level → env.',
   },
   {
     label: '1h anchor seat',
@@ -467,9 +450,9 @@ const sessions: KnobSpec[] = [
   {
     label: 'Session overrides (ASIA / LONDON / NY)',
     where: 'Strategy → Day Plan → Sessions accordion',
-    what: 'Per-session override rows: min grade, min scenario quality, min side levels, max trades, plan mode, max re-plans, acceptance window. Min grade, quality, max trades and plan mode are tri-state: inherit (blank) = the strategy-level row; an explicit value wins. Stored values that EQUAL the strategy level are auto-migrated to inherit.',
+    what: 'Per-session override rows: min grade, min scenario quality, max trades, plan mode, max re-plans, acceptance window. Min grade, quality, max trades and plan mode are tri-state: inherit (blank) = the strategy-level row; an explicit value wins. Stored values that EQUAL the strategy level are auto-migrated to inherit. (min side levels REMOVED — owner ruling 2026-08-31: the per-side count concept is deleted.)',
     trader:
-      'The current rows: min_grade B · min_scenario_quality C · min_side_levels 4 · max_trades 7/10/10 (ASIA/LONDON/NY) · plan_mode strict ×3 · max re-plans 4 · acceptance 2×5m.',
+      'The current rows: min_grade B · min_scenario_quality C · max_trades 7/10/10 (ASIA/LONDON/NY) · plan_mode strict ×3 · max re-plans 4 · acceptance 5m_close.',
     consumer:
       'store/strategy.go:921-975 (per-session resolvers) · trader/auto_trader_planconfig.go:158-168',
     range:
@@ -564,7 +547,7 @@ export const settings: GuideSection = {
         },
         {
           title: 'Wired + per-session',
-          body: 'Session override wins over strategy value (plan_mode, proximity, caps, min_side_levels).',
+          body: 'Session override wins over strategy value (plan_mode, proximity, caps).',
           cite: 'store/strategy.go:921-975',
         },
         {

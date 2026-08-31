@@ -65,7 +65,7 @@ export const glossary: GuideSection = {
         },
         {
           term: 'Min-side quota',
-          def: 'Per-side level floor (min_side_levels). WARN-only per owner ruling 2026-08-31: machine-thin or AI-thin side → ⚖ thin-side note + write; zero-side → fail-closed.',
+          def: 'Per-side level counts are DELETED (owner ruling 2026-08-31). The only side guard left: a plan with 0 levels on a side fails closed (2026-08-18 pathology); an empty machine map also fails closed.',
         },
         {
           term: 'No-trade',

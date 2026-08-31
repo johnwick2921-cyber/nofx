@@ -19,5 +19,5 @@ func LogVolumeWaveBoot() {
 	logger.Infof("🔧 S-wave (2026-08-26): stale_confirm=%.1f×ATR5m · eod_flat=session-end (NY 14:45 CT, R-A15)",
 		StaleConfirmATR())
 	logger.Infof("📜 planner playbook (2026-08-26): playbook=v2 bias_tree=on chain_after=on no_trade_gates=on killzone_weights=on stop_doing=on — ALL ADVISORY, zero new gates")
-	logger.Infof("⚖️ side-quota: per-side COUNT is WARN-only (owner ruling 2026-08-31; thin_side note) — min_side knob/env = warn threshold only · 0-side + empty-map still fail-closed (2026-08-18 pathology guards)")
+	logger.Infof("🛡 plan facts guards: 0-levels-on-a-side + empty machine map = fail-closed (2026-08-18 pathology guards) — per-side counts REMOVED entirely (owner ruling 2026-08-31; no quota, no WARN, no thin_side note)")
 }

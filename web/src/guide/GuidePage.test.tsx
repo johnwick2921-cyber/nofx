@@ -23,8 +23,8 @@ describe('knob spec completeness', () => {
     s.blocks.flatMap((b) => (b.kind === 'knobs' ? b.knobs : []))
   )
 
-  it('has exactly 41 knob cards (Section 7 census = live-page control count; W7 +6 weekly knobs)', () => {
-    expect(allKnobs).toHaveLength(41)
+  it('has exactly 40 knob cards (Section 7 census = live-page control count; W7 +6 weekly knobs, min-side card removed 2026-08-31)', () => {
+    expect(allKnobs).toHaveLength(40)
   })
 
   it('every knob card fills all ten mandatory fields', () => {
@@ -70,7 +70,6 @@ describe('GuidePage', () => {
     ).toBeGreaterThanOrEqual(1)
     expect(screen.getByTestId('mock-plan-card')).toBeTruthy()
     // real chips inside the mock
-    expect(screen.getByTestId('thin-side-note')).toBeTruthy()
     expect(
       document.querySelector('[data-testid^="confirm-chip-"]')
     ).toBeTruthy()

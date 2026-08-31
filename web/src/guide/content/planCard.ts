@@ -33,7 +33,7 @@ export const planCard: GuideSection = {
         },
         {
           title: '4 · Level-row anatomy',
-          body: 'price · provenance label (PDH, ONH, nPOC·Tue, RN, EQH…) · planner grade A/B/C · m: machine grade (detector-side: type × freshness × confluence × HTF) · ROLE badge (what the level is FOR) · distance (gold when within 12pt) · touch chip ○ approaching ◐ touching ✕ rejected ▲ accepted · fresh dot (fresh / tested / consumed — consumed rows dim) · ⚖ thin-side note when the machine map itself was short on a side.',
+          body: 'price · provenance label (PDH, ONH, nPOC·Tue, RN, EQH…) · planner grade A/B/C · m: machine grade (detector-side: type × freshness × confluence × HTF) · ROLE badge (what the level is FOR) · distance (gold when within 12pt) · touch chip ○ approaching ◐ touching ✕ rejected ▲ accepted · fresh dot (fresh / tested / consumed — consumed rows dim).',
           cite: 'web/src/components/plan/ZoneTable.tsx:28-150 · SessionPlanCard.tsx:682',
         },
         {
@@ -57,9 +57,9 @@ export const planCard: GuideSection = {
           cite: 'web/src/components/plan/SessionPlanCard.tsx:474,510',
         },
         {
-          title: '9 · ⚖ thin-side note',
-          body: 'Written when a side came in short of min_side_levels — either the map itself was thin (machine-caused) or the AI copied fewer levels than the map offered. Both WARN-only since 2026-08-31 (owner ruling): the plan writes with the note instead of failing. Zero-side still fails closed.',
-          cite: 'kernel/plan_doc.go · SessionPlanCard.tsx:682',
+          title: '9 · level table rules',
+          body: 'Any level count is fine — the per-side minimum is DELETED (owner ruling 2026-08-31, no ⚖ note anymore). The only hard fails left: 0 levels on a side (the 2026-08-18 one-sided-map pathology) and an empty machine map.',
+          cite: 'kernel/plan_doc.go ValidatePlanDocWithFactsMachine',
         },
         {
           title: '10 · Armed chips',
@@ -83,7 +83,7 @@ export const planCard: GuideSection = {
             'Bias word + conviction — what is it trying to do?',
             'Bias-tree line — which branch, and does the reasoning agree?',
             'NO-TRADE banner? — fail-closed vs skip-day changes everything.',
-            'Levels — any consumed (dim) or thin-side ⚖ rows?',
+            'Levels — any consumed (dim) rows?',
             'Scenarios — which one is armed, and does confirm say MET?',
             'Death/flip — what kills the plan, and at what price?',
           ],

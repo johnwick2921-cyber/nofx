@@ -69,10 +69,10 @@ func TestRunPlannerReadCoreFailClosed(t *testing.T) {
 	}
 }
 
-// P0-relax (2026-08-27) — write-site: a machine-caused thin side must WARN,
-// write the plan, and stamp the thin_side note onto the stored doc (the card
-// renders it). The machine map is what the prompt displayed (seated + owner +
-// HTF rows, price-keyed).
+// Owner ruling 2026-08-31 — the per-side COUNT concept is deleted: a plan with
+// 1 level above while the machine map offered 3 writes ACTIVE with NO WARN, NO
+// note, and no thin_side key anywhere in the stored doc. (Previously this exact
+// shape fail-closed ASIA 3×, then WARNed — both behaviors are gone.)
 const thinAbovePlanJSON = `{
   "reasoning": "thin above: price sits at the top of the stack; only one level above in the map",
   "bias": {"direction": "long", "conviction": "low", "flip_condition": "2x5m < 29500"},
@@ -90,50 +90,30 @@ const thinAbovePlanJSON = `{
   "day_type": "balance"
 }`
 
-func TestRunPlannerReadMachineThinWritesWithNote(t *testing.T) {
+func TestRunPlannerReadThinAboveWritesCleanNoArtifacts(t *testing.T) {
 	at := plannerTestTrader(t)
 	facts := kernel.PlanFacts{Price: 29614, DATR: 300} // PDH/PDL 0 → gap rules skipped
-	machine := map[float64]string{30000: "RN 30000"}   // the map itself is thin above
+	machine := map[float64]string{                     // rich map: 3 below + 3 above; the plan carries only 1 above
+		29500: "PDL", 29550: "RN 29550", 29600: "RN 29600",
+		30000: "RN 30000", 30100: "RN 30100", 30200: "RN 30200",
+	}
 	ver, lc, err := at.runPlannerReadCoreWithFactsGrades("ASIA", "2026-08-26", "owner_reset",
-		"deepseek-v4-pro", "hashQ", "", "", "", facts, nil, machine, nil, true, 2,
+		"deepseek-v4-pro", "hashQ", "", "", "", facts, nil, machine, nil, true,
 		func(rejectBlock string) (string, error) { return thinAbovePlanJSON, nil })
+	// Count is deleted (owner ruling 2026-08-31): no WARN, no note, plan writes.
 	if err != nil || ver != 1 || lc != "active" {
-		t.Fatalf("machine-thin write: ver=%d lc=%q err=%v want active", ver, lc, err)
+		t.Fatalf("thin-above + rich map must write active: ver=%d lc=%q err=%v", ver, lc, err)
 	}
 	row, _ := at.store.Plan().GetLatestPlanForSession("2026-08-26", "ASIA")
 	if row == nil || row.TriggerReason != "owner_reset" {
 		t.Fatalf("stored row wrong: %+v", row)
 	}
+	if strings.Contains(row.Doc, "thin_side") || strings.Contains(row.Doc, "thin-side") {
+		t.Fatalf("no side-count artifact may be stamped, got %s", row.Doc)
+	}
 	var doc kernel.PlanDoc
 	if err := json.Unmarshal([]byte(row.Doc), &doc); err != nil {
 		t.Fatalf("doc unmarshal: %v", err)
-	}
-	if !strings.Contains(doc.ThinSide, "above") || !strings.Contains(doc.ThinSide, "machine map 1") {
-		t.Fatalf("thin_side note not stamped: %q", doc.ThinSide)
-	}
-}
-
-func TestRunPlannerReadAIOmissionWarnsAndWrites(t *testing.T) {
-	at := plannerTestTrader(t)
-	facts := kernel.PlanFacts{Price: 29614, DATR: 300}
-	machine := map[float64]string{ // map HAS 3 above — the plan carries only 1
-		29500: "PDL", 29550: "RN 29550", 29600: "RN 29600",
-		30000: "RN 30000", 30100: "RN 30100", 30200: "RN 30200",
-	}
-	ver, lc, err := at.runPlannerReadCoreWithFactsGrades("ASIA", "2026-08-26", "owner_reset",
-		"deepseek-v4-pro", "hashQ2", "", "", "", facts, nil, machine, nil, true, 2,
-		func(rejectBlock string) (string, error) { return thinAbovePlanJSON, nil })
-	// Owner ruling 2026-08-31: AI omission WARNs + writes ACTIVE (was fail-closed).
-	if err != nil || ver != 1 || lc != "active" {
-		t.Fatalf("AI omission must write active with a WARN: ver=%d lc=%q err=%v", ver, lc, err)
-	}
-	row, _ := at.store.Plan().GetLatestPlanForSession("2026-08-26", "ASIA")
-	var doc kernel.PlanDoc
-	if err := json.Unmarshal([]byte(row.Doc), &doc); err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(doc.ThinSide, "above") || !strings.Contains(doc.ThinSide, "owner ruling 2026-08-31") {
-		t.Fatalf("owner-ruling WARN note not stamped: %q", doc.ThinSide)
 	}
 }
 
@@ -146,7 +126,7 @@ func TestRunPlannerReadRetryAppendRejectBlock(t *testing.T) {
 	machine := map[float64]string{15480: "PWL", 15700: "RN 15700"}
 	blocks := []string{}
 	_, lc, err := at.runPlannerReadCoreWithFactsGrades("ASIA", "2026-08-26", "owner_reset",
-		"deepseek-v4-pro", "hashQB", "", "", "", facts, nil, machine, nil, true, 2,
+		"deepseek-v4-pro", "hashQB", "", "", "", facts, nil, machine, nil, true,
 		func(rejectBlock string) (string, error) {
 			blocks = append(blocks, rejectBlock)
 			if len(blocks) == 1 {

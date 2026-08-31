@@ -52,9 +52,6 @@ const DEFAULT_DAY_PLAN: DayPlanConfig = {
   seat_1h_zone: true,
   // R4 (2026-08-25) — scenario quality floor DEFAULT C (no restriction).
   min_scenario_quality: 'C',
-  // P0-relax (2026-08-27) — side-quota floor DEFAULT 2 (owner ruling; the
-  // old hard ≥3 stays reachable by setting 3).
-  min_side_levels: 2,
 }
 
 // C3 — the legacy day-scoped clock controls (last_entry_ct / eod_flat_ct) were
@@ -507,9 +504,7 @@ export function DayPlanEditor({ config, onChange, disabled, language }: Props) {
           </FieldRow>
           <FieldRow label={tp('acceptance', language)}>
             <Segmented
-              options={[
-                { key: '5m_close', label: '1×5m' },
-              ]}
+              options={[{ key: '5m_close', label: '1×5m' }]}
               value={cfg.acceptance_rule ?? '5m_close'}
               onChange={(v) => update('acceptance_rule', v)}
               disabled={bodyDisabled}
@@ -618,16 +613,6 @@ export function DayPlanEditor({ config, onChange, disabled, language }: Props) {
                 value={cfg.min_scenario_quality ?? 'C'}
                 onChange={(v) => update('min_scenario_quality', v)}
                 disabled={bodyDisabled}
-              />
-            </FieldRow>
-            <FieldRow label={tp('minSideLevels', language)}>
-              <NumberField
-                value={cfg.min_side_levels ?? 2}
-                min={1}
-                max={8}
-                onChange={(v) => update('min_side_levels', v)}
-                disabled={bodyDisabled}
-                testId="min-side-levels"
               />
             </FieldRow>
           </div>
@@ -790,27 +775,6 @@ export function DayPlanEditor({ config, onChange, disabled, language }: Props) {
                         disabled={bodyDisabled}
                       />
                     </TriStateRow>
-                    <OverrideRow
-                      label={tp('minSideLevels', language)}
-                      overridden={ov?.min_side_levels !== undefined}
-                      onToggle={(on) =>
-                        on
-                          ? setSessionField(s, 'min_side_levels', 2)
-                          : clearSessionField(s, 'min_side_levels')
-                      }
-                      disabled={bodyDisabled}
-                      language={language}
-                    >
-                      <NumberField
-                        value={ov?.min_side_levels}
-                        min={1}
-                        max={8}
-                        onChange={(v) =>
-                          setSessionField(s, 'min_side_levels', v)
-                        }
-                        disabled={bodyDisabled}
-                      />
-                    </OverrideRow>
                     <TriStateRow
                       label={tp('maxTrades', language)}
                       overridden={ov?.max_trades !== undefined}
@@ -900,9 +864,7 @@ export function DayPlanEditor({ config, onChange, disabled, language }: Props) {
                       language={language}
                     >
                       <Segmented
-                        options={[
-                          { key: '5m_close', label: '1×5m' },
-                        ]}
+                        options={[{ key: '5m_close', label: '1×5m' }]}
                         value={ov?.acceptance_rule}
                         onChange={(v) =>
                           setSessionField(s, 'acceptance_rule', v)

@@ -5,61 +5,53 @@ import (
 	"testing"
 )
 
-// P0-relax (2026-08-27) — MinSideLevelsFor resolution seam: session override →
-// strategy value → 0 (unset → caller falls back to MIN_SIDE_LEVELS env →
-// kernel.DefaultSideQuota).
-func TestDayPlanMinSideLevelsFor(t *testing.T) {
-	base := func(v int) *DayPlanConfig {
-		c := DefaultDayPlanConfig()
-		c.MinSideLevels = intPtr(v)
-		return c
+// Owner ruling 2026-08-31 — min_side_levels (the per-side count knob) is
+// REMOVED from the system. Old stored config JSON that still carries the field
+// must load HARMLESSLY: encoding/json ignores unknown fields on unmarshal, so
+// a stored strategy/session override with "min_side_levels" round-trips into a
+// config without the field and without error.
+func TestDayPlanConfigIgnoresRemovedMinSideLevels(t *testing.T) {
+	const oldJSON = `{
+		"min_side_levels": 4,
+		"min_scenario_quality": "B",
+		"sessions": [
+			{"session": "NY", "min_side_levels": 3, "max_trades": 7},
+			{"session": "ASIA", "max_trades": 10}
+		]
+	}`
+	var c DayPlanConfig
+	if err := json.Unmarshal([]byte(oldJSON), &c); err != nil {
+		t.Fatalf("old JSON with min_side_levels must load without error, got %v", err)
 	}
-	if got := DefaultDayPlanConfig().MinSideLevelsFor("NY"); got != 2 {
-		t.Fatalf("shipped default = %d, want 2", got)
+	if got := c.MinScenarioQualityFor("NY"); got != "B" {
+		t.Fatalf("sibling fields must survive, got %q", got)
 	}
-	if got := base(3).MinSideLevelsFor("NY"); got != 3 {
-		t.Fatalf("strategy 3 = %d, want 3 (old hard rule reachable)", got)
+	ov := c.SessionOverride("NY")
+	if ov == nil || ov.MaxTrades == nil || *ov.MaxTrades != 7 {
+		t.Fatalf("NY override must survive: %+v", ov)
 	}
-	c := base(2)
-	ov3 := 3
-	c.Sessions = []DayPlanSessionOverride{{Session: "NY", MinSideLevels: &ov3}}
-	if got := c.MinSideLevelsFor("NY"); got != 3 {
-		t.Fatalf("session override 3 = %d, want 3", got)
+	if ovASIA := c.SessionOverride("ASIA"); ovASIA == nil || ovASIA.MaxTrades == nil || *ovASIA.MaxTrades != 10 {
+		t.Fatalf("ASIA override must survive: %+v", ovASIA)
 	}
-	if got := c.MinSideLevelsFor("LONDON"); got != 2 {
-		t.Fatalf("non-overridden session = %d, want 2", got)
-	}
-	ovZero := 0
-	c.Sessions[0].MinSideLevels = &ovZero
-	if got := c.MinSideLevelsFor("NY"); got != 0 {
-		t.Fatalf("override 0 = %d, want 0 (unset → env fallback)", got)
-	}
-	var nilCfg *DayPlanConfig
-	if got := nilCfg.MinSideLevelsFor("NY"); got != 0 {
-		t.Fatalf("nil config = %d, want 0", got)
-	}
-}
-
-// P0-relax (2026-08-27) — JSON round-trip: the knob + its session override
-// survive the config PUT paths (both the full strategy-config save and the
-// day-plan update go through this JSON envelope).
-func TestDayPlanMinSideLevelsJSONRoundTrip(t *testing.T) {
-	c := DefaultDayPlanConfig()
-	c.MinSideLevels = intPtr(3)
-	ov4 := 4
-	c.Sessions = []DayPlanSessionOverride{{Session: "NY", MinSideLevels: &ov4}}
-	b, err := json.Marshal(c)
+	// And the field must be GONE from the marshal output.
+	b, err := json.Marshal(&c)
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
 	}
-	var back DayPlanConfig
-	if err := json.Unmarshal(b, &back); err != nil {
-		t.Fatalf("unmarshal: %v", err)
+	if containsMinSide(string(b)) {
+		t.Fatalf("min_side_levels must not re-appear in marshaled output: %s", b)
 	}
-	if got := back.MinSideLevelsFor("NY"); got != 4 {
-		t.Fatalf("override round-trip = %d, want 4", got)
+}
+
+func containsMinSide(s string) bool {
+	return len(s) >= 15 && findSub(s, "min_side_levels") >= 0
+}
+
+func findSub(s, sub string) int {
+	for i := 0; i+len(sub) <= len(s); i++ {
+		if s[i:i+len(sub)] == sub {
+			return i
+		}
 	}
-	if got := back.MinSideLevelsFor("LONDON"); got != 3 {
-		t.Fatalf("base round-trip = %d, want 3", got)
-	}
+	return -1
 }

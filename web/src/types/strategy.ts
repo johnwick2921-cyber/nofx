@@ -74,9 +74,6 @@ export interface DayPlanSessionOverride {
   acceptance_rule?: string
   min_grade?: string // A | B | C
   min_scenario_quality?: string // A | B | C (R4, 2026-08-25)
-  /** P0-relax (2026-08-27) — per-side level floor for plan validation
-   *  (default 2; 3 = the old hard rule). nil inherits the strategy value. */
-  min_side_levels?: number
   max_trades?: number
 }
 
@@ -114,9 +111,6 @@ export interface DayPlanConfig {
   /** R4 (2026-08-25) — scenario quality floor: A | B | C. Default C = no
    *  restriction. */
   min_scenario_quality?: string
-  /** P0-relax (2026-08-27) — per-side level floor for plan validation.
-   *  Default 2; 3 = the old hard ≥3. Env MIN_SIDE_LEVELS is the fallback. */
-  min_side_levels?: number
   sessions?: DayPlanSessionOverride[]
 }
 

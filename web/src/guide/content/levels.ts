@@ -120,7 +120,7 @@ export const levels: GuideSection = {
     { kind: 'h', text: 'Seats & band' },
     {
       kind: 'p',
-      text: 'Why 8 (max_levels): a tight table the AI can actually copy without hallucinating. The ±band (proximity_filter_atr × daily-range, retuned 0.3 → ≈±100pt): day-trade relevance — far levels still exist in the detector universe (they now feed the bias-tree anchors even unseated). min_side_levels (default 2): the per-side floor — WARN-only since 2026-08-31 (owner ruling): a machine-thin OR AI-thin side writes with a ⚖ note instead of failing the whole session (that exact failure sat ASIA out on 08-26); zero-side still fails closed.',
+      text: 'Why 8 (max_levels): a tight table the AI can actually copy without hallucinating. The ±band (proximity_filter_atr × daily-range, retuned 0.3 → ≈±100pt): day-trade relevance — far levels still exist in the detector universe (they now feed the bias-tree anchors even unseated). Per-side counts are DELETED (owner ruling 2026-08-31): the old min_side_levels knob is gone and the ⚖ thin-side note is gone — the only side guard left is the 0-levels-on-a-side fail (the 2026-08-18 one-sided-map pathology).',
     },
   ],
 }

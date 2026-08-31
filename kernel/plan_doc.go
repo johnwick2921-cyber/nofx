@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"os"
 	"regexp"
 	"sort"
 	"strconv"
@@ -266,12 +265,6 @@ type PlanDoc struct {
 	// remains for legacy stored plans.
 	DeathStructured *PlanCondition `json:"death,omitempty"`
 	FlipStructured  *PlanCondition `json:"flip,omitempty"`
-
-	// ThinSide (P0-relax, 2026-08-27) — when the write site accepted a plan
-	// whose side-shortage was MACHINE-CAUSED (the assembled in-band map itself
-	// had fewer than the quota on that side), this note names the thin side:
-	// "thin-side: 2 above (machine 2)". Advisory; the card renders it.
-	ThinSide string `json:"thin_side,omitempty"`
 }
 
 // PlanCondition is a checkable predicate: price closes beyond `Price` on the
@@ -763,85 +756,54 @@ type PlanFacts struct {
 	PDL   float64 // prior day low (0 = unknown → gap rules skipped)
 }
 
-// DefaultSideQuota (P0-relax, 2026-08-27) — the per-side level floor the plan
-// validator enforces. The ORIGINAL behavior (MinSideLevels=3) stays reachable
-// via the MIN_SIDE_LEVELS env or the Strategy Studio knob (min_side_levels).
-// Owner ruling 2026-08-27: 3 is too hard — it fail-closed the whole 08-26 ASIA
-// session over a machine-map shortage (price sat at the top of the level stack).
-const DefaultSideQuota = 2
-
-// SideQuotaFromEnv reads MIN_SIDE_LEVELS (1..8). Unset/invalid → DefaultSideQuota.
-func SideQuotaFromEnv() int {
-	v := strings.TrimSpace(os.Getenv("MIN_SIDE_LEVELS"))
-	if v == "" {
-		return DefaultSideQuota
-	}
-	if n, err := strconv.Atoi(v); err == nil && n >= 1 && n <= 8 {
-		return n
-	}
-	return DefaultSideQuota
-}
-
-// SideQuotaNote renders the card-visible thin-side note line.
-func SideQuotaNote(side string, planN, machineN int) string {
-	return fmt.Sprintf("thin-side: %d %s (machine map %d) — machine-caused, written with a thin side", planN, side, machineN)
-}
-
-// ValidatePlanDocWithFacts = schema rules + P0.1/P0.2 facts rules:
-//   - levels must carry ≥ quota on EACH side of price (one-sided maps
-//     are the 2026-08-18 pathology — a 110-point breakdown with zero downside
-//     levels);
+// ValidatePlanDocWithFacts = schema rules + facts rules:
+//   - 0 levels on a side of price → HARD FAIL (one-sided maps are the
+//     2026-08-18 pathology — a 110-point breakdown with zero downside levels;
+//     owner ruling 2026-08-31: the per-side COUNT concept is deleted — only
+//     the 0-side guard survives);
 //   - price BELOW PDL (gap-down) → a continuation SHORT scenario is mandatory;
 //     price ABOVE PDH (gap-up) → a continuation LONG scenario is mandatory;
 //   - no two levels within the cluster tolerance (duplicate seats);
 //   - every scenario target must sit within the proximity band of price.
 //
-// Legacy signature: machine map nil + the historical quota. The write site uses
-// ValidatePlanDocWithFactsMachine (P0-relax, 2026-08-27) — see that doc.
+// Legacy signature: machine map nil. The write site uses
+// ValidatePlanDocWithFactsMachine — see that doc.
 func ValidatePlanDocWithFacts(d *PlanDoc, facts PlanFacts, maxLevels, maxScenarios int) error {
-	_, err := ValidatePlanDocWithFactsMachine(d, facts, nil, MinSideLevels, maxLevels, maxScenarios)
-	return err
+	return ValidatePlanDocWithFactsMachine(d, facts, nil, maxLevels, maxScenarios)
 }
 
-// ValidatePlanDocWithFactsMachine is the P0-relax (2026-08-27) write-site
-// validator. `machine` is the prompt-visible universe keyed by rounded price
-// (seated table incl. owner-sticky levels + HTF-section rows merged); len==0
-// means the universe was empty/unknown. `sideQuota` is the resolved
-// MIN_SIDE_LEVELS floor (WARN threshold only since the 2026-08-31 ruling).
+// ValidatePlanDocWithFactsMachine is the write-site validator. `machine` is the
+// prompt-visible universe keyed by rounded price (seated table incl.
+// owner-sticky levels + HTF-section rows merged); len==0 means the universe
+// was empty/unknown.
 //
-// Side-quota ruling history:
+// Side-count ruling history (owner ruling 2026-08-31): the per-side COUNT
+// concept is DELETED from the system — no quota, no WARN, no thin_side note.
+// The only survivors are the two data-earned hard fails:
 //   - plan carries 0 on a side → HARD FAIL (the original one-sided-map
 //     pathology — a plan nobody can trade on that side).
 //   - machine map EMPTY → HARD FAIL (true safety floor — never write on an
 //     empty/unknown map).
-//   - plan < quota on a side → WARN only (thin_side note), BOTH branches:
-//     machine-caused thin AND AI-caused omission. The per-side COUNT ceased
-//     to reject by OWNER RULING 2026-08-31 — a quota reject only ever
-//     produced a re-drafted plan that failed the same way (three identical
-//     rejections on 2026-08-31); the model must see the WARN, never die on it.
 //
 // All other rules (schema, duplicates, gap continuation, reachable targets,
-// targets-in-band) are byte-identical to the legacy validator.
-func ValidatePlanDocWithFactsMachine(d *PlanDoc, facts PlanFacts, machine map[float64]string, sideQuota, maxLevels, maxScenarios int) (thin []string, err error) {
+// targets-in-band) are unchanged.
+func ValidatePlanDocWithFactsMachine(d *PlanDoc, facts PlanFacts, machine map[float64]string, maxLevels, maxScenarios int) error {
 	if err := ValidatePlanDocWithCaps(d, maxLevels, maxScenarios); err != nil {
-		return nil, err
+		return err
 	}
 	if facts.Price <= 0 {
-		return nil, nil // no facts → schema-only (legacy callers/tests)
-	}
-	if sideQuota < 1 {
-		sideQuota = DefaultSideQuota
+		return nil // no facts → schema-only (legacy callers/tests)
 	}
 	// P0.4 — duplicate-level rejection (the planner copied an EQ family 4×).
 	for i := 0; i < len(d.Levels); i++ {
 		for j := i + 1; j < len(d.Levels); j++ {
 			if math.Abs(d.Levels[i].Price-d.Levels[j].Price) <= LevelClusterTicks*0.25 {
-				return nil, fmt.Errorf("levels[%d] and [%d] are %.2f apart — duplicates within the cluster tolerance; collapse them into one entry",
+				return fmt.Errorf("levels[%d] and [%d] are %.2f apart — duplicates within the cluster tolerance; collapse them into one entry",
 					i, j, math.Abs(d.Levels[i].Price-d.Levels[j].Price))
 			}
 		}
 	}
-	// P0.1-relax — both-side minimum (machine-aware; see doc above).
+	// P0.1-relax — both-side minimum (see doc above).
 	below, above := 0, 0
 	for _, l := range d.Levels {
 		switch {
@@ -851,54 +813,27 @@ func ValidatePlanDocWithFactsMachine(d *PlanDoc, facts PlanFacts, machine map[fl
 			above++
 		}
 	}
-	machineBelow, machineAbove := 0, 0
-	for p := range machine {
-		switch {
-		case p < facts.Price:
-			machineBelow++
-		case p > facts.Price:
-			machineAbove++
-		}
-	}
-	if machine == nil {
-		// Legacy caller (tests/replays, no machine universe): the pre-relax
-		// behavior — hard fail whenever the plan carries less than the quota
-		// on a side (this also covers 0 on a side, the original pathology).
-		if below < sideQuota {
-			return nil, fmt.Errorf("only %d levels below price %.2f — the plan must carry ≥%d on EACH side (add prior week/month lows, swing lows, round numbers or value-area edges below)", below, facts.Price, sideQuota)
-		}
-		if above < sideQuota {
-			return nil, fmt.Errorf("only %d levels above price %.2f — the plan must carry ≥%d on EACH side", above, facts.Price, sideQuota)
-		}
-	} else if len(machine) == 0 {
+	if machine != nil && len(machine) == 0 {
 		// Empty machine map = the true safety floor: never write a plan the
 		// system cannot vouch for. (The write site always passes the
 		// prompt-visible map, so this is the fail-closed escape hatch.)
-		return nil, fmt.Errorf("machine level map is EMPTY at price %.2f — refusing to validate a plan against no universe (never stale, never uncalibrated)", facts.Price)
-	} else {
-		if below == 0 {
-			return nil, fmt.Errorf("0 levels below price %.2f — the plan must carry ≥%d on EACH side (one-sided map is the 2026-08-18 pathology)", facts.Price, sideQuota)
-		}
-		if above == 0 {
-			return nil, fmt.Errorf("0 levels above price %.2f — the plan must carry ≥%d on EACH side (one-sided map is the 2026-08-18 pathology)", facts.Price, sideQuota)
-		}
-		// OWNER RULING 2026-08-31 — the per-side COUNT no longer rejects:
-		// below/above < quota is WARN-only on BOTH branches (machine-caused thin
-		// and AI-caused omission alike). The hard fails above (0 on a side) and
-		// the empty-map fail remain the data-earned guards.
-		if below < sideQuota {
-			thin = append(thin, fmt.Sprintf("thin-side: %d below (machine map %d) — count is WARN-only per owner ruling 2026-08-31 (previously rejected AI-caused omissions)", below, machineBelow))
-		}
-		if above < sideQuota {
-			thin = append(thin, fmt.Sprintf("thin-side: %d above (machine map %d) — count is WARN-only per owner ruling 2026-08-31 (previously rejected AI-caused omissions)", above, machineAbove))
-		}
+		return fmt.Errorf("machine level map is EMPTY at price %.2f — refusing to validate a plan against no universe (never stale, never uncalibrated)", facts.Price)
+	}
+	// OWNER RULING 2026-08-31 — the per-side COUNT concept is deleted. The
+	// only surviving side guard is the data-earned 0-on-a-side hard fail
+	// (the 2026-08-18 one-sided-map pathology). No quota, no WARN, no note.
+	if below == 0 {
+		return fmt.Errorf("0 levels below price %.2f — a plan must map both directions (the 2026-08-18 one-sided-map pathology)", facts.Price)
+	}
+	if above == 0 {
+		return fmt.Errorf("0 levels above price %.2f — a plan must map both directions (the 2026-08-18 one-sided-map pathology)", facts.Price)
 	}
 	// P0.2 — continuation scenario on a gap out of the prior range.
 	if facts.PDL > 0 && facts.Price < facts.PDL && !hasDirection(d.Scenarios, "short") {
-		return thin, fmt.Errorf("price %.2f is BELOW PDL %.2f (gap-down) — the plan MUST include a continuation/breakdown short scenario", facts.Price, facts.PDL)
+		return fmt.Errorf("price %.2f is BELOW PDL %.2f (gap-down) — the plan MUST include a continuation/breakdown short scenario", facts.Price, facts.PDL)
 	}
 	if facts.PDH > 0 && facts.Price > facts.PDH && !hasDirection(d.Scenarios, "long") {
-		return thin, fmt.Errorf("price %.2f is ABOVE PDH %.2f (gap-up) — the plan MUST include a continuation/breakout long scenario", facts.Price, facts.PDH)
+		return fmt.Errorf("price %.2f is ABOVE PDH %.2f (gap-up) — the plan MUST include a continuation/breakout long scenario", facts.Price, facts.PDH)
 	}
 	// P0.2-c — the continuation scenario must be REACHABLE from here: a gap-down
 	// short whose trigger needs a rally back above price (the 2026-08-18 S3
@@ -907,12 +842,12 @@ func ValidatePlanDocWithFactsMachine(d *PlanDoc, facts PlanFacts, machine map[fl
 	// nearest numeric level must sit AT or beyond price in the gap direction.
 	if facts.PDL > 0 && facts.Price < facts.PDL {
 		if !continuationReachable(d.Scenarios, "short", facts.Price) {
-			return thin, fmt.Errorf("gap-down at %.2f (< PDL %.2f): the short scenario's trigger must reference a level ≤ current price (breakdown/retest), not a rally back above", facts.Price, facts.PDL)
+			return fmt.Errorf("gap-down at %.2f (< PDL %.2f): the short scenario's trigger must reference a level ≤ current price (breakdown/retest), not a rally back above", facts.Price, facts.PDL)
 		}
 	}
 	if facts.PDH > 0 && facts.Price > facts.PDH {
 		if !continuationReachable(d.Scenarios, "long", facts.Price) {
-			return thin, fmt.Errorf("gap-up at %.2f (> PDH %.2f): the long scenario's trigger must reference a level ≥ current price (breakout/retest), not a dip back below", facts.Price, facts.PDH)
+			return fmt.Errorf("gap-up at %.2f (> PDH %.2f): the long scenario's trigger must reference a level ≥ current price (breakout/retest), not a dip back below", facts.Price, facts.PDH)
 		}
 	}
 	// P0.2b — targets must be reachable: inside the proximity band.
@@ -923,11 +858,11 @@ func ValidatePlanDocWithFactsMachine(d *PlanDoc, facts PlanFacts, machine map[fl
 	for i, s := range d.Scenarios {
 		for _, t := range s.TargetChain {
 			if math.Abs(t-facts.Price) > band {
-				return thin, fmt.Errorf("scenario[%d] target %.2f is %.0f pts from price %.2f — outside the %.0f-pt proximity band (unreachable target)", i, t, math.Abs(t-facts.Price), facts.Price, band)
+				return fmt.Errorf("scenario[%d] target %.2f is %.0f pts from price %.2f — outside the %.0f-pt proximity band (unreachable target)", i, t, math.Abs(t-facts.Price), facts.Price, band)
 			}
 		}
 	}
-	return thin, nil
+	return nil
 }
 
 func hasDirection(scenarios []PlanScenario, dir string) bool {

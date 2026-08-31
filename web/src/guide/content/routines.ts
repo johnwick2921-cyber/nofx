@@ -26,7 +26,7 @@ export const routines: GuideSection = {
           steps: [
             'Card present — not a NO-TRADE banner?',
             "Bias + bias-tree line agree with the day's shape?",
-            'Levels: any consumed/dim or thin-side ⚖ rows?',
+            'Levels: any consumed or dim rows?',
             'Armed scenario: confirm MET? entry S# sane?',
             'Approval required? → tap Approve to unlock the session-day.',
           ],
