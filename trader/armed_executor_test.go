@@ -274,7 +274,8 @@ func TestMaterializeArmedEntryF3(t *testing.T) {
 	}
 	u := ntwire.OrderUpdatePayload{State: "filled", SignalID: "sig-f3", Account: "Sim101", FillPrice: 29347.25}
 	at.materializeArmedEntry(row, u)
-	pos, err := st.Position().GetOpenPositionBySymbol(at.id, at.futuresSymbol(), "long")
+	// FIX 3 (class 27): rows are written with the UPPERCASE canonical side.
+	pos, err := st.Position().GetOpenPositionBySymbol(at.id, at.futuresSymbol(), "LONG")
 	if err != nil || pos == nil {
 		t.Fatalf("open row not materialized: %v", err)
 	}

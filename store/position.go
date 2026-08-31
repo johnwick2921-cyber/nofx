@@ -102,6 +102,21 @@ func formatDurationMs(ms int64) string {
 // marker — not a NULL/sentinel value — is the single source of truth for "unknown".
 const CloseReasonReconcileFlat = "reconcile_flat"
 
+// CloseReasonUnresolved (class 27, 2026-08-31) marks an NT8 orphan-close where
+// NO real exit could be derived — no position_close frame, no netting fill.
+// Unlike reconcile_flat's old placeholder (entry-as-exit → fake $0), unresolved
+// rows are CLOSED with exit_price 0 and a visible note; every P&L presenter/
+// aggregator treats both markers as "unknown" (excluded from stats, rendered
+// "—") — a visible gap beats a fabricated zero.
+const CloseReasonUnresolved = "unresolved"
+
+// UnknownPnLReason reports whether a close reason carries NO trustworthy P&L
+// (reconcile_flat placeholder or class-27 unresolved) and must be excluded
+// from stats/streaks/guardrails while remaining visible in history lists.
+func UnknownPnLReason(reason string) bool {
+	return reason == CloseReasonReconcileFlat || reason == CloseReasonUnresolved
+}
+
 // TraderPosition position record
 // All time fields use int64 millisecond timestamps (UTC) to avoid timezone issues
 type TraderPosition struct {
@@ -373,6 +388,29 @@ func (s *PositionStore) ClosePosition(id int64, exitPrice float64, exitOrderID s
 	return res.RowsAffected > 0, res.Error
 }
 
+// ClosePositionUnresolved (class 27, 2026-08-31) closes an OPEN row whose real
+// exit could NOT be derived — no position_close frame and no netting fill.
+// It writes close_reason=unresolved with exit_price 0 and a visible note, and
+// NEVER fabricates exit=entry (the old fake-$0). Status stays CLOSED so the
+// row remains visible in history lists; UnknownPnLReason excludes it from
+// every P&L sum/streak/guardrail. Guarded on status='OPEN' like ClosePosition,
+// so a last-moment close-sync win is never overwritten.
+func (s *PositionStore) ClosePositionUnresolved(id int64, note string) (bool, error) {
+	nowMs := time.Now().UTC().UnixMilli()
+	res := s.db.Model(&TraderPosition{}).Where("id = ? AND status = ?", id, "OPEN").Updates(map[string]interface{}{
+		"exit_price":          0.0,
+		"exit_order_id":       "",
+		"exit_time":           nowMs,
+		"realized_pnl":        0.0,
+		"fee":                 0.0,
+		"status":              "CLOSED",
+		"close_reason":        CloseReasonUnresolved,
+		"pnl_correction_note": note,
+		"updated_at":          nowMs,
+	})
+	return res.RowsAffected > 0, res.Error
+}
+
 // UpdateEntryPrice overwrites a position's entry price. Used by the NinjaTrader
 // reconcile to anchor a stale decision-time entry (the 5m-mark reference) to the
 // broker-reported position average (NT8 Position.AveragePrice / AverageFillPrice).
@@ -381,6 +419,17 @@ func (s *PositionStore) UpdateEntryPrice(id int64, entryPrice float64) error {
 	return s.db.Model(&TraderPosition{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"entry_price": entryPrice,
 		"updated_at":  time.Now().UTC().UnixMilli(),
+	}).Error
+}
+
+// SetPositionAccount backfills the NT account on an OPEN row whose materializing
+// fill frame carried no account (class 27 FIX 3, 2026-08-31). Without it,
+// close-sync's account-scoped owner lookup misses the row and the real exit is
+// dropped — the 577+578 duplicate class. Only ever fills an EMPTY account.
+func (s *PositionStore) SetPositionAccount(id int64, account string) error {
+	return s.db.Model(&TraderPosition{}).Where("id = ? AND account = ?", id, "").Updates(map[string]interface{}{
+		"account":    account,
+		"updated_at": time.Now().UTC().UnixMilli(),
 	}).Error
 }
 

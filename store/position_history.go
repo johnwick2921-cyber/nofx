@@ -96,9 +96,9 @@ func (s *PositionStore) GetHistorySummary(traderID string) (*HistorySummary, err
 		summary.AvgHoldingMins = totalMins / float64(len(positions))
 	}
 
-	// Recent 20 trades (exclude reconcile-flat orphan closes — unknown P&L).
+	// Recent 20 trades (exclude unknown-P&L orphan closes — reconcile_flat / unresolved).
 	var recent []TraderPosition
-	s.db.Where("trader_id = ? AND status = ? AND close_reason <> ?", traderID, "CLOSED", CloseReasonReconcileFlat).
+	s.db.Where("trader_id = ? AND status = ? AND close_reason NOT IN (?, ?)", traderID, "CLOSED", CloseReasonReconcileFlat, CloseReasonUnresolved).
 		Order("exit_time DESC").Limit(20).Find(&recent)
 	for _, pos := range recent {
 		summary.RecentPnL += pos.EffectivePnL()
@@ -119,8 +119,8 @@ func (s *PositionStore) GetHistorySummary(traderID string) (*HistorySummary, err
 // calculateStreaks calculates win/loss streaks
 func (s *PositionStore) calculateStreaks(traderID string, summary *HistorySummary) {
 	var positions []TraderPosition
-	// Exclude reconcile-flat orphan closes (unknown P&L — see CloseReasonReconcileFlat).
-	err := s.db.Where("trader_id = ? AND status = ? AND close_reason <> ?", traderID, "CLOSED", CloseReasonReconcileFlat).
+	// Exclude unknown-P&L orphan closes (reconcile_flat / class-27 unresolved).
+	err := s.db.Where("trader_id = ? AND status = ? AND close_reason NOT IN (?, ?)", traderID, "CLOSED", CloseReasonReconcileFlat, CloseReasonUnresolved).
 		Order("exit_time DESC").
 		Find(&positions).Error
 	if err != nil || len(positions) == 0 {

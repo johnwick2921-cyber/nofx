@@ -116,3 +116,48 @@ func TestReconcileConsumesParkedCloseForUntrackedPosition(t *testing.T) {
 		t.Fatal("untracked debounce must be pruned once NT8 no longer holds the position")
 	}
 }
+
+// TestReconcileUntrackedDedupesAccountEmptyRow (class 27 FIX 3, 2026-08-31):
+// the 577+578 duplicate class — an armed-materialized OPEN row whose account is
+// still EMPTY must be found by the untracked owner lookup (account-agnostic
+// retry), have its account backfilled, and NEVER be double-materialized.
+func TestReconcileUntrackedDedupesAccountEmptyRow(t *testing.T) {
+	st, err := store.New(filepath.Join(t.TempDir(), "dedupe.db"))
+	if err != nil {
+		t.Fatalf("store.New: %v", err)
+	}
+	const traderID = "trader-dedupe"
+
+	s := ntwire.NewTCPServer(nil)
+	s.SeedPositionsForTest("Sim101", []ntwire.OpenPosition{
+		{Symbol: "MNQ", Side: "LONG", Quantity: 1, AvgPrice: 29413.0},
+	})
+	tr := NewTCPTrader(s, "MNQ", "Sim101")
+
+	// The armed materializer's row — account still empty (the frame predated
+	// the account binding, exactly the 577 birth shape).
+	if err := st.Position().CreateOpenPosition(&store.TraderPosition{
+		TraderID: traderID, ExchangeType: "ninjatrader",
+		ExchangePositionID: "armed_f0bbe9af_1", Symbol: "MNQ", Side: "LONG",
+		Quantity: 1, EntryQuantity: 1, EntryPrice: 29413.0,
+		EntryOrderID: "f0bbe9af-c6ce-4444-8243-974c1ce03208", Leverage: 1,
+		Status: "OPEN", Source: "armed_entry", Account: "",
+	}); err != nil {
+		t.Fatalf("create armed row: %v", err)
+	}
+
+	tr.reconcilePositions(traderID, "nt", "ninjatrader", st)
+	tr.untrackedSince["MNQ|LONG"] = time.Now().UTC().UnixMilli() - untrackedGraceMs - 1
+	tr.reconcilePositions(traderID, "nt", "ninjatrader", st)
+
+	rows, _ := st.Position().GetOpenPositions(traderID)
+	if len(rows) != 1 {
+		t.Fatalf("reconcile must NOT duplicate the armed row, got %d open rows", len(rows))
+	}
+	if rows[0].Account != "Sim101" {
+		t.Fatalf("reconcile must backfill the bound account, got %q", rows[0].Account)
+	}
+	if rows[0].Source != "armed_entry" {
+		t.Fatalf("the original armed row must be kept, got source %q", rows[0].Source)
+	}
+}

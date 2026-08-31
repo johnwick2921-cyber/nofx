@@ -51,6 +51,14 @@ type TCPTrader struct {
 	lastFill ntwire.FillPayload
 	hasFill  bool
 
+	// recentFills is a bounded ring of the last confirmed fills (class 27,
+	// 2026-08-31). A NETTING close emits no position_close frame — the only
+	// evidence of the real exit is the opposite-side fill that flattened the
+	// account (the NT8 Add→Flat pair). The reconcile orphan-close consults this
+	// ring to reconstruct the real exit price instead of fabricating exit=entry.
+	// Guarded by mu. Reconcile goroutine reads via takeNettingExit.
+	recentFills []recentFill
+
 	// closedAt records the wall-clock (ms) of the most recent FILL-CONFIRMED close
 	// (position_close frame) per "SYMBOL|SIDE" for THIS trader's bound account. The
 	// reconcile-before-open gate awaits this event — which arrives ~instantly on the
@@ -225,6 +233,11 @@ func NewTCPTrader(server *ntwire.TCPServer, symbol string, account ...string) *T
 			t.mu.Lock()
 			t.lastFill = fill
 			t.hasFill = true
+			// Class 27 (2026-08-31): retain confirmed fills in the netting ring
+			// so reconcile can reconstruct a netting-close's real exit price.
+			if strings.EqualFold(fill.Status, "filled") || strings.EqualFold(fill.Status, "partial") {
+				t.recordRecentFill(fill)
+			}
 			t.mu.Unlock()
 		}
 	}()

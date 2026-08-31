@@ -77,9 +77,9 @@ func (s *PositionStore) CountConsecutiveLossesSince(traderID string, sinceMs int
 	var rows []TraderPosition
 	err := s.db.
 		// A-2 (2026-08-28): exclude legacy unverified rows from the loss
-		// streak too (reconcile_flat already excluded).
-		Where("trader_id = ? AND status = ? AND close_reason <> ? AND pnl_corrected IS NOT NULL AND exit_time >= ?",
-			traderID, "CLOSED", CloseReasonReconcileFlat, sinceMs).
+		// streak too (reconcile_flat + class-27 unresolved already excluded).
+		Where("trader_id = ? AND status = ? AND close_reason NOT IN (?, ?) AND pnl_corrected IS NOT NULL AND exit_time >= ?",
+			traderID, "CLOSED", CloseReasonReconcileFlat, CloseReasonUnresolved, sinceMs).
 		Order("exit_time DESC").
 		Find(&rows).Error
 	if err != nil {
@@ -110,11 +110,11 @@ func (s *PositionStore) GetSessionDayActivity(traderID string, sinceMs int64, ac
 
 	var pnl struct{ Total float64 }
 	pq := s.db.Model(&TraderPosition{}).
-		Select("COALESCE(SUM(COALESCE(pnl_corrected, realized_pnl)), 0) as total") /* P0 2026-08-20: corrections win */.
+		Select("COALESCE(SUM(COALESCE(pnl_corrected, realized_pnl)), 0) as total"). /* P0 2026-08-20: corrections win */
 		// A-2 (2026-08-28): no silent NULLs — legacy unverified rows are
 		// excluded from the guardrail P&L too.
-		Where("trader_id = ? AND status = ? AND close_reason <> ? AND pnl_corrected IS NOT NULL AND exit_time >= ?",
-			traderID, "CLOSED", CloseReasonReconcileFlat, sinceMs)
+		Where("trader_id = ? AND status = ? AND close_reason NOT IN (?, ?) AND pnl_corrected IS NOT NULL AND exit_time >= ?",
+			traderID, "CLOSED", CloseReasonReconcileFlat, CloseReasonUnresolved, sinceMs)
 	if acct != "" {
 		pq = pq.Where("account = ?", acct)
 	}
@@ -138,7 +138,7 @@ func (s *PositionStore) GetSessionDayActivity(traderID string, sinceMs int64, ac
 // GetFullStats gets complete trading statistics, optionally scoped to one
 // account (mirrors GetClosedPositions): account=="" → trader-global (crypto +
 // legacy); account!="" → only that NT account's closed trades, excluding
-// pre-migration rows (account=''). Variadic so existing callers are unchanged.
+// pre-migration rows (account=”). Variadic so existing callers are unchanged.
 func (s *PositionStore) GetFullStats(traderID string, account ...string) (*TraderStats, error) {
 	stats := &TraderStats{}
 	acct := ""
@@ -146,11 +146,11 @@ func (s *PositionStore) GetFullStats(traderID string, account ...string) (*Trade
 		acct = account[0]
 	}
 
-	// Exclude reconcile-flat orphan closes: their realized P&L is UNKNOWN (exit
+	// Exclude unknown-P&L orphan closes: their realized P&L is UNKNOWN (exit
 	// fill never captured), not a real $0 — counting them would skew win-rate /
 	// total P&L. They still appear in the position LIST (rendered "—").
 	var count int64
-	cq := s.db.Model(&TraderPosition{}).Where("trader_id = ? AND status = ? AND close_reason <> ?", traderID, "CLOSED", CloseReasonReconcileFlat)
+	cq := s.db.Model(&TraderPosition{}).Where("trader_id = ? AND status = ? AND close_reason NOT IN (?, ?)", traderID, "CLOSED", CloseReasonReconcileFlat, CloseReasonUnresolved)
 	if acct != "" {
 		cq = cq.Where("account = ?", acct)
 	}
@@ -162,7 +162,7 @@ func (s *PositionStore) GetFullStats(traderID string, account ...string) (*Trade
 	}
 
 	var positions []TraderPosition
-	pq := s.db.Where("trader_id = ? AND status = ? AND close_reason <> ?", traderID, "CLOSED", CloseReasonReconcileFlat)
+	pq := s.db.Where("trader_id = ? AND status = ? AND close_reason NOT IN (?, ?)", traderID, "CLOSED", CloseReasonReconcileFlat, CloseReasonUnresolved)
 	if acct != "" {
 		pq = pq.Where("account = ?", acct)
 	}
@@ -228,7 +228,7 @@ type RecentTrade struct {
 // GetRecentTrades gets recent closed trades, optionally scoped to one account
 // (mirrors GetClosedPositions): account=="" → trader-global (crypto + legacy);
 // account!="" → only that NT account's trades, excluding pre-migration rows
-// (account=''). Variadic so existing callers stay trader-global unchanged.
+// (account=”). Variadic so existing callers stay trader-global unchanged.
 func (s *PositionStore) GetRecentTrades(traderID string, limit int, account ...string) ([]RecentTrade, error) {
 	var positions []TraderPosition
 	q := s.db.Where("trader_id = ? AND status = ?", traderID, "CLOSED")
@@ -339,8 +339,8 @@ type SymbolStats struct {
 // GetSymbolStats gets per-symbol trading statistics
 func (s *PositionStore) GetSymbolStats(traderID string, limit int) ([]SymbolStats, error) {
 	var positions []TraderPosition
-	// Exclude reconcile-flat orphan closes (unknown P&L — see CloseReasonReconcileFlat).
-	err := s.db.Where("trader_id = ? AND status = ? AND close_reason <> ?", traderID, "CLOSED", CloseReasonReconcileFlat).Find(&positions).Error
+	// Exclude unknown-P&L orphan closes (reconcile_flat / class-27 unresolved).
+	err := s.db.Where("trader_id = ? AND status = ? AND close_reason NOT IN (?, ?)", traderID, "CLOSED", CloseReasonReconcileFlat, CloseReasonUnresolved).Find(&positions).Error
 	if err != nil {
 		return nil, fmt.Errorf("failed to query symbol stats: %w", err)
 	}
@@ -416,8 +416,8 @@ func (s *PositionStore) GetHoldingTimeStats(traderID string) ([]HoldingTimeStats
 	}
 
 	rangeStats := map[string]*struct {
-		count   int
-		wins    int
+		count    int
+		wins     int
 		totalPnL float64
 	}{
 		"<1h":   {},
@@ -480,8 +480,8 @@ type DirectionStats struct {
 // GetDirectionStats analyzes long vs short performance
 func (s *PositionStore) GetDirectionStats(traderID string) ([]DirectionStats, error) {
 	var positions []TraderPosition
-	// Exclude reconcile-flat orphan closes (unknown P&L — see CloseReasonReconcileFlat).
-	err := s.db.Where("trader_id = ? AND status = ? AND close_reason <> ?", traderID, "CLOSED", CloseReasonReconcileFlat).Find(&positions).Error
+	// Exclude unknown-P&L orphan closes (reconcile_flat / class-27 unresolved).
+	err := s.db.Where("trader_id = ? AND status = ? AND close_reason NOT IN (?, ?)", traderID, "CLOSED", CloseReasonReconcileFlat, CloseReasonUnresolved).Find(&positions).Error
 	if err != nil {
 		return nil, fmt.Errorf("failed to query direction stats: %w", err)
 	}

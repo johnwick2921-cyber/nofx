@@ -1909,10 +1909,90 @@ namespace NinjaTrader.NinjaScript.AddOns
         // bug). A close/flat arrives as MarketPosition.Flat or Quantity 0.
         private void OnPositionUpdate(object sender, PositionEventArgs e)
         {
+            var acc = (sender as Account) ?? account;
             // Emit for the account that actually changed (sender) — PositionUpdate is
             // now hooked on ALL SIM accounts, so this can fire for a non-active account.
-            try { SendOpenPositions((sender as Account) ?? account, e); }
+            try { SendOpenPositions(acc, e); }
             catch (Exception ex) { LogWarn("VLTraderTCPClient: OnPositionUpdate failed: " + ex.Message); }
+            // CLASS-27 (2026-08-31 netting-orphan): the instant a position goes
+            // FLAT — whether closed by an SL/TP leg, a manual flatten, or NETTED
+            // by an opposite-side ENTRY fill — sweep EVERY tracked protective
+            // bracket for this (account, instrument). A netting close emits no
+            // exit-order fill, so the old position's SL/TP would otherwise rest
+            // as orphans and re-enter a flat account (live proof 2026-08-31
+            // 13:35:47: the S1 stop fired 26 minutes after its long was netted).
+            try
+            {
+                if (e != null && e.MarketPosition == MarketPosition.Flat)
+                {
+                    string flatRoot = null;
+                    try { if (e.Position != null) flatRoot = e.Position.Instrument.MasterInstrument.Name; } catch { }
+                    if (!string.IsNullOrEmpty(flatRoot))
+                    {
+                        CancelAllBracketsFor(flatRoot, acc != null ? acc.Name : "");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                LogWarn("VLTraderTCPClient: netting-flat bracket sweep failed: " + ex.Message);
+            }
+        }
+
+        // CLASS-27 (2026-08-31): cancel EVERY tracked bracket for (account,
+        // instrument). Used when the account went flat by NETTING (an
+        // opposite-side entry fill) — there is no exit order whose name can
+        // route us, so sweep by (root, account) instead of by signal id.
+        private void CancelAllBracketsFor(string rootSymbol, string acctName)
+        {
+            if (string.IsNullOrEmpty(rootSymbol)) return;
+            List<PlacedBracket> victims = new List<PlacedBracket>();
+            List<string> keysToRemove = new List<string>();
+            lock (signalMapLock)
+            {
+                foreach (var kv in placedBrackets)
+                {
+                    var cand = kv.Value;
+                    if (cand == null) continue;
+                    string candRoot = "";
+                    string candAcct = "";
+                    try { candRoot = cand.Instrument.MasterInstrument.Name; } catch { }
+                    try { candAcct = cand.Account != null ? cand.Account.Name : ""; } catch { }
+                    if (string.Equals(candRoot, rootSymbol, StringComparison.OrdinalIgnoreCase)
+                        && (string.IsNullOrEmpty(acctName) || string.Equals(candAcct, acctName, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        victims.Add(cand);
+                        keysToRemove.Add(kv.Key);
+                    }
+                }
+                if (victims.Count == 0) return;
+                int cancelled = 0;
+                foreach (var pb in victims)
+                {
+                    Account ba = pb.Account ?? account;
+                    var toCancel = new List<Order>();
+                    if (pb.SlOrder != null) toCancel.Add(pb.SlOrder);
+                    if (pb.TpOrder != null) toCancel.Add(pb.TpOrder);
+                    if (toCancel.Count > 0 && ba != null)
+                    {
+                        try
+                        {
+                            ba.Cancel(toCancel);
+                            cancelled += toCancel.Count;
+                        }
+                        catch (Exception ex)
+                        {
+                            LogWarn("VLTraderTCPClient: netting-flat bracket cancel failed: " + ex.Message);
+                        }
+                    }
+                }
+                foreach (var k in keysToRemove)
+                {
+                    placedBrackets.Remove(k);
+                }
+                LogInfo("VLTraderTCPClient: netting-flat bracket sweep cancelled " + cancelled
+                        + " leg(s) for " + rootSymbol + " (" + victims.Count + " bracket(s))");
+            }
         }
 
         // Emit the accounts_list frame reporting all available NT accounts with

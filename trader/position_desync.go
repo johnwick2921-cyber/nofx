@@ -72,5 +72,25 @@ func (at *AutoTrader) skipGateDesync(storeRows []*store.TraderPosition) bool {
 		len(storeRows), r.Symbol, r.Side)
 	telemetry.RecordError(at.id, "position_state_desync",
 		"store open vs broker flat — skip gate deferred to NT8 truth", telemetry.CostNone)
+	// CLASS-27 FIX 1 (2026-08-31): the instant the gate sees store-OPEN vs
+	// broker-FLAT, kill the orphaned brackets NOW — do NOT wait for the 60s
+	// reconcile grace. A netting close leaves the closed arm's SL/TP resting
+	// at NT8 (live proof: the S1 stop fired 26 minutes after its long was
+	// netted and opened a naked short). cancel_order is idempotent and only
+	// targets the bracket legs for that signal.
+	if nt := at.armedTrader(); nt != nil {
+		for _, row := range storeRows {
+			if row.EntryOrderID == "" {
+				continue
+			}
+			if err := nt.CancelOrder(row.EntryOrderID); err == nil {
+				at.logWarnf("🧹 class-27 desync: cancel_order sent for orphan bracket %s (%s %s row=%d) — immediate, no grace",
+					row.EntryOrderID, row.Symbol, row.Side, row.ID)
+			} else {
+				at.logWarnf("🧹 class-27 desync: cancel_order FAILED for %s (%s %s row=%d): %v",
+					row.EntryOrderID, row.Symbol, row.Side, row.ID, err)
+			}
+		}
+	}
 	return true
 }

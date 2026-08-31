@@ -10,6 +10,7 @@ import (
 	"nofx/logger"
 	"nofx/market"
 	"nofx/store"
+	"nofx/telemetry"
 )
 
 // Position reconcile — the durable single-source-of-truth anchor for NT8.
@@ -267,21 +268,58 @@ func (t *TCPTrader) reconcilePositions(traderID, exchangeID, exchangeType string
 				}
 				continue
 			}
-			// Past the grace and still flat+open → the position_close frame was
-			// genuinely never captured. Record the honest marker (exit/P&L UNKNOWN →
-			// UI "—"; entry-as-exit / 0 are placeholders). ClosePosition is guarded on
-			// status='OPEN' (PART-1a), so a last-moment close-sync win is still kept.
-			// Never fabricate an exit NT8 didn't give us.
-			closed, err := st.Position().ClosePosition(row.ID, row.EntryPrice, "reconcile", 0, 0, store.CloseReasonReconcileFlat)
-			if err == nil && closed && OnPositionClosed != nil {
-				OnPositionClosed(row.TraderID, row.ID) // Phase 4: post-exit rescan
+			// CLASS-27 NETTING-FILL FALLBACK (2026-08-31): a NETTING close emits
+			// NO position_close frame at all — an opposite-side ENTRY fill
+			// flattened the account (live proof: the S1 long closed by the S3
+			// SellShort @ 29459). Derive the real exit from the fill ring; the
+			// LATEST opposite-side fill in the flat window IS the close.
+			if exitPx, okn := t.takeNettingExit(row.Account, row.Symbol, row.Side, t.flatSince[row.ID], nowMs); okn {
+				pv := market.FuturesPointValue(row.Symbol)
+				if pv <= 0 {
+					pv = 1
+				}
+				pnl := 0.0
+				if row.EntryPrice > 0 {
+					if row.Side == "LONG" {
+						pnl = (exitPx - row.EntryPrice) * row.Quantity * pv
+					} else {
+						pnl = (row.EntryPrice - exitPx) * row.Quantity * pv
+					}
+				}
+				closed, nerr := st.Position().ClosePosition(row.ID, exitPx, "netting_fill", pnl, 0, "sync")
+				delete(t.flatSince, row.ID)
+				if nerr == nil && closed && OnPositionClosed != nil {
+					OnPositionClosed(row.TraderID, row.ID) // Phase 4: post-exit rescan
+				}
+				switch {
+				case nerr != nil:
+					logger.Warnf("ninjatrader/tcp: reconcile netting-close failed (row %d): %v", row.ID, nerr)
+				case closed:
+					logger.Infof("💵 reconcile: recovered NETTING exit for %s %s row=%d exit=%.2f pnl=%.2f (opposite-side entry fill flattened the account; no close frame exists)", row.Symbol, row.Side, row.ID, exitPx, pnl)
+				default:
+					logger.Infof("✓ reconcile: row=%d already closed by close-sync (kept real P&L); skip", row.ID)
+				}
+				continue
 			}
+			// Past the grace, no priced frame, no netting fill → the exit is
+			// GENUINELY unknown. Mark UNRESOLVED and alarm. NEVER fabricate
+			// exit=entry (the old fake-$0 that hid today's +$92.00 for 26
+			// minutes). ClosePositionUnresolved is guarded on status='OPEN'
+			// (PART-1a), so a last-moment close-sync win is still kept.
+			closed, err := st.Position().ClosePositionUnresolved(row.ID,
+				"class-27: NT8 flat, no close frame, no netting fill — exit price UNKNOWN")
 			delete(t.flatSince, row.ID)
 			switch {
 			case err != nil:
-				logger.Warnf("ninjatrader/tcp: reconcile orphan-close failed (row %d): %v", row.ID, err)
+				logger.Warnf("ninjatrader/tcp: reconcile unresolved-close failed (row %d): %v", row.ID, err)
 			case closed:
-				logger.Infof("🔧 reconcile: closed orphan %s %s (NT8 flat ≥%ds, no frame) row=%d", row.Symbol, row.Side, flatGraceMs/1000, row.ID)
+				logger.Errorf("🚨 class-27 UNRESOLVED EXIT: %s %s row=%d closed with close_reason=unresolved — NT8 flat ≥%ds with NO close frame and NO netting fill. Real P&L is unknown (visible gap, not a fake zero).",
+					row.Symbol, row.Side, row.ID, flatGraceMs/1000)
+				telemetry.RecordError(traderID, "exit_unresolved",
+					fmt.Sprintf("%s %s row=%d flat with no close frame and no netting fill", row.Symbol, row.Side, row.ID), telemetry.CostNone)
+				if OnPositionClosed != nil {
+					OnPositionClosed(row.TraderID, row.ID) // Phase 4: post-exit rescan
+				}
 			default:
 				// Row was already closed by close-sync between the snapshot and now —
 				// the status guard preserved close-sync's real ×pv P&L. No clobber.
@@ -326,6 +364,27 @@ func (t *TCPTrader) reconcilePositions(traderID, exchangeID, exchangeType string
 		if oerr != nil {
 			logger.Warnf("ninjatrader/tcp: reconcile untracked owner lookup failed (%s %s acct=%q): %v", sym, side, acct, oerr)
 			continue
+		}
+		if owner == nil {
+			// CLASS-27 FIX 3 (2026-08-31): the dedupe race that birthed the
+			// 577+578 duplicates — an armed-materialized row can carry
+			// account="" (its order_update frame predates the account binding),
+			// so the account-scoped lookup above misses it and reconcile
+			// materializes a SECOND row for the same NT8 position. Retry
+			// account-agnostically; if found, backfill the bound account so the
+			// later close-sync frame (which carries the account) finds its owner.
+			owner, oerr = st.Position().GetOpenPositionByAccountSymbol("", sym, side)
+			if oerr != nil {
+				logger.Warnf("ninjatrader/tcp: reconcile untracked owner lookup (account-agnostic) failed (%s %s): %v", sym, side, oerr)
+				continue
+			}
+			if owner != nil && owner.Account == "" && acct != "" {
+				if aerr := st.Position().SetPositionAccount(owner.ID, acct); aerr != nil {
+					logger.Warnf("ninjatrader/tcp: reconcile account backfill failed (row %d): %v", owner.ID, aerr)
+				} else {
+					logger.Infof("🔧 reconcile: backfilled account %q on armed row %d (%s %s) — dedupe + close-sync ownership", acct, owner.ID, sym, side)
+				}
+			}
 		}
 		if owner != nil {
 			delete(t.untrackedSince, key) // tracked now — drop any debounce

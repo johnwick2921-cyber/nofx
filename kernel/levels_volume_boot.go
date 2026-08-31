@@ -23,4 +23,5 @@ func LogVolumeWaveBoot() {
 	logger.Infof("🚀 planner speed wave (2026-08-31): retry=%s stream=on stream_idle=%ds ttfb=on — reasoning/mode/cap unchanged until owner ruling",
 		ResolvePlannerRetryMode(), PlannerStreamIdleSeconds())
 	logger.Infof("🗓 session reads (owner ruling 2026-08-31, open−30): ASIA 16:30 · LONDON 01:30 · NY 08:00 CT — windows/flats unchanged; Sunday weekly 16:30 → ASIA follows")
+	logger.Infof("🪢 netting-orphan wave (class 27, 2026-08-31): netting-flat cancels brackets (C# sweep + Go desync cancel_order) · exit reconstruction from the netting fill (never exit=entry; unknown → UNRESOLVED+alarm) · dedupe 577/578 class · one-live-arm guard (opposite-side refused while open; kind=exit escapes) · split legs > capacity rejected (capacity=1 unless max_contracts_per_order raises)")
 }

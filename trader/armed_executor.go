@@ -223,6 +223,19 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 		if len(sc.Arm.Legs) == 2 {
 			legCount = 2
 		}
+		// FIX 5 (class 27, owner-added 2026-08-31) — split-leg sanity: an arm
+		// may not author more legs than the account can hold. leg_count >
+		// position capacity = reject AT WRITE. Live proof: S3 authored 2 legs
+		// on a 1-lot account and leg 1's fill NETTED the open S1 long (an
+		// unlogged exit). Capacity defaults to 1 (every live order sizes to 1
+		// contract); an explicit max_contracts_per_order ≥ 2 raises it.
+		if capN := at.armLegCapacity(); legCount > capN {
+			key := plan.PlanID + ":" + strconv.Itoa(plan.Version) + ":" + sc.ID + ":legcap"
+			if armRefusalChanged(&at.armRefusalLast, key, "split_leg_capacity") {
+				at.logWarnf("⚔️ arm REFUSED %s %s: split_leg_capacity — authors %d legs but account capacity is %d (class 27; set max_contracts_per_order ≥ 2 to allow split arms)", plan.Session, sc.ID, legCount, capN)
+			}
+			continue
+		}
 		for li, leg := range legs {
 			// S2b chained arm (autopsy-response wave): wait_confirm legs stay
 			// DORMANT until the chain confirm is machine-MET. E4: leg 1 chains
@@ -275,6 +288,34 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 				continue
 			}
 			side := strings.ToLower(strings.TrimSpace(sc.Direction))
+			// FIX 4 (class 27, owner-added 2026-08-31) — ONE-LIVE-ARM GUARD. On a
+			// netting account a second arm is not a second trade: an opposite-side
+			// entry fill NETs the open position — an unlogged exit of the first
+			// (live proof 2026-08-31: the S3 SellShort fill silently closed the
+			// S1 long; its +$92.00 vanished from the ledger for 26 minutes). Refuse
+			// opposite-side arm entries while a position is open, and cancel an
+			// already-resting opposite-side order the same cycle. The only escape:
+			// a leg explicitly authored as an exit/flip leg (kind "exit").
+			if verdict := at.oneLiveArmGuard(sc, leg, side); verdict != "" {
+				if rows, lerr := ledger.ListNonTerminal(at.id); lerr == nil {
+					for _, rr := range rows {
+						if rr.TraderID == at.id && rr.PlanID == plan.PlanID && rr.Scenario == sc.ID &&
+							rr.LegIndex == li && (rr.State == "working" || rr.State == "armed") && rr.SignalID != "" {
+							if nt := at.armedTrader(); nt != nil {
+								if cerr := nt.CancelOrder(rr.SignalID); cerr == nil {
+									_ = ledger.SetState(rr.ID, "cancelled", "one_live_arm_guard")
+									at.logWarnf("✕ armed cancel (one_live_arm_guard): %s %s leg %d", plan.Session, sc.ID, li+1)
+								}
+							}
+						}
+					}
+				}
+				key := plan.PlanID + ":" + strconv.Itoa(plan.Version) + ":" + sc.ID + ":leg" + strconv.Itoa(li+1)
+				if armRefusalChanged(&at.armRefusalLast, key, "one_live_arm_guard") {
+					at.logWarnf("⚔️ arm REFUSED %s %s leg %d: %s", plan.Session, sc.ID, li+1, verdict)
+				}
+				continue
+			}
 			row := &store.ArmedOrderDB{
 				TraderID: at.id, PlanID: plan.PlanID, Version: plan.Version, Session: plan.Session,
 				Scenario: sc.ID, Side: side, EntryPx: leg.Entry, StopPx: leg.Stop, TargetPx: leg.Target,
@@ -345,6 +386,57 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 // biasDirectionFor normalizes the plan bias direction ("" → empty).
 func biasDirectionFor(dir string) string {
 	return strings.ToLower(strings.TrimSpace(dir))
+}
+
+// oneLiveArmGuard (class 27 FIX 4, owner-added 2026-08-31) — refuse an
+// opposite-side arm entry while a position is open. On a netting account a
+// second arm is not a second trade: its fill NETs the open position, an
+// unlogged exit of the first. A leg explicitly authored as an exit/flip leg
+// (kind "exit") is the only escape. "" = pass.
+func (at *AutoTrader) oneLiveArmGuard(sc kernel.PlanScenario, leg kernel.PlanArmLeg, side string) string {
+	if at.store == nil || side == "" {
+		return ""
+	}
+	if strings.EqualFold(strings.TrimSpace(leg.Kind), "exit") {
+		return "" // explicitly authored exit/flip leg for the open position
+	}
+	opens, err := at.store.Position().GetOpenPositions(at.id)
+	if err != nil || len(opens) == 0 {
+		return ""
+	}
+	sym := market.Normalize(at.futuresSymbol())
+	for _, p := range opens {
+		if !strings.EqualFold(p.Symbol, sym) {
+			continue
+		}
+		if strings.EqualFold(p.Side, side) {
+			continue // same-side add — outside this guard's scope
+		}
+		return fmt.Sprintf("one_live_arm_guard: %s arm %s would net the open %s %s position (class 27) — opposite-side entry refused while a position is open", side, sc.ID, p.Side, sym)
+	}
+	return ""
+}
+
+// armLegCapacity (class 27 FIX 5, owner-added 2026-08-31) — the account's leg
+// capacity for arm authoring. Default 1: every live order sizes to 1 contract,
+// so a split (2-leg) arm on this account is refused AT WRITE. An explicit
+// per-strategy max_contracts_per_order ≥ 2 raises the capacity and re-enables
+// split arms.
+func (at *AutoTrader) armLegCapacity() int {
+	explicit := 0
+	if at.config.StrategyConfig != nil {
+		explicit = at.config.StrategyConfig.RiskControl.MaxContractsPerOrder
+	}
+	return splitLegCapacity(explicit)
+}
+
+// splitLegCapacity is the pure leg-capacity resolver (test seam): an explicit
+// positive max-contracts value IS the capacity; unset → 1 (netting-safe).
+func splitLegCapacity(explicitMaxContracts int) int {
+	if explicitMaxContracts > 0 {
+		return explicitMaxContracts
+	}
+	return 1
 }
 
 // logShadowAB (E8) writes the 4 counterfactual confirm-fill rows for one armed
@@ -823,8 +915,20 @@ func (at *AutoTrader) materializeArmedEntry(r store.ArmedOrderDB, u ntwire.Order
 	if at.store == nil || u.FillPrice <= 0 || r.SignalID == "" {
 		return
 	}
-	if pos, err := at.store.Position().GetOpenPositionBySymbol(at.id, at.futuresSymbol(), r.Side); err == nil && pos != nil {
+	// CLASS-27 FIX 3 (2026-08-31): rows are written with UPPERCASE side (the
+	// canonical form every lookup uses); the dedupe checks BOTH cases so a
+	// legacy lowercase row can never let a duplicate materialize (the 577+578
+	// class — the old dedupe queried the lowercase ledger side against the
+	// uppercase store convention and missed).
+	side := strings.ToUpper(strings.TrimSpace(r.Side))
+	if side == "" {
+		return
+	}
+	if pos, err := at.store.Position().GetOpenPositionBySymbol(at.id, at.futuresSymbol(), side); err == nil && pos != nil {
 		return // already materialized (reconcile won the race)
+	}
+	if pos, err := at.store.Position().GetOpenPositionBySymbol(at.id, at.futuresSymbol(), strings.ToLower(side)); err == nil && pos != nil {
+		return // legacy lowercase row already exists for the same fill
 	}
 	tradeDate := r.PlanID
 	if i := strings.Index(r.PlanID, ":"); i > 0 {
@@ -836,7 +940,7 @@ func (at *AutoTrader) materializeArmedEntry(r store.ArmedOrderDB, u ntwire.Order
 		ExchangeType:       "ninjatrader",
 		ExchangePositionID: fmt.Sprintf("armed_%s_%d", r.SignalID, nowMs),
 		Symbol:             at.futuresSymbol(),
-		Side:               r.Side,
+		Side:               side,
 		Quantity:           1,
 		EntryQuantity:      1,
 		EntryPrice:         u.FillPrice,

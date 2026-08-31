@@ -83,7 +83,10 @@ func TestArmSpecSplitContractValidation(t *testing.T) {
 // TestSplitArmWritesTwoLedgerRows — the executor writes ONE ROW PER LEG with
 // the shared lineage (plan/scenario) and the leg index distinguishing them.
 func TestSplitArmWritesTwoLedgerRows(t *testing.T) {
-	cfg := store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true}}
+	// FIX 5 (class 27): a 2-leg split is only authorable when the account's
+	// leg capacity is ≥ 2 — the explicit max_contracts_per_order declares it.
+	cfg := store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true},
+		RiskControl: store.RiskControlConfig{MaxContractsPerOrder: 2}}
 	at, st := resetTrader(t, cfg)
 	now := time.Now()
 	sess, ok := at.sessionRegistry(now).ActiveSession(now)

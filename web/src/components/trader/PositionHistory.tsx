@@ -245,9 +245,11 @@ function PositionRow({ position }: { position: HistoricalPosition }) {
   const side = position.side || ''
   const isLong = side.toUpperCase() === 'LONG'
   const realizedPnl = position.realized_pnl || 0
-  // Reconcile-flat orphan closes have NO captured exit fill → realized P&L is
-  // UNKNOWN, not a real $0. Render "—" instead of a misleading breakeven.
-  const pnlUnknown = (position.close_reason || '') === 'reconcile_flat'
+  // Reconcile-flat orphan closes and class-27 unresolved closes have NO
+  // captured exit → realized P&L is UNKNOWN, not a real $0. Render "—".
+  const pnlUnknown =
+    (position.close_reason || '') === 'reconcile_flat' ||
+    (position.close_reason || '') === 'unresolved'
   const isProfitable = realizedPnl >= 0
   const sideColor = isLong ? '#0ECB81' : '#F6465D'
   const pnlColor = isProfitable ? '#0ECB81' : '#F6465D'
@@ -972,7 +974,9 @@ export function PositionHistory({ traderId }: PositionHistoryProps) {
                       filteredAndSortedPositions.reduce(
                         (sum, p) =>
                           sum +
-                          ((p.close_reason || '') === 'reconcile_flat'
+                          (['reconcile_flat', 'unresolved'].includes(
+                            p.close_reason || ''
+                          )
                             ? 0
                             : p.realized_pnl || 0),
                         0
@@ -984,7 +988,9 @@ export function PositionHistory({ traderId }: PositionHistoryProps) {
                   {filteredAndSortedPositions.reduce(
                     (sum, p) =>
                       sum +
-                      ((p.close_reason || '') === 'reconcile_flat'
+                      (['reconcile_flat', 'unresolved'].includes(
+                        p.close_reason || ''
+                      )
                         ? 0
                         : p.realized_pnl || 0),
                     0
@@ -995,7 +1001,9 @@ export function PositionHistory({ traderId }: PositionHistoryProps) {
                     filteredAndSortedPositions.reduce(
                       (sum, p) =>
                         sum +
-                        ((p.close_reason || '') === 'reconcile_flat'
+                        (['reconcile_flat', 'unresolved'].includes(
+                          p.close_reason || ''
+                        )
                           ? 0
                           : p.realized_pnl || 0),
                       0
