@@ -29,6 +29,11 @@ func armedDoc() string {
 
 func TestArmedOrderUpsertAndGateRR(t *testing.T) {
 	cfg := store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true}}
+	// 0C shadow demotion (2026-08-31): armedDoc's S1 is fvg_entry, which resolves
+	// SHADOW by default — the arm seam would refuse it and this R:R-gate fixture
+	// would never row up. Declare fvg_entry live for THIS fixture: it tests the
+	// R:R gate, not the shadow map (the shadow map has its own fixtures).
+	cfg.DayPlan.ConditionStatus = map[string]string{"fvg_entry": "live"}
 	cfg.RiskControl = store.RiskControlConfig{MinRiskRewardRatio: 1.5}
 	at, st := resetTrader(t, cfg)
 	now := time.Now()
