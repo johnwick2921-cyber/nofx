@@ -232,6 +232,26 @@ in CLAUDE.md).
     additive wire frame is sent before the far-side build proves it; a
     capability gate ships with its own negative fixture.
 
+30. **GORM alias scan silently reads 0.** Root cause: a `Scan` target struct
+    field whose default GORM snake-casing disagrees with the SELECT alias —
+    `TotalPnL` maps to `total_pn_l` (misses `total_pnl`), `NetPnL` maps to
+    `net_pn_l` (misses `net_pnl`); the field silently scans zero while the
+    query succeeds (found live 0A-2 in `GetPositionStats` total_pnl, again
+    0C in `ab_confirm_log.net_pnl`). **Probe:** grep `Scan(&` targets for
+    PnL-shaped fields without explicit `gorm:"column:…"` tags; ALWAYS assert
+    a NONZERO expectation in the fixture (a zero assert passes the broken
+    scan). **Law:** every Scan target ships an explicit column tag + a
+    fixture whose expected value is nonzero.
+
+31. **Inert-but-visible ledger state.** Root cause: a new non-terminal state
+    name is invisible to `ListNonTerminal`'s `state IN ('armed','working')`
+    filter, so assertion and cleanup paths silently skip it (0C's "shadowed"
+    rows). **Probe:** when a new state ships, quote every `state IN` /
+    `state =` filter site and add a fixture reading the new state through the
+    SAME query the runtime uses. **Law:** a state is only "inert" if the
+    queries that must skip it and the queries that must see it are BOTH
+    fixture-pinned in the same PR.
+
 ---
 
 ## PART 2 — PRE-AUDIT (standing hard rules)

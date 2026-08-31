@@ -591,5 +591,35 @@ export const settings: GuideSection = {
         },
       ],
     },
+    { kind: 'h', text: 'Condition shadow demotion (owner ruling 2026-08-31)' },
+    {
+      kind: 'callout',
+      title: 'fvg_entry + breakout_retest are SHADOW — no orders, ever',
+      items: [
+        {
+          title: 'fvg_entry — tested null, twice',
+          body: 'An external study of ~40,000 fair-value gaps across ES, NQ, GC and SI (2019-2026, 1-minute base data) found the reaction is real — roughly 5 percentage points above a matched-random level, positive in 34 of 36 cells — but carries NO tradeable edge after honest costs. The apparent edge (win rate ~73%, profit factor ~2.4) was an intrabar look-ahead artifact: resolving exits on 1-minute data collapsed it to ~50% and ~1.0. The most-marketed 5m and 15m timeframes performed WORST. Our own forensics independently returned the same null. Descriptive reaction real ≠ tradeable edge — that distinction is the entire finding.',
+        },
+        {
+          title:
+            'breakout_retest — no evidence anywhere, plus one direct negative',
+          body: 'It rests on role reversal ("broken support becomes resistance"), which has NEVER been rigorously quantified on ANY market in the published literature — an axiom in practitioner texts, defined-but-untested in curricula, with only anonymous vendor backtests of undisclosed methodology circulating. The MNQ-specific falsification study reports an 80.7% stop-out rate on pullback/retest entries after breakouts.',
+        },
+        {
+          title: 'Enforcement site: the ARM SEAM — and why',
+          body: 'The planner MAY still author them, the validator MAY still accept them, and E8 MUST still score them — that counterfactual data is the whole justification for shadowing instead of deleting. The arm executor is the single choke point that guarantees zero exposure: a shadowed scenario writes an inert "shadowed" ledger row, no order frame ever reaches NT8, and any resting order authored before the ruling is cancelled on the first cycle (reason condition_shadowed, counter arms_refused_shadowed).',
+          cite: 'trader/armed_executor.go · kernel/condition_status.go',
+        },
+        {
+          title: 'The knob',
+          body: 'condition_status map, resolved per-condition: session override → strategy base → env (SHADOW_CONDITIONS / LIVE_CONDITIONS) → defaults. Defaults this wave: fvg_entry = shadow, breakout_retest = shadow, all others = live. sweep_reclaim is NOT shadowed (docketed for the Sep-9 court, pre-registered criterion, do not touch).',
+        },
+        {
+          title:
+            'Pre-registered promotion criterion (fix this now, never loosen it later)',
+          body: "A shadowed condition returns to LIVE only if, at n ≥ 30 shadow setups on our own tape, its net-of-friction expectancy LOWER CONFIDENCE BOUND exceeds zero. Otherwise it remains shadowed, or is deleted at the court's discretion. No promotion on narrative. No promotion on a good week. No promotion because the model likes authoring it. No promotion on a point estimate without its interval.",
+        },
+      ],
+    },
   ],
 }
