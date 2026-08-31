@@ -39,7 +39,7 @@ func TestShadowABTouchAndCloseFills(t *testing.T) {
 		102, 102, 102, 102, 102,
 		104, 106, 108, 110, 110}
 	bars, now := abTape(closes, 0.5, 0.5)
-	rows := ShadowABForScenario(abScenario(), bars, bars[0].OpenTime-1, now)
+	rows := ShadowABForScenario(abScenario(), bars, "MNQ", bars[0].OpenTime-1, now)
 	by := map[string]ShadowABRow{}
 	for _, r := range rows {
 		by[r.Rule] = r
@@ -78,7 +78,7 @@ func TestShadowABStopOutResolvesAgainstTrade(t *testing.T) {
 		102, 102, 102, 102, 102,
 		98, 96, 94, 93, 93}
 	bars, now := abTape(closes, 0.5, 0.5)
-	rows := ShadowABForScenario(abScenario(), bars, bars[0].OpenTime-1, now)
+	rows := ShadowABForScenario(abScenario(), bars, "MNQ", bars[0].OpenTime-1, now)
 	if len(rows) < 3 {
 		t.Fatalf("rows=%d want ≥3", len(rows))
 	}
@@ -98,8 +98,8 @@ func TestShadowABZeroRealEffect(t *testing.T) {
 	sc := abScenario()
 	closes := []float64{99, 100.5, 99, 99, 99, 101, 101, 101, 101, 101, 102, 102, 102, 102, 102, 104, 106, 108, 110, 110}
 	bars, now := abTape(closes, 0.5, 0.5)
-	a := ShadowABForScenario(sc, bars, bars[0].OpenTime-1, now)
-	b := ShadowABForScenario(sc, bars, bars[0].OpenTime-1, now)
+	a := ShadowABForScenario(sc, bars, "MNQ", bars[0].OpenTime-1, now)
+	b := ShadowABForScenario(sc, bars, "MNQ", bars[0].OpenTime-1, now)
 	if len(a) != len(b) {
 		t.Fatalf("nondeterministic: %d vs %d rows", len(a), len(b))
 	}
@@ -118,7 +118,7 @@ func TestShadowABZeroRealEffect(t *testing.T) {
 func TestShadowABNoArmNoRows(t *testing.T) {
 	sc := abScenario()
 	sc.Arm = nil
-	if rows := ShadowABForScenario(sc, nil, 0, 0); rows != nil {
+	if rows := ShadowABForScenario(sc, nil, "MNQ", 0, 0); rows != nil {
 		t.Fatalf("non-armed scenario must produce no rows, got %+v", rows)
 	}
 }
@@ -144,7 +144,7 @@ func TestShadowABMSSFill(t *testing.T) {
 	sc := abScenario()
 	sc.Confirm.Side = "above"
 	now := bars[len(bars)-1].CloseTime + 1
-	rows := ShadowABForScenario(sc, bars, bars[0].OpenTime-1, now)
+	rows := ShadowABForScenario(sc, bars, "MNQ", bars[0].OpenTime-1, now)
 	found := false
 	for _, r := range rows {
 		if r.Rule == "1m_mss" {
@@ -177,7 +177,7 @@ func TestShadowABWindowCrossingFiveMBoundary(t *testing.T) {
 	now := bars[len(bars)-1].CloseTime + 1
 	sc := abScenario() // long, ref 100 above, arm stop 95 target 110
 	sc.Confirm.Rule = "1x5m_close"
-	rows := ShadowABForScenario(sc, bars, start-1, now)
+	rows := ShadowABForScenario(sc, bars, "MNQ", start-1, now)
 	// The beyond-close is in the SECOND bucket — must not panic and must
 	// produce the 1x5m row at fill 102.
 	found := false

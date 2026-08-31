@@ -199,7 +199,7 @@ func TestLogShadowABWritesOnlyItsOwnTable(t *testing.T) {
 		bars = append(bars, market.Kline{OpenTime: o, CloseTime: o + 59_999, Open: cl, High: cl + 0.5, Low: cl - 0.5, Close: cl})
 	}
 	plan := &kernel.ActivePlan{PlanID: "2026-08-28:NY:trader-1", Version: 3, Session: "NY", BirthMs: base - 1}
-	at.logShadowAB(plan, sc, bars, bars[len(bars)-1].CloseTime+1)
+	at.logShadowAB(plan, sc, bars, 1.0, bars[len(bars)-1].CloseTime+1)
 
 	// The 4-rule counterfactual rows exist (touch/1x5m/2x5m present; MSS absent
 	// on this tape) — and NOTHING else changed.

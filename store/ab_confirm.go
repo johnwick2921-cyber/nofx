@@ -2,6 +2,7 @@ package store
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -30,6 +31,26 @@ type AbConfirmLogDB struct {
 	Outcome      string  // target | stop | open (neither by snapshot end)
 	TimeToFillMs int64   // entry bar open − plan birth
 
+	// ── 0C shadow demotion (2026-08-31) — the complete would-have-been trade.
+	Condition         string  // the scenario condition (fvg_entry etc.)
+	EntryPx           float64 // authored entry ref
+	StopPx            float64 // authored stop
+	TargetPx          float64 // authored target
+	RR                float64 // authored reward:risk from the fill
+	Atr5m             float64 // ATR(5m) at entry
+	MfeR              float64 // MFE in R-multiples
+	MaeR              float64 // MAE in R-multiples
+	MfeAtr            float64 // MFE in ATR units
+	MaeAtr            float64 // MAE in ATR units
+	TimeToMFEBars     int     // bars from fill to MFE peak
+	TimeToMAEBars     int     // bars from fill to MAE trough
+	TimeToResolveBars int     // bars from fill to stop/target (0 = open)
+	// 0A-2 lesson: GORM snake-cases NetPnL to "net_pn_l" — explicit column tag
+	// or the upsert fails against the DDL column net_pnl.
+	NetPnL           float64 `gorm:"column:net_pnl"` // net-of-friction P&L in USD
+	Ambiguous        bool    // a replay bar contained BOTH stop and target
+	IsCounterfactual bool    // shadowed condition: the trade was NEVER placed
+
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -50,9 +71,47 @@ CREATE TABLE IF NOT EXISTS ab_confirm_log (
 	mae             REAL    NOT NULL DEFAULT 0,
 	outcome         TEXT    NOT NULL DEFAULT 'open',
 	time_to_fill_ms INTEGER NOT NULL DEFAULT 0,
+	condition         TEXT    NOT NULL DEFAULT '',
+	entry_px          REAL    NOT NULL DEFAULT 0,
+	stop_px           REAL    NOT NULL DEFAULT 0,
+	target_px         REAL    NOT NULL DEFAULT 0,
+	rr                REAL    NOT NULL DEFAULT 0,
+	atr5m             REAL    NOT NULL DEFAULT 0,
+	mfe_r             REAL    NOT NULL DEFAULT 0,
+	mae_r             REAL    NOT NULL DEFAULT 0,
+	mfe_atr           REAL    NOT NULL DEFAULT 0,
+	mae_atr           REAL    NOT NULL DEFAULT 0,
+	time_to_mfe_bars    INTEGER NOT NULL DEFAULT 0,
+	time_to_mae_bars    INTEGER NOT NULL DEFAULT 0,
+	time_to_resolve_bars INTEGER NOT NULL DEFAULT 0,
+	net_pnl           REAL    NOT NULL DEFAULT 0,
+	ambiguous         INTEGER NOT NULL DEFAULT 0,
+	is_counterfactual INTEGER NOT NULL DEFAULT 0,
 	created_at      DATETIME,
 	updated_at      DATETIME
 )`
+
+// abConfirmAddedCols are the 0C columns ADDED to a pre-existing live table —
+// CREATE TABLE IF NOT EXISTS never alters an existing table, so the live DB
+// must be patched column-by-column (class-29: never a silent empty column).
+var abConfirmAddedCols = []struct{ name, ddl string }{
+	{"condition", "TEXT NOT NULL DEFAULT ''"},
+	{"entry_px", "REAL NOT NULL DEFAULT 0"},
+	{"stop_px", "REAL NOT NULL DEFAULT 0"},
+	{"target_px", "REAL NOT NULL DEFAULT 0"},
+	{"rr", "REAL NOT NULL DEFAULT 0"},
+	{"atr5m", "REAL NOT NULL DEFAULT 0"},
+	{"mfe_r", "REAL NOT NULL DEFAULT 0"},
+	{"mae_r", "REAL NOT NULL DEFAULT 0"},
+	{"mfe_atr", "REAL NOT NULL DEFAULT 0"},
+	{"mae_atr", "REAL NOT NULL DEFAULT 0"},
+	{"time_to_mfe_bars", "INTEGER NOT NULL DEFAULT 0"},
+	{"time_to_mae_bars", "INTEGER NOT NULL DEFAULT 0"},
+	{"time_to_resolve_bars", "INTEGER NOT NULL DEFAULT 0"},
+	{"net_pnl", "REAL NOT NULL DEFAULT 0"},
+	{"ambiguous", "INTEGER NOT NULL DEFAULT 0"},
+	{"is_counterfactual", "INTEGER NOT NULL DEFAULT 0"},
+}
 
 // AbConfirmStore persists the shadow A/B table (E8).
 type AbConfirmStore struct {
@@ -62,7 +121,8 @@ type AbConfirmStore struct {
 func NewAbConfirmStore(db *gorm.DB) *AbConfirmStore { return &AbConfirmStore{db: db} }
 
 // Migrate creates the table + the per-(plan,scenario,rule) unique index so the
-// logger is idempotent by construction.
+// logger is idempotent by construction. For a pre-existing sqlite table, the
+// 0C columns are added individually (duplicate-column = already there).
 func (s *AbConfirmStore) Migrate() error {
 	if s == nil || s.db == nil {
 		return fmt.Errorf("store required")
@@ -70,6 +130,14 @@ func (s *AbConfirmStore) Migrate() error {
 	if s.db.Dialector.Name() == "sqlite" {
 		if err := s.db.Exec(abConfirmDDL).Error; err != nil {
 			return err
+		}
+		for _, c := range abConfirmAddedCols {
+			if err := s.db.Exec("ALTER TABLE ab_confirm_log ADD COLUMN " + c.name + " " + c.ddl).Error; err != nil {
+				// "duplicate column name" = the column already exists — fine.
+				if !strings.Contains(strings.ToLower(err.Error()), "duplicate") {
+					return err
+				}
+			}
 		}
 		return s.db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_ab_confirm_key ON ab_confirm_log(plan_id, version, scenario, rule)").Error
 	}
@@ -90,6 +158,13 @@ func (s *AbConfirmStore) Upsert(row *AbConfirmLogDB) error {
 			"trader_id": row.TraderID, "session": row.Session,
 			"fill_px": row.FillPx, "mfe": row.MFE, "mae": row.MAE,
 			"outcome": row.Outcome, "time_to_fill_ms": row.TimeToFillMs,
+			"condition": row.Condition, "entry_px": row.EntryPx,
+			"stop_px": row.StopPx, "target_px": row.TargetPx, "rr": row.RR,
+			"atr5m": row.Atr5m, "mfe_r": row.MfeR, "mae_r": row.MaeR,
+			"mfe_atr": row.MfeAtr, "mae_atr": row.MaeAtr,
+			"time_to_mfe_bars": row.TimeToMFEBars, "time_to_mae_bars": row.TimeToMAEBars,
+			"time_to_resolve_bars": row.TimeToResolveBars, "net_pnl": row.NetPnL,
+			"ambiguous": row.Ambiguous, "is_counterfactual": row.IsCounterfactual,
 			"updated_at": row.UpdatedAt,
 		}).Error
 	}

@@ -24,4 +24,8 @@ func LogVolumeWaveBoot() {
 		ResolvePlannerRetryMode(), PlannerStreamIdleSeconds())
 	logger.Infof("🗓 session reads (owner ruling 2026-08-31, open−30): ASIA 16:30 · LONDON 01:30 · NY 08:00 CT — windows/flats unchanged; Sunday weekly 16:30 → ASIA follows")
 	logger.Infof("🪢 netting-orphan wave (class 27, 2026-08-31): netting-flat cancels brackets (C# sweep + Go desync cancel_order) · exit reconstruction from the netting fill (never exit=entry; unknown → UNRESOLVED+alarm) · dedupe 577/578 class · one-live-arm guard (opposite-side refused while open; kind=exit escapes) · split legs > capacity rejected (capacity=1 unless max_contracts_per_order raises)")
+	// 0C shadow demotion (owner ruling 2026-08-31): render the RESOLVED map —
+	// process level sees defaults+env; the per-trader resolved map prints at the
+	// trader's first arm cycle (class-8: resolved, never a literal).
+	logger.Infof("%s (process-level: defaults+env; per-trader resolved map prints at first arm cycle)", ConditionStatusLedger(nil, nil, ShadowConditionsEnv()))
 }

@@ -15,8 +15,30 @@ import (
 	"nofx/market"
 	ntwire "nofx/provider/ninjatrader"
 	"nofx/store"
+	"nofx/telemetry"
 	ntTrader "nofx/trader/ninjatrader"
 )
+
+// conditionsBootLogged dedupes the per-trader resolved-condition-map boot log
+// (0C shadow demotion, 2026-08-31) — once per trader, like armedSubs.
+var conditionsBootLogged sync.Map
+
+// conditionShadowedFor (0C, owner ruling 2026-08-31) resolves one scenario
+// condition's live|shadow status through the SAME config chain as every other
+// knob: session override > strategy base > env > defaults (class-8: quote the
+// RESOLVED value, never the file default).
+func (at *AutoTrader) conditionShadowedFor(condition, session string) bool {
+	cfg := at.config.StrategyConfig
+	if cfg == nil || cfg.DayPlan == nil {
+		return kernel.IsConditionShadowed(condition, nil, nil, kernel.ShadowConditionsEnv())
+	}
+	base := cfg.DayPlan.ConditionStatus
+	var sessionMap map[string]string
+	if ov := cfg.DayPlan.SessionOverride(session); ov != nil && ov.ConditionStatus != nil {
+		sessionMap = *ov.ConditionStatus
+	}
+	return kernel.IsConditionShadowed(condition, base, sessionMap, kernel.ShadowConditionsEnv())
+}
 
 // armedPlaceTicks is the placement band (ARM_PLACE_TICKS, default 100): the
 // resting limit is placed once price comes within this many ticks of entry.
@@ -207,6 +229,17 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 	if dp := at.dayPlanCfg(); dp != nil {
 		minQuality = dp.MinScenarioQualityFor(plan.Session)
 	}
+	// 0C (2026-08-31) — once per trader, print the RESOLVED condition-status
+	// map (class-8: resolved, never the file default) so the live journal
+	// self-documents the demotion even though the process-level boot line can
+	// only see defaults+env.
+	if _, logged := conditionsBootLogged.LoadOrStore(at.id, true); !logged {
+		base := map[string]string(nil)
+		if at.config.StrategyConfig != nil && at.config.StrategyConfig.DayPlan != nil {
+			base = at.config.StrategyConfig.DayPlan.ConditionStatus
+		}
+		at.logInfof("%s (per-trader resolved, 0C shadow demotion)", kernel.ConditionStatusLedger(base, nil, kernel.ShadowConditionsEnv()))
+	}
 	for _, sc := range doc.Scenarios {
 		if sc.Arm == nil || !sc.Arm.Enabled {
 			continue
@@ -233,6 +266,62 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 			key := plan.PlanID + ":" + strconv.Itoa(plan.Version) + ":" + sc.ID + ":legcap"
 			if armRefusalChanged(&at.armRefusalLast, key, "split_leg_capacity") {
 				at.logWarnf("⚔️ arm REFUSED %s %s: split_leg_capacity — authors %d legs but account capacity is %d (class 27; set max_contracts_per_order ≥ 2 to allow split arms)", plan.Session, sc.ID, legCount, capN)
+			}
+			continue
+		}
+		// 0C (owner ruling 2026-08-31) — SHADOW DEMOTION. A shadowed condition
+		// MAY be authored, validated and E8-scored (that data IS the wave's
+		// justification), but NO order may ever reach the wire: the placement
+		// engine only acts on state "armed", so a "shadowed" ledger row is inert
+		// by construction AND invisible in the executor prompt (armedLines
+		// renders armed/working only). Resting orders authored before this
+		// ruling are cancelled here — the first cycle after boot IS the
+		// boot-time sweep (4.3).
+		if at.conditionShadowedFor(sc.Condition, plan.Session) {
+			if rows, lerr := ledger.ListNonTerminal(at.id); lerr == nil {
+				for _, rr := range rows {
+					if rr.TraderID == at.id && rr.PlanID == plan.PlanID && rr.Scenario == sc.ID &&
+						(rr.State == "working" || rr.State == "armed") {
+						if nt := at.armedTrader(); nt != nil && rr.SignalID != "" {
+							if cerr := nt.CancelOrder(rr.SignalID); cerr == nil {
+								_ = ledger.SetState(rr.ID, "shadowed", "condition_shadowed")
+								at.logWarnf("✕ armed cancel (condition_shadowed): %s %s signal=%s", plan.Session, sc.ID, rr.SignalID)
+							}
+						} else {
+							_ = ledger.SetState(rr.ID, "shadowed", "condition_shadowed")
+						}
+					}
+				}
+			}
+			telemetry.IncShadowedArmRefusal()
+			key := plan.PlanID + ":" + strconv.Itoa(plan.Version) + ":" + sc.ID + ":shadow"
+			if armRefusalChanged(&at.armRefusalLast, key, "condition_shadowed") {
+				at.logWarnf("⚔️ arm REFUSED %s %s: condition_shadowed (%s is SHADOW — authored + E8-scored, never placed)", plan.Session, sc.ID, sc.Condition)
+			}
+			// AUTHOR the would-have-been rows in the inert shadowed state —
+			// plan/scenario/arm lineage stays on record for the Sep-9 court.
+			side := strings.ToLower(strings.TrimSpace(sc.Direction))
+			for li, leg := range legs {
+				row := &store.ArmedOrderDB{
+					TraderID: at.id, PlanID: plan.PlanID, Version: plan.Version, Session: plan.Session,
+					Scenario: sc.ID, Side: side, EntryPx: leg.Entry, StopPx: leg.Stop, TargetPx: leg.Target,
+					State: "shadowed", StateReason: "condition_shadowed", EntryClass: "armed_fill",
+					CreatedAt: now, UpdatedAt: now, LegIndex: li, LegCount: legCount, Kind: leg.Kind,
+				}
+				if existing, err := ledger.ListNonTerminal(at.id); err == nil {
+					for i := range existing {
+						if existing[i].TraderID == at.id && existing[i].PlanID == row.PlanID && existing[i].Scenario == sc.ID && existing[i].LegIndex == row.LegIndex {
+							row.ID = existing[i].ID
+							break
+						}
+					}
+				}
+				if row.ID != 0 {
+					_ = ledger.SetState(row.ID, "shadowed", "condition_shadowed")
+				}
+				if err := ledger.UpsertArm(row); err != nil {
+					at.logWarnf("⚔️ shadowed arm write failed %s %s leg %d: %v", plan.Session, sc.ID, li+1, err)
+				}
 			}
 			continue
 		}
@@ -368,8 +457,10 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 	// E8 (2026-08-30) — shadow A/B counterfactual logger (Sep-9's courtroom):
 	// per armed scenario, log the 4 rule counterfactuals once per plan version.
 	// ZERO effect on real paths — writes ONLY the ab_confirm_log table.
+	// 0C (2026-08-31): rows carry the complete would-have-been trade and
+	// is_counterfactual=true for shadowed conditions.
 	for _, sc := range doc.Scenarios {
-		at.logShadowAB(plan, sc, bars, now.UnixMilli())
+		at.logShadowAB(plan, sc, bars, atr5m, now.UnixMilli())
 	}
 
 	// E4 (2026-08-30) — split-sibling law: EITHER leg's STOP-OUT cancels the
@@ -443,7 +534,14 @@ func splitLegCapacity(explicitMaxContracts int) int {
 // scenario — once per (plan, version, scenario, rule). Advisory/report-only:
 // nothing here feeds a gate or a prompt. HARDENED (2026-08-30 cutover panic): a
 // report-only path must NEVER take the trading loop down — recover + log.
-func (at *AutoTrader) logShadowAB(plan *kernel.ActivePlan, sc kernel.PlanScenario, bars []market.Kline, nowMs int64) {
+//
+// 0C (2026-08-31): every row now carries the COMPLETE would-have-been trade
+// (condition, authored stop/target/RR, ATR(5m), MFE/MAE in R + ATR units,
+// time-to bars, net-of-friction P&L, the ambiguous flag) and
+// is_counterfactual=true for SHADOWED conditions — the demotion's whole
+// justification is this data, so shadowed setups must score exactly like
+// placed ones.
+func (at *AutoTrader) logShadowAB(plan *kernel.ActivePlan, sc kernel.PlanScenario, bars []market.Kline, atr5m float64, nowMs int64) {
 	defer func() {
 		if r := recover(); r != nil {
 			at.logWarnf("⚠️ ab-confirm shadow recovered from panic: %v (report-only path — real paths untouched)", r)
@@ -452,20 +550,32 @@ func (at *AutoTrader) logShadowAB(plan *kernel.ActivePlan, sc kernel.PlanScenari
 	if at.store == nil || plan == nil || len(bars) == 0 {
 		return
 	}
-	rows := kernel.ShadowABForScenario(sc, bars, plan.BirthMs, nowMs)
+	rows := kernel.ShadowABForScenario(sc, bars, at.futuresSymbol(), plan.BirthMs, nowMs)
 	if len(rows) == 0 {
 		return
 	}
+	shadowed := at.conditionShadowedFor(sc.Condition, plan.Session)
 	ac := at.store.AbConfirm()
 	now := time.Now()
 	for _, r := range rows {
 		if ac.Has(plan.PlanID, plan.Version, sc.ID, r.Rule) {
 			continue
 		}
+		mfeAtr, maeAtr := 0.0, 0.0
+		if atr5m > 0 {
+			mfeAtr = r.MFE / atr5m
+			maeAtr = r.MAE / atr5m
+		}
 		if err := ac.Upsert(&store.AbConfirmLogDB{
 			TraderID: at.id, PlanID: plan.PlanID, Version: plan.Version, Session: plan.Session,
 			Scenario: sc.ID, Rule: r.Rule, FillPx: r.FillPx, MFE: r.MFE, MAE: r.MAE,
-			Outcome: r.Outcome, TimeToFillMs: r.TimeToFillMs, CreatedAt: now, UpdatedAt: now,
+			Outcome: r.Outcome, TimeToFillMs: r.TimeToFillMs,
+			Condition: sc.Condition, EntryPx: r.FillPx, StopPx: r.StopPx, TargetPx: r.TargetPx,
+			RR: r.RR, Atr5m: atr5m, MfeR: r.MFER, MaeR: r.MAER, MfeAtr: mfeAtr, MaeAtr: maeAtr,
+			TimeToMFEBars: r.TimeToMFEBars, TimeToMAEBars: r.TimeToMAEBars,
+			TimeToResolveBars: r.TimeToResolveBars, NetPnL: r.NetPnL,
+			Ambiguous: r.Ambiguous, IsCounterfactual: shadowed,
+			CreatedAt: now, UpdatedAt: now,
 		}); err != nil {
 			at.logWarnf("ab-confirm shadow write failed %s %s: %v", sc.ID, r.Rule, err)
 		}

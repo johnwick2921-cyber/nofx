@@ -967,6 +967,11 @@ type DayPlanConfig struct {
 	// min_side_levels REMOVED by owner ruling 2026-08-31 — the per-side count
 	// concept is deleted. Old stored JSON carrying the field still loads
 	// (encoding/json ignores unknown fields).
+	// ConditionStatus (0C shadow demotion, 2026-08-31) — per-condition live|
+	// shadow map, resolved base → session override → env → defaults (fvg_entry
+	// and breakout_retest default SHADOW per owner ruling). The ARM SEAM is the
+	// only enforcement point; authoring/validation/E8 scoring stay untouched.
+	ConditionStatus map[string]string `json:"condition_status,omitempty"`
 }
 
 // DayPlanSessionOverride is a minimal per-session override. Every field is a
@@ -993,6 +998,9 @@ type DayPlanSessionOverride struct {
 	// 14:45 CT literal would have flattened an Asia position on sight the moment
 	// the last-entry fix landed). nil → default 15.
 	EODFlatOffsetMin *int `json:"eod_flat_offset_min,omitempty"`
+	// ConditionStatus (0C shadow demotion, 2026-08-31) — per-session live|
+	// shadow map override; nil inherits the strategy-level map.
+	ConditionStatus *map[string]string `json:"condition_status,omitempty"`
 }
 
 // DefaultLastEntryOffsetMin / DefaultEODFlatOffsetMin are the session-relative
