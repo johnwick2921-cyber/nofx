@@ -121,8 +121,8 @@ describe('SessionPlanCard — NO-TRADE with a map', () => {
   })
 })
 
-describe('SessionPlanCard — planner mid-read (UI verification 2026-08-18)', () => {
-  it('says so out loud instead of silently showing the old plan', () => {
+describe('SessionPlanCard — planner mid-read (F7 2026-08-30 semantics)', () => {
+  it('never shows the writing banner over a committed plan — the plan renders', () => {
     render(
       <SessionPlanCard
         plan={{ ...noTradeWithMap, reading: true }}
@@ -132,8 +132,25 @@ describe('SessionPlanCard — planner mid-read (UI verification 2026-08-18)', ()
         language="en"
       />
     )
-    expect(screen.getByTestId('reading-banner').textContent).toContain(
-      'writing a fresh plan'
+    // F7: reading=true with a committed row means a RE-READ, not a fresh write.
+    expect(screen.queryByTestId('reading-banner')).toBeNull()
+    expect(screen.queryByText(/writing a fresh plan/i)).toBeNull()
+    expect(screen.getByRole('table')).toBeTruthy()
+  })
+
+  it('shows the subtle re-reading chip when a read runs over a committed plan', () => {
+    render(
+      <SessionPlanCard
+        plan={{ ...noTradeWithMap, replan_in_flight: true }}
+        traderId="t1"
+        symbol="MNQ"
+        exchange="ninjatrader"
+        language="en"
+      />
     )
+    expect(screen.getByTestId('replan-chip').textContent).toContain(
+      'stays live'
+    )
+    expect(screen.queryByTestId('reading-banner')).toBeNull()
   })
 })

@@ -39,6 +39,31 @@ func TestHandlePlanHistoryRequiresTraderID(t *testing.T) {
 	}
 }
 
+// F7 (2026-08-30) — reading status derives from the STORE, never the raw
+// in-flight claim. The 2026-08-30 live failure: wake re-reads held the claim
+// back-to-back for hours while a committed plan row sat in the DB, so a
+// claim-keyed flag kept the card on "writing a fresh plan" forever.
+func TestPlanReadingFieldsDeriveFromStore(t *testing.T) {
+	cases := []struct {
+		name                string
+		hasRow, inFlight    bool
+		wantReading         bool
+		wantReplanInFlight  bool
+	}{
+		{"no row, no read → idle", false, false, false, false},
+		{"no row, read in flight → writing", false, true, true, false},
+		{"row committed, read in flight → plan + replan chip", true, true, false, true},
+		{"row committed, no read → plan", true, false, false, false},
+	}
+	for _, c := range cases {
+		reading, replan := planReadingFields(c.hasRow, c.inFlight)
+		if reading != c.wantReading || replan != c.wantReplanInFlight {
+			t.Errorf("%s: got (reading=%v replan=%v), want (reading=%v replan=%v)",
+				c.name, reading, replan, c.wantReading, c.wantReplanInFlight)
+		}
+	}
+}
+
 // TestHandlePlanAlertsRequiresTraderID: GET /plan/alerts with no trader_id → 400.
 func TestHandlePlanAlertsRequiresTraderID(t *testing.T) {
 	s := &Server{}
