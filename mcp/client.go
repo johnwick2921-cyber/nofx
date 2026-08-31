@@ -1003,6 +1003,7 @@ func (client *Client) CallWithRequestStreamIdle(req *Request, onChunk func(strin
 	}()
 
 	httpReq = httpReq.WithContext(ctx)
+	reqStart := time.Now()
 	resp, err := client.HTTPClient.Do(httpReq)
 	if err != nil {
 		return "", fmt.Errorf("streaming request failed: %w", err)
@@ -1014,8 +1015,7 @@ func (client *Client) CallWithRequestStreamIdle(req *Request, onChunk func(strin
 		return "", fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
 	}
 
-	streamStart := time.Now()
-	sr, err := ParseSSEStreamFull(resp.Body, onChunk, func() {
+	sr, err := ParseSSEStreamFull(resp.Body, onChunk, reqStart, func() {
 		select {
 		case resetCh <- struct{}{}:
 		default:
@@ -1033,7 +1033,7 @@ func (client *Client) CallWithRequestStreamIdle(req *Request, onChunk func(strin
 				pt, ct = sr.Usage.PromptTokens, sr.Usage.CompletionTokens
 			}
 			client.Log.Infof("📊 AI call complete (stream): completion=%d prompt=%d finish_reason=%s reasoning_chars=%d ttfb_ms=%d wall_ms=%d",
-				ct, pt, sr.FinishReason, sr.ReasoningChars, sr.TTFBMs, time.Since(streamStart).Milliseconds())
+				ct, pt, sr.FinishReason, sr.ReasoningChars, sr.TTFBMs, time.Since(reqStart).Milliseconds())
 		}
 	}
 	if sr != nil && sr.Usage != nil {
@@ -1101,7 +1101,7 @@ type SSEStreamResult struct {
 // (useful for resetting idle-timeout watchdogs).
 // Returns the complete accumulated text and any parsed token usage (nil if absent).
 func ParseSSEStream(body io.Reader, onChunk func(string), onLine func()) (string, *TokenUsage, error) {
-	sr, err := ParseSSEStreamFull(body, onChunk, onLine)
+	sr, err := ParseSSEStreamFull(body, onChunk, time.Now(), onLine)
 	if sr == nil {
 		return "", nil, err
 	}
@@ -1111,13 +1111,14 @@ func ParseSSEStream(body io.Reader, onChunk func(string), onLine func()) (string
 // ParseSSEStreamFull is the planner-speed-wave (2026-08-31) extension:
 // additionally captures reasoning_content chars, finish_reason, and
 // time-to-first-byte (the T4 evidence the latency autopsy was missing).
-func ParseSSEStreamFull(body io.Reader, onChunk func(string), onLine func()) (*SSEStreamResult, error) {
+// `start` anchors the ttfb measurement — pass the request-sent time so the
+// queue (Do → first chunk) is included, not just the body-read latency.
+func ParseSSEStreamFull(body io.Reader, onChunk func(string), start time.Time, onLine func()) (*SSEStreamResult, error) {
 	var accumulated strings.Builder
 	var reasoning strings.Builder
 	var usage *TokenUsage
 	var finish string
 	scanner := bufio.NewScanner(body)
-	start := time.Now()
 	var ttfbMs int64
 	haveFirst := false
 

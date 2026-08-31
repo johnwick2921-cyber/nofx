@@ -20,4 +20,6 @@ func LogVolumeWaveBoot() {
 		StaleConfirmATR())
 	logger.Infof("📜 planner playbook (2026-08-26): playbook=v2 bias_tree=on chain_after=on no_trade_gates=on killzone_weights=on stop_doing=on — ALL ADVISORY, zero new gates")
 	logger.Infof("🛡 plan facts guards: 0-levels-on-a-side + empty machine map = fail-closed (2026-08-18 pathology guards) — per-side counts REMOVED entirely (owner ruling 2026-08-31; no quota, no WARN, no thin_side note)")
+	logger.Infof("🚀 planner speed wave (2026-08-31): retry=%s stream=on stream_idle=%ds ttfb=on — reasoning/mode/cap unchanged until owner ruling",
+		ResolvePlannerRetryMode(), PlannerStreamIdleSeconds())
 }

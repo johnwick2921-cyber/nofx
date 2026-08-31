@@ -35,6 +35,7 @@ type Store struct {
 	barHistory      *BarHistoryStore
 	armedOrders     *ArmedOrderStore
 	abConfirm       *AbConfirmStore
+	plannerRejected *PlannerRejectedStore
 	levelStats      *LevelStatsStore
 	touchEpisodes   *TouchEpisodeStore
 	calendarSlice   *CalendarSliceStore
@@ -390,6 +391,17 @@ func (s *Store) ArmedOrders() *ArmedOrderStore {
 		s.armedOrders = NewArmedOrderStore(s.gdb)
 	}
 	return s.armedOrders
+}
+
+// PlannerRejected returns the rejected-planner-prompt store (lazy, planner-speed
+// wave 1.4).
+func (s *Store) PlannerRejected() *PlannerRejectedStore {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.plannerRejected == nil {
+		s.plannerRejected = NewPlannerRejectedStore(s.gdb)
+	}
+	return s.plannerRejected
 }
 
 // AbConfirm gets the E8 shadow A/B counterfactual table (2026-08-30).

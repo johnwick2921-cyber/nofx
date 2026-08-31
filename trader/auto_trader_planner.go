@@ -859,7 +859,9 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 		at.fastTapePending.Store(true)
 		at.logInfof("🧠 planner mode: fast-market (drift %.1f pts = %.1f×ATR5m) — reasoning downgraded to %s for this read (F3)", driftPts, driftAtr, fastMarketReasoningLabel())
 	}
+	p2Start := time.Now()
 	prompt := kernel.BuildPlannerPrompt(input)
+	at.logInfof("📝 prompt render (T2): %dms ~%d tokens", time.Since(p2Start).Milliseconds(), estimatePromptTokens(prompt))
 	hash := shortHash(prompt)
 	// W3 — HARD red-news blackout lines auto-written into the plan (§80).
 	t1Lines := kernel.T1NoTradeLines(input.Calendar)
@@ -888,7 +890,9 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 	}
 	// S1-wave A3 (2026-08-29) — the record loops moved into collectMachineGrades
 	// (pure, fixture-tested) and now include the FULL HTF-zone universe.
+	mapStart := time.Now()
 	collectMachineGrades(input, machineGrades, machineLabels)
+	at.logInfof("🗺️ map assembly (T1): %dms", time.Since(mapStart).Milliseconds())
 	// S-dispatch (2026-08-27) — the P0.2 gap rules' PDH/PDL must come from the
 	// universe too: the seated loop above skips them post-roll and the gap
 	// continuation rules silently went unevaluated (PDH/PDL = 0 = "unknown").
@@ -909,19 +913,32 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 		pMode, pEffort = fastMarketReasoningWire()
 		modeLabel = fastMarketReasoningLabel()
 	}
-	at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, hash, input.IndicatorsBlock, input.AIConfigHash, requiredBias, facts, machineGrades, machineLabels, htfLabels(input), failClosed, func(rejectBlock string) (string, error) {
+	at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, hash, input.IndicatorsBlock, input.AIConfigHash, requiredBias, prompt, facts, machineGrades, machineLabels, htfLabels(input), failClosed, func(userPrompt string) (string, error) {
 		mcp.ApplyThinking(client, pMode, pEffort)
-		// F1a (LONDON-FORENSICS 2026-08-28) — planner completion budget:
-		// AI_PLAN_MAX_TOKENS (default 65536 = 2× the observed 32768-token
-		// truncation ceiling that killed the 02:23/02:31 wake re-reads).
-		restore := mcp.ApplyMaxTokens(client, aiPlanMaxTokens())
-		defer restore()
-		start := time.Now()
-		raw, err := client.CallWithMessages(plannerSystemPrompt, prompt+rejectBlock)
-		if err == nil && mcp.LastFinishReason(client) == "length" {
-			at.logWarnf("📐 planner output TRUNCATED by the provider (finish_reason=length, cap=%d) — the plan JSON may be incomplete; retrying at the same cap will not fix truncation", aiPlanMaxTokens())
+		// PLANNER SPEED WAVE 4 (2026-08-31) — the session planner now rides the
+		// SSE streaming client with the idle watchdog (split deadlines). The
+		// completion budget rides req.MaxTokens (no shared-client mutation).
+		cap := aiPlanMaxTokens()
+		req := &mcp.Request{
+			Messages: []mcp.Message{
+				mcp.NewSystemMessage(plannerSystemPrompt),
+				mcp.NewUserMessage(userPrompt),
+			},
+			MaxTokens: &cap,
 		}
-		at.logInfof("🧠 planner call (reasoning=%s wire=%s/%s cap=%d) completed in %.1fs", modeLabel, pMode, pEffort, aiPlanMaxTokens(), time.Since(start).Seconds())
+		start := time.Now()
+		var raw string
+		var err error
+		if bc, ok := client.(interface{ BaseClient() *mcp.Client }); ok {
+			raw, err = bc.BaseClient().CallWithRequestStreamRetry(req, nil, plannerStreamIdle())
+		} else {
+			// Non-base clients (tests, legacy callers) keep the full-body path.
+			raw, err = client.CallWithMessages(plannerSystemPrompt, userPrompt)
+		}
+		if err == nil && mcp.LastFinishReason(client) == "length" {
+			at.logWarnf("📐 planner output TRUNCATED by the provider (finish_reason=length, cap=%d) — the plan JSON may be incomplete; retrying at the same cap will not fix truncation", cap)
+		}
+		at.logInfof("🧠 planner call (reasoning=%s wire=%s/%s cap=%d stream idle=%ds) completed in %.1fs", modeLabel, pMode, pEffort, cap, int(plannerStreamIdle().Seconds()), time.Since(start).Seconds())
 		return raw, err
 	}, t1Lines...)
 	return true
@@ -1034,7 +1051,7 @@ func (at *AutoTrader) runPlannerReadCoreWithTrigger(session, tradeDate, triggerO
 // facts-free signature (schema-only validation).
 func (at *AutoTrader) runPlannerReadCoreWithFacts(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash string, facts kernel.PlanFacts, call func() (string, error), extraNoTrade ...string) (int, string, error) {
 	// Legacy signature: no reject block (schema-only callers/tests).
-	return at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, "", facts, nil, nil, nil, true, func(rejectBlock string) (string, error) {
+	return at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, "", "", facts, nil, nil, nil, true, func(userPrompt string) (string, error) {
 		return call()
 	}, extraNoTrade...)
 }
@@ -1178,8 +1195,59 @@ func plannerRejectBlock(err error) string {
 	return "\n\n## PREVIOUS ATTEMPT REJECTED / Validator reason (verbatim):\n" + err.Error() + "\nFix ONLY this defect, keep the rest structurally identical."
 }
 
+// plannerRejectBookkeeping (planner-speed wave 1.4/3.4, 2026-08-31) runs at
+// every reject site: persists the rejected attempt's verbatim prompt + reason
+// for the offline A/B, and bumps the whack-a-mole counter when attempt N
+// repeats attempt N-1's defect.
+func (at *AutoTrader) plannerRejectBookkeeping(attempt int, tradeDate, session, hash, userPrompt string, rejectErr error, prevReason *string) {
+	if rejectErr == nil {
+		return
+	}
+	if attempt >= 2 && *prevReason != "" && samePlannerDefect(*prevReason, rejectErr.Error()) {
+		telemetry.IncRepairRegression(at.id)
+		at.logWarnf("🎯 repair regression: attempt %d repeated the attempt %d defect — %s", attempt, attempt-1, rejectErr.Error())
+	}
+	*prevReason = rejectErr.Error()
+	if at.store != nil {
+		if serr := at.store.PlannerRejected().SaveRejectedPrompt(at.id, tradeDate, session, hash, attempt, rejectErr.Error(), userPrompt); serr != nil {
+			at.logWarnf("🧾 rejected-prompt persist failed: %v", serr)
+		}
+	}
+}
+
+// samePlannerDefect compares two reject reasons on a normalized prefix — the
+// repeated-defect class (split-arm, breakdown-void) repeats VERBATIM, so a
+// 120-char prefix match is exact in practice and robust to tiny drift.
+func samePlannerDefect(a, b string) bool {
+	norm := func(s string) string {
+		s = strings.TrimSpace(s)
+		if len(s) > 120 {
+			s = s[:120]
+		}
+		return s
+	}
+	return norm(a) == norm(b)
+}
+
+// resolvePlannerRetryMode delegates to the kernel resolver (RETRY_MODE env).
+func resolvePlannerRetryMode() string { return kernel.ResolvePlannerRetryMode() }
+
+// plannerStreamIdle delegates to the kernel resolver (AI_PLAN_STREAM_IDLE_SECS).
+func plannerStreamIdle() time.Duration {
+	return time.Duration(kernel.PlannerStreamIdleSeconds()) * time.Second
+}
+
+// estimatePromptTokens is the cheap ~4 chars/token estimate used in the
+// repair-vs-author size log lines (exact counts come from provider usage).
+func estimatePromptTokens(s string) int {
+	if s == "" {
+		return 0
+	}
+	return (len(s) + 3) / 4
+}
+
 // runPlannerReadCoreWithFactsGrades is the full write path (see its doc above).
-func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, requiredBias string, facts kernel.PlanFacts, machineGrades map[float64]string, machineLabels map[float64]string, htfLabels map[float64]string, failClosed bool, call func(rejectBlock string) (string, error), extraNoTrade ...string) (int, string, error) {
+func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, requiredBias, prompt string, facts kernel.PlanFacts, machineGrades map[float64]string, machineLabels map[float64]string, htfLabels map[float64]string, failClosed bool, call func(userPrompt string) (string, error), extraNoTrade ...string) (int, string, error) {
 	// H4/H5 — validation must accept EXACTLY what the config allows: the resolved
 	// max_levels / scenario_cap (hard ceilings 12/5). Before this the parse
 	// hardcoded 8/3, so raising either setting made EVERY read fail-closed into a
@@ -1193,12 +1261,33 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 	// the PREVIOUS attempt's validator reason VERBATIM in the prompt tail — the
 	// 2026-08-31 LONDON read burned attempts 1+2 on the IDENTICAL split-arm
 	// reject because the retry never told the model why it was rejected.
+	// PLANNER SPEED WAVE (2026-08-31): attempt ≥2 sends the REPAIR call by
+	// default (RETRY_MODE=repair|reauthor) — rejected output + errors verbatim
+	// + law excerpts only, a fraction of a full re-author's tokens.
 	rejectBlock := ""
+	retryMode := resolvePlannerRetryMode()
+	var prevReason string
+	lastRaw := ""
+	forceReauthor := false
 	for attempt := 1; attempt <= 3; attempt++ { // 1 + ≤2 retries
-		raw, err := call(rejectBlock)
+		userPrompt := prompt
+		modeLabel := "author"
+		if attempt >= 2 {
+			if retryMode == "repair" && !forceReauthor && lastRaw != "" && lastErr != nil {
+				userPrompt = kernel.BuildPlannerRepairPrompt(lastRaw, lastErr.Error())
+				modeLabel = "repair"
+			} else {
+				userPrompt = prompt + rejectBlock
+				modeLabel = "reauthor+block"
+			}
+			at.logInfof("🧩 planner attempt %d/3 %s: prompt ~%d tokens (full-author ~%d tokens)", attempt, modeLabel, estimatePromptTokens(userPrompt), estimatePromptTokens(prompt))
+		}
+		raw, err := call(userPrompt)
+		lastRaw = raw
 		if err != nil {
 			lastErr = err
 			at.logWarnf("📐 planner attempt %d/3 failed: %v", attempt, err)
+			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason)
 			rejectBlock = plannerRejectBlock(lastErr)
 			continue
 		}
@@ -1206,6 +1295,11 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		if perr != nil {
 			lastErr = perr
 			at.logWarnf("📐 planner attempt %d/3 parse/schema rejected: %v", attempt, perr)
+			if modeLabel == "repair" {
+				forceReauthor = true // 3.6 — a malformed repair falls back to one full re-author
+				at.logWarnf("🧩 repair returned unparseable output — falling back to a full re-author next attempt")
+			}
+			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason)
 			rejectBlock = plannerRejectBlock(lastErr)
 			continue
 		}
@@ -1231,6 +1325,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		// the evaluator and ignored by the re-planner.
 		if requiredBias != "" && strings.ToLower(strings.TrimSpace(d.Bias.Direction)) != requiredBias {
 			lastErr = fmt.Errorf("prior plan flip already fired → bias %s is MANDATORY, got %q — the flip cannot be re-written away", requiredBias, d.Bias.Direction)
+			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason)
 			at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, lastErr)
 			rejectBlock = plannerRejectBlock(lastErr)
 			continue
@@ -1242,6 +1337,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		// was 29290.5 — the flip anchor rode a phantom label.
 		if mis := kernel.MislabeledStructuralLevels(d, machineLabels); len(mis) > 0 {
 			lastErr = fmt.Errorf("level label provenance: %s — copy the machine table's label for these prices", strings.Join(mis, "; "))
+			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason)
 			at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, lastErr)
 			rejectBlock = plannerRejectBlock(lastErr)
 			continue
@@ -1252,6 +1348,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		// reachable targets. Everything else fails → retry → fail-closed.
 		if verr := kernel.ValidatePlanDocWithFactsMachine(d, facts, machineLabels, maxLevels, scenarioCap); verr != nil {
 			lastErr = verr
+			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason)
 			rejectBlock = plannerRejectBlock(lastErr)
 			at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, verr)
 			continue
@@ -1287,6 +1384,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 			}
 			if verr := kernel.ValidateFvgEntryScenarios(d, fvgBars, at.futuresSymbol(), origin, time.Now()); verr != nil {
 				lastErr = verr
+				at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason)
 				rejectBlock = plannerRejectBlock(lastErr)
 				at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, verr)
 				continue
@@ -1303,6 +1401,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 			}
 			if verr := kernel.ValidateBreakdownContinueScenarios(d, bdBars, kernel.StaleConfirmATR5m(bdBars), facts.Price, time.Now().UnixMilli()); verr != nil {
 				lastErr = verr
+				at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason)
 				rejectBlock = plannerRejectBlock(lastErr)
 				at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, verr)
 				continue

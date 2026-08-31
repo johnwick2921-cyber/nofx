@@ -9,6 +9,7 @@ import (
 
 	"nofx/kernel"
 	"nofx/store"
+	"nofx/telemetry"
 )
 
 const validTraderPlanJSON = `{
@@ -98,8 +99,8 @@ func TestRunPlannerReadThinAboveWritesCleanNoArtifacts(t *testing.T) {
 		30000: "RN 30000", 30100: "RN 30100", 30200: "RN 30200",
 	}
 	ver, lc, err := at.runPlannerReadCoreWithFactsGrades("ASIA", "2026-08-26", "owner_reset",
-		"deepseek-v4-pro", "hashQ", "", "", "", facts, nil, machine, nil, true,
-		func(rejectBlock string) (string, error) { return thinAbovePlanJSON, nil })
+		"deepseek-v4-pro", "hashQ", "", "", "", "FULLPROMPT", facts, nil, machine, nil, true,
+		func(userPrompt string) (string, error) { return thinAbovePlanJSON, nil })
 	// Count is deleted (owner ruling 2026-08-31): no WARN, no note, plan writes.
 	if err != nil || ver != 1 || lc != "active" {
 		t.Fatalf("thin-above + rich map must write active: ver=%d lc=%q err=%v", ver, lc, err)
@@ -117,36 +118,80 @@ func TestRunPlannerReadThinAboveWritesCleanNoArtifacts(t *testing.T) {
 	}
 }
 
-// TestRunPlannerReadRetryAppendRejectBlock — CHANGE 2 (owner ruling 2026-08-31):
-// attempt ≥2 carries the previous rejection VERBATIM; a clean attempt 1 sees no
-// block.
-func TestRunPlannerReadRetryAppendRejectBlock(t *testing.T) {
+// TestRunPlannerReadRepairCarriesVerbatimReject — planner-speed wave 3
+// (2026-08-31): attempt ≥2 is the REPAIR call (instruction header + rejected
+// output + errors verbatim + law excerpts) and NOT the full playbook.
+func TestRunPlannerReadRepairCarriesVerbatimReject(t *testing.T) {
 	at := plannerTestTrader(t)
 	facts := kernel.PlanFacts{Price: 15550, DATR: 300}
 	machine := map[float64]string{15480: "PWL", 15700: "RN 15700"}
 	blocks := []string{}
 	_, lc, err := at.runPlannerReadCoreWithFactsGrades("ASIA", "2026-08-26", "owner_reset",
-		"deepseek-v4-pro", "hashQB", "", "", "", facts, nil, machine, nil, true,
-		func(rejectBlock string) (string, error) {
-			blocks = append(blocks, rejectBlock)
+		"deepseek-v4-pro", "hashQB", "", "", "", "FULLPROMPT", facts, nil, machine, nil, true,
+		func(userPrompt string) (string, error) {
+			blocks = append(blocks, userPrompt)
 			if len(blocks) == 1 {
 				return "not json", nil // attempt 1 fails the parse gate
 			}
 			return validTraderPlanJSON, nil
 		})
 	if err != nil || lc != "active" {
-		t.Fatalf("retry-then-success: lc=%q err=%v", lc, err)
+		t.Fatalf("repair-then-success: lc=%q err=%v", lc, err)
 	}
 	if len(blocks) != 2 {
 		t.Fatalf("expected 2 calls, got %d", len(blocks))
 	}
-	if blocks[0] != "" {
-		t.Fatalf("attempt 1 must see NO reject block, got %q", blocks[0])
+	if blocks[0] != "FULLPROMPT" {
+		t.Fatalf("attempt 1 must be the full author prompt, got %q", blocks[0])
 	}
-	if !strings.Contains(blocks[1], "## PREVIOUS ATTEMPT REJECTED / Validator reason (verbatim)") ||
+	if !strings.Contains(blocks[1], "You are repairing a rejected plan") ||
 		!strings.Contains(blocks[1], "no JSON object found in planner output") ||
-		!strings.Contains(blocks[1], "Fix ONLY this defect") {
-		t.Fatalf("attempt 2 must carry the verbatim reject block, got %q", blocks[1])
+		!strings.Contains(blocks[1], "Rejected plan output (verbatim)") ||
+		!strings.Contains(blocks[1], "not json") ||
+		!strings.Contains(blocks[1], "Applicable law") {
+		t.Fatalf("attempt 2 must be the repair prompt (header+errors+output+law), got %q", blocks[1])
+	}
+	if strings.Contains(blocks[1], "FULLPROMPT") {
+		t.Fatalf("repair prompt must NOT re-send the full playbook, got %q", blocks[1])
+	}
+}
+
+// TestRunPlannerReadRepairFallbackAndRegression — 3.4/3.6: a malformed repair
+// falls back to one full re-author (reject block rides), and the repeated-defect
+// counter increments when attempt 2 repeats attempt 1's defect.
+func TestRunPlannerReadRepairFallbackAndRegression(t *testing.T) {
+	at := plannerTestTrader(t)
+	facts := kernel.PlanFacts{Price: 15550, DATR: 300}
+	machine := map[float64]string{15480: "PWL", 15700: "RN 15700"}
+	blocks := []string{}
+	base := telemetry.RepairRegressionCount()
+	_, lc, err := at.runPlannerReadCoreWithFactsGrades("ASIA", "2026-08-26", "owner_reset",
+		"deepseek-v4-pro", "hashQC", "", "", "", "FULLPROMPT", facts, nil, machine, nil, true,
+		func(userPrompt string) (string, error) {
+			blocks = append(blocks, userPrompt)
+			if len(blocks) == 1 {
+				return "not json", nil // attempt 1 parse-fails
+			}
+			if len(blocks) == 2 {
+				return "still not json", nil // repair attempt ALSO parse-fails → fallback
+			}
+			return validTraderPlanJSON, nil
+		})
+	if err != nil || lc != "active" {
+		t.Fatalf("fallback-then-success: lc=%q err=%v", lc, err)
+	}
+	if len(blocks) != 3 {
+		t.Fatalf("expected 3 calls, got %d", len(blocks))
+	}
+	if !strings.Contains(blocks[1], "You are repairing a rejected plan") {
+		t.Fatalf("attempt 2 must be the repair prompt, got %q", blocks[1])
+	}
+	if !strings.Contains(blocks[2], "## PREVIOUS ATTEMPT REJECTED / Validator reason (verbatim)") ||
+		!strings.Contains(blocks[2], "FULLPROMPT") {
+		t.Fatalf("attempt 3 must be the full re-author + reject block, got %q", blocks[2])
+	}
+	if delta := telemetry.RepairRegressionCount() - base; delta < 1 {
+		t.Fatalf("repeated-defect regression counter must increment, delta=%d", delta)
 	}
 }
 
