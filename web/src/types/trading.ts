@@ -179,6 +179,10 @@ export interface HistoricalPosition {
   exit_order_id: string
   exit_time: string
   realized_pnl: number
+  // pnl_corrected wins over realized_pnl in every ledger aggregate (store COALESCE).
+  // null = legacy unverified row (excluded from ledger sums).
+  pnl_corrected?: number | null
+  pnl_correction_note?: string
   fee: number
   leverage: number
   status: string

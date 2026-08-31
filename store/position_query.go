@@ -28,8 +28,11 @@ func (s *PositionStore) GetPositionStats(traderID string) (map[string]interface{
 	type result struct {
 		Total    int
 		Wins     int
-		TotalPnL float64
-		TotalFee float64
+		// 0A-2 (2026-08-31): explicit column tags — GORM's default snake-casing
+		// mapped TotalPnL→"total_pn_l" and silently scanned 0 from the
+		// "total_pnl" alias (the surface under-reported P&L as zero).
+		TotalPnL float64 `gorm:"column:total_pnl"`
+		TotalFee float64 `gorm:"column:total_fee"`
 	}
 	var r result
 
@@ -40,7 +43,8 @@ func (s *PositionStore) GetPositionStats(traderID string) (map[string]interface{
 		// re-verified against stored prices) are EXCLUDED from every
 		// ruled-from aggregate: no silent NULLs in any table we rule
 		// from. The excluded count is surfaced for visibility.
-		Where("trader_id = ? AND status = ? AND pnl_corrected IS NOT NULL", traderID, "CLOSED").
+		// 0A-2 (2026-08-31): unknown-P&L + e7 test-seam reasons excluded too.
+		Where("trader_id = ? AND status = ? AND pnl_corrected IS NOT NULL AND close_reason NOT IN (?, ?, ?)", traderID, "CLOSED", CloseReasonReconcileFlat, CloseReasonUnresolved, CloseReasonTestSeam).
 		Scan(&r).Error
 	if err != nil {
 		return nil, err
@@ -77,9 +81,9 @@ func (s *PositionStore) CountConsecutiveLossesSince(traderID string, sinceMs int
 	var rows []TraderPosition
 	err := s.db.
 		// A-2 (2026-08-28): exclude legacy unverified rows from the loss
-		// streak too (reconcile_flat + class-27 unresolved already excluded).
-		Where("trader_id = ? AND status = ? AND close_reason NOT IN (?, ?) AND pnl_corrected IS NOT NULL AND exit_time >= ?",
-			traderID, "CLOSED", CloseReasonReconcileFlat, CloseReasonUnresolved, sinceMs).
+		// streak too (reconcile_flat + class-27 unresolved + e7 test-seam).
+		Where("trader_id = ? AND status = ? AND close_reason NOT IN (?, ?, ?) AND pnl_corrected IS NOT NULL AND exit_time >= ?",
+			traderID, "CLOSED", CloseReasonReconcileFlat, CloseReasonUnresolved, CloseReasonTestSeam, sinceMs).
 		Order("exit_time DESC").
 		Find(&rows).Error
 	if err != nil {
@@ -113,8 +117,8 @@ func (s *PositionStore) GetSessionDayActivity(traderID string, sinceMs int64, ac
 		Select("COALESCE(SUM(COALESCE(pnl_corrected, realized_pnl)), 0) as total"). /* P0 2026-08-20: corrections win */
 		// A-2 (2026-08-28): no silent NULLs — legacy unverified rows are
 		// excluded from the guardrail P&L too.
-		Where("trader_id = ? AND status = ? AND close_reason NOT IN (?, ?) AND pnl_corrected IS NOT NULL AND exit_time >= ?",
-			traderID, "CLOSED", CloseReasonReconcileFlat, CloseReasonUnresolved, sinceMs)
+		Where("trader_id = ? AND status = ? AND close_reason NOT IN (?, ?, ?) AND pnl_corrected IS NOT NULL AND exit_time >= ?",
+			traderID, "CLOSED", CloseReasonReconcileFlat, CloseReasonUnresolved, CloseReasonTestSeam, sinceMs)
 	if acct != "" {
 		pq = pq.Where("account = ?", acct)
 	}
@@ -150,7 +154,7 @@ func (s *PositionStore) GetFullStats(traderID string, account ...string) (*Trade
 	// fill never captured), not a real $0 — counting them would skew win-rate /
 	// total P&L. They still appear in the position LIST (rendered "—").
 	var count int64
-	cq := s.db.Model(&TraderPosition{}).Where("trader_id = ? AND status = ? AND close_reason NOT IN (?, ?)", traderID, "CLOSED", CloseReasonReconcileFlat, CloseReasonUnresolved)
+	cq := s.db.Model(&TraderPosition{}).Where("trader_id = ? AND status = ? AND close_reason NOT IN (?, ?, ?)", traderID, "CLOSED", CloseReasonReconcileFlat, CloseReasonUnresolved, CloseReasonTestSeam)
 	if acct != "" {
 		cq = cq.Where("account = ?", acct)
 	}
@@ -162,7 +166,7 @@ func (s *PositionStore) GetFullStats(traderID string, account ...string) (*Trade
 	}
 
 	var positions []TraderPosition
-	pq := s.db.Where("trader_id = ? AND status = ? AND close_reason NOT IN (?, ?)", traderID, "CLOSED", CloseReasonReconcileFlat, CloseReasonUnresolved)
+	pq := s.db.Where("trader_id = ? AND status = ? AND close_reason NOT IN (?, ?, ?)", traderID, "CLOSED", CloseReasonReconcileFlat, CloseReasonUnresolved, CloseReasonTestSeam)
 	if acct != "" {
 		pq = pq.Where("account = ?", acct)
 	}
@@ -339,8 +343,8 @@ type SymbolStats struct {
 // GetSymbolStats gets per-symbol trading statistics
 func (s *PositionStore) GetSymbolStats(traderID string, limit int) ([]SymbolStats, error) {
 	var positions []TraderPosition
-	// Exclude unknown-P&L orphan closes (reconcile_flat / class-27 unresolved).
-	err := s.db.Where("trader_id = ? AND status = ? AND close_reason NOT IN (?, ?)", traderID, "CLOSED", CloseReasonReconcileFlat, CloseReasonUnresolved).Find(&positions).Error
+	// Exclude unknown-P&L orphan closes (reconcile_flat / class-27 unresolved / e7 test-seam).
+	err := s.db.Where("trader_id = ? AND status = ? AND close_reason NOT IN (?, ?, ?)", traderID, "CLOSED", CloseReasonReconcileFlat, CloseReasonUnresolved, CloseReasonTestSeam).Find(&positions).Error
 	if err != nil {
 		return nil, fmt.Errorf("failed to query symbol stats: %w", err)
 	}
@@ -480,8 +484,8 @@ type DirectionStats struct {
 // GetDirectionStats analyzes long vs short performance
 func (s *PositionStore) GetDirectionStats(traderID string) ([]DirectionStats, error) {
 	var positions []TraderPosition
-	// Exclude unknown-P&L orphan closes (reconcile_flat / class-27 unresolved).
-	err := s.db.Where("trader_id = ? AND status = ? AND close_reason NOT IN (?, ?)", traderID, "CLOSED", CloseReasonReconcileFlat, CloseReasonUnresolved).Find(&positions).Error
+	// Exclude unknown-P&L orphan closes (reconcile_flat / class-27 unresolved / e7 test-seam).
+	err := s.db.Where("trader_id = ? AND status = ? AND close_reason NOT IN (?, ?, ?)", traderID, "CLOSED", CloseReasonReconcileFlat, CloseReasonUnresolved, CloseReasonTestSeam).Find(&positions).Error
 	if err != nil {
 		return nil, fmt.Errorf("failed to query direction stats: %w", err)
 	}

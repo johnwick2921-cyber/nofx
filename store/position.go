@@ -110,11 +110,18 @@ const CloseReasonReconcileFlat = "reconcile_flat"
 // "—") — a visible gap beats a fabricated zero.
 const CloseReasonUnresolved = "unresolved"
 
+// CloseReasonTestSeam marks rows written by the E7 far-side TEST harness
+// (e7_farside_test) — experiments run against the live wire, never real trades.
+// The E7 closeout promised these are excluded from strategy P&L; the
+// UNKNOWN-P&L reason set now enforces it at every aggregator.
+const CloseReasonTestSeam = "e7_farside_test"
+
 // UnknownPnLReason reports whether a close reason carries NO trustworthy P&L
-// (reconcile_flat placeholder or class-27 unresolved) and must be excluded
-// from stats/streaks/guardrails while remaining visible in history lists.
+// (reconcile_flat placeholder, class-27 unresolved, or an E7 test-seam row)
+// and must be excluded from stats/streaks/guardrails while remaining visible
+// in history lists.
 func UnknownPnLReason(reason string) bool {
-	return reason == CloseReasonReconcileFlat || reason == CloseReasonUnresolved
+	return reason == CloseReasonReconcileFlat || reason == CloseReasonUnresolved || reason == CloseReasonTestSeam
 }
 
 // TraderPosition position record
