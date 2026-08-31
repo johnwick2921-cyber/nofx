@@ -1,11 +1,9 @@
 # 0C — Shadow Demotion: fvg_entry + breakout_retest
 
 Date: 2026-08-31 CT · Wave: 0C-shadow-demotion · Branch: `0c-shadow-demotion` (merged → `dev`)
-Live rev at park: `98a9b4cfb479197f55047b31f6cdacc1b565ec85` (PID 1391022) · Staged build rev: `7004a7f1f7266a3d8c354afc7ee27f05b5fda2a4`
-
-**STATUS: STAGED-AND-GREEN — CUTOVER ON HOLD pending the owner's explicit GO.**
-No unattended deploys (canon 2026-08-27 + dispatch 9.6). The owner was not
-available to ack; nothing was swapped and the live bot is untouched.
+**STATUS: SHIPPED — cutover 2026-08-31 17:34:21 CT, owner GO.**
+Live rev now: `7004a7f1f7266a3d8c354afc7ee27f05b5fda2a4` (PID 1466535).
+Rollback kept: `nofx-bin.prev.boot` = previous live `98a9b4cfb479197f55047b31f6cdacc1b565ec85` (PID 1391022).
 
 ## What shipped
 
@@ -51,33 +49,44 @@ override, the resolved map recomputes at next boot; the boot line prints it.)
 > No promotion on narrative… No promotion on a point estimate without its
 > interval.
 
-## Evidence at park (all flat-gate legs quoted fresh)
+## Evidence at cutover (all flat-gate legs quoted fresh)
 
-- ASIA 16:30 CT read on the OLD binary: **zero rows authored** —
-  `armed_orders WHERE created_at > '2026-08-31 16:00:00'` → empty; no
+- ASIA 16:30 CT read on the OLD binary: **zero rows authored** — no
   fvg_entry/breakout_retest exposure exists or existed under the old binary.
-- DB OPEN = 0: `trader_positions` open=0 (576 CLOSED) · `trader_orders`
-  open=0 · `armed_orders` state IN ('armed','working') → empty.
-- API positions: `[]` (GET /api/positions, Sim101, 17:18 CT).
-- NT8 AddOn snapshot ×2: `positions snapshot account=Sim101 count=0` and
-  `account=SimAccount1 count=0` (journal 17:16:21 CT).
-- Open-orders endpoint: `[]` (GET /api/open-orders?symbol=MNQ, Sim101,
-  17:18 CT).
-- Window check: 17:13+ CT (forbidden 16:45–17:10 window already passed).
-- Owner frontend active (equity=52216.00, pnl=0.00 at 17:16:38 CT).
+- PRE-cutover flat gate (17:33 CT): DB OPEN=0 (`trader_positions` 0 open/576
+  CLOSED · `trader_orders` 0 open · `armed_orders` armed/working 0) · API
+  positions `[]` · API open-orders MNQ `[]` · NT8 snapshots
+  `account=Sim101 count=0` + `account=SimAccount1 count=0` @17:33:21.
+- Window: 17:34 CT (forbidden 16:45–17:10 already passed; owner GO received).
+- Cutover: 17:34:21 CT `kill -9 1391022` → systemd relaunched PID 1466535.
+- **Boot 17:34:26 CT quoted:**
+  - `🔐 BOOT INTEGRITY OK — rev 7004a7f1f726 · built 2026-08-31T22:12:55Z · expected 7004a7f1f726 · goldens PASS`
+  - `🔬 conditions: live [acceptance, breakdown_continue, breakup_continue, hold, reclaim, reject, sweep_reclaim] · shadow [breakout_retest, fvg_entry] (process-level: defaults+env; per-trader resolved map prints at first arm cycle)`
+  - `📜 scenario schema: 9 conditions […]`
+  - 0 `[ERRO]`, 0 panic since boot; balance frames immediate (equity
+    52216.00 == pre-cutover).
+- POST-cutover flat gate (17:35 CT): API positions `[]` · open-orders MNQ
+  `[]` · DB armed nonterminal 0 · NT8 snapshots `count=0` ×2 @17:35:21.
 
-## Cutover runbook (when the owner gives GO)
+## Live proof (first natural read)
 
-1. `sudo`-free swap: `mv ~/nofx/nofx-bin ~/nofx/nofx-bin.prev.boot` then
-   `cp ~/nofx-staged/nofx-0c-bin ~/nofx/nofx-bin` (binary stamp
-   `vcs.revision=7004a7f1f7266a3d8c354afc7ee27f05b5fda2a4`, modified=false).
-2. `kill -9 <PID>` — SIGKILL; systemd `Restart=on-failure` relaunches the
-   new binary.
-3. Boot checklist within 90s: rev `7004a7f1` · `🔐 BOOT INTEGRITY OK` ·
-   goldens PASS · `🔬 conditions: live […] · shadow [breakout_retest
-   fvg_entry]` · per-trader resolved line at first arm cycle.
-4. Post-boot: flat-gate re-quote (all four legs) + first natural read proof
-   (refusal line + E8 counterfactual row; say plainly if none occurred).
+- **Said plainly: no refusal line and no E8 counterfactual row have occurred
+  yet.** The active ASIA v1 plan is `lifecycle=no_trade` (created 17:18:32 CT
+  under the old binary) — zero scenarios authored, so the arm seam has had
+  nothing to refuse. The per-trader resolved map line also awaits the first
+  arm cycle by design. The shipped behavior is proven by the six 0C fixtures
+  (wire-loopback silence, boot cancel, config flip, E8 counterfactual
+  authoring, inert-row visibility) and the boot `🔬 conditions` line; the
+  first live shadow refusal will land when a future read authors a shadowed
+  scenario.
+
+## Cutover runbook (used)
+
+1. Swap: `mv nofx-bin nofx-bin.prev.boot` → `cp ~/nofx-staged/nofx-0c-bin
+   nofx-bin` (stamp verified on the deployed file:
+   `vcs.revision=7004a7f1f7266a3d8c354afc7ee27f05b5fda2a4`, `modified=false`).
+2. `kill -9 1391022` → systemd relaunch → boot checklist quoted above.
+3. Post-boot flat-gate re-quote (quoted above).
 
 ## Shipped vs deferred
 
@@ -91,14 +100,14 @@ override, the resolved map recomputes at next boot; the boot line prints it.)
 mv nofx-bin.prev.boot nofx-bin && <revert deploy/RELEASE> && kill -9 <PID>
 ```
 
-(After the swap, `nofx-bin.prev.boot` holds `98a9b4cfb479…` — the current
-live rev — so a single `mv` back + `kill -9` restores exactly today's state.)
+`nofx-bin.prev.boot` holds `98a9b4cfb479197f55047b31f6cdacc1b565ec85` — the
+pre-cutover live rev — so a single `mv` back + `kill -9` restores exactly
+the pre-0C state.
 
 ## Anything the owner will still see wrong on screen
 
-- Nothing new until GO: the live bot still runs `98a9b4cfb479` with the old
-  condition handling (fvg_entry / breakout_retest arms are still placeable).
-  The guide page now describes the 0C shadow rule while the running binary
-  does not enforce it yet — the drift banner will flag this by design
-  (GUIDE_BUILT_REV `7004a7f1…` vs health revision `98a9b4cf…`) until cutover.
-- No 0C artifacts are in the live DB; the 16:30 ASIA read left nothing.
+- Nothing. The guide page now matches the running binary (`GUIDE_BUILT_REV`
+  `7004a7f1…` == health revision `7004a7f1f726…` — no drift banner).
+- The shadow rule is enforced at the arm seam from the first cycle; the
+  first visible refusal will arrive when a future plan authors an
+  fvg_entry/breakout_retest scenario (ASIA v1 is no_trade).
