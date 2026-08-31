@@ -11,6 +11,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -100,6 +101,16 @@ type Client struct {
 	// executor loop and the Ask-Planner API). Claude overrides ParseMCPResponse
 	// and does not set it — those calls log finish_reason=unknown.
 	lastFinishReason atomic.Value
+
+	// Per-call latency telemetry (atomics — the shared client serves the
+	// executor loop, the planner goroutine, and API ask-planner concurrently;
+	// these are read immediately after each single call returns).
+	lastTTFBMs         atomic.Int64 // time-to-first-byte of the last single call (0 = never measured)
+	lastReasoningChars atomic.Int64 // reasoning_content chars of the last single call
+
+	// reasoningTokensAbsentLogged ensures the explicit one-time "the provider
+	// usage carries no reasoning_tokens field" note is printed once per client.
+	reasoningTokensAbsentLogged sync.Once
 }
 
 // New creates default client (backward compatible)
@@ -193,8 +204,9 @@ func (client *Client) SetTimeout(timeout time.Duration) {
 // evidence was a bare duration and a generic net/http error string).
 //
 //	ai_call model=<m> duration_ms=<d> finish_reason=<r> ok=<bool>
+//	  retries=<n> ttfb_ms=<t> reasoning_chars=<c>
 //	  + on failure: timeout_source=client|context|transport deadline_s=<n>
-func (client *Client) logAICall(start time.Time, callErr error) {
+func (client *Client) logAICall(start time.Time, callErr error, retries int) {
 	if client.Log == nil {
 		return
 	}
@@ -204,8 +216,8 @@ func (client *Client) logAICall(start time.Time, callErr error) {
 		finish = v
 	}
 	if callErr == nil {
-		client.Log.Infof("ai_call model=%s duration_ms=%d finish_reason=%s ok=true",
-			client.Model, durMs, finish)
+		client.Log.Infof("ai_call model=%s duration_ms=%d finish_reason=%s ok=true retries=%d ttfb_ms=%d reasoning_chars=%d",
+			client.Model, durMs, finish, retries, client.lastTTFBMs.Load(), client.lastReasoningChars.Load())
 		return
 	}
 	// Which deadline actually fired. net/http wraps them all in the same
@@ -222,8 +234,8 @@ func (client *Client) logAICall(start time.Time, callErr error) {
 	if client.HTTPClient != nil {
 		deadline = int64(client.HTTPClient.Timeout / time.Second)
 	}
-	client.Log.Warnf("ai_call model=%s duration_ms=%d finish_reason=n/a ok=false timeout_source=%s deadline_s=%d err=%q",
-		client.Model, durMs, source, deadline, msg)
+	client.Log.Warnf("ai_call model=%s duration_ms=%d finish_reason=n/a ok=false retries=%d ttfb_ms=%d reasoning_chars=%d timeout_source=%s deadline_s=%d err=%q",
+		client.Model, durMs, retries, client.lastTTFBMs.Load(), client.lastReasoningChars.Load(), source, deadline, msg)
 }
 
 // CallWithMessages template method - fixed retry flow (cannot be overridden)
@@ -244,7 +256,7 @@ func (client *Client) CallWithMessages(systemPrompt, userPrompt string) (string,
 		// Call the fixed single-call flow
 		callStart := time.Now()
 		result, err := client.Hooks.Call(systemPrompt, userPrompt)
-		client.logAICall(callStart, err)
+		client.logAICall(callStart, err, attempt)
 		if err == nil {
 			if attempt > 1 {
 				client.Log.Infof("✓ AI API retry succeeded")
@@ -368,6 +380,8 @@ func (client *Client) ParseMCPResponseFull(body []byte) (*LLMResponse, error) {
 		return nil, fmt.Errorf("API returned empty response")
 	}
 
+	msg := result.Choices[0].Message
+
 	// Report token usage if callback is set
 	if TokenUsageCallback != nil && result.Usage.TotalTokens > 0 {
 		TokenUsageCallback(TokenUsage{
@@ -399,12 +413,19 @@ func (client *Client) ParseMCPResponseFull(body []byte) (*LLMResponse, error) {
 		if len(result.Choices) > 0 && result.Choices[0].FinishReason != nil {
 			finish = *result.Choices[0].FinishReason
 		}
-		client.Log.Infof("📊 AI call complete: completion=%d prompt=%d finish_reason=%s",
-			result.Usage.CompletionTokens, result.Usage.PromptTokens, finish)
+		rc := len(msg.ReasoningContent)
+		client.lastReasoningChars.Store(int64(rc))
+		// PLANNER SPEED WAVE 1.3 — the provider's usage block carries NO
+		// reasoning-token count (deepseek returns reasoning_content text only);
+		// reasoning_chars is the proxy. Say so once per client.
+		client.reasoningTokensAbsentLogged.Do(func() {
+			client.Log.Infof("📊 provider usage carries no reasoning_tokens field (deepseek) — reasoning_chars is the logged proxy")
+		})
+		client.Log.Infof("📊 AI call complete: completion=%d prompt=%d finish_reason=%s reasoning_chars=%d",
+			result.Usage.CompletionTokens, result.Usage.PromptTokens, finish, rc)
 		client.lastFinishReason.Store(finish)
 	}
 
-	msg := result.Choices[0].Message
 	return &LLMResponse{
 		Content:          msg.Content,
 		ReasoningContent: msg.ReasoningContent,
@@ -501,8 +522,8 @@ func (client *Client) Call(systemPrompt, userPrompt string) (string, error) {
 	}
 	defer resp.Body.Close()
 
-	// Step 6: Read response body (fixed logic)
-	body, err := io.ReadAll(resp.Body)
+	// Step 6: Read response body (fixed logic) — stamp time-to-first-byte.
+	body, err := readWithTTFB(resp.Body, &client.lastTTFBMs)
 	if err != nil {
 		return "", fmt.Errorf("failed to read response: %w", err)
 	}
@@ -519,6 +540,27 @@ func (client *Client) Call(systemPrompt, userPrompt string) (string, error) {
 	}
 
 	return result, nil
+}
+
+// ttfbReader stamps elapsed-since-request time on the first Read — the
+// time-to-first-byte (T4) evidence for the queue-vs-generation split.
+type ttfbReader struct {
+	r       io.Reader
+	start   time.Time
+	stamped *atomic.Int64
+	once    bool
+}
+
+func (t *ttfbReader) Read(p []byte) (int, error) {
+	if !t.once {
+		t.once = true
+		t.stamped.Store(time.Since(t.start).Milliseconds())
+	}
+	return t.r.Read(p)
+}
+
+func readWithTTFB(r io.Reader, stamped *atomic.Int64) ([]byte, error) {
+	return io.ReadAll(&ttfbReader{r: r, start: time.Now(), stamped: stamped})
 }
 
 func (client *Client) String() string {
@@ -679,7 +721,7 @@ func (client *Client) callWithRequestFull(req *Request) (*LLMResponse, error) {
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readWithTTFB(resp.Body, &client.lastTTFBMs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read response: %w", err)
 	}
@@ -717,7 +759,7 @@ func (client *Client) callWithRequest(req *Request) (string, error) {
 	}
 	defer resp.Body.Close()
 
-	body, err := io.ReadAll(resp.Body)
+	body, err := readWithTTFB(resp.Body, &client.lastTTFBMs)
 	if err != nil {
 		return "", fmt.Errorf("failed to read response: %w", err)
 	}
@@ -891,9 +933,25 @@ func ValidateThinkingKnobs(mode, effort string) error {
 // onChunk is called with the full accumulated text so far after each received chunk.
 // Returns the complete final text when the stream ends.
 //
-// Idle timeout: if no chunk arrives for 30 seconds the stream is cancelled automatically.
-// This prevents the scanner from blocking indefinitely on a hung or stalled connection.
+// Idle timeout: if no chunk arrives for AI_STREAM_IDLE_TIMEOUT_SECS (default
+// 180s — generous because reasoning models think before the first token) the
+// stream is cancelled automatically. The planner path passes its own ~30s idle
+// via CallWithRequestStreamIdle (split deadlines, planner-speed wave 4.2).
 func (client *Client) CallWithRequestStream(req *Request, onChunk func(string)) (string, error) {
+	idle := 180 * time.Second
+	if v := os.Getenv("AI_STREAM_IDLE_TIMEOUT_SECS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			idle = time.Duration(n) * time.Second
+		}
+	}
+	return client.CallWithRequestStreamIdle(req, onChunk, idle)
+}
+
+// CallWithRequestStreamIdle is CallWithRequestStream with an explicit
+// idle-chunk deadline. The whole-request ceiling stays http.Client.Timeout
+// (600s) — a live-but-slow stream is never killed; a stalled one dies at `idle`
+// and the caller's retry (with the reject block / repair call) fires.
+func (client *Client) CallWithRequestStreamIdle(req *Request, onChunk func(string), idle time.Duration) (string, error) {
 	if client.APIKey == "" {
 		return "", fmt.Errorf("AI API key not set")
 	}
@@ -909,27 +967,20 @@ func (client *Client) CallWithRequestStream(req *Request, onChunk func(string)) 
 	}
 
 	url := client.Hooks.BuildUrl()
+	client.Log.Infof("📡 [MCP %s] Request URL (stream idle=%ds): %s", client.String(), int(idle.Seconds()), url)
 	httpReq, err := client.buildHTTPRequestWithContext(contextFromRequest(req), url, jsonData)
 	if err != nil {
 		return "", err
 	}
 
-	// Idle-timeout watchdog: cancel the request if no SSE line arrives within
-	// the window. This breaks the scanner out of an indefinitely blocking Read
-	// on a hung connection. Reasoning models (e.g. deepseek-v4-pro) can spend
-	// well over a minute on hidden reasoning before the first token streams, so
-	// the default is generous; tune via AI_STREAM_IDLE_TIMEOUT_SECS.
-	idleTimeout := 180 * time.Second
-	if v := os.Getenv("AI_STREAM_IDLE_TIMEOUT_SECS"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
-			idleTimeout = time.Duration(n) * time.Second
-		}
+	if idle <= 0 {
+		idle = 180 * time.Second
 	}
 	ctx, cancel := context.WithCancel(contextFromRequest(req))
 	defer cancel()
 	resetCh := make(chan struct{}, 1)
 	go func() {
-		t := time.NewTimer(idleTimeout)
+		t := time.NewTimer(idle)
 		defer t.Stop()
 		for {
 			select {
@@ -946,7 +997,7 @@ func (client *Client) CallWithRequestStream(req *Request, onChunk func(string)) 
 					default:
 					}
 				}
-				t.Reset(idleTimeout)
+				t.Reset(idle)
 			}
 		}
 	}()
@@ -963,14 +1014,85 @@ func (client *Client) CallWithRequestStream(req *Request, onChunk func(string)) 
 		return "", fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
 	}
 
-	text, usage, err := ParseSSEStream(resp.Body, onChunk, func() {
+	streamStart := time.Now()
+	sr, err := ParseSSEStreamFull(resp.Body, onChunk, func() {
 		select {
 		case resetCh <- struct{}{}:
 		default:
 		}
 	})
-	ReportStreamUsage(usage, client.Provider, client.Model)
-	return text, err
+	if sr != nil {
+		client.lastTTFBMs.Store(sr.TTFBMs)
+		client.lastReasoningChars.Store(int64(sr.ReasoningChars))
+		if sr.FinishReason != "" {
+			client.lastFinishReason.Store(sr.FinishReason)
+		}
+		if client.Log != nil {
+			pt, ct := 0, 0
+			if sr.Usage != nil {
+				pt, ct = sr.Usage.PromptTokens, sr.Usage.CompletionTokens
+			}
+			client.Log.Infof("📊 AI call complete (stream): completion=%d prompt=%d finish_reason=%s reasoning_chars=%d ttfb_ms=%d wall_ms=%d",
+				ct, pt, sr.FinishReason, sr.ReasoningChars, sr.TTFBMs, time.Since(streamStart).Milliseconds())
+		}
+	}
+	if sr != nil && sr.Usage != nil {
+		ReportStreamUsage(sr.Usage, client.Provider, client.Model)
+	}
+	if err != nil {
+		return "", err
+	}
+	if sr == nil {
+		return "", fmt.Errorf("stream produced no result")
+	}
+	return sr.Text, nil
+}
+
+// CallWithRequestStreamRetry wraps the streaming call in the same fixed retry
+// flow CallWithMessages uses (MaxRetries + exponential backoff + retryable
+// classification). Phase 4.4 — the transport-reset class must still retry.
+func (client *Client) CallWithRequestStreamRetry(req *Request, onChunk func(string), idle time.Duration) (string, error) {
+	if client.APIKey == "" {
+		return "", fmt.Errorf("AI API key not set")
+	}
+	var lastErr error
+	maxRetries := client.Cfg.MaxRetries
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		if attempt > 1 {
+			client.Log.Warnf("⚠️  AI API stream failed, retrying (%d/%d)...", attempt, maxRetries)
+		}
+		start := time.Now()
+		result, err := client.CallWithRequestStreamIdle(req, onChunk, idle)
+		client.logAICall(start, err, attempt)
+		if err == nil {
+			if attempt > 1 {
+				client.Log.Infof("✓ AI API stream retry succeeded")
+			}
+			return result, nil
+		}
+		lastErr = err
+		if !client.Hooks.IsRetryableError(err) {
+			return "", err
+		}
+		if attempt < maxRetries {
+			waitTime := client.Cfg.RetryWaitBase * time.Duration(attempt)
+			client.Log.Infof("⏳ Waiting %v before retry...", waitTime)
+			if err := sleepWithContext(contextFromRequest(req), waitTime); err != nil {
+				return "", err
+			}
+		}
+	}
+	return "", fmt.Errorf("still failed after %d retries: %w", maxRetries, lastErr)
+}
+
+// SSEStreamResult is ParseSSEStreamFull's output: accumulated text, reasoning
+// chars, finish_reason, usage, and time-to-first-byte.
+type SSEStreamResult struct {
+	Text           string
+	ReasoningChars int
+	FinishReason   string
+	Usage          *TokenUsage
+	TTFBMs         int64
 }
 
 // ParseSSEStream reads an SSE response body, accumulates text deltas,
@@ -979,13 +1101,33 @@ func (client *Client) CallWithRequestStream(req *Request, onChunk func(string)) 
 // (useful for resetting idle-timeout watchdogs).
 // Returns the complete accumulated text and any parsed token usage (nil if absent).
 func ParseSSEStream(body io.Reader, onChunk func(string), onLine func()) (string, *TokenUsage, error) {
+	sr, err := ParseSSEStreamFull(body, onChunk, onLine)
+	if sr == nil {
+		return "", nil, err
+	}
+	return sr.Text, sr.Usage, err
+}
+
+// ParseSSEStreamFull is the planner-speed-wave (2026-08-31) extension:
+// additionally captures reasoning_content chars, finish_reason, and
+// time-to-first-byte (the T4 evidence the latency autopsy was missing).
+func ParseSSEStreamFull(body io.Reader, onChunk func(string), onLine func()) (*SSEStreamResult, error) {
 	var accumulated strings.Builder
+	var reasoning strings.Builder
 	var usage *TokenUsage
+	var finish string
 	scanner := bufio.NewScanner(body)
+	start := time.Now()
+	var ttfbMs int64
+	haveFirst := false
 
 	for scanner.Scan() {
 		if onLine != nil {
 			onLine()
+		}
+		if !haveFirst {
+			haveFirst = true
+			ttfbMs = time.Since(start).Milliseconds()
 		}
 
 		line := scanner.Text()
@@ -1000,7 +1142,8 @@ func ParseSSEStream(body io.Reader, onChunk func(string), onLine func()) (string
 		var chunk struct {
 			Choices []struct {
 				Delta struct {
-					Content string `json:"content"`
+					Content          string `json:"content"`
+					ReasoningContent string `json:"reasoning_content"`
 				} `json:"delta"`
 				FinishReason *string `json:"finish_reason"`
 			} `json:"choices"`
@@ -1026,22 +1169,34 @@ func ParseSSEStream(body io.Reader, onChunk func(string), onLine func()) (string
 			continue
 		}
 
-		delta := chunk.Choices[0].Delta.Content
-		if delta == "" {
+		if chunk.Choices[0].FinishReason != nil && *chunk.Choices[0].FinishReason != "" {
+			finish = *chunk.Choices[0].FinishReason
+		}
+		delta := chunk.Choices[0].Delta
+		if delta.ReasoningContent != "" {
+			reasoning.WriteString(delta.ReasoningContent)
+		}
+		if delta.Content == "" {
 			continue
 		}
 
-		accumulated.WriteString(delta)
+		accumulated.WriteString(delta.Content)
 		if onChunk != nil {
 			onChunk(accumulated.String())
 		}
 	}
 
 	if err := scanner.Err(); err != nil {
-		return accumulated.String(), usage, fmt.Errorf("stream interrupted: %w", err)
+		return &SSEStreamResult{
+			Text: accumulated.String(), Usage: usage, FinishReason: finish,
+			ReasoningChars: reasoning.Len(), TTFBMs: ttfbMs,
+		}, fmt.Errorf("stream interrupted: %w", err)
 	}
 
-	return accumulated.String(), usage, nil
+	return &SSEStreamResult{
+		Text: accumulated.String(), Usage: usage, FinishReason: finish,
+		ReasoningChars: reasoning.Len(), TTFBMs: ttfbMs,
+	}, nil
 }
 
 // ReportStreamUsage fires TokenUsageCallback with the given usage, provider, and model.
