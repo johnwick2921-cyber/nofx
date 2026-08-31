@@ -16,6 +16,7 @@ export const status: GuideSection = {
         '    · expected <sha> · goldens PASS      ← code matches deploy record',
         '📜 planner playbook: playbook=v2 bias_tree=on …',
         '🛡 plan facts guards: 0-side + empty map fail-closed …',
+        '🚀 planner speed wave: retry=repair stream=on stream_idle=30s …',
         '🎛 volume wave …   ← wave detector knobs',
         '🎯 touch telemetry …',
         '📐 fvg_entry …',

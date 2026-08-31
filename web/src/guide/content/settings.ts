@@ -138,6 +138,37 @@ const dayPlan: KnobSpec[] = [
     perSession: 'Yes.',
   },
   {
+    label: 'Planner retry mode',
+    where: 'Environment (RETRY_MODE) — not a Strategy knob',
+    what: 'How the planner retries a rejected plan. repair (default): attempt 2+ sends ONLY the rejected plan + validator errors + law excerpts — a fraction of a full re-author. reauthor: the old full-prompt retry with the verbatim reject block.',
+    trader:
+      'repair is the 2026-08-31 speed wave default; a malformed repair falls back to one full re-author.',
+    consumer:
+      'kernel/planner_speed.go (ResolvePlannerRetryMode) · trader/auto_trader_planner.go (retry loop)',
+    range: 'repair | reauthor',
+    systemDefault: 'repair',
+    recommended:
+      '⭐ repair — one env line reverts to reauthor without a deploy.',
+    whenToTouch:
+      'Only if repair attempts start failing parse repeatedly (watch the 🧩 repair lines).',
+    perSession: 'No — process-wide.',
+  },
+  {
+    label: 'Planner stream idle',
+    where: 'Environment (AI_PLAN_STREAM_IDLE_SECS) — not a Strategy knob',
+    what: 'The planner reads the model over SSE. If no chunk arrives for this long, the connection is killed and the retry fires — a stalled read dies in ~30s instead of burning the full 600s ceiling. A live-but-slow stream is never killed (the 600s total ceiling still applies).',
+    trader:
+      'Split deadlines from the latency autopsy: queue/think/stall vs slow generation.',
+    consumer:
+      'kernel/planner_speed.go (PlannerStreamIdleSeconds) · mcp/client.go (CallWithRequestStreamRetry)',
+    range: '1 – 180 seconds',
+    systemDefault: '30',
+    recommended:
+      '⭐ 30 — reasoning streams emit chunks, so silence means stall.',
+    whenToTouch: 'Raise it if the model routinely thinks >30s without a token.',
+    perSession: 'No — process-wide.',
+  },
+  {
     label: 'Min scenario quality',
     where: 'Strategy → Day Plan → A/B/C',
     what: 'Lowest grade the planner may write (INFORMATIONAL — nothing gates on it).',
