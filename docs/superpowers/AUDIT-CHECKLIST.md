@@ -7,7 +7,7 @@ in CLAUDE.md).
 
 ---
 
-## PART 1 — THE 25 BUG CLASSES (name · root cause · probe · law)
+## PART 1 — THE 26 BUG CLASSES (name · root cause · probe · law)
 
 1. **Self-imposed caps.** Root cause: an AI/HTTP/token cap chosen without
    measuring the provider ceiling or the observed need (the 32768-token
@@ -157,7 +157,7 @@ in CLAUDE.md).
     resumed flush → stamp advances, no repeat) — existence tests cannot catch
     this class. **Law:** a guard without a firing fixture is decoration.
 
-20. **Committed binaries / embedded secrets.** Root cause: `git add` of build
+21. **Committed binaries / embedded secrets.** Root cause: `git add` of build
     artifacts — 14 tracked `nofx-bin.old*` binaries embedded a live-era
     DeepSeek `sk-` key in a PUBLIC repo (caught 2026-08-29 by T14's binary
     scan; every text-only secret scan missed it). **Probe:** `git ls-files`
@@ -167,7 +167,7 @@ in CLAUDE.md).
     every binary glob; a history rewrite requires the owner's explicit
     force-push ack and every clone/partner repo must re-clone.
 
-21. **Log-lie counters.** Root cause: a success log reports a WRITE DELTA or
+22. **Log-lie counters.** Root cause: a success log reports a WRITE DELTA or
     a derived counter instead of the thing it claims — `maybeFetchCalendar`
     logged "fetched 0 events" on every healthy fetch because frozen
     `forexfactory` slices return `wrote=false` (`store/calendar.go:92-93`)
@@ -182,7 +182,7 @@ in CLAUDE.md).
     source — T9's renderer omitted `calendar_slices` and printed a false
     "(no filtered events)" for a populated prompt (same forensics).
 
-22. **Unprobed supply chain.** Root cause: dependency audits were never
+23. **Unprobed supply chain.** Root cause: dependency audits were never
     automated — the F1 scan (2026-08-29) found 8 reachable Go
     vulnerabilities (x/text, quic-go ×2, pgx, go-ethereum ×3, jwt/v5) and
     14 npm findings incl. lodash + react-router HIGHs, all fixable by
@@ -193,7 +193,7 @@ in CLAUDE.md).
     the finding; major-version upgrades are owner-ruled, never auto-merged
     before a live-fire window.
 
-23. **Report-only path panicked the trading loop.** Root cause
+24. **Report-only path panicked the trading loop.** Root cause
     (2026-08-30 entry-mechanics cutover): the E8 shadow A/B logger computed
     the counterfactual fill bar as `bucket_index × 5` — WRONG when the plan
     window starts mid-5m-bucket or spans <5 bars, so `w[5]` on a 4-bar
@@ -207,7 +207,7 @@ in CLAUDE.md).
     never to a panic; the trading loop owns no `recover` blanket — each
     advisory seam carries its own.
 
-24. **Armed re-place loop (manual cancel did NOT win).** Root cause:
+25. **Armed re-place loop (manual cancel did NOT win).** Root cause:
     `UpsertArm` re-authorized TERMINAL rows every cycle while the confirm
     stayed MET and the placement band allowed the wrong side — the
     2026-08-30 S2 loop: terminal → armed → marketable fill (limit above
@@ -221,7 +221,7 @@ in CLAUDE.md).
     re-authorized ONLY on a plan-version change; a limit whose level the
     price already accepted through is cancelled, never placed.
 
-25. **Far-side capability mismatch.** Root cause: the Go side sent a
+26. **Far-side capability mismatch.** Root cause: the Go side sent a
     `stop_entry` frame to a pre-E7 AddOn, which executed the UNKNOWN frame
     type as MARKET — the 2026-08-30 test filled at 29346.25 instead of
     resting at 28700 (the far-side proof exists precisely to catch this).

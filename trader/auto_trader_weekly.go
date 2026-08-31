@@ -190,6 +190,21 @@ func (at *AutoTrader) runWeeklyRead(now time.Time, monday string, bootBackfill b
 		// Accepted — stamp the audit fields and write the plan row.
 		doc.FactsHash = facts.FactsHash
 		doc.ThinHistory = facts.ThinHistory
+		// F5 DOA guard (2026-08-30): if the bias's own invalidation basis is
+		// ALREADY crossed at write, stamp neutral now — never write a stillborn
+		// bias the watch kills seconds later (the 17:07:15 bear lived 3s and
+		// the invalidated bear was RIGHT by 250pt).
+		var doaBars []market.Kline
+		if market.FuturesBarsProvider != nil {
+			tf := kernel.WeeklyInvalidationBasisTF(doc.Invalidation.Basis)
+			if tf == "" {
+				tf = kernel.WeeklyInvalidationTFDefault()
+			}
+			doaBars = market.FuturesBarsProvider(at.futuresSymbol(), tf, kernel.AISVPBarCount)
+		}
+		if kernel.ApplyWeeklyDOA(doc, doaBars, time.Now()) {
+			at.logWarnf("📅 WEEKLY READ %s stamped NEUTRAL AT WRITE (F5 DOA) — invalidation %.2f already crossed by a closed %s bar", monday, doc.Invalidation.Px, kernel.WeeklyInvalidationBasisTF(doc.Invalidation.Basis))
+		}
 		docJSON, _ := json.Marshal(doc)
 		trigger := "sunday_weekly_read"
 		if bootBackfill {

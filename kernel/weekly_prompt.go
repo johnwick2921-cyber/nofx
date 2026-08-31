@@ -315,11 +315,38 @@ func WeeklyContextLine(d *WeeklyDoc, thinWeeks int) string {
 }
 
 // WeeklyExecutorLine renders the one executor-prompt context line (W3).
+// F1 (2026-08-30): an INVALIDATED doc still exists and must stay visible —
+// the executor reads "WEEKLY: neutral (invalidated …)", never silence (the
+// silent "" hid the invalidated-bear doc during the −204pt sell-off).
 func WeeklyExecutorLine(d *WeeklyDoc) string {
-	if d == nil || strings.TrimSpace(d.InvalidatedAt) != "" {
+	if d == nil {
 		return ""
 	}
+	if strings.TrimSpace(d.InvalidatedAt) != "" {
+		return "WEEKLY: neutral (invalidated " + d.InvalidatedAt + ")"
+	}
 	return fmt.Sprintf("WEEKLY: %s/%s · draw %.2f", strings.ToLower(d.Bias), strings.ToLower(d.Conviction), d.Draw.Px)
+}
+
+// ApplyWeeklyDOA (F5, 2026-08-30) — the breach-at-write guard: if the weekly
+// bias's own invalidation basis is ALREADY crossed at write time, stamp
+// neutral + invalidated_at NOW instead of writing a stillborn doc the watch
+// kills moments later (the 17:07:15 bear lived 3 seconds; the invalidated
+// bear would have been RIGHT by 250pt). Returns true when it stamped neutral.
+func ApplyWeeklyDOA(doc *WeeklyDoc, bars []market.Kline, now time.Time) bool {
+	if doc == nil || strings.TrimSpace(doc.InvalidatedAt) != "" {
+		return false
+	}
+	bias := strings.ToLower(strings.TrimSpace(doc.Bias))
+	if (bias != "bull" && bias != "bear") || doc.Invalidation.Px <= 0 {
+		return false
+	}
+	if !WeeklyInvalidationCrossed(bias, doc.Invalidation.Px, bars) {
+		return false
+	}
+	doc.Bias = "neutral"
+	doc.InvalidatedAt = FormatCT(now)
+	return true
 }
 
 // ── W4 — mid-week invalidation watch (pure) ─────────────────────────────────

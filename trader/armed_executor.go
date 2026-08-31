@@ -795,6 +795,12 @@ func (at *AutoTrader) onArmedOrderUpdate(u ntwire.OrderUpdatePayload, ledger *st
 			_ = ledger.SetState(r.ID, "filled", "fill@"+strconv.FormatFloat(u.FillPrice, 'f', 2, 64))
 			_ = ledger.SetFillPrice(r.ID, u.FillPrice)
 			_ = ledger.Touch(r.ID)
+			// F3 (2026-08-30 E7 incident) — materialize the OPEN row at FILL
+			// time, before the stamp: the sub-60s round-trip class (fill →
+			// stop-out inside one snapshot interval) meant reconcile never saw
+			// the position open, so the priced close parked forever and NT8's
+			// equity diverged from the ledger.
+			at.materializeArmedEntry(r, u)
 			at.stampArmedFillLineage(r, u.FillPrice)
 			at.logInfof("⚡ armed fill %s @ %.2f (entry_class=armed_fill — stale_reeval NOT applied)", r.Scenario, u.FillPrice)
 		case "rejected":
@@ -806,6 +812,53 @@ func (at *AutoTrader) onArmedOrderUpdate(u ntwire.OrderUpdatePayload, ledger *st
 		}
 		return
 	}
+}
+
+// materializeArmedEntry (F3, 2026-08-30 E7 incident) creates the OPEN position
+// row from the armed fill at FILL time when no row exists yet. The ledger row
+// carries the fill truth (signal, fill price, plan attribution), so the sub-60s
+// round-trip becomes ledger-visible and the priced close the far side sends
+// finds its open row on the normal sync path.
+func (at *AutoTrader) materializeArmedEntry(r store.ArmedOrderDB, u ntwire.OrderUpdatePayload) {
+	if at.store == nil || u.FillPrice <= 0 || r.SignalID == "" {
+		return
+	}
+	if pos, err := at.store.Position().GetOpenPositionBySymbol(at.id, at.futuresSymbol(), r.Side); err == nil && pos != nil {
+		return // already materialized (reconcile won the race)
+	}
+	tradeDate := r.PlanID
+	if i := strings.Index(r.PlanID, ":"); i > 0 {
+		tradeDate = r.PlanID[:i]
+	}
+	nowMs := time.Now().UTC().UnixMilli()
+	row := &store.TraderPosition{
+		TraderID:           at.id,
+		ExchangeType:       "ninjatrader",
+		ExchangePositionID: fmt.Sprintf("armed_%s_%d", r.SignalID, nowMs),
+		Symbol:             at.futuresSymbol(),
+		Side:               r.Side,
+		Quantity:           1,
+		EntryQuantity:      1,
+		EntryPrice:         u.FillPrice,
+		EntryTime:          nowMs,
+		EntryOrderID:       r.SignalID,
+		Leverage:           1,
+		Status:             "OPEN",
+		Source:             "armed_entry",
+		Account:            u.Account,
+		PlanID:             r.PlanID,
+		PlanVersion:        r.Version,
+		PlanTradeDate:      tradeDate,
+		PlanSession:        r.Session,
+		CitedScenarioID:    r.Scenario,
+		CreatedAt:          nowMs,
+		UpdatedAt:          nowMs,
+	}
+	if err := at.store.Position().CreateOpenPosition(row); err != nil {
+		at.logWarnf("🧩 armed fill %s materialize OPEN failed: %v", r.Scenario, err)
+		return
+	}
+	at.logInfof("🧩 armed fill %s @ %.2f materialized OPEN (source=armed_entry — sub-60s round-trips are ledger-visible)", r.Scenario, u.FillPrice)
 }
 
 // stampArmedFillLineage links the freshly-filled position row to the plan the

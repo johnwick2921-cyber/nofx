@@ -480,6 +480,10 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 		// the card chips (IN_ZONE/ABOVE/BELOW/FILLED_INVALID + touch number).
 		"fvg_states":     fvgStates,
 		"overlay_errors": overlayErrStrings,
+		// W7 (weekly-bias wave) — the WEEKLY chip payload. F1 (2026-08-30):
+		// the found=true branch built its own map WITHOUT this key, so the card
+		// rendered grey "WEEKLY none" while a neutral-invalidated doc existed.
+		"weekly": weeklyPayload(s.store, traderID, now),
 		// ITEM 4 — owner edits that could NOT be re-anchored onto this version.
 		// Never dropped silently: the card asks for review.
 		"uncarried_edits": s.uncarriedEdits(row.PlanID, row.Version),

@@ -195,3 +195,50 @@ func TestWeeklyContextLineAllStates(t *testing.T) {
 		t.Fatalf("proving line: invalidated doc renders no executor line — got %q", got)
 	}
 }
+
+// TestWeeklyExecutorLineInvalidatedRendersNeutral — F1 (2026-08-30): an
+// invalidated weekly doc must stay VISIBLE in the executor prompt as
+// "WEEKLY: neutral (invalidated …)", never silent (the silent "" hid the
+// invalidated-bear doc through the −204pt sell-off).
+func TestWeeklyExecutorLineInvalidatedRendersNeutral(t *testing.T) {
+	doc := &WeeklyDoc{Bias: "neutral", Conviction: "low", Draw: WeeklyDraw{Name: "PWL", Px: 28947.75},
+		Invalidation: WeeklyInvalidation{Px: 29535, Basis: "1h close beyond 29535.00"}, InvalidatedAt: "2026-08-30 17:07 CT"}
+	if got := WeeklyExecutorLine(doc); got != "WEEKLY: neutral (invalidated 2026-08-30 17:07 CT)" {
+		t.Fatalf("invalidated line = %q", got)
+	}
+	active := &WeeklyDoc{Bias: "bear", Conviction: "low", Draw: WeeklyDraw{Name: "PWL", Px: 28947.75},
+		Invalidation: WeeklyInvalidation{Px: 29535, Basis: "1h close beyond 29535.00"}}
+	if got := WeeklyExecutorLine(active); !strings.Contains(got, "WEEKLY: bear/low") {
+		t.Fatalf("active line = %q", got)
+	}
+	if got := WeeklyExecutorLine(nil); got != "" {
+		t.Fatalf("nil doc line = %q, want empty", got)
+	}
+}
+
+// TestApplyWeeklyDOAStampsNeutralAtWrite — F5 (2026-08-30): a bias whose own
+// invalidation basis is ALREADY crossed at write is stamped neutral + stamp
+// time, never written stillborn (the 17:07:15 bear lived 3 seconds).
+func TestApplyWeeklyDOAStampsNeutralAtWrite(t *testing.T) {
+	now := time.Date(2026, 8, 30, 22, 7, 15, 0, time.UTC)
+	doc := &WeeklyDoc{Bias: "bear", Conviction: "low", Invalidation: WeeklyInvalidation{Px: 29535, Basis: "1h close beyond 29535.00"}}
+	breached := []market.Kline{{OpenTime: 1, Close: 29541.75}} // 1h close beyond 29535
+	if !ApplyWeeklyDOA(doc, breached, now) {
+		t.Fatal("DOA should stamp neutral on a breach-at-write")
+	}
+	if doc.Bias != "neutral" || doc.InvalidatedAt == "" {
+		t.Fatalf("doc = bias %q invalidated_at %q, want neutral + stamp", doc.Bias, doc.InvalidatedAt)
+	}
+	// Not crossed → untouched; already invalidated → untouched; neutral bias → untouched.
+	doc2 := &WeeklyDoc{Bias: "bull", Invalidation: WeeklyInvalidation{Px: 100, Basis: "1h close below 100.00"}}
+	if ApplyWeeklyDOA(doc2, []market.Kline{{OpenTime: 1, Close: 101}}, now) {
+		t.Fatal("no breach → no DOA stamp")
+	}
+	if ApplyWeeklyDOA(doc, breached, now) { // already invalidated
+		t.Fatal("already-invalidated doc must not re-stamp")
+	}
+	doc3 := &WeeklyDoc{Bias: "neutral", Invalidation: WeeklyInvalidation{Px: 100}}
+	if ApplyWeeklyDOA(doc3, []market.Kline{{OpenTime: 1, Close: 50}}, now) {
+		t.Fatal("neutral bias → no DOA stamp")
+	}
+}

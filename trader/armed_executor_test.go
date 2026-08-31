@@ -260,3 +260,34 @@ func TestLimitMarketableWrongSide(t *testing.T) {
 		}
 	}
 }
+
+// TestMaterializeArmedEntryF3 — F3 (2026-08-30): the fill-time materialization
+// creates the OPEN row from the armed fill so the sub-60s round-trip is
+// ledger-visible (the priced close finds its open row on the normal path).
+func TestMaterializeArmedEntryF3(t *testing.T) {
+	cfg := store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true}}
+	at, st := resetTrader(t, cfg)
+	row := store.ArmedOrderDB{
+		TraderID: at.id, PlanID: "2026-08-30:ASIA:trader", Version: 2, Session: "ASIA",
+		Scenario: "S2", Side: "long", EntryPx: 29371.5, StopPx: 29350.0, TargetPx: 29420.0,
+		State: "filled", SignalID: "sig-f3", FillPrice: 29347.25,
+	}
+	u := ntwire.OrderUpdatePayload{State: "filled", SignalID: "sig-f3", Account: "Sim101", FillPrice: 29347.25}
+	at.materializeArmedEntry(row, u)
+	pos, err := st.Position().GetOpenPositionBySymbol(at.id, at.futuresSymbol(), "long")
+	if err != nil || pos == nil {
+		t.Fatalf("open row not materialized: %v", err)
+	}
+	if pos.EntryOrderID != "sig-f3" || pos.EntryPrice != 29347.25 || pos.Source != "armed_entry" {
+		t.Fatalf("row = %+v", pos)
+	}
+	if pos.PlanID != "2026-08-30:ASIA:trader" || pos.PlanVersion != 2 || pos.CitedScenarioID != "S2" || pos.PlanSession != "ASIA" {
+		t.Fatalf("plan attribution missing: %+v", pos)
+	}
+	// Idempotent: a second call must not duplicate.
+	at.materializeArmedEntry(row, u)
+	opens, _ := st.Position().GetOpenPositions(at.id)
+	if len(opens) != 1 {
+		t.Fatalf("open count = %d, want 1", len(opens))
+	}
+}
