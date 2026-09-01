@@ -969,7 +969,11 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 		var raw string
 		var err error
 		if bc, ok := client.(interface{ BaseClient() *mcp.Client }); ok {
-			raw, err = bc.BaseClient().CallWithRequestStreamRetry(req, nil, plannerStreamIdle())
+			// CLASS 37 (2026-09-01) — the planner's OWN whole-call ceiling
+			// (AI_PLAN_TOTAL_DEADLINE_SECS) rides beside the idle watchdog; the
+			// 600s http.Client.Timeout no longer bounds a LIVE reasoning stream
+			// (it killed 11 of 80 max-reasoning attempts 08-30 → 09-01).
+			raw, err = bc.BaseClient().CallWithRequestStreamRetryDeadlines(req, nil, plannerStreamIdle(), plannerStreamTotal())
 		} else {
 			// Non-base clients (tests, legacy callers) keep the full-body path.
 			raw, err = client.CallWithMessages(plannerSystemPrompt, userPrompt)
@@ -977,7 +981,15 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 		if err == nil && mcp.LastFinishReason(client) == "length" {
 			at.logWarnf("📐 planner output TRUNCATED by the provider (finish_reason=length, cap=%d) — the plan JSON may be incomplete; retrying at the same cap will not fix truncation", cap)
 		}
-		at.logInfof("🧠 planner call (reasoning=%s wire=%s/%s cap=%d stream idle=%ds) completed in %.1fs", modeLabel, pMode, pEffort, cap, int(plannerStreamIdle().Seconds()), time.Since(start).Seconds())
+		if err != nil {
+			// CLASS 37 — every failed provider call names its class, the
+			// provider ROW (never the key), HTTP status and request id: "the
+			// API keeps failing" is never again a log line without a class.
+			at.logWarnf("🛰 planner call FAILED class=%s provider_row=%s model=%s http_status=%d request_id=%q elapsed=%.1fs idle=%ds total=%ds — %v",
+				mcp.LastErrClass(client), at.config.AIModelID, modelID, mcp.LastHTTPStatus(client), mcp.LastRequestID(client),
+				time.Since(start).Seconds(), int(plannerStreamIdle().Seconds()), int(plannerStreamTotal().Seconds()), err)
+		}
+		at.logInfof("🧠 planner call (reasoning=%s wire=%s/%s cap=%d stream idle=%ds total=%ds) completed in %.1fs", modeLabel, pMode, pEffort, cap, int(plannerStreamIdle().Seconds()), int(plannerStreamTotal().Seconds()), time.Since(start).Seconds())
 		return raw, err
 	}, t1Lines...)
 	return true
@@ -1267,6 +1279,27 @@ func resolvePlannerRetryMode() string { return kernel.ResolvePlannerRetryMode() 
 // plannerStreamIdle delegates to the kernel resolver (AI_PLAN_STREAM_IDLE_SECS).
 func plannerStreamIdle() time.Duration {
 	return time.Duration(kernel.PlannerStreamIdleSeconds()) * time.Second
+}
+
+// plannerStreamTotal (class 37) delegates to the kernel resolver
+// (AI_PLAN_TOTAL_DEADLINE_SECS, default 1200; always > idle).
+func plannerStreamTotal() time.Duration {
+	return time.Duration(kernel.PlannerStreamTotalSeconds()) * time.Second
+}
+
+// plannerClientBootLine (class 37, C7) renders the EFFECTIVE planner client
+// config — resolved values, never file defaults — for the per-trader boot
+// block: both stream deadlines, the HTTP ceiling that still governs the
+// non-stream paths, retries/backoff and the provider ROW the trader is bound
+// to. Pure so the fixture can pin the wording.
+func plannerClientBootLine(providerRow string, idleS, totalS, httpCeilingS, retries, backoffS, cap int) string {
+	return fmt.Sprintf("🛰 planner client: provider_row=%s stream_idle=%ds stream_total=%ds (AI_PLAN_TOTAL_DEADLINE_SECS) http_ceiling=%ds (non-stream paths only) retries=%d backoff=%ds cap=%d",
+		providerRow, idleS, totalS, httpCeilingS, retries, backoffS, cap)
+}
+
+func (at *AutoTrader) logPlannerClientBootLine() {
+	ai := mcp.EffectiveAIParamsSnapshot("")
+	at.logInfof("%s", plannerClientBootLine(at.config.AIModelID, kernel.PlannerStreamIdleSeconds(), kernel.PlannerStreamTotalSeconds(), ai.TimeoutSeconds, ai.MaxRetries, ai.RetryBackoffSeconds, aiPlanMaxTokens()))
 }
 
 // sundayAsiaDeferred (A2, owner ruling 2026-08-31) — the Sunday sequencing

@@ -133,8 +133,8 @@ func main() {
 	// default can never hide again (the max_tokens=2000 disease). Any knob the
 	// operator did NOT set explicitly is called out as a WARNING.
 	ai := mcp.EffectiveAIParamsSnapshot(mcp.DefaultDeepSeekModel)
-	logger.Infof("🧠 AI params in force: model=%s client_max_tokens=%d planner_max_tokens=%d temperature=%.2f top_p=%s timeout=%ds retries=%d backoff=%ds · truncated-responses=%d",
-		ai.Model, ai.MaxTokens, trader.PlannerMaxTokens(), ai.Temperature, formatTopP(ai.TopP), ai.TimeoutSeconds, ai.MaxRetries, ai.RetryBackoffSeconds, mcp.TruncatedResponses.Load())
+	logger.Infof("🧠 AI params in force: model=%s client_max_tokens=%d planner_max_tokens=%d temperature=%.2f top_p=%s timeout=%ds (HTTP ceiling; non-stream paths) planner_stream_idle=%ds planner_stream_total=%ds retries=%d backoff=%ds · truncated-responses=%d",
+		ai.Model, ai.MaxTokens, trader.PlannerMaxTokens(), ai.Temperature, formatTopP(ai.TopP), ai.TimeoutSeconds, kernel.PlannerStreamIdleSeconds(), kernel.PlannerStreamTotalSeconds(), ai.MaxRetries, ai.RetryBackoffSeconds, mcp.TruncatedResponses.Load())
 	unset := []string{}
 	if !ai.MaxTokensSet {
 		unset = append(unset, "AI_MAX_TOKENS")

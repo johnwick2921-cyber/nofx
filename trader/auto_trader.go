@@ -229,6 +229,10 @@ type AutoTraderConfig struct {
 	ID      string // Trader unique identifier (for log directory, etc.)
 	Name    string // Trader display name
 	AIModel string // AI model: "qwen" or "deepseek"
+	// AIModelID is the ai_models ROW id the trader is bound to (class 37,
+	// 2026-09-01): named on every failed planner call so a provider failure is
+	// attributable to a row without ever printing the key.
+	AIModelID string
 
 	// Trading platform selection
 	Exchange   string // Exchange type: "binance", "bybit", "okx", "bitget", "gate", "hyperliquid", "aster", "lighter", "indodax", or "ninjatrader"

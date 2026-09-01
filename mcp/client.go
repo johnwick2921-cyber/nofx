@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -108,6 +109,13 @@ type Client struct {
 	lastTTFBMs         atomic.Int64 // time-to-first-byte of the last single call (0 = never measured)
 	lastReasoningChars atomic.Int64 // reasoning_content chars of the last single call
 
+	// Class 37 (2026-09-01) — failure-class telemetry for the ai_call line: the
+	// HTTP status and provider request id of the last response (0/"" when no
+	// response arrived) and the classified error of the last FAILED call.
+	lastHTTPStatus atomic.Int64
+	lastRequestID  atomic.Value // string
+	lastErrClass   atomic.Value // string
+
 	// reasoningTokensAbsentLogged ensures the explicit one-time "the provider
 	// usage carries no reasoning_tokens field" note is printed once per client.
 	reasoningTokensAbsentLogged sync.Once
@@ -199,13 +207,116 @@ func (client *Client) SetTimeout(timeout time.Duration) {
 	client.HTTPClient.Timeout = timeout
 }
 
+// Class 37 (2026-09-01) — the two split deadlines on the planner stream carry
+// sentinels so the ai_call line can name the killer instead of the generic
+// net/http "context deadline exceeded" text.
+var (
+	// ErrStreamIdleDeadline — the idle watchdog cancelled a SILENT stream.
+	ErrStreamIdleDeadline = errors.New("stream idle deadline exceeded")
+	// ErrStreamTotalDeadline — the planner's whole-call ceiling fired on a
+	// LIVE stream (distinct from http.Client.Timeout, the executor's ceiling).
+	ErrStreamTotalDeadline = errors.New("stream total deadline exceeded")
+)
+
+// classifyAIError maps a failed call's error to ONE class token for the
+// ai_call line: total_deadline · idle_deadline · client_timeout · http_status ·
+// auth_config · transport · context · other. Most-specific first.
+func classifyAIError(err error) string {
+	if err == nil {
+		return "ok"
+	}
+	msg := err.Error()
+	switch {
+	case errors.Is(err, ErrStreamTotalDeadline):
+		return "total_deadline"
+	case errors.Is(err, ErrStreamIdleDeadline):
+		return "idle_deadline"
+	case strings.Contains(msg, "Client.Timeout"):
+		return "client_timeout"
+	case strings.Contains(msg, "(status "):
+		return "http_status"
+	case strings.Contains(msg, "API key not set"):
+		return "auth_config"
+	case strings.Contains(msg, "connection reset"), strings.Contains(msg, "broken pipe"),
+		strings.Contains(msg, "connection refused"), strings.Contains(msg, "no such host"),
+		strings.Contains(msg, "i/o timeout"), strings.Contains(msg, "TLS handshake"),
+		strings.Contains(msg, "EOF"), strings.Contains(msg, "stream error"):
+		return "transport"
+	case strings.Contains(msg, "context deadline exceeded"), strings.Contains(msg, "context canceled"):
+		return "context"
+	}
+	return "other"
+}
+
+// requestIDFrom returns the provider's request id header when present (the
+// attributable handle for a provider-side ticket); "" otherwise.
+func requestIDFrom(h http.Header) string {
+	for _, k := range []string{"X-Request-Id", "Request-Id", "X-Amzn-Requestid", "Cf-Ray"} {
+		if v := strings.TrimSpace(h.Get(k)); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func (client *Client) lastRequestIDString() string {
+	if v := client.lastRequestID.Load(); v != nil {
+		s, _ := v.(string)
+		return s
+	}
+	return ""
+}
+
+// resetCallTelemetry clears the per-call atomics so a FAILED call never
+// reports the previous call's ttfb/reasoning/status/request-id (observed
+// 2026-09-01 06:10:36 CT: an executor transport reset logged
+// reasoning_chars=7092 inherited from the planner stream that ended 06:09:33).
+func (client *Client) resetCallTelemetry() {
+	client.lastTTFBMs.Store(0)
+	client.lastReasoningChars.Store(0)
+	client.lastHTTPStatus.Store(0)
+	client.lastRequestID.Store("")
+}
+
+// LastErrClass / LastHTTPStatus / LastRequestID — read-only helpers for the
+// planner's failure line (class 37): the class of the last FAILED call ("" after
+// a success), and the status / provider request id of the last response.
+func LastErrClass(c AIClient) string {
+	bc, ok := c.(interface{ BaseClient() *Client })
+	if !ok {
+		return ""
+	}
+	if v := bc.BaseClient().lastErrClass.Load(); v != nil {
+		s, _ := v.(string)
+		return s
+	}
+	return ""
+}
+
+func LastHTTPStatus(c AIClient) int {
+	bc, ok := c.(interface{ BaseClient() *Client })
+	if !ok {
+		return 0
+	}
+	return int(bc.BaseClient().lastHTTPStatus.Load())
+}
+
+func LastRequestID(c AIClient) string {
+	bc, ok := c.(interface{ BaseClient() *Client })
+	if !ok {
+		return ""
+	}
+	return bc.BaseClient().lastRequestIDString()
+}
+
 // logAICall emits ONE structured line per AI call so the next timeout is
 // self-diagnosing instead of a forensic hunt (incident 2026-08-18: the only
 // evidence was a bare duration and a generic net/http error string).
 //
 //	ai_call model=<m> duration_ms=<d> finish_reason=<r> ok=<bool>
 //	  retries=<n> ttfb_ms=<t> reasoning_chars=<c>
-//	  + on failure: timeout_source=client|context|transport deadline_s=<n>
+//	  + on failure: timeout_source=planner_total|stream_idle|client|context|transport
+//	    deadline_s=<n> class=<token> http_status=<n> request_id=<id> (class 37)
 func (client *Client) logAICall(start time.Time, callErr error, retries int) {
 	if client.Log == nil {
 		return
@@ -216,8 +327,9 @@ func (client *Client) logAICall(start time.Time, callErr error, retries int) {
 		finish = v
 	}
 	if callErr == nil {
-		client.Log.Infof("ai_call model=%s duration_ms=%d finish_reason=%s ok=true retries=%d ttfb_ms=%d reasoning_chars=%d",
-			client.Model, durMs, finish, retries, client.lastTTFBMs.Load(), client.lastReasoningChars.Load())
+		client.lastErrClass.Store("")
+		client.Log.Infof("ai_call model=%s duration_ms=%d finish_reason=%s ok=true retries=%d ttfb_ms=%d reasoning_chars=%d http_status=%d request_id=%q",
+			client.Model, durMs, finish, retries, client.lastTTFBMs.Load(), client.lastReasoningChars.Load(), client.lastHTTPStatus.Load(), client.lastRequestIDString())
 		return
 	}
 	// Which deadline actually fired. net/http wraps them all in the same
@@ -225,17 +337,26 @@ func (client *Client) logAICall(start time.Time, callErr error, retries int) {
 	msg := callErr.Error()
 	source := "transport"
 	switch {
+	case errors.Is(callErr, ErrStreamTotalDeadline):
+		source = "planner_total" // class 37 — the planner's own whole-call ceiling
+	case errors.Is(callErr, ErrStreamIdleDeadline):
+		source = "stream_idle" // the idle watchdog on a silent stream
 	case strings.Contains(msg, "Client.Timeout"):
 		source = "client" // http.Client.Timeout — the whole-request ceiling
 	case strings.Contains(msg, "context deadline exceeded"), strings.Contains(msg, "context canceled"):
-		source = "context" // a caller-supplied ctx (stream idle watchdog, agent paths)
+		source = "context" // a caller-supplied ctx (agent paths)
 	}
 	deadline := int64(0)
 	if client.HTTPClient != nil {
 		deadline = int64(client.HTTPClient.Timeout / time.Second)
 	}
-	client.Log.Warnf("ai_call model=%s duration_ms=%d finish_reason=n/a ok=false retries=%d ttfb_ms=%d reasoning_chars=%d timeout_source=%s deadline_s=%d err=%q",
-		client.Model, durMs, retries, client.lastTTFBMs.Load(), client.lastReasoningChars.Load(), source, deadline, msg)
+	// Class 37 — ONE class token per failure so "the API keeps failing" can
+	// never again be the whole diagnosis; status + provider request id ride
+	// along when a response arrived at all.
+	class := classifyAIError(callErr)
+	client.lastErrClass.Store(class)
+	client.Log.Warnf("ai_call model=%s duration_ms=%d finish_reason=n/a ok=false retries=%d ttfb_ms=%d reasoning_chars=%d timeout_source=%s deadline_s=%d class=%s http_status=%d request_id=%q err=%q",
+		client.Model, durMs, retries, client.lastTTFBMs.Load(), client.lastReasoningChars.Load(), source, deadline, class, client.lastHTTPStatus.Load(), client.lastRequestIDString(), msg)
 }
 
 // CallWithMessages template method - fixed retry flow (cannot be overridden)
@@ -496,6 +617,8 @@ func (client *Client) Call(systemPrompt, userPrompt string) (string, error) {
 		client.Log.Debugf("[%s]   API Key: %s...%s", client.String(), client.APIKey[:4], client.APIKey[len(client.APIKey)-4:])
 	}
 
+	client.resetCallTelemetry() // class 37: a failed call must not inherit the previous call's numbers
+
 	// Step 1: Build request body (via hooks for dynamic dispatch)
 	requestBody := client.Hooks.BuildMCPRequestBody(systemPrompt, userPrompt)
 
@@ -521,6 +644,8 @@ func (client *Client) Call(systemPrompt, userPrompt string) (string, error) {
 		return "", fmt.Errorf("failed to send request: %w", err)
 	}
 	defer resp.Body.Close()
+	client.lastHTTPStatus.Store(int64(resp.StatusCode))
+	client.lastRequestID.Store(requestIDFrom(resp.Header))
 
 	// Step 6: Read response body (fixed logic) — stamp time-to-first-byte.
 	body, err := readWithTTFB(resp.Body, &client.lastTTFBMs)
@@ -948,10 +1073,25 @@ func (client *Client) CallWithRequestStream(req *Request, onChunk func(string)) 
 }
 
 // CallWithRequestStreamIdle is CallWithRequestStream with an explicit
-// idle-chunk deadline. The whole-request ceiling stays http.Client.Timeout
-// (600s) — a live-but-slow stream is never killed; a stalled one dies at `idle`
-// and the caller's retry (with the reject block / repair call) fires.
+// idle-chunk deadline and NO planner total deadline — the whole-request ceiling
+// stays http.Client.Timeout (legacy callers: agent paths, tests). The planner
+// uses CallWithRequestStreamDeadlines (class 37).
 func (client *Client) CallWithRequestStreamIdle(req *Request, onChunk func(string), idle time.Duration) (string, error) {
+	return client.CallWithRequestStreamDeadlines(req, onChunk, idle, 0)
+}
+
+// CallWithRequestStreamDeadlines (class 37, 2026-09-01) is the split-deadline
+// stream call with an EXPLICIT whole-call ceiling: `idle` kills a silent
+// stream, `total` kills a live-but-endless one. When total > 0 the request runs
+// on a shallow copy of the HTTP client with Timeout=0 (same Transport, same
+// pool) so http.Client.Timeout — the executor's 600s ceiling — no longer bounds
+// the body read: it killed 11 of 80 live max-reasoning planner streams at
+// exactly 600.0s between 2026-08-30 and 2026-09-01 while the speed-wave
+// comments claimed "a live-but-slow stream is never killed". total <= 0 keeps
+// the legacy behaviour (http.Client.Timeout applies). Every failure is
+// classified (idle_deadline / total_deadline / client_timeout / transport /
+// http_status) on the ai_call line via context.Cause + classifyAIError.
+func (client *Client) CallWithRequestStreamDeadlines(req *Request, onChunk func(string), idle, total time.Duration) (string, error) {
 	if client.APIKey == "" {
 		return "", fmt.Errorf("AI API key not set")
 	}
@@ -959,6 +1099,7 @@ func (client *Client) CallWithRequestStreamIdle(req *Request, onChunk func(strin
 		req.Model = client.Model
 	}
 	req.Stream = true
+	client.resetCallTelemetry()
 
 	requestBody := client.Hooks.BuildRequestBodyFromRequest(req)
 	jsonData, err := client.Hooks.MarshalRequestBody(requestBody)
@@ -967,17 +1108,36 @@ func (client *Client) CallWithRequestStreamIdle(req *Request, onChunk func(strin
 	}
 
 	url := client.Hooks.BuildUrl()
-	client.Log.Infof("📡 [MCP %s] Request URL (stream idle=%ds): %s", client.String(), int(idle.Seconds()), url)
-	httpReq, err := client.buildHTTPRequestWithContext(contextFromRequest(req), url, jsonData)
-	if err != nil {
-		return "", err
+	if total > 0 {
+		client.Log.Infof("📡 [MCP %s] Request URL (stream idle=%ds total=%ds): %s", client.String(), int(idle.Seconds()), int(total.Seconds()), url)
+	} else {
+		client.Log.Infof("📡 [MCP %s] Request URL (stream idle=%ds): %s", client.String(), int(idle.Seconds()), url)
 	}
 
 	if idle <= 0 {
 		idle = 180 * time.Second
 	}
-	ctx, cancel := context.WithCancel(contextFromRequest(req))
-	defer cancel()
+	parent := contextFromRequest(req)
+	hc := client.HTTPClient
+	if total > 0 {
+		var cancelTotal context.CancelFunc
+		parent, cancelTotal = context.WithTimeoutCause(parent, total, ErrStreamTotalDeadline)
+		defer cancelTotal()
+		if hc != nil {
+			// A shallow copy shares Transport/CheckRedirect/Jar; only the
+			// whole-request Timeout is lifted for THIS call. The shared client
+			// is never mutated — the executor keeps its ceiling.
+			cp := *hc
+			cp.Timeout = 0
+			hc = &cp
+		}
+	}
+	httpReq, err := client.buildHTTPRequestWithContext(parent, url, jsonData)
+	if err != nil {
+		return "", err
+	}
+	ctx, cancel := context.WithCancelCause(parent)
+	defer cancel(nil)
 	resetCh := make(chan struct{}, 1)
 	go func() {
 		t := time.NewTimer(idle)
@@ -987,7 +1147,7 @@ func (client *Client) CallWithRequestStreamIdle(req *Request, onChunk func(strin
 			case <-ctx.Done():
 				return
 			case <-t.C:
-				cancel() // idle timeout: kill the connection
+				cancel(ErrStreamIdleDeadline) // idle timeout: kill the connection
 				return
 			case <-resetCh:
 				// received a line — reset the idle timer
@@ -1004,11 +1164,13 @@ func (client *Client) CallWithRequestStreamIdle(req *Request, onChunk func(strin
 
 	httpReq = httpReq.WithContext(ctx)
 	reqStart := time.Now()
-	resp, err := client.HTTPClient.Do(httpReq)
+	resp, err := hc.Do(httpReq)
 	if err != nil {
-		return "", fmt.Errorf("streaming request failed: %w", err)
+		return "", wrapStreamDeadlineErr(ctx, fmt.Errorf("streaming request failed: %w", err), idle, total)
 	}
 	defer resp.Body.Close()
+	client.lastHTTPStatus.Store(int64(resp.StatusCode))
+	client.lastRequestID.Store(requestIDFrom(resp.Header))
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -1040,7 +1202,7 @@ func (client *Client) CallWithRequestStreamIdle(req *Request, onChunk func(strin
 		ReportStreamUsage(sr.Usage, client.Provider, client.Model)
 	}
 	if err != nil {
-		return "", err
+		return "", wrapStreamDeadlineErr(ctx, err, idle, total)
 	}
 	if sr == nil {
 		return "", fmt.Errorf("stream produced no result")
@@ -1048,10 +1210,39 @@ func (client *Client) CallWithRequestStreamIdle(req *Request, onChunk func(strin
 	return sr.Text, nil
 }
 
+// wrapStreamDeadlineErr names WHICH of the two split deadlines cancelled the
+// stream (context.Cause carries the sentinel; a parent total-deadline cause
+// propagates to the idle child). Every other error passes through untouched so
+// the transport/retry classification keeps working.
+func wrapStreamDeadlineErr(ctx context.Context, err error, idle, total time.Duration) error {
+	// Go ≥1.21 net/http surfaces context.Cause (our sentinel) as the read
+	// error, so ctx.Err() is appended explicitly: the legacy
+	// "context canceled" / "context deadline exceeded" greps keep working.
+	cause := context.Cause(ctx)
+	switch {
+	case errors.Is(cause, ErrStreamTotalDeadline):
+		return fmt.Errorf("%w (total %v, stream was live, %v): %v", ErrStreamTotalDeadline, total, ctx.Err(), err)
+	case errors.Is(cause, ErrStreamIdleDeadline):
+		return fmt.Errorf("%w (idle %v of silence, %v): %v", ErrStreamIdleDeadline, idle, ctx.Err(), err)
+	}
+	return err
+}
+
 // CallWithRequestStreamRetry wraps the streaming call in the same fixed retry
 // flow CallWithMessages uses (MaxRetries + exponential backoff + retryable
 // classification). Phase 4.4 — the transport-reset class must still retry.
 func (client *Client) CallWithRequestStreamRetry(req *Request, onChunk func(string), idle time.Duration) (string, error) {
+	return client.CallWithRequestStreamRetryDeadlines(req, onChunk, idle, 0)
+}
+
+// CallWithRequestStreamRetryDeadlines (class 37) is CallWithRequestStreamRetry
+// with the planner's whole-call ceiling (see CallWithRequestStreamDeadlines).
+// Deadline kills (idle / total / client_timeout) are NOT retried here — none of
+// them match the retryable transport tokens — so the planner loop, not the
+// client, owns that retry (3 attempts); transport resets still retry in place.
+// Worst case per planner attempt therefore stays 1 + (MaxRetries−1) calls on
+// resets only, never MaxRetries × total.
+func (client *Client) CallWithRequestStreamRetryDeadlines(req *Request, onChunk func(string), idle, total time.Duration) (string, error) {
 	if client.APIKey == "" {
 		return "", fmt.Errorf("AI API key not set")
 	}
@@ -1062,7 +1253,7 @@ func (client *Client) CallWithRequestStreamRetry(req *Request, onChunk func(stri
 			client.Log.Warnf("⚠️  AI API stream failed, retrying (%d/%d)...", attempt, maxRetries)
 		}
 		start := time.Now()
-		result, err := client.CallWithRequestStreamIdle(req, onChunk, idle)
+		result, err := client.CallWithRequestStreamDeadlines(req, onChunk, idle, total)
 		client.logAICall(start, err, attempt)
 		if err == nil {
 			if attempt > 1 {

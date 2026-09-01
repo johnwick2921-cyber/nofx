@@ -156,7 +156,7 @@ const dayPlan: KnobSpec[] = [
   {
     label: 'Planner stream idle',
     where: 'Environment (AI_PLAN_STREAM_IDLE_SECS) — not a Strategy knob',
-    what: 'The planner reads the model over SSE. If no chunk arrives for this long, the connection is killed and the retry fires — a stalled read dies in ~30s instead of burning the full 600s ceiling. A live-but-slow stream is never killed (the 600s total ceiling still applies).',
+    what: 'The planner reads the model over SSE. If no chunk arrives for this long, the connection is killed and the next planner attempt fires — a stalled read dies in ~30s. A live-but-slow stream is bounded only by the planner stream total deadline below (class 37) — NOT by the 600s HTTP ceiling, which killed 11 of 80 live max-reasoning reads 2026-08-30 → 09-01 while this text claimed it never would.',
     trader:
       'Split deadlines from the latency autopsy: queue/think/stall vs slow generation.',
     consumer:
@@ -166,6 +166,23 @@ const dayPlan: KnobSpec[] = [
     recommended:
       '⭐ 30 — reasoning streams emit chunks, so silence means stall.',
     whenToTouch: 'Raise it if the model routinely thinks >30s without a token.',
+    perSession: 'No — process-wide.',
+  },
+  {
+    label: 'Planner stream total deadline',
+    where: 'Environment (AI_PLAN_TOTAL_DEADLINE_SECS) — not a Strategy knob',
+    what: "The whole-call ceiling for ONE planner attempt on the SSE path. Before class 37 the planner rode the executor's 600s HTTP ceiling (AI_HTTP_TIMEOUT_SECONDS): 11 of 80 max-reasoning full reads were killed at exactly 600.0s while reasoning was still flowing (71k–140k reasoning chars received, normal ttfb). Now a live stream dies only here; the 600s ceiling still governs every non-stream path (executor loop, weekly read, Ask-Planner). Every failed ai_call line now carries class=total_deadline|idle_deadline|client_timeout|transport|http_status plus http_status and the provider request id.",
+    trader:
+      'Evidence (2026-08-30 17:00 → 09-01 17:30 CT): successful max full reads n=69 p50 448s · p90 552s · p95 581s · max 599.5s (right-censored at 600); the 65536-token completion cap ≈ 1000s at the median 65 tok/s. Worst-case read wall = 3 attempts × this value.',
+    consumer:
+      'kernel/planner_speed.go (PlannerStreamTotalSeconds) · mcp/client.go (CallWithRequestStreamDeadlines) · trader/auto_trader_planner.go (planner call) · boot lines 🚀 planner speed wave / 🛰 planner client',
+    range:
+      '61 – 3600 seconds (resolved value is always > the idle deadline: total ≤ idle → idle + 60)',
+    systemDefault: '1200',
+    recommended:
+      '⭐ 1200 — 2× the observed max success; covers the completion cap at median throughput. Lower only together with a reasoning-mode ruling (fast reads finish in 30–400s).',
+    whenToTouch:
+      'If ai_call lines show class=total_deadline with reasoning_chars still growing → the model needs more time (raise, or rule on reasoning effort). If reads must land before the open, lower attempts or reasoning — not this knob alone.',
     perSession: 'No — process-wide.',
   },
   {

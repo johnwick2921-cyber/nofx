@@ -306,6 +306,43 @@ in CLAUDE.md).
     reads `replans_left` from the API. **Law:** counters record events; they
     do not infer them.
 
+37. **Whole-request ceiling on a LIVE stream (split deadlines that did not
+    split).** (36 is held by the concurrent 2026-09-01 dispatch.) Root cause:
+    the planner-speed wave (2026-08-31) moved the planner onto SSE with a 30s
+    idle watchdog and DOCUMENTED "the whole-request ceiling stays
+    http.Client.Timeout (600s) — a live-but-slow stream is never killed"
+    (`kernel/planner_speed.go`, `mcp/client.go`, guide settings.ts). Both
+    halves cannot be true: `http.Client.Timeout` bounds the body read, so every
+    max-reasoning attempt still streaming at 600.0s died with
+    `stream interrupted: context deadline exceeded (Client.Timeout …)`.
+    2026-08-30 17:00 → 09-01 17:30 CT: 11 of 80 max full/re-author attempts
+    (13.8%) killed at 600000-600001 ms with 71k-140k reasoning chars already
+    received (ttfb 474-578 ms — the provider had answered); 0 of 22 repair and
+    0 of 42 fast-reasoning attempts. Successful max reads p50 448s · p95 581s ·
+    max 599.5s (right-censored). 2 of 9 fail-closed sessions had a kill consume
+    an attempt (08-30 ASIA v3, 08-31 NY v2); 3 wake re-plans landed 15-30 min
+    late. Compounded: the kill's transport text was fed to attempt 2 as a
+    "validator reason" (planner_rejected_prompts 71-72), the `ai_call` line
+    carried no failure class, and a failed call inherited the previous call's
+    ttfb/reasoning numbers — so the owner saw "the API keeps failing".
+    **Probe:** for every deadline claim in a comment/guide, find the
+    transport-level timeout that still applies (`http.Client.Timeout`,
+    `ResponseHeaderTimeout`, dialer) and fixture the live-but-slow case
+    ACROSS that timeout (the 4.4 fixture used `Timeout: 10s` against a 0.5s
+    stream — it never crossed the ceiling); grep `ai_call … ok=false` and
+    demand a `class=` token on every line. **Fix:** planner stream rides
+    `CallWithRequestStreamRetryDeadlines(idle, total)` — total =
+    `AI_PLAN_TOTAL_DEADLINE_SECS` (default 1200, from the distribution) on a
+    per-call http.Client copy with Timeout=0; the 600s ceiling stays on
+    non-stream paths; `classifyAIError` + `context.Cause` stamp
+    `class=total_deadline|idle_deadline|client_timeout|transport|http_status`,
+    `http_status=`, `request_id=` on every ai_call failure; per-call telemetry
+    is reset at call start; the planner logs `provider_row=` on failure; boot
+    lines print idle/total/ceiling/retries/row. **Law:** a deadline a design
+    says "never fires" is asserted by a fixture that crosses it, and every
+    failed provider call carries a failure class — "the API keeps failing" is
+    not a log line.
+
 ---
 
 ## PART 2 — PRE-AUDIT (standing hard rules)
