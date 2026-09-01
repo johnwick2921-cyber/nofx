@@ -184,6 +184,183 @@ read as "the API keeps failing".
    adds the crossing fixture.
 
 
+## Phase 2 — FIX (class 37), shipped to branch, PARKED before cutover
+
+Gate check: B7 = CONFIRMED; the fix is a split of one deadline plus observability (14 files, +639/−30,
+no prompt/validator/schedule change). Lock: `~/nofx-main.lock` acquired (owner hoang/claude, pid 1906840
+alive, expiry 21:35 CT, task planner-api-failure-0901); worktree `~/nofx-planner-api` on branch
+`fix/planner-stream-total-deadline` (locked), base `origin/dev` = `795f67f7`. **The main tree was never
+edited** (porcelain clean throughout; only the ignored `nofx-bin.next` was staged).
+
+### Commits on the branch
+
+| Commit | What |
+|---|---|
+| `638af5ed` | this report, Phase 1 |
+| `75130d59` | the fix + tests + guide + checklist (below) |
+| `225bc367` | deploy marker — `deploy/RELEASE` and `GUIDE_BUILT_REV` = `75130d593c2ae2a98abe4500c62f859111475bef` |
+
+### The change, file:line (at `75130d59`)
+
+| File | Lines | Change |
+|---|---|---|
+| `kernel/planner_speed.go` | 22-59 | `PlannerStreamTotalSeconds()` — `AI_PLAN_TOTAL_DEADLINE_SECS`, default **1200**, junk → default, `total <= idle → idle + 60`; the false "never killed" comment replaced |
+| `mcp/client.go` | 211-306 | sentinels `ErrStreamIdleDeadline` / `ErrStreamTotalDeadline`; `classifyAIError` (total_deadline · idle_deadline · client_timeout · http_status · auth_config · transport · context · other); `requestIDFrom` (X-Request-Id / Request-Id / X-Amzn-Requestid / Cf-Ray); `resetCallTelemetry`; accessors `LastErrClass` / `LastHTTPStatus` / `LastRequestID` |
+| `mcp/client.go` | 322-357 | `logAICall`: `timeout_source` gains `planner_total` / `stream_idle`; failure line gains `class= http_status= request_id=`; success line gains `http_status= request_id=` |
+| `mcp/client.go` | 509, 531-532 | non-stream `Call`: telemetry reset at start; status + request id captured |
+| `mcp/client.go` | 1071-1223 | `CallWithRequestStreamIdle` → thin wrapper (total 0 = legacy ceiling); **`CallWithRequestStreamDeadlines(req, onChunk, idle, total)`**: `context.WithTimeoutCause(total)` on a shallow copy of `HTTPClient` with `Timeout=0` (line 1126; shared Transport, shared client untouched), idle watchdog via `WithCancelCause`; `wrapStreamDeadlineErr` names the killer from `context.Cause` and appends `ctx.Err()` so the legacy "context canceled" grep survives |
+| `mcp/client.go` | 1226-1268 | `CallWithRequestStreamRetry` → wrapper; **`CallWithRequestStreamRetryDeadlines`** (same retry flow; deadline kills are not retryable by construction) |
+| `trader/auto_trader_planner.go` | 972-976 | planner calls `CallWithRequestStreamRetryDeadlines(req, nil, plannerStreamIdle(), plannerStreamTotal())` |
+| `trader/auto_trader_planner.go` | 984-992 | on error: `🛰 planner call FAILED class=… provider_row=… model=… http_status=… request_id=… elapsed=… idle=… total=…` (row id, never the key); `🧠 planner call (…) completed in` line gains `total=%ds` |
+| `trader/auto_trader_planner.go` | 1283-1302 | `plannerStreamTotal()`, `plannerClientBootLine()` (pure), `logPlannerClientBootLine()` |
+| `trader/auto_trader_dayplan.go` | 74 | per-trader boot: `🛰 planner client: provider_row=<row> stream_idle=30s stream_total=1200s (AI_PLAN_TOTAL_DEADLINE_SECS) http_ceiling=600s (non-stream paths only) retries=2 backoff=2s cap=65536` |
+| `trader/auto_trader.go` · `manager/trader_manager.go` | 235 · 602 | `AutoTraderConfig.AIModelID` (the ai_models row id) filled from `aiModelCfg.ID` |
+| `kernel/levels_volume_boot.go` | 23-24 | `🚀 planner speed wave … stream_idle=%ds stream_total=%ds (class 37: planner ceiling split from the HTTP ceiling)` |
+| `main.go` | 136-137 | `🧠 AI params in force: … timeout=600s (HTTP ceiling; non-stream paths) planner_stream_idle=30s planner_stream_total=1200s retries=2 …` |
+| `web/src/guide/content/settings.ts` | 157-190 | idle entry's false sentence corrected; new knob **Planner stream total deadline** (what / evidence / consumer / range / default 1200 / when to touch) |
+| `web/src/guide/content/status.ts` | 19-20 | boot ledger lines updated (`stream_total=1200s`, `🛰 planner client`) |
+| `docs/superpowers/AUDIT-CHECKLIST.md` | 309-345 | **class 37** appended (36 is held by the concurrent dispatch) |
+
+Behaviour unchanged, on purpose: `http.Client.Timeout` = 600 s still bounds every non-stream call
+(executor loop, weekly read, Ask-Planner, realign) and every legacy `CallWithRequestStream` caller;
+`AI_MAX_RETRIES=2`, backoff 2 s, `MaxRetryTimes` unchanged; reasoning mode / cap unchanged (owner
+ruling pending); planner prompts, validators and read schedule untouched (Section F).
+
+### Why 1200 s (C1 — from the distribution, not a blind raise)
+
+- Successful max full/re-author attempts (n = 69): p50 447.8 s · p90 552.0 s · p95 581.1 s · max 599.5 s —
+  right-censored at 600, so the true p95 is above 581 s.
+- Killed attempts carried 71k-140k reasoning chars at 600 s; the largest *successful* read had 135,262
+  chars in 484 s. Completion throughput on successes: p10 48.9 · p50 65.3 · p90 75.5 tok/s → the
+  65,536-token planner cap is ≈ 1,000 s at the median and ≈ 1,340 s at p10.
+- 1200 = 2× the observed max success; covers the cap at median throughput; the two provider-slow kills
+  (K10/K11 at ~120 chars/s, 73k chars) would have needed ≈ 800-1,000 s. Anything above 1200 trades
+  plan latency for completion odds — that is the owner's ruling (worst-case read wall = 3 × 1200 s = 60 min
+  vs 30 min today). The knob is env-only: `AI_PLAN_TOTAL_DEADLINE_SECS=600` restores today's value with the
+  new class logging (a "soft rollback" without a binary swap).
+- The 30 s idle deadline is kept unchanged — candidate (b) was RULED OUT (0 idle kills; ttfb ≤ 2.2 s; the
+  idle timer also covers the dial/queue phase before the first byte, as the autopsy intended).
+
+### Tests (A8/C6 — written to fail on the old code, all green) [A]
+
+`go test ./mcp ./kernel ./trader -count=1` → ok. Full suite `go test ./... -count=1`: first run (pre-fix
+mcp) 26 ok / 1 FAIL (the 3 mcp tests fixed below); re-run on `75130d59`: see Closeout.
+
+| Test | Pins |
+|---|---|
+| `mcp.TestClass37LiveStreamBeyondHTTPTimeoutSurvivesUnderTotal` | a 720 ms live stream vs `http.Client.Timeout=300ms` completes under total=5 s; the shared client's Timeout is not mutated; `request_id`/status captured; success line carries `request_id` — **fails on the pre-fix code** (Client.Timeout killed it) |
+| `mcp.TestClass37LegacyIdleCallKeepsHTTPTimeoutCeiling` | total=0 path still dies at Client.Timeout, error text carries `Client.Timeout`, class `client_timeout`, `ai_call … class=client_timeout`, **not retryable** (the observed 11-kills/0-retries behaviour, pinned) |
+| `mcp.TestClass37TotalDeadlineAbortsWithClass` | endless live stream dies at total=400 ms with `ErrStreamTotalDeadline`, `class=total_deadline`, no client-level retry, `LastErrClass` reads it |
+| `mcp.TestClass37IdleDeadlineClass` | silent stream dies with `ErrStreamIdleDeadline`, legacy `context canceled` text preserved, `class=idle_deadline` |
+| `mcp.TestClass37FailureResetsStaleTelemetry` | after a successful call, a hijack-closed transport failure reports chars=0 ttfb=0 status=0 id="" and class `transport` (the T3 defect) |
+| `mcp.TestClass37ClassifyAIErrorTable` | the verbatim 08-30..09-01 journal strings → classes (both Client.Timeout shapes, both TCP-reset shapes, 429/502, no-such-host, key-not-set, bare cancel, sentinels) |
+| `mcp.TestStreamIdleSilenceAborts` (existing) | still green: Go ≥1.21 returns `context.Cause` as the read error, so `wrapStreamDeadlineErr` appends `ctx.Err()` explicitly |
+| `kernel.TestClass37PlannerStreamTotalDefaultAndOverride` / `…AlwaysExceedsIdle` | default 1200, idle default 30 unchanged, override 900, junk → 1200, total ≤ idle → idle + 60 |
+| `trader.TestClass37PlannerClientBootLineWording` / `…StreamTotalResolvedInTrader` | boot-line tokens (row, idle, total, ceiling, retries, cap; never `sk-`), resolver reaches the trader |
+
+Fixture note: the first version of the stale-telemetry test dialed `127.0.0.1:1` expecting an instant
+refusal; on WSL2 the connect hung and the 1 s idle watchdog fired first (class `idle_deadline`). Replaced
+with a hijack-and-close server — deterministic, and a reminder that the idle timer also bounds the dial.
+
+### Build, stage, rollback (A4/A13) [A]
+
+```
+git clone --no-local ~/nofx-planner-api <scratch>/clone-75130d59 && git checkout 75130d593c2ae2a98abe4500c62f859111475bef
+go build -o nofx-bin .
+go version -m nofx-bin:
+	build	vcs.revision=75130d593c2ae2a98abe4500c62f859111475bef
+	build	vcs.time=2026-09-01T22:53:33Z
+	build	vcs.modified=false
+sha256 8473a5f255c50980c491ddfa5159d278bda16183a3e62661404b1a4cb745e119  (70,899,768 bytes)
+cp → /home/hoang/nofx/nofx-bin.next        # staged 2026-09-01 ~18:00 CT; no nofx-bin.next existed (class 35's was consumed at 17:23:54)
+```
+Frontend: `npm run build` in the worktree → `✓ built in 4.90s` (guide content compiles). The served
+`web/dist` in `~/nofx` is untracked and must be rebuilt at cutover (`cd ~/nofx/web && npm run build`) or the
+guide keeps the old text while the drift banner shows.
+
+Running binary (unchanged by this dispatch): `/home/hoang/nofx/nofx-bin` = `ec6632f9` (class 35, PID
+1908258, boot 17:24:00 CT). Between `ec6632f9` and `75130d59`: `4d88b46e`, `795f67f7` (docs only),
+`638af5ed` (docs), `75130d59` (this fix) — one non-docs commit.
+
+**Cutover (owner GO only; flat window outside 16:45-17:10 CT; no planner read in flight; no live arms):**
+```
+# A5 flat-gate quadruple + A6 in-flight, quoted fresh:
+sqlite3 -readonly ~/nofx/data/data.db "SELECT COUNT(*) FROM trader_positions WHERE status='OPEN'"      # expect 0
+curl -s -H "Authorization: Bearer $JWT" 'http://127.0.0.1:8080/api/positions?trader_id=<id>&account=Sim101'   # expect []
+journalctl -u nofx --since -5min | grep 'positions snapshot'                                                 # expect count=0
+curl -s -H "Authorization: Bearer $JWT" 'http://127.0.0.1:8080/api/open-orders?trader_id=<id>&account=Sim101&symbol=MNQ'   # expect []
+curl -s -H "Authorization: Bearer $JWT" 'http://127.0.0.1:8080/api/plan/today?trader_id=<id>&symbol=MNQ' | grep -o 'replan_in_flight[^,]*'   # expect false
+journalctl -u nofx --since -20min | grep -E 'planner model:|planner call \('                                 # last 'planner model' must be followed by its 'planner call' line (no read in flight)
+# swap — one boot, one marker (RELEASE already = 75130d59 on the branch; merge first so ~/nofx/deploy/RELEASE matches):
+cd ~/nofx && git merge --ff-only fix/planner-stream-total-deadline   # or merge the PR, then git pull --ff-only
+cd ~/nofx/web && npm run build
+cd ~/nofx && cp nofx-bin nofx-bin.prev.boot && mv nofx-bin nofx-bin.old.ec6632f9 && mv nofx-bin.next nofx-bin && kill -9 $(systemctl show -p MainPID --value nofx)
+# within 90 s expect:
+#   🔐 BOOT INTEGRITY OK — rev 75130d59 · expected 75130d59 · goldens PASS
+#   🧠 AI params in force: … timeout=600s (HTTP ceiling; non-stream paths) planner_stream_idle=30s planner_stream_total=1200s …
+#   🚀 planner speed wave (2026-08-31): retry=repair stream=on stream_idle=30s stream_total=1200s (class 37 …)
+#   🛰 planner client: provider_row=8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek stream_idle=30s stream_total=1200s …
+```
+**Rollback (exact):**
+```
+cd ~/nofx && mv nofx-bin nofx-bin.bad.75130d59 && cp nofx-bin.prev.boot nofx-bin && printf 'ec6632f9de41060b52398f41f9ffbbf840814c40' > deploy/RELEASE && kill -9 $(systemctl show -p MainPID --value nofx) && git checkout -- deploy/RELEASE web/src/guide/types.ts
+# soft rollback of the VALUE only (keeps the new class logging): echo 'AI_PLAN_TOTAL_DEADLINE_SECS=600' >> ~/nofx/.env && kill -9 $(systemctl show -p MainPID --value nofx)
+```
+
+### Proof (D) — the true proof has NOT yet occurred
+
+The proof is the next max-reasoning planner read completing **past 600 s** under the new binary, or a
+`class=total_deadline` line replacing today's `Client.Timeout` text. The binary is staged, not running;
+no cutover was performed (A3 — owner GO required; the 16:45-17:10 window has passed but the ASIA read
+chain is live). Until then the only proof is fixture-level: `TestClass37LiveStreamBeyondHTTPTimeoutSurvivesUnderTotal`
+crosses a real `http.Client.Timeout` on a real TCP stream and passes only on the new code.
+
+### What the owner will STILL see wrong (A15)
+
+- **Until cutover:** the running `ec6632f9` still kills every max-reasoning attempt that needs > 600 s
+  (`stream interrupted: context deadline exceeded (Client.Timeout …)`, ~14 % of full reads), its `ai_call`
+  failure lines carry no `class=`, a failed executor call can still print the previous call's
+  `reasoning_chars`, and the guide drift banner shows (`GUIDE_BUILT_REV` = `75130d59` ≠ running rev).
+- **After cutover:** a slow max read may legitimately run up to 20 min per attempt (60 min per 3-attempt
+  read) before the plan lands — plans on the slow tail arrive later than today's 10-min kill, by design;
+  lower `AI_PLAN_TOTAL_DEADLINE_SECS` or rule on reasoning effort if open−30 timing matters more.
+- **Not fixed (Section F):** a deadline/transport failure is still fed to attempt 2 as a "validator
+  reason" (`plannerRejectBlock`) and stored in `planner_rejected_prompts` (rows 71-72 today) — the
+  offline A/B set is polluted by non-validator rows. Owner ruling requested: skip the reject block and
+  tag the stored row for `class ∈ {total_deadline, idle_deadline, client_timeout, transport}`.
+- **Not fixed:** `IsRetryableError` still lists the dead token "timeout" (never matches a Go
+  `Client.Timeout` error) — left alone on purpose and pinned by `TestClass37LegacyIdleCallKeepsHTTPTimeoutCeiling`.
+- The per-call telemetry atomics are shared by the executor and planner goroutines (pre-existing); a
+  reset by one during the other's *final store→log* microsecond window could still cross — accepted.
+- **Owner-side, not this dispatch:** whether the unused "DeepSeek 2" row holds a stale key (A25 — cannot
+  be checked without decrypting); delete or re-key it in Settings.
+
+## Appendix B — queries and commands behind every figure (A21)
+
+```
+# failure lines (14) and their neighbours
+journalctl -u nofx --since "2026-08-29 00:00" --no-pager -o short-iso | grep -E "ai_call |planner call \(|planner attempt|AI API (stream|call) failed|📊 AI call complete|Request URL \(stream|🧩 planner|📐 planner|🗓️|prompt render"
+# counts by model/outcome and by URL
+journalctl -u nofx --since "2026-08-29 00:00" --no-pager | grep -o "ai_call model=[^ ]* .*ok=[a-z]*" | sed -E 's/duration_ms=[0-9]+ //; s/finish_reason=[^ ]+ //' | awk '{print $1,$2,$NF}' | sort | uniq -c
+journalctl -u nofx --since "2026-08-29 00:00" --no-pager | grep -o "Request URL[^:]*: https://[^ ]*" | sort | uniq -c
+# non-200 / auth / rate-limit / DNS / TLS / idle sweep (0 hits)
+journalctl -u nofx --since "2026-08-29 00:00" --no-pager | grep -E "MCP|ai_call|planner" | grep -iE "status [45][0-9][0-9]|HTTP [45][0-9][0-9]|rate.?limit|429|context canceled|idle timeout|no such host|tls:|handshake|401|403|unauthorized|invalid api key"
+# boots / revs
+journalctl -u nofx --since "2026-08-29 00:00" --no-pager -o short-iso | grep -E "BOOT INTEGRITY|AI params in force|Request URL \(stream"
+# DB (read-only)
+sqlite3 -readonly data/data.db "SELECT id,user_id,name,provider,enabled,custom_api_url,custom_model_name,thinking_mode,reasoning_effort,length(api_key),created_at,updated_at FROM ai_models"
+sqlite3 -readonly data/data.db "SELECT id,name,ai_model_id,exchange_id,strategy_id,is_running FROM traders"
+sqlite3 -readonly data/data.db "SELECT id, json_extract(config,'$.day_plan.planner_model') FROM strategies"
+sqlite3 -readonly data/data.db "SELECT COUNT(*) FROM traders WHERE ai_model_id LIKE '%0751c0b6%'"
+sqlite3 -readonly data/data.db "SELECT (a.api_key=b.api_key),(a.custom_api_url=b.custom_api_url),(a.custom_model_name=b.custom_model_name),(a.thinking_mode=b.thinking_mode),(a.reasoning_effort=b.reasoning_effort) FROM ai_models a, ai_models b WHERE a.id='8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek' AND b.id='396db319-d3fe-4d63-9b97-516ff0008f53_deepseek_0751c0b6'"   # → 0|1|1|1|1
+sqlite3 -readonly data/data.db "SELECT id,trader_id,trade_date,session,attempt,substr(reject_reason,1,140),created_at FROM planner_rejected_prompts WHERE created_at >= datetime('now','-72 hours') ORDER BY id"   # ids 58-77
+sqlite3 -readonly data/data.db "SELECT version,trade_date,session,trigger_reason,lifecycle,datetime(created_at,'-5 hours') FROM plans WHERE created_at >= datetime('now','-72 hours') ORDER BY created_at"
+# config in force
+grep -nE "^(AI_|RETRY_MODE|DEEPSEEK_|FAST_MARKET)" .env      # keys redacted in the report
+# per-attempt table + stats
+python3 scratch/parse_attempts2.py journal_wide_72h.txt      # Appendix A; awk over it for the n=80/69/22/42 splits and p50/p90/p95
+```
+
 ## Appendix A — every planner attempt in the window (144 rows)
 
 Generated from the journal by `scratch/parse_attempts2.py` (joins the `🧠 planner call` line to the preceding `ai_call`, `📊`, `🧩`/`📝` lines and the following `📐` line; the backward scan stops at the previous planner-call line). `stream` S = SSE path (post 08-31 09:39), N = non-stream. `attempt` `1?` = attempt 1 (no `🧩` line exists for attempt 1). `est_ptok` = our T2 estimate; `prov_ptok`/`ctok` = provider usage (0 on a kill — no usage frame arrives). `rchars` = reasoning chars received. `src` = `timeout_source`. Outcomes are the next `📐` line; `accepted?` = no reject line followed (the plan was written).
