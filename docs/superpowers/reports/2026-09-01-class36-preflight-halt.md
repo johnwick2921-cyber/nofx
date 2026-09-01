@@ -10,7 +10,7 @@ Evidence tiers: **[A]** directly verified · **[B]** inferred from strong eviden
 | Code | **MERGED to dev @ `17efeea9`** (fast-forward from `795f67f7`, pushed) |
 | Build | clean clone `--no-local` at `17efeea9`, `vcs.modified=false`, built 2026-09-01T22:52:57Z, sha256 `d2f724a92ce3db45…`, 70,859,424 bytes — **STAGED as `~/nofx/nofx-bin.next` at 17:59:30 CT** (main tree fast-forwarded to dev `b2c2ff92`, porcelain empty) |
 | Marker | `7089d271` — `deploy/RELEASE` + `GUIDE_BUILT_REV` = `17efeea9…` (one marker, park record in its message) |
-| Cutover | **NOT DONE — PARKED, staged-and-green.** Running binary is `ec6632f9` (class 35). Awaiting the owner's explicit GO (A3); the lock freed at 17:59:15 CT and was re-acquired for staging, then released while parked |
+| Cutover | **DONE 18:01:06 CT on owner GO** — `🔐 BOOT INTEGRITY OK — rev 17efeea9 · expected 17efeea9 · goldens PASS` 18:01:11, PID 1941026, new `🗓 preflight:` boot line present (see CUTOVER section); rollback `nofx-bin.prev.boot` kept |
 | Lock (A2) | `~/nofx-main.lock` is held by `pid=1906840` (`planner-api-failure-0901`, expiry 21:35 CT) — `kill -0` → ALIVE at 17:41, 17:49 and 17:53 CT. **Not cleared.** All work ran in the worktree; the main tree was never touched (porcelain empty, quoted 17:41 CT) |
 
 ---
@@ -139,3 +139,23 @@ Adjacent suites still green: `TestClass32*` (4), `TestP0BAsiaRead*` (2), `TestPl
 ## Closeout
 
 Commits on dev: `17efeea9` (fix + tests + guide + checklist) · `7089d271` marker (RELEASE + GUIDE_BUILT_REV = 17efeea9) · this report. Worktree removed and repo memory updated at closeout; the main-tree lock was never mine to release (held live by `1906840`) — the cutover step re-acquires it after that dispatch releases.
+
+---
+
+## CUTOVER — DONE (owner GO, 2026-09-01) [A]
+
+- **GO received 18:00 CT.** Lock re-acquired (pid 1860416, no holder present). Gates at 18:00:23 CT: window OK (outside 16:45–17:10); DB OPEN 0, armed 0, API positions `[]`, open-orders `[]`, NT8 `positions snapshot account=Sim101 count=0` — **but `replan_in_flight: true`**: a level_event wake re-read on the ASIA chain was on `planner attempt 3/3` since 17:53:33. **Held per A6.**
+- **Read landed 18:00:41 CT:** `📐 planner attempt 3/3 parse/schema rejected: arm legs on breakdown_continue …` → `🚨 PLANNER FAIL-CLOSED 2026-09-01 ASIA` → `🗓️ PLAN written 2026-09-01 ASIA v2 (… lifecycle no_trade)`; `replan_in_flight` → false. No claim after it. Gates re-quoted 18:00:53 CT: DB OPEN 0, armed 0, positions `[]`, open-orders `[]`, NT8 `count=0` (18:00:52), ASIA `armed: {}`.
+- **Swap 18:01:06 CT:** `cp nofx-bin nofx-bin.prev.boot` · `mv nofx-bin nofx-bin.old.ec6632f9` · `mv nofx-bin.next nofx-bin` (rev check `17efeea9` first) · `kill -9 1908258`.
+- **Boot checklist (F5), 5 s after the kill, 18:01:11 CT:**
+  `🔐 BOOT INTEGRITY OK — rev 17efeea9fc59 · built 2026-09-01T22:52:57Z · expected 17efeea9fc59 · goldens PASS`
+  `🗓 session reads (owner ruling 2026-08-31, open−30): ASIA 16:30 · LONDON 01:30 · NY 08:00 CT — windows/flats unchanged; Sunday weekly 16:30 → ASIA follows`
+  `📜 scenario schema: 9 conditions [acceptance, breakdown_continue, breakout_retest, breakup_continue, fvg_entry, hold, reclaim, reject, sweep_reclaim]`
+  `🧪 validator hints: 6 sites — every condition token legal + live (class 34 guard)`
+  `🔐 confirm rules: 5 [1m_mss, 1x5m_close, 2x5m_close, time_hold, touch]`
+  `🧮 replan budget: recorded-counter (class 35) — spends: death_replan, owner_reread · free: …`
+  **`🗓 preflight: scheduled reads bypass freshness in halt/weekend (class 36); executor halt-block unchanged (cmeSessionClosedSkip / IsCMEOpen)`** ← NEW
+  `🎛 entry law: bd_min_closes=1 bd_min_disp_atr=1.00 mss_min_disp_atr=0.50 …` · `📐 NT8 instrument_info MNQ (MNQ 09-26): point_value=2 tick=0.25 — matches table ✓`
+  Exactly ONE PID: `1941026`. `go version -m nofx-bin` → `vcs.revision=17efeea9fc5909473a40e60418428b521a2f1574`. Feed re-warmed: `received frame type=bars_historical` ×2 at 18:01:30; newest MNQ 1m bar `2026-09-01 18:00:00 CT`. `[ERRO]`/panic lines since boot: **0**. Positions after boot: `[]`. ASIA via API on the new binary: v2 no_trade, `replans_left 4/4` (class 35 intact), `replan_in_flight false`.
+- **Rollback (still valid):** `mv nofx-bin nofx-bin.bad.17efeea9 && cp nofx-bin.prev.boot nofx-bin && printf 'ec6632f9de41060b52398f41f9ffbbf840814c40' > deploy/RELEASE && kill -9 1941026`.
+- **Not yet proven live (A20/F7):** no scheduled read has run inside a halt on this binary yet. The proving events are **ASIA 16:30 CT 2026-09-02** (expect `🗓 session read fired during halt (ASIA)` + `🗓 preflight bypass (class 36) …` + `PLAN written … ASIA v1` before 17:00) and the **Sunday 2026-09-06 16:30 CT weekly** (expect `📅 WEEKLY READ starting` from the wall-clock path, then the ASIA read). Follow-up owed at ~16:35 CT 2026-09-02.
