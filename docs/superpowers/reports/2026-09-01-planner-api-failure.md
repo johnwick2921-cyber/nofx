@@ -2,8 +2,8 @@
 
 **Dispatch:** PLANNER API FAILURE — ROOT CAUSE INVESTIGATION + FIX (owner hoang, 2026-09-01).
 **Phase 1 verdict:** CONFIRMED. **Phase 2:** shipped on branch `fix/planner-stream-total-deadline`
-(worktree `~/nofx-planner-api`), PARKED — no binary staged into `~/nofx`, no restart; cutover
-needs the owner's GO (A3). Section "Phase 2" below carries file:lines, tests, build, rollback.
+(worktree `~/nofx-planner-api`), merged with dev (class 36) at `e42a0b43`, PARKED — combined build parked in
+the worktree, nothing staged in `~/nofx`, no restart; cutover needs the owner's GO (A3) — see CLOSEOUT ADDENDUM. Section "Phase 2" below carries file:lines, tests, build, rollback.
 All times CT (R8). Evidence tiers: **[A]** directly verified · **[B]** inferred · **[C]** speculation.
 Evidence classes: [RUNTIME] journal/log lines · [DB] `data/data.db` read-only queries ·
 [CODE] file:line · [CONFIG] `.env` / boot line. Window: `journalctl -u nofx --since 2026-08-29 00:00`
@@ -360,6 +360,60 @@ grep -nE "^(AI_|RETRY_MODE|DEEPSEEK_|FAST_MARKET)" .env      # keys redacted in 
 # per-attempt table + stats
 python3 scratch/parse_attempts2.py journal_wide_72h.txt      # Appendix A; awk over it for the n=80/69/22/42 splits and p50/p90/p95
 ```
+
+## CLOSEOUT ADDENDUM (18:0x CT) — supersedes the stage/cutover commands in §Phase 2
+
+**Owner questions answered (mid-dispatch, ~17:58 CT).** (1) The main-tree lock was taken 17:35 CT when I
+moved into Phase 2 on the dispatch's evidence gate (B7 CONFIRMED + small fix), **not on owner approval** —
+released 17:59:06 CT; re-acquired for ~1 s at 18:00:19 CT only to check/unstage my own binary (see below),
+released again. Phase 1 itself ran lock-free and read-only. Nothing in `~/nofx` was edited by this dispatch
+at any point (porcelain clean before/after; the only file I ever created there was the ignored
+`nofx-bin.next`, since replaced by class 36's). (2) Phase-1 report raw URL, pinned to the Phase-1 commit:
+`https://raw.githubusercontent.com/johnwick2921-cyber/nofx/638af5ed/docs/superpowers/reports/2026-09-01-planner-api-failure.md`
+→ HTTP 200 (51,940 bytes); branch-tip raw URL → HTTP 200.
+
+**Concurrency surprise (A23, reported, not acted on beyond my own branch).** While this dispatch ran, class
+36 (`17efeea9` + marker `7089d271` + reports `b2c2ff92`, `a1a6e255`) landed on `dev`, and at 17:59 CT the
+class-36 dispatch staged ITS binary as `~/nofx/nofx-bin.next` (sha `d2f724a9…`) — i.e. my earlier staged
+file (sha `8473a5f2…`) was already gone when I went to remove it; nothing of mine remains in `~/nofx`.
+PR #87 became CONFLICTING (`deploy/RELEASE`, `AUDIT-CHECKLIST.md` — both appended after class 35 —,
+`web/src/guide/types.ts`). Resolution, on my branch only: merged `origin/dev` in (`e42a0b43`; checklist
+keeps **36 then 37**, my "(36 is held by…)" note removed), rebuilt, re-marked.
+
+**Combined build (36 + 37), clean clone at the merge rev [A]:**
+```
+vcs.revision=e42a0b43b4bead2c5d2207958d8a0bde2d65be11 · vcs.time=2026-09-01T23:00:31Z · vcs.modified=false
+sha256 75746bb7c0b1c35ebd7bf15dd54edbb97f76094869df1a296b1ef93259728913  (70,905,488 bytes)
+parked at ~/nofx-planner-api/nofx-bin.next   ← the WORKTREE, not ~/nofx (class 36's stage is untouched)
+marker 3c3f5465: deploy/RELEASE + GUIDE_BUILT_REV = e42a0b43…
+```
+Tests on the merge: `go test ./mcp ./kernel ./trader -count=1` ok · full suite `go test ./... -count=1`:
+**27 packages ok, 0 FAIL, EXIT=0** (e42a0b43) · frontend `npm run build` ✓ (4.35 s).
+PR #87 after the push: `mergeable=MERGEABLE` (state UNSTABLE = no CI checks configured).
+Commit URLs (HTTP 200): `75130d59…` (fix), `225bc367` (first marker), `dad07771` (Phase-2 report),
+`e42a0b43…` (merge), `3c3f5465` (combined marker); PR https://github.com/johnwick2921-cyber/nofx/pull/87 → 200.
+
+**Sequencing for the owner (ONE BOOT, ONE MARKER — two valid orders):**
+- **(a) class 36 first, class 37 later:** cut over class 36 from its own stage per its report; afterwards
+  merge PR #87 into dev (`git merge --ff-only fix/planner-stream-total-deadline` in `~/nofx` — the branch
+  already contains dev), `cp ~/nofx-planner-api/nofx-bin.next ~/nofx/nofx-bin.next`, then the §Phase 2
+  cutover block with `nofx-bin.old.17efeea9` and the rollback's RELEASE = `17efeea9…`.
+- **(b) one combined boot:** merge PR #87 first (RELEASE becomes `e42a0b43…`), replace
+  `~/nofx/nofx-bin.next` with the combined build above (it contains class 36 + 37), one cutover, one boot
+  line set: `BOOT INTEGRITY OK — rev e42a0b43 · expected e42a0b43`, `planner_stream_total=1200s`,
+  `🛰 planner client: …`, plus class 36's own boot line. Rollback: `printf 'ec6632f9de41060b52398f41f9ffbbf840814c40' > deploy/RELEASE`
+  and `cp nofx-bin.prev.boot nofx-bin`, `kill -9 $(systemctl show -p MainPID --value nofx)`.
+Either way: flat-gate quadruple + in-flight check + window first (§Phase 2), and note that at 17:53:33 CT an
+ASIA read was in flight (attempt 3/3 re-author) under the running `ec6632f9`.
+
+**Live surface right now (running ec6632f9, 17:24:00 boot):** the ASIA read at 17:38→17:47:32 CT took
+532.3 s (attempt 1, parse-rejected), attempt 2 360.8 s (rejected) — both under the ceiling; the class-37
+kill shape has not recurred since the cutover window, and will recur on the next > 600 s read until the
+combined build runs.
+
+**Worktree state at closeout:** `~/nofx-planner-api` on `fix/planner-stream-total-deadline` @ `3c3f5465`
+(unlocked, kept for the owner's cutover; ignored `nofx-bin.next` inside), scratch clones in the session
+scratchpad only. `~/nofx-main.lock`: absent.
 
 ## Appendix A — every planner attempt in the window (144 rows)
 
