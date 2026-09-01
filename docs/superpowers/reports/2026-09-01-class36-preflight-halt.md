@@ -8,9 +8,9 @@ Evidence tiers: **[A]** directly verified · **[B]** inferred from strong eviden
 | Item | State |
 |---|---|
 | Code | **MERGED to dev @ `17efeea9`** (fast-forward from `795f67f7`, pushed) |
-| Build | clean clone `--no-local` at `17efeea9`, `vcs.modified=false`, built 2026-09-01T22:52:57Z, sha256 `d2f724a92ce3db45…`, 70,859,424 bytes — **in scratch**, not yet staged into `~/nofx` |
+| Build | clean clone `--no-local` at `17efeea9`, `vcs.modified=false`, built 2026-09-01T22:52:57Z, sha256 `d2f724a92ce3db45…`, 70,859,424 bytes — **STAGED as `~/nofx/nofx-bin.next` at 17:59:30 CT** (main tree fast-forwarded to dev `b2c2ff92`, porcelain empty) |
 | Marker | `7089d271` — `deploy/RELEASE` + `GUIDE_BUILT_REV` = `17efeea9…` (one marker, park record in its message) |
-| Cutover | **NOT DONE — PARKED.** Running binary is `ec6632f9` (class 35). Awaiting (a) the main-tree lock, held LIVE by another dispatch, and (b) the owner's explicit GO (A3) |
+| Cutover | **NOT DONE — PARKED, staged-and-green.** Running binary is `ec6632f9` (class 35). Awaiting the owner's explicit GO (A3); the lock freed at 17:59:15 CT and was re-acquired for staging, then released while parked |
 | Lock (A2) | `~/nofx-main.lock` is held by `pid=1906840` (`planner-api-failure-0901`, expiry 21:35 CT) — `kill -0` → ALIVE at 17:41, 17:49 and 17:53 CT. **Not cleared.** All work ran in the worktree; the main tree was never touched (porcelain empty, quoted 17:41 CT) |
 
 ---
