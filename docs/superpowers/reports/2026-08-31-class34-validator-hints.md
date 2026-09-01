@@ -1,6 +1,26 @@
 # CLASS 34 — Validator hints must name only legal conditions
 
-Date: 2026-08-31 CT · Wave: class34-validator-hints · Branch: `class34-validator-hints`
+Date: 2026-08-31 CT · Wave: class34-validator-hints · Branch: `class34-validator-hints` (merged → dev `fef656a4`)
+
+**STATUS: STAGED-AND-GREEN — CUTOVER ON HOLD (owner unavailable for GO at 23:54 CT;
+no unattended deploys).**
+
+Staged:
+- Build sha `fef656a4ee7c45860ad0237f48cef90c6b148d17` — clean-clone build, `vcs.revision` matches, `vcs.modified=false`. Binary at `~/nofx-staged/nofx-34-bin`.
+- Marker `d03db52a` pushed: `deploy/RELEASE` = `fef656a4…` + `GUIDE_BUILT_REV` = `fef656a4…`.
+- Suites: `go build ./...` OK · `go test ./...` green · goldens PASS · tsc 0 · vitest 36 files / 292 tests.
+- Flat gate pre-park (23:52 CT): DB open pos 0 · open orders 0 · armed nonterminal 0 · API positions `[]` · API open-orders MNQ `[]` · NT8 snapshots `count=0` ×2 @23:52:29.
+- Live bot untouched: rev `ebc37e01d7dd…` PID 1589096 (class 32 live since 23:40:22), window check passed.
+
+Cutover runbook (on owner GO):
+1. `mv ~/nofx/nofx-bin ~/nofx/nofx-bin.prev.boot` → `cp ~/nofx-staged/nofx-34-bin ~/nofx/nofx-bin`
+2. `kill -9 <PID>` (SIGTERM exits 0 — no relaunch)
+3. Boot checklist within 90s: rev `fef656a4` · `🔐 BOOT INTEGRITY OK` · goldens PASS · `🧪 validator hints: 6 sites — every condition token legal + live (class 34 guard)` · `🗓 session reads` + `🔬 conditions` lines
+4. Post-boot flat-gate re-quote (four legs).
+5. LIVE PROOF: the next natural reject during a read will carry the new hint + `Valid conditions: [acceptance, breakdown_continue, breakup_continue, hold, reclaim, reject, sweep_reclaim]` — quote it when it fires (and tomorrow ~16:35 CT the class-32 halt-fire timestamp).
+
+Rollback: `mv nofx-bin.prev.boot nofx-bin && <revert deploy/RELEASE> && kill -9 <PID>`
+(`nofx-bin.prev.boot` will hold the pre-wave live `ebc37e01d7dd…`, class 32.)
 
 ## The bug (tonight's evidence)
 
