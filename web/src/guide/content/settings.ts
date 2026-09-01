@@ -72,11 +72,11 @@ const dayPlan: KnobSpec[] = [
   {
     label: 'Max re-plans',
     where: 'Strategy → Day Plan → Max re-plans 0–4',
-    what: 'Re-read budget per session — deaths re-plan on-chain; budget exhausted = NO-TRADE terminal marker (⛔).',
+    what: "Re-read budget per session — a RECORDED counter (class 35): only death re-plans and owner re-reads (↻) spend it. Level-event / MSS wake reads (fast-market included), dormant flips + re-arms, the session's scheduled read, owner reset and fail-closed markers are FREE and never count. Budget exhausted = NO-TRADE terminal marker (⛔).",
     trader:
-      'The v6-after-cap-4 confusion: the last chip IS the no-trade marker, not a real plan.',
+      'The v6-after-cap-4 confusion: the last chip IS the no-trade marker, not a real plan. And a chain can legitimately be v6 with the FULL budget left (2026-09-01 LONDON: six rows, zero spends) — the card\'s "re-reads left" is the recorded number, not version−1.',
     consumer:
-      'store/strategy.go:929 (ReplanCap) · trader/auto_trader_planner.go:241 (re-plan on death)',
+      'store/strategy.go (ReplanCap · GetReplanBudget/SpendReplan) · trader/auto_trader_planner.go (deathReplanAllowed → runDeathReplan) · trader/auto_trader_reread.go (owner re-read gate)',
     range: '0 – 4 per session',
     systemDefault: '2 (owner)',
     recommended: '⭐ 2 — one re-read after an early death, then sit out.',

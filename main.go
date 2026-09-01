@@ -257,6 +257,9 @@ func main() {
 	// knobs in the boot block: the 5-rule vocabulary and the seam state must be
 	// verifiable from the boot line alone (the owner's cutover checklist).
 	logger.Infof("🔐 %s", kernel.ConfirmRuleLedger())
+	// CLASS 35 (2026-09-01) — the re-plan budget accounting mode in the boot
+	// block: which trigger classes spend, which are free, and the counter key.
+	logger.Infof("🧮 %s", store.ReplanBudgetBootLine())
 	logger.Infof("🎛 %s", kernel.EntryLawBootLedger()) // P1.4 (ledger-close 2026-08-19) — clock-guard block: live host-RTC drift,
 	// guard-timer freshness, last resync/check state. Log-only, best-effort.
 	kernel.LogClockGuardBoot()

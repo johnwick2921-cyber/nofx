@@ -330,12 +330,15 @@ export function SessionPlanCard({
   const noTradeVersion =
     versions.find((v) => v.lifecycle === 'no_trade')?.version ??
     (plan.lifecycle === 'no_trade' ? plan.version : undefined)
-  // The marker consumes a version, so version-1 overcounts by exactly one: with
-  // cap=4 the marker is v6 and the re-plans actually spent are 4 (v1..v5 real).
-  const replanCap = plan.replan_cap ?? 0
-  const replansSpent = noTradeVersion
-    ? Math.max(0, noTradeVersion - 2)
-    : Math.max(0, (plan.version ?? 1) - 1)
+  // CLASS 35 (2026-09-01) — the card READS the budget, it never computes one:
+  // `replans_left` / `replan_cap` are the RECORDED counter the death gate and
+  // the executor prompt share. (The old `noTradeVersion − 2 : version − 1` was
+  // a third formula, and it counted wake reads and dormant flips as spends.)
+  const replanCap = plan.replan_cap
+  const replansSpent =
+    typeof plan.replan_cap === 'number' && typeof plan.replans_left === 'number'
+      ? Math.max(0, plan.replan_cap - plan.replans_left)
+      : undefined
   const versionTitle = (v: number) => {
     const rec = versions.find((x) => x.version === v)
     if (!rec) return undefined
@@ -526,8 +529,8 @@ export function SessionPlanCard({
           </span>
           <span className="text-[11px]" style={{ color: 'var(--vl-muted)' }}>
             {tp('noTradeBannerHint', language, {
-              used: String(replansSpent),
-              cap: String(replanCap || replansSpent),
+              used: replansSpent === undefined ? '?' : String(replansSpent),
+              cap: replanCap === undefined ? '?' : String(replanCap),
             })}
           </span>
           {/* The planner's own reason must survive the reframing — it is the

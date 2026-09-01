@@ -76,6 +76,17 @@ func TestForceResetWritesFreshChainAndRestoresBudget(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// CLASS 35 — the budget is RECORDED: the six rows above spent nothing by
+	// themselves, so record the four death re-plans that produced them.
+	for i := 0; i < 4; i++ {
+		if _, err := store.SpendReplan(st, "trader-1", tradeDate, "NY"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if b := store.GetReplanBudget(st, "trader-1", tradeDate, "NY", 4); b.May() {
+		t.Fatalf("fixture: the original chain must be exhausted, got %+v", b)
+	}
+
 	now := time.Date(2026, 8, 18, 14, 0, 0, 0, chicagoLoc())
 	// The planner returns a VALID plan → the reset writes an ACTIVE plan.
 	at.mcpClient = &planClient{}
@@ -92,9 +103,9 @@ func TestForceResetWritesFreshChainAndRestoresBudget(t *testing.T) {
 	if got := store.GetResetBaseline(st, "trader-1", tradeDate, "NY"); got != 7 {
 		t.Fatalf("baseline = %d, want 7", got)
 	}
-	// Budget restored: v7 measured from baseline 7 has the FULL cap.
-	if left := store.ReplansLeftFrom(7, store.GetResetBaseline(st, "trader-1", tradeDate, "NY"), 4); left != 4 {
-		t.Fatalf("replans left after reset = %d, want 4", left)
+	// Budget restored: the counter is keyed under baseline 7, which starts at 0.
+	if b := store.GetReplanBudget(st, "trader-1", tradeDate, "NY", 4); b.Used != 0 || b.Left() != 4 || !b.May() {
+		t.Fatalf("budget after reset = %+v, want the full cap 4", b)
 	}
 	// The new row is an ACTIVE plan (NO-TRADE cleared), trigger "owner reset".
 	row, _ := st.Plan().GetLatestPlanForSession(tradeDate, "NY")

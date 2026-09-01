@@ -64,11 +64,14 @@ func TestW15PlanRulesFallsBackToShippedDefaults(t *testing.T) {
 	if got := dp.PlanModeFor(kernel.SessionNY); got != "advisory" {
 		t.Errorf("mode = %q, want the previously-hardcoded advisory", got)
 	}
-	// replans_left was hardcoded as 2-(version-1)
-	for version, want := range map[int]int{1: 2, 2: 1, 3: 0, 9: 0} {
-		if got := maxI(0, dp.ReplanCapFor(kernel.SessionNY)-(version-1)); got != want {
-			t.Errorf("version %d → replans_left %d, want %d (matches the old formula)", version, got, want)
-		}
+	// replans_left was hardcoded as 2-(version-1); CLASS 35 — the cap still
+	// resolves to the shipped default 2, and the budget is a recorded counter
+	// (see class35_replans_left_test.go), never a function of the version.
+	if got := dp.ReplanCapFor(kernel.SessionNY); got != 2 {
+		t.Errorf("nil config → replan cap %d, want the shipped default 2", got)
+	}
+	if b := (store.ReplanBudget{Used: 0, Cap: dp.ReplanCapFor(kernel.SessionNY)}); b.Left() != 2 {
+		t.Errorf("a fresh chain has the full cap, got %d", b.Left())
 	}
 }
 

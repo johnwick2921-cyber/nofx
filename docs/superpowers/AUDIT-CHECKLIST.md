@@ -283,6 +283,29 @@ in CLAUDE.md).
     checkable; never name a composite or shadowed token as an authoring
     target. (Class 33 is unoccupied — this wave shipped as 34 per dispatch.)
 
+35. **Counter inferred from row count (replan budget arithmetic).** Root
+    cause: `ReplansUsedFrom = version − baseline` counted EVERY appended plan
+    row as a spent re-plan, trigger-agnostic. 2026-09-01 LONDON: chain
+    [planner_fail_closed, level_event, dormant:flip, level_event ×3] — zero
+    death re-plans, zero owner re-reads — read as 5 of 4 spent, replans_left
+    0; the next scenario death would have fail-closed a budget never touched.
+    Compounded: death re-plan rows landed as `<S>_scheduled_read` (no class
+    label), `trigger_reason` is overwritten in place by dormant/rearm
+    transitions, and the card carried a THIRD formula
+    (`noTradeVersion−2 : version−1`). Fourth silent-counter defect in one
+    week: replan budget (this class) · guardrail ENTRIES count includes
+    test-seam rows (open) · P&L summed realized_pnl not pnl_corrected (fixed)
+    · GORM alias scan returned a plausible zero (class 30, fixed). **Probe:**
+    for every cap/budget/quota, find the increment site — if the "used" value
+    is derived (rows, versions, ids, timestamps) rather than written by the
+    consuming path, it is inferred; fixture the live chain shape and assert
+    the resolved value at the gate (`TestClass35PinTodayChain`). **Fix:**
+    `store.GetReplanBudget` / `SpendReplan` — a recorded counter in
+    system_config keyed `dayplan_replans_used:<trader>:<date>:<session>:b<baseline>`,
+    incremented when a `death_replan` / `owner_reread` row lands; the card
+    reads `replans_left` from the API. **Law:** counters record events; they
+    do not infer them.
+
 ---
 
 ## PART 2 — PRE-AUDIT (standing hard rules)

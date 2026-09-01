@@ -63,19 +63,20 @@ func (at *AutoTrader) CanForceReread(now time.Time) RereadRefusal {
 		// No plan yet today: the first read is not a re-plan and costs no budget.
 		return RereadRefusal{Allowed: true, Session: sess.Name, ReplanCap: cap, ReplansLeft: cap, Version: 0}
 	}
+	// CLASS 35 — the RECORDED budget (same seam as the death gate and the card).
+	budget := store.GetReplanBudget(at.store, at.id, tradeDate, sess.Name, cap)
 	out := RereadRefusal{
 		Session:     sess.Name,
 		Version:     row.Version,
 		ReplanCap:   cap,
-		ReplansLeft: store.ReplansLeftFrom(row.Version, store.GetResetBaseline(at.store, at.id, tradeDate, sess.Name), cap),
+		ReplansLeft: budget.Left(),
 	}
 	if row.Lifecycle == "no_trade" {
 		out.Reason = "this session has already been closed out with a NO-TRADE plan (the owner reset is the escape hatch)"
 		return out
 	}
-	if !store.MayReplanFrom(row.Version, store.GetResetBaseline(at.store, at.id, tradeDate, sess.Name), cap) {
-		out.Reason = fmt.Sprintf("the re-read budget for %s is spent (%d of %d used)",
-			sess.Name, store.ReplansUsedFrom(row.Version, store.GetResetBaseline(at.store, at.id, tradeDate, sess.Name)), cap)
+	if !budget.May() {
+		out.Reason = fmt.Sprintf("the re-read budget for %s is spent (%d of %d used)", sess.Name, budget.Used, cap)
 		return out
 	}
 	out.Allowed = true
@@ -115,8 +116,7 @@ func (at *AutoTrader) ForceReread(now time.Time) (RereadRefusal, error) {
 	// before the read: a death re-plan racing this request could already have
 	// spent the last re-plan (the pre-claim CanForceReread TOCTOU).
 	if latest, lErr := at.store.Plan().GetLatestPlanForTraderSession(tradeDate, gate.Session, at.id); lErr == nil && latest != nil {
-		baseline := store.GetResetBaseline(at.store, at.id, tradeDate, gate.Session)
-		if !store.MayReplanFrom(latest.Version, baseline, gate.ReplanCap) {
+		if !store.GetReplanBudget(at.store, at.id, tradeDate, gate.Session, gate.ReplanCap).May() {
 			return RereadRefusal{Allowed: false, Session: gate.Session, Reason: "the re-read budget was spent by a concurrent re-plan — try the owner reset instead"}, nil
 		}
 	}

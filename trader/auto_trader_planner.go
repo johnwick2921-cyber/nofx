@@ -313,49 +313,25 @@ func (at *AutoTrader) maybeRunSessionReadsAt(now time.Time) []SessionReadFired {
 				continue // skip MSS/level wakes while dormant (re-arm path above runs first next cycle)
 			}
 			replanCap := at.replanCapFor(s.Name) // W9 — per-session override wins
-			// P6 — the budget is measured from the CURRENT chain baseline (an
-			// owner reset re-arms it; the default baseline is 1 = the original
-			// chain). Every consumer reads the same seam.
-			baseline := store.GetResetBaseline(at.store, at.id, tradeDate, s.Name)
+			// CLASS 35 (2026-09-01) — the budget is a RECORDED counter keyed under
+			// the chain baseline (an owner reset re-arms it): only death re-plans
+			// and owner re-reads spend; wake reads, dormant flips and fail-closed
+			// markers never did and now never count. Every consumer reads this seam.
+			budget := store.GetReplanBudget(at.store, at.id, tradeDate, s.Name, replanCap)
 			// A death must never again be an unexplained line. On 2026-08-16 six
 			// plans died in 25 minutes and the only record was five identical
 			// "DIED" lines with no condition and no price.
-			at.logInfof("🗓️ plan %s %s v%d DIED — %s. Re-planning (cap %d/session).",
-				tradeDate, s.Name, existing.Version, detail.Killer, replanCap)
+			at.logInfof("🗓️ plan %s %s v%d DIED — %s. Re-planning (cap %d/session, %d spent, %d left).",
+				tradeDate, s.Name, existing.Version, detail.Killer, replanCap, budget.Used, budget.Left())
 			for _, l := range detail.Levels {
 				at.logInfof("🗓️   ↳ %s", l)
 			}
-			if !store.MayReplanFrom(existing.Version, baseline, replanCap) {
-				at.writeNoTradePlan(s.Name, tradeDate,
-					fmt.Sprintf("re-plans exhausted (%d/%d) after %d deaths — last: %s",
-						store.ReplansUsedFrom(existing.Version, baseline), replanCap, existing.Version-baseline, detail.Killer))
-			} else {
-				at.warnIfReplanOrphansOverlays(existing)
-				// The guard the owner asked for: once deaths reach the cap, the alert
-				// NAMES the killing condition and the price rather than the count.
-				if !store.MayReplanFrom(existing.Version+1, baseline, replanCap) {
-					at.emitAlert("P1", "plan-death-streak",
-						fmt.Sprintf("deaths:%s:%s:v%d", tradeDate, s.Name, existing.Version),
-						fmt.Sprintf("%s plan died %d× this session", s.Name, existing.Version),
-						fmt.Sprintf("Killed by: %s. This is the last re-plan before the session sits out.", detail.Killer))
-				}
-				// P0.4-G (2026-08-25) — carry the killer + the prior plan's
-				// levels into the re-plan: the map keeps continuity (no more
-				// rebuilt-from-scratch level sets) and a fired flip's bias is
-				// enforced at write.
+			if at.deathReplanAllowed(s.Name, tradeDate, existing, detail.Killer, budget) {
 				// F6 (LONDON-FORENSICS 2026-08-28) — the death re-plan's planner
 				// call blocked the cycle 19m33s (the 02:14 overrun). Async, same
 				// pattern as the W6/MSS wake re-reads; the plan-store's single-
 				// writer queue serializes the writes.
-				go func() {
-					at.runPlannerReadWithCtx(s.Name, tradeDate, detail.Killer, priorPlanLevelLines(existing))
-					// ITEM 4 — the owner's levels are sticky: re-establish them on
-					// the version just written, re-anchored by price. Anything that
-					// cannot be re-anchored is parked for review, never dropped.
-					if fresh, fErr := at.store.Plan().GetLatestPlanForTraderSession(tradeDate, s.Name, at.id); fErr == nil && fresh != nil {
-						at.carryOwnerEditsInto(fresh.PlanID, existing.Version, fresh.Version)
-					}
-				}()
+				go at.runDeathReplan(s.Name, tradeDate, existing, detail.Killer)
 			}
 		}
 		if !handledDeath {
@@ -750,6 +726,49 @@ func (at *AutoTrader) noTradeLevelMap(session string) []kernel.PlanLevel {
 	return out
 }
 
+// deathReplanAllowed (CLASS 35, 2026-09-01) is the death path's budget gate:
+// false ⇒ the NO-TRADE marker was written and the session sits out; true ⇒
+// the caller may run the re-plan. The spend itself is RECORDED when the
+// re-plan row lands (runPlannerReadCoreWithFactsGrades, keyed by the
+// death_replan trigger class), so a read refused by preflight / clock-hold /
+// a lost claim still costs nothing — "no plan row, no budget consumed" holds.
+func (at *AutoTrader) deathReplanAllowed(session, tradeDate string, existing *store.PlanDB, killer string, budget store.ReplanBudget) bool {
+	if !budget.May() {
+		at.writeNoTradePlan(session, tradeDate,
+			fmt.Sprintf("re-plans exhausted (%d/%d) after %d death re-plan(s) — last: %s",
+				budget.Used, budget.Cap, budget.Used, killer))
+		return false
+	}
+	at.warnIfReplanOrphansOverlays(existing)
+	// The guard the owner asked for: once deaths reach the cap, the alert
+	// NAMES the killing condition and the price rather than the count.
+	if !(store.ReplanBudget{Used: budget.Used + 1, Cap: budget.Cap}).May() {
+		version := 0
+		if existing != nil {
+			version = existing.Version
+		}
+		at.emitAlert("P1", "plan-death-streak",
+			fmt.Sprintf("deaths:%s:%s:v%d", tradeDate, session, version),
+			fmt.Sprintf("%s plan died — re-plan %d of %d", session, budget.Used+1, budget.Cap),
+			fmt.Sprintf("Killed by: %s. This is the last re-plan before the session sits out.", killer))
+	}
+	return true
+}
+
+// runDeathReplan (CLASS 35) — the death re-plan read, labelled with the
+// SPENDING class death_replan (it used to land as "<S>_scheduled_read", which
+// is why the row count had to stand in for the spend). P0.4-G: the killer and
+// the prior plan's levels ride into the prompt (flip bias enforced at write,
+// level-set continuity). ITEM 4: the owner's sticky levels re-establish on
+// the version just written, re-anchored by price; anything that cannot be
+// re-anchored is parked for review, never dropped.
+func (at *AutoTrader) runDeathReplan(session, tradeDate string, existing *store.PlanDB, killer string) {
+	_ = at.runPlannerReadWithTriggerClaimedCtx(session, tradeDate, store.TriggerDeathReplan, killer, priorPlanLevelLines(existing), true)
+	if fresh, fErr := at.store.Plan().GetLatestPlanForTraderSession(tradeDate, session, at.id); fErr == nil && fresh != nil && existing != nil && fresh.Version != existing.Version {
+		at.carryOwnerEditsInto(fresh.PlanID, existing.Version, fresh.Version)
+	}
+}
+
 // writeNoTradePlan appends a NO-TRADE plan (re-plans exhausted) + an alert event.
 func (at *AutoTrader) writeNoTradePlan(session, tradeDate, reason string) {
 	// P7 — levels are market FACTS; the plan is an opinion about them. A no-trade
@@ -1007,13 +1026,6 @@ func PlannerMaxTokens() int { return aiPlanMaxTokens() }
 // and persists the plan (or a fail-closed NO-TRADE plan).
 func (at *AutoTrader) runPlannerRead(session, tradeDate string) {
 	at.runPlannerReadWithTrigger(session, tradeDate, "")
-}
-
-// runPlannerReadWithCtx (P0.4-G, 2026-08-25) is the re-plan form: the dead
-// plan's killer line + its levels ride into the prompt (flip bias enforced at
-// write, level-set continuity).
-func (at *AutoTrader) runPlannerReadWithCtx(session, tradeDate, priorKiller string, priorLevels []string) {
-	_ = at.runPlannerReadWithTriggerClaimedCtx(session, tradeDate, "", priorKiller, priorLevels, true)
 }
 
 // priorPlanLevelLines renders the previous version's levels as "price label"
@@ -1570,6 +1582,10 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 	if strings.TrimSpace(triggerOverride) != "" {
 		trigger = triggerOverride
 	}
+	// CLASS 35 — decide the spend by the CLASS the caller passed, before the
+	// fail-closed branch relabels the row: a death re-plan / owner re-read that
+	// fail-closes still landed a row for a consuming class.
+	spendClass, spends := trigger, store.TriggerSpendsReplan(trigger)
 	if doc == nil {
 		// W6-C (2026-08-25) — wake reads are NON-fatal: a failed wake re-read
 		// must NOT no-trade a session whose active plan is still alive (live
@@ -1638,6 +1654,18 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		return 0, lifecycle, err
 	}
 	at.logInfof("🗓️ PLAN written %s %s v%d (model %s, lifecycle %s, prompt %s, ai_config %s)", tradeDate, session, version, modelID, lifecycle, promptHash, aiConfigHash)
+	if spends {
+		// CLASS 35 — RECORD the spend now that the row exists (counters record
+		// events; they do not infer them from row counts).
+		if used, sErr := store.SpendReplan(at.store, at.id, tradeDate, session); sErr != nil {
+			at.logErrorf("🧮 replan budget: %s %s v%d landed as %s but the spend FAILED to record: %v — the gate may over-allow by one until the row is fixed (class 35)",
+				tradeDate, session, version, spendClass, sErr)
+		} else {
+			b := store.ReplanBudget{Used: used, Cap: at.replanCapFor(session)}
+			at.logInfof("🧮 replan budget: %s spent one — %d/%d used, %d left (%s %s v%d; class 35 recorded-counter)",
+				spendClass, b.Used, b.Cap, b.Left(), tradeDate, session, version)
+		}
+	}
 	at.recordPlanWritePrice(facts.Price) // F3 fast-market drift baseline
 	// W6 — P1 plan-born/armed alert (active plans only; fail-closed already alerted P0).
 	if lifecycle == "active" {
@@ -2206,9 +2234,8 @@ func installActivePlanProvider(at *AutoTrader, st *store.Store) {
 			// ASIA to 4 mid-session, so at v3 the card said "replans left 2" while the
 			// AI was being told 0. P6 — the budget is measured from the chain baseline
 			// (an owner reset re-arms it), same seam the death path reads.
-			replansLeft := store.ReplansLeftFrom(row.Version,
-				store.GetResetBaseline(st, at.id, row.TradeDate, sess.Name),
-				storedReplanCap(st, row.StrategyID, sess.Name))
+			replansLeft := store.GetReplanBudget(st, at.id, row.TradeDate, sess.Name,
+				storedReplanCap(st, row.StrategyID, sess.Name)).Left()
 			// P0-cleanup — decision records carry the full plan attribution
 			// (plan_id, plan_version, overlay_version).
 			overlayVersion := 0

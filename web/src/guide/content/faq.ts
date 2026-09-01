@@ -47,7 +47,7 @@ export const faq: GuideSection = {
           q: 'What does the ⛔ NO-TRADE chip mean?',
           a: 'The re-plan budget is exhausted: the last version row is the terminal marker, not a real plan. Reset (↺) re-arms the budget and reads fresh.',
           mechanism:
-            'replan_cap=4 legitimately ends at a row labelled v6 (marker).',
+            'replan_cap=4 legitimately ends at a row labelled v6 (marker) — and, since class 35, a v6 chain can also have the FULL budget left: only death re-plans and owner re-reads spend (recorded counter); wake reads and dormant flips are free.',
           link: '#plan-card',
         },
         {

@@ -28,7 +28,7 @@ export const planCard: GuideSection = {
         },
         {
           title: '3 · v# + trigger pill',
-          body: 'Version chips v1…vN (tap any to read it as it was) + the lifecycle chip (ACTIVE gold / EXPIRED / DIED / SUPERSEDED / NO-TRADE red) + why this version was written (owner_reset, level_event, NY_scheduled_read…).',
+          body: 'Version chips v1…vN (tap any to read it as it was) + the lifecycle chip (ACTIVE gold / EXPIRED / DIED / SUPERSEDED / NO-TRADE red) + why this version was written (owner_reset, level_event, NY_scheduled_read, death_replan, owner_reread…). Only death_replan and owner_reread spend the re-plan budget (class 35 recorded counter).',
           cite: 'web/src/components/plan/chips.tsx:169,252',
         },
         {

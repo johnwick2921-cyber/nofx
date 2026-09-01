@@ -52,27 +52,33 @@ func TestRereadRefusesOutsideAnySession(t *testing.T) {
 }
 
 // The budget is the SAME one the death path spends. Once it is gone the button
-// must refuse, naming the arithmetic.
+// must refuse, naming the arithmetic. CLASS 35: the budget is a RECORDED
+// counter — two spends against cap 2 exhaust it, however many rows exist.
 func TestRereadRefusesWhenTheBudgetIsSpent(t *testing.T) {
-	_, st := rereadTrader(t, store.StrategyConfig{
+	at, st := rereadTrader(t, store.StrategyConfig{
 		DayPlan: &store.DayPlanConfig{PlanEnabled: true, ReplanCap: 2},
 	})
-	// cap 2 ⇒ real versions v1..v3; the death of v3 is the ceiling.
-	for i := 1; i <= 3; i++ {
-		if _, err := st.Plan().AppendPlan(&store.PlanDB{
-			PlanID: store.MakePlanID("2026-08-18", "NY"), StrategyID: "trader-1",
-			TradeDate: "2026-08-18", Session: "NY", Lifecycle: "active", Doc: "{}",
-		}); err != nil {
+	if _, err := st.Plan().AppendPlan(&store.PlanDB{
+		PlanID: store.MakePlanID("2026-09-01", "NY"), StrategyID: "trader-1",
+		TradeDate: "2026-09-01", Session: "NY", Lifecycle: "active", Doc: "{}",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 2; i++ {
+		if _, err := store.SpendReplan(st, "trader-1", "2026-09-01", "NY"); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if store.MayReplan(3, 2) {
-		t.Fatal("fixture drift: v3 with cap 2 must already be at the ceiling")
+	if b := store.GetReplanBudget(st, "trader-1", "2026-09-01", "NY", 2); b.May() || b.Left() != 0 {
+		t.Fatalf("fixture drift: two spends against cap 2 must be the ceiling, got %+v", b)
 	}
-	// The gate's budget arithmetic must agree with the enforcer's, whatever the
-	// clock does — check the shared definition directly.
-	if left := store.ReplansLeftFor(3, 2); left != 0 {
-		t.Errorf("at v3 with cap 2 the re-read budget is %d, want 0", left)
+	now := time.Date(2026, 9, 1, 10, 0, 0, 0, chicagoLoc()) // NY window, CME open
+	got := at.CanForceReread(now)
+	if got.Allowed {
+		t.Fatal("a spent budget must refuse the button")
+	}
+	if got.ReplansLeft != 0 || got.Reason == "" {
+		t.Errorf("the refusal must carry 0 left and a reason, got %+v", got)
 	}
 }
 

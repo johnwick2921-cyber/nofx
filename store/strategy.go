@@ -6,9 +6,11 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"nofx/config"
+	"nofx/logger"
 
 	"gorm.io/gorm"
 )
@@ -1175,18 +1177,133 @@ func (c *DayPlanConfig) ReplanCapFor(session string) int {
 // v6 is the marker. That is correct behaviour, and it is exactly what read as
 // "the cap didn't work" on 2026-08-16.
 
-// ReplansUsed is how many re-plans a version number represents.
-func ReplansUsed(version int) int {
-	return ReplansUsedFrom(version, 1)
+// ── RE-PLAN BUDGET (CLASS 35, 2026-09-01) — counters RECORD events; they do
+// not infer them. ─────────────────────────────────────────────────────────────
+//
+// The budget used to be inferred as version − baseline: every appended row
+// counted as a spent re-plan regardless of why it was written. On 2026-09-01
+// LONDON the chain was [planner_fail_closed, level_event, dormant:flip,
+// level_event ×3] — zero death re-plans, zero owner re-reads — and the
+// arithmetic said 5 of 4 spent, so the next death would have fail-closed a
+// session whose budget was never touched. Now the two consuming classes
+// (death re-plan, owner re-read) RECORD each spend in system_config; every
+// other row — the session's scheduled read, level_event / structure_mss wakes
+// (fast-market is a reasoning mode of those), owner_reset, dormant/rearm
+// markers, fail-closed markers — is free.
+//
+// The counter is keyed UNDER the chain's reset baseline, so an owner reset
+// (new baseline) starts a fresh counter at 0 without the reset path knowing
+// about counters; the abandoned chain's spends stay on record.
+//
+// cap N still means N spends; the NO-TRADE marker still consumes a version
+// number (the plans table is append-only) — it just no longer counts.
+
+const (
+	// TriggerDeathReplan labels a re-plan written because the active plan's
+	// death condition fired (trader death path). SPENDS.
+	TriggerDeathReplan = "death_replan"
+	// TriggerOwnerReread labels an owner-requested re-read. SPENDS.
+	TriggerOwnerReread = "owner_reread"
+)
+
+// TriggerSpendsReplan names the ONLY trigger classes that spend budget.
+func TriggerSpendsReplan(trigger string) bool {
+	switch strings.TrimSpace(trigger) {
+	case TriggerDeathReplan, TriggerOwnerReread:
+		return true
+	}
+	return false
 }
 
-// MayReplan reports whether another REAL plan version may be written after the
-// given version died. False ⇒ the session sits out with a NO-TRADE marker.
-func MayReplan(version, cap int) bool { return MayReplanFrom(version, 1, cap) }
+// ReplanBudget is the resolved budget for one (trader, trade_date, session)
+// chain: what was RECORDED as spent, the resolved cap, and the baseline the
+// counter is keyed under. The card, the executor prompt, the death gate and
+// the owner re-read gate all read this one value.
+type ReplanBudget struct {
+	Used     int
+	Cap      int
+	Baseline int
+}
 
-// ReplansLeftFor is what the card and the executor prompt must both display.
-func ReplansLeftFor(version, cap int) int {
-	return ReplansLeftFrom(version, 1, cap)
+// Left is what the card and the executor prompt display.
+func (b ReplanBudget) Left() int {
+	if n := b.Cap - b.Used; n > 0 {
+		return n
+	}
+	return 0
+}
+
+// May reports whether another spending re-plan is allowed. False ⇒ the
+// session sits out with a NO-TRADE marker.
+func (b ReplanBudget) May() bool { return b.Used < b.Cap }
+
+// ReplansUsedKey is the system_config key holding the recorded spend count for
+// one chain (trader, trade_date, session, baseline).
+func ReplansUsedKey(traderID, tradeDate, session string, baseline int) string {
+	return "dayplan_replans_used:" + traderID + ":" + tradeDate + ":" + session + ":b" + strconv.Itoa(baseline)
+}
+
+// replanSpendMu serializes read-modify-write on the counter (both spending
+// paths live in this process: the trader cycle and the API re-read handler).
+var replanSpendMu sync.Mutex
+
+// readReplansUsed reads one counter. A malformed or negative value can never
+// exhaust a session or panic the loop: it reads as 0 (full budget) and is
+// logged loudly so the row gets fixed (A24: never a placeholder that reads as
+// data — the log line IS the alarm).
+func readReplansUsed(st *Store, key string) int {
+	raw, _ := st.GetSystemConfig(key)
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return 0
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil || n < 0 {
+		logger.Errorf("🧮 replan budget: malformed counter %s=%q — reading as 0 (full budget); fix the system_config row (class 35)", key, raw)
+		return 0
+	}
+	return n
+}
+
+// GetReplanBudget resolves the recorded budget for a chain: baseline (reset
+// seam) → counter under that baseline → cap from the caller's resolver.
+func GetReplanBudget(st *Store, traderID, tradeDate, session string, cap int) ReplanBudget {
+	if cap < 0 {
+		cap = 0
+	}
+	if st == nil {
+		return ReplanBudget{Cap: cap, Baseline: 1}
+	}
+	baseline := GetResetBaseline(st, traderID, tradeDate, session)
+	return ReplanBudget{
+		Used:     readReplansUsed(st, ReplansUsedKey(traderID, tradeDate, session, baseline)),
+		Cap:      cap,
+		Baseline: baseline,
+	}
+}
+
+// SpendReplan RECORDS one spend on the chain's current baseline and returns the
+// new used count. Called when a death_replan / owner_reread row actually
+// lands — never at a gate whose read may still be refused.
+func SpendReplan(st *Store, traderID, tradeDate, session string) (int, error) {
+	if st == nil {
+		return 0, fmt.Errorf("store required")
+	}
+	replanSpendMu.Lock()
+	defer replanSpendMu.Unlock()
+	baseline := GetResetBaseline(st, traderID, tradeDate, session)
+	key := ReplansUsedKey(traderID, tradeDate, session, baseline)
+	used := readReplansUsed(st, key) + 1
+	if err := st.SetSystemConfig(key, strconv.Itoa(used)); err != nil {
+		return used - 1, err
+	}
+	return used, nil
+}
+
+// ReplanBudgetBootLine is the boot-block line naming the accounting mode.
+func ReplanBudgetBootLine() string {
+	return "replan budget: recorded-counter (class 35) — spends: " + TriggerDeathReplan + ", " + TriggerOwnerReread +
+		" · free: <S>_scheduled_read, level_event, structure_mss (incl. fast-market), owner_reset, dormant/rearm + fail-closed markers · key dayplan_replans_used:<trader>:<date>:<session>:b<baseline>"
 }
 
 // ── OWNER RESET (2026-08-17) — a reset re-opens the budget for ONE chain ──────
@@ -1194,31 +1311,8 @@ func ReplansLeftFor(version, cap int) int {
 // The owner reset marks the current chain ABANDONED (the rows stay — plans are
 // append-only, history and death reasons preserved) and re-arms the session's
 // re-plan budget from a new baseline: the version at which the reset happened.
-// Everything above (ReplansUsed/MayReplan/ReplansLeftFor) is baseline 1 — the
-// original chain — and these From-variants are the SAME math from a later
-// baseline, so every consumer reads one consistent budget.
-
-// ReplansUsedFrom counts re-plans relative to a baseline version.
-func ReplansUsedFrom(version, baseline int) int {
-	if baseline < 1 {
-		baseline = 1
-	}
-	if version < baseline {
-		return 0
-	}
-	return version - baseline
-}
-
-// MayReplanFrom is MayReplan measured from a baseline version (the reset seam).
-func MayReplanFrom(version, baseline, cap int) bool { return ReplansUsedFrom(version, baseline) < cap }
-
-// ReplansLeftFrom is ReplansLeftFor measured from a baseline version.
-func ReplansLeftFrom(version, baseline, cap int) int {
-	if n := cap - ReplansUsedFrom(version, baseline); n > 0 {
-		return n
-	}
-	return 0
-}
+// The recorded counter is keyed under the baseline, so the new chain starts
+// at 0 spent.
 
 // ResetBaselineKey is the system_config key holding the reset seam version for
 // one (trader, trade_date, session). C7 (2026-08-25) — trader-scoped: the key

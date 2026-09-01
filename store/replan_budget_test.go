@@ -8,79 +8,162 @@ import (
 	"testing"
 )
 
-// THE RE-PLAN BUDGET HAS ONE DEFINITION (2026-08-17).
+// THE RE-PLAN BUDGET HAS ONE DEFINITION — and it is RECORDED, not inferred.
 //
-// The owner set replan_cap = 4 and saw a row labelled "v6", which reads as "the
-// cap didn't work". It did. The cap counts RE-PLANS: v1 is the session's first
-// read and costs nothing, so cap N allows real versions v1…v(N+1), and the
-// (N+1)th death writes a NO-TRADE marker — which consumes a version number
-// because the plans table is append-only. cap=4 therefore ends at a row called
-// v6, correctly.
+// CLASS 35 (2026-09-01): the budget used to be version − baseline, so every
+// appended row (wake reads, dormant flips, fail-closed markers) counted as a
+// spent re-plan. Now the two consuming paths record each spend in system_config
+// under the chain's baseline; everything else is free. cap N still means N
+// death re-plans / owner re-reads, and a NO-TRADE marker still consumes a
+// version number (the plans table is append-only) — it just no longer counts.
 
-func TestReplanBudgetCeiling(t *testing.T) {
+func newBudgetStore(t *testing.T) *Store {
+	t.Helper()
+	st, err := New(filepath.Join(t.TempDir(), "b.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	return st
+}
+
+func TestReplanBudgetLeftAndMay(t *testing.T) {
 	for _, tc := range []struct {
-		cap          int
-		lastRealVer  int // the highest version that is a REAL plan
-		noTradeAtVer int // the version whose death writes the NO-TRADE marker
+		used, cap, wantLeft int
+		wantMay             bool
 	}{
-		{cap: 0, lastRealVer: 1, noTradeAtVer: 1}, // no re-plans at all
-		{cap: 2, lastRealVer: 3, noTradeAtVer: 3},
-		{cap: 4, lastRealVer: 5, noTradeAtVer: 5}, // the owner's ASIA session
+		{0, 0, 0, false}, // no re-plans at all: the first death sits out
+		{0, 2, 2, true},
+		{1, 2, 1, true},
+		{2, 2, 0, false},
+		{0, 4, 4, true}, // today's LONDON chain: six rows, nothing spent
+		{3, 4, 1, true},
+		{4, 4, 0, false},
+		{9, 4, 0, false}, // over-spent (should be impossible) still clamps at 0
 	} {
-		// Every version up to the ceiling may re-plan…
-		for v := 1; v < tc.lastRealVer; v++ {
-			if !MayReplan(v, tc.cap) {
-				t.Errorf("cap=%d: v%d must be allowed to re-plan (only %d of %d re-plans used)",
-					tc.cap, v, ReplansUsed(v), tc.cap)
-			}
+		b := ReplanBudget{Used: tc.used, Cap: tc.cap}
+		if got := b.Left(); got != tc.wantLeft {
+			t.Errorf("used=%d cap=%d: Left() = %d, want %d", tc.used, tc.cap, got, tc.wantLeft)
 		}
-		// …and the death of the last real version must NOT.
-		if MayReplan(tc.noTradeAtVer, tc.cap) {
-			t.Errorf("cap=%d: the death of v%d must yield NO-TRADE, not another plan",
-				tc.cap, tc.noTradeAtVer)
+		if got := b.May(); got != tc.wantMay {
+			t.Errorf("used=%d cap=%d: May() = %v, want %v", tc.used, tc.cap, got, tc.wantMay)
 		}
-		if got := ReplansLeftFor(tc.noTradeAtVer, tc.cap); got != 0 {
-			t.Errorf("cap=%d: at v%d the card must show 0 re-plans left, got %d",
-				tc.cap, tc.noTradeAtVer, got)
+		// The card's number and the enforcer's verdict can never disagree.
+		if (b.Left() > 0) != b.May() {
+			t.Errorf("used=%d cap=%d: card says %d left but the enforcer says %v", tc.used, tc.cap, b.Left(), b.May())
 		}
 	}
 }
 
-// The card's "re-plans remaining" must equal what the enforcer will actually
-// allow, at every step. These two numbers disagreeing is the exact class of bug
-// that told the AI it had 0 re-plans while the card said 2.
-func TestCardBudgetMatchesTheEnforcerAtEveryStep(t *testing.T) {
-	for _, cap := range []int{0, 1, 2, 4} {
-		for v := 1; v <= cap+3; v++ {
-			left := ReplansLeftFor(v, cap)
-			mayReplan := MayReplan(v, cap)
-			if (left > 0) != mayReplan {
-				t.Errorf("cap=%d v%d: card says %d left but the enforcer says mayReplan=%v",
-					cap, v, left, mayReplan)
-			}
+// A spend is an EVENT the store records; the budget reads it back.
+func TestSpendReplanRecordsEachSpend(t *testing.T) {
+	st := newBudgetStore(t)
+	const tid, date, sess = "tid-1", "2026-09-01", "LONDON"
+	if b := GetReplanBudget(st, tid, date, sess, 4); b.Used != 0 || b.Left() != 4 || !b.May() {
+		t.Fatalf("fresh chain must have the full budget, got %+v", b)
+	}
+	for i := 1; i <= 4; i++ {
+		used, err := SpendReplan(st, tid, date, sess)
+		if err != nil {
+			t.Fatalf("spend %d: %v", i, err)
+		}
+		if used != i {
+			t.Fatalf("spend %d returned used=%d", i, used)
+		}
+		b := GetReplanBudget(st, tid, date, sess, 4)
+		if b.Used != i || b.Left() != 4-i {
+			t.Fatalf("after %d spends: %+v", i, b)
+		}
+	}
+	if b := GetReplanBudget(st, tid, date, sess, 4); b.May() {
+		t.Fatalf("four spends against cap 4 must exhaust the budget, got %+v", b)
+	}
+	// Per-(trader, date, session) scoping: a sibling session is untouched.
+	if b := GetReplanBudget(st, tid, date, "NY", 4); b.Used != 0 {
+		t.Errorf("NY must keep its own counter, got %+v", b)
+	}
+	if b := GetReplanBudget(st, "tid-2", date, sess, 4); b.Used != 0 {
+		t.Errorf("another trader must keep its own counter, got %+v", b)
+	}
+}
+
+// The owner reset moves the baseline; the counter is keyed UNDER the baseline,
+// so the new chain starts at 0 without the reset path knowing about counters.
+func TestResetBaselineRearmsTheRecordedBudget(t *testing.T) {
+	st := newBudgetStore(t)
+	const tid, date, sess = "tid-1", "2026-09-01", "NY"
+	for i := 0; i < 4; i++ {
+		if _, err := SpendReplan(st, tid, date, sess); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if b := GetReplanBudget(st, tid, date, sess, 4); b.May() || b.Baseline != 1 {
+		t.Fatalf("exhausted original chain expected, got %+v", b)
+	}
+	if err := SetResetBaseline(st, tid, date, sess, 7); err != nil {
+		t.Fatal(err)
+	}
+	b := GetReplanBudget(st, tid, date, sess, 4)
+	if b.Baseline != 7 || b.Used != 0 || b.Left() != 4 || !b.May() {
+		t.Fatalf("reset chain must start with the full budget, got %+v", b)
+	}
+	// The abandoned chain's spends are still on record under baseline 1.
+	if raw, _ := st.GetSystemConfig(ReplansUsedKey(tid, date, sess, 1)); strings.TrimSpace(raw) != "4" {
+		t.Errorf("original chain counter must survive the reset, got %q", raw)
+	}
+}
+
+// A malformed counter can never panic the loop or silently exhaust a session:
+// it reads as 0 (full budget) and is logged loudly.
+func TestMalformedReplanCounterReadsAsZero(t *testing.T) {
+	st := newBudgetStore(t)
+	const tid, date, sess = "tid-1", "2026-09-01", "NY"
+	for _, raw := range []string{"not-a-number", "-3", "  "} {
+		if err := st.SetSystemConfig(ReplansUsedKey(tid, date, sess, 1), raw); err != nil {
+			t.Fatal(err)
+		}
+		if b := GetReplanBudget(st, tid, date, sess, 4); b.Used != 0 {
+			t.Errorf("raw %q: Used = %d, want 0", raw, b.Used)
+		}
+	}
+	// A nil store is a full budget, never a nil deref.
+	if b := GetReplanBudget(nil, tid, date, sess, 2); b.Used != 0 || b.Cap != 2 {
+		t.Errorf("nil store: %+v", b)
+	}
+	if _, err := SpendReplan(nil, tid, date, sess); err == nil {
+		t.Error("spending against a nil store must error, not pretend")
+	}
+}
+
+// Exactly two trigger classes spend. Everything else — the session's scheduled
+// read, level_event / structure_mss wakes (fast-market is a reasoning MODE of
+// those wakes, not a class), owner_reset, dormant/rearm markers — is free.
+func TestTriggerSpendsReplanClasses(t *testing.T) {
+	for _, spend := range []string{TriggerDeathReplan, TriggerOwnerReread, " owner_reread "} {
+		if !TriggerSpendsReplan(spend) {
+			t.Errorf("%q must spend", spend)
+		}
+	}
+	for _, free := range []string{"", "NY_scheduled_read", "LONDON_scheduled_read", "level_event", "structure_mss", "owner_reset", "planner_fail_closed", "replans_exhausted", "dormant:flip:x", "rearmed:x", "sunday_weekly_read"} {
+		if TriggerSpendsReplan(free) {
+			t.Errorf("%q must NOT spend", free)
 		}
 	}
 }
 
-func TestReplansUsedIgnoresNonsenseVersions(t *testing.T) {
-	for _, v := range []int{0, -1, -99} {
-		if got := ReplansUsed(v); got != 0 {
-			t.Errorf("ReplansUsed(%d) = %d, want 0 — a bad version must never grant budget", v, got)
-		}
-	}
-}
-
-// NO LITERAL BUDGET MAY REAPPEAR IN THE PATH.
+// NO INFERRED BUDGET MAY REAPPEAR IN THE PATH.
 //
-// installActivePlanProvider once carried `2 - (row.Version - 1)` and
-// handler_plan.go carried `dp.ReplanCapFor(session)-(version-1)`. Both are gone;
-// this fails if the shape comes back anywhere in the enforcing path.
+// installActivePlanProvider once carried `2 - (row.Version - 1)`, handler_plan.go
+// carried `dp.ReplanCapFor(session)-(version-1)`, and store carried
+// `version - baseline` (class 35). All three are gone; this fails if any shape
+// comes back anywhere in the enforcing path.
 func TestNoLiteralReplanBudgetInThePath(t *testing.T) {
-	// `<something> - (<something>.Version - 1)` / `- (version - 1)` — the hand-rolled
-	// budget arithmetic that must now go through ReplansLeftFor.
-	pattern := regexp.MustCompile(`-\s*\(\s*\w*\.?[Vv]ersion\s*-\s*1\s*\)`)
+	patterns := []*regexp.Regexp{
+		regexp.MustCompile(`-\s*\(\s*\w*\.?[Vv]ersion\s*-\s*1\s*\)`),
+		regexp.MustCompile(`[Vv]ersion\s*-\s*baseline`),
+		regexp.MustCompile(`ReplansUsedFrom|MayReplanFrom|ReplansLeftFrom|ReplansLeftFor\(`),
+	}
 	roots := []string{"../trader", "../api", "../kernel", "."}
-
 	for _, root := range roots {
 		err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 			if err != nil || info.IsDir() || !strings.HasSuffix(path, ".go") {
@@ -94,12 +177,15 @@ func TestNoLiteralReplanBudgetInThePath(t *testing.T) {
 				return nil
 			}
 			for i, line := range strings.Split(string(b), "\n") {
-				if strings.Contains(line, "//") && pattern.MatchString(line) {
-					continue // a comment quoting the old bug is fine
+				code := line
+				if idx := strings.Index(line, "//"); idx >= 0 {
+					code = line[:idx] // a comment quoting the old bug is fine
 				}
-				if pattern.MatchString(line) {
-					t.Errorf("%s:%d re-derives the re-plan budget by hand — use store.ReplansLeftFor / MayReplan:\n\t%s",
-						path, i+1, strings.TrimSpace(line))
+				for _, p := range patterns {
+					if p.MatchString(code) {
+						t.Errorf("%s:%d re-derives the re-plan budget — use store.GetReplanBudget / SpendReplan:\n\t%s",
+							path, i+1, strings.TrimSpace(line))
+					}
 				}
 			}
 			return nil

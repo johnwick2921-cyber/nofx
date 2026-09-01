@@ -149,8 +149,8 @@ func (s *Server) traderOwnedBy(userID, traderID string) bool {
 //
 // An unknown trader falls back to the shipped defaults, which is what the card
 // showed before, so the no-config path is unchanged.
-func (s *Server) planRules(traderID, session, tradeDate string, version int) (rule, mode string, replansLeft int) {
-	rule, mode, replansLeft, _ = s.planRulesWithCap(traderID, session, tradeDate, version)
+func (s *Server) planRules(traderID, session, tradeDate string) (rule, mode string, replansLeft int) {
+	rule, mode, replansLeft, _ = s.planRulesWithCap(traderID, session, tradeDate)
 	return rule, mode, replansLeft
 }
 
@@ -202,18 +202,32 @@ func (s *Server) armedMapFor(planID string) map[string]gin.H {
 	return out
 }
 
-func (s *Server) planRulesWithCap(traderID, session, tradeDate string, version int) (rule, mode string, replansLeft, replanCap int) {
-	var dp *store.DayPlanConfig
-	if at, err := s.traderManager.GetTrader(traderID); err == nil && at != nil {
-		if cfg := at.GetStrategyConfig(); cfg != nil {
-			dp = cfg.DayPlan
-		}
-	}
+func (s *Server) planRulesWithCap(traderID, session, tradeDate string) (rule, mode string, replansLeft, replanCap int) {
+	dp := s.dayPlanCfgFor(traderID)
 	rule = dp.AcceptanceRuleFor(session)
 	mode = dp.PlanModeFor(session)
 	replanCap = dp.ReplanCapFor(session)
-	replansLeft = store.ReplansLeftFrom(version, store.GetResetBaseline(s.store, traderID, tradeDate, session), replanCap)
+	// CLASS 35 (2026-09-01) — the RECORDED budget, the same seam the death gate
+	// and the executor prompt read. It used to be cap − (version − baseline)
+	// from the row being served, which counted wake reads and dormant flips
+	// as spends (today's LONDON: six rows, nothing spent, "0 re-reads left").
+	replansLeft = store.GetReplanBudget(s.store, traderID, tradeDate, session, replanCap).Left()
 	return rule, mode, replansLeft, replanCap
+}
+
+// dayPlanCfgFor resolves a trader's day-plan config through the trader manager;
+// nil (→ the shipped defaults in every resolver) when the trader or the manager
+// is absent, so the budget seam is usable without a live manager.
+func (s *Server) dayPlanCfgFor(traderID string) *store.DayPlanConfig {
+	if s == nil || s.traderManager == nil {
+		return nil
+	}
+	if at, err := s.traderManager.GetTrader(traderID); err == nil && at != nil {
+		if cfg := at.GetStrategyConfig(); cfg != nil {
+			return cfg.DayPlan
+		}
+	}
+	return nil
 }
 
 // resolveRequestedSession applies an OPTIONAL ?session=NY|ASIA|LONDON to the
@@ -301,7 +315,7 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 	// W15.B — the card narrates THE REAL RULEBOOK (acceptance rule / plan mode /
 	// re-plan budget), resolved per trader+session, instead of the hardcoded
 	// "2x5m" + "advisory" + budget-of-2 it used to show.
-	rule, mode, _ := s.planRules(traderID, sessName, tradeDate, 1)
+	rule, mode, _ := s.planRules(traderID, sessName, tradeDate)
 	// UI-verification (2026-08-18): the card must SAY when a planner read is in
 	// flight — the owner reset while a death re-plan was writing and the UI
 	// showed nothing for minutes, which read as "the button does nothing".
@@ -417,8 +431,9 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 		}
 	}
 	facts, price, fvgStates := planLevelFacts(traderID, symbol, doc, now, rule, owners, row.CreatedAt.UnixMilli())
-	// The budget depends on the plan's version, known only now.
-	_, _, replansLeft, replanCap := s.planRulesWithCap(traderID, sessName, tradeDate, row.Version)
+	// CLASS 35 — the budget is a session-chain property (recorded counter),
+	// not a property of the version being viewed.
+	_, _, replansLeft, replanCap := s.planRulesWithCap(traderID, sessName, tradeDate)
 	warming := ""
 	if n, _ := s.store.SessionProfile().Count(symbol); n < 10 {
 		warming = fmt.Sprintf("%d/10", n)
@@ -1327,11 +1342,7 @@ func (s *Server) resolveAskContext(traderID, symbol string, now time.Time) askCo
 	if market.FuturesBarsProvider != nil {
 		if bars := market.FuturesBarsProvider(symbol, "1m", kernel.AISVPBarCount); len(bars) > 0 {
 			price, dATR := marketRef(symbol, now)
-			version := 1
-			if ctx.row != nil {
-				version = ctx.row.Version
-			}
-			rule, _, left := s.planRules(traderID, ctx.session, ctx.tradeDate, version)
+			rule, _, left := s.planRules(traderID, ctx.session, ctx.tradeDate)
 			ctx.liveStatus = kernel.RenderPlanStatus(traderID, symbol, ctx.doc, bars, price, dATR, rule, left, now.UnixMilli(), ctx.row.CreatedAt.UnixMilli())
 		}
 	}
@@ -2111,7 +2122,7 @@ func (s *Server) handlePlanRealign(c *gin.Context) {
 	if market.FuturesBarsProvider != nil {
 		if bars := market.FuturesBarsProvider(symbol, "1m", kernel.AISVPBarCount); len(bars) > 0 {
 			price, dATR := marketRef(symbol, now)
-			rule, _, left := s.planRules(traderID, sess.Name, row.TradeDate, row.Version) // W15.B
+			rule, _, left := s.planRules(traderID, sess.Name, row.TradeDate) // W15.B
 			liveStatus = kernel.RenderPlanStatus(traderID, symbol, doc, bars, price, dATR, rule, left, now.UnixMilli(), row.CreatedAt.UnixMilli())
 		}
 	}

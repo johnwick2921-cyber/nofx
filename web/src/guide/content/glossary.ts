@@ -85,11 +85,11 @@ export const glossary: GuideSection = {
         },
         {
           term: 'Re-plan',
-          def: 'A death-triggered re-read on the same chain (budget: replan_cap).',
+          def: 'A death-triggered re-read on the same chain (trigger death_replan). SPENDS one of replan_cap — recorded when the row lands (class 35).',
         },
         {
           term: 'Re-read',
-          def: 'Owner-triggered extra planner call on the same chain.',
+          def: 'Owner-triggered extra planner call on the same chain (trigger owner_reread). SPENDS one of replan_cap. Wake reads (level_event / structure_mss) are re-reads too but are FREE.',
         },
         {
           term: 'Seat',
