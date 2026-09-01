@@ -14,7 +14,7 @@ export const tradingDay: GuideSection = {
           time: '17:00',
           label: 'Session roll + ASIA read',
           detail:
-            'The CME session-day rolls; the ASIA plan is read (scheduled read 16:30, session opens 17:00 — open−30 per owner ruling 2026-08-31). Gate-block counters reset at the roll.',
+            'The CME session-day rolls; the ASIA plan is read (scheduled read 16:30, session opens 17:00 — open−30 per owner ruling 2026-08-31). The 16:30 read runs INSIDE the 16:00–17:00 halt on purpose: since class 36 the planner preflight skips its bar-freshness check for scheduled reads while the market is closed and authors from the last stored bars (loud 🗓 preflight-bypass line). Gate-block counters reset at the roll.',
         },
         {
           time: '01:30',
@@ -45,7 +45,7 @@ export const tradingDay: GuideSection = {
           time: '16:00–17:00',
           label: 'Halt',
           detail:
-            'CME daily halt — no decisions. The safe window for deploys and restarts.',
+            'CME daily halt — no executor decisions, no orders, no arms (unchanged). The PLANNER still authors on schedule during the halt (class 36 split: planner authors regardless of market state; executor never trades in a halt). The safe window for deploys and restarts.',
           shade: true,
         },
       ],

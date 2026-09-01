@@ -110,6 +110,19 @@ func (at *AutoTrader) evaluateWallClockSessionReads() {
 	}
 }
 
+// evaluateWallClockWeeklyRead (CLASS 36, 2026-09-01) — the Sunday 16:30 CT
+// weekly read is WALL-CLOCK work like the session reads: it used to live
+// inside runCycle (auto_trader_loop.go), behind the bar-close gate and the
+// no-new-data dedup that class 32 hoisted the session reads above — so it was
+// data-gated on a closed market (31 minutes late on 2026-08-30). It runs
+// BEFORE evaluateWallClockSessionReads so the Sunday sequence holds: the weekly
+// doc lands, then sundayAsiaDeferred (unchanged) lets the ASIA read follow.
+// maybeRunWeeklyRead is idempotent (skip-fresh + in-flight claim) and reads
+// STORED 1m bars — it has no freshness preflight to bypass.
+func (at *AutoTrader) evaluateWallClockWeeklyRead() {
+	at.maybeRunWeeklyRead(traderNow())
+}
+
 // newestStoredBarInfo reports the newest stored bar for the halt-fired log line.
 func newestStoredBarInfo(symbol, tf string, now time.Time) (newestCT string, ageMin int, have bool) {
 	if market.FuturesBarsProvider == nil {
@@ -834,6 +847,7 @@ func (at *AutoTrader) tickOnce(isGrid bool) {
 	// cycle_skip=no_new_data from 16:26 until the ~17:00:03 reopen tick —
 	// 30 minutes late, no error, no alarm, no plan at the open). A
 	// scheduled read must never inherit the market's calendar.
+	at.evaluateWallClockWeeklyRead() // CLASS 36 — weekly first (Sunday: weekly lands → ASIA follows)
 	at.evaluateWallClockSessionReads()
 	// U2 (watcher-eyes hotfix): a post_exit kick is a PROMISED immediate rescan
 	// — it bypasses the bar-close gate and the no-new-data dedup exactly once

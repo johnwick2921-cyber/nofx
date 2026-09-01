@@ -156,7 +156,7 @@ func TestPlannerPreflight(t *testing.T) {
 	at, st := feedTrader(t)
 
 	withProvider(t, nil) // provider wired, cache empty — the incident
-	if at.plannerPreflight("ASIA", "2026-08-18") {
+	if at.plannerPreflight("ASIA", "2026-08-18", "level_event") {
 		t.Fatal("an empty bar cache must refuse the planner call")
 	}
 	if got := feedAlerts(t, st, "planner-preflight"); got != 1 {
@@ -164,12 +164,12 @@ func TestPlannerPreflight(t *testing.T) {
 	}
 
 	withProvider(t, []market.Kline{{OpenTime: time.Now().UnixMilli() - 60_000}})
-	if !at.plannerPreflight("ASIA", "2026-08-18") {
+	if !at.plannerPreflight("ASIA", "2026-08-18", "level_event") {
 		t.Fatal("a fresh feed must pass preflight")
 	}
 
 	market.FuturesBarsProvider = nil
-	if !at.plannerPreflight("ASIA", "2026-08-18") {
+	if !at.plannerPreflight("ASIA", "2026-08-18", "level_event") {
 		t.Fatal("no provider at all (test/crypto) must fail open")
 	}
 }
