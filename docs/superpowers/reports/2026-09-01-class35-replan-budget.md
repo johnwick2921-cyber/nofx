@@ -8,9 +8,9 @@ Evidence tiers: **[A]** directly verified · **[B]** inferred from strong eviden
 | Item | State |
 |---|---|
 | PART 1 code | **MERGED to dev @ `ec6632f9`**, pushed to origin (fast-forward from `d4b38604`) |
-| Build | clean clone `--no-local` at `ec6632f9`, `vcs.modified=false`, staged as `~/nofx/nofx-bin.next` (sha256 `b460def0d42469be…`) |
-| Marker | `b51f8f03` — `deploy/RELEASE` + `GUIDE_BUILT_REV` = `ec6632f9…` (one marker, parked) |
-| Cutover | **NOT DONE — PARKED awaiting the owner's explicit GO (A3).** Running binary is still `fef656a4` |
+| Build | clean clone `--no-local` at `ec6632f9`, `vcs.modified=false` (sha256 `b460def0d42469be…`) — now the running `~/nofx/nofx-bin` |
+| Marker | `b51f8f03` — `deploy/RELEASE` + `GUIDE_BUILT_REV` = `ec6632f9…` (one marker, one boot) |
+| Cutover | **DONE 17:23:54 CT on owner GO** — boot `🔐 BOOT INTEGRITY OK — rev ec6632f9 · goldens PASS` 17:24:00, PID 1908258, live replans_left 4/4 (see CUTOVER section at the end); rollback `nofx-bin.prev.boot` kept |
 | PART 2 | read-only analysis complete; recommendation **PARKED, NOT APPLIED** (no config, no knob, no DB write) |
 | Lock | `~/nofx-main.lock` acquired 16:18 CT under a dead subshell PID, found stale by a second agent, restored, then cleared+re-acquired by me at 16:40:57 CT under live pid 1860416 (note in A2 section); released at closeout |
 
