@@ -251,15 +251,15 @@ func ValidateBreakdownContinueScenarios(d *PlanDoc, bars []market.Kline, atr5m, 
 		// confirming closes the floor requires — the honest message for the
 		// rehearsal-S4 class (E3 keeps this check unchanged).
 		if st.Reclaimed {
-			return fmt.Errorf("%s %s: a close came back across %.2f — the breakdown is void; author a reject/retest play instead", s.ID, s.Condition, bd.Level)
+			return fmt.Errorf("%s %s: a close came back across %.2f — the breakdown is void; %s", s.ID, s.Condition, bd.Level, BreakdownReclaimedHint)
 		}
 		if !immediate && !st.Leg1Met {
 			return fmt.Errorf("%s %s: the tape shows NO confirming close beyond %.2f yet (%d confirming close(s) needed — BD_MIN_CLOSES, displacement + reclaim-check unchanged) — author it only after the displacement exists (or set entry_mode=immediate and accept the confirming-close trigger)",
 				s.ID, s.Condition, bd.Level, bdConfirmCloses())
 		}
 		if atr5m > 0 && st.BreakLegPts < bdMinDispATR()*atr5m {
-			return fmt.Errorf("%s %s: measured displacement %.2f pts < BD_MIN_DISP_ATR %.1f×ATR5m (%.1f pts) — not a displacement move, author a normal reject/retest play instead",
-				s.ID, s.Condition, st.BreakLegPts, bdMinDispATR(), bdMinDispATR()*atr5m)
+			return fmt.Errorf("%s %s: measured displacement %.2f pts < BD_MIN_DISP_ATR %.1f×ATR5m (%.1f pts) — not a displacement move, %s",
+				s.ID, s.Condition, st.BreakLegPts, bdMinDispATR(), bdMinDispATR()*atr5m, BreakdownDisplacementHint)
 		}
 		if bd.DeclaredBreakLeg() > 0 && st.BreakLegPts > 0 {
 			_ = bd // declared leg accepted; the machine value is what the arm uses

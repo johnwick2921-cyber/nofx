@@ -28,4 +28,12 @@ func LogVolumeWaveBoot() {
 	// process level sees defaults+env; the per-trader resolved map prints at the
 	// trader's first arm cycle (class-8: resolved, never a literal).
 	logger.Infof("%s (process-level: defaults+env; per-trader resolved map prints at first arm cycle)", ConditionStatusLedger(nil, nil, ShadowConditionsEnv()))
+	// CLASS 34 (owner ruling 2026-08-31): every validator hint's condition
+	// tokens must be legal AND live. The table test is the hard build gate;
+	// this boot re-check makes a broken registry impossible to miss live.
+	if err := ValidateValidatorHints(); err != nil {
+		logger.Errorf("🧪 validator hints BROKEN: %v — a hint names an unknown or shadowed condition (class 34 guard)", err)
+	} else {
+		logger.Infof("🧪 validator hints: %d sites — every condition token legal + live (class 34 guard)", len(ValidatorHints()))
+	}
 }

@@ -267,6 +267,22 @@ in CLAUDE.md).
     DATA work only. Halt-fired reads author from last stored bars and log
     `🗓 session read fired during halt … (newest <tf> <ts>, age <n>m)`.
 
+34. **Validator hint naming a nonexistent condition.** Root cause: the
+    breakdown-void reject said "author a reject/retest play instead" — the
+    model authored condition `reject_retest`, and parse/schema rejected it:
+    the model complied with the hint and was punished for it. 2026-08-31
+    evidence: identical in BOTH ASIA chains, both fail-closed (v1 no_trade +
+    the in-flight reset chain killed by the 0C cutover). Compounded by 0C:
+    `breakout_retest` is shadowed, so the old hint steered toward either a
+    nonexistent or a demoted condition. **Probe:** grep every validator
+    message / repair-law excerpt for condition-shaped tokens; each must be in
+    the enum AND resolve live. The registry + table test IS the guard
+    (`kernel.ValidatorHints()` + `ValidateValidatorHints()`), re-run at boot,
+    and the planner reject block now appends `Valid conditions: [<resolved
+    live list>]`. **Law:** a hint is an instruction — instructions must be
+    checkable; never name a composite or shadowed token as an authoring
+    target. (Class 33 is unoccupied — this wave shipped as 34 per dispatch.)
+
 ---
 
 ## PART 2 — PRE-AUDIT (standing hard rules)

@@ -164,7 +164,7 @@ func ArmSpecValid(sc PlanScenario) error {
 	// the momentum leg chained on 1m_mss (1x5m_close accepted).
 	if len(a.Legs) > 0 {
 		if !strings.EqualFold(strings.TrimSpace(sc.Condition), "sweep_reclaim") {
-			return fmt.Errorf("arm legs on %s — arm_legs_sweep_reclaim_only (the split entry is the sweep_reclaim contract; other conditions arm single)", sc.Condition)
+			return fmt.Errorf("arm legs on %s — arm_legs_sweep_reclaim_only %s", sc.Condition, ArmLegsSplitContract)
 		}
 		if len(a.Legs) != 2 {
 			return fmt.Errorf("arm on %s needs EXACTLY 2 legs (split contract), got %d", sc.ID, len(a.Legs))
