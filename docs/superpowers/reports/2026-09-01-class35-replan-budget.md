@@ -266,3 +266,26 @@ Labelled a **guess** (n = 44 bot fills). D5 test 3 (hand example: $0.35/side com
 - Commits: `ec6632f9` (fix, 20 files) · `b51f8f03` (marker) · this report (docs).
 - Lock released, worktree `../nofx-class35` removed, repo memory updated (`project_class35_replan_budget.md`).
 - **Next action is the owner's:** "GO" → cutover per §7 in a flat window (outside 16:45–17:10 CT, no planner read in flight, no live arms), then quote the boot line, `🧮` line and the live `replans_left` for the ASIA chain.
+
+---
+
+## CUTOVER — DONE (owner GO, 2026-09-01) [A]
+
+- **GO received ~17:13 CT.** Lock re-acquired (pid 1860416, alive). Gates at 17:13:31 CT: outside the 16:45–17:10 window ✓; DB OPEN 0, armed 0, API positions `[]`, open-orders `[]`, NT8 `positions snapshot account=Sim101 count=0` ✓ — **but the ASIA session read was in flight** (17:10:09 `📐 planner attempt 1/3 rejected` → `🧩 attempt 2/3 repair`; 17:13:05 `planner read for 2026-09-01:ASIA … already in flight`). **Held per A6.**
+- **Read landed 17:23:14 CT:** `🗓️ PLAN written 2026-09-01 ASIA v1 (model deepseek-v4-pro, lifecycle no_trade …)` — fail-closed after three rejected attempts (class-34 style validator rejects; not this wave's concern). No claim after it. Gates re-quoted 17:23:37 CT: DB OPEN 0, armed 0, API positions `[]`, open-orders `[]`, NT8 snapshot `Sim101 count=0` (17:23:21), ASIA `armed: {}`.
+- **Swap 17:23:54 CT:** `cp nofx-bin nofx-bin.prev.boot` · `mv nofx-bin nofx-bin.old.fef656a4` · `mv nofx-bin.next nofx-bin` (rev check `ec6632f9` passed first) · `kill -9 1625428`.
+- **Boot checklist (6 s after the kill):**
+  `09-01 17:24:00 🔐 BOOT INTEGRITY OK — rev ec6632f9de41 · built 2026-09-01T21:54:27Z · expected ec6632f9de41 · goldens PASS`
+  `09-01 17:24:00 🧮 replan budget: recorded-counter (class 35) — spends: death_replan, owner_reread · free: <S>_scheduled_read, level_event, structure_mss (incl. fast-market), owner_reset, dormant/rearm + fail-closed markers · key dayplan_replans_used:<trader>:<date>:<session>:b<baseline>`
+  Exactly ONE PID: `1908258`. `📐 NT8 instrument_info MNQ (MNQ 09-26): point_value=2 tick=0.25 — matches table ✓`. Feed re-warmed: the newest MNQ 1m bar in `bars` is `2026-09-01 17:24:00 CT`, written after the boot. `[ERRO]` lines since boot: **0**. Positions after boot: `[]`.
+- **Live `replans_left` on the new binary (17:24:16 CT, `/api/plan/today?trader_id=…&session=`):**
+
+| session | version | lifecycle | old binary (fef656a4, 17:02 CT) | **new binary (ec6632f9)** | fixture expectation |
+|---|---|---|---|---|---|
+| LONDON | 6 | active | 0 / 4 | **4 / 4** | 4 (zero spends) ✓ |
+| NY | 5 | active | 0 / 4 | **4 / 4** | 4 (zero spends) ✓ |
+| ASIA | 1 | no_trade (fail-closed) | 4 / 4 | **4 / 4** | 4 (v1 is free) ✓ |
+
+  `system_config` counter rows: none yet (no `death_replan` / `owner_reread` has landed since boot — the first live spend will write `dayplan_replans_used:…:b1`).
+- **Rollback (still valid):** `mv nofx-bin nofx-bin.bad.ec6632f9 && cp nofx-bin.prev.boot nofx-bin && printf 'fef656a4ee7c45860ad0237f48cef90c6b148d17' > deploy/RELEASE && kill -9 1908258`.
+- **Still to observe live (A20):** a real `death_replan` spend and an owner re-read spend on this binary — neither has occurred yet; the proof so far is the fixture chain matching the live chain shape, plus the corrected live numbers above. Class 35's proving condition (a death on a wake-inflated chain now re-planning instead of fail-closing) has **not** occurred since boot — stated plainly.
