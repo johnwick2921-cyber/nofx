@@ -2,8 +2,16 @@
 
 Date: 2026-08-31 CT · Wave: class32-wallclock-reads · Branch: `class32-wallclock-reads` (merged → dev `ebc37e01`)
 
-**STATUS: STAGED-AND-GREEN — CUTOVER ON HOLD (owner unavailable for GO at 18:45 CT;
-dispatch 8.6: "Owner unavailable" means HOLD. No unattended deploys.)**
+**STATUS: SHIPPED — cutover 2026-08-31 23:40:22 CT, owner GO ("Send this and GO class 32").**
+Live rev now: `ebc37e01d7dd5f19c0e0f0ffa962388e12988f58` (PID 1589096).
+Rollback kept: `nofx-bin.prev.boot` = previous live `7004a7f1f726…` (0C, PID 1466535).
+
+Cutover evidence:
+- Flat gate pre (23:39-23:40 CT): DB open pos 0 · open orders 0 · armed nonterminal 0 · API positions `[]` · API open-orders MNQ `[]` · NT8 snapshots `count=0` ×2 @23:39:59.
+- Swap: `mv nofx-bin nofx-bin.prev.boot` → staged binary in (stamp verified on the deployed file: `vcs.revision=ebc37e01…`, `modified=false`) → `kill -9 1466535` @23:40:22 → systemd relaunch PID 1589096.
+- Boot 23:40:27 quoted: `🔐 BOOT INTEGRITY OK — rev ebc37e01d7dd · expected ebc37e01d7dd · goldens PASS` · `🗓 session reads (owner ruling 2026-08-31, open−30): ASIA 16:30 · LONDON 01:30 · NY 08:00 CT` · `🔬 conditions: live [7] · shadow [breakout_retest, fvg_entry]` · `📜 scenario schema: 9 conditions`.
+- Post-boot: 0 `[ERRO]`/panic, equity 52216.00 preserved, API positions `[]`, open-orders MNQ `[]`.
+- TRUE LIVE PROOF pending: tomorrow ~16:35 CT — quote the actual ASIA read timestamp + `🗓 session read fired during halt …` line (the read is scheduled for 16:30 while CME is halted 16:00-17:00).
 
 Staged:
 - Build sha `ebc37e01d7dd5f19c0e0f0ffa962388e12988f58` — clean-clone build, `vcs.revision` matches, `vcs.modified=false`. Binary at `~/nofx-staged/nofx-32-bin`.
