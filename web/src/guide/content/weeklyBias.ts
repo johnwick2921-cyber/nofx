@@ -17,7 +17,7 @@ export const weeklyBias: GuideSection = {
       cards: [
         {
           title: 'One read per week (Sunday 16:30 CT)',
-          body: 'At WEEKLY_READ_CT (default "sun 16:30" CT) the bot runs ONE AI read over the STORED 1m bars: 12 completed weekly candles, weekly references (weekly_open · PWH/PWL/PWC), the last 5 weekend gaps (NWOG), the 20/40/60-day IPDA ranges, and a prior-week recap. The doc is stored on a plans row with session=WEEKLY; a stored doc means never re-run (idempotent). A Monday boot backfills exactly once.',
+          body: 'At WEEKLY_READ_CT (default "sun 16:30" CT) the bot runs ONE AI read over the STORED 1m bars: 12 completed weekly candles, weekly references (weekly_open · PWH/PWL/PWC), the last 5 weekend gaps (NWOG), the 20/40/60-day IPDA ranges, and a prior-week recap. The doc is stored on a plans row with session=WEEKLY; a stored doc means never re-run (idempotent). A Monday boot backfills exactly once. Class 36 (2026-09-01): the weekly read runs on the wall-clock evaluator beside the session reads (it used to sit inside the data-gated cycle and ran 31 minutes late on 2026-08-30); Sunday sequencing is unchanged — the weekly doc lands, then the 16:30 ASIA read follows.',
         },
         {
           title: 'Tier-A evidence only — closed bars only',

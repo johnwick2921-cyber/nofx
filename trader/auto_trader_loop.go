@@ -195,11 +195,12 @@ func (at *AutoTrader) runCycle() error {
 	// day_plan; throttled; idempotent (skip-fresh).
 	at.maybeFetchCalendar(time.Now())
 
-	// W2 (weekly-bias wave) — SUNDAY WEEKLY READ, hoisted above the session gate
-	// for the same F0 reason: the 16:30 CT Sunday read runs while the market is
-	// CLOSED, and a Monday-morning boot must backfill it before the open. Gated
-	// on day_plan; idempotent (a stored WEEKLY doc = never re-run).
-	at.maybeRunWeeklyRead(time.Now())
+	// W2 (weekly-bias wave) — the SUNDAY WEEKLY READ used to run here, above
+	// the session gate. CLASS 36 (2026-09-01): runCycle itself sits behind the
+	// bar-close gate and the no-new-data dedup in tickOnce, so on a closed
+	// market the read was still data-gated (31 minutes late 2026-08-30). It now
+	// runs on the wall-clock evaluator (evaluateWallClockWeeklyRead, called at
+	// the top of tickOnce beside the session reads).
 
 	// P4 (ledger-close 2026-08-19) — HALF-DAYS PRODUCER, also above the session
 	// gate (same F0 reasoning: a weekend boot must seed Monday's early close

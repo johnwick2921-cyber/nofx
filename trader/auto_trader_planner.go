@@ -875,7 +875,7 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 	// U1 3.2 — never call the LLM on an empty/stale bar window (the 08-19
 	// outage produced 0-scenario fail-closed stubs this way). No plan row is
 	// written and no budget consumed; the read window retries next cycle.
-	if !at.plannerPreflight(session, tradeDate) {
+	if !at.plannerPreflight(session, tradeDate, triggerOverride) { // CLASS 36 — scoped by trigger class
 		return false
 	}
 	client, modelID := at.resolvePlannerClient()

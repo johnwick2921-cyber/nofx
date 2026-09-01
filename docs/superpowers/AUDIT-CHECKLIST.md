@@ -306,6 +306,38 @@ in CLAUDE.md).
     reads `replans_left` from the API. **Law:** counters record events; they
     do not infer them.
 
+36. **Scheduled work inheriting the market's calendar — layer 2, the
+    preflight (sibling of class 32).** Root cause: `plannerPreflight`
+    (trader/auto_trader_feedwatch.go) compared the newest 1m bar's age to
+    FEED_ALERT_S (600s) for EVERY planner trigger class. Class 32 fixed the
+    TRIGGER (wall-clock evaluation), but the read then met a freshness check
+    that is UNSATISFIABLE inside the 16:00–17:00 halt or on a weekend by
+    definition. 2026-09-01: the 16:30 ASIA trigger fired; fifteen
+    `stale_bars_1865s … 3545s` refusals 16:31→16:59; the read launched
+    17:01:05 on the reopen tick, three attempts died on the same
+    breakdown_continue-void class, fail-closed 17:23:14 (ASIA v1
+    planner_fail_closed) — the halt refusal ate the 31 minutes that would
+    have absorbed a retry BEFORE the open. The Sunday weekly read had the
+    same shape (31 minutes late 2026-08-30) and ALSO still lived inside
+    runCycle behind the data gate. Two contracts contradicted: "author from
+    last stored bars" (class 32) vs the preflight's freshness requirement.
+    **Probe:** for every scheduled action, walk the WHOLE path after the
+    trigger — every gate it crosses must be satisfiable at the scheduled
+    time by construction (a check that needs a live tape can never pass
+    during a halt). **Fix:** the freshness check is SCOPED by trigger class
+    (`preflightScheduledBypass`): scheduled session reads + the weekly
+    bypass it only while `!IsCMEOpen(now)`; death_replan / owner_reread /
+    level_event / structure_mss keep it; a scheduled read into a silent OPEN
+    tape still refuses (the 08-19 outage class). The weekly read moved onto
+    the wall-clock evaluator (`evaluateWallClockWeeklyRead`, before the
+    session reads; `sundayAsiaDeferred` unchanged). Both outcomes are loud:
+    `🗓 preflight bypass (class 36) …` (WARN) and `⛔ planner preflight refused
+    <class>: <reason>` (ERROR). Executor halt block untouched
+    (`cmeSessionClosedSkip` / `IsCMEOpen`). **Law:** never trading during a
+    halt is the executor's rule; never AUTHORING during a halt defeats the
+    open−30 design — a preflight may not refuse scheduled work because the
+    market is closed when the work exists to run while the market is closed.
+
 ---
 
 ## PART 2 — PRE-AUDIT (standing hard rules)
