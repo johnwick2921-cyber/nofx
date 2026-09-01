@@ -2,8 +2,16 @@
 
 Date: 2026-08-31 CT · Wave: class34-validator-hints · Branch: `class34-validator-hints` (merged → dev `fef656a4`)
 
-**STATUS: STAGED-AND-GREEN — CUTOVER ON HOLD (owner unavailable for GO at 23:54 CT;
-no unattended deploys).**
+**STATUS: SHIPPED — cutover 2026-09-01 00:43:25 CT, owner GO.**
+Live rev now: `fef656a4ee7c45860ad0237f48cef90c6b148d17` (PID 1625428).
+Rollback kept: `nofx-bin.prev.boot` = previous live `ebc37e01d7dd…` (class 32, PID 1589096).
+
+Cutover evidence:
+- Flat gate pre (00:43 CT): DB open pos 0 · open orders 0 · armed nonterminal 0 · API positions `[]` · API open-orders MNQ `[]` · NT8 snapshots `count=0` ×2 @00:43:00.
+- Swap: `mv nofx-bin nofx-bin.prev.boot` → staged binary in (stamp verified on the deployed file: `vcs.revision=fef656a4…`, `modified=false`) → `kill -9 1589096` @00:43:25 → systemd relaunch PID 1625428.
+- Boot 00:43:30 quoted: `🔐 BOOT INTEGRITY OK — rev fef656a4ee7c · expected fef656a4ee7c · goldens PASS` · `🗓 session reads … ASIA 16:30 · LONDON 01:30 · NY 08:00` · `🔬 conditions: live [7] · shadow [breakout_retest, fvg_entry]` · **`🧪 validator hints: 6 sites — every condition token legal + live (class 34 guard)`** · `📜 scenario schema: 9 conditions`.
+- Post-boot: 0 `[ERRO]`/panic, equity 52216.00 preserved, API positions `[]`, open-orders MNQ `[]`.
+- LIVE PROOF pending: the next natural validator reject during a read will carry the new `\`reject\`` hint + `Valid conditions: [acceptance, breakdown_continue, breakup_continue, hold, reclaim, reject, sweep_reclaim]` — quote it when it fires (and today ~16:35 CT the class-32 halt-fire timestamp).
 
 Staged:
 - Build sha `fef656a4ee7c45860ad0237f48cef90c6b148d17` — clean-clone build, `vcs.revision` matches, `vcs.modified=false`. Binary at `~/nofx-staged/nofx-34-bin`.
