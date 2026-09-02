@@ -248,6 +248,23 @@ func classifyAIError(err error) string {
 	return "other"
 }
 
+// ClassifyAIError (class 41) exports the ai_call class token for callers
+// outside mcp (the planner attempt loop decides resend-vs-repair on it).
+func ClassifyAIError(err error) string { return classifyAIError(err) }
+
+// IsProviderFailure (class 41, owner ruling class 37 M4) — true when a failed
+// call never produced a model answer to repair: transport cut, idle/total
+// deadline, http.Client.Timeout, context. The planner re-sends the IDENTICAL
+// prompt on these; validator/parse rejects (class=other, http_status…) keep
+// the reject/repair flow.
+func IsProviderFailure(err error) bool {
+	switch classifyAIError(err) {
+	case "transport", "idle_deadline", "total_deadline", "client_timeout", "context":
+		return true
+	}
+	return false
+}
+
 // requestIDFrom returns the provider's request id header when present (the
 // attributable handle for a provider-side ticket); "" otherwise.
 func requestIDFrom(h http.Header) string {
@@ -1139,18 +1156,29 @@ func (client *Client) CallWithRequestStreamDeadlines(req *Request, onChunk func(
 	ctx, cancel := context.WithCancelCause(parent)
 	defer cancel(nil)
 	resetCh := make(chan struct{}, 1)
+	callStart := time.Now()
 	go func() {
 		t := time.NewTimer(idle)
 		defer t.Stop()
+		lastLine := callStart // per CALL: a fresh timer + fresh clock each call (never carried across retries)
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case <-t.C:
+				// CLASS 41 M2 (2026-09-02): the watchdog LOGS when it fires, with
+				// the measured gap, so "0 idle kills" is evidence, not silence.
+				// It measures time since the last SSE LINE scanned (bufio line,
+				// including blank/keep-alive lines), not since the last byte.
+				if client.Log != nil {
+					client.Log.Warnf("⏱ stream idle watchdog FIRED: %.1fs since last SSE line (idle=%ds, call age %.1fs) — cancelling the stream (class=idle_deadline)",
+						time.Since(lastLine).Seconds(), int(idle.Seconds()), time.Since(callStart).Seconds())
+				}
 				cancel(ErrStreamIdleDeadline) // idle timeout: kill the connection
 				return
 			case <-resetCh:
 				// received a line — reset the idle timer
+				lastLine = time.Now()
 				if !t.Stop() {
 					select {
 					case <-t.C:
@@ -1247,7 +1275,21 @@ func (client *Client) CallWithRequestStreamRetryDeadlines(req *Request, onChunk 
 		return "", fmt.Errorf("AI API key not set")
 	}
 	var lastErr error
-	maxRetries := client.Cfg.MaxRetries
+	// CLASS 41 (2026-09-02): the stream path counts CALLS via StreamTries and
+	// waits an EXPONENTIAL schedule (StreamBackoff, default 2s → 15s → 45s)
+	// instead of RetryWaitBase×attempt. MaxRetries (AI_MAX_RETRIES) still
+	// governs the non-stream paths only.
+	maxRetries := client.Cfg.StreamTries
+	if maxRetries < 1 {
+		maxRetries = client.Cfg.MaxRetries
+	}
+	if maxRetries < 1 {
+		maxRetries = 1
+	}
+	sched := client.Cfg.StreamBackoff
+	if len(sched) == 0 {
+		sched = StreamRetryBackoffSchedule()
+	}
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		if attempt > 1 {
 			client.Log.Warnf("⚠️  AI API stream failed, retrying (%d/%d)...", attempt, maxRetries)
@@ -1266,7 +1308,7 @@ func (client *Client) CallWithRequestStreamRetryDeadlines(req *Request, onChunk 
 			return "", err
 		}
 		if attempt < maxRetries {
-			waitTime := client.Cfg.RetryWaitBase * time.Duration(attempt)
+			waitTime := streamBackoffFor(attempt, sched) // class 41: 2s → 15s → 45s
 			client.Log.Infof("⏳ Waiting %v before retry...", waitTime)
 			if err := sleepWithContext(contextFromRequest(req), waitTime); err != nil {
 				return "", err

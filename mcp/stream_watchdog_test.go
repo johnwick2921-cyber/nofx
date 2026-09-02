@@ -24,6 +24,8 @@ func streamClient(t *testing.T, url string, retries int) *Client {
 	c.UseFullURL = true
 	c.HTTPClient = &http.Client{Timeout: 10 * time.Second}
 	c.Cfg.MaxRetries = retries
+	c.Cfg.StreamTries = retries // class 41: the stream path counts CALLS via StreamTries
+	c.Cfg.StreamBackoff = []time.Duration{10 * time.Millisecond, 20 * time.Millisecond}
 	c.Log = NewMockLogger()
 	return c
 }

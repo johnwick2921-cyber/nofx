@@ -1321,9 +1321,23 @@ func plannerClientBootLine(providerRow string, idleS, totalS, httpCeilingS, retr
 		providerRow, idleS, totalS, httpCeilingS, retries, backoffS, cap)
 }
 
+// plannerStreamPolicyBootLine (class 41, 2026-09-02) — the planner STREAM
+// retry policy in one line: calls per attempt, the exponential wait schedule,
+// watchdog fire logging, the dialer keepalive in effect, executor
+// serialization (off: P3 found no overlap effect), and identical-prompt resend.
+func plannerStreamPolicyBootLine(tries int, sched []time.Duration, keepaliveS int) string {
+	parts := make([]string, 0, len(sched))
+	for _, d := range sched {
+		parts = append(parts, d.String())
+	}
+	return fmt.Sprintf("🔁 planner stream policy (class 41): stream_tries=%d (AI_PLAN_STREAM_TRIES, counts CALLS; AI_MAX_RETRIES=%s non-stream only) backoff=%s (AI_PLAN_STREAM_BACKOFF) watchdog_log=on (⏱ line on fire, per SSE line) keepalive=%ds (dialer) serialize_executor=off resend_identical=on (transport/deadline → same prompt, no reject block)",
+		tries, "calls", strings.Join(parts, "→"), keepaliveS)
+}
+
 func (at *AutoTrader) logPlannerClientBootLine() {
 	ai := mcp.EffectiveAIParamsSnapshot("")
 	at.logInfof("%s", plannerClientBootLine(at.config.AIModelID, kernel.PlannerStreamIdleSeconds(), kernel.PlannerStreamTotalSeconds(), ai.TimeoutSeconds, ai.MaxRetries, ai.RetryBackoffSeconds, aiPlanMaxTokens()))
+	at.logInfof("%s", plannerStreamPolicyBootLine(mcp.StreamRetryTries(), mcp.StreamRetryBackoffSchedule(), 30))
 }
 
 // sundayAsiaDeferred (A2, owner ruling 2026-08-31) — the Sunday sequencing
@@ -1388,10 +1402,20 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 	var prevReason string
 	lastRaw := ""
 	forceReauthor := false
+	resendIdentical := ""                       // class 41 M0: the exact prompt a provider-failed attempt sent
 	for attempt := 1; attempt <= 3; attempt++ { // 1 + ≤2 retries
 		userPrompt := prompt
 		modeLabel := "author"
-		if attempt >= 2 {
+		if attempt >= 2 && resendIdentical != "" {
+			// CLASS 41 M0 (owner ruling class 37, 2026-09-01; implemented
+			// 2026-09-02): a transport/deadline failure produced NO model
+			// answer, so there is nothing to repair and no validator reason —
+			// re-send the IDENTICAL prompt, no reject block appended.
+			userPrompt = resendIdentical
+			resendIdentical = ""
+			modeLabel = "resend-identical"
+			at.logInfof("🧩 planner attempt %d/3 %s: prompt ~%d tokens (byte-identical to the provider-failed attempt; no reject block)", attempt, modeLabel, estimatePromptTokens(userPrompt))
+		} else if attempt >= 2 {
 			if retryMode == "repair" && !forceReauthor && lastRaw != "" && lastErr != nil {
 				userPrompt = kernel.BuildPlannerRepairPrompt(lastRaw, lastErr.Error())
 				modeLabel = "repair"
@@ -1402,6 +1426,19 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 			at.logInfof("🧩 planner attempt %d/3 %s: prompt ~%d tokens (full-author ~%d tokens)", attempt, modeLabel, estimatePromptTokens(userPrompt), estimatePromptTokens(prompt))
 		}
 		raw, err := call(userPrompt)
+		if err != nil && mcp.IsProviderFailure(err) {
+			// CLASS 41 M0: provider failure → the next attempt re-sends this
+			// exact prompt. No reject block, no rejected-prompt row (that table
+			// samples VALIDATOR rejects; the 🛰/ai_call lines already carry the
+			// class), lastRaw/lastErr untouched so a later validator reject
+			// still repairs against the last real model output.
+			at.logWarnf("📐 planner attempt %d/3 failed on the provider (class=%s) — attempt %d re-sends the IDENTICAL prompt: %v", attempt, mcp.ClassifyAIError(err), attempt+1, err)
+			resendIdentical = userPrompt
+			if attempt == 3 {
+				lastErr = err
+			}
+			continue
+		}
 		lastRaw = raw
 		if err != nil {
 			lastErr = err

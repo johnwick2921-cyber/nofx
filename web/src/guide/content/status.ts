@@ -22,6 +22,7 @@ export const status: GuideSection = {
         '🧪 validator hints: N sites — condition tokens legal+live, rule tokens in-field',
         '📜 prompt/validator contract: N restrictions, all stated in prompt  ← class 38',
         '⚖ arm normalizer: legs on non-sweep → single arm + WARN  ← class 39',
+        '🔁 planner stream policy (class 41): stream_tries=3 backoff=2s→15s→45s watchdog_log=on keepalive=30s serialize_executor=off resend_identical=on  ← class 41 (per trader)',
         '🎛 volume wave …   ← wave detector knobs',
         '🎯 touch telemetry …',
         '📐 fvg_entry …',

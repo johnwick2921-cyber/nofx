@@ -474,6 +474,46 @@ in CLAUDE.md).
     figure travels with its resolved n and its unresolved count, and an
     unknown is UNRESOLVED, never a coerced number and never a plausible zero.
 
+41. **Provider mid-stream cut treated as a validator reject (transport
+    resets).** Root cause: on 2026-09-01 four of 81 planner SSE calls (4.9 per
+    100; 0 of 31 on 08-31) died mid-body — 01:46 `connection reset by peer`
+    (RST), 23:47:13 / 23:47:33 / 23:52:41 `stream interrupted: unexpected
+    EOF` after 250 s / 18 s / 308 s with 55k / 3k / 70k reasoning chars, all
+    `http_status=200 request_id=""`. WHO closed the socket: reproduced
+    in-process (`mcp/transport_cut_probe_test.go`) — a peer FIN mid-body
+    yields exactly `stream interrupted: unexpected EOF` class=transport, a
+    peer RST yields exactly the 01:46 string, and the idle watchdog yields
+    `stream idle deadline exceeded … class=idle_deadline` (context.Cause is
+    checked BEFORE the reader error, so a watchdog kill can never be
+    mislabelled). Verdict: **THEM** — the peer (DeepSeek edge, a CloudFront
+    distribution at `api.deepseek.com` → `d3bbv8sr76az5s.cloudfront.net`)
+    or its origin closed a live HTTP/1.1 chunked response; our Go code is
+    excluded [A]; a middlebox on the WSL2-mirrored / Windows path cannot be
+    excluded from strings alone (passive socket-state watcher armed). Our
+    side then made it worse twice: (1) the client retry waited a FIXED 2 s
+    and call 2 died 18 s later on the same flap; (2) the planner loop
+    treated the exhausted transport error as a VALIDATOR reject — attempt 2
+    re-authored with `still failed after 2 retries: stream interrupted:
+    unexpected EOF` appended as its "validator reason" (owner ruling class
+    37 M4 had said: identical prompt, no reject block). **Probe:** for every
+    failure path, ask whether the model ever answered; if not, there is
+    nothing to repair and no reason to append — resend. For every kill
+    switch (watchdog, deadline, ceiling), ask whether it LOGS when it fires;
+    an unlogged switch makes "0 kills" an absence of evidence. **Fix:**
+    `mcp.IsProviderFailure` (transport / idle_deadline / total_deadline /
+    client_timeout / context) → the planner attempt loop re-sends the
+    byte-identical prompt (`resend-identical`, no reject block, no
+    rejected-prompt row); stream retries count CALLS via
+    `AI_PLAN_STREAM_TRIES` (default 3) with the exponential schedule
+    `AI_PLAN_STREAM_BACKOFF` (default 2s→15s→45s); the idle watchdog logs a
+    `⏱ stream idle watchdog FIRED: Ns since last SSE line` WARN when it fires;
+    dialer keepalive 30 s confirmed in effect (`ss -o` timer), unchanged;
+    executor serialization NOT added (all 71 overlapped streams: 4 cuts; 6
+    non-overlapped: 0 — no power, no effect shown). Boot line `🔁 planner
+    stream policy (class 41)`. **Law:** a provider failure is retried, a
+    validator reject is repaired — never append a transport error to a
+    prompt; and every kill switch logs its own fire.
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,

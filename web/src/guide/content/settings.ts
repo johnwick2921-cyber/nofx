@@ -186,6 +186,22 @@ const dayPlan: KnobSpec[] = [
     perSession: 'No — process-wide.',
   },
   {
+    label: 'Planner stream retry tries + backoff',
+    where: 'Environment (AI_PLAN_STREAM_TRIES, AI_PLAN_STREAM_BACKOFF) — not a Strategy knob',
+    what: "How many CALLS the planner stream path makes per planner attempt when the provider cuts the connection mid-stream (class=transport: peer FIN → 'unexpected EOF', or RST), and how long it waits between them. Class 41 (2026-09-02): the schedule is exponential — 2s → 15s → 45s (last value repeats) — replacing the fixed 2s×n wait that let call 2 die 18s after call 1 on 2026-09-01 23:47 CT. AI_MAX_RETRIES still governs the NON-stream paths (executor loop, weekly read) and also counts CALLS. A transport/deadline failure that exhausts the tries re-sends the IDENTICAL prompt on the next planner attempt with NO reject block (owner ruling class 37; the pre-fix code re-authored with the transport error text as its 'validator reason').",
+    trader:
+      'Evidence: 4 mid-stream cuts in 81 stream calls on 2026-09-01 (4.9 per 100; 0 in 31 on 08-31), all http_status=200 with no provider request id; reproduced in-process: a peer FIN mid-body yields exactly that error string, the idle watchdog never does (it labels itself class=idle_deadline and now logs a ⏱ line when it fires).',
+    consumer:
+      'mcp/config.go (StreamRetryTries, StreamRetryBackoffSchedule) · mcp/client.go (CallWithRequestStreamRetryDeadlines, watchdog ⏱ line) · trader/auto_trader_planner.go (resend-identical) · boot line 🔁 planner stream policy',
+    range: 'tries 1 – 6 · backoff: comma list of Go durations (e.g. "2s,15s,45s")',
+    systemDefault: '3 tries · 2s,15s,45s',
+    recommended:
+      '⭐ Defaults. Worst case added wall per planner attempt = 17s (2s + 15s) before the attempt is consumed; a 4th try adds 45s more.',
+    whenToTouch:
+      'If 🔁 lines show call 3 still dying on the same edge flap, raise tries to 4 (adds the 45s wait). Never lower below 2 — a single cut would consume a planner attempt outright.',
+    perSession: 'No — process-wide.',
+  },
+  {
     label: 'Min scenario quality',
     where: 'Strategy → Day Plan → A/B/C',
     what: 'Lowest grade the planner may write (INFORMATIONAL — nothing gates on it).',

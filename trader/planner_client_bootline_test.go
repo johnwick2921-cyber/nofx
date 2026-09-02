@@ -3,6 +3,7 @@ package trader
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 // Class 37 (C7) — the per-trader boot line carries the RESOLVED planner client
@@ -35,5 +36,16 @@ func TestClass37PlannerStreamTotalResolvedInTrader(t *testing.T) {
 	}
 	if plannerStreamTotal() <= plannerStreamIdle() {
 		t.Fatalf("total must exceed idle")
+	}
+}
+
+// CLASS 41 — the stream policy boot line names tries (CALLS), the schedule,
+// watchdog logging, keepalive, serialization state and identical-prompt resend.
+func TestClass41PlannerStreamPolicyBootLine(t *testing.T) {
+	line := plannerStreamPolicyBootLine(3, []time.Duration{2 * time.Second, 15 * time.Second, 45 * time.Second}, 30)
+	for _, want := range []string{"🔁 planner stream policy (class 41)", "stream_tries=3", "counts CALLS", "backoff=2s→15s→45s", "watchdog_log=on", "keepalive=30s", "serialize_executor=off", "resend_identical=on"} {
+		if !strings.Contains(line, want) {
+			t.Fatalf("boot line missing %q: %s", want, line)
+		}
 	}
 }

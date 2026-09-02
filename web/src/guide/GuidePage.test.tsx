@@ -23,8 +23,8 @@ describe('knob spec completeness', () => {
     s.blocks.flatMap((b) => (b.kind === 'knobs' ? b.knobs : []))
   )
 
-  it('has exactly 43 knob cards (Section 7 census = live-page control count; W7 +6 weekly knobs, min-side card removed 2026-08-31, +2 planner-speed 2026-08-31, +1 planner stream total deadline class 37 2026-09-01)', () => {
-    expect(allKnobs).toHaveLength(43)
+  it('has exactly 44 knob cards (Section 7 census = live-page control count; W7 +6 weekly knobs, min-side card removed 2026-08-31, +2 planner-speed 2026-08-31, +1 planner stream total deadline class 37 2026-09-01, +1 planner stream retry tries+backoff class 41 2026-09-02)', () => {
+    expect(allKnobs).toHaveLength(44)
   })
 
   it('every knob card fills all ten mandatory fields', () => {
