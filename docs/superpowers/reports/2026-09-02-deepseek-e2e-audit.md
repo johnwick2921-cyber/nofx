@@ -434,3 +434,139 @@ Of the **50** `ok=false` lines on file, the `transport` stamp is **correct on 5 
 - **S-6 — stream attempt counts are not derivable from the completion lines.** 09-02 had 16 stream requests but 9 completion lines; the gap reconciles exactly to 6 stream-503s + 1 send reset. Any rate computed off `AI call complete (stream)` has a silent denominator.
 
 ---
+
+## 11. SECTION D — TRANSPORT
+
+### D1 The client: one constructor, and its unset fields are the story
+
+Every DeepSeek client — executor, planner, agent, Ask-Planner — funnels through `mcp.NewClient()` → `DefaultConfig()` → **`security.SafeHTTPClient(ResolvedAITimeout())`** [CODE] `mcp/config.go:87`. `grep -rn "http.Transport{"` finds **no transport literal anywhere in `mcp/` or `provider/`**; the only one on this path is inside `SafeHTTPClient` [CODE] `security/url_validator.go:159-203`.
+
+| field | resolved | evidence |
+|---|---|---|
+| `http.Client.Timeout` | **600 s** | [CONFIG] `.env AI_HTTP_TIMEOUT_SECONDS=600`; [RUNTIME] boot |
+| `net.Dialer.Timeout` | **600 s — bound to the AI request ceiling** | [CODE] `:160` `Timeout: timeout` |
+| `net.Dialer.KeepAlive` | 30 s (literal) | [CODE] `:161` |
+| `DialContext` | non-nil — `net.LookupIP` + private-IP check **on every dial** | [CODE] `:165-186` |
+| `ResponseHeaderTimeout` · `TLSHandshakeTimeout` · `MaxIdleConns` | **0 = no limit** | [CODE] zero values |
+| **`IdleConnTimeout`** | **0 — Go NEVER evicts an idle pooled connection** | [CODE] zero value; Go doc "Zero means no limit" |
+| `MaxIdleConnsPerHost` | 0 → effective **2** | [CODE] `DefaultMaxIdleConnsPerHost` |
+| `ForceAttemptHTTP2` · `TLSClientConfig` | false · nil | [CODE] |
+| **`Transport.Proxy`** | **nil — proxying DISABLED**, not `ProxyFromEnvironment` | [CODE] zero value |
+
+**HTTP version settled two independent ways.** [CODE] Go's `Transport.protocols()` takes the branch `!ForceAttemptHTTP2 && (… || DialContext != nil || …)` → *"Be conservative and don't automatically enable http2"* → the bundled h2 transport is never configured and **ALPN offers `http/1.1` only**. [NET] corroboration: during the 07:15:49→07:21:59 planner stream that overlapped four executor calls, **two separate TCP connections** carried the two workloads — `:48474` accumulating 6.5 MB of SSE with `lastrcv` pinned at 4–44 ms, `:45368` stepping per executor call. **Under HTTP/2 both would have multiplexed onto one connection.** Max simultaneous ESTAB to the peer across the capture = **2** (818 samples at 1, 154 at 2, 0 above) — exactly `DefaultMaxIdleConnsPerHost` with HTTP/1.1 head-of-line serialization.
+
+**The peer is `3.173.21.63:443`** — identified [RUNTIME] from the process's own error text, and per the sibling wave a **CloudFront edge**, not DeepSeek origin.
+
+**Surprise:** `net.Dialer.Timeout` is bound to `AI_HTTP_TIMEOUT_SECONDS`, so **a TCP connect to a black-holed peer can hang 600 seconds**. There is no separate dial or TLS-handshake ceiling.
+
+### D2 Class-41 policy: two fields are real, four are string literals
+
+| element | enforcing code | read or literal? | [RUNTIME] proof since 06:27:45 |
+|---|---|---|---|
+| `stream_tries=3` | `mcp/client.go:1338-1344` | **read** (env, unset → 3) | **none — unproven.** Every stream retry ever logged reads `retrying (2/2)` (pre-class-41 fallback to `MaxRetries`); the class-41 string `(2/3)`/`(3/3)` has **never appeared** |
+| `backoff=2s→15s→45s` | `:1364-1368` | **read** | **none — unproven.** The one `⏳ Waiting 2s` today is the *non-stream* loop |
+| `watchdog_log=on` | `:1229-1237` | **literal** | **none.** `grep "stream idle watchdog FIRED"` across every log 08-26→09-02 → **0 hits, all time** |
+| `keepalive=30s (dialer)` | `security/url_validator.go:161` | **LITERAL** — the constant `30` is passed at `auto_trader_planner.go:1353`; **nothing reads the dialer** | **PARTIAL/CONTRADICTED** — [NET] SO_KEEPALIVE is armed, but the observed probe timer peaks at **14/18/20 s**, never 30 |
+| `serialize_executor=off` | **no code exists** | **LITERAL** | **proven active** — 105 of 117 streams overlapped an executor call |
+| `resend_identical=on` | `auto_trader_planner.go:1418-1431` (real code) | **literal in the line** | **none — `grep "resend-identical"` → 0 hits in any log** |
+
+**A11 — the boot line would print `keepalive=30s` even if the dialer were changed to `KeepAlive: 0`, and `serialize_executor=off` even if serialization were added.** Its own fixture (`trader/planner_client_bootline_test.go:44-51`) pins the wording by calling the function with the same hand-written literals, so **the pin cannot detect the drift it exists to prevent.**
+
+**A12 — keepalive period disputed.** The sibling transport report states 30 s [A]; my [NET] sampling of the same socket family shows probe countdowns peaking at 20/18/14 s over 53 samples with `bytes_sent`/`bytes_received` frozen. Both agree the host default (7200 s) is overridden; they disagree on the value. Neither picked.
+
+### D3 Connection reuse — the mechanism, proven live
+
+**Same client, same transport, same pool, same host.** `resolvePlannerClient()` returns `at.mcpClient` whenever the planner binding is empty [CODE] `:74-79` — and [RUNTIME] it is empty on **9 of 9** planner reads today. The stream path shallow-copies only to lift `Timeout`; the comment says it: *"A shallow copy shares Transport/CheckRedirect/Jar"* [CODE] `mcp/client.go:1196-1204`. **The `*http.Transport` pointer — hence the idle pool — is identical.**
+
+**Reuse of a long-idle connection, observed** [NET]: socket `:48474` sat idle ~106 s (`lastsnd:105820`), the planner stream went out at 07:15:49 on it, and by 07:16:10 it had `bytes_received:397203`. It survived.
+
+**A stale pooled connection killing a call — OBSERVED end to end, not inferred** [NET]+[RUNTIME], 09-02 07:38:19:
+
+| t | observation |
+|---|---|
+| 07:34:20.012 | `:48638 NEW→ESTAB` |
+| 07:37:07 | last byte received on it |
+| 07:38:10.022 | `HB … lastrcv:62924` — idle, still ESTAB, **still in Go's pool** |
+| **07:38:19** | executor reuses it → `ai_call … duration_ms=27 … class=transport … "read tcp 10.0.0.141:48638->3.173.21.63:443: read: connection reset by peer"` |
+| 07:38:20.026 | `:48638 ESTAB→GONE` |
+| 07:38:22.132 | `:48246 NEW→ESTAB` — fresh conn; retry succeeded at 07:38:49 |
+
+`duration_ms=27` is the signature: the RST arrived with the write. **Idle gap ≈72 s.** With `IdleConnTimeout=0` **Go will never evict such a connection**; the CloudFront edge reaped it and only announced it on the next write. Whether a *planner stream* can hit the same dead socket is **[B] inferred** — the mechanism is proven for the executor and the planner demonstrably reuses 106-second-idle sockets, but no planner stream has been observed dying this way.
+
+**Bonus finding — planner streams never return their connection to the pool.** `ParseSSEStreamFull` `break`s at `[DONE]` without draining to EOF [CODE] `:1428-1430`, so `defer resp.Body.Close()` on a partially-read body makes Go close the TCP connection instead of pooling it. [NET] confirms **9 of 9** stream completions today are followed within ~1 s by `ESTAB→GONE`. (Wasteful, but incidentally protective: a stream never inherits a stale pooled socket from a *previous stream*.)
+
+### D4 Concurrency — the 2×2, and why it exonerates overlap
+
+Method: each call's window reconstructed as `[T_log − duration_ms, T_log]` from the `ai_call` line (exact, immune to interleaving), labelled stream vs non-stream by the nearest `📡 Request URL` line. **2,735 calls parsed, 0 unmatched** across 08-26→09-02 (08-27 excluded — a 2.0 GB log anomaly; 08-29 had zero AI calls).
+
+| | stream CUT | stream SURVIVED |
+|---|---|---|
+| overlapped ≥1 executor call | 11 | 94 |
+| stream alone | 5 | 7 |
+
+**Stripping the provider outage** (all 5 `alone`+`cut` and 1 `overlap`+`cut` are the 01:15 503 storm, `class=http_status`, 450–693 ms):
+
+| | CUT (transport/deadline) | SURVIVED | cut rate |
+|---|---|---|---|
+| overlapped | **10** | 94 | 9.6% |
+| alone | **0** | 7 | 0% |
+
+**Conclusion: no evidence that overlap causes cuts.** Overlap is the *default state* — 93% of surviving streams overlapped an executor call, because the executor cycles every ~2 min and streams run 40–600 s. Observing 10 of 10 cuts under overlap is exactly what a 93% base rate predicts (`P ≈ 0.48`), and the `alone` cell has n=7, which has **no power to detect anything**. This corroborates the `serialize_executor=off` rationale — **but the boot line states a conclusion drawn from an underpowered sample as settled policy.**
+
+The ten genuine cuts: seven are the `600.0 s` `timeout_source=client` class-37 kills (08-31 ×4, 09-01 ×3), and **they stop after 09-01 12:43** — zero since the total-deadline split. Three are the 09-01 23:4x `unexpected EOF` cluster that motivated class 41.
+
+### D5 WSL2 / Windows path
+
+**Mirrored networking** (`/mnt/c/Users/hoang/.wslconfig` → `networkingMode=mirrored`), WSL IP **is** the LAN IP (`10.0.0.141/24`, default via `10.0.0.1`), egress **MTU 1500** on `eth0`, **no proxy** anywhere (and moot — `Transport.Proxy` is nil). **Linux conntrack is ruled out**: `nf_conntrack_tcp_timeout_established = 432000 s (5 days)` ≫ any observed idle gap. Host keepalive defaults (7200/75/9) are overridden per-socket by the Go dialer.
+
+**The CloudFront edge is the prime suspect and the only thing the evidence directly implicates**: 72 s idle → RST on reuse. Our keepalive probes are ACKed (`timer:(keepalive,Ns,0)`, third field 0 unacked) while the edge has already released the session — a keepalive-ACKing middlebox in front of a reaped backend is exactly this shape [B]. **`IdleConnTimeout=0` is the amplifier**: whatever the edge's reap window is, Go keeps offering the dead socket forever. Any nonzero value below that window prevents the 07:38:19 failure outright.
+
+### D6 The socket watcher — running, and blind to the one thing it was built for
+
+`/home/hoang/nofx-backups/transport-capture/sockwatch.sh`, **running as PID 2100539 since 00:14** — a **bare background bash loop**, not a systemd unit or timer, **unsupervised**: it will not survive a reboot or a stray kill, and nothing will notice.
+
+It polls `ss -tnopi` every 250 ms. In **5,236 lines** since arming, the transition census is:
+```
+502 ESTAB->GONE   439 NEW->ESTAB   70 NEW->SYN-SENT   69 SYN-SENT->ESTAB   1 SYN-SENT->GONE
+```
+**Zero `CLOSE-WAIT`. Zero `FIN-WAIT-1`. Zero `FIN-WAIT-2`. Zero `LAST-ACK`.** The FIN-vs-RST discrimination the script was armed to provide **has never once fired** — at a 250 ms poll, sockets pass through those states faster than a sample. Every teardown is an undifferentiated `ESTAB→GONE`.
+
+Of the 15 DeepSeek-peer teardowns it saw: 9 are normal stream ends, 3 are binary restarts, **1 is the 07:38:20 stale-pool RST — whose FIN/RST fact came from Go's error string, not from the capture** — and **2 are entirely unexplained** (00:59:48.120, 04:50:11.262). Its `->GONE` branch omits the `$info` field, so every gap measurement carries a **≤10 s quantization** from the preceding heartbeat.
+
+## 12. SECTION I — TOOLS AND TESTS
+
+### I1 — the structural finding
+
+`grep -rn "SafeHTTPClient" --include=*_test.go .` → **one hit, and it is a comment explaining why the production transport is not used** (`mcp/ai_timeout_contract_test.go:30`).
+
+> **Not a single test in the repository instantiates the production transport.** Every stream/timeout/retry fixture substitutes `&http.Client{Timeout: …}` with `http.DefaultTransport`. The SSRF `DialContext`, the `IdleConnTimeout=0` pool, the 600 s dialer, the absent `ForceAttemptHTTP2`, and executor/planner connection sharing are **all untested by construction — and every defect found in D1/D3 lives in exactly that untested region.**
+
+**Vacuous or toy fixtures found (A11):**
+- **`TestProbePeerRSTMidBodyErrorString`** (`mcp/transport_cut_probe_test.go:60`) — **has no assertion at all.** The body is `_, err := …`, `t.Logf(…)`, `_ = bufio.NewReader`. There is no `t.Fatalf`/`t.Errorf` anywhere in the function. **It passes whether the call succeeds, fails, or returns anything whatsoever** — in the very file written to characterise transport cuts.
+- **`TestEffectiveAIParamsSnapshotExposesHiddenDefaults`** (`mcp/config_no_hardcode_test.go:62`) — the test process sets no `AI_*` env, so *all* Set-flags are false by construction; the assertion is guaranteed by the environment, not the code. Its condition also `&&`s **two identical string operands**.
+- **The class-37 toy family, with a sibling.** `TestStreamSlowButAliveSurvivesIdle` uses `Timeout=10s` against a ~510 ms stream (the fixture class-37 named). **`TestStreamTransportResetRetryEngages` has the same disease** — a 5 s idle and a 10 s ceiling against a millisecond-scale stream, both knobs inert.
+- `TestClass37TotalDeadlineAbortsWithClass` asserts `el > 3*time.Second` against a **400 ms** deadline — it would still pass if the deadline were 2.9 s. `TestT6` asserts an OR of two broad substrings that nearly any timeout error satisfies.
+- **The class-41 default schedule is never exercised**: `TestClass41StreamRetryLoopFollowsSchedule` injects `{10ms, 20ms}`, so the shipped 2s→15s→45s runs in no test.
+
+Genuine and valuable: `TestClass37LiveStreamBeyondHTTPTimeoutSurvivesUnderTotal` (actually crosses the ceiling), `TestClass37ClassifyAIErrorTable` (10 verbatim journal strings), `TestClass41ProviderFailureClasses`, `TestClass41TransportFailureResendsIdenticalPrompt` (sha256-compares the two prompts).
+
+**Untested by anything:** connection reuse/pool behavior · a stale pooled connection RST on first write (the 07:38:19 class) · the negotiated HTTP version · `IdleConnTimeout` · the dialer timeout · `Transport.Proxy` being nil · that the planner and executor share a client.
+
+### I2 — boot-line guards
+
+**There is no boot-time assertion of any kind on the AI or transport configuration.** Every transport-touching boot line is a `logger.Infof`, not a gate. `🔐 BOOT INTEGRITY` is a real gate (revision prefix + prompt goldens → `tradingRefused`) but checks **the binary revision and prompt text, not the client**. `VerifyPromptGoldens` covers 3 futures *prompt* goldens and nothing about transport.
+
+**And the one control built to stop silent defaults does not cover the transport knobs:** `AI_PLAN_STREAM_TRIES`, `AI_PLAN_STREAM_BACKOFF`, `AI_PLAN_STREAM_IDLE_SECS` and `AI_PLAN_TOTAL_DEADLINE_SECS` are **absent from the `⚠️ AI params at UNSET defaults` audit list** [CODE] `main.go:139-166`. The four values that decide whether a stream lives are silent defaults with no WARN.
+
+### I3 — what the observability surface cannot see
+
+1. **FIN vs RST and its direction — NOT OBSERVABLE.** 0 hits in 5,236 watcher lines; the only FIN/RST fact we hold came from a Go error string.
+2. **No TLS/ALPN visibility** — nothing records the negotiated protocol. The HTTP/1.1 conclusion rests on [CODE] + the [NET] two-connection inference.
+3. **No pool instrumentation** — `httptrace.ClientTrace` is used nowhere, so there is no `GotConn{Reused, WasIdle, IdleTime}` signal. "Did this request reuse a stale conn?" is only recoverable by hand-correlating socket heartbeats with `ai_call` timestamps, which is exactly what D3 required.
+4. **≤10 s gap quantization** on every watcher measurement.
+5. **`timeout_source=` is unreliable** — 22 of 32 "transport" lines in the window are HTTP 503s.
+6. **The Windows side is opaque from Linux** in mirrored mode (Hyper-V WFP, Defender inspection, any Windows flow table).
+7. **The watcher is unsupervised** — if it dies, the evidence stream ends silently.
+8. **Nothing captures the peer's own close reason** — no `Connection: close` logging, no close_notify observation.
+
+---
