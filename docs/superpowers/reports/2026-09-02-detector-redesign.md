@@ -311,7 +311,7 @@ inputs `tape_mnq_1m.json` (MNQ 1m, n=13,666, 2026-08-19 15:00 → 2026-09-02 12:
 (Δ=5.3771 pt = 21.51 ticks over n=13,665 returns; σ=7.9722 pt; autocorrelation table).
 Seeds are fixed in each script (20260902 / 777 / 4242 / 31337).
 
-## 9. Closeout — A8 not satisfied (reported, not worked around)
+## 9. Closeout — A8 (pushed; anon raw URL still 404 because the repo is private)
 
 `A8` asks for the commit-ref raw URL curl'd for 200 before closeout. It returns **404**:
 
@@ -320,11 +320,9 @@ https://raw.githubusercontent.com/johnwick2921-cyber/nofx/bcb65ec5.../docs/super
 HTTP 404
 ```
 
-Two independent reasons, neither fixable inside this lane's rules: (1) the commit is
-**local only** — `git status -sb` reads `## dev...origin/dev [ahead 1, behind 5]`; the
-dispatch authorises *a commit*, not a push, and `dev` is 5 commits behind other active
-lanes, so pushing from here would be an unreviewed outward action on a shared branch.
-(2) `origin` is a **private** repo — `raw.githubusercontent.com` returns 404 for private
+UPDATE (owner standing instruction 'always push', 2026-09-02): rebased onto origin/dev
+and pushed — `15b01369..1dc958da8e85cc8f361e987e406f74a2d2d5085e dev -> dev`, branch now in sync. The anonymous raw URL
+STILL returns 404 for the one remaining reason: (1) `origin` is a **private** repo — `raw.githubusercontent.com` returns 404 for private
 content without a token regardless of push state. The check is therefore recorded as
 FAILED-BY-DESIGN with the URL and status quoted; the owner (or the lane that owns the
 push) can re-run it after `git push`.
