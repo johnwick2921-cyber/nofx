@@ -129,6 +129,7 @@ _(filled at swap time — five-leg gate from `/api/cutover-gate`, then the boot 
 - **The config diff covers the Studio save path only.** A direct DB write, a migration, or an
   env change still moves resolved values silently.
 - **`config_changes` has no UI.** The rows exist and are capped at 5000; reading them is a query.
+- **Lane 2 (0B) booted 4175e0b6 at 07:49:06 CT while this lane was building**, so the rollback target above is THEIR rev, not the root-fix one.
 - **Class numbering collided mid-flight.** Lane 2 took 43 while this lane was building; this is
   44. Two lanes appending to one file will collide again unless the number is claimed at merge.
 
@@ -142,5 +143,5 @@ rate over the first 10 repairs against the 8/28 baseline. And the first Studio s
 ## 8. Rollback
 
 ```
-cp nofx-bin.prev.boot nofx-bin && echo 0d093c3b3a11fb6ea6cb19454ffa59a9f7bd9f8b > deploy/RELEASE && kill -9 <MainPID>
+cp nofx-bin.prev.boot nofx-bin && echo 4175e0b62de785ac5528a0d3f8a8c2618cd3a6d8 > deploy/RELEASE && kill -9 <MainPID>
 ```
