@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptrace"
 	"os"
 	"strconv"
 	"strings"
@@ -108,6 +109,9 @@ type Client struct {
 	// these are read immediately after each single call returns).
 	lastTTFBMs         atomic.Int64 // time-to-first-byte of the last single call (0 = never measured)
 	lastReasoningChars atomic.Int64 // reasoning_content chars of the last single call
+	// stormCount (class 46 D5) — provider calls made in the CURRENT read.
+	// Reset by the planner at the start of each read via ResetStormCounter.
+	stormCount atomic.Int64
 	// lastCompletionTokens (root-fix part B) — the provider's completion token
 	// count for the last stream call (reasoning + visible output).
 	lastCompletionTokens atomic.Int64
@@ -1237,6 +1241,11 @@ func (client *Client) CallWithRequestStreamDeadlines(req *Request, onChunk func(
 		}
 	}()
 
+	// CLASS 46 D6 — trace the connection from inside the process.
+	tr, ctrace, _ := newConnTrace()
+	if TransportTraceEnabled() {
+		ctx = httptrace.WithClientTrace(ctx, ctrace)
+	}
 	httpReq = httpReq.WithContext(ctx)
 	reqStart := time.Now()
 	resp, err := hc.Do(httpReq)
@@ -1281,6 +1290,18 @@ func (client *Client) CallWithRequestStreamDeadlines(req *Request, onChunk func(
 	if sr != nil && sr.Usage != nil {
 		client.lastCompletionTokens.Store(int64(sr.Usage.CompletionTokens))
 		ReportStreamUsage(sr.Usage, client.Provider, client.Model)
+	}
+	if TransportTraceEnabled() {
+		var chars int64
+		var ttfb time.Duration
+		if sr != nil {
+			chars = int64(sr.ReasoningChars + len(sr.Text))
+			ttfb = time.Duration(sr.TTFBMs) * time.Millisecond
+		}
+		tr.finish(err, context.Cause(ctx), chars, ttfb, time.Since(reqStart))
+		if client.Log != nil {
+			client.Log.Infof("%s", tr.TraceLine())
+		}
 	}
 	if err != nil {
 		return "", wrapStreamDeadlineErr(ctx, err, idle, total)
@@ -1345,7 +1366,20 @@ func (client *Client) CallWithRequestStreamRetryDeadlines(req *Request, onChunk 
 	if len(sched) == 0 {
 		sched = StreamRetryBackoffSchedule()
 	}
+	// CLASS 46 D5 — bound the PROVIDER CALLS one read may make. Observed
+	// 2026-09-02 01:15 CT: a 503 burst produced 3 planner attempts × 3 client
+	// tries = 9 calls in ~7 s against an edge that was already shedding load,
+	// and every one failed. The cap is per READ, so it holds across attempts.
+	cap := StormCapPerRead()
 	for attempt := 1; attempt <= maxRetries; attempt++ {
+		if n := client.stormCount.Load(); n >= int64(cap) {
+			client.Log.Warnf("🌩 storm cap reached: %d provider call(s) this read ≥ cap %d — refusing another try (AI_PLAN_STORM_CAP). Last error: %v", n, cap, lastErr)
+			if lastErr == nil {
+				lastErr = fmt.Errorf("storm cap %d reached", cap)
+			}
+			return "", lastErr
+		}
+		client.stormCount.Add(1)
 		if attempt > 1 {
 			client.Log.Warnf("⚠️  AI API stream failed, retrying (%d/%d)...", attempt, maxRetries)
 		}
@@ -1513,4 +1547,17 @@ func ReportStreamUsage(usage *TokenUsage, provider, model string) {
 		CompletionTokens: usage.CompletionTokens,
 		TotalTokens:      usage.TotalTokens,
 	})
+}
+
+// ResetStormCounter starts a new read's provider-call budget (class 46 D5).
+func (client *Client) ResetStormCounter() { client.stormCount.Store(0) }
+
+// StormCount reports provider calls made in the current read.
+func (client *Client) StormCount() int { return int(client.stormCount.Load()) }
+
+// ResetStormCounterFor resets the budget on any AIClient that wraps a Client.
+func ResetStormCounterFor(c AIClient) {
+	if bc, ok := c.(interface{ BaseClient() *Client }); ok {
+		bc.BaseClient().ResetStormCounter()
+	}
 }

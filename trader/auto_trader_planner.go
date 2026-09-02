@@ -955,6 +955,8 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 	// ROOT-FIX part B (2026-09-02) — register what a SHADOW fast-mode call needs
 	// (client, system prompt, budget, fast wire). The shadow fires only after
 	// the live read finishes, writes no plan, and is off by default.
+	// CLASS 46 D5 — a new READ gets a fresh provider-call budget.
+	mcp.ResetStormCounterFor(client)
 	fMode, fEffort := fastMarketReasoningWire()
 	at.RegisterShadowRunner(client, plannerSystemPrompt, aiPlanMaxTokens(), fMode, fEffort)
 	at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, hash, input.IndicatorsBlock, input.AIConfigHash, requiredBias, prompt, facts, machineGrades, machineLabels, htfLabels(input), failClosed, func(userPrompt string) (string, error) {

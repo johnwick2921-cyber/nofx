@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -173,5 +174,111 @@ func TestClass46WatchdogPreTokenSurvivesHeartbeats(t *testing.T) {
 	}
 	if out != "ok" {
 		t.Fatalf("out = %q", out)
+	}
+}
+
+// E5 — three consecutive 503s: the tries are SPACED by the schedule and the
+// per-read cap holds across attempts. Observed 2026-09-02 01:15 CT: 9 calls in
+// ~7 s at an edge that was already shedding load.
+func TestClass46StormCapBoundsProviderCalls(t *testing.T) {
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		w.WriteHeader(503)
+		fmt.Fprint(w, `{"error":{"message":"Server Overloaded"}}`)
+	}))
+	defer srv.Close()
+	c := streamClient(t, srv.URL, 3)
+	c.Cfg.StreamBackoff = []time.Duration{20 * time.Millisecond, 40 * time.Millisecond}
+	c.ResetStormCounter()
+
+	start := time.Now()
+	_, err := c.CallWithRequestStreamRetryDeadlines(&Request{}, nil, 2*time.Second, 0)
+	if err == nil {
+		t.Fatal("three 503s must fail the call")
+	}
+	if got := ClassifyFailure(err, 503); got != ClassHTTP5xx {
+		t.Fatalf("class = %q want http_5xx", got)
+	}
+	// Spacing: the schedule was actually waited, not fired back to back.
+	if el := time.Since(start); el < 60*time.Millisecond {
+		t.Fatalf("tries were not spaced by the backoff: %v", el)
+	}
+	if c.StormCount() != 3 {
+		t.Fatalf("storm counter = %d, want 3", c.StormCount())
+	}
+
+	// The cap holds ACROSS attempts: the counter is not reset between them.
+	before := calls.Load()
+	for i := 0; i < 4; i++ {
+		_, _ = c.CallWithRequestStreamRetryDeadlines(&Request{}, nil, 2*time.Second, 0)
+	}
+	if extra := calls.Load() - before; extra > int32(StormCapPerRead()) {
+		t.Fatalf("the cap did not hold: %d further provider calls past a cap of %d", extra, StormCapPerRead())
+	}
+	var capped bool
+	for _, e := range c.Log.(*MockLogger).GetLogs() {
+		if strings.Contains(e.Message, "🌩 storm cap reached") {
+			capped = true
+		}
+	}
+	if !capped {
+		t.Fatal("hitting the cap must be logged loudly, not silently")
+	}
+	// A fresh read gets a fresh budget.
+	c.ResetStormCounter()
+	if c.StormCount() != 0 {
+		t.Fatal("ResetStormCounter must start a new read's budget")
+	}
+}
+
+// E6 — the trace names who closed. A peer close mid-body is peer_fin; our own
+// watchdog is local_close with its cause.
+func TestClass46TraceNamesWhoClosed(t *testing.T) {
+	peer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		writeSSE(w, `{"choices":[{"delta":{"content":"a"}}]}`)
+		hj, _ := w.(http.Hijacker)
+		conn, _, _ := hj.Hijack()
+		conn.Close()
+	}))
+	defer peer.Close()
+	c := streamClient(t, peer.URL, 1)
+	c.ResetStormCounter()
+	_, _ = c.CallWithRequestStreamDeadlines(&Request{}, nil, 5*time.Second, 0)
+	var line string
+	for _, e := range c.Log.(*MockLogger).GetLogs() {
+		if strings.Contains(e.Message, "🔌 conn trace:") {
+			line = e.Message
+		}
+	}
+	if !strings.Contains(line, "closed_by=peer_fin") {
+		t.Fatalf("a peer close mid-body must read peer_fin: %q", line)
+	}
+	for _, want := range []string{"reused=", "bytes=", "elapsed=", "INFERRED"} {
+		if !strings.Contains(line, want) {
+			t.Fatalf("trace line missing %q: %s", want, line)
+		}
+	}
+
+	stall := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		writeSSE(w, `{"choices":[{"delta":{"content":"a"}}]}`)
+		time.Sleep(1500 * time.Millisecond)
+	}))
+	defer stall.Close()
+	c2 := streamClient(t, stall.URL, 1)
+	c2.ResetStormCounter()
+	_, _ = c2.CallWithRequestStreamDeadlines(&Request{}, nil, 200*time.Millisecond, 0)
+	line = ""
+	for _, e := range c2.Log.(*MockLogger).GetLogs() {
+		if strings.Contains(e.Message, "🔌 conn trace:") {
+			line = e.Message
+		}
+	}
+	if !strings.Contains(line, "closed_by=local_close") || !strings.Contains(line, "cause=") {
+		t.Fatalf("our own watchdog close must read local_close with its cause: %q", line)
 	}
 }
