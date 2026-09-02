@@ -114,9 +114,40 @@ prose-before, prose-after, prose+fence all parse to byte-identical content) ·
 `TestConfigDiffSilentOnUnchangedSave` · `TestConfigChangesPersist` ·
 `TestConfigDiffUsesDottedResolvedPaths`. Full `go test ./...` green · vitest 10/10 · tsc clean.
 
-## 5. Cutover
+## 5. Cutover — 08:10 CT 2026-09-02, in the window between the NY read and NY arms
 
-_(filled at swap time — five-leg gate from `/api/cutover-gate`, then the boot checklist)_
+Owner ruling: "Swap when the in-flight LONDON read completes IF the five-leg gate reads ready and
+no arm has placed… if a clean window opens before 08:30, take it… If NY arms land first, hold for
+after 14:45."
+
+The window was 95 seconds wide and it was taken.
+
+| Step | Quote |
+|---|---|
+| LONDON v5 lands | 08:01:50 CT, `completed in 643.5s` (a new maximum) |
+| NY read claims | 08:01:06 stream open; leg 5 red from 08:01:59 — the two reads OVERLAPPED |
+| NY v1 lands | 08:09:44 CT, `completed in 517.7s`, lifecycle active |
+| **Five-leg gate 08:09:55** | `ready: True` — 1 `0 open row(s)` · 2 `0 position(s)` · 3 `count=0` · 4 `0 non-terminal arm(s)` · 5 `no planner read claimed` |
+| Arms | `armed_orders` non-terminal **0**; zero `📌 armed` / `→ WORKING` lines since the NY plan |
+| Build | clean clone of dev @ `0465a10b`, `vcs.revision=0465a10bfa4b865a8406a1d684501ec4673febc7`, `vcs.modified=false` |
+| A19 | RELEASE written 08:10:1x, BEFORE the swap; marker committed only after the boot below; **RELEASE file and marker commit both in the main tree** (the 07:32 lesson) |
+| Swap | 08:10:25 `status=9/KILL`; `nofx-bin.prev.boot` = 4175e0b6 |
+| **Boot 08:10:30** | `🔐 BOOT INTEGRITY OK — rev 0465a10bfa4b · built 2026-09-02T12:58:10Z · expected 0465a10bfa4b · goldens PASS` — PID 2932498, ONE process, **0 `[ERRO]`**, 0 TradingRefused |
+| Plan survived | `2026-09-02 NY v1 active` still latest after the restart |
+
+Boot ledger, class 44 line:
+
+```
+🩹 repair (class 44): contract=full-doc restated head+tail · extractor=fenced/prose-tolerant
+   (already was — 17 of 18 rejected repairs PARSED and were rejected on field values) ·
+   fragment→own reason · vocab-suffix=on (LiveConditionsLine now in repair prompts; the DEFAULT
+   retry ran without it from class 34 until now) · law excerpts=all-matching (was first-match:
+   11 of 17 defects got an irrelevant excerpt) · outcomes recorded (repair_outcome_*) ·
+   config-diff=on
+```
+
+Surviving lines: 🪢 27 · 🧪 34+38 · 📜 38 · ⚖ 39 · ✂ root-fix A · 🛡 33 ×2 (`boot sweep cancelled
+0 pre-boot arm(s)`) · 🗓 36 · 🛑 0B exits · 🧾 40 · 🔁 41 · 🔬 root-fix B (OFF).
 
 ## 6. What the owner will still see wrong (A15)
 
