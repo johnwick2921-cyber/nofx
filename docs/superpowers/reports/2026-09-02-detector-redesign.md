@@ -310,3 +310,29 @@ inputs `tape_mnq_1m.json` (MNQ 1m, n=13,666, 2026-08-19 15:00 → 2026-09-02 12:
 0 duplicate timestamps), `levels_real.json` (145 level-days), `tape_stats.json`
 (Δ=5.3771 pt = 21.51 ticks over n=13,665 returns; σ=7.9722 pt; autocorrelation table).
 Seeds are fixed in each script (20260902 / 777 / 4242 / 31337).
+
+## 9. Closeout — A8 not satisfied (reported, not worked around)
+
+`A8` asks for the commit-ref raw URL curl'd for 200 before closeout. It returns **404**:
+
+```
+https://raw.githubusercontent.com/johnwick2921-cyber/nofx/bcb65ec5.../docs/superpowers/reports/2026-09-02-detector-redesign.md
+HTTP 404
+```
+
+Two independent reasons, neither fixable inside this lane's rules: (1) the commit is
+**local only** — `git status -sb` reads `## dev...origin/dev [ahead 1, behind 5]`; the
+dispatch authorises *a commit*, not a push, and `dev` is 5 commits behind other active
+lanes, so pushing from here would be an unreviewed outward action on a shared branch.
+(2) `origin` is a **private** repo — `raw.githubusercontent.com` returns 404 for private
+content without a token regardless of push state. The check is therefore recorded as
+FAILED-BY-DESIGN with the URL and status quoted; the owner (or the lane that owns the
+push) can re-run it after `git push`.
+
+**Surprises (A9 — included, acted on in none):**
+1. The pre-registered D1 failed its own calibration (§4) — the band-entry design carries a
+   milder form of the same bias it was meant to replace.
+2. `touch_episodes` shows `chop` n=0 across 943 live rows: `classifyShape` is binary in
+   practice, so the schema's third bucket is dead.
+3. `level_stats` covers only **6 session-days / 145 level-days** (2026-08-24…08-31) —
+   the binding constraint on every per-kind question is stored sample size, not method.
