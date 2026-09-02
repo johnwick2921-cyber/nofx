@@ -18,6 +18,9 @@ import (
 	"fmt"
 	"nofx/config"
 	"nofx/logger"
+	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -25,9 +28,9 @@ import (
 // RiskLimits caps the risk a strategy can take before the engine intervenes.
 // Zero values disable the corresponding check (so partial config is safe).
 type RiskLimits struct {
-	MaxDailyLossUSD      float64 // hard stop for the trading day (USD, positive number)
-	MaxConcurrentTrades  int     // open position cap (count)
-	MaxNotionalUSD       float64 // sum of (entry price * quantity) cap across open positions
+	MaxDailyLossUSD     float64 // hard stop for the trading day (USD, positive number)
+	MaxConcurrentTrades int     // open position cap (count)
+	MaxNotionalUSD      float64 // sum of (entry price * quantity) cap across open positions
 }
 
 // RiskLimitDecision is the qualitative outcome of a pre-trade check.
@@ -99,9 +102,9 @@ func (r *RiskLimits) Classify(totalPnL float64, openPositions int, requestedNoti
 func LoadRiskLimitsFromConfig() RiskLimits {
 	c := config.Get()
 	return RiskLimits{
-		MaxDailyLossUSD:      c.RiskMaxDailyLossUSD,
-		MaxConcurrentTrades:  c.RiskMaxConcurrentTrades,
-		MaxNotionalUSD:       c.RiskMaxNotionalUSD,
+		MaxDailyLossUSD:     c.RiskMaxDailyLossUSD,
+		MaxConcurrentTrades: c.RiskMaxConcurrentTrades,
+		MaxNotionalUSD:      c.RiskMaxNotionalUSD,
 	}
 }
 
@@ -273,10 +276,44 @@ func firstPositive(vals ...float64) float64 {
 // the researched fallback; 6.6: the old '10-contract' text was a comment lie).
 // NEVER returns 0 — a futures order can never be left unclamped.
 func ResolveMaxContracts(perStrategy, def int) int {
+	n := def
 	if perStrategy > 0 {
-		return perStrategy
+		n = perStrategy
 	}
-	return def
+	return ClampStageAContracts(n)
+}
+
+// StageAContractCap (0B, owner ruling 2026-09-02) is the survival-first size
+// ceiling: ONE contract until n≥30 closed trades with a positive lower-CI
+// expectancy. Kelly and optimal-f are undefined without an edge estimate, so
+// size does not move on intuition. It also holds the line under 0B's stop
+// floor: 1.0→1.5×ATR5m raises dollar risk per trade by ~50% at constant size,
+// which is exactly why size stays at 1.
+//
+// Before 0B the resolvers disagreed in production: arm-leg capacity resolved to
+// 1 (splitLegCapacity, unset max_contracts_per_order) while order sizing
+// resolved to 2 (this function's `def` = maxFuturesContracts) — the boot line
+// said capacity=1 while a market entry could size 2.
+//
+// Env STAGE_A_CONTRACT_CAP raises the ceiling for Stage B; 0 or unset = 1.
+const StageAContractCapDefault = 1
+
+// StageAContractCap resolves the Stage-A ceiling (env STAGE_A_CONTRACT_CAP).
+func StageAContractCap() int {
+	if v := os.Getenv("STAGE_A_CONTRACT_CAP"); v != "" {
+		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n > 0 {
+			return n
+		}
+	}
+	return StageAContractCapDefault
+}
+
+// ClampStageAContracts applies the Stage-A ceiling to any resolved size.
+func ClampStageAContracts(n int) int {
+	if cap := StageAContractCap(); n > cap {
+		return cap
+	}
+	return n
 }
 
 // ResolveConcurrentCap returns the open-position cap for the pre-prompt gate and

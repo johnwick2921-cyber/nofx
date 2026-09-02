@@ -72,11 +72,19 @@ func TestMinSLGateChainInteraction(t *testing.T) {
 	if err := validateDecision(mk(29180, 29400), 50000, 5, 5, 5, 1, 3.0, 60, 20, ctx); err == nil || !strings.Contains(err.Error(), "sl_too_tight") {
 		t.Fatalf("tight stop must hit the min-SL gate, got %v", err)
 	}
-	if err := validateDecision(mk(29160, 29240), 50000, 5, 5, 5, 1, 3.0, 60, 20, ctx); err == nil || !strings.Contains(err.Error(), "risk/reward") {
+	// 0B (2026-09-02): the floor moved 1.0 → 1.5×ATR5m, so "widened" now means
+	// ≥ 1.5 × 38.1 = 57.15 pts. 29200−29160 = 40 pts no longer clears it; the
+	// fixture widens to 29140 (60 pts) to keep testing what it always tested —
+	// the gate ORDER (min-SL first, then R:R), not the floor's value.
+	if err := validateDecision(mk(29140, 29220), 50000, 5, 5, 5, 1, 3.0, 60, 20, ctx); err == nil || !strings.Contains(err.Error(), "risk/reward") {
 		t.Fatalf("widened-but-unviable stop must hit the R:R gate, got %v", err)
 	}
-	if err := validateDecision(mk(29160, 29500), 50000, 5, 5, 5, 1, 3.0, 60, 20, ctx); err != nil {
+	if err := validateDecision(mk(29140, 29500), 50000, 5, 5, 5, 1, 3.0, 60, 20, ctx); err != nil {
 		t.Fatalf("viable widened stop must pass, got %v", err)
+	}
+	// The OLD floor's width (40 pts = 1.05×ATR) is now REFUSED — the pin for D1.
+	if err := validateDecision(mk(29160, 29500), 50000, 5, 5, 5, 1, 3.0, 60, 20, ctx); err == nil || !strings.Contains(err.Error(), "sl_too_tight") {
+		t.Fatalf("a 1.05×ATR stop passed the old 1.0 floor and must now be refused, got %v", err)
 	}
 	t.Setenv("MIN_SL_ATR_MULT", "0")
 	defer t.Setenv("MIN_SL_ATR_MULT", "")

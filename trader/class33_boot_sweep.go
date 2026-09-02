@@ -25,7 +25,10 @@ import (
 // arms. The stale-window reconcile stays exactly as it is: the backstop.
 
 // BootSweepReason is the ledger state_reason written on every swept row.
-const BootSweepReason = "boot_sweep: pre-boot order, process restarted"
+// 0B: the prefix is the CONTRACT — store.IsBootSweepReason keys on it, so a
+// swept row re-authorizes under the same plan version while owner cancels stay
+// sticky. Never reword the leading token.
+const BootSweepReason = store.BootSweepReasonPrefix + ": pre-boot order, process restarted"
 
 // bootSweepDone marks the traders whose sweep has COMPLETED. A deferred sweep
 // (NT8 link not ready) never marks — it retries on the next cycle, because a

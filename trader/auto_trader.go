@@ -153,6 +153,10 @@ func (at *AutoTrader) maybeMoveStopToBreakeven(symbol, side string, entryPrice, 
 	if !fire {
 		return
 	}
+	// 0B — SUSPENDED: the trigger fired, the wire stays untouched.
+	if at.exitMechSuspendedRefuse("auto-breakeven", fmt.Sprintf("%s %s +%.1f pts, stop would move to entry %.2f", symbol, side, pts, entryPrice)) {
+		return
+	}
 	key := symbol + "_" + side
 	at.breakevenMu.Lock()
 	if at.breakevenDone == nil {
@@ -169,7 +173,7 @@ func (at *AutoTrader) maybeMoveStopToBreakeven(symbol, side string, entryPrice, 
 	if !ok {
 		return
 	}
-	if err := ntTCP.MoveStopToBreakeven(side, entryPrice); err != nil {
+	if err := moveStopWire(ntTCP, side, entryPrice); err != nil {
 		logger.Warnf("⚠️ auto-breakeven: move-stop send failed for %s %s: %v", symbol, side, err)
 		at.breakevenMu.Lock()
 		at.breakevenDone[key] = false // let it retry next cycle
@@ -425,6 +429,8 @@ type AutoTrader struct {
 	// silent until the spec or the refusal reason changes. Run-loop goroutine
 	// only — no lock.
 	armRefusalLast map[string]string
+	// 0B — per-arm stop-composition log dedup (plan:version:scenario:leg:stop).
+	armStopCompLast map[string]string
 	// armAuthoredLast dedupes the every-cycle "⚔️ armed" log (PRE-REOPEN F3,
 	// 2026-08-28) — the dead-row re-log spam (69+ lines/day) fired on every
 	// placement beat because the ledger row already existed. Log once per

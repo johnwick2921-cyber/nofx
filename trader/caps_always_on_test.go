@@ -16,8 +16,10 @@ func TestSizeCapsIgnoreDeprecatedToggles(t *testing.T) {
 		NotionalCapEnabled:  &off,
 		// no explicit values → the researched defaults
 	}
-	if got := kernel.ResolveMaxContracts(rc.MaxContractsPerOrder, 2); got != 2 {
-		t.Errorf("contracts clamp = %d with toggle false, want 2 (always-on)", got)
+	// 0B (2026-09-02): the always-on intent is unchanged — the toggle still can
+	// not disable the clamp — but the resolved ceiling is now the Stage-A 1.
+	if got := kernel.ResolveMaxContracts(rc.MaxContractsPerOrder, 2); got != 1 {
+		t.Errorf("contracts clamp = %d with toggle false, want 1 (always-on, Stage-A ceiling)", got)
 	}
 	if got := kernel.ResolveNotionalLeverage(rc.MaxNotionalLeverage, 20); got != 20 {
 		t.Errorf("notional cap = %.0f with toggle false, want 20 (always-on)", got)

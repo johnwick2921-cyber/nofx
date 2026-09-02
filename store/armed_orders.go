@@ -5,6 +5,9 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"strings"
+
+	"nofx/logger"
 )
 
 // ARMED ORDERS (Wave 2, 2026-08-27) — the durable ledger of scenario-arm
@@ -160,16 +163,32 @@ func (s *ArmedOrderStore) UpsertArm(row *ArmedOrderDB) error {
 				"leg_count": row.LegCount, "kind": row.Kind,
 			}).Error
 		}
-			// MANUAL-CANCEL-WINS (2026-08-30 E7 incident): a TERMINAL row is
-			// re-authorized ONLY on a plan VERSION change. The old
-			// re-authorize-every-cycle behavior was the re-place loop:
-			// terminal → armed → marketable fill → stop-out → terminal → armed…
-			// forever while the confirm stayed MET, so an owner/NT8 cancel
-			// never won. Same version + terminal = the row STAYS terminal.
-			if existing.Version == row.Version {
-				return nil
-			}
-			// New plan version → RE-AUTHORIZE: fresh armed state, fresh lineage.
+		// MANUAL-CANCEL-WINS (2026-08-30 E7 incident): a TERMINAL row is
+		// re-authorized ONLY on a plan VERSION change. The old
+		// re-authorize-every-cycle behavior was the re-place loop:
+		// terminal → armed → marketable fill → stop-out → terminal → armed…
+		// forever while the confirm stayed MET, so an owner/NT8 cancel
+		// never won. Same version + terminal = the row STAYS terminal.
+		// 0B (owner ruling 2026-09-02) — RE-ARM AFTER BOOT SWEEP. The
+		// manual-cancel-wins law exists so the OWNER's cancels stick. A boot
+		// sweep is the machine's own housekeeping: it cancels pre-boot orders
+		// because the process that owned them died, not because anyone judged
+		// the setup dead. Leaving those rows sticky killed the live setup
+		// until the next plan version — on 09-02 00:16 that rule would have
+		// meant no position 587. Swept rows (state_reason prefixed
+		// "boot_sweep") re-authorize under the SAME version; every other
+		// terminal row stays terminal.
+		if existing.Version == row.Version && !IsBootSweepReason(existing.StateReason) {
+			return nil
+		}
+		// 0B — the re-arm is LOUD: a swept row coming back under the SAME version
+		// is the machine undoing its own boot housekeeping, and the journal must
+		// say so with the dead broker identity it replaces.
+		if existing.Version == row.Version && IsBootSweepReason(existing.StateReason) {
+			logger.Warnf("⚖ re-armed after boot sweep: %s %s leg %d — signal %s → (fresh arm, awaiting placement) · same plan version v%d",
+				row.Session, row.Scenario, row.LegIndex+1, signalOrNone(existing.SignalID), row.Version)
+		}
+		// New plan version → RE-AUTHORIZE: fresh armed state, fresh lineage.
 		row.ID = existing.ID
 		return s.db.Model(&existing).Updates(map[string]any{
 			"state": "armed", "state_reason": "", "signal_id": "",
@@ -248,4 +267,22 @@ func (s *ArmedOrderStore) ListFilled(traderID string, limit int) ([]ArmedOrderDB
 func (s *ArmedOrderStore) Touch(id int64) error {
 	return s.db.Model(&ArmedOrderDB{}).Where("id = ?", id).
 		Update("updated_at", time.Now()).Error
+}
+
+// BootSweepReasonPrefix marks a ledger row cancelled by the class-33 boot
+// sweep (the machine's own housekeeping), as opposed to an owner/NT8 cancel.
+const BootSweepReasonPrefix = "boot_sweep"
+
+// IsBootSweepReason reports whether a terminal row was swept at boot — the ONE
+// terminal class that re-authorizes under the same plan version (0B).
+func IsBootSweepReason(reason string) bool {
+	return strings.HasPrefix(strings.TrimSpace(reason), BootSweepReasonPrefix)
+}
+
+// signalOrNone renders a possibly-empty broker signal id for the re-arm line.
+func signalOrNone(id string) string {
+	if strings.TrimSpace(id) == "" {
+		return "(never placed)"
+	}
+	return id
 }

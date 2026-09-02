@@ -332,6 +332,21 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 			continue
 		}
 		for li, leg := range legs {
+			// 0B (2026-09-02) — STOP ANCHORED TO SEATED STRUCTURE. Compose the
+			// leg's stop BEFORE every downstream consumer (the gate's R:R and
+			// min-SL legs, the ledger row, the churn guard, placement): stop =
+			// beyond the nearest seated level on the risk side + clearance,
+			// floored at MIN_SL_ATR_MULT×ATR5m, widest wins, never tighter than
+			// authored. Logged once per (plan, version, scenario, leg, stop).
+			if comp := composeArmStop(strings.ToLower(strings.TrimSpace(sc.Direction)), leg.Entry, leg.Stop, atr5m,
+				market.FuturesTickSize(at.futuresSymbol()), doc.Levels, kernel.MinSLATRMult(),
+				kernel.MinSLTickClearance, armStopAnchorMaxATR()); comp.Stop != leg.Stop || comp.Unanchored {
+				skey := plan.PlanID + ":" + strconv.Itoa(plan.Version) + ":" + sc.ID + ":leg" + strconv.Itoa(li+1) + ":stop"
+				if armRefusalChanged(&at.armStopCompLast, skey, fmt.Sprintf("%.2f/%s", comp.Stop, comp.Bound)) {
+					at.logInfof("%s", armStopCompositionLine(plan.Session, sc.ID, li+1, sc.Direction, comp, atr5m, kernel.MinSLATRMult()))
+				}
+				leg.Stop = comp.Stop
+			}
 			// S2b chained arm (autopsy-response wave): wait_confirm legs stay
 			// DORMANT until the chain confirm is machine-MET. E4: leg 1 chains
 			// on confirm2 (1m_mss|1x5m_close); a legacy single arm chains on

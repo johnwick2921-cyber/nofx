@@ -3,6 +3,7 @@ package trader
 import (
 	"strings"
 
+	"fmt"
 	"nofx/market"
 	"nofx/store"
 	ntTrader "nofx/trader/ninjatrader"
@@ -174,13 +175,18 @@ func (at *AutoTrader) maybeTrailStop(symbol, side string, entryPrice, markPrice 
 	if !emit {
 		return
 	}
+	// 0B — SUSPENDED: the ratchet computed a new level; the broker is never
+	// resolved and nothing is sent.
+	if at.exitMechSuspendedRefuse("atr-trail", fmt.Sprintf("%s %s ratchet → stop %.2f", symbol, side, level)) {
+		return
+	}
 	ntTCP, ok2 := at.trader.(*ntTrader.TCPTrader)
 	if !ok2 {
 		return
 	}
 	// The #52-proven amendment path: tick-rounds, refuses widens (B1), preserves
 	// the OCO target. Method name says breakeven; it moves a stop to any price.
-	if err := ntTCP.MoveStopToBreakeven(side, level); err != nil {
+	if err := moveStopWire(ntTCP, side, level); err != nil {
 		at.logWarnf("⚠️ trailing: move_stop send failed for %s %s → %.2f: %v (will retry next beat)", symbol, side, level, err)
 		return
 	}

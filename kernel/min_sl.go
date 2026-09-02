@@ -16,11 +16,22 @@ import (
 // 5m ATR plus level clearance, refusing tight stops before they can execute.
 
 // MinSLATRMultDefault is the shipped minimum stop width in 5m ATR(14) units.
-// 1.0 = the stop must be at least one 5m ATR from the entry — the week's
-// too-tight stops averaged well under half their SL distance in MFE before
-// reversing, so a full ATR is the deliberate first step. Env MIN_SL_ATR_MULT
-// overrides; 0 disables the gate entirely.
-const MinSLATRMultDefault = 1.0
+//
+// 0B (owner ruling 2026-09-02): 1.0 → 1.5. The 1.0 was [C] code-canon with no
+// citation (knob census). Round-7 research tests the day-trade range at
+// 1.5–2.5×ATR and finds stop-out rates above 60% on noise alone below 1.0×;
+// our own tape has 6 of 8 losers printing MAE beyond the stop and 15 of 27
+// losers stopped-too-tight. 1.5 is the bottom of the researched range, not the
+// middle — the deliberate first step from an uncited number to a cited one.
+//
+// This value is read by THREE gates: the arm-time gate
+// (trader/armed_executor.go), the AI-entry decision gate
+// (kernel/engine_position.go) and the planner's authoring WARNING
+// (trader/auto_trader_planner.go, ArmFeasibilityWarnings). Raising it tightens
+// all three at once — intended: the same floor everywhere is the point.
+//
+// Env MIN_SL_ATR_MULT overrides; 0 disables the gate entirely.
+const MinSLATRMultDefault = 1.5
 
 // MinSLTickClearance is the level-clearance leg: a cited-scenario stop must
 // sit at least this many ticks BEYOND the anchor level/zone far edge. Stops
