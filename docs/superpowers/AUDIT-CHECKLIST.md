@@ -617,6 +617,40 @@ in CLAUDE.md).
     that decides money carries a citation or a suspension — never a number
     someone once typed.
 
+43. **The repair prompt judged the model against a vocabulary it never
+    showed it.** Root cause: attempt ≥2 defaults to a REPAIR call
+    (`BuildPlannerRepairPrompt`). It carried the rejected output, the validator
+    errors and a law excerpt — but never `LiveConditionsLine`, which only the
+    RE-AUTHOR tail appended (`plannerRejectBlock`). So from the moment class 34
+    shipped the condition vocabulary, the DEFAULT retry path ran without it.
+    Worse, `lawExcerptsFor` was a first-match `switch` whose cases matched
+    neither `fade_requires_touch` nor `invalid (` — the two commonest confirm
+    defects — so those fell through to a GENERIC excerpt about level labels and
+    targets. **Measured** (all repair attempts, 2026-09-01 → 09-02, n=28): 18
+    rejected at the parse/schema step (64%), 8 accepted, 2 rejected later.
+    Of the 18: **1** packaging failure (`cannot unmarshal number 0.5 into …
+    PlanArmLeg…size of type int` — a fractional contract size, 04:24:17) and
+    **17 that PARSED CLEANLY** and were rejected on field values — 10 of them
+    confirm-rule vocabulary errors (`"2x5m"` and `"displacement"` written into
+    `confirm2.rule`, `1x5m_close` on a fade). **11 of 17 received an irrelevant
+    law excerpt.** **Probe:** when a retry keeps failing, read what the retry
+    prompt actually CONTAINS, not what the author path contains — a default
+    path and a fallback path drift apart silently. And check whether an error
+    router is first-match when errors can be plural. **Fix:** the repair prompt
+    carries `LiveConditionsLine`; `lawExcerptsFor` collects EVERY applicable
+    excerpt; a new `RepairConfirmVocabLaw` names the confirm enum and states
+    that the death/flip enum is a DIFFERENT vocabulary (class-38 rule); the
+    return contract is restated at head AND tail (lost-in-the-middle); a
+    fragment gets its own reason instead of a confusing schema error; outcomes
+    are classified (`ok|content|packaging|fragment|no_outcome`) and RECORDED in
+    system_config, replacing a log line that called all 18 "UNPARSEABLE".
+    **Note the dispatch's premise was wrong and the audit's was right about the
+    RATE only:** extraction already tolerated fences and prose
+    (`extractJSONObject` scans to the first `{`), so an extractor rewrite would
+    have fixed 0 of 18. **Law:** every retry path shows the model the same
+    vocabulary the validator will judge it by; and a diagnosis label must name
+    what actually happened, or it hides the defect it was added to expose.
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,

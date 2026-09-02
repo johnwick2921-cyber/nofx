@@ -1460,13 +1460,24 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 			rejectBlock = plannerRejectBlock(lastErr, liveConditions)
 			continue
 		}
+		if modeLabel == "repair" && kernel.IsPlanFragment(raw) {
+			// REPAIR-PARSE E2: a partial document gets its OWN reason instead of
+			// a confusing schema error. Not observed in the 2026-09-01 journals
+			// — a guard, not a fix for a measured failure.
+			lastErr = fmt.Errorf("%s", kernel.FragmentReason)
+			forceReauthor = true
+			at.recordRepairOutcome(raw, lastErr, prevReason)
+			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
+			rejectBlock = plannerRejectBlock(lastErr, liveConditions)
+			continue
+		}
 		d, perr := kernel.ParsePlanDocCapped(raw, maxLevels, scenarioCap)
 		if perr != nil {
 			lastErr = perr
 			at.logWarnf("📐 planner attempt %d/3 parse/schema rejected: %v", attempt, perr)
 			if modeLabel == "repair" {
 				forceReauthor = true // 3.6 — a malformed repair falls back to one full re-author
-				at.logWarnf("%s", repairUnparseableLine(raw, prevReason, perr))
+				at.recordRepairOutcome(raw, perr, prevReason)
 			}
 			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
 			rejectBlock = plannerRejectBlock(lastErr, liveConditions)
@@ -1536,6 +1547,9 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
 			rejectBlock = plannerRejectBlock(lastErr, liveConditions)
 			at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, verr)
+			if modeLabel == "repair" {
+				at.recordRepairOutcome(raw, verr, prevReason)
+			}
 			continue
 		}
 		// F4 (LONDON-FORENSICS 2026-08-28) — arm feasibility WARN, never a
@@ -1572,6 +1586,9 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 				at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
 				rejectBlock = plannerRejectBlock(lastErr, liveConditions)
 				at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, verr)
+				if modeLabel == "repair" {
+					at.recordRepairOutcome(raw, verr, prevReason)
+				}
 				continue
 			}
 		}
@@ -1589,6 +1606,9 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 				at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
 				rejectBlock = plannerRejectBlock(lastErr, liveConditions)
 				at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, verr)
+				if modeLabel == "repair" {
+					at.recordRepairOutcome(raw, verr, prevReason)
+				}
 				continue
 			}
 		}
@@ -1635,6 +1655,14 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		}
 		for i := 0; i < nArms; i++ {
 			telemetry.IncGateBlock(at.id, "arm_authored")
+		}
+		if modeLabel == "repair" {
+			// The denominator: an accepted repair is recorded ONLY here, where
+			// the doc has survived the whole validator chain (A24: a rate
+			// without its base is not a rate).
+			if _, ierr := store.IncRepairOutcome(at.store, string(kernel.RepairOK)); ierr != nil {
+				at.logWarnf("🩹 repair counter write failed: %v", ierr)
+			}
 		}
 		doc = d
 		break
@@ -2510,4 +2538,18 @@ func (at *AutoTrader) noteConfirmCompliantSession() {
 		return
 	}
 	_ = at.store.SetSystemConfig(confirmGraceKey, strconv.Itoa(confirmGraceSessions()))
+}
+
+// recordRepairOutcome (REPAIR-PARSE E4, 2026-09-02) classifies what a repair
+// attempt actually produced, logs it loudly with the class, and RECORDS it.
+// The old line called every failure "UNPARSEABLE"; measured, 17 of 18 parsed
+// fine and were rejected on field values, so the label was misleading exactly
+// where a diagnosis was needed.
+func (at *AutoTrader) recordRepairOutcome(raw string, err error, repairingReason string) {
+	outcome := kernel.ClassifyRepairOutcome(raw, err)
+	at.logWarnf("🩹 repair outcome=%s — falling back to a full re-author next attempt · reject=%v · was repairing: %s · raw_head=%q",
+		outcome, err, clampLine(repairingReason, 200), clampLine(raw, 400))
+	if _, ierr := store.IncRepairOutcome(at.store, string(outcome)); ierr != nil {
+		at.logWarnf("🩹 repair counter write failed: %v", ierr)
+	}
 }

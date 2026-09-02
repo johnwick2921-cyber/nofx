@@ -36,6 +36,7 @@ type Store struct {
 	armedOrders     *ArmedOrderStore
 	abConfirm       *AbConfirmStore
 	plannerRejected *PlannerRejectedStore
+	configChanges   *ConfigChangeStore
 	levelStats      *LevelStatsStore
 	touchEpisodes   *TouchEpisodeStore
 	calendarSlice   *CalendarSliceStore
@@ -395,6 +396,16 @@ func (s *Store) ArmedOrders() *ArmedOrderStore {
 
 // PlannerRejected returns the rejected-planner-prompt store (lazy, planner-speed
 // wave 1.4).
+// ConfigChanges (REPAIR-PARSE E5) — the per-save resolved-knob diff.
+func (s *Store) ConfigChanges() *ConfigChangeStore {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.configChanges == nil {
+		s.configChanges = NewConfigChangeStore(s.gdb)
+	}
+	return s.configChanges
+}
+
 func (s *Store) PlannerRejected() *PlannerRejectedStore {
 	s.mu.Lock()
 	defer s.mu.Unlock()
