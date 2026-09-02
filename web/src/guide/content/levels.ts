@@ -122,5 +122,10 @@ export const levels: GuideSection = {
       kind: 'p',
       text: 'Why 8 (max_levels): a tight table the AI can actually copy without hallucinating. The ±band (proximity_filter_atr × daily-range, retuned 0.3 → ≈±100pt): day-trade relevance — far levels still exist in the detector universe (they now feed the bias-tree anchors even unseated). Per-side counts are DELETED (owner ruling 2026-08-31): the old min_side_levels knob is gone and the ⚖ thin-side note is gone — the only side guard left is the 0-levels-on-a-side fail (the 2026-08-18 one-sided-map pathology).',
     },
+    { kind: 'h', text: 'WHERE THE BARS COME FROM (class 45)' },
+    {
+      kind: 'p',
+      text: "Every chart, level and indicator is built from bars, and until 2026-09-02 they came from two places that did not know about each other. NinjaTrader streams a deep history into memory — over seven years of weekly bars, five years of daily — but only one-minute bars were ever written to disk, so the rest vanished on every restart. The weekly panel built its weeks from those one-minute bars, which start on 19 August, found two complete weeks against a minimum of four, and showed \"thin\". It was starved beside a full pantry. Now one resolver answers every request for completed bars, preferring NinjaTrader's own series and falling back through coarser-to-finer sources, and every timeframe is written to disk so nothing is lost on restart. One caution worth knowing: NinjaTrader's weekly bars run Friday to Thursday, while every week in this system runs Monday to Friday. Those bars are stored for research and deliberately never used for the weekly view, which is built from daily bars instead so the weeks line up with the ones you see. The weekly bias signal itself is unchanged by this — only the data feeding it.",
+    },
   ],
 }

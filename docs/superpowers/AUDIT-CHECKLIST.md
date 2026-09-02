@@ -651,6 +651,44 @@ in CLAUDE.md).
     vocabulary the validator will judge it by; and a diagnosis label must name
     what actually happened, or it hides the defect it was added to expose.
 
+45. **A pantry nobody could reach (two bar layers, no resolver) — and a
+    provider calendar that is not ours.** Root cause: two unconnected bar
+    layers existed with no single door between them. The NT8 BarCache held
+    native per-TF series (measured live on 0465a10b, 2026-09-02: **1w 383
+    bars back to 2019-05-03 · 1d 1500 back to 2020-11-11 · 4h 1500 back to
+    2025-09-11 · 1h 1500**), all memory-only; the persisted `bars` table held
+    **1m only**, because `InsertBars` carried the line `if r.TF != "1m" {
+    continue }` — so every restart discarded the entire coarse pantry. The
+    weekly reader read the 1m table directly (`BarsBetween(symbol,"1m",…)`),
+    which starts 2026-08-19, saw **2 completed weeks** against a ≥4 guard, and
+    rendered "WEEKLY thin · low" while 383 native weekly bars sat unread. Four
+    hand-rolled 1m→TF aggregators each bucketed on their own convention and no
+    caller could answer where a daily bar came from. **The second, sharper
+    defect:** NT8's native weekly bars run **Friday 00:00 → Thursday 23:59**,
+    while every weekly concept in this system is Monday-governed
+    (`weekStartMonday`; "Sunday 17:00 CT first print"; PWH/PWL from the prior
+    Monday week). Pointing the weekly reader at native 1w — the obvious
+    "nt8-first" fix — would have shifted every week by three days and replaced
+    an honestly-labelled *thin* with silently WRONG data. **Probe:** before
+    consuming a provider's aggregate, print its first and last bar timestamps
+    and ask which calendar they are on; never infer the convention from the
+    TF's name. And for any two-layer store, ask what single function answers
+    "give me completed bars for X" — if none exists, every consumer has its
+    own answer. **Fix:** one resolver (`market.CompletedBars` /
+    `CompletedBar`) with the fallback ladder as DATA (`barLadder`), the
+    repaint law applied at one chokepoint (`dropForming`), and the source
+    (`nt8|nt8_agg|own1m`) travelling with the bars. Weekly's ladder is
+    `1d → 1m`: native 1w is EXCLUDED with its reason recorded in
+    `ladderExclusions`, and `StampAligned()` catches the same mismatch class
+    generically. Every cached TF is now persisted; retention became PER-TF
+    (`tfRetentionDays`) because the old TF-blind 90-day cutoff would have
+    deleted the deep weekly history on the first nightly prune after it was
+    stored — 1m 90d, 5m 180d, 15m 365d, 1h and coarser forever, ≈31 MB steady
+    state. Native 1w is persisted labelled `convention=fri_thu` for research
+    only. **Law:** one resolver, one stamp convention, and a provider's
+    calendar is a measurement — not an assumption you inherit from a
+    timeframe's name.
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,

@@ -28,6 +28,7 @@ export const status: GuideSection = {
         '✂ planner schema: 9 top-level fields, ALL consumed … plan JSON ~920 tokens of a 23,769-token p50 output (3.9%); reasoning is ~96%  ← root-fix part A (measured, no cut shipped)',
         '🔬 shadow A/B (root-fix part B): OFF target_n=10 done=0 … promotion criterion: legal-rate ≥ max AND median wall ≤50% of max at n≥10',
         '🩹 repair (class 44): contract=full-doc restated head+tail · vocab-suffix=on · law excerpts=all-matching · outcomes recorded  ← class 44',
+        '📊 bars: 1w nt8_agg via 1d since 2020-11-11 · 1d nt8 since 2020-11-11 · … · ladder(1w)=[1d 1m] · native 1w EXCLUDED · retention 1m=90d coarse=forever  ← class 45',
         '⚙ config diff (studio_save): min_risk_reward_ratio 3 → 2  ← one line per RESOLVED knob a save changed, plus a config_changes row',
         '🛡 boot sweep CANCELLED pre-boot arm (class 33): <session> <S#> … signal=<id> — the process that placed it is gone  ← only when a restart orphaned a resting order',
         '🎛 volume wave …   ← wave detector knobs',
