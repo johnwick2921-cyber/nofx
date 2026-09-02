@@ -67,18 +67,24 @@ type OITopData struct {
 
 // TradingStats trading statistics (for AI input)
 type TradingStats struct {
-	TotalTrades    int     `json:"total_trades"`     // Total number of trades (closed)
-	WinRate        float64 `json:"win_rate"`         // Win rate (%)
-	ProfitFactor   float64 `json:"profit_factor"`    // Profit factor
-	SharpeRatio    float64 `json:"sharpe_ratio"`     // Sharpe ratio
-	TotalPnL       float64 `json:"total_pnl"`        // Total profit/loss
-	AvgWin         float64 `json:"avg_win"`          // Average win
-	AvgLoss        float64 `json:"avg_loss"`         // Average loss
-	MaxDrawdownPct float64 `json:"max_drawdown_pct"` // Maximum drawdown (%)
+	TotalTrades int `json:"total_trades"` // RESOLVED closed trades (corrected-column law — never a coerced count)
+	// P&L-TRUTH WAVE (2026-09-01): the exclusion count rides with every figure so
+	// the prompt can state "+X over N resolved (K unresolved excluded)".
+	ResolvedTrades     int     `json:"resolved_trades"`
+	UnresolvedExcluded int     `json:"unresolved_excluded"`
+	WinRate            float64 `json:"win_rate"`         // Win rate (%)
+	ProfitFactor       float64 `json:"profit_factor"`    // Profit factor
+	SharpeRatio        float64 `json:"sharpe_ratio"`     // Sharpe ratio
+	TotalPnL           float64 `json:"total_pnl"`        // Total profit/loss
+	AvgWin             float64 `json:"avg_win"`          // Average win
+	AvgLoss            float64 `json:"avg_loss"`         // Average loss
+	MaxDrawdownPct     float64 `json:"max_drawdown_pct"` // Maximum drawdown (%)
 }
 
 // RecentOrder recently completed order (for AI input)
 type RecentOrder struct {
+	ID           int64   `json:"id"`            // position row id (so an UNRESOLVED row can be named)
+	Resolved     bool    `json:"resolved"`      // P&L-TRUTH WAVE: false = pnl_corrected NULL → no P&L, no percentage
 	Symbol       string  `json:"symbol"`        // Trading pair
 	Side         string  `json:"side"`          // long/short
 	EntryPrice   float64 `json:"entry_price"`   // Entry price

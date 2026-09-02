@@ -792,11 +792,13 @@ func formatReadFastPathResponse(lang, kind, raw string) string {
 			return "There is no closed trade history yet."
 		}
 		summary, _ := payload["summary"].(map[string]any)
-		head := fmt.Sprintf("Recent trades: %.0f total, win rate %s, total PnL %.4f",
-			toFloat(summary["total_trades"]), asString(summary["win_rate"]), toFloat(summary["total_pnl"]))
+		// P&L-TRUTH WAVE: the figure never travels without its resolved n and
+		// the unresolved exclusion count.
+		head := fmt.Sprintf("Recent trades: %+.2f over %.0f resolved trades (%.0f unresolved excluded), win rate %s",
+			toFloat(summary["total_pnl"]), toFloat(summary["resolved_trades"]), toFloat(summary["unresolved_excluded"]), asString(summary["win_rate"]))
 		if lang == "zh" {
-			head = fmt.Sprintf("最近交易：共 %.0f 笔，胜率 %s，总 PnL %.4f",
-				toFloat(summary["total_trades"]), asString(summary["win_rate"]), toFloat(summary["total_pnl"]))
+			head = fmt.Sprintf("最近交易：%+.2f，基于 %.0f 笔已结算交易（%.0f 笔未结算已排除），胜率 %s",
+				toFloat(summary["total_pnl"]), toFloat(summary["resolved_trades"]), toFloat(summary["unresolved_excluded"]), asString(summary["win_rate"]))
 		}
 		lines := []string{head}
 		for idx, item := range items {

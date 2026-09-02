@@ -44,6 +44,13 @@ export const faq: GuideSection = {
           link: '#guards',
         },
         {
+          q: 'Why does the header PNL differ from the day total in the position history?',
+          a: 'PNL:: is the NT8-native total (equity − initial balance) and can sit at 0.00 all day. LEDGER_DAY:: beside it is the ledger day total — the SAME rule as the position-history footer: rows closed today CT, unknown-P&L / test-seam reasons out, strict pnl_corrected, unresolved rows counted and excluded. When the backend cannot compute it the chip says UNRESOLVED rather than showing a zero.',
+          mechanism:
+            '/api/account carries ledger_day_pnl / ledger_day_resolved / ledger_day_unresolved (store.GetLedgerDayTotal); the boot line 🧾 states the corrected-column guard.',
+          link: '#status',
+        },
+        {
           q: 'What does the ⛔ NO-TRADE chip mean?',
           a: 'The re-plan budget is exhausted: the last version row is the terminal marker, not a real plan. Reset (↺) re-arms the budget and reads fresh.',
           mechanism:

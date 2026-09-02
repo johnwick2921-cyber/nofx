@@ -1,3 +1,4 @@
+import { LedgerDayPnl } from '../components/trader/LedgerDayPnl'
 import { useEffect, useState, useRef } from 'react'
 import { mutate } from 'swr'
 import { api } from '../lib/api'
@@ -659,7 +660,10 @@ export function TraderDashboardPage({
             <div className="flex gap-4">
               <span>LAST_UPDATE::{lastUpdate}</span>
               <span>EQ::{account.total_equity?.toFixed(2)}</span>
-              <span>PNL::{account.total_pnl?.toFixed(2)}</span>
+              <span title="NT8-native total P&L (equity − initial balance)">
+                PNL::{account.total_pnl?.toFixed(2)}
+              </span>
+              <LedgerDayPnl account={account} />
             </div>
           ) : accountFailed ? (
             <span style={{ color: '#F6465D' }}>

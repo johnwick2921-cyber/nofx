@@ -310,6 +310,15 @@ func (e *StrategyEngine) BuildUserPrompt(ctx *Context) string {
 	if len(ctx.RecentOrders) > 0 {
 		sb.WriteString("## Recent Completed Trades\n")
 		for i, order := range ctx.RecentOrders {
+			// P&L-TRUTH WAVE: an UNRESOLVED row (pnl_corrected NULL) has no
+			// captured exit — it renders as UNRESOLVED with no P&L and no
+			// percentage (the old code showed "+0.00 USDT (+100.00%)").
+			if !order.Resolved {
+				sb.WriteString(fmt.Sprintf("%d. #%d %s %s | Entry %.4f→? UNRESOLVED (exit unknown) | %s→%s (%s)\n",
+					i+1, order.ID, order.Symbol, order.Side, order.EntryPrice,
+					order.EntryTime, order.ExitTime, order.HoldDuration))
+				continue
+			}
 			resultStr := "Profit"
 			if order.RealizedPnL < 0 {
 				resultStr = "Loss"
@@ -324,7 +333,9 @@ func (e *StrategyEngine) BuildUserPrompt(ctx *Context) string {
 	}
 
 	// Historical trading statistics (helps AI understand past performance)
-	if ctx.TradingStats != nil && ctx.TradingStats.TotalTrades > 0 {
+	// P&L-TRUTH WAVE: the block renders whenever there is ANY closed history —
+	// a session with 0 resolved and K unresolved must say so, not go silent.
+	if ctx.TradingStats != nil && (ctx.TradingStats.TotalTrades > 0 || ctx.TradingStats.UnresolvedExcluded > 0) {
 		// Get language from strategy config
 		lang := e.GetLanguage()
 
@@ -336,16 +347,17 @@ func (e *StrategyEngine) BuildUserPrompt(ctx *Context) string {
 
 		if lang == LangChinese {
 			sb.WriteString("## 历史交易统计\n")
-			sb.WriteString(fmt.Sprintf("总交易: %d 笔 | 盈利因子: %.2f | 夏普比率: %.2f | 盈亏比: %.2f\n",
+			sb.WriteString(fmt.Sprintf("已结算交易: %d 笔 | 盈利因子: %.2f | 夏普比率: %.2f | 盈亏比: %.2f\n",
 				ctx.TradingStats.TotalTrades,
 				ctx.TradingStats.ProfitFactor,
 				ctx.TradingStats.SharpeRatio,
 				winLossRatio))
-			sb.WriteString(fmt.Sprintf("总盈亏: %+.2f USDT | 平均盈利: +%.2f | 平均亏损: -%.2f | 最大回撤: %.1f%%\n",
-				ctx.TradingStats.TotalPnL,
+			sb.WriteString(TrackRecordLine(ctx.TradingStats, LangChinese) + "\n")
+			sb.WriteString(fmt.Sprintf("平均盈利: +%.2f | 平均亏损: -%.2f | 最大回撤: %.1f%%\n",
 				ctx.TradingStats.AvgWin,
 				ctx.TradingStats.AvgLoss,
 				ctx.TradingStats.MaxDrawdownPct))
+			sb.WriteString(TrackRecordNote(LangChinese) + "\n")
 
 			// Performance hints based on profit factor, sharpe, and drawdown
 			if ctx.TradingStats.ProfitFactor >= 1.5 && ctx.TradingStats.SharpeRatio >= 1 {
@@ -359,16 +371,19 @@ func (e *StrategyEngine) BuildUserPrompt(ctx *Context) string {
 			}
 		} else {
 			sb.WriteString("## Historical Trading Statistics\n")
-			sb.WriteString(fmt.Sprintf("Total Trades: %d | Profit Factor: %.2f | Sharpe: %.2f | Win/Loss Ratio: %.2f\n",
+			sb.WriteString(fmt.Sprintf("Resolved Trades: %d | Profit Factor: %.2f | Sharpe: %.2f | Win/Loss Ratio: %.2f\n",
 				ctx.TradingStats.TotalTrades,
 				ctx.TradingStats.ProfitFactor,
 				ctx.TradingStats.SharpeRatio,
 				winLossRatio))
-			sb.WriteString(fmt.Sprintf("Total PnL: %+.2f USDT | Avg Win: +%.2f | Avg Loss: -%.2f | Max Drawdown: %.1f%%\n",
-				ctx.TradingStats.TotalPnL,
+			// P&L-TRUTH WAVE: never a bare total — the figure, its resolved n and
+			// the unresolved exclusion count, in one line the model can use.
+			sb.WriteString(TrackRecordLine(ctx.TradingStats, LangEnglish) + "\n")
+			sb.WriteString(fmt.Sprintf("Avg Win: +%.2f | Avg Loss: -%.2f | Max Drawdown: %.1f%%\n",
 				ctx.TradingStats.AvgWin,
 				ctx.TradingStats.AvgLoss,
 				ctx.TradingStats.MaxDrawdownPct))
+			sb.WriteString(TrackRecordNote(LangEnglish) + "\n")
 
 			// Performance hints based on profit factor, sharpe, and drawdown
 			if ctx.TradingStats.ProfitFactor >= 1.5 && ctx.TradingStats.SharpeRatio >= 1 {
@@ -1051,4 +1066,32 @@ func formatFloatSlice(values []float64) string {
 		strValues[i] = fmt.Sprintf("%.4f", v)
 	}
 	return "[" + strings.Join(strValues, ", ") + "]"
+}
+
+// TrackRecordLine (P&L-TRUTH WAVE, 2026-09-01) — the ONE track-record line
+// every prompt surface renders: the strict corrected figure, the resolved
+// count it is measured over, and the unresolved exclusion count. Never a bare
+// total; a resolved count of zero says so rather than rendering nothing.
+func TrackRecordLine(st *TradingStats, lang Language) string {
+	if st == nil {
+		return ""
+	}
+	if lang == LangChinese {
+		if st.TotalTrades == 0 {
+			return fmt.Sprintf("战绩: 未结算 — 0 笔已结算交易（%d 笔未结算交易已排除 — 见注）", st.UnresolvedExcluded)
+		}
+		return fmt.Sprintf("战绩: %+.2f，基于 %d 笔已结算交易（%d 笔未结算交易已排除 — 见注）", st.TotalPnL, st.TotalTrades, st.UnresolvedExcluded)
+	}
+	if st.TotalTrades == 0 {
+		return fmt.Sprintf("Track record: UNRESOLVED — 0 resolved trades (%d unresolved trades excluded — see note).", st.UnresolvedExcluded)
+	}
+	return fmt.Sprintf("Track record: %+.2f over %d resolved trades (%d unresolved trades excluded — see note).", st.TotalPnL, st.TotalTrades, st.UnresolvedExcluded)
+}
+
+// TrackRecordNote explains the exclusion in one line.
+func TrackRecordNote(lang Language) string {
+	if lang == LangChinese {
+		return "注: 未结算交易没有已核实的出场成交，其盈亏未知 — 永远不计入、不折算为原始值。"
+	}
+	return "Note: an unresolved trade has no verified exit fill; its P&L is UNKNOWN and is never counted, never coerced to a raw value."
 }

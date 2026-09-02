@@ -54,7 +54,7 @@ func formatContextData(ctx *Context, lang Language) string {
 	}
 
 	// 4. Historical trading statistics
-	if ctx.TradingStats != nil && ctx.TradingStats.TotalTrades > 0 {
+	if ctx.TradingStats != nil && (ctx.TradingStats.TotalTrades > 0 || ctx.TradingStats.UnresolvedExcluded > 0) {
 		if lang == LangChinese {
 			sb.WriteString(formatTradingStatsZH(ctx.TradingStats))
 		} else {
@@ -151,11 +151,12 @@ func formatTradingStatsZH(stats *TradingStats) string {
 
 	// Data values
 	sb.WriteString("**当前数据**:\n")
-	sb.WriteString(fmt.Sprintf("- 总交易: %d 笔\n", stats.TotalTrades))
+	sb.WriteString(fmt.Sprintf("- 已结算交易: %d 笔（未结算已排除: %d 笔）\n", stats.TotalTrades, stats.UnresolvedExcluded))
 	sb.WriteString(fmt.Sprintf("- 盈利因子: %.2f\n", stats.ProfitFactor))
 	sb.WriteString(fmt.Sprintf("- 夏普比率: %.2f\n", stats.SharpeRatio))
 	sb.WriteString(fmt.Sprintf("- 盈亏比: %.2f\n", winLossRatio))
-	sb.WriteString(fmt.Sprintf("- 总盈亏: %+.2f USDT\n", stats.TotalPnL))
+	sb.WriteString("- " + TrackRecordLine(stats, LangChinese) + "\n")
+	sb.WriteString("- " + TrackRecordNote(LangChinese) + "\n")
 	sb.WriteString(fmt.Sprintf("- 平均盈利: +%.2f USDT\n", stats.AvgWin))
 	sb.WriteString(fmt.Sprintf("- 平均亏损: -%.2f USDT\n", stats.AvgLoss))
 	sb.WriteString(fmt.Sprintf("- 最大回撤: %.1f%%\n\n", stats.MaxDrawdownPct))
@@ -198,6 +199,10 @@ func formatRecentTradesZH(orders []RecentOrder) string {
 	sb.WriteString("## 最近完成的交易\n\n")
 
 	for i, order := range orders {
+		if !order.Resolved { // P&L-TRUTH WAVE: no P&L, no percentage for an unresolved row
+			sb.WriteString(fmt.Sprintf("%d. #%d %s %s | 进场 %.4f→? 未结算（出场未知） | %s → %s (%s)\n", i+1, order.ID, order.Symbol, order.Side, order.EntryPrice, order.EntryTime, order.ExitTime, order.HoldDuration))
+			continue
+		}
 		// Determine profit or loss
 		profitOrLoss := "盈利"
 		if order.RealizedPnL < 0 {
@@ -419,11 +424,13 @@ func formatTradingStatsEN(stats *TradingStats) string {
 
 	// Data values
 	sb.WriteString("**Current Data**:\n")
-	sb.WriteString(fmt.Sprintf("- Total Trades: %d\n", stats.TotalTrades))
+	sb.WriteString(fmt.Sprintf("- Resolved Trades: %d (unresolved excluded: %d)\n", stats.TotalTrades, stats.UnresolvedExcluded))
 	sb.WriteString(fmt.Sprintf("- Profit Factor: %.2f\n", stats.ProfitFactor))
 	sb.WriteString(fmt.Sprintf("- Sharpe Ratio: %.2f\n", stats.SharpeRatio))
 	sb.WriteString(fmt.Sprintf("- Win/Loss Ratio: %.2f\n", winLossRatio))
-	sb.WriteString(fmt.Sprintf("- Total PnL: %+.2f USDT\n", stats.TotalPnL))
+	// P&L-TRUTH WAVE: never a bare total.
+	sb.WriteString("- " + TrackRecordLine(stats, LangEnglish) + "\n")
+	sb.WriteString("- " + TrackRecordNote(LangEnglish) + "\n")
 	sb.WriteString(fmt.Sprintf("- Avg Win: +%.2f USDT\n", stats.AvgWin))
 	sb.WriteString(fmt.Sprintf("- Avg Loss: -%.2f USDT\n", stats.AvgLoss))
 	sb.WriteString(fmt.Sprintf("- Max Drawdown: %.1f%%\n\n", stats.MaxDrawdownPct))
@@ -466,6 +473,10 @@ func formatRecentTradesEN(orders []RecentOrder) string {
 	sb.WriteString("## Recent Completed Trades\n\n")
 
 	for i, order := range orders {
+		if !order.Resolved { // P&L-TRUTH WAVE: no P&L, no percentage for an unresolved row
+			sb.WriteString(fmt.Sprintf("%d. #%d %s %s | Entry %.4f→? UNRESOLVED (exit unknown) | %s → %s (%s)\n", i+1, order.ID, order.Symbol, order.Side, order.EntryPrice, order.EntryTime, order.ExitTime, order.HoldDuration))
+			continue
+		}
 		profitOrLoss := "Profit"
 		if order.RealizedPnL < 0 {
 			profitOrLoss = "Loss"

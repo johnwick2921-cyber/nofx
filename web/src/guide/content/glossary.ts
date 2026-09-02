@@ -92,6 +92,14 @@ export const glossary: GuideSection = {
           def: 'Owner-triggered extra planner call on the same chain (trigger owner_reread). SPENDS one of replan_cap. Wake reads (level_event / structure_mss) are re-reads too but are FREE.',
         },
         {
+          term: 'Track record (pnl_corrected)',
+          def: 'Every P&L figure the model and the dashboard read is pnl_corrected — never raw realized_pnl. The executor prompt states "+X over N resolved trades (K unresolved excluded)"; the AgentBeta trade tool and the API stats carry the same shape (P&L-truth wave, 2026-09-01).',
+        },
+        {
+          term: 'UNRESOLVED (trade)',
+          def: 'A closed row whose pnl_corrected is NULL — no verified exit fill. It is COUNTED and EXCLUDED from every sum, average, win rate and streak, listed as "#id side entry→? UNRESOLVED" with no P&L and no percentage, and never coerced to a raw value (row 526: raw −1,458.00 vs corrected −69.43).',
+        },
+        {
           term: 'Seat',
           def: "A level's place in the card (proximity band + cap + floors).",
         },

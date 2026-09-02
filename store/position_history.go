@@ -10,7 +10,8 @@ import (
 
 // HistorySummary comprehensive trading history for AI context
 type HistorySummary struct {
-	TotalTrades    int     `json:"total_trades"`
+	TotalTrades        int     `json:"total_trades"`        // resolved rows only
+	UnresolvedExcluded int     `json:"unresolved_excluded"` // P&L-TRUTH WAVE: unknown-P&L rows left out of every figure
 	WinRate        float64 `json:"win_rate"`
 	TotalPnL       float64 `json:"total_pnl"`
 	AvgTradeReturn float64 `json:"avg_trade_return"`
@@ -45,6 +46,7 @@ func (s *PositionStore) GetHistorySummary(traderID string) (*HistorySummary, err
 	summary.TotalTrades = fullStats.TotalTrades
 	summary.WinRate = fullStats.WinRate
 	summary.TotalPnL = fullStats.TotalPnL
+	summary.UnresolvedExcluded = fullStats.UnresolvedExcluded
 	if fullStats.TotalTrades > 0 {
 		summary.AvgTradeReturn = fullStats.TotalPnL / float64(fullStats.TotalTrades)
 	}
@@ -101,8 +103,12 @@ func (s *PositionStore) GetHistorySummary(traderID string) (*HistorySummary, err
 	s.db.Where("trader_id = ? AND status = ? AND close_reason NOT IN (?, ?, ?)", traderID, "CLOSED", CloseReasonReconcileFlat, CloseReasonUnresolved, CloseReasonTestSeam).
 		Order("exit_time DESC").Limit(20).Find(&recent)
 	for _, pos := range recent {
-		summary.RecentPnL += pos.EffectivePnL()
-		if pos.EffectivePnL() > 0 {
+		pnl, resolved := pos.CorrectedPnL()
+		if !resolved {
+			continue // P&L-TRUTH WAVE: unresolved rows never enter the recent window's P&L
+		}
+		summary.RecentPnL += pnl
+		if pnl > 0 {
 			summary.RecentWinRate++
 		}
 	}
@@ -132,7 +138,11 @@ func (s *PositionStore) calculateStreaks(traderID string, summary *HistorySummar
 	isFirst := true
 
 	for _, pos := range positions {
-		isWin := pos.EffectivePnL() > 0
+		pnl, resolved := pos.CorrectedPnL()
+		if !resolved {
+			continue // P&L-TRUTH WAVE: an unresolved row neither extends nor breaks a streak
+		}
+		isWin := pnl > 0
 
 		if isFirst {
 			if isWin {

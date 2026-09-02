@@ -1176,79 +1176,9 @@ func (at *AutoTrader) buildTradingContext() (*kernel.Context, error) {
 		CandidateCoins: candidateCoins,
 	}
 
-	// 7. Add recent closed trades (if store is available)
-	if at.store != nil {
-		// Strategy Studio P1 — daily-guardrail inputs on the CME session-day:
-		// today's realized P&L (closed trades) + entry count, scoped to the active
-		// account. The kernel daily-guardrail gate (engine_analysis.go) reads these.
-		sinceMs := kernel.CMESessionDayStart(time.Now()).UnixMilli()
-		if dayPnL, dayTrades, derr := at.store.Position().GetSessionDayActivity(at.id, sinceMs, at.currentAccountName()); derr != nil {
-			at.logWarnf("⚠️ Failed to compute daily-guardrail activity: %v", derr)
-		} else {
-			ctx.DailyRealizedPnL = dayPnL
-			ctx.TradesToday = dayTrades
-		}
-
-		// Get recent 10 closed trades for AI context, scoped to the ACTIVE
-		// account so a post-switch cycle does not carry the old account's
-		// trades into the prompt (empty account → trader-global fallback).
-		recentTrades, err := at.store.Position().GetRecentTrades(at.id, 10, at.currentAccountName())
-		if err != nil {
-			at.logWarnf("⚠️ Failed to get recent trades: %v", err)
-		} else {
-			logger.Infof("📊 [%s] Found %d recent closed trades for AI context", at.name, len(recentTrades))
-			for _, trade := range recentTrades {
-				// Convert Unix timestamps to formatted strings for AI readability
-				entryTimeStr := ""
-				if trade.EntryTime > 0 {
-					entryTimeStr = kernel.FormatCT(time.Unix(trade.EntryTime, 0))
-				}
-				exitTimeStr := ""
-				if trade.ExitTime > 0 {
-					exitTimeStr = kernel.FormatCT(time.Unix(trade.ExitTime, 0))
-				}
-
-				ctx.RecentOrders = append(ctx.RecentOrders, kernel.RecentOrder{
-					Symbol:       trade.Symbol,
-					Side:         trade.Side,
-					EntryPrice:   trade.EntryPrice,
-					ExitPrice:    trade.ExitPrice,
-					RealizedPnL:  trade.RealizedPnL,
-					PnLPct:       trade.PnLPct,
-					EntryTime:    entryTimeStr,
-					ExitTime:     exitTimeStr,
-					HoldDuration: trade.HoldDuration,
-				})
-			}
-		}
-		// Get trading statistics for AI context, scoped to the ACTIVE account so
-		// the prompt's aggregate stats reflect the current account (not the old
-		// one after a switch); empty account → trader-global fallback.
-		stats, err := at.store.Position().GetFullStats(at.id, at.currentAccountName())
-		if err != nil {
-			at.logWarnf("⚠️ Failed to get trading stats: %v", err)
-		} else if stats == nil {
-			at.logWarnf("⚠️ GetFullStats returned nil")
-		} else if stats.TotalTrades == 0 {
-			at.logWarnf("⚠️ GetFullStats returned 0 trades")
-		} else {
-			ctx.TotalRealizedPnL = stats.TotalPnL // Chunk 5 — consistency-rule input (all-time realized P&L)
-			ctx.TradingStats = &kernel.TradingStats{
-				TotalTrades:    stats.TotalTrades,
-				WinRate:        stats.WinRate,
-				ProfitFactor:   stats.ProfitFactor,
-				SharpeRatio:    stats.SharpeRatio,
-				TotalPnL:       stats.TotalPnL,
-				AvgWin:         stats.AvgWin,
-				AvgLoss:        stats.AvgLoss,
-				MaxDrawdownPct: stats.MaxDrawdownPct,
-			}
-			logger.Infof("📈 [%s] Trading stats: %d trades, %.1f%% win rate, PF=%.2f, Sharpe=%.2f, DD=%.1f%%",
-				at.name, stats.TotalTrades, stats.WinRate, stats.ProfitFactor, stats.SharpeRatio, stats.MaxDrawdownPct)
-		}
-	} else {
-		at.logWarnf("⚠️ Store is nil, cannot get recent trades")
-	}
+	// 7. Add recent closed trades + the track record (P&L-TRUTH WAVE: one
+	// strict-corrected plumbing seam, attachTradeContext, fixture-tested).
+	at.attachTradeContext(ctx)
 
 	// 8. Get quantitative data (if enabled in strategy config)
 	if strategyConfig.Indicators.EnableQuantData {
@@ -1384,4 +1314,94 @@ func (at *AutoTrader) checkClaw402Balance() {
 		logger.Infof("💰 [%s] USDC Balance: $%.2f | Daily AI cost: ~$%.2f | Runway: ~%.1f days",
 			at.name, balance, dailyCost, runway)
 	}
+}
+
+// attachTradeContext (P&L-TRUTH WAVE, 2026-09-01) fills the prompt-facing
+// trade context from the STRICT corrected-column aggregators: the session-day
+// guardrail inputs, the recent closed trades (UNRESOLVED rows carry no P&L
+// and no percentage) and the track record (figure + resolved n + unresolved
+// exclusion count). Before this wave the block summed EffectivePnL(), which
+// coerced 115 unresolved rows to raw realized_pnl and told the executor
+// "Total PnL -203.68 (220 trades)" when the truth was +304.32 over 105.
+func (at *AutoTrader) attachTradeContext(ctx *kernel.Context) {
+	if at.store == nil {
+		at.logWarnf("⚠️ Store is nil, cannot get recent trades")
+		return
+	}
+	// Strategy Studio P1 — daily-guardrail inputs on the CME session-day:
+	// today's realized P&L (closed trades) + entry count, scoped to the active
+	// account. The kernel daily-guardrail gate (engine_analysis.go) reads these.
+	sinceMs := kernel.CMESessionDayStart(time.Now()).UnixMilli()
+	if dayPnL, dayTrades, derr := at.store.Position().GetSessionDayActivity(at.id, sinceMs, at.currentAccountName()); derr != nil {
+		at.logWarnf("⚠️ Failed to compute daily-guardrail activity: %v", derr)
+	} else {
+		ctx.DailyRealizedPnL = dayPnL
+		ctx.TradesToday = dayTrades
+	}
+
+	// Recent 10 closed trades for AI context, scoped to the ACTIVE account so a
+	// post-switch cycle does not carry the old account's trades into the prompt.
+	recentTrades, err := at.store.Position().GetRecentTrades(at.id, 10, at.currentAccountName())
+	if err != nil {
+		at.logWarnf("⚠️ Failed to get recent trades: %v", err)
+	} else {
+		unresolved := 0
+		for _, trade := range recentTrades {
+			entryTimeStr := ""
+			if trade.EntryTime > 0 {
+				entryTimeStr = kernel.FormatCT(time.Unix(trade.EntryTime, 0))
+			}
+			exitTimeStr := ""
+			if trade.ExitTime > 0 {
+				exitTimeStr = kernel.FormatCT(time.Unix(trade.ExitTime, 0))
+			}
+			if !trade.Resolved {
+				unresolved++
+			}
+			ctx.RecentOrders = append(ctx.RecentOrders, kernel.RecentOrder{
+				ID:           trade.ID,
+				Resolved:     trade.Resolved,
+				Symbol:       trade.Symbol,
+				Side:         trade.Side,
+				EntryPrice:   trade.EntryPrice,
+				ExitPrice:    trade.ExitPrice,
+				RealizedPnL:  trade.RealizedPnL,
+				PnLPct:       trade.PnLPct,
+				EntryTime:    entryTimeStr,
+				ExitTime:     exitTimeStr,
+				HoldDuration: trade.HoldDuration,
+			})
+		}
+		logger.Infof("📊 [%s] Found %d recent closed trades for AI context (%d unresolved, rendered without P&L)", at.name, len(recentTrades), unresolved)
+	}
+
+	// Track record for AI context, scoped to the ACTIVE account.
+	stats, err := at.store.Position().GetFullStats(at.id, at.currentAccountName())
+	if err != nil {
+		at.logWarnf("⚠️ Failed to get trading stats: %v", err)
+		return
+	}
+	if stats == nil {
+		at.logWarnf("⚠️ GetFullStats returned nil")
+		return
+	}
+	if stats.TotalTrades == 0 && stats.UnresolvedExcluded == 0 {
+		at.logWarnf("⚠️ GetFullStats returned 0 trades")
+		return
+	}
+	ctx.TotalRealizedPnL = stats.TotalPnL // Chunk 5 — consistency-rule input (strict corrected all-time P&L)
+	ctx.TradingStats = &kernel.TradingStats{
+		TotalTrades:        stats.TotalTrades,
+		ResolvedTrades:     stats.ResolvedTrades,
+		UnresolvedExcluded: stats.UnresolvedExcluded,
+		WinRate:            stats.WinRate,
+		ProfitFactor:       stats.ProfitFactor,
+		SharpeRatio:        stats.SharpeRatio,
+		TotalPnL:           stats.TotalPnL,
+		AvgWin:             stats.AvgWin,
+		AvgLoss:            stats.AvgLoss,
+		MaxDrawdownPct:     stats.MaxDrawdownPct,
+	}
+	logger.Infof("🧾 [%s] Track record: %+.2f over %d resolved trades (%d unresolved excluded), %.1f%% win rate, PF=%.2f, Sharpe=%.2f, DD=%.1f%%",
+		at.name, stats.TotalPnL, stats.TotalTrades, stats.UnresolvedExcluded, stats.WinRate, stats.ProfitFactor, stats.SharpeRatio, stats.MaxDrawdownPct)
 }

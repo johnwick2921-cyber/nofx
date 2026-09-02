@@ -823,9 +823,30 @@ func (s *PositionStore) ClosePositionWithAccurateData(id int64, exitPrice float6
 
 // EffectivePnL returns the corrected realized P&L when a correction exists,
 // else the original (P0 pnl-record-integrity, 2026-08-20).
+//
+// P&L-TRUTH WAVE (2026-09-01): this accessor COERCES — a NULL pnl_corrected
+// silently becomes raw realized_pnl, which is how 115 unresolved rows put
+// "Total PnL -203.68 (220 trades)" into the executor prompt when the strict
+// truth was +304.32 over 105 resolved. It is BANNED from every aggregator
+// (store/pnl_surface_guard_test.go) and kept only for per-row display of a
+// row the caller already knows is resolved. Aggregate with CorrectedPnL.
 func (p *TraderPosition) EffectivePnL() float64 {
 	if p.PnlCorrected != nil {
 		return *p.PnlCorrected
 	}
 	return p.RealizedPnL
 }
+
+// CorrectedPnL is the STRICT accessor (corrected-column law, A22): the
+// corrected P&L and true, or (0, false) when the row is UNRESOLVED
+// (pnl_corrected NULL). An unresolved row has no captured/verified exit and
+// must be COUNTED and EXCLUDED — never coerced to realized_pnl, never a $0.
+func (p *TraderPosition) CorrectedPnL() (float64, bool) {
+	if p.PnlCorrected == nil {
+		return 0, false
+	}
+	return *p.PnlCorrected, true
+}
+
+// IsUnresolved reports whether the row carries no verified P&L.
+func (p *TraderPosition) IsUnresolved() bool { return p.PnlCorrected == nil }

@@ -13,6 +13,7 @@ export const status: GuideSection = {
       title: 'the lines printed at startup, in order',
       lines: [
         '🔐 BOOT INTEGRITY OK — rev <sha> [+dirty] · built <ts>',
+        '🧾 P&L surfaces: <N> aggregators strict-corrected, 0 raw (corrected-column guard) — every P&L figure the model and the dashboard read is pnl_corrected; unresolved rows are counted and excluded, never coerced',
         '    · expected <sha> · goldens PASS      ← code matches deploy record',
         '📜 planner playbook: playbook=v2 bias_tree=on …',
         '🛡 plan facts guards: 0-side + empty map fail-closed …',

@@ -262,6 +262,8 @@ func main() {
 	logger.Infof("🧮 %s", store.ReplanBudgetBootLine())
 	// CLASS 36 (2026-09-01) — planner preflight scope in the boot block.
 	logger.Infof("🗓 %s", trader.PreflightBootLine())
+	// P&L-TRUTH WAVE (2026-09-01) — corrected-column guard in the boot block.
+	logger.Infof("🧾 %s", store.PnLSurfacesBootLine())
 	logger.Infof("🎛 %s", kernel.EntryLawBootLedger()) // P1.4 (ledger-close 2026-08-19) — clock-guard block: live host-RTC drift,
 	// guard-timer freshness, last resync/check state. Log-only, best-effort.
 	kernel.LogClockGuardBoot()
