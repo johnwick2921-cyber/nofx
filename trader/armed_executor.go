@@ -176,12 +176,6 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 	if ledger == nil {
 		return
 	}
-	// CLASS 33 (2026-09-02) — BOOT SWEEP FIRST. Before ANY authoring, gating,
-	// cancelling or placement in this process: every non-terminal row stamped
-	// by a DEAD process is cancelled at the broker and in the ledger. This is
-	// the head of the armed subsystem, so sweep-before-arm is guaranteed by
-	// position — runArmedPlacement is reached from BELOW this line only.
-	at.sweepPreBootArms(ledger)
 	now := time.Now()
 
 	// 1.4 — plan → dormant/no_trade/absent = ALL its armed orders cancelled
@@ -332,32 +326,6 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 			continue
 		}
 		for li, leg := range legs {
-			// 0B (2026-09-02) — STOP ANCHORED TO SEATED STRUCTURE. Compose the
-			// leg's stop BEFORE every downstream consumer (the gate's R:R and
-			// min-SL legs, the ledger row, the churn guard, placement): stop =
-			// beyond the nearest seated level on the risk side + clearance,
-			// floored at MIN_SL_ATR_MULT×ATR5m, widest wins, never tighter than
-			// authored. Logged once per (plan, version, scenario, leg, stop).
-			if comp := composeArmStop(strings.ToLower(strings.TrimSpace(sc.Direction)), leg.Entry, leg.Stop, atr5m,
-				market.FuturesTickSize(at.futuresSymbol()), doc.Levels, kernel.MinSLATRMult(),
-				kernel.MinSLTickClearance, armStopAnchorMaxATR()); comp.Stop != leg.Stop || comp.Unanchored {
-				skey := plan.PlanID + ":" + strconv.Itoa(plan.Version) + ":" + sc.ID + ":leg" + strconv.Itoa(li+1) + ":stop"
-				if armRefusalChanged(&at.armStopCompLast, skey, fmt.Sprintf("%.2f/%s", comp.Stop, comp.Bound)) {
-					at.logInfof("%s", armStopCompositionLine(plan.Session, sc.ID, li+1, sc.Direction, comp, atr5m, kernel.MinSLATRMult()))
-					// OWNER RULING 1 (0B): ARM_STOP_ANCHOR_MAX_ATR 3.0 is a
-					// PROVISIONAL [I] default, reviewed at n≥30 dead zones. The
-					// count is RECORDED (class-35 law), never inferred from logs.
-					if comp.Unanchored && at.store != nil {
-						if n, cerr := store.IncStopUnanchored(at.store); cerr != nil {
-							at.logWarnf("🛑 stop_unanchored counter write failed: %v", cerr)
-						} else {
-							at.logWarnf("🛑 stop_unanchored %s %s leg %d — no seated level within %.1f×ATR5m on the risk side; ATR floor governs. Recorded n=%d (provisional bound reviewed at n≥%d).",
-								plan.Session, sc.ID, li+1, armStopAnchorMaxATR(), n, store.StopUnanchoredReviewN)
-						}
-					}
-				}
-				leg.Stop = comp.Stop
-			}
 			// S2b chained arm (autopsy-response wave): wait_confirm legs stay
 			// DORMANT until the chain confirm is machine-MET. E4: leg 1 chains
 			// on confirm2 (1m_mss|1x5m_close); a legacy single arm chains on
@@ -404,21 +372,7 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 				}
 				key := plan.PlanID + ":" + strconv.Itoa(plan.Version) + ":" + sc.ID + ":leg" + strconv.Itoa(li+1)
 				if armRefusalChanged(&at.armRefusalLast, key, armRefusalClass(verdict)) {
-					// OWNER RULING 2 (0B): more R:R refusals with the wider stops
-					// is the intended trade — the COST side of the stop floor.
-					// Recorded per session-day and per class (one distinct
-					// arm-spec per bump, never per re-refusal cycle) so it can be
-					// quoted against the benefit later.
-					class := armRefusalClass(verdict)
-					shown := ""
-					if at.store != nil {
-						if n, cerr := store.IncArmRefusal(at.store, at.id, kernel.PlanTradeDateFor(plan), plan.Session, class); cerr != nil {
-							at.logWarnf("⚔️ arm refusal counter write failed: %v", cerr)
-						} else {
-							shown = fmt.Sprintf(" · %s refusals this session: %d", class, n)
-						}
-					}
-					at.logWarnf("⚔️ arm REFUSED %s %s leg %d: %s%s", plan.Session, sc.ID, li+1, verdict, shown)
+					at.logWarnf("⚔️ arm REFUSED %s %s leg %d: %s", plan.Session, sc.ID, li+1, verdict)
 				}
 				continue
 			}
@@ -601,10 +555,6 @@ func (at *AutoTrader) logShadowAB(plan *kernel.ActivePlan, sc kernel.PlanScenari
 		return
 	}
 	shadowed := at.conditionShadowedFor(sc.Condition, plan.Session)
-	// CLASS 39 — stamp the counterfactual row when this scenario's arm was
-	// normalized at plan write (legs dropped), with the dropped legs as JSON, so
-	// the effect of normalizing instead of rejecting is measurable later.
-	norm := kernel.ArmNormalizationFor(&plan.Doc, sc.ID)
 	ac := at.store.AbConfirm()
 	now := time.Now()
 	for _, r := range rows {
@@ -625,7 +575,6 @@ func (at *AutoTrader) logShadowAB(plan *kernel.ActivePlan, sc kernel.PlanScenari
 			TimeToMFEBars: r.TimeToMFEBars, TimeToMAEBars: r.TimeToMAEBars,
 			TimeToResolveBars: r.TimeToResolveBars, NetPnL: r.NetPnL,
 			Ambiguous: r.Ambiguous, IsCounterfactual: shadowed,
-			Normalized: norm != nil, DroppedLegs: kernel.DroppedLegsJSON(norm),
 			CreatedAt: now, UpdatedAt: now,
 		}); err != nil {
 			at.logWarnf("ab-confirm shadow write failed %s %s: %v", sc.ID, r.Rule, err)

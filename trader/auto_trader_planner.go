@@ -313,25 +313,49 @@ func (at *AutoTrader) maybeRunSessionReadsAt(now time.Time) []SessionReadFired {
 				continue // skip MSS/level wakes while dormant (re-arm path above runs first next cycle)
 			}
 			replanCap := at.replanCapFor(s.Name) // W9 — per-session override wins
-			// CLASS 35 (2026-09-01) — the budget is a RECORDED counter keyed under
-			// the chain baseline (an owner reset re-arms it): only death re-plans
-			// and owner re-reads spend; wake reads, dormant flips and fail-closed
-			// markers never did and now never count. Every consumer reads this seam.
-			budget := store.GetReplanBudget(at.store, at.id, tradeDate, s.Name, replanCap)
+			// P6 — the budget is measured from the CURRENT chain baseline (an
+			// owner reset re-arms it; the default baseline is 1 = the original
+			// chain). Every consumer reads the same seam.
+			baseline := store.GetResetBaseline(at.store, at.id, tradeDate, s.Name)
 			// A death must never again be an unexplained line. On 2026-08-16 six
 			// plans died in 25 minutes and the only record was five identical
 			// "DIED" lines with no condition and no price.
-			at.logInfof("🗓️ plan %s %s v%d DIED — %s. Re-planning (cap %d/session, %d spent, %d left).",
-				tradeDate, s.Name, existing.Version, detail.Killer, replanCap, budget.Used, budget.Left())
+			at.logInfof("🗓️ plan %s %s v%d DIED — %s. Re-planning (cap %d/session).",
+				tradeDate, s.Name, existing.Version, detail.Killer, replanCap)
 			for _, l := range detail.Levels {
 				at.logInfof("🗓️   ↳ %s", l)
 			}
-			if at.deathReplanAllowed(s.Name, tradeDate, existing, detail.Killer, budget) {
+			if !store.MayReplanFrom(existing.Version, baseline, replanCap) {
+				at.writeNoTradePlan(s.Name, tradeDate,
+					fmt.Sprintf("re-plans exhausted (%d/%d) after %d deaths — last: %s",
+						store.ReplansUsedFrom(existing.Version, baseline), replanCap, existing.Version-baseline, detail.Killer))
+			} else {
+				at.warnIfReplanOrphansOverlays(existing)
+				// The guard the owner asked for: once deaths reach the cap, the alert
+				// NAMES the killing condition and the price rather than the count.
+				if !store.MayReplanFrom(existing.Version+1, baseline, replanCap) {
+					at.emitAlert("P1", "plan-death-streak",
+						fmt.Sprintf("deaths:%s:%s:v%d", tradeDate, s.Name, existing.Version),
+						fmt.Sprintf("%s plan died %d× this session", s.Name, existing.Version),
+						fmt.Sprintf("Killed by: %s. This is the last re-plan before the session sits out.", detail.Killer))
+				}
+				// P0.4-G (2026-08-25) — carry the killer + the prior plan's
+				// levels into the re-plan: the map keeps continuity (no more
+				// rebuilt-from-scratch level sets) and a fired flip's bias is
+				// enforced at write.
 				// F6 (LONDON-FORENSICS 2026-08-28) — the death re-plan's planner
 				// call blocked the cycle 19m33s (the 02:14 overrun). Async, same
 				// pattern as the W6/MSS wake re-reads; the plan-store's single-
 				// writer queue serializes the writes.
-				go at.runDeathReplan(s.Name, tradeDate, existing, detail.Killer)
+				go func() {
+					at.runPlannerReadWithCtx(s.Name, tradeDate, detail.Killer, priorPlanLevelLines(existing))
+					// ITEM 4 — the owner's levels are sticky: re-establish them on
+					// the version just written, re-anchored by price. Anything that
+					// cannot be re-anchored is parked for review, never dropped.
+					if fresh, fErr := at.store.Plan().GetLatestPlanForTraderSession(tradeDate, s.Name, at.id); fErr == nil && fresh != nil {
+						at.carryOwnerEditsInto(fresh.PlanID, existing.Version, fresh.Version)
+					}
+				}()
 			}
 		}
 		if !handledDeath {
@@ -726,49 +750,6 @@ func (at *AutoTrader) noTradeLevelMap(session string) []kernel.PlanLevel {
 	return out
 }
 
-// deathReplanAllowed (CLASS 35, 2026-09-01) is the death path's budget gate:
-// false ⇒ the NO-TRADE marker was written and the session sits out; true ⇒
-// the caller may run the re-plan. The spend itself is RECORDED when the
-// re-plan row lands (runPlannerReadCoreWithFactsGrades, keyed by the
-// death_replan trigger class), so a read refused by preflight / clock-hold /
-// a lost claim still costs nothing — "no plan row, no budget consumed" holds.
-func (at *AutoTrader) deathReplanAllowed(session, tradeDate string, existing *store.PlanDB, killer string, budget store.ReplanBudget) bool {
-	if !budget.May() {
-		at.writeNoTradePlan(session, tradeDate,
-			fmt.Sprintf("re-plans exhausted (%d/%d) after %d death re-plan(s) — last: %s",
-				budget.Used, budget.Cap, budget.Used, killer))
-		return false
-	}
-	at.warnIfReplanOrphansOverlays(existing)
-	// The guard the owner asked for: once deaths reach the cap, the alert
-	// NAMES the killing condition and the price rather than the count.
-	if !(store.ReplanBudget{Used: budget.Used + 1, Cap: budget.Cap}).May() {
-		version := 0
-		if existing != nil {
-			version = existing.Version
-		}
-		at.emitAlert("P1", "plan-death-streak",
-			fmt.Sprintf("deaths:%s:%s:v%d", tradeDate, session, version),
-			fmt.Sprintf("%s plan died — re-plan %d of %d", session, budget.Used+1, budget.Cap),
-			fmt.Sprintf("Killed by: %s. This is the last re-plan before the session sits out.", killer))
-	}
-	return true
-}
-
-// runDeathReplan (CLASS 35) — the death re-plan read, labelled with the
-// SPENDING class death_replan (it used to land as "<S>_scheduled_read", which
-// is why the row count had to stand in for the spend). P0.4-G: the killer and
-// the prior plan's levels ride into the prompt (flip bias enforced at write,
-// level-set continuity). ITEM 4: the owner's sticky levels re-establish on
-// the version just written, re-anchored by price; anything that cannot be
-// re-anchored is parked for review, never dropped.
-func (at *AutoTrader) runDeathReplan(session, tradeDate string, existing *store.PlanDB, killer string) {
-	_ = at.runPlannerReadWithTriggerClaimedCtx(session, tradeDate, store.TriggerDeathReplan, killer, priorPlanLevelLines(existing), true)
-	if fresh, fErr := at.store.Plan().GetLatestPlanForTraderSession(tradeDate, session, at.id); fErr == nil && fresh != nil && existing != nil && fresh.Version != existing.Version {
-		at.carryOwnerEditsInto(fresh.PlanID, existing.Version, fresh.Version)
-	}
-}
-
 // writeNoTradePlan appends a NO-TRADE plan (re-plans exhausted) + an alert event.
 func (at *AutoTrader) writeNoTradePlan(session, tradeDate, reason string) {
 	// P7 — levels are market FACTS; the plan is an opinion about them. A no-trade
@@ -875,7 +856,7 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 	// U1 3.2 — never call the LLM on an empty/stale bar window (the 08-19
 	// outage produced 0-scenario fail-closed stubs this way). No plan row is
 	// written and no budget consumed; the read window retries next cycle.
-	if !at.plannerPreflight(session, tradeDate, triggerOverride) { // CLASS 36 — scoped by trigger class
+	if !at.plannerPreflight(session, tradeDate) {
 		return false
 	}
 	client, modelID := at.resolvePlannerClient()
@@ -952,11 +933,6 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 		pMode, pEffort = fastMarketReasoningWire()
 		modeLabel = fastMarketReasoningLabel()
 	}
-	// ROOT-FIX part B (2026-09-02) — register what a SHADOW fast-mode call needs
-	// (client, system prompt, budget, fast wire). The shadow fires only after
-	// the live read finishes, writes no plan, and is off by default.
-	fMode, fEffort := fastMarketReasoningWire()
-	at.RegisterShadowRunner(client, plannerSystemPrompt, aiPlanMaxTokens(), fMode, fEffort)
 	at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, hash, input.IndicatorsBlock, input.AIConfigHash, requiredBias, prompt, facts, machineGrades, machineLabels, htfLabels(input), failClosed, func(userPrompt string) (string, error) {
 		mcp.ApplyThinking(client, pMode, pEffort)
 		// PLANNER SPEED WAVE 4 (2026-08-31) — the session planner now rides the
@@ -974,11 +950,7 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 		var raw string
 		var err error
 		if bc, ok := client.(interface{ BaseClient() *mcp.Client }); ok {
-			// CLASS 37 (2026-09-01) — the planner's OWN whole-call ceiling
-			// (AI_PLAN_TOTAL_DEADLINE_SECS) rides beside the idle watchdog; the
-			// 600s http.Client.Timeout no longer bounds a LIVE reasoning stream
-			// (it killed 11 of 80 max-reasoning attempts 08-30 → 09-01).
-			raw, err = bc.BaseClient().CallWithRequestStreamRetryDeadlines(req, nil, plannerStreamIdle(), plannerStreamTotal())
+			raw, err = bc.BaseClient().CallWithRequestStreamRetry(req, nil, plannerStreamIdle())
 		} else {
 			// Non-base clients (tests, legacy callers) keep the full-body path.
 			raw, err = client.CallWithMessages(plannerSystemPrompt, userPrompt)
@@ -986,17 +958,7 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 		if err == nil && mcp.LastFinishReason(client) == "length" {
 			at.logWarnf("📐 planner output TRUNCATED by the provider (finish_reason=length, cap=%d) — the plan JSON may be incomplete; retrying at the same cap will not fix truncation", cap)
 		}
-		if err != nil {
-			// CLASS 37 — every failed provider call names its class, the
-			// provider ROW (never the key), HTTP status and request id: "the
-			// API keeps failing" is never again a log line without a class.
-			at.logWarnf("🛰 planner call FAILED class=%s provider_row=%s model=%s http_status=%d request_id=%q elapsed=%.1fs idle=%ds total=%ds — %v",
-				mcp.LastErrClass(client), at.config.AIModelID, modelID, mcp.LastHTTPStatus(client), mcp.LastRequestID(client),
-				time.Since(start).Seconds(), int(plannerStreamIdle().Seconds()), int(plannerStreamTotal().Seconds()), err)
-		}
-		at.logInfof("🧠 planner call (reasoning=%s wire=%s/%s cap=%d stream idle=%ds total=%ds) completed in %.1fs", modeLabel, pMode, pEffort, cap, int(plannerStreamIdle().Seconds()), int(plannerStreamTotal().Seconds()), time.Since(start).Seconds())
-		// root-fix part B: the live side of the A/B pair.
-		at.RecordLiveCallMetrics(mcp.LastCompletionTokens(client), time.Since(start).Milliseconds())
+		at.logInfof("🧠 planner call (reasoning=%s wire=%s/%s cap=%d stream idle=%ds) completed in %.1fs", modeLabel, pMode, pEffort, cap, int(plannerStreamIdle().Seconds()), time.Since(start).Seconds())
 		return raw, err
 	}, t1Lines...)
 	return true
@@ -1045,6 +1007,13 @@ func PlannerMaxTokens() int { return aiPlanMaxTokens() }
 // and persists the plan (or a fail-closed NO-TRADE plan).
 func (at *AutoTrader) runPlannerRead(session, tradeDate string) {
 	at.runPlannerReadWithTrigger(session, tradeDate, "")
+}
+
+// runPlannerReadWithCtx (P0.4-G, 2026-08-25) is the re-plan form: the dead
+// plan's killer line + its levels ride into the prompt (flip bias enforced at
+// write, level-set continuity).
+func (at *AutoTrader) runPlannerReadWithCtx(session, tradeDate, priorKiller string, priorLevels []string) {
+	_ = at.runPlannerReadWithTriggerClaimedCtx(session, tradeDate, "", priorKiller, priorLevels, true)
 }
 
 // priorPlanLevelLines renders the previous version's levels as "price label"
@@ -1246,35 +1215,11 @@ func plannerRejectBlock(err error, live []string) string {
 	return "\n\n## PREVIOUS ATTEMPT REJECTED / Validator reason (verbatim):\n" + err.Error() + "\nFix ONLY this defect, keep the rest structurally identical." + kernel.LiveConditionsLine(live)
 }
 
-// repairUnparseableLine (CLASS 38 F6, 2026-09-01) renders the loud line for a
-// repair attempt whose output would not parse: the parse error, the defect the
-// repair was aimed at, and the HEAD of what the model actually sent. Before
-// this the journal carried one bare sentence, so rejected-prompt row 79 could
-// only be reconstructed from the DB. Pure, so the fixture pins the wording;
-// bounded, so a 30k malformed response cannot flood the journal (class 12).
-// Retry semantics are untouched — the caller still falls back to ONE full
-// re-author.
-func repairUnparseableLine(raw, repairingReason string, parseErr error) string {
-	return fmt.Sprintf("🧩 repair returned UNPARSEABLE output — falling back to a full re-author next attempt · parse_err=%v · was repairing: %s · raw_head=%q",
-		parseErr, clampLine(repairingReason, 200), clampLine(raw, 400))
-}
-
-// clampLine truncates to n runes on ONE line (newlines collapsed) with an
-// explicit ellipsis, so a log line can never be mistaken for the whole payload.
-func clampLine(s string, n int) string {
-	s = strings.ReplaceAll(strings.ReplaceAll(s, "\n", " "), "\r", " ")
-	r := []rune(s)
-	if len(r) <= n {
-		return s
-	}
-	return string(r[:n]) + "…"
-}
-
 // plannerRejectBookkeeping (planner-speed wave 1.4/3.4, 2026-08-31) runs at
 // every reject site: persists the rejected attempt's verbatim prompt + reason
 // for the offline A/B, and bumps the whack-a-mole counter when attempt N
 // repeats attempt N-1's defect.
-func (at *AutoTrader) plannerRejectBookkeeping(attempt int, tradeDate, session, hash, userPrompt string, rejectErr error, prevReason *string, factsJSON ...string) {
+func (at *AutoTrader) plannerRejectBookkeeping(attempt int, tradeDate, session, hash, userPrompt string, rejectErr error, prevReason *string) {
 	if rejectErr == nil {
 		return
 	}
@@ -1284,13 +1229,7 @@ func (at *AutoTrader) plannerRejectBookkeeping(attempt int, tradeDate, session, 
 	}
 	*prevReason = rejectErr.Error()
 	if at.store != nil {
-		// ROOT-FIX B-1: the facts snapshot travels with the prompt so an offline
-		// A/B runs the FULL validator chain, not just the schema gate.
-		fj := ""
-		if len(factsJSON) > 0 {
-			fj = factsJSON[0]
-		}
-		if serr := at.store.PlannerRejected().SaveRejectedPromptWithFacts(at.id, tradeDate, session, hash, attempt, rejectErr.Error(), userPrompt, fj); serr != nil {
+		if serr := at.store.PlannerRejected().SaveRejectedPrompt(at.id, tradeDate, session, hash, attempt, rejectErr.Error(), userPrompt); serr != nil {
 			at.logWarnf("🧾 rejected-prompt persist failed: %v", serr)
 		}
 	}
@@ -1316,41 +1255,6 @@ func resolvePlannerRetryMode() string { return kernel.ResolvePlannerRetryMode() 
 // plannerStreamIdle delegates to the kernel resolver (AI_PLAN_STREAM_IDLE_SECS).
 func plannerStreamIdle() time.Duration {
 	return time.Duration(kernel.PlannerStreamIdleSeconds()) * time.Second
-}
-
-// plannerStreamTotal (class 37) delegates to the kernel resolver
-// (AI_PLAN_TOTAL_DEADLINE_SECS, default 1200; always > idle).
-func plannerStreamTotal() time.Duration {
-	return time.Duration(kernel.PlannerStreamTotalSeconds()) * time.Second
-}
-
-// plannerClientBootLine (class 37, C7) renders the EFFECTIVE planner client
-// config — resolved values, never file defaults — for the per-trader boot
-// block: both stream deadlines, the HTTP ceiling that still governs the
-// non-stream paths, retries/backoff and the provider ROW the trader is bound
-// to. Pure so the fixture can pin the wording.
-func plannerClientBootLine(providerRow string, idleS, totalS, httpCeilingS, retries, backoffS, cap int) string {
-	return fmt.Sprintf("🛰 planner client: provider_row=%s stream_idle=%ds stream_total=%ds (AI_PLAN_TOTAL_DEADLINE_SECS) http_ceiling=%ds (non-stream paths only) retries=%d backoff=%ds cap=%d",
-		providerRow, idleS, totalS, httpCeilingS, retries, backoffS, cap)
-}
-
-// plannerStreamPolicyBootLine (class 41, 2026-09-02) — the planner STREAM
-// retry policy in one line: calls per attempt, the exponential wait schedule,
-// watchdog fire logging, the dialer keepalive in effect, executor
-// serialization (off: P3 found no overlap effect), and identical-prompt resend.
-func plannerStreamPolicyBootLine(tries int, sched []time.Duration, keepaliveS int) string {
-	parts := make([]string, 0, len(sched))
-	for _, d := range sched {
-		parts = append(parts, d.String())
-	}
-	return fmt.Sprintf("🔁 planner stream policy (class 41): stream_tries=%d (AI_PLAN_STREAM_TRIES, counts CALLS; AI_MAX_RETRIES=%s non-stream only) backoff=%s (AI_PLAN_STREAM_BACKOFF) watchdog_log=on (⏱ line on fire, per SSE line) keepalive=%ds (dialer) serialize_executor=off resend_identical=on (transport/deadline → same prompt, no reject block)",
-		tries, "calls", strings.Join(parts, "→"), keepaliveS)
-}
-
-func (at *AutoTrader) logPlannerClientBootLine() {
-	ai := mcp.EffectiveAIParamsSnapshot("")
-	at.logInfof("%s", plannerClientBootLine(at.config.AIModelID, kernel.PlannerStreamIdleSeconds(), kernel.PlannerStreamTotalSeconds(), ai.TimeoutSeconds, ai.MaxRetries, ai.RetryBackoffSeconds, aiPlanMaxTokens()))
-	at.logInfof("%s", plannerStreamPolicyBootLine(mcp.StreamRetryTries(), mcp.StreamRetryBackoffSchedule(), 30))
 }
 
 // sundayAsiaDeferred (A2, owner ruling 2026-08-31) — the Sunday sequencing
@@ -1415,22 +1319,12 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 	var prevReason string
 	lastRaw := ""
 	forceReauthor := false
-	resendIdentical := ""                       // class 41 M0: the exact prompt a provider-failed attempt sent
 	for attempt := 1; attempt <= 3; attempt++ { // 1 + ≤2 retries
 		userPrompt := prompt
 		modeLabel := "author"
-		if attempt >= 2 && resendIdentical != "" {
-			// CLASS 41 M0 (owner ruling class 37, 2026-09-01; implemented
-			// 2026-09-02): a transport/deadline failure produced NO model
-			// answer, so there is nothing to repair and no validator reason —
-			// re-send the IDENTICAL prompt, no reject block appended.
-			userPrompt = resendIdentical
-			resendIdentical = ""
-			modeLabel = "resend-identical"
-			at.logInfof("🧩 planner attempt %d/3 %s: prompt ~%d tokens (byte-identical to the provider-failed attempt; no reject block)", attempt, modeLabel, estimatePromptTokens(userPrompt))
-		} else if attempt >= 2 {
+		if attempt >= 2 {
 			if retryMode == "repair" && !forceReauthor && lastRaw != "" && lastErr != nil {
-				userPrompt = kernel.BuildPlannerRepairPrompt(lastRaw, lastErr.Error(), liveConditions)
+				userPrompt = kernel.BuildPlannerRepairPrompt(lastRaw, lastErr.Error())
 				modeLabel = "repair"
 			} else {
 				userPrompt = prompt + rejectBlock
@@ -1439,35 +1333,11 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 			at.logInfof("🧩 planner attempt %d/3 %s: prompt ~%d tokens (full-author ~%d tokens)", attempt, modeLabel, estimatePromptTokens(userPrompt), estimatePromptTokens(prompt))
 		}
 		raw, err := call(userPrompt)
-		if err != nil && mcp.IsProviderFailure(err) {
-			// CLASS 41 M0: provider failure → the next attempt re-sends this
-			// exact prompt. No reject block, no rejected-prompt row (that table
-			// samples VALIDATOR rejects; the 🛰/ai_call lines already carry the
-			// class), lastRaw/lastErr untouched so a later validator reject
-			// still repairs against the last real model output.
-			at.logWarnf("📐 planner attempt %d/3 failed on the provider (class=%s) — attempt %d re-sends the IDENTICAL prompt: %v", attempt, mcp.ClassifyAIError(err), attempt+1, err)
-			resendIdentical = userPrompt
-			if attempt == 3 {
-				lastErr = err
-			}
-			continue
-		}
 		lastRaw = raw
 		if err != nil {
 			lastErr = err
 			at.logWarnf("📐 planner attempt %d/3 failed: %v", attempt, err)
-			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
-			rejectBlock = plannerRejectBlock(lastErr, liveConditions)
-			continue
-		}
-		if modeLabel == "repair" && kernel.IsPlanFragment(raw) {
-			// REPAIR-PARSE E2: a partial document gets its OWN reason instead of
-			// a confusing schema error. Not observed in the 2026-09-01 journals
-			// — a guard, not a fix for a measured failure.
-			lastErr = fmt.Errorf("%s", kernel.FragmentReason)
-			forceReauthor = true
-			at.recordRepairOutcome(raw, lastErr, prevReason)
-			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
+			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason)
 			rejectBlock = plannerRejectBlock(lastErr, liveConditions)
 			continue
 		}
@@ -1477,9 +1347,9 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 			at.logWarnf("📐 planner attempt %d/3 parse/schema rejected: %v", attempt, perr)
 			if modeLabel == "repair" {
 				forceReauthor = true // 3.6 — a malformed repair falls back to one full re-author
-				at.recordRepairOutcome(raw, perr, prevReason)
+				at.logWarnf("🧩 repair returned unparseable output — falling back to a full re-author next attempt")
 			}
-			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
+			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason)
 			rejectBlock = plannerRejectBlock(lastErr, liveConditions)
 			continue
 		}
@@ -1490,22 +1360,6 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		// evaluator still tracks consumption — scenarios demote only when a
 		// level is actually re-touched after the plan is born, never at
 		// birth. demoteConsumedScenarios stays for reference/tests only.
-		// CLASS 39 (owner ruling 2026-09-01) — normalize, don't reject: inside
-		// ParsePlanDocCapped the kernel dropped legs from every non-sweep arm
-		// whose single top-level arm validates, and recorded each event on the
-		// doc. Surface every one LOUDLY (A9) — the WARN names the condition, the
-		// scenario, every dropped leg and the kept arm — and RECORD the count
-		// (D5: system_config, survives restarts; the class-35 lesson).
-		for _, n := range d.ArmNormalizations {
-			at.logWarnf("%s", kernel.ArmNormalizationWarn(n))
-			if at.store != nil {
-				if cnt, cerr := store.IncArmsNormalized(at.store); cerr != nil {
-					at.logWarnf("⚖ arms_normalized_class39 counter write failed: %v", cerr)
-				} else {
-					at.logInfof("⚖ arms_normalized_class39 = %d (recorded)", cnt)
-				}
-			}
-		}
 		// P0.4-C (2026-08-24) — the model may write near-duplicate levels (2.13
 		// pts apart killed ASIA v2 with the duplicate-seat rule). Collapse them
 		// with the same cluster tolerance the scorer uses, instead of burning
@@ -1521,7 +1375,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		// the evaluator and ignored by the re-planner.
 		if requiredBias != "" && strings.ToLower(strings.TrimSpace(d.Bias.Direction)) != requiredBias {
 			lastErr = fmt.Errorf("prior plan flip already fired → bias %s is MANDATORY, got %q — the flip cannot be re-written away", requiredBias, d.Bias.Direction)
-			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
+			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason)
 			at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, lastErr)
 			rejectBlock = plannerRejectBlock(lastErr, liveConditions)
 			continue
@@ -1533,7 +1387,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		// was 29290.5 — the flip anchor rode a phantom label.
 		if mis := kernel.MislabeledStructuralLevels(d, machineLabels); len(mis) > 0 {
 			lastErr = fmt.Errorf("level label provenance: %s — copy the machine table's label for these prices", strings.Join(mis, "; "))
-			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
+			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason)
 			at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, lastErr)
 			rejectBlock = plannerRejectBlock(lastErr, liveConditions)
 			continue
@@ -1544,12 +1398,9 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		// reachable targets. Everything else fails → retry → fail-closed.
 		if verr := kernel.ValidatePlanDocWithFactsMachine(d, facts, machineLabels, maxLevels, scenarioCap); verr != nil {
 			lastErr = verr
-			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
+			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason)
 			rejectBlock = plannerRejectBlock(lastErr, liveConditions)
 			at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, verr)
-			if modeLabel == "repair" {
-				at.recordRepairOutcome(raw, verr, prevReason)
-			}
 			continue
 		}
 		// F4 (LONDON-FORENSICS 2026-08-28) — arm feasibility WARN, never a
@@ -1583,12 +1434,9 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 			}
 			if verr := kernel.ValidateFvgEntryScenarios(d, fvgBars, at.futuresSymbol(), origin, time.Now()); verr != nil {
 				lastErr = verr
-				at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
+				at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason)
 				rejectBlock = plannerRejectBlock(lastErr, liveConditions)
 				at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, verr)
-				if modeLabel == "repair" {
-					at.recordRepairOutcome(raw, verr, prevReason)
-				}
 				continue
 			}
 		}
@@ -1603,12 +1451,9 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 			}
 			if verr := kernel.ValidateBreakdownContinueScenarios(d, bdBars, kernel.StaleConfirmATR5m(bdBars), facts.Price, time.Now().UnixMilli()); verr != nil {
 				lastErr = verr
-				at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
+				at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason)
 				rejectBlock = plannerRejectBlock(lastErr, liveConditions)
 				at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, verr)
-				if modeLabel == "repair" {
-					at.recordRepairOutcome(raw, verr, prevReason)
-				}
 				continue
 			}
 		}
@@ -1655,14 +1500,6 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		}
 		for i := 0; i < nArms; i++ {
 			telemetry.IncGateBlock(at.id, "arm_authored")
-		}
-		if modeLabel == "repair" {
-			// The denominator: an accepted repair is recorded ONLY here, where
-			// the doc has survived the whole validator chain (A24: a rate
-			// without its base is not a rate).
-			if _, ierr := store.IncRepairOutcome(at.store, string(kernel.RepairOK)); ierr != nil {
-				at.logWarnf("🩹 repair counter write failed: %v", ierr)
-			}
 		}
 		doc = d
 		break
@@ -1733,10 +1570,6 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 	if strings.TrimSpace(triggerOverride) != "" {
 		trigger = triggerOverride
 	}
-	// CLASS 35 — decide the spend by the CLASS the caller passed, before the
-	// fail-closed branch relabels the row: a death re-plan / owner re-read that
-	// fail-closes still landed a row for a consuming class.
-	spendClass, spends := trigger, store.TriggerSpendsReplan(trigger)
 	if doc == nil {
 		// W6-C (2026-08-25) — wake reads are NON-fatal: a failed wake re-read
 		// must NOT no-trade a session whose active plan is still alive (live
@@ -1805,23 +1638,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		return 0, lifecycle, err
 	}
 	at.logInfof("🗓️ PLAN written %s %s v%d (model %s, lifecycle %s, prompt %s, ai_config %s)", tradeDate, session, version, modelID, lifecycle, promptHash, aiConfigHash)
-	if spends {
-		// CLASS 35 — RECORD the spend now that the row exists (counters record
-		// events; they do not infer them from row counts).
-		if used, sErr := store.SpendReplan(at.store, at.id, tradeDate, session); sErr != nil {
-			at.logErrorf("🧮 replan budget: %s %s v%d landed as %s but the spend FAILED to record: %v — the gate may over-allow by one until the row is fixed (class 35)",
-				tradeDate, session, version, spendClass, sErr)
-		} else {
-			b := store.ReplanBudget{Used: used, Cap: at.replanCapFor(session)}
-			at.logInfof("🧮 replan budget: %s spent one — %d/%d used, %d left (%s %s v%d; class 35 recorded-counter)",
-				spendClass, b.Used, b.Cap, b.Left(), tradeDate, session, version)
-		}
-	}
 	at.recordPlanWritePrice(facts.Price) // F3 fast-market drift baseline
-	// ROOT-FIX part B — fire ONE shadow fast-mode call on the IDENTICAL prompt,
-	// AFTER the live read has finished (never a concurrent stream: class 41's
-	// concurrency question is still open). Writes nothing; measurement only.
-	at.maybeRunShadowAB(session, tradeDate, prompt, maxLevels, scenarioCap, facts, machineLabels, htfLabels, requiredBias)
 	// W6 — P1 plan-born/armed alert (active plans only; fail-closed already alerted P0).
 	if lifecycle == "active" {
 		at.emitAlert("P1", "armed", fmt.Sprintf("planborn:%s:%s:%d", tradeDate, session, version),
@@ -2389,8 +2206,9 @@ func installActivePlanProvider(at *AutoTrader, st *store.Store) {
 			// ASIA to 4 mid-session, so at v3 the card said "replans left 2" while the
 			// AI was being told 0. P6 — the budget is measured from the chain baseline
 			// (an owner reset re-arms it), same seam the death path reads.
-			replansLeft := store.GetReplanBudget(st, at.id, row.TradeDate, sess.Name,
-				storedReplanCap(st, row.StrategyID, sess.Name)).Left()
+			replansLeft := store.ReplansLeftFrom(row.Version,
+				store.GetResetBaseline(st, at.id, row.TradeDate, sess.Name),
+				storedReplanCap(st, row.StrategyID, sess.Name))
 			// P0-cleanup — decision records carry the full plan attribution
 			// (plan_id, plan_version, overlay_version).
 			overlayVersion := 0
@@ -2538,18 +2356,4 @@ func (at *AutoTrader) noteConfirmCompliantSession() {
 		return
 	}
 	_ = at.store.SetSystemConfig(confirmGraceKey, strconv.Itoa(confirmGraceSessions()))
-}
-
-// recordRepairOutcome (REPAIR-PARSE E4, 2026-09-02) classifies what a repair
-// attempt actually produced, logs it loudly with the class, and RECORDS it.
-// The old line called every failure "UNPARSEABLE"; measured, 17 of 18 parsed
-// fine and were rejected on field values, so the label was misleading exactly
-// where a diagnosis was needed.
-func (at *AutoTrader) recordRepairOutcome(raw string, err error, repairingReason string) {
-	outcome := kernel.ClassifyRepairOutcome(raw, err)
-	at.logWarnf("🩹 repair outcome=%s — falling back to a full re-author next attempt · reject=%v · was repairing: %s · raw_head=%q",
-		outcome, err, clampLine(repairingReason, 200), clampLine(raw, 400))
-	if _, ierr := store.IncRepairOutcome(at.store, string(outcome)); ierr != nil {
-		at.logWarnf("🩹 repair counter write failed: %v", ierr)
-	}
 }

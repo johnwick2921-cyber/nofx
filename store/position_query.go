@@ -6,27 +6,19 @@ import (
 	"strings"
 )
 
-// TraderStats trading statistics metrics.
-//
-// P&L-TRUTH WAVE (2026-09-01, corrected-column law A22): every figure here is
-// computed over RESOLVED rows only (pnl_corrected NOT NULL). TotalTrades IS the
-// resolved count; UnresolvedExcluded is how many closed rows were left out
-// because their P&L is unknown — returned alongside so no surface can show a
-// total without its exclusion count.
+// TraderStats trading statistics metrics
 type TraderStats struct {
-	TotalTrades        int     `json:"total_trades"`        // == ResolvedTrades (compat)
-	ResolvedTrades     int     `json:"resolved_trades"`     // rows with pnl_corrected present
-	UnresolvedExcluded int     `json:"unresolved_excluded"` // rows with pnl_corrected NULL — excluded, never coerced
-	WinTrades          int     `json:"win_trades"`
-	LossTrades         int     `json:"loss_trades"`
-	WinRate            float64 `json:"win_rate"`
-	ProfitFactor       float64 `json:"profit_factor"`
-	SharpeRatio        float64 `json:"sharpe_ratio"`
-	TotalPnL           float64 `json:"total_pnl"`
-	TotalFee           float64 `json:"total_fee"`
-	AvgWin             float64 `json:"avg_win"`
-	AvgLoss            float64 `json:"avg_loss"`
-	MaxDrawdownPct     float64 `json:"max_drawdown_pct"`
+	TotalTrades    int     `json:"total_trades"`
+	WinTrades      int     `json:"win_trades"`
+	LossTrades     int     `json:"loss_trades"`
+	WinRate        float64 `json:"win_rate"`
+	ProfitFactor   float64 `json:"profit_factor"`
+	SharpeRatio    float64 `json:"sharpe_ratio"`
+	TotalPnL       float64 `json:"total_pnl"`
+	TotalFee       float64 `json:"total_fee"`
+	AvgWin         float64 `json:"avg_win"`
+	AvgLoss        float64 `json:"avg_loss"`
+	MaxDrawdownPct float64 `json:"max_drawdown_pct"`
 }
 
 // GetPositionStats gets position statistics
@@ -34,8 +26,8 @@ func (s *PositionStore) GetPositionStats(traderID string) (map[string]interface{
 	stats := make(map[string]interface{})
 
 	type result struct {
-		Total int
-		Wins  int
+		Total    int
+		Wins     int
 		// 0A-2 (2026-08-31): explicit column tags — GORM's default snake-casing
 		// mapped TotalPnL→"total_pn_l" and silently scanned 0 from the
 		// "total_pnl" alias (the surface under-reported P&L as zero).
@@ -45,10 +37,7 @@ func (s *PositionStore) GetPositionStats(traderID string) (map[string]interface{
 	var r result
 
 	err := s.db.Model(&TraderPosition{}).
-		// P&L-TRUTH WAVE: strict pnl_corrected — the raw column is never read
-		// here (the WHERE already excludes NULL; the old COALESCE fallback was a
-		// dead-but-dangerous reference).
-		Select("COUNT(*) as total, SUM(CASE WHEN pnl_corrected > 0 THEN 1 ELSE 0 END) as wins, COALESCE(SUM(pnl_corrected), 0) as total_pnl, COALESCE(SUM(fee), 0) as total_fee").
+		Select("COUNT(*) as total, SUM(CASE WHEN COALESCE(pnl_corrected, realized_pnl) > 0 THEN 1 ELSE 0 END) as wins, COALESCE(SUM(COALESCE(pnl_corrected, realized_pnl)), 0) as total_pnl, COALESCE(SUM(fee), 0) as total_fee").
 		// A-2 (2026-08-28, bar-truth wave): legacy CLOSED rows with
 		// pnl_corrected NULL (317 sync + 37 reconcile_flat — never
 		// re-verified against stored prices) are EXCLUDED from every
@@ -70,7 +59,6 @@ func (s *PositionStore) GetPositionStats(traderID string) (map[string]interface{
 	}
 
 	stats["total_trades"] = r.Total
-	stats["resolved_trades"] = r.Total
 	stats["win_trades"] = r.Wins
 	stats["total_pnl"] = r.TotalPnL
 	stats["total_fee"] = r.TotalFee
@@ -103,11 +91,7 @@ func (s *PositionStore) CountConsecutiveLossesSince(traderID string, sinceMs int
 	}
 	n := 0
 	for _, r := range rows {
-		pnl, resolved := r.CorrectedPnL()
-		if !resolved {
-			continue // UNRESOLVED (defensive — the WHERE excludes these): never counted either way
-		}
-		if pnl < 0 {
+		if r.EffectivePnL() < 0 {
 			n++
 		} else {
 			break // a win / break-even ends the losing streak
@@ -130,7 +114,7 @@ func (s *PositionStore) GetSessionDayActivity(traderID string, sinceMs int64, ac
 
 	var pnl struct{ Total float64 }
 	pq := s.db.Model(&TraderPosition{}).
-		Select("COALESCE(SUM(pnl_corrected), 0) as total"). /* P&L-TRUTH WAVE: strict corrected column; NULL rows are excluded by the WHERE and never coerced */
+		Select("COALESCE(SUM(COALESCE(pnl_corrected, realized_pnl)), 0) as total"). /* P0 2026-08-20: corrections win */
 		// A-2 (2026-08-28): no silent NULLs — legacy unverified rows are
 		// excluded from the guardrail P&L too.
 		Where("trader_id = ? AND status = ? AND close_reason NOT IN (?, ?, ?) AND pnl_corrected IS NOT NULL AND exit_time >= ?",
@@ -169,25 +153,20 @@ func (s *PositionStore) GetFullStats(traderID string, account ...string) (*Trade
 	// Exclude unknown-P&L orphan closes: their realized P&L is UNKNOWN (exit
 	// fill never captured), not a real $0 — counting them would skew win-rate /
 	// total P&L. They still appear in the position LIST (rendered "—").
-	// P&L-TRUTH WAVE (2026-09-01, corrected-column law): the unresolved class
-	// (pnl_corrected NULL) is COUNTED here and EXCLUDED from every figure
-	// below. Before this wave the rows were loaded and summed through
-	// EffectivePnL(), which coerced NULL → raw realized_pnl: 115 such rows put
-	// "Total PnL -203.68 (220 trades)" in front of the executor when the truth
-	// was +304.32 over 105 resolved (row 526 alone: raw −1,458.00 vs corrected
-	// −69.43). The model must never read a fabricated track record.
-	var unresolved int64
-	uq := s.db.Model(&TraderPosition{}).Where("trader_id = ? AND status = ? AND close_reason NOT IN (?, ?, ?) AND pnl_corrected IS NULL", traderID, "CLOSED", CloseReasonReconcileFlat, CloseReasonUnresolved, CloseReasonTestSeam)
+	var count int64
+	cq := s.db.Model(&TraderPosition{}).Where("trader_id = ? AND status = ? AND close_reason NOT IN (?, ?, ?)", traderID, "CLOSED", CloseReasonReconcileFlat, CloseReasonUnresolved, CloseReasonTestSeam)
 	if acct != "" {
-		uq = uq.Where("account = ?", acct)
+		cq = cq.Where("account = ?", acct)
 	}
-	if err := uq.Count(&unresolved).Error; err != nil {
+	if err := cq.Count(&count).Error; err != nil {
 		return nil, err
 	}
-	stats.UnresolvedExcluded = int(unresolved)
+	if count == 0 {
+		return stats, nil
+	}
 
 	var positions []TraderPosition
-	pq := s.db.Where("trader_id = ? AND status = ? AND close_reason NOT IN (?, ?, ?) AND pnl_corrected IS NOT NULL", traderID, "CLOSED", CloseReasonReconcileFlat, CloseReasonUnresolved, CloseReasonTestSeam)
+	pq := s.db.Where("trader_id = ? AND status = ? AND close_reason NOT IN (?, ?, ?)", traderID, "CLOSED", CloseReasonReconcileFlat, CloseReasonUnresolved, CloseReasonTestSeam)
 	if acct != "" {
 		pq = pq.Where("account = ?", acct)
 	}
@@ -196,31 +175,22 @@ func (s *PositionStore) GetFullStats(traderID string, account ...string) (*Trade
 	if err != nil {
 		return nil, fmt.Errorf("failed to query position statistics: %w", err)
 	}
-	if len(positions) == 0 {
-		return stats, nil
-	}
 
 	var pnls []float64
 	var totalWin, totalLoss float64
 
 	for _, pos := range positions {
-		pnl, resolved := pos.CorrectedPnL()
-		if !resolved {
-			stats.UnresolvedExcluded++ // defensive: the WHERE excludes these
-			continue
-		}
 		stats.TotalTrades++
-		stats.ResolvedTrades++
-		stats.TotalPnL += pnl
+		stats.TotalPnL += pos.EffectivePnL()
 		stats.TotalFee += pos.Fee
-		pnls = append(pnls, pnl)
+		pnls = append(pnls, pos.EffectivePnL())
 
-		if pnl > 0 {
+		if pos.EffectivePnL() > 0 {
 			stats.WinTrades++
-			totalWin += pnl
-		} else if pnl < 0 {
+			totalWin += pos.EffectivePnL()
+		} else if pos.EffectivePnL() < 0 {
 			stats.LossTrades++
-			totalLoss += -pnl
+			totalLoss += -pos.EffectivePnL()
 		}
 	}
 
@@ -246,16 +216,8 @@ func (s *PositionStore) GetFullStats(traderID string, account ...string) (*Trade
 	return stats, nil
 }
 
-// RecentTrade recent trade record.
-//
-// P&L-TRUTH WAVE: Resolved=false marks a row whose P&L is UNKNOWN
-// (pnl_corrected NULL). Such a row carries NO P&L and NO percentage — the old
-// code rendered an unresolved short with exit 0 as "+0.00 (+100.00%)".
-// RealizedPnL (json name kept for API compatibility) holds the CORRECTED
-// value for resolved rows and 0 for unresolved ones.
+// RecentTrade recent trade record
 type RecentTrade struct {
-	ID           int64   `json:"id"`
-	Resolved     bool    `json:"resolved"`
 	Symbol       string  `json:"symbol"`
 	Side         string  `json:"side"`
 	EntryPrice   float64 `json:"entry_price"`
@@ -273,10 +235,7 @@ type RecentTrade struct {
 // (account=”). Variadic so existing callers stay trader-global unchanged.
 func (s *PositionStore) GetRecentTrades(traderID string, limit int, account ...string) ([]RecentTrade, error) {
 	var positions []TraderPosition
-	// P&L-TRUTH WAVE: test-seam rows are quarantined from every strategy-P&L
-	// surface (0A-2) — including the model's recent-trade list. Unresolved /
-	// reconcile_flat rows STAY listed, rendered as UNRESOLVED, never as $0.
-	q := s.db.Where("trader_id = ? AND status = ? AND close_reason <> ?", traderID, "CLOSED", CloseReasonTestSeam)
+	q := s.db.Where("trader_id = ? AND status = ?", traderID, "CLOSED")
 	if len(account) > 0 && account[0] != "" {
 		q = q.Where("account = ?", account[0])
 	}
@@ -289,15 +248,12 @@ func (s *PositionStore) GetRecentTrades(traderID string, limit int, account ...s
 
 	var trades []RecentTrade
 	for _, pos := range positions {
-		pnl, resolved := pos.CorrectedPnL()
 		t := RecentTrade{
-			ID:          pos.ID,
-			Resolved:    resolved,
 			Symbol:      pos.Symbol,
 			Side:        strings.ToLower(pos.Side),
 			EntryPrice:  pos.EntryPrice,
 			ExitPrice:   pos.ExitPrice,
-			RealizedPnL: pnl,                  // 0 when unresolved — and Resolved=false says so
+			RealizedPnL: pos.EffectivePnL(),
 			EntryTime:   pos.EntryTime / 1000, // Convert ms to seconds for API compatibility
 		}
 
@@ -307,9 +263,7 @@ func (s *PositionStore) GetRecentTrades(traderID string, limit int, account ...s
 			t.HoldDuration = formatDurationMs(durationMs)
 		}
 
-		// A percentage is only meaningful for a RESOLVED row with a real exit:
-		// exit 0 on an unresolved short used to render as "+100.00%".
-		if resolved && pos.EntryPrice > 0 && pos.ExitPrice > 0 {
+		if pos.EntryPrice > 0 {
 			if t.Side == "long" {
 				t.PnLPct = (pos.ExitPrice - pos.EntryPrice) / pos.EntryPrice * 100 * float64(pos.Leverage)
 			} else {
@@ -377,14 +331,13 @@ func calculateMaxDrawdownFromPnls(pnls []float64) float64 {
 
 // SymbolStats per-symbol trading statistics
 type SymbolStats struct {
-	Symbol             string  `json:"symbol"`
-	TotalTrades        int     `json:"total_trades"`        // resolved rows only
-	UnresolvedExcluded int     `json:"unresolved_excluded"` // P&L-TRUTH WAVE
-	WinTrades          int     `json:"win_trades"`
-	WinRate            float64 `json:"win_rate"`
-	TotalPnL           float64 `json:"total_pnl"`
-	AvgPnL             float64 `json:"avg_pnl"`
-	AvgHoldMins        float64 `json:"avg_hold_mins"`
+	Symbol      string  `json:"symbol"`
+	TotalTrades int     `json:"total_trades"`
+	WinTrades   int     `json:"win_trades"`
+	WinRate     float64 `json:"win_rate"`
+	TotalPnL    float64 `json:"total_pnl"`
+	AvgPnL      float64 `json:"avg_pnl"`
+	AvgHoldMins float64 `json:"avg_hold_mins"`
 }
 
 // GetSymbolStats gets per-symbol trading statistics
@@ -406,14 +359,9 @@ func (s *PositionStore) GetSymbolStats(traderID string, limit int) ([]SymbolStat
 			symbolHoldMins[pos.Symbol] = []float64{}
 		}
 		s := symbolMap[pos.Symbol]
-		pnl, resolved := pos.CorrectedPnL()
-		if !resolved {
-			s.UnresolvedExcluded++ // P&L-TRUTH WAVE: counted, never coerced
-			continue
-		}
 		s.TotalTrades++
-		s.TotalPnL += pnl
-		if pnl > 0 {
+		s.TotalPnL += pos.EffectivePnL()
+		if pos.EffectivePnL() > 0 {
 			s.WinTrades++
 		}
 
@@ -457,28 +405,24 @@ func (s *PositionStore) GetSymbolStats(traderID string, limit int) ([]SymbolStat
 
 // HoldingTimeStats holding duration analysis
 type HoldingTimeStats struct {
-	Range              string  `json:"range"`
-	TradeCount         int     `json:"trade_count"`         // resolved rows only
-	UnresolvedExcluded int     `json:"unresolved_excluded"` // P&L-TRUTH WAVE
-	WinRate            float64 `json:"win_rate"`
-	AvgPnL             float64 `json:"avg_pnl"`
+	Range      string  `json:"range"`
+	TradeCount int     `json:"trade_count"`
+	WinRate    float64 `json:"win_rate"`
+	AvgPnL     float64 `json:"avg_pnl"`
 }
 
 // GetHoldingTimeStats analyzes performance by holding duration
 func (s *PositionStore) GetHoldingTimeStats(traderID string) ([]HoldingTimeStats, error) {
 	var positions []TraderPosition
-	// P&L-TRUTH WAVE: same ledger exclusions as every other aggregator
-	// (unknown-P&L / test-seam reasons out); unresolved rows counted below.
-	err := s.db.Where("trader_id = ? AND status = ? AND exit_time > 0 AND close_reason NOT IN (?, ?, ?)", traderID, "CLOSED", CloseReasonReconcileFlat, CloseReasonUnresolved, CloseReasonTestSeam).Find(&positions).Error
+	err := s.db.Where("trader_id = ? AND status = ? AND exit_time > 0", traderID, "CLOSED").Find(&positions).Error
 	if err != nil {
 		return nil, fmt.Errorf("failed to query holding time stats: %w", err)
 	}
 
 	rangeStats := map[string]*struct {
-		count      int
-		unresolved int
-		wins       int
-		totalPnL   float64
+		count    int
+		wins     int
+		totalPnL float64
 	}{
 		"<1h":   {},
 		"1-4h":  {},
@@ -505,14 +449,9 @@ func (s *PositionStore) GetHoldingTimeStats(traderID string) ([]HoldingTimeStats
 		}
 
 		r := rangeStats[rangeKey]
-		pnl, resolved := pos.CorrectedPnL()
-		if !resolved {
-			r.unresolved++ // P&L-TRUTH WAVE: counted, never coerced
-			continue
-		}
 		r.count++
-		r.totalPnL += pnl
-		if pnl > 0 {
+		r.totalPnL += pos.EffectivePnL()
+		if pos.EffectivePnL() > 0 {
 			r.wins++
 		}
 	}
@@ -522,11 +461,10 @@ func (s *PositionStore) GetHoldingTimeStats(traderID string) ([]HoldingTimeStats
 		r := rangeStats[rangeKey]
 		if r.count > 0 {
 			stats = append(stats, HoldingTimeStats{
-				Range:              rangeKey,
-				TradeCount:         r.count,
-				UnresolvedExcluded: r.unresolved,
-				WinRate:            float64(r.wins) / float64(r.count) * 100,
-				AvgPnL:             r.totalPnL / float64(r.count),
+				Range:      rangeKey,
+				TradeCount: r.count,
+				WinRate:    float64(r.wins) / float64(r.count) * 100,
+				AvgPnL:     r.totalPnL / float64(r.count),
 			})
 		}
 	}
@@ -536,12 +474,11 @@ func (s *PositionStore) GetHoldingTimeStats(traderID string) ([]HoldingTimeStats
 
 // DirectionStats long/short performance comparison
 type DirectionStats struct {
-	Side               string  `json:"side"`
-	TradeCount         int     `json:"trade_count"`
-	WinRate            float64 `json:"win_rate"`
-	TotalPnL           float64 `json:"total_pnl"`
-	AvgPnL             float64 `json:"avg_pnl"`
-	UnresolvedExcluded int     `json:"unresolved_excluded"` // P&L-TRUTH WAVE: counted, never coerced
+	Side       string  `json:"side"`
+	TradeCount int     `json:"trade_count"`
+	WinRate    float64 `json:"win_rate"`
+	TotalPnL   float64 `json:"total_pnl"`
+	AvgPnL     float64 `json:"avg_pnl"`
 }
 
 // GetDirectionStats analyzes long vs short performance
@@ -559,14 +496,9 @@ func (s *PositionStore) GetDirectionStats(traderID string) ([]DirectionStats, er
 			sideStats[pos.Side] = &DirectionStats{Side: pos.Side}
 		}
 		s := sideStats[pos.Side]
-		pnl, resolved := pos.CorrectedPnL()
-		if !resolved {
-			s.UnresolvedExcluded++ // P&L-TRUTH WAVE: counted, never coerced
-			continue
-		}
 		s.TradeCount++
-		s.TotalPnL += pnl
-		if pnl > 0 {
+		s.TotalPnL += pos.EffectivePnL()
+		if pos.EffectivePnL() > 0 {
 			s.WinRate++
 		}
 	}
