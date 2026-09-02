@@ -10,8 +10,8 @@ All times CT (R8). Live rev at dispatch: `e42a0b43` (class 37, booted 21:19:49 C
 |---|---|
 | Code | **merged to dev @ `c0580011`** (fast-forward from `2d29e852`, pushed); marker `3af6af95` |
 | Build | clean clone `--no-local` at `c0580011`, `vcs.modified=false`, built 2026-09-02T02:47:37Z, sha256 `38a1620ba7210df5…`, 70,920,312 bytes — **STAGED as `~/nofx/nofx-bin.next`** |
-| Cutover | **NOT DONE — PARKED pending the owner's explicit GO (A3)** |
-| Proof (A20) | **NOT YET OCCURRED.** The proving event is the next live read authored against the NEW prompt. Nothing to quote; see §8. |
+| Cutover | **DONE 22:22:58 CT on the owner's GO** — boot `🔐 BOOT INTEGRITY OK — rev c0580011b4ce · expected c0580011b4ce · goldens PASS` 22:23:03, PID 2030083 (see §11) |
+| Proof (A20) | **NOT YET OCCURRED.** The proving event is the first live read AUTHORED against the new prompt; ASIA sits on v4 `no_trade`, so the next trigger is a level wake or the 01:30 CT LONDON read. See §11. |
 | Lock (A2) | `~/nofx-main.lock` acquired 21:27 CT (no prior holder), released at closeout |
 | Stop-lines | held: no validator logic, no enum, no retry-semantic, no normalization (F7 is class 39) |
 
@@ -319,4 +319,58 @@ currently running with no tradeable plan.
 
 This is post-hoc evidence for the wave, not a test: it was produced by the OLD binary
 after the fix was written, and it is the same defect class as rows 78/79/80.
+---
 
+## 11. CUTOVER — DONE (owner GO, 2026-09-01) [A]
+
+**Gate, quoted fresh at 22:22:47 CT — all green:**
+
+| Gate | Value |
+|---|---|
+| A5 1/4 DB `trader_positions status='OPEN'` | **0** |
+| A5 2/4 `GET /api/positions` | **`[]`** |
+| A5 3/4 NT8 positions snapshot | **`count=0`** Sim101 · **`count=0`** SimAccount1 |
+| A5 4/4 `GET /api/open-orders?symbol=MNQ` | **`[]`** |
+| A6 `GET /api/plan/today` | `active_session ASIA` · `lifecycle no_trade` · `version 4` · **`replan_in_flight false`** |
+| A6 reads started vs completed since the last plan write | **0 vs 0** (no read in flight) |
+| A7 live arms | **0** |
+| A7 window | **22:22 CT** — outside 16:45-17:10; ASIA open on a `no_trade` plan |
+
+**Swap:**
+```
+22:22:58 CT  cp nofx-bin nofx-bin.prev.boot && mv nofx-bin nofx-bin.old.e42a0b43 \
+             && mv nofx-bin.next nofx-bin && kill -9 1994488
+             nofx-bin sha256 38a1620ba7210df5…  rev c0580011  (RELEASE already c0580011)
+22:23:03 CT  systemd relaunched (Restart=on-failure) → PID 2030083
+```
+
+**Boot lines (A19 — one boot, one marker) [A]:**
+```
+22:23:03 🔐 BOOT INTEGRITY OK — rev c0580011b4ce · built 2026-09-02T02:47:37Z · expected c0580011b4ce · goldens PASS
+22:23:03 🧪 validator hints: 15 sites — every condition token legal + live, every rule token
+         in its own field enum (class 34 + 38 guard)
+22:23:03 📜 prompt/validator contract: 17 restrictions, all stated in prompt (class 38 guard)
+22:23:03 🚀 planner speed wave … stream_idle=30s stream_total=1200s (class 37 …)     ← 37 intact
+22:23:03 🗓 preflight: scheduled reads bypass freshness in halt/weekend (class 36)    ← 36 intact
+22:23:03 🛰 planner client: provider_row=8ef641a7-…_deepseek stream_idle=30s stream_total=1200s
+         http_ceiling=600s (non-stream paths only) retries=2 backoff=2s cap=65536
+```
+Post-boot health: `✅ Trader auto-started successfully`, NinjaTrader close-sync +
+position-reconcile up, `positions snapshot count=0` on both accounts, **zero** error-level
+lines since boot.
+
+**Proof still owed (A20).** The boot is proven; the behavioural proof is not. It is the
+first live read AUTHORED against the new prompt landing without a leg-contract or
+confirm-token reject. ASIA holds v4 `no_trade`, so the next trigger is a level wake or the
+01:30 CT LONDON scheduled read. Quote the attempt count and any rejects when it lands.
+Class 37's own proof (a read past 600 s, or `class=total_deadline`) is also still
+outstanding — longest read since its boot: 487.9 s.
+
+**Rollback (still valid, exact):**
+```
+cd ~/nofx && mv nofx-bin nofx-bin.bad.c0580011 && cp nofx-bin.prev.boot nofx-bin \
+  && printf 'e42a0b43b4bead2c5d2207958d8a0bde2d65be11' > deploy/RELEASE \
+  && kill -9 $(systemctl show -p MainPID --value nofx) \
+  && git checkout -- deploy/RELEASE web/src/guide/types.ts
+```
+`nofx-bin.prev.boot` = the class-37 binary `e42a0b43`, also kept as `nofx-bin.old.e42a0b43`.
