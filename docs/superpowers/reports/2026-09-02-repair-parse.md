@@ -176,3 +176,47 @@ rate over the first 10 repairs against the 8/28 baseline. And the first Studio s
 ```
 cp nofx-bin.prev.boot nofx-bin && echo 4175e0b62de785ac5528a0d3f8a8c2618cd3a6d8 > deploy/RELEASE && kill -9 <MainPID>
 ```
+
+---
+
+## 9. Live proof + a GAP the live proof exposed (appended 2026-09-02 14:35 CT)
+
+Class 44 booted 08:10. First four repairs, all on the live binary `0465a10b`:
+
+| # | CT | attempt-1 defect | repair prompt | repair wall | outcome |
+|---|---|---|---|---|---|
+| 1 | 12:57 | retest level unreachable | 1,399 tok | 161.7 s | `content` — rejected on a NEW defect (breakdown void) |
+| 2 | 12:59 | (same chain, attempt 3) | 1,438 tok | 121.5 s | **OK — NY v10 written** |
+| 3 | 13:56 | too many levels: 13 (max 12) | 1,195 tok | **27.0 s** | **OK — NY v12 written** |
+| 4 | 14:23 | breakdown void | 1,044 tok | 64.6 s | `content` — rejected on `fade_requires_touch` |
+
+Counters: `repair_outcome_ok=2 repair_outcome_content=2`. Baseline was 8 landed of 28 (29%).
+**n=4. No claim of improvement is made from four chains.**
+
+Economics confirmed [A]: repair prompts ran 1,044-1,438 tokens against ~6,650 for a full
+re-author (≈80% saving), and 27-162 s against 482-542 s.
+
+### THE GAP (found by chain 4, in the fix this report describes)
+
+Chain 4's attempt 1 was rejected for `breakdown_continue … the breakdown is void`. The repair
+prompt therefore carried `RepairBreakdownLaw` + `LiveConditionsLine` — correct routing under the
+new `lawExcerptsFor`. The model fixed the breakdown and, in the same edit, wrote
+`scenario[1].confirm.rule "1x5m_close"` on a reject fade — a **confirm-rule** violation
+(`fade_requires_touch`).
+
+`RepairConfirmVocabLaw` was NOT attached, because the routing keys on the INCOMING error and the
+incoming error was not a confirm defect. `LiveConditionsLine` states the CONDITION vocabulary,
+not the confirm enum. So a repair that rewrites a scenario can introduce a confirm-rule error it
+was never shown the vocabulary for — the same defect class this wave was built to close, entering
+through a door the wave did not cover. [A]
+
+**Candidate fix (NOT implemented, no owner ruling):** attach `RepairConfirmVocabLaw` to EVERY
+repair whose rejected document contains a `confirm` or `confirm2` object, not only when the
+incoming error names one. Cost is ~60 tokens on a ~1,200-token prompt. **Probe it first:** count
+how many repair rejects are confirm-rule errors whose INCOMING defect was something else. Chain 4
+is n=1 for that pattern.
+
+Chain 4 exhausted all three attempts. No fail-closed and no dark session: it was a `level_event`
+WAKE read (`failClosed=false`, W6-C), so NY v12 stayed active — correct behaviour, verified [A].
+The whole chain ran on the fast wire (123.5 + 64.6 + 99.2 = 287 s) against ~800-1,600 s for a
+max-reasoning chain.

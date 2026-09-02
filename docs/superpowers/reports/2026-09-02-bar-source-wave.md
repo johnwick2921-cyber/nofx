@@ -149,3 +149,52 @@ cp nofx-bin.prev.boot nofx-bin && echo <previous rev> > deploy/RELEASE && kill -
 
 The `convention` column and any newly persisted coarse rows are additive: the previous binary
 lists explicit columns on insert and reads only `tf='1m'`, so a rollback needs no data undo.
+
+---
+
+## 8. Cutover record — 17:51 CT 2026-09-02 (owner GO)
+
+Gate re-quoted at 17:47:49 → **red on leg 5** (an ASIA read in flight); held per A6; re-quoted
+17:50:59 → `ready: True`, all five legs. Swap 17:51:09 (`status=9/KILL`). Boot 17:51:14, **PID
+585014**, `🔐 BOOT INTEGRITY OK — rev 4d159022c114 · built 2026-09-02T17:30:48Z · expected
+4d159022c114 · goldens PASS`, **0 `[ERRO]`**, boot sweep `cancelled 0 pre-boot arm(s)`. Every
+prior wave's ledger line survived (27 · 34+38 · 39 · root-fix A · 44 · 33 · 36 · 0B · 40 · 41 ·
+root-fix B).
+
+### The result: 2 symbol×tf → 14, and 22 YEARS of weekly
+
+`📦 bars: persisting 14 symbol×tf retention=90d rows=48017 (backfilled 27988)` at 17:51:29 —
+27,988 rows written in 15 s. `✅ bars integrity OK: dups=0 total=48017`.
+
+Persisted state, measured [A][DB] `SELECT tf,COUNT(*),MIN,MAX,convention FROM bars GROUP BY tf`:
+
+| tf | rows | earliest | convention |
+|---|---|---|---|
+| 1w | 1,331 | **2004-12-03** | **fri_thu** |
+| 3d | 2,191 | 2004-12-10 | epoch_floor |
+| 1d | 3,895 | **2018-12-05** | epoch_floor |
+| 8h | 3,998 | 2024-02-01 | epoch_floor |
+| 6h | 3,997 | 2024-09-25 | epoch_floor |
+| 4h | 3,997 | 2025-05-18 | epoch_floor |
+| 2h | 3,998 | 2026-01-12 | epoch_floor |
+| 1h | 3,998 | 2026-05-04 | epoch_floor |
+| 30m | 3,998 | 2026-07-03 | epoch_floor |
+| 15m | 3,998 | 2026-08-04 | epoch_floor |
+| 5m | 3,998 | 2026-08-24 | epoch_floor |
+| 3m | 3,999 | 2026-08-27 | epoch_floor |
+| 1m | 24,028 | 2026-08-19 | epoch_floor |
+
+**~4× deeper than the pre-build estimate.** The API probe was capped at `limit=2000`; the cache
+actually holds ~4,000 bars per TF. Weekly reaches 2004 and daily 2018 — this morning the table
+held two weeks of 1m and nothing else. The convention labelling is live and correct: 1w is the
+only `fri_thu` series, exactly as ruled.
+
+### A15 addendum — the boot line was honest but misleading at that instant
+
+`📊 bars:` printed `own1m via 1m` for EVERY TF. That was TRUE when it ran: the boot line fires
+before the AddOn replays `bars_historical`, so the BarCache was still cold and the resolver
+correctly fell to its last rung. It is a true statement about that instant and a misleading
+report of capability — a reader would conclude the resolver cannot reach NT8. **Defect, not a
+lie:** the line should run after the first backfill, or state `cache cold — replay pending`.
+Logged here rather than hot-patched. Everything else on the line (ladder, exclusion, retention)
+was correct.
