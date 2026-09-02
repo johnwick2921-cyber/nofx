@@ -189,3 +189,75 @@ These split into **two completely different failures wearing the same label**:
 **The mislabelling that hides all of this** [RUNTIME]: `timeout_source=transport` appears on `09-02 01:03:52 … class=other http_status=200 err="fail to parse AI server response: API returned empty response"` — an HTTP 200 with an empty body after 244 s, which is not a transport event at all. §E4 enumerates every site with this defect; the census in §1 was built by reading durations and error text rather than trusting the label.
 
 ---
+
+## 6. SECTION C — REQUEST CONSTRUCTION
+
+### C1 Prompt assembly
+
+Five calling paths build prompts [CODE]: planner **full-author** (`kernel.BuildPlannerPrompt`, `kernel/planner_prompt.go:319`, invoked `trader/auto_trader_planner.go:902`) · planner **repair** (`kernel/planner_repair.go:12`, invoked `:1436`) · planner **re-author+block** (`userPrompt = prompt + rejectBlock`, `:1438`, block from `plannerRejectBlock` `:1242`) · planner **resend-identical** (class-41 M0, `:1425-1430`) · **executor** (`kernel/engine_prompt_futures.go:24` + `kernel/engine_analysis.go:526`, called at `:676` via `CallWithMessages`, **non-stream**) · **weekly** (`kernel/weekly_prompt.go:276`, non-stream) · **Ask-Planner** (`api/handler_plan.go:1398/:2150`, non-stream). All planner variants share one 173-char system prompt (`trader/auto_trader_planner.go:24`).
+
+**The class-38 contract text** [DOC-internal `docs/superpowers/reports/2026-09-01-class38-contract-mismatch.md`, merged `c0580011`, cut over 22:22:58 CT 09-01] found **17 condition-keyed validator restrictions**, 7 of them enforced-but-unstated and one stated in the wrong spelling (`2x5m` where the enum is `2x5m_close`). It is live [RUNTIME 07:32:15]: `📜 prompt/validator contract: 17 restrictions, all stated in prompt (class 38 guard)`. Its cost: the output contract grew 10,219 → 11,284 chars (+267 tokens, ≈+4%).
+
+**C1.5 — the token estimator is wrong by a third, always in the same direction.** [CODE] `trader/auto_trader_planner.go:1373-1379` `estimatePromptTokens = (len(s)+3)/4` — a flat 4 chars/token. Measured against the provider's own `prompt=` count on 10 paired calls [RUNTIME]:
+
+| path | n | min err | median err | max err | real chars/token |
+|---|---|---|---|---|---|
+| planner (T2 estimate vs `prompt=`) | 10 | −25.10% | **−32.02%** | −32.76% | 2.69–3.00 |
+| executor (exact DB char counts vs `prompt=`) | 10 | −41.66% | **−41.70%** | −42.16% | 2.31–2.33 |
+
+Zero over-estimates in 20 pairs. The executor prompt is denser (numeric OHLCV tables) so a single divisor cannot serve both. **Consequence, stated honestly:** no cap, budget or gate reads this number today [CODE, exhaustive grep — its three call sites are all log statements], so the error costs nothing now; it only makes three log lines wrong. The moment anyone sizes a context budget or a cost estimate on it they will be low by a third to two-fifths.
+
+### C2 Request body — what we send, verbatim
+
+Planner stream [CODE] `mcp/client.go:976-1085` + `applyDeepSeekThinkingDefaults` `:1087-1099`:
+```json
+{"model":"deepseek-v4-pro",
+ "messages":[{"role":"system","content":"…173 chars…"},{"role":"user","content":"…~26.7 KB…"}],
+ "temperature":0.5, "max_tokens":65536, "stream":true,
+ "thinking":{"type":"enabled"}, "reasoning_effort":"max"}
+```
+Executor non-stream [CODE] `mcp/client.go:482-530` — **a second, independent builder**:
+```json
+{"model":"deepseek-v4-pro",
+ "messages":[{"role":"system","content":"…~11.0 KB…"},{"role":"user","content":"…~16.2 KB…"}],
+ "temperature":0.5, "max_tokens":32768,
+ "thinking":{"type":"enabled"}, "reasoning_effort":"low"}
+```
+(`stream` is absent entirely on this path; its `messages` are `[]map[string]string` and therefore **structurally cannot** carry `reasoning_content` or `tool_calls`.)
+
+Omitted by zero-value/`omitempty`: `top_p` (boot says `top_p=omitted`), penalties, `stop`, `tools`, `response_format`, `logprobs`, `n`, `seed`, and **`stream_options` — the key exists nowhere in the codebase** [CODE, exhaustive grep for `stream_options|include_usage` → zero hits].
+
+### C3 Headers — exactly two, and they are the documented two
+
+`Content-Type: application/json` [CODE] `mcp/client.go:642` and `Authorization: Bearer <redacted>` [CODE] `:478-480` → `mcp/provider/deepseek.go:66-68`. Both paths share one builder; **there is no separate header path for SSE**. Not set: `Accept` (so **no `Accept: text/event-stream`**), `Connection`, `User-Agent` (Go emits `Go-http-client/1.1`), `Accept-Encoding` (Go auto-adds gzip). **Headers DeepSeek documents that we omit: none** — [DOC] their documented request is exactly those two headers, and streaming is selected by the body's `"stream": true`, not by `Accept`.
+
+### C4 Provider rows [DB `ai_models`, 11 rows — key material never read or printed]
+
+Two DeepSeek rows, **both enabled**, both with a key present, both with empty `custom_api_url`/`custom_model_name` (so both resolve to the package defaults `https://api.deepseek.com` + `deepseek-v4-pro` [CODE] `mcp/providers.go:19-20`):
+
+| row | name | enabled | key | bound to |
+|---|---|---|---|---|
+| `8ef641a7-…_deepseek` | DeepSeek AI | 1 | present | **the only trader** (`hoang`), via `ai_model_id` |
+| `396db319-…_deepseek_0751c0b6` | **DeepSeek 2** | **1** | present | **nothing** — no trader, and `planner_model` is empty on all 9 strategies [DB] |
+
+The other 9 rows are disabled and keyless. **Every path shares one client object**: `resolvePlannerClient` returns `at.mcpClient` verbatim when the planner binding is empty [CODE] `trader/auto_trader_planner.go:64-105`; [RUNTIME] `🧠 planner model: empty binding → using primary, pinned "deepseek-v4-pro"` and boot `🛰 planner client: provider_row=8ef641a7-…_deepseek`.
+
+**DeepSeek 2 is enabled, keyed, and unreachable.** The only selector that could pick it (`store.PickProviderModel` → `betterProviderModel` `store/ai_model.go:227-252`) fires **only when no row's id matches the trader's `ai_model_id`** — which never happens today. **There is no runtime failover anywhere** [CODE, exhaustive]: nothing re-resolves the client after a failure; a 401/402/503 on the bound row never reaches for the second. The tiebreak, were it ever to run, separates the two rows by **120 microseconds** of `updated_at`.
+
+## 7. SECTION G1 — DOCUMENTED PROVIDER BEHAVIOR vs OURS
+
+| # | documented behavior | our handling | verdict |
+|---|---|---|---|
+| a | Under load the server holds the stream with `: keep-alive` **comment lines** | `onLine()` fires on **every** scanned line — blanks and `:` comments included — **before** the `data: ` filter, and pushes to `resetCh` [CODE] `mcp/client.go:1411-1424`, watchdog `:1207-1240`. **Keep-alives DO reset our idle watchdog.** | **COMPLY** |
+| a3 | Rate limiting is by **concurrency** (cap 500 for this model), not RPM; overflow → 429 | We run ≤2 concurrent calls; 429 and all 5xx are treated as provider-side (`IsProviderFailure`, resend identical) [CODE] `:263-280` | COMPLY |
+| **b** | **"If the request has not started inference after 10 minutes, the server will close the connection."** | Planner: idle 30 s + total **1200 s** → survives a queue (keep-alives reset the timer), dies at 1200 s or on the server's close → `class=transport` → class-41 resend-identical. **Executor: `http.Client.Timeout = 600 s` — exactly the documented 10 minutes.** | **COMPLY (planner) / GAP (executor)** — zero margin, and our timer and theirs fire at the same instant, so the two causes are indistinguishable in our logs. This is precisely the `09-02 00:59:47` zero-byte 600 s hang in §5.1. |
+| c2 | `finish_reason: "length"` | Non-stream: counter + `🚨` WARN [CODE] `:591-597`. **Stream path stores the reason and does nothing else** [CODE] `:1263-1276` | **PARTIAL GAP** — `truncated-responses=N` on the boot line counts **executor truncations only**; a truncated *plan* would never appear in it (latent, n=0) |
+| c3 | `finish_reason: "content_filter"` | **Not handled on either path**; partial content is parsed as if complete | **GAP** (latent, n=0 of 3,557) |
+| c4 | `finish_reason: "insufficient_system_resource"` | **Not handled, and not in `retryableErrors`** — an interrupted response is fed to the plan parser as a normal answer, most likely failing schema validation and burning an attempt on a *provider outage* dressed as a validator reason | **GAP** (latent, n=0) — the same shape class-41 fixed for HTTP status |
+| d | `reasoning_content` must **not** be echoed back without `tools` (ignored); **must** be echoed with `tools` (else HTTP 400) | Planner/repair never echo it (reasoning is accumulated separately, only `ReasoningChars` kept) [CODE] `:1404-1487`; executor structurally cannot; the agent path (the only one sending `tools`) **does** echo | **COMPLY on all four paths** — though two code comments assert the opposite of the docs (§Contradictions) |
+| e | Max output for `deepseek-v4-pro` = **384K**; context 1M | 65,536 (planner) / 32,768 (executor) | **COMPLY** — 65536 is legal, 17% of the ceiling |
+| f2 | Thinking mode **does not support** `temperature`/`top_p`/penalties | We send `temperature: 0.5` on **every** call | **GAP (benign on the wire, misleading in the ledger)** — the provider ignores it, but the boot line advertises `temperature=0.50` as an AI param "in force". It is not in force. |
+| g1 | HTTP **500** = retry after a brief pause | **`500` is missing from `retryableErrors`** [CODE] `mcp/client.go:34-52` (429/502/503/520/524 are present). The planner survives via `IsProviderFailure` (`st >= 500`), but **the executor's `CallWithMessages` loop would give up on a 500** | **PARTIAL GAP** |
+| g2 | 401/402/422 = do not retry | Not retried | COMPLY |
+
+---
