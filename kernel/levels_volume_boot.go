@@ -32,8 +32,12 @@ func LogVolumeWaveBoot() {
 	// tokens must be legal AND live. The table test is the hard build gate;
 	// this boot re-check makes a broken registry impossible to miss live.
 	if err := ValidateValidatorHints(); err != nil {
-		logger.Errorf("🧪 validator hints BROKEN: %v — a hint names an unknown or shadowed condition (class 34 guard)", err)
+		logger.Errorf("🧪 validator hints BROKEN: %v — a hint names an unknown/shadowed condition or a rule token illegal in its own field (class 34 + 38 guard)", err)
 	} else {
-		logger.Infof("🧪 validator hints: %d sites — every condition token legal + live (class 34 guard)", len(ValidatorHints()))
+		logger.Infof("🧪 validator hints: %d sites — every condition token legal + live, every rule token in its own field enum (class 34 + 38 guard)", len(ValidatorHints()))
 	}
+	// CLASS 38 (2026-09-01) — every validator restriction keyed by
+	// condition/field must be STATED in the rendered prompt. The prompt offering
+	// what the validator refuses is the whole defect class (rows 78/79/80).
+	logger.Infof("%s", PromptContractBootLine())
 }

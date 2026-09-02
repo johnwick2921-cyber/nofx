@@ -1239,6 +1239,30 @@ func plannerRejectBlock(err error, live []string) string {
 	return "\n\n## PREVIOUS ATTEMPT REJECTED / Validator reason (verbatim):\n" + err.Error() + "\nFix ONLY this defect, keep the rest structurally identical." + kernel.LiveConditionsLine(live)
 }
 
+// repairUnparseableLine (CLASS 38 F6, 2026-09-01) renders the loud line for a
+// repair attempt whose output would not parse: the parse error, the defect the
+// repair was aimed at, and the HEAD of what the model actually sent. Before
+// this the journal carried one bare sentence, so rejected-prompt row 79 could
+// only be reconstructed from the DB. Pure, so the fixture pins the wording;
+// bounded, so a 30k malformed response cannot flood the journal (class 12).
+// Retry semantics are untouched — the caller still falls back to ONE full
+// re-author.
+func repairUnparseableLine(raw, repairingReason string, parseErr error) string {
+	return fmt.Sprintf("🧩 repair returned UNPARSEABLE output — falling back to a full re-author next attempt · parse_err=%v · was repairing: %s · raw_head=%q",
+		parseErr, clampLine(repairingReason, 200), clampLine(raw, 400))
+}
+
+// clampLine truncates to n runes on ONE line (newlines collapsed) with an
+// explicit ellipsis, so a log line can never be mistaken for the whole payload.
+func clampLine(s string, n int) string {
+	s = strings.ReplaceAll(strings.ReplaceAll(s, "\n", " "), "\r", " ")
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n]) + "…"
+}
+
 // plannerRejectBookkeeping (planner-speed wave 1.4/3.4, 2026-08-31) runs at
 // every reject site: persists the rejected attempt's verbatim prompt + reason
 // for the offline A/B, and bumps the whack-a-mole counter when attempt N
@@ -1392,7 +1416,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 			at.logWarnf("📐 planner attempt %d/3 parse/schema rejected: %v", attempt, perr)
 			if modeLabel == "repair" {
 				forceReauthor = true // 3.6 — a malformed repair falls back to one full re-author
-				at.logWarnf("🧩 repair returned unparseable output — falling back to a full re-author next attempt")
+				at.logWarnf("%s", repairUnparseableLine(raw, prevReason, perr))
 			}
 			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason)
 			rejectBlock = plannerRejectBlock(lastErr, liveConditions)

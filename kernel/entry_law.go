@@ -20,6 +20,13 @@ import (
 //
 // Owner ruling (2026-08-30): no 15m confirms ever (E1); default 1x5m_close;
 // 2x5m_close ONLY for breakdown/breakup continuations; fades enter on touch.
+//
+// CLASS 38 (2026-09-01) — Style is quoted VERBATIM into the rejection the model
+// reads ("… not allowed for %s — entry law: %s"), so every rule token here MUST
+// be spelled in the confirm enum form (touch | 1x5m_close | 2x5m_close |
+// 1m_mss | time_hold). Bare spellings ("2x5m", "1x5m") belong to the SEPARATE
+// death/flip enum; naming one here is an instruction the model is punished for
+// following (rejected-prompt rows 78 → 79). ValidateValidatorHints enforces it.
 
 type conditionEntryLaw struct {
 	Allowed   map[string]bool // confirm rules legal for Confirm / Confirm2
@@ -44,27 +51,27 @@ var entryLaw = map[string]conditionEntryLaw{
 	},
 	"reclaim": {
 		Allowed: map[string]bool{"1x5m_close": true, "1m_mss": true},
-		Style:   "reclaim-close discipline — 1x5m or 1m_mss, never 2x",
+		Style:   "reclaim-close discipline — 1x5m_close or 1m_mss, never 2x5m_close",
 	},
 	"breakout_retest": {
 		Allowed: map[string]bool{"touch": true, "1x5m_close": true},
-		Style:   "touch at the retest limit + stop-entry fallback (E7); 1x5m legal for the break leg",
+		Style:   "touch at the retest limit + stop-entry fallback (E7); 1x5m_close legal for the break leg",
 	},
 	"acceptance": {
 		Allowed: map[string]bool{"time_hold": true, "1x5m_close": true},
-		Style:   "time_hold rule (E6) with 1x5m as the legal fallback",
+		Style:   "time_hold rule (E6) with 1x5m_close as the legal fallback",
 	},
 	"hold": {
 		Allowed: map[string]bool{"time_hold": true, "1x5m_close": true},
-		Style:   "time_hold rule (E6) with 1x5m as the legal fallback",
+		Style:   "time_hold rule (E6) with 1x5m_close as the legal fallback",
 	},
 	"breakdown_continue": {
 		Allowed: map[string]bool{"1x5m_close": true, "2x5m_close": true},
-		Style:   "1 confirming close + displacement ≥ BD_MIN_DISP_ATR×ATR5m OR stop-entry (E7); 2x5m legal ONLY here",
+		Style:   "1 confirming close + displacement ≥ BD_MIN_DISP_ATR×ATR5m OR stop-entry (E7); 2x5m_close legal ONLY here",
 	},
 	"breakup_continue": {
 		Allowed: map[string]bool{"1x5m_close": true, "2x5m_close": true},
-		Style:   "1 confirming close + displacement ≥ BD_MIN_DISP_ATR×ATR5m OR stop-entry (E7); 2x5m legal ONLY here",
+		Style:   "1 confirming close + displacement ≥ BD_MIN_DISP_ATR×ATR5m OR stop-entry (E7); 2x5m_close legal ONLY here",
 	},
 }
 
