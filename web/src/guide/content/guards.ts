@@ -191,5 +191,10 @@ export const guards: GuideSection = {
       kind: 'p',
       text: 'Before any restart of the bot, GET /api/cutover-gate answers all five legs in one payload: (1) open positions in the database, (2) positions from the API, (3) the NinjaTrader positions snapshot for the bound account, (4) working orders — read from the armed_orders ledger, because NinjaTrader sends no working-order frame, and (5) in-flight planner work. ready:false means HOLD. Legs 4 and 5 are new on 2026-09-02: leg 4 used to be a stub that always answered empty, so it passed at every cutover from 35 to 41 including one with two orders resting; leg 5 did not exist, so a kill on 2026-08-31 17:34 CT landed mid-read and the planner chain died silently. A leg that cannot be evaluated counts as failed.',
     },
+    { kind: 'h', text: 'WHEN THE MODEL CALL FAILS (class 49)' },
+    {
+      kind: 'p',
+      text: "Every failed call to the model now carries one label saying who failed: the socket died, the provider returned an error, one of our own deadlines fired, the answer never arrived, or the plan itself was rejected. That last one is the only case the model can do anything about, so it is the only case where the failure text is sent back to it. Before this, an empty answer or a broken connection was handed to the model as though its plan had been wrong, which is nonsense it then tried to fix. The old label was also usually incorrect: it defaulted to blaming the network and was right about five times in fifty. The stall detector was rebuilt too. It used to reset whenever the provider sent a keep-alive tick, which meant a generation could stall for twenty minutes while looking alive, and it had never once fired. It now watches for real output and only counts silence in the answer itself, and it says so in the log when it fires. Finally, when the provider is overloaded and returning errors, the bot no longer retries harder: the number of calls one plan read may make is capped, and hitting that cap is logged.",
+    },
   ],
 }

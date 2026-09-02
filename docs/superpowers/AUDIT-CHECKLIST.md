@@ -712,6 +712,58 @@ in CLAUDE.md).
     **Law:** a protection that exists on one order path and not the other is
     not a protection — it is a suggestion.
 
+49. **Instrument theatre: a boot line that could not be wrong, a label that
+    usually was, and a watchdog that never fired.** Root cause: the
+    instruments reporting on the transport wave were themselves unmeasured.
+    **(a) The class-41 boot line printed `watchdog_log=on`,
+    `serialize_executor=off`, `resend_identical=on` and `keepalive=30s` as
+    STRING LITERALS, and its fixture asserted the same literals** — the pair
+    could only ever agree with each other, never with reality, and reality
+    differed: keepalive on the wire ran 14-20 s. Class 6 (Go-side theatre) on
+    the very wave shipped to make transport honest. **(b) `timeout_source`
+    DEFAULTED to `"transport"`** and was overridden for four sentinels only,
+    so it tagged 5xx bodies, parse failures and empty 200s as transport: right
+    on 5 of 50 audited failures, wrong on 23. Two labelling systems
+    (`timeout_source` and `class=`) disagreed on the same line. **(c)
+    `IsProviderFailure` returned false for `class=other`**, so an empty 200, a
+    parse failure or an over-long answer was appended to the next prompt as
+    the MODEL's defect ("fix this: unexpected EOF") — the class-34/37 poisoned-
+    feedback disease, still open. **(d) The idle watchdog reset on every
+    scanned SSE LINE, including DeepSeek's `: keep-alive` comments**, so a
+    stalled generation that was still heartbeating ran to the 1200 s ceiling.
+    It had never fired once — and its close was indistinguishable from a peer
+    EOF, so "0 idle kills" could not be told from "0 idle kills we can see".
+    **(e) A 503 burst produced 3 planner attempts × 3 client tries = 9
+    provider calls in ~7 s** at an edge already shedding load. **(f) The
+    sockwatch bash loop wrote 12,947 lines and caught ZERO FIN/CLOSE-WAIT
+    states** — blind to the single thing it was built for. **Probe:** for
+    every field an instrument prints, ask which function ENFORCES it and
+    whether the fixture calls that function; a fixture that asserts the same
+    literal as the code tests nothing. For every default label, ask what
+    fraction of cases it is right about. For every kill switch, ask what input
+    would make it fire, and whether its output is distinguishable from the
+    thing it is meant to detect. **Fix:** `mcp.PlannerClientPolicyLine()` —
+    every field read from its enforcer, keepalive from the one place that sets
+    it, and `observed=n/a` rather than implying the set value is the seen one;
+    `timeout_source` DELETED and `ClassifyFailure(err, httpStatus)` the only
+    classifier (it sees the status, so a 503 body is `http_5xx` even when its
+    text says EOF, and `http_status` splits 5xx/4xx so retry policy can tell
+    "provider overloaded" from "our request is wrong");
+    `FailureIsProviderSide` decides resend-vs-repair, with `parse` deliberately
+    MODEL-side (resending an unparseable document identically would loop
+    forever — the pre-existing class-41 fixture caught that over-generalisation
+    during this wave); a two-timer watchdog (pre-token, heartbeats allowed;
+    post-token, reset ONLY by content/reasoning deltas) closing with its own
+    `ErrWatchdogIdle`; a per-READ storm cap (`AI_PLAN_STORM_CAP`, default 5);
+    and `httptrace` reporting `closed_by=peer_fin|local_close|clean` from
+    inside the process, labelled INFERRED because httptrace sees no TCP flags.
+    Rider (owner ruling): the confirm enum attaches to every repair whose
+    DOCUMENT carries a confirm object, not only when the incoming error names
+    one. **Law:** an instrument that cannot disagree with the code is not
+    evidence — every printed field reads from its enforcer, every default
+    label earns its default, and every kill switch must have an input that
+    fires it and an output you can tell apart.
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,
