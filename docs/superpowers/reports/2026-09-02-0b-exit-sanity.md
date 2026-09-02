@@ -146,6 +146,47 @@ One PID (2674837), `vcs.revision=4175e0b6`, **0 ERRO**, position-reconcile and t
 
 Until those land, E1/E2/E5 are the fixture proof and this report says so.
 
+### PROOF LANDED — first arms composed live, 08:03:06 CT [A]
+
+```
+🛑 arm stop LONDON S3 leg 1 long: stop 28926.75 (authored 28927.25 WIDENED) ·
+   anchor ONL 28927.25 → beyond 28926.75 · atr_floor n/a (no ATR) · bound=anchor
+🛑 arm stop LONDON S1 leg 1 long: stop 28975.16 (authored 28985.50 WIDENED) ·
+   anchor RTH-L 29001.75 → beyond 29001.25 · atr_floor 28975.16 (1.5×ATR5m 26.02) · bound=atr_floor
+```
+
+Both legs of D2 are demonstrated on the live tape within 14 minutes of the boot:
+
+| arm | authored | anchor | ATR floor | chosen | bound | moved |
+|---|---|---|---|---|---|---|
+| S3 long | 28927.25 | ONL 28927.25 → beyond 28926.75 (2-tick clearance) | n/a (ATR unavailable that cycle) | **28926.75** | **anchor** | 0.50 |
+| S1 long | 28985.50 (28.69 pts) | RTH-L 29001.75 → beyond 29001.25 | 28975.16 (1.5 × 26.02 = 39.03 pts) | **28975.16** | **atr_floor** | **10.34** |
+
+S1 is the wave's thesis in one line: the planner authored a 28.69-point stop that the OLD 1.0× floor would have ACCEPTED (26.02 pts required) and the new floor rejects — so the stop was widened to 39.03 points rather than the trade being refused, and the anchor sat on the wrong side of the entry to help. S3 shows the anchor binding with exactly the 2-tick clearance.
+
+**The cross-effect is visible in the same tape** (the planner's authoring WARNING reads the same resolver — ROOT-FIX's file, read-only):
+
+```
+07:0x (old binary) ⚔️ arm feasibility: S1 arm stop 29040.25 too close (19.00 < 19.44 = 1.0×ATR5m)
+08:01 (new binary) ⚔️ arm feasibility: S1 arm stop 28985.50 too close (28.69 < 38.46 = 1.5×ATR5m)
+```
+
+**The A7-override exposure is now CLOSED BY EVIDENCE [A].** I could not observe position 588's protective stop before the swap. It fired 2 min 32 s after the boot:
+
+```
+07:51:38 📕 NT position closed: MNQ LONG qty=1.00 exit=29050.00 reason=sl pnl=-65.00
+```
+
+Row 588: entry 29082.50 → exit 29050.00, `pnl_corrected` **−65.00**, exit 07:51:38 CT. The bracket was resting at the broker, survived the restart, executed on its own, and the Go process recorded the close. The stop was real; I simply had no way to see it beforehand — that is the F12 gap, and it is still worth closing.
+
+**Counters at 08:05 CT:** `arm_stop_unanchored_0b` and `arm_refusals_0b:*` are both **absent (= 0)** — no dead zone and no refusal yet. Stated as a zero with its meaning, not as a result.
+
+**Still owed:** a BE or trail trigger proving no `move_stop` frame (588 closed at a loss, so breakeven never armed), and a sweep → re-arm sequence (that needs a cutover with a resting arm).
+
+### One honest finding from the live lines (A15)
+
+S3 composed with **`atr_floor n/a (no ATR)`**. When ATR5m is unavailable on a cycle the floor leg is skipped (documented fail-open) — and the arm gate's min-SL leg is skipped on the same condition (`if atr5m > 0`). So on an ATR-less cycle a tight authored stop receives only the anchor's 2 ticks and nothing enforces the floor. This is PRE-EXISTING fail-open behaviour that 0B inherits rather than introduces, but it means the floor is only as strong as ATR availability. It deserves a follow-up ruling: refuse the arm when ATR is unavailable, or accept the gap explicitly.
+
 ---
 
 ## A15 — what the owner will still see wrong
