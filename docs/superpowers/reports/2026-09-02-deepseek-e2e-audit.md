@@ -133,3 +133,40 @@ Two further live defects visible in the same window [RUNTIME]:
 [DOC] `https://status.deepseek.com/` fetched during this audit: **no incidents, no degraded-performance events and no maintenance windows are reported between 2026-08-26 and 2026-09-02.** Current status "All systems are operating as expected"; API uptime for Jun–Sep 2026 shown as 99.81%–100%; no incident mentions the chat-completions API, streaming, or capacity. **So the 503 bursts we observed are below the provider's own incident threshold** — they are ordinary load-shedding, not an outage, and no fallback should be justified on the basis of a published incident.
 
 ---
+
+## 4. THE DOMINANT ROOT CAUSE — A STANDING PROMPT INSTRUCTION THAT FIGHTS A TAPE-AWARE VALIDATOR
+
+`breakdown_continue` / `breakup_continue` appear in **82 of the 194 failed attempts (42.3%)** and in **8 of the 13 fail-closes** [RUNTIME]. Of those 82, **38 are the same rule**: `a close came back across <level> — the breakdown is void`. This is not a transport problem and not a model-quality problem. It is a **contradiction between two parts of our own system**, and the mechanism is fully traceable:
+
+**1. The prompt issues a standing, unconditional MUST** [CODE] `kernel/planner_prompt.go:589`:
+> `"If price sits BELOW PDL you MUST write a continuation short; ABOVE PDH, a continuation long. "`
+
+**2. "Continuation" is bound to the two waterfall conditions** [CODE] `kernel/planner_prompt.go:623`:
+> `"WATERFALL PLAY (F1): author breakdown_continue|breakup_continue when the tape shows one-sided delivery, a >1.2×ATR gap-and-go, or a waterfall after a failed rally — the momentum-follow class."`
+
+**3. The prompt NEVER tells the model that a given breakdown level is already void.** [CODE] A grep of `kernel/planner_prompt.go` for `void|reclaimed|came back across` returns only `:592`, an unrelated flip/death rule. The facts snapshot carries levels, ATR, regime — but not "the tape has already closed back across 29021.25, so a continuation there is illegal".
+
+**4. The validator computes exactly that fact at WRITE time and rejects on it** [CODE] `kernel/breakdown_continue.go:254`:
+> `return fmt.Errorf("%s %s: a close came back across %.2f — the breakdown is void; %s", s.ID, s.Condition, bd.Level, BreakdownReclaimedHint)`
+
+**5. The correction is outgunned by the instruction.** A full re-author sends the **entire standing prompt plus a reject tail** [RUNTIME]: `🧩 planner attempt 3/3 reauthor+block: prompt ~6682 tokens (full-author ~6555 tokens)` — the reject block is **~92–127 tokens against a ~6,341–6,691-token prompt, i.e. ~1.5%**, and the standing MUST at `:589` is still inside it. The model is told "you MUST write a continuation short" in the body and "do not write the continuation you just wrote" in a footnote.
+
+**6. The live regression, in one session** [RUNTIME] 2026-09-02 LONDON:
+```
+01:32:54  attempt 1/3 rejected: S1 breakdown_continue: a close came back across 29021.25 — the breakdown is void
+01:32:54  attempt 2/3 repair: prompt ~922 tokens          → model switches to a reject fade
+01:35:04  attempt 2/3 parse/schema rejected: scenario[0].confirm.rule "1x5m_close" — fade_requires_touch
+01:35:04  attempt 3/3 reauthor+block: prompt ~6682 tokens (full-author ~6555)
+01:37:44  attempt 3/3 rejected: S2 breakdown_continue: a close came back across 29021.25 — the breakdown is void
+01:37:44  🚨 PLANNER FAIL-CLOSED … LONDON
+```
+Attempt 2 **obeyed** the hint and moved to a `reject` fade — and was then killed by a *different* rule (`fade_requires_touch`, the reject fade must confirm on touch, not on a close). Attempt 3, a full re-author, **regressed to `breakdown_continue` at the very same level 29021.25**. Three calls, 463.9 s of successful streaming, session lost.
+
+**Is this a hard deadlock?** No — and the report will not overstate it (A12). The gap-day validator only requires *a short in any condition* [CODE] `kernel/plan_doc.go:841-842` calling `hasDirection(d.Scenarios, "short")` (`:877-884`), so a plain `reject` short satisfies it. **The deadlock is in the wording, not the code**: the error message says `the plan MUST include a continuation/breakdown short scenario` and the prompt says `you MUST write a continuation short`, both of which name the one condition family the tape may have already invalidated. This is the class-34 disease (a hint that names a target the validator then punishes), one layer up: **the instruction, not the hint, is now the thing that cannot be obeyed.**
+
+**Owner ruling candidates (no change made — A1):**
+- Make `:589` tape-aware, or soften it to "a short-direction scenario" and let the model choose the condition; and align the `plan_doc.go:842` message with what the code actually requires.
+- Feed the validator's own knowledge forward: put "breakdown at X is VOID (close came back at HH:MM)" into the facts block so the model never authors it.
+- Put the reject block at the **top** of the re-author prompt, or drop the conflicting standing line from re-author prompts specifically (lost-in-the-middle: a 1.5% tail after 6.5k tokens is the weakest position in the context).
+
+---
