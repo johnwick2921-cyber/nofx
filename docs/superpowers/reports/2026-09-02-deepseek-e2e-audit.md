@@ -261,3 +261,96 @@ The other 9 rows are disabled and keyless. **Every path shares one client object
 | g2 | 401/402/422 = do not retry | Not retried | COMPLY |
 
 ---
+
+## 8. SECTION B — THE CALL GRAPH: EVERY PATH THAT REACHES DEEPSEEK
+
+Enumerated from [CODE] `grep -rn "CallWithMessages\|CallWithRequest\|CallWithRequestStream\|chat/completions" --include=*.go . | grep -v _test` — 60 hits across `kernel/ trader/ api/ agent/ telegram/ mcp/ cmd/`.
+
+| # | path | trigger | entry file:line | stream? | policy |
+|---|---|---|---|---|---|
+| B1 | **Session planner read** (all 6 trigger classes) | scheduled · level_event · structure_mss · death_replan · owner_reread · owner_reset | `trader/auto_trader_planner.go:981` | **SSE** | **class 41** |
+| B1f | planner non-stream fallback | same | `:984` | no | **unreachable — see A11** |
+| B2 | planner retry (repair / reauthor+block / resend-identical) | attempt ≥2 | `:1418-1460` | SSE | class 41 |
+| B3 | ROOT-FIX shadow A/B | after a plan write, if enabled | `trader/rootfix_shadow_ab.go:206` | SSE | class 41 — **cannot fire today** |
+| B4 | **weekly read** | Sunday / boot-backfill | `trader/auto_trader_weekly.go:172` | no | 600 s ceiling |
+| B5 | **executor decision loop** (highest volume, ~2 min) | every cycle | `kernel/engine_analysis.go:676` | no | 600 s ceiling |
+| B6 | **watch/observer cycle** | in-position, `position_mode=watch` | `kernel/engine_prompt_observer.go:162` | no | 600 s ceiling |
+| B7 | grid engine | crypto grid | `kernel/grid_engine.go:456` | no | dormant (futures) |
+| B8/B9 | **Ask-Planner · Realign** | `POST /api/plan/ask` · `/plan/realign` | `api/handler_plan.go:1411` · `:2150` | no | 600 s ceiling |
+| B10 | Studio test-run | `POST /api/strategies/test-run` | `api/strategy.go:833` | no | 600 s ceiling |
+| B11/B12 | **Telegram agent + summariser** | any Telegram message | `telegram/agent/agent.go:224` · `telegram/session/memory.go:94` | no | 600 s ceiling |
+| B13 | **AgentBeta / NOFXi web agent — 17 call sites** | `POST /api/agent/chat[/stream]` | `agent/central_brain.go:47,494,880`; `agent/planner_runtime.go` ×12; `agent/workflow.go` ×3; `agent/memory.go` ×2; others | no | own client, 600 s |
+| B15/B16 | `cmd/planner_ab`, `cmd/decisive-test` | manual CLI | hardcode `https://api.deepseek.com/chat/completions` | no | separate binaries, not in `nofx-bin` |
+
+**All six day-plan trigger classes funnel into ONE outbound site** (`runPlannerReadWithTriggerClaimedCtx`, `:855`), which is why the class-41 policy covers the whole day-plan system at a single seam. `failClosed=true` for scheduled / death_replan / owner_reread / owner_reset; `false` for level_event and structure_mss (this is why the 01:15 503 storm was benign — §2).
+
+**Three layered deadlines on the planner call** [CODE] `mcp/client.go:1191-1200`: idle 30 s per SSE line · total 1200 s via `context.WithTimeoutCause` · and **`cp := *hc; cp.Timeout = 0`** — the 600 s HTTP ceiling is explicitly lifted for streams, which is exactly what class 37 shipped. Worst case per read: **3 attempts × 3 client tries = 9 provider calls, ≈3 hours, with no outer wall-clock bound**; `claimPlannerRead` (`:860`) has **no expiry**, so a stuck read blocks its (trader, date, session) key indefinitely.
+
+**Surprises in the call graph:**
+- **The Telegram bot is LIVE and has no `.env` footprint.** [RUNTIME] `09-02 07:32:16 telegram/bot.go:60 Telegram bot @VLtrader_bot started`; [CONFIG] `grep -c TELEGRAM .env` → **0** — the token comes from the `telegram_configs` DB table. Any user the bot can reach drives a tool-calling loop with unbounded DeepSeek spend, invisible to the boot block.
+- **The shadow A/B cannot call at all today**: `SHADOW_AB_ENABLED` is absent from `.env` **and** from `/proc/2461883/environ`, and nothing in-process can set it — a restart is required. [DB] `system_config` has no shadow rows; boot says `OFF target_n=10 done=0`.
+- **Four paths never assert a reasoning mode** — weekly (`B4`), observer (`B6`), Ask-Planner and Realign (`B8/B9`) call on the **shared client** and inherit whatever the last planner (`enabled/max`) or executor (`enabled/low`) call left on it. Their cost and latency are non-deterministic.
+- **A11 — the planner's non-stream fallback cannot fire.** `:984` is guarded by a `BaseClient()` type assertion that `*provider.DeepSeekClient` always satisfies. A fallback that cannot fire is not a fallback.
+
+## 9. SECTION F — AFTER THE RESPONSE
+
+### F1 The validator chain, in execution order [CODE] `trader/auto_trader_planner.go:1381+`
+
+`0` provider-failure fork (`:1442`, → identical resend, no reject block, **no rejected-prompt row**) → `1` non-provider call error → `2` JSON extract/unmarshal (`kernel/plan_doc.go:423-429`) → `3` **normalizers** (`NormalizePlanDocRules`, class-39 arm-leg normalization `:1156-1190` — WARN + counter, *not* a reject) → `4` **schema gate at resolved caps** (`ParsePlanDocCapped`, maxLevels 12 / scenarioCap 5) → `5` level auto-collapse (mutates + WARN) → `6` flip-fired bias → `7` label provenance → `8` **facts + machine validator** (`ValidatePlanDocWithFactsMachine`, `kernel/plan_doc.go:799`) → `9` arm feasibility (**WARN only**) → `10` FVG re-verification → `11` **breakdown/breakup continuation** (`kernel/breakdown_continue.go:210` — §4's rule) → `12-13` flip/death sanity, prose-only death (**WARN only**) → `14` **confirm{} grace gate — POST-LOOP** → `15` grade stamping → `16` **arm gates at runtime** (`trader/armed_executor.go:1127`).
+
+**F1 finding — stage 14 is a silent session-killer, and it is armed right now.** The confirm-grace rejection runs *after* the retry loop, sets `doc = nil`, and drops into fail-closed. **The model is never told and no attempt is spent trying to fix it.** [DB] `system_config.confirm_grace_sessions_seen = 3` and `confirmGraceSessions()` defaults to **3** (`:2481`) ⇒ **the grace window is exhausted and the gate is live.** Worse, [CODE] the counter increments on **every invocation**, while the comment at `:1648` says "the first CONFIRM_GRACE_SESSIONS (default 3) **distinct plan sessions**" — three missing-confirm writes inside one session would exhaust it (A12: comment and code disagree; both quoted).
+
+**F1 finding — arm-gate rejects never reach the model.** Stage 16 (`ARM_MIN_RR`, `MinSLATRMult×ATR5m`, HTF veto, one-live-arm) refuses an order every cycle and logs `armRefusalClass`; none of it re-enters a prompt. The planner learns nothing from an arm it authored that can never be placed.
+
+### F2 Retry orchestration — the decision table
+
+Which counter a failure consumes is decided at **one line** [CODE] `:1442` via `mcp.IsProviderFailure` (`mcp/client.go:263`): `transport`, `idle_deadline`, `total_deadline`, `client_timeout`, `context` → provider-side; `http_status` → provider-side iff `>= 500 || == 429`.
+
+| failure | in-client retry (3 tries, 2s→15s→45s)? | planner attempt consumed? | next prompt |
+|---|---|---|---|
+| transport (reset / EOF / stream error) | **yes** | only after 3 tries fail | **identical resend** |
+| total-deadline (1200 s) · idle (30 s) · client_timeout (600 s) | **no** (but see below) | yes | **identical resend** |
+| HTTP 5xx / 429 | **yes** | after tries exhausted | **identical resend** |
+| HTTP 4xx (≠429) | no | yes | repair / reauthor+block |
+| schema or validator reject | n/a | yes | **repair**; unparseable repair → one forced re-author |
+| **confirm{} missing, grace exhausted** | n/a | **no — post-loop** | **nothing; fail-closed** |
+
+**Is resend-identical proven live? NO — and it cannot be proven even when it fires.** [RUNTIME] since 06:27:45 CT: `grep -cE "🧩 planner attempt"` → **0**; `grep -cE "resend-identical|failed on the provider"` → **0**. Only two planner reads have run since class 41 (07:15:26, 07:21:59, both under the *previous* rev `8a756bba`), both succeeding on attempt 1 call 1, and **zero planner reads have run under the live rev `0d093c3b`**. Separately, [CODE] `shortHash(prompt)` is computed at `:1076` and stored in `plans.prompt_hash` but **never logged on the attempt lines** — so "byte-identical" will not be provable from the journal even after it fires, and provider failures deliberately write no rejected-prompt row to compare against. **The claim is uninstrumented by construction.**
+
+The defect class-41 M0 exists to fix, captured live the day before [RUNTIME] `09-01 23:47:33`: `🛰 planner call FAILED class=transport … elapsed=270.3s … stream interrupted: unexpected EOF` → `📐 planner attempt 1/3 failed` → `🧩 planner attempt 2/3 reauthor+block` — **a pure transport EOF handed to the model as a validator reason.**
+
+**F2 findings:** ① an off-by-one renders `attempt %d re-sends the IDENTICAL prompt` with `attempt+1`, so attempt 3 will log *"attempt 4"*, which does not exist. ② **the boot line prints a non-value**: `plannerStreamPolicyBootLine` (`:1346`) passes the literal string `"calls"` into an `AI_MAX_RETRIES=%s` verb, so the operator reads `AI_MAX_RETRIES=calls non-stream only` instead of `=2`. ③ the comment at `mcp/client.go:1321-1327` claims deadline kills are never retried in-client, but `wrapStreamDeadlineErr` appends the underlying error verbatim — a cancel surfacing as `unexpected EOF` matches the retryable token list and **would** be retried, tripling wall time [B]. ④ **A11 — the deadline machinery has never fired**: across 08-30→09-02, `class=total_deadline` → 0, `class=idle_deadline` → 0, `stream idle watchdog` → 0. `watchdog_log=on` is a claim, not evidence.
+
+### F3 Replan budget (class 35)
+
+Spends: `death_replan`, `owner_reread` only [CODE] `store/strategy.go:1210`. Free: scheduled reads, `level_event`, `structure_mss`, `owner_reset`, dormant/rearm markers, fail-closed markers. Cap resolved **4** for all three sessions [DB `day_plan.replan_cap`].
+
+**Current counts — every session, today: used 0, cap 4, left 4.** [DB] `SELECT COUNT(*) FROM system_config WHERE key LIKE 'dayplan_replans_used%'` → **0**. LONDON's reset baseline is 2 (`dayplan_reset:…:2026-09-02:LONDON = 2`); NY and ASIA have no reset row (baseline 1). Today's LONDON chain is v1 fail-closed → v2 owner_reset → v3 level_event — **three versions, zero spends**, which is class 35 working as designed.
+
+**F3 finding (A11) — the counter has never recorded a spend, ever.** [DB] `SELECT trigger_reason, COUNT(*) FROM plans WHERE trigger_reason IN ('death_replan','owner_reread')` → **0 rows all-time**. The all-time histogram is `level_event 67 · planner_fail_closed 30 · owner_reset 23 · ASIA_scheduled_read 22 · NY_scheduled_read 19 · LONDON_scheduled_read 16 · replans_exhausted 5 · structure_mss 2`. Both gates that read the budget (`deathReplanAllowed` `:735`, the owner-reread gate `auto_trader_reread.go:119`) therefore **pass unconditionally** today. Whether that is correct-and-untriggered or broken-and-silent **cannot be settled from the data**: no death re-plan has been *attempted* either, because deaths route to `dormant:flip:` / `dormant:death:` (`:298-312`), which by design skip the budget entirely.
+
+### F4 Rejected-prompt store
+
+Cap **200**, verified [CODE] `git show 0d093c3b:store/planner_rejected.go` `const plannerRejectedCap = 200` (raised 20→200 by owner ruling after 121 validator rejects in 72 h). **26 rows** present, newest `2026-09-02 06:37:44 UTC = 01:37:44 CT` — the LONDON fail-close.
+
+**F4 finding — the ROOT-FIX `facts` column is in the code but NOT in the live database.** [CODE] rev `0d093c3b` declares `Facts string` and `SaveRejectedPromptWithFacts` (`:69`, caller `trader/auto_trader_planner.go:1293`), but [DB] `PRAGMA table_info(planner_rejected_prompts)` returns 9 columns with **no `facts`**. Cause: `AutoMigrate` is lazy — it runs on the first `PlannerRejected()` call (`store/store.go:398-404`, `store/planner_rejected.go:42-47`) and no reject has occurred since the 07:32:15 boot. **All 26 stored rows are facts-less**, so the offline A/B still cannot replay any fact-dependent validator (`ValidatePlanDocWithFactsMachine`, fvg, breakdown) against a single row. The capability shipped; its data is empty.
+
+### F5 Telemetry — the last 20 planner calls
+
+Full table in the source data; the material facts [RUNTIME]:
+
+| field | state across 20 calls |
+|---|---|
+| `ttfb_ms` | 355–1,525 ms, present on all stream calls |
+| `wall_ms` | 18,167–574,971 ms |
+| `prompt` tokens | 9,507–9,974 full-author · 1,231–1,817 repair — **except 0 on three failed calls** |
+| `completion` tokens | 8,469–34,024 — **except 0 on the same three** |
+| `reasoning_chars` | 25,250–111,117 |
+| `finish_reason` | `stop` ×17, **empty ×3** |
+| `class=` | absent on successes by design; `transport` ×3 |
+| `http_status` | `200` on 18, **including all three `class=transport` failures**; absent on the 2 oldest (binary drift) |
+| **`request_id`** | **`""` on 20 of 20** |
+
+**F5 findings:** ① **`request_id` is empty on every call in four days** — `requestIDFrom` probes `X-Request-Id`, `Request-Id`, `X-Amzn-Requestid`, `Cf-Ray` and finds none. Class 37 promised "status + provider request id ride along"; it delivers status and never an id, so **no failure in this audit can be correlated with the provider's own logs**. ② **`📊 AI call complete (stream)` is logged on FAILED calls** [CODE] `mcp/client.go:1249-1262` fires whenever `sr != nil`, *before* the error return at `:1268` — a line that says "complete" on a stream that died at 250 s with 54,986 reasoning characters discarded, carrying `prompt=0 completion=0` which are not real values. ③ **Cross-call telemetry contamination, proven** [RUNTIME]: the non-stream executor call at `09-02 07:22:05` logged `ttfb_ms=547` — a non-stream call cannot have a TTFB, and 547 is **exactly** the TTFB of the planner stream that finished at 07:21:59. The planner and executor share one `*mcp.Client` whose per-call atomics are process-global (`client.lastTTFBMs.Store(...)` at `:1249-1252` + `resolvePlannerClient` returning `at.mcpClient`). **Every field on `ai_call` is exposed to this race**, including the token counts the ROOT-FIX A/B uses as its live baseline (`RecordLiveCallMetrics`, `:1001`).
+
+---
