@@ -230,3 +230,19 @@ ONE `EntryGate(intent EntryIntent) (reason string, refused bool)`:
     `Success=false`, `telemetry.IncGateBlock(at.id, "entry_gate")`,
     `⛔ … refused` execution-log line → recorded in `decision_records`).
 - Pins as unit tests replaying the three trades' real intents.
+
+---
+
+## SECTION G — PHASE 2 DELIVERED (owner-approved)
+
+**Code (worktree `~/nofx-gate`, branch `fix/class48-entry-gate`):**
+
+- **`trader/entry_gate.go` (new)** — `EntryGate(intent EntryIntent) (reason string, refused bool)`, pure and nil-safe, legs in order: plan-bias (direction mode) → scenario-direction (action vs the cited scenario's direction) → shadow map → **R:R at the execution price** (the 587/589 fix) → min-SL ×ATR5m → one-live-arm. Fail-open on missing inputs (mirrors `validateDecision`).
+- **Arm seam wiring** — `armed_executor.go` in `maybeManageArmedOrders`, after the `oneLiveArmGuard` block and before the `ArmedOrderDB` row write: `at.entryGateForArm(...)`; on refusal an existing resting arm for the spec is cancelled (reason `entry_gate:…`), and the refusal is RECORDED via `store.IncArmRefusal(..., "entry_gate:"+class)` + `🚦 entry-gate REFUSED` log.
+- **Decision path wiring** — `auto_trader_orders.go` in `executeDecisionWithRecord`, after the legacy gates and before `executeOpen*`: `at.entryGateForDecision(decision, livePrice)` with `livePrice` = execution-time `market.GetWithExchange().CurrentPrice`. On refusal: `telemetry.IncGateBlock(at.id, "entry_gate")`, `actionRecord.Success=false`, `actionRecord.Error="entry_gate: …"` → recorded in `decision_records` (execution_log + risk_check_error) and rendered as a ⛔ refused row.
+- **`trader/entry_gate_test.go` (new, 10 tests, all green)** — pin replays: 587 refused with `R:R 1.09` at the real fill (and admitted at the snapshot price the old gate used — the fix is the reference); 589 and 590 refused as SHADOW (`breakout_retest`); direction-mismatch refused for the owner's stated 590 class (long citing a SHORT scenario); one-live-arm; min-SL; clean-intent admit; arm-seam builder; decision-path builder. **"Pass on current code, fail on the fix":** the pass-on-current evidence is the live journal quoted in Section B (all three logged `→ PASS` + `✓ MNQ open_long succeeded`); the fail-on-fix side is these tests.
+- **AUDIT-PLAYBOOK LAW** — class 48 appended to `docs/superpowers/AUDIT-CHECKLIST.md` in this branch.
+- **GUIDE CONTENT LAW** — `web/src/guide/content/guards.ts` truth table: added the `Entry gate (class 48) — ONE gate, BOTH paths` row and corrected the stale `ARM floors` row (it claimed "the 3.0 floor stays the FULL market-entry gate" — the entry floor is the resolved `min_risk_reward_ratio`, now judged at the live price). `GUIDE_BUILT_REV` bump is deferred to the deploy dispatch: it must equal the BUILD rev of the shipped binary, which does not exist until a cutover is authorized (A19; no deploy was authorized in this dispatch).
+
+**Not shipped.** No RELEASE, no marker, no cutover — A2b honored (main tree untouched, `git status` clean, worktree locked). `go build ./...` green; `go test ./...` exit 0 (27 packages).
+
