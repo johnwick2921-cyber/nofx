@@ -952,6 +952,11 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 		pMode, pEffort = fastMarketReasoningWire()
 		modeLabel = fastMarketReasoningLabel()
 	}
+	// ROOT-FIX part B (2026-09-02) — register what a SHADOW fast-mode call needs
+	// (client, system prompt, budget, fast wire). The shadow fires only after
+	// the live read finishes, writes no plan, and is off by default.
+	fMode, fEffort := fastMarketReasoningWire()
+	at.RegisterShadowRunner(client, plannerSystemPrompt, aiPlanMaxTokens(), fMode, fEffort)
 	at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, hash, input.IndicatorsBlock, input.AIConfigHash, requiredBias, prompt, facts, machineGrades, machineLabels, htfLabels(input), failClosed, func(userPrompt string) (string, error) {
 		mcp.ApplyThinking(client, pMode, pEffort)
 		// PLANNER SPEED WAVE 4 (2026-08-31) — the session planner now rides the
@@ -990,6 +995,8 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 				time.Since(start).Seconds(), int(plannerStreamIdle().Seconds()), int(plannerStreamTotal().Seconds()), err)
 		}
 		at.logInfof("🧠 planner call (reasoning=%s wire=%s/%s cap=%d stream idle=%ds total=%ds) completed in %.1fs", modeLabel, pMode, pEffort, cap, int(plannerStreamIdle().Seconds()), int(plannerStreamTotal().Seconds()), time.Since(start).Seconds())
+		// root-fix part B: the live side of the A/B pair.
+		at.RecordLiveCallMetrics(mcp.LastCompletionTokens(client), time.Since(start).Milliseconds())
 		return raw, err
 	}, t1Lines...)
 	return true
@@ -1267,7 +1274,7 @@ func clampLine(s string, n int) string {
 // every reject site: persists the rejected attempt's verbatim prompt + reason
 // for the offline A/B, and bumps the whack-a-mole counter when attempt N
 // repeats attempt N-1's defect.
-func (at *AutoTrader) plannerRejectBookkeeping(attempt int, tradeDate, session, hash, userPrompt string, rejectErr error, prevReason *string) {
+func (at *AutoTrader) plannerRejectBookkeeping(attempt int, tradeDate, session, hash, userPrompt string, rejectErr error, prevReason *string, factsJSON ...string) {
 	if rejectErr == nil {
 		return
 	}
@@ -1277,7 +1284,13 @@ func (at *AutoTrader) plannerRejectBookkeeping(attempt int, tradeDate, session, 
 	}
 	*prevReason = rejectErr.Error()
 	if at.store != nil {
-		if serr := at.store.PlannerRejected().SaveRejectedPrompt(at.id, tradeDate, session, hash, attempt, rejectErr.Error(), userPrompt); serr != nil {
+		// ROOT-FIX B-1: the facts snapshot travels with the prompt so an offline
+		// A/B runs the FULL validator chain, not just the schema gate.
+		fj := ""
+		if len(factsJSON) > 0 {
+			fj = factsJSON[0]
+		}
+		if serr := at.store.PlannerRejected().SaveRejectedPromptWithFacts(at.id, tradeDate, session, hash, attempt, rejectErr.Error(), userPrompt, fj); serr != nil {
 			at.logWarnf("🧾 rejected-prompt persist failed: %v", serr)
 		}
 	}
@@ -1443,7 +1456,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		if err != nil {
 			lastErr = err
 			at.logWarnf("📐 planner attempt %d/3 failed: %v", attempt, err)
-			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason)
+			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
 			rejectBlock = plannerRejectBlock(lastErr, liveConditions)
 			continue
 		}
@@ -1455,7 +1468,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 				forceReauthor = true // 3.6 — a malformed repair falls back to one full re-author
 				at.logWarnf("%s", repairUnparseableLine(raw, prevReason, perr))
 			}
-			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason)
+			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
 			rejectBlock = plannerRejectBlock(lastErr, liveConditions)
 			continue
 		}
@@ -1497,7 +1510,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		// the evaluator and ignored by the re-planner.
 		if requiredBias != "" && strings.ToLower(strings.TrimSpace(d.Bias.Direction)) != requiredBias {
 			lastErr = fmt.Errorf("prior plan flip already fired → bias %s is MANDATORY, got %q — the flip cannot be re-written away", requiredBias, d.Bias.Direction)
-			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason)
+			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
 			at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, lastErr)
 			rejectBlock = plannerRejectBlock(lastErr, liveConditions)
 			continue
@@ -1509,7 +1522,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		// was 29290.5 — the flip anchor rode a phantom label.
 		if mis := kernel.MislabeledStructuralLevels(d, machineLabels); len(mis) > 0 {
 			lastErr = fmt.Errorf("level label provenance: %s — copy the machine table's label for these prices", strings.Join(mis, "; "))
-			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason)
+			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
 			at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, lastErr)
 			rejectBlock = plannerRejectBlock(lastErr, liveConditions)
 			continue
@@ -1520,7 +1533,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		// reachable targets. Everything else fails → retry → fail-closed.
 		if verr := kernel.ValidatePlanDocWithFactsMachine(d, facts, machineLabels, maxLevels, scenarioCap); verr != nil {
 			lastErr = verr
-			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason)
+			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
 			rejectBlock = plannerRejectBlock(lastErr, liveConditions)
 			at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, verr)
 			continue
@@ -1556,7 +1569,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 			}
 			if verr := kernel.ValidateFvgEntryScenarios(d, fvgBars, at.futuresSymbol(), origin, time.Now()); verr != nil {
 				lastErr = verr
-				at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason)
+				at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
 				rejectBlock = plannerRejectBlock(lastErr, liveConditions)
 				at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, verr)
 				continue
@@ -1573,7 +1586,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 			}
 			if verr := kernel.ValidateBreakdownContinueScenarios(d, bdBars, kernel.StaleConfirmATR5m(bdBars), facts.Price, time.Now().UnixMilli()); verr != nil {
 				lastErr = verr
-				at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason)
+				at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
 				rejectBlock = plannerRejectBlock(lastErr, liveConditions)
 				at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, verr)
 				continue
@@ -1777,6 +1790,10 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		}
 	}
 	at.recordPlanWritePrice(facts.Price) // F3 fast-market drift baseline
+	// ROOT-FIX part B — fire ONE shadow fast-mode call on the IDENTICAL prompt,
+	// AFTER the live read has finished (never a concurrent stream: class 41's
+	// concurrency question is still open). Writes nothing; measurement only.
+	at.maybeRunShadowAB(session, tradeDate, prompt, maxLevels, scenarioCap, facts, machineLabels, htfLabels, requiredBias)
 	// W6 — P1 plan-born/armed alert (active plans only; fail-closed already alerted P0).
 	if lifecycle == "active" {
 		at.emitAlert("P1", "armed", fmt.Sprintf("planborn:%s:%s:%d", tradeDate, session, version),

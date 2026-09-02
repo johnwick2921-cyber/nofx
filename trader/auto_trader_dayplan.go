@@ -72,6 +72,9 @@ func (at *AutoTrader) snapshotSessionProfiles() {
 		// AI_PLAN_MAX_TOKENS, default 65536 = 2× the observed truncation ceiling.
 		at.logInfof("📐 planner cap: plan_max_tokens=%d (AI_PLAN_MAX_TOKENS; default 65536) · truncation → 🚨 WARN, never silent", aiPlanMaxTokens())
 		at.logPlannerClientBootLine() // class 37 (C7): effective planner client config, resolved
+		// ROOT-FIX part B — the shadow A/B instrument's resolved state.
+		done, _ := store.ShadowABCount(at.store)
+		at.logInfof("%s", ShadowABBootLine(ShadowABEnabled(), ShadowABTarget(), done))
 	})
 	installActivePlanProvider(at, st)
 	// P0-cleanup (2026-08-19) — soft-alert: guardrails that WOULD have tripped

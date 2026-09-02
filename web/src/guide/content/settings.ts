@@ -186,6 +186,22 @@ const dayPlan: KnobSpec[] = [
     perSession: 'No — process-wide.',
   },
   {
+    label: 'Fast-mode shadow A/B (measurement, default OFF)',
+    where: 'Environment (SHADOW_AB_ENABLED, SHADOW_AB_N) — not a Strategy knob',
+    what: "Fires ONE extra planner call at reasoning=fast on the IDENTICAL prompt, AFTER the live max-reasoning read has finished. It writes no plan, spends no re-plan budget, and never runs at the same time as a live stream. Its output goes through the FULL validator chain offline and is logged as one 🔬 line: legal or illegal, the reject reasons, output tokens and wall time, side by side with the live max call on the same prompt. It exists because of a measurement: on 67 full-author calls (2026-08-31 → 09-02) the p50 output was 23,769 tokens and the stored plan JSON was only ~920 of them. About 96% of the output is REASONING, so the reasoning mode is the only lever that can shorten the call — shrinking the plan schema cannot.",
+    trader:
+      'PRE-REGISTERED PROMOTION CRITERION (written before the data, 2026-09-02): fast mode is promoted to live ONLY IF, at n≥10 shadow calls, its legal-plan rate is greater than or equal to max mode\'s on the same prompts AND its median wall time is at most 50% of max\'s. Otherwise it stays shadow or is dropped. No promotion on narrative. The earlier fast-mode rejection was n=1 and pre-dates the class-38 prompt contract, so it is stale evidence, not a verdict.',
+    consumer:
+      'trader/rootfix_shadow_ab.go · store/shadow_ab_counter.go (recorded sample counter shadow_ab_calls_rootfix) · boot line 🔬 shadow A/B',
+    range: 'SHADOW_AB_ENABLED on|off · SHADOW_AB_N 1 – 200',
+    systemDefault: 'OFF · n=10',
+    recommended:
+      '⭐ Turn ON for one week of reads, then read the 🔬 lines against the criterion above. Each shadow call costs one extra provider call per session read.',
+    whenToTouch:
+      'Turn it on when you want the fast-vs-max question answered with data. Turn it off once n is reached — the harness stops firing at the target on its own.',
+    perSession: 'No — process-wide.',
+  },
+  {
     label: 'Planner stream retry tries + backoff',
     where: 'Environment (AI_PLAN_STREAM_TRIES, AI_PLAN_STREAM_BACKOFF) — not a Strategy knob',
     what: "How many CALLS the planner stream path makes per planner attempt when the provider cuts the connection mid-stream (class=transport: peer FIN → 'unexpected EOF', or RST), and how long it waits between them. Class 41 (2026-09-02): the schedule is exponential — 2s → 15s → 45s (last value repeats) — replacing the fixed 2s×n wait that let call 2 die 18s after call 1 on 2026-09-01 23:47 CT. AI_MAX_RETRIES still governs the NON-stream paths (executor loop, weekly read) and also counts CALLS. A transport/deadline failure that exhausts the tries re-sends the IDENTICAL prompt on the next planner attempt with NO reject block (owner ruling class 37; the pre-fix code re-authored with the transport error text as its 'validator reason').",

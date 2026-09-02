@@ -11,15 +11,22 @@ import (
 // needs the exact prompt text the model was shown, which no log held (only a
 // hash). Size-capped store — oldest rows are trimmed past the cap.
 type PlannerRejectedPrompt struct {
-	ID           uint      `gorm:"primaryKey"`
-	TraderID     string    `gorm:"index"`
-	TradeDate    string    `gorm:"index"`
-	Session      string    `gorm:"index"`
-	PromptHash   string    `gorm:"index"`
-	Attempt      int       `gorm:"index"`
-	RejectReason string    `gorm:"type:text"`
-	PromptText   string    `gorm:"type:text"`
-	CreatedAt    time.Time `gorm:"index"`
+	ID           uint   `gorm:"primaryKey"`
+	TraderID     string `gorm:"index"`
+	TradeDate    string `gorm:"index"`
+	Session      string `gorm:"index"`
+	PromptHash   string `gorm:"index"`
+	Attempt      int    `gorm:"index"`
+	RejectReason string `gorm:"type:text"`
+	PromptText   string `gorm:"type:text"`
+	// Facts (ROOT-FIX B-1, 2026-09-02) — the JSON snapshot of the PlanFacts the
+	// live attempt was validated against. Without it an offline A/B could only
+	// re-run the SCHEMA gate: every fact-dependent validator
+	// (ValidatePlanDocWithFactsMachine, fvg, breakdown_continue) needs the same
+	// price/PDH/PDL/DATR the live call saw, and those are exactly the
+	// validators that reject real plans. Empty on rows written before this.
+	Facts     string    `gorm:"type:text"`
+	CreatedAt time.Time `gorm:"index"`
 }
 
 // TableName is explicit so the cap-trim SQL never guesses.
@@ -51,10 +58,18 @@ const plannerRejectedCap = 200
 // SaveRejectedPrompt persists one rejected attempt's verbatim prompt + reason,
 // trimming the store to the newest plannerRejectedCap rows.
 func (s *PlannerRejectedStore) SaveRejectedPrompt(traderID, tradeDate, session, hash string, attempt int, reason, promptText string) error {
+	return s.SaveRejectedPromptWithFacts(traderID, tradeDate, session, hash, attempt, reason, promptText, "")
+}
+
+// SaveRejectedPromptWithFacts (B-1) is SaveRejectedPrompt plus the facts
+// snapshot the attempt was validated against, so an offline A/B can run the
+// FULL validator chain rather than the schema gate alone.
+func (s *PlannerRejectedStore) SaveRejectedPromptWithFacts(traderID, tradeDate, session, hash string, attempt int, reason, promptText, factsJSON string) error {
 	if s == nil || s.db == nil {
 		return nil
 	}
 	row := &PlannerRejectedPrompt{
+		Facts:        factsJSON,
 		TraderID:     traderID,
 		TradeDate:    tradeDate,
 		Session:      session,

@@ -556,6 +556,36 @@ in CLAUDE.md).
     validator reject is repaired — never append a transport error to a
     prompt; and every kill switch logs its own fire.
 
+42. **Optimising the 4% (a wave aimed at the wrong term).** Root cause: the
+    planner call was slow (p50 448 s, p95 581 s) and the plan JSON was assumed
+    to be the output. It is not. Measured 2026-09-02 over n=67 full-author
+    calls (2026-08-31 → 09-02, `prompt>9000`): **p50 completion 23,769 tokens,
+    mean 22,376, mean wall 349 s, mean reasoning 72,477 chars**; the stored
+    plan docs (n=61 since 2026-08-28) average **3,088 bytes ≈ 920 tokens**.
+    The plan JSON is therefore **~4% of the output and reasoning is ~96%** —
+    deleting the entire schema could not deliver the 40-50% cut the wave was
+    scoped for, and the field-by-field audit found **no removable field**
+    (every one of the 9 top-level fields has a reader: levels ~402 tok,
+    scenarios ~237, reasoning ~161, no_trade ~42, bias ~33, death_condition
+    ~18, flip ~14, death ~10, day_type ~3). **Probe:** before optimising a
+    cost, measure its COMPOSITION and quote the share of the term you intend
+    to cut; if the term is under ~20% of the total, the optimisation cannot
+    reach a headline target no matter how well it is executed. Ask what the
+    other 80% is made of. **Fix:** no schema cut shipped (it would have been
+    risk without reward); the finding is pinned by two tests
+    (`TestRootFixEveryPlanFieldHasAReader`, which fails if any field ever
+    loses its last reader, and `TestRootFixPlanJSONIsASmallFractionOfOutput`,
+    which fails if the JSON share ever exceeds 15%) and by the boot line
+    `✂ planner schema`. The real lever — reasoning MODE — ships as a
+    measurement instrument, not a change: a fast-mode shadow A/B
+    (`SHADOW_AB_ENABLED`, default OFF) that re-runs the identical prompt at
+    reasoning=fast AFTER the live read, validates it through the full chain
+    offline, writes nothing, and is judged against a criterion registered
+    BEFORE the data (legal-rate ≥ max AND median wall ≤50% of max at n≥10).
+    **Law:** measure the composition before you optimise a total, and state
+    the share you can actually reach; a pre-registered criterion beats a
+    narrative when the result arrives.
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,

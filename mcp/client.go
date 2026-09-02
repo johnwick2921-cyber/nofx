@@ -108,6 +108,9 @@ type Client struct {
 	// these are read immediately after each single call returns).
 	lastTTFBMs         atomic.Int64 // time-to-first-byte of the last single call (0 = never measured)
 	lastReasoningChars atomic.Int64 // reasoning_content chars of the last single call
+	// lastCompletionTokens (root-fix part B) — the provider's completion token
+	// count for the last stream call (reasoning + visible output).
+	lastCompletionTokens atomic.Int64
 
 	// Class 37 (2026-09-01) — failure-class telemetry for the ai_call line: the
 	// HTTP status and provider request id of the last response (0/"" when no
@@ -320,6 +323,7 @@ func (client *Client) lastRequestIDString() string {
 func (client *Client) resetCallTelemetry() {
 	client.lastTTFBMs.Store(0)
 	client.lastReasoningChars.Store(0)
+	client.lastCompletionTokens.Store(0)
 	client.lastHTTPStatus.Store(0)
 	client.lastRequestID.Store("")
 }
@@ -337,6 +341,27 @@ func LastErrClass(c AIClient) string {
 		return s
 	}
 	return ""
+}
+
+// LastReasoningChars / LastCompletionTokens (ROOT-FIX part B, 2026-09-02)
+// expose the last call's OUTPUT size so the shadow A/B can compare fast vs max
+// on the same prompt. The measured split matters: on 67 full-author calls the
+// plan JSON was ~920 tokens of a 23,769-token p50 output — reasoning is ~96%,
+// so the reasoning MODE is the only lever that moves wall time.
+func LastReasoningChars(c AIClient) int {
+	bc, ok := c.(interface{ BaseClient() *Client })
+	if !ok {
+		return 0
+	}
+	return int(bc.BaseClient().lastReasoningChars.Load())
+}
+
+func LastCompletionTokens(c AIClient) int {
+	bc, ok := c.(interface{ BaseClient() *Client })
+	if !ok {
+		return 0
+	}
+	return int(bc.BaseClient().lastCompletionTokens.Load())
 }
 
 func LastHTTPStatus(c AIClient) int {
@@ -1256,6 +1281,7 @@ func (client *Client) CallWithRequestStreamDeadlines(req *Request, onChunk func(
 		}
 	}
 	if sr != nil && sr.Usage != nil {
+		client.lastCompletionTokens.Store(int64(sr.Usage.CompletionTokens))
 		ReportStreamUsage(sr.Usage, client.Provider, client.Model)
 	}
 	if err != nil {
