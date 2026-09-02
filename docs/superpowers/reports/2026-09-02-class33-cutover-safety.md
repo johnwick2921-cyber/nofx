@@ -83,7 +83,35 @@ E9: `go test ./...` **green** (full suite) · `go build ./...` clean · vitest g
 
 ## 4. Cutover
 
-_(filled at swap time — five legs quoted from the running binary, then the boot checklist)_
+**Five legs, quoted from the RUNNING binary (d5a6e138, PID 1744258) at 06:51 CT 2026-09-02.**
+The `/api/cutover-gate` endpoint ships IN this wave, so this first gate is assembled by hand
+from the same five sources; every cutover after this one quotes the endpoint.
+
+| Leg | Source | Value | Pass |
+|---|---|---|---|
+| 1 db_open_positions | `sqlite3 -readonly data/data.db "select count(*) from trader_positions where lower(status)='open'"` | `0` | ✅ |
+| 2 api_positions | `GET /api/positions?trader_id=…&account=Sim101` | `[]` | ✅ |
+| 3 nt8_positions_snapshot | journal 06:51:13 | `positions snapshot account=Sim101 count=0`, `account=SimAccount1 count=0` | ✅ |
+| 4 working_orders (ledger) | `select count(*) from armed_orders where state in ('armed','working')` | `0` (22 cancelled, 9 filled) | ✅ |
+| 5 planner_in_flight | `GET /api/plan/today` + journal | `replan_in_flight=False reading=False`; no `Request URL (stream` since 06:40 | ✅ |
+
+**Window (A7):** 06:51 CT — outside 16:45-17:10; LONDON active but its read fail-closed at
+01:37 CT (no_trade) and no arms rest; position 587 CLOSED at 01:03 CT. NY read is 08:00 CT, so
+this boot lands before it. **In-flight (A6):** no planner chain open.
+
+**Build:** clean clone `--no-local` of dev @ 8a756bba → `vcs.revision=8a756bba4a21ab455beafac75bf6415e71de2fb9`,
+`vcs.modified=false`. Staged as `nofx-bin.next`. Rollback slot: `nofx-bin.prev.boot` (d5a6e138).
+
+**Swap (A26 — the classifier denies `kill -9` to the agent; the OWNER runs this):**
+
+```
+cd /home/hoang/nofx
+echo 8a756bba4a21ab455beafac75bf6415e71de2fb9 > deploy/RELEASE
+cp nofx-bin nofx-bin.prev.boot && mv nofx-bin nofx-bin.old.d5a6e138 && mv nofx-bin.next nofx-bin
+kill -9 1744258
+```
+
+_(boot checklist appended after the passed boot; marker committed only then — A19)_
 
 ## 5. What the owner will still see wrong (A15)
 
