@@ -8,8 +8,8 @@ All times CT (R8). Live rev at dispatch: `e42a0b43` (class 37, booted 21:19:49 C
 
 | Item | State |
 |---|---|
-| Code | merged to dev — see the closeout for the sha |
-| Build | clean clone `--no-local`, `vcs.modified=false` — quoted in §7 |
+| Code | **merged to dev @ `c0580011`** (fast-forward from `2d29e852`, pushed); marker `3af6af95` |
+| Build | clean clone `--no-local` at `c0580011`, `vcs.modified=false`, built 2026-09-02T02:47:37Z, sha256 `38a1620ba7210df5…`, 70,920,312 bytes — **STAGED as `~/nofx/nofx-bin.next`** |
 | Cutover | **NOT DONE — PARKED pending the owner's explicit GO (A3)** |
 | Proof (A20) | **NOT YET OCCURRED.** The proving event is the next live read authored against the NEW prompt. Nothing to quote; see §8. |
 | Lock (A2) | `~/nofx-main.lock` acquired 21:27 CT (no prior holder), released at closeout |
@@ -208,10 +208,32 @@ checklist entry.
 
 ---
 
-## 7. Build, stage, rollback (A4/A13)
+## 7. Build, stage, rollback (A4/A13) [A]
 
-See the closeout section for the merged sha, the `go version -m` stamps and the staged
-binary's sha256.
+```
+git clone --no-local ~/nofx <scratch>/clone-c38 && git checkout c0580011b4ce4fdefa9d92566019a6d5789d5c1e
+(clone porcelain-clean)
+go build -o nofx-bin .
+go version -m nofx-bin:
+	build	vcs.revision=c0580011b4ce4fdefa9d92566019a6d5789d5c1e
+	build	vcs.time=2026-09-02T02:47:37Z
+	build	vcs.modified=false
+sha256 38a1620ba7210df506961f94b70b4101217779736db97fcc683e9390247a43ad  (70,920,312 bytes)
+cp → ~/nofx/nofx-bin.next        (no prior nofx-bin.next existed — class 37's was consumed at 21:19:44)
+goldens + class-38 guards re-run inside the built tree: ok
+```
+Marker `3af6af95`: `deploy/RELEASE` + `GUIDE_BUILT_REV` = `c0580011…`.
+Running binary unchanged: `e42a0b43` (class 37), PID 1994488, booted 21:19:49 CT.
+
+**Cutover (owner GO only; flat gate A5 + in-flight A6 + window A7 first):**
+```
+cd ~/nofx && cp nofx-bin nofx-bin.prev.boot && mv nofx-bin nofx-bin.old.e42a0b43 \
+  && mv nofx-bin.next nofx-bin && kill -9 $(systemctl show -p MainPID --value nofx)
+# within 90s expect:
+#   🔐 BOOT INTEGRITY OK — rev c0580011 · expected c0580011 · goldens PASS
+#   🧪 validator hints: 15 sites — … every rule token in its own field enum (class 34 + 38 guard)
+#   📜 prompt/validator contract: 17 restrictions, all stated in prompt (class 38 guard)
+```
 
 **Rollback (exact):**
 ```
