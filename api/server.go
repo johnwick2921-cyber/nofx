@@ -422,6 +422,11 @@ Returns: [{"symbol":"<string>","side":"long|short","quantity":<float>,"entry_pri
 			s.routeWithSchema(protected, "GET", "/open-orders", "Open orders currently on exchange",
 				`Query: ?trader_id=<EXACT trader_id from GET /api/my-traders>`,
 				s.handleOpenOrders)
+			s.routeWithSchema(protected, "GET", "/cutover-gate", "Pre-cutover gate: all five legs in one payload (class 33)",
+				`Query: ?trader_id=<EXACT trader_id from GET /api/my-traders>
+Returns: {"ready":<bool>,"legs":[{"n":1..5,"name":"<string>","pass":<bool>,"detail":"<string>","source":"<string>"}],"note":"<string>"}
+Legs: 1 db_open_positions · 2 api_positions · 3 nt8_positions_snapshot · 4 working_orders (armed_orders ledger) · 5 planner_in_flight. A leg that cannot be evaluated FAILS.`,
+				s.handleCutoverGate)
 			s.routeWithSchema(protected, "GET", "/decisions", "AI trading decisions (decision records)",
 				`Query: ?trader_id=<EXACT trader_id from GET /api/my-traders>&limit=<int, default 20>
 Returns: [{"id":"<string>","symbol":"<string>","action":"open_long|open_short|close_long|close_short|hold","confidence":<int>,"reasoning":"<string>","created_at":"<timestamp>"}]`,

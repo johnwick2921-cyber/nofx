@@ -393,6 +393,26 @@ func (s *Server) handleOrderFills(c *gin.Context) {
 }
 
 // handleOpenOrders Get open orders (pending SL/TP) from exchange
+// handleCutoverGate (CLASS 33, 2026-09-02) answers the FIVE-leg pre-cutover
+// gate in ONE payload so an agent cannot quote four legs and skip the fifth.
+// Leg 4 now reads the armed_orders ledger (it was a stub returning empty and
+// passed vacuously at every cutover 35 → 41); leg 5 is in-flight planner work,
+// which the rite never checked at all (2026-08-31 17:34 CT: a kill landed on
+// attempt 3/3 and the chain died silently).
+func (s *Server) handleCutoverGate(c *gin.Context) {
+	_, traderID, err := s.getTraderFromQuery(c)
+	if err != nil {
+		SafeBadRequest(c, "Invalid trader ID")
+		return
+	}
+	at, err := s.traderManager.GetTrader(traderID)
+	if err != nil || at == nil {
+		SafeNotFound(c, "Trader")
+		return
+	}
+	c.JSON(http.StatusOK, at.CutoverGateStatus())
+}
+
 func (s *Server) handleOpenOrders(c *gin.Context) {
 	_, traderID, err := s.getTraderFromQuery(c)
 	if err != nil {

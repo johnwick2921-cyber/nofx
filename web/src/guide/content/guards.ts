@@ -23,6 +23,11 @@ export const guards: GuideSection = {
           'No bars, no bridge, no trading — cycle skipped or refused.',
         ],
         [
+          'Boot sweep (class 33)',
+          'HARD',
+          "At boot, before anything is armed: every resting order left behind by the PREVIOUS process is cancelled at NinjaTrader and marked cancelled in the ledger (reason boot_sweep). A cancel that FAILS leaves the row live and retries — the ledger never goes clean while an order might still be at the broker. On 2026-09-02 00:16 CT, before this existed, two arms outlived their process for 15 minutes and briefly double-ordered S3.",
+        ],
+        [
           'plan_mode direction/strict',
           'HARD',
           'Refuses entries against plan bias (direction) or without a cited scenario (strict); no plan + direction/strict = no trades.',
@@ -165,6 +170,11 @@ export const guards: GuideSection = {
     {
       kind: 'p',
       text: 'Risk guardrails: the master switch (default ON, currently OFF by owner ruling — the boot log says "master OFF") arms daily loss/profit/trade limits, consecutive-loss halt, re-entry cooldown, blackout windows, max-contracts and notional caps. The always-on pair (max contracts/order, notional cap) needs no toggle. Would-have-tripped counters are visible in the dashboard. SIM lock: every account list is filtered to SIM; the bot cannot route to a live NT account — do not try.',
+    },
+    { kind: 'h', text: 'THE FIVE-LEG CUTOVER GATE (class 33)' },
+    {
+      kind: 'p',
+      text: "Before any restart of the bot, GET /api/cutover-gate answers all five legs in one payload: (1) open positions in the database, (2) positions from the API, (3) the NinjaTrader positions snapshot for the bound account, (4) working orders — read from the armed_orders ledger, because NinjaTrader sends no working-order frame, and (5) in-flight planner work. ready:false means HOLD. Legs 4 and 5 are new on 2026-09-02: leg 4 used to be a stub that always answered empty, so it passed at every cutover from 35 to 41 including one with two orders resting; leg 5 did not exist, so a kill on 2026-08-31 17:34 CT landed mid-read and the planner chain died silently. A leg that cannot be evaluated counts as failed.",
     },
   ],
 }

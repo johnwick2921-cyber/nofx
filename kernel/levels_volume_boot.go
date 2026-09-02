@@ -44,4 +44,5 @@ func LogVolumeWaveBoot() {
 	// non-sweep condition collapse to the single top-level arm with a WARN;
 	// sweep_reclaim keeps its split contract untouched; never synthesize.
 	logger.Infof("⚖ arm normalizer: legs on non-sweep → single arm + WARN (class 39); sweep_reclaim contract unchanged; counter arms_normalized_class39 recorded in system_config")
+	logger.Infof("🛡 cutover safety (class 33): flat gate legs=5 (db_open_positions · api_positions · nt8_positions_snapshot · working_orders · planner_in_flight) via GET /api/cutover-gate; leg4 reads the armed_orders LEDGER (was a stub returning empty — passed vacuously at cutovers 35→41); boot sweep cancels pre-boot arms before ANY re-arm, counter arms_boot_swept_class33")
 }

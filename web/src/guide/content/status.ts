@@ -23,6 +23,8 @@ export const status: GuideSection = {
         '📜 prompt/validator contract: N restrictions, all stated in prompt  ← class 38',
         '⚖ arm normalizer: legs on non-sweep → single arm + WARN  ← class 39',
         '🔁 planner stream policy (class 41): stream_tries=3 backoff=2s→15s→45s watchdog_log=on keepalive=30s serialize_executor=off resend_identical=on  ← class 41 (per trader)',
+        '🛡 cutover safety (class 33): flat gate legs=5 … leg4 reads the armed_orders LEDGER … boot sweep cancels pre-boot arms  ← class 33',
+        '🛡 boot sweep CANCELLED pre-boot arm (class 33): <session> <S#> … signal=<id> — the process that placed it is gone  ← only when a restart orphaned a resting order',
         '🎛 volume wave …   ← wave detector knobs',
         '🎯 touch telemetry …',
         '📐 fvg_entry …',

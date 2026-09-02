@@ -267,6 +267,48 @@ in CLAUDE.md).
     DATA work only. Halt-fired reads author from last stored bars and log
     `🗓 session read fired during halt … (newest <tf> <ts>, age <n>m)`.
 
+33. **A cutover rite that checks exposure but not in-flight work, trusts a
+    gate that cannot fail, and leaves the previous process's orders alive.**
+    Three measured defects, one class. **(a) No in-flight leg.** PART 3
+    steps 1-7 checked positions and orders, never running work: 2026-08-31
+    17:34 CT a `kill -9` landed while a planner chain was on attempt 3/3 —
+    the chain died silently, no v2, no fail-closed line, nothing re-claimed
+    it. Four later cutovers held on this by agent discipline alone.
+    **(b) Leg 4 could not fail.** `TCPTrader.GetOpenOrders` was
+    `return []types.OpenOrder{}, nil` (tcp_trader.go:1149): the open-orders
+    leg passed VACUOUSLY at cutovers 35, 36, 37, 38, 39, 40 and 41, and the
+    full-system audit quoted "→ []" as evidence of flatness. NT8 emits no
+    working-order frame (audit F12), so the `armed_orders` ledger is the only
+    real source — it is what actually held the 09-01 swap (arm 29 WORKING).
+    **(c) Pre-boot arms were orphaned.** 2026-09-02 00:16 CT a cutover ran on
+    "just go" with S1 @29044 and S3 @29068.05 resting: the old process died,
+    its broker orders did not, and they sat with NO listener for 15 minutes
+    until the stale-window reconcile cancelled them at 00:31:48 — while the
+    new binary re-armed its own S1/S3 and opened position 587 at 00:17:44,
+    so for minutes TWO S3 orders existed at the broker. A fill on the dead
+    process's order would have been a position no stop was attached to
+    (class 27 again). It resolved by luck. **Probe:** for every gate leg, ask
+    what input would make it FAIL — a leg with no such input is not a leg.
+    For every restart, ask what the dying process leaves running at the
+    broker. **Fix:** leg 4 reads the ledger (`AutoTrader.ledgerOpenOrders`,
+    wired into `TCPTrader.SetOpenOrdersSource` at construction) and every row
+    carries `source: "ledger (no NT8 order frame — F12 open)"`; an unwired or
+    erroring source FAILS the leg instead of answering empty. Leg 5 is
+    in-flight planner work (`AnyPlannerReadInFlight`, any date/session).
+    `GET /api/cutover-gate` returns all five legs in ONE payload so an agent
+    cannot quote four and skip the fifth; a leg that cannot be evaluated
+    fails. The boot sweep (`sweepPreBootArms`, at the HEAD of
+    `maybeManageArmedOrders`, before any authoring or placement) cancels every
+    non-terminal row stamped with a different `boot_id` — cancel frame first,
+    then `state=cancelled` with reason `boot_sweep: pre-boot order, process
+    restarted`; a FAILED cancel leaves the row non-terminal and does not latch
+    (never hide a live order behind a clean ledger); an authorized-but-never-
+    placed row is left alone (nothing exists at the broker). Counter
+    `arms_boot_swept_class33` in system_config. Boot line `🛡 cutover safety
+    (class 33)`. **Law:** a gate that cannot fail is not a gate; a cutover
+    checks running work as well as exposure; and no process may leave orders
+    alive at the broker for a successor that never placed them.
+
 34. **Validator hint naming a nonexistent condition.** Root cause: the
     breakdown-void reject said "author a reject/retest play instead" — the
     model authored condition `reject_retest`, and parse/schema rejected it:
@@ -281,7 +323,7 @@ in CLAUDE.md).
     and the planner reject block now appends `Valid conditions: [<resolved
     live list>]`. **Law:** a hint is an instruction — instructions must be
     checkable; never name a composite or shadowed token as an authoring
-    target. (Class 33 is unoccupied — this wave shipped as 34 per dispatch.)
+    target.
 
 35. **Counter inferred from row count (replan budget arithmetic).** Root
     cause: `ReplansUsedFrom = version − baseline` counted EVERY appended plan
@@ -536,7 +578,7 @@ in CLAUDE.md).
 
 ---
 
-## PART 3 — PRE-CUTOVER (standing 7-step protocol)
+## PART 3 — PRE-CUTOVER (standing 7-step protocol; flat gate = 5 legs, class 33)
 
 1. **Tree gate:** porcelain-clean + `~/nofx-main.lock` acquired (owner/PID/
    expiry) + HEAD is the single allowed branch for this dispatch.
@@ -544,12 +586,26 @@ in CLAUDE.md).
    vcs stamping → `<no-vcs>` → INTEGRITY REFUSED). `go build -o nofx-bin.next`.
 3. **Marker:** `deploy/RELEASE` = the 8-char build rev, committed (marker AFTER
    build; RELEASE must equal the BUILD sha).
-4. **Flat gate (all-origin):** API positions `[]` + DB OPEN=0 + NT8 open-orders
-   empty ×2 + open-orders endpoint — all four quoted.
+4. **Flat gate — FIVE legs (class 33), all quoted:** `GET /api/cutover-gate`
+   returns them in one payload; quote it, do not assemble them by hand.
+   (1) DB `trader_positions` OPEN = 0 · (2) API positions `[]` · (3) NT8
+   positions snapshot count = 0 · (4) **working orders = the `armed_orders`
+   ledger's non-terminal rows** (NT8 emits no working-order frame, audit F12 —
+   before 2026-09-02 this leg was a stub returning empty and passed vacuously
+   at cutovers 35→41) · (5) **no in-flight planner work** — `replan_in_flight`
+   false AND no planner read claimed for this trader on any date/session (the
+   2026-08-31 17:34 defect: a kill landed on attempt 3/3 and the chain died
+   silently). A leg that cannot be EVALUATED fails. `ready:false` = HOLD.
 5. **Owner ack:** explicit "go" — reachable and acking the boot line within
-   minutes, OR a TESTED auto-rollback. Timers banned.
+   minutes, OR a TESTED auto-rollback. Timers banned. **Override rule
+   (class 33):** the owner MAY override leg 4/5 and swap with arms resting —
+   the override is permitted, leaving orders alive is not. Such a cutover
+   REQUIRES the boot sweep to run and its result to be quoted in the report
+   (`🛡 boot sweep CANCELLED pre-boot arm …` per row, or `cancelled 0`).
 6. **Swap:** `mv nofx-bin nofx-bin.old.<tag>` → `mv nofx-bin.next nofx-bin` →
    `kill -9 <PID>` (SIGKILL — SIGTERM exits 0 and systemd does NOT relaunch).
+   The classifier denies the kill to the agent: print the command and have the
+   OWNER run it.
 7. **Boot checklist (within 90s):**
    `🔐 BOOT INTEGRITY OK — rev <8char> +dirty · built <ts> · expected <8char> ·
    goldens PASS` + exactly ONE PID + feed warmed (bars_historical replay ~30s
