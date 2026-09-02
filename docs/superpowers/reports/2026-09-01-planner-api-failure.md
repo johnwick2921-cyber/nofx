@@ -2,8 +2,8 @@
 
 **Dispatch:** PLANNER API FAILURE — ROOT CAUSE INVESTIGATION + FIX (owner hoang, 2026-09-01).
 **Phase 1 verdict:** CONFIRMED. **Phase 2:** shipped on branch `fix/planner-stream-total-deadline`
-(worktree `~/nofx-planner-api`), merged with dev (class 36) at `e42a0b43`, PARKED — combined build parked in
-the worktree, nothing staged in `~/nofx`, no restart; cutover needs the owner's GO (A3) — see CLOSEOUT ADDENDUM. Section "Phase 2" below carries file:lines, tests, build, rollback.
+(worktree `~/nofx-planner-api`), merged to dev at `bc9ea126`; **CUT OVER 21:19:49 CT on the owner's "GO 37"** (rev `e42a0b43`, PID 1994488)
+— see CUTOVER section. Behavioural proof still owed (A20). Section "Phase 2" below carries file:lines, tests, build, rollback.
 All times CT (R8). Evidence tiers: **[A]** directly verified · **[B]** inferred · **[C]** speculation.
 Evidence classes: [RUNTIME] journal/log lines · [DB] `data/data.db` read-only queries ·
 [CODE] file:line · [CONFIG] `.env` / boot line. Window: `journalctl -u nofx --since 2026-08-29 00:00`
@@ -414,6 +414,87 @@ combined build runs.
 **Worktree state at closeout:** `~/nofx-planner-api` on `fix/planner-stream-total-deadline` @ `3c3f5465`
 (unlocked, kept for the owner's cutover; ignored `nofx-bin.next` inside), scratch clones in the session
 scratchpad only. `~/nofx-main.lock`: absent.
+
+## CUTOVER — DONE (owner GO "GO 37", 2026-09-01) [A]
+
+**Context correction vs the closeout addendum:** class 36 was cut over by its own dispatch at 18:01:06 CT
+(`🔐 BOOT INTEGRITY OK — rev 17efeea9fc59 · expected 17efeea9 · goldens PASS`, PID 1941026), so the
+running binary already carried class 36 and this cutover added **class 37 only** — sequencing option (b)
+in the addendum, with 36 arriving ahead of it rather than in the same boot.
+
+**Pre-flight, all quoted fresh at 21:19:43 CT (A5/A6/A7):**
+
+| Gate | Value |
+|---|---|
+| A5 1/4 DB `trader_positions status='OPEN'` | **0** |
+| A5 2/4 `GET /api/positions?…&account=Sim101` | **`[]`** |
+| A5 3/4 NT8 positions snapshot (journal 21:19:xx) | **`count=0`** Sim101 · **`count=0`** SimAccount1 |
+| A5 4/4 `GET /api/open-orders?…&symbol=MNQ` | **`[]`** |
+| A6 `GET /api/plan/today` | **`"replan_in_flight":false`** · `active_session ASIA` · `lifecycle no_trade` · `version 3` · `replans_left 4` of `replan_cap 4` |
+| A6 reads started vs completed since the last plan write | **0 vs 0** (no read in flight) |
+| A7 live arms (`armed_orders` state not terminal) | **0** (19 cancelled · 9 filled) |
+| A7 window | **21:19 CT** — outside 16:45-17:10; ASIA open, plan `no_trade` |
+
+**A6 wait honoured:** at 21:13 CT a planner read WAS in flight (attempt 3/3 from 21:05:17). Per A6/class 33
+the cutover waited; the attempt completed at 21:14:51 in **575.0 s** (rejected: `S4 breakdown_continue …`)
+and the chain closed with `🗓️ PLAN written 2026-09-01 ASIA v3 … lifecycle no_trade` at 21:14:52. That
+575.0 s attempt is one more near-miss on the old ceiling — 25 s of margin — measured on the very binary
+being replaced.
+
+**Merge + swap:**
+```
+~/nofx-planner-api: git merge origin/dev (b7715a73, docs-only) → bc9ea126, RELEASE kept at e42a0b43, pushed
+~/nofx:             git merge --ff-only fix/planner-stream-total-deadline → dev = bc9ea126, pushed
+                    RELEASE=e42a0b43  GUIDE_BUILT_REV=e42a0b43
+                    cp ~/nofx-planner-api/nofx-bin.next → ~/nofx/nofx-bin.next
+                    sha256 75746bb7c0b1c35e…  vcs.revision=e42a0b43…  vcs.modified=false  (70,905,488 bytes)
+21:19:44 CT  cp nofx-bin nofx-bin.prev.boot && mv nofx-bin nofx-bin.old.17efeea9 && mv nofx-bin.next nofx-bin && kill -9 1941026
+21:19:49 CT  systemd relaunched (Restart=on-failure) → PID 1994488
+```
+
+**Boot lines (A19 — one boot, one marker) [A]:**
+```
+21:19:49 🔐 BOOT INTEGRITY OK — rev e42a0b43b4be · built 2026-09-01T23:00:31Z · expected e42a0b43b4be · goldens PASS
+21:19:49 🧠 AI params in force: model=deepseek-v4-pro client_max_tokens=32768 planner_max_tokens=65536
+         temperature=0.50 top_p=omitted timeout=600s (HTTP ceiling; non-stream paths)
+         planner_stream_idle=30s planner_stream_total=1200s retries=2 backoff=2s · truncated-responses=0
+21:19:49 🚀 planner speed wave (2026-08-31): retry=repair stream=on stream_idle=30s stream_total=1200s
+         (class 37: planner ceiling split from the HTTP ceiling) ttfb=on
+21:19:49 🛰 planner client: provider_row=8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek stream_idle=30s
+         stream_total=1200s (AI_PLAN_TOTAL_DEADLINE_SECS) http_ceiling=600s (non-stream paths only)
+         retries=2 backoff=2s cap=65536
+21:19:49 🗓 preflight: … (class 36, unchanged — 36 survives the swap)
+```
+Post-boot health: `✅ Trader auto-started successfully`, NinjaTrader close-sync + position-reconcile up,
+executor `ai_call … ok=true` at 21:19:53, `positions snapshot count=0` at 21:20:01, **zero** error-level
+lines since boot.
+
+**Proof status (A20).** The boot is proven; the *behavioural* proof is not. It is the next max-reasoning
+planner read that runs past 600 s and completes (impossible on the old binary), or an `ai_call …
+class=total_deadline` line at 1200 s. Neither has occurred yet — ASIA sits on a `no_trade` plan, so the
+next read is a level wake or the 01:30 CT LONDON scheduled read. **Owed evidence:** quote that line when
+it lands. Until then class 37 is SHIPPED-UNPROVEN (R6: EVENT-WAIT).
+
+**Rollback (still valid, exact):**
+```
+cd ~/nofx && mv nofx-bin nofx-bin.bad.e42a0b43 && cp nofx-bin.prev.boot nofx-bin \
+  && printf '17efeea9fc5909473a40e60418428b521a2f1574' > deploy/RELEASE \
+  && kill -9 $(systemctl show -p MainPID --value nofx) && git checkout -- deploy/RELEASE web/src/guide/types.ts
+# value-only soft rollback (keeps the new class= telemetry):
+echo 'AI_PLAN_TOTAL_DEADLINE_SECS=600' >> ~/nofx/.env && kill -9 $(systemctl show -p MainPID --value nofx)
+```
+`nofx-bin.prev.boot` = the 17efeea9 binary (class 36), also kept as `nofx-bin.old.17efeea9`.
+
+**What the owner will still see wrong (A15), post-cutover:**
+- A slow max read may now run up to 20 min per attempt (60 min for a 3-attempt read) before the plan
+  lands. That is the deliberate trade: fewer fail-closed sessions, later plans on the slow tail.
+- Deadline/transport failures are still fed to attempt 2 as a "validator reason" and stored in
+  `planner_rejected_prompts` — unchanged by this wave (prompt paths were out of scope). Owner ruling open.
+- The guide drift banner should now be CLEAR (`GUIDE_BUILT_REV` = running rev = `e42a0b43`); the FE is
+  served by the vite dev server from `~/nofx/web/src`, which the merge updated, so no `dist` rebuild was
+  needed.
+- `~/nofx` holds 30+ historical `nofx-bin.old.*`/`.prev.*` binaries (~2 GB); unrelated to this wave, worth
+  a prune.
 
 ## Appendix A — every planner attempt in the window (144 rows)
 
