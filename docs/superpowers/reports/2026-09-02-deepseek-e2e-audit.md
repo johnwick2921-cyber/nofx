@@ -60,7 +60,7 @@ Census of every planner attempt that did not yield a usable plan, 2026-08-26 →
 
 Every one of the 51 "remaining" was inspected individually and is **also** a model-output reject — there is no unclassified residue.
 
-**And the outcome that matters:** 14 `🚨 PLANNER FAIL-CLOSED` events in the window. Grouping their quoted reasons — **14 caused by model output, 0 caused by transport, a 503, or a deadline** [RUNTIME]. Verbatim, every fail-close in the window:
+**And the outcome that matters:** **17** `🚨 PLANNER FAIL-CLOSED` events in the window (17 distinct timestamps: 08-26 ×1, 08-27 ×3, 08-31 ×6, 09-01 ×6, 09-02 ×1). Grouping their quoted reasons — **17 caused by model output, 0 caused by transport, a 503, or a deadline**; `grep -icE "503|overload|transport|deadline|EOF|reset|timeout"` over all 17 → **0** [RUNTIME]. The 13 most recent, verbatim:
 
 | when (CT) | session | fail-close reason (verbatim, truncated) |
 |---|---|---|
@@ -78,7 +78,7 @@ Every one of the 51 "remaining" was inspected individually and is **also** a mod
 | 09-01 21:53:46 | ASIA | `arm on S1 leg 2 must chain (wait_confirm true) on its confirm rule` |
 | 09-02 01:37:44 | LONDON | `S2 breakdown_continue: a close came back across 29021.25 — the breakdown is void` |
 
-(13 rows carry a distinct timestamp; the 14th match is the duplicate reason line emitted with the NO-TRADE write.)
+(The four earliest — 08-26 ×1, 08-27 ×3 — are omitted from the table for length; all four are likewise model-output rejects. An independent census by a second agent over the same window arrived at the same 17 and the same zero.)
 
 **Session cost.** 2026-09-01 ASIA fail-closed **four times** (17:23, 18:00, 21:14, 21:53) before an owner reset at 23:12:44 rescued it; 2026-09-02 LONDON fail-closed at 01:37:44 and needed an owner reset at 07:15:26 [DB `plans`]. Both rescues were manual.
 
