@@ -295,3 +295,17 @@ func StampAligned(bars []Kline, tf string) (bool, int64) {
 	}
 	return true, 0
 }
+
+// StampConvention names the calendar a PROVIDER-NATIVE series for tf is
+// stamped on. Persisted rows carry it so a research reader can never mistake
+// an NT8 weekly bar for one of our Monday weeks (owner ruling 2026-09-02:
+// persist native 1w labelled, for research only — no consumer reads it).
+//
+//	epoch_floor — bucket start is floor-aligned to the epoch (our convention)
+//	fri_thu     — NT8 weekly: Friday 00:00 → Thursday 23:59
+func StampConvention(tf string) string {
+	if strings.EqualFold(strings.TrimSpace(tf), "1w") {
+		return "fri_thu"
+	}
+	return "epoch_floor"
+}

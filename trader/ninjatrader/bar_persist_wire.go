@@ -1,6 +1,7 @@
 package ninjatrader
 
 import (
+	"nofx/market"
 	"sync"
 	"time"
 
@@ -41,6 +42,7 @@ func WireBarPersistence(st *store.Store) {
 				rows = append(rows, store.BarHistoryDB{
 					Symbol: symbol, TF: tf, OpenTimeMs: b.T,
 					O: b.O, H: b.H, L: b.L, C: b.C, V: b.V,
+					Convention: market.StampConvention(tf),
 				})
 			}
 			if err := bh.InsertBars(rows); err != nil {
@@ -86,7 +88,7 @@ func backfillBars(bh *store.BarHistoryStore, server *ntwire.TCPServer) int {
 		rows := make([]store.BarHistoryDB, 0, len(closed))
 		for _, b := range closed {
 			rows = append(rows, store.BarHistoryDB{Symbol: pair[0], TF: pair[1], OpenTimeMs: b.T,
-				O: b.O, H: b.H, L: b.L, C: b.C, V: b.V})
+				O: b.O, H: b.H, L: b.L, C: b.C, V: b.V, Convention: market.StampConvention(pair[1])})
 		}
 		if len(rows) > 0 {
 			if err := bh.InsertBars(rows); err != nil {
@@ -113,21 +115,23 @@ func pruneLoop(bh *store.BarHistoryStore) {
 			logger.Warnf("bars: integrity check failed: %v", err)
 			return
 		}
-		if dups > 0 || len(tfs) != 1 || (len(tfs) == 1 && tfs[0] != "1m") {
-			logger.Warnf("🚨 bars integrity DRIFT: dups=%d tfs=%v total=%d (expected dups=0, tfs=[1m]) — replay/calibration readers must not trust stored aggregates", dups, tfs, total)
+		if dups > 0 {
+			logger.Warnf("🚨 bars integrity DRIFT: dups=%d tfs=%v total=%d (expected dups=0) — replay/calibration readers must not trust stored aggregates", dups, tfs, total)
 			return
 		}
-		logger.Infof("✅ bars integrity OK: dups=0 tfs=1m total=%d", total)
+		logger.Infof("✅ bars integrity OK: dups=0 tfs=%v total=%d", tfs, total)
 	}
 	pruneOnce := func() {
-		cutoff := store.RetentionCutoffMs(time.Now())
-		if cutoff <= 0 {
+		// BAR-SOURCE WAVE 2026-09-02 — retention is PER TF. The old single
+		// cutoff was TF-blind and would have deleted the 383 weekly bars back
+		// to 2019 on the first nightly prune after they were persisted.
+		byTF, err := bh.PruneByTF(time.Now())
+		if err != nil {
+			logger.Warnf("bars: prune failed: %v", err)
 			return
 		}
-		if n, err := bh.PruneOlderThan(cutoff); err != nil {
-			logger.Warnf("bars: prune failed: %v", err)
-		} else if n > 0 {
-			logger.Infof("🧹 bars: pruned %d rows older than %s", n, time.UnixMilli(cutoff).UTC().Format("2006-01-02"))
+		for tf, n := range byTF {
+			logger.Infof("🧹 bars: pruned %d %s rows older than %dd (per-TF retention)", n, tf, store.RetentionDaysFor(tf))
 		}
 	}
 	pruneOnce()

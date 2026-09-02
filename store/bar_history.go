@@ -32,6 +32,10 @@ type BarHistoryDB struct {
 	L          float64 `gorm:"column:l"`
 	C          float64 `gorm:"column:c"`
 	V          float64 `gorm:"column:v"`
+	// Convention (BAR-SOURCE WAVE 2026-09-02) names the calendar this row's
+	// bucket start is stamped on: "epoch_floor" (ours) or "fri_thu" (NT8's
+	// native weekly). Empty on rows written before the column existed.
+	Convention string `gorm:"column:convention"`
 }
 
 // TableName is the bars table (spec name).
@@ -39,6 +43,65 @@ func (BarHistoryDB) TableName() string { return "bars" }
 
 // BarRetentionDays resolves the bars retention window (env BAR_RETENTION_DAYS,
 // default 90). A value ≤ 0 means "keep forever".
+// tfRetentionDays (BAR-SOURCE WAVE 2026-09-02) — retention is PER TF. The old
+// single cutoff was TF-blind: pruning at 90 days would delete the 383 weekly
+// bars back to 2019 the moment they were persisted, which is the whole reason
+// to persist them. A coarse bar is tiny and irreplaceable; a 1m bar is bulky
+// and re-fetchable. 0 = keep forever.
+//
+// Storage at steady state (measured base: 23,470 rows = 1.34 MB ≈ 60 B/row;
+// 2 symbols): 1m 90d ≈ 261k rows ≈ 16 MB · 5m 180d ≈ 104k ≈ 6 MB · 15m 365d
+// ≈ 70k ≈ 4 MB · 1h and coarser kept forever ≈ 90k ≈ 5 MB → ≈ 31 MB total
+// against a 634 MB database.
+var tfRetentionDays = map[string]int{
+	"3m": 180, "5m": 180,
+	"15m": 365, "30m": 365,
+	"1h": 0, "2h": 0, "4h": 0, "6h": 0, "8h": 0, "12h": 0,
+	"1d": 0, "3d": 0, "1w": 0,
+}
+
+// RetentionDaysFor resolves one TF's retention. 1m follows BAR_RETENTION_DAYS
+// (env, default 90) so the existing knob keeps its meaning; every other TF
+// reads the table above. 0 = keep forever.
+func RetentionDaysFor(tf string) int {
+	tf = strings.ToLower(strings.TrimSpace(tf))
+	if tf == "1m" {
+		return BarRetentionDays()
+	}
+	if d, ok := tfRetentionDays[tf]; ok {
+		return d
+	}
+	return BarRetentionDays()
+}
+
+// PruneByTF applies the per-TF retention and returns rows deleted per TF.
+// A TF with retention 0 is never pruned.
+func (s *BarHistoryStore) PruneByTF(now time.Time) (map[string]int64, error) {
+	if s == nil || s.db == nil {
+		return nil, fmt.Errorf("store required")
+	}
+	var tfs []string
+	if err := s.db.Raw("SELECT DISTINCT tf FROM bars").Scan(&tfs).Error; err != nil {
+		return nil, err
+	}
+	out := map[string]int64{}
+	for _, tf := range tfs {
+		days := RetentionDaysFor(tf)
+		if days <= 0 {
+			continue // keep forever
+		}
+		cutoff := now.AddDate(0, 0, -days).UnixMilli()
+		res := s.db.Exec("DELETE FROM bars WHERE tf = ? AND open_time_ms < ?", tf, cutoff)
+		if res.Error != nil {
+			return out, res.Error
+		}
+		if res.RowsAffected > 0 {
+			out[tf] = res.RowsAffected
+		}
+	}
+	return out, nil
+}
+
 func BarRetentionDays() int {
 	if v := os.Getenv("BAR_RETENTION_DAYS"); v != "" {
 		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil {
@@ -99,6 +162,16 @@ func (s *BarHistoryStore) Migrate() error {
 			}
 		}
 		// (3) the REAL unique constraint (idempotent; replaces the old plain index).
+		// convention column (idempotent ADD; pre-existing rows keep "").
+		var hasConv int64
+		if err := s.db.Raw("SELECT COUNT(*) FROM pragma_table_info('bars') WHERE name='convention'").Scan(&hasConv).Error; err != nil {
+			return err
+		}
+		if hasConv == 0 {
+			if err := s.db.Exec("ALTER TABLE bars ADD COLUMN convention TEXT NOT NULL DEFAULT ''").Error; err != nil {
+				return err
+			}
+		}
 		if err := s.db.Exec("DROP INDEX IF EXISTS idx_bars_sym_tf_time").Error; err != nil {
 			return err
 		}
@@ -129,18 +202,20 @@ func (s *BarHistoryStore) InsertBars(rows []BarHistoryDB) error {
 		placeholders := make([]string, 0, len(chunk))
 		args := make([]interface{}, 0, len(chunk)*8)
 		for _, r := range chunk {
-			if r.TF != "1m" {
-				continue // derive-on-read: only 1m is stored
+			if r.TF == "" {
+				continue // BAR-SOURCE WAVE 2026-09-02: every TF the cache holds
+				// is now persisted (owner ruling) — the old `TF != "1m"` gate
+				// threw away 383 weekly / 1500 daily bars on every restart.
 			}
-			placeholders = append(placeholders, "(?,?,?,?,?,?,?,?)")
-			args = append(args, r.Symbol, r.TF, r.OpenTimeMs, r.O, r.H, r.L, r.C, r.V)
+			placeholders = append(placeholders, "(?,?,?,?,?,?,?,?,?)")
+			args = append(args, r.Symbol, r.TF, r.OpenTimeMs, r.O, r.H, r.L, r.C, r.V, r.Convention)
 		}
 		if len(placeholders) == 0 {
 			continue
 		}
-		q := "INSERT INTO bars(symbol, tf, open_time_ms, o, h, l, c, v) VALUES " +
+		q := "INSERT INTO bars(symbol, tf, open_time_ms, o, h, l, c, v, convention) VALUES " +
 			strings.Join(placeholders, ",") +
-			" ON CONFLICT(symbol, tf, open_time_ms) DO UPDATE SET o=excluded.o, h=excluded.h, l=excluded.l, c=excluded.c, v=excluded.v"
+			" ON CONFLICT(symbol, tf, open_time_ms) DO UPDATE SET o=excluded.o, h=excluded.h, l=excluded.l, c=excluded.c, v=excluded.v, convention=excluded.convention"
 		if err := s.db.Exec(q, args...).Error; err != nil {
 			return err
 		}
@@ -161,7 +236,8 @@ func (s *BarHistoryStore) ClearSince(symbol, tf string, sinceMs int64) (int64, e
 }
 
 // BarsIntegrity returns the nightly integrity triple: duplicate natural-key
-// groups (must be 0), the distinct tfs present (must be {"1m"}), and total rows.
+// groups (must be 0), the distinct tfs present, and total rows. The tf set is
+// REPORTED, not asserted, since 2026-09-02: every cached TF is persisted.
 func (s *BarHistoryStore) BarsIntegrity() (dups int64, tfs []string, total int64, err error) {
 	if s == nil || s.db == nil {
 		return 0, nil, 0, fmt.Errorf("store required")
