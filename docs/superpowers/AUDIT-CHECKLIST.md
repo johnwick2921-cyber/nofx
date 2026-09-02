@@ -688,6 +688,36 @@ in CLAUDE.md).
     only. **Law:** one resolver, one stamp convention, and a provider's
     calendar is a measurement — not an assumption you inherit from a
     timeframe's name.
+47. **A scheduled mechanism paced by its own throttle, not by events.** Root
+    cause: the level-event wake had exactly one limiter — `wake_min_interval_min`
+    (30 min) — and no notion of whether a wake could still produce a TRADEABLE
+    plan. Measured 2026-09-02: 60 wake re-plans in 7 days against 33 arm rows, 23
+    ever placed and 9 ever working/filled; today's wakes fired at 08:42:30 ·
+    09:12:30 · 09:42:30 · 10:14:30 · 10:44:30 · 11:15 · 11:45 · 12:16:30 ·
+    12:48:29 · 13:18:29 · 13:48:29 · 14:20:29 — a clean ~30-minute drumbeat,
+    which is the signature of a condition that is CONTINUOUSLY true being paced
+    by the throttle rather than by events. NY bought 12 plan versions that way,
+    including a max-reasoning read at 14:20:29 that sat 10 minutes from the
+    last-entry cutoff and 25 from the flat: a plan that could never be entered.
+    Two adjacent defects fell out of the same audit: (a) the planner in-flight
+    claim is keyed per (trader, trade_date, session), so a LONDON read and an NY
+    read hold different claims and stream concurrently — 08:01:06 today opened a
+    second max-reasoning stream while 07:51:06 was still running; and (b) a
+    NEVER-PLACED arm row survives its own plan version indefinitely — NY row 32
+    (v5, S3, no signal id, 10:30:30) stayed non-terminal until the 14:45 EOD
+    flat, ~4h15m across v5→v12, holding the class-33 cutover gate's leg 4 shut
+    the whole time. **Probe:** for any periodic mechanism, plot its firing times.
+    Even spacing at exactly the throttle interval means the throttle is the
+    scheduler and the trigger is noise; then ask what the work it produces is
+    still USED for. **Fix:** cutoff and cooldown land WARN-first — they log
+    `would_skip` with a recorded per-session counter and the wake still runs, so
+    the suppression ruling is made on a week of counts rather than impressions;
+    a wake (never a scheduled read) defers while any planner stream is open; a
+    never-placed arm from a superseded version goes terminal `superseded`, with
+    placed rows untouched. **Law:** a mechanism whose only limiter is its own
+    throttle is not scheduled, it is idling at rate — and before suppressing it,
+    measure what suppression would have cost.
+
 48. **The decision path bypassed the arm-seam gates.** Root cause: the five
     entry protections lived ONLY at the arm seam (`armed_executor.go`): the
     R:R floor (`armMinRR`), the 0C shadow map (`conditionShadowedFor`),

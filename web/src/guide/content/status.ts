@@ -15,6 +15,7 @@ export const status: GuideSection = {
         '🔐 BOOT INTEGRITY OK — rev <sha> [+dirty] · built <ts>',
         '🧾 P&L surfaces: <N> aggregators strict-corrected, 0 raw (corrected-column guard) — every P&L figure the model and the dashboard read is pnl_corrected; unresolved rows are counted and excluded, never coerced',
         '🛑 exits: stop=max(anchor+clr, 1.5×ATR5m) · anchor_max=3.0×ATR5m · BE=off · trail=off · size=1 · re-arm-after-sweep=on (0B) — the whole exit posture in one line',
+        '⏱ wakes: cutoff=25m cooldown=30m cross-session=on stale-arm-expiry=on (class 47) — the two cutoffs are WARN-only observations; cross-session defers WAKES (never scheduled reads) while a planner stream is open; stale-arm expiry retires never-placed arms from superseded plan versions',
         '    · expected <sha> · goldens PASS      ← code matches deploy record',
         '📜 planner playbook: playbook=v2 bias_tree=on …',
         '🛡 plan facts guards: 0-side + empty map fail-closed …',

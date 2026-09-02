@@ -362,6 +362,22 @@ const risk: KnobSpec[] = [
     perSession: 'No.',
   },
   {
+    label: 'Wake cadence (class 47)',
+    where: 'env WAKE_CUTOFF_MIN · WAKE_COOLDOWN_MIN (no Studio row yet)',
+    what: 'Two OBSERVATIONS on level-event wakes, both WARN-first — nothing is suppressed. CUTOFF: a wake starting within WAKE_CUTOFF_MIN of the session flat logs "would_skip: <n> min to flat" and still runs (25m = the 15m last-entry cutoff plus the ~9.3m p90 planner call, so a read starting inside it lands after the gate has closed). COOLDOWN: a wake within WAKE_COOLDOWN_MIN of the last wake-AUTHORED plan version logs "would_skip: cooldown <m> min" and still runs — measured from the last version a wake actually WROTE, which is what makes it different from wake_min_interval_min (that paces attempts). Both counts are recorded per trader/session-day/session.',
+    trader:
+      'Why: 60 wake re-plans in 7 days produced 33 arm rows, 23 ever placed, 9 ever working. On 09-02 the wakes fired every ~30 minutes from 08:42 to 14:20 — the drumbeat of the throttle, not of events — and NY bought 12 plan versions. The 14:20 wake sat 10 minutes from the last-entry cutoff. Nothing is switched off yet: the counters exist so the suppression decision is made on a week of real numbers.',
+    consumer:
+      'trader/class47_wake_cadence.go (resolvers + lines) · trader/auto_trader_wake_levels.go (the wake path) · store/class47_counters.go (recorded counters)',
+    range: 'WAKE_CUTOFF_MIN 0 (off) – 60 · WAKE_COOLDOWN_MIN 0 (off) – 120',
+    systemDefault: '25m cutoff · 30m cooldown — both WARN-only',
+    recommended:
+      '⭐ leave as-is until a week of would_skip counts exists; then rule on suppression.',
+    whenToTouch:
+      'Only to widen the observation window, not to suppress — suppression is an owner ruling, not a knob flip.',
+    perSession: 'No.',
+  },
+  {
     label: 'Stop floor + structure anchor (0B)',
     where: 'env MIN_SL_ATR_MULT · ARM_STOP_ANCHOR_MAX_ATR (no Studio row yet)',
     what: 'Every armed stop is composed, not just accepted: stop = BEYOND the nearest seated level on the risk side + 2 ticks clearance, then floored at MIN_SL_ATR_MULT×ATR5m — WHICHEVER IS WIDER WINS — and never tighter than what the planner authored. When no seated level sits within ARM_STOP_ANCHOR_MAX_ATR×ATR5m on the risk side it is a DEAD ZONE: the arm logs stop_unanchored and the ATR floor governs. A level is never invented.',
