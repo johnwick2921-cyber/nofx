@@ -11,7 +11,7 @@ All times CT (R8). Live rev at dispatch: `e42a0b43` (class 37, booted 21:19:49 C
 | Code | **merged to dev @ `c0580011`** (fast-forward from `2d29e852`, pushed); marker `3af6af95` |
 | Build | clean clone `--no-local` at `c0580011`, `vcs.modified=false`, built 2026-09-02T02:47:37Z, sha256 `38a1620ba7210df5…`, 70,920,312 bytes — **STAGED as `~/nofx/nofx-bin.next`** |
 | Cutover | **DONE 22:22:58 CT on the owner's GO** — boot `🔐 BOOT INTEGRITY OK — rev c0580011b4ce · expected c0580011b4ce · goldens PASS` 22:23:03, PID 2030083 (see §11) |
-| Proof (A20) | **NOT YET OCCURRED.** The proving event is the first live read AUTHORED against the new prompt; ASIA sits on v4 `no_trade`, so the next trigger is a level wake or the 01:30 CT LONDON read. See §11. |
+| Proof (A20) | **LANDED 23:12:44 CT** — the first read authored against the new prompt (owner reset 23:06:33) completed in 371.2 s on **attempt 1 of 3**, zero validator rejects, zero new `planner_rejected_prompts` rows (max id still 86), `🗓️ PLAN written 2026-09-01 ASIA v5 … lifecycle active` — after four fail-closed ASIA plans today. See §12. |
 | Lock (A2) | `~/nofx-main.lock` acquired 21:27 CT (no prior holder), released at closeout |
 | Stop-lines | held: no validator logic, no enum, no retry-semantic, no normalization (F7 is class 39) |
 
@@ -411,3 +411,33 @@ already exists. Nothing was written to `data/data.db`.
 
 No guide surface exists for this store (grep over `web/src/guide/content/*.ts` is empty),
 so no guide change is owed; it is an internal retention bound, not a knob.
+
+---
+
+## 12. PROOF — the first read on the new prompt landed on attempt 1 (A20) [A]
+
+Running rev `c0580011` (class 38), PID 2030083. The owner reset the ASIA chain at 23:06:33 CT
+(`🗓️ OWNER RESET 2026-09-01 ASIA — chain abandoned at v4; budget re-armed (4 re-plans)`), which
+fired a full-author read against the class-38 prompt:
+
+```
+23:06:33  🧠 planner model: empty binding → using primary, pinned "deepseek-v4-pro"
+23:06:33  📝 prompt render (T2): 0ms ~6568 tokens
+23:12:44  🧠 planner call (reasoning=max wire=enabled/max cap=65536 stream idle=30s total=1200s) completed in 371.2s
+23:12:44  🗓️ PLAN written 2026-09-01 ASIA v5 (model deepseek-v4-pro, lifecycle active, prompt 78ec3821da13 …)
+```
+
+- **Attempts: 1 of 3.** No `🧩 planner attempt 2/3` line, no `📐 planner attempt … rejected` line
+  between the model line and the write.
+- **Rejected-prompt store:** `SELECT COUNT(*), MAX(id) FROM planner_rejected_prompts` → `20 | 86`
+  — unchanged from before the read; nothing was rejected.
+- **Plan row:** `plans` version 5, `trigger_reason=owner_reset`, `lifecycle=active`, 23:12:44 CT.
+  Two scenarios: S1 `sweep_reclaim` (confirm touch, confirm2 1x5m_close, no arm), S2
+  `breakout_retest` (touch, no arm — a shadowed condition, authored and E8-scored, never placed
+  per 0C). No `legs` anywhere, no leg-contract or confirm-token shape at all.
+- **Context:** the four prior ASIA plans today (v1 17:23, v2 18:00, v3 21:14, v4 21:53) were all
+  `planner_fail_closed`, the last one burning 1,044 s across three arm-split rejects. The first
+  read after the prompt learned to state its contract landed clean, first try, in 6 minutes.
+
+One read is one read (n = 1); it does not prove the reject rate is zero. It is the proving
+condition the dispatch named, and it occurred.

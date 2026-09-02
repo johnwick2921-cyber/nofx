@@ -11,7 +11,7 @@ All times CT (R8). Live rev at dispatch: `c0580011` (class 38), PID 2030083.
 | Code | merged to dev — sha in the closeout |
 | Build | clean clone `--no-local`, `vcs.modified=false` — stamps in §8 |
 | Cutover | **NOT DONE — PARKED pending the owner's explicit GO (A3)**; marker written only AFTER the boot checklist passes (A19) |
-| Proof (A20) | **NOT YET OCCURRED** — first live arm on a non-sweep condition carrying legs; and class 38's first read on the new prompt has also not run yet (no read since the 22:23 boot as of 23:09 CT) |
+| Proof (A20) | **NOT YET OCCURRED** for 39 — the first live arm on a non-sweep condition carrying legs. (Class 38's proof DID land during this wave: 23:12:44 CT, attempt 1 of 3, ASIA v5 active, zero rejects — see the class-38 report §12.) |
 | Lock (A2) | `~/nofx-main.lock` acquired 22:58 CT (no prior holder), released at closeout |
 | Stop-lines | held: no leg synthesized · sweep_reclaim untouched · no second pass · validator logic unchanged beyond the C1 insertion · no prompt text · no retry semantics · no knob beyond the cap · 35/36/37/38 paths untouched |
 
