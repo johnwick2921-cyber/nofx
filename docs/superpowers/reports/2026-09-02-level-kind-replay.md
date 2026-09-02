@@ -125,3 +125,127 @@ stale row count; the SPLIT RULE was not changed, its inputs were.
 Replay Δ = **5.3707 pt** (vs calibration 5.3771, −0.1% ⇒ band ±16.11 pt at k=3,
 no re-band needed). lag1 ρ = −0.0403. Nothing below this line was known when the
 criteria above were written.
+
+---
+
+# RESULTS (computed after the pre-registration above)
+
+## 1. Replay scope
+
+Tape: 1m MNQ from the bar-source-persisted store, read-only query
+`SELECT open_time_ms,o,h,l,c,v FROM bars WHERE symbol='MNQ' AND tf='1m'` — n=14258 bars, 2026-08-19 10:00 → 2026-09-02 18:34 CT.
+Completed session days: 2026-08-20 … 2026-09-02 (n=10).
+Δ=5.3707 pt · k=3 · band ±16.11 pt · H=12 · exit_on=close.
+Exploration: 2026-08-20 … 2026-08-27 (6d) · Holdout: 2026-08-28 … 2026-09-02 (4d).
+Episodes: exploration n=684 · holdout n=484 · total 1168 (ambiguous recorded + excluded).
+Mechanical level map: 16 kinds (see header). Scan-start convention (implementation note): each level is
+scanned only on bars at/after its formation time (PDH/PDL/PDC/ONH/ONL/rounds from 17:00; VWAP trio from 08:30;
+OR5/15/30 from formation+5m; RTH-H/L + settlement from 15:00) — lookahead-free.
+
+## 2. Pooled
+
+| period | p(hold) | Wilson 95% | n (hold/break) |
+|---|---|---|---|
+| holdout | 0.5413 | [0.4968,0.5852] | 484 (262/222) |
+
+**H1:** holdout pooled 0.5413 [0.4968,0.5852] vs stationary-bootstrap baselines ≈0.51–0.55 →
+**DOES NOT CLEAR** (interval overlaps). Consistent with the detector redesign verdict.
+
+## 3. Per kind — exploration and holdout (verdicts from holdout only)
+
+| kind | exp n | exp p(hold) | exp Wilson | hold n | hold p(hold) | hold Wilson | amb% hold | boot p | Osler null | verdict |
+|---|---|---|---|---|---|---|---|---|---|---|
+| VWAP-1s | 92 | 0.5217 | 0.5217 [0.4209,0.6209] | 63 | 0.5714 | 0.5714 [0.4486,0.6860] | 22% | 0.5165 | 0.5206 | TOO FEW |
+| OR30-L | 73 | 0.5616 | 0.5616 [0.4476,0.6695] | 58 | 0.5862 | 0.5862 [0.4580,0.7037] | 16% | 0.5129 | 0.5230 | TOO FEW |
+| OR30-H | 89 | 0.5506 | 0.5506 [0.4473,0.6497] | 51 | 0.5294 | 0.5294 [0.3952,0.6595] | 20% | 0.5172 | 0.5182 | TOO FEW |
+| VWAP | 91 | 0.5275 | 0.5275 [0.4259,0.6268] | 48 | 0.5208 | 0.5208 [0.3833,0.6553] | 32% | 0.5232 | 0.5192 | TOO FEW |
+| VWAP+1s | 66 | 0.3939 | 0.3939 [0.2850,0.5145] | 44 | 0.5455 | 0.5455 [0.4007,0.6829] | 15% | 0.5250 | 0.5175 | TOO FEW |
+| PDC | 43 | 0.5116 | 0.5116 [0.3675,0.6538] | 39 | 0.5385 | 0.5385 [0.3857,0.6843] | 34% | 0.5097 | 0.5185 | TOO FEW |
+| PDL | 12 | 0.6667 | 0.6667 [0.3906,0.8619] | 32 | 0.5312 | 0.5312 [0.3645,0.6913] | 18% | 0.5166 | 0.5169 | TOO FEW |
+| SETTLE | 45 | 0.5333 | 0.5333 [0.3908,0.6707] | 30 | 0.5667 | 0.5667 [0.3920,0.7262] | 40% | 0.5392 | 0.5197 | TOO FEW |
+| ONH | 20 | 0.7000 | 0.7000 [0.4810,0.8545] | 26 | 0.5000 | 0.5000 [0.3206,0.6794] | 24% | 0.5412 | 0.5224 | TOO FEW |
+| RND-500 | 23 | 0.2609 | 0.2609 [0.1255,0.4647] | 24 | 0.4583 | 0.4583 [0.2789,0.6493] | 45% | 0.5397 | 0.5179 | TOO FEW |
+| ONL | 30 | 0.5667 | 0.5667 [0.3920,0.7262] | 23 | 0.4783 | 0.4783 [0.2924,0.6704] | 4% | 0.5532 | 0.5172 | TOO FEW |
+| RTH-L | 22 | 0.7273 | 0.7273 [0.5185,0.8685] | 16 | 0.6250 | 0.6250 [0.3864,0.8152] | 20% | 0.5460 | 0.5247 | TOO FEW |
+| RND-250 | 45 | 0.3778 | 0.3778 [0.2511,0.5237] | 10 | 0.5000 | 0.5000 [0.2366,0.7634] | 0% | 0.5102 | 0.5174 | TOO FEW |
+| PDH | 3 | 0.6667 | 0.6667 [0.2077,0.9385] | 8 | 0.5000 | 0.5000 [0.2152,0.7848] | 20% | 0.5147 | 0.5203 | TOO FEW |
+| RTH-H | 22 | 0.5909 | 0.5909 [0.3873,0.7674] | 7 | 0.8571 | 0.8571 [0.4869,0.9743] | 0% | 0.5173 | 0.5142 | TOO FEW |
+| RND-1000 | 8 | 0.3750 | 0.3750 [0.1368,0.6943] | 5 | 0.2000 | 0.2000 [0.0362,0.6245] | 0% | 0.4642 | 0.5145 | TOO FEW |
+
+**Every holdout cell is below the pre-registered n=200 floor** (largest: VWAP−1σ n=63).
+No kind is rankable; the table is descriptive ONLY. BH never runs (no n≥200 kinds).
+Cohen's h(0.60 vs 0.50)=0.2014 → n≈193/group for 80% power: the holdout has ~4 days of levels;
+the replay period would need ~30+ holdout days per single-line kind to reach the floor.
+
+## 4. Strata (R5 ordinal, R6 session)
+
+### Ordinal (1st / 2nd / 3rd+ touch per level per day)
+
+| stratum | pooled p(hold) | pooled n | holdout p(hold) | holdout n |
+|---|---|---|---|---|
+| 1st | 0.5657 | 99 | 0.6250 | 40 |
+| 2nd | 0.4568 | 81 | 0.6000 | 30 |
+| 3rd+ | 0.5294 | 988 | 0.5290 | 414 |
+
+**H3 (consumed touch): NOT SUPPORTED — no monotone decline.** Pooled: 1st 0.5657 > 3rd+ 0.5294; holdout: 1st 0.6250 (n=40) vs 3rd+ 0.5290 (n=414) — the FIRST touch holds MORE, the opposite of the
+belief; all intervals cover 0.50/overlap. The consumed-touch belief lives on no evidence from this instrument.
+
+### Session (engine windows ASIA 17:00–02:00 / LONDON 02:00–08:30 / NY 08:30–14:45 CT)
+
+| session | holdout p(hold) | holdout n |
+|---|---|---|
+| NY | 0.5253 [0.4643,0.5855] | 257 |
+| LONDON | 0.5522 [0.4678,0.6338] | 134 |
+| ASIA | 0.5699 [0.4685,0.6658] | 93 |
+
+ASIA highest (0.5699, n=93) — intervals overlap; descriptive only.
+
+## 5. Bias side table (R7, same tape; n is tiny everywhere)
+
+| signal | period | n | agreement | Wilson |
+|---|---|---|---|---|
+| tsmom_21d | all | 9 | 3/9 | 0.3333 [0.1206,0.6458] |
+| tsmom_63d | all | 9 | 4/9 | 0.4444 [0.1888,0.7334] |
+| tsmom_252d | all | 9 | 5/9 | 0.5556 [0.2666,0.8112] |
+| overnight_to_rth | exploration | 6 | 3/6 | 0.5000 [0.1876,0.8124] |
+| overnight_to_rth | holdout | 4 | 1/4 | 0.2500 [0.0456,0.6994] |
+| overnight_to_rth | all | 10 | 4/10 | 0.4000 [0.1682,0.6873] |
+| first30_to_lasthour | exploration | 6 | 3/6 | 0.5000 [0.1876,0.8124] |
+| first30_to_lasthour | holdout | 4 | 1/4 | 0.2500 [0.0456,0.6994] |
+| first30_to_lasthour | all | 10 | 4/10 | 0.4000 [0.1682,0.6873] |
+
+None distinguishes 0.50 at n≤10. TSMOM states use the deep 1d table (quoted); prediction set = the 10 replay days.
+
+## 6. Verdict per kind (pre-registered rule) and what the grader (3A) should do
+
+- **VWAP-1s**: TOO FEW (holdout n=63, p=0.5714 [0.4486,0.6860] vs boot 0.5165) → grader: keep as-is (current [I] labels intact — no evidence to change).
+- **OR30-L**: TOO FEW (holdout n=58, p=0.5862 [0.4580,0.7037] vs boot 0.5129) → grader: keep as-is (current [I] labels intact — no evidence to change).
+- **OR30-H**: TOO FEW (holdout n=51, p=0.5294 [0.3952,0.6595] vs boot 0.5172) → grader: keep as-is (current [I] labels intact — no evidence to change).
+- **VWAP**: TOO FEW (holdout n=48, p=0.5208 [0.3833,0.6553] vs boot 0.5232) → grader: keep as-is (current [I] labels intact — no evidence to change).
+- **VWAP+1s**: TOO FEW (holdout n=44, p=0.5455 [0.4007,0.6829] vs boot 0.5250) → grader: keep as-is (current [I] labels intact — no evidence to change).
+- **PDC**: TOO FEW (holdout n=39, p=0.5385 [0.3857,0.6843] vs boot 0.5097) → grader: keep as-is (current [I] labels intact — no evidence to change).
+- **PDL**: TOO FEW (holdout n=32, p=0.5312 [0.3645,0.6913] vs boot 0.5166) → grader: keep as-is (current [I] labels intact — no evidence to change).
+- **SETTLE**: TOO FEW (holdout n=30, p=0.5667 [0.3920,0.7262] vs boot 0.5392) → grader: keep as-is (current [I] labels intact — no evidence to change).
+- **ONH**: TOO FEW (holdout n=26, p=0.5000 [0.3206,0.6794] vs boot 0.5412) → grader: keep as-is (current [I] labels intact — no evidence to change).
+- **RND-500**: TOO FEW (holdout n=24, p=0.4583 [0.2789,0.6493] vs boot 0.5397) → grader: keep as-is (current [I] labels intact — no evidence to change).
+- **ONL**: TOO FEW (holdout n=23, p=0.4783 [0.2924,0.6704] vs boot 0.5532) → grader: keep as-is (current [I] labels intact — no evidence to change).
+- **RTH-L**: TOO FEW (holdout n=16, p=0.6250 [0.3864,0.8152] vs boot 0.5460) → grader: keep as-is (current [I] labels intact — no evidence to change).
+- **RND-250**: TOO FEW (holdout n=10, p=0.5000 [0.2366,0.7634] vs boot 0.5102) → grader: keep as-is (current [I] labels intact — no evidence to change).
+- **PDH**: TOO FEW (holdout n=8, p=0.5000 [0.2152,0.7848] vs boot 0.5147) → grader: keep as-is (current [I] labels intact — no evidence to change).
+- **RTH-H**: TOO FEW (holdout n=7, p=0.8571 [0.4869,0.9743] vs boot 0.5173) → grader: keep as-is (current [I] labels intact — no evidence to change).
+- **RND-1000**: TOO FEW (holdout n=5, p=0.2000 [0.0362,0.6245] vs boot 0.4642) → grader: keep as-is (current [I] labels intact — no evidence to change).
+
+## 7. Surprises + CSVs
+
+- **1m history is ~14 days, not years** (deep TFs have no intrabar granularity; 5m starts 08-24). The replay is
+  therefore a 10-session-day sample — the n≥200 floor is unreachable for single-line kinds. Going forward,
+  bar-source persistence (1m retained 90d) grows this sample ~13 session days/week.
+- **H2 confirmed as predicted:** E3's PDL 0.6970 lead did NOT replicate (holdout 0.5312, n=32).
+- **H3 inverted:** first touches hold MORE, not less (see §4).
+- The tape extended DURING the run (live persistence) — pre-reg amended before the replay (dated).
+- `test_seam=ON` booted today (flagged; irrelevant to this offline lane).
+
+CSVs (this branch, `docs/superpowers/reports/exports/2026-09-02-level-replay/`):
+`episodes.csv` (every episode: level id, kind, day, ordinal, k, Δ, band, entry side, exit side, outcome,
+bars to exit, MFE/MAE, session) · `per_kind.csv` · `bias_table.csv`.
+Scripts (outside the repo, per A1): `~/nofx-analysis/level-replay/{build_inputs,replay,bias_table}.py`.
