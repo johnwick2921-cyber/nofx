@@ -120,9 +120,17 @@ func TestNoChaseKnobsAndBootLine(t *testing.T) {
 func TestNoChaseIsWiredButNeverRefuses(t *testing.T) {
 	var got NoChaseVerdict
 	var called int
+	// THE CASE THIS LEG EXISTS FOR (premise C2): a chase whose R:R at the fill
+	// is still plausible, so every existing leg allows it. Entry 29192.50 sits
+	// 142 pts above the level it cites, but with a 42.5-pt stop and a 97.5-pt
+	// target its R:R is 2.29 — above the floor — and its stop clears
+	// 1.5×ATR5m. Only the no-chase leg has anything to say about it.
+	//
+	// (589 AS ACTUALLY FILLED had R:R 1.61 and is refused by the R:R leg
+	// before this one runs — verified while writing this test.)
 	reason, refused := EntryGate(EntryIntent{
 		Path: "decision", Action: "open_long", Symbol: "MNQ",
-		Entry: 29192.50, Stop: 29115.00, Target: 29317.25,
+		Entry: 29192.50, Stop: 29150.00, Target: 29290.00,
 		ATR5m: 26.0, MinRR: 2.0, MinSLMult: 1.5,
 		CitedScenario: "S3", ScenarioDir: "long", PlanMode: "advisory",
 		CitedLevelPx: 29050.00, CitedLevelKind: "RTH-L",
@@ -139,12 +147,13 @@ func TestNoChaseIsWiredButNeverRefuses(t *testing.T) {
 		t.Fatalf("WARN-FIRST: this wave refuses NOTHING, got refusal %q", reason)
 	}
 	// And an intent with no callback wired must not panic (A10).
-	if _, r := EntryGate(EntryIntent{
+	// stop 29068.05-29020 = 48.05 > 1.5×26 = 39, R:R = (29200-29068.05)/48.05 = 2.75
+	if reason2, r := EntryGate(EntryIntent{
 		Path: "arm", Action: "open_long", Symbol: "MNQ",
-		Entry: 29068.05, Stop: 29040, Target: 29150, ATR5m: 26, MinRR: 2, MinSLMult: 1.5,
+		Entry: 29068.05, Stop: 29020, Target: 29200, ATR5m: 26, MinRR: 2, MinSLMult: 1.5,
 		PlanMode: "advisory",
 	}); r {
-		t.Fatal("a nil OnNoChase must be inert, never a refusal")
+		t.Fatalf("a nil OnNoChase must be inert, never a refusal: %s", reason2)
 	}
 }
 
