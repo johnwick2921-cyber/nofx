@@ -354,3 +354,83 @@ Full table in the source data; the material facts [RUNTIME]:
 **F5 findings:** ① **`request_id` is empty on every call in four days** — `requestIDFrom` probes `X-Request-Id`, `Request-Id`, `X-Amzn-Requestid`, `Cf-Ray` and finds none. Class 37 promised "status + provider request id ride along"; it delivers status and never an id, so **no failure in this audit can be correlated with the provider's own logs**. ② **`📊 AI call complete (stream)` is logged on FAILED calls** [CODE] `mcp/client.go:1249-1262` fires whenever `sr != nil`, *before* the error return at `:1268` — a line that says "complete" on a stream that died at 250 s with 54,986 reasoning characters discarded, carrying `prompt=0 completion=0` which are not real values. ③ **Cross-call telemetry contamination, proven** [RUNTIME]: the non-stream executor call at `09-02 07:22:05` logged `ttfb_ms=547` — a non-stream call cannot have a TTFB, and 547 is **exactly** the TTFB of the planner stream that finished at 07:21:59. The planner and executor share one `*mcp.Client` whose per-call atomics are process-global (`client.lastTTFBMs.Store(...)` at `:1249-1252` + `resolvePlannerClient` returning `at.mcpClient`). **Every field on `ai_call` is exposed to this race**, including the token counts the ROOT-FIX A/B uses as its live baseline (`RecordLiveCallMetrics`, `:1001`).
 
 ---
+
+## 10. SECTION E — RECEIVING AND PARSING (where the silent kills live)
+
+**Scope proof** [CODE]: `git diff --stat 0d093c3b..HEAD -- mcp/ trader/auto_trader_planner.go kernel/planner_speed.go security/url_validator.go` is **empty** — the audited source is byte-identical to the running binary. Runtime line numbers corroborate (`mcp/client.go:1279` logged at 07:44:03 is exactly where the stream-complete statement sits at HEAD).
+
+### E1 The SSE reader
+
+`bufio.Scanner`, **default buffer, no `Scanner.Buffer` call** [CODE] `mcp/client.go:1409`. Repo-wide `grep '.Buffer('` returns exactly one hit and it is elsewhere: `provider/databento/historical.go:66 sc.Buffer(make([]byte, 1024*1024), 8*1024*1024) // tolerate long lines`. **Somebody on this codebase already knew this failure mode and raised the limit in the Databento reader, but not in the AI reader.** So the SSE path runs at `bufio.MaxScanTokenSize` = **64 KiB per line**.
+
+Could a delta exceed it? Not in the incremental regime we observe (deltas are ~100–400 bytes; max *aggregate* `reasoning_chars` = 140,177). But **per-line length is not instrumented anywhere** — no counter, no probe [UNVERIFIED]. If the provider or an intermediary ever emits one buffered frame, today's p50 output (23,769 tokens, per the boot line) **already exceeds** the limit [B]. **Is any observed failure consistent with it? No** — `grep "token too long"` → **n=0** across all logs.
+
+**What makes it dangerous is the error handling, not the limit:** `ErrTooLong` → `stream interrupted: bufio.Scanner: token too long` → matches no classifier token → **`class=other`** → `IsProviderFailure` returns **false** → the planner does **not** resend; it quotes `bufio.Scanner: token too long` back to the model **as the reason its plan was rejected** [CODE] `trader/auto_trader_planner.go:1441-1460`. A stream truncated by our own buffer would look like a bad plan.
+
+**Keep-alive handling:** `: keep-alive`, blank and comment lines correctly fail the `data: ` prefix test and are skipped [CODE] `:1423`. **But `onLine()` fires at `:1414`, BEFORE the prefix check** — so every scanned line, including keep-alives, resets the idle watchdog. See E2.
+
+**Three defects around `[DONE]`** [CODE]: ① **`[DONE]` is never required** — a stream ending cleanly without it falls out of the loop with `scanner.Err()==nil` and returns whatever accumulated **as a success**. ② **No empty-text guard**: `:1290` guards only `sr == nil`; `sr.Text == ""` with `err == nil` returns `""` as success — while the non-stream path *does* have this guard (`API returned empty response`, `:572`). **Asymmetric.** ③ A **partial final line on a clean EOF** is handed to `json.Unmarshal`, fails, hits `:1446 continue // skip malformed chunks`, and the stream returns **success with silently-lost content** — with no malformed-chunk counter anywhere.
+
+**The usage frame arrives unrequested.** `stream_options`/`include_usage` appear nowhere in the repo, yet **107 of 107 successful streams carried usage** and **0 of 11 failed ones did** [RUNTIME] — it is the last frame, so it never survives a cut. Useful as a failure fingerprint; also means we depend on undeclared provider behavior (§Surprises).
+
+### E2 The idle watchdog — near-vacuous, and never fired
+
+It measures **time since the last SSE LINE**, not the last byte and not the last delta [CODE] `mcp/client.go:1212-1240`. It kills via **`context.CancelCauseFunc`** (`cancel(ErrStreamIdleDeadline)`, `:1231`), not `body.Close()`. The resulting error is correctly labelled `class=idle_deadline` / `timeout_source=stream_idle` — the one deadline that is labelled right.
+
+**Does it log on fire? In code yes; in production it has never fired** [RUNTIME]: `grep "watchdog FIRED"` → **0** across every log file and the journal since 08-26; `class=idle_deadline` → **0**. Since the class-41 boot it has had **16 stream requests** to fire on and fired zero times. **`watchdog_log=on` in the boot line advertises an unexercised code path as live evidence.**
+
+**A11 — the check is close to vacuous by construction.** Because `onLine()` runs *before* the `data:` filter, a keep-alive comment resets the 30 s timer exactly as a real reasoning delta does. A stream that has **stopped producing tokens but is still heartbeating** can never trip the idle deadline; it will run to the 1200 s total instead. The watchdog detects a **dead socket**, which the transport surfaces anyway — not a **stalled generation**, which is what it was built for.
+
+### E3 The total deadline — correct, distinguishable, and proven load-bearing
+
+Applied as **both** a `context.WithTimeoutCause(1200s, ErrStreamTotalDeadline)` **and** a shallow client copy with `cp.Timeout = 0` [CODE] `:1192-1206` — so the 600 s HTTP ceiling is lifted for streams while **the shared client is never mutated** and the non-stream paths keep their ceiling. Error text is fully distinguishable from a transport cut.
+
+**Proof it caused no cut since class 41** [RUNTIME]: `class=total_deadline` → **0** across all logs and the journal; a duration scan for anything near 1200 s → no hits; and **every** `ok=false` line since 06:27:45 CT is exactly **one**:
+```
+09-02 07:38:19 ai_call … duration_ms=27 … class=transport http_status=0
+  err="failed to send request: Post \"https://api.deepseek.com/chat/completions\":
+       read tcp 10.0.0.141:48638->3.173.21.63:443: read: connection reset by peer"
+```
+**27 milliseconds** — a reset on the *send*, i.e. a dead pooled TCP connection reused from the idle pool. It retried and won 30 s later.
+
+**The strongest single piece of evidence in the whole audit** [RUNTIME] `09-02 07:44:03`: `duration_ms=588121 finish_reason=stop ok=true reasoning_chars=123402` — a **588.1-second** stream that completed. Under the old 600 s ceiling it had **11.9 seconds** of headroom. Class 37's split is load-bearing, not theoretical.
+
+**A12 — two sources disagree on the historical kill count.** The code comments (`mcp/client.go:1160`, `kernel/planner_speed.go:41`) say *"11 of 80 max-reasoning planner streams at exactly 600.0s"*; a direct grep of the file logs finds **7** stream kills at 600000–600001 ms; `docs/superpowers/reports/2026-09-01-planner-api-failure.md:113` reconciles them as *"5 of the 7 stream kills"*, i.e. the 11 counts **attempts** across stream and non-stream. Both quoted; neither picked.
+
+### E4 Error classification — the label lies, and the lie has consequences
+
+**Two independent labels are computed from the same error and disagree by design.** `classifyAIError` (`:227-252`) produces `class=` with 8 cases. `logAICall` (`:409-424`) produces `timeout_source=` with **`source := "transport"` as the DEFAULT and only 4 overrides** — there is no `http_status` case, no `auth_config` case, no parse case. **Every remaining failure in the system is stamped `timeout_source=transport`.**
+
+| # | site | error text | `class=` | `timeout_source=` | truth | observed |
+|---|---|---|---|---|---|---|
+| 1 | `:1259` stream non-200 | `API error (status 503): …` | `http_status` ✓ | **`transport`** ✗ | provider 5xx | **YES ×6** (09-02 01:15) |
+| 2 | `:729` non-stream non-200 | `API returned error (status 503): …` | `http_status` ✓ | **`transport`** ✗ | provider 5xx | **YES** — 16×503, 33×402 |
+| 4 | `:572` empty `choices` on HTTP **200** | `fail to parse AI server response: API returned empty response` | **`other`** | **`transport`** ✗ | provider returned nothing | **YES** — 09-02 01:03:52, **244,270 ms burned** |
+| 6 | `:1482` `ErrTooLong` | `stream interrupted: bufio.Scanner: token too long` | **`other`** | **`transport`** ✗ | **our own 64 KiB buffer** | latent |
+| 8 | `:1167`/`:435` no key | `AI API key not set` | `auth_config` ✓ | **`transport`** ✗ | **config error** | latent |
+| 10 | genuine socket cut | `connection reset` / `unexpected EOF` | `transport` ✓ | `transport` ✓ | transport | **YES ×5** |
+
+Of the **50** `ok=false` lines on file, the `transport` stamp is **correct on 5 and wrong on 23**. Error-text histogram [RUNTIME]: `35 failed to read response · 33 API returned error (status 402) · 16 status 503 (non-stream) · 11 stream interrupted · 6 API error (status 503) (STREAM) · 2 failed to send request · 1 fail to parse`. The wording difference `API error` vs `API returned error` is the **only** way to tell a stream 503 from a non-stream 503 in the log.
+
+**The consequence that matters (F-6):** `IsProviderFailure` returns **false for `class=other`**, so the empty-200, the JSON parse failure and `ErrTooLong` all fall into the reject/repair branch and are **quoted back to the model as the reason its plan was rejected** — the identical disease the 01:15 503 fix was written for, **still open for every non-status failure**.
+
+**A11 — two retry tokens are dead code.** `"stream error"` and `"INTERNAL_ERROR"` in `retryableErrors` are HTTP/2-only, and **HTTP/2 is off** (below). Zero HTTP/2 markers in any log.
+
+### E5 / E6 Non-stream parse and truncation
+
+`finish_reason` handling: `stop` ✓ (n=6,709) · `length` ✓ **on the non-stream path only** (n=7, all at 32,768 = the executor cap, last on 08-28 02:31:47) · **`content_filter` ✗ UNHANDLED** · **`insufficient_system_resource` ✗ UNHANDLED** — `grep -rn` for both strings returns **zero hits**; both are treated as **complete successes** with whatever partial content arrived. The second is DeepSeek's documented mid-generation capacity signal, i.e. precisely the failure a provider-overload retry should catch, and it is invisible.
+
+**F-10 — the stream path performs NO truncation handling at all.** `TruncatedResponses.Add(1)` exists at exactly one site (`:593`, inside the non-stream parser). So the boot line `📐 planner cap: … truncation → 🚨 WARN, never silent` is **false as written for the planner** — the very reader it is printed beside — and `truncated-responses=N` in the AI-params line structurally under-reports. Headroom is currently large (max stream completion 41,743 of 65,536 = 64%), so this is latent.
+
+**F-7 — the HTTP-200 empty/error body is never logged** [CODE] `:571-573` returns before any body logging. The 09-02 01:03:52 failure burned **244.3 seconds** and left **no evidence of what DeepSeek actually returned** — error object, empty choices, or truncated body are indistinguishable. Unattributable by construction.
+
+**F-9 — `lastFinishReason` is never reset** (`resetCallTelemetry` `:323-333` omits it) and the stream stores it only when non-empty, so `LastFinishReason` can return a **previous call's** value — and that is the atomic the planner's truncation check reads.
+
+### E — Surprises
+
+- **S-1 — HTTP/2 is OFF, and nobody appears to have intended it.** `security.SafeHTTPClient` sets a custom `DialContext` for SSRF protection, which silently disables Go's HTTP/2 auto-upgrade (`ForceAttemptHTTP2` appears **nowhere** in the repo). All DeepSeek traffic is HTTP/1.1 [B + RUNTIME: zero HTTP/2 signatures, three HTTP/1.1 `unexpected EOF`s]. **This explains the `unexpected EOF` cluster class 41 was chasing** — that is the HTTP/1.1 chunked-truncation signature.
+- **S-3 — the deprecated nofxos.ai key is still firing: 33 × HTTP 402** in the window, the largest failure bucket after read failures. `CLAUDE.md` records that key as dead; something still calls it.
+- **S-4 — the 27 ms reset is a stale pooled connection.** The transport sets **no `IdleConnTimeout`** (zero = keep idle connections forever) and no `MaxIdleConnsPerHost` tuning [CODE] `security/url_validator.go:164-186`. The boot line's `keepalive=30s (dialer)` is the TCP keepalive on the dialer and **does not bound idle-pool residency**.
+- **S-6 — stream attempt counts are not derivable from the completion lines.** 09-02 had 16 stream requests but 9 completion lines; the gap reconciles exactly to 6 stream-503s + 1 send reset. Any rate computed off `AI call complete (stream)` has a silent denominator.
+
+---
