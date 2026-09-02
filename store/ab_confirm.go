@@ -51,6 +51,13 @@ type AbConfirmLogDB struct {
 	Ambiguous        bool    // a replay bar contained BOTH stop and target
 	IsCounterfactual bool    // shadowed condition: the trade was NEVER placed
 
+	// CLASS 39 (owner ruling 2026-09-01) — the scenario's arm was NORMALIZED at
+	// plan write (legs dropped from a non-sweep condition). DroppedLegs is the
+	// JSON of what the model authored and the machine removed, so the effect
+	// of normalizing instead of rejecting is measurable later.
+	Normalized  bool   `gorm:"column:normalized"`
+	DroppedLegs string `gorm:"column:dropped_legs"`
+
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -87,6 +94,8 @@ CREATE TABLE IF NOT EXISTS ab_confirm_log (
 	net_pnl           REAL    NOT NULL DEFAULT 0,
 	ambiguous         INTEGER NOT NULL DEFAULT 0,
 	is_counterfactual INTEGER NOT NULL DEFAULT 0,
+	normalized        INTEGER NOT NULL DEFAULT 0,
+	dropped_legs      TEXT    NOT NULL DEFAULT '',
 	created_at      DATETIME,
 	updated_at      DATETIME
 )`
@@ -111,6 +120,8 @@ var abConfirmAddedCols = []struct{ name, ddl string }{
 	{"net_pnl", "REAL NOT NULL DEFAULT 0"},
 	{"ambiguous", "INTEGER NOT NULL DEFAULT 0"},
 	{"is_counterfactual", "INTEGER NOT NULL DEFAULT 0"},
+	{"normalized", "INTEGER NOT NULL DEFAULT 0"}, // class 39
+	{"dropped_legs", "TEXT NOT NULL DEFAULT ''"}, // class 39
 }
 
 // AbConfirmStore persists the shadow A/B table (E8).
@@ -165,6 +176,7 @@ func (s *AbConfirmStore) Upsert(row *AbConfirmLogDB) error {
 			"time_to_mfe_bars": row.TimeToMFEBars, "time_to_mae_bars": row.TimeToMAEBars,
 			"time_to_resolve_bars": row.TimeToResolveBars, "net_pnl": row.NetPnL,
 			"ambiguous": row.Ambiguous, "is_counterfactual": row.IsCounterfactual,
+			"normalized": row.Normalized, "dropped_legs": row.DroppedLegs,
 			"updated_at": row.UpdatedAt,
 		}).Error
 	}

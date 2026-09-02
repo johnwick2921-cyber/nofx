@@ -40,4 +40,8 @@ func LogVolumeWaveBoot() {
 	// condition/field must be STATED in the rendered prompt. The prompt offering
 	// what the validator refuses is the whole defect class (rows 78/79/80).
 	logger.Infof("%s", PromptContractBootLine())
+	// CLASS 39 (owner ruling 2026-09-01) — normalize, don't reject: legs on a
+	// non-sweep condition collapse to the single top-level arm with a WARN;
+	// sweep_reclaim keeps its split contract untouched; never synthesize.
+	logger.Infof("⚖ arm normalizer: legs on non-sweep → single arm + WARN (class 39); sweep_reclaim contract unchanged; counter arms_normalized_class39 recorded in system_config")
 }

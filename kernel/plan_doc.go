@@ -265,6 +265,13 @@ type PlanDoc struct {
 	// remains for legacy stored plans.
 	DeathStructured *PlanCondition `json:"death,omitempty"`
 	FlipStructured  *PlanCondition `json:"flip,omitempty"`
+
+	// CLASS 39 (owner ruling 2026-09-01) — every normalize-don't-reject event
+	// applied to this doc at validation: legs dropped from a non-sweep arm.
+	// Kept IN the stored doc so the write site can WARN, the E8 row can be
+	// stamped, and forensics can compare what the model authored with what
+	// the machine kept.
+	ArmNormalizations []ArmNormalization `json:"arm_normalizations,omitempty"`
 }
 
 // PlanCondition is a checkable predicate: price closes beyond `Price` on the
@@ -454,6 +461,8 @@ func NormalizePlanDocRules(d *PlanDoc) {
 	if d.DeathStructured != nil {
 		d.DeathStructured.Rule = NormalizeConditionRule(d.DeathStructured.Rule)
 	}
+	// CLASS 39 — legs on a non-sweep condition collapse to the single arm.
+	normalizeArmLegs(d)
 }
 
 // NormalizeConfirmRule canonicalizes a confirm{} rule spelling.
@@ -1112,4 +1121,116 @@ func confirmRuleMentions15m(rule string) bool {
 		return true
 	}
 	return false
+}
+
+// ArmNormalization (CLASS 39, owner ruling 2026-09-01) records ONE
+// normalize-don't-reject event: on a non-sweep_reclaim condition the authored
+// arm carried a legs array, the array was dropped, and the remaining single
+// (top-level) arm validated. DroppedLegs is exactly what the model authored;
+// Kept* is exactly what the machine kept — nothing is synthesized.
+type ArmNormalization struct {
+	Scenario    string       `json:"scenario"`
+	Condition   string       `json:"condition"`
+	DroppedLegs []PlanArmLeg `json:"dropped_legs"`
+	KeptEntry   float64      `json:"kept_entry"`
+	KeptStop    float64      `json:"kept_stop"`
+	KeptTarget  float64      `json:"kept_target"`
+	KeptRule    string       `json:"kept_rule"` // the scenario's confirm rule the single arm chains on ("" when none)
+	KeptWait    bool         `json:"kept_wait_confirm"`
+}
+
+// normalizeArmLegs — CLASS 39, Section B of the owner ruling, applied
+// literally:
+//
+//  1. on a NON-sweep_reclaim condition with ANY legs array (one leg or many):
+//     DROP the array;
+//  2. RE-RUN the full arm validation (ArmSpecValid) on what remains — the
+//     top-level entry / stop / target / wait_confirm;
+//  3. VALID → keep the single arm and record the normalization (the write
+//     site emits the ⚖ WARN, the E8 row is stamped, the counter is bumped);
+//  4. STILL INVALID → leave the scenario UNCHANGED, so validateArmSpecs emits
+//     the ORIGINAL reason to the model's retry. No second normalization pass.
+//
+// NEVER synthesizes a leg. NEVER touches sweep_reclaim — one leg there stays a
+// reject (rows 69-S2 / 85-S1); a legal two-leg split passes through untouched.
+// Runs from NormalizePlanDocRules, i.e. before validateArmSpecs on every
+// parse/validate path. Idempotent: a stored doc whose legs are already gone
+// is a no-op and its recorded normalizations are preserved.
+func normalizeArmLegs(d *PlanDoc) {
+	if d == nil {
+		return
+	}
+	for i := range d.Scenarios {
+		sc := &d.Scenarios[i]
+		if sc.Arm == nil || len(sc.Arm.Legs) == 0 {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(sc.Condition), "sweep_reclaim") {
+			continue // D7 — the split contract is never normalized
+		}
+		trial := *sc
+		single := *sc.Arm
+		single.Legs = nil
+		trial.Arm = &single
+		if err := ArmSpecValid(trial); err != nil {
+			continue // step 4 — unchanged; the original reason surfaces downstream
+		}
+		rec := ArmNormalization{
+			Scenario: sc.ID, Condition: sc.Condition,
+			DroppedLegs: append([]PlanArmLeg(nil), sc.Arm.Legs...), // a COPY of what was authored — never a new leg
+			KeptEntry:   sc.Arm.Entry, KeptStop: sc.Arm.Stop, KeptTarget: sc.Arm.Target, KeptWait: sc.Arm.WaitConfirm,
+		}
+		if sc.Confirm != nil {
+			rec.KeptRule = sc.Confirm.Rule
+		}
+		sc.Arm.Legs = nil // step 1, in place — the top-level arm IS the single arm
+		d.ArmNormalizations = append(d.ArmNormalizations, rec)
+	}
+}
+
+// ArmNormalizationWarn renders the class-39 write-site WARN (D2): the
+// condition, the scenario, every dropped leg, and the single arm that was kept.
+// Pure, so the fixture pins the wording the journal will carry.
+func ArmNormalizationWarn(n ArmNormalization) string {
+	parts := make([]string, 0, len(n.DroppedLegs))
+	for i, l := range n.DroppedLegs {
+		r := l.Rule
+		if r == "" {
+			r = "-"
+		}
+		parts = append(parts, fmt.Sprintf("#%d entry=%.2f stop=%.2f target=%.2f rule=%s", i+1, l.Entry, l.Stop, l.Target, r))
+	}
+	kr := n.KeptRule
+	if kr == "" {
+		kr = "-"
+	}
+	return fmt.Sprintf("⚖ arm normalized (class 39): %s %s — dropped legs[%d] (%s); single arm kept entry=%.2f stop=%.2f target=%.2f rule=%s wait_confirm=%t",
+		n.Condition, n.Scenario, len(n.DroppedLegs), strings.Join(parts, "; "), n.KeptEntry, n.KeptStop, n.KeptTarget, kr, n.KeptWait)
+}
+
+// ArmNormalizationFor returns the recorded class-39 normalization for a
+// scenario id, or nil — the E8 stamp lookup at arm time.
+func ArmNormalizationFor(d *PlanDoc, scenarioID string) *ArmNormalization {
+	if d == nil {
+		return nil
+	}
+	for i := range d.ArmNormalizations {
+		if d.ArmNormalizations[i].Scenario == scenarioID {
+			return &d.ArmNormalizations[i]
+		}
+	}
+	return nil
+}
+
+// DroppedLegsJSON renders a normalization's dropped legs for the E8 column
+// (dropped_legs). "" when there is nothing to record.
+func DroppedLegsJSON(n *ArmNormalization) string {
+	if n == nil || len(n.DroppedLegs) == 0 {
+		return ""
+	}
+	b, err := json.Marshal(n.DroppedLegs)
+	if err != nil {
+		return ""
+	}
+	return string(b)
 }

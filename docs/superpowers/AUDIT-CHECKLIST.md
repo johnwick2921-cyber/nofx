@@ -409,6 +409,37 @@ in CLAUDE.md).
     trap, and a hint is an instruction, so it must be legal in the field it
     describes.
 
+39. **Reject-where-normalize-was-deterministic (legs on a non-sweep
+    condition).** Root cause: the arm contract says every non-sweep_reclaim
+    condition arms SINGLE, and the validator REJECTED any `legs[]` on such a
+    scenario (`arm_legs_sweep_reclaim_only`, plan_doc.go ArmSpecValid) —
+    burning one of three attempts (~450 s of max-reasoning each) on a shape
+    whose correct form was already fully determined: the top-level arm. 72 h to
+    2026-09-01: 35 of 121 validator rejects (breakdown_continue 24, reject 11);
+    7 landed on attempt 3/3; two sessions fail-closed directly on it
+    (`planner_rejected_prompts` rows 69, 80). The only retained instance (row
+    69 S1, breakdown_continue, ONE leg, rule=touch) already carried a valid
+    top-level arm that mirrored the leg — dropping the array alone made it
+    pass; the two sweep_reclaim one-leg instances (rows 69 S2, 85 S1) must
+    keep rejecting because there the fix would be authoring. **Probe:** for
+    every validator reject, ask whether the correct shape is uniquely
+    determined by the contract with NO invented value; if yes, it is a
+    normalization (WARN) not a reject; if any value must be synthesized, it
+    stays a reject. Precedent in the same file: level auto-collapse. **Fix
+    (owner ruling 2026-09-01, verbatim):** on a non-sweep_reclaim condition
+    with ANY legs array — drop the array, re-run the full arm validation on
+    what remains; valid → proceed with a ⚖ WARN naming every dropped leg;
+    still invalid → REJECT UNCHANGED with the original reason, no second pass;
+    never synthesize a leg; never normalize the reverse. Implemented in
+    `NormalizePlanDocRules` (runs before `validateArmSpecs`), recorded on the
+    plan doc (`arm_normalizations`), stamped on the E8 row
+    (`normalized`, `dropped_legs`), counted in system_config
+    (`arms_normalized_class39`); `plannerRejectedCap` 20 → 200 so the next
+    class has a sample. **Law:** the validator's job is to refuse what is
+    ambiguous or unsafe, not what is merely misspelled — when the contract
+    fully determines the answer, normalize and WARN; when it does not, reject
+    with the original reason.
+
 ---
 
 ## PART 2 — PRE-AUDIT (standing hard rules)
