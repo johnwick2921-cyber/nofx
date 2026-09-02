@@ -268,6 +268,8 @@ func main() {
 	// CLASS 45 (2026-09-02) — what the prompt now feeds forward. Boot ORDER by
 	// name (owner ruling): 📜 prompt feeds forward → ⏱ wakes → 🚫 no-chase.
 	logger.Infof("📜 %s", kernel.PromptFeedsForwardBootLine(-1, 0, kernel.MinSLATRMult()))
+	// CLASS 47 (2026-09-02) — wake cadence: every field READ from its resolver.
+	logger.Infof("⏱ %s", trader.WakeCadenceBootLine())
 	// P&L-TRUTH WAVE (2026-09-01) — corrected-column guard in the boot block.
 	logger.Infof("🧾 %s", store.PnLSurfacesBootLine())
 	logger.Infof("🎛 %s", kernel.EntryLawBootLedger()) // P1.4 (ledger-close 2026-08-19) — clock-guard block: live host-RTC drift,

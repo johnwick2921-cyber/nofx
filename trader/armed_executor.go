@@ -217,6 +217,24 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 		return
 	}
 
+	// CLASS 47 F4 (owner-ruled, 2026-09-02) — STALE-ARM EXPIRY. A NEVER-PLACED
+	// arm (no broker signal id) whose plan version has been superseded describes
+	// a setup the planner already replaced; with no signal id there is nothing
+	// at the broker to orphan. On 09-02 one such v5 row stayed non-terminal
+	// across six versions and held the class-33 cutover gate's leg 4 shut ~5 h.
+	// PLACED/WORKING rows are untouched — they belong to the sweep and the
+	// stale-window reconcile, not here.
+	if ids, xerr := ledger.SupersedeUnplacedArms(at.id, plan.PlanID, plan.Version); xerr != nil {
+		at.logWarnf("⏱ stale-arm expiry failed for %s v%d: %v", plan.PlanID, plan.Version, xerr)
+	} else if len(ids) > 0 {
+		n := 0
+		if c, cerr := store.IncArmSuperseded(at.store); cerr == nil {
+			n = c
+		}
+		at.logWarnf("⏱ stale arms SUPERSEDED (class 47): %d never-placed row(s) %v retired at plan %s v%d — they held the cutover gate open. Recorded total=%d",
+			len(ids), ids, plan.PlanID, plan.Version, n)
+	}
+
 	// 2. arm evaluation for the ACTIVE plan's arm specs.
 	doc := plan.Doc
 	cfg := at.GetStrategyConfig()

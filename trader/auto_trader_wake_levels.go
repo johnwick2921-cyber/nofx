@@ -262,6 +262,58 @@ func (at *AutoTrader) maybeWakePlannerOnLevelEvents(session, tradeDate string, r
 			ev.desc, session, tradeDate, now.Sub(at.lastPlannerWakeAt).Minutes(), cfg.WakeMinIntervalMinutes())
 		return
 	}
+	// ── CLASS 47 (2026-09-02) — CADENCE OBSERVATION, WARN-FIRST ──────────────
+	// F1/F2 do NOT suppress: they record what a suppression WOULD have skipped,
+	// so the owner rules on a week of counts rather than impressions. F3 DOES
+	// defer, because two concurrent max-reasoning streams is a cost with no
+	// upside (today 08:01:06 opened one while 07:51:06 was still running).
+	if sess, okS := at.sessionRegistry(now).ActiveSession(now); okS {
+		if cutoff := wakeCutoffMinutes(); cutoff > 0 {
+			if mins, okM := minutesToSessionFlat(now, sess); okM && mins < cutoff {
+				n := 0
+				if at.store != nil {
+					if c, cerr := store.IncWakeCounter(at.store, at.id, tradeDate, session, store.WakeWouldSkipCutoffKind); cerr == nil {
+						n = c
+					} else {
+						at.logWarnf("⏱ wake cutoff counter write failed: %v", cerr)
+					}
+				}
+				at.logWarnf("%s", wakeCutoffLine(session, ev.desc, mins, cutoff, n))
+			}
+		}
+	}
+	if cd := wakeCooldownMinutes(); cd > 0 && at.store != nil {
+		// Measured from the last WAKE-AUTHORED version, not the last wake
+		// ATTEMPT: a wake whose read failed or kept the active plan never wrote
+		// anything, so it must not start this clock (that is what makes this
+		// distinct from wake_min_interval_min above).
+		if last, lerr := at.store.Plan().GetLatestPlanForTraderSession(tradeDate, session, at.id); lerr == nil && last != nil &&
+			last.TriggerReason == "level_event" && !last.CreatedAt.IsZero() {
+			if since := int(now.Sub(last.CreatedAt).Minutes()); since < cd {
+				n := 0
+				if c, cerr := store.IncWakeCounter(at.store, at.id, tradeDate, session, store.WakeWouldSkipCooldownKind); cerr == nil {
+					n = c
+				} else {
+					at.logWarnf("⏱ wake cooldown counter write failed: %v", cerr)
+				}
+				at.logWarnf("%s", wakeCooldownLine(session, ev.desc, since, cd, n))
+			}
+		}
+	}
+	// F3 — a WAKE defers while ANY planner stream is open, in any trading
+	// session, for any trader in this process. SCHEDULED reads never defer: the
+	// naive rule would have parked today's NY session read behind LONDON's.
+	// The dedupe key is deliberately NOT consumed here, so the same event can
+	// wake again on the next cycle once the stream closes.
+	if held, open := anyPlannerStreamOpen(); open {
+		if at.store != nil {
+			if _, cerr := store.IncWakeCounter(at.store, at.id, tradeDate, session, store.WakeStreamDeferKind); cerr != nil {
+				at.logWarnf("⏱ wake defer counter write failed: %v", cerr)
+			}
+		}
+		at.logWarnf("%s", wakeStreamDeferLine(session, ev.desc, held))
+		return
+	}
 	// W6-D (2026-08-25) — wakes are UNLIMITED and count against NOTHING: a wake
 	// re-plan must never consume the death budget, and can never be the cause of
 	// a replans_exhausted NO-TRADE (live bug 19:35 CT: 4 wake re-plans ate the
