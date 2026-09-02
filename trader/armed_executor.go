@@ -176,6 +176,12 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 	if ledger == nil {
 		return
 	}
+	// CLASS 33 (2026-09-02) — BOOT SWEEP FIRST. Before ANY authoring, gating,
+	// cancelling or placement in this process: every non-terminal row stamped
+	// by a DEAD process is cancelled at the broker and in the ledger. This is
+	// the head of the armed subsystem, so sweep-before-arm is guaranteed by
+	// position — runArmedPlacement is reached from BELOW this line only.
+	at.sweepPreBootArms(ledger)
 	now := time.Now()
 
 	// 1.4 — plan → dormant/no_trade/absent = ALL its armed orders cancelled

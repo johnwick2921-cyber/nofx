@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 // ── CLASS 33 (2026-09-02) — PRE-BOOT ARM DECIDABILITY ────────────────────────
@@ -46,6 +48,10 @@ func (s *ArmedOrderStore) ListPreBoot(traderID, bootID string) ([]ArmedOrderDB, 
 		traderID, bootID).Order("id").Find(&out).Error
 	return out, err
 }
+
+// DB exposes the underlying handle for fixtures that need to seed or inspect
+// rows the public API deliberately does not expose (e.g. a foreign boot stamp).
+func (s *ArmedOrderStore) DB() *gorm.DB { return s.db }
 
 // BootSweptKey — the RECORDED counter for pre-boot arms cancelled by the boot
 // sweep (class 35 lesson: a log-only tally evaporates at the next boot).

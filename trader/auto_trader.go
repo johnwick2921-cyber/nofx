@@ -753,7 +753,7 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 	strategyEngine := kernel.NewStrategyEngine(config.StrategyConfig, claw402Key)
 	logger.Infof("✓ [%s] Using strategy engine (strategy configuration loaded)", config.Name)
 
-	return &AutoTrader{
+	at := &AutoTrader{
 		id:                    config.ID,
 		name:                  config.Name,
 		aiModel:               config.AIModel,
@@ -779,7 +779,16 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 		peakPnLCacheMutex:     sync.RWMutex{},
 		lastBalanceSyncTime:   time.Now(),
 		userID:                userID,
-	}, nil
+	}
+	// CLASS 33 (2026-09-02) — wire flat-gate leg 4 to the armed_orders ledger.
+	// NT8 emits NO working-order frame (audit F12): before this, GetOpenOrders
+	// was a stub returning empty, so the leg passed VACUOUSLY at every cutover
+	// 35 → 41. Wired HERE (not lazily) so the dead-man watchdog's own
+	// GetOpenOrders probe has a source from the first cycle.
+	if nt, ok := at.trader.(*ntTrader.TCPTrader); ok {
+		nt.SetOpenOrdersSource(at.ledgerOpenOrders)
+	}
+	return at, nil
 }
 
 // Run runs the automatic trading main loop
