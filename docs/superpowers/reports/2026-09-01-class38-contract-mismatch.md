@@ -259,6 +259,7 @@ Separately owed: **class 37's** own behavioural proof is still outstanding — n
 crossed 600 s and no `class=total_deadline` line has appeared since its 21:19:49 boot
 (longest since: 487.9 s).
 
+
 ---
 
 ## 9. What the owner will STILL see wrong (A15)
@@ -278,3 +279,44 @@ crossed 600 s and no `class=total_deadline` line has appeared since its 21:19:49
 - Row 71/72 (class 37's timeout text stored as a "validator reason") remains: a
   transport/deadline failure is still fed to attempt 2 as if it were a validator defect.
   Unchanged here — prompt paths were the scope, retry semantics were not.
+---
+
+## 10. FRESH EVIDENCE — an entire session lost to this class, after the fix was written [A]
+
+2026-09-01 ASIA, 21:44:29 → 21:53:46 CT, on the RUNNING binary `e42a0b43` (old prompt).
+Three attempts, three DIFFERENT arm-split rejects, then fail-closed:
+
+```
+21:44:29  planner call … completed in 487.9s
+          attempt 1/3 rejected: arm on S1 needs EXACTLY 2 legs (split contract), got 1
+21:47:23  planner call … completed in 173.3s        (repair, ~1195 tokens)
+          attempt 2/3 rejected: arm on S1 top-level entry/stop/target must equal leg 1's
+                                (legacy readers read the top-level)
+21:53:46  planner call … completed in 383.1s        (re-author + reject block, ~6438 tokens)
+          attempt 3/3 rejected: arm on S1 leg 2 must chain (wait_confirm true) on its confirm rule
+21:53:46  🚨 PLANNER FAIL-CLOSED 2026-09-01 ASIA … writing a NO-TRADE plan
+21:53:46  🗓️ PLAN written 2026-09-01 ASIA v4 (lifecycle no_trade)
+```
+
+**1,044 seconds of max-reasoning, three attempts, one NO-TRADE plan.** Every one of the
+three rejects is a restriction in the §2 table, and **two of them had ZERO prompt
+coverage before this wave**:
+
+| Attempt | Reject | §2 row | Prompt BEFORE | Prompt AFTER |
+|---|---|---|---|---|
+| 1/3 | needs EXACTLY 2 legs | 3 | **NONE** | `EXACTLY 2 legs` |
+| 2/3 | top-level must equal leg 1's | 8 | **NONE** | `top-level entry/stop/target mirror leg 1` |
+| 3/3 | leg 2 must chain (wait_confirm true) | 6 | **NONE** | `leg 2 chains (wait_confirm true)` |
+
+The model was iterating toward a split contract it could not read. Note attempt 2's
+reject is a *different* rule from attempt 1's and attempt 3's is different again: the
+repair loop was discovering the contract one hidden clause at a time, which is exactly
+the failure mode a stated contract removes.
+
+`plans` for 2026-09-01: ASIA v1 · v2 · v3 · v4 — **all four `planner_fail_closed` /
+`no_trade`** (17:23:14, 18:00:41, 21:14:52, 21:53:46 CT), plus LONDON v1. The session is
+currently running with no tradeable plan.
+
+This is post-hoc evidence for the wave, not a test: it was produced by the OLD binary
+after the fix was written, and it is the same defect class as rows 78/79/80.
+
