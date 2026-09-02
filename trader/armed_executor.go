@@ -344,6 +344,17 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 				skey := plan.PlanID + ":" + strconv.Itoa(plan.Version) + ":" + sc.ID + ":leg" + strconv.Itoa(li+1) + ":stop"
 				if armRefusalChanged(&at.armStopCompLast, skey, fmt.Sprintf("%.2f/%s", comp.Stop, comp.Bound)) {
 					at.logInfof("%s", armStopCompositionLine(plan.Session, sc.ID, li+1, sc.Direction, comp, atr5m, kernel.MinSLATRMult()))
+					// OWNER RULING 1 (0B): ARM_STOP_ANCHOR_MAX_ATR 3.0 is a
+					// PROVISIONAL [I] default, reviewed at n≥30 dead zones. The
+					// count is RECORDED (class-35 law), never inferred from logs.
+					if comp.Unanchored && at.store != nil {
+						if n, cerr := store.IncStopUnanchored(at.store); cerr != nil {
+							at.logWarnf("🛑 stop_unanchored counter write failed: %v", cerr)
+						} else {
+							at.logWarnf("🛑 stop_unanchored %s %s leg %d — no seated level within %.1f×ATR5m on the risk side; ATR floor governs. Recorded n=%d (provisional bound reviewed at n≥%d).",
+								plan.Session, sc.ID, li+1, armStopAnchorMaxATR(), n, store.StopUnanchoredReviewN)
+						}
+					}
 				}
 				leg.Stop = comp.Stop
 			}
@@ -393,7 +404,21 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 				}
 				key := plan.PlanID + ":" + strconv.Itoa(plan.Version) + ":" + sc.ID + ":leg" + strconv.Itoa(li+1)
 				if armRefusalChanged(&at.armRefusalLast, key, armRefusalClass(verdict)) {
-					at.logWarnf("⚔️ arm REFUSED %s %s leg %d: %s", plan.Session, sc.ID, li+1, verdict)
+					// OWNER RULING 2 (0B): more R:R refusals with the wider stops
+					// is the intended trade — the COST side of the stop floor.
+					// Recorded per session-day and per class (one distinct
+					// arm-spec per bump, never per re-refusal cycle) so it can be
+					// quoted against the benefit later.
+					class := armRefusalClass(verdict)
+					shown := ""
+					if at.store != nil {
+						if n, cerr := store.IncArmRefusal(at.store, at.id, kernel.PlanTradeDateFor(plan), plan.Session, class); cerr != nil {
+							at.logWarnf("⚔️ arm refusal counter write failed: %v", cerr)
+						} else {
+							shown = fmt.Sprintf(" · %s refusals this session: %d", class, n)
+						}
+					}
+					at.logWarnf("⚔️ arm REFUSED %s %s leg %d: %s%s", plan.Session, sc.ID, li+1, verdict, shown)
 				}
 				continue
 			}

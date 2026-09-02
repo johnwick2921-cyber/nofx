@@ -361,3 +361,61 @@ func armedRowByID(t *testing.T, ledger *store.ArmedOrderStore, id int64) store.A
 	t.Fatalf("row %d not found", id)
 	return store.ArmedOrderDB{}
 }
+
+// ── OWNER RULINGS (2026-09-02) — the two recorded counters ──────────────────
+//
+//  1. ARM_STOP_ANCHOR_MAX_ATR 3.0 is PROVISIONAL [I]; reviewed at n≥30
+//     stop_unanchored occurrences. 2. Arm refusals are the COST side of the
+//     stop floor and are recorded per session-day and per class.
+func TestZeroBRecordedCountersSurviveRestart(t *testing.T) {
+	st, err := store.New(filepath.Join(t.TempDir(), "cnt.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+
+	if got := store.CountFromSystemConfig(st, store.StopUnanchoredKey); got != 0 {
+		t.Fatalf("fresh store must read 0, got %d", got)
+	}
+	for i := 1; i <= 3; i++ {
+		n, err := store.IncStopUnanchored(st)
+		if err != nil || n != i {
+			t.Fatalf("stop_unanchored bump %d → %d (err %v)", i, n, err)
+		}
+	}
+	if store.StopUnanchoredReviewN != 30 {
+		t.Fatalf("the review trigger is n≥30 per the owner ruling, got %d", store.StopUnanchoredReviewN)
+	}
+
+	// Per-session, per-class refusal counters: R:R is separable from the rest,
+	// and sessions do not bleed into each other.
+	const tid, date = "t1", "2026-09-02"
+	for i := 1; i <= 4; i++ {
+		if n, err := store.IncArmRefusal(st, tid, date, "NY", "rr"); err != nil || n != i {
+			t.Fatalf("NY rr bump %d → %d (err %v)", i, n, err)
+		}
+	}
+	if _, err := store.IncArmRefusal(st, tid, date, "NY", "min_sl"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.IncArmRefusal(st, tid, date, "ASIA", "rr"); err != nil {
+		t.Fatal(err)
+	}
+	if got := store.ArmRefusalCount(st, tid, date, "NY", "rr"); got != 4 {
+		t.Fatalf("NY rr = %d, want 4", got)
+	}
+	if got := store.ArmRefusalCount(st, tid, date, "NY", "min_sl"); got != 1 {
+		t.Fatalf("NY min_sl = %d, want 1 (classes must be separable)", got)
+	}
+	if got := store.ArmRefusalCount(st, tid, date, "ASIA", "rr"); got != 1 {
+		t.Fatalf("ASIA rr = %d, want 1 (sessions must not bleed)", got)
+	}
+	if got := store.ArmRefusalCount(st, tid, "2026-09-03", "NY", "rr"); got != 0 {
+		t.Fatalf("a different session-day must start at 0, got %d", got)
+	}
+	// A malformed row reads 0, never a fabricated figure.
+	_ = st.SetSystemConfig(store.ArmRefusalKey(tid, date, "LONDON", "rr"), "not-a-number")
+	if got := store.ArmRefusalCount(st, tid, date, "LONDON", "rr"); got != 0 {
+		t.Fatalf("malformed counter must read 0, got %d", got)
+	}
+}
