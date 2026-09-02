@@ -41,6 +41,14 @@ type ArmedOrderDB struct {
 	// TWO rows sharing (plan_id, scenario) distinguished by LegIndex. LegCount
 	// = the pair size (2 for split arms, 0 for legacy single arms). Kind =
 	// "limit" (default) | "stop_entry" (E7).
+	// BootID (CLASS 33, 2026-09-02) — the process that AUTHORED this row
+	// (store.ProcessBootID). A non-terminal row whose BootID differs from the
+	// running process was placed by a DEAD process: its broker order has no
+	// listener, so the boot sweep cancels it before anything is re-armed.
+	// Never refreshed on a same-identity re-arm — the stamp must survive an
+	// upsert or the sweep would lose its evidence.
+	BootID string `gorm:"index"`
+
 	LegIndex int    `gorm:"default:0"`
 	LegCount int    `gorm:"default:0"`
 	Kind     string `gorm:"default:''"`
@@ -73,6 +81,7 @@ CREATE TABLE IF NOT EXISTS armed_orders (
 	leg_index     INTEGER NOT NULL DEFAULT 0,
 	leg_count     INTEGER NOT NULL DEFAULT 0,
 	kind          TEXT    NOT NULL DEFAULT '',
+	boot_id       TEXT    NOT NULL DEFAULT '',
 	created_at    DATETIME,
 	updated_at    DATETIME
 )`
@@ -100,6 +109,7 @@ func (s *ArmedOrderStore) Migrate() error {
 			{"leg_index", "INTEGER NOT NULL DEFAULT 0"},
 			{"leg_count", "INTEGER NOT NULL DEFAULT 0"},
 			{"kind", "TEXT NOT NULL DEFAULT ''"},
+			{"boot_id", "TEXT NOT NULL DEFAULT ''"}, // class 33 — pre-boot decidability
 		} {
 			var n int64
 			if err := s.db.Raw("SELECT COUNT(*) FROM pragma_table_info('armed_orders') WHERE name = ?", col.name).Scan(&n).Error; err != nil {
@@ -168,10 +178,17 @@ func (s *ArmedOrderStore) UpsertArm(row *ArmedOrderDB) error {
 			"side": row.Side, "entry_px": row.EntryPx, "stop_px": row.StopPx,
 			"target_px": row.TargetPx, "leg_count": row.LegCount, "kind": row.Kind,
 			"created_at": row.CreatedAt, "updated_at": row.UpdatedAt,
+			// class 33: a re-authorized row belongs to THIS process.
+			"boot_id": ProcessBootID(),
 		}).Error
 	}
 	if err != gorm.ErrRecordNotFound {
 		return err
+	}
+	// class 33 — a freshly created row belongs to THIS process, so the boot
+	// sweep never mistakes it for an orphan of a dead one.
+	if row.BootID == "" {
+		row.BootID = ProcessBootID()
 	}
 	return s.db.Create(row).Error
 }

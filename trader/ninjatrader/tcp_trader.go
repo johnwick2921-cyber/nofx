@@ -48,8 +48,11 @@ type TCPTrader struct {
 	stopLoss map[string]float64 // key: "<symbol>:<side>"
 	takePrft map[string]float64
 	guard    *orderGuard // B3: dupe-drop + rate breaker at the order-submission chokepoint
-	lastFill ntwire.FillPayload
-	hasFill  bool
+	// openOrdersSrc (class 33) — the ledger-backed working-order source for
+	// GetOpenOrders (flat-gate leg 4). nil = unwired = the leg FAILS.
+	openOrdersSrc func(symbol string) ([]types.OpenOrder, error)
+	lastFill      ntwire.FillPayload
+	hasFill       bool
 
 	// recentFills is a bounded ring of the last confirmed fills (class 27,
 	// 2026-08-31). A NETTING close emits no position_close frame — the only
@@ -1146,8 +1149,34 @@ func (t *TCPTrader) CancelStopOrders(symbol string) error {
 	return fmt.Errorf("ninjatrader/tcp: CancelStopOrders not supported")
 }
 
+// SetOpenOrdersSource (CLASS 33, 2026-09-02) wires the working-order source
+// for GetOpenOrders. NT8 emits NO working-order frame (audit F12), so the only
+// truth about resting entries is the armed_orders ledger — the AutoTrader owns
+// the store and injects it here at start.
+func (t *TCPTrader) SetOpenOrdersSource(fn func(symbol string) ([]types.OpenOrder, error)) {
+	t.mu.Lock()
+	t.openOrdersSrc = fn
+	t.mu.Unlock()
+}
+
+// GetOpenOrders answers flat-gate leg 4. Until 2026-09-02 this was
+// `return []types.OpenOrder{}, nil` — a gate that could not fail, which passed
+// VACUOUSLY at every cutover 35 → 41 (class 33) including 09-02 00:16 CT with
+// two arms resting at the broker. It now reports the armed_orders ledger's
+// non-terminal rows, each stamped with its Source. A source that errors FAILS
+// the leg; an UNWIRED source fails it too — never a silent empty (A24).
 func (t *TCPTrader) GetOpenOrders(symbol string) ([]types.OpenOrder, error) {
-	return []types.OpenOrder{}, nil
+	t.mu.Lock()
+	fn := t.openOrdersSrc
+	t.mu.Unlock()
+	if fn == nil {
+		return nil, fmt.Errorf("open-orders source not wired (class 33): NT8 has no working-order frame, so leg 4 has no truth to report — refusing to answer empty")
+	}
+	rows, err := fn(symbol)
+	if err != nil {
+		return nil, fmt.Errorf("open-orders (armed_orders ledger): %w", err)
+	}
+	return rows, nil
 }
 
 // upperSideStr normalises "long"/"LONG"/"Long" → "LONG" for SL/TP map keys.
