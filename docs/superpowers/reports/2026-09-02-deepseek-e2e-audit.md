@@ -170,3 +170,22 @@ Attempt 2 **obeyed** the hint and moved to a `reject` fade — and was then kill
 - Put the reject block at the **top** of the re-author prompt, or drop the conflicting standing line from re-author prompts specifically (lost-in-the-middle: a 1.5% tail after 6.5k tokens is the weakest position in the context).
 
 ---
+
+## 5. THE TRANSPORT FAILURES THAT ARE REAL — WHAT THEY COST, AND WHAT THEY DO NOT
+
+Transport failures are only 9.8% of failed attempts and have caused **zero** fail-closes, but they are not free. Three distinct mechanisms, all [RUNTIME] over the 7-day window:
+
+**5.1 — The 600-second ceiling, hit 16 times.** Every occurrence:
+`08-26 20:40:02 · 08-27 22:19:20 · 08-28 12:41:05 · 08-28 12:51:06 · 08-30 21:20:01 · 08-30 23:30:11 · 08-31 00:58:42 · 08-31 09:22:11 · 08-31 10:35:38 · 08-31 10:51:29 · 08-31 11:53:29 · 08-31 14:27:28 · 09-01 06:00:01 · 09-01 12:33:07 · 09-01 12:43:07 · 09-02 00:59:47` (CT).
+These split into **two completely different failures wearing the same label**:
+
+- **Streamed-and-starved (n=7 with counters):** e.g. `08-31 10:51:29 … duration_ms=600001 … ttfb_ms=562 reasoning_chars=140177 timeout_source=client deadline_s=600`. First byte in 562 ms, then **140,177 characters of reasoning received**, and the call was killed at the ceiling with nothing usable. Also 126,768 (10:35:38) · 134,792 (11:53:29) · 133,667 (14:27:28) · 134,322 (09-01 06:00:01) · 73,196 (09-01 12:33:07) · 71,414 (09-01 12:43:07). This is the class-37 disease and is what the planner's 1200 s split was built for — the boot line now reads `stream_total=1200s (class 37: planner ceiling split from the HTTP ceiling)`.
+- **Never-started (the newest, 09-02 00:59:47):** `duration_ms=600000 … retries=1 ttfb_ms=0 reasoning_chars=0 timeout_source=client deadline_s=600 class=client_timeout http_status=200 err="failed to read response: context deadline exceeded"`. **Zero bytes in ten minutes.** DeepSeek documents that it closes a connection if inference has not started within ~10 minutes; our non-stream HTTP ceiling is 600 s = the same ten minutes. We do not distinguish "queued behind the provider's backlog and never started" from "the network died" — both land as `timeout_source=client`, and both cost the caller a full ten minutes.
+
+**5.2 — The executor loses its cadence, 96 times.** `⏱ cycle overran the scan interval (…) — next tick delayed, in-flight work never cancelled; intervening ticks skipped` fired **96 times** in the window; the worst was `09-02 00:59:47 (10m0.047s > 2m0s)` — a single hung call cost **ten minutes of executor blindness** on a 2-minute cadence, with the in-flight work explicitly never cancelled. Others in the last two days: 2m41s · 4m54s · 2m19s · 3m0s · 2m44s · 3m30s · 3m9s. The executor is not being killed by the provider; it is being *held* by it.
+
+**5.3 — The 503 burst is one hour of the whole week.** All **35** call-level 503s in seven days fall in a single hour, `09-02 01:xx CT` (= 15:xx Beijing) [RUNTIME]. There is no chronic 503 condition, and **0 fail-closes cite a 503**. But the burst exposed a real hazard: **3 planner attempts × 3 calls = 9 provider calls in 7 seconds** (§2), which on a *scheduled* read would have destroyed the session in the time it takes to read this sentence. That it landed on a wake read was luck, not design.
+
+**The mislabelling that hides all of this** [RUNTIME]: `timeout_source=transport` appears on `09-02 01:03:52 … class=other http_status=200 err="fail to parse AI server response: API returned empty response"` — an HTTP 200 with an empty body after 244 s, which is not a transport event at all. §E4 enumerates every site with this defect; the census in §1 was built by reading durations and error text rather than trusting the label.
+
+---
