@@ -1,10 +1,14 @@
 package mcp
 
 import (
+	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 )
 
 // E1 — THE HONESTY PIN. Every field on the boot line is compared against the
@@ -100,5 +104,74 @@ func TestClass46PolicyResolversClamp(t *testing.T) {
 	// The pre-token limit must not exceed DeepSeek's ~10 min queue close.
 	if WatchdogPreTokenSeconds() > 1200 {
 		t.Fatal("pre-token limit exceeds the resolver's own ceiling")
+	}
+}
+
+// E4 — the watchdog measures DATA, not lines. A stream that emits only
+// heartbeat comments AFTER the first token is a stalled generation and must
+// die at the post-token limit; the same comments BEFORE the first token are a
+// live queue and must not kill it.
+func TestClass46WatchdogPostTokenIgnoresHeartbeats(t *testing.T) {
+	t.Setenv("AI_PLAN_WATCHDOG_POST_SECS", "15") // resolver floor; the call idle overrides tighter
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		writeSSE(w, `{"choices":[{"delta":{"content":"a"}}]}`) // first token
+		for i := 0; i < 40; i++ {                              // heartbeat comments only — a stalled generation
+			fmt.Fprint(w, ": keep-alive\n\n")
+			if f, ok := w.(http.Flusher); ok {
+				f.Flush()
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+	}))
+	defer srv.Close()
+	c := streamClient(t, srv.URL, 1)
+	start := time.Now()
+	_, err := c.CallWithRequestStreamDeadlines(&Request{}, nil, 300*time.Millisecond, 0)
+	if !errors.Is(err, ErrWatchdogIdle) {
+		t.Fatalf("heartbeats must NOT keep a stalled generation alive; got %v", err)
+	}
+	if time.Since(start) > 3*time.Second {
+		t.Fatalf("the watchdog took %v — it is still resetting on comment lines", time.Since(start))
+	}
+	if got := ClassifyFailure(err, 200); got != ClassIdle {
+		t.Fatalf("class = %q want idle", got)
+	}
+	var fired string
+	for _, e := range c.Log.(*MockLogger).GetLogs() {
+		if strings.Contains(e.Message, "⏱ watchdog fired:") {
+			fired = e.Message
+		}
+	}
+	if !strings.Contains(fired, "post gap=") {
+		t.Fatalf("the POST timer must be the one that fired: %q", fired)
+	}
+}
+
+// Before the first token, heartbeats DO keep it alive — a queued request is
+// alive, and DeepSeek's own queue close is the real limit.
+func TestClass46WatchdogPreTokenSurvivesHeartbeats(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		for i := 0; i < 8; i++ { // queued, heartbeating, no token yet
+			fmt.Fprint(w, ": keep-alive\n\n")
+			if f, ok := w.(http.Flusher); ok {
+				f.Flush()
+			}
+			time.Sleep(60 * time.Millisecond)
+		}
+		writeSSE(w, `{"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}`)
+		writeSSE(w, "[DONE]")
+	}))
+	defer srv.Close()
+	c := streamClient(t, srv.URL, 1)
+	out, err := c.CallWithRequestStreamDeadlines(&Request{}, nil, 300*time.Millisecond, 0)
+	if err != nil {
+		t.Fatalf("a heartbeating QUEUE must survive to its own limit, got %v", err)
+	}
+	if out != "ok" {
+		t.Fatalf("out = %q", out)
 	}
 }

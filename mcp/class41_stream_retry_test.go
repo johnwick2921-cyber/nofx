@@ -99,7 +99,10 @@ func TestClass41WatchdogFireIsLogged(t *testing.T) {
 	}
 	found := false
 	for _, e := range c.Log.(*MockLogger).GetLogs() {
-		if strings.Contains(e.Message, "stream idle watchdog FIRED") && strings.Contains(e.Message, "since last SSE line") {
+		// CLASS 46 D4: the wording changed with the mechanism — the watchdog no
+		// longer measures "since last SSE line" (heartbeats reset that), it
+		// measures the mode's own gap and names which timer fired.
+		if strings.Contains(e.Message, "⏱ watchdog fired:") && strings.Contains(e.Message, "gap=") {
 			found = true
 		}
 	}

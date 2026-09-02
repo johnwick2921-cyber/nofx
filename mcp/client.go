@@ -1175,36 +1175,64 @@ func (client *Client) CallWithRequestStreamDeadlines(req *Request, onChunk func(
 	ctx, cancel := context.WithCancelCause(parent)
 	defer cancel(nil)
 	resetCh := make(chan struct{}, 1)
+	dataCh := make(chan struct{}, 1)
 	callStart := time.Now()
+	// CLASS 46 D4 — TWO timers, because "idle" means two different things
+	// before and after the model starts answering:
+	//   pre-token  — a QUEUED request. Heartbeat comments legitimately keep it
+	//                alive; the limit is DeepSeek's own ~10 min queue close.
+	//   post-token — a STALLED generation. Only real content/reasoning deltas
+	//                reset it; comment lines do NOT.
+	preLimit := time.Duration(WatchdogPreTokenSeconds()) * time.Second
+	postLimit := time.Duration(WatchdogPostTokenSeconds()) * time.Second
+	if idle > 0 && idle < postLimit {
+		postLimit = idle // an explicit caller idle stays the tighter bound
+	}
 	go func() {
-		t := time.NewTimer(idle)
+		mode := "pre"
+		t := time.NewTimer(preLimit)
 		defer t.Stop()
-		lastLine := callStart // per CALL: a fresh timer + fresh clock each call (never carried across retries)
+		last := callStart
+		reset := func(d time.Duration) {
+			if !t.Stop() {
+				select {
+				case <-t.C:
+				default:
+				}
+			}
+			t.Reset(d)
+			last = time.Now()
+		}
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case <-t.C:
-				// CLASS 41 M2 (2026-09-02): the watchdog LOGS when it fires, with
-				// the measured gap, so "0 idle kills" is evidence, not silence.
-				// It measures time since the last SSE LINE scanned (bufio line,
-				// including blank/keep-alive lines), not since the last byte.
-				if client.Log != nil {
-					client.Log.Warnf("⏱ stream idle watchdog FIRED: %.1fs since last SSE line (idle=%ds, call age %.1fs) — cancelling the stream (class=idle_deadline)",
-						time.Since(lastLine).Seconds(), int(idle.Seconds()), time.Since(callStart).Seconds())
+			case <-dataCh:
+				if mode == "pre" {
+					mode = "post" // first real byte — switch to the stall timer
 				}
-				cancel(ErrStreamIdleDeadline) // idle timeout: kill the connection
+				reset(postLimit)
+			case <-t.C:
+				// The gap is measured against what the MODE means: silence in a
+				// queue, or a stalled generation. Both are logged with the mode
+				// so "it fired" is never ambiguous.
+				lim := preLimit
+				if mode == "post" {
+					lim = postLimit
+				}
+				if client.Log != nil {
+					client.Log.Warnf("⏱ watchdog fired: %s gap=%.1fs (limit %v, call age %.1fs) — closing the stream (class=idle)",
+						mode, time.Since(last).Seconds(), lim, time.Since(callStart).Seconds())
+				}
+				cancel(ErrWatchdogIdle) // distinct from a peer EOF — see ErrWatchdogIdle
 				return
 			case <-resetCh:
-				// received a line — reset the idle timer
-				lastLine = time.Now()
-				if !t.Stop() {
-					select {
-					case <-t.C:
-					default:
-					}
+				// A scanned LINE. It proves the socket is alive, so it resets
+				// the PRE timer; it proves nothing about generation, so once we
+				// are past the first token it does NOT reset the post timer.
+				if mode == "pre" {
+					reset(preLimit)
 				}
-				t.Reset(idle)
 			}
 		}
 	}()
@@ -1224,9 +1252,14 @@ func (client *Client) CallWithRequestStreamDeadlines(req *Request, onChunk func(
 		return "", fmt.Errorf("API error (status %d): %s", resp.StatusCode, string(body))
 	}
 
-	sr, err := ParseSSEStreamFull(resp.Body, onChunk, reqStart, func() {
+	sr, err := ParseSSEStreamFullData(resp.Body, onChunk, reqStart, func() {
 		select {
 		case resetCh <- struct{}{}:
+		default:
+		}
+	}, func() {
+		select {
+		case dataCh <- struct{}{}:
 		default:
 		}
 	})
@@ -1270,6 +1303,8 @@ func wrapStreamDeadlineErr(ctx context.Context, err error, idle, total time.Dura
 	switch {
 	case errors.Is(cause, ErrStreamTotalDeadline):
 		return fmt.Errorf("%w (total %v, stream was live, %v): %v", ErrStreamTotalDeadline, total, ctx.Err(), err)
+	case errors.Is(cause, ErrWatchdogIdle):
+		return fmt.Errorf("%w (watchdog, %v): %v", ErrWatchdogIdle, ctx.Err(), err)
 	case errors.Is(cause, ErrStreamIdleDeadline):
 		return fmt.Errorf("%w (idle %v of silence, %v): %v", ErrStreamIdleDeadline, idle, ctx.Err(), err)
 	}
@@ -1367,6 +1402,15 @@ func ParseSSEStream(body io.Reader, onChunk func(string), onLine func()) (string
 // `start` anchors the ttfb measurement — pass the request-sent time so the
 // queue (Do → first chunk) is included, not just the body-read latency.
 func ParseSSEStreamFull(body io.Reader, onChunk func(string), start time.Time, onLine func()) (*SSEStreamResult, error) {
+	return ParseSSEStreamFullData(body, onChunk, start, onLine, nil)
+}
+
+// ParseSSEStreamFullData (CLASS 46 D4) is ParseSSEStreamFull plus onData,
+// called ONLY when a real content or reasoning delta arrives — never for a
+// heartbeat comment line. The old watchdog reset on every scanned LINE, so
+// DeepSeek's ": keep-alive" comments kept a stalled generation alive to the
+// 1200 s ceiling and the watchdog had never once fired.
+func ParseSSEStreamFullData(body io.Reader, onChunk func(string), start time.Time, onLine func(), onData func()) (*SSEStreamResult, error) {
 	var accumulated strings.Builder
 	var reasoning strings.Builder
 	var usage *TokenUsage
@@ -1427,6 +1471,9 @@ func ParseSSEStreamFull(body io.Reader, onChunk func(string), start time.Time, o
 			finish = *chunk.Choices[0].FinishReason
 		}
 		delta := chunk.Choices[0].Delta
+		if onData != nil && (delta.ReasoningContent != "" || delta.Content != "") {
+			onData() // a real byte of model output — this is what "not stalled" means
+		}
 		if delta.ReasoningContent != "" {
 			reasoning.WriteString(delta.ReasoningContent)
 		}

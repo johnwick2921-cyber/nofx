@@ -279,14 +279,14 @@ func TestClass37IdleDeadlineClass(t *testing.T) {
 	c := streamClient(t, srv.URL, 1)
 	req := &Request{Messages: []Message{NewUserMessage("hi")}}
 	_, err := c.CallWithRequestStreamRetryDeadlines(req, nil, 200*time.Millisecond, 5*time.Second)
-	if err == nil || !errors.Is(err, ErrStreamIdleDeadline) {
-		t.Fatalf("silent stream must die with ErrStreamIdleDeadline, got %v", err)
+	if err == nil || !errors.Is(err, ErrWatchdogIdle) {
+		t.Fatalf("silent stream must die with ErrWatchdogIdle (class 46), got %v", err)
 	}
 	if !strings.Contains(err.Error(), "context canceled") {
 		t.Fatalf("legacy 'context canceled' text must survive for the existing grep: %v", err)
 	}
-	if !logContains(c.Log.(*MockLogger), "class=idle_deadline") {
-		t.Fatalf("ai_call line must carry class=idle_deadline: %+v", c.Log.(*MockLogger).Logs)
+	if !logContains(c.Log.(*MockLogger), "class=idle") {
+		t.Fatalf("ai_call line must carry class=idle (class 46 vocabulary): %+v", c.Log.(*MockLogger).Logs)
 	}
 }
 

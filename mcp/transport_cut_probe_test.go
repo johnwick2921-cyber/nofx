@@ -32,8 +32,13 @@ func TestProbeWatchdogFireErrorString(t *testing.T) {
 	c := probeClient(t, srv)
 	_, err := c.CallWithRequestStreamDeadlines(&Request{}, nil, 300*time.Millisecond, 0)
 	t.Logf("WATCHDOG READER ERROR: %q class=%s", err, classifyAIError(err))
-	if !errors.Is(err, ErrStreamIdleDeadline) {
-		t.Fatalf("expected idle sentinel, got %v", err)
+	// CLASS 46 D4 — the watchdog's reader error must be DISTINCT from a peer
+	// EOF, or "0 idle kills" cannot be told from "0 idle kills we can see".
+	if !errors.Is(err, ErrWatchdogIdle) {
+		t.Fatalf("expected the watchdog sentinel, got %v", err)
+	}
+	if strings.Contains(err.Error(), "unexpected EOF") {
+		t.Fatalf("a watchdog close must not look like a peer EOF: %v", err)
 	}
 }
 
