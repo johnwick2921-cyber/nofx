@@ -646,3 +646,33 @@ Generated from the journal by `scratch/parse_attempts2.py` (joins the `🧠 plan
 | 09-01 17:10:09 | 1625428 | max | S | 1? | full | 6343 | 9494 | 25619 | 84446 | 655 | 543.6 | true | 1 | stop | - | - | planner attempt 1/3 rejected: S1 breakdown_continue: a close came back across 29130.50 — t |
 | 09-01 17:15:51 | 1625428 | max | S | 2 | repair | 1120 | 1620 | 17869 | 64729 | 368 | 342.4 | true | 1 | stop | - | - | planner attempt 2/3 parse/schema rejected: scenario[0].confirm.rule "1x5m_close" — fade_re |
 | 09-01 17:23:14 | 1625428 | max | S | 3 | reauthor+block | 6470 | 9619 | 21623 | 73714 | 533 | 442.7 | true | 1 | stop | - | - | planner attempt 3/3 rejected: S2 breakdown_continue: a close came back across 29130.50 — t |
+
+---
+
+## LIVE EVIDENCE — first sightings of the class-37 telemetry (2026-09-01 23:47-23:53 CT) [A]
+
+On the class-38 binary (`c0580011`, which carries class 37), one ASIA level-wake read hit three
+provider-side mid-body EOFs; every failure line carried a class:
+
+```
+23:47:13 ai_call … duration_ms=250094 ok=false retries=1 ttfb_ms=510 reasoning_chars=54986 timeout_source=transport
+         deadline_s=600 class=transport http_status=200 request_id="" err="stream interrupted: unexpected EOF"
+23:47:13 ⏳ Waiting 2s before retry...
+23:47:15 ⚠️  AI API stream failed, retrying (2/2)...
+23:47:15 📡 Request URL (stream idle=30s total=1200s) …                       ← identical request re-sent
+23:47:33 ai_call … duration_ms=18167 ok=false retries=2 ttfb_ms=807 reasoning_chars=3073 … class=transport http_status=200 request_id=""
+23:47:33 🛰 planner call FAILED class=transport provider_row=8ef641a7-…_deepseek model=deepseek-v4-pro http_status=200
+         request_id="" elapsed=270.3s idle=30s total=1200s — still failed after 2 retries: stream interrupted: unexpected EOF
+23:52:41 ai_call … duration_ms=307957 ok=false retries=1 ttfb_ms=685 reasoning_chars=69503 … class=transport http_status=200 request_id=""
+23:52:43 ⚠️  AI API stream failed, retrying (2/2)... → landed 23:55:06 (attempt wall 453.7 s)
+```
+Rate: 4 stream transport cuts in 81 stream calls on 2026-09-01 (4.9 per 100; 0 of 31 on 08-31; the SSE
+path did not exist before 08-31 09:39). `http_status=200` on every cut — the provider accepted each
+request and closed the body mid-stream. `request_id=""` — DeepSeek sent none of X-Request-Id /
+Request-Id / X-Amzn-Requestid / Cf-Ray. The negotiated protocol is **HTTP/1.1** (SafeHTTPClient sets
+a custom DialContext without ForceAttemptHTTP2, which disables Go's automatic h2; probed 2026-09-02
+00:0x CT with a bare key-less GET: SafeHTTPClient → HTTP/1.1, stock transport → HTTP/2.0). DeepSeek's
+status page showed no incident for the window.
+
+**Class 37's own proof (a read past 600 s under the 1200 s ceiling) is still outstanding:** longest
+successful read since its boot is 543.6 s; the 1200 s ceiling has not yet been needed.

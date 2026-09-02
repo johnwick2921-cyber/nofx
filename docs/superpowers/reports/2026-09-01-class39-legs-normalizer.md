@@ -8,9 +8,9 @@ All times CT (R8). Live rev at dispatch: `c0580011` (class 38), PID 2030083.
 
 | Item | State |
 |---|---|
-| Code | merged to dev — sha in the closeout |
-| Build | clean clone `--no-local`, `vcs.modified=false` — stamps in §8 |
-| Cutover | **NOT DONE — PARKED pending the owner's explicit GO (A3)**; marker written only AFTER the boot checklist passes (A19) |
+| Code | **merged to dev @ `aeb11179`** (ff from `91c97dc6`); report `aeb11179`→`e31e9146`; marker `9df72702` |
+| Build | clean clone `--no-local` at `aeb11179`, `vcs.modified=false`, built 2026-09-02T04:12:33Z, sha256 `df0a24d4256b9767…`, 70,930,632 B |
+| Cutover | **DONE 00:01:01 CT 2026-09-02 on the owner's GO ("just go", overriding the live-arm HOLD)** — `🔐 BOOT INTEGRITY OK — rev aeb11179df5a · expected aeb11179df5a · goldens PASS` 00:01:07, PID 2089356; **marker committed AFTER the passed boot (A19)** — see §10 |
 | Proof (A20) | **NOT YET OCCURRED** for 39 — the first live arm on a non-sweep condition carrying legs. (Class 38's proof DID land during this wave: 23:12:44 CT, attempt 1 of 3, ASIA v5 active, zero rejects — see the class-38 report §12.) |
 | Lock (A2) | `~/nofx-main.lock` acquired 22:58 CT (no prior holder), released at closeout |
 | Stop-lines | held: no leg synthesized · sweep_reclaim untouched · no second pass · validator logic unchanged beyond the C1 insertion · no prompt text · no retry semantics · no knob beyond the cap · 35/36/37/38 paths untouched |
@@ -151,9 +151,24 @@ a shortfall.
 Storage projection from the live table (read-only, 23:0x CT): 20 rows, avg 20,261 B, max 25,939 B
 → **200 rows ≈ 3.86 MiB (worst case 4.95 MiB)** against a 653 MB database.
 
-## 8. Build, stage, rollback (A4/A13)
+## 8. Build, stage, rollback (A4/A13) [A]
 
-Filled in the closeout.
+```
+git clone --no-local ~/nofx <scratch>/clone-c39 && git checkout aeb11179df5a52b400e03c0cefbee52d5e4e67b9   (clone porcelain-clean)
+go build -o nofx-bin .
+	build	vcs.revision=aeb11179df5a52b400e03c0cefbee52d5e4e67b9
+	build	vcs.time=2026-09-02T04:12:33Z
+	build	vcs.modified=false
+sha256 df0a24d4256b9767c4f14693…  (70,930,632 bytes) → staged ~/nofx/nofx-bin.next (slot was free)
+goldens + class-39 guards re-run inside the built tree: ok
+```
+**Rollback (exact):**
+```
+cd ~/nofx && mv nofx-bin nofx-bin.bad.aeb11179 && cp nofx-bin.prev.boot nofx-bin \
+  && printf 'c0580011b4ce4fdefa9d92566019a6d5789d5c1e' > deploy/RELEASE \
+  && kill -9 $(systemctl show -p MainPID --value nofx) && git checkout -- deploy/RELEASE web/src/guide/types.ts
+```
+`nofx-bin.prev.boot` = the class-38 binary `c0580011`, also kept as `nofx-bin.old.c0580011`.
 
 ## 9. What the owner will STILL see wrong (A15)
 
@@ -166,3 +181,78 @@ Filled in the closeout.
 - Class 38's behavioural proof (first read authored on the new prompt) and class 37's (first read
   past 600 s) are still outstanding; no read has run since 22:23 CT.
 - The guide drift banner shows until this build is cut over and its marker lands.
+
+---
+
+## 10. CUTOVER — DONE (owner GO, 2026-09-02 00:01 CT) [A]
+
+**Cutover log (verbatim, in order):**
+- 23:36:33 CT GATE → HOLD. A5 1-4 all clean (DB OPEN 0 · API positions [] · NT8 count=0 ×2 · API open-orders []), A6 clean (replan_in_flight false, 0/0 reads), BUT armed_orders row 29 = ASIA v6 S1 leg 0/2 state WORKING limit 29035.25 (📌 armed S1 → WORKING 23:21:03, signal d00abc07…). Owner rule: arm placed since 23:20 → HOLD. Watcher armed (60 s poll, ≤90 min) for arms=0 · open=0 · reads in flight=0.
+- FINDING (report, A15/A23): /api/open-orders returned [] while a WORKING resting limit existed per the ledger and the 📌 line — flat-gate leg 4 is blind to at least this arm shape; the armed_orders ledger check is what held the swap.
+- ROOT CAUSE of the leg-4 blindness: trader/ninjatrader/tcp_trader.go:1149-1151 `func (t *TCPTrader) GetOpenOrders(symbol string) ([]types.OpenOrder, error) { return []types.OpenOrder{}, nil }` — a stub. /api/open-orders (api/server.go:373 → trader.GetOpenOrders) is therefore ALWAYS [] for NinjaTrader. Flat-gate leg 4 has been vacuous at the 35/36/37/38 cutovers; the working-order truth lives in armed_orders.state (WORKING) and the NT8 order_update frames. Recommendation (not this wave): the cutover rite's leg 4 should read `armed_orders WHERE state='working'` (or a real order-list frame once the AddOn sends one — Appendix L3 hygiene item). Class 33 candidate.
+- 23:43:02 CT a level-wake read started (5th wake, OB(bear)·4h invalidated) → A6 hard-holds the swap regardless of the arm override; waiter armed for the landing.
+- 23:47:13 CT CLASS-37 LIVE EVIDENCE: `ai_call model=deepseek-v4-pro duration_ms=250094 ok=false retries=1 ttfb_ms=510 reasoning_chars=54986 timeout_source=transport deadline_s=600 class=transport http_status=200 request_id="" err="stream interrupted: unexpected EOF"` → 23:47:15 `⚠️ AI API stream failed, retrying (2/2)` → `Request URL (stream idle=30s total=1200s)` re-sent with the IDENTICAL prompt. First live sighting of a class= token on a failure line and of the client-level transport retry on the 1200s stream. (request_id="" — DeepSeek returned none of the probed headers.)
+- 23:47:33 CT retry ALSO hit `stream interrupted: unexpected EOF` (18.2 s in, retries=2) → `🛰 planner call FAILED class=transport provider_row=8ef641a7-…_deepseek model=deepseek-v4-pro http_status=200 request_id="" elapsed=270.3s idle=30s total=1200s — still failed after 2 retries` (first live sighting of the class-37 FAILED line) → `📐 planner attempt 1/3 failed` → `🧩 planner attempt 2/3 reauthor+block: prompt ~6783 tokens` — the re-author block carries the TRANSPORT text as the "validator reason" (owner ruling M4 2026-09-01: transport/deadline failures should retry the IDENTICAL prompt — NOT yet implemented; queued, not this wave). Two consecutive provider-side EOFs on the same read = DeepSeek stream instability at ~23:47 CT. A6 hard-hold continues until PLAN written / FAIL-CLOSED. arm 29 still WORKING.
+- 23:52:41 CT THIRD cut on the same read: attempt 2/3 call 1 `ai_call … duration_ms=307957 ok=false retries=1 ttfb_ms=685 reasoning_chars=69503 class=transport http_status=200 request_id="" err="stream interrupted: unexpected EOF"`. Pattern: 3 provider-side mid-body EOFs in 6 min (250 s / 18 s / 308 s), all 200 OK at the head — DeepSeek stream instability, not our ceiling (no client_timeout/total_deadline class). The class-37 telemetry attributes every one; request_id="" throughout.
+- 23:55:06 CT attempt 2/3 landed at the transport level (453.7 s incl. the 308 s cut + 2 s backoff + ~144 s retry) but the VALIDATOR rejected it: `S3 breakup_continue: a close came back across 29068.05 — the breakdown is void; author a \`reject\` play instead` — a facts rule (breakdown-void), not a leg-contract / token shape → not a class-38 counterexample. Attempt 3/3 (repair) begins; A6 hold continues.
+
+- 23:55:06 CT attempt 3/3 (repair, ~986 tokens) landed 23:58:16 in 189.9 s → `🗓️ PLAN written 2026-09-01 ASIA v7 … lifecycle active` — the read is over; A6 clears.
+- 00:00:19 CT first gate run tripped on MY OWN in-flight counter (`planner model` lines minus `planner call` lines = −3): retried calls emit one `planner call` line per attempt against one `planner model` line per read. Not a real read in flight (`replan_in_flight:false`, v7 just written). Re-keyed the check to *last model line older than last plan write*. Lesson recorded: an in-flight test must key on read boundaries, not call counts.
+
+**Final gate, 00:01:01 CT — hard gates green, live arms advisory per the owner's override:**
+
+| Gate | Value |
+|---|---|
+| A5 1/4 DB `status='OPEN'` | **0** |
+| A5 2/4 `GET /api/positions` | **`[]`** |
+| A5 3/4 NT8 positions snapshot | **`count=0`** Sim101 · **`count=0`** SimAccount1 |
+| A5 4/4 `GET /api/open-orders` | `[]` — **stub, always `[]` on NinjaTrader** (`trader/ninjatrader/tcp_trader.go:1149`); see the finding below |
+| A6 `replan_in_flight` | **false** · last read started 23:43:02 · last plan write 23:58:16 → **no read in flight** |
+| A7 live arms | **2 WORKING** (ids 29, 30 — ASIA v6 S1 split legs 0/1, limits at 29035.25) — **owner override "just go"** at 23:4x CT, after the 23:36 HOLD |
+
+**Swap:** `deploy/RELEASE` file written to `aeb11179…` at 00:01:01 (uncommitted) → `cp nofx-bin nofx-bin.prev.boot && mv nofx-bin nofx-bin.old.c0580011 && mv nofx-bin.next nofx-bin` → `kill -9 2030083` at 00:01:01 → systemd relaunched → PID **2089356** at 00:01:06.
+
+**Boot checklist (A19 — one boot, then one marker) [A]:**
+```
+00:01:07 🔐 BOOT INTEGRITY OK — rev aeb11179df5a · built 2026-09-02T04:12:33Z · expected aeb11179df5a · goldens PASS
+00:01:07 ⚖ arm normalizer: legs on non-sweep → single arm + WARN (class 39); sweep_reclaim contract unchanged;
+         counter arms_normalized_class39 recorded in system_config                                  ← class 39
+00:01:07 📜 prompt/validator contract: 17 restrictions, all stated in prompt (class 38 guard)        ← 38 intact
+00:01:07 🧪 validator hints: 15 sites — … every rule token in its own field enum (class 34 + 38)     ← 34/38 intact
+00:01:07 🚀 planner speed wave … stream_idle=30s stream_total=1200s (class 37 …)                    ← 37 intact
+00:01:07 🗓 preflight: scheduled reads bypass freshness in halt/weekend (class 36)                   ← 36 intact
+00:01:07 🛰 planner client: provider_row=8ef641a7-…_deepseek stream_idle=30s stream_total=1200s http_ceiling=600s …
+00:01:07 ✅ Trader auto-started successfully · positions snapshot count=0 (both accounts) · zero error-level lines
+```
+**Marker `9df72702`** committed at 00:0x CT AFTER the checklist above — `deploy/RELEASE` + `GUIDE_BUILT_REV` = `aeb11179…`. The gap between the RELEASE file write and the marker commit was the attended swap window only.
+
+**The two working arms across the restart:** ledger after boot → `29:working 30:working `. Arm lines since boot:
+2026-09-02T00:01:07-05:00 🪢 netting-orphan wave (class 27, 2026-08-31): netting-flat cancels brackets (C# sweep + Go desync cancel_order) · exit r
+2026-09-02T00:01:07-05:00 ⚔️ armed_orders=on place_band=100t stale_working=15m test_seam=ON arm_rr=2.0 (gate-at-arm only; market-entry floor 2.0 u
+2026-09-02T00:03:07-05:00 ⚔️ arm S1 leg 1 wait_confirm MET (touch) — arming
+2026-09-02T00:05:07-05:00 ⚔️ arm S1 leg 1 wait_confirm MET (touch) — arming
+NT8 positions stayed at count=0 through the restart; the resting limits belong to the broker and were not filled during the ~5 s gap.
+
+**Proof (A20) — NOT YET OCCURRED for class 39.** The proving event is the first live arm on a
+non-sweep condition that carries legs: quote the `⚖ arm normalized (class 39): …` WARN, the kept arm,
+and whether it placed. Tonight's three reads on the class-38 prompt authored the contract correctly
+(v6 S1 legal 2-leg sweep + S2 single-arm reject; v7 likewise), so the normalizer had nothing to do —
+with 38 stating the contract, rare is the desired outcome. The counter `arms_normalized_class39` reads 0.
+The persistent journal watch stays armed for the first ⚖ line.
+
+**Live-surface findings from the cutover (A15/A23), not changed here:**
+1. **Flat-gate leg 4 is structurally blind on NinjaTrader.** `TCPTrader.GetOpenOrders` returns an empty
+   slice unconditionally (`tcp_trader.go:1149-1151`), so `/api/open-orders` was `[]` at every cutover
+   today (35-39) while, tonight, two limits rested at the broker. The `armed_orders` ledger is what
+   caught the arm. Recommendation: the cutover rite's leg 4 reads `armed_orders WHERE state='working'`
+   until the AddOn sends a real order-list frame. Class-33 candidate (the "fifth flat-gate leg").
+2. **Class 37 telemetry, first live sightings:** three provider-side mid-body EOFs on one read
+   (250,094 ms / 18,167 ms / 307,957 ms — 54,986 / 3,073 / 69,503 reasoning chars received), every one
+   stamped `class=transport http_status=200 request_id=""`; the client retry fired each time
+   (`⏳ Waiting 2s` → `retrying (2/2)` → identical request re-sent on the 1200 s stream); the
+   `🛰 planner call FAILED class=transport provider_row=… elapsed=270.3s` line fired once. DeepSeek
+   returned none of the four request-id headers probed. Its status page shows no incident for the window.
+3. **Owner ruling M4 (transport failures retry the identical prompt at the PLANNER level) is not yet
+   implemented:** attempt 2/3 at 23:47:33 went out as `reauthor+block` carrying the transport text as
+   the "validator reason". Queued, not this wave.
+4. The in-flight counter artifact above — fixed in the rite, not in code.
