@@ -181,6 +181,7 @@ Before (record 36090): `Total Trades: 220 … Total PnL: -203.68 USDT` and row 8
 - `api/handler_plan.go:1685` still echoes raw `realized_pnl` per row in the graded-trades list (per-row echo, not an aggregate; out of scope, noted).
 - The wake re-read in flight at the swap was lost by the override; v7 stays active and the next level event re-wakes it (30-minute wake throttle applies).
 - Boot 1's ~80 seconds of TradingRefused (00:10:21–00:11:42) are in the log as two `[ERRO]` lines; no order was attempted in that window (positions `[]` throughout).
+- **Correction to "the S1 arm survived both restarts" (00:32 CT):** it survived only as an API state. The arms placed by the OLD process (S1 limit 29044, S3 limit 29068.05) had no `order_update` stream after the restart and were **cancelled at 00:31:48 CT by the stale-window reconcile** (`✕ armed S1 cancelled — no order_update for 15m (reconnect/reconcile)`, same for S3). That is the real cost of overriding the A7 "no cutover with live arms" hold: resting arms authored before a restart are orphaned and cleaned up 15 minutes later, not carried. Meanwhile the new binary is trading normally: position **587** (LONG 1 @ 29079.25, Sim101, cited S3, plan v7) opened at **00:17:44 CT**, one minute after the proof cycle; ASIA is on plan v8 at 00:32.
 
 ## Closeout
 Commits on dev: `a6ea66a0` fix · `dbf7e45e` checklist 40 · `23f56f49` report · `128a3c53` marker · this addendum. Lock released, worktree `../nofx-pnltruth` removed, repo memory updated (`project_pnl_truth_wave.md`, with the A19 file-before-swap lesson).
