@@ -375,6 +375,40 @@ in CLAUDE.md).
     failed provider call carries a failure class — "the API keeps failing" is
     not a log line.
 
+38. **Prompt/validator contract mismatch — the prompt offers what the
+    validator refuses.** Root cause: the authoring contract lives in TWO
+    places that drift. 2026-09-01 ASIA, ONE read, three attempts, three
+    DIFFERENT rejects (`planner_rejected_prompts` 78/79/80): (a) the entry-law
+    `Style` string — quoted VERBATIM into the rejection the model reads — said
+    "2x5m legal ONLY here" while `confirm.rule`'s enum is
+    touch|1x5m_close|2x5m_close|1m_mss|time_hold; "2x5m" belongs to the
+    SEPARATE death/flip enum; (b) the model copied that token into
+    confirm2.rule and was rejected for complying, and its repair came back
+    unparseable; (c) the schema line offered `"legs":[…]` on EVERY scenario
+    with no condition qualifier while its siblings fvg{}/breakdown{} on the
+    same line DO carry "REQUIRED iff …", and the sweep_reclaim-only rule lived
+    ONLY in plan_doc.go. Rendered-prompt counts before the fix: "arm_legs" 0 ·
+    "split entry" 0 · "arm single" 0 · "EXACTLY 2 legs" 0 · "split contract" 0.
+    Scale: 35 of 121 validator rejects in 72h were legs on a non-sweep
+    condition (breakdown_continue 24, reject 11); 7 landed on attempt 3/3 and
+    two sessions fail-closed on it. The class-34 guard stayed green throughout
+    because it checked CONDITION tokens only. **Probe:** for every validator
+    branch keyed by condition/field, grep the RENDERED prompt for the sentence
+    that states it — absent = the defect; and scan every hint string for
+    enum-valued tokens, checking each against the enum of ITS OWN field (the
+    same spelling can be legal in one field and illegal in another).
+    **Fix:** `kernel/prompt_contract.go` — a registry of the 17 condition-keyed
+    restrictions with the sentence each requires, `ValidatePromptContracts`
+    failing the build (table test) and shouting at boot
+    (`📜 prompt/validator contract: N restrictions, all stated in prompt`);
+    `ValidateValidatorHints` extended with `HintRuleField` so every rule token
+    is checked against its own field enum, and the entry-law `Style` strings
+    registered as hints; one token vocabulary everywhere, with the death/flip
+    enum declared beside its own schema line. **Law:** the prompt states every
+    restriction its validator enforces — a rule the author cannot read is a
+    trap, and a hint is an instruction, so it must be legal in the field it
+    describes.
+
 ---
 
 ## PART 2 — PRE-AUDIT (standing hard rules)

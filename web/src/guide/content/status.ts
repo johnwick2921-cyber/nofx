@@ -18,6 +18,8 @@ export const status: GuideSection = {
         '🛡 plan facts guards: 0-side + empty map fail-closed …',
         '🚀 planner speed wave: retry=repair stream=on stream_idle=30s stream_total=1200s …',
         '🛰 planner client: provider_row=<ai_models id> stream_idle=30s stream_total=1200s http_ceiling=600s …  ← class 37 (per trader)',
+        '🧪 validator hints: N sites — condition tokens legal+live, rule tokens in-field',
+        '📜 prompt/validator contract: N restrictions, all stated in prompt  ← class 38',
         '🎛 volume wave …   ← wave detector knobs',
         '🎯 touch telemetry …',
         '📐 fvg_entry …',

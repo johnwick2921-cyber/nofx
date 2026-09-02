@@ -19,8 +19,13 @@ func TestValidatorHintsNameOnlyLegalLiveConditions(t *testing.T) {
 	}
 	resolved := ResolvedConditionStatuses(nil, nil, "")
 	for _, h := range ValidatorHints() {
-		if len(h.Conditions) == 0 {
-			t.Errorf("hint %q declares no condition tokens", h.Site)
+		// CLASS 38 generalisation: the registry now covers TWO enum families —
+		// condition names (class 34) and rule tokens (class 38, e.g. the entry
+		// law Style strings, which name confirm rules and no condition at all).
+		// A hint must be checkable against at least one of them; a hint that
+		// declares neither is invisible to both guards.
+		if len(h.Conditions) == 0 && h.RuleField == HintFieldNone {
+			t.Errorf("hint %q declares neither condition tokens nor a rule field — no guard can check it", h.Site)
 		}
 		for _, c := range h.Conditions {
 			if !known[c] {
