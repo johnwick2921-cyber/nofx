@@ -221,39 +221,15 @@ var (
 	ErrStreamTotalDeadline = errors.New("stream total deadline exceeded")
 )
 
-// classifyAIError maps a failed call's error to ONE class token for the
-// ai_call line: total_deadline · idle_deadline · client_timeout · http_status ·
-// auth_config · transport · context · other. Most-specific first.
-func classifyAIError(err error) string {
-	if err == nil {
-		return "ok"
-	}
-	msg := err.Error()
-	switch {
-	case errors.Is(err, ErrStreamTotalDeadline):
-		return "total_deadline"
-	case errors.Is(err, ErrStreamIdleDeadline):
-		return "idle_deadline"
-	case strings.Contains(msg, "Client.Timeout"):
-		return "client_timeout"
-	case strings.Contains(msg, "(status "):
-		return "http_status"
-	case strings.Contains(msg, "API key not set"):
-		return "auth_config"
-	case strings.Contains(msg, "connection reset"), strings.Contains(msg, "broken pipe"),
-		strings.Contains(msg, "connection refused"), strings.Contains(msg, "no such host"),
-		strings.Contains(msg, "i/o timeout"), strings.Contains(msg, "TLS handshake"),
-		strings.Contains(msg, "EOF"), strings.Contains(msg, "stream error"):
-		return "transport"
-	case strings.Contains(msg, "context deadline exceeded"), strings.Contains(msg, "context canceled"):
-		return "context"
-	}
-	return "other"
-}
+// classifyAIError is RETIRED (class 46): the single classifier is
+// ClassifyFailure(err, httpStatus) in failure_class.go, which sees the HTTP
+// status and therefore cannot call a 503 body "transport". This shim remains
+// only for the legacy call sites inside this file.
+func classifyAIError(err error) string { return string(ClassifyFailure(err, 0)) }
 
 // ClassifyAIError (class 41) exports the ai_call class token for callers
 // outside mcp (the planner attempt loop decides resend-vs-repair on it).
-func ClassifyAIError(err error) string { return classifyAIError(err) }
+func ClassifyAIError(err error) string { return string(ClassifyFailure(err, 0)) }
 
 // IsProviderFailure (class 41, owner ruling class 37 M4) — true when a failed
 // call never produced a model answer to repair: transport cut, idle/total
@@ -264,17 +240,11 @@ func IsProviderFailure(err error) bool {
 	if err == nil {
 		return false
 	}
-	switch classifyAIError(err) {
-	case "transport", "idle_deadline", "total_deadline", "client_timeout", "context":
-		return true
-	case "http_status":
-		// 2026-09-02 01:15 CT: "Server Overloaded" 503 ×3 burned all three
-		// planner attempts in 9 s, each re-authored with the 503 text as its
-		// "validator reason". A 5xx or 429 is the provider, not the prompt.
-		st := httpStatusFrom(err.Error())
-		return st >= 500 || st == 429
-	}
-	return false
+	// CLASS 46 — one vocabulary, one predicate. empty_200, too_long and parse
+	// are now provider-side: the model never produced a document those errors
+	// are ABOUT, so appending them as "your plan's defect" is poisoned
+	// feedback (class 34/37, still open before this wave).
+	return FailureIsProviderSide(ClassifyFailure(err, 0))
 }
 
 // httpStatusFrom extracts NNN from "(status NNN)" in an API error message; 0
@@ -406,17 +376,10 @@ func (client *Client) logAICall(start time.Time, callErr error, retries int) {
 	// Which deadline actually fired. net/http wraps them all in the same
 	// "context deadline exceeded" text, hence the incident's ambiguity.
 	msg := callErr.Error()
-	source := "transport"
-	switch {
-	case errors.Is(callErr, ErrStreamTotalDeadline):
-		source = "planner_total" // class 37 — the planner's own whole-call ceiling
-	case errors.Is(callErr, ErrStreamIdleDeadline):
-		source = "stream_idle" // the idle watchdog on a silent stream
-	case strings.Contains(msg, "Client.Timeout"):
-		source = "client" // http.Client.Timeout — the whole-request ceiling
-	case strings.Contains(msg, "context deadline exceeded"), strings.Contains(msg, "context canceled"):
-		source = "context" // a caller-supplied ctx (agent paths)
-	}
+	// CLASS 46 — `timeout_source` is DELETED. It defaulted to "transport" and
+	// was overridden for four sentinels only, so it tagged 5xx, parse failures
+	// and empty 200s as transport: right on 5 of 50 audited failures, wrong on
+	// 23. `class=` is now the only label, from ONE function.
 	deadline := int64(0)
 	if client.HTTPClient != nil {
 		deadline = int64(client.HTTPClient.Timeout / time.Second)
@@ -424,10 +387,12 @@ func (client *Client) logAICall(start time.Time, callErr error, retries int) {
 	// Class 37 — ONE class token per failure so "the API keeps failing" can
 	// never again be the whole diagnosis; status + provider request id ride
 	// along when a response arrived at all.
-	class := classifyAIError(callErr)
+	status := int(client.lastHTTPStatus.Load())
+	class := string(ClassifyFailure(callErr, status))
 	client.lastErrClass.Store(class)
-	client.Log.Warnf("ai_call model=%s duration_ms=%d finish_reason=n/a ok=false retries=%d ttfb_ms=%d reasoning_chars=%d timeout_source=%s deadline_s=%d class=%s http_status=%d request_id=%q err=%q",
-		client.Model, durMs, retries, client.lastTTFBMs.Load(), client.lastReasoningChars.Load(), source, deadline, class, client.lastHTTPStatus.Load(), client.lastRequestIDString(), msg)
+	client.Log.Warnf("ai_call model=%s duration_ms=%d finish_reason=n/a ok=false retries=%d ttfb_ms=%d reasoning_chars=%d deadline_s=%d class=%s provider_side=%v http_status=%d request_id=%q err=%q",
+		client.Model, durMs, retries, client.lastTTFBMs.Load(), client.lastReasoningChars.Load(), deadline, class,
+		FailureIsProviderSide(FailureClass(class)), status, client.lastRequestIDString(), msg)
 }
 
 // CallWithMessages template method - fixed retry flow (cannot be overridden)

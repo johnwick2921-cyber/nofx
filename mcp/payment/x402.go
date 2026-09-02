@@ -29,14 +29,14 @@ var x402WarnLast sync.Map // key -> unix seconds of the last WARN
 
 // x402WarnThrottled logs at most once per hour per key.
 func x402WarnThrottled(key string, log mcp.Logger, format string, args ...interface{}) {
-        now := time.Now().Unix()
-        if v, ok := x402WarnLast.Load(key); ok {
-                if last, _ := v.(int64); now-last < 3600 {
-                        return
-                }
-        }
-        x402WarnLast.Store(key, now)
-        log.Warnf(format, args...)
+	now := time.Now().Unix()
+	if v, ok := x402WarnLast.Load(key); ok {
+		if last, _ := v.(int64); now-last < 3600 {
+			return
+		}
+	}
+	x402WarnLast.Store(key, now)
+	log.Warnf(format, args...)
 }
 
 const (

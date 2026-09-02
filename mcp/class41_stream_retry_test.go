@@ -94,8 +94,8 @@ func TestClass41WatchdogFireIsLogged(t *testing.T) {
 	defer srv.Close()
 	c := streamClient(t, srv.URL, 1)
 	_, err := c.CallWithRequestStreamDeadlines(&Request{}, nil, 300*time.Millisecond, 0)
-	if classifyAIError(err) != "idle_deadline" {
-		t.Fatalf("want idle_deadline, got %v", err)
+	if classifyAIError(err) != string(ClassIdle) { // class 46: the vocabulary collapsed idle_deadline → idle
+		t.Fatalf("want class idle, got %v", err)
 	}
 	found := false
 	for _, e := range c.Log.(*MockLogger).GetLogs() {

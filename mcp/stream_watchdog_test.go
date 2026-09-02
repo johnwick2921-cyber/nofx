@@ -222,11 +222,11 @@ func TestClass37LegacyIdleCallKeepsHTTPTimeoutCeiling(t *testing.T) {
 	if !strings.Contains(err.Error(), "Client.Timeout") {
 		t.Fatalf("expected the Client.Timeout signature, got %v", err)
 	}
-	if classifyAIError(err) != "client_timeout" {
-		t.Fatalf("class = %q, want client_timeout", classifyAIError(err))
+	if classifyAIError(err) != string(ClassTotalDeadline) /* class 46: the vocabulary has no client_timeout — an http.Client ceiling IS a total deadline */ {
+		t.Fatalf("class = %q, want total_deadline", classifyAIError(err))
 	}
-	if !logContains(c.Log.(*MockLogger), "class=client_timeout") {
-		t.Fatalf("ai_call line must carry class=client_timeout: %+v", c.Log.(*MockLogger).Logs)
+	if !logContains(c.Log.(*MockLogger), "class=total_deadline") {
+		t.Fatalf("ai_call line must carry class=total_deadline (class 46 vocabulary): %+v", c.Log.(*MockLogger).Logs)
 	}
 	if c.IsRetryableError(err) {
 		t.Fatalf("a Client.Timeout kill must NOT be retried at the client level (the planner loop owns that retry; observed 11 kills / 0 client retries)")
@@ -333,12 +333,15 @@ func TestClass37ClassifyAIErrorTable(t *testing.T) {
 	cases := []struct {
 		msg, want string
 	}{
-		{"stream interrupted: context deadline exceeded (Client.Timeout or context cancellation while reading body)", "client_timeout"},
-		{"failed to read response: context deadline exceeded (Client.Timeout or context cancellation while reading body)", "client_timeout"},
+		{"stream interrupted: context deadline exceeded (Client.Timeout or context cancellation while reading body)", string(ClassTotalDeadline) /* class 46: the vocabulary has no client_timeout — an http.Client ceiling IS a total deadline */},
+		{"failed to read response: context deadline exceeded (Client.Timeout or context cancellation while reading body)", string(ClassTotalDeadline) /* class 46: the vocabulary has no client_timeout — an http.Client ceiling IS a total deadline */},
 		{"failed to read response: read tcp 10.0.0.141:45938->3.173.21.63:443: read: connection reset by peer", "transport"},
 		{"stream interrupted: read tcp 10.0.0.141:47328->3.173.21.63:443: read: connection reset by peer", "transport"},
-		{"API error (status 429): rate limited", "http_status"},
-		{"API returned error (status 502): bad gateway", "http_status"},
+		// class 46: http_status split into http_5xx / http_4xx so the retry
+		// policy can tell "the provider is overloaded" from "our request is wrong".
+		{"API error (status 429): rate limited", string(ClassHTTP5xx)},
+		{"API returned error (status 502): bad gateway", string(ClassHTTP5xx)},
+		{"API error (status 400): invalid request", string(ClassHTTP4xx)},
 		{"streaming request failed: Post \"https://x\": dial tcp: lookup api.deepseek.com: no such host", "transport"},
 		{"AI API key not set", "auth_config"},
 		{"stream interrupted: context canceled", "context"},
@@ -352,7 +355,7 @@ func TestClass37ClassifyAIErrorTable(t *testing.T) {
 	if classifyAIError(fmt.Errorf("%w (total 20m0s, stream was live): x", ErrStreamTotalDeadline)) != "total_deadline" {
 		t.Errorf("wrapped total sentinel not classified")
 	}
-	if classifyAIError(fmt.Errorf("%w (idle 30s of silence): x", ErrStreamIdleDeadline)) != "idle_deadline" {
+	if classifyAIError(fmt.Errorf("%w (idle 30s of silence): x", ErrStreamIdleDeadline)) != string(ClassIdle) {
 		t.Errorf("wrapped idle sentinel not classified")
 	}
 }
