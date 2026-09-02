@@ -79,9 +79,31 @@ func TestClass45PinLondon0132(t *testing.T) {
 		t.Errorf("E1: the prompt must ask for a SHORT-direction scenario (any legal condition)")
 	}
 
-	// E1b (plan_doc's message), E2 (the void line) and E3 (the floor line) need
-	// mechanisms that do not exist yet; they are pinned in
-	// class45_feeds_forward_test.go, which lands WITH the implementation. This
-	// test deliberately stays compilable on the pre-45 tree so its failure is
-	// BEHAVIOURAL, not a build error.
+	// (E1b) The validator's MESSAGE must use the same words as its RULE. The
+	// rule is hasDirection(short) — ANY condition — while the message said
+	// "continuation/breakdown short", which is part of what taught the model to
+	// reach for breakdown_continue at a dead level.
+	if !strings.Contains(planDocGapDownMessage(), "SHORT-direction") {
+		t.Errorf("E1b: plan_doc's gap-down message must match its direction-only rule, got %q", planDocGapDownMessage())
+	}
+
+	// (E2) The facts block carries the void forward, from the SAME predicate.
+	voidLine := RenderVoidBreakdownLevels([]VoidBreakdownLevel{{Price: lvl, Short: true, ReclaimedAtCT: "01:14 CT"}})
+	for _, want := range []string{"VOID breakdown levels", "29021.25", "reclaimed 01:14 CT", "do NOT author breakdown_continue"} {
+		if !strings.Contains(voidLine, want) {
+			t.Errorf("E2: the void line must contain %q, got %q", want, voidLine)
+		}
+	}
+	if RenderVoidBreakdownLevels(nil) != "" {
+		t.Errorf("E2: no void levels → no section at all, got %q", RenderVoidBreakdownLevels(nil))
+	}
+
+	// (E3) The floor the composer enforces, stated from its own resolver.
+	floor := RenderStopFloorLine(26.02, 1.5)
+	if !strings.Contains(floor, "Minimum stop distance") || !strings.Contains(floor, "39.0 pts") {
+		t.Errorf("E3: the floor line must state the resolved points, got %q", floor)
+	}
+	if RenderStopFloorLine(0, 1.5) != "" {
+		t.Error("E3: no ATR → no floor line, never an invented number")
+	}
 }

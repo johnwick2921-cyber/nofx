@@ -58,6 +58,20 @@ export const faq: GuideSection = {
           link: '#guards',
         },
         {
+          q: 'Why was a plan rejected twice for the same reason?',
+          a: 'It should not happen any more. Before class 50 (2026-09-02) the rewrite prompt named only the LAST defect, so a chain could be corrected about a fade, fix the fade, and walk back into the voided breakdown it had been rejected for two attempts earlier — which is exactly what the London read did that morning. The rewrite now carries every distinct defect of that read, oldest first, and it is printed twice: at the very top of the prompt, ahead of the playbook, and again at the very end. The attempt line says how many distinct defects are riding.',
+          mechanism:
+            'trader/auto_trader_planner.go addDistinctReject → plannerRejectHeader + plannerRejectTail, logged as "reauthor+block(top+tail, N distinct)".',
+          link: '#guards',
+        },
+        {
+          q: 'Why does the plan sometimes fight the prompt?',
+          a: "It used to. The prompt ordered a play ('below the prior day\u2019s low you MUST write a continuation short') while the validator voids a continuation into a level price has already reclaimed, so obeying the prompt earned a rejection. Since class 50 the prompt orders a DIRECTION and names the legal conditions, lists every breakdown level already reclaimed as void (decided by the validator\u2019s own code, not a second copy), and prints the minimum stop distance the arm gate will enforce (1.5\u00d7ATR5m, with the current reading) so a stop can be authored right the first time.",
+          mechanism:
+            'kernel/class45_feeds_forward.go ComputeVoidBreakdownLevels (calls BreakdownContinueState) + RenderStopFloorLine → the planner prompt.',
+          link: '#guards',
+        },
+        {
           q: 'Why did my stop get wider than the plan said?',
           a: 'Since 0B every armed stop is composed: beyond the nearest seated level on the risk side plus 2 ticks, floored at 1.5×ATR5m, widest wins — and never tighter than the planner authored. The arm logs 🛑 with the chosen stop, the anchor level, the ATR floor and which one bound. If nothing seated sits within 3×ATR on the risk side the line says stop_unanchored and the ATR floor governs. Note the R:R gate then judges the WIDER stop, so some arms are now refused at ARM_MIN_RR 2.0 that would previously have rested.',
           mechanism:

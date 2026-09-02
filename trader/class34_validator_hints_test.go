@@ -68,3 +68,25 @@ func TestClass34RepairLawsNameOnlyLegalLiveConditions(t *testing.T) {
 		t.Fatalf("ValidateValidatorHints: %v", err)
 	}
 }
+
+// CLASS 45 E4 (2026-09-02): class 34's canon is that the validator's verbatim
+// reason and its legal-token hint REACH the model. Since 45 the live re-author
+// carries them through the cumulative header/tail, not through the legacy
+// single-defect tail above — so the canon is pinned on the path actually used.
+func TestClass34HintSurvivesTheClass45Blocks(t *testing.T) {
+	err := fmt.Errorf("S3 breakdown_continue: a close came back across 29517.00 — the breakdown is void; %s", kernel.BreakdownReclaimedHint)
+	live := kernel.ResolvedLiveConditions(nil, nil, "")
+	h := addDistinctReject(nil, err)
+
+	for name, block := range map[string]string{"header": plannerRejectHeader(h, live), "tail": plannerRejectTail(h, live)} {
+		if !strings.Contains(block, "breakdown is void") {
+			t.Errorf("%s lost the verbatim reason: %q", name, block)
+		}
+		if !strings.Contains(block, "`reject` play") || strings.Contains(block, "author a reject/retest") {
+			t.Errorf("%s lost the legal-token hint: %q", name, block)
+		}
+		if !strings.Contains(block, "Valid conditions: [") {
+			t.Errorf("%s lost the valid-conditions suffix: %q", name, block)
+		}
+	}
+}

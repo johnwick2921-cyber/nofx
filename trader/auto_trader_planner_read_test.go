@@ -186,9 +186,18 @@ func TestRunPlannerReadRepairFallbackAndRegression(t *testing.T) {
 	if !strings.Contains(blocks[1], "You are repairing a rejected plan") {
 		t.Fatalf("attempt 2 must be the repair prompt, got %q", blocks[1])
 	}
-	if !strings.Contains(blocks[2], "## PREVIOUS ATTEMPT REJECTED / Validator reason (verbatim)") ||
+	// CLASS 45 E4 (2026-09-02): the re-author's corrections lead the prompt AND
+	// close it. Was: a single "PREVIOUS ATTEMPT REJECTED" tail only.
+	if !strings.Contains(blocks[2], "## CORRECTIONS FROM THIS READ — read these FIRST") ||
+		!strings.Contains(blocks[2], "## CORRECTIONS FROM THIS READ (repeated") ||
 		!strings.Contains(blocks[2], "FULLPROMPT") {
-		t.Fatalf("attempt 3 must be the full re-author + reject block, got %q", blocks[2])
+		t.Fatalf("attempt 3 must be the full re-author with corrections at TOP and TAIL, got %q", blocks[2])
+	}
+	if n := strings.Count(blocks[2], "no JSON object found in planner output"); n != 2 {
+		t.Fatalf("the defect must be stated twice (top and tail), counted %d: %q", n, blocks[2])
+	}
+	if hi, lo := strings.Index(blocks[2], "CORRECTIONS FROM THIS READ"), strings.Index(blocks[2], "FULLPROMPT"); hi > lo {
+		t.Fatalf("the corrections must LEAD the prompt, not trail the playbook")
 	}
 	if delta := telemetry.RepairRegressionCount() - base; delta < 1 {
 		t.Fatalf("repeated-defect regression counter must increment, delta=%d", delta)

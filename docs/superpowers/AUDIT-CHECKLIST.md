@@ -764,6 +764,45 @@ in CLAUDE.md).
     label earns its default, and every kill switch must have an input that
     fires it and an output you can tell apart.
 
+50. **The prompt withheld what the validator enforces — and the correction
+    remembered only the last mistake.** (Dispatch "class 45"; checklist slot 45
+    was already the pantry class, hence 50.) Root cause: the planner prompt and
+    the plan validator are two statements of the same law, written in different
+    places, and nobody diffed them. **(a) The prompt ORDERED A PLAY, the
+    validator VOIDED it.** Line 589 read "If price sits BELOW PDL you MUST write
+    a continuation short" — an unconditional MUST naming one condition. But
+    `BreakdownContinueState` voids a breakdown continuation once a close comes
+    back across the level, so on any reclaimed level the only compliant answer
+    was a rejected one. The model obeyed and was punished; the 2026-09-02 LONDON
+    01:32 read burned attempt 1 exactly this way. **(b) The stop floor was
+    enforced but never stated.** 0B raised the arm-time floor to 1.5xATR5m and
+    the planner was told no number at all, so it authored stops that were
+    silently widened at arm time — and the R:R gate then judged the WIDER stop,
+    refusing arms the model believed it had sized correctly. **(c) The
+    correction block carried only the LAST defect.** Same read: attempt 1
+    rejected for the voided breakdown, attempt 2 for a fade with no touch,
+    attempt 3 told only about the fade — it fixed the fade and walked back into
+    the void, spending the whole chain on two defects it had already been told
+    about separately. The block also sat at the TAIL of a ~6,600-token prompt,
+    the position most likely to be skimmed. **Probe:** enumerate every MUST in
+    the prompt and name the validator function that can reject a document
+    obeying it — any MUST that names a CONDITION rather than a DIRECTION is a
+    contradiction waiting for the right market. For every gate that can rewrite
+    or refuse the model's output, ask whether its threshold appears in the
+    prompt as a number. For every retry, ask whether it states the defects of
+    ALL prior attempts or only the most recent. **Fix:** the MUST now orders a
+    DIRECTION and names the legal conditions; `ComputeVoidBreakdownLevels`
+    lists every already-reclaimed breakdown level in the prompt by CALLING
+    `BreakdownContinueState` itself (a parity fixture pins 40/40 checks across
+    20 tapes, so the list cannot drift from the verdict); `RenderStopFloorLine`
+    prints the floor with the live ATR reading; `addDistinctReject` accumulates
+    the chain's DISTINCT defects and `plannerRejectHeader`/`plannerRejectTail`
+    state them at the TOP and the TAIL (~240 tokens), recorded at all eight
+    reject sites. **Law:** the prompt must state every rule the validator will
+    enforce, in the validator's own words and by calling the validator's own
+    code where a verdict is involved; a correction is cumulative or it teaches
+    the model to trade one mistake for another.
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,

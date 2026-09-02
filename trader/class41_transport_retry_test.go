@@ -40,8 +40,12 @@ func TestClass41TransportFailureResendsIdenticalPrompt(t *testing.T) {
 	if h(prompts[0]) != h(prompts[1]) {
 		t.Fatalf("transport failure must re-send the IDENTICAL prompt: attempt1 hash %s != attempt2 hash %s\nattempt2 tail: %q", h(prompts[0])[:12], h(prompts[1])[:12], tail(prompts[1], 200))
 	}
-	if strings.Contains(prompts[1], "PREVIOUS ATTEMPT REJECTED") {
-		t.Fatalf("no reject block on a transport failure")
+	// Both shapes: the legacy tail and the class-45 top/tail corrections. A
+	// transport failure is not a rejection and must teach the model nothing.
+	for _, marker := range []string{"PREVIOUS ATTEMPT REJECTED", "CORRECTIONS FROM THIS READ"} {
+		if strings.Contains(prompts[1], marker) {
+			t.Fatalf("no reject block on a transport failure, found %q", marker)
+		}
 	}
 }
 

@@ -47,6 +47,14 @@ type PlannerInput struct {
 	// flipped), listed so the planner works around them. Advisory.
 	ConsumedLevels []string
 
+	// CLASS 45 (2026-09-02) — the feed-forward inputs. VoidBreakdownLevels is
+	// the validator's OWN verdict per level (ComputeVoidBreakdownLevels →
+	// BreakdownContinueState); StopFloor* are the composer's resolved floor.
+	// Both empty/zero → the sections render nothing.
+	VoidBreakdownLevels []VoidBreakdownLevel
+	StopFloorATR5m      float64
+	StopFloorMult       float64
+
 	// FreshFVGs (level-truth wave b2, 2026-08-27) — the machine's fresh-gap
 	// candidate list the planner may author fvg_entry from. Empty list means
 	// NO fvg_entry may be authored (the write-site validator refuses anything
@@ -368,6 +376,13 @@ func BuildPlannerPrompt(in PlannerInput) string {
 	}
 
 	// Ranked level table — the decision-critical block, high-salience.
+	// CLASS 45 E2/E3 — feed forward what the validator/composer already know:
+	// which breakdown levels are VOID, and the stop floor the executor enforces.
+	// Both are computed from the SAME code the enforcer runs, so the prompt can
+	// never hold a second opinion. Empty inputs render nothing.
+	b.WriteString(RenderVoidBreakdownLevels(in.VoidBreakdownLevels))
+	b.WriteString(RenderStopFloorLine(in.StopFloorATR5m, in.StopFloorMult))
+
 	b.WriteString("## Ranked levels (Go-graded; you never re-sort)\n")
 
 	// G5 (regime wave 2026-08-21) — consumed levels listed explicitly: the
@@ -586,7 +601,13 @@ func plannerOutputContract(maxLevels, maxScenarios int, hasHTFZones, has1HSDZone
 		"Copy the EXACT label from the table row for the price you choose — never re-label a table level as a different anchor (a zone price relabeled 'PDH/PDL/PDC' is a phantom level and is REJECTED at write). " +
 		"Quality: A+ = highest-conviction setup, A = strong, B = workable, C = machine-demoted (trigger level consumed at write — G5) — use C honestly for a demoted setup, never as a default. " +
 		"The scenario MIX must follow the regime + day_type: a trend-down day gets breakdown/pullback-short plays, a trend-up day the reverse, balance days get two-sided plays — do NOT default to 2 longs + 1 rally-rejection short on every day. " +
-		"If price sits BELOW PDL you MUST write a continuation short; ABOVE PDH, a continuation long. " +
+		// CLASS 45 (2026-09-02): this used to order a CONDITION ("a continuation
+		// short"), which the WATERFALL PLAY rule below binds to
+		// breakdown_continue/breakup_continue. When every breakdown level was
+		// already void the order was UNSATISFIABLE, and the model obeyed it into
+		// a guaranteed reject (LONDON 01:32→01:37, three attempts, session lost).
+		// It now orders a DIRECTION and names the legal conditions.
+		"If price sits BELOW PDL the plan MUST include a SHORT-direction scenario (ANY legal condition — reject, breakdown_continue, acceptance, sweep_reclaim, hold, reclaim); ABOVE PDH, a LONG-direction scenario. Pick the condition the TAPE supports: if a breakdown level is listed as VOID above, author a different condition there. " +
 		"A1: your reasoning MUST open by naming the bias-tree branch you took (e.g. \"bias-tree: inside-day long LOW\"), then argue from it. " +
 		"A2: an fvg_entry SHOULD chain after a sweep_reclaim (chain_after: S#) — bare gaps at non-A/B origins get a WARN at write, not a reject. " + "A2b (machine grounding, 2026-08-27): author an fvg_entry scenario ONLY from the ## FRESH FVGs list above — copy its direction and lo–hi EXACTLY. If the list is empty, do NOT author any fvg_entry (invented/stale gaps are REJECTED at write). " + "A2c (FVG demand, 2026-08-28): when ## FRESH FVGs is NON-empty and at least one candidate's direction agrees with your bias, you SHOULD author an fvg_entry from that candidate; if you decide not to, state the reason in ONE line in your reasoning (e.g. 'no fvg_entry: nearest fresh gap is 30pt away — outside my reach'). " + "death.flip objects are MACHINE-EVALUATED — choose levels from your level list and a rule; they must match the prose lines. " +
 		"The flip and death MUST be DIFFERENT events: never the same level AND same rule for both (a flip at the same tick death fires is void). A short-biased plan's flip sits BELOW its death line or uses a stricter rule, so the flip can actually fire. " +

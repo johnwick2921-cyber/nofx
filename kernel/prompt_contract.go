@@ -37,6 +37,19 @@ type PromptContract struct {
 // ValidatePlanDoc / ArmSpecValid / ValidateEntryLaw.
 func PromptContracts() []PromptContract {
 	return []PromptContract{
+		// CLASS 45 (2026-09-02) — the two feed-forward facts. They are
+		// CONDITIONAL sections (rendered only when there is something to say),
+		// so the contract asserts the ORDER text that always ships with them.
+		{
+			Rule:       "void breakdown levels are named in the facts, not discovered at write",
+			Site:       "kernel/class45_feeds_forward.go ComputeVoidBreakdownLevels → BreakdownContinueState",
+			MustAppear: []string{"if a breakdown level is listed as VOID above, author a different condition there"},
+		},
+		{
+			Rule:       "the gap-side order names a DIRECTION, never a condition",
+			Site:       "kernel/plan_doc.go hasDirection + gapDownDirectionMessage",
+			MustAppear: []string{"MUST include a SHORT-direction scenario", "ANY legal condition"},
+		},
 		{
 			Rule:       "arm{} legal only on armable conditions",
 			Site:       "plan_doc.go ArmSpecValid (arm enabled on non-armable condition)",

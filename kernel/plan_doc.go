@@ -839,10 +839,10 @@ func ValidatePlanDocWithFactsMachine(d *PlanDoc, facts PlanFacts, machine map[fl
 	}
 	// P0.2 — continuation scenario on a gap out of the prior range.
 	if facts.PDL > 0 && facts.Price < facts.PDL && !hasDirection(d.Scenarios, "short") {
-		return fmt.Errorf("price %.2f is BELOW PDL %.2f (gap-down) — the plan MUST include a continuation/breakdown short scenario", facts.Price, facts.PDL)
+		return fmt.Errorf("price %.2f is BELOW PDL %.2f (gap-down) — %s", facts.Price, facts.PDL, gapDownDirectionMessage)
 	}
 	if facts.PDH > 0 && facts.Price > facts.PDH && !hasDirection(d.Scenarios, "long") {
-		return fmt.Errorf("price %.2f is ABOVE PDH %.2f (gap-up) — the plan MUST include a continuation/breakout long scenario", facts.Price, facts.PDH)
+		return fmt.Errorf("price %.2f is ABOVE PDH %.2f (gap-up) — %s", facts.Price, facts.PDH, gapUpDirectionMessage)
 	}
 	// P0.2-c — the continuation scenario must be REACHABLE from here: a gap-down
 	// short whose trigger needs a rally back above price (the 2026-08-18 S3
@@ -1234,3 +1234,12 @@ func DroppedLegsJSON(n *ArmNormalization) string {
 	}
 	return string(b)
 }
+
+// CLASS 45 (2026-09-02) — the RULE tests direction only (hasDirection), but the
+// MESSAGE used to name conditions ("continuation/breakdown short"), which is
+// part of what taught the model to reach for breakdown_continue at a void
+// level. Message and rule now use the same words.
+const (
+	gapDownDirectionMessage = "the plan MUST include a SHORT-direction scenario (ANY legal condition)"
+	gapUpDirectionMessage   = "the plan MUST include a LONG-direction scenario (ANY legal condition)"
+)

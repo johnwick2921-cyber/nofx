@@ -265,6 +265,9 @@ func main() {
 	// 0B (2026-09-02) — the exit posture in one line: the stop composition, the
 	// suspended mechanisms, the Stage-A size and the boot-sweep re-arm.
 	logger.Infof("🛑 %s", trader.ExitPolicyBootLineLive(kernel.MinSLATRMult()))
+	// CLASS 45 (2026-09-02) — what the prompt now feeds forward. Boot ORDER by
+	// name (owner ruling): 📜 prompt feeds forward → ⏱ wakes → 🚫 no-chase.
+	logger.Infof("📜 %s", kernel.PromptFeedsForwardBootLine(-1, 0, kernel.MinSLATRMult()))
 	// P&L-TRUTH WAVE (2026-09-01) — corrected-column guard in the boot block.
 	logger.Infof("🧾 %s", store.PnLSurfacesBootLine())
 	logger.Infof("🎛 %s", kernel.EntryLawBootLedger()) // P1.4 (ledger-close 2026-08-19) — clock-guard block: live host-RTC drift,

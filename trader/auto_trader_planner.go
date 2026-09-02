@@ -1248,6 +1248,77 @@ func plannerRejectBlock(err error, live []string) string {
 	return "\n\n## PREVIOUS ATTEMPT REJECTED / Validator reason (verbatim):\n" + err.Error() + "\nFix ONLY this defect, keep the rest structurally identical." + kernel.LiveConditionsLine(live)
 }
 
+// ── CLASS 45 E4 (owner addition, 2026-09-02) — THE CHAIN'S CUMULATIVE REJECTS,
+// AT THE TOP AND THE TAIL ────────────────────────────────────────────────────
+//
+// Measured on LONDON 2026-09-02 (rows 92/93/94): attempt 3's block carried
+// attempt 2's fade defect, NOT attempt 1's void — so the model was corrected
+// about the fade and walked straight back into the void it had already been
+// rejected for. A block that names only the LAST defect can only ever teach the
+// model to avoid its most recent mistake.
+//
+// It also sat in the last 239 chars — 59 of 6,602 tokens, under 1%, at 99%
+// depth — against a standing MUST at 70% depth. Correction has to arrive before
+// the rules it overrides, not after them.
+
+// addDistinctReject appends a reason to the chain history if it is new.
+// Distinctness is by exact text: two rejects that read identically ARE the same
+// defect, and the whack-a-mole counter already tracks repeats separately.
+func addDistinctReject(history []string, err error) []string {
+	if err == nil {
+		return history
+	}
+	msg := strings.TrimSpace(err.Error())
+	if msg == "" {
+		return history
+	}
+	for _, h := range history {
+		if h == msg {
+			return history
+		}
+	}
+	return append(history, msg)
+}
+
+// plannerRejectHeader is the TOP block: every distinct defect seen so far in
+// THIS read, plus the override sentence that resolves any conflict with the
+// standing rules below it.
+func plannerRejectHeader(history []string, live []string) string {
+	if len(history) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("## CORRECTIONS FROM THIS READ — read these FIRST\n")
+	b.WriteString("The standing rules below still apply EXCEPT where this correction overrides them.\n")
+	if len(history) == 1 {
+		b.WriteString("Your previous attempt was REJECTED for:\n")
+	} else {
+		fmt.Fprintf(&b, "This read has already been rejected %d times, for %d DISTINCT defects. Avoid ALL of them, not only the last:\n", len(history), len(history))
+	}
+	for i, h := range history {
+		fmt.Fprintf(&b, "  %d. %s\n", i+1, h)
+	}
+	b.WriteString(kernel.LiveConditionsLine(live))
+	b.WriteString("\n\n")
+	return b.String()
+}
+
+// plannerRejectTail repeats the same cumulative list at the end — the model
+// reads a 6.6k-token prompt; the correction appears at both ends of it.
+func plannerRejectTail(history []string, live []string) string {
+	if len(history) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("\n\n## CORRECTIONS FROM THIS READ (repeated — these override the rules above)\n")
+	for i, h := range history {
+		fmt.Fprintf(&b, "  %d. %s\n", i+1, h)
+	}
+	b.WriteString("Fix ALL of the above; keep the rest structurally identical.")
+	b.WriteString(kernel.LiveConditionsLine(live))
+	return b.String()
+}
+
 // repairUnparseableLine (CLASS 38 F6, 2026-09-01) renders the loud line for a
 // repair attempt whose output would not parse: the parse error, the defect the
 // repair was aimed at, and the HEAD of what the model actually sent. Before
@@ -1408,6 +1479,8 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 	// default (RETRY_MODE=repair|reauthor) — rejected output + errors verbatim
 	// + law excerpts only, a fraction of a full re-author's tokens.
 	rejectBlock := ""
+	// CLASS 45 E4 — every DISTINCT reject this read has produced, in order.
+	var rejectHistory []string
 	retryMode := resolvePlannerRetryMode()
 	var prevReason string
 	lastRaw := ""
@@ -1430,8 +1503,17 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 				userPrompt = kernel.BuildPlannerRepairPrompt(lastRaw, lastErr.Error(), liveConditions)
 				modeLabel = "repair"
 			} else {
-				userPrompt = prompt + rejectBlock
-				modeLabel = "reauthor+block"
+				// CLASS 45 E4: the cumulative corrections lead the prompt AND
+				// close it. rejectBlock (the single-defect legacy tail) is kept
+				// only when the history is somehow empty, so behaviour degrades
+				// to the old shape rather than to nothing.
+				if header := plannerRejectHeader(rejectHistory, liveConditions); header != "" {
+					userPrompt = header + prompt + plannerRejectTail(rejectHistory, liveConditions)
+					modeLabel = fmt.Sprintf("reauthor+block(top+tail, %d distinct)", len(rejectHistory))
+				} else {
+					userPrompt = prompt + rejectBlock
+					modeLabel = "reauthor+block"
+				}
 			}
 			at.logInfof("🧩 planner attempt %d/3 %s: prompt ~%d tokens (full-author ~%d tokens)", attempt, modeLabel, estimatePromptTokens(userPrompt), estimatePromptTokens(prompt))
 		}
@@ -1455,6 +1537,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 			at.logWarnf("📐 planner attempt %d/3 failed: %v", attempt, err)
 			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
 			rejectBlock = plannerRejectBlock(lastErr, liveConditions)
+			rejectHistory = addDistinctReject(rejectHistory, lastErr)
 			continue
 		}
 		if modeLabel == "repair" && kernel.IsPlanFragment(raw) {
@@ -1466,6 +1549,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 			at.recordRepairOutcome(raw, lastErr, prevReason)
 			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
 			rejectBlock = plannerRejectBlock(lastErr, liveConditions)
+			rejectHistory = addDistinctReject(rejectHistory, lastErr)
 			continue
 		}
 		d, perr := kernel.ParsePlanDocCapped(raw, maxLevels, scenarioCap)
@@ -1478,6 +1562,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 			}
 			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
 			rejectBlock = plannerRejectBlock(lastErr, liveConditions)
+			rejectHistory = addDistinctReject(rejectHistory, lastErr)
 			continue
 		}
 		// W6-D (2026-08-25) — the G5 write-time demotion is REMOVED: stamping
@@ -1521,6 +1606,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
 			at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, lastErr)
 			rejectBlock = plannerRejectBlock(lastErr, liveConditions)
+			rejectHistory = addDistinctReject(rejectHistory, lastErr)
 			continue
 		}
 		// P0.4-H (2026-08-25) — label provenance: a plan level whose price
@@ -1533,6 +1619,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
 			at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, lastErr)
 			rejectBlock = plannerRejectBlock(lastErr, liveConditions)
+			rejectHistory = addDistinctReject(rejectHistory, lastErr)
 			continue
 		}
 		// P0.1 facts rules (count concept removed by owner ruling 2026-08-31):
@@ -1543,6 +1630,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 			lastErr = verr
 			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
 			rejectBlock = plannerRejectBlock(lastErr, liveConditions)
+			rejectHistory = addDistinctReject(rejectHistory, lastErr)
 			at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, verr)
 			if modeLabel == "repair" {
 				at.recordRepairOutcome(raw, verr, prevReason)
@@ -1582,6 +1670,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 				lastErr = verr
 				at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
 				rejectBlock = plannerRejectBlock(lastErr, liveConditions)
+				rejectHistory = addDistinctReject(rejectHistory, lastErr)
 				at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, verr)
 				if modeLabel == "repair" {
 					at.recordRepairOutcome(raw, verr, prevReason)
@@ -1602,6 +1691,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 				lastErr = verr
 				at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
 				rejectBlock = plannerRejectBlock(lastErr, liveConditions)
+				rejectHistory = addDistinctReject(rejectHistory, lastErr)
 				at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, verr)
 				if modeLabel == "repair" {
 					at.recordRepairOutcome(raw, verr, prevReason)
@@ -2185,6 +2275,14 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 		HTFZonesFull:     htfZonesFull,
 		StructureSummary: structure,
 		ConsumedLevels:   consumedLines,
+		// CLASS 45 E2/E3 (2026-09-02) — feed forward what the enforcers already
+		// know. The void verdict is the VALIDATOR'S OWN predicate reached through
+		// a level-oriented entry point (never a second implementation), and the
+		// floor is the composer's own resolver. Empty/zero → the prompt renders
+		// nothing, so a cold cache degrades to today's behaviour.
+		VoidBreakdownLevels: kernel.ComputeVoidBreakdownLevels(scored, bars1m, voidWindowStartMs(bars1m, now), now.UnixMilli()),
+		StopFloorATR5m:      plannerATR5m(symbol),
+		StopFloorMult:       kernel.MinSLATRMult(),
 		// Level-truth wave b2 (2026-08-27): the machine's fresh-gap candidate
 		// list — the ONLY gaps the planner may author fvg_entry from.
 		FreshFVGs:       kernel.FreshFvgCandidates(bars, symbol, now),
@@ -2549,4 +2647,27 @@ func (at *AutoTrader) recordRepairOutcome(raw string, err error, repairingReason
 	if _, ierr := store.IncRepairOutcome(at.store, string(outcome)); ierr != nil {
 		at.logWarnf("🩹 repair counter write failed: %v", ierr)
 	}
+}
+
+// voidWindowStartMs scopes the void scan to the SESSION so a level broken and
+// reclaimed days ago is not reported as today's news. Falls back to the tape's
+// own start when the session-day cannot be resolved (never a zero window, which
+// would scan everything).
+func voidWindowStartMs(bars []market.Kline, now time.Time) int64 {
+	start := kernel.CMESessionDayStart(now).UnixMilli()
+	if len(bars) > 0 && bars[0].OpenTime > start {
+		return bars[0].OpenTime
+	}
+	return start
+}
+
+// plannerATR5m resolves the SAME ATR(14) on 5m the arm composer floors against
+// (trader/arm_stop_anchor.go reads it from the identical helper), so the number
+// the prompt states is the number the executor enforces. 0 when unavailable —
+// the prompt then renders no floor line rather than an invented one.
+func plannerATR5m(symbol string) float64 {
+	if market.FuturesBarsProvider == nil {
+		return 0
+	}
+	return market.ExportCalculateATR(kernel.AcceptanceBars(market.FuturesBarsProvider(symbol, "5m", 200), "2x5m"), 14)
 }
