@@ -110,3 +110,18 @@ keep with the current [I] label intact (no change justified). Applied per kind t
 `kernel/levels_score.go` ladder terms.
 
 **Nothing below this line was known when the criteria above were written.**
+
+### AMENDMENT (post-hoc, written 2026-09-02 ~18:45 CT before the replay ran — declared, not hidden)
+
+The tape exported from the store at run time differs from the range quoted in the
+header: the live bot's bar persistence has been appending since the 18:05 CT class-48
+boot. Actual export: **14,258 MNQ 1m bars, 2026-08-19 10:00 CT → 2026-09-02 18:34 CT**
+(same read-only query, `symbol='MNQ' AND tf='1m'`). Completed session days (17:00 CT
+first bar, ≥15:00 last bar, ≥1000 bars): **2026-08-20 … 2026-09-02 = 10 days**.
+The pre-registered 60/40 rule is applied mechanically to this actual list:
+**exploration = first 6 (08-20 … 08-25), holdout = last 4 (08-26 … 09-02)**.
+The header's illustrative day labels (08-20..08-27 / 08-28..09-01) were computed from a
+stale row count; the SPLIT RULE was not changed, its inputs were.
+Replay Δ = **5.3707 pt** (vs calibration 5.3771, −0.1% ⇒ band ±16.11 pt at k=3,
+no re-band needed). lag1 ρ = −0.0403. Nothing below this line was known when the
+criteria above were written.
