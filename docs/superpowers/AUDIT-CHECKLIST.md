@@ -442,6 +442,38 @@ in CLAUDE.md).
 
 ---
 
+40. **Coerced aggregator inside the model's context window (corrected-column
+    law on prompt-facing P&L).** Root cause: `EffectivePnL()` — corrected
+    value if present, else raw `realized_pnl` — was the accessor every P&L
+    aggregator summed (`GetFullStats`, `GetSymbolStats`, `GetRecentTrades`,
+    `GetHoldingTimeStats`, `GetDirectionStats`, `GetHistorySummary`); two
+    more kept a dead `COALESCE(pnl_corrected, realized_pnl)` fallback in SQL;
+    the AgentBeta trade tool read the raw column outright. 2026-09-01
+    evidence: decision record 36090 (23:07:13 CT, Sim101) told the executor
+    `Total PnL: -203.68 USDT` over 220 trades, where the strict truth is
+    **+304.32 over 105 resolved trades, 115 unresolved excluded** (rows
+    237–586; row 526 alone: raw −1,458.00 vs corrected −69.43, the ×21
+    lot-math artifact riding straight into the prompt); an unresolved short
+    with exit 0 rendered as `Profit +0.00 USDT (+100.00%)`. Sign, magnitude
+    and count were all wrong — every executor decision was made against a
+    fabricated track record. The dashboard header showed the NT8-native
+    total (0.00) beside a +212.00 ledger day total. Fourth silent
+    counter/aggregator defect in a week (35 replan budget · guardrail ENTRIES
+    · GORM alias zero · this) and the first found INSIDE the model's context.
+    **Probe:** for every figure a prompt or tool renders, trace the column to
+    the row: any accessor with an `else raw` branch, any COALESCE onto the raw
+    column, any sum that does not return its exclusion count is coercion.
+    **Fix:** `CorrectedPnL() (float64, bool)`; every aggregator strict, NULL
+    rows counted as `UnresolvedExcluded` and excluded from sums/averages/win
+    rates/streaks; prompt line `Track record: +X over N resolved trades (K
+    unresolved trades excluded — see note)` and `#id side entry→? UNRESOLVED`
+    rows; `/api/account` ledger day total (footer rule); build-time lint
+    (`store/pnl_surface_guard_test.go`) fails on any raw aggregation outside
+    the allow-list; boot line `🧾 P&L surfaces: N aggregators strict-corrected,
+    0 raw`. **Law:** the model never reads a fabricated track record — a
+    figure travels with its resolved n and its unresolved count, and an
+    unknown is UNRESOLVED, never a coerced number and never a plausible zero.
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,
