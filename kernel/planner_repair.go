@@ -29,7 +29,7 @@ func BuildPlannerRepairPrompt(rejectedOutput string, errors string, live []strin
 	b.WriteString("\n\n## Rejected plan output (verbatim)\n")
 	b.WriteString(rejectedOutput)
 	b.WriteString("\n\n## Applicable law (excerpts for the violated rules only)\n")
-	b.WriteString(lawExcerptsFor(errors))
+	b.WriteString(lawExcerptsForDoc(errors, rejectedOutput))
 	if line := LiveConditionsLine(live); line != "" {
 		b.WriteString(line)
 	}
@@ -77,6 +77,9 @@ func lawExcerptsFor(errors string) string {
 			strings.Contains(errors, "not allowed for")) {
 		add(RepairConfirmVocabLaw)
 	}
+	// CLASS 46 RIDER (owner ruling 2026-09-02) — see lawExcerptsForDoc: the
+	// enum is also attached whenever the DOCUMENT carries a confirm object,
+	// not only when the incoming error names one.
 	// Entry-law: a confirm rule legal in the field but illegal for THIS play.
 	if strings.Contains(errors, "not allowed for") || strings.Contains(errors, "fade_requires_touch") {
 		add(RepairEntryConfirmLaw)
@@ -85,4 +88,35 @@ func lawExcerptsFor(errors string) string {
 		add("Copy the machine table's labels and prices; collapse duplicate seats; targets must sit within the proximity band of price.")
 	}
 	return strings.Join(out, "\n")
+}
+
+// lawExcerptsForDoc (CLASS 46 RIDER, owner ruling 2026-09-02) is lawExcerptsFor
+// plus one document-driven rule: if the REJECTED DOCUMENT contains a confirm or
+// confirm2 object, the confirm-rule vocabulary is attached regardless of what
+// the incoming error was.
+//
+// Evidence (chain 4, 2026-09-02 14:23 CT): attempt 1 was rejected for a VOID
+// BREAKDOWN, so the repair prompt correctly carried the breakdown law — and
+// nothing about confirm rules, because the routing keys on the incoming error.
+// The model fixed the breakdown and, in the same edit, wrote
+// scenario[1].confirm.rule "1x5m_close" on a reject fade: a confirm-rule
+// violation it had never been shown the enum for. A repair that rewrites a
+// scenario can introduce the very defect class 44 exists to close, through a
+// door class 44 did not cover. Cost of the fix: ~60 tokens on a ~1,200-token
+// prompt.
+func lawExcerptsForDoc(errors, rejectedOutput string) string {
+	base := lawExcerptsFor(errors)
+	if !docHasConfirmObject(rejectedOutput) || strings.Contains(base, RepairConfirmVocabLaw) {
+		return base
+	}
+	if strings.TrimSpace(base) == "" {
+		return RepairConfirmVocabLaw
+	}
+	return base + "\n" + RepairConfirmVocabLaw
+}
+
+// docHasConfirmObject reports whether the rejected document carries a confirm
+// or confirm2 object at all — the trigger for the rider above.
+func docHasConfirmObject(doc string) bool {
+	return strings.Contains(doc, "\"confirm\"") || strings.Contains(doc, "\"confirm2\"")
 }

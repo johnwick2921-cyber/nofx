@@ -1334,23 +1334,18 @@ func plannerClientBootLine(providerRow string, idleS, totalS, httpCeilingS, retr
 		providerRow, idleS, totalS, httpCeilingS, retries, backoffS, cap)
 }
 
-// plannerStreamPolicyBootLine (class 41, 2026-09-02) — the planner STREAM
-// retry policy in one line: calls per attempt, the exponential wait schedule,
-// watchdog fire logging, the dialer keepalive in effect, executor
-// serialization (off: P3 found no overlap effect), and identical-prompt resend.
-func plannerStreamPolicyBootLine(tries int, sched []time.Duration, keepaliveS int) string {
-	parts := make([]string, 0, len(sched))
-	for _, d := range sched {
-		parts = append(parts, d.String())
-	}
-	return fmt.Sprintf("🔁 planner stream policy (class 41): stream_tries=%d (AI_PLAN_STREAM_TRIES, counts CALLS; AI_MAX_RETRIES=%s non-stream only) backoff=%s (AI_PLAN_STREAM_BACKOFF) watchdog_log=on (⏱ line on fire, per SSE line) keepalive=%ds (dialer) serialize_executor=off resend_identical=on (transport/deadline → same prompt, no reject block)",
-		tries, "calls", strings.Join(parts, "→"), keepaliveS)
-}
+// plannerStreamPolicyBootLine is RETIRED (class 46). It printed
+// watchdog_log=on, keepalive=30s, serialize_executor=off and
+// resend_identical=on as STRING LITERALS, and its fixture asserted the same
+// literals — so the line could not drift from the code, only from reality, and
+// it did: keepalive on the wire was 14-20 s while the line said 30. Every
+// field now comes from mcp.PlannerClientPolicyLine(), whose fixture calls the
+// enforcing functions.
 
 func (at *AutoTrader) logPlannerClientBootLine() {
 	ai := mcp.EffectiveAIParamsSnapshot("")
 	at.logInfof("%s", plannerClientBootLine(at.config.AIModelID, kernel.PlannerStreamIdleSeconds(), kernel.PlannerStreamTotalSeconds(), ai.TimeoutSeconds, ai.MaxRetries, ai.RetryBackoffSeconds, aiPlanMaxTokens()))
-	at.logInfof("%s", plannerStreamPolicyBootLine(mcp.StreamRetryTries(), mcp.StreamRetryBackoffSchedule(), 30))
+	at.logInfof("%s", mcp.PlannerClientPolicyLine())
 }
 
 // sundayAsiaDeferred (A2, owner ruling 2026-08-31) — the Sunday sequencing
