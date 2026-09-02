@@ -60,6 +60,18 @@ type EntryIntent struct {
 
 	// Shadow resolver (nil = shadow leg off, fail-open).
 	ConditionShadowed func(condition string) bool
+
+	// NO-CHASE (2026-09-02) — the level the scenario CITES and its most recent
+	// touch, so the gate can ask how far this entry sits from the thing it
+	// claims to be trading. Zero values mean "not known": the leg abstains
+	// rather than inventing a distance.
+	CitedLevelPx   float64
+	CitedLevelKind string
+	LastTouchPx    float64
+	HasTouch       bool
+	// OnNoChase receives the leg's measurement. WARN-FIRST: the gate NEVER
+	// refuses on it in this wave; the callback records and logs.
+	OnNoChase func(NoChaseVerdict)
 }
 
 // EntryGate runs the single canonical entry gate chain. Empty reason = allow.
@@ -149,6 +161,17 @@ func EntryGate(in EntryIntent) (reason string, refused bool) {
 		}
 	}
 
+	// NO-CHASE LEG (WARN-FIRST, refuses nothing — A24). It runs LAST so it
+	// measures only intents every other leg allowed, and it runs on BOTH paths
+	// because they share this function.
+	if in.OnNoChase != nil {
+		in.OnNoChase(EvaluateNoChase(NoChaseInputs{
+			Entry: in.Entry, CitedLevel: in.CitedLevelPx, LevelKind: in.CitedLevelKind,
+			LastTouchPx: in.LastTouchPx, HasTouch: in.HasTouch,
+			ATR5m: in.ATR5m, MinSLMult: in.MinSLMult,
+		}))
+	}
+
 	return "", false
 }
 
@@ -175,8 +198,15 @@ func (at *AutoTrader) entryGateForArm(plan *kernel.ActivePlan, sc kernel.PlanSce
 		}
 	}
 	session := plan.Session
+	levelPx, levelKind := citedLevelFor(sc, plan)
+	touchPx, hasTouch := at.lastTouchFor(levelPx)
 	return EntryGate(EntryIntent{
 		Path:              "arm",
+		CitedLevelPx:      levelPx,
+		CitedLevelKind:    levelKind,
+		LastTouchPx:       touchPx,
+		HasTouch:          hasTouch,
+		OnNoChase:         at.noChaseObserver("arm", sc.ID),
 		Action:            "open_" + side,
 		Symbol:            at.futuresSymbol(),
 		Entry:             leg.Entry,
@@ -248,6 +278,9 @@ func (at *AutoTrader) entryGateForDecision(d *kernel.Decision, livePrice float64
 				if sc.ID == intent.CitedScenario {
 					intent.ScenarioDir = strings.ToLower(strings.TrimSpace(sc.Direction))
 					intent.ScenarioCond = sc.Condition
+					// NO-CHASE: the level this entry claims to be trading.
+					intent.CitedLevelPx, intent.CitedLevelKind = citedLevelFor(sc, ap)
+					intent.LastTouchPx, intent.HasTouch = at.lastTouchFor(intent.CitedLevelPx)
 					break
 				}
 			}
@@ -256,6 +289,7 @@ func (at *AutoTrader) entryGateForDecision(d *kernel.Decision, livePrice float64
 	if intent.ScenarioCond != "" {
 		intent.ConditionShadowed = func(cond string) bool { return at.conditionShadowedFor(cond, session) }
 	}
+	intent.OnNoChase = at.noChaseObserver("decision", intent.CitedScenario)
 	return EntryGate(intent)
 }
 
