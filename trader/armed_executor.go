@@ -555,6 +555,10 @@ func (at *AutoTrader) logShadowAB(plan *kernel.ActivePlan, sc kernel.PlanScenari
 		return
 	}
 	shadowed := at.conditionShadowedFor(sc.Condition, plan.Session)
+	// CLASS 39 — stamp the counterfactual row when this scenario's arm was
+	// normalized at plan write (legs dropped), with the dropped legs as JSON, so
+	// the effect of normalizing instead of rejecting is measurable later.
+	norm := kernel.ArmNormalizationFor(&plan.Doc, sc.ID)
 	ac := at.store.AbConfirm()
 	now := time.Now()
 	for _, r := range rows {
@@ -575,6 +579,7 @@ func (at *AutoTrader) logShadowAB(plan *kernel.ActivePlan, sc kernel.PlanScenari
 			TimeToMFEBars: r.TimeToMFEBars, TimeToMAEBars: r.TimeToMAEBars,
 			TimeToResolveBars: r.TimeToResolveBars, NetPnL: r.NetPnL,
 			Ambiguous: r.Ambiguous, IsCounterfactual: shadowed,
+			Normalized: norm != nil, DroppedLegs: kernel.DroppedLegsJSON(norm),
 			CreatedAt: now, UpdatedAt: now,
 		}); err != nil {
 			at.logWarnf("ab-confirm shadow write failed %s %s: %v", sc.ID, r.Rule, err)

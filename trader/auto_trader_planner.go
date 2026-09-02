@@ -1429,6 +1429,22 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		// evaluator still tracks consumption — scenarios demote only when a
 		// level is actually re-touched after the plan is born, never at
 		// birth. demoteConsumedScenarios stays for reference/tests only.
+		// CLASS 39 (owner ruling 2026-09-01) — normalize, don't reject: inside
+		// ParsePlanDocCapped the kernel dropped legs from every non-sweep arm
+		// whose single top-level arm validates, and recorded each event on the
+		// doc. Surface every one LOUDLY (A9) — the WARN names the condition, the
+		// scenario, every dropped leg and the kept arm — and RECORD the count
+		// (D5: system_config, survives restarts; the class-35 lesson).
+		for _, n := range d.ArmNormalizations {
+			at.logWarnf("%s", kernel.ArmNormalizationWarn(n))
+			if at.store != nil {
+				if cnt, cerr := store.IncArmsNormalized(at.store); cerr != nil {
+					at.logWarnf("⚖ arms_normalized_class39 counter write failed: %v", cerr)
+				} else {
+					at.logInfof("⚖ arms_normalized_class39 = %d (recorded)", cnt)
+				}
+			}
+		}
 		// P0.4-C (2026-08-24) — the model may write near-duplicate levels (2.13
 		// pts apart killed ASIA v2 with the duplicate-seat rule). Collapse them
 		// with the same cluster tolerance the scorer uses, instead of burning

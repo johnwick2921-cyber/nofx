@@ -251,7 +251,13 @@ func TestClass39ReplayRetainedRows(t *testing.T) {
 				t.Errorf("%s: %s (sweep_reclaim) must NOT normalize", file, id)
 			}
 		}
-		verdict := ValidatePlanDocWithCaps(&d, 8, 5)
+		// A11/A21 — the caps the LIVE read resolved, not the file defaults:
+		//   sqlite3 -readonly data/data.db "SELECT json_extract(config,'$.day_plan.max_levels'),
+		//     json_extract(config,'$.day_plan.scenario_cap') FROM strategies
+		//     WHERE id='a5b7662e-7bf7-49bb-9f09-7efa48f95ac8'"  → 12 | 5
+		// (row 69's doc carries 12 levels; at the shipped default of 8 the replay
+		// would reject on level count before ever reaching the arm branch.)
+		verdict := ValidatePlanDocWithCaps(&d, 12, 5)
 		t.Logf("%s: FINAL VERDICT → %v", file, verdict)
 		if exp.verdictHas == "" && verdict != nil {
 			t.Errorf("%s: expected a valid doc, got %v", file, verdict)
