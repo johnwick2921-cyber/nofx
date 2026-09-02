@@ -451,6 +451,33 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 				}
 				continue
 			}
+			// CLASS 48 — the ONE canonical entry gate, shared with the decision
+			// path. The arm chain above (armGateVerdictFor, oneLiveArmGuard,
+			// shadow demotion, stop composition) is the arm's own history; this
+			// re-runs the SAME function the market entry runs so an arm can never
+			// be held to a weaker standard than a decision entry. Refusals are
+			// logged AND recorded per path (arm-refusal counters), and an
+			// existing resting arm for this spec is cancelled the same cycle.
+			if greason, refused := at.entryGateForArm(plan, sc, leg, side, biasDirectionFor(doc.Bias.Direction), atr5m); refused {
+				if rows, lerr := ledger.ListNonTerminal(at.id); lerr == nil {
+					for _, rr := range rows {
+						if rr.TraderID == at.id && rr.PlanID == plan.PlanID && rr.Scenario == sc.ID &&
+							rr.LegIndex == li && rr.SignalID != "" {
+							if nt := at.armedTrader(); nt != nil {
+								if cerr := nt.CancelOrder(rr.SignalID); cerr == nil {
+									_ = ledger.SetState(rr.ID, "cancelled", "entry_gate: "+armRefusalClass(greason))
+									at.logWarnf("✕ armed cancel (entry_gate): %s %s leg %d", plan.Session, sc.ID, li+1)
+								}
+							}
+						}
+					}
+				}
+				key := plan.PlanID + ":" + strconv.Itoa(plan.Version) + ":" + sc.ID + ":leg" + strconv.Itoa(li+1)
+				if armRefusalChanged(&at.armRefusalLast, key, "entry_gate:"+armRefusalClass(greason)) {
+					at.recordEntryGateRefusal("arm", at.futuresSymbol(), "open_"+side, greason, plan)
+				}
+				continue
+			}
 			row := &store.ArmedOrderDB{
 				TraderID: at.id, PlanID: plan.PlanID, Version: plan.Version, Session: plan.Session,
 				Scenario: sc.ID, Side: side, EntryPx: leg.Entry, StopPx: leg.Stop, TargetPx: leg.Target,

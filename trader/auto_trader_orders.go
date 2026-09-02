@@ -317,6 +317,25 @@ func (at *AutoTrader) executeDecisionWithRecord(decision *kernel.Decision, actio
 		}
 	}
 
+	// CLASS 48 — the ONE canonical entry gate, shared with the arm seam. Runs
+	// AFTER the legacy decision gates and BEFORE any order leaves: scenario
+	// direction, shadow map (0C), R:R at the LIVE execution price (fixes the
+	// snapshot-reference sub-floor fills of 587/589), min-SL ×ATR5m, and
+	// one-live-arm. Refusals are logged AND recorded per path: the refusal is
+	// stamped into actionRecord (→ decision_records.execution_log +
+	// risk_check_error) with a gate-block counter.
+	switch decision.Action {
+	case "open_long", "open_short":
+		live := 0.0
+		if md, merr := market.GetWithExchange(decision.Symbol, at.exchange); merr == nil && md != nil {
+			live = md.CurrentPrice
+		}
+		if reason, refused := at.entryGateForDecision(decision, live); refused {
+			entryGateDecisionTelemetry(at, actionRecord, reason)
+			return nil
+		}
+	}
+
 	// P3.5 — ADVISORY: record the executor's plan citation for entries (cited/
 	// matched/off-plan match-rate via B6). Never gates — plan restricts, never
 	// compels; hard gates already ran above.

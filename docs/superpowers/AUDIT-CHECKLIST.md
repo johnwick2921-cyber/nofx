@@ -688,6 +688,29 @@ in CLAUDE.md).
     only. **Law:** one resolver, one stamp convention, and a provider's
     calendar is a measurement — not an assumption you inherit from a
     timeframe's name.
+48. **The decision path bypassed the arm-seam gates.** Root cause: the five
+    entry protections lived ONLY at the arm seam (`armed_executor.go`): the
+    R:R floor (`armMinRR`), the 0C shadow map (`conditionShadowedFor`),
+    scenario-direction consistency, stop composition (`composeArmStop`) and
+    one-live-arm (`oneLiveArmGuard`). The AI market-entry path
+    (`auto_trader_orders.go` → `executeOpenLongWithRecord` → `trader.OpenLong`)
+    ran a different, thinner chain: `validateDecision` enforced R:R + min-SL +
+    HTF veto at the PROMPT-TIME SNAPSHOT price while the fill is a MARKET
+    order ~10 points away, and nothing checked shadow / scenario-direction /
+    one-live-arm / stop composition; the agent chat `execute_trade` ran almost
+    none. **Measured 2026-09-02:** 587 R:R eval `2.03 → PASS` @ snapshot
+    29069.50, filled 29079.25 → real R:R **1.09** (below the owner's 2.0
+    floor); 589 and 590 traded the SHADOWED condition `breakout_retest`; the
+    08:13 R:R 3→2 save had no persisted row (the class-44 `config_changes`
+    table wires only future saves). **Probe:** for every protection, list the
+    call sites — a gate whose only callers live in one file is absent from the
+    other path; and a floor judged on a stale reference is not a floor.
+    **Fix:** ONE `EntryGate` (`trader/entry_gate.go`) — legs direction →
+    shadow → R:R-at-live-price → min-SL → one-live-arm — called by BOTH seams
+    before any order leaves; refusals recorded per path
+    (`decision_records.Error` + gate-block counter; arm-refusal counters).
+    **Law:** a protection that exists on one order path and not the other is
+    not a protection — it is a suggestion.
 
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
