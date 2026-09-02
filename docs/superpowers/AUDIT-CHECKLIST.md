@@ -617,7 +617,7 @@ in CLAUDE.md).
     that decides money carries a citation or a suspension — never a number
     someone once typed.
 
-43. **The repair prompt judged the model against a vocabulary it never
+44. **The repair prompt judged the model against a vocabulary it never
     showed it.** Root cause: attempt ≥2 defaults to a REPAIR call
     (`BuildPlannerRepairPrompt`). It carried the rejected output, the validator
     errors and a law excerpt — but never `LiveConditionsLine`, which only the
