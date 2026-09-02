@@ -171,6 +171,16 @@ export const guards: GuideSection = {
       kind: 'p',
       text: 'Risk guardrails: the master switch (default ON, currently OFF by owner ruling — the boot log says "master OFF") arms daily loss/profit/trade limits, consecutive-loss halt, re-entry cooldown, blackout windows, max-contracts and notional caps. The always-on pair (max contracts/order, notional cap) needs no toggle. Would-have-tripped counters are visible in the dashboard. SIM lock: every account list is filtered to SIM; the bot cannot route to a live NT account — do not try.',
     },
+    { kind: 'h', text: 'WHEN A PLAN IS REJECTED: THE REPAIR RETRY (class 44)' },
+    {
+      kind: 'p',
+      text: "A rejected plan is retried by REPAIR: the model is sent back its own output, the validator's reasons, and the law it broke, and asked to return the complete corrected plan. Repair is the default retry and it is cheap — a fraction of a full re-author. Measured across 2026-09-01, 18 of 28 repairs were rejected again, and the reason was not what anyone assumed: only one failed to parse, and that was a fractional contract size where a whole number was required. The other seventeen parsed perfectly and were rejected on their values, ten of them because the model wrote a confirmation rule that does not exist in that field. It had never been shown the list. The repair prompt now carries the same vocabulary the validator judges by, states the confirmation rules and says plainly that death and flip use a different vocabulary, and attaches every relevant law rather than only the first one that matched. It also repeats the return format at the top and the bottom, because a single instruction in front of a wall of text is the one most likely to be missed.",
+    },
+    { kind: 'h', text: 'WHEN YOU SAVE IN STRATEGY STUDIO (class 44)' },
+    {
+      kind: 'p',
+      text: "Saving reloads the running trader in place. Every save now prints one line per setting that actually changed, with the old and new values as the trader will resolve them, and stores the same rows so the change is answerable later. A save that changes nothing says so. This exists because on 2026-09-01 at 08:13 a save moved the minimum risk-to-reward from 3 to 2 in the middle of the New York session and nothing anywhere recorded it; the change had to be reconstructed afterwards from its effects. It was the third silent settings change that week.",
+    },
     { kind: 'h', text: 'THE FIVE-LEG CUTOVER GATE (class 33)' },
     {
       kind: 'p',
