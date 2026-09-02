@@ -30,8 +30,9 @@ func TestPlannerRejectedRoundTrip(t *testing.T) {
 	if row.PromptText != "FULL PROMPT TEXT 2" || row.RejectReason != "breakdown is void" || row.Attempt != 2 {
 		t.Fatalf("latest row wrong: %+v", row)
 	}
-	// Cap trim: 25 rows → 20 stay.
-	for i := 0; i < 25; i++ {
+	// Cap trim: overshoot the cap by 5, exactly the cap stays. Cap-relative so
+	// the assertion survives an owner ruling on the value (2026-09-01: 20 → 200).
+	for i := 0; i < plannerRejectedCap+5; i++ {
 		if err := ps.SaveRejectedPrompt("t", "2026-08-31", "NY", "h", 3, "r", "p"); err != nil {
 			t.Fatalf("bulk save: %v", err)
 		}

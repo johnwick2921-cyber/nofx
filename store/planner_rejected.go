@@ -40,7 +40,13 @@ func NewPlannerRejectedStore(db *gorm.DB) *PlannerRejectedStore {
 }
 
 // plannerRejectedCap bounds the verbatim-prompt store (privacy + disk).
-const plannerRejectedCap = 20
+// OWNER RULING 2026-09-01: raised 20 → 200 so class 39 (leg normalization) has
+// a sample. At 20 the store held roughly ONE session's rejects: the class-38
+// forensics found n=1 usable instance of the very defect it was investigating
+// because the rest had been trimmed. The 72h to 2026-09-01 carried 121
+// validator rejects, so 200 spans a bad night without unbounding disk —
+// prompts run ~25 KB, giving ~5 MB at the cap.
+const plannerRejectedCap = 200
 
 // SaveRejectedPrompt persists one rejected attempt's verbatim prompt + reason,
 // trimming the store to the newest plannerRejectedCap rows.

@@ -198,13 +198,24 @@ Three findings for class 39:
    `1x5m_close`, `breakdown{}` with `entry_mode=pullback`, and top-level prices that
    already mirrored the leg. Removing `legs` alone makes it pass.
 
-**Recommended class-39 wording:** *when a non-sweep condition carries `legs[]`, drop the
-array and re-run `ArmSpecValid` on the remaining single arm; accept with a WARN naming
-what was dropped, and REJECT unchanged if the arm without legs is still invalid. Never
-synthesize a leg (one → two is authoring).* The 2-leg case is then covered too: the
-top-level already mirrors leg 1 by contract, so dropping the array keeps the leg-1 entry.
-Not shipped here — F7 is class 39, with its own gate-level fixture, guide text and
+**OWNER RULING (2026-09-01), adopted verbatim — this supersedes the ruling quoted at the
+top of this section:**
+
+> On a non-sweep condition with any legs array present, DROP the legs array, re-run arm
+> validation on what remains, WARN naming what was dropped; if still invalid, REJECT
+> unchanged. Never synthesize a leg. Never normalize the reverse.
+
+Note the scope change the owner made: **"any legs array present"**, not "multiple legs" —
+which is what row 69 needed, since that arm carried exactly one leg. The 2-leg case is
+covered by the same rule: the top-level entry/stop/target already mirror leg 1 by
+contract, so dropping the array keeps the leg-1 entry.
+
+**Sequencing (owner, 2026-09-01):** class 39 starts AFTER the 16:30 CT proof read on
+2026-09-02. Not shipped here; it needs its own gate-level fixture, guide text and
 checklist entry.
+
+**Sample retention (owner, same ruling):** `plannerRejectedCap` raised 20 → 200 so class
+39 has something to work from — see §12.
 
 ---
 
@@ -374,3 +385,29 @@ cd ~/nofx && mv nofx-bin nofx-bin.bad.c0580011 && cp nofx-bin.prev.boot nofx-bin
   && git checkout -- deploy/RELEASE web/src/guide/types.ts
 ```
 `nofx-bin.prev.boot` = the class-37 binary `e42a0b43`, also kept as `nofx-bin.old.e42a0b43`.
+
+---
+
+## 12. SAMPLE RETENTION — `plannerRejectedCap` 20 → 200 (owner ruling) [A]
+
+Class 38's F7 analysis had **n=1**: `planner_rejected_prompts` capped at 20 rows held
+roughly ONE session's rejects, and the rest of the 35 instances had been trimmed before
+anyone looked. At 22:42 CT the table held exactly 20 rows (ids 67-86, 11:32:19 → 21:53:46
+CT) — a nine-hour window on a day that produced 121 rejects in 72h.
+
+**Change:** `store/planner_rejected.go:43` `const plannerRejectedCap = 20` → `200`, with
+the reasoning in the comment. Prompts run ~25 KB, so the cap bounds the table at ~5 MB.
+The trim still fires — `TestPlannerRejectedTrimHoldsAtCap` overshoots the cap by 5 and
+asserts exactly `plannerRejectedCap` rows survive AND that the NEWEST rows are the
+survivors. `TestPlannerRejectedCapIsTwoHundred` pins the value against the ruling. The
+pre-existing round-trip test was inserting a literal 25 rows and asserting `count == cap`;
+it is now cap-relative (`plannerRejectedCap+5`) so it tests the trim rather than the
+number.
+
+**Snapshot taken first (belt and braces):** before any of this, the live 20 rows were
+copied read-only to `~/nofx-backups/class39-sample/rejected_20260901-224220.sql`
+(421,375 bytes) plus a CSV index, so tonight's reads cannot trim away the sample that
+already exists. Nothing was written to `data/data.db`.
+
+No guide surface exists for this store (grep over `web/src/guide/content/*.ts` is empty),
+so no guide change is owed; it is an internal retention bound, not a knob.
