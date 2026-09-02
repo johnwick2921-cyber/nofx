@@ -179,3 +179,32 @@ and the NY read fires at 08:00 CT. `ready:false` = HOLD.
 ```
 cp nofx-bin.prev.boot nofx-bin && echo 8a756bba4a21ab455beafac75bf6415e71de2fb9 > deploy/RELEASE && kill -9 <MainPID>
 ```
+
+### 5.1 Boot record (owner GO 07:31 CT 2026-09-02)
+
+Gate re-quoted at **07:31:57 CT** immediately before the swap — `ready: True`, all five legs
+pass (leg 5 `no planner read claimed`). RELEASE written before the swap; marker after the boot.
+
+Old process exited 07:32:10 (`status=9/KILL`); started 07:32:15; **PID 2461883, exactly one
+nofx-bin process, 0 `[ERRO]` lines, 0 TradingRefused**:
+
+```
+🔐 BOOT INTEGRITY OK — rev 0d093c3b3a11 · built 2026-09-02T12:22:31Z · expected 0d093c3b3a11 · goldens PASS
+✂ planner schema: 9 top-level fields, ALL consumed (audit 2026-09-02: levels~402tok scenarios~237
+  reasoning~161 no_trade~42 bias~33 death_condition~18 flip~14 death~10 day_type~3) — plan JSON
+  ~920 tokens of a 23,769-token p50 output (3.9%); reasoning is ~96%, so schema slimming CANNOT
+  shorten the call — the reasoning MODE is the lever (root-fix part A: measured, no cut shipped)
+🔬 shadow A/B (root-fix part B): OFF target_n=10 done=0 (SHADOW_AB_ENABLED, SHADOW_AB_N) —
+  fast-mode plans validated offline, never written; promotion criterion: legal-rate ≥ max AND
+  median wall ≤50% of max at n≥10
+```
+
+Surviving lines: 🪢 class 27 · 🧪 hints (34+38) · 📜 contract 17 (38) · ⚖ normalizer (39) ·
+🗓 preflight (36) · 🧾 P&L 12/0 (40) · 🛰 planner client (37) · 🔁 stream policy (41) ·
+🛡 cutover safety ×2 (33, `boot sweep cancelled 0 pre-boot arm(s)`).
+
+**PROOF STATUS (A20).** Part A's measurement is PROVEN (n=67 calls, n=61 plans, quoted above)
+and pinned by two tests. Part B's instrument is SHIPPED-DORMANT: `SHADOW_AB_ENABLED` is OFF, so
+**no shadow row exists yet** — the first 🔬 row is owed once the owner enables it, and only at
+n≥10 does the pre-registered criterion decide anything. Part C is REPORT-ONLY, unwired.
+The wave shipped NO speed change; the next full-author read will still run ~350-450 s.
