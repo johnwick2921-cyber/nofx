@@ -51,6 +51,20 @@ export const faq: GuideSection = {
           link: '#status',
         },
         {
+          q: 'I restarted the bot mid-setup — is my resting order dead until the next plan read?',
+          a: 'No, not since 0B (2026-09-02). A restart cancels pre-boot orders at the broker (the class-33 boot sweep) because the process that owned them is gone. Those swept rows now re-arm under the SAME plan version and the journal says so: "⚖ re-armed after boot sweep". A cancel YOU made still sticks until the next plan version — manual-cancel-wins is unchanged; only the machine\'s own housekeeping is re-armable.',
+          mechanism:
+            'store/armed_orders.go UpsertArm: terminal + same version = stays terminal, EXCEPT rows whose state_reason starts with "boot_sweep".',
+          link: '#guards',
+        },
+        {
+          q: 'Why did my stop get wider than the plan said?',
+          a: 'Since 0B every armed stop is composed: beyond the nearest seated level on the risk side plus 2 ticks, floored at 1.5×ATR5m, widest wins — and never tighter than the planner authored. The arm logs 🛑 with the chosen stop, the anchor level, the ATR floor and which one bound. If nothing seated sits within 3×ATR on the risk side the line says stop_unanchored and the ATR floor governs. Note the R:R gate then judges the WIDER stop, so some arms are now refused at ARM_MIN_RR 2.0 that would previously have rested.',
+          mechanism:
+            'trader/arm_stop_anchor.go composeArmStop → the arm gate → the ledger row → placement.',
+          link: '#settings',
+        },
+        {
           q: 'What does the ⛔ NO-TRADE chip mean?',
           a: 'The re-plan budget is exhausted: the last version row is the terminal marker, not a real plan. Reset (↺) re-arms the budget and reads fresh.',
           mechanism:

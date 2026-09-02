@@ -203,13 +203,15 @@ const dayPlan: KnobSpec[] = [
   },
   {
     label: 'Planner stream retry tries + backoff',
-    where: 'Environment (AI_PLAN_STREAM_TRIES, AI_PLAN_STREAM_BACKOFF) — not a Strategy knob',
+    where:
+      'Environment (AI_PLAN_STREAM_TRIES, AI_PLAN_STREAM_BACKOFF) — not a Strategy knob',
     what: "How many CALLS the planner stream path makes per planner attempt when the provider cuts the connection mid-stream (class=transport: peer FIN → 'unexpected EOF', or RST), and how long it waits between them. Class 41 (2026-09-02): the schedule is exponential — 2s → 15s → 45s (last value repeats) — replacing the fixed 2s×n wait that let call 2 die 18s after call 1 on 2026-09-01 23:47 CT. AI_MAX_RETRIES still governs the NON-stream paths (executor loop, weekly read) and also counts CALLS. A transport/deadline failure that exhausts the tries re-sends the IDENTICAL prompt on the next planner attempt with NO reject block (owner ruling class 37; the pre-fix code re-authored with the transport error text as its 'validator reason').",
     trader:
       'Evidence: 4 mid-stream cuts in 81 stream calls on 2026-09-01 (4.9 per 100; 0 in 31 on 08-31), all http_status=200 with no provider request id; reproduced in-process: a peer FIN mid-body yields exactly that error string, the idle watchdog never does (it labels itself class=idle_deadline and now logs a ⏱ line when it fires).',
     consumer:
       'mcp/config.go (StreamRetryTries, StreamRetryBackoffSchedule) · mcp/client.go (CallWithRequestStreamRetryDeadlines, watchdog ⏱ line) · trader/auto_trader_planner.go (resend-identical) · boot line 🔁 planner stream policy',
-    range: 'tries 1 – 6 · backoff: comma list of Go durations (e.g. "2s,15s,45s")',
+    range:
+      'tries 1 – 6 · backoff: comma list of Go durations (e.g. "2s,15s,45s")',
     systemDefault: '3 tries · 2s,15s,45s',
     recommended:
       '⭐ Defaults. Worst case added wall per planner attempt = 17s (2s + 15s) before the attempt is consumed; a 4th try adds 45s more.',
@@ -360,28 +362,49 @@ const risk: KnobSpec[] = [
     perSession: 'No.',
   },
   {
-    label: 'Breakeven trigger',
-    where: 'Strategy → Risk Control',
-    what: 'Move the stop to entry after the position gains this much (ticks).',
-    trader: '50 ticks = the free-trade tripwire.',
-    consumer: 'kernel/engine_position.go (breakeven path)',
-    range: 'ticks · default 50',
-    systemDefault: '50',
-    recommended: '⭐ 50 — current config.',
-    whenToTouch: 'Tighten in chop; loosen in trends.',
+    label: 'Stop floor + structure anchor (0B)',
+    where: 'env MIN_SL_ATR_MULT · ARM_STOP_ANCHOR_MAX_ATR (no Studio row yet)',
+    what: 'Every armed stop is composed, not just accepted: stop = BEYOND the nearest seated level on the risk side + 2 ticks clearance, then floored at MIN_SL_ATR_MULT×ATR5m — WHICHEVER IS WIDER WINS — and never tighter than what the planner authored. When no seated level sits within ARM_STOP_ANCHOR_MAX_ATR×ATR5m on the risk side it is a DEAD ZONE: the arm logs stop_unanchored and the ATR floor governs. A level is never invented.',
+    trader:
+      'Why: 15 of 27 losers printed stopped-too-tight, and on the five biggest losers 0 of 5 stops sat ON a seated level while 2 of 5 sat in dead zones 40+ points away. A wider stop in a dead zone is still a stop in a dead zone — width alone was never the fix. Each arm logs 🛑 with the chosen stop, the anchor, the ATR floor and which one bound.',
+    consumer:
+      'kernel/min_sl.go (MinSLATRMultDefault) · trader/arm_stop_anchor.go (composeArmStop) · trader/armed_executor.go (arm leg loop)',
+    range:
+      'MIN_SL_ATR_MULT 0 (off) – 2.5 · ARM_STOP_ANCHOR_MAX_ATR 0 (no anchoring) – 5',
+    systemDefault: '1.5×ATR5m floor · 3.0×ATR5m dead-zone bound',
+    recommended:
+      '⭐ 1.5 — the BOTTOM of the researched 1.5–2.5 day-trade range. The old 1.0 was uncited code-canon.',
+    whenToTouch:
+      'Raise the floor toward 2.5 only with MAE evidence; the 3.0 dead-zone bound is a CHOSEN default awaiting an owner ruling.',
     perSession: 'No.',
   },
   {
-    label: 'Trailing stop',
+    label: 'Breakeven trigger — SUSPENDED (0B)',
     where: 'Strategy → Risk Control',
-    what: 'ATR-multiplier trail: mult (default 2.0) × ATR(period, default 14), arms after breakeven / N points / immediately.',
-    trader: 'Lets runners run while protecting realized gain.',
-    consumer: 'kernel/engine_position.go (trailing path)',
+    what: 'Move the stop to entry after the position gains this much. SUSPENDED 2026-09-02 pending MFE data (wave 1A): the knob is retained and the trigger still evaluates, but NO move_stop frame is sent — the boot line reads BE=off. It fired 2× on 09-01 with no measurement of whether it helps, and the net effect of breakeven moves is contested in the research.',
+    trader:
+      'While suspended your exits are: fixed stop · fixed target · EOD flat · plan invalidation/dormant. Nothing silently moves your stop.',
+    consumer:
+      'trader/auto_trader.go (maybeMoveStopToBreakeven → exitMechSuspendedRefuse → moveStopWire)',
+    range: 'ticks · default 50 · env EXIT_MECHS_SUSPENDED=0 restores',
+    systemDefault: '50 (suspended)',
+    recommended: '⭐ leave suspended until wave 1A measures MFE.',
+    whenToTouch: 'Only with MFE evidence that the move pays.',
+    perSession: 'No.',
+  },
+  {
+    label: 'Trailing stop — SUSPENDED (0B)',
+    where: 'Strategy → Risk Control',
+    what: 'ATR-multiplier trail. SUSPENDED 2026-09-02 pending MFE data (wave 1A): the ratchet still computes a level, but NO move_stop frame is sent — the boot line reads trail=off. It ratcheted 8× on 09-01 with no measurement; a 567,000-backtest study ranks ATR/Chandelier trails in the worst group of 15 exit families, and our own tape shows $719.50 of giveback with ZERO trail exits ever.',
+    trader:
+      'Suspended, not deleted. Unmeasured mechanisms moving live stops is the problem — regardless of which way they cut.',
+    consumer:
+      'trader/auto_trader_trailing.go (maybeTrailStop → exitMechSuspendedRefuse → moveStopWire)',
     range:
-      'mult 0.5–5 · period 7–28 · arm: after_breakeven | N-points | immediately',
-    systemDefault: '2.0 / 14 / after_breakeven',
-    recommended: '⭐ 2.0/14/after_breakeven — current config.',
-    whenToTouch: 'Raise mult for wider runners on trend days.',
+      'mult 0.5–5 · period 7–28 · arm: after_breakeven | N-points | immediately · env EXIT_MECHS_SUSPENDED=0 restores',
+    systemDefault: '2.0 / 14 / after_breakeven (suspended)',
+    recommended: '⭐ leave suspended until wave 1A measures MFE.',
+    whenToTouch: 'Only with evidence the trail beats the fixed target.',
     perSession: 'No.',
   },
   {
@@ -399,15 +422,18 @@ const risk: KnobSpec[] = [
     perSession: 'No.',
   },
   {
-    label: 'Max contracts (always-on)',
+    label: 'Max contracts (always-on) — Stage A: 1',
+    what: 'Contract cap per order — on with or without the master. 0B (2026-09-02): every resolution is clamped to the Stage-A ceiling of 1 contract — survival-first under an undemonstrated edge. Stage B (2) only at n≥30 closed trades with a POSITIVE LOWER-CI expectancy; Kelly and optimal-f are undefined without an edge estimate. Before 0B the two resolvers disagreed: arm-leg capacity said 1 while order sizing said 2, and the boot line said capacity=1.',
     where: 'Strategy → Risk Control → always-on row',
-    what: 'Contract cap per order — on with or without the master.',
-    trader: 'The one guardrail you cannot switch off.',
-    consumer: 'kernel/engine_position.go (max contracts path)',
-    range: 'page value · default 2',
-    systemDefault: '2 (owner)',
-    recommended: '⭐ 2 — current config.',
-    whenToTouch: 'Raise only for deliberate sizing studies.',
+    trader:
+      'THE ARITHMETIC: 0B also raised the stop floor from 1.0× to 1.5×ATR5m, which lifts dollar risk per trade by roughly 50% at constant size. That is precisely why size does NOT move at the same time.',
+    consumer:
+      'kernel/risk_limits.go (ResolveMaxContracts → ClampStageAContracts)',
+    range:
+      'page value · Stage-A ceiling 1 · env STAGE_A_CONTRACT_CAP raises it',
+    systemDefault: '1 (Stage A)',
+    recommended: '⭐ 1 — do not raise before the n≥30 lower-CI test.',
+    whenToTouch: 'Stage B, with the expectancy table in hand.',
     perSession: 'No.',
   },
   {

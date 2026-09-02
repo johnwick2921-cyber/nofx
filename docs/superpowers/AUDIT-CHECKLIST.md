@@ -586,6 +586,37 @@ in CLAUDE.md).
     the share you can actually reach; a pre-registered criterion beats a
     narrative when the result arrives.
 
+43. **Uncited code-canon governing money (the [C] knob that was never
+    researched).** Root cause: `MIN_SL_ATR_MULT = 1.0×ATR5m` shipped as the
+    stop floor with no citation — the knob census labelled it **[C]
+    code-canon**, and three gates read it (arm-time, AI-entry, planner
+    authoring WARN). Round-7 research tests the day-trade range at
+    **1.5–2.5×ATR** and finds stop-out rates above 60% on noise alone below
+    1.0×; our own tape has **6 of 8 losers with MAE beyond the stop** and
+    **15 of 27 losers stopped-too-tight**. Worse, width alone was never the
+    defect: on the five biggest losers **0 of 5 stops sat ON a seated level**
+    and **2 of 5 sat in dead zones 40+ points away** — a wider stop in a dead
+    zone is still a stop in a dead zone. Two live exit mechanisms (BE+40, the
+    ATR trail) were moving those stops **with zero measurement** (2 BE moves
+    and 8 trail ratchets on 09-01; $719.50 of giveback with zero trail EXITS
+    ever), and the size resolvers disagreed in production — arm-leg capacity
+    resolved 1 while order sizing resolved 2 and the boot line said
+    capacity=1. **Probe:** for every knob that decides money, demand its
+    citation. A default with no research behind it is a guess with a
+    confidence interval of the whole real line; a mechanism that moves a live
+    stop without a measurement is worse than one that does nothing.
+    **Fix (0B):** floor 1.0→1.5 (the BOTTOM of the researched range, not the
+    middle); the stop is COMPOSED — beyond the nearest seated level on the
+    risk side + clearance, floored at the ATR multiple, widest wins, never
+    tighter than authored, `stop_unanchored` + ATR floor in a dead zone and a
+    level is NEVER invented; BE and the trail suspended behind
+    `EXIT_MECHS_SUSPENDED` with a single wire seam so a fixture proves zero
+    move_stop frames; Stage-A size ceiling of 1 contract until n≥30 with a
+    positive lower-CI expectancy (the floor raises dollar risk ~50% at
+    constant size — which is why size does not move with it). **Law:** a knob
+    that decides money carries a citation or a suspension — never a number
+    someone once typed.
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,
