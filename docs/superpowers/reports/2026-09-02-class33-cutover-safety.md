@@ -140,3 +140,45 @@ _(boot checklist appended after the passed boot; marker committed only then — 
 ```
 cp nofx-bin.prev.boot nofx-bin && echo d5a6e138da851f2ee9ceba22424363bba0f219eb > deploy/RELEASE && kill -9 <MainPID>
 ```
+
+### 4.1 Boot record (owner GO 06:57 CT 2026-09-02)
+
+Gate re-quoted fresh at **06:57:32 CT** immediately before the swap: leg 1 `0`, leg 4 `0`,
+leg 5 `0` stream calls since 06:40, tree porcelain-clean, running PID 1744258. RELEASE written
+BEFORE the swap; marker committed only after the boot below (A19).
+
+Old process exited 06:57:44 (`status=9/KILL`); service started 06:57:49; boot 06:57:50, **PID
+2065518, exactly one nofx-bin process, 0 `[ERRO]` lines, 0 TradingRefused**:
+
+```
+🔐 BOOT INTEGRITY OK — rev 8a756bba4a21 · built 2026-09-02T11:50:23Z · expected 8a756bba4a21 · goldens PASS
+🛡 cutover safety (class 33): flat gate legs=5 (db_open_positions · api_positions ·
+   nt8_positions_snapshot · working_orders · planner_in_flight) via GET /api/cutover-gate;
+   leg4 reads the armed_orders LEDGER (was a stub returning empty — passed vacuously at
+   cutovers 35→41); boot sweep cancels pre-boot arms before ANY re-arm, counter arms_boot_swept_class33
+🛡 cutover safety (class 33): gate legs=5 · leg4=ledger · boot sweep cancelled 0 pre-boot arm(s)
+   (0 authorized-but-never-placed left for this process)
+```
+
+Surviving ledger lines: 🚀 planner speed wave · 🗓 session reads · 🪢 class 27 · 🧪 validator
+hints 15 sites (34+38) · 📜 prompt/validator contract 17 restrictions (38) · ⚖ arm normalizer
+(39) · 🗓 preflight (36) · 🧾 P&L surfaces 12/0 (40) · 🛰 planner client (37) · 🔁 planner
+stream policy (41).
+
+**Live proof of the gate** — `GET /api/cutover-gate` on the running binary, 06:58 CT:
+
+```json
+{"ready": true, "legs": [
+  {"n":1,"name":"db_open_positions","pass":true,"detail":"0 open row(s)","source":"sqlite trader_positions"},
+  {"n":2,"name":"api_positions","pass":true,"detail":"0 position(s)","source":"trader.GetPositions"},
+  {"n":3,"name":"nt8_positions_snapshot","pass":true,"detail":"count=0","source":"NT8 positions frame"},
+  {"n":4,"name":"working_orders","pass":true,"detail":"0 non-terminal arm(s)","source":"armed_orders ledger (no NT8 order frame — F12 open)"},
+  {"n":5,"name":"planner_in_flight","pass":true,"detail":"no planner read claimed","source":"plannerReadInFlight claim"}]}
+```
+
+**PROOF STATUS (A20).** Legs 1-5 and the endpoint are PROVEN live. The boot sweep is
+SHIPPED-UNPROVEN in the only sense that matters: nothing was resting at 06:57, so it correctly
+reported `cancelled 0 pre-boot arm(s)`. **The live proof is the NEXT cutover that happens with
+an arm resting** — it must show `🛡 boot sweep CANCELLED pre-boot arm (class 33): …` naming the
+signal id, before any re-arm. Until then the sweep's evidence is fixtures only, and this report
+says so.
