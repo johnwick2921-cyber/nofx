@@ -12,7 +12,7 @@ import (
 func TestBuildPlannerRepairPrompt(t *testing.T) {
 	rejected := `{"reasoning":"x","bias":{"direction":"long"},"levels":[...],"scenarios":[{"id":"S2","condition":"sweep_reclaim","arm":{"enabled":true,"entry":29500,"stop":29400,"target":29700,"legs":[{"kind":"limit"}]}}]}`
 	err := `arm on S2 needs EXACTLY 2 legs (split contract), got 1`
-	got := BuildPlannerRepairPrompt(rejected, err)
+	got := BuildPlannerRepairPrompt(rejected, err, nil)
 	for _, want := range []string{
 		"You are repairing a rejected plan",
 		"## Validator errors (verbatim)",

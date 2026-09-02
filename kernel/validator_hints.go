@@ -37,6 +37,17 @@ const RepairArmSplitLaw = "ARM-SPLIT LAW: a scenario with a split contract arm n
 // RepairEntryConfirmLaw is the ENTRY-LAW CONFIRM excerpt for repair prompts.
 const RepairEntryConfirmLaw = "ENTRY-LAW CONFIRM LAW: breakdown_continue takes 1 confirming close + displacement >= BD_MIN_DISP_ATR x ATR5m OR stop-entry (E7); 2x5m_close is legal ONLY there. confirm2 mirrors confirm1 unless the law above allows it."
 
+// RepairConfirmVocabLaw (REPAIR-PARSE, 2026-09-02) is the excerpt for a
+// rejected confirm/confirm2 RULE TOKEN. It is the single most common repair
+// defect: 10 of 18 repair rejections in the 2026-09-01 journals were a confirm
+// rule token that does not exist in that field's enum ("2x5m", "displacement")
+// or a token illegal for that condition. Before this the repair prompt routed
+// those to a generic excerpt about level labels and targets — the model was
+// told it was wrong and never told the legal words. Class 38's rule holds: the
+// confirm enum and the death/flip enum are SEPARATE vocabularies and are named
+// as such, never as one list of bare tokens.
+const RepairConfirmVocabLaw = "CONFIRM-RULE VOCABULARY: the `confirm.rule` and `confirm2.rule` fields take EXACTLY one of touch | 1x5m_close | 2x5m_close | 1m_mss | time_hold. The death/flip `rule` field is a DIFFERENT vocabulary (2x5m | 5m_close) — a token from it is INVALID in confirm/confirm2, and words like `displacement` are not tokens in either. Re-spell the rejected token as one of the five confirm values that matches the play."
+
 // HintRuleField names WHICH enum a hint's rule tokens are drawn from. The same
 // spelling can be legal in one field and illegal in another: "2x5m" is a legal
 // death/flip rule (conditionRules) and an ILLEGAL confirm rule (confirmRules).

@@ -1430,7 +1430,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 			at.logInfof("🧩 planner attempt %d/3 %s: prompt ~%d tokens (byte-identical to the provider-failed attempt; no reject block)", attempt, modeLabel, estimatePromptTokens(userPrompt))
 		} else if attempt >= 2 {
 			if retryMode == "repair" && !forceReauthor && lastRaw != "" && lastErr != nil {
-				userPrompt = kernel.BuildPlannerRepairPrompt(lastRaw, lastErr.Error())
+				userPrompt = kernel.BuildPlannerRepairPrompt(lastRaw, lastErr.Error(), liveConditions)
 				modeLabel = "repair"
 			} else {
 				userPrompt = prompt + rejectBlock
