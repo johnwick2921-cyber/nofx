@@ -570,3 +570,140 @@ Genuine and valuable: `TestClass37LiveStreamBeyondHTTPTimeoutSurvivesUnderTotal`
 8. **Nothing captures the peer's own close reason** — no `Connection: close` logging, no close_notify observation.
 
 ---
+
+## 13. SECTION H — EVERY FAILURE, 7 DAYS (the census)
+
+**Definition:** every `ai_call … ok=false` row — each individual HTTP try to `api.deepseek.com` that returned no model answer. **n = 50** over 2026-08-26 00:00 → 2026-09-02 07:43:40 CT, against **3,633** total attempts = **1.38%**. Sources: the eight file logs (verified strictly sequential, no overlap). **A12 cross-check — sources agree:** the journal holds **49** of the 50, every timestamp matching exactly including the doubled `01:15:54`; the one absentee (`08-26 20:40:02`) predates the journal's first line. Coverage difference only, no content disagreement.
+
+The full 50-row table with verbatim error text lives in the source data; the roll-up that matters is the **reclassification**, because the logged labels are wrong on nearly half the rows:
+
+| my class | meaning | n | share |
+|---|---|---|---|
+| **OUR-CEILING** | **our own `http.Client.Timeout=600s` killing a call that was working** | **15** | **30%** |
+| **PROVIDER-503** | HTTP 503 at request time, sub-second | 22 | 44% |
+| **PEER-CUT-MID** | reset/EOF after N seconds with bytes already received | 9 | 18% |
+| **PEER-CUT-PRE** | reset on the send, zero bytes | 2 | 4% |
+| **STALL-600** | HTTP 200 headers, then zero body bytes for 600 s | 1 | 2% |
+| **EMPTY-200** | HTTP 200 with an empty body | 1 | 2% |
+
+**The single largest self-inflicted category: 15 of 50 failures (30%) are our own 600-second ceiling killing calls that were succeeding.** Seven are **[A] certain** — live SSE streams with `ttfb_ms ≈ 500` that had already received **73,196 / 71,414 / 126,768 / 133,667 / 134,322 / 140,177** reasoning characters when our timer cut them at exactly 600.000 s. The other eight are **[B]**: pre-stream non-stream planner calls at exactly 600.000/600.001 s whose successful neighbours on the same path ran 371, 448, 473, 488, 532 and 545 s — the ceiling sat **inside** the normal distribution. Corroborated by the fix's own commit `75130d59`: *"http.Client.Timeout (600s) was killing LIVE max-reasoning streams (11/80 attempts 08-30→09-01)"*.
+
+**Per day** [RUNTIME]: 08-26 1/666 (0.15%) · 08-27 1/663 (0.15%) · 08-28 6/510 (1.18%) · **08-29 0/0 — no calls at all** (Saturday, CME closed) · 08-30 2/220 (0.91%) · 08-31 7/549 (1.28%) · 09-01 8/778 (1.03%) · 09-02 **25/247 (10.12%)** — of which 22 are the single 503 burst.
+
+**Before / after class 41** (live 06:27:45 CT 09-02): before **49/3,589 = 1.37%**; after **1/44 = 2.27%**. **The "after" cell proves nothing and must not be read as a result** — in that 76-minute window `grep -c '📐 planner attempt'` = **0**. Not one planner attempt ran, so `stream_tries=3`, the 2s→15s→45s backoff and `resend_identical` have never fired in anger; the one failure was on the non-stream executor path, which class 41 does not govern.
+
+**The split that DOES separate — path, not hour.** Restricted to the stream era (08-31 00:08 → 09-02 07:43, n=1,458):
+
+| path | ok | fail | n | fail rate |
+|---|---|---|---|---|
+| planner (SSE stream) | 125 | **17** | 142 | **11.97%** |
+| executor (non-stream) | 1,296 | 20 | 1,316 | **1.52%** |
+
+**7.9×.** That is a property of the call *shape* — long max-reasoning streams (71k–140k reasoning chars, 250–600 s wall) are exposed to both the ceiling and to mid-body peer cuts in a way that 5–170 s executor calls are not.
+
+## 14. SECTION G3 — TIME OF DAY: THE CHINA-WORKDAY HYPOTHESIS IS **NOT** SUPPORTED
+
+Beijing = CT + 13. Denominator is every attempt, `ok=true` and `ok=false`, because our own volume is session-shaped. (It turns out to be near-uniform, 134–196/hr outside the 16:00 CT CME break, but the rates are shown per bucket regardless.)
+
+**Raw arithmetic:** China workday (Beijing 09:00–21:59 = CT 20:00–08:59, 13 buckets) → **40 / 2,100 = 1.905%**. Off-hours (11 buckets) → **10 / 1,533 = 0.652%**. **Ratio 2.92×** — which looks like a clear cluster.
+
+**It is not.** The entire effect is one incident: the 09-02 00:59:47–01:15:57 burst contributes **24 of the 40** workday failures (23 in the CT-01 bucket alone). Excluding that single 12-minute event:
+
+| | n | failures | rate |
+|---|---|---|---|
+| China workday | 2,076 | 16 | **0.771%** |
+| off-hours | 1,533 | 10 | **0.652%** |
+| ratio | | | **1.18×** |
+
+**Plain statement: failures do not cluster in China's workday.** A 0.12 pp difference on 26 events total is noise at this n; 16 vs 10 is nowhere near separable. And the two secondary bumps point the wrong way for the hypothesis — CT-23 (Beijing 12:00) is the 09-01 EOF cluster, and CT-12 (**Beijing 01:00, the middle of China's night**) holds four failures, two of them the 09-01 12:33/12:43 OUR-CEILING pair. The largest single reclassified category, OUR-CEILING, is by construction independent of DeepSeek's load — it is our own timer.
+
+---
+
+## 15. SECTION J — ROOT CAUSE
+
+### J1 — Ranked causes, each with what it explains and what it does not
+
+**① The prompt/validator contradiction on `breakdown_continue` — the session killer.** [CODE]+[RUNTIME], §4.
+*Mechanism:* `kernel/planner_prompt.go:589` issues a standing unconditional *"If price sits BELOW PDL you MUST write a continuation short"*, `:623` binds "continuation" to `breakdown_continue|breakup_continue`, the prompt is **never told a given breakdown level is already void**, and `kernel/breakdown_continue.go:254` rejects exactly that play at write time once a close has come back across it. The correction arrives as a ~92–127-token tail on a ~6,341–6,691-token prompt (≈1.5%) that still contains the MUST.
+*Explains:* 37 of 194 failed attempts directly, 82 counting the whole `breakdown_continue` family (42.3%), **8 of the 17 fail-closes**, and the 09-02 LONDON regression where attempt 3 returned to the very level attempt 1 was rejected on.
+*Does NOT explain:* the other reject families (`arm_legs_sweep_reclaim_only` 28, `flip.rule invalid` 18), and nothing on the transport side.
+
+**② Our own 600-second ceiling — the largest self-inflicted transport cause, now fixed for the planner.** [RUNTIME], §13.
+*Mechanism:* one `http.Client.Timeout` served both a 5-second executor call and a 10-minute max-reasoning stream. Class 37 split them (planner total → 1200 s, `cp.Timeout = 0` for streams).
+*Explains:* **15 of 50 failures (30%)**, including seven streams killed with up to 140,177 reasoning characters already in hand.
+*Does NOT explain:* anything after 09-01 12:43 — **zero** `timeout_source=client` stream kills since. The 588.1-second success at 07:44:03 (11.9 s inside the old ceiling) is the proof the fix is load-bearing.
+*Residual:* the **executor** still runs at 600 s, and that is **exactly DeepSeek's documented 10-minute pre-inference close** — see ④.
+
+**③ Provider load-shedding — real, bounded, and mishandled rather than harmful.** [RUNTIME], §2/§13.
+*Mechanism:* DeepSeek returns sub-second 503s under capacity pressure. All **35** call-level 503s in seven days fall in **one 12-minute window**; there is no background rate and **zero 429/500/502/504** anywhere.
+*Explains:* 22 of 50 failures, 8 lost executor decision cycles (#21–#28), and a near-miss that burned an entire 3-attempt planner budget in **7 seconds**.
+*Does NOT explain:* any fail-close (0 of 17), and not the LONDON one — that read began 14 minutes after the last 503 and all three of its calls returned `ok=true`.
+*The real defect it exposed:* the 503 body was fed back **as a validator reason**, so the planner rewrote its prompt to "fix" a provider outage and the regression detector then scolded it twice for failing to. Fixed in HEAD (`IsProviderFailure`, `st >= 500 || st == 429`); the binary that hit it predated the fix.
+
+**④ `IdleConnTimeout = 0` against a reaping CloudFront edge — proven, and trivially fixable.** [NET]+[RUNTIME], §11 D3.
+*Mechanism:* the transport never evicts an idle pooled connection; the edge reaps the session after ~72 s and announces it only on the next write. Observed end to end at 09-02 07:38:19: idle 72 s → reuse → RST at **27 ms** → retry succeeded 30 s later.
+*Explains:* the two PEER-CUT-PRE failures, and it is the mechanism behind the 58.8-second "failed to send request" anomaly.
+*Does NOT explain:* the mid-body cuts (bytes were flowing), the 503s, or the ceiling kills.
+*Note:* every planner stream *closes* its connection rather than pooling it (9/9, because `break` at `[DONE]` leaves the body undrained), so a **stream** inheriting a dead socket from a previous stream is structurally impossible; the executor is the exposed path. A planner stream hitting a socket the *executor* left is [B] — mechanism proven, instance never observed.
+
+**⑤ Executor/planner concurrency — EXONERATED.** [RUNTIME], §11 D4.
+Stripping the 503 storm: overlapped streams cut **10/104 = 9.6%**, streams alone cut **0/7 = 0%**. But overlap is the *default state* (93% of surviving streams overlapped), so 10 of 10 cuts under overlap is exactly what chance predicts (P ≈ 0.48), and the alone-cell n=7 has no power. **No evidence overlap causes cuts** — though the boot line states that conclusion, drawn from an underpowered sample, as settled policy.
+
+**⑥ SSE parser limits — latent, not implicated.** [CODE], §10 E1.
+`bufio.Scanner` at the default 64 KiB with no `Buffer()` call, while the sibling Databento reader raises it to 1 MiB. `grep "token too long"` → **n=0**, so it has never fired. It matters because of the *handling*: `ErrTooLong` → `class=other` → not retried, not a provider failure → **quoted back to the model as the reason its plan was rejected**.
+
+**⑦ NAT / keepalive — ruled out on the Linux side.** [RUNTIME], §11 D5. `nf_conntrack_tcp_timeout_established = 432000 s (5 days)` ≫ any observed gap. WSL2 is in **mirrored** mode on a real LAN address, MTU 1500, no proxy. The Windows-side WFP/Defender path is opaque from Linux and remains [C].
+
+**⑧ Request-body non-compliance — no failure attributable.** [DOC]+[CODE], §7. We send the two documented headers and every field DeepSeek documents; `max_tokens=65536` is legal (17% of the 384K ceiling). The one true mismatch is `temperature` in thinking mode, which the provider ignores. **No observed failure traces to the body.**
+
+**⑨ New, found here — unhandled `finish_reason`s.** `content_filter` and `insufficient_system_resource` appear **nowhere in the codebase** and are treated as complete successes with whatever partial content arrived. The second is DeepSeek's documented mid-generation capacity signal — precisely the failure a provider-overload retry should catch, and today it is invisible. n=0 observed, so latent.
+
+### J2 — THE VERDICT
+
+> **The dominant cause of session-losing failures is not DeepSeek. It is a contradiction inside our own prompt.**
+>
+> **17 of 17 fail-closes in seven days were caused by model output the validator refused; 0 were caused by a transport failure, a 503, or a deadline** (`grep -icE "503|overload|transport|deadline|EOF|reset|timeout"` over all 17 → 0). Of those 17, **8 name `breakdown_continue`** — the play `kernel/planner_prompt.go:589` orders the model to write and `kernel/breakdown_continue.go:254` refuses once the tape has moved.
+>
+> Of the 194 failed planner attempts, **175 (90%) are the model failing our schema and 19 (10%) are provider or transport** — a ratio two independent censuses reached separately.
+>
+> The transport failures are real and expensive — 15 of 50 were **our own 600-second ceiling** discarding up to 140,177 reasoning characters per call, and 8 executor decision cycles were lost to one 503 burst — but **not one of them cost a session.** The system's own retry machinery absorbed them.
+
+### J3 — What is still UNVERIFIED, and the one observation that settles each
+
+| # | unverified | the observation that would settle it (owner to approve) |
+|---|---|---|
+| 1 | **FIN vs RST and its direction.** The watcher has produced 0 `CLOSE-WAIT`/`FIN-WAIT` in 5,236 lines; the only RST fact we hold came from a Go error string. | `sudo apt install tcpdump`, then during a planner read: `sudo tcpdump -i eth0 -s 0 -w /tmp/ds.pcap 'host 3.173.21.63 and port 443'`. Also settles the ALPN question (#2) from the same capture. |
+| 2 | **Negotiated HTTP version, directly.** [CODE]+[NET] both say HTTP/1.1; no ALPN was ever observed. | the ClientHello/ServerHello in the capture above. No-root alternative: one restart with `GODEBUG=http2debug=1`. |
+| 3 | **Whether class 41 works at all.** `stream_tries=3`, the 2s→15s→45s backoff, `resend_identical` and the `⏱` watchdog line have **never executed** — 0 planner attempts since the boot, and the idle watchdog has never fired in any log, ever. | the next planner attempt meeting a transport cut or 5xx: look for `retrying (2/3)`, a 15 s or 45 s gap, `🧩 … resend-identical`, and the **absence** of `reauthor+block` after a provider-class failure. |
+| 4 | **That "resend-identical" is byte-identical** — it will not be provable even when it fires, because `shortHash(prompt)` is stored in `plans.prompt_hash` but **never logged on the attempt lines**, and provider failures deliberately write no rejected-prompt row. | log the prompt hash on the `🧩` line. Uninstrumented by construction today. |
+| 5 | **Whether a planner *stream* can inherit a dead pooled socket** (the executor demonstrably does). | add `httptrace.ClientTrace` `GotConn{Reused, WasIdle, IdleTime}` logging — a small additive change that turns every future reuse into a labelled data point. |
+| 6 | **The CloudFront edge's actual idle-reap window.** One data point (72 s) plus two unexplained teardowns (00:59:48, 04:50:11). | the same `httptrace` line; or extend `sockwatch.sh` to print `$info` on its `->GONE` branch, cutting the ≤10 s quantization to 250 ms. |
+| 7 | **What the 09-02 01:03:52 HTTP-200 body contained** — it burned 244.3 s and is unattributable because the body is never logged. | log the first ~512 bytes on the empty-choices branch. Nothing can recover the historical instance. |
+| 8 | **Whether `request_id` is absent because DeepSeek sends none or because we read the wrong header.** `request_id=""` on 20 of 20 calls means **no failure in this audit can be correlated with the provider's own logs.** | log `resp.Header` keys once at debug level. |
+| 9 | **Windows-side firewall / Defender / Hyper-V flow expiry** — opaque from Linux in mirrored mode. | elevated PowerShell: `Get-NetFirewallHyperVProfile`, `Get-MpPreference | Select EnableNetworkProtection`, and `pktmon start --etw`. |
+
+### J4 — Fixed · in flight · open
+
+**Already fixed and load-bearing:** class 37's ceiling split (**proved** by the 588.1-second success that would have died at 600 s) · class 41's `IsProviderFailure` so a 5xx no longer re-authors (the 01:15 disease) · class 39 arm-leg normalization · class 38's 17 contract restrictions now stated in the prompt · class 35's recorded replan counter (which, correctly, spent nothing across today's three-version LONDON chain).
+
+**In flight:** ROOT-FIX part A (measured — plan JSON is only 3.9% of output, which killed part A's premise) and part B (the shadow A/B instrument, **dormant**: `SHADOW_AB_ENABLED` is unset in both `.env` and the live process environment, so it cannot fire without a restart; its `facts` column is in the code but **not yet in the live database** because `AutoMigrate` is lazy and no reject has occurred since the 07:32:15 boot).
+
+**OPEN, with proposed owner rulings:**
+
+1. **The `breakdown_continue` contradiction (J1-①) — the only item that has cost sessions.** Ruling needed on one of: make `:589` tape-aware; soften it to "a short-direction scenario" and let the model pick the condition (the validator already accepts any short — `hasDirection(d.Scenarios, "short")`); or feed the validator's own knowledge forward so the facts block says *"breakdown at 29021.25 is VOID (close came back 01:1x)"* and the model never authors it. Also align `plan_doc.go:842`'s message with what its code actually requires.
+2. **A 503 storm can still destroy a scheduled session in seconds.** On 09-02 it burned three attempts in 7 s and was benign only because it hit a *wake* read. Class 41's backoff (2s→15s→45s) lengthens that to ~62 s but still consumes the whole budget. Ruling: should a provider-class failure consume a planner **attempt** at all, or only a client **try**?
+3. **`IdleConnTimeout = 0`.** One nonzero value below the edge's reap window closes the PEER-CUT-PRE class outright. Ruling on the number.
+4. **The executor's 600 s ceiling equals DeepSeek's documented 10-minute no-start close** — zero margin, and the two causes are indistinguishable in our logs. It cost 10 minutes of executor blindness on 09-02 and contributes to the 96 cycle overruns.
+5. **`timeout_source=transport` is wrong on 23 of 28 classifiable failures** and `class=other` failures (empty-200, parse, `ErrTooLong`) are still fed to the model as validator reasons — the 01:15 disease, still open for every non-status failure.
+6. **Provider fallback does not exist.** "DeepSeek 2" is enabled and keyed but bound to nothing, and **no code re-resolves the client after a failure**. Ruling: wire it, or disable the row so it stops implying a fallback that isn't there.
+7. **Hygiene:** the boot line prints `AI_MAX_RETRIES=calls` (a format-string bug) · four of six class-41 boot fields are string literals that would not change if the code did · the four class-37/41 stream knobs are absent from the UNSET-defaults audit · `TestProbePeerRSTMidBodyErrorString` has **no assertion at all** · **no test instantiates the production transport**, so every defect in J1-④ lives in untested code · 33 × HTTP 402 from the deprecated nofxos.ai key are still firing · the socket watcher is an unsupervised bash loop.
+
+---
+
+## 16. CLOSEOUT
+
+**Read-only compliance:** no code, config, knob, key or DB write; no restart, cancel, reset or cutover; **no live provider call** (A3 — every figure comes from the running system's own calls); no lock taken (none was present). The only writes are this report on `docs/deepseek-e2e-audit-0902` in `~/nofx-dsaudit`.
+
+**What the owner will still see wrong on screen:** sessions that fail-close on `breakdown_continue` and need a manual reset (2026-09-01 ASIA four times, 2026-09-02 LONDON once) · a boot line advertising `AI_MAX_RETRIES=calls`, `keepalive=30s` read from nothing, and `truncation → 🚨 WARN, never silent` which is false for the planner · `timeout_source=transport` on failures that are 503s · `request_id=""` on every call, so no failure can be traced to the provider's side · a `📊 AI call complete (stream)` line on streams that did not complete.
+
+**A9 — commit-ref URL: NOT produced.** The branch is committed locally; a push from this session was classifier-denied in an earlier dispatch and was not re-attempted. The owner publishes with `git -C ~/nofx-dsaudit push -u origin docs/deepseek-e2e-audit-0902`, after which the raw URL is `https://raw.githubusercontent.com/johnwick2921-cyber/nofx/<sha>/docs/superpowers/reports/2026-09-02-deepseek-e2e-audit.md` — **curl it for 200 before citing it** (this has 404'd twice before).
