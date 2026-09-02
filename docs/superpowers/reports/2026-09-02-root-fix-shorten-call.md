@@ -123,9 +123,43 @@ reports the real share: **1.6% on the synthetic doc, 3.9% on real stored docs** 
 `TestRootFixFactsSnapshotRoundTrip` (D5) · class-38 contract + hint guard still green (D2) ·
 full `go test ./...` green · vitest guide 10/10 · `tsc --noEmit` clean (D7).
 
-## 5. Cutover
+## 5. Cutover — staged, and a live proof arrived while staging
 
-_(filled at swap time)_
+Staged: clean clone of dev @ `928e49d2` → `vcs.revision=928e49d297f97b9dacac8456da65a6b1ab9eccba`,
+`vcs.modified=false`, copied to `nofx-bin.next`. Running: `8a756bba` PID 2065518. Rollback slot
+`nofx-bin.prev.boot`.
+
+**CLASS-33 LEG 5 FIRED, ON ITS FIRST REAL USE — and it stopped this cutover.** At 07:21:33 CT
+`GET /api/cutover-gate` returned:
+
+```
+ready: False
+  1 db_open_positions      True  | 0 open row(s)
+  2 api_positions          True  | 0 position(s)
+  3 nt8_positions_snapshot True  | count=0
+  4 working_orders         True  | 0 non-terminal arm(s)
+  5 planner_in_flight      False | planner read IN FLIGHT: 2026-09-02:LONDON:8d5c8af5_…_deepseek
+```
+
+The journal confirms a genuine read was mid-flight: stream opened 07:15:50, `🧠 planner call …
+completed in 369.5s` at 07:21:59, `🗓️ PLAN written 2026-09-02 LONDON v3`. **All four of the OLD
+legs passed.** A pre-class-33 cutover would have swapped and killed that chain at ~5.5 minutes
+in — precisely the 2026-08-31 17:34 CT defect (class 33 defect B1) reproduced 24 minutes after
+the fix shipped. Held per A6; re-quoted at 07:22:12 CT → `ready: True`, all five legs pass.
+
+This is the live proof class 33's report listed as owed for leg 5. [A]
+
+**Swap (A26 — the owner runs it):**
+
+```
+cd /home/hoang/nofx
+echo 928e49d297f97b9dacac8456da65a6b1ab9eccba > deploy/RELEASE
+cp nofx-bin nofx-bin.prev.boot && mv nofx-bin nofx-bin.old.8a756bba && mv nofx-bin.next nofx-bin
+kill -9 <MainPID>
+```
+
+Re-quote the gate immediately before the kill: LONDON has been re-reading (v2 07:15, v3 07:21)
+and the NY read fires at 08:00 CT. `ready:false` = HOLD.
 
 ## 6. What the owner will still see wrong (A15)
 
