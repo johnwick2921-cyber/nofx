@@ -258,11 +258,40 @@ func ClassifyAIError(err error) string { return classifyAIError(err) }
 // prompt on these; validator/parse rejects (class=other, http_status…) keep
 // the reject/repair flow.
 func IsProviderFailure(err error) bool {
+	if err == nil {
+		return false
+	}
 	switch classifyAIError(err) {
 	case "transport", "idle_deadline", "total_deadline", "client_timeout", "context":
 		return true
+	case "http_status":
+		// 2026-09-02 01:15 CT: "Server Overloaded" 503 ×3 burned all three
+		// planner attempts in 9 s, each re-authored with the 503 text as its
+		// "validator reason". A 5xx or 429 is the provider, not the prompt.
+		st := httpStatusFrom(err.Error())
+		return st >= 500 || st == 429
 	}
 	return false
+}
+
+// httpStatusFrom extracts NNN from "(status NNN)" in an API error message; 0
+// when absent.
+func httpStatusFrom(msg string) int {
+	i := strings.Index(msg, "(status ")
+	if i < 0 {
+		return 0
+	}
+	n := 0
+	for _, r := range msg[i+len("(status "):] {
+		if r < '0' || r > '9' {
+			break
+		}
+		n = n*10 + int(r-'0')
+		if n > 999 {
+			return 0
+		}
+	}
+	return n
 }
 
 // requestIDFrom returns the provider's request id header when present (the

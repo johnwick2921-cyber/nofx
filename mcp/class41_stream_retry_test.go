@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -104,5 +105,30 @@ func TestClass41WatchdogFireIsLogged(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("watchdog fire must be logged with the measured gap; logs=%v", c.Log.(*MockLogger).GetLogs())
+	}
+}
+
+// CLASS 41 M0 amendment (overnight 2026-09-02 01:15 CT): a 5xx / 429 from the
+// provider ("Server Overloaded" 503 ×3 attempts in 9 s) is a PROVIDER failure —
+// the model never answered — so it must resend identical, not append. 4xx
+// request errors stay non-provider (the request itself is wrong).
+func TestClass41ProviderFailureClasses(t *testing.T) {
+	cases := map[string]bool{
+		"still failed after 2 retries: stream interrupted: unexpected EOF":                                               true,
+		"stream interrupted: read tcp 1.2.3.4:1->5.6.7.8:443: read: connection reset by peer":                            true,
+		"stream idle deadline exceeded (idle 30s of silence, context canceled): stream interrupted: x":                   true,
+		"failed to read response: context deadline exceeded (Client.Timeout or context cancellation while reading body)": true,
+		"still failed after 2 retries: API error (status 503): {\"error\":{\"message\":\"Server Overloaded\"}}":          true,
+		"API returned error (status 502): bad gateway":                                                                   true,
+		"API error (status 429): rate limited":                                                                           true,
+		"API error (status 400): invalid request":                                                                        false,
+		"API error (status 401): unauthorized":                                                                           false,
+		"no JSON object found in planner output":                                                                         false,
+		"S2 breakdown_continue: a close came back across 29021.25":                                                       false,
+	}
+	for msg, want := range cases {
+		if got := IsProviderFailure(errors.New(msg)); got != want {
+			t.Errorf("IsProviderFailure(%q) = %v want %v (class=%s)", msg, got, want, ClassifyAIError(errors.New(msg)))
+		}
 	}
 }
