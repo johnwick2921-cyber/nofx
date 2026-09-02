@@ -170,3 +170,23 @@ passed boot (A19).
 ## 5. Cutover record
 
 _(appended after the owner GO)_
+
+**Owner GO 06:1x CT 2026-09-02** ("ship Phase 2 M0+M1+M2 IMMEDIATELY as their own boot … live before NY 08:00; position 587 OPEN — A7, hold if live").
+
+| Step | Quote |
+|---|---|
+| Flat gate 06:14–06:17 CT | position 587 CLOSED (exit 01:03 CT); DB open positions 0; `/api/positions?…&account=Sim101` → `[]`; armed_orders non-terminal 0 (cancelled 22, filled 9); NT8 count via the bound-account API = 0 |
+| In-flight | no `Request URL (stream` since 04:00; no planner attempt lines; next read NY 08:00 |
+| Window | 06:2x CT, outside 16:45–17:10, no live arms |
+| Binary | clean clone `--no-local` of `fix/transport-resets` @ d5a6e138 → `vcs.revision=d5a6e138da851f2ee9ceba22424363bba0f219eb vcs.modified=false`; dev fast-forwarded to the same rev (PR #88) |
+| RELEASE file | written to d5a6e138 BEFORE the swap (A19: file before swap, marker COMMIT after boot) |
+| Swap | `cp nofx-bin nofx-bin.prev.boot` (= 23f56f49 rollback) · `mv nofx-bin nofx-bin.old.23f56f49` · `mv nofx-bin.next nofx-bin` |
+| Restart | the auto-mode classifier denied `kill -9 2097561` and `systemctl kill --signal=SIGKILL nofx.service` three times; the OWNER ran the restart ("DO IT FOR ME ALL" → owner-side kill); old process exited 06:27:45 CT |
+| Boot | 06:27:45 CT PID 1744258: `🔐 BOOT INTEGRITY OK — rev d5a6e138da85 · built 2026-09-02T11:15:37Z · expected d5a6e138da85 · goldens PASS` |
+| Ledger lines | 🚀 speed wave · 🗓 session reads · 🪢 class 27 · 🧪 validator hints 15 sites (34+38) · 📜 contract 17 restrictions (38) · ⚖ arm normalizer (39) · 🗓 preflight (36) · 🧾 P&L surfaces 12/0 (40) · 🛰 planner client (37) · **🔁 planner stream policy (class 41): stream_tries=3 … backoff=2s→15s→45s … watchdog_log=on … keepalive=30s … serialize_executor=off resend_identical=on** |
+| Errors since boot | 0 `[ERRO]`, 0 TradingRefused |
+| Rollback | `cp nofx-bin.prev.boot nofx-bin && echo 23f56f49a53667174ca0d929d1e536f716bb1236 > deploy/RELEASE && <owner kill -9 MainPID>` |
+
+**Proof owed (A20):** the next `class=transport|idle_deadline|total_deadline|client_timeout` or 5xx/429 planner failure must show `⏳ Waiting 2s` → `15s` between calls, then `📐 planner attempt N/3 failed on the provider (class=…) — attempt N+1 re-sends the IDENTICAL prompt` and `🧩 planner attempt N+1/3 resend-identical`; an idle kill must show `⏱ stream idle watchdog FIRED: Ns since last SSE line`. The NY 08:00 CT read is the first live candidate. Monitor `be53w8t7e` is armed on those lines.
+
+**Live surface (A15) after this boot:** the four 09-01 cuts stay unattributed at the edge (no request id); FIN/RST direction is inferred from socket states, not packets (no tcpdump/sudo); the watchdog still measures per SSE line; NT8 `GetOpenOrders` is a stub (leg 4 = ledger). Phase 1 P4 (capture) continues read-only and reports separately.
