@@ -86,6 +86,61 @@ func (at *AutoTrader) weeklyBars1m(now time.Time) []market.Kline {
 	return bars
 }
 
+// barResolver builds THIS trader's resolver: NT8 BarCache as the native
+// fetcher, our persisted 1m as the last rung. One door for every TF.
+func (at *AutoTrader) barResolver() *market.BarResolver {
+	return &market.BarResolver{
+		Native: func(symbol, tf string, count int) []market.Kline {
+			if market.FuturesBarsProvider == nil {
+				return nil
+			}
+			return market.FuturesBarsProvider(symbol, tf, count)
+		},
+		Own1m: func(symbol string, fromMs, toMs int64) []market.Kline {
+			if at.store == nil {
+				return nil
+			}
+			rows, err := at.store.BarHistory().BarsBetween(symbol, "1m", fromMs, toMs)
+			if err != nil {
+				return nil
+			}
+			out := make([]market.Kline, 0, len(rows))
+			for _, r := range rows {
+				out = append(out, market.Kline{OpenTime: r.OpenTimeMs, Open: r.O, High: r.H, Low: r.L, Close: r.C, Volume: r.V})
+			}
+			return out
+		},
+	}
+}
+
+// weeklyDailyBars (BAR-SOURCE WAVE 2026-09-02) is the weekly reader's source.
+// It was `weeklyBars1m` — the persisted 1m table, which starts 2026-08-19 and
+// yields TWO completed weeks, so the card rendered "WEEKLY thin · low" while
+// the NT8 cache held 1500 native DAILY bars back to 2020-11-11.
+//
+// It resolves "1w", whose ladder is 1d → 1m: native 1w is deliberately
+// EXCLUDED because NT8 stamps weekly bars Friday→Thursday while our weekly
+// vocabulary is Monday-governed (market.ExcludedNative("1w") carries the
+// reason). The returned bars are DAILY; CompletedWeekCandles buckets them with
+// weekStartMonday exactly as it bucketed 1m bars — same convention, same
+// output shape, more history. The weekly SIGNAL is untouched by this wave.
+func (at *AutoTrader) weeklyDailyBars(now time.Time) (bars []market.Kline, source string) {
+	s, err := at.barResolver().CompletedBars(at.futuresSymbol(), "1w", 0, now.UnixMilli())
+	if err != nil {
+		at.logWarnf("📅 WEEKLY READ: resolver failed (%v) — falling back to stored 1m", err)
+	}
+	if len(s.Bars) > 0 {
+		return s.Bars, fmt.Sprintf("%s via %s", s.Source, s.FromTF)
+	}
+	// The resolver already tries own-1m as its last rung; reaching here means
+	// nothing anywhere. Fall back to the legacy path so behaviour is never
+	// WORSE than before this wave.
+	if legacy := at.weeklyBars1m(now); len(legacy) > 0 {
+		return legacy, "legacy_own1m"
+	}
+	return nil, "none"
+}
+
 // weeklyReadVerdict is the pure W2 decision (fixture-tested): before the
 // week's read deadline → "wait"; at/after it with no stored doc → "read"
 // (covers the boot-backfill case — a Monday boot is past the deadline);
@@ -153,11 +208,13 @@ func (at *AutoTrader) runWeeklyRead(now time.Time, monday string, bootBackfill b
 			at.logErrorf("⚠️ WEEKLY READ panic recovered for %s: %v", monday, r)
 		}
 	}()
-	bars := at.weeklyBars1m(now)
+	bars, barSource := at.weeklyDailyBars(now)
 	if len(bars) == 0 {
-		at.logErrorf("⚠️ WEEKLY READ FAILED for %s: no stored 1m bars (thin/cold store)", monday)
+		at.logErrorf("⚠️ WEEKLY READ FAILED for %s: no bars from any rung of the 1w ladder %v (thin/cold store)", monday, market.LadderFor("1w"))
 		return
 	}
+	at.logInfof("📅 WEEKLY READ %s: %d bar(s) from %s → %d completed week(s) (ladder %v; native 1w excluded: %s)",
+		monday, len(bars), barSource, kernel.CompletedWeekCount(bars, now), market.LadderFor("1w"), market.ExcludedNative("1w"))
 	price := bars[len(bars)-1].Close
 	facts := kernel.ComputeWeeklyFacts(bars, now, price)
 	prompt := kernel.BuildWeeklyPrompt(facts)

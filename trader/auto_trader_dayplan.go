@@ -75,6 +75,8 @@ func (at *AutoTrader) snapshotSessionProfiles() {
 		// ROOT-FIX part B — the shadow A/B instrument's resolved state.
 		done, _ := store.ShadowABCount(at.store)
 		at.logInfof("%s", ShadowABBootLine(ShadowABEnabled(), ShadowABTarget(), done))
+		// BAR-SOURCE WAVE — per-TF source/earliest/count, read from the resolver.
+		at.logInfof("%s", BarSourceBootLine(at.barResolver(), at.futuresSymbol(), time.Now()))
 	})
 	installActivePlanProvider(at, st)
 	// P0-cleanup (2026-08-19) — soft-alert: guardrails that WOULD have tripped
