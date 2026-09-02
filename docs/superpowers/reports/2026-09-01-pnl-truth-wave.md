@@ -7,10 +7,10 @@ Evidence tiers: **[A]** directly verified · **[B]** inferred from strong eviden
 
 | Item | State |
 |---|---|
-| Code | branch `fix/pnl-truth-wave` @ `f5c9f6b0` (fix `c738c2ec` + checklist 40), rebased onto dev `e31e9146` (class 39 merged), pushed |
+| Code | **MERGED to dev @ `23f56f49`** (fix `a6ea66a0` · checklist 40 `dbf7e45e` · report), fast-forward from `713def53` |
 | Suites (rebased tree) | `go test ./...` 27 ok / 0 FAIL · goldens PASS · vitest 38 files / 298 pass · tsc clean |
-| Sequencing (B) | class 39 (fix `7e692a63`) is on dev but NOT booted (running `c0580011`); lock held live by pid 1906840 (`class39-legs-normalizer`). **Waiting for class 39's boot**, then re-rebase, re-run, own lock, stage, GO |
-| Cutover | **NOT DONE** — awaits class 39's boot and the owner's explicit GO (A3). Marker written only AFTER this wave's passed boot (A19) |
+| Sequencing (B) | class 39 booted 00:01:07 CT (rev aeb11179, its marker after its boot, lock released 00:05:36); this wave rebased onto its cutover docs `713def53`, re-ran the full suite (27 ok · goldens · vitest 298 · tsc), took the lock 00:05:47 |
+| Cutover | **DONE 00:10:15 CT 2026-09-02** on owner GO (+ explicit hold override) — boot 2 at 00:11:48 `BOOT INTEGRITY OK — rev 23f56f49 · goldens PASS`, PID 2097561; marker `128a3c53` after the passed boot; **LIVE PROOF: decision record 36121 (00:16:32 CT)** carries `Track record: +304.32 over 105 resolved trades (115 unresolved trades excluded — see note).` (see CUTOVER section) |
 | Footprint (B) | zero edits to `kernel/plan_doc.go`, `trader/auto_trader_planner.go`, the E8 logger, `plays.ts`, `store/planner_rejected.go` — `git diff origin/dev --stat` names none of them |
 
 ---
@@ -138,3 +138,49 @@ Sequence per B/G: wait for class 39's boot → rebase onto dev → re-run the fu
 - The 115 unresolved rows stay unresolved: this wave stops READING the wrong column; it writes nothing (stop-line I) — the backfill is 0A-2's, done.
 - `api/handler_plan.go:1685` still echoes raw `realized_pnl` per row in the graded-trades list (per-row, not an aggregate; not in scope). Noted, not changed.
 - The vite dev server serves the main tree: the FE chip appears only after the main tree is fast-forwarded (under the lock, at cutover); until then the header is unchanged.
+
+---
+
+## CUTOVER — DONE (owner GO, 2026-09-02) [A]
+
+- **GO 00:09 CT** with conditions: proceed when both holds clear (no read in flight, no working arm), re-quote at swap, hold again if a new arm places. At 00:09:20 both holds were still live (wake re-read in flight since 00:03:07; ASIA v7 S1 leg-0 limit at 29044 `working`). **Owner then ruled "JUST DO IT NO WAIT"** — an explicit override of the A6/A7 holds. Stated consequence, accepted: the in-flight wake re-read dies with the old process (wake reads are non-fatal, `failClosed=false`; the active v7 plan is kept), and the resting S1 limit must be re-adopted across the restart (class 39's cutover had already shown arms surviving a restart).
+- **Lock re-acquired 00:10:15 CT** (pid 1860416; no holder present). **A5 at swap:** DB OPEN 0 · API positions `[]` · API open-orders `[]` · NT8 `positions snapshot account=Sim101 count=0` (00:10:04). **A6/A7 at swap (overridden):** `replan_in_flight: true`; armed `S1 … legs[0] working (limit 29044)`. The swap would have aborted on an OPEN position; there was none.
+- **Swap 00:10:15 CT:** `cp nofx-bin nofx-bin.prev.boot` (= aeb11179) · `mv nofx-bin nofx-bin.old.aeb11179` · `mv nofx-bin.next nofx-bin` (rev check `23f56f49` first) · `kill -9 2089356`.
+- **Boot 1, 00:10:21 CT — REFUSED.** `🔐 BOOT INTEGRITY REFUSED — rev 23f56f49a536 · built 2026-09-02T05:06:06Z · expected aeb11179df5a · goldens PASS` → `🔐 TRADING REFUSED — binary is revision "23f56f49a536" but the intended release is "aeb11179df5a"`. Cause: I had left `deploy/RELEASE` at the running rev, reading A19 ("marker AFTER the boot") as "do not touch RELEASE before the boot". The boot-integrity assertion reads the RELEASE **file** at startup, so a swap without the file edit always refuses. **Correct A19 protocol (as class 39 did it): edit the RELEASE file (uncommitted) BEFORE the swap; COMMIT the marker only after the boot passes; revert the file if it does not.** Every other boot line was already correct on boot 1, including `🧾 P&L surfaces: 12 aggregators strict-corrected, 0 raw` and `🧾 [hoang] Track record: +304.32 over 105 resolved trades (115 unresolved excluded)`. A peer session (`nofx-06`) independently flagged the REFUSED boot at the same minute; the fix below was already in flight and it was told so.
+- **Fix + restart 00:11:42 CT:** `deploy/RELEASE` = `23f56f49…`, `GUIDE_BUILT_REV` = same (files only); re-quoted: DB OPEN 0, positions `[]`, open-orders `[]`, `replan_in_flight: false`, S1 leg-0 still `working` (survived restart 1); `kill -9 2096745`.
+- **Boot 2, 00:11:48 CT — PASSED:**
+  `🔐 BOOT INTEGRITY OK — rev 23f56f49a536 · built 2026-09-02T05:06:06Z · expected 23f56f49a536 · goldens PASS`
+  `🚀 planner speed wave … stream_total=1200s (class 37 …)` · `🧪 validator hints: 15 sites … (class 34 + 38 guard)` · `📜 prompt/validator contract: 17 restrictions, all stated in prompt (class 38 guard)` · `⚖ arm normalizer … (class 39)` · `🧮 replan budget: recorded-counter (class 35) …` · `🗓 preflight: scheduled reads bypass freshness in halt/weekend (class 36) …`
+  **`🧾 P&L surfaces: 12 aggregators strict-corrected, 0 raw (corrected-column guard; unresolved rows counted + excluded, never coerced)`** ← NEW
+  `🧾 [hoang] Track record: +304.32 over 105 resolved trades (115 unresolved excluded), 38.1% win rate, PF=1.08, Sharpe=0.03, DD=9.1%`
+  Exactly ONE PID: `2097561`; `go version -m nofx-bin` → `vcs.revision=23f56f49…`; `[ERRO]`/panic since boot: **0**; positions `[]`; S1 leg-0 `working` after boot 2 (survived both restarts).
+- **Marker `128a3c53`** (RELEASE + GUIDE_BUILT_REV = `23f56f49…`) committed AFTER the passed boot and pushed (rebased onto a concurrent dev push first).
+- **Live surfaces on the new binary (00:12:21 CT):** `/api/account` → `ledger_day_pnl 0.0, ledger_day_resolved 0, ledger_day_unresolved 0, ledger_day_date 2026-09-02` (no trade closed today CT yet — an honest zero WITH its n, not a fabricated one); `/api/trades` rows carry `"resolved": true` (ids 586, 585 …).
+
+### THE PROOF (G) — the next rendered executor prompt, verbatim [A]
+
+`decision_records` id **36121**, created **2026-09-02 00:16:32 CT**, account Sim101 (the first executor cycle on the new binary; the last pre-swap record was 36120 at 00:09:20):
+
+```
+8. #579 MNQ short | Entry 29459.0000→? UNRESOLVED (exit unknown) | 2026-08-31 13:09 CT→2026-08-31 13:13 CT (3m)
+…
+10. #577 MNQ long | Entry 29413.0000→? UNRESOLVED (exit unknown) | 2026-08-31 12:25 CT→2026-08-31 12:29 CT (3m)
+
+## Historical Trading Statistics
+Resolved Trades: 105 | Profit Factor: 1.08 | Sharpe: 0.03 | Win/Loss Ratio: 1.70
+Track record: +304.32 over 105 resolved trades (115 unresolved trades excluded — see note).
+Avg Win: +100.55 | Avg Loss: -59.01 | Max Drawdown: 9.1%
+Note: an unresolved trade has no verified exit fill; its P&L is UNKNOWN and is never counted, never coerced to a raw value.
+Performance: NORMAL - room for optimization
+```
+
+Before (record 36090): `Total Trades: 220 … Total PnL: -203.68 USDT` and row 8 `Exit 0.0000 | Profit: +0.00 USDT (+100.00%)`. After (record 36121): the strict figure, its resolved n and unresolved count, and the two unresolved rows named by id with no P&L and no percentage. The figure agrees with the raw-store recompute in section C to the cent.
+
+### A15 — what the owner will still see wrong (post-cutover)
+- The header now shows `PNL::0.00` (NT8-native, unchanged) beside `LEDGER_DAY::+0.00 (0 resolved, 0 unresolved excluded)` — correct at 00:12 CT (nothing closed today); it will move with the first close of the session-day.
+- `api/handler_plan.go:1685` still echoes raw `realized_pnl` per row in the graded-trades list (per-row echo, not an aggregate; out of scope, noted).
+- The wake re-read in flight at the swap was lost by the override; v7 stays active and the next level event re-wakes it (30-minute wake throttle applies).
+- Boot 1's ~80 seconds of TradingRefused (00:10:21–00:11:42) are in the log as two `[ERRO]` lines; no order was attempted in that window (positions `[]` throughout).
+
+## Closeout
+Commits on dev: `a6ea66a0` fix · `dbf7e45e` checklist 40 · `23f56f49` report · `128a3c53` marker · this addendum. Lock released, worktree `../nofx-pnltruth` removed, repo memory updated (`project_pnl_truth_wave.md`, with the A19 file-before-swap lesson).
