@@ -247,8 +247,40 @@ staged `.next` in, kill, observe its boot line, commit `RELEASE` from the main
 tree), or revert `deploy/RELEASE` and `web/src/guide/types.ts` to `56904ec1` so
 the file matches the binary that is actually running. I have done neither.
 
-**Consequences for this wave.** My branch is off `origin/dev` (`0bba743b`) and
-does not contain the seven class-50 commits. `git merge-tree` against
-`1cee77a8` reports **zero conflicts**, so the rebase is clean whenever their
-wave boots. The checklist collision is already resolved: they took 51, this
-wave is 52.
+**Consequences for this wave.** My branch was off `origin/dev` (`0bba743b`) and
+did not contain the seven class-50 commits. The checklist collision is resolved:
+they took 51, this wave is 52.
+
+### 8.1 Resolved — the peer cutover completed at 22:37 CT
+
+```
+22:37:30  nofx.service: Main process exited, code=killed, status=9/KILL
+22:37:35  Started nofx.service
+22:37:38  🔐 BOOT INTEGRITY OK — rev 1cee77a87f1d · built 2026-09-03T02:38:05Z
+                              · expected 1cee77a87f1d · goldens PASS
+22:37:38  🛡 cutover safety (class 33): gate legs=5 · leg4=ledger
+          · boot sweep cancelled 0 pre-boot arm(s)
+```
+
+`nofx-bin.next` was swapped in and killed; the binary, `deploy/RELEASE` and
+`HEAD:deploy/RELEASE` now all read `1cee77a8`, so A19's third half is done and
+the TradingRefused trap is gone. The stale `weekly-refs-deploy` lock file was
+still present at that moment naming a dead PID, so a live dispatch is working
+the main tree without holding a live lock — worth a note, not a change I made.
+
+### 8.2 CORRECTION — the merge-tree conflict check was wrong
+
+Section 8 above originally claimed `git merge-tree` reported zero conflicts.
+That was a bad probe: I used the three-argument form, whose output does not
+carry `<<<<<<<` markers, so grepping for them counted zero by construction.
+The real rebase onto `1cee77a8` hit **one** conflict — `kernel/plan_doc.go`,
+where class-50b's `BiasLabel` and this wave's `NoTradeWindows` are added at the
+same point in `PlanDoc`. Both fields kept; resolved at 56efd352.
+
+Resolving it also caught a comment that had gone stale inside this wave: the
+field's doc said T1 windows are deliberately NOT stored and are re-resolved at
+read time, which was true of the first draft and false by the time the machine
+writer took them from `t1WindowsFor`. Corrected in the resolution.
+
+Rebased branch: suites `kernel` `trader` `api` `market` `store` green, vitest
+39 files / 302 tests green.
