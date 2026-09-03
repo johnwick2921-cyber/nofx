@@ -155,7 +155,17 @@ func (at *AutoTrader) currentT1Windows(now time.Time) []kernel.CTWindow {
 	if !ok {
 		return nil
 	}
-	tradeDate := plannerTradeDateCT(now)
+	return at.t1WindowsFor(plannerTradeDateCT(now), sess)
+}
+
+// t1WindowsFor is currentT1Windows for an EXPLICIT session and trade date, so
+// the plan-write path can stamp the card with the SAME windows the entry gate
+// will enforce (no-trade-band wave, 2026-09-02). A read authors ASIA while NY
+// is still the active session, so "the session at now" is the wrong key there.
+func (at *AutoTrader) t1WindowsFor(tradeDate string, sess *kernel.SessionDef) []kernel.CTWindow {
+	if at.store == nil || sess == nil {
+		return nil
+	}
 	slice, err := at.store.Calendar().GetSlice(tradeDate)
 	var evs []calendar.Event
 	fromStatic := false

@@ -473,9 +473,16 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 		"is_active":         sessName == activeName,
 		"runnable_sessions": runnable,
 		"doc":               doc,
-		"level_facts":       facts,
-		"price":             price,
-		"replans_left":      replansLeft,
+		// NO-TRADE BAND (2026-09-02) — the machine-written windows, judged
+		// against THIS read's clock for THIS card's session. Each carries a
+		// status (live / elapsed / other_session) so the card shows what still
+		// constrains trading instead of every rule the plan was born with. Nil
+		// for a doc written before the band existed; the card falls back to the
+		// model's prose, which this wave leaves exactly as authored.
+		"no_trade_band": kernel.RenderNoTradeBand(&doc, sess, now),
+		"level_facts":   facts,
+		"price":         price,
+		"replans_left":  replansLeft,
 		// The RESOLVED cap (config, never a literal) so the card can state the
 		// budget instead of inferring it from a version number — a NO-TRADE marker
 		// consumes a version, so version-1 overcounts by exactly one.

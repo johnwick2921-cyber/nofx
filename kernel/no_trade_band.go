@@ -116,6 +116,10 @@ const (
 type RenderedNoTradeWindow struct {
 	NoTradeWindow
 	Status string `json:"status"`
+	// CT wall-clock bounds, resolved here so the card renders a window without
+	// doing clock arithmetic of its own (A24 — no literals on the surface).
+	StartCT string `json:"start_ct"`
+	EndCT   string `json:"end_ct"`
 }
 
 // EvaluateNoTradeWindows filters windows against [nowMin, eodMin] in CT
@@ -156,7 +160,10 @@ func EvaluateNoTradeWindows(wins []NoTradeWindow, nowMin, sessionStartMin, eodMi
 		case rel(w.EndMin) <= 0:
 			status = StatusElapsed
 		}
-		out = append(out, RenderedNoTradeWindow{NoTradeWindow: w, Status: status})
+		out = append(out, RenderedNoTradeWindow{
+			NoTradeWindow: w, Status: status,
+			StartCT: HHMM(w.StartMin), EndCT: HHMM(w.EndMin),
+		})
 	}
 	return out
 }
@@ -172,13 +179,14 @@ func LiveNoTradeWindows(r []RenderedNoTradeWindow) []RenderedNoTradeWindow {
 	return out
 }
 
-// T1WindowsForRead re-resolves the calendar's T1 blackouts at READ time and
-// applies the drift widening measured NOW. driftMs is the resolved clock-health
-// offset; when the clock is healthy the widening is zero and no "(clock drift)"
-// suffix appears — the label stops claiming a correction that was not applied.
-func T1WindowsForRead(events []PlannerCalendarEvent, driftMs int64) []NoTradeWindow {
-	var out []NoTradeWindow
-	for _, w := range WidenCTWindows(T1BlackoutWindows(events), driftMs) {
+// T1NoTradeWindowsFromCT converts ALREADY-RESOLVED red-news blackout windows
+// into structured band entries. It takes CTWindows rather than raw calendar
+// events on purpose: the widening decision (clock drift, static fallback) is
+// the ENFORCER'S, made once in t1WindowsFor, so the card cannot compute a
+// second answer and disagree with the gate that will actually refuse the entry.
+func T1NoTradeWindowsFromCT(wins []CTWindow) []NoTradeWindow {
+	out := make([]NoTradeWindow, 0, len(wins))
+	for _, w := range wins {
 		out = append(out, NoTradeWindow{
 			StartMin: w.Start, EndMin: w.End, Kind: KindT1,
 			Source: SourceCalendar, Label: "🔴 " + w.Label + " — HARD no-trade (red news)",
@@ -192,4 +200,25 @@ func NoTradeBandBootLine() string {
 	ls, le := LunchWindowCT()
 	return fmt.Sprintf("🗓 no-trade band: session-scoped, config-driven (0 literals) — first_n=%dm lunch=%s–%s (source=%s) · T1 re-resolved at read time with drift measured then · model prose renders as NOTES",
 		FirstNoTradeMinutes(), ls, le, SourceCodeConstant)
+}
+
+// RenderNoTradeBand evaluates a plan's machine-written no-trade windows against
+// the clock the reader is holding, for the session the card is showing.
+//
+// This is the read-time half. The plan's windows are written once; whether any
+// of them still constrains anything is a question only the read can answer, and
+// answering it at write time is what put three dead constraints on an ASIA card
+// at 23:00 CT. A doc with no machine windows (written before this wave, or by a
+// fail-closed path) returns nil and the card falls back to the model's prose.
+func RenderNoTradeBand(doc *PlanDoc, sess *SessionDef, now time.Time) []RenderedNoTradeWindow {
+	if doc == nil || sess == nil || len(doc.NoTradeWindows) == 0 {
+		return nil
+	}
+	start, okS := hhmmToMinK(sess.WindowStartCT)
+	eod, okE := hhmmToMinK(sess.WindowEndCT)
+	if !okS || !okE {
+		return nil
+	}
+	ct := now.In(CTLocation())
+	return EvaluateNoTradeWindows(doc.NoTradeWindows, ct.Hour()*60+ct.Minute(), start, eod)
 }

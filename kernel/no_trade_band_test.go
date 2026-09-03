@@ -163,30 +163,84 @@ func TestNoTradeBandStraddlingNowIsLive(t *testing.T) {
 	}
 }
 
-// F5 — a healthy clock produces NO widening and NO "(clock drift)" label. The
-// suffix used to be baked in at plan time whether or not it applied.
-func TestT1WindowsForReadDriftLabel(t *testing.T) {
-	evs := []PlannerCalendarEvent{{Impact: "T1", TimeCT: "09:00", Title: "ISM PMI"}}
-	healthy := T1WindowsForRead(evs, 108) // +108 ms, the audited NTP offset
-	if len(healthy) == 0 {
-		t.Skip("no T1 window produced by this calendar shape")
+// F5 — a healthy clock produces NO "(clock drift)" claim, and the minute of
+// boundary protection survives the change. The suffix used to be appended for
+// any nonzero measurement, so this machine's 108 ms NTP offset put "the clock
+// is drifting" on the card for the whole trading day.
+func TestWidenCTWindowsDriftClaim(t *testing.T) {
+	base := []CTWindow{{Start: 8*60 + 45, End: 9*60 + 15, Label: "ISM PMI 09:00 CT ±15m"}}
+
+	healthy := WidenCTWindows(base, 108) // +108 ms, the audited NTP offset
+	if contains(healthy[0].Label, "clock drift") {
+		t.Fatalf("a healthy clock must not claim the machine is drifting: %q", healthy[0].Label)
 	}
-	for _, w := range healthy {
-		if contains(w.Label, "clock drift") {
-			t.Fatalf("a healthy clock must not claim the machine is drifting: %q", w.Label)
-		}
-		// The minute of boundary protection is KEPT — only the claim is dropped.
-		if w.EndMin != (9*60+15+1)%1440 {
-			t.Fatalf("boundary widening must survive the label change, end=%d", w.EndMin)
-		}
-		if w.Source != SourceCalendar {
-			t.Fatalf("T1 windows come from the calendar, got %q", w.Source)
-		}
+	if healthy[0].Start != 8*60+44 || healthy[0].End != 9*60+16 {
+		t.Fatalf("boundary widening must survive the label change: %d–%d", healthy[0].Start, healthy[0].End)
 	}
-	skewed := T1WindowsForRead(evs, 90_000) // 90 s of real skew
-	for _, w := range skewed {
-		if !contains(w.Label, "clock drift") {
-			t.Fatalf("a real skew must be stated in the label: %q", w.Label)
-		}
+
+	skewed := WidenCTWindows(base, 90_000) // 90 s of real skew
+	if !contains(skewed[0].Label, "clock drift") {
+		t.Fatalf("a real skew must be stated on the card: %q", skewed[0].Label)
+	}
+	if skewed[0].Start != 8*60+43 || skewed[0].End != 9*60+17 {
+		t.Fatalf("90s skew widens by 2m: %d–%d", skewed[0].Start, skewed[0].End)
+	}
+}
+
+// F6 — T1 band entries are MAPPED from the enforcer's resolved windows, never
+// recomputed, so the card cannot disagree with the gate about red news.
+func TestT1NoTradeWindowsFromCT(t *testing.T) {
+	got := T1NoTradeWindowsFromCT([]CTWindow{{Start: 525, End: 555, Label: "ISM PMI 09:00 CT ±15m"}})
+	if len(got) != 1 {
+		t.Fatalf("want one window, got %d", len(got))
+	}
+	if got[0].StartMin != 525 || got[0].EndMin != 555 {
+		t.Errorf("bounds must pass through untouched: %d–%d", got[0].StartMin, got[0].EndMin)
+	}
+	if got[0].Kind != KindT1 || got[0].Source != SourceCalendar {
+		t.Errorf("red news is calendar-sourced T1, got kind=%q source=%q", got[0].Kind, got[0].Source)
+	}
+}
+
+// F1 (THE PIN) — the ASIA card at 23:00 CT. The doc the planner actually wrote
+// carries three no_trade prose lines; all three were rendered as live rules
+// while the session was mid-flight and none of them could constrain anything.
+// The machine band, evaluated against the reader's clock, says so.
+func TestRenderNoTradeBandAsiaCardAt2300(t *testing.T) {
+	asia := &SessionDef{Name: SessionAsia, WindowStartCT: "17:00", WindowEndCT: "02:00"}
+	doc := &PlanDoc{
+		// verbatim shape of the prose the card used to render as three rules
+		NoTrade: []string{
+			"no entries in the first 5m after the open",
+			"no entries 12:00–13:30 CT (lunch)",
+			"🔴 ISM PMI 09:00 CT ±15m — HARD no-trade (red news)",
+		},
+		NoTradeWindows: append(BuildMachineNoTradeWindows(*asia),
+			T1NoTradeWindowsFromCT([]CTWindow{{Start: 525, End: 555, Label: "ISM PMI 09:00 CT ±15m"}})...),
+	}
+
+	at2300 := time.Date(2026, 9, 2, 23, 0, 0, 0, CTLocation())
+	rendered := RenderNoTradeBand(doc, asia, at2300)
+	if len(rendered) != len(doc.NoTradeWindows) {
+		t.Fatalf("every window must be rendered with a status, got %d of %d", len(rendered), len(doc.NoTradeWindows))
+	}
+	if n := len(LiveNoTradeWindows(rendered)); n != 0 {
+		t.Fatalf("ASIA at 23:00 has NO live no-trade constraint; card would show %d: %+v", n, LiveNoTradeWindows(rendered))
+	}
+	if len(doc.NoTrade) != 3 {
+		t.Fatalf("the model's prose is untouched by this wave, got %d lines", len(doc.NoTrade))
+	}
+
+	// Same doc, same session, read at 17:02 — the first-5m band IS live.
+	at1702 := time.Date(2026, 9, 2, 17, 2, 0, 0, CTLocation())
+	live := LiveNoTradeWindows(RenderNoTradeBand(doc, asia, at1702))
+	if len(live) != 1 || live[0].Kind != KindFirstN {
+		t.Fatalf("at 17:02 exactly the first-5m band is live, got %+v", live)
+	}
+
+	// A doc from before this wave has no machine windows and must not render an
+	// empty band as "no constraints" — it returns nil so the card keeps prose.
+	if RenderNoTradeBand(&PlanDoc{NoTrade: doc.NoTrade}, asia, at2300) != nil {
+		t.Fatal("a doc with no machine windows must return nil, not an empty band")
 	}
 }

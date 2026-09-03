@@ -1842,6 +1842,24 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		}
 	}
 
+	// NO-TRADE BAND (2026-09-02) — the MACHINE writes the structured windows.
+	// The model's no_trade prose stays exactly as authored (legacy readers and
+	// the grader still read it); this is a parallel, additive field that the
+	// card evaluates against the clock instead of trusting write-time text.
+	//
+	// Every window here is resolved from an enforcing source: the session
+	// registry for the first-N and lunch bands (one definition, shared with the
+	// entry gate and the adherence grader), and t1WindowsFor for red news —
+	// literally the windows the gate will refuse entries inside, widening and
+	// fail-closed fallback included. Nothing on this list is model-authored.
+	if doc != nil {
+		if sess, okS := at.sessionRegistry(time.Now()).SessionByName(session); okS && sess != nil {
+			wins := kernel.BuildMachineNoTradeWindows(*sess)
+			wins = append(wins, kernel.T1NoTradeWindowsFromCT(at.t1WindowsFor(tradeDate, sess))...)
+			doc.NoTradeWindows = wins
+		}
+	}
+
 	lifecycle := "active"
 	trigger := session + "_scheduled_read"
 	if strings.TrimSpace(triggerOverride) != "" {
