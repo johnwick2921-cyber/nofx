@@ -484,6 +484,12 @@ func (at *AutoTrader) recordPositionChange(orderID, symbol, side, action string,
 				_ = at.store.Position().SetPlanLinkFull(pos.ID, at.lastCitation.planVersion, at.lastCitation.scenarioID, at.lastCitation.matched, at.lastCitation.band, at.lastCitation.planID, at.lastCitation.tradeDate, at.lastCitation.session)
 				at.lastCitation.valid = false
 			}
+			// E1 (wave 1A, 2026-09-02) — the excursion row's entry half. The AI
+			// execution path does not carry the stop and target down to the
+			// position row, so they are opened UNKNOWN (NULL) and resolved on
+			// the next tick from the decision that opened this fill. Nothing
+			// here is guessed and nothing here can block the fill.
+			at.excursionOnOpen(pos, 0, 0, plannerATR5m(at.futuresSymbol()))
 			// W6 — P0 fill alert.
 			at.emitAlert("P0", "fill", fmt.Sprintf("fill:%d", pos.ID),
 				fmt.Sprintf("Filled %s %s @ %.2f", side, symbol, price), "")

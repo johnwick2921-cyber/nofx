@@ -479,3 +479,51 @@ func (s *DecisionStore) GetLastCycleNumber(traderID string) (int, error) {
 	}
 	return *cycleNumber, nil
 }
+
+// StopTargetNear resolves the stop and target an OPENING decision carried,
+// for a fill at entryMs (wave 1A, 2026-09-02).
+//
+// The excursion writer needs the levels a position was opened with, and the
+// execution path does not thread them down to the position row. They ARE
+// recorded, in the decision that opened it, so this reads the authoritative
+// record rather than reconstructing anything. Nothing is returned unless an
+// open action for this symbol is found inside the window: an unknown level
+// stays unknown (A24 — never a plausible fabricated number).
+func (s *DecisionStore) StopTargetNear(traderID, symbol string, entryMs, windowMs int64) (stop, target float64, ok bool) {
+	if traderID == "" || entryMs <= 0 || windowMs <= 0 {
+		return 0, 0, false
+	}
+	from := time.UnixMilli(entryMs - windowMs).UTC()
+	to := time.UnixMilli(entryMs + windowMs).UTC()
+	var rows []DecisionRecordDB
+	if err := s.db.Where("trader_id = ? AND timestamp >= ? AND timestamp <= ?", traderID, from, to).
+		Order("timestamp asc").Limit(20).Find(&rows).Error; err != nil {
+		return 0, 0, false
+	}
+	best := int64(-1)
+	for i := range rows {
+		var acts []DecisionAction
+		if json.Unmarshal([]byte(rows[i].Decisions), &acts) != nil {
+			continue
+		}
+		for _, a := range acts {
+			if len(a.Action) < 5 || a.Action[:5] != "open_" {
+				continue
+			}
+			if symbol != "" && a.Symbol != "" && a.Symbol != symbol {
+				continue
+			}
+			if a.StopLoss <= 0 && a.TakeProfit <= 0 {
+				continue
+			}
+			d := rows[i].Timestamp.UnixMilli() - entryMs
+			if d < 0 {
+				d = -d
+			}
+			if best < 0 || d < best {
+				best, stop, target, ok = d, a.StopLoss, a.TakeProfit, true
+			}
+		}
+	}
+	return stop, target, ok
+}

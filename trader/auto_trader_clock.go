@@ -740,6 +740,11 @@ func (at *AutoTrader) recordClosedTradeAnalytics(p *store.TraderPosition) {
 		at.logWarnf("📐 excursion update failed for %s: %v", p.Symbol, err)
 		return
 	}
+	// E3 (wave 1A) — the excursion row's exit half. This funnel is reached by
+	// EVERY exit path (AI close, NT8 OCO, EOD-flat, manual), which is why the
+	// hook lives here and not in one of them.
+	at.excursionOnClose(p)
+
 	// P5.5 — ADHERENCE GRADE (A–F), separate from P&L.
 	inKZ, inNoTrade := kernel.SessionWindowFacts(at.sessionRegistry(time.Now()), time.UnixMilli(p.EntryTime))
 	grade, _ := kernel.GradeAdherence(kernel.AdherenceInput{

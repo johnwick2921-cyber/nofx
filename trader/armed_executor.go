@@ -1169,6 +1169,9 @@ func (at *AutoTrader) materializeArmedEntry(r store.ArmedOrderDB, u ntwire.Order
 		return
 	}
 	at.logInfof("🧩 armed fill %s @ %.2f materialized OPEN (source=armed_entry — sub-60s round-trips are ledger-visible)", r.Scenario, u.FillPrice)
+	// E1 (wave 1A) — the excursion row's entry half. An armed fill carries its
+	// own levels in the ledger row, so nothing has to be resolved later.
+	at.excursionOnOpen(row, r.StopPx, r.TargetPx, plannerATR5m(at.futuresSymbol()))
 }
 
 // stampArmedFillLineage links the freshly-filled position row to the plan the

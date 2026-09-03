@@ -46,6 +46,12 @@ func (at *AutoTrader) startDrawdownMonitor() {
 func (at *AutoTrader) monitorTick(now time.Time) {
 	at.checkFeedDown(now)
 	at.checkPositionDrawdown()
+	// TRADE EXCURSION LOGGING (wave 1A, 2026-09-02) — E2. This tick is the
+	// ~1m cadence the excursion path is recomputed on while a position lives.
+	// The whole path is rebuilt from stored bars each time, so a missed tick,
+	// a restart or a late bar costs nothing. Telemetry: it can WARN, never
+	// panic, and never blocks the guards above it (class 23).
+	at.excursionOnBarTick()
 }
 
 // positionPnLPct computes a position's leveraged P&L percent. Side is normalized:
