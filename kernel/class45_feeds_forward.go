@@ -198,7 +198,16 @@ func PromptFeedsForwardBootLine(voidLevels int, atr5m, mult float64) string {
 	if voidLevels < 0 {
 		levels = "void-levels=n/a (computed per read)"
 	}
-	return fmt.Sprintf("prompt feeds forward: %s · stop-floor=%s · reject-block=top+tail (class 45)", levels, floor)
+	// The waterfall floor rides the same line (owner ruling 2026-09-03): it is
+	// enforced at write and was, until now, the one floor the author was never
+	// shown. Same honesty rule — the multiplier is known at boot, the points
+	// are not.
+	disp := fmt.Sprintf("%.1f×ATR5m (n/a — no ATR yet)", bdMinDispATR())
+	if atr5m > 0 {
+		disp = fmt.Sprintf("%.1f×ATR5m=%.1fpts", bdMinDispATR(), bdMinDispATR()*atr5m)
+	}
+	return fmt.Sprintf("prompt feeds forward: %s · stop-floor=%s · waterfall-displacement-floor=%s (stated per level) · reject-block=top+tail (class 45)",
+		levels, floor, disp)
 }
 
 // planDocGapDownMessage is the gap-down refusal text, exported here so the pin

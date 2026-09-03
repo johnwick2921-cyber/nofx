@@ -314,3 +314,57 @@ func TestNoTradeGateBlockDoesNotOrderDeclaration(t *testing.T) {
 		}
 	}
 }
+
+// DISPLACEMENT FEEDS FORWARD (owner ruling 2026-09-03) — contract row.
+//
+// The waterfall floor is enforced at write and was never stated. Two reads on
+// 2026-09-03 burned attempt 1 authoring breakdown_continue at levels with 0.00
+// measured displacement. The schema line must qualify the field, and the facts
+// block must carry both the floor and the per-level measurement.
+func TestBreakdownSchemaRequiresMeasuredDisplacement(t *testing.T) {
+	contract := plannerOutputContract(8, 5, true, true)
+	idx := strings.Index(contract, `"breakdown"`)
+	if idx < 0 {
+		t.Fatal(`the rendered contract has no "breakdown" field`)
+	}
+	window := contract[idx:min(idx+520, len(contract))]
+	for _, want := range []string{"MEASURED displacement", "≥ the stated floor", "REFUSED at write"} {
+		if !strings.Contains(window, want) {
+			t.Errorf(`the "breakdown" schema field never says %q — the floor is enforced and unstated, which is what rejected S3 at 00:07 and S2 at 00:33.`+"\n  field renders as: %s", want, window[:min(260, len(window))])
+		}
+	}
+
+	// The facts block states the floor and the per-level measurement, and both
+	// come from the resolvers rather than a literal.
+	full := BuildPlannerPrompt(PlannerInput{
+		TradeDate: "2026-09-03", Session: SessionNY, Price: 29000, DATR: 300,
+		Now:            time.Date(2026, 9, 3, 8, 30, 0, 0, CTLocation()),
+		StopFloorATR5m: 15.2, StopFloorMult: 1.5,
+		LevelDisplacements: []LevelDisplacement{
+			{Price: 29100, Label: "PDL", Broken: false},
+			{Price: 28900, Label: "ONL", Broken: true, Short: true, Pts: 40},
+			{Price: 29050, Label: "VWAP", Broken: true, Short: true, Pts: 3}, // broken, but a nudge
+		},
+	})
+	for _, want := range []string{
+		"Waterfall displacement floor this cycle",
+		"Measured displacement per level",
+		"none — no break",
+		"BELOW the floor — not authorable as a waterfall",
+		"at or above the floor — authorable",
+	} {
+		if !strings.Contains(full, want) {
+			t.Errorf("the rendered prompt never states %q", want)
+		}
+	}
+
+	// No ATR reading → no claim, rather than a zero floor.
+	bare := BuildPlannerPrompt(PlannerInput{
+		TradeDate: "2026-09-03", Session: SessionNY, Price: 29000, DATR: 300,
+		Now:                time.Date(2026, 9, 3, 8, 30, 0, 0, CTLocation()),
+		LevelDisplacements: []LevelDisplacement{{Price: 29100, Label: "PDL"}},
+	})
+	if strings.Contains(bare, "Waterfall displacement floor") {
+		t.Error("with no ATR the floor must not be printed at all — a 0.0 pt floor is a lie the model would author against")
+	}
+}

@@ -60,7 +60,8 @@ export const plays: GuideSection = {
     { kind: 'h', text: 'THE ENTRY LAW (per condition — machine-enforced)' },
     {
       kind: 'code',
-      title: 'one table, one chokepoint — the validator REJECTS violations by name',
+      title:
+        'one table, one chokepoint — the validator REJECTS violations by name',
       lines: [
         'reject / fvg_entry    → touch ONLY · fade_requires_touch · stop ≥2 ticks beyond',
         'sweep_reclaim         → leg-1 touch at the sweep ref, leg-2 1m_mss (1x5m_close alt)',
@@ -76,7 +77,10 @@ export const plays: GuideSection = {
         'SEPARATE enum (2x5m|5m_close). Never move a token between the two.',
       ],
     },
-    { kind: 'h', text: 'ARM SPLIT vs ARM SINGLE (class 38 · normalizer class 39)' },
+    {
+      kind: 'h',
+      text: 'ARM SPLIT vs ARM SINGLE (class 38 · normalizer class 39)',
+    },
     {
       kind: 'code',
       title: 'legs[] belong to sweep_reclaim and nothing else',
@@ -124,7 +128,7 @@ export const plays: GuideSection = {
     { kind: 'h', text: 'Entry-mechanics knobs' },
     {
       kind: 'p',
-      text: 'BD_MIN_CLOSES (1) · BD_MIN_DISP_ATR (1.0) · MSS_MIN_DISP_ATR (0.5) · ACCEPT_HOLD_MIN (10) · STOP_ENTRY_OFFSET_TICKS (2) · RETEST_WAIT_BARS (6) · STOP_ENTRY_SEAM (off). Default confirm = 1x5m_close; a sweep_reclaim arm may split into TWO child orders (leg 1 touch + leg 2 chained) — either leg\'s stop-out cancels the sibling\'s unfilled order (no doubling into a failed level).',
+      text: "BD_MIN_CLOSES (1) · BD_MIN_DISP_ATR (1.0) · MSS_MIN_DISP_ATR (0.5) · ACCEPT_HOLD_MIN (10) · STOP_ENTRY_OFFSET_TICKS (2) · RETEST_WAIT_BARS (6) · STOP_ENTRY_SEAM (off). Default confirm = 1x5m_close; a sweep_reclaim arm may split into TWO child orders (leg 1 touch + leg 2 chained) — either leg's stop-out cancels the sibling's unfilled order (no doubling into a failed level).",
     },
     { kind: 'h', text: 'THE A-SETUP (the chained play)' },
     {
@@ -147,7 +151,7 @@ export const plays: GuideSection = {
     { kind: 'h', text: 'No-trade is a trade' },
     {
       kind: 'p',
-      text: 'Sitting out is a position. The gates the planner is taught: balance day → edges only or skip · opening gap >1.2×ATR or outside-range open → never fade · no A/B zone in reach AND no pool swept by 10:30 ET → skip the day · lunch 11:30–13:30 ET → no entries · Tier-1 news → stand aside. A real skip looks like: "no_trade: balance day — no A/B zone in reach by 10:30 ET, skip" — that is a decision, not a failure.',
+      text: 'The planner is now SHOWN which levels can carry a waterfall: the facts block states the displacement floor for the cycle (1.0×ATR5m, resolved) and, per seated level, the measured displacement since its break — or "none — no break". A breakdown_continue authored below the floor is refused at write, and before 2026-09-03 that number was enforced without ever being stated. Sitting out is a position. The gates the planner is taught: balance day → edges only or skip · opening gap >1.2×ATR or outside-range open → never fade · no A/B zone in reach AND no pool swept by 10:30 ET → skip the day · lunch 11:30–13:30 ET → no entries · Tier-1 news → stand aside. A real skip looks like: "no_trade: balance day — no A/B zone in reach by 10:30 ET, skip" — that is a decision, not a failure.',
     },
   ],
 }

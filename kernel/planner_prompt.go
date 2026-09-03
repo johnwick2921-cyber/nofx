@@ -53,7 +53,12 @@ type PlannerInput struct {
 	// Both empty/zero → the sections render nothing.
 	VoidBreakdownLevels []VoidBreakdownLevel
 	StopFloorATR5m      float64
-	StopFloorMult       float64
+	// LevelDisplacements (owner ruling 2026-09-03) — the MEASURED displacement
+	// of every seated level, from the validator's own BreakdownContinueState
+	// through ComputeLevelDisplacements. Empty → the blocks render nothing, so
+	// a cold cache degrades to the previous behaviour.
+	LevelDisplacements []LevelDisplacement
+	StopFloorMult      float64
 
 	// FreshFVGs (level-truth wave b2, 2026-08-27) — the machine's fresh-gap
 	// candidate list the planner may author fvg_entry from. Empty list means
@@ -453,6 +458,10 @@ func BuildPlannerPrompt(in PlannerInput) string {
 	// never hold a second opinion. Empty inputs render nothing.
 	b.WriteString(RenderVoidBreakdownLevels(in.VoidBreakdownLevels))
 	b.WriteString(RenderStopFloorLine(in.StopFloorATR5m, in.StopFloorMult))
+	// The waterfall floor, stated the same way the stop floor is: the number
+	// the validator judges by, and which levels can actually meet it.
+	b.WriteString(RenderDisplacementFloorLine(in.StopFloorATR5m))
+	b.WriteString(RenderDisplacementLines(in.LevelDisplacements, in.StopFloorATR5m))
 
 	b.WriteString("## Ranked levels (Go-graded; you never re-sort)\n")
 
@@ -685,7 +694,7 @@ func plannerOutputContract(maxLevels, maxScenarios int, hasHTFZones, has1HSDZone
 		`  "reasoning": "<your read: what the auction is doing and why this plan — ≤200 words, decision-focused>",` + "\n" +
 		`  "bias": {"direction": "long|short|neutral", "conviction": "high|medium|low", "flip_condition": "<explicit>"},` + "\n" +
 		fmt.Sprintf(`  "levels": [{"price": <n>, "label": "<PDH|ONH|nPOC…>", "grade": "A|B|C", "instruction": "<verb>"}],  // max %d, MUST include ≥3 below AND ≥3 above the current price`, maxL) + "\n" +
-		fmt.Sprintf(`  "scenarios": [{"id": "S1", "trigger": "<setup>", "condition": "reclaim|hold|sweep_reclaim|reject|acceptance|breakout_retest|fvg_entry|breakdown_continue|breakup_continue", "direction": "long|short", "target_chain": [<n>,…], "invalid": "<line>", "quality": "A+|A|B|C", "chain_after": "<S# of the sweep_reclaim this fvg_entry follows, or omit>", "confirm": {"rule": "touch|1x5m_close|2x5m_close|1m_mss|time_hold", "ref_price": <n>, "side": "above|below"}, "confirm2": {"rule": "<leg 2 rule>", "ref_price": <n>, "side": "above|below"} (OPTIONAL second trigger leg — a two-leg setup MUST carry both legs; the machine renders EVERY leg and a partial NEVER reads MET), "fvg": {"fvg_lo": <n>, "fvg_hi": <n>, "entry_mode": "edge|ce", "displacement_atr": <n>, "origin_level": "<label>", "direction": "long|short"}, "breakdown": {"level": <n>, "level_label": "<label>", "entry_mode": "pullback|immediate"} (REQUIRED iff condition==breakdown_continue|breakup_continue — see the WATERFALL PLAY rule), "arm": {"enabled": true, "entry": <n>, "stop": <n>, "target": <n>, "wait_confirm": true, "legs": [{"entry": <n>, "stop": <n>, "target": <n>, "size": 1, "wait_confirm": false, "rule": "<rule>"}, …] (ONLY if condition is sweep_reclaim — the split contract, EXACTLY 2 legs; EVERY other condition arms SINGLE: omit legs)}}],  // 1..%d — confirm{} is REQUIRED per scenario; fvg{} REQUIRED iff condition=="fvg_entry" (ce is COMPUTED, never written); breakdown{} REQUIRED iff waterfall-class; chain_after is OPTIONAL; arm{} is OPTIONAL and legal ONLY on fvg_entry|reject|breakdown_continue|breakup_continue (sweep_reclaim arms only via wait_confirm; breakout_retest|reclaim|hold|acceptance NEVER arm) — see the ARMED ORDERS + ENTRY LAW rules`, maxS) + "\n" +
+		fmt.Sprintf(`  "scenarios": [{"id": "S1", "trigger": "<setup>", "condition": "reclaim|hold|sweep_reclaim|reject|acceptance|breakout_retest|fvg_entry|breakdown_continue|breakup_continue", "direction": "long|short", "target_chain": [<n>,…], "invalid": "<line>", "quality": "A+|A|B|C", "chain_after": "<S# of the sweep_reclaim this fvg_entry follows, or omit>", "confirm": {"rule": "touch|1x5m_close|2x5m_close|1m_mss|time_hold", "ref_price": <n>, "side": "above|below"}, "confirm2": {"rule": "<leg 2 rule>", "ref_price": <n>, "side": "above|below"} (OPTIONAL second trigger leg — a two-leg setup MUST carry both legs; the machine renders EVERY leg and a partial NEVER reads MET), "fvg": {"fvg_lo": <n>, "fvg_hi": <n>, "entry_mode": "edge|ce", "displacement_atr": <n>, "origin_level": "<label>", "direction": "long|short"}, "breakdown": {"level": <n>, "level_label": "<label>", "entry_mode": "pullback|immediate"} (REQUIRED iff condition==breakdown_continue|breakup_continue — author ONLY at a level whose MEASURED displacement in the block above is ≥ the stated floor; a level reading \"none — no break\" or below the floor is REFUSED at write — see the WATERFALL PLAY rule), "arm": {"enabled": true, "entry": <n>, "stop": <n>, "target": <n>, "wait_confirm": true, "legs": [{"entry": <n>, "stop": <n>, "target": <n>, "size": 1, "wait_confirm": false, "rule": "<rule>"}, …] (ONLY if condition is sweep_reclaim — the split contract, EXACTLY 2 legs; EVERY other condition arms SINGLE: omit legs)}}],  // 1..%d — confirm{} is REQUIRED per scenario; fvg{} REQUIRED iff condition=="fvg_entry" (ce is COMPUTED, never written); breakdown{} REQUIRED iff waterfall-class; chain_after is OPTIONAL; arm{} is OPTIONAL and legal ONLY on fvg_entry|reject|breakdown_continue|breakup_continue (sweep_reclaim arms only via wait_confirm; breakout_retest|reclaim|hold|acceptance NEVER arm) — see the ARMED ORDERS + ENTRY LAW rules`, maxS) + "\n" +
 		NoTradeSchemaExample() + "\n" +
 		`  "death_condition": "<the single line that invalidates this whole plan>",` + "\n" +
 		`  "death": {"price": <level>, "side": "below|above", "rule": "2x5m|5m_close"},` + "\n" +

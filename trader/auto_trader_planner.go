@@ -2309,6 +2309,10 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 	voidScope := kernel.ResolveVoidScope(symbol, now)
 	voidScopeLevels := kernel.ComputeVoidBreakdownLevels(scored, voidScope, now.UnixMilli())
 	voidScopeATR := plannerATR5m(symbol)
+	// DISPLACEMENT FEEDS FORWARD (owner ruling 2026-09-03) — the waterfall
+	// floor's per-level measurement, from the SAME scope the void list uses so
+	// the two cannot disagree about what the tape shows.
+	levelDisplacements := kernel.ComputeLevelDisplacements(scored, voidScope, now.UnixMilli())
 	// W3 (weekly-bias wave) — the Sunday weekly-bias context line (≤3 lines;
 	// "WEEKLY: none" when no doc — fail-open, nothing else changes).
 	weeklyDoc := at.weeklyDocCached(now)
@@ -2339,6 +2343,7 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 		// nothing, so a cold cache degrades to today's behaviour.
 		VoidBreakdownLevels: voidScopeLevels,
 		StopFloorATR5m:      voidScopeATR,
+		LevelDisplacements:  levelDisplacements,
 		StopFloorMult:       kernel.MinSLATRMult(),
 		// Level-truth wave b2 (2026-08-27): the machine's fresh-gap candidate
 		// list — the ONLY gaps the planner may author fvg_entry from.
