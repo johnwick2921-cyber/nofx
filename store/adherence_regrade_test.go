@@ -102,8 +102,14 @@ func TestAdherenceRegradeTouchesOnlyTheImpossibleDs(t *testing.T) {
 	if cleared != 4 {
 		t.Errorf("cleared %d, want 4", cleared)
 	}
-	if keptD != 3 {
-		t.Errorf("kept %d Ds, want 3 (off-plan sentinel, test seam, direction mismatch)", keptD)
+	// SUPERSEDED 2026-09-03 (owner ruling: seam rows are NEVER graded). This
+	// asserted THREE kept Ds — off-plan sentinel, test seam, direction mismatch.
+	// A seam row can no longer "keep its D": SetAdherence refuses to write any
+	// grade on it and stamps the exclusion reason instead. Two real rows keep
+	// their earned D; the seam row is excluded, which is a stronger outcome than
+	// the one this fixture used to demand.
+	if keptD != 2 {
+		t.Errorf("kept %d Ds, want 2 (off-plan sentinel, direction mismatch — the seam row is now EXCLUDED, not graded)", keptD)
 	}
 	if keptA != 1 {
 		t.Errorf("kept %d As, want 1 — the predicate must not sweep correctly-graded rows", keptA)

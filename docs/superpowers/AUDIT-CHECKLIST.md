@@ -1266,6 +1266,7 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     NY's flat. Before and after it, the test passes, which is why it read as a
     flake rather than a bomb.
 
+<<<<<<< HEAD
 62. **A stored column that reads as money and is not.** (Number assigned at
     merge; highest occupied at authoring: 61.) Found building wave 1D, from the
     FIRST live read of the new table: the E8 counterfactual side-table produced
@@ -1308,6 +1309,34 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     line, not in the reader. Fixed by counting judged roll-ups as their own
     field (`judged_rollups=`), pinned by a test whose fixture makes every
     five-dimensional cell sub-floor while three roll-ups clear the floor.
+=======
+65. **A test harness scoring in a production table.** (Renumbered 62→65 AT
+    MERGE, 2026-09-03 — 62 and 63 were taken by wave 1D and 64 by the detector
+    wave, all merged first. Highest occupied at this merge: 64.) Root cause: position 572 is an `ARMED_TEST_SEAM` experiment run
+    against the live wire. It sat in the graded population holding a D, and when
+    the 2026-09-03 15:02 boot recomputed adherence with repaired lineage, W5
+    promoted it to an **A** — a harness outscoring most real trades and counting
+    toward the plan-adherence rate. Nothing was broken; the grader did exactly
+    its job on a row that should never have been offered to it. Discovered only
+    because a migration's before/after distribution was printed and a grade
+    moved that nobody had asked to move. **Probe:** for every production
+    aggregate, ask which rows are SYNTHETIC and name the predicate that removes
+    them; then check the predicate is applied at the WRITE, not only at each
+    reader — a reader-side filter is one forgotten query away from being wrong.
+    Ask the same of anything that RECOMPUTES: a value can enter an aggregate
+    long after the row was created. **Fix:** `IsSeamSource` (the known seam plus
+    a naming convention, so a future harness need not be remembered in five
+    places); `SetAdherence` REFUSES a grade on a seam row and stamps
+    `"excluded: test seam"` on the row itself, so the reason lives in the data
+    and not only in a log line; W5 skips the grader entirely for seam rows
+    (defence in depth, not the only guard); the distribution excludes them and
+    RETURNS THE COUNT; a boot line reports `adherence: seam rows excluded=<n>`
+    read from the table. One superseded fixture migrated with its reason: a seam
+    row can no longer "keep its D", which is a stronger outcome than the
+    assertion it replaced. **Law:** synthetic rows are excluded at the write,
+    counted where they are excluded, and stamped with the reason in the row —
+    a test that can score is a test that will eventually be quoted as evidence.
+>>>>>>> c346c2fc (feat(adherence): seam rows are NEVER graded — refused at the write, skipped by W5, excluded with a count, stamped in the row)
 
 ## PART 2 — PRE-AUDIT (standing hard rules)
 

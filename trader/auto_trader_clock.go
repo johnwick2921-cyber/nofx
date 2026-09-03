@@ -754,6 +754,16 @@ func (at *AutoTrader) recordClosedTradeAnalytics(p *store.TraderPosition) {
 	// hook lives here and not in one of them.
 	at.excursionOnClose(p)
 
+	// SEAM ROWS ARE NEVER GRADED (owner ruling 2026-09-03). W5 skips the grader
+	// entirely rather than grading and discarding: row 572 is an ARMED_TEST_SEAM
+	// experiment that this path promoted to an A on the 15:02 boot, where it
+	// outscored most real trades in the adherence table. The store refuses the
+	// write too, so this is defence in depth, not the only guard.
+	if store.IsSeamSource(p.Source) {
+		at.logInfof("🧪 adherence SKIPPED for %s pos %d — source %q is a test seam, never a real trade", p.Symbol, p.ID, p.Source)
+		return
+	}
+
 	// P5.5 — ADHERENCE GRADE (A–F), separate from P&L.
 	inKZ, inNoTrade := kernel.SessionWindowFacts(at.sessionRegistry(time.Now()), time.UnixMilli(p.EntryTime))
 	grade, _ := kernel.GradeAdherence(kernel.AdherenceInput{
