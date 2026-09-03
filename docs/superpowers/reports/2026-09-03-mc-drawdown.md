@@ -105,3 +105,140 @@ tiny; say so.
 
 *Results appended below in a later commit. Nothing above is edited after this
 commit — the git history is the pre-registration's proof.*
+
+---
+---
+
+# RESULTS (appended 2026-09-03; the header above is unedited)
+
+Re-run: `cd ~/nofx-analysis/mc-drawdown && python3 mc_drawdown.py`
+Seed 20260903 · B = 10,000 · CSVs in `2026-09-03-mc-drawdown-data/`.
+
+## The sample
+
+**n = 64**, ids **521…590**, session-days 2026-08-18 → 2026-09-01 (11 days).
+
+```
+sum = -423.93    mean = -6.624    sd = 100.589
+wins = 21   losses = 41   flat = 2    p(win) = 0.3387  (flats excluded)
+min = -155.00 (id 589)   max = +311.00 (id 532)
+```
+
+## Q1 — max drawdown ($, 1 contract, $2/pt)
+
+| horizon | method | p50 | p90 | p95 | p99 | worst |
+|---|---|---|---|---|---|---|
+| 20 | IID | 478 | 828 | 935 | 1,138 | 1,499 |
+| 20 | block(5) | 471 | 809 | 920 | 1,110 | 1,608 |
+| 50 | IID | 866 | 1,477 | 1,677 | 2,065 | 3,030 |
+| 50 | block(5) | 847 | 1,436 | 1,613 | 1,981 | 2,595 |
+| 100 | IID | 1,364 | 2,298 | 2,589 | 3,160 | 4,130 |
+| 100 | block(5) | 1,321 | 2,216 | 2,485 | 3,016 | 4,201 |
+
+**The two bootstraps agree throughout** (block within ~3% of IID at every
+quantile), so there is no detectable streakiness beyond what IID resampling
+already produces. Reported as pre-registered; no preference needed.
+
+## Q2 — P(losing streak ≥ k within 50 trades), at p(win)=0.3387
+
+| k | exact (recursion) | bootstrap |
+|---|---|---|
+| 4 | 0.9927 | 0.9865 |
+| 6 | 0.8079 | 0.7446 |
+| 8 | 0.4620 | 0.3963 |
+| 10 | 0.2176 | 0.1741 |
+
+The exact figure runs slightly high because it treats the 2 flat trades as
+non-losses in p(win) but the bootstrap can draw them as run-breakers; the gap is
+the size of that handling choice, not a disagreement about the tape.
+
+## Q3 — guardrail counterfactual (day resample, B=10,000)
+
+Realized: **11 session-days**, trades/day min 3, median 4, max 12.
+
+| rule | trips on | P&L kept/day | forfeited/day | net effect/day |
+|---|---|---|---|---|
+| daily_loss $450 | **9.1%** of days | −36.21 | +0.00 | **+0.00** |
+| max_daily_trades 3 | **81.8%** of days | −65.87 | +24.54 | **−24.54** |
+| both | 82.0% of days | −66.81 | +26.39 | **−26.39** |
+
+**The $450 loss limit forfeits nothing** — it trips on one day in eleven, and on
+that day the trip landed on the day's *last* trade, so nothing followed it.
+**The 3-trade cap trips on 4 days in 5 and forfeits +$24.54/day of realized
+P&L**: with a median of 4 trades per day, it mostly cuts the day short, and the
+trades it removes were net positive over this sample.
+
+## Q4 — expectancy
+
+```
+mean = -6.624   sd = 100.589   se = 12.574
+95% CI [-31.268, +18.020]      t = -0.527
+n_required = ((z_a + z_b)·sd/mu)^2 = ((1.960+0.842)·100.59/6.624)^2 = 1,810 trades
+```
+
+**Expectancy is not distinguishable from zero.** The interval spans −$31 to +$18
+per trade. At the current effect size, separating it from zero at power 0.8 needs
+**~1,810 trades** — roughly 28× the sample in hand, and at ~6 trades/day about a
+year of trading.
+
+## Q5 — era split (0B cutover 2026-09-02 07:49 CT, by timestamp)
+
+| era | n | mean | sum | maxDD@20 p50 | p95 |
+|---|---|---|---|---|---|
+| pre-0B | 62 | −2.741 | −169.93 | 430 | 872 |
+| post-0B | **2** (ids 589, 590: −155, −99) | — | — | — | — |
+
+**Post-0B is two trades, both losses.** No distribution claim is possible and
+none is made. Note the pre-0B mean (−2.741) is *better* than the full-sample mean
+(−6.624) precisely because those two post-0B losses are in the full sample.
+
+## M6 — sensitivity (drop the largest win AND the largest loss)
+
+| | n | mean | maxDD@20 p50 / p95 | maxDD@50 p50 / p95 |
+|---|---|---|---|---|
+| full | 64 | −6.624 | 476 / 944 | 872 / 1,677 |
+| trimmed | 62 | −9.354 | 472 / 930 | 898 / 1,664 |
+
+Dropped id **532** (+311) and id **589** (−155). **The picture does not flip**:
+drawdowns move by under 3% and the mean gets slightly *worse*. The drawdown
+result is not an artifact of one or two extreme trades.
+
+---
+
+## What a normal bad week looks like, at n=64
+
+**[A]** At roughly 6 trades/day and 5 days, a week is ~30 trades. Interpolating
+the Q1 table, a **median** week's worst drawdown is around **$600**, and a
+**1-in-20 bad week reaches roughly $1,200**. A run of **4 consecutive losers is
+essentially certain** inside 50 trades (p=0.99), **6 in a row is the coin-flip
+case** (p=0.81 exact / 0.74 bootstrap), and **8 in a row happens about 4 times in
+10**. None of that is breakage. It is what a 34%-win-rate distribution with
+sd≈$100 does.
+
+**[A]** The distinguishing signal is not drawdown depth, it is **drawdown without
+those statistics**: a $1,200 week is normal; a $1,200 week where trades stop
+arriving, or where losses cluster at one condition or one session, is not.
+
+**[B]** On the guardrails, at the realized distribution: the **$450 daily loss
+limit is close to inert** — it trips on 9% of days and forfeited nothing in this
+sample. The **3-trade cap is the expensive one**: it trips on 82% of days and
+gives up ~$24.54/day of realized P&L, because the median day is 4 trades and the
+trades it cuts were net positive here. **[A]** Both are currently **disabled** —
+master off *and* each individually off — so neither is protecting anything today;
+this is a counterfactual about what turning them on would do.
+
+**[C]** The honest headline: **with expectancy statistically indistinguishable
+from zero (CI −$31 to +$18) and ~1,810 trades needed to resolve it**, no
+drawdown number here should be read as "the system loses $X". It says only how
+wide the noise is at this sample size. That is the input this wave was asked for,
+and per the stop-line it issues no verdict on size, limits or exits.
+
+## Corrections made during the run, before publishing
+
+- **Q5's era cut was wrong on the first pass.** I split on session-day, but the
+  CME day rolls at 17:00 CT, so 0B's 07:49 cutover sits *inside* session-day
+  2026-09-01 — every row landed pre-0B and post-0B read n=0. Re-cut on the
+  timestamp, which gives the true n=2.
+- **Q3's zero forfeiture is real, not a bug**: the one tripping day tripped on
+  its final trade, so nothing followed. The script now says so explicitly rather
+  than printing a bare +0.00.
