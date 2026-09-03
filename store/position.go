@@ -240,6 +240,14 @@ func (s *PositionStore) SetPlanLinkFull(id int64, planVersion int, citedScenario
 
 // SetAdherence records the A–F adherence grade on a closed position (P5.5).
 func (s *PositionStore) SetAdherence(id int64, grade string) error {
+	// SEAM ROWS ARE NEVER GRADED (owner ruling 2026-09-03), enforced HERE rather
+	// than only at the caller: row 572 is an ARMED_TEST_SEAM experiment and W5
+	// graded it A on the 15:02 boot. A grader that forgets to check cannot
+	// reintroduce it, because the write itself refuses.
+	if grade != "" && grade != SeamExcludedNote && s.isSeamPosition(id) {
+		return s.db.Model(&TraderPosition{}).Where("id = ?", id).
+			Update("adherence_grade", SeamExcludedNote).Error
+	}
 	return s.db.Model(&TraderPosition{}).Where("id = ?", id).
 		Update("adherence_grade", grade).Error
 }

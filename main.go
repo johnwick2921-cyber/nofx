@@ -336,6 +336,7 @@ func main() {
 			}
 		}
 		logger.Infof("🩹 %s", store.AdherenceRegradeBootLine(len(pending), regraded, store.AdherenceRegradeEnabled(), backup))
+		logger.Infof("🧪 %s", st.SeamExclusionBootLine())
 	}
 	// VOID PARITY (2026-09-02) — the ONE scope the prompt's VOID list and the
 	// write-site validator both read. Every field READ from its resolver.
