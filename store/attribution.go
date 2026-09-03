@@ -3,6 +3,7 @@ package store
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"nofx/logger"
 )
@@ -107,6 +108,9 @@ func (s *PositionStore) CountUnstampedClosed() (int64, error) {
 }
 
 // attributionConvergeFlag makes the convergence idempotent.
+// DayPlanEraStart is the day-plan era boundary, in the one place it is defined.
+var DayPlanEraStart = time.Date(2026, 8, 15, 0, 0, 0, 0, time.UTC)
+
 const attributionConvergeFlag = "attribution_sentinel_converge_2026_09_02"
 
 // ConvergePlanLinkSentinel converts CLOSED positions from the day-plan era that
@@ -122,7 +126,13 @@ func (s *Store) ConvergePlanLinkSentinel() {
 	if v, err := s.GetSystemConfig(attributionConvergeFlag); err == nil && v == "1" {
 		return
 	}
-	const eraMs = int64(1755230400000) // 2026-08-15 00:00 UTC — the day-plan era
+	// DAY-PLAN ERA. Written as a NAMED, TEST-ASSERTED date, not a magic epoch:
+	// the first cut of this constant was 1755230400000, which is 2025-08-15 —
+	// a YEAR early — and it converted 516 PRE-era rows the attribution report
+	// explicitly said to leave alone. The literal looked plausible and nothing
+	// asserted what date it resolved to. A guarded write whose scope constant is
+	// unverified is a guarded write with no guard.
+	eraMs := DayPlanEraStart.UnixMilli()
 	type row struct {
 		ID     int64
 		Source string

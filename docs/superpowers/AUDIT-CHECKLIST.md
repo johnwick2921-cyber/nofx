@@ -1030,6 +1030,33 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     intersects the hold. **Law:** a column that cannot say "unknown" cannot be
     the input to a ruling — and an aggregate that hides its n is not evidence.
 
+57. **A magic epoch as a scope constant — and the fixture holding the same wrong
+    copy of it.** (Highest occupied at merge: 56.) Root cause: a guarded,
+    WHERE-scoped, idempotent migration (`ConvergePlanLinkSentinel`) took its
+    boundary from the literal `1755230400000`, commented `// 2026-08-15`. That
+    epoch is **2025-08-15** — a year early. The migration ran at the 2026-09-03
+    boot and converted **516 pre-era rows** to a sentinel the wave's own report
+    had explicitly said to leave alone, instead of the 3 rows in scope. Every
+    other guard held: the write was scoped, idempotent, flag-gated, logged and
+    counted — and none of that helps when the SCOPE ITSELF is wrong. **The
+    second half is worse than the first:** the fixture defined its own
+    `const eraMs = 1755230400000` with the same wrong comment, so the test and
+    the code agreed with each other and disagreed with reality. The test passed
+    while the migration over-reached by 172×. (Class 49's shape, in data: an
+    instrument that cannot disagree with the code.) A third instance appeared
+    during the fix — the assertion written to pin the epoch had a hand-typed
+    number that was also wrong. **Probe:** for every date/threshold constant
+    that SCOPES a write, ask (a) what date does this literal actually resolve
+    to, asserted in a test, (b) does any fixture hold its own copy, and (c) does
+    the boot line report the resulting COUNT so an over-reach is visible on the
+    first boot. Here (c) is what caught it: `unresolvable=525` when ~9 was
+    expected. **Fix:** one named `DayPlanEraStart = time.Date(2026, 8, 15, …)`;
+    the migration and every fixture derive from it; a test asserts the resolved
+    DATE (not a typed epoch) and explicitly refuses the 2025 value.
+    **Law:** a scope constant is a named date with a test that says what date it
+    is; no fixture keeps its own copy; and a migration prints the row count it
+    touched where a human will read it on the next boot.
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,

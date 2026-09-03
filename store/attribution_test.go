@@ -127,7 +127,12 @@ func TestAttributionArmedUnderVersionIsStable(t *testing.T) {
 func TestAttributionConvergeIsScopedAndIdempotent(t *testing.T) {
 	st := attribStore(t)
 	ps := st.Position()
-	const eraMs = int64(1755230400000) // 2026-08-15
+	// THE FIXTURE MUST NOT CARRY ITS OWN COPY OF THE BOUNDARY. It used to hold
+	// the literal 1755230400000 — the SAME wrong 2025-08-15 value as the code —
+	// so the two agreed with each other and disagreed with reality, and the test
+	// passed while the migration converted 516 pre-era rows. It now derives from
+	// the one named date, so a wrong boundary fails here first.
+	eraMs := DayPlanEraStart.UnixMilli()
 	mk := func(exchPosID string, createdMs int64, status, planID string) int64 {
 		p := &TraderPosition{
 			TraderID: "hoang", ExchangeID: "nt8", ExchangePositionID: exchPosID, Symbol: "MNQ",
@@ -204,5 +209,24 @@ func TestAttributionSentinelRowsStillCountInPnL(t *testing.T) {
 	p := &TraderPosition{PlanID: PlanUnresolvable}
 	if ClassifyPlanLink(p.PlanID) != PlanLinkUnresolvable {
 		t.Error("classifier must report unresolvable")
+	}
+}
+
+// The era constant is ASSERTED, not trusted. Its first cut was 1755230400000 —
+// 2025-08-15, a year early — and it converted 516 pre-era rows because nothing
+// checked what date the literal resolved to.
+func TestDayPlanEraStartIsTheRightDate(t *testing.T) {
+	if got := DayPlanEraStart.UTC().Format("2006-01-02"); got != "2026-08-15" {
+		t.Fatalf("the day-plan era starts 2026-08-15, got %s (epoch %d)", got, DayPlanEraStart.UnixMilli())
+	}
+	// No hardcoded epoch here either: writing one by hand is how this incident
+	// started, and my first cut of THIS assertion had the wrong number too.
+	// The date is the contract; the epoch is derived from it.
+	if want := time.Date(2026, 8, 15, 0, 0, 0, 0, time.UTC).UnixMilli(); DayPlanEraStart.UnixMilli() != want {
+		t.Errorf("epoch drifted: got %d want %d", DayPlanEraStart.UnixMilli(), want)
+	}
+	// The 2025 value that caused the incident must never come back.
+	if DayPlanEraStart.UnixMilli() == 1755230400000 {
+		t.Error("this is the 2025-08-15 value that converted 516 pre-era rows")
 	}
 }
