@@ -566,6 +566,23 @@ export const planApi = {
     return res.success && res.data ? res.data : null
   },
 
+  // 1D — the per-condition expectancy table. Typed as `unknown` on purpose:
+  // the panel owns the shape, and min_n / promotion_rule travel in the payload
+  // so no frontend copy of the floor can drift from the engine's.
+  async getExpectancy(by?: string, era?: string): Promise<unknown | null> {
+    const q = new URLSearchParams()
+    if (by) q.set('by', by)
+    if (era) q.set('era', era)
+    const qs = q.toString() ? `?${q.toString()}` : ''
+    const res = await httpClient.request<unknown>(
+      `${API_BASE}/expectancy${qs}`,
+      {
+        silent: true,
+      }
+    )
+    return res.success && res.data ? res.data : null
+  },
+
   // C8 (README §9) — structured risk errors (P0-cleanup table). The dashboard
   // 402 banner watches this for the ai_payment_402 class.
   async getRiskErrors(traderId?: string): Promise<{

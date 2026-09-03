@@ -18,6 +18,7 @@ import { ResetButton } from './ResetButton'
 import { ApproveButton } from './ApproveButton'
 import { AlertCenter } from './AlertCenter'
 import { GateBlocksPanel } from './GateBlocksPanel'
+import { ExpectancyPanel } from './ExpectancyPanel'
 import { SESSION_BANDS, type SessionName } from './sessionConfig'
 
 interface Props {
@@ -89,6 +90,11 @@ export function PlanCard({
       />
       {/* W16/R3 — refusals, where the owner already looks for plan state. */}
       <GateBlocksPanel traderId={traderId} language={language} />
+      {/* 1D — what each play has actually paid, on the corrected column. Read
+          model only: it rules on nothing and no control here changes behaviour.
+          Almost every row reads DESCRIPTIVE ONLY today, which is the floor
+          working rather than the table failing. */}
+      <ExpectancyPanel />
       {/* C-fix — adherence GPA + matched-random verdicts (real data, formerly zero FE readers). */}
       <DisciplinePanel traderId={traderId} language={language} />
       {/* ITEM 3 — the owner's manual re-read, next to the plan it acts on.
