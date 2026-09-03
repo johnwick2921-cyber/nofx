@@ -68,22 +68,18 @@ func (s *Server) handleBarTruthArbiter(c *gin.Context) {
 		if back <= 0 {
 			back = 8640 // 6 days of 1m — covers the 08-24+ retention window
 		}
-		// BAR-TRUTH: wipe the replay window FIRST so previously-misstamped rows
-		// (close-stamped at T+1m from the pre-fix replay) can never survive as
-		// spurious extras; the fresh replay repopulates with open-stamped keys.
-		if s.store != nil && s.store.BarHistory() != nil {
-			since := time.Now().UnixMilli() - int64(back)*int64(60_000) - 60_000
-			if n, cerr := s.store.BarHistory().ClearSince(sym, tf, since); cerr == nil {
-				c.JSON(http.StatusAccepted, gin.H{
-					"ok": true, "action": "backfill", "symbol": sym,
-					"timeframe": tf, "bars_back": back, "cleared_rows": n,
-					"note": "window cleared; deep bars_subscribe sent — run action=diff after ~30s.",
-				})
-			} else {
-				c.JSON(http.StatusConflict, gin.H{"error": "clear failed: " + cerr.Error()})
-				return
-			}
-		}
+		// CLASS 52 (owner ruling 2026-09-02): MERGE, never wipe. The old code
+		// cleared the replay window BEFORE knowing what the provider would
+		// return — on 2026-09-02 a 1m ask for 1,000,000 bars came back capped
+		// at ~2,000 and the wipe deleted 3 weeks of accumulated 1m that the
+		// replay could not replace. The persister's InsertBars is INSERT OR
+		// REPLACE: the replay replaces EXACTLY the bars it returns, and rows it
+		// cannot replace are never deleted.
+		c.JSON(http.StatusAccepted, gin.H{
+			"ok": true, "action": "backfill", "symbol": sym,
+			"timeframe": tf, "bars_back": back, "cleared_rows": 0,
+			"note": "merge (INSERT OR REPLACE within the replay's returned range): rows the replay cannot replace are never deleted — deep bars_subscribe sent; run action=diff after ~30s.",
+		})
 		if err := nt.RequestDeepBarsBackfill(sym, tf, back); err != nil {
 			c.JSON(http.StatusConflict, gin.H{"error": err.Error()})
 			return

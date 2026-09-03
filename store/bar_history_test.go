@@ -135,3 +135,46 @@ func TestBarRetentionEnv(t *testing.T) {
 		t.Fatalf("default retention = %d want 90", got)
 	}
 }
+
+// TestBarMergeReplayKeepsExistingRows (CLASS 52, owner pin 2026-09-02): a
+// 14,000-row 1m table + a 2,000-bar replay must end with 14,000+ rows — the
+// replay's INSERT OR REPLACE replaces EXACTLY the bars it returns and never
+// deletes rows it cannot replace (the pre-52 backfill wiped the window first
+// and a capped provider replay shrank a 14,508-row table to ~2,000).
+func TestBarMergeReplayKeepsExistingRows(t *testing.T) {
+	st := newBarStore(t)
+	const n = 14000
+	rows := make([]BarHistoryDB, 0, n)
+	base := time.Date(2026, 8, 19, 15, 0, 0, 0, time.UTC).UnixMilli()
+	for i := 0; i < n; i++ {
+		rows = append(rows, mkBar("MNQ", "1m", base+int64(i)*60_000, float64(i)))
+	}
+	if err := st.InsertBars(rows); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	// A 2,000-bar replay overlapping the TAIL of the table (like NT8's capped
+	// return for a huge ask).
+	const replay = 2000
+	replayBars := make([]BarHistoryDB, 0, replay)
+	replayBase := base + int64(n-replay)*60_000
+	for i := 0; i < replay; i++ {
+		replayBars = append(replayBars, mkBar("MNQ", "1m", replayBase+int64(i)*60_000, float64(i)+0.5))
+	}
+	if err := st.InsertBars(replayBars); err != nil {
+		t.Fatalf("replay: %v", err)
+	}
+	count, _ := st.Count()
+	if count < n {
+		t.Fatalf("after a %d-bar replay the table holds %d rows — want >= %d (merge, never wipe)", replay, count, n)
+	}
+	// The rows the replay could NOT replace (outside its range) must survive.
+	first, err := st.BarsBetween("MNQ", "1m", base, base+60_000)
+	if err != nil || len(first) != 1 || first[0].OpenTimeMs != base {
+		t.Fatalf("the earliest pre-replay row was deleted: %+v err=%v", first, err)
+	}
+	// Inside the replay range the REVISED values win (the upsert works).
+	got, _ := st.BarsBetween("MNQ", "1m", replayBase, replayBase+60_000)
+	if len(got) != 1 || got[0].C != 0.5 {
+		t.Fatalf("replay revision must win inside its range: %+v", got)
+	}
+}
