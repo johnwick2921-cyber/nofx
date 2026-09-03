@@ -735,11 +735,20 @@ func (at *AutoTrader) recordClosedTradeAnalytics(p *store.TraderPosition) {
 		exitMs = time.Now().UnixMilli()
 	}
 	bars := market.FuturesBarsProvider(at.futuresSymbol(), "1m", kernel.AISVPBarCount)
-	ex := kernel.ComputeExcursion(p.EntryPrice, p.Side, bars, p.EntryTime, exitMs)
-	if err := at.store.Position().UpdateExcursion(p.ID, ex.MAE, ex.MFE); err != nil {
+	// E4 (wave 1A, 2026-09-02) — the same path computation the excursion table
+	// uses, so trader_positions.mae/mfe and trade_excursions cannot disagree.
+	// It INCLUDES the bar containing the fill; ComputeExcursion dropped it
+	// whenever a fill did not land exactly on a bar boundary.
+	path := kernel.ComputePathExcursion(p.EntryPrice, p.Side, 0, 0, bars, p.EntryTime, exitMs, "1m")
+	if !path.Computed {
+		// No coverage. The columns stay NULL: an uncomputed excursion is not a
+		// zero, and writing 0 here is what made 517 closed rows unreadable.
+		at.logWarnf("📐 excursion for %s pos=%d has no 1m coverage — mae/mfe left NULL, not zeroed", p.Symbol, p.ID)
+	} else if err := at.store.Position().UpdateExcursion(p.ID, path.MAEPts, path.MFEPts); err != nil {
 		at.logWarnf("📐 excursion update failed for %s: %v", p.Symbol, err)
 		return
 	}
+	ex := kernel.Excursion{MAE: path.MAEPts, MFE: path.MFEPts}
 	// E3 (wave 1A) — the excursion row's exit half. This funnel is reached by
 	// EVERY exit path (AI close, NT8 OCO, EOD-flat, manual), which is why the
 	// hook lives here and not in one of them.

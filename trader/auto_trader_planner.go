@@ -2500,9 +2500,11 @@ func (at *AutoTrader) learningDigestLine() string {
 	}
 	trades := make([]kernel.LearningTrade, 0, len(rows))
 	for _, p := range rows {
-		trades = append(trades, kernel.LearningTrade{
-			MAE: p.MAE, MFE: p.MFE, Grade: p.AdherenceGrade, PlanVersion: p.PlanVersion,
-		})
+		lt := kernel.LearningTrade{Grade: p.AdherenceGrade, PlanVersion: p.PlanVersion}
+		if p.MAE != nil && p.MFE != nil { // E4 — NULL means never computed
+			lt.MAE, lt.MFE, lt.Measured = *p.MAE, *p.MFE, true
+		}
+		trades = append(trades, lt)
 	}
 	return kernel.LearningLine(trades)
 }

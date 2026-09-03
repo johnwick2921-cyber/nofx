@@ -59,6 +59,7 @@ func BackfillExcursions(st *store.Store, symbol, traderID string, from, to time.
 			Condition: excursionCondition(st, p.PlanID, p.PlanVersion, p.CitedScenarioID),
 			Side:      p.Side, EntryPx: p.EntryPrice, EntryTs: p.EntryTime,
 			StopPxInitial: stop, TargetPx: target, Size: p.Quantity,
+			Source: "backfill",
 		}
 		id, err := st.TradeExcursions().Open(row)
 		if err != nil {

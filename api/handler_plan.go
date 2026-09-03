@@ -1699,6 +1699,8 @@ func (s *Server) handlePlanTrades(c *gin.Context) {
 			"symbol": p.Symbol, "side": p.Side,
 			"entry_price": p.EntryPrice, "exit_price": p.ExitPrice,
 			"entry_time": p.EntryTime, "exit_time": p.ExitTime,
+			// E4 (wave 1A) — mae/mfe are nullable: the payload carries null for
+			// "never measured" rather than a 0 the card would render as a fact.
 			"realized_pnl": p.RealizedPnL, "mae": p.MAE, "mfe": p.MFE,
 			"entry_confidence":  p.EntryConfidence,
 			"cited_scenario_id": p.CitedScenarioID, "plan_matched": p.PlanMatched,

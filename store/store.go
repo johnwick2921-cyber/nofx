@@ -227,6 +227,11 @@ func (s *Store) initTables() error {
 	if err := s.TradeExcursions().Migrate(); err != nil {
 		return fmt.Errorf("failed to initialize trade_excursions table: %w", err)
 	}
+	// E4 (wave 1A, 2026-09-02) — retire the never-computed mae/mfe zeros on
+	// trader_positions. Idempotent: a second boot matches nothing.
+	if _, err := s.Position().MigrateExcursionZerosToNull(); err != nil {
+		logger.Warnf("📐 excursion zero→NULL migration skipped: %v", err)
+	}
 	return nil
 }
 

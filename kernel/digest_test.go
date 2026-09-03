@@ -60,20 +60,40 @@ func TestBuildDigestChainShort(t *testing.T) {
 // P0-cleanup (2026-08-19) — a closed trade's MAE/MFE + adherence grade must be
 // visible in the digest line and linkable to its plan version.
 func TestLearningLine(t *testing.T) {
+	// E4 (wave 1A): a trade now says whether its excursion was MEASURED. The
+	// old test `MAE > 0 || MFE > 0` treated an uncomputed row and a genuine
+	// zero identically, which is the ambiguity this wave exists to remove.
 	trades := []LearningTrade{
-		{MAE: 12, MFE: 90, Grade: "A", PlanVersion: 2},
-		{MAE: 30, MFE: 45, Grade: "C", PlanVersion: 2},
+		{MAE: 12, MFE: 90, Measured: true, Grade: "A", PlanVersion: 2},
+		{MAE: 30, MFE: 45, Measured: true, Grade: "C", PlanVersion: 2},
 	}
 	line := LearningLine(trades)
 	if line == "" {
 		t.Fatalf("learning line must render for graded trades")
 	}
-	for _, want := range []string{"avg MAE 21.0", "avg MFE 67.5", "adherence map[A:1 C:1]", "plan v[2 2]"} {
+	for _, want := range []string{"avg MAE 21.0", "avg MFE 67.5", "(n=2 of 2)", "adherence map[A:1 C:1]", "plan v[2 2]"} {
 		if !strings.Contains(line, want) {
 			t.Fatalf("learning line %q missing %q", line, want)
 		}
 	}
 	if LearningLine(nil) != "" {
 		t.Fatalf("empty trades → empty line")
+	}
+
+	// An UNMEASURED trade must not be averaged in as a zero, and the n must
+	// say how many of the trades the averages actually rest on.
+	mixed := LearningLine([]LearningTrade{
+		{MAE: 12, MFE: 90, Measured: true, Grade: "A", PlanVersion: 2},
+		{Grade: "B", PlanVersion: 2}, // never computed
+	})
+	for _, want := range []string{"avg MAE 12.0", "avg MFE 90.0", "(n=1 of 2)"} {
+		if !strings.Contains(mixed, want) {
+			t.Fatalf("mixed line %q missing %q — an unmeasured trade must not read as a zero", mixed, want)
+		}
+	}
+
+	// A genuine measured zero still counts.
+	if z := LearningLine([]LearningTrade{{MAE: 0, MFE: 0, Measured: true, Grade: "A"}}); !strings.Contains(z, "(n=1 of 1)") {
+		t.Fatalf("a measured zero must count: %q", z)
 	}
 }

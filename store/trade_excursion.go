@@ -1,6 +1,7 @@
 package store
 
 import (
+	"fmt"
 	"time"
 
 	"gorm.io/gorm"
@@ -60,6 +61,12 @@ type TradeExcursion struct {
 
 	ATR5mAtEntry     float64  `gorm:"column:atr5m_at_entry"`
 	ATRMultStopEntry *float64 `gorm:"column:atr_mult_stop_at_entry"`
+
+	// Source says how the row came to exist: "live" (the hooks, as it happened)
+	// or "backfill" (rebuilt afterwards from the stored tape). The boot line
+	// reports them separately so nobody reads a backfilled corpus as live
+	// evidence.
+	Source string `gorm:"column:source"`
 
 	// Resolution names the tape the path was built from: "1m", "5m" (fallback,
 	// stated) or "none" (no coverage — every excursion field stays NULL).
@@ -128,6 +135,7 @@ CREATE TABLE IF NOT EXISTS trade_excursions (
 	atr5m_at_entry          REAL    NOT NULL DEFAULT 0,
 	atr_mult_stop_at_entry  REAL,
 	resolution              TEXT    NOT NULL DEFAULT '',
+	source                  TEXT    NOT NULL DEFAULT 'live',
 	created_at              DATETIME,
 	updated_at              DATETIME
 );
@@ -227,15 +235,26 @@ func (s *TradeExcursionStore) GetByPosition(positionID int64) (*TradeExcursion, 
 
 // Counts reports the boot-line numbers: total rows, rows with a measured path,
 // and rows whose path could not be built. READ, never assumed.
-func (s *TradeExcursionStore) Counts() (total, measured, unresolved int64, err error) {
+func (s *TradeExcursionStore) Counts() (total, backfilled, unresolved int64, err error) {
 	if err = s.db.Model(&TradeExcursion{}).Count(&total).Error; err != nil {
 		return
 	}
-	if err = s.db.Model(&TradeExcursion{}).Where("mae_pts IS NOT NULL").Count(&measured).Error; err != nil {
+	if err = s.db.Model(&TradeExcursion{}).Where("source = ?", "backfill").Count(&backfilled).Error; err != nil {
 		return
 	}
-	err = s.db.Model(&TradeExcursion{}).Where("resolution = 'none'").Count(&unresolved).Error
+	err = s.db.Model(&TradeExcursion{}).Where("resolution = ?", "none").Count(&unresolved).Error
 	return
+}
+
+// ExcursionBootLine is the boot block's excursion row. Every number is READ
+// from the table; nothing here is a literal (A24).
+func (s *TradeExcursionStore) ExcursionBootLine() string {
+	total, backfilled, unresolved, err := s.Counts()
+	if err != nil {
+		return fmt.Sprintf("excursions: logging=on rows=? backfilled=? unresolved=? (count failed: %v)", err)
+	}
+	return fmt.Sprintf("excursions: logging=on rows=%d backfilled=%d unresolved=%d (unresolved = no 1m coverage; those rows keep NULLs, never zeros)",
+		total, backfilled, unresolved)
 }
 
 // ClosedPositionsBetween lists the closed positions whose ENTRY falls inside

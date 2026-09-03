@@ -276,6 +276,10 @@ func main() {
 	// NO-TRADE BAND (2026-09-02) — the windows the gate, the grader and the
 	// card all read, and where each one comes from. Every field resolved.
 	logger.Infof("🗓 %s", kernel.NoTradeBandBootLine())
+	// TRADE EXCURSIONS (wave 1A, 2026-09-02) — how many positions have a path
+	// recorded, how many were rebuilt from the tape, and how many the tape
+	// does not reach. Every number READ from the table.
+	logger.Infof("📐 %s", st.TradeExcursions().ExcursionBootLine())
 	// P&L-TRUTH WAVE (2026-09-01) — corrected-column guard in the boot block.
 	logger.Infof("🧾 %s", store.PnLSurfacesBootLine())
 	logger.Infof("🎛 %s", kernel.EntryLawBootLedger()) // P1.4 (ledger-close 2026-08-19) — clock-guard block: live host-RTC drift,

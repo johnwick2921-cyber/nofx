@@ -162,9 +162,12 @@ type TraderPosition struct {
 	// P2.4 — excursion analytics (additive, futures day-plan): max adverse /
 	// favorable excursion over the hold (points) + the AI's entry confidence.
 	// Zero when not computed (crypto / pre-migration).
-	MAE             float64 `gorm:"column:mae;default:0" json:"mae"`
-	MFE             float64 `gorm:"column:mfe;default:0" json:"mfe"`
-	EntryConfidence int     `gorm:"column:entry_confidence;default:0" json:"entry_confidence"`
+	// E4 (wave 1A, 2026-09-02) — NULLABLE. `float64` with DEFAULT 0 could not
+	// tell a computed zero from a value nobody ever computed, and 517 of 586
+	// closed rows carried the never-computed pair (D15). nil means UNKNOWN.
+	MAE             *float64 `gorm:"column:mae" json:"mae"`
+	MFE             *float64 `gorm:"column:mfe" json:"mfe"`
+	EntryConfidence int      `gorm:"column:entry_confidence;default:0" json:"entry_confidence"`
 	// P5.5 — plan link (additive, futures day-plan): the cited scenario + plan
 	// version stamped at OPEN, and the adherence grade (A–F) computed at CLOSE.
 	// Empty/zero for crypto / off-plan trades.
@@ -206,6 +209,8 @@ func (s *PositionStore) SetEntryConfidence(id int64, confidence int) error {
 }
 
 // UpdateExcursion records the MAE/MFE (points) on a closed position (P2.4).
+// A caller with nothing to record must NOT call this with zeros — leave the
+// columns NULL instead (E4).
 func (s *PositionStore) UpdateExcursion(id int64, mae, mfe float64) error {
 	return s.db.Model(&TraderPosition{}).Where("id = ?", id).
 		Updates(map[string]any{"mae": mae, "mfe": mfe}).Error

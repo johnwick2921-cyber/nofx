@@ -49,7 +49,7 @@ func (at *AutoTrader) excursionOnOpen(p *store.TraderPosition, stopPx, targetPx,
 			Condition: excursionCondition(at.store, p.PlanID, p.PlanVersion, p.CitedScenarioID),
 			Side:      p.Side, EntryPx: p.EntryPrice, EntryTs: p.EntryTime,
 			StopPxInitial: stopPx, TargetPx: targetPx,
-			Size: p.Quantity, ATR5mAtEntry: atr5m,
+			Size: p.Quantity, ATR5mAtEntry: atr5m, Source: "live",
 		}
 		// atr_mult_stop_at_entry: how many ATR5m the initial stop sat away from
 		// the fill. NULL when either input is unknown — never a computed 0/0.

@@ -69,8 +69,11 @@ func TestW5AnalyticsLandOnRealClose(t *testing.T) {
 	if g.AdherenceGrade == "" {
 		t.Fatal("adherence grade must be set")
 	}
-	if g.MFE <= 0 {
-		t.Fatalf("MFE must be computed (favorable run), got %.2f", g.MFE)
+	if g.MFE == nil {
+		t.Fatal("MFE must be COMPUTED, not left NULL (E4: nil is 'never measured')")
+	}
+	if *g.MFE <= 0 {
+		t.Fatalf("MFE must be positive on a favorable run, got %.2f", *g.MFE)
 	}
 
 	// idempotent: a second pass leaves nothing ungraded + doesn't error.
