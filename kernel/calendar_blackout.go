@@ -82,7 +82,15 @@ func T1NoTradeLinesDrift(events []PlannerCalendarEvent, driftMs int64) []string 
 
 // WidenCTWindows shifts every window's Start earlier and End later by
 // ceil(|driftMs|/60s) minutes (min 1) so blackout protection survives a skewed
-// clock. A zero/sub-minute drift returns the windows unchanged.
+// clock. A zero drift returns the windows unchanged.
+//
+// The widening itself is unchanged for ANY nonzero measurement: even a 108 ms
+// offset can carry an event across a minute boundary, so the one-minute guard
+// is real protection. What changed (2026-09-02) is the CLAIM. The label said
+// "+1m (clock drift)" whenever the offset was nonzero, so a perfectly healthy
+// clock produced a card that told the reader the machine's time was drifting.
+// Only a skew large enough to move an event by a whole minute on its own is
+// stated; below that the extra minute is boundary rounding and goes unlabelled.
 func WidenCTWindows(windows []CTWindow, driftMs int64) []CTWindow {
 	m := driftWidenMinutes(driftMs)
 	if m <= 0 {
@@ -90,13 +98,27 @@ func WidenCTWindows(windows []CTWindow, driftMs int64) []CTWindow {
 	}
 	out := make([]CTWindow, 0, len(windows))
 	for _, w := range windows {
+		label := w.Label
+		if driftIsSkew(driftMs) {
+			label = fmt.Sprintf("%s +%dm (clock drift)", w.Label, m)
+		}
 		out = append(out, CTWindow{
 			Start: ((w.Start-m)%1440 + 1440) % 1440,
 			End:   (w.End + m) % 1440,
-			Label: fmt.Sprintf("%s +%dm (clock drift)", w.Label, m),
+			Label: label,
 		})
 	}
 	return out
+}
+
+// driftIsSkew reports whether a measured clock offset is large enough to move
+// an event by a whole minute by itself — the only case where a card may tell
+// the reader the widening is caused by clock drift.
+func driftIsSkew(driftMs int64) bool {
+	if driftMs < 0 {
+		driftMs = -driftMs
+	}
+	return driftMs >= 60_000
 }
 
 // driftWidenMinutes rounds |driftMs| up to whole minutes (min 1 for any

@@ -102,3 +102,94 @@ func BuildMachineNoTradeWindows(sess SessionDef) []NoTradeWindow {
 	}
 	return out
 }
+
+// ── READ-TIME EVALUATION ────────────────────────────────────────────────────
+
+// NoTradeStatus is how one window relates to the moment it is rendered.
+const (
+	StatusLive         = "live"          // intersects [now, session EOD]
+	StatusElapsed      = "elapsed"       // ended before now
+	StatusOtherSession = "other_session" // starts after this session's EOD
+)
+
+// RenderedNoTradeWindow is one window plus its read-time verdict.
+type RenderedNoTradeWindow struct {
+	NoTradeWindow
+	Status string `json:"status"`
+}
+
+// EvaluateNoTradeWindows filters windows against [nowMin, eodMin] in CT
+// minutes-of-day, wrap-aware so an ASIA session spanning midnight is handled
+// without a special case. Nothing is dropped: elapsed and other-session
+// windows come back marked, for the collapsed section.
+func EvaluateNoTradeWindows(wins []NoTradeWindow, nowMin, sessionStartMin, eodMin int) []RenderedNoTradeWindow {
+	out := make([]RenderedNoTradeWindow, 0, len(wins))
+	// Geometry is measured from the session start so a window that wraps past
+	// midnight stays monotonic; "has it finished" is measured from NOW on a
+	// signed ±12h axis, because a pre-session read has nothing elapsed yet and
+	// offsets-from-start alone cannot tell 08:00-before-open from 16:00-after.
+	off := func(m int) int { return ((m-sessionStartMin)%1440 + 1440) % 1440 }
+	rel := func(m int) int {
+		d := ((m-nowMin)%1440 + 1440) % 1440
+		if d > 720 {
+			d -= 1440 // the nearer reading of a wrapped clock is the past one
+		}
+		return d
+	}
+	sessionLen := off(eodMin)
+	if sessionLen == 0 {
+		sessionLen = 1440
+	}
+	for _, w := range wins {
+		sOff, eOff := off(w.StartMin), off(w.EndMin)
+		if eOff <= sOff {
+			eOff += 1440 // window wraps past the session start
+		}
+		// Does the window touch this session's tradeable span at all? A window
+		// that does not can never constrain this session, whatever the clock
+		// says — that is the ASIA-at-23:00 lie (NY lunch on an ASIA card).
+		intersects := sOff < sessionLen || eOff > 1440
+		status := StatusLive
+		switch {
+		case !intersects:
+			status = StatusOtherSession
+		case rel(w.EndMin) <= 0:
+			status = StatusElapsed
+		}
+		out = append(out, RenderedNoTradeWindow{NoTradeWindow: w, Status: status})
+	}
+	return out
+}
+
+// LiveNoTradeWindows returns only the windows still ahead in this session.
+func LiveNoTradeWindows(r []RenderedNoTradeWindow) []RenderedNoTradeWindow {
+	out := make([]RenderedNoTradeWindow, 0, len(r))
+	for _, w := range r {
+		if w.Status == StatusLive {
+			out = append(out, w)
+		}
+	}
+	return out
+}
+
+// T1WindowsForRead re-resolves the calendar's T1 blackouts at READ time and
+// applies the drift widening measured NOW. driftMs is the resolved clock-health
+// offset; when the clock is healthy the widening is zero and no "(clock drift)"
+// suffix appears — the label stops claiming a correction that was not applied.
+func T1WindowsForRead(events []PlannerCalendarEvent, driftMs int64) []NoTradeWindow {
+	var out []NoTradeWindow
+	for _, w := range WidenCTWindows(T1BlackoutWindows(events), driftMs) {
+		out = append(out, NoTradeWindow{
+			StartMin: w.Start, EndMin: w.End, Kind: KindT1,
+			Source: SourceCalendar, Label: "🔴 " + w.Label + " — HARD no-trade (red news)",
+		})
+	}
+	return out
+}
+
+// NoTradeBandBootLine is the boot line (every field read from code).
+func NoTradeBandBootLine() string {
+	ls, le := LunchWindowCT()
+	return fmt.Sprintf("🗓 no-trade band: session-scoped, config-driven (0 literals) — first_n=%dm lunch=%s–%s (source=%s) · T1 re-resolved at read time with drift measured then · model prose renders as NOTES",
+		FirstNoTradeMinutes(), ls, le, SourceCodeConstant)
+}

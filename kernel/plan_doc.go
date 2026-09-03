@@ -277,6 +277,20 @@ type PlanDoc struct {
 	// label stamped at write: "bias: AI <x> · tree <y> · regime <z>". A LABEL,
 	// not a direction — no MUST attaches to either leg.
 	BiasLabel string `json:"bias_label,omitempty"`
+
+	// NoTradeWindows (owner ruling 2026-09-02) — the MACHINE's structured
+	// no-trade constraints for this plan's session, written at plan time from
+	// enforcing sources only: the shared window definitions for first-N and
+	// lunch, and the entry gate's own resolved red-news windows for T1. The
+	// model's `no_trade` prose stays above for legacy readers but renders as
+	// NOTES, never as a constraint — an ASIA card was showing an NY lunch
+	// window because the model wrote it, beside a T1 blackout fourteen hours
+	// after it had elapsed.
+	//
+	// Stored windows are absolute CT minutes; whether any of them still
+	// constrains anything is decided at READ time (EvaluateNoTradeWindows),
+	// never here.
+	NoTradeWindows []NoTradeWindow `json:"no_trade_windows,omitempty"`
 }
 
 // PlanCondition is a checkable predicate: price closes beyond `Price` on the
