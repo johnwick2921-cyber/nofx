@@ -224,6 +224,9 @@ func (s *Store) initTables() error {
 	if err := s.AbConfirm().Migrate(); err != nil {
 		return fmt.Errorf("failed to initialize ab_confirm_log table: %w", err)
 	}
+	if err := s.Plan().MigrateLifecycleLog(); err != nil {
+		return fmt.Errorf("failed to initialize plan_lifecycle_log table: %w", err)
+	}
 	if err := s.TradeExcursions().Migrate(); err != nil {
 		return fmt.Errorf("failed to initialize trade_excursions table: %w", err)
 	}
