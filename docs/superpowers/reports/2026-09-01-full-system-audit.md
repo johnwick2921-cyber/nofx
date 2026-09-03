@@ -737,7 +737,7 @@ if p.Status == "CLOSED" && p.AdherenceGrade == "F" {
 
 So an uncited close grades **F when either penalty applies, D when neither does**. The predicate is therefore not looking for an impossible value (an earlier characterisation, corrected here) — it is looking for a value that occurs in a *subset*. `RepairArmedLineage` silently succeeds on penalised uncited rows and silently fails on clean ones, which is why spot-checking would not catch it: a sampled F row shows the repair working. [DB] confirmation, all three `plan_version 0`, `source=reconcile`: **566 = F**, **571 = F**, **580 = D**.
 
-The correct fix keys on the *absence of lineage*, not on a grade letter that encodes lineage plus two unrelated penalties.
+The correct fix keys on the *absence of lineage*, not on a grade letter that encodes lineage plus two unrelated penalties. **It must not simply also match `D`** — row **580** is a genuinely uncited close that has earned its D, and a predicate widened to `F` OR `D` would clear a correct grade along with the wrong ones. (Constraint pair credited to nofx-06.)
 
 **A5.2 — §F1's five ids are now three different failures wearing one ratio.**
 
