@@ -719,3 +719,40 @@ nofx-06 reports `;stamp_pending` is transient by design, trimmed in `reconcile.g
 
 1. Ask which **branch** a write sits on, not merely whether the write exists. A write on a path almost nothing takes is worse than a read nobody performs, because it produces a green proof.
 2. When a log line names a **cause**, check the code can actually distinguish that cause from the alternatives. `"position row not materialized yet — stamp pending"` prints whenever `pos == nil`, which is true under either mechanism, while asserting the race as fact. It was quoted as live proof of the race and proves only `pos == nil`.
+
+### A5 — §F1's "25% blind" has become three failure states; and the grade-reset predicate keys on the wrong thing
+
+*(Measured 2026-09-03 ~11:40 CT, read-only: `sqlite3 'file:/home/hoang/nofx/data/data.db?mode=ro'` + `sed` over two source files. No writes. Prompted by nofx-06's observation that late-stamped positions keep a permanent off-plan D.)*
+
+**A5.1 — The reset predicate catches a subset, not nothing [A].** `trader/ninjatrader/reconcile.go` clears the grade so W5 can regrade, but only for `F`:
+
+```go
+// armed-fill plan in hand (grade ≠ F is the STEP-7 proof).
+if p.Status == "CLOSED" && p.AdherenceGrade == "F" {
+    if err := st.Position().SetAdherence(p.ID, ""); err != nil { … }
+}
+```
+
+`kernel/adherence.go GradeAdherence` grades base **D** for `in.OffPlan || !in.Cited` ("off-plan (no scenario cited)"), then steps down once per penalty — `if in.InNoTrade { grade = stepDown(grade, 1) }`, `if !in.InKillzone { grade = stepDown(grade, 1) }` — over `gradeLetters = []string{"A","B","C","D","F"}`. D is second-to-last, so **one** penalty step takes an uncited close from D to F.
+
+So an uncited close grades **F when either penalty applies, D when neither does**. The predicate is therefore not looking for an impossible value (an earlier characterisation, corrected here) — it is looking for a value that occurs in a *subset*. `RepairArmedLineage` silently succeeds on penalised uncited rows and silently fails on clean ones, which is why spot-checking would not catch it: a sampled F row shows the repair working. [DB] confirmation, all three `plan_version 0`, `source=reconcile`: **566 = F**, **571 = F**, **580 = D**.
+
+The correct fix keys on the *absence of lineage*, not on a grade letter that encodes lineage plus two unrelated penalties.
+
+**A5.2 — §F1's five ids are now three different failures wearing one ratio.**
+
+| id | lineage now | grade | state |
+|---|---|---|---|
+| 566, 571 | `plan_version 0` | **F** | still blind, but eligible for the reset — repair can reach them |
+| 580 | `plan_version 0` | **D** | blind AND ineligible — no path repairs it |
+| 584, 586 | healed: **v6/S2**, **v5/S3**, `entry_order_id` set | **D** | columns resolved, grade permanently wrong |
+
+"25% blind (5 of 20)" was accurate when measured and is now misleading as a single number. Recorded here rather than restated as a ratio, because collapsing three states into one ratio is what hid this.
+
+**A5.3 — Population, and it is not a reconcile-path defect [DB].** Closed rows with `plan_version>0 AND cited_scenario_id<>''`, by grade: **A 30 · B 22 · D 6 · C 5**. The six D ids: **530, 575, 582, 584, 586, 591**. Discount **530** — its `cited_scenario_id` is the literal sentinel `off-plan`, so D is correct. Five are genuinely stuck: **575, 582, 584, 586, 591**. By source: reconcile 4 · armed_entry 1 · system 1.
+
+**582 is `source=armed_entry`** — §D-9 of this report records it carrying v3/S2 correctly, i.e. it stamped on the *fill-time* path — and it still grades D. The grade is therefore computed before the stamp on the armed path too. This is a general ordering problem between grading and stamping, not a reconcile-path problem, and the case-fold fix (664ab6b7) does not address it. **591** is a post-fix row from 2026-09-03 and is in the stuck list.
+
+**Not remediated.** Correcting the existing rows is a DB write and needs the owner's explicit authorisation under the guarded-write rule; this section is measurement only.
+
+**A5.4 — Probe (nofx-06, class 59, third):** when a repair path clears a value to trigger a recompute, check it matches the value the broken path actually writes. Extended by A5.1: check it matches *every* value that path can write, not the representative one — a predicate that matches a subset fails silently and samples clean.
