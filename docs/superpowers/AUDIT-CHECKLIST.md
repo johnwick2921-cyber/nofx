@@ -1243,6 +1243,29 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     becomes load-bearing — and a green suite is only evidence about the moment
     it ran.
 
+    **OWNER LAW (2026-09-03), added at merge.** `time.Now()` lives ONLY at the
+    entry point; everything underneath takes an explicit `…At(now, …)` variant,
+    and tests state their own clock. **And the suite runs at MERGE TIME,
+    immediately before the build — never hours before.** Both of today's boots
+    were verified in the morning and shipped in the afternoon; the readings were
+    honest when taken and were not green at deploy time. A gate whose answer
+    depends on when you asked is not a gate.
+    **SWEEP (2026-09-03, listed not fixed — follow-up wave):** eight test files
+    build a fixed `time.Date` clock and call an entry point that reads
+    `time.Now()` — `auto_trader_wake_levels_test.go` (FIXED here),
+    `auto_trader_reset_test.go`, `auto_trader_transition_test.go`,
+    `auto_trader_weekly_test.go`, `auto_trader_clock_test.go`,
+    `kernel/risk_limits_test.go`, `kernel/tz_test.go`,
+    `trader/binance/order_sync_test.go`. Only the wake path currently consults
+    the enforcing cadence inputs (`minutesToSessionFlat` / `SkipForCutoff` /
+    `SkipForCooldown` appear in exactly two production files), so the blast
+    radius today is one path — but every future guard promoted from WARN to
+    ENFORCE puts its own inputs into this class, which is why the probe is
+    phrased around the PROMOTION and not around this test.
+    **Failure window, measured:** 14:20–14:45 CT — from the 25-minute cutoff to
+    NY's flat. Before and after it, the test passes, which is why it read as a
+    flake rather than a bomb.
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,
