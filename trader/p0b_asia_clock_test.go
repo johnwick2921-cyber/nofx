@@ -112,7 +112,7 @@ func TestP0BAsiaReadDoesNotFireOutsideItsWindow(t *testing.T) {
 	}
 	// Land the weekly doc (governing week of Sunday 2026-08-23 → Monday 08-24).
 	monday := kernel.WeekGoverningMonday(ctTime(t, 2026, 8, 23, 16, 30)).Format("2006-01-02")
-	wj, _ := json.Marshal(kernel.WeeklyDoc{Bias: "neutral"})
+	wj, _ := json.Marshal(kernel.WeeklyDoc{WeeklyLevels: []kernel.WeeklyLevel{{Name: "PWH", Px: 15650}, {Name: "PWL", Px: 15550}}, Narrative: "facts only"})
 	if _, err := st.Plan().AppendPlan(&store.PlanDB{
 		PlanID:     st.Plan().ResolvePlanID(monday, "WEEKLY", at.id),
 		StrategyID: at.id, TradeDate: monday, Session: "WEEKLY",

@@ -28,8 +28,8 @@ func traderDayPlanEnabled(at *trader.AutoTrader) bool {
 	return cfg != nil && cfg.DayPlan != nil && cfg.DayPlan.PlanEnabled
 }
 
-// weeklyPayload (W7, weekly-bias wave) renders the WEEKLY chip payload for the
-// day-plan card: the current governed week's Sunday weekly-bias doc, or nil
+// weeklyPayload renders the WEEKLY chip payload for the day-plan card: the
+// current governed week's Sunday weekly doc (REFS ONLY since class 50), or nil
 // (the card renders the grey "none" chip).
 func weeklyPayload(st *store.Store, traderID string, now time.Time) gin.H {
 	if st == nil {
@@ -44,18 +44,25 @@ func weeklyPayload(st *store.Store, traderID string, now time.Time) gin.H {
 	if json.Unmarshal([]byte(row.Doc), &doc) != nil {
 		return nil
 	}
-	return gin.H{
-		"bias":               doc.Bias,
-		"conviction":         doc.Conviction,
-		"draw_name":          doc.Draw.Name,
-		"draw_px":            doc.Draw.Px,
-		"invalidation_px":    doc.Invalidation.Px,
-		"invalidation_basis": doc.Invalidation.Basis,
-		"invalidated_at":     doc.InvalidatedAt,
-		"narrative":          doc.Narrative,
-		"weekly_levels":      doc.WeeklyLevels,
-		"thin_history":       doc.ThinHistory,
+	// CLASS 50 (refs-only wave): the chip renders refs only. The legacy bias
+	// fields are dropped from the payload entirely — the frontend has no
+	// directional field to render anymore.
+	payload := gin.H{
+		"refs_only":     true,
+		"narrative":     doc.Narrative,
+		"weekly_levels": doc.WeeklyLevels,
+		"thin_history":  doc.ThinHistory,
+		"shadow_bias":   doc.ShadowBias,
 	}
+	for _, l := range doc.WeeklyLevels {
+		if strings.EqualFold(strings.TrimSpace(l.Name), "PWH") && l.Px > 0 {
+			payload["pwh"] = l.Px
+		}
+		if strings.EqualFold(strings.TrimSpace(l.Name), "PWL") && l.Px > 0 {
+			payload["pwl"] = l.Px
+		}
+	}
+	return payload
 }
 
 // planOverlayMu serializes the read-fold-test-append span of an overlay write so

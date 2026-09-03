@@ -59,7 +59,7 @@ func TestDefaultRegistryReadTimesOpenMinus30(t *testing.T) {
 func TestSundayAsiaDeferred(t *testing.T) {
 	asia := &kernel.SessionDef{Name: kernel.SessionAsia}
 	ny := &kernel.SessionDef{Name: kernel.SessionNY}
-	doc := &kernel.WeeklyDoc{Bias: "neutral"}
+	doc := &kernel.WeeklyDoc{WeeklyLevels: []kernel.WeeklyLevel{{Name: "PWH", Px: 1}, {Name: "PWL", Px: 1}}, Narrative: "facts"}
 	// Sunday 16:30, no weekly doc → deferred.
 	if !sundayAsiaDeferred(asia, ct(16, 30, time.Sunday), nil) {
 		t.Fatal("Sunday ASIA with no weekly doc must defer")
@@ -97,7 +97,7 @@ func TestWeeklyDocCachedNegativeNotSticky(t *testing.T) {
 		t.Fatal("no doc yet — must return nil")
 	}
 	monday := kernel.WeekGoverningMonday(now).Format("2006-01-02")
-	doc := kernel.WeeklyDoc{Bias: "neutral", InvalidatedAt: "2026-08-30 17:07 CT"}
+	doc := kernel.WeeklyDoc{WeeklyLevels: []kernel.WeeklyLevel{{Name: "PWH", Px: 1}, {Name: "PWL", Px: 1}}, Narrative: "facts"}
 	b, _ := json.Marshal(doc)
 	if _, err := st.Plan().AppendPlan(&store.PlanDB{
 		PlanID:        st.Plan().ResolvePlanID(monday, "WEEKLY", at.id),
@@ -114,7 +114,7 @@ func TestWeeklyDocCachedNegativeNotSticky(t *testing.T) {
 	if got == nil {
 		t.Fatal("negative result must NOT be cached — the landed doc must be returned on the next call")
 	}
-	if got.InvalidatedAt != "2026-08-30 17:07 CT" {
-		t.Fatalf("doc round-trip wrong: %+v", got)
+	if len(got.WeeklyLevels) != 2 || got.WeeklyLevels[0].Name != "PWH" || got.WeeklyLevels[1].Name != "PWL" {
+		t.Fatalf("doc round-trip wrong (class 50 refs-only): %+v", got)
 	}
 }
