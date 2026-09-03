@@ -67,7 +67,10 @@ func TestPlannerPromptT2CautionIsNeverNoTrade(t *testing.T) {
 	p := BuildPlannerPrompt(in)
 	for _, want := range []string{
 		"Treasury Sec Bessent Speaks", "caution — NOT a no-trade blackout",
-		"CPI", "HARD no-trade blackout — MUST be added to no_trade",
+		// SUPERSEDED (2026-09-03): the tag used to ORDER the author to add T1
+		// blackouts to no_trade, which the dictated instruction now forbids.
+		// The blackout is still marked HARD and still reaches the model.
+		"CPI", "HARD no-trade blackout — the machine writes and enforces it",
 		"T2 caution event is NEVER added to no_trade",
 	} {
 		if !strings.Contains(p, want) {

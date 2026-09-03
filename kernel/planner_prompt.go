@@ -553,7 +553,10 @@ func BuildPlannerPrompt(in PlannerInput) string {
 		for _, e := range in.Calendar {
 			tag := "caution — NOT a no-trade blackout; keep trading with normal discretion"
 			if e.Impact == "T1" {
-				tag = "HARD no-trade blackout — MUST be added to no_trade"
+				// The dictated no_trade instruction (2026-09-03) says the
+				// machine enforces T1 blackouts regardless and the author must
+				// not list them. This tag used to order the opposite.
+				tag = "HARD no-trade blackout — the machine writes and enforces it; stand aside around it"
 			}
 			fmt.Fprintf(&b, "  %s %s %s — %s (%s)\n", e.TimeCT, e.Currency, e.Impact, e.Title, tag)
 		}
@@ -617,7 +620,11 @@ func BuildPlannerPrompt(in PlannerInput) string {
 	// A3 — no-trade gates (≤8 lines, advisory — the plan declares them; the
 	// executor still sees every cycle).
 	lunchStartCT, lunchEndCT := LunchWindowCT()
-	b.WriteString("## No-trade gates (advisory — declare in no_trade or skip the day)\n")
+	// The header used to read "advisory — declare in no_trade or skip the day"
+	// over a list that includes the machine's hard-gated lunch window and
+	// Tier-1 news. That ordered the author to restate exactly what the
+	// no_trade instruction now forbids, and a header is read before a rule.
+	b.WriteString("## No-trade gates (the machine enforces the windows below; the rest are yours to weigh — skip the day if they stack up)\n")
 	b.WriteString("  - balance-day (open inside prior value area AND VAs overlap) → edges-only, or skip\n")
 	b.WriteString("  - opening gap >1.2×ATR or open outside the prior range → NEVER fade; the gap is a target\n")
 	b.WriteString(fmt.Sprintf("  - no A/B zone in reach AND no pool swept by %s CT → declare the skip in the plan\n", ETtoCT("10:30")))

@@ -120,41 +120,28 @@ func TestClass38DeathFlipVocabularyIsDeclared(t *testing.T) {
 	}
 }
 
-// NO-TRADE BAND (2026-09-02) — the contract row for the no_trade field.
+// NO-TRADE BAND (2026-09-02, rewritten under the 2026-09-03 ruling) — the
+// prompt must STATE the machine's lunch window, resolved, so the author knows
+// it exists.
 //
-// The schema example and the rule sentence used to hardcode "first 5m" and
-// "12:00-13:30 CT lunch": a third and fourth copy of windows that the entry
-// gate and the adherence grader own. A copy in the prompt is the worst place
-// for one, because nothing fails when it drifts — the model simply learns a
-// window the machine does not enforce and writes it onto the card.
+// SUPERSEDED SPEC: this used to require the OUTPUT CONTRACT to state the
+// windows, on the reasoning that "the model cannot list a window it was not
+// shown". The ruling inverted that — the model must not list them at all — so
+// what survives is the weaker and still necessary claim: the window is stated
+// somewhere in the prompt, and it comes from the resolver rather than a typed
+// copy. Where it is stated is the no-trade gate block.
 func TestNoTradeContractRendersResolvedWindows(t *testing.T) {
-	prompt := plannerOutputContract(8, 5, true, true)
 	ls, le := LunchWindowCT()
-
-	// The rendered contract must state the RESOLVED windows...
-	for _, want := range []string{
-		fmt.Sprintf("first %dm", FirstNoTradeMinutes()),
-		fmt.Sprintf("%s-%s CT lunch", ls, le),
-	} {
-		if !strings.Contains(prompt, want) {
-			t.Errorf("the rendered contract never states %q — the model cannot list a window it was not shown", want)
-		}
+	prompt := BuildPlannerPrompt(PlannerInput{
+		TradeDate: "2026-09-03", Session: SessionNY, Price: 29000, DATR: 300,
+		Now: time.Date(2026, 9, 3, 8, 30, 0, 0, CTLocation()),
+	})
+	if !strings.Contains(prompt, "lunch "+ls+"–"+le+" CT") {
+		t.Errorf("the no-trade gate block does not state the lunch window %s–%s CT", ls, le)
 	}
-
-	// ...and must say the machine enforces them regardless, so a model that
-	// omits one has not disabled anything.
-	if !strings.Contains(prompt, "ENFORCED by the machine whether or not you list them") {
-		t.Error("the contract never tells the author these windows are enforced independently of what it writes")
-	}
-
-	// SUPERSEDED SPEC (owner ruling 2026-09-03): this used to require the
-	// SCHEMA EXAMPLE to carry the resolved bounds too. Demonstrating the
-	// machine's windows is exactly what taught the model to restate them
-	// (ASIA v14), so the example is a placeholder now and only the SENTENCE
-	// carries the resolved values — which still has to be derived, not typed.
-	origLs, origLe := LunchWindowCT()
-	if !strings.Contains(NoTradeInstruction(), origLs) || !strings.Contains(NoTradeInstruction(), origLe) {
-		t.Fatal("the no_trade instruction sentence is not derived from LunchWindowCT")
+	// Derived, not typed: moving the definition must move the prompt.
+	if !strings.Contains(prompt, ls) || !strings.Contains(prompt, le) {
+		t.Fatal("the prompt's lunch window is not derived from LunchWindowCT")
 	}
 }
 
@@ -238,9 +225,9 @@ func TestNoTradeExampleDoesNotDemonstrateMachineWindows(t *testing.T) {
 	if !strings.Contains(ex, "no_trade") {
 		t.Errorf("the example must still name the field: %s", ex)
 	}
-	// The sentence stays: it is what tells the author the windows are enforced
-	// whether or not it lists them.
-	if !strings.Contains(NoTradeInstruction(), "ENFORCED by the machine whether or not you list them") {
+	// The sentence stays — in its 2026-09-03 wording, which no longer names a
+	// window either (see TestNoTradeInstructionNamesNoMachineWindow).
+	if !strings.Contains(NoTradeInstruction(), "do not list them") {
 		t.Error("the instruction sentence must survive the example change")
 	}
 }
@@ -265,3 +252,65 @@ func TestPromptStatesNoUntypedEasternTimes(t *testing.T) {
 
 // etTime matches an "HH:MM ET" / "HH:MM–HH:MM ET" wall clock.
 var etTime = regexp.MustCompile(`\d{1,2}:\d{2}(\s*[–-]\s*\d{1,2}:\d{2})?\s*ET\b`)
+
+// RIDER (owner ruling 2026-09-03, seam closed) — the no_trade INSTRUCTION must
+// not name a machine window either.
+//
+// The example stopped demonstrating them, but the sentence still opened
+// "no_trade may contain ONLY the fixed session windows (first 5m, 12:00-13:30
+// CT lunch) plus T1 HARD-blackout lines" — naming as permitted content exactly
+// what the machine writes. Example and sentence were saying different things,
+// which is the same trap one layer down.
+func TestNoTradeInstructionNamesNoMachineWindow(t *testing.T) {
+	ins := NoTradeInstruction()
+	ls, le := LunchWindowCT()
+	for _, tok := range []string{
+		fmt.Sprintf("first %dm", FirstNoTradeMinutes()),
+		ls, le, "lunch",
+	} {
+		if strings.Contains(strings.ToLower(ins), strings.ToLower(tok)) {
+			t.Errorf("the no_trade instruction names the machine window token %q — the machine writes it, so naming it here invites the model to restate it.\n  instruction: %s", tok, ins)
+		}
+	}
+	// What it MUST still say: the windows apply regardless, and the field is
+	// the model's own.
+	for _, want := range []string{"enforces", "regardless", "do not list them", "your OWN"} {
+		if !strings.Contains(ins, want) {
+			t.Errorf("the instruction dropped %q — without it the author is not told the windows apply anyway.\n  instruction: %s", want, ins)
+		}
+	}
+	// The window itself is still STATED in the prompt, in the no-trade gate
+	// block — the author must know it exists, just not be told to write it.
+	prompt := BuildPlannerPrompt(PlannerInput{
+		TradeDate: "2026-09-03", Session: SessionNY, Price: 29000, DATR: 300,
+		Now: time.Date(2026, 9, 3, 8, 30, 0, 0, CTLocation()),
+	})
+	if !strings.Contains(prompt, ls+"–"+le+" CT") {
+		t.Errorf("the rendered prompt no longer states the lunch window ANYWHERE — the author must still know it exists")
+	}
+}
+
+// RIDER — the no-trade GATE BLOCK must not order the model to declare the
+// machine's own gates.
+//
+// Found while closing the instruction seam: the block header read "## No-trade
+// gates (advisory — declare in no_trade or skip the day)" over a list whose
+// items include the machine's hard-gated lunch window and Tier-1 news. Telling
+// the author to declare that list in no_trade is the same instruction the
+// sentence below now forbids, one layer up, and a header is read before a rule.
+func TestNoTradeGateBlockDoesNotOrderDeclaration(t *testing.T) {
+	prompt := BuildPlannerPrompt(PlannerInput{
+		TradeDate: "2026-09-03", Session: SessionNY, Price: 29000, DATR: 300,
+		Now: time.Date(2026, 9, 3, 8, 30, 0, 0, CTLocation()),
+	})
+	if strings.Contains(prompt, "declare in no_trade") {
+		t.Error(`the gate block still says "declare in no_trade" over a list containing machine-enforced gates — the instruction says do not list them`)
+	}
+	// The gates themselves must still be visible; only the order to restate
+	// them is gone.
+	for _, want := range []string{"No-trade gates", "balance-day", "Tier-1 news"} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("the gate block lost %q — the author must still see the gates", want)
+		}
+	}
+}
