@@ -1,10 +1,15 @@
 package trader
 
 import (
+	"fmt"
+	"math"
 	"strings"
 	"testing"
+	"time"
 
 	"nofx/kernel"
+	"nofx/market"
+	"nofx/store"
 )
 
 // ── CLASS 48 PIN TESTS ─────────────────────────────────────────────────────
@@ -192,5 +197,85 @@ func TestEntryGateDecisionBuilderRefusesRRAtLivePrice(t *testing.T) {
 	}
 	if !strings.Contains(reason, "R:R 1.09") {
 		t.Fatalf("decision builder refusal should name R:R 1.09; got %q", reason)
+	}
+}
+
+// ── NO-TRADE-RIDER (2026-09-03) — one gate, ONE ATR5m resolver ─────────────
+
+func TestEntryGatePin36640MinSLPassesAtArmSeamATR(t *testing.T) {
+	// Decision record 36640 (09-02 18:48:49): open_short SL 29231 TP 29149,
+	// refused by the old wiring with "25.25 < 450.56 = 1.5×ATR5m" (dATR 300.4).
+	// At the arm seam's ATR5m=12.78 from the same minutes (journal 18:45-18:47),
+	// the floor is 19.17 and the 25.25pt stop PASSES.
+	base := EntryIntent{
+		Path: "decision", Action: "open_short", Symbol: "MNQ",
+		Entry: 29205.75, Stop: 29231.00, Target: 29149.00,
+		MinRR: 2.0, MinSLMult: 1.5,
+	}
+	pass := base
+	pass.ATR5m = 12.78 // the arm seam's measured value that evening
+	if reason, refused := EntryGate(pass); refused {
+		t.Fatalf("36640 intent must PASS min-SL at ATR5m=12.78 (floor 19.17 < 25.25); got %q", reason)
+	}
+	old := base
+	old.ATR5m = 300.4 // the DAILY ATR the old wiring read (→ floor 450.60)
+	reason, refused := EntryGate(old)
+	if !refused || !strings.Contains(reason, "450.60") {
+		t.Fatalf("36640 intent at dATR 300.4 must be refused with the 450.60 floor (the current-code failure); got refused=%v %q", refused, reason)
+	}
+}
+
+func TestArmSeamATR5mIsTheOneResolver(t *testing.T) {
+	// Fixture provider: the SAME 1m bars both seams resolve against.
+	fixture := make([]market.Kline, 120)
+	now := time.Now().Add(-2 * time.Hour)
+	px := 29200.0
+	for i := range fixture {
+		px += math.Sin(float64(i)/5) * 3.5
+		fixture[i] = market.Kline{OpenTime: now.Add(time.Duration(i) * time.Minute).UnixMilli(),
+			Open: px, High: px + 4, Low: px - 4, Close: px, Volume: 10}
+	}
+	orig := market.FuturesBarsProvider
+	market.FuturesBarsProvider = func(symbol string, interval string, count int) []market.Kline {
+		return fixture
+	}
+	t.Cleanup(func() { market.FuturesBarsProvider = orig })
+
+	got := armSeamATR5m("MNQ")
+	want := armSeamATR5mFromBars(fixture)
+	if got == 0 || math.Abs(got-want) > 1e-9 {
+		t.Fatalf("armSeamATR5m must BE the arm-seam expression: got %.4f want %.4f", got, want)
+	}
+	// Same tick, both seams: an intent whose stop is just inside the floor must
+	// be refused with the SAME floor by the decision path builder that the
+	// pure gate fed from the resolver would quote.
+	at := &AutoTrader{id: "pin-test"}
+	if got == 0 {
+		t.Skip("ATR fixture degenerate; skipping floor-equality half")
+	}
+	floor := 1.5 * got
+	live := 29200.0
+	wantDist := 0.95 * floor // sub-floor → min-SL leg must fire
+	d := &kernel.Decision{Action: "open_short", Symbol: "MNQ",
+		StopLoss: live + wantDist, TakeProfit: live - 3*wantDist}
+	reason, refused := at.entryGateForDecision(d, live)
+	if !refused {
+		t.Fatalf("decision path must refuse the sub-floor stop; got allow")
+	}
+	if !strings.Contains(reason, fmt.Sprintf("%.2f", floor)) {
+		t.Fatalf("decision-path refusal must quote the same floor %.2f; got %q", floor, reason)
+	}
+}
+
+func TestEntryGateDecisionTelemetryNoDoublePrefix(t *testing.T) {
+	at := &AutoTrader{id: "pin-test"}
+	ar := &store.DecisionAction{}
+	entryGateDecisionTelemetry(at, ar, "entry_gate: R:R 1.42 below floor 2.00")
+	if ar.Error != "entry_gate: R:R 1.42 below floor 2.00" {
+		t.Fatalf("prefixed reason must pass through once; got %q", ar.Error)
+	}
+	entryGateDecisionTelemetry(at, ar, "R:R 1.42 below floor 2.00")
+	if ar.Error != "entry_gate: R:R 1.42 below floor 2.00" {
+		t.Fatalf("unprefixed reason must gain exactly one prefix; got %q", ar.Error)
 	}
 }

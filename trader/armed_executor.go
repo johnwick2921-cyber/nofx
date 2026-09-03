@@ -245,10 +245,9 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 	if market.FuturesBarsProvider != nil {
 		bars = market.FuturesBarsProvider(at.futuresSymbol(), kernel.AISVPBarInterval, kernel.AISVPBarCount)
 	}
-	atr5m := 0.0
-	if len(bars) > 0 {
-		atr5m = market.ExportCalculateATR(kernel.AcceptanceBars(bars, "2x5m"), 14)
-	}
+	// One ATR5m math, both seams (no-trade-rider 2026-09-03): the SAME 5m ATR
+	// the decision path's EntryGate reads — never PlanDATRFor (DAILY ATR).
+	atr5m := armSeamATR5mFromBars(bars)
 	minQuality := ""
 	if dp := at.dayPlanCfg(); dp != nil {
 		minQuality = dp.MinScenarioQualityFor(plan.Session)
