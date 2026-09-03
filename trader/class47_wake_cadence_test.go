@@ -85,7 +85,7 @@ func TestClass47StaleArmExpiry(t *testing.T) {
 
 // ── F1/F2 — WARN-FIRST: the line is logged and the wake still PROCEEDS ──────
 
-func TestClass47CutoffAndCooldownAreWarnFirst(t *testing.T) {
+func TestClass47CutoffAndCooldownEnforce(t *testing.T) {
 	if got := wakeCutoffMinutes(); got != 25 {
 		t.Fatalf("resolved cutoff = %d, want the shipped 25", got)
 	}
@@ -101,21 +101,25 @@ func TestClass47CutoffAndCooldownAreWarnFirst(t *testing.T) {
 		t.Fatalf("0 must disable the check, got %d", got)
 	}
 
-	// The lines say would_skip AND say the wake proceeds — the WARN-first contract.
+	// SUPERSEDED SPEC (owner ruling 2026-09-03): these lines used to say
+	// "would_skip … WARN-first: the wake PROCEEDS", and the assertion below
+	// forbade the word SKIPPED. The cutoffs enforce now, so the wording is
+	// inverted — the line must say the wake was skipped and must NOT claim it
+	// proceeded. The numbers, the counter n and the class tag are unchanged.
 	cut := wakeCutoffLine("NY", "seated OB(bull)·1h invalidated", 10, 25, 3)
-	for _, want := range []string{"⏱ wake would_skip", "10 min to flat", "cutoff 25m", "WARN-first: the wake PROCEEDS", "n=3", "class 47"} {
+	for _, want := range []string{"⏱ wake SKIPPED", "10 min to flat", "cutoff 25m", "n=3", "class 47"} {
 		if !strings.Contains(cut, want) {
 			t.Errorf("cutoff line %q missing %q", cut, want)
 		}
 	}
 	cool := wakeCooldownLine("NY", "fresh FVG", 12, 30, 7)
-	for _, want := range []string{"cooldown 12 min since the last wake-authored version", "cooldown 30m", "WARN-first: the wake PROCEEDS", "n=7"} {
+	for _, want := range []string{"⏱ wake SKIPPED", "cooldown 12 min since the last wake-authored version", "cooldown 30m", "n=7"} {
 		if !strings.Contains(cool, want) {
 			t.Errorf("cooldown line %q missing %q", cool, want)
 		}
 	}
-	if strings.Contains(cut, "SKIPPED") || strings.Contains(cool, "SKIPPED") {
-		t.Fatal("WARN-first lines must never claim the wake was skipped")
+	if strings.Contains(cut, "PROCEEDS") || strings.Contains(cool, "PROCEEDS") {
+		t.Fatal("an enforcing line must never claim the wake proceeded")
 	}
 }
 
@@ -238,5 +242,89 @@ func TestClass47CountersRecorded(t *testing.T) {
 	_ = st.SetSystemConfig(store.WakeCounterKey(tid, date, "ASIA", store.WakeWouldSkipCutoffKind), "not-a-number")
 	if got := store.WakeCounterCount(st, tid, date, "ASIA", store.WakeWouldSkipCutoffKind); got != 0 {
 		t.Fatalf("malformed must read 0, got %d", got)
+	}
+}
+
+// ── PROMOTION TO ENFORCE (owner ruling 2026-09-03) ──────────────────────────
+//
+// Class 47 shipped WARN-first: both cutoffs recorded what a suppression WOULD
+// have skipped and the wake ran anyway. One morning of live observation decided
+// it. On 2026-09-03 the two guards each caught a real case:
+//
+//   ⏱ wake would_skip: 24 min to flat (cutoff 25m) — 1h S/D zone Demand
+//     [29101.75–29187.25] on LONDON. WARN-first: the wake PROCEEDS.
+//   ⏱ wake would_skip: cooldown 21 min since the last wake-authored version
+//     (cooldown 30m) — seated Supply·1h invalidated
+//
+// The first wrote LONDON v2 at 08:15:44 for a session that flattens at 08:30 —
+// a max-reasoning read whose plan could never be entered. Both now SKIP.
+
+// THE PIN — today's 08:15 LONDON case. 24 minutes to flat, cutoff 25.
+func TestWakeCutoffEnforcedSkipsTheLondon0815Case(t *testing.T) {
+	d := WakeCadenceDecision{MinutesToFlat: 24, HaveFlat: true, CutoffMin: 25}
+	if !d.SkipForCutoff() {
+		t.Fatal("24 min to flat against a 25m cutoff must SKIP — this wrote LONDON v2 at 08:15:44 for an 08:30 flat")
+	}
+	if got := d.Reason(); !strings.Contains(got, "SKIPPED") {
+		t.Errorf("the line must say the wake was skipped, not that it proceeds: %q", got)
+	}
+	// the boundary belongs to the wake: exactly at the cutoff it still runs
+	if (WakeCadenceDecision{MinutesToFlat: 25, HaveFlat: true, CutoffMin: 25}).SkipForCutoff() {
+		t.Error("exactly at the cutoff the wake PROCEEDS — the rule is < cutoff")
+	}
+	// no readable flat → never skip; an unknown deadline is not a deadline
+	if (WakeCadenceDecision{MinutesToFlat: 0, HaveFlat: false, CutoffMin: 25}).SkipForCutoff() {
+		t.Error("an unreadable session window must not manufacture a skip")
+	}
+	// knob off
+	if (WakeCadenceDecision{MinutesToFlat: 1, HaveFlat: true, CutoffMin: 0}).SkipForCutoff() {
+		t.Error("cutoff=0 disables the check")
+	}
+}
+
+// THE PIN — today's 21-minute cooldown case against a 30-minute cooldown.
+func TestWakeCooldownEnforcedSkipsThe21MinuteCase(t *testing.T) {
+	d := WakeCadenceDecision{SinceLastWakeVersionMin: 21, HaveLastWakeVersion: true, CooldownMin: 30}
+	if !d.SkipForCooldown() {
+		t.Fatal("21 min since the last wake-authored version against a 30m cooldown must SKIP")
+	}
+	if got := d.Reason(); !strings.Contains(got, "SKIPPED") {
+		t.Errorf("the line must say skipped: %q", got)
+	}
+	if (WakeCadenceDecision{SinceLastWakeVersionMin: 30, HaveLastWakeVersion: true, CooldownMin: 30}).SkipForCooldown() {
+		t.Error("exactly at the cooldown the wake PROCEEDS — the rule is < cooldown")
+	}
+	// NO previous wake-authored version → nothing to cool down from
+	if (WakeCadenceDecision{SinceLastWakeVersionMin: 0, HaveLastWakeVersion: false, CooldownMin: 30}).SkipForCooldown() {
+		t.Error("with no prior wake-authored version there is no clock to be inside of")
+	}
+}
+
+// Only WAKES are governed. A scheduled read, a death re-plan and an owner reset
+// must be untouched — the ruling is explicit, and this is the assertion that
+// keeps a future edit from widening it.
+func TestWakeCadenceEnforcementGovernsWakesOnly(t *testing.T) {
+	for _, trigger := range []string{"NY_scheduled_read", "LONDON_scheduled_read", "death_replan", "owner_reset", "owner_reread", "sunday_weekly_read"} {
+		if WakeCadenceGoverns(trigger) {
+			t.Errorf("%q is not a wake — the cadence cutoffs must never apply to it", trigger)
+		}
+	}
+	for _, trigger := range []string{"level_event", "structure_mss"} {
+		if !WakeCadenceGoverns(trigger) {
+			t.Errorf("%q IS a wake and must be governed", trigger)
+		}
+	}
+}
+
+// The boot line must say ENFORCE now, from the resolvers.
+func TestWakeCadenceBootLineSaysEnforce(t *testing.T) {
+	line := WakeCadenceBootLine()
+	for _, want := range []string{"cutoff=25m(enforce)", "cooldown=30m(enforce)"} {
+		if !strings.Contains(line, want) {
+			t.Errorf("boot line missing %q:\n%s", want, line)
+		}
+	}
+	if strings.Contains(line, "WARN") {
+		t.Errorf("the boot line still claims WARN-first:\n%s", line)
 	}
 }

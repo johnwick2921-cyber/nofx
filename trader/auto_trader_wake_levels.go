@@ -262,43 +262,57 @@ func (at *AutoTrader) maybeWakePlannerOnLevelEvents(session, tradeDate string, r
 			ev.desc, session, tradeDate, now.Sub(at.lastPlannerWakeAt).Minutes(), cfg.WakeMinIntervalMinutes())
 		return
 	}
-	// ── CLASS 47 (2026-09-02) — CADENCE OBSERVATION, WARN-FIRST ──────────────
-	// F1/F2 do NOT suppress: they record what a suppression WOULD have skipped,
-	// so the owner rules on a week of counts rather than impressions. F3 DOES
-	// defer, because two concurrent max-reasoning streams is a cost with no
-	// upside (today 08:01:06 opened one while 07:51:06 was still running).
+	// ── CLASS 47 — CADENCE CUTOFFS, ENFORCING (owner ruling 2026-09-03) ──────
+	// Both cutoffs shipped WARN-first and recorded what a suppression WOULD
+	// have skipped. 2026-09-03 supplied the two cases that decided it: a wake
+	// with 24 min to flat wrote LONDON v2 at 08:15:44 for an 08:30 flat, and a
+	// wake 21 min after the previous wake-authored version wrote another. Both
+	// now RETURN.
+	//
+	// Wakes only: this whole path is reached from the level-event wake, and
+	// WakeCadenceGoverns pins that the trigger is one. Scheduled reads, death
+	// re-plans and owner resets never come through here.
+	dec := WakeCadenceDecision{
+		Session: session, Desc: ev.desc,
+		CutoffMin: wakeCutoffMinutes(), CooldownMin: wakeCooldownMinutes(),
+	}
 	if sess, okS := at.sessionRegistry(now).ActiveSession(now); okS {
-		if cutoff := wakeCutoffMinutes(); cutoff > 0 {
-			if mins, okM := minutesToSessionFlat(now, sess); okM && mins < cutoff {
-				n := 0
-				if at.store != nil {
-					if c, cerr := store.IncWakeCounter(at.store, at.id, tradeDate, session, store.WakeWouldSkipCutoffKind); cerr == nil {
-						n = c
-					} else {
-						at.logWarnf("⏱ wake cutoff counter write failed: %v", cerr)
-					}
-				}
-				at.logWarnf("%s", wakeCutoffLine(session, ev.desc, mins, cutoff, n))
-			}
+		dec.MinutesToFlat, dec.HaveFlat = minutesToSessionFlat(now, sess)
+	}
+	// Measured from the last WAKE-AUTHORED version, not the last wake ATTEMPT:
+	// a wake whose read failed or kept the active plan wrote nothing, so it must
+	// not start this clock (that is what makes it distinct from
+	// wake_min_interval_min above).
+	if dec.CooldownMin > 0 && at.store != nil {
+		if last, lerr := at.store.Plan().GetLatestPlanForTraderSession(tradeDate, session, at.id); lerr == nil && last != nil &&
+			WakeCadenceGoverns(last.TriggerReason) && !last.CreatedAt.IsZero() {
+			dec.SinceLastWakeVersionMin = int(now.Sub(last.CreatedAt).Minutes())
+			dec.HaveLastWakeVersion = true
 		}
 	}
-	if cd := wakeCooldownMinutes(); cd > 0 && at.store != nil {
-		// Measured from the last WAKE-AUTHORED version, not the last wake
-		// ATTEMPT: a wake whose read failed or kept the active plan never wrote
-		// anything, so it must not start this clock (that is what makes this
-		// distinct from wake_min_interval_min above).
-		if last, lerr := at.store.Plan().GetLatestPlanForTraderSession(tradeDate, session, at.id); lerr == nil && last != nil &&
-			last.TriggerReason == "level_event" && !last.CreatedAt.IsZero() {
-			if since := int(now.Sub(last.CreatedAt).Minutes()); since < cd {
-				n := 0
-				if c, cerr := store.IncWakeCounter(at.store, at.id, tradeDate, session, store.WakeWouldSkipCooldownKind); cerr == nil {
-					n = c
-				} else {
-					at.logWarnf("⏱ wake cooldown counter write failed: %v", cerr)
-				}
-				at.logWarnf("%s", wakeCooldownLine(session, ev.desc, since, cd, n))
+	if dec.SkipForCutoff() {
+		n := 0
+		if at.store != nil {
+			if c, cerr := store.IncWakeCounter(at.store, at.id, tradeDate, session, store.WakeWouldSkipCutoffKind); cerr == nil {
+				n = c
+			} else {
+				at.logWarnf("⏱ wake cutoff counter write failed: %v", cerr)
 			}
 		}
+		at.logWarnf("%s", wakeCutoffLine(session, ev.desc, dec.MinutesToFlat, dec.CutoffMin, n))
+		return
+	}
+	if dec.SkipForCooldown() {
+		n := 0
+		if at.store != nil {
+			if c, cerr := store.IncWakeCounter(at.store, at.id, tradeDate, session, store.WakeWouldSkipCooldownKind); cerr == nil {
+				n = c
+			} else {
+				at.logWarnf("⏱ wake cooldown counter write failed: %v", cerr)
+			}
+		}
+		at.logWarnf("%s", wakeCooldownLine(session, ev.desc, dec.SinceLastWakeVersionMin, dec.CooldownMin, n))
+		return
 	}
 	// F3 — a WAKE defers while ANY planner stream is open, in any trading
 	// session, for any trader in this process. SCHEDULED reads never defer: the
