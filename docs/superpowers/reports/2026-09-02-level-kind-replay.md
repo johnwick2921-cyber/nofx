@@ -249,3 +249,50 @@ CSVs (this branch, `docs/superpowers/reports/exports/2026-09-02-level-replay/`):
 `episodes.csv` (every episode: level id, kind, day, ordinal, k, Δ, band, entry side, exit side, outcome,
 bars to exit, MFE/MAE, session) · `per_kind.csv` · `bias_table.csv`.
 Scripts (outside the repo, per A1): `~/nofx-analysis/level-replay/{build_inputs,replay,bias_table}.py`.
+
+---
+
+# PART 2 — the 1h variant (daily-level kinds on the coarse tape)
+
+## 2.0 PRE-REGISTRATION — written 2026-09-02 ~19:20 CT, BEFORE any 1h replay ran
+
+Owner-directed follow-up (quoted intent): the deep pantry is daily/weekly; 1h
+goes back ~four-five months — a coarser replay of PDH/PDL/PDC/ONH/ONL at 1h is
+the only route to a verdict before October. **It is a coarser instrument and is
+stated as such everywhere.**
+
+- **Tape:** MNQ 1h, read-only query `SELECT open_time_ms,o,h,l,c,v FROM bars WHERE
+  symbol='MNQ' AND tf='1h'` → **2,000 bars, 2026-05-04 06:00 CT → 2026-09-02 17:00 CT**
+  (~4 months, not five — quoted). Completed session days (17:00 CT first bar,
+  ≥15:00 last bar, ≥20 bars): computed from the actual list; OOS split **first
+  60% / last 40% of that ordered list, fixed before looking**.
+- **Levels:** the five daily kinds ONLY — PDH / PDL / PDC / ONH / ONL — rebuilt
+  from 1h bars (coarser than the 1m reconstruction: intra-hour extremes are
+  hidden; stated). Definitions mirror Part 1. Scan-from 17:00 for all five.
+- **Instrument:** D1′ (`detectors.detect_symmetric_v2`) on 1h bars, `exit_on='close'`.
+  **H = 6 bars** (6 hours) primary; H=12 reported as sensitivity only.
+- **k re-calibration (pre-registered, the §0 procedure):** IID-shuffle the 1h bar
+  shapes (same `iid_shuffle`), run k ∈ {0.5, 1, 1.5, 2, 3, 4, 6} on the REAL 1h
+  level map; **PASS iff some k yields p(hold) within 0.50 ± 0.03**; the chosen k
+  is the one closest to 0.500, ties to larger k. If NO k passes, the instrument
+  is declared structurally biased at 1h and the real replay reports the
+  calibration curve with NO verdicts.
+- **Ambiguity:** ambiguous_span / ambiguous_horizon recorded and EXCLUDED from
+  the denominator; the ambiguous SHARE is quoted per kind and period (at 1h a
+  single bar spans both barriers far more often — expected).
+- **Verdict rule (identical to Part 1):** BEATS iff holdout n ≥ 200 AND Wilson
+  lower bound > that kind's stationary-bootstrap holdout baseline AND survives
+  BH q=0.05; DOES NOT if the interval overlaps; TOO FEW below n=200.
+  Baselines: stationary bootstrap on 1h shapes (mean block 10, 40 reps/day,
+  the real per-day level lines) + Osler random-level percentile (B=1000/day).
+- **Strata:** ordinal 1st / 2nd / 3rd+ per level per day; session windows
+  (ASIA 17:00–02:00 / LONDON 02:00–08:30 / NY 08:30–14:45 CT).
+- **Hypotheses:** H6 pooled holdout does not clear the 1h baseline · H7 PDL again
+  shows no hold edge · H8 ordinal again fails to decline (consumed touch) ·
+  H9 ONH/ONL indistinguishable from PDH/PDL.
+- **Grader:** the Part-1 ruling (nothing changes) stands UNLESS a kind BEATS on
+  holdout here; then that kind alone is proposed KEEP-with-evidence, no other
+  ladder term moves.
+
+**Nothing below this line was known when the criteria above were written.**
+
