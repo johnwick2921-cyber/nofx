@@ -2,6 +2,7 @@ package store
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -64,5 +65,39 @@ func TestGetOpenPositionBySymbolIsCaseInsensitiveOnSide(t *testing.T) {
 	// A genuinely different side still misses — the fix must not match everything.
 	if got, _ := ps.GetOpenPositionBySymbol("t1", "MNQ", "long"); got != nil {
 		t.Errorf("a LONG lookup must not find the SHORT row, got id %d", got.ID)
+	}
+}
+
+// WRITE CHOKEPOINT (owner ruling 2026-09-03) — armed_orders stores UPPERCASE
+// from now on, so the two tables stop disagreeing at the source.
+//
+// UPPER(side)=UPPER(?) fixes the READ. Canonicalizing at the write is class 28
+// proper: "one canonicalizer per identifier, called where the value ENTERS,
+// never at each comparison". Existing lowercase rows keep working through the
+// fold-insensitive read; new ones do not need it.
+func TestArmedOrderSideIsCanonicalizedAtWrite(t *testing.T) {
+	st, err := New(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+
+	for _, in := range []string{"short", "SHORT", " Short ", "long"} {
+		row := ArmedOrderDB{
+			TraderID: "t1", PlanID: "p:" + in, Version: 1, Session: "NY",
+			Scenario: "S1", Side: in, EntryPx: 29285, StopPx: 29362.5,
+			TargetPx: 29130, State: "armed",
+		}
+		if err := st.ArmedOrders().UpsertArm(&row); err != nil {
+			t.Fatalf("upsert %q: %v", in, err)
+		}
+		got, err := st.ArmedOrders().ListForPlan(row.PlanID)
+		if err != nil || len(got) != 1 {
+			t.Fatalf("read back %q: %v n=%d", in, err, len(got))
+		}
+		want := strings.ToUpper(strings.TrimSpace(in))
+		if got[0].Side != want {
+			t.Errorf("stored side for input %q = %q, want %q — canonicalize where the value ENTERS", in, got[0].Side, want)
+		}
 	}
 }

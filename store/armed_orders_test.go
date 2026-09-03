@@ -78,7 +78,11 @@ func TestUpsertArmReauthorizesTerminalRow(t *testing.T) {
 	if got.FillPrice != 0 || got.FillQuantity != 0 {
 		t.Fatalf("fill lineage not cleared: price=%v qty=%d", got.FillPrice, got.FillQuantity)
 	}
-	if got.Side != "short" || got.EntryPx != 105 || got.StopPx != 106 || got.Version != 4 {
+	// SUPERSEDED (class 28, owner ruling 2026-09-03): UpsertArm canonicalizes
+	// side to UPPERCASE at the write now, so armed_orders stops disagreeing
+	// with trader_positions. The input here is "short"; the stored value is
+	// "SHORT".
+	if got.Side != "SHORT" || got.EntryPx != 105 || got.StopPx != 106 || got.Version != 4 {
 		t.Fatalf("fresh prices not applied: %+v", got)
 	}
 	if got.ID != orig.ID {

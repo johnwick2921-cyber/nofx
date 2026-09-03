@@ -582,12 +582,28 @@ func RepairArmedLineage(st *store.Store, traderID string) int {
 		}
 		if stamped, _ := StampArmedLineageIfMatched(st, traderID, p.ID, p.Symbol, p.Side, p.EntryPrice); stamped {
 			n++
-			// The F grade was CAUSED by the missing linkage — clear
-			// it so the W5 analytics regrade the close with the
-			// armed-fill plan in hand (grade ≠ F is the STEP-7 proof).
-			if p.Status == "CLOSED" && p.AdherenceGrade == "F" {
+			// REGRADE RESET (owner ruling 2026-09-03) — keyed on "lineage
+			// was just stamped on this row", NEVER on a grade letter.
+			//
+			// The predecessor read `AdherenceGrade == "F"`. That is not an
+			// impossible value but a SUBSET: an uncited close grades base D
+			// and steps to F under either penalty (InNoTrade, !InKillzone),
+			// so the repair silently SUCCEEDED on penalised uncited rows
+			// (566, 571 → F) and silently FAILED on clean ones (580 → D) —
+			// which is why it survived, since a spot-check lands on a
+			// working case.
+			//
+			// Keying on the stamp is also the only correct rule: if lineage
+			// was just written onto this row, whatever grade it carries was
+			// computed WITHOUT that lineage and is stale by construction,
+			// whatever letter it happens to be. A row nothing stamps is not
+			// touched — 580 is uncited and has EARNED its D.
+			if p.Status == "CLOSED" && p.AdherenceGrade != "" {
 				if err := st.Position().SetAdherence(p.ID, ""); err != nil {
 					logger.Warnf("🩹 RepairArmedLineage: adherence reset failed (pos %d): %v", p.ID, err)
+				} else {
+					logger.Infof("🩹 RepairArmedLineage: pos %d lineage stamped (v%d %s) — grade %q cleared for regrading",
+						p.ID, p.PlanVersion, p.CitedScenarioID, p.AdherenceGrade)
 				}
 			}
 		}
