@@ -75,13 +75,21 @@ describe('RulesBlock no-trade band', () => {
       />
     )
     expect(container.textContent).not.toContain('17:00–17:05')
-    fireEvent.click(screen.getByRole('button'))
+    // two toggles exist now (spent windows, model notes) — name the one meant
+    fireEvent.click(
+      screen.getByRole('button', { name: /spent \/ other session/i })
+    )
     const text = container.textContent ?? ''
     expect(text).toContain('(17:00–17:05 CT) · spent')
     expect(text).toContain('(12:00–13:30 CT) · other session')
   })
 
-  it('demotes the model prose to notes when a band exists', () => {
+  it('demotes the model prose to notes, COLLAPSED by default', () => {
+    // SUPERSEDED SPEC (owner ruling 2026-09-03): this used to assert the prose
+    // rendered inline under a "Model notes" label. Inline was the defect — the
+    // ASIA card still printed the two dead windows, one line lower. The notes
+    // are a toggle now, so the assertion moves from "is present" to "is present
+    // only once asked for".
     const { container } = render(
       <RulesBlock
         noTrade={PROSE}
@@ -90,7 +98,11 @@ describe('RulesBlock no-trade band', () => {
         language="en"
       />
     )
-    expect(screen.getByText(/Model notes/i)).toBeTruthy()
+    const notes = screen.getByRole('button', { name: /model notes/i })
+    expect(container.textContent).not.toContain(
+      'no entries 12:00–13:30 CT (lunch)'
+    )
+    fireEvent.click(notes)
     expect(container.textContent).toContain('no entries 12:00–13:30 CT (lunch)')
   })
 
