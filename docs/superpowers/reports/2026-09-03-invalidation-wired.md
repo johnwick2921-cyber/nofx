@@ -477,3 +477,48 @@ A write on a branch almost nothing takes is not merely the equivalent of an
 unperformed read — **it is worse, because it produces a green proof.** Row 35
 would have looked like a pass had I asserted only "the stamp ran".
 
+---
+
+## 10. OPEN ITEMS — neither is in any shipped commit
+
+Named explicitly because they sit between lanes and a checklist entry is not a
+fix. Both need the owner.
+
+### 10.1 CODE — the reset predicate is still wrong
+
+`trader/ninjatrader/reconcile.go`:
+
+```go
+if p.Status == "CLOSED" && p.AdherenceGrade == "F" {
+```
+
+`95e9a4d0` and `664ab6b7` fix the STAMPING. Nothing fixes this line. It must key
+on **the absence of lineage** rather than on a grade letter that encodes lineage
+plus two unrelated penalties — and it must NOT simply also match `"D"`, because
+580 is a genuinely uncited close that deserves its D.
+
+Consequence if left: the stamping fixes stop new rows going unstamped; they do
+not stop a **late**-stamped row keeping a wrong grade. Every future clean uncited
+close repeats the defect. Class 59's third probe records the lesson; it does not
+change the line.
+
+Not in this wave's footprint (adherence belongs to the grader). **Owner call.**
+
+### 10.2 DATA — the 4 stuck rows, separate from 10.1
+
+**575, 584, 586, 591** already carry full lineage, so fixing 10.1 does not reach
+them: the reset only fires on rows the repair path visits. They need an
+owner-authorised DB write — scoped, idempotent, backed up first — and the
+backfill-versus-fix-forward question decided, since a silent backfill moves a
+published grade distribution (A 30 · B 22 · D 10 · C 5 · F 4, n=71).
+
+Neither nofx-89 nor I have written it, and neither of us should.
+
+### 10.3 STANDING WATCH — the row 582 could not be
+
+The armed-path question is **untested, not exonerated**. The discriminating
+observation is a future `armed_entry` close with `plan_matched=1` and grade
+**D**: base A cannot reach D, so that row would prove the ordering defect exists
+outside the reconcile path. Worth a standing watch rather than a re-derivation.
+
+Guard any re-derivation with the lineage clause — see the 572 trap above.
