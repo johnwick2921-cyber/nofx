@@ -213,3 +213,42 @@ arm resting, then the owner's explicit GO. A19 all three halves: `deploy/RELEASE
 written in `~/nofx` before the kill, the marker committed from that same tree
 after the boot line is observed, and the running binary preserved as
 `nofx-bin.old.<its own rev>` first.
+
+---
+
+## 8. BLOCKED — the main tree is mid-cutover under a dead lock (A23: measured, not touched)
+
+Measured at 22:12 CT, read-only. I did not touch `~/nofx`.
+
+| fact | value |
+|---|---|
+| `~/nofx-main.lock` | `owner=weekly-refs-deploy pid=976198 expiry=1788410353` |
+| PID 976198 | **DEAD** (`kill -0` fails); the lock does not expire for ~87 more minutes |
+| main tree HEAD | `1cee77a8` (class-50b), 7 commits ahead of `origin/dev`, **unpushed** |
+| `deploy/RELEASE` | `1cee77a8` — **uncommitted** (` M deploy/RELEASE`) |
+| running process | PID 1093919, `vcs.revision=56904ec1`, up 37 min |
+| `nofx-bin` | 56904ec1 (unchanged) |
+| `nofx-bin.next` | clean build of `1cee77a8`, `vcs.modified=false`, built 21:39 |
+| `nofx-bin.old.56904ec1…` | preserved 21:31 |
+
+**The hazard.** `RELEASE` claims `1cee77a8` while the process runs `56904ec1`.
+`kernel.AssertBootIntegrity` reads `deploy/RELEASE` relative to the unit's
+`WorkingDirectory=/home/hoang/nofx`, prefix-matches it against the embedded
+revision, and on mismatch latches `tradingRefused`. With `Restart=on-failure`,
+**any crash or host restart right now boots the bot into TradingRefused.** This
+is the exact failure mode recorded on 2026-09-02 07:32. **[A]** — read from the
+lock file, `ps`, `go version -m`, the unit and `boot_integrity.go`.
+
+The dead dispatch got as far as: build `.next`, preserve the old binary, write
+`RELEASE` and `GUIDE_BUILT_REV`. It never swapped and never killed.
+
+**Two safe resolutions, both the owner's call.** Finish that cutover (`mv` the
+staged `.next` in, kill, observe its boot line, commit `RELEASE` from the main
+tree), or revert `deploy/RELEASE` and `web/src/guide/types.ts` to `56904ec1` so
+the file matches the binary that is actually running. I have done neither.
+
+**Consequences for this wave.** My branch is off `origin/dev` (`0bba743b`) and
+does not contain the seven class-50 commits. `git merge-tree` against
+`1cee77a8` reports **zero conflicts**, so the rebase is clean whenever their
+wave boots. The checklist collision is already resolved: they took 51, this
+wave is 52.
