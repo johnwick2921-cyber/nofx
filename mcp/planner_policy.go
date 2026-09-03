@@ -27,6 +27,22 @@ func WatchdogPreTokenSeconds() int {
 	return envInt("AI_PLAN_WATCHDOG_PRE_SECS", 600, 30, 1200)
 }
 
+// EffectivePostTokenSeconds (owner ruling 2026-09-02) is the limit ACTUALLY in
+// force after the first token: the smaller of the resolver default and any
+// per-call override the planner passes. The 2026-09-02 20:50 fire reported
+// "limit 30s" while the boot line advertised post90s, because the planner
+// passes a 30 s idle and the tighter bound wins. Printing the default alone
+// was true of the resolver and false of the behaviour.
+//
+// override <= 0 means "no override" and the default stands.
+func EffectivePostTokenSeconds(overrideSecs int) int {
+	def := WatchdogPostTokenSeconds()
+	if overrideSecs > 0 && overrideSecs < def {
+		return overrideSecs
+	}
+	return def
+}
+
 // WatchdogPostTokenSeconds — the idle limit AFTER the first data byte,
 // measured since the last DATA delta (reasoning or content), NOT since the last
 // line. AI_PLAN_WATCHDOG_POST_SECS, default 90.
@@ -89,9 +105,16 @@ func PlannerClientPolicyLine() string {
 	if v, ok := ObservedKeepAlive(); ok {
 		observed = v.String()
 	}
-	return fmt.Sprintf("🛰 planner client: tries=%d backoff=%s keepalive_set=%s observed=%s watchdog=pre%ds/post%ds(data) resend_identical=%t serialize=%t storm_cap=%d trace=%t (class 46)",
+	// The planner's own per-call idle is the usual override; the EFFECTIVE
+	// limit is the tighter of the two and is what actually closes a stream.
+	eff := EffectivePostTokenSeconds(PlannerIdleOverrideSeconds())
+	effNote := ""
+	if eff != WatchdogPostTokenSeconds() {
+		effNote = fmt.Sprintf("→eff%ds", eff)
+	}
+	return fmt.Sprintf("🛰 planner client: tries=%d backoff=%s keepalive_set=%s observed=%s watchdog=pre%ds/post%ds%s(data) resend_identical=%t serialize=%t storm_cap=%d trace=%t (class 46)",
 		StreamRetryTries(), strings.Join(parts, "→"), DialerKeepAliveSet(), observed,
-		WatchdogPreTokenSeconds(), WatchdogPostTokenSeconds(),
+		WatchdogPreTokenSeconds(), WatchdogPostTokenSeconds(), effNote,
 		ResendIdenticalOnProviderFailure(), SerializeExecutorDuringPlannerStream(),
 		StormCapPerRead(), TransportTraceEnabled())
 }
@@ -103,4 +126,12 @@ func envInt(key string, def, lo, hi int) int {
 		}
 	}
 	return def
+}
+
+// PlannerIdleOverrideSeconds reports the per-call idle the planner passes
+// (AI_PLAN_STREAM_IDLE_SECS, default 30). Read here so the boot line's
+// effective figure comes from the same env the planner reads, with no import
+// cycle back into kernel.
+func PlannerIdleOverrideSeconds() int {
+	return envInt("AI_PLAN_STREAM_IDLE_SECS", 30, 1, 3600)
 }

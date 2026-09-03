@@ -1419,6 +1419,7 @@ func (at *AutoTrader) logPlannerClientBootLine() {
 	ai := mcp.EffectiveAIParamsSnapshot("")
 	at.logInfof("%s", plannerClientBootLine(at.config.AIModelID, kernel.PlannerStreamIdleSeconds(), kernel.PlannerStreamTotalSeconds(), ai.TimeoutSeconds, ai.MaxRetries, ai.RetryBackoffSeconds, aiPlanMaxTokens()))
 	at.logInfof("%s", mcp.PlannerClientPolicyLine())
+	at.installWatchdogFireRecorder() // owner ruling 2026-09-02 — record every fire
 }
 
 // sundayAsiaDeferred (A2, owner ruling 2026-08-31) — the Sunday sequencing
@@ -1485,7 +1486,9 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 	var prevReason string
 	lastRaw := ""
 	forceReauthor := false
-	resendIdentical := ""                       // class 41 M0: the exact prompt a provider-failed attempt sent
+	resendIdentical := ""        // class 41 M0: the exact prompt a provider-failed attempt sent
+	resendAfterWatchdog := false // the prior attempt died on a watchdog close
+	resendStart := time.Time{}
 	for attempt := 1; attempt <= 3; attempt++ { // 1 + ≤2 retries
 		userPrompt := prompt
 		modeLabel := "author"
@@ -1518,6 +1521,14 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 			at.logInfof("🧩 planner attempt %d/3 %s: prompt ~%d tokens (full-author ~%d tokens)", attempt, modeLabel, estimatePromptTokens(userPrompt), estimatePromptTokens(prompt))
 		}
 		raw, err := call(userPrompt)
+		if resendAfterWatchdog && modeLabel == "resend-identical" {
+			note := "resend landed"
+			if err != nil {
+				note = mcp.ClassifyAIError(err)
+			}
+			at.recordWatchdogResend(err == nil, time.Since(resendStart), note)
+			resendAfterWatchdog = false
+		}
 		if err != nil && mcp.IsProviderFailure(err) {
 			// CLASS 41 M0: provider failure → the next attempt re-sends this
 			// exact prompt. No reject block, no rejected-prompt row (that table
@@ -1526,6 +1537,10 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 			// still repairs against the last real model output.
 			at.logWarnf("📐 planner attempt %d/3 failed on the provider (class=%s) — attempt %d re-sends the IDENTICAL prompt: %v", attempt, mcp.ClassifyAIError(err), attempt+1, err)
 			resendIdentical = userPrompt
+			// Owner ruling 2026-09-02 — remember a watchdog close so the NEXT
+			// attempt's outcome attaches to the open fire row.
+			resendAfterWatchdog = mcp.ClassifyAIError(err) == string(mcp.ClassIdle)
+			resendStart = time.Now()
 			if attempt == 3 {
 				lastErr = err
 			}

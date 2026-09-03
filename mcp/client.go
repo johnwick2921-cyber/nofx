@@ -1225,8 +1225,21 @@ func (client *Client) CallWithRequestStreamDeadlines(req *Request, onChunk func(
 					lim = postLimit
 				}
 				if client.Log != nil {
-					client.Log.Warnf("⏱ watchdog fired: %s gap=%.1fs (limit %v, call age %.1fs) — closing the stream (class=idle)",
-						mode, time.Since(last).Seconds(), lim, time.Since(callStart).Seconds())
+					client.Log.Warnf("⏱ watchdog fired: %s gap=%.1fs (limit %v, call age %.1fs, bytes=%d) — closing the stream (class=idle)",
+						mode, time.Since(last).Seconds(), lim, time.Since(callStart).Seconds(), client.lastReasoningChars.Load())
+				}
+				// OWNER RULING 2026-09-02 — every fire is RECORDED with its call
+				// age and the bytes already received, so a week of fires can be
+				// read as a table instead of grepped out of the journal. The
+				// resend outcome is attached later by the planner loop.
+				if h := watchdogFireHook.Load(); h != nil {
+					if fn, ok := h.(func(WatchdogFire)); ok && fn != nil {
+						fn(WatchdogFire{
+							Mode: mode, GapMs: time.Since(last).Milliseconds(),
+							LimitMs: lim.Milliseconds(), CallAgeMs: time.Since(callStart).Milliseconds(),
+							Bytes: client.lastReasoningChars.Load(),
+						})
+					}
 				}
 				cancel(ErrWatchdogIdle) // distinct from a peer EOF — see ErrWatchdogIdle
 				return
@@ -1561,3 +1574,19 @@ func ResetStormCounterFor(c AIClient) {
 		bc.BaseClient().ResetStormCounter()
 	}
 }
+
+// WatchdogFire is one fire's measurements, handed to the recorder hook.
+type WatchdogFire struct {
+	Mode      string
+	GapMs     int64
+	LimitMs   int64
+	CallAgeMs int64
+	Bytes     int64
+}
+
+// watchdogFireHook is set once by the trader layer so mcp never imports store.
+// nil = nothing recorded (tests, agent paths) — the log line still prints.
+var watchdogFireHook atomic.Value
+
+// SetWatchdogFireHook installs the recorder. Safe to call more than once.
+func SetWatchdogFireHook(fn func(WatchdogFire)) { watchdogFireHook.Store(fn) }
