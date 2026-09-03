@@ -549,6 +549,18 @@ func StampArmedLineageIfMatched(st *store.Store, traderID string, posID int64, s
 		if strings.HasSuffix(r.StateReason, ";stamp_pending") {
 			_ = st.ArmedOrders().SetState(r.ID, "filled", strings.TrimSuffix(r.StateReason, ";stamp_pending"))
 		}
+		// F3 GAP (2026-09-03, found via nofx-89's 09-01 audit): fill_quantity is
+		// stamped HERE too. The fill-time stamp in stampArmedFillLineage returns
+		// early on this very path — the position row is not materialized when the
+		// fill frame lands — so stamping only there covered the minority case.
+		// The 09-01 audit recorded 584 of 586 armed fills carrying
+		// ";stamp_pending", and armed row 35 today took the same path and still
+		// reads fill_quantity=0 with the stamp live.
+		if qty := st.Position().QuantityOf(posID); qty > 0 {
+			if err := st.ArmedOrders().SetFillQuantity(r.ID, int(qty)); err != nil {
+				logger.Warnf("🧩 reconcile: armed fill-quantity stamp failed (row %d): %v", r.ID, err)
+			}
+		}
 		logger.Infof("🧩 reconcile: armed-fill lineage stamped — pos %d ← %s v%d %s (fill %.2f, entry_id %s)", posID, r.PlanID, r.Version, r.Scenario, armedFillPriceFor(r), r.SignalID)
 		return true, r.SignalID
 	}
