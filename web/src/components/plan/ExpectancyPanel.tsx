@@ -12,6 +12,7 @@
 
 import { useEffect, useState } from 'react'
 import { planApi } from '../../lib/api/plan'
+import { InstrumentsDrawer } from './InstrumentsDrawer'
 
 interface Cell {
   key: {
@@ -89,7 +90,7 @@ const label = (k: Cell['key']) =>
     .filter(Boolean)
     .join(' · ') || 'all'
 
-export function ExpectancyPanel() {
+export function ExpectancyPanel({ traderId }: { traderId?: string }) {
   const [data, setData] = useState<Payload | null>(null)
   const [open, setOpen] = useState<Record<number, boolean>>({})
 
@@ -311,6 +312,12 @@ export function ExpectancyPanel() {
           ))}
         </div>
       )}
+
+      {/* The three DESCRIPTIVE instruments, folded and collapsed: none of them
+          currently supports a decision, and giving them the weight of the table
+          above would imply otherwise. The main table and the E8 block are
+          deliberately untouched. */}
+      <InstrumentsDrawer traderId={traderId} expectancyRows={data.rows} />
     </div>
   )
 }
