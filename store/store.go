@@ -37,6 +37,7 @@ type Store struct {
 	abConfirm       *AbConfirmStore
 	plannerRejected *PlannerRejectedStore
 	configChanges   *ConfigChangeStore
+	watchdogFires   *WatchdogFireStore
 	levelStats      *LevelStatsStore
 	touchEpisodes   *TouchEpisodeStore
 	calendarSlice   *CalendarSliceStore
@@ -396,6 +397,16 @@ func (s *Store) ArmedOrders() *ArmedOrderStore {
 
 // PlannerRejected returns the rejected-planner-prompt store (lazy, planner-speed
 // wave 1.4).
+// WatchdogFires — the stream-watchdog fire log (owner ruling 2026-09-02).
+func (s *Store) WatchdogFires() *WatchdogFireStore {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.watchdogFires == nil {
+		s.watchdogFires = NewWatchdogFireStore(s.gdb)
+	}
+	return s.watchdogFires
+}
+
 // ConfigChanges (REPAIR-PARSE E5) — the per-save resolved-knob diff.
 func (s *Store) ConfigChanges() *ConfigChangeStore {
 	s.mu.Lock()

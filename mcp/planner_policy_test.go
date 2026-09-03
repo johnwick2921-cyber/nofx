@@ -45,8 +45,15 @@ func TestClass46BootLineEveryFieldReadFromEnforcer(t *testing.T) {
 		t.Errorf("backoff not read from StreamRetryBackoffSchedule():\n%s", line)
 	}
 	// watchdog carries BOTH resolved timers and says it measures data.
-	if !strings.Contains(line, fmt.Sprintf("watchdog=pre%ds/post%ds(data)", WatchdogPreTokenSeconds(), WatchdogPostTokenSeconds())) {
+	// The line carries the resolver default and, when an override is tighter,
+	// the EFFECTIVE limit too (owner ruling 2026-09-02).
+	wantWatchdog := fmt.Sprintf("watchdog=pre%ds/post%ds", WatchdogPreTokenSeconds(), WatchdogPostTokenSeconds())
+	if !strings.Contains(line, wantWatchdog) {
 		t.Errorf("watchdog fields not read from their resolvers:\n%s", line)
+	}
+	if eff := EffectivePostTokenSeconds(PlannerIdleOverrideSeconds()); eff != WatchdogPostTokenSeconds() &&
+		!strings.Contains(line, fmt.Sprintf("→eff%ds", eff)) {
+		t.Errorf("a tighter override must show its effective limit:\n%s", line)
 	}
 	// The observed keepalive is honest about being unobserved.
 	if _, ok := ObservedKeepAlive(); !ok && !strings.Contains(line, "observed=n/a") {
@@ -65,7 +72,7 @@ func TestClass46BootLineTracksTheResolvers(t *testing.T) {
 	if moved == base {
 		t.Fatal("the boot line did not change when its resolvers did — a field is a literal")
 	}
-	for _, want := range []string{"storm_cap=9", "post45s(data)", "tries=4", "trace=false"} {
+	for _, want := range []string{"storm_cap=9", "post45s", "tries=4", "trace=false"} {
 		if !strings.Contains(moved, want) {
 			t.Errorf("want %q in\n%s", want, moved)
 		}
@@ -280,5 +287,38 @@ func TestClass46TraceNamesWhoClosed(t *testing.T) {
 	}
 	if !strings.Contains(line, "closed_by=local_close") || !strings.Contains(line, "cause=") {
 		t.Fatalf("our own watchdog close must read local_close with its cause: %q", line)
+	}
+}
+
+// OWNER RULING 2026-09-02 — the boot line must carry the EFFECTIVE post-token
+// limit, not just the resolver default. The first live fire logged "limit 30s"
+// while the line advertised post90s: the planner's 30 s override is tighter and
+// is what actually closes the stream.
+func TestClass46EffectivePostTokenOnBootLine(t *testing.T) {
+	t.Setenv("AI_PLAN_WATCHDOG_POST_SECS", "90")
+	t.Setenv("AI_PLAN_STREAM_IDLE_SECS", "30")
+	if got := EffectivePostTokenSeconds(PlannerIdleOverrideSeconds()); got != 30 {
+		t.Fatalf("effective = %d, want the tighter 30", got)
+	}
+	line := PlannerClientPolicyLine()
+	if !strings.Contains(line, "post90s→eff30s(data)") {
+		t.Fatalf("the line must show BOTH the default and the effective limit:\n%s", line)
+	}
+	// No override tighter than the default → no arrow, no noise.
+	t.Setenv("AI_PLAN_STREAM_IDLE_SECS", "300")
+	if got := EffectivePostTokenSeconds(PlannerIdleOverrideSeconds()); got != 90 {
+		t.Fatalf("a looser override must not widen the default: %d", got)
+	}
+	if l2 := PlannerClientPolicyLine(); strings.Contains(l2, "→eff") {
+		t.Fatalf("no arrow when the default already governs:\n%s", l2)
+	}
+	// Both values are READ: move the default and the line moves.
+	t.Setenv("AI_PLAN_WATCHDOG_POST_SECS", "45")
+	t.Setenv("AI_PLAN_STREAM_IDLE_SECS", "20")
+	if l3 := PlannerClientPolicyLine(); !strings.Contains(l3, "post45s→eff20s(data)") {
+		t.Fatalf("both halves must be read from their resolvers:\n%s", l3)
+	}
+	if EffectivePostTokenSeconds(0) != 45 {
+		t.Fatal("override 0 means no override")
 	}
 }
