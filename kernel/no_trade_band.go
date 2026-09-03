@@ -229,17 +229,37 @@ func RenderNoTradeBand(doc *PlanDoc, sess *SessionDef, now time.Time) []Rendered
 // ("first 5m (CT)", "12:00-13:30 CT lunch"): a second copy of the definitions,
 // in the one place nothing would ever fail if it drifted.
 func NoTradeSchemaExample() string {
-	ls, le := LunchWindowCT()
-	return fmt.Sprintf(`  "no_trade": ["first %dm (CT)", "%s-%s CT lunch", "<calendar blackouts>"],`,
-		FirstNoTradeMinutes(), ls, le)
+	return `  "no_trade": ["<your own sit-out conditions, or omit>"],`
+}
+
+// ETtoCT converts an "HH:MM" Eastern wall clock to Central. America/New_York
+// and America/Chicago change offset on the same instants, so the gap is always
+// exactly one hour and this needs no date.
+//
+// It exists so the prompt can keep advisory windows that the research states in
+// ET while printing them in the ONE clock the prompt declares. The clock line
+// says every time in the prompt is CT; before this, three lines printed ET, and
+// a model reading "10:30 ET" as CT is an hour out.
+func ETtoCT(hhmm string) string {
+	m, ok := hhmmToMinK(hhmm)
+	if !ok {
+		return hhmm // unparseable: pass it through rather than invent a time
+	}
+	return HHMM(((m-60)%1440 + 1440) % 1440)
 }
 
 // NoTradeInstruction is the rule sentence governing what the model may put in
-// no_trade. Same resolved values, one sentence, no literals.
+// no_trade (owner ruling 2026-09-03, seam closed).
+//
+// It used to open "no_trade may contain ONLY the fixed session windows (first
+// 5m, 12:00-13:30 CT lunch) plus T1 HARD-blackout lines" — naming as permitted
+// content exactly what the machine writes. ASIA v14 came back carrying both.
+// Neither the example nor the sentence names a machine window now; the windows
+// are still STATED in the no-trade gate block, so the author knows they exist
+// and is simply not asked to repeat them.
+//
+// No resolved values appear here on purpose: there is nothing left to resolve.
 func NoTradeInstruction() string {
-	ls, le := LunchWindowCT()
-	return fmt.Sprintf(
-		"no_trade may contain ONLY the fixed session windows (first %dm, %s-%s CT lunch) plus T1 HARD-blackout lines from the calendar — a T2 caution event is NEVER added to no_trade and never stops entries. "+
-			"These windows are ENFORCED by the machine whether or not you list them, and the card renders the machine's own list; what you write here is read as your notes, so do not invent a window of your own. ",
-		FirstNoTradeMinutes(), ls, le)
+	return "no_trade: the machine enforces the session windows and T1 blackouts regardless; do not list them — no_trade is for your OWN sit-out conditions, or omit it. " +
+		"A T2 caution event is NEVER added to no_trade and never stops entries. "
 }

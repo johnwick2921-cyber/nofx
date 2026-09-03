@@ -53,7 +53,12 @@ type PlannerInput struct {
 	// Both empty/zero → the sections render nothing.
 	VoidBreakdownLevels []VoidBreakdownLevel
 	StopFloorATR5m      float64
-	StopFloorMult       float64
+	// LevelDisplacements (owner ruling 2026-09-03) — the MEASURED displacement
+	// of every seated level, from the validator's own BreakdownContinueState
+	// through ComputeLevelDisplacements. Empty → the blocks render nothing, so
+	// a cold cache degrades to the previous behaviour.
+	LevelDisplacements []LevelDisplacement
+	StopFloorMult      float64
 
 	// FreshFVGs (level-truth wave b2, 2026-08-27) — the machine's fresh-gap
 	// candidate list the planner may author fvg_entry from. Empty list means
@@ -403,8 +408,9 @@ func BuildPlannerPrompt(in PlannerInput) string {
 	fmt.Fprintf(&b, "## Session\ntrade_date %s · session %s · %s · price %.2f · dATR %.1f\n",
 		in.TradeDate, in.Session, in.ReadKind, in.Price, in.DATR)
 	if !in.Now.IsZero() {
-		fmt.Fprintf(&b, "clock %s — EVERY time in this prompt is CT (America/Chicago): session windows, read/flat times and the lunch no-trade (12:00–13:30 CT) are CT wall-clock. Never apply these numbers to a UTC clock.\n",
-			ClockCTAndUTC(in.Now))
+		cls, cle := LunchWindowCT() // a FOURTH copy of the window lived here
+		fmt.Fprintf(&b, "clock %s — EVERY time in this prompt is CT (America/Chicago): session windows, read/flat times and the lunch no-trade (%s–%s CT) are CT wall-clock. Never apply these numbers to a UTC clock.\n",
+			ClockCTAndUTC(in.Now), cls, cle)
 	}
 	if in.Warming != "" {
 		fmt.Fprintf(&b, "WARMING: %s (first-week honesty — narrate the machinery, not an edge).\n", in.Warming)
@@ -452,6 +458,10 @@ func BuildPlannerPrompt(in PlannerInput) string {
 	// never hold a second opinion. Empty inputs render nothing.
 	b.WriteString(RenderVoidBreakdownLevels(in.VoidBreakdownLevels, len(in.Levels)))
 	b.WriteString(RenderStopFloorLine(in.StopFloorATR5m, in.StopFloorMult))
+	// The waterfall floor, stated the same way the stop floor is: the number
+	// the validator judges by, and which levels can actually meet it.
+	b.WriteString(RenderDisplacementFloorLine(in.StopFloorATR5m))
+	b.WriteString(RenderDisplacementLines(in.LevelDisplacements, in.StopFloorATR5m))
 
 	b.WriteString("## Ranked levels (Go-graded; you never re-sort)\n")
 
@@ -552,7 +562,10 @@ func BuildPlannerPrompt(in PlannerInput) string {
 		for _, e := range in.Calendar {
 			tag := "caution — NOT a no-trade blackout; keep trading with normal discretion"
 			if e.Impact == "T1" {
-				tag = "HARD no-trade blackout — MUST be added to no_trade"
+				// The dictated no_trade instruction (2026-09-03) says the
+				// machine enforces T1 blackouts regardless and the author must
+				// not list them. This tag used to order the opposite.
+				tag = "HARD no-trade blackout — the machine writes and enforces it; stand aside around it"
 			}
 			fmt.Fprintf(&b, "  %s %s %s — %s (%s)\n", e.TimeCT, e.Currency, e.Impact, e.Title, tag)
 		}
@@ -615,16 +628,31 @@ func BuildPlannerPrompt(in PlannerInput) string {
 
 	// A3 — no-trade gates (≤8 lines, advisory — the plan declares them; the
 	// executor still sees every cycle).
-	b.WriteString("## No-trade gates (advisory — declare in no_trade or skip the day)\n")
+	lunchStartCT, lunchEndCT := LunchWindowCT()
+	// The header used to read "advisory — declare in no_trade or skip the day"
+	// over a list that includes the machine's hard-gated lunch window and
+	// Tier-1 news. That ordered the author to restate exactly what the
+	// no_trade instruction now forbids, and a header is read before a rule.
+	b.WriteString("## No-trade gates (the machine enforces the windows below; the rest are yours to weigh — skip the day if they stack up)\n")
 	b.WriteString("  - balance-day (open inside prior value area AND VAs overlap) → edges-only, or skip\n")
 	b.WriteString("  - opening gap >1.2×ATR or open outside the prior range → NEVER fade; the gap is a target\n")
-	b.WriteString("  - no A/B zone in reach AND no pool swept by 10:30 ET → declare the skip in the plan\n")
-	b.WriteString("  - lunch 11:30–13:30 ET: no new entries (the system hard-gates 12:00–13:30 CT)\n")
+	b.WriteString(fmt.Sprintf("  - no A/B zone in reach AND no pool swept by %s CT → declare the skip in the plan\n", ETtoCT("10:30")))
+	// The hard-gate half is RESOLVED, not typed: it was a third copy of the
+	// lunch window, and the F4 literal scan missed it because the bounds sit
+	// unquoted inside a longer sentence. The 11:30–13:30 ET half is the lunch
+	// LULL (trading lore, advisory) and is deliberately not the same window as
+	// the machine gate — see the report for that discrepancy.
+	// ONE window (owner ruling 2026-09-03). This line used to carry an
+	// 11:30–13:30 ET lull BESIDE the machine's 12:00–13:30 CT gate — two
+	// different windows in one sentence, in two clocks, one of them enforced.
+	// The machine's is the only one, stated in CT, rendered from its resolver.
+	b.WriteString(fmt.Sprintf("  - lunch %s–%s CT: no new entries (hard-gated — entries inside it are refused)\n", lunchStartCT, lunchEndCT))
 	b.WriteString("  - Tier-1 news → stand aside until a fresh post-news swing prints\n\n")
 
 	// A4 — killzone weighting (advisory, not a gate).
 	b.WriteString("## Killzone weighting (advisory)\n")
-	b.WriteString("  NY AM 08:30–11:00 ET is the primary window; 10:00–11:00 ET is the premium FVG window; mind the macro minutes. ")
+	b.WriteString(fmt.Sprintf("  NY AM %s–%s CT is the primary window; %s–%s CT is the premium FVG window; mind the macro minutes. ",
+		ETtoCT("08:30"), ETtoCT("11:00"), ETtoCT("10:00"), ETtoCT("11:00")))
 	b.WriteString("Conviction: down on Monday, up Thursday/Friday.\n\n")
 
 	// A5 — stop-doing line: bare acceptance entries have no edge.
@@ -666,7 +694,7 @@ func plannerOutputContract(maxLevels, maxScenarios int, hasHTFZones, has1HSDZone
 		`  "reasoning": "<your read: what the auction is doing and why this plan — ≤200 words, decision-focused>",` + "\n" +
 		`  "bias": {"direction": "long|short|neutral", "conviction": "high|medium|low", "flip_condition": "<explicit>"},` + "\n" +
 		fmt.Sprintf(`  "levels": [{"price": <n>, "label": "<PDH|ONH|nPOC…>", "grade": "A|B|C", "instruction": "<verb>"}],  // max %d, MUST include ≥3 below AND ≥3 above the current price`, maxL) + "\n" +
-		fmt.Sprintf(`  "scenarios": [{"id": "S1", "trigger": "<setup>", "condition": "reclaim|hold|sweep_reclaim|reject|acceptance|breakout_retest|fvg_entry|breakdown_continue|breakup_continue", "direction": "long|short", "target_chain": [<n>,…], "invalid": "<line>", "quality": "A+|A|B|C", "chain_after": "<S# of the sweep_reclaim this fvg_entry follows, or omit>", "confirm": {"rule": "touch|1x5m_close|2x5m_close|1m_mss|time_hold", "ref_price": <n>, "side": "above|below"}, "confirm2": {"rule": "<leg 2 rule>", "ref_price": <n>, "side": "above|below"} (OPTIONAL second trigger leg — a two-leg setup MUST carry both legs; the machine renders EVERY leg and a partial NEVER reads MET), "fvg": {"fvg_lo": <n>, "fvg_hi": <n>, "entry_mode": "edge|ce", "displacement_atr": <n>, "origin_level": "<label>", "direction": "long|short"}, "breakdown": {"level": <n>, "level_label": "<label>", "entry_mode": "pullback|immediate"} (REQUIRED iff condition==breakdown_continue|breakup_continue — see the WATERFALL PLAY rule), "arm": {"enabled": true, "entry": <n>, "stop": <n>, "target": <n>, "wait_confirm": true, "legs": [{"entry": <n>, "stop": <n>, "target": <n>, "size": 1, "wait_confirm": false, "rule": "<rule>"}, …] (ONLY if condition is sweep_reclaim — the split contract, EXACTLY 2 legs; EVERY other condition arms SINGLE: omit legs)}}],  // 1..%d — confirm{} is REQUIRED per scenario; fvg{} REQUIRED iff condition=="fvg_entry" (ce is COMPUTED, never written); breakdown{} REQUIRED iff waterfall-class; chain_after is OPTIONAL; arm{} is OPTIONAL and legal ONLY on fvg_entry|reject|breakdown_continue|breakup_continue (sweep_reclaim arms only via wait_confirm; breakout_retest|reclaim|hold|acceptance NEVER arm) — see the ARMED ORDERS + ENTRY LAW rules`, maxS) + "\n" +
+		fmt.Sprintf(`  "scenarios": [{"id": "S1", "trigger": "<setup>", "condition": "reclaim|hold|sweep_reclaim|reject|acceptance|breakout_retest|fvg_entry|breakdown_continue|breakup_continue", "direction": "long|short", "target_chain": [<n>,…], "invalid": "<line>", "quality": "A+|A|B|C", "chain_after": "<S# of the sweep_reclaim this fvg_entry follows, or omit>", "confirm": {"rule": "touch|1x5m_close|2x5m_close|1m_mss|time_hold", "ref_price": <n>, "side": "above|below"}, "confirm2": {"rule": "<leg 2 rule>", "ref_price": <n>, "side": "above|below"} (OPTIONAL second trigger leg — a two-leg setup MUST carry both legs; the machine renders EVERY leg and a partial NEVER reads MET), "fvg": {"fvg_lo": <n>, "fvg_hi": <n>, "entry_mode": "edge|ce", "displacement_atr": <n>, "origin_level": "<label>", "direction": "long|short"}, "breakdown": {"level": <n>, "level_label": "<label>", "entry_mode": "pullback|immediate"} (REQUIRED iff condition==breakdown_continue|breakup_continue — author ONLY at a level whose MEASURED displacement in the block above is ≥ the stated floor; a level reading \"none — no break\" or below the floor is REFUSED at write — see the WATERFALL PLAY rule), "arm": {"enabled": true, "entry": <n>, "stop": <n>, "target": <n>, "wait_confirm": true, "legs": [{"entry": <n>, "stop": <n>, "target": <n>, "size": 1, "wait_confirm": false, "rule": "<rule>"}, …] (ONLY if condition is sweep_reclaim — the split contract, EXACTLY 2 legs; EVERY other condition arms SINGLE: omit legs)}}],  // 1..%d — confirm{} is REQUIRED per scenario; fvg{} REQUIRED iff condition=="fvg_entry" (ce is COMPUTED, never written); breakdown{} REQUIRED iff waterfall-class; chain_after is OPTIONAL; arm{} is OPTIONAL and legal ONLY on fvg_entry|reject|breakdown_continue|breakup_continue (sweep_reclaim arms only via wait_confirm; breakout_retest|reclaim|hold|acceptance NEVER arm) — see the ARMED ORDERS + ENTRY LAW rules`, maxS) + "\n" +
 		NoTradeSchemaExample() + "\n" +
 		`  "death_condition": "<the single line that invalidates this whole plan>",` + "\n" +
 		`  "death": {"price": <level>, "side": "below|above", "rule": "2x5m|5m_close"},` + "\n" +

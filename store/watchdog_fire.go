@@ -19,14 +19,28 @@ import (
 // a watchdog that kills calls the resend cannot recover is worse than one that
 // waits.
 type WatchdogFireDB struct {
-	ID        uint64    `gorm:"primaryKey;autoIncrement"`
-	TraderID  string    `gorm:"index"`
-	At        time.Time `gorm:"index"`
-	Mode      string    // "pre" | "post" — which timer fired
-	GapMs     int64     // silence measured when it fired
-	LimitMs   int64     // the EFFECTIVE limit in force (min of override and default)
-	CallAgeMs int64     // how long the call had been running
-	Bytes     int64     // reasoning + content chars received before the stall
+	ID       uint64    `gorm:"primaryKey;autoIncrement"`
+	TraderID string    `gorm:"index"`
+	At       time.Time `gorm:"index"`
+	// Kind (owner ruling 2026-09-03) distinguishes the two events that end a
+	// stream early: "watchdog" (we closed it) and "cut" (the peer did). They
+	// share this table because the load-bearing question is the same for both
+	// — did the identical resend recover it — and because the idle_before
+	// analysis needs them side by side.
+	Kind      string `gorm:"index"` // "watchdog" | "cut"
+	Mode      string // "pre" | "post" — which timer fired (watchdog only)
+	GapMs     int64  // silence measured when it fired
+	LimitMs   int64  // the EFFECTIVE limit in force (min of override and default)
+	CallAgeMs int64  // how long the call had been running
+	Bytes     int64  // reasoning + content chars received before the stall
+
+	// The connection the dead call rode. The 2026-09-03 08:11:38 cut arrived on
+	// a connection idle 101,212ms and reused; its successful resend rode one
+	// idle 34,935ms. If cuts cluster above some idle threshold, IdleConnTimeout
+	// below it is the whole fix — and this is the column that decides.
+	IdleBeforeMs int64 `gorm:"index"`
+	Reused       bool
+	ClosedBy     string // peer_fin | local_close | clean (INFERRED — see class 46)
 
 	// The identical resend that followed. Resolved=false until it completes,
 	// so an unresolved row is visibly unresolved rather than a false zero.

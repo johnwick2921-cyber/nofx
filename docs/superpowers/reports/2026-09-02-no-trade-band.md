@@ -316,3 +316,419 @@ which of the two 51s becomes 53. **[A]** — read from the merged file.
 
 The separate renumber commit from before the rebase is gone: it became a no-op
 once the conflict resolution numbered this entry 52 directly, and was skipped.
+
+---
+
+## 9. RIDER (owner ruling 2026-09-03) — notes collapsed, and the contract miss
+
+### 9.1 The card
+
+The first cut demoted the model's prose to a "Model notes" label but still
+printed it inline. The ASIA card at 00:00 read:
+
+```
+No-trade · none live now ▸ 2 spent / other session
+Model notes · first 5m (CT) · 12:00-13:30 CT lunch
+```
+
+The same two dead windows the wave exists to stop showing, one line lower.
+Notes are a toggle now and render nothing until opened. The band line carries
+only machine windows live for this session, or "none live". Pinned on the real
+v14 doc — its actual prose, its actual machine windows.
+
+Also fixed on the way: the machine's label already carries its CT bounds
+("first 5m after the ASIA open (17:00–17:05 CT)") and the renderer appended
+them a second time.
+
+### 9.2 The contract miss — REPORTED, not fixed
+
+**Do plans written after the 23:24 cutover still carry model no_trade prose?
+Yes.** ASIA v14, written 00:08:45 CT, 44 minutes after the boot:
+
+```json
+"no_trade": ["first 5m (CT)", "12:00-13:30 CT lunch"]
+```
+
+Those two strings are **verbatim the schema example this wave generates**:
+
+```go
+func NoTradeSchemaExample() string {
+    ls, le := LunchWindowCT()
+    return fmt.Sprintf(`  "no_trade": ["first %dm (CT)", "%s-%s CT lunch", "<calendar blackouts>"],`,
+        FirstNoTradeMinutes(), ls, le)
+}
+```
+
+→ `"no_trade": ["first 5m (CT)", "12:00-13:30 CT lunch", "<calendar blackouts>"],`
+
+The model copied the example and dropped the placeholder. This is class 45 in
+miniature, and it is **this wave's own defect**: the prose sentence added below
+it says the windows are enforced regardless and "do not invent a window of your
+own", while the EXAMPLE directly above shows those two windows as the expected
+content. The example wins — an example is a demonstration, a sentence is a
+request. **[A]**, n=1 (one plan written since the boot).
+
+Per the ruling the field now renders nowhere by default, so the duplication is
+inert on the surface. The prompt is unchanged: altering what the model is asked
+to emit is a content ruling, and this wave measures the miss rather than
+guessing at the fix.
+
+**Recommended, needs a ruling:** make the schema example carry a placeholder
+rather than the machine's own windows —
+`"no_trade": ["<your own sit-out conditions, or omit>"]` — and re-measure over a
+handful of reads. The risk of leaving it: the field is dead weight in every
+prompt and every stored doc, and a future reader may take it for a rule again.
+
+### 9.3 Two more copies of the lunch window, and the scan that missed them
+
+The F4 literal scan looked only for the QUOTED bounds, so two copies written as
+prose passed it:
+
+| where | text |
+|---|---|
+| clock line | `…the lunch no-trade (12:00–13:30 CT) are CT wall-clock…` |
+| no-trade gate | `lunch 11:30–13:30 ET … (the system hard-gates 12:00–13:30 CT)` |
+
+Both render from `LunchWindowCT` now — **four copies retired by this wave** in
+total, counting the gate and the grader.
+
+The scan was wrong in both directions. Widening it to bare bounds over-fires:
+`13:30 ET` is a different time from `13:30 CT`, and the ET lull in that same
+sentence is deliberately not the machine's window. It scans for the window as a
+pair now, in either dash, alongside the quoted single bounds. Quoted RED on both
+new copies before the fix.
+
+**Reported, not fixed:** the `11:30–13:30 ET` lull does not line up with the
+`12:00–13:30 CT` hard gate (which is 13:00–14:30 ET). The prompt states both and
+labels which one is enforced. Reconciling them is a content ruling. **[A]**
+
+---
+
+## 10. RIDER PART 2 (owner rulings 2026-09-03) — one clock, and an example that stopped teaching
+
+### 10.1 The schema example
+
+```
+before   "no_trade": ["first 5m (CT)", "12:00-13:30 CT lunch", "<calendar blackouts>"],
+after    "no_trade": ["<your own sit-out conditions, or omit>"],
+```
+
+The sentence below it is unchanged, as ruled. What changed is that the prompt no
+longer *demonstrates* the two windows it then asks the model not to write.
+
+**Residual seam, reported not fixed.** The surviving sentence still opens
+"no_trade may contain ONLY the fixed session windows (first 5m, 12:00-13:30 CT
+lunch) plus T1 HARD-blackout lines from the calendar", which names those windows
+as permitted content while the example now offers a placeholder. The clause that
+matters — "ENFORCED by the machine whether or not you list them … what you write
+here is read as your notes" — is intact. Dropping the "may contain ONLY the
+fixed session windows" clause would close the seam, and it is a content change,
+so it waits for a ruling. **[A]**
+
+### 10.2 One clock
+
+The prompt's own clock line says *"EVERY time in this prompt is CT
+(America/Chicago) … Never apply these numbers to a UTC clock"* — and three lines
+then printed ET wall clocks. A model taking `10:30 ET` at its word as CT is an
+hour out.
+
+| line | before | after |
+|---|---|---|
+| skip deadline | `no pool swept by 10:30 ET` | `by 09:30 CT` |
+| primary window | `NY AM 08:30–11:00 ET` | `07:30–10:00 CT` |
+| premium FVG window | `10:00–11:00 ET` | `09:00–10:00 CT` |
+| lunch | `11:30–13:30 ET … (hard-gates 12:00–13:30 CT)` | `lunch 12:00–13:30 CT: no new entries (hard-gated)` |
+
+All derived through `ETtoCT`, never typed: America/New_York and America/Chicago
+change offset on the same instants, so the gap is exactly one hour and needs no
+date. The lunch line is now ONE window — it used to carry an advisory ET lull
+beside the machine's enforced CT gate, two different windows in two clocks in a
+single sentence. **Fifth copy retired**, after the gate, the grader, the clock
+line and the no-trade-gate line.
+
+### 10.3 What the model will read
+
+```
+clock 08:30 CT (13:30 UTC) — EVERY time in this prompt is CT (America/Chicago) …
+## No-trade gates (advisory — declare in no_trade or skip the day)
+  - no A/B zone in reach AND no pool swept by 09:30 CT → declare the skip in the plan
+  - lunch 12:00–13:30 CT: no new entries (hard-gated — entries inside it are refused)
+  NY AM 07:30–10:00 CT is the primary window; 09:00–10:00 CT is the premium FVG window
+  "no_trade": ["<your own sit-out conditions, or omit>"],
+```
+
+### 10.4 Contract rows
+
+| test | asserts | first run |
+|---|---|---|
+| `TestNoTradeExampleDoesNotDemonstrateMachineWindows` | the example names none of the machine's windows; the sentence still carries the resolved values | **RED ×4** |
+| `TestPromptStatesNoUntypedEasternTimes` | the WHOLE rendered prompt holds no `HH:MM ET` | **RED**, named `10:30 ET` |
+| `TestNoTradeContractRendersResolvedWindows` | migrated: the requirement moved from the example to the sentence, with its reason | GREEN |
+
+Suites: Go clean · vitest 40 files / 306 tests · `tsc --noEmit` clean.
+
+### 10.5 PROOF OWED
+
+The re-measure cannot run before the boot. After it: quote the **next three
+plans'** `no_trade` contents. Expected — the model's own reasons, or an empty
+list. A third plan still echoing `first 5m (CT)` would mean the surviving
+sentence in 10.1 is doing the teaching, and that clause is the next thing to go.
+
+---
+
+## 11. RIDER PART 3 (owner ruling 2026-09-03) — the seam closed, and two more copies of the same order
+
+### 11.1 The instruction
+
+```
+before  no_trade may contain ONLY the fixed session windows (first 5m,
+        12:00-13:30 CT lunch) plus T1 HARD-blackout lines from the calendar …
+
+after   no_trade: the machine enforces the session windows and T1 blackouts
+        regardless; do not list them — no_trade is for your OWN sit-out
+        conditions, or omit it. A T2 caution event is NEVER added to no_trade
+        and never stops entries.
+```
+
+No resolved values appear in it any more, because there is nothing left to
+resolve. The window is still **stated** in the no-trade gate block, so the
+author knows it exists and is simply not asked to repeat it. Contract row:
+no machine window token anywhere in the instruction, and the phrases carrying
+its meaning still present — **RED ×7** before the change.
+
+### 11.2 Two more copies of the same order — judgement calls, flagged
+
+Closing the sentence surfaced two other places that gave the model the
+instruction the sentence now forbids. Neither was named in the ruling; I changed
+both, and both are reversible.
+
+| where | before | after | why |
+|---|---|---|---|
+| gate block header | `## No-trade gates (advisory — **declare in no_trade** or skip the day)` | `## No-trade gates (the machine enforces the windows below; the rest are yours to weigh — skip the day if they stack up)` | the list under it contains the machine's hard-gated lunch window. A header is read before a rule, and leaving it would very likely have defeated the re-measure the ruling asks for. |
+| T1 calendar tag | `HARD no-trade blackout — **MUST be added to no_trade**` | `HARD no-trade blackout — the machine writes and enforces it; stand aside around it` | the dictated sentence says the machine enforces T1 blackouts regardless and the author must not list them. The old tag contradicted it outright, so the dictated wording forced this one. |
+
+The blackout is still marked HARD and still reaches the model in both cases;
+only the order to restate it is gone. **If either reads as scope creep, revert
+the header — the T1 tag cannot stay as it was without contradicting the
+sentence you dictated.**
+
+### 11.3 Superseded specs migrated
+
+| spec | why it no longer holds |
+|---|---|
+| `TestNoTradeContractRendersResolvedWindows` | required the OUTPUT CONTRACT to state the windows because "the model cannot list a window it was not shown". The ruling inverted the premise. Rewritten to assert the gate block states the resolved window. |
+| `planner_playbook_test.go` `"10:30 ET"` | one-clock ruling — it is `09:30 CT` now |
+| `planner_prompt_test.go` T1 tag wording | follows 11.2 |
+
+None weakened; each carries its reason in the diff.
+
+### 11.4 Five prompt copies retired in total
+
+gate · grader · clock line · no-trade-gate line · the lunch line's ET half.
+
+### 11.5 PROOF OWED — the re-measure
+
+Cannot run before the boot. After it, quote the **next three plans'** `no_trade`
+contents. Expected: the model's own conditions, or an empty list. A plan still
+echoing `first 5m (CT)` after all five copies and both orders are gone would
+mean the behaviour is not coming from the prompt at all, and the next place to
+look is the repair path's own prompt.
+
+### 11.6 The BEFORE measurement (baseline for the re-measure)
+
+Two plans have now been written on the deployed pre-rider prompt, and both
+carry the schema example verbatim:
+
+| version | written | `no_trade` | machine windows |
+|---|---|---|---|
+| ASIA v14 | 00:08:45 CT | `["first 5m (CT)", "12:00-13:30 CT lunch"]` | 2 |
+| ASIA v15 | 00:34:14 CT | `["first 5m (CT)", "12:00-13:30 CT lunch"]` | 2 |
+| LONDON v1 | 01:34:53 CT | `["first 5m (CT)", "12:00-13:30 CT lunch"]` | 2 |
+| NY v1 | 08:05:19 CT | `["first 5m (CT)", "12:00-13:30 CT lunch"]` | 2 |
+
+**4 of 4, byte-identical, across three sessions and four independent reads.** That is the baseline the
+three post-boot plans are measured against. It also rules out chance and
+rules out session: the model is not choosing these two windows, it is copying
+the example. Four reads on three sessions, including the full-reasoning NY
+read, produced the same two strings and nothing else.
+
+### 11.7 Two reads, two identical rejects — noted, not this wave
+
+Both reads since the band boot were rejected on attempt 1 for the same defect:
+
+```
+00:07  S3 breakdown_continue: measured displacement 0.00 pts < 1.0×ATR5m (15.2 pts)
+00:33  S2 breakdown_continue: measured displacement 0.00 pts < 1.0×ATR5m (21.5 pts)
+```
+
+Both repaired on attempt 2 and landed (`repair_outcome_ok` 10 → 11 across them).
+2 of 2 reads authoring a waterfall play with zero measured displacement is a
+prompt question — something is inviting `breakdown_continue` where the tape has
+no displacement. Answered in §12: the floor was enforced and never stated.
+**[A]**, n=2.
+
+**Third read, no reject.** LONDON v1 at 01:34:53 landed on attempt 1 and
+authored `S1 reject` + `S2 sweep_reclaim` — no waterfall at all. So the
+displacement rejects are not every read; they are every read that reaches for
+a waterfall. NY v1 (08:05:19) is the same again — attempt 1, `S1 reject` + `S2
+breakout_retest` + `S3 sweep_reclaim`, no waterfall. n=4: two waterfall
+attempts, two rejects, two reads that did not reach for one. That is the
+population §12's proof will be measured over, and it is small.
+
+---
+
+## 12. RIDER PART 4 (owner ruling 2026-09-03) — the displacement floor feeds forward
+
+Different lane, same boot.
+
+### 12.1 The defect
+
+`ValidateBreakdownContinueScenarios` refuses a `breakdown_continue` whose
+measured displacement is below `BD_MIN_DISP_ATR × ATR5m`. The prompt named the
+rule in the entry law and never the NUMBER, and never said which levels had any
+displacement at all. So the author picked levels the tape had chopped across.
+
+Two consecutive reads on 2026-09-03 burned attempt 1 on it:
+
+```
+00:07  S3 breakdown_continue: measured displacement 0.00 pts < BD_MIN_DISP_ATR 1.0×ATR5m (15.2 pts)
+00:33  S2 breakdown_continue: measured displacement 0.00 pts < BD_MIN_DISP_ATR 1.0×ATR5m (21.5 pts)
+```
+
+2 of 2 reads since the band boot, both recovered only by a repair. This is the
+class-45 shape exactly — a rule enforced at write and withheld from the prompt.
+
+### 12.2 What the model reads now
+
+```
+## Waterfall displacement floor this cycle
+15.2 pts (1.0×ATR5m 15.20, resolved). A breakdown_continue / breakup_continue
+authored at a level whose MEASURED displacement is below this is REFUSED at write.
+
+## Measured displacement per level (floor 15.2 pts)
+  28900.00 ONL — 40.25 pts down · at or above the floor — authorable
+  29050.00 VWAP — 3.00 pts down · BELOW the floor — not authorable as a waterfall
+  29100.00 PDL — none — no break
+```
+
+The `breakdown{}` schema field is qualified the way `fvg{}` and `legs[]` are:
+*author ONLY at a level whose MEASURED displacement in the block above is ≥ the
+stated floor; a level reading "none — no break" or below the floor is REFUSED at
+write.*
+
+Boot line: `waterfall-displacement-floor=1.0×ATR5m=<pts>pts (stated per level)`.
+
+### 12.3 No second implementation
+
+Every number comes from `BreakdownContinueState` — the validator's own function
+— reached through a level-oriented probe that synthesises the scenario a planner
+would author at that level. It is the same trick `BreakdownLevelReclaimed` uses
+for the void list, for the same reason. It runs over the SAME resolved
+`VoidScope`, so the void list and the displacement list cannot disagree about
+what the tape shows.
+
+`TestDisplacementFeedsForwardMeasuresARealRun` asserts the fed-forward number
+equals `BreakdownContinueState(...).BreakLegPts` exactly; a second
+implementation appearing would fail it.
+
+### 12.4 Two deliberate honesty choices
+
+- **"none — no break"**, not `0.00 pts`. A level the tape never broke is not a
+  level with a small number, and printing 0.00 for it invites precisely the
+  reading this fixes.
+- **No ATR → no floor line at all.** A `0.0 pt` floor is a lie the model would
+  author against.
+
+### 12.5 Tests
+
+| test | asserts | first run |
+|---|---|---|
+| `TestDisplacementFeedsForwardChoppedLevelReadsNone` | THE PIN — a level chopped across 30 bars reads `Broken=false`, 0.00, and renders "none — no break"; the floor is stated with it | RED (undefined) |
+| `TestDisplacementFloorLineIsResolved` | the floor line names its basis, and is EMPTY with no ATR | RED |
+| `TestDisplacementFeedsForwardMeasuresARealRun` | a delivered run reports the validator's own number, on the delivering side | RED |
+| `TestBreakdownSchemaRequiresMeasuredDisplacement` | the schema field is qualified; the facts block carries floor + per-level lines + both verdicts | RED |
+
+Suites: Go clean · vitest 40 files / 306 tests · `tsc --noEmit` clean.
+
+### 12.6 PROOF OWED
+
+After the boot: whether a read still authors `breakdown_continue` at a level the
+block marks "none — no break". Baseline is 2 of 2 reads doing exactly that.
+
+---
+
+## 13. RIDER PART 5 (owner ruling 2026-09-03) — wake cutoffs promoted to ENFORCE
+
+### 13.1 The evidence that decided it
+
+Today's WARN-era counters, read from `system_config`:
+
+```
+wake_cutoff_class47:…:2026-09-03:LONDON    1
+wake_cooldown_class47:…:2026-09-03:NY      2
+wake_stream_defer_class47:…:LONDON         3
+```
+
+**Three** wakes this morning would have been refused — one by the cutoff, two by
+the cooldown — each of which spent a max-reasoning planner read:
+
+| time | rule | detail | cost |
+|---|---|---|---|
+| 08:15 | cutoff | 24 min to flat (25m) — wrote LONDON v2 for an 08:30 flat | ~500s |
+| 09:15 | cooldown | 21 min since the last wake-authored version | ~517s |
+| 09:44 | cooldown | 23 min since the last wake-authored version | ~339s |
+
+The three stream-defers show the cross-session rule already working.
+
+### 13.2 The steady-state effect, measured — a HALVING, not a switch-off
+
+The two clocks are offset by the planner call itself. Measured on NY today:
+
+| wake fires | previous wake-authored version | version → wake |
+|---|---|---|
+| 09:06:54 | v2 08:45:05 | **21.8 min** → inside 30 → skip |
+| 09:38:54 | v3 09:15:31 | **23.4 min** → inside 30 → skip |
+
+Wake ATTEMPTS are throttled to ~30 min apart (08:06:54 · 08:36:54 · 09:06:54 ·
+09:38:54), and a version lands **8–9 minutes after** the wake fires (08:36:54 →
+v2 08:45:05; 09:06:54 → v3 09:15:31). So the version-to-next-attempt gap is
+30 − 8.5 ≈ 21.5 min, always inside a 30-minute cooldown.
+
+That does NOT switch wakes off. Skipping a wake writes no version, so the clock
+keeps running and the FOLLOWING attempt is ~51 min past the last version and
+proceeds:
+
+```
+version T          →  attempt T+21.5  SKIPPED  →  attempt T+51.5  PROCEEDS  →  version T+60
+```
+
+**Steady state: one wake-authored version per ~60 minutes instead of ~30.** The
+cutoff then removes any wake in the last 25 minutes of a session on top of that.
+
+This corrects my own earlier estimate to the owner ("three fewer plan versions
+this morning"). Three is what today's counters caught; the ongoing effect is a
+halving of the drumbeat, which is a different and better-bounded claim. **[A]**
+— arithmetic from the timestamps above, not projection.
+
+### 13.3 Scope, pinned both ways
+
+`WakeCadenceGoverns` is the only place that decides what a wake is.
+`level_event` and `structure_mss` are governed; `NY_scheduled_read`,
+`LONDON_scheduled_read`, `death_replan`, `owner_reset`, `owner_reread` and
+`sunday_weekly_read` are asserted NOT governed, so a later edit cannot widen it
+without failing a test.
+
+### 13.4 Two deliberate choices
+
+- `HaveFlat` / `HaveLastWakeVersion` are separate fields from their numbers. An
+  unreadable session window, or a session with no prior wake-authored version,
+  must never manufacture a skip out of a zero — that is how a gate starts
+  refusing things nobody decided to refuse (A24).
+- Both boundaries belong to the wake: strictly `< cutoff` and `< cooldown`, so
+  exactly 25 or exactly 30 still runs.
+
+### 13.5 Unchanged
+
+The counter keys and the recorded `n` — they now count real skips rather than
+would-be skips, which the log line states, so today's WARN-era numbers and
+tomorrow's enforce-era numbers form one series.

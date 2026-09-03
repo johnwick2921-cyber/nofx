@@ -28,6 +28,14 @@ export type NoTradeBandWindow = {
   status: 'live' | 'elapsed' | 'other_session'
 }
 
+// windowText renders one machine window. The machine's own label usually
+// carries its CT bounds already ("first 5m after the ASIA open (17:00–17:05
+// CT)"); appending them again produced them twice on the card.
+function windowText(w: NoTradeBandWindow): string {
+  if (w.label.includes(w.start_ct)) return w.label
+  return `${w.label} (${w.start_ct}–${w.end_ct} CT)`
+}
+
 export function RulesBlock({
   noTrade,
   band,
@@ -40,6 +48,12 @@ export function RulesBlock({
   language: Language
 }) {
   const [showSpent, setShowSpent] = useState(false)
+  // Owner ruling 2026-09-03: the model's prose is COLLAPSED by default. The
+  // first cut demoted it to "Model notes" but still printed it inline, so an
+  // ASIA card at 00:00 read "none live now · Model notes · first 5m (CT) ·
+  // 12:00-13:30 CT lunch" — the same two dead windows the wave exists to stop
+  // showing, one line lower.
+  const [showNotes, setShowNotes] = useState(false)
 
   const hasBand = Array.isArray(band) && band.length > 0
   const live = hasBand ? band!.filter((w) => w.status === 'live') : []
@@ -76,9 +90,7 @@ export function RulesBlock({
             {proseIsRules
               ? prose.join(' · ')
               : live.length > 0
-                ? live
-                    .map((w) => `${w.label} (${w.start_ct}–${w.end_ct} CT)`)
-                    .join(' · ')
+                ? live.map(windowText).join(' · ')
                 : tp('noTradeNoneLive', language)}
           </span>
         </div>
@@ -110,7 +122,7 @@ export function RulesBlock({
             >
               {spent.map((w, i) => (
                 <div key={`${w.kind}-${w.start_min}-${i}`}>
-                  {w.label} ({w.start_ct}–{w.end_ct} CT) ·{' '}
+                  {windowText(w)} ·{' '}
                   {w.status === 'elapsed'
                     ? tp('bandElapsed', language)
                     : tp('bandOtherSession', language)}
@@ -123,16 +135,31 @@ export function RulesBlock({
 
       {hasBand && prose.length > 0 && (
         <div className="text-[11px]" style={rowStyle}>
-          <span
+          <button
+            type="button"
+            aria-expanded={showNotes}
+            onClick={() => setShowNotes((v) => !v)}
             className="uppercase tracking-wide"
-            style={{ color: 'var(--vl-muted)' }}
+            style={{
+              color: 'var(--vl-muted)',
+              background: 'none',
+              border: 'none',
+              padding: 0,
+              cursor: 'pointer',
+              font: 'inherit',
+            }}
           >
-            {tp('modelNotes', language)}
-          </span>
-          <span style={{ color: 'var(--vl-muted)', opacity: 0.7 }}>
-            {' '}
-            · {prose.join(' · ')}
-          </span>
+            {showNotes ? '▾' : '▸'} {tp('modelNotes', language)} ({prose.length}
+            )
+          </button>
+          {showNotes && (
+            <div
+              className="mt-1"
+              style={{ color: 'var(--vl-muted)', opacity: 0.7 }}
+            >
+              {prose.join(' · ')}
+            </div>
+          )}
         </div>
       )}
 

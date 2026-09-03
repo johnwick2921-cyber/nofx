@@ -27,10 +27,23 @@ import (
 //     and 25 from the flat: a max-reasoning read whose plan can never be
 //     entered.
 //
-// EVERYTHING HERE EXCEPT THE ARM EXPIRY IS WARN-FIRST (owner ruling): the wake
-// still runs. We are measuring what suppression WOULD have cost before anyone
-// suppresses anything. The counters are recorded (class-35 law) so a week of
-// real numbers, not a week of impressions, backs the eventual ruling.
+// PROMOTED TO ENFORCE (owner ruling 2026-09-03). The two cutoffs shipped
+// WARN-first, recording what a suppression WOULD have skipped so the ruling
+// could rest on counts. One morning of live observation supplied them:
+//
+//   ⏱ wake would_skip: 24 min to flat (cutoff 25m) — 1h S/D zone Demand
+//     [29101.75–29187.25] on LONDON. WARN-first: the wake PROCEEDS.
+//   ⏱ wake would_skip: cooldown 21 min since the last wake-authored version
+//     (cooldown 30m) — seated Supply·1h invalidated
+//
+// The first wrote LONDON v2 at 08:15:44 for a session that flattens at 08:30 —
+// a ~500s max-reasoning read whose plan could never be entered. Both cutoffs
+// now SKIP the wake. The counters are unchanged, so the same keys keep counting
+// (they now count skips rather than would-be skips, which the log line says).
+//
+// SCOPE: wakes only. A scheduled read, a death re-plan and an owner reset are
+// untouched — WakeCadenceGoverns is the single place that decides, and a test
+// pins the list both ways.
 
 // WakeCutoffMinDefault — a wake this close to the session flat cannot produce a
 // tradeable plan: the last-entry cutoff is flat−15, and the p90 planner call is
@@ -102,15 +115,68 @@ func anyPlannerStreamOpen() (string, bool) {
 	return held, held != ""
 }
 
+// WakeCadenceGoverns reports whether a trigger is a WAKE, and so subject to the
+// cadence cutoffs. Everything else — scheduled reads, death re-plans, owner
+// resets, the Sunday weekly read — is untouched by them.
+func WakeCadenceGoverns(trigger string) bool {
+	switch strings.TrimSpace(trigger) {
+	case "level_event", "structure_mss":
+		return true
+	}
+	return false
+}
+
+// WakeCadenceDecision is one wake's cadence verdict, pure so the two live cases
+// can be pinned as fixtures rather than described in a comment.
+//
+// HaveFlat / HaveLastWakeVersion are separate from their numbers on purpose: an
+// unreadable session window and a session with no prior wake-authored version
+// must NEVER manufacture a skip out of a zero (A24 — a plausible zero is how a
+// gate starts refusing things nobody decided to refuse).
+type WakeCadenceDecision struct {
+	Session string
+	Desc    string
+
+	MinutesToFlat int
+	HaveFlat      bool
+	CutoffMin     int
+
+	SinceLastWakeVersionMin int
+	HaveLastWakeVersion     bool
+	CooldownMin             int
+}
+
+// SkipForCutoff — the wake starts too close to the flat to produce a plan that
+// can still be entered. The boundary belongs to the wake: the rule is < cutoff.
+func (d WakeCadenceDecision) SkipForCutoff() bool {
+	return d.CutoffMin > 0 && d.HaveFlat && d.MinutesToFlat < d.CutoffMin
+}
+
+// SkipForCooldown — a wake-authored version is younger than the cooldown.
+func (d WakeCadenceDecision) SkipForCooldown() bool {
+	return d.CooldownMin > 0 && d.HaveLastWakeVersion && d.SinceLastWakeVersionMin < d.CooldownMin
+}
+
+// Reason renders whichever rule fired, in the enforcing wording.
+func (d WakeCadenceDecision) Reason() string {
+	switch {
+	case d.SkipForCutoff():
+		return fmt.Sprintf("%d min to flat (cutoff %dm) — SKIPPED", d.MinutesToFlat, d.CutoffMin)
+	case d.SkipForCooldown():
+		return fmt.Sprintf("cooldown %d min since the last wake-authored version (cooldown %dm) — SKIPPED", d.SinceLastWakeVersionMin, d.CooldownMin)
+	}
+	return ""
+}
+
 // wakeCutoffLine / wakeCooldownLine / wakeStreamDeferLine are the pure log-line
 // builders (A9: loud, and fixture-tested for wording).
 func wakeCutoffLine(session, desc string, minsToFlat, cutoff int, n int) string {
-	return fmt.Sprintf("⏱ wake would_skip: %d min to flat (cutoff %dm) — %s on %s. WARN-first: the wake PROCEEDS. Recorded n=%d (class 47)",
+	return fmt.Sprintf("⏱ wake SKIPPED: %d min to flat (cutoff %dm) — %s on %s. A read starting here lands after the last-entry gate closes. Recorded n=%d (class 47, enforcing since 2026-09-03)",
 		minsToFlat, cutoff, desc, session, n)
 }
 
 func wakeCooldownLine(session, desc string, sinceMin, cooldown int, n int) string {
-	return fmt.Sprintf("⏱ wake would_skip: cooldown %d min since the last wake-authored version (cooldown %dm) — %s on %s. WARN-first: the wake PROCEEDS. Recorded n=%d (class 47)",
+	return fmt.Sprintf("⏱ wake SKIPPED: cooldown %d min since the last wake-authored version (cooldown %dm) — %s on %s. Recorded n=%d (class 47, enforcing since 2026-09-03)",
 		sinceMin, cooldown, desc, session, n)
 }
 
@@ -123,8 +189,18 @@ func wakeStreamDeferLine(session, desc, heldKey string) string {
 // literals in a boot line).
 func WakeCadenceBootLine() string {
 	cutoff, cooldown := wakeCutoffMinutes(), wakeCooldownMinutes()
-	return fmt.Sprintf("wakes: cutoff=%dm cooldown=%dm cross-session=%s stale-arm-expiry=%s (class 47)",
-		cutoff, cooldown, onOffWord(cutoff >= 0), onOffWord(true))
+	return fmt.Sprintf("wakes: cutoff=%dm(%s) cooldown=%dm(%s) cross-session=%s stale-arm-expiry=%s (class 47) — cutoffs govern LEVEL_EVENT/structure_mss wakes ONLY; scheduled reads, death re-plans and owner resets are untouched",
+		cutoff, enforceWord(cutoff), cooldown, enforceWord(cooldown),
+		onOffWord(true), onOffWord(true))
+}
+
+// enforceWord states whether a cutoff is live, READ from its own value: 0
+// disables the check, so it cannot claim to enforce.
+func enforceWord(minutes int) string {
+	if minutes > 0 {
+		return "enforce"
+	}
+	return "off"
 }
 
 func onOffWord(b bool) string {
