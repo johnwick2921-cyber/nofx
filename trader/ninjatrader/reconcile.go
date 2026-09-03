@@ -416,10 +416,19 @@ func (t *TCPTrader) reconcilePositions(traderID, exchangeID, exchangeType string
 			Leverage:           1,
 			Status:             "OPEN",
 			Source:             "reconcile",
-			Account:            acct,
-			CreatedAt:          nowMs,
-			UpdatedAt:          nowMs,
+			// ATTRIBUTION E1-lite (2026-09-02): this path knows an account, a
+			// symbol, a side and an average price — no order of ours, so no
+			// lineage to recover. It is stamped UNRESOLVABLE rather than left
+			// "", which is indistinguishable from "not yet stamped". Measured:
+			// 3 rows in three weeks reached the DB this way (566, 571, 580),
+			// none with an arm within 30 minutes. We never guess a link.
+			PlanID:    store.PlanUnresolvable,
+			Account:   acct,
+			CreatedAt: nowMs,
+			UpdatedAt: nowMs,
 		}
+		logger.Warnf("🔗 attribution: materialized %s %s @ %.2f with NO recoverable lineage — plan_id=%s (never joinable; counted in the boot line)",
+			sym, side, avg, store.PlanUnresolvable)
 		if err := st.Position().CreateOpenPosition(row); err != nil {
 			logger.Warnf("ninjatrader/tcp: reconcile materialize untracked %s %s failed: %v", sym, side, err)
 			delete(t.untrackedSince, key) // retry on a later pass

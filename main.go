@@ -113,6 +113,9 @@ func main() {
 	// P0 pnl-record-integrity (2026-08-20) — one-time additive correction of
 	// the 37 wrong recorded-PnL rows (originals preserved; readers COALESCE).
 	st.CorrectHistoricalPnL()
+	// ATTRIBUTION (2026-09-02) — one sentinel: day-plan-era CLOSED rows carrying
+	// "" become UNRESOLVABLE. Idempotent, WHERE-scoped, pre-era history untouched.
+	st.ConvergePlanLinkSentinel()
 
 	// T7 (2026-08-27) — stamp pnl_corrected on EVERY reconstructable closed MNQ
 	// row (the column must be complete, not just the disagreements).
@@ -275,6 +278,8 @@ func main() {
 	logger.Infof("📜 %s", kernel.VoidScopeBootLine())
 	// P&L-TRUTH WAVE (2026-09-01) — corrected-column guard in the boot block.
 	logger.Infof("🧾 %s", store.PnLSurfacesBootLine())
+	// ATTRIBUTION — counts READ from the table, never a literal.
+	logger.Infof("🔗 %s", st.AttributionBootLine())
 	logger.Infof("🎛 %s", kernel.EntryLawBootLedger()) // P1.4 (ledger-close 2026-08-19) — clock-guard block: live host-RTC drift,
 	// guard-timer freshness, last resync/check state. Log-only, best-effort.
 	kernel.LogClockGuardBoot()
