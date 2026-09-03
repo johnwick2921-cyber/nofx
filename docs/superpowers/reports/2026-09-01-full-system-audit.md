@@ -681,3 +681,41 @@ RR / min-SL / one-live-arm / split-leg refusals: log-only via `armRefusalChanged
 ### CUTOVER DURING THE AUDIT — CLASS 35 WENT LIVE AT 17:24:00 CT [RUNTIME]
 - `Sep 01 17:23:55 systemd[1]: nofx.service: Main process exited, code=killed, status=9/KILL` → `17:24:00 Started nofx.service` → `🔐 BOOT INTEGRITY OK — rev ec6632f9de41 · built 2026-09-01T21:54:27Z · expected ec6632f9de41 · goldens PASS` → new boot line `🧮 replan budget: recorded-counter (class 35) — spends: death_replan, owner_reread · free: <S>_scheduled_read, level_event, structure_mss (incl. fast-market), owner_reset, dor…`. New PID **1908258** (started 17:23:59). `go version -m nofx-bin` → `vcs.revision=ec6632f9… vcs.modified=false`; `deploy/RELEASE` = `GUIDE_BUILT_REV` = `ec6632f9…` (marker `b51f8f03 deploy: class-35 marker — RELEASE=ec6632f9 + GUIDE_BUILT_REV=ec6632f9`); class-35 report `155cd4dc` on dev; rollback slot `nofx-bin.prev.boot` now = `fef656a4…` (the binary this audit measured). Lock: `owner=hoang pid=1860416 expiry=2026-09-01T23:30:00-0500 task=class35-cutover acquired=17:13:31` — `kill -0 1860416` → **ALIVE**. Main tree porcelain 0, dev tip `155cd4dc`.
 - **Supersedes** §B1–B3 (live rev/PID/rollback), §B6, and the "fix merged, not deployed" statements in §E1/§H3/§I: the recorded-counter budget is now live; the ASIA v1 NO-TRADE row written 49 s BEFORE the cutover shows `replans_left 4` under the new code (v1 = 0 spends). Everything else in this report was measured on `fef656a4` (00:43:30 → 17:23:55 CT) and stands as the pre-cutover baseline. The cutover happened while a scheduled ASIA read had just fail-closed (17:23:14) and no read was in flight — rule A6 satisfied by timing; the 16:45–17:10 CT window (A7) was respected (kill at 17:23:55).
+
+---
+
+## ADDENDUM 2026-09-03 — §D-9 chain upgraded [B] → [A]; peer-session resolution
+
+*(Additive. The baseline text above is unedited and remains the `fef656a4` snapshot of 2026-09-01. This addendum records what a later session proved on a later rev, and one correction of my own.)*
+
+### A1 — The §D-9 mechanism is confirmed, and it is the deterministic one
+
+§D-9 offered this chain at **[B]** (inferred): "`StampArmedLineageIfMatched` ran before the ledger row was `filled`; the fill handler's `GetOpenPositionBySymbol(side=\"short\")` (`store/position.go:616`, case-sensitive `side = ?`) missed a row stored `SHORT`; `RepairArmedLineage` runs only inside `reconcileOnce`."
+
+Session **nofx-06** measured this on the live store 2026-09-03 and reports it **[A]**:
+
+- `armed_orders.side` is always lowercase (long 19 / short 17); `trader_positions.side` is overwhelmingly uppercase (LONG 280 / SHORT 304 against long 1 / short 2).
+- Against position 591: `side='short'` matched **0** rows, `side='SHORT'` matched **1**. `=` on a plain TEXT column is case-sensitive.
+- The fill handler passes the ARMED row's lowercase side, so the fill-time lookup **could never** find an armed-entry position regardless of timing.
+- Determinism is the tell: **10 of 10** filled rows at `fill_quantity=0`. A race is not deterministic.
+
+Fixed with `UPPER(side)=UPPER(?)` at that lookup and two siblings — the USDT retry and `GetOpenPositionByAccountSymbol`, which close-sync routes through, where the same compare loses a priced close. Commits: **95e9a4d0** (ordering/materialization leg) and **664ab6b7** (case-fold leg), on `fix/invalidation-wired`. Not deployed at time of writing; awaiting the owner's GO.
+
+Both mechanisms are real. The materialization race (armed row 35: filled 09:03:53, position 591 materialized 09:05:14, an 81 s gap) got there first and **masked** the deterministic one.
+
+### A2 — Correction: 584 and 586 are row IDs, not a ratio
+
+In cross-session chat I described this finding as "584 of 586 armed fills never lineage-stamped". **That was wrong and it was mine.** 584 and 586 are `trader_positions` row IDs (see the §G5 ledger table, rows 581–586, and §I3-4: "today's **two** armed fills"). The baseline finding is **two** unstamped armed fills on 2026-09-01, ids 584 and 586, out of six closed rows that session-day. The error did not reach this report — only the chat relay — but it propagated into a peer session's draft before being caught there. Recorded here so the archive carries the correction next to the finding.
+
+The **25% blind** figure is a genuine ratio and is a different measurement: §F1, 5 of 20 eligible closed positions unresolvable over 7 days, ids 566, 571, 580, 584, 586. The two lists overlap because they concern the same two rows.
+
+A re-run of the §D-9 column set on the current rev returns **3** unstamped, against this report's baseline of **2** — consistent, and consistent specifically with a small persistent every-day miss rather than an intermittent race.
+
+### A3 — Open, quoted both ways (A12)
+
+nofx-06 reports `;stamp_pending` is transient by design, trimmed in `reconcile.go`, and that no row carries it now — so the defect is visible only in `fill_quantity`. §D-9 of this report records `armed_orders` 24 and 28 as **still** `filled ;stamp_pending` when read at 16:40 CT on 2026-09-01, against fills at 08:37:08 and 13:33:06 — carried ~8 h and ~3 h. Both hold if reconcile trimmed them later. Not resolved here; flagged because "transient" is the assumption that makes `fill_quantity` the sole symptom.
+
+### A4 — Probe added to the class-59 checklist by nofx-06
+
+1. Ask which **branch** a write sits on, not merely whether the write exists. A write on a path almost nothing takes is worse than a read nobody performs, because it produces a green proof.
+2. When a log line names a **cause**, check the code can actually distinguish that cause from the alternatives. `"position row not materialized yet — stamp pending"` prints whenever `pos == nil`, which is true under either mechanism, while asserting the race as fact. It was quoted as live proof of the race and proves only `pos == nil`.
