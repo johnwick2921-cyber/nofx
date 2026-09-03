@@ -135,3 +135,45 @@ func TestBarSourceBootLineReadsRealValues(t *testing.T) {
 		t.Fatalf("earliest date is not read from the data:\n%s", line)
 	}
 }
+
+// R1 — the boot print says the cache may be cold and points at the second
+// line; the post-backfill print reports what the resolver can actually reach.
+func TestR1BarsBootAndAfterBackfillLines(t *testing.T) {
+	now := time.Date(2026, 9, 2, 12, 0, 0, 0, time.UTC)
+	dayMs := int64(1440) * 60000
+	start := now.AddDate(0, 0, -44).Truncate(24 * time.Hour).UnixMilli()
+	var dailies []market.Kline
+	for i := 0; i < 44; i++ {
+		dailies = append(dailies, market.Kline{OpenTime: start + int64(i)*dayMs,
+			Open: 29000, High: 29050, Low: 28950, Close: 29010, Volume: 1})
+	}
+	cold := &market.BarResolver{Native: func(string, string, int) []market.Kline { return nil },
+		Own1m: func(string, int64, int64) []market.Kline { return nil },
+		Now:   func() time.Time { return now }}
+	warm := &market.BarResolver{Native: func(_, tf string, _ int) []market.Kline {
+		if tf == "1d" {
+			return dailies
+		}
+		return nil
+	}, Now: func() time.Time { return now }}
+
+	boot := BarSourceBootLine(cold, "MNQ", now)
+	if !strings.Contains(boot, "cache cold at boot — see the 📊 bars after backfill line") {
+		t.Fatalf("the boot line must warn that it may be reading a cold cache:\n%s", boot)
+	}
+	after := BarSourceBootLineAfterBackfill(warm, "MNQ", now)
+	if !strings.HasPrefix(after, "📊 bars after backfill:") {
+		t.Fatalf("second line prefix:\n%s", after)
+	}
+	if !strings.Contains(after, "1w nt8_agg via 1d since") {
+		t.Fatalf("the post-backfill line must report the REACHABLE source:\n%s", after)
+	}
+	// Both prints share one field renderer, so they cannot disagree.
+	if strings.Contains(after, "cache cold") {
+		t.Fatal("the post-backfill line must not repeat the cold-cache caveat")
+	}
+	// Same resolver → same fields in both prints.
+	if !strings.Contains(BarSourceBootLine(warm, "MNQ", now), "1w nt8_agg via 1d since") {
+		t.Fatal("the two prints must share one field renderer")
+	}
+}

@@ -18,9 +18,28 @@ import (
 //
 //	📊 bars: 1w nt8_agg via 1d since 2020-11-11 (1500) · 1d nt8 since 2020-11-11 (1500) · …
 //	   · ladder(1w)=[1d 1m] native 1w EXCLUDED (Fri→Thu stamps) · retention 1m=90d coarse=forever
+//
+// BarSourceBootLineAfterBackfill (R1) is the SECOND print, emitted once the
+// first NT8 backfill has landed. The boot print runs before the AddOn replays
+// bars_historical, so on a cold cache the resolver honestly answers "own1m via
+// 1m" for every TF — true of that instant, and a misleading report of
+// capability. Observed twice (2026-09-02 17:51 and 18:27) with 22 years of
+// weekly data already on disk.
+func BarSourceBootLineAfterBackfill(r *market.BarResolver, symbol string, now time.Time) string {
+	return "📊 bars after backfill: " + barSourceFields(r, symbol, now)
+}
+
 func BarSourceBootLine(r *market.BarResolver, symbol string, now time.Time) string {
 	if r == nil {
 		return "📊 bars: resolver unavailable — no source report"
+	}
+	return "📊 bars: " + barSourceFields(r, symbol, now) + " (cache cold at boot — see the 📊 bars after backfill line)"
+}
+
+// barSourceFields renders the per-TF source report both prints share.
+func barSourceFields(r *market.BarResolver, symbol string, now time.Time) string {
+	if r == nil {
+		return "resolver unavailable — no source report"
 	}
 	tfs := []string{"1w", "1d", "4h", "1h", "15m", "5m", "1m"}
 	parts := make([]string, 0, len(tfs))
@@ -45,7 +64,7 @@ func BarSourceBootLine(r *market.BarResolver, symbol string, now time.Time) stri
 		}
 		excl = fmt.Sprintf(" · native 1w EXCLUDED from the weekly ladder: %s", head)
 	}
-	return fmt.Sprintf("📊 bars: %s · ladder(1w)=%v%s · retention 1m=%dd 5m=%dd 15m=%dd coarse=forever",
+	return fmt.Sprintf("%s · ladder(1w)=%v%s · retention 1m=%dd 5m=%dd 15m=%dd coarse=forever",
 		strings.Join(parts, " · "), market.LadderFor("1w"), excl,
 		store.RetentionDaysFor("1m"), store.RetentionDaysFor("5m"), store.RetentionDaysFor("15m"))
 }

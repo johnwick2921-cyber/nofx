@@ -1402,9 +1402,15 @@ func plannerStreamTotal() time.Duration {
 // block: both stream deadlines, the HTTP ceiling that still governs the
 // non-stream paths, retries/backoff and the provider ROW the trader is bound
 // to. Pure so the fixture can pin the wording.
+// R2 (2026-09-02) — RENAMED from "planner client". Two lines began with the
+// same 🛰 and reported DIFFERENT retry numbers: this one (retries=2 backoff=2s,
+// the non-stream executor path) and the class-46 stream policy line (tries=3
+// backoff=2s→15s→45s). A reader scanning the boot log could not tell which
+// governed what. This one names the path it actually describes; every value is
+// still READ from the resolved snapshot, none is literal.
 func plannerClientBootLine(providerRow string, idleS, totalS, httpCeilingS, retries, backoffS, cap int) string {
-	return fmt.Sprintf("🛰 planner client: provider_row=%s stream_idle=%ds stream_total=%ds (AI_PLAN_TOTAL_DEADLINE_SECS) http_ceiling=%ds (non-stream paths only) retries=%d backoff=%ds cap=%d",
-		providerRow, idleS, totalS, httpCeilingS, retries, backoffS, cap)
+	return fmt.Sprintf("🛰 executor client: provider_row=%s retries=%d backoff=%ds http_ceiling=%ds (non-stream paths only — executor loop, weekly read, planner Q&A) · planner stream idle=%ds total=%ds cap=%d",
+		providerRow, retries, backoffS, httpCeilingS, idleS, totalS, cap)
 }
 
 // plannerStreamPolicyBootLine is RETIRED (class 46). It printed

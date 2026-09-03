@@ -3,6 +3,7 @@ package ninjatrader
 import (
 	"nofx/market"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"nofx/logger"
@@ -64,6 +65,15 @@ func WireBarPersistence(st *store.Store) {
 						for r := 0; r < 20 && backfilled == 0; r++ {
 							time.Sleep(15 * time.Second)
 							backfilled = backfillBars(bh, server)
+						}
+					}
+					// R1 (2026-09-02) — the boot 📊 bars line ran before this
+					// replay landed, so it reported own1m for every TF on a
+					// cold cache. Now that the pantry is in, say what the
+					// resolver can ACTUALLY reach.
+					if h := afterBackfillHook.Load(); h != nil {
+						if fn, ok := h.(func()); ok && fn != nil {
+							fn()
 						}
 					}
 					go pruneLoop(bh)
@@ -143,3 +153,11 @@ func pruneLoop(bh *store.BarHistoryStore) {
 		integrityCheck()
 	}
 }
+
+// afterBackfillHook lets the trader layer print its post-backfill bar-source
+// line without this package importing it. nil = nothing printed.
+var afterBackfillHook atomic.Value
+
+// SetAfterBackfillHook installs the callback fired once the first backfill
+// completes. Safe to call more than once; the last registration wins.
+func SetAfterBackfillHook(fn func()) { afterBackfillHook.Store(fn) }

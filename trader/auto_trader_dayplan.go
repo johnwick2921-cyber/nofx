@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	ntTrader "nofx/trader/ninjatrader"
 	"sync"
 	"time"
 
@@ -76,7 +77,12 @@ func (at *AutoTrader) snapshotSessionProfiles() {
 		done, _ := store.ShadowABCount(at.store)
 		at.logInfof("%s", ShadowABBootLine(ShadowABEnabled(), ShadowABTarget(), done))
 		// BAR-SOURCE WAVE — per-TF source/earliest/count, read from the resolver.
+		at.logInfof("%s", NoChaseBootLine())
 		at.logInfof("%s", BarSourceBootLine(at.barResolver(), at.futuresSymbol(), time.Now()))
+		// R1 — print again once the NT8 replay has actually landed.
+		ntTrader.SetAfterBackfillHook(func() {
+			at.logInfof("%s", BarSourceBootLineAfterBackfill(at.barResolver(), at.futuresSymbol(), time.Now()))
+		})
 	})
 	installActivePlanProvider(at, st)
 	// P0-cleanup (2026-08-19) — soft-alert: guardrails that WOULD have tripped
