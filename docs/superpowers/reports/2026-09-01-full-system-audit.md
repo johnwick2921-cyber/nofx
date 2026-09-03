@@ -751,8 +751,44 @@ The correct fix keys on the *absence of lineage*, not on a grade letter that enc
 
 **A5.3 — Population, and it is not a reconcile-path defect [DB].** Closed rows with `plan_version>0 AND cited_scenario_id<>''`, by grade: **A 30 · B 22 · D 6 · C 5**. The six D ids: **530, 575, 582, 584, 586, 591**. Discount **530** — its `cited_scenario_id` is the literal sentinel `off-plan`, so D is correct. Five are genuinely stuck: **575, 582, 584, 586, 591**. By source: reconcile 4 · armed_entry 1 · system 1.
 
+> **CORRECTED — see A6 (same day).** The paragraph below concludes that 582 puts the ordering problem outside
+> the reconcile path. That conclusion is WRONG: 582 has `plan_matched=0`, which makes its D explicable without
+> any ordering defect. The genuinely-stuck count is **4, not 5**, and every one of the four is reconcile-sourced.
+> The 591 "post-fix" characterisation is also wrong. A6 supersedes this paragraph.
+
 **582 is `source=armed_entry`** — §D-9 of this report records it carrying v3/S2 correctly, i.e. it stamped on the *fill-time* path — and it still grades D. The grade is therefore computed before the stamp on the armed path too. This is a general ordering problem between grading and stamping, not a reconcile-path problem, and the case-fold fix (664ab6b7) does not address it. **591** is a post-fix row from 2026-09-03 and is in the stuck list.
 
 **Not remediated.** Correcting the existing rows is a DB write and needs the owner's explicit authorisation under the guarded-write rule; this section is measurement only.
 
 **A5.4 — Probe (nofx-06, class 59, third):** when a repair path clears a value to trigger a recompute, check it matches the value the broken path actually writes. Extended by A5.1: check it matches *every* value that path can write, not the representative one — a predicate that matches a subset fails silently and samples clean.
+
+### A6 — Correction of A5.3: the stuck count is 4, all four are reconcile-sourced, and 582 settles nothing
+
+*(2026-09-03, read-only. nofx-06 challenged two conclusions in A5.3; both challenges are correct and I verified them independently against the live store. This section supersedes A5.3's count, its 582 conclusion, and its 591 characterisation. A5.3's population figures and the A5.2 three-state split are unaffected.)*
+
+**A6.1 — The discriminator A5.3 lacked [A].** `GradeAdherence` bases a cited row that matched direction at **A** unless the band is `off_band` or `struct` (both base B). Only two penalties exist, each one step, so **base A can reach C at worst — never D**. A row with `plan_matched=1` and a band outside `{off_band, struct}` sitting at D is therefore impossible from correctly-ordered grading. That is the clean test A5.3 did not apply.
+
+Applying it [DB] — `plan_matched` and `plan_band` on the six D rows:
+
+| id | source | plan_version | cited | plan_matched | plan_band | verdict |
+|---|---|---|---|---|---|---|
+| 530 | system | 2 | `off-plan` | 0 | *(empty)* | honest — sentinel → `OffPlan` → base D |
+| 575 | reconcile | 3 | S2 | **1** | `armed_fill` | **impossible D** |
+| 582 | armed_entry | 3 | S2 | **0** | *(empty)* | **explicable — not evidence** |
+| 584 | reconcile | 6 | S2 | **1** | `armed_fill` | **impossible D** |
+| 586 | reconcile | 5 | S3 | **1** | `armed_fill` | **impossible D** |
+| 591 | reconcile | 2 | S1 | **1** | `armed_fill` | **impossible D** |
+
+**Stuck: 4 — ids 575, 584, 586, 591.** Not 5.
+
+**A6.2 — 582 does not move the defect off the reconcile path, and A5.3 was wrong to say it does.** With `plan_matched=0`, 582 takes `GradeAdherence`'s `default` branch — base **C**, "cited a scenario but the direction mismatched" — and one penalty gives D honestly. Worse for A5.3's reasoning: a *grade-before-stamp* would produce base D (`!Cited`) with no penalty, which is **also** D at `plan_matched=0`. The two hypotheses are observationally identical on this row, so it cannot discriminate in either direction.
+
+**Whether the `armed_entry` path grades before it stamps is OPEN.** No row in the current data settles it, and A5.3's claim that it does is withdrawn. Stating it as open is the point — a wrong answer closes the question.
+
+**A6.3 — The reversal A5.3 got backwards.** All four impossible-D rows are **`source=reconcile`** (575, 584, 586, 591). A5.3 concluded "this is not a reconcile-path problem" on the strength of 582; with 582 excluded, the evidence points the other way — every impossible-D row is on the reconcile path. This is not proof of reconcile-specificity, because the armed path has one D row and that row is undecidable; it is the absence of any counter-example.
+
+**A6.4 — 591 is not a post-fix regression (A5.3 wrong, correction is nofx-06's).** 591's armed row filled 09:03:53, the position materialized 09:05:14, and the boot carrying 664ab6b7 was 11:10:33 — it was graded roughly two hours before the fix existed.
+
+**A6.5 — Denominator, and a trap in the discriminator [DB].** Closed rows carrying a grade: **71**. So an adherence rate computed today under-reports plan-following by **4 in 71** — not 5, not 7. Caveat for anyone re-running A6.1's predicate: without a lineage clause it also returns **572** (`plan_matched=1`, `plan_band='armed_fill'`, grade D, `plan_version 0`, `cited_scenario_id='TEST-E7'`), whose `source` and `close_reason` are both `e7_farside_test`. That is an `ARMED_TEST_SEAM` artifact, not a trade, and it must be excluded — the same test-seam contamination §D-3 of this report flags in `store/position_query.go`'s unfiltered counts.
+
+**Still nothing remediated** by either session — the rows need an owner-authorised DB write.
