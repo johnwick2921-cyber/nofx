@@ -226,3 +226,14 @@ func (s *Store) AttributionBootLine() string {
 	return fmt.Sprintf("attribution: stamp-at-materialization=on · armed_under_version=on · unresolvable=%d (sentinel %q) · pre-era=%d (history — never a plan to find) · unstamped-closed=%d (day-plan era; >0 is a live defect)",
 		sentinel, PlanUnresolvable, preEra, unstamped)
 }
+
+// DataIntegrityBootLine (D7, 2026-09-03) — what this wave turned on, every
+// field READ from the code that implements it (A24: no literals).
+//
+// Seam exclusion is NOT claimed here: D4 shipped on fix/seam-never-graded and
+// belongs to that wave's line. A boot line that claims a neighbour's work is
+// how a surface starts lying.
+func DataIntegrityBootLine(ordinalSeeded bool) string {
+	return fmt.Sprintf("data-integrity: e8-one-price-space=on · ordinal-seed=%s · lifecycle-log=on · pre-era-split=on",
+		map[bool]string{true: "store", false: "off (no seeder installed)"}[ordinalSeeded])
+}
