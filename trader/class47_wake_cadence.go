@@ -144,6 +144,33 @@ type WakeCadenceDecision struct {
 	SinceLastWakeVersionMin int
 	HaveLastWakeVersion     bool
 	CooldownMin             int
+
+	// FAST-MARKET EXEMPTION (owner ruling 2026-09-03). FastMarketATR is the
+	// measured drift since the last plan write, in ATR5m multiples; the
+	// threshold is the resolved FAST_MARKET_ATR knob. At or above it the
+	// COOLDOWN is bypassed — F3 downgrades reasoning for exactly these reads
+	// because they matter, so refusing them on a cadence rule inverts the
+	// intent. The last-window CUTOFF is not exempted: a re-plan with 20
+	// minutes left is a re-plan with 20 minutes left, fast or not.
+	//
+	// A zero threshold means "unresolved", and must NOT make every wake a
+	// fast-market wake — 0 >= 0 would silently disable the cooldown.
+	FastMarketATR       float64
+	FastMarketThreshold float64
+}
+
+// FastMarketBypass reports whether the drift is a fast market by the resolved
+// threshold, and so exempt from the cooldown.
+func (d WakeCadenceDecision) FastMarketBypass() bool {
+	return d.FastMarketThreshold > 0 && d.FastMarketATR >= d.FastMarketThreshold
+}
+
+// BypassNote is the log fragment when the cooldown was waived, empty otherwise.
+func (d WakeCadenceDecision) BypassNote() string {
+	if !d.FastMarketBypass() {
+		return ""
+	}
+	return fmt.Sprintf("cooldown bypassed: fast market %.1f×ATR", d.FastMarketATR)
 }
 
 // SkipForCutoff — the wake starts too close to the flat to produce a plan that
@@ -154,6 +181,9 @@ func (d WakeCadenceDecision) SkipForCutoff() bool {
 
 // SkipForCooldown — a wake-authored version is younger than the cooldown.
 func (d WakeCadenceDecision) SkipForCooldown() bool {
+	if d.FastMarketBypass() {
+		return false // owner ruling 2026-09-03 — see FastMarketATR
+	}
 	return d.CooldownMin > 0 && d.HaveLastWakeVersion && d.SinceLastWakeVersionMin < d.CooldownMin
 }
 
@@ -189,8 +219,8 @@ func wakeStreamDeferLine(session, desc, heldKey string) string {
 // literals in a boot line).
 func WakeCadenceBootLine() string {
 	cutoff, cooldown := wakeCutoffMinutes(), wakeCooldownMinutes()
-	return fmt.Sprintf("wakes: cutoff=%dm(%s) cooldown=%dm(%s) cross-session=%s stale-arm-expiry=%s (class 47) — cutoffs govern LEVEL_EVENT/structure_mss wakes ONLY; scheduled reads, death re-plans and owner resets are untouched",
-		cutoff, enforceWord(cutoff), cooldown, enforceWord(cooldown),
+	return fmt.Sprintf("wakes: cutoff=%dm(%s) cooldown=%dm(%s, fast-market≥%.1f×ATR exempt) cross-session=%s stale-arm-expiry=%s (class 47) — cutoffs govern LEVEL_EVENT/structure_mss wakes ONLY; scheduled reads, death re-plans and owner resets are untouched; the cutoff is NOT exempted by a fast market",
+		cutoff, enforceWord(cutoff), cooldown, enforceWord(cooldown), fastMarketATR(),
 		onOffWord(true), onOffWord(true))
 }
 

@@ -319,12 +319,102 @@ func TestWakeCadenceEnforcementGovernsWakesOnly(t *testing.T) {
 // The boot line must say ENFORCE now, from the resolvers.
 func TestWakeCadenceBootLineSaysEnforce(t *testing.T) {
 	line := WakeCadenceBootLine()
-	for _, want := range []string{"cutoff=25m(enforce)", "cooldown=30m(enforce)"} {
+	for _, want := range []string{"cutoff=25m(enforce)", "cooldown=30m(enforce", "fast-market≥1.5×ATR exempt", "cutoff is NOT exempted"} {
 		if !strings.Contains(line, want) {
 			t.Errorf("boot line missing %q:\n%s", want, line)
 		}
 	}
 	if strings.Contains(line, "WARN") {
 		t.Errorf("the boot line still claims WARN-first:\n%s", line)
+	}
+}
+
+// ── FAST-MARKET EXEMPTION (owner ruling 2026-09-03) ─────────────────────────
+//
+// The cooldown was promoted to ENFORCE at 10:28 CT and, fourteen minutes
+// earlier, this had already happened:
+//
+//   ⏱ wake would_skip: cooldown 26 min since the last wake-authored version
+//     (cooldown 30m) — seated Supply·1h invalidated … Recorded n=3
+//   🧠 planner mode: fast-market (drift 133.8 pts = 2.8×ATR5m) — reasoning
+//     downgraded to fast→low for this read (F3)
+//
+// Price had moved 2.8×ATR5m from the plan the executor was trading, and the
+// enforcing cooldown would have refused the re-plan. F3 exists BECAUSE those
+// reads matter — it downgrades reasoning to get the plan out faster. So fast
+// market exempts the cooldown.
+//
+// It does NOT exempt the last-window cutoff: a re-plan with 20 minutes left is
+// a re-plan with 20 minutes left, fast or not.
+
+// THE PIN — today's 10:14 case: 26 min into a 30-min cooldown, drift 2.8×
+// against a 1.5× threshold. Proceeds.
+func TestFastMarketBypassesTheCooldown(t *testing.T) {
+	d := WakeCadenceDecision{
+		SinceLastWakeVersionMin: 26, HaveLastWakeVersion: true, CooldownMin: 30,
+		FastMarketATR: 2.8, FastMarketThreshold: 1.5,
+	}
+	if d.SkipForCooldown() {
+		t.Fatal("a 2.8×ATR drift must bypass the cooldown — this is the 10:14 read, 133.8 pts from the plan being traded")
+	}
+	if !d.FastMarketBypass() {
+		t.Error("the decision must report that the bypass is what saved it")
+	}
+	if got := d.BypassNote(); !strings.Contains(got, "cooldown bypassed: fast market 2.8×ATR") {
+		t.Errorf("bypass note = %q, want the ruling's wording", got)
+	}
+}
+
+// A drift BELOW the threshold is not a fast market and is still skipped.
+func TestSubThresholdDriftIsStillSkipped(t *testing.T) {
+	d := WakeCadenceDecision{
+		SinceLastWakeVersionMin: 26, HaveLastWakeVersion: true, CooldownMin: 30,
+		FastMarketATR: 0.9, FastMarketThreshold: 1.5,
+	}
+	if !d.SkipForCooldown() {
+		t.Fatal("0.9×ATR is not a fast market — the cooldown still applies")
+	}
+	if d.FastMarketBypass() {
+		t.Error("no bypass below the threshold")
+	}
+	if d.BypassNote() != "" {
+		t.Errorf("nothing to note when nothing was bypassed, got %q", d.BypassNote())
+	}
+	// exactly at the threshold IS a fast market (the ruling says ≥)
+	at := d
+	at.FastMarketATR = 1.5
+	if at.SkipForCooldown() {
+		t.Error("exactly at the threshold must bypass — the rule is ≥")
+	}
+}
+
+// The cutoff is NOT exempted. The ruling is explicit and this is the assertion
+// that keeps the exemption from spreading to it.
+func TestFastMarketDoesNotBypassTheLastWindowCutoff(t *testing.T) {
+	d := WakeCadenceDecision{
+		MinutesToFlat: 20, HaveFlat: true, CutoffMin: 25,
+		FastMarketATR: 2.8, FastMarketThreshold: 1.5,
+	}
+	if !d.SkipForCutoff() {
+		t.Fatal("20 minutes to flat is 20 minutes to flat, fast market or not — the cutoff still skips")
+	}
+	// and the bypass note must not claim to have saved it
+	if strings.Contains(d.Reason(), "bypassed") {
+		t.Errorf("the cutoff reason must not mention a bypass: %q", d.Reason())
+	}
+}
+
+// A threshold of zero (knob unresolvable) must not turn every wake into a
+// fast-market wake — that would silently disable the cooldown entirely.
+func TestZeroThresholdDoesNotBypassEverything(t *testing.T) {
+	d := WakeCadenceDecision{
+		SinceLastWakeVersionMin: 1, HaveLastWakeVersion: true, CooldownMin: 30,
+		FastMarketATR: 0, FastMarketThreshold: 0,
+	}
+	if d.FastMarketBypass() {
+		t.Fatal("with no resolved threshold there is no fast-market verdict — 0 >= 0 must not read as one")
+	}
+	if !d.SkipForCooldown() {
+		t.Error("the cooldown must still apply when the threshold is unresolved")
 	}
 }

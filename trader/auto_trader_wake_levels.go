@@ -275,6 +275,15 @@ func (at *AutoTrader) maybeWakePlannerOnLevelEvents(session, tradeDate string, r
 	dec := WakeCadenceDecision{
 		Session: session, Desc: ev.desc,
 		CutoffMin: wakeCutoffMinutes(), CooldownMin: wakeCooldownMinutes(),
+		FastMarketThreshold: fastMarketATR(),
+	}
+	// FAST-MARKET EXEMPTION (owner ruling 2026-09-03) — measured HERE, before
+	// the cadence verdict, from the same function the read itself uses. On
+	// 2026-09-03 at 10:14 a wake 26 min into a 30-min cooldown carried a drift
+	// of 133.8 pts = 2.8×ATR5m; the enforcing cooldown would have refused the
+	// re-plan while the executor kept trading a plan 133 points away.
+	if _, driftATR := at.fastMarketDrift(at.wakeTimePrice()); driftATR > 0 {
+		dec.FastMarketATR = driftATR
 	}
 	if sess, okS := at.sessionRegistry(now).ActiveSession(now); okS {
 		dec.MinutesToFlat, dec.HaveFlat = minutesToSessionFlat(now, sess)
@@ -301,6 +310,14 @@ func (at *AutoTrader) maybeWakePlannerOnLevelEvents(session, tradeDate string, r
 		}
 		at.logWarnf("%s", wakeCutoffLine(session, ev.desc, dec.MinutesToFlat, dec.CutoffMin, n))
 		return
+	}
+	if note := dec.BypassNote(); note != "" && dec.CooldownMin > 0 &&
+		dec.HaveLastWakeVersion && dec.SinceLastWakeVersionMin < dec.CooldownMin {
+		// Loud, and only when the bypass actually saved this wake from the
+		// cooldown — never as a decoration on a wake the cooldown would have
+		// let through anyway.
+		at.logWarnf("⏱ wake %s (cooldown %d min since the last wake-authored version, cooldown %dm) — %s on %s. Proceeding (class 47, owner ruling 2026-09-03)",
+			note, dec.SinceLastWakeVersionMin, dec.CooldownMin, ev.desc, session)
 	}
 	if dec.SkipForCooldown() {
 		n := 0
@@ -347,4 +364,26 @@ func (at *AutoTrader) maybeWakePlannerOnLevelEvents(session, tradeDate string, r
 			at.carryOwnerEditsInto(fresh.PlanID, row.Version, fresh.Version)
 		}
 	}()
+}
+
+// wakeTimePrice is the price the fast-market check reads at WAKE-decision time:
+// the latest closed 1m bar.
+//
+// The read itself uses the price that AssembleScoredLevelsFullMinGrade returns,
+// but that assembly is the expensive part of a read and cannot run inside a
+// wake decision. The latest 1m close is what that assembly is anchored on, so
+// the two agree to within a bar.
+//
+// With no bars provider it returns 0, fastMarketDrift then returns no drift,
+// and the cooldown applies as before — the fail-safe direction is "no
+// exemption", never "exempt everything".
+func (at *AutoTrader) wakeTimePrice() float64 {
+	if market.FuturesBarsProvider == nil {
+		return 0
+	}
+	bars := market.FuturesBarsProvider(at.futuresSymbol(), "1m", 2)
+	if len(bars) == 0 {
+		return 0
+	}
+	return bars[len(bars)-1].Close
 }
