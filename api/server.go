@@ -563,6 +563,14 @@ Returns: {qa_id, plan_id, plan_version, reply:{evidence, point_class:NEW-INFO|BA
 			s.routeWithSchema(protected, "GET", "/plan/trades", "Graded closed trades + adherence summary (A–F, separate from P&L)",
 				`Query: ?trader_id=<id>. Returns: {trades:[{symbol,side,entry_price,exit_price,entry_time,exit_time,realized_pnl,mae,mfe,cited_scenario_id,plan_matched,adherence_grade,adherence_label}], summary:{counts,total,gpa}}.`,
 				s.handlePlanTrades)
+			// 1D — per-condition expectancy read model (READ-ONLY; rules on
+			// nothing). The floor and the promotion criterion travel in the
+			// payload so the panel cannot hold its own copy of either.
+			s.routeWithSchema(protected, "GET", "/expectancy", "Per-condition expectancy table on pnl_corrected (1D)",
+				`Query: ?by=condition|session|kind|path|full (default condition) &era=pre-0B|post-0B (default: both).
+Returns: {by, rows:[{key:{condition,session,level_kind,path,era}, n, wins, losses, flats, sum_pnl_corrected, mean, sd, win_rate, wilson_lo, wilson_hi, mean_lo, mean_hi, t_stat, avg_realized_r, avg_planned_rr, median_mae, median_mfe, stop_hit_share, target_hit_share, excluded_unresolved, row_ids, descriptive_only, status}], counterfactual_e8:[...], excluded:{unresolved_pnl,unresolvable,test_seam,no_condition,crypto_era}, min_n, as_of_ms, as_of_utc, built_at_ms, era_0b_start, promotion_rule}.
+Money is pnl_corrected ONLY; a NULL is UNRESOLVED, excluded and counted. status is NOT ENOUGH DATA below min_n. Statistics that cannot be computed are null, never 0.`,
+				s.handleExpectancy)
 			// W8 — admin session registry (GLOBAL; the gates read it, fallback default).
 			s.routeWithSchema(protected, "GET", "/plan/session-registry", "Effective admin session registry (+ is_default)",
 				`Query: ?trader_id=<id>. Returns: {registry:{sessions:[{name,window_start_ct,window_end_ct,read_ct,flat_ct,killzones,enabled}],half_days}, is_default:<bool>, sessions:<int>}.`,

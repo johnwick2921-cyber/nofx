@@ -184,6 +184,13 @@ type Table struct {
 	Conditions []Cell `json:"by_condition"`
 	Sessions   []Cell `json:"by_session"`
 
+	// Kinds and Paths are the remaining single-dimension roll-ups. Like the
+	// others they are aggregated from the RAW rows, never from the cells: a
+	// mean-of-means is not a mean, and an sd cannot be recovered from cells at
+	// all, so a roll-up built by folding cells would quietly lose its spread.
+	Kinds []Cell `json:"by_level_kind"`
+	Paths []Cell `json:"by_path"`
+
 	Counterfactual []E8Cell `json:"counterfactual_e8"`
 
 	Excluded Exclusions `json:"excluded"`
@@ -193,6 +200,13 @@ type Table struct {
 	// built now over stale data must not look fresh.
 	AsOfMs    int64 `json:"as_of_ms"`
 	BuiltAtMs int64 `json:"built_at_ms"`
+
+	// recs is the atom list every cell above was folded from. It is retained,
+	// unexported, so a re-projection (a different roll-up, an era filter) is a
+	// re-aggregation of the raw rows rather than a fold of already-folded
+	// numbers. Without it, FilterEra could only slice — and a sliced roll-up
+	// keeps the unfiltered population's mean while claiming to be scoped.
+	recs []rec
 }
 
 // ByCondition returns the condition roll-up, or nil when the condition has no

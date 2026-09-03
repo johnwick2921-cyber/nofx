@@ -8,6 +8,7 @@ import (
 	"nofx/auth"
 	"nofx/config"
 	"nofx/crypto"
+	"nofx/expectancy"
 	"nofx/kernel"
 	"nofx/logger"
 	"nofx/manager"
@@ -309,6 +310,15 @@ func main() {
 	// recorded, how many were rebuilt from the tape, and how many the tape
 	// does not reach. Every number READ from the table.
 	logger.Infof("📐 %s", st.TradeExcursions().ExcursionBootLine())
+	// EXPECTANCY (wave 1D, 2026-09-03) — the per-condition table, READ. Every
+	// number comes from the table just built, so the line cannot claim a cell
+	// count the process did not compute. A failure here WARNs and boots on:
+	// this is a read model and it may never stop the loop (class 23 / A10).
+	if xt, xerr := expectancy.LoadAndBuildAt(st.GormDB(), time.Now()); xerr != nil {
+		logger.Warnf("📊 expectancy: table unavailable at boot: %v", xerr)
+	} else {
+		logger.Infof("%s", xt.BootLine())
+	}
 	// P&L-TRUTH WAVE (2026-09-01) — corrected-column guard in the boot block.
 	logger.Infof("🧾 %s", store.PnLSurfacesBootLine())
 	// ATTRIBUTION — counts READ from the table, never a literal.

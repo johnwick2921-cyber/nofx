@@ -257,11 +257,43 @@ func BuildAt(now time.Time, positions []posRow, arms map[string]armRow, excs map
 		}
 	}
 
-	tbl.Cells = aggregate(recs, func(k Key) Key { return k })
-	tbl.Conditions = aggregate(recs, func(k Key) Key { return Key{Condition: k.Condition} })
-	tbl.Sessions = aggregate(recs, func(k Key) Key { return Key{Session: k.Session} })
+	tbl.recs = recs
+	tbl.rollUp()
 	tbl.Counterfactual = buildE8(abs, positions)
 	return tbl
+}
+
+// rollUp recomputes every projection from tbl.recs. Called once at build and
+// again after an era filter, so a filtered roll-up is a real aggregation of the
+// filtered rows and never the unfiltered population wearing a scoped label.
+func (t *Table) rollUp() {
+	t.Cells = aggregate(t.recs, func(k Key) Key { return k })
+	t.Conditions = aggregate(t.recs, func(k Key) Key { return Key{Condition: k.Condition} })
+	t.Sessions = aggregate(t.recs, func(k Key) Key { return Key{Session: k.Session} })
+	t.Kinds = aggregate(t.recs, func(k Key) Key { return Key{LevelKind: k.LevelKind} })
+	t.Paths = aggregate(t.recs, func(k Key) Key { return Key{Path: k.Path} })
+}
+
+// FilterEra returns the table restricted to one era, RE-AGGREGATED from the raw
+// rows. An era it does not know yields an empty table rather than the
+// unfiltered one: a filter that silently does nothing is how a scoped claim
+// becomes a global claim without anyone editing a number.
+func FilterEra(t Table, era string) Table {
+	out := Table{BuiltAtMs: t.BuiltAtMs, Excluded: t.Excluded, Counterfactual: t.Counterfactual}
+	if era != EraPre0B && era != EraPost0B {
+		return out
+	}
+	for _, r := range t.recs {
+		if r.key.Era != era {
+			continue
+		}
+		out.recs = append(out.recs, r)
+		if r.pnl != nil && r.exitTimeMs > out.AsOfMs {
+			out.AsOfMs = r.exitTimeMs
+		}
+	}
+	out.rollUp()
+	return out
 }
 
 // eraOf splits by the trade's own instant. Deliberately NOT by session-day: 0B

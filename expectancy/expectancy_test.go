@@ -477,3 +477,114 @@ func TestLevelKindCanonicalizerResolvesLabels(t *testing.T) {
 		}
 	}
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// Projections and the era filter — a roll-up must never be a mean-of-means,
+// and an era filter must re-aggregate rather than slice a computed table.
+// ─────────────────────────────────────────────────────────────────────
+
+func TestKindAndPathRollUpsArePooledNotMeansOfMeans(t *testing.T) {
+	db := newFixtureDB(t)
+	seedPlan(t, db, "2026-09-01:P", 1, "NY")
+	base := msAt(t, 2026, time.September, 1, 9, 0)
+	// Two conditions, both resolving to level kind ONL is impossible (S1→ONL,
+	// S2→SWG-L), so a kind roll-up must pool ACROSS conditions correctly.
+	rows := []seedPos{
+		{scenario: "S1", pnl: f(10), entryMs: base},
+		{scenario: "S1", pnl: f(30), entryMs: base + 60000},
+		{scenario: "S2", pnl: f(-20), entryMs: base + 120000},
+	}
+	seedPositions(t, db, "2026-09-01:P", 1, "NY", rows)
+
+	tbl, err := LoadAndBuildAt(db, time.Date(2026, time.September, 3, 12, 0, 0, 0, ct(t)))
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	var onl *Cell
+	for i := range tbl.Kinds {
+		if tbl.Kinds[i].LevelKind == string(kernel.KindONL) {
+			onl = &tbl.Kinds[i]
+		}
+	}
+	if onl == nil {
+		t.Fatalf("no ONL kind roll-up; kinds = %+v", tbl.Kinds)
+	}
+	if onl.N != 2 {
+		t.Fatalf("ONL N = %d, want 2", onl.N)
+	}
+	closeTo(t, "ONL mean", onl.Mean, 20.0)
+	// SD over {10,30} is 14.142... — recoverable only from the raw values, which
+	// is the point: a roll-up built by averaging cell means could not produce it.
+	closeTo(t, "ONL sd", onl.SD, 14.142135623730951)
+
+	if len(tbl.Paths) == 0 {
+		t.Fatalf("path roll-up missing")
+	}
+	for _, p := range tbl.Paths {
+		if p.Path != PathDecision {
+			t.Errorf("unexpected path %q (no armed_orders rows were seeded)", p.Path)
+		}
+	}
+}
+
+func TestFilterEraReAggregatesInsteadOfSlicing(t *testing.T) {
+	db := newFixtureDB(t)
+	seedPlan(t, db, "2026-09-02:P", 1, "NY")
+	pre := msAt(t, 2026, time.September, 2, 7, 41)
+	post := msAt(t, 2026, time.September, 2, 9, 41)
+	seedPositions(t, db, "2026-09-02:P", 1, "NY", []seedPos{
+		{scenario: "S1", pnl: f(10), entryMs: pre},
+		{scenario: "S1", pnl: f(30), entryMs: pre + 60000},
+		{scenario: "S1", pnl: f(-100), entryMs: post},
+	})
+
+	full, err := LoadAndBuildAt(db, time.Date(2026, time.September, 3, 12, 0, 0, 0, ct(t)))
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	if c := full.ByCondition("reject"); c == nil || c.N != 3 {
+		t.Fatalf("unfiltered reject N = %v, want 3", c)
+	}
+
+	onlyPre := FilterEra(full, EraPre0B)
+	c := onlyPre.ByCondition("reject")
+	if c == nil || c.N != 2 {
+		t.Fatalf("pre-0B reject N = %v, want 2", c)
+	}
+	// The CONDITION roll-up must be recomputed for the era, not inherited.
+	closeTo(t, "pre-0B mean", c.Mean, 20.0)
+	closeTo(t, "pre-0B sd", c.SD, 14.142135623730951)
+	if len(c.RowIDs) != 2 {
+		t.Errorf("filtered cell must carry only its own ids, got %v", c.RowIDs)
+	}
+
+	onlyPost := FilterEra(full, EraPost0B)
+	if c := onlyPost.ByCondition("reject"); c == nil || c.N != 1 || c.SumPnL != -100 {
+		t.Fatalf("post-0B reject = %+v, want N=1 sum=-100", c)
+	}
+	// An unknown era yields an EMPTY table, never the unfiltered one — a filter
+	// that silently does nothing is how a scoped claim becomes a global one.
+	if e := FilterEra(full, "no-such-era"); len(e.Cells) != 0 || len(e.Conditions) != 0 {
+		t.Errorf("unknown era must filter to empty, got %d cells", len(e.Cells))
+	}
+}
+
+func TestBootLineIsReadNotLiteral(t *testing.T) {
+	db := newFixtureDB(t)
+	seedPlan(t, db, "2026-09-01:P", 1, "NY")
+	base := msAt(t, 2026, time.September, 1, 9, 0)
+	seedPositions(t, db, "2026-09-01:P", 1, "NY", []seedPos{
+		{scenario: "S1", pnl: f(10), entryMs: base},
+		{scenario: "S1", pnl: nil, entryMs: base + 60000},
+		{scenario: "S1", pnl: f(5), entryMs: base + 120000, source: TestSeamSource},
+	})
+	tbl, err := LoadAndBuildAt(db, time.Date(2026, time.September, 3, 12, 0, 0, 0, ct(t)))
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	got := tbl.BootLine()
+	want := "📊 expectancy: cells=1 with_n>=30=0 unresolved=1 excluded_test=1"
+	if got != want {
+		t.Errorf("BootLine()\n got %q\nwant %q", got, want)
+	}
+}
