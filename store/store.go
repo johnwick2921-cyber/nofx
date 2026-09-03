@@ -35,6 +35,7 @@ type Store struct {
 	barHistory       *BarHistoryStore
 	armedOrders      *ArmedOrderStore
 	abConfirm        *AbConfirmStore
+	tradeExcursions  *TradeExcursionStore
 	plannerRejected  *PlannerRejectedStore
 	plannerReadFacts *PlannerReadFactsStore
 	configChanges    *ConfigChangeStore
@@ -222,6 +223,14 @@ func (s *Store) initTables() error {
 	}
 	if err := s.AbConfirm().Migrate(); err != nil {
 		return fmt.Errorf("failed to initialize ab_confirm_log table: %w", err)
+	}
+	if err := s.TradeExcursions().Migrate(); err != nil {
+		return fmt.Errorf("failed to initialize trade_excursions table: %w", err)
+	}
+	// E4 (wave 1A, 2026-09-02) — retire the never-computed mae/mfe zeros on
+	// trader_positions. Idempotent: a second boot matches nothing.
+	if _, err := s.Position().MigrateExcursionZerosToNull(); err != nil {
+		logger.Warnf("📐 excursion zero→NULL migration skipped: %v", err)
 	}
 	return nil
 }
@@ -436,6 +445,16 @@ func (s *Store) PlannerRejected() *PlannerRejectedStore {
 		s.plannerRejected = NewPlannerRejectedStore(s.gdb)
 	}
 	return s.plannerRejected
+}
+
+// TradeExcursions gets the per-position excursion table (wave 1A, 2026-09-02).
+func (s *Store) TradeExcursions() *TradeExcursionStore {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.tradeExcursions == nil {
+		s.tradeExcursions = NewTradeExcursionStore(s.gdb)
+	}
+	return s.tradeExcursions
 }
 
 // AbConfirm gets the E8 shadow A/B counterfactual table (2026-08-30).

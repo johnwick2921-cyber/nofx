@@ -392,7 +392,7 @@ const risk: KnobSpec[] = [
     recommended:
       '⭐ 1.5 — the BOTTOM of the researched 1.5–2.5 day-trade range; the old 1.0 was uncited code-canon. The 3.0 dead-zone bound is [I] PROVISIONAL (owner ruling 2026-09-02: accepted as a default, NOT a ruling on the number) — reviewed when stop_unanchored reaches n≥30 recorded occurrences.',
     whenToTouch:
-      'Raise the floor toward 2.5 only with MAE evidence. The 3.0 bound is reviewed at n≥30 dead zones — the count is RECORDED in system_config (arm_stop_unanchored_0b) and every dead zone logs 🛑 stop_unanchored with the running n.',
+      'Raise the floor toward 2.5 only with MAE evidence — wave 1A records it per condition (`go run ./cmd/excursions`), so the floor can be set against the adverse-excursion distribution instead of a placeholder. The 3.0 bound is reviewed at n≥30 dead zones — the count is RECORDED in system_config (arm_stop_unanchored_0b) and every dead zone logs 🛑 stop_unanchored with the running n.',
     perSession: 'No.',
   },
   {
@@ -405,8 +405,10 @@ const risk: KnobSpec[] = [
       'trader/auto_trader.go (maybeMoveStopToBreakeven → exitMechSuspendedRefuse → moveStopWire)',
     range: 'ticks · default 50 · env EXIT_MECHS_SUSPENDED=0 restores',
     systemDefault: '50 (suspended)',
-    recommended: '⭐ leave suspended until wave 1A measures MFE.',
-    whenToTouch: 'Only with MFE evidence that the move pays.',
+    recommended:
+      '⭐ leave suspended until the MFE distribution says the move pays. Wave 1A (2026-09-02) now records it: `go run ./cmd/excursions` prints MFE p50/p80/p95 per condition with the n each rests on.',
+    whenToTouch:
+      'Only with MFE evidence that the move pays — the distribution is in trade_excursions now, so this is answerable rather than a judgement call.',
     perSession: 'No.',
   },
   {
@@ -420,7 +422,8 @@ const risk: KnobSpec[] = [
     range:
       'mult 0.5–5 · period 7–28 · arm: after_breakeven | N-points | immediately · env EXIT_MECHS_SUSPENDED=0 restores',
     systemDefault: '2.0 / 14 / after_breakeven (suspended)',
-    recommended: '⭐ leave suspended until wave 1A measures MFE.',
+    recommended:
+      '⭐ leave suspended until the MFE distribution says the move pays. Wave 1A (2026-09-02) now records it: `go run ./cmd/excursions` prints MFE p50/p80/p95 per condition with the n each rests on.',
     whenToTouch: 'Only with evidence the trail beats the fixed target.',
     perSession: 'No.',
   },

@@ -66,7 +66,11 @@ func pnlWord(p float64) string {
 
 // LearningTrade is one closed trade's learning snapshot for the digest line.
 type LearningTrade struct {
-	MAE, MFE    float64
+	MAE, MFE float64
+	// Measured says whether MAE/MFE were computed at all. E4 (wave 1A): the
+	// columns behind them are nullable now, and the old test `MAE > 0 || MFE > 0`
+	// silently dropped a genuine zero while counting nothing as measured.
+	Measured    bool
 	Grade       string // adherence grade A-F ("" = ungraded)
 	PlanVersion int
 }
@@ -86,7 +90,7 @@ func LearningLine(trades []LearningTrade) string {
 	grades := map[string]int{}
 	var versions []int
 	for _, t := range trades {
-		if t.MAE > 0 || t.MFE > 0 {
+		if t.Measured {
 			smae += t.MAE
 			smfe += t.MFE
 			n++
@@ -101,8 +105,10 @@ func LearningLine(trades []LearningTrade) string {
 	if n == 0 {
 		return ""
 	}
-	line := fmt.Sprintf("learning: avg MAE %.1f · avg MFE %.1f · adherence %v",
-		smae/float64(n), smfe/float64(n), grades)
+	// n travels with the averages — an average without its count is exactly
+	// what A24 forbids, and here n is the MEASURED subset, not len(trades).
+	line := fmt.Sprintf("learning: avg MAE %.1f · avg MFE %.1f (n=%d of %d) · adherence %v",
+		smae/float64(n), smfe/float64(n), n, len(trades), grades)
 	if len(versions) > 0 {
 		line += fmt.Sprintf(" · plan v%v", versions)
 	}

@@ -996,6 +996,40 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     building for it — an alarming percentage over the wrong denominator will
     buy a large fix for a small problem.
 
+54. **A default of 0 on a column that means "how far did it go against us".**
+    (Highest occupied at merge: 53.) `trader_positions.mae REAL DEFAULT 0`
+    and `mfe` the same. A trade whose excursion was never computed and a trade
+    that never went against us are then the same bit pattern, and no reader can
+    tell them apart. Measured 2026-09-02: of 586 closed positions **517 carried
+    mae=0 AND mfe=0** — the never-computed signature, since price always moves —
+    while 9 carried a single genuine zero beside a real number. Round 7 ruled
+    that exit rules, stop sizes and targets come from MAE/MFE distributions, so
+    every one of those rulings was waiting on a column that was 88% unreadable.
+    Two more faces of the same defect: `kernel.LearningLine` guarded its average
+    with `if t.MAE > 0 || t.MFE > 0`, which silently drops a genuine zero AND
+    counts an uncomputed row as merely absent, then printed an average with no n
+    at all; and `ComputeExcursion` filtered bars with `b.OpenTime < entryMs →
+    skip`, so unless a fill landed exactly on a bar boundary the bar CONTAINING
+    the entry — the one holding the first adverse move — was excluded. **Probe:**
+    for every numeric column, ask what value means "not measured" and count the
+    rows holding it; if that value is also a legal measurement, the column
+    cannot answer the question it exists for. For every average, ask what its n
+    is and whether the reader is told. For every window over bars, ask whether
+    the boundary bar is in or out and whether the answer is the same at both
+    ends. **Fix:** `trade_excursions` — one row per position, every numeric
+    NULLABLE and NULL until computed, written by the machine at open, recomputed
+    each tick while the position lives, closed with the exit half, and carrying
+    what a distribution needs: extremes with their timestamps and bar offsets,
+    bars held, bars that reached BOTH the stop and the target, the resolution
+    the path was built from, and pnl_corrected. A hold the tape does not reach
+    is marked `resolution="none"` and keeps its NULLs — never a guessed number,
+    and the count of those rows rides the boot line. `mae`/`mfe` on
+    trader_positions became `*float64` with a migration that nulls only the
+    517-row pair; `LearningTrade` carries `Measured` and the line prints
+    "(n=1 of 2)"; `ComputePathExcursion` counts every bar whose window
+    intersects the hold. **Law:** a column that cannot say "unknown" cannot be
+    the input to a ruling — and an aggregate that hides its n is not evidence.
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,

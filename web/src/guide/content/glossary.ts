@@ -64,6 +64,14 @@ export const glossary: GuideSection = {
           def: 'What a level is FOR: magnet / liquidity / react / target-only / pivot.',
         },
         {
+          term: 'MAE / MFE (excursion)',
+          def: 'How far a trade went AGAINST you (maximum adverse excursion) and IN YOUR FAVOUR (maximum favorable excursion), in points, measured on the 1m tape from the bar containing the fill to the exit. Recorded per position in trade_excursions with the timestamp and bar offset of each extreme, bars held, and a count of bars that reached BOTH the stop and the target. Read them with `go run ./cmd/excursions`. A trade the tape does not cover is recorded as resolution=none with NULLs — never a zero, because before 2026-09-02 the mae column defaulted to 0 and 517 of 586 closed rows were unreadable as a result.',
+        },
+        {
+          term: 'Ambiguous bar',
+          def: 'One 1m bar whose range reached both the stop and the target. A bar carries no ordering, so the excursion record resolves it AGAINST the trade (the stop) and flags the row, rather than crediting a target that may never have been hit first. The share of such rows is printed with its n beside every distribution.',
+        },
+        {
           term: 'Min-side quota',
           def: 'Per-side level counts are DELETED (owner ruling 2026-08-31). The only side guard left: a plan with 0 levels on a side fails closed (2026-08-18 pathology); an empty machine map also fails closed.',
         },
