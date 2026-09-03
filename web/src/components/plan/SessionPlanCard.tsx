@@ -17,6 +17,7 @@ import { BiasBlock } from './BiasBlock'
 import { ZoneTable } from './ZoneTable'
 import { ScenarioList } from './ScenarioList'
 import { RulesBlock, type NoTradeBandWindow } from './RulesBlock'
+import { ArmedUnderBlock, type OpenPositionProvenance } from './ArmedUnderBlock'
 import { PlanFooter } from './PlanFooter'
 import { PlanMiniChart } from './PlanMiniChart'
 import { EditSheet } from './EditSheet'
@@ -877,6 +878,16 @@ export function SessionPlanCard({
           language={language}
         />
       )}
+
+      {/* F2 (2026-09-03): a position entered under a different plan version
+          states its own terms before the rows below are read as its own */}
+      <ArmedUnderBlock
+        position={
+          (plan as { open_position?: OpenPositionProvenance | null })
+            .open_position
+        }
+        language={language}
+      />
 
       {/* rules */}
       <RulesBlock

@@ -274,6 +274,22 @@ func (s *ArmedOrderStore) SetSignal(id int64, signalID string) error {
 		Update("signal_id", signalID).Error
 }
 
+// SetFillQuantity stamps the contracts a fill actually delivered
+// (invalidation-wired, 2026-09-03).
+//
+// armed row 35 (2026-09-03, NY v2 S1) read state=filled with fill_quantity=0
+// while trader_positions carried quantity 1. Nothing wrote the column, so the
+// ledger could say a row filled and not how much — and 0 is also a legal
+// "nothing filled", so the row could not be read either way. WHERE-scoped and
+// idempotent; a zero quantity is never written over a real one.
+func (s *ArmedOrderStore) SetFillQuantity(id int64, qty int) error {
+	if s == nil || s.db == nil || id == 0 || qty <= 0 {
+		return nil
+	}
+	return s.db.Model(&ArmedOrderDB{}).Where("id = ?", id).
+		Update("fill_quantity", qty).Error
+}
+
 // ListForPlan returns every armed row of one plan chain (card render + API).
 func (s *ArmedOrderStore) ListForPlan(planID string) ([]ArmedOrderDB, error) {
 	var out []ArmedOrderDB

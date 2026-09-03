@@ -7,6 +7,17 @@ export const guards: GuideSection = {
   tagline: 'What can hard-block a trade vs what only informs.',
   asBuiltRev: GUIDE_BUILT_REV,
   blocks: [
+    { kind: 'h', text: 'Invalidation is execution-wired' },
+    {
+      kind: 'p',
+      text: "The scenario evaluator publishes a verdict every cycle — '🎯 scenario S1 → ≈invalidated @ 29285.00 (price accepted through the level against the trade)'. Until 2026-09-03 that verdict was display-only and the arm seam never read it: on 09-03 the system reached the verdict at 08:50:54 and armed that same S1 short at 29285 twelve minutes later, filled at 09:03, stopped at 09:20 for −$140. The arm gate now refuses on it, calling the SAME evaluator the display path calls, and records the refusal under its own class 'invalidated'. If the evaluator cannot reach a verdict (no bars, or an UNEVALUABLE scenario) the arm PROCEEDS and the log says 'invalidation check unavailable' — an unresolved check is not a refusal. The refusal names WHEN the verdict was reached, from a stamp written once on the transition; absent that stamp it says 'an earlier cycle' rather than passing the check time off as the verdict time.",
+    },
+    { kind: 'h', text: 'A position states the plan it was armed under' },
+    {
+      kind: 'p',
+      text: "The plan card shows the LIVE plan. On 2026-09-03 it showed NY v3 S1 long, written 09:15, while the account held a position armed under v2 S1 short — both called 'S1', and the owner read long on a short. When a position is open and was entered under a different version than the one on screen, the card now states the position's own terms first ('Position armed under v2 S1 short @ 29285.00') and the plan on screen second ('Plan now v3 — the rows below are THIS plan, not the position above'). It renders nothing when flat or when the two agree. Arms authorized before 2026-09-03 10:28 have no recorded version and render 'version not recorded', never 'v0'. (web/src/components/plan/ArmedUnderBlock.tsx · api/handler_plan_position_provenance.go)",
+    },
+
     { kind: 'h', text: 'CAN-HARD-BLOCK vs ADVISORY-ONLY (the truth table)' },
     {
       kind: 'table',

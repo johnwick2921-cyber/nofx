@@ -301,6 +301,14 @@ export const planStrings = {
   // ── rules ──
   noTrade: { en: 'No-trade', zh: '禁止交易', id: 'Larangan trade' },
   planDies: { en: 'Plan dies if', zh: '计划失效条件', id: 'Rencana mati jika' },
+  // invalidation-wired F2 (2026-09-03): a position's provenance vs the plan on
+  // screen — both stated, armed-under first.
+  armedUnder: {
+    en: 'Position armed under',
+    zh: '持仓挂单版本',
+    id: 'Posisi dipasang di',
+  },
+  planNow: { en: 'Plan now', zh: '当前计划', id: 'Rencana kini' },
   // no-trade band (2026-09-02): the machine's windows vs the model's prose
   noTradeSpent: {
     en: 'spent / other session',

@@ -193,10 +193,18 @@ func (s *Server) armedMapFor(planID string) map[string]gin.H {
 		LegIndex int    `json:"leg_index"`
 		Kind     string `json:"kind,omitempty"`
 	}
+	// INVALIDATION-WIRED F2 (2026-09-03) — the version the arm BELONGS to.
+	// armed_under_version is set once at first authorization and never
+	// overwritten; Version is mutable and re-stamped on every
+	// re-authorization, which is why the card must not read it for provenance.
+	// Rows created before 2026-09-03 10:28 carry 0 and are rendered as
+	// "version not recorded", never as v0.
 	for _, r := range rows {
 		cur, ok := out[r.Scenario]
 		if !ok {
-			cur = gin.H{"state": r.State, "reason": r.StateReason, "entry_px": r.EntryPx}
+			cur = gin.H{"state": r.State, "reason": r.StateReason, "entry_px": r.EntryPx,
+				"armed_under_version": r.ArmedUnderVersion, "side": r.Side,
+				"fill_quantity": r.FillQuantity}
 		}
 		var legs []legState
 		if existing, ok := cur["legs"].([]legState); ok {
@@ -457,6 +465,12 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 		"replan_in_flight": replanInFlight,
 		// Wave 2 armed orders — the per-scenario arm state for the card chips.
 		"armed": s.armedMapFor(row.PlanID),
+		// INVALIDATION-WIRED F2 (2026-09-03) — the OPEN position's own
+		// provenance, so the card can never render the live plan's scenario as
+		// the position's. On 2026-09-03 the card showed v3 S1 LONG (written
+		// 09:15) over a position armed under v2 S1 SHORT, and the owner read
+		// long on a short.
+		"open_position": s.openPositionProvenance(traderID, row.Version),
 		// ITEM 15 — the card marks itself HISTORICAL and offers the way back.
 		"historical":        historical,
 		"latest_version":    latestVersion,
