@@ -1030,6 +1030,45 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     intersects the hold. **Law:** a column that cannot say "unknown" cannot be
     the input to a ruling — and an aggregate that hides its n is not evidence.
 
+57. **A verdict the system published to itself and never read.** (Highest
+    occupied at merge: 56.) The scenario evaluator writes, every cycle,
+    "🎯 scenario S1 → ≈invalidated @ 29285.00 (price accepted through the level
+    against the trade — **display-only estimate, never execution-wired**)". The
+    label was honest and was the defect. On 2026-09-03 the verdict landed at
+    08:50:54; the arm seam armed that same S1 short at 29285 at 09:02:54, it
+    filled at 09:03:53 and stopped at 09:20:45 for −$140. No gate leg read the
+    conclusion the system had already reached about the setup it was about to
+    trade. Three companions of the same shape, all "the record exists and
+    nothing consumes it": the plan card rendered the LIVE plan (v3 S1 long) over
+    a position armed under v2 S1 short — both called "S1", so the owner read
+    long while holding short, and `armed_under_version` had existed since the
+    attribution wave with **zero readers**; armed row 35 read `state=filled`
+    with `fill_quantity=0` beside a position of quantity 1, because nothing ever
+    wrote the column and 0 is also a legal "nothing filled"; and "⚔️ armed …"
+    re-logged four times after that row had filled, because the ledger lookup is
+    `ListNonTerminal` and a filled row is invisible to it, so the authored
+    branch ran again. **Probe:** for every verdict, estimate or status the system
+    PUBLISHES, name the code that consumes it — a verdict with no consumer is a
+    comment. For every column added by a wave, grep for readers before trusting
+    it. For every "display-only" or "advisory" label, ask what would change if
+    it were wrong, and whether anyone would notice. For every dedup key, ask
+    which state transitions it is blind to. **Fix:** EntryGate leg 3 (arm path
+    only) refuses on the evaluator's own verdict, reached through
+    `kernel.EvaluatePlanScenarios` — the same function and the same plan-birth
+    windowing as the display path, never a second predicate — recorded under its
+    own refusal class `invalidated`; an unresolved verdict PASSES and says
+    "invalidation check unavailable", because an unresolved check is not a
+    refusal. The evaluator is stateless, so it stamps `scenario_invalidated_at`
+    once on the transition and the refusal names the verdict time rather than
+    the check time. `/plan/today` gains `open_position` provenance and
+    `ArmedUnderBlock` states a position's own version BEFORE the plan on screen,
+    rendering "version not recorded" for pre-attribution rows instead of "v0".
+    `fill_quantity` is stamped on the lineage path and a zero never overwrites a
+    measurement. The authored-log dedup value carries the row's state, and a
+    terminal row never logs "armed" at all. **Law:** a verdict the system
+    publishes to itself must have a named consumer or be deleted — and a column
+    nothing reads is not a feature, it is a rumour.
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,
