@@ -22,9 +22,16 @@ type ArmedOrderDB struct {
 
 	TraderID string `gorm:"index"`
 	PlanID   string `gorm:"index"`
-	Version  int
-	Session  string
-	Scenario string // S1, S2, …
+	// Version is the LAST plan version that touched this row, not the one it was
+	// armed under: UpsertArm overwrites it on every re-authorization. Documented
+	// 2026-09-02 after the cadence audit trusted it as "armed under" and could
+	// not defend the reading. Use ArmedUnderVersion for attribution.
+	Version int
+	// ArmedUnderVersion is set ONCE, when the arm is first authorized, and is
+	// never overwritten. This is the version the arm actually belongs to.
+	ArmedUnderVersion int `gorm:"index"`
+	Session           string
+	Scenario          string // S1, S2, …
 
 	Side     string  // long | short
 	EntryPx  float64 // resting limit price
@@ -113,6 +120,10 @@ func (s *ArmedOrderStore) Migrate() error {
 			{"leg_count", "INTEGER NOT NULL DEFAULT 0"},
 			{"kind", "TEXT NOT NULL DEFAULT ''"},
 			{"boot_id", "TEXT NOT NULL DEFAULT ''"}, // class 33 — pre-boot decidability
+			// ATTRIBUTION (2026-09-02): the version the arm was FIRST authorized
+			// under. 0 on legacy rows; UpsertArm adopts their current version
+			// once, so the table self-heals without a guessing migration.
+			{"armed_under_version", "INTEGER NOT NULL DEFAULT 0"},
 		} {
 			var n int64
 			if err := s.db.Raw("SELECT COUNT(*) FROM pragma_table_info('armed_orders') WHERE name = ?", col.name).Scan(&n).Error; err != nil {
@@ -156,6 +167,19 @@ func (s *ArmedOrderStore) UpsertArm(row *ArmedOrderDB) error {
 	if err == nil {
 		if existing.State == "armed" || existing.State == "working" {
 			row.ID = existing.ID
+			// ATTRIBUTION (2026-09-02): armed_under_version is NOT in this map —
+			// it belongs to the first authorization and must survive every
+			// re-authorization. "version" continues to mean last-touch.
+			row.ArmedUnderVersion = existing.ArmedUnderVersion
+			if row.ArmedUnderVersion == 0 {
+				// A row armed before the column existed: adopt its current
+				// version once, so the backfill is self-healing rather than a
+				// migration that has to guess.
+				row.ArmedUnderVersion = existing.Version
+				if err := s.db.Model(&existing).Update("armed_under_version", row.ArmedUnderVersion).Error; err != nil {
+					return err
+				}
+			}
 			return s.db.Model(&existing).Updates(map[string]any{
 				"version": row.Version, "session": row.Session,
 				"side": row.Side, "entry_px": row.EntryPx, "stop_px": row.StopPx,
@@ -194,7 +218,10 @@ func (s *ArmedOrderStore) UpsertArm(row *ArmedOrderDB) error {
 			"state": "armed", "state_reason": "", "signal_id": "",
 			"entry_class": "", "fill_price": 0, "fill_quantity": 0,
 			"trader_id": row.TraderID, "version": row.Version, "session": row.Session,
-			"side": row.Side, "entry_px": row.EntryPx, "stop_px": row.StopPx,
+			// ATTRIBUTION: a terminal row re-authorized under a NEW plan version
+			// is a NEW arm reusing the row id — its first authorization is now.
+			"armed_under_version": row.Version,
+			"side":                row.Side, "entry_px": row.EntryPx, "stop_px": row.StopPx,
 			"target_px": row.TargetPx, "leg_count": row.LegCount, "kind": row.Kind,
 			"created_at": row.CreatedAt, "updated_at": row.UpdatedAt,
 			// class 33: a re-authorized row belongs to THIS process.
@@ -208,6 +235,10 @@ func (s *ArmedOrderStore) UpsertArm(row *ArmedOrderDB) error {
 	// sweep never mistakes it for an orphan of a dead one.
 	if row.BootID == "" {
 		row.BootID = ProcessBootID()
+	}
+	// ATTRIBUTION: first authorization stamps the version the arm belongs to.
+	if row.ArmedUnderVersion == 0 {
+		row.ArmedUnderVersion = row.Version
 	}
 	return s.db.Create(row).Error
 }

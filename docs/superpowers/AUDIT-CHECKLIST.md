@@ -932,6 +932,40 @@ in CLAUDE.md).
     arguments tests nothing; and the instrument that proves a fix works must
     not fire only when the fix fails.
 
+52. **Two spellings of "we don't know", and a field that meant something else
+    than its name.** (Highest occupied at merge: 51.) Root cause: three states
+    were stored as two values. `position_plan_join`'s comment has said since
+    2026-08-26 that unresolvable rows carry `plan_id='UNRESOLVABLE'`, and four
+    do (530, 539, 545, 546) — but three others carry `''` (566, 571, 580),
+    which is also what a row looks like *before* anything stamps it. A consumer
+    testing the sentinel misses the empty ones; a consumer testing empty misses
+    the sentinel; neither can tell "we looked and found nothing" from "nobody
+    has looked yet". Separately, `armed_orders.version` was overwritten by
+    `UpsertArm` on every re-authorization, so an arm's stored version was the
+    LAST version that touched it, not the version it was armed under — and a
+    cadence audit that leaned on it could not defend its own reading.
+    **Probe:** for every column that encodes an absence, ask how many distinct
+    absences exist and whether each has its own value; for every column whose
+    name implies a moment ("armed under", "created by", "first seen"), find the
+    write path and check nothing later overwrites it. **Fix:** one sentinel with
+    a `ClassifyPlanLink` three-state classifier that consumers call instead of
+    comparing strings; the materializer stamps the sentinel at creation, loudly,
+    so a row is never born `''`; a scoped idempotent convergence for the
+    day-plan era ONLY (pre-era history is left alone — calling a crypto-era
+    trade "unresolvable" would imply we looked for a plan that never existed,
+    the same lie in the other direction); and `armed_under_version`, set once at
+    first authorization, never overwritten, with `version` documented as
+    last-touch. **The measurement that shaped the wave:** the dispatch believed
+    the join was blind for 25% of a week and that reconcile-materialized rows
+    could never be stamped. Measured: since the day-plan era, 51/51 `system` and
+    5/5 `armed_entry` rows carry a link, 8 of 11 `reconcile` rows do, September
+    was 0 unlinked, and the two rows named as unstamped (584, 586) were already
+    fully stamped. The wave shrank to roughly a fifth of its dispatch.
+    **Law:** every distinct absence gets its own value and one classifier; a
+    column named for a moment must be written once; and measure the rate before
+    building for it — an alarming percentage over the wrong denominator will
+    buy a large fix for a small problem.
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,

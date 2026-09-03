@@ -209,6 +209,22 @@ export const guards: GuideSection = {
       kind: 'p',
       text: 'Separately, every read now records what the model was told: the void list, the minimum stop distance and the ATR behind it, the bias labels and the resolved window, whether the read succeeded or failed. Before this, a rendered prompt was kept only when a read was REJECTED, so the better the system got the less evidence it left — the 2 September fix could be proven live only because a read happened to fail. Five hundred reads are kept.',
     },
+    {
+      kind: 'h',
+      text: 'EVERY POSITION SAYS WHAT IT KNOWS ABOUT ITS PLAN (class 52)',
+    },
+    {
+      kind: 'p',
+      text: 'A closed trade either links to the plan that produced it, or it does not. Until now "does not" was written two different ways: some rows said UNRESOLVABLE, others were simply blank — and blank is also what a row looks like before anything has stamped it. So no report could tell "we looked and there was nothing to join to" from "nobody has looked yet". There is now one value and one place that decides which of the three states a row is in. A position created from an unrecognised broker position is stamped UNRESOLVABLE the moment it is created, with a line in the journal, because that path knows an account, a symbol, a side and a price and nothing else — there is no order of ours behind it to trace. A link is never guessed.',
+    },
+    {
+      kind: 'p',
+      text: 'Worth knowing what this did NOT turn out to be. It was dispatched on a belief that a quarter of recent trades could not be traced to a plan. Measured before building: since the day-plan era began, every system and every armed entry carries a link, eight of eleven reconciled rows do, September had none missing, and the two trades named as unstamped were already fully stamped. The real gap was three rows across three weeks, none with an arm within thirty minutes of it. The older history — several hundred crypto-era trades — is left exactly as it was, because marking those UNRESOLVABLE would claim we searched for a plan that never existed.',
+    },
+    {
+      kind: 'p',
+      text: 'Second fix, same wave: an armed order now records the plan version it was ARMED under, once, and never rewrites it. Its existing version field still moves when a later plan version touches the row, and is now documented as meaning exactly that. Before this, an arm\'s version was whatever last touched it, which is why an audit asking "which version armed this?" could not answer honestly.',
+    },
     { kind: 'h', text: 'WHEN YOU SAVE IN STRATEGY STUDIO (class 44)' },
     {
       kind: 'p',
