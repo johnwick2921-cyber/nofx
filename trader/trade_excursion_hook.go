@@ -46,7 +46,8 @@ func (at *AutoTrader) excursionOnOpen(p *store.TraderPosition, stopPx, targetPx,
 		row := store.TradeExcursion{
 			PositionID: p.ID, PlanID: p.PlanID, Version: p.PlanVersion,
 			Session: p.PlanSession, Scenario: p.CitedScenarioID,
-			Side: p.Side, EntryPx: p.EntryPrice, EntryTs: p.EntryTime,
+			Condition: excursionCondition(at.store, p.PlanID, p.PlanVersion, p.CitedScenarioID),
+			Side:      p.Side, EntryPx: p.EntryPrice, EntryTs: p.EntryTime,
 			StopPxInitial: stopPx, TargetPx: targetPx,
 			Size: p.Quantity, ATR5mAtEntry: atr5m,
 		}

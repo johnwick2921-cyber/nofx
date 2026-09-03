@@ -103,3 +103,65 @@ func TestExcursionCloseCopiesCorrectedPnL(t *testing.T) {
 		t.Errorf("pnl_corrected = %v with none supplied — must stay NULL", *row2.PnlCorrected)
 	}
 }
+
+// E6 — the distribution must never let an unmeasured row read as a zero, and
+// must never print a rate without the n it rests on (A24).
+func TestExcursionDistributionKeepsUnmeasuredOut(t *testing.T) {
+	es := excStore(t)
+	mk := func(pos int64, cond string, mae, mfe float64, measured bool, stop, target float64, ambBars int) {
+		id, err := es.Open(TradeExcursion{
+			PositionID: pos, Condition: cond, Session: "NY", Side: "LONG",
+			EntryPx: 100, EntryTs: 1, StopPxInitial: stop, TargetPx: target, Size: 1,
+		})
+		if err != nil {
+			t.Fatalf("open: %v", err)
+		}
+		if !measured {
+			if err := es.MarkNoCoverage(id); err != nil {
+				t.Fatalf("no coverage: %v", err)
+			}
+			return
+		}
+		if err := es.UpdatePath(id, TradeExcursionPath{
+			MAEPts: mae, MFEPts: mfe, BarsHeld: 5, AmbiguousBars: ambBars, Resolution: "1m",
+		}); err != nil {
+			t.Fatalf("path: %v", err)
+		}
+	}
+	mk(1, "reject", 10, 30, true, 90, 120, 0)
+	mk(2, "reject", 20, 5, true, 90, 120, 1)
+	mk(3, "reject", 0, 0, false, 90, 120, 0) // no coverage — must NOT count as 0/0
+	mk(4, "reject", 40, 8, true, 0, 0, 0)    // measured, but levels unknown
+
+	buckets, err := es.ExcursionDistribution("condition")
+	if err != nil || len(buckets) != 1 {
+		t.Fatalf("distribution: %v n=%d", err, len(buckets))
+	}
+	b := buckets[0]
+	if b.N != 3 {
+		t.Fatalf("n = %d, want 3 measured rows (the no-coverage row is excluded)", b.N)
+	}
+	if b.Unmeasured != 1 {
+		t.Errorf("unmeasured = %d, want 1 — reported, never averaged in", b.Unmeasured)
+	}
+	// p50 of {10,20,40} is 20; a folded-in zero would drag it to 10.
+	if b.MAEp50 != 20 {
+		t.Errorf("MAE p50 = %v, want 20 — an unmeasured row must not act as a zero", b.MAEp50)
+	}
+	share, n, ok := b.AmbiguousShare()
+	if !ok || n != 2 {
+		t.Fatalf("ambiguous share must rest on the 2 rows with known levels, got n=%d ok=%v", n, ok)
+	}
+	if share != 0.5 {
+		t.Errorf("ambiguous share = %v, want 0.5 (1 of 2)", share)
+	}
+	if b.UnknownLevels != 1 {
+		t.Errorf("unknown_levels = %d, want 1", b.UnknownLevels)
+	}
+
+	// A group with nothing judgeable prints no rate at all.
+	empty := ExcursionBucket{N: 2, UnknownLevels: 2}
+	if _, _, ok := empty.AmbiguousShare(); ok {
+		t.Error("a rate with no denominator must not be offered")
+	}
+}

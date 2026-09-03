@@ -237,3 +237,21 @@ func (s *TradeExcursionStore) Counts() (total, measured, unresolved int64, err e
 	err = s.db.Model(&TradeExcursion{}).Where("resolution = 'none'").Count(&unresolved).Error
 	return
 }
+
+// ClosedPositionsBetween lists the closed positions whose ENTRY falls inside
+// [fromMs, toMs], oldest first — the backfill's work list. It lives here so the
+// backfill (which needs kernel, and so cannot live in this package) does not
+// reach for the gorm handle directly.
+func (s *TradeExcursionStore) ClosedPositionsBetween(symbol, traderID string, fromMs, toMs int64) ([]TraderPosition, error) {
+	q := s.db.Model(&TraderPosition{}).
+		Where("status = ? AND entry_time >= ? AND entry_time <= ?", "CLOSED", fromMs, toMs)
+	if traderID != "" {
+		q = q.Where("trader_id = ?", traderID)
+	}
+	if symbol != "" {
+		q = q.Where("symbol = ?", symbol)
+	}
+	var out []TraderPosition
+	err := q.Order("entry_time asc").Find(&out).Error
+	return out, err
+}
