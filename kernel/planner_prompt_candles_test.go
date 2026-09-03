@@ -43,12 +43,12 @@ func TestPlannerCandleTablesRenderAndTokenBudget(t *testing.T) {
 		Price:        30100.0,
 		DATR:         120.0,
 		CandleTables: table,
-		WeeklyCtx:    "WEEKLY: bull/high · draw PWH 30500.25 · invalid 30300.00 (1h close beyond 30300.00)",
+		WeeklyCtx:    "WEEKLY: refs only — PWH 30500.25 · PWL 29980.00",
 	})
 	if !strings.Contains(prompt, "## Candles (oldest→latest)") {
 		t.Fatalf("proving line: prompt must carry the ## Candles section")
 	}
-	if !strings.Contains(prompt, "## Weekly Context") || !strings.Contains(prompt, "WEEKLY: bull/high") {
+	if !strings.Contains(prompt, "## Weekly Context") || !strings.Contains(prompt, "WEEKLY: refs only") {
 		t.Fatalf("proving line: prompt must carry the ## Weekly Context section")
 	}
 	tokens := len(prompt) / 4

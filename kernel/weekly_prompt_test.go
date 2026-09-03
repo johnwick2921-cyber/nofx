@@ -12,11 +12,8 @@ import (
 
 func wkDoc() *WeeklyDoc {
 	return &WeeklyDoc{
-		Bias: "bull", Conviction: "high",
-		Draw:         WeeklyDraw{Name: "PWH", Px: 30500.25},
-		Invalidation: WeeklyInvalidation{Px: 30300.00, Basis: "1h close beyond 30300.00"},
-		WeeklyLevels: []WeeklyLevel{{Name: "PWH", Px: 30500.25}, {Name: "PWL", Px: 29980.00}},
-		Narrative:    "auction accepted above the prior high\nholding above weekly open\nfailure below the draw voids the read",
+		WeeklyLevels: []WeeklyLevel{{Name: "PWH", Px: 30500.25}, {Name: "PWL", Px: 29980.00}, {Name: "IPDA-20d-high", Px: 30600.00}},
+		Narrative:    "PWH and PWL bracket the accepted range\nIPDA 20d high is the first upper reference",
 	}
 }
 
@@ -26,74 +23,60 @@ func weeklyPxBar(openTimeMs int64, o, h, l, c float64) market.Kline {
 	return market.Kline{OpenTime: openTimeMs, Open: o, High: h, Low: l, Close: c, Volume: 1}
 }
 
-// ── validator r1-r6 ────────────────────────────────────────────────────────
+// ── validator r1-r4 (refs-only, class 50) ──────────────────────────────────
 
-func TestWeeklyValidatorR1Enum(t *testing.T) {
+func TestWeeklyValidatorRefsOnly(t *testing.T) {
 	d := wkDoc()
 	if got := ValidateWeeklyDoc(d, refsForDoc(), false); got != "" {
-		t.Fatalf("valid doc rejected: %s", got)
+		t.Fatalf("valid refs-only doc rejected: %s", got)
 	}
-	d.Bias = "sideways"
-	if got := ValidateWeeklyDoc(d, refsForDoc(), false); !strings.Contains(got, "r1") {
-		t.Fatalf("proving line: r1 bias enum — got %q", got)
+	d2 := wkDoc()
+	d2.WeeklyLevels = nil
+	if got := ValidateWeeklyDoc(d2, refsForDoc(), false); !strings.Contains(got, "r1") {
+		t.Fatalf("proving line: r1 empty weekly_levels — got %q", got)
 	}
-	d = wkDoc()
-	d.Conviction = "extreme"
-	if got := ValidateWeeklyDoc(d, refsForDoc(), false); !strings.Contains(got, "r1") {
-		t.Fatalf("proving line: r1 conviction enum — got %q", got)
+	d3 := wkDoc()
+	d3.WeeklyLevels[0].Px = 0
+	if got := ValidateWeeklyDoc(d3, refsForDoc(), false); !strings.Contains(got, "r1") {
+		t.Fatalf("proving line: r1 px>0 — got %q", got)
 	}
-}
-
-func TestWeeklyValidatorR2Invalidation(t *testing.T) {
-	d := wkDoc()
-	d.Invalidation.Px = 0
-	if got := ValidateWeeklyDoc(d, refsForDoc(), false); !strings.Contains(got, "r2") {
-		t.Fatalf("proving line: r2 px>0 — got %q", got)
-	}
-	d = wkDoc()
-	d.Invalidation.Basis = ""
-	if got := ValidateWeeklyDoc(d, refsForDoc(), false); !strings.Contains(got, "r2") {
-		t.Fatalf("proving line: r2 basis non-empty — got %q", got)
+	// A legacy directional doc (pre-wave shape) is STILL ACCEPTED — the schema
+	// tolerates stored rows; the direction is simply never read.
+	legacy := &WeeklyDoc{Bias: "bull", Conviction: "high", Draw: WeeklyDraw{Name: "PWH", Px: 30500.25},
+		Invalidation: WeeklyInvalidation{Px: 30300, Basis: "1h close beyond 30300.00"},
+		WeeklyLevels: []WeeklyLevel{{Name: "PWH", Px: 30500.25}, {Name: "PWL", Px: 29980}},
+		Narrative:    "facts only"}
+	if got := ValidateWeeklyDoc(legacy, refsForDoc(), false); got != "" {
+		t.Fatalf("proving line: legacy-shaped doc parses — got %q", got)
 	}
 }
 
-func TestWeeklyValidatorR3DrawReference(t *testing.T) {
-	d := wkDoc()
-	d.Draw.Px = 30333.33 // matches nothing in refsForDoc
-	if got := ValidateWeeklyDoc(d, refsForDoc(), false); !strings.Contains(got, "r3") {
-		t.Fatalf("proving line: r3 draw-not-a-reference — got %q", got)
-	}
-	d = wkDoc()
-	d.Draw.Px = 30500.30 // 0.05 from PWH — inside the ±1 tick (0.25) band
-	if got := ValidateWeeklyDoc(d, refsForDoc(), false); got != "" {
-		t.Fatalf("proving line: r3 draw within ±1 tick accepted — got %q", got)
-	}
-}
-
-func TestWeeklyValidatorR4NarrativeLines(t *testing.T) {
+func TestWeeklyValidatorR2NarrativeLines(t *testing.T) {
 	d := wkDoc()
 	d.Narrative = "l1\nl2\nl3\nl4"
-	if got := ValidateWeeklyDoc(d, refsForDoc(), false); !strings.Contains(got, "r4") {
-		t.Fatalf("proving line: r4 narrative >3 lines — got %q", got)
+	if got := ValidateWeeklyDoc(d, refsForDoc(), false); !strings.Contains(got, "r2") {
+		t.Fatalf("proving line: r2 narrative >3 lines — got %q", got)
 	}
 }
 
-func TestWeeklyValidatorR5DayOfWeekTokens(t *testing.T) {
+func TestWeeklyValidatorR3DayOfWeekTokens(t *testing.T) {
 	d := wkDoc()
 	d.Narrative = "Monday seasonality favors longs"
-	if got := ValidateWeeklyDoc(d, refsForDoc(), false); !strings.Contains(got, "r5") {
-		t.Fatalf("proving line: r5 day-of-week token — got %q", got)
+	if got := ValidateWeeklyDoc(d, refsForDoc(), false); !strings.Contains(got, "r3") {
+		t.Fatalf("proving line: r3 day-of-week token — got %q", got)
 	}
 }
 
-func TestWeeklyValidatorR6ThinHistoryConviction(t *testing.T) {
-	d := wkDoc() // conviction high
-	if got := ValidateWeeklyDoc(d, refsForDoc(), true); !strings.Contains(got, "r6") {
-		t.Fatalf("proving line: r6 thin_history + high conviction — got %q", got)
+func TestWeeklyValidatorR4DirectionalCallForbidden(t *testing.T) {
+	d := wkDoc()
+	d.Narrative = "price should trend higher — bullish above PWH"
+	if got := ValidateWeeklyDoc(d, refsForDoc(), false); !strings.Contains(got, "r4") {
+		t.Fatalf("proving line: r4 directional token — got %q", got)
 	}
-	d.Conviction = "low"
-	if got := ValidateWeeklyDoc(d, refsForDoc(), true); got != "" {
-		t.Fatalf("proving line: r6 thin_history + low conviction accepted — got %q", got)
+	// thin history no longer interacts with conviction — no conviction exists.
+	d2 := wkDoc()
+	if got := ValidateWeeklyDoc(d2, refsForDoc(), true); got != "" {
+		t.Fatalf("proving line: thin history + refs-only doc accepted — got %q", got)
 	}
 }
 
@@ -129,7 +112,7 @@ func TestWeeklyPromptSectionsAndHash(t *testing.T) {
 	}
 	prompt := BuildWeeklyPrompt(f)
 	for _, want := range []string{"## Instructions (THE RULES — violations are rejected)",
-		"Tier-A evidence ONLY", "draw_on_liquidity MUST equal", `"invalidation":{"px":<n>,"basis":"1h close beyond <px>"}`,
+		"weekly_levels", "REFS ONLY", `{"weekly_levels":[{"name":"<ref name>","px":<n>}],"narrative":"≤3 lines, facts only"}`,
 		"Day-of-week reasoning is FORBIDDEN"} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("proving line: weekly prompt missing %q", want)
@@ -167,52 +150,72 @@ func TestWeeklyInvalidationTwins(t *testing.T) {
 	}
 }
 
-// ── W3 injection render — all 4 states ─────────────────────────────────────
+// ── W3 injection render — refs-only (class 50) ─────────────────────────────
 
-func TestWeeklyContextLineAllStates(t *testing.T) {
+func TestWeeklyContextLineRefsOnly(t *testing.T) {
 	if got := WeeklyContextLine(nil, 0); got != "WEEKLY: none" {
 		t.Fatalf("proving line: no-doc state — got %q", got)
 	}
 	d := wkDoc()
-	if got := WeeklyContextLine(d, 0); got != "WEEKLY: bull/high · draw PWH 30500.25 · invalid 30300.00 (1h close beyond 30300.00)" {
-		t.Fatalf("proving line: active state — got %q", got)
+	if got := WeeklyContextLine(d, 0); got != "WEEKLY: refs only — PWH 30500.25 · PWL 29980.00" {
+		t.Fatalf("proving line: refs-only state — got %q", got)
 	}
-	inv := wkDoc()
-	inv.InvalidatedAt = "2026-08-28 10:15 CT"
-	if got := WeeklyContextLine(inv, 0); got != "WEEKLY: neutral (invalidated 2026-08-28 10:15 CT)" {
-		t.Fatalf("proving line: invalidated state — got %q", got)
+	// A legacy directional doc renders refs only too — the direction is ignored.
+	legacy := &WeeklyDoc{Bias: "bull", Conviction: "high", Draw: WeeklyDraw{Name: "PWH", Px: 30500.25},
+		Invalidation: WeeklyInvalidation{Px: 30300, Basis: "1h close beyond 30300.00"}, InvalidatedAt: "2026-08-28 10:15 CT",
+		WeeklyLevels: []WeeklyLevel{{Name: "PWH", Px: 30500.25}, {Name: "PWL", Px: 29980}}}
+	if got := WeeklyContextLine(legacy, 0); got != "WEEKLY: refs only — PWH 30500.25 · PWL 29980.00" {
+		t.Fatalf("proving line: legacy doc renders refs-only — got %q", got)
 	}
 	thin := wkDoc()
 	thin.ThinHistory = true
-	thin.Conviction = "low"
-	if got := WeeklyContextLine(thin, 3); got != "WEEKLY: thin history (3w) — low conviction" {
+	if got := WeeklyContextLine(thin, 3); got != "WEEKLY: refs only — PWH 30500.25 · PWL 29980.00 (thin history 3w)" {
 		t.Fatalf("proving line: thin-history state — got %q", got)
 	}
-	if got := WeeklyExecutorLine(d); got != "WEEKLY: bull/high · draw 30500.25" {
+	if got := WeeklyExecutorLine(d); got != "WEEKLY: refs only — PWH 30500.25 · PWL 29980.00" {
 		t.Fatalf("proving line: executor line — got %q", got)
-	}
-	if got := WeeklyExecutorLine(inv); got != "WEEKLY: neutral (invalidated 2026-08-28 10:15 CT)" {
-		t.Fatalf("proving line: invalidated doc renders a neutral line — got %q", got)
-	}
-}
-
-// TestWeeklyExecutorLineInvalidatedRendersNeutral — F1 (2026-08-30): an
-// invalidated weekly doc must stay VISIBLE in the executor prompt as
-// "WEEKLY: neutral (invalidated …)", never silent (the silent "" hid the
-// invalidated-bear doc through the −204pt sell-off).
-func TestWeeklyExecutorLineInvalidatedRendersNeutral(t *testing.T) {
-	doc := &WeeklyDoc{Bias: "neutral", Conviction: "low", Draw: WeeklyDraw{Name: "PWL", Px: 28947.75},
-		Invalidation: WeeklyInvalidation{Px: 29535, Basis: "1h close beyond 29535.00"}, InvalidatedAt: "2026-08-30 17:07 CT"}
-	if got := WeeklyExecutorLine(doc); got != "WEEKLY: neutral (invalidated 2026-08-30 17:07 CT)" {
-		t.Fatalf("invalidated line = %q", got)
-	}
-	active := &WeeklyDoc{Bias: "bear", Conviction: "low", Draw: WeeklyDraw{Name: "PWL", Px: 28947.75},
-		Invalidation: WeeklyInvalidation{Px: 29535, Basis: "1h close beyond 29535.00"}}
-	if got := WeeklyExecutorLine(active); !strings.Contains(got, "WEEKLY: bear/low") {
-		t.Fatalf("active line = %q", got)
 	}
 	if got := WeeklyExecutorLine(nil); got != "" {
 		t.Fatalf("nil doc line = %q, want empty", got)
+	}
+}
+
+// TestWeeklyChipsNeverCarryDirection (class 50) — THE LAW pinned: no rendered
+// weekly line may contain a directional token, whatever the stored doc says.
+func TestWeeklyChipsNeverCarryDirection(t *testing.T) {
+	legacy := &WeeklyDoc{Bias: "bear", Conviction: "high", Draw: WeeklyDraw{Name: "PWL", Px: 28947.75},
+		Invalidation: WeeklyInvalidation{Px: 29535, Basis: "1h close beyond 29535.00"}, InvalidatedAt: "2026-08-30 17:07 CT",
+		WeeklyLevels: []WeeklyLevel{{Name: "PWH", Px: 29900}, {Name: "PWL", Px: 28947.75}}}
+	for _, line := range []string{WeeklyContextLine(legacy, 0), WeeklyExecutorLine(legacy)} {
+		for _, tok := range []string{"bull", "bear", "long", "short", "invalidated"} {
+			if strings.Contains(strings.ToLower(line), tok) {
+				t.Fatalf("proving line: weekly line %q carries directional token %q", line, tok)
+			}
+		}
+	}
+}
+
+// TestWeeklyRuleBiasShadow — the deterministic rule survives as SHADOW (class
+// 50): it computes a direction but nothing renders it.
+func TestWeeklyRuleBiasShadow(t *testing.T) {
+	f := WeeklyFacts{Refs: WeeklyRefs{WeeklyOpen: 30000, PWH: 30400, PWL: 29600},
+		Weeks: []WeekCandle{{WeekStart: "2026-08-24", Open: 30050, High: 30500, Low: 29900, Close: 30450}}}
+	if bias, why := WeeklyRuleBias(f); bias != "bull" || why == "" {
+		t.Fatalf("bull case: %q %q", bias, why)
+	}
+	f.Weeks[0].Close = 29500
+	if bias, _ := WeeklyRuleBias(f); bias != "bear" {
+		t.Fatalf("bear case: %q", bias)
+	}
+	f.Weeks[0].Close = 30100
+	if bias, _ := WeeklyRuleBias(f); bias != "neutral" {
+		t.Fatalf("neutral case: %q", bias)
+	}
+	// The shadow result is NOT part of any rendered line.
+	d := wkDoc()
+	d.ShadowBias, d.ShadowWhy = "bull", "would have been bull"
+	if got := WeeklyContextLine(d, 0); strings.Contains(got, "bull") {
+		t.Fatalf("shadow bias leaked into the chip: %q", got)
 	}
 }
 

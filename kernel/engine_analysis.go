@@ -440,7 +440,7 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 			logger.Infof("🗺️ day-plan KEY LEVELS ON but omitted this cycle for %s — no levels available (no 1m bars / provider down / warming forward); prompt has no KEY LEVELS block.", activeSymbol)
 		}
 		// W3 (weekly-bias wave) — the one-line weekly context for the executor
-		// (soft law; "WEEKLY: bull/high · draw 30500.25"). Never changes a gate.
+		// (soft law; "WEEKLY: refs only — PWH x · PWL y", class 50). Never changes a gate.
 		if wd := WeeklyDocFor(ctx.TraderID); wd != nil {
 			engine.SetWeeklyContext(WeeklyExecutorLine(wd))
 		}
