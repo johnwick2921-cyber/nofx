@@ -479,46 +479,81 @@ would have looked like a pass had I asserted only "the stamp ran".
 
 ---
 
-## 10. OPEN ITEMS — neither is in any shipped commit
+## 10. CLOSED — owner extended the footprint and ruled (2026-09-03)
 
-Named explicitly because they sit between lanes and a checklist entry is not a
-fix. Both need the owner.
+Both open items are now implemented on this branch. §10.3's standing watch
+stays open by design.
 
-### 10.1 CODE — the reset predicate is still wrong
+### 10.1 The reset predicate — keyed on the stamp
 
-`trader/ninjatrader/reconcile.go`:
+`RepairArmedLineage` keyed on `AdherenceGrade == "F"`, which is a SUBSET, not
+an impossible value: an uncited close grades base D and steps to F under either
+penalty. It succeeded on penalised uncited rows (566, 571) and failed on clean
+ones (580).
 
-```go
-if p.Status == "CLOSED" && p.AdherenceGrade == "F" {
+It keys on **"lineage was just stamped on this row"** now, whatever letter the
+row holds — if lineage was just written, the grade was computed without it and
+is stale by construction. A row nothing stamps is untouched: **580 keeps its
+earned D.** Pinned across D, F and C, plus the unstamped case.
+
+### 10.2 Canonical casing at the write (class 28)
+
+`UPPER(side)=UPPER(?)` fixed the read. `UpsertArm` now uppercases `side` where
+the value **enters**, so `armed_orders` stops disagreeing with
+`trader_positions` at the source. Existing lowercase rows keep working through
+the fold-insensitive read.
+
+### 10.3 The migration — FOUR rows, not seven
+
+Flag-guarded (`ADHERENCE_REGRADE`, default OFF), backup first via the same
+online `sqlite3 .backup` the C1 timer uses (**no backup, no write**), and
+idempotent.
+
+The ruling listed seven ids. Three do not qualify, and including them would
+regrade a test seam and promote two closes that earned their D:
+
+| id | why it must be left alone |
+|---|---|
+| 530 | cites the literal `off-plan` sentinel, `matched=0` — D is correct |
+| 572 | `source=e7_farside_test`, `TEST-E7`, `plan_version 0` — not a trade |
+| 582 | `matched=0` → base C, "direction mismatched", −1 penalty — D is correct |
+
+Every clause of `stuckAdherenceWhere` exists because one of those rows proves
+it. nofx-47 reached the same four independently and told the owner.
+
+**It CLEARS the grade; it never writes one.** W5 regrades with the lineage in
+hand — the same mechanism `RepairArmedLineage` uses, so there is no second
+grader and no invented verdict. A cleared row is *ungraded* (excluded from
+distributions) until W5 runs, which is honest rather than wrong.
+
+#### Before / after, measured on a copy of the live store
+
+```
+pending ids : [575 584 586 591]
+before      : A 30 · B 22 · C 5 · D 10 · F 4     (n=71)
+after       : A 30 · B 22 · C 5 · D  6 · F 4     (4 cleared, pending recompute)
+second run  : 0                                   (idempotent)
 ```
 
-`95e9a4d0` and `664ab6b7` fix the STAMPING. Nothing fixes this line. It must key
-on **the absence of lineage** rather than on a grade letter that encodes lineage
-plus two unrelated penalties — and it must NOT simply also match `"D"`, because
-580 is a genuinely uncited close that deserves its D.
+The boot line reports what is **pending** when the flag is off, so the count is
+visible without arming anything:
 
-Consequence if left: the stamping fixes stop new rows going unstamped; they do
-not stop a **late**-stamped row keeping a wrong grade. Every future clean uncited
-close repeats the defect. Class 59's third probe records the lesson; it does not
-change the line.
+```
+🩹 adherence regraded=0 (ADHERENCE_REGRADE off) · 4 row(s) pending: full lineage
+   still holding an off-plan D
+```
 
-Not in this wave's footprint (adherence belongs to the grader). **Owner call.**
+### 10.4 STANDING WATCH — the row 582 could not be
 
-### 10.2 DATA — the 4 stuck rows, separate from 10.1
-
-**575, 584, 586, 591** already carry full lineage, so fixing 10.1 does not reach
-them: the reset only fires on rows the repair path visits. They need an
-owner-authorised DB write — scoped, idempotent, backed up first — and the
-backfill-versus-fix-forward question decided, since a silent backfill moves a
-published grade distribution (A 30 · B 22 · D 10 · C 5 · F 4, n=71).
-
-Neither nofx-89 nor I have written it, and neither of us should.
-
-### 10.3 STANDING WATCH — the row 582 could not be
-
-The armed-path question is **untested, not exonerated**. The discriminating
-observation is a future `armed_entry` close with `plan_matched=1` and grade
-**D**: base A cannot reach D, so that row would prove the ordering defect exists
-outside the reconcile path. Worth a standing watch rather than a re-derivation.
+Unchanged and deliberately open. The armed-path question is **untested, not
+exonerated**. The discriminating observation is a future `armed_entry` close
+with `plan_matched=1` and grade **D** — base A cannot reach D, so that row
+would prove the ordering defect exists outside the reconcile path.
 
 Guard any re-derivation with the lineage clause — see the 572 trap above.
+
+### 10.5 NOT MINE — dev is red on a test
+
+`TestMaybeWakePlannerOnLevelEventsThrottleDedupe` fails on `origin/dev` at
+`62fd368d`, verified in a clean worktree of dev itself, unrelated to this
+branch. Reported, not touched — wakes are another lane. **[A]**
