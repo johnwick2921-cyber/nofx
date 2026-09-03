@@ -1,10 +1,13 @@
-# INVALIDATION-WIRED (checklist class 57)
+# INVALIDATION-WIRED (checklist class 59)
 
 **Branch:** `fix/invalidation-wired` off `75d923eb` (deployed rev `528edd78`)
 **Commits:** `d2805408` · `c52c98e2` (+ this report) · pushed
-**Checklist:** entry **57** (highest occupied at merge: **56**)
+**Checklist:** entry **59** — renumbered 57 → 59 AT MERGE by the integrator
+(nofx-52): 57 went to a magic-epoch class that merged first. PART 1 is 50–59.
 **Boot line:** `🛡 arm gate: invalidation-wired=on · armed-under surfaces=on …`
-**Status:** NOT DEPLOYED. Rides the next boot.
+**Status:** MOSTLY LIVE. `beb42e04` merged into dev and shipped as rev
+`f478ed88`, booted 2026-09-03 11:10:33 CT (marker `67ff5e9c`, zero ERRO). The
+one-live-position commit is DEFERRED to the next boot by owner instruction.
 
 ---
 
@@ -227,3 +230,86 @@ rollback named by the rev it holds, A19 all four halves with the marker
 
 **PROOF OWED:** the next arm on an already-invalidated scenario showing the
 refusal line, and the next open position's card showing its armed-under version.
+
+---
+
+## 9. F3 WAS INCOMPLETE — TWO MECHANISMS, AND I MISATTRIBUTED THE NUMBERS
+
+Three sessions untangled this. My first account of it was wrong twice.
+
+### 9.1 The measured population (current rev, not a borrowed baseline)
+
+```
+armed_orders            total 36 · filled 10 · filled with fill_quantity>0: 0 · with 0: 10
+trader_positions        587 · system 567 · reconcile 12 · armed_entry 5 · e7_farside_test 3
+row 35                  state=filled · fill_quantity=0 · state_reason '' (empty)
+stamp_pending in text   0 rows
+```
+
+**Every filled armed row has `fill_quantity=0`. 10 of 10.** That is the finding,
+and it needs no borrowed denominator.
+
+**CORRECTION 1 (nofx-52).** I wrote "584 of 586 armed fills". Wrong population:
+`armed_orders` holds 36 rows in total, so that figure cannot describe armed
+fills — it was a positions-era number from the superseded `fef656a4` baseline,
+and I repeated it without checking its denominator. Run against the current rev,
+the audit's own column set (`plan_version=0 AND cited_scenario_id='' AND
+source='reconcile' AND entry_order_id empty`) returns **3**, not 584.
+
+**CORRECTION 2 (nofx-52).** `;stamp_pending` is transient by design —
+`armed_executor.go` appends it, `reconcile.go` `TrimSuffix`es it off. Row 35's
+`state_reason` is empty, and a search for the marker returns zero rows. The
+defect is visible in `fill_quantity`, never in the marker.
+
+### 9.2 Mechanism 1 — the materialization race (real, but not the whole of it)
+
+`stampArmedFillLineage` returns early when the position row does not exist yet,
+before the `SetFillQuantity` call §4 describes. Confirmed for row 35: it filled
+at **09:03:53** and position 591 materialized at **09:05:14** — an 81-second
+gap. Fixed in `StampArmedLineageIfMatched` (95e9a4d0), which takes `posID`
+directly.
+
+### 9.3 Mechanism 2 — the side-casing miss (nofx-89's §D-9, and the DOMINANT one)
+
+The two writers disagree about casing, measured live:
+
+| column | values |
+|---|---|
+| `armed_orders.side` | `long` 19 · `short` 17 — **always lowercase** |
+| `trader_positions.side` | `LONG` 280 · `SHORT` 304 · `long` 1 · `short` 2 |
+
+`GetOpenPositionBySymbol` compared `side = ?`, and `=` on a plain TEXT column is
+case-sensitive. Against position 591:
+
+```
+select count(*) … where side='short' and id=591  →  0
+select count(*) … where side='SHORT' and id=591  →  1
+```
+
+The fill handler passes the ARMED row's lowercase side. **So it could never find
+an armed-entry position, however well the timing went.** That is why 10 of 10
+fail: a race would be intermittent, and this is deterministic.
+
+nofx-89 offered mechanism 2 as a possible second contributor. It is the primary
+one. Fixed with `UPPER(side) = UPPER(?)` at that lookup and at its two siblings
+(the USDT-suffix retry, and `GetOpenPositionByAccountSymbol`, which close-sync
+routes through — a case-sensitive compare there loses a priced close).
+
+### 9.4 The reason this took three sessions: the log line cannot tell them apart
+
+```
+⚡ armed fill S1 @ 29285.00: position row not materialized yet — stamp pending
+```
+
+That line prints whenever `pos == nil`, and `pos` is nil for **either** reason —
+the row genuinely absent, or the lookup unable to match it. It asserts the first
+as a fact. I quoted it as my "live proof" of mechanism 1 and it is not proof of
+anything beyond `pos == nil`. A misdiagnosis compiled into a log line is
+expensive: it sent me looking for a timing bug and hid a deterministic one.
+
+### 9.5 The law, stated harder (nofx-89's wording)
+
+A write on a branch almost nothing takes is not merely the equivalent of an
+unperformed read — **it is worse, because it produces a green proof.** Row 35
+would have looked like a pass had I asserted only "the stamp ran".
+

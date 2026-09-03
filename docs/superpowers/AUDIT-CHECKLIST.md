@@ -1134,6 +1134,56 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     terminal row never logs "armed" at all. **Law:** a verdict the system
     publishes to itself must have a named consumer or be deleted — and a column
     nothing reads is not a feature, it is a rumour.
+    nothing reads is not a feature, it is a rumour. **Rider (2026-09-03, after
+    the boot):** the `fill_quantity` fix shipped INCOMPLETE and proves the law
+    against itself. It stamped at fill time only — and the fill frame lands
+    BEFORE the position row materializes, so `stampArmedFillLineage` returns on
+    that path first. measured on the
+    current rev, **10 of 10 filled armed rows carry `fill_quantity=0`** — the
+    stamp never lands. TWO mechanisms, and the second is the dominant one:
+    (a) the materialization race (row 35 filled 09:03:53, position 591
+    materialized 09:05:14 — 81s), and (b) `GetOpenPositionBySymbol` compared
+    `side = ?` case-sensitively while `armed_orders.side` is always lowercase
+    and `trader_positions.side` is overwhelmingly uppercase (LONG 280 / SHORT
+    304 vs long 1 / short 2) — `side='short'` matched 0 rows for position 591,
+    `side='SHORT'` matched 1, so the fill-time lookup could never succeed
+    whatever the timing. Fixed with `UPPER(side)=UPPER(?)` at that lookup and
+    its two siblings, plus the stamp in `StampArmedLineageIfMatched`. **And the
+    log line hid it:** "position row not materialized yet" prints whenever
+    `pos == nil` — for either reason — asserting the race as fact, which sent
+    two sessions after a timing bug. A write on a branch almost nothing takes is
+    WORSE than a read nobody performs, because it produces a green proof: row 35
+    passes any test that asserts only "the stamp ran". Probe: ask which BRANCH a
+    write sits on; and when a log line names a CAUSE, check that the code can
+    actually distinguish it from the alternatives.
+58. **A mode that existed only in a comment.** (Highest occupied at merge: 57.)
+    Root cause: `plan_mode` was documented as `advisory | direction | strict`
+    in a doc comment (`store/strategy.go:919`) and offered in the Studio
+    selector, but **`strict` was never implemented**: `PlanModeFor` returned a
+    saved `"strict"` unchanged (no self-heal, and no `"normal"` mode ever
+    existed), and **no consumer in non-test code compared against it** — the
+    only mode any consumer tested was `direction`. An owner could select it,
+    the value would persist, resolve, and render, and nothing anywhere would
+    behave differently. The Studio audit reached it from the other side, listing
+    it as a dead option to REMOVE. **Probe:** for every enum value a UI offers,
+    grep for a consumer that compares against that specific value — a value
+    present in a doc comment, a schema and a selector but absent from every
+    comparison is a control wired to nothing. Do the same for every mode named
+    in a comment listing alternatives. **Fix:** `strict` was **documented,
+    never implemented; first implementation 2026-09-03 by owner ruling** — it is
+    a NEW GATE, not a restoration, and it is recorded as such because the
+    dispatch that ordered it believed it was reviving deprecated behaviour.
+    Semantics: only plan scenarios execute · arm path only · decision-path
+    market entries refused · direction must equal the cited scenario's ·
+    refusals logged `refused: strict`. Implemented as leg 0 of the ONE
+    EntryGate (class 48) so its refusal is the one the journal shows, with pins
+    in both directions (refuses a decision-path open; allows an arm whose side
+    matches its scenario) and a pin that `advisory`/`direction` are unchanged.
+    **Law:** an option a user can select is a promise; either a consumer
+    compares against it or it does not appear in the selector. A comment
+    listing modes is not an implementation, and "deprecated" and "never built"
+    are different findings that call for different fixes.
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,
