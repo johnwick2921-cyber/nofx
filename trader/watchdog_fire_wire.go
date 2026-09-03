@@ -29,10 +29,11 @@ func (at *AutoTrader) installWatchdogFireRecorder() {
 	log := at.logWarnf
 	mcp.SetWatchdogFireHook(func(f mcp.WatchdogFire) {
 		if _, err := st.WatchdogFires().Record(store.WatchdogFireDB{
-			TraderID: id, At: time.Now().UTC(), Mode: f.Mode,
+			TraderID: id, At: time.Now().UTC(), Kind: f.Kind, Mode: f.Mode,
 			GapMs: f.GapMs, LimitMs: f.LimitMs, CallAgeMs: f.CallAgeMs, Bytes: f.Bytes,
+			IdleBeforeMs: f.IdleBeforeMs, Reused: f.Reused, ClosedBy: f.ClosedBy,
 		}); err != nil {
-			log("⏱ watchdog fire log write failed: %v (measurement only — the stream still closed)", err)
+			log("⏱ %s record write failed: %v (measurement only — the stream still closed)", f.Kind, err)
 		}
 	})
 }

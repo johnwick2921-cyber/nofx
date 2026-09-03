@@ -455,6 +455,12 @@ Returns: {"trader_id":"<string>","daily_pnl_usd":<float>,"daily_loss_limit_usd":
 Returns: {"session_day_utc":"<RFC3339>","summary":"<one-line>","by_trader":{"<trader_id>":{"<gate>":<count>}}}
 The empty-string trader key holds process-wide gates (e.g. the B3 order guard). Resets at the 17:00 CT CME session rollover.`,
 				s.handleGateBlocks)
+			// INSTRUMENT HONESTY (owner ruling 2026-09-03) — read-only.
+			s.routeWithSchema(protected, "GET", "/risk/stream-cuts", "Stream cuts and watchdog fires, grouped by how long the connection had been idle",
+				`No params. Every early stream end — a peer FIN ("cut") or our own watchdog ("watchdog") — with the idleness of the connection it rode and what the identical resend then did.
+Returns: {"rows":[{"bucket","n","cuts","fires","recovered","lost","unresolved"}],"table":"<rendered>","note":"<why nothing is set yet>"}
+NO THRESHOLD IS SET. IdleConnTimeout is untouched until the evidence is in; this endpoint is the evidence.`,
+				s.handleStreamCuts)
 			s.routeWithSchema(protected, "GET", "/risk/errors", "Per-trader/session-day structured error events (P0-cleanup)",
 				`No params. Returns structured error events: stable type, plain cause, cost.
 Returns: {"rows":[{"trader","type","cause","cost","count","decisions_lost","trades_lost"}],"summary":"errors today: N (types: …), decisions lost: N"}

@@ -78,6 +78,11 @@ export const status: GuideSection = {
         'Reset: at the 17:00 session roll, and on bot restart.',
       ],
     },
+    { kind: 'h', text: 'Stream cuts vs connection idleness' },
+    {
+      kind: 'p',
+      text: "GET /api/risk/stream-cuts. Every early end of an AI stream — a peer FIN ('cut') or our own watchdog ('watchdog') — grouped by how long the connection had been idle before the call reused it, with what the identical resend then did. Born from 2026-09-03 08:11:38: a planner stream died to a peer FIN at 283.4s with 50,489 reasoning chars in, on a connection reused after 101,212ms idle; the resend that succeeded rode one idle 34,935ms. If cuts cluster above some idle threshold, setting IdleConnTimeout below it is the whole fix and needs nothing from the provider. NOTHING IS SET — the ruling was three more cuts before deciding. An unresolved resend counts as unresolved, never as a loss, and a connection that was not reused gets its own bucket so fresh dials never read as evidence about idleness. idle_before_ms and conn_reused ride every ai_call log line now, so this is greppable as well as queryable.",
+    },
     { kind: 'h', text: 'Traffic light — one glance' },
     {
       kind: 'p',

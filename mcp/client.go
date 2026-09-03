@@ -109,6 +109,11 @@ type Client struct {
 	// these are read immediately after each single call returns).
 	lastTTFBMs         atomic.Int64 // time-to-first-byte of the last single call (0 = never measured)
 	lastReasoningChars atomic.Int64 // reasoning_content chars of the last single call
+	// The connection the last single call rode (owner ruling 2026-09-03).
+	// Hoisted out of the conn-trace line so the ai_call record can carry — and
+	// a table can count — the one number that might explain the peer-FIN cuts.
+	lastIdleBeforeMs atomic.Int64
+	lastConnReused   atomic.Bool
 	// stormCount (class 46 D5) — provider calls made in the CURRENT read.
 	// Reset by the planner at the start of each read via ResetStormCounter.
 	stormCount atomic.Int64
@@ -297,6 +302,8 @@ func (client *Client) lastRequestIDString() string {
 func (client *Client) resetCallTelemetry() {
 	client.lastTTFBMs.Store(0)
 	client.lastReasoningChars.Store(0)
+	client.lastIdleBeforeMs.Store(0)
+	client.lastConnReused.Store(false)
 	client.lastCompletionTokens.Store(0)
 	client.lastHTTPStatus.Store(0)
 	client.lastRequestID.Store("")
@@ -373,8 +380,15 @@ func (client *Client) logAICall(start time.Time, callErr error, retries int) {
 	}
 	if callErr == nil {
 		client.lastErrClass.Store("")
-		client.Log.Infof("ai_call model=%s duration_ms=%d finish_reason=%s ok=true retries=%d ttfb_ms=%d reasoning_chars=%d http_status=%d request_id=%q",
-			client.Model, durMs, finish, retries, client.lastTTFBMs.Load(), client.lastReasoningChars.Load(), client.lastHTTPStatus.Load(), client.lastRequestIDString())
+		client.Log.Infof("%s", AiCallLine(AiCallFields{
+			Model: client.Model, DurationMs: durMs, FinishReason: finish, OK: true,
+			Retries: retries, TTFBMs: client.lastTTFBMs.Load(),
+			ReasoningChars: client.lastReasoningChars.Load(),
+			IdleBeforeMs:   client.lastIdleBeforeMs.Load(),
+			ConnReused:     client.lastConnReused.Load(),
+			HTTPStatus:     int(client.lastHTTPStatus.Load()),
+			RequestID:      client.lastRequestIDString(),
+		}))
 		return
 	}
 	// Which deadline actually fired. net/http wraps them all in the same
@@ -394,9 +408,16 @@ func (client *Client) logAICall(start time.Time, callErr error, retries int) {
 	status := int(client.lastHTTPStatus.Load())
 	class := string(ClassifyFailure(callErr, status))
 	client.lastErrClass.Store(class)
-	client.Log.Warnf("ai_call model=%s duration_ms=%d finish_reason=n/a ok=false retries=%d ttfb_ms=%d reasoning_chars=%d deadline_s=%d class=%s provider_side=%v http_status=%d request_id=%q err=%q",
-		client.Model, durMs, retries, client.lastTTFBMs.Load(), client.lastReasoningChars.Load(), deadline, class,
-		FailureIsProviderSide(FailureClass(class)), status, client.lastRequestIDString(), msg)
+	client.Log.Warnf("%s", AiCallLine(AiCallFields{
+		Model: client.Model, DurationMs: durMs, OK: false,
+		Retries: retries, TTFBMs: client.lastTTFBMs.Load(),
+		ReasoningChars: client.lastReasoningChars.Load(),
+		IdleBeforeMs:   client.lastIdleBeforeMs.Load(),
+		ConnReused:     client.lastConnReused.Load(),
+		DeadlineS:      deadline, Class: class,
+		ProviderSide: FailureIsProviderSide(FailureClass(class)),
+		HTTPStatus:   status, RequestID: client.lastRequestIDString(), Err: msg,
+	}))
 }
 
 // CallWithMessages template method - fixed retry flow (cannot be overridden)
@@ -1232,12 +1253,18 @@ func (client *Client) CallWithRequestStreamDeadlines(req *Request, onChunk func(
 				// age and the bytes already received, so a week of fires can be
 				// read as a table instead of grepped out of the journal. The
 				// resend outcome is attached later by the planner loop.
+				// Kind is stamped at the emission site so the recorder never
+				// has to infer which event it is looking at.
 				if h := watchdogFireHook.Load(); h != nil {
 					if fn, ok := h.(func(WatchdogFire)); ok && fn != nil {
 						fn(WatchdogFire{
+							Kind: "watchdog",
 							Mode: mode, GapMs: time.Since(last).Milliseconds(),
 							LimitMs: lim.Milliseconds(), CallAgeMs: time.Since(callStart).Milliseconds(),
-							Bytes: client.lastReasoningChars.Load(),
+							Bytes:        client.lastReasoningChars.Load(),
+							IdleBeforeMs: client.lastIdleBeforeMs.Load(),
+							Reused:       client.lastConnReused.Load(),
+							ClosedBy:     "local_close",
 						})
 					}
 				}
@@ -1304,7 +1331,7 @@ func (client *Client) CallWithRequestStreamDeadlines(req *Request, onChunk func(
 		client.lastCompletionTokens.Store(int64(sr.Usage.CompletionTokens))
 		ReportStreamUsage(sr.Usage, client.Provider, client.Model)
 	}
-	if TransportTraceEnabled() {
+	{
 		var chars int64
 		var ttfb time.Duration
 		if sr != nil {
@@ -1312,7 +1339,29 @@ func (client *Client) CallWithRequestStreamDeadlines(req *Request, onChunk func(
 			ttfb = time.Duration(sr.TTFBMs) * time.Millisecond
 		}
 		tr.finish(err, context.Cause(ctx), chars, ttfb, time.Since(reqStart))
-		if client.Log != nil {
+		// Captured unconditionally: the ai_call line carries these now, and
+		// gating them on TransportTraceEnabled would silently zero the column
+		// wherever the trace is off — a plausible zero (A24).
+		client.lastIdleBeforeMs.Store(tr.WasIdleMs)
+		client.lastConnReused.Store(tr.Reused)
+		// A PEER-side end of a live stream is recorded the same way a watchdog
+		// fire is (owner ruling 2026-09-03): same table, same resend question,
+		// so idle_before can be read against the outcome for both.
+		if err != nil && tr.ClosedBy == "peer_fin" {
+			if h := watchdogFireHook.Load(); h != nil {
+				if fn, ok := h.(func(WatchdogFire)); ok && fn != nil {
+					fn(WatchdogFire{
+						Kind: "cut", Mode: "n/a",
+						CallAgeMs:    time.Since(reqStart).Milliseconds(),
+						Bytes:        chars,
+						IdleBeforeMs: tr.WasIdleMs,
+						Reused:       tr.Reused,
+						ClosedBy:     tr.ClosedBy,
+					})
+				}
+			}
+		}
+		if TransportTraceEnabled() && client.Log != nil {
 			client.Log.Infof("%s", tr.TraceLine())
 		}
 	}
@@ -1577,11 +1626,19 @@ func ResetStormCounterFor(c AIClient) {
 
 // WatchdogFire is one fire's measurements, handed to the recorder hook.
 type WatchdogFire struct {
+	// Kind (owner ruling 2026-09-03): "watchdog" when we closed the stream,
+	// "cut" when the peer did. Both end a call early and both are answered by
+	// the same identical resend, so they share one record.
+	Kind      string
 	Mode      string
 	GapMs     int64
 	LimitMs   int64
 	CallAgeMs int64
 	Bytes     int64
+	// The connection the dead call rode.
+	IdleBeforeMs int64
+	Reused       bool
+	ClosedBy     string
 }
 
 // watchdogFireHook is set once by the trader layer so mcp never imports store.
