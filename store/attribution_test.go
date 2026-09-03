@@ -216,17 +216,38 @@ func TestAttributionSentinelRowsStillCountInPnL(t *testing.T) {
 // 2025-08-15, a year early — and it converted 516 pre-era rows because nothing
 // checked what date the literal resolved to.
 func TestDayPlanEraStartIsTheRightDate(t *testing.T) {
-	if got := DayPlanEraStart.UTC().Format("2006-01-02"); got != "2026-08-15" {
-		t.Fatalf("the day-plan era starts 2026-08-15, got %s (epoch %d)", got, DayPlanEraStart.UnixMilli())
+	ct, err := time.LoadLocation("America/Chicago")
+	if err != nil {
+		t.Skipf("no tzdata: %v", err)
 	}
-	// No hardcoded epoch here either: writing one by hand is how this incident
-	// started, and my first cut of THIS assertion had the wrong number too.
-	// The date is the contract; the epoch is derived from it.
-	if want := time.Date(2026, 8, 15, 0, 0, 0, 0, time.UTC).UnixMilli(); DayPlanEraStart.UnixMilli() != want {
-		t.Errorf("epoch drifted: got %d want %d", DayPlanEraStart.UnixMilli(), want)
+	got := DayPlanEraStart
+	// THE ASSERTION PRINTS BOTH ZONES, because the two errors this constant has
+	// already had were invisible in one zone: 1755230400000 was a year early,
+	// and UTC midnight was five hours early (2026-08-14 19:00 CT).
+	t.Logf("DayPlanEraStart = %d  ·  %s  ·  %s",
+		got.UnixMilli(),
+		got.In(ct).Format("2006-01-02 15:04:05 MST"),
+		got.UTC().Format("2006-01-02 15:04:05 UTC"))
+
+	// The era is defined in CT: the first day-plan row's created_at is
+	// 2026-08-16 00:44:31 UTC while its trade_date is 2026-08-15 (session NY),
+	// so trade_date — a CT calendar date — is the key the era is named by.
+	if d := got.In(ct).Format("2006-01-02 15:04:05"); d != "2026-08-15 00:00:00" {
+		t.Errorf("the era must start at CT midnight on 2026-08-15, got %s CT", d)
 	}
-	// The 2025 value that caused the incident must never come back.
-	if DayPlanEraStart.UnixMilli() == 1755230400000 {
-		t.Error("this is the 2025-08-15 value that converted 516 pre-era rows")
+	if want := time.Date(2026, 8, 15, 0, 0, 0, 0, ct).UnixMilli(); got.UnixMilli() != want {
+		t.Errorf("epoch drifted: got %d want %d", got.UnixMilli(), want)
+	}
+	// Neither prior wrong value may return.
+	for _, bad := range []struct {
+		ms   int64
+		what string
+	}{
+		{1755230400000, "2025-08-15 — a year early; converted 516 pre-era rows"},
+		{1786752000000, "2026-08-15 00:00 UTC = 08-14 19:00 CT — five hours early"},
+	} {
+		if got.UnixMilli() == bad.ms {
+			t.Errorf("regressed to %d (%s)", bad.ms, bad.what)
+		}
 	}
 }

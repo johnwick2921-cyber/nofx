@@ -1053,9 +1053,21 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     expected. **Fix:** one named `DayPlanEraStart = time.Date(2026, 8, 15, …)`;
     the migration and every fixture derive from it; a test asserts the resolved
     DATE (not a typed epoch) and explicitly refuses the 2025 value.
-    **Law:** a scope constant is a named date with a test that says what date it
-    is; no fixture keeps its own copy; and a migration prints the row count it
-    touched where a human will read it on the next boot.
+    **A FOURTH instance, found by the owner asking which zone the era is
+    defined in:** the corrected constant used **UTC** midnight, which is
+    2026-08-14 **19:00 CT** — five hours early. The era's own definition is CT,
+    and the first day-plan row proves it: `created_at` 2026-08-16 00:44:31 UTC
+    with `trade_date` **2026-08-15** (session NY). `trade_date` is a CT calendar
+    date and it is the key the era is NAMED by, so a UTC boundary cannot express
+    "trade_date >= 2026-08-15". That error was LATENT — the disputed five-hour
+    window held 0 rows — and would have bitten the first row to land in it.
+    **Law:** a scope constant is a named date **in a stated zone**, with a test
+    that prints the resolved instant in BOTH zones and refuses every prior wrong
+    value by name; no fixture keeps its own copy; and a migration prints the row
+    count it touched where a human will read it on the next boot. Four wrong
+    values in one constant (a year early, a fixture copy of the same, a
+    hand-typed assertion, then a zone) is what an unstated zone and a typed
+    epoch cost.
 
 ## PART 2 — PRE-AUDIT (standing hard rules)
 

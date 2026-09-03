@@ -108,8 +108,35 @@ func (s *PositionStore) CountUnstampedClosed() (int64, error) {
 }
 
 // attributionConvergeFlag makes the convergence idempotent.
-// DayPlanEraStart is the day-plan era boundary, in the one place it is defined.
-var DayPlanEraStart = time.Date(2026, 8, 15, 0, 0, 0, 0, time.UTC)
+// DayPlanEraStart is the day-plan era boundary, defined ONCE, in the zone the
+// era is actually named in.
+//
+// THE ZONE IS CT, and the first day-plan row is the proof: its created_at is
+// 2026-08-16 00:44:31 UTC while its trade_date is 2026-08-15 (session NY).
+// trade_date is a CT calendar date and it is the key the era is named by, so a
+// UTC boundary cannot express "trade_date >= 2026-08-15". The rest of the
+// system already agrees — the CME session day rolls at 17:00 CT and kernel/tz.go
+// is the enforced single time source.
+//
+// The first cut of this constant was 1755230400000 (2025-08-15 — a year early,
+// which converted 516 pre-era rows). The second was UTC midnight
+// (1786752000000 = 2026-08-14 19:00 CT), five hours early: latent, because the
+// disputed five-hour window held 0 rows, but wrong. Derived from the date in
+// the stated zone, never typed.
+var DayPlanEraStart = dayPlanEraStart()
+
+// dayPlanEraStart builds the boundary from the DATE in the era's own zone.
+// store cannot import kernel (cycle), so the zone is loaded the same way
+// store/level_state.go:264 already does. A failed load falls back to CDT's
+// fixed -5, which is the correct offset for an August date — and the test
+// asserts the resolved instant in BOTH zones, so a wrong fallback is visible.
+func dayPlanEraStart() time.Time {
+	loc, err := time.LoadLocation("America/Chicago")
+	if err != nil {
+		loc = time.FixedZone("CDT", -5*60*60)
+	}
+	return time.Date(2026, 8, 15, 0, 0, 0, 0, loc)
+}
 
 const attributionConvergeFlag = "attribution_sentinel_converge_2026_09_02"
 
