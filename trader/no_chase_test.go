@@ -170,3 +170,35 @@ func TestNoChaseCounterKeys(t *testing.T) {
 		t.Fatal("an uncited level is NOT an ok — it must count separately (A24: no plausible-zero)")
 	}
 }
+
+// OWNER RULING 2026-09-02 — BOTH measures, OR'd; an unmeasurable run is NULL,
+// counted, and judged on dist alone. A zero run and an unknown run must never
+// look the same.
+func TestNoChaseOrAndNullRun(t *testing.T) {
+	// dist fires alone, run unknown → would_refuse on dist, RunKnown false.
+	a := EvaluateNoChase(NoChaseInputs{Entry: 29192.50, CitedLevel: 29050, HasTouch: false, ATR5m: 26, MinSLMult: 1.5})
+	if !a.WouldRefuse || !a.DistFired || a.RunFired || a.RunKnown {
+		t.Fatalf("dist alone must carry it with run NULL: %+v", a)
+	}
+	if !strings.Contains(NoChaseLine("decision", "S3", a), "run=NULL(no recorded touch)") {
+		t.Fatalf("an unknown run must print NULL, never 0.0pts:\n%s", NoChaseLine("decision", "S3", a))
+	}
+	// run fires alone: near the level by distance, but far from its touch.
+	b := EvaluateNoChase(NoChaseInputs{Entry: 29100, CitedLevel: 29095, LastTouchPx: 29020, HasTouch: true, ATR5m: 26, MinSLMult: 1.5})
+	if !b.WouldRefuse || b.DistFired || !b.RunFired {
+		t.Fatalf("run alone must be able to carry it: %+v", b)
+	}
+	if !strings.Contains(b.Why, " OR ") == false && strings.Count(b.Why, "OR") > 0 {
+		t.Fatalf("a single-half verdict must not read as an OR of two: %q", b.Why)
+	}
+	// both fire → the reason names both, joined by OR (not AND).
+	c := EvaluateNoChase(NoChaseInputs{Entry: 29192.50, CitedLevel: 29050, LastTouchPx: 29050, HasTouch: true, ATR5m: 26, MinSLMult: 1.5})
+	if !c.DistFired || !c.RunFired || !strings.Contains(c.Why, " OR ") {
+		t.Fatalf("both halves fired — the reason must join them with OR: %q", c.Why)
+	}
+	// entering AT the touch is a KNOWN zero run, not an unknown one.
+	d := EvaluateNoChase(NoChaseInputs{Entry: 29068.05, CitedLevel: 29068.05, LastTouchPx: 29068.05, HasTouch: true, ATR5m: 26, MinSLMult: 1.5})
+	if !d.RunKnown || d.RunPts != 0 || d.WouldRefuse {
+		t.Fatalf("entering at the touch is a known zero run: %+v", d)
+	}
+}

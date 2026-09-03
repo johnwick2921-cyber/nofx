@@ -42,14 +42,23 @@ type NoChaseInputs struct {
 }
 
 // NoChaseVerdict is the leg's measurement and its opinion.
+// OWNER RULING 2026-09-02: BOTH measures are recorded on every entry and the
+// verdict is their OR — the week of counts decides which carries the signal,
+// which is the point of not choosing now.
 type NoChaseVerdict struct {
-	Applicable  bool // false = no cited level; fields are NULL, counted separately
-	DistPts     float64
-	DistATR     float64
+	Applicable bool // false = no cited level; every field NULL, counted separately
+	DistPts    float64
+	DistATR    float64
+	// RunKnown false → RunPts is NULL, not zero. A zero run means "entered AT
+	// the touch"; an unknown run means "we could not tell". Conflating them
+	// would make the week's counts unreadable (A24: no plausible zero).
+	RunKnown    bool
 	RunPts      float64
 	MaxDistATR  float64
 	MaxRunPts   float64
 	WouldRefuse bool
+	DistFired   bool // which half fired — the week's table needs them apart
+	RunFired    bool
 	Why         string
 }
 
@@ -99,18 +108,24 @@ func EvaluateNoChase(in NoChaseInputs) NoChaseVerdict {
 		v.DistATR = v.DistPts / in.ATR5m
 	}
 	if in.HasTouch && in.LastTouchPx > 0 {
+		v.RunKnown = true
 		v.RunPts = math.Abs(in.Entry - in.LastTouchPx)
 	}
 	var why []string
 	if v.DistATR > 0 && v.DistATR > v.MaxDistATR {
+		v.DistFired = true
 		why = append(why, fmt.Sprintf("dist %.2f×ATR > %.2f", v.DistATR, v.MaxDistATR))
 	}
-	if v.MaxRunPts > 0 && v.RunPts > v.MaxRunPts {
+	if v.RunKnown && v.MaxRunPts > 0 && v.RunPts > v.MaxRunPts {
+		v.RunFired = true
 		why = append(why, fmt.Sprintf("run %.1fpts > %.1f (%.1f×ATR5m stop floor)", v.RunPts, v.MaxRunPts, in.MinSLMult))
 	}
+	// OR — either half is enough (owner ruling 2026-09-02). A row whose run is
+	// unmeasurable is judged on dist alone; it is never given the benefit of an
+	// unmeasured half.
 	if len(why) > 0 {
 		v.WouldRefuse = true
-		v.Why = strings.Join(why, " AND ")
+		v.Why = strings.Join(why, " OR ")
 	}
 	return v
 }
@@ -118,8 +133,12 @@ func EvaluateNoChase(in NoChaseInputs) NoChaseVerdict {
 // NoChaseLine renders the WARN (pure — fixture-pinned). It always says the
 // entry PROCEEDED, so no reader can mistake this wave for a refusal.
 func NoChaseLine(path, scenario string, v NoChaseVerdict) string {
-	return fmt.Sprintf("🚫 no-chase WOULD_REFUSE %s %s: dist=%.1fpts/%.2f×ATR run=%.1fpts (%s) — WARN-first, entry PROCEEDING",
-		path, scenario, v.DistPts, v.DistATR, v.RunPts, v.Why)
+	run := "NULL(no recorded touch)"
+	if v.RunKnown {
+		run = fmt.Sprintf("%.1fpts", v.RunPts)
+	}
+	return fmt.Sprintf("🚫 no-chase WOULD_REFUSE %s %s: dist=%.1fpts/%.2f×ATR run=%s (%s) — WARN-first, entry PROCEEDING",
+		path, scenario, v.DistPts, v.DistATR, run, v.Why)
 }
 
 // NoChaseBootLine is the boot line, every field READ from its resolver.
@@ -147,10 +166,27 @@ func (at *AutoTrader) noChaseObserver(path, scenario string) func(NoChaseVerdict
 			outcome = "would_refuse"
 			at.logWarnf("%s", NoChaseLine(path, scenario, v))
 		}
-		if at.store != nil {
-			if _, err := store.IncSystemCounter(at.store, NoChaseCounterKey(path, outcome)); err != nil {
+		if at.store == nil {
+			return
+		}
+		bump := func(k string) {
+			if _, err := store.IncSystemCounter(at.store, k); err != nil {
 				at.logWarnf("🚫 no-chase counter write failed: %v", err)
 			}
+		}
+		bump(NoChaseCounterKey(path, outcome))
+		// The week's table needs the halves apart, and needs to know how often
+		// run was unmeasurable — otherwise "dist carried the signal" cannot be
+		// told from "run was never available".
+		if v.Applicable && !v.RunKnown {
+			bump(NoChaseCounterKey(path, "run_null"))
+			at.logInfof("🚫 no-chase: %s %s has no recorded touch — run stored NULL, judged on dist alone (%.2f×ATR)", path, scenario, v.DistATR)
+		}
+		if v.DistFired {
+			bump(NoChaseCounterKey(path, "dist_fired"))
+		}
+		if v.RunFired {
+			bump(NoChaseCounterKey(path, "run_fired"))
 		}
 	}
 }
