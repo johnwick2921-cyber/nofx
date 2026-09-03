@@ -1068,7 +1068,7 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     values in one constant (a year early, a fixture copy of the same, a
     hand-typed assertion, then a zone) is what an unstated zone and a typed
     epoch cost.
-57. **A verdict the system published to itself and never read.** (Highest
+59. **A verdict the system published to itself and never read.** (Renumbered 57→59 AT MERGE, 2026-09-03 combined boot 2 — 57 was taken by the magic-epoch class. Highest
     occupied at merge: 56.) The scenario evaluator writes, every cycle,
     "🎯 scenario S1 → ≈invalidated @ 29285.00 (price accepted through the level
     against the trade — **display-only estimate, never execution-wired**)". The
