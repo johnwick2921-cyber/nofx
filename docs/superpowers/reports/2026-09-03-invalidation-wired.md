@@ -240,10 +240,13 @@ each correction came from a peer reading my claim against the code.
 
 **Source for the baseline evidence:** nofx-89's audit,
 `docs/superpowers/reports/2026-09-01-full-system-audit.md` on branch
-`docs/full-system-audit-0901` @ **`003ee66f`** — the addendum revision carrying
-their row-id correction, the [B]→[A] upgrade and the unresolved transience
-question. `7df072a3` remains a valid citation for the `fef656a4` snapshot
-itself. Raw URL curl'd **200** from this session (A14).
+`docs/full-system-audit-0901` @ **`4d77df44`** — the A5 revision, carrying their
+row-id correction, the [B]→[A] upgrade, the predicate-subset correction and the
+three-state split of §F1. `7df072a3` remains a valid citation for the `fef656a4` snapshot
+itself. Raw URL curl'd **200** from this session (A14). Their A5.3 still reads "five
+genuinely stuck" and treats 582 as evidence the ordering problem sits outside
+the reconcile path; my count is four and 582's D is explicable — the reasoning
+is below and has been sent to them.
 
 ### 9.1 The measured population (current rev, nothing borrowed)
 
