@@ -118,25 +118,28 @@ func ComputeVoidBreakdownLevels(levels []ScoredLevel, scope VoidScope, nowMs int
 
 // RenderVoidBreakdownLevels is the facts-block line (E2). Empty when none —
 // silence means "nothing is void", never an empty header.
-func RenderVoidBreakdownLevels(v []VoidBreakdownLevel) string {
+func RenderVoidBreakdownLevels(v []VoidBreakdownLevel, seatedTotal int) string {
 	if len(v) == 0 {
 		return ""
 	}
-	// COMPACT (owner ruling 2026-09-02): ONE line per level, both sides folded
-	// into it when both are void. The flat "price side · price side ·" form
-	// printed the same price twice and read as twice the levels.
+	// CHOP COLLAPSE (owner ruling 2026-09-03). Measured on the first live
+	// read-facts row (00:00:56 CT, ASIA): void=18 across NINE levels, ALL nine
+	// void on BOTH sides — eighteen lines to say "these nine are chop". The
+	// class-53 session-day window bounded the LOOKBACK but not the crossing
+	// frequency, so it could not fix this; the doubling is intra-session
+	// oscillation. A level void both ways carries no direction, so it collapses
+	// into one aggregated line. A ONE-SIDED void keeps its own line, because
+	// side + reclaim time is real directional news.
 	type agg struct {
-		short, long bool
-		whenShort   string
-		whenLong    string
-		order       int
+		short, long         bool
+		whenShort, whenLong string
 	}
 	byPrice := map[float64]*agg{}
 	var order []float64
 	for _, x := range v {
 		a, ok := byPrice[x.Price]
 		if !ok {
-			a = &agg{order: len(order)}
+			a = &agg{}
 			byPrice[x.Price] = a
 			order = append(order, x.Price)
 		}
@@ -146,27 +149,40 @@ func RenderVoidBreakdownLevels(v []VoidBreakdownLevel) string {
 			a.long, a.whenLong = true, x.ReclaimedAtCT
 		}
 	}
-	var b strings.Builder
-	b.WriteString("## VOID breakdown levels (a close came back across since the break, THIS session day — the write-site validator REFUSES a waterfall play at these)\n")
+	var chop []string
+	type oneSided struct {
+		price float64
+		side  string
+		when  string
+	}
+	var singles []oneSided
 	for _, p := range order {
 		a := byPrice[p]
-		sides, when := "", ""
 		switch {
 		case a.short && a.long:
-			sides = "breakdown+breakup"
-			when = a.whenShort
-			if when == "" {
-				when = a.whenLong
-			}
+			chop = append(chop, fmt.Sprintf("%.2f", p))
 		case a.short:
-			sides, when = "breakdown", a.whenShort
+			singles = append(singles, oneSided{p, "breakdown", a.whenShort})
 		default:
-			sides, when = "breakup", a.whenLong
+			singles = append(singles, oneSided{p, "breakup", a.whenLong})
 		}
-		if when != "" {
-			when = fmt.Sprintf(" (reclaimed %s)", when)
+	}
+	var b strings.Builder
+	b.WriteString("## VOID breakdown levels (a close came back across since the break, THIS session day — the write-site validator REFUSES a waterfall play at these)\n")
+	if len(chop) > 0 {
+		seated := ""
+		if seatedTotal > 0 {
+			seated = fmt.Sprintf(" (%d of %d seated)", len(chop), seatedTotal)
 		}
-		fmt.Fprintf(&b, "- %.2f %s%s\n", p, sides, when)
+		fmt.Fprintf(&b, "- CHOP (broken and reclaimed both ways this session): %s%s — waterfall plays at these will be refused; prefer touch/fade plays there.\n",
+			strings.Join(chop, " · "), seated)
+	}
+	for _, s := range singles {
+		when := ""
+		if s.when != "" {
+			when = fmt.Sprintf(" (reclaimed %s)", s.when)
+		}
+		fmt.Fprintf(&b, "- %.2f %s%s\n", s.price, s.side, when)
 	}
 	b.WriteString("- do NOT author breakdown_continue or breakup_continue at these prices. Any other condition is legal there.\n\n")
 	return b.String()

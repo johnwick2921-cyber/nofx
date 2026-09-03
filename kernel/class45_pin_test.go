@@ -88,14 +88,14 @@ func TestClass45PinLondon0132(t *testing.T) {
 	}
 
 	// (E2) The facts block carries the void forward, from the SAME predicate.
-	voidLine := RenderVoidBreakdownLevels([]VoidBreakdownLevel{{Price: lvl, Short: true, ReclaimedAtCT: "01:14 CT"}})
+	voidLine := RenderVoidBreakdownLevels([]VoidBreakdownLevel{{Price: lvl, Short: true, ReclaimedAtCT: "01:14 CT"}}, 12)
 	for _, want := range []string{"VOID breakdown levels", "29021.25", "reclaimed 01:14 CT", "do NOT author breakdown_continue"} {
 		if !strings.Contains(voidLine, want) {
 			t.Errorf("E2: the void line must contain %q, got %q", want, voidLine)
 		}
 	}
-	if RenderVoidBreakdownLevels(nil) != "" {
-		t.Errorf("E2: no void levels → no section at all, got %q", RenderVoidBreakdownLevels(nil))
+	if RenderVoidBreakdownLevels(nil, 12) != "" {
+		t.Errorf("E2: no void levels → no section at all, got %q", RenderVoidBreakdownLevels(nil, 12))
 	}
 
 	// (E3) The floor the composer enforces, stated from its own resolver.
