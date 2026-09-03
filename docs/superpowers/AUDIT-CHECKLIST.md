@@ -857,6 +857,26 @@ in CLAUDE.md).
     label with measured negative signal must be demoted to shadow, and nothing
     — not even a "shadow" annotation — may consume it as a direction.
 
+52. **A refresh that deletes before it knows what comes back.** (Dispatch
+    "bar-arbiter merge"; class 52 wave, 2026-09-02.) Root cause: the
+    `/api/nt/bar-arbiter` `backfill` action cleared the replay window
+    (`ClearSince`) BEFORE the deep bars_subscribe was sent — on 2026-09-02 a 1m
+    ask for 1,000,000 bars came back capped at ~2,005 and the pre-wipe deleted
+    three weeks of accumulated 1m (14,508 rows → ~2,000) that the replay could
+    not replace. The destroy-first order is the bug: the endpoint deletes rows
+    whose replacement it has not received and cannot guarantee. **Probe:** for
+    every refresh/backfill path, ask whether any delete happens before the
+    replacement data has ARRIVED and been counted — a wipe whose refill is
+    bounded by a third party's cap is a one-way door. **Fix:** the backfill is
+    now a MERGE — the wipe is gone and the persister's `INSERT OR REPLACE`
+    replaces exactly the bars the replay returns; rows it cannot replace are
+    never deleted (response states `cleared_rows: 0` + the merge note). Pinned
+    twice: a store test (14,000-row 1m table + 2,000-bar replay → 14,000+ rows,
+    earliest row survives, revisions win inside the replay range) and a
+    handler-source wiring lint (no `ClearSince` in the backfill branch).
+    **Law:** never delete history the refill cannot reproduce — a refresh
+    merges into what exists, it does not clear a window on faith.
+
 51. **One question, two answers: a predicate shared by two callers that fed it
     different inputs.** (Highest occupied at merge: 50. Class 46 is deliberately
     free — see class 50.) Root cause: the prompt's VOID list and the write-site
