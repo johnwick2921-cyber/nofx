@@ -296,3 +296,78 @@ stated as such everywhere.**
 
 **Nothing below this line was known when the criteria above were written.**
 
+
+---
+
+# PART 2 RESULTS (computed after the §2.0 pre-registration)
+
+## 2.1 Calibration (E1′ §0 rule on the 1h tape)
+
+Tape: 2,001 1h bars, 2026-05-04 → 2026-09-02, **84 completed session days** (05-05 … 09-02) → exploration 50d (05-05 … 07-16) / holdout 34d (07-17 … 09-02).
+Δ(1h) = **56.0084 pt**. IID-shuffle calibration (20 reps/day, real 1h level map):
+
+| k | band (pt) | p(hold) | Wilson | n | amb% |
+|---|---|---|---|---|---|
+| 0.5 | 28.00 | 0.4989 | [0.4888,0.5090] | 9427 | 6.9% |
+| 1 | 56.01 | 0.4917 | [0.4809,0.5025] | 8217 | 12.2% |
+| 1.5 | 84.01 | 0.4743 | [0.4623,0.4863] | 6665 | 22.2% |
+| 2 | 112.02 | 0.4919 | [0.4782,0.5056] | 5121 | 35.0% |
+| 3 | 168.03 | 0.4690 | [0.4517,0.4863] | 3192 | 56.4% |
+| 4 | 224.03 | 0.4684 | [0.4475,0.4894] | 2167 | 69.9% |
+| 6 | 336.05 | 0.4847 | [0.4526,0.5171] | 918 | 87.0% |
+
+**PASS set:** k=0.5 (0.4989), k=1 (0.4917), k=2 (0.4919). Chosen by the §0 rule: **k=0.5, band ±28.00 pt**
+(closest to 0.500, ties → larger k). The coin-flip null at 1h is p_null=0.4989. Higher k collapses into ambiguity
+(k=6 → 87% ambiguous). H=6 primary; sensitivity: H=12 identical (0.6389, n=216 — episodes never reach the horizon),
+H=3 → 0.6280 [0.5604,0.6910] n=207 amb 8.8%. Stable.
+
+## 2.2 Real replay — per kind (holdout verdicts only; floor n=200)
+
+| kind | exp n | exp p | hold n | hold p(hold) | hold Wilson | amb% | boot p | Osler null | verdict |
+|---|---|---|---|---|---|---|---|---|---|
+| ONL | 85 | 0.6824 | 54 | 0.6852 | [0.5526,0.7932] | 8.5% | 0.5540 | 0.5531 | TOO FEW |
+| ONH | 81 | 0.6667 | 53 | 0.7547 | [0.6243,0.8507] | 1.9% | 0.5449 | 0.5540 | TOO FEW |
+| PDC | 69 | 0.4348 | 45 | 0.5333 | [0.3908,0.6707] | 6.2% | 0.5515 | 0.5536 | TOO FEW |
+| PDL | 46 | 0.4565 | 36 | 0.4444 | [0.2954,0.6042] | 2.7% | 0.5258 | 0.5560 | TOO FEW |
+| PDH | 54 | 0.4630 | 28 | 0.7500 | [0.5664,0.8732] | 3.4% | 0.5319 | 0.5539 | TOO FEW |
+
+**Pooled holdout: p(hold) = 0.6389 [0.5729,0.7000], n=216 (amb 4.8%).**
+Every per-kind cell is below the n=200 floor (largest ONL n=54) → **no kind ranks; TOO FEW everywhere.**
+
+**The owner's n-expectation did not hold — measured, not estimated:** 582 episodes over 84 session days.
+At 1h the D1′ touch-open events are rare (a 1h bar must straddle the level after a non-straddling bar)
+and each episode consumes up to H bars. The n=200 floor needs ~10× more 1h history — the 1h retention
+(4,000 rows ≈ 167 days live, growing) reaches it in months, not weeks.
+
+## 2.3 Strata (descriptive only)
+
+Ordinal (holdout): 1st **0.688** (n=125) · 2nd 0.571 (n=63) · 3rd+ 0.571 (n=28).
+**H8: this time the ordinal DECLINES (1st > 2nd ≈ 3rd+)** — the opposite direction of the 1m replay, where 1st
+was also highest but 3rd+ sat above 2nd. Both results are n-tiny; the belief has no stable direction on a
+calibrated instrument. Session (holdout): ASIA 0.662 (n=68) · LONDON 0.692 (n=52) · NY 0.594 (n=96) — all above
+0.50, all overlapping.
+
+## 2.4 Nulls and the one number that stands out
+
+- Per-kind stationary bootstrap (mean block 10, 40 reps/holdout day, the REAL level lines): 0.526–0.554.
+- Osler random-level null (B=1000/holdout day): per-kind means 0.554–0.556; the POOLED null has mean 0.5453
+  with sd 0.2216 (p05 0.167 / p95 0.889 — tiny per-day samples make the null extremely wide).
+- The real pooled holdout 0.6389 sits at the **65.6th percentile of the Osler null — inside the bulk**.
+  The pooled interval does not include 0.50 and clears the per-kind bootstrap means, but the Osler spread says
+  that with n=216 the same number would arise from randomly-placed prices one day in three. **No verdict.**
+
+## 2.5 Verdicts per kind and grader
+
+- **PDH / PDL / PDC / ONH / ONL: all TOO FEW** (holdout n 28–54). ONH 0.7547 and PDH
+  0.7500 are descriptively high vs their bootstrap nulls (~0.53–0.55) but are exactly the size of cell that
+  multiplicity + tiny n produce by accident (Part 1 made this point at n=33; it stands at n=54).
+- **H7:** PDL again shows no hold edge (0.4444, n=36).
+- **H9:** ONH/ONL (0.69–0.75) descriptively above PDH/PDL/PDC (0.44–0.75, wide) — unrankable.
+- **Grader ruling stands: nothing changes; every ladder term keeps its [I] label.** The instrument exists at
+  two granularities now; the tape at both is still too short. The honest lever is time (1m retention 90d +
+  1h retention both live), not a new threshold.
+
+## 2.6 CSVs + scripts
+
+`exports/2026-09-02-level-replay/episodes_1h.csv` (582 episodes) · `per_kind_1h.csv` · `calibration_1h.csv`.
+Scripts: `~/nofx-analysis/level-replay/replay_1h.py` (+ `replay.py` Part 1).
