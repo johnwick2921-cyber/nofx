@@ -32,7 +32,7 @@ export const tradingDay: GuideSection = {
           time: '12:00–13:30',
           label: 'Lunch gate',
           detail:
-            'Hard no-entry window (trader/auto_trader_session.go) — the plan always lists it in no_trade.',
+            'Hard no-entry window. One definition (kernel.LunchWindowCT) read by the entry gate, the adherence grader and the plan card, so all three refuse, score and display the same window. The card only shows it while it can still refuse something.',
           shade: true,
         },
         {

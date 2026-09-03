@@ -198,7 +198,7 @@ func T1NoTradeWindowsFromCT(wins []CTWindow) []NoTradeWindow {
 // NoTradeBandBootLine is the boot line (every field read from code).
 func NoTradeBandBootLine() string {
 	ls, le := LunchWindowCT()
-	return fmt.Sprintf("🗓 no-trade band: session-scoped, config-driven (0 literals) — first_n=%dm lunch=%s–%s (source=%s) · T1 re-resolved at read time with drift measured then · model prose renders as NOTES",
+	return fmt.Sprintf("no-trade band: first_n=%dm lunch=%s–%s (source=%s, shared by gate+grader+card) · T1 taken from the enforcing gate at plan time (widening and fail-closed fallback included) · every window judged against the reader's clock, not the write clock · model prose renders as notes",
 		FirstNoTradeMinutes(), ls, le, SourceCodeConstant)
 }
 
@@ -221,4 +221,25 @@ func RenderNoTradeBand(doc *PlanDoc, sess *SessionDef, now time.Time) []Rendered
 	}
 	ct := now.In(CTLocation())
 	return EvaluateNoTradeWindows(doc.NoTradeWindows, ct.Hour()*60+ct.Minute(), start, eod)
+}
+
+// NoTradeSchemaExample renders the no_trade field's example in the OUTPUT
+// schema from the RESOLVED windows, so the prompt cannot teach the model a
+// window the gate does not enforce. It used to be a hand-written literal
+// ("first 5m (CT)", "12:00-13:30 CT lunch"): a second copy of the definitions,
+// in the one place nothing would ever fail if it drifted.
+func NoTradeSchemaExample() string {
+	ls, le := LunchWindowCT()
+	return fmt.Sprintf(`  "no_trade": ["first %dm (CT)", "%s-%s CT lunch", "<calendar blackouts>"],`,
+		FirstNoTradeMinutes(), ls, le)
+}
+
+// NoTradeInstruction is the rule sentence governing what the model may put in
+// no_trade. Same resolved values, one sentence, no literals.
+func NoTradeInstruction() string {
+	ls, le := LunchWindowCT()
+	return fmt.Sprintf(
+		"no_trade may contain ONLY the fixed session windows (first %dm, %s-%s CT lunch) plus T1 HARD-blackout lines from the calendar — a T2 caution event is NEVER added to no_trade and never stops entries. "+
+			"These windows are ENFORCED by the machine whether or not you list them, and the card renders the machine's own list; what you write here is read as your notes, so do not invent a window of your own. ",
+		FirstNoTradeMinutes(), ls, le)
 }

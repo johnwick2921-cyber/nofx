@@ -1,6 +1,8 @@
 package kernel
 
 import (
+	"fmt"
+	"os"
 	"regexp"
 	"strings"
 	"testing"
@@ -115,4 +117,87 @@ func TestClass38DeathFlipVocabularyIsDeclared(t *testing.T) {
 	if !strings.Contains(prompt, "death/flip rules use their OWN vocabulary") {
 		t.Error("the prompt offers death/flip rule tokens 2x5m|5m_close and confirm rule tokens touch|1x5m_close|2x5m_close|1m_mss|time_hold with no statement that they are DIFFERENT enums — row 79 is the model moving a token between them")
 	}
+}
+
+// NO-TRADE BAND (2026-09-02) — the contract row for the no_trade field.
+//
+// The schema example and the rule sentence used to hardcode "first 5m" and
+// "12:00-13:30 CT lunch": a third and fourth copy of windows that the entry
+// gate and the adherence grader own. A copy in the prompt is the worst place
+// for one, because nothing fails when it drifts — the model simply learns a
+// window the machine does not enforce and writes it onto the card.
+func TestNoTradeContractRendersResolvedWindows(t *testing.T) {
+	prompt := plannerOutputContract(8, 5, true, true)
+	ls, le := LunchWindowCT()
+
+	// The rendered contract must state the RESOLVED windows...
+	for _, want := range []string{
+		fmt.Sprintf("first %dm", FirstNoTradeMinutes()),
+		fmt.Sprintf("%s-%s CT lunch", ls, le),
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("the rendered contract never states %q — the model cannot list a window it was not shown", want)
+		}
+	}
+
+	// ...and must say the machine enforces them regardless, so a model that
+	// omits one has not disabled anything.
+	if !strings.Contains(prompt, "ENFORCED by the machine whether or not you list them") {
+		t.Error("the contract never tells the author these windows are enforced independently of what it writes")
+	}
+
+	// The window bounds must come from the functions, not from the prompt file:
+	// a change to either definition must move the prompt with it.
+	origLs, origLe := LunchWindowCT()
+	if !strings.Contains(NoTradeSchemaExample(), origLs) || !strings.Contains(NoTradeInstruction(), origLe) {
+		t.Fatal("no_trade contract text is not derived from LunchWindowCT")
+	}
+}
+
+// F4 — THE LITERAL SCAN. Every no-trade window on every surface must resolve
+// through the shared definitions. A file in this list holding a bare "12:00"
+// or "13:30" is a fifth copy waiting to drift.
+func TestNoTradeWindowsHaveNoSurfaceLiterals(t *testing.T) {
+	ls, le := LunchWindowCT()
+	for _, f := range []string{
+		"planner_prompt.go",
+		"adherence.go",
+		"no_trade_band.go",
+	} {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatalf("read %s: %v", f, err)
+		}
+		// Comments are stripped first: several of these files EXPLAIN the old
+		// literals in prose, and a scan that cannot tell code from commentary
+		// forces the history out of the file to stay green.
+		src := stripLineComments(string(b))
+		// no_trade_band.go IS the definition site; the bounds live there once.
+		if f == "no_trade_band.go" {
+			if strings.Count(src, `"`+ls+`"`) != 1 || strings.Count(src, `"`+le+`"`) != 1 {
+				t.Errorf("%s must hold EXACTLY one copy of each lunch bound (it is the definition)", f)
+			}
+			continue
+		}
+		for _, lit := range []string{`"` + ls + `"`, `"` + le + `"`} {
+			if strings.Contains(src, lit) {
+				t.Errorf("%s hardcodes the lunch bound %s — read LunchWindowCT() instead", f, lit)
+			}
+		}
+	}
+}
+
+// stripLineComments removes // commentary so the literal scan reads code only.
+// Crude by design: no window bound in this package is written on a line that
+// also carries a // sequence inside a string.
+func stripLineComments(src string) string {
+	var b strings.Builder
+	for _, line := range strings.Split(src, "\n") {
+		if i := strings.Index(line, "//"); i >= 0 {
+			line = line[:i]
+		}
+		b.WriteString(line)
+		b.WriteByte('\n')
+	}
+	return b.String()
 }
