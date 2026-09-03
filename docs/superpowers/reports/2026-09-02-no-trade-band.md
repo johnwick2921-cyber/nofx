@@ -284,3 +284,35 @@ writer took them from `t1WindowsFor`. Corrected in the resolution.
 
 Rebased branch: suites `kernel` `trader` `api` `market` `store` green, vitest
 39 files / 302 tests green.
+
+### 8.3 Rebased again — a third wave landed at 22:41:53 CT
+
+`60f214d9` (void-parity) cut over four minutes after class-50b and booted clean
+(`🔐 BOOT INTEGRITY OK — rev 60f214d988bc · expected 60f214d988bc · goldens
+PASS`). This wave is rebased onto it. Two conflicts, both kept-both:
+
+- `main.go` — its `📜 VoidScopeBootLine` and this wave's `🗓 no-trade band`
+  land at the same point in the boot block. Both lines now print.
+- `docs/superpowers/AUDIT-CHECKLIST.md` — see 8.4.
+
+Suites after the second rebase: `kernel` `trader` `api` `store` `market`
+green, vitest 39 files / 302 tests green.
+
+### 8.4 The checklist has a DUPLICATE 51 — not this wave's, and not fixed here
+
+Three waves numbered their entry from what they could see at the time:
+
+| line | entry | wave |
+|---|---|---|
+| 835 | a direction shipped on evidence that never existed | class 50 (`6e1a0781`) |
+| 860 | one question, two answers — a shared predicate fed different inputs | void-parity (`60f214d9`) |
+| 895 | a rule rendered from the clock it was WRITTEN by | this wave |
+
+The void-parity entry opens "Highest occupied at merge: 50", so it was numbered
+against a tree that did not yet carry class-50's entry. **Both are 51.** This
+wave took 52, which adds no new collision, and left the duplicate alone rather
+than renumbering another wave's entry inside a rebase. Someone owns deciding
+which of the two 51s becomes 53. **[A]** — read from the merged file.
+
+The separate renumber commit from before the rebase is gone: it became a no-op
+once the conflict resolution numbered this entry 52 directly, and was skipped.
