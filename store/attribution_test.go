@@ -188,7 +188,12 @@ func TestAttributionConvergeIsScopedAndIdempotent(t *testing.T) {
 		t.Errorf("sentinel count = %d (err %v), want 1", n, err)
 	}
 	line := st.AttributionBootLine()
-	for _, want := range []string{"attribution:", "unresolvable=1", "UNRESOLVABLE", "unstamped-closed=1"} {
+	// SUPERSEDED (D5, 2026-09-03): the fixture's unstamped row is PRE-era, and
+	// "unstamped-closed" used to count those too — which is how the live boot
+	// line read "unstamped-closed=516 (pre-era history)", calling the same rows
+	// unstamped AND pre-era in one breath. The two are separate counts now, and
+	// this fixture's row belongs to the pre-era one.
+	for _, want := range []string{"attribution:", "unresolvable=1", "UNRESOLVABLE", "pre-era=1", "unstamped-closed=0"} {
 		if !strings.Contains(line, want) {
 			t.Errorf("boot line missing %q: %s", want, line)
 		}

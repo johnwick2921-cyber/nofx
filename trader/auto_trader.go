@@ -697,6 +697,14 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 							VolRatio: ep.VolRatio, ApproachATR: ep.ApproachATR, Shape: ep.Shape,
 						})
 					})
+					// D2 (2026-09-03) — the ORDINAL SEED, installed beside the
+					// sink that writes the rows it reads. Without it
+					// TouchEpisode.Number restarts at 1 on every boot while the
+					// closed episodes keep persisting: the live table reads
+					// touch_number 1 → 513 rows · 2 → 229 · 3 → 131 · 4 → 95.
+					kernel.SetTouchOrdinalSeed(func(traderID, symbol, label string, price float64, sessionDay string) int {
+						return te.MaxTouchNumber(traderID, symbol, label, price, sessionDay)
+					})
 				}
 			}
 		}

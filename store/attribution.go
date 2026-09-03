@@ -100,10 +100,30 @@ func (s *PositionStore) CountUnresolvable() (int64, error) {
 // CountUnstampedClosed is the number of CLOSED positions still carrying "" —
 // the defect the sentinel replaces. Reported beside the sentinel count so the
 // boot line cannot hide a regression behind a healthy-looking number.
+// CountUnstampedClosed counts CLOSED rows with no plan_id AT OR AFTER the
+// day-plan era began (D5, 2026-09-03).
+//
+// It used to have NO era filter, so it returned every unstamped closed row and
+// the boot line rendered "unstamped-closed=516 (pre-era history)" — calling the
+// same rows unstamped AND pre-era in one breath. Pre-era rows are history:
+// there was never a plan to stamp them with, and the converge deliberately
+// leaves them alone. An unstamped row inside the era IS a live defect, and it
+// must not hide inside a number that is almost entirely history.
 func (s *PositionStore) CountUnstampedClosed() (int64, error) {
 	var n int64
 	err := s.db.Model(&TraderPosition{}).
-		Where("status != ? AND (plan_id IS NULL OR plan_id = '')", "OPEN").Count(&n).Error
+		Where("status != ? AND (plan_id IS NULL OR plan_id = '') AND created_at >= ?",
+			"OPEN", DayPlanEraStart.UnixMilli()).Count(&n).Error
+	return n, err
+}
+
+// CountPreEraUnstamped counts the history: CLOSED rows with no plan_id from
+// BEFORE the era began. Reported under its own name so the two never merge.
+func (s *PositionStore) CountPreEraUnstamped() (int64, error) {
+	var n int64
+	err := s.db.Model(&TraderPosition{}).
+		Where("status != ? AND (plan_id IS NULL OR plan_id = '') AND created_at < ?",
+			"OPEN", DayPlanEraStart.UnixMilli()).Count(&n).Error
 	return n, err
 }
 
@@ -199,6 +219,10 @@ func (s *Store) AttributionBootLine() string {
 	if err1 != nil || err2 != nil {
 		return "attribution: counts unavailable (stamp-at-materialization=on · armed_under_version=on)"
 	}
-	return fmt.Sprintf("attribution: stamp-at-materialization=on · armed_under_version=on · unresolvable=%d (sentinel %q) · unstamped-closed=%d (pre-era history)",
-		sentinel, PlanUnresolvable, unstamped)
+	preEra, err3 := s.Position().CountPreEraUnstamped()
+	if err3 != nil {
+		return "attribution: counts unavailable (stamp-at-materialization=on · armed_under_version=on)"
+	}
+	return fmt.Sprintf("attribution: stamp-at-materialization=on · armed_under_version=on · unresolvable=%d (sentinel %q) · pre-era=%d (history — never a plan to find) · unstamped-closed=%d (day-plan era; >0 is a live defect)",
+		sentinel, PlanUnresolvable, preEra, unstamped)
 }

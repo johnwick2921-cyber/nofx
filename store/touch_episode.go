@@ -81,3 +81,29 @@ func (s *TouchEpisodeStore) EpisodeCountByLevel(traderID, sessionDay string) ([]
 		Group("label, level_price").Scan(&out).Error
 	return out, err
 }
+
+// MaxTouchNumber answers "how many episodes are already stored for this level
+// on this session-day" — the seed for kernel's in-memory ordinal (D2,
+// 2026-09-03).
+//
+// The registry is process memory, so TouchEpisode.Number restarted at 1 on
+// every boot while closed episodes were being persisted: the live table reads
+// touch_number 1 → 513 rows · 2 → 229 · 3 → 131 · 4 → 95 · 5 → 62 · 6 → 34.
+//
+// Returns 0 when nothing is stored, or on error — never a guess. The caller
+// treats 0 as "no seed" and the numbering degrades to the old behaviour rather
+// than inventing an ordinal.
+func (s *TouchEpisodeStore) MaxTouchNumber(traderID, symbol, label string, price float64, sessionDay string) int {
+	if s == nil || s.db == nil || sessionDay == "" {
+		return 0
+	}
+	var n int
+	err := s.db.Model(&TouchEpisodeDB{}).
+		Where("trader_id = ? AND symbol = ? AND label = ? AND session_day = ? AND ABS(level_price - ?) < 0.005",
+			traderID, symbol, label, sessionDay, price).
+		Select("COALESCE(MAX(touch_number), 0)").Scan(&n).Error
+	if err != nil || n < 0 {
+		return 0
+	}
+	return n
+}

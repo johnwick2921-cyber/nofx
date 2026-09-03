@@ -96,10 +96,10 @@ type TouchEpisode struct {
 
 // touchTracker is the per-(level) episode state machine.
 type touchLevelState struct {
-	opened   int // episodes ever opened this process (touch numbering)
-	active   *TouchEpisode
-	last     *TouchEpisode // last CLOSED episode (card chip state)
-	ring     []market.Kline
+	opened int // episodes ever opened this process (touch numbering)
+	active *TouchEpisode
+	last   *TouchEpisode // last CLOSED episode (card chip state)
+	ring   []market.Kline
 }
 
 // TouchRegistry is the process-wide telemetry state, keyed trader+symbol+level.
@@ -117,8 +117,43 @@ var TouchEpisodeSink func(TouchEpisode)
 // SetTouchEpisodeSink installs the persistence hook.
 func SetTouchEpisodeSink(fn func(TouchEpisode)) { TouchEpisodeSink = fn }
 
-func touchKey(traderID, symbol, label string, price float64) string {
-	return traderID + "|" + symbol + "|" + label + "|" + strconv.FormatFloat(price, 'f', 2, 64)
+// ORDINAL SEED (data-integrity wave D2, 2026-09-03).
+//
+// touchRegistry is package-level memory and touchLevelState.opened starts at 0,
+// so TouchEpisode.Number restarted at 1 on every process boot while CLOSED
+// episodes were being persisted. The live table carries the skew:
+// touch_number 1 → 513 rows · 2 → 229 · 3 → 131 · 4 → 95 · 5 → 62 · 6 → 34.
+// A level touched for the fourth time today was recorded as its first if the
+// process restarted in between, and nothing downstream could tell.
+//
+// TouchOrdinalSeed is INJECTED because kernel cannot import store. It answers
+// "how many episodes are already stored for this level on this session-day".
+// nil, or any negative answer, means NO seed — behaviour degrades to what it
+// was rather than inventing a number.
+var TouchOrdinalSeed func(traderID, symbol, label string, price float64, sessionDay string) int
+
+// SetTouchOrdinalSeed installs the store-backed seeder (trader layer, once).
+func SetTouchOrdinalSeed(fn func(traderID, symbol, label string, price float64, sessionDay string) int) {
+	TouchOrdinalSeed = fn
+}
+
+// seedOrdinalFor asks the installed seeder for a level's stored ordinal.
+func seedOrdinalFor(traderID, symbol, label string, price float64, sessionDay string) int {
+	if TouchOrdinalSeed == nil {
+		return 0
+	}
+	if n := TouchOrdinalSeed(traderID, symbol, label, price, sessionDay); n > 0 {
+		return n
+	}
+	return 0
+}
+
+// touchKey scopes registry state by SESSION-DAY as well as level: a new day
+// legitimately restarts the count at 1, and yesterday's state must not serve
+// today's ordinals even inside one long-running process.
+func touchKey(traderID, symbol, label string, price float64, sessionDay string) string {
+	return traderID + "|" + symbol + "|" + label + "|" +
+		strconv.FormatFloat(price, 'f', 2, 64) + "|" + sessionDay
 }
 
 // TouchUpdate feeds one cycle: bars (ascending 1m, closed only preferred), the
@@ -137,6 +172,12 @@ func TouchUpdate(traderID, symbol string, bars []market.Kline, levels []ScoredLe
 	volWindow := TouchVolLookback()
 	apprWindow := TouchApproachBars()
 
+	// A28 — the session-day comes from the caller's clock, never time.Now().
+	// CMESessionDayKey is the SAME function the episode sink writes with
+	// (auto_trader.go:692); a second date format here would make the seed query
+	// miss every stored row — class 28, one canonicalizer per identifier.
+	sessionDay := CMESessionDayKey(now)
+
 	var closed []TouchEpisode
 	touchRegistry.mu.Lock()
 	defer touchRegistry.mu.Unlock()
@@ -144,10 +185,12 @@ func TouchUpdate(traderID, symbol string, bars []market.Kline, levels []ScoredLe
 		if l.Price <= 0 {
 			continue
 		}
-		key := touchKey(traderID, symbol, l.Label, l.Price)
+		key := touchKey(traderID, symbol, l.Label, l.Price, sessionDay)
 		st := touchRegistry.states[key]
 		if st == nil {
-			st = &touchLevelState{}
+			// D2 — a registry MISS is where the ordinal used to restart at 1.
+			// Seed it from what the store already holds for this level today.
+			st = &touchLevelState{opened: seedOrdinalFor(traderID, symbol, l.Label, l.Price, sessionDay)}
 			touchRegistry.states[key] = st
 		}
 		// Roll the bar ring (dedup by OpenTime).
@@ -443,8 +486,11 @@ func RenderTouchLines(traderID, symbol string, price float64, maxLines int) stri
 // touching | rejected | accepted | approaching | "" (none).
 func TouchStateForCard(traderID, symbol, label string, levelPrice, price float64, nowMs int64) string {
 	band := TouchBandPoints()
+	// D2 — the registry key carries the session-day, so the card reads the key
+	// for the day nowMs falls in. A28: derived from the caller's clock.
+	sessionDay := CMESessionDayKey(time.UnixMilli(nowMs))
 	touchRegistry.mu.Lock()
-	st := touchRegistry.states[touchKey(traderID, symbol, label, levelPrice)]
+	st := touchRegistry.states[touchKey(traderID, symbol, label, levelPrice, sessionDay)]
 	touchRegistry.mu.Unlock()
 	if st == nil {
 		if math.Abs(price-levelPrice) <= 2*band {
