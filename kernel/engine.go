@@ -277,7 +277,7 @@ type StrategyEngine struct {
 	armedContextLine string
 
 	// weeklyContextLine (W3, weekly-bias wave 2026-08-30) — the ONE-line
-	// executor context from the Sunday weekly read ("WEEKLY: bull/high · draw
+	// executor context from the Sunday weekly read ("WEEKLY: refs only — PWH x · PWL y", class 50);
 	// 30500.25"). Rendered when non-empty; empty (no weekly doc) →
 	// byte-identical prompt. Soft law — never changes any gate.
 	weeklyContextLine string

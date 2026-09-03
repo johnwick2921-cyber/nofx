@@ -166,17 +166,27 @@ func WeeklyRefSet(f WeeklyFacts) []float64 {
 
 // WeeklyDoc is the JSON the Sunday read stores on the plans row
 // (session="WEEKLY"). Schema EXACT per spec W2.2.
+//
+// REFS-ONLY WAVE (2026-09-02, class 50): the doc carries PWH/PWL/IPDA as PRICE
+// FACTS and NO directional call. Bias/Conviction/Draw/Invalidation remain in
+// the schema ONLY so pre-wave stored rows still parse; nothing reads them as a
+// direction (the chips and prompts render refs-only). The deterministic bias
+// rule survives as ShadowBias/ShadowWhy — stamped at write, never read by any
+// consumer, kept so the anti-prediction keeps being measured (calibration
+// report 2026-09-02).
 type WeeklyDoc struct {
-	Bias         string             `json:"bias"`       // bull | bear | neutral
-	Conviction   string             `json:"conviction"` // low | med | high
-	Draw         WeeklyDraw         `json:"draw"`       // draw_on_liquidity
+	Bias         string             `json:"bias"`       // legacy (pre-wave) — never read as direction
+	Conviction   string             `json:"conviction"` // legacy (pre-wave)
+	Draw         WeeklyDraw         `json:"draw"`       // legacy (pre-wave)
 	Invalidation WeeklyInvalidation `json:"invalidation"`
 	WeeklyLevels []WeeklyLevel      `json:"weekly_levels"`
 	Narrative    string             `json:"narrative"` // ≤3 lines, plain auction language
 	// stamped at write (never model-written):
 	FactsHash     string `json:"facts_hash,omitempty"`
 	ThinHistory   bool   `json:"thin_history,omitempty"`
-	InvalidatedAt string `json:"invalidated_at,omitempty"` // W4 mid-week invalidation stamp
+	InvalidatedAt string `json:"invalidated_at,omitempty"` // W4 mid-week invalidation stamp (legacy — refs-only docs never invalidate)
+	ShadowBias    string `json:"shadow_bias,omitempty"`    // class 50: the rule bias that WOULD have been called — shadow only
+	ShadowWhy     string `json:"shadow_why,omitempty"`
 }
 
 // WeeklyDraw is the draw_on_liquidity object.
@@ -220,119 +230,145 @@ func ParseWeeklyDoc(raw string) (*WeeklyDoc, error) {
 	return &d, nil
 }
 
-// ValidateWeeklyDoc is the FAIL-CLOSED validator. Returns "" when the doc is
-// accepted, otherwise the reject reason (r1..r6 per spec W2).
+// ValidateWeeklyDoc is the FAIL-CLOSED validator, REFS-ONLY (class 50): the
+// doc is accepted when it carries the weekly-class reference facts — nothing
+// directional is asked, checked, or rewarded. Returns "" on acceptance.
 func ValidateWeeklyDoc(d *WeeklyDoc, refs []float64, thinHistory bool) string {
 	if d == nil {
 		return "r1: empty doc"
 	}
-	// r1 — bias / conviction enums.
-	switch strings.ToLower(strings.TrimSpace(d.Bias)) {
-	case "bull", "bear", "neutral":
-	default:
-		return fmt.Sprintf("r1: bias %q not in {bull, bear, neutral}", d.Bias)
+	// r1 — the references ARE the doc: at least one weekly_level with a real px
+	// and a non-empty name (PWH/PWL/IPDA extremes/NWOG edges).
+	if len(d.WeeklyLevels) == 0 {
+		return "r1: weekly_levels empty — the doc must carry the reference facts (PWH/PWL/IPDA)"
 	}
-	switch strings.ToLower(strings.TrimSpace(d.Conviction)) {
-	case "low", "med", "high":
-	default:
-		return fmt.Sprintf("r1: conviction %q not in {low, med, high}", d.Conviction)
-	}
-	// r2 — invalidation: px > 0 AND basis non-empty.
-	if d.Invalidation.Px <= 0 {
-		return "r2: invalidation missing/malformed (px must be > 0)"
-	}
-	if strings.TrimSpace(d.Invalidation.Basis) == "" {
-		return "r2: invalidation missing/malformed (basis must be non-empty)"
-	}
-	// r6 — thin history forces low conviction.
-	if thinHistory && strings.ToLower(strings.TrimSpace(d.Conviction)) != "low" {
-		return fmt.Sprintf("r6: thin_history (completed weeks < 4) but conviction %q != low", d.Conviction)
-	}
-	// r3 — the draw MUST be a computed reference within ±1 tick (0.25).
-	const tick = 0.25
-	matched := false
-	for _, p := range refs {
-		if math.Abs(d.Draw.Px-p) <= tick {
-			matched = true
-			break
+	for _, l := range d.WeeklyLevels {
+		if strings.TrimSpace(l.Name) == "" || l.Px <= 0 {
+			return fmt.Sprintf("r1: weekly_level %q px %.2f invalid (name non-empty, px > 0)", l.Name, l.Px)
 		}
 	}
-	if !matched {
-		return fmt.Sprintf("r3: draw %.2f matches NO computed reference within ±%.2f (refs: %d)", d.Draw.Px, tick, len(refs))
-	}
-	// r4 — narrative ≤ 3 lines.
+	// r2 — narrative ≤ 3 lines.
 	if n := strings.Count(strings.TrimSpace(d.Narrative), "\n") + 1; n > 3 {
-		return fmt.Sprintf("r4: narrative has %d lines (max 3)", n)
+		return fmt.Sprintf("r2: narrative has %d lines (max 3)", n)
 	}
-	// r5 — day-of-week reasoning tokens FORBIDDEN.
+	// r3 — day-of-week reasoning tokens FORBIDDEN.
 	if HasDayOfWeekTokens(d.Narrative) {
-		return "r5: narrative contains day-of-week reasoning (FORBIDDEN)"
+		return "r3: narrative contains day-of-week reasoning (FORBIDDEN)"
+	}
+	// r4 — a directional call is FORBIDDEN anywhere in the doc (refs-only law:
+	// bull/bear/long/short/upside/downside tokens reject).
+	low := strings.ToLower(d.Narrative)
+	for _, tok := range []string{"bull", "bear", "long", "short", "upside", "downside", "biased", "bias"} {
+		if strings.Contains(low, tok) {
+			return fmt.Sprintf("r4: directional token %q in narrative — the weekly doc is REFS ONLY (no bias call)", tok)
+		}
 	}
 	return ""
 }
 
 // BuildWeeklyPrompt assembles the full Sunday read prompt: facts sections +
-// the Instructions block + the exact output JSON schema.
+// the Instructions block + the exact output JSON schema. REFS-ONLY (class 50):
+// the model lists the reference facts and writes a FACTS-ONLY narrative — no
+// directional call exists anymore (calibration 2026-09-02: the bias was
+// anti-predictive; nothing reads it as direction).
 func BuildWeeklyPrompt(f WeeklyFacts) string {
 	var b strings.Builder
 	b.WriteString("# WEEKLY READ — CME MNQ futures\n")
-	b.WriteString("You are a disciplined weekly-bias reasoner. Read the facts ONCE and write ONE weekly bias doc for the coming week. Facts below are Go-computed from stored 1m bars; your job is JUDGMENT, not re-deriving the data.\n\n")
+	b.WriteString("You are a disciplined weekly-reference compiler. Read the facts ONCE and write ONE weekly reference doc for the coming week. Facts below are Go-computed; your job is to LIST the references, not to call a direction.\n\n")
 	fmt.Fprintf(&b, "read time: %s (all times CT) · last stored price %.2f\n\n", ClockCTAndUTC(f.Now), f.Price)
 
 	b.WriteString(f.SectionsText)
 
 	b.WriteString("## Instructions (THE RULES — violations are rejected)\n")
-	b.WriteString("1. Tier-A evidence ONLY for bias: (a) price vs weekly_open with acceptance, (b) PWH/PWL break-AND-HOLD vs sweep-and-reject, (c) the 3-week structure tags (HH/outside/LL/LH/inside). Nothing else may justify bias.\n")
-	b.WriteString("2. NWOG and IPDA are DRAW/TARGET material only — citing them as bias evidence = reject.\n")
+	b.WriteString("1. weekly_levels lists the weekly-class PRICE FACTS the week should respect: PWH, PWL, the computed IPDA extremes, and unfilled NWOG edges. 3-6 entries, each from the facts above, px copied EXACTLY.\n")
+	b.WriteString("2. NO directional call: no bias, no conviction, no draw, no invalidation, no long/short/bull/bear language — a direction anywhere = reject. The doc is REFS ONLY.\n")
 	b.WriteString("3. Day-of-week reasoning is FORBIDDEN (any weekday token in the narrative = reject).\n")
-	b.WriteString("4. draw_on_liquidity MUST equal an IPDA extreme, PWH, PWL, or an unfilled-NWOG edge in the bias direction; neutral bias → the nearest untested pool on either side.\n")
-	b.WriteString("5. MANDATORY invalidation: a price AND a basis time-frame written as \"1h close beyond <px>\" (a CLOSED 1h bar beyond the price invalidates the bias mid-week).\n")
-	b.WriteString("6. narrative ≤ 3 lines, plain auction language, no marketing.\n\n")
+	b.WriteString("4. narrative ≤ 3 lines, plain auction language, FACTS ONLY (where the references sit, what fills them) — no marketing, no prediction.\n\n")
 
 	b.WriteString("## OUTPUT — one JSON object, no prose outside it\n")
 	b.WriteString("```json\n")
-	b.WriteString(`{"bias":"bull|bear|neutral","conviction":"low|med|high","draw":{"name":"<ref name>","px":<n>},"invalidation":{"px":<n>,"basis":"1h close beyond <px>"},"weekly_levels":[{"name":"<ref name>","px":<n>}],"narrative":"≤3 lines, plain auction language"}`)
+	b.WriteString(`{"weekly_levels":[{"name":"<ref name>","px":<n>}],"narrative":"≤3 lines, facts only"}`)
 	b.WriteString("\n```\n")
 	b.WriteString("weekly_levels: the 3-6 weekly-class references the week should respect (drawn from the facts above).\n")
 	return b.String()
 }
 
+// weeklyLevelPx returns the first weekly_level with the given name (0 when
+// absent) — the refs-only renderer's lookup.
+func weeklyLevelPx(d *WeeklyDoc, name string) float64 {
+	if d == nil {
+		return 0
+	}
+	for _, l := range d.WeeklyLevels {
+		if strings.EqualFold(strings.TrimSpace(l.Name), name) && l.Px > 0 {
+			return l.Px
+		}
+	}
+	return 0
+}
+
 // WeeklyContextLine renders the ≤3-line injection block for the session
-// planner prompt (W3). Forms: active bias · none · neutral (invalidated) ·
-// thin history.
+// planner prompt. REFS-ONLY (class 50): "WEEKLY: refs only — PWH x · PWL y";
+// thin history appends the completed-week count. Never a direction.
 func WeeklyContextLine(d *WeeklyDoc, thinWeeks int) string {
 	if d == nil {
 		return "WEEKLY: none"
 	}
-	if strings.TrimSpace(d.InvalidatedAt) != "" {
-		return "WEEKLY: neutral (invalidated " + d.InvalidatedAt + ")"
+	pwh, pwl := weeklyLevelPx(d, "PWH"), weeklyLevelPx(d, "PWL")
+	if pwh <= 0 || pwl <= 0 {
+		if d.ThinHistory {
+			return fmt.Sprintf("WEEKLY: refs only (thin history %dw)", thinWeeks)
+		}
+		return "WEEKLY: refs only"
 	}
+	line := fmt.Sprintf("WEEKLY: refs only — PWH %.2f · PWL %.2f", pwh, pwl)
 	if d.ThinHistory {
-		return fmt.Sprintf("WEEKLY: thin history (%dw) — low conviction", thinWeeks)
+		line += fmt.Sprintf(" (thin history %dw)", thinWeeks)
 	}
-	return fmt.Sprintf("WEEKLY: %s/%s · draw %s %.2f · invalid %.2f (%s)",
-		strings.ToLower(d.Bias), strings.ToLower(d.Conviction), d.Draw.Name, d.Draw.Px, d.Invalidation.Px, d.Invalidation.Basis)
+	return line
 }
 
 // WeeklyExecutorLine renders the one executor-prompt context line (W3).
-// F1 (2026-08-30): an INVALIDATED doc still exists and must stay visible —
-// the executor reads "WEEKLY: neutral (invalidated …)", never silence (the
-// silent "" hid the invalidated-bear doc during the −204pt sell-off).
+// REFS-ONLY (class 50): the same refs-only line; "" only when no doc exists.
 func WeeklyExecutorLine(d *WeeklyDoc) string {
 	if d == nil {
 		return ""
 	}
-	if strings.TrimSpace(d.InvalidatedAt) != "" {
-		return "WEEKLY: neutral (invalidated " + d.InvalidatedAt + ")"
+	pwh, pwl := weeklyLevelPx(d, "PWH"), weeklyLevelPx(d, "PWL")
+	if pwh <= 0 || pwl <= 0 {
+		return "WEEKLY: refs only"
 	}
-	return fmt.Sprintf("WEEKLY: %s/%s · draw %.2f", strings.ToLower(d.Bias), strings.ToLower(d.Conviction), d.Draw.Px)
+	return fmt.Sprintf("WEEKLY: refs only — PWH %.2f · PWL %.2f", pwh, pwl)
 }
 
-// ApplyWeeklyDOA (F5, 2026-08-30) — the breach-at-write guard: if the weekly
-// bias's own invalidation basis is ALREADY crossed at write time, stamp
-// neutral + invalidated_at NOW instead of writing a stillborn doc the watch
-// kills moments later (the 17:07:15 bear lived 3 seconds; the invalidated
-// bear would have been RIGHT by 250pt). Returns true when it stamped neutral.
+// WeeklyRuleBias is the SHADOW-ONLY deterministic reconstruction of the old
+// Tier-A bias rule (calibration 2026-09-02, control reconstruction): bull when
+// the prior completed week closes above its weekly_open AND breaks-and-holds
+// PWH; bear symmetric vs PWL; else neutral. It exists so the anti-prediction
+// keeps being measured — THE LAW: nothing reads its output as a direction; it
+// is stamped on the doc as shadow_bias/shadow_why and logged.
+func WeeklyRuleBias(f WeeklyFacts) (bias, why string) {
+	c := 0.0
+	if len(f.Weeks) > 0 {
+		c = f.Weeks[len(f.Weeks)-1].Close
+	}
+	wo, pwh, pwl := f.Refs.WeeklyOpen, f.Refs.PWH, f.Refs.PWL
+	if wo <= 0 || pwh <= 0 || pwl <= 0 || c <= 0 {
+		return "neutral", "refs unavailable"
+	}
+	if c > wo && c > pwh {
+		return "bull", fmt.Sprintf("close %.2f > weekly_open %.2f AND > PWH %.2f (break-and-hold)", c, wo, pwh)
+	}
+	if c < wo && c < pwl {
+		return "bear", fmt.Sprintf("close %.2f < weekly_open %.2f AND < PWL %.2f (break-and-hold)", c, wo, pwl)
+	}
+	return "neutral", fmt.Sprintf("close %.2f inside weekly_open %.2f .. (PWH %.2f / PWL %.2f)", c, wo, pwh, pwl)
+}
+
+// ApplyWeeklyDOA (F5, 2026-08-30) — legacy bias write-time guard. SHADOW ONLY
+// since class 50 (refs-only docs carry no bias/invalidation and nothing calls
+// this from the trader); kept for the offline measurement of pre-wave rows and
+// the pure-function tests. Returns true when it stamped neutral.
 func ApplyWeeklyDOA(doc *WeeklyDoc, bars []market.Kline, now time.Time) bool {
 	if doc == nil || strings.TrimSpace(doc.InvalidatedAt) != "" {
 		return false
