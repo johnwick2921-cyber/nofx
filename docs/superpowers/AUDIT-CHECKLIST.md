@@ -1111,22 +1111,25 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     BEFORE the position row materializes, so `stampArmedFillLineage` returns on
     that path first. measured on the
     current rev, **10 of 10 filled armed rows carry `fill_quantity=0`** — the
-    stamp never lands. TWO mechanisms, and the second is the dominant one:
-    (a) the materialization race (row 35 filled 09:03:53, position 591
-    materialized 09:05:14 — 81s), and (b) `GetOpenPositionBySymbol` compared
-    `side = ?` case-sensitively while `armed_orders.side` is always lowercase
-    and `trader_positions.side` is overwhelmingly uppercase (LONG 280 / SHORT
-    304 vs long 1 / short 2) — `side='short'` matched 0 rows for position 591,
-    `side='SHORT'` matched 1, so the fill-time lookup could never succeed
-    whatever the timing. Fixed with `UPPER(side)=UPPER(?)` at that lookup and
-    its two siblings, plus the stamp in `StampArmedLineageIfMatched`. **And the
-    log line hid it:** "position row not materialized yet" prints whenever
-    `pos == nil` — for either reason — asserting the race as fact, which sent
-    two sessions after a timing bug. A write on a branch almost nothing takes is
-    WORSE than a read nobody performs, because it produces a green proof: row 35
-    passes any test that asserts only "the stamp ran". Probe: ask which BRANCH a
-    write sits on; and when a log line names a CAUSE, check that the code can
-    actually distinguish it from the alternatives.
+    stamp never lands. TWO mechanisms, the second dominant: (a) the
+    materialization race (row 35 filled 09:03:53, position 591 materialized
+    09:05:14 — 81s), and (b) **class 28 again** — `GetOpenPositionBySymbol`
+    compared `side = ?` case-sensitively while `armed_orders.side` is always
+    lowercase and `trader_positions.side` is overwhelmingly uppercase (LONG 280
+    / SHORT 304 vs long 1 / short 2); `side='short'` matched 0 rows for position
+    591 and `side='SHORT'` matched 1, so the fill-time lookup could never
+    succeed whatever the timing. Fixed with `UPPER(side)=UPPER(?)` there and at
+    two siblings. **The log line hid it:** "position row not materialized yet"
+    prints whenever `pos == nil` — true for either mechanism — asserting the
+    race as fact, which sent two sessions after a timing bug. **And a late stamp
+    cannot repair the damage:** `RepairArmedLineage` clears the adherence grade
+    for regrading only when it is `"F"` (reconcile.go:588), while a close with
+    no citation grades `"D"` (adherence.go:52), so positions 584 and 586 now
+    carry full lineage and a permanent off-plan D. Probes: ask which BRANCH a
+    write sits on; when a log line names a CAUSE, check the code can
+    distinguish it from the alternatives; and when a repair path clears a value
+    to trigger a recompute, check it matches the value the broken path actually
+    writes.
 58. **A mode that existed only in a comment.** (Highest occupied at merge: 57.)
     Root cause: `plan_mode` was documented as `advisory | direction | strict`
     in a doc comment (`store/strategy.go:919`) and offered in the Studio

@@ -237,7 +237,7 @@ refusal line, and the next open position's card showing its armed-under version.
 
 Three sessions untangled this. My first account of it was wrong twice.
 
-### 9.1 The measured population (current rev, not a borrowed baseline)
+### 9.1 The measured population (current rev, nothing borrowed)
 
 ```
 armed_orders            total 36 · filled 10 · filled with fill_quantity>0: 0 · with 0: 10
@@ -246,54 +246,95 @@ row 35                  state=filled · fill_quantity=0 · state_reason '' (empt
 stamp_pending in text   0 rows
 ```
 
-**Every filled armed row has `fill_quantity=0`. 10 of 10.** That is the finding,
-and it needs no borrowed denominator.
+**Every filled armed row has `fill_quantity=0`. 10 of 10.** That is the finding
+and it carries its own denominator.
 
-**CORRECTION 1 (nofx-52).** I wrote "584 of 586 armed fills". Wrong population:
-`armed_orders` holds 36 rows in total, so that figure cannot describe armed
-fills — it was a positions-era number from the superseded `fef656a4` baseline,
-and I repeated it without checking its denominator. Run against the current rev,
-the audit's own column set (`plan_version=0 AND cited_scenario_id='' AND
-source='reconcile' AND entry_order_id empty`) returns **3**, not 584.
+### 9.2 CORRECTIONS — three of my claims were wrong
 
-**CORRECTION 2 (nofx-52).** `;stamp_pending` is transient by design —
-`armed_executor.go` appends it, `reconcile.go` `TrimSuffix`es it off. Row 35's
-`state_reason` is empty, and a search for the marker returns zero rows. The
-defect is visible in `fill_quantity`, never in the marker.
+**C1 — "584 of 586 armed fills" (mine to own).** 584 and 586 are
+`trader_positions` **row ids**, not a count and never a ratio. The baseline
+finding is: on 2026-09-01, **two** armed fills went unstamped — ids 584 and 586
+— out of six closed rows that session-day (581–586). The chat figure came from
+nofx-89 misreading their own row ids; the committed report was always correct.
+I then published it without checking that `armed_orders` holds 36 rows in
+total, which would have caught it in one query. My subsequent framing — "a
+positions-era figure I repeated" — was also wrong: it was a row-id pair, not an
+era figure.
 
-### 9.2 Mechanism 1 — the materialization race (real, but not the whole of it)
+Consequence: my re-run of the audit's column set returning **3** on the current
+rev is not a collapse from 584. It is **3 against a baseline of 2** — the same
+order of magnitude, and it makes the deterministic reading STRONGER. A race
+producing 2 one day and 3 the next is unremarkable; a small, persistent,
+every-day number is exactly what a fold-insensitive miss looks like.
 
-`stampArmedFillLineage` returns early when the position row does not exist yet,
-before the `SetFillQuantity` call §4 describes. Confirmed for row 35: it filled
-at **09:03:53** and position 591 materialized at **09:05:14** — an 81-second
-gap. Fixed in `StampArmedLineageIfMatched` (95e9a4d0), which takes `posID`
-directly.
+**C2 — `;stamp_pending` transience.** nofx-52: the marker is trimmed in
+`reconcile.go`, no row carries it now, so the defect is visible only in
+`fill_quantity`. nofx-89: their report line 493 read `armed_orders` 24 and 28 as
+`filled ;stamp_pending` at 16:40 CT against fills at 08:37:08 and 13:33:06 —
+carries of roughly **8 hours and 3 hours**. Both are true. The trim is
+**eventual, not prompt**: verified now, rows 24 and 28 have empty
+`state_reason` and their positions are stamped. "Transient" was the assumption
+that made `fill_quantity` look like the only symptom.
 
-### 9.3 Mechanism 2 — the side-casing miss (nofx-89's §D-9, and the DOMINANT one)
+**C3 — RETRACTED: close-sync does NOT lose a priced close.** I wrote that
+`GetOpenPositionByAccountSymbol` was on a live money-loss path. nofx-52 checked
+and it is not: `close_sync.go:87-89` sets `side` to `"LONG"`/`"SHORT"` via
+`strings.EqualFold` **before** the call, so it passes uppercase and matches the
+uppercase rows; `reconcile.go:153-157` and `tcp_trader.go:601` normalise too.
+Every caller of the account-scoped lookup already hand-normalises.
 
-The two writers disagree about casing, measured live:
+The residual there is the **inverse and small**: the 3 lowercase rows (576, 577,
+579 — all `armed_entry`, all CLOSED, all 2026-08-31) would be missed by an
+uppercase lookup. `UPPER(side)=UPPER(?)` is still correct at all three sites; it
+is the whole fix at `GetOpenPositionBySymbol` and a much smaller one at the
+account-scoped lookup. A claimed live loss path that does not exist costs
+credibility on the ones that do.
+
+### 9.3 Mechanisms 1 and 2
+
+**Mechanism 1 — the materialization race.** `stampArmedFillLineage` returns
+early when the position row does not exist yet. Confirmed for row 35: filled
+**09:03:53**, position 591 materialized **09:05:14** — an 81-second gap. Fixed
+in `StampArmedLineageIfMatched` (95e9a4d0), which takes `posID` directly.
+
+**Mechanism 2 — the side-casing miss, and the DOMINANT one.**
 
 | column | values |
 |---|---|
-| `armed_orders.side` | `long` 19 · `short` 17 — **always lowercase** |
+| `armed_orders.side` | `long` 19 · `short` 17 — always lowercase |
 | `trader_positions.side` | `LONG` 280 · `SHORT` 304 · `long` 1 · `short` 2 |
-
-`GetOpenPositionBySymbol` compared `side = ?`, and `=` on a plain TEXT column is
-case-sensitive. Against position 591:
 
 ```
 select count(*) … where side='short' and id=591  →  0
 select count(*) … where side='SHORT' and id=591  →  1
 ```
 
-The fill handler passes the ARMED row's lowercase side. **So it could never find
-an armed-entry position, however well the timing went.** That is why 10 of 10
-fail: a race would be intermittent, and this is deterministic.
+The fill handler passes the ARMED row's lowercase side, so it could never find
+an armed-entry position however good the timing was. That is why it is 10 of 10
+rather than intermittent. Fixed with `UPPER(side)=UPPER(?)` (664ab6b7).
 
-nofx-89 offered mechanism 2 as a possible second contributor. It is the primary
-one. Fixed with `UPPER(side) = UPPER(?)` at that lookup and at its two siblings
-(the USDT-suffix retry, and `GetOpenPositionByAccountSymbol`, which close-sync
-routes through — a case-sensitive compare there loses a priced close).
+This is **class 28, canonical casing** — "one canonicalizer per identifier,
+called where the value ENTERS, never at each comparison" — backfilled into
+PART 1 by nofx-52 hours before this finding landed on it. Three call sites
+normalise by hand; one storage path does not; the mismatch sat between two
+tables.
+
+### 9.4 NEW — a late stamp cannot fix the grade, because the reset looks for F
+
+Positions 584 and 586 **are stamped now**: `plan_version` 6 and 5,
+`cited_scenario_id` S2 and S3, `entry_order_id` populated. The reconcile got
+there eventually.
+
+Their `adherence_grade` is still **D**.
+
+`RepairArmedLineage` clears the grade so W5 can regrade — but only when it is
+`"F"` (`trader/ninjatrader/reconcile.go:588`). And a close with no citation
+grades **`"D"`** (`kernel/adherence.go:52-54`, "off-plan (no scenario
+cited)"). So the reset predicate looks for a grade this path does not produce,
+and a late-stamped position keeps its off-plan D permanently. **[A]** — both
+rows read D with full lineage, and both code lines quoted.
+
+Out of this wave's footprint (adherence belongs to the grader). Reported.
 
 ### 9.4 The reason this took three sessions: the log line cannot tell them apart
 
