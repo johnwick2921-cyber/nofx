@@ -742,6 +742,19 @@ in CLAUDE.md).
     **Law:** a protection that exists on one order path and not the other is
     not a protection — it is a suggestion.
 
+    **RIDER — "one gate, two ATRs" (no-trade-forensic 2026-09-03):** the
+    class-48 decision-path min-SL leg initially read `kernel.PlanDATRFor`, but
+    `SetPlanDATR(..., dATR)` stores the **DAILY ATR** (`plan_render.go:370`) —
+    not ATR5m. Measured: decision records 36640/36641/36642 (09-02 18:48-18:52)
+    refused against `1.5×ATR5m = 450.56` (dATR 300.4) while the arm seam in the
+    same minutes used ATR5m 12.78-14.12; all three targets printed within 28
+    minutes (19:07/19:15/19:16). Fix: both seams now read ONE resolver —
+    `armSeamATR5m` = the arm seam's chain (`FuturesBarsProvider`
+    AISVPBarInterval/Count → `AcceptanceBars(...,"2x5m")` → `ExportCalculateATR`
+    14) — and the doubled `entry_gate: entry_gate:` prefix collapsed. **Law:**
+    when one gate serves two paths, it reads ONE resolver per input — a gate
+    with two ATRs is two gates, and one of them is lying.
+
 49. **Instrument theatre: a boot line that could not be wrong, a label that
     usually was, and a watchdog that never fired.** Root cause: the
     instruments reporting on the transport wave were themselves unmeasured.

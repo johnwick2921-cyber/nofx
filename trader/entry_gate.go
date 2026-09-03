@@ -177,6 +177,29 @@ func EntryGate(in EntryIntent) (reason string, refused bool) {
 
 // ── Arm-seam builder ────────────────────────────────────────────────────────
 
+// armSeamATR5mFromBars is the ONE ATR5m math for BOTH seams (no-trade-rider
+// 2026-09-03): the arm seam's exact expression — 5m aggregate, ATR(14). The
+// decision path MUST share this, never kernel.PlanDATRFor: SetPlanDATR stores
+// the DAILY ATR (kernel/plan_render.go:370, `SetPlanDATR(traderID, dATR)`), and
+// the 09-02 evening proved the difference — decision records 36640/36641/36642
+// were refused against `1.5×ATR5m = 450.56` (dATR 300.4) while the arm seam in
+// the same minutes used ATR5m 12.78-14.12. "One gate, two ATRs" is the bug.
+func armSeamATR5mFromBars(bars []market.Kline) float64 {
+	if len(bars) == 0 {
+		return 0
+	}
+	return market.ExportCalculateATR(kernel.AcceptanceBars(bars, "2x5m"), 14)
+}
+
+// armSeamATR5m is the decision path's entry to the same resolver: fetch the
+// AISVP bars exactly like the arm seam does, then share the same math.
+func armSeamATR5m(symbol string) float64 {
+	if market.FuturesBarsProvider == nil {
+		return 0
+	}
+	return armSeamATR5mFromBars(market.FuturesBarsProvider(symbol, kernel.AISVPBarInterval, kernel.AISVPBarCount))
+}
+
 // entryGateForArm builds the intent for an arm leg and runs EntryGate. The arm
 // chain's own gates (armGateVerdictFor, oneLiveArmGuard) run before this —
 // EntryGate is the SAME function the decision path runs, so an arm can never
@@ -264,7 +287,7 @@ func (at *AutoTrader) entryGateForDecision(d *kernel.Decision, livePrice float64
 		Entry:            livePrice,
 		Stop:             d.StopLoss,
 		Target:           d.TakeProfit,
-		ATR5m:            kernel.PlanDATRFor(at.id),
+		ATR5m:            armSeamATR5m(d.Symbol),
 		MinRR:            minRR,
 		MinSLMult:        kernel.MinSLATRMult(),
 		PlanMode:         at.planModeFor(session),
@@ -316,5 +339,10 @@ func (at *AutoTrader) recordEntryGateRefusal(path, symbol, action, reason string
 func entryGateDecisionTelemetry(at *AutoTrader, actionRecord *store.DecisionAction, reason string) {
 	telemetry.IncGateBlock(at.id, "entry_gate")
 	actionRecord.Success = false
-	actionRecord.Error = "entry_gate: " + reason
+	// The leg messages already carry the "entry_gate:" prefix — do not double it
+	// (the 09-02 refusals read "entry_gate: entry_gate: …").
+	if !strings.HasPrefix(reason, "entry_gate:") {
+		reason = "entry_gate: " + reason
+	}
+	actionRecord.Error = reason
 }
