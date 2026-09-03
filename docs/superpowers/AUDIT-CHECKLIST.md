@@ -1410,6 +1410,33 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     disagrees with a verified port is the fixture's error; and a rate ships with
     its n, its interval and its excluded count or it does not ship.
 
+66. **A production surface with no production path.** (Number assigned at
+    merge. 64 and 65 are claimed by the detector and seam waves on branches that
+    have not landed on dev yet; 62/63 are the 1D wave's, already on dev — so this
+    takes 66 rather than the next free number on dev, which would collide.)
+    Found during the 1D cutover, incidentally: the **entire operator UI** was
+    served by a Vite DEVELOPMENT server on :3000, started by hand, supervised by
+    nothing. The Go server registered **no static route at all** — `:8080/`
+    returned 404 — and `web/dist` on disk had been **stale since 2026-08-31**
+    while binaries shipped on 09-01, 09-02 and 09-03. Nothing was broken, which
+    is why nobody noticed: the owner's browser pointed at :3000 and :3000 always
+    worked, because the process happened never to have died. A reboot, an OOM
+    kill, or a closed terminal would have taken the whole interface with it and
+    left a live trading bot with no operator surface.
+    **Probe:** for every surface a human depends on, ask what process serves it,
+    what restarts that process, and what the last built artifact's timestamp is.
+    "It is up right now" answers none of those. Specifically: does the artifact
+    on disk predate the binary that is running?
+    **Law:** a dev server is not a production path, and supervising one does not
+    make it one — it makes an unsupervised dev server a supervised one, with the
+    minification, memory and websocket behaviour unchanged. A surface that has no
+    owner process, no restart story, and no freshness check is unowned no matter
+    how long it has stayed up. **Fixed by:** the bot serves its own UI
+    (`api/ui_serving.go`), and the boot line
+    `🖥 ui: served-by=go-static build=<ts>` is READ from the bundle and logged as
+    a WARNING when the bundle predates the binary — the 08-31-dist-under-a-09-03-
+    binary state becomes impossible to miss instead of invisible.
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,
@@ -1456,12 +1483,20 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
    the override is permitted, leaving orders alive is not. Such a cutover
    REQUIRES the boot sweep to run and its result to be quoted in the report
    (`🛡 boot sweep CANCELLED pre-boot arm …` per row, or `cancelled 0`).
+5b. **BUILD THE UI TOO (from 2026-09-03).** The bot serves its own bundle, and
+   `web/dist` is untracked build output — it does not arrive from git and it does
+   NOT rebuild itself. In the clean clone: `cd web && npm ci && npm run build`
+   (~5s), then copy `web/dist` into the deploy tree alongside the binary. Skip
+   this and the boot line says `STALE` with the age, and the screen shows a build
+   that is not the one trading. `served-by=none` means the copy was missed
+   entirely.
 6. **Swap:** `mv nofx-bin nofx-bin.old.<tag>` → `mv nofx-bin.next nofx-bin` →
    `kill -9 <PID>` (SIGKILL — SIGTERM exits 0 and systemd does NOT relaunch).
    The classifier denies the kill to the agent: print the command and have the
    OWNER run it.
 7. **Boot checklist (within 90s):**
    `🔐 BOOT INTEGRITY OK — rev <8char> +dirty · built <ts> · expected <8char> ·
-   goldens PASS` + exactly ONE PID + feed warmed (bars_historical replay ~30s
+   goldens PASS` + `🖥 ui: served-by=go-static build=<ts>` with NO `STALE` and
+   NO `served-by=none` + exactly ONE PID + feed warmed (bars_historical replay ~30s
    before decisions). **Rollback rule:** no boot line within 90s OR goldens
    fail → restore the prior binary + RELEASE, kill -9, restart, alert the owner.
