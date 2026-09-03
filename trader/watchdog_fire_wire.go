@@ -2,6 +2,7 @@ package trader
 
 import (
 	"fmt"
+	"nofx/kernel"
 	"time"
 
 	"nofx/mcp"
@@ -77,7 +78,10 @@ func WatchdogFireTable(rows []store.WatchdogFireDB) string {
 			}
 		}
 		out += fmt.Sprintf("  %-19s %-5s %8.1f %8.1f %10d  %s\n",
-			r.At.Format("2006-01-02 15:04:05"), r.Mode,
+			// TZ GUARD (merged-HEAD integration, 2026-09-03): a bare layout here
+			// broke TestTZGuardSingleTimeSource once the tz-guard lane merged.
+			// One time source — kernel.FormatCT — never a local layout string.
+			kernel.FormatCT(r.At), r.Mode,
 			float64(r.GapMs)/1000, float64(r.CallAgeMs)/1000, r.Bytes, resend)
 	}
 	out += fmt.Sprintf("  → %d fire(s), %d recovered by the identical resend", fired, recovered)
