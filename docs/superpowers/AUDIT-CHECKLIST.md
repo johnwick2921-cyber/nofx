@@ -1182,6 +1182,38 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     listing modes is not an implementation, and "deprecated" and "never built"
     are different findings that call for different fixes.
 
+60. **A gate signal that is time-of-day dependent — green at 11:00, red at
+    14:50, and honest both times.** (Highest occupied at merge: 59.)
+    `TestMaybeWakePlannerOnLevelEventsThrottleDedupe` injects a fixed clock into
+    its FIXTURE (bars anchored 2026-08-25 10:00 CT) but called the production
+    entry point, which reads `time.Now()`. That was harmless for as long as the
+    class-47 cadence cutoffs only WARNED. The hour they began ENFORCING, the
+    last-window cutoff started asking how many minutes remain to the session
+    flat — so the code path's behaviour became a function of the wall clock, and
+    the test with it. At 10:20 CT there were 265 minutes to NY's 14:45 flat and
+    the wake proceeded; at 14:44 there was 1 minute, `SkipForCutoff` fired, no
+    candidate was recorded, and the first assertion failed on an empty key. The
+    deploy lane certified "27 ok / 0 FAIL" at ~11:00 and shipped; the identical
+    command failed the same afternoon. **Neither reading was wrong.** That is
+    what makes it worse than a flake: it is reproducible in ONE DIRECTION, so
+    re-running never surfaces it, and a suite verified in the morning is not the
+    suite you are deploying after lunch. Two sessions also mis-diagnosed it —
+    one blamed the fixture's bar dates, the other reasoned from a stale
+    timestamp read off an earlier command and believed it was 11:30 when it was
+    14:47. **Probe:** for every gate or guard promoted from WARN to ENFORCE, ask
+    what NEW inputs its verdict now depends on, and grep the suite for tests
+    that reach that path through a wall-clock entry point with a fixed fixture —
+    they will pass all morning. For any suite used as a deploy gate, ask whether
+    a run at 11:00 and a run at 15:00 can disagree; if they can, the gate's
+    freshness is part of its result. **Fix:** the clock seam — the entry point
+    keeps `time.Now()` and delegates to an `…At(now, …)` variant; production is
+    unchanged and the test states its own clock instead of borrowing the
+    machine's. Applied to `maybeWakePlannerOnLevelEvents`; the comment records
+    WHY the clock became load-bearing, so the next reader does not re-derive it
+    at 14:44. **Law:** when a guard starts enforcing, every clock it consults
+    becomes load-bearing — and a green suite is only evidence about the moment
+    it ran.
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,

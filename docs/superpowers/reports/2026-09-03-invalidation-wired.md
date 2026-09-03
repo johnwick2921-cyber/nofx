@@ -552,8 +552,54 @@ would prove the ordering defect exists outside the reconcile path.
 
 Guard any re-derivation with the lineage clause — see the 572 trap above.
 
-### 10.5 NOT MINE — dev is red on a test
+### 10.5 DEV WAS RED — and the cause was mine (checklist class 60)
 
-`TestMaybeWakePlannerOnLevelEventsThrottleDedupe` fails on `origin/dev` at
-`62fd368d`, verified in a clean worktree of dev itself, unrelated to this
-branch. Reported, not touched — wakes are another lane. **[A]**
+`TestMaybeWakePlannerOnLevelEventsThrottleDedupe` failed on `origin/dev` at
+`62fd368d`, verified in a clean worktree of dev itself. I first reported it as
+unrelated to this branch. **It is not unrelated — it is a consequence of the
+class-47 cutoffs I built**, and I traced it after nofx-47 called it a time bomb.
+
+The test injects a fixed clock into its FIXTURE and called the production entry
+point, which reads `time.Now()`. Harmless while the cutoffs only WARNED. The
+hour they began ENFORCING, the last-window cutoff began asking how many minutes
+remain to the session flat:
+
+```
+10:20 CT  →  265 min to NY's 14:45 flat  →  wake proceeds  →  PASSES
+14:44 CT  →    1 min                     →  SkipForCutoff  →  FAILS (empty key)
+```
+
+So the deploy lane's "27 ok / 0 FAIL" at `f478ed88` was **honest when taken**
+and the identical command failed the same afternoon. Reproducible in one
+direction, so re-running never surfaces it.
+
+Two of us mis-diagnosed it first: nofx-47 blamed the fixture's bar dates (real,
+but the 15m zone path gates on `FormedAtMs` vs plan birth, both
+fixture-controlled), and reasoned from a stale timestamp believing it was 11:30
+when it was 14:47.
+
+**Fix — the clock seam.** `maybeWakePlannerOnLevelEvents` keeps `time.Now()`
+and delegates to `maybeWakePlannerOnLevelEventsAt(now, …)`. Production is
+unchanged; the test states its own clock. Recorded as **checklist class 60**,
+because the general shape is bigger than one test.
+
+#### The standing check nofx-47 asked for, run
+
+Scanned every `*_test.go` that builds a fixed `time.Date` clock and calls an
+`AutoTrader` entry point that reads `time.Now()` — eight sites. Then asked the
+discriminating question: which of them reach the NEW time-sensitive logic?
+
+```
+minutesToSessionFlat / SkipForCutoff / SkipForCooldown
+  → auto_trader_wake_levels.go:303, 316, 336  — and nowhere else in production
+```
+
+`latestClosedPrimaryBarMs`, `ForceReset`, `observeTransitionStanddown`,
+`runPlannerReadWithTriggerClaimedCtx` and `maybeManageArmedOrders` all read the
+clock for other reasons and consult **none** of the cadence inputs. So the blast
+radius of the enforcing cutoffs is exactly the one path, and the one test that
+reached it. **[A]** — grep over production sources, quoted above.
+
+That is a bounded answer, not a clean bill of health: a future guard promoted to
+ENFORCE puts its own inputs into the same position, which is why class 60's
+probe is phrased around the promotion rather than around this test.
