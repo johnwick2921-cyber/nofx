@@ -301,6 +301,24 @@ export const planStrings = {
   // ── rules ──
   noTrade: { en: 'No-trade', zh: '禁止交易', id: 'Larangan trade' },
   planDies: { en: 'Plan dies if', zh: '计划失效条件', id: 'Rencana mati jika' },
+  // no-trade band (2026-09-02): the machine's windows vs the model's prose
+  noTradeSpent: {
+    en: 'spent / other session',
+    zh: '已过 / 其他时段',
+    id: 'lewat / sesi lain',
+  },
+  noTradeNoneLive: {
+    en: 'none live now',
+    zh: '当前无限制',
+    id: 'tidak ada saat ini',
+  },
+  modelNotes: { en: 'Model notes', zh: '模型备注', id: 'Catatan model' },
+  bandElapsed: { en: 'spent', zh: '已过', id: 'lewat' },
+  bandOtherSession: {
+    en: 'other session',
+    zh: '其他时段',
+    id: 'sesi lain',
+  },
 
   // ── footer ──
   dayType: { en: 'Day type', zh: '日型', id: 'Tipe hari' },

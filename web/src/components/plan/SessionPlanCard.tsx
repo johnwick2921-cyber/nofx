@@ -16,7 +16,7 @@ import { WeeklyChip } from './WeeklyChip'
 import { BiasBlock } from './BiasBlock'
 import { ZoneTable } from './ZoneTable'
 import { ScenarioList } from './ScenarioList'
-import { RulesBlock } from './RulesBlock'
+import { RulesBlock, type NoTradeBandWindow } from './RulesBlock'
 import { PlanFooter } from './PlanFooter'
 import { PlanMiniChart } from './PlanMiniChart'
 import { EditSheet } from './EditSheet'
@@ -881,6 +881,7 @@ export function SessionPlanCard({
       {/* rules */}
       <RulesBlock
         noTrade={doc.no_trade ?? []}
+        band={(plan as { no_trade_band?: NoTradeBandWindow[] }).no_trade_band}
         deathCondition={doc.death_condition}
         language={language}
       />
