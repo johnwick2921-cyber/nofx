@@ -656,6 +656,9 @@ func (s *Server) handlePlanVersions(c *gin.Context) {
 			item["level_count"] = len(d.Levels)
 			item["scenario_count"] = len(d.Scenarios)
 			item["bias"] = d.Bias.Direction
+			// CLASS 50b — the stamped dual label (AI · tree · regime), a LABEL
+			// not a direction; "" on pre-50b stored rows.
+			item["bias_label"] = d.BiasLabel
 			item["day_type"] = d.DayType
 			item["death_condition"] = d.DeathCondition
 			// WHY this version stopped being the plan: the successor's

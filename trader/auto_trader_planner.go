@@ -914,7 +914,7 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 	// hard fail since the owner ruling 2026-08-31 removed the count concept),
 	// continuation scenario on gaps. PDH/PDL come from the detector universe
 	// (seated or raw).
-	facts := kernel.PlanFacts{Price: input.Price, DATR: input.DATR}
+	facts := kernel.PlanFacts{Price: input.Price, DATR: input.DATR, Regime: input.Regime}
 	// 8.4 — machine grades from the Go-ranked candidate table, keyed by rounded
 	// price so the write-site stamp can match the model's levels.
 	machineGrades := map[float64]string{}
@@ -925,6 +925,8 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 			facts.PDH = l.Price
 		case kernel.KindPDL:
 			facts.PDL = l.Price
+		case kernel.KindPDC:
+			facts.PDC = l.Price
 		}
 	}
 	// S1-wave A3 (2026-08-29) — the record loops moved into collectMachineGrades
@@ -940,6 +942,9 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 	}
 	if facts.PDL <= 0 {
 		facts.PDL = input.BiasCtxFacts.PDL
+	}
+	if facts.PDC <= 0 {
+		facts.PDC = input.BiasCtxFacts.PDC
 	}
 	requiredBias := kernel.FlipToDirection(priorKiller)
 	// W11 — carry the frozen indicator mirror + ai_config hash to the write site.
@@ -1892,6 +1897,12 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		// counter. Never touches the seated list.
 		at.weeklyConfluenceShadow(tradeDate, session, doc.Levels)
 	}
+	// CLASS 50b (live-bias replay ruling 53498adb) — stamp the dual label on
+	// the stored doc: AI bias + the machine tree/regime calls the read actually
+	// saw. A LABEL, not a direction — no MUST attaches to either leg.
+	doc.BiasLabel = kernel.BiasLabelLine(doc.Bias.Direction,
+		kernel.TreeCallWord(facts.Price, facts.PDH, facts.PDL, facts.PDC),
+		kernel.RegimeCallWord(facts.Regime))
 	docJSON, _ := json.Marshal(doc)
 	version, err := at.store.Plan().AppendPlan(&store.PlanDB{
 		PlanID:          at.store.Plan().ResolvePlanID(tradeDate, session, at.id),
