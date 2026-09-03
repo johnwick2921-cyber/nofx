@@ -654,3 +654,81 @@ Suites: Go clean · vitest 40 files / 306 tests · `tsc --noEmit` clean.
 
 After the boot: whether a read still authors `breakdown_continue` at a level the
 block marks "none — no break". Baseline is 2 of 2 reads doing exactly that.
+
+---
+
+## 13. RIDER PART 5 (owner ruling 2026-09-03) — wake cutoffs promoted to ENFORCE
+
+### 13.1 The evidence that decided it
+
+Today's WARN-era counters, read from `system_config`:
+
+```
+wake_cutoff_class47:…:2026-09-03:LONDON    1
+wake_cooldown_class47:…:2026-09-03:NY      2
+wake_stream_defer_class47:…:LONDON         3
+```
+
+**Three** wakes this morning would have been refused — one by the cutoff, two by
+the cooldown — each of which spent a max-reasoning planner read:
+
+| time | rule | detail | cost |
+|---|---|---|---|
+| 08:15 | cutoff | 24 min to flat (25m) — wrote LONDON v2 for an 08:30 flat | ~500s |
+| 09:15 | cooldown | 21 min since the last wake-authored version | ~517s |
+| 09:44 | cooldown | 23 min since the last wake-authored version | ~339s |
+
+The three stream-defers show the cross-session rule already working.
+
+### 13.2 The steady-state effect, measured — a HALVING, not a switch-off
+
+The two clocks are offset by the planner call itself. Measured on NY today:
+
+| wake fires | previous wake-authored version | version → wake |
+|---|---|---|
+| 09:06:54 | v2 08:45:05 | **21.8 min** → inside 30 → skip |
+| 09:38:54 | v3 09:15:31 | **23.4 min** → inside 30 → skip |
+
+Wake ATTEMPTS are throttled to ~30 min apart (08:06:54 · 08:36:54 · 09:06:54 ·
+09:38:54), and a version lands **8–9 minutes after** the wake fires (08:36:54 →
+v2 08:45:05; 09:06:54 → v3 09:15:31). So the version-to-next-attempt gap is
+30 − 8.5 ≈ 21.5 min, always inside a 30-minute cooldown.
+
+That does NOT switch wakes off. Skipping a wake writes no version, so the clock
+keeps running and the FOLLOWING attempt is ~51 min past the last version and
+proceeds:
+
+```
+version T          →  attempt T+21.5  SKIPPED  →  attempt T+51.5  PROCEEDS  →  version T+60
+```
+
+**Steady state: one wake-authored version per ~60 minutes instead of ~30.** The
+cutoff then removes any wake in the last 25 minutes of a session on top of that.
+
+This corrects my own earlier estimate to the owner ("three fewer plan versions
+this morning"). Three is what today's counters caught; the ongoing effect is a
+halving of the drumbeat, which is a different and better-bounded claim. **[A]**
+— arithmetic from the timestamps above, not projection.
+
+### 13.3 Scope, pinned both ways
+
+`WakeCadenceGoverns` is the only place that decides what a wake is.
+`level_event` and `structure_mss` are governed; `NY_scheduled_read`,
+`LONDON_scheduled_read`, `death_replan`, `owner_reset`, `owner_reread` and
+`sunday_weekly_read` are asserted NOT governed, so a later edit cannot widen it
+without failing a test.
+
+### 13.4 Two deliberate choices
+
+- `HaveFlat` / `HaveLastWakeVersion` are separate fields from their numbers. An
+  unreadable session window, or a session with no prior wake-authored version,
+  must never manufacture a skip out of a zero — that is how a gate starts
+  refusing things nobody decided to refuse (A24).
+- Both boundaries belong to the wake: strictly `< cutoff` and `< cooldown`, so
+  exactly 25 or exactly 30 still runs.
+
+### 13.5 Unchanged
+
+The counter keys and the recorded `n` — they now count real skips rather than
+would-be skips, which the log line states, so today's WARN-era numbers and
+tomorrow's enforce-era numbers form one series.
