@@ -179,9 +179,16 @@ func TestNoTradeWindowsHaveNoSurfaceLiterals(t *testing.T) {
 			}
 			continue
 		}
-		for _, lit := range []string{`"` + ls + `"`, `"` + le + `"`} {
+		// The WINDOW, not a bare bound. The first cut looked only for the
+		// quoted forms ("12:00") and so missed two copies written as prose:
+		//   "the lunch no-trade (12:00–13:30 CT)"                      (clock line)
+		//   "lunch 11:30–13:30 ET … (the system hard-gates 12:00–13:30 CT)"
+		// Scanning for a bare bound instead over-fires: "13:30 ET" is a
+		// different time from "13:30 CT", and the ET lull is deliberately not
+		// the machine's window. So the unit is the pair, in either dash.
+		for _, lit := range []string{ls + "–" + le, ls + "-" + le, `"` + ls + `"`, `"` + le + `"`} {
 			if strings.Contains(src, lit) {
-				t.Errorf("%s hardcodes the lunch bound %s — read LunchWindowCT() instead", f, lit)
+				t.Errorf("%s hardcodes the lunch window %q — read LunchWindowCT() instead", f, lit)
 			}
 		}
 	}

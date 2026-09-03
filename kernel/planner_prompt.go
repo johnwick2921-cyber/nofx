@@ -403,8 +403,9 @@ func BuildPlannerPrompt(in PlannerInput) string {
 	fmt.Fprintf(&b, "## Session\ntrade_date %s · session %s · %s · price %.2f · dATR %.1f\n",
 		in.TradeDate, in.Session, in.ReadKind, in.Price, in.DATR)
 	if !in.Now.IsZero() {
-		fmt.Fprintf(&b, "clock %s — EVERY time in this prompt is CT (America/Chicago): session windows, read/flat times and the lunch no-trade (12:00–13:30 CT) are CT wall-clock. Never apply these numbers to a UTC clock.\n",
-			ClockCTAndUTC(in.Now))
+		cls, cle := LunchWindowCT() // a FOURTH copy of the window lived here
+		fmt.Fprintf(&b, "clock %s — EVERY time in this prompt is CT (America/Chicago): session windows, read/flat times and the lunch no-trade (%s–%s CT) are CT wall-clock. Never apply these numbers to a UTC clock.\n",
+			ClockCTAndUTC(in.Now), cls, cle)
 	}
 	if in.Warming != "" {
 		fmt.Fprintf(&b, "WARMING: %s (first-week honesty — narrate the machinery, not an edge).\n", in.Warming)
@@ -615,11 +616,17 @@ func BuildPlannerPrompt(in PlannerInput) string {
 
 	// A3 — no-trade gates (≤8 lines, advisory — the plan declares them; the
 	// executor still sees every cycle).
+	lunchStartCT, lunchEndCT := LunchWindowCT()
 	b.WriteString("## No-trade gates (advisory — declare in no_trade or skip the day)\n")
 	b.WriteString("  - balance-day (open inside prior value area AND VAs overlap) → edges-only, or skip\n")
 	b.WriteString("  - opening gap >1.2×ATR or open outside the prior range → NEVER fade; the gap is a target\n")
 	b.WriteString("  - no A/B zone in reach AND no pool swept by 10:30 ET → declare the skip in the plan\n")
-	b.WriteString("  - lunch 11:30–13:30 ET: no new entries (the system hard-gates 12:00–13:30 CT)\n")
+	// The hard-gate half is RESOLVED, not typed: it was a third copy of the
+	// lunch window, and the F4 literal scan missed it because the bounds sit
+	// unquoted inside a longer sentence. The 11:30–13:30 ET half is the lunch
+	// LULL (trading lore, advisory) and is deliberately not the same window as
+	// the machine gate — see the report for that discrepancy.
+	b.WriteString(fmt.Sprintf("  - lunch 11:30–13:30 ET: no new entries (the system hard-gates %s–%s CT)\n", lunchStartCT, lunchEndCT))
 	b.WriteString("  - Tier-1 news → stand aside until a fresh post-news swing prints\n\n")
 
 	// A4 — killzone weighting (advisory, not a gate).
