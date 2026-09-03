@@ -1,6 +1,7 @@
 package kernel
 
 import (
+	"fmt"
 	"math"
 	"os"
 	"strconv"
@@ -263,4 +264,12 @@ func MeanAbsIncrementOf(incs []float64) float64 {
 		sum += math.Abs(d)
 	}
 	return sum / float64(len(incs))
+}
+
+// DetectorBootLine reports the live detector and the two tables recording it.
+// Every field READ from its resolver; the counts come from the tables, so an
+// empty table says 0 rather than implying a measurement (A24).
+func DetectorBootLine(outcomes, pool int64) string {
+	return fmt.Sprintf("detector: D1′ k=%.0f Δ=resolved-per-read band=k×Δ H=%d exit_on=%s · touch_outcomes=%d · candidate_pool=%d · legacy rates retired (reacted/rejection are no longer rendered anywhere)",
+		DetectorK(), DetectorHorizonBars(), DetectorExitOn(), outcomes, pool)
 }

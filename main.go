@@ -299,6 +299,8 @@ func main() {
 			}
 		}
 		logger.Infof("🩹 %s", store.AdherenceRegradeBootLine(len(pending), regraded, store.AdherenceRegradeEnabled(), backup))
+		// 1B D7 — the calibrated detector and the two tables that record it.
+		logger.Infof("🔬 %s", kernel.DetectorBootLine(st.TouchOutcomes().CountOutcomes(), st.CandidatePool().CountPool()))
 	}
 	// VOID PARITY (2026-09-02) — the ONE scope the prompt's VOID list and the
 	// write-site validator both read. Every field READ from its resolver.

@@ -1309,6 +1309,40 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     field (`judged_rollups=`), pinned by a test whose fixture makes every
     five-dimensional cell sub-floor while three roll-ups clear the floor.
 
+64. **An instrument that could not have reported otherwise.** (Highest
+    occupied at merge: 63.) Root cause: two production detectors whose
+    predicates guaranteed their own answers. `touch_telemetry.go` called a touch
+    a REJECTION when the close was still on the side it approached from — true
+    ≈69% of the time on a driftless walk BY CONSTRUCTION. `level_stats_calc.go`
+    counted ANY ≥reactPts move away from the level, either side, so a
+    blast-through scored identically to a rejection. Three touch geometries
+    coexisted. Every reaction rate ever published from them — 84%, 70.3%, 75.1%
+    — is an artifact of the predicate, not a property of the tape, and each was
+    quoted as evidence for trading decisions. **Probe:** for every rate an
+    instrument reports, simulate its predicate on IID-SHUFFLED tape of the same
+    instrument's own scale. If the answer is not ≈0.50, the instrument has an
+    opinion built into it; a detector that cannot be wrong is not measuring.
+    Then ask whether the geometry is symmetric: barriers anchored on the level
+    at ±k·Δ make a driftless walk a gambler's-ruin coin flip, barriers anchored
+    anywhere else do not. **Fix:** D1′ — one detector, ported line-for-line from
+    the reference so a parity fixture is byte-equal (151 episodes), calibrated
+    to p(hold)=0.4988 [0.4894, 0.5083] on IID-shuffled REAL MNQ tape at k=3,
+    exit_on=close, H=12; ambiguous episodes RECORDED, counted and excluded from
+    the rate; `touch_outcomes` writes one row per episode with the scope it was
+    judged under; `candidate_pool` records every level the constructor produced
+    INCLUDING the cut ones with their propensities, because the selection
+    question is off-policy and cannot be answered from the seated levels alone;
+    both legacy verdicts carry a retirement notice and no surface renders a rate
+    from them. **Two synthetic calibration tapes lied before the real one:** an
+    Ornstein-Uhlenbeck tape read 0.5221 (hold-biased by construction, since it
+    pulls price back to the level) and a pure random walk at one median level
+    read 0.4573 on n=2,445 (underpowered and selection-skewed). The byte-equal
+    parity with the reference is what proved the fixture wrong rather than the
+    detector. **Law:** calibrate every rate-producing instrument against noise
+    of its own scale before trusting one number it emits; a fixture that
+    disagrees with a verified port is the fixture's error; and a rate ships with
+    its n, its interval and its excluded count or it does not ship.
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,

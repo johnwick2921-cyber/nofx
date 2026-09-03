@@ -96,10 +96,10 @@ type TouchEpisode struct {
 
 // touchTracker is the per-(level) episode state machine.
 type touchLevelState struct {
-	opened   int // episodes ever opened this process (touch numbering)
-	active   *TouchEpisode
-	last     *TouchEpisode // last CLOSED episode (card chip state)
-	ring     []market.Kline
+	opened int // episodes ever opened this process (touch numbering)
+	active *TouchEpisode
+	last   *TouchEpisode // last CLOSED episode (card chip state)
+	ring   []market.Kline
 }
 
 // TouchRegistry is the process-wide telemetry state, keyed trader+symbol+level.
@@ -260,6 +260,14 @@ func penetrationStats(ring []market.Kline, level float64, from string) (pen, wic
 	return
 }
 
+// ── D4 (1B, 2026-09-03) — THE "REJECTION" VERDICT IS RETIRED ────────────────
+// closeSide calls a touch a REJECTION when the close is still on the side it
+// approached from. On a driftless walk that is true ≈69% of the time BY
+// CONSTRUCTION — the instrument could not have reported otherwise. It is kept
+// for the episode shape it records, but NO SURFACE MAY RENDER A RATE FROM IT.
+// The calibrated replacement is D1′ (kernel/detector_d1prime.go): equidistant
+// barriers anchored on the level, so a driftless walk is a coin flip.
+//
 // closeSide classifies a close: reject = back on the approach side, accept =
 // through the level.
 func closeSide(close, level float64, from string) string {
