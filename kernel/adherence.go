@@ -118,10 +118,13 @@ func SessionWindowFacts(reg SessionRegistry, t time.Time) (inKillzone, inNoTrade
 		return false, false
 	}
 	inKillzone = sess.InKillzone(t)
-	if InBlackoutWindow(t, "12:00", "13:30") {
+	// ONE DEFINITION (owner ruling 2026-09-02): the grader used to carry its own
+	// copies of "12:00"/"13:30" and its own first-5m helper, so it could score
+	// against windows the gate did not enforce. Both now resolve here.
+	if InLunchNoTrade(t) {
 		inNoTrade = true
 	}
-	if inFirst5m(sess.WindowStartCT, t) {
+	if InFirstNoTradeMinutes(sess.WindowStartCT, t) {
 		inNoTrade = true
 	}
 	return inKillzone, inNoTrade

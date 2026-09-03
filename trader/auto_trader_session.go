@@ -117,8 +117,9 @@ func sessionGateDecision(reg kernel.SessionRegistry, now time.Time, t1Windows []
 	if inSessionFirst5m(sess, now) {
 		return fmt.Sprintf("%s first-5m no-trade window", sess.Name), true
 	}
-	if kernel.InBlackoutWindow(now, "12:00", "13:30") {
-		return "lunch no-trade window (12:00–13:30 CT)", true
+	if kernel.InLunchNoTrade(now) {
+		ls, le := kernel.LunchWindowCT()
+		return fmt.Sprintf("lunch no-trade window (%s–%s CT)", ls, le), true
 	}
 	// W3 — HARD red-news blackout: no entry within ±T1BlackoutMinutes of a T1 event.
 	if label, blocked := kernel.InT1Blackout(ctMinutesNow(now), t1Windows); blocked {
@@ -134,8 +135,8 @@ func inSessionFirst5m(sess *kernel.SessionDef, now time.Time) bool {
 	if !ok {
 		return false
 	}
-	cur := ctMinutesNow(now)
-	return cur >= start && cur < start+5
+	_ = start
+	return kernel.InFirstNoTradeMinutes(sess.WindowStartCT, now)
 }
 
 // ---- P3.6-D — night mode ------------------------------------------------------
