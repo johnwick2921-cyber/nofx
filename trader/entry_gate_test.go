@@ -129,8 +129,14 @@ func TestEntryGateOneLiveArmRefused(t *testing.T) {
 	if !refused {
 		t.Fatalf("opposite-side entry while a position is open must be refused; got allow")
 	}
-	if !strings.Contains(reason, "net the open") {
-		t.Fatalf("one-live-arm refusal should name the net risk; got %q", reason)
+	// SUPERSEDED WORDING (owner ruling 2026-09-03): the leg was one-live-ARM
+	// and its message named the NETTING risk, because only an opposite-side
+	// entry was refused. It is one-open-POSITION now — either side, any plan
+	// version — so the message names what is open instead.
+	for _, want := range []string{"one_open_position", "no adds, no flips", "long position is open"} {
+		if !strings.Contains(reason, want) {
+			t.Fatalf("refusal missing %q; got %q", want, reason)
+		}
 	}
 }
 

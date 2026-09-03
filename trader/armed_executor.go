@@ -603,10 +603,19 @@ func (at *AutoTrader) oneLiveArmGuard(sc kernel.PlanScenario, leg kernel.PlanArm
 		if !strings.EqualFold(p.Symbol, sym) {
 			continue
 		}
-		if strings.EqualFold(p.Side, side) {
-			continue // same-side add — outside this guard's scope
+		// ONE OPEN POSITION PER INSTRUMENT (owner ruling 2026-09-03). This
+		// used to `continue` on a same-side match — "outside this guard's
+		// scope" — which is how a new plan version could re-authorize a
+		// terminal row and ADD to a position that was still open. Both sides
+		// are refused now, and EntryGate leg 7 says the same thing on both
+		// paths; this legacy chain is kept in step deliberately so an arm can
+		// never be held to the weaker of two standards.
+		ver := fmt.Sprintf("v%d", p.PlanVersion)
+		if p.PlanVersion <= 0 {
+			ver = "version not recorded"
 		}
-		return fmt.Sprintf("one_live_arm_guard: %s arm %s would net the open %s %s position (class 27) — opposite-side entry refused while a position is open", side, sc.ID, p.Side, sym)
+		return fmt.Sprintf("one_open_position: %s arm %s refused — position %d open (%s %s %s on %s); no adds, no flips (owner ruling 2026-09-03)",
+			side, sc.ID, p.ID, ver, p.CitedScenarioID, strings.ToLower(p.Side), sym)
 	}
 	return ""
 }
