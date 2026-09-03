@@ -233,36 +233,83 @@ refusal line, and the next open position's card showing its armed-under version.
 
 ---
 
-## 9. F3 WAS INCOMPLETE, AND IT SHIPPED THAT WAY
+## 9. F3 WAS INCOMPLETE — TWO MECHANISMS, AND I MISATTRIBUTED THE NUMBERS
 
-Found after the boot, from nofx-89's 2026-09-01 audit
-(`docs/full-system-audit-0901` @ `7df072a3`): **584 of 586 armed fills carried
-`;stamp_pending`**.
+Three sessions untangled this. My first account of it was wrong twice.
 
-That is the path `stampArmedFillLineage` takes when the fill frame lands before
-the position row is materialized — and it `return`s there, *before* the
-`SetFillQuantity` call §4 describes. So the stamp I shipped covered the minority
-case: 2 of 586 by that audit's count.
+### 9.1 The measured population (current rev, not a borrowed baseline)
 
-**Live proof, not inference.** Armed row 35 today logged
-`⚡ armed fill S1 @ 29285.00: position row not materialized yet — stamp pending
-(reconcile completes it)` and still reads `fill_quantity=0` with the stamp
-running.
+```
+armed_orders            total 36 · filled 10 · filled with fill_quantity>0: 0 · with 0: 10
+trader_positions        587 · system 567 · reconcile 12 · armed_entry 5 · e7_farside_test 3
+row 35                  state=filled · fill_quantity=0 · state_reason '' (empty)
+stamp_pending in text   0 rows
+```
 
-`StampArmedLineageIfMatched` (`trader/ninjatrader/reconcile.go`) completes the
-lineage, the signal id and clears the pending marker — and never touched
-`fill_quantity`. It does now, reading the materialized position's quantity via
-`PositionStore.QuantityOf`. `SetFillQuantity` still refuses a zero, so an absent
-row writes nothing.
+**Every filled armed row has `fill_quantity=0`. 10 of 10.** That is the finding,
+and it needs no borrowed denominator.
 
-Pinned: a filled row with `;stamp_pending` + a materialized position →
-`fill_quantity=1` and the marker cleared.
+**CORRECTION 1 (nofx-52).** I wrote "584 of 586 armed fills". Wrong population:
+`armed_orders` holds 36 rows in total, so that figure cannot describe armed
+fills — it was a positions-era number from the superseded `fef656a4` baseline,
+and I repeated it without checking its denominator. Run against the current rev,
+the audit's own column set (`plan_version=0 AND cited_scenario_id='' AND
+source='reconcile' AND entry_order_id empty`) returns **3**, not 584.
 
-**Caveat on the audit's numbers**, as its author flagged: 584/586 is the
-`fef656a4` baseline, superseded by the class-35 cutover at 17:24 CT on 09-01. It
-is a documented before-state, not a current measurement — the current
-measurement is row 35, n=1.
+**CORRECTION 2 (nofx-52).** `;stamp_pending` is transient by design —
+`armed_executor.go` appends it, `reconcile.go` `TrimSuffix`es it off. Row 35's
+`state_reason` is empty, and a search for the marker returns zero rows. The
+defect is visible in `fill_quantity`, never in the marker.
 
-This is the wave's own lesson turned on itself. §1 says every defect here was a
-record written that nothing read; F3 wrote a stamp on a path almost nothing
-takes.
+### 9.2 Mechanism 1 — the materialization race (real, but not the whole of it)
+
+`stampArmedFillLineage` returns early when the position row does not exist yet,
+before the `SetFillQuantity` call §4 describes. Confirmed for row 35: it filled
+at **09:03:53** and position 591 materialized at **09:05:14** — an 81-second
+gap. Fixed in `StampArmedLineageIfMatched` (95e9a4d0), which takes `posID`
+directly.
+
+### 9.3 Mechanism 2 — the side-casing miss (nofx-89's §D-9, and the DOMINANT one)
+
+The two writers disagree about casing, measured live:
+
+| column | values |
+|---|---|
+| `armed_orders.side` | `long` 19 · `short` 17 — **always lowercase** |
+| `trader_positions.side` | `LONG` 280 · `SHORT` 304 · `long` 1 · `short` 2 |
+
+`GetOpenPositionBySymbol` compared `side = ?`, and `=` on a plain TEXT column is
+case-sensitive. Against position 591:
+
+```
+select count(*) … where side='short' and id=591  →  0
+select count(*) … where side='SHORT' and id=591  →  1
+```
+
+The fill handler passes the ARMED row's lowercase side. **So it could never find
+an armed-entry position, however well the timing went.** That is why 10 of 10
+fail: a race would be intermittent, and this is deterministic.
+
+nofx-89 offered mechanism 2 as a possible second contributor. It is the primary
+one. Fixed with `UPPER(side) = UPPER(?)` at that lookup and at its two siblings
+(the USDT-suffix retry, and `GetOpenPositionByAccountSymbol`, which close-sync
+routes through — a case-sensitive compare there loses a priced close).
+
+### 9.4 The reason this took three sessions: the log line cannot tell them apart
+
+```
+⚡ armed fill S1 @ 29285.00: position row not materialized yet — stamp pending
+```
+
+That line prints whenever `pos == nil`, and `pos` is nil for **either** reason —
+the row genuinely absent, or the lookup unable to match it. It asserts the first
+as a fact. I quoted it as my "live proof" of mechanism 1 and it is not proof of
+anything beyond `pos == nil`. A misdiagnosis compiled into a log line is
+expensive: it sent me looking for a timing bug and hid a deterministic one.
+
+### 9.5 The law, stated harder (nofx-89's wording)
+
+A write on a branch almost nothing takes is not merely the equivalent of an
+unperformed read — **it is worse, because it produces a green proof.** Row 35
+would have looked like a pass had I asserted only "the stamp ran".
+

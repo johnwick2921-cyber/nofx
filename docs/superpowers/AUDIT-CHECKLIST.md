@@ -1109,13 +1109,24 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     the boot):** the `fill_quantity` fix shipped INCOMPLETE and proves the law
     against itself. It stamped at fill time only — and the fill frame lands
     BEFORE the position row materializes, so `stampArmedFillLineage` returns on
-    that path first. nofx-89's 09-01 audit had already measured it: **584 of 586
-    armed fills carried `;stamp_pending`**, so the stamp covered 2 of 586. Armed
-    row 35 today took the same path and read `fill_quantity=0` with the stamp
-    live. `StampArmedLineageIfMatched` stamps it now, via
-    `PositionStore.QuantityOf`. A write on a path almost nothing takes is the
-    same defect as a read nobody performs — and the way to catch it is to ask
-    which BRANCH the write sits on, not merely whether the write exists.
+    that path first. measured on the
+    current rev, **10 of 10 filled armed rows carry `fill_quantity=0`** — the
+    stamp never lands. TWO mechanisms, and the second is the dominant one:
+    (a) the materialization race (row 35 filled 09:03:53, position 591
+    materialized 09:05:14 — 81s), and (b) `GetOpenPositionBySymbol` compared
+    `side = ?` case-sensitively while `armed_orders.side` is always lowercase
+    and `trader_positions.side` is overwhelmingly uppercase (LONG 280 / SHORT
+    304 vs long 1 / short 2) — `side='short'` matched 0 rows for position 591,
+    `side='SHORT'` matched 1, so the fill-time lookup could never succeed
+    whatever the timing. Fixed with `UPPER(side)=UPPER(?)` at that lookup and
+    its two siblings, plus the stamp in `StampArmedLineageIfMatched`. **And the
+    log line hid it:** "position row not materialized yet" prints whenever
+    `pos == nil` — for either reason — asserting the race as fact, which sent
+    two sessions after a timing bug. A write on a branch almost nothing takes is
+    WORSE than a read nobody performs, because it produces a green proof: row 35
+    passes any test that asserts only "the stamp ran". Probe: ask which BRANCH a
+    write sits on; and when a log line names a CAUSE, check that the code can
+    actually distinguish it from the alternatives.
 58. **A mode that existed only in a comment.** (Highest occupied at merge: 57.)
     Root cause: `plan_mode` was documented as `advisory | direction | strict`
     in a doc comment (`store/strategy.go:919`) and offered in the Studio
