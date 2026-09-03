@@ -562,3 +562,83 @@ Both repaired on attempt 2 and landed (`repair_outcome_ok` 10 → 11 across them
 prompt question — something is inviting `breakdown_continue` where the tape has
 no displacement — but it belongs to whoever owns the waterfall play, not to this
 wave. **[A]**, n=2.
+
+---
+
+## 12. RIDER PART 4 (owner ruling 2026-09-03) — the displacement floor feeds forward
+
+Different lane, same boot.
+
+### 12.1 The defect
+
+`ValidateBreakdownContinueScenarios` refuses a `breakdown_continue` whose
+measured displacement is below `BD_MIN_DISP_ATR × ATR5m`. The prompt named the
+rule in the entry law and never the NUMBER, and never said which levels had any
+displacement at all. So the author picked levels the tape had chopped across.
+
+Two consecutive reads on 2026-09-03 burned attempt 1 on it:
+
+```
+00:07  S3 breakdown_continue: measured displacement 0.00 pts < BD_MIN_DISP_ATR 1.0×ATR5m (15.2 pts)
+00:33  S2 breakdown_continue: measured displacement 0.00 pts < BD_MIN_DISP_ATR 1.0×ATR5m (21.5 pts)
+```
+
+2 of 2 reads since the band boot, both recovered only by a repair. This is the
+class-45 shape exactly — a rule enforced at write and withheld from the prompt.
+
+### 12.2 What the model reads now
+
+```
+## Waterfall displacement floor this cycle
+15.2 pts (1.0×ATR5m 15.20, resolved). A breakdown_continue / breakup_continue
+authored at a level whose MEASURED displacement is below this is REFUSED at write.
+
+## Measured displacement per level (floor 15.2 pts)
+  28900.00 ONL — 40.25 pts down · at or above the floor — authorable
+  29050.00 VWAP — 3.00 pts down · BELOW the floor — not authorable as a waterfall
+  29100.00 PDL — none — no break
+```
+
+The `breakdown{}` schema field is qualified the way `fvg{}` and `legs[]` are:
+*author ONLY at a level whose MEASURED displacement in the block above is ≥ the
+stated floor; a level reading "none — no break" or below the floor is REFUSED at
+write.*
+
+Boot line: `waterfall-displacement-floor=1.0×ATR5m=<pts>pts (stated per level)`.
+
+### 12.3 No second implementation
+
+Every number comes from `BreakdownContinueState` — the validator's own function
+— reached through a level-oriented probe that synthesises the scenario a planner
+would author at that level. It is the same trick `BreakdownLevelReclaimed` uses
+for the void list, for the same reason. It runs over the SAME resolved
+`VoidScope`, so the void list and the displacement list cannot disagree about
+what the tape shows.
+
+`TestDisplacementFeedsForwardMeasuresARealRun` asserts the fed-forward number
+equals `BreakdownContinueState(...).BreakLegPts` exactly; a second
+implementation appearing would fail it.
+
+### 12.4 Two deliberate honesty choices
+
+- **"none — no break"**, not `0.00 pts`. A level the tape never broke is not a
+  level with a small number, and printing 0.00 for it invites precisely the
+  reading this fixes.
+- **No ATR → no floor line at all.** A `0.0 pt` floor is a lie the model would
+  author against.
+
+### 12.5 Tests
+
+| test | asserts | first run |
+|---|---|---|
+| `TestDisplacementFeedsForwardChoppedLevelReadsNone` | THE PIN — a level chopped across 30 bars reads `Broken=false`, 0.00, and renders "none — no break"; the floor is stated with it | RED (undefined) |
+| `TestDisplacementFloorLineIsResolved` | the floor line names its basis, and is EMPTY with no ATR | RED |
+| `TestDisplacementFeedsForwardMeasuresARealRun` | a delivered run reports the validator's own number, on the delivering side | RED |
+| `TestBreakdownSchemaRequiresMeasuredDisplacement` | the schema field is qualified; the facts block carries floor + per-level lines + both verdicts | RED |
+
+Suites: Go clean · vitest 40 files / 306 tests · `tsc --noEmit` clean.
+
+### 12.6 PROOF OWED
+
+After the boot: whether a read still authors `breakdown_continue` at a level the
+block marks "none — no break". Baseline is 2 of 2 reads doing exactly that.
