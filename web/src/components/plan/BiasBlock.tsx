@@ -69,6 +69,15 @@ export function BiasBlock({
           </span>
         </div>
       )}
+      {/* CLASS 50b — the dual label: AI · tree · regime, a LABEL not a direction */}
+      {bias.bias_label && (
+        <div
+          className="text-[11px]"
+          style={{ color: 'var(--vl-faint)', fontFamily: 'var(--vl-font-ui)' }}
+        >
+          {bias.bias_label}
+        </div>
+      )}
     </div>
   )
 }

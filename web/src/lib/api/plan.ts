@@ -11,6 +11,9 @@ export interface PlanBias {
   direction: string // long | short | neutral
   conviction: string // high | medium | low
   flip_condition: string
+  // CLASS 50b — the stamped dual label "bias: AI <x> · tree <y> · regime <z>";
+  // absent on pre-50b stored rows.
+  bias_label?: string
 }
 
 export interface PlanLevel {
