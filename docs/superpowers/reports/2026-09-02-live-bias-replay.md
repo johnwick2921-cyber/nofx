@@ -100,3 +100,71 @@ losers (ASIA 09-02, LONDON 09-02, NY 09-02) and whether it matches the plan
 `Bias.Direction` the store records.
 
 **Nothing below this line was known when the criteria above were written.**
+
+---
+
+# RESULTS (computed after the pre-registration above)
+
+## R1 — Scope
+
+84 completed session days (2026-05-05 … 2026-09-02), 252 session-plan rows.
+Exploration 50d (05-05 … 07-16) · holdout 34d (07-17 … 09-02). Neutral (uncalled) rows counted per leg.
+
+## R2 — Per leg, holdout (verdicts from holdout only)
+
+| leg | called n | neutral | p(hold direction) | Wilson 95% | net-of-friction t | gross PnL (pt) | maxDD |
+|---|---|---|---|---|---|---|---|
+| BIAS-TREE | 21 | 81 | 0.4762 | [0.2834, 0.6763] | +0.70 | +378.0 | 271.0 |
+| REGIME (D EMA200 + 1h EMA50) | 46 | 56 | 0.5435 | [0.4018, 0.6785] | +0.96 | +1140.5 | 647.8 |
+| COMPOSITE | 62 | 40 | 0.5000 | [0.3792, 0.6208] | +0.92 | +1186.0 | 764.8 |
+
+**D6 (identical rule):** no leg clears (a) hit-rate Wilson lower bound > 0.50 on holdout — the best lower
+bound is regime's 0.4018 — and no leg clears (b) net t > 2 (best +0.96). **Every leg: NOT USABLE at this n.**
+
+## R3 — Sessions (composite, holdout)
+
+| session | called n | neutral | p | Wilson | net t |
+|---|---|---|---|---|---|
+| ASIA | 20 | 14 | 0.6000 | [0.3866, 0.7812] | +1.72 |
+| LONDON | 20 | 14 | 0.4500 | [0.2582, 0.6579] | +0.21 |
+| NY | 22 | 12 | 0.4545 | [0.2692, 0.6534] | −0.11 |
+
+Descriptive only; every interval covers 0.50.
+
+## R4 — Exploration consistency check
+
+Composite exploration: p = 0.4583 [0.3622, 0.5577], n=96, net t = **−1.35** (negative). The holdout's positive net t (+0.92) is not confirmed out-of-sample —
+the sign flips between periods. No BH rejection (all adjusted p far above 0.05).
+
+## R5 — The four-trade check (the dispatch's premise, measured)
+
+Reconstructed calls for session-day 2026-09-02 (read-time price vs PDH 29212.50 / PDL 28927.25 / PDC 29143.00):
+
+| session | read price | tree branch | regime | composite |
+|---|---|---|---|---|
+| ASIA | 29139.00 | branch 3: close < PDC → **SHORT** | neutral | **SHORT** |
+| LONDON | 29076.75 | branch 3: close < PDC → **SHORT** | neutral | **SHORT** |
+| NY | 29040.00 | branch 3 short VETOED by branch 5 (discount) → neutral | neutral | **NEUTRAL** |
+
+**The machine bias did NOT say long on today's losers — it said SHORT (ASIA, LONDON) and NEUTRAL (NY).**
+The plans' `Bias.Direction=long` was the AI overriding its own machine tree (branch 3 was short by PDC
+29143 vs price, and branch 5's discount veto forbade shorts at NY — the AI went long against both). The
+premise 'this signal said long on all four losers' is therefore not supported by the reconstruction;
+the LONG stamp came from the model, not the machine blocks.
+
+## R6 — Verdict (one paragraph)
+
+The reconstructed intraday bias — BIAS-TREE + REGIME, the machine sections that inform every session
+plan's long/short stamp — is **NOT USABLE** by the identical D6 rule that judged the weekly control:
+holdout hit rates 0.48–0.54 with lower bounds ≤ 0.40 (n = 21–62 called rows), net-of-friction t ≤ 0.96,
+and the exploration period runs NEGATIVE (t −1.35). Like the weekly one, the plan bias is a label, not a
+direction — and today's four longs were not the machine's call at all. The machine blocks remain useful
+as FACTS for the AI to reason from (they are rendered as facts, not orders); nothing changes, nothing is
+promoted to a gate. n is tiny (84 session days of 1h); the honest lever is the same as every other tape
+inventory this week: time.
+
+## R7 — CSVs + scripts
+
+`exports/2026-09-02-live-bias-replay-csvs/calls.csv` — all 252 session-plan rows
+(day, session, period, price, PDH/PDL/PDC, EMA200/EMA50, tree/regime/composite, open/close, realized sign,
+window return). Script: `~/nofx-analysis/live-bias-replay/replay.py` (stdlib only, read-only `bars` table).
