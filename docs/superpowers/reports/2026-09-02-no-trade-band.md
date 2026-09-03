@@ -316,3 +316,88 @@ which of the two 51s becomes 53. **[A]** — read from the merged file.
 
 The separate renumber commit from before the rebase is gone: it became a no-op
 once the conflict resolution numbered this entry 52 directly, and was skipped.
+
+---
+
+## 9. RIDER (owner ruling 2026-09-03) — notes collapsed, and the contract miss
+
+### 9.1 The card
+
+The first cut demoted the model's prose to a "Model notes" label but still
+printed it inline. The ASIA card at 00:00 read:
+
+```
+No-trade · none live now ▸ 2 spent / other session
+Model notes · first 5m (CT) · 12:00-13:30 CT lunch
+```
+
+The same two dead windows the wave exists to stop showing, one line lower.
+Notes are a toggle now and render nothing until opened. The band line carries
+only machine windows live for this session, or "none live". Pinned on the real
+v14 doc — its actual prose, its actual machine windows.
+
+Also fixed on the way: the machine's label already carries its CT bounds
+("first 5m after the ASIA open (17:00–17:05 CT)") and the renderer appended
+them a second time.
+
+### 9.2 The contract miss — REPORTED, not fixed
+
+**Do plans written after the 23:24 cutover still carry model no_trade prose?
+Yes.** ASIA v14, written 00:08:45 CT, 44 minutes after the boot:
+
+```json
+"no_trade": ["first 5m (CT)", "12:00-13:30 CT lunch"]
+```
+
+Those two strings are **verbatim the schema example this wave generates**:
+
+```go
+func NoTradeSchemaExample() string {
+    ls, le := LunchWindowCT()
+    return fmt.Sprintf(`  "no_trade": ["first %dm (CT)", "%s-%s CT lunch", "<calendar blackouts>"],`,
+        FirstNoTradeMinutes(), ls, le)
+}
+```
+
+→ `"no_trade": ["first 5m (CT)", "12:00-13:30 CT lunch", "<calendar blackouts>"],`
+
+The model copied the example and dropped the placeholder. This is class 45 in
+miniature, and it is **this wave's own defect**: the prose sentence added below
+it says the windows are enforced regardless and "do not invent a window of your
+own", while the EXAMPLE directly above shows those two windows as the expected
+content. The example wins — an example is a demonstration, a sentence is a
+request. **[A]**, n=1 (one plan written since the boot).
+
+Per the ruling the field now renders nowhere by default, so the duplication is
+inert on the surface. The prompt is unchanged: altering what the model is asked
+to emit is a content ruling, and this wave measures the miss rather than
+guessing at the fix.
+
+**Recommended, needs a ruling:** make the schema example carry a placeholder
+rather than the machine's own windows —
+`"no_trade": ["<your own sit-out conditions, or omit>"]` — and re-measure over a
+handful of reads. The risk of leaving it: the field is dead weight in every
+prompt and every stored doc, and a future reader may take it for a rule again.
+
+### 9.3 Two more copies of the lunch window, and the scan that missed them
+
+The F4 literal scan looked only for the QUOTED bounds, so two copies written as
+prose passed it:
+
+| where | text |
+|---|---|
+| clock line | `…the lunch no-trade (12:00–13:30 CT) are CT wall-clock…` |
+| no-trade gate | `lunch 11:30–13:30 ET … (the system hard-gates 12:00–13:30 CT)` |
+
+Both render from `LunchWindowCT` now — **four copies retired by this wave** in
+total, counting the gate and the grader.
+
+The scan was wrong in both directions. Widening it to bare bounds over-fires:
+`13:30 ET` is a different time from `13:30 CT`, and the ET lull in that same
+sentence is deliberately not the machine's window. It scans for the window as a
+pair now, in either dash, alongside the quoted single bounds. Quoted RED on both
+new copies before the fix.
+
+**Reported, not fixed:** the `11:30–13:30 ET` lull does not line up with the
+`12:00–13:30 CT` hard gate (which is 13:00–14:30 ET). The prompt states both and
+labels which one is enforced. Reconciling them is a content ruling. **[A]**
