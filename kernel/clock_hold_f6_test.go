@@ -11,11 +11,11 @@ import (
 func TestClockHoldDecision(t *testing.T) {
 	const warn, tol = int64(30_000), int64(60_000)
 	cases := []struct {
-		name       string
-		drift      int64
-		have       bool
-		wantDefer  bool
-		wantWiden  int64
+		name      string
+		drift     int64
+		have      bool
+		wantDefer bool
+		wantWiden int64
 	}{
 		{"no measurement fails open", 61_000, false, false, 0},
 		{"below warn", 29_999, true, false, 0},

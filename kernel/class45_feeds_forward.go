@@ -122,21 +122,54 @@ func RenderVoidBreakdownLevels(v []VoidBreakdownLevel) string {
 	if len(v) == 0 {
 		return ""
 	}
-	var parts []string
-	for _, x := range v {
-		side := "breakup"
-		if x.Short {
-			side = "breakdown"
-		}
-		when := ""
-		if x.ReclaimedAtCT != "" {
-			when = fmt.Sprintf(" (reclaimed %s)", x.ReclaimedAtCT)
-		}
-		parts = append(parts, fmt.Sprintf("%.2f %s%s", x.Price, side, when))
+	// COMPACT (owner ruling 2026-09-02): ONE line per level, both sides folded
+	// into it when both are void. The flat "price side · price side ·" form
+	// printed the same price twice and read as twice the levels.
+	type agg struct {
+		short, long bool
+		whenShort   string
+		whenLong    string
+		order       int
 	}
-	return "## VOID breakdown levels (a close came back across since the break — the write-site validator REFUSES a waterfall play at these)\n" +
-		strings.Join(parts, " · ") +
-		"\n- do NOT author breakdown_continue or breakup_continue at these prices. Any other condition is legal there.\n\n"
+	byPrice := map[float64]*agg{}
+	var order []float64
+	for _, x := range v {
+		a, ok := byPrice[x.Price]
+		if !ok {
+			a = &agg{order: len(order)}
+			byPrice[x.Price] = a
+			order = append(order, x.Price)
+		}
+		if x.Short {
+			a.short, a.whenShort = true, x.ReclaimedAtCT
+		} else {
+			a.long, a.whenLong = true, x.ReclaimedAtCT
+		}
+	}
+	var b strings.Builder
+	b.WriteString("## VOID breakdown levels (a close came back across since the break, THIS session day — the write-site validator REFUSES a waterfall play at these)\n")
+	for _, p := range order {
+		a := byPrice[p]
+		sides, when := "", ""
+		switch {
+		case a.short && a.long:
+			sides = "breakdown+breakup"
+			when = a.whenShort
+			if when == "" {
+				when = a.whenLong
+			}
+		case a.short:
+			sides, when = "breakdown", a.whenShort
+		default:
+			sides, when = "breakup", a.whenLong
+		}
+		if when != "" {
+			when = fmt.Sprintf(" (reclaimed %s)", when)
+		}
+		fmt.Fprintf(&b, "- %.2f %s%s\n", p, sides, when)
+	}
+	b.WriteString("- do NOT author breakdown_continue or breakup_continue at these prices. Any other condition is legal there.\n\n")
+	return b.String()
 }
 
 // RenderStopFloorLine is the facts-block line (E3): the floor the composer will

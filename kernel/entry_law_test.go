@@ -141,7 +141,7 @@ func TestEntryLawFadeStopBeyondLevel(t *testing.T) {
 func TestRehearsalS4CaseStillRejects(t *testing.T) {
 	start := time.Date(2026, 8, 30, 10, 0, 0, 0, time.Local)
 	bars := []market.Kline{
-		mkTapeBar(start, 29440, 29444, 29434, 29436),   // beyond close
+		mkTapeBar(start, 29440, 29444, 29434, 29436), // beyond close
 		mkTapeBar(start.Add(time.Minute), 29436, 29442, 29430, 29434),
 		mkTapeBar(start.Add(2*time.Minute), 29434, 29440, 29430, 29438), // reclaims
 		mkTapeBar(start.Add(3*time.Minute), 29438, 29440, 29432, 29436),
@@ -156,7 +156,7 @@ func TestRehearsalS4CaseStillRejects(t *testing.T) {
 		Quality:     "B",
 		Breakdown:   &PlanBreakdownContinue{Level: 29437, LevelLabel: "PDL", EntryMode: "pullback"},
 	}}}
-	err := ValidateBreakdownContinueScenarios(&plan, VoidScopeOf(bars), 15.0, 29436, bars[len(bars)-1].CloseTime)
+	err := ValidateBreakdownContinueScenarios(&plan, tapeScope(bars), 15.0, 29436, bars[len(bars)-1].CloseTime)
 	if err == nil || !strings.Contains(err.Error(), "void") {
 		t.Fatalf("rehearsal S4 (reclaimed) must STILL reject — the new entry law must not resurrect it (got %v)", err)
 	}

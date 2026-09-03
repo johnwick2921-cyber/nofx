@@ -59,16 +59,42 @@ func onlTape(level float64, now time.Time) []market.Kline {
 	return bars
 }
 
-// sessionDayScope is the DELETED production window, kept here so the mechanism
-// test can still demonstrate what it did. Never used by production code again.
-func sessionDayScope(bars []market.Kline, now time.Time) kernel.VoidScope {
-	start := kernel.CMESessionDayStart(now).UnixMilli()
-	if len(bars) > 0 && bars[0].OpenTime > start {
-		start = bars[0].OpenTime
-	}
-	sc := kernel.VoidScopeOf(bars)
-	sc.SinceMs = start
+// wholeSliceScope is the REJECTED alternative (the first cut of this wave),
+// kept only so the mechanism test can show what the ruling avoids: on the real
+// tape it voided 20 entries across 12 levels — noise by construction.
+func wholeSliceScope(bars []market.Kline) kernel.VoidScope {
+	sc := kernel.ResolveVoidScopeOf(bars, time.Now())
+	sc.SinceMs = 0
 	return sc
+}
+
+// inSessionTape breaks and reclaims `level` AFTER the 17:00 CT session-day
+// start, i.e. inside today's news.
+func inSessionTape(level float64, now time.Time) []market.Kline {
+	ct := now.Location()
+	start := time.Date(now.Year(), now.Month(), now.Day(), 17, 30, 0, 0, ct)
+	var bars []market.Kline
+	add := func(t time.Time, o, h, l, c float64) {
+		bars = append(bars, market.Kline{OpenTime: t.UnixMilli(), Open: o, High: h, Low: l, Close: c,
+			CloseTime: t.UnixMilli() + 60_000})
+	}
+	t := start
+	for i := 0; i < 15; i++ {
+		add(t, level+18, level+22, level+14, level+17)
+		t = t.Add(time.Minute)
+	}
+	for i := 0; i < 14; i++ {
+		p := level - float64(4+3*i)
+		add(t, p+3, p+4, p-4, p)
+		t = t.Add(time.Minute)
+	}
+	add(t, level-6, level+9, level-7, level+6) // the reclaim, in-session
+	t = t.Add(time.Minute)
+	for t.Before(now) {
+		add(t, level+8, level+12, level+5, level+9)
+		t = t.Add(time.Minute)
+	}
+	return bars
 }
 
 func voidListHas(v []kernel.VoidBreakdownLevel, price float64, short bool) bool {
@@ -80,9 +106,11 @@ func voidListHas(v []kernel.VoidBreakdownLevel, price float64, short bool) bool 
 	return false
 }
 
-// THE PIN: whatever scope the prompt renders from, the level the validator will
-// reject MUST appear in the VOID list. Same tape, same level, same instant.
-func TestVoidParityCallSitesAgree_ONL29141(t *testing.T) {
+// OWNER-RULED FIXTURE (2026-09-02): a break-and-reclaim that completed BEFORE
+// the CME session-day start is NOT today's news — it must be void for NEITHER
+// caller. Before this wave it was void for the VALIDATOR only (sinceMs=0) and
+// invisible to the prompt, which is the asymmetry that burned the 20:58 read.
+func TestVoidParityPreSessionReclaimIsVoidForNeither(t *testing.T) {
 	ct := kernel.CTLocation()
 	now := time.Date(2026, 9, 2, 20, 58, 0, 0, ct)
 	const onl = 29141.25
@@ -94,19 +122,52 @@ func TestVoidParityCallSitesAgree_ONL29141(t *testing.T) {
 		ID: "S2", Condition: "breakdown_continue", Direction: "short",
 		Breakdown: &kernel.PlanBreakdownContinue{Level: onl, EntryMode: "pullback"},
 	}}}
-	verr := kernel.ValidateBreakdownContinueScenarios(doc, kernel.VoidScopeOf(bars), 20, onl-5, nowMs)
-	if verr == nil || !strings.Contains(verr.Error(), "the breakdown is void") {
-		t.Fatalf("fixture is wrong: the validator must void this level, got %v", verr)
-	}
-	t.Logf("validator: %v", verr)
-
-	// --- the PROMPT's list, through the production render scope ---
+	scope := kernel.ResolveVoidScopeOf(bars, now)
+	verr := kernel.ValidateBreakdownContinueScenarios(doc, scope, 20, onl-5, nowMs)
 	levels := []kernel.ScoredLevel{{DetectedLevel: kernel.DetectedLevel{Price: onl, Label: "ONL"}}}
-	rendered := kernel.ComputeVoidBreakdownLevels(levels, kernel.VoidScopeOf(bars), nowMs)
+	rendered := kernel.ComputeVoidBreakdownLevels(levels, scope, nowMs)
 
-	if !voidListHas(rendered, onl, true) {
-		t.Errorf("PARITY BROKEN: the validator voids %.2f but the prompt's VOID list omits it (%d entries) — the model is told nothing and authors straight into the reject", onl, len(rendered))
+	voidToValidator := verr != nil && strings.Contains(verr.Error(), "the breakdown is void")
+	voidToPrompt := voidListHas(rendered, onl, true)
+
+	if voidToValidator {
+		t.Errorf("a reclaim BEFORE the session-day start is not today's news — the validator must NOT void it: %v", verr)
 	}
+	if voidToPrompt {
+		t.Errorf("the prompt must not list a pre-session reclaim as void (%d entries)", len(rendered))
+	}
+	if voidToValidator != voidToPrompt {
+		t.Fatalf("PARITY BROKEN: validator=%v prompt=%v for the same level, tape and instant", voidToValidator, voidToPrompt)
+	}
+	t.Logf("pre-session reclaim: void to neither (validator=%v prompt=%v) · window=%s CT",
+		voidToValidator, voidToPrompt, time.UnixMilli(scope.SinceMs).In(ct).Format("01-02 15:04"))
+}
+
+// The positive half: a reclaim INSIDE the session day is void for BOTH.
+func TestVoidParityInSessionReclaimIsVoidForBoth(t *testing.T) {
+	ct := kernel.CTLocation()
+	now := time.Date(2026, 9, 2, 20, 58, 0, 0, ct)
+	const lvl = 29141.25
+	bars := inSessionTape(lvl, now)
+	nowMs := now.UnixMilli()
+	scope := kernel.ResolveVoidScopeOf(bars, now)
+
+	doc := &kernel.PlanDoc{Scenarios: []kernel.PlanScenario{{
+		ID: "S2", Condition: "breakdown_continue", Direction: "short",
+		Breakdown: &kernel.PlanBreakdownContinue{Level: lvl, EntryMode: "pullback"},
+	}}}
+	verr := kernel.ValidateBreakdownContinueScenarios(doc, scope, 20, lvl-5, nowMs)
+	levels := []kernel.ScoredLevel{{DetectedLevel: kernel.DetectedLevel{Price: lvl, Label: "ONL"}}}
+	rendered := kernel.ComputeVoidBreakdownLevels(levels, scope, nowMs)
+
+	voidToValidator := verr != nil && strings.Contains(verr.Error(), "the breakdown is void")
+	if !voidToValidator {
+		t.Errorf("an in-session reclaim must void the play: %v", verr)
+	}
+	if !voidListHas(rendered, lvl, true) {
+		t.Errorf("PARITY BROKEN: the validator voids %.2f but the prompt omits it", lvl)
+	}
+	t.Logf("in-session reclaim: void to both · validator=%v", voidToValidator)
 }
 
 // The session-day window is the mechanism, isolated: identical bars, identical
@@ -118,16 +179,16 @@ func TestVoidParityWindowIsTheMechanism(t *testing.T) {
 	bars := onlTape(onl, now)
 	levels := []kernel.ScoredLevel{{DetectedLevel: kernel.DetectedLevel{Price: onl, Label: "ONL"}}}
 
-	whole := kernel.ComputeVoidBreakdownLevels(levels, kernel.VoidScopeOf(bars), now.UnixMilli())
-	dayOnly := kernel.ComputeVoidBreakdownLevels(levels, sessionDayScope(bars, now), now.UnixMilli())
+	whole := kernel.ComputeVoidBreakdownLevels(levels, wholeSliceScope(bars), now.UnixMilli())
+	ruled := kernel.ComputeVoidBreakdownLevels(levels, kernel.ResolveVoidScopeOf(bars, now), now.UnixMilli())
 
 	if !voidListHas(whole, onl, true) {
-		t.Fatalf("sinceMs=0 (the validator's scope) must see the reclaim")
+		t.Fatalf("fixture is wrong: a whole-slice scan must see this reclaim")
 	}
-	if voidListHas(dayOnly, onl, true) {
-		t.Fatalf("fixture is wrong: the session-day window was supposed to MISS the pre-boundary reclaim")
+	if voidListHas(ruled, onl, true) {
+		t.Fatalf("the ruled session-day window must NOT report a pre-boundary reclaim as today's news")
 	}
-	t.Logf("whole-slice=%d entries · session-day-window=%d entries — the window is the bug", len(whole), len(dayOnly))
+	t.Logf("whole-slice=%d entries · ruled session-day=%d entries — the window is the ruling, applied to BOTH sides now", len(whole), len(ruled))
 }
 
 // SOURCE PIN — neither call site may choose its own window or bar slice again.
@@ -167,15 +228,17 @@ func TestVoidParityCallSitesUseTheResolver(t *testing.T) {
 	if strings.Contains(string(b), "func voidWindowStartMs(") {
 		t.Error("voidWindowStartMs is deleted — the window belongs to the resolver")
 	}
-	// The resolver's scope is the VALIDATOR's: whole slice.
-	if kernel.VoidScopeSinceMs() != 0 {
-		t.Errorf("the validator judges the whole slice; the prompt must too (got sinceMs=%d)", kernel.VoidScopeSinceMs())
+	// The ruled scope is the CME session day, for BOTH sides.
+	ct := kernel.CTLocation()
+	at := time.Date(2026, 9, 2, 20, 58, 0, 0, ct)
+	if got, want := kernel.VoidScopeSinceMs(nil, at), kernel.CMESessionDayStart(at).UnixMilli(); got != want {
+		t.Errorf("the ruled window is the session day: got %d want %d", got, want)
 	}
 	if kernel.VoidScopeBarCount() != kernel.AISVPBarCount {
 		t.Errorf("bar depth must match the validator's historical slice, got %d", kernel.VoidScopeBarCount())
 	}
 	line := kernel.VoidScopeBootLine()
-	for _, want := range []string{"void scope:", "whole-slice", "1m×2000", "parity"} {
+	for _, want := range []string{"void scope:", "session-day window", "1m×2000", "parity"} {
 		if !strings.Contains(line, want) {
 			t.Errorf("boot line missing %q: %s", want, line)
 		}

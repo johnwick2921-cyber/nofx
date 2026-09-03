@@ -155,7 +155,7 @@ func (at *AutoTrader) shadowVerdictFor(raw string, maxLevels, scenarioCap int, f
 		}
 	}
 	if kernel.HasBreakdownScenario(d) {
-		scope := kernel.ResolveVoidScope(at.futuresSymbol())
+		scope := kernel.ResolveVoidScope(at.futuresSymbol(), time.Now())
 		if verr := kernel.ValidateBreakdownContinueScenarios(d, scope, kernel.StaleConfirmATR5m(scope.Bars), facts.Price, time.Now().UnixMilli()); verr != nil {
 			reasons = append(reasons, verr.Error())
 		}

@@ -857,6 +857,42 @@ in CLAUDE.md).
     label with measured negative signal must be demoted to shadow, and nothing
     — not even a "shadow" annotation — may consume it as a direction.
 
+51. **One question, two answers: a predicate shared by two callers that fed it
+    different inputs.** (Highest occupied at merge: 50. Class 46 is deliberately
+    free — see class 50.) Root cause: the prompt's VOID list and the write-site
+    validator both ask "has a close come back across this level?" and both call
+    `BreakdownContinueState`, but the render passed
+    `sinceMs = CMESessionDayStart` over a 12,000-bar slice while the validator
+    passed `sinceMs = 0` over 2,000. The predicate filters on
+    `b.OpenTime < sinceMs`, so the window is load-bearing: a level broken and
+    reclaimed before the 17:00 CT boundary was void to the validator and
+    invisible to the prompt. On 2026-09-02 20:58 CT the prompt listed eight
+    seated levels VOID, omitted ONL 29141.25, and the read was rejected on
+    exactly that level. **The class-45 parity fixture passed 40/40 across 20
+    tapes while this was live**, because it fed BOTH sides the same `sinceMs`:
+    it pinned the two FUNCTIONS and never the CALL SITES. **A second-order
+    trap:** the first fix made both sides read the whole slice, which on the
+    real tape voids 20 entries across 12 levels — a list saying "author no
+    waterfall play anywhere", noise by construction. The deleted render-side
+    comment ("a level broken and reclaimed days ago is not today's news") was
+    RIGHT; its error was being applied to one caller only. **Probe:** for every
+    predicate with more than one caller, diff the ARGUMENTS at each call site,
+    not the function; then ask which caller's answer the user sees and which
+    one enforces. Any test that constructs both sides' inputs itself proves only
+    self-consistency. **Fix:** `kernel/void_scope.go` — `VoidScope` +
+    `ResolveVoidScope`; neither caller chooses a window or a slice, and the
+    scope VALUE is owner-ruled as the CME session day, so the VALIDATOR narrowed
+    too (a rule change in the permitted direction: strictly fewer rejects).
+    `voidWindowStartMs` deleted. Parity fixtures pin the CALL SITES in both
+    directions: a pre-session reclaim is void for NEITHER, an in-session reclaim
+    for BOTH. Plus `planner_read_facts` — one row per read, ACCEPTED OR
+    REJECTED, carrying the rendered void list, floor, ATR and resolved scope,
+    because until now a rendered prompt survived only when a read FAILED and a
+    working fix erased its own evidence. **Law:** a predicate with two callers
+    has one resolver for its inputs; a parity test that builds both sides'
+    arguments tests nothing; and the instrument that proves a fix works must
+    not fire only when the fix fails.
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,

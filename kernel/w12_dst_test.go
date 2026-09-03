@@ -49,9 +49,9 @@ func TestW12SessionDayRollDST(t *testing.T) {
 		when time.Time
 		want string
 	}{
-		{time.Date(2026, 3, 8, 16, 0, 0, 0, ct), "2026-03-07"}, // before 17:00 → prior day
-		{time.Date(2026, 3, 8, 18, 0, 0, 0, ct), "2026-03-08"}, // after 17:00 → same day
-		{time.Date(2026, 3, 9, 8, 30, 0, 0, ct), "2026-03-08"}, // Mon morning → Sun-evening session-day
+		{time.Date(2026, 3, 8, 16, 0, 0, 0, ct), "2026-03-07"},  // before 17:00 → prior day
+		{time.Date(2026, 3, 8, 18, 0, 0, 0, ct), "2026-03-08"},  // after 17:00 → same day
+		{time.Date(2026, 3, 9, 8, 30, 0, 0, ct), "2026-03-08"},  // Mon morning → Sun-evening session-day
 		{time.Date(2026, 11, 1, 16, 0, 0, 0, ct), "2026-10-31"}, // fall-back before 17:00
 		{time.Date(2026, 11, 1, 18, 0, 0, 0, ct), "2026-11-01"}, // fall-back after 17:00
 	}

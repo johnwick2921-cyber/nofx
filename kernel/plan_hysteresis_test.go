@@ -43,7 +43,7 @@ func TestFlipConditionWickThroughDoesNotFire(t *testing.T) {
 	t.Setenv("FLIP_ATR_BUFFER", "0")
 	t0 := time.Date(2026, 8, 26, 8, 0, 0, 0, time.UTC).UnixMilli()
 	bars := flatSeries(t0, 20, 100)
-	bars = append(bars, mk5(t0, 20, 100, 100, 94, 99)) // wick below, closes back
+	bars = append(bars, mk5(t0, 20, 100, 100, 94, 99))        // wick below, closes back
 	bars = append(bars, flatSeries(t0+21*300_000, 5, 101)...) // closes stay on the valid side
 	c := PlanCondition{Price: 100, Side: "below", Rule: "2x5m"}
 	if fired, reason := PlanConditionFiredSince(c, bars, t0, t0+26*300_000); fired {

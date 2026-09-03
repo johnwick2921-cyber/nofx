@@ -9,6 +9,17 @@ import (
 )
 
 // mkBar builds a 1m Kline.
+// tapeScope wraps a fixture tape in the resolved void window. For an
+// intra-session tape the session-day start precedes bar 0, so the clamp makes
+// the whole tape in-window — exactly what these fixtures assumed before the
+// scope existed.
+func tapeScope(bars []market.Kline) VoidScope {
+	if len(bars) == 0 {
+		return VoidScopeOf(bars, time.Now())
+	}
+	return VoidScopeOf(bars, time.UnixMilli(bars[len(bars)-1].CloseTime))
+}
+
 func mkTapeBar(t time.Time, o, h, l, c float64) market.Kline {
 	return market.Kline{OpenTime: t.UnixMilli(), Open: o, High: h, Low: l, Close: c,
 		CloseTime: t.UnixMilli() + 60_000}
@@ -115,7 +126,7 @@ func TestBreakdownContinueValidatorRealTape(t *testing.T) {
 	writeTime := start.Add(26 * time.Minute)                        // 10:51 cut — the real v4 birth
 	price := 29600.0
 	// Write-time validation: displacement ≥ BD_MIN_DISP_ATR×ATR, no reclaim.
-	if err := ValidateBreakdownContinueScenarios(&plan, VoidScopeOf(bars), 15.0, price, writeTime.UnixMilli()); err != nil {
+	if err := ValidateBreakdownContinueScenarios(&plan, tapeScope(bars), 15.0, price, writeTime.UnixMilli()); err != nil {
 		t.Fatalf("real-tape plan rejected at write: %v", err)
 	}
 	// Triggerable: at birth, leg 1 MET (breakdown), leg 2 pending (no retest).
@@ -148,7 +159,7 @@ func TestBreakdownContinueValidatorRejectsWeakDisplacement(t *testing.T) {
 		ID: "S1", Condition: "breakdown_continue", Direction: "short",
 		Breakdown: &PlanBreakdownContinue{Level: 29655, EntryMode: "pullback"},
 	}}}
-	err := ValidateBreakdownContinueScenarios(&plan, VoidScopeOf(bars), 15.0, 29652, bars[len(bars)-1].CloseTime)
+	err := ValidateBreakdownContinueScenarios(&plan, tapeScope(bars), 15.0, 29652, bars[len(bars)-1].CloseTime)
 	if err == nil || !strings.Contains(err.Error(), "displacement") {
 		t.Fatalf("want displacement rejection, got %v", err)
 	}
@@ -168,7 +179,7 @@ func TestBreakdownContinueValidatorRejectsReclaimed(t *testing.T) {
 		ID: "S1", Condition: "breakdown_continue", Direction: "short",
 		Breakdown: &PlanBreakdownContinue{Level: 29655, EntryMode: "pullback"},
 	}}}
-	err := ValidateBreakdownContinueScenarios(&plan, VoidScopeOf(bars), 15.0, 29640, bars[len(bars)-1].CloseTime)
+	err := ValidateBreakdownContinueScenarios(&plan, tapeScope(bars), 15.0, 29640, bars[len(bars)-1].CloseTime)
 	if err == nil {
 		t.Fatalf("want reclaim rejection, got nil")
 	}
@@ -190,7 +201,7 @@ func TestBreakupContinueMirror(t *testing.T) {
 		ID: "S1", Condition: "breakup_continue", Direction: "long",
 		Breakdown: &PlanBreakdownContinue{Level: lvl, EntryMode: "pullback"},
 	}}}
-	if err := ValidateBreakdownContinueScenarios(&plan, VoidScopeOf(bars), 15.0, 29484, bars[1].CloseTime); err != nil {
+	if err := ValidateBreakdownContinueScenarios(&plan, tapeScope(bars), 15.0, 29484, bars[1].CloseTime); err != nil {
 		t.Fatalf("mirror rejected: %v", err)
 	}
 	st := BreakdownContinueState(plan.Scenarios[0], bars, 0, bars[len(bars)-1].CloseTime)
@@ -248,7 +259,7 @@ func TestBreakdownImmediateAuthorableBeforeSecondClose(t *testing.T) {
 		ID: "S1", Condition: "breakdown_continue", Direction: "short",
 		Breakdown: &PlanBreakdownContinue{Level: lvl, EntryMode: "immediate"},
 	}}}
-	if err := ValidateBreakdownContinueScenarios(&imm, VoidScopeOf(bars), 15.0, lvl-10, bars[len(bars)-1].CloseTime); err != nil {
+	if err := ValidateBreakdownContinueScenarios(&imm, tapeScope(bars), 15.0, lvl-10, bars[len(bars)-1].CloseTime); err != nil {
 		t.Fatalf("immediate authoring before the confirming close must pass once displacement exists: %v", err)
 	}
 	pb := PlanDoc{Scenarios: []PlanScenario{{
@@ -256,7 +267,7 @@ func TestBreakdownImmediateAuthorableBeforeSecondClose(t *testing.T) {
 		Breakdown: &PlanBreakdownContinue{Level: lvl, EntryMode: "pullback"},
 	}}}
 	// E3 fixture #1 — 1 close + displacement PASSES for pullback now.
-	if err := ValidateBreakdownContinueScenarios(&pb, VoidScopeOf(bars), 15.0, lvl-10, bars[len(bars)-1].CloseTime); err != nil {
+	if err := ValidateBreakdownContinueScenarios(&pb, tapeScope(bars), 15.0, lvl-10, bars[len(bars)-1].CloseTime); err != nil {
 		t.Fatalf("E3: pullback with ONE confirming close + displacement must now PASS: %v", err)
 	}
 	// No displacement at all → immediate is still rejected.
@@ -264,7 +275,7 @@ func TestBreakdownImmediateAuthorableBeforeSecondClose(t *testing.T) {
 		ID: "S1", Condition: "breakdown_continue", Direction: "short",
 		Breakdown: &PlanBreakdownContinue{Level: lvl, EntryMode: "immediate"},
 	}}}
-	if err := ValidateBreakdownContinueScenarios(&flat, VoidScopeOf(bars[:3]), 15.0, 29655, bars[2].CloseTime); err == nil || !strings.Contains(err.Error(), "displacement") {
+	if err := ValidateBreakdownContinueScenarios(&flat, tapeScope(bars[:3]), 15.0, 29655, bars[2].CloseTime); err == nil || !strings.Contains(err.Error(), "displacement") {
 		t.Fatalf("immediate with zero displacement must be rejected, got %v", err)
 	}
 }
@@ -289,7 +300,7 @@ func TestBreakdownImmediateFixturePassesGateChain(t *testing.T) {
 	}
 	plan := PlanDoc{Bias: PlanBias{Direction: "short", Conviction: "medium"}, Scenarios: []PlanScenario{sc}}
 	writeTime := start.Add(26 * time.Minute) // 10:51 — the real v4 birth cut
-	if err := ValidateBreakdownContinueScenarios(&plan, VoidScopeOf(bars), atr, 29600.0, writeTime.UnixMilli()); err != nil {
+	if err := ValidateBreakdownContinueScenarios(&plan, tapeScope(bars), atr, 29600.0, writeTime.UnixMilli()); err != nil {
 		t.Fatalf("immediate plan rejected at the write cut: %v", err)
 	}
 	// Entry = the 2nd confirming close beyond the level (bar 22, 10:47).

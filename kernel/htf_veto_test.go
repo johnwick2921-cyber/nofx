@@ -63,13 +63,13 @@ func TestHTFVeto_CrossModeAuditSeven(t *testing.T) {
 		block1h   bool
 		blockBoth bool
 	}{
-		{"short", "TRENDING_UP", "RANGING", true, false},   // 08-27 23:15 (would-won +$65)
-		{"short", "TRENDING_UP", "RANGING", true, false},   // 08-27 23:15 (would-won +$110)
-		{"long", "TRENDING_DOWN", "RANGING", true, false},  // 08-28 07:27 (would-won +$177)
-		{"long", "RANGING", "RANGING", false, false},       // 08-28 07:36
-		{"long", "RANGING", "RANGING", false, false},       // 08-28 08:17
-		{"long", "RANGING", "RANGING", false, false},       // 08-28 08:35
-		{"long", "RANGING", "RANGING", false, false},       // 08-28 08:35
+		{"short", "TRENDING_UP", "RANGING", true, false},  // 08-27 23:15 (would-won +$65)
+		{"short", "TRENDING_UP", "RANGING", true, false},  // 08-27 23:15 (would-won +$110)
+		{"long", "TRENDING_DOWN", "RANGING", true, false}, // 08-28 07:27 (would-won +$177)
+		{"long", "RANGING", "RANGING", false, false},      // 08-28 07:36
+		{"long", "RANGING", "RANGING", false, false},      // 08-28 08:17
+		{"long", "RANGING", "RANGING", false, false},      // 08-28 08:35
+		{"long", "RANGING", "RANGING", false, false},      // 08-28 08:35
 	}
 
 	t.Setenv("HTF_VETO_MODE", "cross")

@@ -1713,7 +1713,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 			// resolver the prompt's VOID list also reads. This site used to
 			// fetch its own slice and judge sinceMs=0 while the prompt windowed
 			// to the session day — ONL 29141.25, 20:58 CT.
-			bdScope := kernel.ResolveVoidScope(at.futuresSymbol())
+			bdScope := kernel.ResolveVoidScope(at.futuresSymbol(), time.Now())
 			if verr := kernel.ValidateBreakdownContinueScenarios(d, bdScope, kernel.StaleConfirmATR5m(bdScope.Bars), facts.Price, time.Now().UnixMilli()); verr != nil {
 				lastErr = verr
 				at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
@@ -2288,7 +2288,7 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 	// VOID PARITY (2026-09-02) — resolve the void scope ONCE. The prompt and the
 	// persisted read-facts row must carry the identical list; computing it twice
 	// would let them drift, which is the exact class this wave closes.
-	voidScope := kernel.ResolveVoidScope(symbol)
+	voidScope := kernel.ResolveVoidScope(symbol, now)
 	voidScopeLevels := kernel.ComputeVoidBreakdownLevels(scored, voidScope, now.UnixMilli())
 	voidScopeATR := plannerATR5m(symbol)
 	// W3 (weekly-bias wave) — the Sunday weekly-bias context line (≤3 lines;

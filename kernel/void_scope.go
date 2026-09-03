@@ -5,6 +5,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"nofx/market"
 )
@@ -31,7 +32,7 @@ import (
 // will reject, so the prompt reads the validator's tape, not its own.
 type VoidScope struct {
 	Bars     []market.Kline
-	SinceMs  int64 // 0 = the whole slice; the validator's historical behaviour
+	SinceMs  int64 // CME session-day start (clamped to the tape's own start)
 	Interval string
 	BarCount int
 	Source   string // "provider" | "given" — how Bars were obtained
@@ -53,36 +54,57 @@ func VoidScopeBarCount() int {
 // VoidScopeInterval is the bar interval both sides read.
 func VoidScopeInterval() string { return AISVPBarInterval }
 
-// VoidScopeSinceMs is the window start both sides use. 0 = the whole slice.
-// The validator has always judged the whole slice; the prompt now agrees.
-func VoidScopeSinceMs() int64 { return 0 }
+// VoidScopeSinceMs is the window start BOTH sides use: the CME session day.
+//
+// OWNER RULING 2026-09-02. The first cut of this wave made both sides read the
+// WHOLE slice, because that was the validator's historical behaviour. Measured
+// on the real tape that voids nearly every ranked level — 20 entries across 12
+// levels, both sides of almost each — and a list that says "author no waterfall
+// play anywhere" is noise by construction, which would push the model off
+// legitimate plays. The deleted render-side comment was RIGHT ("a level broken
+// and reclaimed days ago is not today's news"); its error was being applied to
+// ONE caller. So the VALIDATOR narrows to the session day as well. That is a
+// validator-rule change in the permitted direction — strictly FEWER rejects —
+// and the planner_read_facts rows measure its effect.
+//
+// Clamped to the tape's own start so a short slice never yields an empty window.
+func VoidScopeSinceMs(bars []market.Kline, now time.Time) int64 {
+	start := CMESessionDayStart(now).UnixMilli()
+	if len(bars) > 0 && bars[0].OpenTime > start {
+		return bars[0].OpenTime
+	}
+	return start
+}
 
 // ResolveVoidScope fetches the ONE tape both sides read. Nil provider or no
 // bars → an empty scope, which renders no VOID list and voids nothing: the
 // honest degradation, never a fabricated verdict.
-func ResolveVoidScope(symbol string) VoidScope {
-	sc := VoidScope{SinceMs: VoidScopeSinceMs(), Interval: VoidScopeInterval(), BarCount: VoidScopeBarCount(), Source: "provider"}
-	if market.FuturesBarsProvider == nil {
-		return sc
+func ResolveVoidScope(symbol string, now time.Time) VoidScope {
+	sc := VoidScope{Interval: VoidScopeInterval(), BarCount: VoidScopeBarCount(), Source: "provider"}
+	if market.FuturesBarsProvider != nil {
+		sc.Bars = market.FuturesBarsProvider(symbol, sc.Interval, sc.BarCount)
 	}
-	sc.Bars = market.FuturesBarsProvider(symbol, sc.Interval, sc.BarCount)
+	sc.SinceMs = VoidScopeSinceMs(sc.Bars, now)
 	return sc
 }
 
 // VoidScopeOf wraps an already-fetched slice in the resolved window. Used by
 // fixtures and by any caller that already holds the tape — the WINDOW still
 // comes from the resolver, never from the caller.
-func VoidScopeOf(bars []market.Kline) VoidScope {
-	return VoidScope{Bars: bars, SinceMs: VoidScopeSinceMs(), Interval: VoidScopeInterval(), BarCount: VoidScopeBarCount(), Source: "given"}
+func VoidScopeOf(bars []market.Kline, now time.Time) VoidScope {
+	return VoidScope{Bars: bars, SinceMs: VoidScopeSinceMs(bars, now), Interval: VoidScopeInterval(), BarCount: VoidScopeBarCount(), Source: "given"}
 }
 
 // VoidScopeBootLine reports the resolved scope, every field READ from its
 // resolver — never a literal.
 func VoidScopeBootLine() string {
-	since := "whole-slice"
-	if VoidScopeSinceMs() != 0 {
-		since = fmt.Sprintf("since=%d", VoidScopeSinceMs())
-	}
-	return fmt.Sprintf("void scope: %s · %s×%d · one resolver for prompt AND validator (parity)",
-		since, VoidScopeInterval(), VoidScopeBarCount())
+	return fmt.Sprintf("void scope: session-day window · %s×%d · one resolver for prompt AND validator (parity)",
+		VoidScopeInterval(), VoidScopeBarCount())
+}
+
+// ResolveVoidScopeOf wraps an already-held tape in the resolved window. Same
+// contract as VoidScopeOf; named for symmetry with ResolveVoidScope at call
+// sites that already have bars.
+func ResolveVoidScopeOf(bars []market.Kline, now time.Time) VoidScope {
+	return VoidScopeOf(bars, now)
 }

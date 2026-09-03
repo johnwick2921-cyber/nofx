@@ -82,10 +82,10 @@ type errClient struct {
 	fail  bool
 }
 
-func (e *errClient) SetAPIKey(_, _, _ string)                         {}
-func (e *errClient) SetTimeout(_ time.Duration)                       {}
-func (e *errClient) ResolvedModel() string                            { return "stub" }
-func (e *errClient) CallWithRequest(_ *mcp.Request) (string, error)   { return "", nil }
+func (e *errClient) SetAPIKey(_, _, _ string)                       {}
+func (e *errClient) SetTimeout(_ time.Duration)                     {}
+func (e *errClient) ResolvedModel() string                          { return "stub" }
+func (e *errClient) CallWithRequest(_ *mcp.Request) (string, error) { return "", nil }
 func (e *errClient) CallWithRequestStream(_ *mcp.Request, _ func(string)) (string, error) {
 	return "", nil
 }

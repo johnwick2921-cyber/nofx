@@ -52,7 +52,7 @@ func TestNPOCRetireTickTolerance(t *testing.T) {
 // TestNPOCBarsTableLegRetires: a POC from 3 sessions ago touched on day 2 of
 // the gap retires — the historical leg the 2000-bar slice could never see.
 func TestNPOCBarsTableLegRetires(t *testing.T) {
-	now := time.Date(2026, 8, 26, 19, 0, 0, 0, CTLocation()) // session-day 08-26
+	now := time.Date(2026, 8, 26, 19, 0, 0, 0, CTLocation())    // session-day 08-26
 	pocs := []PriorPOC{{SessionDate: "2026-08-22", POC: 100.0}} // 4 sessions back
 	// Combined series: the old bars (bars-table leg) show the touch on
 	// session-day 08-24; the recent slice has no touch.

@@ -13,8 +13,8 @@ func htfKlines(n int, o, h, l, c []float64, now time.Time) []market.Kline {
 	start := now.Add(-time.Duration(n) * time.Hour).Truncate(time.Hour)
 	for i := 0; i < n; i++ {
 		out[i] = market.Kline{
-			OpenTime:  start.Add(time.Duration(i) * time.Hour).UnixMilli(),
-			Open:      o[i], High: h[i], Low: l[i], Close: c[i],
+			OpenTime: start.Add(time.Duration(i) * time.Hour).UnixMilli(),
+			Open:     o[i], High: h[i], Low: l[i], Close: c[i],
 			CloseTime: start.Add(time.Duration(i)*time.Hour + time.Hour - 1).UnixMilli(),
 		}
 	}
@@ -167,13 +167,13 @@ func TestSeatHTFPromotesSwingLevels(t *testing.T) {
 	for i := 0; i < 8; i++ { // weak round numbers fill the head
 		scored = append(scored, ScoredLevel{
 			DetectedLevel: DetectedLevel{Kind: KindRound, Price: 990 + float64(i), Label: "RN"},
-			Score: 0.4, Grade: "C", Fresh: "fresh", Distance: 990 + float64(i) - 1000,
+			Score:         0.4, Grade: "C", Fresh: "fresh", Distance: 990 + float64(i) - 1000,
 		})
 	}
 	for i := 0; i < 2; i++ { // HTF swings lost the cut
 		scored = append(scored, ScoredLevel{
 			DetectedLevel: DetectedLevel{Kind: KindEQH, Price: 1100 + float64(i), Label: "EQH·1h", HTF: true},
-			Score: 0.84, Grade: "B", Fresh: "fresh", Distance: 100 + float64(i),
+			Score:         0.84, Grade: "B", Fresh: "fresh", Distance: 100 + float64(i),
 		})
 	}
 	out := seatHTF(scored, 8)
@@ -214,7 +214,7 @@ func TestSeat1HZonePromotesInBandSD(t *testing.T) {
 	mk := func(kind LevelKind, tf string, price, score float64, grade string) ScoredLevel {
 		return ScoredLevel{
 			DetectedLevel: DetectedLevel{Kind: kind, Price: price, Label: "L·" + tf, TF: tf},
-			Score: score, Grade: grade, Fresh: "fresh", Distance: price - 1000,
+			Score:         score, Grade: grade, Fresh: "fresh", Distance: price - 1000,
 		}
 	}
 	scored := []ScoredLevel{

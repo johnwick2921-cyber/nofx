@@ -193,6 +193,22 @@ export const guards: GuideSection = {
       kind: 'p',
       text: 'The fourth change is about memory. When a plan is rejected and rewritten, the correction used to name only the most recent defect. On 2026-09-02 the London read showed the cost: attempt 1 was rejected for writing into a voided breakdown, attempt 2 for a fade that needed a touch, and attempt 3 was told only about the fade — so it fixed the fade and walked straight back into the void it had been corrected about two attempts earlier. The correction block now carries every distinct defect seen so far in that read, in the order they appeared, and it appears twice: once at the very top, ahead of the playbook, and once at the very end. Roughly 240 tokens on a 6,600-token prompt. A single instruction in front of a wall of text is the one most likely to be missed, which is the same reason the repair prompt repeats its return format.',
     },
+    {
+      kind: 'h',
+      text: 'THE VOID LIST AND THE VALIDATOR NOW READ ONE TAPE (class 51)',
+    },
+    {
+      kind: 'p',
+      text: 'The plan prompt lists the levels where a waterfall play is already dead, and the validator refuses those plays when a plan arrives. Both were asking the same question of the same code — and handing it different tape. The prompt looked only at the current session day; the validator looked at everything it held, over a shorter history. So a level broken and taken back before the 17:00 evening boundary was dead to the validator and invisible in the prompt. On 2 September at 20:58 the prompt listed eight levels as void, left out the overnight low, and the plan was rejected on exactly that level. The parity test written to prevent this had passed twenty tapes in a row, because it handed both sides the same inputs itself: it checked that the two pieces of code agree, never that the running system gives them the same thing to agree about.',
+    },
+    {
+      kind: 'p',
+      text: "There is now one resolver. Neither side chooses a window or a slice; both read what it returns. The window is the CME session day, and this is the part that changes behaviour: the VALIDATOR narrowed to match the prompt, so a level broken and reclaimed days ago no longer voids a play today. That means slightly FEWER rejections, not more. The first attempt did the opposite — it widened the prompt to the validator's full history — and on the real tape that marked twenty entries across twelve levels, a list that effectively says author no waterfall play anywhere. The list is also compact now: one line per level, with both sides folded into it when both are dead.",
+    },
+    {
+      kind: 'p',
+      text: 'Separately, every read now records what the model was told: the void list, the minimum stop distance and the ATR behind it, the bias labels and the resolved window, whether the read succeeded or failed. Before this, a rendered prompt was kept only when a read was REJECTED, so the better the system got the less evidence it left — the 2 September fix could be proven live only because a read happened to fail. Five hundred reads are kept.',
+    },
     { kind: 'h', text: 'WHEN YOU SAVE IN STRATEGY STUDIO (class 44)' },
     {
       kind: 'p',
