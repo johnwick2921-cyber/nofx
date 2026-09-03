@@ -156,6 +156,15 @@ func (s *ArmedOrderStore) UpsertArm(row *ArmedOrderDB) error {
 	if row == nil || row.PlanID == "" || row.Scenario == "" {
 		return fmt.Errorf("plan_id and scenario required")
 	}
+	// CANONICAL CASING AT THE WRITE CHOKEPOINT (class 28, owner ruling
+	// 2026-09-03). armed_orders stored lowercase ("long"/"short") while
+	// trader_positions stores uppercase (LONG 280 / SHORT 304 against long 1 /
+	// short 2), so the fill-time lookup compared 'short' to 'SHORT' and matched
+	// zero rows — every armed fill read fill_quantity=0. The read sites now
+	// compare UPPER(side)=UPPER(?), and this is the other half: the value is
+	// canonicalized where it ENTERS, so the two tables stop disagreeing at rest
+	// rather than only at each comparison.
+	row.Side = CanonicalSide(row.Side)
 	// PRE-REOPEN F3 (2026-08-28) — dead re-arm fix: a TERMINAL row for the same
 	// (plan, scenario) is re-authorized as a fresh armed row (new identity, no
 	// stale fill); a non-terminal row keeps its identity and only its prices

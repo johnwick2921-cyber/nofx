@@ -78,7 +78,12 @@ func TestUpsertArmReauthorizesTerminalRow(t *testing.T) {
 	if got.FillPrice != 0 || got.FillQuantity != 0 {
 		t.Fatalf("fill lineage not cleared: price=%v qty=%d", got.FillPrice, got.FillQuantity)
 	}
-	if got.Side != "short" || got.EntryPx != 105 || got.StopPx != 106 || got.Version != 4 {
+	// CLASS 28 (owner ruling 2026-09-03): the side is now canonicalized AT THE
+	// WRITE, so an arm authored "short" is stored "SHORT". This fixture used to
+	// assert the lowercase storage that made armed_orders disagree with
+	// trader_positions at rest. Its intent — fresh prices/version applied on a
+	// re-authorization — is unchanged and still asserted.
+	if got.Side != "SHORT" || got.EntryPx != 105 || got.StopPx != 106 || got.Version != 4 {
 		t.Fatalf("fresh prices not applied: %+v", got)
 	}
 	if got.ID != orig.ID {

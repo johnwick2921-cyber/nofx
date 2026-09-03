@@ -202,3 +202,11 @@ func (s *Store) AttributionBootLine() string {
 	return fmt.Sprintf("attribution: stamp-at-materialization=on · armed_under_version=on · unresolvable=%d (sentinel %q) · unstamped-closed=%d (pre-era history)",
 		sentinel, PlanUnresolvable, unstamped)
 }
+
+// CanonicalSide is the ONE canonicalizer for a position/arm side. Class 28:
+// called where the value ENTERS, never at each comparison. Unknown values pass
+// through uppercased rather than being coerced to a legal side — an unexpected
+// side must stay visible, not be silently turned into a tradeable one.
+func CanonicalSide(side string) string {
+	return strings.ToUpper(strings.TrimSpace(side))
+}

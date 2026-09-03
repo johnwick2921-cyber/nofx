@@ -116,6 +116,10 @@ func main() {
 	// ATTRIBUTION (2026-09-02) — one sentinel: day-plan-era CLOSED rows carrying
 	// "" become UNRESOLVABLE. Idempotent, WHERE-scoped, pre-era history untouched.
 	st.ConvergePlanLinkSentinel()
+	// ADHERENCE REGRADE (owner ruling 2026-09-03) — clears the grade on the four
+	// late-stamped reconcile closes so the analytics regrade them with the
+	// lineage now in hand. Flag-guarded, shape-verified per row, logged.
+	st.RegradeStuckAdherence()
 
 	// T7 (2026-08-27) — stamp pnl_corrected on EVERY reconstructable closed MNQ
 	// row (the column must be complete, not just the disagreements).
@@ -290,6 +294,7 @@ func main() {
 	logger.Infof("🧾 %s", store.PnLSurfacesBootLine())
 	// ATTRIBUTION — counts READ from the table, never a literal.
 	logger.Infof("🔗 %s", st.AttributionBootLine())
+	logger.Infof("🩹 %s", store.AdherenceRegradeBootLine())
 	logger.Infof("🎛 %s", kernel.EntryLawBootLedger()) // P1.4 (ledger-close 2026-08-19) — clock-guard block: live host-RTC drift,
 	// guard-timer freshness, last resync/check state. Log-only, best-effort.
 	kernel.LogClockGuardBoot()

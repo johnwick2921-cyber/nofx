@@ -582,10 +582,22 @@ func RepairArmedLineage(st *store.Store, traderID string) int {
 		}
 		if stamped, _ := StampArmedLineageIfMatched(st, traderID, p.ID, p.Symbol, p.Side, p.EntryPrice); stamped {
 			n++
-			// The F grade was CAUSED by the missing linkage — clear
-			// it so the W5 analytics regrade the close with the
-			// armed-fill plan in hand (grade ≠ F is the STEP-7 proof).
-			if p.Status == "CLOSED" && p.AdherenceGrade == "F" {
+			// REGRADE ON "LINEAGE JUST STAMPED", NOT ON A GRADE LETTER
+			// (owner ruling 2026-09-03). This branch used to fire only when
+			// the grade was "F" — but a close with no citation grades "D"
+			// (kernel/adherence.go: `case in.OffPlan || !in.Cited: base="D"`),
+			// which is the grade this path actually produces. The predicate
+			// waited for a letter it would never see, so every late-stamped
+			// position kept a permanent off-plan grade while carrying full
+			// lineage: 575, 584, 586 and 591 all read D with plan_version,
+			// scenario and plan_matched=1 set.
+			//
+			// The trigger is now the STAMP we just did, not the letter we
+			// happen to find. A genuinely uncited close is never reached here
+			// (it is not in the unlinked scan and nothing stamps it), so it
+			// keeps its D — which is correct, and is why keying on the letter
+			// would have been wrong in the other direction too.
+			if p.Status == "CLOSED" && p.AdherenceGrade != "" {
 				if err := st.Position().SetAdherence(p.ID, ""); err != nil {
 					logger.Warnf("🩹 RepairArmedLineage: adherence reset failed (pos %d): %v", p.ID, err)
 				}
