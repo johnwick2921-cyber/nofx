@@ -544,11 +544,13 @@ carry the schema example verbatim:
 | ASIA v14 | 00:08:45 CT | `["first 5m (CT)", "12:00-13:30 CT lunch"]` | 2 |
 | ASIA v15 | 00:34:14 CT | `["first 5m (CT)", "12:00-13:30 CT lunch"]` | 2 |
 | LONDON v1 | 01:34:53 CT | `["first 5m (CT)", "12:00-13:30 CT lunch"]` | 2 |
+| NY v1 | 08:05:19 CT | `["first 5m (CT)", "12:00-13:30 CT lunch"]` | 2 |
 
-**3 of 3, byte-identical, across two sessions and three independent reads.** That is the baseline the
+**4 of 4, byte-identical, across three sessions and four independent reads.** That is the baseline the
 three post-boot plans are measured against. It also rules out chance and
 rules out session: the model is not choosing these two windows, it is copying
-the example.
+the example. Four reads on three sessions, including the full-reasoning NY
+read, produced the same two strings and nothing else.
 
 ### 11.7 Two reads, two identical rejects — noted, not this wave
 
@@ -568,8 +570,10 @@ no displacement. Answered in §12: the floor was enforced and never stated.
 **Third read, no reject.** LONDON v1 at 01:34:53 landed on attempt 1 and
 authored `S1 reject` + `S2 sweep_reclaim` — no waterfall at all. So the
 displacement rejects are not every read; they are every read that reaches for
-a waterfall. n=3: two waterfall attempts, two rejects, one read that did not
-try. That is the population §12's proof will be measured over.
+a waterfall. NY v1 (08:05:19) is the same again — attempt 1, `S1 reject` + `S2
+breakout_retest` + `S3 sweep_reclaim`, no waterfall. n=4: two waterfall
+attempts, two rejects, two reads that did not reach for one. That is the
+population §12's proof will be measured over, and it is small.
 
 ---
 
