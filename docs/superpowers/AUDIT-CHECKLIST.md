@@ -892,6 +892,42 @@ in CLAUDE.md).
     has one resolver for its inputs; a parity test that builds both sides'
     arguments tests nothing; and the instrument that proves a fix works must
     not fire only when the fix fails.
+52. **A rule rendered from the clock it was WRITTEN by, not the clock it is
+    READ by.** The plan card's no-trade list was the model's prose, stored at
+    authoring time and shown verbatim for the rest of the session. On
+    2026-09-02 the ASIA card at 23:00 CT listed three constraints and not one
+    of them could refuse an entry: the first-5m band had closed six hours
+    earlier, the lunch window belongs to NY and cannot apply to an ASIA
+    session, and the red-news blackout had fired fourteen hours before. The
+    same defect had a second face: the windows were defined THREE times — the
+    entry gate's `cur < start+N` and its `InBlackoutWindow(t,"12:00","13:30")`,
+    the adherence grader's own copies, and whatever prose the model happened to
+    write — so the gate refused one window, the grader scored another and the
+    card claimed a third, with nothing that could fail if they drifted apart. A
+    fourth copy sat in the prompt, teaching the model windows nobody enforced.
+    And the clock-drift widening appended "+1m (clock drift)" for ANY nonzero
+    offset, so a healthy 108 ms NTP reading put "the clock is drifting" on the
+    card for the whole trading day. **Probe:** for every rule a surface
+    displays, ask WHEN it was evaluated and against WHOSE clock; a rule
+    rendered from stored text is a rule frozen at write time. For every window,
+    threshold or window name that appears on more than one surface, find the
+    single function all of them call — if there isn't one, count the copies.
+    For every advisory suffix, ask which measurement makes it TRUE and whether
+    that measurement can be zero. **Fix:** `kernel/no_trade_band.go` holds one
+    definition each (`FirstNoTradeMinutes`, `LunchWindowCT`) read by the gate,
+    the grader and the card; the machine writes `no_trade_windows` onto the doc
+    at plan time, taking red news from `t1WindowsFor` — literally the windows
+    the gate will refuse inside, widening and fail-closed fallback included, so
+    the card cannot compute a second answer; `EvaluateNoTradeWindows` stamps
+    each one live / elapsed / other_session against the READER's clock, asking
+    session geometry first (does this window touch the session at all) and
+    elapsed second; the model's prose is untouched and renders as notes; the
+    prompt's example and rule sentence are generated from the same functions,
+    with a literal scan allowing exactly one copy of each bound at the
+    definition site; and the drift claim is made only when the offset alone can
+    move an event by a whole minute, while the minute of boundary protection is
+    kept for every input. **Law:** a surface renders a rule's STATUS, never its
+    text — and a rule with more than one definition has none.
 
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
