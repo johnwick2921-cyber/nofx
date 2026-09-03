@@ -232,7 +232,22 @@ func seatedLevelSide(label string) string {
 // (plan,version,kind,label,tier,birth). W6-D: wakes are UNLIMITED and spend NO
 // budget — the per-session re-plan cap belongs to deaths alone. Death-first
 // ordering is preserved by the caller.
+// maybeWakePlannerOnLevelEvents is the production entry point: it reads the
+// wall clock and delegates.
+//
+// CLOCK SEAM (2026-09-03). The clock moved from incidental to LOAD-BEARING when
+// the class-47 cutoffs began enforcing: the last-window cutoff asks how many
+// minutes remain to the session flat, so this path's behaviour now depends on
+// the time of day it runs. A test calling it with a fixed fixture and a real
+// clock passes in the morning and fails after ~14:20 CT — which is exactly what
+// TestMaybeWakePlannerOnLevelEventsThrottleDedupe started doing, on dev, the
+// day the cutoffs shipped. The seam lets a test state its own clock instead of
+// borrowing the machine's.
 func (at *AutoTrader) maybeWakePlannerOnLevelEvents(session, tradeDate string, row *store.PlanDB) {
+	at.maybeWakePlannerOnLevelEventsAt(time.Now(), session, tradeDate, row)
+}
+
+func (at *AutoTrader) maybeWakePlannerOnLevelEventsAt(now time.Time, session, tradeDate string, row *store.PlanDB) {
 	if market.FuturesBarsProvider == nil || at.store == nil || row == nil {
 		return
 	}
@@ -240,7 +255,6 @@ func (at *AutoTrader) maybeWakePlannerOnLevelEvents(session, tradeDate string, r
 	if at.config.StrategyConfig != nil {
 		cfg = at.config.StrategyConfig.DayPlan
 	}
-	now := time.Now()
 	symbol := at.futuresSymbol()
 	fetch := func(tf string, count int) []market.Kline {
 		return market.FuturesBarsProvider(symbol, tf, count)
