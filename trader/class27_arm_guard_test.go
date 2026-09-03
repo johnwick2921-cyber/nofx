@@ -2,6 +2,7 @@ package trader
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"nofx/kernel"
@@ -24,17 +25,28 @@ func class27GuardTrader(t *testing.T) (*AutoTrader, *store.Store) {
 	return at, st
 }
 
+// SUPERSEDED SPEC (owner ruling 2026-09-03 — ONE OPEN POSITION PER
+// INSTRUMENT). This asserted that a SAME-side arm "is outside this guard's
+// scope → pass". That scope gap is how a new plan version could re-authorize a
+// terminal row and ADD to a position that was still open: the same-version
+// re-arm block lives in the store, and nothing refused the cross-version case.
+// Both sides are refused now. The opposite-side half of the assertion is
+// unchanged.
 func TestOneLiveArmGuardRefusesOppositeSide(t *testing.T) {
 	at, _ := class27GuardTrader(t)
 	openAPosition(t, at.store, at.id) // helper opens MNQ LONG
 
 	verdict := at.oneLiveArmGuard(kernel.PlanScenario{ID: "S3"}, kernel.PlanArmLeg{Entry: 29459}, "short")
 	if verdict == "" {
-		t.Fatal("opposite-side arm while LONG is open must be refused (one_live_arm_guard)")
+		t.Fatal("opposite-side arm while LONG is open must be refused")
 	}
-	// Same-side arm is outside this guard's scope → pass.
-	if v := at.oneLiveArmGuard(kernel.PlanScenario{ID: "S3"}, kernel.PlanArmLeg{Entry: 29417}, "long"); v != "" {
-		t.Fatalf("same-side arm must pass the guard, got %q", v)
+	// And the same side too, now.
+	v := at.oneLiveArmGuard(kernel.PlanScenario{ID: "S3"}, kernel.PlanArmLeg{Entry: 29417}, "long")
+	if v == "" {
+		t.Fatal("a SAME-side arm while a position is open must also be refused (one_open_position)")
+	}
+	if !strings.Contains(v, "no adds, no flips") {
+		t.Errorf("the refusal must say why: %q", v)
 	}
 }
 

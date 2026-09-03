@@ -467,6 +467,21 @@ func (s *PositionStore) SetPositionAccount(id int64, account string) error {
 	}).Error
 }
 
+// QuantityOf reads one position's quantity by id (invalidation-wired, 2026-09-03).
+// The armed-ledger fill stamp needs it from the reconcile path, which knows the
+// position id but not its size. Returns 0 when the row is absent — the caller
+// then writes nothing, because SetFillQuantity refuses a zero.
+func (s *PositionStore) QuantityOf(id int64) float64 {
+	if s == nil || s.db == nil || id == 0 {
+		return 0
+	}
+	var pos TraderPosition
+	if err := s.db.First(&pos, id).Error; err != nil {
+		return 0
+	}
+	return pos.Quantity
+}
+
 // UpdatePositionQuantityAndPrice updates position quantity and recalculates entry price
 func (s *PositionStore) UpdatePositionQuantityAndPrice(id int64, addQty float64, addPrice float64, addFee float64) error {
 	var pos TraderPosition
@@ -640,7 +655,16 @@ func (s *PositionStore) ListClosedByEntryOrderIDs(traderID string, ids []string)
 // GetOpenPositionBySymbol gets open position for specified symbol and direction
 func (s *PositionStore) GetOpenPositionBySymbol(traderID, symbol, side string) (*TraderPosition, error) {
 	var pos TraderPosition
-	err := s.db.Where("trader_id = ? AND symbol = ? AND side = ? AND status = ?", traderID, symbol, side, "OPEN").
+	// SIDE CASING (2026-09-03) — UPPER() on both sides. `side = ?` is
+	// case-sensitive on a plain TEXT column, and the two writers disagree:
+	// armed_orders.side is always lowercase (built with strings.ToLower), while
+	// trader_positions.side is overwhelmingly uppercase (live: LONG 280 /
+	// SHORT 304 against long 1 / short 2). So the armed fill handler, which
+	// passes the ARMED row's lowercase side, could NEVER find an armed-entry
+	// position however well the timing went — measured on the live store,
+	// side='short' matched 0 rows for position 591 while side='SHORT' matched 1.
+	// The materialization race merely got there first.
+	err := s.db.Where("trader_id = ? AND symbol = ? AND UPPER(side) = UPPER(?) AND status = ?", traderID, symbol, side, "OPEN").
 		Order("entry_time DESC").
 		First(&pos).Error
 
@@ -655,7 +679,7 @@ func (s *PositionStore) GetOpenPositionBySymbol(traderID, symbol, side string) (
 		// Try without USDT suffix for backward compatibility
 		if strings.HasSuffix(symbol, "USDT") {
 			baseSymbol := strings.TrimSuffix(symbol, "USDT")
-			err = s.db.Where("trader_id = ? AND symbol = ? AND side = ? AND status = ?", traderID, baseSymbol, side, "OPEN").
+			err = s.db.Where("trader_id = ? AND symbol = ? AND UPPER(side) = UPPER(?) AND status = ?", traderID, baseSymbol, side, "OPEN").
 				Order("entry_time DESC").
 				First(&pos).Error
 			if err == nil {
@@ -679,7 +703,9 @@ func (s *PositionStore) GetOpenPositionBySymbol(traderID, symbol, side string) (
 func (s *PositionStore) GetOpenPositionByAccountSymbol(account, symbol, side string) (*TraderPosition, error) {
 	find := func(sym string) (*TraderPosition, error) {
 		var pos TraderPosition
-		q := s.db.Where("symbol = ? AND side = ? AND status = ?", sym, side, "OPEN")
+		// Same casing rule as GetOpenPositionBySymbol — close-sync routes by
+		// symbol and side, and a case-sensitive compare loses a priced close.
+		q := s.db.Where("symbol = ? AND UPPER(side) = UPPER(?) AND status = ?", sym, side, "OPEN")
 		if account != "" {
 			q = q.Where("account = ?", account)
 		}

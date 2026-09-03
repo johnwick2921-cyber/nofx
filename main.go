@@ -276,6 +276,29 @@ func main() {
 	// INVALIDATION-WIRED (2026-09-03) — the arm gate's new leg and the
 	// armed-under surfaces, both READ from the code that implements them.
 	logger.Infof("🛡 %s", trader.ArmGateBootLine())
+	// ADHERENCE REGRADE (owner ruling 2026-09-03) — flag-guarded. Default OFF,
+	// and the line reports what is PENDING either way, so the count is visible
+	// without arming anything. Backup first: no backup, no write.
+	{
+		pending, _ := st.Position().StuckAdherenceRows()
+		regraded, backup := 0, ""
+		if store.AdherenceRegradeEnabled() && len(pending) > 0 {
+			before, _ := st.Position().AdherenceDistribution()
+			if b, bErr := store.BackupBeforeRegrade(cfg.DBPath, time.Now().Format("20060102-150405")); bErr != nil {
+				logger.Errorf("🩹 adherence regrade ABORTED — backup failed: %v", bErr)
+			} else {
+				backup = b
+				if n, rErr := st.Position().RegradeStuckAdherence(); rErr != nil {
+					logger.Errorf("🩹 adherence regrade failed: %v", rErr)
+				} else {
+					regraded = n
+					after, _ := st.Position().AdherenceDistribution()
+					logger.Infof("🩹 adherence distribution before %v → after %v (cleared rows are ungraded until W5 recomputes them)", before, after)
+				}
+			}
+		}
+		logger.Infof("🩹 %s", store.AdherenceRegradeBootLine(len(pending), regraded, store.AdherenceRegradeEnabled(), backup))
+	}
 	// VOID PARITY (2026-09-02) — the ONE scope the prompt's VOID list and the
 	// write-site validator both read. Every field READ from its resolver.
 	logger.Infof("📜 %s", kernel.VoidScopeBootLine())

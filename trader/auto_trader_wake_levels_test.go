@@ -270,21 +270,24 @@ func TestMaybeWakePlannerOnLevelEventsThrottleDedupe(t *testing.T) {
 	row := &store.PlanDB{PlanID: "p1", Version: 1,
 		CreatedAt: now.Add(-24 * time.Hour),
 		Doc:       `{"bias":{"direction":"neutral"},"levels":[]}`}
-	// First call fires (planner client is nil → the read fails closed, but the
-	// wake state must be recorded).
-	at.maybeWakePlannerOnLevelEvents("NY", "2026-08-25", row)
+	// CLOCK SEAM (2026-09-03): this test used to call the wall-clock entry
+	// point with a fixture anchored at a fixed `now`. That was harmless until
+	// the class-47 cutoffs began ENFORCING — the last-window cutoff asks how
+	// many minutes remain to the session flat, so the test passed in the
+	// morning and failed after ~14:20 CT. It states its own clock now.
+	at.maybeWakePlannerOnLevelEventsAt(now, "NY", "2026-08-25", row)
 	if at.lastLevelWakeKey == "" || at.lastPlannerWakeAt.IsZero() {
 		t.Fatalf("first wake must record key + clock (key=%q)", at.lastLevelWakeKey)
 	}
 	key1, t1 := at.lastLevelWakeKey, at.lastPlannerWakeAt
 	// Same cycle: dedupe must hold the key and clock unchanged.
-	at.maybeWakePlannerOnLevelEvents("NY", "2026-08-25", row)
+	at.maybeWakePlannerOnLevelEventsAt(now, "NY", "2026-08-25", row)
 	if at.lastLevelWakeKey != key1 || !at.lastPlannerWakeAt.Equal(t1) {
 		t.Fatalf("dedupe must leave wake state unchanged (key %q→%q)", key1, at.lastLevelWakeKey)
 	}
 	// A DIFFERENT event inside the min-interval window must be throttled.
 	at.lastLevelWakeKey = ""
-	at.maybeWakePlannerOnLevelEvents("NY", "2026-08-25", row)
+	at.maybeWakePlannerOnLevelEventsAt(now, "NY", "2026-08-25", row)
 	if at.lastLevelWakeKey != "" {
 		t.Fatalf("min-interval throttle must suppress the second wake inside the window, got key %q", at.lastLevelWakeKey)
 	}

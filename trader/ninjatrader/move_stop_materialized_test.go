@@ -204,3 +204,52 @@ func TestMoveStopStillFailsWithoutAnyIdentity(t *testing.T) {
 		t.Fatalf("want the explicit no-identity error, got %v", err)
 	}
 }
+
+// F3 GAP (2026-09-03) — fill_quantity must be stamped on the RECONCILE path.
+//
+// Found via nofx-89's 2026-09-01 audit: 584 of 586 armed fills carried
+// ";stamp_pending", because the fill frame lands before the position row is
+// materialized and stampArmedFillLineage returns early on that path. Stamping
+// only at fill time covered 2 of 586. Armed row 35 today took the same path and
+// still read fill_quantity=0 with the fill-time stamp live.
+func TestReconcileStampsFillQuantityOnThePendingPath(t *testing.T) {
+	st, err := store.New(filepath.Join(t.TempDir(), "f3gap.db"))
+	if err != nil {
+		t.Fatalf("open store: %v", err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	pos := &store.TraderPosition{
+		TraderID: "t", Symbol: "MNQ", Side: "short", Quantity: 1,
+		EntryPrice: 29285, EntryTime: 1, Status: "OPEN", CreatedAt: 1, UpdatedAt: 1,
+	}
+	if cErr := st.Position().Create(pos); cErr != nil {
+		t.Fatalf("create position: %v", cErr)
+	}
+	row := store.ArmedOrderDB{
+		TraderID: "t", PlanID: "2026-09-03:NY:t", Version: 2, Session: "NY",
+		Scenario: "S1", Side: "short", EntryPx: 29285, StopPx: 29362.5, TargetPx: 29130,
+		State: "armed", FillPrice: 29285,
+	}
+	if err := st.ArmedOrders().UpsertArm(&row); err != nil {
+		t.Fatalf("arm: %v", err)
+	}
+	// exactly the marker the fill-time path leaves when it cannot stamp
+	if err := st.ArmedOrders().SetState(row.ID, "filled", "armed_fill;stamp_pending"); err != nil {
+		t.Fatalf("pending marker: %v", err)
+	}
+
+	stamped, _ := StampArmedLineageIfMatched(st, "t", pos.ID, "MNQ", "SHORT", 29285)
+	if !stamped {
+		t.Fatal("the reconcile must match and stamp this fill")
+	}
+	rows, lErr := st.ArmedOrders().ListForPlan(row.PlanID)
+	if lErr != nil || len(rows) != 1 {
+		t.Fatalf("read back: %v n=%d", lErr, len(rows))
+	}
+	if rows[0].FillQuantity != 1 {
+		t.Errorf("fill_quantity = %d, want 1 — the pending path is where 584 of 586 fills go", rows[0].FillQuantity)
+	}
+	if strings.HasSuffix(rows[0].StateReason, ";stamp_pending") {
+		t.Error("the pending marker must be cleared once the stamp completes")
+	}
+}

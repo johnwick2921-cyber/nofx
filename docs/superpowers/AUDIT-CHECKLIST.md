@@ -1134,6 +1134,115 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     terminal row never logs "armed" at all. **Law:** a verdict the system
     publishes to itself must have a named consumer or be deleted — and a column
     nothing reads is not a feature, it is a rumour.
+    nothing reads is not a feature, it is a rumour. **Rider (2026-09-03, after
+    the boot):** the `fill_quantity` fix shipped INCOMPLETE and proves the law
+    against itself. It stamped at fill time only — and the fill frame lands
+    BEFORE the position row materializes, so `stampArmedFillLineage` returns on
+    that path first. measured on the
+    current rev, **10 of 10 filled armed rows carry `fill_quantity=0`** — the
+    stamp never lands. TWO mechanisms, the second dominant: (a) the
+    materialization race (row 35 filled 09:03:53, position 591 materialized
+    09:05:14 — 81s), and (b) **class 28 again** — `GetOpenPositionBySymbol`
+    compared `side = ?` case-sensitively while `armed_orders.side` is always
+    lowercase and `trader_positions.side` is overwhelmingly uppercase (LONG 280
+    / SHORT 304 vs long 1 / short 2); `side='short'` matched 0 rows for position
+    591 and `side='SHORT'` matched 1, so the fill-time lookup could never
+    succeed whatever the timing. Fixed with `UPPER(side)=UPPER(?)` there and at
+    two siblings. **The log line hid it:** "position row not materialized yet"
+    prints whenever `pos == nil` — true for either mechanism — asserting the
+    race as fact, which sent two sessions after a timing bug. **And a late stamp
+    cannot repair the damage:** `RepairArmedLineage` clears the adherence grade
+    for regrading only when it is `"F"` (reconcile.go:588), while a close with
+    no citation grades `"D"` (adherence.go:52), so positions 584 and 586 now
+    carry full lineage and a permanent off-plan D. Quantified: **4 closed rows are
+    PROVABLY mis-graded** (575, 584, 586, 591 — `plan_matched=1`,
+    `plan_band=armed_fill`, grade D), because a cited+matched close grades base
+    A and two penalties reach only C, so D can only mean it was graded while
+    `Cited` was false. Two more Ds are legitimate and were nearly miscounted:
+    582 has `matched=0` → base C − 1 penalty, and 530 cites the literal sentinel
+    `off-plan`. **And the predicate is not impossible, it is partial:** base D
+    steps to F under either penalty (`InNoTrade`, `!InKillzone`), so the repair
+    silently SUCCEEDS on penalised uncited rows (566, 571 → F) and silently
+    FAILS on clean ones (580 → D) — which is why it survived, since a
+    spot-check lands on a working case. Fix keys on the ABSENCE OF LINEAGE, never
+    on a letter that encodes lineage plus two unrelated penalties; widening it to
+    "D" would promote 580, which deserves its D. Whether to backfill the 4 is an
+    owner call — a silent backfill moves a published distribution. **The
+    discriminator needs a lineage clause:** the ladder argument alone
+    (`plan_matched=1 AND plan_band NOT IN ('off_band','struct') AND grade='D'`)
+    returns FIVE, catching 572 — an `e7_farside_test` seam row with
+    `cited_scenario_id 'TEST-E7'` and `plan_version 0`. Same test-seam
+    contamination that §D-3 of the 09-01 audit found in
+    `store/position_query.go`'s unfiltered counts, recurring in a new query. All
+    four real rows are `source=reconcile`, stated as absence of a counter-example
+    rather than proof: the single `armed_entry` D row (582, `plan_matched=0`) is
+    observationally identical under both hypotheses — base C minus a penalty and
+    base D from a grade-before-stamp are both D — so the armed path is untested,
+    not exonerated. Probes: ask which BRANCH a
+    write sits on; when a log line names a CAUSE, check the code can
+    distinguish it from the alternatives; and when a repair path clears a value
+    to trigger a recompute, check it matches the value the broken path actually
+    writes.
+61. **A mode that existed only in a comment.** (Highest occupied at merge: 57.)
+    Root cause: `plan_mode` was documented as `advisory | direction | strict`
+    in a doc comment (`store/strategy.go:919`) and offered in the Studio
+    selector, but **`strict` was never implemented**: `PlanModeFor` returned a
+    saved `"strict"` unchanged (no self-heal, and no `"normal"` mode ever
+    existed), and **no consumer in non-test code compared against it** — the
+    only mode any consumer tested was `direction`. An owner could select it,
+    the value would persist, resolve, and render, and nothing anywhere would
+    behave differently. The Studio audit reached it from the other side, listing
+    it as a dead option to REMOVE. **Probe:** for every enum value a UI offers,
+    grep for a consumer that compares against that specific value — a value
+    present in a doc comment, a schema and a selector but absent from every
+    comparison is a control wired to nothing. Do the same for every mode named
+    in a comment listing alternatives. **Fix:** `strict` was **documented,
+    never implemented; first implementation 2026-09-03 by owner ruling** — it is
+    a NEW GATE, not a restoration, and it is recorded as such because the
+    dispatch that ordered it believed it was reviving deprecated behaviour.
+    Semantics: only plan scenarios execute · arm path only · decision-path
+    market entries refused · direction must equal the cited scenario's ·
+    refusals logged `refused: strict`. Implemented as leg 0 of the ONE
+    EntryGate (class 48) so its refusal is the one the journal shows, with pins
+    in both directions (refuses a decision-path open; allows an arm whose side
+    matches its scenario) and a pin that `advisory`/`direction` are unchanged.
+    **Law:** an option a user can select is a promise; either a consumer
+    compares against it or it does not appear in the selector. A comment
+    listing modes is not an implementation, and "deprecated" and "never built"
+    are different findings that call for different fixes.
+
+60. **A gate signal that is time-of-day dependent — green at 11:00, red at
+    14:50, and honest both times.** (Highest occupied at merge: 59.)
+    `TestMaybeWakePlannerOnLevelEventsThrottleDedupe` injects a fixed clock into
+    its FIXTURE (bars anchored 2026-08-25 10:00 CT) but called the production
+    entry point, which reads `time.Now()`. That was harmless for as long as the
+    class-47 cadence cutoffs only WARNED. The hour they began ENFORCING, the
+    last-window cutoff started asking how many minutes remain to the session
+    flat — so the code path's behaviour became a function of the wall clock, and
+    the test with it. At 10:20 CT there were 265 minutes to NY's 14:45 flat and
+    the wake proceeded; at 14:44 there was 1 minute, `SkipForCutoff` fired, no
+    candidate was recorded, and the first assertion failed on an empty key. The
+    deploy lane certified "27 ok / 0 FAIL" at ~11:00 and shipped; the identical
+    command failed the same afternoon. **Neither reading was wrong.** That is
+    what makes it worse than a flake: it is reproducible in ONE DIRECTION, so
+    re-running never surfaces it, and a suite verified in the morning is not the
+    suite you are deploying after lunch. Two sessions also mis-diagnosed it —
+    one blamed the fixture's bar dates, the other reasoned from a stale
+    timestamp read off an earlier command and believed it was 11:30 when it was
+    14:47. **Probe:** for every gate or guard promoted from WARN to ENFORCE, ask
+    what NEW inputs its verdict now depends on, and grep the suite for tests
+    that reach that path through a wall-clock entry point with a fixed fixture —
+    they will pass all morning. For any suite used as a deploy gate, ask whether
+    a run at 11:00 and a run at 15:00 can disagree; if they can, the gate's
+    freshness is part of its result. **Fix:** the clock seam — the entry point
+    keeps `time.Now()` and delegates to an `…At(now, …)` variant; production is
+    unchanged and the test states its own clock instead of borrowing the
+    machine's. Applied to `maybeWakePlannerOnLevelEvents`; the comment records
+    WHY the clock became load-bearing, so the next reader does not re-derive it
+    at 14:44. **Law:** when a guard starts enforcing, every clock it consults
+    becomes load-bearing — and a green suite is only evidence about the moment
+    it ran.
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,

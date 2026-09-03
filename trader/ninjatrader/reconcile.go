@@ -549,6 +549,18 @@ func StampArmedLineageIfMatched(st *store.Store, traderID string, posID int64, s
 		if strings.HasSuffix(r.StateReason, ";stamp_pending") {
 			_ = st.ArmedOrders().SetState(r.ID, "filled", strings.TrimSuffix(r.StateReason, ";stamp_pending"))
 		}
+		// F3 GAP (2026-09-03, found via nofx-89's 09-01 audit): fill_quantity is
+		// stamped HERE too. The fill-time stamp in stampArmedFillLineage returns
+		// early on this very path — the position row is not materialized when the
+		// fill frame lands — so stamping only there covered the minority case.
+		// The 09-01 audit recorded 584 of 586 armed fills carrying
+		// ";stamp_pending", and armed row 35 today took the same path and still
+		// reads fill_quantity=0 with the stamp live.
+		if qty := st.Position().QuantityOf(posID); qty > 0 {
+			if err := st.ArmedOrders().SetFillQuantity(r.ID, int(qty)); err != nil {
+				logger.Warnf("🧩 reconcile: armed fill-quantity stamp failed (row %d): %v", r.ID, err)
+			}
+		}
 		logger.Infof("🧩 reconcile: armed-fill lineage stamped — pos %d ← %s v%d %s (fill %.2f, entry_id %s)", posID, r.PlanID, r.Version, r.Scenario, armedFillPriceFor(r), r.SignalID)
 		return true, r.SignalID
 	}
@@ -570,12 +582,28 @@ func RepairArmedLineage(st *store.Store, traderID string) int {
 		}
 		if stamped, _ := StampArmedLineageIfMatched(st, traderID, p.ID, p.Symbol, p.Side, p.EntryPrice); stamped {
 			n++
-			// The F grade was CAUSED by the missing linkage — clear
-			// it so the W5 analytics regrade the close with the
-			// armed-fill plan in hand (grade ≠ F is the STEP-7 proof).
-			if p.Status == "CLOSED" && p.AdherenceGrade == "F" {
+			// REGRADE RESET (owner ruling 2026-09-03) — keyed on "lineage
+			// was just stamped on this row", NEVER on a grade letter.
+			//
+			// The predecessor read `AdherenceGrade == "F"`. That is not an
+			// impossible value but a SUBSET: an uncited close grades base D
+			// and steps to F under either penalty (InNoTrade, !InKillzone),
+			// so the repair silently SUCCEEDED on penalised uncited rows
+			// (566, 571 → F) and silently FAILED on clean ones (580 → D) —
+			// which is why it survived, since a spot-check lands on a
+			// working case.
+			//
+			// Keying on the stamp is also the only correct rule: if lineage
+			// was just written onto this row, whatever grade it carries was
+			// computed WITHOUT that lineage and is stale by construction,
+			// whatever letter it happens to be. A row nothing stamps is not
+			// touched — 580 is uncited and has EARNED its D.
+			if p.Status == "CLOSED" && p.AdherenceGrade != "" {
 				if err := st.Position().SetAdherence(p.ID, ""); err != nil {
 					logger.Warnf("🩹 RepairArmedLineage: adherence reset failed (pos %d): %v", p.ID, err)
+				} else {
+					logger.Infof("🩹 RepairArmedLineage: pos %d lineage stamped (v%d %s) — grade %q cleared for regrading",
+						p.ID, p.PlanVersion, p.CitedScenarioID, p.AdherenceGrade)
 				}
 			}
 		}
