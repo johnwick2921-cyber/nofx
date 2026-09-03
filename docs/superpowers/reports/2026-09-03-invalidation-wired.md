@@ -119,11 +119,64 @@ The dedup value now carries `state=…`, and `armAuthoredLoggable` refuses to lo
 is the load-bearing one, since state in the key alone would make a state change
 *more* loggable, not less.
 
-**Reported, not fixed:** the deeper reading is that a terminal row being
-invisible to the lookup means a filled scenario can be **re-armed**, not merely
-re-logged. This wave's footprint is the dedup key; the re-arm question belongs to
-whoever owns the arm lifecycle. **[B]** — inferred from the lookup's WHERE
-clause, not observed as a second placement.
+### 5.1 CORRECTION — I had this backwards, and my own fix did not work
+
+My first pass recorded, as **[B]**, that a terminal row being invisible to
+`ListNonTerminal` meant a filled scenario "can be re-armed". **That was wrong.**
+Traced properly:
+
+`UpsertArm` runs its OWN query with no state filter
+(`store/armed_orders.go:166`), finds the filled row, and hits MANUAL-CANCEL-WINS
+at line 206:
+
+```go
+if existing.Version == row.Version && !IsBootSweepReason(existing.StateReason) {
+    return nil
+}
+```
+
+So the re-arm guard **is store-derived**, is a DB read, and holds across a
+restart. Nothing was ever re-armed.
+
+What it does is return `nil` having done **nothing**, leaving `row.ID` at 0 —
+and the caller then logged `⚔️ armed …` as though it had succeeded. **The guard
+was real; the log was the lie.** Measured: five such lines after the 09:03:53
+fill, each carrying a different ATR-drifted stop:
+
+```
+⚔️ armed NY S1 leg 1 short limit 29285.00 SL 29354.91 …
+⚔️ armed NY S1 leg 1 short limit 29285.00 SL 29352.65 …
+⚔️ armed NY S1 leg 1 short limit 29285.00 SL 29354.44 …
+⚔️ armed NY S1 leg 1 short limit 29285.00 SL 29352.40 …
+⚔️ armed NY S1 leg 1 short limit 29285.00 SL 29354.86 …
+```
+
+**And my F4 fix was ineffective.** `armAuthoredLoggable(row.State)` read
+`row.State` — the DESIRED state the caller had just built as `"armed"`, never
+the persisted one — so it passed every time. The drifting stop in the dedup
+value made it worse: the value changed each cycle, so the dedup suppressed
+nothing either. Two guards, both no-ops.
+
+Corrected: `armedActually(row.ID, row.State)` — the id is the load-bearing
+signal, because `UpsertArm` sets it on a create and on a live-row update and
+leaves it zero exactly when it declines. The dedup value drops the ATR-derived
+prices and keeps the entry, which is the GAR-F6 lesson the refusal path learned
+in August and the authored path never did.
+
+### 5.2 The remaining hole, reported
+
+The guard is scoped to the SAME version. `UpsertArm`'s next branch
+re-authorizes a terminal row on a **new plan version** — fresh `armed` state,
+`fill_quantity` reset, `armed_under_version` re-stamped. With a position still
+open, `oneLiveArmGuard` explicitly skips the same side
+(`armed_executor.go:601`, "same-side add — outside this guard's scope"), so a
+v3 S1 short can arm while the v2 S1 short position is still open and add to it.
+
+Today that did not fire: NY v3 S1 was authored LONG, and the opposite-side
+branch of `oneLiveArmGuard` would have refused it. **[A]** for the code path,
+**[B]** for the consequence — never observed placing a second same-side arm.
+Out of this dispatch's footprint (the owner scoped F2 to "in this version");
+worth a ruling.
 
 ## 6. Tests
 

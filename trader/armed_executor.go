@@ -526,8 +526,14 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 				// a re-log is at least visible as a state change — and the
 				// guard below means a terminal row does not log "armed" at all.
 				akey := plan.PlanID + ":" + strconv.Itoa(plan.Version) + ":" + sc.ID + ":leg" + strconv.Itoa(li+1)
-				aval := fmt.Sprintf("%s %.2f/%.2f/%.2f state=%s", side, leg.Entry, leg.Stop, leg.Target, row.State)
-				if armAuthoredLoggable(row.State) && armRefusalChanged(&at.armAuthoredLast, akey, aval) {
+				// The dedup VALUE carries no ATR-derived price. leg.Stop drifts
+				// with live ATR, so a price-bearing value changed every cycle and
+				// suppressed nothing — the five post-fill lines of 09-03 each
+				// carried a different stop (29354.91 · 29352.65 · 29354.44 ·
+				// 29352.40 · 29354.86). This is the GAR-F6 lesson the refusal
+				// path learned and the authored path never did.
+				aval := fmt.Sprintf("%s entry=%.2f", side, leg.Entry)
+				if armedActually(row.ID, row.State) && armRefusalChanged(&at.armAuthoredLast, akey, aval) {
 					at.logInfof("⚔️ armed %s %s leg %d %s limit %.2f SL %.2f TP %.2f (tick-managed placement is Phase 2)", plan.Session, sc.ID, li+1, side, leg.Entry, leg.Stop, leg.Target)
 				}
 			} else {
@@ -1625,10 +1631,21 @@ func (at *AutoTrader) TestArmCancel(signalID string) error {
 	return nil
 }
 
-// armAuthoredLoggable reports whether a row in this state may log "⚔️ armed".
-// A filled or cancelled arm was not just authored, whatever the ledger lookup
-// missed (F4, 2026-09-03).
-func armAuthoredLoggable(state string) bool {
+// armedActually reports whether an UpsertArm call really armed something, and
+// so whether "⚔️ armed …" may be logged (F4, corrected 2026-09-03).
+//
+// The first cut of this guard read row.State — which is the DESIRED state the
+// caller built ("armed"), never the persisted one — so it passed every time and
+// changed nothing. The load-bearing signal is the ID: UpsertArm sets it on a
+// create and on a live-row update, and LEAVES IT ZERO when the
+// MANUAL-CANCEL-WINS rule declines a same-version terminal row
+// (store/armed_orders.go:206). That decline is exactly the post-fill case: the
+// store correctly refused to re-arm, returned nil, and the caller announced an
+// arm that never happened — five times after the 09:03:53 fill.
+func armedActually(id int64, state string) bool {
+	if id == 0 {
+		return false // the upsert declined; nothing was armed
+	}
 	switch strings.ToLower(strings.TrimSpace(state)) {
 	case "filled", "cancelled", "expired":
 		return false
