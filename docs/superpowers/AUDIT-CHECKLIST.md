@@ -1138,7 +1138,18 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     spot-check lands on a working case. Fix keys on the ABSENCE OF LINEAGE, never
     on a letter that encodes lineage plus two unrelated penalties; widening it to
     "D" would promote 580, which deserves its D. Whether to backfill the 4 is an
-    owner call — a silent backfill moves a published distribution. Probes: ask which BRANCH a
+    owner call — a silent backfill moves a published distribution. **The
+    discriminator needs a lineage clause:** the ladder argument alone
+    (`plan_matched=1 AND plan_band NOT IN ('off_band','struct') AND grade='D'`)
+    returns FIVE, catching 572 — an `e7_farside_test` seam row with
+    `cited_scenario_id 'TEST-E7'` and `plan_version 0`. Same test-seam
+    contamination that §D-3 of the 09-01 audit found in
+    `store/position_query.go`'s unfiltered counts, recurring in a new query. All
+    four real rows are `source=reconcile`, stated as absence of a counter-example
+    rather than proof: the single `armed_entry` D row (582, `plan_matched=0`) is
+    observationally identical under both hypotheses — base C minus a penalty and
+    base D from a grade-before-stamp are both D — so the armed path is untested,
+    not exonerated. Probes: ask which BRANCH a
     write sits on; when a log line names a CAUSE, check the code can
     distinguish it from the alternatives; and when a repair path clears a value
     to trigger a recompute, check it matches the value the broken path actually

@@ -240,13 +240,10 @@ each correction came from a peer reading my claim against the code.
 
 **Source for the baseline evidence:** nofx-89's audit,
 `docs/superpowers/reports/2026-09-01-full-system-audit.md` on branch
-`docs/full-system-audit-0901` @ **`4d77df44`** — the A5 revision, carrying their
-row-id correction, the [B]→[A] upgrade, the predicate-subset correction and the
-three-state split of §F1. `7df072a3` remains a valid citation for the `fef656a4` snapshot
-itself. Raw URL curl'd **200** from this session (A14). Their A5.3 still reads "five
-genuinely stuck" and treats 582 as evidence the ordering problem sits outside
-the reconcile path; my count is four and 582's D is explicable — the reasoning
-is below and has been sent to them.
+`docs/full-system-audit-0901` @ **`5a2da9ce`** — the A6 revision. A5.3 is
+withdrawn there and carries an inline pointer so the superseded paragraph cannot
+be read standalone. `7df072a3` remains a valid citation for the `fef656a4` snapshot
+itself. Raw URL curl'd **200** from this session (A14). Both of my corrections were independently verified and taken in A6.
 
 ### 9.1 The measured population (current rev, nothing borrowed)
 
@@ -387,12 +384,43 @@ graded while `Cited` was false.
 530  system      v2 'off-plan'     matched=0   D   ← LEGITIMATE: sentinel, OffPlan
 ```
 
-**582 does not show what we thought.** nofx-89 read it as proof that the
-`armed_entry` path grades before it stamps. But 582 has `plan_matched=0`, so its
-base is **C** ("cited a scenario but the direction mismatched"), and one penalty
-gives D legitimately. It is not evidence of the ordering problem. Whether the
-armed path has the same defect is **still open** — 582 does not settle it, and
-no row currently does.
+**582 cannot discriminate — and the reason is sharper than "explicable".**
+nofx-89 read it as proof that the `armed_entry` path grades before it stamps.
+With `plan_matched=0`, two hypotheses give the same letter: base **C**
+("direction mismatched") minus one penalty is D, and a grade-before-stamp gives
+base **D** (`!Cited`) with no penalty, also D. **The two are observationally
+identical on that row.** It cannot discriminate in either direction, so the
+armed-path question is **untested, not exonerated** — a wrong answer closes the
+question.
+
+**Where the four DO sit — nofx-89's own reversal.** With 582 excluded, all four
+impossible-D rows are `source=reconcile` (verified: `reconcile 4`). Their A5.3
+headline was "this is not a reconcile-path problem"; the corrected evidence
+points the other way. Stated as **absence of a counter-example, not proof** —
+the one `armed_entry` D row is precisely the undecidable one.
+
+#### A trap in my own discriminator (nofx-89's catch)
+
+The ladder argument alone is not a safe predicate. Run it without a lineage
+clause and it returns **five**:
+
+```
+plan_matched=1 AND plan_band NOT IN ('off_band','struct') AND grade='D'
+  →  572, 575, 584, 586, 591          ← five
+  + plan_version>0 AND cited_scenario_id<>''
+  →  575, 584, 586, 591               ← four
+```
+
+**572** is `plan_matched 1`, `plan_band armed_fill`, grade D — and
+`plan_version 0`, `cited_scenario_id 'TEST-E7'`, with `source` and
+`close_reason` both `e7_farside_test`. An `ARMED_TEST_SEAM` artifact, not a
+trade.
+
+My 4-in-71 is right because my query carried the lineage clause, but anyone
+re-deriving the count from the ladder reasoning alone lands on **five and quotes
+a test row as a live defect**. nofx-89's §D-3 flags the same seam contaminating
+`store/position_query.go`'s unfiltered counts, so this is that class recurring in
+a new query rather than a one-off. Denominator independently confirmed at 71.
 
 **591 is not a post-fix regression.** It is today's, but it was graded before my
 code shipped: row 35 filled 09:03:53, position 591 materialized 09:05:14, and
