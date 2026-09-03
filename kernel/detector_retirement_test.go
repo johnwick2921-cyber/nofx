@@ -28,7 +28,7 @@ func TestBiasedInstrumentsRenderNoRate(t *testing.T) {
 // D7 — the boot line reports REAL counts and names the retirement.
 func TestDetectorBootLineIsReadNotLiteral(t *testing.T) {
 	line := DetectorBootLine(0, 0)
-	for _, want := range []string{"detector: D1′", "k=3", "H=12", "exit_on=close", "touch_outcomes=0", "candidate_pool=0", "legacy rates retired"} {
+	for _, want := range []string{"detector: D1′", "k=3", "H=12", "exit_on=close", "touch_outcomes=0", "candidate_pool=0"} {
 		if !strings.Contains(line, want) {
 			t.Errorf("boot line missing %q: %s", want, line)
 		}

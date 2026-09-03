@@ -247,3 +247,20 @@ func wilson(p float64, n int) (lo, hi float64) {
 	h := z * math.Sqrt(p*(1-p)/nf+z*z/(4*nf*nf)) / den
 	return c - h, c + h
 }
+
+// LastOpenedAtMs is the watermark that makes the per-read hook idempotent: the
+// newest episode already recorded for this level today. 0 = none, so the first
+// read of a session records everything it finds.
+func (s *TouchOutcomeStore) LastOpenedAtMs(traderID, symbol string, level float64, sessionDayMs int64) int64 {
+	if s == nil || s.db == nil {
+		return 0
+	}
+	var last int64
+	if err := s.db.Model(&TouchOutcomeRow{}).
+		Where("trader_id = ? AND symbol = ? AND level_price = ? AND opened_at_ms >= ?",
+			traderID, symbol, level, sessionDayMs).
+		Select("COALESCE(MAX(opened_at_ms), 0)").Scan(&last).Error; err != nil {
+		return 0
+	}
+	return last
+}
