@@ -86,6 +86,31 @@ func EntryGate(in EntryIntent) (reason string, refused bool) {
 		return "", false // not an entry intent — not this gate's job
 	}
 
+	// Leg 0 — plan_mode STRICT (R4, OWNER RULING 2026-09-03). FIRST
+	// IMPLEMENTATION, not a restoration: "strict" was listed in a doc comment
+	// and never implemented — PlanModeFor returned it unchanged and no consumer
+	// ever compared against it. This is therefore a NEW GATE, ruled by the
+	// owner, and it runs FIRST so its refusal is the one the journal shows.
+	//
+	// Only plan scenarios execute: the arm path may proceed when it cites a
+	// scenario and its side matches; the decision path's market entries are
+	// refused outright.
+	if in.PlanMode == "strict" {
+		if in.Path != "arm" {
+			return fmt.Sprintf("entry_gate: refused: strict — plan_mode=strict executes plan scenarios on the ARM path only, and this is a %s-path market entry", in.Path), true
+		}
+		if strings.TrimSpace(in.CitedScenario) == "" {
+			return "entry_gate: refused: strict — plan_mode=strict requires the entry to cite a plan scenario (none cited)", true
+		}
+		dir := strings.ToLower(strings.TrimSpace(in.ScenarioDir))
+		if dir != "long" && dir != "short" {
+			return fmt.Sprintf("entry_gate: refused: strict — scenario %s has no authored direction, so a strict entry cannot be matched to it", in.CitedScenario), true
+		}
+		if dir != side {
+			return fmt.Sprintf("entry_gate: refused: strict — %s entry against scenario %s authored %s (plan_mode=strict)", side, in.CitedScenario, dir), true
+		}
+	}
+
 	// Leg 1 — plan bias (direction mode only; the arm seam's legacy chain and
 	// the decision path's planModeBlocked both already enforce this in
 	// direction mode — kept here so the ONE gate is complete on its own).
