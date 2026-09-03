@@ -235,7 +235,15 @@ refusal line, and the next open position's card showing its armed-under version.
 
 ## 9. F3 WAS INCOMPLETE — TWO MECHANISMS, AND I MISATTRIBUTED THE NUMBERS
 
-Three sessions untangled this. My first account of it was wrong twice.
+Three sessions untangled this. My first account of it was wrong three times, and
+each correction came from a peer reading my claim against the code.
+
+**Source for the baseline evidence:** nofx-89's audit,
+`docs/superpowers/reports/2026-09-01-full-system-audit.md` on branch
+`docs/full-system-audit-0901` @ **`003ee66f`** — the addendum revision carrying
+their row-id correction, the [B]→[A] upgrade and the unresolved transience
+question. `7df072a3` remains a valid citation for the `fef656a4` snapshot
+itself. Raw URL curl'd **200** from this session (A14).
 
 ### 9.1 The measured population (current rev, nothing borrowed)
 
