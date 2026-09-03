@@ -473,3 +473,63 @@ The re-measure cannot run before the boot. After it: quote the **next three
 plans'** `no_trade` contents. Expected — the model's own reasons, or an empty
 list. A third plan still echoing `first 5m (CT)` would mean the surviving
 sentence in 10.1 is doing the teaching, and that clause is the next thing to go.
+
+---
+
+## 11. RIDER PART 3 (owner ruling 2026-09-03) — the seam closed, and two more copies of the same order
+
+### 11.1 The instruction
+
+```
+before  no_trade may contain ONLY the fixed session windows (first 5m,
+        12:00-13:30 CT lunch) plus T1 HARD-blackout lines from the calendar …
+
+after   no_trade: the machine enforces the session windows and T1 blackouts
+        regardless; do not list them — no_trade is for your OWN sit-out
+        conditions, or omit it. A T2 caution event is NEVER added to no_trade
+        and never stops entries.
+```
+
+No resolved values appear in it any more, because there is nothing left to
+resolve. The window is still **stated** in the no-trade gate block, so the
+author knows it exists and is simply not asked to repeat it. Contract row:
+no machine window token anywhere in the instruction, and the phrases carrying
+its meaning still present — **RED ×7** before the change.
+
+### 11.2 Two more copies of the same order — judgement calls, flagged
+
+Closing the sentence surfaced two other places that gave the model the
+instruction the sentence now forbids. Neither was named in the ruling; I changed
+both, and both are reversible.
+
+| where | before | after | why |
+|---|---|---|---|
+| gate block header | `## No-trade gates (advisory — **declare in no_trade** or skip the day)` | `## No-trade gates (the machine enforces the windows below; the rest are yours to weigh — skip the day if they stack up)` | the list under it contains the machine's hard-gated lunch window. A header is read before a rule, and leaving it would very likely have defeated the re-measure the ruling asks for. |
+| T1 calendar tag | `HARD no-trade blackout — **MUST be added to no_trade**` | `HARD no-trade blackout — the machine writes and enforces it; stand aside around it` | the dictated sentence says the machine enforces T1 blackouts regardless and the author must not list them. The old tag contradicted it outright, so the dictated wording forced this one. |
+
+The blackout is still marked HARD and still reaches the model in both cases;
+only the order to restate it is gone. **If either reads as scope creep, revert
+the header — the T1 tag cannot stay as it was without contradicting the
+sentence you dictated.**
+
+### 11.3 Superseded specs migrated
+
+| spec | why it no longer holds |
+|---|---|
+| `TestNoTradeContractRendersResolvedWindows` | required the OUTPUT CONTRACT to state the windows because "the model cannot list a window it was not shown". The ruling inverted the premise. Rewritten to assert the gate block states the resolved window. |
+| `planner_playbook_test.go` `"10:30 ET"` | one-clock ruling — it is `09:30 CT` now |
+| `planner_prompt_test.go` T1 tag wording | follows 11.2 |
+
+None weakened; each carries its reason in the diff.
+
+### 11.4 Five prompt copies retired in total
+
+gate · grader · clock line · no-trade-gate line · the lunch line's ET half.
+
+### 11.5 PROOF OWED — the re-measure
+
+Cannot run before the boot. After it, quote the **next three plans'** `no_trade`
+contents. Expected: the model's own conditions, or an empty list. A plan still
+echoing `first 5m (CT)` after all five copies and both orders are gone would
+mean the behaviour is not coming from the prompt at all, and the next place to
+look is the repair path's own prompt.
