@@ -165,8 +165,8 @@ type TraderPosition struct {
 	// E4 (wave 1A, 2026-09-02) — NULLABLE. `float64` with DEFAULT 0 could not
 	// tell a computed zero from a value nobody ever computed, and 517 of 586
 	// closed rows carried the never-computed pair (D15). nil means UNKNOWN.
-	MAE             *float64 `gorm:"column:mae" json:"mae"`
-	MFE             *float64 `gorm:"column:mfe" json:"mfe"`
+	MAE             *float64 `gorm:"column:mae;default:0" json:"mae"`
+	MFE             *float64 `gorm:"column:mfe;default:0" json:"mfe"`
 	EntryConfidence int      `gorm:"column:entry_confidence;default:0" json:"entry_confidence"`
 	// P5.5 — plan link (additive, futures day-plan): the cited scenario + plan
 	// version stamped at OPEN, and the adherence grade (A–F) computed at CLOSE.
@@ -374,7 +374,29 @@ func (s *PositionStore) Create(pos *TraderPosition) error {
 	if pos.EntryQuantity == 0 {
 		pos.EntryQuantity = pos.Quantity
 	}
-	return s.db.Create(pos).Error
+	// captured BEFORE the insert: GORM writes the DDL default back into the
+	// struct, so after Create these pointers are no longer nil
+	unmeasured := pos.MAE == nil || pos.MFE == nil
+	if err := s.db.Create(pos).Error; err != nil {
+		return err
+	}
+	// E4 (wave 1A, 2026-09-02) — write the excursion columns as NULL.
+	//
+	// The DDL keeps `mae/mfe REAL DEFAULT 0` on purpose: dropping the default
+	// makes GORM rebuild trader_positions, and the position_plan_join VIEW
+	// fails mid-rebuild ("no such table: main.trader_positions"), which takes
+	// store initialization — and therefore the whole process — down. Since the
+	// default stays, GORM omits a nil pointer on INSERT and SQLite fills in 0,
+	// which is exactly the ambiguity this wave removes. So the two columns are
+	// nulled explicitly, once, right after the insert.
+	if unmeasured {
+		// raw Exec: a GORM Updates map with nil values is dropped, not emitted
+		if err := s.db.Exec(`UPDATE trader_positions SET mae = NULL, mfe = NULL WHERE id = ?`, pos.ID).Error; err != nil {
+			return err
+		}
+		pos.MAE, pos.MFE = nil, nil
+	}
+	return nil
 }
 
 // ClosePosition closes a still-OPEN position. The WHERE clause is guarded on
@@ -793,6 +815,8 @@ func (s *PositionStore) CreateOpenPosition(pos *TraderPosition) error {
 		pos.EntryQuantity = pos.Quantity
 	}
 
+	// E4 — captured before the insert; see Create for why the DDL default stays
+	unmeasured := pos.MAE == nil || pos.MFE == nil
 	err := s.db.Create(pos).Error
 	if err != nil {
 		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
@@ -806,6 +830,12 @@ func (s *PositionStore) CreateOpenPosition(pos *TraderPosition) error {
 			return nil
 		}
 		return fmt.Errorf("failed to create open position: %w", err)
+	}
+	if unmeasured { // E4 — NULL, not the DDL's 0
+		if err := s.db.Exec(`UPDATE trader_positions SET mae = NULL, mfe = NULL WHERE id = ?`, pos.ID).Error; err != nil {
+			return err
+		}
+		pos.MAE, pos.MFE = nil, nil
 	}
 
 	return nil
