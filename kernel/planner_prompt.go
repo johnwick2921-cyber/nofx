@@ -204,6 +204,76 @@ func RenderBiasTree(price float64, levels []ScoredLevel, bc BiasContext) string 
 	return b.String()
 }
 
+// ── CLASS 50b (live-bias replay ruling 53498adb, 2026-09-02) ────────────────
+// The plan bias is a LABEL, not a direction: the AI-authored direction, the
+// machine bias-tree call and the regime call are surfaced on one line so no
+// single source reads as truth. These three helpers are the one shape; no MUST
+// attaches to either leg anywhere.
+
+// TreeCallWord reduces the documented bias-tree branches (RenderBiasTree) to
+// one word for the label line: branch 1 → long, branch 1 mirror → short,
+// branch 3 → close vs PDC, branch 5 premium/discount veto → neutral. Mirrors
+// the reconstruction in the live-bias replay P2 (53498adb).
+func TreeCallWord(price, pdh, pdl, pdc float64) string {
+	if price <= 0 || pdh <= 0 || pdl <= 0 || pdc <= 0 {
+		return "neutral"
+	}
+	if price > pdh {
+		return "long"
+	}
+	if price < pdl {
+		return "short"
+	}
+	if pdh > pdl {
+		pos := (price - pdl) / (pdh - pdl)
+		call := "neutral"
+		switch {
+		case price > pdc:
+			call = "long"
+		case price < pdc:
+			call = "short"
+		}
+		// branch 5: premium (≥50% of the dealing range) disallows longs,
+		// discount disallows shorts.
+		if pos >= 0.5 && call == "long" {
+			return "neutral"
+		}
+		if pos < 0.5 && call == "short" {
+			return "neutral"
+		}
+		return call
+	}
+	return "neutral"
+}
+
+// RegimeCallWord reduces the regime block to one word for the label line:
+// up iff both D and 1h trend up, down iff both down, else neutral (the
+// live-bias replay P2 definition).
+func RegimeCallWord(r RegimeBlock) string {
+	if strings.EqualFold(strings.TrimSpace(r.TrendDaily), "up") &&
+		strings.EqualFold(strings.TrimSpace(r.Trend1h), "up") {
+		return "up"
+	}
+	if strings.EqualFold(strings.TrimSpace(r.TrendDaily), "down") &&
+		strings.EqualFold(strings.TrimSpace(r.Trend1h), "down") {
+		return "down"
+	}
+	return "neutral"
+}
+
+// BiasLabelLine renders the dual-label line: "bias: AI <x> · tree <y> · regime <z>".
+// Lowercased, trimmed — the one shape everywhere (prompt + stamped doc + card).
+func BiasLabelLine(aiBias, treeCall, regimeCall string) string {
+	norm := func(s string) string {
+		s = strings.ToLower(strings.TrimSpace(s))
+		if s == "" {
+			return "neutral"
+		}
+		return s
+	}
+	return fmt.Sprintf("bias: AI %s · tree %s · regime %s", norm(aiBias), norm(treeCall), norm(regimeCall))
+}
+
 // FantasyTargetWarnings (autopsy-response wave, 2026-08-27) — advisory WARN,
 // never a fail: an armed scenario whose PLANNED R:R exceeds 6 is a
 // fantasy-target flag (the 3.28–22.88 R losers in the refusal autopsy).
@@ -528,6 +598,12 @@ func BuildPlannerPrompt(in PlannerInput) string {
 	// the branch it took (contract requirement).
 	if in.Price > 0 {
 		b.WriteString(RenderBiasTree(in.Price, in.Levels, in.BiasCtxFacts))
+		// CLASS 50b (live-bias replay ruling 53498adb, 2026-09-02) — the plan
+		// bias is a LABEL, not a direction: the AI leg, the tree leg and the
+		// regime leg are surfaced on ONE line so no single source reads as
+		// truth. No MUST attaches to either.
+		b.WriteString(BiasLabelLine("yours", TreeCallWord(in.Price, in.BiasCtxFacts.PDH, in.BiasCtxFacts.PDL, in.BiasCtxFacts.PDC), RegimeCallWord(in.Regime)))
+		b.WriteString(" — labels only, no MUST on either\n\n")
 	}
 
 	// A2 — priority setup chain: the sweep → displacement → FVG-retrace play.

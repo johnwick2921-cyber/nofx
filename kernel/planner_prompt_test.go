@@ -117,3 +117,62 @@ func TestPlannerPrompt1HMandateConditional(t *testing.T) {
 		t.Fatalf("HTF mandate must be absent without zones: %s", p)
 	}
 }
+
+// ── CLASS 50b — the dual-label line (live-bias replay ruling 53498adb) ──────
+
+func TestBiasLabelLineShape(t *testing.T) {
+	got := BiasLabelLine("LONG", "Short", "Neutral")
+	if got != "bias: AI long · tree short · regime neutral" {
+		t.Fatalf("label shape = %q, want 'bias: AI long · tree short · regime neutral'", got)
+	}
+	if got := BiasLabelLine("", "", ""); got != "bias: AI neutral · tree neutral · regime neutral" {
+		t.Fatalf("empty legs normalize to neutral: %q", got)
+	}
+	// THE LAW: the line never imposes a MUST on either leg.
+	if strings.Contains(strings.ToLower(got), "must") {
+		t.Fatalf("label line carries a MUST: %q", got)
+	}
+}
+
+func TestTreeCallWordBranches(t *testing.T) {
+	// branch 1 / mirror / branch 3 / branch 5 veto
+	if c := TreeCallWord(105, 100, 95, 102); c != "long" {
+		t.Fatalf("branch 1: %q", c)
+	}
+	if c := TreeCallWord(90, 100, 95, 102); c != "short" {
+		t.Fatalf("branch 1 mirror: %q", c)
+	}
+	if c := TreeCallWord(103, 100, 95, 102); c != "long" {
+		t.Fatalf("branch 3 long: %q", c)
+	}
+	// branch 3 short: below PDC but NOT in discount (pos ≥ 50% of the range)
+	if c := TreeCallWord(98, 100, 95, 98.5); c != "short" {
+		t.Fatalf("branch 3 short: %q", c)
+	}
+	// premium veto: price at 75% of range → long disallowed
+	if c := TreeCallWord(98.75, 100, 95, 98); c != "neutral" {
+		t.Fatalf("branch 5 premium veto: %q", c)
+	}
+	// discount veto: price at 25% of range → short disallowed
+	if c := TreeCallWord(96.25, 100, 95, 99); c != "neutral" {
+		t.Fatalf("branch 5 discount veto: %q", c)
+	}
+	if c := TreeCallWord(0, 0, 0, 0); c != "neutral" {
+		t.Fatalf("zero inputs: %q", c)
+	}
+}
+
+func TestRegimeCallWord(t *testing.T) {
+	if c := RegimeCallWord(RegimeBlock{TrendDaily: "up", Trend1h: "up"}); c != "up" {
+		t.Fatalf("both up: %q", c)
+	}
+	if c := RegimeCallWord(RegimeBlock{TrendDaily: "down", Trend1h: "down"}); c != "down" {
+		t.Fatalf("both down: %q", c)
+	}
+	if c := RegimeCallWord(RegimeBlock{TrendDaily: "up", Trend1h: "down"}); c != "neutral" {
+		t.Fatalf("mixed: %q", c)
+	}
+	if c := RegimeCallWord(RegimeBlock{TrendDaily: "flat", Trend1h: "flat"}); c != "neutral" {
+		t.Fatalf("flat: %q", c)
+	}
+}

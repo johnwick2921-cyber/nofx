@@ -272,6 +272,11 @@ type PlanDoc struct {
 	// stamped, and forensics can compare what the model authored with what
 	// the machine kept.
 	ArmNormalizations []ArmNormalization `json:"arm_normalizations,omitempty"`
+
+	// CLASS 50b (live-bias replay ruling 53498adb, 2026-09-02) — the dual
+	// label stamped at write: "bias: AI <x> · tree <y> · regime <z>". A LABEL,
+	// not a direction — no MUST attaches to either leg.
+	BiasLabel string `json:"bias_label,omitempty"`
 }
 
 // PlanCondition is a checkable predicate: price closes beyond `Price` on the
@@ -759,10 +764,12 @@ func MislabeledStructuralLevels(d *PlanDoc, machineLabels map[float64]string) []
 }
 
 type PlanFacts struct {
-	Price float64 // reference price at read time
-	DATR  float64 // daily ATR proxy
-	PDH   float64 // prior day high (0 = unknown → gap rules skipped)
-	PDL   float64 // prior day low (0 = unknown → gap rules skipped)
+	Price  float64     // reference price at read time
+	DATR   float64     // daily ATR proxy
+	PDH    float64     // prior day high (0 = unknown → gap rules skipped)
+	PDL    float64     // prior day low (0 = unknown → gap rules skipped)
+	PDC    float64     // prior day close (CLASS 50b — the bias-label tree leg)
+	Regime RegimeBlock // CLASS 50b — the bias-label regime leg (read-time copy)
 }
 
 // ValidatePlanDocWithFacts = schema rules + facts rules:
