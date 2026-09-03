@@ -156,7 +156,7 @@ func TestRehearsalS4CaseStillRejects(t *testing.T) {
 		Quality:     "B",
 		Breakdown:   &PlanBreakdownContinue{Level: 29437, LevelLabel: "PDL", EntryMode: "pullback"},
 	}}}
-	err := ValidateBreakdownContinueScenarios(&plan, bars, 15.0, 29436, bars[len(bars)-1].CloseTime)
+	err := ValidateBreakdownContinueScenarios(&plan, VoidScopeOf(bars), 15.0, 29436, bars[len(bars)-1].CloseTime)
 	if err == nil || !strings.Contains(err.Error(), "void") {
 		t.Fatalf("rehearsal S4 (reclaimed) must STILL reject — the new entry law must not resurrect it (got %v)", err)
 	}

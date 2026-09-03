@@ -207,7 +207,11 @@ func BreakdownContinueState(sc PlanScenario, bars []market.Kline, sinceMs, nowMs
 // ValidateBreakdownContinueScenarios re-verifies every waterfall-class scenario
 // against the bars at write time (the model declares, the math verifies).
 // price is the current price at write; atr5m the 5m Wilder ATR14.
-func ValidateBreakdownContinueScenarios(d *PlanDoc, bars []market.Kline, atr5m, price float64, nowMs int64) error {
+// VOID PARITY (2026-09-02): the tape and the window come from the resolver
+// (VoidScope), never from the caller — the prompt's VOID list reads the SAME
+// scope, so the two can no longer hold different opinions about a level.
+func ValidateBreakdownContinueScenarios(d *PlanDoc, scope VoidScope, atr5m, price float64, nowMs int64) error {
+	bars := scope.Bars
 	if d == nil {
 		return nil
 	}
@@ -245,7 +249,7 @@ func ValidateBreakdownContinueScenarios(d *PlanDoc, bars []market.Kline, atr5m, 
 		// ENTRY trigger itself, so requiring it at write time would make the
 		// play un-authorable mid-waterfall (PRE-SUNDAY F1 ruling: immediate is
 		// plan-authorable on the AI path only; arms stay pullback-only).
-		st := BreakdownContinueState(*s, bars, 0, nowMs)
+		st := BreakdownContinueState(*s, bars, scope.SinceMs, nowMs)
 		immediate := strings.EqualFold(strings.TrimSpace(bd.EntryMode), "immediate")
 		// Reclaimed FIRST: a close back across voids the play no matter how many
 		// confirming closes the floor requires — the honest message for the

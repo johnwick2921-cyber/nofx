@@ -1709,11 +1709,12 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		// the bars (displacement ≥ BD_MIN_DISP_ATR, no reclaim, reachable
 		// retest, arm chain rules). The model declares, the math verifies.
 		if kernel.HasBreakdownScenario(d) {
-			var bdBars []market.Kline
-			if market.FuturesBarsProvider != nil {
-				bdBars = market.FuturesBarsProvider(at.futuresSymbol(), "1m", kernel.AISVPBarCount)
-			}
-			if verr := kernel.ValidateBreakdownContinueScenarios(d, bdBars, kernel.StaleConfirmATR5m(bdBars), facts.Price, time.Now().UnixMilli()); verr != nil {
+			// VOID PARITY (2026-09-02): the tape and window come from the ONE
+			// resolver the prompt's VOID list also reads. This site used to
+			// fetch its own slice and judge sinceMs=0 while the prompt windowed
+			// to the session day — ONL 29141.25, 20:58 CT.
+			bdScope := kernel.ResolveVoidScope(at.futuresSymbol())
+			if verr := kernel.ValidateBreakdownContinueScenarios(d, bdScope, kernel.StaleConfirmATR5m(bdScope.Bars), facts.Price, time.Now().UnixMilli()); verr != nil {
 				lastErr = verr
 				at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
 				rejectBlock = plannerRejectBlock(lastErr, liveConditions)
@@ -2284,6 +2285,12 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 	if kernel.PlannerCandlesEnabled() {
 		candleTables = kernel.BuildPlannerCandleTables(bars1m)
 	}
+	// VOID PARITY (2026-09-02) — resolve the void scope ONCE. The prompt and the
+	// persisted read-facts row must carry the identical list; computing it twice
+	// would let them drift, which is the exact class this wave closes.
+	voidScope := kernel.ResolveVoidScope(symbol)
+	voidScopeLevels := kernel.ComputeVoidBreakdownLevels(scored, voidScope, now.UnixMilli())
+	voidScopeATR := plannerATR5m(symbol)
 	// W3 (weekly-bias wave) — the Sunday weekly-bias context line (≤3 lines;
 	// "WEEKLY: none" when no doc — fail-open, nothing else changes).
 	weeklyDoc := at.weeklyDocCached(now)
@@ -2293,7 +2300,7 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 	}
 	weeklyCtx := kernel.WeeklyContextLine(weeklyDoc, nw)
 
-	return kernel.PlannerInput{
+	in := kernel.PlannerInput{
 		TradeDate:        tradeDate,
 		Session:          session,
 		Now:              now, // P0 timezone — the planner's labelled CT clock
@@ -2312,8 +2319,8 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 		// a level-oriented entry point (never a second implementation), and the
 		// floor is the composer's own resolver. Empty/zero → the prompt renders
 		// nothing, so a cold cache degrades to today's behaviour.
-		VoidBreakdownLevels: kernel.ComputeVoidBreakdownLevels(scored, bars1m, voidWindowStartMs(bars1m, now), now.UnixMilli()),
-		StopFloorATR5m:      plannerATR5m(symbol),
+		VoidBreakdownLevels: voidScopeLevels,
+		StopFloorATR5m:      voidScopeATR,
 		StopFloorMult:       kernel.MinSLATRMult(),
 		// Level-truth wave b2 (2026-08-27): the machine's fresh-gap candidate
 		// list — the ONLY gaps the planner may author fvg_entry from.
@@ -2343,6 +2350,50 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 		CandleTables: candleTables,
 		WeeklyCtx:    weeklyCtx,
 	}
+	// VOID PARITY D3 (2026-09-02) — record what the model is TOLD on EVERY read.
+	// Before this a rendered prompt survived only when the read FAILED, so a
+	// working fix erased its own evidence. Best-effort: telemetry never fails a
+	// read (A10).
+	at.persistReadFacts(in, voidScope, voidScopeLevels, voidScopeATR, now)
+	return in
+}
+
+// persistReadFacts writes one planner_read_facts row per read. Loud on failure,
+// never fatal.
+func (at *AutoTrader) persistReadFacts(in kernel.PlannerInput, scope kernel.VoidScope, void []kernel.VoidBreakdownLevel, atr5m float64, now time.Time) {
+	if at == nil || at.store == nil {
+		return
+	}
+	recs := make([]store.VoidLevelRecord, 0, len(void))
+	for _, v := range void {
+		recs = append(recs, store.VoidLevelRecord{Price: v.Price, Short: v.Short, ReclaimedAt: v.ReclaimedAtCT})
+	}
+	mult := kernel.MinSLATRMult()
+	floor := 0.0
+	if atr5m > 0 && mult > 0 {
+		floor = atr5m * mult
+	}
+	row := &store.PlannerReadFact{
+		TraderID:     at.id,
+		TradeDate:    plannerTradeDateCT(now),
+		Session:      in.Session,
+		PromptHash:   in.AIConfigHash,
+		VoidLevels:   store.EncodeVoidLevels(recs),
+		VoidCount:    len(recs),
+		StopFloorPts: floor,
+		ATR5m:        atr5m,
+		StopFloorMlt: mult,
+		BiasRegime:   fmt.Sprintf("%s/%s", in.Regime.TrendDaily, in.Regime.ATRRegime),
+		ScopeSinceMs: scope.SinceMs,
+		ScopeBars:    len(scope.Bars),
+		ScopeIntv:    scope.Interval,
+	}
+	if err := at.store.PlannerReadFacts().SaveReadFact(row); err != nil {
+		at.logWarnf("📓 read-facts write failed: %v", err)
+		return
+	}
+	at.logInfof("📓 read facts: void=%d · floor=%.1f pts (%.1f×ATR5m %.2f) · scope=%s×%d since=%d (cap %d)",
+		len(recs), floor, mult, atr5m, scope.Interval, len(scope.Bars), scope.SinceMs, store.PlannerReadFactsCap)
 }
 
 // maybeWriteDigests writes the 3-line session digest at each enabled session's
@@ -2681,17 +2732,15 @@ func (at *AutoTrader) recordRepairOutcome(raw string, err error, repairingReason
 	}
 }
 
-// voidWindowStartMs scopes the void scan to the SESSION so a level broken and
-// reclaimed days ago is not reported as today's news. Falls back to the tape's
-// own start when the session-day cannot be resolved (never a zero window, which
-// would scan everything).
-func voidWindowStartMs(bars []market.Kline, now time.Time) int64 {
-	start := kernel.CMESessionDayStart(now).UnixMilli()
-	if len(bars) > 0 && bars[0].OpenTime > start {
-		return bars[0].OpenTime
-	}
-	return start
-}
+// voidWindowStartMs is DELETED (VOID PARITY, 2026-09-02). It scoped the prompt's
+// void scan to the session day "so a level broken and reclaimed days ago is not
+// reported as today's news" — a deliberate noise choice that DISAGREED with the
+// write-site validator, which has always judged the whole slice. The prompt then
+// omitted exactly the levels the validator rejects: ONL 29141.25 on the 20:58 CT
+// read, an overnight low, broken overnight, before the 17:00 boundary. The scope
+// now comes from kernel.ResolveVoidScope for BOTH sides. Owner ruling: the
+// validator's scope wins, because the prompt must list what the validator will
+// reject. The noise concern is real and is answered by the list, not the window.
 
 // plannerATR5m resolves the SAME ATR(14) on 5m the arm composer floors against
 // (trader/arm_stop_anchor.go reads it from the identical helper), so the number

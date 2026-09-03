@@ -18,37 +18,38 @@ type Store struct {
 	driver *DBDriver // Database driver for abstraction (legacy)
 
 	// Sub-stores (lazy initialization)
-	user            *UserStore
-	aiModel         *AIModelStore
-	exchange        *ExchangeStore
-	trader          *TraderStore
-	decision        *DecisionStore
-	position        *PositionStore
-	strategy        *StrategyStore
-	equity          *EquityStore
-	order           *OrderStore
-	grid            *GridStore
-	aiCharge        *AIChargeStore
-	plan            *PlanStore
-	levelState      *LevelStateStore
-	sessionProfile  *SessionProfileStore
-	barHistory      *BarHistoryStore
-	armedOrders     *ArmedOrderStore
-	abConfirm       *AbConfirmStore
-	plannerRejected *PlannerRejectedStore
-	configChanges   *ConfigChangeStore
-	watchdogFires   *WatchdogFireStore
-	levelStats      *LevelStatsStore
-	touchEpisodes   *TouchEpisodeStore
-	calendarSlice   *CalendarSliceStore
-	digest          *DigestStore
-	ownerLevel      *OwnerLevelStore
-	alert           *AlertStore
-	logEvent        *LogEventStore
-	watchAssessment *WatchAssessmentStore
-	planQA          *PlanQAStore
-	matchedRandom   *MatchedRandomStore
-	telegramConfig  TelegramConfigStore
+	user             *UserStore
+	aiModel          *AIModelStore
+	exchange         *ExchangeStore
+	trader           *TraderStore
+	decision         *DecisionStore
+	position         *PositionStore
+	strategy         *StrategyStore
+	equity           *EquityStore
+	order            *OrderStore
+	grid             *GridStore
+	aiCharge         *AIChargeStore
+	plan             *PlanStore
+	levelState       *LevelStateStore
+	sessionProfile   *SessionProfileStore
+	barHistory       *BarHistoryStore
+	armedOrders      *ArmedOrderStore
+	abConfirm        *AbConfirmStore
+	plannerRejected  *PlannerRejectedStore
+	plannerReadFacts *PlannerReadFactsStore
+	configChanges    *ConfigChangeStore
+	watchdogFires    *WatchdogFireStore
+	levelStats       *LevelStatsStore
+	touchEpisodes    *TouchEpisodeStore
+	calendarSlice    *CalendarSliceStore
+	digest           *DigestStore
+	ownerLevel       *OwnerLevelStore
+	alert            *AlertStore
+	logEvent         *LogEventStore
+	watchAssessment  *WatchAssessmentStore
+	planQA           *PlanQAStore
+	matchedRandom    *MatchedRandomStore
+	telegramConfig   TelegramConfigStore
 
 	mu sync.RWMutex
 }
@@ -415,6 +416,17 @@ func (s *Store) ConfigChanges() *ConfigChangeStore {
 		s.configChanges = NewConfigChangeStore(s.gdb)
 	}
 	return s.configChanges
+}
+
+// PlannerReadFacts gets the per-read facts table (VOID PARITY, 2026-09-02) —
+// what the model was TOLD on every read, accepted or rejected.
+func (s *Store) PlannerReadFacts() *PlannerReadFactsStore {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.plannerReadFacts == nil {
+		s.plannerReadFacts = NewPlannerReadFactsStore(s.gdb)
+	}
+	return s.plannerReadFacts
 }
 
 func (s *Store) PlannerRejected() *PlannerRejectedStore {

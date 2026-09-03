@@ -57,9 +57,9 @@ func TestClass45VoidListMatchesValidator(t *testing.T) {
 	agree, disagree := 0, 0
 	for seed := 1; seed <= 20; seed++ {
 		bars := mk(seed)
-		since, now := bars[0].OpenTime, bars[len(bars)-1].CloseTime
+		now := bars[len(bars)-1].CloseTime // VOID PARITY: sinceMs now comes from the resolver, not the fixture
 		inList := map[bool]bool{}
-		for _, v := range ComputeVoidBreakdownLevels(levels, bars, since, now) {
+		for _, v := range ComputeVoidBreakdownLevels(levels, VoidScopeOf(bars), now) {
 			inList[v.Short] = true
 		}
 		for _, short := range []bool{true, false} {
@@ -71,7 +71,7 @@ func TestClass45VoidListMatchesValidator(t *testing.T) {
 				ID: "S1", Condition: cond, Direction: dir,
 				Breakdown: &PlanBreakdownContinue{Level: lvl, EntryMode: "pullback"},
 			}}}
-			err := ValidateBreakdownContinueScenarios(doc, bars, 20, lvl, now)
+			err := ValidateBreakdownContinueScenarios(doc, VoidScopeOf(bars), 20, lvl, now)
 			validatorRefusesForReclaim := err != nil && strings.Contains(err.Error(), "came back across")
 			if inList[short] == validatorRefusesForReclaim {
 				agree++

@@ -270,6 +270,9 @@ func main() {
 	logger.Infof("📜 %s", kernel.PromptFeedsForwardBootLine(-1, 0, kernel.MinSLATRMult()))
 	// CLASS 47 (2026-09-02) — wake cadence: every field READ from its resolver.
 	logger.Infof("⏱ %s", trader.WakeCadenceBootLine())
+	// VOID PARITY (2026-09-02) — the ONE scope the prompt's VOID list and the
+	// write-site validator both read. Every field READ from its resolver.
+	logger.Infof("📜 %s", kernel.VoidScopeBootLine())
 	// P&L-TRUTH WAVE (2026-09-01) — corrected-column guard in the boot block.
 	logger.Infof("🧾 %s", store.PnLSurfacesBootLine())
 	logger.Infof("🎛 %s", kernel.EntryLawBootLedger()) // P1.4 (ledger-close 2026-08-19) — clock-guard block: live host-RTC drift,

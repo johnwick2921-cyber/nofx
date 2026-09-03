@@ -155,8 +155,8 @@ func (at *AutoTrader) shadowVerdictFor(raw string, maxLevels, scenarioCap int, f
 		}
 	}
 	if kernel.HasBreakdownScenario(d) {
-		bars := market.FuturesBarsProvider(at.futuresSymbol(), "1m", kernel.AISVPBarCount)
-		if verr := kernel.ValidateBreakdownContinueScenarios(d, bars, kernel.StaleConfirmATR5m(bars), facts.Price, time.Now().UnixMilli()); verr != nil {
+		scope := kernel.ResolveVoidScope(at.futuresSymbol())
+		if verr := kernel.ValidateBreakdownContinueScenarios(d, scope, kernel.StaleConfirmATR5m(scope.Bars), facts.Price, time.Now().UnixMilli()); verr != nil {
 			reasons = append(reasons, verr.Error())
 		}
 	}

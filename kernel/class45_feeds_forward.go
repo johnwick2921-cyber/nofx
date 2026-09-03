@@ -84,7 +84,10 @@ func reclaimStampCT(level float64, short bool, bars []market.Kline, sinceMs, now
 // ComputeVoidBreakdownLevels runs the predicate over every ranked level, both
 // sides, and returns those the validator would refuse. Deterministic order
 // (price ascending) so the prompt text is stable across cycles.
-func ComputeVoidBreakdownLevels(levels []ScoredLevel, bars []market.Kline, sinceMs, nowMs int64) []VoidBreakdownLevel {
+// VOID PARITY (2026-09-02): the scope is resolved, not chosen by the caller —
+// the same VoidScope the write-site validator reads.
+func ComputeVoidBreakdownLevels(levels []ScoredLevel, scope VoidScope, nowMs int64) []VoidBreakdownLevel {
+	bars, sinceMs := scope.Bars, scope.SinceMs
 	var out []VoidBreakdownLevel
 	seen := map[string]bool{}
 	for _, l := range levels {
