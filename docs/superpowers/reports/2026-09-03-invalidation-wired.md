@@ -342,7 +342,34 @@ cited)"). So the reset predicate looks for a grade this path does not produce,
 and a late-stamped position keeps its off-plan D permanently. **[A]** — both
 rows read D with full lineage, and both code lines quoted.
 
-Out of this wave's footprint (adherence belongs to the grader). Reported.
+#### Blast radius, quantified (nofx-52's numbers, re-measured here)
+
+```
+closed + cited scenario + graded D   →  7   (ids 530, 572, 575, 582, 584, 586, 591)
+   of those, plan_matched = 1        →  5   direction agreed — provably mis-graded
+day-plan-era grade distribution      →  A 30 · B 22 · D 10 · C 5 · F 4   (n=71)
+```
+
+**7 of the 10 Ds are suspect, and 5 are not merely uncited but provably
+mis-graded** — the position cites a scenario AND its direction matched. Any
+adherence rate computed today under-reports plan-following by up to 7 in 71.
+
+#### Two cautions for whoever fixes it (nofx-52's, and they are right)
+
+- **Do not simply widen the predicate to `"D"`.** A genuinely uncited close
+  *should* be D. The reset has to key on "lineage was just repaired" rather than
+  on the grade's value, or regrading will promote rows that have earned their D.
+- **Backfill versus fix-forward needs a ruling.** A silent backfill changes a
+  published grade distribution. Seven rows is small enough to fix and large
+  enough to notice.
+
+Out of this wave's footprint (adherence belongs to the grader). Reported, with
+the numbers, so the fix does not have to re-derive them.
+
+**Line-number note:** the reset reads `reconcile.go:588` in this branch and
+`:576` in nofx-52's tree — same statement, and my branch adds lines above it.
+Quoting the statement rather than the number is the durable citation:
+`if p.Status == "CLOSED" && p.AdherenceGrade == "F"`.
 
 ### 9.4 The reason this took three sessions: the log line cannot tell them apart
 
