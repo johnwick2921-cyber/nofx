@@ -119,37 +119,9 @@ func rpMax(a, b int) int {
 	return b
 }
 
-// E7 / R0 — THE RIDER PIN, from chain 4 (2026-09-02 14:23 CT). The incoming
-// error is a VOID BREAKDOWN, not a confirm defect; the document carries a
-// confirm object; the repair prompt must still state the confirm enum. Before
-// the rider it did not, and the repair answered with an illegal confirm rule.
-func TestClass46RiderConfirmEnumOnEveryRepairWithConfirm(t *testing.T) {
-	chain4Doc := `{"reasoning":"r","bias":{"direction":"short"},"levels":[],"scenarios":[` +
-		`{"id":"S2","condition":"breakdown_continue","direction":"short",` +
-		`"confirm":{"rule":"1x5m_close","ref_price":29167.66,"side":"below"}}]}`
-	chain4Err := "S2 breakdown_continue: a close came back across 29167.66 — the breakdown is void; author a `reject` play instead"
-
-	p := BuildPlannerRepairPrompt(chain4Doc, chain4Err, []string{"reject", "hold"})
-	if !strings.Contains(p, "BREAKDOWN-CONTINUE LAW") {
-		t.Fatal("the incoming defect's own law must still be attached")
-	}
-	if !strings.Contains(p, "CONFIRM-RULE VOCABULARY") {
-		t.Fatalf("RIDER: the document carries a confirm object, so the confirm enum MUST be attached even though the error was a breakdown defect.\n%s", rpTrunc(p, 600))
-	}
-	for _, tok := range []string{"touch", "1x5m_close", "2x5m_close", "1m_mss", "time_hold"} {
-		if !strings.Contains(p, tok) {
-			t.Fatalf("confirm enum incomplete, missing %q", tok)
-		}
-	}
-	// A document with NO confirm object must not pay the ~60 tokens.
-	noConfirm := `{"reasoning":"r","bias":{"direction":"short"},"levels":[],"scenarios":[{"id":"S1","condition":"hold"}]}`
-	if q := BuildPlannerRepairPrompt(noConfirm, chain4Err, nil); strings.Contains(q, "CONFIRM-RULE VOCABULARY") {
-		t.Fatal("no confirm object in the document — the enum must not be attached")
-	}
-	// No double-attach when the error itself already routed it.
-	confErr := `scenario[1].confirm.rule "displacement" invalid (touch|1x5m_close|2x5m_close|1m_mss|time_hold)`
-	r := BuildPlannerRepairPrompt(chain4Doc, confErr, nil)
-	if n := strings.Count(r, "CONFIRM-RULE VOCABULARY"); n != 1 {
-		t.Fatalf("the enum must appear exactly once, got %d", n)
-	}
-}
+// E7 / R0 — SUPERSEDED by the owner ruling of 2026-09-02. The rider attached
+// the confirm ENUM; the live counterexample (18:39 CT, planner_rejected_prompts
+// row 104) showed the enum reaching the model, which then wrote `1x5m_close` on
+// a `reject` fade — a token that IS in the enum. The rider now attaches the
+// per-condition TABLE instead, generated from the validator's own entryLaw map.
+// Its pins live in kernel/confirm_table_test.go.

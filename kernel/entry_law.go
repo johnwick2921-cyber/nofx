@@ -3,6 +3,7 @@ package kernel
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -193,4 +194,51 @@ func ValidateEntryLaw(d *PlanDoc) error {
 		}
 	}
 	return nil
+}
+
+// ── CONFIRM-RULE TABLE (owner ruling 2026-09-02) ─────────────────────────────
+// The repair prompt used to attach the confirm ENUM — the five tokens that
+// exist. That was the wrong content: the live failure on 2026-09-02 18:39 CT
+// wrote `1x5m_close` on a `reject` fade, and `1x5m_close` IS in the enum. The
+// model did not need to know which words exist; it needed to know which word
+// THIS CONDITION permits. Row 104 of planner_rejected_prompts proves the enum
+// reached it and did not help.
+//
+// This table is GENERATED FROM `entryLaw` — the same map ValidateEntryLaw
+// enforces — so the prompt and the validator cannot drift. A parity fixture
+// pins that.
+
+// ConfirmRuleRow is one condition's allowed confirm rules, sorted.
+type ConfirmRuleRow struct {
+	Condition string
+	Allowed   []string
+}
+
+// ConfirmRuleRows returns every condition's allowed confirm rules, condition-
+// sorted, read from the validator's own table.
+func ConfirmRuleRows() []ConfirmRuleRow {
+	out := make([]ConfirmRuleRow, 0, len(entryLaw))
+	for cond, law := range entryLaw {
+		rules := make([]string, 0, len(law.Allowed))
+		for r := range law.Allowed {
+			rules = append(rules, r)
+		}
+		sort.Strings(rules)
+		out = append(out, ConfirmRuleRow{Condition: cond, Allowed: rules})
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Condition < out[j].Condition })
+	return out
+}
+
+// ConfirmRuleTable renders the condition → allowed-confirm-rules table for a
+// prompt. Compact by design (~60 tokens): it is attached to every repair whose
+// document carries a confirm object.
+func ConfirmRuleTable() string {
+	var b strings.Builder
+	b.WriteString("CONFIRM RULES PER CONDITION (the machine rejects any other pairing by name):\n")
+	for _, r := range ConfirmRuleRows() {
+		b.WriteString("  " + r.Condition + " → [" + strings.Join(r.Allowed, ", ") + "]\n")
+	}
+	b.WriteString("A token legal for one condition is ILLEGAL for another: `1x5m_close` exists, but a `reject` fade takes touch ONLY. Pick the rule this scenario's condition permits.")
+	return b.String()
 }

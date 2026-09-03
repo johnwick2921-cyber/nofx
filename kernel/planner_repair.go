@@ -106,13 +106,23 @@ func lawExcerptsFor(errors string) string {
 // prompt.
 func lawExcerptsForDoc(errors, rejectedOutput string) string {
 	base := lawExcerptsFor(errors)
-	if !docHasConfirmObject(rejectedOutput) || strings.Contains(base, RepairConfirmVocabLaw) {
+	if !docHasConfirmObject(rejectedOutput) {
+		return base
+	}
+	// OWNER RULING 2026-09-02 — the ENUM is replaced by the per-condition
+	// TABLE. Live counterexample (18:39 CT, planner_rejected_prompts row 104):
+	// the enum reached the model and it still wrote `1x5m_close` on a `reject`
+	// fade — and `1x5m_close` IS in the enum. Listing the words that exist
+	// never addressed the failure; the failure is which word THIS CONDITION
+	// permits. The table is generated from the validator's own entryLaw map.
+	table := ConfirmRuleTable()
+	if strings.Contains(base, table) {
 		return base
 	}
 	if strings.TrimSpace(base) == "" {
-		return RepairConfirmVocabLaw
+		return table
 	}
-	return base + "\n" + RepairConfirmVocabLaw
+	return base + "\n" + table
 }
 
 // docHasConfirmObject reports whether the rejected document carries a confirm
