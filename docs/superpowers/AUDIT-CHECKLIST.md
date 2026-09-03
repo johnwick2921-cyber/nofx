@@ -996,7 +996,7 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     building for it — an alarming percentage over the wrong denominator will
     buy a large fix for a small problem.
 
-54. **A default of 0 on a column that means "how far did it go against us".**
+56. **A default of 0 on a column that means "how far did it go against us".**
     (Highest occupied at merge: 53.) `trader_positions.mae REAL DEFAULT 0`
     and `mfe` the same. A trade whose excursion was never computed and a trade
     that never went against us are then the same bit pattern, and no reader can
