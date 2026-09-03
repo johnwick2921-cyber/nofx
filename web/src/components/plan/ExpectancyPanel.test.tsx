@@ -163,10 +163,13 @@ describe('ExpectancyPanel', () => {
           key: { condition: 'sweep_reclaim', session: 'NY' },
           rule: 'touch',
           n: 9,
+          usable_n: 4,
           wins: 4,
           losses: 5,
           sum_net_pnl: -12,
           mean: -1.3333,
+          excluded_price_scale: 3,
+          excluded_zero_pnl: 2,
           counterfactual: true,
           short_suspect: true,
           note: 'counterfactual (E8) · SHORT ROWS SUSPECT (E8 sign bug)',
@@ -192,5 +195,35 @@ describe('ExpectancyPanel', () => {
     await waitFor(() =>
       expect(screen.getByTestId('expectancy-empty')).toBeTruthy()
     )
+  })
+
+  it('shows why, not a number, when no counterfactual row is usable', async () => {
+    payload = base({
+      counterfactual_e8: [
+        {
+          key: { condition: 'reject', session: 'NY' },
+          rule: '1x5m_close',
+          n: 78,
+          usable_n: 0,
+          wins: 30,
+          losses: 48,
+          sum_net_pnl: null,
+          mean: null,
+          excluded_price_scale: 40,
+          excluded_zero_pnl: 38,
+          counterfactual: true,
+          short_suspect: true,
+          note: 'NO USABLE net_pnl',
+        },
+      ],
+    })
+    await renderPanel()
+    await waitFor(() =>
+      expect(screen.getByTestId('expectancy-panel')).toBeTruthy()
+    )
+    const cf = screen.getByTestId('expectancy-cf-0').textContent ?? ''
+    expect(cf).toMatch(/0 usable/)
+    expect(cf).toMatch(/40 not a P&L/)
+    expect(cf).toMatch(/mean\s*—/)
   })
 })

@@ -1266,6 +1266,49 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     NY's flat. Before and after it, the test passes, which is why it read as a
     flake rather than a bomb.
 
+62. **A stored column that reads as money and is not.** (Number assigned at
+    merge; highest occupied at authoring: 61.) Found building wave 1D, from the
+    FIRST live read of the new table: the E8 counterfactual side-table produced
+    cell means of **−29,926, −29,210 and −32,893** on an instrument trading near
+    29,900. `ab_confirm_log.net_pnl` is not a P&L on those rows — it is
+    approximately **−(entry price × multiplier)**, i.e. the exit was treated as
+    zero. Measured over the whole table: **188 rows — 40 price-scale, 92 a bare
+    `0` beside a RESOLVED outcome (win/loss/target/stop), 56 usable.** Only 30%
+    of the column is arithmetic-able, and nothing said so: the column is REAL,
+    typed, populated, and named like money, so every consumer that averages it
+    publishes a number with a currency symbol and no meaning. This is distinct
+    from the known E8 short-side sign defect — that one corrupts a subset's
+    sign; this one makes the magnitude a price.
+    **Probe:** for any stored numeric column a report will average, compare its
+    magnitude against a quantity it can never legitimately reach. For a P&L on a
+    1–2 lot instrument, `|value| >= entry_price` is impossible; for a rate,
+    anything outside [0,1]. Then count the bare zeros beside a resolved outcome
+    separately — a zero that means "uncomputed" is not a zero that means
+    "break-even", and only the second one may enter a mean.
+    **Law:** a column that is populated is not a column that is computed. Before
+    a read model averages a stored number, it must state which rows it is
+    willing to arithmetic on and COUNT the ones it refused — and when nothing is
+    usable it must return ABSENT, never 0. 1D REPORTS this; it does not repair
+    it. The writer (`kernel/shadow_ab.go`) is out of the wave's footprint, and a
+    read model that silently patched its input would hide the defect it found.
+
+63. **Two true numbers that mislead when read together.** (Number assigned at
+    merge.) Also found on 1D's first live read. The boot line said
+    `cells=41 with_n>=30=0` — both true: no cell of the five-dimensional table
+    reaches the sample floor. At the same instant the `reject` CONDITION
+    roll-up stood at **n=31 and was judged FAILS**. The verdicts are made on the
+    roll-ups, not on the five-dimensional cells, so a line reporting only cells
+    reads as "nothing is judgeable yet" while a verdict exists. No number was
+    wrong; the omission was.
+    **Probe:** when a summary line reports a count over one projection of a
+    model that is also consumed through another projection, ask what a reader
+    would conclude from the line alone, and whether that conclusion is true.
+    **Law:** a boot line is READ, and being read means it is a claim. Two
+    honest numbers whose juxtaposition implies a false third are a defect in the
+    line, not in the reader. Fixed by counting judged roll-ups as their own
+    field (`judged_rollups=`), pinned by a test whose fixture makes every
+    five-dimensional cell sub-floor while three roll-ups clear the floor.
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,

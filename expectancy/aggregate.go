@@ -61,6 +61,7 @@ type abRow struct {
 	Rule      string
 	Condition string
 	Outcome   string
+	EntryPx   float64
 	NetPnl    float64
 }
 
@@ -173,7 +174,7 @@ func loadAB(gdb *gorm.DB) []abRow {
 	var rows []abRow
 	if err := gdb.Raw(`SELECT COALESCE(plan_id,'') AS plan_id, version, COALESCE(session,'') AS session,
 COALESCE(scenario,'') AS scenario, COALESCE(rule,'') AS rule, COALESCE(condition,'') AS condition,
-COALESCE(outcome,'') AS outcome, net_pnl FROM ab_confirm_log`).Scan(&rows).Error; err != nil {
+COALESCE(outcome,'') AS outcome, COALESCE(entry_px,0) AS entry_px, net_pnl FROM ab_confirm_log`).Scan(&rows).Error; err != nil {
 		logger.Warnf("📊 expectancy: ab_confirm_log read failed (E8 side-table absent): %v", err)
 		return nil
 	}
@@ -583,8 +584,11 @@ func buildE8(abs []abRow, positions []posRow) []E8Cell {
 
 	type acc struct {
 		n, wins, losses int
+		usableN         int
 		sum             float64
 		suspect         bool
+		exclPriceScale  int
+		exclZeroPnL     int
 	}
 	buckets := map[Key]*acc{}
 	rules := map[Key]string{}
@@ -599,7 +603,19 @@ func buildE8(abs []abRow, positions []posRow) []E8Cell {
 			order = append(order, k)
 		}
 		a.n++
-		a.sum += r.NetPnl
+		// USABILITY, decided per row and counted, never silently averaged over.
+		switch {
+		case r.EntryPx > 0 && math.Abs(r.NetPnl) >= r.EntryPx:
+			// A "P&L" at least as large as the instrument's price is a price,
+			// not a result. Live shape: net_pnl ≈ −(entry × multiplier).
+			a.exclPriceScale++
+		case r.NetPnl == 0:
+			// Zero beside a resolved outcome is UNCOMPUTED, not break-even.
+			a.exclZeroPnL++
+		default:
+			a.usableN++
+			a.sum += r.NetPnl
+		}
 		switch r.Outcome {
 		case "win":
 			a.wins++
@@ -616,16 +632,27 @@ func buildE8(abs []abRow, positions []posRow) []E8Cell {
 	for _, k := range order {
 		a := buckets[k]
 		c := E8Cell{
-			Key: k, Rule: rules[k], N: a.n, Wins: a.wins, Losses: a.losses,
-			SumPnL: a.sum, Counterfactual: true, ShortSuspect: a.suspect,
+			Key: k, Rule: rules[k], N: a.n, UsableN: a.usableN,
+			Wins: a.wins, Losses: a.losses,
+			ExcludedPriceScale: a.exclPriceScale, ExcludedZeroPnL: a.exclZeroPnL,
+			Counterfactual: true, ShortSuspect: a.suspect,
 			Note: "counterfactual (E8) — never comparable with a realized cell",
 		}
-		if a.n > 0 {
-			c.Mean = a.sum / float64(a.n)
+		// The money fields exist ONLY when something in the cell could be
+		// arithmetic'd. No usable row means no number, not a zero.
+		if a.usableN > 0 {
+			sum := a.sum
+			mean := sum / float64(a.usableN)
+			c.SumPnL, c.Mean = &sum, &mean
 		}
 		if a.suspect {
 			c.Note = "counterfactual (E8) · SHORT ROWS SUSPECT (E8 sign bug) — " +
 				"direction is not stored on ab_confirm_log; an unrecovered direction stays suspect"
+		}
+		if a.usableN == 0 {
+			c.Note = fmt.Sprintf("counterfactual (E8) · NO USABLE net_pnl in %d rows "+
+				"(%d price-scale, %d uncomputed zero) — no mean is computable",
+				a.n, a.exclPriceScale, a.exclZeroPnL)
 		}
 		out = append(out, c)
 	}
@@ -648,6 +675,19 @@ func (t *Table) BootLine() string {
 			withN++
 		}
 	}
-	return fmt.Sprintf("📊 expectancy: cells=%d with_n>=%d=%d unresolved=%d excluded_test=%d",
-		len(t.Cells), MinN, withN, t.Excluded.UnresolvedPnL, t.Excluded.TestSeam)
+	// judged_rollups is a separate count because the two can disagree in a way
+	// that misleads. Live on 2026-09-03: cells=41 with_n>=30=0 while the
+	// `reject` CONDITION roll-up stood at n=31 and was judged FAILS. Both
+	// numbers were true; together they read as "nothing is judgeable", which
+	// was not. Verdicts are made on roll-ups, so roll-ups are counted here.
+	judged := 0
+	for _, set := range [][]Cell{t.Conditions, t.Sessions, t.Kinds, t.Paths} {
+		for _, c := range set {
+			if !c.Descriptive {
+				judged++
+			}
+		}
+	}
+	return fmt.Sprintf("📊 expectancy: cells=%d with_n>=%d=%d judged_rollups=%d unresolved=%d excluded_test=%d",
+		len(t.Cells), MinN, withN, judged, t.Excluded.UnresolvedPnL, t.Excluded.TestSeam)
 }

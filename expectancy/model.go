@@ -143,11 +143,29 @@ type E8Cell struct {
 	Key  `json:"key"`
 	Rule string `json:"rule,omitempty"`
 
-	N      int     `json:"n"`
-	Wins   int     `json:"wins"`
-	Losses int     `json:"losses"`
-	SumPnL float64 `json:"sum_net_pnl"`
-	Mean   float64 `json:"mean"`
+	// N is every row the cell saw. UsableN is how many of them had a net_pnl
+	// this model is willing to arithmetic on. They differ, and both are shown,
+	// because a cell that reported only N would let 40 corrupt rows and 92
+	// uncomputed zeros hide inside a healthy-looking sample size.
+	N       int `json:"n"`
+	UsableN int `json:"usable_n"`
+	Wins    int `json:"wins"`
+	Losses  int `json:"losses"`
+
+	// SumPnL/Mean are ABSENT when no row in the cell is usable. Measured on the
+	// live store 2026-09-03: ab_confirm_log.net_pnl held ≈ −(price × multiplier)
+	// on 40 of 188 rows (an exit treated as zero) and a bare 0 beside a resolved
+	// outcome on another 92. A mean over either is a fabricated number wearing a
+	// currency symbol. Reported, not repaired — the writer is out of 1D's scope.
+	SumPnL *float64 `json:"sum_net_pnl"`
+	Mean   *float64 `json:"mean"`
+
+	// ExcludedPriceScale — |net_pnl| >= entry_px, so the "P&L" is at least the
+	// price of the instrument: impossible for a 1–2 lot MNQ trade.
+	ExcludedPriceScale int `json:"excluded_price_scale"`
+	// ExcludedZeroPnL — a bare 0 beside a resolved outcome: uncomputed, not
+	// break-even. The difference is the whole of A24's "plausible zero".
+	ExcludedZeroPnL int `json:"excluded_zero_pnl"`
 
 	// Counterfactual is always true. It is a field rather than an implicit
 	// property of the type so that a serialized row carries its own warning.

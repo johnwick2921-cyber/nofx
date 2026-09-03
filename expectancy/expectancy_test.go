@@ -3,6 +3,7 @@ package expectancy
 import (
 	"encoding/json"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -342,12 +343,13 @@ func TestE4CounterfactualSideTableFlagsShortRows(t *testing.T) {
 	if err := db.Exec(`CREATE TABLE ab_confirm_log (
 		id INTEGER PRIMARY KEY AUTOINCREMENT, trader_id TEXT, plan_id TEXT, version INTEGER,
 		session TEXT, scenario TEXT, rule TEXT, condition TEXT, outcome TEXT,
-		net_pnl REAL, mfe REAL, mae REAL, is_counterfactual INTEGER DEFAULT 0)`).Error; err != nil {
+		entry_px REAL DEFAULT 0, net_pnl REAL, mfe REAL, mae REAL,
+		is_counterfactual INTEGER DEFAULT 0)`).Error; err != nil {
 		t.Fatalf("create ab_confirm_log: %v", err)
 	}
-	if err := db.Exec(`INSERT INTO ab_confirm_log (session,scenario,rule,condition,outcome,net_pnl) VALUES
-		('NY','S1','1x5m_close','reject','win',10),
-		('NY','S2','touch','sweep_reclaim','loss',-5)`).Error; err != nil {
+	if err := db.Exec(`INSERT INTO ab_confirm_log (session,scenario,rule,condition,outcome,entry_px,net_pnl) VALUES
+		('NY','S1','1x5m_close','reject','win',29400,10),
+		('NY','S2','touch','sweep_reclaim','loss',29400,-5)`).Error; err != nil {
 		t.Fatalf("seed ab: %v", err)
 	}
 	// The short side is the one the E8 sign bug corrupts.
@@ -583,8 +585,152 @@ func TestBootLineIsReadNotLiteral(t *testing.T) {
 		t.Fatalf("build: %v", err)
 	}
 	got := tbl.BootLine()
-	want := "📊 expectancy: cells=1 with_n>=30=0 unresolved=1 excluded_test=1"
+	want := "📊 expectancy: cells=1 with_n>=30=0 judged_rollups=0 unresolved=1 excluded_test=1"
 	if got != want {
 		t.Errorf("BootLine()\n got %q\nwant %q", got, want)
+	}
+}
+
+// The live table forced this field. On 2026-09-03 the boot line read
+// "cells=41 with_n>=30=0" while the CONDITION roll-up for `reject` stood at
+// n=31 and was judged FAILS. Both numbers were true and together they read as
+// "nothing is judgeable yet", which was false. cells= counts the full
+// five-dimensional table, where no single cell reaches the floor; the verdicts
+// are made on the roll-ups, so the roll-ups get their own count.
+func TestBootLineCountsJudgedRollUpsSeparatelyFromCells(t *testing.T) {
+	db := newFixtureDB(t)
+	seedPlan(t, db, "2026-09-01:P", 1, "NY")
+	base := msAt(t, 2026, time.September, 1, 9, 0)
+	var rows []seedPos
+	// 30 rows split across two sessions: no single five-dimensional cell
+	// reaches the floor, but the condition roll-up does.
+	for i := 0; i < 30; i++ {
+		sess := "NY"
+		if i%2 == 0 {
+			sess = "LONDON"
+		}
+		p := &store.TraderPosition{
+			TraderID: "t1", Symbol: "MNQ", Side: "SHORT", Quantity: 1,
+			EntryPrice: 29100, ExitPrice: 29090,
+			EntryTime: base + int64(i)*60000, ExitTime: base + int64(i)*60000 + 1000,
+			Status: "CLOSED", Source: "system", PnlCorrected: f(10), RealizedPnL: -1,
+			PlanID: "2026-09-01:P", PlanVersion: 1, PlanSession: sess,
+			CitedScenarioID: "S1", PlanMatched: true, PlanBand: "armed_fill",
+		}
+		if err := db.Create(p).Error; err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+	}
+	_ = rows
+	tbl, err := LoadAndBuildAt(db, time.Date(2026, time.September, 3, 12, 0, 0, 0, ct(t)))
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	for _, c := range tbl.Cells {
+		if c.N >= MinN {
+			t.Fatalf("no five-dimensional cell should reach the floor here: %+v", c.Key)
+		}
+	}
+	if c := tbl.ByCondition("reject"); c == nil || c.N != 30 || c.Descriptive {
+		t.Fatalf("condition roll-up should be judged: %+v", c)
+	}
+	// THREE roll-ups clear the floor on this fixture, not one: condition,
+	// level-kind and path each pool all 30 rows. Only the session roll-up
+	// splits (15 LONDON / 15 NY) and stays descriptive. Asserting the exact
+	// number pins which sets are counted — a laxer ">0" would still pass if the
+	// count silently dropped a roll-up set.
+	if got := tbl.BootLine(); !strings.Contains(got, "judged_rollups=3") {
+		t.Errorf("boot line must count every judged roll-up, got %q", got)
+	}
+	for _, c := range tbl.Sessions {
+		if !c.Descriptive {
+			t.Errorf("session %q split 15/15 must stay descriptive, got n=%d", c.Session, c.N)
+		}
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// E8 integrity — the live table forced this test.
+//
+// Run against the live store on 2026-09-03 the side-table produced cell means
+// of −29,926 on an instrument trading at 29,900: ab_confirm_log.net_pnl is not
+// a P&L for those rows, it is approximately −(price × multiplier), i.e. the
+// exit was treated as zero. 40 of 188 rows are that shape and another 92 are a
+// bare 0 beside a resolved outcome. A mean over either is a fabricated number
+// wearing a currency symbol, so the model refuses to compute one.
+// ─────────────────────────────────────────────────────────────────────
+
+func TestE8RefusesToMeanAnUncomputableColumn(t *testing.T) {
+	db := newFixtureDB(t)
+	if err := db.Exec(`CREATE TABLE ab_confirm_log (
+		id INTEGER PRIMARY KEY AUTOINCREMENT, trader_id TEXT, plan_id TEXT, version INTEGER,
+		session TEXT, scenario TEXT, rule TEXT, condition TEXT, outcome TEXT,
+		entry_px REAL DEFAULT 0, net_pnl REAL, is_counterfactual INTEGER DEFAULT 0)`).Error; err != nil {
+		t.Fatalf("create ab_confirm_log: %v", err)
+	}
+	// One usable row, one price-scale row, one uncomputed zero — same cell.
+	if err := db.Exec(`INSERT INTO ab_confirm_log (session,scenario,rule,condition,outcome,entry_px,net_pnl) VALUES
+		('NY','S1','1x5m_close','reject','win',29400,40),
+		('NY','S1','1x5m_close','reject','target',29413,-117664.24),
+		('NY','S1','1x5m_close','reject','stop',29200,0)`).Error; err != nil {
+		t.Fatalf("seed ab: %v", err)
+	}
+
+	tbl, err := LoadAndBuildAt(db, time.Date(2026, time.September, 3, 12, 0, 0, 0, ct(t)))
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	if len(tbl.Counterfactual) != 1 {
+		t.Fatalf("want 1 E8 cell, got %d", len(tbl.Counterfactual))
+	}
+	c := tbl.Counterfactual[0]
+	if c.N != 3 {
+		t.Errorf("N = %d, want 3 (the cell still reports every row it saw)", c.N)
+	}
+	if c.UsableN != 1 {
+		t.Errorf("UsableN = %d, want 1", c.UsableN)
+	}
+	if c.ExcludedPriceScale != 1 {
+		t.Errorf("ExcludedPriceScale = %d, want 1", c.ExcludedPriceScale)
+	}
+	if c.ExcludedZeroPnL != 1 {
+		t.Errorf("ExcludedZeroPnL = %d, want 1", c.ExcludedZeroPnL)
+	}
+	if c.Mean == nil {
+		t.Fatalf("one usable row must still yield a mean")
+	}
+	closeTo(t, "E8 mean over usable rows only", *c.Mean, 40)
+}
+
+func TestE8MeanIsAbsentWhenNoRowIsUsable(t *testing.T) {
+	db := newFixtureDB(t)
+	if err := db.Exec(`CREATE TABLE ab_confirm_log (
+		id INTEGER PRIMARY KEY AUTOINCREMENT, trader_id TEXT, plan_id TEXT, version INTEGER,
+		session TEXT, scenario TEXT, rule TEXT, condition TEXT, outcome TEXT,
+		entry_px REAL DEFAULT 0, net_pnl REAL, is_counterfactual INTEGER DEFAULT 0)`).Error; err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if err := db.Exec(`INSERT INTO ab_confirm_log (session,scenario,rule,condition,outcome,entry_px,net_pnl) VALUES
+		('NY','S1','1x5m_close','reject','target',29413,-117664.24),
+		('NY','S1','1x5m_close','reject','stop',29200,0)`).Error; err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	tbl, err := LoadAndBuildAt(db, time.Date(2026, time.September, 3, 12, 0, 0, 0, ct(t)))
+	if err != nil {
+		t.Fatalf("build: %v", err)
+	}
+	c := tbl.Counterfactual[0]
+	// ABSENT, not 0. A zero here would read as "the shadow rule broke even".
+	if c.Mean != nil {
+		t.Errorf("Mean must be absent when no row is usable, got %v", *c.Mean)
+	}
+	if c.SumPnL != nil {
+		t.Errorf("SumPnL must be absent when no row is usable, got %v", *c.SumPnL)
+	}
+	if c.UsableN != 0 || c.N != 2 {
+		t.Errorf("UsableN/N = %d/%d, want 0/2", c.UsableN, c.N)
+	}
+	if c.Note == "" {
+		t.Errorf("a cell with no usable rows must say why")
 	}
 }

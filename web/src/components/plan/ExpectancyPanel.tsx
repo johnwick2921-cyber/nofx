@@ -48,9 +48,14 @@ interface E8Cell {
   key: { condition?: string; session?: string }
   rule?: string
   n: number
+  // usable_n is how many of those n rows had a net_pnl worth arithmetic. When
+  // it is 0 the mean is null and the row shows the reason instead of a number.
+  usable_n: number
   wins: number
   losses: number
-  mean: number
+  mean: number | null
+  excluded_price_scale: number
+  excluded_zero_pnl: number
   counterfactual: boolean
   short_suspect: boolean
   note?: string
@@ -292,7 +297,14 @@ export function ExpectancyPanel() {
                   .join(' · ')}
               </span>
               <span className="vl-num">
-                n {c.n} · {c.wins}/{c.losses} · mean {num(c.mean)}
+                n {c.n} ({c.usable_n} usable) · {c.wins}/{c.losses} · mean{' '}
+                {num(c.mean)}
+                {c.excluded_price_scale > 0
+                  ? ` · ${c.excluded_price_scale} not a P&L`
+                  : ''}
+                {c.excluded_zero_pnl > 0
+                  ? ` · ${c.excluded_zero_pnl} uncomputed`
+                  : ''}
                 {c.short_suspect ? ' · SHORT ROWS SUSPECT (E8 sign bug)' : ''}
               </span>
             </div>
