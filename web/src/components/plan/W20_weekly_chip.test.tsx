@@ -1,45 +1,40 @@
-// W7 (weekly-bias wave) — WEEKLY chip: 4 render states (bull · bear · none ·
-// invalidated strikethrough) + the card-level mount. Advisory view only.
+// CLASS 50 (refs-only wave) — WEEKLY chip: refs-only state + the card-level
+// mount. The chip never carries a direction anymore.
 import { describe, it, expect } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { WeeklyChip } from './WeeklyChip'
 import { SessionPlanCard } from './SessionPlanCard'
 import type { PlanToday, PlanWeekly } from '../../lib/api/plan'
 
-const bull: PlanWeekly = {
-  bias: 'bull',
-  conviction: 'high',
-  draw_name: 'PWH',
-  draw_px: 30500.25,
-  invalidation_px: 30300,
-  invalidation_basis: '1h close beyond 30300.00',
-  invalidated_at: '',
-  narrative: 'accepted above the prior high\nholding above weekly open',
-  weekly_levels: [{ name: 'PWH', px: 30500.25 }],
+const refs: PlanWeekly = {
+  refs_only: true,
+  pwh: 30500.25,
+  pwl: 29980,
+  narrative: 'PWH and PWL bracket the accepted range',
+  weekly_levels: [
+    { name: 'PWH', px: 30500.25 },
+    { name: 'PWL', px: 29980 },
+  ],
   thin_history: false,
 }
-const bear: PlanWeekly = { ...bull, bias: 'bear', conviction: 'low' }
-const invalidated: PlanWeekly = {
-  ...bear, // an invalidated BEAR must display neutral, never the stale bias
-  invalidated_at: '2026-08-28 10:15 CT',
-}
+const thin: PlanWeekly = { ...refs, pwh: 0, pwl: 0, thin_history: true }
 
 describe('WeeklyChip', () => {
-  it('bull state — arrow + conviction + draw px', () => {
-    render(<WeeklyChip weekly={bull} />)
+  it('refs-only state — PWH/PWL, no direction token', () => {
+    render(<WeeklyChip weekly={refs} />)
     const chip = screen.getByTestId('weekly-chip')
-    expect(chip.textContent).toContain('▲')
-    expect(chip.textContent).toContain('bull')
-    expect(chip.textContent).toContain('high')
-    expect(chip.textContent).toContain('30500.25')
-    expect(chip.getAttribute('title')).toContain('WEEKLY: bull/high')
+    expect(chip.textContent).toContain('WEEKLY refs')
+    expect(chip.textContent).toContain('PWH 30500.25')
+    expect(chip.textContent).toContain('PWL 29980.00')
+    expect(chip.textContent).not.toContain('bull')
+    expect(chip.textContent).not.toContain('bear')
+    expect(chip.getAttribute('title')).toContain('refs only')
   })
 
-  it('bear state — down arrow', () => {
-    render(<WeeklyChip weekly={bear} />)
+  it('thin state — refs label with thin marker', () => {
+    render(<WeeklyChip weekly={thin} />)
     const chip = screen.getByTestId('weekly-chip')
-    expect(chip.textContent).toContain('▼')
-    expect(chip.textContent).toContain('bear')
+    expect(chip.textContent).toContain('WEEKLY refs (thin)')
   })
 
   it('none state — grey WEEKLY none', () => {
@@ -47,15 +42,6 @@ describe('WeeklyChip', () => {
     const chip = screen.getByTestId('weekly-chip')
     expect(chip.textContent).toContain('WEEKLY none')
     expect(chip.getAttribute('title')).toContain('WEEKLY: none')
-  })
-
-  it('invalidated state — neutral label, NO strikethrough (owner ruling 2026-08-31)', () => {
-    render(<WeeklyChip weekly={invalidated} />)
-    const chip = screen.getByTestId('weekly-chip')
-    expect(chip.textContent).toContain('WEEKLY neutral')
-    expect(chip.getAttribute('title')).toContain('WEEKLY: neutral (invalidated')
-    expect(chip.style.textDecoration).not.toBe('line-through')
-    expect(chip.textContent).not.toContain('bear') // stale bias never shows
   })
 })
 
@@ -84,17 +70,19 @@ describe('SessionPlanCard — WEEKLY chip mounts on the card', () => {
     level_facts: [],
   })
 
-  it('renders the chip when a weekly doc exists', () => {
+  it('renders the refs chip when a weekly doc exists', () => {
     render(
       <SessionPlanCard
-        plan={plan(bull)}
+        plan={plan(refs)}
         traderId="t1"
         symbol="MNQ"
         exchange="ninjatrader"
         language="en"
       />
     )
-    expect(screen.getByTestId('weekly-chip').textContent).toContain('bull')
+    expect(screen.getByTestId('weekly-chip').textContent).toContain(
+      'WEEKLY refs'
+    )
   })
 
   it('renders the grey none chip when no weekly doc exists', () => {

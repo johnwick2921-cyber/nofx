@@ -150,16 +150,16 @@ export interface PlanToday {
 
 // W7 (weekly-bias wave) — /api/plan/today weekly payload.
 export interface PlanWeekly {
-  bias: string // bull | bear | neutral
-  conviction: string // low | med | high
-  draw_name: string
-  draw_px: number
-  invalidation_px: number
-  invalidation_basis: string
-  invalidated_at: string
+  // CLASS 50 (refs-only wave, 2026-09-02): the payload is refs only — no bias
+  // direction exists on the weekly chip anymore. pwh/pwl are extracted from
+  // weekly_levels by the backend.
+  refs_only: boolean
+  pwh?: number
+  pwl?: number
   narrative: string
   weekly_levels: { name: string; px: number }[]
   thin_history: boolean
+  shadow_bias?: string
 }
 
 // ── GET /api/plan/versions — every stored version of ONE session's plan ──
