@@ -1125,15 +1125,20 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     cannot repair the damage:** `RepairArmedLineage` clears the adherence grade
     for regrading only when it is `"F"` (reconcile.go:588), while a close with
     no citation grades `"D"` (adherence.go:52), so positions 584 and 586 now
-    carry full lineage and a permanent off-plan D. Quantified: **7 closed rows
-    cite a scenario and are graded D** (530, 572, 575, 582, 584, 586, 591), **5
-    of them with `plan_matched=1`** — provably mis-graded, not merely uncited —
-    against a day-plan-era distribution of A 30 / B 22 / D 10 / C 5 / F 4
-    (n=71). So 7 of 10 Ds are suspect and any adherence rate under-reports
-    plan-following by up to 7 in 71. Note for the fix: widening the predicate to
-    `"D"` is WRONG, because a genuinely uncited close deserves its D — the reset
-    must key on "lineage was just repaired", and whether to backfill the 7 is an
-    owner call, since a silent backfill moves a published distribution. Probes: ask which BRANCH a
+    carry full lineage and a permanent off-plan D. Quantified: **4 closed rows are
+    PROVABLY mis-graded** (575, 584, 586, 591 — `plan_matched=1`,
+    `plan_band=armed_fill`, grade D), because a cited+matched close grades base
+    A and two penalties reach only C, so D can only mean it was graded while
+    `Cited` was false. Two more Ds are legitimate and were nearly miscounted:
+    582 has `matched=0` → base C − 1 penalty, and 530 cites the literal sentinel
+    `off-plan`. **And the predicate is not impossible, it is partial:** base D
+    steps to F under either penalty (`InNoTrade`, `!InKillzone`), so the repair
+    silently SUCCEEDS on penalised uncited rows (566, 571 → F) and silently
+    FAILS on clean ones (580 → D) — which is why it survived, since a
+    spot-check lands on a working case. Fix keys on the ABSENCE OF LINEAGE, never
+    on a letter that encodes lineage plus two unrelated penalties; widening it to
+    "D" would promote 580, which deserves its D. Whether to backfill the 4 is an
+    owner call — a silent backfill moves a published distribution. Probes: ask which BRANCH a
     write sits on; when a log line names a CAUSE, check the code can
     distinguish it from the alternatives; and when a repair path clears a value
     to trigger a recompute, check it matches the value the broken path actually

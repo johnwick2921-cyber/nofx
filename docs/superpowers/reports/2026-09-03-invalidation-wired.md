@@ -342,29 +342,86 @@ cited)"). So the reset predicate looks for a grade this path does not produce,
 and a late-stamped position keeps its off-plan D permanently. **[A]** — both
 rows read D with full lineage, and both code lines quoted.
 
-#### Blast radius, quantified (nofx-52's numbers, re-measured here)
+#### CORRECTION — my mechanism was wrong; the predicate matches a SUBSET
+
+I wrote "the reset predicate looks for a grade that path never produces". Wrong,
+and nofx-89 caught it. `GradeAdherence` sets `base = "D"` for an uncited close
+and then applies penalties over `gradeLetters = {A,B,C,D,F}`:
+
+```go
+if in.InNoTrade  { grade = stepDown(grade, 1) }
+if !in.InKillzone { grade = stepDown(grade, 1) }
+```
+
+D is second-to-last, so **one** penalty step takes an uncited close to **F**. An
+uncited close grades F when either penalty applies and D when neither does.
+Verified: 566 and 571 are uncited with grade **F**; 580 is uncited with grade
+**D**.
+
+That is worse than an impossible predicate. `RepairArmedLineage` **silently
+succeeds on penalised uncited rows and silently fails on clean ones** — so
+anyone spot-checking would likely land on an F row, watch the repair work, and
+conclude it was fine. The fix is therefore not "also match D": the predicate
+must key on **the absence of lineage**, never on a letter that encodes lineage
+plus two unrelated penalties.
+
+#### Blast radius — four provably mis-graded, and the discriminator
+
+Both peers counted 5. It is **4**, and the reason is the grade ladder.
+
+A cited row whose direction matched grades **base A** (`plan_band` is
+`armed_fill`, not `off_band`/`struct`). Two penalties take A → **C**. **Base A
+can never reach D.** So `plan_matched=1 AND plan_band='armed_fill' AND grade='D'`
+is impossible from correctly-ordered grading — it can only mean the row was
+graded while `Cited` was false.
 
 ```
-closed + cited scenario + graded D   →  7   (ids 530, 572, 575, 582, 584, 586, 591)
-   of those, plan_matched = 1        →  5   direction agreed — provably mis-graded
-day-plan-era grade distribution      →  A 30 · B 22 · D 10 · C 5 · F 4   (n=71)
+575  reconcile   v3 S2  matched=1  armed_fill  D   ← provably mis-graded
+584  reconcile   v6 S2  matched=1  armed_fill  D   ← provably mis-graded
+586  reconcile   v5 S3  matched=1  armed_fill  D   ← provably mis-graded
+591  reconcile   v2 S1  matched=1  armed_fill  D   ← provably mis-graded
+582  armed_entry v3 S2  matched=0  (none)      D   ← LEGITIMATE: base C − 1 penalty
+530  system      v2 'off-plan'     matched=0   D   ← LEGITIMATE: sentinel, OffPlan
 ```
 
-**7 of the 10 Ds are suspect, and 5 are not merely uncited but provably
-mis-graded** — the position cites a scenario AND its direction matched. Any
-adherence rate computed today under-reports plan-following by up to 7 in 71.
+**582 does not show what we thought.** nofx-89 read it as proof that the
+`armed_entry` path grades before it stamps. But 582 has `plan_matched=0`, so its
+base is **C** ("cited a scenario but the direction mismatched"), and one penalty
+gives D legitimately. It is not evidence of the ordering problem. Whether the
+armed path has the same defect is **still open** — 582 does not settle it, and
+no row currently does.
 
-#### Two cautions for whoever fixes it (nofx-52's, and they are right)
+**591 is not a post-fix regression.** It is today's, but it was graded before my
+code shipped: row 35 filled 09:03:53, position 591 materialized 09:05:14, and
+the boot carrying this wave was 11:10:33.
 
-- **Do not simply widen the predicate to `"D"`.** A genuinely uncited close
-  *should* be D. The reset has to key on "lineage was just repaired" rather than
-  on the grade's value, or regrading will promote rows that have earned their D.
-- **Backfill versus fix-forward needs a ruling.** A silent backfill changes a
-  published grade distribution. Seven rows is small enough to fix and large
+Against the day-plan-era distribution (A 30 · B 22 · D 10 · C 5 · F 4, n=71),
+**4 of the 10 Ds are provably wrong**, so an adherence rate computed today
+under-reports plan-following by 4 in 71 — not 7.
+
+#### The five §F1 ids are three different failure states
+
+nofx-89's "25% blind" was correct when measured and is now three states behind
+one number:
+
+| ids | state |
+|---|---|
+| 566, 571 | uncited, grade F — blind, and ELIGIBLE for the reset |
+| 580 | uncited, grade D — blind and INELIGIBLE; nothing repairs it |
+| 584, 586 | lineage healed, grade still D — the stuck-D finding |
+
+A single ratio is what hid this.
+
+#### Two cautions for whoever fixes it (nofx-52's, both right)
+
+- **Do not widen the predicate to `"D"`.** A genuinely uncited close *should* be
+  D — 580 is exactly that. Key on lineage, not on the letter.
+- **Backfill versus fix-forward needs a ruling.** A silent backfill moves a
+  published grade distribution. Four rows is small enough to fix and large
   enough to notice.
 
-Out of this wave's footprint (adherence belongs to the grader). Reported, with
-the numbers, so the fix does not have to re-derive them.
+Out of this wave's footprint (adherence belongs to the grader). Remediating
+existing rows is a DB write and needs the owner's authorisation.
 
 **Line-number note:** the reset reads `reconcile.go:588` in this branch and
 `:576` in nofx-52's tree — same statement, and my branch adds lines above it.
