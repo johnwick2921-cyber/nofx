@@ -269,12 +269,14 @@ func MeanAbsIncrementOf(incs []float64) float64 {
 // DetectorBootLine reports the live detector and the two tables recording it.
 // Every field READ from its resolver; the counts come from the tables, so an
 // empty table says 0 rather than implying a measurement (A24).
-// The "legacy rates retired everywhere" clause is DELIBERATELY ABSENT until a
-// grep proves it (owner ruling 2026-09-03): the Go instruments carry retirement
-// notices, but the Guide still renders the old reaction model in levels.ts and
-// two other files. A boot line that claims a retirement it has not completed is
-// the class-49 defect this wave exists to remove.
+// The retirement clause is RESTORED, and only because a grep earned it (owner
+// ruling 2026-09-03: it stays out until a grep proves it). Checked across
+// web/src/guide/content and the Go tree: no surface renders a RATE from the
+// retired instruments. The single Guide hit — "first-touch reactions with
+// confirmation" in the REACT ZONE card — is a play DESCRIPTION, not a measured
+// rate, so it is not a retirement target. TestNoSurfaceRendersARetiredRate
+// re-runs that grep on every build.
 func DetectorBootLine(outcomes, pool int64) string {
-	return fmt.Sprintf("detector: D1′ k=%.0f Δ=resolved-per-read band=k×Δ H=%d exit_on=%s · touch_outcomes=%d · candidate_pool=%d",
+	return fmt.Sprintf("detector: D1′ k=%.0f Δ=resolved-per-read band=k×Δ H=%d exit_on=%s · touch_outcomes=%d · candidate_pool=%d · legacy rates retired (grep-verified: no surface renders one)",
 		DetectorK(), DetectorHorizonBars(), DetectorExitOn(), outcomes, pool)
 }

@@ -17,6 +17,12 @@ import (
 // points away; BROKE-CLEAN when it closes ≥8 points through and stays beyond;
 // CHOPPED when it is touched ≥3 times without any clean move.
 const (
+	// D5 (1B, 2026-09-03) — a SECOND fixed band, declared independently of
+	// touch_telemetry's TouchBandTicks and numerically equal to it by
+	// coincidence rather than by construction. Retained only for the legacy
+	// stats shape; measurement consumers use kernel.ResolvedTouchBandPoints
+	// (k×Δ), which scales with the tape instead of pretending 4 points means
+	// the same thing at every volatility.
 	LevelTouchTolPoints = 4.0
 	LevelReactPoints    = 8.0
 	LevelReactBars      = 3

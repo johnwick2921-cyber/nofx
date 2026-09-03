@@ -67,7 +67,32 @@ func TouchApproachBars() int {
 }
 
 // TouchBandPoints converts the tick band to points (MNQ tick 0.25).
+// TouchBandPoints is the LEGACY touch band.
+//
+// D5 (1B, owner ruling 2026-09-03) — THE THREE GEOMETRIES COLLAPSE TO ONE.
+// Three incompatible definitions of "at the level" coexisted: this fixed
+// ±TouchBandTicks×0.25 (default 4.00 pts), level_stats_calc's
+// LevelTouchTolPoints (also 4.0, separately declared), and a zero-tolerance
+// straddle. A fixed point band is wrong on its face — it means one thing when
+// dATR is 200 and something else entirely when it is 600 — which is why D1′
+// scales its band with the tape: k×Δ, Δ re-derived per period.
+//
+// Callers that ask "is price AT this level for a MEASUREMENT" must use
+// ResolvedTouchBandPoints. This remains only for the legacy episode shape,
+// whose verdicts are retired.
 func TouchBandPoints() float64 { return float64(TouchBandTicks()) * 0.25 }
+
+// ResolvedTouchBandPoints is the ONE band: k×Δ from the resolved detector
+// scope, so every consumer asks the same question of the same tape. Falls back
+// to the legacy fixed band ONLY when Δ cannot be derived, and says so to the
+// caller via ok=false rather than silently substituting a different geometry.
+func ResolvedTouchBandPoints(bars []market.Kline) (band float64, ok bool) {
+	delta := MeanAbsIncrement(bars)
+	if delta <= 0 {
+		return TouchBandPoints(), false
+	}
+	return DetectorK() * delta, true
+}
 
 // ── episode model ───────────────────────────────────────────────────────────
 
