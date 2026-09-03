@@ -620,18 +620,23 @@ func BuildPlannerPrompt(in PlannerInput) string {
 	b.WriteString("## No-trade gates (advisory — declare in no_trade or skip the day)\n")
 	b.WriteString("  - balance-day (open inside prior value area AND VAs overlap) → edges-only, or skip\n")
 	b.WriteString("  - opening gap >1.2×ATR or open outside the prior range → NEVER fade; the gap is a target\n")
-	b.WriteString("  - no A/B zone in reach AND no pool swept by 10:30 ET → declare the skip in the plan\n")
+	b.WriteString(fmt.Sprintf("  - no A/B zone in reach AND no pool swept by %s CT → declare the skip in the plan\n", ETtoCT("10:30")))
 	// The hard-gate half is RESOLVED, not typed: it was a third copy of the
 	// lunch window, and the F4 literal scan missed it because the bounds sit
 	// unquoted inside a longer sentence. The 11:30–13:30 ET half is the lunch
 	// LULL (trading lore, advisory) and is deliberately not the same window as
 	// the machine gate — see the report for that discrepancy.
-	b.WriteString(fmt.Sprintf("  - lunch 11:30–13:30 ET: no new entries (the system hard-gates %s–%s CT)\n", lunchStartCT, lunchEndCT))
+	// ONE window (owner ruling 2026-09-03). This line used to carry an
+	// 11:30–13:30 ET lull BESIDE the machine's 12:00–13:30 CT gate — two
+	// different windows in one sentence, in two clocks, one of them enforced.
+	// The machine's is the only one, stated in CT, rendered from its resolver.
+	b.WriteString(fmt.Sprintf("  - lunch %s–%s CT: no new entries (hard-gated — entries inside it are refused)\n", lunchStartCT, lunchEndCT))
 	b.WriteString("  - Tier-1 news → stand aside until a fresh post-news swing prints\n\n")
 
 	// A4 — killzone weighting (advisory, not a gate).
 	b.WriteString("## Killzone weighting (advisory)\n")
-	b.WriteString("  NY AM 08:30–11:00 ET is the primary window; 10:00–11:00 ET is the premium FVG window; mind the macro minutes. ")
+	b.WriteString(fmt.Sprintf("  NY AM %s–%s CT is the primary window; %s–%s CT is the premium FVG window; mind the macro minutes. ",
+		ETtoCT("08:30"), ETtoCT("11:00"), ETtoCT("10:00"), ETtoCT("11:00")))
 	b.WriteString("Conviction: down on Monday, up Thursday/Friday.\n\n")
 
 	// A5 — stop-doing line: bare acceptance entries have no edge.

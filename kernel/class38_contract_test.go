@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 )
 
 // CLASS 38 (2026-09-01) — PROMPT/VALIDATOR CONTRACT MISMATCH.
@@ -146,11 +147,14 @@ func TestNoTradeContractRendersResolvedWindows(t *testing.T) {
 		t.Error("the contract never tells the author these windows are enforced independently of what it writes")
 	}
 
-	// The window bounds must come from the functions, not from the prompt file:
-	// a change to either definition must move the prompt with it.
+	// SUPERSEDED SPEC (owner ruling 2026-09-03): this used to require the
+	// SCHEMA EXAMPLE to carry the resolved bounds too. Demonstrating the
+	// machine's windows is exactly what taught the model to restate them
+	// (ASIA v14), so the example is a placeholder now and only the SENTENCE
+	// carries the resolved values — which still has to be derived, not typed.
 	origLs, origLe := LunchWindowCT()
-	if !strings.Contains(NoTradeSchemaExample(), origLs) || !strings.Contains(NoTradeInstruction(), origLe) {
-		t.Fatal("no_trade contract text is not derived from LunchWindowCT")
+	if !strings.Contains(NoTradeInstruction(), origLs) || !strings.Contains(NoTradeInstruction(), origLe) {
+		t.Fatal("the no_trade instruction sentence is not derived from LunchWindowCT")
 	}
 }
 
@@ -208,3 +212,56 @@ func stripLineComments(src string) string {
 	}
 	return b.String()
 }
+
+// RIDER (owner ruling 2026-09-03) — the no_trade example must not demonstrate
+// the machine's own windows.
+//
+// ASIA v14, written 44 minutes after the band shipped, carried
+//
+//	"no_trade": ["first 5m (CT)", "12:00-13:30 CT lunch"]
+//
+// which is the schema example verbatim, minus its placeholder. The sentence
+// below the example asked the model not to write those windows; the example
+// above it showed them as the expected content. An example is a demonstration
+// and a sentence is a request — the example won.
+func TestNoTradeExampleDoesNotDemonstrateMachineWindows(t *testing.T) {
+	ex := NoTradeSchemaExample()
+	ls, le := LunchWindowCT()
+	for _, banned := range []string{
+		fmt.Sprintf("first %dm", FirstNoTradeMinutes()),
+		ls, le, "lunch",
+	} {
+		if strings.Contains(strings.ToLower(ex), strings.ToLower(banned)) {
+			t.Errorf("the no_trade example demonstrates %q — the machine writes that window, and the model copies whatever the example shows.\n  example: %s", banned, ex)
+		}
+	}
+	if !strings.Contains(ex, "no_trade") {
+		t.Errorf("the example must still name the field: %s", ex)
+	}
+	// The sentence stays: it is what tells the author the windows are enforced
+	// whether or not it lists them.
+	if !strings.Contains(NoTradeInstruction(), "ENFORCED by the machine whether or not you list them") {
+		t.Error("the instruction sentence must survive the example change")
+	}
+}
+
+// RIDER — the prompt declares that EVERY time in it is CT, then printed ET
+// times. A model reading "10:30 ET" as CT is an hour out. One clock.
+func TestPromptStatesNoUntypedEasternTimes(t *testing.T) {
+	prompt := plannerOutputContract(8, 5, true, true)
+	// the whole prompt, not just the output contract — the ET times lived in
+	// the no-trade gate and killzone blocks
+	full := BuildPlannerPrompt(PlannerInput{
+		TradeDate: "2026-09-03", Session: SessionNY, Price: 29000, DATR: 300,
+		Now: time.Date(2026, 9, 3, 8, 30, 0, 0, CTLocation()),
+	})
+	for name, src := range map[string]string{"output contract": prompt, "no-trade gates": full} {
+		if etTime.MatchString(src) {
+			t.Errorf("%s prints an ET wall-clock time (%q) while the clock line declares every time in this prompt CT — the model is an hour out on it",
+				name, etTime.FindString(src))
+		}
+	}
+}
+
+// etTime matches an "HH:MM ET" / "HH:MM–HH:MM ET" wall clock.
+var etTime = regexp.MustCompile(`\d{1,2}:\d{2}(\s*[–-]\s*\d{1,2}:\d{2})?\s*ET\b`)

@@ -229,9 +229,23 @@ func RenderNoTradeBand(doc *PlanDoc, sess *SessionDef, now time.Time) []Rendered
 // ("first 5m (CT)", "12:00-13:30 CT lunch"): a second copy of the definitions,
 // in the one place nothing would ever fail if it drifted.
 func NoTradeSchemaExample() string {
-	ls, le := LunchWindowCT()
-	return fmt.Sprintf(`  "no_trade": ["first %dm (CT)", "%s-%s CT lunch", "<calendar blackouts>"],`,
-		FirstNoTradeMinutes(), ls, le)
+	return `  "no_trade": ["<your own sit-out conditions, or omit>"],`
+}
+
+// ETtoCT converts an "HH:MM" Eastern wall clock to Central. America/New_York
+// and America/Chicago change offset on the same instants, so the gap is always
+// exactly one hour and this needs no date.
+//
+// It exists so the prompt can keep advisory windows that the research states in
+// ET while printing them in the ONE clock the prompt declares. The clock line
+// says every time in the prompt is CT; before this, three lines printed ET, and
+// a model reading "10:30 ET" as CT is an hour out.
+func ETtoCT(hhmm string) string {
+	m, ok := hhmmToMinK(hhmm)
+	if !ok {
+		return hhmm // unparseable: pass it through rather than invent a time
+	}
+	return HHMM(((m-60)%1440 + 1440) % 1440)
 }
 
 // NoTradeInstruction is the rule sentence governing what the model may put in
