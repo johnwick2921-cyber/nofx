@@ -273,6 +273,9 @@ func main() {
 	logger.Infof("📜 %s", kernel.PromptFeedsForwardBootLine(-1, 0, kernel.MinSLATRMult()))
 	// CLASS 47 (2026-09-02) — wake cadence: every field READ from its resolver.
 	logger.Infof("⏱ %s", trader.WakeCadenceBootLine())
+	// INVALIDATION-WIRED (2026-09-03) — the arm gate's new leg and the
+	// armed-under surfaces, both READ from the code that implements them.
+	logger.Infof("🛡 %s", trader.ArmGateBootLine())
 	// VOID PARITY (2026-09-02) — the ONE scope the prompt's VOID list and the
 	// write-site validator both read. Every field READ from its resolver.
 	logger.Infof("📜 %s", kernel.VoidScopeBootLine())

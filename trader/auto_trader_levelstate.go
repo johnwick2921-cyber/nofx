@@ -2,6 +2,7 @@ package trader
 
 import (
 	"encoding/json"
+	"strings"
 	"sync"
 	"time"
 
@@ -251,6 +252,22 @@ func (at *AutoTrader) recordScenarioState() {
 	}
 	if metaBlob, mErr := json.Marshal(map[string]any{"basis": basis, "unevaluable": unevaluable, "confirm": confirms}); mErr == nil {
 		_ = at.store.SetSystemConfig(store.ScenarioMetaKey(at.id, resolvedPlanID), string(metaBlob))
+	}
+	// INVALIDATION-WIRED (2026-09-03) — stamp WHEN a scenario first read
+	// invalidated, once. The evaluator is stateless, so without this the gate's
+	// refusal could only say "as of now"; the arm that cost $140 on 09-03 was
+	// armed twelve minutes after the verdict, and twelve minutes is the point.
+	for _, e := range evals {
+		if !e.HasAnchor || e.Status != kernel.ScenarioInvalidated {
+			continue
+		}
+		k := store.ScenarioInvalidatedAtKey(at.id, resolvedPlanID, e.ID)
+		if prior, gErr := at.store.GetSystemConfig(k); gErr == nil && strings.TrimSpace(prior) != "" {
+			continue // already stamped — never overwritten
+		}
+		if sErr := at.store.SetSystemConfig(k, kernel.FormatCT(now)); sErr != nil {
+			at.logWarnf("🎯 invalidation timestamp write failed for %s: %v", e.ID, sErr)
+		}
 	}
 	if at.scenarioStateLog != string(blob) {
 		at.scenarioStateLog = string(blob)

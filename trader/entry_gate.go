@@ -72,6 +72,32 @@ type EntryIntent struct {
 	// OnNoChase receives the leg's measurement. WARN-FIRST: the gate NEVER
 	// refuses on it in this wave; the callback records and logs.
 	OnNoChase func(NoChaseVerdict)
+
+	// INVALIDATION (owner ruling 2026-09-03) — the system's OWN verdict, made
+	// execution-wired.
+	//
+	// On 2026-09-03 the evaluator logged "🎯 scenario S1 → ≈invalidated @
+	// 29285.00 (price accepted through the level against the trade —
+	// display-only estimate, never execution-wired)" at 08:50:54, and the arm
+	// seam armed that same S1 short at 29285 twelve minutes later. It filled,
+	// stopped at the widened stop, and cost $140. The label was accurate: no
+	// leg read the conclusion the system had already reached.
+	//
+	// The resolver calls the SAME evaluator the display path uses — never a
+	// second copy of the predicate. nil = leg off, which is how the decision
+	// path stays out of scope. ok=false = the evaluator could not run (no
+	// bars): the leg PASSES and OnInvalidationUnavailable is told, because an
+	// unresolved check is not a refusal.
+	ScenarioInvalidation      func(scenarioID string) (InvalidationVerdict, bool)
+	OnInvalidationUnavailable func(note string)
+}
+
+// InvalidationVerdict is the evaluator's conclusion about one scenario.
+type InvalidationVerdict struct {
+	Invalidated bool
+	AtCT        string  // when the verdict was reached, CT wall clock "HH:MM"
+	Anchor      float64 // the level price the tape accepted through
+	Reason      string  // the evaluator's own words
 }
 
 // EntryGate runs the single canonical entry gate chain. Empty reason = allow.
@@ -109,14 +135,45 @@ func EntryGate(in EntryIntent) (reason string, refused bool) {
 		}
 	}
 
-	// Leg 3 — shadow map (0C owner ruling 2026-08-31): a shadowed condition is
+	// Leg 3 — INVALIDATION (owner ruling 2026-09-03). ARM PATH ONLY: the
+	// resolver is wired by entryGateForArm and left nil everywhere else.
+	//
+	// This runs before the pricing legs on purpose. R:R and min-SL ask whether
+	// a trade is well-formed; this asks whether the setup still exists at all,
+	// and a well-formed trade into a dead setup is the 09:02 arm.
+	if in.Path == "arm" && in.CitedScenario != "" && in.ScenarioInvalidation != nil {
+		v, ok := in.ScenarioInvalidation(in.CitedScenario)
+		switch {
+		case !ok:
+			// Fail-open, loudly. An unresolved check is not a refusal.
+			if in.OnInvalidationUnavailable != nil {
+				in.OnInvalidationUnavailable(fmt.Sprintf(
+					"entry_gate: invalidation check unavailable for %s — leg PASSED (no verdict is not a refusal)", in.CitedScenario))
+			}
+		case v.Invalidated:
+			at := v.AtCT
+			if at == "" {
+				at = "an earlier cycle"
+			}
+			msg := fmt.Sprintf("entry_gate: scenario %s invalidated at %s", in.CitedScenario, at)
+			if v.Anchor > 0 {
+				msg += fmt.Sprintf(" (accepted through %.2f)", v.Anchor)
+			}
+			if v.Reason != "" {
+				msg += " — " + v.Reason
+			}
+			return msg, true
+		}
+	}
+
+	// Leg 4 — shadow map (0C owner ruling 2026-08-31): a shadowed condition is
 	// authored + E8-scored but NEVER placed, on ANY path. The decision path had
 	// no copy of this check — 589 and 590 both traded breakout_retest.
 	if in.ScenarioCond != "" && in.ConditionShadowed != nil && in.ConditionShadowed(in.ScenarioCond) {
 		return fmt.Sprintf("entry_gate: scenario %s condition %s is SHADOW (0C) — authored + E8-scored, never placed on any path", in.CitedScenario, in.ScenarioCond), true
 	}
 
-	// Leg 4 — R:R at the REAL entry price (the fix for 587/589): the floor is
+	// Leg 5 — R:R at the REAL entry price (the fix for 587/589): the floor is
 	// judged at the price the order will transact at, not the prompt snapshot.
 	// entry<=0 or stop<=0 → skip (fail-open; validateDecision owns wrong-side).
 	rr := 0.0
@@ -140,7 +197,7 @@ func EntryGate(in EntryIntent) (reason string, refused bool) {
 		}
 	}
 
-	// Leg 5 — min-SL ×ATR5m (same floor as both legacy chains).
+	// Leg 6 — min-SL ×ATR5m (same floor as both legacy chains).
 	if in.ATR5m > 0 && in.MinSLMult > 0 && in.Entry > 0 && in.Stop > 0 {
 		dist := in.Entry - in.Stop
 		if side == "short" {
@@ -151,7 +208,7 @@ func EntryGate(in EntryIntent) (reason string, refused bool) {
 		}
 	}
 
-	// Leg 6 — one-live-arm (class 27 FIX 4 semantics, applied to BOTH paths):
+	// Leg 7 — one-live-arm (class 27 FIX 4 semantics, applied to BOTH paths):
 	// an opposite-side entry while a position is open NETS it on a netting
 	// account — refuse. Same-side add is outside this guard's scope.
 	if in.OpenPositionSide != "" {
@@ -224,27 +281,30 @@ func (at *AutoTrader) entryGateForArm(plan *kernel.ActivePlan, sc kernel.PlanSce
 	levelPx, levelKind := citedLevelFor(sc, plan)
 	touchPx, hasTouch := at.lastTouchFor(levelPx)
 	return EntryGate(EntryIntent{
-		Path:              "arm",
-		CitedLevelPx:      levelPx,
-		CitedLevelKind:    levelKind,
-		LastTouchPx:       touchPx,
-		HasTouch:          hasTouch,
-		OnNoChase:         at.noChaseObserver("arm", sc.ID),
-		Action:            "open_" + side,
-		Symbol:            at.futuresSymbol(),
-		Entry:             leg.Entry,
-		Stop:              leg.Stop,
-		Target:            leg.Target,
-		ATR5m:             atr5m,
-		MinRR:             armMinRR(),
-		MinSLMult:         kernel.MinSLATRMult(),
-		PlanBias:          biasDir,
-		PlanMode:          at.planModeFor(session),
-		CitedScenario:     sc.ID,
-		ScenarioDir:       sc.Direction,
-		ScenarioCond:      sc.Condition,
-		OpenPositionSide:  openSide,
-		ConditionShadowed: func(cond string) bool { return at.conditionShadowedFor(cond, session) },
+		Path:           "arm",
+		CitedLevelPx:   levelPx,
+		CitedLevelKind: levelKind,
+		LastTouchPx:    touchPx,
+		HasTouch:       hasTouch,
+		OnNoChase:      at.noChaseObserver("arm", sc.ID),
+		// INVALIDATION (owner ruling 2026-09-03) — the arm path, and only it.
+		ScenarioInvalidation:      at.scenarioInvalidationResolver(plan),
+		OnInvalidationUnavailable: func(note string) { at.logWarnf("🛡 %s", note) },
+		Action:                    "open_" + side,
+		Symbol:                    at.futuresSymbol(),
+		Entry:                     leg.Entry,
+		Stop:                      leg.Stop,
+		Target:                    leg.Target,
+		ATR5m:                     atr5m,
+		MinRR:                     armMinRR(),
+		MinSLMult:                 kernel.MinSLATRMult(),
+		PlanBias:                  biasDir,
+		PlanMode:                  at.planModeFor(session),
+		CitedScenario:             sc.ID,
+		ScenarioDir:               sc.Direction,
+		ScenarioCond:              sc.Condition,
+		OpenPositionSide:          openSide,
+		ConditionShadowed:         func(cond string) bool { return at.conditionShadowedFor(cond, session) },
 	})
 }
 

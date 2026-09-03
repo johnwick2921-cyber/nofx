@@ -518,9 +518,16 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 				// PRE-REOPEN F3 (2026-08-28) — the authored log fires ONCE per
 				// spec (dedup by plan:version:scenario + prices); the dead-row
 				// re-log spam (69+ lines/day) came from logging every cycle.
+				// F4 (2026-09-03) — the dedup value carries the row's STATE.
+				// "⚔️ armed NY S1 leg 1 short limit" re-logged 4× on 09-03
+				// after row 35 was already filled: ListNonTerminal excludes
+				// filled/cancelled rows, so a terminal row is not found, row.ID
+				// stays 0, and this branch runs again. State in the value means
+				// a re-log is at least visible as a state change — and the
+				// guard below means a terminal row does not log "armed" at all.
 				akey := plan.PlanID + ":" + strconv.Itoa(plan.Version) + ":" + sc.ID + ":leg" + strconv.Itoa(li+1)
-				aval := fmt.Sprintf("%s %.2f/%.2f/%.2f", side, leg.Entry, leg.Stop, leg.Target)
-				if armRefusalChanged(&at.armAuthoredLast, akey, aval) {
+				aval := fmt.Sprintf("%s %.2f/%.2f/%.2f state=%s", side, leg.Entry, leg.Stop, leg.Target, row.State)
+				if armAuthoredLoggable(row.State) && armRefusalChanged(&at.armAuthoredLast, akey, aval) {
 					at.logInfof("⚔️ armed %s %s leg %d %s limit %.2f SL %.2f TP %.2f (tick-managed placement is Phase 2)", plan.Session, sc.ID, li+1, side, leg.Entry, leg.Stop, leg.Target)
 				}
 			} else {
@@ -939,6 +946,11 @@ func churnNeedsModify(oldStop, oldTarget, newStop, newTarget, tick float64) bool
 func armRefusalClass(verdict string) string {
 	v := strings.ToLower(verdict)
 	switch {
+	// INVALIDATION (2026-09-03) — first, because it is the only class that says
+	// the SETUP is gone rather than that the trade is badly shaped. It must not
+	// fall into "other" and disappear from the tally.
+	case strings.Contains(v, "invalidated at"):
+		return "invalidated"
 	case strings.HasPrefix(v, "r:r"):
 		return "rr"
 	case strings.Contains(v, "too close"):
@@ -1196,6 +1208,27 @@ func (at *AutoTrader) stampArmedFillLineage(r store.ArmedOrderDB, fillPrice floa
 	if err := at.store.Position().SetPlanLinkFull(pos.ID, r.Version, r.Scenario, true, "armed_fill", r.PlanID, tradeDate, r.Session); err != nil {
 		at.logWarnf("⚡ armed fill lineage stamp failed: %v", err)
 	}
+	// F3 (2026-09-03) — the contracts the fill delivered, on the same path that
+	// stamps lineage. Row 35 read filled with fill_quantity=0 beside a position
+	// of quantity 1.
+	if err := at.store.ArmedOrders().SetFillQuantity(r.ID, int(pos.Quantity)); err != nil {
+		at.logWarnf("⚡ armed fill quantity stamp failed: %v", err)
+	}
+	// F2 (2026-09-03) — the fill line names the version the arm BELONGS to,
+	// not whatever version is live by the time it fills.
+	at.logInfof("⚡ armed fill %s: armed under v%d %s %s (%s) · qty %.0f",
+		r.Scenario, armedUnderVersionOf(r), r.Scenario, r.Side, r.EntryClass, pos.Quantity)
+}
+
+// armedUnderVersionOf reads the version an arm was FIRST authorized under,
+// falling back to the mutable Version only when the attribution column was
+// never stamped (rows created before 2026-09-03 10:28 carry 0 — armed rows 35
+// and 36 are both such rows).
+func armedUnderVersionOf(r store.ArmedOrderDB) int {
+	if r.ArmedUnderVersion > 0 {
+		return r.ArmedUnderVersion
+	}
+	return r.Version
 }
 
 // armGateVerdict runs the arm-time gate chain for a SINGLE arm (legacy shape).
@@ -1590,4 +1623,15 @@ func (at *AutoTrader) TestArmCancel(signalID string) error {
 		}
 	}
 	return nil
+}
+
+// armAuthoredLoggable reports whether a row in this state may log "⚔️ armed".
+// A filled or cancelled arm was not just authored, whatever the ledger lookup
+// missed (F4, 2026-09-03).
+func armAuthoredLoggable(state string) bool {
+	switch strings.ToLower(strings.TrimSpace(state)) {
+	case "filled", "cancelled", "expired":
+		return false
+	}
+	return true
 }
