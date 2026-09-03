@@ -1105,7 +1105,17 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     measurement. The authored-log dedup value carries the row's state, and a
     terminal row never logs "armed" at all. **Law:** a verdict the system
     publishes to itself must have a named consumer or be deleted — and a column
-    nothing reads is not a feature, it is a rumour.
+    nothing reads is not a feature, it is a rumour. **Rider (2026-09-03, after
+    the boot):** the `fill_quantity` fix shipped INCOMPLETE and proves the law
+    against itself. It stamped at fill time only — and the fill frame lands
+    BEFORE the position row materializes, so `stampArmedFillLineage` returns on
+    that path first. nofx-89's 09-01 audit had already measured it: **584 of 586
+    armed fills carried `;stamp_pending`**, so the stamp covered 2 of 586. Armed
+    row 35 today took the same path and read `fill_quantity=0` with the stamp
+    live. `StampArmedLineageIfMatched` stamps it now, via
+    `PositionStore.QuantityOf`. A write on a path almost nothing takes is the
+    same defect as a read nobody performs — and the way to catch it is to ask
+    which BRANCH the write sits on, not merely whether the write exists.
 58. **A mode that existed only in a comment.** (Highest occupied at merge: 57.)
     Root cause: `plan_mode` was documented as `advisory | direction | strict`
     in a doc comment (`store/strategy.go:919`) and offered in the Studio

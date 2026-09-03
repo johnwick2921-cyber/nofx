@@ -1,10 +1,13 @@
-# INVALIDATION-WIRED (checklist class 57)
+# INVALIDATION-WIRED (checklist class 59)
 
 **Branch:** `fix/invalidation-wired` off `75d923eb` (deployed rev `528edd78`)
 **Commits:** `d2805408` · `c52c98e2` (+ this report) · pushed
-**Checklist:** entry **57** (highest occupied at merge: **56**)
+**Checklist:** entry **59** — renumbered 57 → 59 AT MERGE by the integrator
+(nofx-52): 57 went to a magic-epoch class that merged first. PART 1 is 50–59.
 **Boot line:** `🛡 arm gate: invalidation-wired=on · armed-under surfaces=on …`
-**Status:** NOT DEPLOYED. Rides the next boot.
+**Status:** MOSTLY LIVE. `beb42e04` merged into dev and shipped as rev
+`f478ed88`, booted 2026-09-03 11:10:33 CT (marker `67ff5e9c`, zero ERRO). The
+one-live-position commit is DEFERRED to the next boot by owner instruction.
 
 ---
 
@@ -227,3 +230,39 @@ rollback named by the rev it holds, A19 all four halves with the marker
 
 **PROOF OWED:** the next arm on an already-invalidated scenario showing the
 refusal line, and the next open position's card showing its armed-under version.
+
+---
+
+## 9. F3 WAS INCOMPLETE, AND IT SHIPPED THAT WAY
+
+Found after the boot, from nofx-89's 2026-09-01 audit
+(`docs/full-system-audit-0901` @ `7df072a3`): **584 of 586 armed fills carried
+`;stamp_pending`**.
+
+That is the path `stampArmedFillLineage` takes when the fill frame lands before
+the position row is materialized — and it `return`s there, *before* the
+`SetFillQuantity` call §4 describes. So the stamp I shipped covered the minority
+case: 2 of 586 by that audit's count.
+
+**Live proof, not inference.** Armed row 35 today logged
+`⚡ armed fill S1 @ 29285.00: position row not materialized yet — stamp pending
+(reconcile completes it)` and still reads `fill_quantity=0` with the stamp
+running.
+
+`StampArmedLineageIfMatched` (`trader/ninjatrader/reconcile.go`) completes the
+lineage, the signal id and clears the pending marker — and never touched
+`fill_quantity`. It does now, reading the materialized position's quantity via
+`PositionStore.QuantityOf`. `SetFillQuantity` still refuses a zero, so an absent
+row writes nothing.
+
+Pinned: a filled row with `;stamp_pending` + a materialized position →
+`fill_quantity=1` and the marker cleared.
+
+**Caveat on the audit's numbers**, as its author flagged: 584/586 is the
+`fef656a4` baseline, superseded by the class-35 cutover at 17:24 CT on 09-01. It
+is a documented before-state, not a current measurement — the current
+measurement is row 35, n=1.
+
+This is the wave's own lesson turned on itself. §1 says every defect here was a
+record written that nothing read; F3 wrote a stamp on a path almost nothing
+takes.

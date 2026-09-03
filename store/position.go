@@ -467,6 +467,21 @@ func (s *PositionStore) SetPositionAccount(id int64, account string) error {
 	}).Error
 }
 
+// QuantityOf reads one position's quantity by id (invalidation-wired, 2026-09-03).
+// The armed-ledger fill stamp needs it from the reconcile path, which knows the
+// position id but not its size. Returns 0 when the row is absent — the caller
+// then writes nothing, because SetFillQuantity refuses a zero.
+func (s *PositionStore) QuantityOf(id int64) float64 {
+	if s == nil || s.db == nil || id == 0 {
+		return 0
+	}
+	var pos TraderPosition
+	if err := s.db.First(&pos, id).Error; err != nil {
+		return 0
+	}
+	return pos.Quantity
+}
+
 // UpdatePositionQuantityAndPrice updates position quantity and recalculates entry price
 func (s *PositionStore) UpdatePositionQuantityAndPrice(id int64, addQty float64, addPrice float64, addFee float64) error {
 	var pos TraderPosition
