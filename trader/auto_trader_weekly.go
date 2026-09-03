@@ -247,21 +247,15 @@ func (at *AutoTrader) runWeeklyRead(now time.Time, monday string, bootBackfill b
 		// Accepted — stamp the audit fields and write the plan row.
 		doc.FactsHash = facts.FactsHash
 		doc.ThinHistory = facts.ThinHistory
-		// F5 DOA guard (2026-08-30): if the bias's own invalidation basis is
-		// ALREADY crossed at write, stamp neutral now — never write a stillborn
-		// bias the watch kills seconds later (the 17:07:15 bear lived 3s and
-		// the invalidated bear was RIGHT by 250pt).
-		var doaBars []market.Kline
-		if market.FuturesBarsProvider != nil {
-			tf := kernel.WeeklyInvalidationBasisTF(doc.Invalidation.Basis)
-			if tf == "" {
-				tf = kernel.WeeklyInvalidationTFDefault()
-			}
-			doaBars = market.FuturesBarsProvider(at.futuresSymbol(), tf, kernel.AISVPBarCount)
-		}
-		if kernel.ApplyWeeklyDOA(doc, doaBars, time.Now()) {
-			at.logWarnf("📅 WEEKLY READ %s stamped NEUTRAL AT WRITE (F5 DOA) — invalidation %.2f already crossed by a closed %s bar", monday, doc.Invalidation.Px, kernel.WeeklyInvalidationBasisTF(doc.Invalidation.Basis))
-		}
+		doc.Conviction = "n/a" // class 50: refs-only — the field is fixed "n/a"
+		// CLASS 50 (refs-only wave, 2026-09-02): the deterministic bias rule
+		// survives as SHADOW — stamped on the doc and logged so the
+		// anti-prediction keeps being measured (calibration report 2026-09-02:
+		// holdout hit 25-28%, called-only 45-51%). NOTHING reads it as a
+		// direction. Never inverted.
+		shadowBias, shadowWhy := kernel.WeeklyRuleBias(facts)
+		doc.ShadowBias, doc.ShadowWhy = shadowBias, shadowWhy
+		at.logInfof("📅 WEEKLY SHADOW (never a direction): rule bias would have been %s — %s", shadowBias, shadowWhy)
 		docJSON, _ := json.Marshal(doc)
 		trigger := "sunday_weekly_read"
 		if bootBackfill {
@@ -282,8 +276,8 @@ func (at *AutoTrader) runWeeklyRead(now time.Time, monday string, bootBackfill b
 			at.logErrorf("⚠️ WEEKLY READ FAILED for %s: plan row write: %v", monday, werr)
 			return
 		}
-		at.logInfof("📅 WEEKLY READ written %s v%d bias=%s conviction=%s draw=%s@%.2f invalid=%.2f thin=%v facts_hash=%s…",
-			monday, version, doc.Bias, doc.Conviction, doc.Draw.Name, doc.Draw.Px, doc.Invalidation.Px, doc.ThinHistory, facts.FactsHash[:12])
+		at.logInfof("📅 WEEKLY READ written %s v%d refs_only=true PWH=%.2f PWL=%.2f levels=%d thin=%v shadow_bias=%s facts_hash=%s…",
+			monday, version, facts.Refs.PWH, facts.Refs.PWL, len(doc.WeeklyLevels), doc.ThinHistory, shadowBias, facts.FactsHash[:12])
 		at.weeklyState.mu.Lock()
 		at.weeklyState.resetWeek(monday)
 		at.weeklyState.doc, at.weeklyState.loaded = doc, true
@@ -325,72 +319,12 @@ func (at *AutoTrader) weeklyDocCached(now time.Time) *kernel.WeeklyDoc {
 	return &doc
 }
 
-// maybeCheckWeeklyInvalidation is the W4 watch, called from the EXISTING
-// cycle: when a CLOSED bar of the invalidation basis TF crosses the
-// invalidation price, the WEEKLY doc flips bias→neutral with invalidated_at
-// stamped (a NEW appended version — plans rows are immutable). NEVER
-// auto-flips the opposite side. Idempotent: the invalidated_at guard makes it
-// once per week max; no re-read until next Sunday.
-func (at *AutoTrader) maybeCheckWeeklyInvalidation(now time.Time) {
-	if !at.dayPlanEnabled() || at.store == nil || at.exchange != "ninjatrader" {
-		return
-	}
-	if market.FuturesBarsProvider == nil {
-		return
-	}
-	doc := at.weeklyDocCached(now)
-	if doc == nil {
-		return
-	}
-	bias := strings.ToLower(strings.TrimSpace(doc.Bias))
-	if bias != "bull" && bias != "bear" {
-		return
-	}
-	if strings.TrimSpace(doc.InvalidatedAt) != "" {
-		return // guard flag — once per week max
-	}
-	tf := kernel.WeeklyInvalidationBasisTF(doc.Invalidation.Basis)
-	if tf == "" {
-		tf = kernel.WeeklyInvalidationTFDefault()
-	}
-	bars := market.FuturesBarsProvider(at.futuresSymbol(), tf, kernel.AISVPBarCount)
-	if !kernel.WeeklyInvalidationCrossed(bias, doc.Invalidation.Px, bars) {
-		return
-	}
-	monday := kernel.WeekGoverningMonday(now).Format("2006-01-02")
-	row, err := at.store.Plan().GetLatestPlanForTraderSession(monday, "WEEKLY", at.id)
-	if err != nil || row == nil {
-		return
-	}
-	var cur kernel.WeeklyDoc
-	if json.Unmarshal([]byte(row.Doc), &cur) != nil || strings.TrimSpace(cur.InvalidatedAt) != "" {
-		return // re-check the stored row's guard (cache could race a fresh write)
-	}
-	oldBias := cur.Bias
-	cur.Bias = "neutral"
-	cur.InvalidatedAt = kernel.FormatCT(now)
-	docJSON, _ := json.Marshal(&cur)
-	version, werr := at.store.Plan().AppendPlan(&store.PlanDB{
-		PlanID:        row.PlanID,
-		StrategyID:    at.id,
-		TradeDate:     monday,
-		Session:       "WEEKLY",
-		TriggerReason: "weekly_invalidated",
-		Lifecycle:     "active",
-		ModelID:       row.ModelID,
-		PromptHash:    row.PromptHash,
-		Doc:           string(docJSON),
-	})
-	if werr != nil {
-		at.logErrorf("📅 WEEKLY INVALIDATED write failed for %s: %v", monday, werr)
-		return
-	}
-	at.logInfof("📅 WEEKLY INVALIDATED %s @ %.2f (%s, v%d) — bias→neutral, no auto-flip; no re-read until next Sunday.",
-		oldBias, doc.Invalidation.Px, tf, version)
-	at.weeklyState.mu.Lock()
-	at.weeklyState.doc = &cur
-	at.weeklyState.mu.Unlock()
-}
+// CLASS 50 (refs-only wave, 2026-09-02): the W4 mid-week invalidation watch is
+// REMOVED — a refs-only doc has no bias and no invalidation, so there is
+// nothing to flip and nothing reads bias as a direction anymore. Pre-wave
+// stored docs with bias fields are also left untouched: nothing consumes
+// them. The pure helpers (ApplyWeeklyDOA / WeeklyInvalidationCrossed) remain
+// in kernel for the offline anti-prediction measurement only.
 
 // weeklyConfluenceShadow (W5.1) is the SHADOW scorer: seated levels within
 // WEEKLY_CONFLUENCE_BAND_ATR × ATR5m of a weekly-class reference log their
@@ -453,58 +387,14 @@ func (at *AutoTrader) weeklyConfluenceShadow(tradeDate, session string, levels [
 	at.weeklyState.mu.Unlock()
 }
 
-// weeklyCounterShadow (W5.2) annotates every entry opposing the weekly bias
-// (conviction med|high) with the clauses that WOULD have changed the trade
-// under the hypothetical Sep-9 hard rules. Aligned entries: silent. Shadow
-// only — this call can never block or resize anything.
+// weeklyCounterShadow (W5.2) — CLASS 50 (refs-only wave): the weekly doc no
+// longer carries a direction, so the counter annotation is retired — nothing
+// reads bias as a direction anymore, not even in shadow. The rule bias
+// survives in shadow_bias on the doc + the WeeklyRuleBias log line (measured
+// offline; never inverted). The pure helpers stay in kernel for that
+// measurement only.
 func (at *AutoTrader) weeklyCounterShadow(decision *kernel.Decision) {
-	if !at.dayPlanEnabled() || decision == nil {
-		return
-	}
-	if decision.Action != "open_long" && decision.Action != "open_short" {
-		return
-	}
-	if kernel.WeeklyCounterMode() == "off" {
-		return
-	}
-	doc := at.weeklyDocCached(time.Now())
-	if doc == nil {
-		return
-	}
-	side := "long"
-	if decision.Action == "open_short" {
-		side = "short"
-	}
-	rr := 0.0
-	entry := 0.0
-	if bars := market.FuturesBarsProvider(at.futuresSymbol(), "1m", 1); len(bars) > 0 {
-		entry = bars[len(bars)-1].Close
-	}
-	if entry > 0 && decision.StopLoss > 0 && decision.TakeProfit > 0 {
-		risk, reward := entry-decision.StopLoss, decision.TakeProfit-entry
-		if side == "short" {
-			risk, reward = decision.StopLoss-entry, entry-decision.TakeProfit
-		}
-		if risk > 0 {
-			rr = reward / risk
-		}
-	}
-	grade := at.weeklyScenarioGrade(decision.CitedScenario)
-	clauses := kernel.WeeklyCounterClauses(doc.Bias, doc.Conviction, side, grade, rr)
-	if len(clauses) == 0 {
-		return // aligned or low-conviction → silent
-	}
-	telemetry.IncWeeklyCounter(at.id)
-	for _, c := range clauses {
-		switch c {
-		case "would-require-A-grade":
-			telemetry.IncWeeklyCounterBlock(at.id)
-		case "would-halve-size":
-			telemetry.IncWeeklyCounterResize(at.id)
-		}
-	}
-	at.logInfof("⚖️ WEEKLY-COUNTER %s vs weekly %s/%s (%s) — %s (SHADOW: annotates, never blocks)",
-		side, doc.Bias, doc.Conviction, decision.CitedScenario, strings.Join(clauses, " · "))
+	return // class 50: no weekly direction exists to be counter to
 }
 
 // weeklyScenarioGrade resolves the cited scenario's quality grade from the
@@ -539,33 +429,12 @@ func (at *AutoTrader) weeklyScenarioGrade(cited string) string {
 	return ""
 }
 
-// weeklyDrawAlignTag (W5.3) computes the draw-alignment tag for a decision
-// row: toward_draw | away | neutral. Called from saveDecision so EVERY
-// decision row carries it.
+// weeklyDrawAlignTag (W5.3) — CLASS 50 (refs-only wave): the weekly doc has no
+// direction anymore, so the draw-alignment tag is pinned "neutral" for every
+// row. The kernel.WeeklyDrawAlignTag helper stays for the offline measurement
+// of pre-wave rows only.
 func (at *AutoTrader) weeklyDrawAlignTag(record *store.DecisionRecord) string {
-	doc := at.weeklyDocCached(time.Now())
-	if doc == nil {
-		return "neutral"
-	}
-	side := ""
-	entry := 0.0
-	for _, d := range record.Decisions {
-		if d.Action == "open_long" {
-			side = "long"
-			break
-		}
-		if d.Action == "open_short" {
-			side = "short"
-			break
-		}
-	}
-	if side == "" {
-		return "neutral"
-	}
-	if bars := market.FuturesBarsProvider(at.futuresSymbol(), "1m", 1); len(bars) > 0 {
-		entry = bars[len(bars)-1].Close
-	}
-	return kernel.WeeklyDrawAlignTag(doc.Bias, side, doc.Draw.Px, entry)
+	return "neutral"
 }
 
 // applyWeeklyDecisionShadow is the single per-entry hook: counter annotation

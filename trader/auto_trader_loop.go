@@ -273,11 +273,10 @@ func (at *AutoTrader) runCycle() error {
 	// sat behind cycle_skip=no_new_data until ~17:00:03). See
 	// evaluateWallClockSessionReads in auto_trader_clock.go.
 
-	// W4 (weekly-bias wave) — MID-WEEK INVALIDATION WATCH, in the EXISTING cycle
-	// (no new loop): a CLOSED bar of the invalidation basis TF beyond the weekly
-	// invalidation price flips the WEEKLY doc bias→neutral (idempotent, once per
-	// week). Never auto-flips the opposite side; never a gate.
-	at.maybeCheckWeeklyInvalidation(time.Now())
+// CLASS 50 (refs-only wave, 2026-09-02): the W4 mid-week invalidation
+		// watch is REMOVED — refs-only weekly docs carry no bias/invalidation,
+		// so there is nothing to flip. The rule bias survives as shadow
+		// (stamped + logged by the Sunday read), never read as a direction.
 
 	// P3.6-A — DIGEST WRITERS: 3-line session digest at each session close + the
 	// daily roll-up at the trade-date close. Idempotent; gated → dormant.
