@@ -543,10 +543,12 @@ carry the schema example verbatim:
 |---|---|---|---|
 | ASIA v14 | 00:08:45 CT | `["first 5m (CT)", "12:00-13:30 CT lunch"]` | 2 |
 | ASIA v15 | 00:34:14 CT | `["first 5m (CT)", "12:00-13:30 CT lunch"]` | 2 |
+| LONDON v1 | 01:34:53 CT | `["first 5m (CT)", "12:00-13:30 CT lunch"]` | 2 |
 
-**2 of 2, byte-identical, from two independent reads.** That is the baseline the
-three post-boot plans are measured against. It also rules out chance: the model
-is not choosing these two windows, it is copying the example.
+**3 of 3, byte-identical, across two sessions and three independent reads.** That is the baseline the
+three post-boot plans are measured against. It also rules out chance and
+rules out session: the model is not choosing these two windows, it is copying
+the example.
 
 ### 11.7 Two reads, two identical rejects — noted, not this wave
 
@@ -560,8 +562,14 @@ Both reads since the band boot were rejected on attempt 1 for the same defect:
 Both repaired on attempt 2 and landed (`repair_outcome_ok` 10 → 11 across them).
 2 of 2 reads authoring a waterfall play with zero measured displacement is a
 prompt question — something is inviting `breakdown_continue` where the tape has
-no displacement — but it belongs to whoever owns the waterfall play, not to this
-wave. **[A]**, n=2.
+no displacement. Answered in §12: the floor was enforced and never stated.
+**[A]**, n=2.
+
+**Third read, no reject.** LONDON v1 at 01:34:53 landed on attempt 1 and
+authored `S1 reject` + `S2 sweep_reclaim` — no waterfall at all. So the
+displacement rejects are not every read; they are every read that reaches for
+a waterfall. n=3: two waterfall attempts, two rejects, one read that did not
+try. That is the population §12's proof will be measured over.
 
 ---
 
