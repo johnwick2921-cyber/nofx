@@ -1214,6 +1214,22 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     becomes load-bearing — and a green suite is only evidence about the moment
     it ran.
 
+    **RIDER — the liveness check has a FALSE POSITIVE (2026-09-03, combined
+    boot 3).** `~/nofx-main.lock` carried `pid=1860416`, and `kill -0` on it
+    FAILED — which the LOCK LIVENESS AMENDMENT reads as a dead holder to be
+    cleared and re-acquired. **The holder was alive and mid-cutover.** The PID
+    had been written into the lock hours earlier and that session's process
+    identity changed under it during a long run, so the lock carried a dead
+    number for a living owner. Acting on the amendment as written would have
+    cleared a LIVE holder's lock between its merge and its swap — precisely the
+    double-deploy the lock exists to prevent. What stopped it was noticing HEAD
+    move between two consecutive commands (`f93dc2de` → `8d47cc21`) and ASKING
+    the peer rather than concluding from the PID. **Probe:** a dead PID is
+    necessary but NOT sufficient evidence of a dead holder. Corroborate with a
+    signal that does not depend on process identity — is HEAD moving, is a
+    build in flight, does the named session answer — before clearing anything.
+    A long-running session outlives its own PID.
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,
