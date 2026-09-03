@@ -450,7 +450,7 @@ func BuildPlannerPrompt(in PlannerInput) string {
 	// which breakdown levels are VOID, and the stop floor the executor enforces.
 	// Both are computed from the SAME code the enforcer runs, so the prompt can
 	// never hold a second opinion. Empty inputs render nothing.
-	b.WriteString(RenderVoidBreakdownLevels(in.VoidBreakdownLevels))
+	b.WriteString(RenderVoidBreakdownLevels(in.VoidBreakdownLevels, len(in.Levels)))
 	b.WriteString(RenderStopFloorLine(in.StopFloorATR5m, in.StopFloorMult))
 
 	b.WriteString("## Ranked levels (Go-graded; you never re-sort)\n")

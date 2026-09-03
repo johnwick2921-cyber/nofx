@@ -41,8 +41,15 @@ func PromptContracts() []PromptContract {
 		// CONDITIONAL sections (rendered only when there is something to say),
 		// so the contract asserts the ORDER text that always ships with them.
 		{
-			Rule:       "void breakdown levels are named in the facts, not discovered at write",
-			Site:       "kernel/class45_feeds_forward.go ComputeVoidBreakdownLevels → BreakdownContinueState",
+			// CHOP COLLAPSE (owner ruling 2026-09-03): levels void BOTH ways carry
+			// no direction, so the eighteen-line list measured live at 00:00:56
+			// CT renders as ONE aggregated CHOP line naming the alternative
+			// ("prefer touch/fade plays there"); one-sided voids keep their own
+			// line with side and reclaim time. MustAppear stays the ORDER text
+			// that ALWAYS ships — the chop line itself is conditional, and a
+			// fragment that cannot always appear would make this guard unusable.
+			Rule:       "void breakdown levels are named in the facts, not discovered at write (both-way voids collapse into one CHOP line that names the alternative)",
+			Site:       "kernel/class45_feeds_forward.go ComputeVoidBreakdownLevels → BreakdownContinueState; RenderVoidBreakdownLevels (chop collapse)",
 			MustAppear: []string{"if a breakdown level is listed as VOID above, author a different condition there"},
 		},
 		{
