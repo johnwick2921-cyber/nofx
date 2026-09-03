@@ -55,8 +55,25 @@ type EntryIntent struct {
 	ScenarioDir   string // the cited scenario's direction ("long"/"short"/"")
 	ScenarioCond  string // the cited scenario's condition ("" = none)
 
-	// One-live-arm input: the currently OPEN position side ("" = flat).
-	OpenPositionSide string
+	// ONE OPEN POSITION PER INSTRUMENT (owner ruling 2026-09-03). "" / 0 = flat.
+	//
+	// The predecessor leg refused only the OPPOSITE side, because on a netting
+	// account an opposite-side fill silently nets the position; a same-side add
+	// was "outside this guard's scope". The same-version re-arm block lives in
+	// the store, so a NEW plan version could re-authorize a terminal row and
+	// add to a position that was still open. The ruling closes both: while any
+	// position is open, every open is refused, whatever the side and version.
+	//
+	// The id/version/scenario ride along so the refusal names WHAT is open
+	// rather than merely that something is.
+	OpenPositionSide     string
+	OpenPositionID       int64
+	OpenPositionVersion  int
+	OpenPositionScenario string
+
+	// IsExitLeg marks an arm explicitly authored to FLATTEN the open position.
+	// It is not an open, and refusing it would strand the position.
+	IsExitLeg bool
 
 	// Shadow resolver (nil = shadow leg off, fail-open).
 	ConditionShadowed func(condition string) bool
@@ -98,6 +115,25 @@ type InvalidationVerdict struct {
 	AtCT        string  // when the verdict was reached, CT wall clock "HH:MM"
 	Anchor      float64 // the level price the tape accepted through
 	Reason      string  // the evaluator's own words
+}
+
+// openPositionLabel names what is open, for the refusal. A version of 0 means
+// the column was never stamped (rows written before the attribution wave) and
+// renders as such, never as "v0".
+func openPositionLabel(in EntryIntent) string {
+	side := strings.ToLower(strings.TrimSpace(in.OpenPositionSide))
+	ver := fmt.Sprintf("v%d", in.OpenPositionVersion)
+	if in.OpenPositionVersion <= 0 {
+		ver = "version not recorded"
+	}
+	sc := in.OpenPositionScenario
+	if sc == "" {
+		sc = "no cited scenario"
+	}
+	if in.OpenPositionID > 0 {
+		return fmt.Sprintf("position %d open (%s %s %s)", in.OpenPositionID, ver, sc, side)
+	}
+	return fmt.Sprintf("a %s position is open (%s %s)", side, ver, sc)
 }
 
 // EntryGate runs the single canonical entry gate chain. Empty reason = allow.
@@ -233,13 +269,16 @@ func EntryGate(in EntryIntent) (reason string, refused bool) {
 		}
 	}
 
-	// Leg 7 — one-live-arm (class 27 FIX 4 semantics, applied to BOTH paths):
-	// an opposite-side entry while a position is open NETS it on a netting
-	// account — refuse. Same-side add is outside this guard's scope.
-	if in.OpenPositionSide != "" {
+	// Leg 7 — ONE OPEN POSITION PER INSTRUMENT (owner ruling 2026-09-03).
+	// Was one-live-ARM (class 27 FIX 4), which refused only the opposite side.
+	// Now: any open position refuses any open, either side, any plan version.
+	// An explicitly authored exit leg is exempt — that is how a position is
+	// flattened, and exits are out of this wave's scope.
+	if in.OpenPositionSide != "" && !in.IsExitLeg {
 		open := strings.ToLower(strings.TrimSpace(in.OpenPositionSide))
-		if (open == "long" || open == "short") && open != side {
-			return fmt.Sprintf("entry_gate: %s entry would net the open %s position (one_live_arm_guard, class 27)", side, open), true
+		if open == "long" || open == "short" {
+			return fmt.Sprintf("entry_gate: %s entry refused: %s (one_open_position, owner ruling 2026-09-03); no adds, no flips",
+				side, openPositionLabel(in)), true
 		}
 	}
 
@@ -287,16 +326,19 @@ func armSeamATR5m(symbol string) float64 {
 // EntryGate is the SAME function the decision path runs, so an arm can never
 // be held to a weaker standard than a market entry.
 func (at *AutoTrader) entryGateForArm(plan *kernel.ActivePlan, sc kernel.PlanScenario, leg kernel.PlanArmLeg, side, biasDir string, atr5m float64) (string, bool) {
-	openSide := ""
-	// class-27 escape, mirrored from oneLiveArmGuard: a leg explicitly authored
-	// as an exit/flip leg for the open position is allowed to be opposite-side.
-	if !strings.EqualFold(strings.TrimSpace(leg.Kind), "exit") && at.store != nil {
+	openSide, openID, openVer, openScenario := "", int64(0), 0, ""
+	isExit := strings.EqualFold(strings.TrimSpace(leg.Kind), "exit")
+	// ONE OPEN POSITION (2026-09-03): the position's identity rides into the
+	// gate so the refusal names what is open. The exit-leg escape survives —
+	// that is how a position is flattened.
+	if !isExit && at.store != nil {
 		opens, err := at.store.Position().GetOpenPositions(at.id)
 		if err == nil {
 			sym := market.Normalize(at.futuresSymbol())
 			for _, p := range opens {
 				if strings.EqualFold(p.Symbol, sym) && (p.Side == "long" || p.Side == "short") {
 					openSide = strings.ToLower(p.Side)
+					openID, openVer, openScenario = p.ID, p.PlanVersion, p.CitedScenarioID
 					break
 				}
 			}
@@ -329,6 +371,10 @@ func (at *AutoTrader) entryGateForArm(plan *kernel.ActivePlan, sc kernel.PlanSce
 		ScenarioDir:               sc.Direction,
 		ScenarioCond:              sc.Condition,
 		OpenPositionSide:          openSide,
+		OpenPositionID:            openID,
+		OpenPositionVersion:       openVer,
+		OpenPositionScenario:      openScenario,
+		IsExitLeg:                 isExit,
 		ConditionShadowed:         func(cond string) bool { return at.conditionShadowedFor(cond, session) },
 	})
 }
@@ -343,7 +389,7 @@ func (at *AutoTrader) entryGateForDecision(d *kernel.Decision, livePrice float64
 	if d == nil {
 		return "", false
 	}
-	openSide := ""
+	openSide, openID, openVer, openScenario := "", int64(0), 0, ""
 	if at.store != nil {
 		opens, err := at.store.Position().GetOpenPositions(at.id)
 		if err == nil {
@@ -351,6 +397,9 @@ func (at *AutoTrader) entryGateForDecision(d *kernel.Decision, livePrice float64
 			for _, p := range opens {
 				if strings.EqualFold(p.Symbol, sym) && (p.Side == "long" || p.Side == "short") {
 					openSide = strings.ToLower(p.Side)
+					// ONE OPEN POSITION (2026-09-03) — the identity, so the
+					// refusal names what is open.
+					openID, openVer, openScenario = p.ID, p.PlanVersion, p.CitedScenarioID
 					break
 				}
 			}
@@ -366,18 +415,21 @@ func (at *AutoTrader) entryGateForDecision(d *kernel.Decision, livePrice float64
 		session = s.Name
 	}
 	intent := EntryIntent{
-		Path:             "decision",
-		Action:           d.Action,
-		Symbol:           d.Symbol,
-		Entry:            livePrice,
-		Stop:             d.StopLoss,
-		Target:           d.TakeProfit,
-		ATR5m:            armSeamATR5m(d.Symbol),
-		MinRR:            minRR,
-		MinSLMult:        kernel.MinSLATRMult(),
-		PlanMode:         at.planModeFor(session),
-		CitedScenario:    strings.TrimSpace(d.CitedScenario),
-		OpenPositionSide: openSide,
+		Path:                 "decision",
+		Action:               d.Action,
+		Symbol:               d.Symbol,
+		Entry:                livePrice,
+		Stop:                 d.StopLoss,
+		Target:               d.TakeProfit,
+		ATR5m:                armSeamATR5m(d.Symbol),
+		MinRR:                minRR,
+		MinSLMult:            kernel.MinSLATRMult(),
+		PlanMode:             at.planModeFor(session),
+		CitedScenario:        strings.TrimSpace(d.CitedScenario),
+		OpenPositionSide:     openSide,
+		OpenPositionID:       openID,
+		OpenPositionVersion:  openVer,
+		OpenPositionScenario: openScenario,
 	}
 	if kernel.HasTraderPlanProvider(at.id) {
 		if ap := kernel.ActivePlanFor(at.id, at.futuresSymbol()); ap != nil {
