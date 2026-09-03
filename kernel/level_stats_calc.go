@@ -17,6 +17,12 @@ import (
 // points away; BROKE-CLEAN when it closes ≥8 points through and stays beyond;
 // CHOPPED when it is touched ≥3 times without any clean move.
 const (
+	// D5 (1B, 2026-09-03) — a SECOND fixed band, declared independently of
+	// touch_telemetry's TouchBandTicks and numerically equal to it by
+	// coincidence rather than by construction. Retained only for the legacy
+	// stats shape; measurement consumers use kernel.ResolvedTouchBandPoints
+	// (k×Δ), which scales with the tape instead of pretending 4 points means
+	// the same thing at every volatility.
 	LevelTouchTolPoints = 4.0
 	LevelReactPoints    = 8.0
 	LevelReactBars      = 3
@@ -64,6 +70,14 @@ func EvaluateLevelOutcome(bars []market.Kline, levelPrice, touchTol, reactPts fl
 		return o
 	}
 	o.Touched = true
+	// ── D4 (1B, 2026-09-03) — THE "REACTED" VERDICT IS RETIRED ───────────────
+	// It counted ANY ≥reactPts move away from the level within LevelReactBars,
+	// EITHER SIDE, so a blast-through scored identically to a rejection. Every
+	// reaction rate ever published from it (84%, 70.3%, 75.1%) is an artifact of
+	// that predicate, not a property of the tape. The field is still computed so
+	// existing rows keep their shape, but NO SURFACE MAY RENDER A RATE FROM IT —
+	// the calibrated replacement is store.TouchOutcomeStore (D1′, p(hold)=0.4988
+	// on IID-shuffled real tape). See kernel/detector_d1prime.go.
 	// Reacted: ≥reactPts move away from the level within LevelReactBars of the
 	// first touch (either side; measured on closes).
 	for i := first + 1; i <= first+LevelReactBars && i < len(bars); i++ {

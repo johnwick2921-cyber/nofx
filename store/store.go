@@ -38,6 +38,8 @@ type Store struct {
 	tradeExcursions  *TradeExcursionStore
 	plannerRejected  *PlannerRejectedStore
 	plannerReadFacts *PlannerReadFactsStore
+	touchOutcomes    *TouchOutcomeStore
+	candidatePool    *CandidatePoolStore
 	configChanges    *ConfigChangeStore
 	watchdogFires    *WatchdogFireStore
 	levelStats       *LevelStatsStore
@@ -432,6 +434,26 @@ func (s *Store) ConfigChanges() *ConfigChangeStore {
 
 // PlannerReadFacts gets the per-read facts table (VOID PARITY, 2026-09-02) —
 // what the model was TOLD on every read, accepted or rejected.
+// TouchOutcomes gets the D1′ episode table (1B D2).
+func (s *Store) TouchOutcomes() *TouchOutcomeStore {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.touchOutcomes == nil {
+		s.touchOutcomes = NewTouchOutcomeStore(s.gdb)
+	}
+	return s.touchOutcomes
+}
+
+// CandidatePool gets the per-read candidate pool (1B D3).
+func (s *Store) CandidatePool() *CandidatePoolStore {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.candidatePool == nil {
+		s.candidatePool = NewCandidatePoolStore(s.gdb)
+	}
+	return s.candidatePool
+}
+
 func (s *Store) PlannerReadFacts() *PlannerReadFactsStore {
 	s.mu.Lock()
 	defer s.mu.Unlock()

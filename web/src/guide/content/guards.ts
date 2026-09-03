@@ -241,6 +241,19 @@ export const guards: GuideSection = {
       kind: 'p',
       text: 'Second fix, same wave: an armed order now records the plan version it was ARMED under, once, and never rewrites it. Its existing version field still moves when a later plan version touches the row, and is now documented as meaning exactly that. Before this, an arm\'s version was whatever last touched it, which is why an audit asking "which version armed this?" could not answer honestly.',
     },
+    { kind: 'h', text: 'HOW A LEVEL IS MEASURED — THE DETECTOR (1B)' },
+    {
+      kind: 'p',
+      text: 'Every number this system has published about how levels behave — 84% reactions, 70.3%, 75.1% — was an artifact of how the question was asked, not something the market did. Two detectors were running. One called a touch a REJECTION whenever the closing price was still on the side it arrived from, which on a coin-flip tape is true about 69% of the time before the market does anything at all. The other counted ANY move away from the level as a reaction, so price blasting straight through scored the same as price refusing to go. Neither could have returned a low number. Three different definitions of "at the level" were in use at once, two of them a fixed four points — which means one thing on a quiet morning and nothing at all on a violent one.',
+    },
+    {
+      kind: 'p',
+      text: "The replacement is deliberately dull: put two barriers an equal distance either side of the level, and see which one price reaches first. Equal distances mean a market with no opinion is a coin flip by construction, so any departure from 50/50 is the market talking rather than the instrument. The distance is k×Δ, where Δ is the tape's own average minute-to-minute movement, re-measured per period — so the band widens when the market does. Calibrated on real MNQ data with the moves shuffled into random order, it reads 0.4988, and through the live recording path 0.4920. Both are the coin flip you want to see from an instrument that has no opinion of its own.",
+    },
+    {
+      kind: 'p',
+      text: 'Episodes that cannot be resolved — price spans both barriers in one bar, or the horizon runs out — are RECORDED and counted, then excluded from the rate. That matters: a rate that quietly discards its hard cases flatters itself. Every rate ships with its sample size and a confidence interval, and below 200 observations it is labelled DESCRIPTIVE ONLY, because at that size it describes a sample rather than estimating a property. Two tables now record all of it: one row per episode, and one row per candidate level per plan read — including the levels that were NOT chosen, with the reason each was cut. Without the rejected ones you can measure how the chosen levels performed and never whether the choosing was any good.',
+    },
     { kind: 'h', text: 'WHEN YOU SAVE IN STRATEGY STUDIO (class 44)' },
     {
       kind: 'p',
