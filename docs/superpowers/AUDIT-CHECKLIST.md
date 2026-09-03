@@ -832,6 +832,30 @@ in CLAUDE.md).
     enforce, in the validator's own words and by calling the validator's own
     code where a verdict is involved; a correction is cumulative or it teaches
     the model to trade one mistake for another.
+51. **A direction was shipped on evidence that never existed — the weekly bias
+    was anti-predictive.** (Dispatch "weekly refs only"; class 50 wave.) Root
+    cause: the weekly-bias design (2026-08-30) assumed the Sunday doc's
+    directional call carried signal, and every consumer — the W4 invalidation
+    watch, the F5 write-time DOA stamp, the draw-alignment tag, the
+    WEEKLY-COUNTER shadow — read `WeeklyDoc.Bias` as a direction. The first
+    out-of-sample test of that direction (bias calibration 2026-09-02,
+    pre-registered; report `docs/superpowers/reports/2026-09-02-bias-calibration.md`)
+    found the reconstructed rule ANTI-predictive on holdout (raw hit 25–28%,
+    called-only 45–51%; net-of-friction t ≈ −14) — a label was governing prompts
+    with negative signal, and no reader had ever asked for its evidence.
+    **Probe:** for every advisory/soft-law label in a prompt, ask what
+    out-of-sample test earned it the label and what it would take to strip it;
+    a "shadow" annotation that READS a direction is a consumer, not a shadow.
+    **Fix:** the weekly doc is REFS ONLY — weekly_levels (PWH/PWL/IPDA/NWOG)
+    plus a facts-only narrative; the validator now REJECTS directional tokens
+    (r4) instead of demanding them; the chip and both prompt lines render
+    "WEEKLY: refs only — PWH x · PWL y"; the invalidation watch, DOA stamp,
+    counter shadow and draw-align tag are retired (nothing reads bias as a
+    direction anymore); the deterministic rule survives as `shadow_bias` on the
+    doc + a log line so the anti-prediction keeps being measured — never read,
+    never inverted. **Law:** a directional label is evidence or it is noise; a
+    label with measured negative signal must be demoted to shadow, and nothing
+    — not even a "shadow" annotation — may consume it as a direction.
 
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
