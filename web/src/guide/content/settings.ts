@@ -614,7 +614,7 @@ export const settings: GuideSection = {
       items: [
         {
           title: 'ARM_MIN_RR = 2.0',
-          body: 'The gate-at-arm R:R floor for resting orders (the market-entry floor stays 3.0).',
+          body: 'The gate-at-arm R:R floor for resting orders. RESOLVED 2026-09-03: the market-entry floor is ALSO 2.0, not 3.0 — the entry gate reads the BOUND strategy (MNQ, a5b7662e), whose min_risk_reward_ratio is 2 since the 2026-09-01 08:13 CT save. Both paths therefore refuse below 2.0. The 3.0 this card used to claim is the hardcoded fallback the gate uses only when the bound config has no value, and it is also what the unbound preset 均衡策略 carries — which is how the wrong number got here.',
         },
         {
           title: 'HTF_VETO_MODE = cross',

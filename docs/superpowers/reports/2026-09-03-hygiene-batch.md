@@ -38,8 +38,21 @@ saved strategy config reads `day_plan.proximity_filter_atr = 1.5`, and
 "⭐ 0.3 — LIVE since 2026-08-28" and is now corrected to the resolved 1.5 with
 the band described as `K × dATR`.
 
-**H7d/H7e — already correct, no change made.** The live config reads
-`min_risk_reward_ratio = 3`, so "the market-entry floor stays 3.0" is true.
+**H7d — REVERSED 2026-09-03 after a measurement error of my own.** I first read
+`SELECT config FROM strategies LIMIT 1`, which returned the UNBOUND preset
+`均衡策略` (rr=3), and reported the market-entry floor as 3.0. The trader binds
+`traders.strategy_id = a5b7662e-…` — the strategy named **"MNQ"**, whose
+`min_risk_reward_ratio` is **2** since the 2026-09-01 08:13 CT save. So BOTH
+paths refuse below **2.0** (arm path: `armMinRR()` default 2.0), and the Guide
+card is corrected to say so.
+
+> **`SELECT … LIMIT 1` on a multi-row table is never a measurement.** The bound
+> row is found by TRADER BINDING (`traders.strategy_id`), never by `is_active`,
+> `is_default`, or row order. This is **checklist class 9 (is_active-vs-binding)**,
+> which already names these exact two rows — 4104ca0a advisory vs the bound
+> a5b7662e — and I walked into it anyway. The probe existed; I did not run it.
+
+**H7e — already correct, no change made.**
 `ResolveMaxContracts` ends in `ClampStageAContracts`, which caps at **1** since
 0B, so "capacity=1" is true and needs no owner click.
 
