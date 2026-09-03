@@ -1,5 +1,7 @@
 # RESEARCH INDEX — everything commissioned 2026-08-17 → 2026-09-01
 
+**STANDING RULE (owner, 2026-09-03): a docs branch merges to dev the SAME DAY it is pushed — a report not on dev does not exist.** Eight branches were merged under that rule on 2026-09-03 (dev `338867f9`), all verified docs-only (40 files, 40 under `docs/`) and each report curl'd 200 at raw/dev.
+
 Archive merged to dev 2026-09-01 by `docs/research-archive-merge` (docs-only; no code, no content edits). Each stranded artifact keeps its original filename; collisions are suffixed with the branch slug. Source branch + original commit sha recorded per row. Reports are historical artifacts — a wrong report stays wrong; corrections happen in later waves, not here.
 
 Legend — Action: **shipped** (wave name) · **queued** · **owner-ruled** · **NONE**. Conflicts: →DUPLICATE (agree) / →CONTRADICTION (owner-ruled).
@@ -62,6 +64,14 @@ Legend — Action: **shipped** (wave name) · **queued** · **owner-ruled** · *
 | 08-30 | massive-move audit | docs/superpowers/reports/2026-08-30-massive-move-audit.md | `docs/massive-move-audit` `151ef42b` (origin) | −204pt sell-off; 5 bug-class candidates | **shipped** via weekly/armed waves | — |
 | 08-31 | planner latency autopsy | docs/superpowers/reports/2026-08-31-planner-latency-autopsy.md | `docs/planner-latency-autopsy` `168e5282` | ~99.5% provider generation | **shipped** planner-speed wave; T1/T2/T4 gaps open | — |
 | 09-01 | EOD verification | docs/superpowers/reports/2026-08-31-eod-verification.md | dev `b8f68db1` | six waves verified live | verification | — |
+| 09-02 | level-kind replay | docs/superpowers/reports/2026-09-02-level-kind-replay.md | docs/level-kind-replay-0902 `3961f873` | merged 2026-09-03 by `fix/hygiene-0903` docs sweep — see the report | (unclassified: verdict/action not yet triaged) | — |
+| 09-02 | bias calibration | docs/superpowers/reports/2026-09-02-bias-calibration.md | docs/bias-calibration-0902 `2deab3c8` | merged 2026-09-03 by `fix/hygiene-0903` docs sweep — see the report | (unclassified: verdict/action not yet triaged) | — |
+| 09-02 | live bias replay | docs/superpowers/reports/2026-09-02-live-bias-replay.md | docs/live-bias-replay-0902 `53498adb` | merged 2026-09-03 by `fix/hygiene-0903` docs sweep — see the report | (unclassified: verdict/action not yet triaged) | — |
+| 09-02 | belief census | docs/superpowers/reports/2026-09-02-belief-census.md | docs/belief-census-0902 `ee64a494` | merged 2026-09-03 by `fix/hygiene-0903` docs sweep — see the report | (unclassified: verdict/action not yet triaged) | — |
+| 09-02 | bar-source audit | docs/superpowers/reports/2026-09-02-bar-source-audit.md | docs/bar-source-audit-0902 `593dcf9e` | merged 2026-09-03 by `fix/hygiene-0903` docs sweep — see the report | (unclassified: verdict/action not yet triaged) | — |
+| 09-02 | today's losses forensic | docs/superpowers/reports/2026-09-02-today-losses-forensic.md | docs/today-losses-0902 `53288973` | merged 2026-09-03 by `fix/hygiene-0903` docs sweep — see the report | (unclassified: verdict/action not yet triaged) | — |
+| 09-03 | no-trade forensic | docs/superpowers/reports/2026-09-03-no-trade-forensic.md | docs/no-trade-forensic-0903 `9c42b342` | merged 2026-09-03 by `fix/hygiene-0903` docs sweep — see the report | (unclassified: verdict/action not yet triaged) | — |
+| 09-03 | MC drawdown rig | docs/superpowers/reports/2026-09-03-mc-drawdown.md | docs/mc-drawdown-0903 `77e1cdfc` | expectancy indistinguishable from zero (CI −$31…+$18, n=64); maxDD@50 p95 $1,677; the 3-trade cap forfeits $24.54/day, the $450 limit is inert | **INPUT to size/limit rulings** — no verdict by stop-line | — |
 
 Static literature (on dev): `docs/research/PLAN-CARD-DESIGN-SYSTEM.md`, `VL-DAYPLAN-FULL-SPEC-(2).md`, `AI-Trader-Analysis-Report.md`, `Strategy-Studio-Complete-Plan.md`, `VL_Trading_System_*.md`, `docs/research/plan-card/`.
 
