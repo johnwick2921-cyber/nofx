@@ -533,3 +533,32 @@ contents. Expected: the model's own conditions, or an empty list. A plan still
 echoing `first 5m (CT)` after all five copies and both orders are gone would
 mean the behaviour is not coming from the prompt at all, and the next place to
 look is the repair path's own prompt.
+
+### 11.6 The BEFORE measurement (baseline for the re-measure)
+
+Two plans have now been written on the deployed pre-rider prompt, and both
+carry the schema example verbatim:
+
+| version | written | `no_trade` | machine windows |
+|---|---|---|---|
+| ASIA v14 | 00:08:45 CT | `["first 5m (CT)", "12:00-13:30 CT lunch"]` | 2 |
+| ASIA v15 | 00:34:14 CT | `["first 5m (CT)", "12:00-13:30 CT lunch"]` | 2 |
+
+**2 of 2, byte-identical, from two independent reads.** That is the baseline the
+three post-boot plans are measured against. It also rules out chance: the model
+is not choosing these two windows, it is copying the example.
+
+### 11.7 Two reads, two identical rejects — noted, not this wave
+
+Both reads since the band boot were rejected on attempt 1 for the same defect:
+
+```
+00:07  S3 breakdown_continue: measured displacement 0.00 pts < 1.0×ATR5m (15.2 pts)
+00:33  S2 breakdown_continue: measured displacement 0.00 pts < 1.0×ATR5m (21.5 pts)
+```
+
+Both repaired on attempt 2 and landed (`repair_outcome_ok` 10 → 11 across them).
+2 of 2 reads authoring a waterfall play with zero measured displacement is a
+prompt question — something is inviting `breakdown_continue` where the tape has
+no displacement — but it belongs to whoever owns the waterfall play, not to this
+wave. **[A]**, n=2.
