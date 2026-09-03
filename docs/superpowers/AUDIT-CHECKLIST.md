@@ -1,13 +1,17 @@
 # AUDIT-CHECKLIST — the permanent audit playbook
 
-Codified 2026-08-28 from the campaign's 18 proven bug classes. **Every audit
+Codified 2026-08-28 from the campaign's then-18 proven bug classes; 53 as of
+2026-09-03. **Every audit
 dispatch MUST reference this file instead of re-deriving the probe list. Every
 NEW bug class found gets appended here in the SAME PR that fixes it** (canon law
 in CLAUDE.md).
 
 ---
 
-## PART 1 — THE 26 BUG CLASSES (name · root cause · probe · law)
+## PART 1 — THE BUG CLASSES (name · root cause · probe · law)
+
+*Highest occupied class: **53** (2026-09-03). Numbers are assigned AT MERGE and
+never renumbered; a gap means a wave took a later slot to avoid a collision.*
 
 1. **Self-imposed caps.** Root cause: an AI/HTTP/token cap chosen without
    measuring the provider ceiling or the observed need (the 32768-token
@@ -231,6 +235,33 @@ in CLAUDE.md).
     the refusal (no/old build) and the release (new build). **Law:** NO
     additive wire frame is sent before the far-side build proves it; a
     capability gate ships with its own negative fixture.
+
+27. **The netting orphan: a broker that nets, a ledger that does not.** Root
+    cause: NT8 nets positions per account, so a second entry in the same
+    direction produced ONE broker position while our ledger held two rows —
+    the second row had no broker counterpart and could never close. **Probe:**
+    after any entry path change, open two same-direction positions on one
+    account in SIM and diff the ledger row count against the NT8 snapshot; a
+    close that leaves a row OPEN with no broker position is the signature.
+    **Fix:** shipped a0c7ff0b (report 2026-08-31-netting-orphan-wave.md).
+    **Law:** the ledger's model of the broker is a claim to be verified against
+    the broker's own snapshot, never assumed from our own writes.
+
+28. **Canonical casing.** Root cause: the same identifier written two ways
+    (symbol, account, session) compares unequal and silently splits a lookup
+    into a miss. **Probe:** for every map key and every WHERE clause built from
+    a string, ask where the string was normalized and whether BOTH sides use
+    the same normalizer. **Law:** one canonicalizer per identifier, called at
+    the boundary where the value enters, not at each comparison.
+
+29. **The silent-aggregate family.** Root cause: aggregates that answer
+    confidently from data they should have excluded or never had — an exit
+    price equal to the entry price yielding a clean 0.00 P&L, test-seam rows
+    summed into production totals, a rate printed without its n. Each looks
+    healthy precisely because it is wrong. **Probe:** for every aggregate, ask
+    what a MISSING or SYNTHETIC row does to it — if the answer is "nothing
+    visible", the aggregate is lying; require the exclusion count beside every
+    sum. **Law:** an aggregate reports what it excluded, or it is not evidence.
 
 30. **GORM alias scan silently reads 0.** Root cause: a `Scan` target struct
     field whose default GORM snake-casing disagrees with the SELECT alias —

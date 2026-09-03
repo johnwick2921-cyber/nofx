@@ -22,7 +22,7 @@ export const routines: GuideSection = {
           ],
         },
         {
-          title: 'After the plan read (17:00 / 01:55 / 08:25)',
+          title: 'After the plan read (16:30 / 01:30 / 08:00)',
           steps: [
             'Card present — not a NO-TRADE banner?',
             "Bias + bias-tree line agree with the day's shape?",

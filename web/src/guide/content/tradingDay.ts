@@ -105,9 +105,9 @@ export const tradingDay: GuideSection = {
       title: 'session registry (the times every gate uses)',
       head: ['Session', 'Read', 'Window (CT)', 'EOD flat'],
       rows: [
-        ['ASIA', '16:55', '17:00 → 02:00', 'session end − 0 min'],
-        ['LONDON', '01:55', '02:00 → 08:30', 'session end − 0 min'],
-        ['NY', '08:25', '08:30 → 14:45', 'session end − 0 min (R-A15)'],
+        ['ASIA', '16:30', '17:00 → 02:00', 'session end − 0 min'],
+        ['LONDON', '01:30', '02:00 → 08:30', 'session end − 0 min'],
+        ['NY', '08:00', '08:30 → 14:45', 'session end − 0 min (R-A15)'],
       ],
     },
     { kind: 'h', text: 'The EOD ladder (limit-then-market)' },
