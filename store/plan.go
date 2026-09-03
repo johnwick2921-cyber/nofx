@@ -2,6 +2,7 @@ package store
 
 import (
 	"fmt"
+	"nofx/logger"
 	"sync"
 	"time"
 
@@ -32,8 +33,8 @@ import (
 
 // PlanDB is one immutable plan version. TableName → "plans".
 type PlanDB struct {
-	PlanID        string `gorm:"column:plan_id;primaryKey"`              // stable per (trade_date, session); see MakePlanID
-	Version       int    `gorm:"column:version;primaryKey"`              // append-only, 1-based
+	PlanID  string `gorm:"column:plan_id;primaryKey"` // stable per (trade_date, session); see MakePlanID
+	Version int    `gorm:"column:version;primaryKey"` // append-only, 1-based
 	// S3 (mega-research 2026-08-26) — SEMANTICS NOTE: this column stores the
 	// TRADER id, not the strategy id (historical; do NOT repurpose — analysis
 	// joins use position_plan_join, which keys on plan_id).
@@ -288,14 +289,25 @@ func (s *PlanStore) UpdatePlanLifecycle(planID string, version int, lifecycle, t
 		return fmt.Errorf("plan_id and version required")
 	}
 	return s.enqueue(func(db *gorm.DB) error {
+		// D3 (2026-09-03): the lifecycle marker NO LONGER overwrites
+		// trigger_reason. That column is the AUTHORING trigger; the marker
+		// appends to plan_lifecycle_log, so a row answers both questions.
 		res := db.Model(&PlanDB{}).
 			Where("plan_id = ? AND version = ?", planID, version).
-			Updates(map[string]any{"lifecycle": lifecycle, "trigger_reason": triggerReason})
+			Update("lifecycle", lifecycle)
 		if res.Error != nil {
 			return res.Error
 		}
 		if res.RowsAffected == 0 {
 			return fmt.Errorf("plan row %s v%d not found", planID, version)
+		}
+		// The log is telemetry: a failure here WARNs and the transition still
+		// stands (class 23 — an instrument never blocks the thing it measures).
+		if err := db.Create(&PlanLifecycleEvent{
+			PlanID: planID, Version: version, Event: lifecycle,
+			Reason: triggerReason, At: time.Now(),
+		}).Error; err != nil {
+			logger.Warnf("🗓 plan lifecycle log append failed (%s v%d → %s): %v", planID, version, lifecycle, err)
 		}
 		return nil
 	})
@@ -480,4 +492,56 @@ func (s *PlanStore) ListOverlays(planID string, planVersion int) ([]*PlanOverlay
 		return nil, err
 	}
 	return rows, nil
+}
+
+// ── LIFECYCLE LOG (data-integrity wave D3, 2026-09-03) ──────────────────────
+//
+// UpdatePlanLifecycle used to write the lifecycle marker INTO trigger_reason,
+// so a plan row could answer "why was this parked" or "why was this authored",
+// never both — and the second answer destroyed the first. Live rows that lost
+// their authoring trigger this way:
+//
+//	2026-08-27:ASIA … v7  active   "rearmed:2x5m close back below 29678.25 …"
+//	2026-08-28:NY   … v2  dormant  "dormant:death:death-condition: 15m_close …"
+//	2026-08-26:ASIA … v10 dormant  "dormant:flip:flip-condition: 15m_close …"
+//
+// trigger_reason is the AUTHORING trigger now and nothing else. Every
+// transition appends here instead, so both questions have an answer and the
+// order is recoverable.
+
+// PlanLifecycleEvent is one transition.
+type PlanLifecycleEvent struct {
+	ID      int64     `gorm:"column:id;primaryKey;autoIncrement"`
+	PlanID  string    `gorm:"column:plan_id;index"`
+	Version int       `gorm:"column:version"`
+	Event   string    `gorm:"column:event"`  // the lifecycle it moved TO
+	Reason  string    `gorm:"column:reason"` // the marker the caller passed
+	At      time.Time `gorm:"column:at"`
+}
+
+func (PlanLifecycleEvent) TableName() string { return "plan_lifecycle_log" }
+
+const planLifecycleLogDDL = `
+CREATE TABLE IF NOT EXISTS plan_lifecycle_log (
+	id      INTEGER PRIMARY KEY AUTOINCREMENT,
+	plan_id TEXT    NOT NULL DEFAULT '',
+	version INTEGER NOT NULL DEFAULT 0,
+	event   TEXT    NOT NULL DEFAULT '',
+	reason  TEXT    NOT NULL DEFAULT '',
+	at      DATETIME
+);
+CREATE INDEX IF NOT EXISTS idx_plan_lifecycle_log_plan ON plan_lifecycle_log(plan_id, version, id);
+`
+
+// MigrateLifecycleLog creates the table. Idempotent.
+func (s *PlanStore) MigrateLifecycleLog() error {
+	return s.db.Exec(planLifecycleLogDDL).Error
+}
+
+// LifecycleLog returns one plan version's transitions, oldest first.
+func (s *PlanStore) LifecycleLog(planID string, version int) ([]PlanLifecycleEvent, error) {
+	var out []PlanLifecycleEvent
+	err := s.db.Where("plan_id = ? AND version = ?", planID, version).
+		Order("id").Find(&out).Error
+	return out, err
 }

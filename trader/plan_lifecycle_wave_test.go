@@ -120,8 +120,27 @@ func TestFlipDeathMarksDormantAndSkipsBudget(t *testing.T) {
 	if row.Version != 1 {
 		t.Fatalf("dormant must NOT write a new version (got v%d)", row.Version)
 	}
-	if !strings.HasPrefix(row.TriggerReason, "dormant:flip:") {
-		t.Fatalf("trigger marker wrong: %q", row.TriggerReason)
+	// SUPERSEDED SPEC (D3, 2026-09-03): the lifecycle marker used to be written
+	// INTO trigger_reason, which destroyed the authoring trigger — a row could
+	// answer "why parked" or "why authored", never both. The marker lives in
+	// plan_lifecycle_log now, so the assertion moves there and trigger_reason
+	// is asserted to have SURVIVED.
+	events, lErr := st.Plan().LifecycleLog(row.PlanID, row.Version)
+	if lErr != nil || len(events) == 0 {
+		t.Fatalf("lifecycle log: %v (%d events)", lErr, len(events))
+	}
+	last := events[len(events)-1]
+	if last.Event != "dormant" || !strings.HasPrefix(last.Reason, "dormant:flip:") {
+		t.Fatalf("lifecycle log's last event wrong: %+v", last)
+	}
+	// The claim is that the park no longer OVERWRITES trigger_reason — not that
+	// every fixture has an authoring trigger to begin with (this one appends
+	// its plan without one). So the assertion is that no lifecycle marker
+	// leaked into the column.
+	for _, marker := range []string{"dormant:", "rearmed:"} {
+		if strings.HasPrefix(row.TriggerReason, marker) {
+			t.Fatalf("a lifecycle marker overwrote trigger_reason: %q", row.TriggerReason)
+		}
 	}
 	// budget untouched: no no_trade row anywhere in the chain.
 	rows, _ := st.Plan().ListVersionsForTrader(td, "NY", at.id)

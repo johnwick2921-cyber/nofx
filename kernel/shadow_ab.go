@@ -68,13 +68,22 @@ func ShadowABForScenario(sc PlanScenario, bars []market.Kline, symbol string, si
 	frictionUSD := ShadowFrictionTicks * tick * pv
 	above := strings.EqualFold(sc.Confirm.Side, "above")
 	long := strings.EqualFold(strings.TrimSpace(sc.Direction), "long")
-	if !long {
-		// mirror signs so MFE is always favorable-positive in the replay
-		// (short: price DOWN is favorable).
-		stop, target = -stop, -target
-		ref = -ref
-		above = !above
-	}
+	// ONE PRICE SPACE (data-integrity wave, 2026-09-03). This used to mirror
+	// stop/target/ref into a NEGATIVE price space for shorts, so that "MFE is
+	// always favorable-positive in the replay". The close-rule fill returns the
+	// REAL close and row.StopPx/TargetPx are stored REAL, so every downstream
+	// number then subtracted one space from the other:
+	//
+	//	risk := row.FillPx - stop  →  29204.50 − (−29226.00) = 58 430.50
+	//	RR = (target − FillPx)/risk → (−29132.50 − 29204.50)/58 430.50 = −0.9984
+	//
+	// Measured on the live store, direction taken from the PLAN and never
+	// inferred: 121 short rows, 109 with RR < −0.9, 46 with |MAE| > 1000, and
+	// all 67 long rows clean. Row 166 is the type specimen (rr
+	// −0.998399808319285, mae 58409.25, net_pnl −1.0 on fill 29204.50 / stop
+	// 29226.00 / target 29132.50, whose honest RR is 72.00 / 21.50 = 3.3488).
+	//
+	// Nothing is mirrored now. Every comparison below asks the direction.
 	w := BarsSince(bars, sinceMs)
 	if len(w) == 0 {
 		return nil
@@ -164,9 +173,14 @@ func ShadowABForScenario(sc PlanScenario, bars []market.Kline, symbol string, si
 			row.TimeToFillMs = w[f.barIdx].OpenTime - sinceMs
 		}
 		row.StopPx, row.TargetPx = sc.Arm.Stop, sc.Arm.Target
-		risk := row.FillPx - stop // favorable-sign convention: risk is positive
+		// Risk and reward are DISTANCES, always positive, and which side of the
+		// fill each sits on is the direction's business.
+		risk, reward := row.FillPx-stop, target-row.FillPx
+		if !long {
+			risk, reward = stop-row.FillPx, row.FillPx-target
+		}
 		if risk > 0 {
-			row.RR = (target - row.FillPx) / risk
+			row.RR = reward / risk
 		}
 		mfe, mae, outcome := 0.0, 0.0, "open"
 		mfeBar, maeBar := 0, 0
@@ -179,34 +193,41 @@ func ShadowABForScenario(sc PlanScenario, bars []market.Kline, symbol string, si
 				continue
 			}
 			hi, lo := b.High, b.Low
+			// Which extreme is adverse, and which level each side reaches, is
+			// the direction's business — never a sign flip on the prices.
+			stopHit := lo <= stop     // long: price fell to the stop
+			targetHit := hi >= target // long: price rose to the target
+			adverse := row.FillPx - lo
+			favorable := hi - row.FillPx
 			if !long {
-				hi, lo = -lo, -hi
+				stopHit = hi >= stop     // short: price rose to the stop
+				targetHit = lo <= target // short: price fell to the target
+				adverse = hi - row.FillPx
+				favorable = row.FillPx - lo
 			}
-			if lo <= stop && hi >= target {
+			if stopHit && targetHit {
 				ambiguous = true
 			}
 			// adverse first (R9): a bar that spans both stop and target counts
 			// as a stop-out.
-			if lo <= stop {
-				mae = math.Max(mae, row.FillPx-stop)
+			if stopHit {
+				mae = math.Max(mae, risk)
 				resolvedBar = i - start
 				outcome = "stop"
 				break
 			}
-			if hi >= target {
-				mfe = math.Max(mfe, target-row.FillPx)
+			if targetHit {
+				mfe = math.Max(mfe, reward)
 				resolvedBar = i - start
 				outcome = "target"
 				break
 			}
-			pxHi := hi - row.FillPx
-			if pxHi > mfe {
-				mfe = pxHi
+			if favorable > mfe {
+				mfe = favorable
 				mfeBar = i - start
 			}
-			pxLo := row.FillPx - lo
-			if pxLo > mae {
-				mae = pxLo
+			if adverse > mae {
+				mae = adverse
 				maeBar = i - start
 			}
 		}
@@ -238,7 +259,11 @@ func ShadowABForScenario(sc PlanScenario, bars []market.Kline, symbol string, si
 			}
 		}
 		if exitPx != 0 {
-			row.NetPnL = (exitPx-row.FillPx)*pv - frictionUSD
+			gain := exitPx - row.FillPx
+			if !long {
+				gain = row.FillPx - exitPx // a short profits as price falls
+			}
+			row.NetPnL = gain*pv - frictionUSD
 		}
 		out = append(out, row)
 	}

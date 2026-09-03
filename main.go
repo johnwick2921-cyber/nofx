@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	nofxiagent "nofx/agent"
@@ -277,6 +278,42 @@ func main() {
 	// INVALIDATION-WIRED (2026-09-03) — the arm gate's new leg and the
 	// armed-under surfaces, both READ from the code that implements them.
 	logger.Infof("🛡 %s", trader.ArmGateBootLine())
+	// DATA-INTEGRITY (2026-09-03) — D7. Both lines READ.
+	logger.Infof("🧮 %s", store.DataIntegrityBootLine(kernel.TouchOrdinalSeed != nil))
+	logger.Infof("🧮 %s", st.AbConfirm().E8BootLine())
+	{
+		// D6 — flag-guarded recompute of the short counterfactuals. Default OFF
+		// and the line above reports the state either way. Backup first: no
+		// backup, no write.
+		if store.E8BackfillEnabled() {
+			if b, bErr := store.BackupBeforeE8Backfill(cfg.DBPath, time.Now().Format("20060102-150405")); bErr != nil {
+				logger.Errorf("🧮 e8 backfill ABORTED — backup failed: %v", bErr)
+			} else {
+				res, rErr := st.AbConfirm().BackfillShortRows(func(planID string, version int, scenario string) (string, bool) {
+					row, e := st.Plan().GetPlan(planID, version)
+					if e != nil || row == nil {
+						return "", false
+					}
+					var doc kernel.PlanDoc
+					if json.Unmarshal([]byte(row.Doc), &doc) != nil {
+						return "", false
+					}
+					for _, sc := range doc.Scenarios {
+						if sc.ID == scenario {
+							return sc.Direction, sc.Direction != ""
+						}
+					}
+					return "", false
+				})
+				if rErr != nil {
+					logger.Errorf("🧮 e8 backfill failed: %v", rErr)
+				} else {
+					logger.Infof("🧮 e8 short rows recomputed=%d · unrecomputable fill-bar=%d no-inputs=%d no-direction=%d · longs untouched=%d (backup %s)",
+						res.Recomputed, res.BadFillBar, res.NoInputs, res.NoDirection, res.LongsUntouched, b)
+				}
+			}
+		}
+	}
 	// ADHERENCE REGRADE (owner ruling 2026-09-03) — flag-guarded. Default OFF,
 	// and the line reports what is PENDING either way, so the count is visible
 	// without arming anything. Backup first: no backup, no write.

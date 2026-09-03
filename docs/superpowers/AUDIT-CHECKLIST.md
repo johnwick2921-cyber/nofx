@@ -1309,6 +1309,43 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     field (`judged_rollups=`), pinned by a test whose fixture makes every
     five-dimensional cell sub-floor while three roll-ups clear the floor.
 
+64. **Two price spaces subtracted from each other — and the repair that would
+    have dressed the wreckage as repaired.** (Renumbered 63→64 AT MERGE,
+    combined boot 4 — 63 was taken by the two-true-numbers class that merged
+    first. Highest occupied at merge: 63.)
+    `shadow_ab.go` mirrored stop/target/ref into a NEGATIVE price space for
+    shorts so that "MFE is always favorable-positive in the replay". The
+    close-rule fill returned the REAL close and `row.StopPx/TargetPx` were
+    stored REAL, so every downstream number subtracted one space from the other:
+    `risk := FillPx − stop` → `29204.50 − (−29226.00)` = **58 430.50**, and
+    `RR = (target − FillPx)/risk` = **−0.9984**. Measured with direction read
+    from the PLAN and never inferred (all 188 rows resolve): **121 short rows,
+    109 with RR < −0.9, 46 with |MAE| > 1000; all 67 long rows clean.** The
+    same mirror poisoned `net_pnl`: 40 rows below −1000 because the exit was the
+    MIRRORED target — `(−29418.62 − 29413.00) × 2 = −117 664`, i.e.
+    `−(target+fill)×pv`, not "exit treated as zero". **And it broke more than
+    arithmetic:** `above` was flipped AND `ref` negated, so the short close-rule
+    became `b.Close > −ref`, true for every bar — the FILL BAR was wrong too.
+    **Probe:** wherever a sign convention is imposed "so the replay reads
+    nicely", find every value that ENTERS after the conversion and every value
+    that LEAVES before it — a mirror is only safe if nothing crosses it. Count
+    the rows the two spaces would make impossible (a distance larger than the
+    bracket that contains it, an RR pinned near −1) and you have the blast
+    radius without reading any code. **Fix:** no mirroring; risk and reward are
+    distances, always positive, and which side of the fill each sits on is the
+    direction's business. **And the repair's own lesson:** the first backfill
+    re-derived arithmetic for all 109 rows and produced 23 negative RRs and 14
+    impossible MAEs still labelled "recomputed" — a precise answer about the
+    wrong moment. The shipped version refuses them: a short whose stored stop
+    sits BELOW its fill is geometrically impossible, so its fill came from the
+    wrong bar and no arithmetic on it can be trusted. Three states, not two —
+    `recomputed` **55** (all clean), `unrecomputable:fill-bar` **54**,
+    `unrecomputable:no-inputs` **12** — and the side-table's honest `usable`
+    count is 55. **Law:** a repair that cannot distinguish "fixed" from
+    "recomputed from poison" has not repaired anything — and a number nobody can
+    act on must be labelled, never averaged.
+
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,

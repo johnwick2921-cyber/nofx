@@ -7,6 +7,12 @@ export const status: GuideSection = {
   tagline: 'Every indicator strip, banner, and log line — decoded.',
   asBuiltRev: GUIDE_BUILT_REV,
   blocks: [
+    { kind: 'h', text: 'What the E8 side-table can be used for' },
+    {
+      kind: 'p',
+      text: "The A/B counterfactual table records what a confirm rule WOULD have done. Until 2026-09-03 every short row in it was arithmetic across two price spaces: the replay mirrored stop/target into negative prices so the excursion signs read nicely, while the fill and the stored bracket stayed real — so risk came out as 58 430 instead of 21.50 and RR sat pinned near −1. Measured with direction read from the plan: 121 short rows, 109 with a broken RR; all 67 long rows were always clean. The boot line now states what survives: 'e8: rows=188 usable=55 · unrecomputable fill-bar=54 no-inputs=12'. USABLE is the only count a ruling may rest on. The 54 fill-bar rows keep their numbers and are labelled, because the same bug also broke the close-rule comparison — their fill came from the wrong bar, and clean arithmetic on a wrong fill is a precise answer about the wrong moment.",
+    },
+
     { kind: 'h', text: 'The boot ledger, line by line' },
     {
       kind: 'code',
