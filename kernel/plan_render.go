@@ -167,7 +167,13 @@ func RenderPlanBlock(doc PlanDoc, session string) string {
 			s.ID, s.Quality, s.Condition, s.Direction, s.Trigger, joinFloats(s.TargetChain), s.Invalid)
 	}
 	if len(doc.NoTrade) > 0 {
-		b.WriteString("No-trade: " + strings.Join(doc.NoTrade, " · ") + "\n")
+		// H4 (hygiene 2026-09-03) — the model's no_trade entries are PROSE it
+		// wrote, not machine-evaluated constraints. Rendering them under a bare
+		// "No-trade:" label read as enforcement, the same confusion the plan
+		// card was fixed for. Nothing evaluates these strings; the enforced
+		// no-trade band is the code constant on the boot line.
+		b.WriteString("No-trade NOTES (the model's prose — NOT machine-enforced; the enforced band is the code constant): " +
+			strings.Join(doc.NoTrade, " · ") + "\n")
 	}
 	deathSuffix := ""
 	if doc.DeathStructured == nil {

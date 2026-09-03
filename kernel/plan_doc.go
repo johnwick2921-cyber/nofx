@@ -480,8 +480,34 @@ func NormalizePlanDocRules(d *PlanDoc) {
 	if d.DeathStructured != nil {
 		d.DeathStructured.Rule = NormalizeConditionRule(d.DeathStructured.Rule)
 	}
+	// H3 (hygiene 2026-09-03) — bias spelling. NOTE the canonical set is
+	// long|short|neutral (biasDirections), NOT bull/bear: bull/bear is the
+	// WEEKLY doc's vocabulary (kernel/weekly_prompt.go), and aliasing a day-plan
+	// bias to "bear" would MANUFACTURE the reject this is meant to prevent.
+	// Precautionary: a store grep found ZERO bias-spelling rejects to date, so
+	// the table is kept to the directional vocabulary only — no semantic guesses.
+	d.Bias.Direction = NormalizeBiasDirection(d.Bias.Direction)
 	// CLASS 39 — legs on a non-sweep condition collapse to the single arm.
 	normalizeArmLegs(d)
+}
+
+// NormalizeBiasDirection canonicalizes a day-plan bias direction to the set the
+// validator accepts: long | short | neutral. Unknown spellings pass through
+// unchanged so validation still rejects them honestly (class 11's law).
+func NormalizeBiasDirection(dir string) string {
+	switch strings.ToLower(strings.TrimSpace(dir)) {
+	case "bearish", "bear", "down", "downside", "sell":
+		return "short"
+	case "bullish", "bull", "up", "upside", "buy":
+		return "long"
+	}
+	// DELIBERATELY NOT ALIASED: "flat" / "sideways" / "range" → neutral. Those
+	// are SEMANTIC judgements, not spellings of a known token, and "neutral" is
+	// already writable directly. "sideways" also serves as the invalid-direction
+	// sentinel in two existing fixtures (plan_doc_test, w4_overlay_executor_test)
+	// — aliasing it would have silently weakened both. An alias table fixes
+	// SPELLING; it must never decide meaning.
+	return dir
 }
 
 // NormalizeConfirmRule canonicalizes a confirm{} rule spelling.

@@ -808,11 +808,16 @@ func (at *AutoTrader) writeNoTradePlan(session, tradeDate, reason string) {
 // version of the same session's plan. That is the live configuration today (two
 // MNQ day-plan traders).
 //
-// All traders share one process, so a process-wide claim covers both axes. The
-// key deliberately excludes the trader id: two traders reading the SAME session
-// is exactly what must be collapsed to one call. (P0-A2: the PLAN ROWS are now
-// trader-scoped — MakePlanIDForTrader — while this claim collapses only the AI
-// call, not the identity.)
+// All traders share one process, so a process-wide claim covers both axes.
+//
+// H6 (hygiene 2026-09-03) — THIS COMMENT USED TO SAY THE OPPOSITE OF THE CODE.
+// It claimed the key "deliberately excludes the trader id" so that two traders
+// reading the SAME session collapse to one call. The key is built by
+// store.MakePlanIDForTrader(at.id, tradeDate, session) (see the claim site
+// below), which INCLUDES the trader id — so each trader holds its own claim and
+// two traders on the same session are NOT collapsed. The code is authoritative;
+// only the comment moved. Whether the collapse SHOULD happen is a live
+// question, not a fixed one: it is recorded in the hygiene report, unchanged.
 var plannerReadInFlight sync.Map // "tradeDate:session" -> struct{}
 
 // claimPlannerRead returns false when another read for this session is already

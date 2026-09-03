@@ -31,9 +31,9 @@ const dayPlan: KnobSpec[] = [
       'kernel/levels_score.go:389 (ScoreLevels proximityK) · trader/auto_trader_planconfig.go:47',
     range: '0.1 – 3.0 (× daily-range proxy, clamped)',
     systemDefault:
-      '1.5 (the CODE default — the 0.3 retune is a saved-value change in Strategy → Day Plan, never a code default; GAR-F2 archaeology: nothing ever reverted it)',
+      '1.5 (the code default AND, as of 2026-09-03, the resolved live value — the saved config reads 1.5, so the 0.3 retune this card described is no longer in effect)',
     recommended:
-      '⭐ 0.3 — LIVE since 2026-08-28 11:59 (owner save); band = K × DailyRangeProxy (≈±85pt at 0.3) on BOTH the bot gate and the engine path.',
+      '⭐ 1.5 — the RESOLVED live value, read from the saved strategy config 2026-09-03 (day_plan.proximity_filter_atr = 1.5), NOT the 0.3 this card claimed since 2026-08-28. Band = K × dATR (the daily-range proxy) on BOTH the bot gate and the engine path; kernel.ResolveProximityK clamps to 0.1–3.0 and falls back to ActivationWindowK 1.5.',
     whenToTouch:
       'If the card looks too crowded or too empty for the daily range.',
     perSession:
