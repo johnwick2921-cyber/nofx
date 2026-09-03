@@ -401,3 +401,75 @@ new copies before the fix.
 **Reported, not fixed:** the `11:30–13:30 ET` lull does not line up with the
 `12:00–13:30 CT` hard gate (which is 13:00–14:30 ET). The prompt states both and
 labels which one is enforced. Reconciling them is a content ruling. **[A]**
+
+---
+
+## 10. RIDER PART 2 (owner rulings 2026-09-03) — one clock, and an example that stopped teaching
+
+### 10.1 The schema example
+
+```
+before   "no_trade": ["first 5m (CT)", "12:00-13:30 CT lunch", "<calendar blackouts>"],
+after    "no_trade": ["<your own sit-out conditions, or omit>"],
+```
+
+The sentence below it is unchanged, as ruled. What changed is that the prompt no
+longer *demonstrates* the two windows it then asks the model not to write.
+
+**Residual seam, reported not fixed.** The surviving sentence still opens
+"no_trade may contain ONLY the fixed session windows (first 5m, 12:00-13:30 CT
+lunch) plus T1 HARD-blackout lines from the calendar", which names those windows
+as permitted content while the example now offers a placeholder. The clause that
+matters — "ENFORCED by the machine whether or not you list them … what you write
+here is read as your notes" — is intact. Dropping the "may contain ONLY the
+fixed session windows" clause would close the seam, and it is a content change,
+so it waits for a ruling. **[A]**
+
+### 10.2 One clock
+
+The prompt's own clock line says *"EVERY time in this prompt is CT
+(America/Chicago) … Never apply these numbers to a UTC clock"* — and three lines
+then printed ET wall clocks. A model taking `10:30 ET` at its word as CT is an
+hour out.
+
+| line | before | after |
+|---|---|---|
+| skip deadline | `no pool swept by 10:30 ET` | `by 09:30 CT` |
+| primary window | `NY AM 08:30–11:00 ET` | `07:30–10:00 CT` |
+| premium FVG window | `10:00–11:00 ET` | `09:00–10:00 CT` |
+| lunch | `11:30–13:30 ET … (hard-gates 12:00–13:30 CT)` | `lunch 12:00–13:30 CT: no new entries (hard-gated)` |
+
+All derived through `ETtoCT`, never typed: America/New_York and America/Chicago
+change offset on the same instants, so the gap is exactly one hour and needs no
+date. The lunch line is now ONE window — it used to carry an advisory ET lull
+beside the machine's enforced CT gate, two different windows in two clocks in a
+single sentence. **Fifth copy retired**, after the gate, the grader, the clock
+line and the no-trade-gate line.
+
+### 10.3 What the model will read
+
+```
+clock 08:30 CT (13:30 UTC) — EVERY time in this prompt is CT (America/Chicago) …
+## No-trade gates (advisory — declare in no_trade or skip the day)
+  - no A/B zone in reach AND no pool swept by 09:30 CT → declare the skip in the plan
+  - lunch 12:00–13:30 CT: no new entries (hard-gated — entries inside it are refused)
+  NY AM 07:30–10:00 CT is the primary window; 09:00–10:00 CT is the premium FVG window
+  "no_trade": ["<your own sit-out conditions, or omit>"],
+```
+
+### 10.4 Contract rows
+
+| test | asserts | first run |
+|---|---|---|
+| `TestNoTradeExampleDoesNotDemonstrateMachineWindows` | the example names none of the machine's windows; the sentence still carries the resolved values | **RED ×4** |
+| `TestPromptStatesNoUntypedEasternTimes` | the WHOLE rendered prompt holds no `HH:MM ET` | **RED**, named `10:30 ET` |
+| `TestNoTradeContractRendersResolvedWindows` | migrated: the requirement moved from the example to the sentence, with its reason | GREEN |
+
+Suites: Go clean · vitest 40 files / 306 tests · `tsc --noEmit` clean.
+
+### 10.5 PROOF OWED
+
+The re-measure cannot run before the boot. After it: quote the **next three
+plans'** `no_trade` contents. Expected — the model's own reasons, or an empty
+list. A third plan still echoing `first 5m (CT)` would mean the surviving
+sentence in 10.1 is doing the teaching, and that clause is the next thing to go.
