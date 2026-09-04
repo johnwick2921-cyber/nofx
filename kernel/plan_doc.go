@@ -85,8 +85,12 @@ type PlanScenario struct {
 	// Arm (Wave 2 armed orders, 2026-08-27) — the AI's AUTHORIZATION to arm
 	// this scenario as a resting order with exact deterministic prices. The
 	// LLM chooses WHAT to arm; Go manages WHEN it fills (advisory law holds).
-	// Only armable conditions (fvg_entry, breakout_retest, reject) may carry
-	// an enabled Arm; acceptance / raw sweep_reclaim stay on the AI path.
+	// Only armable conditions may carry an enabled Arm. The set is
+	// ArmableCondition() in armed.go plus chained sweep_reclaim — do not
+	// restate it here. This comment used to name "breakout_retest" as armable
+	// and it never was, which is part of why long plans could not arm: they
+	// lean on retest plays. One source, quoted nowhere else (owner ruling
+	// 2026-09-04 (b)).
 	Arm *PlanArmSpec `json:"arm,omitempty"`
 }
 
