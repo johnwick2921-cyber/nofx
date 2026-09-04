@@ -1,9 +1,9 @@
 # F12 — the NT8 order-snapshot frame + AddOn build_id
 
 **Branch** `fix/f12-order-snapshot` @ `c84bd247` (off `origin/dev` 955d4ac8)
-**Status** BUILT AND GREEN. **NOT DEPLOYED, AND NOT PROVEN.**
-Two halves remain, both the owner's: F1 the Go boot, F2 the NT8 AddOn reload.
-Per A20/class 6 this wave is proven only by a RECEIVED frame, and none has been.
+**Status** **LIVE AND PROVEN, 2026-09-03 21:21 CT.** Both halves landed.
+Proof quoted in §10. One defect found after the proof — the forensic sink was
+never installed — fixed on `fix/f12-sink-ordering`, checklist class 69.
 
 ---
 
@@ -199,3 +199,70 @@ combined boot 4). My own UI-serving wave (`fix/ui-serving-path-clean`) still
 claims 66 on an unmerged branch and **needs renumbering before it lands**. This
 wave took **67** rather than the next free number on its own branch, for the same
 reason.
+
+---
+
+## 10 — PROVEN (added 2026-09-03 21:30 CT)
+
+**F1** — the Go half rode combined boot 5 (`4d846e26`, PID 365128, 21:19:00 CT),
+merged and booted by nofx-63. The transition state printed exactly as specified,
+NAMED rather than silent:
+
+```
+🛡 cutover safety (class 33): gate legs=5 · leg4=ledger (no snapshot yet) · boot sweep cancelled 0 pre-boot arm(s)
+🔌 nt8 addon: build_id=none expected=2026-09-03-f12 match=NO (no frame carrying a build_id received yet)
+🔌 order_snapshot: last=none · leg4 source=ledger (no snapshot yet)
+```
+
+**F2** — NT8 restarted at 21:21 and again 21:22:19 CT (PID 3788 → 14964).
+**I did not perform the restart**; it happened externally, and the `.cs` staged
+at ~21:10 is what NT8 compiled. NT8's own log shows a clean load through
+`VLTraderTCPClient: hello handshake OK (protocol v3)` with **no compile errors**.
+
+**CLASS 6 PROOF — received frames, from journald:**
+
+```
+21:19:28  tcp_server: far-side AddOn build_id=2026-08-30-e7
+21:21:13  tcp_server: hello handshake OK protocol_version=3 source=vltrader-addon build_id=2026-09-03-f12
+21:21:43  tcp_server: received frame type=order_snapshot
+21:22:51  tcp_server: received frame type=order_snapshot
+```
+
+**The before-state was `2026-08-30-e7`, not `none`.** The boot line's `none` was
+read at 21:19:00, twenty-eight seconds before the first heartbeat landed. The
+transition is **e7 → f12**.
+
+**The proof line differs from the dispatch's wording, for a sound reason.** The
+expected string was `far-side AddOn build_id=… (from order_snapshot)`. It never
+fires: `hello` now carries `build_id` and arrives FIRST, so by the time a
+snapshot lands the value already matches and the change-log does not re-fire. The
+evidence is stronger rather than weaker — the handshake proves the build AND the
+frames are arriving.
+
+**LEG 4 HAS FLIPPED**, read live from `GET /api/cutover-gate`:
+
+```
+leg4 pass : true
+detail    : 0 working order(s) at the broker (ledger agrees: 0)
+source    : broker — NT8 order_snapshot frame (age 7s, build 2026-09-03-f12)
+```
+
+That is the wave's whole purpose: the leg is answered by the broker, the ledger
+has become the cross-check, and both agree.
+
+## 11 — THE DEFECT THE PROOF EXPOSED (class 69)
+
+`nt8_order_snapshots` held **0 rows** while all of the above was true.
+`LoadTradersFromStore` (main.go:203) starts the TCP server, which reads the sink
+hook once; the registration sat at main.go:366 — one server-start too late. The
+server came up with a **nil sink**, so every frame was cached and none persisted.
+
+Nothing looked wrong, because the cache is what the gate reads. **A write on a
+branch nothing takes** — the class I had flagged in another lane's code that
+morning, written into my own that evening.
+
+Fixed on `fix/f12-sink-ordering`: the registration moves above the load. Pinned
+by three tests — a real server + real client + real frame asserting a row lands,
+a guard that a freshly started server has no sink, and a source-order guard that
+FAILS if the two calls are swapped back (verified RED at offsets 17584 > 8148,
+GREEN after). Checklist class **69**.

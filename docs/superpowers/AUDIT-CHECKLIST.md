@@ -1472,6 +1472,36 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     a WARNING when the bundle predates the binary — the 08-31-dist-under-a-09-03-
     binary state becomes impossible to miss instead of invisible.
 
+69. **A hook registered one start too late.** (Number assigned at merge;
+    highest occupied on dev at authoring: 68.) F12 wired a sink so every received
+    `order_snapshot` frame would be persisted for forensics. The sink was
+    correct, the store was correct, the tests were green — and
+    `nt8_order_snapshots` held **0 rows** while frames arrived every 30 s and the
+    cutover gate correctly read the broker off those same frames.
+    `main.go` registered the sink at line 366. `LoadTradersFromStore` at line 203
+    builds the first trader, which lazily starts the TCP server, which reads the
+    hook **exactly once, at start**. The server came up with a nil sink. The
+    registration ran 163 lines later and set a variable nothing would read again.
+    **Nothing looked wrong**, and that is the whole defect: the CACHE is what the
+    gate reads, by design, so the feature that mattered kept working. The missing
+    half left no error, no warning, and no empty-state message — just a table
+    that was always empty, which is indistinguishable from a table nothing had
+    happened for yet.
+    **Probe:** for any hook, callback, sink or observer, find the line that READS
+    it and ask whether the registration is guaranteed to have run first. Lazy
+    singletons make this invisible: the read happens inside whatever call first
+    needs the subsystem, which is rarely near the registration. Then ask the
+    harder question — *if this hook were never installed, what would I see?* If
+    the answer is "nothing", the wiring needs its own test, because no test of
+    the hook's logic can fail on it.
+    **Law:** a hook is not wired by being written. It is wired by being installed
+    BEFORE the thing that reads it starts, and only a test that starts that thing
+    can prove it. This is the write-side twin of "parity tests must exercise
+    production call sites": the existing tests called the sink directly and could
+    never see the order. Pinned now by a test that starts a real server, drives a
+    real frame through a real client, asserts a row lands — and by a source-order
+    guard that fails if the two calls are ever swapped back.
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,
