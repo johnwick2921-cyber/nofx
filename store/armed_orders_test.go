@@ -1,6 +1,7 @@
 package store
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -62,9 +63,24 @@ func TestUpsertArmReauthorizesTerminalRow(t *testing.T) {
 	if len(row) != 1 {
 		t.Fatalf("non-terminal rows = %d, want 1", len(row))
 	}
+	// D5 (arms-follow-bias, owner ruling 2026-09-04) — CHANGED HERE. This row
+	// reached the broker (sig-42), so it is no longer revived in place: every
+	// broker placement is one row forever. The re-authorization lands as the
+	// NEXT placement and the cancelled row keeps its prices, its signal and its
+	// ending. Rows that never reached the broker still revive in place.
+	var prior ArmedOrderDB
+	if err := db.First(&prior, orig.ID).Error; err != nil {
+		t.Fatalf("fetch prior: %v", err)
+	}
+	if prior.State != "cancelled" || prior.SignalID != "sig-42" || prior.EntryPx != 100 {
+		t.Fatalf("the placed row must keep its record: %+v", prior)
+	}
 	var got ArmedOrderDB
-	if err := db.Where("plan_id = ? AND scenario = ?", re.PlanID, re.Scenario).First(&got).Error; err != nil {
-		t.Fatalf("fetch: %v", err)
+	if err := db.Where("plan_id = ? AND scenario = ? AND id <> ?", re.PlanID, re.Scenario, orig.ID).First(&got).Error; err != nil {
+		t.Fatalf("fetch replacement: %v", err)
+	}
+	if got.PlacementSeq != 1 {
+		t.Fatalf("replacement placement_seq = %d, want 1", got.PlacementSeq)
 	}
 	if got.State != "armed" {
 		t.Fatalf("state = %q, want armed", got.State)
@@ -85,8 +101,8 @@ func TestUpsertArmReauthorizesTerminalRow(t *testing.T) {
 	if got.Side != "SHORT" || got.EntryPx != 105 || got.StopPx != 106 || got.Version != 4 {
 		t.Fatalf("fresh prices not applied: %+v", got)
 	}
-	if got.ID != orig.ID {
-		t.Fatalf("identity not preserved: id %d want %d", got.ID, orig.ID)
+	if got.ID == orig.ID {
+		t.Fatalf("a placed row must NOT be overwritten by its replacement (id %d)", got.ID)
 	}
 }
 
@@ -116,8 +132,17 @@ func TestUpsertArmPreservesNonTerminalIdentity(t *testing.T) {
 		Scenario: "S2", Side: "long", EntryPx: 201, StopPx: 199, TargetPx: 206,
 		CreatedAt: now, UpdatedAt: now.Add(time.Minute),
 	}
-	if err := st.UpsertArm(upd); err != nil {
-		t.Fatalf("refresh upsert: %v", err)
+	// D5 (owner ruling 2026-09-04) — CHANGED HERE. This test used to assert
+	// that a WORKING row's prices were refreshed in place. That is the defect:
+	// the row describes a LIVE broker order, and rewriting it overwrote the
+	// slot and lost the brackets (rows 582, 585). The refresh is now refused;
+	// replacing a live order requires a cancel first.
+	err := st.UpsertArm(upd)
+	if err == nil {
+		t.Fatal("refreshing a WORKING row must be refused — the broker order is still live")
+	}
+	if !strings.Contains(err.Error(), "working") {
+		t.Fatalf("the refusal must name the state it protected: %v", err)
 	}
 
 	var got ArmedOrderDB
@@ -127,8 +152,9 @@ func TestUpsertArmPreservesNonTerminalIdentity(t *testing.T) {
 	if got.State != "working" || got.SignalID != "sig-7" {
 		t.Fatalf("working identity mutated: state=%q signal=%q", got.State, got.SignalID)
 	}
-	if got.EntryPx != 201 || got.StopPx != 199 || got.TargetPx != 206 || got.Version != 2 {
-		t.Fatalf("prices not refreshed: %+v", got)
+	// The row must still describe the order the broker actually holds.
+	if got.EntryPx != orig.EntryPx || got.StopPx != orig.StopPx || got.TargetPx != orig.TargetPx {
+		t.Fatalf("prices were rewritten under a live order: %+v", got)
 	}
 }
 

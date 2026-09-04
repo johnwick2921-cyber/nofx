@@ -36,17 +36,28 @@ const (
 func ArmKindFor(condition string) string {
 	switch strings.ToLower(strings.TrimSpace(condition)) {
 	// Rests AT a price: the entry is the level itself.
-	//   reject        — the anchor, one tick into the trade's favour
-	//   fvg_entry     — the gap edge or CE
-	//   sweep_reclaim — the split arm's legs rest at the sweep ref
-	case "reject", "fvg_entry", "sweep_reclaim":
+	//   reject                    — the anchor, one tick into the trade's favour
+	//   fvg_entry                 — the gap edge or CE
+	//   sweep_reclaim             — the split arm's legs rest at the sweep ref
+	//   breakup/breakdown_continue — the PULLBACK limit at the broken level,
+	//       chained on confirm leg 1. This is the shipped waterfall design
+	//       (ArmSpecValid requires entry_mode=pullback) and it is NOT flipped
+	//       here: the executor's stop_entry branch remains the no-retest
+	//       FALLBACK it has always been, not an authored primary. Changing that
+	//       would be a live behaviour change, not a labelling one.
+	case "reject", "fvg_entry", "sweep_reclaim", "breakup_continue", "breakdown_continue":
 		return ArmKindLimit
 
-	// Triggers BEYOND a price: the play is only valid once price travels
-	// through the trigger, so a resting limit would either never fill or fill
-	// on the wrong side of the move. This is the pair that makes a LONG
-	// armable in a trend — breakup_continue.
-	case "breakup_continue", "breakdown_continue":
+	// Triggers BEYOND a price. A reclaim is only valid once price travels back
+	// through the level, so a resting limit would fill on the wrong side of the
+	// move — a BUY STOP above the trigger (SELL STOP below, short) is the only
+	// honest expression of it.
+	//
+	// Owner ruling 2026-09-04 (B), the gate change that makes LONGS armable: 19
+	// long plans were stranded because every long play they wrote (reclaim,
+	// breakout_retest) was un-armable, so a long-biased plan had no way to
+	// reach the market with the decision path closed.
+	case "reclaim":
 		return ArmKindStopEntry
 	}
 	return ""

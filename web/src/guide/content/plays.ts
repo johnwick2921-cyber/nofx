@@ -57,6 +57,62 @@ export const plays: GuideSection = {
         },
       ],
     },
+    { kind: 'h', text: 'Arms follow the bias' },
+    {
+      kind: 'p',
+      text: 'With plan mode on strict the decision path is closed, so a RESTING ORDER IS THE ONLY WAY INTO THE MARKET. A plan whose bias direction carries no armed scenario cannot act on the direction it just argued for — it can take the other side, or nothing. On 2026-09-03 the NY v7 plan was biased long, wrote two long scenarios and one short, and armed only the short: both confirms went true at 11:58 CT and the long had no way to trade.',
+    },
+    {
+      kind: 'p',
+      text: 'The plan is still stored when this happens — the check WARNS and counts per side rather than rejecting, because on the stored history a hard reject would have refused about two thirds of every plan ever written. It becomes a rejection by a later ruling, once the planner has had the vocabulary long enough to comply.',
+    },
+    { kind: 'h', text: 'Entry type follows the condition' },
+    {
+      kind: 'table',
+      title: 'What kind of order an arm becomes',
+      head: ['Condition', 'Entry type', 'Why'],
+      rows: [
+        [
+          'reject',
+          'limit',
+          'The entry IS the level — it rests at the anchor, one tick into the trade.',
+        ],
+        [
+          'fvg_entry',
+          'limit',
+          'Rests at the gap edge or CE. Currently SHADOWED — do not arm it.',
+        ],
+        [
+          'sweep_reclaim',
+          'limit',
+          "The split arm's legs rest at the sweep ref.",
+        ],
+        [
+          'breakup_continue / breakdown_continue',
+          'limit (pullback)',
+          'The arm rests AT the broken level and chains on confirm leg 1. A stop entry here is only the no-retest fallback.',
+        ],
+        [
+          'reclaim',
+          'stop entry',
+          'Only valid once price travels back THROUGH the level: a buy stop above the trigger (sell stop below, short). A limit here would fill on the wrong side of the move.',
+        ],
+        [
+          'acceptance / hold / breakout_retest',
+          'not armable',
+          'These stay AI-path plays. A long plan leaning only on them has no way to arm its own bias.',
+        ],
+      ],
+    },
+    {
+      kind: 'p',
+      text: 'The machine derives the type from the condition and refuses a contradiction by name — a stop entry authored for a reject fade is rejected rather than quietly turned into a limit, because a silent correction hides a plan that has misunderstood its own play.',
+    },
+    { kind: 'h', text: 'What "far" counts' },
+    {
+      kind: 'p',
+      text: "An arm authored more than 3.0×ATR5m from the current price is logged and counted per side — 71% of arm-enabled scenarios were authored at a price the tape never reached in that version's life, and on one day six versions carried a short arm 62.25 points above the day's high. Nothing is refused for being far: the count exists so a week of evidence can decide whether that threshold should become a gate at all.",
+    },
     { kind: 'h', text: 'THE ENTRY LAW (per condition — machine-enforced)' },
     {
       kind: 'code',

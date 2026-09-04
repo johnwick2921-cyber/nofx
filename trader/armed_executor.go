@@ -265,6 +265,12 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 	// One ATR5m math, both seams (no-trade-rider 2026-09-03): the SAME 5m ATR
 	// the decision path's EntryGate reads — never PlanDATRFor (DAILY ATR).
 	atr5m := armSeamATR5mFromBars(bars)
+	// D4 (2026-09-04): last close, for the far-arm counter. 0 when the tape is
+	// empty — farArmFactor treats that as UNKNOWN and never flags.
+	armPrice := 0.0
+	if len(bars) > 0 {
+		armPrice = bars[len(bars)-1].Close
+	}
 	minQuality := ""
 	if dp := at.dayPlanCfg(); dp != nil {
 		minQuality = dp.MinScenarioQualityFor(plan.Session)
@@ -289,8 +295,17 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 		// one-row pair (LegCount 0 = legacy shape).
 		legs := sc.Arm.Legs
 		if len(legs) == 0 {
+			// D3 (2026-09-04): the entry TYPE follows the condition, from the
+			// same table the planner prompt is rendered from. This was
+			// hardcoded "limit", which is wrong for a reclaim — it only
+			// becomes valid once price trades back THROUGH the level.
+			kind, refusal := armLegKindFor(sc, kernel.PlanArmLeg{})
+			if refusal != "" {
+				at.logWarnf("✕ armed %s NOT authored — %s", sc.ID, refusal)
+				continue
+			}
 			legs = []kernel.PlanArmLeg{{Entry: sc.Arm.Entry, Stop: sc.Arm.Stop, Target: sc.Arm.Target,
-				WaitConfirm: sc.Arm.WaitConfirm, Rule: "touch", Kind: "limit"}}
+				WaitConfirm: sc.Arm.WaitConfirm, Rule: "touch", Kind: kind}}
 		}
 		legCount := 0
 		if len(sc.Arm.Legs) == 2 {
@@ -512,11 +527,29 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 				}
 				continue
 			}
+			// D3: every leg's kind is derived from the condition and an
+			// authored contradiction is refused by name (A9 — one line, with
+			// the reason).
+			legKind, kindRefusal := armLegKindFor(sc, leg)
+			if kindRefusal != "" {
+				at.logWarnf("✕ armed %s leg %d NOT authored — %s", sc.ID, li+1, kindRefusal)
+				continue
+			}
+
+			// D4 (2026-09-04) — FAR-ARM COUNTER, WARN-first. Nothing is refused
+			// for being far; a week of counts decides the threshold. Per side,
+			// because the 09-02 evidence was one-sided.
+			telemetry.IncArmAuthored()
+			if f := farArmFactor(leg.Entry, armPrice, atr5m); armIsFar(leg.Entry, armPrice, atr5m) {
+				telemetry.IncFarArm(side)
+				at.logWarnf("📏 arm far: %s %s entry %.2f is %.2f pts / %.1f×ATR5m from price %.2f (counted, not refused)",
+					sc.ID, side, leg.Entry, math.Abs(leg.Entry-armPrice), f, armPrice)
+			}
 			row := &store.ArmedOrderDB{
 				TraderID: at.id, PlanID: plan.PlanID, Version: plan.Version, Session: plan.Session,
 				Scenario: sc.ID, Side: side, EntryPx: leg.Entry, StopPx: leg.Stop, TargetPx: leg.Target,
 				State: "armed", EntryClass: "armed_fill", CreatedAt: now, UpdatedAt: now,
-				LegIndex: li, LegCount: legCount, Kind: leg.Kind,
+				LegIndex: li, LegCount: legCount, Kind: legKind, Condition: sc.Condition,
 			}
 			existing, err := ledger.ListNonTerminal(at.id)
 			if err == nil {
@@ -889,7 +922,11 @@ func (at *AutoTrader) runArmedPlacement(bars []market.Kline, sinceMs int64) {
 				if !stopEntrySeamOn() {
 					continue // seam off → the leg stays armed (never on the wire)
 				}
-				if !stopEntryFallbackDue(bars, int64(r.EntryPx), sinceMs, now.UnixMilli()) {
+				// D3 (2026-09-04): the window belongs to the E7 FALLBACK only.
+				// A reclaim's buy stop IS the entry — waiting for a no-retest
+				// window would miss the reclaim it exists to catch.
+				if stopEntryNeedsRetestWindow(r.Condition) &&
+					!stopEntryFallbackDue(bars, int64(r.EntryPx), sinceMs, now.UnixMilli()) {
 					continue // still inside the retest window
 				}
 				offset := float64(stopEntryOffsetTicks()) * tick

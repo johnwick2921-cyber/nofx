@@ -43,6 +43,8 @@ func TestArmableConditionsLineIsDerived(t *testing.T) {
 // The warning names the condition the model actually chose, so the message is
 // actionable rather than a restatement of the rule.
 func TestBiasArmWarningNamesTheUnarmableCondition(t *testing.T) {
+	// v7's real long side: breakout_retest (un-armable AND shadowed) and
+	// reclaim (un-armable). Neither could carry an arm.
 	d := nyV7Doc(false)
 	d.Scenarios[1].Condition = "breakout_retest"
 	d.Scenarios[1].Breakdown = nil
@@ -51,6 +53,14 @@ func TestBiasArmWarningNamesTheUnarmableCondition(t *testing.T) {
 	if w == "" {
 		t.Fatal("a long-biased plan whose only long play is un-armable must warn")
 	}
+	// And the reclaim case v7 also wrote must warn by name too.
+	r := nyV7Doc(false)
+	r.Scenarios[1].Condition = "reclaim"
+	r.Scenarios[1].Breakdown = nil
+	if rw := BiasArmWarning(r, ResolvedConditionStatuses(nil, nil, "")); !strings.Contains(rw, "reclaim") {
+		t.Errorf("a long plan leaning on reclaim must name it: %s", rw)
+	}
+
 	for _, want := range []string{"long", "breakout_retest", "S2"} {
 		if !strings.Contains(w, want) {
 			t.Errorf("warning must name %q: %s", want, w)

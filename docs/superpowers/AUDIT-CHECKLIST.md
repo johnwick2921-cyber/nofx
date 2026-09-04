@@ -1783,6 +1783,40 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     `provider/ninjatrader/bar_persist.go`; the log message is byte-identical and
     reports the same interval numbers it always did.
 
+78. **A plan that could only trade one direction.** (Number assigned at merge,
+    A16 — highest occupied on dev was 76 when this was written; 77 is claimed by
+    this lane's own unmerged persist-counter wave, so this took 78. Re-check at
+    merge.) With `plan_mode` strict the decision path is closed and ARMS ARE THE
+    ONLY ENTRY, so a plan whose bias direction carries no armed scenario cannot
+    act on the direction it just argued for. NY 2026-09-03 v7 was biased **long**
+    and authored `S1 long breakout_retest` (no arm), `S2 long reclaim` (no arm),
+    `S3 short reject` (**armed**): both confirms went true at 11:58 CT and the
+    long had no way to reach the market. Long arm-enablement ran 1/23 (4.3%)
+    against 8/18 (44.4%) for shorts. **The cause was not planner preference —
+    it was vocabulary.** Every long-friendly play the model reached for was
+    un-armable: `reclaim` was excluded ("close-confirm first → AI path"),
+    `breakout_retest` was excluded by GAR-F4 *and* shadowed, and nothing in the
+    prompt said either thing. Measured across 171 stored directional plans, 51
+    of 70 longs and 66 of 104 shorts carried no arm in their own bias direction,
+    and **19 longs could never have complied** because no play they wrote was
+    armable at all. **Probe:** for each bias direction, ask whether ANY condition
+    the planner is told to use is both armable and live; then count plans whose
+    bias direction has zero armed scenarios. A capability that exists, is wired,
+    has its seam ON and has been used ZERO times is not a capability — it is a
+    secret (`stop_entry` was built, wired, seam ON, and used 0 times because the
+    prompt never named it: built ≠ wired ≠ used, and the third gap is invisible
+    to every grep that proves the first two). **Law:** the prompt states the
+    armable AND live vocabulary, generated from the same table the validator
+    warns from — never hand-listed, so a condition changing status changes the
+    prompt with it. Entry TYPE follows the condition, derived by the machine and
+    a contradiction refused by name, never silently corrected. A rule that would
+    reject two thirds of real traffic ships as a COUNTER first and is promoted by
+    a later ruling. Fixed 2026-09-04: `reclaim` armable as a stop-entry (owner's
+    word — the gate change that makes longs armable), `ArmKindFor` as the single
+    table, `BiasArmWarning` + per-side counts, far-arm counter at 3.0×ATR5m
+    ([I] provisional), and the arm ledger made append-only under a live broker
+    order.
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,
