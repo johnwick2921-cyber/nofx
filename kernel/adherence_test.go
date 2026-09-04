@@ -3,8 +3,9 @@ package kernel
 import "testing"
 
 // P5.5 — the adherence rubric. Locks: matched+clean = A; off-plan = D; direction
-// mismatch = C; no-trade-window + outside-killzone step the grade toward F; and
-// that the grade is independent of P&L (no P&L input at all).
+// mismatch = C; no-trade-window steps the grade; killzone is a LABEL, not a
+// grade (owner ruling 09-04); and that the grade is independent of P&L (no P&L
+// input at all).
 
 func TestGradeAdherenceMatrix(t *testing.T) {
 	cases := []struct {
@@ -14,8 +15,8 @@ func TestGradeAdherenceMatrix(t *testing.T) {
 	}{
 		{"clean matched", AdherenceInput{Cited: true, Matched: true, InKillzone: true}, "A"},
 		{"matched but bad window", AdherenceInput{Cited: true, Matched: true, InKillzone: true, InNoTrade: true}, "B"},
-		{"matched outside killzone", AdherenceInput{Cited: true, Matched: true, InKillzone: false}, "B"},
-		{"matched, no-trade AND outside kz", AdherenceInput{Cited: true, Matched: true, InKillzone: false, InNoTrade: true}, "C"},
+		{"matched outside killzone", AdherenceInput{Cited: true, Matched: true, InKillzone: false}, "A"},
+		{"matched, no-trade AND outside kz", AdherenceInput{Cited: true, Matched: true, InKillzone: false, InNoTrade: true}, "B"},
 		{"direction mismatch", AdherenceInput{Cited: true, Matched: false, InKillzone: true}, "C"},
 		{"off-plan", AdherenceInput{OffPlan: true, InKillzone: true}, "D"},
 		{"off-plan in no-trade outside kz", AdherenceInput{OffPlan: true, InKillzone: false, InNoTrade: true}, "F"},

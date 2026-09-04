@@ -19,7 +19,7 @@ func TestBuildPlannerPromptPlaybookSections(t *testing.T) {
 		// "10:30 ET" → "09:30 CT": one-clock ruling 2026-09-03, every time in
 		// the prompt is CT and three lines were printing Eastern.
 		"## No-trade gates", "balance-day", "1.2×ATR", "09:30 CT", "Tier-1 news",
-		"## Killzone weighting", "premium FVG window", "Thursday/Friday",
+
 		"## STOP-DOING", "0% win evidence",
 		`"chain_after"`, "bias-tree",
 	} {

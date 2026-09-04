@@ -91,7 +91,7 @@ Assembly order: MultiDay → Round → OR/IB → Gap → EQH/EQL → S/D → FVG
 
 **What it does:** the prompt (`kernel/planner_prompt.go`) instructs the LLM; the output parses into a plan document (`kernel/plan_doc.go`) with bias, levels, scenarios, confirms, arms; `ValidatePlanDocWithCaps` chains every write-site validator.
 
-**Rules in the prompt** (resolved, current lines): bias tree — close>PDH→bull HIGH · PDH sweep+close back→bear MEDIUM · inside-day→close vs PDC LOW — `planner_prompt.go:158-160` `[I]` · NY AM 08:30–11:00 CT primary, 10:00–11:00 premium FVG (:653-655) `[I]` · conviction "down Monday, up Thu/Fri" (:656) `[I]` · STOP-DOING: acceptance without prior sweep+displacement = 0% win evidence (:658-660) `[T]` · HTF zones are confluence, never standalone triggers (:532-546) `[O]` · scenario mix follows regime+day_type (:706-707) `[I]` · `entry_mode=ce` default (:626) `[R/O]`.
+**Rules in the prompt** (resolved, current lines): bias tree — close>PDH→bull HIGH · PDH sweep+close back→bear MEDIUM · inside-day→close vs PDC LOW — `planner_prompt.go:158-160` `[I]` · STOP-DOING: acceptance without prior sweep+displacement = 0% win evidence (:658-660) `[T]` · HTF zones are confluence, never standalone triggers (:532-546) `[O]` · scenario mix follows regime+day_type (:706-707) `[I]` · `entry_mode=ce` default (:626) `[R/O]`. **Deleted by owner ruling 09-04 (item 9):** the NY-AM/premium-FVG killzone weighting lines and the Monday/Thursday conviction line (ex-:653-656) — killzone is a label the card shows, never a prompt rule; the outside-killzone adherence grade step-down went with them.
 
 **Sessions** (`kernel/session_registry.go:87-126`, CT): ASIA 17:00→02:00 (Read 16:30, kz 19:00–23:00, disabled) · LONDON 02:00→08:30 (Read 01:30, kz 02:00–05:00, disabled) · NY 08:30→14:45 (Read 08:00, kz 08:30–11:00 + 13:00–14:45, enabled; **session end == EOD flat**, owner contract) `[O]`.
 
@@ -105,7 +105,7 @@ All chained through `ValidatePlanDocWithCaps` — `kernel/plan_doc.go:588`. Each
 
 | Validator | Knobs (resolved) | Refuses | Source · Label |
 |---|---|---|---|
-| breakdown/continue | `BD_MIN_DISP_ATR=1.0`, `BD_MAX_PULLBACK=0.4`, `BD_MIN_CLOSES=1`, `BD_MAX_LEVEL_DIST_ATR=5.0`, `BD_MIN_SL_ATR=1.0` | missing breakdown{}, wrong direction, level >5×ATR, **"a close came back across %.2f — the breakdown is void"** (owner entry law), no confirming close, displacement <1.0×ATR5m, pullback-only/wait_confirm/confirm/min-SL arms | breakdown_continue.go:43-93,213-284 · [T]/[I]/[O] |
+| breakdown/continue | `BD_MIN_DISP_ATR=1.0`, `BD_MIN_CLOSES=1`, `BD_MAX_LEVEL_DIST_ATR=5.0`, `BD_MIN_SL_ATR=1.0` | missing breakdown{}, wrong direction, level >5×ATR, **"a close came back across %.2f — the breakdown is void"** (owner entry law), no confirming close, displacement <1.0×ATR5m, pullback-only/wait_confirm/confirm/min-SL arms | breakdown_continue.go:43-93,213-284 · [T]/[I]/[O] |
 | entry law | law table :33-88 | `fade_requires_touch`, `2x5m_reserved`, `sweep_leg1_requires_touch` (leg 1 needs a real sweep touch [O]), `sweep_leg2_requires_mss_or_1x5m`, fade stop <2 ticks beyond level | entry_law.go:153-216 · [O] |
 | FVG entry | `FVG_ENTRY_MIN_DISP_ATR=1.5`, `FVG_CE_WIDTH_PTS=20` ("NQ gap sweet spot 20–80 pts"), gap floor max(2×tick, 2.0 pt) | displacement <1.5×ATR5m, gap < floor, CE band = max(0.5, 10% width) | fvg_entry.go:26-49,235-362 · [R] |
 | min-SL | `MinSLATRMultDefault=1.5` (was 1.0, owner-ruled 2026-09-02 with citation), `MinSLTickClearance=2` | `"sl_too_tight: %.1f < %.1f×ATR (%.1f) — widen or skip"` | min_sl.go:40-68 · [O] |

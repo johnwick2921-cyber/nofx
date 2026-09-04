@@ -18,9 +18,8 @@ import (
 //
 //   - breakdown_continue: SHORT — N closes BELOW a stated level with
 //     displacement ≥ BD_MIN_DISP_ATR × ATR5m and no reclaim close; entry =
-//     the pullback-that-fails (shallow retrace < BD_MAX_PULLBACK × the
-//     breakdown leg that cannot reclaim the level) or immediate on the 2nd
-//     confirming close (entry_mode).
+//     the pullback-that-fails (a shallow retrace that cannot reclaim the
+//     level) or immediate on the 2nd confirming close (entry_mode).
 //   - breakup_continue:  the LONG mirror.
 //
 // ARMABLE: the retest entry is a resting limit AT the broken level — exactly
@@ -35,7 +34,6 @@ type PlanBreakdownContinue struct {
 	LevelLabel string  `json:"level_label"`         // display label, e.g. "VWAP 29657.39"
 	EntryMode  string  `json:"entry_mode"`          // pullback | immediate
 	BreakLeg   float64 `json:"break_leg,omitempty"` // declared displacement in pts (0 = validator computes)
-	Pullback   float64 `json:"pullback,omitempty"`  // declared max pullback in pts (0 = auto BD_MAX_PULLBACK × leg)
 }
 
 // ---- env knobs (zero literals) ----
@@ -49,15 +47,10 @@ func bdMinDispATR() float64 {
 	return 1.0
 }
 
-func bdMaxPullbackFrac() float64 {
-	if v := os.Getenv("BD_MAX_PULLBACK"); v != "" {
-		if n, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err == nil && n > 0 && n < 1 {
-			return n
-		}
-	}
-	return 0.4
-}
-
+// NOTE: BD_MAX_PULLBACK was DELETED as dead code (owner ruling 09-04, item 4a)
+// — bdMaxPullbackFrac() had zero callers and the PlanBreakdownContinue.Pullback
+// field was never read. The pullback entry mode is governed by leg-1 confirm
+// and min-SL, not by a pullback-depth knob.
 // bdConfirmCloses — E3 (entry-mechanics 2026-08-30): the breakdown floor
 // relaxes 2→1 confirming close (BD_MIN_CLOSES, default 1). Displacement
 // (BD_MIN_DISP_ATR) and the reclaim-check are UNCHANGED — the entry law now

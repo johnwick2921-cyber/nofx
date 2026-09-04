@@ -73,10 +73,6 @@ func GradeAdherence(in AdherenceInput) (string, []string) {
 		grade = stepDown(grade, 1)
 		reasons = append(reasons, "entered in a no-trade window")
 	}
-	if !in.InKillzone {
-		grade = stepDown(grade, 1)
-		reasons = append(reasons, "entered outside a killzone")
-	}
 	return grade, reasons
 }
 
