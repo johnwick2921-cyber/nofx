@@ -1,6 +1,7 @@
 package kernel
 
 import (
+	"fmt"
 	"nofx/logger"
 )
 
@@ -10,8 +11,7 @@ import (
 // proximity is per-trader config now (owner retune 0.3 → ±~105pt), so the boot
 // line states the resolver instead of a constant.
 func LogVolumeWaveBoot() {
-	logger.Infof("🎛 volume wave: detectors=on · seats=%d · proximity=cfg(resolved per-trader; retuned 0.3) · family-confluence(cap=%d) · zone-ladder=1.0/0.6/0.3/0.15 · roles=on(overrides=%v) · bias_ctx=on · tier1+=VAH/VAL/SETT/nPOC (R-A13)",
-		DefaultMaxLevels, ConfluenceCap(), IsRoleOverridden())
+	logger.Infof("%s", VolumeWaveBootLine())
 	logger.Infof("🎯 touch telemetry: band=%dt(%.1fpt) max_bars=%d vol_lookback=%d approach=%d — advisory, zero gates",
 		TouchBandTicks(), TouchBandPoints(), TouchEpisodeMaxBars(), TouchVolLookback(), TouchApproachBars())
 	logger.Infof("📐 fvg_entry: on min_disp=%.1f×ATR ce_width=%.0fpt lookback=%d bars — advisory, zero gates",
@@ -47,4 +47,14 @@ func LogVolumeWaveBoot() {
 	logger.Infof("✂ planner schema: 9 top-level fields, ALL consumed (audit 2026-09-02: levels~402tok scenarios~237 reasoning~161 no_trade~42 bias~33 death_condition~18 flip~14 death~10 day_type~3) — plan JSON ~920 tokens of a 23,769-token p50 output (3.9%%); reasoning is ~96%%, so schema slimming CANNOT shorten the call — the reasoning MODE is the lever (root-fix part A: measured, no cut shipped)")
 	logger.Infof("🩹 repair (class 44): contract=full-doc restated head+tail · extractor=fenced/prose-tolerant (already was — 17 of 18 rejected repairs PARSED and were rejected on field values) · fragment→own reason · vocab-suffix=on (LiveConditionsLine now in repair prompts; the DEFAULT retry ran without it from class 34 until now) · law excerpts=all-matching (was first-match: 11 of 17 defects got an irrelevant excerpt) · outcomes recorded (repair_outcome_*) · config-diff=on")
 	logger.Infof("🛡 cutover safety (class 33): flat gate legs=5 (db_open_positions · api_positions · nt8_positions_snapshot · working_orders · planner_in_flight) via GET /api/cutover-gate; leg4 reads the armed_orders LEDGER (was a stub returning empty — passed vacuously at cutovers 35→41); boot sweep cancels pre-boot arms before ANY re-arm, counter arms_boot_swept_class33")
+}
+
+// VolumeWaveBootLine renders the volume-wave posture. Every number is READ from
+// a constant or resolver (A24): it used to print seats=8 from a package default
+// while the bound strategy's max_levels was 12, and to describe proximity as
+// "retuned 0.3" — a figure ResolveProximityK does not produce. Per-trader
+// values are LABELLED rather than printed as if the boot process knew them.
+func VolumeWaveBootLine() string {
+	return fmt.Sprintf("🎛 volume wave: detectors=on · seats=per-trader (default %d, hard cap %d) · proximity=per-trader (default %.1f×dATR) · family-confluence(cap=%d) · role-overridden=%v",
+		DefaultMaxLevels, PlanHardMaxLevels, ActivationWindowK, ConfluenceCap(), IsRoleOverridden())
 }

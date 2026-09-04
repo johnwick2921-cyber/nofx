@@ -60,7 +60,7 @@ func PromptContracts() []PromptContract {
 		{
 			Rule:       "arm{} legal only on armable conditions",
 			Site:       "plan_doc.go ArmSpecValid (arm enabled on non-armable condition)",
-			MustAppear: []string{"legal ONLY on fvg_entry|reject|breakdown_continue|breakup_continue"},
+			MustAppear: []string{"legal ONLY on " + ArmableConditionsPipe()},
 		},
 		{
 			Rule:       "legs[] only on sweep_reclaim (arm_legs_sweep_reclaim_only)",

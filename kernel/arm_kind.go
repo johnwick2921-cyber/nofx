@@ -77,3 +77,35 @@ func ArmKindMismatch(condition, authored string) error {
 	return fmt.Errorf("%s authored for a %s — %s requires %s (entry type follows the condition)",
 		got, strings.ToLower(strings.TrimSpace(condition)), condition, want)
 }
+
+// ArmableConditionsPipe renders the armable set as the pipe-joined string the
+// prompt sentence and the class-38 contract row both quote.
+//
+// D-25 (2026-09-04): both halves used to TYPE the same list, so when reclaim
+// joined the set they went stale together and the guard passed while confirming
+// the stale text. A contract that agrees with the thing it checks — because the
+// same hand typed both — checks nothing. Derived here, one source, and adding a
+// condition to ArmableCondition needs no edit in either place.
+func ArmableConditionsPipe() string {
+	out := make([]string, 0, 8)
+	for _, c := range KnownConditions() {
+		if ArmableCondition(c) {
+			out = append(out, c)
+		}
+	}
+	return strings.Join(out, "|")
+}
+
+// NonArmableConditionsPipe is the complement: conditions that can NEVER carry
+// an arm. Derived for the same reason as ArmableConditionsPipe — the prompt
+// used to type "breakout_retest|reclaim|hold|acceptance NEVER arm", which
+// contradicted the armable set outright once reclaim joined it.
+func NonArmableConditionsPipe() string {
+	out := make([]string, 0, 8)
+	for _, c := range KnownConditions() {
+		if !ArmableCondition(c) && c != "sweep_reclaim" {
+			out = append(out, c)
+		}
+	}
+	return strings.Join(out, "|")
+}

@@ -477,6 +477,13 @@ func (at *AutoTrader) recordEntryGateRefusal(path, symbol, action, reason string
 func entryGateDecisionTelemetry(at *AutoTrader, actionRecord *store.DecisionAction, reason string) {
 	telemetry.IncGateBlock(at.id, "entry_gate")
 	actionRecord.Success = false
+	// D32 (corrected 2026-09-04): the counter above was never the missing half —
+	// it has always fired. What was missing was the LINE. A decision-path
+	// refusal was recorded in decision_records and the counter and said nothing
+	// in the log, while the arm path logged its own 🚦, so a reader grepping
+	// refusals saw one path and concluded the other was idle. Same marker as
+	// the arm path so both are one grep (A9).
+	at.logWarnf("🚦 entry-gate REFUSED decision-path: %s", reason)
 	// The leg messages already carry the "entry_gate:" prefix — do not double it
 	// (the 09-02 refusals read "entry_gate: entry_gate: …").
 	if !strings.HasPrefix(reason, "entry_gate:") {
