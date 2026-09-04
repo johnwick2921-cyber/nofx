@@ -1471,36 +1471,72 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     `🖥 ui: served-by=go-static build=<ts>` is READ from the bundle and logged as
     a WARNING when the bundle predates the binary — the 08-31-dist-under-a-09-03-
     binary state becomes impossible to miss instead of invisible.
+69. **Reported wired, called by nobody.** (Highest occupied at merge: 68; renumbered
+    69 on the rebase when another lane landed 67-68 — theirs untouched, per A16.)
+    Root cause: code that ANNOUNCES its own wiring while no production caller
+    exists, so every downstream consumer reads an empty store as a fact.
+    `trader/detector_record.go` carried the banner "1B — THE PRODUCTION CALL
+    PATH … Called once per planner read" from `89aeb8be`; `recordDetectorOutputs`
+    had **0 production call sites**. `touch_outcomes` and `candidate_pool`
+    therefore booted `0 · 0` on every boot including the running `4d846e26`,
+    and the boot line printed those zeros as if they were measurements. A test
+    named `TestDetectorWritesThroughTheProductionPath` passed throughout —
+    because it called the hook directly. Three instances in 24h: the seam
+    migration, this hook, and `ab_confirm_log`'s "usable" count (healthy-looking
+    because what it dropped was never counted). **Probe:** for any store a
+    decision depends on, ask what WROTE the last row, not whether the writer
+    exists — `grep` the call sites of the writer and require ≥1 outside
+    `_test.go`; and never let a test that calls a hook stand in for a test that
+    drives the path. An empty store is UNKNOWN, never "no change". **Fix:**
+    wired at the one intended site beside the void scope
+    (`auto_trader_planner.go`, so the detector judges the same resolved tape the
+    prompt and validator read); a production-path test that drives
+    `assemblePlannerInputWithCtx` on a fixture and asserts both stores non-empty
+    (RED with the call site removed — the old test stayed GREEN, which is the
+    whole point); and a STANDING GATE, `TestEveryClaimedProductionPathHasACallSite`,
+    which parses every non-test .go file, collects wiring claims from BOTH
+    function docs and FILE-LEVEL banners (1B's claim was a file banner, so a
+    func-doc-only scan would have missed the very case it exists for), and
+    FAILS on 0 production call sites. **Law:** a claim of being wired is a
+    testable assertion, not a comment — if a file says it is a production call
+    path, a gate must be able to prove it wrong.
 
-69. **A hook registered one start too late.** (Number assigned at merge;
-    highest occupied on dev at authoring: 68.) F12 wired a sink so every received
-    `order_snapshot` frame would be persisted for forensics. The sink was
-    correct, the store was correct, the tests were green — and
-    `nt8_order_snapshots` held **0 rows** while frames arrived every 30 s and the
-    cutover gate correctly read the broker off those same frames.
+
+70. **A hook registered one start too late.** (Renumbered 69→70 at merge: 69
+    landed on dev first as "Reported wired, called by nobody". **Read that one
+    with this one — they are the same family**, a registration whose success
+    nobody verified. 69 is a hook nothing ever called; 70 is a hook installed
+    after the thing that reads it had already read it. Neither could fail a test
+    of the hook's own logic.)
+    F12 wired a sink so every received `order_snapshot` frame would be persisted
+    for forensics. The sink was correct, the store was correct, the tests were
+    green — and `nt8_order_snapshots` held **0 rows** while frames arrived every
+    30 s and the cutover gate correctly read the broker off those same frames.
     `main.go` registered the sink at line 366. `LoadTradersFromStore` at line 203
     builds the first trader, which lazily starts the TCP server, which reads the
-    hook **exactly once, at start**. The server came up with a nil sink. The
-    registration ran 163 lines later and set a variable nothing would read again.
-    **Nothing looked wrong**, and that is the whole defect: the CACHE is what the
-    gate reads, by design, so the feature that mattered kept working. The missing
-    half left no error, no warning, and no empty-state message — just a table
-    that was always empty, which is indistinguishable from a table nothing had
+    hook **exactly once, at start**. The server came up with a nil sink; the
+    registration then ran 163 lines later and set a variable nothing would read
+    again.
+    **Nothing looked wrong**, and that is the defect. The CACHE is what the gate
+    reads, by design, so the feature that mattered kept working. The missing half
+    produced no error, no warning and no empty-state message — just a table that
+    was always empty, which is indistinguishable from a table nothing has
     happened for yet.
     **Probe:** for any hook, callback, sink or observer, find the line that READS
     it and ask whether the registration is guaranteed to have run first. Lazy
-    singletons make this invisible: the read happens inside whatever call first
-    needs the subsystem, which is rarely near the registration. Then ask the
-    harder question — *if this hook were never installed, what would I see?* If
-    the answer is "nothing", the wiring needs its own test, because no test of
-    the hook's logic can fail on it.
+    singletons hide this: the read happens inside whatever call first needs the
+    subsystem, which is rarely near the registration. Then ask the harder
+    question — *if this hook were never installed, what would I see?* If the
+    answer is "nothing", the wiring needs its own test, because no test of the
+    hook's logic can fail on it. (69's probe is the sibling: ask who CALLS it.)
     **Law:** a hook is not wired by being written. It is wired by being installed
     BEFORE the thing that reads it starts, and only a test that starts that thing
     can prove it. This is the write-side twin of "parity tests must exercise
     production call sites": the existing tests called the sink directly and could
-    never see the order. Pinned now by a test that starts a real server, drives a
-    real frame through a real client, asserts a row lands — and by a source-order
-    guard that fails if the two calls are ever swapped back.
+    never see the order. Pinned by a test that starts a real server, drives a real
+    frame through a real client and asserts a row lands — and by a source-order
+    guard that fails if the two calls are swapped back (verified RED at offsets
+    17584 > 8148, GREEN after).
 
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
