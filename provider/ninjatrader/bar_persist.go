@@ -158,8 +158,17 @@ func persistWatchdogAlarmAt(now int64) string {
 }
 
 // barPersistSummary logs the 1-line/minute drop summary (no per-drop WARNs).
+// Clock seam (class 60): the 60s rate limit here is a TIME-DEPENDENT RULE, and
+// the body is destructive — it Swap(0)s both counters. A caller that increments
+// and then reads them can have its increment erased by a summary that happened
+// to fall due, which is what made TestFanOutClosesLastResortIsHonest fail ~1 run
+// in 6 with no load involved at all.
 func barPersistSummary() {
-	now := time.Now().Unix()
+	barPersistSummaryAt(time.Now())
+}
+
+func barPersistSummaryAt(nowT time.Time) {
+	now := nowT.Unix()
 	if now-persistLastSum.Load() < 60 {
 		return
 	}

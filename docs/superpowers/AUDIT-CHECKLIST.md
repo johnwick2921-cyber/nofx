@@ -1256,7 +1256,7 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     were verified in the morning and shipped in the afternoon; the readings were
     honest when taken and were not green at deploy time. A gate whose answer
     depends on when you asked is not a gate.
-    **SWEEP (2026-09-03, listed not fixed — follow-up wave):** eight test files
+    **SWEEP — CLOSED by the clock-seam wave (class 72), 2026-09-03.** Listed here, fixed there: eight test files
     build a fixed `time.Date` clock and call an entry point that reads
     `time.Now()` — `auto_trader_wake_levels_test.go` (FIXED here),
     `auto_trader_reset_test.go`, `auto_trader_transition_test.go`,
@@ -1611,6 +1611,37 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     evidence file present on `origin/dev`). `git stash list` is empty and
     `git cat-file -t 6b770196` still answers `commit`, reachable through the
     tag — the landmine is gone and the evidence is not.
+
+72. **A flaky test in the gate — and the flake was the same clock.** (Number
+    assigned at merge, A16 — highest occupied on dev was 71.) Root cause:
+    `TestFanOutClosesLastResortIsHonest` failed roughly 1 full-suite run in 4-6
+    and passed in isolation every time, so it was carried for days as "a load
+    flake" — including by me, in this checklist. It was not load. The drop path
+    increments `persistDropped` / `persistDroppedCloses` and then calls
+    `barPersistSummary()`, which is rate-limited to once per 60 **wall-clock**
+    seconds and, when it fires, `Swap(0)`s both counters — erasing the increment
+    one line before the test reads it. At ~6.3 s per iteration, roughly every
+    tenth run crossed a 60-second boundary and read 0. **Measured, and the
+    numbers are what identified it:** failures returned in **6.01 s** with
+    `closes_dropped=0 AND queue_drops=0` — neither branch's counter survived,
+    which is impossible for either code path — while passes took **6.30 s** with
+    both at 1. Two earlier hypotheses were wrong and both were "obviously"
+    right: a stale queue from the previous `-count` iteration, and the worker
+    freeing a slot mid-retry. Fixing them made the test no better; the queue read
+    4096/4096 in every run, pass and fail alike. **Probe:** a test that fails at
+    a stable RATE rather than randomly is a clock, not a race — measure the
+    period. Grep any assertion on a counter for a destructive reader
+    (`Swap`, `Store(0)`) on the same counter's path. **Law:** a gate with a
+    flaky test is a gate you learn to re-run, and then it is not a gate. Fixed
+    deterministically, test-side only: the queue is filled until it is
+    OBSERVABLY at capacity instead of by a magic count, the worker is confirmed
+    wedged inside the persister before the assertion begins, and the summary's
+    rate limiter is held open across the window so the destructive reset cannot
+    fire. **Zero production behaviour change** — `barPersistSummary` gained a
+    clock seam and still summarises on its own schedule in the bot. `-race
+    -count=30` clean. **The flake was itself a class-60 instance**, which is why
+    the two halves of this wave belong together: the sweep went looking for
+    wall-clock rules and found one hiding behind a counter.
 
 ## PART 2 — PRE-AUDIT (standing hard rules)
 

@@ -143,10 +143,16 @@ var (
 // ResetDailyPnL marks "now" as the new day-start. Cheap, idempotent.
 // Operators call this from the force-flat API endpoint or at the
 // CME Sunday 18:00 ET open.
+// Clock seam (class 60): the entry point owns the wall clock and does nothing
+// else; the rule lives in the …At body so a test can state its own hour.
 func ResetDailyPnL() {
+	ResetDailyPnLAt(time.Now())
+}
+
+func ResetDailyPnLAt(now time.Time) {
 	dailyResetMu.Lock()
 	defer dailyResetMu.Unlock()
-	lastDailyResetDate = CMESessionDayKey(time.Now())
+	lastDailyResetDate = CMESessionDayKey(now)
 	logger.Infof("Plan 3 T21: daily window manually reset to CME session-day %s", lastDailyResetDate)
 }
 

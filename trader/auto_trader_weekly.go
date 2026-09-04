@@ -331,14 +331,19 @@ func (at *AutoTrader) weeklyDocCached(now time.Time) *kernel.WeeklyDoc {
 // shadow grade ONCE per level per session, plus one per-session line counting
 // how many of the top-8 seats the shadow ordering would change. View only —
 // the real seating is already written and never touched.
+// Clock seam (class 60): the entry point owns the wall clock and does nothing
+// else; the rule lives in the …At body so a test can state its own hour.
 func (at *AutoTrader) weeklyConfluenceShadow(tradeDate, session string, levels []kernel.PlanLevel) {
+	at.weeklyConfluenceShadowAt(time.Now(), tradeDate, session, levels)
+}
+
+func (at *AutoTrader) weeklyConfluenceShadowAt(now time.Time, tradeDate, session string, levels []kernel.PlanLevel) {
 	if !at.dayPlanEnabled() || at.store == nil || len(levels) == 0 {
 		return
 	}
 	if market.FuturesBarsProvider == nil {
 		return
 	}
-	now := time.Now()
 	bars1m := market.FuturesBarsProvider(at.futuresSymbol(), "1m", 12000)
 	bars5m := market.FuturesBarsProvider(at.futuresSymbol(), "5m", kernel.AISVPBarCount)
 	price := 0.0
@@ -399,11 +404,16 @@ func (at *AutoTrader) weeklyCounterShadow(decision *kernel.Decision) {
 
 // weeklyScenarioGrade resolves the cited scenario's quality grade from the
 // active session plan ("" when unknown — treated as non-A by the clauses).
+// Clock seam (class 60): the entry point owns the wall clock and does nothing
+// else; the rule lives in the …At body so a test can state its own hour.
 func (at *AutoTrader) weeklyScenarioGrade(cited string) string {
+	return at.weeklyScenarioGradeAt(time.Now(), cited)
+}
+
+func (at *AutoTrader) weeklyScenarioGradeAt(now time.Time, cited string) string {
 	if at.store == nil || strings.TrimSpace(cited) == "" || cited == "off-plan" {
 		return ""
 	}
-	now := time.Now()
 	reg := at.sessionRegistry(now)
 	sess, ok := reg.ActiveSession(now)
 	if !ok {

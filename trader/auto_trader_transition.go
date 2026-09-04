@@ -25,7 +25,13 @@ import (
 // observeTransitionStanddown advances the state machine and wires ctx for the
 // executor gate. Never fails the cycle: any unresolved input leaves the gate
 // dormant (fail-open).
+// Clock seam (class 60): the entry point owns the wall clock and does nothing
+// else; the rule lives in the …At body so a test can state its own hour.
 func (at *AutoTrader) observeTransitionStanddown(ctx *kernel.Context) {
+	at.observeTransitionStanddownAt(time.Now(), ctx)
+}
+
+func (at *AutoTrader) observeTransitionStanddownAt(nowT time.Time, ctx *kernel.Context) {
 	ctx.TransitionActive = false
 	if at.store == nil {
 		return
@@ -48,7 +54,7 @@ func (at *AutoTrader) observeTransitionStanddown(ctx *kernel.Context) {
 		at.persistTransition(false)
 		return
 	}
-	now := time.Now().UnixMilli()
+	now := nowT.UnixMilli()
 
 	// (a) flip/death confirmed → the planner re-planned (new plan identity):
 	// close instantly, the new plan's own structure stands.
@@ -141,12 +147,18 @@ func (at *AutoTrader) persistTransition(active bool) {
 // plan's bias TF (15m) is the FOURTH planner wake-up — one wake per MSS event
 // (deduped by plan version + event instant). Death replans, first reads and
 // owner rereads/resets are the other three.
+// Clock seam (class 60): the entry point owns the wall clock and does nothing
+// else; the rule lives in the …At body so a test can state its own hour.
 func (at *AutoTrader) maybeWakePlannerOnMSS(session, tradeDate string, row *store.PlanDB) {
+	at.maybeWakePlannerOnMSSAt(time.Now(), session, tradeDate, row)
+}
+
+func (at *AutoTrader) maybeWakePlannerOnMSSAt(now time.Time, session, tradeDate string, row *store.PlanDB) {
 	if market.FuturesBarsProvider == nil {
 		return
 	}
 	bars1m := market.FuturesBarsProvider(at.futuresSymbol(), kernel.AISVPBarInterval, kernel.AISVPBarCount)
-	snap := kernel.StructureSnapshot(bars1m, time.Now().UnixMilli())
+	snap := kernel.StructureSnapshot(bars1m, now.UnixMilli())
 	st15, ok := snap["15m"]
 	if !ok {
 		return
@@ -180,7 +192,7 @@ func (at *AutoTrader) maybeWakePlannerOnMSS(session, tradeDate string, row *stor
 	// replans_exhausted NO-TRADE. The dedupe key + the shared min-interval
 	// throttle are the only frequency limits.
 	at.lastMSSWakeKey = key
-	at.lastPlannerWakeAt = time.Now() // W6 — shared wake clock
+	at.lastPlannerWakeAt = now // W6 — shared wake clock
 	at.logWarnf("🗓️ structure MSS on %s %s (%s) — waking the planner (G4.6, 4th wake-up).", session, tradeDate, mss.Detail)
 	// C5 — an MSS wake strands owner overlays exactly like a death re-plan does:
 	// make the loss audible BEFORE the read (the P1 alert names the count).

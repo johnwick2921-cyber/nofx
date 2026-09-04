@@ -203,12 +203,19 @@ func sessionChainDate(sess *kernel.SessionDef, now time.Time) string {
 
 // latestClosedPrimaryBarMs returns the CloseTime (ms) of the most recent CLOSED
 // primary-TF bar, ok=false when none is available (provider down / warming).
+// Clock seam (class 60): the entry point owns the wall clock and does nothing
+// else; the rule lives in the …At body so a test can state its own hour. A
+// green suite is only evidence about the moment it ran.
 func (at *AutoTrader) latestClosedPrimaryBarMs() (int64, bool) {
+	return at.latestClosedPrimaryBarMsAt(time.Now())
+}
+
+func (at *AutoTrader) latestClosedPrimaryBarMsAt(now time.Time) (int64, bool) {
 	if market.FuturesBarsProvider == nil {
 		return 0, false
 	}
 	bars := market.FuturesBarsProvider(at.futuresSymbol(), at.primaryTimeframe(), 5)
-	nowMs := time.Now().UnixMilli()
+	nowMs := now.UnixMilli()
 	var latest int64
 	for i := range bars {
 		if bars[i].CloseTime < nowMs && bars[i].CloseTime > latest {
@@ -720,7 +727,13 @@ func (at *AutoTrader) recordExcursionForClosedSymbol(symbol string) {
 // the matched-random reaction verdict for ONE closed trade. Idempotent (a graded
 // row is skipped), so the AI-close call and the loop poll never double-process.
 // Gated on day_plan → dormant for crypto / plan-off.
+// Clock seam (class 60): the entry point owns the wall clock and does nothing
+// else; the rule lives in the …At body so a test can state its own hour.
 func (at *AutoTrader) recordClosedTradeAnalytics(p *store.TraderPosition) {
+	at.recordClosedTradeAnalyticsAt(time.Now(), p)
+}
+
+func (at *AutoTrader) recordClosedTradeAnalyticsAt(now time.Time, p *store.TraderPosition) {
 	if p == nil || p.AdherenceGrade != "" { // already processed
 		return
 	}
@@ -732,7 +745,7 @@ func (at *AutoTrader) recordClosedTradeAnalytics(p *store.TraderPosition) {
 	}
 	exitMs := p.ExitTime
 	if exitMs <= 0 {
-		exitMs = time.Now().UnixMilli()
+		exitMs = now.UnixMilli()
 	}
 	bars := market.FuturesBarsProvider(at.futuresSymbol(), "1m", kernel.AISVPBarCount)
 	// E4 (wave 1A, 2026-09-02) — the same path computation the excursion table
@@ -765,7 +778,7 @@ func (at *AutoTrader) recordClosedTradeAnalytics(p *store.TraderPosition) {
 	}
 
 	// P5.5 — ADHERENCE GRADE (A–F), separate from P&L.
-	inKZ, inNoTrade := kernel.SessionWindowFacts(at.sessionRegistry(time.Now()), time.UnixMilli(p.EntryTime))
+	inKZ, inNoTrade := kernel.SessionWindowFacts(at.sessionRegistry(now), time.UnixMilli(p.EntryTime))
 	grade, _ := kernel.GradeAdherence(kernel.AdherenceInput{
 		Cited:      p.CitedScenarioID != "",
 		Matched:    p.PlanMatched,
@@ -830,7 +843,13 @@ func (at *AutoTrader) recordClosedTradeAnalytics(p *store.TraderPosition) {
 // AI decision cycle. It grades every ungraded close since the analytics epoch
 // (set on first run so pre-existing history is ignored). Idempotent via the grade
 // flag; gated on day_plan.
+// Clock seam (class 60): the entry point owns the wall clock and does nothing
+// else; the rule lives in the …At body so a test can state its own hour.
 func (at *AutoTrader) maybeRecordClosedTradeAnalytics() {
+	at.maybeRecordClosedTradeAnalyticsAt(time.Now())
+}
+
+func (at *AutoTrader) maybeRecordClosedTradeAnalyticsAt(now time.Time) {
 	if !at.dayPlanEnabled() || at.store == nil {
 		return
 	}
@@ -838,7 +857,7 @@ func (at *AutoTrader) maybeRecordClosedTradeAnalytics() {
 	sinceStr, _ := at.store.GetSystemConfig(key)
 	if sinceStr == "" {
 		// First run: stamp the epoch + skip all pre-existing closes (not day-plan trades).
-		_ = at.store.SetSystemConfig(key, strconv.FormatInt(time.Now().UnixMilli(), 10))
+		_ = at.store.SetSystemConfig(key, strconv.FormatInt(now.UnixMilli(), 10))
 		return
 	}
 	sinceMs, err := strconv.ParseInt(sinceStr, 10, 64)
@@ -850,7 +869,7 @@ func (at *AutoTrader) maybeRecordClosedTradeAnalytics() {
 		return
 	}
 	for _, p := range rows {
-		at.recordClosedTradeAnalytics(p)
+		at.recordClosedTradeAnalyticsAt(now, p)
 	}
 }
 
