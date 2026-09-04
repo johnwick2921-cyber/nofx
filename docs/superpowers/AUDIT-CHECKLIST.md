@@ -1605,10 +1605,12 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     commit it — `git add -A` skipped it with no error and the file was reported
     as landed when it had not (a second instance of this checklist's own
     never-claim-an-unverified-state rule, caught by nofx-47 reading dev rather
-    than reading my report). **The stash entry itself is
-    deliberately NOT dropped** — it is another lane's evidence, dropping is
-    destructive, and it is the owner's call; the artifacts above make that drop
-    safe whenever they want it.
+    than reading my report). **DROPPED 2026-09-03 on explicit owner
+    authorisation**, after a four-point pre-flight (one entry on the stack · its
+    sha IS `6b770196` · the local AND origin tags both dereference to it · the
+    evidence file present on `origin/dev`). `git stash list` is empty and
+    `git cat-file -t 6b770196` still answers `commit`, reachable through the
+    tag — the landmine is gone and the evidence is not.
 
 ## PART 2 — PRE-AUDIT (standing hard rules)
 

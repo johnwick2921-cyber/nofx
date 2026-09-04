@@ -188,9 +188,13 @@ having verified neither. nofx-47 caught it by reading `dev` rather than my repor
 that skips silently and a report that asserts success are the same failure twice** — the
 rule this checklist already states as "read the value back out of the artifact".
 
-**The stash entry itself is deliberately NOT dropped.** It is another lane's evidence,
-dropping is destructive, and it is the owner's call; the tag makes that drop safe whenever
-they want it.
+**The stash entry was dropped 2026-09-03 on explicit owner authorisation**, after a
+four-point pre-flight: one entry on the stack, its sha IS `6b770196`, the local and origin
+tags both dereference to it, and the evidence file is present on `origin/dev`. Afterwards
+`git stash list` is empty and `git cat-file -t 6b770196` still answers `commit` — the
+landmine is gone and the evidence is not. Held for the owner rather than taken on a peer's
+suggestion, because dropping another lane's evidence is destructive and was never mine to
+decide.
 
 ## 5. What this does not fix
 
