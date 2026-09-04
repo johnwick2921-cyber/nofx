@@ -174,3 +174,69 @@ bash deploy/install-tree-guard.sh
 lines on a healthy tree prove the guard runs; only an alarm proves it *catches*. Until one
 fires, this wave is installed and unproven — and the honest way to read the current output
 is "nothing is wrong right now", not "the guard works".
+
+---
+
+## 9 — THE CLOCK-SEAM SWEEP (class 60's follow-up, same branch)
+
+**SPEC FRESHNESS, applied to itself** (PART 3 step 0b, written minutes earlier):
+`git log -1 -- docs/superpowers/AUDIT-CHECKLIST.md` → **13680723**, while my
+worktree base was **26594412**. The file HAD moved, so I merged dev and re-read
+class 60 before building. The law caught something on its first use: dev's class
+70 had grown by 98 lines and dev had taken **71** for the stash-stack class,
+colliding with mine. My entries renumbered **71→72** (tree guard) and **72→73**
+(spec freshness); dev's step 0 was already "PUSH EMPTY AT ACCEPT", so the
+freshness rule became **step 0b** — the same moment, complementary rule.
+
+### The list was eight files. The real scope is two functions.
+
+Measured with brace-matched function bodies, not a line window — my *first*
+measurement used a +35-line window and reported `eodFlatCT` as a seam, which it
+is not; the count had bled into the next function. That is the same
+"plausible-looking measurement" class the checklist keeps finding, produced here
+by me while auditing for it.
+
+| verdict | function | evidence |
+|---|---|---|
+| **REAL SEAM** | `latestClosedPrimaryBarMs` (`auto_trader_clock.go:206`) | `nowMs := time.Now().UnixMilli()` decides which bars count as CLOSED |
+| **REAL SEAM** | `observeTransitionStanddown` (`auto_trader_transition.go:28`) | `now := time.Now().UnixMilli()` drives every elapsed-time comparison |
+| **LEGITIMATE — do NOT convert** | `ForceReset` (`auto_trader_reset.go:92`) | its two `time.Now()` are a wall-clock TIMEOUT: `deadline := time.Now().Add(max)` / `for … time.Now().Before(deadline)`. A fixed clock never advances, so an `At(now)` version would spin forever or not at all. A timeout is *supposed* to read the wall clock. |
+| FALSE POSITIVE | `eodFlatCT`, `lastEntryCT`, `MaybeResetDaily`, `CanForceReset`, `PlannerReadInFlight`, `SetClockContext`, `BuildSystemPrompt`, `ComputeStructureState`, `WeekGoverningMonday`, `DefaultSessionRegistry` | each either already takes its clock or reads none |
+
+Both real seams now follow A28: the existing name is the entry point, reads
+`time.Now()` **once**, and delegates to a `…At(now)` variant that honours the
+clock it is given. Four tests pin it, including one that moves the caller's clock
+forward and asserts the answer moves with it — the assertion that would have been
+hour-dependent before.
+
+### Found while measuring, NOT fixed, deliberately
+
+`maybeWakePlannerOnMSS` (`auto_trader_transition.go:157,191`) reads `time.Now()`
+twice more — `kernel.StructureSnapshot(bars1m, time.Now()…)` and
+`at.lastPlannerWakeAt = time.Now()`. It is a genuine seam of the same class, but
+**no test in class 60's list drives it**, so fixing it would widen this wave past
+what was dispatched. Recorded here rather than silently swept in, and rather than
+silently left out.
+
+### A test of mine that read ambient state — caught by another lane's timing
+
+The full parallel suite failed once where the isolated run had passed:
+
+```
+--- FAIL: TestE3ReleaseMismatchAlarmsAndQuotesBoth
+    RELEASE abc123 vs running def456 must ALARM:
+    tree-guard INFO release: … MISMATCH under a live lock
+      (session 'rebrand-merge' task=merge docs/rebrand-census-0903 to dev, heartbeat 23s old)
+```
+
+`baseEnv` overrode the LEGACY lock path but not `TREE_GUARD_LOCK_DIR`, so the guard
+fell through to the **machine's real `~/nofx-main.lock.d`** — and another lane
+acquired it mid-run, correctly downgrading my expected ALARM to INFO. The guard was
+right; my test was reading ambient state nobody had stated, so its verdict depended
+on whether a peer happened to be merging at that second.
+
+Both paths are overridden now, and the fix is proven by planting a lock during the
+run. Worth noting the shape: **this is the same class as the spec-freshness defect
+two hours earlier, and both were found by accident** — one by a peer's unrelated
+question, one by a peer's unrelated merge. Neither was found by the suite that was
+supposed to cover it.

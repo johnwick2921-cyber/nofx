@@ -96,8 +96,16 @@ func symbolsFile(t *testing.T, syms ...string) string {
 func baseEnv(t *testing.T, tree string) map[string]string {
 	t.Helper()
 	return map[string]string{
-		"TREE_GUARD_TREE":         tree,
+		"TREE_GUARD_TREE": tree,
+		// BOTH lock paths are overridden to absent temp paths. Overriding only
+		// the legacy one let the guard fall through to the MACHINE'S REAL
+		// ~/nofx-main.lock.d, so a verdict depended on whether another lane
+		// happened to hold the lock while the suite ran. It did: a
+		// 'rebrand-merge' lock appeared mid-run and silently downgraded an
+		// expected ALARM to INFO. A test that reads ambient state nobody stated
+		// is a test whose result is a coincidence.
 		"TREE_GUARD_LOCK":         filepath.Join(t.TempDir(), "absent.lock"),
+		"TREE_GUARD_LOCK_DIR":     filepath.Join(t.TempDir(), "absent.lock.d"),
 		"TREE_GUARD_STATE":        filepath.Join(t.TempDir(), "state"),
 		"TREE_GUARD_SYMBOLS":      symbolsFile(t, "composeArmStop", "normalizeArmLegs", "CorrectedPnL"),
 		"TREE_GUARD_SKIP_REMOTE":  "1", // no origin in a fixture

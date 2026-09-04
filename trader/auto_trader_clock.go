@@ -203,12 +203,19 @@ func sessionChainDate(sess *kernel.SessionDef, now time.Time) string {
 
 // latestClosedPrimaryBarMs returns the CloseTime (ms) of the most recent CLOSED
 // primary-TF bar, ok=false when none is available (provider down / warming).
+// CLASS 60 (A28): the entry point reads the wall clock ONCE and delegates. The
+// …At variant honours the clock it is GIVEN, so a test can state its own instead
+// of passing or failing on the hour the suite happens to run.
 func (at *AutoTrader) latestClosedPrimaryBarMs() (int64, bool) {
+	return at.latestClosedPrimaryBarMsAt(time.Now())
+}
+
+func (at *AutoTrader) latestClosedPrimaryBarMsAt(now time.Time) (int64, bool) {
 	if market.FuturesBarsProvider == nil {
 		return 0, false
 	}
 	bars := market.FuturesBarsProvider(at.futuresSymbol(), at.primaryTimeframe(), 5)
-	nowMs := time.Now().UnixMilli()
+	nowMs := now.UnixMilli()
 	var latest int64
 	for i := range bars {
 		if bars[i].CloseTime < nowMs && bars[i].CloseTime > latest {

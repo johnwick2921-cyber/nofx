@@ -25,7 +25,15 @@ import (
 // observeTransitionStanddown advances the state machine and wires ctx for the
 // executor gate. Never fails the cycle: any unresolved input leaves the gate
 // dormant (fail-open).
+// CLASS 60 (A28): the entry point reads the wall clock once; the …At variant
+// honours the clock it is given. The standdown's whole behaviour is elapsed-time
+// comparisons against `now`, so a test that states a clock and then silently
+// races the real one is a test whose result depends on the hour it ran.
 func (at *AutoTrader) observeTransitionStanddown(ctx *kernel.Context) {
+	at.observeTransitionStanddownAt(ctx, time.Now())
+}
+
+func (at *AutoTrader) observeTransitionStanddownAt(ctx *kernel.Context, clock time.Time) {
 	ctx.TransitionActive = false
 	if at.store == nil {
 		return
@@ -48,7 +56,7 @@ func (at *AutoTrader) observeTransitionStanddown(ctx *kernel.Context) {
 		at.persistTransition(false)
 		return
 	}
-	now := time.Now().UnixMilli()
+	now := clock.UnixMilli()
 
 	// (a) flip/death confirmed → the planner re-planned (new plan identity):
 	// close instantly, the new plan's own structure stands.
