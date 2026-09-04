@@ -69,7 +69,6 @@ export function InstrumentsDrawer({
     }
   }, [traderId])
 
-  const head = { color: 'var(--vl-faint)' } as const
   const src = { color: 'var(--vl-faint)', fontSize: '9px' } as const
 
   // MAE/MFE comes from the expectancy rows, which read trade_excursions and
@@ -92,12 +91,23 @@ export function InstrumentsDrawer({
       style={{ borderTop: '1px dashed var(--vl-hair)' }}
     >
       <button
+        type="button"
         data-testid="instruments-drawer-toggle"
-        className="flex items-baseline gap-1 text-left text-[9px] uppercase tracking-wider"
-        style={head}
+        aria-expanded={open}
+        className="flex w-full items-center gap-1.5 text-left text-[11px] uppercase tracking-wide"
+        style={{
+          color: 'var(--vl-muted)',
+          background: 'none',
+          border: 'none',
+          padding: '2px 0',
+          cursor: 'pointer',
+          fontFamily: 'inherit',
+        }}
         onClick={() => setOpen((o) => !o)}
       >
-        <span>{open ? '▾' : '▸'}</span>
+        <span aria-hidden style={{ width: '0.75em', flex: 'none' }}>
+          {open ? '\u25be' : '\u25b8'}
+        </span>
         <span>
           Instruments · discipline · MAE/MFE · level gate (descriptive)
         </span>

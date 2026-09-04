@@ -229,3 +229,53 @@ describe('InstrumentsDrawer', () => {
     )
   })
 })
+
+// ── 1D FOLLOW-UP (owner report 2026-09-03: "the old bottom tab is gone and NO
+// dropdown appears") ───────────────────────────────────────────────────────
+//
+// The drawer WAS rendering. Its toggle was a 9px caption in `--vl-faint` —
+// the token `web/src/theme/vl-tokens.css:86` itself annotates as "2.83:1 on
+// --vl-card, below AA" — with no button affordance. A control nobody can see
+// is a deleted panel, not a collapsed one. These pin the toggle at the same
+// visibility as every sibling control in the card (RulesBlock, AlertCenter).
+describe('InstrumentsDrawer toggle is a visible control', () => {
+  beforeEach(() => {
+    tradesPayload = baseTrades()
+    statsPayload = baseStats()
+  })
+
+  it('is a real button that declares its expanded state', async () => {
+    await renderDrawer()
+    const btn = await screen.findByTestId('instruments-drawer-toggle')
+    expect(btn.getAttribute('type')).toBe('button')
+    expect(btn.getAttribute('aria-expanded')).toBe('false')
+    fireEvent.click(btn)
+    expect(btn.getAttribute('aria-expanded')).toBe('true')
+  })
+
+  it('renders above the sub-AA floor: not --vl-faint, not 9px', async () => {
+    await renderDrawer()
+    const btn = await screen.findByTestId('instruments-drawer-toggle')
+    expect(btn.style.color).not.toBe('var(--vl-faint)')
+    expect(btn.className).not.toMatch(/text-\[9px\]/)
+  })
+
+  it('is a labelled row with a chevron that flips', async () => {
+    await renderDrawer()
+    const btn = await screen.findByTestId('instruments-drawer-toggle')
+    expect(btn.textContent).toMatch(/▸/)
+    expect(btn.textContent).toMatch(/Instruments/)
+    fireEvent.click(btn)
+    expect(btn.textContent).toMatch(/▾/)
+  })
+
+  // "always shown": the three instruments are all empty here, and two of them
+  // say so only once opened. The way IN must still be on screen.
+  it('shows the toggle even when every instrument is empty', async () => {
+    tradesPayload = null
+    statsPayload = null
+    await renderDrawer([])
+    const btn = await screen.findByTestId('instruments-drawer-toggle')
+    expect(btn.textContent).toMatch(/Instruments/)
+  })
+})
