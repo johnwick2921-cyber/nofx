@@ -115,8 +115,14 @@ func TestSeamBootLineIsCounted(t *testing.T) {
 	seedSeamRow(t, st, 572, CloseReasonTestSeam)
 	seedSeamRow(t, st, 903, "system")
 	line := st.SeamExclusionBootLine()
-	if !strings.Contains(line, "adherence: seam rows excluded=1") {
-		t.Errorf("boot line must report the counted exclusions: %s", line)
+	// SUPERSEDED 2026-09-03: "excluded=1" read as "1 row was excluded" when it
+	// counted rows MATCHING the predicate. On the 042ff360 boot it printed 3
+	// while nothing had been excluded. Matched and stamped are now separate.
+	if !strings.Contains(line, "matched=1") {
+		t.Errorf("boot line must report what it matched: %s", line)
+	}
+	if !strings.Contains(line, "stamped=") {
+		t.Errorf("boot line must report what it actually stamped: %s", line)
 	}
 	t.Logf("boot: %s", line)
 }

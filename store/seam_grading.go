@@ -83,7 +83,22 @@ func (s *Store) SeamExclusionBootLine() string {
 	if err != nil {
 		return "adherence: seam rows excluded=n/a (count unavailable)"
 	}
-	return fmt.Sprintf("adherence: seam rows excluded=%d (never graded; source matched the seam predicate)", excluded)
+	// HONEST WORDING (2026-09-03). This used to read "excluded=%d", which reads
+	// as "%d rows were excluded" when it counts rows MATCHING the predicate. On
+	// the 042ff360 boot it printed 3 while nothing had been excluded, because
+	// the migration was not wired. The count and the action are now named
+	// separately: a matched row that still holds a grade is a DEFECT, and the
+	// line says so rather than implying success.
+	stamped, unstamped, err := s.seamStampCounts()
+	if err != nil {
+		return fmt.Sprintf("adherence: seam rows matched=%d (stamp state unavailable)", excluded)
+	}
+	warn := ""
+	if unstamped > 0 {
+		warn = fmt.Sprintf(" · ⚠ %d STILL GRADED — the migration has not run", unstamped)
+	}
+	return fmt.Sprintf("adherence: seam rows matched=%d · stamped=%d%s (never graded; source matched the seam predicate)",
+		excluded, stamped, warn)
 }
 
 // StampSeamRowsExcluded clears any grade a seam row still carries and stamps the
@@ -106,4 +121,18 @@ WHERE status != 'OPEN' AND (`+seamSQLPredicate+`)`, SeamExcludedNote).Error; err
 	}
 	logger.Infof("🧪 seam exclusion: %d test-seam row(s) cleared and stamped %q (ids %v) — a harness must never score in the adherence table",
 		len(ids), SeamExcludedNote, ids)
+}
+
+// seamStampCounts splits matched seam rows into those already excluded and
+// those still carrying a real grade — the second number is the defect signal.
+func (s *Store) seamStampCounts() (stamped, unstamped int, err error) {
+	if e := s.gdb.Raw(`SELECT COUNT(*) FROM trader_positions WHERE status != 'OPEN' AND (`+seamSQLPredicate+`) AND adherence_grade = ?`, SeamExcludedNote).
+		Scan(&stamped).Error; e != nil {
+		return 0, 0, e
+	}
+	if e := s.gdb.Raw(`SELECT COUNT(*) FROM trader_positions WHERE status != 'OPEN' AND (`+seamSQLPredicate+`) AND COALESCE(adherence_grade,'') NOT IN ('', ?)`, SeamExcludedNote).
+		Scan(&unstamped).Error; e != nil {
+		return 0, 0, e
+	}
+	return stamped, unstamped, nil
 }
