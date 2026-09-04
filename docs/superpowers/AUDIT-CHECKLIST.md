@@ -1338,10 +1338,11 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     a test that can score is a test that will eventually be quoted as evidence.
 >>>>>>> c346c2fc (feat(adherence): seam rows are NEVER graded — refused at the write, skipped by W5, excluded with a count, stamped in the row)
 
-64. **Two price spaces subtracted from each other — and the repair that would
-    have dressed the wreckage as repaired.** (Renumbered 63→64 AT MERGE,
-    combined boot 4 — 63 was taken by the two-true-numbers class that merged
-    first. Highest occupied at merge: 63.)
+66. **Two price spaces subtracted from each other — and the repair that would
+    have dressed the wreckage as repaired.** (Renumbered 63→64→66 AT MERGE,
+    combined boot 4. 63 went to the two-true-numbers class, then 64 collided
+    with the detector class and 65 with the seam class — both allocated by
+    nofx-47 and nofx-ed. Highest occupied at merge: 65.)
     `shadow_ab.go` mirrored stop/target/ref into a NEGATIVE price space for
     shorts so that "MFE is always favorable-positive in the replay". The
     close-rule fill returned the REAL close and `row.StopPx/TargetPx` were

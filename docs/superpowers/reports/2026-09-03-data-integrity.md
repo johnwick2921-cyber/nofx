@@ -1,4 +1,4 @@
-# DATA-INTEGRITY (checklist class 64)
+# DATA-INTEGRITY (checklist class 66)
 
 **Branch:** `fix/data-integrity` off `5ebeb5a2` · **Status:** NOT DEPLOYED, rides the next boot
 **Checklist:** entry **63** (highest occupied at merge: 62 — number assigned AT MERGE, A16)
