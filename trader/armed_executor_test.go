@@ -219,9 +219,20 @@ func TestArmedStalePredicate(t *testing.T) {
 	}
 }
 
-// PHASE 4 — reconnect/reconcile wire: the stale working row gets its NT8 cancel
-// (recorded via the seam) AND flips to cancelled with the reason.
-func TestArmedReconcileStaleWorking(t *testing.T) {
+// SUPERSEDED AND MIGRATED, not weakened.
+//
+// This asserted the PHASE 4 contract: a working row with no order_update for the
+// stale window gets cancelled. That contract was the defect. order_update is an
+// event frame, so a resting limit nobody touches is silent BY DESIGN, and the
+// reaper was reading silence as death — then acting on it by cancelling a live
+// order at the broker.
+//
+// The row is still SELECTED by silence; the verdict now comes from the broker's
+// book. With no snapshot cache (this fixture's state) the verdict is UNKNOWN, and
+// UNKNOWN cancels NOTHING — cancelling on absence of information is precisely
+// what was removed. The positive case (a fresh book that omits the order, which
+// DOES cancel) is pinned in reaper_snapshot_test.go.
+func TestArmedReconcileStaleWorking_NoBookCancelsNothing(t *testing.T) {
 	at, st := resetTrader(t, store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true}})
 	ledger := st.ArmedOrders()
 	now := time.Now()
@@ -241,16 +252,18 @@ func TestArmedReconcileStaleWorking(t *testing.T) {
 	}
 	var cancelled []string
 	at.reconcileStaleWorking(ledger, rows, now, 15, func(sid string) { cancelled = append(cancelled, sid) })
-	if len(cancelled) != 1 || cancelled[0] != "sig-9" {
-		t.Fatalf("cancelFn = %v, want exactly sig-9", cancelled)
+	// THE INVERSION: 20 minutes of silence with no broker book must cancel
+	// NOTHING. Under the old contract this asserted exactly sig-9.
+	if len(cancelled) != 0 {
+		t.Fatalf("cancelFn = %v, want NOTHING — with no snapshot the link cannot answer, and silence is not death", cancelled)
 	}
 	rows, _ = ledger.ListForPlan("2026-08-27:NY:trader-1")
 	byScenario := map[string]string{}
 	for _, r := range rows {
 		byScenario[r.Scenario] = r.State
 	}
-	if byScenario["S1"] != "cancelled" {
-		t.Fatalf("stale S1 state = %q, want cancelled", byScenario["S1"])
+	if byScenario["S1"] != "working" {
+		t.Fatalf("stale S1 state = %q, want STILL working — an unadjudicated row is left alone", byScenario["S1"])
 	}
 	if byScenario["S2"] != "working" {
 		t.Fatalf("fresh S2 state = %q, want working", byScenario["S2"])

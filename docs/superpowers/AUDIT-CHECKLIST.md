@@ -1817,6 +1817,31 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     ([I] provisional), and the arm ledger made append-only under a live broker
     order.
 
+79. **Silence read as death.** (Number assigned at merge; highest occupied on
+    dev at authoring: 78.) The stale-working reaper cancelled any armed row that
+    had seen no `order_update` for the stale window. But `order_update` is an
+    EVENT frame: a resting limit that nobody touches emits **nothing at all**, so
+    after N minutes a perfectly healthy order is byte-for-byte indistinguishable
+    from a dead one. The reaper turned an ABSENCE OF EVIDENCE into a cancel — and
+    a cancel is not a read, it is an execution against a live order at the broker.
+    The failure was not that it reaped too eagerly. It is that the only input it
+    had could not answer the question it was asking. No threshold tuning fixes
+    that: a longer window delays the wrong answer, it does not make the evidence
+    exist.
+    **Probe:** for every predicate that concludes something is DEAD, GONE, DONE or
+    STALE, ask what the healthy case emits. If the healthy case is also silent,
+    the predicate cannot distinguish them and its threshold is decoration. Then
+    ask the harder one: **what does this code do when it does not know?** If the
+    answer is the same as what it does when the thing is dead, ignorance and death
+    are the same branch, and the destructive one wins by default.
+    **Law:** silence is not evidence. A destructive action needs a POSITIVE
+    observation from the system that owns the fact — here the broker's own book
+    (F12's `order_snapshot`), which answers whether or not anything happened.
+    Where no such observation exists, the answer is a THIRD verdict — unknown —
+    and unknown must do NOTHING. Fixed by giving the reaper three verdicts
+    (alive / gone / unknown) where it had a boolean; silence now selects which
+    rows to ASK about and never decides the answer.
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,

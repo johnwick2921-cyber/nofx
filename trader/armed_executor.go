@@ -1047,27 +1047,60 @@ func armRefusalChanged(last *map[string]string, key, verdict string) bool {
 	return true
 }
 
-// workingStale — the reconnect predicate: no order_update for the stale window.
+// workingStale — RETAINED as the "how long has this been quiet" measure only.
+// It is NO LONGER a death predicate. order_update is an event frame, so a
+// resting limit nobody touches is silent by design; treating that silence as
+// death is what cancelled live orders (checklist: "silence read as death").
 func workingStale(updatedAt, now time.Time, staleMin int) bool {
 	return now.Sub(updatedAt) > time.Duration(staleMin)*time.Minute
 }
 
-// reconcileStaleWorking cancels working rows that have seen no order_update for
-// the stale window (reconnect safety net). cancelFn issues the NT8 cancel — the
-// ledger flips to cancelled with the reason regardless.
+// reconcileStaleWorking reconciles working ledger rows AGAINST THE BROKER'S BOOK.
+//
+// Silence still selects WHICH rows to ask about — a row that saw an update a
+// minute ago needs no adjudication — but it no longer decides the answer. The
+// answer comes from the latest order_snapshot:
+//
+//	ALIVE   fresh book lists it working      → never reaped, whatever the silence
+//	GONE    fresh book does not list it      → reconcile to the broker's word
+//	UNKNOWN no book, or a book too old       → WARN "link stale", cancel NOTHING
+//
+// The UNKNOWN branch is the point. The old code's failure was not that it reaped
+// too eagerly; it was that it reaped on the ABSENCE of information. When the link
+// cannot answer, doing nothing is the only safe act — a resting order left alive
+// one more cycle is recoverable, a cancelled live order is not.
 func (at *AutoTrader) reconcileStaleWorking(ledger *store.ArmedOrderStore, rows []store.ArmedOrderDB, now time.Time, staleMin int, cancelFn func(signalID string)) {
+	book, acct, sym := at.brokerBook()
+	interval := OrderSnapshotInterval()
+
 	for _, r := range rows {
 		if r.TraderID != at.id || r.State != "working" {
 			continue
 		}
+		// Silence is the TRIGGER TO ASK, never the verdict.
 		if !workingStale(r.UpdatedAt, now, staleMin) {
 			continue
 		}
-		if r.SignalID != "" && cancelFn != nil {
-			cancelFn(r.SignalID)
+
+		verdict, why := reaperVerdictAt(book, acct, sym, r, interval, now)
+		switch verdict {
+		case reaperAlive:
+			// The single most important line in this file: a quiet order that
+			// the broker still holds is left exactly as it is.
+			at.logInfof("🫀 armed %s ALIVE at the broker — %s", r.Scenario, why)
+
+		case reaperUnknown:
+			at.logWarnf("⚠️ armed %s NOT adjudicated — %s", r.Scenario, why)
+
+		case reaperGone:
+			// The broker no longer holds it. Cancel is still issued for the
+			// idempotent case where a leg survives, then the ledger is squared.
+			if r.SignalID != "" && cancelFn != nil {
+				cancelFn(r.SignalID)
+			}
+			_ = ledger.SetState(r.ID, "cancelled", "absent from a fresh NT8 order_snapshot (reconciled to the broker)")
+			at.logWarnf("✕ armed %s cancelled — %s", r.Scenario, why)
 		}
-		_ = ledger.SetState(r.ID, "cancelled", "no order_update within stale window (reconnect/reconcile)")
-		at.logWarnf("✕ armed %s cancelled — no order_update for %dm (reconnect/reconcile)", r.Scenario, staleMin)
 	}
 }
 
