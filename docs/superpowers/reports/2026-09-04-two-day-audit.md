@@ -403,7 +403,7 @@ signal id (`armed_executor.go:927-935`):
 ```
 
 Price later traded at or above 29543.75 on **83 one-minute bars**, up to 29585.00. It never filled.
-That looks like a broker defect. **It is not** — the order was already gone:
+That looks like a broker defect. **It is not** — by 12:51 the order was already gone:
 
 ```
 09-03 12:15:00 😴 plan 2026-09-03 NY v7 DORMANT — death-condition: 2x5m close below 29502.25
@@ -416,8 +416,26 @@ That looks like a broker defect. **It is not** — the order was already gone:
 arm, and NT8 acked it.** "cancelled in NT8" is our own cancel being acknowledged, not an external
 one — the string is written by `onArmedOrderUpdate` when the broker reports the cancel, so the
 ledger **launders our own action into something that reads like a broker event**. That is a defect
-in its own right: an operator reading `state_reason` alone would investigate NT8. During the arm's actual 16.5-minute life the maximum high was **29534.25 — 9.5 points short
-of the entry**. Price first reached 29543.75 at **12:51 CT, 36 minutes after the arm was gone.**
+in its own right: an operator reading `state_reason` alone would investigate NT8.
+
+**A correction, and an honest CANNOT-DISTINGUISH.** An earlier pass of this report said the tape
+came no closer than **9.5 pts** during the arm's life. That figure silently excluded the arm's own
+creation minute. The 11:58 bar is `o 29539.25 · h 29548.00 · l 29530.50 · c 29532.00` — **its high
+is 4.25 pts THROUGH the 29543.75 short entry**, corroborated at 3m/5m/15m (all `h=29548.00`).
+
+The arm was created at **11:58:33.110 CT, inside that bar**. **[A] The finest granularity stored
+for MNQ is 1m** (verified across every timeframe present), so whether 29548.00 printed in
+11:58:00–11:58:33 (before the arm existed) or in 11:58:33–11:58:59 (while it was live)
+**cannot be distinguished from the store**. The post-creation segment high is bounded only to
+[29532.00, 29548.00].
+
+Nor does the `frames=4 accepted=1 working=1 cancelpending=1 submitted=1` line date the transition:
+it is a global, cumulative, untimestamped counter drained on print
+(`armed_executor.go:1078-1105`), so it establishes only that NT8 reported *Working* at some instant
+in [11:58:33, 12:00:33] — it cannot rule out that the order was not yet live during the 11:58 spike.
+
+What is certain: **after** the cancel, the first 1m bar whose high reaches 29543.75 opens
+**12:51:00 CT — 36 minutes after the arm was gone.**
 
 **Counterfactual, had the arm survived** (filled 12:51 @29543.75, stop 29592.50, target 29397.11):
 
