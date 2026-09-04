@@ -1410,10 +1410,11 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     disagrees with a verified port is the fixture's error; and a rate ships with
     its n, its interval and its excluded count or it does not ship.
 
-66. **A production surface with no production path.** (Number assigned at
-    merge. 64 and 65 are claimed by the detector and seam waves on branches that
-    have not landed on dev yet; 62/63 are the 1D wave's, already on dev — so this
-    takes 66 rather than the next free number on dev, which would collide.)
+68. **A production surface with no production path.** (Number assigned at
+    merge, A16. Highest occupied on dev at merge was 66, the data-integrity
+    wave's; 67 is taken by the F12 order-snapshot wave merged in the same boot —
+    so this takes 68. The branch was authored claiming 66, which had been free
+    when it was written and was not by the time it merged.)
     Found during the 1D cutover, incidentally: the **entire operator UI** was
     served by a Vite DEVELOPMENT server on :3000, started by hand, supervised by
     nothing. The Go server registered **no static route at all** — `:8080/`
