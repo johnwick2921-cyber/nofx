@@ -18,41 +18,42 @@ type Store struct {
 	driver *DBDriver // Database driver for abstraction (legacy)
 
 	// Sub-stores (lazy initialization)
-	user             *UserStore
-	aiModel          *AIModelStore
-	exchange         *ExchangeStore
-	trader           *TraderStore
-	decision         *DecisionStore
-	position         *PositionStore
-	strategy         *StrategyStore
-	equity           *EquityStore
-	order            *OrderStore
-	grid             *GridStore
-	aiCharge         *AIChargeStore
-	plan             *PlanStore
-	levelState       *LevelStateStore
-	sessionProfile   *SessionProfileStore
-	barHistory       *BarHistoryStore
-	armedOrders      *ArmedOrderStore
-	abConfirm        *AbConfirmStore
-	tradeExcursions  *TradeExcursionStore
-	plannerRejected  *PlannerRejectedStore
-	plannerReadFacts *PlannerReadFactsStore
-	touchOutcomes    *TouchOutcomeStore
-	candidatePool    *CandidatePoolStore
-	configChanges    *ConfigChangeStore
-	watchdogFires    *WatchdogFireStore
-	levelStats       *LevelStatsStore
-	touchEpisodes    *TouchEpisodeStore
-	calendarSlice    *CalendarSliceStore
-	digest           *DigestStore
-	ownerLevel       *OwnerLevelStore
-	alert            *AlertStore
-	logEvent         *LogEventStore
-	watchAssessment  *WatchAssessmentStore
-	planQA           *PlanQAStore
-	matchedRandom    *MatchedRandomStore
-	telegramConfig   TelegramConfigStore
+	user              *UserStore
+	aiModel           *AIModelStore
+	exchange          *ExchangeStore
+	trader            *TraderStore
+	decision          *DecisionStore
+	position          *PositionStore
+	strategy          *StrategyStore
+	equity            *EquityStore
+	order             *OrderStore
+	grid              *GridStore
+	aiCharge          *AIChargeStore
+	plan              *PlanStore
+	levelState        *LevelStateStore
+	sessionProfile    *SessionProfileStore
+	barHistory        *BarHistoryStore
+	armedOrders       *ArmedOrderStore
+	abConfirm         *AbConfirmStore
+	tradeExcursions   *TradeExcursionStore
+	nt8OrderSnapshots *NT8OrderSnapshotStore
+	plannerRejected   *PlannerRejectedStore
+	plannerReadFacts  *PlannerReadFactsStore
+	touchOutcomes     *TouchOutcomeStore
+	candidatePool     *CandidatePoolStore
+	configChanges     *ConfigChangeStore
+	watchdogFires     *WatchdogFireStore
+	levelStats        *LevelStatsStore
+	touchEpisodes     *TouchEpisodeStore
+	calendarSlice     *CalendarSliceStore
+	digest            *DigestStore
+	ownerLevel        *OwnerLevelStore
+	alert             *AlertStore
+	logEvent          *LogEventStore
+	watchAssessment   *WatchAssessmentStore
+	planQA            *PlanQAStore
+	matchedRandom     *MatchedRandomStore
+	telegramConfig    TelegramConfigStore
 
 	mu sync.RWMutex
 }
@@ -228,6 +229,9 @@ func (s *Store) initTables() error {
 	}
 	if err := s.Plan().MigrateLifecycleLog(); err != nil {
 		return fmt.Errorf("failed to initialize plan_lifecycle_log table: %w", err)
+	}
+	if err := s.NT8OrderSnapshots().Migrate(); err != nil {
+		return fmt.Errorf("failed to initialize nt8_order_snapshots table: %w", err)
 	}
 	if err := s.TradeExcursions().Migrate(); err != nil {
 		return fmt.Errorf("failed to initialize trade_excursions table: %w", err)
@@ -473,6 +477,17 @@ func (s *Store) PlannerRejected() *PlannerRejectedStore {
 }
 
 // TradeExcursions gets the per-position excursion table (wave 1A, 2026-09-02).
+// NT8OrderSnapshots (F12) is the forensic record of the broker's working-order
+// book. The cutover gate reads the in-memory cache, not this table.
+func (s *Store) NT8OrderSnapshots() *NT8OrderSnapshotStore {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.nt8OrderSnapshots == nil {
+		s.nt8OrderSnapshots = NewNT8OrderSnapshotStore(s.gdb)
+	}
+	return s.nt8OrderSnapshots
+}
+
 func (s *Store) TradeExcursions() *TradeExcursionStore {
 	s.mu.Lock()
 	defer s.mu.Unlock()

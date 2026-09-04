@@ -335,3 +335,60 @@ Used by auto-breakeven (once the trade is +N points in profit → stop → entry
 - Plan 1 critical-file integrity guard: `docs/adr/ADR-007-plan1-critical-file-integrity.md` (Plan 1.5 is purely additive — none of the CSV bridge files are modified).
 - Plan 4.4 deep spec: same plan doc, Plan 4.4 Deep Spec section. Defines `bars_subscribe`, `bars_historical`, `bar_update`, `bars_unsubscribe` envelopes consumed by the new C# `VLBarsSubscriptionManager`.
 - Plan 4.4 Stage 1 C# implementation: `ninjascript/VLBarsSubscriptionManager.cs`. Isolates BarsRequest logic from the proven signal/fill/heartbeat path in `VLTraderTCPClient.cs` (which gains only a field, a constructor call, and two switch cases).
+
+## order_snapshot (F12, 2026-09-03) — AddOn → Go
+
+The BROKER's working-order book. Every other frame in this protocol is an
+EVENT; `order_update` fires on a state change, so a Go-side restart loses the
+picture until the next change happens — which on a quiet book may be never.
+Cutover leg 4 therefore had to read the Go side's own `armed_orders` ledger and
+call it the broker's book.
+
+Emitted (a) every `ORDER_SNAPSHOT_INTERVAL_MS` (30 s, riding the heartbeat loop)
+and (b) immediately after any order state change.
+
+**ACCOUNT-SCOPED.** `Account.Orders` is an account collection and the AddOn holds
+no persistent per-instrument handle, so one frame covers the account and every
+order carries its own `symbol`. The Go side files the book per account and
+filters by instrument. This is what keeps an EMPTY book representable: an account
+with no working orders still emits `orders: []`. **"No orders" and "no answer"
+are different claims** and leg 4 must be able to tell them apart.
+
+```json
+{"type":"order_snapshot","payload":{
+  "account":"Sim101",
+  "build_id":"2026-09-03-f12",
+  "emitted_at_ms":1788480000000,
+  "reason":"periodic|state_change",
+  "orders":[
+    {"order_id":"NT-1","name":"VL-S1-entry","action":"buy|sell",
+     "type":"limit|stop|stop_limit|market","limit_price":29450.25,"stop_price":0,
+     "quantity":1,"filled":0,"state":"Working","oco":"oco-1","symbol":"MNQ"}
+  ]}}
+```
+
+Terminal orders (`Filled`, `Cancelled`, `Rejected`, `Expired`, `Unknown`) are
+omitted by the AddOn — sending the whole history every 30 s would grow without
+bound. The Go side filters again; **one definition of "working" lives in Go**
+(`NT8Order.IsWorking`), so the two cannot drift on what the word means.
+
+**STALENESS IS A SHARED CONSTANT.** The Go side calls a book older than
+**2 × 30 s** stale (`trader.DefaultOrderSnapshotSecs`, env
+`NT8_ORDER_SNAPSHOT_SECS`). The AddOn's `ORDER_SNAPSHOT_INTERVAL_MS` must match.
+Changing one without the other changes what "stale" means on only one side.
+
+**Age is measured against RECEIPT, not `emitted_at_ms`.** Those are two machines'
+clocks, and a Windows-side skew must never make a stale book look fresh.
+
+### build_id on `hello` and `heartbeat`
+
+`hello` now carries `build_id` alongside `protocol_version` and `source`
+(`omitempty` — an older AddOn's wire stays byte-identical), so the running DLL is
+identifiable from the FIRST frame. `heartbeat` has carried it since E7.
+
+**This is the only honest answer to "which DLL is NT8 running".** `VL_BUILD_ID` in
+this repo is what we INTEND to be running; NT8 keeps executing whatever was last
+compiled with F5. The Go boot line prints
+`build_id=<received> expected=<source> match=yes|NO` and says **NO** until a frame
+proves otherwise — a change to a distributed system is proven by a received
+frame, never by a ledger write on the sending side.

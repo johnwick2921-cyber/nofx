@@ -20,10 +20,10 @@ func containsStr(hay, needle string) bool { return strings.Contains(hay, needle)
 func TestStaleDodgeDefer(t *testing.T) {
 	const s = int64(1000)
 	cases := []struct {
-		name              string
-		nowToClose, avg   int64
-		wantDodge         bool
-		wantDefer         int64
+		name            string
+		nowToClose, avg int64
+		wantDodge       bool
+		wantDefer       int64
 	}{
 		// The spec's worked example: cycle due 40s before close, avg 70s →
 		// window 84s > 40s → defer to close+1s = 41s.

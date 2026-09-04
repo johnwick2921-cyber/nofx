@@ -23,6 +23,29 @@ export const guards: GuideSection = {
       text: "The plan card shows the LIVE plan. On 2026-09-03 it showed NY v3 S1 long, written 09:15, while the account held a position armed under v2 S1 short — both called 'S1', and the owner read long on a short. When a position is open and was entered under a different version than the one on screen, the card now states the position's own terms first ('Position armed under v2 S1 short @ 29285.00') and the plan on screen second ('Plan now v3 — the rows below are THIS plan, not the position above'). It renders nothing when flat or when the two agree. Arms authorized before 2026-09-03 10:28 have no recorded version and render 'version not recorded', never 'v0'. (web/src/components/plan/ArmedUnderBlock.tsx · api/handler_plan_position_provenance.go)",
     },
 
+    { kind: 'h', text: 'The flat gate now asks the broker about orders' },
+    {
+      kind: 'p',
+      text: "Before a cutover the bot checks five things and refuses to swap binaries unless all five are clear. Four of them asked NinjaTrader. The fifth — are there working orders resting? — asked the bot's OWN records, because the AddOn never sent anything describing the broker's order book. That leg could confirm what we believed and could not detect the one thing it exists to detect: our records and the broker disagreeing. It had been passing on that basis since cutover 35.",
+    },
+    {
+      kind: 'p',
+      text: 'The AddOn now sends its working-order book every 30 seconds and immediately whenever an order changes state, and that is what the leg reads. Our ledger becomes the cross-check: if the two disagree the leg FAILS and shows you both counts and both lists rather than picking the one that would let the cutover proceed. A book older than 60 seconds is refused as stale — a book we have not heard about is not a flat book. Until you reload the AddOn in NinjaTrader the leg still reads the ledger, and it says so in its own source line every time; the rule is never a SILENT fallback, not never a fallback.',
+    },
+    { kind: 'h', text: 'Overriding the gate with a position open' },
+    {
+      kind: 'p',
+      text: 'On 2026-09-02 a cutover went ahead with a position open and the resting stop could not be verified — nothing on the wire could say whether it was there. The rule after that was blunt: no override while a position is open. That was the right answer to a question nothing could answer, but it was a blanket no standing in for a missing measurement.',
+    },
+    {
+      kind: 'p',
+      text: 'The question is answerable now, so it gets asked instead: is there a working STOP order for this instrument, at the price we expect, within tolerance, in a book fresh enough to believe? If yes the override is allowed. If the stop is missing, at the wrong price, or the book is stale or absent, it is refused — and the refusal tells you what it found versus what it expected, rather than just saying no. A stale answer is never treated as a permissive one.',
+    },
+    { kind: 'h', text: 'Which AddOn build is actually running' },
+    {
+      kind: 'p',
+      text: "Editing the AddOn source changes nothing until you recompile it in NinjaTrader (F5) and restart NT8 — NinjaTrader keeps executing the DLL it last compiled. The bot now prints, at every boot, the build id it has RECEIVED on the wire next to the one it expects: '🔌 nt8 addon: build_id=… expected=… match=yes|NO'. It says NO — loudly, every boot — until a frame from the running AddOn proves otherwise. A build id read from our own source would report success for a change that never landed, which is precisely how a distributed change gets believed without being made.",
+    },
     { kind: 'h', text: 'CAN-HARD-BLOCK vs ADVISORY-ONLY (the truth table)' },
     {
       kind: 'table',

@@ -30,7 +30,7 @@ func TestPlanRestartRecovery(t *testing.T) {
 	nowMs := bars[len(bars)-1].CloseTime + 1
 	const price, dATR, rule = 15600.0, 120.0, "2x5m"
 	doc := kernel.PlanDoc{
-		Reasoning:      "r", Bias: kernel.PlanBias{Direction: "long"},
+		Reasoning: "r", Bias: kernel.PlanBias{Direction: "long"},
 		Levels:         []kernel.PlanLevel{{Price: 15620, Label: "PDH", Grade: "A"}, {Price: 15480, Label: "ONL", Grade: "B"}},
 		Scenarios:      []kernel.PlanScenario{{ID: "S1", Condition: "hold", Direction: "long", Quality: "A"}},
 		DeathCondition: "d",

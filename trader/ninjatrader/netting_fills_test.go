@@ -46,7 +46,7 @@ func TestTakeNettingExitRejectsSameSideAndStale(t *testing.T) {
 	tr.mu.Lock()
 	tr.recentFills = append(tr.recentFills,
 		fillAt("short", 29459.0, flat-nettingFillWindowMs-5_000, "MNQ", "Sim101"), // too old
-		fillAt("long", 29397.5, flat+2_000, "MNQ", "Sim101"))                        // same side as LONG row
+		fillAt("long", 29397.5, flat+2_000, "MNQ", "Sim101"))                      // same side as LONG row
 	tr.mu.Unlock()
 
 	if px, ok := tr.takeNettingExit("Sim101", "MNQ", "LONG", flat, now); ok {

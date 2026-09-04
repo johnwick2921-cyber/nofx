@@ -101,7 +101,8 @@ func TestClass33BootSweepNoPreBootRows(t *testing.T) {
 	if len(rows) != 1 {
 		t.Fatalf("this process's own arm must survive, got %d", len(rows))
 	}
-	if line := BootSweepBootLine(0, 0); !strings.Contains(line, "cancelled 0 pre-boot arm(s)") {
+	// F12: leg4's source is a RESOLVED argument now, not a literal in the line.
+	if line := BootSweepBootLine(0, 0, "ledger (no snapshot yet)"); !strings.Contains(line, "cancelled 0 pre-boot arm(s)") {
 		t.Fatalf("boot line: %s", line)
 	}
 }

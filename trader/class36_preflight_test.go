@@ -358,7 +358,7 @@ func TestClass36PinSundayWeekly(t *testing.T) {
 	if len(refs) == 0 {
 		t.Fatal("fixture: weekly refs")
 	}
-		wj, _ := json.Marshal(kernel.WeeklyDoc{WeeklyLevels: []kernel.WeeklyLevel{{Name: "PWL", Px: refs[0]}}, Narrative: "range"})
+	wj, _ := json.Marshal(kernel.WeeklyDoc{WeeklyLevels: []kernel.WeeklyLevel{{Name: "PWL", Px: refs[0]}}, Narrative: "range"})
 	at.mcpClient = &sundayClient{weeklyJSON: string(wj)}
 	testNow = func() time.Time { return now }
 	t.Cleanup(func() { testNow = nil })

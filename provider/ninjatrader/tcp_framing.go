@@ -111,6 +111,11 @@ const ProtocolVersion = 3
 type HelloPayload struct {
 	ProtocolVersion int    `json:"protocol_version"`
 	Source          string `json:"source"` // "vltrader-addon" | "nofx-go"
+	// BuildID (F12) is the AddOn's VL_BUILD_ID, carried on the handshake so the
+	// running DLL is identifiable from the FIRST received frame rather than
+	// only after a snapshot arrives. omitempty keeps the wire byte-identical
+	// for an older AddOn that does not send it.
+	BuildID string `json:"build_id,omitempty"`
 }
 
 // PHASE 2 armed orders — order-management frames (Go-server → C#-AddOn) +
@@ -119,6 +124,11 @@ const (
 	FrameCancelOrder   FrameType = "cancel_order"
 	FrameModifyBracket FrameType = "modify_bracket"
 	FrameOrderUpdate   FrameType = "order_update"
+	// FrameOrderSnapshot (F12) is the AddOn's periodic + on-change dump of the
+	// BROKER's working-order book. order_update is per-event and a Go restart
+	// loses the picture until the next event; the snapshot makes the book
+	// re-derivable at any moment. Payload: OrderSnapshotPayload.
+	FrameOrderSnapshot FrameType = "order_snapshot"
 )
 
 // CancelOrderPayload asks the AddOn to cancel a working resting limit entry

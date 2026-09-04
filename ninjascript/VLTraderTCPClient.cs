@@ -36,6 +36,10 @@ namespace NinjaTrader.NinjaScript.AddOns
         private const string GO_SERVER_HOST          = "127.0.0.1";
         private const int    GO_SERVER_PORT          = 36974; // NOT NT's ATI port 36973
         private const int    HEARTBEAT_INTERVAL_MS   = 30000; // spec L4408
+        // F12: the working-order snapshot period. The Go side calls a book older
+        // than 2x this STALE (trader.DefaultOrderSnapshotSecs = 30). Changing one
+        // without the other changes what "stale" means on only one side.
+        private const int    ORDER_SNAPSHOT_INTERVAL_MS = 30000;
         private const int    RECONNECT_INTERVAL_MS   = 5000;  // spec L4415
         private const int    STALE_SIGNAL_AGE_SECONDS = 60;   // spec L4414
         // Wire-protocol generation. v2 = symbol-tagged fills + the hello handshake.
@@ -48,7 +52,7 @@ namespace NinjaTrader.NinjaScript.AddOns
         // E7 capability handshake (2026-08-30): reported on every heartbeat so
         // the Go side refuses frame types this build hasn't proven. Bump on any
         // additive wire change; Go gates on FarSideBuildE7 in tcp_framing.go.
-        private const string  VL_BUILD_ID             = "2026-09-03-hygiene";
+        private const string  VL_BUILD_ID             = "2026-09-03-f12";
         private const int    MAX_FRAME_BYTES         = 1 << 20; // 1 MB, spec L4376
 
         // === State ===
@@ -1404,7 +1408,11 @@ namespace NinjaTrader.NinjaScript.AddOns
             WriteEnvelope("hello", new Dictionary<string, object>
             {
                 ["protocol_version"] = PROTOCOL_VERSION,
-                ["source"]           = "vltrader-addon"
+                ["source"]           = "vltrader-addon",
+                // F12: the running DLL identifies itself on the FIRST frame, so
+                // the Go boot line can answer "which build is NT8 running"
+                // without waiting for a heartbeat or a snapshot.
+                ["build_id"]         = VL_BUILD_ID
             });
         }
 
@@ -1453,6 +1461,104 @@ namespace NinjaTrader.NinjaScript.AddOns
         // per order name) so the armed engine sees working/cancelled resting
         // entries and bracket legs. signal_id is the bare order name minus the
         // -sl/-tp/-lx suffix (same derivation as the fill path).
+        // ── F12: the working-order SNAPSHOT ──────────────────────────────────
+        //
+        // Every other frame this AddOn sends is an EVENT. order_update fires on a
+        // state change, so a Go-side restart loses the picture until the next
+        // change happens — which on a quiet book may be never. Cutover leg 4
+        // therefore had to read the Go side's own armed_orders ledger and call it
+        // the broker's book.
+        //
+        // This frame is the broker's answer: every working/accepted order on the
+        // account, emitted every ORDER_SNAPSHOT_INTERVAL_MS and immediately on any
+        // order state change. It is ACCOUNT-scoped and each order carries its own
+        // symbol; the Go side filters by instrument. That keeps an empty book
+        // representable — orders: [] is an explicit empty, and "no orders" and "no
+        // answer" must never render as the same thing.
+        private void SendOrderSnapshot(Account acc, string reason)
+        {
+            if (acc == null) return;
+            try
+            {
+                var orders = new List<object>();
+                // Copy under the collection's lock: NT8 mutates account
+                // collections from its own threads and a bare foreach throws.
+                lock (acc.Orders)
+                {
+                    foreach (Order o in acc.Orders)
+                    {
+                        if (o == null) continue;
+                        string st = o.OrderState.ToString();
+                        // Terminal orders are history. The Go side filters again
+                        // (one definition of "working" lives there), but shipping
+                        // the whole history every 30s would grow without bound.
+                        if (st == "Filled" || st == "Cancelled" || st == "Rejected" ||
+                            st == "Expired" || st == "Unknown")
+                            continue;
+
+                        string sym = "";
+                        try { sym = o.Instrument.MasterInstrument.Name; } catch { }
+
+                        string otype = "market";
+                        try
+                        {
+                            if (o.OrderType == OrderType.Limit)           otype = "limit";
+                            else if (o.OrderType == OrderType.StopMarket) otype = "stop";
+                            else if (o.OrderType == OrderType.StopLimit)  otype = "stop_limit";
+                        }
+                        catch { }
+
+                        string act = "sell";
+                        try
+                        {
+                            if (o.OrderAction == OrderAction.Buy || o.OrderAction == OrderAction.BuyToCover)
+                                act = "buy";
+                        }
+                        catch { }
+
+                        orders.Add(new Dictionary<string, object>
+                        {
+                            ["order_id"]    = o.OrderId ?? "",
+                            ["name"]        = o.Name ?? "",
+                            ["action"]      = act,
+                            ["type"]        = otype,
+                            ["limit_price"] = o.LimitPrice,
+                            ["stop_price"]  = o.StopPrice,
+                            ["quantity"]    = o.Quantity,
+                            ["filled"]      = o.Filled,
+                            ["state"]       = st,
+                            ["oco"]         = o.Oco ?? "",
+                            ["symbol"]      = sym ?? ""
+                        });
+                    }
+                }
+
+                WriteEnvelope("order_snapshot", new Dictionary<string, object>
+                {
+                    ["account"]       = acc.Name ?? "",
+                    ["build_id"]      = VL_BUILD_ID,
+                    ["emitted_at_ms"] = SnapshotNowUtcMs(),
+                    ["reason"]        = reason ?? "periodic",
+                    ["orders"]        = orders
+                });
+            }
+            catch (Exception ex)
+            {
+                // A10 — never fatal. A dropped snapshot ages out on the Go side
+                // and leg 4 fails closed; a throw here would take the AddOn down.
+                LogWarn("VLTraderTCPClient: order_snapshot frame failed: " + ex.Message);
+            }
+        }
+
+        // Epoch milliseconds. Same derivation VLBarsSubscriptionManager.NowUtcMs
+        // uses; duplicated rather than shared because the two files are compiled
+        // as independent AddOns and NT8 does not link them.
+        private static long SnapshotNowUtcMs()
+        {
+            return (long)((DateTime.UtcNow
+                - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalMilliseconds);
+        }
+
         private void SendOrderUpdateFrame(OrderEventArgs e)
         {
             try
@@ -1485,6 +1591,18 @@ namespace NinjaTrader.NinjaScript.AddOns
                 };
                 StampIdentity(payload, signalId);
                 WriteEnvelope("order_update", payload);
+                // F12 — a state change makes the book stale the instant it
+                // happens, so the snapshot follows the event rather than waiting
+                // up to 30s. The Go side is idempotent: a snapshot simply
+                // replaces the cached book.
+                try
+                {
+                    SendOrderSnapshot(e.Order.Account != null ? e.Order.Account : account, "state_change");
+                }
+                catch (Exception exSnap)
+                {
+                    LogWarn("VLTraderTCPClient: post-update order_snapshot failed: " + exSnap.Message);
+                }
             }
             catch (Exception ex)
             {
@@ -2242,6 +2360,18 @@ namespace NinjaTrader.NinjaScript.AddOns
                 {
                     ["build_id"] = VL_BUILD_ID,
                 });
+
+                // F12 — the PERIODIC working-order snapshot. It rides this loop
+                // because HEARTBEAT_INTERVAL_MS and ORDER_SNAPSHOT_INTERVAL_MS are
+                // both 30s; a second thread on the same period would buy nothing
+                // but another thing to get out of step. If the periods ever
+                // diverge this needs its own timer, and the constants sit beside
+                // each other so that is visible.
+                try { SendOrderSnapshot(account, "periodic"); }
+                catch (Exception exSnap)
+                {
+                    LogWarn("RunHeartbeatLoop: order_snapshot failed (will retry): " + exSnap.Message);
+                }
 
                 // Periodic re-emit of accounts every 3 heartbeats (90s) to ensure
                 // Go always has them after a restart (not just on connect/change)

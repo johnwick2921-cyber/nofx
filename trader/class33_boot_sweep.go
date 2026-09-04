@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"sync"
 
+	ntwire "nofx/provider/ninjatrader"
 	"nofx/store"
 	"nofx/trader/types"
+	"time"
 )
 
 // ── CLASS 33 (2026-09-02) — BOOT-TIME ARM SWEEP ──────────────────────────────
@@ -111,14 +113,22 @@ func (at *AutoTrader) sweepPreBootArmsWith(ledger *store.ArmedOrderStore, cancel
 		return swept
 	}
 	bootSweepDone.Store(at.id, struct{}{})
-	at.logInfof("%s", BootSweepBootLine(swept, skipped))
+	// F12: leg 4's source is RESOLVED, not asserted. Before this wave the line
+	// said "leg4=ledger" as a literal; once the broker answers, that literal is
+	// a lie printed at every boot.
+	book, acct, sym := at.brokerBook()
+	at.logInfof("%s", BootSweepBootLine(swept, skipped, Leg4SourceLabel(book, acct, sym, time.Now())))
+	at.logInfof("🔌 %s", ntwire.AddonBuildLine(at.farSideBuildID(), ntwire.ExpectedAddonBuild))
+	at.logInfof("🔌 %s", ntwire.OrderSnapshotLineAt(book, acct, sym, time.Now()))
 	return swept
 }
 
-// BootSweepBootLine is the pure boot line (fixture-pinned wording).
-func BootSweepBootLine(swept, skippedUnplaced int) string {
-	return fmt.Sprintf("🛡 cutover safety (class 33): gate legs=5 · leg4=ledger · boot sweep cancelled %d pre-boot arm(s) (%d authorized-but-never-placed left for this process)",
-		swept, skippedUnplaced)
+// BootSweepBootLine is the pure boot line (fixture-pinned wording). leg4Source
+// is passed in rather than written here: F12 made it a resolved value, and a
+// literal in a boot line is a claim that cannot fail (A24).
+func BootSweepBootLine(swept, skippedUnplaced int, leg4Source string) string {
+	return fmt.Sprintf("🛡 cutover safety (class 33): gate legs=5 · leg4=%s · boot sweep cancelled %d pre-boot arm(s) (%d authorized-but-never-placed left for this process)",
+		leg4Source, swept, skippedUnplaced)
 }
 
 // ledgerOpenOrders renders THIS trader's non-terminal ledger rows as the

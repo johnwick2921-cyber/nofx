@@ -82,6 +82,16 @@ type TCPServer struct {
 	// test executed as MARKET on the pre-E7 AddOn).
 	farSideBuild atomic.Value // string
 
+	// F12 — the broker's working-order book, latest per account+symbol. Read by
+	// cutover leg 4 and the override guard; nil-safe because an older AddOn
+	// sends no snapshots at all and leg 4 must then say so out loud rather than
+	// silently falling back.
+	orderSnaps *OrderSnapshotCache
+	// orderSnapCB is the optional persistence hook (the store writes one row
+	// per snapshot). Optional so the provider package keeps no store import and
+	// the parse path stays testable without a database.
+	orderSnapCB func(OrderSnapshotPayload)
+
 	// Inbound fills — TCPTrader subscribes via Fills().
 	fillCh     chan FillPayload
 	closeCh    chan PositionClosePayload
@@ -474,6 +484,7 @@ func NewTCPServer(logger *slog.Logger) *TCPServer {
 	}
 	return &TCPServer{
 		addr:       ListenAddr(),
+		orderSnaps: NewOrderSnapshotCache(),
 		fillCh:     make(chan FillPayload, fillChannelBuffer),
 		orderUpdCh: make(chan OrderUpdatePayload, fillChannelBuffer), closeCh: make(chan PositionClosePayload, fillChannelBuffer),
 		rejectCh:      make(chan PositionCloseRejectedPayload, fillChannelBuffer),
@@ -1691,8 +1702,16 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 				return // closes the connection via the deferred cleanup
 			}
 			helloSeen = true
+			// F12 — the handshake carries build_id, so the running DLL is
+			// identifiable from the FIRST frame instead of only after a
+			// heartbeat or a snapshot.
+			if p.BuildID != "" {
+				if prev, _ := s.farSideBuild.Load().(string); prev != p.BuildID {
+					s.farSideBuild.Store(p.BuildID)
+				}
+			}
 			s.logger.Info("tcp_server: hello handshake OK",
-				"protocol_version", p.ProtocolVersion, "source", p.Source)
+				"protocol_version", p.ProtocolVersion, "source", p.Source, "build_id", p.BuildID)
 			s.writeMu.Lock()
 			_ = c.SetWriteDeadline(time.Now().Add(5 * time.Second))
 			err := WriteFrame(c, FrameHello, HelloPayload{ProtocolVersion: ProtocolVersion, Source: "nofx-go"})
@@ -1739,6 +1758,30 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			case s.orderUpdCh <- oup:
 			default:
 				s.logger.Warn("tcp_server: order_update channel full, dropping", "signal_id", oup.SignalID)
+			}
+
+		case FrameOrderSnapshot:
+			// F12 — the BROKER's book. A malformed frame is logged and dropped
+			// (A10): the previous snapshot stays, and leg 4 will age it out
+			// rather than trusting a half-parsed one.
+			p, perr := ParseOrderSnapshot(env.Payload)
+			if perr != nil {
+				s.logger.Warn("tcp_server: bad order_snapshot payload", "err", perr)
+				continue
+			}
+			if s.orderSnaps != nil {
+				s.orderSnaps.PutAt(p, time.Now())
+			}
+			// The snapshot's build_id feeds the SAME far-side field the E7
+			// heartbeat handshake owns — one received value, one source.
+			if p.BuildID != "" {
+				if prev, _ := s.farSideBuild.Load().(string); prev != p.BuildID {
+					s.farSideBuild.Store(p.BuildID)
+					s.logger.Info("tcp_server: far-side AddOn build_id=" + p.BuildID + " (from order_snapshot)")
+				}
+			}
+			if s.orderSnapCB != nil {
+				s.orderSnapCB(p)
 			}
 
 		case FrameAck:

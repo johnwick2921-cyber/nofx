@@ -152,7 +152,6 @@ func jsonMarshalForTest(reg kernel.SessionRegistry) (string, error) {
 	return string(b), err
 }
 
-
 // E7-v2 HIGH regression — the calendar-vs-session-day-key skew: seeding the
 // CME calendar date must protect the REAL half-day (Monday daytime) and never
 // the next full session (Tuesday).
