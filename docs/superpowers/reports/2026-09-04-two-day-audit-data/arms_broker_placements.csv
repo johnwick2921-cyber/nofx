@@ -1,0 +1,12 @@
+signal_id_8,placed_ct,scenario,placed_px,in_armed_orders,ledger_row_id,ledger_entry_px_now,note
+ca315135,2026-09-01 02:55:29,S1,29477.0,YES,23,29477.0,ok
+0c77307d,2026-09-01 04:55:29,S2,29246.75,NO,,,ORPHAN — no armed_orders row carries this broker signal
+6b5b89c6,2026-09-01 07:57:28,S2,29138.0,YES,24,29138.0,ok
+fd71b48f,2026-09-01 08:55:08,S2,29137.29,NO,,,ORPHAN — no armed_orders row carries this broker signal
+18a7cc55,2026-09-01 09:21:08,S1,29182.0,NO,,,ORPHAN — no armed_orders row carries this broker signal
+d5fed440,2026-09-01 13:31:06,S3,29082.75,YES,28,29082.75,ok
+d00abc07,2026-09-01 23:21:03,S1,29035.25,YES,29,29044.0,ledger entry_px MUTATED after placement
+c86c5cd0,2026-09-01 23:51:02,S1,29035.25,YES,30,29035.25,ok
+dc8405f1,2026-09-02 00:16:32,S3,29068.05,YES,31,29068.05,ok
+f2b1eb20,2026-09-03 09:02:54,S1,29285.0,YES,35,29285.0,ok
+43512e1d,2026-09-03 11:58:33,S3,29543.75,YES,37,29543.75,ok
