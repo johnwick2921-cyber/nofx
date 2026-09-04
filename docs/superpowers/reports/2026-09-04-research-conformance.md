@@ -427,3 +427,88 @@ Per the boot WARN, master-independent venue safety: the futures **notional×N ce
 **per-order contract clamp**, plus `isAccountTradeable` (SIM-only). Position size is pinned at
 **1 contract** by 0B (`size=1`), which is below the `max_contracts_per_order: 2` that is itself
 disabled — so the binding size constraint today is the 0B wave, not any guardrail.
+
+---
+
+## 9. D6 — bias: does anything MUST-read it?
+
+**(a) Weekly refs-only.** Branch `fix/weekly-refs-only` exists (`1cee77a8`); the weekly reader's
+live surface is covered in the agent unit below. Boot 8 shows the weekly read was skipped as fresh:
+`📅 WEEKLY READ skip-fresh — week 2026-08-31 doc already stored (v1), idempotent.`
+
+**(b) Every production reader of `Bias.Direction`, classified:**
+
+| reader | file:line | effect | live? |
+|---|---|---|---|
+| EntryGate **leg 1** — "entry against plan bias" | `trader/entry_gate.go:176-184` | REJECT | **INERT — guarded by `if in.PlanMode == "direction"`, and the live `plan_mode` is `strict`** |
+| plan-config direction check | `trader/auto_trader_planconfig.go:210-215` | refusal string | same mode guard |
+| **flip-fired re-plan enforcement (P0.4-G)** | `trader/auto_trader_planner.go:1635-1637` | **REJECT at plan write** — *"prior plan flip already fired → bias %s is MANDATORY, got %q — the flip cannot be re-written away"* | **LIVE** |
+| arms bias-coherence | `kernel/arms_bias_coherent.go:74 BiasArmWarning` | returns a **warning string** | live, **warn only** ✓ |
+| prompt render | `kernel/plan_render.go:157`, `kernel/planner_prompt.go:324` | text | label |
+| doc validation | `kernel/plan_doc.go:602` | enum check (long/short/neutral) | [M] mechanics |
+
+**[A] The honest answer is not "no MUST reads bias" — one does.** `auto_trader_planner.go:1635` is
+a live REJECT keyed on `Bias.Direction`. Its content, though, is a **flip-consistency** rule, not a
+directional-edge claim: it refuses a re-plan that contradicts a flip the machine already fired on
+bars. Label **[O]** (it was written to close a live bug — ASIA v3's flip fired "→ bias long" and v4
+came back short). It does **not** assert that a direction is profitable, so it does not conflict
+with the calibrations.
+
+**(c) The tree as facts.** `kernel/planner_prompt.go:213` states the contract in the code itself:
+*"The plan bias is a LABEL, not a direction"*. Consistent with (b).
+
+**Conformance:** the directional-edge gate (leg 1) is **inert under `strict`**, and the bias
+calibrations are therefore not contradicted by any live gate. **CONFORMS**, with the one MUST named
+above disclosed rather than hidden.
+
+---
+
+## 10. D8 — cadence
+
+**Resolved at boot 8:**
+
+```
+⏱ wakes: cutoff=25m(enforce) cooldown=30m(enforce, fast-market≥1.5×ATR exempt)
+          cross-session=on stale-arm-expiry=on (class 47)
+          — cutoffs govern LEVEL_EVENT/structure_mss wakes ONLY
+```
+
+**Measured on 2026-09-04 (whole day so far):**
+
+| event | n |
+|---|---|
+| `waking the planner` (fired) | **2** |
+| `SKIPPED: … wake_min_interval_min` | **11** |
+| `⏱ wake would_skip` (class-47 WARN) | **0** |
+| `⏱ wake cooldown` | **0** |
+| `⏱ wake cutoff` | **0** |
+| scheduled_read triggers | 2 |
+| level_event triggers | 2 |
+| structure MSS | 0 |
+
+**[A] The class-47 cutoffs suppressed nothing today** — the same result the two-day audit found for
+09-02 and 09-03. Across three consecutive days the enforcing cutoff has produced **zero**
+suppressions; the throttle that actually shapes cadence is `wake_min_interval_min` (11 skips today).
+
+### Stage-4 status — answered precisely
+
+`docs/superpowers/reports/2026-09-03-wake-predicate.md` (`git log -1` → `586261ed 2026-09-03
+21:36:39 -0500`), title line 1: *"step 2: the 1B wiring (steps 3-4 gated on a boot)"*, line 7:
+*"STEP 2 of 4 COMPLETE (1B wiring). Branch `fix/wake-predicate` @ `f1d7cf51`, NOT deployed."*
+
+| step | status now |
+|---|---|
+| 1–2 (1B wiring) | **COMPLETE and DEPLOYED** — `f1d7cf51` is an ancestor of `origin/dev`; `touch_outcomes` holds 359 rows, so the hook fires |
+| 3 (boot it, accumulate a session of data) | **precondition now satisfied by events** — boot 8 ran and 359 outcomes / 192 pool rows accumulated |
+| 4 (**the change-based predicate itself**) | **NOT IMPLEMENTED** — `grep -rn "changeBased\|change_based\|ChangePredicate\|materialChange\|wakePredicate" --include=*.go .` (excluding tests) returns **nothing** |
+
+**[A] The change-based predicate does not exist in production code.** The wave's own report says
+the throttle is the scheduler and the predicate is a later wave; that is still true at boot 8.
+
+### E5 (queue item 3) — was the level-event wake demoted?
+
+Census E5 (`belief-census.md:87`): *"[T] weak: 52 re-plans/7 days, 7 ever armed"*, demote to
+WARN-first N=25. **[A] NOT DONE** — `level_event` remains a **full REPLAN trigger** and is on the
+**budget-free** list at boot 8 (`replan budget: … free: <S>_scheduled_read, level_event,
+structure_mss …`). It fired twice today. The class-47 cutoffs govern *when* it may wake, not
+whether it is advisory.
