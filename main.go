@@ -120,6 +120,13 @@ func main() {
 	// ATTRIBUTION (2026-09-02) — one sentinel: day-plan-era CLOSED rows carrying
 	// "" become UNRESOLVABLE. Idempotent, WHERE-scoped, pre-era history untouched.
 	st.ConvergePlanLinkSentinel()
+	// SEAM EXCLUSION (owner ruling 2026-09-03) — clears any grade a test-seam
+	// row still carries and stamps the reason IN the row. This call was MISSING
+	// from the 042ff360 boot: the boot line shipped and reported "excluded=3"
+	// while nothing had been excluded — 573 and 574 still read D and F. The
+	// pin below asserts the call exists, because a boot line without its
+	// migration is a claim without a mechanism.
+	st.StampSeamRowsExcluded()
 
 	// T7 (2026-08-27) — stamp pnl_corrected on EVERY reconstructable closed MNQ
 	// row (the column must be complete, not just the disagreements).
