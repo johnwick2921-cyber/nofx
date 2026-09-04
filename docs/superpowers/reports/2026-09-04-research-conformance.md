@@ -662,3 +662,59 @@ Resolved values are from the boot-8 lines or the resolver path. `report:line` gr
 | **pre-NY sessions carry edge** | ASIA+LONDON run | **[X]**-candidate (0/6 −$353.5 vs NY 3/3 +$177) | enablement | **NO** — drift D-8 |
 | no-trade band | first 5m · lunch 12:00–13:30 CT (code constants) | [O] | gate | yes |
 | void scope | session-day window · 1m×2000 · **one resolver for prompt AND validator** | [M] | parity | yes |
+
+---
+
+## 14. THE DRIFT LIST
+
+Every rule whose resolved value or label differs from what the research or the ruling says it
+should be. **No ruling is made here — this list is the input to them (dispatch stop-line).**
+
+| # | rule | what the research / ruling says | what is live at boot 8 | fix owner |
+|---|---|---|---|---|
+| **D-1** | `plan_mode = strict` + EntryGate leg 0 | no research supports closing the decision path; the two-day audit (`f3c640c3`) found it refuses **every** decision-path market entry regardless of citation, and announces this nowhere | `strict` saved on strategy `a5b7662e`; 13 refusals on 09-03 20:35–21:12 CT | **ruling** (keep strict, or make the arm path carry the load explicitly) |
+| **D-2** | min-SL floor | belief census queue **#1**: demote to **WARN-first**, sweep the multiplier | still a hard **REJECT** (`engine_position.go:227-231`); multiplier **raised 1.0 → 1.5** | **code** (WARN-first) + **ruling** (the multiplier) |
+| **D-3** | breakeven / trailing | census **E1/E2 are [O] owner-ruled ON** — BE at +40pt, trail 2.0×ATR14; the saved strategy still carries `breakeven_enabled: true`, `trailing_enabled: true` | boot: **`BE=off · trail=off`** (suspended by the 0B wave). Two boot lines contradict each other on trailing | **ruling** (which of the two owner positions stands) |
+| **D-4** | swing seats | census **D9 = [X]** — own tape shows −15 pts of missed-turn capture (`grand-audit.md:74`) | still seated (`seats=8`) | **ruling** (unseat / reduce / accept) |
+| **D-5** | stale-working reaper | two-day audit: a **healthy** resting limit is reaped ~15 min after placement because `onArmedOrderUpdate` has no default branch and no `Touch` for `submitted/accepted/working` | `stale_working=15m`, unchanged | **code** |
+| **D-6** | level_event as a full REPLAN trigger | census **E5 [T]-weak** (52 re-plans / 7 days, **7 ever armed**); queue **#3**: demote to WARN-first N=25 | full REPLAN, **budget-free**; fired twice today | **code** |
+| **D-7** | guardrails | MC rig (`77e1cdfc`): *"the 3-trade cap forfeits $24.54/day"* — framed as an active constraint | master **OFF** and every limit's own `*_enabled` is **false** — the cap forfeits **nothing** | **ruling** (turn on, or restate the rig's finding) |
+| **D-8** | pre-NY sessions | census queue **#7**, [X]-candidate: own tape 0/6 −$353.5 pre-NY vs NY 3/3 +$177 | ASIA + LONDON both run; today's only two arm-enabled scenarios were **both LONDON** | **ruling** |
+| **D-9** | census label for stale-confirm (B7) | census says **[I]** | the code carries a tape citation, **n=2,908** (`plan_confirm.go:118-123`) — it is **[T]** | **prompt/doc** (correct the census label; no code change) |
+| **D-10** | `armGateVerdict` | — | **DEAD: 0 production callers**, 8 test-only sites (`armed_executor.go:1268`) | **code** (delete or wire) |
+| **D-11** | `touch_outcomes.candidate_seated` | 1B intended it to separate seated from unseated candidates | **all 359 rows = 1**; the column is degenerate (`trader/detector_record.go:66`) | **code** |
+| **D-12** | `trade_excursions` | 1A wave (`0c1a808c`) specified the table so exits could be judged on path data | **0 rows**; `BackfillExcursions` has no automatic trigger | **code** |
+| **D-13** | decision-path EntryGate refusal | — | writes **no log line and no counter** (`entry_gate.go:477-486`); 19 refusals were invisible in the two-day audit until `decision_records` was read directly | **code** |
+| **D-14** | no-chase | its own boot line calls it **`[I] PROVISIONAL`** and promises "the week of counts is the research" | still `mode=warn`; on the arm path it is **structurally incapable of firing** (two-day audit: 40 evaluations, all `dist=0.00×ATR`) | **code** |
+| **D-15** | expectancy vs the MC rig | rig: **n=64**, CI −$31…+$18 | this rebuild: **n=58**, CI −$34.80…+$18.72 — six rows apart, exclusion sets could not be reconciled from the report text | **doc** (name the canonical set) |
+
+---
+
+## 15. THE KEEP LIST — what conforms
+
+One line each. These were checked and need nothing.
+
+- **Entry law, all 9 conditions** — one enum-keyed table, one chokepoint, named rejections
+  (`entry_law.go:38-77,133`). Fades forced to `touch`, `2x5m_close` confined to the displacement
+  pair — directionally consistent with the −$681 confirm-cost measurement.
+- **`fade_requires_touch`** and **`2x5m_reserved`** — live REJECTs, both declared to the model as
+  prompt-contract restrictions (`prompt_contract.go:121-127`).
+- **Prompt/validator contract** — 19 restrictions, all stated in the prompt, class-38 guarded.
+- **R:R floor 2.0** — [T] with n=18 (+$994), saved explicitly rather than defaulted, and applied at
+  both seams.
+- **Marketable wrong-side guard** and **UpsertArm version-bump re-authorization** — both [R] from
+  the 08-30 incident; both still exactly as the incident required.
+- **Breakdown displacement floor** — [T] from the waterfall replay (+$243 would-have).
+- **Stale-confirm 2.0×ATR5m** — tape-calibrated on n=2,908; only its census *label* is stale.
+- **D1′ detector** — descriptive only, exactly as specified: 0 gate readers, verified by a
+  method-level grep across `kernel/`, `trader/`, `api/`.
+- **Void scope** — one resolver for prompt AND validator (parity), session-day window, 1m×2000.
+- **No-trade band** — first-5m and lunch 12:00–13:30 CT, one code constant shared by gate, grader
+  and card.
+- **Session windows and the NY 14:45 EOD flat** — owner contract, matched by the running registry.
+- **Bias as a label** — the directional gate (leg 1) is inert under `strict`; the one live
+  bias-reading REJECT enforces flip *consistency*, not a directional edge.
+- **`min_confidence` 60** — saved, matches the shipped default, enforced.
+- **Arm bias-coherence** — returns a warning string, never a refusal: warn matches its label.
+- **`one_open_position`** — owner-ruled 2026-09-03, hardcoded, both seams.
+- **Invalidation-wired** — owner-ruled, arm path only, unresolved verdict passes with a line.
