@@ -127,6 +127,18 @@ type KnobSummary struct {
 }
 
 // KnobStatusSummary counts the registry by status.
+// AllKnobs returns every classified entry, ordered by path so the payload a
+// client renders is stable request to request. Callers get a copy of the slice,
+// never the registry map.
+func AllKnobs() []KnobEntry {
+	out := make([]KnobEntry, 0, len(knobRegistry))
+	for _, e := range knobRegistry {
+		out = append(out, e)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
+	return out
+}
+
 func KnobStatusSummary() KnobSummary {
 	s := KnobSummary{}
 	for _, e := range knobRegistry {

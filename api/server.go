@@ -145,6 +145,11 @@ func (s *Server) setupRoutes() {
 		// Routes requiring authentication
 		protected := api.Group("/", s.authMiddleware(), s.planTraderOwnership())
 		{
+
+			// Settings integrity (D5): the knob registry — what this build
+			// actually honours. Protected: it enumerates strategy knobs and
+			// their consumers. Classification only, never values (A25).
+			s.route(protected, "GET", "/config/resolved", "Resolved knob registry — status and label per knob", s.handleConfigResolved)
 			// Market data — JWT-protected (C4, 2026-08-25): candle history +
 			// SVP moved out of the public group; the FE httpClient always
 			// attaches the Bearer token, and the agent calls handlers in-process.
