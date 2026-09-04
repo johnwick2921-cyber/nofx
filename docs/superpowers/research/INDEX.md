@@ -78,3 +78,63 @@ Static literature (on dev): `docs/research/PLAN-CARD-DESIGN-SYSTEM.md`, `VL-DAYP
 Orphaned findings (carried from the inventory §B): knob-census top-10 unvalidated · cheap-five · confirm-cost −$681 · mega-research calibration queue · weekend-p2 min-conf/proximity buckets (Sep-9) · level-system weight divergences · strategy-controls DEAD register · controls-runtime gate-65 defect (closure UNKNOWN) · london-drought open questions · latency T1/T2/T4 instrumentation + completion diet.
 Duplicates (§D): london-drought ×2 (agree) · pre-livefire ×2 (superset) · VWAP residual ×2 (resolved).
 Contradictions (§E): fvg_entry study vs demand prompts (0C shadow) · min-conf 65 vs 60 (60) · proximity (0.3) · side-quota (removed) · VWAP residual (data bug) · volume weights (documented, live code wins).
+
+## 2026-09-03 — the stranded-branch sweep
+
+**25 docs-only branches merged** (verified by PATH, not by name; all test-merged
+conflict-free at `33286ac6` before the lock was taken). Every one is listed
+**unclassified**: it is now ON DEV and therefore exists, but nobody has read it
+and no verdict is claimed. Reading them is separate work — the standing rule is
+about existence, not endorsement.
+
+| Date | Title | Path on dev | Branch · sha | Verdict (one line) | Action | Conflicts |
+|---|---|---|---|---|---|---|
+| — | brand-census | 198 files under docs/ | `23582b2a` | **unclassified — not yet read** | queued | — |
+| — | cheap-five | 123 files under docs/ | `9298f9d4` | **unclassified — not yet read** | queued | — |
+| — | confirm-cost-0830 | 124 files under docs/ | `8f09aa84` | **unclassified — not yet read** | queued | — |
+| — | controls-runtime-verify | 198 files under docs/ | `1522cfa2` | **unclassified — not yet read** | queued | — |
+| — | decision-anatomy | 196 files under docs/ | `2d4a706e` | **unclassified — not yet read** | queued | — |
+| — | deepseek-e2e-audit-0902 | 62 files under docs/ | `8c1e52ef` | **unclassified — not yet read** | queued | — |
+| — | dryrun-replay | 131 files under docs/ | `4b0ba249` | **unclassified — not yet read** | queued | — |
+| — | forensics-zerotrade-2026-08-19 | 214 files under docs/ | `765ac11a` | **unclassified — not yet read** | queued | — |
+| — | full-system-audit-0901 | 71 files under docs/ | `8f57f845` | **unclassified — not yet read** | queued | — |
+| — | knob-census | 124 files under docs/ | `39a0481e` | **unclassified — not yet read** | queued | — |
+| — | level-system-verify | 149 files under docs/ | `d6aa9669` | **unclassified — not yet read** | queued | — |
+| — | london-drought | 150 files under docs/ | `607b8861` | **unclassified — not yet read** | queued | — |
+| — | london-drought-2026-08-27 | 150 files under docs/ | `f962d648` | **unclassified — not yet read** | queued | — |
+| — | london-forensics | 140 files under docs/ | `a5595503` | **unclassified — not yet read** | queued | — |
+| — | massive-move-audit | 123 files under docs/ | `151ef42b` | **unclassified — not yet read** | queued | — |
+| — | mega-research-mnq | 155 files under docs/ | `2cea2029` | **unclassified — not yet read** | queued | — |
+| — | missed-200pt | 138 files under docs/ | `673e9240` | **unclassified — not yet read** | queued | — |
+| — | partner-sync-2026-08-20 | 197 files under docs/ | `9540e2d2` | **unclassified — not yet read** | queued | — |
+| — | planner-latency-autopsy | 118 files under docs/ | `168e5282` | **unclassified — not yet read** | queued | — |
+| — | research-import-shift-forensics | 187 files under docs/ | `d070c932` | **unclassified — not yet read** | queued | — |
+| — | settings-week-audit | 164 files under docs/ | `dda9777c` | **unclassified — not yet read** | queued | — |
+| — | strategy-controls-census | 198 files under docs/ | `e12e3846` | **unclassified — not yet read** | queued | — |
+| — | total-audit-15 | 131 files under docs/ | `35c3aad9` | **unclassified — not yet read** | queued | — |
+| — | weekend-audit-p1 | 137 files under docs/ | `c18bd3a2` | **unclassified — not yet read** | queued | — |
+| — | weekend-audit-p2 | 135 files under docs/ | `b964dc8e` | **unclassified — not yet read** | queued | — |
+
+### 11 branches NOT merged — named `docs/*` but carrying code
+
+The owner's rule is that a docs branch merges the same day. These are not docs
+branches. Each carries Go tests, a compiled command, analysis scripts or a
+README — none of it production trading code, but all of it entering `go build`,
+`go test` or the repo root, which a documentation merge must not do silently.
+**Anything worth keeping from them gets its own `fix/` branch** (owner ruling
+2026-09-03). Two of them, `dress-rehearsal-0830` and `pre-livefire-verify-0830`,
+add overlapping copies of `cmd/vfverify/*` and would fight each other.
+
+| Date | Title | Path on dev | Branch · sha | Why not merged | Action | Conflicts |
+|---|---|---|---|---|---|---|
+| — | deep-verify-22 | — | `95049c0c` | **NOT MERGED — carries code**: .github/dependabot.yml, .github/workflows/security.yml, .gitignore, agent/planner_runtime.go … | owner-ruled: own fix/ branch later | — |
+| — | dress-rehearsal-0830 | — | `b54a9bfc` | **NOT MERGED — carries code**: agent/planner_runtime.go, agent/pnl_truth_tool_test.go, agent/tools.go, api/class35_replans_left_test.go … | owner-ruled: own fix/ branch later | — |
+| — | e2e-verify | — | `03957e58` | **NOT MERGED — carries code**: .github/dependabot.yml, .github/workflows/security.yml, .gitignore, agent/planner_runtime.go … | owner-ruled: own fix/ branch later | — |
+| — | final-verify | — | `91995ad4` | **NOT MERGED — carries code**: .github/dependabot.yml, .github/workflows/security.yml, .gitignore, agent/planner_runtime.go … | owner-ruled: own fix/ branch later | — |
+| — | grand-audit | — | `104f0d3d` | **NOT MERGED — carries code**: .github/dependabot.yml, .github/workflows/security.yml, .gitignore, agent/planner_runtime.go … | owner-ruled: own fix/ branch later | — |
+| — | master-recheck | — | `4b65eeeb` | **NOT MERGED — carries code**: .github/dependabot.yml, .github/workflows/security.yml, .gitignore, agent/planner_runtime.go … | owner-ruled: own fix/ branch later | — |
+| — | pre-livefire-verify | — | `85095811` | **NOT MERGED — carries code**: .github/dependabot.yml, .github/workflows/security.yml, .gitignore, agent/planner_runtime.go … | owner-ruled: own fix/ branch later | — |
+| — | pre-livefire-verify-0830 | — | `a290920e` | **NOT MERGED — carries code**: agent/planner_runtime.go, agent/pnl_truth_tool_test.go, agent/tools.go, api/class35_replans_left_test.go … | owner-ruled: own fix/ branch later | — |
+| — | refusal-autopsy | — | `589f7865` | **NOT MERGED — carries code**: .github/dependabot.yml, .github/workflows/security.yml, .gitignore, agent/planner_runtime.go … | owner-ruled: own fix/ branch later | — |
+| — | system-readme | — | `a5e34f9e` | **NOT MERGED — carries code**: .github/dependabot.yml, .github/workflows/security.yml, .gitignore, agent/planner_runtime.go … | owner-ruled: own fix/ branch later | — |
+| — | zone-math-verification | — | `6919aa8b` | **NOT MERGED — carries code**: .github/dependabot.yml, .github/workflows/security.yml, .gitignore, agent/planner_runtime.go … | owner-ruled: own fix/ branch later | — |
