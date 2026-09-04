@@ -15,28 +15,28 @@ import (
 type LevelKind string
 
 const (
-	KindPDH    LevelKind = "PDH"    // prior calendar-day high
-	KindPDL    LevelKind = "PDL"    // prior calendar-day low
-	KindPDC    LevelKind = "PDC"    // prior calendar-day close
-	KindRTHH   LevelKind = "RTH-H"  // prior regular-hours (NY) high
-	KindRTHL   LevelKind = "RTH-L"  // prior regular-hours (NY) low
-	KindASH    LevelKind = "AS-H"   // overnight Asia high
-	KindASL    LevelKind = "AS-L"   // overnight Asia low
-	KindLDNH   LevelKind = "LDN-H"  // overnight London high
-	KindLDNL   LevelKind = "LDN-L"  // overnight London low
-	KindONH    LevelKind = "ONH"    // overnight (Asia+London) composite high
-	KindONL    LevelKind = "ONL"    // overnight composite low
-	KindPWH    LevelKind = "PWH"    // prior week high
-	KindPWL    LevelKind = "PWL"    // prior week low
-	KindPMH    LevelKind = "PMH"    // prior month high
-	KindPML    LevelKind = "PML"    // prior month low
-	KindRound  LevelKind = "RN"     // round number
-	KindGap    LevelKind = "GAP"    // unfilled gap edge
-	KindORH    LevelKind = "OR-H"   // opening-range high
-	KindORL    LevelKind = "OR-L"   // opening-range low
-	KindIBH    LevelKind = "IB-H"   // initial-balance high
-	KindIBL    LevelKind = "IB-L"   // initial-balance low
-	KindNPOC   LevelKind = "nPOC"   // naked point of control
+	KindPDH   LevelKind = "PDH"   // prior calendar-day high
+	KindPDL   LevelKind = "PDL"   // prior calendar-day low
+	KindPDC   LevelKind = "PDC"   // prior calendar-day close
+	KindRTHH  LevelKind = "RTH-H" // prior regular-hours (NY) high
+	KindRTHL  LevelKind = "RTH-L" // prior regular-hours (NY) low
+	KindASH   LevelKind = "AS-H"  // overnight Asia high
+	KindASL   LevelKind = "AS-L"  // overnight Asia low
+	KindLDNH  LevelKind = "LDN-H" // overnight London high
+	KindLDNL  LevelKind = "LDN-L" // overnight London low
+	KindONH   LevelKind = "ONH"   // overnight (Asia+London) composite high
+	KindONL   LevelKind = "ONL"   // overnight composite low
+	KindPWH   LevelKind = "PWH"   // prior week high
+	KindPWL   LevelKind = "PWL"   // prior week low
+	KindPMH   LevelKind = "PMH"   // prior month high
+	KindPML   LevelKind = "PML"   // prior month low
+	KindRound LevelKind = "RN"    // round number
+	KindGap   LevelKind = "GAP"   // unfilled gap edge
+	KindORH   LevelKind = "OR-H"  // opening-range high
+	KindORL   LevelKind = "OR-L"  // opening-range low
+	KindIBH   LevelKind = "IB-H"  // initial-balance high
+	KindIBL   LevelKind = "IB-L"  // initial-balance low
+	KindNPOC  LevelKind = "nPOC"  // naked point of control
 	// Pack B (owner override 2026-08-26) — VOLUME FAMILY kinds. Forward-validated
 	// via the B4 level_stats table; weights are provisional until the 2-week verdict.
 	KindVWAP   LevelKind = "VWAP"   // session-anchored VWAP (+±1σ band lines share this kind)
@@ -57,12 +57,12 @@ const (
 	// Level-truth wave (2026-08-27) — ±2σ fair-value bands EMITTED at 0.85 per
 	// owner ruling (the dispatched spec listed them; they were missing).
 	KindVWAP2S LevelKind = "VWAP±2σ" // session VWAP ±2σ band lines
-	KindSupply LevelKind = "SUPPLY" // supply zone
-	KindDemand LevelKind = "DEMAND" // demand zone
-	KindFVG    LevelKind = "FVG"    // fair-value gap
-	KindIFVG   LevelKind = "IFVG"   // inverse FVG (filled gap, inverted polarity)
-	KindOB     LevelKind = "OB"     // order block
-	KindOwner  LevelKind = "OWNER"  // sticky owner-set level (P3.6-C)
+	KindSupply LevelKind = "SUPPLY"  // supply zone
+	KindDemand LevelKind = "DEMAND"  // demand zone
+	KindFVG    LevelKind = "FVG"     // fair-value gap
+	KindIFVG   LevelKind = "IFVG"    // inverse FVG (filled gap, inverted polarity)
+	KindOB     LevelKind = "OB"      // order block
+	KindOwner  LevelKind = "OWNER"   // sticky owner-set level (P3.6-C)
 )
 
 // DetectedLevel is the uniform output of every detector (a line or a zone). For

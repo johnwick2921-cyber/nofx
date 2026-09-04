@@ -20,8 +20,8 @@ var LevelStateProvider func(traderID, symbol string, l DetectedLevel) string
 // levelFreshnessFn builds the ScoreLevels freshness callback for a symbol from the
 // installed LevelStateProvider (nil when no provider → all-fresh, as before).
 func levelFreshnessFn(traderID, symbol string) func(DetectedLevel) string {
-        if LevelStateProvider == nil {
-                return nil
-        }
-        return func(l DetectedLevel) string { return LevelStateProvider(traderID, symbol, l) }
+	if LevelStateProvider == nil {
+		return nil
+	}
+	return func(l DetectedLevel) string { return LevelStateProvider(traderID, symbol, l) }
 }

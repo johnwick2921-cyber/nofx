@@ -44,6 +44,38 @@ export const welcome: GuideSection = {
       kind: 'p',
       text: 'Boot truth: the bot refuses to trade unless its revision and prompt goldens pass — `🔐 BOOT INTEGRITY OK — rev … · goldens PASS` (kernel/boot_integrity.go). The SIM lock is hard: non-SIM accounts are refused at the account-routing layer (provider/ninjatrader isAccountTradeable).',
     },
+    { kind: 'h', text: 'Canon — the files that ARE the answer' },
+    {
+      kind: 'p',
+      text: 'When this Guide and the repo disagree, the repo wins. These are the files that hold the answer rather than describe it, so a question about how the bot behaves ends at one of them instead of at somebody\u2019s memory.',
+    },
+    {
+      kind: 'table',
+      title: 'where each kind of truth lives',
+      head: ['File', 'What it settles'],
+      rows: [
+        [
+          'clock-seams.list (repo root)',
+          'Every rule whose verdict can change with the wall clock, and the three that are deliberately excluded with their reasons. A lint test reads this file: adding a time-dependent rule without an \u2026At seam fails the build. Born from a suite that was honestly green at 11:00 and honestly red at 14:50.',
+        ],
+        [
+          'docs/superpowers/AUDIT-CHECKLIST.md',
+          'Every bug class the system has actually suffered, each with its probe and its law. New classes are appended in the same PR that fixes them.',
+        ],
+        [
+          'deploy/RELEASE',
+          'The revision the running binary was built from. It is written BEFORE the swap, so it can never name a build that is not running.',
+        ],
+        [
+          'kernel/boot_integrity.go',
+          'Whether the bot is allowed to trade at all \u2014 revision match plus prompt goldens, refused loudly rather than assumed.',
+        ],
+        [
+          'ninjascript/vltrader_tcp_PROTOCOL.md',
+          'The wire between the Go bot and the NT8 AddOn. The two sides change in lockstep or not at all.',
+        ],
+      ],
+    },
     { kind: 'h', text: 'Quick start' },
     {
       kind: 'p',

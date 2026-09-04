@@ -85,8 +85,6 @@ func MinScenarioQualityVerdict(action, cited, floor string, qualities map[string
 	return false, ""
 }
 
-
-
 // TransitionStanddownVerdict is the pure gate: (blocked, refusal message).// action is open_long/open_short; dir is the plan's bias direction; active +
 // detail come from the trader's TransitionState. Empty refusal = pass.
 func TransitionStanddownVerdict(action string, active bool, dir, detail string) (bool, string) {

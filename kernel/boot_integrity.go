@@ -187,7 +187,6 @@ func SetTradingRefusedForTest(refused bool, reason string) {
 	refusalReason.Store(reason)
 }
 
-
 // lastBootRevision caches the asserted revision for API exposure (v1 audit
 // §5.6 — bug reports could not be checked against the running rev without a
 // shell). Set once at boot.
@@ -201,7 +200,6 @@ func RunningRevision() string {
 	}
 	return ""
 }
-
 
 func shortRev(r string) string {
 	if len(r) > 12 {
