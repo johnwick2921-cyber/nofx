@@ -1574,6 +1574,38 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     deploy tree in an editor, and that is an owner action no repo change
     substitutes for.
 
+72. **A spec that moved after the worktree was cut.** (Number assigned at
+    merge; highest occupied on dev at authoring: 71. **Read with class 70** — a
+    hook registered one start too late — and with class 69. All three are the
+    same family: **a value read once, at a moment nobody recorded.** 69 asks who
+    calls it; 70 asks whether the registration ran before the read; 72 asks
+    whether what you read is still what is there.)
+    The tree-guard wave was built against
+    `docs/superpowers/plans/2026-09-02-tree-guard-spec.md`. At **21:48:36** the
+    lock wave landed `ec2dd8f7`, which replaced the lock model — file+pid+`kill
+    -0` → atomic directory keyed by session with a heartbeat and no pid — and
+    edited that spec in the same commit. The guard's worktree was cut minutes
+    earlier and its author read the spec at **~21:54**, six minutes AFTER the
+    edit, but from a base that predated it. The old text was read as current.
+    **The shipped result would have false-alarmed on every cutover**: under the
+    new lock there is no legacy file, so a legitimately dirty tree during a
+    deploy would have read as "dirty with no live holder" — an alarm at exactly
+    the moment the guard is supposed to be trusted, while running and printing
+    normally. A guard that cries wolf on every deploy is worse than no guard,
+    because the next real alarm is the one everyone scrolls past. Nothing in the
+    wave's own suite could catch it: every test asserted the model the author had
+    read.
+    **Probe:** `git log -1 -- <spec>` before building, compared against your
+    worktree's base commit. Two lanes editing and reading the same document
+    within minutes is not exotic — it is the normal shape of parallel work, and
+    neither lane can see the other. Ask it of plans, specs, contracts and
+    protocol docs, not just code.
+    **Law:** a worktree is cut from dev's TIP at accept. A spec is a moving
+    artifact and reading it is a point-in-time act with no record; if it moved
+    after your base, REBASE AND RE-READ before writing code. Reports quote the
+    `git log -1` line for every spec they built from, so the base a wave was
+    built against is on the record rather than in someone's memory.
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,
@@ -1597,6 +1629,19 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
 ---
 
 ## PART 3 — PRE-CUTOVER (standing 7-step protocol; flat gate = 5 legs, class 33)
+
+0. **Spec freshness (owner law, 2026-09-03).** A worktree is cut from dev's
+   **TIP at accept**, and a spec on dev is a MOVING artifact — a worktree cut
+   from an older base silently freezes it. Before building against any spec or
+   plan, run `git log -1 -- <spec>` and compare it to your worktree's base: **if
+   the spec moved after your base, rebase and re-read before writing code.** The
+   report quotes that `git log -1` line for every spec it built from.
+   Born from the tree-guard wave: the lock model was rewritten at 21:48:36 and
+   the tree-guard spec edited in the same commit; the guard's author read that
+   spec at 21:54 from a base six minutes older, built the superseded model, and
+   shipped a guard that would have false-alarmed on **every** cutover — found
+   only because a peer asked an unrelated question. See class 70 and class 72;
+   the family is a value read once, at a moment nobody recorded.
 
 1. **Tree gate:** porcelain-clean + `deploy/nofx-lock.sh acquire <session>
    <task> [minutes]` (atomic create; records session · task · acquired ·
