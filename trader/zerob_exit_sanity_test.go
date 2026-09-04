@@ -323,8 +323,16 @@ func TestZeroBReArmAfterBootSweep(t *testing.T) {
 	}
 
 	// 3. The swept rows are ARMED again with a FRESH identity; the owner's is not.
+	//
+	// D5 (owner ruling 2026-09-04) — CHANGED HERE. A swept row REACHED the
+	// broker, so it is no longer revived in place: it keeps its cancelled
+	// record forever and the re-authorization lands as the next placement.
+	// The subject of this test is unchanged — the swept scenario is armed
+	// again with no dead broker identity — so it now follows the SCENARIO
+	// rather than the row id.
 	for _, id := range []int64{s1, s3} {
-		row := armedRowByID(t, ledger, id)
+		swept := armedRowByID(t, ledger, id)
+		row := latestArmedForScenario(t, ledger, swept.PlanID, swept.Scenario)
 		if row.State != "armed" {
 			t.Fatalf("swept row %d must re-arm under the same version, got state %q reason %q", id, row.State, row.StateReason)
 		}
@@ -348,8 +356,15 @@ func TestZeroBReArmAfterBootSweep(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if row := armedRowByID(t, ledger, owner); row.State != "armed" {
-		t.Fatalf("a new plan version must still re-authorize an owner-cancelled row, got %q", row.State)
+	// D5: the owner's cancelled row had a broker identity (sig-owner), so it
+	// keeps its record and the new version's authorization is the NEXT
+	// placement. The law under test — a new version DOES re-authorize — is
+	// unchanged; only where the fresh row lives has moved.
+	if prior := armedRowByID(t, ledger, owner); prior.State != "cancelled" || prior.SignalID != "sig-owner" {
+		t.Fatalf("the owner's cancelled placement must keep its record: %+v", prior)
+	}
+	if row := latestArmedForScenario(t, ledger, planID, "S9"); row.State != "armed" || row.SignalID != "" {
+		t.Fatalf("a new plan version must still re-authorize, as a fresh placement: %+v", row)
 	}
 }
 
@@ -424,4 +439,21 @@ func TestZeroBRecordedCountersSurviveRestart(t *testing.T) {
 	if got := store.ArmRefusalCount(st, tid, date, "LONDON", "rr"); got != 0 {
 		t.Fatalf("malformed counter must read 0, got %d", got)
 	}
+}
+
+// latestArmedForScenario returns the newest row for a (plan, scenario) — the
+// current placement, after D5 made a replacement its own row.
+func latestArmedForScenario(t *testing.T, ledger *store.ArmedOrderStore, planID, scenario string) store.ArmedOrderDB {
+	t.Helper()
+	rows, err := ledger.ListNonTerminal("t1")
+	if err != nil {
+		t.Fatalf("list non-terminal: %v", err)
+	}
+	for i := range rows {
+		if rows[i].PlanID == planID && rows[i].Scenario == scenario {
+			return rows[i]
+		}
+	}
+	t.Fatalf("no live row for %s/%s", planID, scenario)
+	return store.ArmedOrderDB{}
 }

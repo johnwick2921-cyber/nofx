@@ -67,6 +67,12 @@ type ArmedOrderDB struct {
 	// (reclaim) from the E7 no-retest FALLBACK, which share a Kind. Legacy rows
 	// carry '' = UNKNOWN, which is never treated as a condition.
 	Condition string `gorm:"default:''"`
+	// PlacementSeq (D5, arms-follow-bias 2026-09-04) — every BROKER PLACEMENT is
+	// one row forever. A terminal row that reached the broker is never revived
+	// in place; the next authorization lands as seq+1 and the old row keeps its
+	// prices, its signal id and its ending. Rows that never reached the broker
+	// still revive in place (PRE-REOPEN F3), because there is nothing to keep.
+	PlacementSeq int `gorm:"default:0"`
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -124,8 +130,9 @@ func (s *ArmedOrderStore) Migrate() error {
 			{"leg_index", "INTEGER NOT NULL DEFAULT 0"},
 			{"leg_count", "INTEGER NOT NULL DEFAULT 0"},
 			{"kind", "TEXT NOT NULL DEFAULT ''"},
-			{"boot_id", "TEXT NOT NULL DEFAULT ''"},   // class 33 — pre-boot decidability
-			{"condition", "TEXT NOT NULL DEFAULT ''"}, // arms-follow-bias 2026-09-04
+			{"boot_id", "TEXT NOT NULL DEFAULT ''"},         // class 33 — pre-boot decidability
+			{"condition", "TEXT NOT NULL DEFAULT ''"},       // arms-follow-bias 2026-09-04
+			{"placement_seq", "INTEGER NOT NULL DEFAULT 0"}, // D5 — append-only placements
 			// ATTRIBUTION (2026-09-02): the version the arm was FIRST authorized
 			// under. 0 on legacy rows; UpsertArm adopts their current version
 			// once, so the table self-heals without a guessing migration.
@@ -148,7 +155,10 @@ func (s *ArmedOrderStore) Migrate() error {
 		if err := s.db.Exec("DROP INDEX IF EXISTS idx_armed_orders_plan_scenario").Error; err != nil {
 			return err
 		}
-		return s.db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_armed_orders_plan_scenario ON armed_orders(plan_id, scenario, leg_index)").Error
+		// D5 (2026-09-04): the placement sequence joins the key so a cancelled
+		// placement and its replacement can coexist. Without it the replacement
+		// had to overwrite the row the broker had already acted on.
+		return s.db.Exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_armed_orders_plan_scenario_seq ON armed_orders(plan_id, scenario, leg_index, placement_seq)").Error
 	}
 	return s.db.AutoMigrate(&ArmedOrderDB{})
 }
@@ -178,7 +188,37 @@ func (s *ArmedOrderStore) UpsertArm(row *ArmedOrderDB) error {
 	var existing ArmedOrderDB
 	err := s.db.Where("plan_id = ? AND scenario = ? AND leg_index = ?", row.PlanID, row.Scenario, row.LegIndex).First(&existing).Error
 	if err == nil {
-		if existing.State == "armed" || existing.State == "working" {
+		// D5 — a WORKING row is a LIVE BROKER ORDER. Rewriting its prices in
+		// place overwrote the slot and lost the brackets (rows 582, 585): the
+		// ledger and the broker then held two different orders under one id.
+		// Replacing a live order requires a cancel, and the store cannot issue
+		// one, so it declines rather than diverge.
+		if existing.State == "working" {
+			return fmt.Errorf("armed_orders: refusing to rewrite %s/%s — the row is working (a live broker order, signal %q); replace requires cancel first",
+				row.PlanID, row.Scenario, existing.SignalID)
+		}
+		// A TERMINAL row that reached the broker keeps its record forever; the
+		// new authorization becomes the NEXT placement rather than erasing it.
+		// A row that never reached the broker has nothing to keep and still
+		// revives in place (PRE-REOPEN F3).
+		if existing.State != "armed" && strings.TrimSpace(existing.SignalID) != "" {
+			var maxSeq int
+			s.db.Model(&ArmedOrderDB{}).
+				Where("plan_id = ? AND scenario = ? AND leg_index = ?", row.PlanID, row.Scenario, row.LegIndex).
+				Select("COALESCE(MAX(placement_seq), 0)").Scan(&maxSeq)
+			row.ID = 0
+			row.PlacementSeq = maxSeq + 1
+			// A fresh authorization is ARMED and carries no lineage from the
+			// placement it follows: a new row must never inherit the old row's
+			// signal id or fill, or the two placements become indistinguishable.
+			row.State = "armed"
+			row.StateReason = ""
+			row.SignalID = ""
+			row.FillPrice = 0
+			row.FillQuantity = 0
+			return s.db.Create(row).Error
+		}
+		if existing.State == "armed" {
 			row.ID = existing.ID
 			// ATTRIBUTION (2026-09-02): armed_under_version is NOT in this map —
 			// it belongs to the first authorization and must survive every

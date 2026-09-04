@@ -265,6 +265,12 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 	// One ATR5m math, both seams (no-trade-rider 2026-09-03): the SAME 5m ATR
 	// the decision path's EntryGate reads — never PlanDATRFor (DAILY ATR).
 	atr5m := armSeamATR5mFromBars(bars)
+	// D4 (2026-09-04): last close, for the far-arm counter. 0 when the tape is
+	// empty — farArmFactor treats that as UNKNOWN and never flags.
+	armPrice := 0.0
+	if len(bars) > 0 {
+		armPrice = bars[len(bars)-1].Close
+	}
 	minQuality := ""
 	if dp := at.dayPlanCfg(); dp != nil {
 		minQuality = dp.MinScenarioQualityFor(plan.Session)
@@ -528,6 +534,16 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 			if kindRefusal != "" {
 				at.logWarnf("✕ armed %s leg %d NOT authored — %s", sc.ID, li+1, kindRefusal)
 				continue
+			}
+
+			// D4 (2026-09-04) — FAR-ARM COUNTER, WARN-first. Nothing is refused
+			// for being far; a week of counts decides the threshold. Per side,
+			// because the 09-02 evidence was one-sided.
+			telemetry.IncArmAuthored()
+			if f := farArmFactor(leg.Entry, armPrice, atr5m); armIsFar(leg.Entry, armPrice, atr5m) {
+				telemetry.IncFarArm(side)
+				at.logWarnf("📏 arm far: %s %s entry %.2f is %.2f pts / %.1f×ATR5m from price %.2f (counted, not refused)",
+					sc.ID, side, leg.Entry, math.Abs(leg.Entry-armPrice), f, armPrice)
 			}
 			row := &store.ArmedOrderDB{
 				TraderID: at.id, PlanID: plan.PlanID, Version: plan.Version, Session: plan.Session,

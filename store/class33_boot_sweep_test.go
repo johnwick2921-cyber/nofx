@@ -82,8 +82,12 @@ func TestClass33ReArmKeepsForeignStamp(t *testing.T) {
 	}
 	again := &ArmedOrderDB{TraderID: "t1", PlanID: "p1", Scenario: "S3", Side: "long",
 		EntryPx: 29070, State: "armed", CreatedAt: now, UpdatedAt: now}
-	if err := l.UpsertArm(again); err != nil {
-		t.Fatalf("re-arm: %v", err)
+	// D5 (owner ruling 2026-09-04): a re-arm under a WORKING row is refused
+	// outright now, which makes this test's subject stronger rather than
+	// weaker — the foreign stamp cannot be touched at all, not merely left
+	// un-refreshed.
+	if err := l.UpsertArm(again); err == nil {
+		t.Fatal("a re-arm under a working row must be refused")
 	}
 	pre, _ := l.ListPreBoot("t1", ProcessBootID())
 	if len(pre) != 1 {
