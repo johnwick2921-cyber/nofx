@@ -29,16 +29,23 @@ can be answered, and is:
 | label | 09-02 census | now | Δ |
 |---|---|---|---|
 | **[R]** researched | 7 | 7 | — |
-| **[T]** own-tape | 7 | **8** | **+1** |
+| **[T]** own-tape | 7 | **9** | **+2** |
 | **[O]** owner-ruled | 14 | 14 | — |
 | **[I]** invented / untested | **20** | **19** | **−1** |
-| **[X]** contradicted | 1 | 1 | — |
-| **grounded ([R]+[T]+[O])** | **28 of 49 (57.1%)** | **29 of 49 (59.2%)** | **+1** |
+| **[X]** contradicted | 1 | **0** | **−1** |
+| **grounded ([R]+[T]+[O])** | **28 of 49 (57.1%)** | **30 of 49 (61.2%)** | **+2** |
 
-**[A] Exactly one belief moved in two days: B7 (stale-confirm 2.0×ATR5m) from [I] to [T]** — and it
-moved because a citation was written into the code (`kernel/plan_confirm.go:118-123`, n=2,908), not
-because a wave demoted anything. **Zero of the nine demotion-queue items were demoted.** The
-ungrounded share fell from 40.8% to 38.8% by one row.
+**[A] Three census rows are re-labelled by this audit, and none of them moved because a wave
+demoted anything:**
+
+1. **B7 (stale-confirm 2.0×ATR5m): [I] → [T]** — a citation was written into the code
+   (`kernel/plan_confirm.go:118-123`, n=2,908 MET confirms).
+2. **B6 (min-SL floor): [I] → [R]/[O]** — `kernel/min_sl.go:10-33` carries a full grounding and an
+   explicit **owner ruling of 2026-09-02** raising 1.0 → 1.5. See §3.
+3. **D9 (swing seats): [X] → [T]-positive — the census misread its own source.** See §4.
+
+**Zero of the nine demotion-queue items were demoted.** The ungrounded share fell from 40.8% to
+38.8%, and the contradicted share to zero — by correcting labels, not by changing behaviour.
 
 Counted with `python3` over the census tables (49 rows, first label per row where a row carries a
 compound like `[R/O]`); the raw token counts differ (27/15/8/8/3) because compound labels
@@ -141,7 +148,7 @@ beliefs with live teeth. Status at boot 8:
 
 | # | queue item | asked for | status at boot 8 | verdict |
 |---|---|---|---|---|
-| **1** | min-SL 1.0×ATR5m + 2t, [I], REJECT at write | demote to WARN-first; sweep the multiplier | **still a hard REJECT** (`kernel/engine_position.go:227-231`, `return fmt.Errorf`); the multiplier went **1.0 → 1.5** (`kernel/min_sl.go:34`) | **NOT DONE — moved the wrong way** |
+| **1** | min-SL 1.0×ATR5m + 2t, [I], REJECT at write | demote to WARN-first; sweep the multiplier | **still a hard REJECT** (`kernel/engine_position.go:227-231`); multiplier **1.0 → 1.5** — but by an **owner ruling dated 2026-09-02, the census's own day**, with a written citation | **SUPERSEDED, not ignored** — see below |
 | 2 | swing seats improve turns, **[X]** | re-test; likely unseat | seats still live (boot: `seats=8`) | see §4 |
 | 3 | level-event wakes deserve a re-read, [T]-weak | WARN-first N=25 | boot line: cutoffs `enforce` govern LEVEL_EVENT — but that is the *cadence* cutoff, not the E5 demotion | see agent unit `cadence` |
 | 4 | BD_MAX_PULLBACK / BD_CONFIRM_CLOSES, [I] | WARN-first | — | see agent unit `validator` |
@@ -151,7 +158,27 @@ beliefs with live teeth. Status at boot 8:
 | 8 | consumed/3rd-touch → never entry, [I] | measure react rate | touch telemetry advisory; `touch_outcomes` now n=359 — see §5 | data now exists |
 | 9 | killzone/premium-window + Monday/Thursday conviction, [I] | keep advisory, add n counter or delete | prompt lines still present | advisory (no teeth) |
 
-### The one thing that DID move on item 1 — and it is not the demotion
+### Item 1 was superseded by an owner ruling — a correction to this audit's first reading
+
+**[A] `kernel/min_sl.go:10-33` is not an uncited number.** It carries the grounding in full:
+
+> Research grounding (week ledger, `pnl_corrected`): **15 of 27 losers were STOPPED-TOO-TIGHT** —
+> they printed MFE ≥ 0.5×SL before the stop-out; the 5 biggest losers all stopped 5–44 pts from ANY
+> seated level. […] **0B (owner ruling 2026-09-02): 1.0 → 1.5.** The 1.0 was **[C] code-canon with
+> no citation** (knob census). **Round-7 research** tests the day-trade range at 1.5–2.5×ATR and
+> finds stop-out rates above 60% on noise alone below 1.0×; our own tape has 6 of 8 losers printing
+> MAE beyond the stop and 15 of 27 losers stopped-too-tight. **1.5 is the bottom of the researched
+> range, not the middle — the deliberate first step from an uncited number to a cited one.**
+
+So the queue's premise ("[I], no sweep") was true of the **1.0**, and the owner replaced it with a
+**cited 1.5 on the same day the census was written**. The queue asked for WARN-first *and* a
+multiplier sweep; the owner did the sweep and kept the REJECT. **This is the dispatch's "round 7" —
+it exists, cited in code at `kernel/min_sl.go:21`, not as a document under `docs/`.**
+
+The same comment names the three readers, which matters for §14: *"This value is read by THREE
+gates: the arm-time gate, the AI-entry decision gate and the planner's authoring WARNING."*
+
+### The WARN-first pre-check that exists — and the drift it exposes
 
 A WARN-first pre-check exists and fired four times this morning:
 
@@ -176,16 +203,38 @@ scenarios in one morning were written knowing the gate would refuse them.
 
 ## 4. D1 (second half) — every [X] belief still enforced
 
-| belief | label source | still live? | teeth |
-|---|---|---|---|
-| **D9 — swing seats improve turn capture** | census D9: [X] on own tape, `grand-audit.md:74` (missed-turns 80.0/75.0/79.2% → 65.0/60.0/66.7%, Δ −15pts) | **YES** — boot 8 `volume wave: … seats=8` | seated **weight** on every level grade |
-| **queue #7 — pre-NY sessions carry edge** | census: [X]-candidate, own tape 0/6 −$353.5 pre-NY vs NY 3/3 +$177 (weekend P2 audit) | **YES** — ASIA and LONDON both run | session **enablement**; today's only two arm-enabled scenarios were both LONDON |
+**[A] The answer is NONE — and the reason is that the census's only [X] rests on a misread of its
+own source.**
 
-**[A] Two [X]-labelled beliefs still carry live teeth.** Neither is a REJECT or a MUST — one is a
-weight, one is an enablement — so the strict reading of D1 ("every [X] still enforced as a REJECT
-or MUST") is: **none**. The honest reading is: **two**, with weight/enablement teeth.
+### D9 "swing seats improve turn capture" is NOT contradicted
 
----
+`belief-census.md:77` labels D9 **[X] research-CONTRADICTED**, citing:
+
+> *"own tape: missed-turns 80.0/75.0/79.2% → 65.0/60.0/66.7% with swing seats (Δ −15pts)"*
+
+The source is `docs/superpowers/reports/2026-08-28-grand-audit.md:73-74` (A17), which reads in full:
+
+> **A17 — Missed-turns refreshed ✅**
+> `scripts/leveltruth_missed_turns.py` on live (repaired) bars: baseline 80.0/75.0/79.2% → with
+> swing seats 65.0/60.0/66.7% (Δ −15.0/−15.0/−12.5 pts). Reproduces the T3 result independently.
+> **PROVEN.**
+
+**`missed-turns` is a MISS rate. Falling from ~80% to ~65% is the seats working, not failing** —
+and the source marks it **PROVEN** with a ✅. The census read the negative delta as a degradation
+and inverted the finding.
+
+**Corrected label: D9 is [T]-positive**, own tape, Δ −15 pts of *missed* turns. It should stay
+seated. The census row needs the correction; the code needs nothing.
+
+### The other [X]-candidate
+
+Queue #7, "pre-NY sessions carry edge", is a **[X]-candidate** in the census's own words (own tape
+0/6 −$353.5 pre-NY vs NY 3/3 +$177, weekend-P2 audit) — not a confirmed [X], and at n=6 and n=3 it
+is far below any verdict floor. ASIA and LONDON still run. **No verdict (A24)**; it stays on the
+drift list as an open owner question, not as a contradicted belief with teeth.
+
+**[A] So: zero [X] beliefs are enforced as a REJECT, a MUST, a weight or an enablement — because
+after correction there are no [X] beliefs.**
 
 ## 5. D5 — levels and the D1′ detector
 
@@ -542,14 +591,22 @@ The census named three candidates (`belief-census.md:107`). Status at boot 8:
 
 | census row | belief | still a REJECT? | label now | verdict |
 |---|---|---|---|---|
-| **B6** | min-SL ≥ mult×ATR5m + 2-tick clearance | **YES** — `kernel/engine_position.go:227-231` `return fmt.Errorf` | **[I]** — `MIN_SL_ATR_MULT` unset, no citation in code, no owner ruling found in `docs/` | **A24 VIOLATION — and the multiplier was raised 1.0 → 1.5** (`kernel/min_sl.go:34`) |
+| **B6** | min-SL ≥ mult×ATR5m + 2-tick clearance | **YES** — `kernel/engine_position.go:227-231` `return fmt.Errorf` | **[R]/[O], NOT [I]** — `kernel/min_sl.go:10-33` carries the week-ledger grounding *and* names the **owner ruling of 2026-09-02** that set 1.5 | **NOT a violation.** The census row describes the superseded 1.0 |
 | **B2** | breakdown family: `BD_MIN_CLOSES`, `BD_MAX_PULLBACK`, `BD_MAX_LEVEL_DIST` | **YES** — `kernel/breakdown_continue.go:258-265` author-time `return fmt.Errorf` | partially [T] | **PARTIALLY MOVED — not by demotion.** E3 (entry-mechanics 2026-08-30) relaxed the confirm requirement **2 → 1** close: *"the entry law now rides on displacement quality, not on a double close"* (`breakdown_continue.go:60-64`). The census's "BD_CONFIRM_CLOSES 2" no longer exists; `BD_MIN_CLOSES` defaults to **1** |
 | **B7** | stale-confirm 2.0×ATR5m | YES — gate | **[T], NOT [I]** | **THE CENSUS LABEL IS NOW WRONG.** The code carries its own citation (`kernel/plan_confirm.go:118-123`): *register S2, mega-research 2026-08-26 — the shipped 1.0×dATR unit marked only **38/2,908 (1.3%)** of the week's MET confirms stale; at 2.0×ATR5m the rule marks ~37%, matching the empirical stale mass (median \|price−ref\| = 58.75 pt)*. **n=2,908.** This is a tape-calibrated value, not an invention |
 
-**[A] D2's answer: ONE — B6, the min-SL floor.** It is the only [I] belief still carrying a hard
-REJECT with no citation and no owner ruling, and it was tightened by 50% rather than demoted.
-Queue item #5 (B7) should be **re-labelled [T] in the census**, not demoted. Queue item #4 (B2)
-moved for a different reason than the queue gave.
+**[A] D2's answer: ZERO.** No [I] belief carries a hard REJECT without either a citation or an
+owner ruling. All three census candidates dissolve on inspection:
+
+- **B6** was owner-ruled on 2026-09-02 with a written citation (the census's own day — the row
+  describes the value the ruling replaced).
+- **B7** is tape-calibrated on n=2,908 and should be re-labelled **[T]**, not demoted.
+- **B2** moved by E3's displacement-quality reasoning, not by an untested invention.
+
+**This corrects this audit's own first reading, which recorded B6 as an A24 violation.** The
+WARN-first law is not being broken by any live REJECT. What *is* broken is narrower and is on the
+drift list: the **planner prompt still states the superseded 1.0× floor** while three gates enforce
+1.5× (drift D-2).
 
 ---
 
@@ -611,7 +668,7 @@ Resolved values are from the boot-8 lines or the resolver path. `report:line` gr
 | 3 | invalidation-wired | `:199-220` | `invalidation-wired=on`, **ARM PATH ONLY**; unresolved ⇒ leg PASSES | [O] 2026-09-03 | boot line | REJECT (arm) | yes | 2 |
 | 4 | shadow (0C) | `:234` | shadow = `breakout_retest`, `fvg_entry` | [R] | fvg-entry-model → 0C demotion (INDEX.md) | REJECT if cited | yes | 2 |
 | 5 | R:R at execution price | `:257` | floor **2.0** (`min_risk_reward_ratio`, *saved*, not default 3.0) | [T] | census B8: n=18 +$994 | REJECT | yes | 2 |
-| 6 | min-SL at execution | `:268` | `1.5×ATR5m` + 2 ticks | **[I]** | census B6 | REJECT | **NO** — see drift D-2 | 2 |
+| 6 | min-SL at execution | `:268` | `1.5×ATR5m` + 2 ticks | **[R]/[O]** | `kernel/min_sl.go:10-33` (round-7 + week ledger; owner ruling 2026-09-02) | REJECT | yes — **but the prompt still says 1.0×**, drift D-2 | 2 |
 | 7 | one_open_position | `:280` | ON, hardcoded, no knob | [O] 2026-09-03 | owner ruling | REJECT | yes | 2 |
 | — | no-chase callback | `trader/no_chase.go:145` | `max_dist=1.00×ATR max_run=1.5×ATR5m` **mode=warn** | **[I]** *(self-declared "PROVISIONAL" in the boot line)* | boot line | **WARN-only** | yes — warn matches its label | 1 |
 
@@ -626,14 +683,14 @@ Resolved values are from the boot-8 lines or the resolver path. `report:line` gr
 | marketable wrong-side guard | `:918-924`, `:947-960` | on | [R] 08-30 incident (census B9) | cancel-before-place | yes | 1 |
 | UpsertArm re-authorize on version bump | `store/armed_orders.go:155,212` | on | [R] 08-30 incident (census B10) | ledger | yes | — |
 | arm normalizer (class 39) | boot line | legs on non-sweep → single arm + WARN | [O] | WARN | yes | — |
-| bias coherence | `kernel/arms_bias_coherent.go:74` | returns a warning string | [M] | **WARN-only** | yes | — |
+| bias coherence | `kernel/arms_bias_coherent.go:74 BiasArmWarning` | returns a warning string | [M] | **WARN-only — but 0 production callers; nothing warns** | **NO** — drift D-18 | **0 — DEAD** |
 | re-arm after sweep | boot: `re-arm-after-sweep=on` | on | [O] 0B | lifecycle | yes | — |
 
 ### 13.3 Exits / 0B
 
 | rule | file:line | resolved | label | grounding | effect | CONFORMS |
 |---|---|---|---|---|---|---|
-| stop composition | `main.go:335` (boot) | `max(anchor+clr, 1.5×ATR5m)`, `anchor_max=3.0×ATR5m` | **[I]** | census B6 | REJECT/compose | **NO** — §2 |
+| stop composition | `main.go:335` (boot) | `max(anchor+clr, 1.5×ATR5m)`, `anchor_max=3.0×ATR5m` | **[R]/[O]** | `kernel/min_sl.go:10-33` | REJECT/compose | yes |
 | breakeven | boot: `BE=off` | **OFF** | **[O]** | census E1 (owner-ruled ON at +40pt) | exit | **NO** — drift D-3 |
 | trailing | boot: `trail=off` | **OFF** | **[O]** | census E2 (owner-ruled 2.0×ATR14) | exit | **NO** — drift D-3 |
 | position size | boot: `size=1` | 1 contract | [O] 0B | sizing | yes |
@@ -657,11 +714,11 @@ Resolved values are from the boot-8 lines or the resolver path. `report:line` gr
 
 | rule | resolved | label | effect | CONFORMS |
 |---|---|---|---|---|
-| seats | `seats=8` | [I] | filter | unlabelled-by-research |
-| proximity band | `cfg` retuned **0.3** | [O] (P2 keep) | filter | yes |
+| seats / `max_levels` | boot prints **8** (`DefaultMaxLevels`, a file constant) — **resolved value is 12** (`day_plan.max_levels`); live log shows `🗺️ seated 12/360` | [I] | filter | **NO** — drift D-16 (the boot line does not read the resolver) |
+| proximity band | boot prints *"retuned 0.3"* — **that is a string literal in the format string** (`kernel/levels_volume_boot.go:13`). **Resolved `proximity_filter_atr` = 1.0** | [O] (P2 keep) | filter | **NO** — drift D-17 |
 | zone ladder | `1.0/0.6/0.3/0.15` | [I] | weight | pending sweep (queue #6) |
 | family confluence | `cap=3` | [I] | weight | pending |
-| **swing seats** | seated | **[X]** — `grand-audit.md:74`, −15pts on own tape | **weight** | **NO** — drift D-4 |
+| swing seats | seated | **[T]-positive** — `grand-audit.md:73-74`: missed-turns 80.0→65.0%, marked **PROVEN** | weight | **yes** — the census's [X] was a misread (§4) |
 | roles (consumed/3rd-touch → target_only) | `roles=on(overrides=false)` | [I] | role demotion | queue #8, data now exists |
 | touch telemetry | `band=16t max_bars=12 approach=5` | [I] | **advisory, zero gates** | yes |
 | **D1′ detector** | `k=3 H=12 exit_on=close`; 359 outcomes / 192 pool | [M] | **descriptive only — 0 gate readers** | **yes** (§5) |
@@ -693,9 +750,10 @@ should be. **No ruling is made here — this list is the input to them (dispatch
 | # | rule | what the research / ruling says | what is live at boot 8 | fix owner |
 |---|---|---|---|---|
 | **D-1** | `plan_mode = strict` + EntryGate leg 0 | no research supports closing the decision path; the two-day audit (`f3c640c3`) found it refuses **every** decision-path market entry regardless of citation, and announces this nowhere | `strict` saved on strategy `a5b7662e`; 13 refusals on 09-03 20:35–21:12 CT | **ruling** (keep strict, or make the arm path carry the load explicitly) |
-| **D-2** | min-SL floor | belief census queue **#1**: demote to **WARN-first**, sweep the multiplier | still a hard **REJECT** (`engine_position.go:227-231`); multiplier **raised 1.0 → 1.5** | **code** (WARN-first) + **ruling** (the multiplier) |
+| **D-2** | **the planner prompt states the SUPERSEDED min-SL floor** | three gates enforce **1.5×ATR5m** (`kernel/min_sl.go:34`, owner ruling 2026-09-02) | `kernel/planner_prompt.go:733` still instructs the model *"the stop distance must be ≥ **1.0×** the current 5m ATR"* — **the planner authors to a floor 50% below the one that judges it.** This is the direct cause of the four `arm feasibility` WARNs on 2026-09-04 (authored stops 35.00–38.50 vs floors 44.59–50.73) | **prompt** |
+| **D-2b** | the prompt cites a deleted env knob | owner ruling R1 (2026-09-03) **deleted `ARM_MIN_RR`** | `planner_prompt.go:733` still says *"must be ≥ 2.0 (ARM_MIN_RR)"* | **prompt** |
 | **D-3** | breakeven / trailing | census **E1/E2 are [O] owner-ruled ON** — BE at +40pt, trail 2.0×ATR14; the saved strategy still carries `breakeven_enabled: true`, `trailing_enabled: true` | boot: **`BE=off · trail=off`** (suspended by the 0B wave). Two boot lines contradict each other on trailing | **ruling** (which of the two owner positions stands) |
-| **D-4** | swing seats | census **D9 = [X]** — own tape shows −15 pts of missed-turn capture (`grand-audit.md:74`) | still seated (`seats=8`) | **ruling** (unseat / reduce / accept) |
+| **D-4** | **the census's D9 label** | `grand-audit.md:73-74` marks swing seats **PROVEN**: missed-turns 80.0/75.0/79.2% → 65.0/60.0/66.7% (a MISS rate falling = better) | `belief-census.md:77` labels it **[X] research-CONTRADICTED**, reading the fall as a degradation | **doc** (correct the census; the code is right) |
 | **D-5** | stale-working reaper | two-day audit: a **healthy** resting limit is reaped ~15 min after placement because `onArmedOrderUpdate` has no default branch and no `Touch` for `submitted/accepted/working` | `stale_working=15m`, unchanged | **code** |
 | **D-6** | level_event as a full REPLAN trigger | census **E5 [T]-weak** (52 re-plans / 7 days, **7 ever armed**); queue **#3**: demote to WARN-first N=25 | full REPLAN, **budget-free**; fired twice today | **code** |
 | **D-7** | guardrails | MC rig (`77e1cdfc`): *"the 3-trade cap forfeits $24.54/day"* — framed as an active constraint | master **OFF** and every limit's own `*_enabled` is **false** — the cap forfeits **nothing** | **ruling** (turn on, or restate the rig's finding) |
@@ -706,6 +764,11 @@ should be. **No ruling is made here — this list is the input to them (dispatch
 | **D-12** | `trade_excursions` | 1A wave (`0c1a808c`) specified the table so exits could be judged on path data | **0 rows**; `BackfillExcursions` has no automatic trigger | **code** |
 | **D-13** | decision-path EntryGate refusal | — | writes **no log line and no counter** (`entry_gate.go:477-486`); 19 refusals were invisible in the two-day audit until `decision_records` was read directly | **code** |
 | **D-14** | no-chase | its own boot line calls it **`[I] PROVISIONAL`** and promises "the week of counts is the research" | still `mode=warn`; on the arm path it is **structurally incapable of firing** (two-day audit: 40 evaluations, all `dist=0.00×ATR`) | **code** |
+| **D-16** | seat count | the resolver returns `day_plan.max_levels` = **12** (live log: `🗺️ seated 12/360`) | the boot line prints `seats=8` — `DefaultMaxLevels`, a file constant, never the resolver (`kernel/levels_volume_boot.go:13-14`) | **code** (boot line must READ, per A24) |
+| **D-17** | proximity band | census D7 / weekend-audit-p1: **0.3** ("Proximity @0.3 PROVEN live") | resolved `proximity_filter_atr` = **1.0**; the boot line's "retuned 0.3" is a **string literal**, not a read | **code** (the line) + **ruling** (which value stands) |
+| **D-18** | arm bias-coherence | the boot line prints `bias-coherent=warn` and the checklist records `BiasArmWarning` as shipped | **`BiasArmWarning` has 0 production callers — nothing warns**, and the boot line's "warn" is a hardcoded literal | **code** |
+| **D-19** | HTF veto | census C1 + weekend-audit-p2 rule KEEP: "1h AND 4h agree blocks counter-trend entries" | reported by the agent unit as a **gate that cannot fire** (0 of 6,036 production evaluations) — **flagged for verification, not asserted here** | **code** (pending confirm) |
+| **D-20** | "ARMS FOLLOW THE BIAS … a long plan with no long arm is invalid" | stated as **law** in the prompt (`kernel/planner_prompt.go:730`) | **no validator and no warn enforces it**; it is not among the 19 prompt-contract restrictions | **code or prompt** (enforce it, or stop calling it invalid) |
 | **D-15** | expectancy vs the MC rig | rig: **n=64**, CI −$31…+$18 | this rebuild: **n=58**, CI −$34.80…+$18.72 — six rows apart, exclusion sets could not be reconciled from the report text | **doc** (name the canonical set) |
 
 ---
