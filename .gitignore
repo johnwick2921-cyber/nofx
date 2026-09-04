@@ -162,3 +162,6 @@ nofx-bin*
 # sandbox (isolated test instance) — never commit its DB or binary
 data/sandbox.db*
 .sandbox/
+
+# build artifacts from cmd/* (the 2026-08-29 purge: never commit binaries)
+/gate-jwt

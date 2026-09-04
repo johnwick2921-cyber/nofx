@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -252,6 +253,23 @@ func main() {
 		logger.Errorf("🔐 No new positions will be opened until this is fixed and the bot is restarted.")
 	} else {
 		logger.Infof("%s", integrity.Line())
+	}
+	// UI SERVING PATH (owner ruling 2026-09-03). Printed right after the boot
+	// integrity line because it answers the same question about a different
+	// artifact: is what is being SERVED the thing that was just BUILT. The
+	// binary's build time comes from the integrity result above — one reader of
+	// debug.ReadBuildInfo in the process, not two that can disagree.
+	{
+		binAt, perr := time.Parse(time.RFC3339, integrity.BuildTime)
+		if perr != nil {
+			binAt = time.Time{} // unknown → the staleness comparison is skipped, not guessed
+		}
+		uiLine := api.UIServingBootLineAt(api.UIDistDir, binAt)
+		if strings.Contains(uiLine, "STALE") || strings.Contains(uiLine, "served-by=none") {
+			logger.Warnf("🖥 %s", uiLine)
+		} else {
+			logger.Infof("🖥 %s", uiLine)
+		}
 	}
 	// PHASE 3.5 — clock health at boot (log-only; repeated at each session roll
 	// by the trader loop). At boot the NT8 wire may not be up yet — the line

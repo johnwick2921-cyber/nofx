@@ -7,12 +7,20 @@ export const status: GuideSection = {
   tagline: 'Every indicator strip, banner, and log line — decoded.',
   asBuiltRev: GUIDE_BUILT_REV,
   blocks: [
+    { kind: 'h', text: 'Where this page comes from' },
+    {
+      kind: 'p',
+      text: "The UI you are reading is served by the bot's own process at http://localhost:8080. That is the production path and the one this Guide assumes. Until 2026-09-03 there was no production path at all: the interface was served by a Vite DEVELOPMENT server on port 3000, started by hand, supervised by nothing, and the built bundle on disk had been stale since 08-31 while the Go server answered 404 at its own root. A reboot of the machine, or anything that stopped that one node process, took the whole interface with it and left the bot trading blind to its operator. Port 3000 still works and is still the right thing to use while developing — it rebuilds on save — but nothing depends on it any more.",
+    },
+    {
+      kind: 'p',
+      text: "The boot log says which path is live and how old the bundle is: '🖥 ui: served-by=go-static build=<timestamp>'. If that bundle is older than the binary running it, the line adds STALE and how far behind it is, and it is logged as a warning rather than as information — because a stale bundle means the screen is showing you a build that is not the one making your trading decisions. 'served-by=none' means no bundle was found at web/dist; the API keeps working and only the interface is missing, which is why the bot does not refuse to start over it.",
+    },
     { kind: 'h', text: 'What the E8 side-table can be used for' },
     {
       kind: 'p',
       text: "The A/B counterfactual table records what a confirm rule WOULD have done. Until 2026-09-03 every short row in it was arithmetic across two price spaces: the replay mirrored stop/target into negative prices so the excursion signs read nicely, while the fill and the stored bracket stayed real — so risk came out as 58 430 instead of 21.50 and RR sat pinned near −1. Measured with direction read from the plan: 121 short rows, 109 with a broken RR; all 67 long rows were always clean. The boot line now states what survives: 'e8: rows=188 usable=55 · unrecomputable fill-bar=54 no-inputs=12'. USABLE is the only count a ruling may rest on. The 54 fill-bar rows keep their numbers and are labelled, because the same bug also broke the close-rule comparison — their fill came from the wrong bar, and clean arithmetic on a wrong fill is a precise answer about the wrong moment.",
     },
-
     { kind: 'h', text: 'The boot ledger, line by line' },
     {
       kind: 'code',

@@ -719,6 +719,7 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     only. **Law:** one resolver, one stamp convention, and a provider's
     calendar is a measurement — not an assumption you inherit from a
     timeframe's name.
+
 47. **A scheduled mechanism paced by its own throttle, not by events.** Root
     cause: the level-event wake had exactly one limiter — `wake_min_interval_min`
     (30 min) — and no notion of whether a wake could still produce a TRADEABLE
@@ -876,6 +877,7 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     enforce, in the validator's own words and by calling the validator's own
     code where a verdict is involved; a correction is cumulative or it teaches
     the model to trade one mistake for another.
+
 51. **A direction was shipped on evidence that never existed — the weekly bias
     was anti-predictive.** (Dispatch "weekly refs only"; class 50 wave.) Root
     cause: the weekly-bias design (2026-08-30) assumed the Sunday doc's
@@ -942,6 +944,7 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     different inputs.** (Numbered 51 at merge against a tree that did not
     yet carry class 50's entry; renumbered to 53 by owner ruling 2026-09-02 —
     class 50 keeps 51, the no-trade band keeps 52. Class 46 is deliberately
+
 54. **A refresh that deletes before it knows what comes back.** (Renumbered 52→54 AT MERGE, 2026-09-03 combined boot — 52 was taken by the no-trade-band class. Dispatch
     "bar-arbiter merge"; class 52 wave, 2026-09-02.) Root cause: the
     `/api/nt/bar-arbiter` `backfill` action cleared the replay window
@@ -1068,6 +1071,7 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     values in one constant (a year early, a fixture copy of the same, a
     hand-typed assertion, then a zone) is what an unstated zone and a typed
     epoch cost.
+
 58. **A mode that existed only in a comment.** (Highest occupied at merge: 57.)
     Root cause: `plan_mode` was documented as `advisory | direction | strict`
     in a doc comment (`store/strategy.go:919`) and offered in the Studio
@@ -1183,6 +1187,7 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     distinguish it from the alternatives; and when a repair path clears a value
     to trigger a recompute, check it matches the value the broken path actually
     writes.
+
 61. **A mode that existed only in a comment.** (Highest occupied at merge: 57.)
     Root cause: `plan_mode` was documented as `advisory | direction | strict`
     in a doc comment (`store/strategy.go:919`) and offered in the Studio
@@ -1266,7 +1271,6 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     NY's flat. Before and after it, the test passes, which is why it read as a
     flake rather than a bomb.
 
-<<<<<<< HEAD
 62. **A stored column that reads as money and is not.** (Number assigned at
     merge; highest occupied at authoring: 61.) Found building wave 1D, from the
     FIRST live read of the new table: the E8 counterfactual side-table produced
@@ -1309,7 +1313,7 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     line, not in the reader. Fixed by counting judged roll-ups as their own
     field (`judged_rollups=`), pinned by a test whose fixture makes every
     five-dimensional cell sub-floor while three roll-ups clear the floor.
-=======
+
 65. **A test harness scoring in a production table.** (Renumbered 62→65 AT
     MERGE, 2026-09-03 — 62 and 63 were taken by wave 1D and 64 by the detector
     wave, all merged first. Highest occupied at this merge: 64.) Root cause: position 572 is an `ARMED_TEST_SEAM` experiment run
@@ -1336,7 +1340,6 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     assertion it replaced. **Law:** synthetic rows are excluded at the write,
     counted where they are excluded, and stamped with the reason in the row —
     a test that can score is a test that will eventually be quoted as evidence.
->>>>>>> c346c2fc (feat(adherence): seam rows are NEVER graded — refused at the write, skipped by W5, excluded with a count, stamped in the row)
 
 66. **Two price spaces subtracted from each other — and the repair that would
     have dressed the wreckage as repaired.** (Renumbered 63→64→66 AT MERGE,
@@ -1441,6 +1444,34 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     measurement should be recorded as a MEASUREMENT DEBT, not as policy: it looks
     like caution and behaves like a permanent no.
 
+68. **A production surface with no production path.** (Number assigned at
+    merge, A16. Highest occupied on dev at merge was 66, the data-integrity
+    wave's; 67 is taken by the F12 order-snapshot wave merged in the same boot —
+    so this takes 68. The branch was authored claiming 66, which had been free
+    when it was written and was not by the time it merged.)
+    Found during the 1D cutover, incidentally: the **entire operator UI** was
+    served by a Vite DEVELOPMENT server on :3000, started by hand, supervised by
+    nothing. The Go server registered **no static route at all** — `:8080/`
+    returned 404 — and `web/dist` on disk had been **stale since 2026-08-31**
+    while binaries shipped on 09-01, 09-02 and 09-03. Nothing was broken, which
+    is why nobody noticed: the owner's browser pointed at :3000 and :3000 always
+    worked, because the process happened never to have died. A reboot, an OOM
+    kill, or a closed terminal would have taken the whole interface with it and
+    left a live trading bot with no operator surface.
+    **Probe:** for every surface a human depends on, ask what process serves it,
+    what restarts that process, and what the last built artifact's timestamp is.
+    "It is up right now" answers none of those. Specifically: does the artifact
+    on disk predate the binary that is running?
+    **Law:** a dev server is not a production path, and supervising one does not
+    make it one — it makes an unsupervised dev server a supervised one, with the
+    minification, memory and websocket behaviour unchanged. A surface that has no
+    owner process, no restart story, and no freshness check is unowned no matter
+    how long it has stayed up. **Fixed by:** the bot serves its own UI
+    (`api/ui_serving.go`), and the boot line
+    `🖥 ui: served-by=go-static build=<ts>` is READ from the bundle and logged as
+    a WARNING when the bundle predates the binary — the 08-31-dist-under-a-09-03-
+    binary state becomes impossible to miss instead of invisible.
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,
@@ -1467,10 +1498,13 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
 
 1. **Tree gate:** porcelain-clean + `~/nofx-main.lock` acquired (owner/PID/
    expiry) + HEAD is the single allowed branch for this dispatch.
+
 2. **Build:** from the MAIN checkout at the deploy commit (worktree builds lose
    vcs stamping → `<no-vcs>` → INTEGRITY REFUSED). `go build -o nofx-bin.next`.
+
 3. **Marker:** `deploy/RELEASE` = the 8-char build rev, committed (marker AFTER
    build; RELEASE must equal the BUILD sha).
+
 4. **Flat gate — FIVE legs (class 33), all quoted:** `GET /api/cutover-gate`
    returns them in one payload; quote it, do not assemble them by hand.
    (1) DB `trader_positions` OPEN = 0 · (2) API positions `[]` · (3) NT8
@@ -1481,16 +1515,19 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
    false AND no planner read claimed for this trader on any date/session (the
    2026-08-31 17:34 defect: a kill landed on attempt 3/3 and the chain died
    silently). A leg that cannot be EVALUATED fails. `ready:false` = HOLD.
+
 5. **Owner ack:** explicit "go" — reachable and acking the boot line within
    minutes, OR a TESTED auto-rollback. Timers banned. **Override rule
    (class 33):** the owner MAY override leg 4/5 and swap with arms resting —
    the override is permitted, leaving orders alive is not. Such a cutover
    REQUIRES the boot sweep to run and its result to be quoted in the report
    (`🛡 boot sweep CANCELLED pre-boot arm …` per row, or `cancelled 0`).
+
 6. **Swap:** `mv nofx-bin nofx-bin.old.<tag>` → `mv nofx-bin.next nofx-bin` →
    `kill -9 <PID>` (SIGKILL — SIGTERM exits 0 and systemd does NOT relaunch).
    The classifier denies the kill to the agent: print the command and have the
    OWNER run it.
+
 7. **Boot checklist (within 90s):**
    `🔐 BOOT INTEGRITY OK — rev <8char> +dirty · built <ts> · expected <8char> ·
    goldens PASS` + exactly ONE PID + feed warmed (bars_historical replay ~30s
