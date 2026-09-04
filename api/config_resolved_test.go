@@ -158,3 +158,99 @@ func TestConfigResolvedIsRegisteredProtected(t *testing.T) {
 		t.Fatal("route appears before the protected group is declared")
 	}
 }
+
+// "saved → resolved · source" — the three fields R1/R2/R3 made single-sourced.
+func TestResolvedFieldsRenderSavedArrowResolvedWithSource(t *testing.T) {
+	// A config that exercises all three sources at once: R:R saved, plan_mode
+	// absent (shipped default), htf_veto explicitly turned off.
+	off := false
+	cfg := &store.StrategyConfig{Regime: &store.RegimeConfig{HTFVeto: &off}}
+	cfg.RiskControl.MinRiskRewardRatio = 2
+
+	got := buildResolvedFields(cfg, "NY")
+	if len(got) != 3 {
+		t.Fatalf("want 3 resolved fields, got %d", len(got))
+	}
+	by := map[string]resolvedField{}
+	for _, f := range got {
+		by[f.Path] = f
+	}
+
+	rr := by["risk_control.min_risk_reward_ratio"]
+	if rr.Saved != "2" || rr.Resolved != "2" || rr.Source != store.SourceSaved {
+		t.Errorf("min_rr: %q → %q · %q", rr.Saved, rr.Resolved, rr.Source)
+	}
+
+	// Absent must render as "(unset)" on the SAVED side while the resolved side
+	// shows what the engine will actually use. Collapsing those two is the whole
+	// bug this line exists to prevent.
+	pm := by["day_plan.plan_mode"]
+	if pm.Saved != "(unset)" || pm.Resolved != "advisory" || pm.Source != store.SourceShippedDefault {
+		t.Errorf("plan_mode: %q → %q · %q", pm.Saved, pm.Resolved, pm.Source)
+	}
+
+	veto := by["regime.htf_veto"]
+	if veto.Saved != "false" || veto.Resolved != "false" || veto.Source != store.SourceSaved {
+		t.Errorf("htf_veto: %q → %q · %q", veto.Saved, veto.Resolved, veto.Source)
+	}
+
+	// Every field must carry a rendered line the UI can print verbatim.
+	for _, f := range got {
+		if f.Line == "" || !strings.Contains(f.Line, "→") || !strings.Contains(f.Line, "·") {
+			t.Errorf("%s has no rendered line: %q", f.Path, f.Line)
+		}
+	}
+}
+
+// An UNCOMPUTED list is absent; an empty computed one is []. Without a trader
+// there is no config to resolve against, so the key must not appear at all.
+func TestResolvedAbsentWithoutTraderContext(t *testing.T) {
+	w, body := resolvedPayload(t)
+	if w.Code != http.StatusOK {
+		t.Fatalf("status %d", w.Code)
+	}
+	if _, present := body["resolved"]; present {
+		t.Fatal("resolved must be ABSENT without a trader — an uncomputed list is not an empty one")
+	}
+}
+
+// The shipped resolver is the source of truth for the rendered value.
+func TestResolvedFieldsAgreeWithProductionResolvers(t *testing.T) {
+	cfg := &store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanMode: "strict"}}
+	fields := buildResolvedFields(cfg, "NY")
+	for _, f := range fields {
+		if f.Path != "day_plan.plan_mode" {
+			continue
+		}
+		if want := cfg.DayPlan.PlanModeFor("NY"); f.Resolved != want {
+			t.Fatalf("rendered %q but PlanModeFor says %q", f.Resolved, want)
+		}
+		if f.Source != store.SourceStrategyValue {
+			t.Errorf("source = %q, want %q", f.Source, store.SourceStrategyValue)
+		}
+	}
+}
+
+// With a trader context the key appears, and it carries the three lines.
+func TestResolvedPresentWithTraderContext(t *testing.T) {
+	cfg := &store.StrategyConfig{}
+	cfg.RiskControl.MinRiskRewardRatio = 2
+
+	payload := configResolvedPayload(cfg, "NY")
+	fields, present := payload["resolved"].([]resolvedField)
+	if !present {
+		t.Fatal("resolved missing despite a config being supplied")
+	}
+	if len(fields) != 3 {
+		t.Fatalf("want 3 lines, got %d", len(fields))
+	}
+	for _, f := range fields {
+		t.Logf("  %-34s %s", f.Path, f.Line)
+	}
+
+	// And the no-context path still omits it, in the same test, so the two can
+	// never quietly converge.
+	if _, present := configResolvedPayload(nil, "NY")["resolved"]; present {
+		t.Fatal("nil cfg must omit resolved")
+	}
+}

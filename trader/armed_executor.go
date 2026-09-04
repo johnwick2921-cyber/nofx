@@ -66,11 +66,10 @@ func armedPlaceTicks() int {
 // and a Studio save moving the floor would have moved only one of them.
 // Behaviour is unchanged today (both read 2.0); the SOURCE is now single.
 func resolvedMinRR(cfg *store.StrategyConfig) float64 {
-	if cfg != nil && cfg.RiskControl.MinRiskRewardRatio > 0 {
-		return cfg.RiskControl.MinRiskRewardRatio
-	}
-	// No config: the schema's own safe default, not a second opinion.
-	return store.SafeDefaultMinRiskReward
+	// The rule lives in store.ResolveMinRiskReward so the Settings page can
+	// narrate the SAME resolution the arm seam performs, source included.
+	v, _ := store.ResolveMinRiskReward(cfg)
+	return v
 }
 
 // armMinRRFor is the arm seam's floor — the SAME resolver the decision path
