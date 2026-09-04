@@ -94,6 +94,7 @@ const label = (k: Cell['key']) =>
 export function ExpectancyPanel() {
   const [data, setData] = useState<Payload | null>(null)
   const [open, setOpen] = useState<Record<number, boolean>>({})
+  const [panelOpen, setPanelOpen] = useState(false)
 
   useEffect(() => {
     let alive = true
@@ -127,197 +128,223 @@ export function ExpectancyPanel() {
         fontFamily: 'var(--vl-font-ui)',
       }}
     >
-      <div className="flex items-baseline justify-between">
-        <span className="text-[10px] uppercase tracking-widest" style={head}>
-          Expectancy · by {data.by}
+      {/* Collapsed by owner ruling 2026-09-03, at the instruments drawer's
+          convention. The as-of clock rides the CLOSED toggle on purpose: a
+          reader deciding whether to open the table needs to know how old it is
+          BEFORE opening it, not after. */}
+      <button
+        type="button"
+        data-testid="expectancy-toggle"
+        aria-expanded={panelOpen}
+        className="flex w-full items-center gap-1.5 text-left text-[11px] uppercase tracking-wide"
+        style={{
+          color: 'var(--vl-muted)',
+          background: 'none',
+          border: 'none',
+          padding: '2px 0',
+          cursor: 'pointer',
+          fontFamily: 'inherit',
+        }}
+        onClick={() => setPanelOpen((o) => !o)}
+      >
+        <span aria-hidden style={{ width: '0.75em', flex: 'none' }}>
+          {panelOpen ? '\u25be' : '\u25b8'}
         </span>
-        {/* The data's own clock, not the page's. A table built now over stale
-            rows must not look fresh. */}
-        <span
-          data-testid="expectancy-as-of"
-          className="text-[9px]"
-          style={head}
-        >
-          as of {data.as_of_utc ? data.as_of_utc.slice(0, 10) : dash}
+        <span>
+          Expectancy · by {data.by} (
+          <span data-testid="expectancy-as-of">
+            as of {data.as_of_utc ? data.as_of_utc.slice(0, 10) : dash}
+          </span>
+          )
         </span>
-      </div>
+      </button>
 
-      {data.rows.length === 0 ? (
-        <div
-          data-testid="expectancy-empty"
-          className="text-[11px]"
-          style={{ color: 'var(--vl-muted)' }}
-        >
-          No closed trades resolve to a play yet — nothing to measure. This is
-          an empty sample, not a zero result.
-        </div>
-      ) : (
-        <div className="flex flex-col gap-1">
-          <div
-            className="grid text-[9px] uppercase tracking-wider"
-            style={{
-              ...head,
-              gridTemplateColumns:
-                '1.6fr .4fr .5fr .6fr .7fr .5fr .5fr .8fr .4fr',
-            }}
-          >
-            <span>row</span>
-            <span className="text-right">n</span>
-            <span className="text-right">w/l</span>
-            <span className="text-right">mean</span>
-            <span className="text-right">mean 95%</span>
-            <span className="text-right">win%</span>
-            <span className="text-right">MAE</span>
-            <span className="text-right">status</span>
-            <span className="text-right">ids</span>
-          </div>
-
-          {data.rows.map((r, i) => (
-            <div key={i} className="flex flex-col">
+      {panelOpen && (
+        <>
+          {data.rows.length === 0 ? (
+            <div
+              data-testid="expectancy-empty"
+              className="text-[11px]"
+              style={{ color: 'var(--vl-muted)' }}
+            >
+              No closed trades resolve to a play yet — nothing to measure. This
+              is an empty sample, not a zero result.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1">
               <div
-                data-testid={`expectancy-row-${i}`}
-                className="grid text-[11px] items-baseline"
+                className="grid text-[9px] uppercase tracking-wider"
                 style={{
+                  ...head,
                   gridTemplateColumns:
                     '1.6fr .4fr .5fr .6fr .7fr .5fr .5fr .8fr .4fr',
                 }}
               >
-                <span style={{ color: 'var(--vl-ivory)' }}>{label(r.key)}</span>
-                {/* n leads every row: the floor is a property of n, so the
-                    reader meets the sample before meeting any statistic. */}
-                <span
-                  className="vl-num text-right"
-                  style={{ color: 'var(--vl-ivory)' }}
-                >
-                  {r.n}
-                </span>
-                <span
-                  className="vl-num text-right"
-                  style={{ color: 'var(--vl-muted)' }}
-                >
-                  {r.wins}/{r.losses}
-                </span>
-                <span
-                  className="vl-num text-right"
-                  style={{
-                    color: r.mean >= 0 ? 'var(--vl-long)' : 'var(--vl-short)',
-                  }}
-                >
-                  {num(r.mean)}
-                </span>
-                <span
-                  className="vl-num text-right"
-                  style={{ color: 'var(--vl-muted)' }}
-                >
-                  {num(r.mean_lo)}…{num(r.mean_hi)}
-                </span>
-                <span
-                  className="vl-num text-right"
-                  style={{ color: 'var(--vl-muted)' }}
-                >
-                  {pct(r.win_rate)}
-                </span>
-                <span
-                  data-testid={`expectancy-mae-${i}`}
-                  className="vl-num text-right"
-                  style={{ color: 'var(--vl-muted)' }}
-                >
-                  {num(r.median_mae, 1)}
-                </span>
-                <span
-                  data-testid={`expectancy-status-${i}`}
-                  className="text-right text-[10px]"
-                  style={{
-                    color: r.descriptive_only
-                      ? 'var(--vl-faint)'
-                      : r.status === 'PASSES'
-                        ? 'var(--vl-long)'
-                        : 'var(--vl-short)',
-                  }}
-                >
-                  {/* Below the floor the panel says DESCRIPTIVE ONLY and shows
-                      no verdict at all — not a greyed-out one. */}
-                  {r.descriptive_only ? 'DESCRIPTIVE ONLY' : r.status}
-                </span>
-                <button
-                  data-testid={`expectancy-ids-toggle-${i}`}
-                  className="text-right text-[10px]"
-                  style={{ color: 'var(--vl-faint)' }}
-                  onClick={() => setOpen((o) => ({ ...o, [i]: !o[i] }))}
-                >
-                  {open[i] ? '−' : `${r.row_ids.length}`}
-                </button>
+                <span>row</span>
+                <span className="text-right">n</span>
+                <span className="text-right">w/l</span>
+                <span className="text-right">mean</span>
+                <span className="text-right">mean 95%</span>
+                <span className="text-right">win%</span>
+                <span className="text-right">MAE</span>
+                <span className="text-right">status</span>
+                <span className="text-right">ids</span>
               </div>
-              {open[i] && (
-                <div
-                  data-testid={`expectancy-ids-${i}`}
-                  className="vl-num text-[10px] pl-2 pb-1"
-                  style={{ color: 'var(--vl-muted)', wordBreak: 'break-all' }}
-                >
-                  ids: {r.row_ids.join(', ')}
-                  {r.excluded_unresolved > 0 &&
-                    ` · ${r.excluded_unresolved} excluded (unresolved P&L)`}
+
+              {data.rows.map((r, i) => (
+                <div key={i} className="flex flex-col">
+                  <div
+                    data-testid={`expectancy-row-${i}`}
+                    className="grid text-[11px] items-baseline"
+                    style={{
+                      gridTemplateColumns:
+                        '1.6fr .4fr .5fr .6fr .7fr .5fr .5fr .8fr .4fr',
+                    }}
+                  >
+                    <span style={{ color: 'var(--vl-ivory)' }}>
+                      {label(r.key)}
+                    </span>
+                    {/* n leads every row: the floor is a property of n, so the
+                    reader meets the sample before meeting any statistic. */}
+                    <span
+                      className="vl-num text-right"
+                      style={{ color: 'var(--vl-ivory)' }}
+                    >
+                      {r.n}
+                    </span>
+                    <span
+                      className="vl-num text-right"
+                      style={{ color: 'var(--vl-muted)' }}
+                    >
+                      {r.wins}/{r.losses}
+                    </span>
+                    <span
+                      className="vl-num text-right"
+                      style={{
+                        color:
+                          r.mean >= 0 ? 'var(--vl-long)' : 'var(--vl-short)',
+                      }}
+                    >
+                      {num(r.mean)}
+                    </span>
+                    <span
+                      className="vl-num text-right"
+                      style={{ color: 'var(--vl-muted)' }}
+                    >
+                      {num(r.mean_lo)}…{num(r.mean_hi)}
+                    </span>
+                    <span
+                      className="vl-num text-right"
+                      style={{ color: 'var(--vl-muted)' }}
+                    >
+                      {pct(r.win_rate)}
+                    </span>
+                    <span
+                      data-testid={`expectancy-mae-${i}`}
+                      className="vl-num text-right"
+                      style={{ color: 'var(--vl-muted)' }}
+                    >
+                      {num(r.median_mae, 1)}
+                    </span>
+                    <span
+                      data-testid={`expectancy-status-${i}`}
+                      className="text-right text-[10px]"
+                      style={{
+                        color: r.descriptive_only
+                          ? 'var(--vl-faint)'
+                          : r.status === 'PASSES'
+                            ? 'var(--vl-long)'
+                            : 'var(--vl-short)',
+                      }}
+                    >
+                      {/* Below the floor the panel says DESCRIPTIVE ONLY and shows
+                      no verdict at all — not a greyed-out one. */}
+                      {r.descriptive_only ? 'DESCRIPTIVE ONLY' : r.status}
+                    </span>
+                    <button
+                      data-testid={`expectancy-ids-toggle-${i}`}
+                      className="text-right text-[10px]"
+                      style={{ color: 'var(--vl-faint)' }}
+                      onClick={() => setOpen((o) => ({ ...o, [i]: !o[i] }))}
+                    >
+                      {open[i] ? '−' : `${r.row_ids.length}`}
+                    </button>
+                  </div>
+                  {open[i] && (
+                    <div
+                      data-testid={`expectancy-ids-${i}`}
+                      className="vl-num text-[10px] pl-2 pb-1"
+                      style={{
+                        color: 'var(--vl-muted)',
+                        wordBreak: 'break-all',
+                      }}
+                    >
+                      ids: {r.row_ids.join(', ')}
+                      {r.excluded_unresolved > 0 &&
+                        ` · ${r.excluded_unresolved} excluded (unresolved P&L)`}
+                    </div>
+                  )}
                 </div>
-              )}
+              ))}
             </div>
-          ))}
-        </div>
-      )}
+          )}
 
-      {/* The honesty ledger. An excluded row that is not counted is a row that
+          {/* The honesty ledger. An excluded row that is not counted is a row that
           silently shrank the denominator. */}
-      <div
-        data-testid="expectancy-excluded"
-        className="text-[10px]"
-        style={{ color: 'var(--vl-faint)' }}
-      >
-        excluded — {data.excluded.unresolved_pnl} unresolved P&L ·{' '}
-        {data.excluded.unresolvable} unresolvable · {data.excluded.test_seam}{' '}
-        test-seam · {data.excluded.no_condition} no play. Floor: n ≥{' '}
-        {data.min_n}. {data.promotion_rule}
-      </div>
+          <div
+            data-testid="expectancy-excluded"
+            className="text-[10px]"
+            style={{ color: 'var(--vl-faint)' }}
+          >
+            excluded — {data.excluded.unresolved_pnl} unresolved P&L ·{' '}
+            {data.excluded.unresolvable} unresolvable ·{' '}
+            {data.excluded.test_seam} test-seam · {data.excluded.no_condition}{' '}
+            no play. Floor: n ≥ {data.min_n}. {data.promotion_rule}
+          </div>
 
-      {data.counterfactual_e8.length > 0 && (
-        <div
-          data-testid="expectancy-counterfactual"
-          className="flex flex-col gap-1 pt-1"
-          style={{ borderTop: '1px dashed var(--vl-hair)' }}
-        >
-          <span className="text-[9px] uppercase tracking-wider" style={head}>
-            counterfactual (E8) — never comparable with a realized row above
-          </span>
-          {data.counterfactual_e8.map((c, i) => (
+          {data.counterfactual_e8.length > 0 && (
             <div
-              key={i}
-              data-testid={`expectancy-cf-${i}`}
-              className="flex items-baseline justify-between text-[10px]"
-              style={{ color: 'var(--vl-muted)' }}
+              data-testid="expectancy-counterfactual"
+              className="flex flex-col gap-1 pt-1"
+              style={{ borderTop: '1px dashed var(--vl-hair)' }}
             >
-              <span>
-                {[c.key.condition, c.key.session, c.rule]
-                  .filter(Boolean)
-                  .join(' · ')}
+              <span
+                className="text-[9px] uppercase tracking-wider"
+                style={head}
+              >
+                counterfactual (E8) — never comparable with a realized row above
               </span>
-              <span className="vl-num">
-                n {c.n} ({c.usable_n} usable) · {c.wins}/{c.losses} · mean{' '}
-                {num(c.mean)}
-                {c.excluded_price_scale > 0
-                  ? ` · ${c.excluded_price_scale} not a P&L`
-                  : ''}
-                {c.excluded_zero_pnl > 0
-                  ? ` · ${c.excluded_zero_pnl} uncomputed`
-                  : ''}
-                {c.short_suspect ? ' · SHORT ROWS SUSPECT (E8 sign bug)' : ''}
-              </span>
+              {data.counterfactual_e8.map((c, i) => (
+                <div
+                  key={i}
+                  data-testid={`expectancy-cf-${i}`}
+                  className="flex items-baseline justify-between text-[10px]"
+                  style={{ color: 'var(--vl-muted)' }}
+                >
+                  <span>
+                    {[c.key.condition, c.key.session, c.rule]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </span>
+                  <span className="vl-num">
+                    n {c.n} ({c.usable_n} usable) · {c.wins}/{c.losses} · mean{' '}
+                    {num(c.mean)}
+                    {c.excluded_price_scale > 0
+                      ? ` · ${c.excluded_price_scale} not a P&L`
+                      : ''}
+                    {c.excluded_zero_pnl > 0
+                      ? ` · ${c.excluded_zero_pnl} uncomputed`
+                      : ''}
+                    {c.short_suspect
+                      ? ' · SHORT ROWS SUSPECT (E8 sign bug)'
+                      : ''}
+                  </span>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
+          )}
+        </>
       )}
-
-      {/* The three DESCRIPTIVE instruments, folded and collapsed: none of them
-          currently supports a decision, and giving them the weight of the table
-          above would imply otherwise. The main table and the E8 block are
-          deliberately untouched. */}
     </div>
   )
 }

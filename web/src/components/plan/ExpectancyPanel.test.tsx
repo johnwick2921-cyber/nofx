@@ -18,6 +18,15 @@ const renderPanel = async () => {
   return render(<ExpectancyPanel />)
 }
 
+// The table is a collapsed dropdown now (owner ruling 2026-09-03). Every test
+// that asserts on the table itself opens it first; the pins for the collapsed
+// state use renderPanel directly.
+const renderOpen = async () => {
+  const r = await renderPanel()
+  fireEvent.click(await screen.findByTestId('expectancy-toggle'))
+  return r
+}
+
 const row = (over: Record<string, unknown> = {}) => ({
   key: { condition: 'reject', session: 'NY' },
   n: 20,
@@ -74,7 +83,7 @@ describe('ExpectancyPanel', () => {
 
   it('shows n before any statistic and marks a sub-floor row DESCRIPTIVE ONLY', async () => {
     payload = base()
-    await renderPanel()
+    await renderOpen()
     await waitFor(() =>
       expect(screen.getByTestId('expectancy-panel')).toBeTruthy()
     )
@@ -101,7 +110,7 @@ describe('ExpectancyPanel', () => {
         }),
       ],
     })
-    await renderPanel()
+    await renderOpen()
     await waitFor(() =>
       expect(screen.getByTestId('expectancy-panel')).toBeTruthy()
     )
@@ -112,7 +121,7 @@ describe('ExpectancyPanel', () => {
 
   it('renders an unmeasured statistic blank, never as zero', async () => {
     payload = base()
-    await renderPanel()
+    await renderOpen()
     await waitFor(() =>
       expect(screen.getByTestId('expectancy-panel')).toBeTruthy()
     )
@@ -123,7 +132,7 @@ describe('ExpectancyPanel', () => {
 
   it('exposes the row ids so any figure can be recomputed', async () => {
     payload = base()
-    await renderPanel()
+    await renderOpen()
     await waitFor(() =>
       expect(screen.getByTestId('expectancy-panel')).toBeTruthy()
     )
@@ -135,7 +144,7 @@ describe('ExpectancyPanel', () => {
 
   it('dates the table by the last closed trade, not by page load', async () => {
     payload = base()
-    await renderPanel()
+    await renderOpen()
     await waitFor(() =>
       expect(screen.getByTestId('expectancy-panel')).toBeTruthy()
     )
@@ -146,7 +155,7 @@ describe('ExpectancyPanel', () => {
 
   it('states what was excluded and why, beside the table', async () => {
     payload = base()
-    await renderPanel()
+    await renderOpen()
     await waitFor(() =>
       expect(screen.getByTestId('expectancy-panel')).toBeTruthy()
     )
@@ -176,7 +185,7 @@ describe('ExpectancyPanel', () => {
         },
       ],
     })
-    await renderPanel()
+    await renderOpen()
     await waitFor(() =>
       expect(screen.getByTestId('expectancy-panel')).toBeTruthy()
     )
@@ -191,7 +200,7 @@ describe('ExpectancyPanel', () => {
 
   it('says so when there is nothing to show, instead of rendering an empty table', async () => {
     payload = base({ rows: [] })
-    await renderPanel()
+    await renderOpen()
     await waitFor(() =>
       expect(screen.getByTestId('expectancy-empty')).toBeTruthy()
     )
@@ -217,7 +226,7 @@ describe('ExpectancyPanel', () => {
         },
       ],
     })
-    await renderPanel()
+    await renderOpen()
     await waitFor(() =>
       expect(screen.getByTestId('expectancy-panel')).toBeTruthy()
     )
@@ -242,5 +251,89 @@ describe('the instruments drawer is not inside the expectancy panel', () => {
       expect(screen.getByTestId('expectancy-panel')).toBeTruthy()
     )
     expect(screen.queryByTestId('instruments-drawer')).toBeNull()
+  })
+})
+
+// FOLDED (owner ruling 2026-09-03) — the expectancy table is a collapsed
+// dropdown, same convention as the instruments drawer below it: a visible
+// labelled toggle, not a 9px caption. The "as of" clock stays on the CLOSED
+// toggle, because a reader deciding whether to open the table needs to know how
+// old it is before they open it, not after.
+describe('the expectancy table is a collapsed dropdown', () => {
+  beforeEach(() => {
+    payload = null
+  })
+
+  it('is COLLAPSED on load, showing the label and the as-of only', async () => {
+    payload = base()
+    await renderPanel()
+    const btn = await screen.findByTestId('expectancy-toggle')
+    expect(btn.textContent).toMatch(/Expectancy · by condition/)
+    expect(btn.textContent).toMatch(/as of 2026-09-01/)
+    // nothing from the table itself until it is opened
+    expect(screen.queryByTestId('expectancy-row-0')).toBeNull()
+    expect(screen.queryByTestId('expectancy-excluded')).toBeNull()
+  })
+
+  it('expands to the full table, status column and all', async () => {
+    payload = base()
+    await renderPanel()
+    fireEvent.click(await screen.findByTestId('expectancy-toggle'))
+    expect(screen.getByTestId('expectancy-row-0')).toBeTruthy()
+    expect(screen.getByTestId('expectancy-status-0').textContent).toMatch(
+      /DESCRIPTIVE ONLY/
+    )
+    expect(screen.getByTestId('expectancy-excluded')).toBeTruthy()
+  })
+
+  it('keeps the as-of on the closed toggle, not only inside', async () => {
+    payload = base()
+    await renderPanel()
+    await screen.findByTestId('expectancy-toggle')
+    const asOf = screen.getByTestId('expectancy-as-of')
+    expect(
+      screen.getByTestId('expectancy-toggle').contains(asOf),
+      'the as-of clock must be readable without opening the table'
+    ).toBe(true)
+  })
+
+  it('folds the E8 counterfactual block inside, under its own sub-heading', async () => {
+    payload = base({
+      counterfactual_e8: [
+        {
+          key: { condition: 'reject', session: 'ASIA' },
+          rule: 'touch',
+          n: 7,
+          usable_n: 0,
+          wins: 0,
+          losses: 0,
+          mean: null,
+          excluded_price_scale: 0,
+          excluded_zero_pnl: 7,
+          short_suspect: false,
+        },
+      ],
+    })
+    await renderPanel()
+    await screen.findByTestId('expectancy-toggle')
+    expect(screen.queryByTestId('expectancy-counterfactual')).toBeNull()
+    fireEvent.click(screen.getByTestId('expectancy-toggle'))
+    const cf = screen.getByTestId('expectancy-counterfactual')
+    expect(cf.textContent).toMatch(/counterfactual \(E8\)/)
+    expect(screen.getByTestId('expectancy-cf-0').textContent).toMatch(/usable/)
+  })
+
+  it('is a real control at the drawer convention, not a 9px caption', async () => {
+    payload = base()
+    await renderPanel()
+    const btn = await screen.findByTestId('expectancy-toggle')
+    expect(btn.getAttribute('type')).toBe('button')
+    expect(btn.getAttribute('aria-expanded')).toBe('false')
+    expect(btn.style.color).toBe('var(--vl-muted)')
+    expect(btn.className).toMatch(/text-\[11px\]/)
+    expect(btn.textContent).toMatch(/▸/)
+    fireEvent.click(btn)
+    expect(btn.getAttribute('aria-expanded')).toBe('true')
+    expect(btn.textContent).toMatch(/▾/)
   })
 })
