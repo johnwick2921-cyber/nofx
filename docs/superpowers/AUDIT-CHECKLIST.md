@@ -1681,6 +1681,74 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     guard that fails if the two calls are swapped back (verified RED at offsets
     17584 > 8148, GREEN after).
 
+74. **A swap that failed and a kill that succeeded — the null cutover.** (Number
+    assigned at merge, A16 — highest occupied on dev was 73. Found by nofx-47
+    during combined boot 7, 2026-09-03.) Root cause: `cp nofx-bin.next nofx-bin`
+    against a RUNNING binary fails with **`Text file busy`** — the inode is
+    executing. The kill sat in the same command block and had already fired, so
+    systemd relaunched the **OLD** binary while the operator's screen showed a
+    completed deploy. Nothing about the sequence looked wrong: a kill that works,
+    a process that comes back, a version that never moved.
+    **What caught it was RELEASE-before-the-kill**, and only that:
+
+    ```
+    23:11:59 [ERRO] 🔐 TRADING REFUSED — binary is revision "89673ccc5984"
+                     but the intended release is "530009ff" — a stale binary is running
+    23:12:55 [INFO] 🔐 BOOT INTEGRITY OK — rev 530009ffd540 · goldens PASS
+    ```
+
+    Had RELEASE been written after the boot, the stale binary would have booted,
+    agreed with itself, and traded — for however long it took someone to notice a
+    revision that had not moved. **The sharp part: PART 3 step 6 ALREADY SAID
+    `mv`.** This is not a gap in the procedure, it is a deviation from it whose
+    failure mode is silent enough to read as success. `mv` replaces the directory
+    entry and works on a busy inode; `cp` writes THROUGH it and cannot.
+    **Probe:** after any swap, verify `go version -m nofx-bin` BEFORE the kill,
+    not after — and never put the swap and the kill in one block, because a
+    `&&` chain hides which half failed and a `;` chain runs the kill anyway.
+    **Law:** swap with `mv`, verify the swapped artifact, then kill — three
+    steps, three exit codes, never one block. A19's RELEASE-before-the-kill is
+    what makes the guard able to speak; this class is why it is not optional.
+
+75. **The build directory is in every log line.** (Found 2026-09-03 in boot 7's
+    output; going into the tree guard as its own check.) Root cause: Go embeds
+    the **build directory name** in source paths, so a binary built from a clean
+    clone in a directory called `cleanclone/` logs `cleanclone/main.go:291`
+    where every previous binary logged `nofx/main.go:291`. Measured on the
+    running binary: **41 lines carrying the `cleanclone/` prefix against 35
+    carrying `nofx/`** in the same tail. Behaviourally harmless and completely
+    invasive for anything that reads logs by path — greps, alerts, the
+    journald filters, and every runbook that says "look for `nofx/main.go`".
+    **Probe:** after a clean-clone build, grep one log line for the module
+    directory name before shipping. **Law:** the clean clone is named `nofx`.
+    A build artifact carries its build path into production, so the build
+    directory is part of the deploy, not scratch space.
+
+76. **Canon relocated to where nothing could read it.** (Found 2026-09-03,
+    minutes after boot 7; fixed by the same lane at `86a11888`.) Root cause: the
+    standing laws lived in a **gitignored** `CLAUDE.md`, which is a real defect —
+    a law that cannot travel on a branch cannot be reviewed, guarded, or reach a
+    clone. The repair was right and the ORDER was wrong: the live file was turned
+    into a two-line `@import` pointer while its target existed only on an
+    unmerged branch. For roughly twenty minutes every reader of `CLAUDE.md` got a
+    dangling reference **and a comment instructing them to STOP and read a path
+    that did not exist** — no laws at all, stated with authority.
+    **The guard could not have seen it.** The tree guard's canon check alarms on
+    CHANGE; a pointer that is *born* dangling never changes, so a change-only
+    check is structurally blind to it. An unchanged pointer to nothing is the
+    worst case: stable, silent, empty. Fixed by check **5b**, which resolves
+    every `^@import` and alarms naming the unresolved target, pinned by a test
+    for the born-dangling case with no baseline. The live file now carries a FULL
+    MIRROR with a header saying it is a mirror and not the source, and becomes a
+    pointer only once the target is on `dev` — **a stale-but-present copy beats a
+    correct-but-empty one.** **Probe:** after any indirection, resolve it from a
+    tree that is NOT the one you authored it in. **Law:** never point at a target
+    that is not yet on `dev`, and a comment asserting a guarantee ("the guard
+    alarms if this changes") is a claim to TEST, not documentation — that comment
+    was making a promise the guard did not keep. Class 71's shape with the stakes
+    inverted: not an unguarded writer mutating canon, but canon moved beyond
+    reach by the lane building the guard for exactly that.
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,
@@ -1760,9 +1828,13 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
    (`🛡 boot sweep CANCELLED pre-boot arm …` per row, or `cancelled 0`).
 
 6. **Swap:** `mv nofx-bin nofx-bin.old.<tag>` → `mv nofx-bin.next nofx-bin` →
-   `kill -9 <PID>` (SIGKILL — SIGTERM exits 0 and systemd does NOT relaunch).
-   The classifier denies the kill to the agent: print the command and have the
-   OWNER run it.
+   VERIFY (`go version -m nofx-bin` shows the deploy rev) → `kill -9 <PID>`
+   (SIGKILL — SIGTERM exits 0 and systemd does NOT relaunch). The classifier
+   denies the kill to the agent: print the command and have the OWNER run it.
+   **`mv`, never `cp`** — `cp` onto a running binary fails `Text file busy`,
+   and if the kill is in the same block it fires anyway and relaunches the OLD
+   binary: a null cutover that reads like a deploy (class 74). Three steps,
+   three exit codes, never one block.
 
 7. **Boot checklist (within 90s):**
    `🔐 BOOT INTEGRITY OK — rev <8char> +dirty · built <ts> · expected <8char> ·
