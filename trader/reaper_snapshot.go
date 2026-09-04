@@ -55,6 +55,16 @@ func reaperVerdictAt(
 	interval time.Duration,
 	now time.Time,
 ) (reaperVerdict, string) {
+	// A row we cannot NAME cannot be asked about: there is no identifier to look
+	// up in the broker's book, so every order in it will fail to match and the
+	// loop below would fall through to GONE — cancelling on ignorance. This is
+	// the same defect this file exists to remove, one level down, and it is
+	// checked FIRST because it is the case where a cancel is least wanted: it can
+	// only arise when something upstream has already gone wrong.
+	// (Review finding, nofx-47, 2026-09-04.)
+	if strings.TrimSpace(row.SignalID) == "" {
+		return reaperUnknown, "link stale: ledger row carries no signal id — the broker cannot be asked about an order we cannot name"
+	}
 	if c == nil {
 		return reaperUnknown, "link stale: no order-snapshot cache — the broker cannot be asked, so nothing is cancelled"
 	}
@@ -83,6 +93,14 @@ func reaperVerdictAt(
 		"broker's book (age %ds, build %s) does not list it as working — reconciling the ledger to the broker's word",
 		int(age.Seconds()), snap.BuildID)
 }
+
+// NOTE ON BROKER STATES (verified against nt8_order_snapshots, 2026-09-04): the
+// live book carries Working, Accepted, Initialized, Submitted, CancelPending and
+// CancelSubmitted. None is terminal, so all read ALIVE — including an arm
+// mid-cancel, which is the safe direction: a cancel already in flight does not
+// need a second one, and the order still exists at the broker until it does not.
+// Asserted by test rather than inherited from "absent from the terminal list",
+// because safety by accident is not safety.
 
 // orderMatchesArm ties a broker order to a ledger row. The ledger keys on
 // SignalID; the broker may report it as the order's Name, and bracket legs carry

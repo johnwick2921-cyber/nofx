@@ -147,3 +147,64 @@ func TestTerminalOrderInTheBookIsNotAlive(t *testing.T) {
 		t.Errorf("a Filled order in the book is GONE, not alive")
 	}
 }
+
+// REVIEW FINDING (nofx-47): the bug this wave's own framing predicts, surviving
+// one level inside the fix.
+//
+// orderMatchesArm returns false for an empty SignalID, so the loop matched
+// nothing and control fell through to reaperGone — which CANCELS. But a row with
+// no signal id is precisely one the broker cannot be asked about: there is no
+// name to look up. That is the UNKNOWN case, and it was taking the destructive
+// branch. "When ignorance and death take the same branch, the destructive one
+// wins by default" — written in this file's own header, and true of this file.
+//
+// Unlikely today (SetSignal runs before SetState("working")), which is exactly
+// why it earns a guard rather than a comment: it can only fire when something
+// else has already gone wrong, and that is when a cancel is least wanted.
+func TestUnnameableRowIsUnknownNotGone(t *testing.T) {
+	now := time.Date(2026, 9, 4, 10, 0, 0, 0, time.UTC)
+	c := nt.NewOrderSnapshotCache()
+	c.PutAt(snapWithOrders(nt.NT8Order{OrderID: "NT-1", Name: "someone-else", State: "Working"}), now)
+
+	row := store.ArmedOrderDB{TraderID: "t1", State: "working", Scenario: "S1",
+		SignalID: "", UpdatedAt: now.Add(-30 * time.Minute)}
+
+	v, why := reaperVerdictAt(c, "Sim101", "MNQ", row, 30*time.Second, now)
+	if v == reaperGone {
+		t.Fatalf("a row we cannot NAME must never be cancelled — that is ignorance, not death: %s", why)
+	}
+	if v != reaperUnknown {
+		t.Fatalf("verdict = %v, want unknown (%s)", v, why)
+	}
+	if !strings.Contains(why, "signal id") {
+		t.Errorf("the reason must name the cause: %q", why)
+	}
+}
+
+// The live book carries transient states the terminal list does not mention:
+// Initialized, Submitted, Accepted, CancelPending, CancelSubmitted (all observed
+// in nt8_order_snapshots). Every one of them means the order still exists at the
+// broker, so all must read ALIVE. Asserted deliberately rather than inherited
+// from "not in the terminal list" — an arm mid-cancel reading ALIVE is the safe
+// direction, and safety by accident is not safety.
+func TestTransientBrokerStatesAllReadAlive(t *testing.T) {
+	now := time.Date(2026, 9, 4, 10, 0, 0, 0, time.UTC)
+	row := store.ArmedOrderDB{TraderID: "t1", State: "working", Scenario: "S1",
+		SignalID: "sig-S1", UpdatedAt: now.Add(-30 * time.Minute)}
+
+	for _, st := range []string{"Working", "Accepted", "Initialized", "Submitted", "CancelPending", "CancelSubmitted"} {
+		c := nt.NewOrderSnapshotCache()
+		c.PutAt(snapWithOrders(nt.NT8Order{OrderID: "NT-1", Name: "sig-S1", State: st}), now)
+		if v, why := reaperVerdictAt(c, "Sim101", "MNQ", row, 30*time.Second, now); v != reaperAlive {
+			t.Errorf("state %q must read ALIVE (the order still exists at the broker), got %v: %s", st, v, why)
+		}
+	}
+	// And the terminal ones must still read GONE.
+	for _, st := range []string{"Filled", "Cancelled", "Rejected", "Expired"} {
+		c := nt.NewOrderSnapshotCache()
+		c.PutAt(snapWithOrders(nt.NT8Order{OrderID: "NT-1", Name: "sig-S1", State: st}), now)
+		if v, _ := reaperVerdictAt(c, "Sim101", "MNQ", row, 30*time.Second, now); v != reaperGone {
+			t.Errorf("terminal state %q must read GONE, got %v", st, v)
+		}
+	}
+}
