@@ -122,9 +122,12 @@ found one hiding behind a counter, which is why both halves belong in one wave.
 |---|---|
 | E1 | RED quoted (`latestClosedPrimaryBarMsAt undefined`), then GREEN at both 11:00 and 14:50 CT |
 | E2 | lint fails a 2-statement entry (quoted above); negative case pinned synthetically |
-| E3 | `TestFanOutCloses*` `-race -count=30` — **ok** |
-| E4 | see §6 |
-| E5 | tsc clean · vitest 42 files / 336 tests |
+| E3 | `TestFanOutCloses*` `-race -count=30` → **ok**; whole package `-race -count=10 -p 8` → **ok 181.685s, RC=0, no data race** |
+| E4 | full suite **3× consecutively: RUN 1 EXIT=0 · RUN 2 EXIT=0 · RUN 3 EXIT=0**, 28 packages ok each |
+| E5 | goldens **3/3 PASS** (`futures-empty 41564a7a` · `futures-keylevels efd93ac6` · `futures-plan 270e4733`) · vitest 42 files / 336 tests · tsc clean |
+
+E4 is the point of the wave and the only result that could have contradicted it: before this
+branch the same command failed roughly one run in four to six.
 
 ## 6. Standing findings, reported not fixed
 
@@ -132,7 +135,11 @@ found one hiding behind a counter, which is why both halves belong in one wave.
   reader racing the summary loses the count. Harmless in production today (nothing reads the
   counters synchronously) but it is the "counters record, never infer" rule pointing the
   other way, and it is exactly what made a gate test lie. Left alone under this wave's
-  zero-behaviour-change rule; worth its own wave.
+  zero-behaviour-change rule. nofx-47's framing on reading it, which is sharper than mine:
+  the log line is the ONLY consumer that can ever observe a nonzero value, so anything else
+  that reads those counters will be wrong intermittently and silently — a class-35 problem
+  ("counters record, never infer") in waiting. It wants its own wave with its own boot line,
+  not a test-side accommodation kept forever.
 - `gofmt -l kernel` reports **10 pre-existing unformatted files on dev**, none of them mine
   (verified by stashing this branch's diff and re-running). Not touched — out of scope, and
   reformatting them would bury this wave's diff.
