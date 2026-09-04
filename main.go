@@ -41,7 +41,7 @@ func main() {
 	logger.Init(nil)
 
 	logger.Info("╔════════════════════════════════════════════════════════════╗")
-	logger.Info("║           🚀 NOFX - AI-Powered Trading System              ║")
+	logger.Info("║           🚀 VL Intelligent - AI-Powered Trading System    ║")
 	logger.Info("╚════════════════════════════════════════════════════════════╝")
 
 	// Initialize global configuration (loaded from .env)
@@ -447,7 +447,7 @@ func main() {
 	telegramReloadCh := make(chan struct{}, 1)
 	server.SetTelegramReloadCh(telegramReloadCh)
 
-	// Start the NOFXi web agent on top of the current dev branch services.
+	// Start the VL web agent on top of the current dev branch services.
 	nofxiAgent := nofxiagent.New(traderManager, st, nil, slog.Default())
 	agentWeb := nofxiagent.NewWebHandler(nofxiAgent, slog.Default())
 	server.RegisterAgentHandler(agentWeb)

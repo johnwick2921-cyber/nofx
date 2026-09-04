@@ -1365,7 +1365,7 @@ func (a *Agent) extractExecutionStateContinuationWithLLM(ctx context.Context, us
 		},
 	)
 	systemPrompt += `
-- This is the structured continuation input for an active NOFXi execution flow.
+- This is the structured continuation input for an active VL execution flow.
 - Prefer "continue" only when the message clearly contributes to the current waiting question or active execution goal.
 - Use "switch" for read-only queries, unrelated requests, explanation requests, or clear topic changes.
 - For "continue", extract only explicit field values that answer the waiting question or pending fields.
@@ -1526,7 +1526,7 @@ type suspendedTaskSelectionResult struct {
 }
 
 func buildActiveFlowClassifierPrompt(lang, flowLabel, flowContext, text, recentConversationCtx string, currentRefs any, suspendedSnapshots any) (string, string) {
-	systemPrompt := `You classify one user message while an active NOFXi flow is in progress.
+	systemPrompt := `You classify one user message while an active VL flow is in progress.
 Return JSON only. No markdown.
 
 Possible decisions:
@@ -2112,7 +2112,7 @@ func (a *Agent) tryRestoreSuspendedTaskWithLLM(ctx context.Context, userID int64
 	}
 	snapshotsJSON, _ := json.Marshal(snapshots)
 	recentConversationCtx := a.buildRecentConversationContext(userID, text)
-	systemPrompt := `You select whether a user message refers to one suspended NOFXi snapshot that should be restored now.
+	systemPrompt := `You select whether a user message refers to one suspended VL snapshot that should be restored now.
 Return JSON only. No markdown.
 
 Rules:
@@ -2323,7 +2323,7 @@ func (a *Agent) tryDirectAnswer(ctx context.Context, userID int64, lang, text st
 
 	currentTurnCtx := a.buildCurrentTurnContext(userID, lang, text)
 	activeTaskCtx := a.buildActiveTaskStateContext(userID, lang)
-	systemPrompt := `You are the first-pass router for NOFXi.
+	systemPrompt := `You are the first-pass router for VL.
 Decide whether the assistant can answer the user's message directly without using skills, tools, or planning.
 Return JSON only. Do not return markdown.
 
@@ -2708,7 +2708,7 @@ func (a *Agent) decideNextStep(ctx context.Context, userID int64, lang string, s
 	currentTurnCtx := a.buildCurrentTurnContext(userID, lang, state.Goal)
 	activeTaskCtx := a.buildActiveTaskStateContext(userID, lang)
 
-	systemPrompt := `You are the step selector for NOFXi.
+	systemPrompt := `You are the step selector for VL.
 Return JSON only. Do not return markdown.
 
 You are operating in ReAct mode: Thought -> Action -> Observation.
@@ -2906,7 +2906,7 @@ func (a *Agent) createExecutionPlan(ctx context.Context, userID int64, lang, use
 		activeTaskCtx = ""
 	}
 
-	systemPrompt := prependNOFXiAdvisorPreamble(`You are the planning module for NOFXi.
+	systemPrompt := prependVLAdvisorPreamble(`You are the planning module for VL.
 Return JSON only. Do not return markdown.
 
 Create a minimal safe execution plan using these step types only:
@@ -3387,7 +3387,7 @@ func parseRFC3339(value string) time.Time {
 func (a *Agent) replanAfterStep(ctx context.Context, userID int64, lang string, state ExecutionState, completedStep PlanStep) (replannerDecision, error) {
 	obsJSON, _ := json.Marshal(buildObservationContext(state))
 	stepsJSON, _ := json.Marshal(state.Steps)
-	systemPrompt := prependNOFXiAdvisorPreamble(`You are the replanning module for NOFXi.
+	systemPrompt := prependVLAdvisorPreamble(`You are the replanning module for VL.
 Return JSON only.
 
 Decide what to do after a plan step completed.
@@ -3710,7 +3710,7 @@ func (a *Agent) executeReasonStep(ctx context.Context, userID int64, lang, goal 
 	startedAt := time.Now()
 	resp, err := a.aiClient.CallWithRequest(&mcp.Request{
 		Messages: []mcp.Message{
-			mcp.NewSystemMessage("You are the reasoning module for NOFXi. Return one short paragraph only. No markdown, no bullet list."),
+			mcp.NewSystemMessage("You are the reasoning module for VL. Return one short paragraph only. No markdown, no bullet list."),
 			mcp.NewUserMessage(fmt.Sprintf("Language: %s\nGoal: %s\nReasoning task: %s\nObservations JSON: %s\nPersistent preferences: %s\nTask state: %s", lang, goal, step.Instruction, string(obsJSON), a.buildPersistentPreferencesContext(userID), buildTaskStateContext(a.getTaskState(userID)))),
 		},
 		Ctx: stageCtx,
@@ -3775,7 +3775,7 @@ func buildCompactObservationSummary(state ExecutionState) string {
 
 func finalPlanResponseSystemPrompt(lang string) string {
 	if lang == "zh" {
-		return `你是 NOFXi，用户的 AI 交易伙伴。像朋友聊天一样回复。
+		return `你是 VL，用户的 AI 交易伙伴。像朋友聊天一样回复。
 
 严格规则：
 - 只回答 Goal 问的那一件事。用户问余额就只说余额，问持仓就只说持仓，问钱包就只说钱包。
@@ -3785,7 +3785,7 @@ func finalPlanResponseSystemPrompt(lang string) string {
 - 不要列"下一步建议"或"需要我帮你做什么"，除非用户主动问。
 - 回复尽量短，能一句话说清的不要写一段话。`
 	}
-	return `You are NOFXi, the user's AI trading partner. Reply like a friend chatting.
+	return `You are VL, the user's AI trading partner. Reply like a friend chatting.
 
 Strict rules:
 - Answer ONLY the one thing asked in Goal. If user asks balance, only say balance. If user asks positions, only say positions.
@@ -3958,7 +3958,7 @@ func (a *Agent) thinkAndActLegacyWithStore(ctx context.Context, storeUserID stri
 		userPrompt = preferencesCtx + "\n\n---\n" + userPrompt
 	}
 	if enrichment != "" {
-		userPrompt = text + "\n\n---\n[NOFXi System Context - real-time data for reference]\n" + enrichment
+		userPrompt = text + "\n\n---\n[VL System Context - real-time data for reference]\n" + enrichment
 		if preferencesCtx != "" {
 			userPrompt = preferencesCtx + "\n\n---\n" + userPrompt
 		}

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# nofx-clock-guard.sh — P1 (ledger-close dispatch 2026-08-19): root-free clock
-# drift DETECTOR, run every 15 min by the nofx-clock-guard user timer.
+# vl-clock-guard.sh — P1 (ledger-close dispatch 2026-08-19): root-free clock
+# drift DETECTOR, run every 15 min by the vl-clock-guard user timer.
 #
 # WHY DETECTOR-ONLY (dispatch 1.2 "use the best available resync and SAY SO"):
 # in this WSL2 env hwclock does not exist (verified: not in /usr/sbin, rc=127),
@@ -18,11 +18,11 @@
 #              launch noise); skipped when powershell.exe is unavailable.
 #
 # Output: one status line per run on stdout (lands in the user journal:
-# journalctl --user -u nofx-clock-guard.service) + an atomic state JSON the Go
+# journalctl --user -u vl-clock-guard.service) + an atomic state JSON the Go
 # bot reads at boot for the P1.4 integrity block.
 set -euo pipefail
 
-STATE="${NOFX_CLOCK_STATE:-/home/hoang/nofx/data/clock-guard-state.json}"
+STATE="${VL_CLOCK_STATE:-${NOFX_CLOCK_STATE:-/home/hoang/nofx/data/clock-guard-state.json}}"
 WARN_S="${CLOCK_GUARD_WARN_S:-30}"
 
 now_s=$(date +%s)

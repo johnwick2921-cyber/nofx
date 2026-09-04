@@ -81,9 +81,13 @@ func goldensWord(ok bool) string {
 	return "FAIL"
 }
 
-// expectedRevision resolves the intended release: NOFX_EXPECTED_REVISION wins,
-// else the first line of deploy/RELEASE. Empty means "no expectation declared".
+// expectedRevision resolves the intended release: VL_EXPECTED_REVISION wins
+// (legacy NOFX_EXPECTED_REVISION still read for one boot), else the first line
+// of deploy/RELEASE. Empty means "no expectation declared".
 func expectedRevision() string {
+	if v := strings.TrimSpace(os.Getenv("VL_EXPECTED_REVISION")); v != "" {
+		return v
+	}
 	if v := strings.TrimSpace(os.Getenv("NOFX_EXPECTED_REVISION")); v != "" {
 		return v
 	}
@@ -187,7 +191,6 @@ func SetTradingRefusedForTest(refused bool, reason string) {
 	refusalReason.Store(reason)
 }
 
-
 // lastBootRevision caches the asserted revision for API exposure (v1 audit
 // §5.6 — bug reports could not be checked against the running rev without a
 // shell). Set once at boot.
@@ -201,7 +204,6 @@ func RunningRevision() string {
 	}
 	return ""
 }
-
 
 func shortRev(r string) string {
 	if len(r) > 12 {

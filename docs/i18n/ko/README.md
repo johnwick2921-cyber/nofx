@@ -1,4 +1,4 @@
-<h1 align="center">NOFX</h1>
+<h1 align="center">VL Intelligent</h1>
 
 <p align="center">
   <strong>당신만의 AI 트레이딩 어시스턴트.</strong><br/>

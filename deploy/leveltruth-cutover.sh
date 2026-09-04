@@ -7,7 +7,7 @@
 set -u
 cd /home/hoang/nofx || exit 1
 BUILD_SHA="6fc09ad39fbaf17aa473ad960f186f8e1b3cc16e"
-BIN="./nofx-bin.next"
+BIN="./vl-bin.next"
 LOG="/tmp/leveltruth-cutover.log"
 exec >>"$LOG" 2>&1
 echo "=== level-truth cutover $(date '+%F %T %Z') ==="
@@ -18,7 +18,7 @@ if [ "$OPEN" != "0" ]; then
   echo "ABORT: DB OPEN positions = $OPEN — not flat, no deploy."
   exit 2
 fi
-SNAP=$(journalctl -u nofx --since "5 min ago" -o cat 2>/dev/null | grep -E "positions snapshot" | tail -2)
+SNAP=$(journalctl -u vl --since "5 min ago" -o cat 2>/dev/null | grep -E "positions snapshot" | tail -2)
 if ! echo "$SNAP" | grep -q "count=0" || [ -z "$SNAP" ]; then
   echo "ABORT: no clean NT8 count=0 snapshot in the last 5 min: $SNAP"
   exit 3
@@ -31,19 +31,19 @@ echo "RELEASE written: $BUILD_SHA"
 
 # 3. Binary swap + kill -9 (SIGTERM exits 0 and does NOT relaunch).
 if [ ! -x "$BIN" ]; then echo "ABORT: $BIN missing"; exit 4; fi
-OLDPID=$(pgrep -f "nofx-bin$" | head -1)
-mv nofx-bin "nofx-bin.old.leveltruth" 2>/dev/null
-mv "$BIN" nofx-bin
+OLDPID=$(pgrep -f "vl-bin$" | head -1)
+mv vl-bin "vl-bin.old.leveltruth" 2>/dev/null
+mv "$BIN" vl-bin
 echo "binary swapped (old PID $OLDPID)"
 if [ -n "$OLDPID" ]; then kill -9 "$OLDPID"; echo "kill -9 sent to $OLDPID"; fi
 
 # 4. Boot proof (systemd relaunches; poll up to 90s for the integrity line).
 for i in $(seq 1 30); do
   sleep 3
-  BOOT=$(journalctl -u nofx --since "2 min ago" -o cat 2>/dev/null | grep -E "BOOT INTEGRITY OK" | tail -1)
+  BOOT=$(journalctl -u vl --since "2 min ago" -o cat 2>/dev/null | grep -E "BOOT INTEGRITY OK" | tail -1)
   if [ -n "$BOOT" ]; then
     echo "BOOT: $BOOT"
-    NEWPID=$(pgrep -f "nofx-bin$" | head -1)
+    NEWPID=$(pgrep -f "vl-bin$" | head -1)
     echo "CUTOVER COMPLETE — PID $NEWPID"
     exit 0
   fi

@@ -19,7 +19,7 @@ var apiRequestTool = mcp.Tool{
 	Type: "function",
 	Function: mcp.FunctionDef{
 		Name:        "api_request",
-		Description: "Call the NOFX trading system REST API",
+		Description: "Call the VL Intelligent trading system REST API",
 		Parameters: map[string]any{
 			"type": "object",
 			"properties": map[string]any{

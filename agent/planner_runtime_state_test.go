@@ -368,7 +368,7 @@ func TestShouldAttemptReplan(t *testing.T) {
 type failingAIClient struct{}
 
 func (f *failingAIClient) SetAPIKey(string, string, string) {}
-func (f *failingAIClient) ResolvedModel() string { return "mock-model" }
+func (f *failingAIClient) ResolvedModel() string            { return "mock-model" }
 func (f *failingAIClient) SetTimeout(_ time.Duration)       {}
 func (f *failingAIClient) CallWithMessages(string, string) (string, error) {
 	return "", errors.New("unexpected CallWithMessages")
@@ -389,7 +389,7 @@ type capturePlannerAIClient struct {
 }
 
 func (c *capturePlannerAIClient) SetAPIKey(string, string, string) {}
-func (c *capturePlannerAIClient) ResolvedModel() string { return "mock-model" }
+func (c *capturePlannerAIClient) ResolvedModel() string            { return "mock-model" }
 func (c *capturePlannerAIClient) SetTimeout(time.Duration)         {}
 func (c *capturePlannerAIClient) CallWithMessages(string, string) (string, error) {
 	return "", errors.New("unexpected CallWithMessages")
@@ -413,7 +413,7 @@ func (c *capturePlannerAIClient) CallWithRequestFull(*mcp.Request) (*mcp.LLMResp
 type blockingAIClient struct{}
 
 func (b *blockingAIClient) SetAPIKey(string, string, string) {}
-func (b *blockingAIClient) ResolvedModel() string { return "mock-model" }
+func (b *blockingAIClient) ResolvedModel() string            { return "mock-model" }
 func (b *blockingAIClient) SetTimeout(time.Duration)         {}
 func (b *blockingAIClient) CallWithMessages(string, string) (string, error) {
 	return "", errors.New("unexpected CallWithMessages")
@@ -438,7 +438,7 @@ type directReplyAIClient struct {
 }
 
 func (d *directReplyAIClient) SetAPIKey(string, string, string) {}
-func (d *directReplyAIClient) ResolvedModel() string { return "mock-model" }
+func (d *directReplyAIClient) ResolvedModel() string            { return "mock-model" }
 func (d *directReplyAIClient) SetTimeout(time.Duration)         {}
 func (d *directReplyAIClient) CallWithMessages(string, string) (string, error) {
 	return "", errors.New("unexpected CallWithMessages")
@@ -450,21 +450,21 @@ func (d *directReplyAIClient) CallWithRequest(req *mcp.Request) (string, error) 
 	if len(req.Messages) > 1 {
 		d.lastUserPrompt = req.Messages[1].Content
 	}
-	if strings.Contains(d.lastSystemPrompt, "first-pass router for NOFXi") {
+	if strings.Contains(d.lastSystemPrompt, "first-pass router for VL") {
 		d.routerPrompt = d.lastSystemPrompt
 		if strings.Contains(d.lastUserPrompt, "你好") {
 			return `{"action":"direct_answer","answer":"你好，我在。想聊策略、配置还是排障？"}`, nil
 		}
 		return `{"action":"defer","answer":""}`, nil
 	}
-	if strings.Contains(d.lastSystemPrompt, "lightweight skill router for NOFXi") {
+	if strings.Contains(d.lastSystemPrompt, "lightweight skill router for VL") {
 		d.skillRouterPrompt = d.lastSystemPrompt
 		if strings.Contains(d.lastUserPrompt, "运行中的trader") || strings.Contains(d.lastUserPrompt, "有没有 trader 在跑") {
 			return `{"route":"skill","skill":"trader_management","action":"query","filter":"running_only"}`, nil
 		}
 		return `{"route":"planner","skill":"","action":"","filter":""}`, nil
 	}
-	if strings.Contains(d.lastSystemPrompt, "planning module for NOFXi") {
+	if strings.Contains(d.lastSystemPrompt, "planning module for VL") {
 		d.plannerPrompt = d.lastSystemPrompt
 	}
 	return `{"goal":"test goal","steps":[{"id":"step_1","type":"respond","instruction":"ok"}]}`, nil
@@ -513,7 +513,7 @@ func TestThinkAndActUsesDirectReplyGateForConversationalQuestion(t *testing.T) {
 	if !strings.Contains(resp, "你好，我在") {
 		t.Fatalf("expected direct reply response, got %q", resp)
 	}
-	if !strings.Contains(client.routerPrompt, "first-pass router for NOFXi") {
+	if !strings.Contains(client.routerPrompt, "first-pass router for VL") {
 		t.Fatalf("expected direct reply router prompt, got %q", client.routerPrompt)
 	}
 }
@@ -624,7 +624,7 @@ func TestThinkAndActPrioritizesActiveExecutionStateOverDirectReply(t *testing.T)
 	if strings.Contains(resp, "你好，我在") {
 		t.Fatalf("expected active execution state to bypass direct reply gate, got %q", resp)
 	}
-	if !strings.Contains(client.plannerPrompt, "planning module for NOFXi") {
+	if !strings.Contains(client.plannerPrompt, "planning module for VL") {
 		t.Fatalf("expected planner prompt when execution state is active, got %q", client.plannerPrompt)
 	}
 }

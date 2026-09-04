@@ -1,8 +1,8 @@
 # Security Policy
 
-## 🔒 Security at NOFX
+## 🔒 Security at VL Intelligent
 
-We take the security of NOFX seriously. This document outlines our security policy and procedures for reporting vulnerabilities.
+We take the security of VL Intelligent seriously. This document outlines our security policy and procedures for reporting vulnerabilities.
 
 ## 📋 Supported Versions
 
@@ -57,7 +57,7 @@ After you submit a report:
 
 ## 🛡️ Security Best Practices
 
-If you're using NOFX, please follow these security best practices:
+If you're using VL Intelligent, please follow these security best practices:
 
 ### API Keys and Secrets
 
@@ -153,7 +153,7 @@ We appreciate the security research community's efforts. Contributors who respon
 
 ## 🔐 Encryption & Secure Storage
 
-NOFX uses the following security measures:
+VL Intelligent uses the following security measures:
 
 - **AES-256 encryption** for sensitive data at rest (planned v3.1)
 - **TLS 1.3** for all network communications

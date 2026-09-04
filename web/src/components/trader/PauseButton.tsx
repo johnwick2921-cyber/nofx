@@ -88,7 +88,7 @@ export function PauseButton({ traderId, stopUntil, onChanged }: Props) {
         type="button"
         disabled={busy}
         onClick={doResume}
-        className="bg-nofx-gold/20 hover:bg-nofx-gold/30 border border-nofx-gold text-nofx-gold font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50"
+        className="bg-vl-gold/20 hover:bg-vl-gold/30 border border-vl-gold text-vl-gold font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50"
       >
         ▶ {t('resume')}
       </button>
@@ -103,12 +103,12 @@ export function PauseButton({ traderId, stopUntil, onChanged }: Props) {
         disabled={busy}
         onClick={() => setOpen((v) => !v)}
         title={L.title[language] ?? L.title.en}
-        className="border border-white/20 hover:border-nofx-gold/60 text-nofx-text-muted hover:text-nofx-gold font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50"
+        className="border border-white/20 hover:border-vl-gold/60 text-vl-text-muted hover:text-vl-gold font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50"
       >
         ⏸ {t('pause')}
       </button>
       {open && (
-        <div className="absolute right-0 mt-2 z-40 nofx-glass border border-white/10 rounded-lg p-2 min-w-[180px] flex flex-col gap-1 shadow-xl">
+        <div className="absolute right-0 mt-2 z-40 vl-glass border border-white/10 rounded-lg p-2 min-w-[180px] flex flex-col gap-1 shadow-xl">
           <button
             type="button"
             data-testid="pause-30m"
@@ -146,7 +146,7 @@ export function PauseButton({ traderId, stopUntil, onChanged }: Props) {
               type="button"
               data-testid="pause-custom-go"
               disabled={!customMin || Number(customMin) <= 0}
-              className="px-2 py-1 rounded bg-nofx-gold/20 border border-nofx-gold/50 text-nofx-gold text-sm disabled:opacity-40"
+              className="px-2 py-1 rounded bg-vl-gold/20 border border-vl-gold/50 text-vl-gold text-sm disabled:opacity-40"
               onClick={() => doPause({ minutes: Number(customMin) })}
             >
               OK

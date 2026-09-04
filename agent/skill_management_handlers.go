@@ -914,7 +914,7 @@ func formatStrategyCreateFieldOptionsReply(lang, text, missingKind string) strin
 	case "strategy_type":
 		return "策略类型只有两个：\n- AI 策略：让 AI 根据行情和策略规则判断开平仓。\n- 网格策略：在价格区间内按网格低买高卖。\n你直接回复“AI 策略”或“网格策略”就行。"
 	case "source_type":
-		return "AI 策略的选币来源有 4 个：\n- AI500：从 NOFX AI500 榜单自动选币。\n- OI Top：选持仓量靠前/更活跃的币。\n- OI Low：选持仓量较低或变化较弱的币。\n- 静态币种：你指定固定币种，比如 BTCUSDT、ETHUSDT。\n没有混合模式。你选一个，我继续填模板。"
+		return "AI 策略的选币来源有 4 个：\n- AI500：从 VL Intelligent AI500 榜单自动选币。\n- OI Top：选持仓量靠前/更活跃的币。\n- OI Low：选持仓量较低或变化较弱的币。\n- 静态币种：你指定固定币种，比如 BTCUSDT、ETHUSDT。\n没有混合模式。你选一个，我继续填模板。"
 	case "primary_timeframe":
 		return "主周期可选：1m、3m、5m、15m、30m、1h、2h、4h、6h、8h、12h、1d、3d、1w。高频一般偏 1m/3m/5m，稳健一点可以用 15m/1h。"
 	case "selected_timeframes":

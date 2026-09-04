@@ -173,7 +173,7 @@ func (a *Agent) buildUnifiedTurnRouterPrompt(userID int64, lang, text string) (s
 		activeTaskDetails = buildBrainUserPrompt(lang, text, previousAssistantReply, recentConversation, currentRefs, activeTask, true)
 	}
 
-	systemPrompt := prependNOFXiAdvisorPreamble(`You are the unified turn router for NOFXi.
+	systemPrompt := prependVLAdvisorPreamble(`You are the unified turn router for VL.
 Return JSON only. No markdown.
 
 You must make ONE combined decision for this user turn:

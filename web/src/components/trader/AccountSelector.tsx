@@ -117,10 +117,10 @@ export function AccountSelector({
   if (isLoading) {
     return (
       <div
-        className="flex items-center gap-2 px-3 py-2 rounded border border-nofx-gold/20 bg-nofx-bg/30 text-sm text-nofx-text-muted"
+        className="flex items-center gap-2 px-3 py-2 rounded border border-vl-gold/20 bg-vl-bg/30 text-sm text-vl-text-muted"
         data-account-selector
       >
-        <div className="h-4 w-20 bg-nofx-bg/50 rounded animate-pulse" />
+        <div className="h-4 w-20 bg-vl-bg/50 rounded animate-pulse" />
       </div>
     )
   }
@@ -146,8 +146,8 @@ export function AccountSelector({
           'flex items-center gap-2 px-3 py-2 rounded border transition-all',
           'text-sm font-medium',
           isOpen
-            ? 'border-nofx-gold/50 bg-nofx-gold/10 text-nofx-gold'
-            : 'border-nofx-gold/20 bg-nofx-bg/30 text-nofx-text hover:border-nofx-gold/40 hover:bg-nofx-bg/50'
+            ? 'border-vl-gold/50 bg-vl-gold/10 text-vl-gold'
+            : 'border-vl-gold/20 bg-vl-bg/30 text-vl-text hover:border-vl-gold/40 hover:bg-vl-bg/50'
         )}
       >
         <span className="truncate">
@@ -156,7 +156,7 @@ export function AccountSelector({
               Account: <span className="font-semibold">{selectedAccount}</span>
             </>
           ) : (
-            <span className="font-semibold text-nofx-gold">
+            <span className="font-semibold text-vl-gold">
               Select an account
             </span>
           )}
@@ -190,7 +190,7 @@ export function AccountSelector({
         ReactDOM.createPortal(
           <div
             data-account-selector
-            className="fixed z-[9999] rounded border border-nofx-gold/20 bg-[#0B0E11] shadow-xl shadow-black/50 max-h-64 overflow-y-auto"
+            className="fixed z-[9999] rounded border border-vl-gold/20 bg-[#0B0E11] shadow-xl shadow-black/50 max-h-64 overflow-y-auto"
             style={{
               top: `${dropdownPos.top}px`,
               left: `${dropdownPos.left}px`,
@@ -198,7 +198,7 @@ export function AccountSelector({
             }}
           >
             {accounts.length === 0 ? (
-              <div className="px-3 py-2 text-xs text-nofx-text-muted text-center">
+              <div className="px-3 py-2 text-xs text-vl-text-muted text-center">
                 Waiting for accounts...
               </div>
             ) : (
@@ -217,15 +217,15 @@ export function AccountSelector({
                       : ''
                   }
                   className={cn(
-                    'w-full flex items-center gap-3 px-3 py-2 text-sm transition-colors border-b border-nofx-bg/30 last:border-b-0',
+                    'w-full flex items-center gap-3 px-3 py-2 text-sm transition-colors border-b border-vl-bg/30 last:border-b-0',
                     account.is_sim
                       ? cn(
-                          'text-nofx-text-main hover:bg-nofx-bg/50 cursor-pointer',
+                          'text-vl-text-main hover:bg-vl-bg/50 cursor-pointer',
                           account.name === selectedAccount
-                            ? 'bg-nofx-gold/10 text-nofx-gold'
+                            ? 'bg-vl-gold/10 text-vl-gold'
                             : ''
                         )
-                      : 'text-nofx-text-muted opacity-50 cursor-not-allowed bg-nofx-bg/20'
+                      : 'text-vl-text-muted opacity-50 cursor-not-allowed bg-vl-bg/20'
                   )}
                 >
                   <span className="flex-1 text-left truncate">
@@ -237,7 +237,7 @@ export function AccountSelector({
                     )}
                   </span>
                   {account.name === selectedAccount && (
-                    <Check className="w-4 h-4 text-nofx-gold shrink-0" />
+                    <Check className="w-4 h-4 text-vl-gold shrink-0" />
                   )}
                 </button>
               ))

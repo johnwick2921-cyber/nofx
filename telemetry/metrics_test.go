@@ -35,11 +35,11 @@ func familyByName(mfs []*dto.MetricFamily, name string) *dto.MetricFamily {
 // TestAllCollectorsRegistered confirms the 5 Plan 4 T25 collectors are present.
 func TestAllCollectorsRegistered(t *testing.T) {
 	expected := []string{
-		"nofx_decisions_total",
-		"nofx_decision_latency_seconds",
-		"nofx_fill_latency_seconds",
-		"nofx_databento_errors_total",
-		"nofx_risk_gate_trips_total",
+		"vl_decisions_total",
+		"vl_decision_latency_seconds",
+		"vl_fill_latency_seconds",
+		"vl_databento_errors_total",
+		"vl_risk_gate_trips_total",
 	}
 
 	// Touch each collector once so it surfaces in Gather() output.
@@ -72,9 +72,9 @@ func TestDecisionsTotalIncrement(t *testing.T) {
 	DecisionsTotal.WithLabelValues("t1-incr", "LONG", "queued").Inc()
 
 	mfs := gatherFamilies(t)
-	fam := familyByName(mfs, "nofx_decisions_total")
+	fam := familyByName(mfs, "vl_decisions_total")
 	if fam == nil {
-		t.Fatal("nofx_decisions_total not found")
+		t.Fatal("vl_decisions_total not found")
 	}
 
 	var got float64
@@ -98,9 +98,9 @@ func TestDecisionLatencyObservation(t *testing.T) {
 	DecisionLatency.WithLabelValues("t1-hist").Observe(2.0)
 
 	mfs := gatherFamilies(t)
-	fam := familyByName(mfs, "nofx_decision_latency_seconds")
+	fam := familyByName(mfs, "vl_decision_latency_seconds")
 	if fam == nil {
-		t.Fatal("nofx_decision_latency_seconds not found")
+		t.Fatal("vl_decision_latency_seconds not found")
 	}
 
 	var samples uint64
@@ -121,9 +121,9 @@ func TestFillLatencyObservation(t *testing.T) {
 	FillLatency.WithLabelValues("ninjatrader-test").Observe(45.0) // slow NT8 CSV bridge
 
 	mfs := gatherFamilies(t)
-	fam := familyByName(mfs, "nofx_fill_latency_seconds")
+	fam := familyByName(mfs, "vl_fill_latency_seconds")
 	if fam == nil {
-		t.Fatal("nofx_fill_latency_seconds not found")
+		t.Fatal("vl_fill_latency_seconds not found")
 	}
 
 	var samples uint64
@@ -140,10 +140,10 @@ func TestFillLatencyObservation(t *testing.T) {
 
 // TestDatabentoErrorsTotalIncrement verifies the plain counter increments.
 func TestDatabentoErrorsTotalIncrement(t *testing.T) {
-	before := getCounterValue(t, "nofx_databento_errors_total")
+	before := getCounterValue(t, "vl_databento_errors_total")
 	DatabentoErrorsTotal.Inc()
 	DatabentoErrorsTotal.Inc()
-	after := getCounterValue(t, "nofx_databento_errors_total")
+	after := getCounterValue(t, "vl_databento_errors_total")
 	if after-before != 2 {
 		t.Errorf("DatabentoErrorsTotal delta = %v, want 2", after-before)
 	}
@@ -162,9 +162,9 @@ func TestRiskGateTripsForEachGate(t *testing.T) {
 	}
 
 	mfs := gatherFamilies(t)
-	fam := familyByName(mfs, "nofx_risk_gate_trips_total")
+	fam := familyByName(mfs, "vl_risk_gate_trips_total")
 	if fam == nil {
-		t.Fatal("nofx_risk_gate_trips_total not found")
+		t.Fatal("vl_risk_gate_trips_total not found")
 	}
 
 	got := map[string]float64{}

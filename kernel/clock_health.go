@@ -118,7 +118,7 @@ func LogClockHealth(tag, symbol string) {
 	}
 }
 
-// clockGuardState mirrors the JSON written by deploy/nofx-clock-guard.sh.
+// clockGuardState mirrors the JSON written by deploy/vl-clock-guard.sh.
 type clockGuardState struct {
 	LastRunUTC  string `json:"last_run_utc"`
 	LastRunUnix int64  `json:"last_run_unix"`
@@ -143,7 +143,10 @@ func LogClockGuardBoot() {
 	// Guard timer state, judged by state-file freshness (the bot runs as a
 	// SYSTEM service and cannot reliably reach the user systemd manager, so the
 	// file the 15-min timer writes is the honest signal: fresh = active).
-	statePath := os.Getenv("NOFX_CLOCK_STATE")
+	statePath := os.Getenv("VL_CLOCK_STATE")
+	if statePath == "" {
+		statePath = os.Getenv("NOFX_CLOCK_STATE") // legacy, one boot
+	}
 	if statePath == "" {
 		statePath = "data/clock-guard-state.json"
 	}

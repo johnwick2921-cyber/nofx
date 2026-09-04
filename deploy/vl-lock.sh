@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# nofx-lock — the main-tree lock, atomic and heartbeat-based.
+# vl-lock — the main-tree lock, atomic and heartbeat-based.
 #
 # WHY THIS SHAPE (owner ruling 2026-09-03). The old lock was ONE FLAT FILE
 # written with `>`, carrying a PID, read with `kill -0`. It failed in THREE
@@ -31,18 +31,21 @@
 # before any clearing, and this script never clears a lock itself at any age.
 #
 # Usage:
-#   nofx-lock acquire <session> <task> [minutes]   # atomic; refuses if held
-#   nofx-lock heartbeat <session>                  # holder rewrites; every 2m
-#   nofx-lock status                               # free | held | STALE + age
-#   nofx-lock check                                # rc 0 free · 1 held · 2 stale
-#   nofx-lock with-heartbeat <session> -- <cmd>    # beats for <cmd>'s lifetime
-#   nofx-lock reclaim <new> <stale> "<corroboration>"  # ONLY on a stale heartbeat
-#   nofx-lock release <session>                    # only the holder may release
+#   vl-lock acquire <session> <task> [minutes]   # atomic; refuses if held
+#   vl-lock heartbeat <session>                  # holder rewrites; every 2m
+#   vl-lock status                               # free | held | STALE + age
+#   vl-lock check                                # rc 0 free · 1 held · 2 stale
+#   vl-lock with-heartbeat <session> -- <cmd>    # beats for <cmd>'s lifetime
+#   vl-lock reclaim <new> <stale> "<corroboration>"  # ONLY on a stale heartbeat
+#   vl-lock release <session>                    # only the holder may release
 set -uo pipefail
 
-LOCK_DIR="${NOFX_LOCK_DIR:-$HOME/nofx-main.lock.d}"
-LEGACY_LOCK="${NOFX_LEGACY_LOCK:-$HOME/nofx-main.lock}"
-HEARTBEAT_STALE_SECONDS="${NOFX_LOCK_STALE_SECONDS:-300}"   # 5 min
+LOCK_DIR="${VL_LOCK_DIR:-${NOFX_LOCK_DIR:-$HOME/vl-main.lock.d}}"
+LEGACY_LOCK="${VL_LEGACY_LOCK:-${NOFX_LEGACY_LOCK:-$HOME/nofx-main.lock}}"
+# Rebrand cutover (2026-09-03): for ONE boot, an old-shape lock dir held by a
+# pre-rebrand lane still excludes everyone — acquire refuses while it exists.
+OLD_LOCK_DIR="${VL_OLD_LOCK_DIR:-$HOME/nofx-main.lock.d}"
+HEARTBEAT_STALE_SECONDS="${VL_LOCK_STALE_SECONDS:-${NOFX_LOCK_STALE_SECONDS:-300}}"   # 5 min
 HEARTBEAT_EVERY_SECONDS=120                                  # 2 min
 
 _now()      { date -Is; }
@@ -68,6 +71,10 @@ _require_holder() { # _require_holder <session>
 
 cmd_acquire() {
   local session="${1:?session required}" task="${2:?task required}" mins="${3:-45}"
+  if [ -d "$OLD_LOCK_DIR" ]; then
+    echo "REFUSED — an old-shape lock dir is held at $OLD_LOCK_DIR (pre-rebrand lane still working). Wait, or corroborate and reclaim on the old script."
+    return 1
+  fi
   # THE ATOMIC STEP. mkdir either creates the directory or fails; it never
   # overwrites. Exactly one caller can win, whatever the interleaving.
   if ! mkdir "$LOCK_DIR" 2>/dev/null; then
@@ -105,6 +112,9 @@ _show_history() {
 _age() { local hb; hb="$(_field heartbeat_epoch)"; echo $(( $(_epoch) - ${hb:-0} )); }
 
 cmd_status() {
+  if [ -d "$OLD_LOCK_DIR" ]; then
+    echo "OLD-SHAPE lock dir present at $OLD_LOCK_DIR — a pre-rebrand lane holds the tree on the old script."
+  fi
   if [ -f "$LEGACY_LOCK" ]; then
     echo "LEGACY lock file present at $LEGACY_LOCK — a lane is still on the old shape:"
     sed 's/^/    /' "$LEGACY_LOCK"
@@ -121,7 +131,7 @@ cmd_status() {
     echo "STALE — held by '$session' (task: $task), heartbeat ${age}s old (> ${HEARTBEAT_STALE_SECONDS}s), expiry $(_field expiry)."
     echo "  DO NOT CLEAR ON THIS ALONE. Corroborate first: is HEAD moving? is a build running?"
     echo "  does '$session' answer? Clear only with a note naming what you checked."
-    echo "  To take it over on the record: nofx-lock reclaim <you> '$session' \"<what you checked>\""
+    echo "  To take it over on the record: vl-lock reclaim <you> '$session' \"<what you checked>\""
     _show_history
     return 2
   fi
@@ -131,6 +141,7 @@ cmd_status() {
 
 # For scripts (the tree guard): 0 free · 1 held-fresh · 2 held-stale.
 cmd_check() {
+  [ -d "$OLD_LOCK_DIR" ] && { echo held; return 1; }
   [ -d "$LOCK_DIR" ] || { echo free; return 0; }
   if [ "$(_age)" -gt "$HEARTBEAT_STALE_SECONDS" ]; then echo stale; return 2; fi
   echo held; return 1
@@ -186,7 +197,7 @@ cmd_reclaim() { # reclaim <new_session> <stale_session> <corroboration...>
   fi
   if [ -z "$why" ]; then
     echo "REFUSED — state the corroboration you checked (HEAD not moving, no build in flight, session not answering)."
-    echo "  usage: nofx-lock reclaim <new> <stale> \"<what you checked>\""
+    echo "  usage: vl-lock reclaim <new> <stale> \"<what you checked>\""
     return 1
   fi
   printf '%s reclaim: %s took over from %s (heartbeat was %ss old) — corroboration: %s\n' \
@@ -216,5 +227,5 @@ case "${1:-status}" in
   with-heartbeat) shift; cmd_with_heartbeat "$@" ;;
   reclaim)        shift; cmd_reclaim "$@" ;;
   release)        shift; cmd_release "$@" ;;
-  *) echo "usage: nofx-lock {acquire <session> <task> [mins]|heartbeat <session>|status|check|with-heartbeat <session> -- <cmd>|reclaim <new> <stale> \"<corroboration>\"|release <session>}"; exit 64 ;;
+  *) echo "usage: vl-lock {acquire <session> <task> [mins]|heartbeat <session>|status|check|with-heartbeat <session> -- <cmd>|reclaim <new> <stale> \"<corroboration>\"|release <session>}"; exit 64 ;;
 esac

@@ -63,10 +63,24 @@ func TestLogClockHealthWithInjectedDriftDoesNotPanic(t *testing.T) {
 
 // P1.4 — the boot block must read the guard's state JSON and never error when
 // it is missing (bot boots identically without the guard installed).
+func TestLogClockGuardBootReadsLegacyStateEnv(t *testing.T) {
+	// Rebrand phase 2: the legacy NOFX_CLOCK_STATE key still resolves for one
+	// boot, so the installed pre-rebrand timer keeps feeding the bot.
+	dir := t.TempDir()
+	state := filepath.Join(dir, "legacy-clock-guard-state.json")
+	t.Setenv("VL_CLOCK_STATE", "")
+	t.Setenv("NOFX_CLOCK_STATE", state)
+	if err := os.WriteFile(state, []byte(`{"last_run_utc":"2026-08-19T13:50:34Z","last_run_unix":`+
+		i64str(time.Now().Unix()-60)+`,"status":"OK","rtc_vs_wsl_s":"-1","ntp_offset":"+644ms"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	LogClockGuardBoot() // legacy key + fresh file → active path, no panic
+}
+
 func TestLogClockGuardBootReadsState(t *testing.T) {
 	dir := t.TempDir()
 	state := filepath.Join(dir, "clock-guard-state.json")
-	t.Setenv("NOFX_CLOCK_STATE", state)
+	t.Setenv("VL_CLOCK_STATE", state)
 
 	LogClockGuardBoot() // missing file → timer=inactive-or-not-installed, no panic
 

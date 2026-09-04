@@ -689,8 +689,8 @@ export const translations = {
     faqCategoryContributing: 'Contributing',
 
     // ===== GETTING STARTED =====
-    faqWhatIsNOFX: 'What is VL?',
-    faqWhatIsNOFXAnswer:
+    faqWhatIsVL: 'What is VL?',
+    faqWhatIsVLAnswer:
       'VL is an open-source AI-powered trading operating system for cryptocurrency and US stock markets. It uses large language models (LLMs) like DeepSeek, GPT, Claude, Gemini to analyze market data and make autonomous trading decisions. Key features include: multi-AI model support, multi-exchange trading, and visual strategy builder.',
 
     faqHowDoesItWork: 'How does VL work?',
@@ -734,8 +734,8 @@ export const translations = {
     faqServerDeploymentAnswer:
       'Run the install script on your server - it auto-detects the server IP. Access via http://YOUR_SERVER_IP:3000. For HTTPS: 1) Use Cloudflare (free) - add domain, create A record pointing to server IP, set SSL to "Flexible"; 2) Enable TRANSPORT_ENCRYPTION=true in .env for browser-side encryption; 3) Access via https://your-domain.com',
 
-    faqUpdateNOFX: 'How do I update VL?',
-    faqUpdateNOFXAnswer:
+    faqUpdateVL: 'How do I update VL?',
+    faqUpdateVLAnswer:
       'For Docker: Run "docker compose pull && docker compose up -d" to pull latest images and restart. For manual installation: "git pull && go build -o nofx" for backend, "cd web && npm install && npm run build" for frontend. Your configurations in data.db are preserved during updates.',
 
     // ===== CONFIGURATION =====
@@ -799,11 +799,11 @@ export const translations = {
     // ===== TECHNICAL ISSUES =====
     faqPortInUse: 'Port 8080 or 3000 already in use',
     faqPortInUseAnswer:
-      'Check what\'s using the port: "lsof -i :8080" (macOS/Linux) or "netstat -ano | findstr 8080" (Windows). Kill the process or change ports in .env: NOFX_BACKEND_PORT=8081, NOFX_FRONTEND_PORT=3001. Restart with "docker compose down && docker compose up -d".',
+      'Check what\'s using the port: "lsof -i :8080" (macOS/Linux) or "netstat -ano | findstr 8080" (Windows). Kill the process or change ports in .env: VL_BACKEND_PORT=8081, VL_FRONTEND_PORT=3001. Restart with "docker compose down && docker compose up -d".',
 
     faqFrontendNotLoading: 'Frontend shows "Loading..." forever',
     faqFrontendNotLoadingAnswer:
-      'Backend may not be running or reachable. Check: 1) "curl http://127.0.0.1:8080/api/health" should return {"status":"ok"}; 2) "docker compose ps" to verify containers are running; 3) Check backend logs: "docker compose logs nofx-backend"; 4) Ensure firewall allows port 8080.',
+      'Backend may not be running or reachable. Check: 1) "curl http://127.0.0.1:8080/api/health" should return {"status":"ok"}; 2) "docker compose ps" to verify containers are running; 3) Check backend logs: "docker compose logs vl-backend"; 4) Ensure firewall allows port 8080.',
 
     faqDatabaseLocked: 'Database locked error',
     faqDatabaseLockedAnswer:
@@ -842,8 +842,8 @@ export const translations = {
     faqSecurityBestPracticesAnswer:
       'Recommended: 1) Use exchange API keys with IP whitelist and minimal permissions (Futures Trading only); 2) Use dedicated subaccount for VL; 3) Enable TRANSPORT_ENCRYPTION for remote deployments; 4) Never share .env or data.db files; 5) Use HTTPS with valid certificates; 6) Regularly rotate API keys; 7) Monitor account activity.',
 
-    faqCanNOFXStealFunds: 'Can VL steal my funds?',
-    faqCanNOFXStealFundsAnswer:
+    faqCanVLStealFunds: 'Can VL steal my funds?',
+    faqCanVLStealFundsAnswer:
       'VL is open-source (AGPL-3.0 license) - you can audit all code on GitHub. API keys are stored locally on YOUR machine, never sent to external servers. VL only has the permissions you grant via API keys. For maximum safety: use API keys with trading-only permissions (no withdrawal), enable IP whitelist, use a dedicated subaccount.',
 
     // ===== FEATURES =====
@@ -2043,8 +2043,8 @@ export const translations = {
     faqCategoryContributing: '参与贡献',
 
     // ===== 入门指南 =====
-    faqWhatIsNOFX: 'VL 是什么？',
-    faqWhatIsNOFXAnswer:
+    faqWhatIsVL: 'VL 是什么？',
+    faqWhatIsVLAnswer:
       'VL 是一个开源的 AI 驱动交易操作系统，支持加密货币和美股市场。它使用大语言模型（LLM）如 DeepSeek、GPT、Claude、Gemini 来分析市场数据，进行自主交易决策。核心功能包括：多 AI 模型支持、多交易所交易、可视化策略构建器、回测系统。',
 
     faqHowDoesItWork: 'VL 是如何工作的？',
@@ -2088,8 +2088,8 @@ export const translations = {
     faqServerDeploymentAnswer:
       '在服务器上运行安装脚本 - 它会自动检测服务器 IP。通过 http://服务器IP:3000 访问。配置 HTTPS：1）使用 Cloudflare（免费）- 添加域名，创建 A 记录指向服务器 IP，SSL 设为"灵活"；2）在 .env 中启用 TRANSPORT_ENCRYPTION=true 进行浏览器端加密；3）通过 https://你的域名.com 访问。',
 
-    faqUpdateNOFX: '如何更新 VL？',
-    faqUpdateNOFXAnswer:
+    faqUpdateVL: '如何更新 VL？',
+    faqUpdateVLAnswer:
       'Docker 方式：运行 "docker compose pull && docker compose up -d" 拉取最新镜像并重启。手动安装：后端 "git pull && go build -o nofx"，前端 "cd web && npm install && npm run build"。data.db 中的配置在更新时会保留。',
 
     // ===== 配置设置 =====
@@ -2153,11 +2153,11 @@ export const translations = {
     // ===== 技术问题 =====
     faqPortInUse: '端口 8080 或 3000 被占用',
     faqPortInUseAnswer:
-      '查看占用端口的进程：macOS/Linux 用 "lsof -i :8080"，Windows 用 "netstat -ano | findstr 8080"。终止进程或在 .env 中修改端口：NOFX_BACKEND_PORT=8081、NOFX_FRONTEND_PORT=3001。然后 "docker compose down && docker compose up -d" 重启。',
+      '查看占用端口的进程：macOS/Linux 用 "lsof -i :8080"，Windows 用 "netstat -ano | findstr 8080"。终止进程或在 .env 中修改端口：VL_BACKEND_PORT=8081、VL_FRONTEND_PORT=3001。然后 "docker compose down && docker compose up -d" 重启。',
 
     faqFrontendNotLoading: '前端一直显示"加载中..."',
     faqFrontendNotLoadingAnswer:
-      '后端可能未运行或无法访问。检查：1）"curl http://127.0.0.1:8080/api/health" 应返回 {"status":"ok"}；2）"docker compose ps" 验证容器运行中；3）查看后端日志："docker compose logs nofx-backend"；4）确保防火墙允许 8080 端口。',
+      '后端可能未运行或无法访问。检查：1）"curl http://127.0.0.1:8080/api/health" 应返回 {"status":"ok"}；2）"docker compose ps" 验证容器运行中；3）查看后端日志："docker compose logs vl-backend"；4）确保防火墙允许 8080 端口。',
 
     faqDatabaseLocked: '数据库锁定错误',
     faqDatabaseLockedAnswer:
@@ -2196,8 +2196,8 @@ export const translations = {
     faqSecurityBestPracticesAnswer:
       '建议：1）使用带 IP 白名单和最小权限（仅合约交易）的交易所 API 密钥；2）为 VL 使用专用子账户；3）远程部署启用 TRANSPORT_ENCRYPTION；4）切勿分享 .env 或 data.db 文件；5）使用有效证书的 HTTPS；6）定期轮换 API 密钥；7）监控账户活动。',
 
-    faqCanNOFXStealFunds: 'VL 会盗取我的资金吗？',
-    faqCanNOFXStealFundsAnswer:
+    faqCanVLStealFunds: 'VL 会盗取我的资金吗？',
+    faqCanVLStealFundsAnswer:
       'VL 是开源的（AGPL-3.0 许可）- 您可以在 GitHub 审计所有代码。API 密钥存储在您的机器本地，从不发送到外部服务器。VL 只有您通过 API 密钥授予的权限。为最大安全：使用仅交易权限（无提现）的 API 密钥，启用 IP 白名单，使用专用子账户。',
 
     // ===== 功能介绍 =====
@@ -3392,8 +3392,8 @@ export const translations = {
     faqCategoryFeatures: 'Fitur',
     faqCategoryAIModels: 'Model AI',
     faqCategoryContributing: 'Kontribusi',
-    faqWhatIsNOFX: 'Apa itu VL?',
-    faqWhatIsNOFXAnswer:
+    faqWhatIsVL: 'Apa itu VL?',
+    faqWhatIsVLAnswer:
       'VL adalah sistem operasi trading bertenaga AI open-source untuk pasar kripto dan saham AS. Ia menggunakan model bahasa besar (LLM) seperti DeepSeek, GPT, Claude, Gemini untuk menganalisis data pasar dan membuat keputusan trading secara otonom. Fitur utama: dukungan multi-model AI, trading multi-bursa, dan pembangun strategi visual.',
     faqHowDoesItWork: 'Bagaimana cara kerja VL?',
     faqHowDoesItWorkAnswer:
@@ -3426,8 +3426,8 @@ export const translations = {
     faqServerDeployment: 'Bagaimana cara deploy ke server remote?',
     faqServerDeploymentAnswer:
       'Jalankan skrip instal di server Anda. Akses via http://IP_SERVER:3000. Untuk HTTPS: Gunakan Cloudflare (gratis) dan aktifkan TRANSPORT_ENCRYPTION=true di .env.',
-    faqUpdateNOFX: 'Bagaimana cara memperbarui VL?',
-    faqUpdateNOFXAnswer:
+    faqUpdateVL: 'Bagaimana cara memperbarui VL?',
+    faqUpdateVLAnswer:
       'Docker: "docker compose pull && docker compose up -d". Manual: "git pull && go build -o nofx" untuk backend, "cd web && npm install && npm run build" untuk frontend.',
     faqConfigureAIModels: 'Bagaimana cara mengonfigurasi model AI?',
     faqConfigureAIModelsAnswer:
@@ -3473,7 +3473,7 @@ export const translations = {
       'Perkiraan biaya harian per trader (interval 5 menit): DeepSeek: $0.10-0.50; Qwen: $0.20-0.80; OpenAI: $2-5; Claude: $1-3.',
     faqPortInUse: 'Port 8080 atau 3000 sudah digunakan',
     faqPortInUseAnswer:
-      'Periksa proses yang menggunakan port. Ubah port di .env: NOFX_BACKEND_PORT=8081, NOFX_FRONTEND_PORT=3001.',
+      'Periksa proses yang menggunakan port. Ubah port di .env: VL_BACKEND_PORT=8081, VL_FRONTEND_PORT=3001.',
     faqFrontendNotLoading: 'Frontend menampilkan "Memuat..." terus-menerus',
     faqFrontendNotLoadingAnswer:
       'Backend mungkin tidak berjalan. Periksa: "curl http://127.0.0.1:8080/api/health" harus mengembalikan {"status":"ok"}.',
@@ -3504,8 +3504,8 @@ export const translations = {
     faqSecurityBestPractices: 'Apa praktik terbaik keamanan?',
     faqSecurityBestPracticesAnswer:
       'Disarankan: 1) Gunakan API key dengan whitelist IP dan izin minimal; 2) Gunakan sub-akun khusus; 3) Aktifkan TRANSPORT_ENCRYPTION; 4) Gunakan HTTPS.',
-    faqCanNOFXStealFunds: 'Bisakah VL mencuri dana saya?',
-    faqCanNOFXStealFundsAnswer:
+    faqCanVLStealFunds: 'Bisakah VL mencuri dana saya?',
+    faqCanVLStealFundsAnswer:
       'VL open-source (lisensi AGPL-3.0) - Anda bisa audit semua kode. API key disimpan lokal di mesin ANDA, tidak pernah dikirim ke server eksternal.',
     faqStrategyStudio: 'Apa itu Strategy Studio?',
     faqStrategyStudioAnswer:

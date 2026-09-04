@@ -13,7 +13,7 @@ FROM alpine:latest
 RUN apk add --no-cache ca-certificates tzdata sqlite nginx openssl gettext
 
 # Copy backend binary
-COPY --from=backend /app/nofx /app/nofx
+COPY --from=backend /app/vl /app/vl
 
 # Copy TA-Lib libraries
 COPY --from=backend /usr/local/lib/libta_lib* /usr/local/lib/

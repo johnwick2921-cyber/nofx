@@ -11,7 +11,7 @@ export const welcome: GuideSection = {
       kind: 'cards',
       cards: [
         {
-          title: 'NOFX / VL',
+          title: 'VL Intelligent',
           body: 'One structure-permissioned, level-anchored MNQ SIM trader — advisory-first. The Go engine computes the map; the AI (deepseek-v4-pro) writes one day-plan per session, then decides every cycle against it. You hold the knobs.',
           tag: 'SIM',
         },
@@ -34,7 +34,7 @@ export const welcome: GuideSection = {
         '  │ TCP (bars / account / positions / orders)',
         'C# AddOn (NinjaTrader AddOns folder)  ← compile + NT8 restart to change',
         '  │ framed messages (ninjascript/vltrader_tcp_PROTOCOL.md)',
-        'Go bot (nofx-bin) ─── BarCache + bars table (SQLite data/data.db = "memory")',
+        'Go bot (vl-bin) ─── BarCache + bars table (SQLite data/data.db = "memory")',
         '  ├─ PLANNER: DeepSeek → 1 day-plan per session (advisory JSON)',
         '  ├─ EXECUTOR: every ~2 min → DeepSeek decision → risk gates → Sim101',
         '  └─ WATCHER: in-position advisory only (zero order authority)',

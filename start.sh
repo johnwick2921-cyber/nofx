@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ═══════════════════════════════════════════════════════════════
-# NOFX AI Trading System - Docker Management Script
+# VL Intelligent AI Trading System - Docker Management Script
 # Usage: ./start.sh [command]
 # ═══════════════════════════════════════════════════════════════
 
@@ -175,17 +175,17 @@ check_encryption() {
 # ------------------------------------------------------------------------
 read_env_vars() {
     if [ -f ".env" ]; then
-        NOFX_FRONTEND_PORT=$(grep "^NOFX_FRONTEND_PORT=" .env 2>/dev/null | cut -d'=' -f2 || echo "3000")
-        NOFX_BACKEND_PORT=$(grep "^NOFX_BACKEND_PORT=" .env 2>/dev/null | cut -d'=' -f2 || echo "8080")
+        VL_FRONTEND_PORT=$(grep "^VL_FRONTEND_PORT=" .env 2>/dev/null | cut -d'=' -f2 || grep "^NOFX_FRONTEND_PORT=" .env 2>/dev/null | cut -d'=' -f2 || echo "3000")
+        VL_BACKEND_PORT=$(grep "^VL_BACKEND_PORT=" .env 2>/dev/null | cut -d'=' -f2 || grep "^NOFX_BACKEND_PORT=" .env 2>/dev/null | cut -d'=' -f2 || echo "8080")
 
-        NOFX_FRONTEND_PORT=$(echo "$NOFX_FRONTEND_PORT" | tr -d '"'"'" | tr -d ' ')
-        NOFX_BACKEND_PORT=$(echo "$NOFX_BACKEND_PORT" | tr -d '"'"'" | tr -d ' ')
+        VL_FRONTEND_PORT=$(echo "$VL_FRONTEND_PORT" | tr -d '"' | tr -d ' ')
+        VL_BACKEND_PORT=$(echo "$VL_BACKEND_PORT" | tr -d '"' | tr -d ' ')
 
-        NOFX_FRONTEND_PORT=${NOFX_FRONTEND_PORT:-3000}
-        NOFX_BACKEND_PORT=${NOFX_BACKEND_PORT:-8080}
+        VL_FRONTEND_PORT=${VL_FRONTEND_PORT:-3000}
+        VL_BACKEND_PORT=${VL_BACKEND_PORT:-8080}
     else
-        NOFX_FRONTEND_PORT=3000
-        NOFX_BACKEND_PORT=8080
+        VL_FRONTEND_PORT=3000
+        VL_BACKEND_PORT=8080
     fi
 }
 
@@ -208,7 +208,7 @@ check_database() {
 start() {
     echo ""
     echo -e "${CYAN}╔══════════════════════════════════════════════════════╗${NC}"
-    echo -e "${CYAN}║         🚀 NOFX AI Trading Bot — Startup             ║${NC}"
+    echo -e "${CYAN}║         🚀 VL Intelligent AI Trading Bot — Startup             ║${NC}"
     echo -e "${CYAN}╚══════════════════════════════════════════════════════╝${NC}"
     echo ""
 
@@ -236,7 +236,7 @@ start() {
     echo "  2. Add an AI model and exchange in Settings"
     echo "  3. (Optional) Add a Telegram bot token in Settings → Telegram"
     echo ""
-    echo -e "  Web dashboard: ${BLUE}http://localhost:${NOFX_FRONTEND_PORT}${NC}"
+    echo -e "  Web dashboard: ${BLUE}http://localhost:${VL_FRONTEND_PORT}${NC}"
     echo -e "  View logs:     ${YELLOW}./start.sh logs${NC}"
     echo -e "  Stop:          ${YELLOW}./start.sh stop${NC}"
     echo ""
@@ -281,7 +281,7 @@ status() {
     $COMPOSE_CMD ps
     echo ""
     print_info "Health check:"
-    curl -s "http://localhost:${NOFX_BACKEND_PORT}/api/health" | jq '.' || echo "Backend not responding"
+    curl -s "http://localhost:${VL_BACKEND_PORT}/api/health" | jq '.' || echo "Backend not responding"
 }
 
 # ------------------------------------------------------------------------
@@ -349,7 +349,7 @@ regenerate_keys() {
 # Help: Usage Information
 # ------------------------------------------------------------------------
 show_help() {
-    echo "NOFX AI Trading System - Docker Management Script"
+    echo "VL Intelligent AI Trading System - Docker Management Script"
     echo ""
     echo "Usage: ./start.sh [command] [options]"
     echo ""

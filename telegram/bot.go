@@ -373,7 +373,7 @@ func statusMsg(st *store.Store, userID string, apiPort int, lang string) string 
 
 	// All configured — show ready state.
 	if lang == "zh" {
-		return `✅ *NOFX 就绪，开始交易吧！*
+		return `✅ *VL Intelligent 就绪，开始交易吧！*
 
 直接告诉我你想做什么：
 
@@ -384,7 +384,7 @@ func statusMsg(st *store.Store, userID string, apiPort int, lang string) string 
 
 /help 查看更多 · /lang 切换语言`
 	}
-	return `✅ *NOFX is ready!*
+	return `✅ *VL Intelligent is ready!*
 
 Just tell me what you want:
 
@@ -416,7 +416,7 @@ func parseLangChoice(text string) string {
 
 func helpMsg(lang string) string {
 	if lang == "zh" {
-		return `*NOFX 使用指南*
+		return `*VL Intelligent 使用指南*
 
 *查询*
 • "查看我的持仓"
@@ -437,7 +437,7 @@ func helpMsg(lang string) string {
 /lang  — 切换语言
 /help  — 帮助`
 	}
-	return `*NOFX Help*
+	return `*VL Intelligent Help*
 
 *Query*
 • "Show my positions"

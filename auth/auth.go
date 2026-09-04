@@ -81,6 +81,16 @@ func CheckPassword(password, hash string) bool {
 	return err == nil
 }
 
+// Issuer constants (rebrand phase 2, 2026-09-03): new tokens mint with vlAI;
+// the legacy nofxAI issuer is ACCEPTED for 24h after this binary boots so
+// tokens issued before the cutover stay valid through their TTL.
+const (
+	issuerVL     = "vlAI"
+	issuerLegacy = "nofxAI"
+)
+
+var legacyIssuerCutoff = time.Now().Add(24 * time.Hour)
+
 // GenerateJWT generates JWT token
 func GenerateJWT(userID, email string) (string, error) {
 	claims := Claims{
@@ -112,6 +122,14 @@ func ValidateJWT(tokenString string) (*Claims, error) {
 	}
 
 	if claims, ok := token.Claims.(*Claims); ok && token.Valid {
+		// Rebrand phase 2: vlAI is the canonical issuer. Legacy nofxAI tokens
+		// remain valid for 24h after boot; empty-issuer tokens (external mint
+		// scripts) are left alone, exactly as before this change.
+		if claims.Issuer != "" && claims.Issuer != issuerVL {
+			if claims.Issuer != issuerLegacy || time.Now().After(legacyIssuerCutoff) {
+				return nil, fmt.Errorf("token issuer %q not accepted", claims.Issuer)
+			}
+		}
 		return claims, nil
 	}
 

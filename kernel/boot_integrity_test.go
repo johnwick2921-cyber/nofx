@@ -12,6 +12,7 @@ func TestAssertBootIntegrityBothPaths(t *testing.T) {
 	t.Cleanup(func() { SetTradingRefusedForTest(false, "") })
 
 	// ── path A: no expectation declared → never refuses, goldens still checked
+	t.Setenv("VL_EXPECTED_REVISION", "")
 	t.Setenv("NOFX_EXPECTED_REVISION", "")
 	a := AssertBootIntegrity()
 	if !a.GoldensOK {
@@ -28,7 +29,7 @@ func TestAssertBootIntegrityBothPaths(t *testing.T) {
 	}
 
 	// ── path B: an expectation that CANNOT match → refuse to trade
-	t.Setenv("NOFX_EXPECTED_REVISION", "0000000000000000000000000000000000000000")
+	t.Setenv("VL_EXPECTED_REVISION", "0000000000000000000000000000000000000000")
 	b := AssertBootIntegrity()
 	if b.RevisionOK {
 		t.Fatal("a bogus expected revision must not match")
@@ -45,12 +46,27 @@ func TestAssertBootIntegrityBothPaths(t *testing.T) {
 	}
 
 	// ── back to A: re-asserting a good state re-opens the gate (restart recovers)
+	t.Setenv("VL_EXPECTED_REVISION", "")
 	t.Setenv("NOFX_EXPECTED_REVISION", "")
 	if c := AssertBootIntegrity(); c.Refused {
 		t.Fatal("clearing the expectation must clear the refusal on the next boot")
 	}
 	if _, refused := TradingRefused(); refused {
 		t.Fatal("gate must reopen after a clean assertion")
+	}
+}
+
+// Rebrand phase 2 (2026-09-03): VL_EXPECTED_REVISION wins; the legacy key
+// still resolves for one boot (old .env untouched).
+func TestExpectedRevisionLegacyEnvFallback(t *testing.T) {
+	t.Setenv("VL_EXPECTED_REVISION", "")
+	t.Setenv("NOFX_EXPECTED_REVISION", "abc123")
+	if got := expectedRevision(); got != "abc123" {
+		t.Fatalf("legacy NOFX_EXPECTED_REVISION must still resolve; got %q", got)
+	}
+	t.Setenv("VL_EXPECTED_REVISION", "def456")
+	if got := expectedRevision(); got != "def456" {
+		t.Fatalf("VL_EXPECTED_REVISION must win over the legacy key; got %q", got)
 	}
 }
 

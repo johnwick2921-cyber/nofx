@@ -87,7 +87,7 @@ func Init(cfg *Config) error {
 	// Setup log file output (write to both stdout and file)
 	logDir := "data"
 	if err := os.MkdirAll(logDir, 0755); err == nil {
-		logFileName := filepath.Join(logDir, fmt.Sprintf("nofx_%s.log", time.Now().Format("2006-01-02")))
+		logFileName := filepath.Join(logDir, fmt.Sprintf("vl_%s.log", time.Now().Format("2006-01-02")))
 		f, err := os.OpenFile(logFileName, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 		if err == nil {
 			logFile = f

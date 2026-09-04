@@ -1,10 +1,10 @@
-# NOFX Makefile for testing and development
+# VL Intelligent Makefile for testing and development
 
 .PHONY: help test test-backend test-frontend test-coverage clean
 
 # Default target
 help:
-	@echo "NOFX Testing & Development Commands"
+	@echo "VL Intelligent Testing & Development Commands"
 	@echo ""
 	@echo "Testing:"
 	@echo "  make test                 - Run all tests (backend + frontend)"
@@ -56,8 +56,8 @@ test-coverage:
 # Build backend binary
 build:
 	@echo "🔨 Building backend..."
-	go build -o nofx
-	@echo "✅ Backend built: ./nofx"
+	go build -o vl-bin
+	@echo "✅ Backend built: ./vl-bin"
 
 # Build frontend
 build-frontend:
@@ -97,7 +97,7 @@ lint:
 
 clean:
 	@echo "🧹 Cleaning..."
-	rm -f nofx
+	rm -f vl-bin
 	rm -f coverage.out coverage.html
 	rm -rf web/dist
 	go clean -testcache

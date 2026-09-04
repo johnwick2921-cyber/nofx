@@ -467,7 +467,7 @@ export function GuidePage() {
           className="text-xl font-black uppercase tracking-widest"
           style={{ color: 'var(--vl-gold)' }}
         >
-          NOFX System Guide
+          VL Intelligent System Guide
         </h1>
         <p className="text-[12px]" style={muted}>
           built against rev {GUIDE_BUILT_REV} · 12 sections · live-component
