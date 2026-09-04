@@ -1532,13 +1532,88 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     stays mandatory before clearing: ask the named session, watch whether HEAD
     moves, look for a build in flight. Fixed in `deploy/nofx-lock.sh`
     (`acquire`/`heartbeat`/`release`/`status`/`check`/`with-heartbeat`), pinned
-    by `deploy/nofx-lock-test.sh` — 36 assertions including a second acquire
+    by `deploy/nofx-lock-test.sh` — 56 assertions including a second acquire
     refusing, a stale heartbeat never reading "dead", and a source pin that the
     script cannot express `kill -0`, `pgrep` or `$$`. `with-heartbeat` beats
     only for the lifetime of the command it wraps: a beater that outlived its
-    job would reinvent the pid problem in a new costume.
-71. **A non-agent writer mutating the deploy tree — locks govern agents, not
-    editors.** (Number assigned at merge; highest occupied on dev at authoring:
+    job would reinvent the pid problem in a new costume. **Succession is on the
+    record:** `reclaim <new> <stale> "<corroboration>"` is refused while the
+    heartbeat is fresh (a reclaim that can take a live lock is replacement with
+    better manners), requires the caller to name the holder it is taking over
+    and what it checked, appends who/from-whom/when/why to a `history` file
+    printed by `status` and again at `release`, and returns **rc 3** rather than
+    acquire's 0 so a lane can tell "took a free lock" from "inherited an
+    abandoned one" and refuse to inherit. **Provenance hazard found the same
+    day:** every commit in this repo carries the identical author identity, so
+    git cannot answer "which lane wrote this" — provenance must come from the
+    branch, the worktree and the timestamp, and a lane's work can otherwise be
+    absorbed under another lane's name. That is what PART 3 step 0 exists to
+    prevent.
+    **SECOND-ORDER HAZARD THIS WAVE CREATED, found by nofx-ed.** Changing the
+    lock changed `docs/superpowers/plans/2026-09-02-tree-guard-spec.md`, whose
+    expected-dirty rule the tree-guard wave was implementing AT THE SAME TIME,
+    from a worktree cut before the change. They built the old model —
+    `~/nofx-main.lock`, a pid, `kill -0` — and under the new lock there is no
+    legacy file, so during a cutover that guard would have found "no live
+    holder", seen a legitimately dirty tree, and **ALARMED at exactly the moment
+    it is meant to be trusted**, while running and printing normally. A guard
+    that cries wolf on every deploy is worse than no guard: the next real alarm
+    is the one everyone scrolls past. Fixed at `ac345a7a` — the lock DIRECTORY
+    is authoritative, and the legacy file is surfaced but NEVER honoured for
+    liveness, since honouring it would restore the `kill -0` test this class
+    removed. **Law:** a spec on `dev` is a MOVING artifact, and a worktree cut
+    from an older base silently freezes it. **Probe:** before building against a
+    spec, `git log -1 -- <spec>` and compare against your worktree's base; if it
+    moved after you branched, re-read it. Same family as this class — a value
+    read once, at a moment nobody recorded.
+
+71. **Global state that no worktree owns — the stash stack.** (Number assigned
+    at merge, A16 — highest occupied on dev was 70. Found by nofx-47 on
+    2026-09-03, by accident, while isolating a test result.) Root cause: `git
+    stash` is per-REPOSITORY, not per-worktree. This repo has **56 worktrees**,
+    the main tree among them, and a plain `git stash pop` in ANY of them applies
+    whatever is on top — regardless of which lane parked it, which branch it was
+    taken from, or how old it is. `stash@{0}` was
+    `6b770196` "On dev: class45-found-revert-1203" (2026-09-02 12:03:34): the
+    preserved evidence of the class-45 VS Code stale-buffer revert, **127
+    insertions / 596 deletions** of shipped safety code across six files.
+    nofx-47 popped it into an unrelated worktree by routine stash/pop; three
+    files conflicted because dev had moved, and **three applied CLEANLY and
+    staged**, deleting among other things:
+
+    ```
+    -	// CLASS 33 (2026-09-02) — BOOT SWEEP FIRST. Before ANY authoring, gating,
+    -	at.sweepPreBootArms(ledger)
+    ```
+
+    A lane doing that mid-wave and committing without reading the diff re-ships
+    the exact deletion class 45 exists to prevent — this time with no editor to
+    blame. **WORKTREE LAW and the class-70 lock do not cover it:** both govern
+    branches and directories, and the stash stack is neither. **Probe:** `git
+    stash list` before ANY stash operation, and never `pop` blind — `git stash
+    show -p stash@{0}` first, and prefer `git stash push -m` + `apply` of a
+    named entry over `pop` of whatever is on top. **Law:** evidence is never
+    parked on the stash stack. It is preserved as a file and a tag, both of
+    which are inert, and never as a poppable entry that every worktree shares.
+    Disarmed here without destroying anything. **The annotated tag
+    `class45-found-revert-1203` is what makes a drop lossless** — it references
+    `6b770196`, so dropping the stack entry cannot let gc collect the object.
+    The human-readable copy is
+    `docs/superpowers/reports/class45-found-revert-1203.patch.txt`, a
+    convenience and not the guarantee; it carries a `.txt` suffix because
+    `.gitignore:143` is `*.patch`, which silently swallowed the first attempt to
+    commit it — `git add -A` skipped it with no error and the file was reported
+    as landed when it had not (a second instance of this checklist's own
+    never-claim-an-unverified-state rule, caught by nofx-47 reading dev rather
+    than reading my report). **DROPPED 2026-09-03 on explicit owner
+    authorisation**, after a four-point pre-flight (one entry on the stack · its
+    sha IS `6b770196` · the local AND origin tags both dereference to it · the
+    evidence file present on `origin/dev`). `git stash list` is empty and
+    `git cat-file -t 6b770196` still answers `commit`, reachable through the
+    tag — the landmine is gone and the evidence is not.
+
+72. **A non-agent writer mutating the deploy tree — locks govern agents, not
+    editors.** (Number assigned at merge; renumbered 71→72 at merge, dev took 71 for the stash-stack class; highest occupied at authoring:
     70.) On 2026-09-02 at 08:46:33-34 an editor Save-All wrote six stale buffers
     over `/home/hoang/nofx`, deleting **596 lines across four shipped waves**:
     `CorrectedPnL`/`UnresolvedExcluded` (class 40), `composeArmStop` +
@@ -1574,8 +1649,8 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     deploy tree in an editor, and that is an owner action no repo change
     substitutes for.
 
-72. **A spec that moved after the worktree was cut.** (Number assigned at
-    merge; highest occupied on dev at authoring: 71. **Read with class 70** — a
+73. **A spec that moved after the worktree was cut.** (Number assigned at
+    merge; renumbered 72→73 at merge. **Read with class 70 and class 72** — a
     hook registered one start too late — and with class 69. All three are the
     same family: **a value read once, at a moment nobody recorded.** 69 asks who
     calls it; 70 asks whether the registration ran before the read; 72 asks
@@ -1628,9 +1703,31 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
 
 ---
 
-## PART 3 — PRE-CUTOVER (standing 7-step protocol; flat gate = 5 legs, class 33)
+## PART 3 — PRE-CUTOVER (standing 8-step protocol, 0-7; flat gate = 5 legs, class 33)
 
-0. **Spec freshness (owner law, 2026-09-03).** A worktree is cut from dev's
+0. **PUSH EMPTY AT ACCEPT — claim the wave before you build it.** The moment you
+   accept a dispatch, create the named branch and push it with an empty commit,
+   BEFORE writing a line:
+
+   ```
+   git checkout -b <branch> origin/dev
+   git commit --allow-empty -m "claim: <wave> — <session>, $(date -Is)"
+   git push -u origin <branch>          # rejected or already there? STOP.
+   ```
+
+   If the branch already exists on origin, **another lane has this wave**: stop
+   and coordinate before doing any work. Fold the empty commit into your first
+   real one (`--amend`) or leave it; it costs nothing either way.
+
+   Born 2026-09-03, during class 70 itself. Two lanes independently wrote ~250
+   lines of the same lock wave inside an hour, and a third lane's branch was
+   consumed into dev without its author ever being told — and the ONLY thing that
+   surfaced any of it was a non-fast-forward rejection at push time, after all
+   the work was done. A branch name on origin is the only claim this protocol
+   has. Claiming it costs one empty commit and one second; not claiming it cost
+   a day's duplicate work and an attribution that git cannot reconstruct.
+
+0b. **Spec freshness (owner law, 2026-09-03) — the same moment as step 0.** A worktree is cut from dev's
    **TIP at accept**, and a spec on dev is a MOVING artifact — a worktree cut
    from an older base silently freezes it. Before building against any spec or
    plan, run `git log -1 -- <spec>` and compare it to your worktree's base: **if
@@ -1640,7 +1737,7 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
    the tree-guard spec edited in the same commit; the guard's author read that
    spec at 21:54 from a base six minutes older, built the superseded model, and
    shipped a guard that would have false-alarmed on **every** cutover — found
-   only because a peer asked an unrelated question. See class 70 and class 72;
+   only because a peer asked an unrelated question. See class 70 and class 73;
    the family is a value read once, at a moment nobody recorded.
 
 1. **Tree gate:** porcelain-clean + `deploy/nofx-lock.sh acquire <session>
