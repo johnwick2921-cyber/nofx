@@ -10,18 +10,23 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 
 let tradesPayload: unknown = null
 let statsPayload: unknown = null
+let expectancyPayload: unknown = null
 vi.mock('../../lib/api/plan', () => ({
   planApi: {
     getPlanTrades: () => Promise.resolve(tradesPayload),
     getPlanStats: () => Promise.resolve(statsPayload),
+    getExpectancy: () => Promise.resolve(expectancyPayload),
   },
 }))
 
-const renderDrawer = async (rows: unknown[] = []) => {
+// The drawer reads expectancy ITSELF. It used to be handed rows by
+// ExpectancyPanel, which returns null on an empty expectancy day and took the
+// drawer down with it; rows arrive through the same API the panel uses, so an
+// empty answer collapses the MAE/MFE row and nothing else.
+const renderDrawer = async (rows: unknown[] | null = []) => {
+  expectancyPayload = rows === null ? null : { by: 'condition', rows }
   const { InstrumentsDrawer } = await import('./InstrumentsDrawer')
-  return render(
-    <InstrumentsDrawer traderId="t1" expectancyRows={rows as never} />
-  )
+  return render(<InstrumentsDrawer traderId="t1" />)
 }
 
 const baseTrades = (over: Record<string, unknown> = {}) => ({
@@ -277,5 +282,27 @@ describe('InstrumentsDrawer toggle is a visible control', () => {
     await renderDrawer([])
     const btn = await screen.findByTestId('instruments-drawer-toggle')
     expect(btn.textContent).toMatch(/Instruments/)
+  })
+})
+
+// The reason this component moved out of ExpectancyPanel at all.
+describe('InstrumentsDrawer survives an empty expectancy day', () => {
+  beforeEach(() => {
+    tradesPayload = baseTrades()
+    statsPayload = baseStats()
+  })
+
+  it('still renders when the expectancy endpoint returns nothing', async () => {
+    await renderDrawer(null)
+    const btn = await screen.findByTestId('instruments-drawer-toggle')
+    expect(btn.textContent).toMatch(/Instruments/)
+    fireEvent.click(btn)
+    expect(screen.getByTestId('instrument-maemfe').textContent).toMatch(
+      /no excursion rows yet/i
+    )
+    // the other two instruments do not read expectancy and must be unaffected
+    expect(screen.getByTestId('instrument-discipline').textContent).toMatch(
+      /GPA/
+    )
   })
 })

@@ -227,3 +227,20 @@ describe('ExpectancyPanel', () => {
     expect(cf).toMatch(/mean\s*—/)
   })
 })
+
+// SIBLING, NOT CHILD (owner ruling 2026-09-03). The drawer used to be rendered
+// from inside this panel, below the table. The panel returns null whenever the
+// expectancy endpoint gives it nothing — so on a day with no expectancy the
+// three instruments vanished with it, for a reason no reader could connect to
+// the drawer. The drawer is a sibling in PlanCard now, and this pins that the
+// coupling cannot come back.
+describe('the instruments drawer is not inside the expectancy panel', () => {
+  it('does not render the drawer even when the panel has data', async () => {
+    payload = base()
+    await renderPanel()
+    await waitFor(() =>
+      expect(screen.getByTestId('expectancy-panel')).toBeTruthy()
+    )
+    expect(screen.queryByTestId('instruments-drawer')).toBeNull()
+  })
+})

@@ -12,7 +12,6 @@
 
 import { useEffect, useState } from 'react'
 import { planApi } from '../../lib/api/plan'
-import { InstrumentsDrawer } from './InstrumentsDrawer'
 
 interface Cell {
   key: {
@@ -90,7 +89,9 @@ const label = (k: Cell['key']) =>
     .filter(Boolean)
     .join(' · ') || 'all'
 
-export function ExpectancyPanel({ traderId }: { traderId?: string }) {
+// No traderId: the expectancy endpoint is not per-trader, and the only
+// consumer of that prop here was the instruments drawer, now a sibling.
+export function ExpectancyPanel() {
   const [data, setData] = useState<Payload | null>(null)
   const [open, setOpen] = useState<Record<number, boolean>>({})
 
@@ -317,7 +318,6 @@ export function ExpectancyPanel({ traderId }: { traderId?: string }) {
           currently supports a decision, and giving them the weight of the table
           above would imply otherwise. The main table and the E8 block are
           deliberately untouched. */}
-      <InstrumentsDrawer traderId={traderId} expectancyRows={data.rows} />
     </div>
   )
 }

@@ -41,16 +41,11 @@ interface StatsLike {
 
 const dash = '—'
 
-export function InstrumentsDrawer({
-  traderId,
-  expectancyRows,
-}: {
-  traderId?: string
-  expectancyRows: ExpRow[]
-}) {
+export function InstrumentsDrawer({ traderId }: { traderId?: string }) {
   const [open, setOpen] = useState(false)
   const [trades, setTrades] = useState<TradesLike | null>(null)
   const [stats, setStats] = useState<StatsLike | null>(null)
+  const [expectancyRows, setExpectancyRows] = useState<ExpRow[]>([])
 
   useEffect(() => {
     if (!traderId) return
@@ -68,6 +63,26 @@ export function InstrumentsDrawer({
       alive = false
     }
   }, [traderId])
+
+  // Expectancy is read HERE rather than passed in. It used to arrive as a prop
+  // from ExpectancyPanel, which returns null when the endpoint gives it
+  // nothing — so an empty expectancy day removed the whole drawer, including
+  // the two instruments that do not read expectancy at all. Same endpoint and
+  // same 60s cadence as the table above, so neither surface can be showing
+  // older rows than the other.
+  useEffect(() => {
+    let alive = true
+    const load = async () => {
+      const res = (await planApi.getExpectancy()) as { rows?: ExpRow[] } | null
+      if (alive) setExpectancyRows(res?.rows ?? [])
+    }
+    void load()
+    const t = setInterval(load, 60_000)
+    return () => {
+      alive = false
+      clearInterval(t)
+    }
+  }, [])
 
   const src = { color: 'var(--vl-faint)', fontSize: '9px' } as const
 

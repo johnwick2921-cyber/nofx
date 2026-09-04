@@ -18,6 +18,7 @@ import { ApproveButton } from './ApproveButton'
 import { AlertCenter } from './AlertCenter'
 import { GateBlocksPanel } from './GateBlocksPanel'
 import { ExpectancyPanel } from './ExpectancyPanel'
+import { InstrumentsDrawer } from './InstrumentsDrawer'
 import { SESSION_BANDS, type SessionName } from './sessionConfig'
 
 interface Props {
@@ -93,7 +94,12 @@ export function PlanCard({
           model only: it rules on nothing and no control here changes behaviour.
           Almost every row reads DESCRIPTIVE ONLY today, which is the floor
           working rather than the table failing. */}
-      <ExpectancyPanel traderId={traderId} />
+      <ExpectancyPanel />
+      {/* SIBLING of the panel above, deliberately. It used to render from
+          inside it, and the panel returns null on a day the expectancy
+          endpoint has nothing — which took the three instruments down with it
+          for a reason no reader could have connected to the drawer. */}
+      <InstrumentsDrawer traderId={traderId} />
       {/* ITEM 3 — the owner's manual re-read, next to the plan it acts on.
           P6 — the owner RESET sits beside it: both visible, one explanatory
           line each, so the two escape hatches can never be mistaken for one
