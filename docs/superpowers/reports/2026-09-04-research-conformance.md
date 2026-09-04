@@ -372,3 +372,58 @@ compound: the stop is widened to clear min-SL, which lowers R:R, which then fail
 | `wait_confirm … arming` | 8 |
 | `MIN-SL REJECT` (decision path) | 0 |
 | `⚔️ arm feasibility` WARN | 4 |
+
+---
+
+## 8. D9 — guardrails: what is actually ON
+
+Live strategy `a5b7662e-7bf7-49bb-9f09-7efa48f95ac8` ("MNQ"), bound to trader `hoang`. Resolved
+from the saved config at `config.ai_config.risk_control` — **not** `config.risk_control`, which
+reads null and would make every value look unset:
+
+| knob | saved value | its own enable flag | master | **effective** |
+|---|---|---|---|---|
+| `guardrails_enabled` | **false** | — | — | **MASTER OFF** |
+| `daily_loss_limit_usd` | 450 | `daily_loss_enabled: false` | off | **INERT (doubly)** |
+| `daily_profit_target_usd` | 900 | `daily_profit_enabled: false` | off | INERT |
+| `max_daily_trades` | 3 | `max_daily_trades_enabled: false` | off | **INERT (doubly)** |
+| `max_contracts_per_order` | 2 | `max_contracts_enabled: false` | off | INERT |
+| `notional_cap_enabled` | false | — | off | INERT |
+| `blackout_enabled` | false | — | off | INERT |
+| `min_risk_reward_ratio` | **2** | — | master-independent | **LIVE — both seams** |
+| `min_confidence` | **60** | — | master-independent | **LIVE** |
+| `max_positions` | 3 | — | — | live |
+| `hold_discipline` | **true** | — | — | live |
+| `breakeven_enabled` | **true**, trigger **40 pts** | — | — | **OVERRIDDEN OFF by 0B** |
+| `trailing_enabled` | **true**, `atr_period: 14` | — | — | **OVERRIDDEN OFF by 0B** |
+
+Boot 8 confirms the override: `🛑 exits: … BE=off · trail=off · size=1 (0B)`.
+
+### Against the Monte Carlo rig
+
+`docs/superpowers/reports/2026-09-03-mc-drawdown.md` (`git log -1` → `77e1cdfc 2026-09-03 00:39:25
+-0500`), verdict line: *"expectancy indistinguishable from zero (CI −$31…+$18, n=64); maxDD@50 p95
+$1,677; the 3-trade cap forfeits $24.54/day, the $450 limit is inert."*
+
+| rig said | resolved now | conformance |
+|---|---|---|
+| "the $450 limit is **inert**" | `daily_loss_limit_usd: 450` · `daily_loss_enabled: false` · master off | **CONFORMS** — and it is inert *twice over* |
+| "the 3-trade cap **forfeits $24.54/day**" | `max_daily_trades: 3` · `max_daily_trades_enabled: false` · master off | **DOES NOT CONFORM as framed** — the cap is not enforced at all, so it forfeits **nothing**. The $24.54/day is the cost the cap *would* impose if switched on, not a cost being paid |
+
+**[A] This corrects the rig's framing, which reads as though the cap were active.** A sizing ruling
+taken from that line would be reasoning about a constraint that is not in force.
+
+**[A] Even the shadow counter is silent:** `kernel/engine_analysis.go:177` emits
+`🔍 guardrail WOULD have tripped (master OFF, not enforced)` and records
+`guardrail_would_trip` telemetry. It fired **0 times** on 2026-09-04.
+
+The two-day audit's finding that position 590 (−$99.00) "opened through" `max_daily_trades=3` is
+**re-verified at boot 8** and is more precisely stated here: the cap did not merely fail to
+enforce because the master was off — its own `max_daily_trades_enabled` is `false` as well.
+
+### What REMAINS enforced regardless of the master
+
+Per the boot WARN, master-independent venue safety: the futures **notional×N ceiling** and the
+**per-order contract clamp**, plus `isAccountTradeable` (SIM-only). Position size is pinned at
+**1 contract** by 0B (`size=1`), which is below the `max_contracts_per_order: 2` that is itself
+disabled — so the binding size constraint today is the 0B wave, not any guardrail.
