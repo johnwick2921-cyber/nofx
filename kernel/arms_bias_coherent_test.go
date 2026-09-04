@@ -14,8 +14,18 @@ import (
 	"testing"
 )
 
-// nyV7Level is the level BOTH scenarios were authored on, replayed from the
-// 09-03 NY v7 plan.
+// The real NY 2026-09-03 v7, read from the stored plan:
+//
+//	S1 long  breakout_retest  arm=none   ← un-armable AND shadowed
+//	S2 long  reclaim          arm=none   ← un-armable
+//	S3 short reject           arm=1      ← the only armable+live play it wrote
+//
+// So v7's long side had TWO scenarios and neither COULD be armed. The fixture
+// below models the same failure with an armable long, which is the harder case
+// to catch (the model could have armed and did not); the un-armable case v7
+// actually hit is pinned in TestBiasArmWarningNamesTheUnarmableCondition.
+//
+// nyV7Level is the level both sides were authored on.
 const nyV7Level = 29543.75
 
 // nyV7Doc builds the v7 shape: long bias, a short reject that is armed and a

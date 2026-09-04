@@ -16,7 +16,11 @@ import "strings"
 // armable: the retest entry rests AT the broken level.
 func ArmableCondition(condition string) bool {
 	switch strings.ToLower(strings.TrimSpace(condition)) {
-	case "fvg_entry", "reject", "breakdown_continue", "breakup_continue":
+	// reclaim added 2026-09-04 by owner ruling (arms-follow-bias, B): it arms
+	// as a STOP-ENTRY beyond the reclaim trigger (ArmKindFor). Until then every
+	// long-side play the planner favoured was un-armable, which is why long
+	// arm-enablement sat at 4.3% while shorts ran at 44%.
+	case "fvg_entry", "reject", "breakdown_continue", "breakup_continue", "reclaim":
 		return true
 	}
 	return false

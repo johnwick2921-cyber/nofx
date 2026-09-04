@@ -16,7 +16,16 @@ func TestArmableCondition(t *testing.T) {
 	}
 	// GAR-F4: breakout_retest was EXCLUDED (negative at every R-floor in the
 	// 2026-08-28 autopsy) — it stays a normal AI play and is never armed.
-	for _, c := range []string{"acceptance", "sweep_reclaim", "hold", "reclaim", "breakout_retest"} {
+	//
+	// RECLAIM MOVED OUT 2026-09-04 (owner ruling, arms-follow-bias B). It was
+	// excluded here as "close-confirm first → AI path". It arms now as a
+	// STOP-ENTRY beyond the trigger, which only fills if price actually trades
+	// back through the level — the mechanism, not a waiver of the reasoning.
+	// Note the nuance honestly: a trade-through is NOT a close confirm, and the
+	// original exclusion asked for a close. The ruling accepts that trade, and
+	// it is the change that makes long-biased plans armable at all (19 long
+	// plans were stranded with no armable play in their own direction).
+	for _, c := range []string{"acceptance", "sweep_reclaim", "hold", "breakout_retest"} {
 		if ArmableCondition(c) {
 			t.Fatalf("%s must NOT be armable (close-confirm first → AI path)", c)
 		}

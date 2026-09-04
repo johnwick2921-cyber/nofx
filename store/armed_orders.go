@@ -62,6 +62,11 @@ type ArmedOrderDB struct {
 	LegIndex int    `gorm:"default:0"`
 	LegCount int    `gorm:"default:0"`
 	Kind     string `gorm:"default:''"`
+	// Condition (arms-follow-bias 2026-09-04) — the scenario condition this arm
+	// was authored from. The executor needs it to tell a PRIMARY stop-entry
+	// (reclaim) from the E7 no-retest FALLBACK, which share a Kind. Legacy rows
+	// carry '' = UNKNOWN, which is never treated as a condition.
+	Condition string `gorm:"default:''"`
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -119,7 +124,8 @@ func (s *ArmedOrderStore) Migrate() error {
 			{"leg_index", "INTEGER NOT NULL DEFAULT 0"},
 			{"leg_count", "INTEGER NOT NULL DEFAULT 0"},
 			{"kind", "TEXT NOT NULL DEFAULT ''"},
-			{"boot_id", "TEXT NOT NULL DEFAULT ''"}, // class 33 — pre-boot decidability
+			{"boot_id", "TEXT NOT NULL DEFAULT ''"},   // class 33 — pre-boot decidability
+			{"condition", "TEXT NOT NULL DEFAULT ''"}, // arms-follow-bias 2026-09-04
 			// ATTRIBUTION (2026-09-02): the version the arm was FIRST authorized
 			// under. 0 on legacy rows; UpsertArm adopts their current version
 			// once, so the table self-heals without a guessing migration.
