@@ -154,9 +154,37 @@ preceded it, not to a file default.
 | trade-excursion writer | not present | first booted **10:28:29** — 67 min after the last trade closed |
 
 **[A] The last boot verified itself:** `BOOT INTEGRITY OK — rev 530009ffd540 · built
-2026-09-04T04:04:45Z · expected 530009ff · goldens PASS`. Note the worktree this audit reads
+2026-09-04T04:04:45Z · expected 530009ff · goldens PASS`. The worktree this audit reads
 (`dfbfa660`) is **3 commits ahead** of the deployed `530009ff`; the diff is `deploy/RELEASE`,
 `AUDIT-CHECKLIST.md` and docs only — no behavioural code.
+
+**Three premise corrections on the running rev [A]:**
+
+1. **PID 594377 *is* boot 7 running `530009ff`. There is no boot 8** — one `nofx-bin`,
+   `ExecMainStartTimestamp = Thu 2026-09-03 23:12:54 CDT`. They were never two facts to reconcile.
+2. **"~23:05 CT" is the build time, not the boot.** `530009ff` was committed/built at 23:04:45 CT
+   (`vcs.time 2026-09-04T04:04:45Z`); the boot is **23:12:55 CT**, eight minutes later.
+3. **The 23:11:59 boot is the failed half of that same cutover** (class 74 null cutover), not a
+   separate deploy — the old binary `89673ccc` relaunched and self-refused because `deploy/RELEASE`
+   already named the new rev. The two `TRADING REFUSED` lines in this window are one aborted
+   cutover each, not two independent stale deploys.
+
+**When each gate entered force** — this is what lets a refusal be attributed to the rule that
+actually governed it:
+
+| gate / behaviour | in force from |
+|---|---|
+| wake cutoff 25m + cooldown 30m, **WARN-only** | 09-02 21:19:21 CT |
+| the same, **ENFORCING** | **09-03 10:28:29 CT** |
+| cooldown fast-market exemption | 09-03 11:10:33 CT |
+| **`plan_mode=strict` (EntryGate leg 0)** + invalidation (leg 3) | **09-03 11:10:33 CT** |
+| one-open-position (leg 7) | **09-03 14:59:03 CT** |
+| trade-excursion writer | 09-03 10:28:29 CT (67 min after the last trade closed) |
+| 1B detector recorder | 09-03 21:48:12 CT |
+
+**[A] None of the legs that entered force on 09-03 existed during any of the five losing trades** —
+the last of which closed 09-03 09:20:45 CT, before the 10:28:29 boot. Every gate the dispatch
+names as "new" post-dates every loss in the window.
 
 ---
 
@@ -277,22 +305,28 @@ Cause: **`never_reached`**, by 8.2 points and one minute.
 
 ---
 
-## 5. THE TRADING DAY WAS LOST TO A HOST OUTAGE, THEN TO POST-BOOT BLINDNESS
+## 5. THE TRADING AFTERNOON WAS LOST TO 113 MINUTES OF SILENCE, THEN TO A BLIND BOOT
 
-**[A] The WSL2 host itself went down. This is not deploy churn and not a defect of the trading
-system** — an earlier reading of this audit blamed the restart cadence and was wrong:
+**Two separate events, and the first one has no determinable cause.** This audit passed through
+two wrong readings before arriving here — it first blamed deploy churn, then blamed the host
+reboot for the whole window. Neither is right.
 
 ```
-$ who -b          →  system boot  2026-09-03 14:18
-$ last reboot     →  reboot  system boot  6.6.87.2-microso  Thu Sep  3 14:18  still running
+last log_events row before the silence   →  id 25754,  2026-09-03 12:24:33 CT
+kernel boot   (uptime -s)                →  2026-09-03 14:02:25
+utmp boot     (who -b)                   →  2026-09-03 14:18       ← utmp is written late on WSL2
+bot log resumes                          →  2026-09-03 14:18:24
 ```
 
-The Go process, `nofx-web.service` and vite all came up together at 14:18:2x, systemd-started.
-The 548 bytes of NUL at offset 779709 of `nofx_2026-09-03.log` are the classic unclean-shutdown
-signature (dirty page cache lost), which is why the log's last *readable* line is 12:23:33 while
-the process's last verified act is `log_events` id 25754 at **12:24:33 CT**.
+| segment | duration | what is known |
+|---|---|---|
+| 12:24:33 → **14:02:25** | **98 min** | **[A] CAUSE CANNOT BE DISTINGUISHED.** The process stopped emitting. There is **no panic, no fatal, no shutdown banner, no signal line** anywhere in 12:20–12:25, and journald retains **nothing** before 2026-09-03 18:21:48 CT, so the window is unrecoverable. The 548 bytes of NUL at log offset 779709 are an unclean-shutdown signature — consistent with the process dying or the host freezing, and it does not distinguish between them. |
+| 14:02:25 → 14:18:24 | 16 min | host up (kernel boot), bot not yet running |
+| 14:18:24 → ~14:58 | ~40 min | bot up and **blind** — see below |
 
-**Corrected silence window: 2026-09-03 12:24:33 → 14:18:24 CT = 113 min 51 s.**
+**Corrected silence window: 2026-09-03 12:24:33 → 14:18:24 CT = 113 min 51 s**, of which only the
+last 16 minutes are explained by the host boot. **The host reboot at 14:02:25 does not explain the
+first 98 minutes**, and nothing in the record does.
 
 What the tape did while nothing was running:
 
@@ -324,7 +358,7 @@ The next decision cycle after 12:22:44 is **15:08:51** — a 166-minute decision
 14:45. **[A] The whole NY afternoon — 12:24:33 to 14:45, 2h20m containing the day's high — ran
 with either no host or no market data, and nothing alerted on the second half.**
 
-**[B] The restart cadence is a separate finding, not the cause of this gap.** `nofx_2026-09-03.log`
+**[B] The restart cadence is a separate finding, and it is not the cause of this gap either.** `nofx_2026-09-03.log`
 alone carries **11 boot banners from at least 6 different build trees** (`cleanclone`, `cc2`,
 `cc3`, `cleanbuild`, `cc6`, `nofx`) — audit and fix lanes cutting over repeatedly on a live
 trading day, one of them at 11:10:33 CT landing *between* NY v6 (10:49:57) and v7 (11:27:53), so
@@ -764,7 +798,7 @@ Cause vocabulary per the dispatch. Counts are **opportunities**, not log lines.
 | cause | n | detail |
 |---|---|---|
 | **planner_shape** | **22** | long scenarios authored without `arm.enabled` during a `trend`/`long` plan |
-| **host outage + post-boot blindness** | **1 window** | 113m51s down (12:24:33→14:18:24) + ~50 min blind after the boot; covers the day's high and the last 2h of NY entry time |
+| **silence (cause undetermined) + post-boot blindness** | **1 window** | 113m51s silent (12:24:33→14:18:24; only the last 16 min explained by the 14:02:25 kernel boot) + ~40 min blind after; covers the day's high and the last 2h of NY entry time |
 | **gate_strict (EntryGate leg 0)** | **13** | 20:35→21:12 CT ASIA; refuses *every* decision-path market entry (D33). Cost nothing this day — after the trading session |
 | parked(death) | 1 | arm 37; counterfactual **+38.75 pts** |
 | never_reached | 1 | the only arm-enabled long, missed by **8.2 pts** |
@@ -802,7 +836,7 @@ Every defect found, with the code path. None was acted on — this audit is read
 
 | # | defect | evidence | path |
 |---|---|---|---|
-| **D1** | **HOST outage, 113 min 51 s** — *not a system defect; recorded for attribution* | `who -b` / `last reboot` → system boot 2026-09-03 14:18; NUL hole at log offset 779709; last verified act `log_events` 25754 @12:24:33 CT | WSL2 host |
+| **D1** | **113 min 51 s of silence — the first 98 min have NO determinable cause** | last act `log_events` 25754 @12:24:33 CT; kernel boot `uptime -s` **14:02:25**; no panic/fatal/shutdown banner in 12:20–12:25; journald retains nothing before 18:21:48 CT; NUL hole at log offset 779709 | **cannot distinguish** — process death vs host freeze |
 | **D2** | **NT8 feed did not reconnect after the boot** | 46 `🚨 FEED DOWN` lines on 09-03; episode 1 runs 14:28:39→14:58:28, newest-bar age reaching **40m0s** | `trader/auto_trader.go:53` |
 | **D3** | **~50 min of post-boot blindness with no alert** — 3 × `NT8 TCP link DOWN — NEW entries BLOCKED`, 3 × `no_balance_frame` (equity 0), next decision cycle not until **15:08:51** vs 12:22:44 | the real defect in the outage story; the NY flat is 14:45 | dead-man watchdog + balance-frame wait |
 | **D4** | **Planner arms shorts, not longs** — 4.3% vs 44.4% arm-enablement on 09-03 while the plan bias was `long`/`trend` | §4 | planner output; `plans.doc.scenarios[].arm.enabled` |
@@ -907,7 +941,7 @@ the trade kept running to 29355 — losing 140 on a thesis its own document had 
 | 10:49:57 | the day's only arm-enabled long (29481.05) goes live; **misses by 8.2 pts**; superseded 11:27:53 |
 | 11:58:33 | arm 37 (short 29543.75) placed — the *short* half of v7's two scenarios on that level |
 | 12:15:00 | v7 dies (2×5m close below 29502.25) → arm 37 disarmed, 36 min before price reached it |
-| 12:24:33 | **HOST down for 113 min 51 s** (`who -b` → system boot 14:18) |
+| 12:24:33 | **silence begins — 113 min 51 s; first 98 min have no determinable cause**; kernel boot 14:02:25 |
 | 14:18:24 | host+process boot; **FEED DOWN ×31**, `NT8 TCP link DOWN — NEW entries BLOCKED`, `no_balance_frame` — blind for the remaining 27 min of NY |
 | 14:45 | NY flat |
 
@@ -948,9 +982,11 @@ decision loop that proposed `open_long` **zero times in 575 decisions**; v7 put 
 on the *identical* level 29543.75 with both confirms true at 11:58 CT and armed only the short;
 71% of all arm-enabled scenarios were authored at prices their own version never saw, and on 09-02
 six versions carried a short arm 62.25 points above the day's high. **Something that is neither a rule nor the tape accounts for
-~30%**, and it is two things, not one: the **WSL2 host rebooted at 14:18 CT** (`who -b`,
-`last reboot`), taking the process down from 12:24:33 for 113 min 51 s — an infrastructure event,
-not a defect of this system — and then the boot came up **blind**, with 31 `FEED DOWN` lines, the
+~30%**, and it is two things, not one: the process fell silent at **12:24:33 CT** and stayed silent
+for **113 min 51 s**, of which only the last 16 minutes are explained by the host's kernel boot at
+14:02:25 — **the first 98 minutes have no determinable cause** (no panic, fatal or shutdown banner,
+and journald retains nothing before 18:21:48 CT, so this is a CANNOT-DISTINGUISH, not an
+infrastructure finding dressed up as one) — and then the boot came up **blind**, with 31 `FEED DOWN` lines, the
 dead-man watchdog logging `NT8 TCP link DOWN — NEW entries BLOCKED`, and `no_balance_frame` at
 equity 0, so the next decision cycle after 12:22:44 was **15:08:51**; the NY flat is 14:45, so the
 entire afternoon containing the day's high of 29585 had either no host or no data, and **the
