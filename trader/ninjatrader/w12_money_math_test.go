@@ -65,10 +65,10 @@ func TestW12TickRounding(t *testing.T) {
 		t.Fatalf("MNQ tick must be 0.25, got %v", ts)
 	}
 	cases := []struct{ in, want float64 }{
-		{29901.30, 29901.25}, // .30 → nearest .25
-		{29901.37, 29901.25}, // .37 closer to .25 than .50
-		{29901.38, 29901.50}, // .38 closer to .50
-		{29901.13, 29901.25}, // .13 → .25
+		{29901.30, 29901.25},  // .30 → nearest .25
+		{29901.37, 29901.25},  // .37 closer to .25 than .50
+		{29901.38, 29901.50},  // .38 closer to .50
+		{29901.13, 29901.25},  // .13 → .25
 		{29901.125, 29901.25}, // exact half → away from zero → .25
 		{29901.25, 29901.25},  // already aligned (idempotent)
 	}

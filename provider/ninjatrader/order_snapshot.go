@@ -27,6 +27,7 @@ import (
 // NT8Order is one order in the broker's book, as the AddOn sees it.
 type NT8Order struct {
 	OrderID    string  `json:"order_id"`
+	Symbol     string  `json:"symbol,omitempty"`
 	Name       string  `json:"name,omitempty"`
 	Action     string  `json:"action,omitempty"` // buy | sell
 	Type       string  `json:"type,omitempty"`   // limit | stop | stop_limit | market
@@ -58,9 +59,12 @@ func (o NT8Order) IsWorking() bool {
 }
 
 // OrderSnapshotPayload is the frame body.
+// The frame is ACCOUNT-scoped: NT8's Account.Orders is an account collection and
+// the AddOn has no persistent per-instrument handle to scope it by. Each order
+// carries its own symbol and the reader filters — which also keeps an empty book
+// representable, since an account with no orders still emits orders: [].
 type OrderSnapshotPayload struct {
 	Account string `json:"account"`
-	Symbol  string `json:"symbol"`
 	// BuildID is the AddOn's VL_BUILD_ID. It rides every snapshot so the running
 	// DLL can be identified from a RECEIVED frame — the only proof that a
 	// distributed change actually landed (class 6). A build id read from our own
@@ -71,13 +75,26 @@ type OrderSnapshotPayload struct {
 	Orders    []NT8Order `json:"orders"`
 }
 
-// WorkingOrders is the non-terminal subset — what leg 4 counts.
+// WorkingOrders is the non-terminal subset of the whole account book.
 func (p OrderSnapshotPayload) WorkingOrders() []NT8Order {
+	return p.WorkingOrdersFor("")
+}
+
+// WorkingOrdersFor is the non-terminal subset for one instrument — what leg 4
+// counts. An empty symbol means the whole account. Matching is case-insensitive
+// because NT8 reports MasterInstrument.Name and our side carries the canonical
+// symbol; one canonicalizer, applied where the values meet.
+func (p OrderSnapshotPayload) WorkingOrdersFor(symbol string) []NT8Order {
+	want := strings.ToUpper(strings.TrimSpace(symbol))
 	out := make([]NT8Order, 0, len(p.Orders))
 	for _, o := range p.Orders {
-		if o.IsWorking() {
-			out = append(out, o)
+		if !o.IsWorking() {
+			continue
 		}
+		if want != "" && strings.ToUpper(strings.TrimSpace(o.Symbol)) != want {
+			continue
+		}
+		out = append(out, o)
 	}
 	return out
 }
@@ -90,10 +107,10 @@ func ParseOrderSnapshot(b []byte) (OrderSnapshotPayload, error) {
 	if err := json.Unmarshal(b, &p); err != nil {
 		return OrderSnapshotPayload{}, fmt.Errorf("order_snapshot: bad payload: %w", err)
 	}
-	// A frame with no symbol cannot be filed against an instrument. Filing it
-	// under "" would let it answer for every symbol at once.
-	if strings.TrimSpace(p.Symbol) == "" {
-		return OrderSnapshotPayload{}, fmt.Errorf("order_snapshot: no symbol — unaddressable frame")
+	// A frame with no ACCOUNT cannot be filed. Filing it under "" would let one
+	// account's book answer for every account.
+	if strings.TrimSpace(p.Account) == "" {
+		return OrderSnapshotPayload{}, fmt.Errorf("order_snapshot: no account — unaddressable frame")
 	}
 	if p.Orders == nil {
 		// An absent list and an empty list must not collapse into each other:
@@ -130,8 +147,8 @@ func NewOrderSnapshotCache() *OrderSnapshotCache {
 	return &OrderSnapshotCache{byKey: map[string]cachedSnapshot{}}
 }
 
-func snapKey(account, symbol string) string {
-	return strings.ToUpper(strings.TrimSpace(account)) + "|" + strings.ToUpper(strings.TrimSpace(symbol))
+func snapKey(account string) string {
+	return strings.ToUpper(strings.TrimSpace(account))
 }
 
 // PutAt stores a snapshot. The receipt instant is passed IN (class 60 / A28):
@@ -140,7 +157,7 @@ func snapKey(account, symbol string) string {
 func (c *OrderSnapshotCache) PutAt(p OrderSnapshotPayload, receivedAt time.Time) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.byKey[snapKey(p.Account, p.Symbol)] = cachedSnapshot{Payload: p, ReceivedAt: receivedAt}
+	c.byKey[snapKey(p.Account)] = cachedSnapshot{Payload: p, ReceivedAt: receivedAt}
 }
 
 // EverReceived reports whether ANY snapshot has arrived on this link. It is
@@ -155,10 +172,10 @@ func (c *OrderSnapshotCache) EverReceived() bool {
 }
 
 // Latest returns the newest snapshot for the key.
-func (c *OrderSnapshotCache) Latest(account, symbol string) (OrderSnapshotPayload, bool) {
+func (c *OrderSnapshotCache) Latest(account string) (OrderSnapshotPayload, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	s, ok := c.byKey[snapKey(account, symbol)]
+	s, ok := c.byKey[snapKey(account)]
 	return s.Payload, ok
 }
 
@@ -166,10 +183,10 @@ func (c *OrderSnapshotCache) Latest(account, symbol string) (OrderSnapshotPayloa
 // second return is false when there is no snapshot at all — the caller must
 // distinguish "no book" from "a book of age 0", which is precisely the
 // plausible-zero the gate rules forbid (A24).
-func (c *OrderSnapshotCache) AgeAt(account, symbol string, now time.Time) (time.Duration, bool) {
+func (c *OrderSnapshotCache) AgeAt(account string, now time.Time) (time.Duration, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	s, ok := c.byKey[snapKey(account, symbol)]
+	s, ok := c.byKey[snapKey(account)]
 	if !ok {
 		return 0, false
 	}
@@ -184,3 +201,48 @@ func (s *TCPServer) OrderSnapshots() *OrderSnapshotCache { return s.orderSnaps }
 // time; nil disables persistence without disabling the cache, so a store
 // failure can never cost the gate its broker read.
 func (s *TCPServer) SetOrderSnapshotSink(fn func(OrderSnapshotPayload)) { s.orderSnapCB = fn }
+
+// ExpectedAddonBuild is the VL_BUILD_ID this Go binary was built alongside — the
+// value in ninjascript/VLTraderTCPClient.cs at the time of the build.
+//
+// It is the EXPECTED side of the comparison and never the reported one. The
+// whole reason the boot line exists is that our source and NT8's loaded DLL can
+// differ: VL_BUILD_ID has been bumped in source repeatedly while NT8 kept
+// running an older compile, and a line that read this constant as if it were
+// the running build would report success for a change that never landed
+// (class 6 — proof is a RECEIVED frame).
+const ExpectedAddonBuild = "2026-09-03-f12"
+
+// AddonBuildLine renders the build-id half of the boot line. `received` comes
+// from TCPServer.FarSideBuildID() — a value that arrived on the wire.
+func AddonBuildLine(received, expected string) string {
+	got := strings.TrimSpace(received)
+	if got == "" {
+		// "none", never the expected value: an unknown build must not be able to
+		// render as agreement (A24 — a check that cannot fail is not a check).
+		return "nt8 addon: build_id=none expected=" + expected + " match=NO (no frame carrying a build_id received yet)"
+	}
+	if got == expected {
+		return "nt8 addon: build_id=" + got + " expected=" + expected + " match=yes"
+	}
+	return "nt8 addon: build_id=" + got + " expected=" + expected +
+		" match=NO (NT8 is running an older DLL — recompile the AddOn (F5) and restart NT8)"
+}
+
+// OrderSnapshotLineAt renders the snapshot half: age, working count, and which
+// source cutover leg 4 will therefore use. Every field is READ from the cache;
+// a missing book says "none" rather than age=0, which would read as a book
+// received this instant.
+func OrderSnapshotLineAt(c *OrderSnapshotCache, account, symbol string, now time.Time) string {
+	if c == nil || !c.EverReceived() {
+		return "order_snapshot: last=none · leg4 source=ledger (no snapshot yet)"
+	}
+	snap, ok := c.Latest(account)
+	age, haveAge := c.AgeAt(account, now)
+	if !ok || !haveAge {
+		return "order_snapshot: last=none for " + account + "/" + symbol +
+			" · leg4 source=ledger (snapshots arriving, but not for this key)"
+	}
+	return fmt.Sprintf("order_snapshot: last age=%ds orders=%d · leg4 source=broker",
+		int(age.Seconds()), len(snap.WorkingOrdersFor(symbol)))
+}

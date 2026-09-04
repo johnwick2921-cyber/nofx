@@ -31,7 +31,7 @@ func TestT1RunLevelStatsDayOnceWritesRows(t *testing.T) {
 		Scenarios: []kernel.PlanScenario{}, NoTrade: []string{}}
 	blob, _ := json.Marshal(doc)
 	if _, err := st.Plan().AppendPlan(&store.PlanDB{
-		PlanID: "2026-08-26:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265",
+		PlanID:    "2026-08-26:NY:8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265",
 		TradeDate: day, Session: "NY", StrategyID: "8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265",
 		Doc: string(blob), Lifecycle: "active", CreatedAt: dayStart,
 	}); err != nil {

@@ -1410,6 +1410,37 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     disagrees with a verified port is the fixture's error; and a rate ships with
     its n, its interval and its excluded count or it does not ship.
 
+67. **A gate leg that asks our own bookkeeping and calls the answer the
+    broker's.** (Number assigned at merge; 66 was taken on dev by the
+    two-price-spaces class at combined boot 4, and my own UI wave claims 66 on
+    an unmerged branch — that one needs renumbering before it lands.) The flat
+    gate had five legs and four of them asked NT8. Leg 4 — working orders — asked
+    `armed_orders`, our own ledger, because the AddOn emitted position, fill,
+    order_update, bar and account frames and nothing that said what was RESTING
+    at the broker. The leg even said so in its own source string: *"armed_orders
+    ledger (no NT8 order frame — F12 open)"*. A leg answered by our own
+    bookkeeping cannot detect the one failure a flat gate exists to detect — the
+    ledger and the broker disagreeing — and it had passed at every cutover since
+    35 on exactly that basis.
+    The consequence was not theoretical: on 2026-09-02 the 0B cutover waived flat
+    with position 588 open, and **the resting stop could not be verified**,
+    because nothing on the wire could say whether it was there. The standing rule
+    that followed ("no override with a position open") was the right answer to an
+    unanswerable question — a blanket refusal standing in for a check that had no
+    data.
+    **Probe:** for every gate leg, name the SYSTEM that answers it, not the
+    function that computes it. If the answer comes from state we ourselves wrote,
+    the leg cannot fail in the case where our state is wrong — which is the case
+    the gate is for. Ask separately: what does this leg do when its source is
+    silent? "Passes" is the wrong answer, and so is "fails" if silence is the
+    normal state during a rollout.
+    **Law:** a gate leg must be answered by the system it is asserting about. When
+    it cannot be, the fallback is permitted but must be NAMED in the leg's own
+    source string on every read — the rule is *never a SILENT fallback*, not
+    *never a fallback*. And a blanket refusal standing in for a missing
+    measurement should be recorded as a MEASUREMENT DEBT, not as policy: it looks
+    like caution and behaves like a permanent no.
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,

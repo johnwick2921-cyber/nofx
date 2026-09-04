@@ -53,8 +53,8 @@ func Leg4FromBrokerAt(
 			Detail: fmt.Sprintf("%d non-terminal arm(s) — NO SNAPSHOT YET, this leg is the LEDGER's answer, not the broker's", len(ledger)),
 			Source: "armed_orders ledger (no snapshot yet — old AddOn or link down; reload the AddOn to make this leg read the broker)"}
 	}
-	snap, ok := c.Latest(account, symbol)
-	age, haveAge := c.AgeAt(account, symbol, now)
+	snap, ok := c.Latest(account)
+	age, haveAge := c.AgeAt(account, now)
 	// A book existed on this link but not for THIS account+symbol, or it
 	// vanished: that is a regression, not a cold start, and it FAILS.
 	if !ok || !haveAge {
@@ -69,7 +69,7 @@ func Leg4FromBrokerAt(
 			Source: "broker — NT8 order_snapshot frame (STALE)"}
 	}
 
-	working := snap.WorkingOrders()
+	working := snap.WorkingOrdersFor(symbol)
 	// The word "broker" is load-bearing in this string: the whole point of F12
 	// is that a reader can tell at a glance whether leg 4 was answered by the
 	// broker or by our own ledger.
@@ -136,8 +136,8 @@ func OverrideAllowedAt(
 	if c == nil {
 		return false, "override refused: no order-snapshot cache — the resting stop cannot be verified"
 	}
-	snap, ok := c.Latest(account, symbol)
-	age, haveAge := c.AgeAt(account, symbol, now)
+	snap, ok := c.Latest(account)
+	age, haveAge := c.AgeAt(account, now)
 	if !ok || !haveAge {
 		return false, fmt.Sprintf("override refused: no order frame received for %s/%s — the resting stop cannot be verified (this is the 0B state)", account, symbol)
 	}
@@ -150,21 +150,19 @@ func OverrideAllowedAt(
 	}
 
 	var best *nt.NT8Order
-	for i := range snap.Orders {
-		o := snap.Orders[i]
-		if !o.IsWorking() {
-			continue
-		}
+	candidates := snap.WorkingOrdersFor(symbol)
+	for i := range candidates {
+		o := candidates[i]
 		if !strings.Contains(strings.ToLower(o.Type), "stop") {
 			continue
 		}
 		if best == nil || math.Abs(o.StopPrice-expectedStop) < math.Abs(best.StopPrice-expectedStop) {
-			best = &snap.Orders[i]
+			best = &candidates[i]
 		}
 	}
 	if best == nil {
 		return false, fmt.Sprintf("override refused: no working STOP order in the broker's book (age %ds, %d working order(s)) — the position is unprotected or the stop is not where we think",
-			int(age.Seconds()), len(snap.WorkingOrders()))
+			int(age.Seconds()), len(candidates))
 	}
 	if d := math.Abs(best.StopPrice - expectedStop); d > tolerance {
 		return false, fmt.Sprintf("override refused: the resting stop is at %.2f, expected %.2f (Δ %.2f > tolerance %.2f)",
@@ -209,3 +207,33 @@ func OrderSnapshotInterval() time.Duration {
 // side reads its own constant; the protocol doc names this as the contract so
 // the two cannot silently disagree about what "stale" means.
 const DefaultOrderSnapshotSecs = 30
+
+// Leg4SourceLabel is the one-word answer to "who answers leg 4 right now" —
+// `broker` once snapshots are arriving, `ledger` until then. It exists so the
+// boot line and the gate cannot disagree: both derive it from the same cache.
+func Leg4SourceLabel(c *nt.OrderSnapshotCache, account, symbol string, now time.Time) string {
+	if c == nil || !c.EverReceived() {
+		return "ledger (no snapshot yet)"
+	}
+	if _, ok := c.Latest(account); !ok {
+		return "ledger (no book for " + account + ")"
+	}
+	if age, ok := c.AgeAt(account, now); ok && age > 2*OrderSnapshotInterval() {
+		return "STALE"
+	}
+	return "broker"
+}
+
+// farSideBuildID is the AddOn build id as RECEIVED on the wire, "" when no
+// frame has carried one. Never falls back to our own source constant.
+func (at *AutoTrader) farSideBuildID() string {
+	n := at.armedTrader()
+	if n == nil {
+		return ""
+	}
+	srv := n.GetServer()
+	if srv == nil {
+		return ""
+	}
+	return srv.FarSideBuildID()
+}
