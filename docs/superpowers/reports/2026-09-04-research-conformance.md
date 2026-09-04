@@ -21,8 +21,28 @@ they are separated.**
 
 A knob is a *number with a reader*; a belief is a *rule with a claim about the market*. The census
 never labelled the 144, and the registry never labelled the 49. **"How many of the 144 live rules
-are [R]/[T] vs [I]" cannot be answered as posed** — the 144 have no labels. What can be answered,
-and is, below: the label distribution of the 49 beliefs then vs now, and the demotion-queue status.
+are [R]/[T] vs [I]" cannot be answered as posed** — the 144 carry no evidence labels at all. What
+can be answered, and is:
+
+### The 49 labelled beliefs — 2026-09-02 vs now
+
+| label | 09-02 census | now | Δ |
+|---|---|---|---|
+| **[R]** researched | 7 | 7 | — |
+| **[T]** own-tape | 7 | **8** | **+1** |
+| **[O]** owner-ruled | 14 | 14 | — |
+| **[I]** invented / untested | **20** | **19** | **−1** |
+| **[X]** contradicted | 1 | 1 | — |
+| **grounded ([R]+[T]+[O])** | **28 of 49 (57.1%)** | **29 of 49 (59.2%)** | **+1** |
+
+**[A] Exactly one belief moved in two days: B7 (stale-confirm 2.0×ATR5m) from [I] to [T]** — and it
+moved because a citation was written into the code (`kernel/plan_confirm.go:118-123`, n=2,908), not
+because a wave demoted anything. **Zero of the nine demotion-queue items were demoted.** The
+ungrounded share fell from 40.8% to 38.8% by one row.
+
+Counted with `python3` over the census tables (49 rows, first label per row where a row carries a
+compound like `[R/O]`); the raw token counts differ (27/15/8/8/3) because compound labels
+double-count.
 
 ```bash
 grep -c 'Status: KnobLive'        store/knob_registry_table.go   # 144
