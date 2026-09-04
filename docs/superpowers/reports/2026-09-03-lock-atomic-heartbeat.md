@@ -70,7 +70,34 @@ they expect to need the tree. Liveness is the heartbeat. An unexpired lock with 
 heartbeat is precisely the 0C case from the A2 amendment, and it now reads that way on its
 face instead of requiring an agent to reason it out.
 
-## 3. Tests — `deploy/nofx-lock-test.sh`, 36 assertions
+## 2b. Succession — `reclaim`, added by owner ruling after the first merge
+
+The heartbeat makes an abandoned lock *visible*; it does not hand it over. `reclaim` does,
+and only on the record:
+
+```
+nofx-lock reclaim <new> <stale> "<what you checked>"
+```
+
+- **Refused while the heartbeat is fresh**, without exception. A reclaim that can take a
+  live lock is replacement with better manners — the exact failure the atomic create
+  removed. The refusal quotes the age and tells you to wait or ask the holder to release.
+- **You must name the holder you are taking over.** Naming the wrong session is refused, so
+  a misread of `status` cannot become a silent seizure.
+- **You must state the corroboration.** Empty is refused. The message names what counts:
+  HEAD not moving, no build in flight, the session not answering.
+- **It appends to `history`** — who took over, from whom, the heartbeat age, and the reason.
+  `status` prints it, and `release` prints it once more before the directory goes, because
+  the failure this exists for is invisible succession and a chain that vanishes silently
+  would defeat the point.
+- **rc 3, not acquire's 0.** A script can distinguish "took a free lock" from "inherited an
+  abandoned one", so a lane can refuse to inherit. Suggested by nofx-b3 and adopted.
+
+One peer suggestion was **not** taken: that reclaim "must refuse while the recorded pid is
+alive". There is no recorded pid any more, and adding one back to gate reclaim would
+reintroduce the class this wave removed. Staleness of the heartbeat is the whole test.
+
+## 3. Tests — `deploy/nofx-lock-test.sh`, 56 assertions
 
 | pins | first run |
 |---|---|
@@ -133,10 +160,25 @@ face instead of requiring an agent to reason it out.
 ## 6. Two lanes wrote this, and the branch keeps both
 
 I finished my version and found the branch name already taken on the remote by `ec2dd8f7`,
-a peer lane's independent implementation of the same ruling — same atomic `mkdir`, same
-session identity, same 2-min/5-min heartbeat, same STALE-not-DEAD wording. **I did not
-force-push over it.** Their commit is the base; mine is layered on top, and the shipped
-script takes the better half of each:
+an independent implementation of the same ruling — same atomic `mkdir`, same session
+identity, same 2-min/5-min heartbeat, same STALE-not-DEAD wording. **I did not force-push
+over it.** That commit is the base; mine is layered on top, and the shipped script takes the
+better half of each:
+
+**Whose commit `ec2dd8f7` is, is currently UNKNOWN, and that is itself a finding.** I first
+told nofx-b3 it was theirs. They corrected it with their own timeline — their boot marker
+lands at 21:49:36, sixty seconds after `ec2dd8f7`, and at 21:48:12 they were reading a
+boot-integrity line; nobody writes 150 lines of bash in that minute. **Every commit in this
+repo carries the identical author identity (`johnwick2921-cyber`), so git cannot answer
+"which lane wrote this".** Provenance has to come from the branch, the worktree and the
+timestamp. I have asked nofx-ed and nofx-47 directly and will name the author here when one
+of them confirms; until then this section says "unknown" rather than guessing twice.
+
+The sharper version of the problem: a lane's work was merged into `dev` without its author
+being told, under a wave another lane was reporting. A24 bans a boot line that claims a
+neighbour's work — the same rule has to run in reverse, or credit silently migrates to
+whoever merges. PART 3 step 0 (push-empty-at-accept) is the mechanism that stops it
+happening again.
 
 | kept from `ec2dd8f7` | why |
 |---|---|

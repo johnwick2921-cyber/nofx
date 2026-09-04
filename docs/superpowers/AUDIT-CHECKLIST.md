@@ -1532,11 +1532,23 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     stays mandatory before clearing: ask the named session, watch whether HEAD
     moves, look for a build in flight. Fixed in `deploy/nofx-lock.sh`
     (`acquire`/`heartbeat`/`release`/`status`/`check`/`with-heartbeat`), pinned
-    by `deploy/nofx-lock-test.sh` — 36 assertions including a second acquire
+    by `deploy/nofx-lock-test.sh` — 56 assertions including a second acquire
     refusing, a stale heartbeat never reading "dead", and a source pin that the
     script cannot express `kill -0`, `pgrep` or `$$`. `with-heartbeat` beats
     only for the lifetime of the command it wraps: a beater that outlived its
-    job would reinvent the pid problem in a new costume.
+    job would reinvent the pid problem in a new costume. **Succession is on the
+    record:** `reclaim <new> <stale> "<corroboration>"` is refused while the
+    heartbeat is fresh (a reclaim that can take a live lock is replacement with
+    better manners), requires the caller to name the holder it is taking over
+    and what it checked, appends who/from-whom/when/why to a `history` file
+    printed by `status` and again at `release`, and returns **rc 3** rather than
+    acquire's 0 so a lane can tell "took a free lock" from "inherited an
+    abandoned one" and refuse to inherit. **Provenance hazard found the same
+    day:** every commit in this repo carries the identical author identity, so
+    git cannot answer "which lane wrote this" — provenance must come from the
+    branch, the worktree and the timestamp, and a lane's work can otherwise be
+    absorbed under another lane's name. That is what PART 3 step 0 exists to
+    prevent.
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,
@@ -1559,7 +1571,29 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
 
 ---
 
-## PART 3 — PRE-CUTOVER (standing 7-step protocol; flat gate = 5 legs, class 33)
+## PART 3 — PRE-CUTOVER (standing 8-step protocol, 0-7; flat gate = 5 legs, class 33)
+
+0. **PUSH EMPTY AT ACCEPT — claim the wave before you build it.** The moment you
+   accept a dispatch, create the named branch and push it with an empty commit,
+   BEFORE writing a line:
+
+   ```
+   git checkout -b <branch> origin/dev
+   git commit --allow-empty -m "claim: <wave> — <session>, $(date -Is)"
+   git push -u origin <branch>          # rejected or already there? STOP.
+   ```
+
+   If the branch already exists on origin, **another lane has this wave**: stop
+   and coordinate before doing any work. Fold the empty commit into your first
+   real one (`--amend`) or leave it; it costs nothing either way.
+
+   Born 2026-09-03, during class 70 itself. Two lanes independently wrote ~250
+   lines of the same lock wave inside an hour, and a third lane's branch was
+   consumed into dev without its author ever being told — and the ONLY thing that
+   surfaced any of it was a non-fast-forward rejection at push time, after all
+   the work was done. A branch name on origin is the only claim this protocol
+   has. Claiming it costs one empty commit and one second; not claiming it cost
+   a day's duplicate work and an attribution that git cannot reconstruct.
 
 1. **Tree gate:** porcelain-clean + `deploy/nofx-lock.sh acquire <session>
    <task> [minutes]` (atomic create; records session · task · acquired ·

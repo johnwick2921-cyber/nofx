@@ -101,6 +101,44 @@ sleep 1
 check "beater does not outlive its command" "$(cat "$NOFX_LOCK_DIR/heartbeat")" "$before"
 L release nofx-63 >/dev/null
 
+echo "== reclaim: REFUSED on a fresh heartbeat =="
+L acquire nofx-b3 'a live cutover' 90 >/dev/null
+out="$(L reclaim nofx-63 nofx-b3 'HEAD has not moved in 20m; no build in flight')"; rc=$?
+check "reclaim rc on fresh is nonzero" "$([ $rc -ne 0 ] && echo nonzero || echo zero)" "nonzero"
+has   "reclaim refuses a fresh lock" "$out" "REFUSED"
+hasi  "refusal says the heartbeat is fresh" "$out" "fresh"
+check "holder is unchanged after a refused reclaim" "$(L status | grep -c "nofx-b3")" "1"
+
+echo "== reclaim: allowed once STALE, and only with corroboration =="
+age_lock 660
+out="$(L reclaim nofx-63 nofx-b3)"; rc=$?
+check "reclaim without corroboration rc nonzero" "$([ $rc -ne 0 ] && echo nonzero || echo zero)" "nonzero"
+hasi  "refuses when corroboration is missing" "$out" "corroborat"
+out="$(L reclaim nofx-63 nofx-ed 'HEAD static; no build')"; rc=$?
+check "reclaim naming the WRONG stale session rc nonzero" "$([ $rc -ne 0 ] && echo nonzero || echo zero)" "nonzero"
+has   "refuses when the named session is not the holder" "$out" "REFUSED"
+out="$(L reclaim nofx-63 nofx-b3 'HEAD has not moved in 20m; no build in flight')"; rc=$?
+# rc 3, NOT acquire's 0 — a script must be able to tell "took a free lock" from
+# "inherited an abandoned one", so a lane can refuse to inherit.
+check "reclaim rc is 3, distinct from acquire's 0" "$rc" "3"
+hasi  "reclaim confirms" "$out" "reclaim"
+out="$(L status)"
+has   "new holder is named"        "$out" "nofx-63"
+hasnti "reclaimed lock is fresh"   "$out" "stale"
+
+echo "== the reclaim is written to the lock's history =="
+hist="$(cat "$NOFX_LOCK_DIR/history" 2>/dev/null)"
+has  "history names who took over"      "$hist" "nofx-63"
+has  "history names who was taken from" "$hist" "nofx-b3"
+has  "history carries the corroboration" "$hist" "no build in flight"
+has  "history is timestamped"           "$hist" "20"
+check "history survives into status" "$(L status | grep -c 'reclaim')" "1"
+
+echo "== a reclaimed lock still beats and releases as the new holder =="
+check "old holder may no longer beat" "$(L heartbeat nofx-b3 >/dev/null 2>&1; echo $?)" "1"
+L heartbeat nofx-63 >/dev/null; check "new holder may beat" "$?" "0"
+L release nofx-63 >/dev/null; has "released" "$(L status)" "free"
+
 echo "== the script cannot express pid liveness =="
 src="$(grep -v '^[[:space:]]*#' "$LOCK_SH" | sed 's/[[:space:]]#.*$//')"
 hasnt "no kill -0"  "$src" "kill -0"

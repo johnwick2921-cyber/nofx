@@ -36,6 +36,7 @@
 #   nofx-lock status                               # free | held | STALE + age
 #   nofx-lock check                                # rc 0 free · 1 held · 2 stale
 #   nofx-lock with-heartbeat <session> -- <cmd>    # beats for <cmd>'s lifetime
+#   nofx-lock reclaim <new> <stale> "<corroboration>"  # ONLY on a stale heartbeat
 #   nofx-lock release <session>                    # only the holder may release
 set -uo pipefail
 
@@ -93,6 +94,14 @@ cmd_heartbeat() {
   echo "heartbeat $(_now)"
 }
 
+# The history lives in the lock dir and dies with the lock, so it is printed
+# wherever the lock is inspected and once more at release — a succession chain
+# that vanishes silently would defeat the point of recording it.
+_show_history() {
+  [ -s "$LOCK_DIR/history" ] || return 0
+  echo "  history:"; sed 's/^/    /' "$LOCK_DIR/history"
+}
+
 _age() { local hb; hb="$(_field heartbeat_epoch)"; echo $(( $(_epoch) - ${hb:-0} )); }
 
 cmd_status() {
@@ -112,9 +121,12 @@ cmd_status() {
     echo "STALE — held by '$session' (task: $task), heartbeat ${age}s old (> ${HEARTBEAT_STALE_SECONDS}s), expiry $(_field expiry)."
     echo "  DO NOT CLEAR ON THIS ALONE. Corroborate first: is HEAD moving? is a build running?"
     echo "  does '$session' answer? Clear only with a note naming what you checked."
+    echo "  To take it over on the record: nofx-lock reclaim <you> '$session' \"<what you checked>\""
+    _show_history
     return 2
   fi
   echo "held by '$session' (task: $task), heartbeat ${age}s old — ALIVE, expiry $(_field expiry)"
+  _show_history
 }
 
 # For scripts (the tree guard): 0 free · 1 held-fresh · 2 held-stale.
@@ -144,10 +156,55 @@ cmd_with_heartbeat() {
   return $rc
 }
 
+# reclaim — succession, on the record.
+#
+# The failure this exists for is INVISIBLE SUCCESSION: a lock whose owner is
+# gone, taken over by someone else with nothing written down. So every reclaim
+# APPENDS to the lock's history — who took it, from whom, when, and what they
+# checked — and an unauditable reclaim is worse than none.
+#
+# It is refused while the heartbeat is FRESH, without exception. A reclaim that
+# can take a live lock is replacement with better manners, which is the very
+# failure the atomic create removed.
+#
+# rc 3 is deliberately distinct from acquire's rc 0: a script can tell "took a
+# free lock" from "inherited an abandoned one", and a lane that would rather not
+# inherit can refuse.
+cmd_reclaim() { # reclaim <new_session> <stale_session> <corroboration...>
+  local new="${1:?new session required}" stale="${2:-}" ; shift 2 2>/dev/null || true
+  local why="${*:-}"
+  [ -d "$LOCK_DIR" ] || { echo "REFUSED — no lock to reclaim (use acquire)."; return 1; }
+  local holder age; holder="$(_field session)"; age="$(_age)"
+  if [ -z "$stale" ] || [ "$stale" != "$holder" ]; then
+    echo "REFUSED — name the session you are taking over. The holder is '$holder', you named '${stale:-<nothing>}'."
+    return 1
+  fi
+  if [ "$age" -le "$HEARTBEAT_STALE_SECONDS" ]; then
+    echo "REFUSED — '$holder' has a FRESH heartbeat (${age}s old, stale is > ${HEARTBEAT_STALE_SECONDS}s)."
+    echo "  A live holder is never reclaimable. Wait, or ask '$holder' to release."
+    return 1
+  fi
+  if [ -z "$why" ]; then
+    echo "REFUSED — state the corroboration you checked (HEAD not moving, no build in flight, session not answering)."
+    echo "  usage: nofx-lock reclaim <new> <stale> \"<what you checked>\""
+    return 1
+  fi
+  printf '%s reclaim: %s took over from %s (heartbeat was %ss old) — corroboration: %s\n' \
+    "$(_now)" "$new" "$stale" "$age" "$why" >> "$LOCK_DIR/history"
+  { _meta | grep -vE '^(session|heartbeat)'
+    echo "session=$new"
+    echo "heartbeat=$(_now)"
+    echo "heartbeat_epoch=$(_epoch)"
+  } | _write_meta
+  echo "RECLAIMED by $new from $stale — logged to the lock history."
+  return 3
+}
+
 cmd_release() {
   local session="${1:?session required}"
   [ -d "$LOCK_DIR" ] || { echo "no lock"; return 0; }
   _require_holder "$session" || return 1
+  _show_history
   rm -rf "$LOCK_DIR"; echo "released by $session"
 }
 
@@ -157,6 +214,7 @@ case "${1:-status}" in
   status)         cmd_status ;;
   check)          cmd_check ;;
   with-heartbeat) shift; cmd_with_heartbeat "$@" ;;
+  reclaim)        shift; cmd_reclaim "$@" ;;
   release)        shift; cmd_release "$@" ;;
-  *) echo "usage: nofx-lock {acquire <session> <task> [mins]|heartbeat <session>|status|check|with-heartbeat <session> -- <cmd>|release <session>}"; exit 64 ;;
+  *) echo "usage: nofx-lock {acquire <session> <task> [mins]|heartbeat <session>|status|check|with-heartbeat <session> -- <cmd>|reclaim <new> <stale> \"<corroboration>\"|release <session>}"; exit 64 ;;
 esac
