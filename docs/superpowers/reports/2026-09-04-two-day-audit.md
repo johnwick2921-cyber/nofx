@@ -487,15 +487,40 @@ dead code that a reader would reasonably mistake for the live path.
 
 ### Knobs, resolved (A11)
 
-| knob | live value | how established |
+**[A] Every knob below was established from the running process's own boot lines, the saved
+strategy row, or the refusal message that printed the value it applied — never from a file default
+presented as live.** `/api/config/resolved` and `/api/risk/gate-blocks` both return
+`{"error":"Missing Authorization header"}` from this session, so neither was used. Full table with
+sources in `docs/…-two-day-audit-data/knobs.csv`.
+
+| knob | live value | source |
 |---|---|---|
-| `MIN_SL_ATR_MULT` | **1.0** until the 09-02 07:49:06 boot, **1.5** after | not set in `.env`; code default, and the refusal line prints the multiplier it applied |
-| `min_risk_reward_ratio` | **2.00** — an *explicit saved* value | `config.ai_config.risk_control.min_risk_reward_ratio` (**not** `config.risk_control`, which reads null and would falsely resolve to `SafeDefaultMinRiskReward` = 3.0) |
-| `armedWorkingStaleMin` | **15 min** | printed resolved in the cancel reason `no order_update for 15m` |
-| wake cutoff / cooldown | 25m / 30m, WARN 09-02 → enforce 09-03 | boot line |
-| lunch no-trade | 12:00–13:30 CT | `kernel/no_trade_band.go:41` (code constant) |
-| `max_daily_trades` | **3 — NOT ENFORCED** | guardrails master switch is off |
-| `/api/config/resolved`, `/api/risk/gate-blocks` | **unavailable** | both return `{"error":"Missing Authorization header"}` |
+| **`day_plan.plan_mode`** | **`strict`** — a *saved* strategy value (shipped default is `advisory`) | strategy `MNQ` `a5b7662e`; `store/resolve_source.go:47` |
+| `min_risk_reward_ratio` | **2.0** — *saved*, both seams | strategy `MNQ`; store default `SafeDefaultMinRiskReward` = **3.0** |
+| EntryGate leg-5 fallback floor | 3.0 (only when MinRR ≤ 0) | hardcoded, `entry_gate.go:~253` |
+| `MIN_SL_ATR_MULT` | **1.0** until the 09-02 07:49:06 boot, **1.5** after | env UNSET → `kernel/min_sl.go:34`; boot line `atr_mult=1.5` |
+| min-SL level clearance | 2 ticks | `kernel/min_sl.go:40`; boot line |
+| exit stop composition (0B) | `max(anchor+clr, 1.5×ATR5m)`, `anchor_max=3.0×ATR5m` | boot line |
+| **breakeven** | **OFF** — *despite the strategy carrying `breakeven_enabled: true`, `trigger=40pts`* | boot line `BE=off` |
+| **trailing stop** | **OFF** — *despite `trailing_enabled: true`* | boot line `trail=off` |
+| position size | 1 contract (fixed by 0B) | boot line `size=1` |
+| no-chase | `max_dist=1.00×ATR`, `max_run=1.5×ATR5m`, **`mode=warn`** | env UNSET → `trader/no_chase.go:77,146` |
+| shadow map | shadow = `[breakout_retest, fvg_entry]`; 7 conditions live | `kernel/condition_status.go:75`; env UNSET |
+| wake cutoff / cooldown | 25m / 30m — **WARN on 09-02, ENFORCE from 09-03** | env UNSET → `class47_wake_cadence.go:52,59` |
+| `armedWorkingStaleMin` | 15 min | printed resolved in `no order_update for 15m` |
+| `min_confidence` | 60 (saved; coincides with the default) | strategy `MNQ`; `store/strategy.go:83` |
+| one_open_position | **ON, hardcoded** — no knob | `entry_gate.go:272`, `armed_executor.go:623` |
+| invalidation (leg 3) | ON, **arm path only**; unresolved verdict = leg PASSES | boot line `invalidation-wired=on` |
+| `htf_veto` | ON, `mode=cross` (needs 1h **and** 4h to agree) | `HTF_VETO_MODE=cross` in `.env` |
+| no-trade band | first 5m + lunch 12:00–13:30 CT, **code constants, not owner-configurable** | `kernel/no_trade_band.go:37,42` |
+| `max_daily_trades` | **3 — NOT ENFORCED** (guardrails master off) | strategy value; master switch |
+
+**[A] Two owner-set behaviours are silently overridden:** the strategy carries
+`breakeven_enabled: true` (trigger 40 pts) and `trailing_enabled: true`, and the 0B wave suspends
+both. Worse, **two boot lines disagree with each other** — `🛑 exits:` prints `BE=off · trail=off`
+while the `🧾 ledger boot` line in the same boot still narrates
+`trailing=2.0×ATR14 arm=after_breakeven (source: studio)`. An operator reading the ledger line
+would believe trailing is live.
 
 ### Three gate defects
 
@@ -795,6 +820,7 @@ Every defect found, with the code path. None was acted on — this audit is read
 | **D40** | **`armed_orders` is not append-only** — the `(plan_id, scenario, leg_index)` slot is overwritten, so 15 rows under-represent **at least 11 distinct broker placements**; three signal ids (`0c77307d`, `fd71b48f`, `18a7cc55`) survive nowhere, and two of them **filled into real positions** (582 +129.5, 585) |
 | **D41** | **No independent broker-side record exists for any arm** — `trader_orders` holds **1 row all-time** (2026-06-02) and the NT8 armed path writes nothing there; `nt8_order_snapshots` holds 228 rows all with `symbol=''` (blank). There is no way to reconcile the ledger against the broker |
 | **D42** | **Double entry path** — arm 31 (ASIA S3 long limit 29068.05, signal `dc8405f1`) was live at NT8 from 00:16:32 while the **decision** path opened the SAME plan+scenario at market 29079.25 at 00:17:44 (position 587). Both live together for 14m04s |
+| **D44** | **Two owner-set knobs are silently off** — strategy `MNQ` carries `breakeven_enabled: true` (trigger 40 pts) and `trailing_enabled: true`; the 0B wave suspends both, and **two boot lines in the same boot disagree**: `🛑 exits: … BE=off · trail=off` vs `🧾 ledger boot: … trailing=2.0×ATR14 arm=after_breakeven (source: studio)` |
 | **D43** | **Zero arms authored under a 09-02-dated plan ever reached the broker** (ids 32, 33, 34). The single 09-02 broker placement (00:16:32, arm 31) belonged to the 09-01 ASIA plan. All four 09-02 positions entered via the decision path |
 
 ---
