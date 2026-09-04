@@ -124,6 +124,39 @@ describe('GuidePage', () => {
     expect(screen.queryByTestId('guide-rev-drift')).toBeNull()
   })
 
+  // The server sends kernel.RunningRevision(), which is shortRev() — 12 chars.
+  // The previous test fed GUIDE_BUILT_REV back to itself, so it proved the
+  // component agrees with itself and never that it agrees with the bot.
+  it('hides the drift banner when the bot reports the SHORT rev of the same commit', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        json: () =>
+          Promise.resolve({
+            status: 'ok',
+            revision: GUIDE_BUILT_REV.slice(0, 12),
+          }),
+      })
+    )
+    render(<GuidePage />)
+    await act(async () => {})
+    expect(screen.queryByTestId('guide-rev-drift')).toBeNull()
+  })
+
+  // "" means the boot assertion has not run yet — the bot does not know its own
+  // rev. Not knowing is not disagreeing, so the banner must stay down.
+  it('does not claim drift when the bot has no revision yet', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        json: () => Promise.resolve({ status: 'ok', revision: '' }),
+      })
+    )
+    render(<GuidePage />)
+    await act(async () => {})
+    expect(screen.queryByTestId('guide-rev-drift')).toBeNull()
+  })
+
   it('renders knob cards with all ten fields', () => {
     render(<GuidePage />)
     const knobs = screen.getAllByTestId('guide-knob')

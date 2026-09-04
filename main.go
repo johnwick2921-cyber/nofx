@@ -426,6 +426,7 @@ func main() {
 	logger.Infof("🧾 %s", store.PnLSurfacesBootLine())
 	// ATTRIBUTION — counts READ from the table, never a literal.
 	logger.Infof("🔗 %s", st.AttributionBootLine())
+	logger.Infof("⚙ %s", store.KnobRegistryBootLine())
 	logger.Infof("🎛 %s", kernel.EntryLawBootLedger()) // P1.4 (ledger-close 2026-08-19) — clock-guard block: live host-RTC drift,
 	// guard-timer freshness, last resync/check state. Log-only, best-effort.
 	kernel.LogClockGuardBoot()

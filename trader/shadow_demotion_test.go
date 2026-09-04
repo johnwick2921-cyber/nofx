@@ -123,6 +123,7 @@ func shadowWireHarness(t *testing.T, cfg store.StrategyConfig) (*AutoTrader, *st
 func TestShadowDemotionAuthorsInertRow(t *testing.T) {
 	before := telemetry.ShadowedArmRefusalCount()
 	cfg := store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true}}
+	cfg.RiskControl.MinRiskRewardRatio = 2 // R1 (2026-09-03): the arm floor is the Studio value; this fixture arms at R:R 2.0
 	at, st := resetTrader(t, cfg)
 	pid := shadowPlanAt(t, at, st, armedDoc()) // fvg_entry
 
@@ -153,6 +154,7 @@ func TestShadowDemotionAuthorsInertRow(t *testing.T) {
 // setup, flagged is_counterfactual, with the condition + authored prices.
 func TestShadowDemotionE8WritesCounterfactual(t *testing.T) {
 	cfg := store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true}}
+	cfg.RiskControl.MinRiskRewardRatio = 2 // R1 (2026-09-03): the arm floor is the Studio value; this fixture arms at R:R 2.0
 	at, st := resetTrader(t, cfg)
 	doc := kernel.PlanDoc{Bias: kernel.PlanBias{Direction: "long", Conviction: "low", FlipCondition: "n/a"},
 		Levels: []kernel.PlanLevel{{Price: 100, Label: "PDH", Grade: "A", Instruction: "fade"}},
@@ -186,6 +188,7 @@ func TestShadowDemotionE8WritesCounterfactual(t *testing.T) {
 // the LOOPBACK WIRE (not internal state).
 func TestShadowDemotionNoWireFrameOnLoopback(t *testing.T) {
 	cfg := store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true}}
+	cfg.RiskControl.MinRiskRewardRatio = 2 // R1 (2026-09-03): the arm floor is the Studio value; this fixture arms at R:R 2.0
 	at, st, sigs, _ := shadowWireHarness(t, cfg)
 	pid := shadowPlanAt(t, at, st, armedDoc()) // fvg_entry, entry 100
 	prev := market.FuturesBarsProvider
@@ -209,6 +212,7 @@ func TestShadowDemotionNoWireFrameOnLoopback(t *testing.T) {
 // 7.4 — a live condition's arm places normally (regression pin, same wire).
 func TestLiveConditionPlacesOnLoopback(t *testing.T) {
 	cfg := store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true}}
+	cfg.RiskControl.MinRiskRewardRatio = 2 // R1 (2026-09-03): the arm floor is the Studio value; this fixture arms at R:R 2.0
 	at, st, sigs, _ := shadowWireHarness(t, cfg)
 	live := kernel.PlanDoc{Bias: kernel.PlanBias{Direction: "long", Conviction: "low", FlipCondition: "n/a"},
 		Levels: []kernel.PlanLevel{{Price: 100, Label: "PDH", Grade: "A", Instruction: "fade"}},
@@ -241,6 +245,7 @@ func TestLiveConditionPlacesOnLoopback(t *testing.T) {
 // is cancelled on the first cycle, with its signal id quoted.
 func TestShadowedRestingOrderCancelledAtBoot(t *testing.T) {
 	cfg := store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true}}
+	cfg.RiskControl.MinRiskRewardRatio = 2 // R1 (2026-09-03): the arm floor is the Studio value; this fixture arms at R:R 2.0
 	at, st, _, cancels := shadowWireHarness(t, cfg)
 	now := time.Now()
 	sessName := shadowEnableTestSession(t, st)
@@ -278,6 +283,7 @@ func TestShadowedRestingOrderCancelledAtBoot(t *testing.T) {
 func TestConfigFlipToLiveAllowsArming(t *testing.T) {
 	cfg := store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true,
 		ConditionStatus: map[string]string{"fvg_entry": "live"}}}
+	cfg.RiskControl.MinRiskRewardRatio = 2 // R1 (2026-09-03): the arm floor is the Studio value; this fixture arms at R:R 2.0
 	at, st := resetTrader(t, cfg)
 	if at.conditionShadowedFor("fvg_entry", "NY") {
 		t.Fatal("config live must resolve live")

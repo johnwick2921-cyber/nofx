@@ -773,10 +773,8 @@ type RegimeConfig struct {
 
 // HTFVetoEnabled resolves the shipped default (nil/absent → ON).
 func (c *StrategyConfig) HTFVetoEnabled() bool {
-	if c.Regime == nil || c.Regime.HTFVeto == nil {
-		return true
-	}
-	return *c.Regime.HTFVeto
+	on, _ := ResolveHTFVeto(c)
+	return on
 }
 
 // TransitionStanddownEnabled resolves the shipped default (nil/absent → ON).
@@ -1399,14 +1397,8 @@ func (c *DayPlanConfig) MinGradeFor(session string) string {
 // PlanModeFor resolves the plan-restriction mode for a session: per-session
 // override → strategy-level → "advisory".
 func (c *DayPlanConfig) PlanModeFor(session string) string {
-	mode := "advisory"
-	if c != nil && strings.TrimSpace(c.PlanMode) != "" {
-		mode = c.PlanMode
-	}
-	if ov := c.SessionOverride(session); ov != nil && ov.PlanMode != nil && strings.TrimSpace(*ov.PlanMode) != "" {
-		mode = *ov.PlanMode
-	}
-	return strings.ToLower(strings.TrimSpace(mode))
+	mode, _ := ResolvePlanMode(c, session)
+	return mode
 }
 
 // DefaultDayPlanConfig returns the spec default block (plan OFF). It is NOT

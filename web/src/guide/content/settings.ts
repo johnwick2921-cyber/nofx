@@ -12,7 +12,7 @@ const dayPlan: KnobSpec[] = [
     trader:
       'Strict means no-plan = flat day — the plan is the law, not advice.',
     consumer:
-      'trader/auto_trader_planconfig.go:158 (planModeFor) · direction block trader/auto_trader_planconfig.go:206-249',
+      'store/resolve_source.go ResolvePlanMode — the one resolver (session override → strategy → advisory) · entry points store/strategy.go PlanModeFor and trader/auto_trader_planconfig.go planModeFor · direction block trader/auto_trader_planconfig.go planModeBlocked',
     range: 'advisory | direction | strict',
     systemDefault: 'advisory',
     recommended:
@@ -603,6 +603,58 @@ export const settings: GuideSection = {
     {
       kind: 'p',
       text: 'Every knob card below names the engine consumer (file:line) that reads it — so you always know whether a slider is real or decorative. FE persists but NO production code reads: nothing here is in that category; the three that used to be (plan_mode, proximity_filter_atr, …) are wired now.',
+    },
+    { kind: 'h', text: 'What the status labels mean' },
+    {
+      kind: 'p',
+      text: 'A knob can fail to matter in two different ways, and the Settings page keeps them apart on purpose. "No consumer" and "cannot take effect" are different findings, so they get different words — and neither of them says "dead". Nothing is removed from the registry on the strength of a grep.',
+    },
+    {
+      kind: 'table',
+      title: 'Registry statuses',
+      head: ['Status', 'Renders as', 'What it means'],
+      rows: [
+        ['live', '(no label)', 'A consumer reads it and behaviour changes.'],
+        [
+          'ineffective',
+          'read; does not take effect (reason)',
+          'A consumer WAS found and it cannot gate — e.g. the value reaches prompt text only. The audit checked this one; the reason says what it found.',
+        ],
+        [
+          'candidate-unverified',
+          'no known reader — pending verification',
+          'A field-level grep found no reader. That is not proof: a method-based reader would not appear in it. The note quotes the exact command run. It stays listed until someone runs a method-level grep and quotes that too.',
+        ],
+        ['advisory', '—', 'Feeds prompt text only, never a gate.'],
+        [
+          'suspended',
+          '—',
+          'A standing ruling disables it; the value is preserved.',
+        ],
+        [
+          'infra',
+          '—',
+          'Ports, paths, keys — not a trading knob. Never carries a value on the wire.',
+        ],
+      ],
+    },
+    { kind: 'h', text: 'saved → resolved · source' },
+    {
+      kind: 'p',
+      text: 'What you saved is not always what the engine uses. Each line shows the saved value, the value the engine will actually resolve, and the rule that produced the difference. "(unset)" never borrows the resolved value: a field you never set and a field you set to its default are different facts, and the line exists to keep them apart.',
+    },
+    {
+      kind: 'code',
+      title: 'GET /api/config/resolved?trader_id=…&session=NY',
+      lines: [
+        'risk_control.min_risk_reward_ratio   2 → 2 · saved value',
+        'day_plan.plan_mode                   (unset) → advisory · shipped default',
+        'regime.htf_veto                      (unset) → true · shipped default',
+      ],
+    },
+    {
+      kind: 'p',
+      text: 'The source comes from the same resolver the engine calls (store/resolve_source.go), not a second copy in the page — so if a resolution rule changes, this line changes with it instead of quietly disagreeing.',
     },
     { kind: 'h', text: 'Day Plan knobs' },
     { kind: 'knobs', knobs: dayPlan },

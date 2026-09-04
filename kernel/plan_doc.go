@@ -569,7 +569,7 @@ func ArmFeasibilityWarnings(d *PlanDoc, atr5m, minRR, minSLMult float64) []strin
 			}
 		}
 		if minRR > 0 && rr+1e-9 < minRR {
-			out = append(out, fmt.Sprintf("%s arm R:R %.2f below ARM_MIN_RR %.2f — the gate-at-arm chain will refuse it every cycle (target/stop infeasible)", sc.ID, rr, minRR))
+			out = append(out, fmt.Sprintf("%s arm R:R %.2f below min_risk_reward_ratio %.2f (Studio) — the gate-at-arm chain will refuse it every cycle (target/stop infeasible)", sc.ID, rr, minRR))
 		}
 		if minSLMult > 0 && dist+1e-9 < minSLMult*atr5m {
 			out = append(out, fmt.Sprintf("%s arm stop %.2f too close (%.2f < %.2f = %.1f×ATR5m) — min-SL gate will refuse it", sc.ID, a.Stop, dist, minSLMult*atr5m, minSLMult))

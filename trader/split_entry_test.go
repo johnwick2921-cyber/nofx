@@ -87,6 +87,7 @@ func TestSplitArmWritesTwoLedgerRows(t *testing.T) {
 	// leg capacity is ≥ 2 — the explicit max_contracts_per_order declares it.
 	cfg := store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true},
 		RiskControl: store.RiskControlConfig{MaxContractsPerOrder: 2}}
+	cfg.RiskControl.MinRiskRewardRatio = 2 // R1 (2026-09-03): the arm floor is the Studio value; this fixture arms at R:R 2.0
 	at, st := resetTrader(t, cfg)
 	now := time.Now()
 	sess, ok := at.sessionRegistry(now).ActiveSession(now)
@@ -272,6 +273,7 @@ func TestStopEntryKnobDefaults(t *testing.T) {
 // (dormant/session-end) covers BOTH legs: two rows in, zero non-terminal out.
 func TestSplitArmSessionEndCancelsBothLegs(t *testing.T) {
 	cfg := store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true}}
+	cfg.RiskControl.MinRiskRewardRatio = 2 // R1 (2026-09-03): the arm floor is the Studio value; this fixture arms at R:R 2.0
 	at, st := resetTrader(t, cfg)
 	now := time.Now()
 	sess, ok := at.sessionRegistry(now).ActiveSession(now)

@@ -45,7 +45,7 @@ type EntryIntent struct {
 	Target float64
 
 	ATR5m     float64
-	MinRR     float64 // resolved min_risk_reward_ratio (decision path) or ARM_MIN_RR (arm seam)
+	MinRR     float64 // resolved min_risk_reward_ratio — ONE floor for BOTH paths (R1, 2026-09-03; ARM_MIN_RR deleted)
 	MinSLMult float64 // resolved MIN_SL_ATR_MULT (0 = leg off)
 
 	// Plan context (all optional — legs skip on absence).
@@ -363,7 +363,7 @@ func (at *AutoTrader) entryGateForArm(plan *kernel.ActivePlan, sc kernel.PlanSce
 		Stop:                      leg.Stop,
 		Target:                    leg.Target,
 		ATR5m:                     atr5m,
-		MinRR:                     armMinRR(),
+		MinRR:                     at.armMinRRFor(nil), // R1: ONE floor — the Studio value, same as the decision path
 		MinSLMult:                 kernel.MinSLATRMult(),
 		PlanBias:                  biasDir,
 		PlanMode:                  at.planModeFor(session),
@@ -405,10 +405,11 @@ func (at *AutoTrader) entryGateForDecision(d *kernel.Decision, livePrice float64
 			}
 		}
 	}
-	minRR := 3.0
-	if at.config.StrategyConfig != nil && at.config.StrategyConfig.RiskControl.MinRiskRewardRatio > 0 {
-		minRR = at.config.StrategyConfig.RiskControl.MinRiskRewardRatio
-	}
+	// R1 (owner ruling 2026-09-03) — ONE floor, one resolver. This used to
+	// start at a hardcoded 3.0 and override it from the config, so a strategy
+	// with no value silently got a DIFFERENT floor from the arm seam's 2.0.
+	// Both paths now call the same resolver.
+	minRR := at.armMinRRFor(nil)
 	now := time.Now()
 	session := ""
 	if s, ok := at.sessionRegistry(now).ActiveSession(now); ok {
