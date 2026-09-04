@@ -1643,6 +1643,44 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     the two halves of this wave belong together: the sweep went looking for
     wall-clock rules and found one hiding behind a counter.
 
+73. **A hook registered one start too late.** (Renumbered 69→70 on its branch, then 70→73 at THIS merge — 70/71/72 were
+    taken by the lock, stash-stack and flaky-clock classes landing in the same
+    boot. A27: numbers are assigned AT MERGE. Original branch note: 69
+    landed on dev first as "Reported wired, called by nobody". **Read that one
+    with this one — they are the same family**, a registration whose success
+    nobody verified. 69 is a hook nothing ever called; 70 is a hook installed
+    after the thing that reads it had already read it. Neither could fail a test
+    of the hook's own logic.)
+    F12 wired a sink so every received `order_snapshot` frame would be persisted
+    for forensics. The sink was correct, the store was correct, the tests were
+    green — and `nt8_order_snapshots` held **0 rows** while frames arrived every
+    30 s and the cutover gate correctly read the broker off those same frames.
+    `main.go` registered the sink at line 366. `LoadTradersFromStore` at line 203
+    builds the first trader, which lazily starts the TCP server, which reads the
+    hook **exactly once, at start**. The server came up with a nil sink; the
+    registration then ran 163 lines later and set a variable nothing would read
+    again.
+    **Nothing looked wrong**, and that is the defect. The CACHE is what the gate
+    reads, by design, so the feature that mattered kept working. The missing half
+    produced no error, no warning and no empty-state message — just a table that
+    was always empty, which is indistinguishable from a table nothing has
+    happened for yet.
+    **Probe:** for any hook, callback, sink or observer, find the line that READS
+    it and ask whether the registration is guaranteed to have run first. Lazy
+    singletons hide this: the read happens inside whatever call first needs the
+    subsystem, which is rarely near the registration. Then ask the harder
+    question — *if this hook were never installed, what would I see?* If the
+    answer is "nothing", the wiring needs its own test, because no test of the
+    hook's logic can fail on it. (69's probe is the sibling: ask who CALLS it.)
+    **Law:** a hook is not wired by being written. It is wired by being installed
+    BEFORE the thing that reads it starts, and only a test that starts that thing
+    can prove it. This is the write-side twin of "parity tests must exercise
+    production call sites": the existing tests called the sink directly and could
+    never see the order. Pinned by a test that starts a real server, drives a real
+    frame through a real client and asserts a row lands — and by a source-order
+    guard that fails if the two calls are swapped back (verified RED at offsets
+    17584 > 8148, GREEN after).
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,
