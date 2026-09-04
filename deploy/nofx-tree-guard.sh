@@ -38,6 +38,10 @@ STATE="${TREE_GUARD_STATE:-$HOME/nofx-backups/tree-guard/state}"
 SYMBOLS="${TREE_GUARD_SYMBOLS:-$TREE/deploy/tree-guard-symbols.txt}"
 HEARTBEAT_MAX_S="${TREE_GUARD_HEARTBEAT_MAX_S:-900}"
 BEHIND_MAX="${TREE_GUARD_BEHIND_MAX:-20}"
+# CHECK 5 (owner ruling 2026-09-03): the standing laws. The pointer file is
+# gitignored and therefore INVISIBLE to check 1 — which is exactly why the canon
+# needs a check of its own. Colon-separated; both are watched.
+CANON_FILES="${TREE_GUARD_CANON_FILES:-$TREE/CLAUDE.md:$TREE/docs/superpowers/CLAUDE-canon.md}"
 
 alarms=0
 lines=()
@@ -46,6 +50,35 @@ say() { lines+=("$1"); echo "$1"; }
 alarm() { alarms=$((alarms + 1)); say "🚨 tree-guard ALARM $1"; }
 pass()  { say "tree-guard PASS $1"; }
 info()  { say "tree-guard INFO $1"; }
+
+# revs_agree — git compares shas by PREFIX and so must this. deploy/RELEASE may
+# hold the 8-char short form while the binary reports the full 40; those are the
+# SAME rev, and a string equality test calls them a mismatch. That produced a
+# false ALARM on this guard's second live run against a perfectly healthy tree.
+# A prefix shorter than 7 is not a sha and never matches — otherwise "5" would
+# agree with everything.
+revs_agree() {
+  local a="$1" b="$2" short long
+  if [ -z "$a" ] || [ -z "$b" ]; then
+    return 1
+  fi
+  # EXACT equality always agrees, whatever the length — a test fixture may use a
+  # short placeholder, and two identical strings are not a mismatch.
+  if [ "$a" = "$b" ]; then
+    return 0
+  fi
+  # PREFIX matching is what makes a short RELEASE agree with a full sha, and it
+  # is the only case that needs a length floor: without one, "5" would agree with
+  # every rev in history.
+  if [ ${#a} -le ${#b} ]; then short="$a"; long="$b"; else short="$b"; long="$a"; fi
+  if [ ${#short} -lt 7 ]; then
+    return 1
+  fi
+  case "$long" in
+    "$short"*) return 0 ;;
+    *)         return 1 ;;
+  esac
+}
 
 # ── THE LOCK'S SECOND JOB ────────────────────────────────────────────────────
 # A cutover legitimately dirties the tree (A19 writes deploy/RELEASE before the
@@ -143,13 +176,13 @@ else
   elif [ -z "$running" ]; then
     # A value the guard cannot know prints as unknown, never as agreement.
     info "release: RELEASE=$rel · running=unknown (no nofx-bin process) — cannot compare"
-  elif [ "$rel" != "$running" ]; then
+  elif ! revs_agree "$rel" "$running"; then
     if [ "$lock_live" = "1" ]; then
       info "release: RELEASE=$rel vs running=$running — MISMATCH under a live lock ($lock_desc), cutover in progress"
     else
       alarm "release: RELEASE=$rel · running=$running · HEAD:deploy/RELEASE=${head_rel:-unknown} — the file and the binary disagree with no cutover in flight"
     fi
-  elif [ -n "$head_rel" ] && [ "$head_rel" != "$rel" ]; then
+  elif [ -n "$head_rel" ] && ! revs_agree "$head_rel" "$rel"; then
     alarm "release: RELEASE=$rel matches the binary but HEAD:deploy/RELEASE=$head_rel — the marker was never committed from this tree"
   else
     pass "release: RELEASE=$rel == running == HEAD:deploy/RELEASE"
@@ -181,6 +214,58 @@ else
   fi
 fi
 
+# ── CHECK 5 — THE CANON FILES ────────────────────────────────────────────────
+# md5 of each canon file against the baseline the guard itself recorded.
+#
+# A change UNDER A LIVE LOCK is a legitimate edit: reported INFO and RE-BASELINED.
+# A change with NO live lock ALARMS and is NOT re-baselined — an unexplained edit
+# to the standing laws must keep shouting until a human resolves it, rather than
+# becoming the new normal after one 60-second tick. That asymmetry is the whole
+# value of the check.
+canon_lines=()
+canon_changed=0
+canon_alarm=0
+old_state_md5s=""
+[ -r "$STATE" ] && old_state_md5s="$(grep '^canon_md5 ' "$STATE" 2>/dev/null || true)"
+
+IFS=':' read -r -a _canon_paths <<< "$CANON_FILES"
+for cf in "${_canon_paths[@]}"; do
+  [ -z "$cf" ] && continue
+  name="$(basename "$cf")"
+  if [ ! -r "$cf" ]; then
+    cur="MISSING"
+  else
+    cur="$(md5sum "$cf" 2>/dev/null | awk '{print $1}')"
+  fi
+  prev="$(printf '%s\n' "$old_state_md5s" | grep -m1 " $cf " | awk '{print $3}' || true)"
+  canon_lines+=("canon_md5 $cf $cur")
+  if [ -z "$prev" ]; then
+    continue                      # first sight: record, do not judge
+  fi
+  if [ "$cur" != "$prev" ]; then
+    canon_changed=1
+    if [ "$cur" = "MISSING" ]; then
+      alarm "canon: $name is MISSING (was $prev) — the standing laws are gone from $cf"
+      canon_alarm=1
+    elif [ "$lock_live" = "1" ]; then
+      info "canon: $name changed under a live lock ($lock_desc) — accepted, re-baselined ($prev → $cur)"
+    else
+      alarm "canon: $name CHANGED with no live lock holder — $cf ($prev → $cur). The standing laws were edited by nobody who declared it; this alarm persists until the file is restored or the change is made under a lock."
+      canon_alarm=1
+    fi
+  fi
+done
+if [ "$canon_changed" = "0" ]; then
+  pass "canon: ${#_canon_paths[@]} law file(s) unchanged"
+fi
+
+# An ALARMING change is NOT re-baselined: keep the old md5s so the next tick
+# alarms again. Anything else lets one unexplained edit go quiet after 60s.
+if [ "$canon_alarm" = "1" ] && [ -n "$old_state_md5s" ]; then
+  canon_lines=()
+  while IFS= read -r l; do [ -n "$l" ] && canon_lines+=("$l"); done <<< "$old_state_md5s"
+fi
+
 # ── STATE FILE ───────────────────────────────────────────────────────────────
 # Deliberately OUTSIDE the tree. A guard that writes into the thing it guards is
 # the wrong shape, and data/ is gitignored — so such a write would be invisible
@@ -191,6 +276,7 @@ mkdir -p "$(dirname "$STATE")" 2>/dev/null || true
   echo "verdict=$verdict"
   echo "alarms=$alarms"
   echo "checked_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  printf '%s\n' "${canon_lines[@]}"
   printf '%s\n' "${lines[@]}"
 } > "$STATE.partial" 2>/dev/null && mv "$STATE.partial" "$STATE" 2>/dev/null || true
 

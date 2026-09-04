@@ -537,3 +537,270 @@ func TestNoLockOfEitherKindStillAlarmsOnDirt(t *testing.T) {
 		t.Fatalf("no lock of either kind + dirty tree must ALARM:\n%s", out)
 	}
 }
+
+// ── CHECK 5: the canon files ────────────────────────────────────────────
+//
+// Owner ruling 2026-09-03: CLAUDE.md's canon moved into a TRACKED file
+// (docs/superpowers/CLAUDE-canon.md) because a law that cannot travel on a branch
+// or be guarded is not canon. The pointer file stays gitignored — and therefore
+// stays INVISIBLE to check 1, which is exactly why it needs its own check.
+//
+// The baseline is recorded in the guard's own state file. A change under a live
+// lock is accepted and re-baselined; a change with NO live lock ALARMS and does
+// NOT re-baseline, so an unexplained edit to the standing laws keeps shouting
+// until a human resolves it rather than going quiet after one tick.
+
+func writeCanonPair(t *testing.T, dir, pointer, canon string) (string, string) {
+	t.Helper()
+	p := filepath.Join(dir, "CLAUDE.md")
+	c := filepath.Join(dir, "CLAUDE-canon.md")
+	if err := os.WriteFile(p, []byte(pointer), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(c, []byte(canon), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return p, c
+}
+
+func TestCheck5FirstRunRecordsTheBaselineAndPasses(t *testing.T) {
+	tree := fixtureRepo(t)
+	env := baseEnv(t, tree)
+	dir := t.TempDir()
+	p, c := writeCanonPair(t, dir, "pointer v1", "canon v1")
+	env["TREE_GUARD_CANON_FILES"] = p + ":" + c
+	state := filepath.Join(t.TempDir(), "state")
+	env["TREE_GUARD_STATE"] = state
+
+	out, _ := runGuard(t, env)
+	if !strings.Contains(out, "PASS canon") {
+		t.Fatalf("a first run has nothing to compare and must PASS while recording:\n%s", out)
+	}
+	b, err := os.ReadFile(state)
+	if err != nil {
+		t.Fatalf("state: %v", err)
+	}
+	if !strings.Contains(string(b), "canon_md5") {
+		t.Errorf("the baseline must be recorded in the state file:\n%s", b)
+	}
+}
+
+func TestCheck5UnchangedCanonPasses(t *testing.T) {
+	tree := fixtureRepo(t)
+	env := baseEnv(t, tree)
+	dir := t.TempDir()
+	p, c := writeCanonPair(t, dir, "pointer v1", "canon v1")
+	env["TREE_GUARD_CANON_FILES"] = p + ":" + c
+	env["TREE_GUARD_STATE"] = filepath.Join(t.TempDir(), "state")
+
+	runGuard(t, env) // baseline
+	out, code := runGuard(t, env)
+	if !strings.Contains(out, "PASS canon") || code != 0 {
+		t.Fatalf("an unchanged canon must PASS on the second run:\n%s", out)
+	}
+}
+
+// THE RULING'S POINT: an edit to the standing laws with nobody holding the lock.
+func TestCheck5ChangedWithNoLockAlarmsAndNamesTheFile(t *testing.T) {
+	tree := fixtureRepo(t)
+	env := baseEnv(t, tree)
+	dir := t.TempDir()
+	p, c := writeCanonPair(t, dir, "pointer v1", "canon v1")
+	env["TREE_GUARD_CANON_FILES"] = p + ":" + c
+	env["TREE_GUARD_STATE"] = filepath.Join(t.TempDir(), "state")
+
+	runGuard(t, env) // baseline
+	if err := os.WriteFile(c, []byte("canon v2 — a law quietly deleted"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, code := runGuard(t, env)
+	if !strings.Contains(out, "ALARM canon") {
+		t.Fatalf("a canon change with no live lock must ALARM:\n%s", out)
+	}
+	if !strings.Contains(out, "CLAUDE-canon.md") {
+		t.Errorf("the alarm must NAME the changed file:\n%s", out)
+	}
+	if code == 0 {
+		t.Errorf("exit must be non-zero")
+	}
+}
+
+// It must keep alarming. A one-shot alarm that re-baselines itself turns an
+// unexplained edit into the new normal after a single 60s tick.
+func TestCheck5KeepsAlarmingUntilResolved(t *testing.T) {
+	tree := fixtureRepo(t)
+	env := baseEnv(t, tree)
+	dir := t.TempDir()
+	p, c := writeCanonPair(t, dir, "pointer v1", "canon v1")
+	env["TREE_GUARD_CANON_FILES"] = p + ":" + c
+	env["TREE_GUARD_STATE"] = filepath.Join(t.TempDir(), "state")
+
+	runGuard(t, env)
+	if err := os.WriteFile(c, []byte("canon v2"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for i := 1; i <= 3; i++ {
+		out, _ := runGuard(t, env)
+		if !strings.Contains(out, "ALARM canon") {
+			t.Fatalf("run %d went quiet — an unexplained canon edit must not become the new baseline:\n%s", i, out)
+		}
+	}
+}
+
+// A change UNDER A LIVE LOCK is a legitimate edit: INFO, and re-baselined so the
+// next run is clean.
+func TestCheck5ChangeUnderALiveLockIsAcceptedAndRebaselined(t *testing.T) {
+	tree := fixtureRepo(t)
+	env := baseEnv(t, tree)
+	dir := t.TempDir()
+	p, c := writeCanonPair(t, dir, "pointer v1", "canon v1")
+	env["TREE_GUARD_CANON_FILES"] = p + ":" + c
+	env["TREE_GUARD_STATE"] = filepath.Join(t.TempDir(), "state")
+
+	runGuard(t, env) // baseline with no lock
+	if err := os.WriteFile(c, []byte("canon v2 — edited on purpose"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	env["TREE_GUARD_LOCK_DIR"] = newLockDir(t, "nofx-canon", "edit the canon", 20*time.Second)
+
+	out, _ := runGuard(t, env)
+	if strings.Contains(out, "ALARM canon") {
+		t.Fatalf("a canon edit under a live lock is legitimate:\n%s", out)
+	}
+	if !strings.Contains(out, "INFO canon") {
+		t.Errorf("it must still be reported, not silent:\n%s", out)
+	}
+	// re-baselined: with the lock gone, the next run is clean
+	env["TREE_GUARD_LOCK_DIR"] = filepath.Join(t.TempDir(), "absent.lock.d")
+	out2, _ := runGuard(t, env)
+	if !strings.Contains(out2, "PASS canon") {
+		t.Fatalf("an accepted edit must become the new baseline:\n%s", out2)
+	}
+}
+
+// A canon file that VANISHES is the loudest case of all.
+func TestCheck5MissingCanonFileAlarms(t *testing.T) {
+	tree := fixtureRepo(t)
+	env := baseEnv(t, tree)
+	dir := t.TempDir()
+	p, c := writeCanonPair(t, dir, "pointer v1", "canon v1")
+	env["TREE_GUARD_CANON_FILES"] = p + ":" + c
+	env["TREE_GUARD_STATE"] = filepath.Join(t.TempDir(), "state")
+
+	runGuard(t, env)
+	if err := os.Remove(c); err != nil {
+		t.Fatal(err)
+	}
+	out, _ := runGuard(t, env)
+	if !strings.Contains(out, "ALARM canon") || !strings.Contains(strings.ToLower(out), "missing") {
+		t.Fatalf("a vanished canon file must ALARM and say missing:\n%s", out)
+	}
+}
+
+// ── THE RULING ITSELF: canon must be tracked, the pointer must point ────
+
+func TestCanonFileIsTrackedAndCarriesTheLaws(t *testing.T) {
+	canon := filepath.Join("..", "docs", "superpowers", "CLAUDE-canon.md")
+	b, err := os.ReadFile(canon)
+	if err != nil {
+		t.Fatalf("the canon file must exist at docs/superpowers/CLAUDE-canon.md: %v", err)
+	}
+	s := string(b)
+	// Every standing law the repo runs on must have survived the move.
+	for _, law := range []string{
+		"WORKTREE LAW", "MAIN-TREE LOCK LAW", "SPEC-FRESHNESS LAW",
+		"NO UNATTENDED DEPLOYS", "GUIDE CONTENT LAW", "AUDIT-PLAYBOOK LAW",
+	} {
+		if !strings.Contains(s, law) {
+			t.Errorf("the canon lost %q in the move", law)
+		}
+	}
+	if len(strings.Split(s, "\n")) < 200 {
+		t.Errorf("the canon is suspiciously short (%d lines) — did the move truncate it?",
+			len(strings.Split(s, "\n")))
+	}
+}
+
+// ── SHORT SHA vs FULL SHA — my own guard's false alarm ──────────────────
+//
+// Found on the guard's SECOND live run, on a healthy tree, minutes after boot 7:
+//
+//   🚨 ALARM release: RELEASE=530009ff · running=530009ffd5402c206d1ef7...
+//      — the file and the binary disagree with no cutover in flight
+//
+// They do not disagree. deploy/RELEASE held the 8-char short form and the binary
+// reports the full 40-char sha; a string equality test calls that a mismatch.
+// Earlier deploys happened to write the full sha, so the bug stayed hidden until
+// a lane wrote the short one — which is the normal, correct thing to write.
+//
+// This is precisely the failure this wave's own report warned about: a guard that
+// cries wolf on a healthy deploy is worse than no guard, because the next real
+// alarm is the one everyone scrolls past. Git compares shas by prefix; so must this.
+
+// setReleaseCommitted writes deploy/RELEASE and COMMITS it, so a comparison test
+// exercises only the comparison — not the porcelain check and not the
+// "marker never committed" check, both of which would otherwise fire and mask it.
+func setReleaseCommitted(t *testing.T, tree, rev string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(tree, "deploy", "RELEASE"), []byte(rev+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, args := range [][]string{{"add", "-A"}, {"commit", "-qm", "deploy: RELEASE=" + rev}} {
+		c := exec.Command("git", args...)
+		c.Dir = tree
+		c.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t",
+			"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
+		if out, err := c.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v (%s)", args, err, out)
+		}
+	}
+}
+
+func TestReleaseComparisonAcceptsAShortShaAgainstAFullOne(t *testing.T) {
+	tree := fixtureRepo(t)
+	full := "530009ffd5402c206d1ef7fbdcc0e5b14f8814ad"
+	setReleaseCommitted(t, tree, "530009ff")
+	env := baseEnv(t, tree)
+	delete(env, "TREE_GUARD_SKIP_RUNNING")
+	env["TREE_GUARD_RUNNING_REV"] = full
+
+	out, code := runGuard(t, env)
+	if strings.Contains(out, "ALARM release") {
+		t.Fatalf("a short RELEASE against the full running sha is the SAME rev:\n%s", out)
+	}
+	if !strings.Contains(out, "PASS release") {
+		t.Errorf("expected PASS:\n%s", out)
+	}
+	if code != 0 {
+		t.Errorf("exit = %d, want 0", code)
+	}
+}
+
+// The other direction, and the case that must STILL alarm: a genuine mismatch
+// that merely shares no prefix. Prefix-matching must not become "any overlap".
+func TestReleaseComparisonStillCatchesARealMismatch(t *testing.T) {
+	tree := fixtureRepo(t)
+	setReleaseCommitted(t, tree, "530009ff")
+	env := baseEnv(t, tree)
+	delete(env, "TREE_GUARD_SKIP_RUNNING")
+	env["TREE_GUARD_RUNNING_REV"] = "89673ccc5984eef8ad8168edda24984fd1da50cb"
+
+	out, _ := runGuard(t, env)
+	if !strings.Contains(out, "ALARM release") {
+		t.Fatalf("530009ff vs 89673ccc… is a REAL mismatch and must still ALARM:\n%s", out)
+	}
+}
+
+// A one-character RELEASE must not prefix-match everything.
+func TestReleaseComparisonRefusesAnAbsurdlyShortPrefix(t *testing.T) {
+	tree := fixtureRepo(t)
+	setReleaseCommitted(t, tree, "5")
+	env := baseEnv(t, tree)
+	delete(env, "TREE_GUARD_SKIP_RUNNING")
+	env["TREE_GUARD_RUNNING_REV"] = "530009ffd5402c206d1ef7fbdcc0e5b14f8814ad"
+
+	out, _ := runGuard(t, env)
+	if !strings.Contains(out, "ALARM release") {
+		t.Fatalf("a 1-char RELEASE is not a sha and must not silently match:\n%s", out)
+	}
+}
