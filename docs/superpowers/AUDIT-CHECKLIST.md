@@ -99,8 +99,9 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
 13. **Concurrent-terminal.** Root cause: two dispatches in the main tree — one
     reset the other's uncommitted work out from under it (armed-orders vs
     level-truth; 6 dirty worktrees lost). **Probe:** porcelain gate
-    (`git status --porcelain` empty) + the `~/nofx-main.lock` marker
-    (owner/PID/expiry) before ANY main-tree work. **Law:** WORKTREE LAW — the
+    (`git status --porcelain` empty) + `deploy/nofx-lock.sh acquire <session>
+    <task>` before ANY main-tree work (atomic; a second acquire REFUSES — see
+    class 70, which removed the pid this line used to name). **Law:** WORKTREE LAW — the
     main checkout belongs to exactly ONE dispatch; secondary work runs in
     `git worktree add ../nofx-<task>` + `git worktree lock`.
 
@@ -1502,6 +1503,40 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     path, a gate must be able to prove it wrong.
 
 
+
+70. **A lock that answers the wrong question.** (Number assigned at merge,
+    A16 — highest occupied on dev was 69, the reported-wired-called-by-nobody
+    class from the wake-predicate boot.) Root cause: `~/nofx-main.lock` was ONE
+    FLAT FILE, written with `>`, carrying a **pid**, and read with `kill -0`. It
+    failed in three directions on 2026-09-03 alone, and no single failure was
+    caught by the file — every one was caught by a peer asking:
+    (a) **dead pid, live owner** — agents wrote `pid=$$`, but every tool call is
+    a fresh shell, so the recorded pid was dead within a second while its owner
+    worked on; a peer found an unexpired lock whose pid did not resolve and
+    correctly did NOT clear it;
+    (b) **live pid, silently replaced** — `>` truncates, so a second acquirer
+    clobbered an active cutover's lock with no error and no trace, last writer
+    winning in silence;
+    (c) **stale pid after resume** — a session resumed under a new pid and wrote
+    a lock naming its own former, now-dead process.
+    The deeper fault under all three: a pid answers *"does some process exist"*,
+    which was never the question. The question is *"is the owner still
+    working"*, and only the owner can answer it. **Probe:** try to acquire a
+    held lock — if it succeeds, the lock is a suggestion, not a lock; then read
+    the lock and grep it for a pid. **Law:** the lock is an ATOMIC CREATE
+    (`mkdir ~/nofx-main.lock.d`, which fails if it exists, so (b) cannot be
+    represented) recording **session · task · acquired · expiry · heartbeat**
+    and **no pid field at all**. Liveness is the heartbeat, rewritten by the
+    holder every 2 min; older than 5 min reads **STALE**, and STALE IS NOT
+    DEAD — the surface never prints "dead" and never self-clears. Corroboration
+    stays mandatory before clearing: ask the named session, watch whether HEAD
+    moves, look for a build in flight. Fixed in `deploy/nofx-lock.sh`
+    (`acquire`/`heartbeat`/`release`/`status`/`check`/`with-heartbeat`), pinned
+    by `deploy/nofx-lock-test.sh` — 36 assertions including a second acquire
+    refusing, a stale heartbeat never reading "dead", and a source pin that the
+    script cannot express `kill -0`, `pgrep` or `$$`. `with-heartbeat` beats
+    only for the lifetime of the command it wraps: a beater that outlived its
+    job would reinvent the pid problem in a new costume.
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,
@@ -1526,8 +1561,13 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
 
 ## PART 3 — PRE-CUTOVER (standing 7-step protocol; flat gate = 5 legs, class 33)
 
-1. **Tree gate:** porcelain-clean + `~/nofx-main.lock` acquired (owner/PID/
-   expiry) + HEAD is the single allowed branch for this dispatch.
+1. **Tree gate:** porcelain-clean + `deploy/nofx-lock.sh acquire <session>
+   <task> [minutes]` (atomic create; records session · task · acquired ·
+   expiry · heartbeat, NO pid — class 70) + HEAD is the single allowed branch
+   for this dispatch. Beat it as you work (`nofx-lock.sh heartbeat <session>`,
+   or wrap long steps in `nofx-lock.sh with-heartbeat <session> -- <cmd>`); a
+   heartbeat older than 5 min reads STALE, which means NOT CHECKED IN, never
+   dead, and never clear one without corroboration.
 
 2. **Build:** from the MAIN checkout at the deploy commit (worktree builds lose
    vcs stamping → `<no-vcs>` → INTEGRITY REFUSED). `go build -o nofx-bin.next`.

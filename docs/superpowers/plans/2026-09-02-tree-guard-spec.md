@@ -55,24 +55,26 @@ the reason this guard is worth building rather than just trusting porcelain.
 
 A cutover legitimately dirties the tree (the RELEASE write before the kill, per A19). So:
 
-**UPDATED 2026-09-03 — the lock no longer records a PID.** `kill -0` was the
-wrong liveness test: pid 1860416 died while its holder kept working, and a peer
-nearly cleared a live lock mid-deploy on that reading. The lock is now an ATOMIC
-directory (`~/nofx-main.lock.d`, created with `mkdir` so a second acquire fails
-rather than clobbering — two lanes did overwrite each other on 09-03), keyed by
-SESSION name, with a heartbeat the holder rewrites every 2 minutes. Liveness is
-heartbeat age < 5 min, and an older heartbeat is reported **STALE, never DEAD**.
-See `deploy/nofx-lock.sh`.
-
 ```
-if ~/nofx-main.lock.d exists AND its heartbeat is younger than 5 min:
-        check 1 and check 3 downgrade to INFO ("dirty under lock <task> by pid <n> — expected")
-else:
-        ALARM
+deploy/nofx-lock.sh check      # 0 free · 1 held-fresh · 2 held-stale
+
+held-fresh (rc 1): checks 1 and 3 downgrade to INFO
+                   ("dirty under lock <task> held by <session> — expected")
+held-stale (rc 2): checks 1 and 3 WARN, naming the session and the heartbeat age.
+                   STALE IS NOT DEAD — the guard reports, a human corroborates.
+free       (rc 0): ALARM
 ```
 
 This makes the lock earn a second job: it is the declaration that dirt is intentional. A
-dirty tree with **no live lock holder** is exactly the 08:46 signature.
+dirty tree with **no lock at all** is exactly the 08:46 signature.
+
+**Updated 2026-09-03 (class 70).** This section originally read *"if ~/nofx-main.lock
+exists AND its pid is alive (kill -0)"*. There is no pid any more. The lock is an atomic
+`mkdir ~/nofx-main.lock.d` recording session · task · acquired · expiry · heartbeat, and
+liveness is the heartbeat's age, because a pid answered "does some process exist" when the
+question was "is the owner still working". A guard that asked `kill -0` would have
+mis-answered in both directions on 2026-09-03: it would have called a working owner gone,
+and it would have called a silently-replaced lock healthy.
 
 ## Shape
 
@@ -103,7 +105,10 @@ deploy/install-tree-guard.sh               install + enable --now, mirroring ins
 - Fixture: a scratch clone with `composeArmStop` deleted **and committed** → check 1 says
   clean, check 2 ALARMS. This is the incident-specific pin.
 - Fixture: RELEASE mismatched against a stamped binary → check 3 alarms.
-- Fixture: dirty tree + a live lock → INFO, not ALARM. Dirty tree + a dead-pid lock → ALARM.
+- Fixture: dirty tree + a lock with a FRESH heartbeat → INFO, not ALARM.
+- Fixture: dirty tree + a lock with a STALE heartbeat → WARN naming the session and the
+  age, never the word "dead", and never a clear.
+- Fixture: dirty tree + no lock → ALARM (the 08:46 signature).
 - The guard must be proven to run zero writing git commands: a source pin asserting the
   script contains no `checkout|restore|reset|stash|clean|commit|push`.
 

@@ -1,48 +1,112 @@
 #!/usr/bin/env bash
-# Pins for the atomic heartbeat lock (owner ruling 2026-09-03).
+# nofx-lock-test.sh — pins for the atomic heartbeat lock.
+#
+# The lock this replaces failed in three directions in one day (2026-09-03):
+# a dead pid under a live owner, a live pid silently overwritten by a second
+# writer, and a pid that went stale when its session was resumed. Every pin
+# below is one of those, or the rule that makes them un-representable.
 set -uo pipefail
-export NOFX_LOCK_DIR="$(mktemp -d)/lock.d"
-export NOFX_LEGACY_LOCK="$(mktemp -d)/legacy-absent"
-L="$(dirname "$0")/nofx-lock.sh"
-fail=0
-check(){ if [ "$2" = "$3" ]; then echo "  PASS  $1"; else echo "  FAIL  $1 — got '$2' want '$3'"; fail=1; fi; }
 
-# PIN 1 — a second acquire FAILS. This is the race that clobbered a live lock
-# on 2026-09-03 ("their lock had replaced mine at 21:43").
-out1=$("$L" acquire nofx-A "first boot" 45 >/dev/null 2>&1; echo $?)
-out2=$("$L" acquire nofx-B "second boot" 45 >/dev/null 2>&1; echo $?)
-check "first acquire succeeds"  "$out1" "0"
-check "SECOND acquire FAILS"    "$out2" "1"
+LOCK_SH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/nofx-lock.sh"
+PASS=0; FAIL=0
+ok()   { PASS=$((PASS+1)); printf '  ok   %s\n' "$1"; }
+bad()  { FAIL=$((FAIL+1)); printf '  FAIL %s\n     %s\n' "$1" "${2:-}"; }
+check(){ if [ "$2" = "$3" ]; then ok "$1"; else bad "$1" "want [$3] got [$2]"; fi; }
+has()  { case "$2" in *"$3"*) ok "$1";; *) bad "$1" "missing [$3] in: $2";; esac; }
+hasnt(){ case "$2" in *"$3"*) bad "$1" "found [$3] in: $2";; *) ok "$1";; esac; }
+lower() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]'; }
+hasi()  { has  "$1" "$(lower "$2")" "$(lower "$3")"; }
+hasnti(){ hasnt "$1" "$(lower "$2")" "$(lower "$3")"; }
 
-# PIN 2 — a non-holder cannot release.
-r=$("$L" release nofx-B >/dev/null 2>&1; echo $?)
-check "non-holder cannot release" "$r" "1"
+# A source pin passes vacuously against a missing file, which is a false green
+# of exactly the kind these tests exist to prevent.
+if [ ! -f "$LOCK_SH" ]; then
+  printf 'FAIL: %s does not exist — every pin below would be vacuous\n' "$LOCK_SH"
+  exit 1
+fi
 
-# PIN 3 — a fresh heartbeat reads ALIVE.
-s=$("$L" status 2>&1)
-case "$s" in *ALIVE*) echo "  PASS  fresh heartbeat is ALIVE";; *) echo "  FAIL  fresh status: $s"; fail=1;; esac
+WORK="$(mktemp -d)"; trap 'rm -rf "$WORK"' EXIT
+export NOFX_LOCK_DIR="$WORK/nofx-main.lock.d"
+L() { NOFX_LOCK_DIR="$NOFX_LOCK_DIR" bash "$LOCK_SH" "$@" 2>&1; }
 
-# PIN 4 — A STALE HEARTBEAT IS REPORTED STALE, NEVER DEAD. The distinction is
-# the whole ruling: pid 1860416 died while its holder kept working.
-sed -i "s/^heartbeat_epoch=.*/heartbeat_epoch=$(( $(date +%s) - 999 ))/" "$NOFX_LOCK_DIR/meta"
-s=$("$L" status 2>&1); rc=$?
-case "$s" in
-  *STALE*) echo "  PASS  old heartbeat reports STALE";;
-  *)       echo "  FAIL  stale status: $s"; fail=1;;
-esac
-case "$s" in
-  *DEAD*|*dead*) echo "  FAIL  status said DEAD — a stale heartbeat is not a dead holder"; fail=1;;
-  *)            echo "  PASS  never says DEAD";;
-esac
-case "$s" in
-  *"DO NOT CLEAR ON THIS ALONE"*) echo "  PASS  demands corroboration before clearing";;
-  *) echo "  FAIL  stale status must demand corroboration"; fail=1;;
-esac
-check "stale exits 2 (distinct from free/held)" "$rc" "2"
+echo "== a free lock reports free =="
+out="$(L status)"; rc=$?
+has  "status names it free" "$out" "free"
+check "status rc on a free lock" "$rc" "0"
 
-# PIN 5 — the holder can release, and the lock is then free.
-"$L" release nofx-A >/dev/null 2>&1
-s=$("$L" status 2>&1)
-check "after release the lock is free" "$s" "free"
+echo "== acquire, then a SECOND acquire FAILS (the replacement class) =="
+out="$(L acquire nofx-63 'cutover boot 6' 90)"; check "first acquire rc" "$?" "0"
+hasi "first acquire confirms" "$out" "acquired"
+out="$(L acquire nofx-b3 'a different cutover' 90)"; rc=$?
+check "second acquire rc is nonzero" "$([ $rc -ne 0 ] && echo nonzero || echo zero)" "nonzero"
+has  "second acquire refuses"        "$out" "REFUSED"
+has  "second acquire names the holder" "$out" "nofx-63"
+has  "second acquire names the task"   "$out" "cutover boot 6"
 
-[ "$fail" = "0" ] && { echo "ALL LOCK PINS PASS"; exit 0; } || { echo "LOCK PINS FAILED"; exit 1; }
+echo "== the lock carries no pid, by construction =="
+body="$(cat "$NOFX_LOCK_DIR"/* 2>/dev/null)"
+hasnt "no pid= field in the lock"  "$body" "pid="
+hasnt "no PID word in the lock"    "$body" "PID"
+has   "records the session"        "$body" "nofx-63"
+has   "records the task"           "$body" "cutover boot 6"
+has   "records acquired"           "$body" "acquired="
+has   "records expiry"             "$body" "expiry="
+has   "records a heartbeat"        "$body" "heartbeat="
+
+echo "== a fresh heartbeat reads held, and never 'stale' =="
+out="$(L status)"
+has   "fresh status says held"     "$out" "held"
+hasnti "fresh status is not stale" "$out" "stale"
+check "check rc on held-fresh" "$(L check >/dev/null 2>&1; echo $?)" "1"
+
+echo "== a STALE heartbeat says stale, and NEVER says dead =="
+age_lock() { # rewrite the heartbeat the way the script actually reads it
+  local secs="$1" f="$NOFX_LOCK_DIR/meta"
+  { grep -v '^heartbeat' "$f"
+    printf 'heartbeat=%s\n' "$(date -Is -d "$secs seconds ago")"
+    printf 'heartbeat_epoch=%s\n' "$(( $(date +%s) - secs ))"
+  } > "$f.tmp" && mv -f "$f.tmp" "$f"
+}
+age_lock 660
+out="$(L status)"
+hasi   "stale status says stale"      "$out" "stale"
+hasnti "stale status never says dead" "$out" "dead"
+hasi  "stale status demands corroboration" "$out" "corroborat"
+has   "stale status still names the holder" "$out" "nofx-63"
+check "check rc on held-stale" "$(L check >/dev/null 2>&1; echo $?)" "2"
+
+echo "== heartbeat refreshes it; a foreign session may not beat =="
+L heartbeat nofx-63 >/dev/null
+out="$(L status)"
+hasnti "beating clears stale" "$out" "stale"
+out="$(L heartbeat nofx-b3)"; rc=$?
+check "foreign heartbeat rc nonzero" "$([ $rc -ne 0 ] && echo nonzero || echo zero)" "nonzero"
+has   "foreign heartbeat refuses" "$out" "REFUSED"
+
+echo "== release is owner-scoped, and frees the lock =="
+out="$(L release nofx-b3)"; rc=$?
+check "foreign release rc nonzero" "$([ $rc -ne 0 ] && echo nonzero || echo zero)" "nonzero"
+out="$(L release nofx-63)"; check "owner release rc" "$?" "0"
+has   "release confirms" "$out" "released"
+has   "lock is free again" "$(L status)" "free"
+check "lock dir is gone" "$([ -e "$NOFX_LOCK_DIR" ] && echo present || echo gone)" "gone"
+
+echo "== with-heartbeat keeps a long job fresh, and stops when it ends =="
+L acquire nofx-63 'long build' 90 >/dev/null
+age_lock 660
+L with-heartbeat nofx-63 -- true >/dev/null 2>&1
+hasnti "with-heartbeat beat at least once" "$(L status)" "stale"
+before="$(cat "$NOFX_LOCK_DIR/heartbeat")"
+sleep 1
+check "beater does not outlive its command" "$(cat "$NOFX_LOCK_DIR/heartbeat")" "$before"
+L release nofx-63 >/dev/null
+
+echo "== the script cannot express pid liveness =="
+src="$(grep -v '^[[:space:]]*#' "$LOCK_SH" | sed 's/[[:space:]]#.*$//')"
+hasnt "no kill -0"  "$src" "kill -0"
+hasnt "no pgrep"    "$src" "pgrep"
+hasnt "no \$\$"     "$src" '$$'
+
+echo
+printf 'pass=%d fail=%d\n' "$PASS" "$FAIL"
+[ "$FAIL" -eq 0 ]
