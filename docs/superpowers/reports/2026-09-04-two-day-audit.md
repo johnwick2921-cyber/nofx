@@ -203,6 +203,39 @@ Session windows, read from the running process's own ledger boot line (not assum
 | 2026-09-02 | 28927.25 | 29255.00 | **327.75** | **chop / balance** — 40–90 pt swings, no sustained leg; open 29059 → close 29207.50 |
 | 2026-09-03 | 29075.00 | **29601.00** | **526.00** | **strong uptrend** — 29101.75 (06:00 low) → 29585.00 (13:00 RTH high) = **+483.25 in 7 hours**; the 29601.00 print is the overnight extension at 23:5x CT |
 
+### Per session (the dispatch's C4 table)
+
+Session boundaries read from `kernel/session_registry.go:83-118`, the declared single source of
+truth, and cross-checked against the persisted `system_config.session_registry`:
+**ASIA 17:00→02:00 (read 16:30) · LONDON 02:00→08:30 (read 01:30) · NY 08:30→14:45 (read 08:00)**,
+all CT. An ASIA session is labelled by the date it *starts*. (The registry's `enabled:false` on
+ASIA/LONDON is only the default the resolver consults — `trader/auto_trader_session.go:105-107`
+says it "must never VETO a session the resolver already said runs", and positions 587 (ASIA) and
+588 (LONDON) prove it did not.)
+
+ATR period verified as **14, Wilder, on 5m bars** — `kernel/structure.go:151` (hardcoded `n := 14`),
+`kernel/plan_confirm.go:147`, `trader/auto_trader_planner.go:2808-2813`.
+
+| day | session | open | high | low | close | range | net | ATR5m @ read | largest 15m | at (CT) |
+|---|---|---|---|---|---|---|---|---|---|---|
+| 09-01 | ASIA | 29137.25 | 29171.25 | 29016.50 | 29076.75 | 154.75 | −60.50 | 21.75 *[B]* | +49.25 | 01:30 |
+| 09-02 | LONDON | 29076.75 | 29149.25 | 28927.25 | 29098.25 | 222.00 | +21.50 | 19.86 *[B]* | −58.25 | 03:45 |
+| 09-02 | **NY** | 29098.25 | 29211.75 | 29017.25 | 29175.00 | **194.50** | +76.75 | **26.02** | **−81.50** | 09:45 |
+| 09-02 | ASIA | 29175.75 | 29255.00 | 29075.00 | 29173.50 | 180.00 | −2.25 | 18.73 *[B]* | −59.25 | 00:00 |
+| 09-03 | LONDON | 29173.25 | 29293.00 | 29101.75 | 29248.75 | 191.25 | +75.50 | **22.10** | +55.00 | 07:45 |
+| **09-03** | **NY** | 29249.50 | **29585.00** | 29199.25 | 29524.00 | **385.75** | **+274.50** | **29.02** | **+101.50** | **10:00** |
+| 09-03 | ASIA (open) | 29500.00 | 29601.00 | 29481.50 | 29599.75 | 119.50 | +99.75 | **12.74** | +18.00 | 19:15 |
+
+**[A]** Bolded ATR values are the system's own recorded numbers (`planner_read_facts`, or the
+09-02 arm-stop log line `1.5×ATR5m 26.02` at 08:03:06). **[B]** The three italic values are
+reconstructions — `planner_read_facts` holds 17 rows, **all dated 09-03**, so no recorded ATR
+exists for any 09-02 read. Measured against all 17 recorded rows, closed-bar reconstruction runs
+**+0.01 to +2.89 pts** high (the live cache includes a partial 5m bar the DB never persists), so
+treat them as ±1 pt in quiet tape and ±3 pts in fast tape. They are not exact and cannot be made so.
+
+**The 09-03 NY session is the whole story in one row: +274.50 net on a 385.75 range, its largest
+15-minute move +101.50 at 10:00 CT — and the system was short into it.**
+
 **Snapshot caveat [A]:** the `bars` table is live and was still appending while this audit ran.
 The RTH figures below are stable; the day's *extreme* moved from 29585.00 to **29601.00** between
 the first and last measurement (1374 1m bars at 23:53 CT). Every figure in this report is stamped
