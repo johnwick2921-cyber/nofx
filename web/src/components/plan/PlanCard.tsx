@@ -12,7 +12,6 @@ import { usePlanToday, usePlanVersions } from './usePlan'
 import { SessionTimelineStrip } from './SessionTimelineStrip'
 import { SessionTabs, type SessionTab, type TabState } from './SessionTabs'
 import { SessionPlanCard } from './SessionPlanCard'
-import { DisciplinePanel } from './DisciplinePanel'
 import { RereadButton } from './RereadButton'
 import { ResetButton } from './ResetButton'
 import { ApproveButton } from './ApproveButton'
@@ -94,9 +93,7 @@ export function PlanCard({
           model only: it rules on nothing and no control here changes behaviour.
           Almost every row reads DESCRIPTIVE ONLY today, which is the floor
           working rather than the table failing. */}
-      <ExpectancyPanel />
-      {/* C-fix — adherence GPA + matched-random verdicts (real data, formerly zero FE readers). */}
-      <DisciplinePanel traderId={traderId} language={language} />
+      <ExpectancyPanel traderId={traderId} />
       {/* ITEM 3 — the owner's manual re-read, next to the plan it acts on.
           P6 — the owner RESET sits beside it: both visible, one explanatory
           line each, so the two escape hatches can never be mistaken for one

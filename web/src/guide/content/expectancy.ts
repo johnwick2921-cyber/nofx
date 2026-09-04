@@ -88,6 +88,33 @@ export const expectancy: GuideSection = {
         ],
       ],
     },
+    { kind: 'h', text: 'The instruments drawer underneath' },
+    {
+      kind: 'p',
+      text: 'Below the table sits one collapsed dropdown — "Instruments · discipline · MAE/MFE · level gate (descriptive)". It holds the three measurements that are not yet good enough to decide anything with, which is exactly why they are folded away: giving them the same weight as the table above would imply they carry the same authority. Every row inside names its source and its sample size, so no number in there has to be taken on trust.',
+    },
+    {
+      kind: 'table',
+      title: 'What is in the drawer, and what each one is worth today',
+      head: ['Instrument', 'Source', 'State'],
+      rows: [
+        [
+          'DISCIPLINE',
+          'GET /api/plan/trades — adherence summary',
+          'Real GPA over graded trades, but the test-seam rows are NOT yet excluded from it. It says so on the row rather than implying an exclusion that has not happened.',
+        ],
+        [
+          'MAE/MFE',
+          'trade_excursions, via the expectancy rows',
+          'Reads "no excursion rows yet" until the excursion recorder has data. It never touches the legacy mae/mfe columns on the position row: those default to 0, so averaging the non-zero ones selects a biased subset and reports it as the whole.',
+        ],
+        [
+          'LEVEL GATE',
+          'level_stats, via GET /api/plan/stats',
+          'Legacy — retired, pending its replacement. Shown as raw touch counts and a frozen weekly verdict, never as a live rate with a significance claim. When the replacement lands this reads p(hold) with a sample size and an interval, and stays DESCRIPTIVE ONLY below n=200.',
+        ],
+      ],
+    },
     { kind: 'h', text: 'Where it lives' },
     {
       kind: 'p',
