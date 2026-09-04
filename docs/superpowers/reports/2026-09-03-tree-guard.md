@@ -48,7 +48,7 @@ blindness with a nicer name.
 | The canary's vocabulary | `deploy/tree-guard-symbols.txt` (12 symbols) |
 | Units | `deploy/systemd-user/nofx-tree-guard.{service,timer}` |
 | Installer | `deploy/install-tree-guard.sh` |
-| Tests — **16 cases** | `deploy/tree_guard_test.go` |
+| Tests — **20 cases** | `deploy/tree_guard_test.go` |
 | Guide | `web/src/guide/content/status.ts` |
 | Checklist | class **71** |
 
@@ -92,7 +92,40 @@ into a spec nobody opens.
 
 ---
 
-## 5 — TWO PLACES I DEPARTED FROM THE DISPATCH, AND WHY
+## 5 — THE LOCK CHANGED UNDERNEATH THIS WAVE (A23)
+
+**I built against a superseded spec and shipped a guard that would have false-alarmed on
+every cutover.** Found only because a peer asked an unrelated provenance question.
+
+At **21:48:36** another lane landed `ec2dd8f7`, which replaced the lock model — from
+`~/nofx-main.lock`, a file with a pid, liveness by `kill -0`, to `~/nofx-main.lock.d`, an
+atomic directory keyed by SESSION with a heartbeat and **no pid at all** — and edited
+`2026-09-02-tree-guard-spec.md` to say so. I created my worktree and read that spec at
+**~21:54, six minutes later**, but from a base commit that predates the edit. So I read
+the old version and implemented the old model.
+
+The failure this would have produced is the worst shape available: during a cutover under
+the new lock there is no legacy file, so the guard would find "no live holder", see the
+legitimately dirty tree, and **ALARM — at exactly the moment it is supposed to be
+trusted.** It would have kept running and kept printing the whole time. A guard that cries
+wolf on every deploy is worse than no guard, because the next real alarm is the one you
+scroll past.
+
+**Fixed:** the directory is authoritative (heartbeat age < 300 s), and the legacy file is
+**surfaced but never honoured for liveness** — honouring it would reintroduce the exact
+`kill -0` test the new lock exists to remove. **STALE, never DEAD**: the guard reports a
+heartbeat age and refuses to declare a session dead, because a pid died on 09-03 while its
+holder kept working.
+
+One test was superseded and migrated with its reason rather than weakened —
+`TestLegacyLockFileNoLongerConfersLiveness` now asserts the opposite of what it originally
+asserted, and says why in the test body.
+
+**The lesson is not "read the spec more carefully".** It is that a spec on dev is a moving
+artifact, and a worktree cut from an older base silently freezes it. Checking `git log`
+on the spec file before building against it costs one command.
+
+## 6 — TWO PLACES I DEPARTED FROM THE DISPATCH, AND WHY
 
 **5.1 — The state file lives OUTSIDE the tree.** Section B says "a state file under
 `data/`"; the spec says `~/nofx-backups/tree-guard/state`. I followed the spec.
@@ -111,7 +144,7 @@ fact — it catches a marker committed from the wrong tree, which happened twice
 
 ---
 
-## 6 — A15: WHAT IS STILL WRONG AFTER THIS
+## 7 — A15: WHAT IS STILL WRONG AFTER THIS
 
 **The hole is not closed.** An editor can overwrite the deploy tree at any moment. The
 worktree law and the lock govern agents; an editor is not an agent, holds no lock, and its
@@ -128,7 +161,7 @@ something whose loss would be invisible and does not add a line to
 
 ---
 
-## 7 — INSTALL + PROOF
+## 8 — INSTALL + PROOF
 
 Install writes only to `~/.config/systemd/user` and chmods the script — it is not a tree
 write, which is why it needs no cutover:

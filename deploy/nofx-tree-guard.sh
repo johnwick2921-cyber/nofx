@@ -25,7 +25,15 @@ set -uo pipefail
 # ── RESOLVED VALUES (A11): every path is overridable and every default is
 # stated here rather than assumed by a caller.
 TREE="${TREE_GUARD_TREE:-/home/hoang/nofx}"
+# THE LOCK MOVED under this wave (ec2dd8f7, 2026-09-03 21:48): it is now an
+# ATOMIC DIRECTORY keyed by SESSION with a heartbeat, and it records NO PID —
+# kill -0 was the wrong liveness test. Both are read here: the directory is
+# authoritative, and a leftover legacy file is SURFACED rather than honoured,
+# because a stale pid-file lying next to the real lock is the transition's
+# actual hazard.
+LOCK_DIR="${TREE_GUARD_LOCK_DIR:-$HOME/nofx-main.lock.d}"
 LOCK="${TREE_GUARD_LOCK:-/home/hoang/nofx-main.lock}"
+LOCK_STALE_S="${TREE_GUARD_LOCK_STALE_S:-300}"
 STATE="${TREE_GUARD_STATE:-$HOME/nofx-backups/tree-guard/state}"
 SYMBOLS="${TREE_GUARD_SYMBOLS:-$TREE/deploy/tree-guard-symbols.txt}"
 HEARTBEAT_MAX_S="${TREE_GUARD_HEARTBEAT_MAX_S:-900}"
@@ -42,48 +50,51 @@ info()  { say "tree-guard INFO $1"; }
 # ── THE LOCK'S SECOND JOB ────────────────────────────────────────────────────
 # A cutover legitimately dirties the tree (A19 writes deploy/RELEASE before the
 # kill). The lock is the DECLARATION that dirt is intentional — but only while
-# its holder is alive AND its heartbeat is fresh. A dead pid must not be able to
-# silence this guard, which is the same corroboration rule that stopped a live
-# holder's lock being cleared on 09-03, applied in the other direction.
+# its heartbeat is FRESH. A stale heartbeat buys no silence.
+#
+# STALE, NEVER DEAD. This guard does not get to declare a session dead: a pid
+# died on 09-03 while its holder kept working, and a peer nearly cleared a live
+# lock on that reading. Age is reported; a human corroborates.
 lock_live=0
 lock_desc=""
-if [ -f "$LOCK" ]; then
-  lock_pid="$(grep -oE 'pid=[0-9]+' "$LOCK" 2>/dev/null | head -1 | cut -d= -f2 || true)"
-  lock_task="$(grep -oE 'task=[^ ]*' "$LOCK" 2>/dev/null | head -1 | cut -d= -f2- || true)"
-  lock_hb="$(grep -oE 'heartbeat=[^ ]+' "$LOCK" 2>/dev/null | head -1 | cut -d= -f2- || true)"
-  if [ -n "${lock_pid:-}" ] && kill -0 "$lock_pid" 2>/dev/null; then
-    hb_ok=1
-    if [ -n "${lock_hb:-}" ]; then
-      hb_epoch="$(date -d "$lock_hb" +%s 2>/dev/null || echo 0)"
-      now_epoch="$(date +%s)"
-      if [ "$hb_epoch" -gt 0 ] && [ $((now_epoch - hb_epoch)) -gt "$HEARTBEAT_MAX_S" ]; then
-        hb_ok=0
-      fi
-    fi
-    if [ "$hb_ok" = "1" ]; then
+legacy_note=""
+
+if [ -f "$LOCK_DIR/meta" ]; then
+  l_session="$(grep -m1 '^session=' "$LOCK_DIR/meta" 2>/dev/null | cut -d= -f2- || true)"
+  l_task="$(grep -m1 '^task=' "$LOCK_DIR/meta" 2>/dev/null | cut -d= -f2- || true)"
+  l_hb="$(grep -m1 '^heartbeat_epoch=' "$LOCK_DIR/meta" 2>/dev/null | cut -d= -f2- || true)"
+  if [ -n "${l_hb:-}" ]; then
+    age=$(( $(date +%s) - l_hb ))
+    if [ "$age" -le "$LOCK_STALE_S" ]; then
       lock_live=1
-      lock_desc="pid $lock_pid task=${lock_task:-?}"
+      lock_desc="session '${l_session:-?}' task=${l_task:-?} heartbeat ${age}s old"
     else
-      lock_desc="pid $lock_pid ALIVE but heartbeat stale ($lock_hb)"
+      lock_desc="session '${l_session:-?}' task=${l_task:-?} heartbeat ${age}s old — STALE (> ${LOCK_STALE_S}s); STALE is not DEAD, corroborate before clearing"
     fi
   else
-    lock_desc="pid ${lock_pid:-none} NOT alive"
+    lock_desc="lock dir present but no heartbeat_epoch — unreadable, treated as NOT live"
   fi
+fi
+
+# The legacy pid-file: surfaced either way. Honouring it would reintroduce the
+# kill -0 liveness test the new lock exists to remove.
+if [ -f "$LOCK" ]; then
+  legacy_note=" · NOTE: a legacy lock FILE also exists at $LOCK (the lock moved to $LOCK_DIR on 2026-09-03) — it is NOT honoured for liveness; remove it once its owner is corroborated"
 fi
 
 # ── CHECK 1 — PORCELAIN ──────────────────────────────────────────────────────
 dirty="$(git -C "$TREE" status --porcelain 2>/dev/null)"
 if [ -z "$dirty" ]; then
-  pass "porcelain: tree clean"
+  pass "porcelain: tree clean$legacy_note"
 else
   n=$(printf '%s\n' "$dirty" | wc -l | tr -d ' ')
   files="$(printf '%s\n' "$dirty" | awk '{print $NF}' | paste -sd' ' - | cut -c1-400)"
   if [ "$lock_live" = "1" ]; then
     # Expected-dirty suppression — INFO, never silence: the files are still
     # named, so a cutover that dirties something unexpected is still readable.
-    info "porcelain: $n path(s) dirty UNDER A LIVE LOCK ($lock_desc) — expected during a cutover · $files"
+    info "porcelain: $n path(s) dirty UNDER A LIVE LOCK ($lock_desc) — expected during a cutover · $files$legacy_note"
   else
-    alarm "porcelain: $n path(s) dirty with NO live lock holder (${lock_desc:-no lock file}) — this is the 2026-09-02 08:46 signature · $files"
+    alarm "porcelain: $n path(s) dirty with NO live lock holder (${lock_desc:-no lock}) — this is the 2026-09-02 08:46 signature · $files$legacy_note"
   fi
 fi
 

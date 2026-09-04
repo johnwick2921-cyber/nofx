@@ -96,11 +96,11 @@ func symbolsFile(t *testing.T, syms ...string) string {
 func baseEnv(t *testing.T, tree string) map[string]string {
 	t.Helper()
 	return map[string]string{
-		"TREE_GUARD_TREE":    tree,
-		"TREE_GUARD_LOCK":    filepath.Join(t.TempDir(), "absent.lock"),
-		"TREE_GUARD_STATE":   filepath.Join(t.TempDir(), "state"),
-		"TREE_GUARD_SYMBOLS": symbolsFile(t, "composeArmStop", "normalizeArmLegs", "CorrectedPnL"),
-		"TREE_GUARD_SKIP_REMOTE": "1", // no origin in a fixture
+		"TREE_GUARD_TREE":         tree,
+		"TREE_GUARD_LOCK":         filepath.Join(t.TempDir(), "absent.lock"),
+		"TREE_GUARD_STATE":        filepath.Join(t.TempDir(), "state"),
+		"TREE_GUARD_SYMBOLS":      symbolsFile(t, "composeArmStop", "normalizeArmLegs", "CorrectedPnL"),
+		"TREE_GUARD_SKIP_REMOTE":  "1", // no origin in a fixture
 		"TREE_GUARD_SKIP_RUNNING": "1",
 	}
 }
@@ -126,28 +126,35 @@ func TestE1DirtyTreeWithNoLockAlarmsAndNamesTheFile(t *testing.T) {
 	}
 }
 
-func TestE1DirtyTreeUnderALiveLockIsInfoNotAlarm(t *testing.T) {
+// SUPERSEDED AND MIGRATED, not weakened. This case originally used a legacy
+// ~/nofx-main.lock file naming a LIVE pid and expected INFO. The lock changed
+// under this wave (ec2dd8f7): it is now an atomic directory keyed by session
+// with a heartbeat and NO pid, because kill -0 was the wrong liveness test — a
+// pid died while its holder kept working. So the legacy FILE deliberately no
+// longer confers liveness, and asserting that it does not is the point.
+func TestLegacyLockFileNoLongerConfersLiveness(t *testing.T) {
 	tree := fixtureRepo(t)
-	if err := os.WriteFile(filepath.Join(tree, "trader", "shipped.go"),
-		[]byte("package trader\nfunc composeArmStop() {}\nfunc normalizeArmLegs() {}\nvar CorrectedPnL = 1\n// RELEASE bump\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(tree, "trader", "shipped.go"), []byte("package trader\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	env := baseEnv(t, tree)
-	lock := filepath.Join(t.TempDir(), "live.lock")
-	// A lock naming OUR pid, which is by definition alive, with a fresh heartbeat.
+	lock := filepath.Join(t.TempDir(), "legacy.lock")
+	// OUR pid — unambiguously alive. Under the old contract this suppressed the
+	// alarm; under the new one it must not.
 	body := fmt.Sprintf("owner=hoang session=test pid=%d task=cutover heartbeat=%s\n",
 		os.Getpid(), time.Now().UTC().Format(time.RFC3339))
 	if err := os.WriteFile(lock, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	env["TREE_GUARD_LOCK"] = lock
+	env["TREE_GUARD_LOCK_DIR"] = filepath.Join(t.TempDir(), "absent.lock.d")
 
 	out, _ := runGuard(t, env)
-	if strings.Contains(out, "ALARM porcelain") {
-		t.Fatalf("a cutover legitimately dirties the tree — under a LIVE lock this is INFO:\n%s", out)
+	if !strings.Contains(out, "ALARM porcelain") {
+		t.Fatalf("a legacy pid-file must NOT suppress the alarm — that liveness test is exactly what the new lock removes:\n%s", out)
 	}
-	if !strings.Contains(out, "INFO") {
-		t.Errorf("expected an INFO line naming the lock holder:\n%s", out)
+	if !strings.Contains(out, "legacy") {
+		t.Errorf("and its presence must still be surfaced:\n%s", out)
 	}
 }
 
@@ -421,5 +428,104 @@ func TestE6SymbolsFileHasRealEntries(t *testing.T) {
 		if !strings.Contains(string(src), must) {
 			t.Errorf("the canary omits %q — one of the symbols the 08:46 Save-All deleted", must)
 		}
+	}
+}
+
+// ── THE LOCK CHANGED UNDER THIS WAVE ────────────────────────────────────
+//
+// I read the tree-guard spec at ~21:54 and built against its lock model:
+// ~/nofx-main.lock, a file with a pid, liveness by kill -0. At 21:48:36 —
+// SIX MINUTES BEFORE I READ IT — another lane landed ec2dd8f7, which replaced
+// that model with an atomic directory ~/nofx-main.lock.d keyed by SESSION with a
+// heartbeat, no pid at all, and edited this very spec to say so. My branch is
+// based on a commit that predates the edit, so I read the superseded version.
+//
+// Left alone, the guard would have found no legacy lock file during a cutover
+// under the new lock, concluded "no live holder", and ALARMED on a legitimately
+// dirty tree — a false alarm at the exact moment the guard is supposed to be
+// trusted. It would have kept running and kept printing the whole time.
+
+func newLockDir(t *testing.T, session, task string, heartbeatAge time.Duration) string {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), "nofx-main.lock.d")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	hb := time.Now().Add(-heartbeatAge)
+	meta := fmt.Sprintf("session=%s\ntask=%s\nexpiry=%s\nheartbeat=%s\nheartbeat_epoch=%d\n",
+		session, task, hb.Add(45*time.Minute).Format(time.RFC3339),
+		hb.Format(time.RFC3339), hb.Unix())
+	if err := os.WriteFile(filepath.Join(dir, "meta"), []byte(meta), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func TestLockDirWithFreshHeartbeatDowngradesToInfo(t *testing.T) {
+	tree := fixtureRepo(t)
+	if err := os.WriteFile(filepath.Join(tree, "deploy", "RELEASE"), []byte("newrev\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	env := baseEnv(t, tree)
+	env["TREE_GUARD_LOCK_DIR"] = newLockDir(t, "nofx-63", "merge+boot", 30*time.Second)
+
+	out, _ := runGuard(t, env)
+	if strings.Contains(out, "ALARM porcelain") {
+		t.Fatalf("a dirty tree under a FRESH-heartbeat lock dir is INFO, not ALARM:\n%s", out)
+	}
+	if !strings.Contains(out, "nofx-63") {
+		t.Errorf("the INFO line must name the holding SESSION (there is no pid any more):\n%s", out)
+	}
+}
+
+// STALE, NEVER DEAD — and stale does not buy silence.
+func TestLockDirWithStaleHeartbeatStillAlarms(t *testing.T) {
+	tree := fixtureRepo(t)
+	if err := os.WriteFile(filepath.Join(tree, "trader", "shipped.go"), []byte("package trader\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	env := baseEnv(t, tree)
+	env["TREE_GUARD_LOCK_DIR"] = newLockDir(t, "nofx-ghost", "abandoned", 20*time.Minute)
+
+	out, _ := runGuard(t, env)
+	if !strings.Contains(out, "ALARM") {
+		t.Fatalf("a heartbeat 20 minutes old must not suppress the alarm:\n%s", out)
+	}
+	if !strings.Contains(out, "STALE") {
+		t.Errorf("the guard must say STALE — never DEAD; it does not get to declare a session dead:\n%s", out)
+	}
+}
+
+// The transition's real hazard: a legacy pid-file lock lying around after the
+// lock moved to a directory. It must be SURFACED, not silently honoured and not
+// silently ignored.
+func TestLegacyLockFileIsSurfacedAsAHazard(t *testing.T) {
+	tree := fixtureRepo(t)
+	env := baseEnv(t, tree)
+	legacy := filepath.Join(t.TempDir(), "nofx-main.lock")
+	if err := os.WriteFile(legacy, []byte("owner=hoang pid=4194301 task=old\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	env["TREE_GUARD_LOCK"] = legacy
+	env["TREE_GUARD_LOCK_DIR"] = newLockDir(t, "nofx-63", "merge", 10*time.Second)
+
+	out, _ := runGuard(t, env)
+	if !strings.Contains(out, "legacy") {
+		t.Fatalf("a leftover legacy lock file must be surfaced:\n%s", out)
+	}
+}
+
+// With the new lock absent AND no legacy file, a dirty tree is still the 08:46
+// signature. The guard must not treat "I don't recognise any lock" as consent.
+func TestNoLockOfEitherKindStillAlarmsOnDirt(t *testing.T) {
+	tree := fixtureRepo(t)
+	if err := os.WriteFile(filepath.Join(tree, "trader", "shipped.go"), []byte("package trader\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	env := baseEnv(t, tree)
+	env["TREE_GUARD_LOCK_DIR"] = filepath.Join(t.TempDir(), "absent.lock.d")
+	out, _ := runGuard(t, env)
+	if !strings.Contains(out, "ALARM porcelain") {
+		t.Fatalf("no lock of either kind + dirty tree must ALARM:\n%s", out)
 	}
 }
