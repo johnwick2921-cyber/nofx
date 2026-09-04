@@ -143,6 +143,17 @@ func (c *OrderSnapshotCache) PutAt(p OrderSnapshotPayload, receivedAt time.Time)
 	c.byKey[snapKey(p.Account, p.Symbol)] = cachedSnapshot{Payload: p, ReceivedAt: receivedAt}
 }
 
+// EverReceived reports whether ANY snapshot has arrived on this link. It is
+// what separates "the AddOn has not been reloaded yet" (F1: a LOUD ledger
+// fallback, so the Go boot is not blocked by the old DLL) from "we had a book
+// and lost it" (a regression, which FAILS). Without the distinction the two
+// render identically and the second one hides inside the first.
+func (c *OrderSnapshotCache) EverReceived() bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return len(c.byKey) > 0
+}
+
 // Latest returns the newest snapshot for the key.
 func (c *OrderSnapshotCache) Latest(account, symbol string) (OrderSnapshotPayload, bool) {
 	c.mu.RLock()

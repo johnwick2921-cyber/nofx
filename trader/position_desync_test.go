@@ -21,7 +21,7 @@ type stubTrader struct {
 
 var _ types.Trader = (*stubTrader)(nil)
 
-func (s *stubTrader) GetBalance() (map[string]interface{}, error)   { return nil, nil }
+func (s *stubTrader) GetBalance() (map[string]interface{}, error)     { return nil, nil }
 func (s *stubTrader) GetPositions() ([]map[string]interface{}, error) { return s.positions, s.err }
 func (s *stubTrader) OpenLong(string, float64, int) (map[string]interface{}, error) {
 	return nil, nil

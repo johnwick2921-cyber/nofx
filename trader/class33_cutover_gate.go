@@ -3,6 +3,7 @@ package trader
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"nofx/store"
 )
@@ -94,16 +95,22 @@ func (at *AutoTrader) CutoverGateStatus() CutoverGate {
 	// exist whether or not our connection does, so a dead link must never turn
 	// leg 4 into "no working orders". (The same function feeds the TCPTrader's
 	// GetOpenOrders, so /api/open-orders and this leg cannot disagree.)
+	//
+	// F12 (2026-09-03): the BROKER now answers this leg. The ledger is the
+	// cross-check, and a disagreement FAILS with both counts quoted — when two
+	// sources disagree the honest move is to show both and refuse, never to
+	// pick the one that lets the cutover proceed. With no snapshot (an old
+	// AddOn, or the link down) the leg FAILS and names the ledger as the source
+	// out loud: a silent fallback would let a ledger answer be read as a broker
+	// answer, which is the whole defect F12 closes.
 	orders, oerr := at.gateOpenOrders()
 	switch {
 	case oerr != nil:
 		add(4, "working_orders", false, fmt.Sprintf("source failed: %v", oerr), "armed_orders ledger")
 	default:
-		src := "armed_orders ledger (no NT8 order frame — F12 open)"
-		if len(orders) > 0 && orders[0].Source != "" {
-			src = orders[0].Source
-		}
-		add(4, "working_orders", len(orders) == 0, fmt.Sprintf("%d non-terminal arm(s)", len(orders)), src)
+		book, acct, sym := at.brokerBook()
+		leg := Leg4FromBrokerAt(book, acct, sym, OrderSnapshotInterval(), orders, time.Now())
+		add(4, leg.Name, leg.Pass, leg.Detail, leg.Source)
 	}
 
 	// Leg 5 — IN-FLIGHT WORK (the 2026-08-31 17:34 defect).

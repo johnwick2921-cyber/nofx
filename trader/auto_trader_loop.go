@@ -273,10 +273,10 @@ func (at *AutoTrader) runCycle() error {
 	// sat behind cycle_skip=no_new_data until ~17:00:03). See
 	// evaluateWallClockSessionReads in auto_trader_clock.go.
 
-// CLASS 50 (refs-only wave, 2026-09-02): the W4 mid-week invalidation
-		// watch is REMOVED — refs-only weekly docs carry no bias/invalidation,
-		// so there is nothing to flip. The rule bias survives as shadow
-		// (stamped + logged by the Sunday read), never read as a direction.
+	// CLASS 50 (refs-only wave, 2026-09-02): the W4 mid-week invalidation
+	// watch is REMOVED — refs-only weekly docs carry no bias/invalidation,
+	// so there is nothing to flip. The rule bias survives as shadow
+	// (stamped + logged by the Sunday read), never read as a direction.
 
 	// P3.6-A — DIGEST WRITERS: 3-line session digest at each session close + the
 	// daily roll-up at the trade-date close. Idempotent; gated → dormant.
