@@ -28,8 +28,22 @@ const (
 	KnobSuspended   KnobStatus = "suspended"    // a standing ruling disables it; value preserved
 	KnobAdvisory    KnobStatus = "advisory"     // feeds prompt text only — never a gate
 	KnobDisplayOnly KnobStatus = "display-only" // rendered, never read by the engine
-	KnobDead        KnobStatus = "dead"         // saved value CANNOT take effect (audit's 15)
-	KnobInfra       KnobStatus = "infra"        // ports, paths, keys — not a trading knob
+
+	// TWO DIFFERENT TESTS, TWO DIFFERENT LABELS (owner ruling 2026-09-03). The
+	// 09-03 sweep proved neither subsumes the other, so they must not share a
+	// word.
+	//
+	// KnobIneffective — a consumer DOES read it and the read does not change
+	// behaviour. Seven of these: max_margin_usage feeds prompt text only,
+	// plan_mode was dropped at the arm seam until R2. The reason is REQUIRED.
+	//
+	// KnobCandidate — no consumer found by a FIELD grep, which is NOT the same
+	// as having no reader: a method-based consumer would not appear. Never
+	// "dead", never removed, and rendered "no known reader — pending
+	// verification" until a METHOD-level grep is run and its command quoted.
+	KnobIneffective KnobStatus = "ineffective"
+	KnobCandidate   KnobStatus = "candidate-unverified"
+	KnobInfra       KnobStatus = "infra" // ports, paths, keys — not a trading knob
 )
 
 // KnobEntry is one schema field's classification.
@@ -107,9 +121,9 @@ func LookupKnob(path string) (KnobEntry, bool) {
 
 // KnobSummary is what the boot line reports — counted, never typed.
 type KnobSummary struct {
-	Total, Live, Suspended, Advisory, DisplayOnly, Dead, Infra int
-	EnvShadows                                                 int
-	EnvShadowPaths                                             []string
+	Total, Live, Suspended, Advisory, DisplayOnly, Ineffective, Candidate, Infra int
+	EnvShadows                                                                   int
+	EnvShadowPaths                                                               []string
 }
 
 // KnobStatusSummary counts the registry by status.
@@ -126,8 +140,10 @@ func KnobStatusSummary() KnobSummary {
 			s.Advisory++
 		case KnobDisplayOnly:
 			s.DisplayOnly++
-		case KnobDead:
-			s.Dead++
+		case KnobIneffective:
+			s.Ineffective++
+		case KnobCandidate:
+			s.Candidate++
 		case KnobInfra:
 			s.Infra++
 		}
@@ -149,8 +165,8 @@ func KnobRegistryBootLine() string {
 	if unclassified > 0 {
 		warn = fmt.Sprintf(" · ⚠ %d UNCLASSIFIED", unclassified)
 	}
-	return fmt.Sprintf("settings: schema=%d classified=%d live=%d suspended=%d advisory=%d display-only=%d dead=%d infra=%d · env-shadows=%d%s",
-		fields, s.Total, s.Live, s.Suspended, s.Advisory, s.DisplayOnly, s.Dead, s.Infra, s.EnvShadows, warn)
+	return fmt.Sprintf("settings: schema=%d classified=%d live=%d ineffective=%d candidate-unverified=%d suspended=%d advisory=%d display-only=%d infra=%d · env-shadows=%d%s",
+		fields, s.Total, s.Live, s.Ineffective, s.Candidate, s.Suspended, s.Advisory, s.DisplayOnly, s.Infra, s.EnvShadows, warn)
 }
 
 // AuditDeadKnobs2026_09_03 is the audit's fifteen, by schema path, so the
@@ -162,4 +178,26 @@ var AuditDeadKnobs2026_09_03 = []string{
 	"risk_control.notional_cap_enabled",
 	"risk_control.max_margin_usage",
 	"indicator_config.external_data_sources",
+}
+
+// UILabel is what the Studio renders beside a field. The two failure modes get
+// DIFFERENT words, because conflating them is how a knob nobody has checked
+// gets deleted as "dead".
+func (e KnobEntry) UILabel() string {
+	switch e.Status {
+	case KnobIneffective:
+		return "read; does not take effect (" + e.Note + ")"
+	case KnobCandidate:
+		return "no known reader — pending verification"
+	case KnobSuspended:
+		return "suspended — " + e.Note
+	case KnobAdvisory:
+		return "advisory to the model — not a gate"
+	case KnobDisplayOnly:
+		return "display only"
+	case KnobInfra:
+		return "infrastructure — not a trading knob"
+	default:
+		return "live"
+	}
 }

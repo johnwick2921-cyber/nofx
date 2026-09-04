@@ -54,6 +54,11 @@ func TestRegistryDoesNotCallTheAuditsDeadKnobsLive(t *testing.T) {
 		if e.Status == KnobLive {
 			t.Errorf("%s: registry says LIVE but the audit proved it cannot take effect", p)
 		}
+		// An audit-dead knob is 'ineffective' (read, no effect) — never
+		// 'candidate', which means nobody has checked yet.
+		if e.Status == KnobCandidate {
+			t.Errorf("%s: the audit CHECKED this one — it is ineffective, not unverified", p)
+		}
 		if e.Note == "" {
 			t.Errorf("%s: a non-live knob must carry the REASON", p)
 		}
@@ -63,7 +68,8 @@ func TestRegistryDoesNotCallTheAuditsDeadKnobsLive(t *testing.T) {
 // The boot line is counted from the registry, never typed.
 func TestKnobBootLineIsCounted(t *testing.T) {
 	line := KnobRegistryBootLine()
-	for _, want := range []string{"settings: schema=", "classified=", "live=", "dead=", "env-shadows=0"} {
+	// The ruling's two labels must BOTH appear — conflating them is the defect.
+	for _, want := range []string{"settings: schema=", "classified=", "live=", "ineffective=", "candidate-unverified=", "env-shadows=0"} {
 		if !strings.Contains(line, want) {
 			t.Errorf("boot line missing %q: %s", want, line)
 		}
