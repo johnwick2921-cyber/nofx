@@ -512,3 +512,64 @@ WARN-first N=25. **[A] NOT DONE** — `level_event` remains a **full REPLAN trig
 **budget-free** list at boot 8 (`replan budget: … free: <S>_scheduled_read, level_event,
 structure_mss …`). It fired twice today. The class-47 cutoffs govern *when* it may wake, not
 whether it is advisory.
+
+---
+
+## 11. D2 — every [I] belief still enforced as a REJECT
+
+The WARN-first law says an untested belief must not carry a hard REJECT without an owner ruling.
+The census named three candidates (`belief-census.md:107`). Status at boot 8:
+
+| census row | belief | still a REJECT? | label now | verdict |
+|---|---|---|---|---|
+| **B6** | min-SL ≥ mult×ATR5m + 2-tick clearance | **YES** — `kernel/engine_position.go:227-231` `return fmt.Errorf` | **[I]** — `MIN_SL_ATR_MULT` unset, no citation in code, no owner ruling found in `docs/` | **A24 VIOLATION — and the multiplier was raised 1.0 → 1.5** (`kernel/min_sl.go:34`) |
+| **B2** | breakdown family: `BD_MIN_CLOSES`, `BD_MAX_PULLBACK`, `BD_MAX_LEVEL_DIST` | **YES** — `kernel/breakdown_continue.go:258-265` author-time `return fmt.Errorf` | partially [T] | **PARTIALLY MOVED — not by demotion.** E3 (entry-mechanics 2026-08-30) relaxed the confirm requirement **2 → 1** close: *"the entry law now rides on displacement quality, not on a double close"* (`breakdown_continue.go:60-64`). The census's "BD_CONFIRM_CLOSES 2" no longer exists; `BD_MIN_CLOSES` defaults to **1** |
+| **B7** | stale-confirm 2.0×ATR5m | YES — gate | **[T], NOT [I]** | **THE CENSUS LABEL IS NOW WRONG.** The code carries its own citation (`kernel/plan_confirm.go:118-123`): *register S2, mega-research 2026-08-26 — the shipped 1.0×dATR unit marked only **38/2,908 (1.3%)** of the week's MET confirms stale; at 2.0×ATR5m the rule marks ~37%, matching the empirical stale mass (median \|price−ref\| = 58.75 pt)*. **n=2,908.** This is a tape-calibrated value, not an invention |
+
+**[A] D2's answer: ONE — B6, the min-SL floor.** It is the only [I] belief still carrying a hard
+REJECT with no citation and no owner ruling, and it was tightened by 50% rather than demoted.
+Queue item #5 (B7) should be **re-labelled [T] in the census**, not demoted. Queue item #4 (B2)
+moved for a different reason than the queue gave.
+
+---
+
+## 12. D4 — the entry law, per condition
+
+**[A] The law is ONE enum-keyed table at one chokepoint** — `kernel/entry_law.go:38-77`,
+enforced by `ValidateEntryLaw` (`:133`) as a **REJECT AT WRITE with a NAMED message**.
+
+| condition | allowed confirms | fade-touch enforced | style |
+|---|---|---|---|
+| `reject` | **touch only** | ✅ | touch-entry at the level (limit), stop ≥2 ticks behind structure |
+| `fvg_entry` | **touch only** | ✅ | touch inside the FVG (edge..CE band, vs the FRESH list) |
+| `sweep_reclaim` | touch · 1x5m_close · 1m_mss | — | split contract (E4): leg-1 touch, leg-2 1m_mss |
+| `reclaim` | 1x5m_close · 1m_mss | — | reclaim-close discipline, **never 2x5m_close** |
+| `breakout_retest` | touch · 1x5m_close | — | retest limit + stop-entry fallback (E7) |
+| `acceptance` | time_hold · 1x5m_close | — | time_hold (E6) with 1x5m fallback |
+| `hold` | time_hold · 1x5m_close | — | as `acceptance` |
+| `breakdown_continue` | 1x5m_close · **2x5m_close** | — | 1 confirming close + displacement ≥ `BD_MIN_DISP_ATR`×ATR5m, or stop-entry |
+| `breakup_continue` | 1x5m_close · **2x5m_close** | — | as above |
+
+Two named rejections carry the law:
+
+- **`fade_requires_touch`** — `entry_law.go:151-155`: a close-confirm on `reject`/`fvg_entry` is
+  always refused. **LIVE, REJECT-at-write.** Declared to the model as a prompt contract restriction
+  (`kernel/prompt_contract.go:121-123`, `MustAppear: "touch ONLY (fade_requires_touch)"`).
+- **`2x5m_reserved`** — `entry_law.go:157`, `twoX5mReserved()` at `:87`: a double close is legal
+  **only** on the breakdown/breakup pair. Also a declared contract restriction
+  (`prompt_contract.go:126-127`).
+
+**Owner ruling in the code (`entry_law.go:22`):** *"no 15m confirms ever (E1); default 1x5m_close"*
+— label **[O]**.
+
+### Against the confirm-cost research
+
+`docs/superpowers/reports/2026-08-30-confirm-cost-forensics.md`
+(`git log -1` → `8f09aa84`) measured close-confirms at a net cost of **≈ −$681**. The live law is
+directionally consistent with that finding: the two **fade** conditions are forced to `touch`
+(the cheap confirm), and the expensive `2x5m_close` is confined to the two displacement
+conditions. **CONFORMS.**
+
+**The dispatch's "round 3 (touch vs 2x5m cost)" source could not be located** — there is no
+`round 3` document on dev (premise P3). The confirm-cost forensics report is the nearest named
+measurement and is what this row is checked against.
