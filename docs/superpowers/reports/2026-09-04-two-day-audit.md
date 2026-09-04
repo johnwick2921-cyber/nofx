@@ -964,7 +964,10 @@ perfect-exit assumption; R:R-at-arm at n=7 nets −7.03 pts and sits below the n
 verdict is stated for it; the one winning cluster (09-02 18:47–19:00 ASIA, 7 opportunities all
 reaching target) is worth **+$55.22** as the single sequential position it actually was. Four of
 the named new legs — one-open-position, invalidation-wired, shadow map, direction — are among
-**fourteen wired legs that never fired once**. **Gates account for roughly 5%**, and the real gate
+**fourteen wired legs that never fired once**, and, decisively, **none of the legs the dispatch
+calls "new" existed during any of the five losing trades**: strict and invalidation entered force
+at 09-03 11:10:33 CT and one-open-position at 14:59:03, while the last loss closed at
+**09-03 09:20:45**. A rule that post-dates every loss cannot have caused one. **Gates account for roughly 5%**, and the real gate
 findings are structural rather than costly: `plan_mode=strict` refuses **every** decision-path
 market entry regardless of citation and announces this nowhere; the decision-path refusal recorder
 writes no log line and no counter, so 19 refusals were invisible until `decision_records` was read
