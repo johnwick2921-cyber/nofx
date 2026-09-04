@@ -55,8 +55,17 @@ the reason this guard is worth building rather than just trusting porcelain.
 
 A cutover legitimately dirties the tree (the RELEASE write before the kill, per A19). So:
 
+**UPDATED 2026-09-03 — the lock no longer records a PID.** `kill -0` was the
+wrong liveness test: pid 1860416 died while its holder kept working, and a peer
+nearly cleared a live lock mid-deploy on that reading. The lock is now an ATOMIC
+directory (`~/nofx-main.lock.d`, created with `mkdir` so a second acquire fails
+rather than clobbering — two lanes did overwrite each other on 09-03), keyed by
+SESSION name, with a heartbeat the holder rewrites every 2 minutes. Liveness is
+heartbeat age < 5 min, and an older heartbeat is reported **STALE, never DEAD**.
+See `deploy/nofx-lock.sh`.
+
 ```
-if ~/nofx-main.lock exists AND its pid is alive (kill -0):
+if ~/nofx-main.lock.d exists AND its heartbeat is younger than 5 min:
         check 1 and check 3 downgrade to INFO ("dirty under lock <task> by pid <n> — expected")
 else:
         ALARM
