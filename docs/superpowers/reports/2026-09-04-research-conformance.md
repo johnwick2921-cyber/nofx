@@ -805,3 +805,49 @@ One line each. These were checked and need nothing.
 - **Arm bias-coherence** — returns a warning string, never a refusal: warn matches its label.
 - **`one_open_position`** — owner-ruled 2026-09-03, hardcoded, both seams.
 - **Invalidation-wired** — owner-ruled, arm path only, unresolved verdict passes with a line.
+
+---
+
+## 16. WHAT THIS AUDIT GOT WRONG, AND WHY IT IS IN THE REPORT
+
+Three findings in this report's own first draft were wrong. Each was caught by an adversarial
+re-read, each is corrected in place above, and each is listed here because the *pattern* matters
+more than the individual error.
+
+| my first reading | what is true | why I got it wrong |
+|---|---|---|
+| "min-SL is an [I] belief enforced as a REJECT — an A24 violation" (D2 = 1) | it is **[R]/[O]** — `kernel/min_sl.go:10-33` carries a week-ledger grounding and names an **owner ruling of 2026-09-02**. **D2 = 0** | I read the census row and the boot line, and did not read the constant's own doc comment. The citation lives in code, not in `docs/` |
+| "D9 swing seats is [X] with live teeth" | the census **misread its source**: `missed-turns` is a MISS rate, 80.0→65.0% is an improvement, and `grand-audit.md:74` marks it **PROVEN ✅** | I trusted the census's label instead of opening the report it cited |
+| "seats=8, proximity retuned 0.3 — conforms" | resolved values are **`max_levels`=12** and **`proximity_filter_atr`=1.0**; the boot line prints a file constant and a **string literal** | I treated a boot line as a resolved read. The repo's own canon says *"Boot lines are READ, never literal"* — two of them are not |
+
+**The common thread: a label or a boot line was trusted in place of the thing it describes.** That
+is the same failure mode the two-day audit hit (concluding "the gate refused nothing" from a grep),
+and it is why every row of §13 now carries a `file:line` and a resolved value rather than a
+citation to a prior report's summary.
+
+**One correction propagates backwards:** the two-day audit's defect D32 said the decision-path
+EntryGate refusal writes "no log line and no counter". It writes no log line and no
+`arm_refusals_0b` row, but it **does** call `telemetry.IncGateBlock` (`entry_gate.go:478`). That
+report's finding is half right and is corrected here rather than left standing.
+
+---
+
+## 17. LIMITS
+
+- **[A]** `/api/config/resolved` and `/api/risk/gate-blocks` require an Authorization header this
+  session does not have. Every resolved value above comes from a boot line, the resolver code path,
+  or the saved strategy row — and where a boot line proved to be a literal (§16) the resolver was
+  read instead.
+- **[A]** `trade_excursions` is empty, so D3 rests on `trader_positions.mae/mfe`, which is
+  **right-censored by our own stops** for losing trades. The winners-only MAE (n=18) is the
+  uncensored signal and is **below the n=30 floor** — reported without a verdict.
+- **[A]** The live tables move while the audit runs: `touch_outcomes` was 359 at the start and 424
+  twenty minutes later; `plans` for 09-03 grew from 14 versions (two-day audit) to 16. Every count
+  in this report carries the instant it was taken.
+- **[A]** Four dispatch premises could not be sourced: "rounds 1–9" as a directory, `VL-MASTER-PLAN-v2.md`,
+  the "arms-follow-bias" report, and "round 3: 88% of breaks resolve next candle" (three `88%` hits
+  in `docs/superpowers/`, none about breaks). **Round 7 *was* found** — cited in code at
+  `kernel/min_sl.go:21`, not as a document.
+- **[B]** Drift rows **D-19** (HTF veto as a dead gate) and **D-22** (weekly F3/F4 as dead gates)
+  come from agent units whose adversarial verification had not returned when this report was
+  merged. They are marked *pending confirm* rather than asserted, and neither is acted on.
