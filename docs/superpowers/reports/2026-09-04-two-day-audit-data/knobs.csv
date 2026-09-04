@@ -44,7 +44,8 @@ ob_lookback_bars,8,boot line "ob_lookback_bars=8" (kernel.OBLookbackBars()),trad
 position_mode,ai_watch (source: db); watcher min_conf=70 hold=2 warn_consec=2,boot 🧾 ledger line,trader/auto_trader.go ledger boot,yes
 guardrails master,OFF (soft-audit only) — daily loss/profit/trade limits + blackout NOT enforced,"strategy MNQ guardrails_enabled:false; per-cycle WARN at kernel/engine_analysis.go:173",kernel/engine_analysis.go:173,yes
 shadow A/B (SHADOW_AB_ENABLED),OFF (target_n=10 done=0),"env SHADOW_AB_ENABLED UNSET; boot line ""🔬 shadow A/B … OFF""",trader (ShadowABEnabled/ShadowABTarget),yes
-planner stream idle / total deadline,idle=30s · total=1200s,"boot line ""planner stream idle=30s total=1200s""; AI_PLAN_TOTAL_DEADLINE_SECS is NOT in .env — 1200 is the CODE default, not an env setting",kernel/levels_volume_boot.go:23 (line) — resolver in the planner client,yes
+planner stream idle deadline,30s,"env AI_PLAN_STREAM_IDLE_SECS UNSET → code default; boot line ""stream_idle=30s""",kernel/planner_speed.go:22-29 (default 30),yes
+planner stream TOTAL deadline,1200s,"env AI_PLAN_TOTAL_DEADLINE_SECS is NOT in /home/hoang/nofx/.env — 1200 is the CODE DEFAULT, not an env setting (memory entry project_class37 says it was set in .env; that is wrong, behaviour identical)",kernel/planner_speed.go:38-49 (default 1200),yes
 executor HTTP ceiling,600s (non-stream paths only),env AI_HTTP_TIMEOUT_SECONDS=600 in .env; boot line "http_ceiling=600s",config (AI_HTTP_TIMEOUT_SECONDS),yes
 planner max tokens,65536,"env AI_PLAN_MAX_TOKENS UNSET → default 65536; boot line ""📐 planner cap: plan_max_tokens=65536 (AI_PLAN_MAX_TOKENS; default 65536)""",trader/auto_trader_dayplan.go:73 (aiPlanMaxTokens()),yes
 client max tokens,32768,env AI_MAX_TOKENS=32768 in .env; boot line "client_max_tokens=32768",config,yes

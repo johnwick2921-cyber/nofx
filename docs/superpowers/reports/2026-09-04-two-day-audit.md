@@ -371,8 +371,26 @@ entry 29044.00, but the order actually resting at NT8 was a buy limit at 29035.2
 
 **Arms 29/30/31** were cancelled by the stale-order-update reconciler at 00:07–00:31 CT on 09-02 —
 inside the window of three boots in eleven minutes (00:01:06, 00:10:20, 00:11:47). **[B]** The
-restart resets the NT8 order-update stream; the reconciler then sees no update inside the stale
-window and cancels. Three long arms in ASIA died to deploy churn, not to the market.
+restart resets the NT8 order-update stream; the reaper then sees no update inside the 15-minute
+stale window and cancels. **The mechanism is genuinely broken:** `onArmedOrderUpdate`
+(`armed_executor.go:1139-1156`) switches only on `filled/partfilled/rejected/cancelled` — there is
+no default branch and no `Touch` for `submitted/accepted/working`, so a **perfectly healthy**
+resting limit is reaped ~15 minutes after placement simply because non-terminal frames write
+nothing to the ledger. Three long arms in ASIA died to deploy churn, not to the market.
+
+**And they would have filled [A].** Price traded through all three entries within 45 minutes of
+the cancel (arm 31 at 00:54, arms 29/30 at 01:17 CT). **But the reaper was lucky** — carried to
+their own stops and targets on the real tape, all three would have been **stopped out**:
+
+| arm | side | entry | stop | target | outcome | pts |
+|---|---|---|---|---|---|---|
+| 29 | long | 29035.25 | 29025.00 | 29099.85 | STOP 01:18 | −10.25 |
+| 30 | long | 29035.25 | 29018.00 | 29071.41 | STOP 01:33 | −17.25 |
+| 31 | long | 29068.05 | 29044.00 | 29131.66 | STOP 01:04 | −24.05 |
+| | | | | | **net** | **−51.55 pts = −$103** |
+
+So the reaper cost three real fills and **saved $103** doing it. The defect is the mechanism, not
+this outcome.
 
 ### Arm 37 — the case that looks like a broker defect and is not
 
@@ -608,6 +626,10 @@ refused trades were stopped on their own stop inside half an hour.
 **n=7 is below the n=10 floor, so no verdict is stated** — the number is reported plainly.
 **[A] All seven were authored at R:R ≥ 2.0 and pushed below the 2.0 floor by `composeArmStop`
 widening the stop.** The plan cleared the gate; the stop composer then broke it.
+
+**stale-arm reaper — n=3.** All three would have filled after the cancel and all three would have
+been stopped: **−51.55 pts = −$103**. The reaper's ledger is *positive*; its mechanism is still
+wrong (D10).
 
 **strict (leg 0) — n=13.** All 09-03 20:35–21:12 CT, all ASIA, all after the trading day. They cost
 nothing on 09-02/09-03, but they demonstrate a decision path that is structurally closed.
