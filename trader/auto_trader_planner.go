@@ -2318,6 +2318,35 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 	// floor's per-level measurement, from the SAME scope the void list uses so
 	// the two cannot disagree about what the tape shows.
 	levelDisplacements := kernel.ComputeLevelDisplacements(scored, voidScope, now.UnixMilli())
+	if at.store != nil {
+		detPlanID := at.store.Plan().ResolvePlanID(tradeDate, session, at.id)
+		detVersion := 0
+		if latest, lerr := at.store.Plan().GetLatestPlanForTraderSession(tradeDate, session, at.id); lerr == nil && latest != nil {
+			detVersion = latest.Version
+		}
+		// pool is []ScoredLevel; the recorder classifies raw DetectedLevels
+		// against the seated set itself and must not be handed a second scoring.
+		detAll := make([]kernel.DetectedLevel, 0, len(pool))
+		for _, c := range pool {
+			detAll = append(detAll, c.DetectedLevel)
+		}
+		at.recordDetectorOutputs(symbol, detPlanID, session, detVersion,
+			detAll, scored, price, dATR, at.proximityFilterATR(), maxLevels, now)
+	}
+
+	// 1B WIRING (owner ruling 2026-09-03) — the detector's ONE production call
+	// site. detector_record.go's header has claimed "THE PRODUCTION CALL PATH"
+	// since 89aeb8be while NOTHING called it: every boot, including the running
+	// 4d846e26, printed "touch_outcomes=0 · candidate_pool=0". It runs HERE,
+	// beside the void scope, because the hook re-resolves that identical scope
+	// (detector_record.go:38) — so the detector judges the SAME tape the prompt
+	// and the validator read, which is what 1B's design required.
+	//
+	// planVersion is the version IN FORCE at read time, NOT the one this read is
+	// about to author: a read can fail and author nothing, and A24 forbids
+	// recording a version number that may never exist.
+	//
+	// A10: the hook logs and returns on every failure; it cannot fail this read.
 	// W3 (weekly-bias wave) — the Sunday weekly-bias context line (≤3 lines;
 	// "WEEKLY: none" when no doc — fail-open, nothing else changes).
 	weeklyDoc := at.weeklyDocCached(now)
