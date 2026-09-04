@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { ResolvedKnobPanel } from '../components/settings/ResolvedKnobPanel'
 import { toast } from 'sonner'
 import {
   User,
@@ -815,6 +816,20 @@ export function SettingsPage() {
           />
         </div>
       )}
+      {/* What this build actually honours. Rendered from the registry itself so
+          the page cannot narrate a rulebook the engine does not follow. */}
+      <div className="mt-8 rounded-lg border border-zinc-800 bg-zinc-900/40 p-4">
+        <h3 className="mb-1 text-sm font-semibold text-white">
+          What this build honours
+        </h3>
+        <p className="mb-3 text-xs text-zinc-500">
+          Knobs whose behaviour differs from what their name suggests. A knob
+          can fail to matter in two different ways, and neither of them means
+          dead.
+        </p>
+        <ResolvedKnobPanel />
+      </div>
+
       {revision && (
         <p className="mt-4 text-center text-[10px] text-zinc-600 font-mono">
           running rev {revision}
