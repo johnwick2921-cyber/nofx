@@ -56,13 +56,31 @@ func armedPlaceTicks() int {
 // fill AT the level (better entry by construction, no stale risk) and the one
 // refused arm replayed +$108 — the global entry floor (3.0) is NOT lowered;
 // AI-proposed market entries keep their own gate unchanged.
-func armMinRR() float64 {
-	if v := os.Getenv("ARM_MIN_RR"); v != "" {
-		if f, err := strconv.ParseFloat(strings.TrimSpace(v), 64); err == nil && f > 0 {
-			return f
-		}
+// R1 (owner ruling 2026-09-03) — ONE R:R FLOOR. The Studio value
+// min_risk_reward_ratio governs BOTH the arm seam and the decision path;
+// ARM_MIN_RR is DELETED, env and code default alike.
+//
+// Two floors from two sources was the defect: the bound strategy "MNQ"
+// (a5b7662e) carries 2, while armMinRR() returned its own default 2.0 from an
+// env var nobody had set. They agreed by coincidence, so nothing looked wrong —
+// and a Studio save moving the floor would have moved only one of them.
+// Behaviour is unchanged today (both read 2.0); the SOURCE is now single.
+func resolvedMinRR(cfg *store.StrategyConfig) float64 {
+	if cfg != nil && cfg.RiskControl.MinRiskRewardRatio > 0 {
+		return cfg.RiskControl.MinRiskRewardRatio
 	}
-	return 2.0
+	// No config: the schema's own safe default, not a second opinion.
+	return store.SafeDefaultMinRiskReward
+}
+
+// armMinRRFor is the arm seam's floor — the SAME resolver the decision path
+// uses. Kept as a named function so the call sites read as a policy, not a
+// field access.
+func (at *AutoTrader) armMinRRFor(cfg *store.StrategyConfig) float64 {
+	if cfg == nil && at != nil {
+		cfg = at.config.StrategyConfig
+	}
+	return resolvedMinRR(cfg)
 }
 
 // armedWorkingStaleMin is the reconnect/reconcile safety net
@@ -395,7 +413,7 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 			}
 			// gates AT ARM TIME — a resting order is a pre-passed entry; each gate
 			// input that changes materially later triggers a cancel (1.3).
-			if verdict := at.armGateVerdictFor(sc, leg, biasDirectionFor(doc.Bias.Direction), snap, atr5m, minQuality, cfg); verdict != "" {
+			if verdict := at.armGateVerdictFor(sc, leg, biasDirectionFor(doc.Bias.Direction), snap, atr5m, minQuality, cfg, plan.Session); verdict != "" {
 				// F4 (LONDON-FORENSICS 2026-08-28) — log the REFUSED verdict ONCE
 				// per arm-spec (the same infeasible arm re-refused every cycle
 				// printed ~120 lines/session); silent until the spec changes.
@@ -1248,18 +1266,18 @@ func armedUnderVersionOf(r store.ArmedOrderDB) int {
 
 // armGateVerdict runs the arm-time gate chain for a SINGLE arm (legacy shape).
 // Empty string = pass.
-func (at *AutoTrader) armGateVerdict(sc kernel.PlanScenario, biasDirection string, snap map[string]kernel.StructureState, atr5m float64, minQuality string, cfg *store.StrategyConfig) string {
+func (at *AutoTrader) armGateVerdict(sc kernel.PlanScenario, biasDirection string, snap map[string]kernel.StructureState, atr5m float64, minQuality string, cfg *store.StrategyConfig, session string) string {
 	if sc.Arm == nil {
 		return "no arm"
 	}
-	return at.armGateVerdictFor(sc, kernel.PlanArmLeg{Entry: sc.Arm.Entry, Stop: sc.Arm.Stop, Target: sc.Arm.Target}, biasDirection, snap, atr5m, minQuality, cfg)
+	return at.armGateVerdictFor(sc, kernel.PlanArmLeg{Entry: sc.Arm.Entry, Stop: sc.Arm.Stop, Target: sc.Arm.Target}, biasDirection, snap, atr5m, minQuality, cfg, session)
 }
 
 // armGateVerdictFor runs the arm-time gate chain for ONE LEG's prices (E4: the
 // split legs gate independently — each leg is a pre-passed entry of its own).
 // The min-confidence gate is N/A for arms — the AI's authorization IS the
 // confidence signal (no per-scenario confidence exists to check).
-func (at *AutoTrader) armGateVerdictFor(sc kernel.PlanScenario, leg kernel.PlanArmLeg, biasDirection string, snap map[string]kernel.StructureState, atr5m float64, minQuality string, cfg *store.StrategyConfig) string {
+func (at *AutoTrader) armGateVerdictFor(sc kernel.PlanScenario, leg kernel.PlanArmLeg, biasDirection string, snap map[string]kernel.StructureState, atr5m float64, minQuality string, cfg *store.StrategyConfig, session string) string {
 	a := sc.Arm
 	if err := kernel.ArmSpecValid(sc); err != nil {
 		return err.Error()
@@ -1269,7 +1287,12 @@ func (at *AutoTrader) armGateVerdictFor(sc kernel.PlanScenario, leg kernel.PlanA
 		return fmt.Sprintf("direction %q not armable", sc.Direction)
 	}
 	// plan_mode direction — the plan is the law, same as the entry path.
-	if at.planModeFor("") == "direction" {
+	//
+	// R2 (owner ruling 2026-09-03): this passed "" and so ALWAYS resolved the
+	// strategy-level mode, silently dropping a per-session override. A session
+	// set to direction (or strict) was honoured on the decision path and
+	// ignored at the arm seam — the same plan, two different laws.
+	if at.planModeFor(session) == "direction" {
 		bias := strings.ToLower(strings.TrimSpace(biasDirection))
 		if bias != "" && bias != side {
 			return fmt.Sprintf("against plan bias %q (plan_mode=direction)", bias)
@@ -1290,8 +1313,8 @@ func (at *AutoTrader) armGateVerdictFor(sc kernel.PlanScenario, leg kernel.PlanA
 	} else if side == "short" && leg.Stop > leg.Entry && leg.Entry > 0 {
 		rr = (leg.Entry - leg.Target) / (leg.Stop - leg.Entry)
 	}
-	if rr+1e-9 < armMinRR() {
-		return fmt.Sprintf("R:R %.2f below arm min %.2f", rr, armMinRR())
+	if rr+1e-9 < at.armMinRRFor(cfg) {
+		return fmt.Sprintf("R:R %.2f below arm min %.2f (studio min_risk_reward_ratio)", rr, at.armMinRRFor(cfg))
 	}
 	// min-SL — the same floor (×ATR5m) the entry path enforces.
 	if atr5m > 0 {
@@ -1303,8 +1326,15 @@ func (at *AutoTrader) armGateVerdictFor(sc kernel.PlanScenario, leg kernel.PlanA
 			return fmt.Sprintf("stop %.2f too close (%.2f < %.2f = %.1f×ATR5m)", leg.Stop, dist, kernel.MinSLATRMult()*atr5m, kernel.MinSLATRMult())
 		}
 	}
-	// HTF veto — the same veto the entry path enforces.
-	if blocked, vetoReason := kernel.HTFVetoVerdict(snap, "open_"+side, kernel.HTFVetoTF()); blocked {
+	// HTF veto — the same veto the entry path enforces, AND the same switch.
+	//
+	// R3 (owner ruling 2026-09-03): this ran unconditionally. regime.htf_veto
+	// = false turned the veto off for the decision path and left the arm chain
+	// vetoing forever, so an owner who switched it off still could not arm.
+	// One switch, both consumers.
+	if cfg != nil && !cfg.HTFVetoEnabled() {
+		// off by owner ruling — fall through to the remaining gates
+	} else if blocked, vetoReason := kernel.HTFVetoVerdict(snap, "open_"+side, kernel.HTFVetoTF()); blocked {
 		return "HTF veto: " + vetoReason
 	}
 	_ = a

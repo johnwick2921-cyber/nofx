@@ -62,7 +62,7 @@ func (at *AutoTrader) snapshotSessionProfiles() {
 			kernel.FlipATRBuffer(), kernel.FlipConfirmCloses(), execReasoningLabel(), planReasoningLabel())
 		// Wave 2 armed orders (Phase 2, 2026-08-27) — placement engine mode.
 		at.logInfof("⚔️ armed_orders=on place_band=%dt stale_working=%dm test_seam=%s arm_rr=%.1f (gate-at-arm only; market-entry floor %.1f unchanged) (resting limits fill at the authorized price; stale_reeval NOT applied)",
-			armedPlaceTicks(), armedWorkingStaleMin(), armedSeamStateLabel(), armMinRR(), at.config.StrategyConfig.RiskControl.MinRiskRewardRatio) // F1a (LONDON-FORENSICS 2026-08-28) — planner completion budget boot line
+			armedPlaceTicks(), armedWorkingStaleMin(), armedSeamStateLabel(), at.armMinRRFor(nil), at.config.StrategyConfig.RiskControl.MinRiskRewardRatio) // F1a (LONDON-FORENSICS 2026-08-28) — planner completion budget boot line
 		// GAR-F1 (2026-08-28) — move_stop identity observability (the
 		// #566 dead-cell fix): materialized positions carry the armed
 		// ledger's signal identity so BE+40/trailing can address them.

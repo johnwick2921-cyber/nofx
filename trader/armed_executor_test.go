@@ -64,28 +64,40 @@ func TestArmedOrderUpsertAndGateRR(t *testing.T) {
 
 func TestArmedGateRefusesBadRR(t *testing.T) {
 	at, _ := resetTrader(t, store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true}})
-	at.config.StrategyConfig.RiskControl = store.RiskControlConfig{MinRiskRewardRatio: 4}
+	// SUPERSEDED 2026-09-03 by R1 (ONE R:R FLOOR). This fixture asserted the
+	// two-floor design directly — "a 4.0 GLOBAL floor does NOT block a 2.0 arm"
+	// — which is exactly what the owner ruled away: the Studio
+	// min_risk_reward_ratio now governs BOTH paths and ARM_MIN_RR is deleted.
+	// The INTENT survives unchanged: an arm at R:R 2.0 passes when the floor is
+	// 2.0, and is refused when the floor is raised above it. Only the SOURCE of
+	// the floor moved, from an env var to the Studio value.
+	at.config.StrategyConfig.RiskControl = store.RiskControlConfig{MinRiskRewardRatio: 2}
 	sc := kernel.PlanScenario{ID: "S1", Condition: "reject", Direction: "long", Quality: "A",
 		Arm: &kernel.PlanArmSpec{Enabled: true, Entry: 100, Stop: 95, Target: 110}} // R:R 2.0
-	// S1 (autopsy-response 2026-08-27): the arm floor is ARM_MIN_RR, NOT the
-	// global config floor — a 4.0 GLOBAL floor does NOT block a 2.0 arm.
-	if v := at.armGateVerdict(sc, "long", nil, 0, "", at.config.StrategyConfig); v != "" {
-		t.Fatalf("arm R:R 2.0 must pass under the default arm floor (global 4.0 irrelevant), got %q", v)
+	if v := at.armGateVerdict(sc, "long", nil, 0, "", at.config.StrategyConfig, "NY"); v != "" {
+		t.Fatalf("arm R:R 2.0 must pass when the Studio floor is 2.0, got %q", v)
 	}
-	t.Setenv("ARM_MIN_RR", "4")
-	if v := at.armGateVerdict(sc, "long", nil, 0, "", at.config.StrategyConfig); v == "" {
-		t.Fatal("arm R:R 2.0 below ARM_MIN_RR=4 must be refused at arm time")
+	// Raise it in STUDIO — the one place — and the same arm is refused.
+	at.config.StrategyConfig.RiskControl.MinRiskRewardRatio = 4
+	if v := at.armGateVerdict(sc, "long", nil, 0, "", at.config.StrategyConfig, "NY"); v == "" {
+		t.Fatal("arm R:R 2.0 below a Studio floor of 4 must be refused at arm time")
 	}
+	// And the deleted env var must NOT resurrect a second floor.
+	t.Setenv("ARM_MIN_RR", "1")
+	if v := at.armGateVerdict(sc, "long", nil, 0, "", at.config.StrategyConfig, "NY"); v == "" {
+		t.Fatal("ARM_MIN_RR is deleted — it must not lower the Studio floor")
+	}
+	at.config.StrategyConfig.RiskControl.MinRiskRewardRatio = 2
 	// quality floor: a C scenario below min_scenario_quality=B must refuse.
 	scC := kernel.PlanScenario{ID: "S1", Condition: "reject", Direction: "long", Quality: "C",
 		Arm: &kernel.PlanArmSpec{Enabled: true, Entry: 100, Stop: 95, Target: 110}}
-	if v := at.armGateVerdict(scC, "long", nil, 0, "B", at.config.StrategyConfig); v == "" {
+	if v := at.armGateVerdict(scC, "long", nil, 0, "B", at.config.StrategyConfig, "NY"); v == "" {
 		t.Fatal("C-quality below min_scenario_quality=B must be refused")
 	}
 	// plan_mode direction against bias
 	at.config.StrategyConfig.DayPlan.PlanMode = "direction"
 	sc.Direction = "short"
-	if v := at.armGateVerdict(sc, "long", nil, 0, "", at.config.StrategyConfig); v == "" {
+	if v := at.armGateVerdict(sc, "long", nil, 0, "", at.config.StrategyConfig, "NY"); v == "" {
 		t.Fatal("short arm against long bias under plan_mode=direction must be refused")
 	}
 }
@@ -159,18 +171,22 @@ func TestArmedOrderUpdateTransitions(t *testing.T) {
 // PHASE 4 — short twin of the R:R arm gate (long side covered elsewhere).
 func TestArmedGateRRShortTwin(t *testing.T) {
 	at, _ := resetTrader(t, store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true}})
+	// SUPERSEDED 2026-09-03 by R1: the arm floor is the Studio value, so the
+	// fixture states it rather than relying on a deleted env default of 2.0.
+	at.config.StrategyConfig.RiskControl.MinRiskRewardRatio = 2
 	sc := kernel.PlanScenario{ID: "S1", Condition: "reject", Direction: "short", Quality: "A",
 		Arm: &kernel.PlanArmSpec{Enabled: true, Entry: 100, Stop: 105, Target: 90}} // R:R (100−90)/(105−100)=2.0
 	// S1: default arm floor 2.0 → a 2.0-R short arm passes (no config floor).
-	if v := at.armGateVerdict(sc, "short", nil, 0, "", at.config.StrategyConfig); v != "" {
-		t.Fatalf("short arm R:R 2.0 must pass under default ARM_MIN_RR, got %q", v)
+	if v := at.armGateVerdict(sc, "short", nil, 0, "", at.config.StrategyConfig, "NY"); v != "" {
+		t.Fatalf("short arm R:R 2.0 must pass when the Studio floor is 2.0, got %q", v)
 	}
-	t.Setenv("ARM_MIN_RR", "3")
-	if v := at.armGateVerdict(sc, "short", nil, 0, "", at.config.StrategyConfig); v == "" {
-		t.Fatal("short arm R:R 2.0 below ARM_MIN_RR=3 must be refused")
+	// R1: raise the floor in STUDIO, the one place, not via a deleted env var.
+	at.config.StrategyConfig.RiskControl.MinRiskRewardRatio = 3
+	if v := at.armGateVerdict(sc, "short", nil, 0, "", at.config.StrategyConfig, "NY"); v == "" {
+		t.Fatal("short arm R:R 2.0 below a Studio floor of 3 must be refused")
 	}
 	sc.Arm.Target = 85 // R:R 3.0 → pass
-	if v := at.armGateVerdict(sc, "short", nil, 0, "", at.config.StrategyConfig); v != "" {
+	if v := at.armGateVerdict(sc, "short", nil, 0, "", at.config.StrategyConfig, "NY"); v != "" {
 		t.Fatalf("short arm R:R 3.0 must pass, got %q", v)
 	}
 }

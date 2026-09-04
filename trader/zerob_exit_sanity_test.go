@@ -57,7 +57,7 @@ func TestZeroBPinStopFloor(t *testing.T) {
 
 	// 1.2×ATR — inside the new floor, outside the old one.
 	scTight, legTight := zeroBScenario(entry, entry-1.2*atr5m)
-	verdict := at.armGateVerdictFor(scTight, legTight, "", nil, atr5m, "", at.config.StrategyConfig)
+	verdict := at.armGateVerdictFor(scTight, legTight, "", nil, atr5m, "", at.config.StrategyConfig, "NY")
 	if verdict == "" {
 		t.Fatalf("0B: a stop 1.2×ATR5m (%.1f pts) from entry must be REFUSED by the 1.5× floor — the gate allowed it (old 1.0× canon)", 1.2*atr5m)
 	}
@@ -67,7 +67,7 @@ func TestZeroBPinStopFloor(t *testing.T) {
 
 	// 1.6×ATR — passes both floors (regression pin: the floor must not refuse a sane stop).
 	scWide, legWide := zeroBScenario(entry, entry-1.6*atr5m)
-	if v := at.armGateVerdictFor(scWide, legWide, "", nil, atr5m, "", at.config.StrategyConfig); v != "" {
+	if v := at.armGateVerdictFor(scWide, legWide, "", nil, atr5m, "", at.config.StrategyConfig, "NY"); v != "" {
 		t.Fatalf("a stop 1.6×ATR5m from entry must pass the gate, got %q", v)
 	}
 }
@@ -152,12 +152,18 @@ func TestZeroBRRGateRefusesWithTheWiderStop(t *testing.T) {
 	}
 	sc, leg := zeroBScenario(entry, comp.Stop)
 	leg.Target, sc.Arm.Target = target, target
-	if v := at.armGateVerdictFor(sc, leg, "", nil, atr5m, "", at.config.StrategyConfig); !strings.Contains(v, "below arm min") {
+	if v := at.armGateVerdictFor(sc, leg, "", nil, atr5m, "", at.config.StrategyConfig, "NY"); !strings.Contains(v, "below arm min") {
 		t.Fatalf("R:R 1.0 with the widened stop must be refused by ARM_MIN_RR, got %q", v)
 	}
 	// D7 VERIFY-ONLY: the resolved floor is the owner's 2.0, unchanged by 0B.
-	if got := armMinRR(); got != 2.0 {
-		t.Fatalf("ARM_MIN_RR resolves %.2f, want the owner-ruled 2.0 (0B changes NO R:R value)", got)
+	// MIGRATED 2026-09-03 (R1): the floor now comes from the Studio value via
+	// ONE resolver rather than the ARM_MIN_RR env var, which is deleted. The
+	// assertion's intent — 0B changes NO R:R value — is unchanged, and the
+	// bound strategy still resolves 2.0.
+	cfgRR := &store.StrategyConfig{}
+	cfgRR.RiskControl.MinRiskRewardRatio = 2.0
+	if got := at.armMinRRFor(cfgRR); got != 2.0 {
+		t.Fatalf("the resolved floor is %.2f, want the owner-ruled 2.0 (0B changes NO R:R value)", got)
 	}
 }
 

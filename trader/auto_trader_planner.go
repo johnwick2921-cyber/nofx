@@ -1678,7 +1678,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 				atr5m = market.ExportCalculateATR(b5, 14)
 			}
 		}
-		for _, w := range kernel.ArmFeasibilityWarnings(d, atr5m, armMinRR(), kernel.MinSLATRMult()) {
+		for _, w := range kernel.ArmFeasibilityWarnings(d, atr5m, at.armMinRRFor(nil), kernel.MinSLATRMult()) {
 			at.logWarnf("⚔️ arm feasibility: %s (WARN — write proceeds; the gate-at-arm chain enforces)", w)
 		}
 		// FVG ENTRY MODEL (2026-08-26) — write-time re-verification from stored
