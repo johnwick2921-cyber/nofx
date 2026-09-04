@@ -237,6 +237,24 @@ for cf in "${_canon_paths[@]}"; do
   else
     cur="$(md5sum "$cf" 2>/dev/null | awk '{print $1}')"
   fi
+  # CHECK 5b — A POINTER THAT POINTS AT NOTHING.
+  # Check 5 alarms when a canon file CHANGES; it says nothing about whether the
+  # file still leads anywhere. The repo-root CLAUDE.md was turned into a two-line
+  # @import while its target existed only on an unmerged branch, and for ~35
+  # minutes every reader got a dangling reference instead of the standing laws.
+  # An unchanged pointer to nothing is the worst case: stable, silent and empty —
+  # and a change-only check never fires on a pointer that was born dangling.
+  if [ -r "$cf" ]; then
+    while IFS= read -r imp; do
+      [ -z "$imp" ] && continue
+      case "$imp" in /*) tgt="$imp" ;; *) tgt="$(dirname "$cf")/$imp" ;; esac
+      if [ ! -r "$tgt" ]; then
+        alarm "canon: $name imports '$imp' but that target DOES NOT RESOLVE (looked for $tgt) — this file leads nowhere, and a reader following it gets no laws at all"
+        canon_alarm=1
+      fi
+    done < <(grep -oE '^@[^[:space:]]+' "$cf" 2>/dev/null | sed 's/^@//')
+  fi
+
   prev="$(printf '%s\n' "$old_state_md5s" | grep -m1 " $cf " | awk '{print $3}' || true)"
   canon_lines+=("canon_md5 $cf $cur")
   if [ -z "$prev" ]; then

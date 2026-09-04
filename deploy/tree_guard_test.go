@@ -804,3 +804,81 @@ func TestReleaseComparisonRefusesAnAbsurdlyShortPrefix(t *testing.T) {
 		t.Fatalf("a 1-char RELEASE is not a sha and must not silently match:\n%s", out)
 	}
 }
+
+// ── CHECK 5b: a POINTER THAT POINTS AT NOTHING ──────────────────────────
+//
+// nofx-63's catch, and they were right that check 5 as shipped would have stayed
+// silent through it. Check 5 alarms when a canon file CHANGES. It says nothing
+// about whether the file still leads anywhere.
+//
+// That is not hypothetical: the repo-root CLAUDE.md was turned into a two-line
+// @import at 22:59 while its target existed only on an unmerged branch. For ~35
+// minutes every reader of the main tree got a dangling reference instead of the
+// standing laws — and the file's own comment told them to go read a path that
+// did not exist. An unchanged pointer to nothing is the worst case: stable,
+// silent, and empty.
+
+func TestCheck5AlarmsOnADanglingImportTarget(t *testing.T) {
+	tree := fixtureRepo(t)
+	env := baseEnv(t, tree)
+	dir := t.TempDir()
+	pointer := "# canon lives elsewhere\n\n@docs/superpowers/CLAUDE-canon.md\n"
+	p, c := writeCanonPair(t, dir, pointer, "canon v1")
+	env["TREE_GUARD_CANON_FILES"] = p + ":" + c
+	env["TREE_GUARD_STATE"] = filepath.Join(t.TempDir(), "state")
+
+	out, code := runGuard(t, env)
+	if !strings.Contains(out, "ALARM canon") {
+		t.Fatalf("an @import whose target does not exist must ALARM:\n%s", out)
+	}
+	if !strings.Contains(out, "CLAUDE-canon.md") {
+		t.Errorf("the alarm must name the unresolved target:\n%s", out)
+	}
+	if code == 0 {
+		t.Errorf("exit must be non-zero")
+	}
+}
+
+// It must alarm on the FIRST run, before any baseline exists — a pointer that was
+// born dangling never "changes", so a change-only check never fires on it.
+func TestCheck5DanglingImportAlarmsEvenWithNoBaseline(t *testing.T) {
+	tree := fixtureRepo(t)
+	env := baseEnv(t, tree)
+	dir := t.TempDir()
+	p, c := writeCanonPair(t, dir, "@nowhere/at/all.md\n", "canon v1")
+	env["TREE_GUARD_CANON_FILES"] = p + ":" + c
+	env["TREE_GUARD_STATE"] = filepath.Join(t.TempDir(), "state")
+
+	out, _ := runGuard(t, env)
+	if !strings.Contains(out, "ALARM canon") {
+		t.Fatalf("a born-dangling pointer must alarm on the first run:\n%s", out)
+	}
+}
+
+// A resolvable import is fine, and a file with no import at all is fine.
+func TestCheck5ResolvableAndImportlessCanonPass(t *testing.T) {
+	tree := fixtureRepo(t)
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, "docs", "superpowers"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(dir, "docs", "superpowers", "CLAUDE-canon.md")
+	if err := os.WriteFile(target, []byte("the laws"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p := filepath.Join(dir, "CLAUDE.md")
+	if err := os.WriteFile(p, []byte("@docs/superpowers/CLAUDE-canon.md\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	env := baseEnv(t, tree)
+	env["TREE_GUARD_CANON_FILES"] = p + ":" + target
+	env["TREE_GUARD_STATE"] = filepath.Join(t.TempDir(), "state")
+
+	out, code := runGuard(t, env)
+	if strings.Contains(out, "ALARM canon") {
+		t.Fatalf("a resolvable import must not alarm:\n%s", out)
+	}
+	if code != 0 {
+		t.Errorf("exit = %d, want 0", code)
+	}
+}
