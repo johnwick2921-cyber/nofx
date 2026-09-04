@@ -208,6 +208,42 @@ func main() {
 	}
 
 	// Load all traders from database to memory (may auto-start traders with IsRunning=true)
+	// F12 SINK — REGISTERED BEFORE THE TRADERS LOAD. LoadTradersFromStore builds
+	// the first trader, which lazily starts the TCP server, which reads this
+	// hook ONCE at start. Registered after that call (as it was on the first
+	// boot) the server starts with a nil sink and every received frame is
+	// cached but never persisted — the gate keeps working, so nothing looks
+	// wrong, and the forensic table stays empty forever. A write on a branch
+	// nothing takes.
+	// F12 (2026-09-03) — the NT8 AddOn's build id and the broker's order book.
+	//
+	// The build id is READ from the last frame that carried one, never from our
+	// own source: VL_BUILD_ID has been bumped in the repo repeatedly while NT8
+	// kept running an older compile, so a line sourced from the constant would
+	// report success for a change that never landed (class 6 — proof is a
+	// RECEIVED frame). It says match=NO, loudly, until the owner reloads.
+	//
+	// The snapshot line says which source cutover leg 4 will use. Before the
+	// AddOn is reloaded that is the LEDGER, and the line says so — the wave's
+	// own transition state, printed rather than assumed.
+	ntTrader.SetOrderSnapshotSink(func(p ntwire.OrderSnapshotPayload) {
+		b, merr := json.Marshal(p.Orders)
+		if merr != nil {
+			logger.Warnf("📸 order_snapshot: cannot marshal orders for storage: %v", merr)
+			return
+		}
+		if err := st.NT8OrderSnapshots().Insert(&store.NT8OrderSnapshot{
+			Account: p.Account, BuildID: p.BuildID, Reason: p.Reason,
+			OrdersJSON: string(b), OrderCount: len(p.Orders),
+			WorkingCount: len(p.WorkingOrders()),
+			EmittedMs:    p.EmittedMs, ReceivedMs: time.Now().UnixMilli(),
+		}); err != nil {
+			// Forensics are worth having and never worth a frame. The cache
+			// already holds the book the gate reads.
+			logger.Warnf("📸 order_snapshot: store insert failed (frame still cached): %v", err)
+		}
+	})
+
 	if err := traderManager.LoadTradersFromStore(st); err != nil {
 		logger.Fatalf("❌ Failed to load traders: %v", err)
 	}
@@ -377,35 +413,6 @@ func main() {
 	// recorded, how many were rebuilt from the tape, and how many the tape
 	// does not reach. Every number READ from the table.
 	logger.Infof("📐 %s", st.TradeExcursions().ExcursionBootLine())
-	// F12 (2026-09-03) — the NT8 AddOn's build id and the broker's order book.
-	//
-	// The build id is READ from the last frame that carried one, never from our
-	// own source: VL_BUILD_ID has been bumped in the repo repeatedly while NT8
-	// kept running an older compile, so a line sourced from the constant would
-	// report success for a change that never landed (class 6 — proof is a
-	// RECEIVED frame). It says match=NO, loudly, until the owner reloads.
-	//
-	// The snapshot line says which source cutover leg 4 will use. Before the
-	// AddOn is reloaded that is the LEDGER, and the line says so — the wave's
-	// own transition state, printed rather than assumed.
-	ntTrader.SetOrderSnapshotSink(func(p ntwire.OrderSnapshotPayload) {
-		b, merr := json.Marshal(p.Orders)
-		if merr != nil {
-			logger.Warnf("📸 order_snapshot: cannot marshal orders for storage: %v", merr)
-			return
-		}
-		if err := st.NT8OrderSnapshots().Insert(&store.NT8OrderSnapshot{
-			Account: p.Account, BuildID: p.BuildID, Reason: p.Reason,
-			OrdersJSON: string(b), OrderCount: len(p.Orders),
-			WorkingCount: len(p.WorkingOrders()),
-			EmittedMs:    p.EmittedMs, ReceivedMs: time.Now().UnixMilli(),
-		}); err != nil {
-			// Forensics are worth having and never worth a frame. The cache
-			// already holds the book the gate reads.
-			logger.Warnf("📸 order_snapshot: store insert failed (frame still cached): %v", err)
-		}
-	})
-
 	// EXPECTANCY (wave 1D, 2026-09-03) — the per-condition table, READ. Every
 	// number comes from the table just built, so the line cannot claim a cell
 	// count the process did not compute. A failure here WARNs and boots on:
