@@ -146,6 +146,30 @@ reintroduce the class this wave removed. Staleness of the heartbeat is the whole
   MAIN-TREE LOCK LAW and LOCK LIVENESS AMENDMENT are edited in the main tree separately —
   under the new lock, which is also the first live use of it.
 
+## 4b. What changing the lock broke, six minutes later
+
+`ec2dd8f7` and my merge both edited `docs/superpowers/plans/2026-09-02-tree-guard-spec.md`.
+The tree-guard wave was implementing that spec's expected-dirty rule at the same time, from
+a worktree cut before either edit — so it built the **old** model: `~/nofx-main.lock`, a pid,
+`kill -0`.
+
+Under the new lock there is no legacy file. During a cutover that guard would have found
+"no live holder", seen a legitimately dirty tree, and **ALARMED at precisely the moment it
+exists to be trusted** — running and printing normally the whole time. It would have fired
+on the next boot. A guard that cries wolf on every deploy is worse than no guard, because
+the next real alarm is the one everybody scrolls past.
+
+Found and fixed by nofx-ed at `ac345a7a`: the lock directory is authoritative, and the
+legacy file is surfaced but never honoured for liveness — honouring it would restore the
+exact `kill -0` test this wave removed. One of their tests asserted the old contract and was
+migrated with its reason rather than deleted.
+
+**The generalisable part:** a spec on `dev` is a moving artifact, and a worktree cut from an
+older base silently freezes it. Two waves read and wrote the same file within six minutes
+and neither could see the other. The probe costs nothing — `git log -1 -- <spec>` against
+your worktree's base before building on it. It is the same family as class 70 itself: a
+value read once, at a moment nobody recorded.
+
 ## 5. What this does not fix
 
 - **An owner who resumes under a new identity** still has to re-acquire or beat. The
@@ -171,8 +195,12 @@ lands at 21:49:36, sixty seconds after `ec2dd8f7`, and at 21:48:12 they were rea
 boot-integrity line; nobody writes 150 lines of bash in that minute. **Every commit in this
 repo carries the identical author identity (`johnwick2921-cyber`), so git cannot answer
 "which lane wrote this".** Provenance has to come from the branch, the worktree and the
-timestamp. I have asked nofx-ed and nofx-47 directly and will name the author here when one
-of them confirms; until then this section says "unknown" rather than guessing twice.
+timestamp. Both nofx-b3 and nofx-ed have been ruled out on evidence I verified myself:
+nofx-b3's boot marker lands 60s after `ec2dd8f7` while they were reading a boot-integrity
+line, and none of nofx-ed's six branches contains it (`git merge-base --is-ancestor`, all
+six), with their own commits bracketing the timestamp at 21:44:33 and 22:01:48. **nofx-47 is
+the remaining lane and has been asked.** Until they answer this section says "unknown"
+rather than guessing a third time.
 
 The sharper version of the problem: a lane's work was merged into `dev` without its author
 being told, under a wave another lane was reporting. A24 bans a boot line that claims a

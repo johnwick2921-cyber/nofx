@@ -1549,6 +1549,24 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     branch, the worktree and the timestamp, and a lane's work can otherwise be
     absorbed under another lane's name. That is what PART 3 step 0 exists to
     prevent.
+    **SECOND-ORDER HAZARD THIS WAVE CREATED, found by nofx-ed.** Changing the
+    lock changed `docs/superpowers/plans/2026-09-02-tree-guard-spec.md`, whose
+    expected-dirty rule the tree-guard wave was implementing AT THE SAME TIME,
+    from a worktree cut before the change. They built the old model —
+    `~/nofx-main.lock`, a pid, `kill -0` — and under the new lock there is no
+    legacy file, so during a cutover that guard would have found "no live
+    holder", seen a legitimately dirty tree, and **ALARMED at exactly the moment
+    it is meant to be trusted**, while running and printing normally. A guard
+    that cries wolf on every deploy is worse than no guard: the next real alarm
+    is the one everyone scrolls past. Fixed at `ac345a7a` — the lock DIRECTORY
+    is authoritative, and the legacy file is surfaced but NEVER honoured for
+    liveness, since honouring it would restore the `kill -0` test this class
+    removed. **Law:** a spec on `dev` is a MOVING artifact, and a worktree cut
+    from an older base silently freezes it. **Probe:** before building against a
+    spec, `git log -1 -- <spec>` and compare against your worktree's base; if it
+    moved after you branched, re-read it. Same family as this class — a value
+    read once, at a moment nobody recorded.
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,
