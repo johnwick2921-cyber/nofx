@@ -1753,6 +1753,36 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     **Family: "a healthy-looking absence"** (PART 3 step 0) — with 74, and with
     the lost dispatch that has no claim branch.
 
+77. **A counter destroyed by the act of reporting it.** (Number assigned at
+    merge, A27 — 74/75/76 were already taken on this base when I checked, two of
+    them by my own boot-7 failures written up by another lane, so this took the
+    next free number rather than the one I first assumed.)
+    `barPersistSummary()` formatted `persistDropped` and `persistDroppedCloses`
+    by calling `.Swap(0)` on both, so publishing the number and erasing it were
+    the same operation. The log line was therefore the ONLY consumer that could
+    ever observe a nonzero value; every other reader was correct or wrong
+    depending on whether it happened to run before or after a summary fell due,
+    with no error and no trace either way. The summary is rate-limited to once
+    per 60 WALL-CLOCK seconds, so the erasure arrived on a schedule unrelated to
+    the code under test — which is why `TestFanOutClosesLastResortIsHonest` was
+    carried as a **load flake** for weeks, by more than one lane and in this
+    checklist. **What identified it was the impossible reading:** the drop path
+    increments both counters and the non-close path increments one, so
+    `closes_dropped=0 queue_drops=0` cannot be produced by either branch. Zero
+    was not a branch outcome; it was a third party having been there first. A
+    reading that no branch can produce points at a destructive reader, not at
+    the branch taken. **Probe:** for any counter, grep its consumers for `Swap(`
+    / `Store(0)` and ask whether the reset is a *side effect of reading*; then
+    ask which consumer can ever see a nonzero value — if the answer is "only the
+    log line", the counter is not a counter. **Law:** counters RECORD (class 35).
+    Reporting reads; it never resets. Where a per-interval figure is wanted,
+    measure it against a **reported-baseline** stored beside the counter, and
+    make reset a separate explicit verb (`rollPersistCounters`) that nothing
+    calls implicitly. A negative delta means an unsynchronised rollover and must
+    report zero, never a negative — a negative count reads as a fix. Fixed in
+    `provider/ninjatrader/bar_persist.go`; the log message is byte-identical and
+    reports the same interval numbers it always did.
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,

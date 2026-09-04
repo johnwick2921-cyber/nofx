@@ -45,13 +45,18 @@ var (
 	persistDroppedCloses atomic.Int64 // CLOSED bars lost on queue-full drops (must stay 0)
 	persistFlushed       atomic.Int64 // closed bars handed to the persister
 	persistLastSum       atomic.Int64 // unix seconds of the last drop summary
-	persistLastFlushAt   atomic.Int64 // unix seconds of the last successful flush (F2 watchdog)
-	persistLastFrameAt   atomic.Int64 // unix seconds of the last LIVE bar frame (W1 quiet-wire awareness)
-	persistAlarmAt       atomic.Int64 // unix seconds of the last watchdog ERROR (dedup)
-	ingestDropOld        atomic.Int64 // ingest channel drop-oldest events
-	ingestDropCur        atomic.Int64 // ingest channel drop-current events
-	ingestDropHist       atomic.Int64 // historical batch drops
-	ingestLastSum        atomic.Int64
+	// Reported-baselines: the counter values as of the last PUBLISHED summary.
+	// The interval is measured against these, so the summary never has to zero
+	// a counter in order to say what changed (class 35).
+	persistDroppedReported       atomic.Int64
+	persistDroppedClosesReported atomic.Int64
+	persistLastFlushAt           atomic.Int64 // unix seconds of the last successful flush (F2 watchdog)
+	persistLastFrameAt           atomic.Int64 // unix seconds of the last LIVE bar frame (W1 quiet-wire awareness)
+	persistAlarmAt               atomic.Int64 // unix seconds of the last watchdog ERROR (dedup)
+	ingestDropOld                atomic.Int64 // ingest channel drop-oldest events
+	ingestDropCur                atomic.Int64 // ingest channel drop-current events
+	ingestDropHist               atomic.Int64 // historical batch drops
+	ingestLastSum                atomic.Int64
 )
 
 type persistMsg struct {
@@ -173,9 +178,41 @@ func barPersistSummaryAt(nowT time.Time) {
 		return
 	}
 	if persistLastSum.CompareAndSwap(persistLastSum.Load(), now) {
+		// Read the interval, THEN advance the baseline. The counters are not
+		// touched: a reader racing this line sees the same value before and
+		// after. The reported numbers are identical to what Swap(0) produced.
+		dropped, closes := persistIntervalDelta()
+		persistDroppedReported.Store(persistDropped.Load())
+		persistDroppedClosesReported.Store(persistDroppedCloses.Load())
 		logger.Warnf("bars: persist queue summary: queue_drops=%d closes_dropped=%d flushed=%d (closes_dropped must be 0 — queue-full drops self-heal via the cache tail)",
-			persistDropped.Swap(0), persistDroppedCloses.Swap(0), persistFlushed.Load())
+			dropped, closes, persistFlushed.Load())
 	}
+}
+
+// persistIntervalDelta reports what has accumulated since the last published
+// summary, without disturbing the counters.
+func persistIntervalDelta() (dropped, closes int64) {
+	d := persistDropped.Load() - persistDroppedReported.Load()
+	c := persistDroppedCloses.Load() - persistDroppedClosesReported.Load()
+	// A baseline ahead of its counter can only mean an unsynchronised rollover.
+	// Report zero rather than a negative count, which would read as a fix.
+	if d < 0 {
+		d = 0
+	}
+	if c < 0 {
+		c = 0
+	}
+	return d, c
+}
+
+// rollPersistCounters is the ONLY reset. Keeping it a separate, explicit verb is
+// the whole fix: reporting must never perform one as a side effect. The previous
+// destructive read spent weeks being misfiled as a load flake.
+func rollPersistCounters() {
+	persistDropped.Store(0)
+	persistDroppedCloses.Store(0)
+	persistDroppedReported.Store(0)
+	persistDroppedClosesReported.Store(0)
 }
 
 // ClosedBarsOnly keeps the bars whose CLOSE time (T + tf duration) has passed
