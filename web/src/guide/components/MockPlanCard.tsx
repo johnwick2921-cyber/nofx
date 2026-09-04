@@ -2,6 +2,7 @@
 // realistic mock props (LIVE-COMPONENT RULE). Styled like the card's visual
 // grammar (tokens only). Every chip shown here is the exact one the app ships.
 import { BiasBlock } from '../../components/plan/BiasBlock'
+import { useResolvedPlanMode } from './useResolvedPlanMode'
 import {
   GradeChip,
   ProvenanceChip,
@@ -27,6 +28,7 @@ const faint = {
 } as const
 
 export function MockPlanCard() {
+  const resolvedMode = useResolvedPlanMode()
   return (
     <div
       data-testid="mock-plan-card"
@@ -161,8 +163,16 @@ export function MockPlanCard() {
       ))}
 
       {/* scenarios (real chips) */}
-      <div className="text-[10px] uppercase tracking-widest" style={faint}>
-        Scenarios (advisory)
+      {/* GUIDE CONTENT LAW: this header used to type "advisory" while the
+            bound strategy resolved strict. A mock that names a mode is making
+            a claim, so it reads the resolved mode or says it is not reading
+            one — it never asserts a mode it did not resolve. */}
+      <div
+        data-testid="mock-scenarios-header"
+        className="text-[10px] uppercase tracking-widest"
+        style={faint}
+      >
+        Scenarios ({resolvedMode})
       </div>
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-2 text-[11px]">
