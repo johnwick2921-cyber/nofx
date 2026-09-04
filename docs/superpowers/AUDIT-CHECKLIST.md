@@ -1595,9 +1595,17 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     named entry over `pop` of whatever is on top. **Law:** evidence is never
     parked on the stash stack. It is preserved as a file and a tag, both of
     which are inert, and never as a poppable entry that every worktree shares.
-    Disarmed here without destroying anything: the content is
-    `docs/superpowers/reports/class45-found-revert-1203.patch` and the annotated
-    tag `class45-found-revert-1203` pins the sha. **The stash entry itself is
+    Disarmed here without destroying anything. **The annotated tag
+    `class45-found-revert-1203` is what makes a drop lossless** — it references
+    `6b770196`, so dropping the stack entry cannot let gc collect the object.
+    The human-readable copy is
+    `docs/superpowers/reports/class45-found-revert-1203.patch.txt`, a
+    convenience and not the guarantee; it carries a `.txt` suffix because
+    `.gitignore:143` is `*.patch`, which silently swallowed the first attempt to
+    commit it — `git add -A` skipped it with no error and the file was reported
+    as landed when it had not (a second instance of this checklist's own
+    never-claim-an-unverified-state rule, caught by nofx-47 reading dev rather
+    than reading my report). **The stash entry itself is
     deliberately NOT dropped** — it is another lane's evidence, dropping is
     destructive, and it is the owner's call; the artifacts above make that drop
     safe whenever they want it.
