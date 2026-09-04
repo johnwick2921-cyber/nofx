@@ -1709,6 +1709,8 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     **Law:** swap with `mv`, verify the swapped artifact, then kill — three
     steps, three exit codes, never one block. A19's RELEASE-before-the-kill is
     what makes the guard able to speak; this class is why it is not optional.
+    **Family: "a healthy-looking absence"** (PART 3 step 0) — with 76, and with
+    the lost dispatch that has no claim branch.
 
 75. **The build directory is in every log line.** (Found 2026-09-03 in boot 7's
     output; going into the tree guard as its own check.) Root cause: Go embeds
@@ -1748,6 +1750,38 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     was making a promise the guard did not keep. Class 71's shape with the stakes
     inverted: not an unguarded writer mutating canon, but canon moved beyond
     reach by the lane building the guard for exactly that.
+    **Family: "a healthy-looking absence"** (PART 3 step 0) — with 74, and with
+    the lost dispatch that has no claim branch.
+
+77. **A counter destroyed by the act of reporting it.** (Number assigned at
+    merge, A27 — 74/75/76 were already taken on this base when I checked, two of
+    them by my own boot-7 failures written up by another lane, so this took the
+    next free number rather than the one I first assumed.)
+    `barPersistSummary()` formatted `persistDropped` and `persistDroppedCloses`
+    by calling `.Swap(0)` on both, so publishing the number and erasing it were
+    the same operation. The log line was therefore the ONLY consumer that could
+    ever observe a nonzero value; every other reader was correct or wrong
+    depending on whether it happened to run before or after a summary fell due,
+    with no error and no trace either way. The summary is rate-limited to once
+    per 60 WALL-CLOCK seconds, so the erasure arrived on a schedule unrelated to
+    the code under test — which is why `TestFanOutClosesLastResortIsHonest` was
+    carried as a **load flake** for weeks, by more than one lane and in this
+    checklist. **What identified it was the impossible reading:** the drop path
+    increments both counters and the non-close path increments one, so
+    `closes_dropped=0 queue_drops=0` cannot be produced by either branch. Zero
+    was not a branch outcome; it was a third party having been there first. A
+    reading that no branch can produce points at a destructive reader, not at
+    the branch taken. **Probe:** for any counter, grep its consumers for `Swap(`
+    / `Store(0)` and ask whether the reset is a *side effect of reading*; then
+    ask which consumer can ever see a nonzero value — if the answer is "only the
+    log line", the counter is not a counter. **Law:** counters RECORD (class 35).
+    Reporting reads; it never resets. Where a per-interval figure is wanted,
+    measure it against a **reported-baseline** stored beside the counter, and
+    make reset a separate explicit verb (`rollPersistCounters`) that nothing
+    calls implicitly. A negative delta means an unsynchronised rollover and must
+    report zero, never a negative — a negative count reads as a fix. Fixed in
+    `provider/ninjatrader/bar_persist.go`; the log message is byte-identical and
+    reports the same interval numbers it always did.
 
 78. **A plan that could only trade one direction.** (Number assigned at merge,
     A16 — highest occupied on dev was 76 when this was written; 77 is claimed by
@@ -1828,6 +1862,33 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
    the work was done. A branch name on origin is the only claim this protocol
    has. Claiming it costs one empty commit and one second; not claiming it cost
    a day's duplicate work and an attribution that git cannot reconstruct.
+
+   **THE SECOND THING THIS BUYS — a lost dispatch stops looking like a quiet
+   lane.** (Found by nofx-ed 2026-09-03, the same night: four dispatches
+   misrouted, three to the wrong lane and one — "TWO-DAY AUDIT" — whose title
+   reached a lane and whose body reached nobody.) A dispatch delivered to the
+   WRONG lane is self-correcting: the receiver sees a mismatch and says so, which
+   is how three of the four surfaced within minutes. A dispatch delivered to NO
+   lane is **silent**, and silence is exactly what a lane working quietly looks
+   like. Nothing anywhere is in a state that differs from success.
+
+   The claim branch makes the two distinguishable, which is the whole point:
+   **an assignment with no claim branch on origin after ~15 minutes is either
+   unstarted or LOST — and either way it is now a question somebody can ask.**
+   Fifteen minutes because that is long enough to read a dispatch and cut a
+   worktree, and short enough to catch a loss in the session that lost it; the
+   number matters far less than the fact that the absence is now checkable at
+   all. `git ls-remote --heads origin | grep <wave>` is the whole probe.
+
+   **FAMILY: "a healthy-looking absence."** The failure is not that something
+   went wrong loudly, it is that the *absence of the thing* is indistinguishable
+   from its presence. Same shape as **class 74** (a kill that worked, a process
+   that came back, a version that never moved — a null cutover reading as a
+   deploy) and **class 76** (a pointer born dangling: stable, silent, empty, and
+   invisible to a guard that only watches for change). Three instances in one
+   evening. When a check can only observe CHANGE or ERROR, ask what its silence
+   would look like if the thing had never existed at all — and if the answer is
+   "identical to success", the check does not cover the case.
 
 1. **Tree gate:** porcelain-clean + `deploy/nofx-lock.sh acquire <session>
    <task> [minutes]` (atomic create; records session · task · acquired ·
