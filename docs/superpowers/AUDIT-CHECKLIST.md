@@ -1936,3 +1936,24 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
    goldens PASS` + exactly ONE PID + feed warmed (bars_historical replay ~30s
    before decisions). **Rollback rule:** no boot line within 90s OR goldens
    fail → restore the prior binary + RELEASE, kill -9, restart, alert the owner.
+
+## CLASS 75 — SYSTEM-MAP CONTRACT (born 2026-09-04, docs/system-map-0904)
+
+**Symptom:** a knob, gate leg, window, threshold, refusal string, or boot line
+changes in a wave; the map of the system goes stale; the next lane believes the
+map and not the code.
+
+**Root cause:** the map (`docs/superpowers/SYSTEM-MAP.md`) is documentation
+nobody is forced to read, so nothing forces it to stay true.
+
+**Probe:** compare the map's boot-line quotes against the running binary's
+journal; compare knob values against the settings registry and resolvers.
+
+**Law:** **every wave that changes a rule updates its map section in the SAME
+commit** — knob value, gate leg, window, threshold, refusal string, or boot
+line. A contract test greps the map for the boot-line text: a boot line with no
+matching text in the map fails the suite, and a map quote with no code match
+fails it too (the text is the join key). Labels `[R]/[X]/[T]/[I]/[O]` move with
+evidence (legend: belief-census 2026-09-02:8-16). A wave that renames the boot
+line must update the map in the same commit or the contract test fails both
+sides.
