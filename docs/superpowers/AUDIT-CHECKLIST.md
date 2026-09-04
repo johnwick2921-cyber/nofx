@@ -1567,6 +1567,41 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     moved after you branched, re-read it. Same family as this class — a value
     read once, at a moment nobody recorded.
 
+71. **Global state that no worktree owns — the stash stack.** (Number assigned
+    at merge, A16 — highest occupied on dev was 70. Found by nofx-47 on
+    2026-09-03, by accident, while isolating a test result.) Root cause: `git
+    stash` is per-REPOSITORY, not per-worktree. This repo has **56 worktrees**,
+    the main tree among them, and a plain `git stash pop` in ANY of them applies
+    whatever is on top — regardless of which lane parked it, which branch it was
+    taken from, or how old it is. `stash@{0}` was
+    `6b770196` "On dev: class45-found-revert-1203" (2026-09-02 12:03:34): the
+    preserved evidence of the class-45 VS Code stale-buffer revert, **127
+    insertions / 596 deletions** of shipped safety code across six files.
+    nofx-47 popped it into an unrelated worktree by routine stash/pop; three
+    files conflicted because dev had moved, and **three applied CLEANLY and
+    staged**, deleting among other things:
+
+    ```
+    -	// CLASS 33 (2026-09-02) — BOOT SWEEP FIRST. Before ANY authoring, gating,
+    -	at.sweepPreBootArms(ledger)
+    ```
+
+    A lane doing that mid-wave and committing without reading the diff re-ships
+    the exact deletion class 45 exists to prevent — this time with no editor to
+    blame. **WORKTREE LAW and the class-70 lock do not cover it:** both govern
+    branches and directories, and the stash stack is neither. **Probe:** `git
+    stash list` before ANY stash operation, and never `pop` blind — `git stash
+    show -p stash@{0}` first, and prefer `git stash push -m` + `apply` of a
+    named entry over `pop` of whatever is on top. **Law:** evidence is never
+    parked on the stash stack. It is preserved as a file and a tag, both of
+    which are inert, and never as a poppable entry that every worktree shares.
+    Disarmed here without destroying anything: the content is
+    `docs/superpowers/reports/class45-found-revert-1203.patch` and the annotated
+    tag `class45-found-revert-1203` pins the sha. **The stash entry itself is
+    deliberately NOT dropped** — it is another lane's evidence, dropping is
+    destructive, and it is the owner's call; the artifacts above make that drop
+    safe whenever they want it.
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,

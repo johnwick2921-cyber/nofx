@@ -189,18 +189,25 @@ identity, same 2-min/5-min heartbeat, same STALE-not-DEAD wording. **I did not f
 over it.** That commit is the base; mine is layered on top, and the shipped script takes the
 better half of each:
 
-**Whose commit `ec2dd8f7` is, is currently UNKNOWN, and that is itself a finding.** I first
+**`ec2dd8f7` is nofx-47's**, confirmed by them 2026-09-03 after two wrong guesses. Nothing
+of their wave was lost: the 36 lines of extra reclaim tests they had locally are covered by
+the shipped suite (refused-on-fresh, rc nonzero, holder unchanged after refusal,
+corroboration required once stale), which they ran themselves at `bd20be31` — 56 pass, 0
+fail. **That it took three rounds of asking to establish is itself the finding.** I first
 told nofx-b3 it was theirs. They corrected it with their own timeline — their boot marker
 lands at 21:49:36, sixty seconds after `ec2dd8f7`, and at 21:48:12 they were reading a
 boot-integrity line; nobody writes 150 lines of bash in that minute. **Every commit in this
 repo carries the identical author identity (`johnwick2921-cyber`), so git cannot answer
 "which lane wrote this".** Provenance has to come from the branch, the worktree and the
-timestamp. Both nofx-b3 and nofx-ed have been ruled out on evidence I verified myself:
+timestamp. Both wrong guesses were ruled out on evidence I verified myself before believing
+the denial:
 nofx-b3's boot marker lands 60s after `ec2dd8f7` while they were reading a boot-integrity
 line, and none of nofx-ed's six branches contains it (`git merge-base --is-ancestor`, all
-six), with their own commits bracketing the timestamp at 21:44:33 and 22:01:48. **nofx-47 is
-the remaining lane and has been asked.** Until they answer this section says "unknown"
-rather than guessing a third time.
+six), with their own commits bracketing the timestamp at 21:44:33 and 22:01:48. nofx-47 then
+confirmed. Their own verdict on the merge: combining rather than forcing was right, and the
+owner-scoped heartbeat I added is **a bug fix rather than a refinement** — theirs took no
+session, so any lane could beat any lock, which defeats the liveness claim the whole class
+rests on.
 
 The sharper version of the problem: a lane's work was merged into `dev` without its author
 being told, under a wave another lane was reporting. A24 bans a boot line that claims a
