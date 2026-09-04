@@ -1881,6 +1881,17 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
    malformed reaper message as REAL-1 — a checker that passes the message which
    caused the incident is decoration; mutation-tested by hollowing the regex).
 
+   **QUOTE THE BRANCH, NEVER THE CLAIM SHA** (owner ruling 2026-09-04). A claim
+   commit does NOT survive a routine `git pull --rebase origin dev` — the rebase
+   replays it onto the new base and it comes back with a different sha, so the
+   branch needs a `--force-with-lease` and anyone holding the old sha is now
+   holding a commit that no longer exists. This wave hit it: the claim pushed as
+   `4d485b19` and landed as `5bcb5455`, same message, same author, same wave.
+   So a claim is addressed by its BRANCH, and `nofx-claim.sh check` reads the
+   FIRST COMMIT AHEAD OF `origin/dev` on that branch — whatever its sha — rather
+   than a recorded one. A coordination message that cites a claim sha will go
+   stale the first time its lane rebases; cite `fix/<wave>` instead.
+
    Born 2026-09-03, during class 70 itself. Two lanes independently wrote ~250
    lines of the same lock wave inside an hour, and a third lane's branch was
    consumed into dev without its author ever being told — and the ONLY thing that
