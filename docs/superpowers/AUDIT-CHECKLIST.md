@@ -1471,6 +1471,36 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     `🖥 ui: served-by=go-static build=<ts>` is READ from the bundle and logged as
     a WARNING when the bundle predates the binary — the 08-31-dist-under-a-09-03-
     binary state becomes impossible to miss instead of invisible.
+69. **Reported wired, called by nobody.** (Highest occupied at merge: 68; renumbered
+    69 on the rebase when another lane landed 67-68 — theirs untouched, per A16.)
+    Root cause: code that ANNOUNCES its own wiring while no production caller
+    exists, so every downstream consumer reads an empty store as a fact.
+    `trader/detector_record.go` carried the banner "1B — THE PRODUCTION CALL
+    PATH … Called once per planner read" from `89aeb8be`; `recordDetectorOutputs`
+    had **0 production call sites**. `touch_outcomes` and `candidate_pool`
+    therefore booted `0 · 0` on every boot including the running `4d846e26`,
+    and the boot line printed those zeros as if they were measurements. A test
+    named `TestDetectorWritesThroughTheProductionPath` passed throughout —
+    because it called the hook directly. Three instances in 24h: the seam
+    migration, this hook, and `ab_confirm_log`'s "usable" count (healthy-looking
+    because what it dropped was never counted). **Probe:** for any store a
+    decision depends on, ask what WROTE the last row, not whether the writer
+    exists — `grep` the call sites of the writer and require ≥1 outside
+    `_test.go`; and never let a test that calls a hook stand in for a test that
+    drives the path. An empty store is UNKNOWN, never "no change". **Fix:**
+    wired at the one intended site beside the void scope
+    (`auto_trader_planner.go`, so the detector judges the same resolved tape the
+    prompt and validator read); a production-path test that drives
+    `assemblePlannerInputWithCtx` on a fixture and asserts both stores non-empty
+    (RED with the call site removed — the old test stayed GREEN, which is the
+    whole point); and a STANDING GATE, `TestEveryClaimedProductionPathHasACallSite`,
+    which parses every non-test .go file, collects wiring claims from BOTH
+    function docs and FILE-LEVEL banners (1B's claim was a file banner, so a
+    func-doc-only scan would have missed the very case it exists for), and
+    FAILS on 0 production call sites. **Law:** a claim of being wired is a
+    testable assertion, not a comment — if a file says it is a production call
+    path, a gate must be able to prove it wrong.
+
 
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
