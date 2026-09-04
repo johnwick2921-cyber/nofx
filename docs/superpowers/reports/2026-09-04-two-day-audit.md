@@ -34,7 +34,7 @@ The two days were **not** a gate problem. In proportion, from the tables below:
 | **3** | **PLANNER / ENTRY SHAPE** | **~55%** | 09-03: **0 `open_long` proposed in 575 decisions** during a +483-pt rally; long scenarios were arm-enabled **4.3%** of the time vs **44.4%** for shorts |
 | **5** | **NOT-A-RULE, NOT-THE-TAPE — host outage + post-boot blindness** | **~30%** | **the WSL2 host rebooted at 14:18** (`who -b`); silence 12:24:33→14:18:24 CT (**113 min 51 s**), then **~50 min blind** on FEED DOWN / `NT8 TCP link DOWN — NEW entries BLOCKED`. Together: the NY afternoon containing the day's high (29585) |
 | **2** | NO SETUPS | ~10% | the day's only arm-enabled long (29481.05) **missed by 8.2 pts**; 09-02's four losses each stopped at their own authored stop |
-| **1** | GATES TOO TIGHT | **~5%** | the entry gate's eight legs refused **zero** entries across both days (counter-proven); the two gates that did fire net **negative** in their counterfactual ledgers |
+| **1** | GATES TOO TIGHT | **~5%** | 61 refusal events over **44 distinct opportunities**, and the refused set **loses $860.64** on the actual tape. No leg's ledger says "review". A structural gate defect exists (`plan_mode=strict` closes the decision path) but it cost nothing in this window |
 | **4** | CADENCE | **~0%** | class-47 cutoff/cooldown suppressed **nothing**: 09-02 ran WARN-first, 09-03 ran enforce and its single firing was fast-market-exempted |
 
 **Can this system, as configured today, take a trade on a trending fast tape?**
@@ -103,6 +103,63 @@ re-entered, stopped twice, for −254.00 of the day's −381.50.
 
 ---
 
+## 2b. C2 — since the last fill, and C3 — the boots
+
+### C2 — what happened after the one trade
+
+The last fill is **arm 35 → position 591, filled 2026-09-03 09:05:14 CT**. Since that moment:
+
+| | count |
+|---|---|
+| decision cycles evaluated | **314** |
+| of those, an OPEN was proposed | **13** — every one `open_short` |
+| arms authored | **2** (id 36, id 37) |
+| arms actually placed at the broker | **1** (id 37; id 36 was cancelled marketable before placement) |
+| arms filled | **0** |
+| positions opened | **0** |
+
+**[A] Not one long has been proposed in the 14+ hours since the last trade**, on a tape that rose
+from 29285 to 29585 in that time.
+
+### C3 — the boots, and the rule in force at each
+
+**[A] 28 boots across the two days** — 17 on 09-02, 11 on 09-03 — from **17 distinct build
+directories**. Every refusal in this report is attributed to the rule printed by the boot that
+preceded it, not to a file default.
+
+| # | boot (CT) | build tree | # | boot (CT) | build tree |
+|---|---|---|---|---|---|
+| 1 | 09-02 00:01:06 | clone-c39 | 15 | 09-02 22:37:35 | nofx |
+| 2 | 09-02 00:10:20 | clonepnl ← `TRADING REFUSED` stale rev | 16 | 09-02 22:41:58 | nofx |
+| 3 | 09-02 00:11:47 | clonepnl | 17 | 09-02 23:24:56 | nofx |
+| 4 | 09-02 06:27:45 | c41clone | 18 | 09-03 10:28:29 | cleanclone |
+| 5 | 09-02 06:57:49 | c33clone | 19 | 09-03 11:10:33 | cc2 ← **mid-NY-session** |
+| 6 | 09-02 07:32:15 | rfclone | 20 | 09-03 14:18:24 | cc2 ← **host reboot** |
+| 7 | 09-02 07:49:06 | clone0b2 | 21 | 09-03 14:59:03 | cc3 |
+| 8 | 09-02 08:10:30 | rpclone | 22 | 09-03 15:02:18 | cc3 |
+| 9 | 09-02 17:51:14 | bwclone | 23 | 09-03 18:08:56 | cleanbuild |
+| 10 | 09-02 18:05:26 | nofx-deploy | 24 | 09-03 19:06:06 | cc6 |
+| 11 | 09-02 18:27:17 | c46clone | 25 | 09-03 21:19:00 | nofx |
+| 12 | 09-02 20:42:28 | nofx | 26 | 09-03 21:48:12 | nofx |
+| 13 | 09-02 21:19:21 | nofx | 27 | 09-03 23:11:59 | nofx ← `TRADING REFUSED` stale rev |
+| 14 | 09-02 21:32:51 | ncclone | 28 | 09-03 23:12:54 | cleanclone ← **the running PID 594377** |
+
+**The rules changed inside the window.** The two that matter for attribution:
+
+| behaviour | 09-02 | 09-03 (from boot 18) |
+|---|---|---|
+| class-47 wake cutoff/cooldown | `cutoff=25m cooldown=30m` — **WARN-first, refuses nothing** | `cutoff=25m(enforce) cooldown=30m(enforce, fast-market≥1.5×ATR exempt)` |
+| min-SL multiplier | **1.0** until ~07:30, **1.5** after | **1.5** |
+| 1B detector recorder | not present | call site landed **21:31 CT**, first ran **21:48:12** |
+| trade-excursion writer | not present | first booted **10:28:29** — 67 min after the last trade closed |
+
+**[A] The last boot verified itself:** `BOOT INTEGRITY OK — rev 530009ffd540 · built
+2026-09-04T04:04:45Z · expected 530009ff · goldens PASS`. Note the worktree this audit reads
+(`dfbfa660`) is **3 commits ahead** of the deployed `530009ff`; the diff is `deploy/RELEASE`,
+`AUDIT-CHECKLIST.md` and docs only — no behavioural code.
+
+---
+
 ## 3. C4 — THE TAPE
 
 Session windows, read from the running process's own ledger boot line (not assumed):
@@ -116,7 +173,12 @@ Session windows, read from the running process's own ledger boot line (not assum
 | day | low | high | range | shape |
 |---|---|---|---|---|
 | 2026-09-02 | 28927.25 | 29255.00 | **327.75** | **chop / balance** — 40–90 pt swings, no sustained leg; open 29059 → close 29207.50 |
-| 2026-09-03 | 29075.00 | 29585.00 | **510.00** | **strong uptrend** — 29101.75 (06:00 low) → 29585.00 (13:00 high) = **+483.25 in 7 hours** |
+| 2026-09-03 | 29075.00 | **29601.00** | **526.00** | **strong uptrend** — 29101.75 (06:00 low) → 29585.00 (13:00 RTH high) = **+483.25 in 7 hours**; the 29601.00 print is the overnight extension at 23:5x CT |
+
+**Snapshot caveat [A]:** the `bars` table is live and was still appending while this audit ran.
+The RTH figures below are stable; the day's *extreme* moved from 29585.00 to **29601.00** between
+the first and last measurement (1374 1m bars at 23:53 CT). Every figure in this report is stamped
+with the reading that produced it.
 
 09-03 hourly (CT), the two impulse hours in bold:
 
@@ -251,9 +313,10 @@ The process came up at 14:18:24 into a 27-minute remainder of the NY session and
 trade for any of it**:
 
 ```
-09-03 14:18:24→15:10 CT:   31 × 🚨 FEED DOWN (no NT8 bar, age reaching 40m0s, while CME is OPEN)
-                            3 × 🚨 NT8 TCP link DOWN — NEW entries BLOCKED  (dead-man watchdog)
-                            3 × no_balance_frame                            (equity 0, no AddOn)
+09-03 14:18:27→14:58:28 CT:  21 decision cycles ran — ALL 21 SKIPPED, every one for
+                             "no balance frame yet" (equity 0, no AddOn frame)
+                             31 × 🚨 FEED DOWN (no NT8 bar, age reaching 40m0s, CME OPEN)
+                              3 × 🚨 NT8 TCP link DOWN — NEW entries BLOCKED (dead-man watchdog)
 ```
 
 The next decision cycle after 12:22:44 is **15:08:51** — a 166-minute decision drought, of which
@@ -346,56 +409,104 @@ The next plan of any session is ASIA v1 at **16:37:36 CT**. Between them the pro
 
 ---
 
-## 7. D2 — every gate refusal, and A29 call sites
+## 7. D2 — every gate refusal
 
-### The entry gate refused nothing
+### A correction this audit owes: the entry gate DID refuse — silently
 
-`trader/entry_gate.go` holds eight legs — strict, plan-bias direction, class-48 direction
-mismatch, invalidation-wired, shadow(0C), R:R at execution price, min-SL, one_open_position.
-Both production call sites exist:
+An earlier pass of this report concluded the entry gate refused nothing, on the strength of
+`grep -c "entry_gate:"` returning **0/0** over both logs and no `entry_gate:*` counter existing in
+`system_config`. **That conclusion was wrong, and the reason it was wrong is itself a defect [A].**
 
-| leg family | refusal branch | production call site | callers |
+There are two refusal recorders and only one of them is visible:
+
+| path | function | logs? | counter? |
 |---|---|---|---|
-| all 8 legs, decision path | `trader/entry_gate.go:162-284` | `trader/auto_trader_orders.go:333` | 1 |
-| all 8 legs, arm path | `trader/entry_gate.go:162-284` | `trader/armed_executor.go:495` | 1 |
+| **arm** | `recordEntryGateRefusal` (`trader/entry_gate.go:461-474`) | ✅ `🚦 entry-gate REFUSED arm …` | ✅ `arm_refusals_0b:…:entry_gate:<class>` |
+| **decision** | `entryGateDecisionTelemetry` (`trader/entry_gate.go:477-486`) | ❌ **nothing** | ❌ **nothing** — only `actionRecord.Error` |
 
-**[A] Across 09-02 and 09-03 these legs produced ZERO refusals.** This is a *recorded-counter*
-result, not an inferred zero. Refusals increment `arm_refusals_0b:<trader>:<date>:<session>:<class>`
-where class is `entry_gate:`+leg (`armed_executor.go:467`). Every counter that exists in the store:
+The decision-path refusal is a **WARN-less code path**, so it is absent from the file log *and*
+from `log_events` (which carries only WARN+). It exists in exactly one place:
 
 ```sql
-SELECT key, value FROM system_config WHERE key LIKE '%refus%';
-arm_refusals_0b:…:2026-09-02:ASIA:rr    2
-arm_refusals_0b:…:2026-09-02:NY:rr      3
-arm_refusals_0b:…:2026-09-03:LONDON:rr  1
-arm_refusals_0b:…:2026-09-03:NY:rr      1
+SELECT COUNT(*) FROM decision_records
+WHERE date(timestamp,'-5 hours') BETWEEN '2026-09-02' AND '2026-09-03'
+  AND execution_log LIKE '%entry_gate%';                                  -- 19
 ```
 
-Four keys, all class `rr`, summing to **7**. **No `entry_gate:*` counter exists at all**, and
-`grep -c "entry_gate:"` over both log files returns **0 / 0**. The named new legs — strict,
-one-open-position, invalidation-wired, shadow map, direction — refused nothing.
+**[A] 19 decision-path entry-gate refusals in the window:**
 
-### The gates that did fire
+| leg | n | window (CT) |
+|---|---|---|
+| **strict (leg 0)** | **13** | 09-03 20:35:06 → 21:12:40 |
+| min_sl (leg 6) | 3 | 09-02 18:48:49 → 18:52:33 |
+| rr_at_fill (leg 5) | 3 | 09-02 19:00:23 → 09-03 02:12:56 |
 
-| gate | where | n (09-02+09-03) | governing knob (live value) |
+The **arm**-path entry gate refused **zero** — that half of the original finding stands, and it is
+counter-proven: the only `arm_refusals_0b` keys in the store are four `rr`-class rows totalling 7.
+
+### The full refusal inventory
+
+**[A] 61 refusal EVENTS across 44 distinct opportunities**, 09-02 00:00 → 09-03 23:34 CT:
+
+| gate | seam | events | code |
 |---|---|---|---|
-| **min-SL (decision path)** | `kernel/engine_position.go:229` → `kernel/min_sl.go:56` | **34** | `MIN_SL_ATR_MULT` = **1.5** (1.0 on 09-02 before 07:30) |
-| **R:R at arm** | `trader/armed_executor.go:455` | **7** | arm min R:R = **2.00** |
-| marketable guard | `armed_executor.go:918-924` | 3 | — (wrong-side guard, no knob) |
-| stale order_update | `armed_executor.go:940` | 3 arms (ids 29/30/31) | `armedWorkingStaleMin` = 15m |
-| plan-death disarm | 12:15:01 09-03 | 1 arm (id 37) | death: 2×5m close, buffer 0.5×ATR14 |
-| no-chase | `auto_trader.go` (warn) | 27 lines | **mode=warn — refuses nothing** |
-| lunch no-trade | `kernel/no_trade_band.go:58` → `trader/auto_trader_session.go:120` | 0 recorded | 12:00–13:30 CT |
+| min-SL | `validateDecision` | **34** | `kernel/engine_position.go:229` → `kernel/min_sl.go:56` |
+| **strict** | EntryGate leg 0 | **13** | `trader/entry_gate.go:162-172` |
+| R:R at arm | `armGateVerdictFor` | 7 | `trader/armed_executor.go:415` |
+| min-SL | EntryGate leg 6 | 3 | `trader/entry_gate.go:268` |
+| rr_at_fill | EntryGate leg 5 | 3 | `trader/entry_gate.go:257` |
+| other | — | 1 | — |
+| marketable guard | `armed_executor.go:918-924` | 5 (ids 25,27,33,34,36) | wrong-side guard, no knob |
+| stale-arm reaper | `armed_executor.go:1019-1034` | 3 (ids 29,30,31) | `armedWorkingStaleMin` = **15m** (resolved, printed) |
+| plan-death disarm | `cancelArmedOrdersSync` | 1 (id 37) | — |
 
-**A11 caveat.** `GET /api/config/resolved` and `/api/risk/gate-blocks` both return
-`{"error":"Missing Authorization header"}` from this session, so live knob values are taken from
-the process's own boot lines and from the refusal messages themselves (which print the multiplier
-they applied) — not from file defaults. Knobs I could **not** establish live are named as such
-rather than guessed.
+**[A] Fourteen wired gate legs never fired once**: EntryGate legs 1, 2, 3, 4, 7 (direction,
+class-48 mismatch, invalidation, shadow, one_open_position); the arm-legacy `ArmSpecValid`,
+not-armable, plan-bias, quality, min-SL and HTF-veto legs; `oneLiveArmGuard`;
+`split_leg_capacity`; `condition_shadowed`; and on the decision side `feed_down` and the dead-man
+legs. **The named "new legs" the dispatch asked about — one-open-position, invalidation-wired,
+shadow map, direction — are among them. They refused nothing.**
 
-### A reporting defect that invites a false read of the min-SL gate
+### A29 — a gate with zero production callers
 
-`kernel/min_sl.go:56-66` formats the raw ATR where a reader expects the threshold:
+**[A] `armGateVerdict` (`trader/armed_executor.go:1268`) has EIGHT call sites and every one is a
+test** (`armed_executor_test.go:77,82,87,94,100,180,185,189`). Production calls the sibling
+`armGateVerdictFor` at `:415`. Per A29 a gate with 0 production callers is not a gate — this one is
+dead code that a reader would reasonably mistake for the live path.
+
+### Knobs, resolved (A11)
+
+| knob | live value | how established |
+|---|---|---|
+| `MIN_SL_ATR_MULT` | **1.0** until the 09-02 07:49:06 boot, **1.5** after | not set in `.env`; code default, and the refusal line prints the multiplier it applied |
+| `min_risk_reward_ratio` | **2.00** — an *explicit saved* value | `config.ai_config.risk_control.min_risk_reward_ratio` (**not** `config.risk_control`, which reads null and would falsely resolve to `SafeDefaultMinRiskReward` = 3.0) |
+| `armedWorkingStaleMin` | **15 min** | printed resolved in the cancel reason `no order_update for 15m` |
+| wake cutoff / cooldown | 25m / 30m, WARN 09-02 → enforce 09-03 | boot line |
+| lunch no-trade | 12:00–13:30 CT | `kernel/no_trade_band.go:41` (code constant) |
+| `max_daily_trades` | **3 — NOT ENFORCED** | guardrails master switch is off |
+| `/api/config/resolved`, `/api/risk/gate-blocks` | **unavailable** | both return `{"error":"Missing Authorization header"}` |
+
+### Three gate defects
+
+**[A] `plan_mode=strict` + EntryGate leg 0 refuses EVERY decision-path market entry, regardless of
+citation.** Strict executes plan scenarios on the ARM path only; a market entry is by construction
+a "market-path" entry, so leg 0 refuses it before any other test. All 13 strict refusals cite a
+real scenario (S1) and are refused anyway. Since 09-03 10:43 CT (commit `c8c90dcc`) the decision
+path is effectively closed to market entries — **and it says so nowhere.**
+
+**[A] On 09-02 evening the EntryGate min-SL leg was fed the DAILY ATR.** It rendered
+`1.5×ATR5m = 450.56` from a daily ATR of 300.37 while the arm seam in the same minutes used
+ATR5m 12.78–14.12 — a **32×** threshold. Fixed by `609067ec` on 09-03 08:23 CT. The three
+09-02 18:48–18:52 min_sl(leg6) refusals are that bug.
+
+**[A] The no-chase leg is structurally incapable of firing on the arm path.** 40 evaluations,
+every one with `dist = 0.00×ATR` and `run = NULL`, 0 `would_refuse`. `citedLevelFor` returns
+`sc.Confirm.RefPrice`, which equals the arm entry in every plan in the window, so the distance is
+always zero by construction. Its 27 log lines are noise.
+
+### The reporting defect that inverts a correct refusal
+
+`kernel/min_sl.go:62` prints the raw ATR where the threshold belongs:
 
 ```go
 if dist < mult*atr {
@@ -403,62 +514,72 @@ if dist < mult*atr {
 }
 ```
 
-So `sl_too_tight: 40.2 < 1.5×ATR (27.3)` reads as "40.2 is less than 27.3", which is false. The
-threshold is 1.5 × 27.3 = 40.95, and 40.2 < 40.95 is correct. **[A] All 34 refusals are
-arithmetically correct** (`gate_correct=YES` for every row of
-`refusals_minsl_counterfactual.csv`). The gate is sound; the line is misleading, and this auditor
-initially misread it as a defect.
+`sl_too_tight: 40.2 < 1.5×ATR (27.3)` reads as "40.2 < 27.3", which is false; the threshold is
+1.5 × 27.3 = 40.95 and 40.2 < 40.95 is correct. **[A] All 34 are arithmetically correct.** This
+auditor initially recorded it as a gate defect and had to withdraw that.
 
 ---
 
 ## 8. SECTION F — THE COUNTERFACTUAL LEDGER
 
-The direct test of "gates too tight". Multiplier $2/pt, verified from position 591.
+The direct test of "gates too tight". $2/pt, verified from position 591 (70 pts → −140.00).
 
-### min-SL leg — n=34 events, 11 distinct opportunity clusters
+### The whole refused set — 44 distinct opportunities
 
-The refusals cluster: eight of them (09-02 18:48:13→18:59:36) are the *same short* re-proposed
-in eleven minutes. Counting events and clusters separately matters and is done here.
+| outcome | n |
+|---|---|
+| TARGET first | **7** |
+| STOP first | **31** |
+| flat at horizon | 5 |
+| never filled | 1 |
+| **net, session-flat horizon** | **−$860.64** |
+| net, CME-day horizon | −$1,036.52 |
 
-Because a min-SL-rejected decision is **not persisted with its prices** (the retry overwrites the
-record with the final `wait` — defect #7), an exact stop/target counterfactual is impossible. The
-honest substitute: each refusal's own too-tight stop distance against the realised excursion.
+**[A] The refused set loses money.** Taking every refused trade at its authored stop and target on
+the actual tape produces a loss of about **$861**. **No leg's ledger says "review".** The gates
+were not what cost these two days; on balance they saved roughly a day's worth of losses.
+
+### Per leg
+
+**min-SL — n=34 events, 11 distinct clusters.** A min-SL-rejected decision is not persisted with
+its prices (the retry overwrites the record with the final `wait` — D24), so the exact stop/target
+counterfactual is unrecoverable. The honest substitute — each refusal's own too-tight stop against
+realised excursion:
 
 | outcome | n | points |
 |---|---|---|
 | would have hit its **own** too-tight stop within 30 min | **18** | **−431.2 pts = −$862** |
 | still alive at 30 min | 16 | ΣMFE30 = +715.5 pts = +$1,431 |
-| **upper-bound net** (every survivor exits at its exact 30-min high — unattainable) | 34 | **+284.3 pts = +$569** |
+| **upper bound** (every survivor exits at its exact 30-min high — unattainable) | 34 | +284.3 pts = +$569 |
 
 Per side: short n=25 (12 stopped, −248.9 pts) · long n=9 (6 stopped, −182.3 pts).
+**Verdict: min_sl is not a leg to review.** Positive only under perfect exits; over half the
+refused trades were stopped on their own stop inside half an hour.
 
-**Verdict: min_sl is NOT a leg to review.** At n=34 its refusal set is positive only under an
-assumption of perfect exits at the 30-minute high; under any realistic exit rule the ledger is
-around break-even or negative. Over half of the refused trades would have been stopped out on
-their own stop within half an hour.
+**R:R-at-arm — n=7**, full stop/target counterfactual (prices recovered from the plan doc in force):
 
-### R:R-at-arm leg (min 2.00) — n=7
+| time (CT) | sess | side | entry | stop | target | R:R | outcome | pts |
+|---|---|---|---|---|---|---|---|---|
+| 09-02 09:55:01 | NY | long | 29135.65 | 29099.00 | 29209.25 | 0.95 | **TARGET** 15:06 | **+73.60** |
+| 09-02 10:25:01 | NY | long | 29058.75 | 29020.00 | 29143.97 | 1.74 | never_reached | 0.00 |
+| 09-02 13:06:29 | NY | long | 29163.99 | 29138.75 | 29246.25 | 1.32 | STOP 13:12 | −25.24 |
+| 09-02 18:47:17 | ASIA | short | 29209.25 | 29223.00 | 29181.64 | 1.30 | **TARGET** 19:07 | **+27.61** |
+| 09-02 20:07:16 | ASIA | short | 29175.66 | 29194.30 | 29136.25 | 1.75 | STOP 20:16 | −18.64 |
+| 09-03 08:18:54 | LONDON | short | 29219.97 | 29255.00 | 29144.50 | 1.68 | STOP 08:30 | −35.03 |
+| 09-03 08:30:54 | NY | short | 29259.67 | 29289.00 | 29178.73 | 1.68 | STOP 08:38 | −29.33 |
+| | | | | | | | **net** | **−7.03 pts = −$14** |
 
-Full stop/target counterfactual (prices recovered from the plan doc scenario in force):
+**n=7 is below the n=10 floor, so no verdict is stated** — the number is reported plainly.
+**[A] All seven were authored at R:R ≥ 2.0 and pushed below the 2.0 floor by `composeArmStop`
+widening the stop.** The plan cleared the gate; the stop composer then broke it.
 
-| time (CT) | sess | scen | side | entry | stop | target | R:R logged | outcome | pts |
-|---|---|---|---|---|---|---|---|---|---|
-| 09-02 09:55:01 | NY | S1 | long | 29135.65 | 29099.00 | 29209.25 | 0.95 | **TARGET** 15:06 | **+73.60** |
-| 09-02 10:25:01 | NY | S3 | long | 29058.75 | 29020.00 | 29143.97 | 1.74 | never_reached | 0.00 |
-| 09-02 13:06:29 | NY | S1 | long | 29163.99 | 29138.75 | 29246.25 | 1.32 | STOP 13:12 | −25.24 |
-| 09-02 18:47:17 | ASIA | S2 | short | 29209.25 | 29223.00 | 29181.64 | 1.30 | **TARGET** 19:07 | **+27.61** |
-| 09-02 20:07:16 | ASIA | S3 | short | 29175.66 | 29194.30 | 29136.25 | 1.75 | STOP 20:16 | −18.64 |
-| 09-03 08:18:54 | LONDON | S1 | short | 29219.97 | 29255.00 | 29144.50 | 1.68 | STOP 08:30 | −35.03 |
-| 09-03 08:30:54 | NY | S1 | short | 29259.67 | 29289.00 | 29178.73 | 1.68 | STOP 08:38 | −29.33 |
-| | | | | | | | | **net** | **−7.03 pts = −$14** |
+**strict (leg 0) — n=13.** All 09-03 20:35–21:12 CT, all ASIA, all after the trading day. They cost
+nothing on 09-02/09-03, but they demonstrate a decision path that is structurally closed.
 
-**n=7 is below the n=10 floor, so no verdict is stated.** The number is reported plainly: the
-refused set was approximately break-even. Four of seven were stopped; the gate did not cost money.
-
-### entry_gate legs — n=0
-
-No counterfactual is possible and none is invented. **A leg that refused nothing over two days
-cannot be the reason the system did not trade.**
+**The one winning refusal cluster.** 09-02 18:47:17–19:00:23 ASIA: 13 refusal events / **7 distinct
+opportunities, all 7 would have hit target** — **+$644.22** treated independently, **+$55.22** as
+one sequential position. This is the only cluster where refusing cost money, and the sequential
+figure is the honest one: they are the same short re-proposed, not seven trades.
 
 ---
 
@@ -615,8 +736,8 @@ Every defect found, with the code path. None was acted on — this audit is read
 
 | # | defect | evidence |
 |---|---|---|
-| **D11** | **591's stop was 8.3× its own invalidation distance** — stop 29351.63 (66.63 pts from entry) while the scenario's own invalid is "a 5m close above 29293.00 ONH" (8.00 pts). The ATR floor overrode the structure the scenario was built on |
-| **D12** | **591's arm was placed 15 pts wider than the plan authored** — plan `09-03 NY v2 S1 arm.stop = 29340` (55 pts); ledger `stop_px = 29351.63`; the SL is recomputed from the live ATR at placement, not taken from the plan |
+| **D11** | **591's stop was 8.3× its own invalidation distance** — stop 29351.63 (66.63 pts from entry) while the scenario's own invalid is "a 5m close above 29293.00 ONH" (8.00 pts). **The ATR floor is not the main cause: the planner itself authored `stop: 29340` = 55.00 pts = 6.875× the invalidation.** The floor added the last 11.63 pts; the planner supplied the other 47. A scenario that says "dead at 29293" carrying a stop at 29351.63 is authored incoherence, not a gate artefact |
+| **D12** | **591's arm was placed 11.63 pts wider than even the plan's own wide stop** — plan `arm.stop = 29340`; ledger `stop_px = 29351.6284728996`, recomputed from live ATR at placement (`stop_floor_pts` 67.65 on the 09:06:54 read, `atr5m` 45.1) rather than taken from the plan |
 | **D13** | **The R:R gate evaluates against `current_price_snapshot`, not the fill** (`kernel/engine_position.go:140,187`). Positions 587 and 589 filled 9.75 and 10.x pts away from the price the gate scored, so the R:R that passed is not the R:R that traded |
 
 ### Data integrity and observability
@@ -643,6 +764,23 @@ Every defect found, with the code path. None was acted on — this audit is read
 | **D30** | Boot-time rev-mismatch `🔐 TRADING REFUSED` fired **twice** in the window (09-02 00:10:21, 09-03 23:11:59) — two cutovers shipped the wrong binary |
 | **D31** | **8 of 21 big-move windows drew no wake line at all**, 6 of them sitting on a plan **190–370 minutes stale** |
 
+### Gate defects (added after the D2 pass corrected this audit's first reading)
+
+| # | defect | evidence |
+|---|---|---|
+| **D32** | **The decision-path entry-gate refusal is invisible** — `entryGateDecisionTelemetry` (`trader/entry_gate.go:477-486`) writes no log line and no counter, only `actionRecord.Error`. 19 refusals in the window produced **0** log lines and **0** `log_events` rows. This audit's first pass therefore concluded the gate refused nothing |
+| **D33** | **`plan_mode=strict` + EntryGate leg 0 refuses EVERY decision-path market entry regardless of citation** — 13 refusals 09-03 20:35:06→21:12:40, all citing a real scenario. Since commit `c8c90dcc` (09-03 10:43 CT) the decision path is closed to market entries and nothing says so |
+| **D34** | **A29 DEAD GATE — `armGateVerdict` (`trader/armed_executor.go:1268`) has ZERO production callers**; all 8 call sites are in `armed_executor_test.go`. Production uses `armGateVerdictFor` at `:415` |
+| **D35** | **EntryGate min-SL leg was fed the DAILY ATR on 09-02 evening** — threshold rendered `1.5×ATR5m = 450.56` from a daily ATR of 300.37, while the arm seam used ATR5m 12.78–14.12 in the same minutes (**32×**). Fixed by `609067ec`, 09-03 08:23 CT |
+| **D36** | **The no-chase leg cannot fire on the arm path** — 40 evaluations, all `dist = 0.00×ATR`, `run = NULL`, 0 `would_refuse`, because `citedLevelFor` returns `sc.Confirm.RefPrice` which equals the arm entry in every plan in the window. Its 27 log lines are noise |
+| **D37** | **All 7 R:R-at-arm refusals were authored at R:R ≥ 2.0** and pushed below the 2.0 floor by `composeArmStop` widening the stop. The plan cleared the gate; the stop composer broke it |
+| **D38** | **`max_daily_trades=3` is not enforced** because the guardrails master switch is off. It would have blocked every entry from 09-02 09:59:29 CT onward; position **590** (−99.00) opened straight through it |
+| **D39** | **`UpsertArm` rewrites `entry_px`/`stop_px`/`target_px` on a row whose state is `working`** — i.e. under a LIVE broker order — leaving `signal_id` and `state` intact and sending no cancel or replace. Arm 29's ledger says 29044.00; the order actually resting at NT8 was a buy limit at **29035.25** |
+| **D40** | **`armed_orders` is not append-only** — the `(plan_id, scenario, leg_index)` slot is overwritten, so 15 rows under-represent **at least 11 distinct broker placements**; three signal ids (`0c77307d`, `fd71b48f`, `18a7cc55`) survive nowhere, and two of them **filled into real positions** (582 +129.5, 585) |
+| **D41** | **No independent broker-side record exists for any arm** — `trader_orders` holds **1 row all-time** (2026-06-02) and the NT8 armed path writes nothing there; `nt8_order_snapshots` holds 228 rows all with `symbol=''` (blank). There is no way to reconcile the ledger against the broker |
+| **D42** | **Double entry path** — arm 31 (ASIA S3 long limit 29068.05, signal `dc8405f1`) was live at NT8 from 00:16:32 while the **decision** path opened the SAME plan+scenario at market 29079.25 at 00:17:44 (position 587). Both live together for 14m04s |
+| **D43** | **Zero arms authored under a 09-02-dated plan ever reached the broker** (ids 32, 33, 34). The single 09-02 broker placement (00:16:32, arm 31) belonged to the 09-01 ASIA plan. All four 09-02 positions entered via the decision path |
+
 ---
 
 ## 13. D6 — THE ONE TRADE, in full
@@ -666,12 +804,14 @@ read was **`up/NORMAL`**, and the day was called **"balance"** on a day that ran
 **What killed it.** A stop-out at the arm's own stop with 3.37 pts of slippage
 (29351.63 → filled 29355.00). Not a market close, not a sync artefact.
 
-**Where the stop came from.** Not the plan. The plan authored `stop: 29340` (55 pts). The ledger
-carries **29351.6284728996** — the ATR floor recomputed at placement
-(`stop_floor_pts` on the 09:06:54 read was **67.65** against `atr5m` 45.1). **[A] The stop was
-widened 15 pts beyond the author's intent by the floor, and simultaneously sat 8.3× further out
-than the scenario's own invalidation level (29293.00, 8 pts away).** The scenario said the idea
-was dead at 29293; the stop let it run to 29351.63 before admitting it.
+**Where the stop came from — and the correction this audit owes.** The obvious reading is that the
+ATR floor blew the stop out. **[A] It did not, mostly.** The plan's own authored stop was
+`29340` = **55.00 pts**, already **6.875×** the scenario's stated invalidation distance
+(29293.00 is 8.00 pts from the entry). The ledger's **29351.6284728996** is the live-ATR floor
+(`stop_floor_pts` 67.65 against `atr5m` 45.1 on the 09:06:54 read) adding a further **11.63 pts**.
+So of the 66.63-pt stop, the planner authored 55 and the floor added 11.63. **The scenario declared
+itself dead at 29293 and then carried a stop 58 points beyond that.** Price closed above 29293 and
+the trade kept running to 29355 — losing 140 on a thesis its own document had already voided.
 
 **What refused everything else that session.**
 
@@ -696,14 +836,23 @@ proposed `open_long` zero times.
 ## 14. G — VERDICT
 
 **[A]** Two days that closed −521.50 combined (09-02 −381.50 on n=4, 09-03 −140.00 on n=1, zero
-exclusions) did not lose because the new gates were too tight. The eight-leg entry gate — strict,
-one-open-position, invalidation-wired, R:R at execution, min-SL, no-chase, shadow map, direction —
-**refused nothing at all across both days**, proven by the absence of any `entry_gate:*` counter in
-`system_config` where four `rr`-class counters do exist. The two gates that did fire have negative
-counterfactual ledgers: min-SL at **n=34 events / 11 clusters** would have been stopped out on its
-own too-tight stops 18 times for **−431.2 pts**, positive only under an unattainable
-perfect-exit assumption; R:R-at-arm at **n=7** nets **−7.03 pts** and is below the n=10 floor, so no
-verdict is stated for it. **Gates account for roughly 5%.** Cadence accounts for **~0%**: class-47
+exclusions) did not lose because the gates were too tight. Sixty-one refusal events fired across
+**44 distinct opportunities**, and taking every one of them at its authored stop and target on the
+actual tape **loses $860.64** — the gates saved roughly a day's worth of losses rather than costing
+one. **No leg's ledger says "review":** min-SL at n=34 events / 11 clusters would have been stopped
+on its own too-tight stops 18 times for −431.2 pts and is positive only under an unattainable
+perfect-exit assumption; R:R-at-arm at n=7 nets −7.03 pts and sits below the n=10 floor, so no
+verdict is stated for it; the one winning cluster (09-02 18:47–19:00 ASIA, 7 opportunities all
+reaching target) is worth **+$55.22** as the single sequential position it actually was. Four of
+the named new legs — one-open-position, invalidation-wired, shadow map, direction — are among
+**fourteen wired legs that never fired once**. **Gates account for roughly 5%**, and the real gate
+findings are structural rather than costly: `plan_mode=strict` refuses **every** decision-path
+market entry regardless of citation and announces this nowhere; the decision-path refusal recorder
+writes no log line and no counter, so 19 refusals were invisible until `decision_records` was read
+directly (this audit's own first pass concluded "the gate refused nothing" and had to withdraw it);
+`armGateVerdict` has **zero production callers**; the no-chase leg is arithmetically incapable of
+firing; and on 09-02 evening the EntryGate min-SL leg was fed the **daily** ATR, rendering a
+threshold 32× too large until `609067ec` fixed it on 09-03. Cadence accounts for **~0%**: class-47
 ran WARN-first for all of 09-02 and enforcing on 09-03, and across both days it suppressed **zero**
 wakes — its one enforcing firing was fast-market-exempted, and 43 and 8 wakes fired through the
 `wake_min_interval_min` ceiling. What is left is planner shape and a defect. **Planner shape is the
