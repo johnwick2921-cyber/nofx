@@ -1871,6 +1871,12 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
    BEFORE writing a line:
 
    ```
+   NOFX_SESSION=<your session>  deploy/nofx-claim.sh new <branch> "<wave>"
+   ```
+
+   which is exactly:
+
+   ```
    git checkout -b <branch> origin/dev
    git commit --allow-empty -m "claim: <wave> — <session>, $(date -Is)"
    git push -u origin <branch>          # rejected or already there? STOP.
@@ -1879,6 +1885,37 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
    If the branch already exists on origin, **another lane has this wave**: stop
    and coordinate before doing any work. Fold the empty commit into your first
    real one (`--amend`) or leave it; it costs nothing either way.
+
+   **THE SESSION NAME AND THE ISO TIMESTAMP ARE MANDATORY, NOT DECORATION**
+   (owner ruling 2026-09-04). The message MUST match
+   `claim: <wave> — <session>, <ISO-8601 with offset>`, and
+   `deploy/nofx-claim.sh check <branch>` FAILS on anything else —
+   `audit` sweeps every claim on origin.
+
+   Why it is a rule and not a template: on 2026-09-04 step 0 worked perfectly and
+   still left the lane stuck. `fix/reaper-reads-snapshot` was claimed as
+   `claim: reaper reads the snapshot, not order_update silence (PART 3 step 0)`.
+   The next lane pushed 70 seconds later, hit the collision step 0 exists to
+   catch — and then could not act on it, because the claim named no one. In this
+   repo every commit carries the identical git author, so the author field
+   answers nothing (PROVENANCE, CLAUDE.md): the claim message is the ONLY place a
+   reachable identity can live. **A claim without a session proves a collision
+   and cannot resolve it.** The template already showed `<session>`; a template is
+   a suggestion, and two of the five claims on origin at the time this shipped
+   omitted it. Pins: `deploy/nofx-claim-test.sh` (10, including the real
+   malformed reaper message as REAL-1 — a checker that passes the message which
+   caused the incident is decoration; mutation-tested by hollowing the regex).
+
+   **QUOTE THE BRANCH, NEVER THE CLAIM SHA** (owner ruling 2026-09-04). A claim
+   commit does NOT survive a routine `git pull --rebase origin dev` — the rebase
+   replays it onto the new base and it comes back with a different sha, so the
+   branch needs a `--force-with-lease` and anyone holding the old sha is now
+   holding a commit that no longer exists. This wave hit it: the claim pushed as
+   `4d485b19` and landed as `5bcb5455`, same message, same author, same wave.
+   So a claim is addressed by its BRANCH, and `nofx-claim.sh check` reads the
+   FIRST COMMIT AHEAD OF `origin/dev` on that branch — whatever its sha — rather
+   than a recorded one. A coordination message that cites a claim sha will go
+   stale the first time its lane rebases; cite `fix/<wave>` instead.
 
    Born 2026-09-03, during class 70 itself. Two lanes independently wrote ~250
    lines of the same lock wave inside an hour, and a third lane's branch was
