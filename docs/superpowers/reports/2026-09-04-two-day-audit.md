@@ -360,6 +360,15 @@ stored with a CT offset and `updated_at` with `+00:00` UTC.** Both are normalise
 | 36 | 09-03 | NY | S2 | short | 29351.05 | cancelled | 0.0m | " (price 29358.75 already above 29351.05) | marketable_guard |
 | 37 | 09-03 | NY | S3 | short | 29543.75 | cancelled | 16.5m | cancelled in NT8 | **parked(death)** |
 
+**The arms table under-counts the arms [A].** `armed_orders` is **not append-only**: `UpsertArm`
+(`store/armed_orders.go:155,175-196`) rewrites the `(plan_id, scenario, leg_index)` slot in place.
+The 15 rows below therefore under-represent **at least 11 distinct broker placements**; three
+signal ids (`0c77307d`, `fd71b48f`, `18a7cc55`) survive nowhere in the table and **two of them
+filled into real positions** (582 +129.50, 585). Worse, the rewrite happens even while `state =
+'working'` — under a live broker order, with no cancel or replace sent: **arm 29's ledger says
+entry 29044.00, but the order actually resting at NT8 was a buy limit at 29035.25**, repriced at
+23:58:16 while live. Treat the entry prices below as the ledger's last word, not the broker's.
+
 **Arms 29/30/31** were cancelled by the stale-order-update reconciler at 00:07–00:31 CT on 09-02 —
 inside the window of three boots in eleven minutes (00:01:06, 00:10:20, 00:11:47). **[B]** The
 restart resets the NT8 order-update stream; the reconciler then sees no update inside the stale
@@ -387,7 +396,9 @@ That looks like a broker defect. **It is not** — the order was already gone:
 
 **[A] The plan's death condition fired at 12:15:00, the disarm-on-no-active-plan rule cancelled the
 arm, and NT8 acked it.** "cancelled in NT8" is our own cancel being acknowledged, not an external
-one. During the arm's actual 16.5-minute life the maximum high was **29534.25 — 9.5 points short
+one — the string is written by `onArmedOrderUpdate` when the broker reports the cancel, so the
+ledger **launders our own action into something that reads like a broker event**. That is a defect
+in its own right: an operator reading `state_reason` alone would investigate NT8. During the arm's actual 16.5-minute life the maximum high was **29534.25 — 9.5 points short
 of the entry**. Price first reached 29543.75 at **12:51 CT, 36 minutes after the arm was gone.**
 
 **Counterfactual, had the arm survived** (filled 12:51 @29543.75, stop 29592.50, target 29397.11):
@@ -673,11 +684,14 @@ Cause vocabulary per the dispatch. Counts are **opportunities**, not log lines.
 | cause | n | detail |
 |---|---|---|
 | planner_shape (no arm authored on the bias side) | 55 | long scenarios authored without `arm.enabled` |
-| gate_min_sl | 6 clusters (16 events) | all arithmetically correct; ledger negative |
+| gate_min_sl (validateDecision) | 6 clusters (16 events) | all arithmetically correct; ledger negative |
+| gate_min_sl (EntryGate leg 6) | 3 | **fed the DAILY ATR — threshold 32× too large (D35)** |
+| gate_rr_at_fill (EntryGate leg 5) | 2 | silent — `decision_records` only |
 | gate_rr_at_arm | 5 | net −36.3 pts across the five |
 | marketable_guard | 2 | ids 33, 34 |
 | defect(restart→stale arm) | 1 | id 31 (+ ids 29/30 authored 09-01) |
 | never_reached | 1 | id 32, EOD flat after 254.5 min |
+| defect(double entry path) | 1 | arm 31 live at NT8 while the decision path opened the same scenario at market → position 587 |
 | cadence_suppressed | **0** | class-47 in WARN mode |
 
 ### 2026-09-03
@@ -686,10 +700,12 @@ Cause vocabulary per the dispatch. Counts are **opportunities**, not log lines.
 |---|---|---|
 | **planner_shape** | **22** | long scenarios authored without `arm.enabled` during a `trend`/`long` plan |
 | **host outage + post-boot blindness** | **1 window** | 113m51s down (12:24:33→14:18:24) + ~50 min blind after the boot; covers the day's high and the last 2h of NY entry time |
+| **gate_strict (EntryGate leg 0)** | **13** | 20:35→21:12 CT ASIA; refuses *every* decision-path market entry (D33). Cost nothing this day — after the trading session |
 | parked(death) | 1 | arm 37; counterfactual **+38.75 pts** |
 | never_reached | 1 | the only arm-enabled long, missed by **8.2 pts** |
 | marketable_guard | 1 | id 36 |
 | gate_min_sl | 5 clusters (18 events) | ledger negative |
+| gate_rr_at_fill | 1 | silent |
 | gate_rr_at_arm | 2 | net −64.4 pts |
 | cadence_suppressed | **0** | one cooldown, fast-market-exempted |
 
@@ -748,9 +764,9 @@ Every defect found, with the code path. None was acted on — this audit is read
 | **D14** | `armed_orders.created_at` is stored with a **CT offset** and `updated_at` with **`+00:00` UTC** — same table, same subsystem, two clocks. Reading the raw column makes every arm look ~5h longer-lived than it was |
 | **D15** | `plans.created_at` is **UTC** while `plan_lifecycle_log.at` is **CT** — sibling tables of the same subsystem disagree on the wall clock |
 | **D16** | `planner_read_facts.bias_ai` and `bias_tree` are **empty in all 17 rows**, and `plan_id=''`/`version=0` in all 17 (`persistReadFacts`, `auto_trader_planner.go:2420-2453`). The AI and tree bias labels the dispatch asked for **do not exist in the store** |
-| **D17** | `planner_read_facts` has **zero rows for 2026-09-02** — no `bias_regime` figure of any kind exists for that day (n=0), so 09-02's regime cannot be audited |
-| **D18** | `plan_lifecycle_log` holds **2 rows all-time**; the D3 fix that creates it landed 2026-09-03 17:40:18 CT. 09-03 LONDON v1 went dormant **twice** and neither death nor the re-arm in between is in the database |
-| **D19** | **38 of 52 plan versions** record their trigger as the bare token `level_event` — *which* level woke the planner is never persisted |
+| **D17** | `planner_read_facts` holds **17 rows, all `trade_date='2026-09-03'`** (ids 1–17 contiguous, 00:00:56→20:24:03 CT) and **zero for 09-02** — the table was created with the wave. *Measurement confirmed; the "defect" reading is not supported* — this is a feature that had not shipped on 09-02, so 09-02's regime is simply unrecorded, not lost |
+| **D18** | `plan_lifecycle_log` holds **2 rows all-time** (09-03 ASIA v2 @19:25:00, ASIA v5 @21:21:00 CT); the fix that creates it landed 09-03 17:40:18 CT, so it covers **8 of 51** versions in the window (15.7%, n=51). 09-03 LONDON v1's full history — PLAN 01:34:53 → DORMANT 02:40:00 → REARMED 04:30:55 → DORMANT 08:00:54 → superseded 08:15:44 — is recoverable only from the log file, not the lifecycle table |
+| **D19** | **38 of 51 plan versions** in the window record their trigger as the bare token `level_event` — *which* level woke the planner is never persisted (n=51 versions created 09-02 00:00 CT onward) |
 | **D20** | Until commit `4e901261` (09-03 17:40:18 CT), `UpdatePlanLifecycle` **overwrote `plans.trigger_reason`** with the dormant/flip marker, destroying the authoring trigger. This is why §6's version table shows death markers in the trigger column |
 | **D21** | **`data/nofx_<date>.log` rotates on PROCESS START, not on date.** Position 591's close (09-03 09:20:45 CT) is at line 85591 of **`nofx_2026-09-02.log`**. Any grep scoped by filename silently misses events |
 | **D22** | **`nofx_2026-08-27.log` is 2,049,637,081 bytes** (2.0 GB) against 0.6–13 MB for every other day — 180,139 lines in the first 40 MB are empty-payload `📡 armed order_update frame` spam |
@@ -762,7 +778,7 @@ Every defect found, with the code path. None was acted on — this audit is read
 | **D28** | `WakeCadenceBootLine` (`trader/class47_wake_cadence.go:222`) claims the cutoffs govern `LEVEL_EVENT`/`structure_mss` wakes only, but `maybeWakePlannerOnMSSAt` does not honour that — the boot line misdescribes the running rule |
 | **D29** | `collectLevelWakeCandidates` emits **no log line** when it returns zero candidates (`auto_trader_wake_levels.go:263-265`) and none when the bars provider is nil — a silent wake path |
 | **D30** | Boot-time rev-mismatch `🔐 TRADING REFUSED` fired **twice** in the window (09-02 00:10:21, 09-03 23:11:59) — two cutovers shipped the wrong binary |
-| **D31** | **8 of 21 big-move windows drew no wake line at all**, 6 of them sitting on a plan **190–370 minutes stale** |
+| **D31** | **8 of 21 big-move windows (|15m open→close| ≥ 40 pts) drew no wake line at all.** *The "190–370 min stale" band attached to six of them did not survive verification and is withdrawn* — the 8-of-21 count reproduces independently; the staleness figure does not |
 
 ### Gate defects (added after the D2 pass corrected this audit's first reading)
 
@@ -786,7 +802,10 @@ Every defect found, with the code path. None was acted on — this audit is read
 ## 13. D6 — THE ONE TRADE, in full
 
 **Arm 35 → position 591.** NY S1, short, entry 29285.00, stop 29351.63, target 29144.50.
-Armed 09-03 09:02:54.66 CT, filled 09:05:14, exited 09:20:45 @29355.00, **−140.00**, grade A.
+Armed 09-03 09:02:54.66 CT, exited 09:20:45 @29355.00, **−140.00**, grade A.
+**[A] The stored `entry_time` 09:05:14.627 is the reconcile *materialization* instant, ~81 s after
+the actual fill** (`trader/ninjatrader/reconcile.go:412` sets `EntryTime=nowMs` after a 60 s
+grace) — the true fill is ≈09:03:53. Every `source='reconcile'` row carries this offset (D26).
 
 **Why it was authored.** Plan `2026-09-03:NY` v2 (08:45:05 CT), bias `short`/medium,
 `day_type: "balance"`. Scenario S1 in the plan's own words:
