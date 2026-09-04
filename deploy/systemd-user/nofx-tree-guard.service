@@ -1,0 +1,15 @@
+# TREE GUARD (2026-09-03) — observes the deploy tree, never repairs it.
+# Root-free by design and READ-ONLY by contract: the script runs no writing git
+# command, asserted by a test that greps the script itself.
+[Unit]
+Description=nofx tree guard (observe + alarm, never repair)
+
+[Service]
+Type=oneshot
+ExecStart=/home/hoang/nofx/deploy/nofx-tree-guard.sh --once
+# A guard must never contend with the live bot (same posture as the clock guard
+# and the backup timer). It is also allowed to FAIL: exit 2 means an alarm fired,
+# which systemd should surface, not suppress.
+Nice=10
+IOSchedulingClass=idle
+SuccessExitStatus=0

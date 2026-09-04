@@ -1,0 +1,38 @@
+# Shipped symbols the tree guard asserts are PRESENT in the deploy tree.
+#
+# This is the canary from the 2026-09-02 08:46 incident: an editor Save-All
+# deleted 596 lines across four shipped waves, and a porcelain check alone would
+# have called the tree clean the moment anyone committed that state. Each line
+# here is a symbol whose ABSENCE means a shipped wave has been silently undone.
+#
+# Add a line when a wave ships something whose loss would be invisible. Removing
+# a line is a deliberate act: it means that symbol is genuinely gone by decision,
+# and the removal belongs in the same commit that removes the code.
+#
+# One symbol per line. '#' comments and blank lines ignored.
+
+# class 40 — the corrected-column law
+CorrectedPnL
+UnresolvedExcluded
+
+# 0B — the stop floor and both owner-ruled counters
+composeArmStop
+IncArmRefusal
+IncStopUnanchored
+
+# class 39 — arm-leg normalisation
+normalizeArmLegs
+ArmNormalizations
+
+# class 48 — the one entry gate
+EntryGate
+
+# class 45 — void scope
+VoidScope
+
+# F12 — the broker's order book answers cutover leg 4
+ParseOrderSnapshot
+Leg4FromBrokerAt
+
+# 1D — the expectancy read model
+LoadAndBuildAt

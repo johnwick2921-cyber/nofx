@@ -21,6 +21,33 @@ export const status: GuideSection = {
       kind: 'p',
       text: "The A/B counterfactual table records what a confirm rule WOULD have done. Until 2026-09-03 every short row in it was arithmetic across two price spaces: the replay mirrored stop/target into negative prices so the excursion signs read nicely, while the fill and the stored bracket stayed real — so risk came out as 58 430 instead of 21.50 and RR sat pinned near −1. Measured with direction read from the plan: 121 short rows, 109 with a broken RR; all 67 long rows were always clean. The boot line now states what survives: 'e8: rows=188 usable=55 · unrecomputable fill-bar=54 no-inputs=12'. USABLE is the only count a ruling may rest on. The 54 fill-bar rows keep their numbers and are labelled, because the same bug also broke the close-rule comparison — their fill came from the wrong bar, and clean arithmetic on a wrong fill is a precise answer about the wrong moment.",
     },
+    { kind: 'h', text: 'The tree guard — what watches the deploy tree' },
+    {
+      kind: 'p',
+      text: 'A background check runs every 60 seconds against /home/hoang/nofx and reports four things: is the tree clean, are the shipped safety symbols still present, does deploy/RELEASE agree with the binary that is actually running, and is anything committed but unpushed. It writes a verdict to ~/nofx-backups/tree-guard/state and a line to the user journal (journalctl --user -u nofx-tree-guard.service).',
+    },
+    {
+      kind: 'p',
+      text: 'It exists because on 2026-09-02 an editor Save-All wrote six stale buffers over the deploy tree and deleted 596 lines of shipped safety code across four waves — the stop floor, the corrected-P&L readers, arm-leg normalisation, and the real order-book reader. Nothing detected it. It sat there for three hours and twenty minutes and was found by accident. The tree survived only because nobody happened to build from it in that window.',
+    },
+    {
+      kind: 'callout',
+      title: 'What the guard will never do',
+      items: [
+        {
+          title: 'It never repairs',
+          body: 'It runs no git command that writes — no checkout, restore, reset, stash or clean. A guard that repaired the tree would be a second thing writing to it without being asked, which is exactly the problem it was built to detect. It tells you; you decide. A test greps the script to keep that true.',
+        },
+        {
+          title: 'It does not close the hole',
+          body: 'An editor can overwrite the deploy tree at any moment, and no file in this repo can stop it — the worktree rule and the lock file both govern automated agents, and an editor is not one. The guard shortens discovery from hours to a minute. The actual fix is to stop opening /home/hoang/nofx in an editor and open a worktree instead. That is a habit, not a setting.',
+        },
+        {
+          title: 'A dirty tree is not always an alarm',
+          body: 'A cutover legitimately dirties the tree when it writes the RELEASE file before the swap. If the lock file names a process that is genuinely alive with a fresh heartbeat, that dirt reads as INFO and the files are still listed. A dead process in the lock file does NOT buy silence — that is the signature the guard is looking for.',
+        },
+      ],
+    },
     { kind: 'h', text: 'The boot ledger, line by line' },
     {
       kind: 'code',

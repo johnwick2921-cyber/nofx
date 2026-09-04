@@ -1,0 +1,16 @@
+# Every 60s. A git status on this tree is ~5ms, so the cost is noise; the value
+# is shortening the discovery window for a silent overwrite from HOURS (the
+# 2026-09-02 incident ran 3h20m) to one minute.
+[Unit]
+Description=nofx tree guard — every 60 seconds
+
+[Timer]
+OnBootSec=60s
+OnUnitActiveSec=60s
+# Persistent=false on purpose: a missed window while the machine slept is not
+# interesting, and firing a burst of catch-up runs on wake would only spam.
+Persistent=false
+AccuracySec=15s
+
+[Install]
+WantedBy=timers.target
