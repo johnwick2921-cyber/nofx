@@ -186,7 +186,17 @@ func (s *ArmedOrderStore) UpsertArm(row *ArmedOrderDB) error {
 	// forever, so a legit same-scenario re-arm was impossible and the executor
 	// re-logged the dead row every cycle.
 	var existing ArmedOrderDB
-	err := s.db.Where("plan_id = ? AND scenario = ? AND leg_index = ?", row.PlanID, row.Scenario, row.LegIndex).First(&existing).Error
+	// A LIVE row wins the lookup, then the newest placement.
+	//
+	// This was First() with no ORDER BY, so SQLite returned the lowest rowid —
+	// which, once a first placement had been cancelled, was always the TERMINAL
+	// row. The "terminal row that reached the broker keeps its record" branch
+	// below then fired on every re-authorization and minted a new placement each
+	// cycle: one NY scenario reached 24 rows in 100 minutes and pushed the
+	// cutover gate's leg 4 to "broker 1 vs ledger 23 — MISMATCH". The
+	// record-keeping law was right; the row it was applied to was wrong.
+	err := s.db.Where("plan_id = ? AND scenario = ? AND leg_index = ?", row.PlanID, row.Scenario, row.LegIndex).
+		Order("CASE WHEN state IN ('armed','working') THEN 0 ELSE 1 END, placement_seq DESC, id DESC").First(&existing).Error
 	if err == nil {
 		// D5 — a WORKING row is a LIVE BROKER ORDER. Rewriting its prices in
 		// place overwrote the slot and lost the brackets (rows 582, 585): the
