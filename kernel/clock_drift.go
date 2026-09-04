@@ -149,11 +149,11 @@ func FeedClockDriftMs(symbol string) (int64, bool) {
 
 // ClockHoldDecision is the pure F6 decision: (deferAuthoring, widenMs).
 //
-//   • no measurement        → (false, 0)   fail-open (C2 contract)
-//   • |drift| <  warn       → (false, 0)
-//   • warn ≤ |drift| ≤ tol  → (false, |drift|)  author, windows widened
-//   • |drift| > tol, drift < 0 → (true, |drift|)  authoring deferred
-//   • |drift| > tol, drift > 0 → (false, |drift|) author, windows widened
+//   - no measurement        → (false, 0)   fail-open (C2 contract)
+//   - |drift| <  warn       → (false, 0)
+//   - warn ≤ |drift| ≤ tol  → (false, |drift|)  author, windows widened
+//   - |drift| > tol, drift < 0 → (true, |drift|)  authoring deferred
+//   - |drift| > tol, drift > 0 → (false, |drift|) author, windows widened
 //
 // The asymmetry is deliberate. NEGATIVE drift means the feed labeled bars in
 // the FUTURE — impossible unless the local clock is broken (the 2026-08-30

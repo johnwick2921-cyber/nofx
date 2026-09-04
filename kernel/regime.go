@@ -30,15 +30,15 @@ type RegimeInputs struct {
 
 // RegimeBlock is the computed regime snapshot.
 type RegimeBlock struct {
-	TrendDaily       string  `json:"trend_daily"`  // up | down | flat | n/a
-	Trend1h          string  `json:"trend_1h"`     // up | down | flat | n/a
-	ATR14            float64 `json:"atr14"`        // daily ATR (dATR); 0 = n/a
-	ATRRegime        string  `json:"atr_regime"`   // LOW | NORMAL | HIGH | EXTREME | n/a
-	ATRPercentile    float64 `json:"atr_pctile"`   // 0..100 (−1 = n/a)
-	RealizedVolPct   float64 `json:"rv_pct"`       // recent daily RV%, or recent/baseline%
-	RVWarming        bool    `json:"rv_warming"`   // true → no 20d baseline yet
-	VIXLevel         float64 `json:"vix_level"`    // 0 = unavailable
-	VIXRegime        string  `json:"vix_regime"`   // <15 | 15-20 | 20-30 | >30 | unavailable
+	TrendDaily       string  `json:"trend_daily"` // up | down | flat | n/a
+	Trend1h          string  `json:"trend_1h"`    // up | down | flat | n/a
+	ATR14            float64 `json:"atr14"`       // daily ATR (dATR); 0 = n/a
+	ATRRegime        string  `json:"atr_regime"`  // LOW | NORMAL | HIGH | EXTREME | n/a
+	ATRPercentile    float64 `json:"atr_pctile"`  // 0..100 (−1 = n/a)
+	RealizedVolPct   float64 `json:"rv_pct"`      // recent daily RV%, or recent/baseline%
+	RVWarming        bool    `json:"rv_warming"`  // true → no 20d baseline yet
+	VIXLevel         float64 `json:"vix_level"`   // 0 = unavailable
+	VIXRegime        string  `json:"vix_regime"`  // <15 | 15-20 | 20-30 | >30 | unavailable
 	ExpectedRangePts float64 `json:"expected_range_pts"`
 	OvernightGapATR  float64 `json:"overnight_gap_atr"` // gap / dATR (0 if unavailable)
 	HasGap           bool    `json:"has_gap"`

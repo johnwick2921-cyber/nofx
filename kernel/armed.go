@@ -28,6 +28,7 @@ func ArmableCondition(condition string) bool {
 //   - breakout_retest: the retest level = the scenario's snapped anchor.
 //   - reject: the anchor, offset one tick INTO the trade's favor
 //     (long → anchor − tick, short → anchor + tick).
+//
 // Returns 0 when underivable (no fvg object / no anchor / bad direction).
 func ArmedEntryPx(sc PlanScenario, anchor float64, tick float64) float64 {
 	switch strings.ToLower(strings.TrimSpace(sc.Condition)) {
