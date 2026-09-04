@@ -851,3 +851,50 @@ report's finding is half right and is corrected here rather than left standing.
 - **[B]** Drift rows **D-19** (HTF veto as a dead gate) and **D-22** (weekly F3/F4 as dead gates)
   come from agent units whose adversarial verification had not returned when this report was
   merged. They are marked *pending confirm* rather than asserted, and neither is acted on.
+
+---
+
+## 18. THE DEMOTION QUEUE — one line each (owner-requested)
+
+Read-only. **The owner rules per line; nothing below is a decision.** "What could get through"
+means: what the system refuses **today** that a demotion would let reach the tape.
+
+| # | belief | label **now** | live effect today | demotion means concretely | what could get through |
+|---|---|---|---|---|---|
+| **1** | min-SL ≥ **1.5**×ATR5m + 2-tick clearance | **[R]/[O]** — owner-ruled 2026-09-02, cited `kernel/min_sl.go:10-33` (census's [I] describes the retired 1.0) | **REJECT** at three gates (arm-time, AI-entry, planner WARN) | → **WARN + count**: author it, log it, place it, tally the outcomes | **stops between 1.0× and 1.5×ATR5m** — exactly the **35.00 / 36.50 / 38.00 / 38.50** pt stops the planner authored on 2026-09-04 against floors of **44.59 / 50.73** |
+| **2** | swing seats improve turn capture | **[T]-positive** — census's [X] is a **misread** of `grand-audit.md:73-74` (missed-turns 80.0→65.0%, marked PROVEN ✅) | **weight** — seats levels | → unseat / reduce the seat weight | **nothing is refused.** It changes *which levels seat*, never whether an entry passes |
+| **3** | level-event wakes deserve a re-read | [T]-**weak** — 52 re-plans / 7 days, **7 ever armed** | **full REPLAN trigger, budget-free** (boot 8: `free: … level_event …`) | → **WARN + count**, N=25, advisory until n improves | **nothing is refused.** It *adds* re-plans; it does not block entries |
+| **4** | `BD_MAX_PULLBACK` 0.4 · `BD_MIN_CLOSES` **1** · `BD_MAX_LEVEL_DIST` 5.0 | [I] (pullback, distance) · **[T]** (closes — E3 relaxed 2→1 on displacement quality) | **author-time REJECT** (`breakdown_continue.go:238,258-265`) | → **WARN + count** on the two uncited knobs | **waterfall scenarios with a pullback deeper than 0.4× the leg, or a broken level further than 5.0×ATR5m from price** — refused at write today |
+| **5** | stale-confirm 2.0×ATR5m | **[T]** — n=**2,908** MET confirms, cited `plan_confirm.go:118-123` (census's [I] is stale) | **gate** — a MET confirm beyond the band is voided | → measure stale-MET outcomes before touching it | **arms whose confirm fired ≥2.0×ATR5m from `ref_price`** — ~**37%** of MET confirms by the cited measurement |
+| **6** | `zoneTFMult` + `zoneEvidenceByKind` + freshness/anchor ladders | [I] | **multiplicative weight** on every level grade | → sensitivity sweep **before** any downstream demotion | **nothing is refused directly** — but grade feeds `min_scenario_quality=C`, so a re-weighted level can pull a scenario back above the quality floor |
+| **7** | pre-NY sessions carry edge | **[X]-candidate**, n=6 vs n=3 — **both below any floor** | **enablement** — ASIA + LONDON run | → disable the two sessions | **inverse: demotion REMOVES trades.** Today's only two arm-enabled scenarios were **both LONDON** |
+| **8** | consumed / 3rd-touch → `target_only`, never an entry | [I] | **WARN-only** — `RoleMismatches` (`levels_role.go:443`) emits a string; **no gate reads it** | → add a counter or delete the line | **nothing is refused today.** The census's "role demotion" overstates its teeth |
+| **9** | killzone / premium-FVG window + Monday-down / Thursday-up conviction | [I] — **no citation anywhere in `docs/`** | **advisory prompt lines only** | → add an n counter, or delete | **nothing is refused** |
+
+**[A] Of the nine, only three (1, 4, 5) refuse anything today.** Two (2, 8) carry less teeth than
+the census recorded — one because the label was inverted, one because the "role demotion" is a
+warning string. One (7) would *remove* trades rather than admit them. And two of the three that do
+refuse (1 and 5) are now **cited**, so the demotion the queue asked for is no longer the obvious
+move on either.
+
+---
+
+## 19. LATE FINDING — the arm asymmetry was root-caused and fixed in boot 8
+
+**[A] `kernel/armed.go:19-24` added `reclaim` to the armable set on 2026-09-04**, commit `8f103d1d`
+*"feat(arms D3/B): reclaim arms as a stop-entry; waterfalls stay pullback limits"* (07:48:43 CT —
+42 minutes before boot 8). The code comment names the cause outright:
+
+> *"reclaim added 2026-09-04 by owner ruling (arms-follow-bias, B): it arms as a STOP-ENTRY beyond
+> the reclaim trigger (ArmKindFor). **Until then every long-side play the planner favoured was
+> un-armable, which is why long arm-enablement sat at 4.3% while shorts ran at 44%.**"*
+
+That is the mechanism behind the two-day audit's central finding, fixed. It also explains §7's
+parity reading (20.0% / 20.0% on 09-04) — a mechanism, not a coincidence, though still n=5 per side.
+
+**But the class-38 prompt contract still pins the pre-ruling set.**
+`kernel/prompt_contract.go:63` requires the prompt to contain
+`"legal ONLY on fvg_entry|reject|breakdown_continue|breakup_continue"` — **without `reclaim`** —
+while `planner_prompt.go:731` derives the live armable line *with* it. The guard that exists to
+keep prompt and validator in sync is holding the stale half in place, and still reports
+`19 restrictions, all stated in prompt`. **New drift row D-25, fix owner: code.**
