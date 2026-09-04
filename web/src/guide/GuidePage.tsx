@@ -433,6 +433,10 @@ function BlockView({ block }: { block: GuideBlock }) {
   }
 }
 
+// Both sides truncate to this before comparing: the bot can only ever send a
+// short sha, so a full-length equality test can never succeed.
+const REV_COMPARE_LEN = 12
+
 export function GuidePage() {
   const [query, setQuery] = useState('')
   const [revision, setRevision] = useState<string | undefined>(undefined)
@@ -455,7 +459,20 @@ export function GuidePage() {
     }
   }, [])
 
-  const drift = revision !== undefined && !revision.startsWith(GUIDE_BUILT_REV)
+  // The bot reports kernel.RunningRevision() — shortRev(), 12 chars — while
+  // GUIDE_BUILT_REV is a full sha. `revision.startsWith(GUIDE_BUILT_REV)` is
+  // therefore false even for the SAME commit, which left the banner on
+  // permanently and made it worth nothing. Compare on the short prefix both
+  // sides can actually produce.
+  //
+  // An empty revision means the boot assertion has not run yet: the bot does
+  // not know its own rev, which is not the same as disagreeing with it. Claim
+  // drift only when there is a revision to disagree with.
+  const drift =
+    revision !== undefined &&
+    revision !== '' &&
+    revision.slice(0, REV_COMPARE_LEN) !==
+      GUIDE_BUILT_REV.slice(0, REV_COMPARE_LEN)
 
   return (
     <div
