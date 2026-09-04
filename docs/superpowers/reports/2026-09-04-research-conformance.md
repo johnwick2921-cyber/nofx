@@ -573,3 +573,92 @@ conditions. **CONFORMS.**
 **The dispatch's "round 3 (touch vs 2x5m cost)" source could not be located** — there is no
 `round 3` document on dev (premise P3). The confirm-cost forensics report is the nearest named
 measurement and is what this row is checked against.
+
+---
+
+## 13. THE C TABLE — every live rule, grouped by subsystem
+
+Resolved values are from the boot-8 lines or the resolver path. `report:line` grounds the label.
+`callers` is A29: a rule with 0 production callers is DEAD.
+
+### 13.1 Entry gate (`trader/entry_gate.go`)
+
+| leg | rule | file:line | resolved now | label | grounding | effect | CONFORMS | callers |
+|---|---|---|---|---|---|---|---|---|
+| 0 | strict — plan scenarios execute on the ARM path only | `:162-172` | `plan_mode = strict` (saved on strategy `a5b7662e`) | [O] | knob census / owner | **REJECT** — refuses every decision-path market entry | **NO** — see drift D-1 | 2 (`auto_trader_orders.go:333`, `armed_executor.go:495`) |
+| 1 | entry against plan bias | `:176-184` | **inert** — guarded by `PlanMode=="direction"`, live mode is `strict` | [I] | census A-none | REJECT (when direction) | yes (inert) | 2 |
+| 2 | class-48 scenario-direction mismatch | `:186-196` | live | [O] | class 48 | REJECT | yes | 2 |
+| 3 | invalidation-wired | `:199-220` | `invalidation-wired=on`, **ARM PATH ONLY**; unresolved ⇒ leg PASSES | [O] 2026-09-03 | boot line | REJECT (arm) | yes | 2 |
+| 4 | shadow (0C) | `:234` | shadow = `breakout_retest`, `fvg_entry` | [R] | fvg-entry-model → 0C demotion (INDEX.md) | REJECT if cited | yes | 2 |
+| 5 | R:R at execution price | `:257` | floor **2.0** (`min_risk_reward_ratio`, *saved*, not default 3.0) | [T] | census B8: n=18 +$994 | REJECT | yes | 2 |
+| 6 | min-SL at execution | `:268` | `1.5×ATR5m` + 2 ticks | **[I]** | census B6 | REJECT | **NO** — see drift D-2 | 2 |
+| 7 | one_open_position | `:280` | ON, hardcoded, no knob | [O] 2026-09-03 | owner ruling | REJECT | yes | 2 |
+| — | no-chase callback | `trader/no_chase.go:145` | `max_dist=1.00×ATR max_run=1.5×ATR5m` **mode=warn** | **[I]** *(self-declared "PROVISIONAL" in the boot line)* | boot line | **WARN-only** | yes — warn matches its label | 1 |
+
+### 13.2 Arms (`trader/armed_executor.go`)
+
+| rule | file:line | resolved | label | effect | CONFORMS | callers |
+|---|---|---|---|---|---|---|
+| arm R:R floor | `:415` `armGateVerdictFor` | **2.0** | [T] census B8 (n=18) | gate | yes | 1 |
+| `armGateVerdict` (legacy shape) | `:1268` | — | [M] | — | **DEAD — 0 production callers**, all 8 sites in `armed_executor_test.go` | **0 — DEAD** |
+| place band | `:935` | `100t` | [I] | placement window | unlabelled | 1 |
+| stale-working reaper | `:1019-1034` | **15m** | [I] | cancels a working arm | see drift D-5 | 1 (`:940`) |
+| marketable wrong-side guard | `:918-924`, `:947-960` | on | [R] 08-30 incident (census B9) | cancel-before-place | yes | 1 |
+| UpsertArm re-authorize on version bump | `store/armed_orders.go:155,212` | on | [R] 08-30 incident (census B10) | ledger | yes | — |
+| arm normalizer (class 39) | boot line | legs on non-sweep → single arm + WARN | [O] | WARN | yes | — |
+| bias coherence | `kernel/arms_bias_coherent.go:74` | returns a warning string | [M] | **WARN-only** | yes | — |
+| re-arm after sweep | boot: `re-arm-after-sweep=on` | on | [O] 0B | lifecycle | yes | — |
+
+### 13.3 Exits / 0B
+
+| rule | file:line | resolved | label | grounding | effect | CONFORMS |
+|---|---|---|---|---|---|---|
+| stop composition | `main.go:335` (boot) | `max(anchor+clr, 1.5×ATR5m)`, `anchor_max=3.0×ATR5m` | **[I]** | census B6 | REJECT/compose | **NO** — §2 |
+| breakeven | boot: `BE=off` | **OFF** | **[O]** | census E1 (owner-ruled ON at +40pt) | exit | **NO** — drift D-3 |
+| trailing | boot: `trail=off` | **OFF** | **[O]** | census E2 (owner-ruled 2.0×ATR14) | exit | **NO** — drift D-3 |
+| position size | boot: `size=1` | 1 contract | [O] 0B | sizing | yes |
+| EOD flat | `kernel/session_registry.go:78-82` | NY 14:45 CT | [O] | census E3 | gate | yes |
+| flip/death → dormant + auto re-arm | boot | on | [O] | census E4 | lifecycle | yes |
+
+### 13.4 Validator / entry law
+
+| rule | file:line | resolved | label | effect | CONFORMS |
+|---|---|---|---|---|---|
+| per-condition entry law (9 conditions) | `kernel/entry_law.go:38-77`, enforced `:133` | see §12 | [O] `:22` | **REJECT at write** | yes |
+| `fade_requires_touch` | `:151-155` | live | [O] | REJECT | yes |
+| `2x5m_reserved` | `:157`, `:87` | live | [O] | REJECT | yes |
+| breakdown displacement | `kernel/breakdown_continue.go:265` | `BD_MIN_DISP_ATR` | [T] census B1 (waterfall replay +$243) | REJECT | yes |
+| breakdown confirming closes | `:60-66` | **`BD_MIN_CLOSES = 1`** (was 2) | [T] E3 2026-08-30 | REJECT | yes — value moved with a stated reason |
+| breakdown reclaim voids | `:258` | live | [O] census B3 | REJECT | yes |
+| stale-confirm | `kernel/plan_confirm.go:124` | **2.0×ATR5m** | **[T]** — in-code citation, n=2,908 | gate | yes — **census label [I] is now stale** |
+| prompt/validator contract | `kernel/prompt_contract.go` | **19 restrictions**, all stated in prompt | [M] class 38 | REJECT on drift | yes |
+
+### 13.5 Levels / detector
+
+| rule | resolved | label | effect | CONFORMS |
+|---|---|---|---|---|
+| seats | `seats=8` | [I] | filter | unlabelled-by-research |
+| proximity band | `cfg` retuned **0.3** | [O] (P2 keep) | filter | yes |
+| zone ladder | `1.0/0.6/0.3/0.15` | [I] | weight | pending sweep (queue #6) |
+| family confluence | `cap=3` | [I] | weight | pending |
+| **swing seats** | seated | **[X]** — `grand-audit.md:74`, −15pts on own tape | **weight** | **NO** — drift D-4 |
+| roles (consumed/3rd-touch → target_only) | `roles=on(overrides=false)` | [I] | role demotion | queue #8, data now exists |
+| touch telemetry | `band=16t max_bars=12 approach=5` | [I] | **advisory, zero gates** | yes |
+| **D1′ detector** | `k=3 H=12 exit_on=close`; 359 outcomes / 192 pool | [M] | **descriptive only — 0 gate readers** | **yes** (§5) |
+
+### 13.6 Cadence / wakes · Guardrails · Sessions
+
+| rule | resolved | label | effect | CONFORMS |
+|---|---|---|---|---|
+| wake cutoff | **25m (enforce)** | [O] class 47 | gate on LEVEL_EVENT/MSS | yes — but **0 suppressions in 3 days** |
+| wake cooldown | **30m (enforce)**, fast-market ≥1.5×ATR exempt | [O] | gate | yes — 0 firings today |
+| `wake_min_interval_min` | 30 | [I] | the real throttle — **11 skips today** | unlabelled |
+| level_event as a replan trigger | budget-**free**, full REPLAN | **[T]-weak** census E5 (52 re-plans/7d, 7 armed) | REPLAN | **NO** — drift D-6 (queue #3 not done) |
+| change-based predicate (stage 4) | **not implemented** | — | — | **NOT STARTED** (§10) |
+| guardrails master | **OFF** | [O] | — | **NO** — drift D-7 |
+| daily loss $450 / daily profit $900 / max_daily_trades 3 / contracts 2 / notional / blackout | all **`*_enabled: false`** *and* master off | [O] | inert | matches the MC rig's "inert"; **corrects its "forfeits $24.54/day"** |
+| `min_confidence` | **60** (saved) | [O] | REJECT | yes |
+| sessions ASIA/LONDON/NY | 17:00→02:00 / 02:00→08:30 / 08:30→14:45 CT | [O] | gate | yes |
+| **pre-NY sessions carry edge** | ASIA+LONDON run | **[X]**-candidate (0/6 −$353.5 vs NY 3/3 +$177) | enablement | **NO** — drift D-8 |
+| no-trade band | first 5m · lunch 12:00–13:30 CT (code constants) | [O] | gate | yes |
+| void scope | session-day window · 1m×2000 · **one resolver for prompt AND validator** | [M] | parity | yes |
