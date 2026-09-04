@@ -170,6 +170,28 @@ and neither could see the other. The probe costs nothing — `git log -1 -- <spe
 your worktree's base before building on it. It is the same family as class 70 itself: a
 value read once, at a moment nobody recorded.
 
+## 4c. The class-45 stash, disarmed (class 71)
+
+Recorded here because it was found while checking this wave: `stash@{0}` held the class-45
+VS Code revert — 127 insertions, **596 deletions** of shipped safety code — and `git stash`
+is per-REPOSITORY, so any of this repo's 56 worktrees could pop it. nofx-47 did, by routine
+stash/pop; three files applied CLEANLY and staged, deleting the class-33 boot sweep.
+
+**The annotated tag `class45-found-revert-1203` is what makes a drop lossless** — it
+references `6b770196`, so removing the stack entry cannot let gc collect the object. The
+human-readable copy at `docs/superpowers/reports/class45-found-revert-1203.patch.txt` is a
+convenience, not the guarantee.
+
+I got that wrong once and it is worth keeping: I first committed the copy as `.patch`,
+`.gitignore:143` (`*.patch`) silently swallowed it, and I reported both halves as landed
+having verified neither. nofx-47 caught it by reading `dev` rather than my report. **A tool
+that skips silently and a report that asserts success are the same failure twice** — the
+rule this checklist already states as "read the value back out of the artifact".
+
+**The stash entry itself is deliberately NOT dropped.** It is another lane's evidence,
+dropping is destructive, and it is the owner's call; the tag makes that drop safe whenever
+they want it.
+
 ## 5. What this does not fix
 
 - **An owner who resumes under a new identity** still has to re-acquire or beat. The
