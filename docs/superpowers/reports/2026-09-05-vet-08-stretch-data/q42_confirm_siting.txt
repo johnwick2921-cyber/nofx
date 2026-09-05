@@ -1,0 +1,6 @@
+confirmed        n=18  p25 0.63  median 1.23  p75 1.78  (xATR5m at version birth)
+never-confirmed  n=45  p25 1.85  median 2.97  p75 5.61  (xATR5m at version birth)
+Mann-Whitney U1=190.5 z=-3.26 two-sided p=0.0011
+confirm rate, ref <=1.5xATR: 11/20 = 55.0% Wilson [34.2, 74.2]
+confirm rate, ref  >1.5xATR: 7/43 = 16.3% Wilson [8.1, 30.0]
+version LIFETIME (inter-version gaps in the window) n=50 median 30.4 min  mean 59.4 min

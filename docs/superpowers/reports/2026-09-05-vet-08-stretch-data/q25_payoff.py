@@ -1,9 +1,17 @@
 import sqlite3, math, json, datetime
 c=sqlite3.connect('file:/home/hoang/nofx/data/data.db?mode=ro', uri=True)
 era=int(datetime.datetime(2026,8,15,5,0).timestamp()*1000)
-rows=c.execute("""SELECT id, source, side, entry_price, exit_price, entry_time, pnl_corrected, mae, mfe, plan_session, entry_order_id
- FROM trader_positions WHERE entry_time>=? AND source<>'e7_farside_test' AND pnl_corrected IS NOT NULL ORDER BY entry_time""",(era,)).fetchall()
-n=len(rows); print("usable era rows n=",n, "(era>=2026-08-15 00:00 CT, excl e7_farside_test, excl pnl_corrected NULL)")
+# REVISION 2026-09-05: the standing rules require plan_id='UNRESOLVABLE' excluded
+# too. Primary figures are the COMPLIANT population; the broader cut is printed
+# below it as a labelled sensitivity only.
+Q="""SELECT id, source, side, entry_price, exit_price, entry_time, pnl_corrected, mae, mfe, plan_session, entry_order_id
+ FROM trader_positions WHERE entry_time>=? AND source<>'e7_farside_test' AND pnl_corrected IS NOT NULL {extra} ORDER BY entry_time"""
+rows=c.execute(Q.format(extra="AND plan_id<>'UNRESOLVABLE'"),(era,)).fetchall()
+broad=c.execute(Q.format(extra=""),(era,)).fetchall()
+unres=c.execute("SELECT id,pnl_corrected FROM trader_positions WHERE entry_time>=? AND source<>'e7_farside_test' AND pnl_corrected IS NOT NULL AND plan_id='UNRESOLVABLE' ORDER BY id",(era,)).fetchall()
+n=len(rows); print("COMPLIANT era rows n=",n, "(era>=2026-08-15 00:00 CT; excl e7_farside_test, pnl_corrected NULL, plan_id='UNRESOLVABLE')")
+print("excluded plan_id='UNRESOLVABLE':", len(unres), "ids", [u[0] for u in unres], "sum %.2f"%sum(u[1] for u in unres))
+print("broader 65-row cut (SENSITIVITY ONLY) n=", len(broad))
 excl=c.execute("SELECT COUNT(*) FROM trader_positions WHERE entry_time>=? AND source<>'e7_farside_test' AND pnl_corrected IS NULL",(era,)).fetchone()[0]
 print("excluded NULL pnl_corrected:",excl)
 w=[r[6] for r in rows if r[6]>0]; l=[r[6] for r in rows if r[6]<0]; z=[r for r in rows if r[6]==0]
@@ -45,3 +53,9 @@ for a in arms:
     risk=abs(a[2]-a[3]); rew=abs(a[4]-a[2])
     if risk>0: rr.append(rew/risk)
 rr.sort(); print("arms with geometry n=%d planned R:R median %.2f min %.2f max %.2f"%(len(rr), rr[len(rr)//2], rr[0], rr[-1]))
+
+# sensitivity line on the broader 65-row cut
+wb=[r[6] for r in broad if r[6]>0]; lb=[r[6] for r in broad if r[6]<0]
+print("SENSITIVITY (65-row cut, includes the 7 UNRESOLVABLE): wins %d losses %d sum %.2f win rate %d/%d = %.4f avgW %.2f avgL %.2f payoff %.3f"%(
+  len(wb),len(lb),sum(r[6] for r in broad),len(wb),len(wb)+len(lb),len(wb)/(len(wb)+len(lb)),
+  sum(wb)/len(wb), -sum(lb)/len(lb), (sum(wb)/len(wb))/(-sum(lb)/len(lb))))

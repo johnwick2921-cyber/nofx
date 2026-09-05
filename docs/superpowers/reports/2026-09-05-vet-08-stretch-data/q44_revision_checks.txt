@@ -1,0 +1,100 @@
+== compliant era population ==
+58|-466.43|-8.0419
+== the 7 UNRESOLVABLE era rows excluded ==
+530|system|13.0
+539|system|-84.5
+545|system|-29.5
+546|system|-88.5
+566|reconcile|97.0
+571|reconcile|-44.5
+580|reconcile|39.5
+== armed_orders ids 5-37: 33 rows, 2 TEST-E7 seams (15,16) ==
+33|2|6|9
+== 09-04 arms by state/reason (superseded ids are EVEN) ==
+armed||2|104,105
+cancelled|boot_sweep: pre-boot order, proces|8|87,89,91,93,95,97,99,101
+cancelled|cancelled in NT8|1|102
+cancelled|gate changed: rr|5|38,62,65,67,70
+cancelled|no active plan|2|100,103
+cancelled|no order_update within stale windo|8|39,73,75,77,79,81,83,85
+superseded|superseded: never placed (no signa|4|92,94,96,98
+== wait buckets 37078-37169 ==
+37078-37090 n=13 wait=13
+37091-37098 n=8 wait=8
+37099-37123 n=25 wait=25
+37124-37141 n=18 wait=18
+37142-37169 n=28 wait=28
+== ab_confirm_log net_pnl, BOTH clocks ==
+created_ct 2026-08-30|7|0.0
+created_ct 2026-08-31|23|0.0
+created_ct 2026-09-01|53|-1284363.66
+created_ct 2026-09-02|84|-2567461.76
+created_ct 2026-09-03|27|-233518.78
+created_ct 2026-09-04|29|-453.4
+plan_td 2026-08-30|7|0.0
+plan_td 2026-08-31|23|0.0
+plan_td 2026-09-01|60|-1284357.76
+plan_td 2026-09-02|82|-2800918.94
+plan_td 2026-09-03|25|-58.0
+plan_td 2026-09-04|26|-462.9
+169|2026-09-03 00:10:56.718602719-05:00|14|-116697.28
+171|2026-09-03 00:10:56.719022916-05:00|14|-116754.0
+== nt8_order_snapshots: still growing on 09-05 ==
+5446|4462|2026-09-05 18:07:48|263|3008
+== snapshot working_count ladder around the peak ==
+1604|2026-09-04 10:40:01|9
+1605|2026-09-04 10:40:01|9
+1606|2026-09-04 10:40:01|9
+1607|2026-09-04 10:40:01|9
+1608|2026-09-04 10:40:01|9
+1609|2026-09-04 10:40:01|8
+1610|2026-09-04 10:40:08|8
+1611|2026-09-04 10:40:38|8
+1612|2026-09-04 10:41:08|8
+1613|2026-09-04 10:41:38|8
+1614|2026-09-04 10:42:01|9
+1615|2026-09-04 10:42:01|9
+== 09-04 hourly (the 07:00 hour is -135.75 open-to-close, 218 range) ==
+07|29682.25|29720.0|29502.0|29546.5
+08|29546.5|29692.0|29523.0|29691.25
+09|29691.0|29691.25|29498.5|29520.75
+10|29520.5|29543.5|29477.75|29515.25
+11|29514.75|29596.0|29504.0|29575.75
+== 09-03 NY v3-v7 scenarios: 10 longs, not 11 ==
+3|S1|long|reclaim
+3|S2|short|reject
+3|S3|short|reject
+3|S4|long|sweep_reclaim
+4|S1|long|breakout_retest
+4|S2|long|breakout_retest
+4|S3|long|reclaim
+5|S1|long|reclaim
+5|S2|short|reject
+6|S1|long|reclaim
+6|S2|long|reject
+6|S3|short|reject
+7|S1|long|breakout_retest
+7|S2|long|reclaim
+7|S3|short|reject
+== breakup_continue has NEVER been authored (0 of 254 plans) ==
+reject|234
+sweep_reclaim|186
+breakout_retest|124
+hold|72
+reclaim|63
+acceptance|56
+breakdown_continue|3
+== position 591: broker stop == fill; the 3.37 'slip' is ledger drift ==
+591|29355.0
+35|29351.6284728996|2026-09-03 15:28:29.204123431+00:00
+  NT8 log 09-03 09:02:54 submitted entry ... (SL=29355 TP=29144.5 on fill)
+  NT8 log 09-03 09:03:53 Name='...-sl' Limit price=0 Stop price=29355 Type='Stop Market'
+== 09-03 empty-book window: 09:20 close -> 11:58 close/high ==
+2026-09-03 09:20:00|29343.5|29360.0|29342.25|29348.0
+2026-09-03 09:59:00|29339.5|29367.75|29338.0|29363.25
+2026-09-03 11:58:00|29539.25|29548.0|29530.5|29532.0
+29548.0|29246.0
+== IB high 08:30-09:29 09-03 ==
+29375.25|29199.25
+== WSL2 drifting clocks (read again during the revision) ==
+  uptime -s / /proc/stat btime slide with no reboot; systemctl is the stable record.

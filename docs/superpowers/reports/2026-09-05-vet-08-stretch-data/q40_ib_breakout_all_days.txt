@@ -1,0 +1,17 @@
+2026-08-19 SKIP (IB bars 0)
+2026-08-20  short fill 10:25 @29304.25  ATR 57.94 stop 29391.16 tgt 29130.43 -> flat      -2.25 at 14:45
+2026-08-21  long  fill 10:51 @29472.75  ATR 39.10 stop 29414.10 tgt 29590.05 -> stop     -58.65 at 11:05
+2026-08-23 SKIP (IB bars 0)
+2026-08-24  no IB break (IBH 29243.75 IBL 28947.75)
+2026-08-25  short fill 09:30 @29209.00  ATR 41.62 stop 29271.43 tgt 29084.15 -> stop     -62.43 at 09:39
+2026-08-26  long  fill 14:00 @29333.50  ATR 19.84 stop 29303.74 tgt 29393.02 -> flat     -20.75 at 14:45
+2026-08-27  long  fill 10:07 @29622.50  ATR 50.17 stop 29547.25 tgt 29773.00 -> stop     -75.25 at 10:43
+2026-08-28  long  fill 09:38 @29707.75  ATR 50.67 stop 29631.74 tgt 29859.76 -> stop     -76.01 at 10:48
+2026-08-30 SKIP (IB bars 0)
+2026-08-31  no IB break (IBH 29517.00 IBL 29354.00)
+2026-09-01  long  fill 09:30 @29179.25  ATR 37.23 stop 29123.40 tgt 29290.95 -> target  +111.70 at 10:45
+2026-09-02  long  fill 09:34 @29194.25  ATR 37.13 stop 29138.56 tgt 29305.63 -> stop     -55.69 at 09:53
+2026-09-03  long  fill 10:00 @29375.50  ATR 50.63 stop 29299.55 tgt 29527.40 -> target  +151.90 at 10:29
+2026-09-04  short fill 09:42 @29553.50  ATR 39.97 stop 29613.46 tgt 29433.58 -> flat     +22.00 at 12:19
+
+n=10 breaks (2 no-break days). W 3 / L 7  sum -65.43 pts  mean -6.54 pts/trade = $-13/trade

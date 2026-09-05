@@ -1,0 +1,83 @@
+td          session  v   born_ct              day_type           bias   
+----------  -------  --  -------------------  -----------------  -------
+2026-08-20  NY       1   2026-08-20 08:28:09  balance            short  
+2026-08-20  NY       2   2026-08-20 08:47:52  trend              short  
+2026-08-21  NY       1   2026-08-21 08:29:29  trend-down         short  
+2026-08-25  NY       1   2026-08-25 08:35:00  trend              long   
+2026-08-25  NY       2   2026-08-25 09:36:32  trend              short  
+2026-08-26  NY       1   2026-08-26 08:32:30  trend_down         short  
+2026-08-26  NY       2   2026-08-26 08:48:28  balance            long   
+2026-08-26  NY       3   2026-08-26 09:24:07  balance            short  
+2026-08-26  NY       4   2026-08-26 09:35:45  balance            short  
+2026-08-26  NY       5   2026-08-26 10:04:46  balance            long   
+2026-08-26  NY       6   2026-08-26 10:09:28  balance            neutral
+2026-08-26  NY       7   2026-08-26 10:44:42  balance            long   
+2026-08-26  NY       8   2026-08-26 11:15:53  no-trade           neutral
+2026-08-27  NY       1   2026-08-27 08:47:04  no-trade           neutral
+2026-08-27  NY       2   2026-08-27 10:00:52  no-trade           neutral
+2026-08-27  NY       3   2026-08-27 11:31:06  premium_rejection  short  
+2026-08-27  NY       4   2026-08-27 13:50:22  balance            short  
+2026-08-27  NY       5   2026-08-27 14:04:28  balance            long   
+2026-08-28  NY       1   2026-08-28 08:33:59  balance            neutral
+2026-08-28  NY       2   2026-08-28 08:49:08  trend              long   
+2026-08-28  NY       3   2026-08-28 09:20:49  trend-down         short  
+2026-08-28  NY       4   2026-08-28 10:51:47  balance            short  
+2026-08-28  NY       5   2026-08-28 12:05:44  balance            long   
+2026-08-28  NY       6   2026-08-28 12:59:59  balance            long   
+2026-08-28  NY       7   2026-08-28 13:08:51  balance            neutral
+2026-09-01  NY       1   2026-09-01 08:06:46  trend-down         short  
+2026-09-01  NY       2   2026-09-01 08:53:16  trend-down         short  
+2026-09-01  NY       3   2026-09-01 09:20:44  trend-down         short  
+2026-09-01  NY       4   2026-09-01 10:24:39  trend              short  
+2026-09-01  NY       5   2026-09-01 13:00:02  trend              short  
+2026-09-02  NY       1   2026-09-02 08:09:44  balance            neutral
+2026-09-02  NY       2   2026-09-02 08:45:28  balance            long   
+2026-09-02  NY       3   2026-09-02 09:21:18  balance            long   
+2026-09-02  NY       4   2026-09-02 09:45:52  balance            long   
+2026-09-02  NY       5   2026-09-02 10:22:33  balance            long   
+2026-09-02  NY       6   2026-09-02 10:50:53  trend              long   
+2026-09-02  NY       7   2026-09-02 11:20:19  balance            long   
+2026-09-02  NY       8   2026-09-02 11:47:10  balance            long   
+2026-09-02  NY       9   2026-09-02 12:25:10  balance            long   
+2026-09-02  NY       10  2026-09-02 13:02:15  balance            long   
+2026-09-02  NY       11  2026-09-02 13:28:36  balance            long   
+2026-09-02  NY       12  2026-09-02 13:56:59  balance            long   
+2026-09-03  NY       1   2026-09-03 08:05:19  balance            short  
+2026-09-03  NY       2   2026-09-03 08:45:05  balance            short  
+2026-09-03  NY       3   2026-09-03 09:15:31  trend              long   
+2026-09-03  NY       4   2026-09-03 09:44:33  trend              long   
+2026-09-03  NY       5   2026-09-03 10:14:45  trend              long   
+2026-09-03  NY       6   2026-09-03 10:49:57  trend              long   
+2026-09-03  NY       7   2026-09-03 11:27:53  trend              long   
+2026-09-04  NY       1   2026-09-04 08:11:45  no-trade           neutral
+2026-09-04  NY       2   2026-09-04 08:44:46  balance            long   
+2026-09-04  NY       3   2026-09-04 08:55:11  balance            short  
+2026-09-04  NY       4   2026-09-04 11:03:30  balance            short  
+2026-09-04  NY       5   2026-09-04 11:28:50  balance            short  
+2026-09-04  NY       6   2026-09-04 12:10:35  balance            short  
+day_type                       n  
+-----------------------------  ---
+balance                        135
+trend                          55 
+no-trade                       36 
+trend-down                     18 
+trend_down                     5  
+premium_rejection              1  
+premium-fade                   1  
+balance/breakdown attempt      1  
+balance (short-lean pullback)  1  
+                               1  
+
+VERDICT (applied by hand against q40's fill instants):
+  08-20 short break 10:25 -> NY v2 (08:47) trend / short          QUALIFIES   -2.25 pts
+  08-21 long  break 10:51 -> NY v1 (08:29) trend-down / short     bias mismatch
+  08-25 short break 09:30 -> NY v1 (08:35) trend / long           bias mismatch
+  08-26 long  break 14:00 -> NY v8 (11:15) no-trade / neutral     not trend
+  08-27 long  break 10:07 -> NY v2 (10:00) no-trade / neutral     not trend
+  08-28 long  break 09:38 -> NY v3 (09:20) trend-down / short     bias mismatch
+  09-01 long  break 09:30 -> NY v3 (09:20) trend-down / short     bias mismatch (+111.70 DISCARDED)
+  09-02 long  break 09:34 -> NY v3 (09:21) balance / long         not trend
+  09-03 long  break 10:00 -> NY v4 (09:44) trend / long           QUALIFIES  +151.90 pts
+  09-04 short break 09:42 -> NY v3 (08:55) balance / short        not trend
+  => 2 qualifying fires in 12 tape-days = 0.17/day. n>=30 needs ~180 trading days.
+     A branch on the literal string 'trend' also misses 'trend-down'/'trend_down' (23 plans).
