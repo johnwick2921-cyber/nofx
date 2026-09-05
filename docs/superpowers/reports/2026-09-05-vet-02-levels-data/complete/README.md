@@ -14,7 +14,7 @@ python3 /home/hoang/nofx-analysis/vet-02-complete-0905/verify_details.py
 
 `audit.py` opens `file:/home/hoang/nofx/data/data.db?mode=ro`, enables `PRAGMA query_only=ON`, and uses a read transaction. No store initialization, gate-jwt, writable database connection or runtime/order operation. It records raw inputs and outputs. `verify_details.py` uses the same read-only settings, exact plan versions and explicit reference-matching rules. **Run only from authorized scratch, not by writing outputs into a live application directory.** Neither script needs a network connection or API token.
 
-`summarize.py` is fully offline against the saved JSON inputs; it recreates `evidence.txt` and `inventory.md`. The complete reference snapshot is preserved in `source_snapshot.txt` as `repo/path:line text`. All code references in the report refer to the pinned source base, not future dev lines. JSON files are formatted to keep their record IDs inspectable. `SHA256SUMS` verifies the frozen bundle.
+`summarize.py` is fully offline against the saved JSON inputs; it recreates `evidence.txt` and `inventory.md`. The complete reference snapshot is preserved in `source_snapshot.txt` as `repo/path:line text` (trailing whitespace normalized). All code references in the report refer to the pinned source base, not future dev lines. JSON files are formatted to keep their record IDs inspectable. `SHA256SUMS` verifies the frozen bundle.
 
 | Artifact | Purpose |
 |---|---|
