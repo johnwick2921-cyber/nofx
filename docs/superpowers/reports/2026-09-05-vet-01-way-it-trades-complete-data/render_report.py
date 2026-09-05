@@ -1,4 +1,24 @@
-# Section 1 — The way it trades: complete corrected audit
+import csv,json,statistics as st,math
+from pathlib import Path
+D='2026-09-05-vet-01-way-it-trades-complete-data'
+s=json.load(open('summary.json'));u=json.load(open('supplement.json'));stats=list(csv.DictReader(open('trade_stats.csv')));touch=list(csv.DictReader(open('touch_stats.csv')));proxy=list(csv.DictReader(open('excursion_proxies.csv')))
+def fmt(x):return '—' if x in ['',None] else f'{float(x):,.2f}'
+def wr(r):
+ if not r['win_rate']:return '— (0 decided)'
+ return f"{100*float(r['win_rate']):.1f}% [{100*float(r['wilson_lo']):.1f}, {100*float(r['wilson_hi']):.1f}]"
+def table(dim,includeR=False):
+ h='| Cell | n; W/L/F | Corrected $ sum | Mean $ | Win/decided; Wilson 95% |'+(' R n; mean |' if includeR else '')+' Evidence |\n|---|---:|---:|---:|---|'+('---|' if includeR else '')+'---|\n'
+ for idx,r in enumerate(stats,2):
+  if r['dimension']!=dim:continue
+  h+=f"| {r['cell']} | {r['n']}; {r['W']}/{r['L']}/{r['F']} | {fmt(r['sum_usd'])} | {fmt(r['mean_usd'])} | {r['W']}/{r['win_decided']}; {wr(r)} |"+(f" {r['R_n']}; {fmt(r['R_mean'])} |" if includeR else '')+f" D/trade_stats.csv:{idx} |\n"
+ return h
+def mae_note(u):
+ rows=u['zero_mae_sensitivity']['rows']
+ out="\n**Uncertain historical zero MAE.** Eligible winners **569 and 584** are reconcile rows with recorded MAE=0. I do not interpret these as measured absence of adverse movement. The historical `ComputeExcursion` starts at zero, can skip the fill-containing bar, and returns zero when no bars contribute (`kernel/mae_mfe.go:24`); before E4, `trader/auto_trader_clock.go` wrote that result without a computed-status check (parent of commit `d4aee04a`, lines 738–739). Current `trader/auto_trader_clock.go:752`–759 already uses `ComputePathExcursion` and leaves uncomputed values NULL. That fix is shipped. The raw proxies above remain unchanged; I separately exclude only these two uncertain MAE zeros:\n\n| Group | Treatment | MAE n | MAE p50 / p80 / p95, pts | Evidence |\n|---|---|---:|---|---|\n"
+ for i,r in enumerate(rows,2):
+  out+=f"| {r['group']} | {r['mode']} | {r['n']} | {fmt(r['mae_p50'])} / {fmt(r['mae_p80'])} / {fmt(r['mae_p95'])} | D/zero_mae_sensitivity.csv:{i} |\n"
+ return out+"\nThe sensitivity does not repair either trade's unknown MAE or establish which other historical proxies are fully computed. Both winner samples and the adjusted reject MAE sample have n<30: **NO VERDICT**. The primary trade population remains 58; its P&L, held-time and RV results are unchanged. Neither raw nor sensitivity MAE justifies tightening stops, preserving every winner, or judging the floor from a presumed zero-adverse subset. The actual ordered/coverage-verified excursion distribution remains **UNMEASURABLE**. [T/A/I]\n"
+text=f'''# Section 1 — The way it trades: complete corrected audit
 
 **One-page summary — 2026-09-05.** I judge the historical method **UNVERIFIED for a positive edge** and the enforced strict method **EVENT-WAIT: no realized entry after its first enforced boot**. I would retain one-contract SIM research. I do not claim professional trading experience: every [I] below is my analytical judgment, untested here. [T] denotes this tape; [R] denotes the specifically cited external study, with its transfer limits. [A] is directly inspected code or source evidence.
 
@@ -22,7 +42,7 @@ I own **Section 1 only**. Parent owns Section 9 integration. Branch `docs/vet-01
 
 **This report replaces the old Section 1 prose and all of its recommendations.** Its old data folder remains a historical audit trail, not an active source. In particular, the old 65-row statistics, 14-calendar-day count, 370-touch primary identity, fitted MFE p60 target, ATR-as-ceiling proposal, impossibility claim and invented biography are superseded. I have not changed any trading code, configuration, database, runtime, prompt or order. No production token helper was run. After the parent update I also checked origin/dev **23b9f99e**: the relevant kernel/trader/store/provider/NinjaScript code is unchanged from b4376246. The instructed origin/dev base takes precedence over the checklist's running-revision worktree convention; code claims below name this base and do not imply deployed settings.
 
-**D** in a citation expands to `docs/superpowers/reports/2026-09-05-vet-01-way-it-trades-complete-data/`. Every aggregate CSV row carries all of its position IDs or touch-key IDs; every touch key lists all contributing raw row IDs. Plans are identified by SQLite rowid plus `(plan_id, version, scenario)`. Bars retain rowid and `(symbol, tf, open_time_ms, convention)`. `inputs.json.gz` preserves the selected raw inputs and extraction SQL, including broker record file:line; `audit.py` and `supplement.py` reproduce the outputs offline with Python's standard library. Extraction as-of **2026-09-05T17:38:15.087919-05:00** used `mode=ro`, `PRAGMA query_only=ON`, and one read transaction. D/source_evidence.txt preserves code and boot lines; unauthenticated `/api/health` returned HTTP 200, rev `36648655cfe0`. It is behind the review base. [A]
+**D** in a citation expands to `docs/superpowers/reports/{D}/`. Every aggregate CSV row carries all of its position IDs or touch-key IDs; every touch key lists all contributing raw row IDs. Plans are identified by SQLite rowid plus `(plan_id, version, scenario)`. Bars retain rowid and `(symbol, tf, open_time_ms, convention)`. `inputs.json.gz` preserves the selected raw inputs and extraction SQL, including broker record file:line; `audit.py` and `supplement.py` reproduce the outputs offline with Python's standard library. Extraction as-of **{s['meta']['asof_ct']}** used `mode=ro`, `PRAGMA query_only=ON`, and one read transaction. D/source_evidence.txt preserves code and boot lines; unauthenticated `/api/health` returned HTTP 200, rev `36648655cfe0`. It is behind the review base. [A]
 
 The primary rule is entry time ≥ **1786770000000**, 2026-08-15 00:00 CT; exclude `source='e7_farside_test'`, `plan_id='UNRESOLVABLE'`, and NULL `pnl_corrected`. Of 71 era rows: test IDs **572–574**; non-test sentinel IDs **530, 539, 545, 546, 566, 571, 580**; non-test null-corrected IDs **576, 577, 579**. These reasons overlap: test row 572 has NULL P&L, and test rows 573–574 also carry the sentinel plan ID. The union removes 13 rows. The seven sentinel rows contribute −$97.50, explaining the difference between the old −$563.93 and corrected −$466.43. I never use `realized_pnl` as a replacement. D/excluded.csv:2; D/results.txt:2. [T]
 
@@ -42,57 +62,25 @@ In the current code, reject is a limit at a level; sweep-reclaim is a confirmed/
 
 The exact epochs matter. First inspected 0B boot: **Sep 2 07:49:06 CT**, rev **4175e0b62de7**, epoch **1788353346000** (`data/nofx_2026-09-02.log:16710`, `:16755`). First enforced-strict boot: **Sep 3 11:10:33 CT**, rev **f478ed880dc9**, epoch **1788451833000** (`data/nofx_2026-09-03.log:3658`). The gate is independently present in that revision, lines 124–126, preserved in D/source_evidence.txt. The strict implementation's commit identity must not be substituted for the boot revision.
 
-| Cell | n; W/L/F | Corrected $ sum | Mean $ | Win/decided; Wilson 95% | R n; mean | Evidence |
-|---|---:|---:|---:|---|---|---|
-| 0B_pre_strict | 3; 0/3/0 | -394.00 | -131.33 | 0/3; 0.0% [0.0, 56.2] | 1; -1.00 | D/trade_stats.csv:46 |
-| pre_0B | 55; 18/35/2 | -72.43 | -1.32 | 18/53; 34.0% [22.7, 47.4] | 8; 0.40 | D/trade_stats.csv:47 |
-| strict | 0; 0/0/0 | 0.00 | — | 0/0; — (0 decided) | 0; — | D/trade_stats.csv:72 |
-
+{table('era',True)}
 
 Post-0B trades are **589, 590, 591**, all losses, −$394; two are historical decision-path breakout-retests, one an arm-associated reject. This is not a clean test of 0B arms. **No strict-era realized trades; NO VERDICT**, not a 0% win rate. [T]
 
-| Cell | n; W/L/F | Corrected $ sum | Mean $ | Win/decided; Wilson 95% | R n; mean | Evidence |
-|---|---:|---:|---:|---|---|---|
-| acceptance | 6; 1/4/1 | 4.57 | 0.76 | 1/5; 20.0% [3.6, 62.4] | 0; — | D/trade_stats.csv:3 |
-| breakout_retest | 9; 1/8/0 | -581.50 | -64.61 | 1/9; 11.1% [2.0, 43.5] | 0; — | D/trade_stats.csv:4 |
-| hold | 1; 1/0/0 | 168.00 | 168.00 | 1/1; 100.0% [20.7, 100.0] | 0; — | D/trade_stats.csv:5 |
-| reclaim | 5; 0/5/0 | -436.50 | -87.30 | 0/5; 0.0% [-0.0, 43.4] | 0; — | D/trade_stats.csv:6 |
-| reject | 31; 14/16/1 | 586.00 | 18.90 | 14/30; 46.7% [30.2, 63.9] | 6; 0.55 | D/trade_stats.csv:7 |
-| sweep_reclaim | 6; 1/5/0 | -207.00 | -34.50 | 1/6; 16.7% [3.0, 56.4] | 3; -0.36 | D/trade_stats.csv:8 |
-
+{table('condition',True)}
 
 No eligible fvg_entry, breakdown_continue or breakup_continue trades exist in this population: n=0, NO VERDICT. Reject supplies 31 of the 58 records and +$586, mean +$18.90 with a descriptive naive normal 95% mean interval **[−$18.26, +$56.06]** (D/trade_stats.csv condition=reject); its positive point estimate is not established expectancy. Acceptance and hold also have positive sums, so the old “everything except reject loses” sentence was false. The explicitly defined continuation-candidate set is 20 trades, 2W/17L/1F, −$1,013.43; it is below 30 and cannot establish that continuation fails as a method. All nine R-bearing rows are selected by broker evidence availability; their condition means are not complete-cell estimates. [T; D/trade_stats.csv thesis rows]
 
-| Cell | n; W/L/F | Corrected $ sum | Mean $ | Win/decided; Wilson 95% | R n; mean | Evidence |
-|---|---:|---:|---:|---|---|---|
-| LONG | 19; 4/15/0 | -808.50 | -42.55 | 4/19; 21.1% [8.5, 43.3] | 3; 0.06 | D/trade_stats.csv:9 |
-| SHORT | 39; 14/23/2 | 342.07 | 8.77 | 14/37; 37.8% [24.1, 53.9] | 6; 0.34 | D/trade_stats.csv:10 |
+{table('side',True)}
 
+{table('plan_session',True)}
 
-| Cell | n; W/L/F | Corrected $ sum | Mean $ | Win/decided; Wilson 95% | R n; mean | Evidence |
-|---|---:|---:|---:|---|---|---|
-| ASIA | 16; 2/13/1 | -552.43 | -34.53 | 2/15; 13.3% [3.7, 37.9] | 0; — | D/trade_stats.csv:11 |
-| LONDON | 21; 7/14/0 | 24.00 | 1.14 | 7/21; 33.3% [17.2, 54.6] | 3; 1.23 | D/trade_stats.csv:12 |
-| NY | 21; 9/11/1 | 62.00 | 2.95 | 9/20; 45.0% [25.8, 65.8] | 6; -0.24 | D/trade_stats.csv:13 |
-
-
-| Cell | n; W/L/F | Corrected $ sum | Mean $ | Win/decided; Wilson 95% | R n; mean | Evidence |
-|---|---:|---:|---:|---|---|---|
-| arm-associated | 11; 6/5/0 | 94.50 | 8.59 | 6/11; 54.5% [28.0, 78.7] | 9; 0.25 | D/trade_stats.csv:40 |
-| decision | 47; 12/33/2 | -560.93 | -11.93 | 12/45; 26.7% [16.0, 41.0] | 0; — | D/trade_stats.csv:41 |
-
+{table('path',True)}
 
 The historical decision path accounts for 47 trades, not the previous 51. I cannot compare the 11 arm-associated trades with the decision trades as if execution mode had been randomized. `source=reconcile` alone is not proof of a particular entry mechanism; “arm-associated” is the historical source/lineage grouping, while nine exact broker signal chains are verified separately. [T]
 
-Median hold is **25.64 min**, interquartile range **12.28–56.30**, maximum **219.71**. Winners' median is **43.04 min** (18 IDs in D/supplement.txt); losers' **19.74 min** (38 IDs). These are ledger entry-to-exit durations. For 591, broker fill precedes ledger materialization, so they are not exact market-exposure clocks. [T]
+Median hold is **25.64 min**, interquartile range **{fmt(stats[0]['hold_p25'])}–{fmt(stats[0]['hold_p75'])}**, maximum **219.71**. Winners' median is **43.04 min** (18 IDs in D/supplement.txt); losers' **19.74 min** (38 IDs). These are ledger entry-to-exit durations. For 591, broker fill precedes ledger materialization, so they are not exact market-exposure clocks. [T]
 
-| Cell | n; W/L/F | Corrected $ sum | Mean $ | Win/decided; Wilson 95% | R n; mean | Evidence |
-|---|---:|---:|---:|---|---|---|
-| 0-15 | 19; 5/14/0 | -317.50 | -16.71 | 5/19; 26.3% [11.8, 48.8] | 4; -0.20 | D/trade_stats.csv:73 |
-| 15-30 | 12; 1/10/1 | -872.00 | -72.67 | 1/11; 9.1% [1.6, 37.7] | 2; -0.31 | D/trade_stats.csv:74 |
-| 30-60 | 13; 5/7/1 | 184.57 | 14.20 | 5/12; 41.7% [19.3, 68.0] | 2; 1.70 | D/trade_stats.csv:75 |
-| 60+ | 14; 7/7/0 | 538.50 | 38.46 | 7/14; 50.0% [26.8, 73.2] | 1; 0.26 | D/trade_stats.csv:76 |
-
+{table('hold_bucket',True)}
 
 **Realized R: partially measurable, not a 58-row distribution.** I use `pnl_corrected / (abs(actual entry fill − first accepted protective stop) × $2 × entry_quantity)`, after matching exact signal identity, one-unit entry fill/price, and an accepted stop within ten seconds of that broker fill. I do not use a nearby decision, final arm stop, or loss/exit distance as initial risk. Nine broker-linked rows qualify: **568, 570, 575, 578, 582, 584, 585, 586, 591**. Mean **+0.248R**, median **+0.256R**, p25 **−1.000R**, p75 **+0.925R**, n=9: **NO VERDICT**. Their individual R values and source file:line are in D/broker_R.csv:2 and D/trades.csv. The other 49 IDs are explicitly listed under `R_missing_ids` in D/summary.json. Missing inputs: immutable entry signal/OCO identity and first accepted protective bracket, including any immediate modification; `trade_excursions` supplies zero records. I do not report the observed nine as representative. [T]
 
@@ -110,37 +98,22 @@ For ordinal sensitivity I sort exact kind/price keys chronologically, reset at t
 
 | Reconstructed observed ordinal | HOLD / BREAK / ambiguous | Decided n | HOLD; Wilson 95% | BREAK; Wilson 95% |
 |---|---:|---:|---|---|
-| 1 | 29 / 21 / 26 | 50 | 58.0% [44.2, 70.6] | 42.0% [29.4, 55.8] |
-| 2 | 19 / 14 / 32 | 33 | 57.6% [40.8, 72.8] | 42.4% [27.2, 59.2] |
-| 3+ | 122 / 90 / 70 | 212 | 57.5% [50.8, 64.0] | 42.5% [36.0, 49.2] |
-
+'''
+for r in touch:
+ if r['dimension']=='ordinal':
+  text+=f"| {r['cell']} | {r['hold']} / {r['brk']} / {r['amb']} | {r['decided_n']} | {float(r['hold_rate'])*100:.1f}% [{float(r['hold_lo'])*100:.1f}, {float(r['hold_hi'])*100:.1f}] | {float(r['break_rate'])*100:.1f}% [{float(r['break_lo'])*100:.1f}, {float(r['break_hi'])*100:.1f}] |\n"
+text+='''
 All three ordinal descriptions are about 58% HOLD. I withdraw the old assertion that this corpus establishes a first-touch advantage. No ordinal receives a trading edge verdict: formation/availability and selection remain unresolved even where pooled n exceeds 30. [T/I]
 
 ### 2(b) Breaks: the same observations inverted
 
 | Kind | HOLD / BREAK / ambiguous | Decided n | HOLD; Wilson 95% | BREAK; Wilson 95% |
 |---|---:|---:|---|---|
-| DEMAND | 8 / 8 / 2 | 16 | 50.0% [28.0, 72.0] | 50.0% [28.0, 72.0] |
-| EQL | 2 / 0 / 0 | 2 | 100.0% [34.2, 100.0] | 0.0% [0.0, 65.8] |
-| FVG | 0 / 1 / 0 | 1 | 0.0% [0.0, 79.3] | 100.0% [20.7, 100.0] |
-| OB | 5 / 2 / 4 | 7 | 71.4% [35.9, 91.8] | 28.6% [8.2, 64.1] |
-| ONH | 3 / 0 / 0 | 3 | 100.0% [43.8, 100.0] | 0.0% [0.0, 56.2] |
-| ONL | 3 / 1 / 0 | 4 | 75.0% [30.1, 95.4] | 25.0% [4.6, 69.9] |
-| OR-H | 9 / 9 / 4 | 18 | 50.0% [29.0, 71.0] | 50.0% [29.0, 71.0] |
-| OR-L | 4 / 4 / 4 | 8 | 50.0% [21.5, 78.5] | 50.0% [21.5, 78.5] |
-| PDC | 5 / 6 / 1 | 11 | 45.5% [21.3, 72.0] | 54.5% [28.0, 78.7] |
-| PDH | 4 / 5 / 1 | 9 | 44.4% [18.9, 73.3] | 55.6% [26.7, 81.1] |
-| PDL | 2 / 0 / 0 | 2 | 100.0% [34.2, 100.0] | 0.0% [0.0, 65.8] |
-| POC | 9 / 5 / 6 | 14 | 64.3% [38.8, 83.7] | 35.7% [16.3, 61.2] |
-| RTH-H | 7 / 3 / 2 | 10 | 70.0% [39.7, 89.2] | 30.0% [10.8, 60.3] |
-| RTH-L | 4 / 8 / 2 | 12 | 33.3% [13.8, 60.9] | 66.7% [39.1, 86.2] |
-| SUPPLY | 7 / 7 / 8 | 14 | 50.0% [26.8, 73.2] | 50.0% [26.8, 73.2] |
-| SWG-H | 9 / 6 / 14 | 15 | 60.0% [35.7, 80.2] | 40.0% [19.8, 64.3] |
-| SWG-L | 4 / 4 / 8 | 8 | 50.0% [21.5, 78.5] | 50.0% [21.5, 78.5] |
-| VWAP | 82 / 50 / 67 | 132 | 62.1% [53.6, 69.9] | 37.9% [30.1, 46.4] |
-| VWAP±2σ | 2 / 2 / 0 | 4 | 50.0% [15.0, 85.0] | 50.0% [15.0, 85.0] |
-| eVWAP | 1 / 4 / 5 | 5 | 20.0% [3.6, 62.4] | 80.0% [37.6, 96.4] |
-
+'''
+for r in touch:
+ if r['dimension']=='kind':
+  text+=f"| {r['cell']} | {r['hold']} / {r['brk']} / {r['amb']} | {r['decided_n']} | {float(r['hold_rate'])*100:.1f}% [{float(r['hold_lo'])*100:.1f}, {float(r['hold_hi'])*100:.1f}] | {float(r['break_rate'])*100:.1f}% [{float(r['break_lo'])*100:.1f}, {float(r['break_hi'])*100:.1f}] |\n"
+text+=f'''
 Every kind except VWAP has decided n<30: **NO VERDICT**. VWAP has n=132 decided but is retrospective and selected, so it also has **no actionable edge verdict**. A detector BREAK means price crossed its band according to the detector rule; it does not mean a stop-entry would fill and reach a profit target before a stop. It is not an executable complement strategy. [T/I; D/touch_stats.csv]
 
 **RTH-L specifically:** 140 raw rows are **14 price-time keys**, all at 29199.25. Conservative conflict handling yields **4 HOLD / 8 BREAK / 2 ambiguous**, 12 decided; BREAK **8/12, 66.7%, Wilson [39.1%, 86.2%]**. The conflicting key 180 is not silently converted to BREAK by majority. The old 9/13 and raw 43/63 do not justify a flip. The raw RTH-L observations are attached to September 4 plan reads, yet **129 raw rows opened before September 3 08:30 CT**—before the prior NY session even began. All IDs are in D/supplement.txt `rth_formation`. That is direct evidence of looking backward with a subsequently identified level. `kernel/levels_multiday.go:92` derives the NY extrema; `:154` selects the prior calendar day; `trader/detector_record.go:57` runs the resulting seated price over the historical scope. Deduplication alone cannot repair this. [T/A]
@@ -151,30 +124,7 @@ Only **57 of 423 representative keys** even have their attached plan version tim
 
 Q1 gives plan-session distributions and separate R sample sizes. Actual entry-hour distributions follow; plan session and wall-clock session are different labels. All hour cells have n<30: **NO VERDICT**. Empty hours 14, 15 and 16 have n=0, also no verdict; they are not assumed losing or winning opportunities.
 
-| Cell | n; W/L/F | Corrected $ sum | Mean $ | Win/decided; Wilson 95% | R n; mean | Evidence |
-|---|---:|---:|---:|---|---|---|
-| 0 | 2; 0/2/0 | -142.00 | -71.00 | 0/2; 0.0% [0.0, 65.8] | 0; — | D/trade_stats.csv:14 |
-| 1 | 2; 1/1/0 | -11.50 | -5.75 | 1/2; 50.0% [9.5, 90.5] | 0; — | D/trade_stats.csv:15 |
-| 10 | 3; 0/3/0 | -249.00 | -83.00 | 0/3; 0.0% [0.0, 56.2] | 0; — | D/trade_stats.csv:16 |
-| 11 | 2; 2/0/0 | 443.00 | 221.50 | 2/2; 100.0% [34.2, 100.0] | 0; — | D/trade_stats.csv:17 |
-| 12 | 2; 2/0/0 | 109.00 | 54.50 | 2/2; 100.0% [34.2, 100.0] | 2; 0.59 | D/trade_stats.csv:18 |
-| 13 | 2; 1/1/0 | 27.00 | 13.50 | 1/2; 50.0% [9.5, 90.5] | 1; -1.00 | D/trade_stats.csv:19 |
-| 17 | 1; 0/1/0 | -54.50 | -54.50 | 0/1; 0.0% [0.0, 79.3] | 0; — | D/trade_stats.csv:20 |
-| 18 | 1; 0/1/0 | -43.00 | -43.00 | 0/1; 0.0% [0.0, 79.3] | 0; — | D/trade_stats.csv:21 |
-| 19 | 2; 0/2/0 | -118.00 | -59.00 | 0/2; 0.0% [0.0, 65.8] | 0; — | D/trade_stats.csv:22 |
-| 2 | 3; 1/2/0 | 30.00 | 10.00 | 1/3; 33.3% [6.1, 79.2] | 0; — | D/trade_stats.csv:23 |
-| 20 | 2; 0/2/0 | -153.93 | -76.96 | 0/2; 0.0% [0.0, 65.8] | 0; — | D/trade_stats.csv:24 |
-| 21 | 3; 1/1/1 | 93.00 | 31.00 | 1/2; 50.0% [9.5, 90.5] | 0; — | D/trade_stats.csv:25 |
-| 22 | 2; 0/2/0 | -95.50 | -47.75 | 0/2; 0.0% [0.0, 65.8] | 0; — | D/trade_stats.csv:26 |
-| 23 | 1; 0/1/0 | -27.00 | -27.00 | 0/1; 0.0% [0.0, 79.3] | 0; — | D/trade_stats.csv:27 |
-| 3 | 2; 1/1/0 | 40.50 | 20.25 | 1/2; 50.0% [9.5, 90.5] | 0; — | D/trade_stats.csv:28 |
-| 4 | 2; 1/1/0 | 99.00 | 49.50 | 1/2; 50.0% [9.5, 90.5] | 0; — | D/trade_stats.csv:29 |
-| 5 | 4; 2/2/0 | 137.00 | 34.25 | 2/4; 50.0% [15.0, 85.0] | 1; 2.47 | D/trade_stats.csv:30 |
-| 6 | 5; 1/4/0 | -208.50 | -41.70 | 1/5; 20.0% [3.6, 62.4] | 0; — | D/trade_stats.csv:31 |
-| 7 | 4; 0/4/0 | -180.00 | -45.00 | 0/4; 0.0% [0.0, 49.0] | 1; -1.00 | D/trade_stats.csv:32 |
-| 8 | 4; 2/1/1 | 21.50 | 5.38 | 2/3; 66.7% [20.8, 93.9] | 1; 2.21 | D/trade_stats.csv:33 |
-| 9 | 9; 3/6/0 | -183.50 | -20.39 | 3/9; 33.3% [12.1, 64.6] | 3; -0.54 | D/trade_stats.csv:34 |
-
+{table('hour',True)}
 
 The four records in 11:00–12:59 CT are winners, but neither hourly cell has even three observations. I will not select a “profitable hour.” The dollar table is complete; hour/session R is **UNMEASURABLE for the full populations**, with observed broker-linked subsets shown explicitly. Missingness is concentrated by time and era, not randomly sampled. [T/I]
 
@@ -184,13 +134,7 @@ The four records in 11:00–12:59 CT are winners, but neither hourly cell has ev
 
 **Realized volatility is not ATR.** I compute a causal RV60 proxy, `10,000 × sqrt(sum(log(c[t]/c[t−1])²))`, from exactly 60 one-minute returns using 61 consecutive, fully closed pre-entry MNQ bars. It is basis points over the preceding hour, not annualized. Identical overlapping bar conventions collapse to one timestamp; conflicting OHLC timestamps would be excluded. Every contributing bar rowid is in D/trades.csv. Four trades fail the complete-window rule: **521, 522, 523, 533**. The other **54** split into **18/18/18**; in-sample cutpoints are **16.1562 and 24.0159 bps**. These cutpoints are a descriptive sort, not causal production thresholds: the measurements are pre-entry, but the quantiles use the whole sample. [T]
 
-| Cell | n; W/L/F | Corrected $ sum | Mean $ | Win/decided; Wilson 95% | R n; mean | Evidence |
-|---|---:|---:|---:|---|---|---|
-| UNMEASURABLE | 4; 2/2/0 | 141.00 | 35.25 | 2/4; 50.0% [15.0, 85.0] | 0; — | D/trade_stats.csv:68 |
-| high | 18; 6/11/1 | -288.00 | -16.00 | 6/17; 35.3% [17.3, 58.7] | 4; -0.34 | D/trade_stats.csv:69 |
-| low | 18; 5/13/0 | -356.50 | -19.81 | 5/18; 27.8% [12.5, 50.9] | 2; 0.73 | D/trade_stats.csv:70 |
-| mid | 18; 5/12/1 | 37.07 | 2.06 | 5/17; 29.4% [13.3, 53.1] | 3; 0.71 | D/trade_stats.csv:71 |
-
+{table('vol_tercile',True)}
 
 Every tercile is n=18: **NO VERDICT**. Low RV is −$356.50, middle +$37.07, high −$288.00. That does not establish a monotonic low-volatility failure, and it replaces the old low-ATR −$795.50 claim. Session × tercile cells and row identities are preserved in D/trade_stats.csv to expose confounding, not to search for a preferred cell. Complete-case R per tercile is again only the small broker-linked subset, never a 54-row risk-normalized result. I would need entry ATR and risk, a label frozen before entry, and future observations across independent days to test a regime switch. [T/I]
 
@@ -230,24 +174,10 @@ I therefore replace “the model fabricates the reward” with **“the declared
 
 | Condition | Position MFE n | MFE p50 / p80 / p95, pts | MAE p50 / p80 / p95, pts | Evidence |
 |---|---:|---|---|---|
-| acceptance | 6 | 17.62 / 89.75 / 140.00 | 47.12 / 57.50 / 60.50 | D/excursion_proxies.csv:2 |
-| breakout_retest | 9 | 25.75 / 43.50 / 62.25 | 36.75 / 50.35 / 68.80 | D/excursion_proxies.csv:3 |
-| hold | 1 | 92.00 / 92.00 / 92.00 | 22.50 / 22.50 / 22.50 | D/excursion_proxies.csv:4 |
-| reclaim | 5 | 16.25 / 21.40 / 26.35 | 42.25 / 55.00 / 70.00 | D/excursion_proxies.csv:5 |
-| reject | 31 | 41.50 / 69.75 / 88.25 | 17.75 / 42.00 / 66.00 | D/excursion_proxies.csv:6 |
-| sweep_reclaim | 6 | 20.50 / 25.00 / 41.69 | 28.75 / 43.25 / 86.38 | D/excursion_proxies.csv:7 |
-
-**Uncertain historical zero MAE.** Eligible winners **569 and 584** are reconcile rows with recorded MAE=0. I do not interpret these as measured absence of adverse movement. The historical `ComputeExcursion` starts at zero, can skip the fill-containing bar, and returns zero when no bars contribute (`kernel/mae_mfe.go:24`); before E4, `trader/auto_trader_clock.go` wrote that result without a computed-status check (parent of commit `d4aee04a`, lines 738–739). Current `trader/auto_trader_clock.go:752`–759 already uses `ComputePathExcursion` and leaves uncomputed values NULL. That fix is shipped. The raw proxies above remain unchanged; I separately exclude only these two uncertain MAE zeros:
-
-| Group | Treatment | MAE n | MAE p50 / p80 / p95, pts | Evidence |
-|---|---|---:|---|---|
-| winners | raw_position_proxy | 18 | 11.38 / 20.40 / 46.41 | D/zero_mae_sensitivity.csv:2 |
-| winners | exclude_uncertain_zero_MAE | 16 | 13.00 / 22.50 / 48.19 | D/zero_mae_sensitivity.csv:3 |
-| reject | raw_position_proxy | 31 | 17.75 / 42.00 / 66.00 | D/zero_mae_sensitivity.csv:4 |
-| reject | exclude_uncertain_zero_MAE | 29 | 18.00 / 42.20 / 67.45 | D/zero_mae_sensitivity.csv:5 |
-
-The sensitivity does not repair either trade's unknown MAE or establish which other historical proxies are fully computed. Both winner samples and the adjusted reject MAE sample have n<30: **NO VERDICT**. The primary trade population remains 58; its P&L, held-time and RV results are unchanged. Neither raw nor sensitivity MAE justifies tightening stops, preserving every winner, or judging the floor from a presumed zero-adverse subset. The actual ordered/coverage-verified excursion distribution remains **UNMEASURABLE**. [T/A/I]
-
+'''
+for idx,r in enumerate(proxy,2):text+=f"| {r['condition']} | {r['mfe_n']} | {fmt(r['mfe_p50'])} / {fmt(r['mfe_p80'])} / {fmt(r['mfe_p95'])} | {fmt(r['mae_p50'])} / {fmt(r['mae_p80'])} / {fmt(r['mae_p95'])} | D/excursion_proxies.csv:{idx} |\n"
+text+=mae_note(u)
+text+='''
 **Ordered-path limits.** These proxies may contain full entry/exit-bar extrema, including prices before broker entry or after exit. They stop at the historical exit, censoring the later path a changed stop would need. They do not tell whether target, stop, progress threshold and invalidation occurred first. Replaying close/high/low cannot disambiguate both-hit minutes. Complete fully interior held minutes also have missing bars for IDs 521–523. Even all other complete minute bars do not reveal within-minute order or queue position. A “no progress for 15 minutes” rule cannot be evaluated from final MFE; nor can final MAE tell which winners would survive a tighter stop. I withdraw both old claims of guaranteed winner preservation. [T/I; D/floor_path_sensitivity.csv; D/supplement.txt `path_coverage`]
 
 | Target source | My analytical ruling [I] | Evidence needed before changing production |
@@ -336,3 +266,6 @@ I also withdraw the false professional biography, “one contract cannot work,�
 | Read-only, own scope, reproducible evidence, branch delivery | Evidence contract; data README and verification receipt | Docs-only; commit/push receipt produced at delivery; own worktree retained for parent |
 
 The coverage table is not a claim that every requested statistic is measurable. The main open requirements are full-population initial R, formation-safe touch/ordinal performance, machine-regime comparison, populated ordered excursions and any realized assessment of strict. I have named the absent inputs rather than substituting a favorable estimate.
+'''
+Path('report.md').write_text(text)
+print(len(text.split()),'words',len(text.splitlines()),'lines')
