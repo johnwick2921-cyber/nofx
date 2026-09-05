@@ -26,5 +26,5 @@ for path in ['kernel/engine_analysis.go','trader/entry_gate.go']:
 log=pathlib.Path('/home/hoang/nofx/data/nofx_2026-09-03.log')
 for i,s in enumerate(log.read_text(errors='replace').splitlines(),1):
  if s.startswith('09-03 11:10:33') and ('ledger boot:' in s or 'ScanIntervalMinutes=2' in s):lines.append(f'{log}:{i}: {s}')
-(OUT/'source-evidence.txt').write_text('\n'.join(lines)+'\n')
+(OUT/'source-evidence.txt').write_text('\n'.join(line.rstrip() for line in lines)+'\n')
 print(json.dumps(r['static_files']));print(json.dumps(r['guard_scope_sensitivity']['days']))

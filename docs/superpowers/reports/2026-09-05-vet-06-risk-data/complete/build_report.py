@@ -237,7 +237,7 @@ The order calls the resolver at `ninjascript/VLTraderTCPClient.cs:901`; bar subs
 
 | Original item | Status / answer location | Evidence or exact measurement limit |
 |---|---|---|
-| 1a. Re-run original mc-drawdown against current store | ANSWERED: corrected extraction + unmodified original compatibility rerun; Q1 | `{D}/legacy_mc_drawdown.py:1`, `legacy_mc_drawdown.out:2`, `population.sql:1`; seed differs from primary and trade-block rig is secondary |
+| 1a. Re-run original mc-drawdown against current store | ANSWERED: corrected extraction + unmodified original compatibility rerun; Q1 | `{D}/legacy_mc_drawdown.py:1`, `legacy_mc_drawdown.txt:2`, `population.sql:1`; seed differs from primary and trade-block rig is secondary |
 | 1b. Sample by session-day, not trade | ANSWERED: Q1 full-day sampler, final-block truncation and pair sensitivity | `{D}/recompute.py:1`, `days.csv:1`; all 58 IDs and 12 memberships listed |
 | 1c. Expectancy CI | ANSWERED historically; current strict net expectancy UNMEASURABLE | {ref('trade_cluster_bootstrap_ci95')}, {ref('day_t_ci95')}; missing strict closes and documented live costs |
 | 1d. DD quantiles at 20/50/100 trades | ANSWERED, all p50/90/95/99 in Q1 | {ref('trade_horizons')}; marked/gap DD not measured without full intratrade broker/market path |

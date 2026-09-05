@@ -24,7 +24,7 @@ def time_ct(ms): return dt.datetime.fromtimestamp(int(ms)/1000,CT)
 def day(ms): return (time_ct(ms)-dt.timedelta(hours=17)).date().isoformat()
 def writecsv(name,rows):
  with (out/name).open('w',newline='') as f:
-  w=csv.DictWriter(f,fieldnames=list(rows[0])); w.writeheader(); w.writerows(rows)
+  w=csv.DictWriter(f,fieldnames=list(rows[0]),lineterminator='\n'); w.writeheader(); w.writerows(rows)
 def writejson(name,obj): (out/name).write_text(json.dumps(obj,indent=2,allow_nan=False)+'\n')
 if a.db:
  c=sqlite3.connect('file:'+a.db+'?mode=ro',uri=True); c.execute('PRAGMA query_only=ON'); c.execute('BEGIN'); c.row_factory=sqlite3.Row

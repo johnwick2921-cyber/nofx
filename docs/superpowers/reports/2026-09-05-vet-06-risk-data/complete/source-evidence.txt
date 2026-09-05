@@ -94,7 +94,7 @@ trader/auto_trader_calendar.go:156: 		return nil
 trader/auto_trader_calendar.go:157: 	}
 trader/auto_trader_calendar.go:158: 	return at.t1WindowsFor(plannerTradeDateCT(now), sess)
 trader/auto_trader_calendar.go:159: }
-trader/auto_trader_calendar.go:160: 
+trader/auto_trader_calendar.go:160:
 trader/auto_trader_calendar.go:161: // t1WindowsFor is currentT1Windows for an EXPLICIT session and trade date, so
 trader/auto_trader_calendar.go:162: // the plan-write path can stamp the card with the SAME windows the entry gate
 trader/auto_trader_calendar.go:163: // will enforce (no-trade-band wave, 2026-09-02). A read authors ASIA while NY
@@ -138,7 +138,7 @@ trader/auto_trader_calendar.go:200: 		}
 trader/auto_trader_calendar.go:201: 	}
 trader/auto_trader_calendar.go:202: 	return windows
 trader/auto_trader_calendar.go:203: }
-trader/auto_trader_calendar.go:204: 
+trader/auto_trader_calendar.go:204:
 trader/auto_trader_calendar.go:205: // sessionPlannerEvents maps stored calendar.Event → kernel.PlannerCalendarEvent
 trader/auto_trader_calendar.go:206: // (session-sliced, CT time). Shared by the gate + the planner input + the plan
 trader/auto_trader_calendar.go:207: // no-trade injection so all three agree.
@@ -154,14 +154,14 @@ trader/auto_trader_calendar.go:216: 	}
 trader/auto_trader_calendar.go:217: 	return out
 kernel/calendar_blackout.go:13: // T1BlackoutMinutes is the half-width (minutes) of the blackout around a red event.
 kernel/calendar_blackout.go:14: const T1BlackoutMinutes = 15
-kernel/calendar_blackout.go:15: 
+kernel/calendar_blackout.go:15:
 kernel/calendar_blackout.go:16: // CTWindow is a [start,end] minute-of-day CT window (end may be < start ⇒ wraps).
 kernel/calendar_blackout.go:17: type CTWindow struct {
 kernel/calendar_blackout.go:18: 	Start int
 kernel/calendar_blackout.go:19: 	End   int
 kernel/calendar_blackout.go:20: 	Label string
 kernel/calendar_blackout.go:21: }
-kernel/calendar_blackout.go:22: 
+kernel/calendar_blackout.go:22:
 kernel/calendar_blackout.go:23: // T1BlackoutWindows returns the blackout windows for the T1 events in a session's
 kernel/calendar_blackout.go:24: // calendar slice (±T1BlackoutMinutes around each). T2 and non-timed events are
 kernel/calendar_blackout.go:25: // ignored (T2 is caution-only, not a hard block).
@@ -209,7 +209,7 @@ calendar/calendar.go:180: 		m["EUR"], m["GBP"] = true, true
 calendar/calendar.go:181: 	}
 calendar/calendar.go:182: 	return m
 calendar/calendar.go:183: }
-calendar/calendar.go:184: 
+calendar/calendar.go:184:
 calendar/calendar.go:185: // EventsForSession filters a day's events to a session's currency set.
 calendar/calendar.go:186: func EventsForSession(day []Event, session string) []Event {
 calendar/calendar.go:187: 	cur := SessionCurrencies(session)
@@ -267,7 +267,7 @@ trader/auto_trader_clock.go:657: 		}
 trader/auto_trader_clock.go:658: 	}
 trader/auto_trader_clock.go:659: 	return ""
 trader/auto_trader_clock.go:660: }
-trader/auto_trader_clock.go:661: 
+trader/auto_trader_clock.go:661:
 trader/auto_trader_clock.go:662: // enforceT1ForceFlat closes any open position from t1ForceFlatLead minutes
 trader/auto_trader_clock.go:663: // before each T1 blackout window through the end of that window. Same shape as
 trader/auto_trader_clock.go:664: // enforceEODFlatAt: gated dormant (day_plan), never invents a flatten outside
@@ -278,7 +278,7 @@ trader/auto_trader_clock.go:668: // fallback protects this path too.
 trader/auto_trader_clock.go:669: func (at *AutoTrader) enforceT1ForceFlat() bool {
 trader/auto_trader_clock.go:670: 	return at.enforceT1ForceFlatAt(time.Now())
 trader/auto_trader_clock.go:671: }
-trader/auto_trader_clock.go:672: 
+trader/auto_trader_clock.go:672:
 trader/auto_trader_clock.go:673: func (at *AutoTrader) enforceT1ForceFlatAt(now time.Time) bool {
 trader/auto_trader_clock.go:674: 	if !at.dayPlanEnabled() || at.store == nil || at.trader == nil {
 trader/auto_trader_clock.go:675: 		return false
@@ -325,7 +325,7 @@ kernel/risk_limits.go:171: var (
 kernel/risk_limits.go:172: 	forceFlatMu     sync.RWMutex
 kernel/risk_limits.go:173: 	forceFlatReason = map[string]string{}
 kernel/risk_limits.go:174: )
-kernel/risk_limits.go:175: 
+kernel/risk_limits.go:175:
 kernel/risk_limits.go:176: // SetDailyForceFlat records that traderID tripped its daily loss limit.
 kernel/risk_limits.go:177: func SetDailyForceFlat(traderID, reason string) {
 kernel/risk_limits.go:178: 	forceFlatMu.Lock()
@@ -335,7 +335,7 @@ kernel/risk_limits.go:181: 		logger.Warnf("🔴 daily force-flat ARMED for trade
 kernel/risk_limits.go:182: 	}
 kernel/risk_limits.go:183: 	forceFlatReason[traderID] = reason
 kernel/risk_limits.go:184: }
-kernel/risk_limits.go:185: 
+kernel/risk_limits.go:185:
 kernel/risk_limits.go:186: // DailyForceFlatReason returns the trip reason for traderID, or "" when the
 kernel/risk_limits.go:187: // daily loss limit has not tripped. "" is the fail-open answer: no evidence of
 kernel/risk_limits.go:188: // a trip is never a refusal.
@@ -344,14 +344,14 @@ kernel/risk_limits.go:190: 	forceFlatMu.RLock()
 kernel/risk_limits.go:191: 	defer forceFlatMu.RUnlock()
 kernel/risk_limits.go:192: 	return forceFlatReason[traderID]
 kernel/risk_limits.go:193: }
-kernel/risk_limits.go:194: 
+kernel/risk_limits.go:194:
 kernel/risk_limits.go:195: // ClearDailyForceFlat lifts the trip for one trader (operator resume).
 kernel/risk_limits.go:196: func ClearDailyForceFlat(traderID string) {
 kernel/risk_limits.go:197: 	forceFlatMu.Lock()
 kernel/risk_limits.go:198: 	defer forceFlatMu.Unlock()
 kernel/risk_limits.go:199: 	delete(forceFlatReason, traderID)
 kernel/risk_limits.go:200: }
-kernel/risk_limits.go:201: 
+kernel/risk_limits.go:201:
 kernel/risk_limits.go:202: // clearAllDailyForceFlat lifts every trip; called by the daily reset.
 kernel/risk_limits.go:203: func clearAllDailyForceFlat() {
 kernel/risk_limits.go:204: 	forceFlatMu.Lock()
@@ -385,7 +385,7 @@ kernel/risk_limits.go:367: // said capacity=1 while a market entry could size 2.
 kernel/risk_limits.go:368: //
 kernel/risk_limits.go:369: // Env STAGE_A_CONTRACT_CAP raises the ceiling for Stage B; 0 or unset = 1.
 kernel/risk_limits.go:370: const StageAContractCapDefault = 1
-kernel/risk_limits.go:371: 
+kernel/risk_limits.go:371:
 kernel/risk_limits.go:372: // StageAContractCap resolves the Stage-A ceiling (env STAGE_A_CONTRACT_CAP).
 kernel/risk_limits.go:373: func StageAContractCap() int {
 kernel/risk_limits.go:374: 	if v := os.Getenv("STAGE_A_CONTRACT_CAP"); v != "" {
@@ -395,7 +395,7 @@ kernel/risk_limits.go:377: 		}
 kernel/risk_limits.go:378: 	}
 kernel/risk_limits.go:379: 	return StageAContractCapDefault
 kernel/risk_limits.go:380: }
-kernel/risk_limits.go:381: 
+kernel/risk_limits.go:381:
 kernel/risk_limits.go:382: // ClampStageAContracts applies the Stage-A ceiling to any resolved size.
 kernel/risk_limits.go:383: func ClampStageAContracts(n int) int {
 kernel/risk_limits.go:384: 	if cap := StageAContractCap(); n > cap {
@@ -446,7 +446,7 @@ store/position_query.go:126: 	acct := ""
 store/position_query.go:127: 	if len(account) > 0 {
 store/position_query.go:128: 		acct = account[0]
 store/position_query.go:129: 	}
-store/position_query.go:130: 
+store/position_query.go:130:
 store/position_query.go:131: 	var pnl struct{ Total float64 }
 store/position_query.go:132: 	pq := s.db.Model(&TraderPosition{}).
 store/position_query.go:133: 		Select("COALESCE(SUM(pnl_corrected), 0) as total"). /* P&L-TRUTH WAVE: strict corrected column; NULL rows are excluded by the WHERE and never coerced */
@@ -460,7 +460,7 @@ store/position_query.go:140: 	}
 store/position_query.go:141: 	if err = pq.Scan(&pnl).Error; err != nil {
 store/position_query.go:142: 		return 0, 0, err
 store/position_query.go:143: 	}
-store/position_query.go:144: 
+store/position_query.go:144:
 store/position_query.go:145: 	var cnt int64
 store/position_query.go:146: 	cq := s.db.Model(&TraderPosition{}).
 store/position_query.go:147: 		Where("trader_id = ? AND entry_time >= ?", traderID, sinceMs)
@@ -523,7 +523,7 @@ trader/auto_trader_orders.go:240: 			actionRecord.Error = "contract_roll: " + re
 trader/auto_trader_orders.go:241: 			return nil
 trader/auto_trader_orders.go:242: 		}
 trader/auto_trader_orders.go:243: 	}
-trader/auto_trader_orders.go:244: 
+trader/auto_trader_orders.go:244:
 trader/auto_trader_orders.go:245: 	// D1 — consecutive-loss halt: after N consecutive losing closed trades this CME
 trader/auto_trader_orders.go:246: 	// session-day, block NEW entries until the next session. Closes (open-position
 trader/auto_trader_orders.go:247: 	// management) are NEVER blocked. 0 = OFF.
@@ -597,7 +597,7 @@ trader/contract_roll.go:120: 		return ""
 trader/contract_roll.go:121: 	}
 trader/contract_roll.go:122: 	return st.Contract
 trader/contract_roll.go:123: }
-trader/contract_roll.go:124: 
+trader/contract_roll.go:124:
 trader/contract_roll.go:125: // entryBlockedByRoll is the gate predicate for executeDecisionWithRecord.
 trader/contract_roll.go:126: // Fail-open: no/unparseable resolution → WARN once per contract-string change
 trader/contract_roll.go:127: // and PASS (the C# resolver + T19 remain the other layers).
@@ -631,7 +631,7 @@ ninjascript/VLContractResolver.cs:132:             int[] quarterlyMonths = new[]
 ninjascript/VLContractResolver.cs:133:             int year = now.Year;
 ninjascript/VLContractResolver.cs:134:             int frontMonth = 0;
 ninjascript/VLContractResolver.cs:135:             int frontYear = 0;
-ninjascript/VLContractResolver.cs:136: 
+ninjascript/VLContractResolver.cs:136:
 ninjascript/VLContractResolver.cs:137:             for (int i = 0; i < quarterlyMonths.Length; i++)
 ninjascript/VLContractResolver.cs:138:             {
 ninjascript/VLContractResolver.cs:139:                 int qm = quarterlyMonths[i];
