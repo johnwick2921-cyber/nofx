@@ -100,11 +100,90 @@ that rule. I would change what it is measuring.
 
 ---
 
-## 1–8. RESERVED — sub-agent parts A–D
+## 1–3. PART A — the way it trades, the levels, the decisions
 
-Not delivered at push time. Sections 1–3 (way it trades / levels / decisions), 4–6
-(monitoring / execution / risk), 7 (prompts / laws / settings) and 8 (the three-day stretch)
-will be merged in on delivery, each verified against the store-derived CSVs before use.
+**Delivered.** Full text: `docs/superpowers/reports/2026-09-05-veteran-part-a.md` (652 lines).
+
+**My verification before use.** I spot-checked two numbers against the committed CSVs myself
+rather than trusting the summary. (1) RTH-L hold **20/63 = 31.75%, Wilson [0.216, 0.440]** —
+matches my own computation exactly. (2) The first-touch coin-flip and the per-kind census
+reproduce from `D5b-touch_outcomes-by-kind.csv`. Both pass.
+
+**One disagreement I am ruling on.** A reports win rate **33.87%** and payoff **1.66**
+(breakeven 37.59%); I computed **32.8%** and **1.74** (breakeven 36.5%). The difference is the
+denominator: A excludes 2 scratch trades, I counted all 64. **A's treatment is the better one**
+— a scratch is not a loss and should not sit in the win-rate denominator — so **33.87% / 1.66 /
+37.59% is the number to quote**, and mine is the all-64 variant. Both agree on the finding that
+matters: the gap to breakeven is under 4 percentage points and n cannot resolve it.
+
+**What A adds that I did not have.** A located committed tape exports I had missed —
+`docs/superpowers/reports/exports/2026-09-02-level-replay/` (1,168 episodes) and
+`exports/2026-09-02-losses/` (23 plans, 544 executor cycles, bars) — and replayed the two
+committed sessions end-to-end on them. Its three hardest findings:
+
+1. **The reward side is fiction `[T]`.** Plans claim a median **2.55:1**; realised is **1.66:1**.
+   The R:R floor is checked against a target the model itself chose, so the model simply writes a
+   bigger number. Only **3 of 36** trades produced enough favourable excursion to reach a 2.0R
+   target measured off the *minimum* stop — Wilson [2.9%, 21.8%], and that is an upper bound.
+2. **The stop floor is calibrated to the losers `[T]`.** Winners' worst adverse excursion never
+   exceeds **0.661×** the 1.5×ATR5m floor (n=10); losers' median is **1.014×** it (n=26).
+3. **The AI decision path is inert, and ASIA is the whole loss `[T]`.** 544 executor cycles on
+   09-01/09-02 → **492 `wait`, 5 `open_long`, 0 `open_short`**; four became positions, all four
+   lost. ASIA is n=16 / **−$552.43** against ex-ASIA n=48 / **+$128.50** — and the code already
+   ships ASIA `Enabled: false` (`kernel/session_registry.go:93`); the running config overrode it.
+
+**Two corrections A makes to the dispatch's own premises, which I accept.** The executor loop is
+not 2-minute: `scan_interval_minutes` defaults to **3, minimum 3** (`store/trader.go:29`), and
+SYSTEM-MAP §12 labels it `[X]` — never tape-tested. And the committed
+`E-d3-summary-percentiles.csv` states `atr_convertible n=30` while the per-trade CSV yields
+**n=36**; A could not rebuild the report's cohort and used its own, flagged. That is the right
+call and it is a live reproducibility defect in a committed artifact.
+
+## 4–6. PART B — monitoring, execution, risk
+
+**Delivered.** Full text: `docs/superpowers/reports/2026-09-05-veteran-part-b.md` (498 lines).
+
+**My verification before use.** (1) B re-ran the committed 1E rig and reproduced the published
+report bit-for-bit — mean **−6.624**, sd **100.589**, CI **[−31.268, +18.020]** — which matches
+my own independent computation to four decimals. (2) B's arms tally, **5 of 15 marketable-guard
+vs 3 filled**, matches mine from `arms.csv`. (3) I verified B's new n=65 input: position **591**,
+`pnl_corrected = −140.0`, exists at `2026-09-04-two-day-audit-data/trades.csv:12`. All pass.
+
+**Updated 1E numbers (n=65, B's run, input verified by me):** mean **−$8.676**, sd **$101.162**,
+se **$12.548**, CI **[−$33.269, +$15.917]**, t **−0.691**. maxDD@50 p50 **$934** / p95 **$1,767**;
+@100 p95 **$2,771**, p99 **$3,304**. Adding one trade moved the mean *down* and the interval still
+contains zero. Post-0B is **n=3, all losses**.
+
+**One reconciliation.** B's script reports `n_req` **1,067–1,810**; I computed **886**. These are
+different questions — mine is the sample needed to exclude zero at 95% given the observed mean,
+the script's is a powered detection. Both say the same thing: **the required sample is more than
+an order of magnitude above what exists.**
+
+Its three hardest findings:
+
+1. **A daily-loss trip can neither flatten you nor stop an arm `[T]`.** `DailyGuardrails.Check()`
+   returns `RiskForceFlat` (`kernel/risk_limits.go:245`) and the only production caller **discards
+   it** — `} else if _, gErr := g.Check(); gErr != nil {` (`kernel/engine_analysis.go:183`) —
+   then merely skips the decision cycle. `RiskForceFlat` and `RiskLimits.Classify` have **zero
+   non-test consumers**, and neither `entry_gate.go` nor `armed_executor.go` contains the string
+   `daily` or `guardrail`. **A resting arm fills straight through a tripped limit.** This
+   materially changes my §9 item 5 — see the amendment there.
+2. **The marketable guard is the largest killer of arms and is invisible to every counter `[T]`.**
+   5 of 15 arms died to it and never reached the wire; one was cancelled for closing **1.70
+   points** on the wrong side. It runs once per scan cycle on a bar close
+   (`armed_executor.go:898`), the cancel is terminal, and it emits no `IncArmRefusal` — only a
+   `logWarnf` (`:960-961`). It is the biggest leak in the system and nothing counts it.
+3. **The broker computes your slippage and Go bins it `[T]`.** The AddOn calculates
+   `slippageTicks` (`ninjascript/VLTraderTCPClient.cs:1383`) and ships it (`:1430`); Go declares
+   the field (`provider/ninjatrader/tcp_framing.go:86`) and **never reads it** — no column, no
+   telemetry. Meanwhile 3 of 3 armed fills printed the authorized price to the tick on limits the
+   market had traded *through*, so the fill statistics carry no live-execution information at all.
+
+## 7–8. RESERVED — sub-agent parts C and D
+
+Not delivered at the time of this revision. Section 7 (prompts / laws / settings) and section 8
+(the three-day stretch) will be merged in on delivery, each spot-checked against the committed
+CSVs before use, exactly as A and B were.
 
 ---
 
@@ -149,13 +228,17 @@ bias does not have a bias.
 voided, so the model was punished for obeying). Then a measured floor.
 *Watch:* long-side arm-enablement rate on days the plan bias is `long`. Today **4.3%**.
 
-**5. Turn the $450 daily loss limit ON.**
-*Why:* trips **1 of 11 days (9.09%)**, forfeits **$0.00/day** `[T]`. Zero measured cost, and
-it caps the −$492.00 tail. `[I]` A daily stop's real job is not P&L, it is stopping the
-operator from re-engaging on a day his read is demonstrably wrong.
-*What it takes:* a knob, already built and currently off.
-*Watch:* days tripped, and the forfeited-P&L figure — if forfeited/day turns materially
-negative over a larger sample, revisit.
+**5. Wire the daily loss limit to something that can actually stop trading — THEN turn it on.**
+*Why:* two findings compound. Mine: the $450 limit trips **1 of 11 days (9.09%)** and forfeits
+**$0.00/day** `[T]` — zero measured cost, caps the −$492.00 tail. Part B's, which I verified and
+which **reorders this item**: the limit as built cannot flatten you or stop a resting arm.
+`DailyGuardrails.Check()` returns `RiskForceFlat` (`kernel/risk_limits.go:245`) and the only
+production caller discards the value (`kernel/engine_analysis.go:183`); `RiskForceFlat` has zero
+non-test consumers. **Switching the knob on today would buy a feeling, not a stop.** `[I]` A daily
+stop's real job is not P&L, it is stopping the operator from re-engaging on a day his read is
+demonstrably wrong — and a stop that arms fill through is worse than none, because it is believed.
+*What it takes:* code first (consume `RiskForceFlat` in both order paths), then the knob.
+*Watch:* days tripped; and a fixture proving a tripped limit cancels a resting arm.
 
 **6. Do NOT add a daily trade cap — and say so in the record.**
 *Why:* `max_daily_trades_3` trips **81.84% of days** and costs **−$24.54/day** net `[T]`
