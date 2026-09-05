@@ -1,0 +1,130 @@
+# vet-07-0905 REVISION PASS — the queries behind the VERIFICATION RECORD (2026-09-05)
+# All store reads mode=ro against /home/hoang/nofx/data/data.db. All API reads GET, HTTP 200.
+
+## B1 — the level merge exists (C4/K7/D10 withdrawn)
+$ grep -rn "CollapsePlanLevels" --include='*.go' .
+kernel/plan_doc.go:393:func CollapsePlanLevels(levels []PlanLevel, tol float64) ([]PlanLevel, int)
+trader/auto_trader_planner.go:1626: if collapsed, n := kernel.CollapsePlanLevels(d.Levels, kernel.LevelClusterTicks*0.25); n > 0 {
+# same <= predicate as the reject at plan_doc.go:861; validator called at :1660 (34 lines later)
+$ git show 36648655:trader/auto_trader_planner.go | sed -n '1626p'   -> identical on the running rev
+$ grep -h "plan level auto-collapse" data/nofx_*.log | wc -l
+12          # 08-24, 08-26 x3, 08-28, 09-02 x6, 09-03
+
+## B2 — AUDIT-CHECKLIST PART 1 scoped counts
+$ awk 'NR>=11 && NR<=1844' docs/superpowers/AUDIT-CHECKLIST.md | grep -cE '^[0-9]+\. \*\*'
+78
+$ ... | grep -oE '^[0-9]+' | sort -n | uniq -c | awk '$1>1'      -> (empty: no duplicates)
+$ ... numbers present: 1..45, 47..79   (46 absent)
+$ awk 'NR>=11 && NR<=1844' ... | grep -c '\*\*Law:\*\*'   -> 79      (whole file 80; the 80th at :2014)
+# law-bearing PART 1 entries: 76  (20,48,70 carry two Laws; 19 and 53 carry none)
+# numbered lines outside PART 1: :1869,:1955,:1963,:1966,:1969,:1980,:1987,:1996 = PART 3 steps 0-7
+
+## N1/B3 — env knob count
+$ grep -rhoP --include='*.go' 'os\.Getenv\("\K[A-Z0-9_]+' kernel/ trader/ | sort -u | wc -l      -> 107
+$ find kernel trader -name '*.go' ! -name '*_test.go' -print0 | xargs -0 grep -hoP 'os\.Getenv\("\K[A-Z0-9_]+' | sort -u | wc -l   -> 81
+# comm -13 of the two -> 26 names, every one test-only
+
+## N2 — class-38 contract shape
+$ grep -c MustAppear kernel/prompt_contract.go            -> 23  (LINES)
+# parsed slice: 19 entries / 25 fragments; six two-fragment entries at :58,:68,:78,:88,:93,:103
+# non-entry MustAppear lines: :31 :33 :48 (comments/field) and :152 (range loop)
+
+## N3/C1 — the per-session reject split reproduces
+$ curl -s -H "Authorization: Bearer $TOK" 'http://127.0.0.1:8080/api/expectancy?by=full'   -> 200, 41 cells
+# aggregated on (condition, session):
+#   reject  ASIA  n=11 w=2  -234.00  18.2% [5.1,47.7]   ids 533,535,536,537,538,550,551,552,553,567,587
+#   reject  LONDON n=8 w=5  +538.50  62.5% [30.6,86.3]  ids 521,529,554,564,565,581,582,584
+#   reject  NY    n=12 w=7  +281.50  58.3% [32.0,80.7]  ids 523,524,544,547,548,549,560,569,570,575,585,591
+#   acceptance n=6 w=1 +4.57 16.7% [3.0,56.4]           ids 522,526,527,532,542,543
+# excluded block: {unresolved_pnl:3, unresolvable:7, test_seam:3, no_condition:0, crypto_era:0}
+# 58 distinct row_ids; population totals 18W/38L/2F, sum -466.43, mean -8.04, win 18/56 = 32.1% [21.4,45.2]
+#   -> identical to section 09's independent cut (2026-09-05-vet-09-top-ten.md:7)
+
+## N4/B13 — the single off-plan open
+$ SELECT COUNT(*) FROM decision_records WHERE date(timestamp,'-5 hours') BETWEEN '2026-08-29' AND '2026-09-04' AND decision_json LIKE '%off-plan%';                       -> 111
+$ ... AND decision_json LIKE '%"action": "wait"%';                                                                                                                        -> 110
+$ SELECT id, cited_scenario_id, risk_check_error FROM decision_records WHERE id IN (35879,36864);
+35879 | off-plan | stale_reeval_refused: sl_breached_in_fresh_bar (high 29158.00 >= sl 29151.25)
+36864 | S1       | entry_gate: R:R 1.76 below floor 2.00 ...      (contains "off-plan" in NO column)
+
+## N6 — the reject table's real window + what the log holds outside it
+$ SELECT MIN(datetime(created_at,'-5 hours')), MAX(...), COUNT(*), MIN(id) FROM planner_rejected_prompts;
+2026-09-01 11:59:57 | 2026-09-04 10:34:21 | 64 | 69
+# store/planner_rejected.go:50-56  "OWNER RULING 2026-09-01: raised 20 -> 200"
+# log '📐 planner attempt ... rejected' by internal date prefix:
+#   08-30 27 · 08-31 38 · 09-01 60 · 09-02 22 · 09-03 2 · 09-04 17
+#   table rows                    09-01 20 · 09-02 25 · 09-03 2 · 09-04 17
+# log-only reject shapes: sweep_leg1_requires_touch (08-30 18:45, table 0), flip{price...} mismatch (08-30 19:18, table 0)
+# 'NO confirming close' in the log: 08-30 x2 (21:43 a1, 21:51 a3) + 09-04 x5   (table holds the 5)
+
+## N5 — the retry ladder is not a boot difference
+09-04 07:38:40 boot 4f47ed2c · 08:30:11 boot 70af663d · 10:53:10 ebe07d5f · 13:25:47 36648655
+09-04 08:09:03  🧩 planner attempt 3/3 repair: prompt ~1731 tokens
+09-04 08:28:32  🧩 planner attempt 3/3 reauthor+block(top+tail, 2 distinct): prompt ~7565 tokens   <- 99s BEFORE the 08:30 boot
+# both under 4f47ed2c; the switch is "2 distinct" reject reasons
+
+## N7 — the thirteen strict calls
+$ SELECT MIN(ai_request_duration_ms), MAX(...), AVG(...) FROM decision_records WHERE id IN (37304,...,37322);
+31852 | 144482 | 76087
+
+## N8 — LONDON 09-04 was cut off, not recovered
+$ SELECT version, datetime(strftime('%s',created_at),'unixepoch','-5 hours') FROM plans WHERE plan_id LIKE '2026-09-04:LONDON%';
+1 | 2026-09-04 01:41:15
+2 | 2026-09-04 02:04:14
+3 | 2026-09-04 07:56:17      <- last version, written BEFORE the 08:25 read
+
+## N12 — B1 attempts
+$ SELECT id, session, attempt, datetime(created_at,'-5 hours') FROM planner_rejected_prompts WHERE id IN (114,115,117,126,129,132);
+114 ASIA 1 2026-09-03 00:07:05 | 115 ASIA 1 00:33:15 | 117 LONDON 1 2026-09-04 07:52:37
+126 NY 3 09:43:31 | 129 NY 3 10:05:36 | 132 NY 3 10:34:21
+
+## N13/C13 — clock vs trade_date on 09-04
+$ SELECT date(created_at,'-5 hours'), COUNT(*) FROM planner_rejected_prompts GROUP BY 1;   -> 09-04: 17
+$ SELECT trade_date, COUNT(*) ...                                                          -> 09-04: 16   (id 116 = 00:37 CT, trade_date 09-03)
+
+## N16 — the transport rows
+$ SELECT id, trade_date, datetime(created_at,'-5 hours') FROM planner_rejected_prompts WHERE id IN (71,72,87,89,90,91);
+71 09-01 09-01 12:33:07 | 72 09-01 09-01 12:43:07 | 87 09-01 09-01 23:47:33
+89 09-01 09-02 01:15:50 | 90 09-01 09-02 01:15:53 | 91 09-01 09-02 01:15:57
+
+## N19 — store lengths (the committed scratch files carry an appended newline)
+planner id 132   31595 chars / 278 lines / 4482 words
+exec system      11120 chars / 165 lines
+exec input       16447 chars / 232 lines      (total 27567 / 397)
+
+## C4 — plan versions vs plans since the strict boot
+$ SELECT plan_id, COUNT(*) FROM plans WHERE created_at >= '2026-09-03 16:10:33' AND lifecycle IN ('active','dormant') AND json_valid(doc) AND session IN ('ASIA','LONDON','NY') GROUP BY plan_id;
+2026-09-03:ASIA 7 | 2026-09-03:NY 1 | 2026-09-04:LONDON 3 | 2026-09-04:NY 5      -> FOUR plans, 16 versions
+# unarmed-in-bias versions: ASIA v1,v3,v7 (one plan) + NY v7 + LONDON v3 -> THREE plans of four = 75% [30.1,95.4]
+
+## B5 — the guide's two stop-floor answers, both shipped at the running rev
+web/src/guide/content/settings.ts:382   'env MIN_SL_ATR_MULT ...'  systemDefault '1.5xATR5m floor [R researched]'
+web/src/guide/content/guards.ts:80      'MIN-SL (env MIN_SL_ATR_MULT, 1.0)'
+web/src/guide/types.ts:6                GUIDE_BUILT_REV = '36648655cfe03fc8dccd03403a10922f1621b24a'
+web/src/guide/content/settings.ts:671   'ARM_MIN_RR = 2.0'   (deleted in code: trader/armed_executor.go:61, pinned armed_executor_test.go:86-88)
+
+## B6 — why D/4h read "unavailable"
+kernel/structure.go:34    var StructureTFs = []string{"5m", "15m", "1h"}
+kernel/structure.go:392   StructureSnapshot loops ONLY over StructureTFs
+trader/auto_trader_planner.go:2063-2065   tf+": unavailable" for anything not in the snapshot
+
+## B7 — the per-level facts are computed per level
+kernel/plan_render.go:219   f := EvaluateLevelFacts(BarsSince(bars, birthMs), l.Price, dir, rule, lookback, now)   <- inside the loop
+kernel/plan_render.go:238   maxInt(f.ClosesBeyondUp, f.ClosesBeyondDown)                                          <- the direction-blind collapse
+
+## B11 — which crypto knobs bind on MNQ
+/api/config/resolved: min_position_size = ineffective ("crypto path hardcodes 12/60")
+                      max_margin_usage  = ineffective ("prompt text only — advisory, never a gate")
+kernel/engine_position.go:63  case isFutures:  maxPositionValue = accountEquity * maxNotionalLev; maxLeverage stays altcoinLeverage
+
+## B15 — class 78 already rules the planner half warn-first
+docs/superpowers/AUDIT-CHECKLIST.md:1785-1818   class 78
+trader/auto_trader_planner.go:1691-1694         "WARN-FIRST per the owner ruling of 2026-09-04"
+trader/wiring_pins_test.go:89                   fails the build if BiasArmWarning becomes a reject
+kernel/arms_bias_coherent.go:109-111            if armedInBias > 0 { return "" }   <- the per-DIRECTION test v5 passed
+
+## C14 — no refusal feedback reaches the executor
+$ grep -niE 'refus|strict|entry_gate|rejected' rendered_executor_system_prompt_dr37768...txt
+67:# 🎯 Entry Standards (Strict)
+77:# Output Format (Strictly Follow)
+(input prompt: no match)

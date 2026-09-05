@@ -1,0 +1,13 @@
+1d MNQ bars: 1898
+drop_flat= True
+   Mon n= 378 up= 236 share= 62.4 (57.4, 67.2) flat= 0
+   Tue n= 383 up= 194 share= 50.7 (45.7, 55.6) flat= 0
+   Wed n= 379 up= 210 share= 55.4 (50.4, 60.3) flat= 0
+   Thu n= 381 up= 201 share= 52.8 (47.7, 57.7) flat= 0
+   Fri n= 375 up= 190 share= 50.7 (45.6, 55.7) flat= 2
+drop_flat= False
+   Mon n= 378 up= 236 share= 62.4 (57.4, 67.2) flat= 0
+   Tue n= 383 up= 194 share= 50.7 (45.7, 55.6) flat= 0
+   Wed n= 379 up= 210 share= 55.4 (50.4, 60.3) flat= 0
+   Thu n= 381 up= 201 share= 52.8 (47.7, 57.7) flat= 0
+   Fri n= 377 up= 190 share= 50.4 (45.4, 55.4) flat= 2
