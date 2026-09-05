@@ -1,10 +1,11 @@
-# VETERAN REVIEW — LEAD REPORT (INTERIM)
+# VETERAN REVIEW — LEAD REPORT
 
 **Owner:** hoang · **Date:** 2026-09-05 · **Lead agent**
-**Status: INTERIM.** Sub-agent parts A–D were dispatched and had not delivered when this
-was pushed. Sections 1–8 are therefore RESERVED. What follows is the one-page summary and
-the lead's own sections 9–10, resting **only** on numbers I computed myself from data
-committed in this repository. Nothing here is quoted from a sub-agent.
+**Status: COMPLETE.** All four sub-agent parts (A–D) delivered and are folded in below. Each was
+verified by me against the committed CSVs and the Go source before use — never taken on its
+summary — and every verification is recorded in that part's section, including one case where my
+own first check was wrong and the sub-agent was right (§8, the 53-minute error). Where sub-agents
+differed, I ruled and said why (§1–3, the win-rate denominator).
 
 ---
 
@@ -61,27 +62,39 @@ that rule. I would change what it is measuring.
 
 **The three biggest problems.**
 
-1. **The fade premise has no measured edge `[T]`.** First-touch hold rate **118/242 =
-   48.76%, Wilson 95% [42.5%, 55.0%]** — 50% sits comfortably inside. Of 18 level kinds,
-   exactly one excludes 50%, and it excludes it *on the wrong side for a fade*: RTH-L holds
-   **20/63 = 31.75%, Wilson [21.6%, 44.0%]**, i.e. the prior-day RTH low **breaks 68% of
-   the time**. The most-seated kind, DEMAND, is **44/85 = 51.8%, Wilson [41.3%, 62.1%]** —
-   a coin flip with a wide interval. The one kind that looks tradeable, VWAP
-   (**43/70 = 61.4%, Wilson [49.7%, 72.0%]**), barely clips 50% *and* **38.6% of its
-   touches were unclassifiable**, so what survives is a selected sample, not a random one.
-2. **The planner will not author the trade the tape is offering `[T]`.** On 09-03, during a
-   **+483-point rally** with the plan's own bias `long` and `day_type: trend`, the planner
-   proposed **0 `open_long` in 575 decisions**; long scenarios were arm-enabled **1 of 23 =
-   4.3%** against shorts at **8 of 18 = 44.4%** (`2026-09-04-two-day-audit.md:279-292`,
-   arithmetic verified by me). The prior day: long 14.1%, short 62.8%. This is a structural
-   short bias, not a bad day.
-3. **The arms funnel loses almost everything, mechanically `[T]`.** Of 15 arms in the
-   two-day window, **3 filled (20%)**. The single largest killer is the marketable guard:
-   **5 of 15 (33%)** died as *"level accepted through — marketable, never placed"*. Read
-   that against the audit's D6 — **71% of arm-enabled scenarios (34 of 48) were authored at
-   a price the tape never reached during that version's own life**
-   (`2026-09-04-two-day-audit.md:877`) — and the system in one sentence is: **it authors
-   levels the market does not visit, and refuses the ones it visits too fast.**
+1. **This system ships mechanisms and does not wire them — and the audit record cannot see it.**
+   This is mine as lead, and it is the finding I would act on first, because it was found
+   *independently by three of the four sub-agents who were not looking for it*. `RiskForceFlat`
+   is returned by `DailyGuardrails.Check()` (`kernel/risk_limits.go:245`) and **discarded by its
+   only production caller** (`kernel/engine_analysis.go:183`); it has zero non-test consumers, so
+   **a resting arm fills straight through a tripped daily limit**. `BiasArmWarning`
+   (`kernel/arms_bias_coherent.go`) — shipped 09-04 *specifically* to answer the planner-shape
+   finding — has **zero production callers**; only tests. The NT8 AddOn computes `slippageTicks`
+   (`ninjascript/VLTraderTCPClient.cs:1383`) and ships it; Go declares the field
+   (`provider/ninjatrader/tcp_framing.go:86`) and **never reads it**. The checklist already
+   recorded a fourth instance itself — `armGateVerdict` with eight call sites, every one a test
+   (`two-day-audit.md:584-588`). I verified all four. `[T]` The pattern is: **the mechanism is
+   built, the test is written, the test passes, and nothing calls it in production.** That means
+   a passing suite and a green checklist row do not establish that a protection is live. Until
+   there is a contract test asserting *production* callers, every safety claim in this project is
+   unproven.
+2. **The fade premise has no measured edge, and the reward side is fiction `[T]`.** First-touch
+   hold rate **118/242 = 48.76%, Wilson [42.5%, 55.0%]** — a coin flip; 17 of 18 level kinds
+   contain 50%. The one kind that separates does so *on the wrong side for a fade*: RTH-L holds
+   **20/63 = 31.75%, Wilson [21.6%, 44.0%]**, i.e. the prior-day RTH low **breaks 68%** of the
+   time — and it carries the highest average score in the candidate pool and is arm-traded 100%
+   as a fade. On the other side of the trade, plans claim a median **2.55:1** while the book
+   realises **1.66:1**, because the R:R floor is checked against a target the model itself chose;
+   only **3 of 36** trades ever produced enough favourable excursion to reach a 2.0R target
+   measured off the *minimum* stop.
+3. **The planner writes longs in a vocabulary the executor cannot arm `[T]`.** The famous 09-03
+   number — 0 `open_long` in 575 decisions during a +483-point rally, long scenarios arm-enabled
+   4.3% against shorts at 44.4% — has a mechanism underneath it that nobody had named: **21 of
+   the 23 long scenarios authored that day rode on conditions the machine could not arm** (9
+   `breakout_retest`, never armable and shadowed; 8 `reclaim`, not armable until the next day; 4
+   `sweep_reclaim`, split-only). From **09:20:47 to 11:58:33 the book was empty on both sides
+   while price ran +199.25 points.** This is not a bias to be prompted away; it is a vocabulary
+   mismatch, and the coherence check meant to catch it is the unwired `BiasArmWarning` above.
 
 **The three biggest opportunities.**
 
@@ -179,126 +192,244 @@ Its three hardest findings:
    telemetry. Meanwhile 3 of 3 armed fills printed the authorized price to the tick on limits the
    market had traded *through*, so the fill statistics carry no live-execution information at all.
 
-## 7–8. RESERVED — sub-agent parts C and D
+## 7. PART C — the prompts, the laws, the settings
 
-Not delivered at the time of this revision. Section 7 (prompts / laws / settings) and section 8
-(the three-day stretch) will be merged in on delivery, each spot-checked against the committed
-CSVs before use, exactly as A and B were.
+**Delivered.** Full text: `docs/superpowers/reports/2026-09-05-veteran-part-c.md` (943 lines).
+
+C did the measurement for real rather than estimating: it rendered the production prompts through
+the actual builders under a scratch overlay (`BuildPlannerPrompt`, `plannerOutputContract`,
+`BuildFuturesDecisionSystemPrompt`) and counted with a real BPE, stating plainly that DeepSeek's
+own tokenizer was unavailable so the counts are a consistent proxy. That caveat is correctly made
+and correctly bounded.
+
+**My verification before use — I checked its three load-bearing claims.**
+
+1. **The prompt contradicts itself on a money number.** `planner_prompt.go:733` renders the floor
+   from the resolver — `fmt.Sprintf("%.1f", MinSLATRMult())` — while `:752` carries the hardcoded
+   literal *"min-SL ≥ 1.0×ATR5m"*. `kernel/min_sl.go:34` sets `MinSLATRMultDefault = 1.5`. So the
+   prompt tells the model the floor is 1.5 in one sentence and 1.0 about 2,000 characters later,
+   and the 1.0 is simply stale. **Confirmed.** A model that sizes to the 1.0 sentence authors
+   stops that are silently widened at arm time and then judged by the R:R gate at the wider
+   number — which is precisely the failure the checklist already recorded at `:853-857`.
+2. **The executor does not know it is in `plan_mode=strict`.** `grep -iw strict` on the
+   boot-verified golden `kernel/testdata/futures_mnq_plan.golden` returns **0**; the only
+   substring hit is the unrelated word "Strictly". **Confirmed.** Meanwhile
+   `trader/entry_gate.go:160-163` refuses every decision-path market entry outright, and the
+   executor is still handed an `open_long` worked example that cannot execute.
+3. **`fvg_entry` is shadow by default** — `kernel/condition_status.go` sets
+   `"fvg_entry": ConditionShadow` in the owner-ruled baseline. **Confirmed**, so C's point that
+   ~20% of the fixed instruction budget buys a condition that cannot place an order stands.
+   I also confirmed the checklist carries exactly **80** `**Law:**` lines, as C states.
+
+**The measurement, as delivered.** Planner prompt fully populated: **19,933 chars / 5,394 tokens**.
+The output contract alone is **12,637 chars / 3,301 tokens = 73.0%** of the minimal prompt. The
+`Rules:` paragraph is **one unbroken line of 10,090 chars / 2,511 tokens / 52 sentences with 157
+ALL-CAPS emphasis tokens — 46.6% of the whole prompt**. Instruction is **~64–80%** of the payload
+depending on how much live data is present. Modal counts, all-caps: **MUST 14 · NEVER 8 ·
+SHOULD 5 · ONLY 14**; any casing: **must 20 · never 27 · should 6 · only 22**. Executor prompt:
+**5,477 chars / 1,506 tokens**, byte-identical to the boot-verified golden.
+
+**My reading of that.** `[I]` Twenty-seven `never`s and a 52-sentence unbroken paragraph is not a
+checklist any more, it is a wall. I have watched desks do this to their own traders: every loss
+adds a line, nothing is ever removed, and within a quarter nobody reads past the third bullet.
+The prompt has been maintained the way a rulebook is maintained after incidents, not the way an
+instruction is maintained for the person who has to act on it. Half of it being a single paragraph
+is the tell.
+
+**The one thing C found that I would put money on immediately.** `B3 breakdown_void_reclaimed` was
+**21 of 55 rejects (38.2%)**, 15 of them on a single day. A prompt sentence created that reject
+class; the class-45 VOID block killed the sentence; rejects went to **zero on 09-03 and 09-04**.
+`[T]` That is the only clean before/after in the entire reject record, and it is the template —
+find the sentence, kill the sentence, measure the class. C is right that it has been applied to
+one rule out of nineteen.
+
+**C's own research-law audit of the prompt, which is the assignment done properly.** Of 12 market
+claims in the prompt, **6 are uncited `[I]`** — including *"Conviction: down on Monday, up
+Thursday/Friday"* (`:656`), which the system's own belief census calls "pure prompt doctrine" —
+**3 are `[R]`-by-reference to studies not present in this tree**, and **2 are `[T]` literals the
+tape has since refuted** ("reject 75% win" against a measured 45.2%, n=31). And bias-tree branch
+5's absolute *"longs ONLY below 50%"* was violated by **17 of 58 plans (29.3%)** with nothing
+rejecting any of them.
+
+## 8. PART D — the three-day stretch and the tape
+
+**Delivered.** Full text: `docs/superpowers/reports/2026-09-05-veteran-part-d.md` (839 lines).
+
+D made the best use of this environment of the four: it found that
+`2026-09-04-two-day-audit-data/` contains **real tape** — `d6_bars_1m_0903.csv`, **1,355 one-minute
+MNQ bars for 2026-09-03** — plus `refusals.csv` (61 rows), `cadence.csv` (588), `plans.csv` (159
+scenario rows). So a genuine partial re-derivation of the two-day audit was possible after all. It
+is still **not a replay**: no 09-02 or 09-04 bars are committed, and D marks the replay BLOCKED and
+writes out the SQL for the owner to run on his own machine.
+
+**My verification before use — I checked all three headline claims myself.**
+
+1. **Cadence.** `cadence.csv` holds **588 rows: 513 `skipped`**, of which **493 `min_interval` and
+   20 `cooldown_enforced`**. Reproduces exactly. The audit's "class-47 suppressed **nothing**"
+   (`two-day-audit.md:38`) is contradicted by the audit's own committed CSV. **D is right.**
+2. **The 53-minute error.** Verified, and *I got this wrong on my first pass and D did not*. I
+   initially tested `high >= 29476.00` and found 10:16 CT, which appeared to refute D. That is the
+   wrong side of the bar: the arm was a **long limit resting below market**, so it is filled by the
+   **low**. Testing correctly: exactly **one** bar after 11:27 has `low <= 29476.00`, at **12:21
+   CT**; 11:28's low was **29494.00**; and 29476.00 prints exactly once all day. The audit's
+   "price did reach 29476.00 at 11:28 CT … by 8.2 points and one minute"
+   (`two-day-audit.md:335-336`) is wrong by **53 minutes**. **D is right.**
+3. **`BiasArmWarning` has zero production callers.** `grep -rln "BiasArmWarning" --include=*.go`
+   returns exactly one non-test file — `kernel/arms_bias_coherent.go`, its own definition. Every
+   other reference is a test. **D is right.**
+
+**The ruling that matters.** The audit's headline split — gates ~5% / planner shape ~55% / outage
+~30% — is *directionally* right and *structurally* unsound, and I accept D's reasoning. The
+percentages **have no denominator and no unit**: the buckets are counted in four incommensurable
+currencies (scenarios, refusal events, one "window", arms) and then assigned shares on an
+undisclosed basis. D shows the report's own §11 counts, if actually used, invert it to gates 41.1%
+/ outage 0.7%. `[T]` **I would not quote the 5/55/30 split again.** The underlying findings
+survive; the arithmetic that ranks them does not. That is a real defect in the project's most
+load-bearing recent document, and it is exactly the kind of thing a second pair of eyes is for.
+
+**What D adds that changes the picture.**
+
+- **The mechanism behind the 4.3%.** **21 of the 23 long scenarios written on 09-03 rode on
+  conditions the machine could not arm** — 9 `breakout_retest` (never armable *and* shadowed), 8
+  `reclaim` (not armable until the next day), 4 `sweep_reclaim` (split-only). The planner was not
+  merely biased; it was writing longs in a vocabulary the executor had no way to express. `[T]`
+- **From 09:20:47 to 11:58:33 the book was completely empty on both sides while price ran +199.25
+  points.** `[T]`
+- **The fix for the #1 cause was never wired.** `BiasArmWarning` (`kernel/arms_bias_coherent.go:74`)
+  shipped 09-04 against the planner-shape finding and has zero production callers; its sibling
+  `ArmableConditionsLine` did ship. Half a fix — while the prompt-contract boot line still reports
+  "19 restrictions, all stated in prompt". `[T]`
+- **A caveat D is right to flag:** the audit's `arm.enabled` numerators (1 and 8) appear in **no**
+  committed CSV — `plans.csv` has no such column — so 4.3%/44.4% remains the audit's claim, not an
+  independently verified number. I had checked only its internal arithmetic; D is correct that this
+  is weaker evidence than it looked. It stays in the report labelled as the audit's.
 
 ---
 
 ## 9. MY TOP TEN
 
-Ordered. Each carries **what · why (evidence) · what it takes · the number I would watch**.
-Every item was cross-checked against `AUDIT-CHECKLIST.md` so that nothing already fixed is
-recommended again; the things I found already fixed are listed at the end of this section
-and I am **not** re-recommending them.
+Ordered by what I would do first with my own money on the line. Each carries **what · why
+(evidence) · what it takes · the number I would watch**. Cross-checked against
+`AUDIT-CHECKLIST.md` so nothing already fixed is recommended again; the already-fixed items I
+found are listed at the end and deliberately **not** re-recommended. Two are removals (items 9 and
+10); a third, item 6, is a "do not build".
 
-**1. Stop seating levels as fade triggers until the kind has a hold rate whose Wilson
-interval excludes 50%.**
-*Why:* first touch is **48.76%, n=242, Wilson [42.5%, 55.0%]** `[T]`. Of 18 kinds, 17 have
-50% inside their interval. Seating a level as an entry trigger is asserting a market belief;
-on this tape that belief is unsupported for every kind but one.
-*What it takes:* an owner ruling plus a seating-eligibility predicate — data already exists.
-*Watch:* count of seated entry-trigger kinds whose Wilson lower bound > 0.50. Today: **0**.
+**1. Audit every safety mechanism for a production caller, and add a contract test that fails
+without one.**
+*Why:* four independent instances, all verified by me `[T]` — `RiskForceFlat`
+(`kernel/risk_limits.go:245`, discarded at `kernel/engine_analysis.go:183`), `BiasArmWarning`
+(`kernel/arms_bias_coherent.go`, only non-test reference is its own definition), `armGateVerdict`
+(`trader/armed_executor.go:1338`; all 8 call sites are in `armed_executor_test.go`), and
+`SlippageTicks` (`provider/ninjatrader/tcp_framing.go:86`, declared, set in a mock and a test,
+never read). `[I]` A green suite that proves a function works, while nothing calls it, is the most
+expensive kind of false comfort — it is how a desk discovers in a drawdown that its risk limit was
+a unit test.
+*What it takes:* code + a contract test in the style the project already uses for boot lines.
+*Watch:* count of money-deciding mechanisms with zero production callers. Today: **at least 4**.
 
-**2. Trade RTH-L as a break, not a hold.**
-*Why:* **20/63 = 31.75% hold, Wilson [21.6%, 44.0%]** `[T]` — the only kind in the census
-that separates from a coin flip, and it separates toward the break. n=63 is thin, so I would
-size it as a probe, not a program.
-*What it takes:* prompt + scenario vocabulary (the `breakdown` scenario already exists).
-*Watch:* RTH-L break-side expectancy, target n≥100 before it earns a real allocation.
-
-**3. Fix the marketable guard — do not let it silently eat a third of the book.**
-*Why:* **5 of 15 arms (33%)** died *"level accepted through — marketable, never placed"*,
-and **9 of 15** had `price_traded_through=YES` `[T]`. `[I]` In my experience a limit that
-refuses to become marketable is not protecting you from slippage; it is selecting for slow,
-mean-reverting approaches and discarding fast ones — that is adverse selection you are doing
-to yourself. The guard should convert to a controlled stop-entry or a bounded marketable
-order with a slippage cap, not cancel.
-*What it takes:* code, in `armed_executor.go`, plus an owner ruling on the slippage cap.
-*Watch:* arms filled ÷ arms whose level was reached. Today **3 of 9 = 33%**.
-
-**4. Make the planner author longs, and prove it with a per-side arm-enablement floor.**
-*Why:* **4.3% long vs 44.4% short arm-enablement on a +483-pt trend day with a `long` plan
-bias; 0 `open_long` in 575 decisions** `[T]`. A system that cannot express its own stated
-bias does not have a bias.
-*What it takes:* prompt work first (the checklist already records the mechanism at
-`:848-853` — an unconditional `MUST` naming a continuation short, which the validator then
-voided, so the model was punished for obeying). Then a measured floor.
-*Watch:* long-side arm-enablement rate on days the plan bias is `long`. Today **4.3%**.
-
-**5. Wire the daily loss limit to something that can actually stop trading — THEN turn it on.**
-*Why:* two findings compound. Mine: the $450 limit trips **1 of 11 days (9.09%)** and forfeits
-**$0.00/day** `[T]` — zero measured cost, caps the −$492.00 tail. Part B's, which I verified and
-which **reorders this item**: the limit as built cannot flatten you or stop a resting arm.
-`DailyGuardrails.Check()` returns `RiskForceFlat` (`kernel/risk_limits.go:245`) and the only
-production caller discards the value (`kernel/engine_analysis.go:183`); `RiskForceFlat` has zero
-non-test consumers. **Switching the knob on today would buy a feeling, not a stop.** `[I]` A daily
-stop's real job is not P&L, it is stopping the operator from re-engaging on a day his read is
-demonstrably wrong — and a stop that arms fill through is worse than none, because it is believed.
-*What it takes:* code first (consume `RiskForceFlat` in both order paths), then the knob.
+**2. Wire the daily loss limit to something that can stop trading — then turn it on.**
+*Why:* the limit trips **1 of 11 days (9.09%)** and forfeits **$0.00/day** `[T]`
+(`day_sim.csv`; `mc_drawdown.py:127-128` explains the zero — the crossing trade was the day's
+last). Free insurance. But per item 1 it cannot flatten or stop a resting arm today, so switching
+the knob on buys a feeling, not a stop.
+*What it takes:* code first (consume `RiskForceFlat` on both order paths), then the knob.
 *Watch:* days tripped; and a fixture proving a tripped limit cancels a resting arm.
 
-**6. Do NOT add a daily trade cap — and say so in the record.**
-*Why:* `max_daily_trades_3` trips **81.84% of days** and costs **−$24.54/day** net `[T]`
-(`day_sim.csv`). It is the intuitive risk control that this tape says is wrong. I am listing
-it because it is the kind of thing that gets added after a bad week.
-*What it takes:* an owner ruling, written down.
-*Watch:* nothing — the point is to not build it.
+**3. Fix the two prompt sentences that state the wrong money number.**
+*Why:* `planner_prompt.go:733` renders the stop floor from the resolver (1.5) and `:752` carries a
+stale literal saying **1.0×ATR5m**, against `MinSLATRMultDefault = 1.5` (`kernel/min_sl.go:34`)
+`[T]`. A model sizing to the 1.0 sentence authors stops that get silently widened at arm time and
+then judged at the wider number by the R:R gate — the exact punishment loop the checklist already
+recorded at `:853-857`. The same paragraph lists `fvg_entry` as arm-legal and then forbids arming
+it.
+*What it takes:* prompt, one line each. This is the cheapest item on the list.
+*Watch:* rejects per rule; and whether authored stop ÷ ATR5m clusters at 1.0 or 1.5.
 
-**7. Report the effective sample as days, not trades.**
-*Why:* n=64 trades are **11 session days**, and the P&L is dominated by two of them
-(+$469.00, −$492.00) `[T]`. Trades inside a day share one plan, one bias, one regime — they
-are not independent. The MC rig bootstraps by trade with a mean block of 5
-(`mc_drawdown.py:35-38`), which approximates a day by accident of scale (64/11 = 5.8
-trades/day) rather than by design.
-*What it takes:* data/reporting change; key the block bootstrap to `session_day_ct`.
-*Watch:* distinct session days. Today **11**. I would not take any strategy conclusion
-seriously below ~60.
+**4. Fix the armable-condition vocabulary before touching the planner's bias.**
+*Why:* **21 of the 23 long scenarios on 09-03 rode on conditions the executor cannot arm** — 9
+`breakout_retest` (never armable *and* shadowed), 8 `reclaim`, 4 `sweep_reclaim` `[T]`. The 4.3%
+long arm-enablement is a *symptom*; the cause is that the planner writes longs in a vocabulary the
+machine has no way to express. Telling it to write more longs changes nothing.
+*What it takes:* owner ruling on which conditions are armable, then code, then prompt. And wire
+`BiasArmWarning`, which shipped for this exact finding and has no callers.
+*Watch:* share of authored long scenarios whose condition is in the armable set; then long-side
+arm-enablement on `long`-bias days (today **4.3%**, the audit's figure — not reproducible from any
+committed CSV, so treat it as their claim).
 
-**8. Publish the ambiguity rate next to every hold rate.**
-*Why:* SWG-L and eVWAP are **50% unclassifiable**, SWG-H **48.3%**, OB **44.4%**, VWAP
-**38.6%** `[T]`. A rate computed on the classifiable half of a sample is not that sample's
-rate. This is quietly the biggest measurement defect in the level census and it flatters
-exactly the kind (VWAP) that looks most tradeable.
-*What it takes:* reporting change in the detector telemetry; the field already exists.
-*Watch:* ambiguous ÷ rows_all per kind; suppress any kind above ~25% from decision use.
+**5. Convert the marketable guard from a cancel into a bounded entry.**
+*Why:* **5 of 15 arms (33%) died "level accepted through — marketable, never placed"** against
+only 3 filled; **9 of 15** had price trade through; one died over **1.70 points** `[T]`. The
+cancel is terminal, re-armable only on a plan-version change, runs once per scan on a bar close
+(`armed_executor.go:898`), and emits no counter at all — only a `logWarnf` (`:960-961`). `[I]` A
+limit that refuses to become marketable is not saving you slippage; it is selecting for slow
+mean-reverting approaches and discarding fast ones. That is adverse selection you are performing
+on yourself.
+*What it takes:* code + an owner ruling on a slippage cap. And a counter, so it stops being
+invisible.
+*Watch:* arms filled ÷ arms whose level was reached. Today **3 of 9 = 33%**.
 
-**9. REMOVAL — retire `eVWAP`, `VWAP±2σ`, `EQL`, `ONH`, `ONL`, `PDL` as decision inputs.**
-*Why:* n_den of **5, 4, 2, 3, 3, 3** respectively `[T]`. `ONH`, `PDL` and `EQL` show
-100% hold on **n=3, n=3, n=2** — those are not edges, they are rounding. Carrying them
-implies a knowledge the system does not have, and every one of them widens the surface the
-planner must reason over.
-*What it takes:* code + owner ruling.
-*Watch:* seated kinds count; and no decision citing a kind with n < 30.
+**6. Do NOT add a daily trade cap — and write the ruling down.**
+*Why:* `max_daily_trades_3` trips **81.84% of days** and costs **−$24.54/day** net `[T]`. It is
+the intuitive control that this tape says is wrong, and it is exactly what gets added after a bad
+week.
+*What it takes:* an owner ruling, recorded.
+*Watch:* nothing. The point is to not build it.
 
-**10. REMOVAL — delete the 105-minute structural wake blackout, or state it as a rule.**
-*Why:* NY `WindowEndCT`=14:45 and ASIA `ReadCT`=16:30 make `inSessionReadWindow` false for
-all of **14:45–16:30 every weekday** (`2026-09-04-two-day-audit.md:880`) `[T]`. Either it is
-a deliberate no-trade window — in which case it belongs in the plan, on the card, where the
-owner can see it — or it is an artefact of two constants that were never diffed. `[I]` Dead
-time you did not choose is how you end up flat through the move that pays for the month.
-*What it takes:* code, or an owner ruling that promotes it to a stated rule.
-*Watch:* decisions per hour across 14:45–16:30. Today: none, by construction.
+**7. Read the slippage the broker is already sending you.**
+*Why:* the AddOn computes `slippageTicks` and ships it; Go never reads it `[T]`. Meanwhile 3 of 3
+armed fills printed the authorized price to the tick on limits the market had traded *through*, so
+the fill record currently carries **no live-execution information at all**. You cannot manage
+execution you do not measure, and the measurement is already on the wire.
+*What it takes:* code — a column and a counter.
+*Watch:* mean and 90th-percentile slippage per fill, by condition.
+
+**8. Report the effective sample as days, and publish ambiguity next to every rate.**
+*Why:* n=64 trades are **11 session days**, dominated by two of them (+$469.00, −$492.00) `[T]`;
+trades inside a day share one plan, one bias, one regime. The MC rig bootstraps by trade with a
+mean block of 5 (`mc_drawdown.py:35-38`), which approximates a day by accident of scale, not by
+design. Separately, ambiguity is the quiet defect in the level census: SWG-L and eVWAP **50%**
+unclassifiable, SWG-H **48.3%**, OB **44.4%**, VWAP **38.6%** `[T]` — and it flatters exactly the
+kind that looks most tradeable.
+*What it takes:* data/reporting; key the block bootstrap to `session_day_ct`.
+*Watch:* distinct session days (today **11**; I would not take a strategy conclusion seriously
+below ~60), and ambiguous ÷ rows_all per kind.
+
+**9. REMOVAL — retire `eVWAP`, `VWAP±2σ`, `EQL`, `ONH`, `ONL`, `PDL` as decision inputs, and cut
+the `fvg_entry` instruction block.**
+*Why:* n_den of **5, 4, 2, 3, 3, 3** `[T]`; `ONH`, `PDL` and `EQL` show 100% hold on n=3, n=3,
+n=2 — rounding, not edges. And `fvg_entry` is `shadow` by default
+(`kernel/condition_status.go`) while consuming ~20% of the fixed instruction budget — **32
+mentions and 850 tokens of Rules-paragraph** buying a condition that cannot place an order `[T]`.
+*What it takes:* code + prompt + owner ruling.
+*Watch:* seated-kind count; prompt token count; and no decision citing a kind with n < 30.
+
+**10. REMOVAL — cut the `Rules:` paragraph in half, and delete the 105-minute wake blackout or
+promote it to a stated rule.**
+*Why:* the `Rules:` paragraph is **one unbroken line of 10,090 chars / 2,511 tokens / 52 sentences
+with 157 ALL-CAPS emphasis tokens — 46.6% of the whole prompt**, inside a prompt that is
+**~64–80% instruction by token** with **27 `never`s** `[T]`. `[I]` That is past the point where
+anyone, model or human, reads to the end. The template for cutting it already exists and is
+measured: `B3 breakdown_void_reclaimed` was **21 of 55 rejects (38.2%)**; a prompt sentence caused
+it, the class-45 VOID block killed the sentence, and rejects went to **zero** on 09-03 and 09-04.
+Separately, NY `WindowEndCT`=14:45 with ASIA `ReadCT`=16:30 makes `inSessionReadWindow` false for
+**14:45–16:30 every weekday** (`two-day-audit.md:880`) — either a deliberate no-trade window,
+which belongs on the plan card, or two constants nobody diffed.
+*What it takes:* prompt; and code or an owner ruling for the blackout.
+*Watch:* prompt tokens (today **5,394** full-render) and rejects per rule; decisions per hour
+across 14:45–16:30 (today: none, by construction).
 
 ### Cross-check — already fixed, NOT re-recommended
-- **BE and the ATR trail suspended** behind `EXIT_MECHS_SUSPENDED`
-  (`AUDIT-CHECKLIST.md:632-644`). This was the right call and the evidence is clean: 2 BE
-  moves and 8 trail ratchets on 09-01, **$719.50 of giveback, and zero trail EXITS ever**. A
-  mechanism that moves a live stop and has never once been the reason a trade ended is
-  giving away money for nothing. Leave it suspended.
-- **Stop floor 1.0→1.5×ATR5m, composed stop, level never invented** (`:640-644`).
-- **"One gate, two ATRs"** — the decision path read the DAILY ATR (300.4) and refused
-  against a phantom `1.5×ATR5m = 450.56` while the arm seam used ATR5m 12.78–14.12; all
-  three refused targets printed within 28 minutes. Fixed; both seams now read
-  `armSeamATR5m` (`:777-789`).
-- **Stage-A size ceiling: 1 contract until n≥30 with a positive lower-CI expectancy**
-  (`:645-647`). **This is the best rule in the checklist and I would not touch it.** Note
-  where it currently stands: n=64 clears n≥30, but the lower CI is **−$31.27**. *The
-  system's own rule already says do not size up.*
-
----
+- **BE and the ATR trail suspended** behind `EXIT_MECHS_SUSPENDED` (`AUDIT-CHECKLIST.md:632-644`).
+  Right call, clean evidence: 2 BE moves and 8 trail ratchets on 09-01, **$719.50 of giveback and
+  zero trail EXITS ever**. Leave it suspended.
+- **Stop floor 1.0→1.5×ATR5m, composed stop, level never invented** (`:640-644`). Note item 3: the
+  prompt still tells the model 1.0 in one sentence.
+- **"One gate, two ATRs"** — the decision path read the DAILY ATR (300.4) and refused against a
+  phantom `1.5×ATR5m = 450.56` while the arm seam used ATR5m 12.78–14.12; all three refused
+  targets printed within 28 minutes. Fixed (`:777-789`).
+- **Stage-A size ceiling: 1 contract until n≥30 with a positive lower-CI expectancy** (`:645-647`).
+  **The best rule in the checklist; do not touch it.** Where it stands: n=64 clears n≥30, the
+  lower CI is **−$31.27**. *The system's own rule already says do not size up.*
 
 ## 10. IDEAS
 
