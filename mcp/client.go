@@ -1282,11 +1282,21 @@ func (client *Client) CallWithRequestStreamDeadlines(req *Request, onChunk func(
 	}()
 
 	// CLASS 46 D6 — trace the connection from inside the process.
+	//
+	// The traced context is bound to its OWN name and never assigned back over
+	// ctx: the watchdog goroutine above closed over the ctx VARIABLE and reads
+	// it (`case <-ctx.Done()`), so reassigning ctx here is a data race between
+	// this goroutine and the watchdog — `go test -race ./mcp/...` reports it on
+	// every streaming test. reqCtx derives from ctx, so cancel() still cancels
+	// the request, and the trace is only ever needed for the HTTP call itself;
+	// context.Cause(ctx) and wrapStreamDeadlineErr(ctx, ...) below want the
+	// cancellation, not the trace.
 	tr, ctrace, _ := newConnTrace()
+	reqCtx := ctx
 	if TransportTraceEnabled() {
-		ctx = httptrace.WithClientTrace(ctx, ctrace)
+		reqCtx = httptrace.WithClientTrace(ctx, ctrace)
 	}
-	httpReq = httpReq.WithContext(ctx)
+	httpReq = httpReq.WithContext(reqCtx)
 	reqStart := time.Now()
 	resp, err := hc.Do(httpReq)
 	if err != nil {
