@@ -180,10 +180,21 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 						SoftGuardrailFunc(ctx.TraderID, hit)
 					}
 				}
-			} else if _, gErr := g.Check(); gErr != nil {
+			} else if gDecision, gErr := g.Check(); gErr != nil {
 				logger.Warnf("⚠️ Strategy Studio daily guardrail tripped: %v — skipping decision cycle (HOLD)", gErr)
 				telemetry.RiskGateTrips.WithLabelValues("strategy_studio_daily").Inc()
 				telemetry.IncGateBlock(ctx.TraderID, "strategy_studio_daily")
+				// WIRING (2026-09-05) — the decision this call has always
+				// returned used to be discarded (`_, gErr :=`), so a HOLD on the
+				// decision cycle was the WHOLE effect of a daily-loss trip and a
+				// resting arm filled straight through it. RiskForceFlat is now
+				// published; EntryGate reads it and refuses on BOTH order paths.
+				// Open positions are deliberately NOT closed here — that stays
+				// operator-initiated via POST /api/risk/force-flat, per the
+				// ForceFlatSignaler contract below.
+				if gDecision == RiskForceFlat {
+					SetDailyForceFlat(ctx.TraderID, gErr.Error())
+				}
 				return holdCycle("daily_guardrail"), nil
 			} else if boolOrDefault(rc.BlackoutEnabled, false) && InBlackoutWindow(time.Now(), rc.BlackoutStartCT, rc.BlackoutEndCT) {
 				// Chunk 4 — time/news blackout: go passive during a configured daily

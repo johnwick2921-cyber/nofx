@@ -145,11 +145,76 @@ var (
 // CME Sunday 18:00 ET open.
 // Clock seam (class 60): the entry point owns the wall clock and does nothing
 // else; the rule lives in the …At body so a test can state its own hour.
+// ---------------------------------------------------------------------------
+// DAILY FORCE-FLAT TRIP STATE (wiring wave 2026-09-05)
+//
+// DailyGuardrails.Check() has always returned RiskForceFlat on a daily-loss
+// trip, and its ONLY production caller discarded the value:
+//
+//	} else if _, gErr := g.Check(); gErr != nil {   // engine_analysis.go
+//
+// so the trip skipped the decision cycle and nothing else. The ARM path never
+// consulted the guardrail at all (entry_gate.go contained neither "daily" nor
+// "guardrail"), which meant a RESTING ARM FILLED STRAIGHT THROUGH A TRIPPED
+// DAILY LOSS LIMIT. The limit was believed and did not hold.
+//
+// The caller now publishes the trip here and EntryGate reads it, so both order
+// paths — arm seam and decision path — refuse new entries once it is set.
+//
+// SCOPE, deliberately: this blocks NEW ENTRIES only. Open positions are NOT
+// closed. Closing them stays operator-initiated via POST /api/risk/force-flat,
+// per the ForceFlatSignaler contract documented in engine_analysis.go — that
+// policy is unchanged by this wave.
+//
+// Cleared by the CME session-day reset (ResetDailyPnLAt), so a trip lasts the
+// session-day and lifts with the daily window.
+var (
+	forceFlatMu     sync.RWMutex
+	forceFlatReason = map[string]string{}
+)
+
+// SetDailyForceFlat records that traderID tripped its daily loss limit.
+func SetDailyForceFlat(traderID, reason string) {
+	forceFlatMu.Lock()
+	defer forceFlatMu.Unlock()
+	if _, already := forceFlatReason[traderID]; !already {
+		logger.Warnf("🔴 daily force-flat ARMED for trader %s: %s — NEW ENTRIES BLOCKED on both order paths until the daily window resets", traderID, reason)
+	}
+	forceFlatReason[traderID] = reason
+}
+
+// DailyForceFlatReason returns the trip reason for traderID, or "" when the
+// daily loss limit has not tripped. "" is the fail-open answer: no evidence of
+// a trip is never a refusal.
+func DailyForceFlatReason(traderID string) string {
+	forceFlatMu.RLock()
+	defer forceFlatMu.RUnlock()
+	return forceFlatReason[traderID]
+}
+
+// ClearDailyForceFlat lifts the trip for one trader (operator resume).
+func ClearDailyForceFlat(traderID string) {
+	forceFlatMu.Lock()
+	defer forceFlatMu.Unlock()
+	delete(forceFlatReason, traderID)
+}
+
+// clearAllDailyForceFlat lifts every trip; called by the daily reset.
+func clearAllDailyForceFlat() {
+	forceFlatMu.Lock()
+	defer forceFlatMu.Unlock()
+	if n := len(forceFlatReason); n > 0 {
+		logger.Infof("daily force-flat cleared for %d trader(s) by the daily window reset", n)
+	}
+	forceFlatReason = map[string]string{}
+}
+
 func ResetDailyPnL() {
 	ResetDailyPnLAt(time.Now())
 }
 
 func ResetDailyPnLAt(now time.Time) {
+	clearAllDailyForceFlat()
 	dailyResetMu.Lock()
 	defer dailyResetMu.Unlock()
 	lastDailyResetDate = CMESessionDayKey(now)

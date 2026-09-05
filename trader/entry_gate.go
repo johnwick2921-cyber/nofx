@@ -78,6 +78,12 @@ type EntryIntent struct {
 	// Shadow resolver (nil = shadow leg off, fail-open).
 	ConditionShadowed func(condition string) bool
 
+	// DAILY GUARDRAIL resolver (nil = leg off, fail-open). Returns the daily
+	// force-flat trip reason, or "" when the daily loss limit has not tripped.
+	// Set on BOTH paths so a tripped limit closes the arm seam too — before
+	// this wave the arm path never consulted the guardrail at all.
+	DailyForceFlat func() string
+
 	// NO-CHASE (2026-09-02) — the level the scenario CITES and its most recent
 	// touch, so the gate can ask how far this entry sits from the thing it
 	// claims to be trading. Zero values mean "not known": the leg abstains
@@ -146,6 +152,24 @@ func EntryGate(in EntryIntent) (reason string, refused bool) {
 	}
 	if side != "long" && side != "short" {
 		return "", false // not an entry intent — not this gate's job
+	}
+
+	// Leg D — DAILY LOSS LIMIT (wiring wave 2026-09-05). Runs BEFORE leg 0:
+	// a tripped daily limit outranks every other reason to take or refuse an
+	// entry, and its refusal is the one the journal should show.
+	//
+	// This leg is the half of the daily guardrail that was missing.
+	// DailyGuardrails.Check() always returned RiskForceFlat on a daily-loss
+	// trip, its only caller discarded the value, and this file contained
+	// neither "daily" nor "guardrail" — so the limit stopped the decision cycle
+	// and a RESTING ARM FILLED STRAIGHT THROUGH IT.
+	//
+	// Fail-open per the file's contract: a nil resolver, or an empty reason,
+	// is not evidence of a trip and never refuses.
+	if in.DailyForceFlat != nil {
+		if why := in.DailyForceFlat(); strings.TrimSpace(why) != "" {
+			return fmt.Sprintf("entry_gate: refused: daily_force_flat — %s (new entries blocked on the %s path until the daily window resets; open positions are not closed by this leg)", why, in.Path), true
+		}
 	}
 
 	// Leg 0 — plan_mode STRICT (R4, OWNER RULING 2026-09-03). FIRST
@@ -349,6 +373,7 @@ func (at *AutoTrader) entryGateForArm(plan *kernel.ActivePlan, sc kernel.PlanSce
 	touchPx, hasTouch := at.lastTouchFor(levelPx)
 	return EntryGate(EntryIntent{
 		Path:           "arm",
+		DailyForceFlat: func() string { return kernel.DailyForceFlatReason(at.id) },
 		CitedLevelPx:   levelPx,
 		CitedLevelKind: levelKind,
 		LastTouchPx:    touchPx,
@@ -417,6 +442,7 @@ func (at *AutoTrader) entryGateForDecision(d *kernel.Decision, livePrice float64
 	}
 	intent := EntryIntent{
 		Path:                 "decision",
+		DailyForceFlat:       func() string { return kernel.DailyForceFlatReason(at.id) },
 		Action:               d.Action,
 		Symbol:               d.Symbol,
 		Entry:                livePrice,

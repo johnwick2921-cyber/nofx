@@ -1681,6 +1681,20 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		for _, w := range kernel.ArmFeasibilityWarnings(d, atr5m, at.armMinRRFor(nil), kernel.MinSLATRMult()) {
 			at.logWarnf("⚔️ arm feasibility: %s (WARN — write proceeds; the gate-at-arm chain enforces)", w)
 		}
+		// D2 (arms-follow-bias) — WIRED 2026-09-05. BiasArmWarning shipped
+		// 2026-09-04 to answer the planner-shape finding and had ZERO
+		// production callers: it was written, tested, and never called, so a
+		// plan whose bias direction carried no armed scenario shipped silently.
+		// With plan_mode=strict the arm path is the ONLY entry, so such a plan
+		// cannot trade the direction it just argued for.
+		//
+		// WARN-FIRST per the owner ruling of 2026-09-04 recorded in
+		// kernel/arms_bias_coherent.go: a hard reject would have refused
+		// 50/68 longs and 66/103 shorts across 171 stored plans. The write
+		// proceeds; this makes the condition visible instead of silent.
+		if w := kernel.BiasArmWarning(d, kernel.ResolvedConditionStatuses(nil, nil, kernel.ShadowConditionsEnv())); w != "" {
+			at.logWarnf("🧭 bias-coherent arms: %s (WARN — write proceeds; owner ruling 2026-09-04 is warn-first)", w)
+		}
 		// FVG ENTRY MODEL (2026-08-26) — write-time re-verification from stored
 		// bars: the 3-candle relation, the gap floor, the displacement body vs
 		// 5m ATR, and the origin-level membership. A fake/stale gap fails the
