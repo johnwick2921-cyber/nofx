@@ -1873,6 +1873,44 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     column exists to prevent. Related: class 49/53 (a plausible zero), class 69
     (built ≠ wired — here, wired ≠ effective).
 
+81. **A send read as a settlement.** (Number assigned at merge, A16 — highest
+    occupied on dev at authoring: 80. Re-check at merge.) `nt.CancelOrder` is a
+    one-line pass-through to `SendCancelOrder`; its error is the result of
+    putting a frame on a socket, and it returns non-nil in exactly two cases —
+    no client connected, or `WriteFrame` failed. Everything past the socket
+    (did the AddOn find the order, did `Account.Cancel` throw, did NT8 accept
+    it) returns nil. Five sites in `armed_executor.go` read `cerr == nil` as
+    proof the order was gone and wrote the ledger terminal on it, and the sync
+    helper wrote `cancelled` even on ACK TIMEOUT with the reason
+    "flatten proceeds" — UNKNOWN taking the destructive branch, where
+    "cancelled" is destructive because it is the word that unlocks a
+    replacement. **Measured cost:** across the ledger's whole lifetime, 47 rows
+    reached the broker and exactly THREE cancels were ever confirmed by NT8
+    (ids 8, 37, 102). The other 34 are our own assertions — 'cancelled' has been
+    ~92% unverified. **What identified it** was not a failure: it was asking, of
+    a row that read 'cancelled', which *frame* said so — and finding that the
+    question had no answer for 34 of 37 rows. **Probe:** for any state written
+    after an outbound call, ask what RECEIVED evidence justifies it; if the
+    answer is the call's own return, it is an intention, not an observation.
+    Then count how many rows in that state can name their evidence.
+    **Law:** a distributed claim is settled by a RECEIVED far-side frame
+    (A20/class 6). A cancel is proven by the ORDER'S ABSENCE FROM A FRESH BROKER
+    SNAPSHOT — never by a return value, a log line, or a ledger row. The row
+    moves to a NON-TERMINAL `cancel_pending` and only a snapshot may finish it,
+    recording WHICH snapshot did. A stale or absent book settles nothing and
+    promotes nothing.
+    **Corollary — the invariant that actually stops stacking.** The nine live
+    orders of `nt8_order_snapshots` id 1664 were NOT nine failed cancels: NT8
+    honoured all 22 cancels for that slot within ~110-260 ms. They were nine
+    concurrent PLACEMENTS, and the mechanism is arithmetic — mint every ~2 min
+    ÷ retire after 15 min = 7-8 alive. A per-slot invariant (the broker's fresh
+    book must show ZERO non-terminal orders for the slot before any placement)
+    takes that to 1 and is the load-bearing half. **A guard on one placement
+    path is not a guard** — this repo has two.
+    Sibling to class 79 (silence is not death) and class 33 (the boot sweep):
+    all three are the same shape — an ABSENCE OF EVIDENCE is not evidence of
+    absence. Related: class 70 (built ≠ wired), class 49/53 (a plausible zero).
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,

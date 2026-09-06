@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	nt "nofx/provider/ninjatrader"
@@ -369,7 +370,12 @@ func (at *AutoTrader) confirmPendingCancels(ledger *store.ArmedOrderStore, cance
 		r := rows[i]
 		ok, why := cancelSettled(book, have, age, maxAge, r.SignalID)
 		if ok && snapID > 0 {
-			if err := ledger.ConfirmCancel(r.ID, snapID, "cancel confirmed: "+why); err != nil {
+			// The ORIGINAL reason survives the confirmation. Each cancel site
+			// names WHY it cancelled (gate changed, one_live_arm_guard,
+			// entry_gate, condition_shadowed…) and that word is the only record
+			// of the decision; a confirmation that overwrote it would trade one
+			// kind of blindness for another.
+			if err := ledger.ConfirmCancel(r.ID, snapID, strings.TrimSpace(r.StateReason)+" — confirmed: "+why); err != nil {
 				at.logWarnf("🧾 cancel confirm: ledger write failed for %s: %v", r.Scenario, err)
 				continue
 			}
@@ -412,4 +418,122 @@ func (at *AutoTrader) confirmPendingCancels(ledger *store.ArmedOrderStore, cance
 			r.Scenario, shortID(r.SignalID), reqAge.Round(time.Second), why, r.CancelAttempts+1, cap, store.StateCancelPending)
 	}
 	return settled, stillPending, reRequested
+}
+
+// ── D4 — RECONCILE WHAT IS ALREADY WRONG (three-state, A30) ──────────────────
+//
+// For every non-terminal ledger row, ask the freshest book. NOTHING is
+// auto-cancelled: a row the broker still lists is a WARN and a count, and the
+// owner decides. Never delete a row.
+
+// ReconcileCounts is one pass's three-state result. Counts, never rates (A24).
+type ReconcileCounts struct {
+	ConfirmedGone int     // the book agrees the order is gone
+	LiveAtBroker  int     // the book still lists it — the dangerous case
+	Unconfirmed   int     // no fresh book; nothing can be said
+	LiveIDs       []int64 // sample-id law (A21)
+	SnapshotID    int64
+	Ran           bool // false until a book has been seen at all
+}
+
+// cancelReconcileDone latches the once-per-boot reconciliation per trader. It
+// is NOT latched when no book was available, so the pass retries until it can
+// actually answer — an unanswered question is not a finished one.
+var cancelReconcileDone sync.Map // trader id -> ReconcileCounts
+
+// ResetCancelReconcileForTest clears the latch.
+func ResetCancelReconcileForTest() { cancelReconcileDone = sync.Map{} }
+
+// LastReconcile returns what the once-per-boot pass measured, for the boot line.
+func LastReconcile(traderID string) ReconcileCounts {
+	if v, ok := cancelReconcileDone.Load(traderID); ok {
+		if c, ok2 := v.(ReconcileCounts); ok2 {
+			return c
+		}
+	}
+	return ReconcileCounts{}
+}
+
+// reconcileOncePerBoot runs the D4 pass at the first cycle where a book exists.
+func (at *AutoTrader) reconcileOncePerBoot(ledger *store.ArmedOrderStore, now time.Time) {
+	if _, done := cancelReconcileDone.Load(at.id); done {
+		return
+	}
+	_, have, age, _ := at.persistedBook(now)
+	if !have || (snapshotMaxAge() > 0 && age > snapshotMaxAge()) {
+		return // no usable book yet — ask again next cycle rather than invent
+	}
+	cancelReconcileDone.Store(at.id, at.reconcileAgainstBroker(ledger, now))
+}
+
+// reconcileAgainstBroker compares the ledger's live rows to the broker's book.
+// It runs once the book is available — NOT at process start, where there is no
+// book and any answer would be invented.
+func (at *AutoTrader) reconcileAgainstBroker(ledger *store.ArmedOrderStore, now time.Time) ReconcileCounts {
+	var c ReconcileCounts
+	if at == nil || ledger == nil {
+		return c
+	}
+	rows, err := ledger.ListNonTerminal(at.id)
+	if err != nil {
+		at.logWarnf("🧾 cancel reconcile: ledger read failed — reconciling nothing: %v", err)
+		return c
+	}
+	book, have, age, snapID := at.persistedBook(now)
+	c.SnapshotID = snapID
+	c.Ran = true
+	maxAge := snapshotMaxAge()
+	for i := range rows {
+		r := rows[i]
+		if strings.TrimSpace(r.SignalID) == "" {
+			// Never placed: there is nothing at the broker to reconcile
+			// against, and calling that "confirmed gone" would be a claim we
+			// did not earn.
+			c.Unconfirmed++
+			continue
+		}
+		gone, _ := cancelSettled(book, have, age, maxAge, r.SignalID)
+		switch {
+		case !have || (maxAge > 0 && age > maxAge):
+			c.Unconfirmed++
+		case gone:
+			c.ConfirmedGone++
+		default:
+			c.LiveAtBroker++
+			c.LiveIDs = append(c.LiveIDs, r.ID)
+		}
+	}
+	if c.LiveAtBroker > 0 {
+		at.logWarnf("🧾 cancel reconcile: %d ledger row(s) are LIVE AT THE BROKER right now (ids %v, snapshot %d, book age %s) — NOT auto-cancelled; the owner decides",
+			c.LiveAtBroker, c.LiveIDs, c.SnapshotID, age.Round(time.Second))
+	}
+	at.logInfof("🧾 cancel reconcile: confirmed_gone=%d live_at_broker=%d unconfirmed=%d (snapshot %d, book age %s)",
+		c.ConfirmedGone, c.LiveAtBroker, c.Unconfirmed, c.SnapshotID, age.Round(time.Second))
+	return c
+}
+
+// CancelBootLine is D6. EVERY field is READ (A11): the counts come from the
+// table, the timeout and the staleness bound from their own resolvers.
+//
+// The reconciliation half prints n/a until a book has been seen — at process
+// start there is no broker book, and a number invented there would be exactly
+// the fabrication this wave exists to remove.
+//
+// NOTE for whoever writes a watcher: the 🧾 glyph is shared by nine other log
+// sites in this tree. Key on the text "cancels:", never on the glyph (A24).
+func CancelBootLine(st *store.Store, rec ReconcileCounts, nowMs int64) string {
+	pending, unconfirmed := int64(0), int64(0)
+	if st != nil {
+		ao := st.ArmedOrders()
+		pending = ao.CountCancelPending()
+		unconfirmed = ao.CountCancelUnconfirmed(nowMs, cancelConfirmTimeout().Milliseconds())
+	}
+	reconciled := "reconciled=n/a (no broker book yet)"
+	if rec.Ran {
+		reconciled = fmt.Sprintf("reconciled(confirmed=%d live=%d unconfirmed=%d snapshot=%d)",
+			rec.ConfirmedGone, rec.LiveAtBroker, rec.Unconfirmed, rec.SnapshotID)
+	}
+	return fmt.Sprintf(
+		"cancels: confirm=broker-snapshot · pending=%d · unconfirmed=%d · slot-guard=on(refuse-on-live|stale) · timeout=%s · stale-bound=%s · rerequest-cap=%d · %s",
+		pending, unconfirmed, cancelConfirmTimeout(), snapshotMaxAge(), cancelReRequestMax(), reconciled)
 }

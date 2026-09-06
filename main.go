@@ -462,6 +462,10 @@ func main() {
 	}
 	// P&L-TRUTH WAVE (2026-09-01) — corrected-column guard in the boot block.
 	logger.Infof("🧾 %s", store.PnLSurfacesBootLine())
+	// CANCEL-CONFIRMATION (2026-09-06) — a send is not a settlement. Every
+	// field READ; the reconciliation half prints n/a until a broker book exists,
+	// because at process start there is none and a number here would be invented.
+	logger.Infof("🧾 %s", trader.CancelBootLine(st, trader.ReconcileCounts{}, time.Now().UnixMilli()))
 	// ATTRIBUTION — counts READ from the table, never a literal.
 	logger.Infof("🔗 %s", st.AttributionBootLine())
 	logger.Infof("⚙ %s", store.KnobRegistryBootLine())

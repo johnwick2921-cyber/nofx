@@ -43,6 +43,11 @@ var alsoRequireWired = []string{
 	"recordAcceptedRisk",
 	"excursionOnClose",
 	"excursionOnOpen",
+	// CANCEL-CONFIRMATION (2026-09-06). The wave's whole value is that these
+	// run in production; a guard nobody calls is the defect wearing a fix.
+	"armSlotGuard",
+	"confirmPendingCancels",
+	"reconcileOncePerBoot",
 }
 
 func TestEveryClaimedProductionPathHasACallSite(t *testing.T) {

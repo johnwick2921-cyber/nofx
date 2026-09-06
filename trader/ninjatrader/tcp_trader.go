@@ -553,7 +553,25 @@ func (t *TCPTrader) PlaceStopEntry(symbol, side string, quantity float64, stopPx
 	return signalID, nil
 }
 
-// CancelOrder (PHASE 2 armed orders) cancels a working resting limit entry
+// CancelOrder REQUESTS a cancel. ITS RETURN MEANS SENT, NOT CONFIRMED.
+//
+// D5 (cancel-confirmation, 2026-09-06). This is a one-line pass-through to
+// SendCancelOrder: a nil error means a frame reached the socket, and NOTHING
+// MORE. It does not mean the AddOn acted on it, and it certainly does not mean
+// the order left the broker's book — the AddOn removes its own bookkeeping
+// entry BEFORE calling Account.Cancel and acks regardless of whether the cancel
+// threw (VLTraderTCPClient.cs:1665-1707), so a nil here is compatible with an
+// order that is still resting.
+//
+// A cancel is proven ONLY by the order's absence from a FRESH broker snapshot
+// (A20, class 6). Callers must move the ledger row to cancel_pending via
+// store.RequestCancel and let the settlement pass confirm it; writing a
+// terminal state on this return is the defect that let one arm slot hold nine
+// live orders while the ledger read 'cancelled' (nt8_order_snapshots id 1664).
+//
+// TestNoCallSiteTreatsCancelReturnAsConfirmation enforces this in the tree.
+//
+// (PHASE 2 armed orders) cancels a working resting limit entry
 // and/or its bracket legs on the AddOn side.
 func (t *TCPTrader) CancelOrder(signalID string) error {
 	return t.server.SendCancelOrder(ntwire.CancelOrderPayload{

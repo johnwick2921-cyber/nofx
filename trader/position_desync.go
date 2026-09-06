@@ -83,12 +83,18 @@ func (at *AutoTrader) skipGateDesync(storeRows []*store.TraderPosition) bool {
 			if row.EntryOrderID == "" {
 				continue
 			}
-			if err := nt.CancelOrder(row.EntryOrderID); err == nil {
-				at.logWarnf("🧹 class-27 desync: cancel_order sent for orphan bracket %s (%s %s row=%d) — immediate, no grace",
-					row.EntryOrderID, row.Symbol, row.Side, row.ID)
-			} else {
-				at.logWarnf("🧹 class-27 desync: cancel_order FAILED for %s (%s %s row=%d): %v",
+			// D5 (cancel-confirmation 2026-09-06): the branch is on the
+			// FAILURE, never on the success. This site only logs — it writes
+			// no ledger state — but a `== nil` block after a cancel send is
+			// the shape the defect grows in, so the rule is enforced on the
+			// shape rather than on today's contents. The wording was already
+			// honest and is unchanged: SENT, not cancelled.
+			if err := nt.CancelOrder(row.EntryOrderID); err != nil {
+				at.logWarnf("🧹 class-27 desync: cancel_order SEND FAILED for %s (%s %s row=%d): %v",
 					row.EntryOrderID, row.Symbol, row.Side, row.ID, err)
+			} else {
+				at.logWarnf("🧹 class-27 desync: cancel_order sent for orphan bracket %s (%s %s row=%d) — immediate, no grace; SENT is not CONFIRMED",
+					row.EntryOrderID, row.Symbol, row.Side, row.ID)
 			}
 		}
 	}

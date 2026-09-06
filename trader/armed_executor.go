@@ -339,10 +339,18 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 					if rr.TraderID == at.id && rr.PlanID == plan.PlanID && rr.Scenario == sc.ID &&
 						(rr.State == "working" || rr.State == "armed") {
 						if nt := at.armedTrader(); nt != nil && rr.SignalID != "" {
-							if cerr := nt.CancelOrder(rr.SignalID); cerr == nil {
-								_ = ledger.SetState(rr.ID, "shadowed", "condition_shadowed")
-								at.logWarnf("✕ armed cancel (condition_shadowed): %s %s signal=%s", plan.Session, sc.ID, rr.SignalID)
+							// A SEND IS NOT A SETTLEMENT. The row moves to
+							// cancel_pending and holds its slot until a fresh
+							// broker snapshot no longer lists the order.
+							// NOTE: this path used to end at the terminal state
+							// "shadowed"; it now ends at "cancelled" with
+							// "condition_shadowed" preserved as the reason. The
+							// table has never held a shadowed row (0 of 67).
+							if cerr := nt.CancelOrder(rr.SignalID); cerr != nil {
+								at.logWarnf("✕ armed cancel SEND failed (condition_shadowed): %s %s signal=%s: %v", plan.Session, sc.ID, rr.SignalID, cerr)
 							}
+							_ = ledger.RequestCancel(rr.ID, "condition_shadowed", now.UnixMilli())
+							at.logWarnf("✕ armed cancel REQUESTED (condition_shadowed): %s %s signal=%s — pending broker confirmation", plan.Session, sc.ID, rr.SignalID)
 						} else {
 							_ = ledger.SetState(rr.ID, "shadowed", "condition_shadowed")
 						}
@@ -444,10 +452,11 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 						if r.TraderID == at.id && r.PlanID == plan.PlanID && r.Scenario == sc.ID &&
 							r.State == "working" && r.SignalID != "" {
 							if nt := at.armedTrader(); nt != nil {
-								if cerr := nt.CancelOrder(r.SignalID); cerr == nil {
-									_ = ledger.SetState(r.ID, "cancelled", "gate changed: "+armRefusalClass(verdict))
-									at.logWarnf("✕ armed cancel (gate changed %s): %s %s", armRefusalClass(verdict), plan.Session, sc.ID)
+								if cerr := nt.CancelOrder(r.SignalID); cerr != nil {
+									at.logWarnf("✕ armed cancel SEND failed (gate changed): %s %s: %v", plan.Session, sc.ID, cerr)
 								}
+								_ = ledger.RequestCancel(r.ID, "gate changed: "+armRefusalClass(verdict), now.UnixMilli())
+								at.logWarnf("✕ armed cancel REQUESTED (gate changed %s): %s %s — pending broker confirmation", armRefusalClass(verdict), plan.Session, sc.ID)
 							}
 						}
 					}
@@ -487,10 +496,11 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 						if rr.TraderID == at.id && rr.PlanID == plan.PlanID && rr.Scenario == sc.ID &&
 							rr.LegIndex == li && (rr.State == "working" || rr.State == "armed") && rr.SignalID != "" {
 							if nt := at.armedTrader(); nt != nil {
-								if cerr := nt.CancelOrder(rr.SignalID); cerr == nil {
-									_ = ledger.SetState(rr.ID, "cancelled", "one_live_arm_guard")
-									at.logWarnf("✕ armed cancel (one_live_arm_guard): %s %s leg %d", plan.Session, sc.ID, li+1)
+								if cerr := nt.CancelOrder(rr.SignalID); cerr != nil {
+									at.logWarnf("✕ armed cancel SEND failed (one_live_arm_guard): %s %s leg %d: %v", plan.Session, sc.ID, li+1, cerr)
 								}
+								_ = ledger.RequestCancel(rr.ID, "one_live_arm_guard", now.UnixMilli())
+								at.logWarnf("✕ armed cancel REQUESTED (one_live_arm_guard): %s %s leg %d — pending broker confirmation", plan.Session, sc.ID, li+1)
 							}
 						}
 					}
@@ -514,10 +524,11 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 						if rr.TraderID == at.id && rr.PlanID == plan.PlanID && rr.Scenario == sc.ID &&
 							rr.LegIndex == li && rr.SignalID != "" {
 							if nt := at.armedTrader(); nt != nil {
-								if cerr := nt.CancelOrder(rr.SignalID); cerr == nil {
-									_ = ledger.SetState(rr.ID, "cancelled", "entry_gate: "+armRefusalClass(greason))
-									at.logWarnf("✕ armed cancel (entry_gate): %s %s leg %d", plan.Session, sc.ID, li+1)
+								if cerr := nt.CancelOrder(rr.SignalID); cerr != nil {
+									at.logWarnf("✕ armed cancel SEND failed (entry_gate): %s %s leg %d: %v", plan.Session, sc.ID, li+1, cerr)
 								}
+								_ = ledger.RequestCancel(rr.ID, "entry_gate: "+armRefusalClass(greason), now.UnixMilli())
+								at.logWarnf("✕ armed cancel REQUESTED (entry_gate): %s %s leg %d — pending broker confirmation", plan.Session, sc.ID, li+1)
 							}
 						}
 					}
@@ -621,7 +632,7 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 	// sibling's unfilled order (no doubling into a failed level). Runs on the
 	// existing cancel machinery; session-end/news/dormant cancel paths already
 	// cover BOTH legs (cancel-all by trader).
-	at.cancelSplitSiblingOnStopOut(ledger)
+	at.cancelSplitSiblingOnStopOut(ledger, now)
 
 	// PHASE 2 — placement engine (armed → working within the tick band), wire
 	// cancel/modify, and the order_update event machine.
@@ -788,7 +799,9 @@ func splitSiblingCancelDecision(pair []store.ArmedOrderDB, closed []store.Trader
 
 // cancelSplitSiblingOnStopOut (E4) — the wire half of the split-sibling law,
 // riding the existing cancel machinery (cancel + ledger state + ack seam).
-func (at *AutoTrader) cancelSplitSiblingOnStopOut(ledger *store.ArmedOrderStore) {
+// now is the CALLER's clock (A28/class 60): this is not an entry point, and the
+// cancel lifecycle stamps a request time that tests must be able to state.
+func (at *AutoTrader) cancelSplitSiblingOnStopOut(ledger *store.ArmedOrderStore, now time.Time) {
 	if ledger == nil {
 		return
 	}
@@ -834,9 +847,11 @@ func (at *AutoTrader) cancelSplitSiblingOnStopOut(ledger *store.ArmedOrderStore)
 			reason := "sibling stopped out — split contract (E4)"
 			nt := at.armedTrader()
 			if nt != nil && sibling.SignalID != "" {
-				if cerr := nt.CancelOrder(sibling.SignalID); cerr == nil {
-					_ = ledger.SetState(sibling.ID, "cancelled", reason)
-					at.logWarnf("✕ armed cancel %s %s leg %d: %s", sibling.Session, sibling.Scenario, sibling.LegIndex+1, reason)
+				if cerr := nt.CancelOrder(sibling.SignalID); cerr != nil {
+					at.logWarnf("✕ armed cancel SEND failed %s %s leg %d: %v", sibling.Session, sibling.Scenario, sibling.LegIndex+1, cerr)
+				}
+				if rerr := ledger.RequestCancel(sibling.ID, reason, now.UnixMilli()); rerr == nil {
+					at.logWarnf("✕ armed cancel REQUESTED %s %s leg %d: %s — pending broker confirmation", sibling.Session, sibling.Scenario, sibling.LegIndex+1, reason)
 					continue
 				}
 			}
@@ -985,6 +1000,15 @@ func (at *AutoTrader) runArmedPlacement(bars []market.Kline, sinceMs int64) {
 	// reconnect/reconcile safety net (separate pass — cancelFn is the wire seam).
 	at.reconcileStaleWorking(ledger, rows, now, armedWorkingStaleMin(), func(sid string) { _ = nt.CancelOrder(sid) })
 	at.consumeArmedOrderUpdates(nt, ledger)
+	// D1/D2 — THE SETTLEMENT PASS. Every requested cancel is checked against the
+	// freshest PERSISTED snapshot: gone from a fresh book → cancelled, with the
+	// snapshot id that proved it; still listed, or no fresh book → it stays
+	// cancel_pending, says so once past the timeout, and is re-requested up to
+	// the cap. Nothing here ever promotes a row on ignorance.
+	at.confirmPendingCancels(ledger, nt.CancelOrder, now)
+	// D4 — the once-per-boot three-state reconciliation, run at the first cycle
+	// where a book actually exists. Nothing is auto-cancelled by it.
+	at.reconcileOncePerBoot(ledger, now)
 }
 
 // limitMarketableWrongSide (E7 incident guard, pure) reports whether price has
