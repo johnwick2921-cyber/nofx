@@ -1,0 +1,660 @@
+{
+  "captured_at": "2026-09-06T17:17:14.327037-05:00",
+  "source_revision": "a3471b3f4cd1fd07989b28cfd2fa7490ffed327e",
+  "base_revision": "eb2c65c882bc14c35f292322f0afc82691b185da",
+  "checklist_revision": "dd35112117d0b06ca90387236a1c636666fd4025",
+  "scope": "diagnosis only; no trading, configuration, database, or deployment changes",
+  "arm": {
+    "id": 106,
+    "session": "ASIA",
+    "scenario": "S2",
+    "kind": "stop_entry",
+    "state": "armed",
+    "state_reason": "",
+    "entry_px": 29526.0,
+    "stop_px": 29497.0,
+    "target_px": 29657.38,
+    "signal_id": "",
+    "placement_seq": 0,
+    "created_at": "2026-09-06 17:01:34.050835721-05:00",
+    "updated_at": "2026-09-06 17:15:30.974972527-05:00"
+  },
+  "config": {
+    "STOP_ENTRY_SEAM": "off",
+    "evidence": "single-key read of deployed .env plus boot log and placement code"
+  },
+  "desk_snapshots": [
+    {
+      "read_at": "2026-09-06T17:04:31.221422-05:00",
+      "lines": [
+        {
+          "n": 1,
+          "key": "mode",
+          "label": "MODE",
+          "text": "SIM · plan_mode=strict · session=ASIA · CME OPEN · 17:04:31 CT · process responding · feed 3m31s since last bar · link Connected · book broker 0 vs ledger 1 — MISMATCH; broker[] ledger[]",
+          "state": "ok",
+          "source": "strategy config · session registry · bars · NT8 link",
+          "as_of_ms": 1788732271212,
+          "age_ms": 0,
+          "verified": true
+        },
+        {
+          "n": 2,
+          "key": "position",
+          "label": "POSITION",
+          "text": "FLAT — no open position",
+          "state": "flat",
+          "source": "trader.GetPositions",
+          "as_of_ms": 1788732271212,
+          "age_ms": 0,
+          "verified": true
+        },
+        {
+          "n": 6,
+          "key": "day",
+          "label": "DAY",
+          "text": "realized +0.00 USD on 0 trade(s) · no enforced daily limit (guardrails master OFF — soft-audit only)",
+          "state": "ok",
+          "unit": "USD",
+          "source": "trader_positions.pnl_corrected · strategy guardrails",
+          "as_of_ms": 1788732271212,
+          "age_ms": 0,
+          "verified": true
+        },
+        {
+          "n": 7,
+          "key": "arms",
+          "label": "ARMS",
+          "text": "1 resting — S2 LONG stop_entry @ 29526.00 · distance UNKNOWN (no mark) · age 2m57s · NOT placed at broker · armed",
+          "state": "ok",
+          "source": "armed_orders",
+          "as_of_ms": 1788732094050,
+          "age_ms": 177162,
+          "verified": true
+        },
+        {
+          "n": 8,
+          "key": "book",
+          "label": "BOOK",
+          "text": "broker 0 vs ledger 1 — MISMATCH; broker[] ledger[]",
+          "state": "stale",
+          "source": "broker — NT8 order_snapshot frame (age 10s, build 2026-09-03-f12) × armed_orders ledger",
+          "as_of_ms": 1788732271212,
+          "age_ms": 0,
+          "verified": false,
+          "reason": "leg 4 does not pass — the broker and the ledger disagree, or the book cannot be read"
+        },
+        {
+          "n": 9,
+          "key": "feed",
+          "label": "FEED",
+          "text": "last bar 3m31s ago · link Connected · AddOn build 2026-09-03-f12",
+          "state": "stale",
+          "source": "bars · NT8 link · AddOn build id",
+          "as_of_ms": 1788732060000,
+          "age_ms": 211212,
+          "verified": false,
+          "reason": "the newest 1m bar is older than 2 minutes"
+        },
+        {
+          "n": 11,
+          "key": "range",
+          "label": "RANGE",
+          "text": "session 29530.25–29594.00 = 63.75 pts on 2 bar(s) · 3.56× ATR5m (17.90)",
+          "state": "ok",
+          "unit": "pts",
+          "source": "bars (session-day) · ATR5m",
+          "as_of_ms": 1788732060000,
+          "age_ms": 211212,
+          "verified": true
+        }
+      ]
+    },
+    {
+      "read_at": "2026-09-06T17:05:45.753904-05:00",
+      "lines": [
+        {
+          "n": 1,
+          "key": "mode",
+          "label": "MODE",
+          "text": "SIM · plan_mode=strict · session=ASIA · CME OPEN · 17:05:45 CT · process responding · feed 4m46s since last bar · link Connected · book broker 0 vs ledger 1 — MISMATCH; broker[] ledger[]",
+          "state": "ok",
+          "source": "strategy config · session registry · bars · NT8 link",
+          "as_of_ms": 1788732345744,
+          "age_ms": 0,
+          "verified": true
+        },
+        {
+          "n": 2,
+          "key": "position",
+          "label": "POSITION",
+          "text": "FLAT — no open position",
+          "state": "flat",
+          "source": "trader.GetPositions",
+          "as_of_ms": 1788732345744,
+          "age_ms": 0,
+          "verified": true
+        },
+        {
+          "n": 6,
+          "key": "day",
+          "label": "DAY",
+          "text": "realized +0.00 USD on 0 trade(s) · no enforced daily limit (guardrails master OFF — soft-audit only)",
+          "state": "ok",
+          "unit": "USD",
+          "source": "trader_positions.pnl_corrected · strategy guardrails",
+          "as_of_ms": 1788732345744,
+          "age_ms": 0,
+          "verified": true
+        },
+        {
+          "n": 7,
+          "key": "arms",
+          "label": "ARMS",
+          "text": "1 resting — S2 LONG stop_entry @ 29526.00 · distance UNKNOWN (no mark) · age 4m12s · NOT placed at broker · armed",
+          "state": "ok",
+          "source": "armed_orders",
+          "as_of_ms": 1788732094050,
+          "age_ms": 251694,
+          "verified": true
+        },
+        {
+          "n": 8,
+          "key": "book",
+          "label": "BOOK",
+          "text": "broker 0 vs ledger 1 — MISMATCH; broker[] ledger[]",
+          "state": "stale",
+          "source": "broker — NT8 order_snapshot frame (age 24s, build 2026-09-03-f12) × armed_orders ledger",
+          "as_of_ms": 1788732345744,
+          "age_ms": 0,
+          "verified": false,
+          "reason": "leg 4 does not pass — the broker and the ledger disagree, or the book cannot be read"
+        },
+        {
+          "n": 9,
+          "key": "feed",
+          "label": "FEED",
+          "text": "last bar 4m46s ago · link Connected · AddOn build 2026-09-03-f12",
+          "state": "stale",
+          "source": "bars · NT8 link · AddOn build id",
+          "as_of_ms": 1788732060000,
+          "age_ms": 285744,
+          "verified": false,
+          "reason": "the newest 1m bar is older than 2 minutes"
+        },
+        {
+          "n": 11,
+          "key": "range",
+          "label": "RANGE",
+          "text": "session 29530.25–29594.00 = 63.75 pts on 2 bar(s) · 3.56× ATR5m (17.90)",
+          "state": "ok",
+          "unit": "pts",
+          "source": "bars (session-day) · ATR5m",
+          "as_of_ms": 1788732060000,
+          "age_ms": 285744,
+          "verified": true
+        }
+      ]
+    },
+    {
+      "read_at": "2026-09-06T17:07:22.927522-05:00",
+      "lines": [
+        {
+          "n": 1,
+          "key": "mode",
+          "label": "MODE",
+          "text": "SIM · plan_mode=strict · session=ASIA · CME OPEN · 17:07:22 CT · process responding · feed 23s since last bar · link Disconnected · book snapshot stale (age 61s, limit 60s) — a book we have not heard about is not a flat book",
+          "state": "ok",
+          "source": "strategy config · session registry · bars · NT8 link",
+          "as_of_ms": 1788732442906,
+          "age_ms": 0,
+          "verified": true
+        },
+        {
+          "n": 2,
+          "key": "position",
+          "label": "POSITION",
+          "text": "FLAT — no open position",
+          "state": "flat",
+          "source": "trader.GetPositions",
+          "as_of_ms": 1788732442906,
+          "age_ms": 0,
+          "verified": true
+        },
+        {
+          "n": 6,
+          "key": "day",
+          "label": "DAY",
+          "text": "realized +0.00 USD on 0 trade(s) · no enforced daily limit (guardrails master OFF — soft-audit only)",
+          "state": "ok",
+          "unit": "USD",
+          "source": "trader_positions.pnl_corrected · strategy guardrails",
+          "as_of_ms": 1788732442906,
+          "age_ms": 0,
+          "verified": true
+        },
+        {
+          "n": 7,
+          "key": "arms",
+          "label": "ARMS",
+          "text": "1 resting — S2 LONG stop_entry @ 29526.00 · distance UNKNOWN (no mark) · age 5m49s · NOT placed at broker · armed",
+          "state": "ok",
+          "source": "armed_orders",
+          "as_of_ms": 1788732094050,
+          "age_ms": 348856,
+          "verified": true
+        },
+        {
+          "n": 8,
+          "key": "book",
+          "label": "BOOK",
+          "text": "snapshot stale (age 61s, limit 60s) — a book we have not heard about is not a flat book",
+          "state": "stale",
+          "source": "broker — NT8 order_snapshot frame (STALE)",
+          "as_of_ms": 1788732442906,
+          "age_ms": 0,
+          "verified": false,
+          "reason": "leg 4 does not pass — the broker and the ledger disagree, or the book cannot be read"
+        },
+        {
+          "n": 9,
+          "key": "feed",
+          "label": "FEED",
+          "text": "last bar 23s ago · link Disconnected · AddOn build 2026-09-03-f12",
+          "state": "ok",
+          "source": "bars · NT8 link · AddOn build id",
+          "as_of_ms": 1788732420000,
+          "age_ms": 22906,
+          "verified": true
+        },
+        {
+          "n": 11,
+          "key": "range",
+          "label": "RANGE",
+          "text": "session 29530.25–29587.25 = 57.00 pts on 5 bar(s) · 3.49× ATR5m (16.32)",
+          "state": "ok",
+          "unit": "pts",
+          "source": "bars (session-day) · ATR5m",
+          "as_of_ms": 1788732420000,
+          "age_ms": 22906,
+          "verified": true
+        }
+      ]
+    }
+  ],
+  "candle_gap": {
+    "api_read_at": "2026-09-06T17:13:10.376636-05:00",
+    "db_read_at": "2026-09-06T17:13:54.389958-05:00",
+    "timezone": "America/Chicago",
+    "symbol": "MNQ",
+    "interval": "1m",
+    "api_rows": [
+      {
+        "openTime": 1788732000000,
+        "open": 29534.5,
+        "high": 29569.75,
+        "low": 29530.25,
+        "close": 29566.5,
+        "volume": 1906
+      },
+      {
+        "openTime": 1788732060000,
+        "open": 29567.5,
+        "high": 29570,
+        "low": 29566.25,
+        "close": 29569.25,
+        "volume": 141
+      },
+      {
+        "openTime": 1788732300000,
+        "open": 29587,
+        "high": 29587.25,
+        "low": 29573,
+        "close": 29575.75,
+        "volume": 554
+      },
+      {
+        "openTime": 1788732360000,
+        "open": 29575,
+        "high": 29584.75,
+        "low": 29572.5,
+        "close": 29582.5,
+        "volume": 798
+      },
+      {
+        "openTime": 1788732420000,
+        "open": 29582.25,
+        "high": 29583.5,
+        "low": 29579,
+        "close": 29583.25,
+        "volume": 294
+      },
+      {
+        "openTime": 1788732480000,
+        "open": 29583,
+        "high": 29587.75,
+        "low": 29576.25,
+        "close": 29577.75,
+        "volume": 488
+      },
+      {
+        "openTime": 1788732540000,
+        "open": 29578.5,
+        "high": 29581.75,
+        "low": 29578,
+        "close": 29578.5,
+        "volume": 210
+      },
+      {
+        "openTime": 1788732600000,
+        "open": 29579,
+        "high": 29582.25,
+        "low": 29577,
+        "close": 29580,
+        "volume": 233
+      },
+      {
+        "openTime": 1788732660000,
+        "open": 29579,
+        "high": 29582.75,
+        "low": 29578.75,
+        "close": 29581.25,
+        "volume": 351
+      },
+      {
+        "openTime": 1788732720000,
+        "open": 29581.25,
+        "high": 29581.75,
+        "low": 29577.25,
+        "close": 29578.5,
+        "volume": 196
+      }
+    ],
+    "db_rows": [
+      {
+        "symbol": "MNQ",
+        "tf": "1m",
+        "open_time_ms": 1788732000000,
+        "o": 29534.5,
+        "h": 29569.75,
+        "l": 29530.25,
+        "c": 29566.5,
+        "v": 1906.0,
+        "convention": "epoch_floor",
+        "ct": "2026-09-06T17:00:00-05:00"
+      },
+      {
+        "symbol": "MNQ",
+        "tf": "1m",
+        "open_time_ms": 1788732060000,
+        "o": 29567.5,
+        "h": 29570.0,
+        "l": 29566.25,
+        "c": 29569.25,
+        "v": 141.0,
+        "convention": "epoch_floor",
+        "ct": "2026-09-06T17:01:00-05:00"
+      },
+      {
+        "symbol": "MNQ",
+        "tf": "1m",
+        "open_time_ms": 1788732300000,
+        "o": 29587.0,
+        "h": 29587.25,
+        "l": 29573.0,
+        "c": 29575.75,
+        "v": 554.0,
+        "convention": "epoch_floor",
+        "ct": "2026-09-06T17:05:00-05:00"
+      },
+      {
+        "symbol": "MNQ",
+        "tf": "1m",
+        "open_time_ms": 1788732360000,
+        "o": 29575.0,
+        "h": 29584.75,
+        "l": 29572.5,
+        "c": 29582.5,
+        "v": 798.0,
+        "convention": "epoch_floor",
+        "ct": "2026-09-06T17:06:00-05:00"
+      },
+      {
+        "symbol": "MNQ",
+        "tf": "1m",
+        "open_time_ms": 1788732420000,
+        "o": 29582.25,
+        "h": 29583.5,
+        "l": 29579.0,
+        "c": 29583.25,
+        "v": 294.0,
+        "convention": "epoch_floor",
+        "ct": "2026-09-06T17:07:00-05:00"
+      },
+      {
+        "symbol": "MNQ",
+        "tf": "1m",
+        "open_time_ms": 1788732480000,
+        "o": 29583.0,
+        "h": 29587.75,
+        "l": 29576.25,
+        "c": 29577.75,
+        "v": 488.0,
+        "convention": "epoch_floor",
+        "ct": "2026-09-06T17:08:00-05:00"
+      },
+      {
+        "symbol": "MNQ",
+        "tf": "1m",
+        "open_time_ms": 1788732540000,
+        "o": 29578.5,
+        "h": 29581.75,
+        "l": 29578.0,
+        "c": 29578.5,
+        "v": 210.0,
+        "convention": "epoch_floor",
+        "ct": "2026-09-06T17:09:00-05:00"
+      },
+      {
+        "symbol": "MNQ",
+        "tf": "1m",
+        "open_time_ms": 1788732600000,
+        "o": 29579.0,
+        "h": 29582.25,
+        "l": 29577.0,
+        "c": 29580.0,
+        "v": 233.0,
+        "convention": "epoch_floor",
+        "ct": "2026-09-06T17:10:00-05:00"
+      },
+      {
+        "symbol": "MNQ",
+        "tf": "1m",
+        "open_time_ms": 1788732660000,
+        "o": 29579.0,
+        "h": 29582.75,
+        "l": 29578.75,
+        "c": 29581.25,
+        "v": 351.0,
+        "convention": "epoch_floor",
+        "ct": "2026-09-06T17:11:00-05:00"
+      },
+      {
+        "symbol": "MNQ",
+        "tf": "1m",
+        "open_time_ms": 1788732720000,
+        "o": 29581.25,
+        "h": 29581.75,
+        "l": 29577.25,
+        "c": 29578.5,
+        "v": 196.0,
+        "convention": "epoch_floor",
+        "ct": "2026-09-06T17:12:00-05:00"
+      }
+    ],
+    "missing_open_time_ms": [
+      1788732120000,
+      1788732180000,
+      1788732240000
+    ],
+    "missing_ct": [
+      "2026-09-06T17:02:00-05:00",
+      "2026-09-06T17:03:00-05:00",
+      "2026-09-06T17:04:00-05:00"
+    ]
+  },
+  "nt_log_excerpts": [
+    {
+      "file": "log.20260906.00006.en.txt",
+      "line": 56,
+      "text": "2026-09-06 17:06:53:346|1|16|VLBarsSubscriptionManager: subscribing MNQ|1M barsBack=2000"
+    },
+    {
+      "file": "log.20260906.00006.en.txt",
+      "line": 91,
+      "text": "2026-09-06 17:06:54:487|1|16|VLBarsSubscriptionManager: emitted bars_historical MNQ|1M bars=2000"
+    },
+    {
+      "file": "log.20260906.00006.en.txt",
+      "line": 106,
+      "text": "2026-09-06 17:06:55:252|1|16|VLTraderTCPClient: data feed Connected (prev=Connecting) — recreating BarsRequests via OnConnectionReconnected"
+    },
+    {
+      "file": "log.20260906.00006.en.txt",
+      "line": 107,
+      "text": "2026-09-06 17:06:55:254|1|16|VLBarsSubscriptionManager: reconnect — re-subscribing MNQ|1M"
+    },
+    {
+      "file": "log.20260906.00006.en.txt",
+      "line": 109,
+      "text": "2026-09-06 17:06:55:254|1|16|VLBarsSubscriptionManager: subscribing MNQ|1M barsBack=2000"
+    },
+    {
+      "file": "log.20260906.00006.en.txt",
+      "line": 198,
+      "text": "2026-09-06 17:06:55:652|1|16|VLBarsSubscriptionManager: emitted bars_historical MNQ|1M bars=2"
+    },
+    {
+      "file": "log.20260906.00006.en.txt",
+      "line": 201,
+      "text": "2026-09-06 17:06:57:533|2|16|VLTraderTCPClient: data feed lost (PriceStatus=Disconnected) — BarsRequests will be recreated on recovery"
+    },
+    {
+      "file": "log.20260906.00006.en.txt",
+      "line": 212,
+      "text": "2026-09-06 17:07:23:337|1|16|VLBarsSubscriptionManager: reconnect — re-subscribing MNQ|1M"
+    },
+    {
+      "file": "log.20260906.00006.en.txt",
+      "line": 214,
+      "text": "2026-09-06 17:07:23:337|1|16|VLBarsSubscriptionManager: subscribing MNQ|1M barsBack=2000"
+    },
+    {
+      "file": "log.20260906.00006.en.txt",
+      "line": 335,
+      "text": "2026-09-06 17:07:36:191|1|16|VLBarsSubscriptionManager: emitted bars_historical MNQ|1M bars=0"
+    },
+    {
+      "file": "log.20260906.00006.en.txt",
+      "line": 344,
+      "text": "2026-09-06 17:07:53:352|1|16|VLBarsSubscriptionManager: reconnect — re-subscribing MNQ|1M"
+    },
+    {
+      "file": "log.20260906.00006.en.txt",
+      "line": 346,
+      "text": "2026-09-06 17:07:53:352|1|16|VLBarsSubscriptionManager: subscribing MNQ|1M barsBack=2000"
+    },
+    {
+      "file": "log.20260906.00006.en.txt",
+      "line": 438,
+      "text": "2026-09-06 17:07:53:465|1|16|VLBarsSubscriptionManager: emitted bars_historical MNQ|1M bars=0"
+    }
+  ],
+  "go_log_excerpts": [
+    "2026-09-06T17:00:00-05:00 HOST nofx-bin[2419987]: 09-06 17:00:00 [WARN] ninjatrader/bar_persist.go:350 bars: ingest drop summary: intrabar_dropped=0 current_dropped=0 historical_dropped=0 peak_depth=0/4096 (1-line/min; intra-bar drops self-heal on the next tick — closed bars are NEVER dropped on this path)",
+    "2026-09-06T17:00:54-05:00 HOST nofx-bin[2419987]: 2026/09/06 17:00:54 INFO tcp_server: feed status price_status=Disconnecting",
+    "2026-09-06T17:00:56-05:00 HOST nofx-bin[2419987]: 2026/09/06 17:00:56 INFO tcp_server: feed status price_status=Disconnected",
+    "2026-09-06T17:01:00-05:00 HOST nofx-bin[2419987]: 2026/09/06 17:01:00 INFO tcp_server: feed status price_status=Connecting",
+    "2026-09-06T17:01:01-05:00 HOST nofx-bin[2419987]: 2026/09/06 17:01:01 INFO tcp_server: feed status price_status=Connected",
+    "2026-09-06T17:01:01-05:00 HOST nofx-bin[2419987]: 09-06 17:01:01 [WARN] ninjatrader/bar_persist.go:350 bars: ingest drop summary: intrabar_dropped=0 current_dropped=0 historical_dropped=0 peak_depth=0/4096 (1-line/min; intra-bar drops self-heal on the next tick — closed bars are NEVER dropped on this path)",
+    "2026-09-06T17:02:01-05:00 HOST nofx-bin[2419987]: 09-06 17:02:01 [WARN] ninjatrader/bar_persist.go:350 bars: ingest drop summary: intrabar_dropped=0 current_dropped=0 historical_dropped=0 peak_depth=0/4096 (1-line/min; intra-bar drops self-heal on the next tick — closed bars are NEVER dropped on this path)",
+    "2026-09-06T17:03:01-05:00 HOST nofx-bin[2419987]: 09-06 17:03:01 [WARN] ninjatrader/bar_persist.go:350 bars: ingest drop summary: intrabar_dropped=0 current_dropped=0 historical_dropped=0 peak_depth=0/4096 (1-line/min; intra-bar drops self-heal on the next tick — closed bars are NEVER dropped on this path)",
+    "2026-09-06T17:04:01-05:00 HOST nofx-bin[2419987]: 09-06 17:04:01 [WARN] ninjatrader/bar_persist.go:350 bars: ingest drop summary: intrabar_dropped=0 current_dropped=0 historical_dropped=0 peak_depth=0/4096 (1-line/min; intra-bar drops self-heal on the next tick — closed bars are NEVER dropped on this path)",
+    "2026-09-06T17:05:01-05:00 HOST nofx-bin[2419987]: 09-06 17:05:01 [WARN] ninjatrader/bar_persist.go:350 bars: ingest drop summary: intrabar_dropped=0 current_dropped=0 historical_dropped=0 peak_depth=0/4096 (1-line/min; intra-bar drops self-heal on the next tick — closed bars are NEVER dropped on this path)",
+    "2026-09-06T17:06:01-05:00 HOST nofx-bin[2419987]: 09-06 17:06:01 [WARN] ninjatrader/bar_persist.go:350 bars: ingest drop summary: intrabar_dropped=0 current_dropped=0 historical_dropped=0 peak_depth=0/4096 (1-line/min; intra-bar drops self-heal on the next tick — closed bars are NEVER dropped on this path)",
+    "2026-09-06T17:06:55-05:00 HOST nofx-bin[2419987]: 2026/09/06 17:06:55 INFO tcp_server: feed status price_status=Connecting",
+    "2026-09-06T17:06:55-05:00 HOST nofx-bin[2419987]: 2026/09/06 17:06:55 INFO tcp_server: feed status price_status=Connected",
+    "2026-09-06T17:06:57-05:00 HOST nofx-bin[2419987]: 2026/09/06 17:06:57 INFO tcp_server: feed status price_status=Disconnected",
+    "2026-09-06T17:07:01-05:00 HOST nofx-bin[2419987]: 09-06 17:07:01 [WARN] ninjatrader/bar_persist.go:350 bars: ingest drop summary: intrabar_dropped=0 current_dropped=0 historical_dropped=0 peak_depth=0/4096 (1-line/min; intra-bar drops self-heal on the next tick — closed bars are NEVER dropped on this path)",
+    "2026-09-06T17:08:01-05:00 HOST nofx-bin[2419987]: 09-06 17:08:01 [WARN] ninjatrader/bar_persist.go:350 bars: ingest drop summary: intrabar_dropped=0 current_dropped=0 historical_dropped=0 peak_depth=0/4096 (1-line/min; intra-bar drops self-heal on the next tick — closed bars are NEVER dropped on this path)",
+    "2026-09-06T17:09:01-05:00 HOST nofx-bin[2419987]: 09-06 17:09:01 [WARN] ninjatrader/bar_persist.go:350 bars: ingest drop summary: intrabar_dropped=0 current_dropped=0 historical_dropped=0 peak_depth=0/4096 (1-line/min; intra-bar drops self-heal on the next tick — closed bars are NEVER dropped on this path)",
+    "2026-09-06T17:10:01-05:00 HOST nofx-bin[2419987]: 09-06 17:10:01 [WARN] ninjatrader/bar_persist.go:350 bars: ingest drop summary: intrabar_dropped=0 current_dropped=0 historical_dropped=0 peak_depth=0/4096 (1-line/min; intra-bar drops self-heal on the next tick — closed bars are NEVER dropped on this path)",
+    "2026-09-06T17:11:01-05:00 HOST nofx-bin[2419987]: 09-06 17:11:01 [WARN] ninjatrader/bar_persist.go:350 bars: ingest drop summary: intrabar_dropped=0 current_dropped=0 historical_dropped=0 peak_depth=0/4096 (1-line/min; intra-bar drops self-heal on the next tick — closed bars are NEVER dropped on this path)",
+    "2026-09-06T17:12:01-05:00 HOST nofx-bin[2419987]: 09-06 17:12:01 [WARN] ninjatrader/bar_persist.go:350 bars: ingest drop summary: intrabar_dropped=0 current_dropped=0 historical_dropped=0 peak_depth=0/4096 (1-line/min; intra-bar drops self-heal on the next tick — closed bars are NEVER dropped on this path)",
+    "2026-09-06T17:13:01-05:00 HOST nofx-bin[2419987]: 09-06 17:13:01 [WARN] ninjatrader/bar_persist.go:350 bars: ingest drop summary: intrabar_dropped=0 current_dropped=0 historical_dropped=0 peak_depth=0/4096 (1-line/min; intra-bar drops self-heal on the next tick — closed bars are NEVER dropped on this path)",
+    "2026-09-06T17:14:03-05:00 HOST nofx-bin[2419987]: 09-06 17:14:03 [WARN] ninjatrader/bar_persist.go:350 bars: ingest drop summary: intrabar_dropped=0 current_dropped=0 historical_dropped=0 peak_depth=0/4096 (1-line/min; intra-bar drops self-heal on the next tick — closed bars are NEVER dropped on this path)"
+  ],
+  "planner": {
+    "created_at": "2026-09-06T21:39:24.179940818Z",
+    "session": "ASIA",
+    "version": 1,
+    "scenarios": [
+      {
+        "id": "S1",
+        "direction": "long",
+        "entry": 29468.25,
+        "stop": 29440,
+        "target": 29534.33,
+        "target_chain": [
+          29524.75,
+          29534.33,
+          29539.38
+        ],
+        "risk_points": 28.25,
+        "planned_reward_points": 66.08000000000175,
+        "planned_r": 2.3391150442478494,
+        "first_target_r": 2.0
+      },
+      {
+        "id": "S2",
+        "direction": "long",
+        "entry": 29526,
+        "stop": 29497,
+        "target": 29657.38,
+        "target_chain": [
+          29534.33,
+          29539.38,
+          29657.38
+        ],
+        "risk_points": 29,
+        "planned_reward_points": 131.38000000000102,
+        "planned_r": 4.530344827586242,
+        "first_target_r": 0.28724137931040505
+      },
+      {
+        "id": "S3",
+        "direction": "short",
+        "entry": 29657.38,
+        "stop": 29687,
+        "target": 29534.33,
+        "target_chain": [
+          29539.38,
+          29534.33,
+          29524.75
+        ],
+        "risk_points": 29.61999999999898,
+        "planned_reward_points": 123.04999999999927,
+        "planned_r": 4.154287643484251,
+        "first_target_r": 3.983794733288456
+      }
+    ]
+  },
+  "executor_prompt_checks": {
+    "decision_id": 37770,
+    "timestamp": "2026-09-06T22:04:00.262358422Z",
+    "plan_api_mode": "strict",
+    "prompt_says_preferred": true,
+    "prompt_permits_off_plan": true,
+    "interpretation": "wording discrepancy observed; enforcement behavior not established here"
+  }
+}
