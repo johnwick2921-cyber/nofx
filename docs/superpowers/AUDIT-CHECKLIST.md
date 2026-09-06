@@ -2019,3 +2019,55 @@ fails it too (the text is the join key). Labels `[R]/[X]/[T]/[I]/[O]` move with
 evidence (legend: belief-census 2026-09-02:8-16). A wave that renames the boot
 line must update the map in the same commit or the contract test fails both
 sides.
+
+## CLASS 76 — THE POSITIONAL ARGUMENT IN THE WRONG SLOT (born 2026-09-05, fix/wave-b-stop-entry, C1-C3)
+
+**Symptom:** an order the broker ACCEPTS, acknowledges, and lists in its own
+book — and then never acts on. No reject, no error, no counter, nothing in any
+log on our side. The feature reads as live and idle rather than broken. Here: 22
+of 22 stop-market ENTRIES over two days went to NT8 as `Limit price=<trigger>
+Stop price=0`, a stop whose trigger is zero. Lifetime fill rate 0/22, and one of
+those inert orders had already been accepted as the capability's own PROOF.
+
+**Root cause, two of them, and they MASKED EACH OTHER.** (1) `Account.CreateOrder`
+is positional — after `quantity` come (limitPrice, stopPrice, …) — and the entry
+call computed a single price and passed it into the limitPrice slot for both a
+Limit and a StopMarket. (2) The stop-entry branch reused the LIMIT wrong-side
+predicate with the trigger in the entry argument, which inverts all four of its
+answers for a resting stop. Bug 2 admitted 21 orders the market had already run
+50-103 points past; bug 1 made them inert. Fixing either one alone is worse than
+fixing neither: the slot fix alone turns 21 inert orders into 21 the broker acts
+on immediately, at ~75 points adverse.
+
+**Probe, four questions:**
+1. For every positional API call with two or more same-typed arguments, is there
+   a call to the SAME API built correctly elsewhere in the same file? Diff them.
+   Here the bracket stop-loss 850 lines down had always been right.
+2. Does the log print the ARGUMENTS PASSED, or the variables parsed just before?
+   The AddOn logged `stop@29590.5` on all 21 malformed submissions. A log that
+   reads back your own intent cannot witness a slot bug.
+3. Read the broker's OWN record, not ours. NT8's order log and the
+   `order_snapshot` book both said `Stop price=0` for two days. (Trap: a
+   `json:",omitempty"` field VANISHES at zero — absence there means zero, not
+   unknown. Trap: NT8 writes `Type='Stop Market'` WITH A SPACE; grepping
+   `StopMarket` returns 0 hits and reads as "no such orders ever existed".)
+4. Is one predicate shared by two order kinds? A boundary that is strict for one
+   is inclusive for the other (a limit AT its price rests; a stop AT its trigger
+   fires). One function per kind, chosen BY KIND, never a shared one with a
+   default fallthrough.
+
+**Law:** **a capability is proven by a RECEIVED frame that carries the value,
+never by the order's behaviour.** "It rested and it cancelled" was the 2026-08-31
+acceptance criterion, and a zero-trigger stop rests perfectly, forever. The
+acceptance test must read the PRICE SLOT back. When the far side is a separately
+deployed artifact, the minimum-build floor is the mechanism: bump it in the same
+PR as the fix so an un-recompiled far side is REFUSED loudly rather than sent
+something it will mis-execute — and remember the floor is a BYTEWISE string
+compare, so it must advance the ISO DATE, never only the suffix.
+
+**Corollary (why it survived):** every layer reported the value it INTENDED to
+send. Go logged the trigger, the AddOn logged the trigger, the ledger said
+"working stop" for 48 minutes. Only NinjaTrader ever said zero, and nothing read
+it back. When two components agree, check whether they are agreeing about the
+same artifact or merely echoing one source.
+
