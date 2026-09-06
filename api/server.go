@@ -451,6 +451,15 @@ Returns: {"total_trades":<int>,"winning_trades":<int>,"win_rate":<float>,"total_
 Returns: {"triggered":<bool>,"trader_id":"<string>","positions_flattened":<int>,"timestamp_utc":"<RFC3339>","log_message":"<string>","reason":"<string, only when triggered=false>"}
 For non-ninjatrader brokers returns triggered=false with reason explaining why.`,
 				s.handleForceFlat)
+			// THE DESK STRIP (2026-09-06) — one read, one row per fact the owner
+			// needs during a session. Read-only; writes nothing.
+			s.routeWithSchema(protected, "GET", "/desk", "The desk strip: one row per fact the owner needs during a session",
+				`Query: ?trader_id=<EXACT trader_id from GET /api/my-traders>
+Returns one rendered row per strip line, each carrying its value, unit, SOURCE, as-of instant, age and a verified flag.
+A row it cannot compute is returned with state "unknown" AND a reason string - never omitted, never zero, never a dash.
+Returns: {"trader_id","generated_at_ms","cadence_ms","unknown_count","stale_count","lines":[{"n","key","label","text","state","unit","source","as_of_ms","age_ms","verified","reason"}]}
+state is one of: ok | flat | stale | unknown. cadence_ms is 5000 while a position or arm is live, 15000 otherwise.`,
+				s.handleDesk)
 			s.routeWithSchema(protected, "GET", "/risk/status", "Get current risk-limit + account state snapshot",
 				`Query: ?trader_id=<EXACT trader_id from GET /api/my-traders>
 Returns: {"trader_id":"<string>","daily_pnl_usd":<float>,"daily_loss_limit_usd":<float>,"concurrent_trades":<int>,"max_concurrent_trades":<int>,"current_notional_usd":<float>,"max_notional_usd":<float>,"kill_switch_armed":<bool>,"last_reset_utc":"<RFC3339>"}`,
