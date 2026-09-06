@@ -1941,6 +1941,56 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     is a rumour. Related: class 49/53 (a plausible zero), class 24 (a check that
     prints but does not gate).
 
+83. **An acknowledgement mistaken for a settlement — outside the broker.**
+    (Number assigned at merge, A16 — highest occupied on dev at authoring: 82.
+    Re-check at merge.) Class 81 named this shape at the broker socket. It is
+    not a broker defect. It is what happens anywhere a *receipt* is read as
+    proof of the *state it was requested to produce*, and one wave
+    (`docs/v5-precheck-0906`, 2026-09-06) hit it three times in three different
+    layers in a single session — which is why it is filed as its own class
+    rather than as a corollary of 81.
+    **The three instances, one shape:**
+    (a) **At the CDN.** The A14 closeout check fetched the report's raw URL by
+    BRANCH path and got `HTTP 200`, 228,895 bytes — the *previous* revision,
+    while `origin/dev` already held `ac48aea6…` at 229,575.
+    `raw.githubusercontent.com` caches branch paths ~5 min. A 200 on a branch
+    URL can therefore certify a revision that no longer exists, a file that was
+    just deleted, or a push that has not propagated.
+    (b) **In the tooling.** A redaction pass over the 313 KB companion report
+    ran `open(P,"w").write(red(open(P).read()))` — Python opens for write, and
+    truncates, BEFORE it reads. The file was emptied. The verification printed
+    `residual account names: 0`, which was true, and true of an empty file. The
+    check and the damage had the same cause, so the check could not see it.
+    (c) **In the emergency control.** `api/handler_risk.go:121` writes
+    `PositionsFlattened: 1` after `CloseLong` returns nil — the return of
+    putting a frame on a socket. The value is never persisted and counts
+    nothing; the endpoint has been invoked `n=0` times across 29,692
+    `log_events` rows, so the defect has never fired in anger. (Same site as
+    class 81, reached from the opposite direction: 81 found it in the ledger,
+    this wave found it in the HTTP response.)
+    **What identified it** was not any of the three failing. Each *succeeded*.
+    It was asking, of each success, WHICH RECEIVED ARTIFACT the success
+    describes — and finding that in all three the answer was the request's own
+    acknowledgement.
+    **Probe:** for every check that gates a claim, ask what it would print if
+    the thing it checks were absent, empty, stale or deleted. If the answer is
+    the same as the passing output, the check is decorative. Two specific
+    smells: a verifier that shares a mutable resource with the operation it
+    verifies (b); and a success code read without the payload it should carry
+    (a, c).
+    **Law:** **a status code is not a verification, and a return value is not an
+    observation.** Verify against the ARTIFACT, pinned by identity, compared on
+    content: a commit SHA and a byte count, not a branch name and a 200; a
+    re-read of the file by a separate process, not the writer's own report; a
+    fresh far-side snapshot, not the send's error. Where the artifact cannot be
+    named, the claim is UNKNOWN with its reason (class 82's corollary), never a
+    pass.
+    Sibling to class 81 (a send read as a settlement — the broker case) and
+    class 24 (a check that prints but does not gate). Related: class 49/53 (a
+    plausible zero), class 79 (silence is not death), class 82 (a green word
+    answering a narrower question). Operationalised as **R10**, PART 2.
+
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,
@@ -1960,6 +2010,20 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
 - **R8 times** — all times CT.
 - **R9 isolation** — read-only sweeps run in a worktree at the RUNNING rev;
   zero code/config/DB/env changes; no restarts. Main tree untouched.
+- **R10 closeout publication** — a report is published only when the ARTIFACT
+  is verified, never when the push command exits 0. Fetch the raw URL with the
+  **commit SHA** in the path — never a branch path, which
+  `raw.githubusercontent.com` caches for ~5 min and will happily serve at
+  `HTTP 200` for a superseded or deleted revision — and compare
+  `size_download` against `git ls-tree -r --long <sha> -- <path>` for that
+  blob. A 200 alone proves that something answered. (Amends A14; born class 83,
+  2026-09-06, `docs/v5-precheck-0906`.)
+```
+SHA=$(git rev-parse HEAD)
+git ls-tree -r --long "$SHA" -- docs/superpowers/reports/<report>.md
+curl -s -o /dev/null -w "HTTP %{http_code}  %{size_download} bytes\n" \
+  "https://raw.githubusercontent.com/johnwick2921-cyber/nofx/$SHA/docs/superpowers/reports/<report>.md"
+```
 
 ---
 
