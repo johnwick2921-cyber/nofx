@@ -2071,3 +2071,56 @@ send. Go logged the trigger, the AddOn logged the trigger, the ledger said
 it back. When two components agree, check whether they are agreeing about the
 same artifact or merely echoing one source.
 
+
+## CLASS 77 — A CANONICALIZER ADDED AT ONE BOUNDARY, CONSUMERS LEFT ORDINAL (born 2026-09-05, fix/wave-b-stop-entry repair pass)
+
+**Symptom:** none, for two days, and then a live order in the OPPOSITE
+DIRECTION. Class 28 ("one canonicalizer per identifier, called where the value
+ENTERS") was applied correctly to `armed_orders.side` on 2026-09-03: the store
+now uppercases at the write, so `trader_positions` and the ledger can finally be
+compared. Nothing audited the CONSUMERS. Two of them still compared that column
+to the lowercase literal `"long"`, ordinally:
+
+- `armed_executor.go` chose a stop entry's trigger with `if r.Side == "long"`,
+  so a LONG arm got `entry − offset` — a buy stop BELOW the level it must sit
+  above — and the new stop-side guard then adjudicated that mis-signed trigger.
+- `VLTraderTCPClient.cs` chose the ORDER ACTION with
+  `side == "long" ? OrderAction.Buy : OrderAction.SellShort`, so `"LONG"` fell
+  to the else branch: a long entry, limit or stop, submitted as a live SELL.
+
+Neither ever fired, and the reason is the trap: **every row written since the
+canonicalizer happened to be SHORT** (21 stop_entry + 9 limit rows, ids 38-102
+and the 09-04 limit group), and for SHORT the wrong branch is accidentally the
+right answer. A census of the column reads "no problem" precisely because the
+half that breaks has no rows.
+
+**Probe, five questions:**
+1. When a canonicalizer is ADDED to a column, grep every consumer of that field
+   for an ordinal comparison — `== "`, `switch`, a map key, a ternary. The write
+   side is one line; the read side is however many places already existed.
+2. Does the value CROSS A LANGUAGE BOUNDARY? A Go `strings.ToLower` and a C#
+   `==` are different contracts. The wire spec said lowercase
+   (`vltrader_tcp_PROTOCOL.md` L58) and one call site's comment even said
+   `// lowercase per spec L4390` — while the sibling call two functions away sent
+   whatever the store returned.
+3. Is the fallback branch of the comparison SAFE when the input is unrecognised?
+   `x == "long" ? Buy : SellShort` answers "sell" to *every* question it does not
+   understand. A directional default is never a safe default.
+4. Do the tests feed the STORED value or a hand-written one? Every fixture in the
+   wave passed lowercase `"long"`/`"short"` — the casing the store has not
+   produced since 2026-09-03. A table over the canonical form is one line and
+   would have caught both halves.
+5. Is the untouched half of the enum reachable? "It has never happened" and "it
+   cannot happen" differ by whichever accident is currently supplying the rows.
+
+**Law:** **a canonicalizer is a WIRE-CONTRACT CHANGE, not a storage detail.**
+Fold ONCE where the value enters the path that uses it, hand the folded value to
+every consumer on that path, and make the far side fold again on arrival —
+because the far side is deployed separately and will, at some point, be running
+the version that does not. Where the unrecognised branch has a DIRECTION, refuse
+instead of defaulting.
+
+**Corollary (how it was found):** not by a test and not by the census, but by an
+adversarial reviewer asking what `r.Side` actually contains at runtime rather
+than what the struct comment says (`Side string // long | short`,
+`store/armed_orders.go:36` — still true of the type, false of the data).
