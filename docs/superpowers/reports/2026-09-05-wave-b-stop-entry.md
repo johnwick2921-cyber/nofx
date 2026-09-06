@@ -2,7 +2,7 @@
 
 **Branch:** `fix/wave-b-stop-entry` · **base:** `a45cf551` (= `origin/dev` tip at accept) · **claim:** `cb23d9eb`
 **Session:** waveb-stopentry-0905 · **worktree:** `/home/hoang/nofx-waveb`
-**Status: PUSHED, GREEN, NOT DEPLOYED, NOT MERGED.** No release build, no binary swap, no kill, nothing copied into the NinjaTrader Documents AddOns folder, no NT8 restart (A3). Sections F1/F2 are the owner's, and so is the merge.
+**Status: MERGED TO DEV. GO HALF LIVE. C# HALF STAGED, NOT YET COMPILED.** The Go binary shipped in `f516da7c` — booted 2026-09-05 23:53:44 CT by the Wave A lane (`nofx-6b`) under an owner ruling that collapsed both waves into ONE boot; this lane stood down from its own F1 and handed over the head. F2 ran at 00:04 CT 2026-09-06: the corrected AddOn source is deployed and verified byte-identical, but NT8 is in its maintenance window and could not start, so **nothing has compiled and the C# half is NOT live**. `STOP_ENTRY_SEAM=off` throughout, by owner ruling.
 
 **THIS REPORT COVERS TWO PASSES.** The build (`48e340c0` … `98c28dcd`) and the REPAIR after four adversarial reviews (`291a299c` … the report commit). The repair found **two BLOCKERs the build missed**, both live, both outside what the build had been looking at; they are class 77 and they are the reason this document has a VERIFICATION RECORD at the end naming every finding and its disposition.
 
@@ -464,7 +464,63 @@ Re-run in full at the REPAIR head:
 
 ---
 
-## F2 — THE FOUR LIVE PROOF LINES: **NOT YET RECEIVED — awaiting the owner's NT8 recompile**
+## F2 — ATTEMPTED 2026-09-06 00:04 CT. SOURCE DEPLOYED, COMPILE DEFERRED BY NT8 MAINTENANCE.
+
+**Owner GO received 2026-09-06 ~00:02 CT** ("run F2 now — window open, book empty, backups verified"),
+with the standing condition restated: **the seam stays OFF regardless — F2 proves the order SHAPE, it
+does not enable stop entries.**
+
+**Window and flat gate, quoted (A7).** Sunday 2026-09-06 00:01 CT, CME closed. Open positions **0**;
+non-terminal arms **0**; broker book empty across the last ten `nt8_order_snapshots`
+(`0 orders / 0 working`), freshest id 6152 `Sim101` build `2026-09-03-f12` at 00:00:55 CT.
+
+**A13 — BOTH HALVES BACKED UP BEFORE ANYTHING WAS COPIED IN**, md5-verified against the live files
+(the AddOn has no git revert; this is the only rollback that exists):
+
+| file | md5 | build it HOLDS |
+|---|---|---|
+| `~/nofx-backups/nt8-addon/VLTraderTCPClient.2026-09-03-f12.cs` | `b7d6700220f8cbd21ca73d4892400065` | 2026-09-03-f12 |
+| `~/nofx-backups/nt8-addon/NinjaTrader.Custom.2026-09-03-f12.dll` | `7c2789ff35d96beb73dd740a29b913f1` | 2026-09-03-f12 |
+
+**What was actually done, and it is only the first half of F2:**
+
+1. `ninjascript/VLTraderTCPClient.cs` from the deployed head copied to
+   `…/Documents/NinjaTrader 8/bin/Custom/AddOns/VLTraderTCPClient.cs`.
+   **Verified byte-identical after the copy:** repo `34efc3f85d0a775247f6c2f2ea576224` ==
+   live `34efc3f85d0a775247f6c2f2ea576224`. Build id on the far side moved
+   `2026-09-03-f12` → **`2026-09-05-g2`** in source.
+2. NinjaTrader stopped (pid 14964) and relaunched (pid 45436, 00:04:56 CT).
+3. **It never compiled.** The new process parked at its **`Welcome`** window and stayed there for
+   nine minutes, responsive, with a 61-byte log containing one `Session Break` line and zero
+   `VLTrader` activity. `NinjaTrader.Custom.dll` is **unchanged at `7c2789ff…`** — which is exactly
+   why A13 requires the DLL's md5: it is the only thing that distinguishes "the F5 succeeded" from
+   "NT8 silently kept the old binary". Here it says, correctly, that no compile happened.
+   **Owner: NT8 is in its maintenance window and cannot start.**
+
+**ATTRIBUTION, CORRECTED ON THE RECORD.** I first told the owner the cause was "plainly my
+force-kill". That was wrong, and the logs say so. The NT8 feed was **already dead before I touched
+anything**: at 00:00:23 CT — four minutes BEFORE the stop — the AddOn's own watchdog logged
+`most-stale MNQ|1M bar age 398s; dead-subscriptions=28`, and `There was a problem authenticating
+account Google Simulation` had been repeating every ~30 s since 00:00:14. The identical pattern
+appears at the identical time on 2026-09-05 (first line 00:00:14:032), i.e. it is the nightly
+maintenance window, not this wave. My restart did not cause the outage; it removed the one thing
+masking it — a process that was already connected and could not have re-authenticated either.
+
+**THE COMPILE IS DEFERRED, NOT SKIPPED.** NinjaTrader compiles NinjaScript on startup, and the
+corrected source is in place and verified. **The next time NT8 starts after maintenance it will
+compile `2026-09-05-g2` with no further action.** Nothing was restored: the restore rule is for a
+COMPILE ERROR, and there was no compile error — there was no compile. Restoring would have put the
+defect back for no benefit, since the AddOn is not loaded either way.
+
+**RISK WHILE THE BRIDGE IS DOWN: bounded, and the Go half is the reason.** Market closed until
+17:00 CT Sunday. Zero positions, zero arms, book empty. `STOP_ENTRY_SEAM=off` is in force in the
+running process (`🎛 entry law: … stop_entry_seam=off`), so no stop entry is placed at all; and even
+with the seam on, `PlaceStopEntry` refuses any build below `MinAddonBuildStopSlot`. Limits are
+unaffected by both. **The one thing the owner must ensure is that NT8 is up and the AddOn connected
+well before 17:00 CT Sunday** — without it there are no bars and no execution path, which is a
+data/feed outage, not a Wave B regression.
+
+## THE FOUR LIVE PROOF LINES: **NOT YET RECEIVED — the C# half is NOT live (A20/class 6)**
 
 None of these can exist until the owner copies `ninjascript/VLTraderTCPClient.cs` to the Documents AddOns folder, F5-compiles, and **fully restarts NT8** — and then a CME session opens. All four are owed:
 
