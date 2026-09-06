@@ -443,12 +443,12 @@ Re-run in full at the REPAIR head:
 |---|---|---|
 | build | `go build ./...` | rc=0 |
 | vet | `go vet ./...` | rc=0 |
-| Go suite | `go test ./...` | **`grep -c '^FAIL'` = 0** · `ok nofx/trader 40.037s` · `ok nofx/trader/ninjatrader 8.603s` · `ok nofx/provider/ninjatrader 18.617s` · `ok nofx/store 23.598s` · `ok nofx/kernel 1.457s` |
+| Go suite | `go test ./...` | **`grep -c '^FAIL'` = 0 · `grep -c '^ok'` = 28** · `ok nofx/trader 54.440s` · `ok nofx/trader/ninjatrader 8.603s` · `ok nofx/provider/ninjatrader 18.617s` · `ok nofx/store 23.598s` · `ok nofx/kernel 1.770s` |
 | goldens | `go run ./cmd/nq_smoke prompt` | `OK prompt: system=1530 bytes, user=504 bytes` rc=0 |
 | goldens | `go run ./cmd/nq_smoke roundtrip` | `OK roundtrip: signal->fill in 400.893174ms (direction=LONG entry=21500.00)` rc=0 |
 | goldens | `git diff --name-only origin/dev...HEAD -- kernel/testdata` | **0 files** |
 | tsc | `cd web && npx tsc --noEmit -p tsconfig.json` | rc=0 |
-| vite | `cd web && npm run build` | `✓ built in 4.55s` |
+| vite | `cd web && npm run build` | `✓ built in 4.09s` |
 | vitest | `cd web && npm test` | **Test Files 44 passed (44) · Tests 345 passed (345)** |
 
 (`web/node_modules` was absent in this worktree; `npm ci` was run **in the worktree only** — the main tree was never touched.)
