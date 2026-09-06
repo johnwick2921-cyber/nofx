@@ -79,8 +79,13 @@ func TestDetectorHookIsACoinFlipThroughTheProductionPath(t *testing.T) {
 	step := (hi - lo) / 40.0
 	var seated []kernel.ScoredLevel
 	for i := 1; i < 40; i++ {
+		// WAVE A / D1e — certified so these episodes can form a rate (see
+		// TestLineLevelsCannotBeCertifiedAndAreExcludedFromRates for the
+		// uncertified case, which is what production line levels hit).
 		seated = append(seated, kernel.ScoredLevel{
-			DetectedLevel: kernel.DetectedLevel{Price: lo + float64(i)*step, Label: "GRID"}, Score: 90, Grade: "A",
+			DetectedLevel: kernel.DetectedLevel{
+				Price: lo + float64(i)*step, Label: "GRID", FormedAtMs: bars[0].OpenTime,
+			}, Score: 90, Grade: "A",
 		})
 	}
 	at.recordDetectorOutputs("MNQ", "2026-09-03:ASIA:hoang", "ASIA", 1, nil, seated,

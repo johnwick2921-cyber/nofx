@@ -162,8 +162,11 @@ func (t *TCPTrader) recordClose(
 		}
 	}
 
-	if err := pb.ProcessTrade(owner.TraderID, exchangeID, exchangeType, symbol, side, action,
-		attributedQty, p.ExitPrice, 0, realizedPnL, exitMs, p.SignalID); err != nil {
+	// D3 — the broker's own cause travels WITH the close instead of being
+	// logged and thrown away. p.ExitReason is the same value line 204 below
+	// uses to arm the re-entry cooldown.
+	if err := pb.ProcessTradeWithExitReason(owner.TraderID, exchangeID, exchangeType, symbol, side, action,
+		attributedQty, p.ExitPrice, 0, realizedPnL, exitMs, p.SignalID, p.ExitReason); err != nil {
 		logger.Warnf("ninjatrader/tcp: record close failed (%s %s): %v", symbol, side, err)
 	} else {
 		// 4.2 — exit-fill persistence (NT8 SIM lineage): entries record fills in

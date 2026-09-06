@@ -51,10 +51,14 @@ func TestTouchOrdinalComesFromTheStore(t *testing.T) {
 func TestTouchOutcomeRatesExcludeAmbiguousAndCarryN(t *testing.T) {
 	st := obStore(t)
 	ts := st.TouchOutcomes()
+	// WAVE A / D1e — a rate is computed over CERTIFIED rows only, so this
+	// fixture writes what the fixed recorder writes. The rate arithmetic under
+	// test is unchanged; the population it may draw from is now explicit.
 	mk := func(kind, outcome string, amb bool) {
 		if err := ts.SaveOutcome(&TouchOutcomeRow{
 			TraderID: "hoang", Symbol: "MNQ", LevelKind: kind, LevelPrice: 29000,
 			Outcome: outcome, Ambiguous: amb, OpenedAtMs: time.Now().UnixMilli(),
+			Validity: ValidityValid,
 		}); err != nil {
 			t.Fatal(err)
 		}

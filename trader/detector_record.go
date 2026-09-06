@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"nofx/kernel"
+	"nofx/market"
 	"nofx/store"
 )
 
@@ -46,30 +47,54 @@ func (at *AutoTrader) recordDetectorOutputs(
 		return
 	}
 	k, horizon, exitOn := kernel.DetectorK(), kernel.DetectorHorizonBars(), kernel.DetectorExitOn()
-	dayMs := kernel.CMESessionDayStart(now).UnixMilli()
 	ts := at.store.TouchOutcomes()
 
-	written := 0
+	written, preFormation, noFormation := 0, 0, 0
 	for _, lv := range seated {
 		if lv.Price <= 0 {
 			continue
 		}
-		eps := kernel.DetectTouchOutcomes(scope.Bars, lv.Price, k, delta, horizon, exitOn)
+		// D1a — THE SCAN STARTS WHERE THE LEVEL WAS BORN. Scanning the whole
+		// void scope for a level that did not exist across most of it is
+		// lookahead by construction: it is how all 14 live RTH-L episodes came
+		// to open before the 08:36 bar that first printed their price.
+		bars := scope.Bars
+		if lv.FormedAtMs > 0 {
+			bars = barsSince(bars, lv.FormedAtMs)
+			preFormation += len(scope.Bars) - len(bars)
+		} else {
+			// A24/A9: an unknown formation time is NOT a formation time of 0.
+			// We still de-duplicate, but this level's episodes cannot be
+			// proven post-formation, and the row says so — see below.
+			noFormation++
+		}
+		if len(bars) < 2 {
+			continue
+		}
+		eps := kernel.DetectTouchOutcomes(bars, lv.Price, k, delta, horizon, exitOn)
 		if len(eps) == 0 {
 			continue
 		}
-		last := ts.LastOpenedAtMs(at.id, symbol, lv.Price, dayMs)
+		// D1a — the watermark covers THE WHOLE SCANNED WINDOW, not the current
+		// session day. Passing dayMs here is what re-wrote every episode that
+		// opened before 17:00 CT today, on every read.
+		last := ts.LastOpenedAtMs(at.id, symbol, lv.Price, lv.FormedAtMs)
 		for _, e := range kernel.NewEpisodesSince(eps, last) {
 			row := &store.TouchOutcomeRow{
 				TraderID: at.id, Symbol: symbol,
 				LevelPrice: lv.Price, LevelKind: string(lv.Kind),
 				CandidateSeated: true, PlanID: planID, PlanVersion: planVersion, Session: session,
-				Ordinal: ts.NextOrdinal(at.id, symbol, lv.Price, dayMs),
-				K:       k, Delta: delta, BandPts: k * delta, Horizon: horizon, ExitOn: exitOn,
+				// D1c — the ordinal counts within the EPISODE's own session-day.
+				// Handing it the day of the READ is what made 471 of 677 rows
+				// ordinal 1. One implementation, reused (A24).
+				Ordinal: ts.NextOrdinal(at.id, symbol, lv.Price,
+					kernel.CMESessionDayStart(time.UnixMilli(e.OpenedAtMs)).UnixMilli()),
+				K: k, Delta: delta, BandPts: k * delta, Horizon: horizon, ExitOn: exitOn,
 				EntrySide: e.Entry, ExitSide: e.Exit, Outcome: e.Outcome,
 				Ambiguous: e.IsAmbiguous(), BarsToExit: e.BarsToExit,
 				MFEPts: e.MFE, MAEPts: e.MAE,
 				OpenedAtMs: e.OpenedAtMs, ClosedAtMs: e.ClosedAtMs,
+				FormedAtMs: lv.FormedAtMs, Validity: validityFor(lv.FormedAtMs),
 			}
 			if err := ts.SaveOutcome(row); err != nil {
 				at.logWarnf("🔬 detector: touch_outcomes write failed (level %.2f): %v", lv.Price, err)
@@ -101,6 +126,30 @@ func (at *AutoTrader) recordDetectorOutputs(
 	if err := at.store.CandidatePool().SavePool(rows); err != nil {
 		at.logWarnf("🔬 detector: candidate_pool write failed (%d rows): %v", len(rows), err)
 	}
-	at.logInfof("🔬 detector recorded: %d new episode(s) · pool %d candidate(s) (%d seated, %d cut) · k=%.0f Δ=%.2f band=±%.2f H=%d %s",
-		written, len(rows), len(rows)-cut, cut, k, delta, k*delta, horizon, exitOn)
+	// A9 — every skipped bar and every level with no formation time is named.
+	at.logInfof("🔬 detector recorded: %d new episode(s) · pool %d candidate(s) (%d seated, %d cut) · k=%.0f Δ=%.2f band=±%.2f H=%d %s · pre-formation bars skipped=%d · levels with no formation time=%d",
+		written, len(rows), len(rows)-cut, cut, k, delta, k*delta, horizon, exitOn, preFormation, noFormation)
+}
+
+// validityFor says what this row may be used for. A level with no formation
+// time cannot be certified post-formation, so its episodes are recorded and
+// EXCLUDED from rates rather than silently blessed (A24, A30).
+func validityFor(formedAtMs int64) string {
+	if formedAtMs > 0 {
+		return store.ValidityValid
+	}
+	return store.ValidityNoFormation
+}
+
+// barsSince returns the bars at or after fromMs. The detector needs a previous
+// bar to see a touch, so this deliberately keeps the boundary bar: an episode
+// still cannot OPEN before fromMs, because a touch is judged on the current
+// bar and the episode's opened_at_ms is that bar's time.
+func barsSince(bars []market.Kline, fromMs int64) []market.Kline {
+	for i := range bars {
+		if bars[i].OpenTime >= fromMs {
+			return bars[i:]
+		}
+	}
+	return nil
 }

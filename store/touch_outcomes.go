@@ -52,8 +52,53 @@ type TouchOutcomeRow struct {
 	MAEPts     float64
 	OpenedAtMs int64 `gorm:"index"`
 	ClosedAtMs int64
-	CreatedAt  time.Time `gorm:"index"`
+	// FormedAtMs (WAVE A / D1) is the level's own birth instant, copied from
+	// DetectedLevel.FormedAtMs. An episode that opened before it is lookahead
+	// by construction — the recorder now refuses to scan there, and this
+	// column is what lets a later reader CHECK that, instead of trusting it.
+	// 0 means the level did not carry a formation time, not "formed at epoch".
+	FormedAtMs int64 `gorm:"index"`
+	// Validity (WAVE A / D1e) classifies a row for readers. Rows written
+	// before the recorder was fixed are marked, never deleted and never
+	// silently repaired — a rate computed over them would be the artifact
+	// this wave exists to remove.
+	//
+	// DELIBERATELY NO SQL DEFAULT. SQLite's ADD COLUMN ... DEFAULT 'valid'
+	// would stamp all 677 pre-existing contaminated rows as valid the moment
+	// AutoMigrate ran, which is the exact fabrication this column exists to
+	// prevent. An empty validity means NOT CERTIFIED and is excluded from
+	// every rate until the migration classifies it.
+	Validity  string    `gorm:"index"`
+	CreatedAt time.Time `gorm:"index"`
 }
+
+// Validity values. Only ValidityValid rows may be used for a rate.
+const (
+	// ValidityValid — written by the fixed recorder: scan started at
+	// max(FormedAtMs, watermark) and the episode key is unique.
+	ValidityValid = "valid"
+	// ValidityPreFormation — the episode opened before the level existed.
+	ValidityPreFormation = "invalid:pre_formation"
+	// ValidityDuplicate — a second (or eleventh) copy of an episode key.
+	ValidityDuplicate = "invalid:duplicate"
+	// ValidityLegacy — written by the old recorder and provably neither of
+	// the above. UNVERIFIED, not blessed: it was still scanned over a whole
+	// 33 h void scope with a day-scoped ordinal.
+	ValidityLegacy = "legacy:unverified"
+	// ValidityNoFormation — de-duplicated correctly, but the level carried NO
+	// formation time, so this episode CANNOT be shown to post-date the level.
+	//
+	// This is not a corner case: FormedAtMs is set only by kernel/levels_zones.go
+	// (DEMAND/SUPPLY/OB/FVG). Every LINE level — VWAP, RTH-L, RTH-H, PDH, PDL,
+	// PDC, ONH, ONL, POC, OR-H/L, SWG — is built by lineLevel (kernel/levels.go:93-95),
+	// which never sets it: 503 of the 677 live rows, 74.3%, including all 140
+	// RTH-L rows that are the premise's own evidence.
+	//
+	// A24 forbids dressing that as a guarantee. The formation floor is applied
+	// where it CAN be applied and these rows say plainly that it could not be.
+	// They are excluded from every rate until line levels carry a birth time.
+	ValidityNoFormation = "unverified:no_formation"
+)
 
 func (TouchOutcomeRow) TableName() string { return "touch_outcomes" }
 
@@ -70,6 +115,13 @@ func NewTouchOutcomeStore(db *gorm.DB) *TouchOutcomeStore {
 
 // NextOrdinal reads the next touch ordinal for a level FROM THE STORE (C4), so
 // numbering survives a restart. Scoped per (trader, symbol, level, session-day).
+//
+// WAVE A / D1c — sessionDayMs IS THE EPISODE'S OWN SESSION-DAY, not the day of
+// the read. The caller used to pass the CURRENT day, so every episode that
+// opened earlier scored MAX(ordinal)=0 and was written as ordinal 1 on every
+// read: 471 of 677 live rows read 1, which is why no ordinal stratum is
+// usable. This function was always right; it was being asked the wrong
+// question. It is the ONE ordinal implementation (A24) — do not add a second.
 func (s *TouchOutcomeStore) NextOrdinal(traderID, symbol string, level float64, sessionDayMs int64) int {
 	if s == nil || s.db == nil {
 		return 1
@@ -94,6 +146,44 @@ func (s *TouchOutcomeStore) SaveOutcome(r *TouchOutcomeRow) error {
 		r.CreatedAt = time.Now().UTC()
 	}
 	return s.db.Create(r).Error
+}
+
+// AllOutcomes returns every persisted episode, oldest first. Used by the
+// WAVE A migration (which must classify rows it may never delete) and by the
+// recorder's own tests. Read-only.
+func (s *TouchOutcomeStore) AllOutcomes() ([]TouchOutcomeRow, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	var rows []TouchOutcomeRow
+	if err := s.db.Order("id ASC").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
+// CountByValidity is the boot line's breakdown — every figure READ (A11).
+// Returns a map from validity value to row count; the empty key is
+// "not certified" (rows the migration has not classified).
+func (s *TouchOutcomeStore) CountByValidity() map[string]int64 {
+	out := map[string]int64{}
+	if s == nil || s.db == nil {
+		return out
+	}
+	type vr struct {
+		Validity string
+		N        int64
+	}
+	var rows []vr
+	if err := s.db.Model(&TouchOutcomeRow{}).
+		Select("COALESCE(validity,'') AS validity, COUNT(*) AS n").
+		Group("validity").Scan(&rows).Error; err != nil {
+		return out
+	}
+	for _, r := range rows {
+		out[r.Validity] = r.N
+	}
+	return out
 }
 
 // CountOutcomes is the boot line's figure — READ, never a literal.
@@ -144,7 +234,12 @@ func (s *TouchOutcomeStore) RatesBy(column string) ([]OutcomeRate, error) {
 		N       int
 	}
 	var rows []row
-	q := s.db.Model(&TouchOutcomeRow{}).Select(sel + ", outcome, COUNT(*) AS n")
+	// D1e — ONLY CERTIFIED ROWS MAY FORM A RATE. Everything else (legacy,
+	// duplicate, pre-formation, formation-unknown) is recorded and excluded.
+	// This is the single chokepoint: DetectorReport and every caller of
+	// RatesBy inherit it, so there is one implementation of "usable" (A24).
+	q := s.db.Model(&TouchOutcomeRow{}).Select(sel+", outcome, COUNT(*) AS n").
+		Where("validity = ?", ValidityValid)
 	if grp != "" {
 		q = q.Group(grp + ", outcome").Order(grp)
 	} else {
@@ -249,16 +344,22 @@ func wilson(p float64, n int) (lo, hi float64) {
 }
 
 // LastOpenedAtMs is the watermark that makes the per-read hook idempotent: the
-// newest episode already recorded for this level today. 0 = none, so the first
-// read of a session records everything it finds.
-func (s *TouchOutcomeStore) LastOpenedAtMs(traderID, symbol string, level float64, sessionDayMs int64) int64 {
+// newest episode already recorded for this level at or after sinceMs. 0 = none.
+//
+// WAVE A / D1a — sinceMs IS THE SCAN WINDOW, NOT THE SESSION DAY. The caller
+// used to pass the CURRENT session-day start, so an episode that opened before
+// 17:00 CT today never matched this filter, the watermark read 0, and the whole
+// set was written again on every read. That is how 677 rows became 423
+// episodes and RTH-L became 140 rows of 14. The watermark must cover exactly
+// the window the caller is about to scan.
+func (s *TouchOutcomeStore) LastOpenedAtMs(traderID, symbol string, level float64, sinceMs int64) int64 {
 	if s == nil || s.db == nil {
 		return 0
 	}
 	var last int64
 	if err := s.db.Model(&TouchOutcomeRow{}).
 		Where("trader_id = ? AND symbol = ? AND level_price = ? AND opened_at_ms >= ?",
-			traderID, symbol, level, sessionDayMs).
+			traderID, symbol, level, sinceMs).
 		Select("COALESCE(MAX(opened_at_ms), 0)").Scan(&last).Error; err != nil {
 		return 0
 	}

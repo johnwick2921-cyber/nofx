@@ -48,7 +48,14 @@ func TestDetectorWritesThroughTheProductionPath(t *testing.T) {
 	t.Cleanup(func() { market.FuturesBarsProvider = prev })
 
 	at := &AutoTrader{id: "hoang", store: st}
-	seated := []kernel.ScoredLevel{{DetectedLevel: kernel.DetectedLevel{Price: level, Label: "ONL"}, Score: 91, Grade: "A"}}
+	// WAVE A / D1e — a rate is drawn from CERTIFIED rows only, and a level is
+	// certifiable only if it carries a formation time. This fixture gives its
+	// level one (born with the tape) so the rate assertion below still has a
+	// population; an uncertified line level would correctly yield episodes and
+	// no rate, which TestLineLevelsCannotBeCertifiedAndAreExcludedFromRates pins.
+	seated := []kernel.ScoredLevel{{DetectedLevel: kernel.DetectedLevel{
+		Price: level, Label: "ONL", FormedAtMs: bars[0].OpenTime,
+	}, Score: 91, Grade: "A"}}
 	all := []kernel.DetectedLevel{
 		{Price: level, Label: "ONL"},
 		{Price: level + 500, Label: "FAR"}, // cut on proximity

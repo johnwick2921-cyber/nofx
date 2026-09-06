@@ -116,6 +116,41 @@ const CloseReasonUnresolved = "unresolved"
 // UNKNOWN-P&L reason set now enforces it at every aggregator.
 const CloseReasonTestSeam = "e7_farside_test"
 
+// WAVE A / D3 — THE BROKER'S OWN EXIT CAUSES. Written from the NT8
+// order/close event (`exit_reason` on the wire), never inferred from price
+// proximity or from the sign of the P&L: two live rows (557, 570) exited at a
+// protective stop IN PROFIT, so "stopped out" and "lost" are different facts.
+const (
+	// CloseReasonStop — the protective stop child order filled ("-sl").
+	CloseReasonStop = "stop"
+	// CloseReasonTarget — the profit target child order filled ("-tp").
+	CloseReasonTarget = "target"
+	// CloseReasonManual — a human or an explicit flatten closed it.
+	CloseReasonManual = "manual"
+	// CloseReasonSync — the row was synchronized from a broker position
+	// delta with NO exit event to name a cause. It says how the ROW was
+	// written; it says nothing about why the TRADE ended. This is what all
+	// 58 eligible rows carry today, and it stays the value for the eleven
+	// CEX/DEX sync paths, which have no OCO event to report.
+	CloseReasonSync = "sync"
+)
+
+// ExitCauseFromBroker maps NT8's own exit_reason to a stored close_reason.
+// An unrecognized or absent value is NEVER guessed: it stays "sync", the
+// honest "a close was synchronized, cause unnamed" (D3b).
+func ExitCauseFromBroker(brokerReason string) string {
+	switch strings.ToLower(strings.TrimSpace(brokerReason)) {
+	case "sl", "stop", "stoploss", "stop_loss":
+		return CloseReasonStop
+	case "tp", "target", "takeprofit", "take_profit", "profittarget":
+		return CloseReasonTarget
+	case "manual":
+		return CloseReasonManual
+	default:
+		return CloseReasonSync
+	}
+}
+
 // UnknownPnLReason reports whether a close reason carries NO trustworthy P&L
 // (reconcile_flat placeholder, class-27 unresolved, or an E7 test-seam row)
 // and must be excluded from stats/streaks/guardrails while remaining visible
@@ -521,7 +556,12 @@ func (s *PositionStore) UpdatePositionQuantityAndPrice(id int64, addQty float64,
 
 // ReducePositionQuantity reduces position quantity for partial close
 // If quantity reaches 0 (or near 0), automatically closes the position
-func (s *PositionStore) ReducePositionQuantity(id int64, reduceQty float64, exitPrice float64, addFee float64, addPnL float64) error {
+// WAVE A / D3 — exitReason is the BROKER's word for the close that took the
+// quantity to zero. This auto-close branch wrote the literal "sync" too; it is
+// unexercised on MNQ today only because every live position has been one
+// contract, and it becomes reachable the first time a multi-contract position
+// closes in parts.
+func (s *PositionStore) ReducePositionQuantity(id int64, reduceQty float64, exitPrice float64, addFee float64, addPnL float64, exitReason string) error {
 	var pos TraderPosition
 	if err := s.db.First(&pos, id).Error; err != nil {
 		return fmt.Errorf("failed to get current position: %w", err)
@@ -554,7 +594,7 @@ func (s *PositionStore) ReducePositionQuantity(id int64, reduceQty float64, exit
 			"realized_pnl": newPnL,
 			"status":       "CLOSED",
 			"exit_time":    nowMs,
-			"close_reason": "sync",
+			"close_reason": ExitCauseFromBroker(exitReason),
 			"updated_at":   nowMs,
 		}).Error
 	}
