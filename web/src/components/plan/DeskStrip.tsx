@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import useSWR from 'swr'
+import { useLanguage } from '../../contexts/LanguageContext'
+import { t } from '../../i18n/translations'
 import { api } from '../../lib/api'
 import type { DeskLine, DeskStrip as DeskStripData } from '../../lib/api/plan'
 
@@ -91,6 +93,12 @@ function Row({ line }: { line: DeskLine }) {
 export function DeskStrip({ traderId }: { traderId?: string }) {
   // D5 — expanded by default; the collapse lives in COMPONENT STATE, never in
   // browser storage.
+  const { language } = useLanguage()
+  const deskLabels = {
+    en: { expand: 'Expand Desk', collapse: 'Collapse Desk' },
+    zh: { expand: '展开交易台', collapse: '收起交易台' },
+    id: { expand: 'Perluas Desk', collapse: 'Ciutkan Desk' },
+  }[language]
   const [open, setOpen] = useState(true)
 
   const { data, error } = useSWR<DeskStripData | null>(
@@ -129,7 +137,22 @@ export function DeskStrip({ traderId }: { traderId?: string }) {
       </div>
     )
   }
-  if (!data) return null
+  if (!data) {
+    return (
+      <div
+        data-testid="desk-strip"
+        data-state="loading"
+        role="status"
+        style={{
+          padding: 12,
+          border: '1px solid var(--vl-hair)',
+          borderRadius: 6,
+        }}
+      >
+        DESK — {t('loading', language)}
+      </div>
+    )
+  }
 
   return (
     <div
@@ -156,6 +179,8 @@ export function DeskStrip({ traderId }: { traderId?: string }) {
       >
         <button
           data-testid="desk-toggle"
+          aria-label={open ? deskLabels.collapse : deskLabels.expand}
+          aria-expanded={open}
           onClick={() => setOpen((v) => !v)}
           style={{
             background: 'none',
