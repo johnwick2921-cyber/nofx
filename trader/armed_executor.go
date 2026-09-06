@@ -1,6 +1,7 @@
 package trader
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"os"
@@ -892,6 +893,7 @@ func (at *AutoTrader) runArmedPlacement(bars []market.Kline, sinceMs int64) {
 	if ledger == nil {
 		return
 	}
+	at.logStopEntryBootLineOnce()
 	now := time.Now()
 	price := 0.0
 	if len(bars) > 0 {
@@ -934,22 +936,48 @@ func (at *AutoTrader) runArmedPlacement(bars []market.Kline, sinceMs int64) {
 				if r.Side == "long" {
 					trigger = r.EntryPx + offset
 				}
-				// WRONG-SIDE GUARD (2026-08-30 E7 incident class): a stop-market
-				// whose trigger the market has already traded through fires the
-				// instant it reaches NT8. Never place it — cancel the arm.
-				if price > 0 && limitMarketableWrongSide(price, trigger, r.Side) {
-					_ = ledger.SetState(r.ID, "cancelled", "trigger already traded through — never placed")
-					at.logWarnf("✕ armed %s stop-entry cancelled — price %.2f already %s the trigger %.2f (never placed)", r.Scenario, price, throughWord(r.Side), trigger)
+				// WAVE B / D2 — THE STOP-SIDE GUARD, chosen BY KIND. This branch
+				// called limitMarketableWrongSide until 2026-09-05 and every one
+				// of its four answers was backwards for a resting stop.
+				armKey := r.PlanID + ":" + strconv.Itoa(r.Version) + ":" + r.Scenario + ":leg" + strconv.Itoa(r.LegIndex)
+				verdict, why := stopEntryGuardVerdict(r.Side, trigger, price)
+				switch verdict {
+				case stopGuardThrough:
+					_ = ledger.SetState(r.ID, "cancelled", why+" — never placed")
+					at.logWarnf("✕ armed %s stop-entry CANCELLED [guard=stop-side] %s stop-market trigger=%.2f price=%.2f — %s (never placed)",
+						r.Scenario, strings.ToUpper(r.Side), trigger, price, why)
+					continue
+				case stopGuardUnknown:
+					// D3 — UNKNOWN NEVER TAKES THE DESTRUCTIVE BRANCH. No cancel,
+					// no placement: say so, count it, and leave the arm exactly as
+					// it is for the next cycle to adjudicate.
+					if armRefusalChanged(&at.armRefusalLast, armKey, "stop_entry:guard_unknown") {
+						shown := at.countStopEntryRefusal(r, "stop_entry:guard_unknown", now)
+						at.logWarnf("⚠️ armed %s stop-entry NOT adjudicated [guard=stop-side] %s stop-market trigger=%.2f — %s%s",
+							r.Scenario, strings.ToUpper(r.Side), trigger, why, shown)
+					}
 					continue
 				}
 				sid, perr := nt.PlaceStopEntry(at.futuresSymbol(), r.Side, 1, trigger, r.StopPx, r.TargetPx)
 				if perr != nil {
-					at.logWarnf("📌 stop-entry place failed %s: %v", r.Scenario, perr)
+					// D5 — an AddOn that predates the stop-slot fix is refused at
+					// the wire, not sent a malformed order. Counted, and deduped
+					// so it does not re-log every cycle until NT8 is recompiled.
+					if errors.Is(perr, ntwire.ErrAddonBuildTooOld) {
+						if armRefusalChanged(&at.armRefusalLast, armKey, "stop_entry:addon_build") {
+							shown := at.countStopEntryRefusal(r, "stop_entry:addon_build", now)
+							at.logWarnf("📌 armed %s stop-entry REFUSED [guard=far_side_build] %s stop-market trigger=%.2f: %v%s",
+								r.Scenario, strings.ToUpper(r.Side), trigger, perr, shown)
+						}
+						continue
+					}
+					at.logWarnf("📌 stop-entry place failed %s [guard=stop-side passed] %s trigger=%.2f: %v", r.Scenario, strings.ToUpper(r.Side), trigger, perr)
 					continue
 				}
 				_ = ledger.SetSignal(r.ID, sid)
 				_ = ledger.SetState(r.ID, "working", "")
-				at.logInfof("📌 armed %s → WORKING stop-entry %.2f signal=%s (no retest in %d bars, offset %dt)", r.Scenario, trigger, sid, retestWaitBars(), stopEntryOffsetTicks())
+				at.logInfof("📌 armed %s → WORKING stop-entry [guard=stop-side] %s stop-market trigger=%.2f price=%.2f signal=%s (%s · no retest in %d bars, offset %dt)",
+					r.Scenario, strings.ToUpper(r.Side), trigger, price, sid, why, retestWaitBars(), stopEntryOffsetTicks())
 				continue
 			}
 			if price > 0 && limitMarketableWrongSide(price, r.EntryPx, r.Side) {
@@ -994,6 +1022,181 @@ func limitMarketableWrongSide(price, entry float64, side string) bool {
 	}
 	return false
 }
+
+// ---------------------------------------------------------------------------
+// WAVE B / D2 + D3 (2026-09-05) — THE STOP-SIDE GUARD.
+//
+// limitMarketableWrongSide above is CORRECT and is left exactly as it is: a buy
+// limit above the market and a sell limit below it are marketable. The bug was
+// that the STOP-ENTRY branch called it too, with the trigger in the `entry`
+// argument — and for a resting stop every one of its four answers is backwards.
+// A buy stop is VALID below the market and already-through at/above it; a sell
+// stop is VALID above the market and already-through at/below it. So the guard
+// cancelled every good stop and admitted every bad one. On 2026-09-04 it
+// admitted 21 sell stops with the market 50-103 points through the trigger; only
+// the malformed zero stop slot (D1) kept them inert.
+//
+// One function per order kind, chosen BY KIND at the call site — never a shared
+// predicate with a default fallthrough, which is how one call site's correct
+// semantics became another's inversion.
+//
+// NOTE ON THE BOUNDARY: the stop boundary is INCLUSIVE and the limit boundary is
+// strict. A limit at price == entry still rests; a stop at price == trigger
+// FIRES. A strict mirror of the limit predicate would leave an off-by-one at
+// exactly the trigger, so the exact-touch case is pinned on both sides.
+type stopGuardVerdict int
+
+const (
+	// stopGuardUnknown — the guard could not be evaluated (no price, no trigger,
+	// a side we do not recognise). ZERO VALUE ON PURPOSE: a forgotten or
+	// uninitialised verdict reads as the harmless branch, never the cancel.
+	// D3: unknown NEVER takes the destructive branch. Cancelling on ignorance is
+	// the same defect the reaper was rebuilt to remove, one level down.
+	stopGuardUnknown stopGuardVerdict = iota
+	// stopGuardRest — the market is on the resting side of the trigger. Place it.
+	stopGuardRest
+	// stopGuardThrough — the market is AT or beyond the trigger; the order would
+	// fire the instant it reached NT8. Cancel the arm; never place.
+	stopGuardThrough
+)
+
+func (v stopGuardVerdict) String() string {
+	switch v {
+	case stopGuardRest:
+		return "rest"
+	case stopGuardThrough:
+		return "through"
+	default:
+		return "unknown"
+	}
+}
+
+// stopEntryMarketableWrongSide (pure) reports whether the market has already
+// reached or passed a resting stop entry's TRIGGER — long: price >= trigger,
+// short: price <= trigger. Inclusive, because a stop at its trigger fires.
+func stopEntryMarketableWrongSide(side string, trigger, price float64) bool {
+	if price <= 0 || trigger <= 0 {
+		return false
+	}
+	switch strings.ToLower(strings.TrimSpace(side)) {
+	case "long":
+		return price >= trigger
+	case "short":
+		return price <= trigger
+	}
+	return false
+}
+
+// stopEntryGuardVerdict adjudicates ONE stop-entry arm and says why, in the
+// words the log will print (A9: the refusal names which guard ran and the
+// relation it actually evaluated). Pure; the caller supplies price and trigger.
+func stopEntryGuardVerdict(side string, trigger, price float64) (stopGuardVerdict, string) {
+	s := strings.ToLower(strings.TrimSpace(side))
+	if s != "long" && s != "short" {
+		return stopGuardUnknown, fmt.Sprintf("stop-side guard not evaluated: side %q is neither long nor short — nothing cancelled", side)
+	}
+	if price <= 0 {
+		return stopGuardUnknown, fmt.Sprintf("stop-side guard not evaluated: no price (trigger %.2f) — nothing cancelled", trigger)
+	}
+	if trigger <= 0 {
+		return stopGuardUnknown, fmt.Sprintf("stop-side guard not evaluated: no trigger (price %.2f) — nothing cancelled", price)
+	}
+	// The relation is printed as the guard evaluated it, so the message cannot
+	// say "above" while the code tested "below" (the old throughWord did exactly
+	// that on this branch: it is correct for limits and inverted for stops).
+	rel, restRel := ">=", "<"
+	if s == "short" {
+		rel, restRel = "<=", ">"
+	}
+	if stopEntryMarketableWrongSide(s, trigger, price) {
+		return stopGuardThrough, fmt.Sprintf("accepted through (stop side): price %.2f %s trigger %.2f", price, rel, trigger)
+	}
+	return stopGuardRest, fmt.Sprintf("rests (stop side): price %.2f %s trigger %.2f", price, restRel, trigger)
+}
+
+// armRowTradeDate is the session-day key for a ledger row's counters. The row
+// carries it: PlanID is shaped "2026-09-04:NY:<traderID>", which is exactly
+// kernel.PlanTradeDateFor's primary path. Falling back to the session day of the
+// caller's clock keeps these keys in the same namespace as the rr / entry_gate
+// refusal counters rather than forking a second date convention. `now` is the
+// caller's clock (class 60 / A28).
+func armRowTradeDate(planID string, now time.Time) string {
+	if i := strings.Index(planID, ":"); i > 0 {
+		if _, err := time.Parse("2006-01-02", planID[:i]); err == nil {
+			return planID[:i]
+		}
+	}
+	return kernel.CMESessionDayKey(now)
+}
+
+// countStopEntryRefusal records ONE distinct stop-entry refusal, deduped by
+// arm-spec so a re-refused arm counts once and not once per cycle. Durable
+// counter (survives restarts) + the in-memory gate-block table behind
+// GET /api/risk/gate-blocks. Returns the suffix to append to the log line.
+func (at *AutoTrader) countStopEntryRefusal(r store.ArmedOrderDB, class string, now time.Time) string {
+	telemetry.IncGateBlock(at.id, "stop_entry_"+strings.ReplaceAll(class, ":", "_"))
+	if at.store == nil {
+		return ""
+	}
+	n, err := store.IncArmRefusal(at.store, at.id, armRowTradeDate(r.PlanID, now), r.Session, class)
+	if err != nil {
+		at.logWarnf("📌 stop-entry refusal counter write failed (%s): %v", class, err)
+		return ""
+	}
+	return fmt.Sprintf(" · %s refusals this session: %d", class, n)
+}
+
+// StopEntryBootLine (D4) states what THIS binary does about stop entries. Every
+// field is READ from the code that enforces it, never written as a literal
+// (A11) — a boot line that restates its own source cannot report a change.
+//
+//   - slots  — resolved from the SAME build gate PlaceStopEntry uses. The slot
+//     order lives in the C# AddOn, which this process cannot read; the only
+//     honest Go-side claim is "the AddOn that answered proves the fix", so an
+//     unproven build reads `unproven`, not `stop_price`.
+//   - guard  — resolved by asking the predicate the placement branch calls, on
+//     the canonical already-through case. An inverted guard renders MISROUTED.
+//   - unknown— resolved from the verdict enum on an unevaluable input.
+func StopEntryBootLine(received, expected string) string {
+	slots := "unproven(addon build)"
+	if ntwire.FarSideProven(received, ntwire.MinAddonBuildStopSlot) {
+		slots = "stop_price"
+	}
+	guard := "MISROUTED"
+	if v, _ := stopEntryGuardVerdict("short", 29590.50, 29515.25); v == stopGuardThrough {
+		if v2, _ := stopEntryGuardVerdict("long", 29610.00, 29590.25); v2 == stopGuardRest {
+			guard = "stop-side"
+		}
+	}
+	unknown := "CANCELS"
+	if v, _ := stopEntryGuardVerdict("long", 29610.00, 0); v == stopGuardUnknown {
+		unknown = "no-op"
+	}
+	// The build half is read from AddonBuildLine — the one renderer that decides
+	// what "match" means — so the boot line cannot disagree with the gate.
+	build := strings.TrimPrefix(ntwire.AddonBuildLine(received, expected), "nt8 addon: ")
+	if i := strings.Index(build, " ("); i >= 0 {
+		build = build[:i]
+	}
+	return fmt.Sprintf("🎯 stop-entry: slots=%s · guard=%s · unknown=%s · addon %s",
+		slots, guard, unknown, build)
+}
+
+// logStopEntryBootLineOnce emits the D4 line once per trader, on the first armed
+// cycle that has a bound NT8 trader. It is NOT hung off the class-33 boot sweep:
+// that path latches and is skipped entirely when the sweep defers, when the
+// ledger read fails, or when any cancel failed — three ways for the line to
+// silently not exist. The first armed cycle is the moment the stop-entry path
+// becomes live, which is exactly when the posture is worth stating.
+func (at *AutoTrader) logStopEntryBootLineOnce() {
+	if _, loaded := stopEntryBootLogged.LoadOrStore(at.id, struct{}{}); loaded {
+		return
+	}
+	at.logInfof("%s", StopEntryBootLine(at.farSideBuildID(), ntwire.ExpectedAddonBuild))
+}
+
+// stopEntryBootLogged dedupes the D4 line per trader, like conditionsBootLogged.
+var stopEntryBootLogged sync.Map
 
 // throughWord is the human word for "the market has traded through" per side.
 func throughWord(side string) string {

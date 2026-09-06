@@ -487,12 +487,21 @@ func (t *TCPTrader) PlaceLimitEntry(symbol, side string, quantity float64, limit
 // tick offset is applied by the caller). Back-compat law: the frame is
 // additive JSON — only send it when the far-side AddOn has proven it.
 func (t *TCPTrader) PlaceStopEntry(symbol, side string, quantity float64, stopPx, sl, tp float64) (string, error) {
-	// E7 capability handshake (2026-08-30): the far-side AddOn must PROVE
-	// stop_entry support via its heartbeat build_id. An old AddOn executes an
-	// unknown frame type as MARKET (the 22:32 test filled at 29346.25 instead
-	// of resting at 28700) — refuse loudly, never send.
-	if bid := t.server.FarSideBuildID(); !ntwire.FarSideProven(bid, ntwire.FarSideBuildE7) {
-		return "", fmt.Errorf("ninjatrader/tcp: refusing stop-entry %s — far-side AddOn build %q does not prove stop_entry support (need ≥ %s); F5-compile + restart the new AddOn", side, bid, ntwire.FarSideBuildE7)
+	// CAPABILITY HANDSHAKE — the far-side AddOn must PROVE, by a build_id that
+	// arrived on the wire, that it will BUILD this order correctly. Two distinct
+	// failures live behind this one gate:
+	//   2026-08-30 — a pre-E7 AddOn executed the unknown frame as MARKET (the
+	//     22:32 test filled at 29346.25 instead of resting at 28700).
+	//   2026-09-05 (WAVE B / D1) — the E7..f12 AddOns parsed the frame and built
+	//     an OrderType.StopMarket, but passed the trigger in CreateOrder's
+	//     limitPrice argument with a literal 0 in stopPrice. NT8 accepted a
+	//     zero-trigger stop and simply never worked it: 22 of 22 lifetime
+	//     submissions, 0 fills, no reject, no error.
+	// So the floor is MinAddonBuildStopSlot, not FarSideBuildE7. An AddOn that
+	// only proves the parse is refused — never sent a frame it will mis-execute.
+	if bid := t.server.FarSideBuildID(); !ntwire.FarSideProven(bid, ntwire.MinAddonBuildStopSlot) {
+		return "", fmt.Errorf("ninjatrader/tcp: refusing stop-entry %s %s trigger=%.2f qty=%.0f [guard=far_side_build] — addon build predates the stop-slot fix (build_id=%s, need ≥ %s): does not prove stop_entry support; F5-compile + restart the new AddOn: %w",
+			side, symbol, stopPx, quantity, ntwire.BuildIDForLog(bid), ntwire.MinAddonBuildStopSlot, ntwire.ErrAddonBuildTooOld)
 	}
 	tradeAcct := t.boundAccount
 	if tradeAcct == "" {
