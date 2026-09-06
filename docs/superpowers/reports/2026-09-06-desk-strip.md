@@ -208,12 +208,57 @@ the rule is "no dash standing in for a value".
 
 ---
 
-## 6 · PROOF STATUS
+## 6 · PROOF — THE FIRST LIVE STRIP
 
-The Section F live dump has **not** been taken: `/api/desk` does not exist in the
-running binary (`ea3f33fe`). It can only be produced after the boot, and the
-second dump — with a position or an arm — needs a session. **A green suite is
-not proof of this wave**; the dumps are.
+Boot **2026-09-06 15:12:38 CT**, PID 2364404, rev `2a66bf5d`. Dump taken
+15:13:01 CT — **12 lines, 1 UNKNOWN, 1 stale, cadence 15000 ms** (idle, resolved
+from what is live):
+
+```
+ 1 MODE       [ok     ] SIM · plan_mode=strict · session=none · CME CLOSED (weekend) ·
+                        15:13:01 CT · process responding · feed 47h14m2s · link  · book …
+ 2 POSITION   [flat   ] FLAT — no open position
+ 3 PROTECTION [flat   ] FLAT — nothing to protect
+ 4 DRIFT      [flat   ] FLAT
+ 5 TARGET     [flat   ] FLAT
+ 6 DAY        [ok     ] realized +0.00 USD on 0 trade(s) · no enforced daily limit
+                        (guardrails master OFF — soft-audit only)
+ 7 ARMS       [flat   ] none resting
+ 8 BOOK       [ok     ] 0 working order(s) at the broker (ledger agrees: 0)
+                        src: broker — NT8 order_snapshot frame (age 13s, build 2026-09-03-f12)
+ 9 FEED       [stale  ] last bar 47h14m2s ago · link  · AddOn build 2026-09-03-f12
+                        reason: the newest 1m bar is older than 2 minutes
+10 PLANNER    [ok     ] idle — no planner read claimed
+11 RANGE      [unknown] UNKNOWN
+                        reason: no bars inside the current CME session-day
+12 LAST FILL  [ok     ] BUY MNQ 29355.00 qty 1.00 · slippage UNKNOWN (…)
+```
+
+**What the dump proves.** MODE reads `SIM` **from the accounts frame**, not from
+a literal — the defect caught mid-cutover. It states `CME CLOSED (weekend)`
+separately from `session=none`, so a closed market cannot read as a live one.
+BOOK is cutover leg 4 rendered continuously. RANGE is UNKNOWN **with its
+reason**, not a zero. FEED is amber at 47h — correct, CME has been shut since
+Friday.
+
+**PROTECTION/DRIFT/TARGET read FLAT, not UNKNOWN**, because there is no position
+to protect. They become UNKNOWN-with-reason the moment a position exists without
+an `accepted_risk` row — which is the case the owner flagged and which the E2b
+pin covers.
+
+**The second dump — with a position or an arm — has NOT been taken.** It needs a
+session; CME opens 17:00 CT. Until then this wave is proven for the flat case
+only, and a green suite proves neither.
+
+### A defect this dump itself exposed
+
+Row 9 renders `link ` — an **empty string** where UNKNOWN belongs. `FeedStatus()`
+returned `""` and the strip printed it verbatim. It is not misleading about
+safety (the row is already amber and states its reason), but a blank where a
+value should be is precisely the class this strip exists to remove, and it is
+mine. Fix: render `link UNKNOWN (no status reported)` when `FeedStatus()` is
+empty. Filed here rather than hot-fixed, so the fix arrives with its own pin
+rather than as an unpinned edit to a just-booted binary.
 
 ---
 
