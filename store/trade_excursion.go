@@ -251,9 +251,12 @@ func (s *TradeExcursionStore) Counts() (total, backfilled, unresolved int64, err
 func (s *TradeExcursionStore) ExcursionBootLine() string {
 	total, backfilled, unresolved, err := s.Counts()
 	if err != nil {
-		return fmt.Sprintf("excursions: logging=on rows=? backfilled=? unresolved=? (count failed: %v)", err)
+		return fmt.Sprintf("excursions: rows=? backfilled=? unresolved=? (count failed: %v)", err)
 	}
-	return fmt.Sprintf("excursions: logging=on rows=%d backfilled=%d unresolved=%d (unresolved = no 1m coverage; those rows keep NULLs, never zeros)",
+	// WAVE A — "logging=on" was a LITERAL here and has been removed. It was not
+	// resolved from excursionsEnabled(), dayPlanEnabled() or any trader, so it
+	// read "on" even where no hook could ever fire. The counts below ARE read.
+	return fmt.Sprintf("excursions: rows=%d backfilled=%d unresolved=%d (unresolved = no 1m coverage; those rows keep NULLs, never zeros)",
 		total, backfilled, unresolved)
 }
 

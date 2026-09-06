@@ -400,6 +400,44 @@ func main() {
 		}
 		logger.Infof("🩹 %s", store.AdherenceRegradeBootLine(len(pending), regraded, store.AdherenceRegradeEnabled(), backup))
 		logger.Infof("🧪 %s", st.SeamExclusionBootLine())
+		// WAVE A / D1e + D2c — THE RECORD. Flag-guarded, backup first, counted.
+		// The line reports what is PENDING when the flag is off, so the counts
+		// are visible without arming anything (the adherence-regrade idiom).
+		{
+			armed := store.WaveARecordMigrateEnabled()
+			ran, backup := store.WaveACounts{}, ""
+			if armed {
+				pending := st.PendingWaveAWork()
+				if pending.TouchRows == 0 && pending.MAEZeroed == 0 && pending.MFEZeroed == 0 {
+					logger.Infof("📐 wave-A record migration armed but there is nothing to do — every row is already classified")
+				} else if b, bErr := store.BackupBeforeWaveA(cfg.DBPath, time.Now().Format("20060102-150405")); bErr != nil {
+					logger.Errorf("📐 wave-A record migration ABORTED — backup failed, no backup no write: %v", bErr)
+				} else {
+					backup = b
+					if c, mErr := st.RunWaveARecordMigration(); mErr != nil {
+						logger.Errorf("📐 wave-A record migration failed: %v", mErr)
+					} else {
+						ran = c
+						logger.Warnf("📐 wave-A record migration: %d duplicate + %d legacy touch rows marked (NEVER deleted, never blessed) · mae 0→NULL on %d row(s) %v · mfe 0→NULL on %d row(s) · backup %s",
+							c.TouchDuplicate, c.TouchLegacy, c.MAEZeroed, c.MAEZeroIDs, c.MFEZeroed, b)
+					}
+					// D2d — THE BACKFILL, three-state. It was built in wave 1A
+					// and never run, which is the whole reason trade_excursions
+					// reads 0: not a broken writer, an unpopulated corpus. From
+					// epoch so the WHOLE history is in scope — the CLI's
+					// documented `-backfill 2026-08-15` covers only rows entered
+					// on or after that date and silently leaves the rest out.
+					// Empty symbol and trader mean ALL — no literal to drift.
+					if res, bfErr := trader.BackfillExcursions(st, "", "", time.Unix(0, 0), time.Now()); bfErr != nil {
+						logger.Errorf("📐 excursion backfill failed: %v", bfErr)
+					} else {
+						logger.Warnf("📐 excursion backfill: scanned=%d computed=%d unrecomputable=%d (no 1m coverage — those rows keep NULLs, never zeros) levels_resolved=%d",
+							res.Scanned, res.Computed, res.NoCoverage, res.LevelsFound)
+					}
+				}
+			}
+			logger.Infof("📐 %s", st.WaveARecordBootLine(armed, ran, backup))
+		}
 		// 1B D7 — the calibrated detector and the two tables that record it.
 		logger.Infof("🔬 %s", kernel.DetectorBootLine(st.TouchOutcomes().CountOutcomes(), st.CandidatePool().CountPool()))
 	}
