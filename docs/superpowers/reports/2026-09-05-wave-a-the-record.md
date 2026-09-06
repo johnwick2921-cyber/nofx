@@ -302,3 +302,61 @@ sqlite3 ~/nofx/data/data.db ".restore '~/nofx-backups/wave-a-record/<stamp>.db'"
 The migration is additive and reversible by backup: **no row is deleted**, the
 classification lives in one new column, and the excursion rows are keyed UNIQUE
 on `position_id`.
+
+---
+
+## 8 · THE BOOT — LIVE PROOF (added after the cutover)
+
+**One boot carrying BOTH waves**, on the owner's ruling: `f516da7c` = `e14dd8da`
+(Wave A + Wave B) + the arms-census commit. Boot **2026-09-05 23:53:44 CT**, PID
+1963305.
+
+```
+🔐 BOOT INTEGRITY OK — rev f516da7cadb3 · built 2026-09-06T04:42:14Z ·
+   expected f516da7c · goldens PASS                       (no +dirty)
+📐 wave-A record migration: 254 duplicate + 423 legacy touch rows marked
+   (NEVER deleted, never blessed) · mae 0→NULL on 4 row(s) [569 579 580 584] ·
+   mfe 0→NULL on 5 row(s) · backup ~/nofx-backups/wave-a-record/20260905-235345.db
+📐 excursion backfill: scanned=587 computed=68 unrecomputable=519
+   (no 1m coverage — those rows keep NULLs, never zeros) levels_resolved=567
+📐 record: touches=677 (valid=0 no_formation=0 invalid:pre_formation=0
+   invalid:dup=254 legacy=423 unclassified=0) · excursions=587 (backfilled=587
+   unresolvable=519) · exit-cause=broker · accepted-risk rows=0 (with broker
+   stop=0) · mae/mfe 0→NULL=4/5 · arms live=0 (superseded=6 cancelled=51
+   filled=10) · migration armed backup=20260905-235345.db
+🎛 entry law: … stop_entry_seam=off
+```
+
+**Live three-state counts match the dry run exactly** — 254 / 423 / 0-blessed,
+and 68 computed / 519 unrecomputable. Zero panics or fatals in the boot.
+
+**Five-reference check — all six agree on `f516da7c`:** RELEASE file · binary
+`vcs.revision` · `HEAD:deploy/RELEASE` · `GUIDE_BUILT_REV` (full 40 chars) ·
+`/api/health` · the running `/proc/1963305/exe`.
+
+**The kill worked on its first invocation.** systemd recorded
+`Main process exited, code=killed, status=9/KILL` at 23:53:39 and restarted at
+23:53:44. The owner's "No such process" came from a *second* invocation, not a
+failed one — worth recording, because "the kill did nothing" and "the kill
+already happened" look identical from the shell.
+
+### A15 — one boot line that can be misread
+
+`🎯 arms: … stop-entry=on(reclaim) …` and `🎛 entry law: … stop_entry_seam=off`
+are both true and are **about different things**. The first is the arm KIND
+table (`ArmKindFor("reclaim") == ArmKindStopEntry`) — reclaim scenarios are
+*authored* as stop entries. The second is the SEAM, and the seam is what decides
+whether a stop entry is ever PLACED. With the seam off, **no stop entry is
+placed regardless of what the kind table says.** Read together at a glance they
+suggest stop entries are live. They are not.
+
+### Still owed after this boot
+
+- **The class-75 SYSTEM-MAP contract test does not exist.** The checklist
+  describes a test that greps the map for boot-line text and fails the suite on
+  a mismatch; no such test is in the tree. Filed as OWED — not built here, on
+  the owner's instruction, so the map stays maintained by hand until it is.
+- `valid=0` on the touch corpus, and it will stay 0 until line levels carry a
+  formation time (§5). The instrument is now honest, not yet useful.
+- The live half of the excursion record is unproven until a position opens and
+  closes — CME was closed at boot.
