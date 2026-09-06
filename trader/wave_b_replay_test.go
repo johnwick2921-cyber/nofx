@@ -147,7 +147,7 @@ func TestStopEntryGuardHasAProductionCallSite(t *testing.T) {
 // that enforces it; none is a literal. A proven build reads slots=stop_price and
 // match=yes, an unproven one must say so on both.
 func TestStopEntryBootLineIsRead(t *testing.T) {
-	proven := StopEntryBootLine(ntwire.MinAddonBuildStopSlot, ntwire.ExpectedAddonBuild)
+	proven := StopEntryBootLine(ntwire.MinAddonBuildStopSlot, ntwire.ExpectedAddonBuild, true)
 	for _, want := range []string{"🎯 stop-entry:", "slots=stop_price", "guard=stop-side", "unknown=no-op", "match=yes"} {
 		if !strings.Contains(proven, want) {
 			t.Errorf("proven-build line missing %q: %s", want, proven)
@@ -159,7 +159,7 @@ func TestStopEntryBootLineIsRead(t *testing.T) {
 
 	// The build NT8 is running today (the one whose CreateOrder put the trigger
 	// in the limit slot) must not be able to render as proven.
-	old := StopEntryBootLine("2026-09-03-f12", ntwire.ExpectedAddonBuild)
+	old := StopEntryBootLine("2026-09-03-f12", ntwire.ExpectedAddonBuild, true)
 	if strings.Contains(old, "slots=stop_price") {
 		t.Errorf("a pre-stop-slot build must not claim slots=stop_price: %s", old)
 	}
@@ -168,7 +168,7 @@ func TestStopEntryBootLineIsRead(t *testing.T) {
 	}
 
 	// No frame received yet: "none", never an empty string that reads as data.
-	none := StopEntryBootLine("", ntwire.ExpectedAddonBuild)
+	none := StopEntryBootLine("", ntwire.ExpectedAddonBuild, true)
 	if !strings.Contains(none, "build_id=none") || strings.Contains(none, "build_id= ") {
 		t.Errorf("an unknown build must render as none: %s", none)
 	}
@@ -196,7 +196,7 @@ func TestStopEntryBootLineReEmitsWhenTheBuildArrives(t *testing.T) {
 	defer stopEntryBootLogged.Delete(at.id)
 
 	emit := func(received string) (string, bool) {
-		line := StopEntryBootLine(received, ntwire.ExpectedAddonBuild)
+		line := StopEntryBootLine(received, ntwire.ExpectedAddonBuild, true)
 		prev, ok := stopEntryBootLogged.Load(at.id)
 		changed := !ok || prev.(string) != line
 		if changed {
@@ -302,5 +302,37 @@ func TestSystemMapStopEntryRefsResolve(t *testing.T) {
 	}
 	if checked < 5 {
 		t.Errorf("only %d of the region's references were checkable — the pin is going vacuous", checked)
+	}
+}
+
+// TestStopEntryBootLineStatesTheSeam — D4 / A11, owner ruling 2026-09-05.
+// The seam is the FIRST thing the line reports because it is the only field
+// that decides whether any of the others can matter: with the seam off the
+// placement branch returns at :935, before the guard, the build floor or the
+// wire. A reader who sees "guard=stop-side" and stops must not conclude the
+// binary is placing stop entries. This pin fails if the field is ever written
+// as a literal (both renderings are asserted from ONE function) or if the OFF
+// rendering stops saying that nothing is placed.
+func TestStopEntryBootLineStatesTheSeam(t *testing.T) {
+	off := StopEntryBootLine(ntwire.MinAddonBuildStopSlot, ntwire.ExpectedAddonBuild, false)
+	for _, want := range []string{"seam=OFF", "NO stop entry is placed", "owner ruling 2026-09-05"} {
+		if !strings.Contains(off, want) {
+			t.Fatalf("seam-off boot line must contain %q, got:\n%s", want, off)
+		}
+	}
+	// The seam leads: nothing may precede it but the emoji and the label.
+	if !strings.HasPrefix(off, "\U0001F3AF stop-entry: seam=") {
+		t.Fatalf("the seam must be the FIRST field, got:\n%s", off)
+	}
+	on := StopEntryBootLine(ntwire.MinAddonBuildStopSlot, ntwire.ExpectedAddonBuild, true)
+	if !strings.Contains(on, "seam=on") {
+		t.Fatalf("seam-on boot line must read seam=on, got:\n%s", on)
+	}
+	if strings.Contains(on, "NO stop entry is placed") {
+		t.Fatalf("seam-on must NOT claim nothing is placed, got:\n%s", on)
+	}
+	// A11: the field is RESOLVED, so the two renderings must differ.
+	if off == on {
+		t.Fatal("seam on and off render identically — the field is a literal, not a read")
 	}
 }

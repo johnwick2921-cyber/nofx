@@ -238,10 +238,19 @@ The old substring `does not prove stop_entry support` is retained so the existin
 Every field READ from the enforcing code, none a literal (A11). Rendered live, all three states:
 
 ```
-🎯 stop-entry: slots=stop_price · guard=stop-side · unknown=no-op · addon build_id=2026-09-05-g2 expected=2026-09-05-g2 match=yes
-🎯 stop-entry: slots=unproven(addon build) · guard=stop-side · unknown=no-op · addon build_id=2026-09-03-f12 expected=2026-09-05-g2 match=NO
-🎯 stop-entry: slots=unproven(addon build) · guard=stop-side · unknown=no-op · addon build_id=none expected=2026-09-05-g2 match=NO
+🎯 stop-entry: seam=on · slots=stop_price · guard=stop-side · unknown=no-op · addon build_id=2026-09-05-g2 expected=2026-09-05-g2 match=yes
+🎯 stop-entry: seam=on · slots=unproven(addon build) · guard=stop-side · unknown=no-op · addon build_id=2026-09-03-f12 expected=2026-09-05-g2 match=NO
+🎯 stop-entry: seam=on · slots=unproven(addon build) · guard=stop-side · unknown=no-op · addon build_id=none expected=2026-09-05-g2 match=NO
 ```
+
+**THE LINE THIS BOOT WILL ACTUALLY PRINT (owner ruling, 2026-09-05).** The cutover runs with
+`STOP_ENTRY_SEAM=off`, so the seam field leads and says what it MEANS, not merely what it is:
+
+```
+🎯 stop-entry: seam=OFF — NO stop entry is placed (owner ruling 2026-09-05: cancel-confirmation wave owed; broker-side stacking) · slots=unproven(addon build) · guard=stop-side · unknown=no-op · addon build_id=2026-09-03-f12 expected=2026-09-05-g2 match=NO
+```
+
+- `seam` — resolved from the SAME predicate the placement branch consults (`stopEntrySeamOn`, `:935`), stated FIRST because it is the only field that decides whether the others can matter: with the seam off the branch returns **before** the guard, the build floor or the wire is reached. A reader who sees `guard=stop-side` and stops must not conclude that this binary places stop entries. **It does not place any.** The owner's reason is on the line itself: `nt.CancelOrder` reports success on a SEND, not on a confirmation, and the broker was once observed holding **nine** working stop orders for one arm slot (`nt8_order_snapshots` id 1664) on an account capped at two contracts. Until a cancel-confirmation wave lands, the AddOn build floor is not a brake the owner will rely on. Pinned by `TestStopEntryBootLineStatesTheSeam` (mutation-checked: a literal `seam` fails it).
 
 - `slots` — resolved from the **same gate** `PlaceStopEntry` uses. The slot order lives in the C# and this process cannot read it, so the only honest Go-side claim is "the AddOn that answered proves the fix". An unproven build reads `unproven`, never `stop_price`.
 - `guard` — resolved by asking `stopEntryGuardVerdict` on the canonical already-through and resting cases. An inverted guard renders `MISROUTED`.

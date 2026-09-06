@@ -1293,7 +1293,13 @@ func (at *AutoTrader) countStopEntryRefusal(r store.ArmedOrderDB, class string, 
 //   - guard  — resolved by asking the predicate the placement branch calls, on
 //     the canonical already-through case. An inverted guard renders MISROUTED.
 //   - unknown— resolved from the verdict enum on an unevaluable input.
-func StopEntryBootLine(received, expected string) string {
+//   - seam   — resolved from the SAME predicate the placement branch consults
+//     (stopEntrySeamOn, :935). It is stated FIRST and in capitals when off,
+//     because a reader who stops after one field must not conclude that a
+//     binary reporting a correct guard is placing stop entries: with the seam
+//     off this branch returns before the guard, the build floor or the wire is
+//     ever reached, and NO stop entry is placed at all.
+func StopEntryBootLine(received, expected string, seamOn bool) string {
 	slots := "unproven(addon build)"
 	if ntwire.FarSideProven(received, ntwire.MinAddonBuildStopSlot) {
 		slots = "stop_price"
@@ -1314,8 +1320,17 @@ func StopEntryBootLine(received, expected string) string {
 	if i := strings.Index(build, " ("); i >= 0 {
 		build = build[:i]
 	}
-	return fmt.Sprintf("🎯 stop-entry: slots=%s · guard=%s · unknown=%s · addon %s",
-		slots, guard, unknown, build)
+	// The seam leads, and says what it MEANS rather than only what it is: an
+	// owner ruling (2026-09-05) holds stop entries off until a cancel-confirmation
+	// wave lands, because nt.CancelOrder reports success on a SEND and the broker
+	// was once seen holding nine working stop orders for one arm slot
+	// (nt8_order_snapshots id 1664) on an account capped at two contracts.
+	seam := "OFF — NO stop entry is placed (owner ruling 2026-09-05: cancel-confirmation wave owed; broker-side stacking)"
+	if seamOn {
+		seam = "on"
+	}
+	return fmt.Sprintf("🎯 stop-entry: seam=%s · slots=%s · guard=%s · unknown=%s · addon %s",
+		seam, slots, guard, unknown, build)
 }
 
 // logStopEntryBootLine emits the D4 line on the first armed cycle that has a
@@ -1335,7 +1350,7 @@ func StopEntryBootLine(received, expected string) string {
 // 09-04 07:38:40 CT). Keying on the LINE means the none→proven transition is on
 // the record exactly once, and a steady state still prints once.
 func (at *AutoTrader) logStopEntryBootLine() {
-	line := StopEntryBootLine(at.farSideBuildID(), ntwire.ExpectedAddonBuild)
+	line := StopEntryBootLine(at.farSideBuildID(), ntwire.ExpectedAddonBuild, stopEntrySeamOn())
 	if prev, ok := stopEntryBootLogged.Load(at.id); ok && prev.(string) == line {
 		return
 	}
