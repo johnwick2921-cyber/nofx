@@ -300,8 +300,11 @@ func (at *AutoTrader) deskMode(now time.Time, book DeskLine) DeskLine {
 		N: 1, Key: "mode", Label: "MODE", State: "ok", Verified: true,
 		Source: "strategy config · session registry · bars · NT8 link",
 		AsOfMs: now.UnixMilli(),
-		Text: fmt.Sprintf("%s · plan_mode=%s · session=%s · CME %s · %s CT · process responding · feed %s · link %s · book %s",
-			acct, mode, session, market, now.In(kernel.CTLocation()).Format("15:04:05"), feed, link, book.Text),
+		// The clock routes through kernel/tz.go's ONE time source (class 60 /
+		// the TZ guard): a bare "15:04:05" here is a second, unlabelled clock,
+		// and this repo has already been bitten by two of those.
+		Text: fmt.Sprintf("%s · plan_mode=%s · session=%s · CME %s · %s · process responding · feed %s · link %s · book %s",
+			acct, mode, session, market, kernel.ClockCTSeconds(now), feed, link, book.Text),
 	}
 }
 
