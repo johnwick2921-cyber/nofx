@@ -117,8 +117,8 @@ func TestEveryLineIsDatedOrUnknownWithAReason(t *testing.T) {
 	at := &AutoTrader{id: "hoang", store: st, config: AutoTraderConfig{NinjaTraderSymbol: "MNQ"}}
 	s := at.DeskStripAt(time.Now())
 
-	if len(s.Lines) != 12 {
-		t.Fatalf("the strip is defined as 12 lines, got %d", len(s.Lines))
+	if len(s.Lines) != deskLineCount {
+		t.Fatalf("the strip is defined as %d lines, got %d", deskLineCount, len(s.Lines))
 	}
 	for _, l := range s.Lines {
 		switch l.State {
@@ -187,8 +187,13 @@ func TestStripSurvivesABrokenStoreAndStillReturnsTwelveLines(t *testing.T) {
 
 // The boot line reads its fields (A11) and states the rule it enforces.
 func TestDeskBootLineReadsItsFields(t *testing.T) {
-	line := DeskBootLine(12, 7)
-	for _, want := range []string{"desk strip:", "lines=12", "unknown-at-boot=7", "cadence=5s live / 15s idle", "book-age-bound=", "never a zero"} {
+	// with no strip yet, the count says so rather than printing 0
+	boot := DeskBootLine(nil)
+	if !strings.Contains(boot, "unknown=n/a") {
+		t.Fatalf("before any request the UNKNOWN count is not knowable and must say so: %s", boot)
+	}
+	line := DeskBootLine(&DeskStrip{Lines: make([]DeskLine, 12), UnknownCount: 7})
+	for _, want := range []string{"desk strip:", "lines=12", "unknown=7", "cadence=5s live / 15s idle", "book-age-bound=", "never a zero"} {
 		if !strings.Contains(line, want) {
 			t.Fatalf("boot line missing %q:\n%s", want, line)
 		}

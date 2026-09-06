@@ -90,7 +90,7 @@ func deskUnknown(n int, key, label, source, reason string) DeskLine {
 func (at *AutoTrader) deskSafe(n int, key, label, source string, fn func() DeskLine) (out DeskLine) {
 	defer func() {
 		if r := recover(); r != nil {
-			at.logWarnf("🖥 desk strip: line %d (%s) panicked and was contained: %v", n, key, r)
+			at.logWarnf("🔭 desk strip: line %d (%s) panicked and was contained: %v", n, key, r)
 			out = deskUnknown(n, key, label, source, fmt.Sprintf("computing this line panicked: %v", r))
 		}
 	}()
@@ -184,10 +184,24 @@ const (
 )
 
 // DeskBootLine is D7 — every field READ from the code that enforces it.
-func DeskBootLine(lines, unknown int) string {
-	return fmt.Sprintf("desk strip: lines=%d · unknown-at-boot=%d · cadence=%ds live / %ds idle · book-age-bound=%s · UNKNOWN carries its reason, never a zero",
+//
+// The UNKNOWN count is per-REQUEST, not per-process: at boot no strip has been
+// built for anyone, so this prints n/a rather than a zero it did not measure
+// (A24 — a field the process cannot know yet says so). Pass a strip to report
+// a real count.
+func DeskBootLine(s *DeskStrip) string {
+	lines, unknown := deskLineCount, "n/a (no strip built yet — the count is per request)"
+	if s != nil {
+		lines = len(s.Lines)
+		unknown = fmt.Sprintf("%d", s.UnknownCount)
+	}
+	return fmt.Sprintf("desk strip: lines=%d · unknown=%s · cadence=%ds live / %ds idle · book-age-bound=%s · every row dated; UNKNOWN carries its reason, never a zero and never a dash",
 		lines, unknown, deskCadenceLiveMs/1000, deskCadenceIdleMs/1000, snapshotMaxAge())
 }
+
+// deskLineCount is the strip's shape, asserted by the tests so the boot line
+// and the strip cannot drift.
+const deskLineCount = 12
 
 // ── the lines ────────────────────────────────────────────────────────────────
 
@@ -197,7 +211,7 @@ func DeskBootLine(lines, unknown int) string {
 func (at *AutoTrader) deskPositionSafe() (pos map[string]interface{}, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			at.logWarnf("🖥 desk strip: reading the position panicked and was contained: %v", r)
+			at.logWarnf("🔭 desk strip: reading the position panicked and was contained: %v", r)
 			pos, err = nil, fmt.Errorf("reading the broker position panicked: %v", r)
 		}
 	}()

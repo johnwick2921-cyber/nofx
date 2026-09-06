@@ -428,7 +428,11 @@ export function SessionPlanCard({
             lifecycle={plan.lifecycle ?? 'active'}
             language={language}
           />
-          {/* W7 (weekly-bias wave) — the WEEKLY chip (advisory view). */}
+          {/* W7 (weekly-bias wave), corrected 2026-09-06: the chip is REFS-ONLY since
+              class 50 (2026-09-02) — "WEEKLY refs — PWH x · PWL y", no directional
+              call. It has not been an "advisory view" since then, and this comment
+              saying so is what sent a later wave hunting a bug that was already
+              fixed. The rendered label is the contract; a comment is not. */}
           <WeeklyChip weekly={plan.weekly} />
           {plan.degraded && (
             <span

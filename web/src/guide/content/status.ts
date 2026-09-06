@@ -24,7 +24,7 @@ export const status: GuideSection = {
     { kind: 'h', text: 'Why a green test suite has an expiry time' },
     {
       kind: 'p',
-      text: "On 2026-09-03 a suite was verified green at 11:00 and was red at 14:50 with no code change in between, and both readings were honest. A test pinned its fixture to a fixed date but called production code that asked the operating system what time it was; once a cadence guard began enforcing, the answer started depending on how many minutes were left before the session flat. The lesson is not about that one test: any rule that consults the clock makes every test that reaches it a function of the hour it ran.",
+      text: 'On 2026-09-03 a suite was verified green at 11:00 and was red at 14:50 with no code change in between, and both readings were honest. A test pinned its fixture to a fixed date but called production code that asked the operating system what time it was; once a cadence guard began enforcing, the answer started depending on how many minutes were left before the session flat. The lesson is not about that one test: any rule that consults the clock makes every test that reaches it a function of the hour it ran.',
     },
     {
       kind: 'p',
@@ -48,14 +48,23 @@ export const status: GuideSection = {
         ['weeklyScenarioGrade — the active-session grade', 'yes'],
         ['ResetDailyPnL — the manual daily-window reset', 'yes'],
         ['barPersistSummary — the 60s counter summary', 'yes'],
-        ['ForceReset poll deadline — a real wait, not a rule', 'deliberately not'],
-        ['tickOnce — loop entry; its clock use already delegates', 'deliberately not'],
-        ['NowCT — the clock accessor itself; consumers all take a time', 'deliberately not'],
+        [
+          'ForceReset poll deadline — a real wait, not a rule',
+          'deliberately not',
+        ],
+        [
+          'tickOnce — loop entry; its clock use already delegates',
+          'deliberately not',
+        ],
+        [
+          'NowCT — the clock accessor itself; consumers all take a time',
+          'deliberately not',
+        ],
       ],
     },
     {
       kind: 'p',
-      text: "The three marked \u201cdeliberately not\u201d are listed with their reasons in the same file. An unexplained absence from a list is how the list stops being trusted, so the exclusions are written down beside the inclusions rather than left to be rediscovered.",
+      text: 'The three marked \u201cdeliberately not\u201d are listed with their reasons in the same file. An unexplained absence from a list is how the list stops being trusted, so the exclusions are written down beside the inclusions rather than left to be rediscovered.',
     },
     { kind: 'h', text: 'The boot ledger, line by line' },
     {
@@ -94,6 +103,68 @@ export const status: GuideSection = {
         '+dirty usually = an untracked file (.env.bak…) — Go vcs.modified',
         'counts untracked files. NOT a code change.',
       ],
+    },
+    { kind: 'h', text: 'The DESK strip (top of the plan card)' },
+    {
+      kind: 'p',
+      text: 'Twelve rows, one per fact you need mid-session, from a single read of /api/desk. Every row carries the age of the newest input it used, so nothing on it is undated. A row the engine could not compute says UNKNOWN and gives its reason — it never shows a zero, a dash, or the last value it happened to have. A source older than its own bound turns amber with its age rather than quietly showing you a stale number as if it were current.',
+    },
+    {
+      kind: 'table',
+      head: ['Row', 'What it tells you'],
+      rows: [
+        [
+          'MODE',
+          'plan_mode, session, CT clock — and process/feed/link/book named SEPARATELY, never as one green word.',
+        ],
+        [
+          'POSITION',
+          'Side, size, entry, mark and unrealized P&L in points and dollars. FLAT when there is nothing on.',
+        ],
+        [
+          'PROTECTION',
+          "The stop NT8 ACCEPTED — not the one in our ledger — with the distance and the dollars at risk if it fills. UNKNOWN when no accepted record exists yet; it never falls back to the ledger's number.",
+        ],
+        [
+          'DRIFT',
+          'Shown only when the ledger and the broker disagree about the stop. Arm 35 was 3.371527 points apart.',
+        ],
+        [
+          'TARGET',
+          'The accepted target, its distance, and the dollars if it fills.',
+        ],
+        [
+          'DAY',
+          'Realized P&L on pnl_corrected against the ENFORCED daily limit, naming its source (Studio or the env fallback) and whether the guardrails master is even on. Rows with no corrected P&L are excluded AND counted.',
+        ],
+        [
+          'ARMS',
+          'Every resting arm: scenario, side, kind, price, distance from mark, age, and whether it actually reached the broker.',
+        ],
+        [
+          'BOOK',
+          "Cutover leg 4, continuously: the broker's order count against the ledger's, with the snapshot age. This is the check that caught the eight-order incident.",
+        ],
+        [
+          'FEED',
+          'Age of the newest 1m bar, the NT8 link state, and the AddOn build the broker is actually running.',
+        ],
+        ['PLANNER', 'Idle, or a read in flight and since when.'],
+        ['RANGE', "The session's high, low and range against ATR5m."],
+        [
+          'LAST FILL',
+          'The most recent fill. Slippage reads UNKNOWN because the intended price is not stored beside the fill.',
+        ],
+      ],
+    },
+    {
+      kind: 'p',
+      text: 'It refreshes every 5 seconds while a position or an arm is live and every 15 seconds otherwise — the server decides which, from what is actually live. It has no unread count and nothing to acknowledge: P0 alerts are already acknowledged only 40.8% of the time (62 of 152), and a second queue would make that worse.',
+    },
+    { kind: 'h', text: 'PROCESS::RESPONDING (dashboard header)' },
+    {
+      kind: 'p',
+      text: 'This header used to read SYSTEM_STATUS::ONLINE. It answers exactly one question — did the HTTP process reply to /api/health — and it stayed green through 113 minutes of feed silence on 2026-09-03. It was renamed so it can only be read as what it is. For whether the system is actually working, read the DESK strip: feed, link and book are separate facts and each is stated separately.',
     },
     { kind: 'h', text: 'SYSTEM_STATUS strip (dashboard)' },
     {

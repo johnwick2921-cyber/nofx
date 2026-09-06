@@ -1917,6 +1917,30 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     all three are the same shape — an ABSENCE OF EVIDENCE is not evidence of
     absence. Related: class 70 (built ≠ wired), class 49/53 (a plausible zero).
 
+82. **A green word that answers a narrower question than the reader will
+    assume.** (Number assigned at merge, A16 — highest occupied on dev at
+    authoring: 81. Re-check at merge.) The dashboard header read
+    `SYSTEM_STATUS::ONLINE` in green whenever `/api/health` returned
+    `status:"ok"` — which reports that the HTTP process answered a request, and
+    nothing else. Not the feed, not the broker link, not any risk control. On
+    2026-09-03 it stayed green through 113 minutes of feed silence and 48
+    minutes of blindness. An earlier wave had already fixed it once, from a
+    STATIC string to a real poll; the poll was honest and the WORD was still
+    wrong, which is why the second fix was needed and why the first felt
+    sufficient. **What identified it** was not a bug report: it was reading the
+    handler and asking what the green state actually excludes. **Probe:** for
+    every status word on every surface, write down the question it truly
+    answers, then the question a tired reader at 09:30 will think it answers.
+    If those differ, the word is the defect — not the plumbing behind it.
+    **Law:** a compound question gets a compound answer. Name the parts
+    (`process responding · feed <age> · link <state> · book <age>`) or name the
+    narrow question (`PROCESS::RESPONDING`). Never one word, never one colour,
+    for several independent facts. Corollary, from the same wave: an uncomputed
+    value is UNKNOWN **with its reason**, never 0, never a dash and never the
+    last known number silently — and a row with no timestamp is not a fact, it
+    is a rumour. Related: class 49/53 (a plausible zero), class 24 (a check that
+    prints but does not gate).
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,

@@ -16,6 +16,7 @@ import { RereadButton } from './RereadButton'
 import { ResetButton } from './ResetButton'
 import { ApproveButton } from './ApproveButton'
 import { AlertCenter } from './AlertCenter'
+import { DeskStrip } from './DeskStrip'
 import { GateBlocksPanel } from './GateBlocksPanel'
 import { ExpectancyPanel } from './ExpectancyPanel'
 import { InstrumentsDrawer } from './InstrumentsDrawer'
@@ -80,6 +81,11 @@ export function PlanCard({
         fontFamily: 'var(--vl-font-ui)',
       }}
     >
+      {/* THE DESK STRIP — the first thing on screen, above the alert feed.
+          One read, one row per fact, every number dated. It adds no unread
+          queue: alerts are acknowledged 40.8% of the time (P0, 62 of 152) and
+          a second backlog would make that worse, not better. */}
+      <DeskStrip traderId={traderId} />
       <AlertCenter traderId={traderId} language={language} />
       <SessionTimelineStrip activeSession={activeSession} language={language} />
       <SessionTabs

@@ -251,6 +251,37 @@ export interface ResetGate {
 
 const enc = encodeURIComponent
 
+// ── THE DESK STRIP ──────────────────────────────────────────────────────────
+// One row per fact the owner needs during a session. Every row arrives RENDERED
+// with its source, its as-of instant and its age; the browser computes nothing,
+// so the screen cannot show a number the engine did not stand behind.
+export interface DeskLine {
+  n: number
+  key: string
+  label: string
+  /** the row as the owner reads it, rendered server-side */
+  text: string
+  /** ok | flat | stale | unknown — never a bare colour */
+  state: 'ok' | 'flat' | 'stale' | 'unknown'
+  unit?: string
+  source: string
+  as_of_ms: number
+  age_ms: number
+  verified: boolean
+  /** REQUIRED whenever state is unknown or stale */
+  reason?: string
+}
+
+export interface DeskStrip {
+  trader_id: string
+  generated_at_ms: number
+  /** 5000 while a position or arm is live, 15000 otherwise — resolved server-side */
+  cadence_ms: number
+  unknown_count: number
+  stale_count: number
+  lines: DeskLine[]
+}
+
 export const planApi = {
   // Active plan (overlay-resolved) + live scenario facts. Returns null on any
   // failure so the card falls back to its error/no-plan state (never throws).
@@ -392,6 +423,21 @@ export const planApi = {
       return { ok: true, gate: res.data.gate, note: res.data.gate?.note }
     }
     return { ok: false, error: res.message || 'reset refused' }
+  },
+
+  // THE DESK STRIP (2026-09-06) — one read, one row per fact. On failure this
+  // returns a strip whose lines are ABSENT rather than empty values, so the
+  // component renders "UNKNOWN — the desk endpoint could not be read" and never
+  // a screen of zeros (A24: an uncomputed value is never 0 and never a dash).
+  async getDeskStrip(
+    traderId: string,
+    silent = true
+  ): Promise<DeskStrip | null> {
+    const res = await httpClient.request<DeskStrip>(
+      `${API_BASE}/desk?trader_id=${enc(traderId)}`,
+      { silent }
+    )
+    return res.success && res.data ? res.data : null
   },
 
   async getPlanAlerts(

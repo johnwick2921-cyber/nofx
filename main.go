@@ -466,6 +466,13 @@ func main() {
 	// field READ; the reconciliation half prints n/a until a broker book exists,
 	// because at process start there is none and a number here would be invented.
 	logger.Infof("🧾 %s", trader.CancelBootLine(st, trader.ReconcileCounts{}, time.Now().UnixMilli()))
+	// THE DESK STRIP (2026-09-06) — one read, one row per fact the owner needs.
+	// The UNKNOWN count is per-request, so at boot the line says n/a instead of
+	// printing a zero it has not measured.
+	// 🔭 and not 🖥: the screen glyph already belongs to the UI-serving line at
+	// :305 (dist staleness), and two lines under one glyph make any watcher
+	// keyed on it ambiguous (A24).
+	logger.Infof("🔭 %s", trader.DeskBootLine(nil))
 	// ATTRIBUTION — counts READ from the table, never a literal.
 	logger.Infof("🔗 %s", st.AttributionBootLine())
 	logger.Infof("⚙ %s", store.KnobRegistryBootLine())

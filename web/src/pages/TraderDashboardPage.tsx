@@ -648,11 +648,17 @@ export function TraderDashboardPage({
                     : '#F6465D',
             }}
           >
-            SYSTEM_STATUS::
+            {/* 2026-09-06 (desk strip, D6b): this said ONLINE, which reads as
+                "the system is working". /api/health reports ONE thing — that the
+                HTTP process answered. It stayed green through 113 minutes of
+                feed silence on 09-03. The word now names the question it
+                actually answers; the feed, the link and the broker book are
+                separate facts and the DESK strip states each of them. */}
+            PROCESS::
             {health.status === undefined
               ? '…'
               : health.status === 'ok'
-                ? 'ONLINE'
+                ? 'RESPONDING'
                 : String(health.status).toUpperCase()}
             {health.revision ? ` · REV::${health.revision}` : ''}
           </span>
