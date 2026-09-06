@@ -211,7 +211,7 @@ func (s *TCPServer) SetOrderSnapshotSink(fn func(OrderSnapshotPayload)) { s.orde
 // running an older compile, and a line that read this constant as if it were
 // the running build would report success for a change that never landed
 // (class 6 — proof is a RECEIVED frame).
-const ExpectedAddonBuild = "2026-09-03-f12"
+const ExpectedAddonBuild = "2026-09-05-g2"
 
 // AddonBuildLine renders the build-id half of the boot line. `received` comes
 // from TCPServer.FarSideBuildID() — a value that arrived on the wire.
@@ -220,13 +220,24 @@ func AddonBuildLine(received, expected string) string {
 	if got == "" {
 		// "none", never the expected value: an unknown build must not be able to
 		// render as agreement (A24 — a check that cannot fail is not a check).
-		return "nt8 addon: build_id=none expected=" + expected + " match=NO (no frame carrying a build_id received yet)"
+		return "nt8 addon: build_id=" + BuildIDForLog(received) + " expected=" + expected + " match=NO (no frame carrying a build_id received yet)"
 	}
 	if got == expected {
 		return "nt8 addon: build_id=" + got + " expected=" + expected + " match=yes"
 	}
 	return "nt8 addon: build_id=" + got + " expected=" + expected +
 		" match=NO (NT8 is running an older DLL — recompile the AddOn (F5) and restart NT8)"
+}
+
+// BuildIDForLog renders a RECEIVED build id for a human: "none" when no frame
+// has carried one, never "" — an unknown must not read as an empty datum (A24).
+// One definition, so the boot line and the stop-entry refusal cannot disagree
+// about what "we have not heard from the AddOn" looks like.
+func BuildIDForLog(received string) string {
+	if got := strings.TrimSpace(received); got != "" {
+		return got
+	}
+	return "none"
 }
 
 // OrderSnapshotLineAt renders the snapshot half: age, working count, and which

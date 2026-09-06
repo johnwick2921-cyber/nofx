@@ -108,6 +108,23 @@ export const plays: GuideSection = {
       kind: 'p',
       text: 'The machine derives the type from the condition and refuses a contradiction by name — a stop entry authored for a reject fade is rejected rather than quietly turned into a limit, because a silent correction hides a plan that has misunderstood its own play.',
     },
+    { kind: 'h', text: 'What has to be true before a stop entry is placed' },
+    {
+      kind: 'p',
+      text: 'A stop entry only makes sense while the market is still on the resting side of its trigger: a buy stop needs price BELOW the trigger, a sell stop needs price ABOVE it. If the market is already at or past the trigger the order would fire the instant it reached the broker, at whatever the market is now rather than at the level the plan chose — so the arm is cancelled instead, and the line says which side it found: "accepted through (stop side): price 29515.25 <= trigger 29590.50".',
+    },
+    {
+      kind: 'p',
+      text: 'The boundary is not the same as a limit\u2019s. A limit sitting exactly at its price still rests; a stop sitting exactly at its trigger fires. So the stop test is at-or-through and the limit test is strictly-through, and they are two separate checks chosen by order kind rather than one shared one. Until 2026-09-05 the stop side borrowed the limit test, which inverted every answer it gave: it cancelled the valid stops and placed the ones the market had already run past.',
+    },
+    {
+      kind: 'p',
+      text: 'If the guard cannot answer at all — no price this cycle, no trigger, a side it does not recognise — nothing happens. The arm is left exactly as it is for the next cycle, the line reads "NOT adjudicated", and it is counted. Not knowing is never a reason to cancel a live order.',
+    },
+    {
+      kind: 'p',
+      text: 'And the order has to be one NinjaTrader will actually work. A stop entry is refused outright unless the AddOn that answered on the wire is new enough to place the trigger in the stop-price slot: "addon build predates the stop-slot fix (build_id=…)". Between deploying the bot and recompiling the AddOn in NinjaTrader that refusal is the expected state — limits are unaffected and keep placing normally. Note the order, because it matters in that window: the wrong-way guard runs BEFORE the build floor, so an arm the market has already run past is cancelled outright rather than held back by the refusal. A refused arm stays armed and is retried next cycle; a cancelled one is gone.',
+    },
     { kind: 'h', text: 'What "far" counts' },
     {
       kind: 'p',
@@ -177,8 +194,12 @@ export const plays: GuideSection = {
         '            of 1m closes with no close back across — for acceptance/hold.',
         'stop_entry: the breakout-retest fallback — a STOP-MARKET entry beyond the',
         '            break candle after RETEST_WAIT_BARS (6) no-retest bars,',
-        '            STOP_ENTRY_OFFSET_TICKS (2) beyond. Gated on STOP_ENTRY_SEAM',
-        '            (owner-enabled only after the far-side AddOn proves the frame).',
+        '            STOP_ENTRY_OFFSET_TICKS (2) beyond. THREE gates, in the order',
+        '            they actually run: STOP_ENTRY_SEAM · the stop-side',
+        '            wrong-way guard (at-or-through = cancelled, never placed)',
+        '            · the AddOn build floor, LAST, inside the wire call (the',
+        '            received build must prove the trigger reaches the',
+        '            stop-price slot).',
       ],
     },
     { kind: 'h', text: 'Entry-mechanics knobs' },

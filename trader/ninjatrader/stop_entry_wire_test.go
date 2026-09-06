@@ -3,6 +3,7 @@ package ninjatrader
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"path/filepath"
 	"strings"
@@ -74,13 +75,15 @@ func TestPlaceStopEntryFrameOnLoopback(t *testing.T) {
 	} {
 		s, st, conn, frames := stopEntryServer(t)
 
-		// E7 capability handshake: the far side proves stop_entry support by
-		// reporting its build id on the heartbeat (the 22:32 incident: an old
-		// AddOn executed the frame as MARKET because the Go side never checked).
-		if err := ntwire.WriteFrame(conn, ntwire.FrameHeartbeat, ntwire.HeartbeatPayload{BuildID: ntwire.FarSideBuildE7}); err != nil {
+		// Capability handshake: the far side proves it will BUILD the order
+		// correctly by reporting its build id on the heartbeat. The floor moved
+		// from FarSideBuildE7 (parse-proven, 2026-08-30) to MinAddonBuildStopSlot
+		// (slot-proven, WAVE B 2026-09-05) — seeded BY IMPORT, never as a literal
+		// copy of the constant (A24).
+		if err := ntwire.WriteFrame(conn, ntwire.FrameHeartbeat, ntwire.HeartbeatPayload{BuildID: ntwire.MinAddonBuildStopSlot}); err != nil {
 			t.Fatalf("write heartbeat: %v", err)
 		}
-		for i := 0; i < 100 && !ntwire.FarSideProven(s.FarSideBuildID(), ntwire.FarSideBuildE7); i++ {
+		for i := 0; i < 100 && !ntwire.FarSideProven(s.FarSideBuildID(), ntwire.MinAddonBuildStopSlot); i++ {
 			time.Sleep(10 * time.Millisecond)
 		}
 
@@ -109,6 +112,13 @@ func TestPlaceStopEntryFrameOnLoopback(t *testing.T) {
 			if p.StopPrice != tc.trigger {
 				t.Fatalf("%s: stop_price=%.2f, want %.2f", tc.side, p.StopPrice, tc.trigger)
 			}
+			// E1 — the trigger travels in stop_price and the limit slot is EMPTY,
+			// on both sides. The AddOn selects its CreateOrder arguments from
+			// exactly these two fields, so a trigger that leaked into limit_price
+			// would rebuild the 2026-09-04 defect from the Go end.
+			if p.LimitPrice != 0 {
+				t.Fatalf("%s: limit_price=%.2f on a stop entry, want 0", tc.side, p.LimitPrice)
+			}
 			if p.SignalID != sid {
 				t.Fatalf("%s: signal_id mismatch", tc.side)
 			}
@@ -125,7 +135,7 @@ func TestPlaceStopEntryFrameOnLoopback(t *testing.T) {
 }
 
 // TestPlaceStopEntryRefusedWithoutFarSideBuild — the capability handshake:
-// before the far side reports a build_id ≥ FarSideBuildE7, NO stop_entry frame
+// before the far side reports a build_id ≥ MinAddonBuildStopSlot, NO stop_entry frame
 // may leave the wire (the 2026-08-30 incident: an old AddOn executed the frame
 // as MARKET).
 func TestPlaceStopEntryRefusedWithoutFarSideBuild(t *testing.T) {
@@ -204,5 +214,59 @@ func TestStopEntryFrameIsAdditiveJSON(t *testing.T) {
 	_ = json.Unmarshal(b2, &m2)
 	if m2["order_type"] != "stop_entry" || m2["stop_price"] != 101.00 {
 		t.Fatalf("stop_entry frame malformed: %s", b2)
+	}
+}
+
+// TestStopEntryRefusedOnPreStopSlotBuild — WAVE B / E6. FarSideBuildE7
+// (2026-08-30) proved only that the AddOn PARSED a stop_entry frame; it did NOT
+// prove the trigger reached NT8's stopPrice slot. Every stop entry that build
+// family ever sent went out as `Limit price=<trigger> Stop price=0` — 22 of 22
+// lifetime submissions, 0 fills. An AddOn reporting a build below the stop-slot
+// minimum must be REFUSED, never sent a frame it will mis-execute.
+func TestStopEntryRefusedOnPreStopSlotBuild(t *testing.T) {
+	s, st, conn, frames := stopEntryServer(t)
+
+	if err := ntwire.WriteFrame(conn, ntwire.FrameHeartbeat, ntwire.HeartbeatPayload{BuildID: ntwire.FarSideBuildE7}); err != nil {
+		t.Fatalf("write heartbeat: %v", err)
+	}
+	for i := 0; i < 100 && s.FarSideBuildID() == ""; i++ {
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	tr := NewTCPTrader(s, "MNQ", "Sim101")
+	tr.mu.Lock()
+	tr.st = st
+	tr.mu.Unlock()
+
+	var err error
+	for i := 0; i < 50; i++ {
+		_, err = tr.PlaceStopEntry("MNQ", "short", 1, 29590.50, 29650.00, 29481.50)
+		if err == nil || !strings.Contains(err.Error(), "no NT client connected") {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if err == nil {
+		t.Fatal("a stop entry was sent to an AddOn that predates the stop-slot fix — it would go out with a ZERO trigger")
+	}
+	if !strings.Contains(err.Error(), "predates the stop-slot fix") {
+		t.Fatalf("refusal must name the reason: %v", err)
+	}
+	if !strings.Contains(err.Error(), "build_id="+ntwire.FarSideBuildE7) {
+		t.Fatalf("refusal must name the received build id: %v", err)
+	}
+	// THE SENTINEL IS THE CONTRACT, not the prose. armed_executor.go branches on
+	// errors.Is(perr, ntwire.ErrAddonBuildTooOld) to count a build refusal apart
+	// from a transport failure and to dedupe it; a %v instead of %w in the wrap
+	// silently drops the whole counting path and leaves every armed leg
+	// re-logging every cycle for the entire go-first window, with
+	// /api/risk/gate-blocks reading zero.
+	if !errors.Is(err, ntwire.ErrAddonBuildTooOld) {
+		t.Fatalf("the refusal does not wrap ErrAddonBuildTooOld — the caller cannot count it: %v", err)
+	}
+	select {
+	case p := <-frames:
+		t.Fatalf("a frame leaked to the wire despite the stop-slot gate: %+v", p)
+	case <-time.After(200 * time.Millisecond):
 	}
 }

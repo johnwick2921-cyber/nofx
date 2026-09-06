@@ -46,6 +46,10 @@ export const guards: GuideSection = {
       kind: 'p',
       text: "Editing the AddOn source changes nothing until you recompile it in NinjaTrader (F5) and restart NT8 — NinjaTrader keeps executing the DLL it last compiled. The bot now prints, at every boot, the build id it has RECEIVED on the wire next to the one it expects: '🔌 nt8 addon: build_id=… expected=… match=yes|NO'. It says NO — loudly, every boot — until a frame from the running AddOn proves otherwise. A build id read from our own source would report success for a change that never landed, which is precisely how a distributed change gets believed without being made.",
     },
+    {
+      kind: 'p',
+      text: 'From 2026-09-05 that build id does more than report. A stop entry is REFUSED unless the received build proves it will hand NinjaTrader the trigger in the stop-price argument — because the build before it did not, and the result was an order NinjaTrader accepted, listed in its book, and then never worked: a stop with a trigger of zero. Twenty-two of them over two days, none filled, no reject and no error anywhere. Nothing in a log that reads the value we meant to send can catch that; only a build the far side proves by answering can. Limits are untouched by the floor, and the bot states the posture directly on its first armed cycle — and again if it changes: "🎯 stop-entry: seam=… · slots=… · guard=stop-side · unknown=no-op · addon build_id=… expected=… match=…", where slots reads "unproven" until a new enough build answers. Read the seam field FIRST: it is the switch the placement branch consults before any of the others, and from the 2026-09-05 cutover it reads OFF — no stop entry is placed at all, by owner ruling, until a wave lands that confirms a broker cancel instead of assuming one. Limits are unaffected either way. It is not a boot line in the strict sense: it needs a plan with arms and a bound NinjaTrader connection, so a quiet day may not print it at all.',
+    },
     { kind: 'h', text: 'CAN-HARD-BLOCK vs ADVISORY-ONLY (the truth table)' },
     {
       kind: 'table',

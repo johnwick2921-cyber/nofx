@@ -52,7 +52,7 @@ namespace NinjaTrader.NinjaScript.AddOns
         // E7 capability handshake (2026-08-30): reported on every heartbeat so
         // the Go side refuses frame types this build hasn't proven. Bump on any
         // additive wire change; Go gates on FarSideBuildE7 in tcp_framing.go.
-        private const string  VL_BUILD_ID             = "2026-09-03-f12";
+        private const string  VL_BUILD_ID             = "2026-09-05-g2";
         private const int    MAX_FRAME_BYTES         = 1 << 20; // 1 MB, spec L4376
 
         // === State ===
@@ -961,8 +961,20 @@ namespace NinjaTrader.NinjaScript.AddOns
             // entry stands alone (empty OCO); SL+TP get their own OCO pair.
             try
             {
-                var entryAction = side == "long" ? OrderAction.Buy : OrderAction.SellShort;
-                var exitAction  = side == "long" ? OrderAction.Sell : OrderAction.BuyToCover;
+                // WAVE B / class 77 (2026-09-05) — FOLD THE CASE. These two
+                // ternaries were ORDINAL: "LONG" is not "long", so an uppercase
+                // side fell to the else branch and a LONG entry was submitted as
+                // a live SellShort. The Go ledger canonicalizes side to
+                // UPPERCASE at the write (store/armed_orders.go:181, 2026-09-03)
+                // and the armed placement path handed that value straight to the
+                // wire. Go now folds before it sends; this folds again on
+                // arrival, because a ternary whose UNKNOWN branch opens a
+                // position in the opposite direction must not be the last line
+                // of defence. The same file already does this at the
+                // close-position handler (string.Equals + OrdinalIgnoreCase).
+                bool isLongSide = string.Equals(side, "long", StringComparison.OrdinalIgnoreCase);
+                var entryAction = isLongSide ? OrderAction.Buy : OrderAction.SellShort;
+                var exitAction  = isLongSide ? OrderAction.Sell : OrderAction.BuyToCover;
 
                 // PHASE 2 armed orders — a "limit" signal places a RESTING limit
                 // entry (fills fire OnOrderUpdate exactly like market entries;
@@ -972,10 +984,24 @@ namespace NinjaTrader.NinjaScript.AddOns
                 bool isLimit    = orderType == "limit" && limitPx > 0;
                 bool isStopEntry = orderType == "stop_entry" && stopPx > 0;
                 OrderType orderT = isLimit ? OrderType.Limit : (isStopEntry ? OrderType.StopMarket : OrderType.Market);
-                double orderPx  = isLimit ? limitPx : (isStopEntry ? stopPx : 0);
+                // WAVE B / D1 (2026-09-05) — ONE ORDER, CORRECT SLOTS.
+                // Account.CreateOrder is POSITIONAL: after `quantity` come
+                // (limitPrice, stopPrice, oco, name, gtd, customOrder). Until
+                // today this call computed a single `orderPx` and passed it into
+                // the limitPrice slot for BOTH kinds, with a literal 0 in
+                // stopPrice — so every StopMarket entry reached NT8 as
+                // `Limit price=<trigger> Stop price=0`. A stop with a ZERO
+                // trigger is not rejected and not worked; it rests inert forever
+                // (22 of 22 lifetime submissions, 0 fills, 2026-08-31 + 09-04).
+                // The correct shape was always in this file: the bracket stop
+                // loss below builds a StopMarket as (b.Qty, 0, b.Sl) and fills.
+                // A limit entry keeps the shape it has today: price in
+                // limitPrice, 0 in stopPrice. StopMarket only — no stop-limit.
+                double limitArg = isLimit ? limitPx : 0;
+                double stopArg  = isStopEntry ? stopPx : 0;
                 var entryOrder = submitAccount.CreateOrder(
                     instrument, entryAction, orderT, OrderEntry.Manual,
-                    TimeInForce.Day, qty, orderPx, 0, string.Empty, signalId,
+                    TimeInForce.Day, qty, limitArg, stopArg, string.Empty, signalId,
                     Core.Globals.MaxDate, null);
 
                 lock (signalMapLock)
@@ -996,10 +1022,25 @@ namespace NinjaTrader.NinjaScript.AddOns
                 }
 
                 submitAccount.Submit(new[] { entryOrder });
+                // A9 — LOG WHAT WAS SENT, NOT WHAT WAS PARSED. The old line printed
+                // "stop@29590.5" (the parsed variable) on all 21 malformed
+                // submissions while handing NT8 a zero stop slot, which is why a
+                // slot bug survived in a file that logs every placement. These
+                // four values are the arguments actually given to CreateOrder, so
+                // the AddOn log and the NT8 order log must now agree or disagree
+                // visibly.
                 LogInfo("VLTraderTCPClient: submitted entry signal_id=" + signalId
                         + " on account=" + submitAccount.Name
                         + " " + side + " " + qty + " " + symbol
-                        + (isLimit ? (" limit@" + limitPx) : (isStopEntry ? (" stop@" + stopPx) : (" entry≈" + entry)))
+                        + " action=" + entryAction + " type=" + orderT
+                        + " limitPrice=" + limitArg + " stopPrice=" + stopArg
+                        // A MARKET entry has 0 in BOTH price slots by
+                        // construction, so the four argument fields alone would
+                        // name no price at all on the path that carries almost
+                        // every live entry. Keep the reference entry for that
+                        // case only — it is not an argument to CreateOrder and
+                        // must not read as one.
+                        + (isLimit || isStopEntry ? "" : " entry~=" + entry)
                         + " (SL=" + sl + " TP=" + tp + " on fill)");
             }
             catch (Exception ex)

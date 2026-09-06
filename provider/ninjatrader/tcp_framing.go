@@ -218,9 +218,32 @@ type HeartbeatPayload struct {
 	BuildID string `json:"build_id,omitempty"`
 }
 
-// FarSideBuildE7 is the minimum AddOn build that PROVES stop_entry support
-// (OrderType.StopMarket + stop_price parsing). ISO-date prefixes sort lexically.
+// FarSideBuildE7 is the ORIGINAL stop-entry floor (2026-08-30). It proved the
+// AddOn PARSED a stop_entry frame and built an OrderType.StopMarket — and that
+// is ALL it proved. It did not prove the trigger reached NinjaTrader's stopPrice
+// argument, and it did not: every stop entry this build family sent went out as
+// `Limit price=<trigger> Stop price=0` (22 of 22 lifetime submissions, 0 fills,
+// 2026-08-31 and 2026-09-04). SUPERSEDED by MinAddonBuildStopSlot, which is the
+// value the gate now reads; E7 is retained as the named historical floor (it is
+// referenced by tcp_server.go's farSideBuild comment) and as the negative
+// fixture in the stop-entry wire pins. It gates nothing.
 const FarSideBuildE7 = "2026-08-30-e7"
+
+// MinAddonBuildStopSlot is the minimum AddOn build that proves a stop entry is
+// CONSTRUCTED correctly: the trigger passed in CreateOrder's stopPrice argument
+// rather than its limitPrice one (WAVE B / D1, 2026-09-05). This is the value
+// PlaceStopEntry gates on.
+//
+// THE DATE PREFIX IS WHAT DECIDES. FarSideProven compares strings bytewise and
+// build suffixes are NOT zero-padded — "2026-09-03-f9" >= "2026-09-03-f12" is
+// TRUE, so an older same-date build would satisfy a newer same-date minimum.
+// Every future minimum MUST advance the ISO DATE, never only the suffix.
+const MinAddonBuildStopSlot = "2026-09-05-g2"
+
+// ErrAddonBuildTooOld is the sentinel behind a stop entry refused because the
+// AddOn NT8 has loaded predates the stop-slot fix. Callers errors.Is on it so a
+// build refusal is counted apart from a transport or account failure.
+var ErrAddonBuildTooOld = errors.New("addon build predates the stop-slot fix")
 
 // FarSideProven reports whether the far-side build id satisfies a minimum
 // build requirement. Unknown ("") NEVER satisfies — capability is proven by
