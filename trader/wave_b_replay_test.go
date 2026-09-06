@@ -4,6 +4,8 @@ package trader
 
 import (
 	"os"
+	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -243,5 +245,62 @@ func TestStopEntryBootLineHasAProductionCallSite(t *testing.T) {
 	}
 	if strings.Contains(src, "stopEntryBootLogged.LoadOrStore(") {
 		t.Error("the boot line latches on HAVING EMITTED again — an unknown build would pin match=NO for the life of the process")
+	}
+}
+
+// TestSystemMapStopEntryRefsResolve — class 75 (SYSTEM-MAP CONTRACT) has no
+// enforcing test, and the first cut of this wave shipped six wrong line
+// references INSIDE the sentence whose stated purpose was to correct two stale
+// ones. Nothing caught it because nothing reads the map.
+//
+// This does, for the region this wave owns: every `symbol` :NNN pair between the
+// MAPCHECK markers must name a line of trader/armed_executor.go that actually
+// mentions that symbol. It reads the numbers OUT of the map, so the map stays
+// the single source and no third copy exists to drift.
+func TestSystemMapStopEntryRefsResolve(t *testing.T) {
+	mb, err := os.ReadFile("../docs/superpowers/SYSTEM-MAP.md")
+	if err != nil {
+		t.Fatalf("cannot read SYSTEM-MAP: %v", err)
+	}
+	mapSrc := string(mb)
+	const open, close = "<!-- MAPCHECK:trader/armed_executor.go", "<!-- /MAPCHECK -->"
+	i := strings.Index(mapSrc, open)
+	j := strings.Index(mapSrc, close)
+	if i < 0 || j <= i {
+		t.Fatal("the MAPCHECK region is gone — the map section this wave owns is no longer checked")
+	}
+	region := mapSrc[i:j]
+
+	cb, err := os.ReadFile("armed_executor.go")
+	if err != nil {
+		t.Fatalf("cannot read armed_executor.go: %v", err)
+	}
+	lines := strings.Split(string(cb), "\n")
+
+	re := regexp.MustCompile("`([A-Za-z_][A-Za-z0-9_]*)`[^`\n]{0,60}?:(\\d+)")
+	ms := re.FindAllStringSubmatch(region, -1)
+	if len(ms) < 6 {
+		t.Fatalf("the MAPCHECK region names only %d symbol:line pairs — it has been gutted", len(ms))
+	}
+	checked := 0
+	for _, m := range ms {
+		sym, numStr := m[1], m[2]
+		n, cerr := strconv.Atoi(numStr)
+		if cerr != nil || n <= 0 || n > len(lines) {
+			t.Errorf("%s :%s — armed_executor.go has %d lines", sym, numStr, len(lines))
+			continue
+		}
+		// Only symbols that exist in this file are ours to check; the region
+		// also cites store/ and C# coordinates, which are out of its reach.
+		if !strings.Contains(string(cb), sym) {
+			continue
+		}
+		checked++
+		if !strings.Contains(lines[n-1], sym) {
+			t.Errorf("SYSTEM-MAP says %s is at armed_executor.go:%d, but that line reads:\n\t%s", sym, n, strings.TrimSpace(lines[n-1]))
+		}
+	}
+	if checked < 5 {
+		t.Errorf("only %d of the region's references were checkable — the pin is going vacuous", checked)
 	}
 }
