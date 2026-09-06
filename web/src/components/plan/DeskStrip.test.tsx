@@ -6,7 +6,11 @@
 // rather than blanked, and the ledger's price is never shown as the broker's.
 
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
+
+vi.mock('../../contexts/LanguageContext', () => ({
+  useLanguage: () => ({ language: 'en' }),
+}))
 
 let stripPayload: unknown = null
 vi.mock('../../lib/api', () => ({
@@ -60,7 +64,9 @@ describe('DeskStrip', () => {
         }),
       ],
     })
-    await waitFor(() => expect(screen.getByTestId('desk-strip')).toBeTruthy())
+    await waitFor(() =>
+      expect(screen.getByTestId('desk-age-mode')).toBeTruthy()
+    )
     expect(screen.getByTestId('desk-age-mode').textContent).toContain('ago')
     expect(screen.getByTestId('desk-age-position').textContent).not.toBe('')
   })
@@ -177,7 +183,12 @@ describe('DeskStrip', () => {
   // different things and only the second one is honest.
   it('states an unreachable endpoint instead of blanking the card', async () => {
     await renderStrip(null)
-    await waitFor(() => expect(screen.getByTestId('desk-strip')).toBeTruthy())
+    await waitFor(() =>
+      expect(screen.getByTestId('desk-strip')).toHaveAttribute(
+        'data-state',
+        'unreachable'
+      )
+    )
     const el = screen.getByTestId('desk-strip')
     expect(el.getAttribute('data-state')).toBe('unreachable')
     expect(el.textContent).toContain('This is not a quiet desk')
@@ -199,5 +210,51 @@ describe('DeskStrip', () => {
     expect(hdr).toContain('4 UNKNOWN')
     expect(hdr).toContain('1 stale')
     expect(hdr).toContain('5s')
+  })
+})
+
+describe('Desk loading and accessible disclosure', () => {
+  it('announces a pending read, then replaces loading with real facts', async () => {
+    let resolve!: (data: unknown) => void
+    await renderStrip(
+      new Promise((done) => {
+        resolve = done
+      })
+    )
+    expect(screen.getByRole('status')).toHaveAttribute('data-state', 'loading')
+    expect(screen.queryByTestId('desk-line-mode')).toBeNull()
+    await act(async () =>
+      resolve({
+        trader_id: 'pending',
+        generated_at_ms: Date.now(),
+        cadence_ms: 5000,
+        unknown_count: 0,
+        stale_count: 0,
+        lines: [line()],
+      })
+    )
+    await screen.findByTestId('desk-line-mode')
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
+  it('announces expanded state and keeps the toggle reachable while collapsed', async () => {
+    await renderStrip({
+      trader_id: 'toggle',
+      generated_at_ms: Date.now(),
+      cadence_ms: 5000,
+      unknown_count: 0,
+      stale_count: 0,
+      lines: [line()],
+    })
+    const toggle = await screen.findByRole('button', { name: 'Collapse Desk' })
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    fireEvent.click(toggle)
+    expect(screen.getByRole('button', { name: 'Expand Desk' })).toHaveAttribute(
+      'aria-expanded',
+      'false'
+    )
+    expect(screen.queryByTestId('desk-line-mode')).toBeNull()
+    fireEvent.click(toggle)
+    expect(screen.getByTestId('desk-line-mode')).toBeInTheDocument()
   })
 })
