@@ -94,6 +94,24 @@ func TestAddonSubmissionLogNamesTheFourValuesItSent(t *testing.T) {
 	}
 }
 
+// TestAddonEntryActionFoldsCase — class 77, the C# half. The Go ledger
+// canonicalizes side to UPPERCASE at the write and the AddOn decided the ORDER
+// DIRECTION with an ordinal ternary: "LONG" is not "long", so an uppercase side
+// fell to the else branch and a LONG entry was submitted as OrderAction.SellShort.
+// Go now folds before it sends; the AddOn must fold on arrival too, because a
+// ternary whose unknown branch opens a position in the OPPOSITE direction must
+// not be the last line of defence. This is a SOURCE pin (see the file header).
+func TestAddonEntryActionFoldsCase(t *testing.T) {
+	src := addonSource(t)
+	if regexp.MustCompile(`var\s+entryAction\s*=\s*side\s*==\s*"long"\s*\?`).MatchString(src) ||
+		regexp.MustCompile(`var\s+exitAction\s*=\s*side\s*==\s*"long"\s*\?`).MatchString(src) {
+		t.Fatal("the AddOn still decides the order DIRECTION with an ordinal `side == \"long\"` — an uppercase side submits a live SellShort")
+	}
+	if !strings.Contains(src, `string.Equals(side, "long", StringComparison.OrdinalIgnoreCase)`) {
+		t.Error("the entry action is not case-folded — the store writes LONG/SHORT")
+	}
+}
+
 // TestAddonBuildIDMovesInLockstep — VL_BUILD_ID (C#), ExpectedAddonBuild (Go)
 // and MinAddonBuildStopSlot (the gate) are three copies of one value in two
 // languages. A half-bump makes every boot print match=NO, or lets the gate pass
