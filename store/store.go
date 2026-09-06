@@ -37,6 +37,7 @@ type Store struct {
 	abConfirm         *AbConfirmStore
 	tradeExcursions   *TradeExcursionStore
 	nt8OrderSnapshots *NT8OrderSnapshotStore
+	acceptedRisk      *AcceptedRiskStore
 	plannerRejected   *PlannerRejectedStore
 	plannerReadFacts  *PlannerReadFactsStore
 	touchOutcomes     *TouchOutcomeStore
@@ -477,6 +478,18 @@ func (s *Store) PlannerRejected() *PlannerRejectedStore {
 }
 
 // TradeExcursions gets the per-position excursion table (wave 1A, 2026-09-02).
+// AcceptedRisk (WAVE A / D4) is the APPEND-ONLY record of what the broker
+// actually accepted. The mutable armed_orders ledger stays as it is; this is
+// the row no later cycle may rewrite.
+func (s *Store) AcceptedRisk() *AcceptedRiskStore {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.acceptedRisk == nil {
+		s.acceptedRisk = NewAcceptedRiskStore(s.gdb)
+	}
+	return s.acceptedRisk
+}
+
 // NT8OrderSnapshots (F12) is the forensic record of the broker's working-order
 // book. The cutover gate reads the in-memory cache, not this table.
 func (s *Store) NT8OrderSnapshots() *NT8OrderSnapshotStore {

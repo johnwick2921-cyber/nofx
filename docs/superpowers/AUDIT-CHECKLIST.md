@@ -1842,6 +1842,37 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     (alive / gone / unknown) where it had a boolean; silence now selects which
     rows to ASK about and never decides the answer.
 
+80. **A guard that cannot guard the rows it was built for.** (Number assigned
+    at merge, A16 — highest occupied on dev at authoring: 79. Re-check at merge.)
+    WAVE A was dispatched to stop the touch recorder fabricating episodes, on
+    evidence that 677 rows are 423 episodes and that all 14 RTH-L episodes opened
+    BEFORE the level existed. The specified fix — "the scan starts at
+    `max(level.FormedAtMs, watermark)`" — is correct, and implementing it
+    verbatim would have produced a guard that **does nothing on the very rows
+    that motivated it**: `FormedAtMs` is populated only by
+    `kernel/levels_zones.go` (DEMAND/SUPPLY/OB/FVG), while every LINE level is
+    built by `lineLevel` (`kernel/levels.go:93-95`), which never sets it — 503 of
+    677 live rows (74.3%), INCLUDING ALL 140 RTH-L ROWS THAT WERE THE EVIDENCE.
+    The E1 pin passed on the first attempt only because the fixture supplied a
+    formation time; production supplies none. **What identified it** was not the
+    test — the test was green — but asking, separately from the code, what
+    fraction of the live corpus the new predicate could actually reach:
+    `SELECT level_kind, COUNT(*) ... GROUP BY level_kind` against the zone/line
+    split, which inverts the projection in one query. **Probe:** for every new
+    guard, gate or filter, measure the share of the LIVE population its predicate
+    can even evaluate, and quote that share with n beside the pass/fail counts. A
+    predicate that is structurally NULL on most rows is a silent pass, and a
+    silent pass looks exactly like a clean bill of health. **Law:** a guard ships
+    with its COVERAGE, measured on live rows, not with its logic alone. Where the
+    input is missing, the row is marked as uncertifiable (here
+    `validity='unverified:no_formation'`) and EXCLUDED from every rate at one
+    chokepoint — never defaulted to the passing value. Corollary for schema: a
+    new classification column takes NO SQL default, because SQLite's
+    `ADD COLUMN ... DEFAULT 'valid'` stamps every pre-existing contaminated row
+    as certified the moment AutoMigrate runs, which is the exact fabrication the
+    column exists to prevent. Related: class 49/53 (a plausible zero), class 69
+    (built ≠ wired — here, wired ≠ effective).
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,

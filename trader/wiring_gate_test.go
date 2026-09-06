@@ -36,7 +36,14 @@ var wiringClaims = []string{"production call path", "the production call site"}
 // alsoRequireWired is the maintained escape hatch for functions that must be
 // wired but whose doc does not say so in those words. Keep it SHORT; prefer
 // putting the claim in the function's own comment.
-var alsoRequireWired = []string{"recordDetectorOutputs"}
+var alsoRequireWired = []string{
+	"recordDetectorOutputs",
+	// WAVE A — the writers this wave added. Each must keep at least one
+	// production call site; removing one turns this test red.
+	"recordAcceptedRisk",
+	"excursionOnClose",
+	"excursionOnOpen",
+}
 
 func TestEveryClaimedProductionPathHasACallSite(t *testing.T) {
 	root := ".."

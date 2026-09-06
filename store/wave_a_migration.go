@@ -176,9 +176,11 @@ func (s *Store) WaveARecordBootLine(armed bool, ran WaveACounts, backup string) 
 	if exErr != nil {
 		ex = "(count failed)"
 	}
+	ar := s.AcceptedRisk()
 	return fmt.Sprintf(
-		"record: touches=%d (valid=%d no_formation=%d invalid:pre_formation=%d invalid:dup=%d legacy=%d unclassified=%d) · excursions=%d %s · exit-cause=broker · mae/mfe 0→NULL=%d/%d · migration %s",
+		"record: touches=%d (valid=%d no_formation=%d invalid:pre_formation=%d invalid:dup=%d legacy=%d unclassified=%d) · excursions=%d %s · exit-cause=broker · accepted-risk rows=%d (with broker stop=%d) · mae/mfe 0→NULL=%d/%d · migration %s",
 		total, get(ValidityValid), get(ValidityNoFormation), get(ValidityPreFormation),
 		get(ValidityDuplicate), get(ValidityLegacy), uncertified,
-		exTotal, ex, ran.MAEZeroed, ran.MFEZeroed, state)
+		exTotal, ex, ar.Count(), ar.WithAcceptedStop(),
+		ran.MAEZeroed, ran.MFEZeroed, state)
 }

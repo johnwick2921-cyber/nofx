@@ -44,7 +44,7 @@ export const expectancy: GuideSection = {
     { kind: 'h', text: 'Blanks are honest, zeros would not be' },
     {
       kind: 'p',
-      text: "MAE, MFE, and the stop-hit and target-hit shares render as blank until the trade-excursion recorder has rows to give them. A blank means not measured. They are deliberately not derived from the close reason, because every closed row in this store records 'sync' — which says how the row was written, not how the trade ended. A zero in those columns would read as a measurement, and there is no measurement yet.",
+      text: "MAE, MFE, and the stop-hit and target-hit shares render as blank until the trade-excursion recorder has rows to give them. A blank means not measured; a zero would read as a measurement, and these are different facts. Rows closed before 2026-09-05 record close_reason 'sync' — which says how the row was written, not how the trade ended — so their stop-hit and target-hit shares stay blank and are never inferred from price or from the sign of the P&L. From that date the cause is written from NT8's own exit event ('stop', 'target', 'manual'), and a close with no broker event still records 'sync' rather than a guess. Note that a stop can be profitable: two rows in this store exited at their protective stop in profit, so 'stopped out' and 'lost' are not the same column.",
     },
     { kind: 'h', text: 'The counterfactual block is a different table' },
     {

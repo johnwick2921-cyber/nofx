@@ -87,6 +87,12 @@ Assembly order: MultiDay → Round → OR/IB → Gap → EQH/EQL → S/D → FVG
 
 **Roles:** five roles — `levels_role.go:24-29`; consumed / 3rd-touch / far-HTF → **target_only, never entry** (:28,107-118) `[I]`.
 
+**Touch record (`touch_outcomes`) — WAVE A, 2026-09-05.** One row per D1′ episode, written per planner read from `trader/detector_record.go`.
+
+- **The scan starts at `max(FormedAtMs, watermark)`** :57-70 — never before the level existed, never re-scanning a recorded window. The watermark (`store/touch_outcomes.go` `LastOpenedAtMs`) covers the WHOLE scanned window and the ordinal (`NextOrdinal`) counts within the EPISODE's own session-day. Handing either the *current* session-day is what produced 677 rows for 423 episodes and 471 rows reading ordinal 1.
+- **`validity` gates every rate.** `RatesBy` — the one chokepoint `DetectorReport` and all callers inherit — draws from `validity='valid'` only. Values: `valid` · `unverified:no_formation` · `invalid:pre_formation` · `invalid:duplicate` · `legacy:unverified`. No SQL default: an empty validity means NOT CERTIFIED.
+- **KNOWN LIMIT — 74.3% of the corpus cannot be certified.** `FormedAtMs` is set only by `kernel/levels_zones.go` (DEMAND/SUPPLY/OB/FVG). Every LINE level comes from `lineLevel` (`kernel/levels.go:93-95`), which never sets it — 503 of 677 live rows, including all 140 RTH-L rows. Those episodes are recorded as `unverified:no_formation` and excluded from rates. Giving line levels a birth time is what unlocks them.
+
 ## 3 · PLANNER — plan authoring and sessions
 
 **What it does:** the prompt (`kernel/planner_prompt.go`) instructs the LLM; the output parses into a plan document (`kernel/plan_doc.go`) with bias, levels, scenarios, confirms, arms; `ValidatePlanDocWithCaps` chains every write-site validator.
@@ -129,6 +135,11 @@ All chained through `ValidatePlanDocWithCaps` — `kernel/plan_doc.go:588`. Each
 **Knobs:** `ARM_PLACE_TICKS=100` (:34-42) `[T]` · `ARM_WORKING_STALE_MIN=15` (:122-130) `[T]` → cancel `"no order_update within stale window (reconnect/reconcile)"` (:1058) · `ARM_STOP_ANCHOR_MAX_ATR=3.0` (arm_stop_anchor.go:38) `[I]` provisional · `ARM_FAR_ATR_MULT=3.0` (arm_far_counter.go:36) `[T]` warn-first · `ARMED_CANCEL_ACK_TIMEOUT_MS=2000` (:1424) `[T]`.
 
 **Boot lines:** `"⚔️ armed_orders=on place_band=%dt stale_working=%dm test_seam=%s arm_rr=%.1f (gate-at-arm only; market-entry floor %.1f unchanged) (resting limits fill at the authorized price; stale_reeval NOT applied)"` `auto_trader_dayplan.go:64` · `"🎯 arms: bias-coherent=warn · stop-entry=… · far-arm counter=on(%.1f×ATR5m) · ledger append-only=on"` `arms_boot_line.go:14/26`, main.go:430.
+
+**Accepted risk (`accepted_risk`) — WAVE A, 2026-09-05.** APPEND-ONLY record of what the broker agreed to, written from the `accepted`/`working` order_update (`trader/armed_executor.go:1205-1211` → `trader/accepted_risk_hook.go`), with the broker's own prices read from the same F12 book cutover leg 4 answers from.
+
+- `armed_orders` stays MUTABLE and is re-composed per cycle; this table is never updated. A re-authorization APPENDS a row, so ledger and broker are both readable and the drift is a subtraction. Arm 35 is the fixture: ledger stop 29351.6284728996 vs accepted 29355 = **3.3715271 pts of ledger drift** (not slippage — the far-side stop was placed at 29355 and filled at 29355).
+- Accepted prices are NULL when the book did not carry the order. An unknown accepted price is never 0 and never the ledger's number wearing the broker's name. `book_age_ms` / `book_source` record how fresh the view was.
 
 ## 6 · ENTRYGATE — the one canonical gate, both seams
 
@@ -189,6 +200,17 @@ All chained through `ValidatePlanDocWithCaps` — `kernel/plan_doc.go:588`. Each
 - Columns (`store/position.go:128-200`): `entry_price`, `exit_price`, `exit_time`, `realized_pnl` :152, **`pnl_corrected` (nullable) + `pnl_correction_note`** :157-158 (corrections additive, original never edited), `fee`, `close_reason`, `source`, `mae/mfe` (wave 1A), `plan_id/plan_version/cited_scenario_id/plan_matched/plan_band/adherence_grade` :186-197.
 - **Corrected-column law:** `pnl_corrected` only; NULL = UNRESOLVED, excluded AND counted — model.go:14-17 · sample-id law: every row claim names ids — `row_ids` :117-134 · `MinN=30` :37 · z=1.96 :41 · eras pre/post-0B (`Era0BStart` = 2026-09-02 07:49:06 CT) :83-90.
 - Realized formula `(ExitPrice−EntryPrice)×qty×pointValue` — close_sync.go:156-166.
+
+**Exit cause — WAVE A, 2026-09-05.** `close_reason` is written from NT8's OWN exit event, never inferred from price proximity or from the sign of the P&L.
+
+- The wire already carried it: `provider/ninjatrader/tcp_framing.go:288` `exit_reason` = `sl|tp|manual`, parsed and used at `trader/ninjatrader/close_sync.go:204` to arm the re-entry cooldown. Both writers previously stored the literal `"sync"` (`store/position_builder.go`, `ReducePositionQuantity`'s auto-close branch).
+- Mapping (`store.ExitCauseFromBroker`): `sl`→`stop` · `tp`→`target` · `manual`→`manual` · absent/unrecognized→`sync` (never a guess). The mapped words are what `expectancy/aggregate.go`'s substring test for "stop"/"target" actually matches; the raw wire tokens match neither.
+- **A stop can be profitable.** Rows 557 and 570 exited at their protective stop in profit, so "stopped out" is not "lost". The eleven CEX/DEX sync paths are unchanged and still record `sync`.
+- **Excursions:** `trade_excursions` is populated by the wave-1A hooks (open/bar-tick/close) plus the epoch-range backfill. Measured 2026-09-05: scanned 587, computed 68, **unrecomputable 519** (`resolution='none'`, columns NULL — the 1m tape does not reach them). `trader_positions.mae/mfe` keep `DEFAULT 0` in the DDL; the wave converted the 4 surviving pre-E4 zeros (ids 569, 579, 580, 584) to NULL. NULL = UNMEASURED; 0.0 = measured zero.
+
+**Boot line (`📐`, `store/wave_a_migration.go` `WaveARecordBootLine`, emitted `main.go`):**
+`record: touches=<n> (valid=<n> no_formation=<n> invalid:pre_formation=<n> invalid:dup=<n> legacy=<n> unclassified=<n>) · excursions=<n> (backfilled=<n> unresolvable=<n>) · exit-cause=broker · accepted-risk rows=<n> (with broker stop=<n>) · mae/mfe 0→NULL=<n>/<n> · migration <state>`
+One-boot migration flag `WAVE_A_RECORD_MIGRATE`; backup first (no backup, no write); idempotent; the line reports what is PENDING when the flag is off.
 
 ## 11 · WAKES — what re-plans the plan
 
