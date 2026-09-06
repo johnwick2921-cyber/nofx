@@ -396,3 +396,29 @@ func signalOrNone(id string) string {
 	}
 	return id
 }
+
+// StateCensus counts armed_orders by state. READ, for the boot line: a claim
+// that the ledger is clear must be answered by the table, not asserted.
+// WAVE A / cutover 2026-09-05 — the two never-placed arms (104, 105) that
+// failed cutover leg 4 were terminalized under owner authorization, and the
+// boot line has to be able to SAY that rather than have it live in a chat log.
+func (s *ArmedOrderStore) StateCensus() map[string]int64 {
+	out := map[string]int64{}
+	if s == nil || s.db == nil {
+		return out
+	}
+	type row struct {
+		State string
+		N     int64
+	}
+	var rows []row
+	if err := s.db.Model(&ArmedOrderDB{}).
+		Select("COALESCE(state,'') AS state, COUNT(*) AS n").
+		Group("state").Scan(&rows).Error; err != nil {
+		return out
+	}
+	for _, r := range rows {
+		out[r.State] = r.N
+	}
+	return out
+}

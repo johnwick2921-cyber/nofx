@@ -219,7 +219,8 @@ All chained through `ValidatePlanDocWithCaps` — `kernel/plan_doc.go:588`. Each
 - **Excursions:** `trade_excursions` is populated by the wave-1A hooks (open/bar-tick/close) plus the epoch-range backfill. Measured 2026-09-05: scanned 587, computed 68, **unrecomputable 519** (`resolution='none'`, columns NULL — the 1m tape does not reach them). `trader_positions.mae/mfe` keep `DEFAULT 0` in the DDL; the wave converted the 4 surviving pre-E4 zeros (ids 569, 579, 580, 584) to NULL. NULL = UNMEASURED; 0.0 = measured zero.
 
 **Boot line (`📐`, `store/wave_a_migration.go` `WaveARecordBootLine`, emitted `main.go`):**
-`record: touches=<n> (valid=<n> no_formation=<n> invalid:pre_formation=<n> invalid:dup=<n> legacy=<n> unclassified=<n>) · excursions=<n> (backfilled=<n> unresolvable=<n>) · exit-cause=broker · accepted-risk rows=<n> (with broker stop=<n>) · mae/mfe 0→NULL=<n>/<n> · migration <state>`
+`record: touches=<n> (valid=<n> no_formation=<n> invalid:pre_formation=<n> invalid:dup=<n> legacy=<n> unclassified=<n>) · excursions=<n> (backfilled=<n> unresolvable=<n>) · exit-cause=broker · accepted-risk rows=<n> (with broker stop=<n>) · mae/mfe 0→NULL=<n>/<n> · arms live=<n> (superseded=<n> cancelled=<n> filled=<n>) · migration <state>`
+The arms census is READ from `armed_orders` (class 75): cutover 2026-09-05 was blocked by leg 4 on two never-placed arms (104, 105), and their terminalization had to be visible at boot rather than only in a chat log.
 One-boot migration flag `WAVE_A_RECORD_MIGRATE`; backup first (no backup, no write); idempotent; the line reports what is PENDING when the flag is off.
 
 ## 11 · WAKES — what re-plans the plan

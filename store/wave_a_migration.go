@@ -177,10 +177,16 @@ func (s *Store) WaveARecordBootLine(armed bool, ran WaveACounts, backup string) 
 		ex = "(count failed)"
 	}
 	ar := s.AcceptedRisk()
+	// The ledger census, READ — leg 4 of the cutover gate compares the broker's
+	// book against these rows, so the boot says out loud how many are live.
+	ac := s.ArmedOrders().StateCensus()
+	live := ac["armed"] + ac["working"]
 	return fmt.Sprintf(
-		"record: touches=%d (valid=%d no_formation=%d invalid:pre_formation=%d invalid:dup=%d legacy=%d unclassified=%d) · excursions=%d %s · exit-cause=broker · accepted-risk rows=%d (with broker stop=%d) · mae/mfe 0→NULL=%d/%d · migration %s",
+		"record: touches=%d (valid=%d no_formation=%d invalid:pre_formation=%d invalid:dup=%d legacy=%d unclassified=%d) · excursions=%d %s · exit-cause=broker · accepted-risk rows=%d (with broker stop=%d) · mae/mfe 0→NULL=%d/%d · arms live=%d (superseded=%d cancelled=%d filled=%d) · migration %s",
 		total, get(ValidityValid), get(ValidityNoFormation), get(ValidityPreFormation),
 		get(ValidityDuplicate), get(ValidityLegacy), uncertified,
 		exTotal, ex, ar.Count(), ar.WithAcceptedStop(),
-		ran.MAEZeroed, ran.MFEZeroed, state)
+		ran.MAEZeroed, ran.MFEZeroed,
+		live, ac["superseded"], ac["cancelled"], ac["filled"],
+		state)
 }

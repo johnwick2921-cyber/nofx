@@ -1,7 +1,9 @@
 package store
 
 import (
+	"fmt"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -115,4 +117,34 @@ func TestWaveAMigrationConvertsPreE4ZerosToNullAndCountsThem(t *testing.T) {
 		t.Fatalf("a measured excursion must be untouched, got mae=%v mfe=%v", p.MAE, p.MFE)
 	}
 	_ = ps
+}
+
+// The boot line must SAY how many arms are live, read from the table — the
+// cutover on 2026-09-05 was blocked by two never-placed arms (104, 105) whose
+// terminalization otherwise lived only in a chat log.
+func TestRecordBootLineReportsTheArmsCensusFromTheTable(t *testing.T) {
+	st := waveAStore(t)
+	ao := st.ArmedOrders()
+	// Distinct scenarios: UpsertArm keys on (trader, plan, session, scenario,
+	// side), so identical rows collapse into one.
+	for i, tc := range []struct{ state string }{{"armed"}, {"superseded"}, {"superseded"}, {"cancelled"}} {
+		row := &ArmedOrderDB{TraderID: "hoang", PlanID: "P", Session: "NY",
+			Scenario: fmt.Sprintf("S%d", i+1),
+			Side:     "long", EntryPx: 100, StopPx: 95, TargetPx: 110, State: "armed"}
+		if err := ao.UpsertArm(row); err != nil {
+			t.Fatal(err)
+		}
+		if tc.state != "armed" {
+			if err := ao.SetState(row.ID, tc.state, "fixture"); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	line := st.WaveARecordBootLine(false, WaveACounts{}, "")
+	for _, want := range []string{"arms live=1", "superseded=2", "cancelled=1"} {
+		if !strings.Contains(line, want) {
+			t.Fatalf("boot line must report the census READ from the table; missing %q in:\n%s", want, line)
+		}
+	}
+	t.Logf("%s", line)
 }
