@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"nofx/kernel"
 	"nofx/store"
 )
 
@@ -209,4 +210,81 @@ func TestDeskAgeNeverRendersNegative(t *testing.T) {
 		t.Fatalf("age rendering changed: %q", got)
 	}
 	_ = math.Abs
+}
+
+// THE SIM LABEL MAY NEVER BE ASSERTED.
+//
+// The first cut of this file printed the literal "SIM · " in row 1. On a
+// trading dashboard the word that separates simulated money from real money is
+// the last thing that may be a constant: it would have read as reassurance on
+// an account the AddOn never reported as a simulation. With no link, no server
+// or no bound account the answer is UNKNOWN — never "SIM", and never "live",
+// because a missing answer is not a dangerous answer, it is a missing one.
+func TestAccountModeIsReadNeverAsserted(t *testing.T) {
+	at := &AutoTrader{id: "hoang"}
+	got := at.deskAccountMode()
+	if !strings.Contains(got, "UNKNOWN") {
+		t.Fatalf("with no NT8 link the account mode must be UNKNOWN, got %q", got)
+	}
+	if strings.Contains(got, "SIM") {
+		t.Fatalf("SIM must never be asserted without the accounts frame saying so: %q", got)
+	}
+	// And the rendered row must not carry a hardcoded SIM either.
+	st := deskStore(t)
+	at2 := &AutoTrader{id: "hoang", store: st, config: AutoTraderConfig{NinjaTraderSymbol: "MNQ"}}
+	s := at2.DeskStripAt(time.Now())
+	for _, l := range s.Lines {
+		if l.Key != "mode" {
+			continue
+		}
+		if strings.Contains(l.Text, "SIM ·") {
+			t.Fatalf("row 1 asserted SIM with no accounts frame: %q", l.Text)
+		}
+	}
+}
+
+// THE POISONED JOIN KEY. 567 of 587 trader_positions rows carry the LITERAL
+// five-character string "<nil>" in entry_order_id — a formatted nil pointer
+// persisted as text. It passes IS NULL and = ”, joins to nothing, and makes a
+// naive read look like it worked.
+func TestPoisonJoinKeysAreTreatedAsAbsent(t *testing.T) {
+	for _, poison := range []string{"<nil>", "nil", "NULL", "0", "", "   "} {
+		if got := deskJoinKey(map[string]interface{}{"signal_id": poison}, "signal_id"); got != "" {
+			t.Fatalf("%q must read as ABSENT, got %q", poison, got)
+		}
+	}
+	if got := deskJoinKey(map[string]interface{}{"signal_id": "f2b1eb20"}, "signal_id"); got != "f2b1eb20" {
+		t.Fatalf("a real signal id must survive, got %q", got)
+	}
+	// A poisoned key must send PROTECTION to UNKNOWN, never to a false join.
+	st := deskStore(t)
+	at := &AutoTrader{id: "hoang", store: st}
+	prot := at.deskProtection(map[string]interface{}{
+		"side": "SHORT", "quantity": 1.0, "entryPrice": 29285.0, "markPrice": 29300.0,
+		"signal_id": "<nil>",
+	}, 0.25, 2, time.Now().UnixMilli())
+	if prot.State != "unknown" {
+		t.Fatalf("a poisoned join key must render UNKNOWN, got %q", prot.State)
+	}
+}
+
+// ActiveSession names the WINDOW; it ignores Enabled and the weekday. Row 1 must
+// therefore state the market separately, or it reads as "NY is trading" at 14:22
+// on a Sunday with CME shut.
+func TestModeRowStatesTheMarketSeparatelyFromTheSessionWindow(t *testing.T) {
+	st := deskStore(t)
+	at := &AutoTrader{id: "hoang", store: st, config: AutoTraderConfig{NinjaTraderSymbol: "MNQ"}}
+	// A Sunday afternoon inside the NY window, with CME closed.
+	sunday := time.Date(2026, 9, 6, 14, 22, 0, 0, kernel.CTLocation())
+	s := at.DeskStripAt(sunday)
+	for _, l := range s.Lines {
+		if l.Key != "mode" {
+			continue
+		}
+		if !strings.Contains(l.Text, "CME CLOSED") {
+			t.Fatalf("with CME shut the row must say so beside the session window: %q", l.Text)
+		}
+		return
+	}
+	t.Fatal("no mode row")
 }

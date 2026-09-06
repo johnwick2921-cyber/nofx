@@ -111,6 +111,39 @@ could compile. `git show e28b604d:trader/desk_facts.go` → *path does not exist
 | E8 broken store | `with the store closed: 5 unknown of 12`, no panic, 12 rows still render |
 | FE ×6 | dated · UNKNOWN-with-reason · accepted-not-ledger · amber-stale · unreachable-stated · header counts |
 
+### THREE MORE, FOUND MID-CUTOVER — the lock was held and the merge was done
+
+The verification fan-out returned while the clean-clone build was running. It
+found three defects in **this wave's own code**, and one of them was the kind
+that must never ship:
+
+1. **The `SIM ·` label was a LITERAL** (`desk_facts.go:252`). On a trading
+   dashboard, the word separating simulated money from real money is the last
+   thing that may be asserted: it would have printed SIM on an account the AddOn
+   never reported as a simulation. It is now READ from `AccountInfo.IsSim` on
+   the accounts frame, renders `*** LIVE ACCOUNT ***` unsoftened if NT8 ever says
+   so, and renders **UNKNOWN** — never "SIM", never "live" — when the frame has
+   not arrived. **This is the exact class of defect the wave was commissioned to
+   remove, committed by the wave itself.**
+2. **`kernel.DefaultSessionRegistry()` bypassed the admin registry** — the
+   shipped fallback instead of `system_config`, which is the dead wire W8 exists
+   to close. It agreed with the stored registry today, which is how a bypass
+   survives review. Now `at.sessionRegistry(now)`.
+3. **`ActiveSession` names the WINDOW, not the market.** It ignores `Enabled`
+   and the weekday, so it answered "NY" at 14:22 on a Sunday with CME shut. Row 1
+   now states the market separately via `CMEClosedReason` — `CME CLOSED
+   (weekend)` beside `session=NY`.
+
+And a fourth the fan-out proved about the data rather than the code: **567 of
+587 `trader_positions` rows carry the literal five-character string `"<nil>"`**
+in `entry_order_id` — a formatted nil pointer persisted as text. It passes
+`IS NULL`, it passes `= ''`, and it joins to nothing, so a naive read looks like
+it worked. `deskJoinKey` now treats it as absent, which sends PROTECTION to
+UNKNOWN instead of to a false join.
+
+**The cutover was stopped for these** (A23) after the merge and before the
+binary swap, and the clean-clone build was redone at the corrected head.
+
 ### Three defects the pins found in my own code
 
 1. **`deskPosition`/`deskBook` ran outside the containment loop**, so a nil
@@ -144,11 +177,19 @@ the rule is "no dash standing in for a value".
 
 ## 5 · A15 — WHAT THE OWNER WILL STILL SEE WRONG
 
-- **PROTECTION, DRIFT and TARGET will read UNKNOWN until a trade is accepted.**
-  `accepted_risk` has **0 rows** today: Wave A's recorder writes its first at the
-  next order acceptance. This is the strip's headline safety line, and it will be
-  honest-but-empty at the first boot. That is correct behaviour and it will still
-  look like a gap.
+- **PROTECTION, DRIFT and TARGET will read UNKNOWN until the first order
+  acceptance writes an `accepted_risk` row. That is the strip being honest, not
+  a gap** (owner's words, and the correct reading). `accepted_risk` has **0 rows**
+  today because its only writer shipped 2026-09-05 21:59 CT and the last arm was
+  created 2026-09-04 12:11 CT — the path has never had an opportunity to fire.
+- **AND THEY MAY STAY UNKNOWN EVEN AFTER THE NEXT ARM.** `applyBrokerTerms` keys
+  on order names ending `-sl`/`-tp` and on `o.StopPrice`, and across all stored
+  `nt8_order_snapshots` there are **zero** orders with either: every observed
+  order carries a bare signal-id name and puts its price in `limit_price`,
+  including `type:"stop"` orders. So `accepted_stop_px` will likely be written
+  NULL. The strip will say UNKNOWN with its reason and will not invent a number —
+  but the underlying recorder needs its own wave, and this report is where that
+  starts.
 - **LAST FILL's slippage is UNKNOWN and will stay UNKNOWN.** The intended price
   is not stored beside the fill, and the AddOn's `slippage_ticks` has no
   production consumer. The row says so rather than computing a number from the

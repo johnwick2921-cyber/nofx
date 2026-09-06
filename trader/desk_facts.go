@@ -205,6 +205,38 @@ const deskLineCount = 12
 
 // ── the lines ────────────────────────────────────────────────────────────────
 
+// deskAccountMode READS whether the bound account is a simulation account, from
+// the AddOn's own accounts frame (AccountInfo.IsSim, set from NT8's
+// Account.Simulation). It never asserts. An absent frame is UNKNOWN, and an
+// account the frame does not list is UNKNOWN — not "live", because a missing
+// answer is not a dangerous answer, it is a missing one.
+func (at *AutoTrader) deskAccountMode() string {
+	nt := at.armedTrader()
+	if nt == nil {
+		return "account UNKNOWN (no NT8 link)"
+	}
+	srv := nt.GetServer()
+	if srv == nil {
+		return "account UNKNOWN (no NT8 server)"
+	}
+	bound := nt.BoundAccount()
+	if strings.TrimSpace(bound) == "" {
+		return "account UNKNOWN (no account bound)"
+	}
+	accounts, _ := srv.GetAccountsList()
+	for _, a := range accounts {
+		if strings.EqualFold(strings.TrimSpace(a.Name), strings.TrimSpace(bound)) {
+			if a.IsSim {
+				return "SIM"
+			}
+			// Never softened. If NT8 ever reports a non-simulation account the
+			// strip says so in the loudest word it has.
+			return "*** LIVE ACCOUNT ***"
+		}
+	}
+	return "account UNKNOWN (the accounts frame does not list the bound account)"
+}
+
 // deskPositionSafe contains a broker link that is absent or angry. A nil
 // result with a nil error means FLAT; a non-nil error means "we could not ask",
 // and the two render differently on purpose.
@@ -230,9 +262,28 @@ func (at *AutoTrader) deskPosition() (map[string]interface{}, error) {
 }
 
 func (at *AutoTrader) deskMode(now time.Time, book DeskLine) DeskLine {
+	// FIX (2026-09-06, found by review of this wave's own code): this line
+	// printed the literal "SIM ·". The word that separates simulated money from
+	// real money is the last thing that may be asserted rather than read — a
+	// hardcoded SIM would have read as reassurance on an account the AddOn never
+	// reported as simulation. It is now READ from the accounts frame, and says
+	// UNKNOWN when the frame has not arrived.
+	acct := at.deskAccountMode()
+
+	// FIX: this used kernel.DefaultSessionRegistry(), the SHIPPED fallback,
+	// bypassing the admin registry in system_config — the exact dead wire W8
+	// exists to close (trader/auto_trader_registry.go:10-13). It agreed with the
+	// stored registry today, which is how a bypass survives review.
 	session := "none"
-	if sd, ok := kernel.DefaultSessionRegistry().ActiveSession(now); ok && sd != nil {
+	if sd, ok := at.sessionRegistry(now).ActiveSession(now); ok && sd != nil {
 		session = string(sd.Name)
+	}
+	// AND: ActiveSession names the WINDOW; it ignores Enabled and it ignores the
+	// weekday, so it answers "NY" at 14:22 on a Sunday with CME shut. Two
+	// different questions, so the row states both.
+	market := "OPEN"
+	if closed, reason := kernel.CMEClosedReason(now); closed {
+		market = "CLOSED (" + reason + ")"
 	}
 	mode := at.planModeFor(session)
 	// RULE 3 — never one green word. Process, feed, link and book are four
@@ -249,8 +300,8 @@ func (at *AutoTrader) deskMode(now time.Time, book DeskLine) DeskLine {
 		N: 1, Key: "mode", Label: "MODE", State: "ok", Verified: true,
 		Source: "strategy config · session registry · bars · NT8 link",
 		AsOfMs: now.UnixMilli(),
-		Text: fmt.Sprintf("SIM · plan_mode=%s · session=%s · %s CT · process responding · feed %s · link %s · book %s",
-			mode, session, now.In(kernel.CTLocation()).Format("15:04:05"), feed, link, book.Text),
+		Text: fmt.Sprintf("%s · plan_mode=%s · session=%s · CME %s · %s CT · process responding · feed %s · link %s · book %s",
+			acct, mode, session, market, now.In(kernel.CTLocation()).Format("15:04:05"), feed, link, book.Text),
 	}
 }
 
@@ -290,6 +341,26 @@ func deskNum(m map[string]interface{}, keys ...string) float64 {
 	return 0
 }
 
+// deskJoinKey reads a join key and REFUSES the poison values.
+//
+// 567 of 587 trader_positions rows carry the LITERAL five-character string
+// "<nil>" in entry_order_id — a formatted nil pointer that was persisted as
+// text. It passes IS NULL, it passes = ”, and it joins to nothing, so a naive
+// read looks like it worked and silently matched no rows. Treating it as absent
+// is the only honest reading.
+func deskJoinKey(m map[string]interface{}, keys ...string) string {
+	for _, k := range keys {
+		v, _ := m[k].(string)
+		v = strings.TrimSpace(v)
+		switch strings.ToLower(v) {
+		case "", "<nil>", "nil", "null", "0":
+			continue
+		}
+		return v
+	}
+	return ""
+}
+
 // acceptedFor finds the immutable accepted-risk record for the open position's
 // signal. RULE 5: this is the ONLY source PROTECTION and TARGET may use.
 func (at *AutoTrader) acceptedFor(pos map[string]interface{}) (*store.AcceptedRisk, string) {
@@ -299,12 +370,9 @@ func (at *AutoTrader) acceptedFor(pos map[string]interface{}) (*store.AcceptedRi
 	if pos == nil {
 		return nil, "no open position"
 	}
-	sig, _ := pos["signal_id"].(string)
-	if strings.TrimSpace(sig) == "" {
-		sig, _ = pos["entry_order_id"].(string)
-	}
-	if strings.TrimSpace(sig) == "" {
-		return nil, "the open position carries no signal id to join on"
+	sig := deskJoinKey(pos, "signal_id", "entry_order_id")
+	if sig == "" {
+		return nil, "the open position carries no usable signal id to join on"
 	}
 	rows, err := at.store.AcceptedRisk().ForSignal(sig)
 	if err != nil {
