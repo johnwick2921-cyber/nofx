@@ -330,10 +330,13 @@ func (at *AutoTrader) armSlotGuard(ledgerRows []store.ArmedOrderDB, r store.Arme
 // that persists for many cycles is stated once per distinct condition, not once
 // per cycle (the armRefusalChanged pattern this file reuses rather than
 // reinvents).
-func (at *AutoTrader) refuseSlot(r store.ArmedOrderDB, v slotVerdict, what string) {
+func (at *AutoTrader) refuseSlot(r store.ArmedOrderDB, v slotVerdict, what string, now time.Time) {
 	class := "slot_live_at_broker"
 	if v.Action == slotUnverifiable {
 		class = "slot_unverifiable"
+		// Owner ruling 2026-09-06: a dark AddOn must read as an OUTAGE, not as
+		// a quiet no-trade day. Once per outage, with the book age.
+		at.raiseBookOutageAlert(v.BookAge, now)
 	}
 	key := r.PlanID + ":" + strconv.Itoa(r.Version) + ":" + r.Scenario + ":leg" +
 		strconv.Itoa(r.LegIndex+1) + ":slotguard"
@@ -536,4 +539,79 @@ func CancelBootLine(st *store.Store, rec ReconcileCounts, nowMs int64) string {
 	return fmt.Sprintf(
 		"cancels: confirm=broker-snapshot · pending=%d · unconfirmed=%d · slot-guard=on(refuse-on-live|stale) · timeout=%s · stale-bound=%s · rerequest-cap=%d · %s",
 		pending, unconfirmed, cancelConfirmTimeout(), snapshotMaxAge(), cancelReRequestMax(), reconciled)
+}
+
+// ── A DARK ADDON IS AN OUTAGE, NOT A QUIET DAY (owner ruling 2026-09-06) ─────
+//
+// D3 refuses placements on a stale or absent book. Refusals are counted
+// (arm_slot_unverifiable) — but a counter nobody is looking at renders a dark
+// AddOn as a day on which nothing happened to trade. It is not: it is an
+// outage, and it is the owner's to see.
+//
+// ONE P0 PER OUTAGE. emitAlert dedupes on EventID, so the id carries the
+// outage's START instant: every refusal inside one outage collapses to the
+// alert already on screen, and a LATER outage raises a new one. When the book
+// returns the alert is acked by that same id, which clears the banner.
+//
+// The counter is unchanged — the owner asked for one alert beside it, not a
+// second counter.
+
+// bookOutageSince holds the start of the current book outage per trader.
+// Absent = the book is healthy as far as we last saw.
+var bookOutageSince sync.Map // trader id -> int64 (unix ms of outage start)
+
+// ResetBookOutageForTest clears the outage latch.
+func ResetBookOutageForTest() { bookOutageSince = sync.Map{} }
+
+// bookOutageEventID is stable for the life of ONE outage, which is what makes
+// the alert fire once and clear cleanly.
+func bookOutageEventID(startMs int64) string {
+	return "cancel_book_stale:" + strconv.FormatInt(startMs, 10)
+}
+
+// raiseBookOutageAlert opens an outage if none is open and raises the P0 once.
+func (at *AutoTrader) raiseBookOutageAlert(age time.Duration, now time.Time) {
+	if at == nil {
+		return
+	}
+	startMs := now.UnixMilli()
+	if prev, loaded := bookOutageSince.LoadOrStore(at.id, startMs); loaded {
+		// An outage is already open — the alert for it is already on screen.
+		_ = prev
+		return
+	}
+	at.emitAlert("P0", "broker_book",
+		bookOutageEventID(startMs),
+		"Broker order book is dark — arm placement is REFUSED",
+		fmt.Sprintf("No fresh NT8 order_snapshot: the newest book is %s old against a %s bound. "+
+			"Every arm placement is refused while this lasts, because an unverifiable slot is not an empty slot — "+
+			"this is an OUTAGE, not a quiet session. Check that NinjaTrader and the VL AddOn are running. "+
+			"This alert clears itself when a fresh book arrives.",
+			age.Round(time.Second), snapshotMaxAge()))
+	at.logErrorf("🚨 broker book DARK — book %s old against a %s bound; arm placement REFUSED until it returns (P0 raised once for this outage)",
+		age.Round(time.Second), snapshotMaxAge())
+}
+
+// clearBookOutageIfHealthy closes an open outage when a fresh book is seen and
+// acks the alert that announced it.
+func (at *AutoTrader) clearBookOutageIfHealthy(now time.Time) {
+	if at == nil || at.store == nil {
+		return
+	}
+	_, have, age := at.liveBook(now)
+	fresh := have && (snapshotMaxAge() <= 0 || age <= snapshotMaxAge())
+	if !fresh {
+		return
+	}
+	v, open := bookOutageSince.Load(at.id)
+	if !open {
+		return
+	}
+	startMs, _ := v.(int64)
+	bookOutageSince.Delete(at.id)
+	if _, err := at.store.Alert().AckByEvent(at.id, bookOutageEventID(startMs)); err != nil {
+		at.logWarnf("🚨 broker book recovered but the outage alert could not be acked: %v", err)
+	}
+	at.logWarnf("🚨 broker book RECOVERED after %s — arm placement resumes (outage alert cleared)",
+		time.Duration(now.UnixMilli()-startMs)*time.Millisecond)
 }

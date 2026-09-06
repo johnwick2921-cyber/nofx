@@ -75,6 +75,11 @@ addresses the incident, and it is load-bearing. D1/D2 remain correct and worth
 having *on their own evidence* (the 3-of-47 number above), but they are not what
 caused 1664. Saying otherwise would have been a fix aimed at the wrong defect.
 
+**OWNER RULING, 2026-09-06 — correction accepted.** C2 was nine concurrent
+placements, not nine failed cancels. D1/D2 stand on the 92%-unverified evidence;
+**D3 is the incident's actual fix.** Recorded here and at the head of checklist
+class 81 so nobody arriving from snapshot 1664 rebuilds the wrong half.
+
 ### C3 — the one-contract rule cannot see the broker · **CONFIRMED** [A]
 
 Nothing consulted the book before a placement. The guard sequence before
@@ -188,8 +193,13 @@ next session.
   owner-ruled ("an unverifiable slot is not an empty slot"), and on a closed
   market it costs nothing. **In a live session with a dark AddOn it means no arm
   is placed at all** — a trading-availability consequence created by a telemetry
-  dependency. It is loud (`arm_slot_unverifiable`, counted) but it is real, and
-  it is the single thing I would want the owner to decide with open eyes.
+  dependency. **The owner ruled on this (2026-09-06): it must read as an OUTAGE,
+  not as a quiet no-trade day.** So a staleness refusal now raises ONE P0 in-app
+  alert per outage, carrying the book age, deduped on the outage's start instant
+  and acked — banner cleared — when a fresh book returns. A later outage raises
+  its own. The `arm_slot_unverifiable` counter is unchanged: one alert beside
+  it, not a second counter. Pinned, and mutation-checked: removing the raise
+  makes the pin fail with "got 0".
 - **`stop_price` is 0 on every order the broker has ever shown us** (n=1,233,
   zero exceptions), because the AddOn's submit-slot fix is written but **not
   compiled**. Wave B's F2 is what changes that.

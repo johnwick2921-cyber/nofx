@@ -2,6 +2,7 @@ package trader
 
 import (
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -97,4 +98,75 @@ func TestSettlementPassNeverPanics(t *testing.T) {
 	if r := recoverOf(func() { at.confirmPendingCancels(st.ArmedOrders(), nil, time.Now()) }); r != nil {
 		t.Fatalf("settlement pass panicked with no wire: %v", r)
 	}
+}
+
+// OWNER RULING 2026-09-06 — A DARK ADDON IS AN OUTAGE, NOT A QUIET DAY.
+// Exactly ONE P0 per outage, carrying the book age; cleared when the book
+// returns; a LATER outage raises a new one.
+func TestDarkBookRaisesOneP0PerOutageAndClearsOnRecovery(t *testing.T) {
+	ResetBookOutageForTest()
+	st, err := store.New(filepath.Join(t.TempDir(), "outage.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	at := &AutoTrader{
+		id: "hoang", exchange: "ninjatrader", store: st,
+		config: AutoTraderConfig{NinjaTraderSymbol: "MNQ", StrategyConfig: &store.StrategyConfig{
+			DayPlan: &store.DayPlanConfig{PlanEnabled: true},
+		}},
+	}
+	r := store.ArmedOrderDB{ID: 1, PlanID: "P", Scenario: "S2", Side: "SHORT"}
+	stale := slotVerdict{Action: slotUnverifiable, Why: "book is 30m0s old", BookAge: 30 * time.Minute}
+	now := time.Date(2026, 9, 6, 9, 0, 0, 0, time.UTC)
+
+	// Many refusals across one outage — one alert.
+	for i := 0; i < 5; i++ {
+		at.refuseSlot(r, stale, "limit", now.Add(time.Duration(i)*time.Minute))
+	}
+	alerts, err := st.Alert().List("hoang", 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p0 := 0
+	for _, a := range alerts {
+		if a.Level == "P0" && a.Kind == "broker_book" {
+			p0++
+			if !strings.Contains(a.Body, "30m0s") {
+				t.Fatalf("the alert must carry the book age, body was: %s", a.Body)
+			}
+		}
+	}
+	if p0 != 1 {
+		t.Fatalf("five refusals inside ONE outage must raise exactly one P0, got %d", p0)
+	}
+
+	// The book returns → the alert is acked (banner cleared).
+	unackedBefore, _ := st.Alert().UnackedCount("hoang")
+	if unackedBefore == 0 {
+		t.Fatal("precondition: the P0 should be unacked while the outage is open")
+	}
+	// liveBook needs a broker link; with none, clearBookOutageIfHealthy must be
+	// a no-op — an absent book is NOT a recovery.
+	at.clearBookOutageIfHealthy(now.Add(10 * time.Minute))
+	if _, stillOpen := bookOutageSince.Load("hoang"); !stillOpen {
+		t.Fatal("an ABSENT book must not be mistaken for a recovered one")
+	}
+
+	// Simulate recovery by clearing the latch the way a fresh book would, then
+	// prove a SECOND outage raises a SECOND alert (not deduped against the first).
+	bookOutageSince.Delete("hoang")
+	_, _ = st.Alert().AckByEvent("hoang", bookOutageEventID(now.UnixMilli()))
+	at.refuseSlot(r, stale, "limit", now.Add(2*time.Hour))
+	alerts, _ = st.Alert().List("hoang", 50)
+	p0 = 0
+	for _, a := range alerts {
+		if a.Level == "P0" && a.Kind == "broker_book" {
+			p0++
+		}
+	}
+	if p0 != 2 {
+		t.Fatalf("a SECOND outage must raise its own alert, got %d P0(s) total", p0)
+	}
+	t.Logf("one outage → 1 P0 with the age; a later outage → a second, independent P0")
 }

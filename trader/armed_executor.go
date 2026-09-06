@@ -983,7 +983,7 @@ func (at *AutoTrader) runArmedPlacement(bars []market.Kline, sinceMs int64) {
 				// route to the wire, and the nine-order incident came through a
 				// slot that could be placed into repeatedly.
 				if g := at.armSlotGuard(rows, r, now); !g.Allowed() {
-					at.refuseSlot(r, g, "limit")
+					at.refuseSlot(r, g, "limit", now)
 					continue
 				}
 				sid, perr := nt.PlaceLimitEntry(at.futuresSymbol(), side, 1, r.EntryPx, r.StopPx, r.TargetPx)
@@ -1009,6 +1009,9 @@ func (at *AutoTrader) runArmedPlacement(bars []market.Kline, sinceMs int64) {
 	// D4 — the once-per-boot three-state reconciliation, run at the first cycle
 	// where a book actually exists. Nothing is auto-cancelled by it.
 	at.reconcileOncePerBoot(ledger, now)
+	// A dark book is an outage; a returned book clears it. Checked every cycle
+	// so recovery is noticed even when there is no arm to place.
+	at.clearBookOutageIfHealthy(now)
 }
 
 // limitMarketableWrongSide (E7 incident guard, pure) reports whether price has
@@ -1266,7 +1269,7 @@ func (at *AutoTrader) placeOneStopEntry(pl stopEntryPlacer, ledger armStateWrite
 	// ledger rows reading 'cancelled'. They were inert only because the order
 	// was malformed — which Wave B has now fixed.
 	if !guard.Allowed() {
-		at.refuseSlot(r, guard, "stop-entry")
+		at.refuseSlot(r, guard, "stop-entry", now)
 		return
 	}
 	sid, perr := pl.PlaceStopEntry(at.futuresSymbol(), d.Side, 1, d.Trigger, r.StopPx, r.TargetPx)

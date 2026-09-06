@@ -1874,7 +1874,13 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     (built ≠ wired — here, wired ≠ effective).
 
 81. **A send read as a settlement.** (Number assigned at merge, A16 — highest
-    occupied on dev at authoring: 80. Re-check at merge.) `nt.CancelOrder` is a
+    occupied on dev at authoring: 80. Re-check at merge.)
+    **READ THE COROLLARY FIRST IF YOU CAME HERE FROM SNAPSHOT 1664.** That
+    incident was NINE CONCURRENT PLACEMENTS, not nine failed cancels — the
+    dispatch that opened this class said the latter and the tape says the
+    former (owner-accepted correction, 2026-09-06). The send-as-settlement
+    defect below is real and separately evidenced; it is simply not what
+    produced 1664. `nt.CancelOrder` is a
     one-line pass-through to `SendCancelOrder`; its error is the result of
     putting a frame on a socket, and it returns non-nil in exactly two cases —
     no client connected, or `WriteFrame` failed. Everything past the socket
@@ -1899,7 +1905,7 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     moves to a NON-TERMINAL `cancel_pending` and only a snapshot may finish it,
     recording WHICH snapshot did. A stale or absent book settles nothing and
     promotes nothing.
-    **Corollary — the invariant that actually stops stacking.** The nine live
+    **Corollary — THE INCIDENT'S ACTUAL FIX, and the half to build first.** The nine live
     orders of `nt8_order_snapshots` id 1664 were NOT nine failed cancels: NT8
     honoured all 22 cancels for that slot within ~110-260 ms. They were nine
     concurrent PLACEMENTS, and the mechanism is arithmetic — mint every ~2 min
