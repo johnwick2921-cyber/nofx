@@ -113,15 +113,27 @@ func TestStopEntryGuardHasAProductionCallSite(t *testing.T) {
 		t.Fatalf("cannot read the placement source: %v", err)
 	}
 	src := string(b)
-	if !strings.Contains(src, "verdict, why := stopEntryGuardVerdict(r.Side, trigger, price)") {
-		t.Error("the stop-entry branch does not call stopEntryGuardVerdict — the guard is built but not wired")
+	if !strings.Contains(src, "d := decideStopEntry(side, r.EntryPx, float64(stopEntryOffsetTicks())*tick, tick, price)") {
+		t.Error("the stop-entry branch does not call decideStopEntry — the adjudication is built but not wired")
+	}
+	if !strings.Contains(src, "at.placeOneStopEntry(nt, ledger, r, d, price, now)") {
+		t.Error("the stop-entry branch does not dispatch the decision — nothing acts on the verdict")
 	}
 	if strings.Contains(src, "limitMarketableWrongSide(price, trigger,") {
 		t.Error("the stop-entry branch still calls the LIMIT predicate with the trigger — the inversion is back")
 	}
 	// The limit branch must keep its own predicate, with the ENTRY argument.
-	if !strings.Contains(src, "limitMarketableWrongSide(price, r.EntryPx, r.Side)") {
+	// `side` is the canonical lowercase fold of r.Side (class 77); the predicate
+	// case-folds anyway, but the value handed to the WIRE must be the folded one.
+	if !strings.Contains(src, "limitMarketableWrongSide(price, r.EntryPx, side)") {
 		t.Error("the limit branch lost limitMarketableWrongSide — the limit path was not supposed to move")
+	}
+	// NO RAW LEDGER SIDE MAY REACH THE WIRE. The store canonicalizes Side to
+	// UPPERCASE and the AddOn reads `side == "long" ? Buy : SellShort`, so
+	// PlaceLimitEntry/PlaceStopEntry must be handed the folded value.
+	if strings.Contains(src, "PlaceLimitEntry(at.futuresSymbol(), r.Side,") ||
+		strings.Contains(src, "PlaceStopEntry(at.futuresSymbol(), r.Side,") {
+		t.Error("the placement branch hands the RAW ledger side to the wire — an uppercase LONG submits as a live SellShort")
 	}
 	// D5's refusal must be counted, not swallowed.
 	if !strings.Contains(src, "errors.Is(perr, ntwire.ErrAddonBuildTooOld)") {
@@ -164,5 +176,72 @@ func TestStopEntryBootLineIsRead(t *testing.T) {
 	// The expected half is READ from the source constant, never restated.
 	if !strings.Contains(proven, "expected="+ntwire.ExpectedAddonBuild) {
 		t.Errorf("expected= must be the source constant: %s", proven)
+	}
+}
+
+// TestStopEntryBootLineReEmitsWhenTheBuildArrives — the build id arrives
+// ASYNCHRONOUSLY: farSideBuildID() is "" until a hello or heartbeat lands, while
+// armedTrader() is non-nil with no far-side connection at all. A latch on
+// "having emitted" therefore pinned `slots=unproven … build_id=none … match=NO`
+// for the life of the process whenever the first armed cycle beat the AddOn's
+// first frame — and the sibling 🔌 line, which reads the same value under the
+// same latch, did exactly that on 3 of its 8 observed emissions. Dedupe on the
+// rendered LINE instead: the none→proven transition is recorded exactly once,
+// and a steady state still prints once.
+func TestStopEntryBootLineReEmitsWhenTheBuildArrives(t *testing.T) {
+	at := &AutoTrader{id: "boot-line-trader"}
+	stopEntryBootLogged.Delete(at.id)
+	defer stopEntryBootLogged.Delete(at.id)
+
+	emit := func(received string) (string, bool) {
+		line := StopEntryBootLine(received, ntwire.ExpectedAddonBuild)
+		prev, ok := stopEntryBootLogged.Load(at.id)
+		changed := !ok || prev.(string) != line
+		if changed {
+			stopEntryBootLogged.Store(at.id, line)
+		}
+		return line, changed
+	}
+
+	unproven, first := emit("")
+	if !first {
+		t.Fatal("the first cycle must emit")
+	}
+	if !strings.Contains(unproven, "build_id=none") || strings.Contains(unproven, "slots=stop_price") {
+		t.Fatalf("with no frame received the line must say so: %s", unproven)
+	}
+	if _, again := emit(""); again {
+		t.Error("an unchanged posture must not re-emit every cycle")
+	}
+	arrived, changed := emit(ntwire.MinAddonBuildStopSlot)
+	if !changed {
+		t.Fatal("the none→proven transition was swallowed — F2's acceptance line is unobtainable without a restart")
+	}
+	if !strings.Contains(arrived, "slots=stop_price") || !strings.Contains(arrived, "match=yes") {
+		t.Fatalf("the proven line must state the proof: %s", arrived)
+	}
+	if _, again := emit(ntwire.MinAddonBuildStopSlot); again {
+		t.Error("the proven posture must settle to one line")
+	}
+
+	// The dedupe key must be the RENDERED LINE, which is what makes the
+	// transition visible; a bare "have I emitted" flag cannot express it.
+	if v, ok := stopEntryBootLogged.Load(at.id); !ok || v.(string) != arrived {
+		t.Errorf("the latch must hold the last rendered line, got %v", v)
+	}
+}
+
+// TestStopEntryBootLineHasAProductionCallSite — A29 for the emitter itself.
+func TestStopEntryBootLineHasAProductionCallSite(t *testing.T) {
+	b, err := os.ReadFile("armed_executor.go")
+	if err != nil {
+		t.Fatalf("cannot read the placement source: %v", err)
+	}
+	src := string(b)
+	if !strings.Contains(src, "at.logStopEntryBootLine()") {
+		t.Error("the D4 boot line is never emitted from the armed cycle")
+	}
+	if strings.Contains(src, "stopEntryBootLogged.LoadOrStore(") {
+		t.Error("the boot line latches on HAVING EMITTED again — an unknown build would pin match=NO for the life of the process")
 	}
 }

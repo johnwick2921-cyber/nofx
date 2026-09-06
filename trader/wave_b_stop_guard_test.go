@@ -46,6 +46,11 @@ var stopGuardCases = []stopGuardCase{
 
 // TestStopEntryMarketableWrongSide — E3. All four cells of the stop-side guard.
 func TestStopEntryMarketableWrongSide(t *testing.T) {
+	// A table with no length assertion is a test that passes when it is emptied
+	// (the sibling replay pins its own 21; this one did not pin its 8).
+	if len(stopGuardCases) != 8 {
+		t.Fatalf("the four cells plus both boundaries plus both case-folds = 8 cases, got %d", len(stopGuardCases))
+	}
 	for _, c := range stopGuardCases {
 		got := stopEntryMarketableWrongSide(c.side, c.trigger, c.price)
 		if got != c.through {

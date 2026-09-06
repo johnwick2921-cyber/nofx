@@ -238,7 +238,7 @@ const FarSideBuildE7 = "2026-08-30-e7"
 // build suffixes are NOT zero-padded — "2026-09-03-f9" >= "2026-09-03-f12" is
 // TRUE, so an older same-date build would satisfy a newer same-date minimum.
 // Every future minimum MUST advance the ISO DATE, never only the suffix.
-const MinAddonBuildStopSlot = "2026-09-05-g1"
+const MinAddonBuildStopSlot = "2026-09-05-g2"
 
 // ErrAddonBuildTooOld is the sentinel behind a stop entry refused because the
 // AddOn NT8 has loaded predates the stop-slot fix. Callers errors.Is on it so a

@@ -52,7 +52,7 @@ namespace NinjaTrader.NinjaScript.AddOns
         // E7 capability handshake (2026-08-30): reported on every heartbeat so
         // the Go side refuses frame types this build hasn't proven. Bump on any
         // additive wire change; Go gates on FarSideBuildE7 in tcp_framing.go.
-        private const string  VL_BUILD_ID             = "2026-09-05-g1";
+        private const string  VL_BUILD_ID             = "2026-09-05-g2";
         private const int    MAX_FRAME_BYTES         = 1 << 20; // 1 MB, spec L4376
 
         // === State ===
@@ -961,8 +961,20 @@ namespace NinjaTrader.NinjaScript.AddOns
             // entry stands alone (empty OCO); SL+TP get their own OCO pair.
             try
             {
-                var entryAction = side == "long" ? OrderAction.Buy : OrderAction.SellShort;
-                var exitAction  = side == "long" ? OrderAction.Sell : OrderAction.BuyToCover;
+                // WAVE B / class 77 (2026-09-05) — FOLD THE CASE. These two
+                // ternaries were ORDINAL: "LONG" is not "long", so an uppercase
+                // side fell to the else branch and a LONG entry was submitted as
+                // a live SellShort. The Go ledger canonicalizes side to
+                // UPPERCASE at the write (store/armed_orders.go:181, 2026-09-03)
+                // and the armed placement path handed that value straight to the
+                // wire. Go now folds before it sends; this folds again on
+                // arrival, because a ternary whose UNKNOWN branch opens a
+                // position in the opposite direction must not be the last line
+                // of defence. The same file already does this at the
+                // close-position handler (string.Equals + OrdinalIgnoreCase).
+                bool isLongSide = string.Equals(side, "long", StringComparison.OrdinalIgnoreCase);
+                var entryAction = isLongSide ? OrderAction.Buy : OrderAction.SellShort;
+                var exitAction  = isLongSide ? OrderAction.Sell : OrderAction.BuyToCover;
 
                 // PHASE 2 armed orders — a "limit" signal places a RESTING limit
                 // entry (fills fire OnOrderUpdate exactly like market entries;
@@ -1022,6 +1034,13 @@ namespace NinjaTrader.NinjaScript.AddOns
                         + " " + side + " " + qty + " " + symbol
                         + " action=" + entryAction + " type=" + orderT
                         + " limitPrice=" + limitArg + " stopPrice=" + stopArg
+                        // A MARKET entry has 0 in BOTH price slots by
+                        // construction, so the four argument fields alone would
+                        // name no price at all on the path that carries almost
+                        // every live entry. Keep the reference entry for that
+                        // case only — it is not an argument to CreateOrder and
+                        // must not read as one.
+                        + (isLimit || isStopEntry ? "" : " entry~=" + entry)
                         + " (SL=" + sl + " TP=" + tp + " on fill)");
             }
             catch (Exception ex)

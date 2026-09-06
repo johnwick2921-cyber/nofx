@@ -3,6 +3,7 @@ package ninjatrader
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net"
 	"path/filepath"
 	"strings"
@@ -253,6 +254,15 @@ func TestStopEntryRefusedOnPreStopSlotBuild(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "build_id="+ntwire.FarSideBuildE7) {
 		t.Fatalf("refusal must name the received build id: %v", err)
+	}
+	// THE SENTINEL IS THE CONTRACT, not the prose. armed_executor.go branches on
+	// errors.Is(perr, ntwire.ErrAddonBuildTooOld) to count a build refusal apart
+	// from a transport failure and to dedupe it; a %v instead of %w in the wrap
+	// silently drops the whole counting path and leaves every armed leg
+	// re-logging every cycle for the entire go-first window, with
+	// /api/risk/gate-blocks reading zero.
+	if !errors.Is(err, ntwire.ErrAddonBuildTooOld) {
+		t.Fatalf("the refusal does not wrap ErrAddonBuildTooOld — the caller cannot count it: %v", err)
 	}
 	select {
 	case p := <-frames:
