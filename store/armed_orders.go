@@ -74,9 +74,40 @@ type ArmedOrderDB struct {
 	// still revive in place (PRE-REOPEN F3), because there is nothing to keep.
 	PlacementSeq int `gorm:"default:0"`
 
+	// ── CANCEL LIFECYCLE (cancel-confirmation, 2026-09-06) ──────────────────
+	//
+	// A cancel used to be a RETURN VALUE: nt.CancelOrder put a frame on a
+	// socket, returned nil, and the row was written 'cancelled' on the
+	// strength of it. nt8_order_snapshots id 1664 is what that costs — nine
+	// working orders at the broker against nine rows reading 'cancelled', all
+	// one arm slot. A cancel is now a LIFECYCLE settled by the broker's book.
+	//
+	// 0 on every one of these means "no cancel has been requested for this
+	// row", which is the truth for every historical row. It is not a computed
+	// zero standing in for a measurement.
+	CancelRequestedAtMs int64 `gorm:"default:0"`
+	// CancelAttempts counts REQUESTS SENT, not confirmations. A re-request
+	// bumps it; the confirmation does not.
+	CancelAttempts int `gorm:"default:0"`
+	// CancelSettledSnapshotID is the nt8_order_snapshots id whose book no
+	// longer listed the order — the evidence the cancel actually happened.
+	// 0 on a row that reached 'cancelled' any other way, which is every row
+	// written before this wave.
+	CancelSettledSnapshotID int64 `gorm:"default:0"`
+
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
+
+// Arm ledger states. cancel_pending is NON-TERMINAL by design: while a cancel
+// is in flight the order may still be resting at the broker, so the slot is not
+// free and nothing may replace it.
+const (
+	StateArmed         = "armed"
+	StateWorking       = "working"
+	StateCancelPending = "cancel_pending"
+	StateCancelled     = "cancelled"
+)
 
 // TableName is the armed_orders table (spec name).
 func (ArmedOrderDB) TableName() string { return "armed_orders" }
@@ -137,6 +168,12 @@ func (s *ArmedOrderStore) Migrate() error {
 			// under. 0 on legacy rows; UpsertArm adopts their current version
 			// once, so the table self-heals without a guessing migration.
 			{"armed_under_version", "INTEGER NOT NULL DEFAULT 0"},
+			// CANCEL LIFECYCLE (cancel-confirmation 2026-09-06). 0 means "no
+			// cancel has been requested for this row", which is the truth for
+			// every historical row — not an uncomputed value dressed as data.
+			{"cancel_requested_at_ms", "INTEGER NOT NULL DEFAULT 0"},
+			{"cancel_attempts", "INTEGER NOT NULL DEFAULT 0"},
+			{"cancel_settled_snapshot_id", "INTEGER NOT NULL DEFAULT 0"},
 		} {
 			var n int64
 			if err := s.db.Raw("SELECT COUNT(*) FROM pragma_table_info('armed_orders') WHERE name = ?", col.name).Scan(&n).Error; err != nil {
@@ -196,22 +233,36 @@ func (s *ArmedOrderStore) UpsertArm(row *ArmedOrderDB) error {
 	// cutover gate's leg 4 to "broker 1 vs ledger 23 — MISMATCH". The
 	// record-keeping law was right; the row it was applied to was wrong.
 	err := s.db.Where("plan_id = ? AND scenario = ? AND leg_index = ?", row.PlanID, row.Scenario, row.LegIndex).
-		Order("CASE WHEN state IN ('armed','working') THEN 0 ELSE 1 END, placement_seq DESC, id DESC").First(&existing).Error
+		Order("CASE WHEN state IN ('armed','working','cancel_pending') THEN 0 ELSE 1 END, placement_seq DESC, id DESC").First(&existing).Error
 	if err == nil {
 		// D5 — a WORKING row is a LIVE BROKER ORDER. Rewriting its prices in
 		// place overwrote the slot and lost the brackets (rows 582, 585): the
 		// ledger and the broker then held two different orders under one id.
 		// Replacing a live order requires a cancel, and the store cannot issue
 		// one, so it declines rather than diverge.
-		if existing.State == "working" {
+		if existing.State == StateWorking {
 			return fmt.Errorf("armed_orders: refusing to rewrite %s/%s — the row is working (a live broker order, signal %q); replace requires cancel first",
+				row.PlanID, row.Scenario, existing.SignalID)
+		}
+		// CANCEL-CONFIRMATION (2026-09-06) — A CANCEL IN FLIGHT IS STILL A LIVE
+		// BROKER ORDER. Until a fresh snapshot says the order is gone, nobody
+		// can prove it is, so this row may neither be rewritten in place nor
+		// used as the predecessor of a new placement.
+		//
+		// Without this branch the row falls through to the mint below (it is
+		// not 'armed' and it has a signal id), which would create a fresh
+		// 'armed' row with the signal id cleared — and the executor would place
+		// a SECOND order while the first may still be resting. That is the
+		// stacking of 2026-09-04 arriving by a new road.
+		if existing.State == StateCancelPending {
+			return fmt.Errorf("armed_orders: refusing to rewrite %s/%s — a cancel is in flight for signal %q and is not yet confirmed by the broker's book; the slot is not free",
 				row.PlanID, row.Scenario, existing.SignalID)
 		}
 		// A TERMINAL row that reached the broker keeps its record forever; the
 		// new authorization becomes the NEXT placement rather than erasing it.
 		// A row that never reached the broker has nothing to keep and still
 		// revives in place (PRE-REOPEN F3).
-		if existing.State != "armed" && strings.TrimSpace(existing.SignalID) != "" {
+		if existing.State != StateArmed && strings.TrimSpace(existing.SignalID) != "" {
 			var maxSeq int
 			s.db.Model(&ArmedOrderDB{}).
 				Where("plan_id = ? AND scenario = ? AND leg_index = ?", row.PlanID, row.Scenario, row.LegIndex).
@@ -311,7 +362,13 @@ func (s *ArmedOrderStore) UpsertArm(row *ArmedOrderDB) error {
 // trader boundaries the moment more than one trader runs.
 func (s *ArmedOrderStore) ListNonTerminal(traderID string) ([]ArmedOrderDB, error) {
 	var out []ArmedOrderDB
-	err := s.db.Where("trader_id = ? AND state IN ('armed','working')", traderID).Order("id").Find(&out).Error
+	// cancel_pending is NON-TERMINAL (cancel-confirmation 2026-09-06): a cancel
+	// that has been REQUESTED but not CONFIRMED still has an order at the
+	// broker as far as anyone can prove, so it holds its slot, it is swept at
+	// boot like any live row, and cutover leg 4 counts it — which is what makes
+	// leg 4 agree with the broker instead of with our intentions.
+	err := s.db.Where("trader_id = ? AND state IN (?,?,?)", traderID, StateArmed, StateWorking, StateCancelPending).
+		Order("id").Find(&out).Error
 	return out, err
 }
 
@@ -320,6 +377,81 @@ func (s *ArmedOrderStore) ListNonTerminal(traderID string) ([]ArmedOrderDB, erro
 func (s *ArmedOrderStore) SetState(id int64, state, reason string) error {
 	return s.db.Model(&ArmedOrderDB{}).Where("id = ?", id).
 		Updates(map[string]any{"state": state, "state_reason": reason}).Error
+}
+
+// RequestCancel moves a row to cancel_pending and records that a cancel was
+// SENT. It never writes 'cancelled': that word now means the broker's book
+// stopped listing the order, and only ConfirmCancel may say it.
+//
+// Idempotent on the timestamp — a re-request bumps the attempt count and leaves
+// the original request time, so the age in the timeout WARN is the age of the
+// FIRST attempt, which is the number that matters.
+func (s *ArmedOrderStore) RequestCancel(id int64, reason string, nowMs int64) error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	var row ArmedOrderDB
+	if err := s.db.First(&row, id).Error; err != nil {
+		return err
+	}
+	upd := map[string]any{
+		"state":           StateCancelPending,
+		"state_reason":    reason,
+		"cancel_attempts": row.CancelAttempts + 1,
+	}
+	if row.CancelRequestedAtMs == 0 {
+		upd["cancel_requested_at_ms"] = nowMs
+	}
+	return s.db.Model(&ArmedOrderDB{}).Where("id = ?", id).Updates(upd).Error
+}
+
+// ConfirmCancel is the ONLY way a row becomes 'cancelled' through the cancel
+// path, and it requires the id of the snapshot whose book no longer listed the
+// order. A caller with no snapshot cannot call it — which is the point.
+func (s *ArmedOrderStore) ConfirmCancel(id int64, snapshotID int64, reason string) error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	return s.db.Model(&ArmedOrderDB{}).Where("id = ?", id).Updates(map[string]any{
+		"state":                      StateCancelled,
+		"state_reason":               reason,
+		"cancel_settled_snapshot_id": snapshotID,
+	}).Error
+}
+
+// ListCancelPending returns this trader's rows awaiting confirmation, oldest
+// request first — the work list for the confirmation pass.
+func (s *ArmedOrderStore) ListCancelPending(traderID string) ([]ArmedOrderDB, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	var out []ArmedOrderDB
+	err := s.db.Where("trader_id = ? AND state = ?", traderID, StateCancelPending).
+		Order("cancel_requested_at_ms ASC, id ASC").Find(&out).Error
+	return out, err
+}
+
+// CountCancelPending is the boot line's figure — READ, never a literal (A11).
+func (s *ArmedOrderStore) CountCancelPending() int64 {
+	if s == nil || s.db == nil {
+		return 0
+	}
+	var n int64
+	_ = s.db.Model(&ArmedOrderDB{}).Where("state = ?", StateCancelPending).Count(&n).Error
+	return n
+}
+
+// CountCancelUnconfirmed counts pending rows whose first request is older than
+// olderThanMs — the ones that have already missed their window.
+func (s *ArmedOrderStore) CountCancelUnconfirmed(nowMs, timeoutMs int64) int64 {
+	if s == nil || s.db == nil {
+		return 0
+	}
+	var n int64
+	_ = s.db.Model(&ArmedOrderDB{}).
+		Where("state = ? AND cancel_requested_at_ms > 0 AND cancel_requested_at_ms < ?",
+			StateCancelPending, nowMs-timeoutMs).Count(&n).Error
+	return n
 }
 
 // SetFillPrice records the actual fill price on a FILLED row (PRE-SUNDAY F2 —

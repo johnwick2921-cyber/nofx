@@ -1,11 +1,16 @@
 package trader
 
 import (
+	"encoding/json"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
 	nt "nofx/provider/ninjatrader"
+	"nofx/store"
+	"nofx/telemetry"
 )
 
 // ── CANCEL-CONFIRMATION (2026-09-06) ─────────────────────────────────────────
@@ -180,4 +185,231 @@ func shortID(s string) string {
 		return s[:8]
 	}
 	return s
+}
+
+// ── READING THE BOOK ─────────────────────────────────────────────────────────
+//
+// TWO READERS, DELIBERATELY DIFFERENT, because the two decisions have opposite
+// failure costs.
+//
+//   the SLOT GUARD may read the in-memory cache. Refusing every placement
+//   because a forensics INSERT failed would be a trading outage caused by a
+//   logging bug, and main.go says so in its own words at the sink: "Forensics
+//   are worth having and never worth a frame."
+//
+//   CONFIRMING A CANCEL requires a PERSISTED snapshot id. 'cancelled' is the
+//   word that unlocks a replacement, so the evidence for it must still be
+//   citable tomorrow. If the snapshots table is not being written, cancels
+//   simply do not confirm — they stay pending and say so, loudly, which is the
+//   correct failure mode (D2) rather than a silent promotion.
+
+// snapshotMaxAge is the resolved staleness bound: leg 4's own multiple of the
+// resolved snapshot interval. ONE definition of stale, reused (A24).
+func snapshotMaxAge() time.Duration { return 2 * OrderSnapshotInterval() }
+
+// cancelConfirmTimeout is how long a requested cancel may go unconfirmed before
+// it is called out and re-requested. [I] PROVISIONAL — owner-set default,
+// resolved from the environment so it can be moved without a build.
+func cancelConfirmTimeout() time.Duration {
+	if v := strings.TrimSpace(os.Getenv("CANCEL_CONFIRM_TIMEOUT_S")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return time.Duration(n) * time.Second
+		}
+	}
+	return 90 * time.Second
+}
+
+// cancelReRequestMax bounds re-requests so a broker that never answers cannot
+// make us send forever.
+func cancelReRequestMax() int {
+	if v := strings.TrimSpace(os.Getenv("CANCEL_REREQUEST_MAX")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return 5
+}
+
+// liveBook returns the freshest book this process can see for the slot guard,
+// preferring the in-memory cache the cutover gate reads.
+func (at *AutoTrader) liveBook(now time.Time) (orders []nt.NT8Order, haveBook bool, age time.Duration) {
+	cache, account, _ := at.brokerBook()
+	if cache == nil {
+		return nil, false, 0
+	}
+	snap, ok := cache.Latest(account)
+	if !ok {
+		return nil, false, 0
+	}
+	if a, ok2 := cache.AgeAt(account, now); ok2 {
+		age = a
+	}
+	return snap.Orders, true, age
+}
+
+// persistedBook returns the freshest PERSISTED snapshot — the one that carries
+// an id a later reader can check. Used only where the evidence must survive.
+func (at *AutoTrader) persistedBook(now time.Time) (orders []nt.NT8Order, haveBook bool, age time.Duration, snapshotID int64) {
+	if at == nil || at.store == nil {
+		return nil, false, 0, 0
+	}
+	_, account, _ := at.brokerBook()
+	// symbol is deliberately empty: the writer (main.go) never sets it, so every
+	// stored row carries symbol='' and a symbol-scoped lookup would find nothing.
+	row, err := at.store.NT8OrderSnapshots().Latest(account, "")
+	if err != nil || row == nil {
+		return nil, false, 0, 0
+	}
+	var book []nt.NT8Order
+	if err := json.Unmarshal([]byte(row.OrdersJSON), &book); err != nil {
+		at.logWarnf("🧾 cancel: snapshot %d has unreadable orders_json — settling nothing from it: %v", row.ID, err)
+		return nil, false, 0, row.ID
+	}
+	if row.ReceivedMs > 0 {
+		age = time.Duration(now.UnixMilli()-row.ReceivedMs) * time.Millisecond
+	}
+	return book, true, age, row.ID
+}
+
+// slotSignalIDs collects every signal id this arm slot has ever been given.
+//
+// THE SLOT KEY IS (plan_id, scenario, leg_index) — the same key the DB's unique
+// index and UpsertArm's own lookup use. VERSION IS NOT IN IT: armed_orders.Version
+// is documented at store/armed_orders.go:25-28 as the LAST version that touched
+// the row, not the one it was armed under, so keying on it would split one slot
+// into several and let a re-authorized slot place beside its own live order.
+//
+// Side is not in it either. Twenty-two rows shared this key on 2026-09-04 and
+// twenty of them reached the broker; the guard must ask about all of their
+// signals, not only the row it is about to place.
+func slotSignalIDs(rows []store.ArmedOrderDB, r store.ArmedOrderDB) []string {
+	out := make([]string, 0, 4)
+	seen := map[string]bool{}
+	add := func(s string) {
+		s = strings.TrimSpace(s)
+		if s != "" && !seen[s] {
+			seen[s] = true
+			out = append(out, s)
+		}
+	}
+	add(r.SignalID)
+	for i := range rows {
+		o := rows[i]
+		if o.TraderID == r.TraderID && o.PlanID == r.PlanID && o.Scenario == r.Scenario &&
+			o.LegIndex == r.LegIndex {
+			add(o.SignalID)
+		}
+	}
+	return out
+}
+
+// ── THE TWO PRODUCTION ENTRY POINTS ──────────────────────────────────────────
+
+// armSlotGuard is D3: before ANY placement for an arm slot, the broker's fresh
+// book must show ZERO non-terminal orders carrying that slot's signal ids.
+// A live order refuses. A book we cannot see ALSO refuses.
+//
+// This is the wave's only new reject, and it is owner-ruled.
+func (at *AutoTrader) armSlotGuard(ledgerRows []store.ArmedOrderDB, r store.ArmedOrderDB, now time.Time) slotVerdict {
+	sigs := slotSignalIDs(ledgerRows, r)
+	if len(sigs) == 0 {
+		// A slot that has never been given a signal id cannot have an order at
+		// the broker under any name we could match. That is a genuinely free
+		// slot, not an unverifiable one — and refusing it would deadlock the
+		// very first placement of every arm.
+		return slotVerdict{Action: slotFree, Why: "slot has never been placed (no signal id to look for)"}
+	}
+	book, have, age := at.liveBook(now)
+	_, _, _, snapID := at.persistedBook(now)
+	v := adjudicateSlot(book, have, age, snapshotMaxAge(), snapID, sigs)
+	return v
+}
+
+// refuseSlot logs and counts a D3 refusal. Deduped per slot+class so a refusal
+// that persists for many cycles is stated once per distinct condition, not once
+// per cycle (the armRefusalChanged pattern this file reuses rather than
+// reinvents).
+func (at *AutoTrader) refuseSlot(r store.ArmedOrderDB, v slotVerdict, what string) {
+	class := "slot_live_at_broker"
+	if v.Action == slotUnverifiable {
+		class = "slot_unverifiable"
+	}
+	key := r.PlanID + ":" + strconv.Itoa(r.Version) + ":" + r.Scenario + ":leg" +
+		strconv.Itoa(r.LegIndex+1) + ":slotguard"
+	if armRefusalChanged(&at.armRefusalLast, key, class) {
+		telemetry.IncGateBlock(at.id, "arm_"+class)
+		at.logWarnf("🧾 armed %s %s REFUSED — %s", r.Scenario, what, v.Refusal())
+	}
+}
+
+// confirmPendingCancels is the per-cycle settlement pass (D1/D2). It is the
+// ONLY place a cancel becomes 'cancelled' through the cancel path.
+//
+// A10/class 23: it is telemetry-shaped — a failed read WARNs and returns; it
+// never stops the loop and never promotes a row on ignorance.
+func (at *AutoTrader) confirmPendingCancels(ledger *store.ArmedOrderStore, cancelFn func(string) error, now time.Time) (settled, stillPending, reRequested int) {
+	if at == nil || ledger == nil {
+		return 0, 0, 0
+	}
+	rows, err := ledger.ListCancelPending(at.id)
+	if err != nil {
+		at.logWarnf("🧾 cancel confirm: ledger read failed — settling nothing this cycle: %v", err)
+		return 0, 0, 0
+	}
+	if len(rows) == 0 {
+		return 0, 0, 0
+	}
+	// The EVIDENCE reader: confirming requires a persisted snapshot id.
+	book, have, age, snapID := at.persistedBook(now)
+	maxAge := snapshotMaxAge()
+	timeout := cancelConfirmTimeout()
+	cap := cancelReRequestMax()
+
+	for i := range rows {
+		r := rows[i]
+		ok, why := cancelSettled(book, have, age, maxAge, r.SignalID)
+		if ok && snapID > 0 {
+			if err := ledger.ConfirmCancel(r.ID, snapID, "cancel confirmed: "+why); err != nil {
+				at.logWarnf("🧾 cancel confirm: ledger write failed for %s: %v", r.Scenario, err)
+				continue
+			}
+			settled++
+			at.logInfof("🧾 cancel CONFIRMED %s signal=%s — %s (snapshot %d, book age %s, attempts %d)",
+				r.Scenario, shortID(r.SignalID), why, snapID, age.Round(time.Second), r.CancelAttempts)
+			continue
+		}
+		stillPending++
+		// A9 — every unconfirmed cancel says so, with its age and its reason.
+		reqAge := time.Duration(0)
+		if r.CancelRequestedAtMs > 0 {
+			reqAge = time.Duration(now.UnixMilli()-r.CancelRequestedAtMs) * time.Millisecond
+		}
+		if reqAge < timeout {
+			continue // still inside its window; nothing to say yet
+		}
+		telemetry.IncGateBlock(at.id, "cancel_unconfirmed")
+		if r.CancelAttempts >= cap {
+			at.logWarnf("🧾 cancel UNCONFIRMED %s signal=%s after %s and %d attempt(s) — attempt cap reached, NOT re-requesting and NOT promoting to cancelled (%s)",
+				r.Scenario, shortID(r.SignalID), reqAge.Round(time.Second), r.CancelAttempts, why)
+			continue
+		}
+		if cancelFn == nil {
+			at.logWarnf("🧾 cancel UNCONFIRMED %s signal=%s after %s — no wire to re-request on (%s)",
+				r.Scenario, shortID(r.SignalID), reqAge.Round(time.Second), why)
+			continue
+		}
+		if cerr := cancelFn(r.SignalID); cerr != nil {
+			at.logWarnf("🧾 cancel re-request SEND FAILED %s signal=%s: %v", r.Scenario, shortID(r.SignalID), cerr)
+		}
+		// The re-request is recorded whether or not the SEND returned nil —
+		// because the send is not the point.
+		if err := ledger.RequestCancel(r.ID, "re-requested after "+reqAge.Round(time.Second).String()+" unconfirmed", now.UnixMilli()); err != nil {
+			at.logWarnf("🧾 cancel re-request: ledger write failed for %s: %v", r.Scenario, err)
+			continue
+		}
+		reRequested++
+		at.logWarnf("🧾 cancel UNCONFIRMED %s signal=%s after %s (%s) — re-requested, attempt %d of %d; the row stays %s",
+			r.Scenario, shortID(r.SignalID), reqAge.Round(time.Second), why, r.CancelAttempts+1, cap, store.StateCancelPending)
+	}
+	return settled, stillPending, reRequested
 }

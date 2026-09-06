@@ -81,6 +81,12 @@ func (f *fakeLedger) SetSignal(id int64, signalID string) error {
 var _ stopEntryPlacer = (*ntTrader.TCPTrader)(nil)
 var _ armStateWriter = (*store.ArmedOrderStore)(nil)
 
+// freeSlot is the cancel-confirmation guard verdict these Wave B cases run
+// under: the slot is empty at the broker, so the stop-side guard remains the
+// thing under test. TestStopEntryRefusedWhenSlotIsLiveAtTheBroker covers the
+// other verdict.
+func freeSlot() slotVerdict { return slotVerdict{Action: slotFree, Why: "test: slot free"} }
+
 const testTick = 0.25
 
 func testOffset() float64 { return 2 * testTick } // STOP_ENTRY_OFFSET_TICKS default
@@ -205,7 +211,7 @@ func TestPlaceOneStopEntryDispatch(t *testing.T) {
 		pl, led := &fakePlacer{}, &fakeLedger{}
 		r := armRow(38, "SHORT", 29591.02)
 		d := decideStopEntry(r.Side, r.EntryPx, testOffset(), testTick, 29515.25)
-		at.placeOneStopEntry(pl, led, r, d, 29515.25, now)
+		at.placeOneStopEntry(pl, led, r, d, 29515.25, now, freeSlot())
 		if len(pl.calls) != 0 {
 			t.Fatalf("an already-through stop reached the wire: %+v", pl.calls)
 		}
@@ -223,7 +229,7 @@ func TestPlaceOneStopEntryDispatch(t *testing.T) {
 		pl, led := &fakePlacer{sid: "sig-1"}, &fakeLedger{}
 		r := armRow(200, "LONG", 29610.00) // the STORED casing
 		d := decideStopEntry(r.Side, r.EntryPx, testOffset(), testTick, 29590.25)
-		at.placeOneStopEntry(pl, led, r, d, 29590.25, now)
+		at.placeOneStopEntry(pl, led, r, d, 29590.25, now, freeSlot())
 		if len(pl.calls) != 1 {
 			t.Fatalf("want exactly one placement, got %d", len(pl.calls))
 		}
@@ -263,7 +269,7 @@ func TestPlaceOneStopEntryDispatch(t *testing.T) {
 			pl, led := &fakePlacer{}, &fakeLedger{}
 			r := armRow(300, c.side, c.entry)
 			d := decideStopEntry(r.Side, r.EntryPx, testOffset(), testTick, c.price)
-			at.placeOneStopEntry(pl, led, r, d, c.price, now)
+			at.placeOneStopEntry(pl, led, r, d, c.price, now, freeSlot())
 			if len(pl.calls) != 0 {
 				t.Errorf("%s: an unadjudicated arm reached the wire: %+v", c.name, pl.calls)
 			}
@@ -282,7 +288,7 @@ func TestPlaceOneStopEntryDispatch(t *testing.T) {
 		if d.Action != stopEntryPlace {
 			t.Fatalf("fixture no longer reaches the wire: %v (%s)", d.Action, d.Why)
 		}
-		at.placeOneStopEntry(pl, led, r, d, 29650.00, now)
+		at.placeOneStopEntry(pl, led, r, d, 29650.00, now, freeSlot())
 		if len(pl.calls) != 1 {
 			t.Fatalf("the refusal must happen AT the wire call, got %d calls", len(pl.calls))
 		}
@@ -297,7 +303,7 @@ func TestPlaceOneStopEntryDispatch(t *testing.T) {
 		led := &fakeLedger{}
 		r := armRow(500, "SHORT", 29591.02)
 		d := decideStopEntry(r.Side, r.EntryPx, testOffset(), testTick, 29650.00)
-		at.placeOneStopEntry(pl, led, r, d, 29650.00, now)
+		at.placeOneStopEntry(pl, led, r, d, 29650.00, now, freeSlot())
 		if len(led.states) != 0 {
 			t.Fatalf("a failed send must not move the ledger: %+v", led.states)
 		}
@@ -323,7 +329,7 @@ func TestPlacementRefusalKeyCannotAliasTheArmGate(t *testing.T) {
 		r.LegIndex = legIndex
 		before := len(at.armRefusalLast)
 		d := decideStopEntry(r.Side, r.EntryPx, testOffset(), testTick, 0) // unknown → keyed refusal
-		at.placeOneStopEntry(pl, led, r, d, 0, time.Now())
+		at.placeOneStopEntry(pl, led, r, d, 0, time.Now(), freeSlot())
 		if len(at.armRefusalLast) != before+1 {
 			t.Fatalf("leg %d: the refusal was not keyed (before=%d after=%d)", legIndex, before, len(at.armRefusalLast))
 		}

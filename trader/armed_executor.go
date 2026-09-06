@@ -950,7 +950,7 @@ func (at *AutoTrader) runArmedPlacement(bars []market.Kline, sinceMs int64) {
 				// verdict, action — is ONE pure value so a test can drive it with
 				// the casing the STORE actually hands back (class 77).
 				d := decideStopEntry(side, r.EntryPx, float64(stopEntryOffsetTicks())*tick, tick, price)
-				at.placeOneStopEntry(nt, ledger, r, d, price, now)
+				at.placeOneStopEntry(nt, ledger, r, d, price, now, at.armSlotGuard(rows, r, now))
 				continue
 			}
 			if price > 0 && limitMarketableWrongSide(price, r.EntryPx, side) {
@@ -963,6 +963,14 @@ func (at *AutoTrader) runArmedPlacement(bars []market.Kline, sinceMs int64) {
 				continue
 			}
 			if price > 0 && math.Abs(price-r.EntryPx) <= band {
+				// D3 — the SAME per-slot invariant the stop path enforces. A
+				// guard on one placement path is not a guard: this is the other
+				// route to the wire, and the nine-order incident came through a
+				// slot that could be placed into repeatedly.
+				if g := at.armSlotGuard(rows, r, now); !g.Allowed() {
+					at.refuseSlot(r, g, "limit")
+					continue
+				}
 				sid, perr := nt.PlaceLimitEntry(at.futuresSymbol(), side, 1, r.EntryPx, r.StopPx, r.TargetPx)
 				if perr != nil {
 					at.logWarnf("📌 armed place failed %s: %v", r.Scenario, perr)
@@ -1194,7 +1202,7 @@ type armStateWriter interface {
 // placeOneStopEntry executes ONE adjudicated stop-entry arm, and is the only
 // path from an armed stop-entry row to the wire. A9: every line names the order
 // type, the trigger, the side and WHICH guard reached the verdict.
-func (at *AutoTrader) placeOneStopEntry(pl stopEntryPlacer, ledger armStateWriter, r store.ArmedOrderDB, d stopEntryDecision, price float64, now time.Time) {
+func (at *AutoTrader) placeOneStopEntry(pl stopEntryPlacer, ledger armStateWriter, r store.ArmedOrderDB, d stopEntryDecision, price float64, now time.Time, guard slotVerdict) {
 	// THE PLACEMENT KEYSPACE IS NAMED AND 1-BASED. Every other writer into
 	// at.armRefusalLast keys the same leg as strconv.Itoa(li+1) (:455, :498,
 	// :525, :579); a 0-based key here was byte-identical to the ARM-GATE key for
@@ -1221,6 +1229,20 @@ func (at *AutoTrader) placeOneStopEntry(pl stopEntryPlacer, ledger armStateWrite
 			at.logWarnf("⚠️ armed %s stop-entry NOT adjudicated [guard=stop-side verdict=%s action=%s] %s stop-market trigger=%.2f — %s%s",
 				r.Scenario, d.Verdict, d.Action, strings.ToUpper(d.Side), d.Trigger, d.Why, shown)
 		}
+		return
+	}
+	// D3 — THE PER-SLOT INVARIANT. The broker's fresh book must show ZERO
+	// non-terminal orders for this slot before anything else is sent to it.
+	// A live order refuses; a book we cannot see ALSO refuses, because an
+	// unverifiable slot is not an empty slot. This is a REFUSAL, never a
+	// cancellation: the arm stays exactly as it is and the next cycle asks
+	// again once the book clears.
+	//
+	// Snapshot 1664 is why: nine live stop orders for one arm slot against nine
+	// ledger rows reading 'cancelled'. They were inert only because the order
+	// was malformed — which Wave B has now fixed.
+	if !guard.Allowed() {
+		at.refuseSlot(r, guard, "stop-entry")
 		return
 	}
 	sid, perr := pl.PlaceStopEntry(at.futuresSymbol(), d.Side, 1, d.Trigger, r.StopPx, r.TargetPx)
