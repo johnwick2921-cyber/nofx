@@ -36,7 +36,9 @@ func IsCMEOpen(t time.Time) bool {
 		if !st.HasClose {
 			return false
 		}
-		return weeklyCMEOpen(ct) && ct.Before(st.Close)
+		// Halted from the stated close until the ordinary daily reopen — the
+		// EVENING session belongs to the next trading day and still runs.
+		return weeklyCMEOpen(ct) && !shortenedDayHalted(ct, st.Close)
 	}
 	return weeklyCMEOpen(ct)
 }
@@ -61,7 +63,7 @@ func CMEClosedReason(t time.Time) (closed bool, reason string) {
 		}
 		return true, "holiday"
 	case SessionShortened:
-		if st.HasClose && !ct.Before(st.Close) {
+		if st.HasClose && shortenedDayHalted(ct, st.Close) {
 			return true, "early close " + st.Close.Format("15:04") + " CT"
 		}
 	}

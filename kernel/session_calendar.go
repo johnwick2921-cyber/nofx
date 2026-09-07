@@ -400,3 +400,26 @@ func sourceTag(src string) string {
 	}
 	return "unsourced"
 }
+
+// globexDailyReopenHourCT is the hour the ordinary daily break ends — the same
+// boundary weeklyCMEOpen already encodes for Sunday's reopen and the Mon-Thu
+// 16:00-17:00 break. Named here so the shortened-day rule reuses the weekly
+// rule's own boundary instead of introducing a second session-time literal.
+const globexDailyReopenHourCT = 17
+
+// shortenedDayHalted reports whether ct falls in a shortened day's HALT: from
+// its stated early close until the ordinary daily reopen.
+//
+// A SHORTENED DAY IS NOT A CLOSED DAY, and it is not shut until midnight either.
+// CME's own wording for 2026-09-07 is "equity futures halt 12:00 CT, reopen
+// 17:00 CT" — the evening session belongs to the next trading day and must run.
+// Treating the whole calendar date as closed would have skipped tonight's ASIA
+// session, which is the same class of loss this calendar exists to prevent, one
+// layer down.
+//
+// Going FLAT at the early close is a different mechanism and already wired: it
+// is EffectiveFlatCT / the EOD-flat path, the same discipline as 14:45 at an
+// earlier time. This function governs only whether the MARKET is open.
+func shortenedDayHalted(ct time.Time, close time.Time) bool {
+	return !ct.Before(close) && ct.Hour() < globexDailyReopenHourCT
+}

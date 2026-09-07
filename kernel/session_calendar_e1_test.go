@@ -69,3 +69,34 @@ func TestE1_ReasonMirrorsOpenOnAShortenedDay(t *testing.T) {
 		}
 	}
 }
+
+// E1.d — THE EVENING REOPEN. A shortened day halts at its stated close and
+// REOPENS at the ordinary daily boundary; the evening belongs to the next
+// trading day. CME's own wording for 2026-09-07 is "equity futures halt 12:00
+// CT, reopen 17:00 CT".
+//
+// Without this the whole calendar date stayed shut and tonight's ASIA session
+// was skipped — the same loss this calendar exists to prevent, one layer down.
+// Found at cutover, by reading the source line the fold had carried over.
+func TestE1_ShortenedDayReopensInTheEvening(t *testing.T) {
+	for _, c := range []struct {
+		h    int
+		open bool
+		why  string
+	}{
+		{11, true, "before the early close"},
+		{12, false, "the early close itself"},
+		{16, false, "still halted"},
+		{17, true, "the ordinary daily reopen"},
+		{22, true, "the evening session runs"},
+	} {
+		now := laborDayAt(c.h, 0)
+		if got := IsCMEOpen(now); got != c.open {
+			t.Errorf("E1.d: %02d:00 CT (%s) open=%v, want %v", c.h, c.why, got, c.open)
+		}
+	}
+	// And the reason names the early close during the halt, not "holiday".
+	if _, r := CMEClosedReason(laborDayAt(14, 0)); r != "early close 12:00 CT" {
+		t.Errorf("E1.d: halt reason = %q, want \"early close 12:00 CT\"", r)
+	}
+}
