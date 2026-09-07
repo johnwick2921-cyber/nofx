@@ -80,6 +80,22 @@ func applyBrokerTerms(row *store.AcceptedRisk, orders []nt.NT8Order, signalID st
 		if !strings.HasPrefix(o.Name, signalID) {
 			continue
 		}
+		// FIX 4 (2026-09-07) — A DYING ORDER IS NOT AN ACCEPTED ONE.
+		//
+		// CancelPending and CancelSubmitted are non-terminal (they still count
+		// as WORKING for the slot guard, correctly — a cancel in flight may
+		// still fail). But they are on their way OUT, and recording their
+		// prices as "what the broker accepted" writes a protection that is
+		// already being withdrawn.
+		//
+		// accepted_risk ids 9 and 10 are exactly that: they recorded
+		// stop=29554 / target=29623 at 23:37:02 from snapshot 8209/8212, where
+		// the -sl read CancelPending and the -tp read CancelSubmitted. The row
+		// said position 592 was protected at 29554; the book was already
+		// cancelling that protection, and 8214 held nothing at all.
+		if isCancelInFlight(o.State) {
+			continue
+		}
 		switch {
 		case strings.HasSuffix(strings.ToLower(o.Name), "-sl"):
 			if o.StopPrice > 0 {
@@ -102,6 +118,17 @@ func applyBrokerTerms(row *store.AcceptedRisk, orders []nt.NT8Order, signalID st
 			}
 		}
 	}
+}
+
+// isCancelInFlight reports whether the broker is already withdrawing this
+// order. Measured across the live book: CancelSubmitted and CancelPending are
+// the two states NT8 uses (130 and 22 occurrences across 360 frames).
+func isCancelInFlight(state string) bool {
+	switch strings.ToLower(strings.TrimSpace(state)) {
+	case "cancelpending", "cancelsubmitted", "cancel_pending", "cancel_submitted":
+		return true
+	}
+	return false
 }
 
 // entryPriceOf is the price the entry order rests at: a stop's trigger,

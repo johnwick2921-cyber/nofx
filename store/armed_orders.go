@@ -107,6 +107,10 @@ const (
 	StateWorking       = "working"
 	StateCancelPending = "cancel_pending"
 	StateCancelled     = "cancelled"
+	// StateFilled — the entry became a position. A filled arm is NEVER
+	// cancelled: the only orders left under its signal are its protections
+	// (2026-09-06 23:37:02, position 592).
+	StateFilled = "filled"
 )
 
 // TableName is the armed_orders table (spec name).
