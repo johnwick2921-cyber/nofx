@@ -93,7 +93,23 @@ func applyBrokerTerms(row *store.AcceptedRisk, orders []nt.NT8Order, signalID st
 		// the -sl read CancelPending and the -tp read CancelSubmitted. The row
 		// said position 592 was protected at 29554; the book was already
 		// cancelling that protection, and 8214 held nothing at all.
-		if isCancelInFlight(o.State) {
+		// D3 (2026-09-07) — ONLY WHAT IS STANDING AT THE EXCHANGE COUNTS.
+		//
+		// This was `if isCancelInFlight(o.State) { continue }`: it caught the
+		// two dying states and let everything else through. Two other classes
+		// slipped past it.
+		//
+		//   TriggerPending — NT8 holds the order on THIS PC. It is not at the
+		//   exchange and will not fire if the machine is down, so its price is
+		//   not a protection the broker has agreed to. The state appeared
+		//   nowhere in this tree before today.
+		//
+		//   Unreadable — a state we could not parse is not evidence. Owner
+		//   ruling 2026-09-07: UNKNOWN takes no branch.
+		//
+		// So the test is now positive: the order must be LIVE AT THE EXCHANGE.
+		// One classifier, in provider/ninjatrader/order_state.go.
+		if !o.IsLiveAtExchange() {
 			continue
 		}
 		switch {
@@ -121,14 +137,11 @@ func applyBrokerTerms(row *store.AcceptedRisk, orders []nt.NT8Order, signalID st
 }
 
 // isCancelInFlight reports whether the broker is already withdrawing this
-// order. Measured across the live book: CancelSubmitted and CancelPending are
-// the two states NT8 uses (130 and 22 occurrences across 360 frames).
+// order. It now delegates to the one shared vocabulary rather than carrying its
+// own copy of the four spellings (A24: no fixture — and no caller — holds its
+// own copy of a constant).
 func isCancelInFlight(state string) bool {
-	switch strings.ToLower(strings.TrimSpace(state)) {
-	case "cancelpending", "cancelsubmitted", "cancel_pending", "cancel_submitted":
-		return true
-	}
-	return false
+	return nt.ClassifyOrderState(state) == nt.LivenessDying
 }
 
 // entryPriceOf is the price the entry order rests at: a stop's trigger,

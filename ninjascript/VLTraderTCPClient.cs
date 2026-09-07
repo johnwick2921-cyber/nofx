@@ -1388,9 +1388,16 @@ namespace NinjaTrader.NinjaScript.AddOns
             // Entry just filled → place the protective SL/TP now that the
             // position exists (deferred from HandleSignal to dodge the OCO
             // cancel-on-entry-fill bug). On rejection, drop the pending bracket.
+            // D2 (2026-09-07) — a PART fill is protected too. The bracket is
+            // placed for whatever has filled so far and amended as more arrives;
+            // waiting for OrderState.Filled left a partially filled position
+            // naked for the width of the remaining fill.
+            if (e.OrderState == OrderState.Filled || e.OrderState == OrderState.PartFilled)
+            {
+                SubmitBracketOnEntryFill(signalId, e.Filled, e.AverageFillPrice);
+            }
             if (e.OrderState == OrderState.Filled)
             {
-                SubmitBracketOnEntryFill(signalId);
                 lock (signalMapLock) { workingEntries.Remove(signalId); } // PHASE 2: resting limit consumed
                 // PHASE 4: record which account now holds this symbol's open position so a
                 // later close flattens the RIGHT account (not the active one). Sourced from
@@ -1662,6 +1669,30 @@ namespace NinjaTrader.NinjaScript.AddOns
                 string signalId = GetString(p, "signal_id");
                 if (string.IsNullOrEmpty(signalId)) { LogWarn("VLTraderTCPClient: cancel_order missing signal_id"); return; }
 
+                // ── D1 (2026-09-07) — A CANCEL TARGETS THE ENTRY. FULL STOP. ──
+                //
+                // This handler used to be a TWO-PART cancel: the resting entry
+                // from workingEntries, and then, unconditionally, the SL and TP
+                // from placedBrackets.
+                //
+                // 2026-09-06 23:37:02 a cancel_order arrived for signal
+                // aa07e583 whose entry had filled ~100 seconds earlier.
+                // workingEntries.Remove had already fired on that fill (see the
+                // Filled branch of OnOrderUpdate), so part one found nothing and
+                // ONLY THE SECOND HALF RAN — cancelling accepted stop 29554 and
+                // working target 29623. Position 592 ran unprotected for 8h19m,
+                // through the Monday open, and the owner flattened it by hand.
+                //
+                // This was never OCO propagation. The entry carries an EMPTY oco
+                // group and the children their own shared "<signal>-exit" id
+                // (SubmitBracketOnEntryFill). Our own code reached across and
+                // killed them.
+                //
+                // OWNER RULING 2026-09-07: cancelling a bracket leg is its own
+                // explicit call, never a side effect of cancelling an entry. The
+                // two places that legitimately retire protection — closing a
+                // position, and the netting-flat sweep — still do so, because
+                // retiring protection is what those handlers ARE.
                 Order working = null;
                 lock (signalMapLock)
                 {
@@ -1670,39 +1701,34 @@ namespace NinjaTrader.NinjaScript.AddOns
                 }
                 if (working != null)
                 {
+                    OrderState wst = OrderState.Unknown;
+                    try { wst = working.OrderState; } catch { }
                     try
                     {
                         var acct = working.Account ?? account;
                         acct.Cancel(new[] { working });
-                        LogInfo("VLTraderTCPClient: cancel_order cancelled resting entry " + signalId);
+                        LogInfo("VLTraderTCPClient: cancel_order cancelled resting ENTRY " + signalId
+                                + " state=" + wst + " source=workingEntries (bracket legs untouched)");
                     }
                     catch (Exception ex)
                     {
-                        LogWarn("VLTraderTCPClient: cancel_order entry Cancel failed: " + ex.Message);
+                        LogWarn("VLTraderTCPClient: cancel_order entry Cancel failed: " + signalId
+                                + " state=" + wst + ": " + ex.Message);
                     }
                 }
-
-                PlacedBracket pb = null;
-                lock (signalMapLock)
+                else
                 {
-                    placedBrackets.TryGetValue(signalId, out pb);
-                    placedBrackets.Remove(signalId);
-                }
-                if (pb != null)
-                {
-                    try
-                    {
-                        var acct = pb.Account ?? account;
-                        var legs = new List<Order>();
-                        if (pb.SlOrder != null) legs.Add(pb.SlOrder);
-                        if (pb.TpOrder != null) legs.Add(pb.TpOrder);
-                        if (legs.Count > 0) acct.Cancel(legs.ToArray());
-                        LogInfo("VLTraderTCPClient: cancel_order cancelled bracket legs for " + signalId);
-                    }
-                    catch (Exception ex)
-                    {
-                        LogWarn("VLTraderTCPClient: cancel_order bracket Cancel failed: " + ex.Message);
-                    }
+                    // NOT AN ERROR, AND NOT A LICENCE. The entry is not resting:
+                    // it filled, or it was already cancelled. Either way there is
+                    // no entry to cancel and the protections are not ours to
+                    // touch from here.
+                    // This handler does not READ placedBrackets either. A read
+                    // is one edit away from a cancel, and the rule is that the
+                    // bracket is not this handler's business at all.
+                    LogInfo("VLTraderTCPClient: cancel_order found NO resting entry for " + signalId
+                            + " source=workingEntries — nothing cancelled (a filled entry's"
+                            + " protections are never cancelled by an entry cancel;"
+                            + " 2026-09-06 23:37:02)");
                 }
                 SendAck("cancel_order");
             }
@@ -1846,8 +1872,39 @@ namespace NinjaTrader.NinjaScript.AddOns
             }
         }
 
-        private void SubmitBracketOnEntryFill(string signalId)
+        // D2 (2026-09-07) — THE BRACKET COVERS WHAT FILLED, SIZED FROM THE EVENT.
+        //
+        // This used to size the pair from the cached PendingBracket captured when
+        // the entry was SUBMITTED. NinjaTrader staff guidance is to update from
+        // the passed-in event parameters rather than a cached mirror or the
+        // return of Submit: ordering across OrderUpdate / ExecutionUpdate /
+        // PositionUpdate is not guaranteed, and on a part-fill the quantity we
+        // asked for is not the quantity that needs protecting.
+        //
+        // filledQty is the order's CUMULATIVE filled quantity (OrderEventArgs
+        // .Filled), so a completing part-fill AMENDS the existing pair to the new
+        // absolute quantity instead of placing a second bracket. A second bracket
+        // in the same exit OCO group would be worse than none: one stop firing
+        // would cancel the other and leave the rest of the position naked.
+        private void SubmitBracketOnEntryFill(string signalId, int filledQty, double avgFillPx)
         {
+            if (filledQty <= 0)
+            {
+                LogWarn("VLTraderTCPClient: bracket NOT placed for " + signalId
+                        + " — fill event reported quantity " + filledQty
+                        + "; refusing to size a protective order from a non-positive fill");
+                return;
+            }
+
+            // A later fill on the same entry amends what is already resting.
+            PlacedBracket already = null;
+            lock (signalMapLock) { placedBrackets.TryGetValue(signalId, out already); }
+            if (already != null)
+            {
+                AmendBracketQuantity(signalId, already, filledQty);
+                return;
+            }
+
             PendingBracket b;
             lock (signalMapLock)
             {
@@ -1860,13 +1917,22 @@ namespace NinjaTrader.NinjaScript.AddOns
                 // routed to (stored in PendingBracket), not necessarily the active one.
                 Account ba = b.Account ?? account;
                 string exitOco = signalId + "-exit";
+                // D6 (2026-09-07) — PROTECTIVE ORDERS ARE GTC.
+                //
+                // These were TimeInForce.Day. A Day order is dropped at session
+                // end; GTC survives NT8's daily maintenance window. A stop that
+                // expires while the position it protects does not is a naked
+                // position on a timer — the 09-06 exposure arriving by the
+                // calendar instead of by a cancel. The ENTRY stays Day (see
+                // HandleSignal): an unfilled entry must die with its session
+                // rather than wake up and fire into a market its plan never saw.
                 var slOrder = ba.CreateOrder(
                     b.Instrument, b.ExitAction, OrderType.StopMarket, OrderEntry.Manual,
-                    TimeInForce.Day, b.Qty, 0, b.Sl, exitOco, signalId + "-sl",
+                    TimeInForce.Gtc, filledQty, 0, b.Sl, exitOco, signalId + "-sl",
                     Core.Globals.MaxDate, null);
                 var tpOrder = ba.CreateOrder(
                     b.Instrument, b.ExitAction, OrderType.Limit, OrderEntry.Manual,
-                    TimeInForce.Day, b.Qty, b.Tp, 0, exitOco, signalId + "-tp",
+                    TimeInForce.Gtc, filledQty, b.Tp, 0, exitOco, signalId + "-tp",
                     Core.Globals.MaxDate, null);
                 ba.Submit(new[] { slOrder, tpOrder });
                 // Track the live SL order so auto-breakeven can move it later.
@@ -1877,16 +1943,64 @@ namespace NinjaTrader.NinjaScript.AddOns
                     placedBrackets[signalId] = new PlacedBracket
                     {
                         SlOrder = slOrder, TpOrder = tpOrder, Account = ba, Instrument = b.Instrument,
-                        ExitAction = b.ExitAction, Qty = b.Qty, ExitOco = exitOco, TickSize = tick,
+                        ExitAction = b.ExitAction, Qty = filledQty, ExitOco = exitOco, TickSize = tick,
                     };
                 }
                 LogInfo("VLTraderTCPClient: placed protective bracket signal_id=" + signalId
-                        + " sl=" + b.Sl + " tp=" + b.Tp);
+                        + " sl=" + b.Sl + " tp=" + b.Tp
+                        + " qty=" + filledQty + " (requested " + b.Qty + ")"
+                        + " avg_fill=" + avgFillPx
+                        + " entry_oco=<none> exit_oco=" + exitOco + " tif=Gtc");
             }
             catch (Exception ex)
             {
                 LogWarn("VLTraderTCPClient: bracket submit failed signal_id=" + signalId
                         + ": " + ex.Message);
+            }
+        }
+
+        // D2 (2026-09-07) — a completing part-fill AMENDS the resting pair.
+        //
+        // NEVER cancel-and-replace: that leaves the filled quantity unprotected
+        // for the width of the round trip, which is the exposure this whole wave
+        // exists to remove. NEVER add a second pair to the same exit OCO group
+        // either — one stop firing would cancel the other and leave the rest of
+        // the position naked.
+        //
+        // filledQty is the order's CUMULATIVE filled quantity, so this sets an
+        // ABSOLUTE quantity, not a delta. QuantityChanged + Account.Change is the
+        // same staging pattern move_stop and modify_bracket already use for
+        // prices.
+        private void AmendBracketQuantity(string signalId, PlacedBracket pb, int filledQty)
+        {
+            if (pb == null || filledQty <= 0) return;
+            if (filledQty == pb.Qty) return; // nothing changed; stay quiet
+            Account ba = pb.Account ?? account;
+            if (ba == null) return;
+            try
+            {
+                var changed = new List<Order>();
+                if (pb.SlOrder != null) { pb.SlOrder.QuantityChanged = filledQty; changed.Add(pb.SlOrder); }
+                if (pb.TpOrder != null) { pb.TpOrder.QuantityChanged = filledQty; changed.Add(pb.TpOrder); }
+                if (changed.Count == 0)
+                {
+                    LogWarn("VLTraderTCPClient: bracket amend found NO legs for " + signalId
+                            + " — the position may be holding " + filledQty + " unprotected");
+                    return;
+                }
+                ba.Change(changed.ToArray());
+                int was = pb.Qty;
+                lock (signalMapLock) { pb.Qty = filledQty; }
+                LogInfo("VLTraderTCPClient: bracket amended signal_id=" + signalId
+                        + " qty " + was + " -> " + filledQty
+                        + " legs=" + changed.Count + " exit_oco=" + pb.ExitOco
+                        + " (cumulative fill from the event)");
+            }
+            catch (Exception ex)
+            {
+                LogWarn("VLTraderTCPClient: bracket amend FAILED signal_id=" + signalId
+                        + " target_qty=" + filledQty + ": " + ex.Message
+                        + " — the resting pair still covers " + pb.Qty);
             }
         }
 

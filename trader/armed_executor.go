@@ -1711,14 +1711,6 @@ func (at *AutoTrader) onArmedOrderUpdate(u ntwire.OrderUpdatePayload, ledger *st
 			continue
 		}
 		switch strings.ToLower(u.State) {
-		case "accepted", "working":
-			// WAVE A / D4 — THE ACCEPTANCE WAS RECEIVED AND DROPPED. This
-			// switch handled filled/partfilled/rejected/cancelled and had no
-			// case for the one event that says what the broker agreed to. The
-			// ledger row above is mutable and gets re-composed; this appends
-			// the immutable record. IT CHANGES NO STATE AND NO DECISION —
-			// nothing below this line runs for an acceptance.
-			at.recordAcceptedRisk(r, u)
 		case "filled", "partfilled":
 			_ = ledger.SetState(r.ID, "filled", "fill@"+strconv.FormatFloat(u.FillPrice, 'f', 2, 64))
 			_ = ledger.SetFillPrice(r.ID, u.FillPrice)
@@ -1737,6 +1729,23 @@ func (at *AutoTrader) onArmedOrderUpdate(u ntwire.OrderUpdatePayload, ledger *st
 		case "cancelled":
 			_ = ledger.SetState(r.ID, "cancelled", "cancelled in NT8")
 			at.logInfof("✕ armed %s cancelled in NT8", r.Scenario)
+		default:
+			// WAVE A / D4 — THE ACCEPTANCE WAS RECEIVED AND DROPPED. This
+			// switch handled filled/partfilled/rejected/cancelled and had no
+			// case for the one event that says what the broker agreed to. The
+			// ledger row above is mutable and gets re-composed; this appends
+			// the immutable record. IT CHANGES NO STATE AND NO DECISION —
+			// nothing below this line runs for an acceptance.
+			//
+			// D3 (2026-09-07): the arm was a literal pair, `case "accepted",
+			// "working"`. It is now the shared classifier's LIVE class, so a
+			// state that means "standing at the exchange" cannot be live for
+			// one reader and invisible to another. The lifecycle cases above
+			// are untouched and still win — partfilled remains a FILL event
+			// here, whatever its liveness says about the order.
+			if ntwire.ClassifyOrderState(u.State) == ntwire.LivenessLive {
+				at.recordAcceptedRisk(r, u)
+			}
 		}
 		return
 	}

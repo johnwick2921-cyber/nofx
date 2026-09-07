@@ -40,23 +40,10 @@ type NT8Order struct {
 	TimeMs     int64   `json:"time_ms,omitempty"`
 }
 
-// terminalOrderStates are the states that mean "this order is history". Held as
-// a set rather than inline in a condition so leg 4 and the override guard
-// cannot drift apart on what "working" means.
-var terminalOrderStates = map[string]bool{
-	"filled":          true,
-	"cancelled":       true,
-	"canceled":        true,
-	"rejected":        true,
-	"expired":         true,
-	"unknown":         true,
-	"partfilled_done": true,
-}
-
-// IsWorking reports whether the order still stands at the broker.
-func (o NT8Order) IsWorking() bool {
-	return !terminalOrderStates[strings.ToLower(strings.TrimSpace(o.State))]
-}
+// The terminal set and IsWorking now live in order_state.go: one graded
+// classifier, so "still on the books" and "protecting at the exchange" stop
+// being answered by the same bool. `unknown` is no longer terminal (owner
+// ruling 2026-09-07) — an unreadable state is not a closed order.
 
 // OrderSnapshotPayload is the frame body.
 // The frame is ACCOUNT-scoped: NT8's Account.Orders is an account collection and
