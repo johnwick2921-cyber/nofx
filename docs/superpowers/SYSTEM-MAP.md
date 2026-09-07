@@ -254,9 +254,10 @@ Cadence governance (class 47): `WakeCutoffMinDefault=25` (:52), `WakeCooldownMin
 - Scan interval: `scan_interval_minutes` default **3**, min 3 — store/trader.go:28-29, api/handler_trader.go:451-453, agent/tools.go:2487-2488 `[X]` per census (never tape-tested).
 - Cadence modes: `CadenceInterval` / `CadenceBarClose` — auto_trader_clock.go:42-50; main loop ticker `auto_trader.go:936`; bar-close gate :905; stale-dodge :921.
 - Sessions (CT): ASIA 17:00→02:00 · LONDON 02:00→08:30 · NY 08:30→14:45 (see §3) — session_registry.go:83-117.
-- Half-days: `half_days.json` (Labor Day 2026-09-07 12:00 CT etc.) — auto_trader_halfdays.go, halfDayCutoffMin auto_trader_clock.go:452 `[R]` CME sources cited.
-- Calendar: live ForexFactory JSON + static T1 fallback `calendar_static_t1.json` — calendar/calendar.go:33-92.
-- Closed-market backoff: 3 min in 10 s slices — auto_trader_loop.go:937,980-992.
+- **SESSION CALENDAR — the one owner of what a day IS** (fold, 2026-09-07): `kernel/session_calendar.json` (embedded, 14 dated rows, each citing its source) + `kernel/session_calendar.go`. Three classes: `closed` · `shortened` (+`close_ct`) · absent = normal. `SessionStateAt(now)` is the single join of calendar + weekly rules; `IsCMEOpen` / `CMEClosedReason` read it. Safe side is CLOSED in every ambiguous branch (unreadable `close_ct`, unrecognised class, uncovered year → the superseded boolean, which errs closed). Boot line `SessionCalendarBootLine` → main.go; status text `SessionDayNote` → the DESK MODE row.
+- Half-days: **FOLDED IN**. `half_days.json` is DELETED and `SessionRegistry.HalfDays` removed — that fact had three owners with two key conventions and, on three dates, two different times (the gate stopped at 12:00 where the sourced file said 12:15). `EffectiveFlatCT` (session_registry.go) and `halfDayCutoffMin` / `effectiveEODFlatCT` (auto_trader_clock.go) all resolve through `kernel.SessionEarlyCloseCTForKey`. The override is PULL-IN ONLY and never earlier than the session's own `window_start_ct`. Pin: `TestFoldOneFactOneOwner` (kernel/session_registry_test.go).
+- Calendar (economic events, unrelated): live ForexFactory JSON + static T1 fallback `calendar_static_t1.json` — calendar/calendar.go:33-92.
+- Closed-market backoff: 3 min in 10 s slices — auto_trader_loop.go. **Exempt from the overrun warning** (`shouldWarnOverrun`, auto_trader.go): a 3-minute sleep cannot fit a 2-minute interval, so the warning was guaranteed rather than diagnostic — 165 in one day, all `3m0.0XXs > 2m0s`. `tickOnce` reports the closed path; a real overrun on a trading day still warns.
 - Daily report 21:00 local, risk check 4 h — agent/scheduler.go:37-52.
 
 ## 13 · SETTINGS — registry and resolved values

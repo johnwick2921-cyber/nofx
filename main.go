@@ -491,6 +491,12 @@ func main() {
 	// next upcoming early close. Fail-open on a bad file.
 	trader.LogHalfDaysBoot(time.Now())
 
+	// D6 (owner ruling 2026-09-07) — THE SESSION CALENDAR SAYS WHICH DAY IT IS,
+	// once at boot. Every field is READ from the calendar the gate consults, and
+	// an unsourced date is counted rather than hidden: a calendar nobody has
+	// checked must not read like a checked one.
+	logger.Infof("🗓 %s", kernel.SessionCalendarBootLine(time.Now()))
+
 	// SANDBOX: a demo instance has no NT8 wire, so install a deterministic
 	// synthetic bar feed — without it level_facts/price/chart/armor are all empty.
 	if cfg.SandboxMode {

@@ -281,10 +281,16 @@ func (at *AutoTrader) deskMode(now time.Time, book DeskLine) DeskLine {
 	// AND: ActiveSession names the WINDOW; it ignores Enabled and it ignores the
 	// weekday, so it answers "NY" at 14:22 on a Sunday with CME shut. Two
 	// different questions, so the row states both.
+	// D5 (owner ruling 2026-09-07) — THE MODE LINE SAYS WHICH DAY IT IS.
+	// It read "CME CLOSED (holiday)" beside a feed carrying a bar seconds old,
+	// because a boolean could not express "shortened". It now carries the
+	// classification, the close time and where the answer came from, and says
+	// UNKNOWN in the established in-text shape when the calendar cannot answer.
 	market := "OPEN"
 	if closed, reason := kernel.CMEClosedReason(now); closed {
 		market = "CLOSED (" + reason + ")"
 	}
+	market += kernel.SessionDayNote(now)
 	mode := at.planModeFor(session)
 	// RULE 3 — never one green word. Process, feed, link and book are four
 	// different questions and the row answers each.

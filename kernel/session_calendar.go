@@ -140,28 +140,50 @@ func weeklyCMEOpen(ct time.Time) bool {
 // published or decided.
 func SessionCalendarBootLine(now time.Time) string {
 	ct := now.In(CTLocation())
-	covered := "covered"
-	if !SessionCalendarCoversYear(ct.Year()) {
-		covered = fmt.Sprintf("YEAR %d NOT COVERED — no one has checked it; the weekly rules alone are deciding", ct.Year())
+	st := SessionStateAt(now)
+
+	today := string(st.Class)
+	closeTxt := "—"
+	if st.Class == SessionShortened && st.HasClose {
+		closeTxt = st.Close.Format("15:04") + " CT"
 	}
-	day, listed := SessionDayFor(ct)
-	if !listed {
-		return fmt.Sprintf("session calendar: today %s is NORMAL (not listed) · %d date(s) listed for %v · %s",
-			ct.Format("2006-01-02"), len(sessionCal.Dates), sessionCal.CoveredYears, covered)
+	if st.CloseUnreadable {
+		closeTxt = "UNKNOWN (unreadable close_ct — treated as closed)"
 	}
-	switch day.Class {
-	case SessionClosed:
-		return fmt.Sprintf("session calendar: today %s is CLOSED — %s · no trading · source: %s · %s",
-			day.Date, day.Name, day.Source, covered)
-	case SessionShortened:
-		closeTxt := day.CloseCT + " CT"
-		if _, ok := parseCloseCT(ct, day.CloseCT); !ok {
-			closeTxt = fmt.Sprintf("UNREADABLE close_ct %q — treated as CLOSED rather than guessed", day.CloseCT)
-		}
-		return fmt.Sprintf("session calendar: today %s is SHORTENED — %s · TRADES until %s, then flat · source: %s · %s",
-			day.Date, day.Name, closeTxt, day.Source, covered)
+	source := "default"
+	if st.Listed {
+		source = sourceTag(st.Source)
 	}
-	return fmt.Sprintf("session calendar: today %s is NORMAL · %s", day.Date, covered)
+	if st.UncoveredFallback {
+		source = fmt.Sprintf("YEAR %d NOT COVERED — superseded boolean deciding", ct.Year())
+	}
+	if st.Unestablished {
+		source = "unestablished — closed on the safe side until sourced"
+	}
+	return fmt.Sprintf("session calendar: today=%s close=%s source=%s · unknown-dates=%d · dates=%d covered=%v · backoff=%s (interval=%s)",
+		today, closeTxt, source,
+		SessionCalendarUnestablishedCount(), len(sessionCal.Dates), sessionCal.CoveredYears,
+		SessionClosedBackoff(), SessionScanIntervalHint())
+}
+
+// SessionClosedBackoff and SessionScanIntervalHint let the boot line READ the
+// two durations D4 turns on rather than printing literals (A11). The backoff is
+// owned by the trader loop; the interval is per-trader configuration, so the
+// hint says so instead of inventing a number.
+func SessionClosedBackoff() string { return closedBackoffForBootLine }
+
+// SessionScanIntervalHint reports where the interval comes from, not a value the
+// calendar cannot know (A24: never a plausible number).
+func SessionScanIntervalHint() string { return "per-trader scan_interval_minutes" }
+
+// closedBackoffForBootLine is set once at boot by the trader package, which owns
+// the constant. Empty until then, and it prints as UNKNOWN rather than 0.
+var closedBackoffForBootLine = "UNKNOWN (not reported by the loop yet)"
+
+// SetClosedBackoffForBootLine is how the trader package hands the calendar the
+// real backoff so the boot line quotes the enforcing value (A11).
+func SetClosedBackoffForBootLine(d time.Duration) {
+	closedBackoffForBootLine = d.String()
 }
 
 // ── THE JOIN: calendar + weekly rules → one resolved answer ──────────────────
@@ -325,4 +347,56 @@ func SessionShortenedDays() []SessionDay {
 		}
 	}
 	return out
+}
+
+// SessionDayNote is the calendar's contribution to a status surface: what today
+// IS, when it closes, and where that came from. It is appended to the MODE row
+// and rendered on the boot line.
+//
+// D5 (owner ruling 2026-09-07). The MODE row read "CME CLOSED (holiday)" beside
+// a feed reporting a bar seconds old, and a reader who sees that once stops
+// believing the row. UNKNOWN uses the strip's established in-text shape —
+// "<FACT> UNKNOWN (<why>)" — never a zero, a dash, or a silent omission.
+//
+// Returns "" for an ordinary unlisted day: a normal Tuesday needs no note.
+func SessionDayNote(now time.Time) string {
+	st := SessionStateAt(now)
+	if st.UncoveredFallback {
+		return fmt.Sprintf(" · calendar UNKNOWN (year %d not covered; the superseded holiday boolean is deciding, which errs closed)", now.In(CTLocation()).Year())
+	}
+	if !st.Listed {
+		return ""
+	}
+	if st.Unestablished {
+		return fmt.Sprintf(" · %s: treatment UNESTABLISHED (closed on the safe side until sourced — %s)", st.Name, st.Date)
+	}
+	switch st.Class {
+	case SessionShortened:
+		if !st.HasClose {
+			return fmt.Sprintf(" · %s: SHORTENED but close time UNKNOWN (unreadable close_ct — treated as closed)", st.Name)
+		}
+		return fmt.Sprintf(" · %s: SHORTENED, closes %s CT [%s]", st.Name, st.Close.Format("15:04"), sourceTag(st.Source))
+	case SessionClosed:
+		return fmt.Sprintf(" · %s: FULL CLOSURE [%s]", st.Name, sourceTag(st.Source))
+	case SessionNormal:
+		return fmt.Sprintf(" · %s: listed NORMAL [%s]", st.Name, sourceTag(st.Source))
+	}
+	return ""
+}
+
+// sourceTag shortens a source row to its provenance CLASS, so a status line
+// says whether the answer was published or decided without carrying a URL.
+func sourceTag(src string) string {
+	s := strings.ToLower(src)
+	switch {
+	case strings.HasPrefix(s, "unestablished"):
+		return "unestablished"
+	case strings.Contains(s, "cmegroup.com"):
+		return "CME published"
+	case strings.Contains(s, "owner ruling"):
+		return "owner ruling"
+	case src == "":
+		return "source UNKNOWN"
+	}
+	return "unsourced"
 }

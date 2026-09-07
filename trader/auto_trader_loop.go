@@ -978,7 +978,10 @@ func (at *AutoTrader) noteCMESessionEdge(open bool) {
 // the moment the trader is stopped.
 func (at *AutoTrader) backoffWhileClosed() {
 	const slice = 10 * time.Second
-	const cmeClosedBackoff = 3 * time.Minute // within the ~2–5 min target
+	const cmeClosedBackoff = 3 * time.Minute
+	// A11 — hand the calendar the ENFORCING value so the boot line quotes this
+	// constant rather than a literal typed into a format string.
+	kernel.SetClosedBackoffForBootLine(cmeClosedBackoff) // within the ~2–5 min target
 	for waited := time.Duration(0); waited < cmeClosedBackoff; waited += slice {
 		at.isRunningMutex.RLock()
 		running := at.isRunning

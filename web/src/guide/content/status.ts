@@ -110,6 +110,27 @@ export const status: GuideSection = {
         'counts untracked files. NOT a code change.',
       ],
     },
+    { kind: 'h', text: 'Which day is it? (the session calendar)' },
+    {
+      kind: 'p',
+      text: 'CME does not simply open or close. Most US holidays are EARLY CLOSES, not closures, and the bot used to treat every one of them as a full shutdown \u2014 the code said so itself: "for v1 we treat them as full closures and refuse to trade." On Labor Day 2026 that cost a whole session: MNQ traded 980 bars across 153.50 points while the dashboard read CME CLOSED (holiday) beside a live bar, and no LONDON plan was ever read.',
+    },
+    {
+      kind: 'p',
+      text: 'A date is now one of three things, and the calendar is DATA (kernel/session_calendar.json), not code. CLOSED \u2014 no trading at all. SHORTENED \u2014 a TRADING day: reads fire, arms are allowed, and the bot is flat at the stated early close, the same discipline as 14:45 at an earlier time. NORMAL \u2014 the ordinary weekly rules decide, and a date absent from the file is normal.',
+    },
+    {
+      kind: 'p',
+      text: 'Every row cites its source, so you can tell a published fact from a decision. Where nobody has established a date it is CLOSED and SAYS SO \u2014 a guessed trading day is worse than a missed one \u2014 and the count of unestablished dates rides the boot line so an unchecked calendar cannot look like a checked one. A year the calendar has never covered falls back to the old holiday rule, which errs closed, and the boot line names the year.',
+    },
+    {
+      kind: 'p',
+      text: 'You will see it in two places. The boot line: \u201c\ud83d\uddd3 session calendar: today=shortened close=12:00 CT source=CME published \u00b7 unknown-dates=5 \u00b7 dates=14 covered=[2026] \u00b7 backoff=3m0s\u201d. And the DESK strip\u2019s MODE row, which now ends with the day\u2019s classification, its close time and where that came from \u2014 the row that used to say only \u201choliday\u201d.',
+    },
+    {
+      kind: 'p',
+      text: 'One more thing changed with it: while the market is shut the loop idles on a deliberate 3-minute backoff, which is longer than the 2-minute scan interval it was being measured against. That comparison logged 165 \u201ccycle overran the scan interval\u201d warnings in a single day, every one of them guaranteed rather than diagnostic. The closed path no longer raises it. A real overrun on a trading day still does.',
+    },
     { kind: 'h', text: 'The DESK strip (top of the plan card)' },
     {
       kind: 'p',

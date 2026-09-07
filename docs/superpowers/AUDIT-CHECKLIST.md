@@ -1991,6 +1991,42 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     answering a narrower question). Operationalised as **R10**, PART 2.
 
 
+84. **A boolean standing in for a spectrum — and the warning that fires by
+    construction beside it.** (Number assigned at merge, A16 — highest occupied
+    on dev at authoring: 83. Re-check at merge.) `isCMEHoliday` answered yes/no
+    and the gate treated every holiday as a FULL closure. The code conceded it in
+    its own comment — *"for v1 we treat them as full closures and refuse to trade.
+    Refine in Plan 3 if it becomes restrictive"* — and on 2026-09-07 it became
+    restrictive: MNQ traded **980 bars across 153.50 points** on Labor Day while
+    the gate called the market shut, every cycle was skipped and no LONDON plan
+    was ever read. Most US holidays are EARLY CLOSES, not closures; the boolean
+    had no way to say so.
+    **The second half, which the first hid.** While the market was "closed" the
+    loop idled on a deliberate 3-minute backoff and an overrun check compared it
+    against a 2-minute scan interval. A 3-minute sleep can never fit inside a
+    2-minute interval, so the warning was GUARANTEED on every closed tick —
+    **165 in one boot log, every one reading `3m0.0XXs > 2m0s`**. A warning that
+    cannot indicate a fault trains the reader to skip the line that one day does.
+    **What identified it** was not a failure: it was the dashboard contradicting
+    itself — a MODE row reading `CME CLOSED (holiday)` beside a feed carrying a
+    bar seconds old — and someone asking which of the two was lying.
+    **Probe:** for every boolean that gates behaviour, ask what the WORLD's third
+    state is and what the code does with it. Then, for every warning: construct
+    the case where it fires; if that case is reachable by design rather than by
+    fault, it is noise. Count how many times it fired last week and how many of
+    those a human acted on.
+    **Law:** a calendar is DATA, not code — one dated file, one row per special
+    date, a cited source per row, and no date literal in the language. Where a
+    date's treatment cannot be established it takes the SAFE side and is NAMED on
+    the boot line, never guessed silently. And one fact has ONE owner: this wave
+    found the same early close in three places with two key conventions and two
+    different times, the gate stopping at 12:00 on days the sourced file said
+    12:15.
+    Sibling to class 82 (a green word answering a narrower question — same
+    dashboard row, same day). Related: class 49/53 (a plausible zero), class 24
+    (a check that prints but does not gate), class 28/77 (one canonicalizer, one
+    owner).
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,
