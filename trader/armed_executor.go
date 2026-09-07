@@ -924,6 +924,21 @@ func (at *AutoTrader) runArmedPlacement(bars []market.Kline, sinceMs int64) {
 	if err != nil {
 		return
 	}
+
+	// ONE CONTRACT PER ACCOUNT (owner ruling 2026-09-06). Evaluated ONCE per
+	// pass, before any wire call, and it governs BOTH placement paths below.
+	// See trader/one_contract.go for why per-slot was not enough: on 09-06 two
+	// arms from one plan were WORKING at the broker simultaneously (snapshot
+	// 7812) because each passed its own slot check and nothing asked whether
+	// the ACCOUNT was already committed.
+	//
+	// placedThisPass is the in-pass half of the same invariant. The book cannot
+	// refresh between two placements inside one loop, so a guard that only read
+	// the book would still let arm B through microseconds after arm A reached
+	// the wire.
+	contract := at.oneContractGuard(now)
+	placedThisPass := false
+
 	for _, r := range rows {
 		if r.TraderID != at.id {
 			continue
@@ -964,8 +979,19 @@ func (at *AutoTrader) runArmedPlacement(bars []market.Kline, sinceMs int64) {
 				// The whole adjudication — canonical side, tick-rounded trigger,
 				// verdict, action — is ONE pure value so a test can drive it with
 				// the casing the STORE actually hands back (class 77).
+				if !contract.Allowed() || placedThisPass {
+					at.refuseContract(r, contract, placedThisPass, "stop", now)
+					continue
+				}
 				d := decideStopEntry(side, r.EntryPx, float64(stopEntryOffsetTicks())*tick, tick, price)
 				at.placeOneStopEntry(nt, ledger, r, d, price, now, at.armSlotGuard(rows, r, now))
+				// A stop entry that reached the wire commits the account exactly
+				// as a limit does. The pass is closed either way — the ledger
+				// row's own state is not consulted, because "did we send" is the
+				// question here, not "did it work" (class 81: a send is not a
+				// settlement, so this latch is deliberately pessimistic).
+				placedThisPass = true
+				at.cancelOtherArmsInPlan(ledger, rows, r, now)
 				continue
 			}
 			if price > 0 && limitMarketableWrongSide(price, r.EntryPx, side) {
@@ -982,6 +1008,10 @@ func (at *AutoTrader) runArmedPlacement(bars []market.Kline, sinceMs int64) {
 				// guard on one placement path is not a guard: this is the other
 				// route to the wire, and the nine-order incident came through a
 				// slot that could be placed into repeatedly.
+				if !contract.Allowed() || placedThisPass {
+					at.refuseContract(r, contract, placedThisPass, "limit", now)
+					continue
+				}
 				if g := at.armSlotGuard(rows, r, now); !g.Allowed() {
 					at.refuseSlot(r, g, "limit", now)
 					continue
@@ -994,6 +1024,11 @@ func (at *AutoTrader) runArmedPlacement(bars []market.Kline, sinceMs int64) {
 				_ = ledger.SetSignal(r.ID, sid)
 				_ = ledger.SetState(r.ID, "working", "")
 				at.logInfof("📌 armed %s → WORKING limit %.2f signal=%s (band ±%.0ft)", r.Scenario, r.EntryPx, sid, band/tick)
+				// ONE LIVE ENTRY PER PLAN (owner ruling 2026-09-06): the moment
+				// one arm reaches the wire, every other arm in the plan is
+				// cancelled. A plan gets one entry, not one per scenario.
+				placedThisPass = true
+				at.cancelOtherArmsInPlan(ledger, rows, r, now)
 			}
 		}
 	}
