@@ -251,12 +251,45 @@ if (st == "Filled" || st == "Cancelled" || st == "Rejected" ||
     continue;
 ```
 
-An `Unknown` order was not shipped as unknown; it was not shipped at all. And
-absence is what every "this order is gone" branch keys on — the stale reaper,
-cancel settlement, `entryIsResting`, cutover leg 4, and the new D5 reconciler,
-which would have placed a **second stop beside an invisible live one**. Every Go
-test passed throughout. Found by reading the producer, not by a test. `Unknown`
-is now shipped; the genuinely terminal four are still filtered.
+An `Unknown` order was not in the BOOK at all. And absence in the book is what
+every "this order is gone" branch keys on — the stale reaper, cancel settlement,
+`entryIsResting`, cutover leg 4, and the new D5 reconciler, which would have
+placed a **second stop beside an invisible live one**. Every Go test passed
+throughout. Found by reading the producer, not by a test. `Unknown` is now
+shipped; the genuinely terminal four are still filtered.
+
+**Correction to my own first statement of this.** I initially wrote that Unknown
+"was not shipped at all". That is wrong, and an adversarial reader caught it:
+`SendOrderUpdateFrame(e)` runs BEFORE the actionable-state gate and is
+unfiltered, so Unknown does reach Go on the per-event `order_update` stream. What
+it never reached was the periodic `order_snapshot`. That is the one that matters
+— `order_update` is per-EVENT, so a restart loses the picture until the next
+transition, which on a quiet book may be never, and every consumer listed above
+reads the snapshot. The defect and the fix are unchanged; the description was
+too broad. Class 78 carries the corrected wording and the trap that produced it.
+
+## A SECOND NAKED-POSITION PATH, FOUND BY THE SAME QUESTION — CLASS 80
+
+The cancel-path census was pointed at *every* path that cancels a bracket, not
+just the one in the incident. It found this, and it is severity 1:
+
+`OnOrderUpdate`'s actionable-state gate admits `Filled`, `Rejected` **and**
+`PartFilled`. Below it the `"-lx"` branch — the limit-then-market exit — called
+`CancelBracketsFor(...)` with **no state check at all**. Its own comment gives
+the justification: "cancel the still-live bracket legs so they can never re-enter
+the now-flat position." Every word of that is conditional on the exit having
+FILLED.
+
+A limit exit the SIM rejects is an ordinary, documented event in that same file
+("There is no market data available to drive the simulation engine"). On that
+rejection **the position is still open, and this stripped its stop and target** —
+the 2026-09-06 naked position reached from the exit side. A PART fill is the same
+trap more quietly: the unclosed remainder still needs the protection.
+
+Now gated on `e.OrderState == OrderState.Filled`, with a WARN naming the state on
+every other outcome. Pinned RED first
+(`TestRejectedLimitExitDoesNotCancelTheBracket`). Neither the incident report nor
+any test had opened this door.
 
 ## The cancel-sender census — four found, two guarded, two deliberately not
 
@@ -320,6 +353,7 @@ either `accepted_risk` or the plan, a P0 is raised and nothing is placed.
 3. **A part-filled entry cannot sit unprotected.** It is bracketed for what
    filled, and amended.
 4. **An unreadable order state cannot read as a closed one** — at either end.
+4b. **A failed exit cannot cancel a live position's protection** (class 80).
 5. **A locally-held stop cannot be counted as protection**, or written to
    `accepted_risk` as an accepted price.
 6. **A position cannot be unprotected without anyone knowing.** Every minute,
@@ -343,6 +377,14 @@ Still possible, and stated plainly (A15) — see the next section.
   that confirms a broker cancel instead of assuming one."** The 09-06 wave landed
   that confirmation. Flipping the seam is an owner ruling and out of A31 scope,
   so the sentence is untouched — but it now reads as a promise already kept.
+- **D5's reconnect hook is gated; its primary hook is not.** `driveDeadManWatchdog`
+  runs inside `runCycle`, which returns early on the CME session gate, the
+  NT8-account gate, the bar-close gate and the no-new-data dedup — so the
+  reconnect edge cannot fire while CME is closed or the tape is quiet. The
+  1-minute `monitorTick` path is driven by its own `time.Ticker` in
+  `startDrawdownMonitor` and is gated by none of those, which is why it is the
+  primary path. Stated because a reader could otherwise assume the reconnect edge
+  is the guarantee; it is the fast path, not the floor.
 - **`GetOpenOrders` is served by the ledger, not the broker**, so the dead-man
   watchdog's "clean reconciliation" still proves nothing about the real book.
   Untouched by this wave (A31).

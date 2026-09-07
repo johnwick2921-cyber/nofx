@@ -2354,8 +2354,15 @@ if (st == "Filled" || st == "Cancelled" || st == "Rejected" ||
     continue;
 ```
 
-An order in `OrderState.Unknown` was not shipped as unknown. It was not shipped
-at all — and **absence is what every "this order is gone" branch keys on**: the
+An order in `OrderState.Unknown` was not shipped as unknown. It was not in the
+BOOK at all.
+
+**Precision matters here, and the first draft of this entry got it wrong.**
+Unknown still reached Go on the per-event `order_update` frame, which is emitted
+before the actionable-state gate and is not filtered. What it never reached was
+the `order_snapshot` — the periodic, re-derivable picture of the whole book. That
+is the one that matters, because **absence in the BOOK is what every "this order
+is gone" branch keys on**: the
 stale reaper cancels and marks the row cancelled, a cancel_pending row is
 promoted to cancelled, `entryIsResting` sees no children and ALLOWS the cancel,
 cutover leg 4 counts zero working orders, and the new protection reconciler
@@ -2366,6 +2373,11 @@ The filter was not wrong when written — its comment says "Terminal orders are
 history … shipping the whole history every 30s would grow without bound", and for
 Filled/Cancelled/Rejected/Expired that is right. `Unknown` was smuggled into a
 list of things that are over.
+
+The event stream is not a substitute: `order_update` is per-EVENT, so a Go
+restart loses the picture until the next transition, which on a quiet book may be
+never. The snapshot exists precisely to be the thing you can ask at any moment —
+which is why a state missing from it is a state that does not exist.
 
 **It was not found by a test.** Every Go test passed, including the new ones. It
 was found by a reader sent to enumerate every classifier in the tree *including
@@ -2394,6 +2406,12 @@ and you in the SAME wave — and where the producer is a separately deployed
 artifact, gate on its build id so the careful branch is not silently unreachable.
 An unreadable state must be SHIPPED, never omitted: the receiver can decide to do
 nothing, but only if it is told.
+
+**Sibling trap (how this entry itself nearly shipped wrong).** Having found the
+filter, the obvious next sentence — "so Go never receives Unknown" — is FALSE,
+because a second, unfiltered path carries the same value for a different purpose.
+When you find a drop, establish which CONSUMERS it starves, not which value it
+removes: the answer is usually "some of them".
 
 **Corollary.** "The tests pass" is the expected outcome of this class, not
 evidence against it. A fix whose branch cannot be reached is indistinguishable
@@ -2454,3 +2472,46 @@ the incident.
 **Corollary.** The dispatch already required this (A17, "MEASURE FIRST"). What
 made it work was writing the pin FIRST and watching it refuse to fail — the
 mechanism was refuted by an artefact, not by an argument.
+
+
+## CLASS 80 — THE CLEANUP THAT RUNS WHEN THE THING IT CLEANS UP AFTER DID NOT HAPPEN (born 2026-09-07, fix/bracket-oco-separation, adversarial review)
+
+**Name.** A handler tidies up after an event. Its enclosing gate admits the
+event's FAILURE modes as well as its success, and the tidying does not check
+which it got — so a failed operation triggers the cleanup for a successful one.
+
+**Root cause.** `OnOrderUpdate`'s actionable-state gate admits `Filled`,
+`Rejected` and `PartFilled`. Below it, the `"-lx"` branch (the limit-then-market
+exit) called `CancelBracketsFor(...)` with no state check at all. Its comment
+states the justification plainly — "cancel the still-live bracket legs so they
+can never re-enter the now-flat position" — and every word of that is conditional
+on the exit having FILLED.
+
+A limit exit the SIM rejects is a documented, ordinary event in this very file
+("There is no market data available to drive the simulation engine"). On that
+rejection the position is still OPEN, and the handler stripped its stop and
+target. Same naked position as 2026-09-06, reached from the exit side instead of
+the cancel side. A PART fill is the same trap more quietly: the remaining
+quantity still needs the protection that just went away.
+
+**Probe, five questions:**
+1. Read the cleanup's own comment and extract the precondition it ASSERTS ("the
+   now-flat position"). Is that precondition checked, or assumed?
+2. What states does the enclosing gate admit? A cleanup written under a gate that
+   once admitted only success is a time bomb the day a failure state is added to
+   that gate.
+3. Does the operation have a PARTIAL outcome? Partial success is where "it
+   happened" and "it did not" are both wrong, and it is the case cleanups forget.
+4. Is the cleanup DESTRUCTIVE and the operation RETRYABLE? Then the failure path
+   destroys the state the retry needs.
+5. Ask it as one sentence: "we are undoing X because Y finished" — then find the
+   line that proves Y finished.
+
+**Law:** **a cleanup names the outcome it cleans up after, and checks it.** Where
+the cleanup removes protection, the default on any state that is not the success
+state is to do NOTHING and say so.
+
+**Corollary.** Found by an adversarial reader sent to map cancel paths, not by
+the incident it duplicates and not by any test. The census that found it was
+pointed at "every path that cancels a bracket" — the question was broad enough to
+reach a door the incident report never opened.

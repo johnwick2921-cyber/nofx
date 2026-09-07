@@ -1326,11 +1326,33 @@ namespace NinjaTrader.NinjaScript.AddOns
                 // (account, instrument) bracket lookup.
                 exitReason = "limit";
                 signalId = signalId.Substring(0, signalId.Length - 3);
-                string lxRoot = "";
-                string lxAcct = "";
-                try { lxRoot = e.Order.Instrument.MasterInstrument.Name; } catch { }
-                try { lxAcct = e.Order.Account != null ? e.Order.Account.Name : ""; } catch { }
-                CancelBracketsFor(signalId, lxRoot, lxAcct);
+                // 2026-09-07 — ONLY ON A REAL FILL.
+                //
+                // The state gate above admits Filled, Rejected AND PartFilled,
+                // and this branch had no state check at all. A limit exit the
+                // SIM REJECTS — and this file documents that exact rejection,
+                // "There is no market data available to drive the simulation
+                // engine" — cancelled the position's stop and target while the
+                // position was still OPEN. The 2026-09-06 naked position,
+                // reached from the exit side instead of the cancel side.
+                //
+                // The justification for cancelling here is "the position is now
+                // flat". A rejected exit means it is not, and a PART fill means
+                // it is not YET: the remaining quantity still needs its stop.
+                if (e.OrderState == OrderState.Filled)
+                {
+                    string lxRoot = "";
+                    string lxAcct = "";
+                    try { lxRoot = e.Order.Instrument.MasterInstrument.Name; } catch { }
+                    try { lxAcct = e.Order.Account != null ? e.Order.Account.Name : ""; } catch { }
+                    CancelBracketsFor(signalId, lxRoot, lxAcct);
+                }
+                else
+                {
+                    LogWarn("VLTraderTCPClient: limit exit " + signalId + "-lx is " + e.OrderState
+                            + ", NOT Filled — the position is still open, so its bracket is LEFT ALONE"
+                            + " (protective orders are not cancelled by an exit that did not happen)");
+                }
             }
 
             var action = e.Order.OrderAction;

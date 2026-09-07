@@ -237,3 +237,35 @@ func TestSnapshotDoesNotDropUnknownOrders(t *testing.T) {
 		}
 	}
 }
+
+// TestRejectedLimitExitDoesNotCancelTheBracket — the same naked-position bug,
+// through a door the incident report never opened. Found 2026-09-07 by an
+// adversarial reader of the cancel-path census, not by any test.
+//
+// OnOrderUpdate's state gate admits Filled, Rejected AND PartFilled. The "-lx"
+// branch below it — the limit-then-market exit — called CancelBracketsFor with
+// NO state check at all. So a limit exit the SIM REJECTS (and this file
+// documents that exact rejection: "There is no market data available to drive
+// the simulation engine") cancelled the position's stop and target while the
+// position was still OPEN.
+//
+// It is D1's rule again: retiring a bracket is legitimate when the position is
+// ENDING, and this branch fires when the attempt to end it FAILED.
+func TestRejectedLimitExitDoesNotCancelTheBracket(t *testing.T) {
+	src := stripCSharpComments(addonSource(t))
+	i := strings.Index(src, `EndsWith("-lx")`)
+	if i < 0 {
+		t.Fatal(`the "-lx" exit branch was not found — this pin has lost its subject`)
+	}
+	call := strings.Index(src[i:], "CancelBracketsFor(")
+	if call < 0 {
+		return // the branch no longer cancels a bracket at all: also fine
+	}
+	branch := src[i : i+call]
+	if !strings.Contains(branch, "OrderState.Filled") {
+		t.Fatalf("the \"-lx\" branch cancels the bracket without checking the exit actually FILLED:\n    %s\n"+
+			"A REJECTED or PART-FILLED limit exit leaves the position OPEN — and this strips its stop "+
+			"and target. That is the 2026-09-06 naked position, reached from the exit side.",
+			strings.TrimSpace(branch))
+	}
+}
