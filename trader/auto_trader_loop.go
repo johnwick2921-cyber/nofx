@@ -943,6 +943,11 @@ func (at *AutoTrader) cmeSessionClosedSkip() bool {
 	if open {
 		return false
 	}
+	// E5 (owner ruling 2026-09-07): mark the cycle as having taken the closed
+	// path, so the loop's overrun check can tell the deliberate backoff from a
+	// fault. Set BEFORE the sleep: a Stop() during the backoff still leaves a
+	// truthful flag rather than an unexplained 3-minute cycle.
+	at.lastTickClosedSkip = true
 	at.backoffWhileClosed()
 	return true
 }

@@ -22,55 +22,103 @@
     "normal days — SessionCalendar reports the year as UNCOVERED and the caller",
     "decides; it never silently assumes."
   ],
-  "covered_years": [2026],
+  "covered_years": [
+    2026
+  ],
   "dates": [
     {
-      "date": "2026-01-01", "class": "closed", "name": "New Year's Day",
+      "date": "2026-01-01",
+      "class": "closed",
+      "name": "New Year's Day",
       "source": "owner ruling 2026-09-07 — full closure"
     },
     {
-      "date": "2026-01-19", "class": "shortened", "close_ct": "12:00", "name": "MLK Day",
+      "date": "2026-01-19",
+      "class": "shortened",
+      "close_ct": "12:00",
+      "name": "MLK Day",
       "source": "CME equity-index early-close convention (12:00 CT); NOT owner-verified — check against CME's published 2026 calendar"
     },
     {
-      "date": "2026-02-16", "class": "shortened", "close_ct": "12:00", "name": "Presidents Day",
+      "date": "2026-02-16",
+      "class": "shortened",
+      "close_ct": "12:00",
+      "name": "Presidents Day",
       "source": "CME equity-index early-close convention (12:00 CT); NOT owner-verified — check against CME's published 2026 calendar"
     },
     {
-      "date": "2026-04-03", "class": "closed", "name": "Good Friday",
+      "date": "2026-04-03",
+      "class": "closed",
+      "name": "Good Friday",
       "source": "owner ruling 2026-09-07 — full closure"
     },
     {
-      "date": "2026-05-25", "class": "shortened", "close_ct": "12:00", "name": "Memorial Day",
+      "date": "2026-05-25",
+      "class": "shortened",
+      "close_ct": "12:00",
+      "name": "Memorial Day",
       "source": "owner ruling 2026-09-07 — trades to its stated close"
     },
     {
-      "date": "2026-06-19", "class": "shortened", "close_ct": "12:00", "name": "Juneteenth",
+      "date": "2026-06-19",
+      "class": "shortened",
+      "close_ct": "12:00",
+      "name": "Juneteenth",
       "source": "CME equity-index early-close convention (12:00 CT); NOT owner-verified — check against CME's published 2026 calendar"
     },
     {
-      "date": "2026-07-03", "class": "shortened", "close_ct": "12:00", "name": "Independence Day (observed)",
+      "date": "2026-07-03",
+      "class": "shortened",
+      "close_ct": "12:00",
+      "name": "Independence Day (observed)",
       "source": "owner ruling 2026-09-07 — trades to its stated close"
     },
     {
-      "date": "2026-09-07", "class": "shortened", "close_ct": "12:00", "name": "Labor Day",
+      "date": "2026-07-04",
+      "class": "closed",
+      "close_ct": "",
+      "name": "Independence Day (falls Saturday)",
+      "source": "CME equity index: Independence Day 2026 falls on a SATURDAY, so the observed early close is Friday 2026-07-03 (listed separately). This row changes no behaviour — Saturday is already closed by the weekly Globex rule — and exists so the calendar does not appear to have silently dropped a holiday the superseded boolean covered."
+    },
+    {
+      "date": "2026-09-07",
+      "class": "shortened",
+      "close_ct": "12:00",
+      "name": "Labor Day",
       "source": "owner ruling 2026-09-07, made on the day: the feed carried 980 session bars over 153.50 pts while the gate called it closed"
     },
     {
-      "date": "2026-11-26", "class": "closed", "name": "Thanksgiving Day",
+      "date": "2026-11-26",
+      "class": "closed",
+      "name": "Thanksgiving Day",
       "source": "owner ruling 2026-09-07 — full closure"
     },
     {
-      "date": "2026-11-27", "class": "shortened", "close_ct": "12:00", "name": "Day after Thanksgiving",
+      "date": "2026-11-27",
+      "class": "shortened",
+      "close_ct": "12:00",
+      "name": "Day after Thanksgiving",
       "source": "owner ruling 2026-09-07 — trades to its stated close"
     },
     {
-      "date": "2026-12-24", "class": "shortened", "close_ct": "12:00", "name": "Christmas Eve",
+      "date": "2026-12-24",
+      "class": "shortened",
+      "close_ct": "12:00",
+      "name": "Christmas Eve",
       "source": "owner ruling 2026-09-07 — trades to its stated close"
     },
     {
-      "date": "2026-12-25", "class": "closed", "name": "Christmas Day",
+      "date": "2026-12-25",
+      "class": "closed",
+      "name": "Christmas Day",
       "source": "owner ruling 2026-09-07 — full closure"
+    },
+    {
+      "date": "2026-12-31",
+      "class": "closed",
+      "close_ct": "",
+      "name": "New Year's Eve",
+      "source": "UNESTABLISHED — the superseded boolean closed this date with the comment 'New Year's Eve (early close treated as closure)'. CME publishes an early close for some years and a normal session for others, and this lane could not establish 2026's treatment from a citable source. Per the C4 rule it therefore defaults to the SAFE side (closed) and is named as unestablished rather than guessed. RESOLVE BEFORE 2026-12-31: check CME Group's published equity-index holiday calendar and replace this row with the verified class and close_ct."
     }
   ]
 }

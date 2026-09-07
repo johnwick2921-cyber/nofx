@@ -404,6 +404,7 @@ type AutoTrader struct {
 	kickPending           atomic.Bool           // at most one kick armed at a time (CAS)
 	skipDodgeOnce         bool                  // a dodge-kicked cycle must not re-dodge at the boundary (run-loop goroutine only)
 	skipCadenceOnce       bool                  // U2: a post_exit kick bypasses the cadence gates exactly once (run-loop goroutine only)
+	lastTickClosedSkip    bool                  // E5: this cycle took the closed-market backoff, so its duration is deliberate, not a fault (run-loop goroutine only)
 	cycleTrigger          string                // why this cycle fired: "" (timer) | "stale_dodge" | "post_exit" (run-loop goroutine only)
 	aiCallMs              [aiCallRingSize]int64 // last-N AI call durations (run-loop goroutine only)
 	aiCallIdx             int
@@ -975,8 +976,8 @@ func (at *AutoTrader) Run() error {
 			// in-flight AI read is structurally never cancelled by the next
 			// tick. Log the overrun so a slow call is visible, not mysterious.
 			tickStart := time.Now()
-			at.tickOnce(isGridStrategy)
-			if d := time.Since(tickStart); d > at.config.ScanInterval {
+			closedSkip := at.tickOnce(isGridStrategy)
+			if d := time.Since(tickStart); shouldWarnOverrun(d, at.config.ScanInterval, closedSkip) {
 				at.logWarnf("⏱ cycle overran the scan interval (%v > %v) — next tick delayed, in-flight work never cancelled; intervening ticks skipped",
 					d.Round(time.Millisecond), at.config.ScanInterval)
 			}
@@ -1183,4 +1184,25 @@ func deriveWalletAddress(privateKeyHex string) string {
 
 	address := crypto.PubkeyToAddress(privateKey.PublicKey)
 	return address.Hex()
+}
+
+// shouldWarnOverrun decides whether a finished cycle deserves the scan-interval
+// warning. PURE — no clock, no receiver — so E5 can drive it with the exact
+// durations the log recorded (class 60 / A28).
+//
+// THE CLOSED PATH IS EXEMPT (owner ruling 2026-09-07). backoffWhileClosed sleeps
+// a deliberate 3 minutes; the live ScanInterval is 2. A 3-minute sleep can never
+// fit inside a 2-minute interval, so on a closed market this warning was
+// GUARANTEED rather than diagnostic — 165 of them in the 2026-09-06 boot log,
+// every one reading "3m0.0XXs > 2m0s". A warning that cannot indicate a fault
+// must not fire, because it teaches the reader to skip the line that one day
+// does indicate one (A24).
+//
+// The sleep itself is KEPT: idling slowly while the market is shut is correct.
+// Only the false alarm goes.
+func shouldWarnOverrun(d, interval time.Duration, closedSkip bool) bool {
+	if closedSkip {
+		return false
+	}
+	return d > interval
 }

@@ -10,28 +10,35 @@ import (
 //
 //	Sunday 17:00 → Friday 16:00, with a 60-minute daily break at 16:00–17:00.
 //
-// Holidays observed: New Year, MLK Day, Presidents Day, Good Friday, Memorial Day,
-// Juneteenth, Independence Day, Labor Day, Thanksgiving (+ day after), Christmas Eve,
-// Christmas Day, New Year's Eve. Each may have shortened hours; for v1 we treat them
-// as full closures and refuse to trade. Refine in Plan 3 if it becomes restrictive.
+// Holidays come from the SESSION CALENDAR (kernel/session_calendar.json), not from
+// code. Each dated row is closed | shortened (with its close time in CT) | absent
+// (a normal date). A SHORTENED SESSION IS A TRADING SESSION — it trades under the
+// weekly rules until its stated close, then flat.
+//
+// This replaced the v1 boolean whose own comment conceded the shortcut: "for v1 we
+// treat them as full closures and refuse to trade. Refine in Plan 3 if it becomes
+// restrictive." On 2026-09-07 it became restrictive: MNQ traded a full Labor Day
+// session while this function called the market shut, so no plan was ever read.
+// The superseded boolean survives as the fallback for a year the calendar does not
+// cover, where it still errs closed — see SessionStateAt.
 func IsCMEOpen(t time.Time) bool {
-	chicago := CTLocation()
-	ct := t.In(chicago)
-	if isCMEHoliday(ct) {
+	ct := t.In(CTLocation())
+	st := SessionStateAt(t)
+	switch st.Class {
+	case SessionClosed:
 		return false
+	case SessionShortened:
+		// A SHORTENED SESSION IS A TRADING SESSION. It trades under the ordinary
+		// weekly rules until its stated close, then it is done for the day.
+		// HasClose is false only when the row was demoted for an unreadable
+		// close_ct, and SessionStateAt has already set Class=closed in that case
+		// — the guard is belt-and-braces, not a live branch.
+		if !st.HasClose {
+			return false
+		}
+		return weeklyCMEOpen(ct) && ct.Before(st.Close)
 	}
-	wd := ct.Weekday()
-	hour := ct.Hour()
-	switch wd {
-	case time.Saturday:
-		return false
-	case time.Sunday:
-		return hour >= 17
-	case time.Friday:
-		return hour < 16
-	default: // Mon-Thu
-		return hour != 16
-	}
+	return weeklyCMEOpen(ct)
 }
 
 // CMEClosedReason mirrors IsCMEOpen and, when the market is closed, returns a
@@ -39,10 +46,24 @@ func IsCMEOpen(t time.Time) bool {
 // "Friday close" / "daily break"). Invariant (asserted by tests): the returned
 // bool is exactly !IsCMEOpen(t), so the two can never disagree.
 func CMEClosedReason(t time.Time) (closed bool, reason string) {
-	chicago := CTLocation()
-	ct := t.In(chicago)
-	if isCMEHoliday(ct) {
+	ct := t.In(CTLocation())
+	// THE CALENDAR ANSWERS FIRST, and its reason names what the day actually is
+	// — "early close" is not "holiday", and a reader who sees "holiday" beside a
+	// live bar stops believing the line (the 2026-09-07 contradiction).
+	st := SessionStateAt(t)
+	switch st.Class {
+	case SessionClosed:
+		if st.CloseUnreadable {
+			return true, "calendar close time unreadable — treated as closed"
+		}
+		if st.UncoveredFallback {
+			return true, "holiday (calendar year not covered)"
+		}
 		return true, "holiday"
+	case SessionShortened:
+		if st.HasClose && !ct.Before(st.Close) {
+			return true, "early close " + st.Close.Format("15:04") + " CT"
+		}
 	}
 	switch ct.Weekday() {
 	case time.Saturday:

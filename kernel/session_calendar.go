@@ -155,3 +155,88 @@ func SessionCalendarBootLine(now time.Time) string {
 	}
 	return fmt.Sprintf("session calendar: today %s is NORMAL · %s", day.Date, covered)
 }
+
+// ── THE JOIN: calendar + weekly rules → one resolved answer ──────────────────
+//
+// The 233 lines above were authored by lane session-calendar-554049f5 and left
+// DORMANT — production call sites 0 for every function in this file. Nothing
+// below re-derives them; this is the wiring they were missing.
+
+// SessionState is TODAY, resolved: what the calendar says, whether anyone has
+// checked the year, and — for a shortened day — the instant it closes.
+//
+// Every field is READ (A11). Nothing here is a literal, and no date or session
+// time appears in Go: the calendar is data (A24).
+type SessionState struct {
+	Date        string
+	Class       SessionClass
+	Name        string
+	Source      string
+	Listed      bool // the calendar has a row for this date
+	YearCovered bool // someone has maintained the calendar for this year
+	Close       time.Time
+	HasClose    bool
+	// CloseUnreadable is true when a shortened row carries a close_ct that
+	// cannot be parsed. Such a day is demoted to CLOSED rather than traded to
+	// a guessed time — an unreadable close is not a full trading day.
+	CloseUnreadable bool
+	// UncoveredFallback is true when the year is not covered and the superseded
+	// boolean decided this date instead. Named, never silent.
+	UncoveredFallback bool
+}
+
+// SessionStateAt resolves the classification for an instant. It is the ONE
+// place the calendar and the fallback meet, so nothing downstream can consult
+// half of the answer.
+//
+// The safe side is CLOSED in every ambiguous branch: an unreadable close time,
+// an unrecognised class, and an uncovered year all refuse to trade rather than
+// assume a normal day. Placing a trade is the destructive branch here.
+func SessionStateAt(now time.Time) SessionState {
+	ct := now.In(CTLocation())
+	st := SessionState{
+		Date:        ct.Format("2006-01-02"),
+		YearCovered: SessionCalendarCoversYear(ct.Year()),
+	}
+
+	// YEAR NOT COVERED — nobody has checked this year. Fall back to the
+	// superseded boolean, which errs closed, and say so on every surface.
+	if !st.YearCovered {
+		st.UncoveredFallback = true
+		st.Source = "year not covered by the calendar — the superseded holiday boolean is deciding, which errs CLOSED"
+		if isCMEHoliday(ct) {
+			st.Class, st.Name = SessionClosed, "holiday (uncovered year)"
+			return st
+		}
+		st.Class = SessionNormal
+		return st
+	}
+
+	day, listed := SessionDayFor(ct)
+	st.Listed = listed
+	if !listed {
+		// D2: a date absent from a COVERED year is a normal date.
+		st.Class = SessionNormal
+		st.Source = "not listed — a normal date in a covered year"
+		return st
+	}
+	st.Name, st.Source = day.Name, day.Source
+
+	switch day.Class {
+	case SessionClosed:
+		st.Class = SessionClosed
+	case SessionShortened:
+		close, ok := parseCloseCT(ct, day.CloseCT)
+		if !ok {
+			// D2/C4: present but unclassifiable → CLOSED, and it says so.
+			st.Class, st.CloseUnreadable = SessionClosed, true
+			return st
+		}
+		st.Class, st.Close, st.HasClose = SessionShortened, close, true
+	default:
+		// An unrecognised class is a typo in data that ships inside the binary.
+		// It must not degrade to a normal trading day (A24).
+		st.Class, st.CloseUnreadable = SessionClosed, true
+	}
+	return st
+}

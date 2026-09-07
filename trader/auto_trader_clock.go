@@ -875,7 +875,15 @@ func (at *AutoTrader) maybeRecordClosedTradeAnalyticsAt(now time.Time) {
 
 // tickOnce runs one loop iteration: a grid cycle, or (for AI strategies) a
 // decision cycle gated by bar-close cadence.
-func (at *AutoTrader) tickOnce(isGrid bool) {
+// tickOnce runs one cycle. It returns TRUE when the cycle took the closed-market
+// path — the caller needs that to decide whether an "overrun" is a fault or the
+// deliberate backoff (E5, owner ruling 2026-09-07).
+func (at *AutoTrader) tickOnce(isGrid bool) (closedSkip bool) {
+	// E5: one flag, one lifetime. Cleared at entry and read at every exit, so a
+	// cycle that returns early (grid, stale_dodge, cadence) can never inherit
+	// the previous cycle's closed-market verdict.
+	at.lastTickClosedSkip = false
+	defer func() { closedSkip = at.lastTickClosedSkip }()
 	if isGrid {
 		if err := at.RunGridCycle(); err != nil {
 			at.logErrorf("❌ Grid execution failed: %v", err)
@@ -932,4 +940,5 @@ func (at *AutoTrader) tickOnce(isGrid bool) {
 	if err := at.runCycle(); err != nil {
 		at.logErrorf("❌ Execution failed: %v", err)
 	}
+	return
 }
