@@ -193,3 +193,46 @@ func TestCancelInFlightStatesAreNamedExactly(t *testing.T) {
 		}
 	}
 }
+
+// ── THE ORPHAN CASE (2026-09-07) ─────────────────────────────────────────────
+//
+// The children-without-entry shape means two OPPOSITE things depending on one
+// fact the adjudicator was not given:
+//
+//   position OPEN  → those children are the protection. 2026-09-06 23:37:02.
+//   position FLAT  → those children are ORPHANS. Class 27, 2026-08-31: a
+//                    netting close left an arm's SL resting and it fired 26
+//                    minutes later, opening a NAKED SHORT.
+//
+// Refusing both leaves the orphan alive; allowing both is the naked stop. The
+// guard therefore asks whether a position is actually open, and — A24 — an
+// UNKNOWN position is treated as open, because that is the non-destructive side.
+func TestOrphanBracketIsCancellableOnlyWhenTheBrokerSaysFlat(t *testing.T) {
+	book := []nt.NT8Order{
+		{Name: sig592 + "-sl", State: "Accepted", StopPrice: 29554},
+		{Name: sig592 + "-tp", State: "Working", LimitPrice: 29623},
+	}
+
+	// broker FLAT → orphans, sweep them (class 27)
+	if v := adjudicateArmCancelWith(store.StateWorking, sig592, book, true,
+		positionContext{Known: true, Open: false}); !v.Allow {
+		t.Fatalf("orphan legs left alive with the broker FLAT — this is class 27: a resting stop "+
+			"fires later and opens a naked position. why=%s", v.Why)
+	}
+
+	// broker holds a POSITION → this is protection, never touch it (09-06)
+	if v := adjudicateArmCancelWith(store.StateWorking, sig592, book, true,
+		positionContext{Known: true, Open: true}); v.Allow {
+		t.Fatal("the protective pair of an OPEN position was cleared for cancellation — 2026-09-06")
+	}
+
+	// position UNKNOWN → the non-destructive side, exactly as before
+	if v := adjudicateArmCancelWith(store.StateWorking, sig592, book, true,
+		positionContext{}); v.Allow {
+		t.Fatal("an UNKNOWN position took the destructive branch (A24)")
+	}
+	// and the plain entry point must keep that conservative default
+	if v := adjudicateArmCancel(store.StateWorking, sig592, book, true); v.Allow {
+		t.Fatal("the default adjudicator stopped refusing the children case")
+	}
+}

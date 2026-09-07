@@ -249,6 +249,17 @@ func (at *AutoTrader) cancelOtherArmsInPlan(ledger *store.ArmedOrderStore, rows 
 		// it; review had not.
 		if rr.SignalID != "" {
 			if ntTrader != nil {
+				// D4 (2026-09-07) — THE SAME FILLED-ARM GUARD AS THE SEVEN IN
+				// armed_executor.go. This sender was missed by the 09-06 wave:
+				// each site was reviewed on its own, and this one sends the
+				// identical frame. isTerminalArmState above already skips a
+				// row the LEDGER calls filled — but the ledger is a memory, and
+				// at 23:37:02 it was a minute out of date. The book decides.
+				if v := at.cancelSafetyFor(rr, now); !v.Allow {
+					at.logWarnf("🛟 armed cancel REFUSED (one_live_entry): %s %s leg %d signal=%s — %s",
+						rr.Session, rr.Scenario, rr.LegIndex+1, shortID(rr.SignalID), v.Why)
+					continue
+				}
 				if cerr := ntTrader.CancelOrder(rr.SignalID); cerr != nil {
 					at.logWarnf("✕ armed cancel SEND failed (one_live_entry): %s %s leg %d: %v",
 						rr.Session, rr.Scenario, rr.LegIndex+1, cerr)

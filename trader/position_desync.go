@@ -3,6 +3,7 @@ package trader
 import (
 	"os"
 	"strings"
+	"time"
 
 	"nofx/store"
 	"nofx/telemetry"
@@ -42,7 +43,13 @@ func positionReconcileEnabled() bool {
 // live broker truth (broker flat) — the caller then refuses to skip. Fail-safe
 // posture: any inability to get fresh truth (nil trader, feed down, error)
 // returns false → existing skip behavior is kept.
+// skipGateDesync is the entry point and owns the clock (A28/class 60); the
+// judgement lives in skipGateDesyncAt so tests state their own.
 func (at *AutoTrader) skipGateDesync(storeRows []*store.TraderPosition) bool {
+	return at.skipGateDesyncAt(storeRows, time.Now())
+}
+
+func (at *AutoTrader) skipGateDesyncAt(storeRows []*store.TraderPosition, now time.Time) bool {
 	if !positionReconcileEnabled() || at.trader == nil || len(storeRows) == 0 {
 		return false
 	}
@@ -89,13 +96,22 @@ func (at *AutoTrader) skipGateDesync(storeRows []*store.TraderPosition) bool {
 			// the shape the defect grows in, so the rule is enforced on the
 			// shape rather than on today's contents. The wording was already
 			// honest and is unchanged: SENT, not cancelled.
-			if err := nt.CancelOrder(row.EntryOrderID); err != nil {
-				at.logWarnf("🧹 class-27 desync: cancel_order SEND FAILED for %s (%s %s row=%d): %v",
-					row.EntryOrderID, row.Symbol, row.Side, row.ID, err)
-			} else {
-				at.logWarnf("🧹 class-27 desync: cancel_order sent for orphan bracket %s (%s %s row=%d) — immediate, no grace; SENT is not CONFIRMED",
-					row.EntryOrderID, row.Symbol, row.Side, row.ID)
+			// D4 (2026-09-07) — GUARDED, BUT WITH THE BROKER'S POSITION TRUTH.
+			//
+			// This sender was the second one the 09-06 wave missed. It cannot
+			// carry the plain guard: children-with-no-entry is exactly the shape
+			// it exists to sweep, and the plain guard refuses that shape to
+			// protect a live position. Here there IS no live position — every
+			// row reaching this loop was checked against the broker's own
+			// positions above and found FLAT (the `held[...]` early return).
+			// So the guard is given that fact and allows the sweep, while still
+			// refusing if the book ever shows an entry still resting.
+			if !at.cancelSignalIfSafeWith(nt.CancelOrder, row.EntryOrderID,
+				"class-27 desync", now, positionContext{Known: true, Open: false}) {
+				continue
 			}
+			at.logWarnf("🧹 class-27 desync: cancel_order sent for orphan bracket %s (%s %s row=%d) — immediate, no grace; SENT is not CONFIRMED",
+				row.EntryOrderID, row.Symbol, row.Side, row.ID)
 		}
 	}
 	return true

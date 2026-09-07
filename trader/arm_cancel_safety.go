@@ -72,7 +72,25 @@ func entryIsResting(book []nt.NT8Order, signalID string) (found bool, childrenSe
 // It refuses on ignorance. Cancelling is the destructive branch here — it can
 // remove a live protective stop — so an unreadable book is a refusal, not a
 // permission (A24: UNKNOWN never takes the destructive branch).
+// positionContext carries the ONE fact that tells the two children-without-entry
+// shapes apart. Its zero value means "we do not know", which is deliberately the
+// conservative reading: an unknown position is treated as OPEN, so ignorance
+// never reaches the destructive branch (A24).
+type positionContext struct {
+	Known bool
+	Open  bool
+}
+
+// adjudicateArmCancel is the conservative entry point: no position context, so
+// the children case is always refused. Every caller that has not established
+// what the broker holds uses this.
 func adjudicateArmCancel(ledgerState, signalID string, book []nt.NT8Order, haveBook bool) armCancelVerdict {
+	return adjudicateArmCancelWith(ledgerState, signalID, book, haveBook, positionContext{})
+}
+
+// adjudicateArmCancelWith is the same adjudication with the broker's position
+// truth supplied. PURE.
+func adjudicateArmCancelWith(ledgerState, signalID string, book []nt.NT8Order, haveBook bool, pos positionContext) armCancelVerdict {
 	if strings.TrimSpace(signalID) == "" {
 		return armCancelVerdict{false, "the arm has no signal id — nothing was ever placed under it"}
 	}
@@ -95,7 +113,25 @@ func adjudicateArmCancel(ledgerState, signalID string, book []nt.NT8Order, haveB
 		return armCancelVerdict{true, "the entry is still resting at the broker"}
 	}
 	if children {
-		return armCancelVerdict{false, "the entry has FILLED — only its OCO children remain, and a cancel would take the protection with it (2026-09-06 23:37:02)"}
+		// TWO OPPOSITE MEANINGS, ONE SHAPE (2026-09-07).
+		//
+		// Children with no entry means the entry is gone. Whether that is a
+		// disaster or a mess depends entirely on whether a position exists:
+		//
+		//   OPEN → these ARE the protection. Cancelling them is 2026-09-06
+		//          23:37:02: accepted stop 29554 and target 29623 withdrawn,
+		//          position 592 naked for 8h19m.
+		//   FLAT → these are ORPHANS. Class 27, 2026-08-31: a netting close
+		//          left an arm's stop resting and it fired 26 minutes later,
+		//          opening a NAKED SHORT. Leaving them alive is the bug.
+		//
+		// Refusing both cases would re-open class 27; allowing both is the
+		// naked stop. So the caller that KNOWS is asked, and the caller that
+		// does not know gets the non-destructive answer.
+		if pos.Known && !pos.Open {
+			return armCancelVerdict{true, "the entry is gone and the broker reports FLAT — these are ORPHAN protective orders with no position behind them; leaving them resting is class 27 (a stop that fires later and opens a naked position)"}
+		}
+		return armCancelVerdict{false, "the entry has FILLED — only its bracket children remain, and a cancel would take the protection with it (2026-09-06 23:37:02)"}
 	}
 	// NOTHING AT ALL under this signal. This is NOT the dangerous case and must
 	// not be refused: there is no protection to lose, and refusing would strand
@@ -113,8 +149,16 @@ func adjudicateArmCancel(ledgerState, signalID string, book []nt.NT8Order, haveB
 //
 // Returns true when the cancel was actually sent.
 func (at *AutoTrader) cancelSignalIfSafe(send func(string) error, signalID, who string, now time.Time) bool {
+	return at.cancelSignalIfSafeWith(send, signalID, who, now, positionContext{})
+}
+
+// cancelSignalIfSafeWith is the same gate for a caller that has already
+// established what the broker holds — the class-27 desync sweep, which reaches
+// its cancel loop only after reading the broker FLAT for every row it is about
+// to sweep.
+func (at *AutoTrader) cancelSignalIfSafeWith(send func(string) error, signalID, who string, now time.Time, pos positionContext) bool {
 	book, have, _ := at.liveBook(now)
-	v := adjudicateArmCancel(store.StateWorking, signalID, book, have)
+	v := adjudicateArmCancelWith(store.StateWorking, signalID, book, have, pos)
 	if !v.Allow {
 		at.logWarnf("🛟 cancel REFUSED (%s) signal=%s — %s", who, shortID(signalID), v.Why)
 		return false

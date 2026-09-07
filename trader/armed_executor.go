@@ -2051,6 +2051,14 @@ func (at *AutoTrader) cancelArmedOrdersSyncWith(reason string, timeout time.Dura
 		}
 		acked := false
 		for attempt := 1; attempt <= 2 && !acked; attempt++ {
+			// D4 (2026-09-07) — this seam sends the same frame as the seven
+			// guarded sites. r.State == "working" above is the LEDGER's word,
+			// and the ledger is a memory: at 2026-09-06 23:37:02 it was a
+			// minute out of date and a filled arm's bracket paid for it.
+			if v := at.cancelSafetyFor(r, time.Now()); !v.Allow {
+				at.logWarnf("🛟 armed cancel REFUSED (%s): signal=%s — %s", reason, shortID(r.SignalID), v.Why)
+				continue
+			}
 			if err := cancelFn(r.SignalID); err != nil {
 				at.logWarnf("⚠️ armed sync cancel send %s signal=%s failed: %v", r.Scenario, r.SignalID, err)
 			}
