@@ -2055,6 +2055,51 @@ curl -s -o /dev/null -w "HTTP %{http_code}  %{size_download} bytes\n" \
    `deploy/nofx-claim.sh check <branch>` FAILS on anything else —
    `audit` sweeps every claim on origin.
 
+   **THE SESSION FIELD CARRIES BOTH IDENTIFIERS — A CLAIM MUST BE ROUTABLE, NOT
+   MERELY ATTRIBUTABLE** (owner ruling 2026-09-07). Write it as:
+
+   ```
+   NOFX_SESSION="<wave>-<session-uuid-prefix>/<ListAgents-name>[<ref>]"
+   # e.g.  claimid-ee7f9468/nofx-db[ca9c60]
+   ```
+
+   The 2026-09-04 rule fixed attribution: a claim now names WHO. It did not fix
+   ADDRESSING, and the two are different problems. The uuid prefix is the lane's
+   identity in the claim/lock namespace; `ListAgents` addresses sessions by a
+   short ref in a DIFFERENT namespace, and nothing joins them. So a lane that
+   hits a collision can read the holder's name and still be unable to send it a
+   message.
+
+   **The evidence, 2026-09-07.** `fix/session-calendar` was claimed by
+   `session-calendar-554049f5`. A second lane hit the collision at step 0
+   exactly as designed, stood down exactly as designed — and then had to relay
+   two owner additions to a lane it could not address: `ListAgents` offered
+   `nofx-2c / nofx-ba / nofx-e7 / nofx-6b` and no row matching `554049f5`. The
+   message went to **all four sessions** because there was no way to send it to
+   one. Three lanes paid an interrupt for a message that concerned none of them,
+   and the fourth may not be the holder either. One message, four sends, delivery
+   still unconfirmed. The same gap had already appeared on 09-05 in the main-tree
+   lock, whose holder `wave-a-record-554049f5` was likewise absent from every
+   listing — so this is the second sighting, not a one-off.
+
+   Both halves are needed and neither substitutes for the other: the uuid prefix
+   survives in git after the session ends and is what a later reader greps; the
+   `name[ref]` is what `SendMessage` can actually deliver to while the lane is
+   alive. A claim carrying only the first is a forwarding address for a lane that
+   has moved out.
+
+   **Enforcement is a NAMED FOLLOW-UP, not part of this entry.** The regex in
+   `deploy/nofx-claim.sh` (`CLAIM_RE`) treats the session field as `.+`, so the
+   composite form passes `check` today and so does the old bare form — verified
+   on this entry's own claim, which uses the new form and passes unchanged.
+   Until that regex is tightened by owner ruling, **this is a convention the
+   checker does not gate** (class 24: a check that prints but does not gate).
+   Stating that here rather than leaving the doc to imply an enforcement that
+   does not exist.
+
+   **A lane whose `[ref]` is unknown at claim time writes `[unlisted]`** — never
+   a guess, and never omitted silently (A24).
+
    Why it is a rule and not a template: on 2026-09-04 step 0 worked perfectly and
    still left the lane stuck. `fix/reaper-reads-snapshot` was claimed as
    `claim: reaper reads the snapshot, not order_update silence (PART 3 step 0)`.
