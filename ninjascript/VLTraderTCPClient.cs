@@ -52,7 +52,7 @@ namespace NinjaTrader.NinjaScript.AddOns
         // E7 capability handshake (2026-08-30): reported on every heartbeat so
         // the Go side refuses frame types this build hasn't proven. Bump on any
         // additive wire change; Go gates on FarSideBuildE7 in tcp_framing.go.
-        private const string  VL_BUILD_ID             = "2026-09-05-g2";
+        private const string  VL_BUILD_ID             = "2026-09-07-h1";
         private const int    MAX_FRAME_BYTES         = 1 << 20; // 1 MB, spec L4376
 
         // === State ===
@@ -652,6 +652,12 @@ namespace NinjaTrader.NinjaScript.AddOns
                     // PHASE 2 armed orders — cancel a working limit entry and/or
                     // its protective bracket legs (managed Account.Cancel).
                     HandleCancelOrder(payload);
+                }
+                else if (type == "place_protective_stop")
+                {
+                    // D5 (2026-09-07) — restore a stop for a position the broker
+                    // is holding UNPROTECTED. Standalone: no bracket, no OCO group.
+                    HandlePlaceProtectiveStop(payload);
                 }
                 else if (type == "modify_bracket")
                 {
@@ -1540,8 +1546,22 @@ namespace NinjaTrader.NinjaScript.AddOns
                         // Terminal orders are history. The Go side filters again
                         // (one definition of "working" lives there), but shipping
                         // the whole history every 30s would grow without bound.
+                        //
+                        // D3 (2026-09-07) — "Unknown" WAS in this list and is not
+                        // any more. It is not history; it is the state we are
+                        // least entitled to act on. Dropped here it did not reach
+                        // Go as unknown, it reached Go as ABSENT — and absence is
+                        // what every "this order is gone" branch keys on: the
+                        // stale reaper cancels and marks the row cancelled,
+                        // cancel_pending is promoted to cancelled, entryIsResting
+                        // sees no children and allows the cancel, leg 4 counts
+                        // zero working orders, and the D5 reconciler concludes a
+                        // position is unprotected and places a SECOND stop beside
+                        // an invisible live one. Owner ruling 2026-09-07: UNKNOWN
+                        // is non-terminal and takes no destructive branch. That
+                        // is decided HERE, not in Go.
                         if (st == "Filled" || st == "Cancelled" || st == "Rejected" ||
-                            st == "Expired" || st == "Unknown")
+                            st == "Expired")
                             continue;
 
                         string sym = "";
@@ -1564,6 +1584,9 @@ namespace NinjaTrader.NinjaScript.AddOns
                         }
                         catch { }
 
+                        string tif = "";
+                        try { tif = o.TimeInForce.ToString(); } catch { }
+
                         orders.Add(new Dictionary<string, object>
                         {
                             ["order_id"]    = o.OrderId ?? "",
@@ -1576,6 +1599,12 @@ namespace NinjaTrader.NinjaScript.AddOns
                             ["filled"]      = o.Filled,
                             ["state"]       = st,
                             ["oco"]         = o.Oco ?? "",
+                            // D6 (2026-09-07) — the TIF rides the book so the boot
+                            // line can READ whether protective orders are actually
+                            // GTC instead of asserting it (A11). Additive: an older
+                            // Go build ignores it, and an older AddOn simply omits
+                            // it, which reads as "n/a" rather than as "Day".
+                            ["tif"]         = tif,
                             ["symbol"]      = sym ?? ""
                         });
                     }
@@ -1730,11 +1759,129 @@ namespace NinjaTrader.NinjaScript.AddOns
                             + " protections are never cancelled by an entry cancel;"
                             + " 2026-09-06 23:37:02)");
                 }
+                // The DEFERRED bracket for this entry is not a live order — it is
+                // our own note to place one WHEN the entry fills. A cancelled
+                // entry must not leave that note behind: SubmitBracketOnEntryFill
+                // fires on ANY later Filled for the same key, and nothing else
+                // clears it (only a REJECT did), so the map also grew for the
+                // life of the AddOn. Bookkeeping, not an order — and emphatically
+                // NOT the placedBrackets walk this handler no longer does. A
+                // no-op when the entry already filled, because the bracket was
+                // placed and the note consumed at that moment.
+                lock (signalMapLock) { pendingBrackets.Remove(signalId); }
                 SendAck("cancel_order");
             }
             catch (Exception ex)
             {
                 LogWarn("VLTraderTCPClient: cancel_order failed: " + ex.Message);
+            }
+        }
+
+        // D3 (2026-09-07) — THE ADDON'S ONE DEFINITION OF "LIVE AT THE EXCHANGE".
+        //
+        // HandleModifyBracket and HandleMoveStop each carried their own copy of
+        // `st != Working && st != Accepted`. Two copies of a two-state whitelist
+        // is how the tree ended up disagreeing with itself about TriggerPending —
+        // which NT8 holds on THIS PC and which neither side should treat as
+        // protection at the exchange. Mirrors ClassifyOrderState's LivenessLive
+        // in provider/ninjatrader/order_state.go; change them together.
+        private static bool IsLiveAtExchange(OrderState st)
+        {
+            return st == OrderState.Working || st == OrderState.Accepted;
+        }
+
+        // ── D5 (2026-09-07) — PLACE A STOP FOR AN UNPROTECTED POSITION ──
+        //
+        // The reconciler on the Go side has established, from the broker's own
+        // book, that a position is open and NOTHING protective is resting for
+        // it. That is the one case where acting beats reporting (owner ruling).
+        //
+        // STANDALONE BY DESIGN. This order joins no OCO group. A group is what
+        // lets one cancel take another order with it, and this stop exists
+        // precisely because the last one went away. It is GTC for the same
+        // reason the bracket legs are: a protective order must not expire while
+        // the position it protects survives.
+        //
+        // It is named "<signal>-sl" so every existing reader — accepted_risk's
+        // leg naming, entryIsResting's child detection, the reconciler's own
+        // next pass — sees it as the protection it is.
+        private void HandlePlaceProtectiveStop(Dictionary<string, object> p)
+        {
+            try
+            {
+                if (p == null) { LogWarn("VLTraderTCPClient: place_protective_stop empty payload"); return; }
+                string signalId = GetString(p, "signal_id");
+                string symbol   = GetString(p, "symbol");
+                string side     = (GetString(p, "position_side") ?? "").ToUpperInvariant();
+                string acctName = GetString(p, "account");
+                string reason   = GetString(p, "reason");
+                double stopPx   = 0.0;
+                double qtyD     = 0.0;
+                try { stopPx = GetDouble(p, "stop_price"); } catch { }
+                try { qtyD   = GetDouble(p, "quantity"); } catch { }
+                int qty = (int)qtyD;
+
+                if (string.IsNullOrEmpty(signalId) || string.IsNullOrEmpty(symbol)
+                    || (side != "LONG" && side != "SHORT") || qty <= 0 || stopPx <= 0)
+                {
+                    LogWarn("VLTraderTCPClient: place_protective_stop REFUSED — incomplete request"
+                            + " signal_id=" + signalId + " symbol=" + symbol + " side=" + side
+                            + " qty=" + qty + " stop=" + stopPx
+                            + " (a protective order is never sized or priced from a zero)");
+                    SendAck("place_protective_stop_error");
+                    return;
+                }
+
+                // Resolve the account the SAME way an entry does, and re-assert
+                // every guard on the exact submit target.
+                Account resolved = null;
+                if (!string.IsNullOrEmpty(acctName))
+                {
+                    lock (Account.All)
+                    {
+                        foreach (var a in Account.All)
+                            if (a.Name == acctName) { resolved = a; break; }
+                    }
+                }
+                Account ba = resolved ?? account;
+                if (ba == null || !IsSimAccount(ba)
+                    || ba.Connection == null || ba.Connection.Status != ConnectionStatus.Connected
+                    || !IsSessionAccount(ba.Name))
+                {
+                    LogWarn("VLTraderTCPClient: place_protective_stop HARD-REFUSED for " + signalId
+                            + " — submit target failed the SIM/connected/allowlist guard");
+                    SendAck("place_protective_stop_error");
+                    return;
+                }
+
+                string contract = VLContractResolver.ResolveFrontMonthContract(symbol);
+                var instrument = Instrument.GetInstrument(contract);
+                if (instrument == null)
+                {
+                    LogWarn("VLTraderTCPClient: place_protective_stop — instrument " + symbol
+                            + " (resolved to " + contract + ") not found; position stays UNPROTECTED");
+                    SendAck("place_protective_stop_error");
+                    return;
+                }
+
+                OrderAction exitAction = (side == "LONG") ? OrderAction.Sell : OrderAction.BuyToCover;
+                SubscribeOrderUpdate(ba);
+                var slOrder = ba.CreateOrder(
+                    instrument, exitAction, OrderType.StopMarket, OrderEntry.Manual,
+                    TimeInForce.Gtc, qty, 0, stopPx, string.Empty, signalId + "-sl",
+                    Core.Globals.MaxDate, null);
+                ba.Submit(new[] { slOrder });
+                LogInfo("VLTraderTCPClient: PLACED protective stop signal_id=" + signalId
+                        + " " + side + " " + symbol + " qty=" + qty + " stop=" + stopPx
+                        + " oco=<none> tif=Gtc name=" + signalId + "-sl"
+                        + " reason=" + (reason ?? "reconciler"));
+                SendAck("place_protective_stop");
+            }
+            catch (Exception ex)
+            {
+                LogWarn("VLTraderTCPClient: place_protective_stop FAILED: " + ex.Message
+                        + " — the position remains UNPROTECTED");
+                SendAck("place_protective_stop_error");
             }
         }
 
@@ -1768,7 +1915,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                 if (newSl > 0 && pb.SlOrder != null)
                 {
                     OrderState st = pb.SlOrder.OrderState;
-                    if (st != OrderState.Working && st != OrderState.Accepted)
+                    if (!IsLiveAtExchange(st))
                     {
                         LogWarn("VLTraderTCPClient: modify_bracket refused — stop not changeable (state=" + st + ") for " + signalId);
                         SendAck("modify_bracket_error");
@@ -1780,7 +1927,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                 if (newTp > 0 && pb.TpOrder != null)
                 {
                     OrderState st = pb.TpOrder.OrderState;
-                    if (st != OrderState.Working && st != OrderState.Accepted)
+                    if (!IsLiveAtExchange(st))
                     {
                         LogWarn("VLTraderTCPClient: modify_bracket refused — target not changeable (state=" + st + ") for " + signalId);
                         SendAck("modify_bracket_error");
@@ -1836,7 +1983,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                 // the order is gone — do NOT touch it; error-ACK so Go knows the move did
                 // not happen (it re-arms and retries on the next cycle).
                 OrderState st = pb.SlOrder != null ? pb.SlOrder.OrderState : OrderState.Unknown;
-                if (pb.SlOrder == null || (st != OrderState.Working && st != OrderState.Accepted))
+                if (pb.SlOrder == null || !IsLiveAtExchange(st))
                 {
                     LogWarn("VLTraderTCPClient: move_stop refused — stop not changeable (state=" + st + ") for " + signalId);
                     SendAck("move_stop_error");

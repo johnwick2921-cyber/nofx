@@ -48,6 +48,11 @@ var alsoRequireWired = []string{
 	"armSlotGuard",
 	"confirmPendingCancels",
 	"reconcileOncePerBoot",
+	// BRACKET-OCO SEPARATION (2026-09-07). D5's reconciler is the only thing
+	// in this process that asks whether an open position is protected. Unwired,
+	// the 09-06 hole is open again and every test in this wave still passes.
+	"reconcileProtectionAt",
+	"protectionPricesFor",
 }
 
 func TestEveryClaimedProductionPathHasACallSite(t *testing.T) {

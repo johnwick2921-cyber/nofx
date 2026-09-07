@@ -240,6 +240,19 @@ const FarSideBuildE7 = "2026-08-30-e7"
 // Every future minimum MUST advance the ISO DATE, never only the suffix.
 const MinAddonBuildStopSlot = "2026-09-05-g2"
 
+// MinAddonBuildProtectiveStop is the minimum AddOn build that can honour
+// place_protective_stop — the frame D5's reconciler uses to restore a stop for a
+// position the broker holds unprotected. There was NO wire command for this
+// before 2026-09-07: SetStopLoss writes a local map that a later entry reads
+// (trader/ninjatrader/tcp_trader.go), move_stop needs a stop that already
+// exists, and modify_bracket needs a live bracket. So an older AddOn cannot
+// place one, and the reconciler must REFUSE to send rather than log a placement
+// that never happened.
+//
+// The ISO DATE advances, per the rule above: a suffix-only bump would let an
+// older same-date build satisfy this.
+const MinAddonBuildProtectiveStop = "2026-09-07-h1"
+
 // ErrAddonBuildTooOld is the sentinel behind a stop entry refused because the
 // AddOn NT8 has loaded predates the stop-slot fix. Callers errors.Is on it so a
 // build refusal is counted apart from a transport or account failure.
@@ -416,6 +429,27 @@ type AccountRegisterPayload struct {
 // exactly why the paired C# redeploy (cp → F5 → NT8 restart) is required to
 // activate breakeven.
 const FrameMoveStop FrameType = "move_stop"
+
+// FramePlaceProtectiveStop asks the AddOn to place a STANDALONE protective stop
+// for a position that has none — D5, 2026-09-07. It is not part of a bracket
+// and joins no existing OCO group: it exists because the position is naked, and
+// a group is what would let something else cancel it.
+const FramePlaceProtectiveStop FrameType = "place_protective_stop"
+
+// PlaceProtectiveStopPayload is the Go-server → C#-AddOn request. Quantity is
+// the position size to cover; StopPrice is tick-rounded by the caller.
+type PlaceProtectiveStopPayload struct {
+	Symbol       string  `json:"symbol"`
+	SignalID     string  `json:"signal_id"`     // names the order "<signal>-sl"
+	PositionSide string  `json:"position_side"` // LONG | SHORT — the side HELD
+	Quantity     int     `json:"quantity"`
+	StopPrice    float64 `json:"stop_price"`
+	Reason       string  `json:"reason,omitempty"`
+	Timestamp    string  `json:"timestamp"`
+	Account      string  `json:"account,omitempty"`
+	TraderID     string  `json:"trader_id,omitempty"`
+	Seq          uint64  `json:"seq,omitempty"`
+}
 
 // MoveStopPayload is the Go-server → C#-AddOn move-stop request.
 type MoveStopPayload struct {

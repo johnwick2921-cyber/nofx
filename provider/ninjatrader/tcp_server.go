@@ -1092,6 +1092,22 @@ func (s *TCPServer) SendMoveStop(payload MoveStopPayload) error {
 
 // SendCancelOrder (PHASE 2 armed orders) asks the AddOn to cancel a working
 // resting limit entry and/or its bracket legs. Immediate command.
+// SendPlaceProtectiveStop puts a standalone protective stop on the wire (D5).
+func (s *TCPServer) SendPlaceProtectiveStop(payload PlaceProtectiveStopPayload) error {
+	s.connMu.Lock()
+	c := s.conn
+	s.connMu.Unlock()
+	if c == nil {
+		return fmt.Errorf("ninjatrader/tcp: no NT client connected")
+	}
+	payload.Seq = s.assignSeqRegister(payload.TraderID, payload.Account, payload.SignalID)
+	s.writeMu.Lock()
+	_ = c.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	err := WriteFrame(c, FramePlaceProtectiveStop, payload)
+	s.writeMu.Unlock()
+	return err
+}
+
 func (s *TCPServer) SendCancelOrder(payload CancelOrderPayload) error {
 	s.connMu.Lock()
 	c := s.conn

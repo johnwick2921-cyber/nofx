@@ -477,6 +477,13 @@ func main() {
 	logger.Infof("🔗 %s", st.AttributionBootLine())
 	logger.Infof("⚙ %s", store.KnobRegistryBootLine())
 	logger.Infof("%s", trader.ArmsBootLine())
+	// BRACKET-OCO SEPARATION (2026-09-07) — D7. Three of these fields describe
+	// the C# AddOn, which this process cannot read from its own source, so they
+	// are read from the broker's book and print n/a until one arrives. At boot
+	// there is no book and no far-side build id, so this line is mostly n/a BY
+	// DESIGN: a resolved "entry-oco=own" here would be a Go constant claiming
+	// the AddOn's behaviour (A11/A24).
+	logger.Infof("🧷 %s", trader.BracketsBootLine(nil, false, "", 0))
 	logger.Infof("🎛 %s", kernel.EntryLawBootLedger()) // P1.4 (ledger-close 2026-08-19) — clock-guard block: live host-RTC drift,
 	// guard-timer freshness, last resync/check state. Log-only, best-effort.
 	kernel.LogClockGuardBoot()

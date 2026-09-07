@@ -103,6 +103,14 @@ func (at *AutoTrader) driveDeadManWatchdog() {
 	case wdReconnected:
 		at.logWarnf("🔌 dead-man watchdog: NT8 TCP link back UP — sweeping unfilled entries; entries stay BLOCKED until a clean positions/orders reconciliation.")
 		at.cancelUnfilledEntriesAfterReconnect()
+		// D5 (2026-09-07) — C6: nothing rebuilds the bracket after a reconnect.
+		// The AddOn's placedBrackets is in-memory and repopulated from nowhere,
+		// so after NT8 restarts our side has forgotten the protections exist.
+		// This asks the broker directly. It usually answers UNKNOWN on this
+		// edge — the AddOn sends hello, accounts, balances and positions on
+		// connect but NO order_snapshot until its next beat — and saying so is
+		// the point; the monitor beat re-asks a minute later with a fresh book.
+		at.reconcileProtectionAt(time.Now(), "reconnect")
 	case wdResumed:
 		at.logInfof("✅ dead-man watchdog: clean positions/orders reconciliation — NEW entries RESUMED.")
 	}

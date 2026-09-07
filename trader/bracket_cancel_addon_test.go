@@ -197,3 +197,43 @@ func TestBracketQuantityComesFromTheFillEvent(t *testing.T) {
 			"quantity must come from the event that reported the fill")
 	}
 }
+
+// TestSnapshotDoesNotDropUnknownOrders — the owner's UNKNOWN ruling, enforced
+// where it is actually decided.
+//
+// Go was made to treat `unknown` as non-terminal (order_state.go). That fix is
+// worthless on its own, because the AddOn filters the book BEFORE Go sees it and
+// dropped Unknown along with Filled/Cancelled/Rejected/Expired. An Unknown order
+// therefore did not arrive as "unknown" — it arrived as ABSENT, and every Go
+// conclusion of "gone" is drawn from absence: the reaper cancels and marks
+// cancelled, cancel_pending is promoted to cancelled, entryIsResting reports no
+// children so a cancel is allowed, leg 4 counts zero working orders, and the D5
+// reconciler concludes a position is unprotected and places a SECOND stop.
+//
+// Filtering there was reasonable when the set was "history". Unknown is not
+// history; it is the one state we are least entitled to act on.
+func TestSnapshotDoesNotDropUnknownOrders(t *testing.T) {
+	src := stripCSharpComments(addonSource(t))
+	i := strings.Index(src, `st == "Filled"`)
+	if i < 0 {
+		t.Fatal("the snapshot's terminal filter was not found — this pin has lost its subject")
+	}
+	end := strings.Index(src[i:], "continue")
+	if end < 0 {
+		t.Fatal("could not read the end of the snapshot filter")
+	}
+	filter := src[i : i+end]
+	if strings.Contains(filter, `"Unknown"`) {
+		t.Fatalf("the order_snapshot filter still drops Unknown orders:\n    %s\n"+
+			"An order whose state the AddOn cannot read must be SHIPPED, not omitted. "+
+			"Omitted, it reaches Go as absent, and absence is what every 'this order is gone' "+
+			"branch keys on — including the D5 reconciler, which would place a second stop "+
+			"beside an invisible live one.", strings.TrimSpace(filter))
+	}
+	for _, terminal := range []string{`"Filled"`, `"Cancelled"`, `"Rejected"`} {
+		if !strings.Contains(filter, terminal) {
+			t.Errorf("the snapshot filter no longer drops %s — genuinely terminal orders must "+
+				"still be filtered, or the book grows without bound", terminal)
+		}
+	}
+}

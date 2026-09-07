@@ -37,7 +37,11 @@ type NT8Order struct {
 	Filled     int     `json:"filled,omitempty"`
 	State      string  `json:"state,omitempty"`
 	OCO        string  `json:"oco,omitempty"`
-	TimeMs     int64   `json:"time_ms,omitempty"`
+	// TimeInForce rides the book from AddOn build 2026-09-07-h1 so D6 can be
+	// READ from a received frame rather than asserted (A11). An older AddOn
+	// omits it and it stays "" — which renders as n/a, never as "Day".
+	TimeInForce string `json:"tif,omitempty"`
+	TimeMs      int64  `json:"time_ms,omitempty"`
 }
 
 // The terminal set and IsWorking now live in order_state.go: one graded
@@ -198,7 +202,7 @@ func (s *TCPServer) SetOrderSnapshotSink(fn func(OrderSnapshotPayload)) { s.orde
 // running an older compile, and a line that read this constant as if it were
 // the running build would report success for a change that never landed
 // (class 6 — proof is a RECEIVED frame).
-const ExpectedAddonBuild = "2026-09-05-g2"
+const ExpectedAddonBuild = "2026-09-07-h1"
 
 // AddonBuildLine renders the build-id half of the boot line. `received` comes
 // from TCPServer.FarSideBuildID() — a value that arrived on the wire.

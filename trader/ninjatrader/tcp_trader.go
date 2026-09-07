@@ -756,6 +756,47 @@ func (t *TCPTrader) SetMarginMode(symbol string, isCrossMargin bool) error {
 	return nil // n/a for futures
 }
 
+// PlaceProtectiveStop places a STANDALONE protective stop for a position the
+// broker is holding with no protection (D5, 2026-09-07).
+//
+// NOTE FOR THE NEXT READER: SetStopLoss below is NOT this. It writes a price
+// into a local map that a subsequent placeEntry reads — it puts nothing on the
+// wire and creates no order. Before today there was no way for this process to
+// place a protective stop for an already-open position at all, which is part of
+// why position 592 stayed naked for 8h19m: nothing was watching, and nothing
+// could have fixed it if it had been.
+func (t *TCPTrader) PlaceProtectiveStop(symbol, positionSide string, quantity int, stopPrice float64, signalID, reason string) error {
+	// CAPABILITY HANDSHAKE. An older AddOn has no handler for this frame. Rather
+	// than send into the dark and log a placement that never happened (class 81),
+	// refuse and name the build.
+	if bid := t.server.FarSideBuildID(); !ntwire.FarSideProven(bid, ntwire.MinAddonBuildProtectiveStop) {
+		return fmt.Errorf("ninjatrader/tcp: refusing protective-stop %s %s stop=%.2f qty=%d [guard=far_side_build] — addon build cannot place a standalone protective stop (build_id=%s, need ≥ %s); the position stays UNPROTECTED and this is reported, not silently retried: %w",
+			positionSide, symbol, stopPrice, quantity, ntwire.BuildIDForLog(bid), ntwire.MinAddonBuildProtectiveStop, ntwire.ErrAddonBuildTooOld)
+	}
+	tradeAcct := t.boundAccount
+	if tradeAcct == "" {
+		return fmt.Errorf("ninjatrader/tcp: refusing protective-stop %s on %s — trader has no bound account", positionSide, symbol)
+	}
+	if !t.isAccountTradeable(tradeAcct) {
+		return fmt.Errorf("ninjatrader/tcp: refusing protective-stop %s — account %q is not tradeable (not on allow-list / not SIM)", positionSide, tradeAcct)
+	}
+	if quantity <= 0 || stopPrice <= 0 {
+		return fmt.Errorf("ninjatrader/tcp: refusing protective-stop %s %s — qty=%d stop=%.2f; a protective order is never sized or priced from a zero", positionSide, symbol, quantity, stopPrice)
+	}
+	tick := InstrumentTickSize(t.symbol)
+	return t.server.SendPlaceProtectiveStop(ntwire.PlaceProtectiveStopPayload{
+		Symbol:       symbol,
+		SignalID:     signalID,
+		PositionSide: upperSideStr(positionSide),
+		Quantity:     quantity,
+		StopPrice:    RoundToTick(stopPrice, tick),
+		Reason:       reason,
+		Timestamp:    time.Now().UTC().Format(time.RFC3339),
+		Account:      tradeAcct,
+		TraderID:     t.traderID,
+	})
+}
+
 func (t *TCPTrader) SetStopLoss(symbol, positionSide string, quantity, stopPrice float64) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
