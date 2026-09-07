@@ -1,0 +1,76 @@
+{
+  "_about": [
+    "THE CME SESSION CALENDAR — data, not code (owner ruling 2026-09-07).",
+    "",
+    "It replaced a boolean. isCMEHoliday() returned true for every holiday and the",
+    "gate treated all of them as FULL closures, with the code's own comment saying",
+    "so: 'for v1 we treat them as full closures and refuse to trade. Refine in",
+    "Plan 3 if it becomes restrictive.' On 2026-09-07 it became restrictive: the",
+    "bot skipped every cycle of a Labor Day session in which MNQ traded 980 bars",
+    "across 153.50 points, and no LONDON plan was ever read.",
+    "",
+    "SHORTENED SESSIONS ARE TRADING SESSIONS. A date is one of three things:",
+    "  closed     — no trading at all",
+    "  shortened  — trades normally until close_ct, then flat",
+    "  (absent)   — a normal date; the weekly rules alone decide",
+    "",
+    "EVERY ENTRY CITES A SOURCE. Where the source is an owner ruling rather than a",
+    "published schedule it says so, so a later reader can tell what was verified",
+    "from what was decided. CME republishes these each year: BEFORE A NEW YEAR IS",
+    "TRADED, the next year's block must be checked against CME Group's published",
+    "holiday calendar and its source lines updated. An absent year is not a year of",
+    "normal days — SessionCalendar reports the year as UNCOVERED and the caller",
+    "decides; it never silently assumes."
+  ],
+  "covered_years": [2026],
+  "dates": [
+    {
+      "date": "2026-01-01", "class": "closed", "name": "New Year's Day",
+      "source": "owner ruling 2026-09-07 — full closure"
+    },
+    {
+      "date": "2026-01-19", "class": "shortened", "close_ct": "12:00", "name": "MLK Day",
+      "source": "CME equity-index early-close convention (12:00 CT); NOT owner-verified — check against CME's published 2026 calendar"
+    },
+    {
+      "date": "2026-02-16", "class": "shortened", "close_ct": "12:00", "name": "Presidents Day",
+      "source": "CME equity-index early-close convention (12:00 CT); NOT owner-verified — check against CME's published 2026 calendar"
+    },
+    {
+      "date": "2026-04-03", "class": "closed", "name": "Good Friday",
+      "source": "owner ruling 2026-09-07 — full closure"
+    },
+    {
+      "date": "2026-05-25", "class": "shortened", "close_ct": "12:00", "name": "Memorial Day",
+      "source": "owner ruling 2026-09-07 — trades to its stated close"
+    },
+    {
+      "date": "2026-06-19", "class": "shortened", "close_ct": "12:00", "name": "Juneteenth",
+      "source": "CME equity-index early-close convention (12:00 CT); NOT owner-verified — check against CME's published 2026 calendar"
+    },
+    {
+      "date": "2026-07-03", "class": "shortened", "close_ct": "12:00", "name": "Independence Day (observed)",
+      "source": "owner ruling 2026-09-07 — trades to its stated close"
+    },
+    {
+      "date": "2026-09-07", "class": "shortened", "close_ct": "12:00", "name": "Labor Day",
+      "source": "owner ruling 2026-09-07, made on the day: the feed carried 980 session bars over 153.50 pts while the gate called it closed"
+    },
+    {
+      "date": "2026-11-26", "class": "closed", "name": "Thanksgiving Day",
+      "source": "owner ruling 2026-09-07 — full closure"
+    },
+    {
+      "date": "2026-11-27", "class": "shortened", "close_ct": "12:00", "name": "Day after Thanksgiving",
+      "source": "owner ruling 2026-09-07 — trades to its stated close"
+    },
+    {
+      "date": "2026-12-24", "class": "shortened", "close_ct": "12:00", "name": "Christmas Eve",
+      "source": "owner ruling 2026-09-07 — trades to its stated close"
+    },
+    {
+      "date": "2026-12-25", "class": "closed", "name": "Christmas Day",
+      "source": "owner ruling 2026-09-07 — full closure"
+    }
+  ]
+}
