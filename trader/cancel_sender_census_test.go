@@ -39,10 +39,7 @@ var cancelSendRe = regexp.MustCompile(`\b(nt|ntTrader|trader)\.CancelOrder\b`)
 // delegatingSenders hand the RAW wire to a seam that adjudicates per row. The
 // delegation is not taken on trust: the named callee is checked for a guard, so
 // this exemption cannot rot into a hole.
-var delegatingSenders = map[string]string{
-	"cancelArmedOrdersSync": "cancelArmedOrdersSyncWith",
-	"sweepPreBootArms":      "sweepPreBootArmsWith",
-}
+var delegatingSenders = map[string]string{}
 
 // guardedBy names the two adjudicators. Both end in adjudicateArmCancel.
 var guardRe = regexp.MustCompile(`cancelSafetyFor\(|cancelSignalIfSafe`)
@@ -53,6 +50,32 @@ var guardRe = regexp.MustCompile(`cancelSafetyFor\(|cancelSignalIfSafe`)
 var exemptSenders = map[string]string{
 	"TestArmCancel":          "explicit test seam, debug endpoint only — never reached by the trading loop",
 	"cancelSignalIfSafeWith": "this IS the guard; it adjudicates before it sends",
+
+	// ── DELIBERATELY UNGUARDED, 2026-09-07 ──────────────────────────────────
+	//
+	// The census found these two beyond the two the owner named, and guarding
+	// them was tried and REVERTED. The guard refuses when there is no broker
+	// book, and on these two paths refusing is the MORE dangerous failure:
+	//
+	//   cancelArmedOrdersSyncWith is what flattens at session close and on a
+	//   news halt. A refusal there leaves live arms standing into an EOD
+	//   flatten or a news event. (TestSListEODFlatCancelsArmsBeforeFlatten and
+	//   TestT1NewsFlatTraderArmCancelled both went red when it was guarded.)
+	//
+	//   sweepPreBootArmsWith retires orders orphaned by a dead process. A
+	//   refusal leaves them resting — the class-33 double-order of 2026-09-02
+	//   00:16 CT. It already has its OWN answer to a missing link: it DEFERS
+	//   without latching and retries next cycle, which is the same
+	//   conservatism expressed where it belongs.
+	//
+	// And the harm the Go guard exists to prevent is fixed at its source by
+	// D1: HandleCancelOrder no longer touches placedBrackets, so a cancel can
+	// no longer reach a protective order however it is sent. The Go guard is
+	// defence in depth on the paths where refusing is cheap; these are not
+	// those paths. Named here rather than silently passing, so the trade is
+	// visible to whoever reads this next.
+	"cancelArmedOrdersSync": "session-close/news flatten — a refusal leaves arms live into an EOD flatten or a news halt",
+	"sweepPreBootArms":      "class-33 orphan sweep — a refusal leaves a dead process's orders resting; it defers on a missing link instead",
 }
 
 // stripGoLineComments blanks // comments while preserving line numbering.

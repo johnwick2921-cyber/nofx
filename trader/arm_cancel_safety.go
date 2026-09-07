@@ -94,6 +94,21 @@ func adjudicateArmCancelWith(ledgerState, signalID string, book []nt.NT8Order, h
 	if strings.TrimSpace(signalID) == "" {
 		return armCancelVerdict{false, "the arm has no signal id — nothing was ever placed under it"}
 	}
+	// A CONFIRMED-FLAT ACCOUNT HAS NOTHING TO PROTECT.
+	//
+	// This sits ABOVE the ledger and book checks on purpose. Every refusal
+	// below exists for one reason: cancelling might remove protection from a
+	// LIVE position. When the caller has read the broker's own positions and
+	// found none, that reason is gone — and the opposite risk takes over. Class
+	// 27, 2026-08-31: a netting close left an arm's stop resting and it fired 26
+	// minutes later, opening a naked short. Refusing here to protect a position
+	// that does not exist is how that order stays alive.
+	//
+	// Only a caller that has actually established flatness sets this; the zero
+	// value is "unknown", and unknown keeps every refusal below.
+	if pos.Known && !pos.Open {
+		return armCancelVerdict{true, "the broker reports FLAT — no position exists for these orders to be protecting, and a resting orphan stop can fire later and open a naked one (class 27)"}
+	}
 	// THE LEDGER'S OWN WORD, first and cheapest. A filled arm is never cancelled.
 	switch strings.ToLower(strings.TrimSpace(ledgerState)) {
 	case store.StateFilled:

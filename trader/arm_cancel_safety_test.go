@@ -199,10 +199,10 @@ func TestCancelInFlightStatesAreNamedExactly(t *testing.T) {
 // The children-without-entry shape means two OPPOSITE things depending on one
 // fact the adjudicator was not given:
 //
-//   position OPEN  → those children are the protection. 2026-09-06 23:37:02.
-//   position FLAT  → those children are ORPHANS. Class 27, 2026-08-31: a
-//                    netting close left an arm's SL resting and it fired 26
-//                    minutes later, opening a NAKED SHORT.
+//	position OPEN  → those children are the protection. 2026-09-06 23:37:02.
+//	position FLAT  → those children are ORPHANS. Class 27, 2026-08-31: a
+//	                 netting close left an arm's SL resting and it fired 26
+//	                 minutes later, opening a NAKED SHORT.
 //
 // Refusing both leaves the orphan alive; allowing both is the naked stop. The
 // guard therefore asks whether a position is actually open, and — A24 — an
@@ -224,6 +224,14 @@ func TestOrphanBracketIsCancellableOnlyWhenTheBrokerSaysFlat(t *testing.T) {
 	if v := adjudicateArmCancelWith(store.StateWorking, sig592, book, true,
 		positionContext{Known: true, Open: true}); v.Allow {
 		t.Fatal("the protective pair of an OPEN position was cleared for cancellation — 2026-09-06")
+	}
+
+	// broker FLAT with NO book at all → still a sweep: the book only matters
+	// for deciding whether protection is at risk, and a flat account has none.
+	if v := adjudicateArmCancelWith(store.StateWorking, sig592, nil, false,
+		positionContext{Known: true, Open: false}); !v.Allow {
+		t.Fatalf("a confirmed-FLAT account refused an orphan sweep for want of a book — the book "+
+			"exists to protect a live position, and there is none. why=%s", v.Why)
 	}
 
 	// position UNKNOWN → the non-destructive side, exactly as before

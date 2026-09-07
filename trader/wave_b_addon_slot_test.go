@@ -68,8 +68,14 @@ func TestAddonEntryOrderPassesTheTriggerInTheStopSlot(t *testing.T) {
 	// The bracket stop-loss at the other end of the same file is the in-file
 	// control: it has always built a StopMarket correctly (limit 0 / stop Sl)
 	// and is proven correct by a live fill (2026-09-03, filled at 29355).
-	if !strings.Contains(src, "TimeInForce.Day, b.Qty, 0, b.Sl, exitOco, signalId + \"-sl\",") {
-		t.Error("the bracket stop-loss control call changed shape — the in-file proof of the slot order is gone")
+	//
+	// 2026-09-07: the call's TIF became Gtc (D6) and its quantity now comes from
+	// the fill event (D2). Neither touches what this control proves — the SLOT
+	// ORDER, a literal 0 in limitPrice and b.Sl in stopPrice — which is asserted
+	// below on the two arguments themselves rather than on the whole line, so
+	// the next unrelated edit does not read as the slot order being lost.
+	if !strings.Contains(src, "0, b.Sl, exitOco, signalId + \"-sl\",") {
+		t.Error("the bracket stop-loss control no longer passes (limitPrice=0, stopPrice=b.Sl) — the in-file proof of the slot order is gone")
 	}
 }
 
@@ -127,7 +133,11 @@ func TestAddonBuildIDMovesInLockstep(t *testing.T) {
 	if got != ntwire.ExpectedAddonBuild {
 		t.Errorf("VL_BUILD_ID=%q but ExpectedAddonBuild=%q — every boot would print match=NO", got, ntwire.ExpectedAddonBuild)
 	}
-	if got != ntwire.MinAddonBuildStopSlot {
+	// The floor is a MINIMUM, not a twin. This read `!=` while its own message
+	// said ">=", which was invisible only because the two constants happened to
+	// be equal from 2026-09-05 until the build id next moved. MinAddonBuildStopSlot
+	// is a historical floor and must stay put; VL_BUILD_ID advances past it.
+	if !ntwire.FarSideProven(got, ntwire.MinAddonBuildStopSlot) {
 		t.Errorf("VL_BUILD_ID=%q but the stop-slot gate needs >= %q — the fixed AddOn would refuse itself", got, ntwire.MinAddonBuildStopSlot)
 	}
 	// The gate must actually refuse the build that shipped the defect.

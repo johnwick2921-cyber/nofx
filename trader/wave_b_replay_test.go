@@ -150,13 +150,17 @@ func TestStopEntryGuardHasAProductionCallSite(t *testing.T) {
 // that enforces it; none is a literal. A proven build reads slots=stop_price and
 // match=yes, an unproven one must say so on both.
 func TestStopEntryBootLineIsRead(t *testing.T) {
-	proven := StopEntryBootLine(ntwire.MinAddonBuildStopSlot, ntwire.ExpectedAddonBuild, true)
+	// match=yes means RECEIVED == EXPECTED, so the received build here must be
+	// ExpectedAddonBuild. Passing MinAddonBuildStopSlot only worked while the two
+	// constants coincided; the moment the AddOn shipped a newer build than the
+	// stop-slot floor, this asserted match=yes on a mismatch.
+	proven := StopEntryBootLine(ntwire.ExpectedAddonBuild, ntwire.ExpectedAddonBuild, true)
 	for _, want := range []string{"🎯 stop-entry:", "slots=stop_price", "guard=stop-side", "unknown=no-op", "match=yes"} {
 		if !strings.Contains(proven, want) {
 			t.Errorf("proven-build line missing %q: %s", want, proven)
 		}
 	}
-	if !strings.Contains(proven, "build_id="+ntwire.MinAddonBuildStopSlot) {
+	if !strings.Contains(proven, "build_id="+ntwire.ExpectedAddonBuild) {
 		t.Errorf("the line must name the RECEIVED build id: %s", proven)
 	}
 
@@ -218,14 +222,14 @@ func TestStopEntryBootLineReEmitsWhenTheBuildArrives(t *testing.T) {
 	if _, again := emit(""); again {
 		t.Error("an unchanged posture must not re-emit every cycle")
 	}
-	arrived, changed := emit(ntwire.MinAddonBuildStopSlot)
+	arrived, changed := emit(ntwire.ExpectedAddonBuild)
 	if !changed {
 		t.Fatal("the none→proven transition was swallowed — F2's acceptance line is unobtainable without a restart")
 	}
 	if !strings.Contains(arrived, "slots=stop_price") || !strings.Contains(arrived, "match=yes") {
 		t.Fatalf("the proven line must state the proof: %s", arrived)
 	}
-	if _, again := emit(ntwire.MinAddonBuildStopSlot); again {
+	if _, again := emit(ntwire.ExpectedAddonBuild); again {
 		t.Error("the proven posture must settle to one line")
 	}
 

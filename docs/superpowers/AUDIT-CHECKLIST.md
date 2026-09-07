@@ -2287,3 +2287,125 @@ instead of defaulting.
 adversarial reviewer asking what `r.Side` actually contains at runtime rather
 than what the struct comment says (`Side string // long | short`,
 `store/armed_orders.go:36` — still true of the type, false of the data).
+
+## CLASS 78 — THE CASE YOUR FIX HANDLES NEVER ARRIVES (born 2026-09-07, fix/bracket-oco-separation, C3)
+
+**Name.** A classifier is corrected to handle a value carefully. An earlier stage,
+on the other side of a wire, DROPS that value. The careful branch is unreachable,
+every test of it passes, and the behaviour in production is exactly what it was.
+
+**Root cause.** The owner ruled that `unknown` is not terminal: "an unreadable
+state is not history. UNKNOWN is non-terminal and takes no destructive branch."
+Go was changed accordingly — `unknown` left `terminalOrderStates`,
+`ClassifyOrderState` returned `LivenessUnknown`, `IsStateReadable` let callers
+refuse to act, and a table test proved all of it.
+
+None of it could ever run. The C# AddOn builds the order snapshot and filters
+first:
+
+```csharp
+if (st == "Filled" || st == "Cancelled" || st == "Rejected" ||
+    st == "Expired" || st == "Unknown")
+    continue;
+```
+
+An order in `OrderState.Unknown` was not shipped as unknown. It was not shipped
+at all — and **absence is what every "this order is gone" branch keys on**: the
+stale reaper cancels and marks the row cancelled, a cancel_pending row is
+promoted to cancelled, `entryIsResting` sees no children and ALLOWS the cancel,
+cutover leg 4 counts zero working orders, and the new protection reconciler
+concludes a position is unprotected and places a SECOND stop beside an invisible
+live one. The Go fix made the tree careful about a value the tree never received.
+
+The filter was not wrong when written — its comment says "Terminal orders are
+history … shipping the whole history every 30s would grow without bound", and for
+Filled/Cancelled/Rejected/Expired that is right. `Unknown` was smuggled into a
+list of things that are over.
+
+**It was not found by a test.** Every Go test passed, including the new ones. It
+was found by a reader sent to enumerate every classifier in the tree *including
+the far side*, who noticed the two filters disagreed about one word.
+
+**Probe, five questions:**
+1. For the value your fix handles: trace it from where it is PRODUCED, not from
+   where you handle it. How many stages sit between? Which of them can drop,
+   coalesce, or default it?
+2. Does any upstream stage have a filter list? Read the list ITEM BY ITEM against
+   the vocabulary your fix defines. A list that was right when written acquires
+   an entry that no longer belongs.
+3. Can your careful branch be reached in a test that starts at the PRODUCER? If
+   the only way to exercise it is to hand-build the value at your own front door,
+   you have tested a function, not a path.
+4. Does the drop turn "I could not read this" into "this does not exist"? Absence
+   and unreadability are different claims. Anything that renders them identically
+   converts every downstream refusal into permission.
+5. Is the filter on the other side of a deploy boundary? Then the two halves ship
+   separately, and there is a window where the careful side runs against the
+   dropping side. Say what degrades in that window.
+
+**Law:** **a vocabulary is defined at the point of PRODUCTION, not at the point of
+use.** When you add or reclassify a state, fix every filter between the producer
+and you in the SAME wave — and where the producer is a separately deployed
+artifact, gate on its build id so the careful branch is not silently unreachable.
+An unreadable state must be SHIPPED, never omitted: the receiver can decide to do
+nothing, but only if it is told.
+
+**Corollary.** "The tests pass" is the expected outcome of this class, not
+evidence against it. A fix whose branch cannot be reached is indistinguishable
+from a fix that works, by every means except reading the producer.
+
+## CLASS 79 — THE FIX THAT VALIDATES ITSELF (born 2026-09-07, fix/bracket-oco-separation, C1)
+
+**Name.** A wave is dispatched against a stated mechanism. The mechanism is not
+the cause. The fix is correct, ships clean, reviews well, and changes nothing —
+and because the ticket closes, the real defect is now harder to find than before.
+
+**Root cause.** The 2026-09-06 naked stop was attributed to OCO grouping: the
+entry sharing an OCO id with its stop and target, so cancelling the entry took
+the protections with it. It is an entirely plausible mechanism. NinjaTrader OCO
+really does behave that way, the symptom matches exactly, and the remedy —
+separate the groups — is sound engineering.
+
+The entry had carried an EMPTY OCO group for some time
+(`Account.CreateOrder(..., string.Empty, signalId, ...)`), and the stop and
+target their own shared `"<signal>-exit"` id. The separation the wave was
+dispatched to build was already there, with a comment explaining why.
+
+The actual cause was twelve lines further down the same handler:
+`HandleCancelOrder` cancelled the resting entry, and THEN, unconditionally,
+cancelled `SlOrder` and `TpOrder` out of its own `placedBrackets` dictionary. The
+entry had already filled, so the first half found nothing and only the second
+half ran. Our own code reached across and killed the protections by hand.
+
+Had the wave built what it was asked for, it would have separated two OCO groups
+that were already separate, passed every test, deployed, closed the incident —
+and left the naked-stop path fully open, now with a report saying it was fixed.
+
+**Probe, five questions:**
+1. Before building, can you make the CURRENT code produce the incident? Not
+   "could this mechanism cause it" — "does the code in front of me do this". If
+   the pin you write to prove the bug cannot be made to fail on today's tree, the
+   premise is wrong, not the pin.
+2. Is the named mechanism GENERIC to the technology (OCO, GC, retries, caching)
+   or SPECIFIC to this code? A generic mechanism that matches the symptom is the
+   easiest wrong answer to accept, because it explains everything and predicts
+   nothing.
+3. Which line, by file and number, does the thing? A mechanism you cannot anchor
+   to a line is a hypothesis wearing a diagnosis.
+4. Search the incident's own artefacts for the OTHER path. Snapshot 8208 showed
+   two children and no entry — an entry-cancel that reaches children is one
+   explanation; a handler that cancels children explicitly is another, and only
+   one of them is in the file.
+5. If the fix is correct-but-inert, what happens next? A closed ticket is not
+   neutral: it removes the incident from the queue and makes the second
+   occurrence read as a regression of a fix that was never load-bearing.
+
+**Law:** **verify the premise against the code before building on it, and say so
+in the report when it fails.** A wrong premise is a STOP and a correction, never a
+build. The strongest signal is a bug-pin that will not go red: if you cannot make
+the current tree fail the test that describes the incident, you have not found
+the incident.
+
+**Corollary.** The dispatch already required this (A17, "MEASURE FIRST"). What
+made it work was writing the pin FIRST and watching it refuse to fail — the
+mechanism was refuted by an artefact, not by an argument.

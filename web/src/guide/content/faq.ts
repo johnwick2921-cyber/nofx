@@ -58,6 +58,13 @@ export const faq: GuideSection = {
           link: '#guards',
         },
         {
+          q: 'I restarted NinjaTrader while holding a trade — does my stop survive?',
+          a: 'The stop itself usually does: working orders are re-synced from the broker. What did NOT survive, until 2026-09-07, was the bot\'s memory of it — the AddOn kept the stop/target pairing in memory only, rebuilt from nowhere, so after a restart auto-breakeven and bracket edits silently did nothing and no one was checking whether a stop was there at all. Now the bot asks the broker directly, every minute a position is open and again on reconnect, and if there is genuinely no stop it raises a P0 and places one. Two honest caveats: on the reconnect edge the answer is usually "UNVERIFIED", because NinjaTrader sends positions and balances on connect but not its order book until the next 30-second beat — the check re-asks a minute later; and protective orders are now GTC rather than Day, so a stop no longer expires at session end while the position it protects lives on.',
+          mechanism:
+            'trader/protection_reconciler.go adjudicateProtection, on monitorTick and the dead-man reconnect edge; ninjascript SubmitBracketOnEntryFill places SL/TP TimeInForce.Gtc.',
+          link: '#guards',
+        },
+        {
           q: 'Why was a plan rejected twice for the same reason?',
           a: 'It should not happen any more. Before class 50 (2026-09-02) the rewrite prompt named only the LAST defect, so a chain could be corrected about a fade, fix the fade, and walk back into the voided breakdown it had been rejected for two attempts earlier — which is exactly what the London read did that morning. The rewrite now carries every distinct defect of that read, oldest first, and it is printed twice: at the very top of the prompt, ahead of the playbook, and again at the very end. The attempt line says how many distinct defects are riding.',
           mechanism:

@@ -84,15 +84,6 @@ func (at *AutoTrader) sweepPreBootArmsWith(ledger *store.ArmedOrderStore, cancel
 			at.logInfof("🛡 boot sweep: %s %s pre-boot but never placed (no signal id) — left armed for this process to place", r.Session, r.Scenario)
 			continue
 		}
-		// D4 (2026-09-07) — the boot sweep sends the same frame too. A
-		// pre-boot row whose entry FILLED before the restart still reads
-		// non-terminal here; cancelling it reached the bracket. The book
-		// decides, not the row.
-		if v := at.cancelSafetyFor(r, time.Now()); !v.Allow {
-			at.logWarnf("🛟 boot sweep cancel REFUSED (class 33): signal=%s — %s", shortID(r.SignalID), v.Why)
-			skipped++
-			continue
-		}
 		if cerr := cancelFn(r.SignalID); cerr != nil {
 			// The order may still be live: do NOT mark the ledger terminal on
 			// a failed cancel — that would hide a live order behind a clean
