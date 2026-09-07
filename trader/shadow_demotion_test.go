@@ -111,6 +111,17 @@ func shadowWireHarness(t *testing.T, cfg store.StrategyConfig) (*AutoTrader, *st
 	t.Cleanup(func() { _ = st.Close() })
 
 	tr := ntTrader.NewTCPTrader(s, "MNQ", "Sim101")
+
+	// THE BOOK THE ONE-CONTRACT GUARD READS (2026-09-06). A real AddOn emits an
+	// order_snapshot every N seconds whether or not the book has anything in
+	// it, and the account guard refuses on an ABSENT book by design — an
+	// unverifiable book is not an empty book. Without this seed the harness
+	// represents a dark AddOn, not a flat account, and every placement test
+	// here would be asserting the wrong thing.
+	if snaps := s.OrderSnapshots(); snaps != nil {
+		snaps.PutAt(ntwire.OrderSnapshotPayload{Account: "Sim101", Orders: []ntwire.NT8Order{}}, time.Now())
+	}
+
 	at := &AutoTrader{id: "trader-1", exchange: "ninjatrader", store: st, trader: tr}
 	at.config.StrategyConfig = &cfg
 	at.mcpClient = &fakeDecisionClient{}
