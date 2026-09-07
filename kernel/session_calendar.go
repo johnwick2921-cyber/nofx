@@ -53,6 +53,14 @@ type SessionDay struct {
 	CloseCT string       `json:"close_ct,omitempty"`
 	Name    string       `json:"name"`
 	Source  string       `json:"source"`
+	// Unestablished marks a date whose treatment nobody has sourced. Such a row
+	// is CLOSED (C4: the safe side) and is NAMED on the boot line — a guessed
+	// trading day is worse than a missed one (owner ruling 2026-09-07).
+	Unestablished bool `json:"unestablished,omitempty"`
+	// Superseded records a value this row replaced, with its provenance, so a
+	// ruling can be revisited against the source instead of re-litigated from
+	// memory. Never dropped silently.
+	Superseded string `json:"superseded,omitempty"`
 }
 
 type sessionCalendarFile struct {
@@ -180,6 +188,9 @@ type SessionState struct {
 	// cannot be parsed. Such a day is demoted to CLOSED rather than traded to
 	// a guessed time — an unreadable close is not a full trading day.
 	CloseUnreadable bool
+	// Unestablished — this date's treatment is not sourced; it is closed on the
+	// safe side and named as such wherever the classification is shown.
+	Unestablished bool
 	// UncoveredFallback is true when the year is not covered and the superseded
 	// boolean decided this date instead. Named, never silent.
 	UncoveredFallback bool
@@ -221,6 +232,7 @@ func SessionStateAt(now time.Time) SessionState {
 		return st
 	}
 	st.Name, st.Source = day.Name, day.Source
+	st.Unestablished = day.Unestablished
 
 	switch day.Class {
 	case SessionClosed:
@@ -233,10 +245,84 @@ func SessionStateAt(now time.Time) SessionState {
 			return st
 		}
 		st.Class, st.Close, st.HasClose = SessionShortened, close, true
+	case SessionNormal:
+		// A date listed EXPLICITLY as normal — researched and found ordinary.
+		// Without this arm it fell to the default below and was traded as
+		// CLOSED, which is how 2026-12-31 (a sourced normal session) would have
+		// stayed shut. Found by folding half_days.json, not by a test.
+		st.Class = SessionNormal
 	default:
 		// An unrecognised class is a typo in data that ships inside the binary.
 		// It must not degrade to a normal trading day (A24).
 		st.Class, st.CloseUnreadable = SessionClosed, true
 	}
 	return st
+}
+
+// SessionEarlyCloseCT is THE ONE accessor for a day's early close, in "HH:MM" CT.
+//
+// ONE FACT, ONE OWNER (owner ruling 2026-09-07). Before the fold this answer
+// lived in three places with two key conventions and, on three dates, two
+// different times: half_days.json at the repo root, SessionRegistry.HalfDays in
+// the store, and this calendar. The gate stopped trading at 12:00 on days the
+// sourced file said 12:15. Now the gate, the session registry and the EOD flat
+// all resolve through here.
+func SessionEarlyCloseCT(now time.Time) (string, bool) {
+	st := SessionStateAt(now)
+	if st.Class == SessionShortened && st.HasClose {
+		return st.Close.Format("15:04"), true
+	}
+	return "", false
+}
+
+// SessionEarlyCloseCTForKey answers for a CME session-day key ("YYYY-MM-DD"),
+// which is the shape the session registry and the EOD-flat path already speak.
+// It exists so those callers need no clock of their own (A28).
+func SessionEarlyCloseCTForKey(key string) (string, bool) {
+	for i := range sessionCal.Dates {
+		d := sessionCal.Dates[i]
+		if d.Date != key {
+			continue
+		}
+		if d.Class != SessionShortened {
+			return "", false
+		}
+		// Parsed rather than echoed, so a malformed close_ct cannot reach the
+		// flat path as a plausible-looking string.
+		anchor, err := time.ParseInLocation("2006-01-02", key, CTLocation())
+		if err != nil {
+			return "", false
+		}
+		c, ok := parseCloseCT(anchor, d.CloseCT)
+		if !ok {
+			return "", false
+		}
+		return c.Format("15:04"), true
+	}
+	return "", false
+}
+
+// SessionCalendarUnestablishedCount is how many listed dates nobody has sourced.
+// The boot line prints it so an unsourced calendar cannot look like a checked one.
+func SessionCalendarUnestablishedCount() int {
+	n := 0
+	for i := range sessionCal.Dates {
+		if sessionCal.Dates[i].Unestablished {
+			n++
+		}
+	}
+	return n
+}
+
+// SessionShortenedDays lists every shortened day in the calendar, in file order.
+// It exists so the half-day surfaces derive from the SAME rows the gate reads
+// rather than keeping a second copy (the fold, 2026-09-07).
+func SessionShortenedDays() []SessionDay {
+	out := make([]SessionDay, 0, len(sessionCal.Dates))
+	for i := range sessionCal.Dates {
+		if sessionCal.Dates[i].Class == SessionShortened {
+			out = append(out, sessionCal.Dates[i])
+		}
+	}
+	return out
 }

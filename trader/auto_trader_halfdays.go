@@ -1,19 +1,23 @@
 package trader
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
 	"sort"
-	"strings"
 	"time"
 
 	"nofx/kernel"
 	"nofx/logger"
-	"nofx/store"
 )
 
-// P4 — HalfDays PRODUCER (ledger-close dispatch 2026-08-19).
+// P4 — HalfDays, FOLDED INTO THE SESSION CALENDAR (owner ruling 2026-09-07).
+//
+// This file used to LOAD half_days.json and seed a HalfDays map into the session
+// registry — a second dated calendar with its own key convention that, on three
+// dates, disagreed with kernel/session_calendar.json: the gate stopped at 12:00
+// on days this file's SOURCED rows said 12:15. One fact, one owner. The rows and
+// their archived CME citations were folded into the calendar verbatim,
+// half_days.json was deleted, and what remains here DERIVES from the calendar so
+// the boot line and any remaining caller cannot drift from the gate.
 //
 // The consumer chain existed for months with an EMPTY map: the session registry
 // (system_config key "session_registry") carries HalfDays{date → early-close
@@ -46,200 +50,53 @@ import (
 // Fail-open (4.5): a malformed/missing file logs CRITICAL and trading proceeds
 // normally; a malformed ENTRY is skipped with CRITICAL, valid ones still land.
 
-// HalfDayEntry is one owner-config row in half_days.json.
+// HalfDayEntry is one early-close day, DERIVED from the session calendar.
 type HalfDayEntry struct {
 	Date         string `json:"date"`           // YYYY-MM-DD (CME session-day key)
 	EarlyCloseCT string `json:"early_close_ct"` // "HH:MM" CT
 	Label        string `json:"label"`
 }
 
-func halfDaysPath() string {
-	if p := os.Getenv("NOFX_HALF_DAYS"); p != "" {
-		return p
-	}
-	return "half_days.json"
-}
-
-// sessionDayKeyForCalendarDate converts an owner-facing CALENDAR date
-// ("2026-09-07" — the day the early close actually happens, as CME publishes
-// it) into the registry's session-day KEY: the date of the containing
-// session's 17:00 CT START (calendar date D's daytime began at 17:00 on D−1,
-// so the key is D−1). Routed through the REAL CMESessionDayKey so the two can
-// never diverge again — E7-v2 HIGH finding: seeding calendar dates verbatim
-// made the pull-in MISS the actual half-day and fire on the NEXT full session
-// (a wrong-day 12:00 flatten on Tue Sep 8).
-func sessionDayKeyForCalendarDate(date string) (string, bool) {
-	d, err := time.ParseInLocation("2006-01-02", date, kernel.CTLocation())
-	if err != nil {
-		return "", false
-	}
-	noon := time.Date(d.Year(), d.Month(), d.Day(), 12, 0, 0, 0, kernel.CTLocation())
-	return kernel.CMESessionDayKey(noon), true
-}
-
-// LoadHalfDaysFile reads + validates the owner file. Invalid entries are
-// dropped (CRITICAL-logged); a missing file returns (nil, nil) — not an error.
+// LoadHalfDaysFile now reads the SESSION CALENDAR rather than half_days.json.
+// The name and signature are kept so callers and their pins survive the fold;
+// the source of truth moved, the API did not.
 func LoadHalfDaysFile() ([]HalfDayEntry, error) {
-	raw, err := os.ReadFile(halfDaysPath())
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, err
+	out := kernel.SessionShortenedDays()
+	entries := make([]HalfDayEntry, 0, len(out))
+	for _, d := range out {
+		entries = append(entries, HalfDayEntry{Date: d.Date, EarlyCloseCT: d.CloseCT, Label: d.Name})
 	}
-	var entries []HalfDayEntry
-	if err := json.Unmarshal(raw, &entries); err != nil {
-		return nil, fmt.Errorf("parse %s: %w", halfDaysPath(), err)
-	}
-	valid := entries[:0]
-	for _, e := range entries {
-		if _, err := time.Parse("2006-01-02", e.Date); err != nil {
-			logger.Errorf("🚨 half-days CRITICAL: entry date %q is not YYYY-MM-DD — entry skipped, trading continues normally", e.Date)
-			continue
-		}
-		if _, ok := hhmmToMin(e.EarlyCloseCT); !ok {
-			logger.Errorf("🚨 half-days CRITICAL: entry %s early_close_ct %q is not HH:MM — entry skipped, trading continues normally", e.Date, e.EarlyCloseCT)
-			continue
-		}
-		valid = append(valid, e)
-	}
-	return valid, nil
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Date < entries[j].Date })
+	return entries, nil
 }
 
-// NextUpcomingHalfDay returns the first entry at/after now — compared in
-// CALENDAR-date space (entries carry CME calendar dates; the session-day KEY
-// conversion happens only at seed time).
+// NextUpcomingHalfDay is the next early close at or after now, in CT.
 func NextUpcomingHalfDay(entries []HalfDayEntry, now time.Time) (HalfDayEntry, bool) {
-	today := now.In(kernel.CTLocation()).Format("2006-01-02")
-	sorted := append([]HalfDayEntry(nil), entries...)
-	sort.Slice(sorted, func(i, j int) bool { return sorted[i].Date < sorted[j].Date })
-	for _, e := range sorted {
-		if e.Date >= today {
+	key := now.In(kernel.CTLocation()).Format("2006-01-02")
+	for _, e := range entries {
+		if e.Date >= key {
 			return e, true
 		}
 	}
 	return HalfDayEntry{}, false
 }
 
-// halfDaysOwnedKeysKey tracks which registry keys THIS producer wrote (comma-
-// joined), so a row DELETED from half_days.json is pruned from the registry on
-// the next seed instead of surviving forever (E7-v2 medium finding) — while
-// DB-only keys (admin-written, never in the ledger) stay untouched.
-const halfDaysOwnedKeysKey = "half_days_seeded_keys"
-
-// SeedHalfDaysIntoRegistry merges the file entries into the STORED session
-// registry (system_config): file-wins per key; keys the producer previously
-// seeded but that left the file are PRUNED; DB-only keys survive. Returns
-// (added/updated/pruned count, error). Idempotent — a no-change merge does not
-// rewrite the row.
-func SeedHalfDaysIntoRegistry(st *store.Store, entries []HalfDayEntry) (int, error) {
-	if st == nil {
-		return 0, nil
-	}
-	raw, _ := st.GetSystemConfig(kernel.SessionRegistryConfigKey)
-	reg, _ := kernel.LoadSessionRegistry(raw)
-	if reg.HalfDays == nil {
-		reg.HalfDays = map[string]string{}
-	}
-	changed := 0
-	owned := make([]string, 0, len(entries))
-	ownedSet := map[string]bool{}
-	for _, e := range entries {
-		key, okK := sessionDayKeyForCalendarDate(e.Date)
-		if !okK {
-			continue // validated upstream; never seed an unconvertible date
-		}
-		if !ownedSet[key] {
-			ownedSet[key] = true
-			owned = append(owned, key)
-		}
-		if reg.HalfDays[key] != e.EarlyCloseCT {
-			reg.HalfDays[key] = e.EarlyCloseCT
-			changed++
-		}
-	}
-	// Prune producer-owned keys that are no longer in the file.
-	prevOwned, _ := st.GetSystemConfig(halfDaysOwnedKeysKey)
-	for _, k := range strings.Split(prevOwned, ",") {
-		if k == "" || ownedSet[k] {
-			continue
-		}
-		if _, exists := reg.HalfDays[k]; exists {
-			delete(reg.HalfDays, k)
-			changed++
-			logger.Infof("📅 half-days: %s removed from %s — pruned from the registry (deletion honored)", k, halfDaysPath())
-		}
-	}
-	sort.Strings(owned)
-	ledger := strings.Join(owned, ",")
-	if ledger != prevOwned {
-		_ = st.SetSystemConfig(halfDaysOwnedKeysKey, ledger)
-	}
-	if changed == 0 {
-		return 0, nil
-	}
-	if err := kernel.ValidateSessionRegistry(reg); err != nil {
-		return 0, fmt.Errorf("merged registry failed validation: %w", err)
-	}
-	out, err := json.Marshal(reg)
-	if err != nil {
-		return 0, err
-	}
-	if err := st.SetSystemConfig(kernel.SessionRegistryConfigKey, string(out)); err != nil {
-		return 0, err
-	}
-	return changed, nil
-}
-
-// maybeSeedHalfDays runs the producer once per CME session-day per process
-// (idempotent across traders — the merge is a no-op when nothing changed).
-// Called from runCycle housekeeping ABOVE the session gate, so weekend/holiday
-// boots still seed (the F0 calendar-producer precedent).
-func (at *AutoTrader) maybeSeedHalfDays(now time.Time) {
-	if at.config.Exchange != "ninjatrader" || at.store == nil {
-		return
-	}
-	day := kernel.CMESessionDayKey(now)
-	if at.lastHalfDaySeedDay == day {
-		return
-	}
-	at.lastHalfDaySeedDay = day
-
-	entries, err := LoadHalfDaysFile()
-	if err != nil {
-		logger.Errorf("🚨 half-days CRITICAL: %v — trading continues NORMALLY on standard hours (fail-open). Fix %s.", err, halfDaysPath())
-		return
-	}
-	if len(entries) == 0 {
-		return
-	}
-	changed, err := SeedHalfDaysIntoRegistry(at.store, entries)
-	if err != nil {
-		logger.Errorf("🚨 half-days CRITICAL: seed failed: %v — trading continues normally", err)
-		return
-	}
-	if changed > 0 {
-		labels := make([]string, 0, len(entries))
-		for _, e := range entries {
-			labels = append(labels, e.Date+" "+e.EarlyCloseCT+" ("+e.Label+")")
-		}
-		at.logInfof("📅 half-days seeded: %d entr%s updated in the session registry — %s. Effective from the NEXT session-day registry refresh.",
-			changed, map[bool]string{true: "y", false: "ies"}[changed == 1], strings.Join(labels, ", "))
-	}
-}
-
-// LogHalfDaysBoot is the P4 boot integrity line (main.go): loaded count + the
-// next upcoming half-day.
+// LogHalfDaysBoot states the early-close days the calendar holds. Every field is
+// READ from the calendar the gate consults (A11), so this line and the gate can
+// never disagree.
 func LogHalfDaysBoot(now time.Time) {
-	entries, err := LoadHalfDaysFile()
-	if err != nil {
-		logger.Errorf("🚨 half-days CRITICAL at boot: %v — trading continues normally on standard hours", err)
-		return
+	entries, _ := LoadHalfDaysFile()
+	next := "none upcoming"
+	if e, ok := NextUpcomingHalfDay(entries, now); ok {
+		next = fmt.Sprintf("%s %s CT (%s)", e.Date, e.EarlyCloseCT, e.Label)
 	}
-	if next, ok := NextUpcomingHalfDay(entries, now); ok {
-		logger.Infof("📅 half-days [boot]: %d loaded from %s · next half-day: %s %s CT (%s)",
-			len(entries), halfDaysPath(), next.Date, next.EarlyCloseCT, next.Label)
-	} else {
-		logger.Infof("📅 half-days [boot]: %d loaded from %s · no upcoming half-day registered", len(entries), halfDaysPath())
-	}
+	logger.Infof("🗓 half-days: %d early close(s) in the session calendar · next: %s · source=kernel/session_calendar.json (folded 2026-09-07; half_days.json deleted)",
+		len(entries), next)
 }
+
+// maybeSeedHalfDays is now a NO-OP kept as a call-site seam. Seeding existed to
+// copy half_days.json into the registry; after the fold there is nothing to copy
+// — EffectiveFlatCT resolves from the calendar directly. Removing the call site
+// would touch the cycle's hot path for no behavioural gain, so the seam stays
+// and states why it does nothing.
+func (at *AutoTrader) maybeSeedHalfDays(time.Time) {}

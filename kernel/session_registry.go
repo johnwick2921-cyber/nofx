@@ -3,6 +3,7 @@ package kernel
 import (
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -58,12 +59,14 @@ type SessionDef struct {
 // SessionRegistry is the global-admin session config.
 type SessionRegistry struct {
 	Sessions []SessionDef `json:"sessions"`
-	// HalfDays maps a CME session-day key (YYYY-MM-DD, per CMESessionDayKey) to
-	// an early-close CT "HH:MM" that overrides the affected session's flat time.
-	// EMPTY BY DEFAULT (dormant) — the half-day truth hook (RECON #6). Nothing
-	// changes live while empty; the calendar feed populates it later.
-	HalfDays map[string]string `json:"half_days,omitempty"`
 }
+
+// NOTE (fold, owner ruling 2026-09-07): SessionRegistry no longer carries a
+// HalfDays map. It was the THIRD representation of one fact — half_days.json at
+// the repo root and kernel/session_calendar.json were the other two — and on
+// three dates the three disagreed, with the gate stopping at 12:00 on days the
+// sourced file said 12:15. EffectiveFlatCT now resolves the early close from the
+// session calendar, so the gate, this registry and the EOD flat cannot drift.
 
 // DefaultSessionRegistry returns the shipped registry: three CT-anchored
 // sessions with only NY enabled (ASIA/LONDON earn enablement via replay +
@@ -171,17 +174,6 @@ func ValidateSessionRegistry(r SessionRegistry) error {
 			}
 		}
 	}
-	// P4 (ledger-close 2026-08-19) — validate HalfDays too: keys are session-day
-	// dates (YYYY-MM-DD), values early-close CT (HH:MM). Garbage was previously
-	// persistable through the API door and silently ignored at consumption.
-	for k, v := range r.HalfDays {
-		if _, err := time.Parse("2006-01-02", k); err != nil {
-			return fmt.Errorf("half_days key %q is not YYYY-MM-DD", k)
-		}
-		if _, ok := parseHHMM(v); !ok {
-			return fmt.Errorf("half_days[%q]: %q is not HH:MM (CT)", k, v)
-		}
-	}
 	return nil
 }
 
@@ -234,8 +226,20 @@ func (r SessionRegistry) EffectiveFlatCT(sessionName, sessionDayKey string) (str
 	if !ok {
 		return "", false
 	}
-	if r.HalfDays != nil {
-		if early, ok := r.HalfDays[sessionDayKey]; ok && strings.TrimSpace(early) != "" {
+	// ONE OWNER: the session calendar. A shortened day's close overrides the
+	// session's ordinary flat time — but ONLY for a session the close actually
+	// falls inside.
+	//
+	// The override is PULL-IN ONLY, and never before the session's own start.
+	// Without the second half, activating this path put 2026-09-07's 12:00 close
+	// onto ASIA, which begins at 17:00 CT — a flat five hours before the session
+	// opened. It never showed while the old HalfDays map was empty; the fold lit
+	// the path up and the pin caught it the same hour.
+	if early, ok := SessionEarlyCloseCTForKey(sessionDayKey); ok {
+		e, okE := hhmmMinutes(early)
+		f, okF := hhmmMinutes(s.FlatCT)
+		st, okS := hhmmMinutes(s.WindowStartCT)
+		if okE && okF && okS && e < f && e > st {
 			return early, true
 		}
 	}
@@ -274,4 +278,20 @@ func minutesSinceMidnightCT(now time.Time) int {
 	chicago := CTLocation()
 	ct := now.In(chicago)
 	return ct.Hour()*60 + ct.Minute()
+}
+
+// hhmmMinutes parses "HH:MM" into minutes past midnight. ok=false on anything
+// malformed — a session time that cannot be read must not become a comparison
+// against zero (A24).
+func hhmmMinutes(hhmm string) (int, bool) {
+	parts := strings.SplitN(strings.TrimSpace(hhmm), ":", 2)
+	if len(parts) != 2 {
+		return 0, false
+	}
+	h, err1 := strconv.Atoi(parts[0])
+	m, err2 := strconv.Atoi(parts[1])
+	if err1 != nil || err2 != nil || h < 0 || h > 23 || m < 0 || m > 59 {
+		return 0, false
+	}
+	return h*60 + m, true
 }

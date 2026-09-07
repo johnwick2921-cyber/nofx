@@ -41,14 +41,22 @@ func TestEffectiveEODFlat(t *testing.T) {
 	if got := effectiveEODFlatCT(reg, "2026-08-14", "14:45"); got != "14:45" {
 		t.Fatalf("normal day = %q want 14:45", got)
 	}
-	reg.HalfDays = map[string]string{"2026-11-27": "12:00"}
-	if got := effectiveEODFlatCT(reg, "2026-11-27", "14:45"); got != "12:00" {
-		t.Fatalf("half-day should pull flat in to 12:00, got %q", got)
+	// FOLD (owner ruling 2026-09-07): the early close is no longer hand-injected
+	// into the registry — it resolves from the session calendar, so this asserts
+	// the REAL sourced value (12:15, CME archived: equity final close, settlement
+	// 12:00) rather than a value the test invented.
+	if got := effectiveEODFlatCT(reg, "2026-11-27", "14:45"); got != "12:15" {
+		t.Fatalf("half-day should pull flat in to the sourced 12:15, got %q", got)
 	}
-	// A half-day close LATER than the config flat keeps the config flat.
-	reg.HalfDays = map[string]string{"2026-11-27": "16:00"}
-	if got := effectiveEODFlatCT(reg, "2026-11-27", "14:45"); got != "14:45" {
-		t.Fatalf("later half-day must not push flat out, got %q", got)
+	// A close LATER than the config flat keeps the config flat. Driven through
+	// the same seam with a config flat EARLIER than the calendar's close, since
+	// the close itself is now data and cannot be dialled per-test.
+	if got := effectiveEODFlatCT(reg, "2026-11-27", "11:00"); got != "11:00" {
+		t.Fatalf("a later early-close must not push the flat out, got %q", got)
+	}
+	// A full-closure day exposes no early close at all: the flat is untouched.
+	if got := effectiveEODFlatCT(reg, "2026-11-26", "14:45"); got != "14:45" {
+		t.Fatalf("Thanksgiving is a full closure, not a half-day; flat = %q want 14:45", got)
 	}
 }
 

@@ -126,10 +126,13 @@ func TestHalfDayFlatOverride(t *testing.T) {
 	if flat, ok := r.EffectiveFlatCT("NY", "2026-08-14"); !ok || flat != "14:45" {
 		t.Fatalf("default NY flat = %q want 14:45", flat)
 	}
-	// Half-day override (e.g. day after Thanksgiving early close 12:00 CT).
-	r.HalfDays = map[string]string{"2026-11-27": "12:00"}
-	if flat, ok := r.EffectiveFlatCT("NY", "2026-11-27"); !ok || flat != "12:00" {
-		t.Fatalf("half-day NY flat = %q want 12:00", flat)
+	// FOLD (owner ruling 2026-09-07): the override is no longer injected into the
+	// registry — it comes from the session calendar, the single owner. And the
+	// value is the SOURCED 12:15, not the 12:00 convention guess this test used
+	// to hand-feed: CME's archived 2026 calendar gives the day after Thanksgiving
+	// an equity FINAL close of 12:15 CT (settlement 12:00).
+	if flat, ok := r.EffectiveFlatCT("NY", "2026-11-27"); !ok || flat != "12:15" {
+		t.Fatalf("half-day NY flat = %q want 12:15 (sourced, not the 12:00 guess)", flat)
 	}
 	// A non-half-day still returns the default flat.
 	if flat, _ := r.EffectiveFlatCT("NY", "2026-08-14"); flat != "14:45" {
@@ -139,7 +142,6 @@ func TestHalfDayFlatOverride(t *testing.T) {
 
 func TestRegistryRoundTrip(t *testing.T) {
 	r := DefaultSessionRegistry()
-	r.HalfDays = map[string]string{"2026-12-24": "12:00"}
 	raw, err := r.Marshal()
 	if err != nil {
 		t.Fatalf("marshal: %v", err)
@@ -163,5 +165,47 @@ func TestRegistryRoundTrip(t *testing.T) {
 	}
 	if len(bad.Sessions) != 3 {
 		t.Fatalf("malformed should fall back to default registry")
+	}
+}
+
+// THE FOLD PIN (owner ruling 2026-09-07): ONE FACT, ONE OWNER.
+//
+// Before the fold this answer lived in three places — half_days.json at the repo
+// root, SessionRegistry.HalfDays in the store, and the session calendar — with
+// two key conventions and, on three dates, two different times. The gate stopped
+// trading at 12:00 on days the sourced file said 12:15.
+//
+// This asserts the three surfaces now agree, by value, on the two dates that
+// disagreed. It fails the moment a second copy of this fact reappears.
+func TestFoldOneFactOneOwner(t *testing.T) {
+	cases := []struct{ day, want string }{
+		{"2026-11-27", "12:15"}, // day after Thanksgiving — sourced final close
+		{"2026-12-24", "12:15"}, // Christmas Eve — sourced final close
+	}
+	r := DefaultSessionRegistry()
+	for _, c := range cases {
+		// 1. THE CALENDAR (what the gate reads).
+		got, ok := SessionEarlyCloseCTForKey(c.day)
+		if !ok || got != c.want {
+			t.Errorf("%s calendar early close = %q ok=%v, want %q", c.day, got, ok, c.want)
+		}
+		// 2. THE REGISTRY / EOD FLAT (what the flatten reads).
+		flat, ok2 := r.EffectiveFlatCT("NY", c.day)
+		if !ok2 || flat != c.want {
+			t.Errorf("%s EffectiveFlatCT = %q ok=%v, want %q", c.day, flat, ok2, c.want)
+		}
+		// 3. THEY ARE THE SAME VALUE, not merely both correct.
+		if got != flat {
+			t.Errorf("%s: gate says %q but the EOD flat says %q — the fact has two owners again", c.day, got, flat)
+		}
+	}
+	// Thanksgiving itself is a FULL CLOSURE (owner ruling): no early close at all,
+	// and the superseded 12:00 row is recorded in the calendar, not applied.
+	if got, ok := SessionEarlyCloseCTForKey("2026-11-26"); ok {
+		t.Errorf("2026-11-26 is a full closure — it must expose no early close, got %q", got)
+	}
+	// A normal day is untouched.
+	if flat, _ := r.EffectiveFlatCT("NY", "2026-08-14"); flat != "14:45" {
+		t.Errorf("a normal day must keep its configured flat, got %q", flat)
 	}
 }

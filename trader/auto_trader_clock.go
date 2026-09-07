@@ -306,11 +306,13 @@ func inDailyRollWindow(now time.Time) bool {
 
 // effectiveEODFlatCT returns the flat time, pulled IN by a registered half-day
 // early-close for the current CME session-day (holiday/half-day awareness via the
-// P0 registry, which the P1.8 calendar populates). Empty HalfDays → configFlat.
+// session calendar — the single owner of a day's early close since the fold).
 // P4 note (2026-08-19): the live flatten now resolves through halfDayCutoffMin
 // (early_close − offset); this zero-offset form is kept for its tests/API.
 func effectiveEODFlatCT(reg kernel.SessionRegistry, sessionDayKey, configFlat string) string {
-	if early, ok := reg.HalfDays[sessionDayKey]; ok && strings.TrimSpace(early) != "" {
+	// FOLD (2026-09-07): one owner. The early close comes from the session
+	// calendar, not from a registry map that could disagree with the gate.
+	if early, ok := kernel.SessionEarlyCloseCTForKey(sessionDayKey); ok && strings.TrimSpace(early) != "" {
 		em, ok1 := hhmmToMin(early)
 		cm, ok2 := hhmmToMin(configFlat)
 		if ok1 && (!ok2 || em < cm) {
@@ -419,7 +421,7 @@ func (at *AutoTrader) entryBlockedByLastEntryAt(now time.Time) (string, bool) {
 // halfDayCutoffMin resolves "early_close_CT − offset" for the session-day's
 // registered half-day (P4). ok=false when no half-day / unparseable value.
 func halfDayCutoffMin(reg kernel.SessionRegistry, sessionDayKey string, offsetMin int) (int, string, bool) {
-	early, ok := reg.HalfDays[sessionDayKey]
+	early, ok := kernel.SessionEarlyCloseCTForKey(sessionDayKey)
 	if !ok || strings.TrimSpace(early) == "" {
 		return 0, "", false
 	}

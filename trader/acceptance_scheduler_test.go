@@ -97,7 +97,7 @@ func TestAcceptanceEODFlatClock(t *testing.T) {
 	monday := time.Date(2026, 8, 17, 12, 0, 0, 0, ct)
 	key := kernel.CMESessionDayKey(monday)
 	eff := effectiveEODFlatCT(reg, key, ny.FlatCT)
-	t.Logf("session-day %s: configured flat %s → effective %s (half-days registered: %d)", key, ny.FlatCT, eff, len(reg.HalfDays))
+	t.Logf("session-day %s: configured flat %s → effective %s (early close from the session calendar)", key, ny.FlatCT, eff)
 	if eff != ny.FlatCT {
 		t.Errorf("effective flat %s != configured %s with no half-day registered", eff, ny.FlatCT)
 	}

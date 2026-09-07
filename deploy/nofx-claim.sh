@@ -24,9 +24,21 @@
 # NOFX_SESSION names the lane; it is required for `new`.
 set -uo pipefail
 
-# The contract. Both halves are mandatory:
-#   claim: <wave> — <session>, <ISO-8601 with offset>
-CLAIM_RE='^claim: .+ — .+, [0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([+-][0-9]{2}:?[0-9]{2}|Z)'
+# The contract. All three parts are mandatory:
+#   claim: <wave> — <wave>-<uuid-prefix>/<ListAgents-name>[<ref>], <ISO-8601 with offset>
+#
+# THE SESSION FIELD MUST BE ROUTABLE, NOT MERELY ATTRIBUTABLE (owner ruling
+# 2026-09-07, AUDIT-CHECKLIST PART 3 step 0). The 2026-09-04 rule fixed
+# attribution — a claim names WHO. It did not fix ADDRESSING: the uuid prefix
+# lives in the claim/lock namespace, ListAgents addresses sessions by a short ref
+# in another, and nothing joins them. On 2026-09-07 a lane hit a collision on
+# fix/session-calendar, read the holder's name, and could not send it a message:
+# ListAgents offered four sessions and none matched. One relay went to ALL FOUR
+# because there was no way to send it to one.
+#
+# The ref may be the literal [unlisted] when a lane cannot read its own — never
+# omitted, never guessed (A24).
+CLAIM_RE='^claim: .+ — .+-[0-9a-f]{6,40}/[^,]+\[[A-Za-z0-9_-]+\], [0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([+-][0-9]{2}:?[0-9]{2}|Z)'
 
 die() { echo "$*" >&2; exit 1; }
 
@@ -40,6 +52,7 @@ cmd_new() {
   [ -n "$br" ] && [ -n "$wave" ] || die "usage: nofx-claim new <branch> \"<wave>\""
   local sess="${NOFX_SESSION:-}"
   [ -n "$sess" ] || die "REFUSED — NOFX_SESSION is unset. A claim without a reachable identity proves a collision and cannot resolve it (2026-09-04)."
+  printf '%s' "$sess" | grep -qE -- '-[0-9a-f]{6,40}/[^,]+\[[A-Za-z0-9_-]+\]$' || die "REFUSED — NOFX_SESSION must be routable: <wave>-<uuid-prefix>/<ListAgents-name>[<ref>], e.g. claimid-ee7f9468/nofx-db[ca9c60]. Use [unlisted] if you cannot read your own ref (owner ruling 2026-09-07). Got: $sess"
   git ls-remote --heads origin "$br" | grep -q . && die "REFUSED — $br already exists on origin: ANOTHER LANE HAS THIS WAVE. Stop and coordinate."
   git checkout -q -b "$br" origin/dev || die "cannot branch from origin/dev"
   git commit -q --allow-empty -m "claim: $wave — $sess, $(date -Is)"
