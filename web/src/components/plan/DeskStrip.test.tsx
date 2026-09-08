@@ -258,3 +258,44 @@ describe('Desk loading and accessible disclosure', () => {
     expect(screen.getByTestId('desk-line-mode')).toBeInTheDocument()
   })
 })
+
+describe('Received book and missing link labels', () => {
+  it('shows receipt age and received build, preserving known facts beside UNKNOWN link state', async () => {
+    await renderStrip({
+      generated_at_ms: Date.now(),
+      cadence_ms: 15000,
+      unknown_count: 1,
+      stale_count: 0,
+      lines: [
+        line({
+          key: 'book',
+          label: 'BOOK',
+          text: '0 working orders · received 21:00:00 CT · age 21s · AddOn build received-build',
+          as_of_ms: Date.now() - 21000,
+          age_ms: 21000,
+        }),
+        line({
+          key: 'feed',
+          label: 'FEED',
+          state: 'unknown',
+          reason: 'NT8 link state has not been received',
+          text: 'last bar 3s ago · link UNKNOWN (no feed_status received) · AddOn build received-build',
+        }),
+      ],
+    })
+    await waitFor(() =>
+      expect(screen.getByTestId('desk-line-book')).toBeInTheDocument()
+    )
+    expect(screen.getByTestId('desk-age-book')).toHaveTextContent('21s ago')
+    expect(screen.getByTestId('desk-line-book')).toHaveTextContent(
+      'received-build'
+    )
+    expect(screen.getByTestId('desk-line-feed')).toHaveTextContent(
+      'last bar 3s ago · link UNKNOWN'
+    )
+    expect(screen.getByTestId('desk-line-feed')).toHaveAttribute(
+      'data-state',
+      'unknown'
+    )
+  })
+})

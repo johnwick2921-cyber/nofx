@@ -139,7 +139,7 @@ export function StatusDot({
     <span
       className="inline-flex items-center gap-1.5"
       style={{ color: m.color, fontFamily: 'var(--vl-font-ui)' }}
-      title={tp(m.key, language)}
+      title={`${tp('scenarioActivation', language)}: ${tp(m.key, language)}`}
     >
       <span
         aria-hidden
@@ -149,7 +149,7 @@ export function StatusDot({
         {m.glyph}
       </span>
       <span className="text-[11px] uppercase tracking-wide">
-        {tp(m.key, language)}
+        {tp('scenarioActivation', language)}: {tp(m.key, language)}
       </span>
     </span>
   )

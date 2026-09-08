@@ -8,7 +8,10 @@ import (
 	"time"
 
 	"nofx/kernel"
+	"nofx/market"
+	ntwire "nofx/provider/ninjatrader"
 	"nofx/store"
+	nttrader "nofx/trader/ninjatrader"
 )
 
 // E1's RED is the base commit itself: at e28b604d there is no api/handler_desk.go,
@@ -287,4 +290,54 @@ func TestModeRowStatesTheMarketSeparatelyFromTheSessionWindow(t *testing.T) {
 		return
 	}
 	t.Fatal("no mode row")
+}
+
+func TestDeskBookUsesReceivedFrameAndUnknownLink(t *testing.T) {
+	now := time.Date(2026, 9, 7, 22, 0, 0, 0, time.UTC)
+	server := ntwire.NewTCPServer(nil)
+	broker := nttrader.NewTCPTrader(server, "MNQ", "audit-sim")
+	at := &AutoTrader{id: "desk-labels", store: deskStore(t), trader: broker, config: AutoTraderConfig{NinjaTraderSymbol: "MNQ"}}
+	oldProvider := market.FuturesBarsProvider
+	market.FuturesBarsProvider = func(string, string, int) []market.Kline {
+		return []market.Kline{{OpenTime: now.Add(-3 * time.Second).UnixMilli()}}
+	}
+	t.Cleanup(func() { market.FuturesBarsProvider = oldProvider })
+	t.Setenv("NT8_ORDER_SNAPSHOT_SECS", "30")
+	for _, tc := range []struct {
+		name      string
+		age       time.Duration
+		wantState string
+	}{
+		{"fresh", 21 * time.Second, "ok"}, {"stale", 61 * time.Second, "stale"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			received := now.Add(-tc.age)
+			server.OrderSnapshots().PutAt(ntwire.OrderSnapshotPayload{Account: "audit-sim", BuildID: "received-test-build", EmittedMs: now.Add(time.Hour).UnixMilli(), Orders: []ntwire.NT8Order{}}, received)
+			strip := at.DeskStripAt(now)
+			for _, line := range strip.Lines {
+				switch line.Key {
+				case "book":
+					if line.AsOfMs != received.UnixMilli() || line.AgeMs != tc.age.Milliseconds() || line.State != tc.wantState {
+						t.Fatalf("wrong book provenance: %+v", line)
+					}
+					if !strings.Contains(line.Text, "received-test-build") || !strings.Contains(line.Text, "received ") || !strings.Contains(line.Text, "age ") {
+						t.Fatalf("book metadata hidden: %+v", line)
+					}
+				case "mode", "feed":
+					if line.State != "unknown" || line.Verified || !strings.Contains(line.Text, "link UNKNOWN") {
+						t.Fatalf("missing link became known: %+v", line)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestDeskMissingBrokerBookDoesNotDateLedgerFlatnessAsNow(t *testing.T) {
+	server := ntwire.NewTCPServer(nil)
+	at := &AutoTrader{id: "desk-labels", store: deskStore(t), trader: nttrader.NewTCPTrader(server, "MNQ", "audit-sim"), config: AutoTraderConfig{NinjaTraderSymbol: "MNQ"}}
+	line := at.deskBook(time.Date(2026, 9, 7, 22, 0, 0, 0, time.UTC))
+	if line.State != "unknown" || line.Verified || line.AsOfMs != 0 || !strings.Contains(line.Reason, "UNKNOWN") {
+		t.Fatalf("absent broker book passed as dated flatness: %+v", line)
+	}
 }

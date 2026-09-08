@@ -150,6 +150,37 @@ describe('ScenarioList', () => {
   })
 })
 
+describe('Scenario activation is separate from order authorization', () => {
+  it('does not turn an activated scenario into an authorized order', () => {
+    const { rerender } = render(
+      <ScenarioList
+        scenarios={[scenario]}
+        statusMap={{ S1: 'armed' }}
+        armedStates={{}}
+        language="en"
+      />
+    )
+    expect(
+      screen.getByText('scenario activation: in activation window')
+    ).toBeInTheDocument()
+    expect(screen.queryByTestId('armed-chip')).not.toBeInTheDocument()
+    rerender(
+      <ScenarioList
+        scenarios={[scenario]}
+        statusMap={{ S1: 'armed' }}
+        armedStates={{ S1: { state: 'armed' } }}
+        language="en"
+      />
+    )
+    expect(screen.getByTestId('armed-chip')).toHaveTextContent(
+      'order authorized'
+    )
+    expect(
+      screen.getByText('scenario activation: in activation window')
+    ).toBeInTheDocument()
+  })
+})
+
 describe('SessionPlanCard states', () => {
   it('renders the loading state', () => {
     render(

@@ -10,6 +10,12 @@ import { SessionPlanCard } from './SessionPlanCard'
 import { AskPlannerPanel } from './AskPlannerPanel'
 import type { PlanToday } from '../../lib/api/plan'
 
+// Opening the panel starts a thread read. Keep this UI fixture offline rather
+// than letting its unmocked HTTP request reject after the assertion completes.
+vi.mock('../../lib/api', () => ({
+  api: { getPlanThread: vi.fn().mockResolvedValue({ thread: [] }) },
+}))
+
 const nightPlan: PlanToday = {
   found: false,
   trade_date: '2026-08-16',

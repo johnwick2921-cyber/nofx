@@ -170,6 +170,15 @@ func (c *OrderSnapshotCache) Latest(account string) (OrderSnapshotPayload, bool)
 	return s.Payload, ok
 }
 
+// LatestReceived returns one book and its local receipt instant under the same
+// lock. Display metadata must date the frame whose values it shows.
+func (c *OrderSnapshotCache) LatestReceived(account string) (OrderSnapshotPayload, time.Time, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	s, ok := c.byKey[snapKey(account)]
+	return s.Payload, s.ReceivedAt, ok
+}
+
 // AgeAt is how long ago the latest snapshot for the key was RECEIVED. The
 // second return is false when there is no snapshot at all — the caller must
 // distinguish "no book" from "a book of age 0", which is precisely the

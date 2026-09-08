@@ -36,7 +36,8 @@ const COLOURS: Record<DeskLine['state'], string> = {
 }
 
 function ageText(ms: number): string {
-  if (!Number.isFinite(ms) || ms <= 0) return 'now'
+  if (!Number.isFinite(ms) || ms < 0) return 'age UNKNOWN'
+  if (ms === 0) return 'now'
   const s = Math.round(ms / 1000)
   if (s < 60) return `${s}s ago`
   const m = Math.round(s / 60)
@@ -49,7 +50,9 @@ function Row({ line }: { line: DeskLine }) {
   // RULE 1 + 2: an UNKNOWN shows its reason in place of a value, and every
   // dated row shows its age. Neither is optional.
   const body =
-    line.state === 'unknown' ? `UNKNOWN — ${line.reason ?? ''}` : line.text
+    line.state === 'unknown' && (!line.text || line.text === 'UNKNOWN')
+      ? `UNKNOWN — ${line.reason ?? ''}`
+      : line.text
   return (
     <div
       data-testid={`desk-line-${line.key}`}

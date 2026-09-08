@@ -7,6 +7,11 @@ export const status: GuideSection = {
   tagline: 'Every indicator strip, banner, and log line — decoded.',
   asBuiltRev: GUIDE_BUILT_REV,
   blocks: [
+    { kind: 'h', text: 'Scenario activation and order authorization' },
+    {
+      kind: 'p',
+      text: 'Scenario activation describes the evaluator’s view of the setup. In activation window and confirmation MET do not authorize or place an order. The separate order authorized chip means the ledger has an authorization; working, filled and cancelled describe that ledger record, not a direct broker settlement. Prices and order selection are addressed separately.',
+    },
     { kind: 'h', text: 'Dashboard layout and Desk loading' },
     {
       kind: 'p',
@@ -100,7 +105,7 @@ export const status: GuideSection = {
         '🌩 storm cap reached: 5 provider call(s) this read ≥ cap 5  ← a 503 burst is not retried harder',
         '⚙ config diff (studio_save): min_risk_reward_ratio 3 → 2  ← one line per RESOLVED knob a save changed, plus a config_changes row',
         '🛡 boot sweep CANCELLED pre-boot arm (class 33): <session> <S#> … signal=<id> — the process that placed it is gone  ← only when a restart orphaned a resting order',
-        '🧷 brackets: entry-oco=<own(none)|SHARED(id)|n/a> · bracket-oco=<on-fill(shared)|MIXED|n/a> · state-source=<broker|none> · protective-tif=<Gtc|Day|n/a> · reconcile-on-reconnect=on · can-place-stop=<yes|no (addon <build>)> · unprotected-found=<n>  ← bracket-OCO separation. At startup most fields read n/a ON PURPOSE: they describe what the NinjaTrader AddOn does, and the bot can only know that from a book it has not received yet. A Go constant asserting the AddOn\'s behaviour is exactly the failure this line exists to catch — if entry-oco ever reads SHARED(...), the entry is back in its bracket\'s cancel group and cancelling it can take the stop.',
+        "🧷 brackets: entry-oco=<own(none)|SHARED(id)|n/a> · bracket-oco=<on-fill(shared)|MIXED|n/a> · state-source=<broker|none> · protective-tif=<Gtc|Day|n/a> · reconcile-on-reconnect=on · can-place-stop=<yes|no (addon <build>)> · unprotected-found=<n>  ← bracket-OCO separation. At startup most fields read n/a ON PURPOSE: they describe what the NinjaTrader AddOn does, and the bot can only know that from a book it has not received yet. A Go constant asserting the AddOn's behaviour is exactly the failure this line exists to catch — if entry-oco ever reads SHARED(...), the entry is back in its bracket's cancel group and cancelling it can take the stop.",
         '🎛 volume wave …   ← wave detector knobs',
         '🎯 touch telemetry …',
         '📐 fvg_entry …',
@@ -170,7 +175,7 @@ export const status: GuideSection = {
         ],
         [
           'BOOK',
-          "Cutover leg 4, continuously: the broker's order count against the ledger's, with the snapshot age. This is the check that caught the eight-order incident.",
+          'Broker order count against the ledger, dated from receipt of that snapshot. Receipt time, true age and received AddOn build are visible together. No received book or missing link state says UNKNOWN; a fresh bar does not supply a missing link status.',
         ],
         [
           'FEED',

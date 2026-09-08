@@ -229,9 +229,17 @@ export function ArmedChip({
 }) {
   if (!arm) return null
   const legGlyphs = (s: string) =>
-    s === 'working' ? '📌' : s === 'filled' ? '⚡' : s === 'cancelled' ? '✕' : '⏳'
+    s === 'working'
+      ? '📌'
+      : s === 'filled'
+        ? '⚡'
+        : s === 'cancelled'
+          ? '✕'
+          : '⏳'
   const splitLegs = arm.legs && arm.legs.length >= 2 ? arm.legs : null
-  const legLine = splitLegs ? ` · ${splitLegs.map((l) => `L${(l.leg_index ?? 0) + 1}${legGlyphs(l.state)}`).join(' ')}` : ''
+  const legLine = splitLegs
+    ? ` · ${splitLegs.map((l) => `L${(l.leg_index ?? 0) + 1}${legGlyphs(l.state)}`).join(' ')}`
+    : ''
   switch (arm.state) {
     case 'armed':
       return (
@@ -243,7 +251,7 @@ export function ArmedChip({
             border: '1px solid var(--vl-gold-line)',
           }}
         >
-          ⏳ armed{legLine}
+          ⏳ order authorized{legLine}
         </span>
       )
     case 'working':
@@ -283,7 +291,8 @@ export function ArmedChip({
             border: '1px solid rgba(224,108,108,0.4)',
           }}
         >
-          ✕ cancelled{legLine}{arm.reason ? ` · ${arm.reason}` : ''}
+          ✕ cancelled{legLine}
+          {arm.reason ? ` · ${arm.reason}` : ''}
         </span>
       )
   }
@@ -340,11 +349,14 @@ export function ScenarioList({
         style={{ color: 'var(--vl-faint)', fontFamily: 'var(--vl-font-ui)' }}
       >
         {tp('scenarios', language)}
-        <span title="Scenario dots and confirm chips are ADVISORY — they inform the card and the AI's prompt, they never hard-gate an entry (a hard scenario-state gate would recreate the suppression class; AI judgment + plan discipline already gate).">
+        <span title={tp('scenarioOrderSeparation', language)}>
           {' '}
-          (advisory)
+          · {tp('scenarioActivation', language)}
         </span>
       </span>
+      <p className="text-[10px]" style={{ color: 'var(--vl-muted)' }}>
+        {tp('scenarioOrderSeparation', language)}
+      </p>
       <div className="mt-1">
         {scenarios.map((s) => {
           const stored = statusMap?.[s.id] as ScenarioStatus | undefined

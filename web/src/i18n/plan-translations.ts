@@ -290,7 +290,21 @@ export const planStrings = {
 
   // ── scenarios ──
   scenarios: { en: 'Scenarios', zh: '情景', id: 'Skenario' },
-  statusArmed: { en: 'armed', zh: '待触发', id: 'siap' },
+  scenarioActivation: {
+    en: 'scenario activation',
+    zh: '情景激活状态',
+    id: 'aktivasi skenario',
+  },
+  scenarioOrderSeparation: {
+    en: 'Scenario activation and confirmation do not mean an order is authorized or working. The order chip shows the separate ledger state.',
+    zh: '情景激活与确认不代表订单已授权或已挂单。订单标签单独显示账本状态。',
+    id: 'Aktivasi dan konfirmasi skenario tidak berarti order diotorisasi atau aktif. Label order menunjukkan status ledger terpisah.',
+  },
+  statusArmed: {
+    en: 'in activation window',
+    zh: '处于激活区间',
+    id: 'dalam jendela aktivasi',
+  },
   statusWaiting: { en: 'waiting', zh: '等待中', id: 'menunggu' },
   statusTriggered: { en: 'triggered', zh: '已触发', id: 'terpicu' },
   statusInvalidated: { en: 'invalidated', zh: '已失效', id: 'batal' },

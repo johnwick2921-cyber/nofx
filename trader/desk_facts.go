@@ -8,6 +8,7 @@ import (
 
 	"nofx/kernel"
 	"nofx/market"
+	nt "nofx/provider/ninjatrader"
 	"nofx/store"
 )
 
@@ -298,12 +299,14 @@ func (at *AutoTrader) deskMode(now time.Time, book DeskLine) DeskLine {
 	if bars := deskBars(at.futuresSymbol(), 2); len(bars) > 0 {
 		feed = deskAge(now.UnixMilli()-bars[len(bars)-1].OpenTime) + " since last bar"
 	}
-	link := "no NT8 link"
-	if nt := at.armedTrader(); nt != nil {
-		link = nt.FeedStatus()
+	link, linkKnown := at.deskLinkStatus()
+	state, reason := "ok", ""
+	if !linkKnown {
+		state, reason = "unknown", "NT8 link state has not been received"
 	}
+
 	return DeskLine{
-		N: 1, Key: "mode", Label: "MODE", State: "ok", Verified: true,
+		N: 1, Key: "mode", Label: "MODE", State: state, Verified: linkKnown, Reason: reason,
 		Source: "strategy config · session registry · bars · NT8 link",
 		AsOfMs: now.UnixMilli(),
 		// The clock routes through kernel/tz.go's ONE time source (class 60 /
@@ -570,24 +573,56 @@ func (at *AutoTrader) deskArms(pos map[string]interface{}, now time.Time, tick f
 }
 
 // deskBook is cutover leg 4 ON SCREEN, CONTINUOUSLY. It reuses the gate's own
-// computation rather than re-deriving it, so the strip and the gate can never
-// disagree about whether the broker and the ledger agree.
+// formatter rather than re-deriving it. Each display read uses the caller's
+// clock and dates the exact broker snapshot supplying its values.
 func (at *AutoTrader) deskBook(now time.Time) DeskLine {
-	g := at.CutoverGateStatus()
-	for _, l := range g.Legs {
-		if l.N != 4 {
-			continue
-		}
-		state := "ok"
-		if !l.Pass {
-			state = "stale"
-		}
-		return DeskLine{N: 8, Key: "book", Label: "BOOK", State: state, Verified: l.Pass,
-			Source: l.Source, AsOfMs: now.UnixMilli(),
-			Text:   l.Detail,
-			Reason: map[bool]string{true: "", false: "leg 4 does not pass — the broker and the ledger disagree, or the book cannot be read"}[l.Pass]}
+	cache, account, symbol := at.brokerBook()
+	if cache == nil {
+		return deskUnknown(8, "book", "BOOK", "NT8 order_snapshot", "no broker book received; AddOn build UNKNOWN")
 	}
-	return deskUnknown(8, "book", "BOOK", "cutover gate", "the gate returned no leg 4")
+	snap, received, ok := cache.LatestReceived(account)
+	if !ok || received.IsZero() {
+		return deskUnknown(8, "book", "BOOK", "NT8 order_snapshot", "no dated broker book received for this account; AddOn build UNKNOWN")
+	}
+	build := strings.TrimSpace(snap.BuildID)
+	if build == "" {
+		build = "UNKNOWN"
+	}
+	age := now.Sub(received)
+	if age < 0 {
+		return deskUnknown(8, "book", "BOOK", "NT8 order_snapshot", "broker receipt is ahead of the server clock; age UNKNOWN · AddOn build "+build)
+	}
+	metadata := fmt.Sprintf("received %s · age %s · AddOn build %s", kernel.ClockCTSeconds(received), deskAge(age.Milliseconds()), build)
+	orders, err := at.gateOpenOrders()
+	if err != nil {
+		line := deskUnknown(8, "book", "BOOK", "NT8 order_snapshot × armed_orders", "ledger comparison unavailable: "+err.Error())
+		line.Text = "UNKNOWN — " + line.Reason + " · " + metadata
+		line.AsOfMs, line.AgeMs = received.UnixMilli(), age.Milliseconds()
+		return line
+	}
+	// Freeze this display read so the gate's existing count/freshness formatter
+	// and the displayed age/build all describe the same received frame. This
+	// request-local view changes no trading gate or shared cache.
+	view := nt.NewOrderSnapshotCache()
+	view.PutAt(snap, received)
+	leg := Leg4FromBrokerAt(view, account, symbol, OrderSnapshotInterval(), orders, now)
+	state, reason := "ok", ""
+	if !leg.Pass {
+		state, reason = "stale", leg.Detail
+	}
+	return DeskLine{N: 8, Key: "book", Label: "BOOK", State: state, Verified: leg.Pass,
+		Source: leg.Source, AsOfMs: received.UnixMilli(), AgeMs: age.Milliseconds(),
+		Text: leg.Detail + " · " + metadata, Reason: reason}
+}
+
+// FeedStatus is a received field, not the bar-based trading connectivity gate.
+func (at *AutoTrader) deskLinkStatus() (string, bool) {
+	if trader := at.armedTrader(); trader != nil && trader.GetServer() != nil {
+		if status := strings.TrimSpace(trader.FeedStatus()); status != "" {
+			return status, true
+		}
+	}
+	return "UNKNOWN (no feed_status received)", false
 }
 
 func (at *AutoTrader) deskFeed(now time.Time) DeskLine {
@@ -597,10 +632,9 @@ func (at *AutoTrader) deskFeed(now time.Time) DeskLine {
 	}
 	last := bars[len(bars)-1].OpenTime
 	age := now.UnixMilli() - last
-	link := "no NT8 link"
+	link, linkKnown := at.deskLinkStatus()
 	build := "UNKNOWN"
 	if nt := at.armedTrader(); nt != nil {
-		link = nt.FeedStatus()
 		if srv := nt.GetServer(); srv != nil {
 			if snap, ok := srv.OrderSnapshots().Latest(nt.BoundAccount()); ok && snap.BuildID != "" {
 				build = snap.BuildID
@@ -612,6 +646,13 @@ func (at *AutoTrader) deskFeed(now time.Time) DeskLine {
 	if age > int64(2*time.Minute/time.Millisecond) {
 		state = "stale"
 		reason = "the newest 1m bar is older than 2 minutes"
+	}
+	if !linkKnown {
+		state = "unknown"
+		if reason != "" {
+			reason += "; "
+		}
+		reason += "NT8 link state has not been received"
 	}
 	return DeskLine{N: 9, Key: "feed", Label: "FEED", State: state, Verified: state == "ok",
 		Source: "bars · NT8 link · AddOn build id", AsOfMs: last, Reason: reason,
