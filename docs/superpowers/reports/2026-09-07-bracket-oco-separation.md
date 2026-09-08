@@ -241,7 +241,7 @@ Readers: `IsWorking()` = not terminal (the flat gate's question, conservative);
 lets a caller refuse to act. One bool could not answer both questions, which is
 why the classification is graded rather than binary.
 
-## The finding that made the UNKNOWN ruling real — CLASS 78
+## The finding that made the UNKNOWN ruling real — CLASS 85
 
 The Go reclassification was **unreachable**. The AddOn filtered first:
 
@@ -268,7 +268,7 @@ transition, which on a quiet book may be never, and every consumer listed above
 reads the snapshot. The defect and the fix are unchanged; the description was
 too broad. Class 78 carries the corrected wording and the trap that produced it.
 
-## A SECOND NAKED-POSITION PATH, FOUND BY THE SAME QUESTION — CLASS 80
+## A SECOND NAKED-POSITION PATH, FOUND BY THE SAME QUESTION — CLASS 87
 
 The cancel-path census was pointed at *every* path that cancels a bracket, not
 just the one in the incident. It found this, and it is severity 1:
@@ -353,7 +353,7 @@ either `accepted_risk` or the plan, a P0 is raised and nothing is placed.
 3. **A part-filled entry cannot sit unprotected.** It is bracketed for what
    filled, and amended.
 4. **An unreadable order state cannot read as a closed one** — at either end.
-4b. **A failed exit cannot cancel a live position's protection** (class 80).
+4b. **A failed exit cannot cancel a live position's protection** (class 87).
 5. **A locally-held stop cannot be counted as protection**, or written to
    `accepted_risk` as an accepted price.
 6. **A position cannot be unprotected without anyone knowing.** Every minute,

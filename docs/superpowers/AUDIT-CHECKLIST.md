@@ -2369,7 +2369,38 @@ adversarial reviewer asking what `r.Side` actually contains at runtime rather
 than what the struct comment says (`Side string // long | short`,
 `store/armed_orders.go:36` — still true of the type, false of the data).
 
-## CLASS 78 — THE CASE YOUR FIX HANDLES NEVER ARRIVES (born 2026-09-07, fix/bracket-oco-separation, C3)
+## ⚠ NUMBERING HAZARD — THIS FILE CARRIES TWO FORMATS (added 2026-09-07)
+
+**Before assigning a class number, count BOTH formats.** PART 1 numbers its
+entries `NN. **Title.**`; the appended sections below use `## CLASS NN — TITLE`.
+A grep for one is blind to the other, and "the highest is N" from a single-format
+read is how duplicates get born.
+
+I filed three entries as CLASS 78/79/80 on the strength of
+`grep -oE "^## CLASS [0-9]+"`, which returned 75-77 and nothing higher. PART 1
+already held 78 (a plan that could only trade one direction), 79 (silence read as
+death) and 80 (a guard that cannot guard the rows it was built for). Mine are now
+85/86/87. A peer lane caught it; my own census did not, because the census asked
+the question in the format I happened to have written in.
+
+**75, 76 and 77 are STILL duplicated across the two formats** — from waves before
+this one. They are not renumbered here: A16 forbids renumbering another lane's
+entry, and a number already cited elsewhere is worse to move than to leave. They
+are recorded so the next reader knows the collision is real and pre-existing.
+
+Count with this, which sees both:
+
+```
+{ grep -oE "^[0-9]{2}\. \*\*" docs/superpowers/AUDIT-CHECKLIST.md | grep -oE "^[0-9]{2}"
+  grep -oE "^## CLASS [0-9]+" docs/superpowers/AUDIT-CHECKLIST.md | grep -oE "[0-9]+$"
+} | sort -n | uniq -c | awk '$1>1{print "DUPLICATE: "$2} $1==1{l=$2} END{print "highest: "l}'
+```
+
+**Law:** a "highest occupied" read is only as wide as the format it greps for.
+Where a document has grown more than one convention, the census must enumerate
+every convention or it will confidently report a free number that is taken.
+
+## CLASS 85 — THE CASE YOUR FIX HANDLES NEVER ARRIVES (born 2026-09-07, fix/bracket-oco-separation, C3)
 
 **Name.** A classifier is corrected to handle a value carefully. An earlier stage,
 on the other side of a wire, DROPS that value. The careful branch is unreachable,
@@ -2453,7 +2484,7 @@ removes: the answer is usually "some of them".
 evidence against it. A fix whose branch cannot be reached is indistinguishable
 from a fix that works, by every means except reading the producer.
 
-## CLASS 79 — THE FIX THAT VALIDATES ITSELF (born 2026-09-07, fix/bracket-oco-separation, C1)
+## CLASS 86 — THE FIX THAT VALIDATES ITSELF (born 2026-09-07, fix/bracket-oco-separation, C1)
 
 **Name.** A wave is dispatched against a stated mechanism. The mechanism is not
 the cause. The fix is correct, ships clean, reviews well, and changes nothing —
@@ -2510,7 +2541,7 @@ made it work was writing the pin FIRST and watching it refuse to fail — the
 mechanism was refuted by an artefact, not by an argument.
 
 
-## CLASS 80 — THE CLEANUP THAT RUNS WHEN THE THING IT CLEANS UP AFTER DID NOT HAPPEN (born 2026-09-07, fix/bracket-oco-separation, adversarial review)
+## CLASS 87 — THE CLEANUP THAT RUNS WHEN THE THING IT CLEANS UP AFTER DID NOT HAPPEN (born 2026-09-07, fix/bracket-oco-separation, adversarial review)
 
 **Name.** A handler tidies up after an event. Its enclosing gate admits the
 event's FAILURE modes as well as its success, and the tidying does not check
