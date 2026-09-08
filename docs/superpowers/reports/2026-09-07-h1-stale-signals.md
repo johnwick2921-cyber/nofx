@@ -49,7 +49,7 @@ This audit changes documentation only. The owner’s following-wave ruling is re
 ```text
 runCycle / auto_trader_loop.go:432
   → maybeManageArmedOrders / armed_executor.go:189
-  → composeArmStop :422; arm gates :462; UpsertArm :616/:658
+  → composeArmStop :422; arm gates :462; UpsertArm :617/:658
   → runArmedPlacement :680/:950
   → PlaceLimitEntry :1067
       → uuid.NewString / ninjatrader/tcp_trader.go:452
@@ -65,7 +65,7 @@ runCycle / auto_trader_loop.go:432
   → SetSignal :1072; SetState("working", "") :1073
   → WORKING log :1074
 NT8 HandleSignal
-  → parse payload timestamp / VLTraderTCPClient.cs:758
+  → parse payload timestamp / VLTraderTCPClient.cs:757
   → compare DateTime.UtcNow against timestamp :814–815
   → log stale reason; send fill.status=rejected :817–819
 Go receive / tcp_server.go:1740
@@ -102,7 +102,7 @@ It rejects ages **greater than60 seconds**, not >=60. The age string is formatte
 | Debug limit seam | armed_executor.go:2162 | **armed_executor.go:2180** | No |
 | Debug stop seam | armed_executor.go:2212 | **armed_executor.go:2230** | No |
 
-The normal loop drains queued `order_update` events at its beginning (:221) and after placement (:1085). That is not a per-placement received-acceptance gate. The stale-signal rejection occurs before NT8 creates an Order, so it sends a **fill rejection**, not an OrderUpdate rejection.
+The normal loop drains queued `order_update` events at its beginning (:221) and after placement (:1090). That is not a per-placement received-acceptance gate. The stale-signal rejection occurs before NT8 creates an Order, so it sends a **fill rejection**, not an OrderUpdate rejection.
 
 [A] Two separate consumers explain the lost state/reason:
 
@@ -138,5 +138,7 @@ Spec freshness (`git log -1`):
 - armed_executor.go: `78da55a92a2d726ddebab3f4eebf8aa5ab38f195 | 2026-09-07T10:45:00-05:00 | docs+guide: classes 78/79, guide surfaces, and the two over-reached guards reverted`.
 - tcp_trader.go and tcp_server.go: `8e6cf957efb14996acf46fd7396aee9af99a78e2 | 2026-09-07T10:37:50-05:00 | feat(protection): D5/D6/D7 — a position without a stop is found, named, and given one`.
 - h1 C#: `b4195e6f877032090812214b8ae4b6acae777a4f | 2026-09-07T10:53:37-05:00 | fix(exit): class 80 — a REJECTED limit exit no longer cancels the position's bracket`.
+
+The concurrent F2 report update `9e42bebf` (2026-09-07T23:07:22-05:00, `docs(report): the near-miss the test caught, now confirmed live by rows 116/117`) was read and merged before publication. Its harmless-cancel/reaper evidence agrees with the two reconciliation timestamps above; it does not establish broker acceptance or rejection-state handling. No source file changed in that concurrent update.
 
 The audit follows `docs/superpowers/AUDIT-CHECKLIST.md`; no new class number allocated in this documentation-only wave. The passive wire watch remains active. A third attempt, arm118 placement2/signal2b4c8bda-e8e6-4abf-8970-dd779604554f, was rejected at23:05:23.640 CT with age2903.6s (native log.00005:743); it is further stale-signal evidence, not an h1 acceptance proof. The four requested new-arm wire proofs remain pending.
