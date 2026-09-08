@@ -403,6 +403,8 @@ func (s *ArmedOrderStore) BeginPlacement(id int64, signalID string) error {
 	return nil
 }
 
+const PlacementReasonUnavailable = "reason unavailable (NT8 frame omitted reason)"
+
 // ApplyPlacementReceipt is called only for received entry frames. Cancellation
 // intent survives a late acceptance; filled/terminal rows cannot be resurrected.
 func (s *ArmedOrderStore) ApplyPlacementReceipt(traderID, signalID, state, reason string) error {
@@ -415,9 +417,13 @@ func (s *ArmedOrderStore) ApplyPlacementReceipt(traderID, signalID, state, reaso
 		q = q.Where("state = ?", StatePlacePending)
 		reason = ""
 	case StateRejected:
-		q = q.Where("state IN (?,?,?)", StatePlacePending, StateWorking, StateCancelPending)
 		if strings.TrimSpace(reason) == "" {
-			reason = "reason unavailable (NT8 frame omitted reason)"
+			q = q.Where("state IN (?,?,?)", StatePlacePending, StateWorking, StateCancelPending)
+			reason = PlacementReasonUnavailable
+		} else {
+			// A second receipt may supply the reason h1's first frame omitted.
+			// Enrich that absence without replacing an already received reason.
+			q = q.Where("(state IN (?,?,?) OR (state = ? AND state_reason = ?))", StatePlacePending, StateWorking, StateCancelPending, StateRejected, PlacementReasonUnavailable)
 		}
 	default:
 		return fmt.Errorf("armed_orders: unsupported placement receipt %q", state)

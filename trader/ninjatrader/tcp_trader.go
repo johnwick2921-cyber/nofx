@@ -169,11 +169,13 @@ func NewTCPTrader(server *ntwire.TCPServer, symbol string, account ...string) *T
 	// extras (source of truth per (re)load), then the NT_EXTRA_SYMBOLS testing
 	// override appends. Both dedup against the real primary set above.
 	// Subscribe to inbound fills — update lastFill cache (mirrors CSV Trader).
+	// Install ownership before returning a trader that can send entries.
+	fills := server.SubscribeFillsFor(symbol, t.boundAccount)
 	go func() {
 		// P5.4 — router-fed per-symbol stream (no cross-trader racing). The
 		// channel CLOSES when a reloaded trader re-subscribes, ending this
 		// goroutine (fixes the pre-P5.4 reload leak).
-		for fill := range server.SubscribeFillsFor(symbol, t.boundAccount) {
+		for fill := range fills {
 			// P5.2 split-brain defense: a symbol-tagged fill for a DIFFERENT
 			// instrument must never be attributed to this trader. Empty symbol
 			// = legacy (pre-P5.2) AddOn → assumed primary (back-compat).
@@ -226,8 +228,12 @@ func NewTCPTrader(server *ntwire.TCPServer, symbol string, account ...string) *T
 						logger.Errorf("persist entry rejection signal=%s: %v", fill.SignalID, err)
 					}
 				}
-				logger.Errorf("🚨 C8 ENTRY REJECTED by NT8: %s %s qty=%d signal_id=%s — no position exists; pending entry dropped (no phantom).",
-					fill.Symbol, fill.Side, fill.Quantity, fill.SignalID)
+				reason := fill.Reason
+				if strings.TrimSpace(reason) == "" {
+					reason = store.PlacementReasonUnavailable
+				}
+				logger.Errorf("🚨 C8 ENTRY REJECTED by NT8: %s %s qty=%d signal_id=%s reason=%q — no position exists; pending entry dropped (no phantom).",
+					fill.Symbol, fill.Side, fill.Quantity, fill.SignalID, reason)
 				telemetry.RecordError(tid, "nt_entry_rejected", fmt.Sprintf("%s %s rejected (signal %s)", fill.Symbol, fill.Side, fill.SignalID), telemetry.CostNone)
 				continue
 			}

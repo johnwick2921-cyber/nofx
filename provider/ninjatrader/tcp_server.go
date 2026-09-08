@@ -231,6 +231,15 @@ const pendingOpsCap = 4096
 // exists, ALL production consumption goes through the router.
 func (s *TCPServer) ensureRouters() {
 	s.routerOnce.Do(func() {
+		// Map pointers must be stable before runRouters evaluates its dispatch
+		// arguments. Locking only inside dispatch was too late for lazy init.
+		s.subsMu.Lock()
+		s.fillSubs = make(map[string]chan FillPayload)
+		s.closeSubs = make(map[string]chan PositionClosePayload)
+		s.rejectSubs = make(map[string]chan PositionCloseRejectedPayload)
+		s.instrSubs = make(map[string]chan InstrumentInfoPayload)
+		s.orderUpdSubs = make(map[string]chan OrderUpdatePayload)
+		s.subsMu.Unlock()
 		ctx := s.runCtx
 		if ctx == nil {
 			ctx = context.Background()

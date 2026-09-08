@@ -63,3 +63,23 @@ func TestAcceptancePreservesCancelIntent(t *testing.T) {
 		t.Fatalf("late acceptance erased cancel: %+v", rows)
 	}
 }
+
+func TestSecondRejectionCanSupplyMissingReason(t *testing.T) {
+	ledger := NewArmedOrderStore(newArmedTestDB(t))
+	row := &ArmedOrderDB{TraderID: "t1", PlanID: "p", Scenario: "S1", State: StateArmed}
+	if err := ledger.UpsertArm(row); err != nil {
+		t.Fatal(err)
+	}
+	if err := ledger.BeginPlacement(row.ID, "sig"); err != nil {
+		t.Fatal(err)
+	}
+	for _, reason := range []string{"", "  exact wire reason  ", "", "different later reason"} {
+		if err := ledger.ApplyPlacementReceipt("t1", "sig", StateRejected, reason); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rows, _ := ledger.ListForPlan("p")
+	if rows[0].State != StateRejected || rows[0].StateReason != "  exact wire reason  " {
+		t.Fatalf("missing reason did not enrich, or was overwritten: %+v", rows)
+	}
+}

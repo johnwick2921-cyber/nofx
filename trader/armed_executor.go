@@ -1069,7 +1069,7 @@ func (at *AutoTrader) runArmedPlacement(bars []market.Kline, sinceMs int64) {
 					at.logWarnf("📌 armed place failed %s: %v", r.Scenario, perr)
 					continue
 				}
-				at.logInfof("📌 armed %s → PLACE_PENDING limit %.2f signal=%s (band ±%.0ft)", r.Scenario, r.EntryPx, sid, band/tick)
+				at.logInfof("📌 armed %s placement requested limit %.2f signal=%s (band ±%.0ft)", r.Scenario, r.EntryPx, sid, band/tick)
 				// ONE LIVE ENTRY PER PLAN (owner ruling 2026-09-06): the moment
 				// one arm reaches the wire, every other arm in the plan is
 				// cancelled. A plan gets one entry, not one per scenario.
@@ -1380,7 +1380,7 @@ func (at *AutoTrader) placeOneStopEntry(pl stopEntryPlacer, ledger armStateWrite
 			r.Scenario, d.Verdict, strings.ToUpper(d.Side), d.Trigger, perr)
 		return
 	}
-	at.logInfof("📌 armed %s → PLACE_PENDING stop-entry [guard=stop-side verdict=%s action=%s] %s stop-market trigger=%.2f price=%.2f signal=%s (%s · no retest in %d bars, offset %dt)",
+	at.logInfof("📌 armed %s placement requested stop-entry [guard=stop-side verdict=%s action=%s] %s stop-market trigger=%.2f price=%.2f signal=%s (%s · no retest in %d bars, offset %dt)",
 		r.Scenario, d.Verdict, d.Action, strings.ToUpper(d.Side), d.Trigger, price, sid, d.Why, retestWaitBars(), stopEntryOffsetTicks())
 }
 
@@ -1698,12 +1698,27 @@ func (at *AutoTrader) onArmedOrderUpdate(u ntwire.OrderUpdatePayload, ledger *st
 			u.State, u.SignalID, u.Account, u.FillPrice)
 	}
 	logArmedOrderUpdateSummary()
+	if u.OrderName != "" && u.OrderName != u.SignalID {
+		return
+	}
+	if strings.EqualFold(u.State, "rejected") {
+		// May enrich a prior rejection whose fill frame omitted the reason.
+		if err := ledger.ApplyPlacementReceipt(at.id, u.SignalID, store.StateRejected, u.Reason); err != nil {
+			at.logWarnf("persist entry rejection signal=%s: %v", u.SignalID, err)
+		}
+		reason := u.Reason
+		if strings.TrimSpace(reason) == "" {
+			reason = store.PlacementReasonUnavailable
+		}
+		at.logWarnf("✕ received entry REJECTED signal=%s reason=%q", u.SignalID, reason)
+		return
+	}
 	rows, err := ledger.ListNonTerminal(at.id)
 	if err != nil {
 		return
 	}
 	for _, r := range rows {
-		if r.TraderID != at.id || r.SignalID != u.SignalID || (u.OrderName != "" && u.OrderName != u.SignalID) {
+		if r.TraderID != at.id || r.SignalID != u.SignalID {
 			continue
 		}
 		switch strings.ToLower(u.State) {
@@ -1719,9 +1734,6 @@ func (at *AutoTrader) onArmedOrderUpdate(u ntwire.OrderUpdatePayload, ledger *st
 			at.materializeArmedEntry(r, u)
 			at.stampArmedFillLineage(r, u.FillPrice)
 			at.logInfof("⚡ armed fill %s @ %.2f (entry_class=armed_fill — stale_reeval NOT applied)", r.Scenario, u.FillPrice)
-		case "rejected":
-			_ = ledger.ApplyPlacementReceipt(at.id, u.SignalID, store.StateRejected, u.Reason)
-			at.logWarnf("✕ armed %s NT8-REJECTED — disarmed", r.Scenario)
 		case "cancelled":
 			_ = ledger.SetState(r.ID, "cancelled", "cancelled in NT8")
 			at.logInfof("✕ armed %s cancelled in NT8", r.Scenario)
@@ -2173,7 +2185,7 @@ func (at *AutoTrader) TestArmPlace(side string, entry, stop, target float64) (st
 	if err := ledger.DB().First(&out, out.ID).Error; err != nil {
 		return out, err
 	}
-	at.logInfof("🧪 TEST-E2 arm → PLACE_PENDING limit %.2f signal=%s (seam)", entry, sid)
+	at.logInfof("🧪 TEST-E2 arm placement requested limit %.2f signal=%s (seam)", entry, sid)
 	return out, nil
 }
 
@@ -2230,7 +2242,7 @@ func (at *AutoTrader) TestArmPlaceStop(side string, trigger, stop, target float6
 	if err := ledger.DB().First(&out, out.ID).Error; err != nil {
 		return out, err
 	}
-	at.logInfof("🧪 TEST-E7 stop-entry → PLACE_PENDING stop_entry trigger %.2f signal=%s (seam)", trigger, sid)
+	at.logInfof("🧪 TEST-E7 stop-entry placement requested stop_entry trigger %.2f signal=%s (seam)", trigger, sid)
 	return out, nil
 }
 
