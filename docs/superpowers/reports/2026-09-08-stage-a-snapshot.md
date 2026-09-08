@@ -54,7 +54,7 @@ Audit protocol: `AUDIT-CHECKLIST.md`, Part 2 R1–R10; checklist number assigned
 
 ## Implementation and proof status
 
-Pending: record-only schema/capture/writers/export, red/green production pins, fault and latency bounds, mutation evidence, Guide/SYSTEM-MAP, merge-time checklist, suite/build, owner-controlled cutover and live receipts. No trading decision, score, contract, order, DB row or runtime setting has been changed in this audit.
+Implemented: separate archive, five-object writers, read-only export and production mutation pins. Class 93 is assigned at integration. Full clean-clone suite/build and owner-controlled cutover/live receipts remain separate pending steps. No Stage A trading decision or runtime setting is changed by preparation.
 
 
 ## Implementation checkpoint (not deployed)
@@ -159,7 +159,7 @@ real retry/publication path; removing each candidate/TCP/permission/outcome hook
 produces zero corresponding rows. The repair fixture publishes version 2 and keeps
 both attempts and the parser rejection. Mutating manifest count validation accepts
 an altered count and fails its pin. Exact changed lines and full failures are in
-the staged evidence logs (to be included in the final report bundle).
+the committed evidence logs in `2026-09-08-stage-a-snapshot-data/`.
 
 [A] Restored focused tests passed with `-race`. Web preliminary validation:
 52 test files / 369 tests passed; `tsc --noEmit` passed. The first full Go attempt
@@ -203,3 +203,14 @@ independent keeper. Main was porcelain-clean on dev `c98ed6f2`; scenario-economi
 had merged its contract and class 92 and released the lock. Stage A must integrate
 that tip and reread its schema before the final merged-head suite. No swap or
 restart is authorized by this preparation record.
+
+
+## Integrated candidate and field dictionary
+
+[A] Integrated scenario-economics through `c98ed6f2`, merge `13017618`. Its new-authoring contract is owned by `fix/scenario-economics`; Stage A records the final JSON (including economics) without adding validation or altering it. Contract freshness: `d5e2414e0d30a275b6239f5d609f9e22f8e381d7 2026-09-08T16:02:39-05:00 feat(scenario-economics): enforce new authoring contract and preserve legacy unknowns`.
+
+[A] Class **93** assigned after highest **92** in the fresh two-format `sort -n | uniq -c` census, retained in `checklist-at-merge.txt`. Existing duplicate 75/76/77 entries are unchanged. Restored merged integration tests passed for researchsnapshot, kernel, provider/ninjatrader and trader. Guide removal mutation also failed before its restored GREEN.
+
+The [complete field dictionary](2026-09-08-stage-a-snapshot-data/field-dictionary.md) enumerates every registered field, its meaning and NULL semantics. Dedicated predicate timestamp projection, full config/prompt-version, legacy row links and accepted entry role remain NULL; relevant raw metadata/output/order facts remain available separately. The per-read adapter benchmark is 0.002532 / 0.002161 / 0.002655 ms (median 0.002532 ms) on its one-candidate fixture; it is not added to the separate 72-candidate scorer benchmark as a measured whole-read number.
+
+A15 remains explicit: whole live per-read overhead, first real candidate/cut/attempt/repair and the first live export are **NOT YET PROVEN**. Queue admission is nonblocking and measured separately. The 5 ms admission test is a code budget/drop guard, not a real-time operating-system scheduling guarantee.
