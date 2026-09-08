@@ -674,9 +674,25 @@ func (t *TCPTrader) MoveStopToBreakeven(side string, newStop float64) error {
 		Symbol:      t.symbol,
 		SignalID:    sid,
 		NewStopLoss: newStop,
-		Timestamp:   t.feedNowUTC(t.symbol).Format(time.RFC3339),
-		Account:     t.boundAccount, // A2 (G1) — identity stamp
-		TraderID:    tid,
+		// WALL CLOCK, not the tape (2026-09-07). This was feedNowUTC — the last
+		// BAR's close — which is a market fact, not the moment a command was
+		// created. The AddOn ages a received timestamp against DateTime.UtcNow
+		// (VLTraderTCPClient.cs:814), so a bar-derived stamp reads as stale by
+		// exactly the length of any feed gap.
+		//
+		// It is INERT today: the AddOn parses "timestamp" in one place only,
+		// HandleSignal, and HandleMoveStop reads just signal_id and
+		// new_stop_loss. Fixed anyway for two reasons. A freshness guard on
+		// move_stop — the obvious hardening after this wave — would inherit the
+		// bug fully formed, and auto-breakeven would then fail during feed gaps,
+		// which is when a runner most needs its stop moved. And the internal
+		// inconsistency teaches the wrong convention: the sibling
+		// PlaceProtectiveStopPayload two hundred lines below already stamps
+		// time.Now().UTC(), so one file said two different things about what
+		// "timestamp" means.
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Account:   t.boundAccount, // A2 (G1) — identity stamp
+		TraderID:  tid,
 	}); err != nil {
 		return err
 	}

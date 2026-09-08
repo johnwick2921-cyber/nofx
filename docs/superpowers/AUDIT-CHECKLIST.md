@@ -2086,6 +2086,45 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     one you can see), class 24 (a check that prints but does not gate), class 83
     (a status code is not a verification).
 
+89. **A wave verified by a toolchain that cannot see half of it.** (Number
+    assigned at merge, A16 — two-format census at merge: highest occupied 88,
+    duplicates 75/76/77 pre-existing.) On 2026-09-07 the place-confirmation wave
+    edited `ninjascript/VLTraderTCPClient.cs` and shipped it to dev with **two
+    compile errors**: an `if` statement inside a C# collection initializer, and a
+    `reason:` argument dropped into a branch where `ageSec` is out of scope. The
+    commit reported "Suite: 28/28, 0 FAIL" and that was TRUE — of the Go half.
+    `go build ./...`, `go vet` and `go test ./...` cannot compile NinjaScript, so
+    every check that passed was blind to the file that was broken. Another lane
+    repaired it before the next F5.
+    **Why it did no runtime damage, and why that is not comfort.** NinjaScript
+    only takes effect after copy → F5 → full NT8 restart, so the broken file sat
+    inert. The damage would have landed on whoever ran that dance next, at the
+    moment they most needed the AddOn to build — and the commit gave them no
+    reason to suspect it.
+    **What identified it** was not the suite and not review: it was the NEXT
+    wave's audit reading the same file for an unrelated reason. Nothing in the
+    wave's own process could have found it, which is the whole point.
+    **Probe:** list every LANGUAGE and every RUNTIME a wave's diff touches. For
+    each, name the command that compiles or executes it. Any language with no
+    such command in the wave is UNVERIFIED — say so by name. Two smells: a
+    green-suite claim in a commit whose diff spans more than one toolchain, and
+    a file whose deploy path is manual (copy/F5/restart, a DLL, a browser
+    extension, a device) — manual deploy is exactly where "it compiles" stops
+    being checked by anything.
+    **Law:** **a wave states which half its toolchain verified and which half it
+    did not.** Green is a claim about what ran, never about the diff. Where a
+    language cannot be compiled in the wave, the commit says so in words and the
+    boot line or report names what remains unproven — the same rule as an
+    uncomputed value being UNKNOWN rather than 0 (A24, class 49/53).
+    **Pin (standing):** any wave touching `.cs` states plainly that NinjaScript
+    is outside the Go toolchain and names what was and was not compiled. A
+    commit that reports a green suite while its diff contains `.cs` and says
+    nothing about it fails this entry on its face.
+    Sibling to class 83 (a status code is not a verification — there, a 200
+    proved only that something answered; here, a green suite proves only that
+    Go compiled). Related: class 24 (a check that prints but does not gate),
+    class 88 (a liveness signal that is a side effect of activity).
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,
