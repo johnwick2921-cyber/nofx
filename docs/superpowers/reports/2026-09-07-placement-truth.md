@@ -78,7 +78,7 @@ All source coordinates below refer to implementation `7e0c5527`.
 
 ## Pins and validation
 
-**[A] Fresh final loopback measurement:** the actual entry composer read a
+**[A] Fresh final loopback measurement:** the actual entry composer was given prices from a
 1-minute bar whose close was 30 minutes old (bar open 31 minutes old). The
 receiver parsed the emitted payload timestamp and independently subtracted it
 from receipt time, as h1 does. Results from `/tmp/placement-clock-proof.log`:
@@ -129,7 +129,7 @@ vcs.modified=false
 sha256=6b005690cf53bcea0482d6ee55d23edd648827a84addc4033df44b47a268337d
 ```
 
-The deployed h1 source remains unchanged: MD5
+The repo h1 source remains unchanged: MD5
 `d0a604d79163f36557af89edc9f40777`. Its line 44 still states
 `STALE_SIGNAL_AGE_SECONDS = 60`. This wave does not claim h1 emits the new reason
 field or that Go has been cut over.
