@@ -1,0 +1,144 @@
+# Combined PLAN-LIVENESS / CONFIRMATION-TRUTH cutover
+
+**Status: combined candidate built and verified; Guide stamp prepared; dist and
+cutover checks follow. No new service boot is claimed.** This is the preparation
+record; the postboot marker is added only after a passed boot.
+
+## Authority, ownership and provenance
+
+[A] Owner explicitly authorized **both waves in one boot** at the next A7
+window and named PLAN-LIVENESS the deploy owner. The earlier A31 hold was an
+over-broad interpretation: A31 forbids this lane from authoring executor changes;
+it does not forbid booting a merged head legitimately changed by the other lane.
+The owner clarified that distinction before the combined cutover resumed.
+
+**This lane built and gated the merged head; it did not author all of it.**
+Provenance below rests on the named branches, their captured commits, session
+claims and the owner's explicit attribution, never on git's shared author field.
+
+| Lane / captured branch | Implementation and validation commits carried by this boot | Responsibility |
+|---|---|---|
+| PLAN-LIVENESS — `fix/plan-liveness`, session `plan-liveness-c22ee052/root[unlisted]`, pre-combination tip `3ef10c1f93c49b0513d3cc22d97e4f402f915716` | `9c754e369f397d04a462fbcbefb47c2feef37ab0`, `5710cb5d353046aca531eb9ce049ab3bd780fdcb`, `94f0d7df8601eec585b38029ccafb90239bee90d` | Version/anchor-bound death records, authored-condition validation, exhaustion WARN/counter, liveness surfaces, qualifier/reader pins and telemetry error handling. |
+| CONFIRMATION-TRUTH — `fix/confirmation-truth`, session `confirmation-truth-96604090/root[unlisted]`, captured tip `f8bc7044cc44d58e84904a0a7761e78b420404af` | `e020885b86621d68534fbc237472fc3171688d62`, `b99963857c453f909570eba7a854a8ec23eed087`, `2166a072339131fdb0a8e8e816e12148b261872b`; audit/receipt publication `c19faeed`, `ba833a9d`, `f8bc7044` | Closed-bucket and ordered-sequence semantics, `1m_displacement`, confirmation evidence/surfaces and the reviewed `trader/armed_executor.go` call-site changes. Those changes belong to this lane. |
+| Combined deploy owner — PLAN-LIVENESS | Fast-forward onto `f8bc7044`, followed by Guide/RELEASE/report metadata commits recorded at handoff | Own fresh merged-head suite, clean-clone binary, frontend, broker gate, backup, ordered swap/VERIFY, printed owner kill and postboot proof. No additional Go or executor behavior authored for this cutover. |
+
+[A] At **14:54:38 CT** the foreign lock had been released and main was clean
+on dev `f8bc7044`. At **14:55:17 CT**, the deploy owner acquired its own lock
+and started an independent heartbeat at acquisition. No reclaim occurred.
+PLAN-LIVENESS then fast-forwarded to current dev. All three remote refs were
+read as `f8bc7044` before the combined suite. The applicable window is
+**14:45–16:30 CT**; no mid-session override was used.
+
+## 23 + 1 validation REJECT→PASS is the approved replay result
+
+[A] The embedded `kernel/confirmation_replay_receipt.json`, read at the combined
+head, records **23 closure-only REJECT→PASS observations across two scenario
+identities**, then **one additional observation under the separately authorized
+`1m_displacement` rule: 24 total**. This is an approved semantic change, not a
+newly discovered regression. These are historical revalidations at retained
+decision instants, not original planner-write rejection counts, trades, or live
+refusal counters. Replay coverage remains **627 evaluated / 162 unevaluated
+scenarios** as documented in the confirmation audit.
+
+The 23 closure-only observation IDs are:
+
+- Plan **163/S1**, n=22: decisions **34787, 34788, 34789, 34791, 34792, 34793,
+  34794, 34795, 34796, 34797, 34798, 34799, 34800, 34801, 34802, 34803,
+  34804, 34805, 34806, 34807, 34808, 34809**.
+- Plan **183/S1**, n=1: decision **35691**.
+- Additional authorized case, n=1: **plan 163/S1 / decision 34790**.
+
+The first two lists were independently extracted from the pinned confirmation
+`breakdown-observations.jsonl` by selecting `validation_old != PASS` and
+`validation_new == PASS`; their count is asserted as 23. The extra case is
+named by the embedded receipt and its production validator pin.
+
+## PLAN-LIVENESS refusal evidence remains n=1
+
+[A] The born-dead refusal ships on **n=1 measured case**, plan row **265**,
+ASIA v2 S1, authored **2026-09-07 22:03:44.933209 CT**. Its 5m-close-below
+condition was **29664.50**; completed 5m bar row **451050** closed **29661.50**
+at **22:00 CT**, with constituent minute rows **451031, 451034, 451037,
+451039, 451051**. The original v4 born-dead claim was cross-version contamination
+and does not add a second case. The owner ruled that this measured case permits
+the refusal to ship. **Representativeness remains unproven at n=1**; the recorded
+refusal counter and named evidence will tell us how often it recurs. UNKNOWN
+accepts with a warning. Exhaustion remains WARN + counter, with no added wake.
+
+## Own merged-head verification and binary
+
+[A] Fresh ordinary clone: `/tmp/nofx-plan-liveness-combined-build/nofx`.
+At merged HEAD `f8bc7044cc44d58e84904a0a7761e78b420404af`, before building:
+
+- `go test ./... -count=1`: PASS, exit 0.
+- Explicit kernel golden/self-check run: PASS, exit 0.
+- Vitest: **51 files / 368 tests PASS**, exit 0.
+- TypeScript: PASS, exit 0.
+
+`go build -o nofx-bin .` followed those checks in the same clean clone:
+
+```
+vcs.revision=f8bc7044cc44d58e84904a0a7761e78b420404af
+vcs.time=2026-09-08T19:50:07Z
+vcs.modified=false
+SHA256=e2c2ce8602ca61e52d180309743593b3bf538337693e4f2c61ae83c21d457918
+```
+
+`GUIDE_BUILT_REV` was parsed from this binary before rebuilding dist. Later
+Guide/RELEASE/report commits are metadata; they do not change the binary's
+embedded revision. Logs and artifact receipts: `/tmp/plan-liveness-combined/`.
+
+## Required live proof — pending
+
+Both boot lines must be read from the new service process, not copied from
+an isolated function run or this expectation list:
+
+1. **Confirmation:** `close-requires-closed-bucket=on`,
+   `sequence-order=enforced`, `missing-reference=UNKNOWN(not met)`,
+   `immediate-displacement=1m_displacement`, forming-bucket and out-of-order
+   refusal counters, and the separately labeled **23 / 24 (+1)** replay counts.
+2. **Plan liveness:** tradeable count availability, recorded exhaustion WARN
+   count, born-dead refusals, recorded deaths and authored UNKNOWN count.
+   The boot code prints **tradeable=n/a** before a current-version snapshot
+   exists; it does not fabricate 0/M. Actual **N/M** must be checked from the
+   first current-version API/card/desk snapshot after feed warm-up.
+
+**If either boot line is absent, that half is not proved live and will be
+reported as such.** Even both boot lines do not prove a future organically
+occurring forming-bucket refusal, out-of-order refusal, born-dead refusal or
+scenario death. Unobserved events stay unobserved; no forced trade/read is
+used to manufacture proof.
+
+Fresh five-leg gate (including broker-snapshot leg 4 and no in-flight read),
+backup/integrity, RELEASE → `mv` → independent VERIFY → printed owner kill,
+90-second boot integrity, five-reference check and pushed postboot marker are
+still required below. No unattended kill or timed deployment is scheduled.
+
+## Source freshness at merged head
+
+```
+docs/superpowers/reports/2026-09-08-plan-liveness.md
+3ef10c1f93c49b0513d3cc22d97e4f402f915716 2026-09-08T14:05:14-05:00 docs(plan-liveness): stamp A7 candidate from verified binary
+docs/superpowers/reports/2026-09-08-confirmation-truth.md
+f8bc7044cc44d58e84904a0a7761e78b420404af 2026-09-08T14:50:07-05:00 docs(confirmation): publish verified candidate and stamp Guide from binary
+docs/superpowers/AUDIT-CHECKLIST.md
+78eed09b7969022408e3279d89c895c553885843 2026-09-08T14:32:14-05:00 docs(confirmation): assign class 91 at integration
+docs/superpowers/SYSTEM-MAP.md
+e020885b86621d68534fbc237472fc3171688d62 2026-09-08T14:21:34-05:00 fix(confirmation): require closed buckets and ordered reference evidence
+kernel/confirmation_replay_receipt.json
+e020885b86621d68534fbc237472fc3171688d62 2026-09-08T14:21:34-05:00 fix(confirmation): require closed buckets and ordered reference evidence
+kernel/confirmation_telemetry.go
+e020885b86621d68534fbc237472fc3171688d62 2026-09-08T14:21:34-05:00 fix(confirmation): require closed buckets and ordered reference evidence
+trader/plan_liveness.go
+9c754e369f397d04a462fbcbefb47c2feef37ab0 2026-09-08T08:56:19-05:00 fix(plan-liveness): bind death evidence to version and validate authored closes
+trader/class33_cutover_gate.go
+268ee6097b1aa2c7979552018f004b548592f182 2026-09-03T19:46:13-05:00 feat(F12): cutover leg 4 reads the broker; the override guard becomes a check
+api/ui_serving.go
+1560aeb21f9004227ebdd5ac68793b22696131df 2026-09-03T21:09:35-05:00 fix(ui): the bot serves its own UI + fix the gate-jwt 401 (owner rulings 2026-09-03)
+deploy/RELEASE
+11803c092221108b7da1f00944ccbf666fd9316d 2026-09-08T01:34:28-05:00 deploy: boot 20 marker — RELEASE=33672fdd + GUIDE_BUILT_REV=33672fdd, from the MAIN TREE after the passed boot
+deploy/RESTORE.md
+986a8fbeb6d16a2bc846349bdb6e78796e87ff16 2026-08-16T09:54:59-05:00 docs(deploy): RESTORE.md — binary rollback + the MANDATORY RELEASE re-arm
+web/src/guide/types.ts
+f8bc7044cc44d58e84904a0a7761e78b420404af 2026-09-08T14:50:07-05:00 docs(confirmation): publish verified candidate and stamp Guide from binary
+```

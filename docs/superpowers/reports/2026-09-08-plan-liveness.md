@@ -1,6 +1,8 @@
 # Plan liveness — corrected premises and implementation
 
-**Current handoff:** code merged to dev; A7 candidate `04a62a0e31868ac9618010e915215284574353da` built clean.
+**Current handoff:** owner authorized a combined boot with CONFIRMATION-TRUTH;
+merged candidate `f8bc7044cc44d58e84904a0a7761e78b420404af` built clean. See
+[the combined cutover record](2026-09-08-plan-liveness-confirmation-cutover.md).
 Versioned death evidence and authored-condition validation are implemented;
 exhaustion is warning-only. Owner GO was received for the next A7 window; cutover and live proof remain
 pending that window and fresh gates. Earlier STOP/build sections below are historical evidence.
@@ -619,3 +621,12 @@ No process `NOFX_EXPECTED_REVISION` override is set; the RELEASE file governs.
 The next permitted window begins **14:45 CT**. Until then: no RELEASE change,
 no binary/dist swap, no kill, and no new live proof. The main lock is released
 after preparation and reacquired with an independent heartbeat at cutover.
+
+### Combined cutover owner ruling
+
+The owner authorized both waves in one A7 boot and clarified that A31 scopes
+what this lane authors, not legitimate changes inherited from the other lane.
+PLAN-LIVENESS is the deploy owner, not the author of CONFIRMATION-TRUTH.
+The combined record names both lanes' commits, the deploy owner's own suite,
+build and gate, and the approved **23 + 1 = 24** historical validation
+REJECT→PASS observations. Earlier A7 candidate/hold sections are historical.
