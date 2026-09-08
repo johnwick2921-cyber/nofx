@@ -575,3 +575,86 @@ This is the same shape as the two guards reverted earlier in this wave
 book would have left arms live into an EOD flatten. Three instances, one wave:
 **every over-broad refusal in this wave was caught by a test asserting the
 BENIGN path, never by review.**
+
+---
+
+# F2 PROOF (A20) — RECEIVED FRAMES, 2026-09-08
+
+Owner ran the NT8 copy + F5 compile + restart at 22:16:54 CT on 09-07. The
+far-side build is proven by a RECEIVED frame, not by the file on disk — the
+progression is in the journal:
+
+```
+20:49:40  addon build_id=2026-09-03-f12  expected=2026-09-07-h1  match=NO
+22:01:28  addon build_id=2026-09-05-g2   expected=2026-09-07-h1  match=NO
+22:17:26  addon build_id=2026-09-07-h1   expected=2026-09-07-h1  match=yes
+```
+
+The g2 that had sat uncompiled in the AddOns folder since 09-05 was compiled
+first; h1 followed. **Wave B's stop-slot fix and this wave went live in the same
+window**, which is why f12 → g2 → h1 all appear inside 90 minutes.
+
+## The bracket shape, one signal, continuous
+
+Signal `f159e573-9c38-4d24-be8f-24586c214d16`, LONDON S1 long, armed_orders row
+124, from `nt8_order_snapshots` (the persisted F12 book, build `2026-09-07-h1`):
+
+```
+02:50:00  ENTRY  oco=''                 type=limit  limit=29546.25  stop=0      tif=Day
+          Initialized → Submitted → Accepted → Working
+
+02:52:11  -sl    oco='f159e573-…-exit'  type=stop   limit=0         stop=29510  tif=Gtc
+          -tp    oco='f159e573-…-exit'  type=limit  limit=29620.75  stop=0      tif=Gtc
+          Initialized → Submitted → Accepted / Working
+```
+
+All four claims, from the broker's own book:
+
+| claim | evidence |
+|---|---|
+| the entry carries its OWN oco | `oco=''` — no group at all, through four state transitions |
+| SL+TP share a DIFFERENT oco | `f159e573-…-exit`, a group the entry was never in |
+| both protective legs are GTC | `tif=Gtc` on both; the entry stayed `tif=Day` (D6 exactly) |
+| the stop is in the STOP slot | `-sl` has `stop=29510, limit=0`; `-tp` has `limit=29620.75, stop=0` |
+
+**The entry and its children never coexist in any frame.** The entry is gone
+(filled) before the pair appears, so no OCO relationship between them was even
+possible — which is the wave's whole claim, shown rather than argued.
+
+## Protection preceded our own bookkeeping by 86 seconds
+
+The bracket appears at **02:52:11**; Go logs `⚡ armed fill S1 @ 29546.25` at
+**02:53:37**. The AddOn placed the protective pair off its own fill event before
+our ledger knew the entry had filled.
+
+That ordering is the exact inversion of the 09-06 defect, where the ledger was a
+minute out of date and a guard acting on that stale row cancelled a live bracket.
+Protection now leads the bookkeeping instead of trailing it.
+
+## D5 confirmed live
+
+```
+🧷 protection OK (monitor): LONG MNQ ×1 — 1 live protective stop(s) at the exchange covering 1 of 1
+```
+
+Position 594 OPEN, LONG MNQ ×1, protected by the Gtc stop at 29510 reading
+`Accepted`. This also exercises C3(a): `Accepted` is the NORMAL resting state of
+a stop-market, and `IsLiveAtExchange` counts it as protection. Under the old
+"not Working means not live" reading this stop would not have counted, and the
+reconciler would have concluded the position was unprotected and placed a second
+one.
+
+## What the capture design got right, and what it got wrong
+
+The evidence survived because `nt8_order_snapshots` PERSISTS every book — the
+proof was reconstructed after the fact rather than raced live.
+
+My own watcher did NOT capture this sequence: it exited after six snapshots at
+02:40:58, having recorded a DIFFERENT arm (row 122, signal `846914a0`, cancelled
+at 02:43:38 when the stop was re-composed 29509.11 → 29510.0). Had the persisted
+table not existed, the proof would have been a mix of two signals and I would
+have had to say so. **A capture bounded by a count rather than by the event it is
+waiting for will stop early on a quiet market and late on a busy one** — the
+right bound was "until this signal's bracket appears", not "six snapshots".
+
+**F2 is closed. Nothing remains owed from this wave.**
