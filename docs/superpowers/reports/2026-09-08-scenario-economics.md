@@ -1,5 +1,8 @@
 # Scenario economics — new authoring contract, legacy UNKNOWN preserved
 
+**Latest cutover state — STOP (17:20 CT):** owner GO was received and Stage A released its lock, but the required merged-head Go suite failed the existing W7 consumed-level pin. No new combined binary was built, no RELEASE/swap/kill occurred, and running remains `f8bc7044`. See the cutover STOP below; earlier candidate readiness does not override this failure.
+
+
 2026-09-08 · branch `fix/scenario-economics` · session `scenario-economics-83f741b2/root[unlisted]`.
 
 **Implemented and candidate built; not deployed.** New authoring must provide a complete economics declaration. The existing write parser refuses missing required fields and the three approved numeric contradictions. Stored legacy reads keep missing economics UNKNOWN; role differences and sub-1R obstacles remain WARN plus recorded counters. No target policy, arm authorization, trading gate, floor, confirmation or cadence change is introduced.
@@ -221,3 +224,32 @@ Candidate source is `95e7b420df0960edc67a91ff2a719fe105f441ae`; subsequent Guide
 The owner has given GO after 17:10 CT, with no arms or open position and a fresh five-leg broker-backed gate. This authorizes preparation and cutover; it does not assert a boot has occurred. At 16:40 CT Stage A held a fresh main-tree lock, so this lane waited and prepared only in its isolated worktree. The final merged source and lane provenance will be recorded at cutover.
 
 The economics boot line explicitly ends `legacy UNKNOWN by design`; its other fields read the enforcing policy and process counters. The wording pin first failed with `boot must explain intentional legacy UNKNOWN` against the prior line, then passed after the clarification. Legacy UNKNOWN is intentional missing historical information, not a new schema defect or evidence of a failed boot.
+
+
+## Cutover STOP — existing W7 fixture crosses the CME day boundary
+
+[A] The owner authorized cutover after 17:10 CT with no arms or open position and our own fresh gate, then explicitly instructed us to stand by until Stage A booted or released. Stage A released without booting. This lane acquired the free lock at 17:16:26 CT with an automatic heartbeat and merged its clarification `c40bb45a6e47c796810441cbf15069f2bee19e1e` onto dev `3c09651ca5abf3177c83be0d9470ac0f1e5e0ed7`, producing **`ed4567c7e17f3b5c9b5a4a447ace72565fb08c1d`**. The fresh ordinary clone is `/tmp/nofx-scenario-economics-final/nofx`.
+
+[A] At that merged head, full Go exited **1**: `TestW7LevelBurnedStaysBurnedAcrossSessions`, `trader/w7_levelstate_test.go:119`, reported `touched-and-accepted-through level must be consumed, got consumed=false freshness=A` at 17:20:13 CT. Frontend **54 files / 378 tests**, TypeScript and explicit goldens passed. A23 stops cutover; A31 does not authorize this lane to change level-state behavior. No build followed the failed full suite.
+
+[A] Reproduction: **3/3 isolated runs failed** at the merged source, and **3/3 failed** at retained clean clone `72bb9de08f7fee83f2b45a5219ec14bd17a30340`, whose Go production/test source is identical to running `f8bc7044`. The full-suite failure plus these six isolated failures are seven failed observations, not seven live trading events. [Merged failures](2026-09-08-scenario-economics-data/w7-reproduction.txt), [running-source failures](2026-09-08-scenario-economics-data/w7-running-baseline.txt). The W7 fixture itself has no diff between running and merged source. This evidence does not support attributing the failure to the economics contract or declaring a new Stage A regression.
+
+[A] The fixture generates 20 minute bars from `time.Now()-22m`, with the sole initial touch and a final price 27 points beyond the level. `DailyRangeProxy` prefers completed CME-session-day ranges; `recordLevelState` filters levels using `ActivePlanLevels` before evaluating consumption. A fixed-clock probe of those production functions gives:
+
+| Fixture clock CT | Range proxy | Activation band (1.5 × range) | Distance | Active level count |
+| --- | --- | --- | --- | --- |
+| 17:17:13 | 18 | 27 | 27 | 1 |
+| 17:18:13 | 17 | 25.5 | 27 | 0 |
+| 17:19:13 | 16 | 24 | 27 | 0 |
+| 17:20:13 | 15 | 22.5 | 27 | 0 |
+| 17:21:13 | 6 | 9 | 27 | 0 |
+| 17:22:13 | 33 | 49.5 | 27 | 1 |
+| 17:23:13 | 33 | 49.5 | 27 | 1 |
+
+These are **n=7 synthetic clock points**, not observed market samples. [Probe output](2026-09-08-scenario-economics-data/w7-clock-probe.json), [probe source](2026-09-08-scenario-economics-data/w7-clock-probe.go.txt), and [pinned source freshness](2026-09-08-scenario-economics-data/w7-source-freshness.txt). [B] The failed assertion is explained by the clock-dependent fixture leaving the activation window before consumption can be evaluated. Waiting for a later clock to turn the suite green would not correct this defect; a deterministic fixture correction belongs in an explicitly scoped follow-up before this STOP is lifted.
+
+[A] Our 17:10:17 CT preparation gate passed all five legs for n=1 running trader: no DB/API/NT8 positions, broker working orders 0 with ledger 0, order snapshot age 15s/build `2026-09-07-h1`, and no planner read claimed. That read is stale and is not cutover authorization. Backup at 17:18:30 CT: `/home/hoang/nofx-backups/scenario-economics-20260908-171830`; database 751,734,784 bytes, `integrity_check=ok`; executable preserved as `nofx-bin.old.f8bc7044cc44d58e84904a0a7761e78b420404af` after checking its embedded revision, SHA-256 `e2c2ce8602ca61e52d180309743593b3bf538337693e4f2c61ae83c21d457918`; prior RELEASE and served dist also preserved.
+
+Lane provenance: economics contract `d5e2414e`, verification `0533c8d0`, class assignment `95e7b420`, Guide/receipt `c98ed6f2`, clarification `c40bb45a` belong to the named `fix/scenario-economics` branch/worktree. Stage A recorder changes `896aeea5`, `0babd090`, integration `13017618`, class/receipt `b167f597`, dev merge `2a96cf63`, and preparation receipt `3c09651c` come from `fix/stage-a-snapshot` and its claim `af1ded7e`; its recorder hooks, including those in shared files, were not authored by this lane. Clean-machine documentation `04c5f86c` came from `docs/clean-machine-readiness`, merged at `98d76e9b`. Provenance is taken from branch/claim records, not identical Git author identities; no direct peer acknowledgement is claimed. This lane assembled and gated the merged source but **did not build or boot it after the failed suite**. No passed boot marker exists for this attempted cutover.
+
+C5 remains the master-plan correction: `E[net R]=p*b-(1-p)-c`, so break-even `p=(1+c)/(1+b)`; at b=0.5/1/2/3 the c=0 rates are 66.67/50/33.33/25%, and at c=0.04 they are 69.33/52/34.67/26%. The master plan must be amended to this reference; no amendment there is claimed here. **C6 is DROPPED — UNESTABLISHED**, not a retained implementation premise. Legacy economics remains UNKNOWN by design; the unbooted clarification says so explicitly.
