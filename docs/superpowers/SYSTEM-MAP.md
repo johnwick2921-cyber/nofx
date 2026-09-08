@@ -356,3 +356,10 @@ entry-specific fields stay NULL until their role is established. Admission p50
 prints an upper bound at microsecond resolution, with UNKNOWN on overflow or no
 measurements. The guarded stop-entry source coordinates above were refreshed after
 the added recording calls; no stop-entry predicate changed.
+### Scenario economics (fix/scenario-economics)
+
+New model output enters `ParsePlanDocCapped` → `parsePlanDocument(newAuthoring=true)` → `validateNewScenarioEconomics`. Stored-plan readers use `ValidatePlanDocWithCaps`; absent economics remains UNKNOWN and is never backfilled or refused. The new-authoring parser requires the complete contract regardless of any model-supplied version, and stamps the accepted contract version itself. Existing plan JSON persistence carries the object without schema migration or new recorder hooks.
+
+`scenarioEconomicsIssues` checks target-path membership (one MNQ registry tick, or explicit exception), obstacle beyond target, and declared R against geometry in price units. The arm's entry/stop/target remain authoritative; a non-armed scenario may carry hypothetical geometry without authorizing an order. `scenarioRoleWarnings` diagnoses recognized role differences only and never refuses them. Sub-1R obstacles are facts, WARN only. Counters record complete new-authoring observations under a mutex (path coherence means membership or a declared exception),, including retries, since boot; no legacy or trade count is inferred. `LogVolumeWaveBoot` reads `ScenarioEconomicsBootLine` from the enforcing policy and counters.
+
+The card's `ScenarioEconomics` block and desk SCENARIOS line display obstacle provenance/response and both R values, keeping authored geometry separate from broker prices. Legacy R/obstacle fields remain UNKNOWN. No target family, R:R floor, stop floor, armable set, arm composition, EntryGate, confirmation, liveness, cadence or executor behavior changes. C5 uses `E=p*b-(1-p)-c`; C6 floor-binding is NOT ESTABLISHED and dropped.

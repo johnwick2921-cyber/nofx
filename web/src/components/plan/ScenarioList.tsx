@@ -11,8 +11,8 @@ import type {
   ScenarioStatusValue,
 } from '../../lib/api/plan'
 import { OrderTerms } from './OrderTerms'
+import { ScenarioEconomics } from './ScenarioEconomics'
 import { StatusDot, type ScenarioStatus } from './chips'
-import { fmtPrice } from './levelState'
 
 export function QualityChip({ quality }: { quality: string }) {
   const q = quality || 'B'
@@ -211,21 +211,8 @@ function ScenarioRow({
         {scenario.trigger}
         {scenario.condition ? ` · ${scenario.condition}` : ''}
       </div>
-      {/* uses-chain (targets) + invalidation */}
+      {/* Structural invalidation; the economics block renders the path. */}
       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px]">
-        {scenario.target_chain && scenario.target_chain.length > 0 && (
-          <span
-            style={{
-              color: 'var(--vl-faint)',
-              fontFamily: 'var(--vl-font-ui)',
-            }}
-          >
-            {tp('targets', language)}:{' '}
-            <span className="vl-num" style={{ color: 'var(--vl-long)' }}>
-              {scenario.target_chain.map((t) => fmtPrice(t)).join(' → ')}
-            </span>
-          </span>
-        )}
         {scenario.invalid && scenario.invalid !== 'n/a' && (
           <span
             style={{
@@ -443,6 +430,7 @@ export function ScenarioList({
                   <ArmedChip arm={armedStates?.[s.id]} />
                 </div>
               )}
+              <ScenarioEconomics scenario={s} />
               <OrderTerms legs={armedStates?.[s.id]?.legs} />
             </div>
           )

@@ -30,6 +30,7 @@ func class39LegsPlanJSON(target string) string {
   "scenarios": [{"id": "S1", "trigger": "fade the touch at 15480 PWL", "condition": "reject", "direction": "long",
     "target_chain": [15550, 15620], "invalid": "5m close below 15470", "quality": "A",
     "confirm": {"rule": "touch", "ref_price": 15480, "side": "below"},
+    "economics":{"entry_zone":[15480,15480],"first_obstacle":{"price":15550,"level":"fixture reference","family":"reference","response":"pass_through"},"r_to_obstacle":7,"r_to_arm_target":7},
     "arm": {"enabled": true, "entry": 15480, "stop": 15470, "target": ` + target + `, "wait_confirm": true,
       "legs": [{"entry": 15480, "stop": 15470, "target": ` + target + `, "size": 1, "wait_confirm": false, "rule": "touch"}]}}],
   "no_trade": ["first 5m"],

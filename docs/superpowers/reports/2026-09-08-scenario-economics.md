@@ -1,17 +1,10 @@
-# Scenario economics — evidence correction; implementation STOP
+# Scenario economics — new authoring contract, legacy UNKNOWN preserved
 
-2026-09-08. Dispatch: `fix/scenario-economics`. Session: `scenario-economics-83f741b2/root[unlisted]`.
+2026-09-08 · branch `fix/scenario-economics` · session `scenario-economics-83f741b2/root[unlisted]`.
 
-**[A] STOP under A23 and E6. No production code, configuration, database, binary, Guide, or serving assets changed. No build or boot was attempted.** This report is the required measurement before implementation, not a declaration that the economics contract shipped. The existing combined confirmation/liveness boot remains `f8bc7044`.
+**Implemented and candidate built; not deployed.** New authoring must provide a complete economics declaration. The existing write parser refuses missing required fields and the three approved numeric contradictions. Stored legacy reads keep missing economics UNKNOWN; role differences and sub-1R obstacles remain WARN plus recorded counters. No target policy, arm authorization, trading gate, floor, confirmation or cadence change is introduced.
 
-## Decisions needed before building
-
-1. **C5 transcription correction:** `E[net R] = p·b − (1−p) − c`, with a gross losing outcome of −1R and cost cR. The dispatch instead multiplies the losing probability by c. Its break-even table is correct; its expectation equation is not. Research §03 already states the correct equation.
-2. **E2 versus E6/UNKNOWN:** all **799/799 retained scenario documents** lack `first_obstacle`; all **280/280** in the frozen sample lack it too. Requiring the field when replaying unchanged legacy documents would refuse 100%, beyond E6's 5% STOP threshold. This is absent evidence, not a measured contradiction. A proposed resolution, **not implemented**, is an explicit contract version: require the complete contract only for newly authored candidates, accept legacy documents unchanged with missing economics UNKNOWN, and never fabricate obstacle/response/R values. The owner must resolve E2's missing-field refusal against D4-only/UNKNOWN and E6 before coding.
-3. **C6 correction:** London v2's authored widths are 36.25, 36.00, 36.25 and 36.50 points, but its stored 5m ATR14 is 23.8431; 1.5× is **35.76465**, smaller than every authored width. These documents do not establish that the ATR floor bound all four composed stops. Exact historical composition inputs/results are not reconstructed; retain that result as UNKNOWN, not an invented frequency.
-4. **C4 warning semantics:** the two literal London role/use differences reproduce. Free-text map instructions have no exhaustive role compatibility table. A narrow, explicit two-family census finds 172 level/scenario diagnostics affecting 150/799 scenarios; that is not 150 proven economic contradictions or independent episodes. Proposed disposition remains WARN. It must not become a refusal merely because a lexical count exceeds ten.
-
-The scenario contract still has a measured reason to exist: C1–C3 reproduce on the frozen members, and 13 target/path mismatches exist among all retained scenarios. No target family or risk-floor change is proposed. Stage A retains ownership of recorder changes.
+The owner approved the corrected premises after the initial measurement STOP at `59af58fd54a74f1422296ac651a0c687c2072d33`: new-authoring-only completeness, unchanged legacy acceptance, role differences WARN, corrected C5 and **C6 NOT ESTABLISHED — dropped**. That pinned earlier report preserves the original correction record. Its STOP is resolved by the owner's subsequent ruling. This report describes the approved implementation and remaining deployment proof.
 
 ## Runtime, scope, and fresh evidence
 
@@ -43,7 +36,7 @@ Research §02 separates authored geometry from actual admission/execution and co
 
 The dispatch's governing RESEARCH LAW is: **“MAY: require that a scenario state its first opposing obstacle, its planned response there, its arm target and the implied R”** and refuse contradictory numbers; it forbids selecting a target family or declaring a placement superior. [O] This report chooses **no structural, fixed-R, ATR, partial, trailing or mandatory-1R target policy**. Numerical illustrations below are arithmetic, not market beliefs or estimated NOFX rates. No new [R]/[I] profitability claim is introduced.
 
-[Source-freshness receipt](2026-09-08-scenario-economics-data/source-freshness.txt) gives exact `git log -1` for **every production/source file cited here** and verifies each is byte-identical to running `f8bc7044`. `SYSTEM-MAP.md`: `e020885b 2026-09-08T14:21:34-05:00`; `AUDIT-CHECKLIST.md`: `78eed09b 2026-09-08T14:32:14-05:00`. The audit follows its PART 2 R1–R10. No implementation spec was taken from a stale worktree base.
+[Source-freshness receipt](2026-09-08-scenario-economics-data/source-freshness.txt) gives exact `git log -1` for the files cited in the **initial measurement** and verifies their pre-change versions were byte-identical to running `f8bc7044`. `SYSTEM-MAP.md`: `e020885b 2026-09-08T14:21:34-05:00`; `AUDIT-CHECKLIST.md`: `78eed09b 2026-09-08T14:32:14-05:00`. The audit follows its PART 2 R1–R10. No implementation spec was taken from a stale worktree base.
 
 ## C1–C3: independent recomputation
 
@@ -110,7 +103,7 @@ Each remains absent at one tick, so changing the tolerance from half a tick to D
 
 The census intentionally tests only two narrow diagnostic families: a pure confluence instruction referenced as an arm/path target, and a pure target instruction referenced numerically as invalidation. It normalizes whitespace/underscores and explicitly lists recognized synonyms in the saved script. Price matching is within 0.25 point. It counts a level/scenario once even when both arm target and path reference it. It does not invent entry references from unrelated numbers or treat arbitrary free text as an enum.
 
-**Frozen: 81 level/scenario diagnostics, affecting 73/280 scenarios. All retained: 172 diagnostics, affecting 150/799 scenarios.** Every row, instruction, price and use is in `role-diagnostics.json`. This is a measured lower bound for these two literal families, **not an exhaustive semantic role-disagreement rate**. Other uses/prose remain unevaluated, not silently compatible or incompatible. No historical structured exception field exists. It would require a policy decision to interpret every role as exclusive; the research explicitly permits several uses. The lexical n exceeds ten but is not a basis here for choosing a role-refusal policy. WARN remains the proposed disposition pending the owner's correction ruling.
+**Frozen: 81 level/scenario diagnostics, affecting 73/280 scenarios. All retained: 172 diagnostics, affecting 150/799 scenarios.** Every row, instruction, price and use is in `role-diagnostics.json`. This is a measured lower bound for these two literal families, **not an exhaustive semantic role-disagreement rate**. Other uses/prose remain unevaluated, not silently compatible or incompatible. No historical structured exception field exists. It would require a policy decision to interpret every role as exclusive; the research explicitly permits several uses. The lexical n exceeds ten but is not a basis here for choosing a role-refusal policy. The owner has ruled WARN plus counter; no role rejection is implemented.
 
 ## C5 — corrected arithmetic and contract-size boundary
 
@@ -131,28 +124,19 @@ Setting this to zero gives `p = (1+c)/(1+b)`. The dispatched expression `p*b - (
 
 [A] The production limit-placement call uses quantity **1** (`trader/armed_executor.go:1067`, also the shared placement seam `:2161`). A single contract cannot be split into half a contract. However, “one contract” must not be misread as a universal configured one-leg ceiling: the one running strategy row **a5b7662e-7bf7-49bb-9f09-7efa48f95ac8** stores `max_contracts_per_order=2`, `max_contracts_enabled=false`, `plan_mode=strict`, `min_risk_reward_ratio=2`. `armLegCapacity`/`splitLegCapacity` (`:731`, `:741`) read the positive capacity directly; they do not consult that enabled switch. London v2 S1 itself authors two one-contract legs. This is not an observed two-contract position and is not authorization to add size for partial exits. [Whitelisted configuration evidence](2026-09-08-scenario-economics-data/risk-settings.json). No account name or credential is retained.
 
-## C6 — widths reproduced; composed-floor claim NOT REPRODUCED
+## C6 — NOT ESTABLISHED; dropped
 
-[T/A] Row **270**, same stored ATR14(5m)=23.8431 and 1.5 multiplier:
+The claimed frequency of ATR-floor-bound composed stops was not established. C6 is dropped from this wave and supplies no implementation premise, policy, test expectation or frequency claim. Historical exploratory measurements remain at the original correction revision; they are not evidence that the composed floor bound those stops. No stop-floor or composition code changes.
 
-| Scenario | Entry | Authored stop | Width | Stored-ATR floor |
-| --- | --- | --- | --- | --- |
-| S1 | 29546.25 | 29510 | 36.25 | 35.76465 |
-| S2 | 29579.75 | 29543.75 | 36.00 | 35.76465 |
-| S3 | 29646 | 29682.25 | 36.25 | 35.76465 |
-| S4 | 29736.75 | 29773.25 | 36.50 | 35.76465 |
+## E6 — zero new legacy refusals
 
-The differences above that floor are S1 **0.48535**, S2 **0.23535**, S3 **0.48535**, S4 **0.73535** points. **0/4 equal it exactly; 1/4 is within one tick** (S2). All four may have been authored with the floor in mind, but that causal claim is [C], not measured proof.
+[A] The same read-only probe ran against the pre-wave clean clone at `72bb9de0` (production source identical to running `f8bc7044`) and the new implementation. **All 276 plan-read results, covering 799 retained scenarios, are identical.** Plans containing **394 scenarios** already pass today's read schema and still pass. The remaining **405 scenarios** belong to plans with pre-existing parse/schema failures; their exact existing errors remain unchanged. No new economics refusal is introduced on either group: **0/799 new legacy refusals; rejected-by-this-wave IDs `[]`**.
 
-Across the complete geometries, every one has a retained indicator-block 5m ATR: **111/111 frozen; 177/177 all retained**. Authored risk equals 1.5×that stored ATR in **0/111 and 0/177**; within a tick, **13/111 and 22/177**. Matching IDs are the `authored_within_tick_stored_floor=true` rows in the scenario evidence. These are explicitly **authoring-snapshot comparisons**, not actual composed-stop counts. The stored ATR is printed to four decimals, so exact equality is additionally sensitive to that precision.
+[Before](2026-09-08-scenario-economics-data/legacy-read-before.json) and [after](2026-09-08-scenario-economics-data/legacy-read-after.json) enumerate every plan row, scenario count and pre-existing error. They compare equal as JSON. [Probe](2026-09-08-scenario-economics-data/legacy-read-probe.go.txt): copy to `/tmp/legacy-read-probe.go`, then run `go run /tmp/legacy-read-probe.go /tmp/result.json` from the source revision being checked. It opens the database with `mode=ro`; it does not backfill or migrate anything.
 
-Actual composition reads fresh arm-seam ATR and picks the widest of authored stop, nearest seated risk-side anchor with clearance, and ATR floor (`trader/armed_executor.go:292`, `:429`; `trader/arm_stop_anchor.go:60`, `:132`). It never tightens the authored stop. The `armed_orders` schema does not persist that complete input/result tuple. The log emits composition only when widened or unanchored (`armed_executor.go:431`); silence is not an observed authored/floor result. No complete per-scenario composition replay was established here: **177/177 historical composed-stop outcomes remain unreconstructed in this census**, not zero floor-bound stops. No floor, arm-composition or executor edit is warranted by this report.
+The initial projected **799/799 missing-obstacle refusals** belonged to the rejected interpretation that new completeness applied to unchanged legacy reads. The owner explicitly corrected that interpretation. New model output cannot opt into legacy treatment: `ParsePlanDocCapped` supplies the trusted new-authoring boundary, independently of the JSON version. The legacy pin verifies accepted stored reads, absent economics after round-trip, UNKNOWN R values and no authoring-counter increment.
 
-## E6 — projected refusal census and STOP
-
-[A] Applying E2 literally to unchanged retained documents yields **799/799** missing-obstacle refusals, including **280/280** frozen members. Each exact identity is listed in `scenarios.json` with `first_obstacle_present=false`. The reason for each is the new missing required field; that reason is not an economic contradiction. This is a prospective structural projection, **not execution of a completed validator**, and it is enough to trigger E6's STOP before building it.
-
-Separately, the D2-only numeric comparison identifies these **13/799** potential path contradictions (1.63% of all scenarios; **13/177=7.34%** of complete geometries). The original four are **4/280=1.43%** or **4/111=3.60%**. The chosen denominator must be stated; none licenses refusing UNKNOWN geometry. An eventual explicit exception contract would still need to be evaluated before calling them actual write refusals.
+Separately, the D2-only numeric comparison identifies these **13/799** legacy path differences (1.63% of all scenarios; **13/177=7.34%** of complete geometries). The original four are **4/280=1.43%** or **4/111=3.60%**. The chosen denominator must be stated; none licenses refusing UNKNOWN geometry. These legacy rows remain untouched; only a newly authored candidate must add its target to the path or declare its exception.
 
 | Plan row / scenario | Date/session/version | Arm target | Path | Projected reason |
 | --- | --- | --- | --- | --- |
@@ -170,22 +154,61 @@ Separately, the D2-only numeric comparison identifies these **13/799** potential
 | 230/S4 | 2026-09-02:ASIA:v14 | 29214.5 | 29235, 29228.75, 29218.25, 29212.5, 29207.5 | arm target absent within 0.25 |
 | 259/S1 | 2026-09-06:ASIA:v2 | 29575.48 | 29545, 29566.02, 29587.75 | arm target absent within 0.25 |
 
-There are no authored first-obstacle/R declarations to test for obstacle-beyond-target or stated-R contradictions. Those counts are **unevaluable**, not zero validated contradictions. No synthetic case is represented as a measured live instance. The schema's missing-field requirement and the unmeasured contradiction halves need a clear warn/refuse ruling before implementation.
+The retained legacy sample has no first-obstacle/R declarations from which to count historical beyond-target or stated-R contradictions; those historical counts remain unevaluable. The owner explicitly approved all three D4 contradiction refusals for **new authoring**. The beyond-target and R pins are synthetic declared candidates, not claims of measured legacy events.
 
 The E3 example independently reproduces at **row 265/S2**, 2026-09-07 ASIA v2: entry 29664.50, stop 29640.00, arm target 29721.25, risk 24.50, arm R **2.3163265306**, first listed target 29671.42, R **0.2824489796**. It is a prospective WARN fixture, not a declared historical obstacle or an executed exit.
 
-## Source footprint, tests, and recorder coordination
+## Implementation, RED/GREEN, and production wiring
 
-[A] Production before/after is identical. No E1–E9 implementation fixtures, RED/GREEN or mutations are claimed. The census script ran successfully and its frozen triple/membership cross-check passed. Full Go, goldens, Vitest, tsc and clean-clone binary builds are **not run for this evidence-only STOP**; there is no candidate binary to certify. No new production function/call site exists. Guide/SYSTEM-MAP/boot behavior stays unchanged because no behavior changed.
+[Implementation source freshness](2026-09-08-scenario-economics-data/implementation-source-freshness.txt) quotes `git log -1` and function line locations at the merged candidate, separately from the pre-change measurement. The first implementation commit is `d5e2414e` (contract + card + desk + Guide + SYSTEM-MAP together); follow-up changes complete compatibility fixtures, telemetry containment and verification. The definitive candidate ref and merged-head suite/build receipts are recorded at publication/cutover.
 
-[A] At accept, `fix/stage-a-snapshot` was `250546854b249a89591befb4b05cd64ffd482b08`, with claim `af1ded7e` naming `stage-a-snapshot-96604090/root[unlisted]`. Its claim owns record-only schema/writers/export, record hooks, boot and related docs; it explicitly excludes the scenario contract. Its current diff contains its own evidence report/data only. This wave has changed none of its files or record hooks. This is branch/claim evidence of ownership, not attribution from Git author identity and not a claim of direct lane acknowledgement. On resume, fetch/rebase on whichever lands first and re-read the recorder footprint; do not edit `store/plan.go` persistence as if no other lane owned it.
+- `kernel/plan_doc.go`: optional `PlanScenario.Economics` travels through existing plan JSON. `ParsePlanDocCapped` enters `parsePlanDocument(..., true)` and the new-authoring check; stored `ValidatePlanDocWithCaps` never invokes it. `ParsePlanDoc` retains generic legacy parsing. The parser stamps the contract version after successful checking, so a model-supplied zero version cannot bypass it.
+- `kernel/scenario_economics.go`: schema, independent geometry projection, D4 checks, known role diagnostics, process counters and logging. Target-path tolerance reads the MNQ tick from `market.FuturesTickSize`; stated-R tolerance is converted back to price distance. An arm remains the geometry authority; a scenario without an arm may declare hypothetical geometry without changing the armable set. Every economics check logs PASS/REFUSED, obstacle/provenance/response, target, both Rs, issues, warnings and cumulative counters. PASS means this economics check passed, not that all later validators accepted or a plan was persisted. Logging failure cannot panic the loop or turn refusal into acceptance.
+- `kernel/planner_prompt.go`: only scenario-contract instructions change. New completeness, exact field names, required response, both R formulas, three contradiction refusals, role warnings and explicit exceptions are stated. No target family is selected.
+- `kernel/levels_volume_boot.go`: one call to `ScenarioEconomicsBootLine`; `main.go` already calls this boot entry. Contract/obstacle switches and counts are read from enforcement. A coherent path means membership or a declared exception. Counters describe new-authoring checks **since process boot, including retries**, not independent scenarios, persisted plans or trades. Startup zero counters are actual initialized process counters, not a historical census.
+- `web/src/components/plan/ScenarioEconomics.tsx` and `ScenarioList.tsx`: every scenario, including unevaluable activation, shows existing entry/stop, declared obstacle/provenance/response, arm objective, path, and both independently recomputed R values. Missing legacy economics remains UNKNOWN even with a known old arm. Broker-accepted prices remain a separate surface. `web/src/lib/api/plan.ts` mirrors the optional object.
+- `trader/scenario_economics_desk.go` plus the display-only registration/count in `trader/desk_facts.go`: the SCENARIOS row carries each scenario's obstacle and arm R, version and plan creation time. Legacy/undated inputs remain UNKNOWN. No planner/liveness/confirmation function changes.
+- `web/src/guide/content/planCard.ts` and `SYSTEM-MAP.md`: same behavior commit; explain semantics, counter scope, UNKNOWN, no target prescription, and independently checked C5 reference arithmetic. GUIDE_BUILT_REV must be set from the clean candidate binary before dist at build time.
 
-[A] Checklist census used both numbering formats, numeric sort and **`uniq -c`**: highest occupied **91**, duplicates **75/76/77 each have count 2**. [Full census](2026-09-08-scenario-economics-data/checklist-census.txt). No new class is assigned for this report; assignment belongs to the behavior merge and must be rechecked then. No other lane's entry is renumbered.
+No `store/plan.go` edit or migration was needed: the existing writer persists the additive JSON object. The full production write-path pin proves that the first off-path candidate is refused, the repaired second attempt is accepted, and the stamped economics object reaches the stored row.
+
+### Pins and mutations
+
+[Original kernel RED](2026-09-08-scenario-economics-data/kernel-red.txt): all five new-authoring refusal cases failed with `new authoring accepted contradiction/missing contract`. E3 failed with `accepted economics discarded; cannot render/count first obstacle`. The legacy acceptance pin passed before implementation, as it must.
+
+[Original UI RED](2026-09-08-scenario-economics-data/ui-red.txt): all eight cases failed because the production scenario card had no economics surface. GREEN after implementation: legacy UNKNOWN, E3 sub-1R accepted/counted/marked, all six C2 arithmetic rows, and rendering even with unevaluable activation. The Guide pin computes its four break-even rows independently and checks the correct expectation equation.
+
+Kernel GREEN covers C3 row 178, missing obstacle and whole contract, long/short beyond-target refusal, implied-R tolerance at and beyond one registry tick, explicit target-path exception, missing/zero-version bypass, hypothetical geometry without arm authorization, both London role warnings/counters, sub-1R counter and marker, boot fields, production parser/boot call sites, and telemetry failure containment. The production desk pin calls `DeskStripAt`; the production write pin calls the planner retry/write path. Existing mock new-authoring fixtures were updated with complete declarations; their cap/cadence/repair/liveness/no-trade assertions were preserved.
+
+[Mutation receipts](2026-09-08-scenario-economics-data/mutations.json) quote each **exact changed line before/after**, nonzero test exit and assertion failures. Each replacement matched exactly once, failed an assertion (not compilation), and was restored:
+
+1. D2 coherence: disable the off-path conditional → real C3 accepted, pin fails.
+2. D4 refusal: replace the aggregate contradiction error with `return nil` → refusal pins fail.
+3. Parser call: disable the new-authoring call site → missing/contradiction pins fail.
+4. Sub-1R counter: increment by zero → accepted scenario's counter pin fails.
+5. Role counter: increment by zero → real London role-warning counter pin fails.
+
+[A29 call-site census](2026-09-08-scenario-economics-data/call-sites.json): every one of the **12 new Go functions** has a production caller; no `production call sites: 0`. UI component is rendered from `ScenarioList`, not merely exported. No new `time.Now` entry point or clock seam was introduced; desk tests supply their own clock.
+
+Development validation: full `go test ./...` passed; all **53 Vitest files / 377 tests** passed; `tsc --noEmit` passed. At merged source **95e7b420df0960edc67a91ff2a719fe105f441ae**, the ordinary clean clone `/tmp/nofx-scenario-economics-build/nofx` passed fresh full Go (`-count=1`), explicit prompt goldens, 53 Vitest files / 377 tests, and tsc. The binary was built after these checks and reports `vcs.modified=false`; its embedded revision supplied GUIDE_BUILT_REV **before** dist was built. [Candidate build receipt](2026-09-08-scenario-economics-data/candidate-build.json) includes SHA-256 and asset hashes. The preparation read at **16:25:36 CT**, n=1 running trader, passed all five gate legs; leg 4 came from a broker order snapshot age 5s, build `2026-09-07-h1`, with zero working orders and matching ledger. This read is **not** permission for a later swap; repeat the gate and in-flight/window check at cutover.
+
+### Stage A separation and checklist
+
+At accept Stage A was `250546854b...`, claim `af1ded7e` by `stage-a-snapshot-96604090/root[unlisted]`. At the implementation refresh it was `896aeea5abb2faa2daabe247b7c551ab9f30ac9a`. Its new recorder diff owns scorer/record hooks and `main.go`; this wave touches none of those. The shared `kernel/planner_prompt.go` diff adds `ResearchSnapshotID` to `PlannerInput`; ours changes only scenario-contract text, in a different hunk. SYSTEM-MAP must preserve both additions when whichever lane lands second rebases. Ownership is established by named branch/claim and diff, not Git author identity; this is not a claim of direct lane acknowledgement.
+
+The accept checklist census used both formats, numeric sort and **`uniq -c`**: highest **91**, duplicates **75/76/77 count 2 each**. [Census](2026-09-08-scenario-economics-data/checklist-census.txt). At the locked behavior merge, the fresh census still had highest 91 and the same duplicates; this wave was assigned **class 92**. No other entry was renumbered.
 
 ## Owner-visible limits, rollback, and publication
 
-A15: the card still renders its existing target path, without a declared obstacle/response or both economics R values. The desk has no new economics line. There is no scenario-economics boot line or counter. No first-new-contract scenario, contradiction refusal, sub-1R WARN/counter, or live card proof exists. Confirmation/liveness remain the previously booted combined revision. This wave has not fixed the surface yet.
+A15: until the new binary and dist are deployed, the owner still sees the existing card/desk, without this economics surface or counters. No first live scenario under the new contract, organic contradiction refusal, sub-1R WARN/counter, or live card proof is claimed. Test rendering is not live proof. Current running confirmation/liveness remains `f8bc7044`.
 
-Rollback: this wave changes documentation and evidence only; no runtime rollback, DB backup/migration or binary swap is needed. A later implementation must retain A31, version legacy handling explicitly, run production call-site pins RED→GREEN and actual mutations, update Guide/SYSTEM-MAP together, and obtain this wave's own GO before the normal merged-head/clean-clone/five-leg/RELEASE/swap/VERIFY/owner-kill procedure. The earlier combined-wave GO is not authorization for a scenario-economics boot.
+After deployment, old documents will still show UNKNOWN economics; hypothetical non-armed scenarios remain non-executable; declared obstacle responses do not implement partial exits or a new management policy. The displayed ratios are authored geometry, not net expectancy or the final composed/broker-accepted order geometry. Role diagnostics cover recognized instruction categories; unknown prose is not converted into a refusal. Counters restart with the process and are explicitly labeled as such.
 
-The correction report is to be fast-forwarded to dev under the main-tree lock, with automatic heartbeat started at acquisition, and its raw URL verified at that exact committed SHA before lock release. That documentation-only merge does not require a boot and does not change RELEASE or GUIDE_BUILT_REV. The final chat receipt supplies the resulting immutable report URL, HTTP status and Git/download byte equality; this file cannot name its own future commit without a self-reference.
+Rollback: there is no database schema migration or legacy backfill. Retain the verified previous binary/dist/RELEASE for the normal rollback procedure. The additive JSON remains in newly written rows; an old reader can ignore it, but the economics enforcement and display would no longer be live. No account, trader binding, size, R:R floor, stop floor, arm/execution rule or cadence setting changes are part of rollback.
+
+Deployment requires this wave's explicit owner GO, merged-head suite in a clean clone named `nofx`, verified `vcs.modified=false`, GUIDE_BUILT_REV from that binary before dist, fresh five-leg gate and in-flight check, then RELEASE → atomic mv → VERIFY → exact owner kill, boot proof and five-reference check. The prior combined-wave GO is not a scenario-economics boot approval. The correction report is already on dev at the pinned initial revision; the implementation report is to merge with the behavior and be verified again by exact commit URL/byte equality. The final publication receipt supplies that immutable SHA and HTTP/byte result.
+
+
+### Candidate handoff
+
+Candidate source is `95e7b420df0960edc67a91ff2a719fe105f441ae`; subsequent Guide/report commits are preparation metadata, not a different Go binary. No RELEASE change, service-file replacement or kill occurred. Running health and RELEASE remain `f8bc7044`. The prepared binary is `/tmp/nofx-scenario-economics-build/nofx/nofx-bin`; candidate dist is that clone's `web/dist`. Deployment remains owner-GO gated under A3, with A7's 14:45–16:30 CT window or after 17:10 flat/no arms/no position, never 16:45–17:10. If another lane merges before GO, rebuild and gate the resulting merged head rather than silently deploying this older candidate.

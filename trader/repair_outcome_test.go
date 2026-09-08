@@ -78,7 +78,7 @@ func TestRepairExtractionToleratesPackagingWithoutAlteringContent(t *testing.T) 
 	doc := `{"reasoning":"r","bias":{"direction":"long","conviction":"low","flip_condition":"x"},` +
 		`"levels":[{"price":29500,"label":"PDL","grade":"A","instruction":"reclaim"}],` +
 		`"scenarios":[{"id":"S1","trigger":"reclaim of 29500 with a 5m close back above","condition":"reclaim","direction":"long",` +
-		`"target_chain":[29700],"invalid":"2x5m below 29500","quality":"B",` +
+		`"target_chain":[29700],"invalid":"2x5m below 29500","quality":"B","economics":{"entry_zone":[29500,29500],"geometry":{"entry":29500,"stop":29480,"target":29700},"first_obstacle":{"price":29700,"level":"fixture reference","family":"reference","response":"pass_through"},"r_to_obstacle":10.0,"r_to_arm_target":10.0},` +
 		`"confirm":{"rule":"1x5m_close","ref_price":29500,"side":"above"}}],` +
 		`"no_trade":["first 5m"],"death_condition":"d"}`
 	wrappers := map[string]string{

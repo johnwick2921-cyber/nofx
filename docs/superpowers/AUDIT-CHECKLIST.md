@@ -2745,3 +2745,13 @@ state is to do NOTHING and say so.
 the incident it duplicates and not by any test. The census that found it was
 pointed at "every path that cancels a bracket" — the question was broad enough to
 reach a door the incident report never opened.
+
+## CLASS 92 — SCENARIO ECONOMICS: A PATH, AN ORDER TARGET, AND MISSING LEGACY DECLARATIONS
+
+Assigned at merge for `fix/scenario-economics`, 2026-09-08, after a fresh two-format `sort -n | uniq -c` census: prior highest 91; 75/76/77 each duplicated twice, unchanged.
+
+**Evidence:** frozen C1 45/111 first-listed target distances below 1R; C2 six under-2R authored arm geometries; C3 four off-path arm targets (plans 178/S1, 194/S3, 230/S4, 259/S1); C4 London plan 270/S2 targets a confluence level, S3 invalidates on a target level. Authored geometry is not execution or a loss rate. Research `982091d4d908f4a5b8b65022cedf5b8c7c8202d5` §§02/03/07/09 requires coherent obstacle/response/target/R; §09 says “Do not prescribe now: a mandatory 1R first target.” §05 preserves target/obstacle/invalidation uses of entry-excluded levels. C5 correction: E=p*b-(1-p)-c, break-even p=(1+c)/(1+b). C6 NOT ESTABLISHED, dropped.
+
+**Law:** complete economics belongs to NEW AUTHORING only. Stored legacy UNKNOWN is first-class, never inferred/backfilled, never refused. The new-authoring parser refuses missing completeness and the three owner-approved contradictions: target off path without exception; obstacle beyond target; R inconsistent with geometry by more than one registry tick of price distance. Role differences and sub-1R obstacles WARN and count, never refuse. No target policy, R:R/stop floor, arm/gate/confirmation/cadence change. Process counters count authoring checks, including retries, not independent trades.
+
+**Pins:** production parser RED→GREEN on real C3; missing new obstacle refused while legacy reads remain UNKNOWN/accepted; full writer retries then persists contract; 276 retained plan-read verdicts covering 799 scenarios match baseline exactly (394 scenarios in accepted plans, zero new legacy refusals); both London warnings; all six C2 UI ratios; actual D2/D4/call-site/counter mutations fail; Guide C5 table independent arithmetic. See `reports/2026-09-08-scenario-economics.md` and its pinned evidence. Boot line reads `ScenarioEconomicsBootLine`; card and desk show both Rs. Built/tested is not live proof.
