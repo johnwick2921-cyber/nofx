@@ -108,25 +108,25 @@ func RenderDisplacementLines(rows []LevelDisplacement, atr5m float64) string {
 		}
 		if !r.Broken {
 			fmt.Fprintf(&b, "  %.2f %s — none — no break\n", r.Price, label)
-			renderImmediateDisplacement(&b, r)
+			renderImmediateDisplacement(&b, r, floor)
 			continue
 		}
 		side := "up"
 		if r.Short {
 			side = "down"
 		}
-		verdict := "BELOW the floor — not authorable as a waterfall"
+		verdict := "BELOW the floor — closed-5m displacement does not permit pullback authoring"
 		if r.Pts >= floor {
-			verdict = "at or above the floor — authorable"
+			verdict = "at or above the floor — closed-5m displacement permits pullback authoring"
 		}
 		fmt.Fprintf(&b, "  %.2f %s — %.2f pts %s · %s\n", r.Price, label, r.Pts, side, verdict)
-		renderImmediateDisplacement(&b, r)
+		renderImmediateDisplacement(&b, r, floor)
 	}
 	b.WriteString("\n")
 	return b.String()
 }
 
-func renderImmediateDisplacement(b *strings.Builder, r LevelDisplacement) {
+func renderImmediateDisplacement(b *strings.Builder, r LevelDisplacement, floor float64) {
 	if !r.Immediate.Observed {
 		return
 	}
@@ -134,5 +134,9 @@ func renderImmediateDisplacement(b *strings.Builder, r LevelDisplacement) {
 	if r.ImmediateShort {
 		side = "down"
 	}
-	fmt.Fprintf(b, "    %s: %.2f pts %s · immediate-mode displacement only; 5m confirmation and void checked separately\n", r.Immediate.Rule, r.Immediate.Pts, side)
+	verdict := "BELOW the immediate-mode displacement floor"
+	if r.Immediate.Pts >= floor {
+		verdict = "meets the immediate-mode displacement floor"
+	}
+	fmt.Fprintf(b, "    %s: %.2f pts %s · %s; 5m confirmation and void checked separately\n", r.Immediate.Rule, r.Immediate.Pts, side, verdict)
 }

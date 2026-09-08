@@ -43,6 +43,7 @@ func evaluateConfirmAfter(c PlanConfirm, bars []market.Kline, sinceMs, nowMs int
 			// exact tick time. A forming touch has no ordered reference yet.
 			if e.Closed {
 				v.EventMs, v.EventKnown = e.CloseMs, true
+				v.EventSource = "closed 1m touch observation (OHLC upper bound)"
 			}
 			return
 		}
@@ -54,6 +55,7 @@ func evaluateConfirmAfter(c PlanConfirm, bars []market.Kline, sinceMs, nowMs int
 			e := EvaluateBucketClose(m.BreakTimeMs, 1, nowMs)
 			v.Bucket = &e
 			v.EventMs, v.EventKnown = e.CloseMs, true
+			v.EventSource = "completed 1m MSS close"
 		}
 	case "time_hold":
 		need, run, best := AcceptHoldMin(), 0, 0
@@ -84,10 +86,12 @@ func evaluateConfirmAfter(c PlanConfirm, bars []market.Kline, sinceMs, nowMs int
 			}
 		}
 		v.Met = best >= need
+		v.EventSource = "completed 1m hold run"
 		v.Detail = fmt.Sprintf("price held %s %.2f for %d/%d min of completed 1m closes", c.Side, c.RefPrice, best, need)
 	default:
 		r := AcceptanceRunEver(w, confirmAcceptanceRule(c.Rule), c.RefPrice, above, nowMs, after)
 		v.Met = r.Found
+		v.EventSource = "completed rule-timeframe close"
 		v.EventMs, v.EventKnown, v.Bucket = r.FirstAt, r.Found, r.Bucket
 		if r.Bucket == nil {
 			v.Detail = "no bars at the rule timeframe yet"
@@ -133,6 +137,11 @@ func orderedScenarioConfirm(s PlanScenario, bars []market.Kline, sinceMs, nowMs 
 		finishConfirmation(&v2)
 	} else {
 		v2 = evaluateConfirmAfter(*s.Confirm2, bars, sinceMs, nowMs, &ref)
+		if v1.EventSource != "" {
+			source := "part one: " + v1.EventSource
+			v2.Detail = strings.ReplaceAll(v2.Detail, v2.ReferenceSource, source)
+			v2.ReferenceSource = source
+		}
 		if !v2.Met {
 			prior := evaluateConfirmAfter(*s.Confirm2, bars, sinceMs, nowMs, nil)
 			if prior.EventKnown && prior.EventMs <= ref {

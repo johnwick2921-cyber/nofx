@@ -170,6 +170,81 @@ func TestConfirmationTruthReferenceFoundAtEpoch(t *testing.T) {
 	}
 }
 
+func TestConfirmationTruthSequenceSameInstantIsNotAfter(t *testing.T) {
+	base := truthBase()
+	bars := confirmBars(base, 99, 99, 99, 99, 99)
+	for i := 0; i < 4; i++ {
+		bars[i].High = 99.75
+	}
+	bars[4].High = 101
+	v := EvaluateScenarioConfirm(truthScenario(), bars, base, base+5*60000)
+	if v.Met || v.Refusal != "out_of_order" {
+		t.Fatalf("touch upper bound equals the reclaim close: strictly-after is not established: %+v", v)
+	}
+}
+
+func TestConfirmationTruthImmediateStored34790(t *testing.T) {
+	var corpus struct {
+		Plans []struct {
+			RowID int     `json:"rowid"`
+			Doc   PlanDoc `json:"doc"`
+		} `json:"plans"`
+		Bars []struct {
+			OpenMs        int64 `json:"open_time_ms"`
+			O, H, L, C, V float64
+		} `json:"bars"`
+		Decisions []struct {
+			ID  int   `json:"id"`
+			Now int64 `json:"snapshot_ms"`
+		} `json:"decisions"`
+	}
+	b, err := os.ReadFile("../docs/superpowers/reports/2026-09-08-confirmation-truth-data/replay-corpus.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = json.Unmarshal(b, &corpus); err != nil {
+		t.Fatal(err)
+	}
+	var sc PlanScenario
+	var now int64
+	for _, p := range corpus.Plans {
+		if p.RowID == 163 {
+			for _, s := range p.Doc.Scenarios {
+				if s.ID == "S1" {
+					sc = s
+				}
+			}
+		}
+	}
+	for _, d := range corpus.Decisions {
+		if d.ID == 34790 {
+			now = d.Now
+		}
+	}
+	if sc.Breakdown == nil || now == 0 {
+		t.Fatal("stored case missing")
+	}
+	var tape []market.Kline
+	for _, b := range corpus.Bars {
+		if b.OpenMs+60000 <= now {
+			tape = append(tape, market.Kline{OpenTime: b.OpenMs, CloseTime: b.OpenMs + 59999, Open: b.O, High: b.H, Low: b.L, Close: b.C, Volume: b.V})
+		}
+	}
+	if len(tape) > AISVPBarCount {
+		tape = tape[len(tape)-AISVPBarCount:]
+	}
+	scope := VoidScopeOf(tape, time.UnixMilli(now))
+	atr := StaleConfirmATR5m(scope.Bars)
+	closed := BreakdownContinueState(sc, scope.Bars, scope.SinceMs, now)
+	minute := Evaluate1mDisplacement(scope.Bars, sc.Breakdown.Level, true, scope.SinceMs, now)
+	if closed.BreakLegPts >= bdMinDispATR()*atr || minute.Pts < bdMinDispATR()*atr {
+		t.Fatalf("pin must straddle the same resolved floor: five=%g minute=%g floor=%g", closed.BreakLegPts, minute.Pts, bdMinDispATR()*atr)
+	}
+	if err := ValidateBreakdownContinueScenarios(&PlanDoc{Scenarios: []PlanScenario{sc}}, scope, atr, tape[len(tape)-1].Close, now); err != nil {
+		t.Fatalf("approved immediate carve-out must accept stored 163/S1 decision 34790: %v", err)
+	}
+}
+
 func TestConfirmationTruthAuditReceipt(t *testing.T) {
 	var rows []map[string]any
 	b, err := os.ReadFile("../docs/superpowers/reports/2026-09-08-confirmation-truth-data/breakdown-observations.jsonl")

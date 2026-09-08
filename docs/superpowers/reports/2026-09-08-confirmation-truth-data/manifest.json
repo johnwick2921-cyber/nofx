@@ -15,6 +15,18 @@
     "bytes": 60551,
     "sha256": "51fa87dd7a86b549245569356d2c0299c02821facdda60110fabcac7dd206976"
   },
+  "closed-verdicts-after.json": {
+    "bytes": 3002,
+    "sha256": "f8b580c6577267696cfbbf1d947125a94dc8965a9de60373f52fc10f6cb21cdc"
+  },
+  "closed-verdicts-before.json": {
+    "bytes": 3002,
+    "sha256": "f8b580c6577267696cfbbf1d947125a94dc8965a9de60373f52fc10f6cb21cdc"
+  },
+  "closed-verdicts.go.txt": {
+    "bytes": 2258,
+    "sha256": "91c49afb8689d81256c44116d1558d416f6f174abc91e69a3c46f690b9af1cb2"
+  },
   "decision-38329-snapshot.json": {
     "bytes": 4576,
     "sha256": "a6a8ff4e1b7316c866a8fd58c3b148ab84ec82e01cdf9cf0ea26628668fc0f96"
@@ -23,9 +35,33 @@
     "bytes": 2771,
     "sha256": "1093a87884667ee68ef0567da3368cf72af19dbb9c7288e80521125d55da15a4"
   },
+  "feed-facts-after.json": {
+    "bytes": 461383,
+    "sha256": "0dd1680499f1a34a33689322d2a3a22b901f0b4fdf1e92c0d141947508f2ae20"
+  },
+  "feed-facts-before.json": {
+    "bytes": 292662,
+    "sha256": "10e9c8b8154bec4361b8e8712c0830b4fda3e3db55c6953a023f35b71c30704a"
+  },
+  "feed-facts.go.txt": {
+    "bytes": 2993,
+    "sha256": "3b5de1f1e5a3f5fbdcdcac0ca053d251f31d340b82776629abd2319b4879e485"
+  },
+  "mutate.py.txt": {
+    "bytes": 1844,
+    "sha256": "b8b81c20f5c981fa34368fdc763592216edd424e640046847c2fb2e394e3b1e5"
+  },
+  "mutations.json": {
+    "bytes": 5880,
+    "sha256": "760dc12de7ca21d43e25fcaf5d6933ba5e64b621355f57ea00aada4ddb7983e1"
+  },
   "original-probe.go.txt": {
     "bytes": 1464,
     "sha256": "191cbfbb3b66ac4342c9c408d14995bb895b4e97f520f60967c56f77093e69a3"
+  },
+  "red-pins.json": {
+    "bytes": 4328,
+    "sha256": "a59326886d0a49e7257633f05060a3ca2f8d993bfbda59953a479758a7e0429e"
   },
   "replay-corpus.json": {
     "bytes": 4620476,

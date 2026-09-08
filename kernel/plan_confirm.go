@@ -36,6 +36,7 @@ func confirmAcceptanceRule(rule string) string {
 
 // ConfirmVerdict is one scenario's machine-computed confirmation state.
 type ConfirmVerdict struct {
+	EventSource     string       `json:"event_source,omitempty"`
 	Outcome         string       `json:"outcome"`
 	Bucket          *BucketClose `json:"bucket,omitempty"`
 	EvaluatedMs     int64        `json:"evaluated_ms"`

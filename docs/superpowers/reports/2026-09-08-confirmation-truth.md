@@ -167,3 +167,121 @@ Implementation base after integrating plan-liveness: `c3fd6f6f013b130d9651066407
 Existing fixture review: five tests initially failed semantically—`TestBreakdownContinueValidatorRealTape`, `TestBreakupContinueMirror`, `TestClass45PinLondon0132`, `TestRehearsalS4CaseStillRejects`, `TestLegacy15mConfirmStillEvaluates`. The real waterfall tape is unchanged; only its synthetic retest extension now completes its 5m bucket. Synthetic mirror/London stages now contain complete 5m buckets. The rehearsal keeps its original minute tape and correctly refuses a missing 5m break without inventing a 5m reclaim. The legacy 15m test now evaluates a completed 15m interval. Two additional weak-displacement/reclaim tests could falsely pass on the new missing-close error; their synthetic tapes now close the required buckets and their assertions name the intended rejection. The desk shape test now includes the new thirteenth recorded-confirmation row. A complete fixture/change and mutation receipt follows after final verification.
 
 [B] Corrected feeds-forward facts intentionally change what the planner knows; subsequent authoring may differ. The original 31 displacement and 162 last-close changes are **plan-birth-scoped scenario states**, whereas planner facts use their existing resolved session scope. Those populations must not be mislabeled as identical.
+
+## 9. Four stored waterfall scenarios — before/after facts
+
+[A] Production-call replay, baseline source `c3fd6f6f` and implementation based on `e020885b`, over the same **286** observations. The source and every before/after output are committed beside this report. These are **one-level probes at each authored scenario level**, not a reconstruction of every historical ranked-level list; “1 of 1 seated” below describes the probe. Planner facts retain their session scope, while the numeric state comparison retains each plan's publication scope.
+
+| Scenario key | Representative decision | BreakLegPts before → after | LastClose before → after | Pts-changing observations | Close-changing observations |
+|---|---:|---:|---:|---:|---:|
+| 163/S1 | 34790 | 50.50 → 19.75 | 29349.25 → 29358.50 | 5 | 67 |
+| 181/S1 | 35654 | 47.50 → 39.50 | 29131.75 → 29148.75 | 5 | 14 |
+| 183/S1 | 35682 | 60.00 → 40.00 | 29095.00 → 29111.50 | 3 | 9 |
+| 273/S2 | 38241 | 170.50 → 122.00 | 29626.00 → 29597.50 | 18 | 72 |
+
+**163/S1, decision 34790, snapshot_ms=1788133426000**
+
+Before (production fact renderer):
+
+```text
+## Measured displacement per level (floor 23.8 pts)
+  29371.50 audited scenario level — none — no break
+## VOID breakdown levels (a close came back across since the break, THIS session day — the write-site validator REFUSES a waterfall play at these)
+- CHOP (broken and reclaimed both ways this session): 29371.50 (1 of 1 seated) — waterfall plays at these will be refused; prefer touch/fade plays there.
+- do NOT author breakdown_continue or breakup_continue at these prices. Any other condition is legal there.
+```
+
+After (same production call sites and scope):
+
+```text
+## Measured displacement per level (floor 23.8 pts)
+  29371.50 audited scenario level — 23.75 pts down · BELOW the floor — closed-5m displacement does not permit pullback authoring
+    1m_displacement: 50.50 pts down · meets the immediate-mode displacement floor; 5m confirmation and void checked separately
+## VOID breakdown levels (a close came back across since the break, THIS session day — the write-site validator REFUSES a waterfall play at these)
+- 29371.50 breakup (reclaimed 2026-08-30 18:35 CT)
+- do NOT author breakdown_continue or breakup_continue at these prices. Any other condition is legal there.
+```
+
+**181/S1, decision 35654, snapshot_ms=1788266248000**
+
+Before (production fact renderer):
+
+```text
+## Measured displacement per level (floor 22.1 pts)
+  29177.50 audited scenario level — 47.50 pts down · at or above the floor — authorable
+## VOID breakdown levels (a close came back across since the break, THIS session day — the write-site validator REFUSES a waterfall play at these)
+- 29177.50 breakup (reclaimed 2026-09-01 06:56 CT)
+- do NOT author breakdown_continue or breakup_continue at these prices. Any other condition is legal there.
+```
+
+After (same production call sites and scope):
+
+```text
+## Measured displacement per level (floor 22.1 pts)
+  29177.50 audited scenario level — 39.50 pts down · at or above the floor — closed-5m displacement permits pullback authoring
+    1m_displacement: 47.50 pts down · meets the immediate-mode displacement floor; 5m confirmation and void checked separately
+## VOID breakdown levels (a close came back across since the break, THIS session day — the write-site validator REFUSES a waterfall play at these)
+- 29177.50 breakup (reclaimed 2026-09-01 07:00 CT)
+- do NOT author breakdown_continue or breakup_continue at these prices. Any other condition is legal there.
+```
+
+**183/S1, decision 35682, snapshot_ms=1788269588000**
+
+Before (production fact renderer):
+
+```text
+## Measured displacement per level (floor 24.4 pts)
+  29122.75 audited scenario level — 60.00 pts down · at or above the floor — authorable
+## VOID breakdown levels (a close came back across since the break, THIS session day — the write-site validator REFUSES a waterfall play at these)
+- 29122.75 breakup (reclaimed 2026-09-01 08:00 CT)
+- do NOT author breakdown_continue or breakup_continue at these prices. Any other condition is legal there.
+```
+
+After (same production call sites and scope):
+
+```text
+## Measured displacement per level (floor 24.4 pts)
+  29122.75 audited scenario level — 40.00 pts down · at or above the floor — closed-5m displacement permits pullback authoring
+    1m_displacement: 60.00 pts down · meets the immediate-mode displacement floor; 5m confirmation and void checked separately
+## VOID breakdown levels (a close came back across since the break, THIS session day — the write-site validator REFUSES a waterfall play at these)
+- 29122.75 breakup (reclaimed 2026-09-01 08:05 CT)
+- do NOT author breakdown_continue or breakup_continue at these prices. Any other condition is legal there.
+```
+
+**273/S2, decision 38241, snapshot_ms=1788862883000**
+
+Before (production fact renderer):
+
+```text
+## Measured displacement per level (floor 23.1 pts)
+  29478.50 audited scenario level — 286.25 pts up · at or above the floor — authorable
+(no void line)
+```
+
+After (same production call sites and scope):
+
+```text
+## Measured displacement per level (floor 23.1 pts)
+  29478.50 audited scenario level — 286.25 pts up · at or above the floor — closed-5m displacement permits pullback authoring
+    1m_displacement: 286.25 pts up · meets the immediate-mode displacement floor; 5m confirmation and void checked separately
+(no void line)
+```
+
+[B] Subsequent authoring may differ: the planner now receives the completed-5m facts and the distinct immediate-mode observation. That is the intended consequence of the owner ruling. Row 273 illustrates why scope matters: its plan-window displacement changes in 18 observations even though the selected session-window planner displacement remains 286.25 in the displayed example.
+
+## 10. Mutation and completed-case verification
+
+[A] At implementation checkpoint `e020885b`, each mutation reached a failing test assertion (exit 1), then the exact original source was restored. [mutations.json](2026-09-08-confirmation-truth-data/mutations.json) contains the changed file/line and complete failure text.
+
+| Mutation | Actual changed line | Failing pin |
+|---|---|---|
+| Closure | `kernel/confirmation_bucket.go:34`: `b.Closed = true` | All three one-second-before boundaries falsely MET |
+| Order | `kernel/confirmation_bucket.go:11`: `const confirmationOrderedSequence = false` | Reclaim before touch falsely MET |
+| Reference lookup | `kernel/plan_confirm.go:204`: `return v.EventMs, false` | Ordered scenario loses its reference and reports UNKNOWN |
+| Separate minute rule | `kernel/confirmation_bucket.go:72`: `if false {` | A forming minute falsely supplies displacement |
+
+The first attempted reference mutation returned `0, false` and failed compilation because it left an unused local. It was rejected as non-evidence; the corrected mutation above compiled and failed at the assertion. No invalid mutation is counted as a pin.
+
+[A] **50 already-completed-bucket cases, zero verdict changes**, byte-identical before/after JSON: 40 single-rule/side/tape combinations, two correctly ordered sequences, and eight waterfall direction/mode/outcome cases. This is a verdict golden, not an assertion that newly added evidence text is byte-identical. Both JSONs and the isolated generator are included. Existing embedded prompt goldens also passed the initial full Go suite.
+
+[A] The additional `163/S1 / decision 34790` carve-out has a production validator pin, and a same-observation-bound sequence pin requires strict ordering. Touch references explicitly name their closed-minute **OHLC upper bound**; no exact touch tick is fabricated. Final merged-HEAD suite/build receipts remain pending below.
