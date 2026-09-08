@@ -40,12 +40,12 @@
     "sha256": "8cb3ec9c2c9fd312753514428ec2ecebc5cef803119b7d114a4ba6de3971042a"
   },
   "scenario-census.csv": {
-    "bytes": 106435,
-    "sha256": "fdce1139a43a817e20bc83072b397b5934f36e20ff6138340eddf7bf0ffd2d5f"
+    "bytes": 105645,
+    "sha256": "3e9d55dcdeaf6f52fdd6f399a3c95241ebf1b2b7d5bfc9c03a7a61f8586f5fa3"
   },
   "source-freshness.csv": {
-    "bytes": 5107,
-    "sha256": "9c4c540fb9907cac635aa61c0cd7b2e68c04dd266d915ecfaf9c29c6601214f9"
+    "bytes": 5081,
+    "sha256": "4d43129253db1dc320e02b223d51aef6c44e24e9afb69db2e72f5470b93454c0"
   },
   "summary.json": {
     "bytes": 1710,
