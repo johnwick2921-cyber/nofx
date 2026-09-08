@@ -14,6 +14,8 @@ Spec freshness: `738ea9b72925f0061a3f16a2cb5818f4ab86d153 | 2026-09-07T21:21:45-
 
 ## F2: owner controls copy, compile and restart
 
+**Update after the owner restart:** h1 receipt is now confirmed (`match=yes`); see [the h1 wire-proof watch](2026-09-07-nt8-h1-wire-proofs.md). The two adopted g2 protections still carried `tif=Day` in h1 snapshots. They were not GTC and would not survive the trading-session close if still working. They subsequently settled at 22:28:53 CT (target filled, stop cancelled). The pre-restart evidence below is retained as history.
+
 [A] At 21:44:16.879 CT, trace.20260907.00001.txt:20 says exactly `UserDataDir='C:\Users\hoang\Documents\NinjaTrader 8\'`. The loaded source is therefore its bin/Custom/AddOns/VLTraderTCPClient.cs. Line 55 declares `2026-09-05-g2`, MD5 `34efc3f85d0a775247f6c2f2ea576224`, 140520 bytes.
 
 [A] h1 is present at `/home/hoang/nofx-oco/ninjascript/VLTraderTCPClient.cs` (fix/bracket-oco-separation worktree) and byte-identically at `/home/hoang/nofx/ninjascript/VLTraderTCPClient.cs`. Both line 55 declarations are `2026-09-07-h1`; MD5 `d0a604d79163f36557af89edc9f40777`, 157510 bytes. The older lane scratchpad file HEAD_VLTraderTCPClient.cs is actually g2 and is not the source to copy. Today's NT8 native log/trace search found no compile errors; the recompiled DLL embeds g2.
@@ -39,4 +41,4 @@ Owner was given this ONE WSL command, not executed by this agent. It creates a f
 - The wire omits TIF. Native log at22:05:41.449 CT (:604–606) explicitly shows Time in force=DAY for both protections. Gtc is not proven.
 - No unfilled-entry cancellation preserving a bracket was observed. No agent-induced placement, cancellation or restart occurred.
 
-h1 receipt and its four wire proofs remain pending. Existing Go entry-only cancellation exemptions are not certified by this report.
+At the original 22:14 CT closeout, h1 receipt and its four wire proofs were pending. The linked follow-up confirms h1 receipt; new-arm behavior proofs remain pending. Existing Go entry-only cancellation exemptions are not certified by this report.
