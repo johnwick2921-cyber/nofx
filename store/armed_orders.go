@@ -106,7 +106,26 @@ const (
 	StateArmed         = "armed"
 	StateWorking       = "working"
 	StateCancelPending = "cancel_pending"
-	StateCancelled     = "cancelled"
+	// StatePlacePending — SENT to the broker, NOT yet confirmed by a RECEIVED
+	// frame (class 81, one line lower: the placement side, 2026-09-07).
+	//
+	// "working" means the order RESTS AT THE BROKER. It used to be written on
+	// the strength of PlaceLimitEntry returning nil, which only reports that a
+	// frame reached a socket. On 2026-09-07 22:47:24 arm 117 was written
+	// `working` and NT8 rejected the same signal in the same second — the
+	// ledger claimed a broker state no frame ever supported, the chart drew a
+	// line for it, and the broker's book was empty for the next 33 minutes.
+	//
+	// A placement now lands here and is promoted ONLY by a received frame that
+	// names the signal, which is recorded so a reader can check the claim.
+	StatePlacePending = "place_pending"
+	// StateRejected — the broker refused it, in the broker's own words.
+	StateRejected = "rejected"
+	// StateUnconfirmed — sent, never confirmed, never refused: the frame that
+	// would settle it did not arrive inside the bound. Terminal, and it says
+	// which of the three it is rather than defaulting to the flattering one.
+	StateUnconfirmed = "unconfirmed"
+	StateCancelled   = "cancelled"
 	// StateFilled — the entry became a position. A filled arm is NEVER
 	// cancelled: the only orders left under its signal are its protections
 	// (2026-09-06 23:37:02, position 592).
@@ -371,7 +390,12 @@ func (s *ArmedOrderStore) ListNonTerminal(traderID string) ([]ArmedOrderDB, erro
 	// broker as far as anyone can prove, so it holds its slot, it is swept at
 	// boot like any live row, and cutover leg 4 counts it — which is what makes
 	// leg 4 agree with the broker instead of with our intentions.
-	err := s.db.Where("trader_id = ? AND state IN (?,?,?)", traderID, StateArmed, StateWorking, StateCancelPending).
+	// place_pending is NON-TERMINAL for the same reason (2026-09-07): a
+	// placement that has been SENT but not CONFIRMED may be resting at the
+	// broker as far as anyone can prove. It holds its slot, it is swept at boot,
+	// and cutover leg 4 counts it — a row we cannot account for must never make
+	// the flat gate look cleaner than the broker is.
+	err := s.db.Where("trader_id = ? AND state IN (?,?,?,?)", traderID, StateArmed, StateWorking, StateCancelPending, StatePlacePending).
 		Order("id").Find(&out).Error
 	return out, err
 }
@@ -557,4 +581,80 @@ func (s *ArmedOrderStore) StateCensus() map[string]int64 {
 		out[r.State] = r.N
 	}
 	return out
+}
+
+// ── PLACEMENT CONFIRMATION (class 81, the placement side — 2026-09-07) ───────
+
+// ConfirmPlacement promotes a place_pending row to working, naming the RECEIVED
+// frame that justified it. Nothing else may write working.
+//
+// It is a no-op on any other state, so a late frame cannot resurrect a row that
+// has already been rejected, cancelled or filled.
+func (s *ArmedOrderStore) ConfirmPlacement(id int64, frame string) error {
+	return s.db.Model(&ArmedOrderDB{}).
+		Where("id = ? AND state = ?", id, StatePlacePending).
+		Updates(map[string]interface{}{
+			"state":        StateWorking,
+			"state_reason": "confirmed by " + frame,
+			"updated_at":   time.Now(),
+		}).Error
+}
+
+// RejectPlacement moves a row terminal with THE BROKER'S OWN WORDS. reason is
+// passed through verbatim — our summary of a refusal is not the refusal.
+//
+// It applies to place_pending and working alike: a broker can refuse an order it
+// previously acknowledged, and a row that already reads working must still be
+// corrected rather than left claiming a state the broker has withdrawn.
+func (s *ArmedOrderStore) RejectPlacement(id int64, brokerReason string) error {
+	r := strings.TrimSpace(brokerReason)
+	if r == "" {
+		// A21: never an empty reason. An unexplained rejection is still a fact,
+		// and saying so beats an empty string that reads like no reason existed.
+		r = "rejected by the broker — no reason text on the frame"
+	}
+	return s.db.Model(&ArmedOrderDB{}).
+		Where("id = ? AND state IN (?,?)", id, StatePlacePending, StateWorking).
+		Updates(map[string]interface{}{
+			"state":        StateRejected,
+			"state_reason": r,
+			"updated_at":   time.Now(),
+		}).Error
+}
+
+// ExpirePlacement retires a place_pending row that no frame ever settled. It is
+// terminal and it is NAMED: never silently working (which would claim a broker
+// state), never silently gone (which would hide that we sent something).
+func (s *ArmedOrderStore) ExpirePlacement(id int64, waited time.Duration) error {
+	return s.db.Model(&ArmedOrderDB{}).
+		Where("id = ? AND state = ?", id, StatePlacePending).
+		Updates(map[string]interface{}{
+			"state":        StateUnconfirmed,
+			"state_reason": fmt.Sprintf("unconfirmed:no_frame — sent, then %s with no order_update or book frame naming this signal", waited.Round(time.Second)),
+			"updated_at":   time.Now(),
+		}).Error
+}
+
+// ListPlacePending returns one trader's unconfirmed placements, oldest first.
+func (s *ArmedOrderStore) ListPlacePending(traderID string) ([]ArmedOrderDB, error) {
+	var out []ArmedOrderDB
+	err := s.db.Where("trader_id = ? AND state = ?", traderID, StatePlacePending).
+		Order("id").Find(&out).Error
+	return out, err
+}
+
+// FindBySignal resolves a row by the signal id a frame names. Frames carry the
+// signal, not our row id, so every confirmation path needs this join.
+func (s *ArmedOrderStore) FindBySignal(traderID, signalID string) (*ArmedOrderDB, error) {
+	sig := strings.TrimSpace(signalID)
+	if sig == "" {
+		return nil, nil
+	}
+	var row ArmedOrderDB
+	err := s.db.Where("trader_id = ? AND signal_id = ?", traderID, sig).
+		Order("id DESC").First(&row).Error
+	if err != nil {
+		return nil, err
+	}
+	return &row, nil
 }

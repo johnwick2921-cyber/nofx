@@ -1070,8 +1070,18 @@ func (at *AutoTrader) runArmedPlacement(bars []market.Kline, sinceMs int64) {
 					continue
 				}
 				_ = ledger.SetSignal(r.ID, sid)
-				_ = ledger.SetState(r.ID, "working", "")
-				at.logInfof("📌 armed %s → WORKING limit %.2f signal=%s (band ±%.0ft)", r.Scenario, r.EntryPx, sid, band/tick)
+				// CLASS 81, ONE LINE LOWER (2026-09-07). This wrote "working" —
+				// which means RESTING AT THE BROKER — on the strength of
+				// PlaceLimitEntry returning nil, and that nil only reports that a
+				// frame reached a socket. On 2026-09-07 22:47:24 arm 117 was
+				// written working and NT8 rejected the same signal in the same
+				// second ("stale signal … age 1824.5s — rejecting"). The ledger
+				// claimed a broker state for 33 minutes that no frame supported.
+				//
+				// A send is an intention. Only a RECEIVED frame naming this
+				// signal may promote it — confirmPendingPlacements does that.
+				_ = ledger.SetState(r.ID, store.StatePlacePending, "sent, awaiting a frame that names this signal")
+				at.logInfof("📤 armed %s → PLACE_PENDING limit %.2f signal=%s (band ±%.0ft) — SENT, not yet confirmed by the broker", r.Scenario, r.EntryPx, sid, band/tick)
 				// ONE LIVE ENTRY PER PLAN (owner ruling 2026-09-06): the moment
 				// one arm reaches the wire, every other arm in the plan is
 				// cancelled. A plan gets one entry, not one per scenario.
@@ -1093,6 +1103,7 @@ func (at *AutoTrader) runArmedPlacement(bars []market.Kline, sinceMs int64) {
 	// snapshot id that proved it; still listed, or no fresh book → it stays
 	// cancel_pending, says so once past the timeout, and is re-requested up to
 	// the cap. Nothing here ever promotes a row on ignorance.
+	at.confirmPendingPlacements(ledger, now)
 	at.confirmPendingCancels(ledger, func(sid string) error {
 		// A re-request is still a cancel. If the entry filled while the first
 		// cancel was in flight, re-sending would reach the protections.

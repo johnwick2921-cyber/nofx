@@ -1068,9 +1068,30 @@ export function AdvancedChart({
 
         if (openOrders.length > 0 && candlestickSeriesRef.current) {
           openOrders.forEach((order) => {
-            // Get trigger price (SL/TP use stop_price, limit orders use price)
+            // A ROW THAT IS NOT AT THE BROKER IS NOT AN ORDER (2026-09-07).
+            // ARMED = authorized, never sent. PENDING = sent, no confirming
+            // frame yet. Drawing either as a price line tells the owner an
+            // order rests at a price where none does — which is exactly what
+            // happened to arm 117: a line at 29751 labelled "Limit" while NT8
+            // had refused the signal and the book was empty for 33 minutes.
+            const notAtBroker =
+              order.status === 'ARMED' ||
+              order.status.startsWith('PENDING')
+            if (notAtBroker) return
+
+            // THE PRICE AND THE LABEL MUST COME FROM THE SAME QUESTION. This
+            // took stop_price for the line and the TYPE for the title, so a
+            // resting LIMIT entry (type "LIMIT", stop_price = its protective
+            // stop) drew ONE line at the STOP labelled "Limit" and never drew
+            // the entry at all. A stop line belongs to a STOP order.
+            const isStopKind =
+              order.type.includes('STOP') || order.type.includes('SL')
             const linePrice =
-              order.stop_price > 0 ? order.stop_price : order.price
+              isStopKind && order.stop_price > 0
+                ? order.stop_price
+                : order.price > 0
+                  ? order.price
+                  : order.stop_price
             if (linePrice <= 0) return
 
             // Determine order type

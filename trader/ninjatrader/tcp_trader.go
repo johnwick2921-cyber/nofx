@@ -51,8 +51,15 @@ type TCPTrader struct {
 	// openOrdersSrc (class 33) — the ledger-backed working-order source for
 	// GetOpenOrders (flat-gate leg 4). nil = unwired = the leg FAILS.
 	openOrdersSrc func(symbol string) ([]types.OpenOrder, error)
-	lastFill      ntwire.FillPayload
-	hasFill       bool
+	// rejectSink (2026-09-07) — the ledger's ear for a REFUSAL. The C8 handler
+	// below cleaned every in-memory trace of a rejected entry and told nobody
+	// who could write it down: on 2026-09-07 the ledger kept claiming `working`
+	// for 33 minutes after NT8 refused the order. Injected as a callback rather
+	// than a store handle so this package keeps its dependencies (same seam as
+	// openOrdersSrc).
+	rejectSink func(signalID, brokerReason string)
+	lastFill   ntwire.FillPayload
+	hasFill    bool
 
 	// recentFills is a bounded ring of the last confirmed fills (class 27,
 	// 2026-08-31). A NETTING close emits no position_close frame — the only
@@ -221,9 +228,26 @@ func NewTCPTrader(server *ntwire.TCPServer, symbol string, account ...string) *T
 				}
 				tid := t.traderID
 				t.mu.Unlock()
-				logger.Errorf("🚨 C8 ENTRY REJECTED by NT8: %s %s qty=%d signal_id=%s — no position exists; pending entry dropped (no phantom).",
-					fill.Symbol, fill.Side, fill.Quantity, fill.SignalID)
-				telemetry.RecordError(tid, "nt_entry_rejected", fmt.Sprintf("%s %s rejected (signal %s)", fill.Symbol, fill.Side, fill.SignalID), telemetry.CostNone)
+				// THE BROKER'S OWN WORDS, carried verbatim. `fill.Reason` is
+				// whatever NT8 said; our summary of a refusal is not the
+				// refusal. On 2026-09-07 NT8 said "stale signal … (age 1824.5s)
+				// — rejecting" while this line said "no position exists", which
+				// is this handler describing its OWN cleanup, not NT8's reason.
+				brokerReason := strings.TrimSpace(fill.Reason)
+				if brokerReason == "" {
+					brokerReason = "rejected by NT8 — no reason text on the fill frame"
+				}
+				logger.Errorf("🚨 C8 ENTRY REJECTED by NT8: %s %s qty=%d signal_id=%s — broker reason: %q. Pending entry dropped (no phantom); ledger row moved terminal.",
+					fill.Symbol, fill.Side, fill.Quantity, fill.SignalID, brokerReason)
+				telemetry.RecordError(tid, "nt_entry_rejected", fmt.Sprintf("%s %s rejected (signal %s): %s", fill.Symbol, fill.Side, fill.SignalID, brokerReason), telemetry.CostNone)
+				// THE LEDGER HEARS IT TOO. Without this the row keeps claiming a
+				// broker state the broker has just refused.
+				t.mu.Lock()
+				sink := t.rejectSink
+				t.mu.Unlock()
+				if sink != nil && fill.SignalID != "" {
+					sink(fill.SignalID, brokerReason)
+				}
 				continue
 			}
 			// A CONFIRMED fill resolves its pending entry marker.
@@ -1257,5 +1281,27 @@ func upperSideStr(side string) string {
 		return "SHORT"
 	default:
 		return side
+	}
+}
+
+// SetRejectSink wires the ledger's ear for a broker refusal (2026-09-07). Every
+// entry-reject path calls it with the BROKER'S reason, verbatim.
+func (t *TCPTrader) SetRejectSink(fn func(signalID, brokerReason string)) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.rejectSink = fn
+}
+
+// notifyReject is the single call site every reject path shares, so a new path
+// cannot forget the ledger (the C8 handler forgot it for two weeks).
+func (t *TCPTrader) notifyReject(signalID, brokerReason string) {
+	if strings.TrimSpace(signalID) == "" {
+		return
+	}
+	t.mu.Lock()
+	sink := t.rejectSink
+	t.mu.Unlock()
+	if sink != nil {
+		sink(signalID, brokerReason)
 	}
 }

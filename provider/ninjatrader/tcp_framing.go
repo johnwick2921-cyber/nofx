@@ -85,6 +85,16 @@ type FillPayload struct {
 	Quantity      int     `json:"quantity"`
 	SlippageTicks float64 `json:"slippage_ticks"`
 	Status        string  `json:"status"` // "filled" | "rejected" | "partial"
+	// Reason is THE BROKER'S OWN WORDS for a refusal (2026-09-07). Additive and
+	// omitempty, so a pre-h2 AddOn that does not send it stays byte-identical.
+	//
+	// It exists because on 2026-09-07 NT8 refused an entry with "stale signal
+	// 9ba63cb5-… (age 1824.5s) — rejecting" and that sentence lived ONLY in the
+	// AddOn's own log file on the Windows side. The Go log said "no position
+	// exists", which was this handler describing its own cleanup — not NT8's
+	// reason. A refusal whose reason cannot cross the wire is a refusal nobody
+	// downstream can act on.
+	Reason string `json:"reason,omitempty"`
 	// A2 (G1, wire v3) — echoed identity from the originating signal. Go verifies
 	// (trader_id, account, seq) against the pending op; a present mismatch freezes the
 	// trader (A4). Empty = pre-v3 AddOn (echo absent) → tolerated in the deploy window.
