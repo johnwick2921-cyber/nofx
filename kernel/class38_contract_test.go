@@ -350,8 +350,8 @@ func TestBreakdownSchemaRequiresMeasuredDisplacement(t *testing.T) {
 		"Waterfall displacement floor this cycle",
 		"Measured displacement per level",
 		"none — no break",
-		"BELOW the floor — not authorable as a waterfall",
-		"at or above the floor — authorable",
+		"BELOW the floor — closed-5m displacement does not permit pullback authoring",
+		"at or above the floor — closed-5m displacement permits pullback authoring",
 	} {
 		if !strings.Contains(full, want) {
 			t.Errorf("the rendered prompt never states %q", want)
