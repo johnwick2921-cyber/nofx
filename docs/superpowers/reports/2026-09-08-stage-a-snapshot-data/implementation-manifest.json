@@ -75,6 +75,30 @@
     "bytes": 1054,
     "sha256": "1ea96ecc27e2b3ed3aa316c6cea69cc48f8ae0e1afec92550dd161da479ab2d3"
   },
+  "assembly-baseline-benchmark.go.txt": {
+    "bytes": 1170,
+    "sha256": "85835bcc6dad462f33cb78fcea6e8aa9137bd0b4ff71d737bf0ead50c0e922c5"
+  },
+  "assembly-current-benchmark.go.txt": {
+    "bytes": 1581,
+    "sha256": "2e97334cda98dda4bb6b0b22d5197ac108982984428c6bfa59971b7eb1c6b1ae"
+  },
+  "assembly-sequential-baseline.log": {
+    "bytes": 304408,
+    "sha256": "2e5bc254b79e6fcf79a70740735a66b9bba383a4c4b25881e5dd2add9c75fbcf"
+  },
+  "assembly-sequential-current.log": {
+    "bytes": 304495,
+    "sha256": "87d396ebd1995ee8ac2bcfaab124b9c6d1fa1e4da1fa33c75eecd78a76d9caa8"
+  },
+  "assembly-summary.json": {
+    "bytes": 413,
+    "sha256": "a1450427cca2506b5603150e728d8621e04427b5d0c717235479f1fa7efcdeb8"
+  },
+  "candidate.json": {
+    "bytes": 883,
+    "sha256": "cc42fc82550ba3ad3a13bff09455db9365dc8f461eca5ce1ead95cf398c7ff83"
+  },
   "census.json": {
     "bytes": 1607700,
     "sha256": "ebb866b403eef766997378396938bb02b6cb3e5670adc904a25854473f0a3763"
@@ -82,6 +106,10 @@
   "checklist-at-merge.txt": {
     "bytes": 1098,
     "sha256": "9e230401526c5c0e45c74190d896ce5a0978a0b64e9112869dccb80d2fd68021"
+  },
+  "dist-manifest.json": {
+    "bytes": 13492,
+    "sha256": "925919f3063014f8884604ba52fb0356f07967d17da7831de20e1037d342cf15"
   },
   "field-dictionary.md": {
     "bytes": 8986,
@@ -94,6 +122,10 @@
   "frozen-planning-log.txt": {
     "bytes": 9157,
     "sha256": "f02af585087b0a1e30dd35edb251a8df4610e23275472197dd6217a1267d9371"
+  },
+  "full-go.log": {
+    "bytes": 2428,
+    "sha256": "9f0f1b5e54e4f681a2444d6d125c6b80f7bdc3091b94d1eab77139b688d21827"
   },
   "implementation-source-freshness.csv": {
     "bytes": 18386,
@@ -127,6 +159,14 @@
     "bytes": 418743,
     "sha256": "db745da3c8042ec26f0b457d239518660ed855a0ae4a04853508552aac1592e9"
   },
+  "production-call-census.json": {
+    "bytes": 53861,
+    "sha256": "2240ca235ef0c387d399a45f831d1cbb2aba6dcc1b007d2b7d79db1323a5f51a"
+  },
+  "race-focused.log": {
+    "bytes": 96,
+    "sha256": "5437b5405df1e2646b5425892113ec8822e869f2db96cf17887730d168727a60"
+  },
   "read-adapter-bench.log": {
     "bytes": 1179,
     "sha256": "e05e66e72b6ae82f1c8491bfe5e915423de4267a5b08f958f5887f8243b32e50"
@@ -138,5 +178,9 @@
   "source-freshness.csv": {
     "bytes": 3548,
     "sha256": "51add3795c745da3bf18b6aad2746cfa38d627e12d9f784dfe2a07cefc501ecd"
+  },
+  "validation-receipt.json": {
+    "bytes": 1175,
+    "sha256": "fe4361714068ba23b8a99edacb76008d45ec4f9cceb950e0c50db1bb6b7aff70"
   }
 }

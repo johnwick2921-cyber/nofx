@@ -1,6 +1,6 @@
 # Stage A — research snapshot
 
-Status: implementation and production-path pins staged on `fix/stage-a-snapshot`; full-suite validation in progress. No Stage A migration of the trading database, deployment or live proof is claimed.
+Status: merged to dev; candidate **2a96cf63278f7c836d55e14c5a02597f80280292** passed the full clean-clone suite and built with `vcs.modified=false`. Matching Guide/dist are prepared. **Not swapped or booted; owner GO and an eligible fresh gate are required.**
 
 Lane `stage-a-snapshot-96604090/root[unlisted]`; branch `fix/stage-a-snapshot`; accept base `cd5b9a6b9c479eae97eced7fb0abb40594bf1ac5`. The claim's `ls-remote` receipt was `af1ded7e2c0af427b7268ff2fb76cbf20b4997ca`. Source freshness for every cited repository path is in [source-freshness.csv](2026-09-08-stage-a-snapshot-data/source-freshness.csv).
 
@@ -12,7 +12,7 @@ Audit protocol: `AUDIT-CHECKLIST.md`, Part 2 R1–R10; checklist number assigned
 
 ## Running revisions and source freshness
 
-[A] At **15:12:33 CT**, `/api/health` returned `33672fdd2cd2`; `/proc/3260027/exe` reported full revision **33672fdd2cd2fee60a2c562a9693e06ab3b13551**, `vcs.modified=false`. A separate locked read-only worktree preserves that running source at `/tmp/nofx-stage-a-running-33672`.
+[A] At **15:12:33 CT**, `/api/health` returned `33672fdd2cd2`; `/proc/3260027/exe` reported full revision **33672fdd2cd2fee60a2c562a9693e06ab3b13551**, `vcs.modified=false`. The initial audit used an isolated worktree of that running source; later offline parity generation added only a temporary test fixture there.
 
 [A] While this audit ran, the plan-liveness deploy owner booted the combined candidate at **15:17:31 CT**, PID **3566770**, revision **f8bc7044cc44d58e84904a0a7761e78b420404af**, `vcs.modified=false`; its observed BOOT INTEGRITY line says goldens PASS. This is not a Stage A boot. The Stage A accept base already contains that code; the refreshed dev tip remained `cd5b9a6b`. The candidate/score/ordinal/store and NT8 source files cited below are byte-identical between the initial running revision and this branch. Planner and confirmation code additionally contains the separately owned combined-wave changes; that difference is named where relevant.
 
@@ -52,7 +52,7 @@ Audit protocol: `AUDIT-CHECKLIST.md`, Part 2 R1–R10; checklist number assigned
 
 [A] The stored `bars` key is root symbol/timeframe/open time, with no per-bar contract or adjustment-policy field. The inspected AddOn request does not explicitly set a merge/adjustment policy, and the wire does not supply one. Therefore **historical per-bar contract and back-adjustment status are UNKNOWN**. A current subscription contract cannot certify every historical bar's actual contract or orderable price scale. Stage A will retain the received contract and its basis where known, and separately expose these unsupported historical fields as NULL with reasons. It will not change roll handling or C# behavior.
 
-## Implementation and proof status
+## Implementation and proof status at audit checkpoint
 
 Implemented: separate archive, five-object writers, read-only export and production mutation pins. Class 93 is assigned at integration. Full clean-clone suite/build and owner-controlled cutover/live receipts remain separate pending steps. No Stage A trading decision or runtime setting is changed by preparation.
 
@@ -146,8 +146,8 @@ Median increment **27,760 ns = 0.027760 ms per scorer invocation**. This is an o
 incremental measurement, not a measured whole live planner read. Queue admission
 has a 5 ms budget, select/default on full capacity, and its own measured histogram;
 JSON and SQLite run on the worker. Removing the nonblocking admission fails with
-“offer blocked behind the writer beyond admission budget”. Whole live read cost is
-still unproven until a Stage A read occurs; boot admission p50 must not be relabelled
+“offer blocked behind the writer beyond admission budget”. Whole live read cost remains
+unproven; the later sequential production-assembly benchmark below measures offline incremental cost; boot admission p50 must not be relabelled
 as an end-to-end model-call or whole-read duration.
 
 [A] Exact-line mutations failed: removing `l.Research.Score = scoreValue(score)`
@@ -214,3 +214,40 @@ restart is authorized by this preparation record.
 The [complete field dictionary](2026-09-08-stage-a-snapshot-data/field-dictionary.md) enumerates every registered field, its meaning and NULL semantics. Dedicated predicate timestamp projection, full config/prompt-version, legacy row links and accepted entry role remain NULL; relevant raw metadata/output/order facts remain available separately. The per-read adapter benchmark is 0.002532 / 0.002161 / 0.002655 ms (median 0.002532 ms) on its one-candidate fixture; it is not added to the separate 72-candidate scorer benchmark as a measured whole-read number.
 
 A15 remains explicit: whole live per-read overhead, first real candidate/cut/attempt/repair and the first live export are **NOT YET PROVEN**. Queue admission is nonblocking and measured separately. The 5 ms admission test is a code budget/drop guard, not a real-time operating-system scheduling guarantee.
+
+
+## Final candidate preparation receipt
+
+[A] Source `2a96cf63278f7c836d55e14c5a02597f80280292` is the Stage A merge including scenario-economics and clean-machine documentation. Both `dev` and `fix/stage-a-snapshot` were verified by `git ls-remote` at that revision before clean-clone validation. Clone: `/tmp/stage-a-build/nofx`. Full `go test ./... -count=1` **PASS**, including prompt goldens and guarded source references; Vitest **54 files / 378 tests PASS**; `tsc --noEmit` **PASS**; final focused recorder/producer `-race` **PASS**. Exact receipt hashes are in `validation-receipt.json`; successful Go/race outputs are retained.
+
+[A] Binary: **72,454,640 bytes**, SHA-256 `c94ee81fbe364bee2b7b9352b2c706918da8bcac49bc781895de6466872e211b`, **vcs.modified=false**. Its actual embedded revision was read into `GUIDE_BUILT_REV` at **16:49:46 CT**, THEN dist was rebuilt. Dist: **92 files / 7,918,497 bytes**, manifest SHA-256 `925919f3063014f8884604ba52fb0356f07967d17da7831de20e1037d342cf15`; its JavaScript contains that same full revision. See `candidate.json` and `dist-manifest.json`.
+
+[A] Own preparation gate at **16:45:40 CT**: all five legs PASS, no open position, no working order, no planner read claimed. Leg 4: **broker — NT8 order_snapshot frame (age 9s, build 2026-09-07-h1)**, broker and ledger both zero. This receipt is stale for cutover. A7 prohibits **16:45–17:10 CT**; next window is **after 17:10 only if flat, no arms, no open position**, with a fresh five-leg gate/in-flight read. A3 still requires owner GO before RELEASE/swap. No kill was issued.
+
+[A] At **16:47:41 CT**, PID **3566770** and the disk binary both held `f8bc7044cc44d58e84904a0a7761e78b420404af`, modified=false. Preserved actual running image `/tmp/stage-a-cutover/backup/nofx-bin.old.f8bc7044cc44d58e84904a0a7761e78b420404af`, SHA-256 `e2c2ce8602ca61e52d180309743593b3bf538337693e4f2c61ae83c21d457918`. Online backup `/tmp/stage-a-cutover/backup/data.db`: **751,267,840 bytes**, **integrity_check=ok**. Stage A does not migrate existing trading rows.
+
+### Measured complete input-assembly overhead
+
+[A] Sequential offline benchmark of the **actual `assemblePlannerInputWithCtx` call**, before Stage A at accept base `cd5b9a6b` and after at candidate source `2a96cf63`. Identical synthetic 300-bar fixture, temporary legacy DB each run; current side also installs the real separate SQLite research worker. Three runs × 100 calls each, executed sequentially after other builds/tests finished. Mean costs per run: baseline **21.042842 / 19.141682 / 21.324307 ms**; current **21.628321 / 23.165777 / 23.515908 ms**. Difference between medians of those three means: **+2.122935 ms per input assembly**. This is not a sample p50, not live latency, and excludes subsequent provider/network time.
+
+The deliberately continuous 100-call bursts dropped **573 / 560 / 565 batches** on the current side; these are measured recorder batch counts, not lost-row estimates. Production cadence throughput is not inferred from this overload fixture. Queue saturation did not wait for SQLite. The prior admission mutation separately proves that replacing select/default with a blocking send fails the stated latency pin. Benchmark sources, both complete logs and summary are retained; the temporary benchmark source was removed before publishing the metadata receipt.
+
+### Current production sources and wiring
+
+| Capture surface | Source at candidate `2a96cf63` |
+|---|---|
+| Scorer capture | `kernel/levels_score.go:513` |
+| Raw candidate assembly | `kernel/levels_assemble.go:158` |
+| Candidate/input/permission/placement/outcome adapters | `trader/research_snapshot.go:20` |
+| Outer retries and publication | `trader/auto_trader_planner.go:1479` |
+| Received broker/market frames | `provider/ninjatrader/research_wire.go:21` |
+| Bounded admission and worker | `researchsnapshot/recorder.go:45` |
+| Append-only schema and export | `researchsnapshot/archive.go:25` |
+| Pre-reader registration | `main.go:76` |
+| Read-only export CLI | `cmd/research_export/main.go:23` |
+
+`production-call-census.json` enumerates 87 newly defined production functions. All have at least one lexical production call except the export command's `main`, which is the Go executable entry point. Lexical method-name matches are not claimed as semantic proof; the AST writer test names enclosing callers and startup order, and actual producer-removal pins fail. The sole new table `research_facts` is written by `Archive.saveAt` via the worker and read by the export and boot counter queries. Source freshness is retained separately for the frozen audit and integrated implementation.
+
+### Outstanding live proof, not inferred
+
+Stage A boot line, first real captured candidate, first cut with its own reason, first author/repair timeline, first live export/checksum and live admission latency remain **NOT YET OBSERVED**. Existing NULL limitations are enumerated in the field dictionary. The confirmation-truth watcher still has no first bucket/forming/out-of-order proof at this preparation checkpoint; its earlier combined boot is not a Stage A receipt. Marker and lock release follow a passed owner-controlled boot, never a prepared build.
