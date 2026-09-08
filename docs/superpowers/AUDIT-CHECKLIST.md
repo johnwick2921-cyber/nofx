@@ -2027,6 +2027,54 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     (a check that prints but does not gate), class 28/77 (one canonicalizer, one
     owner).
 
+88. **A liveness signal that is a side effect of activity.** (Number assigned at
+    merge, A16 — two-format census run at merge: highest occupied 87, duplicates
+    75/76/77 pre-existing. Re-check both formats; a census in one convention
+    cannot see the other.) The main-tree lock proves the holder is alive by a
+    heartbeat. On 2026-09-07 a cutover lane beat that heartbeat **inside the
+    `until` loops that waited on its background builds** — so the beating stopped
+    exactly when the work stopped. The lock went **STALE at 2107 s** while the
+    binary was swapped in, RELEASE already led it, and the old process was still
+    serving, waiting on a human to run the kill. From outside it was
+    indistinguishable from an abandoned lock, and a lane corroborating on "is
+    HEAD moving?" would have found HEAD static since the build and had a
+    plausible case for `reclaim` — landing on a half-applied swap.
+    **The generalisation, which is the reason this is a class and not an
+    anecdote:** anything whose liveness signal is a side effect of activity goes
+    quiet **precisely when the thing you are waiting on is a human**. The busiest
+    lane looks most alive and the blocked one looks dead, which is exactly
+    backwards — a blocked lane is the one holding something.
+    **What identified it** was not the tool: `status` said STALE and nobody was
+    reading it. It was a PEER who had held the same lock an hour earlier, waited
+    75 minutes on the same human, and recognised the shape. Their own heartbeat
+    survived only because their keeper was **detached from the work**, not
+    because they were more careful.
+    **Probe:** for every liveness or freshness signal, ask what emits it and
+    whether that emitter runs when the system is IDLE. If the signal rides on
+    work, it is an activity meter wearing a health badge. Then ask what the
+    longest legitimate idle stretch is — for anything gated on a human, it is
+    unbounded.
+    **Law:** decouple the heartbeat from the work. A detached keeper that
+    self-exits when the resource is released:
+    ```
+    nohup bash -c 'while true; do deploy/nofx-lock.sh heartbeat <session> \
+      >/dev/null 2>&1 || exit 0; sleep 100; done' >/dev/null 2>&1 &
+    ```
+    And note what does NOT save you: the lock's `expiry` field is written at
+    acquire and only ever PRINTED — the ALIVE/STALE branch compares heartbeat
+    AGE alone (`nofx-lock.sh`). Expiry is display; the keeper is the mechanism.
+    **Corollary, from the same hour and the same two lanes.** Both lanes ran a
+    census of this file and both were blind, in opposite ways: one grepped only
+    `## CLASS N` and could not see the `NN. **Title.**` entries where 78-84 live;
+    the other counted BOTH formats but with `sort -n | uniq` instead of
+    `uniq -c`, **deduplicating while hunting duplicates**. The second is the more
+    instructive error — a regex that cannot see a format is fixed on sight, but
+    collapsing duplicates before counting them reproduces anywhere. Neither lane
+    found 75/76/77 alone; the duplicates surfaced only when a challenge forced a
+    third, wider query. Related: class 85 (the branch you handle carefully is the
+    one you can see), class 24 (a check that prints but does not gate), class 83
+    (a status code is not a verification).
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,
