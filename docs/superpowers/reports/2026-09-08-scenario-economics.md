@@ -2,7 +2,7 @@
 
 2026-09-08 · branch `fix/scenario-economics` · session `scenario-economics-83f741b2/root[unlisted]`.
 
-**Implemented; not deployed.** New authoring must provide a complete economics declaration. The existing write parser refuses missing required fields and the three approved numeric contradictions. Stored legacy reads keep missing economics UNKNOWN; role differences and sub-1R obstacles remain WARN plus recorded counters. No target policy, arm authorization, trading gate, floor, confirmation or cadence change is introduced.
+**Implemented and candidate built; not deployed.** New authoring must provide a complete economics declaration. The existing write parser refuses missing required fields and the three approved numeric contradictions. Stored legacy reads keep missing economics UNKNOWN; role differences and sub-1R obstacles remain WARN plus recorded counters. No target policy, arm authorization, trading gate, floor, confirmation or cadence change is introduced.
 
 The owner approved the corrected premises after the initial measurement STOP at `59af58fd54a74f1422296ac651a0c687c2072d33`: new-authoring-only completeness, unchanged legacy acceptance, role differences WARN, corrected C5 and **C6 NOT ESTABLISHED — dropped**. That pinned earlier report preserves the original correction record. Its STOP is resolved by the owner's subsequent ruling. This report describes the approved implementation and remaining deployment proof.
 
@@ -36,7 +36,7 @@ Research §02 separates authored geometry from actual admission/execution and co
 
 The dispatch's governing RESEARCH LAW is: **“MAY: require that a scenario state its first opposing obstacle, its planned response there, its arm target and the implied R”** and refuse contradictory numbers; it forbids selecting a target family or declaring a placement superior. [O] This report chooses **no structural, fixed-R, ATR, partial, trailing or mandatory-1R target policy**. Numerical illustrations below are arithmetic, not market beliefs or estimated NOFX rates. No new [R]/[I] profitability claim is introduced.
 
-[Source-freshness receipt](2026-09-08-scenario-economics-data/source-freshness.txt) gives exact `git log -1` for **every production/source file cited here** and verifies each is byte-identical to running `f8bc7044`. `SYSTEM-MAP.md`: `e020885b 2026-09-08T14:21:34-05:00`; `AUDIT-CHECKLIST.md`: `78eed09b 2026-09-08T14:32:14-05:00`. The audit follows its PART 2 R1–R10. No implementation spec was taken from a stale worktree base.
+[Source-freshness receipt](2026-09-08-scenario-economics-data/source-freshness.txt) gives exact `git log -1` for the files cited in the **initial measurement** and verifies their pre-change versions were byte-identical to running `f8bc7044`. `SYSTEM-MAP.md`: `e020885b 2026-09-08T14:21:34-05:00`; `AUDIT-CHECKLIST.md`: `78eed09b 2026-09-08T14:32:14-05:00`. The audit follows its PART 2 R1–R10. No implementation spec was taken from a stale worktree base.
 
 ## C1–C3: independent recomputation
 
@@ -160,7 +160,7 @@ The E3 example independently reproduces at **row 265/S2**, 2026-09-07 ASIA v2: e
 
 ## Implementation, RED/GREEN, and production wiring
 
-The first implementation commit is `d5e2414e` (contract + card + desk + Guide + SYSTEM-MAP together); follow-up changes complete compatibility fixtures, telemetry containment and verification. The definitive candidate ref and merged-head suite/build receipts are recorded at publication/cutover.
+[Implementation source freshness](2026-09-08-scenario-economics-data/implementation-source-freshness.txt) quotes `git log -1` and function line locations at the merged candidate, separately from the pre-change measurement. The first implementation commit is `d5e2414e` (contract + card + desk + Guide + SYSTEM-MAP together); follow-up changes complete compatibility fixtures, telemetry containment and verification. The definitive candidate ref and merged-head suite/build receipts are recorded at publication/cutover.
 
 - `kernel/plan_doc.go`: optional `PlanScenario.Economics` travels through existing plan JSON. `ParsePlanDocCapped` enters `parsePlanDocument(..., true)` and the new-authoring check; stored `ValidatePlanDocWithCaps` never invokes it. `ParsePlanDoc` retains generic legacy parsing. The parser stamps the contract version after successful checking, so a model-supplied zero version cannot bypass it.
 - `kernel/scenario_economics.go`: schema, independent geometry projection, D4 checks, known role diagnostics, process counters and logging. Target-path tolerance reads the MNQ tick from `market.FuturesTickSize`; stated-R tolerance is converted back to price distance. An arm remains the geometry authority; a scenario without an arm may declare hypothetical geometry without changing the armable set. Every economics check logs PASS/REFUSED, obstacle/provenance/response, target, both Rs, issues, warnings and cumulative counters. PASS means this economics check passed, not that all later validators accepted or a plan was persisted. Logging failure cannot panic the loop or turn refusal into acceptance.
@@ -190,7 +190,7 @@ Kernel GREEN covers C3 row 178, missing obstacle and whole contract, long/short 
 
 [A29 call-site census](2026-09-08-scenario-economics-data/call-sites.json): every one of the **12 new Go functions** has a production caller; no `production call sites: 0`. UI component is rendered from `ScenarioList`, not merely exported. No new `time.Now` entry point or clock seam was introduced; desk tests supply their own clock.
 
-Development validation: full `go test ./...` passed; all **53 Vitest files / 377 tests** passed; `tsc --noEmit` passed. The final merged-head suite and clean-clone build still require their own receipt; branch/development green is not substituted for merged green.
+Development validation: full `go test ./...` passed; all **53 Vitest files / 377 tests** passed; `tsc --noEmit` passed. At merged source **95e7b420df0960edc67a91ff2a719fe105f441ae**, the ordinary clean clone `/tmp/nofx-scenario-economics-build/nofx` passed fresh full Go (`-count=1`), explicit prompt goldens, 53 Vitest files / 377 tests, and tsc. The binary was built after these checks and reports `vcs.modified=false`; its embedded revision supplied GUIDE_BUILT_REV **before** dist was built. [Candidate build receipt](2026-09-08-scenario-economics-data/candidate-build.json) includes SHA-256 and asset hashes. The preparation read at **16:25:36 CT**, n=1 running trader, passed all five gate legs; leg 4 came from a broker order snapshot age 5s, build `2026-09-07-h1`, with zero working orders and matching ledger. This read is **not** permission for a later swap; repeat the gate and in-flight/window check at cutover.
 
 ### Stage A separation and checklist
 
@@ -207,3 +207,8 @@ After deployment, old documents will still show UNKNOWN economics; hypothetical 
 Rollback: there is no database schema migration or legacy backfill. Retain the verified previous binary/dist/RELEASE for the normal rollback procedure. The additive JSON remains in newly written rows; an old reader can ignore it, but the economics enforcement and display would no longer be live. No account, trader binding, size, R:R floor, stop floor, arm/execution rule or cadence setting changes are part of rollback.
 
 Deployment requires this wave's explicit owner GO, merged-head suite in a clean clone named `nofx`, verified `vcs.modified=false`, GUIDE_BUILT_REV from that binary before dist, fresh five-leg gate and in-flight check, then RELEASE → atomic mv → VERIFY → exact owner kill, boot proof and five-reference check. The prior combined-wave GO is not a scenario-economics boot approval. The correction report is already on dev at the pinned initial revision; the implementation report is to merge with the behavior and be verified again by exact commit URL/byte equality. The final publication receipt supplies that immutable SHA and HTTP/byte result.
+
+
+### Candidate handoff
+
+Candidate source is `95e7b420df0960edc67a91ff2a719fe105f441ae`; subsequent Guide/report commits are preparation metadata, not a different Go binary. No RELEASE change, service-file replacement or kill occurred. Running health and RELEASE remain `f8bc7044`. The prepared binary is `/tmp/nofx-scenario-economics-build/nofx/nofx-bin`; candidate dist is that clone's `web/dist`. Deployment remains owner-GO gated under A3, with A7's 14:45–16:30 CT window or after 17:10 flat/no arms/no position, never 16:45–17:10. If another lane merges before GO, rebuild and gate the resulting merged head rather than silently deploying this older candidate.
