@@ -4,7 +4,12 @@
 
 import type { Language } from '../../i18n/translations'
 import { tp } from '../../i18n/plan-translations'
-import type { PlanScenario, ScenarioStatusValue } from '../../lib/api/plan'
+import type {
+  PlanArmView,
+  PlanScenario,
+  ScenarioStatusValue,
+} from '../../lib/api/plan'
+import { OrderTerms } from './OrderTerms'
 import { StatusDot, type ScenarioStatus } from './chips'
 import { fmtPrice } from './levelState'
 
@@ -310,10 +315,7 @@ export function ScenarioList({
   scenarios: PlanScenario[]
   statusMap?: Record<string, ScenarioStatusValue>
   /** Wave 2 armed orders — per-scenario arm state (⏳/📌/⚡/✕+reason). */
-  armedStates?: Record<
-    string,
-    { state: string; reason?: string; entry_px?: number }
-  >
+  armedStates?: Record<string, PlanArmView>
   /** A1/A4/C1 (fail-register wave): verdict basis, unevaluable ids, confirm verdicts */
   meta?: {
     basis?: Record<string, string>
@@ -402,6 +404,7 @@ export function ScenarioList({
                   <ArmedChip arm={armedStates?.[s.id]} />
                 </div>
               )}
+              <OrderTerms legs={armedStates?.[s.id]?.legs} />
             </div>
           )
         })}

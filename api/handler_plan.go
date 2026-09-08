@@ -179,44 +179,6 @@ func (s *Server) approvalRequired(traderID string) bool {
 // armedMapFor builds the scenario→state map the card chips read (Wave 2).
 // E4 (entry-mechanics 2026-08-30): a split arm has TWO rows (leg_index 0/1) —
 // the chip gets the per-leg states so the card shows the split contract.
-func (s *Server) armedMapFor(planID string) map[string]gin.H {
-	out := map[string]gin.H{}
-	if s.store == nil || planID == "" {
-		return out
-	}
-	rows, err := s.store.ArmedOrders().ListForPlan(planID)
-	if err != nil {
-		return out
-	}
-	type legState struct {
-		State    string `json:"state"`
-		LegIndex int    `json:"leg_index"`
-		Kind     string `json:"kind,omitempty"`
-	}
-	// INVALIDATION-WIRED F2 (2026-09-03) — the version the arm BELONGS to.
-	// armed_under_version is set once at first authorization and never
-	// overwritten; Version is mutable and re-stamped on every
-	// re-authorization, which is why the card must not read it for provenance.
-	// Rows created before 2026-09-03 10:28 carry 0 and are rendered as
-	// "version not recorded", never as v0.
-	for _, r := range rows {
-		cur, ok := out[r.Scenario]
-		if !ok {
-			cur = gin.H{"state": r.State, "reason": r.StateReason, "entry_px": r.EntryPx,
-				"armed_under_version": r.ArmedUnderVersion, "side": r.Side,
-				"fill_quantity": r.FillQuantity}
-		}
-		var legs []legState
-		if existing, ok := cur["legs"].([]legState); ok {
-			legs = existing
-		}
-		legs = append(legs, legState{State: r.State, LegIndex: r.LegIndex, Kind: r.Kind})
-		cur["legs"] = legs
-		out[r.Scenario] = cur
-	}
-	return out
-}
-
 func (s *Server) planRulesWithCap(traderID, session, tradeDate string) (rule, mode string, replansLeft, replanCap int) {
 	dp := s.dayPlanCfgFor(traderID)
 	rule = dp.AcceptanceRuleFor(session)
@@ -464,7 +426,7 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 		// renders the plan and shows a subtle re-reading chip, never "writing".
 		"replan_in_flight": replanInFlight,
 		// Wave 2 armed orders — the per-scenario arm state for the card chips.
-		"armed": s.armedMapFor(row.PlanID),
+		"armed": s.armedMapFor(row.PlanID, row.Version, doc, s.planOrderBook(traderID, now)),
 		// INVALIDATION-WIRED F2 (2026-09-03) — the OPEN position's own
 		// provenance, so the card can never render the live plan's scenario as
 		// the position's. On 2026-09-03 the card showed v3 S1 LONG (written

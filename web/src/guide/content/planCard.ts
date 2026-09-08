@@ -13,6 +13,10 @@ export const planCard: GuideSection = {
     },
     { kind: 'mockCard' },
     {
+      kind: 'p',
+      text: 'Order prices are shown side by side for each scenario leg: intended terms from the displayed plan (including overlays), composed terms from the selected arm ledger row, and ACCEPTED terms from a fresh received broker book. Selection uses the displayed version and highest placement sequence per leg; the first authorization version remains separate. Each leg shows its state and provenance, so split legs can disagree. The current ACCEPTED column matches the exact placement signal and its stop/target names; missing, ambiguous, stale, terminal or unconfirmed orders show UNKNOWN. It never substitutes planned prices or historical acceptance records. After a fill, the absent entry can read UNKNOWN while its live protective prices remain visible. Receipt time, age and received AddOn build accompany the book.',
+    },
+    {
       kind: 'callout',
       title: 'tap to expand — every element',
       items: [

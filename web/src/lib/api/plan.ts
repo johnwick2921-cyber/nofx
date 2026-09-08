@@ -35,6 +35,40 @@ export interface PlanScenario {
   consumed?: boolean
 }
 
+export interface OrderPrices {
+  entry: number | null
+  stop: number | null
+  target: number | null
+  source: string
+  reason?: string
+}
+
+export interface PlanOrderLeg {
+  state: string
+  reason?: string
+  leg_index: number
+  kind?: string
+  row_id?: number
+  version?: number
+  armed_under_version?: number
+  placement_seq: number
+  signal_id?: string
+  side?: string
+  intended: OrderPrices
+  composed: OrderPrices
+  accepted: OrderPrices
+  book_received_at_ms?: number
+  book_age_ms: number
+  build_id: string
+}
+
+export interface PlanArmView {
+  state: string
+  reason?: string
+  entry_px?: number
+  legs?: PlanOrderLeg[]
+}
+
 export interface PlanDoc {
   reasoning: string
   bias: PlanBias
@@ -129,7 +163,7 @@ export interface PlanToday {
     >
   }
   /** Wave 2 armed orders — per-scenario arm state for the card chips. */
-  armed?: Record<string, { state: string; reason?: string; entry_px?: number }>
+  armed?: Record<string, PlanArmView>
   /** W15.B — the acceptance rule the executor evaluates these levels with. */
   acceptance_rule?: string
   /** W15.B — which session is LIVE right now, regardless of the tab requested. */
