@@ -3,7 +3,7 @@
 // against GET /api/health revision and warns on drift.
 import type { ReactNode } from 'react'
 
-export const GUIDE_BUILT_REV = '44ea117a02a1d6703003109a3386c92ca55d2bd5'
+export const GUIDE_BUILT_REV = 'b4195e6f877032090812214b8ae4b6acae777a4f'
 
 export interface Card {
   title: string
