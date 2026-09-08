@@ -658,3 +658,29 @@ waiting for will stop early on a quiet market and late on a busy one** — the
 right bound was "until this signal's bracket appears", not "six snapshots".
 
 **F2 is closed. Nothing remains owed from this wave.**
+
+## The stop fired — the whole path, end to end
+
+Position 594 closed at **29510.0**, `close_reason=stop`, realized −72.50 on
+LONG MNQ ×1 from 29546.25. **29510.0 is exactly the `-sl` price** from the
+bracket quoted above.
+
+So the complete lifecycle ran on the new code, in order:
+
+1. entry placed with **no OCO group**, `tif=Day` (02:50:00)
+2. entry fills
+3. the AddOn places the protective pair **from the fill event**, shared `-exit`
+   oco, both `tif=Gtc` (02:52:11) — 86 s before Go's ledger recorded the fill
+4. D5 reads the broker's book and confirms coverage: *"1 live protective stop(s)
+   at the exchange covering 1 of 1"* — counting an `Accepted` stop as live (C3a)
+5. the stop fires at 29510.0
+6. the close records `close_reason=stop`, taken from the broker's own reason
+   rather than inferred (Wave A / D3, `ExitCauseFromBroker`)
+
+The trade lost $72.50, and that is the correct outcome: the stop did what a stop
+is for. The wave's claim was never that the trade would win — it was that this
+stop would **exist, be GTC, sit at the exchange, and not be cancellable out from
+under the position by an entry cancel**. All four held, and the sixth step shows
+the exit cause was recorded rather than guessed.
+
+Zero `[ERROR]` and zero panics across the whole sequence.
