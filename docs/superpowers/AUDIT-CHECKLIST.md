@@ -2159,6 +2159,37 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     its proposed live causal premise was not established. Versioned status and
     metadata feed the card/desk; the existing evaluator's verdict is unchanged.
 
+91. **A named close counted before its bucket closed; a sequence lost its reference.**
+    (Assigned at merge of `fix/confirmation-truth`, 2026-09-08; highest occupied
+    was 90. Two-format `uniq -c` also found the existing duplicate 75/76/77;
+    none was renumbered.) Decision **38329**, LONDON v5 S3, snapshot **08:16:59
+    CT**, said MET while the 08:15 five-minute bucket closed at 08:20. The
+    generic counter admitted a forming bucket; the waterfall path counted raw
+    minutes under a 5m label. A missing touch lookup returned zero and the
+    sequence silently substituted plan birth, admitting pre-touch reclaims.
+    **Law:** one explicit-clock bucket-end predicate for every confirmation,
+    validation and feeds-forward consumer; one `(instant, ok)` reference
+    lookup; UNKNOWN never satisfies and never substitutes publication. Ordered
+    arms use the scenario verdict. Touch OHLC references name their closed-minute
+    observation upper bound, not an invented tick timestamp.
+    **Owner-accepted validation correction:** the closure-only audit removed
+    **23 REJECTs across two scenarios**; minute-only reclaims never established
+    the named 5m void. This is correct rule application, not a regression.
+    The separately authorized **`1m_displacement`** rule adds **one** further
+    PASS (**163/S1, decision 34790**) by preserving immediate-mode preparation:
+    **24 final REJECT→PASS observations**. The boot receipt labels both audit
+    counts separately from live refusal counters. Pullback/void facts use 5m;
+    immediate displacement has its own function, label and tests.
+    **Coverage:** 789 stored scenarios, 627 replayed, 176 confirmation-changing
+    in 299 observations; 168 have supporting saved-prompt matches. **162 stay
+    unevaluated**, never inferred from that subset. Four stored waterfall
+    scenarios changed displacement in 31 observations and last close in 162;
+    corrected planner facts may intentionally change subsequent authoring.
+    **Pins:** explicit before/at/after boundaries; 38329; reversed, missing and
+    equal-time references; real arm/record/desk callers; separate 1m rule and
+    34790. Four actual-line mutations fail assertions; 50 already-closed verdict
+    goldens are unchanged. Full evidence: `reports/2026-09-08-confirmation-truth.md`.
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,
