@@ -77,7 +77,7 @@ func BootLineAt(a *Archive, r *Recorder, now time.Time) string {
 	if r != nil {
 		dropped = fmt.Sprint(r.Dropped())
 		if n := r.LatencyP50MS(); n != nil {
-			latency = fmt.Sprintf("%.3fms", *n)
+			latency = fmt.Sprintf("≤%.3fms (admission)", *n)
 		}
 	}
 	if a != nil {

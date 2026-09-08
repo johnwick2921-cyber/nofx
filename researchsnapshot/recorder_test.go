@@ -196,3 +196,24 @@ func TestResearchExportDetectsTampering(t *testing.T) {
 		t.Fatal("altered count passed checksum/count verification")
 	}
 }
+
+func TestResearchSQLNullAndComputedZero(t *testing.T) {
+	a, err := Open(filepath.Join(t.TempDir(), "research.db"), "null-fixture")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer a.Close()
+	f := NewFact("candidate", "fixture", nil, Clocks{})
+	f.Set("confluence_raw", 0)
+	if err = a.Save(context.Background(), []Fact{f}); err != nil {
+		t.Fatal(err)
+	}
+	var missing any
+	var zero int
+	if err = a.db.QueryRow(`SELECT json_extract(fields_json,'$.final_score'),json_extract(fields_json,'$.confluence_raw') FROM research_facts`).Scan(&missing, &zero); err != nil {
+		t.Fatal(err)
+	}
+	if missing != nil || zero != 0 {
+		t.Fatalf("SQL null/zero contract broken: missing=%v zero=%d", missing, zero)
+	}
+}

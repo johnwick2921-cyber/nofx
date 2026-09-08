@@ -198,7 +198,7 @@ func (r *Recorder) LatencyP50MS() *float64 {
 			if i == len(r.latency)-1 {
 				return nil
 			} // overflow is unmeasured, never a plausible millisecond value
-			return Value(float64(i) / 1000)
+			return Value(float64(i+1) / 1000) // upper bound of this microsecond bucket
 		}
 	}
 	return nil

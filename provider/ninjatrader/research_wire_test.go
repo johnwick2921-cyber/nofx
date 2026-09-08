@@ -76,3 +76,16 @@ func TestStageABackfillAvailableOnlyAtReceipt(t *testing.T) {
 		t.Fatal("historical adjustment policy invented")
 	}
 }
+
+func TestStageAUnlinkedBrokerPricesStayUnclassified(t *testing.T) {
+	w := newResearchWire()
+	now := time.Date(2026, 9, 8, 16, 0, 0, 0, time.UTC)
+	fill := w.facts(FrameFill, json.RawMessage(`{"signal_id":"fixture","status":"filled","fill_price":100,"quantity":1}`), now)
+	if fill[0].Fields["attainable_entry"] != nil || fill[0].Fields["fills"] == nil {
+		t.Fatal("unlinked fill was promoted to entry price or lost")
+	}
+	book := w.facts(FrameOrderSnapshot, json.RawMessage(`{"emitted_at_ms":1788881400123,"orders":[{"order_id":"fixture-protection","name":"fixture-sl","type":"stop","stop_price":95}]}`), now)
+	if len(book) != 2 || book[1].Fields["accepted_entry"] != nil || book[1].Fields["order_semantics"] == nil {
+		t.Fatal("protective book price was promoted to accepted entry or lost")
+	}
+}

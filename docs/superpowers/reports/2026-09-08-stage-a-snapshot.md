@@ -181,3 +181,25 @@ under the normal five-leg gate. The separate research archive can be retained as
 immutable evidence; the old binary does not read it. No trading schema rollback
 or deletion of research records is needed. No worker drop can release an arm slot,
 promote an order, authorize a scenario, or change a gate verdict.
+
+
+### Second validation checkpoint
+
+The full Go run at `0babd090` failed only the guarded SYSTEM-MAP stop-entry
+coordinates after recorder call sites moved the source. Those references were
+refreshed from the current symbols; the guard passed. A separate broker-price pin
+now refuses to label an unlinked fill or protective book price as an entry:
+raw price/semantics remain retained, while entry-specific fields remain NULL.
+SQL NULL-versus-zero and startup-registration mutations fail explicitly.
+
+The per-read input/candidate/attempt/publication adapter benchmark (three runs of
+1,000 groups, bounded queue) additionally measures microsecond admission overhead;
+full results travel in the evidence bundle. It does not include model/network time
+or async SQLite work. Admission p50 is rendered as a microsecond-bucket upper bound,
+never a fabricated exact zero below measurement resolution.
+
+At 16:35:28 CT the Stage A lane acquired the free merge/build lock and started an
+independent keeper. Main was porcelain-clean on dev `c98ed6f2`; scenario-economics
+had merged its contract and class 92 and released the lock. Stage A must integrate
+that tip and reread its schema before the final merged-head suite. No swap or
+restart is authorized by this preparation record.

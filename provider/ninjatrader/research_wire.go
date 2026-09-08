@@ -141,12 +141,7 @@ func (w *researchWire) facts(kind FrameType, payload json.RawMessage, received t
 	if kind == FrameFill {
 		f.Set("fills", selected)
 		f.Set("ambiguity", []string{"entry/exit role requires signal and order linkage"})
-		if text("status") == "filled" || text("status") == "partial" {
-			if v, ok := m["fill_price"]; ok {
-				f.Set("attainable_entry", v)
-				f.Set("entry_basis", "received fill; entry/exit role requires signal linkage")
-			}
-		}
+		f.Unknown("attainable_entry", "fill price retained in fills; entry versus exit role requires signal/order linkage")
 	}
 	if text("reason") == "" {
 		f.Unknown("reason", "received frame omits reason; h1 does not transmit rejection check")
@@ -172,7 +167,7 @@ func (w *researchWire) facts(kind FrameType, payload json.RawMessage, received t
 				}
 			}
 			if len(prices) > 0 {
-				of.Set("accepted_entry", map[string]any{"prices": prices, "basis": "prices present in received broker book; order role/state retained, not a fill"})
+				of.Set("order_semantics", map[string]any{"prices": prices, "basis": "prices present in received broker book; order role/state retained, not a fill"})
 			}
 			// Retain only known order-schema keys; strip account/unknown extensions.
 			clean := map[string]json.RawMessage{}

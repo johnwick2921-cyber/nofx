@@ -170,3 +170,31 @@ func TestStageAPermissionAndOutcomeProductionPaths(t *testing.T) {
 		t.Fatalf("raw P&L laundered into research: corrected=%v exclusion=%v", f["pnl_corrected"], f["outcome_exclusion"])
 	}
 }
+
+type researchDiscardSink struct{}
+
+func (researchDiscardSink) Save(context.Context, []researchsnapshot.Fact) error { return nil }
+
+// Measures the actual per-read capture adapters separately from scoring, whose
+// incremental cost is measured against the pre-wave source. Disk runs off-thread.
+func BenchmarkStageAReadCaptureAdapters(b *testing.B) {
+	r := researchsnapshot.NewRecorder(researchDiscardSink{}, 128, func(string) {})
+	researchsnapshot.Install(r)
+	defer func() { researchsnapshot.Install(nil); r.Close() }()
+	now := time.Date(2026, 9, 8, 15, 0, 0, 0, time.UTC)
+	raw := []kernel.DetectedLevel{{Kind: kernel.KindPDH, Price: 30000, Lo: 30000, Hi: 30000, Label: "PDH"}}
+	scored, _ := kernel.ScoreLevelsMinGradeFull(raw, 30001, 100, nil, 1, 1.5, "")
+	in := kernel.PlannerInput{Now: now, Levels: scored, ResearchSnapshotID: "benchmark-read"}
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		recordResearchCandidatesAt("benchmark-read", "MNQ", raw, scored, now, now)
+		recordResearchInputAt("benchmark-read", in, "system", "fixture-model", now)
+		trace := &researchsnapshot.PlanTrace{SnapshotID: "benchmark-read", Model: "fixture-model"}
+		trace.BeginAt(1, "author", "prompt", now)
+		trace.ReplyAt(validTraderPlanJSON, nil, now.Add(time.Second))
+		trace.FinishAt(nil, now.Add(time.Second))
+		trace.PublishedAt("fixture-plan", 1, validTraderPlanJSON, now.Add(time.Second))
+	}
+	b.StopTimer()
+}

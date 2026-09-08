@@ -15,7 +15,7 @@ export const expectancy: GuideSection = {
     },
     {
       kind: 'p',
-      text: 'NULL means the field was not captured; its reason travels with the record. A measured zero remains zero. Observation, receipt, publication and permission times are separate. A late historical bar becomes available at receipt, even when its market timestamp is earlier. A scenario activation is not an order authorization.',
+      text: 'NULL means the field was not captured; its reason travels with the record. A measured zero remains zero. Observation, receipt, publication and permission times are separate. A late historical bar becomes available at receipt, even when its market timestamp is earlier. A scenario activation is not an order authorization. A fill or book price without an entry link remains unclassified; protective prices do not become entry prices.',
     },
     {
       kind: 'p',
