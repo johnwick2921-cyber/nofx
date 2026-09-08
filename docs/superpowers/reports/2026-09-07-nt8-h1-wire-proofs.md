@@ -54,6 +54,14 @@ No received snapshot through11031 (22:58:25.189 CT) contains either signal. Arm1
 
 A single placement cannot both fill and remain unfilled for cancellation. The cancellation proof requires a suitable subsequent unfilled entry with a standing bracket to observe; the watch will not manufacture that condition with a trading command.
 
+## Watch update — 23:04 CT
+
+[A] Arm117 subsequently reconciled to cancelled at23:03:24.050 CT with reason `absent from a fresh NT8 order_snapshot (reconciled to the broker)`. Snapshot11041 received23:03:25.307 CT remains an empty h1 book. This is settlement of a misleading ledger state, not proof of cancelling a resting broker entry.
+
+[A] Authenticated live FEED at23:04:24.289 CT: `last bar 48m24s ago · link Disconnected · AddOn build 2026-09-07-h1`, state=stale, verified=false, newest1m bar timestamp22:16:00 CT. BOOK at the same sample says zero working orders with ledger agreement and a29s-old h1 snapshot. Broker-book liveness and market-feed liveness are different facts.
+
+[B] This explains the stale signal rejection pattern: `trader/ninjatrader/tcp_trader.go:274` stamps entry commands using the newest cached bar close; `ninjascript/VLTraderTCPClient.cs:810` rejects an entry timestamp older than60s against the Windows clock. The reported signal ages point to a22:17:00 CT stamp. Actual command payload timestamps were not retained in the examined evidence, so that timestamp attribution remains an inference. Fresh broker-accepted h1 order activity has not arrived. The watch remains read-only and does not bypass the stale-signal guard or reconnect anything.
+
 ## Provenance and scope
 
 Docs-only branch `docs/nt8-h1-wire-proofs-0907`, claim `df2d3275c8b27ccf36ba2490cd0a29fbdbc01164`. Spec freshness: `40f3c2443b3d84f6d8cef9e671fb523e086423af | 2026-09-07T22:13:56-05:00 | docs: record DATA-2 provenance and owner NT8 copy command`, latest change to the DATA-2 report at acceptance. Verification follows `docs/superpowers/AUDIT-CHECKLIST.md`: received build evidence, snapshot row IDs, no invented timestamps, and no ledger state substituted for a broker fact. No new class number allocated. This report marks each evidence gap explicitly and does not certify the two Go cancel exemptions.
