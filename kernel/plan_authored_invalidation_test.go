@@ -33,6 +33,7 @@ func TestAuthoredInvalidationCompletedWindowAndUnknown(t *testing.T) {
 		}, true, false},
 		{"sequential unknown", "5m close back below 101 negates breakout", nil, false, false},
 		{"compound unknown", "5m close above 99 or a 1m MSS above 105 cancels the fade.", nil, false, false},
+		{"qualified parentheses unknown", "5m close below 101 (only after breakout) kills the setup", nil, false, false},
 		{"subjective unknown", "auction changes character", nil, false, false},
 	}
 	for _, tc := range cases {

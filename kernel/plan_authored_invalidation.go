@@ -13,7 +13,7 @@ import (
 
 // Deliberately a small complete grammar, not a price mined from prose. Compound,
 // sequential ("back below", "after"), MSS and subjective rules stay UNKNOWN.
-var authoredCloseRule = regexp.MustCompile(`(?i)^(?:(?:a|one) )?(?:(1|2)x)?5m(?:_close| closes?)?\s*(above|below|>|<)\s*(\d+(?:\.\d+)?)(?:\s+\([^()]*\))?(?:\s+(?:invalidates|kills|cancels|voids|negates|aborts) (?:the |this )?(?:setup|short|long|rejection|fade|hold|hold thesis|breakout|reclaim))?\.?$`)
+var authoredCloseRule = regexp.MustCompile(`(?i)^(?:(?:a|one) )?(?:(1|2)x)?5m(?:_close| closes?)?\s*(above|below|>|<)\s*(\d+(?:\.\d+)?)(?:\s+\((?:SWG-[HL]·(?:1|5|15|30)m|OR-[HL]|ON[HL]|PD[HL]|VWAP[+−-][12]σ|POC)\))?(?:\s+(?:invalidates|kills|cancels|voids|negates|aborts) (?:the |this )?(?:setup|short|long|rejection|fade|hold|hold thesis|breakout|reclaim))?\.?$`)
 
 type AuthoredInvalidationVerdict struct {
 	ScenarioID  string

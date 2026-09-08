@@ -489,11 +489,8 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 		// DEGRADED badge past the threshold so a half-map plan says so out loud.
 		"dark_regime_count": row.DarkRegimeCount,
 		"degraded":          row.Degraded,
-		// SCENARIO STATUS (○waiting ◉armed ●triggered ✕invalid). There is no Go
-		// state machine yet, so this is a passthrough of an explicitly-stored map
-		// (system_config "scenario_status:<plan_id>"); absent in production → the
-		// FE keeps its current fallback. The sandbox seeds it so all four states
-		// are visible. Replace the source when the executor computes it for real.
+		// Current evaluator statuses, read only from the displayed version.
+		// An uncomputed version has no map; legacy unversioned keys are ignored.
 		"scenario_status": scenarioStatusForLifecycle(s.scenarioStatus(traderID, row.PlanID, row.Version), row.Lifecycle, doc),
 		// A1/A4 (fail-register wave): verdict basis (machine vs prose-anchor
 		// heuristic) + unevaluable scenario ids — the card renders them

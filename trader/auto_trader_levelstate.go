@@ -213,7 +213,7 @@ func (at *AutoTrader) recordScenarioStateAt(now time.Time) {
 	// FIX 7 (F1, 2026-08-27) — evaluate triggers ONLY on bars closed AFTER the
 	// plan was born: the full-cache evaluation let pre-plan sweeps/rejects read
 	// as "triggered now" (the 13 false-positive machine-trigger lines of
-	// 2026-08-26). The status stays DISPLAY-ONLY — never execution-wired.
+	// 2026-08-26). The arm gate shares this evaluator.
 	windowed := kernel.BarsSince(bars, plan.BirthMs)
 	statuses, evals := kernel.EvaluatePlanScenarios(
 		plan.Doc, windowed, price, dATR, kernel.ActivationWindowK, rule, true, now.UnixMilli())

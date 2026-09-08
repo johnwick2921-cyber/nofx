@@ -128,7 +128,10 @@ func TestP0AScenarioStatusKeyIsTraderScoped(t *testing.T) {
 	if a == b {
 		t.Fatalf("scenario-status keys must differ per trader, both %q", a)
 	}
-	if a != "scenario_status:trader-A:2026-08-17:NY" {
+	if a != "scenario_status:trader-A:2026-08-17:NY:v1" {
 		t.Fatalf("unexpected key shape %q", a)
+	}
+	if a == store.ScenarioStatusKey("trader-A", "2026-08-17:NY", 2) {
+		t.Fatal("scenario-status keys must differ per version")
 	}
 }

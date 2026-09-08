@@ -399,6 +399,14 @@ export function ScenarioList({
                   history
                 </div>
               )}
+              {!deaths?.[s.id] && stored === 'invalidated' && (
+                <div
+                  data-testid={`scenario-death-unknown-${s.id}`}
+                  className="text-[10px]"
+                >
+                  Recorded invalidation time UNKNOWN for this version and anchor
+                </div>
+              )}
               {unevaluable ? (
                 <div
                   className="flex items-center gap-1.5 text-[11px] py-0.5"

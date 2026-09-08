@@ -68,3 +68,17 @@ func TestScenarioLivenessUnknownAndVersionIsolation(t *testing.T) {
 		}
 	}
 }
+
+func TestLivenessEventsCountAttemptsNotClockTicks(t *testing.T) {
+	st := newPlanTestStore(t)
+	now, _ := time.Parse(time.RFC3339, "2026-09-08T10:00:00-05:00")
+	for i := 0; i < 3; i++ {
+		if _, err := st.RecordPlanLivenessEvent(LivenessBornDeadRefusal, "candidate", now, "refused"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	counts, err := st.PlanLivenessCounts()
+	if err != nil || counts.BornDeadRefusals != 3 {
+		t.Fatalf("three observations at one clock instant must count three: %+v %v", counts, err)
+	}
+}

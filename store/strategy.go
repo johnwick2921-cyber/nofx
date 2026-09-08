@@ -1324,19 +1324,14 @@ func ResetBaselineKey(traderID, tradeDate, session string) string {
 // statuses. P0-A (2026-08-18): the key used to be "scenario_status:<plan_id>"
 // — with two day-plan traders sharing a plan_id, the last writer's statuses
 // governed both cards. Trader-scoped so one trader's scenario facts can never
-// reach another's card.
+// reach another's card. Version-scoped so a newer plan cannot borrow them.
 func ScenarioStatusKey(traderID, planID string, version int) string {
 	return fmt.Sprintf("scenario_status:%s:%s:v%d", traderID, planID, version)
 }
 
-// ScenarioInvalidatedAtKey (invalidation-wired, 2026-09-03) — the CT wall
-// clock at which one scenario FIRST read invalidated, stamped once on the
-// transition and never overwritten.
-//
-// The evaluator is stateless: it recomputes each cycle, so it knows a scenario
-// IS invalidated and not WHEN it became so. Without this the gate's refusal
-// could only say "as of now", and "invalidated at 09:02" would silently mean
-// the check time rather than the verdict time.
+// ScenarioInvalidatedAtKey identifies the JSON first-observed invalidation
+// record by trader, plan, version and scenario. Legacy unversioned timestamps
+// remain untouched; readers never infer their version or anchor.
 func ScenarioInvalidatedAtKey(traderID, planID string, version int, scenarioID string) string {
 	return fmt.Sprintf(ScenarioDeathRecordPrefix+"%s:%s:v%d:%s", traderID, planID, version, scenarioID)
 }

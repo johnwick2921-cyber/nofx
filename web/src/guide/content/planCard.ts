@@ -18,7 +18,7 @@ export const planCard: GuideSection = {
     },
     {
       kind: 'p',
-      text: 'At publication, supported authored invalidation rules are checked against the latest completed five-minute windows using complete minute bars. Explicit one- or two-close above/below price rules can refuse a candidate and re-author inside the existing attempt budget; a refused candidate is never published active. Compound, sequential, subjective or unsupported wording, and missing or malformed tape, are UNKNOWN and accepted for this check with a warning and recorded count. This check is separate from the live anchor heuristic and changes no entry-gate verdict.',
+      text: 'At publication, supported authored invalidation rules are checked against the latest completed five-minute windows using complete minute bars. Explicit one- or two-close above/below price rules can refuse a candidate and re-author inside the existing attempt budget; a refused candidate is never published active. Conditional annotations, compound, sequential, subjective or unsupported wording, and missing or malformed tape, are UNKNOWN and accepted for this check with a warning and recorded count. This check is separate from the live anchor heuristic and changes no entry-gate verdict.',
     },
     {
       kind: 'p',

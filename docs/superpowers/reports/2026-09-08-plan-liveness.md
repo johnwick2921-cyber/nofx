@@ -367,3 +367,26 @@ base, before these edits. NEW means this wave introduces the file.
 - `store/plan_liveness.go`: `NEW in fix/plan-liveness`
 - `trader/plan_liveness.go`: `NEW in fix/plan-liveness`
 - `web/src/components/plan/PlanLiveness.tsx`: `NEW in fix/plan-liveness`
+
+### Review follow-up
+
+The first complete Go run failed only `TestP0AScenarioStatusKeyIsTraderScoped`:
+its expected string still described the legacy key. The assertion now checks
+the versioned shape as well as trader and version separation. Targeted tests
+pass. Additional API reader coverage proves that an unevaluated displayed
+version never borrows legacy or earlier-version status/metadata.
+
+A review fixture caught ambiguous parenthetical wording: `5m close below 101
+(only after breakout) kills the setup` initially parsed as an unconditional
+rule. Its RED output was `Known:true Invalidated:true`. Annotation parsing now
+accepts only recognized reference-label spellings; the fixture returns UNKNOWN.
+Born-dead/UNKNOWN event records use distinct event identities, so three attempts
+at the same fixed clock count as three; exhaustion alone deduplicates by version.
+
+Partner propagation is not attempted against the existing sibling checkout:
+`/home/hoang/vlautoagenttraderv1` is at `f6ae7597fb3bc9caeaaedb25ce8c3c48bca72247`
+(2026-08-23), predating the documented 2026-08-29 history rewrite, and has three
+pre-existing modified test files. Its root history differs from this repository.
+The standing partner rule requires a fresh clone after that rewrite. No files,
+refs or remotes in that checkout were changed. A transport patch can be handed
+to the owner for application only after the required fresh-clone preparation.

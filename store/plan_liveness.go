@@ -3,6 +3,7 @@ package store
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/google/uuid"
 	"math"
 	"time"
 )
@@ -94,6 +95,9 @@ func (s *Store) RecordPlanLivenessEvent(kind, identity string, now time.Time, de
 	case LivenessExhaustionWarning, LivenessBornDeadRefusal, LivenessAuthoredUnknown:
 	default:
 		return false, fmt.Errorf("unknown liveness event")
+	}
+	if kind != LivenessExhaustionWarning {
+		identity += ":" + uuid.NewString()
 	}
 	raw, err := json.Marshal(struct {
 		At     time.Time `json:"at"`
