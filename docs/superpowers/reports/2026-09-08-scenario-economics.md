@@ -1,6 +1,6 @@
 # Scenario economics — new authoring contract, legacy UNKNOWN preserved
 
-**Latest cutover state — authorized class-60 correction complete, merged validation pending:** the owner authorized a deterministic W7 fixture and a clock seam only. Its previous failure is pre-existing (also 3/3 on running source); eight fixed-clock cases now pass. No new combined binary has yet been built or booted. The earlier STOP and its evidence remain below; resumption requires the full merged suite and fresh live checks.
+**Latest cutover state — BOOTED 18:11:54 CT at `6f677b55`:** economics, confirmation and liveness are live; legacy UNKNOWN is by design. The authorized W7 clock correction passed. Stage A capture is DISABLED by a reproduced relative-path archive defect, so combined-wave proof is incomplete. [Actual boot marker and evidence](2026-09-08-scenario-economics-cutover.md).
 
 
 2026-09-08 · branch `fix/scenario-economics` · session `scenario-economics-83f741b2/root[unlisted]`.
