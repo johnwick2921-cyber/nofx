@@ -1,0 +1,29 @@
+[
+  {
+    "plan": "2026-09-07:ASIA:v1",
+    "created_ct": "2026-09-07T20:47:57.716325-05:00",
+    "latest_fully_closed_bar_open_ct": "2026-09-07T20:46:00-05:00",
+    "close": 29672.0,
+    "high": 29677.0,
+    "low": 29671.75,
+    "close_before_plan_age_seconds": 57.71632495117188
+  },
+  {
+    "plan": "2026-09-07:ASIA:v2",
+    "created_ct": "2026-09-07T22:03:44.933209-05:00",
+    "latest_fully_closed_bar_open_ct": "2026-09-07T22:02:00-05:00",
+    "close": 29665.25,
+    "high": 29674.5,
+    "low": 29664.0,
+    "close_before_plan_age_seconds": 44.933208984375
+  },
+  {
+    "plan": "2026-09-07:ASIA:v3",
+    "created_ct": "2026-09-07T22:16:50.382317-05:00",
+    "latest_fully_closed_bar_open_ct": "2026-09-07T22:15:00-05:00",
+    "close": 29689.0,
+    "high": 29690.75,
+    "low": 29688.25,
+    "close_before_plan_age_seconds": 50.38231713867187
+  }
+]
