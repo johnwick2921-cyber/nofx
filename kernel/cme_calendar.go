@@ -64,7 +64,7 @@ func CMEClosedReason(t time.Time) (closed bool, reason string) {
 		return true, "holiday"
 	case SessionShortened:
 		if st.HasClose && shortenedDayHalted(ct, st.Close) {
-			return true, "early close " + st.Close.Format("15:04") + " CT"
+			return true, "early close " + CloseClockCT(st.Close)
 		}
 	}
 	switch ct.Weekday() {

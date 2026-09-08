@@ -145,7 +145,7 @@ func SessionCalendarBootLine(now time.Time) string {
 	today := string(st.Class)
 	closeTxt := "—"
 	if st.Class == SessionShortened && st.HasClose {
-		closeTxt = st.Close.Format("15:04") + " CT"
+		closeTxt = CloseClockCT(st.Close)
 	}
 	if st.CloseUnreadable {
 		closeTxt = "UNKNOWN (unreadable close_ct — treated as closed)"
@@ -292,7 +292,7 @@ func SessionStateAt(now time.Time) SessionState {
 func SessionEarlyCloseCT(now time.Time) (string, bool) {
 	st := SessionStateAt(now)
 	if st.Class == SessionShortened && st.HasClose {
-		return st.Close.Format("15:04"), true
+		return CloseHHMMCT(st.Close), true
 	}
 	return "", false
 }
@@ -319,7 +319,7 @@ func SessionEarlyCloseCTForKey(key string) (string, bool) {
 		if !ok {
 			return "", false
 		}
-		return c.Format("15:04"), true
+		return CloseHHMMCT(c), true
 	}
 	return "", false
 }
@@ -375,7 +375,7 @@ func SessionDayNote(now time.Time) string {
 		if !st.HasClose {
 			return fmt.Sprintf(" · %s: SHORTENED but close time UNKNOWN (unreadable close_ct — treated as closed)", st.Name)
 		}
-		return fmt.Sprintf(" · %s: SHORTENED, closes %s CT [%s]", st.Name, st.Close.Format("15:04"), sourceTag(st.Source))
+		return fmt.Sprintf(" · %s: SHORTENED, closes %s [%s]", st.Name, CloseClockCT(st.Close), sourceTag(st.Source))
 	case SessionClosed:
 		return fmt.Sprintf(" · %s: FULL CLOSURE [%s]", st.Name, sourceTag(st.Source))
 	case SessionNormal:

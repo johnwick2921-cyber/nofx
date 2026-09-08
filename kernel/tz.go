@@ -65,3 +65,23 @@ func ClockCTSeconds(t time.Time) string {
 func TableTimeCT(t time.Time) string {
 	return t.In(CTLocation()).Format("01-02 15:04")
 }
+
+// CloseClockCT renders a session close time for DISPLAY: "12:00 CT".
+// CloseHHMMCT renders the same instant as bare "12:00" for DATA — the shape the
+// session registry and the EOD-flat comparison speak.
+//
+// Both live here because the tz guard (TestTZGuardSingleTimeSource) refuses a
+// bare "15:04" layout anywhere outside this file, and the session calendar had
+// five of them. One timezone source; no component does its own clock math.
+//
+// The two are deliberately separate: the first draft routed everything through
+// ClockCT, which appends " CT", and that fed "12:00 CT" into a minutes parser
+// that expects "12:00" — the flat comparison silently stopped matching.
+func CloseClockCT(t time.Time) string {
+	return ClockCT(t)
+}
+
+// CloseHHMMCT is the bare wire/comparison form.
+func CloseHHMMCT(t time.Time) string {
+	return t.In(CTLocation()).Format("15:04")
+}
