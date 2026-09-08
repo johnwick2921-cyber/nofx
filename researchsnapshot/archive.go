@@ -23,6 +23,12 @@ type Archive struct {
 }
 
 func Open(path, revision string) (*Archive, error) {
+	// A relative URL path serializes as file://data/... (an authority), not
+	// a local file. Resolve filesystem paths before constructing the URI.
+	path, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return nil, err
 	}
@@ -61,6 +67,10 @@ CREATE INDEX IF NOT EXISTS research_captured ON research_facts(captured_ms,objec
 
 // OpenReadOnly does not run schema creation, migrations, or writer PRAGMAs.
 func OpenReadOnly(path string) (*Archive, error) {
+	path, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
+	}
 	u := url.URL{Scheme: "file", Path: path}
 	db, err := sql.Open("sqlite", u.String()+"?mode=ro")
 	if err != nil {

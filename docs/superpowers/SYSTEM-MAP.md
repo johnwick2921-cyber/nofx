@@ -368,3 +368,8 @@ The card's `ScenarioEconomics` block and desk SCENARIOS line display obstacle pr
 ### W7 level-state clock boundary (class 60)
 
 `recordLevelState` is a single-statement delegate to `recordLevelStateAt(now)` and is listed in `clock-seams.list`. The predicate body is unchanged apart from receiving its clock. The W7 consumed-level fixture uses explicit clocks and one completed-hour acceptance sequence, with an asserted activation-window prerequisite; this corrects a pre-existing test failure around the 17:00 CME day boundary and changes no trading behavior.
+
+
+### Stage A archive startup repair
+
+`researchsnapshot.Open` and `OpenReadOnly` resolve filesystem paths with `filepath.Abs` before constructing the escaped SQLite file URI. The production default `data/data.db.research.db` must resolve relative to the service working directory, not serialize as a URI authority. The startup pin calls `Start` and `CurrentBootLineAt`, verifies the actual archive schema and persisted row count, and reads the same file through the relative export opener. Absolute-path-only fixtures missed the deployed failure. A failed startup still WARNs and prints schema=UNKNOWN; no schema value is fabricated. The 18:11:54 CT boot of 6f677b55 proved scenario-economics live but Stage A unavailable.

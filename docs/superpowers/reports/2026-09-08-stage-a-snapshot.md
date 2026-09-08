@@ -1,6 +1,6 @@
 # Stage A — research snapshot
 
-Status: merged to dev; candidate **2a96cf63278f7c836d55e14c5a02597f80280292** passed the full clean-clone suite and built with `vcs.modified=false`. Matching Guide/dist are prepared. **Not swapped or booted; owner GO and an eligible fresh gate are required.**
+Status: **Stage A is NOT live.** Combined boot `6f677b55` at 18:11:54 CT reported `schema=UNKNOWN`; scenario-economics was live, research capture was unavailable. Relative archive-path repair and startup pins are prepared on `fix/stage-a-archive-path`; a corrected boot and real records remain required.
 
 Lane `stage-a-snapshot-96604090/root[unlisted]`; branch `fix/stage-a-snapshot`; accept base `cd5b9a6b9c479eae97eced7fb0abb40594bf1ac5`. The claim's `ls-remote` receipt was `af1ded7e2c0af427b7268ff2fb76cbf20b4997ca`. Source freshness for every cited repository path is in [source-freshness.csv](2026-09-08-stage-a-snapshot-data/source-freshness.csv).
 
@@ -251,3 +251,22 @@ The deliberately continuous 100-call bursts dropped **573 / 560 / 565 batches** 
 ### Outstanding live proof, not inferred
 
 Stage A boot line, first real captured candidate, first cut with its own reason, first author/repair timeline, first live export/checksum and live admission latency remain **NOT YET OBSERVED**. Existing NULL limitations are enumerated in the field dictionary. The confirmation-truth watcher still has no first bucket/forming/out-of-order proof at this preparation checkpoint; its earlier combined boot is not a Stage A receipt. Marker and lock release follow a passed owner-controlled boot, never a prepared build.
+
+
+## Startup failure and repair (same Stage A wave)
+
+[A] The combined deploy owner booted `6f677b55daa1c7da33b8c35f8bcc67883f36b470`, PID 3726840, at **18:11:54 CT**, clean VCS stamp and goldens PASS. The actual Stage A line was:
+
+```text
+🗄 research snapshot: schema=UNKNOWN · objects=5 · rows today market=UNKNOWN candidate=UNKNOWN plan=UNKNOWN scenario=UNKNOWN exec=UNKNOWN · null-fields=UNKNOWN · dropped=UNKNOWN · added latency p50=UNKNOWN
+```
+
+That is a failed research initialization, not a live record. The scenario-economics line separately reported contract=on / obstacle-required=on and legacy UNKNOWN by design. Both boot frames and source revision are retained in `2026-09-08-stage-a-path-repair-data/failed-live-boot.json`.
+
+[A] The scenario-economics lane's retained reproduction opened the absolute path successfully; relative `data/data.db.research.db` became `file://data/data.db.research.db` and returned `research schema unsupported: version=0 error=SQL logic error: out of memory (1)`. Configuration uses `DB_PATH=data/data.db`; `main.go:76` appends `.research.db`. The bad URI put `data` in the authority position. The message was not evidence of RAM exhaustion. No NT8 or trading policy caused this failure.
+
+[A] Repair branch was cut from dev `d5b27e86` and claimed as `fix/stage-a-archive-path`; remote claim receipt `9c91538e73c32d13f9370d63a4e17a57076eefa8`. Source freshness for both archive/runtime: `ccef731d251b57d9caf08c4834767a83a0f18d32 2026-09-08T16:36:00-05:00 fix(research): preserve unknown entry roles and refresh guarded source references`. Both filesystem entry points now call `filepath.Abs` before URL construction (`researchsnapshot/archive.go:28` and `:70`). URL escaping remains responsible for literal spaces, ?, # and %. No process working directory, DB_PATH setting, schema version or trading table is changed.
+
+[A] New startup regression **RED** on the old source: `working recorder required at relative path "data/data.db.research.db"; boot line: ... schema=UNKNOWN`. The separate read-only regression was also RED with the SQLite open error. Restored tests pass under `-race`. The working-startup pin reads the real schema and persisted candidate count; the failure pin still requires a WARN and schema=UNKNOWN. Exact-line mutations removing each path normalization fail their respective pins, and replacing the default UNKNOWN with the schema constant fails the genuine-failure pin. Logs and the peer reproduction are retained in the repair evidence directory.
+
+[A15] Until a corrected boot produces a real schema and rows, the research half remains **unshipped**. The previous candidate/latency fixtures and healthy scenario-economics counters do not prove research availability. No historical research records are recreated or represented as original observations.
