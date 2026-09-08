@@ -643,8 +643,10 @@ func (s *ArmedOrderStore) RejectPlacement(id int64, brokerReason string) error {
 // elapsed wait is not a broker receipt; the owner requires place_pending until
 // received evidence settles it. Keep UpdatedAt as the registration/receipt time.
 func (s *ArmedOrderStore) ExpirePlacement(id int64, waited time.Duration) error {
-	return s.db.Model(&ArmedOrderDB{}).Where("id = ? AND state = ?", id, StatePlacePending).
-		UpdateColumn("state_reason", fmt.Sprintf("unconfirmed:no_frame — awaiting broker receipt for %s; slot held", waited.Round(time.Second))).Error
+	reason := fmt.Sprintf("unconfirmed:no_frame — awaiting broker receipt for %s; slot held", waited.Round(time.Second))
+	result := s.db.Model(&ArmedOrderDB{}).Where("id = ? AND state = ?", id, StatePlacePending).UpdateColumn("state_reason", reason)
+	recordResearchPlacementTimeout(id, waited, reason, result.RowsAffected, result.Error)
+	return result.Error
 }
 
 // ListPlacePending returns one trader's unconfirmed placements, oldest first.

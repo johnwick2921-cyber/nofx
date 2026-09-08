@@ -330,7 +330,9 @@ func (at *AutoTrader) executeDecisionWithRecord(decision *kernel.Decision, actio
 		if md, merr := market.GetWithExchange(decision.Symbol, at.exchange); merr == nil && md != nil {
 			live = md.CurrentPrice
 		}
-		if reason, refused := at.entryGateForDecision(decision, live); refused {
+		reason, refused := at.entryGateForDecision(decision, live)
+		recordResearchGate("decision", "", 0, decision.CitedScenario, reason, refused)
+		if refused {
 			entryGateDecisionTelemetry(at, actionRecord, reason)
 			return nil
 		}

@@ -259,6 +259,7 @@ func (at *AutoTrader) recordScenarioStateAt(now time.Time) {
 	}
 	if metaBlob, mErr := json.Marshal(map[string]any{"basis": basis, "unevaluable": unevaluable, "confirm": confirms, "observed_at": now}); mErr == nil {
 		_ = at.store.SetSystemConfig(store.ScenarioMetaKey(at.id, resolvedPlanID, plan.Version), string(metaBlob))
+		recordResearchPermissions(resolvedPlanID, plan.Version, string(metaBlob), now, evals)
 	}
 	// INVALIDATION-WIRED (2026-09-03) — stamp WHEN a scenario first read
 	// invalidated, once. The evaluator is stateless, so without this the gate's

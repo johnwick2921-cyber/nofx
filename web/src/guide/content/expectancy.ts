@@ -8,6 +8,20 @@ export const expectancy: GuideSection = {
     'What each play has actually paid — and when that number is allowed to mean anything.',
   asBuiltRev: GUIDE_BUILT_REV,
   blocks: [
+    { kind: 'h', text: 'Stage A research record' },
+    {
+      kind: 'p',
+      text: 'The research snapshot keeps five linked kinds of evidence: market receipts, candidate scores and selection, plan inputs and authoring attempts, scenario permissions, and execution outcomes. It records existing decisions. It does not change scoring, confirmation, order authorization, targets or sizing.',
+    },
+    {
+      kind: 'p',
+      text: 'NULL means the field was not captured; its reason travels with the record. A measured zero remains zero. Observation, receipt, publication and permission times are separate. A late historical bar becomes available at receipt, even when its market timestamp is earlier. A scenario activation is not an order authorization. A fill or book price without an entry link remains unclassified; protective prices do not become entry prices.',
+    },
+    {
+      kind: 'p',
+      text: 'Only exported research bundles may supply the experiments in the trading-policy research. The manifest identifies the writing revision, schema, row counts and checksum. Missing records and dropped batches limit what can be concluded. The boot latency measures queue admission; it does not measure the full planner read. Earlier empty components cannot be recovered as original measurements, and historical contract adjustment policy remains unknown when the feed did not supply it.',
+    },
+
     { kind: 'h', text: 'What the table is' },
     {
       kind: 'p',

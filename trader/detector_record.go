@@ -24,7 +24,7 @@ import (
 func (at *AutoTrader) recordDetectorOutputs(
 	symbol, planID, session string, planVersion int,
 	allLevels []kernel.DetectedLevel, seated []kernel.ScoredLevel,
-	price, dATR, proximityK float64, maxLevels int, now time.Time,
+	price, dATR, proximityK float64, maxLevels int, now time.Time, researchIDs ...string,
 ) {
 	if at == nil || at.store == nil {
 		return
@@ -72,6 +72,9 @@ func (at *AutoTrader) recordDetectorOutputs(
 			continue
 		}
 		eps := kernel.DetectTouchOutcomes(bars, lv.Price, k, delta, horizon, exitOn)
+		if len(researchIDs) > 0 {
+			recordResearchEpisodes(researchIDs[0], symbol, lv.DetectedLevel, eps, k, delta, horizon, exitOn, now)
+		}
 		if len(eps) == 0 {
 			continue
 		}

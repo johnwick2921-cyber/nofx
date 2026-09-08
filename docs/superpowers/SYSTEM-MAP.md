@@ -133,9 +133,9 @@ All chained through `ValidatePlanDocWithCaps` — `kernel/plan_doc.go:588`. Each
 <!-- MAPCHECK:trader/armed_executor.go — the two paragraphs below are line-checked by
      TestSystemMapStopEntryRefsResolve (class 75 has no global contract test; this
      region has one). Every `symbol` :NNN pair must resolve in the named file. -->
-**Stop-entry placement, the gates IN THE ORDER PRODUCTION RUNS THEM** (`runArmedPlacement` :946, stop branch :963-990, WAVE B 2026-09-05): canonical side folded once at the row (:958, class 77) → `stopEntrySeamOn` (:1013 — **OFF at the 2026-09-05 cutover by owner ruling: NO stop entry is placed at all, and the D4 boot line leads with it**) → retest window, FALLBACK ONLY — a reclaim skips it (`stopEntryNeedsRetestWindow` :1019) → `decideStopEntry` :1034 (**stop-side wrong-way guard**, tick-rounded trigger) → `placeOneStopEntry` :1035 → `PlaceStopEntry` :1311, and the **AddOn build floor is LAST**, inside that call (`tcp_trader.go:502`). ONE PREDICATE PER ORDER KIND, chosen by kind: `stopEntryMarketableWrongSide` :1177 is **at-or-through** (long `price >= trigger`, short `price <= trigger`) because a stop AT its trigger fires; `limitMarketableWrongSide` :1045 stays **strictly-through** because a limit AT its price rests. Three verdicts (`stopGuardVerdict` :1147, UNKNOWN = iota zero) mapped to three actions (`stopEntryAction` :1217, NO-OP = iota zero, and PLACEMENT IS REACHABLE ONLY BY NAMING `stopEntryPlace` :1228 — the `default:` arm no-ops): THROUGH → cancel `"accepted through (stop side): price %.2f %s trigger %.2f — never placed"` (:1279) · REST → place (:1310) · **UNKNOWN → no cancel, no placement**, WARN `"⚠️ armed %s stop-entry NOT adjudicated"` (:1291) + `countStopEntryRefusal` class `stop_entry:guard_unknown` (:1290) `[O]`. Build refusal: `ErrAddonBuildTooOld` → WARN + class `stop_entry:addon_build` (:1317). Refusal keys are 1-based and `:place`-namespaced (`armKey` :1333) so they cannot alias the arm-gate keys in the same map. `[R]` — until 2026-09-05 this branch called the LIMIT predicate with the trigger and all four of its answers were inverted: 21 already-through sell stops admitted on 2026-09-04 (armed_orders 38, 62-102), 0 valid stops ever placed, 0 fills on 22 post-E7 lifetime submissions.
+**Stop-entry placement, the gates IN THE ORDER PRODUCTION RUNS THEM** (`runArmedPlacement` :952, stop branch :963-990, WAVE B 2026-09-05): canonical side folded once at the row (:958, class 77) → `stopEntrySeamOn` (:1015 — **OFF at the 2026-09-05 cutover by owner ruling: NO stop entry is placed at all, and the D4 boot line leads with it**) → retest window, FALLBACK ONLY — a reclaim skips it (`stopEntryNeedsRetestWindow` :1021) → `decideStopEntry` :1036 (**stop-side wrong-way guard**, tick-rounded trigger) → `placeOneStopEntry` :1037 → `PlaceStopEntry` :1370, and the **AddOn build floor is LAST**, inside that call (`tcp_trader.go:502`). ONE PREDICATE PER ORDER KIND, chosen by kind: `stopEntryMarketableWrongSide` :1180 is **at-or-through** (long `price >= trigger`, short `price <= trigger`) because a stop AT its trigger fires; `limitMarketableWrongSide` :1047 stays **strictly-through** because a limit AT its price rests. Three verdicts (`stopGuardVerdict` :1150, UNKNOWN = iota zero) mapped to three actions (`stopEntryAction` :1226, NO-OP = iota zero, and PLACEMENT IS REACHABLE ONLY BY NAMING `stopEntryPlace` :1231 — the `default:` arm no-ops): THROUGH → cancel `"accepted through (stop side): price %.2f %s trigger %.2f — never placed"` (:1279) · REST → place (:1310) · **UNKNOWN → no cancel, no placement**, WARN `"⚠️ armed %s stop-entry NOT adjudicated"` (:1291) + `countStopEntryRefusal` class `stop_entry:guard_unknown` (:1290) `[O]`. Build refusal: `ErrAddonBuildTooOld` → WARN + class `stop_entry:addon_build` (:1317). Refusal keys are 1-based and `:place`-namespaced (`armKey` :1336) so they cannot alias the arm-gate keys in the same map. `[R]` — until 2026-09-05 this branch called the LIMIT predicate with the trigger and all four of its answers were inverted: 21 already-through sell stops admitted on 2026-09-04 (armed_orders 38, 62-102), 0 valid stops ever placed, 0 fills on 22 post-E7 lifetime submissions.
 
-**The side the wire carries** (class 77, 2026-09-05) `[R]`: `store.UpsertArm` canonicalizes `armed_orders.side` to **UPPERCASE** at the write (`store/armed_orders.go:181`, class 28) and the placement branch compared it to the lowercase literal `"long"`. Two silent consequences: a LONG stop entry was built at `entry − offset` (below the level a buy stop must sit above), and the wire carried `"LONG"` to a C# ternary reading `side == "long" ? Buy : SellShort` — a LONG entry, limit or stop, submitted as a live SELL. Never fired because no LONG row exists post-canonicalizer (21 stop_entry + 9 limit rows, all SHORT). Now folded ONCE at :958 and used for the trigger, the guard, the log and both wire calls (`decideStopEntry` :1034 folds again, defensively); the AddOn folds on arrival too (`VLTraderTCPClient.cs:975`).
+**The side the wire carries** (class 77, 2026-09-05) `[R]`: `store.UpsertArm` canonicalizes `armed_orders.side` to **UPPERCASE** at the write (`store/armed_orders.go:181`, class 28) and the placement branch compared it to the lowercase literal `"long"`. Two silent consequences: a LONG stop entry was built at `entry − offset` (below the level a buy stop must sit above), and the wire carried `"LONG"` to a C# ternary reading `side == "long" ? Buy : SellShort` — a LONG entry, limit or stop, submitted as a live SELL. Never fired because no LONG row exists post-canonicalizer (21 stop_entry + 9 limit rows, all SHORT). Now folded ONCE at :958 and used for the trigger, the guard, the log and both wire calls (`decideStopEntry` :1036 folds again, defensively); the AddOn folds on arrival too (`VLTraderTCPClient.cs:975`).
 <!-- /MAPCHECK -->
 
 **Cancel confirmation and the per-slot invariant** (cancel-confirmation, 2026-09-06) `[R]`: a cancel is settled by the BROKER'S BOOK, never by `CancelOrder`'s return — that return means a frame reached the socket and nothing more (`tcp_trader.go` `CancelOrder`, one-line pass-through to `SendCancelOrder`). `RequestCancel` moves the row to **`cancel_pending`, which is NON-TERMINAL** (`ListNonTerminal` includes it, so it holds its slot, is swept at boot and is counted by cutover leg 4); only `ConfirmCancel(id, snapshotID)` may write `cancelled`, and it records which snapshot settled it. A stale or absent book settles NOTHING and promotes nothing — past the resolved timeout the row stays pending, WARNs with its age, and is re-requested to a cap. **D3, the per-slot invariant:** before ANY placement the broker's fresh book must show zero non-terminal orders carrying that slot's signal ids, on BOTH paths (`armSlotGuard` at the stop-entry call and at the limit call) — a live order refuses (`arm_slot_live_at_broker`), and a book we cannot see ALSO refuses (`arm_slot_unverifiable`), because an unverifiable slot is not an empty slot. Slot key is **(plan_id, scenario, leg_index)** — version is a mutable last-touch column and is NOT in it. `CancelSubmitted`/`CancelPending` are non-terminal in the book (measured 130 and 22 across 360 frames), so a cancel in flight correctly keeps the slot locked. **A dark book is an OUTAGE** (owner ruling 2026-09-06): when the refusal cause is staleness rather than a live slot, ONE P0 in-app alert is raised per outage (`emitAlert` `broker_book`, event id `cancel_book_stale:<outage-start-ms>`, carrying the book age), and it is acked — banner cleared — when a fresh book returns. Every refusal inside one outage collapses onto that alert; a LATER outage raises its own. The `arm_slot_unverifiable` counter is unchanged: one alert beside it, not a second counter. **Boot line:** `"cancels: confirm=broker-snapshot · pending=<n> · unconfirmed=<n> · slot-guard=on(refuse-on-live|stale) · timeout=<d> · stale-bound=<d> · rerequest-cap=<n> · reconciled(confirmed=<n> live=<n> unconfirmed=<n>)"` — `CancelBootLine`, emitted from main.go; the reconciliation half reads `reconciled=n/a (no broker book yet)` until a book exists, because at process start there is none. **Its 🧾 glyph is shared by nine other log sites: key a watcher on the text `cancels:`, never on the glyph.** `[R]` evidence: only 3 of 47 broker-reaching ledger rows ever had a broker-confirmed cancel (ids 8, 37, 102).
@@ -313,6 +313,49 @@ The existing `recordScenarioStateAt` recorder writes status/meta and first-obser
 
 Exhaustion is **warn-only**, once per version in the existing recorder; it does not wake or bypass any throttle/cutoff. `PlanLivenessBootLine` reads recorded event counts, says tradeable=n/a before an active snapshot, and warns rather than panicking when counters cannot be read or event identity generation fails.
 
+
+## Stage A · Research snapshot (record only)
+
+Implementation branch `fix/stage-a-snapshot`; not a live receipt. `researchsnapshot/`
+provides a separate append-only SQLite archive at `<configured DBPath>.research.db`.
+`main.go` installs its bounded worker before loading traders. Five object tags share
+`research_facts`: market, candidate, plan, scenario, exec. Nullable epoch-millisecond
+columns distinguish observation, receipt, publication and permission. Payload fields
+are explicit JSON null (SQL `json_extract` NULL) with missing-field explanations;
+computed zeros remain numbers. No historical trading rows are rewritten.
+
+Capture points: scorer computation and actual cut branches in `kernel/levels_score.go`
+and `levels_assemble.go`; planner inputs/retries/publication in
+`trader/auto_trader_planner.go`; existing scenario verdict metadata in
+`trader/auto_trader_levelstate.go`; received NT8 frames in
+`provider/ninjatrader/research_wire.go`. Producer decisions never read this archive.
+`cmd/research_export` uses read-only SQLite and receipt-time [from,to) membership,
+with stable row ordering, per-object counts, writing revisions and SHA-256.
+
+Boot join key: `🗄 research snapshot:`. Schema and rows/nulls come from the archive;
+objects from the schema registry; drops and admission latency from the worker.
+Unmeasured latency or inaccessible data prints UNKNOWN. The queue admission budget
+is `researchsnapshot.OfferBudget`; full/late/faulted work drops with a counted WARN.
+This is admission latency, not a claim that all capture overhead is already measured.
+Live counts, per-read overhead and final field coverage remain deployment proofs.
+
+
+Stage A recording coverage update: actual EntryGate return values are observed at
+its two callers, without editing EntryGate or its legs. `store/armed_orders.go`
+records the existing `ExpirePlacement` write; pending state remains held. The
+closed analytics caller records only `pnl_corrected` and explicit exclusions.
+Candidate episodes reuse `recordDetectorOutputs` results. The source registry and
+NULL limitations are documented in the Stage A report. Every producer admission
+and worker write contains recorder panics; the archive never supplies a trading
+verdict. Offline 72-candidate scoring added 0.027760 ms at the median of three
+1,000-call runs; whole live read latency remains unproven until deployment.
+
+
+Research price classification: raw fills and book order prices remain retained;
+entry-specific fields stay NULL until their role is established. Admission p50
+prints an upper bound at microsecond resolution, with UNKNOWN on overflow or no
+measurements. The guarded stop-entry source coordinates above were refreshed after
+the added recording calls; no stop-entry predicate changed.
 ### Scenario economics (fix/scenario-economics)
 
 New model output enters `ParsePlanDocCapped` → `parsePlanDocument(newAuthoring=true)` → `validateNewScenarioEconomics`. Stored-plan readers use `ValidatePlanDocWithCaps`; absent economics remains UNKNOWN and is never backfilled or refused. The new-authoring parser requires the complete contract regardless of any model-supplied version, and stamps the accepted contract version itself. Existing plan JSON persistence carries the object without schema migration or new recorder hooks.

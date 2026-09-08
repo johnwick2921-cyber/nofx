@@ -736,6 +736,7 @@ func (at *AutoTrader) recordClosedTradeAnalytics(p *store.TraderPosition) {
 }
 
 func (at *AutoTrader) recordClosedTradeAnalyticsAt(now time.Time, p *store.TraderPosition) {
+	recordResearchOutcomeAt(p, now)
 	if p == nil || p.AdherenceGrade != "" { // already processed
 		return
 	}

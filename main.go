@@ -16,6 +16,7 @@ import (
 	"nofx/mcp"
 	_ "nofx/mcp/payment"
 	_ "nofx/mcp/provider"
+	"nofx/researchsnapshot"
 	"nofx/store"
 	"nofx/telegram"
 	"nofx/telemetry"
@@ -72,6 +73,8 @@ func main() {
 		}
 	}
 
+	closeResearch := researchsnapshot.Start(cfg.DBPath+".research.db", func(line string) { logger.Infof("%s", line) })
+	defer closeResearch()
 	logger.Infof("📋 Initializing database (%s)...", cfg.DBType)
 	dbType := store.DBTypeSQLite
 	if cfg.DBType == "postgres" {
@@ -290,6 +293,7 @@ func main() {
 	} else {
 		logger.Infof("%s", integrity.Line())
 	}
+	logger.Infof("%s", researchsnapshot.CurrentBootLine())
 	// UI SERVING PATH (owner ruling 2026-09-03). Printed right after the boot
 	// integrity line because it answers the same question about a different
 	// artifact: is what is being SERVED the thing that was just BUILT. The

@@ -1063,7 +1063,9 @@ func (s *TCPServer) SendSignal(payload SignalPayload) error {
 	s.pendingMu.Lock()
 	s.pending = append(s.pending, timedSignal{payload: payload, timestamp: time.Now()})
 	s.pendingMu.Unlock()
-	return s.flushPending()
+	err := s.flushPending()
+	recordResearchSignal(payload, err)
+	return err
 }
 
 // SendClosePosition tells the connected AddOn to flatten the symbol's position.
@@ -1632,6 +1634,7 @@ func (s *TCPServer) enqueueBarHistorical(symbol, timeframe string, bars []Bar) {
 }
 
 func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
+	researchWire := newResearchWire()
 	defer s.wg.Done()
 	defer s.closeConn()
 
@@ -1671,6 +1674,7 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 		// the old 2s polling deadline used to.
 		env, err := ReadFrame(c)
 		if err == nil {
+			researchWire.observe(env.Type, env.Payload)
 			s.framesTotal.Add(1)
 			s.lastFrameUnixMs.Store(time.Now().UnixMilli())
 		}
