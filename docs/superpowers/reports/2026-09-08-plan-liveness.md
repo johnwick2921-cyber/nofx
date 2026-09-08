@@ -1,6 +1,6 @@
 # Plan liveness — corrected premises and implementation
 
-**Current handoff:** code merged to dev; candidate `94f0d7df8601eec585b38029ccafb90239bee90d` built clean.
+**Current handoff:** code merged to dev; A7 candidate `04a62a0e31868ac9618010e915215284574353da` built clean.
 Versioned death evidence and authored-condition validation are implemented;
 exhaustion is warning-only. Owner GO was received for the next A7 window; cutover and live proof remain
 pending that window and fresh gates. Earlier STOP/build sections below are historical evidence.
@@ -562,7 +562,7 @@ was a 5m close below **29664.50**. Stored 5m bar row **451050**, completed
 a second case. The standing rule keeps an unmeasured REJECT at WARN; this
 case was measured, so the owner authorizes the D3 refusal to ship. **n=1
 does not establish representativeness.** The recorded born-dead-refusal
-counter, together with its named candidate/version/condition evidence, is
+counter, together with its date/session/scenario/condition evidence, is
 what will tell us whether the measured instance was representative. UNKNOWN
 still accepts with a named warning. Exhaustion remains WARN + counter and
 does not change wake policy.
@@ -582,3 +582,40 @@ The replacement candidate will be built from the merged report head after
 the full suite, with the actual binary's vcs.revision used for GUIDE_BUILT_REV
 before rebuilding dist. Earlier candidate manifests remain historical until
 the replacement's metadata, hash, suite SHA and bundle are recorded.
+
+### A7 candidate built after the merged-head suite
+
+[A] `go test ./...` and the explicit kernel golden/self-check run passed at
+merged dev HEAD `04a62a0e31868ac9618010e915215284574353da`. Vitest: **50 files /
+366 tests PASS**; TypeScript passes. A fresh ordinary clone at
+`/tmp/nofx-plan-liveness-a7-build/nofx` built the binary after those checks:
+
+```
+vcs.revision=04a62a0e31868ac9618010e915215284574353da
+vcs.time=2026-09-08T18:59:19Z
+vcs.modified=false
+SHA256=7e6ad8884a0599b682d2cac5ef5f83dbbd472b1034ca55989590e4c28454928e
+```
+
+The only changes from the earlier verified Go implementation are report and
+Guide metadata. `GUIDE_BUILT_REV` is set by parsing this binary's build
+metadata; dist is built **after** this stamp. The Guide/report marker itself
+does not claim a deployment. Final marker-head verification and the bundle
+manifest are retained in `/tmp/plan-liveness-a7/`.
+
+[A] The n=1 amendment at commit `04a62a0e31868ac9618010e915215284574353da`
+returned pinned raw HTTP **200 / 35,336 bytes**, byte-identical to its git blob.
+
+[A] Preparation gate at **14:00:57 CT**, n=1 running trader, HTTP 200:
+DB open positions 0; API positions 0; NT8 positions snapshot 0; broker working
+orders 0 with ledger agreement 0, source `broker — NT8 order_snapshot frame
+(age 27s, build 2026-09-07-h1)`; no planner read claimed. All five legs passed.
+The gate's legacy trailing note still claims no NT8 working-order frame;
+the actual leg-4 source is the broker snapshot quoted above. This preparatory
+read is not reused at swap time. Running process **3260027**, health and
+`/proc` revision **33672fdd2cd2fee60a2c562a9693e06ab3b13551**, remains unchanged.
+No process `NOFX_EXPECTED_REVISION` override is set; the RELEASE file governs.
+
+The next permitted window begins **14:45 CT**. Until then: no RELEASE change,
+no binary/dist swap, no kill, and no new live proof. The main lock is released
+after preparation and reacquired with an independent heartbeat at cutover.
