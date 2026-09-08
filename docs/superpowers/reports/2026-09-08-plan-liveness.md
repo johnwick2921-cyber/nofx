@@ -482,3 +482,26 @@ scenarioInvalidationAt: trader/invalidation_resolver.go:34
 scenarioInvalidationResolverClock: trader/invalidation_resolver.go:26
 validateAuthoredScenariosAt: trader/auto_trader_planner.go:1787
 ```
+
+### Final telemetry review and retained C4 lines
+
+The initially built 393712c1 candidate is superseded by the telemetry review
+fix below. It was not deployed. A fault-injection test of the event-ID source
+made the panic-on-error UUID helper panic (`panic: injected entropy failure`).
+The implementation now uses the error-returning UUID constructor and returns
+that error to the existing WARN caller. The same fixture passes. Telemetry
+failure cannot decide an entry, change a planner verdict, or panic the process.
+The replacement candidate is rebuilt after the full merged-head suite.
+
+[A] Fresh retained journal proof of the governing cadence configuration:
+
+```
+2026-09-08 01:33:46 CT: wakes: cutoff=25m(enforce) cooldown=30m(enforce, fast-market≥1.5×ATR exempt) cross-session=on stale-arm-expiry=on (class 47) — cutoffs govern LEVEL_EVENT/structure_mss wakes ONLY; scheduled reads, death re-plans and owner resets are untouched; the cutoff is NOT exempted by a fast market
+```
+
+[A] One retained bypass event, 2026-09-08 **03:20:00 CT**, names **1.8×ATR**,
+25 minutes since the previous wake-authored version, 30-minute cooldown, and
+seated Demand·1h invalidation (close 29512.75 below 29541.12). This verifies an
+actual bypass of the separate cadence cooldown; the claimed earlier 1.9×ATR
+line was not reproduced in this extraction. It does not change the reason for
+the four 23:41–23:47 minimum-interval suppressions.

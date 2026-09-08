@@ -2,6 +2,8 @@ package store
 
 import (
 	"encoding/json"
+	"fmt"
+	"github.com/google/uuid"
 	"sync"
 	"testing"
 	"time"
@@ -81,4 +83,22 @@ func TestLivenessEventsCountAttemptsNotClockTicks(t *testing.T) {
 	if err != nil || counts.BornDeadRefusals != 3 {
 		t.Fatalf("three observations at one clock instant must count three: %+v %v", counts, err)
 	}
+}
+
+// Telemetry must return an entropy failure to its warning caller, never panic.
+func TestLivenessTelemetryEntropyFailureReturnsError(t *testing.T) {
+	st := newPlanTestStore(t)
+	uuid.SetRand(livenessBrokenEntropy{})
+	defer uuid.SetRand(nil)
+	now, _ := time.Parse(time.RFC3339, "2026-09-08T10:00:00-05:00")
+	wrote, err := st.RecordPlanLivenessEvent(LivenessBornDeadRefusal, "attempt", now, "observed")
+	if wrote || err == nil {
+		t.Fatalf("telemetry entropy failure: wrote=%t err=%v", wrote, err)
+	}
+}
+
+type livenessBrokenEntropy struct{}
+
+func (livenessBrokenEntropy) Read([]byte) (int, error) {
+	return 0, fmt.Errorf("injected entropy failure")
 }

@@ -97,7 +97,11 @@ func (s *Store) RecordPlanLivenessEvent(kind, identity string, now time.Time, de
 		return false, fmt.Errorf("unknown liveness event")
 	}
 	if kind != LivenessExhaustionWarning {
-		identity += ":" + uuid.NewString()
+		eventID, err := uuid.NewRandom()
+		if err != nil {
+			return false, fmt.Errorf("liveness event identity unavailable: %w", err)
+		}
+		identity += ":" + eventID.String()
 	}
 	raw, err := json.Marshal(struct {
 		At     time.Time `json:"at"`
