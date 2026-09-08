@@ -24,6 +24,8 @@ Evidence labels: **[A]** a stored value, code line or direct observation; **[B]*
 
 The worktree began at that dev tip and the branch was claimed as `docs/the-strategy-0908`; the verified remote SHA at acceptance was `f0c172e1559aaf2718fa9c139c126bed3b8ebb2a`. Main checkout remained read-only. No lock was touched under this dispatch’s A2 override. Current-code descriptions apply to the measured revision; **the whole historical sample did not run this one version**. In particular, current strict/one-contract/exit rules must not be projected backward onto every August fill.
 
+**Final freshness check:** at **8 September 2026 18:43:07 CT**, health and the loaded/disk SHA256 still matched the same running revision, and positions remained empty with cutover ready. [runtime-final.json](2026-09-08-the-strategy-data/runtime-final.json) preserves the GET-only observation. The report branch was rebased onto dev **954f11b1**. Changes since 6f677b55 affected Stage A archive path handling and its documentation; the cited trading implementations were unchanged. The changed SYSTEM-MAP and AUDIT-CHECKLIST sections were reread and the provenance below refreshed. No historical table was silently refreshed beyond the original SQLite cutoff. [A]
+
 Era boundary is the named `store.DayPlanEraStart`, built by `store/attribution.go:146` and `:153` from **15 August 2026 00:00 CT**, milliseconds **1786770000000**. Retained plans: **279 rows**, comprising **277 intraday versions and 2 weekly reference documents** (weekly rows **223, 257**). These yield **806 scenario rows**: **36 S0/trigger=none no-trade sentinels**, plus **770 real scenarios** in **49 session-day groups**. The sentinel constructor is `kernel/plan_doc.go:1032`; counting it as a hold trade would be false. These are retained accepted versions, not every failed planning attempt and not independent observations. [plan-inventory.csv](2026-09-08-the-strategy-data/plan-inventory.csv); [scenarios.csv](2026-09-08-the-strategy-data/scenarios.csv). [A]
 
 Position cohort: **78 era rows → 65 eligible closed trades**, all linked to a retained scenario. Exclusions are disjoint: test rows **572, 573, 574** (`e7_farside_test`); `UNRESOLVABLE` rows **530, 539, 545, 546, 566, 571, 580**; remaining NULL `pnl_corrected` rows **576, 577, 579**. There are **4 raw NULL rows** including already-excluded test row **572**. NULL is not zero. No raw P&L, win rate, expectancy or profitability conclusion is used. The dispatch’s historical “58 trades, 12 days” is **not this snapshot’s cohort**: current eligible n is **65**, spread over **15 CT entry dates**. [position-cohort.json](2026-09-08-the-strategy-data/position-cohort.json) enumerates all included/excluded IDs. [A]
@@ -81,6 +83,8 @@ Evidence: [tables.json](2026-09-08-the-strategy-data/tables.json), `play_day_typ
 
 For display, `trend`, `trend-down`, `trend_down` share the trend group; labels beginning `balance` share balance. The raw cross-tab is retained, not overwritten. No-trade and weekly documents stay in the inventory, outside the real-scenario denominator.
 
+Current placement adds another distinction between a proposal and a trade: `trader/armed_executor.go:41` resolves `ARM_PLACE_TICKS` to **100 ticks** when unset; with MNQ **0.25-point ticks**, the limit placement band is **25 points** (`:969`, `:1056`). Both initial process environment and dotenv were unset at the final read. Already-marketable wrong-side limits are cancelled (`:1047`); the **stop-entry seam is explicitly off** in dotenv and the measured boot. Follow-family authorship therefore does not imply a stop-entry was sent. [A: runtime-final.json; runtime-log.json.]
+
 ## C2 · Levels chosen for a scenario, versus levels merely seated
 
 Each scenario gets **one documented primary reference**: positive `confirm.ref_price`, otherwise the first trigger price matching a seated level within **0.125 points**. That tolerance is an audit join convention (half a MNQ tick), not a trading threshold. It resolves **762/770** to seated levels; **8/770** remain unresolved. Secondary trigger alternatives and target levels are not counted as additional primary anchors. Unknown labels stay `other`; composite labels stay composite. VWAP variants are grouped; raw labels, all matching level IDs and grades remain in [scenarios.csv](2026-09-08-the-strategy-data/scenarios.csv). This is a count of **levels selected for authored scenarios**, not proof those scenarios filled. [A/B]
@@ -99,25 +103,25 @@ Each scenario gets **one documented primary reference**: positive `confirm.ref_p
 | OR-L | 31 | 14 | 0 | 17 | 94 |
 | EQH | 30 | 10 | 9 | 11 | 116 |
 | PDH | 29 | 14 | 9 | 6 | 157 |
-| SWG-L | 25 | 8 | 8 | 9 | 99 |
 | RTH-L | 25 | 4 | 15 | 6 | 99 |
+| SWG-L | 25 | 8 | 8 | 9 | 99 |
 | SUPPLY | 18 | 5 | 3 | 10 | 120 |
 | OR-H | 13 | 0 | 0 | 13 | 101 |
 | DEMAND | 11 | 2 | 5 | 4 | 94 |
 | unresolved | 8 | 6 | 2 | 0 | 0 |
 | PWL | 6 | 0 | 0 | 6 | 8 |
 | NPOC | 6 | 5 | 0 | 1 | 24 |
-| EVWAP | 4 | 2 | 1 | 1 | 19 |
 | RN | 4 | 1 | 0 | 3 | 10 |
+| EVWAP | 4 | 2 | 1 | 1 | 19 |
 | composite | 3 | 3 | 0 | 0 | 9 |
-| PDVWAP | 2 | 2 | 0 | 0 | 7 |
-| IB-L | 2 | 1 | 0 | 1 | 2 |
 | POC | 2 | 1 | 0 | 1 | 34 |
 | other | 2 | 0 | 0 | 2 | 5 |
+| PDVWAP | 2 | 2 | 0 | 0 | 7 |
+| IB-L | 2 | 1 | 0 | 1 | 2 |
 | PWH | 1 | 0 | 0 | 1 | 1 |
 | AS-L | 1 | 0 | 0 | 1 | 1 |
 
-Seated denominator is **2,649 level-version rows**, including the retained documents; selected denominator is **770 scenario-version rows**. These are different units: a level can host more than one scenario, and repeated versions repeat levels. Production `kernel/levels_role.go:303` has a fallback classification; the descriptive taxonomy deliberately preserves unknown/composite labels rather than calling every unknown a round number. Full seated kind × session × grade counts: [tables.json](2026-09-08-the-strategy-data/tables.json) `seated_levels`; primary scenario kind × session: `scenario_levels_session`. [A]
+Seated denominator is **2,649 level-version rows**, including the retained documents; selected denominator is **770 scenario-version rows**. These are different units: a level can host more than one scenario, and repeated versions repeat levels. Production `kernel/levels_role.go:303` has a fallback classification; the descriptive taxonomy deliberately preserves unknown/composite labels rather than calling every unknown a round number. Full scenario kind × session × grade counts are in supplement.json `scenario_levels_session_grade`. Full seated kind × session × grade counts: [tables.json](2026-09-08-the-strategy-data/tables.json) `seated_levels`; primary scenario kind × session: `scenario_levels_session`. [A]
 
 | Matched seated grade | Scenario n | Top kinds (counts within grade) |
 | --- | --- | --- |
@@ -418,13 +422,13 @@ The following are literal `git log -1 --format="%H %cI %s" -- "<file>"` outputs 
 `docs/superpowers/SYSTEM-MAP.md`
 
 ```text
-6f677b55daa1c7da33b8c35f8bcc67883f36b470 2026-09-08T18:01:58-05:00 test(w7): freeze consumed-level clocks and add behavior-preserving clock seam
+954f11b15f2e7615678f7d2b708c47895faebf1e 2026-09-08T18:38:16-05:00 fix(research): resolve archive paths before SQLite URI construction
 ```
 
 `docs/superpowers/AUDIT-CHECKLIST.md`
 
 ```text
-6f677b55daa1c7da33b8c35f8bcc67883f36b470 2026-09-08T18:01:58-05:00 test(w7): freeze consumed-level clocks and add behavior-preserving clock seam
+954f11b15f2e7615678f7d2b708c47895faebf1e 2026-09-08T18:38:16-05:00 fix(research): resolve archive paths before SQLite URI construction
 ```
 
 `docs/superpowers/research/2026-09-08-trading-policy/README.md`
@@ -596,5 +600,7 @@ c40bb45a6e47c796810441cbf15069f2bee19e1e 2026-09-08T16:43:32-05:00 docs(scenario
 ```
 
 ## Validation and publication record
+
+Validation commands and artifact fingerprints: [validate.py](2026-09-08-the-strategy-data/validate.py) and [validation.json](2026-09-08-the-strategy-data/validation.json).
 
 Offline validation checked complete scenario totals, all condition/session/day-type marginals, unique scenario keys, arm and position joins, geometry signs, duplicate accepted-risk receipts, missing-value denominators and artifact privacy. Product tests were not run: this is a documentation/evidence-only change and executes no trading code. The source snapshot and current runtime are deliberately distinguished from historical behavior. Final publication verification is recorded in the PR and owner closeout using a commit-pinned report URL and byte-size/hash comparison; no branch-path fetch is treated as pinned evidence.

@@ -12,6 +12,7 @@ def group(rows,fields,key):
  return [{**dict(zip(fields,k)),'n':len(v),'ids':v} for k,v in sorted(g.items())]
 out['arm_enabled']=group(s,['arm_enabled','has_arm_evidence'],'scenario_key')
 out['family_session_daytype']=group(s,['session','day_type_group','family'],'scenario_key')
+out['scenario_levels_session_grade']=group(s,['session','level_kind','level_grade'],'scenario_key')
 out['quality_side']=group(s,['quality','side'],'scenario_key')
 out['authored_hour']=group(s,['hour_ct'],'scenario_key')
 receipts=[]
