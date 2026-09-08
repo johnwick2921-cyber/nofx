@@ -107,6 +107,8 @@ The census intentionally tests only two narrow diagnostic families: a pure confl
 
 ## C5 — corrected arithmetic and contract-size boundary
 
+**Owner ruling for the master plan:** this C5 correction supersedes the master plan’s C5 figures/equation. Amend the master plan to the equation and reference table below; the superseded `p*b - (1-p)*c` must not be reused. This report records the correction, without claiming the master plan has already been edited.
+
 [A] For gross outcomes +bR and −1R, and cost cR on the trade:
 
 `E[net R] = p*b - (1-p) - c = p*(b+1) - 1 - c`
@@ -124,7 +126,7 @@ Setting this to zero gives `p = (1+c)/(1+b)`. The dispatched expression `p*b - (
 
 [A] The production limit-placement call uses quantity **1** (`trader/armed_executor.go:1067`, also the shared placement seam `:2161`). A single contract cannot be split into half a contract. However, “one contract” must not be misread as a universal configured one-leg ceiling: the one running strategy row **a5b7662e-7bf7-49bb-9f09-7efa48f95ac8** stores `max_contracts_per_order=2`, `max_contracts_enabled=false`, `plan_mode=strict`, `min_risk_reward_ratio=2`. `armLegCapacity`/`splitLegCapacity` (`:731`, `:741`) read the positive capacity directly; they do not consult that enabled switch. London v2 S1 itself authors two one-contract legs. This is not an observed two-contract position and is not authorization to add size for partial exits. [Whitelisted configuration evidence](2026-09-08-scenario-economics-data/risk-settings.json). No account name or credential is retained.
 
-## C6 — NOT ESTABLISHED; dropped
+## C6 — DROPPED — UNESTABLISHED
 
 The claimed frequency of ATR-floor-bound composed stops was not established. C6 is dropped from this wave and supplies no implementation premise, policy, test expectation or frequency claim. Historical exploratory measurements remain at the original correction revision; they are not evidence that the composed floor bound those stops. No stop-floor or composition code changes.
 
@@ -212,3 +214,10 @@ Deployment requires this wave's explicit owner GO, merged-head suite in a clean 
 ### Candidate handoff
 
 Candidate source is `95e7b420df0960edc67a91ff2a719fe105f441ae`; subsequent Guide/report commits are preparation metadata, not a different Go binary. No RELEASE change, service-file replacement or kill occurred. Running health and RELEASE remain `f8bc7044`. The prepared binary is `/tmp/nofx-scenario-economics-build/nofx/nofx-bin`; candidate dist is that clone's `web/dist`. Deployment remains owner-GO gated under A3, with A7's 14:45–16:30 CT window or after 17:10 flat/no arms/no position, never 16:45–17:10. If another lane merges before GO, rebuild and gate the resulting merged head rather than silently deploying this older candidate.
+
+
+### Authorized cutover preparation — 2026-09-08
+
+The owner has given GO after 17:10 CT, with no arms or open position and a fresh five-leg broker-backed gate. This authorizes preparation and cutover; it does not assert a boot has occurred. At 16:40 CT Stage A held a fresh main-tree lock, so this lane waited and prepared only in its isolated worktree. The final merged source and lane provenance will be recorded at cutover.
+
+The economics boot line explicitly ends `legacy UNKNOWN by design`; its other fields read the enforcing policy and process counters. The wording pin first failed with `boot must explain intentional legacy UNKNOWN` against the prior line, then passed after the clarification. Legacy UNKNOWN is intentional missing historical information, not a new schema defect or evidence of a failed boot.

@@ -131,7 +131,7 @@ func ScenarioEconomicsBootLine() string {
 	if scenarioObstacleRequired {
 		required = "on"
 	}
-	return fmt.Sprintf("📐 scenario economics: contract=%s · obstacle-required=%s · target-path-coherent=%d/%d · sub-1R-first-obstacle=%d · role-use-disagreements=%d · contradictions refused=%d · schema refusals=%d · checked=%d (new-authoring checks since boot; legacy UNKNOWN)", contract, required, c.PathCoherent, c.PathEvaluated, c.Sub1, c.RoleWarnings, c.Contradictions, c.SchemaRefusals, c.Checked)
+	return fmt.Sprintf("📐 scenario economics: contract=%s · obstacle-required=%s · target-path-coherent=%d/%d · sub-1R-first-obstacle=%d · role-use-disagreements=%d · contradictions refused=%d · schema refusals=%d · checked=%d (new-authoring checks since boot; legacy UNKNOWN by design)", contract, required, c.PathCoherent, c.PathEvaluated, c.Sub1, c.RoleWarnings, c.Contradictions, c.SchemaRefusals, c.Checked)
 }
 
 // validateNewScenarioEconomics is called at the existing model-output parser,

@@ -219,6 +219,9 @@ func TestScenarioEconomicsNewHypotheticalGeometryNeverArms(t *testing.T) {
 func TestScenarioEconomicsBootAndProductionWiring(t *testing.T) {
 	c := ScenarioEconomicsCounters()
 	line := ScenarioEconomicsBootLine()
+	if !strings.Contains(line, "legacy UNKNOWN by design") {
+		t.Fatalf("boot must explain intentional legacy UNKNOWN: %s", line)
+	}
 	for _, w := range []string{"contract=on", "obstacle-required=on", fmt.Sprintf("target-path-coherent=%d/%d", c.PathCoherent, c.PathEvaluated), fmt.Sprintf("sub-1R-first-obstacle=%d", c.Sub1), fmt.Sprintf("role-use-disagreements=%d", c.RoleWarnings), fmt.Sprintf("contradictions refused=%d", c.Contradictions)} {
 		if !strings.Contains(line, w) {
 			t.Fatalf("boot not reading counters: %s missing %s", line, w)

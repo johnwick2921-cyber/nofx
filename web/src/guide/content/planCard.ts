@@ -17,7 +17,7 @@ export const planCard: GuideSection = {
     },
     {
       kind: 'p',
-      text: 'Legacy scenarios retain UNKNOWN for economics they never declared. Reading them does not invent or backfill fields and never invokes the new-authoring refusal. At new authoring, missing complete economics is a schema refusal; off-path targets without an explicit exception, obstacles beyond the arm target, and implied R inconsistent with geometry by more than one tick of price distance are contradiction refusals. An obstacle below 1R and a known role/use difference are WARN plus counter only. A response at an obstacle declares intent; it does not change order management or make a half-contract exit executable. Hypothetical geometry never authorizes an arm.',
+      text: 'Legacy scenarios retain UNKNOWN by design for economics they never declared. Reading them does not invent or backfill fields and never invokes the new-authoring refusal. At new authoring, missing complete economics is a schema refusal; off-path targets without an explicit exception, obstacles beyond the arm target, and implied R inconsistent with geometry by more than one tick of price distance are contradiction refusals. An obstacle below 1R and a known role/use difference are WARN plus counter only. A response at an obstacle declares intent; it does not change order management or make a half-contract exit executable. Hypothetical geometry never authorizes an arm.',
     },
     {
       kind: 'p',
