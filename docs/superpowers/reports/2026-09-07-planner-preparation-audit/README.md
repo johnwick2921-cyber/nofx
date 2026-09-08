@@ -1,5 +1,7 @@
 # Is the Planner preparing like a professional NQ trading desk?
 
+Publication update: the owner has explicitly approved publishing this report, de-identified Planner history and sanitized logs to the public NOFX repository. Earlier local-only notes describe the package at assembly time. See [publication scope](PUBLICATION.md).
+
 **Read-only review · 7 September 2026 · source and evidence frozen as specified below**
 
 ## 1. My verdict
