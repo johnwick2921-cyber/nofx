@@ -52,3 +52,15 @@ Four protective-order proofs remain event-dependent: entry's own OCO; filled ent
 - `kernel/clock_drift_test.go`: b95e6125 2026-08-18T14:27:26-05:00 fix(P0): zero-trades root cause — WSL clock drift was blocking every entry
 - `trader/ninjatrader/placement_truth_test.go`: 6262bf42 2026-09-07T23:34:58-05:00 fix: stamp entry creation time and await received placement truth
 - `docs/superpowers/AUDIT-CHECKLIST.md`: 7e0c5527 2026-09-07T23:39:11-05:00 fix: install receipt routing before entries and preserve rejection evidence
+
+## Final preparation gate and RELEASE
+
+[A] The gate held at 00:13:33 CT because a planner wake begun at 00:10:58 CT was still in flight. No binary or active dist swap occurred during the hold. At `2026-09-08T00:17:48.810467-05:00`, this lane received HTTP 200, `ready=true`, with all five legs passing:
+
+1. `0 open row(s)` — source `sqlite trader_positions`.
+2. `0 position(s)` — source `trader.GetPositions`.
+3. `count=0` — source `NT8 positions frame`.
+4. `0 working order(s) at the broker (ledger agrees: 0)` — source `broker — NT8 order_snapshot frame (age 23s, build 2026-09-07-h1)`.
+5. `no planner read claimed` — source `plannerReadInFlight claim`.
+
+[A] RELEASE is now prepared as `98f4ec6e` after the successful merged-head suite, clean-clone binary build, binary-derived full GUIDE revision and successful production dist build. The gate will be read again before the binary rename; boot and broker placement proofs remain pending.
