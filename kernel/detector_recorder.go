@@ -69,10 +69,25 @@ func BuildCandidatePool(all []DetectedLevel, seated []ScoredLevel, price, dATR, 
 		k := key(l.Price, string(l.Kind), l.Label)
 		rec := CandidateRecord{
 			Price: l.Price, Kind: string(l.Kind), Label: l.Label,
-			Threshold: threshold, Components: "{}",
+			Threshold: threshold, Components: researchComponents(l.Research),
+		}
+		if l.Research != nil {
+			if l.Research.Score != nil {
+				rec.Score = *l.Research.Score
+			}
+			if l.Research.Grade != nil {
+				rec.Grade = *l.Research.Grade
+			}
+			if l.Research.Exclusion != nil {
+				rec.CutReason = *l.Research.Exclusion
+			}
 		}
 		if r, ok := rankOf[k]; ok {
 			rec.Rank, rec.Seated, rec.Score, rec.Grade = r, true, scoreOf[k], gradeOf[k]
+			out = append(out, rec)
+			continue
+		}
+		if rec.CutReason != "" {
 			out = append(out, rec)
 			continue
 		}

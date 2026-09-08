@@ -312,3 +312,29 @@ The existing `recordScenarioStateAt` recorder writes status/meta and first-obser
 `validateAuthoredScenariosAt` is called inside the existing planner candidate retry loop after the model returns. `kernel.EvaluateAuthoredInvalidationAt` recognizes only complete explicit one/two five-minute-close threshold rules with recognized reference-label annotations (conditional parentheses stay UNKNOWN) and requires every constituent minute of the latest fully completed rule window. Known invalidation refuses the candidate; unknown wording/tape accepts with a named warning. The real replay evidence is plan row 265 / bar 451050 and constituent rows 451031, 451034, 451037, 451039, 451051. This does not change scenario verdicts, EntryGate legs, cadence, replan budgeting or execution.
 
 Exhaustion is **warn-only**, once per version in the existing recorder; it does not wake or bypass any throttle/cutoff. `PlanLivenessBootLine` reads recorded event counts, says tradeable=n/a before an active snapshot, and warns rather than panicking when counters cannot be read or event identity generation fails.
+
+
+## Stage A · Research snapshot (record only)
+
+Implementation branch `fix/stage-a-snapshot`; not a live receipt. `researchsnapshot/`
+provides a separate append-only SQLite archive at `<configured DBPath>.research.db`.
+`main.go` installs its bounded worker before loading traders. Five object tags share
+`research_facts`: market, candidate, plan, scenario, exec. Nullable epoch-millisecond
+columns distinguish observation, receipt, publication and permission. Payload fields
+are explicit JSON null (SQL `json_extract` NULL) with missing-field explanations;
+computed zeros remain numbers. No historical trading rows are rewritten.
+
+Capture points: scorer computation and actual cut branches in `kernel/levels_score.go`
+and `levels_assemble.go`; planner inputs/retries/publication in
+`trader/auto_trader_planner.go`; existing scenario verdict metadata in
+`trader/auto_trader_levelstate.go`; received NT8 frames in
+`provider/ninjatrader/research_wire.go`. Producer decisions never read this archive.
+`cmd/research_export` uses read-only SQLite and receipt-time [from,to) membership,
+with stable row ordering, per-object counts, writing revisions and SHA-256.
+
+Boot join key: `🗄 research snapshot:`. Schema and rows/nulls come from the archive;
+objects from the schema registry; drops and admission latency from the worker.
+Unmeasured latency or inaccessible data prints UNKNOWN. The queue admission budget
+is `researchsnapshot.OfferBudget`; full/late/faulted work drops with a counted WARN.
+This is admission latency, not a claim that all capture overhead is already measured.
+Live counts, per-read overhead and final field coverage remain deployment proofs.

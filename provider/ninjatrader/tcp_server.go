@@ -1632,6 +1632,7 @@ func (s *TCPServer) enqueueBarHistorical(symbol, timeframe string, bars []Bar) {
 }
 
 func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
+	researchWire := newResearchWire()
 	defer s.wg.Done()
 	defer s.closeConn()
 
@@ -1671,6 +1672,7 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 		// the old 2s polling deadline used to.
 		env, err := ReadFrame(c)
 		if err == nil {
+			researchWire.observe(env.Type, env.Payload)
 			s.framesTotal.Add(1)
 			s.lastFrameUnixMs.Store(time.Now().UnixMilli())
 		}

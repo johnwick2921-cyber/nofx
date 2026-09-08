@@ -55,3 +55,23 @@ Audit protocol: `AUDIT-CHECKLIST.md`, Part 2 R1–R10; checklist number assigned
 ## Implementation and proof status
 
 Pending: record-only schema/capture/writers/export, red/green production pins, fault and latency bounds, mutation evidence, Guide/SYSTEM-MAP, merge-time checklist, suite/build, owner-controlled cutover and live receipts. No trading decision, score, contract, order, DB row or runtime setting has been changed in this audit.
+
+
+## Implementation checkpoint (not deployed)
+
+The original scorer→bare DetectedLevel→recorder pin failed with cut score 0/empty
+grade and `{}` components, then passed after internal capture metadata survived that
+seam. No score multiplication order, grade boundary, seat rule or prompt JSON changed.
+Targeted existing scorer/cluster/filter tests also pass. New foundation mutation pins
+failed for fabricated NULL-as-zero, receipt bound to observation, suppressed drop
+count, and disabled admission budget; restored foundation passes `go test -race`.
+The initial receipt mutation accidentally changed the null-count loop and survived;
+that result is rejected as evidence. The corrected mutation changed the INSERT
+argument and failed with a missing late-backfill row in the receipt range.
+
+This checkpoint wires the archive before readers, candidate universe capture,
+input/attempt/publication hooks, existing scenario metadata, and wire receipts.
+Production removal pins, full coverage of normalization/permission/outcome fields,
+whole-read latency measurement, mutation receipts, full merged suite, Guide binary
+revision, deployment and live evidence remain pending. Do not read compilation as
+proof that the five objects have appeared live.

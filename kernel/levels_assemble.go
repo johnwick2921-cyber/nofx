@@ -1,6 +1,7 @@
 package kernel
 
 import (
+	"fmt"
 	"math"
 	"strings"
 	"time"
@@ -148,13 +149,20 @@ func AssembleScoredLevelsMinGrade(traderID string, bars []market.Kline, reg Sess
 // LOST the seat race (a far nPOC, a carried swing) still gets stamped — the
 // stamp-gap regression fix (256/795 rows unstamped).
 func AssembleScoredLevelsFullMinGrade(traderID string, bars []market.Kline, reg SessionRegistry, symbol string, maxLevels int, now time.Time, proximityK float64, minGrade string, extraLevels ...DetectedLevel) (seated, pool []ScoredLevel, price, dATR float64) {
+	seated, pool, price, dATR, _ = AssembleResearchLevels(traderID, bars, reg, symbol, maxLevels, now, proximityK, minGrade, extraLevels...)
+	return
+}
+
+// AssembleResearchLevels returns the pre-deduplication universe as evidence;
+// the trading outputs use the same detection, scoring and seating path.
+func AssembleResearchLevels(traderID string, bars []market.Kline, reg SessionRegistry, symbol string, maxLevels int, now time.Time, proximityK float64, minGrade string, extraLevels ...DetectedLevel) (seated, pool []ScoredLevel, price, dATR float64, raw []DetectedLevel) {
 	cb := closedBars(bars, now)
 	if len(cb) == 0 {
-		return nil, nil, 0, 0
+		return nil, nil, 0, 0, nil
 	}
 	price = cb[len(cb)-1].Close
 	if price <= 0 {
-		return nil, nil, 0, 0
+		return nil, nil, 0, 0, nil
 	}
 	dATR = DailyRangeProxy(bars, now)
 	if dATR <= 0 {
@@ -183,10 +191,11 @@ func AssembleScoredLevelsFullMinGrade(traderID string, bars []market.Kline, reg 
 	// Level-truth wave (2026-08-27) — recent 5m/15m fractal swings (T3).
 	all = append(all, SwingPointLevels(bars, now)...)
 	all = append(all, extraLevels...) // nPOC etc. from the durable store (P1.3)
-	all = dedupeSameKind(all)
+	raw = researchLevels(all)
+	all = dedupeSameKind(raw)
 
 	seated, pool = ScoreLevelsMinGradeFull(all, price, dATR, levelFreshnessFn(traderID, symbol), maxLevels, proximityK, minGrade)
-	return seated, pool, price, dATR
+	return seated, pool, price, dATR, raw
 }
 
 // dedupeSameKind collapses same-kind duplicates within 1 MNQ tick (register
@@ -200,6 +209,7 @@ func dedupeSameKind(levels []DetectedLevel) []DetectedLevel {
 		dup := false
 		for _, o := range out {
 			if o.Kind == l.Kind && math.Abs(o.Price-l.Price) <= dedupeTick {
+				researchCut(l, fmt.Sprintf("same-kind duplicate of %s %.2f [%s]", o.Kind, o.Price, o.Label))
 				dup = true
 				break
 			}

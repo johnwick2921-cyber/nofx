@@ -23,15 +23,16 @@ type PlannerCalendarEvent struct {
 
 // PlannerInput is everything the reasoner reads to write a plan.
 type PlannerInput struct {
-	TradeDate        string
-	Session          string    // NY | ASIA | LONDON
-	Now              time.Time // labelled CT clock line (zero → omitted)
-	ReadKind         string    // e.g. "closed-market 16:55 CT read (from stored data)"
-	Price            float64
-	DATR             float64
-	Regime           RegimeBlock
-	Levels           []ScoredLevel // Go-ranked, graded (P1.5) — the decision-critical block
-	StructureSummary []string      // one line per timeframe
+	ResearchSnapshotID string `json:"-"` // record link, never prompt content
+	TradeDate          string
+	Session            string    // NY | ASIA | LONDON
+	Now                time.Time // labelled CT clock line (zero → omitted)
+	ReadKind           string    // e.g. "closed-market 16:55 CT read (from stored data)"
+	Price              float64
+	DATR               float64
+	Regime             RegimeBlock
+	Levels             []ScoredLevel // Go-ranked, graded (P1.5) — the decision-critical block
+	StructureSummary   []string      // one line per timeframe
 	// G2.2 (2026-08-24) — nearest in-band HTF zones (S/D/FVG/OB), graded, for a
 	// dedicated prompt section. They exist in the data but lose the top-8 seat
 	// race to structural levels (cluster collapse + seat priority), so the model

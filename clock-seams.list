@@ -43,3 +43,17 @@ trader/invalidation_resolver.go:scenarioInvalidationResolver:scenarioInvalidatio
 
 trader/armed_executor.go:declineHadFreshMet:declineHadFreshMetAt
 trader/armed_executor.go:maybeManageArmedOrders:maybeManageArmedOrdersAt
+
+# Stage A telemetry clocks (no trading verdict changes)
+researchsnapshot/archive.go:Save:saveAt
+researchsnapshot/recorder.go:Offer:offerWithClock
+researchsnapshot/runtime.go:BootLine:BootLineAt
+researchsnapshot/runtime.go:CurrentBootLine:CurrentBootLineAt
+researchsnapshot/plan.go:Begin:BeginAt
+researchsnapshot/plan.go:Reply:ReplyAt
+researchsnapshot/plan.go:Finish:FinishAt
+researchsnapshot/plan.go:Published:PublishedAt
+provider/ninjatrader/research_wire.go:observe:observeAt
+trader/research_snapshot.go:recordResearchCandidates:recordResearchCandidatesAt
+trader/research_snapshot.go:recordResearchInput:recordResearchInputAt
+trader/research_snapshot.go:recordResearchPermissions:recordResearchPermissionsAt

@@ -5,8 +5,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/google/uuid"
 	"math"
 	"nofx/logger"
+	"nofx/researchsnapshot"
 	"os"
 	"strconv"
 	"strings"
@@ -969,7 +971,9 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 	mcp.ResetStormCounterFor(client)
 	fMode, fEffort := fastMarketReasoningWire()
 	at.RegisterShadowRunner(client, plannerSystemPrompt, aiPlanMaxTokens(), fMode, fEffort)
-	at.runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, hash, input.IndicatorsBlock, input.AIConfigHash, requiredBias, prompt, facts, machineGrades, machineLabels, htfLabels(input), failClosed, func(userPrompt string) (string, error) {
+	recordResearchInput(input.ResearchSnapshotID, input, plannerSystemPrompt, modelID)
+	researchTrace := &researchsnapshot.PlanTrace{SnapshotID: input.ResearchSnapshotID, Model: modelID, ConfigVersion: input.AIConfigHash, SystemPrompt: plannerSystemPrompt}
+	at.runPlannerReadCoreObserved(time.Now, researchTrace, session, tradeDate, triggerOverride, modelID, hash, input.IndicatorsBlock, input.AIConfigHash, requiredBias, prompt, facts, machineGrades, machineLabels, htfLabels(input), failClosed, func(userPrompt string) (string, error) {
 		mcp.ApplyThinking(client, pMode, pEffort)
 		// PLANNER SPEED WAVE 4 (2026-08-31) — the session planner now rides the
 		// SSE streaming client with the idle watchdog (split deadlines). The
@@ -1468,6 +1472,10 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 }
 
 func (at *AutoTrader) runPlannerReadCoreWithFactsGradesClock(authoringClock func() time.Time, session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, requiredBias, prompt string, facts kernel.PlanFacts, machineGrades map[float64]string, machineLabels map[float64]string, htfLabels map[float64]string, failClosed bool, call func(userPrompt string) (string, error), extraNoTrade ...string) (int, string, error) {
+	return at.runPlannerReadCoreObserved(authoringClock, nil, session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, requiredBias, prompt, facts, machineGrades, machineLabels, htfLabels, failClosed, call, extraNoTrade...)
+}
+
+func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time, researchTrace *researchsnapshot.PlanTrace, session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, requiredBias, prompt string, facts kernel.PlanFacts, machineGrades map[float64]string, machineLabels map[float64]string, htfLabels map[float64]string, failClosed bool, call func(userPrompt string) (string, error), extraNoTrade ...string) (int, string, error) {
 	// H4/H5 — validation must accept EXACTLY what the config allows: the resolved
 	// max_levels / scenario_cap (hard ceilings 12/5). Before this the parse
 	// hardcoded 8/3, so raising either setting made EVERY read fail-closed into a
@@ -1511,6 +1519,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGradesClock(authoringClock func
 	resendAfterWatchdog := false // the prior attempt died on a watchdog close
 	resendStart := time.Time{}
 	for attempt := 1; attempt <= 3; attempt++ { // 1 + ≤2 retries
+		researchTrace.Finish(lastErr)
 		userPrompt := prompt
 		modeLabel := "author"
 		if attempt >= 2 && resendIdentical != "" {
@@ -1541,7 +1550,9 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGradesClock(authoringClock func
 			}
 			at.logInfof("🧩 planner attempt %d/3 %s: prompt ~%d tokens (full-author ~%d tokens)", attempt, modeLabel, estimatePromptTokens(userPrompt), estimatePromptTokens(prompt))
 		}
+		researchTrace.Begin(attempt, modeLabel, userPrompt)
 		raw, err := call(userPrompt)
+		researchTrace.Reply(raw, err)
 		if resendAfterWatchdog && modeLabel == "resend-identical" {
 			note := "resend landed"
 			if err != nil {
@@ -1557,6 +1568,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGradesClock(authoringClock func
 			// class), lastRaw/lastErr untouched so a later validator reject
 			// still repairs against the last real model output.
 			at.logWarnf("📐 planner attempt %d/3 failed on the provider (class=%s) — attempt %d re-sends the IDENTICAL prompt: %v", attempt, mcp.ClassifyAIError(err), attempt+1, err)
+			researchTrace.Finish(err)
 			resendIdentical = userPrompt
 			// Owner ruling 2026-09-02 — remember a watchdog close so the NEXT
 			// attempt's outcome attaches to the open fire row.
@@ -1813,6 +1825,11 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGradesClock(authoringClock func
 		doc = d
 		break
 	}
+	if doc != nil {
+		researchTrace.Finish(nil)
+	} else {
+		researchTrace.Finish(lastErr)
+	}
 	// A3 (F5, fail-register wave): a plan whose death/flip is prose-only has NO
 	// machine evaluation — the owner must know (the prompt line says it too).
 	if doc != nil && doc.DeathStructured == nil {
@@ -1975,6 +1992,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGradesClock(authoringClock func
 		at.logErrorf("🗓️ planner: write plan row failed for %s %s: %v", tradeDate, session, err)
 		return 0, lifecycle, err
 	}
+	researchTrace.Published(at.store.Plan().ResolvePlanID(tradeDate, session, at.id), version, string(docJSON))
 	at.logInfof("🗓️ PLAN written %s %s v%d (model %s, lifecycle %s, prompt %s, ai_config %s)", tradeDate, session, version, modelID, lifecycle, promptHash, aiConfigHash)
 	if spends {
 		// CLASS 35 — RECORD the spend now that the row exists (counters record
@@ -2157,7 +2175,7 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 		}
 		extra = append(extra, htfLevels...)
 	}
-	scored, pool, price, dATR := kernel.AssembleScoredLevelsFullMinGrade(at.id, bars, reg, symbol, maxLevels, now, at.proximityFilterATR(), minGrade, extra...)
+	scored, pool, price, dATR, researchRaw := kernel.AssembleResearchLevels(at.id, bars, reg, symbol, maxLevels, now, at.proximityFilterATR(), minGrade, extra...)
 	// 1h wave (2026-08-25) — the ranked table's HTF seats guarantee an in-band
 	// 1h S/D zone when one exists. Gated by the seat_1h_zone knob (default ON).
 	if dp != nil && dp.Seat1HZoneEnabled() {
@@ -2439,6 +2457,8 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 	// Before this a rendered prompt survived only when the read FAILED, so a
 	// working fix erased its own evidence. Best-effort: telemetry never fails a
 	// read (A10).
+	in.ResearchSnapshotID = uuid.NewString()
+	recordResearchCandidates(in.ResearchSnapshotID, symbol, researchRaw, scored, now)
 	at.persistReadFacts(in, voidScope, voidScopeLevels, voidScopeATR, now)
 	return in
 }

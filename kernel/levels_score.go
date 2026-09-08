@@ -78,6 +78,8 @@ func FilterLevelsByMinGrade(scored []ScoredLevel, minGrade string) []ScoredLevel
 		// survive ANY min_grade cut (the map must always carry today's anchors).
 		if levelGradeRank[strings.ToUpper(l.Grade)] >= min || isTier1Kind(l.Kind) {
 			out = append(out, l)
+		} else {
+			researchCut(l.DetectedLevel, fmt.Sprintf("minimum grade: %s below %s", l.Grade, minGrade))
 		}
 	}
 	return out
@@ -418,10 +420,13 @@ func scoreLevelsPool(levels []DetectedLevel, price, dATR float64, freshness func
 	confBand := 0.10 * dATR // cluster tolerance
 
 	// Proximity filter (day-trade lock).
+	levels = researchLevels(levels)
 	inBand := make([]DetectedLevel, 0, len(levels))
 	for _, l := range levels {
 		if math.Abs(l.Price-price) <= band {
 			inBand = append(inBand, l)
+		} else {
+			researchCut(l, fmt.Sprintf("proximity distance=%g exceeds band=%g", math.Abs(l.Price-price), band))
 		}
 	}
 
@@ -437,7 +442,10 @@ func scoreLevelsPool(levels []DetectedLevel, price, dATR float64, freshness func
 			// the anchor ladder (1.0/0.6/0.3/0.15 vs 1.0/0.8/0.6/0.5).
 			fm = zoneFreshMult(fRaw)
 		}
+		l.Research.Freshness = fRaw
+		l.Research.FreshMultiplier = scoreValue(fm)
 		if fm == 0 {
+			researchCut(l, "consumed freshness multiplier=0")
 			continue // consumed
 		}
 		// B3 (2026-08-26) — confluence counts DISTINCT FAMILIES within the
@@ -464,11 +472,14 @@ func scoreLevelsPool(levels []DetectedLevel, price, dATR float64, freshness func
 		if capC := ConfluenceCap(); conf > capC {
 			effConf = float64(capC)
 		}
+		l.Research.ConfluenceRaw = scoreValue(conf)
+		l.Research.ConfluenceCapped = scoreValue(effConf)
 		if isZoneKind(l.Kind) && conf == 0 {
 			// P0.1 (2026-08-19) — a zone with an HTF origin seats on its own
 			// merit (grade C): large-account auctions don't need a crowd. Pure
 			// intraday S/D + FVG/OB remain confluence-only, never standalone.
 			if !(l.HTF) {
+				researchCut(l, "intraday zone without other-family confluence")
 				continue
 			}
 		}
@@ -479,11 +490,22 @@ func scoreLevelsPool(levels []DetectedLevel, price, dATR float64, freshness func
 		var score float64
 		if isZoneKind(l.Kind) {
 			// v3 zone grading: kindBase × size × TFmult × freshness × confluence.
-			score = zoneEvidence(l) * zoneSizeMult(l.Lo, l.Hi, dATR) * fm * (1 + 0.20*effConf) * zoneTFMult[zoneTierFor(l.TF)]
+			evidence, size, confMult, tfMult := zoneEvidence(l), zoneSizeMult(l.Lo, l.Hi, dATR), (1 + 0.20*effConf), zoneTFMult[zoneTierFor(l.TF)]
+			score = evidence * size * fm * confMult * tfMult
+			l.Research.Evidence = scoreValue(evidence)
+			l.Research.SizeMultiplier = scoreValue(size)
+			l.Research.ConfluenceMultiplier = scoreValue(confMult)
+			l.Research.TFMultiplier = scoreValue(tfMult)
 		} else {
-			score = typeEvidence(l.Kind) * fm * (1 + 0.20*effConf) * htf
+			evidence, confMult := typeEvidence(l.Kind), (1 + 0.20*effConf)
+			score = evidence * fm * confMult * htf
+			l.Research.Evidence = scoreValue(evidence)
+			l.Research.ConfluenceMultiplier = scoreValue(confMult)
+			l.Research.HTFMultiplier = scoreValue(htf)
 		}
+		l.Research.Score = scoreValue(score)
 		grade := gradeFromScore(score)
+		rawGrade := grade
 		if isZoneKind(l.Kind) {
 			// v3 floors/caps: 1m zones never above C; 15m floor B, cap B
 			// (entry TF, not a zone-defining TF — research R20); 1h floor B,
@@ -507,6 +529,8 @@ func scoreLevelsPool(levels []DetectedLevel, price, dATR float64, freshness func
 					grade = "C"
 				}
 			}
+			researchGrade(l, rawGrade, grade, "zone timeframe floor/cap")
+			rawGrade = grade
 			// B2 (2026-08-26) — pattern-above-C only within
 			// TIER1_PROXIMITY_TICKS of a Tier-1 anchor: a pattern (zone) earns
 			// grade B/A ONLY when it sits beside a Tier-1 structural level.
@@ -515,6 +539,8 @@ func scoreLevelsPool(levels []DetectedLevel, price, dATR float64, freshness func
 				grade = "C"
 			}
 		}
+		researchGrade(l, rawGrade, grade, "Tier-1 proximity cap")
+		l.Research.Grade = scoreValue(grade)
 		scored = append(scored, ScoredLevel{
 			DetectedLevel: l,
 			Grade:         grade,
@@ -566,6 +592,7 @@ func scoreLevelsPool(levels []DetectedLevel, price, dATR float64, freshness func
 	scored = seatBothSides(scored, maxLevels)
 
 	if len(scored) > maxLevels {
+		researchCap(scored, maxLevels, "pre-pool seating cap")
 		scored = scored[:maxLevels]
 	}
 
@@ -606,10 +633,12 @@ func ScoreLevelsMinGradeFull(levels []DetectedLevel, price, dATR float64, freshn
 	if price <= 0 || dATR <= 0 {
 		return nil, nil
 	}
+	levels = researchLevels(levels)
 	pool := scoreLevelsPool(levels, price, dATR, freshness, eff*2, proximityK)
 	filtered := FilterLevelsByMinGrade(pool, minGrade)
 	if minGrade == "" || len(filtered) <= eff {
 		if len(filtered) > eff {
+			researchCap(filtered, eff, "final nearest-first cap")
 			filtered = filtered[:eff]
 		}
 		return filtered, pool
@@ -634,6 +663,7 @@ func ScoreLevelsMinGradeFull(levels []DetectedLevel, price, dATR float64, freshn
 	filtered = SeatVolumeFamily(filtered, eff) // Pack B — same guarantee after the min_grade cut
 	filtered = seatBothSides(filtered, eff)
 	if len(filtered) > eff {
+		researchCap(filtered, eff, "final reseating cap")
 		filtered = filtered[:eff]
 	}
 	sort.SliceStable(filtered, func(i, j int) bool {
@@ -724,6 +754,10 @@ func collapseLevelClusters(scored []ScoredLevel, tol float64) []ScoredLevel {
 				continue
 			}
 			if math.Abs(kept[i].Price-cand.Price) <= tol {
+				researchCut(cand.DetectedLevel, fmt.Sprintf("cluster collapsed into %s %.2f [%s]", kept[i].Kind, kept[i].Price, kept[i].Label))
+				if kept[i].Research != nil {
+					kept[i].Research.Overrides = append(kept[i].Research.Overrides, fmt.Sprintf("cluster confluence display %d -> %d; score unchanged", kept[i].Confluence, kept[i].Confluence+cand.Confluence+1))
+				}
 				kept[i].Confluence += cand.Confluence + 1
 				merged = true
 				break
