@@ -8,6 +8,7 @@ import (
 	_ "nofx/mcp/payment"
 	_ "nofx/mcp/provider"
 	"nofx/store"
+	"nofx/telemetry"
 	"nofx/trader/aster"
 	"nofx/trader/binance"
 	"nofx/trader/bitget"
@@ -810,6 +811,9 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 	// GetOpenOrders probe has a source from the first cycle.
 	if nt, ok := at.trader.(*ntTrader.TCPTrader); ok {
 		nt.SetOpenOrdersSource(at.ledgerOpenOrders)
+		// THE LEDGER'S EAR FOR A REFUSAL (2026-09-07). Every entry-reject path
+		// in the NT8 trader calls this with the BROKER'S reason, verbatim.
+		nt.SetRejectSink(at.recordBrokerRejection)
 	}
 	return at, nil
 }
@@ -1205,4 +1209,37 @@ func shouldWarnOverrun(d, interval time.Duration, closedSkip bool) bool {
 		return false
 	}
 	return d > interval
+}
+
+// recordBrokerRejection moves an armed row terminal in the broker's own words.
+//
+// It is the ledger half of the C8 handler, which for two weeks cleaned every
+// in-memory trace of a rejected entry and told nobody who could write it down.
+// On 2026-09-07 that left arm 117 reading `working` for 33 minutes after NT8
+// refused it, with the chart drawing a line for an order that did not exist.
+func (at *AutoTrader) recordBrokerRejection(signalID, brokerReason string) {
+	if at == nil || at.store == nil {
+		return
+	}
+	ledger := at.store.ArmedOrders()
+	if ledger == nil {
+		return
+	}
+	row, err := ledger.FindBySignal(at.id, signalID)
+	if err != nil || row == nil {
+		// A rejection for a signal we hold no row for is not an error — a
+		// manual NT8-side order can be rejected too. Say so; never guess.
+		at.logWarnf("🚨 broker rejected signal %s (%s) — no armed row carries that signal; nothing to move", shortID(signalID), brokerReason)
+		return
+	}
+	if err := ledger.RejectPlacement(row.ID, brokerReason); err != nil {
+		at.logWarnf("🚨 broker rejected %s but the ledger write FAILED (%v) — the row may still claim a broker state", shortID(signalID), err)
+		return
+	}
+	reason := brokerReason
+	if strings.TrimSpace(reason) == "" {
+		reason = store.PlacementReasonUnavailable
+	}
+	at.logWarnf("🚨 received armed entry rejection %s leg %d signal=%s reason=%q", row.Scenario, row.LegIndex+1, signalID, reason)
+	telemetry.IncGateBlock(at.id, "place_rejected_by_broker")
 }

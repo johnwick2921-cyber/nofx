@@ -415,7 +415,10 @@ func (s *ArmedOrderStore) ApplyPlacementReceipt(traderID, signalID, state, reaso
 	switch state {
 	case StateWorking:
 		q = q.Where("state = ?", StatePlacePending)
-		reason = ""
+		if reason == "" {
+			reason = "received entry order_update"
+		}
+		reason = "confirmed by " + reason
 	case StateRejected:
 		if strings.TrimSpace(reason) == "" {
 			q = q.Where("state IN (?,?,?)", StatePlacePending, StateWorking, StateCancelPending)
@@ -605,4 +608,65 @@ func (s *ArmedOrderStore) StateCensus() map[string]int64 {
 		out[r.State] = r.N
 	}
 	return out
+}
+
+// ── PLACEMENT CONFIRMATION (class 81, the placement side — 2026-09-07) ───────
+
+// ConfirmPlacement promotes a place_pending row to working, naming the RECEIVED
+// frame that justified it. Nothing else may write working.
+//
+// It is a no-op on any other state, so a late frame cannot resurrect a row that
+// has already been rejected, cancelled or filled.
+func (s *ArmedOrderStore) ConfirmPlacement(id int64, frame string) error {
+	if strings.TrimSpace(frame) == "" {
+		return fmt.Errorf("placement confirmation requires received frame evidence")
+	}
+	return s.db.Model(&ArmedOrderDB{}).Where("id = ? AND state = ?", id, StatePlacePending).
+		Updates(map[string]any{"state": StateWorking, "state_reason": "confirmed by " + frame}).Error
+}
+
+// RejectPlacement moves a row terminal with THE BROKER'S OWN WORDS. reason is
+// passed through verbatim — our summary of a refusal is not the refusal.
+//
+// It applies to place_pending and working alike: a broker can refuse an order it
+// previously acknowledged, and a row that already reads working must still be
+// corrected rather than left claiming a state the broker has withdrawn.
+func (s *ArmedOrderStore) RejectPlacement(id int64, brokerReason string) error {
+	var row ArmedOrderDB
+	if err := s.db.First(&row, id).Error; err != nil {
+		return err
+	}
+	return s.ApplyPlacementReceipt(row.TraderID, row.SignalID, StateRejected, brokerReason)
+}
+
+// ExpirePlacement records overdue evidence without releasing the slot. An
+// elapsed wait is not a broker receipt; the owner requires place_pending until
+// received evidence settles it. Keep UpdatedAt as the registration/receipt time.
+func (s *ArmedOrderStore) ExpirePlacement(id int64, waited time.Duration) error {
+	return s.db.Model(&ArmedOrderDB{}).Where("id = ? AND state = ?", id, StatePlacePending).
+		UpdateColumn("state_reason", fmt.Sprintf("unconfirmed:no_frame — awaiting broker receipt for %s; slot held", waited.Round(time.Second))).Error
+}
+
+// ListPlacePending returns one trader's unconfirmed placements, oldest first.
+func (s *ArmedOrderStore) ListPlacePending(traderID string) ([]ArmedOrderDB, error) {
+	var out []ArmedOrderDB
+	err := s.db.Where("trader_id = ? AND state = ?", traderID, StatePlacePending).
+		Order("id").Find(&out).Error
+	return out, err
+}
+
+// FindBySignal resolves a row by the signal id a frame names. Frames carry the
+// signal, not our row id, so every confirmation path needs this join.
+func (s *ArmedOrderStore) FindBySignal(traderID, signalID string) (*ArmedOrderDB, error) {
+	sig := strings.TrimSpace(signalID)
+	if sig == "" {
+		return nil, nil
+	}
+	var row ArmedOrderDB
+	err := s.db.Where("trader_id = ? AND signal_id = ?", traderID, sig).
+		Order("id DESC").First(&row).Error
+	if err != nil {
+		return nil, err
+	}
+	return &row, nil
 }

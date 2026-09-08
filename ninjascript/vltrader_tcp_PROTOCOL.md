@@ -412,7 +412,8 @@ Retries retain the original timestamp. This does not make stale market data
 fresh or bypass any existing data/entry gates.
 
 The armed ledger registers `signal_id` and `place_pending` atomically before
-sending. Only a received live entry `order_update` promotes to `working`;
+sending. Only a received live entry `order_update` or fresh `order_snapshot` naming
+that exact entry promotes to `working`;
 a received entry rejection (`fill.status` or `order_update.state`) settles as
 `rejected`. Protective-leg updates cannot promote or reject the entry row.
 A local socket return is not broker acceptance. Unanswered placements retain

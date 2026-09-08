@@ -497,6 +497,11 @@ func main() {
 	// checked must not read like a checked one.
 	logger.Infof("🗓 %s", kernel.SessionCalendarBootLine(time.Now()))
 
+	// PLACE CONFIRMATION (2026-09-07) — the placement side of class 81. The
+	// The reason producer is deferred to the next owner-run AddOn wave.
+	// h1 omits the field; the line states that missing evidence explicitly.
+	logger.Infof("📤 %s", trader.PlaceConfirmBootLine(false))
+
 	// SANDBOX: a demo instance has no NT8 wire, so install a deterministic
 	// synthetic bar feed — without it level_facts/price/chart/armor are all empty.
 	if cfg.SandboxMode {

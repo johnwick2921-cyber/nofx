@@ -1091,6 +1091,7 @@ func (at *AutoTrader) runArmedPlacement(bars []market.Kline, sinceMs int64) {
 	// snapshot id that proved it; still listed, or no fresh book → it stays
 	// cancel_pending, says so once past the timeout, and is re-requested up to
 	// the cap. Nothing here ever promotes a row on ignorance.
+	at.confirmPendingPlacements(ledger, now)
 	at.confirmPendingCancels(ledger, func(sid string) error {
 		// A re-request is still a cancel. If the entry filled while the first
 		// cancel was in flight, re-sending would reach the protections.
@@ -1741,7 +1742,7 @@ func (at *AutoTrader) onArmedOrderUpdate(u ntwire.OrderUpdatePayload, ledger *st
 			// A received live ENTRY state proves placement. Preserve pending
 			// cancellation and terminal outcomes; protective legs cannot promote.
 			if ntwire.ClassifyOrderState(u.State) == ntwire.LivenessLive {
-				_ = ledger.ApplyPlacementReceipt(at.id, u.SignalID, store.StateWorking, "")
+				_ = ledger.ApplyPlacementReceipt(at.id, u.SignalID, store.StateWorking, fmt.Sprintf("order_update signal=%s state=%s seq=%d", u.SignalID, u.State, u.Seq))
 				at.recordAcceptedRisk(r, u)
 			}
 		}

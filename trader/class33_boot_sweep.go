@@ -157,8 +157,15 @@ func (at *AutoTrader) ledgerOpenOrders(symbol string) ([]types.OpenOrder, error)
 			typ = "STOP_MARKET"
 		}
 		status := "NEW"
-		if r.State == "armed" {
+		switch r.State {
+		case "armed":
 			status = "ARMED" // authorized, NOT yet at the broker
+		case store.StatePlacePending:
+			// SENT, NOT CONFIRMED (2026-09-07). Nothing may render this as an
+			// order resting at the broker: on 2026-09-07 the chart drew a line
+			// for arm 117 — at the STOP price, labelled "Limit" — while NT8 had
+			// already refused it and the book stayed empty for 33 minutes.
+			status = "PENDING — awaiting broker receipt"
 		}
 		out = append(out, types.OpenOrder{
 			OrderID: r.SignalID, Symbol: at.futuresSymbol(), Side: side, PositionSide: posSide,

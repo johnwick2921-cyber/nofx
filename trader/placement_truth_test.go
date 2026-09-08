@@ -141,3 +141,46 @@ func TestStopPlacementFastRejectBeforeSendReturns(t *testing.T) {
 		t.Fatalf("fast receipt overwritten: %+v", rows)
 	}
 }
+
+func TestPlacementBookRequiresLiveEntryAndSilenceKeepsSlot(t *testing.T) {
+	at, st, _, _ := shadowWireHarness(t, store.StrategyConfig{})
+	ledger := st.ArmedOrders()
+	row := &store.ArmedOrderDB{TraderID: at.id, PlanID: "book-proof", Scenario: "S1", State: store.StateArmed}
+	if err := ledger.UpsertArm(row); err != nil {
+		t.Fatal(err)
+	}
+	if err := ledger.BeginPlacement(row.ID, "book-entry"); err != nil {
+		t.Fatal(err)
+	}
+	broker := at.armedTrader()
+	now := time.Now()
+	if err := ledger.DB().Model(row).UpdateColumn("updated_at", now.Add(-time.Hour)).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, orders := range [][]ntwire.NT8Order{
+		{},
+		{{Name: "book-entry-sl", State: "working", Symbol: "MNQ"}},
+		{{Name: "book-entry", State: "submitted", Symbol: "MNQ"}},
+		{{Name: "book-entry", State: "triggerpending", Symbol: "MNQ"}},
+	} {
+		broker.GetServer().OrderSnapshots().PutAt(ntwire.OrderSnapshotPayload{Account: "Sim101", Orders: orders}, now)
+		confirmed, pending, _ := at.confirmPendingPlacements(ledger, now)
+		if confirmed != 0 || pending != 1 {
+			t.Fatalf("non-entry evidence settled placement: %d/%d", confirmed, pending)
+		}
+		rows, err := ledger.ListNonTerminal(at.id)
+		if err != nil || len(rows) != 1 || rows[0].State != store.StatePlacePending {
+			t.Fatalf("silence released slot: %+v %v", rows, err)
+		}
+	}
+	broker.GetServer().OrderSnapshots().PutAt(ntwire.OrderSnapshotPayload{Account: "Sim101", Orders: []ntwire.NT8Order{{Name: "book-entry", State: "working", Symbol: "MNQ"}}}, now.Add(-2*placeConfirmMaxWait()))
+	confirmed, pending, _ := at.confirmPendingPlacements(ledger, now)
+	if confirmed != 0 || pending != 1 {
+		t.Fatal("stale book promoted")
+	}
+	broker.GetServer().OrderSnapshots().PutAt(ntwire.OrderSnapshotPayload{Account: "Sim101", Orders: []ntwire.NT8Order{{Name: "book-entry", State: "working", Symbol: "MNQ"}}}, now)
+	confirmed, pending, _ = at.confirmPendingPlacements(ledger, now)
+	if confirmed != 1 || pending != 0 {
+		t.Fatalf("live entry not confirmed: %d/%d", confirmed, pending)
+	}
+}

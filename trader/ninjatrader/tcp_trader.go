@@ -51,6 +51,7 @@ type TCPTrader struct {
 	// openOrdersSrc (class 33) — the ledger-backed working-order source for
 	// GetOpenOrders (flat-gate leg 4). nil = unwired = the leg FAILS.
 	openOrdersSrc func(symbol string) ([]types.OpenOrder, error)
+	rejectSink    func(signalID, brokerReason string)
 	lastFill      ntwire.FillPayload
 	hasFill       bool
 
@@ -221,13 +222,9 @@ func NewTCPTrader(server *ntwire.TCPServer, symbol string, account ...string) *T
 				if t.lastEntrySignalID == fill.SignalID {
 					t.lastEntrySignalID = ""
 				}
-				tid, st := t.traderID, t.st
+				tid := t.traderID
 				t.mu.Unlock()
-				if st != nil {
-					if err := st.ArmedOrders().ApplyPlacementReceipt(tid, fill.SignalID, store.StateRejected, fill.Reason); err != nil {
-						logger.Errorf("persist entry rejection signal=%s: %v", fill.SignalID, err)
-					}
-				}
+				t.notifyReject(fill.SignalID, fill.Reason)
 				reason := fill.Reason
 				if strings.TrimSpace(reason) == "" {
 					reason = store.PlacementReasonUnavailable
@@ -1274,5 +1271,30 @@ func upperSideStr(side string) string {
 		return "SHORT"
 	default:
 		return side
+	}
+}
+
+// SetRejectSink installs the owning AutoTrader's receipt sink. The fallback is
+// the same store transition for standalone TCPTrader users; never invoke both.
+func (t *TCPTrader) SetRejectSink(fn func(signalID, brokerReason string)) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.rejectSink = fn
+}
+func (t *TCPTrader) notifyReject(signalID, brokerReason string) {
+	if strings.TrimSpace(signalID) == "" {
+		return
+	}
+	t.mu.Lock()
+	sink, st, tid := t.rejectSink, t.st, t.traderID
+	t.mu.Unlock()
+	if sink != nil {
+		sink(signalID, brokerReason)
+		return
+	}
+	if st != nil {
+		if err := st.ArmedOrders().ApplyPlacementReceipt(tid, signalID, store.StateRejected, brokerReason); err != nil {
+			logger.Errorf("persist entry rejection signal=%s: %v", signalID, err)
+		}
 	}
 }
