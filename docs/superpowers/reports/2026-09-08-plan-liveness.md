@@ -2,8 +2,8 @@
 
 **Current handoff:** code merged to dev; candidate `94f0d7df8601eec585b38029ccafb90239bee90d` built clean.
 Versioned death evidence and authored-condition validation are implemented;
-exhaustion is warning-only. Cutover and live proof await owner GO in an allowed
-flat window. Earlier STOP/build sections below are historical evidence.
+exhaustion is warning-only. Owner GO was received for the next A7 window; cutover and live proof remain
+pending that window and fresh gates. Earlier STOP/build sections below are historical evidence.
 
 The original STOP report below is retained as historical evidence. The owner
 subsequently authorized the version/anchor repair and the revised conditional
@@ -543,3 +543,42 @@ give GO in the permitted flat window; all fresh broker/in-flight/window checks,
 backup, RELEASE ordering, swap verification, owner kill, boot verification and
 post-boot marker remain mandatory. This report's commit-pinned raw URL and byte
 count are independently verified at publication and included in the handoff.
+
+## Owner-authorized A7 cutover preparation — 2026-09-08
+
+[A] Owner GO received before the next 14:45–16:30 CT window. The alternative
+is after 17:10 CT, flat with no arms and no open position. No mid-session
+override was given. Preparation does not authorize an early swap or boot;
+the fresh five-leg gate, broker-snapshot leg 4 and in-flight check must pass
+at cutover. The owner receives the exact kill command only after RELEASE →
+`mv` → independent VERIFY, as required by dispatch A3/A7/A13. No timed deploy
+is scheduled.
+
+**The born-dead refusal ships on n=1 measured case:** plan row **265**,
+2026-09-07 ASIA v2 S1, authored 22:03:44.933209 CT. Its authored invalidation
+was a 5m close below **29664.50**. Stored 5m bar row **451050**, completed
+22:00 CT, closed **29661.50**; the five constituent minute rows are
+**451031, 451034, 451037, 451039, 451051**. The corrected v4 claim is not
+a second case. The standing rule keeps an unmeasured REJECT at WARN; this
+case was measured, so the owner authorizes the D3 refusal to ship. **n=1
+does not establish representativeness.** The recorded born-dead-refusal
+counter, together with its named candidate/version/condition evidence, is
+what will tell us whether the measured instance was representative. UNKNOWN
+still accepts with a named warning. Exhaustion remains WARN + counter and
+does not change wake policy.
+
+[A] Refreshed origin/dev and fix/plan-liveness both resolve to
+`b0f95bc6bdd133124061a68d20ae66328fd70903` at preparation. Existing claim
+resumed in isolated locked worktree `/tmp/nofx-plan-liveness-cutover`.
+Source freshness read before changes:
+
+```
+b0f95bc6bdd133124061a68d20ae66328fd70903 2026-09-08T09:16:09-05:00 docs(plan-liveness): pin final verified candidate and pending cutover — report; web/src/guide/types.ts
+393712c1bcbc767de0318517d5f2823a1907d374 2026-09-08T09:02:15-05:00 docs(plan-liveness): assign class 90 at integration — AUDIT-CHECKLIST.md
+268ee6097b1aa2c7979552018f004b548592f182 2026-09-03T19:46:13-05:00 feat(F12): cutover leg 4 reads the broker; the override guard becomes a check — trader/class33_cutover_gate.go
+```
+
+The replacement candidate will be built from the merged report head after
+the full suite, with the actual binary's vcs.revision used for GUIDE_BUILT_REV
+before rebuilding dist. Earlier candidate manifests remain historical until
+the replacement's metadata, hash, suite SHA and bundle are recorded.
