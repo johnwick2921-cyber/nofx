@@ -32,6 +32,10 @@ var repairConsumedOnce sync.Once
 // persisted freshness INTO RenderPlanStatus is a deliberate prompt-regression
 // follow-up, flagged in the W7 report — not silently done here.
 func (at *AutoTrader) recordLevelState() {
+	at.recordLevelStateAt(time.Now())
+}
+
+func (at *AutoTrader) recordLevelStateAt(now time.Time) {
 	if !at.dayPlanEnabled() || at.store == nil || !kernel.HasTraderPlanProvider(at.id) {
 		return
 	}
@@ -47,7 +51,6 @@ func (at *AutoTrader) recordLevelState() {
 	if len(bars) == 0 {
 		return
 	}
-	now := time.Now()
 	nowMs := now.UnixMilli()
 	// H1/H2 — the day-trade lock that seats levels is the OWNER's resolved
 	// proximity_filter_atr, threaded into the detector/scorer (never a hardcoded

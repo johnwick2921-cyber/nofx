@@ -363,3 +363,8 @@ New model output enters `ParsePlanDocCapped` → `parsePlanDocument(newAuthoring
 `scenarioEconomicsIssues` checks target-path membership (one MNQ registry tick, or explicit exception), obstacle beyond target, and declared R against geometry in price units. The arm's entry/stop/target remain authoritative; a non-armed scenario may carry hypothetical geometry without authorizing an order. `scenarioRoleWarnings` diagnoses recognized role differences only and never refuses them. Sub-1R obstacles are facts, WARN only. Counters record complete new-authoring observations under a mutex (path coherence means membership or a declared exception), including retries, since boot; no legacy or trade count is inferred. `LogVolumeWaveBoot` reads `ScenarioEconomicsBootLine` from the enforcing policy and counters; the line explicitly says `legacy UNKNOWN by design`.
 
 The card's `ScenarioEconomics` block and desk SCENARIOS line display obstacle provenance/response and both R values, keeping authored geometry separate from broker prices. Legacy R/obstacle fields remain UNKNOWN. No target family, R:R floor, stop floor, armable set, arm composition, EntryGate, confirmation, liveness, cadence or executor behavior changes. C5 uses `E=p*b-(1-p)-c`; C6 floor-binding is NOT ESTABLISHED and dropped.
+
+
+### W7 level-state clock boundary (class 60)
+
+`recordLevelState` is a single-statement delegate to `recordLevelStateAt(now)` and is listed in `clock-seams.list`. The predicate body is unchanged apart from receiving its clock. The W7 consumed-level fixture uses explicit clocks and one completed-hour acceptance sequence, with an asserted activation-window prerequisite; this corrects a pre-existing test failure around the 17:00 CME day boundary and changes no trading behavior.

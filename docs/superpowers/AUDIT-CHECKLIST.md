@@ -1249,6 +1249,16 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     becomes load-bearing — and a green suite is only evidence about the moment
     it ran.
 
+    **W7 recurrence (2026-09-08, scenario-economics cutover):** the old
+    consumed-level fixture straddled the 17:00 CME day; at 17:18–17:21 its
+    completed-day range excluded the test level from the activation window.
+    Reproduced 3/3 on running source as well as the merged candidate: pre-existing.
+    Owner-authorized fix: recordLevelState delegates once to recordLevelStateAt(now),
+    registered in clock-seams.list; eight fixed clocks and an explicit in-window
+    fixture preserve all consumed/re-arm/retouch assertions. Predicate body and
+    nine golden files are unchanged apart from clock injection. Evidence:
+    reports/2026-09-08-scenario-economics.md, class-60 correction section.
+
     **OWNER LAW (2026-09-03), added at merge.** `time.Now()` lives ONLY at the
     entry point; everything underneath takes an explicit `…At(now, …)` variant,
     and tests state their own clock. **And the suite runs at MERGE TIME,
