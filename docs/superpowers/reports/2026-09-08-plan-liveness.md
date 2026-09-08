@@ -1,5 +1,10 @@
 # Plan liveness — corrected premises and implementation
 
+**Current handoff:** code merged to dev; candidate `94f0d7df8601eec585b38029ccafb90239bee90d` built clean.
+Versioned death evidence and authored-condition validation are implemented;
+exhaustion is warning-only. Cutover and live proof await owner GO in an allowed
+flat window. Earlier STOP/build sections below are historical evidence.
+
 The original STOP report below is retained as historical evidence. The owner
 subsequently authorized the version/anchor repair and the revised conditional
 scope. See the implementation update at the end. The STOP report was merged to
@@ -505,3 +510,36 @@ seated Demand·1h invalidation (close 29512.75 below 29541.12). This verifies an
 actual bypass of the separate cadence cooldown; the claimed earlier 1.9×ATR
 line was not reproduced in this extraction. It does not change the reason for
 the four 23:41–23:47 minimum-interval suppressions.
+
+### Final replacement candidate
+
+[A] Replacement code head: `94f0d7df8601eec585b38029ccafb90239bee90d`, merged to dev and verified on both
+remote refs. `go test ./...` passed at this head. The kernel golden/self-check
+coverage is included; the explicit golden run also passed at the earlier
+identical kernel implementation. Vitest remains **50 files / 366 tests PASS**;
+TypeScript passes. The fault-injection fixture now returns the entropy error
+without panic.
+
+The replacement was built in the clean `nofx` clone **after** the complete
+merged-head Go suite passed:
+
+```
+vcs.revision=94f0d7df8601eec585b38029ccafb90239bee90d
+vcs.modified=false
+SHA256=ce97e597ee86004002ce5c415c7f0d98aec0fe68251b59d6ec905696585f1981
+```
+
+`GUIDE_BUILT_REV` is read from this replacement binary. The earlier 393712c1
+candidate and Guide stamp are superseded. Final marker-head checks and frontend
+bundle verification are recorded in the local handoff manifest at
+`/tmp/nofx-plan-liveness-build/candidate.json` after they finish; no such manifest
+is used as a substitute for live boot proof. Candidate binary and dist stay in
+`/tmp/nofx-plan-liveness-build/nofx/`; the original dispatch worktree is removed
+at handoff. The transfer patch is `/tmp/plan-liveness-transfer.patch` and has not
+been applied to the stale partner checkout.
+
+Cutover is not scheduled and no timer was created. The owner must be present and
+give GO in the permitted flat window; all fresh broker/in-flight/window checks,
+backup, RELEASE ordering, swap verification, owner kill, boot verification and
+post-boot marker remain mandatory. This report's commit-pinned raw URL and byte
+count are independently verified at publication and included in the handoff.
