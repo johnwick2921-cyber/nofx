@@ -64,3 +64,19 @@ Four protective-order proofs remain event-dependent: entry's own OCO; filled ent
 5. `no planner read claimed` — source `plannerReadInFlight claim`.
 
 [A] RELEASE is now prepared as `98f4ec6e` after the successful merged-head suite, clean-clone binary build, binary-derived full GUIDE revision and successful production dist build. The gate will be read again before the binary rename; boot and broker placement proofs remain pending.
+
+## Staged handoff — owner kill not executed
+
+[A] Final single-response gate at `2026-09-08T00:19:38.229436-05:00`: `ready=true`; all five legs passed.
+
+1. `0 open row(s)`; source `sqlite trader_positions`.
+2. `0 position(s)`; source `trader.GetPositions`.
+3. `count=0`; source `NT8 positions frame`.
+4. `0 working order(s) at the broker (ledger agrees: 0)`; source `broker — NT8 order_snapshot frame (age 12s, build 2026-09-07-h1)`.
+5. `no planner read claimed`; source `plannerReadInFlight claim`.
+
+[A] RELEASE → binary rename → independent VERIFY completed at `2026-09-08T00:19:49.043308-05:00`. RELEASE file, `HEAD:deploy/RELEASE`, disk binary and GUIDE all resolve to **98f4ec6e**; disk `vcs.modified=false`, dist byte-matched the build. Running `/proc/3201079/exe` and `/api/health` still resolve to **317388e7**, intentionally awaiting the owner command `kill -9 3201079`. The command was printed, not executed by this lane. No new boot or broker acceptance is claimed.
+
+[A] Preparation correction: the first dist staging path was an untracked sibling of `web/dist`; the pre-swap clean-tree assertion stopped that attempt. The owned staging directory was moved to `/tmp/placement-cutover-98f4/dist.next`, main was verified clean, and the gate was re-read before any binary rename. Backup dist is outside the main tree.
+
+[A] Binary backup: `/home/hoang/nofx/nofx-bin.old.317388e7.placement-98f4ec6e`. Dist backup: `/tmp/placement-cutover-98f4/dist.old.317388e7`. Independent keeper log: `/tmp/placement-cutover-98f4/keeper.log`; received-frame watcher: `/tmp/placement-cutover-98f4/watch.jsonl`; full machine receipt: `/tmp/placement-cutover-98f4/verify.json`. The lock stays held with fresh heartbeats through the owner handoff; postboot verification and the postboot marker push must precede release.
