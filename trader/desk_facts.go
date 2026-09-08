@@ -665,7 +665,28 @@ func (at *AutoTrader) deskPlanner(now time.Time) DeskLine {
 	if inFlight {
 		txt = "read IN FLIGHT: " + key
 	}
-	return DeskLine{N: 10, Key: "planner", Label: "PLANNER", State: "ok", Verified: true,
+
+	state := "ok"
+	if plan := kernel.ActivePlanFor(at.id, at.futuresSymbol()); plan != nil {
+		ids := make([]string, 0, len(plan.Doc.Scenarios))
+		for _, sc := range plan.Doc.Scenarios {
+			ids = append(ids, sc.ID)
+		}
+		live := at.store.ScenarioLivenessFor(at.id, plan.PlanID, plan.Version, ids, now)
+		if live.Tradeable == nil {
+			txt += " · tradeable UNKNOWN — " + live.Reason
+			state = "unknown"
+		} else {
+			txt += fmt.Sprintf(" · %s v%d tradeable %d/%d (evaluator) · observed %s", plan.Session, plan.Version, *live.Tradeable, live.Total, kernel.FormatCT(*live.ObservedAt))
+			if live.Total > 0 && *live.Tradeable == 0 {
+				txt += " · EXHAUSTED (warning only; no exhaustion wake)"
+				state = "warn"
+			}
+		}
+	} else {
+		txt += " · tradeable UNKNOWN — no active plan"
+	}
+	return DeskLine{N: 10, Key: "planner", Label: "PLANNER", State: state, Verified: state != "unknown",
 		Source: "plannerReadInFlight claim", AsOfMs: now.UnixMilli(), Text: txt}
 }
 

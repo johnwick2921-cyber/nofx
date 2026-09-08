@@ -416,12 +416,30 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 		warming = fmt.Sprintf("%d/10", n)
 	}
 
+	scenarioIDs := make([]string, 0, len(doc.Scenarios))
+	scenarioDeaths := make(map[string]*store.ScenarioDeath)
+	for _, sc := range doc.Scenarios {
+		scenarioIDs = append(scenarioIDs, sc.ID)
+		if anchor, ok := kernel.ScenarioAnchor(sc, doc.Levels); ok {
+			if r, err := s.store.ScenarioDeathFor(traderID, row.PlanID, row.Version, sc.ID, anchor); err == nil && r != nil {
+				scenarioDeaths[sc.ID] = r
+			}
+		}
+	}
+	liveness := s.store.ScenarioLivenessFor(traderID, row.PlanID, row.Version, scenarioIDs, now)
+	if row.Lifecycle != "active" {
+		liveness.Tradeable = nil
+		liveness.Reason = "plan is not active; recorded scenario history shown separately"
+	}
+
 	c.JSON(200, gin.H{
-		"found":      true,
-		"trade_date": tradeDate,
-		"session":    sessName,
-		"version":    row.Version,
-		"reading":    reading,
+		"scenario_liveness": liveness,
+		"scenario_deaths":   scenarioDeaths,
+		"found":             true,
+		"trade_date":        tradeDate,
+		"session":           sessName,
+		"version":           row.Version,
+		"reading":           reading,
 		// F7 — a read is running while THIS plan row is committed: the card
 		// renders the plan and shows a subtle re-reading chip, never "writing".
 		"replan_in_flight": replanInFlight,
@@ -471,16 +489,13 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 		// DEGRADED badge past the threshold so a half-map plan says so out loud.
 		"dark_regime_count": row.DarkRegimeCount,
 		"degraded":          row.Degraded,
-		// SCENARIO STATUS (○waiting ◉armed ●triggered ✕invalid). There is no Go
-		// state machine yet, so this is a passthrough of an explicitly-stored map
-		// (system_config "scenario_status:<plan_id>"); absent in production → the
-		// FE keeps its current fallback. The sandbox seeds it so all four states
-		// are visible. Replace the source when the executor computes it for real.
-		"scenario_status": scenarioStatusForLifecycle(s.scenarioStatus(traderID, row.PlanID), row.Lifecycle, doc),
+		// Current evaluator statuses, read only from the displayed version.
+		// An uncomputed version has no map; legacy unversioned keys are ignored.
+		"scenario_status": scenarioStatusForLifecycle(s.scenarioStatus(traderID, row.PlanID, row.Version), row.Lifecycle, doc),
 		// A1/A4 (fail-register wave): verdict basis (machine vs prose-anchor
 		// heuristic) + unevaluable scenario ids — the card renders them
 		// distinctly instead of dressing a heuristic as a machine verdict.
-		"scenario_meta": s.scenarioMeta(traderID, row.PlanID),
+		"scenario_meta": s.scenarioMeta(traderID, row.PlanID, row.Version),
 		// FVG ENTRY MODEL (2026-08-26) — per-scenario gap-band live states for
 		// the card chips (IN_ZONE/ABOVE/BELOW/FILLED_INVALID + touch number).
 		"fvg_states":     fvgStates,
@@ -2256,11 +2271,11 @@ func scenarioStatusForLifecycle(m map[string]string, lifecycle string, doc kerne
 // A scenario whose anchor level could not be resolved is deliberately ABSENT
 // from the map, and the card's fallback covers it — saying nothing beats
 // inventing a status.
-func (s *Server) scenarioStatus(traderID, planID string) map[string]string {
+func (s *Server) scenarioStatus(traderID, planID string, version int) map[string]string {
 	if s.store == nil {
 		return nil
 	}
-	raw, _ := s.store.GetSystemConfig(store.ScenarioStatusKey(traderID, planID))
+	raw, _ := s.store.GetSystemConfig(store.ScenarioStatusKey(traderID, planID, version))
 	if strings.TrimSpace(raw) == "" {
 		return nil
 	}
@@ -2272,11 +2287,11 @@ func (s *Server) scenarioStatus(traderID, planID string) map[string]string {
 }
 
 // scenarioMeta (A1/A4) reads the basis/unevaluable envelope; nil when absent.
-func (s *Server) scenarioMeta(traderID, planID string) map[string]any {
+func (s *Server) scenarioMeta(traderID, planID string, version int) map[string]any {
 	if s.store == nil {
 		return nil
 	}
-	raw, _ := s.store.GetSystemConfig(store.ScenarioMetaKey(traderID, planID))
+	raw, _ := s.store.GetSystemConfig(store.ScenarioMetaKey(traderID, planID, version))
 	if strings.TrimSpace(raw) == "" {
 		return nil
 	}

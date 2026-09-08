@@ -1,3 +1,4 @@
+import { PlanLiveness } from './PlanLiveness'
 // P4.3 / P5 — the SessionPlanCard: composes bias / mini-chart / levels /
 // scenarios / rules / footer, and renders every lifecycle state. It is a pure
 // VIEW of plan_final; the OWNER DOOR (P5) hangs off the header: ✎ opens the edit
@@ -355,6 +356,7 @@ export function SessionPlanCard({
       role="region"
       aria-label={`${tp('title', language)}, v${plan.version ?? 1}, ${plan.lifecycle ?? 'active'}`}
     >
+      <PlanLiveness value={plan.scenario_liveness} />
       {/* UI-verification (2026-08-18): the owner tapped Reset while a death
           re-plan was writing and the card showed NOTHING for minutes — the reset
           worked but read as "does nothing". F7 (2026-08-30): once a plan row is
@@ -833,6 +835,7 @@ export function SessionPlanCard({
         <ScenarioList
           scenarios={doc.scenarios}
           statusMap={plan.scenario_status}
+          deaths={plan.scenario_deaths}
           armedStates={
             (
               plan as {

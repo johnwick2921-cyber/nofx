@@ -2141,6 +2141,24 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     Go compiled). Related: class 24 (a check that prints but does not gate),
     class 88 (a liveness signal that is a side effect of activity).
 
+90. **A timestamp whose key omits the version.** (Assigned at merge of
+    `fix/plan-liveness`, 2026-09-08.) **Root cause:** the first-observed S1
+    invalidation stamp was keyed by plan and scenario, but scenario IDs are
+    reused across immutable versions. ASIA v4's gate attached v1's 20:51 time
+    to v4's 29753.25 anchor. **Probe:** two versions sharing S1 and different
+    anchors must preserve separate records through the production recorder and
+    gate resolver; removing the version must fail that pin. Store the judged
+    anchor with the time and reject mismatched evidence. **Law:** evidence
+    identity includes every version dimension the reader uses; legacy evidence
+    without that dimension stays unknown, never inferred into a new version.
+    The C1/C3 corrections and C2/C4 limits are in
+    `reports/2026-09-08-plan-liveness.md`; the original 20:51 line is not a
+    born-dead fixture. A separate real D3 replay uses plan row 265 / bar 451050:
+    complete authored close rules are checked at write; unsupported or incomplete
+    evidence is UNKNOWN and accepted. Exhaustion remains warning-only because
+    its proposed live causal premise was not established. Versioned status and
+    metadata feed the card/desk; the existing evaluator's verdict is unchanged.
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,

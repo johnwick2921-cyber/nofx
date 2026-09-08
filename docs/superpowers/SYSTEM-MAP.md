@@ -296,3 +296,11 @@ Cadence governance (class 47): `WakeCutoffMinDefault=25` (:52), `WakeCooldownMin
 ---
 
 *Map generated 2026-09-04 from code @ `492d2067` + settings registry + the 2026-08-30 knob census and 2026-09-02 belief census, then aligned with the 2026-09-04 research-conformance corrections (D9 swing seats [T]-positive, min-SL [O], breakeven/trailing [O]-ruled-but-suspended, R:R 2.0-vs-3.0 drift). Drift found and recorded: `BD_MIN_CLOSES` 1 (was 2), `MinSLATRMultDefault` 1.5 (was 1.0), code breakeven default 50 when unset (owner ruling 40), OR = first 5 min (IB = first 60 min), no wake-predicate cutover in production code.*
+
+### Plan liveness (fix/plan-liveness)
+
+The existing `recordScenarioStateAt` recorder writes status/meta and first-observed invalidation records under plan ID + version + scenario ID. The record retains the judged anchor and price; `scenarioInvalidationResolverClock` reads only matching version/anchor evidence. Legacy unversioned stamps remain untouched and are not imported. The card and PLANNER desk line read versioned status snapshots through `store.ScenarioLivenessFor`; missing, unknown or stale data renders UNKNOWN. Recorded invalidation is history, distinct from the reversible current evaluator status.
+
+`validateAuthoredScenariosAt` is called inside the existing planner candidate retry loop after the model returns. `kernel.EvaluateAuthoredInvalidationAt` recognizes only complete explicit one/two five-minute-close threshold rules with recognized reference-label annotations (conditional parentheses stay UNKNOWN) and requires every constituent minute of the latest fully completed rule window. Known invalidation refuses the candidate; unknown wording/tape accepts with a named warning. The real replay evidence is plan row 265 / bar 451050 and constituent rows 451031, 451034, 451037, 451039, 451051. This does not change scenario verdicts, EntryGate legs, cadence, replan budgeting or execution.
+
+Exhaustion is **warn-only**, once per version in the existing recorder; it does not wake or bypass any throttle/cutoff. `PlanLivenessBootLine` reads recorded event counts, says tradeable=n/a before an active snapshot, and warns rather than panicking when counters cannot be read or event identity generation fails.

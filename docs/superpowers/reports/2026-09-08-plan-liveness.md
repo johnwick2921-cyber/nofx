@@ -1,4 +1,17 @@
-# Plan liveness — measurement STOP, no implementation
+# Plan liveness — corrected premises and implementation
+
+**Current handoff:** code merged to dev; candidate `94f0d7df8601eec585b38029ccafb90239bee90d` built clean.
+Versioned death evidence and authored-condition validation are implemented;
+exhaustion is warning-only. Cutover and live proof await owner GO in an allowed
+flat window. Earlier STOP/build sections below are historical evidence.
+
+The original STOP report below is retained as historical evidence. The owner
+subsequently authorized the version/anchor repair and the revised conditional
+scope. See the implementation update at the end. The STOP report was merged to
+dev at `63d902ac9c345e6e51cfd237b035d4062a59acf0`; its commit-pinned raw URL returned
+HTTP 200 / 11,183 bytes, byte-identical to the git blob.
+
+## Original measurement STOP (historical)
 
 Owner dispatch: PLAN LIVENESS, 2026-09-08. Branch: `fix/plan-liveness`.
 Session: `plan-liveness-c22ee052/root[unlisted]`.
@@ -197,3 +210,336 @@ as well as the separate class-47 cooldown, while retaining cutoff and budget.
 
 This report is preserved on the dispatch branch for review. It is not yet
 merged to dev; the dispatch is paused under the owner's explicit STOP rule.
+
+## Revised implementation (owner resumed the wave)
+
+[A] On resumption the running health revision was `33672fdd2cd2`, PID 3260027.
+The independent born-dead case is **one scenario**, ASIA v2 S1, `plans.rowid=265`,
+published **22:03:44.933209 CT**. Its exact invalidation is:
+`5m close below 29664.50 (SWG-H·15m) kills the setup`.
+The immediately preceding completed five-minute candle is `bars.rowid=451050`,
+open epoch-ms `1788836100000`, close **29661.50**, convention `epoch_floor`.
+Its **n=5** constituent minute bars independently agree:
+
+| Minute row ID | Open epoch-ms | Close |
+|---|---:|---:|
+| 451031 | 1788836100000 | 29668.75 |
+| 451034 | 1788836160000 | 29668.50 |
+| 451037 | 1788836220000 | 29668.50 |
+| 451039 | 1788836280000 | 29665.25 |
+| 451051 | 1788836340000 | 29661.50 |
+
+This supports D3 independently of the invalid 20:51 claim. It does **not**
+establish that every scenario of v4 was born dead. The full production retry
+loop accepted the bad candidate on the baseline and retries it after the fix.
+
+D1 remains **WARN-only**. The four level-event suppressions establish that the
+minimum-interval throttle fired; they do not establish that an exhaustion
+trigger caused a blocked action or missed fill. No exhaustion wake, exemption,
+cutoff override or budget change was implemented. The existing recorder emits
+one exhaustion warning/event per version when all current evaluator statuses
+are invalidated/expired. Unknown and empty scenario sets do not exhaust.
+
+D2 extends the **existing recorder**, without a new table or a migration.
+`ScenarioInvalidatedAtKey` now uses a separate `scenario_death:` namespace
+containing trader, plan ID, **version**, and scenario ID. The JSON record carries
+plan/version/scenario, judged anchor, observed price, cause, evaluated condition,
+basis and first-observed time. Atomic insert-on-conflict preserves the first
+record. Readers reject mismatched anchors/identity instead of attaching an
+older timestamp to a different verdict. Legacy unversioned records are retained
+untouched and are never imported. Status and metadata keys are also versioned;
+the plan API reads the displayed version. History remains history: the existing
+scenario evaluator may subsequently return armed again. No gate verdict changed.
+
+D3 validates every candidate after the model call, inside the existing retry
+loop. It recognizes a deliberately narrow **complete** grammar: explicit one or
+two five-minute closes above/below a numeric threshold, optional reference label
+and simple invalidation wording. It requires every constituent minute of the
+latest fully completed rule window and ignores the forming bucket. Duplicate,
+missing, malformed and non-finite bars are UNKNOWN. Compound/sequential/MSS and
+subjective wording are UNKNOWN. Each UNKNOWN is named, counted and accepted for
+this check. Known invalidation refuses the **candidate**, preserving the authored
+scenario set rather than silently deleting scenarios; the existing model repair
+attempts re-author it. Existing retry counts, fail-closed behavior and replan
+accounting remain in place. Authoring time is captured after the model returns;
+the accepted row carries the instant at which this check ran.
+
+D4: the active plan card and PLANNER desk line show `tradeable N/M` from the
+current evaluator snapshot, with an EXHAUSTED warning at zero. This is scenario
+liveness, not order eligibility. Missing/unevaluable/stale version snapshots
+show UNKNOWN. Each available invalidation record shows its version, anchor,
+cause and recorded first-observed timestamp. It never substitutes render time.
+
+D5: `PlanLivenessBootLine` reads persisted event counts. Startup has no active
+snapshot yet and prints `tradeable=n/a`. The exhaustion field is now
+`exhausted-warnings`, not a fictitious wake count, reflecting the revised scope.
+Unavailable counters print UNKNOWN; telemetry does not panic. The Guide and
+SYSTEM-MAP are updated with the enforcement split and the remaining limitations.
+
+### RED, GREEN and mutation evidence
+
+[A] The fixed-clock production-recorder/gate pin failed before the key change:
+
+```
+v2 S1 must retain its own anchor 29753.25 and death time 2026-09-08 11:00 CT;
+got {Invalidated:true AtCT:2026-09-08 10:00 CT Anchor:29753.25 ...}
+```
+
+[A] The production retry/write pin failed before the D3 call was wired:
+
+```
+born-dead candidate must retry before publication; unsupported repair accepted:
+version=1 lifecycle=active calls=1 err=<nil>
+```
+
+[A] The production recorder exhaustion pin failed before observation was wired
+at **both 08:00 CT and 23:45 CT** (26 minutes of minimum interval remaining):
+
+```
+exhaustion must record one warning per version despite repeated cycles and 26m
+throttle remaining: counts={DeathsRecorded:1 ExhaustionWarnings:0 BornDeadRefusals:0 AuthoredUnknown:0}
+```
+
+[A] All three tests subsequently passed (`go test ./trader -run
+'^TestPlanLiveness' -count=1`). The UI pin initially failed because
+`data-testid="plan-liveness"` did not exist; it now renders tradeable 0/1,
+EXHAUSTED, the exact stored timestamp and 29753.25 anchor.
+
+[A] Deliberate mutations were applied one at a time and restored in `finally`:
+
+| Mutation | Actual failure |
+|---|---|
+| Force all death keys to version 1 | `v2 S1 must retain its own anchor 29753.25 and death time ...11:00 CT; got {Invalidated:true AtCT: Anchor:29753.25 ...}` |
+| Remove `validateAuthoredScenariosAt` from the candidate loop | `born-dead candidate must retry ... version=1 lifecycle=active calls=1 err=<nil>` |
+| Remove `observePlanExhaustionAt` from the existing recorder | `exhaustion must record one warning per version ... ExhaustionWarnings:0` at both fixed clocks |
+
+Supplemental pins cover concurrent first writes, retained versions, anchor
+mismatch, versioned/stale/unevaluable count snapshots, both price directions,
+equality, two-close runs, missing/duplicate/non-finite bars, forming candles,
+unsupported/compound/sequential wording, and desk/boot reads. The clock-seam lint
+passes for the new delegates; the clock callback supplies the actual authoring
+instant after a potentially long model call.
+
+[A] Initial frontend validation: **50 files / 366 tests passed**, `tsc --noEmit`
+passed. Initial targeted backend packages kernel/store/trader passed. The full
+Go suite and final merged-head checks are recorded in the closeout below once
+completed. No build/deployment success is asserted by this intermediate update.
+
+### Production call sites
+
+The existing recorder calls `RecordScenarioDeath` and `observePlanExhaustionAt`;
+the resolver calls `ScenarioDeathFor`. The candidate retry loop calls
+`validateAuthoredScenariosAt`, which calls `EvaluateAuthoredInvalidationAt`.
+`RecordPlanLivenessEvent` is called at the warning/refusal observations.
+`PlanLivenessCounts` is read by the main boot line. `ScenarioLivenessFor` is read
+by the API and desk. The production card renders `PlanLiveness` and passes death
+records to the scenario list. New clock wrappers delegate to their clock-aware
+implementations; the scope does not modify the signal-clock files.
+
+### What remains wrong / proof not yet observed
+
+No live cutover has occurred in this dispatch. No first live exhaustion warning,
+new versioned death record, born-dead refusal, new boot line or live card count
+has yet been observed. The old binary can still exhibit the cross-version label
+until cutover. Unsupported authored invalidations remain accepted as UNKNOWN;
+this is explicitly not a general natural-language invalidation engine. A first
+observation is not the candle's original death time. Historical legacy stamps
+remain unassignable to versions. The current heuristic can revive a scenario;
+this wave records that history without making its verdict terminal.
+
+Rollback: restore the verified previous binary and RELEASE under the owner's
+cutover procedure. New system_config keys are additive; do not delete or rewrite
+legacy evidence or reset the database. No live DB migration was required or run.
+
+### Additional source freshness ledger
+
+The following is `git log -1 --format='%H %cI %s' -- <path>` at the implementation
+base, before these edits. NEW means this wave introduces the file.
+
+- `api/handler_plan.go`: `ae9bd136d1d20df072d4a5d95c30e0beb08eb749 2026-09-07T22:11:20-05:00 fix(plan): select placement by version and expose three price sources`
+- `cmd/sandbox-seed/main.go`: `54cbcceca328b27e298760c66dc2ee3c010d5fb4 2026-08-27T14:11:57-05:00 level-truth T4: MarkConsumed records the consuming touch (times_tested=1 + last_play_ms when born already-accepted) — consumed rows always carry ≥1 touch`
+- `main.go`: `6310eaf8941f53194fa2c5e7368552eed1ed8d64 2026-09-07T23:51:51-05:00 merge: reconcile placement confirmation with pre-send identity and owner ruling`
+- `store/strategy.go`: `d3f711617d58176fb33b3bc3beda9b5bb897e19a 2026-09-03T22:33:00-05:00 feat(settings D6): saved → resolved · source, from the shipped resolvers`
+- `trader/auto_trader_levelstate.go`: `d280540835f2ddfc09a17497df45359084a8f95f 2026-09-03T10:54:48-05:00 feat(invalidation-wired): the system's own verdict refuses the arm; a position states the version it was armed under`
+- `trader/auto_trader_planner.go`: `01ce808839becd61120140e178bffa7cbc225d30 2026-09-05T12:12:00+00:00 fix(risk,planner): wire RiskForceFlat and BiasArmWarning — both shipped uncalled`
+- `trader/desk_facts.go`: `1064dca0e734d4caca8450533c64756b8331abbc 2026-09-07T21:52:21-05:00 fix(desk): date broker facts and distinguish scenario activation`
+- `trader/invalidation_resolver.go`: `d280540835f2ddfc09a17497df45359084a8f95f 2026-09-03T10:54:48-05:00 feat(invalidation-wired): the system's own verdict refuses the arm; a position states the version it was armed under`
+- `web/src/components/plan/ScenarioList.tsx`: `6262bf427276d3e00102de64247b122af743c1fe 2026-09-07T23:34:58-05:00 fix: stamp entry creation time and await received placement truth`
+- `web/src/components/plan/SessionPlanCard.tsx`: `64b076d27f34041c7c82253dc63c891a707fbb7e 2026-09-06T14:38:14-05:00 feat(desk-strip): the component, the four truth fixes, the guide, the map and class 82`
+- `web/src/guide/content/planCard.ts`: `6310eaf8941f53194fa2c5e7368552eed1ed8d64 2026-09-07T23:51:51-05:00 merge: reconcile placement confirmation with pre-send identity and owner ruling`
+- `web/src/lib/api/plan.ts`: `ae9bd136d1d20df072d4a5d95c30e0beb08eb749 2026-09-07T22:11:20-05:00 fix(plan): select placement by version and expose three price sources`
+- `kernel/plan_authored_invalidation.go`: `NEW in fix/plan-liveness`
+- `store/plan_liveness.go`: `NEW in fix/plan-liveness`
+- `trader/plan_liveness.go`: `NEW in fix/plan-liveness`
+- `web/src/components/plan/PlanLiveness.tsx`: `NEW in fix/plan-liveness`
+
+### Review follow-up
+
+The first complete Go run failed only `TestP0AScenarioStatusKeyIsTraderScoped`:
+its expected string still described the legacy key. The assertion now checks
+the versioned shape as well as trader and version separation. Targeted tests
+pass. Additional API reader coverage proves that an unevaluated displayed
+version never borrows legacy or earlier-version status/metadata.
+
+A review fixture caught ambiguous parenthetical wording: `5m close below 101
+(only after breakout) kills the setup` initially parsed as an unconditional
+rule. Its RED output was `Known:true Invalidated:true`. Annotation parsing now
+accepts only recognized reference-label spellings; the fixture returns UNKNOWN.
+Born-dead/UNKNOWN event records use distinct event identities, so three attempts
+at the same fixed clock count as three; exhaustion alone deduplicates by version.
+
+Partner propagation is not attempted against the existing sibling checkout:
+`/home/hoang/vlautoagenttraderv1` is at `f6ae7597fb3bc9caeaaedb25ce8c3c48bca72247`
+(2026-08-23), predating the documented 2026-08-29 history rewrite, and has three
+pre-existing modified test files. Its root history differs from this repository.
+The standing partner rule requires a fresh clone after that rewrite. No files,
+refs or remotes in that checkout were changed. A transport patch can be handed
+to the owner for application only after the required fresh-clone preparation.
+
+### Merge census and scope
+
+At the merge decision, the two-format census piped through `sort -n | uniq -c`
+reported `1 89` as the highest occupied class and `2 75`, `2 76`, `2 77` as
+pre-existing duplicates. This wave adds 90; no other entry was renumbered.
+The implementation changes neither EntryGate's file/legs, the executor, stop
+composition, reaper, level scoring/seating, signal-clock files, cadence values,
+nor replan budget rules. The small companion edits update versioned record
+consumers, boot output, API/UI, Guide and test fixtures.
+
+### C5 inventory correction at the measured running source
+
+At `33672fdd2cd2`, direct scheduled reads run through
+`auto_trader_clock.go:98` → `auto_trader_planner.go:190/252`; death replans through
+`auto_trader_planner.go:334/765`; MSS through `auto_trader_transition.go:156/206`;
+and level-event reads through `auto_trader_wake_levels.go:250/376`.
+There was no scenario-exhaustion authoring trigger in these paths.
+The dispatch's other labels need qualification: `auto_trader_loop.go:80` is the
+`fastMarketATR` threshold getter, not a planner trigger; the planner reads that
+drift for its reasoning mode and the cadence code for its bypass. `discard_burn`
+implements stale decision re-evaluation and delayed cycle kicks, not a distinct
+scenario-exhaustion planner read. A kick reaches normal scheduled/read checks
+at the top of the cycle (`auto_trader_clock.go:897–905`). Budget-related
+"exhausted" text also exists in the planner, not only the MSS comment.
+
+Freshness for these additional running-source citations:
+
+- `trader/auto_trader_clock.go`: `3f23d9bb5404696c7eeabc43bb133c118d60a6f7 2026-09-07T19:30:13-05:00 feat(session-calendar): the fold — one calendar, one owner, and the sourced close times win`
+- `trader/auto_trader_loop.go`: `0eddf90e95184c106d5a8c6f8fabaa8059d667f5 2026-09-07T19:30:13-05:00 feat(session-calendar): D5 the MODE line, D6 the boot line, the Guide, the map and class 84`
+- `trader/discard_burn.go`: `e424ec41bf60bbf18ec05a12ee5b6945aa46876e 2026-08-20T00:53:41-05:00 fix(T3): ONE timeframe table (kernel/timeframes.go) — the three drifted private copies delegated (stale_data 1m/5m/15m-only, dodge, NT8 bridge with its silent unknown→60s CloseTime fabrication); unmapped primary TF is now a named BOOT FAIL; 3m/30m gain forming labels + correct interval math`
+- `trader/auto_trader_transition.go`: `21b3e75e3243839bfddcf39e80f630363af5f03e 2026-09-03T22:50:35-05:00 fix(class 60/72): clock seams for every time-dependent rule + the flake was a clock`
+
+### Merged validation and candidate build
+
+[A] Code and report merged to dev at
+`393712c1bcbc767de0318517d5f2823a1907d374`. Both remote refs were verified equal
+to that SHA. At that merged head:
+
+- `go test ./...`: PASS (including trader, store, API and all broker packages).
+- `go test ./kernel -run 'Golden|SelfCheck' -count=1`: PASS.
+- Vitest: **50 files / 366 tests PASS**.
+- `tsc --noEmit`: PASS.
+- All **14 new Go functions** have production callers; the three load-bearing
+  mutation removals fail the intended tests. Frontend `PlanLiveness` is rendered
+  by the real SessionPlanCard, and the card supplies the records to ScenarioList.
+
+[A] After the merged-head suite passed, `go build -o nofx-bin .` ran in the clean
+clone `/tmp/nofx-plan-liveness-build/nofx` (leaf directory **nofx**). Build metadata:
+
+```
+vcs.revision=393712c1bcbc767de0318517d5f2823a1907d374
+vcs.time=2026-09-08T14:02:15Z
+vcs.modified=false
+SHA256=65ce253fe3dc602971ba88a558bb79437303d03e5c784ee3ae3fa85445711a96
+```
+
+`GUIDE_BUILT_REV` was set by reading this binary's `vcs.revision`, not by guessing
+HEAD. The frontend is rebuilt after this guide-marker commit. This marker does
+not claim a deployment: RELEASE, the running executable and the served dist are
+unchanged. The final marker/report head is tested again before the frontend build.
+
+The owner still needs to give explicit cutover GO. At preparation time (~09:00
+CT), the routine A7 deploy window is closed; no mid-session exception was given.
+There was no binary swap, process signal, live data.db change, RELEASE update or
+boot marker. The fresh five-leg broker gate, in-flight check, backup, swap/verify,
+owner kill, 90-second boot check and five-reference proof remain cutover work.
+No historical log or fixture output is presented as a new live boot/death/refusal.
+
+Operational note: the first shell-launched heartbeat keeper did not survive its
+shell. The lock was still fresh and held by this session; it was renewed and a
+keeper was restarted with `start_new_session=True`. It exits when the lock is
+released. No foreign lock was cleared or reclaimed.
+
+Production call-site census at the compiled code head:
+
+```
+EvaluateAuthoredInvalidationAt: trader/plan_liveness.go:22
+PlanLivenessBootLine: main.go:341
+PlanLivenessCounts: trader/plan_liveness.go:69
+RecordPlanLivenessEvent: trader/plan_liveness.go:25, trader/plan_liveness.go:37, trader/plan_liveness.go:58
+RecordScenarioDeath: trader/auto_trader_levelstate.go:271
+ScenarioDeathFor: trader/invalidation_resolver.go:76, api/handler_plan.go:424
+ScenarioLivenessFor: trader/desk_facts.go:675, api/handler_plan.go:429
+observePlanExhaustionAt: trader/auto_trader_levelstate.go:283
+planExhaustionPolicy: trader/plan_liveness.go:57, trader/plan_liveness.go:73
+recordScenarioStateAt: trader/auto_trader_levelstate.go:183
+runPlannerReadCoreWithFactsGradesClock: trader/auto_trader_planner.go:1467
+scenarioInvalidationAt: trader/invalidation_resolver.go:34
+scenarioInvalidationResolverClock: trader/invalidation_resolver.go:26
+validateAuthoredScenariosAt: trader/auto_trader_planner.go:1787
+```
+
+### Final telemetry review and retained C4 lines
+
+The initially built 393712c1 candidate is superseded by the telemetry review
+fix below. It was not deployed. A fault-injection test of the event-ID source
+made the panic-on-error UUID helper panic (`panic: injected entropy failure`).
+The implementation now uses the error-returning UUID constructor and returns
+that error to the existing WARN caller. The same fixture passes. Telemetry
+failure cannot decide an entry, change a planner verdict, or panic the process.
+The replacement candidate is rebuilt after the full merged-head suite.
+
+[A] Fresh retained journal proof of the governing cadence configuration:
+
+```
+2026-09-08 01:33:46 CT: wakes: cutoff=25m(enforce) cooldown=30m(enforce, fast-market≥1.5×ATR exempt) cross-session=on stale-arm-expiry=on (class 47) — cutoffs govern LEVEL_EVENT/structure_mss wakes ONLY; scheduled reads, death re-plans and owner resets are untouched; the cutoff is NOT exempted by a fast market
+```
+
+[A] One retained bypass event, 2026-09-08 **03:20:00 CT**, names **1.8×ATR**,
+25 minutes since the previous wake-authored version, 30-minute cooldown, and
+seated Demand·1h invalidation (close 29512.75 below 29541.12). This verifies an
+actual bypass of the separate cadence cooldown; the claimed earlier 1.9×ATR
+line was not reproduced in this extraction. It does not change the reason for
+the four 23:41–23:47 minimum-interval suppressions.
+
+### Final replacement candidate
+
+[A] Replacement code head: `94f0d7df8601eec585b38029ccafb90239bee90d`, merged to dev and verified on both
+remote refs. `go test ./...` passed at this head. The kernel golden/self-check
+coverage is included; the explicit golden run also passed at the earlier
+identical kernel implementation. Vitest remains **50 files / 366 tests PASS**;
+TypeScript passes. The fault-injection fixture now returns the entropy error
+without panic.
+
+The replacement was built in the clean `nofx` clone **after** the complete
+merged-head Go suite passed:
+
+```
+vcs.revision=94f0d7df8601eec585b38029ccafb90239bee90d
+vcs.modified=false
+SHA256=ce97e597ee86004002ce5c415c7f0d98aec0fe68251b59d6ec905696585f1981
+```
+
+`GUIDE_BUILT_REV` is read from this replacement binary. The earlier 393712c1
+candidate and Guide stamp are superseded. Final marker-head checks and frontend
+bundle verification are recorded in the local handoff manifest at
+`/tmp/nofx-plan-liveness-build/candidate.json` after they finish; no such manifest
+is used as a substitute for live boot proof. Candidate binary and dist stay in
+`/tmp/nofx-plan-liveness-build/nofx/`; the original dispatch worktree is removed
+at handoff. The transfer patch is `/tmp/plan-liveness-transfer.patch` and has not
+been applied to the stale partner checkout.
+
+Cutover is not scheduled and no timer was created. The owner must be present and
+give GO in the permitted flat window; all fresh broker/in-flight/window checks,
+backup, RELEASE ordering, swap verification, owner kill, boot verification and
+post-boot marker remain mandatory. This report's commit-pinned raw URL and byte
+count are independently verified at publication and included in the handoff.

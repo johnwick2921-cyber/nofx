@@ -1464,6 +1464,10 @@ func estimatePromptTokens(s string) int {
 
 // runPlannerReadCoreWithFactsGrades is the full write path (see its doc above).
 func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, requiredBias, prompt string, facts kernel.PlanFacts, machineGrades map[float64]string, machineLabels map[float64]string, htfLabels map[float64]string, failClosed bool, call func(userPrompt string) (string, error), extraNoTrade ...string) (int, string, error) {
+	return at.runPlannerReadCoreWithFactsGradesClock(time.Now, session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, requiredBias, prompt, facts, machineGrades, machineLabels, htfLabels, failClosed, call, extraNoTrade...)
+}
+
+func (at *AutoTrader) runPlannerReadCoreWithFactsGradesClock(authoringClock func() time.Time, session, tradeDate, triggerOverride, modelID, promptHash, indicatorsBlock, aiConfigHash, requiredBias, prompt string, facts kernel.PlanFacts, machineGrades map[float64]string, machineLabels map[float64]string, htfLabels map[float64]string, failClosed bool, call func(userPrompt string) (string, error), extraNoTrade ...string) (int, string, error) {
 	// H4/H5 — validation must accept EXACTLY what the config allows: the resolved
 	// max_levels / scenario_cap (hard ceilings 12/5). Before this the parse
 	// hardcoded 8/3, so raising either setting made EVERY read fail-closed into a
@@ -1471,6 +1475,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 	maxLevels, _, _ := resolveSessionPlanCfg(at.dayPlanCfg(), session)
 	scenarioCap := at.scenarioCap()
 
+	var authoredAt time.Time
 	var doc *kernel.PlanDoc
 	// CLASS 34 (owner ruling 2026-08-31): the reject block now carries the
 	// RESOLVED live condition vocabulary so the model can never be hinted
@@ -1778,6 +1783,14 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		for _, m := range kernel.FantasyTargetWarnings(*d) {
 			at.logWarnf("🔮 fantasy-target warning: %s", m)
 		}
+		authoredAt = authoringClock()
+		if verr := at.validateAuthoredScenariosAt(d, session, tradeDate, authoredAt); verr != nil {
+			lastErr = verr
+			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, verr, &prevReason, FactsSnapshotJSON(facts))
+			rejectBlock = plannerRejectBlock(verr, liveConditions)
+			rejectHistory = addDistinctReject(rejectHistory, verr)
+			continue
+		}
 		// S5 (autopsy-response wave) — arm-authored counter: one tick per
 		// arm{} spec written; the before/after gauge of the arming mandate.
 		nArms := 0
@@ -1943,6 +1956,7 @@ func (at *AutoTrader) runPlannerReadCoreWithFactsGrades(session, tradeDate, trig
 		kernel.RegimeCallWord(facts.Regime))
 	docJSON, _ := json.Marshal(doc)
 	version, err := at.store.Plan().AppendPlan(&store.PlanDB{
+		CreatedAt:       authoredAt,
 		PlanID:          at.store.Plan().ResolvePlanID(tradeDate, session, at.id),
 		StrategyID:      at.id,
 		TradeDate:       tradeDate,
