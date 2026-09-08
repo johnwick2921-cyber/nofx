@@ -23,7 +23,25 @@ export interface PlanLevel {
   instruction: string
 }
 
+export interface ScenarioEconomics {
+  version: number
+  entry_zone: number[]
+  geometry?: { entry: number; stop: number; target: number }
+  first_obstacle: {
+    price: number | null
+    level: string
+    family: string
+    response: string
+  } | null
+  r_to_obstacle: number | null
+  r_to_arm_target: number | null
+  target_path_exception?: string
+  role_exceptions?: Array<{ level: string; use: string; reason: string }>
+}
+
 export interface PlanScenario {
+  economics?: ScenarioEconomics
+  arm?: { enabled?: boolean; entry: number; stop: number; target: number }
   id: string // S1, S2, S3
   trigger: string
   condition: string // reclaim | hold | sweep_reclaim | reject | acceptance | breakout_retest

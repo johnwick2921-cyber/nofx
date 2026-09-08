@@ -11,6 +11,7 @@ import type {
   ScenarioStatusValue,
 } from '../../lib/api/plan'
 import { OrderTerms } from './OrderTerms'
+import { ScenarioEconomics } from './ScenarioEconomics'
 import { StatusDot, type ScenarioStatus } from './chips'
 import { fmtPrice } from './levelState'
 
@@ -220,7 +221,7 @@ function ScenarioRow({
               fontFamily: 'var(--vl-font-ui)',
             }}
           >
-            {tp('targets', language)}:{' '}
+            Target path:{' '}
             <span className="vl-num" style={{ color: 'var(--vl-long)' }}>
               {scenario.target_chain.map((t) => fmtPrice(t)).join(' → ')}
             </span>
@@ -443,6 +444,7 @@ export function ScenarioList({
                   <ArmedChip arm={armedStates?.[s.id]} />
                 </div>
               )}
+              <ScenarioEconomics scenario={s} />
               <OrderTerms legs={armedStates?.[s.id]?.legs} />
             </div>
           )

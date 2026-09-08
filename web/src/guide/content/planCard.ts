@@ -8,6 +8,37 @@ export const planCard: GuideSection = {
   asBuiltRev: GUIDE_BUILT_REV,
   blocks: [
     {
+      kind: 'h',
+      text: 'Scenario economics: obstacle, response and order objective',
+    },
+    {
+      kind: 'p',
+      text: 'Newly authored scenarios must state the entry zone, trigger, confirmation, structural invalidation, protective stop, first opposing obstacle with level/family/price provenance, planned response, arm target and both R values. The card separates the target path from the arm order objective. Prices and R describe authored geometry before costs, execution rounding and later stop composition; accepted broker prices remain separate. No structural, fixed-R, ATR, partial, trailing or mandatory-1R target policy is prescribed.',
+    },
+    {
+      kind: 'p',
+      text: 'Legacy scenarios retain UNKNOWN for economics they never declared. Reading them does not invent or backfill fields and never invokes the new-authoring refusal. At new authoring, missing complete economics is a schema refusal; off-path targets without an explicit exception, obstacles beyond the arm target, and implied R inconsistent with geometry by more than one tick of price distance are contradiction refusals. An obstacle below 1R and a known role/use difference are WARN plus counter only. A response at an obstacle declares intent; it does not change order management or make a half-contract exit executable. Hypothetical geometry never authorizes an arm.',
+    },
+    {
+      kind: 'p',
+      text: 'R = absolute price distance / absolute entry-to-stop distance. For two gross outcomes, +bR with probability p and −1R otherwise, and cost cR per trade: E[net R] = p*b − (1−p) − c. Setting E to zero gives p = (1+c)/(1+b). These examples are reference arithmetic, not estimated win rates, fees, or a target recommendation.',
+    },
+    {
+      kind: 'table',
+      title: 'Break-even reference arithmetic',
+      head: ['Winning payoff', 'No cost', 'Illustrative cost 0.04R'],
+      rows: [
+        ['0.5R', '66.67%', '69.33%'],
+        ['1R', '50.00%', '52.00%'],
+        ['2R', '33.33%', '34.67%'],
+        ['3R', '25.00%', '26.00%'],
+      ],
+    },
+    {
+      kind: 'p',
+      text: 'A 50% exit at +0.5R and 50% at +3R totals +1.75R when both succeed. A single MNQ contract cannot be halved. Economics counters count new-authoring checks, including retries, since process boot; they are not independent trades, persisted-plan counts, or reconstructed legacy events. The boot line starts from these recorded process counters. C6 floor-binding was NOT ESTABLISHED and is not a premise of this contract.',
+    },
+    {
       kind: 'p',
       text: 'This is the card the planner writes and the executor trades against. Below is a mock built from the REAL card components (dashed border = example). Every callout maps to a piece of it.',
     },

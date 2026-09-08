@@ -1,4 +1,6 @@
-# Scenario economics — evidence correction; implementation STOP
+# Scenario economics — corrected premises and implementation evidence
+
+**Owner ruling received after the initial STOP:** approved new-authoring-only completeness; unchanged legacy UNKNOWN acceptance; role differences WARN + counter; corrected C5 arithmetic; C6 NOT ESTABLISHED and dropped. D4's three contradiction refusals apply to new authoring. The original STOP/evidence below remains historical evidence, not the current instruction to stop. Implementation is in progress; no economics boot has occurred.
 
 2026-09-08. Dispatch: `fix/scenario-economics`. Session: `scenario-economics-83f741b2/root[unlisted]`.
 

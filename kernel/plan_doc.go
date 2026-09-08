@@ -50,12 +50,14 @@ type PlanConfirm struct {
 }
 
 type PlanScenario struct {
-	ID          string    `json:"id"`           // S1, S2, S3
-	Trigger     string    `json:"trigger"`      // the setup description
-	Condition   string    `json:"condition"`    // reclaim|hold|sweep_reclaim|reject|acceptance|breakout_retest|fvg_entry|breakdown_continue|breakup_continue
-	Direction   string    `json:"direction"`    // long | short
-	TargetChain []float64 `json:"target_chain"` // ordered targets
-	Invalid     string    `json:"invalid"`      // invalidation
+	// Absent on legacy records: never inferred or required during stored reads.
+	Economics   *ScenarioEconomics `json:"economics,omitempty"`
+	ID          string             `json:"id"`           // S1, S2, S3
+	Trigger     string             `json:"trigger"`      // the setup description
+	Condition   string             `json:"condition"`    // reclaim|hold|sweep_reclaim|reject|acceptance|breakout_retest|fvg_entry|breakdown_continue|breakup_continue
+	Direction   string             `json:"direction"`    // long | short
+	TargetChain []float64          `json:"target_chain"` // ordered targets
+	Invalid     string             `json:"invalid"`      // invalidation
 	// Confirm (C1) — REQUIRED after the grace window; see PlanConfirm.
 	Confirm *PlanConfirm `json:"confirm,omitempty"`
 	Quality string       `json:"quality"` // A+ | A | B
@@ -435,7 +437,7 @@ func planGradeRank(g string) int {
 // schema at the SHIPPED caps (8 levels / 3 scenarios). Any failure → error, which
 // the planner treats as a retryable/fail-closed event.
 func ParsePlanDoc(raw string) (*PlanDoc, error) {
-	return ParsePlanDocCapped(raw, 0, 0)
+	return parsePlanDocument(raw, 0, 0, false)
 }
 
 // ParsePlanDocCapped is ParsePlanDoc with the RESOLVED config caps (max_levels,
@@ -443,6 +445,11 @@ func ParsePlanDoc(raw string) (*PlanDoc, error) {
 // pass validation instead of making every read fail-closed against the hardcoded
 // 8/3.
 func ParsePlanDocCapped(raw string, maxLevels, maxScenarios int) (*PlanDoc, error) {
+	return parsePlanDocument(raw, maxLevels, maxScenarios, true)
+}
+
+// The boolean is a trusted call-site boundary, never a JSON version switch.
+func parsePlanDocument(raw string, maxLevels, maxScenarios int, newAuthoring bool) (*PlanDoc, error) {
 	js := extractJSONObject(raw)
 	if js == "" {
 		return nil, fmt.Errorf("no JSON object found in planner output")
@@ -453,6 +460,11 @@ func ParsePlanDocCapped(raw string, maxLevels, maxScenarios int) (*PlanDoc, erro
 	}
 	if err := ValidatePlanDocWithCaps(&doc, maxLevels, maxScenarios); err != nil {
 		return nil, err
+	}
+	if newAuthoring && scenarioEconomicsRequired {
+		if err := validateNewScenarioEconomics(&doc); err != nil {
+			return nil, err
+		}
 	}
 	return &doc, nil
 }

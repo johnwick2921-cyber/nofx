@@ -11,6 +11,7 @@ import (
 // proximity is per-trader config now (owner retune 0.3 → ±~105pt), so the boot
 // line states the resolver instead of a constant.
 func LogVolumeWaveBoot() {
+	logger.Info(ScenarioEconomicsBootLine())
 	logger.Infof("%s", VolumeWaveBootLine())
 	logger.Infof("🎯 touch telemetry: band=%dt(%.1fpt) max_bars=%d vol_lookback=%d approach=%d — advisory, zero gates",
 		TouchBandTicks(), TouchBandPoints(), TouchEpisodeMaxBars(), TouchVolLookback(), TouchApproachBars())
