@@ -1,0 +1,51 @@
+{
+  "read_at": "2026-09-07T22:03:04.474989-05:00",
+  "lines": [
+    {
+      "n": 1,
+      "key": "mode",
+      "label": "MODE",
+      "text": "SIM · plan_mode=strict · session=ASIA · CME OPEN · Labor Day: SHORTENED, closes 12:00 CT [CME published] · 22:03:04 CT · process responding · feed 4s since last bar · link Disconnected · book 0 working order(s) at the broker (ledger agrees: 0)",
+      "state": "ok",
+      "source": "strategy config · session registry · bars · NT8 link",
+      "as_of_ms": 1788836584467,
+      "age_ms": 0,
+      "verified": true
+    },
+    {
+      "n": 6,
+      "key": "day",
+      "label": "DAY",
+      "text": "realized +0.00 USD on 0 trade(s) · no enforced daily limit (guardrails master OFF — soft-audit only)",
+      "state": "ok",
+      "unit": "USD",
+      "source": "trader_positions.pnl_corrected · strategy guardrails",
+      "as_of_ms": 1788836584467,
+      "age_ms": 0,
+      "verified": true
+    },
+    {
+      "n": 9,
+      "key": "feed",
+      "label": "FEED",
+      "text": "last bar 4s ago · link Disconnected · AddOn build 2026-09-05-g2",
+      "state": "ok",
+      "source": "bars · NT8 link · AddOn build id",
+      "as_of_ms": 1788836580000,
+      "age_ms": 4467,
+      "verified": true
+    },
+    {
+      "n": 11,
+      "key": "range",
+      "label": "RANGE",
+      "text": "session 29521.75–29721.25 = 199.50 pts on 304 bar(s) · 11.90× ATR5m (16.77)",
+      "state": "ok",
+      "unit": "pts",
+      "source": "bars (session-day) · ATR5m",
+      "as_of_ms": 1788836580000,
+      "age_ms": 4467,
+      "verified": true
+    }
+  ]
+}

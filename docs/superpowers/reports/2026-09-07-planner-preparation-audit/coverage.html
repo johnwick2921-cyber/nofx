@@ -1,0 +1,136 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>coverage</title><style>*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:#f3f4f3;color:#192c31;font:17px/1.65 system-ui,-apple-system,Segoe UI,sans-serif}header{background:#163c44;color:#fff;padding:30px max(24px,calc((100vw - 1240px)/2))}header a{color:#c5e9df;text-decoration:none}header small{display:block;letter-spacing:.1em;text-transform:uppercase;color:#9fc6bf}header strong{font-size:25px}.shell{display:grid;grid-template-columns:250px minmax(0,1fr);gap:34px;max-width:1320px;margin:32px auto;padding:0 28px}aside{position:sticky;top:20px;align-self:start;max-height:94vh;overflow:auto;font-size:13px}aside a{display:block;padding:7px 10px;color:#385860;text-decoration:none;border-left:2px solid #d7e1df}aside a:hover{border-color:#177864;background:#e7efec}main{overflow-wrap:anywhere;min-width:0;background:white;border:1px solid #dce3e0;border-radius:10px;padding:38px 44px;box-shadow:0 5px 25px #173b4210}h1{font-size:37px;line-height:1.18;letter-spacing:-.025em;margin:0 0 26px}h2{font-size:26px;border-top:1px solid #dce5e1;padding-top:32px;margin-top:38px;scroll-margin-top:22px}h3{font-size:20px;color:#256859;margin-top:29px;scroll-margin-top:22px}p{margin:16px 0}a{color:#116955;overflow-wrap:anywhere}code{background:#eef3f0;padding:2px 5px;border-radius:4px;font-size:.85em;overflow-wrap:anywhere}pre{background:#edf3f0;padding:18px;overflow:auto}pre code{padding:0}li{margin:9px 0}.table-wrap{overflow:auto;margin:24px 0;border:1px solid #d7e2de;border-radius:6px}table{width:100%;border-collapse:collapse;font-size:14px;line-height:1.5}th{text-align:left;background:#edf4ef;color:#214940}td,th{padding:13px 14px;border-bottom:1px solid #e1e8e4;vertical-align:top;min-width:125px}td:first-child{font-weight:560}tr:last-child td{border:0}td a{font-size:12px}.notice{background:#e8f2ed;border-left:4px solid #36785b;padding:14px 18px;font-size:15px}.cards{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}.card{border:1px solid #d6e2dc;border-radius:7px;padding:20px;background:#f8fbf9}.card a{font-size:21px;font-weight:650}.card p{font-size:15px;margin-bottom:0}.facts{display:flex;gap:25px;flex-wrap:wrap;margin:26px 0}.facts strong{display:block;font-size:27px;color:#1a6855}.facts span{font-size:13px;color:#58706b}.flow{display:flex;gap:8px;flex-wrap:wrap;margin:24px 0}.flow span{background:#edf2ef;border:1px solid #ccdcd5;border-radius:5px;padding:9px 12px;font-size:13px}.muted{font-size:13px;color:#647970}footer{max-width:1200px;margin:20px auto 50px;padding:0 28px;font-size:13px;color:#62736b}@media(max-width:900px){.shell{grid-template-columns:1fr;padding:0 16px;gap:16px}aside{position:static;max-height:240px}main{padding:24px 20px}h1{font-size:29px}.cards{grid-template-columns:1fr}header{padding:22px}table{font-size:13px}}@media print{body{background:#fff;font-size:11px}header,aside,footer{display:none}.shell{display:block;margin:0;padding:0}main{padding:0;border:0;box-shadow:none}h1{font-size:25px}h2{font-size:18px}h3{font-size:15px}.table-wrap{overflow:visible}table{font-size:9px}td,th{min-width:0;padding:6px}a{color:#000;text-decoration:none}h2,h3{break-after:avoid}tr{break-inside:avoid}}</style><header><small>NOFX · Read-only evidence review</small><strong>Planner preparation audit</strong><div><a href="index.html">Start / files</a> · <a href="report.html">Full report</a> · <a href="summary-vi.html">Tiếng Việt</a> · <a href="coverage.html">Requirement coverage</a></div></header><div class="shell"><aside><strong>On this page</strong></aside><main><h1 id="requirement-coverage-and-limits">Requirement coverage and limits</h1>
+<p>The reviewed source is pinned to 5457ac5accd97c3519bf6d16ead147a0db2ab0d0. Market evidence is frozen at 22:17 Chicago, 7 September 2026. A completed report does not mean every unknown has been resolved.</p>
+<div class="table-wrap"><table>
+<thead>
+<tr>
+  <th>Owner requirement</th>
+  <th>Work completed</th>
+  <th>Evidence / report location</th>
+  <th>Limit</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Professional NQ trading-preparation perspective</td>
+  <td>Conditional style, context, preparation, invalidation and feasible risk reviewed</td>
+  <td>Report sections 1, 4, 6 and 10</td>
+  <td>Analytical perspective; no personal professional credentials claimed</td>
+</tr>
+<tr>
+  <td>Complete Planner history</td>
+  <td>All 102 stored versions inventoried; all 280 scenarios exported</td>
+  <td>planner-history.json; all-scenarios.csv</td>
+  <td>Not every original request or historical live-cache revision was retained</td>
+</tr>
+<tr>
+  <td>Compare successive plans against actual market data</td>
+  <td>Detailed review of all three captured current-session versions; publication-time prices independently calculated</td>
+  <td>case-bars.json; publication-context.json; section 4</td>
+  <td>Current-session contextual study, not 102 complete historical replays</td>
+</tr>
+<tr>
+  <td>Check every level family</td>
+  <td>Definition, window, role, approximation and source inventory</td>
+  <td>Section 5</td>
+  <td>Source defaults distinguished from live configuration</td>
+</tr>
+<tr>
+  <td>Check grade, ranking and filters</td>
+  <td>Weights, freshness, confluence, overrides, caps and representation passes traced</td>
+  <td>Section 5; candidate-selection.csv</td>
+  <td>Excluded score components are unavailable; no invented attribution</td>
+</tr>
+<tr>
+  <td>Keep meaningful chart references when not selected</td>
+  <td>Entry selection separated from obstacle, target and invalidation roles</td>
+  <td>Sections 5 and 10</td>
+  <td>Proposed policy; benefit not proven by current selected-only touch data</td>
+</tr>
+<tr>
+  <td>Check news, session and volatility</td>
+  <td>Session windows, calendar fallback, bar completion, RV/ATR horizons and holiday-sensitive definitions reviewed</td>
+  <td>Sections 2, 5 and 9</td>
+  <td>Exact original RV baseline inputs not reconstructed; no complete dated-news archive</td>
+</tr>
+<tr>
+  <td>Check volume information</td>
+  <td>Both profile estimators, VWAP windows and non-order-flow pattern proxies traced</td>
+  <td>Section 5</td>
+  <td>No tick-level volume-at-price or order-book feed was available</td>
+</tr>
+<tr>
+  <td>Check scenario style</td>
+  <td>All seven stored condition families counted; continuation, rejection and sweep distinctions reviewed</td>
+  <td>Sections 4 and 7</td>
+  <td>Counts describe authored scenarios, not opportunity or execution frequency</td>
+</tr>
+<tr>
+  <td>Check entry / stop / targets</td>
+  <td>All 111 complete arms recalculated; first-target and final-target economics distinguished</td>
+  <td>Section 6; metrics.json</td>
+  <td>169 scenarios without complete arm geometry not assigned invented values</td>
+</tr>
+<tr>
+  <td>Check confirmation order / timeframes</td>
+  <td>Actual functions run with four mirrored synthetic counterexamples</td>
+  <td>confirmation-probe.json; confirmation-probe.go.txt; section 7</td>
+  <td>Demonstrates logic failure, not a historical trade occurrence</td>
+</tr>
+<tr>
+  <td>Check state and invalidation</td>
+  <td>Status ladder, absent condition mappings, anchor inference and lifecycle provenance reviewed</td>
+  <td>Section 7</td>
+  <td>Several historical occurrences remain unverified</td>
+</tr>
+<tr>
+  <td>Check prompt and pipeline</td>
+  <td>Input assembly, authoring, repair, validation, normalization, persistence and overlay traced</td>
+  <td>Sections 3 and 8</td>
+  <td>Original request/response chain is incomplete; no fabricated reconstruction</td>
+</tr>
+<tr>
+  <td>Check executor handoff</td>
+  <td>Active plan versus retained arm version and decision-attribution timing reviewed</td>
+  <td>Section 8</td>
+  <td>Not a full broker execution audit, per the owner's latest priority</td>
+</tr>
+<tr>
+  <td>Detailed references</td>
+  <td>Source links pinned to audited revision; primary external research and data artifacts</td>
+  <td>Report; source-index.csv</td>
+  <td>External source pages require network access</td>
+</tr>
+<tr>
+  <td>Clear proposals and proof</td>
+  <td>Ten main proposals plus six inventory-specific proposals with acceptance criteria</td>
+  <td>Section 10; agent-review-brief.md</td>
+  <td>No proposed fix was applied</td>
+</tr>
+<tr>
+  <td>Read-only system review</td>
+  <td>Isolated source checkout and separate docs worktree; read-only data access</td>
+  <td>Report section 2</td>
+  <td>Separate owner-requested review automation was created; no trading behavior changed</td>
+</tr>
+<tr>
+  <td>Communicate properly with codex 101</td>
+  <td>Detailed review brief prepared</td>
+  <td>agent-review-brief.md</td>
+  <td>Messaging channel could not reach that VS Code task; brief was not sent</td>
+</tr>
+<tr>
+  <td>Review before every session</td>
+  <td>One active heartbeat saved with London, NY and ASIA pre-session times</td>
+  <td>Section 10</td>
+  <td>Future unattended execution and data access not yet observed</td>
+</tr>
+<tr>
+  <td>No omissions hidden by a completion claim</td>
+  <td>Evidence gaps, unavailable raw history and unproved strategy benefits are explicit</td>
+  <td>Report limitations</td>
+  <td>No certification of every line in the entire repository or of profitable trading</td>
+</tr>
+</tbody>
+</table></div>
+<p>Local delivery includes the full report, this matrix, the proposed agent brief, raw sanitized evidence, arithmetic verifier and recorded confirmation probe. No production fixes or automatic trade actions are included.</p>
+</main></div><footer>Source and data frozen as documented · September 7, 2026 · Local review bundle · No production changes</footer></html>

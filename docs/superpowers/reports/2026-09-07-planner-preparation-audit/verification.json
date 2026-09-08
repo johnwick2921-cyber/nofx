@@ -1,0 +1,46 @@
+{
+  "pages": [
+    {
+      "file": "index.html",
+      "heading": "Is the Planner ready to prepare a coherent trading session?",
+      "desktopNoOverflow": true,
+      "mobileNoOverflow": true
+    },
+    {
+      "file": "report.html",
+      "heading": "Is the Planner preparing like a professional NQ trading desk?",
+      "desktopNoOverflow": true,
+      "mobileNoOverflow": true
+    },
+    {
+      "file": "coverage.html",
+      "heading": "Requirement coverage and limits",
+      "desktopNoOverflow": true,
+      "mobileNoOverflow": true
+    },
+    {
+      "file": "summary-vi.html",
+      "heading": "T\u00f3m t\u1eaft cho ch\u1ee7 h\u1ec7 th\u1ed1ng",
+      "desktopNoOverflow": true,
+      "mobileNoOverflow": true
+    },
+    {
+      "file": "agent-review-brief.html",
+      "heading": "Review brief for codex 101 \u2014 proposal only, not dispatched",
+      "desktopNoOverflow": true,
+      "mobileNoOverflow": true
+    }
+  ],
+  "mainNavigation": true,
+  "sectionNavigation": true,
+  "jsErrors": [],
+  "networkRequests": [],
+  "scope": "Five offline report pages only; no live dashboard access",
+  "source_revision": "5457ac5accd97c3519bf6d16ead147a0db2ab0d0",
+  "source_reference_targets_checked": 144,
+  "source_files_referenced": 53,
+  "offline_arithmetic": "passed",
+  "local_file_and_fragment_links": "passed",
+  "production_files_changed": false,
+  "publication": "local only; public evidence payload awaiting approval"
+}
