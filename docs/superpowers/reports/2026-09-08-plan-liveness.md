@@ -400,3 +400,85 @@ The implementation changes neither EntryGate's file/legs, the executor, stop
 composition, reaper, level scoring/seating, signal-clock files, cadence values,
 nor replan budget rules. The small companion edits update versioned record
 consumers, boot output, API/UI, Guide and test fixtures.
+
+### C5 inventory correction at the measured running source
+
+At `33672fdd2cd2`, direct scheduled reads run through
+`auto_trader_clock.go:98` → `auto_trader_planner.go:190/252`; death replans through
+`auto_trader_planner.go:334/765`; MSS through `auto_trader_transition.go:156/206`;
+and level-event reads through `auto_trader_wake_levels.go:250/376`.
+There was no scenario-exhaustion authoring trigger in these paths.
+The dispatch's other labels need qualification: `auto_trader_loop.go:80` is the
+`fastMarketATR` threshold getter, not a planner trigger; the planner reads that
+drift for its reasoning mode and the cadence code for its bypass. `discard_burn`
+implements stale decision re-evaluation and delayed cycle kicks, not a distinct
+scenario-exhaustion planner read. A kick reaches normal scheduled/read checks
+at the top of the cycle (`auto_trader_clock.go:897–905`). Budget-related
+"exhausted" text also exists in the planner, not only the MSS comment.
+
+Freshness for these additional running-source citations:
+
+- `trader/auto_trader_clock.go`: `3f23d9bb5404696c7eeabc43bb133c118d60a6f7 2026-09-07T19:30:13-05:00 feat(session-calendar): the fold — one calendar, one owner, and the sourced close times win`
+- `trader/auto_trader_loop.go`: `0eddf90e95184c106d5a8c6f8fabaa8059d667f5 2026-09-07T19:30:13-05:00 feat(session-calendar): D5 the MODE line, D6 the boot line, the Guide, the map and class 84`
+- `trader/discard_burn.go`: `e424ec41bf60bbf18ec05a12ee5b6945aa46876e 2026-08-20T00:53:41-05:00 fix(T3): ONE timeframe table (kernel/timeframes.go) — the three drifted private copies delegated (stale_data 1m/5m/15m-only, dodge, NT8 bridge with its silent unknown→60s CloseTime fabrication); unmapped primary TF is now a named BOOT FAIL; 3m/30m gain forming labels + correct interval math`
+- `trader/auto_trader_transition.go`: `21b3e75e3243839bfddcf39e80f630363af5f03e 2026-09-03T22:50:35-05:00 fix(class 60/72): clock seams for every time-dependent rule + the flake was a clock`
+
+### Merged validation and candidate build
+
+[A] Code and report merged to dev at
+`393712c1bcbc767de0318517d5f2823a1907d374`. Both remote refs were verified equal
+to that SHA. At that merged head:
+
+- `go test ./...`: PASS (including trader, store, API and all broker packages).
+- `go test ./kernel -run 'Golden|SelfCheck' -count=1`: PASS.
+- Vitest: **50 files / 366 tests PASS**.
+- `tsc --noEmit`: PASS.
+- All **14 new Go functions** have production callers; the three load-bearing
+  mutation removals fail the intended tests. Frontend `PlanLiveness` is rendered
+  by the real SessionPlanCard, and the card supplies the records to ScenarioList.
+
+[A] After the merged-head suite passed, `go build -o nofx-bin .` ran in the clean
+clone `/tmp/nofx-plan-liveness-build/nofx` (leaf directory **nofx**). Build metadata:
+
+```
+vcs.revision=393712c1bcbc767de0318517d5f2823a1907d374
+vcs.time=2026-09-08T14:02:15Z
+vcs.modified=false
+SHA256=65ce253fe3dc602971ba88a558bb79437303d03e5c784ee3ae3fa85445711a96
+```
+
+`GUIDE_BUILT_REV` was set by reading this binary's `vcs.revision`, not by guessing
+HEAD. The frontend is rebuilt after this guide-marker commit. This marker does
+not claim a deployment: RELEASE, the running executable and the served dist are
+unchanged. The final marker/report head is tested again before the frontend build.
+
+The owner still needs to give explicit cutover GO. At preparation time (~09:00
+CT), the routine A7 deploy window is closed; no mid-session exception was given.
+There was no binary swap, process signal, live data.db change, RELEASE update or
+boot marker. The fresh five-leg broker gate, in-flight check, backup, swap/verify,
+owner kill, 90-second boot check and five-reference proof remain cutover work.
+No historical log or fixture output is presented as a new live boot/death/refusal.
+
+Operational note: the first shell-launched heartbeat keeper did not survive its
+shell. The lock was still fresh and held by this session; it was renewed and a
+keeper was restarted with `start_new_session=True`. It exits when the lock is
+released. No foreign lock was cleared or reclaimed.
+
+Production call-site census at the compiled code head:
+
+```
+EvaluateAuthoredInvalidationAt: trader/plan_liveness.go:22
+PlanLivenessBootLine: main.go:341
+PlanLivenessCounts: trader/plan_liveness.go:69
+RecordPlanLivenessEvent: trader/plan_liveness.go:25, trader/plan_liveness.go:37, trader/plan_liveness.go:58
+RecordScenarioDeath: trader/auto_trader_levelstate.go:271
+ScenarioDeathFor: trader/invalidation_resolver.go:76, api/handler_plan.go:424
+ScenarioLivenessFor: trader/desk_facts.go:675, api/handler_plan.go:429
+observePlanExhaustionAt: trader/auto_trader_levelstate.go:283
+planExhaustionPolicy: trader/plan_liveness.go:57, trader/plan_liveness.go:73
+recordScenarioStateAt: trader/auto_trader_levelstate.go:183
+runPlannerReadCoreWithFactsGradesClock: trader/auto_trader_planner.go:1467
+scenarioInvalidationAt: trader/invalidation_resolver.go:34
+scenarioInvalidationResolverClock: trader/invalidation_resolver.go:26
+validateAuthoredScenariosAt: trader/auto_trader_planner.go:1787
+```
