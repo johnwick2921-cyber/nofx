@@ -1,4 +1,12 @@
 {
+  "build-validation.json": {
+    "bytes": 692,
+    "sha256": "13eeac3c1542a5e36d78b2c65379894d286bb2f43a321984ad7c73deeeb45085"
+  },
+  "candidate.json": {
+    "bytes": 15508,
+    "sha256": "65989b79cfe2a27ee6fc128817f64b3dab4af451b9127847d0e6d9089b289325"
+  },
   "checklist-census.txt": {
     "bytes": 1086,
     "sha256": "0e58d9799c978a8c419fc2067f90105eec3ea8c326ca456e373e568984331ef0"
@@ -6,6 +14,10 @@
   "failed-live-boot.json": {
     "bytes": 1770,
     "sha256": "228bcf7116fcbbc0959b356cb45f5524ac8a901f76b9aeb0e8117493c17bd66c"
+  },
+  "full-go.log": {
+    "bytes": 2499,
+    "sha256": "0fcab60c87878fda6e68a7274d50bfea47d9801594aac5295734a9754a01e355"
   },
   "mutation-false-schema-red.log": {
     "bytes": 514,

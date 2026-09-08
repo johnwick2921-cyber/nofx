@@ -270,3 +270,14 @@ That is a failed research initialization, not a live record. The scenario-econom
 [A] New startup regression **RED** on the old source: `working recorder required at relative path "data/data.db.research.db"; boot line: ... schema=UNKNOWN`. The separate read-only regression was also RED with the SQLite open error. Restored tests pass under `-race`. The working-startup pin reads the real schema and persisted candidate count; the failure pin still requires a WARN and schema=UNKNOWN. Exact-line mutations removing each path normalization fail their respective pins, and replacing the default UNKNOWN with the schema constant fails the genuine-failure pin. Logs and the peer reproduction are retained in the repair evidence directory.
 
 [A15] Until a corrected boot produces a real schema and rows, the research half remains **unshipped**. The previous candidate/latency fixtures and healthy scenario-economics counters do not prove research availability. No historical research records are recreated or represented as original observations.
+
+
+### Corrected candidate prepared
+
+Repair binary **954f11b15f2e7615678f7d2b708c47895faebf1e**, **vcs.modified=false**, built in `/tmp/stage-a-path-build/nofx` after full `go test ./... -count=1` PASS (including goldens), Vitest **54 files / 378 tests PASS**, and TypeScript PASS. Binary **72,459,208 bytes**, SHA-256 `c7c9c72321c89a56f5348cc0a9cee554b8f63633782cc6b29973e196fae2e4cf`. GUIDE_BUILT_REV was read from that binary at **18:44:06 CT**, THEN dist built: **92 files / 7,918,609 bytes**, exact manifest retained.
+
+The repair keeper acquired the free lock at **18:37:10 CT**. Before cutover, actual running/disk revision **6f677b55daa1c7da33b8c35f8bcc67883f36b470**, PID **3726840**, was backed up by embedded revision with matching RELEASE/dist. Online `data.db` backup at **18:40:56 CT**, **753,287,168 bytes**, returned **integrity_check=ok**. No existing trading table is migrated.
+
+Fresh preparation gate **18:44:39 CT** passed all five legs for the one running trader; leg 4 was **NT8 order_snapshot, h1, age 2s, zero working orders**. Separate active-arm census: **0, IDs []**. Applied window: after 17:10 CT, flat, no arms, no position. A further fresh gate and independent swap verification remain required before the owner restart. Under the standing owner boot instruction, this repair prepares RELEASE and the verified binary; the agent never executes the kill.
+
+At this receipt, repaired startup is proven by the fixture, **not yet by the running service**. The first known schema, candidate/cut/attempt and export remain live proof requirements. Publication receipt, swap verification, owner restart and passed-boot marker will distinguish preparation from shipping.
