@@ -196,7 +196,7 @@ Development validation: full `go test ./...` passed; all **53 Vitest files / 377
 
 At accept Stage A was `250546854b...`, claim `af1ded7e` by `stage-a-snapshot-96604090/root[unlisted]`. At the implementation refresh it was `896aeea5abb2faa2daabe247b7c551ab9f30ac9a`. Its new recorder diff owns scorer/record hooks and `main.go`; this wave touches none of those. The shared `kernel/planner_prompt.go` diff adds `ResearchSnapshotID` to `PlannerInput`; ours changes only scenario-contract text, in a different hunk. SYSTEM-MAP must preserve both additions when whichever lane lands second rebases. Ownership is established by named branch/claim and diff, not Git author identity; this is not a claim of direct lane acknowledgement.
 
-The accept checklist census used both formats, numeric sort and **`uniq -c`**: highest **91**, duplicates **75/76/77 count 2 each**. [Census](2026-09-08-scenario-economics-data/checklist-census.txt). Assign this wave's class at its behavior merge after a fresh census; never renumber another lane.
+The accept checklist census used both formats, numeric sort and **`uniq -c`**: highest **91**, duplicates **75/76/77 count 2 each**. [Census](2026-09-08-scenario-economics-data/checklist-census.txt). At the locked behavior merge, the fresh census still had highest 91 and the same duplicates; this wave was assigned **class 92**. No other entry was renumbered.
 
 ## Owner-visible limits, rollback, and publication
 
