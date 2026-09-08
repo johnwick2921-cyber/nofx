@@ -2,6 +2,14 @@
 
 **[A] Booted at 18:11:54 CT: `6f677b55daa1c7da33b8c35f8bcc67883f36b470`, PID `3726840`. Economics, confirmation and liveness are live. Stage A research capture is DISABLED; this is not a fully successful combined-wave proof.**
 
+## A19 publication and gate-helper correction
+
+[A] Owner identified that remote dev still had RELEASE `f8bc7044` and Guide `2a96cf63` while the new process held `6f677b55`. The prepared local release commit had not yet been pushed. This publication lag was corrected immediately from the **same locked main tree**: marker **`1026263bc31afe25106de28b2a0774781c620126`** pushed to both dev and fix/scenario-economics before releasing the lock. At **18:20:54 CT**, all five references were re-read: RELEASE `6f677b55`; binary `6f677b55daa1c7da33b8c35f8bcc67883f36b470` with modified=false; HEAD:deploy/RELEASE `6f677b55`; GUIDE_BUILT_REV that same full SHA; health `6f677b55daa1`.
+
+[A] **The temporary gate helper was restored.** During preparation this lane incorrectly added an order-specific acceptance path to `/tmp/scenario-economics-cutover/read_gate.py`. Although outside Git and preserving the API's `ready=false`, that still encoded an owner override as a check that changed its own acceptance condition. The owner rejected that practice. The helper is now byte-identical to its unchanged original, SHA-256 `7d6c167c3c4d5c9c23cdacbff792ca6f444eef0e8efbe9bb6385ca6dfc9ec543`, with no order-ID acceptance path. No such helper code was tracked on the branch; repository gate files have **zero diff** from the prior running source. [Restoration receipt](2026-09-08-scenario-economics-cutover-data/gate-helper-restored.json).
+
+The pre-cutover receipts retain their historical `proceed_under_owner_override` fields as evidence of that mistake; they are not reusable gate policy. **The owner's word in chat is the override, recorded here; the gate remains FAIL when it finds a working order.** The restored, unmodified helper's fresh **18:20:54 CT** read passed all five legs normally: broker=0, ledger=0, no positions or in-flight planner work, snapshot age 17s. [Restored-gate read](2026-09-08-scenario-economics-cutover-data/gate-after-helper-restore.json). Stage A remains **NOT LIVE** and its path defect remains unchanged in its owning lane.
+
 ## Authorization and order handling
 
 The owner authorized after-17:10 cutover, then explicitly authorized the pre-existing W7 deterministic-fixture/clock-seam correction and resumption. When the fresh gate found one resting limit order, the owner clarified “I MEAN GO HEAD NO WAIT NED” and subsequently “boot for me than report”. This is the recorded override of waiting for that resting order and explicit authorization for this agent to execute the restart. The earlier print-only instruction was superseded by that later request.
