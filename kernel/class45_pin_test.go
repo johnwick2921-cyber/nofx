@@ -32,11 +32,13 @@ import (
 // Reclaimed — and told nobody until the write.
 
 // pinLondonBars rebuilds the shape of that tape: a breakdown through 29021.25
-// followed by a close back across it (the reclaim that voids the play).
+// followed by a completed 5m close back across it. Each stage below is
+// synthetic; the original five-minute-long fixture never had a 5m break.
 func pinLondonBars() []market.Kline {
 	const lvl = 29021.25
 	var out []market.Kline
 	t := int64(1_756_800_000_000)
+	t -= t % 300_000 // synthetic stages on canonical 5m boundaries
 	add := func(c float64) {
 		out = append(out, market.Kline{OpenTime: t, CloseTime: t + 59_000, Open: c, High: c + 3, Low: c - 3, Close: c})
 		t += 60_000
@@ -46,7 +48,7 @@ func pinLondonBars() []market.Kline {
 	add(lvl - 12)
 	add(lvl + 4) // ← a close came back ACROSS: the breakdown is VOID
 	add(lvl + 7)
-	return out
+	return completeFiveMinuteFixture(out)
 }
 
 // TestClass45PinLondon0132 is the wave's pin. It asserts the three things the

@@ -137,7 +137,8 @@ func TestEntryLawFadeStopBeyondLevel(t *testing.T) {
 
 // TestRehearsalS4CaseStillRejects — the dress-rehearsal S4 (breakdown_continue
 // 29437, pullback, 2x5m+1x5m) on its OWN tape: the flip leg had already
-// reclaimed, so the write path must STILL reject (reclaimed=true).
+// reclaimed on a minute bar. Under confirmation truth this is NOT a 5m
+// void; it still refuses at this instant because no 5m break has closed.
 func TestRehearsalS4CaseStillRejects(t *testing.T) {
 	start := time.Date(2026, 8, 30, 10, 0, 0, 0, time.Local)
 	bars := []market.Kline{
@@ -157,12 +158,12 @@ func TestRehearsalS4CaseStillRejects(t *testing.T) {
 		Breakdown:   &PlanBreakdownContinue{Level: 29437, LevelLabel: "PDL", EntryMode: "pullback"},
 	}}}
 	err := ValidateBreakdownContinueScenarios(&plan, tapeScope(bars), 15.0, 29436, bars[len(bars)-1].CloseTime)
-	if err == nil || !strings.Contains(err.Error(), "void") {
-		t.Fatalf("rehearsal S4 (reclaimed) must STILL reject — the new entry law must not resurrect it (got %v)", err)
+	if err == nil || !strings.Contains(err.Error(), "NO confirming close") {
+		t.Fatalf("rehearsal S4 has no completed 5m break; refuse that missing confirmation, never claim a 5m reclaim (got %v)", err)
 	}
 	st := BreakdownContinueState(plan.Scenarios[0], bars, 0, bars[len(bars)-1].CloseTime)
-	if !st.Reclaimed {
-		t.Fatalf("S4 tape must be machine-reclaimed: %+v", st)
+	if st.Reclaimed {
+		t.Fatalf("S4 minute-only reclaim must not be reported as a 5m void: %+v", st)
 	}
 }
 

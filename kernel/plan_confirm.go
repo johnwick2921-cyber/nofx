@@ -21,6 +21,9 @@ import (
 // evaluating. 1m_mss and time_hold never route through the acceptance
 // machinery (they are evaluated by their own primitives).
 func confirmAcceptanceRule(rule string) string {
+	if n, err := strconv.Atoi(strings.TrimSuffix(rule, "x5m_close")); err == nil && n > 0 {
+		return fmt.Sprintf("%dx5m", n)
+	}
 	switch rule {
 	case "15m_close": // legacy: stored docs only
 		return "15m-close"
@@ -33,6 +36,15 @@ func confirmAcceptanceRule(rule string) string {
 
 // ConfirmVerdict is one scenario's machine-computed confirmation state.
 type ConfirmVerdict struct {
+	Outcome         string       `json:"outcome"`
+	Bucket          *BucketClose `json:"bucket,omitempty"`
+	EvaluatedMs     int64        `json:"evaluated_ms"`
+	ReferenceMs     *int64       `json:"reference_ms,omitempty"`
+	ReferenceSource string       `json:"reference_source"`
+	EventMs         int64        `json:"event_ms,omitempty"`
+	EventKnown      bool         `json:"event_known"`
+	Refusal         string       `json:"refusal,omitempty"`
+
 	Rule     string           `json:"rule"`
 	RefPrice float64          `json:"ref_price"`
 	Side     string           `json:"side"`
@@ -47,71 +59,8 @@ type ConfirmVerdict struct {
 // EvaluateConfirm computes MET/NOT-MET for one confirm object over the bars
 // since the plan's birth (touch-gated like plan death; windowed identically).
 func EvaluateConfirm(c PlanConfirm, bars []market.Kline, sinceMs, nowMs int64) ConfirmVerdict {
-	v := ConfirmVerdict{Rule: c.Rule, RefPrice: c.RefPrice, Side: c.Side}
-	w := BarsSince(bars, sinceMs)
-	if len(w) == 0 {
-		v.Detail = "no bars yet"
-		return v
-	}
-	if c.Rule == "touch" {
-		for i := range w {
-			if w[i].Low <= c.RefPrice && w[i].High >= c.RefPrice {
-				v.Met = true
-				v.Detail = "level touched"
-				return v
-			}
-		}
-		v.Detail = "not touched since plan birth"
-		return v
-	}
-	// E5 (2026-08-30) — 1m-MSS: last confirmed 1m swing broken by a qualifying
-	// 1m close. Renders "1m-MSS: MET/NOT-MET (swing <px> @<t>)".
-	if c.Rule == "1m_mss" {
-		m := EvaluateMSS(w, c.Side, nowMs)
-		v.Met = m.Met
-		v.Detail = m.Detail
-		return v
-	}
-	// E6 (2026-08-30) — time_hold: price must HOLD beyond ref for
-	// ACCEPT_HOLD_MIN minutes of 1m closes with no close back across.
-	if c.Rule == "time_hold" {
-		need := AcceptHoldMin()
-		above := strings.EqualFold(c.Side, "above")
-		var run, best int
-		for _, b := range w {
-			if b.CloseTime >= nowMs {
-				continue // closed 1m bars only
-			}
-			beyond := (above && b.Close > c.RefPrice) || (!above && b.Close < c.RefPrice)
-			if beyond {
-				run++
-				if run > best {
-					best = run
-				}
-			} else {
-				run = 0
-			}
-		}
-		v.Met = best >= need
-		if best == 0 {
-			v.Detail = "no 1m close held beyond the ref yet"
-		} else {
-			v.Detail = fmt.Sprintf("price held %s %.2f for %d/%d min of 1m closes", c.Side, c.RefPrice, best, need)
-		}
-		return v
-	}
-	rule := confirmAcceptanceRule(c.Rule)
-	above := strings.EqualFold(c.Side, "above")
-	// EVER-fired semantics via the sanctioned facts API (the acceptance-interval
-	// guard forbids raw counting outside scenario_facts.go).
-	best, need, lastClose := AcceptanceRunEver(w, rule, c.RefPrice, above)
-	if lastClose == 0 && best == 0 {
-		v.Detail = "no closed bars at the rule timeframe yet"
-		return v
-	}
-	v.Met = best >= need
-	v.Detail = fmt.Sprintf("last %s close %.2f (best run %d/%d closes %s %.2f since plan birth)",
-		strings.TrimSuffix(c.Rule, "_close"), lastClose, best, need, c.Side, c.RefPrice)
+	v := evaluateConfirmAfter(c, bars, sinceMs, nowMs, nil)
+	recordConfirmationVerdict(v)
 	return v
 }
 
@@ -189,37 +138,52 @@ func staleConfirmAnnotation(s PlanScenario, v ConfirmVerdict, nowPrice, atr5m fl
 func EvaluateScenarioConfirm(s PlanScenario, bars []market.Kline, sinceMs, nowMs int64) ConfirmVerdict {
 	if IsBreakdownCondition(s.Condition) && s.Breakdown != nil {
 		st := BreakdownContinueState(s, bars, sinceMs, nowMs)
-		leg1 := ConfirmVerdict{Rule: fmt.Sprintf("%dx5m_close", bdConfirmCloses()), RefPrice: s.Breakdown.Level,
-			Side: map[bool]string{true: "below", false: "above"}[breakdownShort(s.Condition)], Met: st.Leg1Met,
-			Detail: fmt.Sprintf("best run %d closes beyond %.2f", 0, s.Breakdown.Level)}
-		if st.Leg1Met {
-			leg1.Detail = fmt.Sprintf("displacement %.2f pts, no reclaim", st.BreakLegPts)
+		side := "above"
+		if breakdownShort(s.Condition) {
+			side = "below"
 		}
-		v := ConfirmVerdict{Met: st.Leg1Met && st.Leg2Met, Legs: []ConfirmVerdict{leg1, {
-			Rule: "retest_fail", RefPrice: s.Breakdown.Level, Side: leg1.Side,
-			Met: st.Leg2Met, Detail: retestLegDetail(s, st),
-		}}}
-		v.Rule, v.RefPrice, v.Side = leg1.Rule, leg1.RefPrice, leg1.Side
-		v.Detail = retestLegDetail(s, st)
+		c := PlanConfirm{Rule: fmt.Sprintf("%dx5m_close", bdConfirmCloses()), RefPrice: s.Breakdown.Level, Side: side}
+		leg1 := evaluateConfirmAfter(c, bars, sinceMs, nowMs, nil)
+		leg1.Met = st.Leg1Met
+		leg1.Outcome = "NOT MET"
+		if leg1.Met {
+			leg1.Outcome = "MET"
+		}
+		if st.Reclaimed {
+			leg1.Detail = "reclaimed by completed 5m close — the breakdown is void · " + leg1.Detail
+		}
+		leg2 := ConfirmVerdict{Rule: "retest_fail", RefPrice: c.RefPrice, Side: side, Met: st.Leg2Met,
+			EvaluatedMs: nowMs, ReferenceSource: "part one recorded 5m close", Bucket: st.Bucket, Detail: retestLegDetail(s, st)}
+		if st.Leg1Known {
+			leg2.ReferenceMs = &st.Leg1At
+		} else {
+			leg2.Outcome = confirmationUnknown
+			leg2.Refusal = "missing_reference"
+			leg2.Detail = "part one reference instant is missing; UNKNOWN does not satisfy"
+		}
+		if st.Leg2Met {
+			leg2.EventMs, leg2.EventKnown = st.Leg2At, true
+			e := EvaluateBucketClose(st.Leg2At-1, AcceptanceIntervalMinutes("5m-close"), nowMs)
+			leg2.Bucket = &e
+		}
+		if st.ReclaimedAt != nil {
+			e := EvaluateBucketClose(*st.ReclaimedAt-1, AcceptanceIntervalMinutes("5m-close"), nowMs)
+			leg2.Bucket = &e
+		}
+		finishConfirmation(&leg2)
+		v := leg2
+		v.Rule, v.RefPrice, v.Side = c.Rule, c.RefPrice, c.Side
+		v.Met = st.Leg1Met && st.Leg2Met
+		v.Legs = []ConfirmVerdict{leg1, leg2}
+		recordConfirmationVerdict(v)
 		return v
 	}
 	if s.Confirm == nil {
 		return ConfirmVerdict{}
 	}
-	v1 := EvaluateConfirm(*s.Confirm, bars, sinceMs, nowMs)
-	if s.Confirm2 == nil {
-		return v1
-	}
-	// Leg 2 is windowed from leg 1's first fire (the retest leg cannot be
-	// satisfied by touches/closes that happened before the breakdown).
-	since2 := firstConfirmFireMs(*s.Confirm, bars, sinceMs, nowMs)
-	if since2 <= 0 {
-		since2 = sinceMs
-	}
-	v2 := EvaluateConfirm(*s.Confirm2, bars, since2, nowMs)
-	v2.Met = v1.Met && v2.Met // leg 2 only counts once leg 1 is satisfied (ordered legs)
-	return ConfirmVerdict{Rule: v1.Rule, RefPrice: v1.RefPrice, Side: v1.Side,
-		Met: v1.Met && v2.Met, Detail: v2.Detail, Legs: []ConfirmVerdict{v1, v2}}
+	v := orderedScenarioConfirm(s, bars, sinceMs, nowMs)
+	recordConfirmationVerdict(v)
+	return v
 }
 
 // AcceptHoldMin resolves ACCEPT_HOLD_MIN (E6, default 10) — the minutes of
@@ -233,73 +197,11 @@ func AcceptHoldMin() int {
 	return 10
 }
 
-// firstConfirmFireMs returns the open time of the bar where the close-rule
-// confirm FIRST fired (the run reached the required count), 0 when not met.
-func firstConfirmFireMs(c PlanConfirm, bars []market.Kline, sinceMs, nowMs int64) int64 {
-	if c.Rule == "touch" {
-		return 0
-	}
-	w := BarsSince(bars, sinceMs)
-	if len(w) == 0 {
-		return 0
-	}
-	// E5 — 1m_mss fires at the breaking bar.
-	if c.Rule == "1m_mss" {
-		m := EvaluateMSS(w, c.Side, nowMs)
-		if m.Met {
-			return m.BreakTimeMs
-		}
-		return 0
-	}
-	// E6 — time_hold fires when the qualifying run completes (its first bar).
-	if c.Rule == "time_hold" {
-		need := AcceptHoldMin()
-		above := strings.EqualFold(c.Side, "above")
-		run := 0
-		for i, b := range w {
-			if b.CloseTime >= nowMs {
-				continue
-			}
-			beyond := (above && b.Close > c.RefPrice) || (!above && b.Close < c.RefPrice)
-			if beyond {
-				run++
-				if run >= need {
-					return w[i-run+1].OpenTime
-				}
-			} else {
-				run = 0
-			}
-		}
-		return 0
-	}
-	rule := confirmAcceptanceRule(c.Rule)
-	var dur, need int64
-	switch rule {
-	case "5m-close":
-		dur, need = 5*60_000, 1
-	case "2x5m":
-		dur, need = 5*60_000, 2
-	default:
-		return 0
-	}
-	buckets := AggregateBars(w, dur)
-	above := strings.EqualFold(c.Side, "above")
-	run := int64(0)
-	for _, b := range buckets {
-		if b.CloseTime > nowMs {
-			continue
-		}
-		beyond := (above && b.Close > c.RefPrice) || (!above && b.Close < c.RefPrice)
-		if beyond {
-			run++
-			if run >= need {
-				return b.OpenTime
-			}
-		} else {
-			run = 0
-		}
-	}
-	return 0
+// ConfirmReferenceInstant is the single reference lookup. Zero is allowed as
+// an actual instant only when ok=true; a missing witness never becomes birth.
+func ConfirmReferenceInstant(c PlanConfirm, bars []market.Kline, sinceMs, nowMs int64) (instant int64, ok bool) {
+	v := evaluateConfirmAfter(c, bars, sinceMs, nowMs, nil)
+	return v.EventMs, v.EventKnown
 }
 
 // retestLegDetail renders the leg-2 state of a waterfall-class play.

@@ -156,6 +156,10 @@ func (at *AutoTrader) armedTrader() *ntTrader.TCPTrader {
 // the honest-wait leak the autopsy quantified (declines while a FRESH confirm
 // was live). Mirrors RenderConfirmLines' staleness rule.
 func (at *AutoTrader) declineHadFreshMet() bool {
+	return at.declineHadFreshMetAt(time.Now())
+}
+
+func (at *AutoTrader) declineHadFreshMetAt(now time.Time) bool {
 	plan := kernel.ActivePlanFor(at.id, at.futuresSymbol())
 	if plan == nil {
 		return false
@@ -167,14 +171,14 @@ func (at *AutoTrader) declineHadFreshMet() bool {
 	if len(bars) == 0 {
 		return false
 	}
-	nowMs := time.Now().UnixMilli()
+	nowMs := now.UnixMilli()
 	nowPrice := bars[len(bars)-1].Close
 	atr5m := market.ExportCalculateATR(kernel.AcceptanceBars(bars, "2x5m"), 14)
 	for _, s := range plan.Doc.Scenarios {
 		if s.Confirm == nil {
 			continue
 		}
-		v := kernel.EvaluateConfirm(*s.Confirm, bars, plan.BirthMs, nowMs)
+		v := kernel.EvaluateScenarioConfirm(s, bars, plan.BirthMs, nowMs)
 		if !v.Met {
 			continue
 		}
@@ -187,6 +191,10 @@ func (at *AutoTrader) declineHadFreshMet() bool {
 }
 
 func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureState) {
+	at.maybeManageArmedOrdersAt(snap, time.Now())
+}
+
+func (at *AutoTrader) maybeManageArmedOrdersAt(snap map[string]kernel.StructureState, now time.Time) {
 	if !at.dayPlanEnabled() || at.store == nil || at.exchange != "ninjatrader" {
 		return
 	}
@@ -200,7 +208,6 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 	// the head of the armed subsystem, so sweep-before-arm is guaranteed by
 	// position — runArmedPlacement is reached from BELOW this line only.
 	at.sweepPreBootArms(ledger)
-	now := time.Now()
 
 	// FIX 1 (2026-09-07) — DRAIN THE FILL BEFORE ANY GUARD READS THE LEDGER.
 	//
@@ -444,14 +451,7 @@ func (at *AutoTrader) maybeManageArmedOrders(snap map[string]kernel.StructureSta
 			// on confirm2 (1m_mss|1x5m_close); a legacy single arm chains on
 			// its own confirm{}.
 			if leg.WaitConfirm {
-				chain := sc.Confirm2
-				if len(sc.Arm.Legs) == 0 {
-					chain = sc.Confirm
-				}
-				if chain == nil {
-					continue
-				}
-				v := kernel.EvaluateConfirm(*chain, bars, plan.BirthMs, now.UnixMilli())
+				v := kernel.EvaluateScenarioConfirm(sc, bars, plan.BirthMs, now.UnixMilli())
 				if !v.Met {
 					continue
 				}

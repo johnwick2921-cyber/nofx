@@ -14,6 +14,18 @@ export const planCard: GuideSection = {
     { kind: 'mockCard' },
     {
       kind: 'p',
+      text: 'Confirmation records name the bucket they judged, its close time, whether it was closed, and the reference event. A 5m close cannot count before that five-minute bucket ends; one completed minute inside it is insufficient. This applies to scenario confirmation, waiting arms, validation and the facts shown to the planner. A minute-only reclaim cannot void a rule that requires a completed 5m reclaim. The plan card and the desk show the recorded verdict and its evidence. The ≈ activation status remains a separate estimate; confirmation alone is not order authorization.',
+    },
+    {
+      kind: 'p',
+      text: 'A sequence needs a recorded first event and a second event strictly after it. Missing first-event evidence reads UNKNOWN and does not satisfy the condition; it never falls back to plan publication. For a touch reconstructed from minute OHLC, the closed minute establishes that the touch occurred by its end; the exact tick time is unavailable. A forming touch can be observed, but supplies no ordered reference until that minute closes. A later five-minute close may qualify even when its bucket opened before the touch.',
+    },
+    {
+      kind: 'p',
+      text: 'Immediate-mode authoring has a separate rule, 1m_displacement: it measures excursion on completed one-minute bars before a five-minute confirmation is available. This preserves preparation before the entry trigger. It never declares a five-minute confirmation or a five-minute reclaim. The ordinary displacement and void facts use completed five-minute buckets; immediate-mode displacement is named separately. Corrected facts may lead the planner to author different scenarios.',
+    },
+    {
+      kind: 'p',
       text: 'Plan liveness: tradeable N/M counts scenarios whose current evaluator status is waiting, armed or triggered. It is not order eligibility. Missing, unevaluable or stale versioned snapshots show UNKNOWN. Zero remaining is marked EXHAUSTED and records one warning per version; exhaustion does not itself wake the planner or bypass either throttle, the session cutoff or the replan budget. First-observed invalidation records retain the exact plan version, scenario ID, judged anchor, price, cause and time. They are history: the existing evaluator can later change status. Legacy unversioned timestamps are preserved but never attached to a new version. The card names the recorded observation time, not a render time or an inferred candle-death time.',
     },
     {

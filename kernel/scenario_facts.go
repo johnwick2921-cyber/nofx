@@ -2,6 +2,7 @@ package kernel
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"nofx/market"
@@ -98,6 +99,9 @@ type LevelFacts struct {
 // AUTHORSHIP at the schema chokepoint, but stored pre-entry-mechanics docs
 // must keep evaluating); "2x5m"/"2×5m"/default → 2.
 func acceptanceNeed(rule string) int {
+	if n, err := strconv.Atoi(strings.TrimSuffix(rule, "x5m")); err == nil && n > 0 {
+		return n
+	}
 	switch strings.ReplaceAll(strings.ToLower(strings.TrimSpace(rule)), "×", "x") {
 	case "15m-close", "15m", "15mclose", "15m_close": // legacy: stored docs only
 		return 1
@@ -437,23 +441,59 @@ func EvaluateLevelFacts(bars []market.Kline, level float64, dir int, rule string
 // on the given side anywhere in the window, plus the rule's required count.
 // Plan death judges the run ending NOW; a scenario CONFIRMATION that printed
 // and pulled back still happened — the executor AI weighs the pullback itself.
-func AcceptanceRunEver(bars []market.Kline, rule string, ref float64, above bool) (best, need int, lastClose float64) {
-	judge := AcceptanceBars(bars, rule)
-	need = acceptanceNeed(rule)
-	if len(judge) == 0 {
-		return 0, need, 0
-	}
+// AcceptanceRun carries the witness of the first completed qualifying run.
+type AcceptanceRun struct {
+	Best, Need int
+	LastClose  float64
+	FirstAt    int64
+	Found      bool
+	Bucket     *BucketClose
+}
+
+func AcceptanceRunEver(bars []market.Kline, rule string, ref float64, above bool, nowMs int64, after *int64) AcceptanceRun {
+	v := AcceptanceRun{Need: acceptanceNeed(rule)}
+	minutes := AcceptanceIntervalMinutes(rule)
 	run := 0
-	for i := range judge {
-		beyond := (above && judge[i].Close > ref) || (!above && judge[i].Close < ref)
+	for _, b := range AcceptanceBars(bars, rule) {
+		e := EvaluateBucketClose(b.OpenTime, minutes, nowMs)
+		if b.OpenTime >= nowMs {
+			continue
+		}
+		if !v.Found {
+			v.Bucket = &e
+		}
+		if confirmationClosedBuckets && !e.Closed {
+			continue
+		}
+		if after != nil && confirmationOrderedSequence && e.CloseMs <= *after {
+			continue
+		}
+		v.LastClose = b.Close
+		beyond := (above && b.Close > ref) || (!above && b.Close < ref)
 		if beyond {
 			run++
-			if run > best {
-				best = run
+			if run > v.Best {
+				v.Best = run
+			}
+			if run >= v.Need && !v.Found {
+				v.FirstAt, v.Found, v.Bucket = e.CloseMs, true, &e
 			}
 		} else {
 			run = 0
 		}
 	}
-	return best, need, judge[len(judge)-1].Close
+	return v
+}
+
+// confirmationBuckets windows BEFORE aggregation, preserving the existing
+// publication policy. Its final bucket can be forming; only the shared
+// predicate decides whether a consumer may count it.
+func confirmationBuckets(bars []market.Kline, sinceMs, nowMs int64, minutes int) []market.Kline {
+	var available []market.Kline
+	for _, b := range bars {
+		if b.OpenTime >= sinceMs && b.OpenTime < nowMs {
+			available = append(available, b)
+		}
+	}
+	return aggregateToMinutes(available, minutes)
 }

@@ -99,6 +99,10 @@ func lastFractalSwing(bars []market.Kline, wantHigh bool, nowMs int64) (float64,
 // line judged (the swing is what exists on the tape at runtime; the ref may
 // be the plan-write snapshot of it).
 func EvaluateMSS(bars []market.Kline, side string, nowMs int64) MSSVerdict {
+	return evaluateMSSAfter(bars, side, nowMs, nil)
+}
+
+func evaluateMSSAfter(bars []market.Kline, side string, nowMs int64, after *int64) MSSVerdict {
 	v := MSSVerdict{}
 	wantHigh := strings.EqualFold(side, "above")
 	p, t, ok := lastFractalSwing(bars, wantHigh, nowMs)
@@ -110,7 +114,8 @@ func EvaluateMSS(bars []market.Kline, side string, nowMs int64) MSSVerdict {
 	atr5m := StaleConfirmATR5m(bars)
 	need := mssMinDispATR() * atr5m
 	for _, b := range bars {
-		if b.CloseTime >= nowMs || b.OpenTime < t-60_000 {
+		event := EvaluateBucketClose(b.OpenTime, 1, nowMs)
+		if !event.Closed || (after != nil && confirmationOrderedSequence && event.CloseMs <= *after) || b.OpenTime < t-60_000 {
 			continue // closed bars AFTER the swing only (the swing itself can't break itself)
 		}
 		beyond := (wantHigh && b.Close > p) || (!wantHigh && b.Close < p)

@@ -26,11 +26,13 @@ import (
 // Broken=false means the tape never delivered a run beyond it — the honest
 // "none", which is not the same as a small number.
 type LevelDisplacement struct {
-	Price  float64
-	Label  string
-	Short  bool    // the side that delivered (true = price ran DOWN through it)
-	Pts    float64 // BreakLegPts from the validator, 0 when never broken
-	Broken bool
+	Price          float64
+	Label          string
+	Short          bool    // the side that delivered (true = price ran DOWN through it)
+	Pts            float64 // BreakLegPts from the validator, 0 when never broken
+	Broken         bool
+	ImmediateShort bool
+	Immediate      MinuteDisplacement
 }
 
 // displacementProbe asks the validator what one level's displacement is, by
@@ -68,6 +70,10 @@ func ComputeLevelDisplacements(levels []ScoredLevel, scope VoidScope, nowMs int6
 			if st.Leg1Met && st.BreakLegPts > row.Pts {
 				row.Short, row.Pts, row.Broken = short, st.BreakLegPts, true
 			}
+			minute := Evaluate1mDisplacement(scope.Bars, l.Price, short, scope.SinceMs, nowMs)
+			if !st.Reclaimed && minute.Observed && (!row.Immediate.Observed || minute.Pts > row.Immediate.Pts) {
+				row.ImmediateShort, row.Immediate = short, minute
+			}
 		}
 		out = append(out, row)
 	}
@@ -102,6 +108,7 @@ func RenderDisplacementLines(rows []LevelDisplacement, atr5m float64) string {
 		}
 		if !r.Broken {
 			fmt.Fprintf(&b, "  %.2f %s — none — no break\n", r.Price, label)
+			renderImmediateDisplacement(&b, r)
 			continue
 		}
 		side := "up"
@@ -113,7 +120,19 @@ func RenderDisplacementLines(rows []LevelDisplacement, atr5m float64) string {
 			verdict = "at or above the floor — authorable"
 		}
 		fmt.Fprintf(&b, "  %.2f %s — %.2f pts %s · %s\n", r.Price, label, r.Pts, side, verdict)
+		renderImmediateDisplacement(&b, r)
 	}
 	b.WriteString("\n")
 	return b.String()
+}
+
+func renderImmediateDisplacement(b *strings.Builder, r LevelDisplacement) {
+	if !r.Immediate.Observed {
+		return
+	}
+	side := "up"
+	if r.ImmediateShort {
+		side = "down"
+	}
+	fmt.Fprintf(b, "    %s: %.2f pts %s · immediate-mode displacement only; 5m confirmation and void checked separately\n", r.Immediate.Rule, r.Immediate.Pts, side)
 }

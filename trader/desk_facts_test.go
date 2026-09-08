@@ -169,7 +169,7 @@ func TestCadenceIsFiveSecondsOnlyWhenSomethingIsLive(t *testing.T) {
 
 // A10 / class 23 — a broken dependency renders UNKNOWN rows, never a panic and
 // never a blank strip.
-func TestStripSurvivesABrokenStoreAndStillReturnsTwelveLines(t *testing.T) {
+func TestStripSurvivesABrokenStoreAndStillReturnsEveryLine(t *testing.T) {
 	st := deskStore(t)
 	at := &AutoTrader{id: "hoang", store: st, config: AutoTraderConfig{NinjaTraderSymbol: "MNQ"}}
 	_ = st.Close() // the harshest realistic failure
@@ -178,8 +178,8 @@ func TestStripSurvivesABrokenStoreAndStillReturnsTwelveLines(t *testing.T) {
 	if r := recoverOf(func() { s = at.DeskStripAt(time.Now()) }); r != nil {
 		t.Fatalf("the strip panicked through to the caller: %v", r)
 	}
-	if len(s.Lines) != 12 {
-		t.Fatalf("a broken store must still render all 12 rows, got %d", len(s.Lines))
+	if len(s.Lines) != deskLineCount {
+		t.Fatalf("a broken store must still render every row, got %d", len(s.Lines))
 	}
 	for _, l := range s.Lines {
 		if l.State == "unknown" && strings.TrimSpace(l.Reason) == "" {

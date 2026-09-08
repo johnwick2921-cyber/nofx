@@ -137,10 +137,13 @@ func TestBreakdownContinueValidatorRealTape(t *testing.T) {
 	if st.BreakLegPts < 1.0*15.0 {
 		t.Fatalf("want displacement ≥ 1×ATR5m, got %.2f", st.BreakLegPts)
 	}
-	// Append the retest-that-fails → the play fires.
-	extended := append(append([]market.Kline{}, bars...),
-		mkTapeBar(time.UnixMilli(bars[len(bars)-1].CloseTime), 29640.00, 29658.00, 29639.00, 29650.00))
-	st2 := BreakdownContinueState(plan.Scenarios[0], extended, writeTime.UnixMilli(), extended[len(extended)-1].CloseTime)
+	// Append a synthetic COMPLETE 5m retest after the unchanged real tape.
+	extended := append([]market.Kline{}, bars...)
+	retestStart := time.UnixMilli(bars[len(bars)-1].OpenTime).Add(time.Minute)
+	for i := 0; i < 5; i++ {
+		extended = append(extended, mkTapeBar(retestStart.Add(time.Duration(i)*time.Minute), 29640, 29658, 29639, 29650))
+	}
+	st2 := BreakdownContinueState(plan.Scenarios[0], extended, writeTime.UnixMilli(), retestStart.Add(5*time.Minute).UnixMilli())
 	if !st2.Leg2Met {
 		t.Fatalf("retest-that-fails must fire leg 2; got %+v", st2)
 	}
@@ -155,12 +158,15 @@ func TestBreakdownContinueValidatorRejectsWeakDisplacement(t *testing.T) {
 		mkTapeBar(start.Add(time.Minute), 29662, 29666, 29650, 29654),
 		mkTapeBar(start.Add(2*time.Minute), 29654, 29658, 29648, 29652),
 	}
+	for i := 3; i < 5; i++ {
+		bars = append(bars, mkTapeBar(start.Add(time.Duration(i)*time.Minute), 29652, 29658, 29648, 29652))
+	}
 	plan := PlanDoc{Scenarios: []PlanScenario{{
 		ID: "S1", Condition: "breakdown_continue", Direction: "short",
 		Breakdown: &PlanBreakdownContinue{Level: 29655, EntryMode: "pullback"},
 	}}}
 	err := ValidateBreakdownContinueScenarios(&plan, tapeScope(bars), 15.0, 29652, bars[len(bars)-1].CloseTime)
-	if err == nil || !strings.Contains(err.Error(), "displacement") {
+	if err == nil || !strings.Contains(err.Error(), "measured displacement") {
 		t.Fatalf("want displacement rejection, got %v", err)
 	}
 }
@@ -175,12 +181,13 @@ func TestBreakdownContinueValidatorRejectsReclaimed(t *testing.T) {
 		mkTapeBar(start.Add(2*time.Minute), 29630, 29662, 29625, 29658), // reclaims
 		mkTapeBar(start.Add(3*time.Minute), 29658, 29660, 29630, 29640),
 	}
+	bars = completeFiveMinuteFixture(bars)
 	plan := PlanDoc{Scenarios: []PlanScenario{{
 		ID: "S1", Condition: "breakdown_continue", Direction: "short",
 		Breakdown: &PlanBreakdownContinue{Level: 29655, EntryMode: "pullback"},
 	}}}
 	err := ValidateBreakdownContinueScenarios(&plan, tapeScope(bars), 15.0, 29640, bars[len(bars)-1].CloseTime)
-	if err == nil {
+	if err == nil || !strings.Contains(err.Error(), "breakdown is void") {
 		t.Fatalf("want reclaim rejection, got nil")
 	}
 }
@@ -197,11 +204,12 @@ func TestBreakupContinueMirror(t *testing.T) {
 		mkTapeBar(start.Add(2*time.Minute), 29484, 29520, 29480, 29514),
 		mkTapeBar(start.Add(3*time.Minute), 29514, 29550, 29510, 29542),
 	}
+	bars = completeFiveMinuteFixture(bars)
 	plan := PlanDoc{Scenarios: []PlanScenario{{
 		ID: "S1", Condition: "breakup_continue", Direction: "long",
 		Breakdown: &PlanBreakdownContinue{Level: lvl, EntryMode: "pullback"},
 	}}}
-	if err := ValidateBreakdownContinueScenarios(&plan, tapeScope(bars), 15.0, 29484, bars[1].CloseTime); err != nil {
+	if err := ValidateBreakdownContinueScenarios(&plan, tapeScope(bars), 15.0, 29484, bars[9].CloseTime); err != nil {
 		t.Fatalf("mirror rejected: %v", err)
 	}
 	st := BreakdownContinueState(plan.Scenarios[0], bars, 0, bars[len(bars)-1].CloseTime)
@@ -341,4 +349,19 @@ func TestBreakdownImmediateFixturePassesGateChain(t *testing.T) {
 	if hitSL || !hitTP {
 		t.Fatalf("replay: hitTP=%v hitSL=%v (SL %.2f TP %.2f) — the 10:48 leg must fill the target", hitTP, hitSL, sl, tp)
 	}
+}
+
+// completeFiveMinuteFixture gives each synthetic OHLC stage a complete 5m
+// bucket. It is never applied to the measured waterfallTape data.
+func completeFiveMinuteFixture(stages []market.Kline) []market.Kline {
+	var out []market.Kline
+	base := stages[0].OpenTime
+	for i, b := range stages {
+		for j := 0; j < 5; j++ {
+			b.OpenTime = base + int64(i*5+j)*60000
+			b.CloseTime = b.OpenTime + 60000
+			out = append(out, b)
+		}
+	}
+	return out
 }

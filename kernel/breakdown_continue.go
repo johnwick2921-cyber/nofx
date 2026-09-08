@@ -120,6 +120,12 @@ func breakdownShort(condition string) bool {
 // BreakdownState is the machine-evaluated two-leg trigger state of one
 // waterfall-class scenario against the 1m snapshot.
 type BreakdownState struct {
+	Bucket      *BucketClose
+	Leg1At      int64
+	Leg1Known   bool
+	Leg2At      int64
+	ReclaimedAt *int64
+
 	Leg1Met     bool    // N closes beyond the level (the breakdown)
 	Leg2Met     bool    // the retest that failed to reclaim (pullback) / auto with leg1 (immediate)
 	Reclaimed   bool    // a close came back across the level — the play is void
@@ -137,68 +143,49 @@ func BreakdownContinueState(sc PlanScenario, bars []market.Kline, sinceMs, nowMs
 	if !IsBreakdownCondition(sc.Condition) || sc.Breakdown == nil || sc.Breakdown.Level <= 0 {
 		return st
 	}
-	lvl := sc.Breakdown.Level
-	short := breakdownShort(sc.Condition)
-	need := bdConfirmCloses()
-	run, bestRun := 0, 0
-	leg1At := int64(0)
-	for _, b := range bars {
-		if b.OpenTime < sinceMs || b.CloseTime > nowMs {
-			continue // closed bars within the plan's window only
-		}
-		cl := b.Close
-		st.LastClose = cl
-		beyond := (short && cl < lvl) || (!short && cl > lvl)
+	lvl, short := sc.Breakdown.Level, breakdownShort(sc.Condition)
+	side := "above"
+	if short {
+		side = "below"
+	}
+	st.Leg1At, st.Leg1Known = ConfirmReferenceInstant(PlanConfirm{Rule: fmt.Sprintf("%dx5m_close", bdConfirmCloses()), RefPrice: lvl, Side: side}, bars, sinceMs, nowMs)
+	judge, last := closedConfirmationBuckets(bars, sinceMs, nowMs, AcceptanceIntervalMinutes("5m-close"))
+	st.Bucket = last
+	touched := false
+	for _, b := range judge {
+		e := EvaluateBucketClose(b.OpenTime, AcceptanceIntervalMinutes("5m-close"), nowMs)
+		st.LastClose = b.Close
+		beyond := (short && b.Close < lvl) || (!short && b.Close > lvl)
 		if beyond {
-			run++
-			if run > bestRun {
-				bestRun = run
-			}
-			if run >= need && leg1At == 0 {
-				leg1At = b.OpenTime
-			}
-			var exc float64
+			exc := b.High - lvl
 			if short {
 				exc = lvl - b.Low
-			} else {
-				exc = b.High - lvl
 			}
 			if exc > st.BreakLegPts {
 				st.BreakLegPts = exc
 			}
-		} else {
-			if leg1At > 0 {
-				st.Reclaimed = true // a close back across voids the breakdown
-			}
-			run = 0
 		}
-	}
-	st.Leg1Met = leg1At > 0 && !st.Reclaimed
-	if !st.Leg1Met {
-		return st
-	}
-	if strings.EqualFold(strings.TrimSpace(sc.Breakdown.EntryMode), "immediate") {
-		// Immediate mode enters on the 2nd confirming close — leg 1 IS the entry
-		// signal; leg 2 is post-entry management (never a separate trigger).
-		st.Leg2Met = true
-		return st
-	}
-	// Pullback mode: after leg1, price must TOUCH back into the level and then
-	// close back beyond it once (the failed retest). The touch is detected as
-	// any bar whose range intersects the level after leg1At.
-	touched := false
-	for _, b := range bars {
-		if b.OpenTime <= leg1At || b.CloseTime > nowMs {
+		if !st.Leg1Known || e.CloseMs <= st.Leg1At {
 			continue
+		}
+		if !beyond && st.ReclaimedAt == nil {
+			at := e.CloseMs
+			st.ReclaimedAt = &at
 		}
 		if (short && b.High >= lvl) || (!short && b.Low <= lvl) {
 			touched = true
 		}
-		if touched {
-			if (short && b.Close < lvl) || (!short && b.Close > lvl) {
-				st.Leg2Met = true
-				break
-			}
+		if touched && beyond && st.Leg2At == 0 {
+			st.Leg2At = e.CloseMs
+		}
+	}
+	st.Reclaimed = st.ReclaimedAt != nil
+	st.Leg1Met = st.Leg1Known && !st.Reclaimed
+	st.Leg2Met = st.Leg1Met && st.Leg2At != 0
+	if strings.EqualFold(strings.TrimSpace(sc.Breakdown.EntryMode), "immediate") {
+		st.Leg2Met = st.Leg1Met
+		if st.Leg1Met {
+			st.Leg2At = st.Leg1At
 		}
 	}
 	return st
@@ -261,9 +248,13 @@ func ValidateBreakdownContinueScenarios(d *PlanDoc, scope VoidScope, atr5m, pric
 			return fmt.Errorf("%s %s: the tape shows NO confirming close beyond %.2f yet (%d confirming close(s) needed — BD_MIN_CLOSES, displacement + reclaim-check unchanged) — author it only after the displacement exists (or set entry_mode=immediate and accept the confirming-close trigger)",
 				s.ID, s.Condition, bd.Level, bdConfirmCloses())
 		}
-		if atr5m > 0 && st.BreakLegPts < bdMinDispATR()*atr5m {
+		displacement := st.BreakLegPts
+		if immediate {
+			displacement = Evaluate1mDisplacement(bars, bd.Level, short, scope.SinceMs, nowMs).Pts
+		}
+		if atr5m > 0 && displacement < bdMinDispATR()*atr5m {
 			return fmt.Errorf("%s %s: measured displacement %.2f pts < BD_MIN_DISP_ATR %.1f×ATR5m (%.1f pts) — not a displacement move, %s",
-				s.ID, s.Condition, st.BreakLegPts, bdMinDispATR(), bdMinDispATR()*atr5m, BreakdownDisplacementHint)
+				s.ID, s.Condition, displacement, bdMinDispATR(), bdMinDispATR()*atr5m, BreakdownDisplacementHint)
 		}
 		if bd.DeclaredBreakLeg() > 0 && st.BreakLegPts > 0 {
 			_ = bd // declared leg accepted; the machine value is what the arm uses

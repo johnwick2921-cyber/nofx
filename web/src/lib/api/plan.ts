@@ -176,6 +176,23 @@ export interface PlanToday {
     confirm?: Record<
       string,
       {
+        outcome?: string
+        evaluated_ms?: number
+        reference_ms?: number
+        reference_source?: string
+        bucket?: {
+          open_ms: number
+          close_ms: number
+          minutes: number
+          closed: boolean
+        }
+        legs?: Array<{
+          rule: string
+          ref_price: number
+          side: string
+          met: boolean
+          detail: string
+        }>
         rule: string
         ref_price: number
         side: string

@@ -147,6 +147,7 @@ func (at *AutoTrader) DeskStripAt(now time.Time) DeskStrip {
 		at.deskSafe(10, "planner", "PLANNER", "plannerReadInFlight claim", func() DeskLine { return at.deskPlanner(now) }),
 		at.deskSafe(11, "range", "RANGE", "bars (session) · ATR5m", func() DeskLine { return at.deskRange(now, sym) }),
 		at.deskSafe(12, "lastfill", "LAST FILL", "trader_fills", func() DeskLine { return at.deskLastFill(now) }),
+		at.deskSafe(13, "confirmation", "CONFIRMATION", "versioned scenario_meta.confirm", func() DeskLine { return at.deskConfirmation(now) }),
 	)
 
 	for i := range s.Lines {
@@ -202,7 +203,7 @@ func DeskBootLine(s *DeskStrip) string {
 
 // deskLineCount is the strip's shape, asserted by the tests so the boot line
 // and the strip cannot drift.
-const deskLineCount = 12
+const deskLineCount = 13
 
 // ── the lines ────────────────────────────────────────────────────────────────
 

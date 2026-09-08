@@ -58,27 +58,10 @@ func BreakdownLevelReclaimed(level float64, short bool, bars []market.Kline, sin
 	if !st.Reclaimed {
 		return false, ""
 	}
-	return true, reclaimStampCT(level, short, bars, sinceMs, nowMs)
-}
-
-// reclaimStampCT finds the first close back ACROSS the level after the level was
-// broken — the label only. Voidness is the predicate's call, never this.
-func reclaimStampCT(level float64, short bool, bars []market.Kline, sinceMs, nowMs int64) string {
-	broken := false
-	for _, b := range bars {
-		if b.OpenTime < sinceMs || b.CloseTime > nowMs {
-			continue
-		}
-		beyond := (short && b.Close < level) || (!short && b.Close > level)
-		if beyond {
-			broken = true
-			continue
-		}
-		if broken {
-			return FormatCT(time.UnixMilli(b.OpenTime))
-		}
+	if st.ReclaimedAt == nil {
+		return true, ""
 	}
-	return ""
+	return true, FormatCT(time.UnixMilli(*st.ReclaimedAt))
 }
 
 // ComputeVoidBreakdownLevels runs the predicate over every ranked level, both

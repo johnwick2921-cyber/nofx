@@ -325,6 +325,7 @@ func main() {
 	// knobs in the boot block: the 5-rule vocabulary and the seam state must be
 	// verifiable from the boot line alone (the owner's cutover checklist).
 	logger.Infof("🔐 %s", kernel.ConfirmRuleLedger())
+	logger.Info(kernel.ConfirmationBootLine())
 	// CLASS 35 (2026-09-01) — the re-plan budget accounting mode in the boot
 	// block: which trigger classes spend, which are free, and the counter key.
 	logger.Infof("🧮 %s", store.ReplanBudgetBootLine())

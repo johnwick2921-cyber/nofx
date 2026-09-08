@@ -40,6 +40,16 @@ export function QualityChip({ quality }: { quality: string }) {
 }
 
 export type ConfirmVerdict = {
+  outcome?: string
+  evaluated_ms?: number
+  reference_ms?: number
+  reference_source?: string
+  bucket?: {
+    open_ms: number
+    close_ms: number
+    minutes: number
+    closed: boolean
+  }
   rule: string
   ref_price: number
   side: string
@@ -76,13 +86,14 @@ function confirmRuleLabel(rule: string): string {
 export function ConfirmChip({ id, c }: { id: string; c: ConfirmVerdict }) {
   const legs = c.legs && c.legs.length > 0
   const label = confirmRuleLabel(c.rule)
+  const outcome = c.outcome || 'UNKNOWN'
   return (
     <span
       data-testid={`confirm-chip-${id}`}
       className="text-[9px] font-bold px-1.5 py-0.5 rounded"
       title={`${label} ${c.side} ${c.ref_price} — ${c.detail} (machine-computed, advisory)`}
       style={
-        c.met
+        c.met && outcome === 'MET'
           ? {
               color: 'var(--vl-long)',
               border: '1px solid rgba(63,191,143,0.35)',
@@ -93,9 +104,16 @@ export function ConfirmChip({ id, c }: { id: string; c: ConfirmVerdict }) {
             }
       }
     >
-      {legs
-        ? `${label} ${c.met ? 'MET' : 'not met'} (${c.legs!.map((l, i) => `${i + 1}/${c.legs!.length} ${l.met ? 'MET' : 'not met'}`).join(' · ')})`
-        : `${label} ${c.met ? 'MET' : 'not met'}`}
+      Recorded {label} {outcome}
+      {legs &&
+        ` (${c.legs!.map((l, i) => `${i + 1}/${c.legs!.length} ${l.met ? 'MET' : 'NOT MET'}`).join(' · ')})`}
+      <span className="block font-normal">
+        {c.detail || 'Bucket evidence unavailable'}
+        {!c.outcome && ' · legacy record: bucket evidence unavailable'}
+      </span>
+      <span className="block font-normal">
+        ≈ activation is a separate estimate; order authorization is separate.
+      </span>
     </span>
   )
 }
@@ -330,16 +348,7 @@ export function ScenarioList({
   meta?: {
     basis?: Record<string, string>
     unevaluable?: string[]
-    confirm?: Record<
-      string,
-      {
-        rule: string
-        ref_price: number
-        side: string
-        met: boolean
-        detail: string
-      }
-    >
+    confirm?: Record<string, ConfirmVerdict>
   }
   /** FVG ENTRY MODEL (2026-08-26) — per-scenario gap-band live states (advisory). */
   fvgStates?: Array<{

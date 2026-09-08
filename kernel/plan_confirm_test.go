@@ -86,9 +86,9 @@ func TestConfirmValidator(t *testing.T) {
 func TestLegacy15mConfirmStillEvaluates(t *testing.T) {
 	base := int64(1_700_000_100_000)
 	base -= base % 900_000 // 15m-aligned
-	bars := confirmBars(base, 99, 99, 99, 99, 99)
+	bars := confirmBars(base, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99, 99)
 	legacy := PlanConfirm{Rule: "15m_close", RefPrice: 100, Side: "below"}
-	if v := EvaluateConfirm(legacy, bars, base-1, base+5*60_000); !v.Met {
+	if v := EvaluateConfirm(legacy, bars, base-1, base+15*60_000); !v.Met {
 		t.Fatalf("a legacy stored 15m confirm must still evaluate MET (%s)", v.Detail)
 	}
 	if got := conditionRule(PlanCondition{Rule: "15m_close"}); got != "15m-close" {
