@@ -1,6 +1,6 @@
 # Confirmation truth — pre-change consumer census and stored-scenario blast radius
 
-**Status: owner approved the blast radius; implementation and verification in progress. No deployment.** Sections 1–7 preserve the pre-change audit, whose pinned publication is `ba833a9d4113c792432cb08cf2ca238c8a07b01b`. The owner subsequently authorized both confirmation paths, validation changes, feeds-forward changes and a separate `1m_displacement` rule. Section 8 records implementation after that ruling; the historical statements about unchanged code in sections 1–7 describe the audit phase.
+**Status: merged to dev, merged-HEAD suite passed, clean-clone binary and stamped frontend built. NOT LIVE; owner cutover GO and live proof pending.** Sections 1–7 preserve the pre-change audit, whose pinned publication is `ba833a9d4113c792432cb08cf2ca238c8a07b01b`. The owner subsequently authorized both confirmation paths, validation changes, feeds-forward changes and a separate `1m_displacement` rule. Sections 8–11 record implementation and verification after that ruling; the historical statements about unchanged code in sections 1–7 describe the audit phase.
 
 Lane: `confirmation-truth-96604090/root[unlisted]`, branch `fix/confirmation-truth`. Audit source HEAD: `5308c2bbcc010add0c8f7ba15a7d78e8da046507`, incorporating dev `63d902ac9c345e6e51cfd237b035d4062a59acf0`. At 2026-09-08 08:44:46 CT, `/api/health` reported `33672fdd2cd2`; systemd PID was `3260027`. The earlier executable read at 08:34:14 CT showed `33672fdd2cd2fee60a2c562a9693e06ab3b13551`, `vcs.modified=false`. The five core source files examined here are byte-identical between that running revision and audit HEAD.
 
@@ -284,4 +284,41 @@ The first attempted reference mutation returned `0, false` and failed compilatio
 
 [A] **50 already-completed-bucket cases, zero verdict changes**, byte-identical before/after JSON: 40 single-rule/side/tape combinations, two correctly ordered sequences, and eight waterfall direction/mode/outcome cases. This is a verdict golden, not an assertion that newly added evidence text is byte-identical. Both JSONs and the isolated generator are included. Existing embedded prompt goldens also passed the initial full Go suite.
 
-[A] The additional `163/S1 / decision 34790` carve-out has a production validator pin, and a same-observation-bound sequence pin requires strict ordering. Touch references explicitly name their closed-minute **OHLC upper bound**; no exact touch tick is fabricated. Final merged-HEAD suite/build receipts remain pending below.
+[A] The additional `163/S1 / decision 34790` carve-out has a production validator pin, and a same-observation-bound sequence pin requires strict ordering. Touch references explicitly name their closed-minute **OHLC upper bound**; no exact touch tick is fabricated. Final merged-HEAD suite/build receipts follow.
+
+## 11. Merge, candidate build, and remaining live proof
+
+[A] After plan-liveness released the lock, this lane acquired it at **2026-09-08 14:31:05 CT** with an independent heartbeat keeper started at acquisition. Checklist census found highest occupied **90**, and `uniq -c` showed **2 each for 75, 76 and 77**. This wave received **91** without renumbering those existing duplicates. Integration includes dev's plan-liveness work; the current source was merged by fast-forward under the lock.
+
+[A] The first merged-HEAD Go run at `6cf8a2d85d73770b58e64b01f65ef1571cea472c` exposed one remaining text-contract assertion: `kernel/class38_contract_test.go` expected the old blanket waterfall-authoring label. That label cannot distinguish the separately authorized immediate mode from closed-5m pullback preparation. Commit **`2166a072339131fdb0a8e8e816e12148b261872b`** corrected the assertion to require the mode-specific production facts. No production predicate was changed to satisfy that test. Its freshness receipt is in [implementation-source-freshness.csv](2026-09-08-confirmation-truth-data/implementation-source-freshness.csv).
+
+[A] **Nine existing tests were adjusted:** the five semantic fixtures, two insufficiently specific rejection assertions, and desk-row shape listed in section 8, plus this text-contract assertion. This is separate from the **50 completed-case verdict goldens, whose verdict diff is empty**. The first failed integrated suite was not reported green.
+
+[A] At merged source **`2166a072339131fdb0a8e8e816e12148b261872b`**, in the clean clone **`/tmp/nofx-confirmation-build/nofx`**, immediately before the Go build:
+
+| Check | Observed result |
+|---|---|
+| `go test ./... -count=1` | PASS, exit 0; [complete output](2026-09-08-confirmation-truth-data/merged-suite-go.log) |
+| `npm test -- --run` / Vitest | PASS, **51 files / 368 tests**; [output](2026-09-08-confirmation-truth-data/merged-suite-vitest.log) |
+| TypeScript `tsc --noEmit` | PASS, exit 0; empty output |
+| Production wiring census | **16 new functions/methods, zero with 0 production call sites**; [file:line census](2026-09-08-confirmation-truth-data/production-calls.json), [AST scanner](2026-09-08-confirmation-truth-data/production-calls.go.txt) |
+
+[A] `go build -o nofx-bin .` then produced **72,204,224 bytes**, SHA-256 **`26cecc0f0513482c88ec695051b9585f179cef53806b86f74e43645ecd770292`**. `go version -m` reads **`vcs.revision=2166a072339131fdb0a8e8e816e12148b261872b`**, **`vcs.modified=false`**, and `vcs.time=2026-09-08T19:35:49Z` (the commit time). Binary verification was **14:41:54 CT**. `GUIDE_BUILT_REV` was then populated from that binary's revision, followed by `npm run build` (TypeScript and Vite), exit 0. At **14:47:01 CT**, dist contained **92 files / 7,896,609 bytes**; the generated JavaScript contains that exact Guide revision. [Candidate receipt](2026-09-08-confirmation-truth-data/candidate.json), [dist manifest](2026-09-08-confirmation-truth-data/dist-manifest.json), [build output](2026-09-08-confirmation-truth-data/dist-build.log). The ensuing Guide/report commit is metadata after the tested Go source, not a claim that the binary embeds that later commit.
+
+[A] Candidate boot-line function output, from an isolated process, **not an observed service boot**:
+
+```text
+🔎 confirmation: close-requires-closed-bucket=on · sequence-order=enforced · missing-reference=UNKNOWN(not met) · immediate-displacement=1m_displacement · forming-bucket refusals=0 · out-of-order refusals=0 · validation-REJECT→PASS=23 observations/2 scenarios (closure-only audit; evaluated=627 unevaluated=162) · with-1m_displacement=24 (+1 audit observation)
+```
+
+Those zero refusal counters belong to this new isolated process. The policy values come from the enforcing code and the replay counts from the embedded audit receipt; neither is fabricated live evidence. The two historical validation counts are explicitly labeled, as required by the owner's ruling.
+
+[A] **Live preparation read, 14:47:54 CT:** `/api/health` still returned **`33672fdd2cd2`**. This lane's five-leg gate passed: DB 0 open, API 0 positions, NT8 snapshot 0 positions, broker 0 working orders matching ledger 0, and no planner read claimed. Leg 4 quoted **`broker — NT8 order_snapshot frame (age 23s, build 2026-09-07-h1)`**. This is a preparation snapshot, not a reusable cutover gate; all five legs and in-flight state must be re-read immediately before any authorized swap. The response's legacy top-level note still incorrectly describes leg 4 as ledger-only; the actual leg-4 result names its broker frame. This unrelated display wording was not changed.
+
+**A15, what remains visible:** the running old binary can still report the original false confirmations until cutover. After cutover, legacy stored verdicts without the new evidence remain UNKNOWN on the updated surfaces until a new verdict is recorded; the stored versioned record wins over a display estimate. OHLC touch evidence is explicitly an observation upper bound. Planner facts may intentionally change subsequent authoring. Historical rows are not rewritten, and the **162 unevaluated scenarios remain unevaluated**. This wave makes no C# change and does not claim a new NT8 build.
+
+**Cutover status:** no RELEASE change, binary swap, restart, migration, trading-account change, or NT8 copy/compile/restart occurred. The owner's A3 requires a separate cutover GO and reserves the kill command to the owner. The normal A7 window is **14:45–16:30 CT**, otherwise after **17:10 CT** flat with no arms or positions; a time window does not authorize a cutover by itself. This lane will release its preparation lock after the report is pushed and byte-verified. A later cutover must reacquire it and repeat the fresh gate. There is no postboot marker yet.
+
+**Rollback:** this wave adds no database migration. Before an authorized cutover, preserve the existing executable using the revision read from that executable, retain its RELEASE and dist, then follow RELEASE → atomic `mv` → running/disk VERIFY → owner kill. If the candidate boot or goldens fail, restore the preserved binary, RELEASE and matching dist under the same owner-controlled protocol. Do not restore an unverified filename or mutate historical verdict records.
+
+**Live proof: NOT YET OBSERVED.** Still owed after the candidate boots: (1) a received live confirmation verdict naming the judged bucket and close time, (2) a forming-bucket refusal, (3) an out-of-order refusal if one occurs, and (4) a MET verdict with bucket close at or before evaluation. A passing suite and the candidate boot-line function output do not prove these live events. The five-reference boot check and pushed postboot marker remain part of that later cutover.

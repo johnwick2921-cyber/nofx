@@ -22,3 +22,4 @@ web/src/lib/api/plan.ts,e020885b86621d68534fbc237472fc3171688d62,2026-09-08T14:2
 web/src/guide/content/planCard.ts,e020885b86621d68534fbc237472fc3171688d62,2026-09-08T14:21:34-05:00,fix(confirmation): require closed buckets and ordered reference evidence
 docs/superpowers/SYSTEM-MAP.md,e020885b86621d68534fbc237472fc3171688d62,2026-09-08T14:21:34-05:00,fix(confirmation): require closed buckets and ordered reference evidence
 docs/superpowers/AUDIT-CHECKLIST.md,78eed09b7969022408e3279d89c895c553885843,2026-09-08T14:32:14-05:00,docs(confirmation): assign class 91 at integration
+kernel/class38_contract_test.go,2166a072339131fdb0a8e8e816e12148b261872b,2026-09-08T14:35:49-05:00,test(confirmation): require mode-specific displacement facts
