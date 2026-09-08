@@ -2120,6 +2120,22 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     is outside the Go toolchain and names what was and was not compiled. A
     commit that reports a green suite while its diff contains `.cs` and says
     nothing about it fails this entry on its face.
+    **Second pin (owner ruling 2026-09-08, from this entry's own follow-up):
+    A MUTATION THAT PASSES IS NOT EVIDENCE.** A mutation test proves a pin bites
+    only if the mutation ACTUALLY CHANGED THE SOURCE — so the wave must show the
+    changed line, not merely report that the suite went red or green. The
+    signal-clock wave mutated `Timestamp:   time.Now()` (three spaces) where
+    gofmt had aligned `Timestamp: time.Now()` (one). The search matched ZERO
+    occurrences, nothing was mutated, the suite passed, and that pass was
+    reported as "the pins bite" until a second look showed the count was 0. A
+    no-op mutation reporting green is the same hollow verification as a green Go
+    suite over a broken `.cs`: the check ran, and it ran on nothing.
+    **How to satisfy it:** assert the occurrence count before mutating
+    (`assert t.count(old) == 1`), or print the diff of the mutated file. The
+    corrected run then failed by name — "move_stop stamp is 31m1s old with a
+    31-minute-stale bar cache" — which is what the first run should have shown
+    and did not. Sibling to class 83: trusting a tool'"'"'s success message over the
+    artifact, one layer further in, because here the tool was the verifier itself.
     Sibling to class 83 (a status code is not a verification — there, a 200
     proved only that something answered; here, a green suite proves only that
     Go compiled). Related: class 24 (a check that prints but does not gate),
