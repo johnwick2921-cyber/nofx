@@ -24,7 +24,7 @@ def csvout(n,rows):
     if not rows:return
     keys=list(dict.fromkeys(k for r in rows for k in r))
     with (P/(n+'.csv')).open('w') as f:
-        w=csv.DictWriter(f,fieldnames=keys);w.writeheader()
+        w=csv.DictWriter(f,fieldnames=keys,lineterminator="\n");w.writeheader()
         for r in rows:w.writerow({k:json.dumps(v,ensure_ascii=False) if isinstance(v,(list,dict)) else v for k,v in r.items()})
 def quantile(v,p):
     v=sorted(v); q=(len(v)-1)*p; a=int(q);return v[a]+(v[min(a+1,len(v)-1)]-v[a])*(q-a)

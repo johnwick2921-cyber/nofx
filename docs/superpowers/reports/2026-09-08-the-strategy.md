@@ -99,8 +99,8 @@ Each scenario gets **one documented primary reference**: positive `confirm.ref_p
 | OR-L | 31 | 14 | 0 | 17 | 94 |
 | EQH | 30 | 10 | 9 | 11 | 116 |
 | PDH | 29 | 14 | 9 | 6 | 157 |
-| RTH-L | 25 | 4 | 15 | 6 | 99 |
 | SWG-L | 25 | 8 | 8 | 9 | 99 |
+| RTH-L | 25 | 4 | 15 | 6 | 99 |
 | SUPPLY | 18 | 5 | 3 | 10 | 120 |
 | OR-H | 13 | 0 | 0 | 13 | 101 |
 | DEMAND | 11 | 2 | 5 | 4 | 94 |
@@ -111,9 +111,9 @@ Each scenario gets **one documented primary reference**: positive `confirm.ref_p
 | RN | 4 | 1 | 0 | 3 | 10 |
 | composite | 3 | 3 | 0 | 0 | 9 |
 | PDVWAP | 2 | 2 | 0 | 0 | 7 |
-| other | 2 | 0 | 0 | 2 | 5 |
 | IB-L | 2 | 1 | 0 | 1 | 2 |
 | POC | 2 | 1 | 0 | 1 | 34 |
+| other | 2 | 0 | 0 | 2 | 5 |
 | PWH | 1 | 0 | 0 | 1 | 1 |
 | AS-L | 1 | 0 | 0 | 1 | 1 |
 
@@ -598,4 +598,3 @@ c40bb45a6e47c796810441cbf15069f2bee19e1e 2026-09-08T16:43:32-05:00 docs(scenario
 ## Validation and publication record
 
 Offline validation checked complete scenario totals, all condition/session/day-type marginals, unique scenario keys, arm and position joins, geometry signs, duplicate accepted-risk receipts, missing-value denominators and artifact privacy. Product tests were not run: this is a documentation/evidence-only change and executes no trading code. The source snapshot and current runtime are deliberately distinguished from historical behavior. Final publication verification is recorded in the PR and owner closeout using a commit-pinned report URL and byte-size/hash comparison; no branch-path fetch is treated as pinned evidence.
-

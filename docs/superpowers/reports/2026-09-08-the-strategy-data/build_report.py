@@ -144,5 +144,5 @@ p('The following are literal `git log -1 --format="%H %cI %s" -- "<file>"` outpu
 for r in prov:p('`'+r['file']+'`\n\n```text\n'+r['output']+'\n```')
 p('## Validation and publication record')
 p('Offline validation checked complete scenario totals, all condition/session/day-type marginals, unique scenario keys, arm and position joins, geometry signs, duplicate accepted-risk receipts, missing-value denominators and artifact privacy. Product tests were not run: this is a documentation/evidence-only change and executes no trading code. The source snapshot and current runtime are deliberately distinguished from historical behavior. Final publication verification is recorded in the PR and owner closeout using a commit-pinned report URL and byte-size/hash comparison; no branch-path fetch is treated as pinned evidence.')
-(P.parent/'2026-09-08-the-strategy.md').write_text('\n'.join(parts)+'\n')
+(P.parent/'2026-09-08-the-strategy.md').write_text('\n'.join(parts).rstrip()+'\n')
 print('report bytes', (P.parent/'2026-09-08-the-strategy.md').stat().st_size)
