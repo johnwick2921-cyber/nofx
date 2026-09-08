@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"nofx/logger"
+	"nofx/market"
 	"os"
 	"strings"
 	"testing"
@@ -166,11 +168,12 @@ func TestScenarioEconomicsExceptionTickAndShortMirror(t *testing.T) {
 	raw = economicsRaw(t, 265, "S2")
 	s = economicsScenario(raw)
 	e = s["economics"].(map[string]any)
-	e["r_to_arm_target"] = 56.75/24.5 + 0.25/24.5
+	tick := market.FuturesTickSize("MNQ")
+	e["r_to_arm_target"] = 56.75/24.5 + tick/24.5
 	if _, err := ParsePlanDocCapped(economicsJSON(t, raw), 12, 5); err != nil {
 		t.Fatalf("one tick boundary refused: %v", err)
 	}
-	e["r_to_arm_target"] = 56.75/24.5 + 0.251/24.5
+	e["r_to_arm_target"] = 56.75/24.5 + (tick+0.001)/24.5
 	if _, err := ParsePlanDocCapped(economicsJSON(t, raw), 12, 5); err == nil {
 		t.Fatal("greater than one tick accepted")
 	}
@@ -230,5 +233,18 @@ func TestScenarioEconomicsBootAndProductionWiring(t *testing.T) {
 		if !strings.Contains(string(b), pin.call) {
 			t.Fatalf("production call missing: %s", pin.call)
 		}
+	}
+}
+
+type economicsPanicWriter struct{}
+
+func (economicsPanicWriter) Write([]byte) (int, error) { panic("telemetry test") }
+func TestScenarioEconomicsTelemetryCannotPanicOrPermit(t *testing.T) {
+	old := logger.Log.Out
+	logger.Log.SetOutput(economicsPanicWriter{})
+	defer logger.Log.SetOutput(old)
+	d := economicsRaw(t, 178, "S1")
+	if _, err := ParsePlanDocCapped(economicsJSON(t, d), 12, 5); err == nil {
+		t.Fatal("telemetry failure permitted contradiction")
 	}
 }

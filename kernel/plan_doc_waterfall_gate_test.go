@@ -13,6 +13,10 @@ import (
 // This test drives the FULL schema gate end-to-end.
 
 func waterfallDocJSON(cond, direction string) string {
+	economics := `{"entry_zone":[29657.39,29657.39],"geometry":{"entry":29657.39,"stop":29677.39,"target":29580},"first_obstacle":{"price":29580,"level":"fixture reference","family":"reference","response":"pass_through"},"r_to_obstacle":3.869499999999971,"r_to_arm_target":3.869499999999971}`
+	if direction == "long" {
+		economics = `{"entry_zone":[29500,29500],"geometry":{"entry":29500,"stop":29480,"target":29580},"first_obstacle":{"price":29580,"level":"fixture reference","family":"reference","response":"pass_through"},"r_to_obstacle":4.0,"r_to_arm_target":4.0}`
+	}
 	return `{
 		"reasoning": "waterfall continuation after the gap-and-go",
 		"bias": {"direction": "short", "conviction": "high"},
@@ -27,6 +31,8 @@ func waterfallDocJSON(cond, direction string) string {
 				"condition": "` + cond + `",
 				"direction": "` + direction + `",
 				"quality": "B",
+                "confirm":{"rule":"1x5m_close","ref_price":29657.39,"side":"below"},
+                "economics": ` + economics + `,
 				"target_chain": [29580.00],
 				"invalid": "2x5m close back above 29657.39 cancels the short"
 			}

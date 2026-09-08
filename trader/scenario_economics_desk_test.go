@@ -46,3 +46,40 @@ func TestScenarioEconomicsOnProductionDesk(t *testing.T) {
 		}
 	}
 }
+
+func TestScenarioEconomicsWriteRefusesThenPersistsContract(t *testing.T) {
+	at := plannerTestTrader(t)
+	now := time.Date(2026, 9, 8, 19, 0, 0, 0, time.UTC)
+	good := class39LegsPlanJSON("15550")
+	bad := strings.Replace(good, `"target_chain": [15550, 15620]`, `"target_chain": [15620]`, 1)
+	if bad == good {
+		t.Fatal("fixture mutation missed actual path")
+	}
+	calls := 0
+	before := kernel.ScenarioEconomicsCounters()
+	_, lc, err := at.runPlannerReadCoreWithFactsGradesClock(func() time.Time { return now }, "NY", "2026-09-08", "owner_reset", "model", "hash", "", "", "", "", kernel.PlanFacts{}, nil, nil, nil, true, func(string) (string, error) {
+		calls++
+		if calls == 1 {
+			return bad, nil
+		}
+		return good, nil
+	})
+	if err != nil || lc != "active" || calls != 2 {
+		t.Fatalf("write must reject off-path attempt then accept repaired contract: lc=%s calls=%d err=%v", lc, calls, err)
+	}
+	row, err := at.store.Plan().GetLatestPlanForSession("2026-09-08", "NY")
+	if err != nil || row == nil {
+		t.Fatal(err)
+	}
+	var doc kernel.PlanDoc
+	if err = json.Unmarshal([]byte(row.Doc), &doc); err != nil {
+		t.Fatal(err)
+	}
+	if doc.Scenarios[0].Economics == nil || doc.Scenarios[0].Economics.Version != kernel.ScenarioEconomicsContractVersion {
+		t.Fatal("new contract was not persisted by the existing plan writer")
+	}
+	after := kernel.ScenarioEconomicsCounters()
+	if after.Contradictions != before.Contradictions+1 {
+		t.Fatalf("refusal counter mismatch: %+v -> %+v", before, after)
+	}
+}

@@ -23,7 +23,7 @@ const validTraderPlanJSON = `{
     {"price": 15650, "label": "RN 15650", "grade": "B", "instruction": "fade"},
     {"price": 15700, "label": "RN 15700", "grade": "B", "instruction": "fade"}
   ],
-  "scenarios": [{"id": "S1", "trigger": "sweep 15480 reclaim", "condition": "sweep_reclaim", "direction": "long", "target_chain": [15550, 15620], "invalid": "2x5m<15470", "quality": "A"}],
+  "scenarios": [{"id": "S1", "trigger": "sweep 15480 reclaim", "condition": "sweep_reclaim", "direction": "long", "target_chain": [15550, 15620], "invalid": "2x5m<15470", "quality": "A", "confirm":{"rule":"touch","ref_price":15480,"side":"below"},"economics":{"entry_zone":[15480,15480],"geometry":{"entry":15480,"stop":15470,"target":15620},"first_obstacle":{"price":15550,"level":"fixture reference","family":"reference","response":"pass_through"},"r_to_obstacle":7.0,"r_to_arm_target":14.0}}],
   "no_trade": ["first 5m"],
   "death_condition": "acceptance above 15620",
   "death": {"price": 15620, "side": "above", "rule": "2x5m"},
@@ -83,7 +83,7 @@ const thinAbovePlanJSON = `{
     {"price": 29600, "label": "RN 29600", "grade": "B", "instruction": "fade"},
     {"price": 30000, "label": "RN 30000", "grade": "B", "instruction": "fade"}
   ],
-  "scenarios": [{"id": "S1", "trigger": "hold 29550", "condition": "hold", "direction": "long", "target_chain": [29700], "invalid": "2x5m<29540", "quality": "B", "confirm": {"rule": "time_hold", "ref_price": 29550, "side": "above"}}],
+  "scenarios": [{"id": "S1", "trigger": "hold 29550", "condition": "hold", "direction": "long", "target_chain": [29700], "invalid": "2x5m<29540", "quality": "B", "economics":{"entry_zone":[29550,29550],"geometry":{"entry":29550,"stop":29540,"target":29700},"first_obstacle":{"price":29700,"level":"fixture reference","family":"reference","response":"pass_through"},"r_to_obstacle":15.0,"r_to_arm_target":15.0}, "confirm": {"rule": "time_hold", "ref_price": 29550, "side": "above"}}],
   "no_trade": ["first 5m"],
   "death_condition": "acceptance above 30000",
   "death": {"price": 30000, "side": "above", "rule": "2x5m"},

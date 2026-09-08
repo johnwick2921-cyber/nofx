@@ -3,8 +3,9 @@ package kernel
 import (
 	"fmt"
 	"math"
+	"os"
 	"strings"
-	"sync/atomic"
+	"sync"
 
 	"nofx/logger"
 	"nofx/market"
@@ -57,12 +58,13 @@ type ScenarioEconomicsView struct {
 // stays UNKNOWN, even where a legacy arm would permit an inferred ratio.
 func EconomicsFor(s PlanScenario) ScenarioEconomicsView {
 	v := ScenarioEconomicsView{}
-	if s.Economics == nil {
-		return v
-	}
 	if s.Arm != nil {
 		v.Geometry = &ScenarioGeometry{s.Arm.Entry, s.Arm.Stop, s.Arm.Target}
-	} else {
+	}
+	if s.Economics == nil {
+		return v // existing arm prices are known; newly introduced R stays UNKNOWN
+	}
+	if v.Geometry == nil {
 		v.Geometry = s.Economics.Geometry
 	}
 	g := v.Geometry
@@ -110,10 +112,15 @@ func EconomicsSummary(s PlanScenario) string {
 
 type ScenarioEconomicsCounts struct{ Checked, PathEvaluated, PathCoherent, Sub1, RoleWarnings, Contradictions, SchemaRefusals uint64 }
 
-var economicsCounts struct{ checked, pathEvaluated, pathCoherent, sub1, roleWarnings, contradictions, schemaRefusals atomic.Uint64 }
+var economicsCounts struct {
+	sync.Mutex
+	values ScenarioEconomicsCounts
+}
 
 func ScenarioEconomicsCounters() ScenarioEconomicsCounts {
-	return ScenarioEconomicsCounts{economicsCounts.checked.Load(), economicsCounts.pathEvaluated.Load(), economicsCounts.pathCoherent.Load(), economicsCounts.sub1.Load(), economicsCounts.roleWarnings.Load(), economicsCounts.contradictions.Load(), economicsCounts.schemaRefusals.Load()}
+	economicsCounts.Lock()
+	defer economicsCounts.Unlock()
+	return economicsCounts.values
 }
 func ScenarioEconomicsBootLine() string {
 	c := ScenarioEconomicsCounters()
@@ -133,20 +140,31 @@ func validateNewScenarioEconomics(d *PlanDoc) error {
 	var errors []string
 	for i := range d.Scenarios {
 		s := &d.Scenarios[i]
-		economicsCounts.checked.Add(1)
 		issues, contradiction, pathKnown, pathCoherent := scenarioEconomicsIssues(*s)
+		v := EconomicsFor(*s)
+		warnings := scenarioRoleWarnings(*s, d.Levels)
+		// Record one complete observation atomically, so a concurrent boot/log
+		// reader cannot combine a new numerator with an old denominator.
+		economicsCounts.Lock()
+		economicsCounts.values.Checked++
 		if pathKnown {
-			economicsCounts.pathEvaluated.Add(1)
+			economicsCounts.values.PathEvaluated++
 			if pathCoherent {
-				economicsCounts.pathCoherent.Add(1)
+				economicsCounts.values.PathCoherent++
 			}
 		}
-		v := EconomicsFor(*s)
 		if v.Sub1 {
-			economicsCounts.sub1.Add(1)
+			economicsCounts.values.Sub1++
 		}
-		warnings := scenarioRoleWarnings(*s, d.Levels)
-		economicsCounts.roleWarnings.Add(uint64(len(warnings)))
+		economicsCounts.values.RoleWarnings += uint64(len(warnings))
+		if len(issues) > 0 {
+			if contradiction {
+				economicsCounts.values.Contradictions++
+			} else {
+				economicsCounts.values.SchemaRefusals++
+			}
+		}
+		economicsCounts.Unlock()
 		if v.Sub1 {
 			warnings = append(warnings, "sub-1R first obstacle: fact only; target policy unchanged")
 		}
@@ -154,15 +172,10 @@ func validateNewScenarioEconomics(d *PlanDoc) error {
 		if len(issues) > 0 {
 			verdict = "REFUSED"
 			errors = append(errors, fmt.Sprintf("%s: %s", s.ID, strings.Join(issues, "; ")))
-			if contradiction {
-				economicsCounts.contradictions.Add(1)
-			} else {
-				economicsCounts.schemaRefusals.Add(1)
-			}
 		} else {
 			s.Economics.Version = ScenarioEconomicsContractVersion
 		}
-		logger.Infof("📐 scenario economics %s: %s · issues=%v · WARN=%v · %s", verdict, EconomicsSummary(*s), issues, warnings, ScenarioEconomicsBootLine())
+		logScenarioEconomics(verdict, *s, issues, warnings)
 	}
 	if len(errors) > 0 {
 		return fmt.Errorf("scenario economics: %s", strings.Join(errors, " | "))
@@ -225,6 +238,11 @@ func scenarioEconomicsIssues(s PlanScenario) (issues []string, contradiction, pa
 	if !pathCoherent && strings.TrimSpace(e.TargetPathException) == "" {
 		issues = append(issues, fmt.Sprintf("target_path arm target %.2f absent from path %v within %.2f; name target_path_exception", g.Target, s.TargetChain, tick))
 		contradiction = true
+	}
+	// The contract explicitly permits a named exception. The coherence counter
+	// counts membership OR that declared exception, not inferred path membership.
+	if strings.TrimSpace(e.TargetPathException) != "" {
+		pathCoherent = true
 	}
 	if o != nil && o.Price != nil && economicsPrice(*o.Price) {
 		beyond := (s.Direction == "long" && *o.Price > g.Target+1e-8) || (s.Direction == "short" && *o.Price < g.Target-1e-8)
@@ -289,4 +307,14 @@ func scenarioRoleWarnings(s PlanScenario, levels []PlanLevel) []string {
 		}
 	}
 	return warnings
+}
+
+// Telemetry failure must not replace the validation result or panic the loop.
+func logScenarioEconomics(verdict string, s PlanScenario, issues, warnings []string) {
+	defer func() {
+		if recover() != nil {
+			fmt.Fprintln(os.Stderr, "WARN scenario economics telemetry unavailable; validation verdict preserved")
+		}
+	}()
+	logger.Infof("📐 scenario economics %s: %s · issues=%v · WARN=%v · %s", verdict, EconomicsSummary(s), issues, warnings, ScenarioEconomicsBootLine())
 }

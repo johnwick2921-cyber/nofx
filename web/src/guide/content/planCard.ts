@@ -36,7 +36,7 @@ export const planCard: GuideSection = {
     },
     {
       kind: 'p',
-      text: 'A 50% exit at +0.5R and 50% at +3R totals +1.75R when both succeed. A single MNQ contract cannot be halved. Economics counters count new-authoring checks, including retries, since process boot; they are not independent trades, persisted-plan counts, or reconstructed legacy events. The boot line starts from these recorded process counters. C6 floor-binding was NOT ESTABLISHED and is not a premise of this contract.',
+      text: 'A 50% exit at +0.5R and 50% at +3R totals +1.75R when both succeed. A single MNQ contract cannot be halved. Economics counters count new-authoring checks, including retries, since process boot; they are not independent trades, persisted-plan counts, or reconstructed legacy events. The boot line starts from these recorded process counters.',
     },
     {
       kind: 'p',
