@@ -420,3 +420,97 @@ the book empty:
 - a cancel of an unfilled entry leaving no orphan and touching no bracket
 - a restart with an open position → the reconciler finds or places the stop
 - an `Unknown` order appearing in an order_snapshot rather than being dropped
+
+---
+
+# F1 — THE GO BOOT (passed 2026-09-07 19:27:03 CT)
+
+Owner GO given; the owner ran the kill (`kill -9 2745590`) — the classifier
+denies it in this session.
+
+**Preconditions, my own fresh reads.** A7 window: 19:14 CT Monday, post-17:10 and
+flat. A5 five-leg gate re-read immediately pre-kill: **5/5 PASS, `ready:true`**,
+with leg 4 answered by the BROKER (`NT8 order_snapshot`, age 2s), not the ledger
+— it has passed vacuously at earlier cutovers and did not here. A6: no planner
+read claimed. Main tree porcelain 0 throughout; lock held by
+`bracket-oco-554049f5` with a live heartbeat from acquire to release.
+
+**Suite at the MERGED head** (`b4195e6f`, immediately before the build): Go
+**28 ok / 0 FAIL** · `tsc` exit 0 · vitest **47 files, 360 tests, all passed**
+(including the guide's 14-section and 45-knob-card pins, which my guide edits had
+to not disturb).
+
+**Build.** Clean clone in a directory named `nofx`,
+`vcs.revision=b4195e6f877032090812214b8ae4b6acae777a4f`, **`vcs.modified=false`**.
+`GUIDE_BUILT_REV` then READ FROM THAT BINARY and set to the same 40-char rev;
+`web/dist` rebuilt AFTER the bump and verified to carry it
+(`web/dist/assets/index-DQJURKdg.js`).
+
+**A13.** Running binary preserved as `nofx-bin.old.44ea117a`, verified with
+`go version -m` to hold `44ea117a02a1d6703003109a3386c92ca55d2bd5` — named for
+the rev it HOLDS. AddOn `.cs` and `NinjaTrader.Custom.dll` copied to
+`~/nofx-backups/nt8-addon/` before anything was copied in:
+`34efc3f85d0a775247f6c2f2ea576224` (`VLTraderTCPClient.2026-09-05-g2.cs`) and
+`7c2789ff35d96beb73dd740a29b913f1` (`NinjaTrader.Custom.2026-09-05-g2.dll`).
+**Caveat on that naming:** the `.cs` on disk is `g2`, but the DLL NT8 has loaded
+reports `2026-09-03-f12` on the wire, so the `.dll` backup is named for the
+source beside it rather than for its own build. Restore the pair together.
+
+**A19 ordering, all four halves.** RELEASE written before the kill · swap by
+`mv` (never `cp`) with a VERIFY between swap and kill · marker committed from
+the MAIN TREE after the passed boot (`14b3c824`) · marker PUSHED before the lock
+was released.
+
+**Boot, 19:27:03 CT — within 90 s of the kill:**
+
+```
+🔐 BOOT INTEGRITY OK — rev b4195e6f8770 · built 2026-09-07T15:53:37Z · expected b4195e6f · goldens PASS
+🧷 brackets: entry-oco=n/a (no book yet) · bracket-oco=n/a (no book yet) ·
+   state-source=none (no book) · protective-tif=n/a (no book yet) ·
+   reconcile-on-reconnect=on · can-place-stop=no (addon none < 2026-09-07-h1) ·
+   unprotected-found=0
+```
+
+**FIVE-REFERENCE CHECK — all five agree on `b4195e6f`:** RELEASE file · binary
+`vcs.revision` · `HEAD:deploy/RELEASE` · `GUIDE_BUILT_REV` · `/api/health`.
+
+**A14.** `raw.githubusercontent.com/.../14b3c824102ada8b5cc2bdf2f598c24247bda15a/trader/protection_reconciler.go`
+→ **200**, `size_download=16630`, `git ls-tree`=**16630**. Pinned to the commit
+sha, never a branch path.
+
+**Post-boot.** Zero `[ERROR]` and zero panics since 19:27:03. No protection lines,
+which is correct — there is no open position, and D5 is silent when there is
+nothing to check. The AddOn reconnected: leg 4 now reads a fresh book (age 22 s)
+carrying **`build 2026-09-03-f12`**.
+
+## The boot line said `addon none`, and then the AddOn arrived as f12
+
+Both are honest and they are not in conflict. The line is emitted once, at
+startup, before any frame has been received — so `none` is what the process
+actually knew at 19:27:03, printed rather than guessed (A11/A24). The gate read a
+minute later shows the build that then arrived.
+
+**And it is `2026-09-03-f12`, not the `2026-09-05-g2` sitting in the AddOns
+folder.** The g2 source was copied in and never F5-compiled with a full NT8
+restart, so it has never been live — the single biggest NT8 gotcha, caught here
+by comparing the file on disk against a RECEIVED frame. Two consequences the
+owner should know before F2:
+
+1. **Wave B's stop-slot fix has never run.** `MinAddonBuildStopSlot` is
+   `2026-09-05-g2`, so `PlaceStopEntry` has been refusing every stop entry on the
+   build gate — correctly, but that refusal has been the whole stop-entry story
+   since 09-05.
+2. **F2 will land two waves at once**, not one: the g2 stop-slot fix and this
+   wave's h1 changes.
+
+## F1-window degradation, exactly as stated in advance
+
+With `f12` running: a cancel of a filled entry still kills its bracket (D1 is C#
+code), protective orders are still Day, part-fills get no bracket, `Unknown`
+orders are still dropped from the book, and `place_protective_stop` is refused by
+the build gate — so **D5 detects an unprotected position and raises the P0, but
+cannot place the stop** until F2. The Go-side cancel guards, the census, the
+state vocabulary and the reconciler's detection are all live from this boot.
+
+**F2 remains owed**, on a separate owner GO, in a flat window with the book
+empty, with the A20 proof lines listed above.
