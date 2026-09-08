@@ -1236,7 +1236,10 @@ func (at *AutoTrader) recordBrokerRejection(signalID, brokerReason string) {
 		at.logWarnf("🚨 broker rejected %s but the ledger write FAILED (%v) — the row may still claim a broker state", shortID(signalID), err)
 		return
 	}
-	at.logWarnf("🚨 armed %s leg %d → REJECTED by the broker: %s (signal %s) — row moved terminal; it is NOT at the broker",
-		row.Scenario, row.LegIndex+1, brokerReason, shortID(signalID))
+	reason := brokerReason
+	if strings.TrimSpace(reason) == "" {
+		reason = store.PlacementReasonUnavailable
+	}
+	at.logWarnf("🚨 received armed entry rejection %s leg %d signal=%s reason=%q", row.Scenario, row.LegIndex+1, signalID, reason)
 	telemetry.IncGateBlock(at.id, "place_rejected_by_broker")
 }

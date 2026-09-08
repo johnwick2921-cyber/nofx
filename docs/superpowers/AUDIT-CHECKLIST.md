@@ -1917,6 +1917,17 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     all three are the same shape — an ABSENCE OF EVIDENCE is not evidence of
     absence. Related: class 70 (built ≠ wired), class 49/53 (a plausible zero).
 
+    **Placement-side recurrence (2026-09-07, `fix/placement-truth-0907`):**
+    Four sends wrote `working` without receipts. Register `signal_id` and
+    `place_pending` atomically BEFORE the wire, so an immediate rejection can
+    find the row; never overwrite it when the send returns. Exercise both
+    `fill.status=rejected` (h1's pre-submit refusal) and `order_update`; the
+    latter alone misses the incident. Distinguish an omitted reason from a
+    received reason. Fresh row/queue timestamps do not prove payload freshness:
+    seed a 30-minute-old bar through the actual command composer and inspect
+    the received payload clock. Run receipt routing with the race detector;
+    a listener installed asynchronously is another pre-receipt identity gap.
+
 82. **A green word that answers a narrower question than the reader will
     assume.** (Number assigned at merge, A16 — highest occupied on dev at
     authoring: 81. Re-check at merge.) The dashboard header read

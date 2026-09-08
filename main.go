@@ -498,9 +498,8 @@ func main() {
 	logger.Infof("🗓 %s", kernel.SessionCalendarBootLine(time.Now()))
 
 	// PLACE CONFIRMATION (2026-09-07) — the placement side of class 81. The
-	// addonReasonLive flag is FALSE until the AddOn carrying SendFillFrame(reason:)
-	// has been copied, F5-compiled and NT8 fully restarted; the line says so
-	// rather than implying a field that is not on the wire yet.
+	// The reason producer is deferred to the next owner-run AddOn wave.
+	// h1 omits the field; the line states that missing evidence explicitly.
 	logger.Infof("📤 %s", trader.PlaceConfirmBootLine(false))
 
 	// SANDBOX: a demo instance has no NT8 wire, so install a deterministic

@@ -21,7 +21,7 @@ func pcLedger(t *testing.T) (*store.Store, *store.ArmedOrderStore) {
 	return st, st.ArmedOrders()
 }
 
-// seedSent reproduces what runArmedPlacement now does after a successful send.
+// seedSent registers the placement before sending, as production does.
 func seedSent(t *testing.T, ledger *store.ArmedOrderStore, signal string, entry float64) store.ArmedOrderDB {
 	t.Helper()
 	row := &store.ArmedOrderDB{
@@ -32,8 +32,7 @@ func seedSent(t *testing.T, ledger *store.ArmedOrderStore, signal string, entry 
 	if err := ledger.UpsertArm(row); err != nil {
 		t.Fatal(err)
 	}
-	_ = ledger.SetSignal(row.ID, signal)
-	if err := ledger.SetState(row.ID, store.StatePlacePending, "sent, awaiting a frame that names this signal"); err != nil {
+	if err := ledger.BeginPlacement(row.ID, signal); err != nil {
 		t.Fatal(err)
 	}
 	return *row
@@ -84,8 +83,8 @@ func TestPin1_RejectIsTerminalWithTheBrokersReason(t *testing.T) {
 	}
 }
 
-// PIN 2 — send succeeds, NO frame → place_pending, then unconfirmed. Never working.
-func TestPin2_SendWithNoFrameIsPendingThenUnconfirmed(t *testing.T) {
+// PIN 2 — send succeeds, NO frame → place_pending, then overdue but still pending. Never working.
+func TestPin2_SendWithNoFrameHoldsPendingSlot(t *testing.T) {
 	_, ledger := pcLedger(t)
 	row := seedSent(t, ledger, "sig-no-frame", 29721.25)
 
@@ -108,13 +107,13 @@ func TestPin2_SendWithNoFrameIsPendingThenUnconfirmed(t *testing.T) {
 		t.Errorf("PIN 2: a place_pending row must be NON-terminal — it holds its slot and leg 4 must count it")
 	}
 
-	// The bound spends with no frame → terminal, and NAMED.
+	// The bound spends with no frame: named unconfirmed but NONTERMINAL.
 	if err := ledger.ExpirePlacement(row.ID, 4*time.Minute); err != nil {
 		t.Fatal(err)
 	}
 	got = stateOf(t, ledger, row.ID)
-	if got.State != store.StateUnconfirmed {
-		t.Errorf("PIN 2: want %q, got %q", store.StateUnconfirmed, got.State)
+	if got.State != store.StatePlacePending {
+		t.Errorf("PIN 2: want %q, got %q", store.StatePlacePending, got.State)
 	}
 	if !strings.Contains(got.StateReason, "unconfirmed:no_frame") {
 		t.Errorf("PIN 2: the reason must name it unconfirmed:no_frame, got %q", got.StateReason)
@@ -211,7 +210,7 @@ func TestRejectWithNoReasonTextIsStillNamed(t *testing.T) {
 	if got.StateReason == "" {
 		t.Errorf("an unexplained rejection must still say so, not carry an empty reason")
 	}
-	if !strings.Contains(got.StateReason, "no reason text") {
+	if !strings.Contains(got.StateReason, "reason unavailable") {
 		t.Errorf("want the honest fallback, got %q", got.StateReason)
 	}
 }

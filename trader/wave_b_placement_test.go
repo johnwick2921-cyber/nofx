@@ -37,18 +37,27 @@ type placeCall struct {
 }
 
 type fakePlacer struct {
-	calls []placeCall
-	sid   string
-	err   error
+	calls         []placeCall
+	sid           string
+	err           error
+	afterRegister func()
 }
 
-func (f *fakePlacer) PlaceStopEntry(symbol, side string, quantity float64, stopPx, sl, tp float64) (string, error) {
+func (f *fakePlacer) PlaceStopEntry(symbol, side string, quantity float64, stopPx, sl, tp float64, beforeSend ...func(string) error) (string, error) {
 	f.calls = append(f.calls, placeCall{symbol, side, quantity, stopPx, sl, tp})
 	if f.err != nil {
 		return "", f.err
 	}
 	if f.sid == "" {
-		return "sid-fake", nil
+		f.sid = "sid-fake"
+	}
+	for _, register := range beforeSend {
+		if err := register(f.sid); err != nil {
+			return "", err
+		}
+	}
+	if f.afterRegister != nil {
+		f.afterRegister()
 	}
 	return f.sid, nil
 }
@@ -69,11 +78,12 @@ func (f *fakeLedger) SetState(id int64, state, reason string) error {
 	return nil
 }
 
-func (f *fakeLedger) SetSignal(id int64, signalID string) error {
+func (f *fakeLedger) BeginPlacement(id int64, signalID string) error {
 	if f.signals == nil {
 		f.signals = map[int64]string{}
 	}
 	f.signals[id] = signalID
+	f.states = append(f.states, stateWrite{id, "place_pending", ""})
 	return nil
 }
 
@@ -249,8 +259,8 @@ func TestPlaceOneStopEntryDispatch(t *testing.T) {
 		if led.signals[200] != "sig-1" {
 			t.Errorf("the signal id was not recorded: %v", led.signals)
 		}
-		if len(led.states) != 1 || led.states[0].state != "working" {
-			t.Fatalf("want exactly one working transition, got %+v", led.states)
+		if len(led.states) != 1 || led.states[0].state != "place_pending" {
+			t.Fatalf("want exactly one pending transition, got %+v", led.states)
 		}
 	})
 

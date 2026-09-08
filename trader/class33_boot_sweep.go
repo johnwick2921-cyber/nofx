@@ -165,7 +165,7 @@ func (at *AutoTrader) ledgerOpenOrders(symbol string) ([]types.OpenOrder, error)
 			// order resting at the broker: on 2026-09-07 the chart drew a line
 			// for arm 117 — at the STOP price, labelled "Limit" — while NT8 had
 			// already refused it and the book stayed empty for 33 minutes.
-			status = "PENDING — not in broker book"
+			status = "PENDING — awaiting broker receipt"
 		}
 		out = append(out, types.OpenOrder{
 			OrderID: r.SignalID, Symbol: at.futuresSymbol(), Side: side, PositionSide: posSide,

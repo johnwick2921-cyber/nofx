@@ -163,7 +163,7 @@ func TestArmedOrderUpdateTransitions(t *testing.T) {
 	_ = ledger.SetState(rows[0].ID, "working", "")
 	at.onArmedOrderUpdate(ntwire.OrderUpdatePayload{SignalID: "sig-1", State: "rejected"}, ledger)
 	rows, _ = ledger.ListForPlan("2026-08-27:NY:trader-1")
-	if rows[0].State != "cancelled" || rows[0].StateReason == "" {
+	if rows[0].State != "rejected" || rows[0].StateReason != "reason unavailable (NT8 frame omitted reason)" {
 		t.Fatalf("reject must disarm with a reason: %+v", rows[0])
 	}
 }

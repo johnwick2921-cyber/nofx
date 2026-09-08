@@ -238,7 +238,7 @@ export function ArmedChip({
       ? '📌'
       : s === 'filled'
         ? '⚡'
-        : s === 'cancelled'
+        : s === 'cancelled' || s === 'rejected'
           ? '✕'
           : '⏳'
   const splitLegs = arm.legs && arm.legs.length >= 2 ? arm.legs : null
@@ -247,6 +247,7 @@ export function ArmedChip({
     : ''
   switch (arm.state) {
     case 'armed':
+    case 'place_pending':
       return (
         <span
           data-testid={`armed-chip`}
@@ -256,7 +257,11 @@ export function ArmedChip({
             border: '1px solid var(--vl-gold-line)',
           }}
         >
-          ⏳ order authorized{legLine}
+          ⏳{' '}
+          {arm.state === 'place_pending'
+            ? 'placement pending'
+            : 'order authorized'}
+          {legLine}
         </span>
       )
     case 'working':
@@ -286,6 +291,7 @@ export function ArmedChip({
         </span>
       )
     case 'cancelled':
+    case 'rejected':
       return (
         <span
           data-testid={`armed-chip`}
@@ -296,7 +302,8 @@ export function ArmedChip({
             border: '1px solid rgba(224,108,108,0.4)',
           }}
         >
-          ✕ cancelled{legLine}
+          ✕ {arm.state}
+          {legLine}
           {arm.reason ? ` · ${arm.reason}` : ''}
         </span>
       )

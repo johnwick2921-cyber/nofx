@@ -67,7 +67,7 @@ export const planCard: GuideSection = {
         },
         {
           title: '10 · Armed chips',
-          body: '⏳ armed = resting order placed, waiting on its confirm (wait_confirm) · 📌 working = resting at the broker · ⚡ filled = entry taken (the real fill) · ✕ cancelled/expired/refused. The arm is the fast path: it pre-commits the entry so the fill happens at the plan price, not after a 2-minute debate.',
+          body: '⏳ armed = order authorized, not yet sent · ⏳ placement pending = command registered for sending, awaiting an NT8 receipt · 📌 working = received live entry state from NT8 (entry update or fresh broker book) · ⚡ filled = entry taken (the real fill) · ✕ rejected = received NT8 rejection (verbatim reason when supplied; h1 omits it, so reason unavailable) · cancelled/expired/refused. Command age starts at creation time; cached bar time remains a separate market fact. Payloads older than 60 seconds are refused before sending. No receipt means placement pending with the slot held, even after the wait bound; unconfirmed requests do not draw broker order lines on the chart. The arm is the fast path: it pre-commits the entry so the fill happens at the plan price, not after a 2-minute debate.',
           cite: 'web/src/components/plan/ScenarioList.tsx:218-251',
         },
         {

@@ -763,9 +763,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                     if (limitPx <= 0)
                     {
                         LogWarn("VLTraderTCPClient: limit signal " + signalId + " missing limit_price — rejecting");
-                        SendFillFrame(signalId, 0.0, side, qty, 0.0, "rejected", symbol: symbol,
-                                  reason: "stale signal (age " + ageSec.ToString("F1") + "s > "
-                                          + STALE_SIGNAL_AGE_SECONDS + "s) — rejecting");
+                        SendFillFrame(signalId, 0.0, side, qty, 0.0, "rejected", symbol: symbol);
                         return;
                     }
                 }
@@ -1494,16 +1492,9 @@ namespace NinjaTrader.NinjaScript.AddOns
             });
         }
 
-        // reason (2026-09-07): THE BROKER'S OWN WORDS for a refusal, carried on
-        // the wire. Optional and omitted when empty, so the Go side is
-        // byte-identical for every non-rejection. It exists because NT8's actual
-        // refusal — "stale signal <id> (age 1824.5s) — rejecting" — lived only
-        // in THIS log file, while the Go side logged its own cleanup's wording
-        // and the ledger went on claiming the order was working.
         private void SendFillFrame(string signalId, double fillPrice, string side,
                                    int qty, double slippageTicks, string status,
-                                   string acctName = "", string symbol = "",
-                                   string reason = "")
+                                   string acctName = "", string symbol = "")
         {
             var payload = new Dictionary<string, object>
             {
@@ -1514,8 +1505,6 @@ namespace NinjaTrader.NinjaScript.AddOns
                 ["quantity"]       = qty,
                 ["slippage_ticks"] = slippageTicks,
                 ["status"]         = status,
-            if (!string.IsNullOrEmpty(reason))
-                payload["reason"] = reason;
                 // PHASE 4: which account this fill is on (e.Order.Account). Additive +
                 // back-compat: an un-updated Go binary ignores unknown JSON fields.
                 ["account"]        = acctName ?? "",

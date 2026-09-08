@@ -1076,7 +1076,7 @@ export function AdvancedChart({
             // had refused the signal and the book was empty for 33 minutes.
             const notAtBroker =
               order.status === 'ARMED' ||
-              order.status.startsWith('PENDING')
+              (order.status ?? '').startsWith('PENDING')
             if (notAtBroker) return
 
             // THE PRICE AND THE LABEL MUST COME FROM THE SAME QUESTION. This

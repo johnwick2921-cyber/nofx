@@ -1,23 +1,6 @@
-// PLACEMENT CONFIRMATION — class 81, one line lower (owner ruling 2026-09-07).
-//
-// THE INCIDENT. At 22:47:24 arm 117 was sent to NT8. PlaceLimitEntry returned
-// nil, so the ledger wrote `working` — a word that means RESTING AT THE BROKER.
-// In the same second NT8 answered:
-//
-//	VLTraderTCPClient: stale signal 9ba63cb5-… (age 1824.5s) — rejecting
-//
-// Nothing carried that refusal back to the ledger. For the next 33 minutes four
-// surfaces disagreed: the ledger said `working`, the broker's fresh book was
-// empty, the in-memory pending map had correctly dropped it, and the chart drew
-// a line at the stop price labelled "Limit". The loudest of the four — a red
-// [ERRO] — reached no surface the owner reads.
-//
-// THE RULE, the same one the cancel path already obeys: a distributed claim is
-// settled by a RECEIVED far-side frame. A send is an intention. A placement
-// lands in place_pending and only a frame that NAMES the signal promotes it,
-// recording which frame did so; a refusal moves it terminal in the broker's own
-// words; and a placement no frame ever settles retires as `unconfirmed`, never
-// as the flattering guess in either direction.
+// Placement confirmation: a fresh received book can prove a standing entry.
+// An unanswered request stays place_pending and holds its slot; age alone is
+// neither acceptance nor evidence that an order disappeared.
 package trader
 
 import (
@@ -29,104 +12,61 @@ import (
 	"nofx/telemetry"
 )
 
-// placeConfirmMaxWait is how long a sent placement may go unconfirmed before it
-// is retired. RESOLVED from the snapshot cadence rather than picked: two
-// snapshot intervals is the same bound the slot guard calls a stale book, so a
-// placement cannot outlive the evidence that would have settled it.
+// placeConfirmMaxWait is the existing broker-book freshness bound. It is not
+// a payload freshness clock and cannot prove that an unanswered order is gone.
 func placeConfirmMaxWait() time.Duration { return snapshotMaxAge() }
 
-// confirmPendingPlacements is the per-cycle settlement pass for placements. It
-// mirrors confirmPendingCancels exactly, and like it, it is telemetry-shaped: a
-// failed read WARNs and returns, never stops the loop, and never promotes a row
-// on ignorance (A10 / class 23).
-//
-// Promotion evidence, in order of strength:
-//  1. the broker's periodic BOOK naming the signal — the same frame leg 4 trusts
-//  2. an order_update the wire already recorded against the signal
-//
-// Nothing else promotes. In particular the absence of a rejection is not
-// evidence of acceptance.
-func (at *AutoTrader) confirmPendingPlacements(ledger *store.ArmedOrderStore, now time.Time) (confirmed, stillPending, expired int) {
+// confirmPendingPlacements accepts only a fresh received book naming the live
+// ENTRY. No frame means place_pending with the slot held, regardless of age.
+func (at *AutoTrader) confirmPendingPlacements(ledger *store.ArmedOrderStore, now time.Time) (confirmed, stillPending, unconfirmed int) {
 	if at == nil || ledger == nil {
-		return 0, 0, 0
+		return
 	}
 	rows, err := ledger.ListPlacePending(at.id)
 	if err != nil {
-		at.logWarnf("📤 place-confirm: ledger read failed (%v) — nothing promoted this cycle", err)
-		return 0, 0, 0
+		at.logWarnf("place-confirm: ledger read failed: %v", err)
+		return
 	}
-	if len(rows) == 0 {
-		return 0, 0, 0
-	}
-
-	book, haveBook, bookAge := at.liveBook(now)
+	book, haveBook, age := at.liveBook(now)
 	_, _, _, snapID := at.persistedBook(now)
-
 	for _, r := range rows {
-		sig := strings.TrimSpace(r.SignalID)
-		if sig == "" {
-			// Sent with no signal id is not representable — but if it ever
-			// happens, it can never be confirmed, so retire it rather than let
-			// it hold a slot forever.
-			_ = ledger.ExpirePlacement(r.ID, now.Sub(r.CreatedAt))
-			at.logWarnf("📤 place-confirm: %s leg %d had NO signal id — retired unconfirmed (nothing could ever name it)", r.Scenario, r.LegIndex+1)
-			expired++
-			continue
-		}
-
-		// 1. THE BOOK. A fresh book that names the signal is the strongest
-		//    evidence there is, and it is the same evidence the flat gate's leg
-		//    4 answers from.
-		if haveBook && bookAge <= placeConfirmMaxWait() {
-			if o, ok := bookOrderForSignal(book, sig); ok {
+		if haveBook && age <= placeConfirmMaxWait() {
+			if o, ok := bookOrderForSignal(book, r.SignalID); ok {
 				frame := "order_snapshot " + snapshotLabel(snapID) + " (" + o.State + ", " + o.Type + ")"
 				if err := ledger.ConfirmPlacement(r.ID, frame); err != nil {
-					at.logWarnf("📤 place-confirm: promote failed for %s: %v", shortID(sig), err)
+					at.logWarnf("place-confirm: %v", err)
 					continue
 				}
-				at.logInfof("📥 armed %s leg %d → WORKING — confirmed by %s (signal %s)", r.Scenario, r.LegIndex+1, frame, shortID(sig))
-				telemetry.IncGateBlock(at.id, "place_confirmed")
 				confirmed++
+				telemetry.IncGateBlock(at.id, "place_confirmed")
 				continue
 			}
 		}
-
-		// 2. NOT YET. A placement is only retired once the evidence that would
-		//    have settled it has had its full bound to arrive.
-		waited := now.Sub(r.CreatedAt)
-		if waited <= placeConfirmMaxWait() {
-			stillPending++
-			continue
+		stillPending++
+		// UpdatedAt was written by BeginPlacement before sending, unlike the arm's
+		// potentially much older authoring time. This only controls a warning.
+		waited := now.Sub(r.UpdatedAt)
+		if waited > placeConfirmMaxWait() && !strings.HasPrefix(r.StateReason, "unconfirmed:no_frame") {
+			if err := ledger.ExpirePlacement(r.ID, waited); err != nil {
+				at.logWarnf("place-confirm: %v", err)
+				continue
+			}
+			unconfirmed++
+			at.logWarnf("📤 armed %s signal=%s awaits a broker receipt after %s — place_pending, slot held", r.Scenario, r.SignalID, waited.Round(time.Second))
+			telemetry.IncGateBlock(at.id, "place_unconfirmed_no_frame")
 		}
-
-		// 3. THE BOUND IS SPENT. Terminal, and NAMED — never silently working
-		//    (which claims a broker state) and never silently gone (which hides
-		//    that we sent something).
-		if err := ledger.ExpirePlacement(r.ID, waited); err != nil {
-			at.logWarnf("📤 place-confirm: expire failed for %s: %v", shortID(sig), err)
-			continue
-		}
-		bookNote := "no book to check"
-		if haveBook {
-			bookNote = "book age " + bookAge.Round(time.Second).String() + ", signal absent from it"
-		}
-		at.logWarnf("📤 armed %s leg %d → UNCONFIRMED after %s — no order_update and no book frame ever named signal %s (%s). SENT, never confirmed, never refused.",
-			r.Scenario, r.LegIndex+1, waited.Round(time.Second), shortID(sig), bookNote)
-		telemetry.IncGateBlock(at.id, "place_unconfirmed_no_frame")
-		expired++
 	}
-	return confirmed, stillPending, expired
+	return
 }
 
-// bookOrderForSignal finds a WORKING order in the broker's book carrying this
-// signal's name. It reuses orderBelongsToSlot's join so the confirmation and the
-// slot guard can never disagree about what "this signal's order" means.
+// A bracket child shares the signal but is not a standing entry; pending/local
+// broker states likewise do not prove the entry is working at the exchange.
 func bookOrderForSignal(book []nt.NT8Order, signalID string) (nt.NT8Order, bool) {
+	if strings.TrimSpace(signalID) == "" {
+		return nt.NT8Order{}, false
+	}
 	for _, o := range book {
-		if !o.IsWorking() {
-			continue
-		}
-		if _, ok := orderBelongsToSlot(o.Name, []string{signalID}); ok {
+		if o.Name == signalID && nt.ClassifyOrderState(o.State) == nt.LivenessLive {
 			return o, true
 		}
 	}
@@ -161,21 +101,11 @@ func itoa64(n int64) string {
 	return string(b)
 }
 
-// PlaceConfirmBootLine states the placement-confirmation contract once at boot,
-// every field READ from the code that enforces it (A11).
-//
-// It carries one thing that is NOT yet true: the AddOn half of the broker-reason
-// field. FillPayload.Reason and the C# SendFillFrame(reason:) shipped together,
-// but NinjaScript only takes effect after the copy → F5 → full NT8 restart, so
-// until that happens a rejection records the honest fallback rather than NT8's
-// sentence. A boot line that implied otherwise would be the exact defect this
-// wave exists to fix, one level up.
+// PlaceConfirmBootLine exposes the contract and the deferred AddOn producer.
 func PlaceConfirmBootLine(addonReasonLive bool) string {
-	reason := "NOT LIVE until the next AddOn copy/F5/full NT8 restart — rejections record \"no reason text on the fill frame\" until then"
+	reason := store.PlacementReasonUnavailable + "; C# reason producer deferred to next AddOn wave"
 	if addonReasonLive {
-		reason = "live — rejections carry NT8's own sentence"
+		reason = "received reason carried verbatim"
 	}
-	return "place-confirm: a send writes place_pending, never working · promoted ONLY by a received frame naming the signal (recorded) · " +
-		"reject → terminal in the broker's words · unconfirmed after " + placeConfirmMaxWait().String() + " → unconfirmed:no_frame · " +
-		"broker-reason wire field: " + reason
+	return "place-confirm: pre-send identity + place_pending · working requires a received live ENTRY frame · rejected requires a received rejection · no receipt: place_pending, slot held · broker-reason: " + reason
 }
