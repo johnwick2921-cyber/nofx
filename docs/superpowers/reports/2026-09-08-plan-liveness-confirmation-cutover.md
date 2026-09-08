@@ -1,7 +1,7 @@
 # Combined PLAN-LIVENESS / CONFIRMATION-TRUTH cutover
 
-**Status: combined candidate built and verified; Guide stamp prepared; dist and
-cutover checks follow. No new service boot is claimed.** This is the preparation
+**Status: combined candidate and dist built; initial fresh gate and backup passed;
+RELEASE prepared for the ordered swap. No new service boot is claimed.** This is the preparation
 record; the postboot marker is added only after a passed boot.
 
 ## Authority, ownership and provenance
@@ -142,3 +142,44 @@ deploy/RESTORE.md
 web/src/guide/types.ts
 f8bc7044cc44d58e84904a0a7761e78b420404af 2026-09-08T14:50:07-05:00 docs(confirmation): publish verified candidate and stamp Guide from binary
 ```
+
+## Fresh gate, backup and RELEASE preparation
+
+[A] Production dist built after the binary-derived Guide stamp, exit 0. The
+generated JavaScript embeds `f8bc7044cc44d58e84904a0a7761e78b420404af`.
+The original worktree commit-hook attempt lacked its dependency symlink and
+could not start ESLint; the normal hook passed after restoring that link.
+No hook was bypassed and no production code changed.
+
+[A] Deploy owner's fresh five-leg gate at **15:03:39 CT**, n=1 running trader,
+HTTP 200, ready=true:
+
+1. DB open positions: **0** (row IDs: `[]`), `sqlite trader_positions`.
+2. API positions: **0**, `trader.GetPositions`.
+3. NT8 positions snapshot: **count=0**, `NT8 positions frame`.
+4. Working orders: **0 at broker, ledger agrees: 0**; source
+   `broker — NT8 order_snapshot frame (age 8s, build 2026-09-07-h1)`.
+5. Planner in flight: **no planner read claimed**, `plannerReadInFlight claim`.
+
+All five legs are from one returned payload. The trailing legacy note saying
+no NT8 working-order frame exists is stale; leg 4's actual source is quoted
+above. A fresh read will be required again immediately before `mv`.
+
+[A] Online SQLite backup completed **15:04:25 CT**, source opened `mode=ro`,
+copy **750,182,400 bytes**, `PRAGMA integrity_check = ok`. Location:
+`/home/hoang/nofx-backups/plan-liveness-confirmation-20260908-150422/data.db`.
+No schema/data migration was performed by the deploy owner.
+
+The same backup directory preserves `RELEASE.before` (**33672fdd**) and
+`dist.before`. Preserved executable:
+`/home/hoang/nofx-backups/plan-liveness-confirmation-20260908-150422/nofx-bin.old.33672fdd2cd2fee60a2c562a9693e06ab3b13551`.
+Both `/proc/3260027/exe` and the disk/backup executable were independently
+read as **33672fdd2cd2fee60a2c562a9693e06ab3b13551**, `vcs.modified=false`,
+SHA-256 **25af1ec9714be825287fd697e9148340381ac1b702180cc392fb3dba0a5319c2**.
+The backup name comes from that observed revision.
+
+`deploy/RELEASE` is prepared as **f8bc7044**, derived from the verified combined
+binary. This metadata commit is not the postboot marker. The main tree is
+fast-forwarded under the lock after final metadata-head checks, and RELEASE
+therefore precedes the swap and the owner's kill. The final gate, swap and
+independent verification receipts are appended after they occur.
