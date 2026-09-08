@@ -514,3 +514,64 @@ state vocabulary and the reconciler's detection are all live from this boot.
 
 **F2 remains owed**, on a separate owner GO, in a flat window with the book
 empty, with the A20 proof lines listed above.
+
+---
+
+# THE NEAR-MISS THE TEST CAUGHT, NOW CONFIRMED LIVE
+
+**The defect I nearly shipped was the guard being too WIDE, not too narrow.**
+
+The first draft of `adjudicateArmCancel` refused any cancel whose entry could not
+be shown resting at the broker. That reads as the safe direction — the whole wave
+is about not cancelling into a live bracket — and it is wrong. There are two ways
+an entry can fail to be resting:
+
+  · **children remain** → the entry FILLED and those are its protections. Refuse.
+    This is 2026-09-06 23:37:02.
+  · **nothing at all is under the signal** → there is no protection to lose. The
+    cancel is a harmless no-op, and REFUSING it strands the ledger row `working`
+    with no way ever to retire it.
+
+The draft refused both. `TestShadowedRestingOrderCancelledAtBoot` went red, which
+is the only reason the distinction exists in the shipped code:
+
+```go
+// NOTHING AT ALL under this signal. This is NOT the dangerous case and must
+// not be refused: there is no protection to lose, and refusing would strand
+// the ledger row `working` forever with no way to retire it.
+return armCancelVerdict{true, "nothing under this signal is working at the broker
+    — the cancel is a harmless no-op and lets the ledger row retire"}
+```
+
+**Live confirmation, 2026-09-07, under the h1 AddOn — two rows, hours after the
+test made the argument.** `armed_orders` 116 and 117 are two separate ASIA S3
+arms (signals `747dc100`, `9ba63cb5`). Each was reconciled against a FRESH broker
+book that listed nothing under its signal:
+
+```
+22:45:25  ✕ armed S3 cancelled — broker's book (age 30s, build 2026-09-07-h1)
+          does not list it as working — reconciling the ledger to the broker's word
+23:03:24  ✕ armed S3 cancelled — broker's book (age 28s, build 2026-09-07-h1)
+          does not list it as working — reconciling the ledger to the broker's word
+```
+
+Ledger after: both `cancelled`, reason *"absent from a fresh NT8 order_snapshot
+(reconciled to the broker)"*. **Under the draft guard both would still read
+`working` today, against an empty book, and would keep reading `working` forever
+— because the only condition that could retire them is the one the guard
+refused.** Two stranded rows in the first six hours, on the quietest possible
+path, with nothing in the logs to say why.
+
+**What generalises.** A safety guard's failure modes are not symmetric, and the
+conservative-looking direction is not automatically the safe one. Refusing to act
+is safe when acting is destructive and unnecessary; it is a defect when the
+refused action is the only thing that retires state. The question to ask of any
+new refusal is not "could acting cause harm" but "what becomes unreachable if I
+never act" — and the answer has to be checked against a test that exercises the
+harmless case, because the dangerous case is the only one anybody writes down.
+
+This is the same shape as the two guards reverted earlier in this wave
+(`cancelArmedOrdersSyncWith`, `sweepPreBootArmsWith`), where refusing without a
+book would have left arms live into an EOD flatten. Three instances, one wave:
+**every over-broad refusal in this wave was caught by a test asserting the
+BENIGN path, never by review.**
