@@ -1325,8 +1325,8 @@ func ResetBaselineKey(traderID, tradeDate, session string) string {
 // — with two day-plan traders sharing a plan_id, the last writer's statuses
 // governed both cards. Trader-scoped so one trader's scenario facts can never
 // reach another's card.
-func ScenarioStatusKey(traderID, planID string) string {
-	return "scenario_status:" + traderID + ":" + planID
+func ScenarioStatusKey(traderID, planID string, version int) string {
+	return fmt.Sprintf("scenario_status:%s:%s:v%d", traderID, planID, version)
 }
 
 // ScenarioInvalidatedAtKey (invalidation-wired, 2026-09-03) — the CT wall
@@ -1337,15 +1337,15 @@ func ScenarioStatusKey(traderID, planID string) string {
 // IS invalidated and not WHEN it became so. Without this the gate's refusal
 // could only say "as of now", and "invalidated at 09:02" would silently mean
 // the check time rather than the verdict time.
-func ScenarioInvalidatedAtKey(traderID, planID, scenarioID string) string {
-	return "scenario_invalidated_at:" + traderID + ":" + planID + ":" + scenarioID
+func ScenarioInvalidatedAtKey(traderID, planID string, version int, scenarioID string) string {
+	return fmt.Sprintf(ScenarioDeathRecordPrefix+"%s:%s:v%d:%s", traderID, planID, version, scenarioID)
 }
 
 // ScenarioMetaKey (A1/A4, fail-register wave) — sibling of ScenarioStatusKey:
 // {"basis":{"S1":"machine|heuristic"},"unevaluable":["S3"]} so the card can
 // render heuristic verdicts distinctly and name unevaluable scenarios.
-func ScenarioMetaKey(traderID, planID string) string {
-	return "scenario_meta:" + traderID + ":" + planID
+func ScenarioMetaKey(traderID, planID string, version int) string {
+	return fmt.Sprintf("scenario_meta:%s:%s:v%d", traderID, planID, version)
 }
 
 // SetResetBaseline records the version the reset chain starts measuring from.

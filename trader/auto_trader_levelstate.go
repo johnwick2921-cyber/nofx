@@ -2,7 +2,7 @@ package trader
 
 import (
 	"encoding/json"
-	"strings"
+	"fmt"
 	"sync"
 	"time"
 
@@ -180,6 +180,10 @@ func gradeToFreshness(grade string) string {
 // keep saying nothing than to invent a status. If NO scenario resolves, the key
 // is not written at all.
 func (at *AutoTrader) recordScenarioState() {
+	at.recordScenarioStateAt(time.Now())
+}
+
+func (at *AutoTrader) recordScenarioStateAt(now time.Time) {
 	if !at.dayPlanEnabled() || at.store == nil || !kernel.HasTraderPlanProvider(at.id) {
 		return
 	}
@@ -195,7 +199,6 @@ func (at *AutoTrader) recordScenarioState() {
 	if len(bars) == 0 {
 		return
 	}
-	now := time.Now()
 	maxLevels, _, _ := resolveSessionPlanCfg(at.dayPlanCfg(), at.activeSessionName(now))
 	_, price, dATR := kernel.AssembleScoredLevels(at.id, bars, at.sessionRegistry(now), symbol, maxLevels, now, at.proximityFilterATR())
 	if price <= 0 {
@@ -223,8 +226,12 @@ func (at *AutoTrader) recordScenarioState() {
 	if err != nil {
 		return
 	}
-	resolvedPlanID := at.store.Plan().ResolvePlanID(plannerTradeDateCT(now), plan.Session, at.id)
-	key := store.ScenarioStatusKey(at.id, resolvedPlanID)
+	resolvedPlanID := plan.PlanID
+	if resolvedPlanID == "" || plan.Version <= 0 {
+		at.logWarnf("scenario record unavailable: missing plan identity/version")
+		return
+	}
+	key := store.ScenarioStatusKey(at.id, resolvedPlanID, plan.Version)
 	if err := at.store.SetSystemConfig(key, string(blob)); err != nil {
 		at.logWarnf("🎯 scenario-state write failed for %s: %v", key, err)
 		return
@@ -250,8 +257,8 @@ func (at *AutoTrader) recordScenarioState() {
 			confirms[sc.ID] = kernel.EvaluateScenarioConfirm(sc, bars, plan.BirthMs, now.UnixMilli())
 		}
 	}
-	if metaBlob, mErr := json.Marshal(map[string]any{"basis": basis, "unevaluable": unevaluable, "confirm": confirms}); mErr == nil {
-		_ = at.store.SetSystemConfig(store.ScenarioMetaKey(at.id, resolvedPlanID), string(metaBlob))
+	if metaBlob, mErr := json.Marshal(map[string]any{"basis": basis, "unevaluable": unevaluable, "confirm": confirms, "observed_at": now}); mErr == nil {
+		_ = at.store.SetSystemConfig(store.ScenarioMetaKey(at.id, resolvedPlanID, plan.Version), string(metaBlob))
 	}
 	// INVALIDATION-WIRED (2026-09-03) — stamp WHEN a scenario first read
 	// invalidated, once. The evaluator is stateless, so without this the gate's
@@ -261,20 +268,25 @@ func (at *AutoTrader) recordScenarioState() {
 		if !e.HasAnchor || e.Status != kernel.ScenarioInvalidated {
 			continue
 		}
-		k := store.ScenarioInvalidatedAtKey(at.id, resolvedPlanID, e.ID)
-		if prior, gErr := at.store.GetSystemConfig(k); gErr == nil && strings.TrimSpace(prior) != "" {
-			continue // already stamped — never overwritten
-		}
-		if sErr := at.store.SetSystemConfig(k, kernel.FormatCT(now)); sErr != nil {
-			at.logWarnf("🎯 invalidation timestamp write failed for %s: %v", e.ID, sErr)
+		wrote, err := at.store.RecordScenarioDeath(at.id, store.ScenarioDeath{
+			PlanID: resolvedPlanID, Version: plan.Version, ScenarioID: e.ID,
+			Anchor: e.Anchor, Price: price, Cause: e.Status,
+			Condition: fmt.Sprintf("%s at %.2f using %s: %s", e.Status, e.Anchor, rule, e.Reason),
+			Basis:     e.Basis, ObservedAt: now,
+		})
+		if err != nil {
+			at.logWarnf("scenario death record failed: v%d %s: %v", plan.Version, e.ID, err)
+		} else if wrote {
+			at.logInfof("scenario death recorded: %s v%d %s cause=%s anchor=%.2f price=%.2f first observed=%s basis=%s — %s", plan.Session, plan.Version, e.ID, e.Status, e.Anchor, price, kernel.FormatCT(now), e.Basis, e.Reason)
 		}
 	}
+	at.observePlanExhaustionAt(plan, statuses, now)
 	if at.scenarioStateLog != string(blob) {
 		at.scenarioStateLog = string(blob)
 		for _, e := range evals {
 			if e.HasAnchor {
 				// FIX 7 (F1) — the label says what it is: an ESTIMATE.
-				at.logInfof("🎯 scenario %s → ≈%s @ %.2f (%s — display-only estimate, never execution-wired)", e.ID, e.Status, e.Anchor, e.Reason)
+				at.logInfof("🎯 scenario %s → ≈%s @ %.2f (%s — anchor estimate; arm gate uses this verdict, authored invalidation is separate)", e.ID, e.Status, e.Anchor, e.Reason)
 			} else {
 				// A4: unevaluable is owner-relevant — WARN so it reaches the
 				// log_events sink + dashboard, not just the file log.

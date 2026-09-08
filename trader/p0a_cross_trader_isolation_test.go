@@ -123,8 +123,8 @@ func TestP0AInstallRegistersPerTraderID(t *testing.T) {
 // TestP0AScenarioStatusKeyIsTraderScoped pins the scenario-status system_config
 // key: two traders sharing a plan_id used to share one key (last writer won).
 func TestP0AScenarioStatusKeyIsTraderScoped(t *testing.T) {
-	a := store.ScenarioStatusKey("trader-A", "2026-08-17:NY")
-	b := store.ScenarioStatusKey("trader-B", "2026-08-17:NY")
+	a := store.ScenarioStatusKey("trader-A", "2026-08-17:NY", 1)
+	b := store.ScenarioStatusKey("trader-B", "2026-08-17:NY", 1)
 	if a == b {
 		t.Fatalf("scenario-status keys must differ per trader, both %q", a)
 	}

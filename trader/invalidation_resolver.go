@@ -2,12 +2,10 @@ package trader
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"nofx/kernel"
 	"nofx/market"
-	"nofx/store"
 )
 
 // ── INVALIDATION RESOLVER (owner ruling 2026-09-03) ─────────────────────────
@@ -25,62 +23,72 @@ import (
 // scenarioInvalidationResolver builds the gate's resolver for one plan.
 // Returns nil when the plan is absent, which switches the leg off entirely.
 func (at *AutoTrader) scenarioInvalidationResolver(plan *kernel.ActivePlan) func(string) (InvalidationVerdict, bool) {
+	return at.scenarioInvalidationResolverClock(plan, time.Now)
+}
+
+func (at *AutoTrader) scenarioInvalidationResolverClock(plan *kernel.ActivePlan, clock func() time.Time) func(string) (InvalidationVerdict, bool) {
 	if plan == nil || at == nil {
 		return nil
 	}
 	return func(scenarioID string) (InvalidationVerdict, bool) {
-		if scenarioID == "" || market.FuturesBarsProvider == nil {
-			return InvalidationVerdict{}, false
-		}
-		now := time.Now()
-		bars := market.FuturesBarsProvider(at.futuresSymbol(), kernel.AISVPBarInterval, kernel.AISVPBarCount)
-		if len(bars) == 0 {
-			return InvalidationVerdict{}, false
-		}
-		price := bars[len(bars)-1].Close
-		dATR := kernel.PlanDATRFor(at.id)
-		if price <= 0 {
-			return InvalidationVerdict{}, false
-		}
-		// The SAME windowing the display path uses: only bars closed after the
-		// plan was born, so a pre-plan sweep never reads as a verdict.
-		windowed := kernel.BarsSince(bars, plan.BirthMs)
-		rule := at.acceptanceRuleFor(at.activeSessionName(now))
-		_, evals := kernel.EvaluatePlanScenarios(
-			plan.Doc, windowed, price, dATR, kernel.ActivationWindowK, rule, true, now.UnixMilli())
-
-		for _, e := range evals {
-			if e.ID != scenarioID {
-				continue
-			}
-			if !e.HasAnchor {
-				// The display path calls this UNEVALUABLE and refuses to store
-				// a status. The gate must not invent one either.
-				return InvalidationVerdict{}, false
-			}
-			if e.Status != kernel.ScenarioInvalidated {
-				return InvalidationVerdict{}, true // a verdict, and it is "alive"
-			}
-			// WHEN it became invalidated, from the stamp the evaluator wrote
-			// on the transition. Absent → say nothing rather than pass the
-			// CHECK time off as the VERDICT time; the gate then renders
-			// "at an earlier cycle", which is true.
-			atCT := ""
-			if at.store != nil {
-				resolved := at.store.Plan().ResolvePlanID(plannerTradeDateCT(now), plan.Session, at.id)
-				if v, gErr := at.store.GetSystemConfig(store.ScenarioInvalidatedAtKey(at.id, resolved, scenarioID)); gErr == nil {
-					atCT = strings.TrimSpace(v)
-				}
-			}
-			return InvalidationVerdict{
-				Invalidated: true,
-				AtCT:        atCT,
-				Anchor:      e.Anchor,
-				Reason:      e.Reason,
-			}, true
-		}
-		return InvalidationVerdict{}, false // scenario not in this plan
+		return at.scenarioInvalidationAt(plan, scenarioID, clock())
 	}
+}
+
+func (at *AutoTrader) scenarioInvalidationAt(plan *kernel.ActivePlan, scenarioID string, now time.Time) (InvalidationVerdict, bool) {
+	if scenarioID == "" || market.FuturesBarsProvider == nil {
+		return InvalidationVerdict{}, false
+	}
+	bars := market.FuturesBarsProvider(at.futuresSymbol(), kernel.AISVPBarInterval, kernel.AISVPBarCount)
+	if len(bars) == 0 {
+		return InvalidationVerdict{}, false
+	}
+	price := bars[len(bars)-1].Close
+	dATR := kernel.PlanDATRFor(at.id)
+	if price <= 0 {
+		return InvalidationVerdict{}, false
+	}
+	// The SAME windowing the display path uses: only bars closed after the
+	// plan was born, so a pre-plan sweep never reads as a verdict.
+	windowed := kernel.BarsSince(bars, plan.BirthMs)
+	rule := at.acceptanceRuleFor(at.activeSessionName(now))
+	_, evals := kernel.EvaluatePlanScenarios(
+		plan.Doc, windowed, price, dATR, kernel.ActivationWindowK, rule, true, now.UnixMilli())
+
+	for _, e := range evals {
+		if e.ID != scenarioID {
+			continue
+		}
+		if !e.HasAnchor {
+			// The display path calls this UNEVALUABLE and refuses to store
+			// a status. The gate must not invent one either.
+			return InvalidationVerdict{}, false
+		}
+		if e.Status != kernel.ScenarioInvalidated {
+			return InvalidationVerdict{}, true // a verdict, and it is "alive"
+		}
+		// WHEN it became invalidated, from the stamp the evaluator wrote
+		// on the transition. Absent → say nothing rather than pass the
+		// CHECK time off as the VERDICT time; the gate then renders
+		// "at an earlier cycle", which is true.
+		atCT := ""
+		if at.store != nil {
+			r, err := at.store.ScenarioDeathFor(at.id, plan.PlanID, plan.Version, scenarioID, e.Anchor)
+			if err != nil {
+				at.logWarnf("scenario death evidence unavailable: v%d %s: %v", plan.Version, scenarioID, err)
+			} else if r != nil {
+				atCT = kernel.FormatCT(r.ObservedAt)
+			}
+
+		}
+		return InvalidationVerdict{
+			Invalidated: true,
+			AtCT:        atCT,
+			Anchor:      e.Anchor,
+			Reason:      e.Reason,
+		}, true
+	}
+	return InvalidationVerdict{}, false // scenario not in this plan
 }
 
 // ArmGateBootLine (F5) — what the arm gate now reads and renders. Every field

@@ -1,3 +1,4 @@
+import type { ScenarioDeath } from '../../lib/api/plan'
 // P4.3 — scenario rows: StatusDot · id · quality · name/grammar + the target
 // (uses) chain. Status is READ-ONLY from the backend (single-authority rule) —
 // absent → 'armed' (plan-born). The UI never computes trading state.
@@ -314,6 +315,7 @@ export function ArmedChip({
 export function ScenarioList({
   scenarios,
   statusMap,
+  deaths,
   meta,
   fvgStates,
   armedStates,
@@ -321,6 +323,7 @@ export function ScenarioList({
 }: {
   scenarios: PlanScenario[]
   statusMap?: Record<string, ScenarioStatusValue>
+  deaths?: Record<string, ScenarioDeath>
   /** Wave 2 armed orders — per-scenario arm state (⏳/📌/⚡/✕+reason). */
   armedStates?: Record<string, PlanArmView>
   /** A1/A4/C1 (fail-register wave): verdict basis, unevaluable ids, confirm verdicts */
@@ -384,6 +387,18 @@ export function ScenarioList({
               }
               style={heuristic ? { opacity: 0.75 } : undefined}
             >
+              {deaths?.[s.id] && (
+                <div
+                  data-testid={`scenario-death-${s.id}`}
+                  className="text-[10px]"
+                  title={deaths[s.id].condition}
+                >
+                  Recorded {deaths[s.id].cause} · v{deaths[s.id].version} ·
+                  anchor {deaths[s.id].anchor.toFixed(2)} · first observed{' '}
+                  {deaths[s.id].observed_at} · {deaths[s.id].basis} verdict
+                  history
+                </div>
+              )}
               {unevaluable ? (
                 <div
                   className="flex items-center gap-1.5 text-[11px] py-0.5"

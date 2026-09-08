@@ -113,6 +113,26 @@ export type ScenarioStatusValue =
   | 'expired'
 
 // ── GET /api/plan/today ──
+export interface ScenarioLiveness {
+  total: number
+  tradeable: number | null
+  unknown: number
+  observed_at?: string
+  reason?: string
+}
+
+export interface ScenarioDeath {
+  plan_id: string
+  version: number
+  scenario_id: string
+  anchor: number
+  price: number
+  cause: string
+  condition: string
+  basis: string
+  observed_at: string
+}
+
 export interface PlanToday {
   found: boolean
   trade_date: string
@@ -146,6 +166,8 @@ export interface PlanToday {
   degraded?: boolean
   // Per-scenario live status keyed by scenario id (executor-phase; absent now).
   scenario_status?: Record<string, ScenarioStatusValue>
+  scenario_liveness?: ScenarioLiveness
+  scenario_deaths?: Record<string, ScenarioDeath>
   // A1/A4: verdict basis ("machine"|"heuristic") + scenarios with no anchor
   scenario_meta?: {
     basis?: Record<string, string>

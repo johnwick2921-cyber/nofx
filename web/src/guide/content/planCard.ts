@@ -14,6 +14,14 @@ export const planCard: GuideSection = {
     { kind: 'mockCard' },
     {
       kind: 'p',
+      text: 'Plan liveness: tradeable N/M counts scenarios whose current evaluator status is waiting, armed or triggered. It is not order eligibility. Missing, unevaluable or stale versioned snapshots show UNKNOWN. Zero remaining is marked EXHAUSTED and records one warning per version; exhaustion does not itself wake the planner or bypass either throttle, the session cutoff or the replan budget. First-observed invalidation records retain the exact plan version, scenario ID, judged anchor, price, cause and time. They are history: the existing evaluator can later change status. Legacy unversioned timestamps are preserved but never attached to a new version. The card names the recorded observation time, not a render time or an inferred candle-death time.',
+    },
+    {
+      kind: 'p',
+      text: 'At publication, supported authored invalidation rules are checked against the latest completed five-minute windows using complete minute bars. Explicit one- or two-close above/below price rules can refuse a candidate and re-author inside the existing attempt budget; a refused candidate is never published active. Compound, sequential, subjective or unsupported wording, and missing or malformed tape, are UNKNOWN and accepted for this check with a warning and recorded count. This check is separate from the live anchor heuristic and changes no entry-gate verdict.',
+    },
+    {
+      kind: 'p',
       text: 'Order prices are shown side by side for each scenario leg: intended terms from the displayed plan (including overlays), composed terms from the selected arm ledger row, and ACCEPTED terms from a fresh received broker book. Selection uses the displayed version and highest placement sequence per leg; the first authorization version remains separate. Each leg shows its state and provenance, so split legs can disagree. The current ACCEPTED column matches the exact placement signal and its stop/target names; missing, ambiguous, stale, terminal or unconfirmed orders show UNKNOWN. It never substitutes planned prices or historical acceptance records. After a fill, the absent entry can read UNKNOWN while its live protective prices remain visible. Receipt time, age and received AddOn build accompany the book.',
     },
     {
