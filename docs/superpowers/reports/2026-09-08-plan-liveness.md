@@ -390,3 +390,13 @@ pre-existing modified test files. Its root history differs from this repository.
 The standing partner rule requires a fresh clone after that rewrite. No files,
 refs or remotes in that checkout were changed. A transport patch can be handed
 to the owner for application only after the required fresh-clone preparation.
+
+### Merge census and scope
+
+At the merge decision, the two-format census piped through `sort -n | uniq -c`
+reported `1 89` as the highest occupied class and `2 75`, `2 76`, `2 77` as
+pre-existing duplicates. This wave adds 90; no other entry was renumbered.
+The implementation changes neither EntryGate's file/legs, the executor, stop
+composition, reaper, level scoring/seating, signal-clock files, cadence values,
+nor replan budget rules. The small companion edits update versioned record
+consumers, boot output, API/UI, Guide and test fixtures.
