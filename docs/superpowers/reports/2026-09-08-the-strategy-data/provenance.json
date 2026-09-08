@@ -2,12 +2,12 @@
   {
     "file": "docs/superpowers/SYSTEM-MAP.md",
     "command": "git log -1 --format=\"%H %cI %s\" -- \"docs/superpowers/SYSTEM-MAP.md\"",
-    "output": "6f677b55daa1c7da33b8c35f8bcc67883f36b470 2026-09-08T18:01:58-05:00 test(w7): freeze consumed-level clocks and add behavior-preserving clock seam"
+    "output": "954f11b15f2e7615678f7d2b708c47895faebf1e 2026-09-08T18:38:16-05:00 fix(research): resolve archive paths before SQLite URI construction"
   },
   {
     "file": "docs/superpowers/AUDIT-CHECKLIST.md",
     "command": "git log -1 --format=\"%H %cI %s\" -- \"docs/superpowers/AUDIT-CHECKLIST.md\"",
-    "output": "6f677b55daa1c7da33b8c35f8bcc67883f36b470 2026-09-08T18:01:58-05:00 test(w7): freeze consumed-level clocks and add behavior-preserving clock seam"
+    "output": "954f11b15f2e7615678f7d2b708c47895faebf1e 2026-09-08T18:38:16-05:00 fix(research): resolve archive paths before SQLite URI construction"
   },
   {
     "file": "docs/superpowers/research/2026-09-08-trading-policy/README.md",
