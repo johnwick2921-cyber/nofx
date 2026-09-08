@@ -555,7 +555,9 @@ func (at *AutoTrader) maybeManageArmedOrdersAt(snap map[string]kernel.StructureS
 			// be held to a weaker standard than a decision entry. Refusals are
 			// logged AND recorded per path (arm-refusal counters), and an
 			// existing resting arm for this spec is cancelled the same cycle.
-			if greason, refused := at.entryGateForArm(plan, sc, leg, side, biasDirectionFor(doc.Bias.Direction), atr5m); refused {
+			greason, refused := at.entryGateForArm(plan, sc, leg, side, biasDirectionFor(doc.Bias.Direction), atr5m)
+			recordResearchGate("arm", plan.PlanID, plan.Version, sc.ID, greason, refused)
+			if refused {
 				if rows, lerr := ledger.ListNonTerminal(at.id); lerr == nil {
 					for _, rr := range rows {
 						if rr.TraderID == at.id && rr.PlanID == plan.PlanID && rr.Scenario == sc.ID &&
@@ -1065,6 +1067,7 @@ func (at *AutoTrader) runArmedPlacement(bars []market.Kline, sinceMs int64) {
 					continue
 				}
 				sid, perr := nt.PlaceLimitEntry(at.futuresSymbol(), side, 1, r.EntryPx, r.StopPx, r.TargetPx, func(sid string) error { return ledger.BeginPlacement(r.ID, sid) })
+				recordResearchPlacement(r, sid, "limit", r.EntryPx, r.StopPx, r.TargetPx, perr)
 				if perr != nil {
 					at.logWarnf("📌 armed place failed %s: %v", r.Scenario, perr)
 					continue
@@ -1365,6 +1368,7 @@ func (at *AutoTrader) placeOneStopEntry(pl stopEntryPlacer, ledger armStateWrite
 		return
 	}
 	sid, perr := pl.PlaceStopEntry(at.futuresSymbol(), d.Side, 1, d.Trigger, r.StopPx, r.TargetPx, func(sid string) error { return ledger.BeginPlacement(r.ID, sid) })
+	recordResearchPlacement(r, sid, "stop_entry", d.Trigger, r.StopPx, r.TargetPx, perr)
 	if perr != nil {
 		// D5 — an AddOn that predates the stop-slot fix is refused at the wire,
 		// not sent a malformed order. Counted, and deduped so it does not re-log

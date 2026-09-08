@@ -19,6 +19,7 @@ func (w *researchWire) observe(kind FrameType, payload json.RawMessage) {
 	w.observeAt(kind, payload, time.Now())
 }
 func (w *researchWire) observeAt(kind FrameType, payload json.RawMessage, received time.Time) {
+	defer researchsnapshot.Contain(" recording")
 	switch kind {
 	case FrameHello, FrameSubscribed, FrameBarsHistorical, FrameBarUpdate, FrameFill, FrameOrderUpdate, FrameOrderSnapshot, FramePositionClose:
 	default:
@@ -50,25 +51,36 @@ func (w *researchWire) facts(kind FrameType, payload json.RawMessage, received t
 		if err := json.Unmarshal(m["bars"], &bars); err != nil {
 			panic("research bars decode")
 		}
+		var rawBars []map[string]json.RawMessage
+		if err := json.Unmarshal(m["bars"], &rawBars); err != nil {
+			panic("research raw bars decode")
+		}
 		tf := text("timeframe")
 		opened := OpenStampBars(bars, tf)
 		out := make([]researchsnapshot.Fact, 0, len(bars))
 		for i, b := range bars {
-			f := researchsnapshot.NewFact("market", string(kind), nil, researchsnapshot.Clocks{ObservationMS: researchsnapshot.Value(b.T), ReceiptMS: researchsnapshot.Value(received.UnixMilli())})
+			clocks := researchsnapshot.Clocks{ReceiptMS: researchsnapshot.Value(received.UnixMilli())}
+			if b.T > 0 {
+				clocks.ObservationMS = researchsnapshot.Value(b.T)
+			}
+			f := researchsnapshot.NewFact("market", string(kind), nil, clocks)
 			f.Set("root_symbol", "MNQ")
 			f.Set("feed", "NT8 TCP")
 			f.Set("source_timezone", "UTC epoch milliseconds")
 			f.Set("timeframe", tf)
-			f.Set("source_stamp_ms", b.T)
-			f.Set("bar_open_ms", opened[i].T)
-			f.Set("bar_close_ms", b.T)
-			f.Set("open", b.O)
-			f.Set("high", b.H)
-			f.Set("low", b.L)
-			f.Set("close", b.C)
-			f.Set("volume", b.V)
-			f.Set("finalized", b.T <= received.UnixMilli())
-			f.Set("forming", b.T > received.UnixMilli())
+			if b.T > 0 {
+				f.Set("source_stamp_ms", b.T)
+				f.Set("bar_open_ms", opened[i].T)
+				f.Set("bar_close_ms", b.T)
+				f.Set("finalized", b.T <= received.UnixMilli())
+				f.Set("forming", b.T > received.UnixMilli())
+			}
+			for dest, src := range map[string]string{"open": "o", "high": "h", "low": "l", "close": "c", "volume": "v"} {
+				if value, ok := rawBars[i][src]; ok {
+					f.Set(dest, value)
+				}
+			}
+
 			if w.contract != "" {
 				f.Set("contract", w.contract)
 				f.Set("contract_basis", "preceding received subscription acknowledgement; historical per-bar contract UNKNOWN")
@@ -78,7 +90,13 @@ func (w *researchWire) facts(kind FrameType, payload json.RawMessage, received t
 			}
 			f.Unknown("price_scale", "wire has no merge/back-adjust policy; cannot certify historical contract prices")
 			key := fmt.Sprintf("%s:%d", tf, b.T)
-			if prev, ok := w.previous[key]; ok {
+			complete := b.T > 0
+			for _, key := range []string{"o", "h", "l", "c", "v"} {
+				if _, ok := rawBars[i][key]; !ok {
+					complete = false
+				}
+			}
+			if prev, ok := w.previous[key]; ok && complete {
 				f.Set("previous_observation", prev)
 				f.Set("correction", prev != b)
 			} else {
@@ -87,7 +105,9 @@ func (w *researchWire) facts(kind FrameType, payload json.RawMessage, received t
 			if len(w.previous) >= 12000 {
 				w.previous = map[string]Bar{}
 			}
-			w.previous[key] = b
+			if complete {
+				w.previous[key] = b
+			}
 			out = append(out, f)
 		}
 		return out
@@ -120,6 +140,7 @@ func (w *researchWire) facts(kind FrameType, payload json.RawMessage, received t
 	}
 	if kind == FrameFill {
 		f.Set("fills", selected)
+		f.Set("ambiguity", []string{"entry/exit role requires signal and order linkage"})
 		if text("status") == "filled" || text("status") == "partial" {
 			if v, ok := m["fill_price"]; ok {
 				f.Set("attainable_entry", v)
@@ -131,5 +152,71 @@ func (w *researchWire) facts(kind FrameType, payload json.RawMessage, received t
 		f.Unknown("reason", "received frame omits reason; h1 does not transmit rejection check")
 	}
 	f.Unknown("costs", "no broker commission or cost field in this received frame")
-	return []researchsnapshot.Fact{f}
+	out := []researchsnapshot.Fact{f}
+	if kind == FrameOrderSnapshot {
+		var orders []map[string]json.RawMessage
+		if e := json.Unmarshal(m["orders"], &orders); e != nil {
+			panic("research book decode")
+		}
+		for _, order := range orders {
+			of := researchsnapshot.NewFact("exec", "broker_book_order", nil, f.Clocks)
+			for dest, src := range map[string]string{"root_symbol": "symbol", "order_id": "order_id", "side": "action", "order_type": "type", "oco_id": "oco", "tif": "tif", "size": "quantity"} {
+				if value, ok := order[src]; ok {
+					of.Set(dest, value)
+				}
+			}
+			prices := map[string]json.RawMessage{}
+			for _, key := range []string{"limit_price", "stop_price"} {
+				if v, ok := order[key]; ok {
+					prices[key] = v
+				}
+			}
+			if len(prices) > 0 {
+				of.Set("accepted_entry", map[string]any{"prices": prices, "basis": "prices present in received broker book; order role/state retained, not a fill"})
+			}
+			// Retain only known order-schema keys; strip account/unknown extensions.
+			clean := map[string]json.RawMessage{}
+			for _, key := range []string{"order_id", "symbol", "name", "action", "type", "limit_price", "stop_price", "quantity", "filled", "state", "oco", "tif", "time_ms"} {
+				if v, ok := order[key]; ok {
+					clean[key] = v
+				}
+			}
+			of.Set("broker_frame", clean)
+			if build := text("build_id"); build != "" {
+				of.Set("source_build_id", build)
+			}
+			out = append(out, of)
+		}
+	}
+	return out
+}
+
+func recordResearchSignal(p SignalPayload, err error) {
+	recordResearchSignalAt(p, err, time.Now())
+}
+func recordResearchSignalAt(p SignalPayload, err error, now time.Time) {
+	defer researchsnapshot.Contain("signal recording")
+	// Copy only the authorized wire semantics, never the account or trader binding.
+	reason := "queued for transport; broker acceptance unproven"
+	if err != nil {
+		reason = err.Error()
+	}
+	symbol, signal, side, kind, seq := p.Symbol, p.SignalID, p.Side, p.OrderType, p.Seq
+	entry, limit, stop, sl, tp, size, stamp := p.Entry, p.LimitPrice, p.StopPrice, p.StopLoss, p.TakeProfit, p.Quantity, p.Timestamp
+	researchsnapshot.Record("exec:signal_transport", func() []researchsnapshot.Fact {
+		c := researchsnapshot.Clocks{ReceiptMS: researchsnapshot.Value(now.UnixMilli())}
+		if t, e := time.Parse(time.RFC3339Nano, stamp); e == nil {
+			c.ObservationMS = researchsnapshot.Value(t.UnixMilli())
+		}
+		f := researchsnapshot.NewFact("exec", "signal_transport", nil, c)
+		f.Set("root_symbol", symbol)
+		f.Set("signal_id", signal)
+		f.Set("side", side)
+		f.Set("order_type", kind)
+		f.Set("size", size)
+		f.Set("reason", reason)
+		f.Set("composed_entry", map[string]any{"entry": entry, "limit_price": limit, "stop_price": stop, "stop_loss": sl, "take_profit": tp, "sequence": seq})
+		f.Unknown("accepted_entry", "transport result is not a received broker acceptance")
+		return []researchsnapshot.Fact{f}
+	})
 }

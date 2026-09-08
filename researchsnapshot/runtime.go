@@ -34,10 +34,16 @@ func Record(name string, build func() []Fact) (accepted bool) {
 
 func Start(path string, log func(string)) (closeRecorder func()) {
 	closeRecorder = func() {}
+	emit := func(message string) {
+		defer func() { _ = recover() }()
+		if log != nil {
+			log(message)
+		}
+	}
 	defer func() {
 		if recover() != nil {
 			if log != nil {
-				log("WARN research snapshot initialization panic; capture unavailable")
+				emit("WARN research snapshot initialization panic; capture unavailable")
 			}
 		}
 	}()
@@ -51,7 +57,7 @@ func Start(path string, log func(string)) (closeRecorder func()) {
 	}
 	a, err := Open(path, rev)
 	if err != nil {
-		log("WARN research snapshot archive unavailable; capture disabled")
+		emit("WARN research snapshot archive unavailable; capture disabled")
 		return
 	}
 	r := NewRecorder(a, 128, log)
@@ -59,9 +65,6 @@ func Start(path string, log func(string)) (closeRecorder func()) {
 	return func() { Install(nil); r.Close(); _ = a.Close() }
 }
 
-func BootLine(a *Archive, r *Recorder) string {
-	return BootLineAt(a, r, time.Now())
-}
 func BootLineAt(a *Archive, r *Recorder, now time.Time) string {
 	schema := "UNKNOWN"
 	counts := map[string]string{}
@@ -131,4 +134,14 @@ func CurrentBootLineAt(now time.Time) string {
 	}
 	a, _ := r.sink.(*Archive)
 	return BootLineAt(a, r, now)
+}
+
+// Contain is deferred by producer adapters as well as the worker. Even a
+// custom error/string conversion fault cannot escape back into a decision.
+func Contain(name string) {
+	if recover() != nil {
+		if r := Active(); r != nil {
+			r.drop("producer panic: " + name)
+		}
+	}
 }

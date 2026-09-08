@@ -10,6 +10,7 @@ import (
 // PlanTrace belongs to one authoring invocation, never shared mutable trader
 // state. Queued jobs receive value copies of strings and timestamps.
 type PlanTrace struct {
+	Clock                                          func() time.Time
 	SnapshotID, Model, ConfigVersion, SystemPrompt string
 	Attempt                                        int
 	Mode, Prompt, Raw                              string
@@ -18,9 +19,10 @@ type PlanTrace struct {
 }
 
 func (p *PlanTrace) Begin(attempt int, mode, prompt string) {
-	p.BeginAt(attempt, mode, prompt, time.Now())
+	p.BeginAt(attempt, mode, prompt, p.clock())
 }
 func (p *PlanTrace) BeginAt(attempt int, mode, prompt string, now time.Time) {
+	defer Contain(" recording")
 	if p == nil {
 		return
 	}
@@ -34,9 +36,10 @@ func (p *PlanTrace) BeginAt(attempt int, mode, prompt string, now time.Time) {
 	p.emit("attempt_started", nil, nil, nil, now)
 }
 func (p *PlanTrace) Reply(raw string, err error) {
-	p.ReplyAt(raw, err, time.Now())
+	p.ReplyAt(raw, err, p.clock())
 }
 func (p *PlanTrace) ReplyAt(raw string, err error, now time.Time) {
+	defer Contain(" recording")
 	if p == nil {
 		return
 	}
@@ -45,9 +48,10 @@ func (p *PlanTrace) ReplyAt(raw string, err error, now time.Time) {
 	p.emit("provider_returned", err, nil, nil, now)
 }
 func (p *PlanTrace) Finish(err error) {
-	p.FinishAt(err, time.Now())
+	p.FinishAt(err, p.clock())
 }
 func (p *PlanTrace) FinishAt(err error, now time.Time) {
+	defer Contain(" recording")
 	if p == nil || !p.pending {
 		return
 	}
@@ -55,9 +59,10 @@ func (p *PlanTrace) FinishAt(err error, now time.Time) {
 	p.pending = false
 }
 func (p *PlanTrace) Published(planID string, version int, output string) {
-	p.PublishedAt(planID, version, output, time.Now())
+	p.PublishedAt(planID, version, output, p.clock())
 }
 func (p *PlanTrace) PublishedAt(planID string, version int, output string, now time.Time) {
+	defer Contain(" recording")
 	if p == nil {
 		return
 	}
@@ -70,10 +75,40 @@ func (p *PlanTrace) PublishedAt(planID string, version int, output string, now t
 		f.Set("plan_id", planID)
 		f.Set("plan_version", version)
 		f.Set("input_snapshot_id", id)
-		return []Fact{f}
+		out := []Fact{f}
+		var doc struct {
+			Scenarios []map[string]json.RawMessage `json:"scenarios"`
+		}
+		if e := json.Unmarshal([]byte(output), &doc); e != nil {
+			panic("research accepted document decode")
+		}
+		for _, sc := range doc.Scenarios {
+			sf := NewFact("scenario", "published", Value(id), Clocks{ReceiptMS: Value(now.UnixMilli()), PublicationMS: Value(now.UnixMilli())})
+			sf.Set("plan_id", planID)
+			sf.Set("plan_version", version)
+			for dest, src := range map[string]string{"scenario_id": "id", "target_path": "target_chain", "invalidation": "invalid", "authored_geometry": "arm"} {
+				if v, ok := sc[src]; ok {
+					sf.Set(dest, v)
+				}
+			}
+			predicates := []json.RawMessage{}
+			for _, key := range []string{"confirm", "confirm2"} {
+				if v, ok := sc[key]; ok {
+					predicates = append(predicates, v)
+				}
+			}
+			if len(predicates) > 0 {
+				sf.Set("ordered_predicates", predicates)
+			}
+			sf.Unknown("initial_risk", "authored entry/stop captured; actual composed risk is a later placement fact")
+			sf.Unknown("permission_status", "published scenario; no order authorization verdict implied")
+			out = append(out, sf)
+		}
+		return out
 	})
 }
 func (p *PlanTrace) emit(event string, err error, output *string, version *int, now time.Time) {
+	defer Contain(" recording")
 	copy := *p
 	var reason *string
 	if err != nil {
@@ -117,6 +152,33 @@ func (p *PlanTrace) emit(event string, err error, output *string, version *int, 
 			f.Set("normalization", map[string]any{"basis": "exact raw response and final stored document; no replay of normalization", "before": copy.Raw, "after": json.RawMessage(*output)})
 		}
 		f.Set("plan_version", version)
+		return []Fact{f}
+	})
+}
+
+// Boundary clock accessor. Tests replace this only on their local trace;
+// authoring's independent market/permission clock is never consumed here.
+func (p *PlanTrace) clock() time.Time {
+	if p != nil && p.Clock != nil {
+		return p.Clock()
+	}
+	return time.Now()
+}
+
+func (p *PlanTrace) RequestConfig(mode, effort string, tokenCap int) {
+	p.RequestConfigAt(mode, effort, tokenCap, p.clock())
+}
+func (p *PlanTrace) RequestConfigAt(mode, effort string, tokenCap int, now time.Time) {
+	defer Contain("model configuration")
+	if p == nil {
+		return
+	}
+	id, attempt := p.SnapshotID, p.Attempt
+	Record("plan:request_config", func() []Fact {
+		f := NewFact("plan", "request_config", Value(id), Clocks{ObservationMS: Value(now.UnixMilli()), ReceiptMS: Value(now.UnixMilli())})
+		f.Set("input_snapshot_id", id)
+		f.Set("attempt", attempt)
+		f.Set("model_config", map[string]any{"thinking_mode": mode, "reasoning_effort": effort, "max_tokens": tokenCap})
 		return []Fact{f}
 	})
 }

@@ -93,7 +93,8 @@ func TestResearchRecorderContainsFaults(t *testing.T) {
 				}
 				return errors.New("injected database failure")
 			}}
-			r := NewRecorder(s, 2, func(string) {})
+			var warnings []string
+			r := NewRecorder(s, 2, func(message string) { warnings = append(warnings, message) })
 			defer r.Close()
 			continued := false
 			r.Offer("fixture", func() []Fact { return []Fact{NewFact("plan", "fixture", nil, Clocks{})} })
@@ -102,6 +103,15 @@ func TestResearchRecorderContainsFaults(t *testing.T) {
 			defer cancel()
 			if err := r.Flush(ctx); err != nil {
 				t.Fatal(err)
+			}
+			warned := false
+			for _, message := range warnings {
+				if strings.Contains(message, "WARN research snapshot dropped:") {
+					warned = true
+				}
+			}
+			if !warned {
+				t.Fatal("recorder failure did not emit a WARN")
 			}
 			if !continued || r.Dropped() != 1 {
 				t.Fatalf("loop continuation=%v dropped=%d", continued, r.Dropped())

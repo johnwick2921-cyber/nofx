@@ -237,7 +237,14 @@ func zoneEvidence(l DetectedLevel) float64 {
 	if !ok {
 		base = table["1m"]
 	}
+	if l.Research != nil {
+		l.Research.ZoneBase = scoreValue(base)
+		l.Research.ReversalMultiplier = scoreValue(1.0)
+	}
 	if l.ZonePattern == "reversal" {
+		if l.Research != nil {
+			l.Research.ReversalMultiplier = scoreValue(zoneReversalBonus)
+		}
 		base *= zoneReversalBonus
 	}
 	return base
@@ -541,6 +548,8 @@ func scoreLevelsPool(levels []DetectedLevel, price, dATR float64, freshness func
 		}
 		researchGrade(l, rawGrade, grade, "Tier-1 proximity cap")
 		l.Research.Grade = scoreValue(grade)
+		role := RoleFor(l, fRaw)
+		l.Research.Role = scoreValue(role)
 		scored = append(scored, ScoredLevel{
 			DetectedLevel: l,
 			Grade:         grade,
@@ -548,7 +557,7 @@ func scoreLevelsPool(levels []DetectedLevel, price, dATR float64, freshness func
 			Score:         score,
 			Confluence:    conf,
 			Distance:      l.Price - price,
-			Role:          RoleFor(l, fRaw),
+			Role:          role,
 		})
 	}
 
@@ -587,9 +596,9 @@ func scoreLevelsPool(levels []DetectedLevel, price, dATR float64, freshness func
 	// top-N table, so HTF swing/zone levels must WIN seats to reach the plan.
 	// The P0.1 side-balance pass may still swap a promoted seat if a side ends
 	// under-supplied (the hard rule wins).
-	scored = seatHTF(scored, maxLevels)
-	scored = SeatVolumeFamily(scored, maxLevels) // Pack B (2026-08-26) — E1 volume-family seat
-	scored = seatBothSides(scored, maxLevels)
+	scored = researchSeat("HTF seating", scored, maxLevels, seatHTF)
+	scored = researchSeat("volume-family seating", scored, maxLevels, SeatVolumeFamily) // Pack B (2026-08-26) — E1 volume-family seat
+	scored = researchSeat("both-side seating", scored, maxLevels, seatBothSides)
 
 	if len(scored) > maxLevels {
 		researchCap(scored, maxLevels, "pre-pool seating cap")
@@ -659,9 +668,9 @@ func ScoreLevelsMinGradeFull(levels []DetectedLevel, price, dATR float64, freshn
 		}
 		return filtered[i].Price < filtered[j].Price
 	})
-	filtered = seatHTF(filtered, eff)
-	filtered = SeatVolumeFamily(filtered, eff) // Pack B — same guarantee after the min_grade cut
-	filtered = seatBothSides(filtered, eff)
+	filtered = researchSeat("post-grade HTF seating", filtered, eff, seatHTF)
+	filtered = researchSeat("post-grade volume seating", filtered, eff, SeatVolumeFamily) // Pack B — same guarantee after the min_grade cut
+	filtered = researchSeat("post-grade both-side seating", filtered, eff, seatBothSides)
 	if len(filtered) > eff {
 		researchCap(filtered, eff, "final reseating cap")
 		filtered = filtered[:eff]

@@ -986,6 +986,7 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 			},
 			MaxTokens: &cap,
 		}
+		researchTrace.RequestConfig(pMode, pEffort, cap)
 		start := time.Now()
 		var raw string
 		var err error
@@ -2138,6 +2139,7 @@ func (at *AutoTrader) assemblePlannerInput(session, tradeDate string) kernel.Pla
 func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKiller string, priorLevels []string) kernel.PlannerInput {
 	symbol := at.futuresSymbol()
 	now := time.Now()
+	researchID := uuid.NewString()
 	reg := at.sessionRegistry(now) // W8
 
 	var dp *store.DayPlanConfig
@@ -2227,6 +2229,10 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 				DetectedLevel: kernel.DetectedLevel{Kind: kernel.KindOwner, Price: o.Price, Lo: o.Price, Hi: o.Price, Label: label, OriginDate: "owner", HTF: true, Info: o.ScenarioTag},
 				Grade:         "A", Fresh: "owner", Distance: o.Price - price,
 			})
+		}
+		for i := range ownerScored {
+			ownerScored[i].Research = &kernel.LevelScoreCapture{Family: "owner", Grade: researchsnapshot.Value(ownerScored[i].Grade), Overrides: []string{"owner level prepended; grade supplied by owner rule; score not computed"}}
+			researchRaw = append(researchRaw, ownerScored[i].DetectedLevel)
 		}
 		scored = append(ownerScored, scored...)
 	}
@@ -2377,7 +2383,7 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 			detAll = append(detAll, c.DetectedLevel)
 		}
 		at.recordDetectorOutputs(symbol, detPlanID, session, detVersion,
-			detAll, scored, price, dATR, at.proximityFilterATR(), maxLevels, now)
+			detAll, scored, price, dATR, at.proximityFilterATR(), maxLevels, now, researchID)
 	}
 
 	// 1B WIRING (owner ruling 2026-09-03) — the detector's ONE production call
@@ -2457,7 +2463,7 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 	// Before this a rendered prompt survived only when the read FAILED, so a
 	// working fix erased its own evidence. Best-effort: telemetry never fails a
 	// read (A10).
-	in.ResearchSnapshotID = uuid.NewString()
+	in.ResearchSnapshotID = researchID
 	recordResearchCandidates(in.ResearchSnapshotID, symbol, researchRaw, scored, now)
 	at.persistReadFacts(in, voidScope, voidScopeLevels, voidScopeATR, now)
 	return in

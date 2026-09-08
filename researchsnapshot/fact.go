@@ -3,6 +3,7 @@
 package researchsnapshot
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"reflect"
@@ -38,7 +39,7 @@ var fields = map[string][]string{
 	"candidate": {"stable_id", "identity_basis", "root_symbol", "raw_origin", "family", "price", "lo", "hi", "formation_ms", "availability_ms", "prior_episodes", "zone_pattern", "timeframe", "freshness_at_read", "confluence_raw", "confluence_capped", "raw_score_components", "capped_score_components", "overrides", "final_score", "grade", "rank", "selection_outcome", "exclusion_reason", "role", "legacy_row_id"},
 	"plan":      {"input_snapshot_id", "input_snapshot", "prompt", "system_prompt", "prompt_hash", "prompt_version", "model", "model_config", "config_version", "config", "attempt", "attempt_mode", "attempt_started_ms", "attempt_ended_ms", "duration_ms", "rejection_reason", "raw_output", "accepted_output", "normalization", "plan_id", "plan_version", "tokens_in", "tokens_out"},
 	"scenario":  {"plan_id", "plan_version", "scenario_id", "ordered_predicates", "initial_risk", "risk_basis", "target_path", "predicate_timestamps", "invalidation", "expiry", "revalidation", "reason", "permission_status", "arm_id", "authored_geometry"},
-	"exec":      {"root_symbol", "contract", "signal_id", "order_id", "parent_id", "order_type", "side", "oco_id", "tif", "intended_entry", "composed_entry", "accepted_entry", "attainable_entry", "entry_basis", "exit_price", "exit_basis", "fills", "simulation_assumption", "costs", "size", "common_horizon", "ambiguity", "timeout", "broker_frame", "source_build_id", "reason", "position_id", "plan_id", "plan_version", "scenario_id"},
+	"exec":      {"root_symbol", "contract", "signal_id", "order_id", "parent_id", "order_type", "order_semantics", "side", "oco_id", "tif", "intended_entry", "composed_entry", "accepted_entry", "attainable_entry", "entry_basis", "exit_price", "exit_basis", "fills", "simulation_assumption", "costs", "size", "common_horizon", "ambiguity", "timeout", "broker_frame", "source_build_id", "reason", "pnl_corrected", "outcome_exclusion", "position_id", "plan_id", "plan_version", "scenario_id"},
 }
 
 func NewFact(object, event string, snapshot *string, clocks Clocks) Fact {
@@ -60,6 +61,9 @@ func NewFact(object, event string, snapshot *string, clocks Clocks) Fact {
 }
 
 func (f *Fact) Set(name string, value any) {
+	if raw, ok := value.(json.RawMessage); ok && bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		value = nil
+	}
 	if value != nil {
 		v := reflect.ValueOf(value)
 		switch v.Kind() {

@@ -130,6 +130,7 @@ func (r *Recorder) run() {
 		select {
 		case job := <-r.queue:
 			if job.barrier != nil {
+				r.flushNotices()
 				close(job.barrier)
 			} else {
 				r.perform(job)
@@ -172,7 +173,15 @@ func (r *Recorder) Flush(ctx context.Context) error {
 }
 
 func (r *Recorder) Dropped() uint64 { return r.dropped.Load() }
-func (r *Recorder) Close()          { r.once.Do(func() { close(r.stop) }); <-r.done }
+func (r *Recorder) Close() {
+	r.once.Do(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		_ = r.Flush(ctx)
+		close(r.stop)
+	})
+	<-r.done
+}
 
 func (r *Recorder) LatencyP50MS() *float64 {
 	var n uint64
@@ -193,4 +202,15 @@ func (r *Recorder) LatencyP50MS() *float64 {
 		}
 	}
 	return nil
+}
+
+func (r *Recorder) flushNotices() {
+	for {
+		select {
+		case reason := <-r.dropNotices:
+			r.log(fmt.Sprintf("WARN research snapshot dropped: %s; total=%d", reason, r.Dropped()))
+		default:
+			return
+		}
+	}
 }

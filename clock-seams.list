@@ -47,7 +47,6 @@ trader/armed_executor.go:maybeManageArmedOrders:maybeManageArmedOrdersAt
 # Stage A telemetry clocks (no trading verdict changes)
 researchsnapshot/archive.go:Save:saveAt
 researchsnapshot/recorder.go:Offer:offerWithClock
-researchsnapshot/runtime.go:BootLine:BootLineAt
 researchsnapshot/runtime.go:CurrentBootLine:CurrentBootLineAt
 researchsnapshot/plan.go:Begin:BeginAt
 researchsnapshot/plan.go:Reply:ReplyAt
@@ -57,3 +56,9 @@ provider/ninjatrader/research_wire.go:observe:observeAt
 trader/research_snapshot.go:recordResearchCandidates:recordResearchCandidatesAt
 trader/research_snapshot.go:recordResearchInput:recordResearchInputAt
 trader/research_snapshot.go:recordResearchPermissions:recordResearchPermissionsAt
+trader/research_snapshot.go:recordResearchGate:recordResearchGateAt
+provider/ninjatrader/research_wire.go:recordResearchSignal:recordResearchSignalAt
+trader/research_snapshot.go:recordResearchEpisodes:recordResearchEpisodesAt
+researchsnapshot/plan.go:RequestConfig:RequestConfigAt
+trader/research_snapshot.go:recordResearchPlacement:recordResearchPlacementAt
+store/research_record.go:recordResearchPlacementTimeout:recordResearchPlacementTimeoutAt

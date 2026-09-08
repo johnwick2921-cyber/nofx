@@ -19,7 +19,7 @@ export const expectancy: GuideSection = {
     },
     {
       kind: 'p',
-      text: 'Only exported research bundles may supply the experiments in the trading-policy research. The manifest identifies the writing revision, schema, row counts and checksum. Missing records and dropped writes limit what can be concluded. Earlier empty components cannot be recovered as original measurements, and historical contract adjustment policy remains unknown when the feed did not supply it.',
+      text: 'Only exported research bundles may supply the experiments in the trading-policy research. The manifest identifies the writing revision, schema, row counts and checksum. Missing records and dropped batches limit what can be concluded. The boot latency measures queue admission; it does not measure the full planner read. Earlier empty components cannot be recovered as original measurements, and historical contract adjustment policy remains unknown when the feed did not supply it.',
     },
 
     { kind: 'h', text: 'What the table is' },

@@ -338,3 +338,14 @@ Unmeasured latency or inaccessible data prints UNKNOWN. The queue admission budg
 is `researchsnapshot.OfferBudget`; full/late/faulted work drops with a counted WARN.
 This is admission latency, not a claim that all capture overhead is already measured.
 Live counts, per-read overhead and final field coverage remain deployment proofs.
+
+
+Stage A recording coverage update: actual EntryGate return values are observed at
+its two callers, without editing EntryGate or its legs. `store/armed_orders.go`
+records the existing `ExpirePlacement` write; pending state remains held. The
+closed analytics caller records only `pnl_corrected` and explicit exclusions.
+Candidate episodes reuse `recordDetectorOutputs` results. The source registry and
+NULL limitations are documented in the Stage A report. Every producer admission
+and worker write contains recorder panics; the archive never supplies a trading
+verdict. Offline 72-candidate scoring added 0.027760 ms at the median of three
+1,000-call runs; whole live read latency remains unproven until deployment.

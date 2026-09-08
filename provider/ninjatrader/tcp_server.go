@@ -1063,7 +1063,9 @@ func (s *TCPServer) SendSignal(payload SignalPayload) error {
 	s.pendingMu.Lock()
 	s.pending = append(s.pending, timedSignal{payload: payload, timestamp: time.Now()})
 	s.pendingMu.Unlock()
-	return s.flushPending()
+	err := s.flushPending()
+	recordResearchSignal(payload, err)
+	return err
 }
 
 // SendClosePosition tells the connected AddOn to flatten the symbol's position.
