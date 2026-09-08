@@ -160,3 +160,22 @@ func itoa64(n int64) string {
 	}
 	return string(b)
 }
+
+// PlaceConfirmBootLine states the placement-confirmation contract once at boot,
+// every field READ from the code that enforces it (A11).
+//
+// It carries one thing that is NOT yet true: the AddOn half of the broker-reason
+// field. FillPayload.Reason and the C# SendFillFrame(reason:) shipped together,
+// but NinjaScript only takes effect after the copy → F5 → full NT8 restart, so
+// until that happens a rejection records the honest fallback rather than NT8's
+// sentence. A boot line that implied otherwise would be the exact defect this
+// wave exists to fix, one level up.
+func PlaceConfirmBootLine(addonReasonLive bool) string {
+	reason := "NOT LIVE until the next AddOn copy/F5/full NT8 restart — rejections record \"no reason text on the fill frame\" until then"
+	if addonReasonLive {
+		reason = "live — rejections carry NT8's own sentence"
+	}
+	return "place-confirm: a send writes place_pending, never working · promoted ONLY by a received frame naming the signal (recorded) · " +
+		"reject → terminal in the broker's words · unconfirmed after " + placeConfirmMaxWait().String() + " → unconfirmed:no_frame · " +
+		"broker-reason wire field: " + reason
+}
