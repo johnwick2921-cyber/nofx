@@ -1,8 +1,8 @@
 # Combined PLAN-LIVENESS / CONFIRMATION-TRUTH cutover
 
-**Status: combined candidate and dist built; initial fresh gate and backup passed;
-RELEASE prepared for the ordered swap. No new service boot is claimed.** This is the preparation
-record; the postboot marker is added only after a passed boot.
+**Status: combined boot VERIFIED at 2026-09-08 15:17:31 CT. Both wave boot
+lines are present; integrity/goldens and five references agree on f8bc7044.**
+The preparation sections below are historical; this update is the postboot marker.
 
 ## Authority, ownership and provenance
 
@@ -88,7 +88,7 @@ SHA256=e2c2ce8602ca61e52d180309743593b3bf538337693e4f2c61ae83c21d457918
 Guide/RELEASE/report commits are metadata; they do not change the binary's
 embedded revision. Logs and artifact receipts: `/tmp/plan-liveness-combined/`.
 
-## Required live proof — pending
+## Required live proof contract (defined before boot)
 
 Both boot lines must be read from the new service process, not copied from
 an isolated function run or this expectation list:
@@ -183,3 +183,135 @@ binary. This metadata commit is not the postboot marker. The main tree is
 fast-forwarded under the lock after final metadata-head checks, and RELEASE
 therefore precedes the swap and the owner's kill. The final gate, swap and
 independent verification receipts are appended after they occur.
+
+## Postboot marker — combined head built and gated by PLAN-LIVENESS
+
+[A] **PLAN-LIVENESS acted as deploy owner for the merged head, not as the
+author of all changes in it.** The lane/commit provenance table above remains
+the attribution record. In particular the reviewed executor/confirmation
+changes came from CONFIRMATION-TRUTH commits `e020885b`, `b9996385` and
+`2166a072`; PLAN-LIVENESS's implementation commits are `9c754e36`, `5710cb5d`
+and `94f0d7df`. This cutover authored deployment metadata and verified the
+combined head; no new Go or executor change was introduced by the deploy owner.
+
+### Ordered swap and observed restart
+
+[A] Final pre-swap gate, **15:09:52 CT**, n=1 running trader, all five legs
+PASS: DB 0 open (IDs `[]`), API 0 positions, NT8 count=0, broker 0 working
+orders matching ledger 0 (snapshot **age 21s, build 2026-09-07-h1**), no planner
+read claimed. RELEASE **f8bc7044** was already active on the clean main dev tree.
+
+[A] **15:10:28 CT:** binary `mv` exit **0**; old-dist preservation and new-dist
+`mv` each exit **0**. The prior executable was already preserved and verified
+under its actual revision as recorded above. **15:10:37 CT:** separate VERIFY
+exit **0**: RELEASE file, HEAD:RELEASE, disk binary and GUIDE matched f8bc7044,
+every dist hash matched, and HTTP-served index/JavaScript matched the new dist.
+The old process was still PID **3260027**, revision **33672fdd2cd2**, at this
+verification. The owner then received exactly `kill -9 3260027`.
+
+[A] Owner acknowledged completion. systemd recorded **15:17:26 CT**:
+`Main process exited, code=killed, status=9/KILL`; it started the replacement
+service at **15:17:31 CT**. The owner-shell command exit code was not supplied;
+it is not invented as zero. Successful SIGKILL/restart is independently observed
+in systemd and in the changed executable/PID. The agent did not issue the kill.
+The observed boot is inside **14:45–16:30 CT**; no mid-session override occurred.
+
+[A] The read-only watcher captured the following from **new PID 3566770** at
+**15:17:31 CT**, verified by **15:17:32 CT**, within the 90-second boot window:
+
+```text
+🔐 BOOT INTEGRITY OK — rev f8bc7044cc44 · built 2026-09-08T19:50:07Z · expected f8bc7044 · goldens PASS
+🖥 ui: served-by=go-static build=2026-09-08T20:02:55Z
+🔎 confirmation: close-requires-closed-bucket=on · sequence-order=enforced · missing-reference=UNKNOWN(not met) · immediate-displacement=1m_displacement · forming-bucket refusals=0 · out-of-order refusals=0 · validation-REJECT→PASS=23 observations/2 scenarios (closure-only audit; evaluated=627 unevaluated=162) · with-1m_displacement=24 (+1 audit observation)
+🧭 plan liveness: tradeable=n/a · exhausted-warnings=0 · born-dead refusals=0 · deaths recorded=0 · authored UNKNOWN=0 · exhaustion=warn-only
+```
+
+**Both halves' boot lines are present.** Confirmation's zero forming-bucket and
+out-of-order counts are the new process's measured startup counters. The
+**23 closure-only observations / 24 with 1m_displacement (+1)** are labeled
+historical replay results, not live counters and not a regression. PLAN-LIVENESS's
+startup counts are read from recorded rows; `tradeable=n/a` is the truthful
+startup absence of a computed current-version snapshot.
+
+The boot sweep separately logged **cancelled 0 pre-boot arms**, with **0
+authorized-but-never-placed** arms left for the new process. Process census:
+**n=1, PID list [3566770]**. No second service process was observed.
+
+### Five-reference and feed verification
+
+[A] Independent five-reference check at **15:18:16 CT** passed:
+
+| Reference | Observed value |
+|---|---|
+| Working-tree `deploy/RELEASE` | `f8bc7044` |
+| Disk and `/proc/3566770/exe` vcs.revision | `f8bc7044cc44d58e84904a0a7761e78b420404af`, `vcs.modified=false` |
+| `HEAD:deploy/RELEASE` | `f8bc7044` |
+| `GUIDE_BUILT_REV` and served JavaScript | `f8bc7044cc44d58e84904a0a7761e78b420404af` |
+| `/api/health` | revision `f8bc7044cc44`, status `ok` |
+
+Disk binary SHA-256 remains
+`e2c2ce8602ca61e52d180309743593b3bf538337693e4f2c61ae83c21d457918`.
+Every dist hash and HTTP-served index/JavaScript match the built artifacts.
+
+[A] NT8 `bars_historical` frames were received by the new process between
+**15:17:32 and 15:17:56 CT**. At **15:21:17 CT**, the authenticated live
+`/api/klines?symbol=MNQ&exchange=ninjatrader&interval=1m&limit=3` response
+returned **n=3** bars from NT8 BarCache, identified by openTime values
+**1788898740000, 1788898800000, 1788898860000**. The first two minutes are
+complete; the last is the forming 15:21 minute, whose closeTime is in the
+future at observation. It is evidence of a recovered live feed, not a completed
+confirmation bucket. No forming bar is presented as a closed-bar proof.
+
+[A] Fresh postboot five-leg gate at **15:19:40 CT** again passed all five:
+0 DB/API/NT8 positions, broker 0 working orders matching ledger 0,
+`broker — NT8 order_snapshot frame (age 10s, build 2026-09-07-h1)`, no planner
+read claimed. No override was applied to leg 4.
+
+### Live-surface limits and event proof still owed
+
+[A] At **15:20:49 CT**, `/api/plan/today` returned HTTP 200 with
+`found=false`, `active_session=""`, `is_active=false`, `night=true`,
+`trade_date="2026-09-08"`. There is **no active version from which to report
+tradeable N/M in this window**. No plan-card N/M screenshot or active desk count
+is claimed. The new frontend is byte-verified as served; actual active-version
+N/M remains event-dependent and must be observed when a current plan exists.
+
+[A] At **15:20:11 CT**, read-only system_config prefix census found:
+`scenario_death:` **n=0, row IDs []**; `plan_liveness_event:` **n=0, row IDs []**.
+No organic new scenario-death record, exhaustion WARN event or born-dead refusal
+was verified in this handoff. A live forming-bucket refusal, out-of-order refusal
+or qualifying MET event also remains unverified. These are not manufactured
+by forcing authoring, placing a trade or rewriting historical rows.
+
+The n=1 born-dead evidence limit remains as ruled above. The confirmation
+replay's **162 unevaluated scenarios remain unevaluated**. Legacy saved verdicts
+without the new evidence can remain UNKNOWN until reevaluated. Both boot
+surfaces are live; these future event proofs are explicitly outstanding.
+
+### Publication, rollback and closeout
+
+[A] Final pre-swap metadata head **cd5b9a6b9c479eae97eced7fb0abb40594bf1ac5**
+passed the full Go suite, **51 files / 368 Vitest tests**, and TypeScript checks
+in the clean clone before the main-tree RELEASE fast-forward. Go source differs
+from compiled f8bc7044 only in subsequent deployment/report/Guide metadata.
+Both origin/dev and fix/plan-liveness were read at that metadata SHA. Its
+commit-pinned raw cutover report returned **HTTP 200 / 11,695 bytes**, exactly
+matching the git blob.
+
+This postboot marker is committed only after the passed boot. It is fast-forwarded
+into the same clean main dev tree, checked at its own final SHA, pushed and
+verified by commit-pinned raw bytes **before the deploy lock is released**. The
+final publication and lock-release receipt is retained in
+`/tmp/plan-liveness-combined/candidate.json`. No rollback was required. If a
+later rollback is ordered, the preserved prior binary, RELEASE and dist listed
+above must be restored together under the same fresh-gate/owner-kill protocol;
+no historical DB rows are rewritten to make the result appear clean.
+
+Additional source-freshness reads for the postboot surfaces:
+
+```
+api/handler_plan.go
+5710cb5d353046aca531eb9ce049ab3bd780fdcb 2026-09-08T09:00:25-05:00 test(plan-liveness): pin unknown qualifiers and versioned readers
+api/handler_klines.go
+91faf354c2baf4a9b2ed311d275db98c9d58bdea 2026-05-30T13:07:06-05:00 fix(nt8): live MNQ bars reach chart via klines ninjatrader branch
+```

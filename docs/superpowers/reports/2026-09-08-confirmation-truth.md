@@ -1,6 +1,6 @@
 # Confirmation truth — pre-change consumer census and stored-scenario blast radius
 
-**Status: merged to dev, merged-HEAD suite passed, clean-clone binary and stamped frontend built. NOT LIVE; owner cutover GO and live proof pending.** Sections 1–7 preserve the pre-change audit, whose pinned publication is `ba833a9d4113c792432cb08cf2ca238c8a07b01b`. The owner subsequently authorized both confirmation paths, validation changes, feeds-forward changes and a separate `1m_displacement` rule. Sections 8–11 record implementation and verification after that ruling; the historical statements about unchanged code in sections 1–7 describe the audit phase.
+**Status: combined boot VERIFIED at 2026-09-08 15:17:31 CT, revision f8bc7044, with PLAN-LIVENESS as deploy owner.** Both boot lines and integrity/goldens were observed. [Combined postboot marker and lane provenance](2026-09-08-plan-liveness-confirmation-cutover.md). Organic confirmation-event proof remains outstanding; earlier audit/preparation sections below are historical.
 
 Lane: `confirmation-truth-96604090/root[unlisted]`, branch `fix/confirmation-truth`. Audit source HEAD: `5308c2bbcc010add0c8f7ba15a7d78e8da046507`, incorporating dev `63d902ac9c345e6e51cfd237b035d4062a59acf0`. At 2026-09-08 08:44:46 CT, `/api/health` reported `33672fdd2cd2`; systemd PID was `3260027`. The earlier executable read at 08:34:14 CT showed `33672fdd2cd2fee60a2c562a9693e06ab3b13551`, `vcs.modified=false`. The five core source files examined here are byte-identical between that running revision and audit HEAD.
 
@@ -322,3 +322,15 @@ Those zero refusal counters belong to this new isolated process. The policy valu
 **Rollback:** this wave adds no database migration. Before an authorized cutover, preserve the existing executable using the revision read from that executable, retain its RELEASE and dist, then follow RELEASE → atomic `mv` → running/disk VERIFY → owner kill. If the candidate boot or goldens fail, restore the preserved binary, RELEASE and matching dist under the same owner-controlled protocol. Do not restore an unverified filename or mutate historical verdict records.
 
 **Live proof: NOT YET OBSERVED.** Still owed after the candidate boots: (1) a received live confirmation verdict naming the judged bucket and close time, (2) a forming-bucket refusal, (3) an out-of-order refusal if one occurs, and (4) a MET verdict with bucket close at or before evaluation. A passing suite and the candidate boot-line function output do not prove these live events. The five-reference boot check and pushed postboot marker remain part of that later cutover.
+
+## 12. Combined postboot marker (deploy owner: PLAN-LIVENESS)
+
+The owner authorized both waves in one boot. PLAN-LIVENESS built and gated
+merged head `f8bc7044cc44d58e84904a0a7761e78b420404af`; it did not author this
+lane's implementation. At 15:17:31 CT both boot lines were read from new
+PID3566770 with BOOT INTEGRITY OK and goldens PASS. The confirmation boot
+line explicitly reports **23 closure-only REJECT→PASS observations and
+24 with 1m_displacement (+1)**, the approved replay result, not live counts
+or a regression. Full provenance, fresh broker gates, backup, ordered swap,
+five-reference proof and remaining live-event limits are in the linked combined
+marker. This paragraph is deployment evidence, not a rewrite of the audit.

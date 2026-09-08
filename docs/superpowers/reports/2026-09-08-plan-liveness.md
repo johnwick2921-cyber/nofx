@@ -1,11 +1,12 @@
 # Plan liveness — corrected premises and implementation
 
-**Current handoff:** owner authorized a combined boot with CONFIRMATION-TRUTH;
-merged candidate `f8bc7044cc44d58e84904a0a7761e78b420404af` built clean. See
+**Current handoff:** combined boot with CONFIRMATION-TRUTH verified at
+2026-09-08 15:17:31 CT, revision `f8bc7044cc44d58e84904a0a7761e78b420404af`. See
 [the combined cutover record](2026-09-08-plan-liveness-confirmation-cutover.md).
 Versioned death evidence and authored-condition validation are implemented;
-exhaustion is warning-only. Owner GO was received for the next A7 window; cutover and live proof remain
-pending that window and fresh gates. Earlier STOP/build sections below are historical evidence.
+exhaustion is warning-only. Both boot lines, integrity/goldens and five references passed. No active plan
+exists in the observed window, so active-version N/M and organic event proofs
+remain outstanding. Earlier STOP/build sections below are historical evidence.
 
 The original STOP report below is retained as historical evidence. The owner
 subsequently authorized the version/anchor repair and the revised conditional
