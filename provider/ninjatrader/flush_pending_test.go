@@ -23,7 +23,7 @@ func TestFlushPendingRequeuesUnsentTailOnConnDeath(t *testing.T) {
 	s.connMu.Unlock()
 
 	sig := func(id string) SignalPayload {
-		return SignalPayload{Symbol: "MNQ", Side: "short", Quantity: 1, SignalID: id}
+		return SignalPayload{Symbol: "MNQ", Side: "short", Quantity: 1, SignalID: id, Timestamp: time.Now().UTC().Format(time.RFC3339Nano)}
 	}
 	s.pendingMu.Lock()
 	for _, id := range []string{"sig-a", "sig-b", "sig-c"} {

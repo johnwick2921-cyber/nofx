@@ -44,7 +44,7 @@ func (s *ArmedOrderStore) ListPreBoot(traderID, bootID string) ([]ArmedOrderDB, 
 		return nil, fmt.Errorf("store required")
 	}
 	var out []ArmedOrderDB
-	err := s.db.Where("trader_id = ? AND state IN ('armed','working') AND (boot_id IS NULL OR boot_id <> ?)",
+	err := s.db.Where("trader_id = ? AND state IN ('armed','place_pending','working') AND (boot_id IS NULL OR boot_id <> ?)",
 		traderID, bootID).Order("id").Find(&out).Error
 	return out, err
 }

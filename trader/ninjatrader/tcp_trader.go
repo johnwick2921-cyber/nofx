@@ -219,8 +219,13 @@ func NewTCPTrader(server *ntwire.TCPServer, symbol string, account ...string) *T
 				if t.lastEntrySignalID == fill.SignalID {
 					t.lastEntrySignalID = ""
 				}
-				tid := t.traderID
+				tid, st := t.traderID, t.st
 				t.mu.Unlock()
+				if st != nil {
+					if err := st.ArmedOrders().ApplyPlacementReceipt(tid, fill.SignalID, store.StateRejected, fill.Reason); err != nil {
+						logger.Errorf("persist entry rejection signal=%s: %v", fill.SignalID, err)
+					}
+				}
 				logger.Errorf("🚨 C8 ENTRY REJECTED by NT8: %s %s qty=%d signal_id=%s — no position exists; pending entry dropped (no phantom).",
 					fill.Symbol, fill.Side, fill.Quantity, fill.SignalID)
 				telemetry.RecordError(tid, "nt_entry_rejected", fmt.Sprintf("%s %s rejected (signal %s)", fill.Symbol, fill.Side, fill.SignalID), telemetry.CostNone)
@@ -266,12 +271,8 @@ func (t *TCPTrader) activeAccountName() string {
 	return ""
 }
 
-// feedNowUTC stamps outgoing signals with the MARKET's own clock (freshest NT8
-// bar close) instead of the local WSL clock, which drifts minutes behind the
-// Windows/NT8 clock on this box. NT8 rejects signals older than 60s, and the
-// C2 guard then pre-emptively blocked every entry — the Aug-13→18 zero-trade
-// chain. Falls back to the local clock when no bar exists (fail-open, matching
-// the old behavior).
+// feedNowUTC is the latest market bar close, falling back to wall time when
+// absent. It is a market fact, never the creation timestamp of an entry command.
 func (t *TCPTrader) feedNowUTC(symbol string) time.Time {
 	if t.server != nil {
 		for _, tf := range []string{"1m", "5m"} {
@@ -391,7 +392,7 @@ func (t *TCPTrader) placeEntry(symbol, side string, quantity float64) (map[strin
 		StopLoss:   sl,
 		TakeProfit: tp,
 		SignalID:   signalID,
-		Timestamp:  t.feedNowUTC(symbol).Format(time.RFC3339),
+		Timestamp:  time.Now().UTC().Truncate(time.Millisecond).Format(time.RFC3339Nano),
 	}
 
 	// A1 (G3) — PRE-SUBMIT IDENTITY INVARIANT: the account on the outbound order MUST
@@ -430,7 +431,7 @@ func (t *TCPTrader) placeEntry(symbol, side string, quantity float64) (map[strin
 // bracket prices — the armed-order engine's wire call. Same safety rails as
 // placeEntry (bound account + SIM + B3 guard); the AddOn submits OrderType.Limit
 // and defers SL/TP to SubmitBracketOnEntryFill, identical to market entries.
-func (t *TCPTrader) PlaceLimitEntry(symbol, side string, quantity float64, limitPx, sl, tp float64) (string, error) {
+func (t *TCPTrader) PlaceLimitEntry(symbol, side string, quantity float64, limitPx, sl, tp float64, beforeSend ...func(string) error) (string, error) {
 	tradeAcct := t.boundAccount
 	if tradeAcct == "" {
 		return "", fmt.Errorf("ninjatrader/tcp: refusing armed %s entry on %s — trader has no bound account", side, symbol)
@@ -460,13 +461,18 @@ func (t *TCPTrader) PlaceLimitEntry(symbol, side string, quantity float64, limit
 		StopLoss:   sl,
 		TakeProfit: tp,
 		SignalID:   signalID,
-		Timestamp:  t.feedNowUTC(symbol).Format(time.RFC3339),
+		Timestamp:  time.Now().UTC().Truncate(time.Millisecond).Format(time.RFC3339Nano),
 		OrderType:  "limit",
 		LimitPrice: entry,
 	}
 	if err := assertBoundAccount("armed-entry", symbol, payload.Account, t.boundAccount); err != nil {
 		logger.Errorf("🚨 %v — REFUSING to submit armed entry", err)
 		return "", err
+	}
+	for _, register := range beforeSend {
+		if err := register(signalID); err != nil {
+			return "", fmt.Errorf("ninjatrader/tcp: register placement: %w", err)
+		}
 	}
 	t.pendingMu.Lock()
 	t.pending[signalID] = upperSideStr(side)
@@ -486,7 +492,7 @@ func (t *TCPTrader) PlaceLimitEntry(symbol, side string, quantity float64, limit
 // same bracket-on-fill contract as limits. stopPx is the TRIGGER price (the
 // tick offset is applied by the caller). Back-compat law: the frame is
 // additive JSON — only send it when the far-side AddOn has proven it.
-func (t *TCPTrader) PlaceStopEntry(symbol, side string, quantity float64, stopPx, sl, tp float64) (string, error) {
+func (t *TCPTrader) PlaceStopEntry(symbol, side string, quantity float64, stopPx, sl, tp float64, beforeSend ...func(string) error) (string, error) {
 	// CAPABILITY HANDSHAKE — the far-side AddOn must PROVE, by a build_id that
 	// arrived on the wire, that it will BUILD this order correctly. Two distinct
 	// failures live behind this one gate:
@@ -532,13 +538,18 @@ func (t *TCPTrader) PlaceStopEntry(symbol, side string, quantity float64, stopPx
 		StopLoss:   sl,
 		TakeProfit: tp,
 		SignalID:   signalID,
-		Timestamp:  t.feedNowUTC(symbol).Format(time.RFC3339),
+		Timestamp:  time.Now().UTC().Truncate(time.Millisecond).Format(time.RFC3339Nano),
 		OrderType:  "stop_entry",
 		StopPrice:  entry,
 	}
 	if err := assertBoundAccount("stop-entry", symbol, payload.Account, t.boundAccount); err != nil {
 		logger.Errorf("🚨 %v — REFUSING to submit stop-entry", err)
 		return "", err
+	}
+	for _, register := range beforeSend {
+		if err := register(signalID); err != nil {
+			return "", fmt.Errorf("ninjatrader/tcp: register placement: %w", err)
+		}
 	}
 	t.pendingMu.Lock()
 	t.pending[signalID] = upperSideStr(side)

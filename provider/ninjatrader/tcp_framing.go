@@ -71,6 +71,7 @@ type SignalPayload struct {
 // attributable. Empty = legacy AddOn (pre-P5.2) → consumers treat it as the
 // primary trading symbol (back-compat; new field is additive JSON).
 type FillPayload struct {
+	Reason   string `json:"reason,omitempty"` // Optional; h1 omits rejection reasons.
 	SignalID string `json:"signal_id"`
 	Symbol   string `json:"symbol,omitempty"` // P5.2 — order's root symbol; empty = legacy (primary)
 	// Account is the NT sub-account this fill executed on (H3 fix). The C# AddOn
@@ -157,6 +158,7 @@ type ModifyBracketPayload struct {
 // OrderUpdatePayload is every NT8 order-state change (deduped per order name)
 // — the armed engine's working/cancelled/filled visibility.
 type OrderUpdatePayload struct {
+	Reason    string  `json:"reason,omitempty"` // Additive Go receive support; next AddOn wave emits it.
 	SignalID  string  `json:"signal_id"`
 	OrderName string  `json:"order_name"`
 	State     string  `json:"state"` // accepted|working|partfilled|filled|rejected|cancelled

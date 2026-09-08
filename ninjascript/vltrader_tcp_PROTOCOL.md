@@ -392,3 +392,29 @@ compiled with F5. The Go boot line prints
 `build_id=<received> expected=<source> match=yes|NO` and says **NO** until a frame
 proves otherwise — a change to a distributed system is proven by a received
 frame, never by a ledger write on the sending side.
+
+### Go receive extension: placement truth (2026-09-07)
+
+`fill` and `order_update` accept optional `reason` (JSON string). On an entry
+rejection Go stores that text verbatim. The deployed `2026-09-07-h1` AddOn
+**does not emit this field** for these frames; Go records
+`reason unavailable (NT8 frame omitted reason)` when it is missing/blank.
+The C# producer is explicitly deferred to the next owner-run AddOn wave.
+This additive receive-only extension does not change the protocol version or
+claim that h1 supplies rejection reasons.
+
+Entry `signal.timestamp` is UTC command creation time (RFC3339 with fractional
+seconds), independent of the market bar close used to compose entry prices.
+Go checks that payload timestamp before enqueue and again immediately before
+writing, including reconnect/retry. Missing, invalid, future, or older-than-60s
+payload clocks are refused with the measured age (or age unavailable) logged.
+Retries retain the original timestamp. This does not make stale market data
+fresh or bypass any existing data/entry gates.
+
+The armed ledger registers `signal_id` and `place_pending` atomically before
+sending. Only a received live entry `order_update` promotes to `working`;
+a received entry rejection (`fill.status` or `order_update.state`) settles as
+`rejected`. Protective-leg updates cannot promote or reject the entry row.
+A local socket return is not broker acceptance. Unanswered placements retain
+their pending state and slot; a queue-age refusal is logged, never presented as
+an NT8 rejection or silently re-authorized as another placement.

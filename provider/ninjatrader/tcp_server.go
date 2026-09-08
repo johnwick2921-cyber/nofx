@@ -443,8 +443,8 @@ var (
 	defaultAutoBarsBack = 2000
 )
 
-// timedSignal pairs a signal payload with the wall-clock time SendSignal was
-// called, so the flush path can drop stale-on-reconnect entries.
+// timedSignal retains enqueue metadata across retries. Freshness is proved
+// exclusively by payload.Timestamp, never by the queue timestamp.
 type timedSignal struct {
 	payload   SignalPayload
 	timestamp time.Time
@@ -1045,6 +1045,9 @@ func (s *TCPServer) Stop() error {
 // client is currently connected, the signal is buffered and flushed on the
 // next successful accept (subject to TCPStaleSignalAge).
 func (s *TCPServer) SendSignal(payload SignalPayload) error {
+	if err := s.checkSignalAge(payload, time.Now()); err != nil {
+		return err
+	}
 	// A2 (G1) — stamp the monotonic seq + register (trader_id, account, signal_id)
 	// so the AddOn's echo on the paired ack/fill/close can be verified.
 	payload.Seq = s.assignSeqRegister(payload.TraderID, payload.Account, payload.SignalID)
@@ -2130,6 +2133,22 @@ func (s *TCPServer) handleAccountSelect(p AccountSelectPayload) {
 	s.logger.Info("tcp_server: account selected", "account", p.Account)
 }
 
+// checkSignalAge enforces h1's 60s payload-age ceiling on our side. Row and
+// queue timestamps cannot prove freshness. Missing/malformed clocks are refused.
+func (s *TCPServer) checkSignalAge(sig SignalPayload, now time.Time) error {
+	created, err := time.Parse(time.RFC3339Nano, sig.Timestamp)
+	if err != nil {
+		s.logger.Warn("tcp_server: refusing signal: payload age unavailable", "signal_id", sig.SignalID, "timestamp", sig.Timestamp)
+		return fmt.Errorf("signal %s refused: payload age unavailable (invalid timestamp)", sig.SignalID)
+	}
+	age := now.Sub(created)
+	if age > s.staleAge() || age < 0 {
+		s.logger.Warn("tcp_server: refusing stale/future signal", "signal_id", sig.SignalID, "payload_age_ms", age.Milliseconds(), "threshold_ms", s.staleAge().Milliseconds())
+		return fmt.Errorf("signal %s refused: payload age %s outside [0,%s]", sig.SignalID, age, s.staleAge())
+	}
+	return nil
+}
+
 // flushPending writes any non-stale queued signals to the connected client.
 // No-op if disconnected. Stale entries (>TCPStaleSignalAge) are dropped.
 func (s *TCPServer) flushPending() error {
@@ -2140,26 +2159,20 @@ func (s *TCPServer) flushPending() error {
 		return nil
 	}
 
-	cutoff := s.staleAge()
-	now := time.Now()
-
 	s.pendingMu.Lock()
-	kept := s.pending[:0]
-	toSend := make([]SignalPayload, 0, len(s.pending))
-	for _, ts := range s.pending {
-		if now.Sub(ts.timestamp) > cutoff {
-			s.logger.Warn("tcp_server: dropping stale signal", "signal_id", ts.payload.SignalID, "age", now.Sub(ts.timestamp))
-			continue
-		}
-		toSend = append(toSend, ts.payload)
-		_ = kept
-	}
-	// Drain pending: anything not stale is being sent now; anything stale was logged + dropped.
+	toSend := append([]timedSignal(nil), s.pending...)
 	s.pending = s.pending[:0]
 	s.pendingMu.Unlock()
 
-	for i, sig := range toSend {
+	for i, queued := range toSend {
+		sig := queued.payload
 		s.writeMu.Lock()
+		// Check after waiting for the writer, using the command's original
+		// timestamp. Neither enqueue nor retry is allowed to renew its lease.
+		if err := s.checkSignalAge(sig, time.Now()); err != nil {
+			s.writeMu.Unlock()
+			continue
+		}
 		_ = c.SetWriteDeadline(time.Now().Add(5 * time.Second))
 		err := WriteFrame(c, FrameSignal, sig)
 		s.writeMu.Unlock()
@@ -2169,10 +2182,7 @@ func (s *TCPServer) flushPending() error {
 			// DROPPED every later queued signal on a mid-flush conn death —
 			// a reconnect right after could lose armed entries silently.
 			s.pendingMu.Lock()
-			s.pending = append(s.pending, timedSignal{payload: sig, timestamp: now})
-			for _, rest := range toSend[i+1:] {
-				s.pending = append(s.pending, timedSignal{payload: rest, timestamp: now})
-			}
+			s.pending = append(s.pending, toSend[i:]...)
 			s.pendingMu.Unlock()
 			s.logger.Warn("tcp_server: flush signal failed", "err", err, "signal_id", sig.SignalID, "requeued", len(toSend)-i)
 			s.closeConn()

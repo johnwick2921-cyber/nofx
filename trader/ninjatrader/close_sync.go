@@ -27,6 +27,7 @@ func (t *TCPTrader) StartCloseSync(traderID, exchangeID, exchangeType string, st
 	// A2 (G1) — record the owning trader id so outbound order frames can stamp it.
 	t.mu.Lock()
 	t.traderID = traderID
+	t.st = st // Entry rejection receipts need the ledger before any placement.
 	t.mu.Unlock()
 	pb := store.NewPositionBuilder(st.Position())
 	t.closeSyncOnce.Do(func() {

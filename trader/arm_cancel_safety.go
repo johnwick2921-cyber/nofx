@@ -113,7 +113,7 @@ func adjudicateArmCancelWith(ledgerState, signalID string, book []nt.NT8Order, h
 	switch strings.ToLower(strings.TrimSpace(ledgerState)) {
 	case store.StateFilled:
 		return armCancelVerdict{false, "the arm is FILLED — its entry is a position, and the only orders left under this signal are its protections"}
-	case store.StateArmed, store.StateWorking:
+	case store.StateArmed, store.StatePlacePending, store.StateWorking:
 		// keep going: the ledger thinks it is live, and the book decides.
 	default:
 		return armCancelVerdict{false, "the arm is " + ledgerState + " — not a live order"}

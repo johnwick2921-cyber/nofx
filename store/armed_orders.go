@@ -38,12 +38,12 @@ type ArmedOrderDB struct {
 	StopPx   float64 // bracket stop
 	TargetPx float64 // bracket target
 
-	// State: armed (authorized, not yet placed) | working (live in NT8) |
-	// filled | cancelled | expired. Only the terminal states carry a reason.
+	// State: armed (authorized) | place_pending (registered, awaiting receipt) |
+	// working (received live entry) | filled | rejected | cancelled | expired.
 	State        string `gorm:"index"`
 	StateReason  string
 	EntryClass   string // armed_fill when filled (fills bypass stale_reeval)
-	SignalID     string // the wire signal_id once working
+	SignalID     string // the wire signal_id registered before sending
 	FillPrice    float64
 	FillQuantity int
 
@@ -105,6 +105,8 @@ type ArmedOrderDB struct {
 const (
 	StateArmed         = "armed"
 	StateWorking       = "working"
+	StatePlacePending  = "place_pending"
+	StateRejected      = "rejected"
 	StateCancelPending = "cancel_pending"
 	StateCancelled     = "cancelled"
 	// StateFilled — the entry became a position. A filled arm is NEVER
@@ -237,16 +239,16 @@ func (s *ArmedOrderStore) UpsertArm(row *ArmedOrderDB) error {
 	// cutover gate's leg 4 to "broker 1 vs ledger 23 — MISMATCH". The
 	// record-keeping law was right; the row it was applied to was wrong.
 	err := s.db.Where("plan_id = ? AND scenario = ? AND leg_index = ?", row.PlanID, row.Scenario, row.LegIndex).
-		Order("CASE WHEN state IN ('armed','working','cancel_pending') THEN 0 ELSE 1 END, placement_seq DESC, id DESC").First(&existing).Error
+		Order("CASE WHEN state IN ('armed','place_pending','working','cancel_pending') THEN 0 ELSE 1 END, placement_seq DESC, id DESC").First(&existing).Error
 	if err == nil {
 		// D5 — a WORKING row is a LIVE BROKER ORDER. Rewriting its prices in
 		// place overwrote the slot and lost the brackets (rows 582, 585): the
 		// ledger and the broker then held two different orders under one id.
 		// Replacing a live order requires a cancel, and the store cannot issue
 		// one, so it declines rather than diverge.
-		if existing.State == StateWorking {
-			return fmt.Errorf("armed_orders: refusing to rewrite %s/%s — the row is working (a live broker order, signal %q); replace requires cancel first",
-				row.PlanID, row.Scenario, existing.SignalID)
+		if existing.State == StateWorking || existing.State == StatePlacePending {
+			return fmt.Errorf("armed_orders: refusing to rewrite %s/%s — the row is %s (signal %q); replace requires cancel first",
+				row.PlanID, row.Scenario, existing.State, existing.SignalID)
 		}
 		// CANCEL-CONFIRMATION (2026-09-06) — A CANCEL IN FLIGHT IS STILL A LIVE
 		// BROKER ORDER. Until a fresh snapshot says the order is gone, nobody
@@ -371,7 +373,7 @@ func (s *ArmedOrderStore) ListNonTerminal(traderID string) ([]ArmedOrderDB, erro
 	// broker as far as anyone can prove, so it holds its slot, it is swept at
 	// boot like any live row, and cutover leg 4 counts it — which is what makes
 	// leg 4 agree with the broker instead of with our intentions.
-	err := s.db.Where("trader_id = ? AND state IN (?,?,?)", traderID, StateArmed, StateWorking, StateCancelPending).
+	err := s.db.Where("trader_id = ? AND state IN (?,?,?,?)", traderID, StateArmed, StatePlacePending, StateWorking, StateCancelPending).
 		Order("id").Find(&out).Error
 	return out, err
 }
@@ -381,6 +383,46 @@ func (s *ArmedOrderStore) ListNonTerminal(traderID string) ([]ArmedOrderDB, erro
 func (s *ArmedOrderStore) SetState(id int64, state, reason string) error {
 	return s.db.Model(&ArmedOrderDB{}).Where("id = ?", id).
 		Updates(map[string]any{"state": state, "state_reason": reason}).Error
+}
+
+// BeginPlacement persists identity BEFORE the socket write. A received reply can
+// then find the row even when it beats SendSignal's return. A second placement
+// cannot reuse an in-flight row, and no post-send write can erase a rejection.
+func (s *ArmedOrderStore) BeginPlacement(id int64, signalID string) error {
+	if strings.TrimSpace(signalID) == "" {
+		return fmt.Errorf("armed_orders: placement requires signal id")
+	}
+	r := s.db.Model(&ArmedOrderDB{}).Where("id = ? AND state = ? AND (signal_id = '' OR signal_id IS NULL)", id, StateArmed).
+		Updates(map[string]any{"signal_id": signalID, "state": StatePlacePending, "state_reason": ""})
+	if r.Error != nil {
+		return r.Error
+	}
+	if r.RowsAffected != 1 {
+		return fmt.Errorf("armed_orders: row %d is no longer eligible for placement", id)
+	}
+	return nil
+}
+
+// ApplyPlacementReceipt is called only for received entry frames. Cancellation
+// intent survives a late acceptance; filled/terminal rows cannot be resurrected.
+func (s *ArmedOrderStore) ApplyPlacementReceipt(traderID, signalID, state, reason string) error {
+	if traderID == "" || signalID == "" {
+		return nil
+	}
+	q := s.db.Model(&ArmedOrderDB{}).Where("trader_id = ? AND signal_id = ?", traderID, signalID)
+	switch state {
+	case StateWorking:
+		q = q.Where("state = ?", StatePlacePending)
+		reason = ""
+	case StateRejected:
+		q = q.Where("state IN (?,?,?)", StatePlacePending, StateWorking, StateCancelPending)
+		if strings.TrimSpace(reason) == "" {
+			reason = "reason unavailable (NT8 frame omitted reason)"
+		}
+	default:
+		return fmt.Errorf("armed_orders: unsupported placement receipt %q", state)
+	}
+	return q.Updates(map[string]any{"state": state, "state_reason": reason}).Error
 }
 
 // RequestCancel moves a row to cancel_pending and records that a cancel was
