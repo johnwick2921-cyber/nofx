@@ -357,6 +357,43 @@ func RenderMapBlock(cs []MapCandidate, price float64) string {
 	return b.String()
 }
 
+// MapBootLine is D7's boot posture. Every field is READ, never a literal.
+//
+// TWO kinds of field, and the line is honest about both:
+//
+//   - PER-READ (detected / merged / entry-candidates / refused / projections)
+//     cannot be known at boot — no planner read has happened. They print n/a.
+//     Printing 0 would assert a measurement that was never taken, the exact
+//     fault kernel/detector_d1prime.go:270-271 exists to prevent. The real
+//     numbers ride MapReadLine, once per read.
+//
+//   - PER-TRADER (`cap`) is not a global. This process serves several traders
+//     and each resolves its own max_levels, so the boot line LABELS it rather
+//     than printing one trader's number as if it were everyone's — exactly the
+//     shape VolumeWaveBootLine adopted when 0e016635 fixed it printing seats=8
+//     from a package default while the bound strategy resolved 12.
+func MapBootLine(defaultCap, hardCap int, dailySourceInstalled bool) string {
+	seatable := "no"
+	if dailySourceInstalled {
+		seatable = "yes"
+	}
+	return fmt.Sprintf(
+		"🗺 map: detected=n/a merged=n/a entry-candidates=n/a (no-target refused=n/a) · "+
+			"order=reachability[I] · projections=n/a (pwh/pwl seatable=%s) · "+
+			"cap=per-trader (default %d, hard cap %d) · merge=zone-width[I] · min-target=stop-floor[I]",
+		seatable, defaultCap, hardCap)
+}
+
+// MapReadLine is the per-read counterpart: the same fields with the numbers
+// COUNTED from the map that was actually built (canon 35 — counters record,
+// never infer).
+func MapReadLine(m MapCounts) string {
+	return fmt.Sprintf(
+		"🗺 map read: detected=%d merged=%d entry-candidates=%d (no-target refused=%d) · "+
+			"order=reachability[I] · projections=%d",
+		m.Detected, m.Merged, m.EntryCandidates, m.NoTargetRefused, m.Projections)
+}
+
 // assignMapRoles applies D1's role axis and D3's candidacy test in one pass
 // over the merged set. Mutates the slice in place; the slice is ours.
 func assignMapRoles(cs []MapCandidate, price, minTarget float64) {

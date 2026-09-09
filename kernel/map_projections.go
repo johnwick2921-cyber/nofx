@@ -195,6 +195,10 @@ func projectionAt(price float64, name string, kind LevelKind, method string) Map
 	}
 }
 
+// DailySourceInstalled reports whether a daily bar source is reachable, so the
+// boot line can say pwh/pwl seatable=yes|no from a READ rather than a guess.
+func DailySourceInstalled() bool { return market.FuturesBarsProvider != nil }
+
 // DailyBarsFor reads CLOSED daily bars for a symbol from the injected futures
 // provider — the same accessor kernel already uses for the void scope
 // (void_scope.go:85) and the clock probes. Returns nil when no provider is

@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"nofx/logger"
 	"nofx/market"
 )
 
@@ -50,6 +51,9 @@ func BuildKeyLevelsBlockOpts(traderID string, bars []market.Kline, reg SessionRe
 	if mb := RenderMapBlock(cs, price); mb != "" {
 		block += "\n" + mb
 	}
+	// The per-read counterpart of the D7 boot line: real numbers, COUNTED from
+	// the map that was actually built (canon 35 — counters record, never infer).
+	logger.Infof("%s", MapReadLine(CountMap(len(scored), cs)))
 	return block
 }
 
