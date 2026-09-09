@@ -344,7 +344,14 @@ func (at *AutoTrader) weeklyConfluenceShadowAt(now time.Time, tradeDate, session
 	if market.FuturesBarsProvider == nil {
 		return
 	}
-	bars1m := market.FuturesBarsProvider(at.futuresSymbol(), "1m", 12000)
+	// D2 CHOICE (a) — READ THE STORE. WHY: ComputeWeeklyFacts asks for 12
+	// COMPLETED WEEKS (kernel/weekly_prompt.go) plus the last 5 weekend gaps.
+	// The ring ceiling is 2,500 1m bars = 41.7 h — under two days — so neither
+	// could ever have been satisfied from it. The store reaches 21 days today
+	// (~3 weeks) and up to the 90-day 1m retention, which is still short of 12
+	// weeks: ComputeWeeklyFacts already stamps that honestly via ThinHistory,
+	// and this wave does not change what it computes.
+	bars1m := at.barsWithStoreDepth(at.futuresSymbol(), "1m", weeklyFactsTapeBars, now)
 	bars5m := market.FuturesBarsProvider(at.futuresSymbol(), "5m", kernel.AISVPBarCount)
 	price := 0.0
 	if len(bars1m) > 0 {
@@ -457,3 +464,7 @@ func (at *AutoTrader) applyWeeklyDecisionShadow(decision *kernel.Decision) {
 	}()
 	at.weeklyCounterShadow(decision)
 }
+
+// weeklyFactsTapeBars is the 1m depth the weekly facts read asks for. Named so
+// the ask and the disclosure that reports it cannot drift (D2, 2026-09-09).
+const weeklyFactsTapeBars = 12000

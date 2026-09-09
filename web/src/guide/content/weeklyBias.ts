@@ -114,6 +114,14 @@ export const weeklyBias: GuideSection = {
           body: 'A daily session candle is bucketed by the 17:00 CT roll and its Open is simply the first bar held — so a tape that starts mid-session used to present a part-session as a whole one. Rows are now measured against the CME session calendar (kernel/session_calendar.json, shortened and closed days included) and marked on the row: ⚠PARTIAL (only part of the window is held — front-truncated rows say so, interior holes say the minutes are missing INSIDE), ⏳FORMING (the window has not closed), ❓COVERAGE-UNKNOWN (a year the calendar does not cover — never a guess). Nothing is interpolated, carried forward or synthesised to fill a hole, and no O/H/L/C/V is changed by any of it.',
         },
         {
+          title: 'The store is the horizon, the ring is the cache',
+          body: 'The live BarCache ring holds 2,500 bars per symbol+timeframe — about 41.7 h of 1m — and a restart rebuilds it from a 2,000-bar seed. Three reads asked for more than that could ever hold: 1m × 12,000 (200 h) twice and 5m × 3,000 (250 h). The two 1m reads now splice the persisted bars table onto the older end (measured 2026-09-09: MNQ 1m back to 2026-08-19, 21 days). Rules: an EMPTY ring is never backfilled from the store — no live feed still means no plan — a ring that already serves the ask is not second-guessed, only bars strictly older than the ring are taken so a live or forming bar is never replaced, and a failed store read simply serves the ring. Nothing here gates or blocks.',
+        },
+        {
+          title: 'RV baseline names its real window',
+          body: 'The regime line used to read "RV=103%-of-normal", where "normal" was a baseline averaged over about 7 complete session-days by a field called RVBaseline20d. It now reads "RV=103%-of-baseline(7 complete session-days)", or "(window UNKNOWN)" when the count was not reported. The 5m ask behind it was 3,000 bars = 250 h against a 208 h ring, which no market condition could satisfy; it is now 2,500. The computed value did not change — only the ask and the name.',
+        },
+        {
           title: 'Weekly context (soft law, refs only)',
           body: 'Every session prompt carries a ≤3-line ## Weekly Context block — "WEEKLY: refs only — PWH 30500.25 · PWL 29980.00" or "WEEKLY: none" when no doc exists (fail-open: a missing doc changes nothing else). There is no counter-weekly direction anymore (class 50); the references are price facts the model may seat against. The executor prompt gets one matching line. The weekly doc never gates your plan.',
         },

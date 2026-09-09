@@ -28,6 +28,8 @@ Visible brand (Dispatch 102): `branding/product.txt` = VL Intelligent; `branding
 - Provider wiring: `wireFuturesBarsProvider` → `market.FuturesBarsProvider = server.BarCache().Get(...)` — `trader/ninjatrader/bars_market_bridge.go:17-33`; var declaration `market/futures_data.go:14`.
 - Kernel reads the SVP snapshot via `FuturesBarsProvider(activeSymbol, AISVPBarInterval, AISVPBarCount)` — `kernel/engine_analysis.go:297`.
 - **Served-scope observability (BARS HORIZON 2026-09-09):** `barsFromCache` measures every served slice with `kernel.HorizonOf` and WARNs on SHORT | HOLED | EMPTY — `trader/ninjatrader/bars_market_bridge.go`, `kernel/bar_horizon.go`. A COUNT is not a HORIZON: the 2026-09-09 13:18 CT planner read was served 2000 of 2000 bars across a 3,055-minute span with 696 open-market minutes missing inside it, so a served-count check would have been silent. WARN only — it gates nothing.
+- **The store is the horizon; the ring is the cache (D2):** `store/bar_history.go::LastNBars` + `trader/bars_store_depth.go::barsWithStoreDepthFrom` splice the store onto the OLDER end of a short ring read. Rules: an EMPTY ring is never substituted (the store deepens a live tape, never stands in for one) · a satisfied ring is not second-guessed (no store read) · only bars strictly older than the ring's oldest are taken, so a live/forming bar is never replaced · a failed read WARNs and degrades to the ring. Measured 2026-09-09: `bars` holds MNQ 1m 20,043 rows back to 2026-08-19 (21 days); retention per TF is `store/bar_history.go` (1m 90d · 3m/5m 180d · 15m/30m 365d · 1h+ forever) and nothing has ever been pruned.
+- **`RVBaseline20d` → `RVBaseline` + `RVBaselineDays` (D2b):** the field was fed about 7 complete session-days while its name said 20, and the regime line rendered `RV=…%-of-normal` — a baseline with no stated window. The regime now renders `RV=…%-of-baseline(N complete session-days)`, or `(window UNKNOWN)` when the count was not reported. The COMPUTED value is unchanged.
 - **The prompt's candle tables declare HELD vs REQUESTED (D1):** `kernel/candle_disclosure.go` + `BuildPlannerCandleTablesAt` — every heading states held-of-requested (including when complete), one TAPE line above the tables names bars held/requested, oldest age and gaps, and every row whose window is only partly held is marked ⚠PARTIAL / ⏳FORMING / ❓COVERAGE-UNKNOWN against `kernel/session_calendar.json`. Measured over the stored prompts (`planner_rejected_prompts`, n=54 with a Candles block, ids 70–142): 15m 12/12 in 54/54 · 1h 12/12 in 54/54 · 4h 8/8 in 54/54 · **daily 2 rows in 19 and 3 rows in 35, never 8, in 0 of 54**. Nothing is interpolated or synthesised to fill a hole (A24).
 
 **Knobs (resolved default · source):**
@@ -37,6 +39,10 @@ Visible brand (Dispatch 102): `branding/product.txt` = VL Intelligent; `branding
 | `AISVPBarInterval` | `"1m"` | kernel/svp.go:46 | — |
 | `AISVPBarCount` | 2000 | kernel/svp.go:47 | — |
 | `DefaultBarCacheMaxBars` | 2500 | bar_cache.go:24 | — |
+| `plannerCandleTapeBars` | 12000 (1m, store-deepened) | trader/auto_trader_planner.go | [D2] (a) read the store |
+| `weeklyFactsTapeBars` | 12000 (1m, store-deepened) | trader/auto_trader_weekly.go | [D2] (a) read the store |
+| `rvBaseline5mBarsAsk` | 2500 (was 3000 = 250.0 h, above the 208.3 h ring) | trader/auto_trader_planner.go | [D2] (b) ask corrected |
+| `rvBaselineMaxDays` | 20 (cap; the FED count now travels as `RVBaselineDays`) | trader/auto_trader_planner.go | [D2] (b) name corrected |
 | auto-subscribe symbol | `"MNQ"` | tcp_server.go:431 | — |
 | auto-subscribe TFs | 1m 3m 5m 15m 30m 1h 2h 4h 6h 8h 12h 1d 3d 1w | tcp_server.go:435 | — |
 | auto-subscribe back | 2000 | tcp_server.go:443 | — |
