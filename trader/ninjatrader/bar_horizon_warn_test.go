@@ -189,3 +189,30 @@ func prodCallSites(t *testing.T, needle string) (int, []string) {
 	}
 	return n, where
 }
+
+// PIN D3-E — A29. The boot rehydrate is WIRED, and it uses the ring-safe door.
+func TestRingRehydrateIsWiredAtBoot(t *testing.T) {
+	for fn, wantIn := range map[string]string{
+		"rehydrateRingFromStore(": "trader/ninjatrader/bar_persist_wire.go",
+		"cache.RehydrateOlder(":   "trader/ninjatrader/bar_persist_wire.go",
+		"bh.LastNBars(":           "trader/ninjatrader/bar_persist_wire.go",
+	} {
+		n, where := prodCallSites(t, fn)
+		if n == 0 {
+			t.Fatalf("%s: 0 production call sites — a new function with no caller is not shipped (A29)", fn)
+		}
+		if !strings.Contains(strings.Join(where, " "), wantIn) {
+			t.Fatalf("%s: production call sites %v, want one in %s", fn, where, wantIn)
+		}
+	}
+	// The rehydrate must NEVER reach for SeedHistorical: that door seeds a cold
+	// key and lets the INCOMING (here: the store) win an overlap, which is
+	// exactly what D3 must not do.
+	b, err := os.ReadFile("bar_persist_wire.go")
+	if err != nil {
+		t.Fatalf("read bar_persist_wire.go: %v", err)
+	}
+	if strings.Contains(string(b), "SeedHistorical(") {
+		t.Fatalf("bar_persist_wire.go calls SeedHistorical — the store must enter through RehydrateOlder, which refuses a cold key and never outranks a live bar")
+	}
+}
