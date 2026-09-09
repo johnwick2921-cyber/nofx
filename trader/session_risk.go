@@ -152,9 +152,18 @@ func SessionRiskBootLine(cfg *store.StrategyConfig, dailyLimit float64, masterOn
 	if !masterOn || !dailyLegOn {
 		daily += " DECORATIVE (guardrails master " + master + ", daily_loss_enabled " + leg + " — both must be on)"
 	}
+	n, m := breakerHaltN(cfg), breakerWarnM()
+	// A THRESHOLD THAT CAN NEVER FIRE IS REPORTED, NEVER CLAMPED. If the owner
+	// set a halt below the WARN, the WARN is dead — the halt refuses first, so
+	// nothing ever reaches M. Silently clamping would hide the setting he chose;
+	// he should see what he set and what it costs him.
+	warn := fmt.Sprintf("warn=%d[I]", m)
+	if n > 0 && m >= n {
+		warn = fmt.Sprintf("warn=%d[I] UNREACHABLE (halt=%d fires first)", m, n)
+	}
 	return fmt.Sprintf(
-		"session risk: daily=%s · breaker=%d[I] warn=%d[I] (not master-gated; never fires on the retained tape, max run 7, ids 585-591) · no-trade-band=arm+decision · post-loss counter=on(%dm) · flat@%s=position+arms+pending",
-		daily, breakerHaltN(cfg), breakerWarnM(), postLossWindowMin(), flatHHMM)
+		"session risk: daily=%s · breaker=%d[I] %s (not master-gated; never fires on the retained tape, max run 7, ids 585-591) · no-trade-band=arm+decision · post-loss counter=on(%dm) · flat@%s=position+arms+pending",
+		daily, n, warn, postLossWindowMin(), flatHHMM)
 }
 
 // ── D3 — THE POST-LOSS RE-ARM COUNTER ───────────────────────────────────────
@@ -230,30 +239,44 @@ func SessionRiskBootLineForBoot(st *store.Store) string {
 	return SessionRiskBootLine(cfg, limit, masterOn, legOn, "session close")
 }
 
-// bootRiskFacts resolves the guardrail toggles at boot from the strategies the
-// store holds. It reports ok=false rather than inventing a state: a boot line
-// that says "off" when it simply could not read is the same lie in the other
-// direction.
+// bootRiskFacts resolves the guardrail toggles at boot from THE STRATEGY BOUND
+// TO A TRADER — the same row deskGuardrail reads at runtime
+// (at.config.StrategyConfig). One source for the bound row, both readers.
+//
+// THE DEFECT THIS REPLACES, live on the 2026-09-09 18:14 boot line: this
+// scanned EVERY strategy row and returned the first carrying risk-shaped
+// fields. The store held nine; it read one ("New Strategy",
+// daily_loss_enabled=true, consecutive_loss_halt=2) that is bound to NO trader,
+// and printed its knobs as though they governed. The line said
+// "daily_loss_enabled on · breaker=2" about a desk where neither was true.
+//
+// The runtime was never wrong — breakerHaltN reads the trader's own config — so
+// only the boot line lied, on the one line whose whole job is to say what is
+// enforced. Class 82 shipped in the line beside the deskGuardrail fix written
+// for it.
+//
+// MORE THAN ONE BOUND STRATEGY is reported, not averaged: a single line cannot
+// speak for two desks, and picking one silently is how this defect started.
 func bootRiskFacts(st *store.Store) (cfg *store.StrategyConfig, limit float64, masterOn, dailyLegOn, ok bool) {
-	if st == nil || st.Strategy() == nil {
+	if st == nil || st.GormDB() == nil {
+		return nil, 0, false, false, false
+	}
+	var ids []string
+	if err := st.GormDB().
+		Raw(`SELECT DISTINCT strategy_id FROM traders WHERE strategy_id IS NOT NULL AND strategy_id <> ''`).
+		Scan(&ids).Error; err != nil || len(ids) != 1 {
 		return nil, 0, false, false, false
 	}
 	var rows []*store.Strategy
-	if err := st.GormDB().Find(&rows).Error; err != nil || len(rows) == 0 {
+	if err := st.GormDB().Where("id = ?", ids[0]).Find(&rows).Error; err != nil || len(rows) != 1 {
 		return nil, 0, false, false, false
 	}
-	for _, r := range rows {
-		c, err := r.ParseConfig()
-		if err != nil || c == nil {
-			continue
-		}
-		rc := c.RiskControl
-		if rc.DailyLossLimitUSD <= 0 && rc.GuardrailsEnabled == nil && rc.DailyLossEnabled == nil {
-			continue // nothing risk-shaped configured on this row
-		}
-		return c, rc.DailyLossLimitUSD,
-			rc.GuardrailsEnabled != nil && *rc.GuardrailsEnabled,
-			rc.DailyLossEnabled != nil && *rc.DailyLossEnabled, true
+	c, err := rows[0].ParseConfig()
+	if err != nil || c == nil {
+		return nil, 0, false, false, false
 	}
-	return nil, 0, false, false, false
+	rc := c.RiskControl
+	return c, rc.DailyLossLimitUSD,
+		rc.GuardrailsEnabled != nil && *rc.GuardrailsEnabled,
+		rc.DailyLossEnabled != nil && *rc.DailyLossEnabled, true
 }
