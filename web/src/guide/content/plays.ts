@@ -42,7 +42,7 @@ export const plays: GuideSection = {
         },
         {
           title: 'fvg_entry',
-          body: "Setup: the A-setup's finish — displacement leaves a gap → first retrace INTO the FVG → confirm: touch at the gap band. entry_mode ce by default (edge only for A-grade HTF-confluent origins); stop beyond the sweep extreme; T1 = first opposing pool; runner = the draw. chain_after links it to its sweep_reclaim. FVG DEMAND (A2c): a fresh machine gap matching your bias expects an fvg_entry — or a one-line reason why not.",
+          body: 'Setup: the A-setup\'s finish — displacement leaves a gap → first retrace INTO the FVG → confirm: touch at the gap band. entry_mode ce by default (edge only for A-grade HTF-confluent origins); stop beyond the sweep extreme; T1 = first opposing pool; runner = the draw. T1 and "runner" are PLAN VOCABULARY, not an exit ladder: an arm reaches the broker as ONE bracket — one entry, one stop, one target — at the size kernel.StageAContractCap() resolves (one contract today), so nothing scales out at T1 and leaves a remainder. Targets beyond the first node are guidance for the executor AI, validated for reachability at write time and never enforced at execution. chain_after links it to its sweep_reclaim. FVG DEMAND (A2c): a fresh machine gap matching your bias expects an fvg_entry — or a one-line reason why not.',
           tag: 'play 7',
         },
         {
@@ -218,7 +218,7 @@ export const plays: GuideSection = {
         'S2 fvg_entry    : the displacement gap retraces into the FVG band',
         '        entry_mode = ce (edge only for A-grade HTF-confluent origins)',
         '        stop beyond the sweep extreme · T1 = first opposing pool',
-        '        runner = the draw (nearest opposing liquidity beyond T1)',
+        '        runner = the draw (nearest opposing liquidity beyond T1) — vocabulary only: no partial exit exists, the whole position closes at once',
         '',
         'a bare fvg_entry with NO sweep precursor at a non-A/B origin',
         'gets a WARN at write — the raw-FVG null (40k sample) says it',
@@ -228,7 +228,7 @@ export const plays: GuideSection = {
     { kind: 'h', text: 'No-trade is a trade' },
     {
       kind: 'p',
-      text: 'The planner is now SHOWN which levels can carry a waterfall: the facts block states the displacement floor for the cycle (1.0×ATR5m, resolved) and, per seated level, the measured displacement since its break — or "none — no break". A breakdown_continue authored below the floor is refused at write, and before 2026-09-03 that number was enforced without ever being stated. Sitting out is a position. The gates the planner is taught: balance day → edges only or skip · opening gap >1.2×ATR or outside-range open → never fade · no A/B zone in reach AND no pool swept by 10:30 ET → skip the day · lunch 11:30–13:30 ET → no entries · Tier-1 news → stand aside. A real skip looks like: "no_trade: balance day — no A/B zone in reach by 10:30 ET, skip" — that is a decision, not a failure.',
+      text: 'The planner is now SHOWN which levels can carry a waterfall: the facts block states the displacement floor for the cycle (1.0×ATR5m, resolved) and, per seated level, the measured displacement since its break — or "none — no break". A breakdown_continue authored below the floor is refused at write, and before 2026-09-03 that number was enforced without ever being stated. Sitting out is a position. The gates the planner is taught: balance day → edges only or skip · opening gap >1.2×ATR or outside-range open → never fade · no A/B zone in reach AND no pool swept by 09:30 CT → skip the day · lunch 12:00–13:30 CT — the window kernel.LunchWindowCT() resolves — refuses entries on BOTH paths since 2026-09-09: the band is read in executeDecisionWithRecord (trader/auto_trader_orders.go:281), by the adherence grader, and — since dispatch 104 — in maybeManageArmedOrdersAt before the scenario loop. Until then no band predicate appeared in trader/armed_executor.go at all, so with plan_mode=strict, where a resting order is the only way in, it refused nothing; an arm resting when the band opens is now cancelled rather than grandfathered · Tier-1 news → stand aside. A real skip looks like: "no_trade: balance day — no A/B zone in reach by 09:30 CT, skip" — that is a decision, not a failure.',
     },
   ],
 }

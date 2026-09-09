@@ -68,7 +68,7 @@ export const guards: GuideSection = {
         [
           'Unprotected position (2026-09-07)',
           'HARD',
-          'Every minute while a position is open, and again the moment the NinjaTrader link comes back: is there a LIVE stop at the broker for it? If the book shows none, a P0 is raised AND a stop is placed — at the price the broker itself accepted, or failing that the plan\'s composed stop. It is the one check that acts rather than reports, because a position with no stop has no safe amount of waiting. Three things stop it acting: no fresh book, a protective order in a state this build cannot read, or a live stop whose quantity the book does not carry. Each says so in the journal and does nothing — an unknown is not permission to place a SECOND stop beside an invisible one. A PARTIALLY covered position is raised, never patched. Born from 2026-09-06 23:37:02, when a cancel meant for an already-filled entry took its stop with it and the position ran 8h19m unprotected with nothing in the bot looking.',
+          "Every minute while a position is open, and again the moment the NinjaTrader link comes back: is there a LIVE stop at the broker for it? If the book shows none, a P0 is raised AND a stop is placed — at the price the broker itself accepted, or failing that the plan's composed stop. It is the one check that acts rather than reports, because a position with no stop has no safe amount of waiting. Three things stop it acting: no fresh book, a protective order in a state this build cannot read, or a live stop whose quantity the book does not carry. Each says so in the journal and does nothing — an unknown is not permission to place a SECOND stop beside an invisible one. A PARTIALLY covered position is raised, never patched. Born from 2026-09-06 23:37:02, when a cancel meant for an already-filled entry took its stop with it and the position ran 8h19m unprotected with nothing in the bot looking.",
         ],
         [
           'Boot sweep (class 33)',
@@ -113,7 +113,7 @@ export const guards: GuideSection = {
         [
           'Lunch / session windows / EOD flat',
           'HARD',
-          'Outside an enabled session window, inside the lunch or first-N no-trade band, or past the session close: no NEW entry. Since 2026-09-09 the band is enforced on the ARM path too — under plan_mode=strict the arm path is the only way in, and armed_executor.go previously contained zero references to it, so the band guarded only the path strict forbids from trading. An arm inside the band is refused, and an arm already resting when the band opens is CANCELLED rather than grandfathered: an arm whose fill would land inside the band is not one we are willing to own, however long it has been sitting there.',
+          'Outside an enabled session window, inside the lunch or first-N no-trade band (the lunch window is the one kernel.LunchWindowCT() resolves — read, never a literal), or past the session close: no NEW entry, and flat at session end. Since 2026-09-09 the band binds the ARM path too. Until then it was read by the AI-decision gate and the adherence grader and by NOTHING on the arm path, so under plan_mode=strict — where a resting order is the only way in — it refused nothing. An arm inside the band is now refused, and an arm already resting when the band opens is CANCELLED rather than grandfathered: refusing only NEW arms while one placed at 11:58 rests into 12:00 is a band that stops authoring and not entering.',
         ],
         [
           'Consecutive-loss breaker',

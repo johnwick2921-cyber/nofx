@@ -638,16 +638,21 @@ func BuildPlannerPrompt(in PlannerInput) string {
 	b.WriteString("  - balance-day (open inside prior value area AND VAs overlap) → edges-only, or skip\n")
 	b.WriteString("  - opening gap >1.2×ATR or open outside the prior range → NEVER fade; the gap is a target\n")
 	b.WriteString(fmt.Sprintf("  - no A/B zone in reach AND no pool swept by %s CT → declare the skip in the plan\n", ETtoCT("10:30")))
+	// SUPERSEDED by faa3526f — the paragraph below describes the line as it read
+	// BEFORE that commit and is kept as provenance only. There is no ET half in
+	// this prompt any more: the sentence emitted below carries the machine's CT
+	// window and nothing else. Read it in the past tense.
+	//
 	// The hard-gate half is RESOLVED, not typed: it was a third copy of the
 	// lunch window, and the F4 literal scan missed it because the bounds sit
-	// unquoted inside a longer sentence. The 11:30–13:30 ET half is the lunch
-	// LULL (trading lore, advisory) and is deliberately not the same window as
-	// the machine gate — see the report for that discrepancy.
+	// unquoted inside a longer sentence. The 11:30–13:30 ET half was the lunch
+	// LULL (trading lore, advisory), deliberately not the same window as the
+	// machine gate — see the report for that discrepancy.
 	// ONE window (owner ruling 2026-09-03). This line used to carry an
 	// 11:30–13:30 ET lull BESIDE the machine's 12:00–13:30 CT gate — two
 	// different windows in one sentence, in two clocks, one of them enforced.
 	// The machine's is the only one, stated in CT, rendered from its resolver.
-	b.WriteString(fmt.Sprintf("  - lunch %s–%s CT: no new entries (hard-gated — entries inside it are refused)\n", lunchStartCT, lunchEndCT))
+	b.WriteString(fmt.Sprintf("  - lunch %s–%s CT: no new entries (refused on the AI-decision path only — no band predicate exists in the arm path, so with plan_mode=strict nothing refuses an entry here)\n", lunchStartCT, lunchEndCT))
 	b.WriteString("  - Tier-1 news → stand aside until a fresh post-news swing prints\n\n")
 
 	// A4 — killzone weighting (advisory, not a gate).

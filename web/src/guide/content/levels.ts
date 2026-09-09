@@ -9,7 +9,7 @@ export const levels: GuideSection = {
   blocks: [
     {
       kind: 'p',
-      text: 'Every plan and every decision hangs on levels. A level is a price the machine detected (structure, volume, imbalance); a role says what to DO with it; a grade says how trustworthy it is.',
+      text: 'Every plan and every decision hangs on levels. A level is a price the machine detected (structure, volume, imbalance); a role says what to DO with it; and a grade is a letter — A, B or C — that gradeFromScore (kernel/levels_score.go) assigns by thresholding a score built from hand-set evidence weights, a freshness ladder, a confluence multiplier and a timeframe multiplier, then capped by the zone-timeframe and Tier-1 proximity rules. It is a SEATING PRIORITY label, not a probability: nothing in the scoring path reads an outcome table, and no grade has ever been calibrated against what those levels actually did.',
     },
     { kind: 'h', text: 'The kinds — Anchors / Volume / Zones' },
     {
@@ -125,7 +125,7 @@ export const levels: GuideSection = {
     { kind: 'h', text: 'WHERE THE BARS COME FROM (class 45)' },
     {
       kind: 'p',
-      text: "Every chart, level and indicator is built from bars, and until 2026-09-02 they came from two places that did not know about each other. NinjaTrader streams a deep history into memory — over seven years of weekly bars, five years of daily — but only one-minute bars were ever written to disk, so the rest vanished on every restart. The weekly panel built its weeks from those one-minute bars, which start on 19 August, found two complete weeks against a minimum of four, and showed \"thin\". It was starved beside a full pantry. Now one resolver answers every request for completed bars, preferring NinjaTrader's own series and falling back through coarser-to-finer sources, and every timeframe is written to disk so nothing is lost on restart. One caution worth knowing: NinjaTrader's weekly bars run Friday to Thursday, while every week in this system runs Monday to Friday. Those bars are stored for research and deliberately never used for the weekly view, which is built from daily bars instead so the weeks line up with the ones you see. The weekly bias signal itself is unchanged by this — only the data feeding it.",
+      text: 'Every chart, level and indicator is built from bars, and until 2026-09-02 they came from two places that did not know about each other. NinjaTrader streams a deep history into memory — over seven years of weekly bars, five years of daily — but only one-minute bars were ever written to disk, so the rest vanished on every restart. The weekly panel built its weeks from those one-minute bars, which start on 19 August, found two complete weeks against a minimum of four, and showed "thin". It was starved beside a full pantry. Now one resolver answers every request for completed bars, preferring NinjaTrader\'s own series and falling back through coarser-to-finer sources, and every timeframe is written to disk so nothing is lost on restart. One caution worth knowing: NinjaTrader\'s weekly bars run Friday to Thursday, while every week in this system runs Monday to Friday. Those bars are stored for research and deliberately never used for the weekly view, which is built from daily bars instead so the weeks line up with the ones you see. The weekly bias signal itself is unchanged by this — only the data feeding it.',
     },
   ],
 }

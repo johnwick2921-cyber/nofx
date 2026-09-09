@@ -2,7 +2,9 @@
 
 Updated 2026-09-09. Branch `fix/brand-visible`; lane `brand-visible-0b955fbc/root[unlisted]`; isolated worktree `/tmp/nofx-brand-visible`. Accepted from dev `954f11b15f2e7615678f7d2b708c47895faebf1e`, then merged refreshed dev before implementation. This lane owns only the visible-brand changes and pins. It does not own Stage A's archive repair or the held `fix/rebrand-phase-1-2` work.
 
-**Implemented and tested; not merged to dev or deployed.** Stage A released its lock after publishing its passed-boot marker. This lane acquired the now-free lock on 2026-09-09 with automatic heartbeat started at acquisition; no reclaim was used. No main-tree write, build of a release binary, RELEASE update, dist swap, service restart, DB write, or gate edit occurred. A new cutover still requires the dispatch's owner GO, safe window and fresh five-leg gate. No live brand result is claimed.
+**Implemented and merged to dev at `05125bd6efffd2a9afd179728f32b29d679f71ac`; not deployed.** Stage A released its lock after publishing its passed-boot marker. This lane acquired the now-free lock on 2026-09-09 with automatic heartbeat started at acquisition; no reclaim was used. Main was updated only by fast-forward under this lane’s lock and pushed from that same tree. No RELEASE update, dist swap, service restart, DB write or gate edit occurred. A new cutover still requires the dispatch's owner GO, safe window and fresh five-leg gate. No live brand result is claimed.
+
+**Latest owner ruling, 2026-09-09: WAIT; do not boot over arm 133.** Conditional GO is now recorded for the first eligible flat gate after that resting order fills, cancels or is superseded, with no working orders, no open position and no planner read in flight. The A7 window remains in force. The earlier proposed one-order exception is not used. No boot has occurred. See the class-33 finding below; it belongs to a separate adopt-or-cancel-by-scenario-validity wave.
 
 ## Owner correction — imports are allowed
 
@@ -114,7 +116,9 @@ Sixteen protected source files remain byte-identical to the measured base: Go mo
 
 ## A15 / A20 — live truth and retained text
 
-**Not live:** only the previously running login-page title (`VL Trader - AI Trading System`) was observed in a real browser. No authenticated full-surface walk or after-boot proof is claimed. Automated approval review rejected the proposed live walk because it would read JWT secret material and mint a token without specific credential-use authorization. That action was not executed or retried by another route. Unit-rendered text is evidence about code, not a live authenticated observation.
+**Not live:** the initial unauthenticated walk observed the old title, Agent disclaimer `NOFXi may make mistakes.` and placeholder `Ask NOFXi anything...  ⌘K`, plus technical references in FAQ; protected pages redirected to login. [Initial route results](2026-09-08-brand-visible-data/live-before.json). Automated approval review rejected reading JWT secret material to mint a token. The owner selected **“Use an owner-authenticated browser instead”** and subsequently supplied credentials for normal browser sign-in. That sign-in succeeded; no signing-secret read or token minting occurred.
+
+[A] The authenticated read-only walk on 2026-09-09 at 13:50 CT reached Agent, Traders, Dashboard, Strategy, Guide, Settings and Welcome without a login redirect. All seven retained the live title `VL Trader - AI Trading System`; Agent rendered `NOFXi` and `Ask NOFXi anything...  ⌘K`, Dashboard rendered `VL Trader`, and Guide rendered `NOFX`. [Authenticated route evidence](2026-09-08-brand-visible-data/authenticated-ui-before.json). Output is restricted to product-word matches and brand placeholders; credentials, tokens and account names are excluded. This proves the current release still serves the old Group 1 text; no after-boot proof is claimed. Unit-rendered status/sender text remains code evidence, not an observed new live message.
 
 Known retained old-name occurrences, deliberately outside Section B:
 
@@ -128,12 +132,68 @@ The after-boot A15 list is **pending observation**, not asserted empty. No remai
 
 ## Cutover, rollback and numbering status
 
-No release binary or dist has been built/swapped for this wave. `GUIDE_BUILT_REV` still names the existing release and is not hand-stamped. At cutover: coordinate lock succession, acquire with heartbeat at acquire, merge current dev, enumerate checklist classes with `uniq -c`, assign the new class, run full merged suite in a clean clone named **nofx**, build a clean VCS binary, read its actual vcs.revision, stamp Guide, then build dist. Read own five-leg gate including broker leg 4 and in-flight state. Apply A7 (14:45–16:30 CT, or after 17:10 flat/no arms/no position); no mid-session override is inferred from “continue.”
+The release candidate and dist have been built in the isolated clean clone, **not swapped**. The candidate Guide was stamped from that binary. Main’s served dist, binary, RELEASE and tracked Guide revision continue to name the existing running release; candidate metadata is not misrepresented as a passed boot. At cutover: coordinate lock succession, acquire with heartbeat at acquire, merge current dev, enumerate checklist classes with `uniq -c`, assign the new class, run full merged suite in a clean clone named **nofx**, build a clean VCS binary, read its actual vcs.revision, stamp Guide, then build dist. Read own five-leg gate including broker leg 4 and in-flight state. Apply A7 (14:45–16:30 CT, or after 17:10 flat/no arms/no position); no mid-session override is inferred from “continue.”
 
 Preserve the binary actually running at cutover as `nofx-bin.old.<verified held revision>`, with DB/dist rollback artifacts. RELEASE → atomic mv → VERIFY → **print the exact owner kill command**; do not execute it under this dispatch. After an acknowledged good boot, verify all five references, read the real banner, push marker from the same main tree before releasing the lock. No old gate-script exception or previous wave's override is reused.
 
-Pre-assignment numbering census (both formats, sorted with `uniq -c`): highest **93**; existing duplicates **75/76/77** each count 2. At merge preparation the repeated `sort -n | uniq -c` census again showed highest 93; **class 94** is assigned to this wave. Existing duplicated classes are untouched. Class 94 cites C1 and the display/identifier scope boundary. This report is on the branch, **not yet dev**; publication will not be described as merged until it is.
+Pre-assignment numbering census (both formats, sorted with `uniq -c`): highest **93**; existing duplicates **75/76/77** each count 2. At merge preparation the repeated `sort -n | uniq -c` census again showed highest 93; **class 94** is assigned to this wave. Existing duplicated classes are untouched. Class 94 cites C1 and the display/identifier scope boundary. The implementation and this report are **on dev**, first published there at `05125bd6efffd2a9afd179728f32b29d679f71ac`. Publication is not a claim that the candidate is live.
 
 ## Source freshness
 
 [Exact `git log -1 --format='%h %aI %s' -- <file>` outputs for every changed production file and basis document](2026-09-08-brand-visible-data/source-freshness.json). The census last changed at 878f9e7f; SYSTEM-MAP and AUDIT-CHECKLIST at 954f11b1. Neither spec moved after this implementation base. Recheck at merge.
+
+
+## Integration receipt
+
+Current dev advanced with Stage A’s passed-boot receipts and the separately authored range-fade research report. They were incorporated by merge; this lane did not author them. The prescribed pull --rebase flattened local integration history, so the first main fast-forward attempt correctly refused and left main unchanged. Current dev ancestry was restored on the isolated branch, then main fast-forwarded and pushed successfully at **05125bd6**. No reset, forced update or peer-file deletion was used.
+
+The ordinary clean clone is `/tmp/brand-visible-build/nofx`, pinned to that merged HEAD, with clean porcelain before suite/build. Its frontend suite is **57 files / 408 tests PASS**, TypeScript PASS. The full merged Go suite and embedded prompt goldens **PASS**. The candidate build and dist **PASS**, with the binary stamp verified below. This is preparation; the subsequent authenticated broker-backed gate failed leg 4, and owner GO and boot remain outstanding.
+
+
+## Clean-clone build receipt — ready for owner-controlled cutover
+
+[A] Build source **05125bd6efffd2a9afd179728f32b29d679f71ac**, the merged dev HEAD. Ordinary clone leaf directory **nofx**: `/tmp/brand-visible-build/nofx`. Full Go suite, 57 Vitest files / 408 tests, TypeScript and embedded prompt goldens passed there before the build. Actual `go version -m nofx-bin.next` reads **vcs.revision=05125bd6efffd2a9afd179728f32b29d679f71ac**, **vcs.modified=false**. Binary SHA-256 **070ef7cf432da6e11201996f5512e29134c0bb0b9fc0b10480bbd7d17aae6d5b**.
+
+[A] Only after that binary existed, its embedded revision was parsed to stamp the **candidate clone’s** `GUIDE_BUILT_REV` from 954f11b1… to full 05125bd6…. Dist was then built: **92 files**; its HTML title is `VL Intelligent - AI Trading System`; its compiled JS contains that exact Guide revision. [Build validation](2026-09-08-brand-visible-data/build-validation.json) and [full binary/dist manifest](2026-09-08-brand-visible-data/candidate.json). The clone’s Guide change is intentional post-binary metadata and does not change the already verified clean binary stamp. It will be carried into the release metadata at the authorized swap, not silently served ahead of the binary.
+
+[A] A separate loopback preview of the actual candidate dist rendered `VL Intelligent - AI Trading System`, `Ask VL anything...  ⌘K`, and `VL may make mistakes.` in the connected browser. [Exact preview text](2026-09-08-brand-visible-data/candidate-preview.json). This is evidence from **4173**, not a claim that 8080 or the Go status/banner has changed. The subsequent owner-authenticated live walk is recorded above. The preview process was stopped after recording this evidence (exit 130); the live service was not stopped.
+
+**No cutover performed — STOP at leg 4.** [A] The owner-authenticated read-only gate at **2026-09-09 13:50:06 CT** returned HTTP 200 and `ready=false` for trader id `8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265`. [Exact five-leg evidence](2026-09-08-brand-visible-data/authenticated-gate.json):
+
+| Leg | Verdict | Observed evidence |
+|---|---|---|
+| 1 DB positions | PASS | `0 open row(s)` |
+| 2 API positions | PASS | `0 position(s)` |
+| 3 NT8 positions | PASS | `count=0` |
+| 4 Working orders | **FAIL** | `broker 1 vs ledger 3 — MISMATCH`; broker snapshot age 2s, build `2026-09-07-h1`, cross-checked against armed_orders ledger |
+| 5 Planner in flight | PASS | `no planner read claimed` |
+
+Leg 4 sample ids: broker `db758fae647843aa93b691bc8ffc6df6`; ledger `5d4716c8-298a-4f86-bc72-4d6529d73483` plus two empty order ids, quoted as returned. An earlier independent read at 13:49:42 CT also failed leg 4. No root cause is inferred from these counts. Dispatch A5 forbids overriding this mismatch; A23 requires STOP/report/wait. No gate, order, arm, binding or DB correction is authorized by this visible-brand wave, and none was made.
+
+No owner GO has been given for this swap, and the observation precedes the 14:45 CT A7 window. Successful browser authentication resolves the earlier access prerequisite, not the failed gate. No kill is printed before RELEASE → mv → VERIFY, and no stale PID command is offered. Full Go, 57 Vitest files / 408 tests and TypeScript also passed at report-only receipt HEAD `efdff525652b32c4f3bc61e9a358d4dce2dba01e`; this subsequent report/evidence update changes no executable source.
+
+This preparation receipt is pushed from the same clean main tree under the lock before releasing it. Lock release ends preparation only; the future cutover must reacquire, check current dev/source equivalence, rerun any required merged validation if source changed, make fresh backups/gates and obtain the owner GO. The report will be updated with actual boot/five-reference evidence after that boot; it is not a boot marker today.
+
+[A] Publication check: the complete authenticated census/failed-gate receipt at [commit e3a6de6dcdb267942c9d6eabce3cdc88aec1032a](https://raw.githubusercontent.com/johnwick2921-cyber/nofx/e3a6de6dcdb267942c9d6eabce3cdc88aec1032a/docs/superpowers/reports/2026-09-08-brand-visible.md) returned **HTTP 200, size_download=24,901 bytes**; `git ls-tree -l` reported **24,901 bytes**, and `cmp` passed. Origin dev and fix/brand-visible both resolved to that commit after the push from main. This subsequent publication note does not amend source, tests or gate evidence. The final report revision is separately checked after its push; no self-referential commit id is fabricated.
+
+## Arm 133 comparison and class-33 boot sweep finding — owner WAIT
+
+[A] A read-only SQLite transaction at **2026-09-09 13:57:47 CT**, scoped to trader `8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265` and the production non-terminal state set, found:
+
+| Ledger id | Scenario | State | signal_id | Entry |
+|---|---|---|---|---:|
+| 133 | S1 | working | `5d4716c8-298a-4f86-bc72-4d6529d73483` | 29424.50 |
+| 134 | S2 | armed | empty | 29424.50 |
+| 135 | S3 | armed | empty | 29503.25 |
+
+Broker snapshot **14449**, received at epoch-ms **1788980251312**, was **16.17 seconds old** at that read. Its one MNQ limit order was `db758fae647843aa93b691bc8ffc6df6`, name `5d4716c8-298a-4f86-bc72-4d6529d73483`, price **29424.50**, state **Working**. That name and price match row 133 exactly. Age is snapshot freshness, not order lifetime. The two extra ledger rows are authorized, never placed; neither claims a signal absent from the broker book. The persisted frame is forensic evidence; the gate itself reads the live in-memory broker snapshot. The snapshot envelope symbol is empty; MNQ is on the contained order, so an envelope `symbol='MNQ'` filter does not find this frame.
+
+[A] The fresh authenticated gate at **13:59:32 CT** still read broker **1** / ledger **3** with snapshot age **2 seconds**, while legs 1/2/3 were flat and leg 5 reported a planner read **IN FLIGHT** for the same trader's `2026-09-09:NY` chain. No override was executed, no gate was edited, and no arm or order was changed.
+
+**Finding:** the class-33 sweep cancels prior-process placed orders without checking scenario validity. It cannot distinguish an orphan from an intended resting order whose scenario remains valid. Precisely, `store/boot_sweep.go:42-48` selects this trader's `armed`, `place_pending` and `working` rows with a different/null boot id; `trader/class33_boot_sweep.go:78-87` skips empty signal ids and calls the production `nt.CancelOrder` delegate for every other selected row. It does not literally enumerate every broker order: its selection is the ledger state set above. No scenario-validity check exists on that path. The production call site is `trader/armed_executor.go:210`.
+
+[A] Rows 133/134/135 carried boot id `438-1788976927048`. A new process receives a different id (`store.ProcessBootID`, pid plus first-call timestamp), so row **133** would be selected and a cancel sent after restart if it remained working. Rows **134/135** would instead be left armed; the earlier claim that the sweep clears never-placed residue is corrected. This conclusion comes from the actual selection/delegate path, not a live cancellation experiment. Scenario validity was not independently re-evaluated in this read-only comparison; the defect is that the sweep never asks it.
+
+Running source pinned at **954f11b15f2e7615678f7d2b708c47895faebf1e** and candidate source **05125bd6efffd2a9afd179728f32b29d679f71ac** have identical sweep behavior. Source freshness: `git log -1 -- trader/class33_boot_sweep.go` = `6310eaf8 2026-09-07T23:51:51-05:00 merge: reconcile placement confirmation with pre-send identity and owner ruling`; `git log -1 -- store/boot_sweep.go` = `6262bf42 2026-09-07T23:34:58-05:00 fix: stamp entry creation time and await received placement truth`.
+
+**Owner disposition:** separate wave, **adopt-or-cancel by scenario validity**. Dispatch 102 remains docs-and-strings and does not change this execution path. WAIT until arm 133 becomes terminal and the broker has no working orders; a superseding plan alone is not proof of broker cancellation. Recheck all five legs immediately before any swap, including positions after any fill and the planner in-flight claim. The conditional GO does not authorize booting over arm 133, editing a gate to pass, or bypassing A7. No boot marker is written until a real passed boot; any eventual marker must quote the actual cutover state rather than reuse the historical one-order snapshot.
