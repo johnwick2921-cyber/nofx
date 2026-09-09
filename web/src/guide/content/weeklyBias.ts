@@ -118,6 +118,10 @@ export const weeklyBias: GuideSection = {
           body: 'The live BarCache ring holds 2,500 bars per symbol+timeframe — about 41.7 h of 1m — and a restart rebuilds it from a 2,000-bar seed. Three reads asked for more than that could ever hold: 1m × 12,000 (200 h) twice and 5m × 3,000 (250 h). The two 1m reads now splice the persisted bars table onto the older end (measured 2026-09-09: MNQ 1m back to 2026-08-19, 21 days). Rules: an EMPTY ring is never backfilled from the store — no live feed still means no plan — a ring that already serves the ask is not second-guessed, only bars strictly older than the ring are taken so a live or forming bar is never replaced, and a failed store read simply serves the ring. Nothing here gates or blocks.',
         },
         {
+          title: 'A restart no longer shortens the history',
+          body: 'The bot used to lose its depth on every restart: the ring came back with the 2,000-bar seed the AddOn sends, then slowly climbed to 2,500 across a session, and the next restart reset it — while the persisted bars table held 21 days the whole time. On boot, once the AddOn replay lands, the ring is now extended BACKWARDS from the store, per symbol and timeframe, with the counts logged. It only ever adds bars older than the ring already has, so a live or forming bar is never overwritten; a symbol with no live bars at all is skipped entirely; and if the store read fails the boot simply continues on the AddOn seed.',
+        },
+        {
           title: 'RV baseline names its real window',
           body: 'The regime line used to read "RV=103%-of-normal", where "normal" was a baseline averaged over about 7 complete session-days by a field called RVBaseline20d. It now reads "RV=103%-of-baseline(7 complete session-days)", or "(window UNKNOWN)" when the count was not reported. The 5m ask behind it was 3,000 bars = 250 h against a 208 h ring, which no market condition could satisfy; it is now 2,500. The computed value did not change — only the ask and the name.',
         },

@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"nofx/kernel"
 	"nofx/logger"
 	ntwire "nofx/provider/ninjatrader"
 	"nofx/store"
@@ -80,6 +81,10 @@ func WireBarPersistence(st *store.Store) {
 					// EMPTY arm may speak, and the depth line can report what
 					// the ring ACTUALLY holds rather than a cold cache.
 					noteBarHorizonBackfillLanded()
+					// D3 — REHYDRATE THE RING FROM THE STORE, alongside the
+					// AddOn's seed. `now` is taken HERE, at the boot entry
+					// point, and handed down (A28).
+					rehydrateRingFromStore(bh, server, time.Now())
 					logger.Infof("%s", barHorizonBootLine(server.BarCache(), time.Now()))
 					go pruneLoop(bh)
 					return
@@ -166,3 +171,69 @@ var afterBackfillHook atomic.Value
 // SetAfterBackfillHook installs the callback fired once the first backfill
 // completes. Safe to call more than once; the last registration wins.
 func SetAfterBackfillHook(fn func()) { afterBackfillHook.Store(fn) }
+
+// ── D3 — THE RING REHYDRATES FROM THE STORE ON BOOT ─────────────────────────
+// (owner-authorised expansion, wave BARS HORIZON 2026-09-09)
+//
+// A Go restart drops the ring to the AddOn's 2000-bar seed
+// (defaultAutoBarsBack) while the persisted `bars` table holds 21 days
+// (measured 2026-09-09: MNQ 1m 20,043 rows back to 2026-08-19 10:00 CT). The
+// ring climbs back to 2500 across a session because SeedHistorical MERGES —
+// and then the next restart shortens the horizon again. Nothing ever
+// rehydrated it.
+//
+// This runs ALONGSIDE the AddOn's seed, immediately after the replay lands, and
+// it deliberately touches nothing else: not the AddOn, not the subscription,
+// not the backfill.
+//
+// EVERY CONSTRAINT IS ENFORCED BY RehydrateOlder, not here:
+//   - it MERGES (mergeBarsByTime, the same discipline SeedHistorical uses);
+//   - it never replaces a live bar with a stale one (older-only, existing wins);
+//   - it is bounded by the ring's own maxBars;
+//   - it is a NO-OP on a cold key, so a dead feed can never be made to look alive.
+//
+// A10: a failed store read WARNs and boot continues. Nothing here gates,
+// refuses, blocks or blanks.
+func rehydrateRingFromStore(bh *store.BarHistoryStore, server *ntwire.TCPServer, now time.Time) {
+	if bh == nil || server == nil || server.BarCache() == nil {
+		logger.Warnf("🧯 ring rehydrate SKIPPED: store=%v server=%v — the ring keeps whatever the AddOn seeded",
+			bh != nil, server != nil)
+		return
+	}
+	cache := server.BarCache()
+	pairs := cache.AllPairs()
+	if len(pairs) == 0 {
+		logger.Warnf("🧯 ring rehydrate SKIPPED: the cache holds 0 symbol×tf pairs — a COLD ring is never filled from the store (the store deepens a live tape, it never substitutes for one)")
+		return
+	}
+	totalAdded, deepened, failed := 0, 0, 0
+	for _, pair := range pairs {
+		symbol, tf := pair[0], pair[1]
+		before := cache.Count(symbol, tf)
+		rows, err := bh.LastNBars(symbol, tf, cache.MaxBars())
+		if err != nil {
+			failed++
+			logger.Warnf("🧯 ring rehydrate %s %s FAILED: %v — boot continues on the AddOn seed alone (%d bars)", symbol, tf, err, before)
+			continue
+		}
+		if len(rows) == 0 {
+			continue
+		}
+		bars := make([]ntwire.Bar, 0, len(rows))
+		for _, r := range rows {
+			bars = append(bars, ntwire.Bar{T: r.OpenTimeMs, O: r.O, H: r.H, L: r.L, C: r.C, V: r.V})
+		}
+		added := cache.RehydrateOlder(symbol, tf, bars)
+		if added == 0 {
+			continue
+		}
+		totalAdded += added
+		deepened++
+		after := cache.Get(symbol, tf)
+		h := kernel.HorizonOf(barsToKlines(after, tf), tf, cache.MaxBars(), now)
+		logger.Infof("🧯 ring rehydrated %s %s: %d → %d bars (+%d older from the store, cap %d) · %s",
+			symbol, tf, before, len(after), added, cache.MaxBars(), h.Line())
+	}
+	logger.Infof("🧯 ring rehydrate done: %d of %d symbol×tf pairs deepened, +%d bars total, %d read failure(s) · store retention 1m=%dd (the ring is the cache; the store is the horizon)",
+		deepened, len(pairs), totalAdded, failed, store.RetentionDaysFor("1m"))
+}
