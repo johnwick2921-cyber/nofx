@@ -1,6 +1,8 @@
 package ninjatrader
 
 import (
+	"time"
+
 	"nofx/kernel"
 	"nofx/logger"
 	"nofx/market"
@@ -16,19 +18,47 @@ import (
 // (e.g. "MNQ"); the kernel passes the same canonical symbol, so the lookup
 // is direct with no remapping.
 func wireFuturesBarsProvider(server *ntwire.TCPServer) {
+	// BARS HORIZON (2026-09-09) — the EMPTY arm is graced from here, because
+	// wiring the bridge IS the boot instant this leaf can know (A28).
+	armBarHorizonGrace(time.Now())
 	market.FuturesBarsProvider = func(symbol, timeframe string, count int) []market.Kline {
 		if server == nil {
 			return nil
 		}
-		bars := server.BarCache().Get(symbol, timeframe)
-		if len(bars) == 0 {
-			return nil
-		}
-		if count > 0 && len(bars) > count {
-			bars = bars[len(bars)-count:]
-		}
-		return barsToKlines(bars, timeframe)
+		// `now` is taken HERE, at the entry point, and handed down (A28).
+		return barsFromCache(server.BarCache(), symbol, timeframe, count, time.Now())
 	}
+}
+
+// barsFromCache is the production path, extracted from the closure above so a
+// pin drives IT rather than a copy of it (class 86).
+//
+// THE RETURN VALUE IS BYTE-IDENTICAL to the pre-wave closure: nil on an empty
+// cache, the tail when the ring holds MORE than asked, and whatever it has when
+// it holds LESS. Only the OBSERVATION is new — this wave adds no gate, refuses
+// nothing and degrades nothing (A10/A24).
+//
+// Before this, a short read was indistinguishable from a short market at every
+// one of the 57 consumer call sites. Now the bridge says which it was, once, at
+// the choke point, instead of 57 places each having to remember to ask.
+func barsFromCache(cache *ntwire.BarCache, symbol, timeframe string, count int, now time.Time) []market.Kline {
+	if cache == nil {
+		return nil
+	}
+	bars := cache.Get(symbol, timeframe)
+	if count > 0 && len(bars) > count {
+		bars = bars[len(bars)-count:]
+	}
+	out := []market.Kline(nil)
+	if len(bars) > 0 {
+		out = barsToKlines(bars, timeframe)
+	}
+	// AFTER the slice is final, so the horizon describes what was SERVED.
+	h := kernel.HorizonOf(out, timeframe, count, now)
+	if h.Short() || h.Holed() || h.Empty() {
+		barHorizonWarn(now, h, symbol, timeframe, resolveBarHorizonCaller(), cache.MaxBars())
+	}
+	return out
 }
 
 // barsToKlines adapts the NT8 wire Bar shape to market.Kline. NT8 bars carry
