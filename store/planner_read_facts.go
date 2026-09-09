@@ -58,21 +58,38 @@ type PlannerReadFact struct {
 	// a 3055-minute window with 696 open-market minutes missing inside it, and
 	// no field could express the difference.
 	//
-	// UNKNOWN vs ZERO: when ReadHorizons == "" the four numerics below were
-	// never computed and are UNKNOWN, NOT zero. Gate every query on
-	// HorizonRecorded() (in SQL: `where read_horizons != ''`) and state the
-	// excluded COUNT (corrected-column law, class 40). This reuses the "" vs
-	// "[]" convention VoidLevels already established above, rather than adding
-	// a boolean that can drift out of agreement with the text.
+	// UNKNOWN vs ZERO: when ReadHorizons is NULL or "" the four numerics below
+	// were never computed and are UNKNOWN, NOT zero. Gate every query on
+	// HorizonRecorded() (in SQL: `where read_horizons is not null and
+	// read_horizons != ''`) and state the excluded COUNT (corrected-column law,
+	// class 40) with `where read_horizons is null or read_horizons = ''`.
+	//
+	// THE NULL HALF MATTERS AND WAS WRONG UNTIL REVIEW (2026-09-09). AutoMigrate
+	// adds these columns with no DEFAULT, so the 68 rows that pre-date the wave
+	// (ids 1..68) hold NULL, not "". The INCLUSION test survives that — `NULL
+	// != ''` is NULL, so those rows are excluded, correctly — but the
+	// count-the-excluded test written as `where read_horizons = ''` returns 0,
+	// a plausible zero over 68 genuinely unresolved rows. That is the exact
+	// A24 failure this column exists to prevent, so both halves are spelled out
+	// above. This reuses the "" vs "[]" convention VoidLevels already
+	// established, rather than adding a boolean that can drift out of agreement
+	// with the text.
 	ScopeRequestedBars int
 	ScopeSpanMs        int64
 	ScopeOldestAgeMs   int64
 	ScopeGapCount      int
-	// ReadHorizons is the JSON array of one kernel.BarHorizon per tape this read
-	// consulted — the void tape (1m) AND the ATR tape (5m), which are different
-	// windows. Before this, a row's stop_floor_pts could not be explained from
-	// its own row: the floor came from the 5m fetch while scope_* described the
-	// 1m one. "" = not computed; "[]" = computed and empty.
+	// ReadHorizons is a JSON ARRAY of kernel.BarHorizon, one per tape this read
+	// consulted.
+	//
+	// AS SHIPPED IT CARRIES EXACTLY ONE ENTRY: the void tape (who="void", 1m).
+	// The ATR tape (5m) entry is NOT built yet — the array shape exists so it
+	// can be appended without a migration, and it is an OPEN ITEM, not a
+	// delivered one. The earlier wording said the 5m entry was there; it never
+	// was, and a query author reading the field doc would have been misled
+	// (corrected in review, 2026-09-09). Until that entry lands, a row's
+	// stop_floor_pts still cannot be explained from its own row: the floor comes
+	// from plannerATR5m's separate 5m×200 fetch while scope_* describes the 1m
+	// tape. "" or NULL = not computed; "[]" = computed and empty.
 	ReadHorizons string    `gorm:"type:text"`
 	CreatedAt    time.Time `gorm:"index"`
 }
@@ -80,6 +97,14 @@ type PlannerReadFact struct {
 // HorizonRecorded reports whether this row's horizon columns were computed.
 // FALSE means ScopeRequestedBars / ScopeSpanMs / ScopeOldestAgeMs /
 // ScopeGapCount are UNKNOWN — never that they are zero (A24).
+//
+// A29, STATED PLAINLY: THIS HELPER HAS ZERO PRODUCTION CALL SITES BY DESIGN.
+// Nothing in Go reads PlannerReadFact rows back today; the readers are the SQL
+// queries in the reports and the SYSTEM-MAP. It exists so a future Go reader
+// cannot re-derive the "" / NULL rule by hand and get it wrong, and so the rule
+// has ONE definition to cite. The wave's A29 sweep covers every new function
+// that is meant to be called; this one is named here instead of being counted
+// as covered (corrected in review, 2026-09-09).
 
 func (p *PlannerReadFact) HorizonRecorded() bool { return p != nil && p.ReadHorizons != "" }
 

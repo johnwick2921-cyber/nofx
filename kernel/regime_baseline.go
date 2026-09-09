@@ -41,6 +41,14 @@ func PriorCloseSessionOpen(daily []market.Kline) (priorClose, sessionOpen float6
 //
 // It is now a thin wrapper over RVBaselineFrom5mDays so the two can never
 // disagree about a value (D2, BARS HORIZON 2026-09-09).
+//
+// A29, STATED PLAINLY: THIS HAS ZERO PRODUCTION CALL SITES. Production reads
+// RVBaselineFrom5mDays through trader.ResolveRVBaselineTape. The wrapper is
+// KEPT — deliberately, not by oversight — as the parity anchor for pin D2-E,
+// which asserts the day-carrying function returns a byte-identical value to the
+// pre-wave one. Delete the wrapper and that parity claim loses the only thing
+// it can be checked against. Named here rather than counted as covered by the
+// wave A29 sweep (corrected in review, 2026-09-09).
 func RVBaselineFrom5m(min5 []market.Kline, maxDays, minDays int) (float64, bool) {
 	v, _, ok := RVBaselineFrom5mDays(min5, maxDays, minDays)
 	return v, ok

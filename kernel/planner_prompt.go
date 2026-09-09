@@ -389,32 +389,42 @@ func BuildPlannerCandleTablesAt(bars1m []market.Kline, asked1m int, now time.Tim
 	b.WriteString(candleTapeLine(HorizonOf(bars1m, "1m", asked1m, now)) + "\n")
 	b.WriteString(candleMarkerLegend + "\n\n")
 
-	// render takes the FULL aggregated slice and the coverage measured on it,
-	// then tail-trims BOTH together, so a marker can never land on the wrong
-	// row. The heading is computed from what survives the trim.
-	render := func(label string, bars []market.Kline, cov []RowCoverage, n int) {
-		if len(bars) > n {
-			bars = bars[len(bars)-n:]
-			cov = cov[len(cov)-n:]
+	// TAIL-TRIM FIRST, THEN MEASURE. The trim used to run after coverage was
+	// computed for every row of the full aggregate — ~1,170 calendar walks per
+	// planner read on the store-deepened 12,000-bar tape, ~99% of them for rows
+	// that were then discarded. Only the rows that will be PRINTED are measured
+	// (found in review, 2026-09-09). rows and every parallel slice are trimmed
+	// together, so a marker can never land on the wrong row.
+	tail := func(rows []market.Kline, n int) []market.Kline {
+		if len(rows) > n {
+			return rows[len(rows)-n:]
 		}
+		return rows
+	}
+	render := func(label, unit string, bars []market.Kline, cov []RowCoverage, absent []int, n int) {
 		notes := make([]string, len(cov))
 		for i, c := range cov {
 			notes[i] = c.Marker()
+			if i > 0 {
+				if a := absentRowNote(absent[i], unit, bars[i-1].OpenTime, bars[i].OpenTime); a != "" {
+					notes[i] = a + notes[i]
+				}
+			}
 		}
-		b.WriteString(tableHeading(label, len(bars), n, cov) + "\n")
+		b.WriteString(tableHeading(label, len(bars), n, cov, absent) + "\n")
 		FormatCandleTableNoted(&b, KlineBars(bars), true, notes)
 	}
 
 	agg := func(label string, bucketMs int64, n int) {
-		rows := AggregateBars(bars1m, bucketMs)
-		render(label, rows, aggregateCoverage(bars1m, rows, bucketMs, now), n)
+		rows := tail(AggregateBars(bars1m, bucketMs), n)
+		render(label, label, rows, aggregateCoverage(bars1m, rows, bucketMs, now), absentAggregateRows(rows, bucketMs), n)
 	}
 	agg("15m", 15*60*1000, 12)
 	agg("1h", 60*60*1000, 12)
 	agg("4h", 240*60*1000, 8)
 
-	daily := DailySessionBars(bars1m)
-	render("daily session candles", daily, sessionCoverage(bars1m, daily, now), 8)
+	daily := tail(DailySessionBars(bars1m), 8)
+	render("daily session candles", "session-day", daily, sessionCoverage(bars1m, daily, now), absentSessionRows(daily), 8)
 	return b.String()
 }
 

@@ -19,6 +19,7 @@ import (
 	"nofx/kernel"
 	"nofx/market"
 	"nofx/mcp"
+	nt "nofx/provider/ninjatrader"
 	"nofx/store"
 	"nofx/telemetry"
 )
@@ -2244,19 +2245,49 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 	// keeps the owner-prepended levels above the floor.
 	scored = kernel.FilterLevelsByMinGrade(scored, minGrade)
 
-	var daily, hour1, min5, min5Long []market.Kline
+	// D2 CHOICE (a) — READ THE STORE. WHY: this tape is aggregated into the
+	// "8 daily session candles" table, which needs ~11,040 open 1m intervals.
+	// The ring ceiling is 2,500 bars (41.7 h), so the 8-row table rendered 2 or
+	// 3 rows in 55 of 55 stored prompts and NEVER 8. The bars table holds MNQ 1m
+	// back 21 days (measured 2026-09-09: 20,788 rows from 2026-08-19), bounded
+	// by the 1m retention of 90 days. The ring still owns the live tail — the
+	// store only extends it backwards (barsWithStoreDepthFrom rule 3).
+	//
+	// IT IS READ HERE, ABOVE THE REGIME BLOCK, because the realized-vol
+	// baseline is now served from THIS tape (owner condition (b), below) as
+	// well as by the candle tables and the weekly thin-history count. One read,
+	// three consumers, so they can never disagree about the tape.
+	//
+	// THREE CONSUMERS, ALL NAMED (the second and third were undisclosed until
+	// review, 2026-09-09):
+	//   1. kernel.BuildPlannerCandleTablesAt — the candle tables (D1);
+	//   2. ResolveRVBaselineTape             — the realized-vol baseline;
+	//   3. kernel.CompletedWeekCount         — the WEEKLY line's "(thin history
+	//      %dw)" clause. MEASURED against the live store 2026-09-09: 2,500 1m
+	//      bars (43.6 h) → 0 completed weeks; 12,000 (309.0 h) → 2. The count
+	//      gets MORE accurate, but it does move, and it renders in the prompt.
+	bars1m := at.barsWithStoreDepth(symbol, "1m", plannerCandleTapeBars, now)
+
+	var daily, hour1, min5, ring5m []market.Kline
 	if market.FuturesBarsProvider != nil {
 		daily = market.FuturesBarsProvider(symbol, "1d", 300)
 		hour1 = market.FuturesBarsProvider(symbol, "1h", 300)
-		min5 = market.FuturesBarsProvider(symbol, "5m", 300)                     // recent (~1 day) → RV recent
-		min5Long = market.FuturesBarsProvider(symbol, "5m", rvBaseline5mBarsAsk) // multi-day → RV baseline
+		min5 = market.FuturesBarsProvider(symbol, "5m", 300)                           // recent (~1 day) → RV recent
+		ring5m = market.FuturesBarsProvider(symbol, "5m", rvBaselineFallback5mBarsAsk) // FALLBACK ONLY (see below)
 	}
 	// W10 — supply the realized-vol baseline (was never fed → RV stuck "warming").
 	// Same 5m estimator as the recent value; VIX stays honest n/a (no feed).
 	//
-	// D2 CHOICE (b) — CORRECT THE ASK AND STOP PROMISING 20 DAYS. The computed
-	// value is UNCHANGED; only the ask and the name move.
-	rvBaseline, rvBaselineDays, _ := kernel.RVBaselineFrom5mDays(min5Long, rvBaselineMaxDays, 5)
+	// OWNER CONDITION (b), 2026-09-09 — THE 5m ASK IS SERVED FROM THE
+	// REHYDRATED 1m TAIL. The estimator (kernel.RVBaselineFrom5mDays) is
+	// byte-for-byte the same RULE; only the INPUT is corrected, from a 5m ring
+	// that could reach ~7 complete session-days to the 1m tape's ~9. ring5m
+	// remains as the FALLBACK so a thin 1m tape can never turn the baseline
+	// OFF — see ResolveRVBaselineTape (trader/regime_input_window.go) for the
+	// measured numbers and the reason stored 5m rows are refused.
+	rvTape := ResolveRVBaselineTape(bars1m, ring5m, rvBaselineMaxDays)
+	rvBaseline, rvBaselineDays := rvTape.Baseline, rvTape.Days
+	at.logInfof("📈 regime input: %s (rule unchanged; owner ruling 2026-09-09)", rvTape.Line())
 	// W11b — supply overnight-gap inputs (prior close + session open, ×ATR) from the
 	// daily bars (was never fed → the gap field stayed inert).
 	priorClose, sessionOpen := kernel.PriorCloseSessionOpen(daily)
@@ -2357,14 +2388,8 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 	// 12×1h · 8×4h · 8×daily) built from the 1m slice via kernel.AggregateBars.
 	// Candles are ground truth for structure. Knob PLANNER_CANDLES (default on).
 	var candleTables string
-	// D2 CHOICE (a) — READ THE STORE. WHY: this tape is aggregated into the
-	// "8 daily session candles" table, which needs ~11,040 open 1m intervals.
-	// The ring ceiling is 2,500 bars (41.7 h), so the 8-row table rendered 2 or
-	// 3 rows in 54 of 54 stored prompts and NEVER 8. The bars table holds MNQ 1m
-	// back 21 days (measured 2026-09-09: 20,043 rows from 2026-08-19), bounded
-	// by the 1m retention of 90 days. The ring still owns the live tail — the
-	// store only extends it backwards (barsWithStoreDepthFrom rule 3).
-	bars1m := at.barsWithStoreDepth(symbol, "1m", plannerCandleTapeBars, now)
+	// bars1m is read ABOVE, beside the regime block — one store-deepened tape,
+	// three consumers (candle tables · RV baseline · CompletedWeekCount).
 	if kernel.PlannerCandlesEnabled() {
 		candleTables = kernel.BuildPlannerCandleTablesAt(bars1m, plannerCandleTapeBars, now)
 	}
@@ -2858,27 +2883,35 @@ func plannerATR5m(symbol string) float64 {
 // literal so the ask and the disclosure that reports it cannot drift.
 const plannerCandleTapeBars = 12000
 
-// rvBaseline5mBarsAsk is the 5m depth the realized-vol baseline asks for.
+// rvBaselineFallback5mBarsAsk is the 5m depth the realized-vol baseline asks
+// for WHEN THE 1m TAPE CANNOT ANSWER — it is no longer the primary input.
 //
-// D2 CHOICE (b) — CORRECT THE ASK, DO NOT READ THE STORE. The old ask was
-// 5m × 3000 = 250.0 h against a 208.3 h ring ceiling: unreachable BY
-// CONSTRUCTION, not by market conditions. 2500 is DefaultBarCacheMaxBars
-// (provider/ninjatrader/bar_cache.go:24), the deepest read the ring can serve.
+// RENAMED TO WHAT IT ACTUALLY RECEIVES (owner condition (b), 2026-09-09). It
+// was rvBaseline5mBarsAsk, the one and only source; the baseline now comes from
+// the store-deepened 1m tape aggregated to 5m (ResolveRVBaselineTape,
+// trader/regime_input_window.go) and falls back to this ring read only so a
+// thin 1m tape can never turn a working baseline OFF (A10 — degrade, never
+// gate).
 //
-// WHY NOT (a), the store, when the two 1m sites take it:
+// THE ASK ITSELF WAS ALSO CORRECTED (D2 choice (b)): it was 5m × 3000 = 250.0 h
+// against a 208.3 h ring ceiling — unreachable BY CONSTRUCTION, not by market
+// conditions. It is now READ from the ring's own ceiling rather than copied
+// from it, so the ask and the ceiling cannot drift (A11).
+//
+// WHY THE STORE'S 5m ROWS ARE STILL REFUSED, at this site and in the boot
+// rehydrate:
 //  1. the store's 5m does not reach 20 days either — measured 2026-09-09 it
-//     held 3,164 MNQ 5m rows back to 2026-08-24, about 16 days — so a store
+//     held 3,314 MNQ 5m rows back to 2026-08-24, about 16 days — so a store
 //     read would swap one unmet promise for another; and
 //  2. the stored 5m rows are NT8 aggregates that this repo has already judged
 //     inconsistent with their own 1m constituents (store/bar_history.go
 //     Migrate step 4 deleted every tf != "1m" row for exactly that reason, and
 //     the per-TF persistence added back on 2026-09-02 did not re-establish
-//     their agreement). Feeding them into a LIVE regime input is not a
-//     depth improvement; it is an unverified substitution.
-//
-// So the ask now names what the ring can serve, and the consumer carries the
-// day count it was ACTUALLY fed (RVBaselineDays) instead of a field named 20d.
-const rvBaseline5mBarsAsk = 2500
+//     their agreement). MEASURED: over the SAME nine complete session-days the
+//     stored 5m rows give 0.884746 and the 1m constituents give 0.893543.
+//     Feeding the aggregate into a LIVE regime input is not a depth
+//     improvement; it is an unverified substitution.
+const rvBaselineFallback5mBarsAsk = nt.DefaultBarCacheMaxBars
 
 // rvBaselineMaxDays is the averaging window cap handed to the estimator. It is
 // UNCHANGED at 20 — this wave does not alter what anything computes — but it is

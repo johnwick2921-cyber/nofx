@@ -68,6 +68,23 @@ func WireBarPersistence(st *store.Store) {
 							backfilled = backfillBars(bh, server)
 						}
 					}
+					// BARS HORIZON (2026-09-09) — the replay has landed, so the
+					// EMPTY arm may speak, and the depth line can report what
+					// the ring ACTUALLY holds rather than a cold cache.
+					noteBarHorizonBackfillLanded()
+					// D3 — REHYDRATE THE RING FROM THE STORE, alongside the
+					// AddOn's seed. `now` is taken HERE, at the boot entry
+					// point, and handed down (A28).
+					//
+					// ORDERING (fixed in review, 2026-09-09): this runs BEFORE
+					// the afterBackfillHook, because that hook prints the
+					// "📊 bars after backfill" line AND the BarResolver behind it
+					// picks nt8 vs nt8_agg vs own1m from what the cache can
+					// reach. Running the rehydrate afterwards left the
+					// best-known boot line describing a ring the bot no longer
+					// had — two lines about the same instant, and the older,
+					// more-read one wrong.
+					rehydrateRingFromStore(bh, server, time.Now())
 					// R1 (2026-09-02) — the boot 📊 bars line ran before this
 					// replay landed, so it reported own1m for every TF on a
 					// cold cache. Now that the pantry is in, say what the
@@ -77,14 +94,6 @@ func WireBarPersistence(st *store.Store) {
 							fn()
 						}
 					}
-					// BARS HORIZON (2026-09-09) — the replay has landed, so the
-					// EMPTY arm may speak, and the depth line can report what
-					// the ring ACTUALLY holds rather than a cold cache.
-					noteBarHorizonBackfillLanded()
-					// D3 — REHYDRATE THE RING FROM THE STORE, alongside the
-					// AddOn's seed. `now` is taken HERE, at the boot entry
-					// point, and handed down (A28).
-					rehydrateRingFromStore(bh, server, time.Now())
 					logger.Infof("%s", barHorizonBootLine(server.BarCache(), time.Now()))
 					go pruneLoop(bh)
 					return
@@ -192,6 +201,41 @@ func SetAfterBackfillHook(fn func()) { afterBackfillHook.Store(fn) }
 //   - it is bounded by the ring's own maxBars;
 //   - it is a NO-OP on a cold key, so a dead feed can never be made to look alive.
 //
+// 1m ONLY — OWNER CONDITION (a), RULING 2026-09-09 18:18 CT.
+//
+//	"RULING on D3: the regime input MAY change. Rehydrating the ring from the
+//	 store changes what RVBaseline is fed — and what it is fed today is 41
+//	 hours labelled as 20 days. A regime value computed on a shorter window
+//	 than its name is the defect; correcting the window is not a scope
+//	 violation, it is the fix. A31 forbids changing the RULE, not correcting
+//	 the INPUT the rule was promised."
+//
+// The first cut rehydrated EVERY (symbol, timeframe) pair the cache held. That
+// deepened the 5m ring from the AddOn's ~2000-bar seed to the 2500 cap, and
+// min5Long (auto_trader_planner.go) was the ONE production ring read above
+// 2000 — so it moved a REGIME input using NT8's own 5m aggregates. MEASURED on
+// the live store, MNQ, kernel.RVBaselineFrom5mDays(·, 20, 5):
+//
+//	stored 5m, newest 2000 rows → 0.876371 over 7 complete session-days
+//	stored 5m, newest 2500 rows → 0.884746 over 9 complete session-days
+//	1m tape 12000 → agg 5m 2400 → 0.893543 over 9 complete session-days
+//
+// The last two cover the SAME nine days and disagree by 0.9%: the stored 5m
+// rows do not agree with their own 1m constituents (store/bar_history.go's
+// migration once deleted every non-1m row for exactly that reason). So the
+// rehydrate takes the 1m rows ONLY — the feed's own closed bars, the tape every
+// other series is aggregated FROM — and the deeper regime window is served from
+// that 1m tail instead (owner condition (b): ResolveRVBaselineTape,
+// trader/regime_input_window.go). The non-1m rings keep exactly what the AddOn
+// seeded, exactly as before the wave.
+//
+// THIS WAVE DOES MOVE COMPUTED VALUES, AND THE REPORT NAMES THEM. Claiming
+// otherwise while the boot line shows a change is class 82. What moves:
+// RVBaseline / RVBaselineDays (7 → 9 complete session-days), and — through the
+// D2 1m store splice, not through this rehydrate — CompletedWeekCount (0 → 2)
+// and WeeklyShadowRefs (1 → 3). The RULE (kernel.RVBaselineFrom5mDays) is
+// byte-for-byte unchanged and pinned so by an E7 golden.
+//
 // A10: a failed store read WARNs and boot continues. Nothing here gates,
 // refuses, blocks or blanks.
 func rehydrateRingFromStore(bh *store.BarHistoryStore, server *ntwire.TCPServer, now time.Time) {
@@ -206,8 +250,10 @@ func rehydrateRingFromStore(bh *store.BarHistoryStore, server *ntwire.TCPServer,
 		logger.Warnf("🧯 ring rehydrate SKIPPED: the cache holds 0 symbol×tf pairs — a COLD ring is never filled from the store (the store deepens a live tape, it never substitutes for one)")
 		return
 	}
+	selected := pairsToRehydrate(pairs)
+	skipped := len(pairs) - len(selected)
 	totalAdded, deepened, failed := 0, 0, 0
-	for _, pair := range pairs {
+	for _, pair := range selected {
 		symbol, tf := pair[0], pair[1]
 		before := cache.Count(symbol, tf)
 		rows, err := bh.LastNBars(symbol, tf, cache.MaxBars())
@@ -234,6 +280,27 @@ func rehydrateRingFromStore(bh *store.BarHistoryStore, server *ntwire.TCPServer,
 		logger.Infof("🧯 ring rehydrated %s %s: %d → %d bars (+%d older from the store, cap %d) · %s",
 			symbol, tf, before, len(after), added, cache.MaxBars(), h.Line())
 	}
-	logger.Infof("🧯 ring rehydrate done: %d of %d symbol×tf pairs deepened, +%d bars total, %d read failure(s) · store retention 1m=%dd (the ring is the cache; the store is the horizon)",
-		deepened, len(pairs), totalAdded, failed, store.RetentionDaysFor("1m"))
+	logger.Infof("🧯 ring rehydrate done: %d of %d symbol×tf pairs deepened, +%d bars total, %d read failure(s), %d pair(s) SKIPPED as tf!=%s (stored non-1m rows are NT8 aggregates — never fed to a live regime input) · store retention %s=%dd (the ring is the cache; the store is the horizon)",
+		deepened, len(pairs), totalAdded, failed, skipped, rehydrateTimeframe, rehydrateTimeframe, store.RetentionDaysFor(rehydrateTimeframe))
+}
+
+// rehydrateTimeframe is the ONLY timeframe the boot rehydrate touches. See the
+// header above for why it is not every pair the cache holds.
+const rehydrateTimeframe = "1m"
+
+// pairsToRehydrate is THE selection (owner condition (a), 2026-09-09),
+// extracted so a pin drives IT rather than a copy of it (class 86): only the
+// 1m pairs are rehydrated, and the order the cache handed us is preserved so
+// the log line's counts are reproducible.
+//
+// A pin that only checked the constant still exists would pass a mutation that
+// disabled the filter, so the filter is a function with its own fixture.
+func pairsToRehydrate(pairs [][2]string) [][2]string {
+	out := make([][2]string, 0, len(pairs))
+	for _, p := range pairs {
+		if p[1] == rehydrateTimeframe {
+			out = append(out, p)
+		}
+	}
+	return out
 }

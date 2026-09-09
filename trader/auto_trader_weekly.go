@@ -349,8 +349,19 @@ func (at *AutoTrader) weeklyConfluenceShadowAt(now time.Time, tradeDate, session
 	// The ring ceiling is 2,500 1m bars = 41.7 h — under two days — so neither
 	// could ever have been satisfied from it. The store reaches 21 days today
 	// (~3 weeks) and up to the 90-day 1m retention, which is still short of 12
-	// weeks: ComputeWeeklyFacts already stamps that honestly via ThinHistory,
-	// and this wave does not change what it computes.
+	// weeks: ComputeWeeklyFacts already stamps that honestly via ThinHistory.
+	//
+	// IT DOES CHANGE WHAT THIS COMPUTES, AND HERE ARE THE NUMBERS (corrected in
+	// review, 2026-09-09 — the earlier comment claimed no change, which is
+	// class 82). MEASURED against the live store, MNQ 1m, now=2026-09-09:
+	//
+	//	2,500 bars (43.6 h)  → WeeklyShadowRefs=1 CompletedWeekCount=0 Weeks=0 NWOGs=0
+	//	12,000 bars (309.0 h) → WeeklyShadowRefs=3 CompletedWeekCount=2 Weeks=2 NWOGs=2
+	//
+	// ThinHistory stays TRUE in both (12 completed weeks is still out of reach).
+	// The direction is a more accurate count from a deeper tape, but it is a
+	// change: the 🌗 SHADOW counters and the WEEKLY line's "(thin history %dw)"
+	// clause both move at the first boot. Shadow only — no order path.
 	bars1m := at.barsWithStoreDepth(at.futuresSymbol(), "1m", weeklyFactsTapeBars, now)
 	bars5m := market.FuturesBarsProvider(at.futuresSymbol(), "5m", kernel.AISVPBarCount)
 	price := 0.0

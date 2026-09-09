@@ -1,6 +1,7 @@
 package ninjatrader
 
 import (
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -129,6 +130,9 @@ func TestBarHorizonHasProductionCallSites(t *testing.T) {
 		"telemetry.IncBarHorizon(":           "trader/ninjatrader/bar_horizon_warn.go",
 		"resetBarHorizonWarnsForSessionDay(": "trader/ninjatrader/bar_horizon_warn.go",
 		"cache.MaxBars()":                    "trader/ninjatrader/bars_market_bridge.go",
+		// Added in review 2026-09-09: the counter had FIVE arms and no reader.
+		"telemetry.BarHorizonCounts(": "trader/ninjatrader/bar_horizon_warn.go",
+		"barHorizonCountsTxt(":        "trader/ninjatrader/bar_horizon_warn.go",
 	} {
 		n, where := prodCallSites(t, fn)
 		if n == 0 {
@@ -214,5 +218,64 @@ func TestRingRehydrateIsWiredAtBoot(t *testing.T) {
 	}
 	if strings.Contains(string(b), "SeedHistorical(") {
 		t.Fatalf("bar_persist_wire.go calls SeedHistorical — the store must enter through RehydrateOlder, which refuses a cold key and never outranks a live bar")
+	}
+}
+
+// PIN D3-L — OWNER CONDITION (a), 2026-09-09. THE BOOT REHYDRATE TOUCHES 1m
+// AND NOTHING ELSE.
+//
+// THE DEFECT THIS CATCHES: the first cut rehydrated EVERY (symbol, timeframe)
+// pair the cache held, which deepened the 5m ring from the store and silently
+// moved a LIVE regime input using NT8 aggregates this repo has already judged
+// inconsistent with their own 1m constituents. The owner's ruling allowed the
+// regime input to change and required the depth to come from the 1m tape.
+func TestRehydrateSelectsOnly1mPairs(t *testing.T) {
+	in := [][2]string{
+		{"MNQ", "1m"}, {"MNQ", "5m"}, {"MNQ", "15m"}, {"MNQ", "1h"},
+		{"MNQ", "4h"}, {"MNQ", "1d"}, {"MNQ", "1w"}, {"ES", "1m"}, {"ES", "5m"},
+	}
+	got := pairsToRehydrate(in)
+	if len(got) != 2 {
+		t.Fatalf("selected %d pairs from %d, want exactly the 2 that are 1m: %v", len(got), len(in), got)
+	}
+	for _, p := range got {
+		if p[1] != rehydrateTimeframe {
+			t.Fatalf("a non-%s pair was selected for rehydration: %v — stored non-1m rows are NT8 aggregates and must never reach a live regime input", rehydrateTimeframe, p)
+		}
+	}
+	if got[0] != ([2]string{"MNQ", "1m"}) || got[1] != ([2]string{"ES", "1m"}) {
+		t.Fatalf("the cache's order was not preserved: %v", got)
+	}
+	// An all-non-1m cache selects nothing, and says nothing was selected —
+	// never a silent full pass (A24).
+	if n := len(pairsToRehydrate([][2]string{{"MNQ", "5m"}, {"MNQ", "1d"}})); n != 0 {
+		t.Fatalf("a cache with no 1m pair selected %d pair(s)", n)
+	}
+	// A29 — the production loop consults it.
+	if n, where := prodCallSites(t, "pairsToRehydrate("); n == 0 {
+		t.Fatalf("pairsToRehydrate has 0 production call sites (A29) — the filter can be bypassed with the suite green (%v)", where)
+	}
+}
+
+// PIN 5d — THE COUNTER IS READABLE ON THE RUNNING BOT.
+//
+// THE DEFECT THIS CATCHES: telemetry.BarHorizonCounts had zero production
+// readers. Five arms were counted on every detection and nothing on the running
+// bot could ever print them — a counter that records into a void, which is the
+// opposite of "counters record, never infer" (class 35). There is no API
+// surface in this wave's footprint, so the totals ride the one line that
+// already survives the dedupe.
+func TestBarHorizonWarnLineCarriesTheCounters(t *testing.T) {
+	txt := barHorizonCountsTxt()
+	for _, arm := range []string{"short=", "holed=", "empty=", "graced=", "suppressed="} {
+		if !strings.Contains(txt, arm) {
+			t.Fatalf("arm %q is counted but never printed: %q", arm, txt)
+		}
+	}
+	before := telemetry.BarHorizonCounts()["short"]
+	telemetry.IncBarHorizon("short")
+	after := barHorizonCountsTxt()
+	if !strings.Contains(after, fmt.Sprintf("short=%d", before+1)) {
+		t.Fatalf("the rendered totals do not READ telemetry (A11): before=%d line=%q", before, after)
 	}
 }

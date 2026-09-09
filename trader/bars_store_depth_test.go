@@ -121,6 +121,17 @@ func TestStoreReadFailureFallsBackToTheRing(t *testing.T) {
 
 // PIN D2-E — THE RV BASELINE STOPS PROMISING 20 DAYS IT WAS NEVER FED.
 //
+// WHAT THIS PIN IS, AND WHAT IT IS NOT (relabeled in review, 2026-09-09). It is
+// the ESTIMATOR PARITY anchor: it proves RVBaselineFrom5mDays returns the same
+// VALUE as the pre-wave RVBaselineFrom5m for the same slice, and that the day
+// count it reports is the count it was FED and not the count it was ASKED.
+// It builds BOTH sides' inputs itself, so BY CONSTRUCTION it cannot see the
+// production INPUT move — that is the class-53 trap, and it is not a defect
+// here as long as nobody cites this pin as evidence that the rendered value is
+// unchanged. It was cited that way, and the claim was false. The CALL-SITE
+// golden is TestRegimeLabelUnchangedWhenTheWindowDoesNotChange
+// (trader/regime_input_window_test.go), owner condition (d).
+//
 // RVBaselineFrom5m(min5Long, 20, 5) filled the struct field RVBaseline20d from
 // about 7 complete session-days. The value is honest internally (incomplete
 // days are dropped, and it returns ok=false below minDays) but nothing carried
@@ -175,8 +186,8 @@ func TestD2WiredAtTheThreeCallSites(t *testing.T) {
 		"barsWithStoreDepth(":         "trader/auto_trader_planner.go",
 		"barsWithStoreDepthFrom(":     "trader/bars_store_depth.go",
 		"LastNBars(":                  "trader/bars_store_depth.go",
-		"RVBaselineFrom5mDays(":       "trader/auto_trader_planner.go",
-		"rvBaseline5mBarsAsk":         "trader/auto_trader_planner.go",
+		"RVBaselineFrom5mDays(":       "trader/regime_input_window.go",
+		"rvBaselineFallback5mBarsAsk": "trader/auto_trader_planner.go",
 		"at.barsWithStoreDepth(at.fu": "trader/auto_trader_weekly.go",
 	} {
 		n, where := d2ProdCallSites(t, fn)
@@ -194,6 +205,38 @@ func TestD2WiredAtTheThreeCallSites(t *testing.T) {
 		if n > 0 {
 			t.Errorf("an ask above the ring ceiling survives: %s in %v", gone, where)
 		}
+	}
+}
+
+// PIN D2-G — THE SPLICE NEVER SERVES MORE THAN IT WAS ASKED FOR.
+//
+// THE DEFECT THIS CATCHES (found by a reviewer's mutation, 2026-09-09): the
+// tail cap at the end of barsWithStoreDepthFrom could be deleted and the whole
+// trader package stayed green, because D2-A's fixture picks an n large enough
+// that the cap never engages. Without it `older` (bounded by n) plus the ring
+// can reach 2n, and the TAPE line one layer up would then read "14000 1m bars
+// HELD of 12000 requested" — a disclosure that contradicts itself, which is the
+// exact class this wave exists to remove.
+func TestStoreDepthNeverServesMoreThanAsked(t *testing.T) {
+	now := time.Date(2026, 9, 9, 13, 18, 0, 0, kernel.CTLocation())
+	ringStart := now.Add(-100 * time.Minute)
+	ring := d2Bars(ringStart, 100, time.Minute)                         // 100 live bars
+	stored := d2Bars(ringStart.Add(-300*time.Minute), 300, time.Minute) // 300 older bars
+	const n = 250                                                       // < 300 + 100
+
+	out := barsWithStoreDepthFrom(ring, func(int) ([]market.Kline, error) { return stored, nil },
+		"MNQ", "1m", n, now)
+
+	if len(out) != n {
+		t.Fatalf("served %d bars for an ask of %d — the splice over-serves", len(out), n)
+	}
+	// And what survives must be the NEWEST n, live tail included.
+	if out[len(out)-1].OpenTime != ring[len(ring)-1].OpenTime {
+		t.Fatalf("the live tail was trimmed: newest served %d, newest ring %d", out[len(out)-1].OpenTime, ring[len(ring)-1].OpenTime)
+	}
+	wantOldest := ring[len(ring)-1].OpenTime - int64(n-1)*60_000
+	if out[0].OpenTime != wantOldest {
+		t.Fatalf("the trim kept the wrong end: oldest served %d, want %d (the newest %d bars)", out[0].OpenTime, wantOldest, n)
 	}
 }
 

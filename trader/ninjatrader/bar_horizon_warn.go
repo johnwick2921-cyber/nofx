@@ -163,19 +163,51 @@ func barHorizonWarn(now time.Time, h kernel.BarHorizon, symbol, tf, caller strin
 	// WARN, never INFO: INFO is journald-suppressed here and never reaches
 	// log_events, so an INFO line lives only inside a log file that rotates on
 	// process start. WARN ships through logger.AttachDBSink and is queryable.
-	logger.Warnf("🕳 bar horizon %s: %s %s · ring=%d caller=%s%s", why, symbol, h.Line(), ringCap, caller, extra)
+	//
+	// THE COUNTERS RIDE THE LINE (added in review, 2026-09-09). A29: before
+	// this, telemetry.BarHorizonCounts had ZERO production readers — five arms
+	// counted on the running bot that nobody could ever read, which is a
+	// counter that records into a void. There is no API surface in this wave's
+	// footprint, so the totals ship on the one line that already survives the
+	// dedupe. They are READ from telemetry, never recomputed here (A11), and
+	// they are process-lifetime totals, not a rate — no denominator is implied.
+	logger.Warnf("🕳 bar horizon %s: %s %s · ring=%d caller=%s%s · totals(since boot) %s",
+		why, symbol, h.Line(), ringCap, caller, extra, barHorizonCountsTxt())
+}
+
+// barHorizonCountsTxt renders telemetry.BarHorizonCounts in a stable arm order
+// so two log lines can be diffed. Every value is READ; none is inferred.
+func barHorizonCountsTxt() string {
+	c := telemetry.BarHorizonCounts()
+	parts := make([]string, 0, len(c))
+	for _, k := range []string{"short", "holed", "empty", "graced", "suppressed"} {
+		parts = append(parts, fmt.Sprintf("%s=%d", k, c[k]))
+	}
+	return strings.Join(parts, " ")
 }
 
 // resolveBarHorizonCaller names the frame that asked for the bars.
 //
-// HONEST LIMITATION, stated rather than papered over: six sites call the
-// provider on BEHALF of someone else — trader/desk_facts.go's deskBars and the
+// HONEST LIMITATION, stated rather than papered over: SEVEN sites call the
+// provider on BEHALF of someone else — trader/bars_store_depth.go's
+// barsWithStoreDepth (added by D2, and now the caller named on the two 1m sites
+// and the RV baseline's fallback read), trader/desk_facts.go's deskBars, and the
 // closure indirections in auto_trader_planner.go, auto_trader_wake_levels.go,
 // auto_trader_weekly.go and kernel/engine_analysis.go. For those the name is the
 // WRAPPER, not the ultimate consumer. It is NOT mitigated by walking N frames to
 // guess: a heuristic that confidently names the wrong function is worse than an
 // honest wrapper name, and the wrapper name is unique and greppable. The only
 // frames skipped are this wave's OWN shims.
+//
+// PAIR THE TWO LINES WHEN YOU READ A D2 SITE (added in review, 2026-09-09).
+// barsWithStoreDepth asks the ring for 12,000 1m bars, which the 2,500-bar ring
+// can never serve, so this 🕳 SHORT line fires on EVERY planner read and every
+// weekly shadow — and is then satisfied one layer up by the store splice, which
+// prints its own "📚 bars depth: … ring <horizon> → store-deepened <horizon>"
+// line with the post-splice horizon. The SHORT line describes the RING; the 📚
+// line describes what the CALLER actually received. Neither is suppressed:
+// suppressing the ring's line would hide a genuinely dead feed on the day the
+// store also fails.
 func resolveBarHorizonCaller() string {
 	var pcs [16]uintptr
 	n := runtime.Callers(2, pcs[:])

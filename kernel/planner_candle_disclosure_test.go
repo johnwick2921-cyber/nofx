@@ -2,6 +2,7 @@ package kernel
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -18,7 +19,8 @@ import (
 // stood over 3 rows. MEASURED on the stored prompts (planner_rejected_prompts,
 // n=54 carrying a Candles block, ids 70..142): 15m rendered 12 in 54/54, 1h 12
 // in 54/54, 4h 8 in 54/54 — and the daily table rendered 2 rows in 19 and 3
-// rows in 35. NEVER 8, in 0 of 54.
+// rows in 35. NEVER 8, in 0 of 54 (re-measured 18:3x CT: n=55, ids 70..143,
+// daily 2 rows in 20 and 3 in 35 — NEVER 8, in 0 of 55).
 //
 // Worse, the OLDEST daily row is a PARTIAL session candle presented as a whole
 // one: DailySessionBars takes the first bar it sees as the session Open with no
@@ -181,7 +183,7 @@ func TestCompleteSessionRowCarriesNoMarker(t *testing.T) {
 	if r := d1Rows(sec); strings.Contains(r, "PARTIAL") || strings.Contains(r, "FORMING") || strings.Contains(r, "UNKNOWN") {
 		t.Errorf("a complete closed session ROW was marked:\n%s", r)
 	}
-	if !strings.Contains(sec, "all held rows COMPLETE") {
+	if !strings.Contains(sec, "every row PRINTED here is COMPLETE") {
 		t.Errorf("a complete table does not SAY it is complete:\n%s", sec)
 	}
 }
@@ -214,7 +216,7 @@ func TestUncoveredCalendarYearRendersUnknownNotZero(t *testing.T) {
 // PIN D1-F — THE HEADING AND THE ROWS MUST AGREE.
 //
 // Found by MUTATION, not by design: forcing RowCoverage.Marked() to false left
-// every pin above green while the daily heading said "all held rows COMPLETE"
+// every pin above green while the daily heading said "every row PRINTED here is COMPLETE"
 // over a row that carried "⚠PARTIAL". A heading that contradicts its own rows
 // is the exact defect this wave exists to remove, one layer up.
 func TestHeadingCompletenessAgreesWithTheRows(t *testing.T) {
@@ -231,9 +233,9 @@ func TestHeadingCompletenessAgreesWithTheRows(t *testing.T) {
 				markedRows++
 			}
 		}
-		claimsComplete := strings.Contains(head, "all held rows COMPLETE")
+		claimsComplete := strings.Contains(head, "every row PRINTED here is COMPLETE")
 		if claimsComplete && markedRows > 0 {
-			t.Errorf("%s heading claims \"all held rows COMPLETE\" over %d MARKED row(s):\n%s\n%s", h, markedRows, head, rows)
+			t.Errorf("%s heading claims \"every row PRINTED here is COMPLETE\" over %d MARKED row(s):\n%s\n%s", h, markedRows, head, rows)
 		}
 		if !claimsComplete && markedRows == 0 {
 			t.Errorf("%s heading withholds the COMPLETE claim although no row is marked:\n%s\n%s", h, head, rows)
@@ -300,4 +302,197 @@ func TestTapeAgeIsMinuteResolution(t *testing.T) {
 	if !strings.Contains(first, "m ago") && !strings.Contains(first, "h") {
 		t.Errorf("tape age does not render as a duration: %q", first)
 	}
+}
+
+// ── REVIEW PINS, 2026-09-09 (added after three reviewers; each one names the
+// defect it would have caught) ──────────────────────────────────────────────
+
+// PIN D1-I — A HEALTHY TAPE CARRIES NO ⚠PARTIAL, AND THE ANSWER DOES NOT
+// DEPEND ON WHETHER THE FORMING BAR HAS BEEN DELIVERED YET.
+//
+// THE DEFECT THIS CATCHES: observableEndMs rounded UP to the end of the minute
+// `now` falls in, counting the minute still IN PROGRESS as an interval the tape
+// ought to hold. Bars are delivered on close, so on a PERFECTLY GAPLESS tape
+// the newest row of all four tables rendered "⏳FORMING ⚠PARTIAL — holds only
+// 1309 of the 1310" while the TAPE line six lines above it said "gaps 0" — a
+// self-contradiction, in 100% of live reads, under a prompt that tells the
+// model to trust the candles. A marker on every read is a marker on nothing.
+func TestHealthyTapeIsNotMarkedPartial(t *testing.T) {
+	from := time.Date(2026, 9, 8, 17, 0, 0, 0, CTLocation())
+	// Newest DELIVERED bar opens 14:48 and closed at 14:49; 14:49 is forming.
+	bars := d1Tape(from, time.Date(2026, 9, 9, 14, 49, 0, 0, CTLocation()))
+	now := time.Date(2026, 9, 9, 14, 49, 30, 0, CTLocation())
+	table := BuildPlannerCandleTablesAt(bars, 12000, now)
+	if !strings.Contains(table, "gaps 0 open 1m intervals") {
+		t.Fatalf("fixture is not gapless — the pin would prove nothing:\n%s", d1Section(t, table, "TAPE:"))
+	}
+	for _, h := range []string{"### 15m", "### 1h", "### 4h", "### daily session candles"} {
+		sec := d1Section(t, table, h)
+		rows := strings.Split(d1Rows(sec), "\n")
+		newest := rows[len(rows)-1]
+		if strings.Contains(newest, "⚠PARTIAL") {
+			t.Errorf("%s: the NEWEST row of a GAPLESS tape is marked ⚠PARTIAL while the tape line says gaps 0:\n%s", h, sec)
+		}
+		if !strings.Contains(newest, "⏳FORMING") {
+			t.Errorf("%s: the newest row of an open window must still say FORMING:\n%s", h, sec)
+		}
+		// Nothing INTERIOR may be partial either. Only the OLDEST row may be,
+		// and only because the tape BEGINS inside its window (front truncation
+		// by where the tape starts, which is a true statement about the tape).
+		for i := 1; i < len(rows); i++ {
+			if strings.Contains(rows[i], "⚠PARTIAL") {
+				t.Errorf("%s: an interior row of a GAPLESS tape is marked ⚠PARTIAL:\n%s", h, rows[i])
+			}
+		}
+	}
+	// And the SAME clock with the forming bar already delivered must agree.
+	bars2 := d1Tape(from, time.Date(2026, 9, 9, 14, 50, 0, 0, CTLocation()))
+	t2 := BuildPlannerCandleTablesAt(bars2, 12000, now)
+	for _, h := range []string{"### 15m", "### 1h", "### 4h", "### daily session candles"} {
+		a := strings.SplitN(d1Section(t, table, h), "\n", 2)[0]
+		b := strings.SplitN(d1Section(t, t2, h), "\n", 2)[0]
+		if a != b {
+			t.Errorf("%s heading depends on whether the FORMING bar has landed yet:\n  not delivered: %s\n  delivered:     %s", h, a, b)
+		}
+	}
+}
+
+// PIN D1-J — WHOLE ROWS THAT ARE NOT THERE ARE COUNTED AND NAMED.
+//
+// THE DEFECT THIS CATCHES: RowCoverage measures INSIDE a rendered row and the
+// heading counts ROWS, so a bucket holding no bars produced no row and was
+// invisible to both. A tape with a market-open hole rendered
+// "### 15m — HELD 12 of 12 requested rows · all held rows COMPLETE" with FOUR
+// whole 15m windows missing between two adjacent-LOOKING rows. That is this
+// wave's own thesis — a COUNT cannot express a SPAN or a HOLE — one layer down,
+// inside the fix.
+func TestWholeAbsentRowsAreNamedNotSilentlySkipped(t *testing.T) {
+	a := d1Tape(time.Date(2026, 9, 8, 18, 0, 0, 0, CTLocation()), time.Date(2026, 9, 8, 19, 0, 0, 0, CTLocation()))
+	b := d1Tape(time.Date(2026, 9, 8, 20, 0, 0, 0, CTLocation()), time.Date(2026, 9, 8, 22, 0, 0, 0, CTLocation()))
+	now := time.Date(2026, 9, 8, 22, 0, 0, 0, CTLocation())
+	sec := d1Section(t, BuildPlannerCandleTablesAt(append(a, b...), 12000, now), "### 15m")
+	head := strings.SplitN(sec, "\n", 2)[0]
+	if !strings.Contains(head, "4 WHOLE ROWS ABSENT BETWEEN HELD ROWS") {
+		t.Fatalf("the heading does not count the rows that are NOT there (4×15m, market open):\n%s", head)
+	}
+	if strings.Contains(head, "every row PRINTED here is COMPLETE") && !strings.Contains(head, "ABSENT BETWEEN HELD ROWS") {
+		t.Fatalf("a table straddling a hole must not read as complete:\n%s", head)
+	}
+	rows := d1Rows(sec)
+	if !strings.Contains(rows, "⛔4×15m ABSENT BEFORE THIS ROW") {
+		t.Fatalf("the row FOLLOWING the hole carries no ⛔ marker:\n%s", rows)
+	}
+	if !strings.Contains(rows, "no bars between 18:45 CT and 20:00 CT") {
+		t.Fatalf("the ⛔ marker must name the CT bounds of the break:\n%s", rows)
+	}
+	// A24: nothing was invented to fill it.
+	for _, ln := range strings.Split(rows, "\n") {
+		if strings.HasPrefix(ln, "09-08 19:") {
+			t.Fatalf("a bar inside the hole was SYNTHESISED: %s", ln)
+		}
+	}
+}
+
+// PIN D1-K — A CLOSED INSTANT IS NEVER NAMED AS "THE WINDOW OPEN".
+//
+// THE DEFECT THIS CATCHES: WindowOpenMs was the raw epoch-floor bucket start.
+// The Sunday 4h bucket floors to 15:00 CT, two hours before CME reopens, so a
+// front-truncated row printed "its Open is the first bar HELD (17:30 CT), not
+// the window open (15:00 CT)" — counts right, reason false. Same class as the
+// interior-hole false reason this file already fixed, one bucket over.
+func TestWindowOpenIsAnOpenInstant(t *testing.T) {
+	sundayFloor := time.Date(2026, 9, 6, 15, 0, 0, 0, CTLocation())
+	if IsCMEOpen(sundayFloor) {
+		t.Skipf("%s is open — pick a bucket floor that lands in the halt", sundayFloor)
+	}
+	got := firstOpenGridMs(sundayFloor.UnixMilli(), sundayFloor.Add(4*time.Hour).UnixMilli())
+	if !IsCMEOpen(time.UnixMilli(got)) {
+		t.Fatalf("firstOpenGridMs returned %s CT, which is CLOSED", ClockHHMMCT(time.UnixMilli(got)))
+	}
+	if want := time.Date(2026, 9, 6, 17, 0, 0, 0, CTLocation()); got != want.UnixMilli() {
+		t.Fatalf("firstOpenGridMs = %s CT, want %s CT (the reopen)", ClockHHMMCT(time.UnixMilli(got)), ClockHHMMCT(want))
+	}
+	// And a bucket that is open at its floor is unchanged.
+	openFloor := time.Date(2026, 9, 8, 11, 0, 0, 0, CTLocation())
+	if !IsCMEOpen(openFloor) {
+		t.Skip("fixture floor is closed")
+	}
+	if got := firstOpenGridMs(openFloor.UnixMilli(), openFloor.Add(4*time.Hour).UnixMilli()); got != openFloor.UnixMilli() {
+		t.Fatalf("an OPEN bucket floor was moved to %s CT", ClockHHMMCT(time.UnixMilli(got)))
+	}
+}
+
+// PIN D1-L — THE TAPE LINE'S TWO NUMBERS ARE PINNED BY VALUE, NOT BY SHAPE.
+//
+// THE DEFECT THIS CATCHES: D1-C asserted only the substrings "TAPE:",
+// "1m bars HELD of 12000 requested" and "gaps". A reviewer hardcoded the gap
+// count to "0" and then replaced the SERVED count with the REQUESTED count —
+// the exact defect this wave exists to remove, moved one layer up — and the
+// whole package stayed green. The headline sentence had no pin behind it.
+func TestTapeLineNumbersArePinnedByValue(t *testing.T) {
+	// A tape with a KNOWN hole: 09-08 18:00→19:00 and 20:00→22:00 CT, market
+	// open throughout, so exactly 60 open 1m intervals are missing inside it.
+	a := d1Tape(time.Date(2026, 9, 8, 18, 0, 0, 0, CTLocation()), time.Date(2026, 9, 8, 19, 0, 0, 0, CTLocation()))
+	b := d1Tape(time.Date(2026, 9, 8, 20, 0, 0, 0, CTLocation()), time.Date(2026, 9, 8, 22, 0, 0, 0, CTLocation()))
+	bars := append(a, b...)
+	if len(bars) != 180 {
+		t.Fatalf("fixture holds %d bars, want 180", len(bars))
+	}
+	line := strings.SplitN(BuildPlannerCandleTablesAt(bars, 12000, time.Date(2026, 9, 8, 22, 0, 0, 0, CTLocation())), "\n", 2)[0]
+	if !strings.Contains(line, "TAPE: 180 1m bars HELD of 12000 requested") {
+		t.Fatalf("the TAPE line must state the SERVED count, by value:\n%s", line)
+	}
+	if !strings.Contains(line, "gaps 60 open 1m intervals missing INSIDE that span") {
+		t.Fatalf("the TAPE line must state the COMPUTED gap count, by value:\n%s", line)
+	}
+	// A contiguous twin: the 0 must be a real computed 0, and it must render.
+	cont := d1Tape(time.Date(2026, 9, 8, 18, 0, 0, 0, CTLocation()), time.Date(2026, 9, 8, 21, 0, 0, 0, CTLocation()))
+	line2 := strings.SplitN(BuildPlannerCandleTablesAt(cont, 12000, time.Date(2026, 9, 8, 21, 0, 0, 0, CTLocation())), "\n", 2)[0]
+	if !strings.Contains(line2, "TAPE: 180 1m bars HELD of 12000 requested") || !strings.Contains(line2, "gaps 0 open 1m intervals") {
+		t.Fatalf("a contiguous tape must report served=180 gaps=0:\n%s", line2)
+	}
+}
+
+// PIN D1-M — AN UNMEASURABLE BREAK IS UNKNOWN, NEVER ZERO (A24).
+func TestAbsentRowCountIsUnknownWhenTheScanCaps(t *testing.T) {
+	old := absentRowScanCap
+	absentRowScanCap = 2
+	defer func() { absentRowScanCap = old }()
+	a := d1Tape(time.Date(2026, 9, 8, 18, 0, 0, 0, CTLocation()), time.Date(2026, 9, 8, 19, 0, 0, 0, CTLocation()))
+	b := d1Tape(time.Date(2026, 9, 8, 20, 0, 0, 0, CTLocation()), time.Date(2026, 9, 8, 22, 0, 0, 0, CTLocation()))
+	sec := d1Section(t, BuildPlannerCandleTablesAt(append(a, b...), 12000, time.Date(2026, 9, 8, 22, 0, 0, 0, CTLocation())), "### 15m")
+	if !strings.Contains(sec, "absent-row count UNKNOWN, never read as zero") {
+		t.Fatalf("a capped between-row walk must report UNKNOWN in the heading:\n%s", strings.SplitN(sec, "\n", 2)[0])
+	}
+	if !strings.Contains(d1Rows(sec), "⛔ABSENT-BEFORE UNKNOWN") {
+		t.Fatalf("a capped between-row walk must report UNKNOWN on the row:\n%s", d1Rows(sec))
+	}
+	if strings.Contains(sec, "0 WHOLE ROWS ABSENT") {
+		t.Fatalf("an uncomputed count was rendered as 0:\n%s", sec)
+	}
+}
+
+// PIN D1-N — A29. The flagship renderer HAS a production call site.
+//
+// THE DEFECT THIS CATCHES: a reviewer replaced the whole call with
+// `candleTables = ""` — deleting the entire D1 disclosure from every planner
+// prompt — and the module stayed green. Four A29 source-scans shipped in this
+// wave and none of them named this function.
+func TestPlannerCandleTablesAreWiredIntoThePrompt(t *testing.T) {
+	const src = "../trader/auto_trader_planner.go"
+	b, err := os.ReadFile(src)
+	if err != nil {
+		// NOT a skip: a pin that cannot fail is not a pin (A8).
+		t.Fatalf("cannot read %s to prove the call site exists: %v", src, err)
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		t := strings.TrimSpace(line)
+		if strings.HasPrefix(t, "//") {
+			continue
+		}
+		if strings.Contains(t, "kernel.BuildPlannerCandleTablesAt(") {
+			return
+		}
+	}
+	t.Fatalf("kernel.BuildPlannerCandleTablesAt has 0 production call sites in %s (A29) — the whole D1 disclosure can be deleted from every planner prompt with the suite green", src)
 }

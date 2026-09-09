@@ -33,6 +33,28 @@ import (
 //
 // A10: this never gates, refuses, blocks or blanks. Every failure path returns
 // what the ring returned, which is exactly the pre-wave value.
+//
+// ── KNOWN LIMITATION: THE STORE IS CONTRACT-BLIND (raised in review,
+// 2026-09-09; NOT fixed here, because the wire and the AddOn are out of this
+// wave's footprint). ──────────────────────────────────────────────────────────
+//
+// `.schema bars` (read 2026-09-09): PRIMARY KEY (symbol, tf, open_time_ms) —
+// there is no contract/expiry column, and CLAUDE.md keeps the "MNQ 06-26" form
+// inside the C# GetInstrument call only. So a stored MNQ 1m bar does not say
+// WHICH contract it came from.
+//
+// WHAT THAT MEANS AFTER A QUARTERLY ROLL: the ring is the new contract while
+// the store's older rows are the old one, and rule 3 admits those rows PRECISELY
+// BECAUSE they are older. The quarterly basis on MNQ is tens of points, so the
+// seam renders as a real price step in the 8-session daily table for as long as
+// the pre-roll rows remain the deepest history — with no marker, because a
+// contract change is not a missing bar and D1 measures presence, not identity.
+//
+// THE HAZARD PRE-EXISTS THIS WAVE (SeedHistorical merges, so a roll's old bars
+// linger in the ring too) but its reach was 41.7 h; D2 extends it to the 1m
+// retention window (90 days; 21 days held today). The next MNQ roll is the
+// September→December contract. A later wave should persist the resolved contract
+// per bar and MARK — never drop — a splice across a contract boundary.
 
 // barsWithStoreDepth serves a bar request the ring alone cannot fill, by
 // EXTENDING it backwards from the store. `now` comes from the caller (A28).
