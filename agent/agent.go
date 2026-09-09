@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"nofx/branding"
 	"nofx/kernel"
 	"os"
 	"sort"
@@ -373,7 +374,7 @@ func resolveModelRuntimeConfig(provider, customAPIURL, customModelName, fallback
 }
 
 func (a *Agent) Start() {
-	a.logger.Info("starting NOFXi agent...")
+	a.logger.Info("starting " + branding.PersonaName() + " agent...")
 	a.EnsureAIClient()
 
 	if a.config.EnableSentinel {
@@ -390,7 +391,7 @@ func (a *Agent) Start() {
 	a.scheduler = NewScheduler(a, a.logger)
 	a.scheduler.Start(context.Background())
 
-	a.logger.Info("NOFXi agent is online 🚀")
+	a.logger.Info(branding.PersonaName() + " agent is online 🚀")
 }
 
 func (a *Agent) Stop() {
@@ -556,7 +557,7 @@ func (a *Agent) buildSystemPromptForStoreUser(lang, storeUserID string) string {
 	skillCatalog := skillCatalogPrompt(lang)
 
 	if lang == "zh" {
-		return fmt.Sprintf(`你是 NOFXi，一个专业的 AI 交易 Agent。你不是一个简单的聊天机器人——你是用户的交易伙伴。
+		return fmt.Sprintf(`你是 `+branding.PersonaName()+`，一个专业的 AI 交易 Agent。你不是一个简单的聊天机器人——你是用户的交易伙伴。
 
 ## 你的核心能力
 1. **市场分析** — 加密货币（BTC/ETH/SOL等）有实时数据，A股/港股/美股/外汇你可以基于知识分析
@@ -644,7 +645,7 @@ func (a *Agent) buildSystemPromptForStoreUser(lang, storeUserID string) string {
 当前时间: %s`, traderInfo, watchlist, skillCatalog, kernel.FormatCT(time.Now()))
 	}
 
-	return fmt.Sprintf(`You are NOFXi, a professional AI trading agent. Not a chatbot — a trading partner.
+	return fmt.Sprintf(`You are `+branding.PersonaName()+`, a professional AI trading agent. Not a chatbot — a trading partner.
 
 ## Capabilities
 1. Market analysis — crypto with real-time data, stocks/forex with knowledge
@@ -920,9 +921,9 @@ func (a *Agent) noAIFallback(storeUserID, lang, text string) (string, error) {
 	}
 
 	if lang == "zh" {
-		return "🤖 我是 NOFXi。配置 AI 模型后我就能理解你的任何问题——分析股票、制定策略、管理交易。\n\n现在可用：\n• 加密货币实时行情（试试「BTC」）\n• `/status` 查看系统状态\n• `/clear` 清空当前对话记忆\n\n发送 *开始配置* 配置 AI 模型。", nil
+		return "🤖 我是 " + branding.PersonaName() + "。配置 AI 模型后我就能理解你的任何问题——分析股票、制定策略、管理交易。\n\n现在可用：\n• 加密货币实时行情（试试「BTC」）\n• `/status` 查看系统状态\n• `/clear` 清空当前对话记忆\n\n发送 *开始配置* 配置 AI 模型。", nil
 	}
-	return "🤖 I'm NOFXi. Configure an AI model and I can understand anything — analyze stocks, build strategies, manage trades.\n\nAvailable now:\n• Crypto real-time data (try 'BTC')\n• `/status` to check system status\n• `/clear` to clear the current conversation memory\n\nSend *setup* to configure AI.", nil
+	return "🤖 I'm " + branding.PersonaName() + ". Configure an AI model and I can understand anything — analyze stocks, build strategies, manage trades.\n\nAvailable now:\n• Crypto real-time data (try 'BTC')\n• `/status` to check system status\n• `/clear` to clear the current conversation memory\n\nSend *setup* to configure AI.", nil
 }
 
 func (a *Agent) aiServiceFailure(lang string, err error) (string, error) {

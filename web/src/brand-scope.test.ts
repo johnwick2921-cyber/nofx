@@ -27,3 +27,45 @@ it('rejects a removed protected guard, instead of only checking the issuer word'
     'protected file changed'
   )
 })
+
+it('preserves every existing TypeScript import target in changed files', async () => {
+  const { execFileSync } = await import('node:child_process')
+  const ts = await import('typescript')
+  const base = '954f11b15f2e7615678f7d2b708c47895faebf1e'
+  const git = (args: string[]) =>
+    execFileSync('git', args, {
+      cwd: resolve('..'),
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+  const targets = (source: string) => {
+    const file = ts.createSourceFile(
+      'source.tsx',
+      source,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TSX
+    )
+    return file.statements.flatMap((node) =>
+      ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)
+        ? [node.moduleSpecifier.text]
+        : []
+    )
+  }
+  for (const path of git(['diff', '--name-only', base, '--', '*.ts', '*.tsx'])
+    .trim()
+    .split('\n')
+    .filter(Boolean)) {
+    let old: string
+    try {
+      old = git(['show', `${base}:${path}`])
+    } catch {
+      continue
+    }
+    const current = targets(readFileSync(resolve('..', path), 'utf8'))
+    for (const target of targets(old))
+      expect(current, `${path}: existing import target ${target}`).toContain(
+        target
+      )
+  }
+})

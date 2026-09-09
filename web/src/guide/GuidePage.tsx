@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from '../constants/branding'
 // GuidePage — the in-app system guide (5th nav page). FE-only; renders typed
 // content modules + the LIVE-COMPONENT examples. Rev-drift banner compares
 // GUIDE_BUILT_REV against the running bot's /api/health revision.
@@ -484,7 +485,7 @@ export function GuidePage() {
           className="text-xl font-black uppercase tracking-widest"
           style={{ color: 'var(--vl-gold)' }}
         >
-          NOFX System Guide
+          {PRODUCT_NAME} System Guide
         </h1>
         <p className="text-[12px]" style={muted}>
           built against rev {GUIDE_BUILT_REV} · 12 sections · live-component

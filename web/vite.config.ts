@@ -1,8 +1,21 @@
+import { readFileSync } from 'node:fs'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      name: 'visible-product-name',
+      transformIndexHtml(html) {
+        const name = readFileSync(
+          new URL('../branding/product.txt', import.meta.url),
+          'utf8'
+        )
+        return html.replace('%PRODUCT_NAME%', name)
+      },
+    },
+  ],
   server: {
     // LOOPBACK ONLY. This dev server proxies /api straight to the bot on :8080,
     // so binding it to 0.0.0.0 handed the whole API to the LAN and defeated the

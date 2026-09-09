@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from '../../constants/branding'
 import { GUIDE_BUILT_REV, type GuideSection } from '../types'
 
 export const welcome: GuideSection = {
@@ -11,7 +12,7 @@ export const welcome: GuideSection = {
       kind: 'cards',
       cards: [
         {
-          title: 'NOFX / VL',
+          title: PRODUCT_NAME,
           body: 'One structure-permissioned, level-anchored MNQ SIM trader — advisory-first. The Go engine computes the map; the AI (deepseek-v4-pro) writes one day-plan per session, then decides every cycle against it. You hold the knobs.',
           tag: 'SIM',
         },

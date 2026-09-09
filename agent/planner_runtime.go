@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"nofx/branding"
 	"sort"
 	"strings"
 	"time"
@@ -3775,7 +3776,7 @@ func buildCompactObservationSummary(state ExecutionState) string {
 
 func finalPlanResponseSystemPrompt(lang string) string {
 	if lang == "zh" {
-		return `你是 NOFXi，用户的 AI 交易伙伴。像朋友聊天一样回复。
+		return `你是 ` + branding.PersonaName() + `，用户的 AI 交易伙伴。像朋友聊天一样回复。
 
 严格规则：
 - 只回答 Goal 问的那一件事。用户问余额就只说余额，问持仓就只说持仓，问钱包就只说钱包。
@@ -3785,7 +3786,7 @@ func finalPlanResponseSystemPrompt(lang string) string {
 - 不要列"下一步建议"或"需要我帮你做什么"，除非用户主动问。
 - 回复尽量短，能一句话说清的不要写一段话。`
 	}
-	return `You are NOFXi, the user's AI trading partner. Reply like a friend chatting.
+	return `You are ` + branding.PersonaName() + `, the user's AI trading partner. Reply like a friend chatting.
 
 Strict rules:
 - Answer ONLY the one thing asked in Goal. If user asks balance, only say balance. If user asks positions, only say positions.

@@ -16,7 +16,7 @@
 | `[I]` | invented / doctrine, untested |
 | `[O]` | owner-ruled |
 
-Pending rebrand: `fix/rebrand-phase-1-2` (NOFX→VL Intelligent) is NOT merged at this revision — every `nofx`-named file/boot line below changes the day it merges; that wave MUST update this map per the contract.
+Visible brand (Dispatch 102): `branding/product.txt` = VL Intelligent; `branding/persona.txt` = VL. `branding/branding.go` supplies the Go banner and rendered agent/Telegram names; `web/src/constants/branding.ts` and Vite read the same files for UI text and the page title. Operational identifiers remain nofx. `fix/rebrand-phase-1-2` remains held and is not part of this wave.
 
 ---
 
@@ -279,7 +279,7 @@ Cadence governance (class 47): `WakeCutoffMinDefault=25` (:52), `WakeCooldownMin
 **HeaderBar tabs:** Agent (Beta) · Config · Dashboard · Strategy · 📖 Guide — HeaderBar.tsx:112-140 (mobile duplicates ~:450-510).
 **Guide:** 14 sections (welcome…expectancy) — GuidePage.tsx:24-40; drift check vs `/api/health` revision, 12-char prefix compare :455-477; `GUIDE_BUILT_REV` stamped by `web/scripts/stamp-guide-rev.sh` (never hand-typed) — types.ts:6.
 **i18n:** en/zh/id — translations.ts:1; agent Go side zh/en — agent/i18n.go:3-83.
-**Design system:** `--nofx-*` app chrome vars (index.css:18-66) + `--vl-*` Plan-Card tokens (theme/vl-tokens.css) + tailwind palette (tailwind.config.js:10-31). The rebrand branch collapses these to `vl-*` — update this line when it merges.
+**Design system:** `--nofx-*` app chrome vars (index.css:18-66) + `--vl-*` Plan-Card tokens (theme/vl-tokens.css) + tailwind palette (tailwind.config.js:10-31). These are invisible identifiers and remain unchanged by Dispatch 102.
 **Endpoints:** `GET /api/health` `{status,time,revision}` — api/server.go:625-631 · `GET /api/cutover-gate` — :430-434 → class33_cutover_gate.go:58 (5 legs: db_open_positions · api_positions · nt8_positions_snapshot · working_orders · planner_in_flight; `ready` only if ALL pass).
 **Boot lines:** `"🖥 ui: served-by=go-static build=…"` (or STALE warning) — api/ui_serving.go:110-146, main.go:303-308.
 

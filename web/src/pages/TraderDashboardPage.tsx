@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from '../constants/branding'
 import { LedgerDayPnl } from '../components/trader/LedgerDayPnl'
 import { useEffect, useState, useRef } from 'react'
 import { mutate } from 'swr'
@@ -458,7 +459,7 @@ export function TraderDashboardPage({
               <div className="flex flex-col">
                 <span className="text-xs font-mono text-nofx-text-muted opacity-60 flex items-center gap-2">
                   <div className="w-1.5 h-1.5 bg-nofx-gold rounded-full" />
-                  VL Trader · {t('dashboardNav', language)} ·{' '}
+                  {PRODUCT_NAME} · {t('dashboardNav', language)} ·{' '}
                   {selectedTrader.trader_name} · ID:{' '}
                   {selectedTrader.trader_id.slice(0, 8)}...
                 </span>

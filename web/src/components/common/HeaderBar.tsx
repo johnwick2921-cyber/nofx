@@ -1,3 +1,4 @@
+import { PERSONA_NAME } from '../../constants/branding'
 import { useState, useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -92,7 +93,9 @@ export default function HeaderBar({
           className="flex items-center gap-2 hover:opacity-80 transition-opacity cursor-pointer"
         >
           <img src="/icons/vl.svg" alt="VL" className="w-7 h-7" />
-          <span className="text-lg font-bold text-nofx-gold">VL</span>
+          <span className="text-lg font-bold text-nofx-gold">
+            {PERSONA_NAME}
+          </span>
         </div>
 
         {/* Desktop Menu */}

@@ -7,6 +7,7 @@ import (
 	nofxiagent "nofx/agent"
 	"nofx/api"
 	"nofx/auth"
+	"nofx/branding"
 	"nofx/config"
 	"nofx/crypto"
 	"nofx/expectancy"
@@ -42,7 +43,7 @@ func main() {
 	logger.Init(nil)
 
 	logger.Info("╔════════════════════════════════════════════════════════════╗")
-	logger.Info("║           🚀 NOFX - AI-Powered Trading System              ║")
+	logger.Info("║           🚀 " + branding.ProductName() + " - AI-Powered Trading System              ║")
 	logger.Info("╚════════════════════════════════════════════════════════════╝")
 
 	// Initialize global configuration (loaded from .env)
