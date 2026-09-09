@@ -118,6 +118,20 @@ export interface PlanLevelFact {
   origin?: 'AI' | 'OWNER'
   note?: string
   scenario_id?: string
+  // W3 (2026-09-09) — the merged map, matched to this level by price. Every
+  // field is OPTIONAL: when the map could not be built or this level did not
+  // match one, the keys are absent and the row renders exactly as before.
+  // names carries ALL merged references ("Supply·1h", "PDC", "VWAP+1σ").
+  names?: string[]
+  merged_count?: number
+  // map_role is the W3 axis (what this reference is FOR in this read) and is
+  // distinct from the five detector LevelRole values.
+  map_role?: 'entry-candidate' | 'target' | 'obstacle' | 'invalidation'
+  entry_candidate?: boolean
+  not_entry_reason?: string
+  projection?: boolean
+  projection_method?: string
+  distance_atr?: number
 }
 
 // Backend-owned scenario status (the state machine ships in the executor phase;

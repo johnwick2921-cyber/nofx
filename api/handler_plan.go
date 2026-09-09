@@ -520,6 +520,11 @@ func planLevelFacts(traderID, symbol string, doc kernel.PlanDoc, now time.Time, 
 	if len(bars) == 0 {
 		return nil, 0, nil
 	}
+	// W3 (2026-09-09) — the merged map the MODEL is shown, so the card shows the
+	// same thing (D6). Built once per request from these same bars. Enrichment is
+	// OPTIONAL: when the map cannot be built the extra keys are simply absent and
+	// the card renders nothing extra, rather than a fabricated role or a 0 ATR.
+	w3Map := planW3Map(traderID, symbol, bars, now)
 	nowMs := now.UnixMilli()
 	price := 0.0
 	for i := len(bars) - 1; i >= 0; i-- {
@@ -566,6 +571,28 @@ func planLevelFacts(traderID, symbol string, doc kernel.PlanDoc, now time.Time, 
 			"accept_have":   f.AcceptHave,
 			"accept_need":   f.AcceptNeed,
 			"still_valid":   f.StillValid,
+		}
+		// W3 — merged names, the map role, the ATR distance and any projection
+		// method, matched from the map by price. Absent when unmatched (A24).
+		if mc, ok := kernel.MatchMapCandidate(w3Map, l.Price); ok {
+			if len(mc.Names) > 1 {
+				row["names"] = mc.Names
+				row["merged_count"] = mc.MergedCount
+			}
+			if mc.Role != "" {
+				row["map_role"] = string(mc.Role)
+			}
+			row["entry_candidate"] = mc.EntryCandidate
+			if mc.RefusedReason != "" {
+				row["not_entry_reason"] = mc.RefusedReason
+			}
+			if mc.Projection {
+				row["projection"] = true
+				row["projection_method"] = mc.ProjectionMethod
+			}
+			if mc.HasATR {
+				row["distance_atr"] = mc.DistanceATR
+			}
 		}
 		// OWNER PROVENANCE: the card renders 👤 / 📝 / an S-tag and the ⚡ conflict
 		// chip from these three fields. They were typed as optional on the FE from
@@ -2300,4 +2327,16 @@ func (s *Server) scenarioMeta(traderID, planID string, version int) map[string]a
 		return nil
 	}
 	return m
+}
+
+// planW3Map builds the W3 merged map for one card request, from the same bars
+// the level facts use. Returns nil when the map cannot be assembled; callers
+// then emit no W3 keys at all rather than empty ones.
+func planW3Map(traderID, symbol string, bars []market.Kline, now time.Time) []kernel.MapCandidate {
+	reg := kernel.ResolvedSessionRegistryFor(traderID)
+	scored, price, _ := kernel.AssembleScoredLevels(traderID, bars, reg, symbol, kernel.PlanHardMaxLevels, now, 0)
+	if price <= 0 || len(scored) == 0 {
+		return nil
+	}
+	return kernel.BuildMapCandidates(scored, price, kernel.StaleConfirmATR5m(bars), kernel.MapCandidateOpts{})
 }

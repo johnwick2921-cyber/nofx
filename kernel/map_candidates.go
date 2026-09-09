@@ -490,3 +490,21 @@ func trimFloat(f float64) string {
 	}
 	return s
 }
+
+// MatchMapCandidate finds the merged candidate a price belongs to, using the
+// SAME zone width the merge used. Returns ok=false when nothing matches, so a
+// caller emits no role and no distance rather than a fabricated one (A24).
+func MatchMapCandidate(cs []MapCandidate, price float64) (MapCandidate, bool) {
+	if price <= 0 {
+		return MapCandidate{}, false
+	}
+	width := clusterToleranceFor(price)
+	best, bestD, found := MapCandidate{}, math.MaxFloat64, false
+	for _, c := range cs {
+		d := math.Abs(c.Price - price)
+		if d <= width && d < bestD {
+			best, bestD, found = c, d, true
+		}
+	}
+	return best, found
+}
