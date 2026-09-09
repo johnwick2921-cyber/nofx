@@ -26,6 +26,7 @@ import { glossary } from './content/glossary'
 import { faq } from './content/faq'
 import { weeklyBias } from './content/weeklyBias'
 import { expectancy } from './content/expectancy'
+import { candidates } from './content/candidates'
 
 export const GUIDE_SECTIONS: GuideSection[] = [
   welcome,
@@ -42,6 +43,7 @@ export const GUIDE_SECTIONS: GuideSection[] = [
   faq,
   weeklyBias,
   expectancy,
+  candidates,
 ]
 
 const ivory = { color: 'var(--vl-ivory)' }
@@ -488,8 +490,8 @@ export function GuidePage() {
           {PRODUCT_NAME} System Guide
         </h1>
         <p className="text-[12px]" style={muted}>
-          built against rev {GUIDE_BUILT_REV} · 12 sections · live-component
-          examples
+          built against rev {GUIDE_BUILT_REV} · {GUIDE_SECTIONS.length} sections
+          · live-component examples
         </p>
       </header>
 
