@@ -386,5 +386,88 @@ window`. Pinned RED, mutation-tested.
   notes the harm is currently bounded by the C# side, which no longer walks
   `placedBrackets` — a bound that lives in the AddOn, not in Go.
 
-None of these are regressions from this wave; all predate it. They are the next
-wave's material, and they are listed here rather than in a drawer.
+None of these are regressions from this wave; all predate it.
+
+---
+
+# OWNED BY THE NEXT WAVE (owner-ruled 2026-09-09) — NOT THIS ONE
+
+## 1 · ConfirmCancel has NEVER fired in production
+
+**`0` of `69`** cancelled rows carry a `cancel_settled_snapshot_id`:
+
+```
+sqlite> SELECT (cancel_settled_snapshot_id>0) AS settled, COUNT(*)
+        FROM armed_orders WHERE state='cancelled' GROUP BY 1;
+0|69
+```
+
+`ConfirmCancel` (`store/armed_orders.go:466`) is the ONLY writer that records
+evidence — it requires the id of the snapshot whose book no longer listed the
+order — and it has exactly one production caller,
+`trader/cancel_confirm.go:381`.
+
+**The bypass is `trader/armed_executor.go:2198`:**
+
+```go
+_ = ledger.SetState(r.ID, "cancelled", reason+" (ack timeout — flatten proceeds)")
+```
+
+That promotes a row straight to `cancelled` on a TIMEOUT, skipping the whole
+`RequestCancel → cancel_pending → ConfirmCancel` lifecycle the 2026-09-06 wave
+was built to enforce. `cancelled` is the word that frees the slot
+(`UpsertArm`) and the word cutover leg 4 counts, so a row promoted on a timeout
+can be replaced while its order still rests.
+
+**This is built ≠ wired, on the wave that was ABOUT settlement.** The lifecycle
+exists, is correct, and is tested; the path that actually retires rows at a
+close does not use it. Class 95's shape (the guard is on the path that does not
+run) reaching the settlement machinery itself.
+
+## 2 · Every flatten trusts the ledger over the broker
+
+All five position reads in the flatten paths are local:
+`trader/auto_trader_clock.go:80`, `:158`, `:533` (EOD), `:648`, `:721` (T1) —
+every one `at.store.Position().GetOpenPositions(at.id)`.
+
+The codebase documents that store as lagging real exits:
+`trader/position_desync.go:18` — *"for up to ~80s after a real exit, the store
+row is still OPEN"* — and `:78` records the opposite skew, the store showing
+OPEN while the broker reports FLAT.
+
+**The broker's own answer is already in the process.** `at.liveBook(now)`
+(`trader/cancel_confirm.go:236`) and `at.brokerBook()` (`trader/f12_leg4.go:182`)
+serve the F12 order snapshot that cutover leg 4 answers from — and the cutover
+gate deliberately splits leg 1 (sqlite) from legs 2/3 (broker) so a routing
+fault cannot hide behind one number. **The flatten has only the sqlite leg.**
+
+A flatten that trusts the ledger over the broker is the 2026-09-06 naked-stop
+shape arriving from the exit side: our record says flat, the broker says
+otherwise, and the close is the one moment where the two must agree.
+
+## 3 · The no-link fallback writes `cancelled` with zero broker contact
+
+`trader/armed_executor.go:2095` — `return at.cancelArmedOrders(reason), 0` —
+taken exactly when `armedTrader()` is nil, i.e. when NT8 is unreachable, which
+is precisely when resting orders are most likely to outlive us.
+`cancelArmedOrders` (`:2015`) walks `ListNonTerminal` and calls
+`SetState(r.ID, "cancelled", reason)` with no wire, no book, and no state test.
+Its count then feeds the operator-facing flat claim.
+
+## 4 · "Acked" means "left the non-terminal set", so a FILL counts as a cancel
+
+`trader/armed_executor.go:2190` — `acked = !at.armedRowStillActive(ledger, r.ID)`
+(`armedRowStillActive` at `:2207`). A fill arriving during the drain window
+writes state `filled`, which is terminal, which removes the row from
+`ListNonTerminal` — and is therefore counted and logged as a successful cancel.
+A limit that filled two seconds before the close is reported as an order we
+cancelled.
+
+## 5 · The flatten is the last unguarded cancel site
+
+`cancelArmedOrdersSyncWith` contains **0** `cancelSafetyFor` calls while seven
+per-arm sites have one. **This is the owner's ruling of 2026-09-07 and it
+stands** — a guard that refuses without a book, applied to the EOD flatten and
+the news-halt sweep, leaves arms live and re-opens class 33. Recorded because the
+harm is currently bounded by the C# side no longer walking `placedBrackets`, and
+that bound lives in the AddOn rather than in Go.
