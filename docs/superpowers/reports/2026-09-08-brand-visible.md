@@ -114,7 +114,9 @@ Sixteen protected source files remain byte-identical to the measured base: Go mo
 
 ## A15 / A20 — live truth and retained text
 
-**Not live:** the connected browser observed the old title, the real Agent page disclaimer `NOFXi may make mistakes.` and placeholder `Ask NOFXi anything...  ⌘K`, plus retained technical references in FAQ. Dashboard/Strategy/Guide/Config and Welcome redirect to login in the available browser context. [Exact read-only route results](2026-09-08-brand-visible-data/live-before.json). No authenticated full-surface walk or after-boot proof is claimed. Automated approval review rejected the proposed live walk because it would read JWT secret material and mint a token without specific credential-use authorization. The owner selected **“Use an owner-authenticated browser instead.”** Secret access/token minting was not executed or retried by another route. The connected browser is currently unauthenticated, and the owner was asked to sign in; no authentication bypass is attempted. Unit-rendered text is evidence about code, not a live authenticated observation.
+**Not live:** the initial unauthenticated walk observed the old title, Agent disclaimer `NOFXi may make mistakes.` and placeholder `Ask NOFXi anything...  ⌘K`, plus technical references in FAQ; protected pages redirected to login. [Initial route results](2026-09-08-brand-visible-data/live-before.json). Automated approval review rejected reading JWT secret material to mint a token. The owner selected **“Use an owner-authenticated browser instead”** and subsequently supplied credentials for normal browser sign-in. That sign-in succeeded; no signing-secret read or token minting occurred.
+
+[A] The authenticated read-only walk on 2026-09-09 at 13:50 CT reached Agent, Traders, Dashboard, Strategy, Guide, Settings and Welcome without a login redirect. All seven retained the live title `VL Trader - AI Trading System`; Agent rendered `NOFXi` and `Ask NOFXi anything...  ⌘K`, Dashboard rendered `VL Trader`, and Guide rendered `NOFX`. [Authenticated route evidence](2026-09-08-brand-visible-data/authenticated-ui-before.json). Output is restricted to product-word matches and brand placeholders; credentials, tokens and account names are excluded. This proves the current release still serves the old Group 1 text; no after-boot proof is claimed. Unit-rendered status/sender text remains code evidence, not an observed new live message.
 
 Known retained old-name occurrences, deliberately outside Section B:
 
@@ -143,7 +145,7 @@ Pre-assignment numbering census (both formats, sorted with `uniq -c`): highest *
 
 Current dev advanced with Stage A’s passed-boot receipts and the separately authored range-fade research report. They were incorporated by merge; this lane did not author them. The prescribed pull --rebase flattened local integration history, so the first main fast-forward attempt correctly refused and left main unchanged. Current dev ancestry was restored on the isolated branch, then main fast-forwarded and pushed successfully at **05125bd6**. No reset, forced update or peer-file deletion was used.
 
-The ordinary clean clone is `/tmp/brand-visible-build/nofx`, pinned to that merged HEAD, with clean porcelain before suite/build. Its frontend suite is **57 files / 408 tests PASS**, TypeScript PASS. The full merged Go suite and embedded prompt goldens **PASS**. The candidate build and dist **PASS**, with the binary stamp verified below. This is preparation; the fresh broker-backed gate, owner GO and boot remain outstanding.
+The ordinary clean clone is `/tmp/brand-visible-build/nofx`, pinned to that merged HEAD, with clean porcelain before suite/build. Its frontend suite is **57 files / 408 tests PASS**, TypeScript PASS. The full merged Go suite and embedded prompt goldens **PASS**. The candidate build and dist **PASS**, with the binary stamp verified below. This is preparation; the subsequent authenticated broker-backed gate failed leg 4, and owner GO and boot remain outstanding.
 
 
 ## Clean-clone build receipt — ready for owner-controlled cutover
@@ -152,8 +154,20 @@ The ordinary clean clone is `/tmp/brand-visible-build/nofx`, pinned to that merg
 
 [A] Only after that binary existed, its embedded revision was parsed to stamp the **candidate clone’s** `GUIDE_BUILT_REV` from 954f11b1… to full 05125bd6…. Dist was then built: **92 files**; its HTML title is `VL Intelligent - AI Trading System`; its compiled JS contains that exact Guide revision. [Build validation](2026-09-08-brand-visible-data/build-validation.json) and [full binary/dist manifest](2026-09-08-brand-visible-data/candidate.json). The clone’s Guide change is intentional post-binary metadata and does not change the already verified clean binary stamp. It will be carried into the release metadata at the authorized swap, not silently served ahead of the binary.
 
-[A] A separate loopback preview of the actual candidate dist rendered `VL Intelligent - AI Trading System`, `Ask VL anything...  ⌘K`, and `VL may make mistakes.` in the connected browser. [Exact preview text](2026-09-08-brand-visible-data/candidate-preview.json). This is evidence from **4173**, not a claim that 8080 or the Go status/banner has changed. Protected live pages still require owner sign-in. The preview process is closed after recording this evidence.
+[A] A separate loopback preview of the actual candidate dist rendered `VL Intelligent - AI Trading System`, `Ask VL anything...  ⌘K`, and `VL may make mistakes.` in the connected browser. [Exact preview text](2026-09-08-brand-visible-data/candidate-preview.json). This is evidence from **4173**, not a claim that 8080 or the Go status/banner has changed. The subsequent owner-authenticated live walk is recorded above. The preview process was stopped after recording this evidence (exit 130); the live service was not stopped.
 
-**No cutover performed.** No owner GO has been given for the swap; at preparation the clock is before the 14:45 CT A7 window. No fresh five-leg pass is asserted. The user chose an owner-authenticated browser instead of JWT-secret access; the connected browser remains on `/login`, awaiting sign-in for the protected UI/gate reads. This is an explicit unmet prerequisite, not a silently unevaluable PASS. No kill is printed before RELEASE → mv → VERIFY, and no stale PID command is offered.
+**No cutover performed — STOP at leg 4.** [A] The owner-authenticated read-only gate at **2026-09-09 13:50:06 CT** returned HTTP 200 and `ready=false` for trader id `8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265`. [Exact five-leg evidence](2026-09-08-brand-visible-data/authenticated-gate.json):
+
+| Leg | Verdict | Observed evidence |
+|---|---|---|
+| 1 DB positions | PASS | `0 open row(s)` |
+| 2 API positions | PASS | `0 position(s)` |
+| 3 NT8 positions | PASS | `count=0` |
+| 4 Working orders | **FAIL** | `broker 1 vs ledger 3 — MISMATCH`; broker snapshot age 2s, build `2026-09-07-h1`, cross-checked against armed_orders ledger |
+| 5 Planner in flight | PASS | `no planner read claimed` |
+
+Leg 4 sample ids: broker `db758fae647843aa93b691bc8ffc6df6`; ledger `5d4716c8-298a-4f86-bc72-4d6529d73483` plus two empty order ids, quoted as returned. An earlier independent read at 13:49:42 CT also failed leg 4. No root cause is inferred from these counts. Dispatch A5 forbids overriding this mismatch; A23 requires STOP/report/wait. No gate, order, arm, binding or DB correction is authorized by this visible-brand wave, and none was made.
+
+No owner GO has been given for this swap, and the observation precedes the 14:45 CT A7 window. Successful browser authentication resolves the earlier access prerequisite, not the failed gate. No kill is printed before RELEASE → mv → VERIFY, and no stale PID command is offered. Full Go, 57 Vitest files / 408 tests and TypeScript also passed at report-only receipt HEAD `efdff525652b32c4f3bc61e9a358d4dce2dba01e`; this subsequent report/evidence update changes no executable source.
 
 This preparation receipt is pushed from the same clean main tree under the lock before releasing it. Lock release ends preparation only; the future cutover must reacquire, check current dev/source equivalence, rerun any required merged validation if source changed, make fresh backups/gates and obtain the owner GO. The report will be updated with actual boot/five-reference evidence after that boot; it is not a boot marker today.
