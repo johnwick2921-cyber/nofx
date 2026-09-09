@@ -23,9 +23,15 @@ func TestPlannerCandleTablesRenderAndTokenBudget(t *testing.T) {
 			OpenTime: ts.UnixMilli(), Open: o, High: o + 1.5, Low: o - 1.5, Close: o + 0.5, Volume: 10,
 		})
 	}
-	table := BuildPlannerCandleTables(bars)
-	for _, want := range []string{"### 15m (last 12)", "### 1h (last 12)", "### 4h (last 8)",
-		"### daily session candles (last 8)", "Time(CT)       Open      High      Low       Close     Volume"} {
+	table := BuildPlannerCandleTablesAt(bars, 5000, time.Date(2026, 8, 28, 9, 0, 0, 0, CTLocation()))
+	// D1 (BARS HORIZON 2026-09-09) — these assertions used to pin the LIE.
+	// "(last 8)" stood over 2-3 rendered rows in 54 of 54 stored prompts, and
+	// this test passed the whole time because it asserted the literal in the
+	// title rather than the rows underneath it. The headings now state HELD-vs-
+	// REQUESTED, so the strings below changed deliberately.
+	for _, want := range []string{"### 15m — HELD 12 of 12 requested rows", "### 1h — HELD 12 of 12 requested rows",
+		"### 4h — HELD 8 of 8 requested rows", "### daily session candles — HELD ",
+		"Time(CT)       Open      High      Low       Close     Volume"} {
 		if !strings.Contains(table, want) {
 			t.Fatalf("proving line: candle table missing %q", want)
 		}

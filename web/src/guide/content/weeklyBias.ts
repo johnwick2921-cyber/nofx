@@ -103,7 +103,15 @@ export const weeklyBias: GuideSection = {
       cards: [
         {
           title: 'Candles are ground truth',
-          body: 'The session planner prompt now carries the raw candle tables (last 12×15m, 12×1h, 8×4h, 8×daily) rendered by the SAME formatter the executor uses. The playbook line is explicit: "Candles are ground truth for structure; ranked levels and tags are summaries. On conflict, trust the candles and say so in the scenario rationale." Scenario lines citing "per candles" are counted into the planner_candle_citations telemetry counter — the P3 promotion evidence.',
+          body: 'The session planner prompt carries the raw candle tables (15m, 1h, 4h, daily session candles) rendered by the SAME formatter the executor uses. The playbook line is explicit: "Candles are ground truth for structure; ranked levels and tags are summaries. On conflict, trust the candles and say so in the scenario rationale." Scenario lines citing "per candles" are counted into the planner_candle_citations telemetry counter — the P3 promotion evidence.',
+        },
+        {
+          title: 'Every table says HELD vs REQUESTED',
+          body: 'Each heading now reads "### daily session candles — HELD 3 of 8 requested rows · SHORT BY 5 …" instead of a baked "(last 8)". Measured over the stored planner prompts (n=54 with a Candles block): 15m rendered 12 of 12 every time, 1h 12 of 12, 4h 8 of 8 — but the daily table rendered 2 or 3 rows, never 8, in 0 of 54. A table that IS complete says "all held rows COMPLETE", so the disclosure is not something you only see when something is wrong. Above the tables, one TAPE line names the 1m bars held vs requested, the oldest bar and its age, and how many open 1m intervals are missing INSIDE that span.',
+        },
+        {
+          title: 'A partial candle is marked, never invented',
+          body: 'A daily session candle is bucketed by the 17:00 CT roll and its Open is simply the first bar held — so a tape that starts mid-session used to present a part-session as a whole one. Rows are now measured against the CME session calendar (kernel/session_calendar.json, shortened and closed days included) and marked on the row: ⚠PARTIAL (only part of the window is held — front-truncated rows say so, interior holes say the minutes are missing INSIDE), ⏳FORMING (the window has not closed), ❓COVERAGE-UNKNOWN (a year the calendar does not cover — never a guess). Nothing is interpolated, carried forward or synthesised to fill a hole, and no O/H/L/C/V is changed by any of it.',
         },
         {
           title: 'Weekly context (soft law, refs only)',
