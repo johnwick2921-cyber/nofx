@@ -199,6 +199,113 @@ func BuildMapCandidates(scored []ScoredLevel, price, atr5m float64, opts MapCand
 	return out
 }
 
+// BuildMapWithProjections is BuildMapCandidates plus D5's projected references.
+//
+// Projections are references the detectors cannot produce because they lie
+// BEYOND the mapped range — the 2026-09-03 case, where price ran +483 pts, left
+// the highest seated level, and the map then held no target at all while the
+// fade book kept selling.
+//
+// A projection is a TARGET or an OBSTACLE and is never an entry candidate. It
+// carries the word `projection` and the method it came from, so neither the
+// owner nor the model can mistake it for an observed level.
+func BuildMapWithProjections(scored []ScoredLevel, projections []MapCandidate, price, atr5m float64, opts MapCandidateOpts) []MapCandidate {
+	out := BuildMapCandidates(scored, price, atr5m, opts)
+
+	width := opts.MergeWidth
+	if width <= 0 {
+		width = clusterToleranceFor(price)
+	}
+	minTarget := opts.MinTargetDistance
+	if minTarget <= 0 && atr5m > 0 {
+		minTarget = MinSLATRMult() * atr5m
+	}
+
+	for _, p := range projections {
+		if p.Price <= 0 {
+			continue
+		}
+		// A projection that lands on an OBSERVED reference is not new
+		// information: fold its name in and keep the observed row, which is
+		// evidence rather than arithmetic.
+		folded := false
+		for i := range out {
+			if !out[i].Projection && math.Abs(out[i].Price-p.Price) <= width {
+				for _, n := range p.Names {
+					out[i].Names = appendDistinct(out[i].Names, n)
+				}
+				out[i].MergedCount++
+				folded = true
+				break
+			}
+		}
+		if folded {
+			continue
+		}
+		c := p
+		c.Projection = true
+		c.MergedCredit = 1
+		if c.MergedCount <= 0 {
+			c.MergedCount = 1
+		}
+		c.Distance = c.Price - price
+		if atr5m > 0 {
+			c.DistanceATR = c.Distance / atr5m
+			c.HasATR = true
+		}
+		out = append(out, c)
+	}
+
+	assignMapRoles(out, price, minTarget)
+	sort.SliceStable(out, func(i, j int) bool {
+		di, dj := math.Abs(out[i].Distance), math.Abs(out[j].Distance)
+		if di != dj {
+			return di < dj
+		}
+		return out[i].Score > out[j].Score
+	})
+	return out
+}
+
+// EntryShortlist returns only the entry candidates, in the reachability order
+// BuildMapCandidates already established. The full map is what the caller keeps;
+// this is the short, ranked set the research asks for.
+func EntryShortlist(cs []MapCandidate) []MapCandidate {
+	out := make([]MapCandidate, 0, len(cs))
+	for _, c := range cs {
+		if c.EntryCandidate {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// MapCounts are D7's per-read numbers. Every one is COUNTED from the map that
+// was actually built — none is inferred and none is a literal.
+type MapCounts struct {
+	Detected        int
+	Merged          int
+	EntryCandidates int
+	NoTargetRefused int
+	Projections     int
+}
+
+// CountMap tallies a built map for the per-read boot/telemetry line.
+func CountMap(detected int, cs []MapCandidate) MapCounts {
+	m := MapCounts{Detected: detected, Merged: len(cs)}
+	for _, c := range cs {
+		switch {
+		case c.Projection:
+			m.Projections++
+		case c.EntryCandidate:
+			m.EntryCandidates++
+		case c.RefusedReason != "":
+			m.NoTargetRefused++
+		}
+	}
+	return m
+}
+
 // assignMapRoles applies D1's role axis and D3's candidacy test in one pass
 // over the merged set. Mutates the slice in place; the slice is ours.
 func assignMapRoles(cs []MapCandidate, price, minTarget float64) {
