@@ -2200,6 +2200,39 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     34790. Four actual-line mutations fail assertions; 50 already-closed verdict
     goldens are unchanged. Full evidence: `reports/2026-09-08-confirmation-truth.md`.
 
+92. **A description that lives in a DB row nobody audits.** (Number assigned at
+    merge, A16 — highest occupied on dev was 91 at the time of writing; re-check
+    with a `uniq -c` census before merging.) The system's description of itself
+    contradicted its code in twelve places (docs/superpowers/reports/2026-09-08-
+    the-strategy.md @ 5519d494, section D4). All twelve reproduced at the running
+    rev 954f11b1 — none had been quietly fixed. Two structural facts made them
+    durable. **(a) Four of the false sentences were not in the repo at all.** They
+    live in `strategies.config → ai_config.prompt_sections` in `data/data.db`, are
+    rendered into every AI call, and are invisible to every grep, every test and
+    every code review the project runs — "2-4 trades per day", "50 point move
+    stop loss to breakeven", "avoid sideways oscillation", "avoid immediately
+    restarting after closing positions", none of them enforced by anything.
+    Worse, the same text sat in **three unbound `New Strategy` presets** beside
+    the bound MNQ row, so correcting a source template fixes nothing and binding
+    a different strategy resurrects every claim. **(b) A Guide sentence can be
+    true when written and false later without any signal.** `GUIDE_BUILT_REV`
+    proves when the Guide was BUILT; it says nothing about whether the prose
+    still matches behaviour, so a stamped, in-date Guide can be confidently
+    wrong. **Probe:** for every sentence that states a behaviour, name the code
+    that performs it and the path that reaches it — a mechanism that exists but
+    is never reached is not a behaviour. Then grep the DB for prose:
+    `sqlite3 data/data.db "SELECT id FROM strategies WHERE config LIKE '%<claim>%'"`
+    and check EVERY row, not the bound one. **Law:** a sentence stating a number
+    names its resolver (the Guide already had the pattern in tradingDay.ts and it
+    was the only file of five to use it); a sentence stating enforcement names
+    the PATH that enforces it, because the same rule can bind one path and not
+    another — the lunch and first-N no-trade bands are read by the AI-decision
+    gate and the adherence grader and by NOTHING in `trader/armed_executor.go`,
+    so under `plan_mode=strict`, where a resting order is the only way into the
+    market, both bands refuse nothing while the Guide called them "all of them
+    enforcing". Fixed in W5 as words only; the code defect (arm path ignores the
+    band) is filed for a later wave.
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,

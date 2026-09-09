@@ -68,7 +68,7 @@ export const guards: GuideSection = {
         [
           'Unprotected position (2026-09-07)',
           'HARD',
-          'Every minute while a position is open, and again the moment the NinjaTrader link comes back: is there a LIVE stop at the broker for it? If the book shows none, a P0 is raised AND a stop is placed — at the price the broker itself accepted, or failing that the plan\'s composed stop. It is the one check that acts rather than reports, because a position with no stop has no safe amount of waiting. Three things stop it acting: no fresh book, a protective order in a state this build cannot read, or a live stop whose quantity the book does not carry. Each says so in the journal and does nothing — an unknown is not permission to place a SECOND stop beside an invisible one. A PARTIALLY covered position is raised, never patched. Born from 2026-09-06 23:37:02, when a cancel meant for an already-filled entry took its stop with it and the position ran 8h19m unprotected with nothing in the bot looking.',
+          "Every minute while a position is open, and again the moment the NinjaTrader link comes back: is there a LIVE stop at the broker for it? If the book shows none, a P0 is raised AND a stop is placed — at the price the broker itself accepted, or failing that the plan's composed stop. It is the one check that acts rather than reports, because a position with no stop has no safe amount of waiting. Three things stop it acting: no fresh book, a protective order in a state this build cannot read, or a live stop whose quantity the book does not carry. Each says so in the journal and does nothing — an unknown is not permission to place a SECOND stop beside an invisible one. A PARTIALLY covered position is raised, never patched. Born from 2026-09-06 23:37:02, when a cancel meant for an already-filled entry took its stop with it and the position ran 8h19m unprotected with nothing in the bot looking.",
         ],
         [
           'Boot sweep (class 33)',
@@ -113,7 +113,7 @@ export const guards: GuideSection = {
         [
           'Lunch / session windows / EOD flat',
           'HARD',
-          'Clock gates: no entries 12:00–13:30 CT; flat at session end.',
+          'Clock gates: no entries 12:00–13:30 CT — the window kernel.LunchWindowCT() resolves; flat at session end.',
         ],
         [
           'Consecutive-loss halt (guardrails ON)',

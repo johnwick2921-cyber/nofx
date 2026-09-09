@@ -222,7 +222,7 @@ const dayPlan: KnobSpec[] = [
   {
     label: 'Min scenario quality',
     where: 'Strategy → Day Plan → A/B/C',
-    what: 'Lowest grade the planner may write (INFORMATIONAL — nothing gates on it).',
+    what: 'Lowest grade the planner may write. Judged against the min_scenario_quality floor that MinScenarioQualityFor (store/strategy.go) resolves per session; at the floor it resolves to today nothing is refused for quality, and raising it makes the arm-time gate refuse a below-floor scenario.',
     trader: 'C = full palette; B/A = the planner filters its own plays.',
     consumer:
       'trader/auto_trader_planner.go:592 (AssembleScoredLevelsMinGrade)',
@@ -566,7 +566,7 @@ const risk: KnobSpec[] = [
     range: 'start+end CT · enabled with master',
     systemDefault: 'OFF',
     recommended:
-      '⭐ ON with 12:00–13:30 CT (matches the lunch gate) or your worst hours.',
+      '⭐ ON with 12:00–13:30 CT — the window kernel.LunchWindowCT() resolves, the same one the lunch gate reads — or your worst hours.',
     whenToTouch: 'Set for your known-bad hours from the journal.',
     perSession: 'No.',
   },
