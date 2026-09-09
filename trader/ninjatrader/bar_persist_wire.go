@@ -76,6 +76,11 @@ func WireBarPersistence(st *store.Store) {
 							fn()
 						}
 					}
+					// BARS HORIZON (2026-09-09) — the replay has landed, so the
+					// EMPTY arm may speak, and the depth line can report what
+					// the ring ACTUALLY holds rather than a cold cache.
+					noteBarHorizonBackfillLanded()
+					logger.Infof("%s", barHorizonBootLine(server.BarCache(), time.Now()))
 					go pruneLoop(bh)
 					return
 				}

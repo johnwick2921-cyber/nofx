@@ -361,6 +361,15 @@ func (c *BarCache) Count(symbol, timeframe string) int {
 	return len(c.bars[barKey(symbol, timeframe)])
 }
 
+// MaxBars is this cache's ring capacity — READ, not assumed.
+// DefaultBarCacheMaxBars is the DEFAULT; NewBarCache accepts any value, so a
+// line that names the ring must ask the cache rather than the constant (A11).
+func (c *BarCache) MaxBars() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.maxBars
+}
+
 // Keys returns the list of currently-populated (symbol, timeframe) pairs.
 // Returned in unspecified order. Useful for diagnostics + the Stage 4
 // chart relay enumerating its outbound subscriptions.
