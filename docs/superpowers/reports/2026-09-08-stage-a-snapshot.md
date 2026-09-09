@@ -1,6 +1,6 @@
 # Stage A — research snapshot
 
-Status: **Stage A is NOT live.** Combined boot `6f677b55` at 18:11:54 CT reported `schema=UNKNOWN`; scenario-economics was live, research capture was unavailable. Relative archive-path repair and startup pins are prepared on `fix/stage-a-archive-path`; a corrected boot and real records remain required.
+Status: **Stage A startup and live recording verified on 2026-09-09 at revision `954f11b1`.** Machine reset booted PID 438 at 13:02:06 CT with `schema=1` and goldens PASS. Live candidate, cut, completed author attempt and deterministic export are proven below. A repair attempt and measured live admission p50 remain unproven.
 
 Lane `stage-a-snapshot-96604090/root[unlisted]`; branch `fix/stage-a-snapshot`; accept base `cd5b9a6b9c479eae97eced7fb0abb40594bf1ac5`. The claim's `ls-remote` receipt was `af1ded7e2c0af427b7268ff2fb76cbf20b4997ca`. Source freshness for every cited repository path is in [source-freshness.csv](2026-09-08-stage-a-snapshot-data/source-freshness.csv).
 
@@ -281,3 +281,41 @@ The repair keeper acquired the free lock at **18:37:10 CT**. Before cutover, act
 Fresh preparation gate **18:44:39 CT** passed all five legs for the one running trader; leg 4 was **NT8 order_snapshot, h1, age 2s, zero working orders**. Separate active-arm census: **0, IDs []**. Applied window: after 17:10 CT, flat, no arms, no position. A further fresh gate and independent swap verification remain required before the owner restart. Under the standing owner boot instruction, this repair prepares RELEASE and the verified binary; the agent never executes the kill.
 
 At this receipt, repaired startup is proven by the fixture, **not yet by the running service**. The first known schema, candidate/cut/attempt and export remain live proof requirements. Publication receipt, swap verification, owner restart and passed-boot marker will distinguish preparation from shipping.
+
+## Passed boot after owner machine reset — 2026-09-09
+
+[A] Read-only verification at **13:13:33 CT**, after the owner reported a machine reset: systemd PID **438**, start **13:02:04 CT**; journal boot lines **13:02:06 CT**. This is retrospective observation after the reset, not a claim that a watcher acknowledged within 90 seconds. No kill was issued by this lane. The former PID 3726840 kill command is obsolete.
+
+```text
+🔐 BOOT INTEGRITY OK — rev 954f11b15f2e · built 2026-09-08T23:38:16Z · expected 954f11b1 · goldens PASS
+🗄 research snapshot: schema=1 · objects=5 · rows today market=0 candidate=0 plan=0 scenario=0 exec=0 · null-fields=0 · dropped=0 · added latency p50=UNKNOWN
+📐 scenario economics: contract=on · obstacle-required=on · target-path-coherent=0/0 · sub-1R-first-obstacle=0 · role-use-disagreements=0 · contradictions refused=0 · schema refusals=0 · checked=0 (new-authoring checks since boot; legacy UNKNOWN by design)
+```
+
+[A] All five A19 references agree on **954f11b1**: RELEASE file, disk binary VCS revision (`modified=false`), `HEAD:deploy/RELEASE`, GUIDE_BUILT_REV, and `/api/health`. The running executable independently matches. Binary SHA-256 `c7c9c72321c89a56f5348cc0a9cee554b8f63633782cc6b29973e196fae2e4cf`, 72,459,208 bytes; all 92 on-disk dist files match the prepared manifest. Source head f416ba13 is the publication receipt around that clean binary; the later 5519d494 merge contains a separate strategy research report, not another executable build.
+
+[A] At the 13:13:33 check, legs 1–4 passed; leg 4 was a received **h1 order_snapshot, age 4s**. Leg 5 **FAILED: plannerReadInFlight claim**. Active arms: **0, IDs []**. Therefore no fresh kill was printed or executed. The repair was already running; this marker changes documentation only.
+
+[A] Postboot archive read transaction, scoped to `captured_ms >= 1788976926000` (13:02:06 CT), proves writes in all five objects. Counts are observations, not unique market bars or trading decisions:
+
+| Object | Rows | Stored ID extrema |
+| --- | ---: | --- |
+| candidate | 1651 | 54982–224363 |
+| exec | 50 | 1–238014 |
+| market | 241180 | 4–242898 |
+| plan | 10 | 55783–224366 |
+| scenario | 7 | 211926–223510 |
+
+Census read at `2026-09-09T18:19:22.322386+00:00`; precise query scope and selected IDs are retained in [passed-live-boot-20260909.json](2026-09-08-stage-a-path-repair-data/passed-live-boot-20260909.json).
+
+[A] First scored candidate **54995**, receipt **13:08:08.691 CT**, event `planner_read`: price 29424.5, grade A, final_score **1.92**, seated. Raw evidence=1, fresh multiplier=1, confluence raw=4/capped=3/multiplier=1.6, HTF multiplier=1.2; recorded display overrides explicitly leave the score unchanged. Unsupported components remain NULL. First cut **54994**, same receipt: `PDH 29739.50 [PDH]: proximity distance=283.75 exceeds band=245`; raw components and score are NULL, not fabricated zero.
+
+[A] First completed author attempt **211923**, receipt **13:17:32.483 CT**, event `attempt_verdict`, attempt=1, mode=author; recorded start=1788977288694, end=1788977852480, duration_ms=558090.835295. These clocks and duration are quoted independently as stored; no equality or provider-only latency is inferred. Rejection reason and plan version on this particular frame are NULL. **No repair-mode attempt was observed in this census**; that proof remains pending.
+
+[A] Two successful read-only exports of receipt interval **13:08:08–13:08:10 CT** were byte-identical: **3,260,626 bytes**, SHA-256 `880ae1d9c3e5de730337358217153a8ebfac3807bececc085895bf9bc72032d2`. The production exporter validates the bundle before emitting it. Counts: market=887, candidate=801, plan=3, scenario=0, exec=1; unknown receipt exclusions=0; sole writer=954f11b15f2e7615678f7d2b708c47895faebf1e. The empty scenario array is valid for this narrow interval; the broader census above separately proves scenario capture. Export receipt and object checksum are retained in [live-export-20260909.json](2026-09-08-stage-a-path-repair-data/live-export-20260909.json).
+
+[A] Boot p50 remains **UNKNOWN** because the quoted boot frame has no admission measurement. The earlier offline +2.122935 ms comparison is not substituted for a live statistic. No claim of lossless production recording follows from dropped=0 at startup.
+
+Provenance: Stage A `fix/stage-a-snapshot` supplied recording implementation; this lane/session `stage-a-snapshot-96604090/root[unlisted]`, branch `fix/stage-a-archive-path`, supplied repair **954f11b1** and publication **f416ba13**. Scenario-economics supplied its separately documented contract changes and combined clean-build clock seam **6f677b55**. This lane built and gated the combined source before the September 8 swap; it did not author all constituent waves. Existing candidate suite/build receipts remain above. This passed-boot marker changes only report/evidence files and requires no new executable or restart.
+
+Lock continuity: the machine reset removed the temporary worktree and heartbeat process. The same named owner resumed after verifying missing directory, preserved local/remote repair branch f416ba13, clean main f416ba13 and the running 954f11b1 boot. Only its missing worktree registration was restored. Automatic review initially refused combined recovery until ownership and loss checks were demonstrated, then approved the scoped recovery. The marker must be pushed before this owner releases the lock; release is a subsequent operation, not asserted in advance here.
