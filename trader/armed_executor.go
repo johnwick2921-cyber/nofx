@@ -2134,9 +2134,33 @@ func (at *AutoTrader) cancelArmedOrdersSyncWith(reason string, timeout time.Dura
 		// and may go terminal without asking; every other row gets a cancel on
 		// the wire, and a duplicate cancel is idempotent (NT8 cancels by signal
 		// id) where a missed one is a live order we have stopped watching.
-		if r.SignalID == "" || cancelFn == nil || src == nil {
+		if r.SignalID == "" {
+			// Never placed: nothing at the broker, so this may go terminal.
 			_ = ledger.SetState(r.ID, "cancelled", reason)
 			n++
+			continue
+		}
+		if cancelFn == nil || src == nil {
+			// THE WIRE IS GONE, AND THE ROW IS AT THE BROKER.
+			//
+			// The first draft of this fix replaced `r.State != "working"` with
+			// the signal-id test and left the rest of the disjunction standing,
+			// so a row WITH a signal id was still written 'cancelled' whenever
+			// the cancel function or the ack stream was missing — the same
+			// class-81 shape, surviving in the half of the condition nobody
+			// re-read. The comment above claimed "every other row gets a cancel
+			// on the wire"; the code did not do that.
+			//
+			// one_contract.go learned this exact lesson already: "an unreachable
+			// AddOn sent the row down the terminal branch below — writing
+			// 'cancelled' on an order the broker still holds, which is class 81
+			// exactly". A missing wire is a reason to record the INTENT, never
+			// to declare the outcome. The row goes cancel_pending (non-terminal,
+			// so the slot stays taken and the settlement pass reconciles it) and
+			// is counted as UNACKED, which is what it is.
+			_ = ledger.RequestCancel(r.ID, reason+" (no broker link — intent recorded, never settled)", time.Now().UnixMilli())
+			at.logWarnf("✕ armed cancel UNSENDABLE (%s): signal=%s — no broker link; row held cancel_pending, never promoted", reason, shortID(r.SignalID))
+			unacked++
 			continue
 		}
 		acked := false

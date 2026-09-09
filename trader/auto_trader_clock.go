@@ -719,7 +719,15 @@ func (at *AutoTrader) enforceT1ForceFlatAt(now time.Time) bool {
 		at.logWarnf("⚠️ T1-FORCE-FLAT: %d armed cancel(s) unacked after retry", unacked)
 	}
 	positions, err := at.store.Position().GetOpenPositions(at.id)
-	if err != nil || len(positions) == 0 {
+	if err != nil {
+		// A24 — an unreadable book is not an empty one, and this is the
+		// two-minutes-before-red-news path. The EOD flatten closed this hole on
+		// 2026-09-09; its sibling two functions away collapsed the same failure
+		// into "flat" and let the position ride the print in silence.
+		at.logWarnf("⚠️ T1-FORCE-FLAT (%s): open-position read failed (%v) — flatness UNVERIFIED going into the red-news window", due, err)
+		return n+unacked > 0
+	}
+	if len(positions) == 0 {
 		return n+unacked > 0 // flat — the arm-cancel above is the whole job
 	}
 	at.logWarnf("📰 T1-FORCE-FLAT (%s): flattening %d open position(s) — red-news forced close at T-%dmin (research v5 C.5).", due, len(positions), t1ForceFlatLead)

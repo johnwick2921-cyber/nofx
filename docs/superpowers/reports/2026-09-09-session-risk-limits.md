@@ -318,3 +318,73 @@ revertable: the flatten's ordering (`auto_trader_clock.go`), the cancel guard's
 key (`armed_executor.go`), and the loss-run's UNKNOWN semantics
 (`store/position_query.go`). `BREAKER_HALT_N=0` disables the breaker at runtime
 without a rebuild.
+
+
+---
+
+# THE ADVERSARIAL PASS FOUND A DEFECT I HAD JUST INTRODUCED
+
+A read-only census over every flatten path landed after this report was first
+written. Two of its findings were acted on; the rest are recorded below.
+
+## FIXED — my own D1 fix was half a fix
+
+`cancelArmedOrdersSyncWith` read:
+
+```go
+if r.SignalID == "" || cancelFn == nil || src == nil {
+    _ = ledger.SetState(r.ID, "cancelled", reason); n++; continue
+}
+```
+
+I replaced `r.State != "working"` with the signal-id test **and left the rest of
+the disjunction standing.** So a row that HAS a signal id — by definition an
+order at the broker — was still written `cancelled` whenever the cancel function
+or the ack stream was missing. The same class-81 shape, surviving in the half of
+the condition nobody re-read. Worse: the comment I wrote above it claimed *"every
+other row gets a cancel on the wire"*, which the code did not do. A comment
+asserting the fix, over code that only half performs it.
+
+`one_contract.go` had already learned this exact lesson — *"an unreachable AddOn
+sent the row down the terminal branch below — writing 'cancelled' on an order the
+broker still holds, which is class 81 exactly"*. A missing wire records the
+INTENT, never the outcome. The row now goes `cancel_pending` (non-terminal, so
+the slot stays taken and the settlement pass reconciles it) and is counted
+UNACKED. Pinned RED (*"row 1 (signal sig-nowire) was written 'cancelled' with NO
+wire available"*), mutation-tested.
+
+## FIXED — the same A24 hole in the sibling path
+
+`enforceT1ForceFlatAt` — the red-news force-flat — read
+`if err != nil || len(positions) == 0 { return … }`. A DB read failure two
+minutes before FOMC silently became "no position to flatten" and the position
+rode the print. The EOD path closed this on 2026-09-09; its sibling two functions
+away did not get the fix. Now logs `flatness UNVERIFIED going into the red-news
+window`. Pinned RED, mutation-tested.
+
+## REPORTED, NOT FIXED
+
+- **`cancelArmedOrders` (the no-link fallback)** writes `cancelled` on every
+  non-terminal row with no wire contact of any kind, and its count feeds the
+  operator-facing flat claim. Same shape as the above, different function; it is
+  the branch taken when `armedTrader()` is nil.
+- **The ack-timeout branch** promotes a row straight to `cancelled`, bypassing
+  the `RequestCancel → cancel_pending → ConfirmCancel` lifecycle the 2026-09-06
+  wave built. **`ConfirmCancel` has never fired in production: 0 of 69 cancelled
+  rows carry a `cancel_settled_snapshot_id`.**
+- **"Acked" means "the row left the non-terminal set", not "cancelled".** A FILL
+  arriving during the drain window retires the row and is counted and logged as a
+  successful cancel.
+- **Every flatten decides "no open position" from the local store, never the
+  broker** — the same store this codebase documents as lagging real exits by
+  ~80s. The cutover gate deliberately splits store from broker for exactly this
+  reason; the flatten has only the store leg.
+- **The flatten is the only cancel site with no `cancelSafetyFor` guard.** That
+  is the owner's ruling of 2026-09-07 ("a guard that refuses without a book,
+  applied to the EOD flatten and the news-halt sweep, leaves arms live and
+  re-opens class 33 — worse than the defect it guards") and it stands. The census
+  notes the harm is currently bounded by the C# side, which no longer walks
+  `placedBrackets` — a bound that lives in the AddOn, not in Go.
+
+None of these are regressions from this wave; all predate it. They are the next
+wave's material, and they are listed here rather than in a drawer.

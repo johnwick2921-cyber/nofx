@@ -206,3 +206,72 @@ func TestFlattenCancelsBeforeItReadsPositions(t *testing.T) {
 			"short-circuits the close and every resting arm survives it", read, cancel)
 	}
 }
+
+// A ROW WITH A SIGNAL ID IS NEVER RETIRED BY OUR OWN PLUMBING BEING ABSENT.
+//
+// The D1 fix replaced `r.State != "working"` with a test on the signal id — and
+// left the rest of the disjunction standing:
+//
+//	if r.SignalID == "" || cancelFn == nil || src == nil { SetState(cancelled) }
+//
+// So a row that HAS a signal id — by definition an order at the broker — was
+// still written 'cancelled' whenever the wire or the ack stream was missing.
+// That is the same class-81 shape the fix was written to end, surviving in the
+// half of the condition nobody re-read. My own comment above it claimed "every
+// other row gets a cancel on the wire", which the code did not do.
+//
+// one_contract.go already learned this exact lesson: "an unreachable AddOn sent
+// the row down the terminal branch below — writing 'cancelled' on an order the
+// broker still holds, which is class 81 exactly". A missing wire is a reason to
+// record the INTENT, not to declare the outcome.
+func TestNoWireNeverRetiresARowThatReachedTheBroker(t *testing.T) {
+	now := time.Date(2026, 8, 18, 14, 30, 0, 0, chicagoLoc())
+	at, _ := flatFixture(t, now, true, store.StateWorking, "sig-nowire", nil)
+
+	// The wire is gone: no cancel function, no ack stream.
+	n, unacked := at.cancelArmedOrdersSyncWith("session close — EOD flat", time.Millisecond, nil, nil)
+
+	rows, err := at.store.ArmedOrders().ListForPlan("2026-08-18:NY:trader-1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range rows {
+		if r.SignalID == "" {
+			continue
+		}
+		if r.State == store.StateCancelled {
+			t.Fatalf("row %d (signal %s) was written 'cancelled' with NO wire available — the order it "+
+				"names may be resting at the broker right now, and the ledger has declared it dead. "+
+				"n=%d unacked=%d reason=%q", r.ID, r.SignalID, n, unacked, r.StateReason)
+		}
+	}
+}
+
+// The T1 red-news force-flat must not read a FAILED position query as "flat".
+// The EOD path closed this on 2026-09-09; its sibling two functions away did
+// not get the fix, and a DB hiccup two minutes before FOMC silently becomes
+// "no position to flatten" while the position rides the print.
+func TestT1ForceFlatDoesNotReadAFailedQueryAsFlat(t *testing.T) {
+	b, err := os.ReadFile("auto_trader_clock.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(b)
+	fn := strings.Index(src, "func (at *AutoTrader) enforceT1ForceFlatAt(")
+	if fn < 0 {
+		t.Fatal("enforceT1ForceFlatAt not found — this pin has lost its subject")
+	}
+	body := src[fn:]
+	if e := strings.Index(body[1:], "\nfunc "); e >= 0 {
+		body = body[:e+1]
+	}
+	if strings.Contains(body, "if err != nil || len(positions) == 0 {") {
+		t.Fatal("T1 force-flat still collapses a FAILED position read into \"flat\" — " +
+			"`if err != nil || len(positions) == 0`. A24: an unreadable book is not an empty one, and " +
+			"this is the two-minutes-before-red-news path")
+	}
+	if !strings.Contains(body, "UNVERIFIED") {
+		t.Error("T1 force-flat does not report unverified flatness — the EOD path says " +
+			"\"flatness UNVERIFIED this cycle\"; its sibling must be as honest")
+	}
+}
