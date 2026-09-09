@@ -44,8 +44,44 @@ type PlannerReadFact struct {
 	ScopeSinceMs int64
 	ScopeBars    int
 	ScopeIntv    string
+	// ── BARS HORIZON (2026-09-09), ADDITIVE ─────────────────────────────────
+	//
+	// ScopeBars is NOT redefined by this wave. It has always been
+	// len(scope.Bars) — the SERVED count (auto_trader_planner.go). The owner's
+	// premise that it recorded the REQUESTED window is NOT REPRODUCED; the two
+	// numbers happen to coincide at 2000 because VoidScopeBarCount() is 2000
+	// and the ring held at least that many. Renaming its meaning would silently
+	// reinterpret 67 correct rows.
+	//
+	// What was missing is the SPAN and the CONTINUITY of that served tape. On
+	// 2026-09-09 rows 65 and 66 recorded 2000 bars that WERE delivered, across
+	// a 3055-minute window with 696 open-market minutes missing inside it, and
+	// no field could express the difference.
+	//
+	// UNKNOWN vs ZERO: when ReadHorizons == "" the four numerics below were
+	// never computed and are UNKNOWN, NOT zero. Gate every query on
+	// HorizonRecorded() (in SQL: `where read_horizons != ''`) and state the
+	// excluded COUNT (corrected-column law, class 40). This reuses the "" vs
+	// "[]" convention VoidLevels already established above, rather than adding
+	// a boolean that can drift out of agreement with the text.
+	ScopeRequestedBars int
+	ScopeSpanMs        int64
+	ScopeOldestAgeMs   int64
+	ScopeGapCount      int
+	// ReadHorizons is the JSON array of one kernel.BarHorizon per tape this read
+	// consulted — the void tape (1m) AND the ATR tape (5m), which are different
+	// windows. Before this, a row's stop_floor_pts could not be explained from
+	// its own row: the floor came from the 5m fetch while scope_* described the
+	// 1m one. "" = not computed; "[]" = computed and empty.
+	ReadHorizons string    `gorm:"type:text"`
 	CreatedAt    time.Time `gorm:"index"`
 }
+
+// HorizonRecorded reports whether this row's horizon columns were computed.
+// FALSE means ScopeRequestedBars / ScopeSpanMs / ScopeOldestAgeMs /
+// ScopeGapCount are UNKNOWN — never that they are zero (A24).
+
+func (p *PlannerReadFact) HorizonRecorded() bool { return p != nil && p.ReadHorizons != "" }
 
 // TableName is explicit so the cap-trim SQL never guesses.
 func (PlannerReadFact) TableName() string { return "planner_read_facts" }

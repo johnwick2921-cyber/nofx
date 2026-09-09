@@ -2483,36 +2483,14 @@ func (at *AutoTrader) persistReadFacts(in kernel.PlannerInput, scope kernel.Void
 	if at == nil || at.store == nil {
 		return
 	}
-	recs := make([]store.VoidLevelRecord, 0, len(void))
-	for _, v := range void {
-		recs = append(recs, store.VoidLevelRecord{Price: v.Price, Short: v.Short, ReclaimedAt: v.ReclaimedAtCT})
-	}
-	mult := kernel.MinSLATRMult()
-	floor := 0.0
-	if atr5m > 0 && mult > 0 {
-		floor = atr5m * mult
-	}
-	row := &store.PlannerReadFact{
-		TraderID:     at.id,
-		TradeDate:    plannerTradeDateCT(now),
-		Session:      in.Session,
-		PromptHash:   in.AIConfigHash,
-		VoidLevels:   store.EncodeVoidLevels(recs),
-		VoidCount:    len(recs),
-		StopFloorPts: floor,
-		ATR5m:        atr5m,
-		StopFloorMlt: mult,
-		BiasRegime:   fmt.Sprintf("%s/%s", in.Regime.TrendDaily, in.Regime.ATRRegime),
-		ScopeSinceMs: scope.SinceMs,
-		ScopeBars:    len(scope.Bars),
-		ScopeIntv:    scope.Interval,
-	}
+	row := buildReadFactRow(at.id, in, scope, void, atr5m, now)
 	if err := at.store.PlannerReadFacts().SaveReadFact(row); err != nil {
 		at.logWarnf("📓 read-facts write failed: %v", err)
 		return
 	}
-	at.logInfof("📓 read facts: void=%d · floor=%.1f pts (%.1f×ATR5m %.2f) · scope=%s×%d since=%d (cap %d)",
-		len(recs), floor, mult, atr5m, scope.Interval, len(scope.Bars), scope.SinceMs, store.PlannerReadFactsCap)
+	at.logInfof("📓 read facts: void=%d · floor=%.1f pts (%.1f×ATR5m %.2f) · scope=%s×%d since=%d (cap %d) · horizon %s",
+		row.VoidCount, row.StopFloorPts, row.StopFloorMlt, row.ATR5m, row.ScopeIntv, row.ScopeBars,
+		row.ScopeSinceMs, store.PlannerReadFactsCap, scope.Horizon.Line())
 }
 
 // maybeWriteDigests writes the 3-line session digest at each enabled session's
@@ -2906,3 +2884,65 @@ const rvBaseline5mBarsAsk = 2500
 // UNCHANGED at 20 — this wave does not alter what anything computes — but it is
 // now named rather than a literal beside a field that claimed to be fed it.
 const rvBaselineMaxDays = 20
+
+// buildReadFactRow builds the one planner_read_facts row per read. Extracted
+// from persistReadFacts (class 86) so a pin drives THE PRODUCTION BUILDER
+// rather than a copy of it, and pure — it reads no clock (A28: `now` comes in).
+//
+// D4 (BARS HORIZON 2026-09-09) — WHAT CHANGED, AND WHAT DELIBERATELY DID NOT:
+//
+// ScopeBars IS NOT REDEFINED. It has always been len(scope.Bars): the SERVED
+// count, after truncation. The premise that it recorded the REQUEST is NOT
+// REPRODUCED — 67 of 67 live rows (ids 1..67) record scope_bars=2000 against a
+// 2000 ask, so the void scope has never been short, and reinterpreting the
+// column would silently rewrite the meaning of 67 correct rows.
+//
+// What a COUNT cannot express is a SPAN or a HOLE. Rows 64 and 66 were
+// identical on the record, yet row 66's tape reached back to 2026-09-07 10:23
+// CT — 3,055 minutes — with 696 OPEN-MARKET minutes missing inside it. So four
+// additive columns carry the request, the span, the oldest bar's age and the
+// gap count, plus read_horizons as the JSON of the horizons themselves.
+//
+// UNKNOWN vs ZERO: read_horizons == "" marks a row whose horizon was never
+// computed; its four numerics are UNKNOWN, not zero (HorizonRecorded, A24).
+func buildReadFactRow(traderID string, in kernel.PlannerInput, scope kernel.VoidScope, void []kernel.VoidBreakdownLevel, atr5m float64, now time.Time) *store.PlannerReadFact {
+	recs := make([]store.VoidLevelRecord, 0, len(void))
+	for _, v := range void {
+		recs = append(recs, store.VoidLevelRecord{Price: v.Price, Short: v.Short, ReclaimedAt: v.ReclaimedAtCT})
+	}
+	mult := kernel.MinSLATRMult()
+	floor := 0.0
+	if atr5m > 0 && mult > 0 {
+		floor = atr5m * mult
+	}
+	row := &store.PlannerReadFact{
+		TraderID:     traderID,
+		TradeDate:    plannerTradeDateCT(now),
+		Session:      in.Session,
+		PromptHash:   in.AIConfigHash,
+		VoidLevels:   store.EncodeVoidLevels(recs),
+		VoidCount:    len(recs),
+		StopFloorPts: floor,
+		ATR5m:        atr5m,
+		StopFloorMlt: mult,
+		BiasRegime:   fmt.Sprintf("%s/%s", in.Regime.TrendDaily, in.Regime.ATRRegime),
+		ScopeSinceMs: scope.SinceMs,
+		ScopeBars:    len(scope.Bars), // SERVED — unchanged, and NOT the request
+		ScopeIntv:    scope.Interval,
+	}
+	h := scope.Horizon
+	if h.Interval == "" {
+		// The scope was built without a horizon (a pre-wave caller or a bare
+		// literal). Leave every horizon column at its zero value AND
+		// read_horizons empty, so the row reads UNKNOWN rather than "no gaps".
+		return row
+	}
+	row.ScopeRequestedBars = h.Requested
+	row.ScopeSpanMs = h.SpanMs
+	row.ScopeOldestAgeMs = h.OldestAgeMs
+	row.ScopeGapCount = h.GapCount
+	if b, err := json.Marshal([]kernel.BarHorizon{h}); err == nil {
+		row.ReadHorizons = string(b)
+	}
+	return row
+}
