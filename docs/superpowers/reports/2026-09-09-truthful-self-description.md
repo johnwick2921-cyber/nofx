@@ -112,3 +112,28 @@ GREEN after the corrections.
 ## Rollback
 
 Prior binary preserved as `nofx-bin.old.<rev>` (named for the rev it holds, verified with `go version -m`). DB backed up before the config write to `~/nofx-backups/manual-w5-truthful/data.db` (762,155,008 bytes), taken with `sqlite3 .backup` against a read-only handle.
+
+## E5 was owed and unrun; when run it refuted the fixture
+
+The dispatch required E5 — "mutate the resolved value E1 reads; quote the line and the failure text" — and I did not run it. A sibling lane's class-97 warning ("one source, both readers — never two readers that happen to agree") prompted me to. It refuted my own pin:
+
+```
+-func LunchWindowCT() (startCT, endCT string) { return "12:00", "13:30" }
++func LunchWindowCT() (startCT, endCT string) { return "12:15", "13:45" }
+
+go test ./kernel/ -run TestGuideDoesNotTypeTheLunchWindow   →   ok        ← should have FAILED
+```
+
+The pin built its forbidden-literal list FROM the resolver, so when the resolver moved, the Guide's stale `12:00–13:30` matched none of the new literals and the loop fell through. It could only ever confirm today's agreement — the same defect the wave was written to remove, inside the guard written to prevent it.
+
+The shipped VALUE was never wrong (`12:00–13:30`, verified live), so nothing the owner read was false. What was missing was the guard against tomorrow.
+
+Fixed on fix/guide-clock-drift-pin: the pin now finds every `HH:MM–HH:MM` range written near "lunch" and requires it to EQUAL the resolved pair. The same mutation now fails on three files at once:
+
+```
+plays.ts      states the lunch window as "12:00–13:30" but kernel.LunchWindowCT() resolves "12:15–13:45"
+settings.ts   states the lunch window as "12:00–13:30" but …
+tradingDay.ts states the lunch window as "12:00–13:30" but …
+```
+
+One more lesson from the fix: the first inversion used a ±160-character window and failed on tradingDay.ts's unrelated NY session range `08:30–14:45`. A guard calibrated by guesswork fails on correct text; the window was then calibrated against the real sentences. Checklist class 93, filed as the worked example for the inbound class 97.

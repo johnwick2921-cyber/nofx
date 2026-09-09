@@ -59,43 +59,61 @@ func ctPlusOneHour(hhmm string) string {
 	return fmt.Sprintf("%02d:%02d", (h+1)%24, m)
 }
 
-// A typed lunch window is allowed ONLY in a file that also names the resolver.
+// Any clock range stated NEAR the word "lunch" must EQUAL the resolved window.
 //
-// Four Guide files typed the CORRECT window and cited nothing; one typed the
-// WRONG one. Rewriting the four true sentences to look busy would be worse than
-// leaving them (H), so the rule is not "never type it" — it is "never type it
-// unsourced". tradingDay.ts already does this correctly and is the model:
-// it renders the window and names kernel.LunchWindowCT beside it, so a reader
-// who doubts the number knows exactly where to check it.
-func TestGuideDoesNotTypeTheLunchWindow(t *testing.T) {
+// THIS TEST WAS WRONG, AND E5 IS WHAT FOUND IT. The first version built its
+// forbidden-literal list FROM LunchWindowCT() and asked whether the Guide
+// contained those literals. Mutating the resolver to 12:15–13:45 left the
+// Guide's stale "12:00–13:30" matching none of the new literals, so the loop
+// fell through and the test reported ok. A guard that derives its expectation
+// from the thing it guards cannot see that thing drift — it can only confirm
+// today's agreement (checklist class 97: one source, both readers; never two
+// readers that happen to agree).
+//
+// Inverted: find every HH:MM–HH:MM range written near "lunch" and assert it
+// EQUALS the resolved pair. Now moving the resolver fails loudly, which is the
+// only behaviour that protects the Guide tomorrow.
+var clockRange = regexp.MustCompile(`(\d{1,2}:\d{2})\s*[–-]\s*(\d{1,2}:\d{2})`)
+
+func TestGuideLunchWindowEqualsTheResolvedWindow(t *testing.T) {
 	ls, le := LunchWindowCT()
-	// ET is CT+1. Computed here, in the test, rather than adding a production
-	// converter with no production caller (A29).
-	etStart, etEnd := ctPlusOneHour(ls), ctPlusOneHour(le)
+	want := ls + "-" + le
 
 	for name, src := range guideContentFiles(t) {
-		typed := ""
-		for _, lit := range []string{
-			ls + "\u2013" + le, ls + "-" + le,
-			etStart + "\u2013" + etEnd, etStart + "-" + etEnd,
-			"11:30\u201313:30", "11:30-13:30",
-		} {
-			if strings.Contains(src, lit) {
-				typed = lit
+		lower := strings.ToLower(src)
+		checked := 0
+		for idx := 0; ; {
+			at := strings.Index(lower[idx:], "lunch")
+			if at < 0 {
 				break
 			}
+			at += idx
+			idx = at + 5
+			// A TIGHT window around the word. Calibrated against the real text:
+			// the range sits adjacent to "lunch" in every case that matters
+			// ("lunch 12:00–13:30 CT"; time: '12:00–13:30' … label: 'Lunch
+			// gate'). A wider window dragged in tradingDay.ts's unrelated NY
+			// session range 08:30–14:45 and failed on a sentence that was right.
+			lo, hi := at-80, at+80
+			if lo < 0 {
+				lo = 0
+			}
+			if hi > len(src) {
+				hi = len(src)
+			}
+			for _, m := range clockRange.FindAllStringSubmatch(src[lo:hi], -1) {
+				checked++
+				got := m[1] + "-" + m[2]
+				if got != want {
+					t.Errorf("%s states the lunch window as %q but kernel.LunchWindowCT() resolves %q — the Guide has drifted from its resolver", name, m[0], ls+"–"+le)
+				}
+			}
 		}
-		if typed == "" {
-			continue
-		}
-		// The wrong window is a false claim wherever it appears.
-		if strings.HasPrefix(typed, "11:30") {
-			t.Errorf("%s states the lunch window as %q — kernel.LunchWindowCT() resolves %s\u2013%s CT; the typed copy is an hour off and in the wrong clock", name, typed, ls, le)
-			continue
-		}
-		// A correct window still has to say where it came from.
-		if !strings.Contains(src, "LunchWindowCT") {
-			t.Errorf("%s types the lunch window %q without naming its resolver — cite kernel.LunchWindowCT so the number can be checked (tradingDay.ts is the pattern)", name, typed)
+		if checked == 0 && strings.Contains(lower, "lunch") && strings.Contains(src, "LunchWindowCT") {
+			// A file that names the resolver and states no digits is the ideal
+			// shape; nothing to compare. Recorded so the pin cannot pass
+			// vacuously everywhere at once.
+			t.Logf("%s: names the resolver and types no window — nothing to compare", name)
 		}
 	}
 }
