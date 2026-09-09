@@ -2792,3 +2792,113 @@ Stage A's first combined boot (`6f677b55`, 2026-09-08 18:11:54 CT) read schema=U
 **Probe:** render the real Go status-handler output through ChatMessages; check sender, placeholder, Vite-transformed HTML title and Guide heading; enumerate EN/ZH/ID. Mutate each shared display-name file and require RED. Pin the actual main logger call to the shared source, even against a visually identical literal. E2 preserves module/import targets and byte-pins units, binary paths, JWT, lock, log naming, wire and stored chat keys. A removed JWT guard and renamed import must be rejected.
 
 **Law:** product display names come from `branding/product.txt` and `branding/persona.txt`, read by Go and the UI. Display-name imports may be added; no existing import target or operational/stored identifier is renamed in a visible-only wave. URLs, provider names, historical records and accurate technical examples remain explicitly inventoried. Browser/unit evidence is never presented as proof of an unobserved live boot. Dispatch 102 report: `reports/2026-09-08-brand-visible.md`.
+
+## CLASS 95 — THE GATE IS ON THE PATH THAT CANNOT TRADE (born 2026-09-09, fix/session-risk-limits, C2 + the band addendum)
+
+**Name.** A guard is written, wired, registered, covered by tests, and listed in
+the knob registry as live — on a code path that the current mode forbids from
+trading. It guards a door nobody walks through. Every check for "is it wired?"
+answers yes.
+
+**Root cause.** This desk has two entry paths: the DECISION path (the AI opens a
+position directly) and the ARM path (a plan scenario places a resting order).
+`plan_mode=strict` — the live setting — routes everything through the arm path:
+*"plan_mode=strict executes plan scenarios on the ARM path only, and this is a
+%s-path market entry"* (`trader/entry_gate.go`). The decision path cannot enter.
+
+Two independent session-risk guards were found on the wrong side of that split
+in one wave, by two different routes:
+
+  · **the consecutive-loss breaker** — `consecutive_loss_halt`, registered
+    `KnobLive` with a named consumer, wired at
+    `trader/auto_trader_orders.go:250` inside `executeDecisionWithRecord`.
+  · **the lunch / first-N no-trade band** — enforced at
+    `trader/auto_trader_orders.go:281` and NOWHERE else.
+    `grep -c` over `armed_executor.go` returned **0** for `InLunchNoTrade`,
+    `InFirstNoTradeMinutes` and `sessionEntryBlocked`.
+
+Both are real, correct, tested implementations. Both were unreachable by the
+only path that places an order.
+
+**Why the usual checks miss it.** A29 asks "does this function have a production
+call site?" — and it does. The knob registry asks "is this knob consumed?" — and
+it is, with a file:line. A wiring-gate test asks "is it called?" — yes. Every
+one of those questions is about the FUNCTION. None is about the PATH, and the
+path is where the trading happens.
+
+**Probe, five questions:**
+1. Name every path that can open a position in the CURRENT mode. Not every path
+   the code has — the ones the live configuration permits. Which does the guard
+   sit on?
+2. Invert it: for the path that actually trades, list every guard it consults,
+   in order. Anything absent from that list is not guarding this desk.
+3. Does a mode/flag (strict, dormant, shadow) make one path unreachable? Then a
+   guard on that path is dead code with a passing test suite.
+4. `grep -c <guard> <the-file-that-trades>` — a literal zero on the file that
+   places orders is the whole finding, and it takes one command.
+5. If the mode changed tomorrow, would the guard start firing for the first time
+   in production, untested against real flow? That is the same defect wearing a
+   different hat.
+
+**Law:** **wire a guard to the PATH, not to a function.** A guard's home is the
+narrowest point every entry must pass through in the mode you actually run; if
+two paths exist, either both consult it or the wave says in writing which one
+does not and why. "It is wired" is an answer to a question nobody was asking.
+
+**Corollary.** Neither instance was found by a test, a review or the registry.
+The breaker was found by reading its own comment ("NOT gated by the guardrails
+master") and asking which callers exist; the band was found by the owner running
+one `grep -c` against the file that places orders.
+
+## CLASS 96 — THE LATCH WITH NO AUTOMATIC RELEASE (born 2026-09-09, fix/session-risk-limits, D4(c))
+
+**Name.** A flag is set by an automatic condition and cleared only by a human. Its
+release is described in a comment, implemented in a function, and that function
+is called from exactly one place: the manual operator endpoint. Nothing on the
+recurring path ever calls it.
+
+**Root cause.** `SetDailyForceFlat` records a daily-loss trip that blocks new
+entries. `clearAllDailyForceFlat` lifts every trip. The comment above the state
+says plainly: *"Cleared by the CME session-day reset (ResetDailyPnLAt), so a trip
+lasts the session-day and lifts with the daily window."*
+
+`MaybeResetDaily` — the once-per-cycle rollover detector — rolled the DATE and
+did not touch the trips:
+
+```go
+if lastDailyResetDate == "" || lastDailyResetDate != today {
+    lastDailyResetDate = today
+    logger.Infof("daily window reset to CME session-day %s", today)
+    return true
+}
+```
+
+`grep -rn clearAllDailyForceFlat` returned its definition and ONE caller —
+`ResetDailyPnLAt`, whose only production entry is `POST /api/risk/force-flat`. So
+a tripped desk stayed blocked across the roll, the next session, and the one
+after, until a human reset it or the process restarted.
+
+**Nobody had seen it**, because the guardrails master is OFF and the trip has
+never fired. A restart also clears it, since the state is an in-memory map — so
+even a live occurrence would likely have been erased before anyone correlated it.
+
+**Probe, five questions:**
+1. For every latch that BLOCKS something: name the line that clears it, and the
+   caller of that line. If the only caller is an operator endpoint, the latch is
+   permanent in practice.
+2. Does a comment promise a release the code does not perform? Grep the named
+   clearing function and count its callers before believing the sentence.
+3. Is the state in memory? Then a restart hides the defect, and "we have never
+   seen it" is evidence about restart frequency, not about correctness.
+4. Is the setting condition currently disabled (a master switch off, a feature
+   flagged)? Then the latch has never been exercised and its release has never
+   been observed — schedule the test, do not infer from silence.
+5. Does the release belong to a CLOCK event (a roll, a session, a day)? Then the
+   thing that detects that event is where the release belongs, and it is worth
+   asserting that the detector clears it.
+
+**Law:** **a latch is not shipped until its RELEASE has a test.** Set and clear
+are one feature. Where the release is tied to a recurring boundary, the code that
+detects the boundary performs the release — and a pin asserts that crossing the
+boundary lifts the latch, because the comment saying so is the thing most likely
+to be wrong.
