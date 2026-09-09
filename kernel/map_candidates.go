@@ -306,6 +306,57 @@ func CountMap(detected int, cs []MapCandidate) MapCounts {
 	return m
 }
 
+// RenderMapBlock is D6: the model sees the SAME map the card shows.
+//
+// One row per MERGED candidate, carrying every name it wears, its map role, its
+// distance in ATR5m (or n/a), and — for a projection — the word `projection`
+// and the method. Score is carried and shown but ranks second to reachability.
+//
+// No score COMPONENTS appear here (that is Stage A's job) and no instruction
+// text (that is the Guide-strings lane's). This renders what the map IS, never
+// what to do about it.
+func RenderMapBlock(cs []MapCandidate, price float64) string {
+	if len(cs) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "MAP (merged references, nearest-first; price %s):\n", trimFloat(price))
+	for _, c := range cs {
+		sign := "+"
+		if c.Distance < 0 {
+			sign = "-"
+		}
+		grade := c.Grade
+		if grade == "" {
+			grade = "—" // a projection carries no detector grade (canon 49)
+		}
+		names := c.NamesLine()
+		if c.MergedCount > 1 {
+			names = fmt.Sprintf("%s [merged x%d]", names, c.MergedCount)
+		}
+		tail := ""
+		if c.Projection {
+			tail = "  projection: " + c.ProjectionMethod
+		} else if !c.EntryCandidate && c.RefusedReason != "" {
+			tail = "  not-an-entry: " + c.RefusedReason
+		}
+		fmt.Fprintf(&b, "  %-9s %-44s %s  %-16s %s%s pt / %s ATR%s\n",
+			trimFloat(c.Price), names, grade, c.Role,
+			sign, trimFloat(math.Abs(c.Distance)), c.DistanceATRLabel(), tail)
+	}
+	short := EntryShortlist(cs)
+	if len(short) == 0 {
+		b.WriteString("ENTRY SHORTLIST: none — no reference has a plausible target at the resolved minimum.\n")
+	} else {
+		b.WriteString("ENTRY SHORTLIST (reachability order — nearest first; [I] unvalidated, E4 pending):\n")
+		for i, c := range short {
+			fmt.Fprintf(&b, "  %d. %-9s %-44s score %s\n", i+1, trimFloat(c.Price), c.NamesLine(), trimFloat(c.Score))
+		}
+	}
+	b.WriteString("Levels excluded from the shortlist remain on the map as target/obstacle/invalidation — exclusion is not invalidation.\n")
+	return b.String()
+}
+
 // assignMapRoles applies D1's role axis and D3's candidacy test in one pass
 // over the merged set. Mutates the slice in place; the slice is ours.
 func assignMapRoles(cs []MapCandidate, price, minTarget float64) {

@@ -35,7 +35,55 @@ func BuildKeyLevelsBlockOpts(traderID string, bars []market.Kline, reg SessionRe
 	if seat1HZone {
 		scored = Seat1HZone(scored, maxLevels)
 	}
-	return RenderKeyLevelsBlock(scored, price)
+	block := RenderKeyLevelsBlock(scored, price)
+
+	// W3 (2026-09-09) — the MERGED map, the entry shortlist in reachability
+	// order, and any projections beyond the mapped range, rendered BELOW the
+	// existing table rather than replacing it: the seated table is what the
+	// scorer produced and stays exactly as it was (the score is untouched this
+	// wave), while the map block is what the owner's card shows.
+	//
+	// ATR5m is the same series the confirm/stop path uses (StaleConfirmATR5m);
+	// when it cannot be computed the ATR column prints n/a rather than 0.
+	atr5m := StaleConfirmATR5m(bars)
+	cs := BuildMapWithProjections(scored, mapProjectionsFor(scored, bars, symbol, price, now), price, atr5m, MapCandidateOpts{})
+	if mb := RenderMapBlock(cs, price); mb != "" {
+		block += "\n" + mb
+	}
+	return block
+}
+
+// mapProjectionsFor assembles D5's projected references for one read. Each
+// producer returns nothing when its inputs are absent, so an unavailable source
+// contributes no row rather than a fabricated one (A24).
+func mapProjectionsFor(scored []ScoredLevel, bars []market.Kline, symbol string, price float64, now time.Time) []MapCandidate {
+	if len(scored) == 0 {
+		return nil
+	}
+	lo, hi := scored[0].Price, scored[0].Price
+	for _, s := range scored {
+		if s.Price < lo {
+			lo = s.Price
+		}
+		if s.Price > hi {
+			hi = s.Price
+		}
+	}
+	var out []MapCandidate
+	// (a) prior-week extremes from the DAILY source — never the 1m ring.
+	out = append(out, ProjectPriorWeekExtremes(DailyBarsFor(symbol, MapDailyBarCount), now)...)
+	// (b) round numbers beyond the mapped range.
+	dATR := DailyRangeProxy(bars, now)
+	if dATR > 0 {
+		out = append(out, ProjectRoundNumbersBeyond(lo, hi, MapRoundNumberStep, dATR)...)
+	}
+	// (c) the ATR-projected session extreme, from the session's own open.
+	if cb := closedBars(bars, now); len(cb) > 0 && dATR > 0 {
+		out = append(out, ProjectSessionExtreme(cb[0].Open, dATR)...)
+	}
+	// (d) the measured move of the mapped range once price has broken it.
+	out = append(out, ProjectMeasuredMove(lo, hi, price)...)
+	return out
 }
 
 // AssembleScoredLevels runs every detector, scores them, and returns the graded

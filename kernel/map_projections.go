@@ -38,6 +38,16 @@ func SessionExtremeATRMult() float64 {
 	return SessionExtremeATRMultDefault
 }
 
+// MapDailyBarCount is how many CLOSED daily bars the prior-week projector
+// reads. Two weeks of trading days plus slack, so a holiday-shortened prior
+// week is still fully covered.
+const MapDailyBarCount = 20
+
+// MapRoundNumberStep is the round-number spacing used BEYOND the mapped range
+// (D5b). 100 index points on MNQ — the same magnitude traders quote ("29,700"),
+// and coarse enough that a projection list stays short. [I] until E4.
+const MapRoundNumberStep = 100.0
+
 // SessionExtremeATRMultDefault — one daily ATR either side of the open. Chosen
 // as the plainest possible starting point, NOT as a measured edge: a day that
 // travels a full daily ATR from its open is ordinary, so this projects the
