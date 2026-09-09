@@ -36,6 +36,13 @@ type VoidScope struct {
 	Interval string
 	BarCount int
 	Source   string // "provider" | "given" — how Bars were obtained
+	// Horizon (BARS HORIZON 2026-09-09) is what the served slice ACTUALLY
+	// covers: span, oldest age, and open-market intervals missing inside it.
+	// BarCount is what was ASKED for; len(Bars) is what came back; neither says
+	// whether the tape between them was continuous. On 2026-09-09 13:18 CT this
+	// read was served 2000 of 2000 across a 3055-minute window with 696 missing
+	// open-market minutes — Horizon.GapCount is the only field that says so.
+	Horizon BarHorizon
 }
 
 // VoidScopeBarCount is the resolved bar depth both sides read. Default
@@ -85,6 +92,10 @@ func ResolveVoidScope(symbol string, now time.Time) VoidScope {
 		sc.Bars = market.FuturesBarsProvider(symbol, sc.Interval, sc.BarCount)
 	}
 	sc.SinceMs = VoidScopeSinceMs(sc.Bars, now)
+	// The SAME `now` the caller passed — no second clock (A28), so the recorded
+	// age is exact rather than approximately-now.
+	sc.Horizon = HorizonOf(sc.Bars, sc.Interval, sc.BarCount, now)
+	sc.Horizon.Who = "void"
 	return sc
 }
 
@@ -92,14 +103,17 @@ func ResolveVoidScope(symbol string, now time.Time) VoidScope {
 // fixtures and by any caller that already holds the tape — the WINDOW still
 // comes from the resolver, never from the caller.
 func VoidScopeOf(bars []market.Kline, now time.Time) VoidScope {
-	return VoidScope{Bars: bars, SinceMs: VoidScopeSinceMs(bars, now), Interval: VoidScopeInterval(), BarCount: VoidScopeBarCount(), Source: "given"}
+	sc := VoidScope{Bars: bars, SinceMs: VoidScopeSinceMs(bars, now), Interval: VoidScopeInterval(), BarCount: VoidScopeBarCount(), Source: "given"}
+	sc.Horizon = HorizonOf(sc.Bars, sc.Interval, sc.BarCount, now)
+	sc.Horizon.Who = "void"
+	return sc
 }
 
 // VoidScopeBootLine reports the resolved scope, every field READ from its
 // resolver — never a literal.
 func VoidScopeBootLine() string {
-	return fmt.Sprintf("void scope: session-day window · %s×%d · one resolver for prompt AND validator (parity)",
-		VoidScopeInterval(), VoidScopeBarCount())
+	return fmt.Sprintf("void scope: session-day window · %s×%d · one resolver for prompt AND validator (parity) · horizon: calendar-aware gap scan, cap=%d steps (a weekend is not a gap)",
+		VoidScopeInterval(), VoidScopeBarCount(), barHorizonScanCap)
 }
 
 // ResolveVoidScopeOf wraps an already-held tape in the resolved window. Same
