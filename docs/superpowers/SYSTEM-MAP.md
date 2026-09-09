@@ -103,6 +103,8 @@ Assembly order: MultiDay → Round → OR/IB → Gap → EQH/EQL → S/D → FVG
 
 **Blackouts:** T1 red news ±15 min hard no-trade (`T1BlackoutMinutes=15` `calendar_blackout.go:14`, windows :23-39) `[O]` · T2 caution-only (:21-22) · lunch 12:00–13:30 CT (`no_trade_band.go:42`) `[O]` · first-5-min no-trade (:34-37) `[O]` · session gate `auto_trader_session.go:98-127`.
 
+**WHICH PATH EACH BLACKOUT BINDS** (W5, measured at rev 954f11b1): the lunch and first-N bands have exactly two consumers — the AI-DECISION entry gate (`auto_trader_orders.go:281` → `sessionEntryBlocked`, the only production call site) and the adherence grader, which scores after the fact and refuses nothing. **They do not bind the ARM path:** `grep -cE 'InLunchNoTrade|InFirstNoTradeMinutes|sessionEntryBlocked' trader/armed_executor.go` = **0**. With `plan_mode=strict` — where a resting order is the only way into the market — neither band can refuse an entry. T1 red news is the one blackout binding both paths (decision refusal + force-flat cancel/flatten). The Guide states this in these words; the code defect is filed for a later wave.
+
 **Boot lines:** `"📜 prompt/validator contract: %d restrictions, all stated in prompt (class 38 guard)"` `prompt_contract.go:164-172` · `"no-trade band: first_n=%dm lunch=%s–%s …"` `no_trade_band.go:199-203` · `"void scope: session-day window · %s×%d · one resolver for prompt AND validator (parity)"` `void_scope.go:100-104`.
 
 ## 4 · VALIDATORS — REJECT-at-write law
