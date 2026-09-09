@@ -502,25 +502,45 @@ func (at *AutoTrader) enforceEODFlatAt(now time.Time) bool {
 		// No active session: past every session's flat by definition.
 		flat = "no active session"
 	}
-	positions, err := at.store.Position().GetOpenPositions(at.id)
-	if err != nil || len(positions) == 0 {
-		return false
-	}
-	// S-LIST CLOSER (2026-08-27) — cancel ALL resting arms FIRST, synchronously
-	// (ack-waited, one retry), THEN flatten. This kills the ≤2m window where a
-	// working limit could fill after the flat (deep-verify hole 11). The same
-	// ordering guards the session-end branch (no active session above), the T1
-	// force-flat, and the dormancy path in maybeManageArmedOrders.
+	// FLAT MEANS FLAT (D1, 2026-09-09) — THE BOOK IS RETIRED FIRST, WHETHER OR
+	// NOT A POSITION EXISTS.
+	//
+	// This function used to read the open positions here and `return false` on
+	// len(positions)==0 — BEFORE it reached the cancel below. So a session that
+	// ended flat BY LUCK (nothing filled) left every resting arm alive at the
+	// broker, past the close, into the next session's tape. Nothing said so:
+	// the position was zero, so the book "looked" flat.
+	//
+	// The research's do-not is explicit — "Canceling remaining entries is part
+	// of being flat" — and a resting entry past the close is exactly the risk a
+	// session limit exists to end. So the cancel runs unconditionally and FIRST,
+	// which also keeps the S-LIST CLOSER's ordering (2026-08-27): cancelling
+	// before flattening kills the ≤2m window where a working limit could fill
+	// after the flat (deep-verify hole 11). The same ordering guards the
+	// session-end branch, the T1 force-flat, and the dormancy path.
+	acted := false
 	n, unacked := at.cancelArmedOrdersSync("session close — EOD flat")
 	if n > 0 {
-		at.logWarnf("🔒 EOD-FLAT: %d armed order(s) cancelled before flattening", n)
+		at.logWarnf("🔒 EOD-FLAT (%s): %d armed order(s) cancelled — the book is retired at the close, not just the position", flat, n)
+		acted = true
 	}
 	if unacked > 0 {
 		at.logWarnf("⚠️ EOD-FLAT: %d armed cancel(s) unacked after retry — flattening anyway (wire reconciles next cycle)", unacked)
+		acted = true
 	}
-	// A fill that won the race mid-cancel must be flattened too — re-read.
-	if fresh, err2 := at.store.Position().GetOpenPositions(at.id); err2 == nil {
-		positions = fresh
+	// Positions are read AFTER the cancel: a fill that won the race mid-cancel
+	// must be flattened too.
+	positions, err := at.store.Position().GetOpenPositions(at.id)
+	if err != nil {
+		// A24 — a failed read is not "flat". Say so and keep the cycle honest.
+		at.logWarnf("⚠️ EOD-FLAT (%s): open-position read failed (%v) — flatness UNVERIFIED this cycle", flat, err)
+		return acted
+	}
+	if len(positions) == 0 {
+		if acted {
+			at.logWarnf("🕒 EOD-FLAT (%s): no open position — arms retired; book flat", flat)
+		}
+		return acted
 	}
 	at.logWarnf("🕒 EOD-FLAT (%s): session close — flattening %d open position(s) via the trader close path.", flat, len(positions))
 	for _, p := range positions {

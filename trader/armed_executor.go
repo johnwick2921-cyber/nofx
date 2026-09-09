@@ -2047,7 +2047,23 @@ func (at *AutoTrader) cancelArmedOrdersSyncWith(reason string, timeout time.Dura
 		}
 	}
 	for _, r := range mine {
-		if r.State != "working" || r.SignalID == "" || cancelFn == nil || src == nil {
+		// D1 (2026-09-09) — THE SIGNAL ID DECIDES, NOT THE STATE.
+		//
+		// This read `r.State != "working"`, so a place_pending row was written
+		// 'cancelled' with NO wire cancel at all. BeginPlacement
+		// (store/armed_orders.go) sets signal_id AND state=place_pending in ONE
+		// update, BEFORE the order reaches the broker — so a place_pending row
+		// ALWAYS carries a signal id and its order may already be resting. The
+		// ledger said dead while the book could say working: class 81 (a send
+		// read as a settlement) reached by omitting the send.
+		//
+		// The question is not what state we believe the row is in. It is whether
+		// anything could be at the broker under this signal — and a signal id is
+		// the only evidence of that. A row that never got one was never placed
+		// and may go terminal without asking; every other row gets a cancel on
+		// the wire, and a duplicate cancel is idempotent (NT8 cancels by signal
+		// id) where a missed one is a live order we have stopped watching.
+		if r.SignalID == "" || cancelFn == nil || src == nil {
 			_ = ledger.SetState(r.ID, "cancelled", reason)
 			n++
 			continue
