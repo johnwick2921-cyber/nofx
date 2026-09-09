@@ -12,11 +12,13 @@
 package trader
 
 import (
+	"os"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
+	"nofx/kernel"
 	ntwire "nofx/provider/ninjatrader"
 	"nofx/store"
 )
@@ -143,3 +145,64 @@ func TestFlatCancelsPlacePendingOnTheWire(t *testing.T) {
 }
 
 var _ = sync.Mutex{}
+
+// E5 — ON A SHORTENED DAY THE FLATTEN FIRES AT THE EARLY CLOSE.
+//
+// The half-day pull-in is what makes "flat at the close" mean the REAL close.
+// D1 moved the arm cancel above the position read, so this re-pins that the
+// pull-in still governs WHEN the whole retirement happens — a cancel that fires
+// at 14:45 on a day the exchange shut at 12:00 is 2h45m of resting orders on a
+// closed book.
+func TestShortenedDayFlattensAtTheEarlyClose(t *testing.T) {
+	ny := &kernel.SessionDef{Name: "NY", WindowStartCT: "08:30", WindowEndCT: "14:45"}
+	full, _, ok := sessionCutoffCT(ny, 0)
+	if !ok {
+		t.Fatal("the NY cutoff must resolve")
+	}
+	if full != 14*60+45 {
+		t.Fatalf("full-day NY cutoff = %d, want 14:45", full)
+	}
+	// An early close at 12:00 PULLS IN.
+	early := 12 * 60
+	if !halfDayPullsIn(ny, early, full) {
+		t.Fatal("a 12:00 CT early close must pull the flat IN from 14:45 — otherwise the book stays " +
+			"open on an exchange that has shut")
+	}
+	// A "late close" never pushes the flat OUT past the session's own end.
+	if halfDayPullsIn(ny, 15*60+30, full) {
+		t.Fatal("a calendar time AFTER the session end must never push the flat out")
+	}
+	// Garbage never invents a cutoff.
+	if _, _, ok := halfDayCutoffMin(kernel.DefaultSessionRegistry(), "not-a-day", 0); ok {
+		t.Fatal("an unknown session-day must not produce a half-day cutoff")
+	}
+}
+
+// The flatten's ORDER is the contract D1 established: the arm cancel is reached
+// before the position read, so it cannot be skipped by a flat book. A source pin
+// because the defect was a sequence, and a sequence never exercised cannot be
+// observed at runtime.
+func TestFlattenCancelsBeforeItReadsPositions(t *testing.T) {
+	b, err := os.ReadFile("auto_trader_clock.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	src := string(b)
+	fn := strings.Index(src, "func (at *AutoTrader) enforceEODFlatAt(")
+	if fn < 0 {
+		t.Fatal("enforceEODFlatAt not found — this pin has lost its subject")
+	}
+	body := src[fn:]
+	if e := strings.Index(body[1:], "\nfunc "); e >= 0 {
+		body = body[:e+1]
+	}
+	cancel := strings.Index(body, "at.cancelArmedOrdersSync(")
+	read := strings.Index(body, "at.store.Position().GetOpenPositions(")
+	if cancel < 0 || read < 0 {
+		t.Fatalf("cannot locate both halves (cancel=%d read=%d)", cancel, read)
+	}
+	if cancel > read {
+		t.Fatalf("the position read comes BEFORE the arm cancel (read@%d < cancel@%d) — a flat book "+
+			"short-circuits the close and every resting arm survives it", read, cancel)
+	}
+}
