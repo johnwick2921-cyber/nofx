@@ -234,7 +234,30 @@ func MaybeResetDaily(now time.Time) bool {
 	defer dailyResetMu.Unlock()
 	if lastDailyResetDate == "" || lastDailyResetDate != today {
 		lastDailyResetDate = today
-		logger.Infof("Plan 3 T21 / Strategy Studio: daily window reset to CME session-day %s", today)
+		// D4(c) (2026-09-09, dispatch 104) — THE ROLL LIFTS THE TRIP.
+		//
+		// This rolled the DATE and left forceFlatReason untouched, so a daily
+		// force-flat never cleared automatically at all: clearAllDailyForceFlat
+		// had exactly one caller, ResetDailyPnLAt, reachable only from the
+		// operator's force-flat endpoint. A tripped desk stayed blocked across
+		// the roll, the next session and the one after, until a human reset it
+		// or the process restarted.
+		//
+		// vet-06 called this "clears only at the first AI cycle after the roll";
+		// the truth was that it did not clear on any cycle. The comment above
+		// forceFlatReason has promised since #91 that a trip "lifts with the
+		// daily window" — this is the line that makes that true. It has never
+		// been seen because the guardrails master is OFF and the trip has never
+		// fired: a latent halt waiting for the day the owner turns it on.
+		//
+		// The unlock is deliberate: clearAllDailyForceFlat takes forceFlatMu,
+		// and holding dailyResetMu across it is a lock-order the manual path
+		// (ResetDailyPnLAt: clear FIRST, then take dailyResetMu) does not use.
+		// One order, both paths.
+		dailyResetMu.Unlock()
+		clearAllDailyForceFlat()
+		dailyResetMu.Lock()
+		logger.Infof("Plan 3 T21 / Strategy Studio: daily window reset to CME session-day %s (force-flat trips lifted)", today)
 		return true
 	}
 	return false

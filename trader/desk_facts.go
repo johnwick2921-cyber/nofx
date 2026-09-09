@@ -479,7 +479,7 @@ func (at *AutoTrader) deskDay(now time.Time) DeskLine {
 	// guardrails master is ON. A limit nothing enforces is said to be unenforced.
 	limit, src, enforced := at.deskGuardrail()
 	realized, n, unresolved := at.deskRealizedToday(now)
-	limitTxt := "no enforced daily limit (guardrails master OFF — soft-audit only)"
+	limitTxt := deskDailyLimitText(at, limit)
 	if enforced {
 		limitTxt = fmt.Sprintf("limit -%.0f USD (%s, ENFORCED)", limit, src)
 	}
@@ -501,6 +501,22 @@ func (at *AutoTrader) deskGuardrail() (limit float64, source string, enforced bo
 	rc := at.config.StrategyConfig.RiskControl
 	if !hlBool(rc.GuardrailsEnabled, true) {
 		return 0, "guardrails master OFF", false
+	}
+	// 2026-09-09 — BOTH TOGGLES, because the GATE requires both.
+	//
+	// kernel/risk_limits.go:309 reads
+	//   if g.DailyLossEnabled && g.DailyLossLimitUSD > 0 && g.DailyRealizedPnL <= -g.DailyLossLimitUSD
+	// so daily_loss_enabled gates this leg independently of the master. This
+	// resolver checked only the master, and the live config has BOTH off — so
+	// the moment the owner turned the master ON, the strip would have reported
+	// the $450 limit ENFORCED while the gate went on ignoring it. A green word
+	// answering a narrower question than the reader will assume (class 82).
+	//
+	// ABSENT stays true: engine_analysis.go builds the gate with
+	// boolOrDefault(rc.DailyLossEnabled, true), and this must agree with it or
+	// the strip becomes a second, disagreeing definition (A24).
+	if !hlBool(rc.DailyLossEnabled, true) {
+		return 0, "daily_loss_enabled OFF", false
 	}
 	if rc.DailyLossLimitUSD > 0 {
 		return rc.DailyLossLimitUSD, "studio", true
@@ -738,4 +754,37 @@ func (at *AutoTrader) deskLastFill(now time.Time) DeskLine {
 		Source: "trader_fills", AsOfMs: f.CreatedAt,
 		Text: fmt.Sprintf("%s %s %.2f qty %.2f · slippage UNKNOWN (the intended price is not stored beside the fill; the AddOn's slippage_ticks has no consumer)",
 			f.Side, f.Symbol, f.Price, f.Quantity)}
+}
+
+// deskDailyLimitText says, in the owner's own words, which switches are off and
+// what the configured limit would be if they moved. "soft-audit only" told the
+// owner the state but not the remedy; this names both toggles and the value, so
+// the line reads as an instruction rather than a status.
+func deskDailyLimitText(at *AutoTrader, limit float64) string {
+	if at == nil || at.config.StrategyConfig == nil {
+		return "no enforced daily limit (no strategy config)"
+	}
+	rc := at.config.StrategyConfig.RiskControl
+	master := hlBool(rc.GuardrailsEnabled, true)
+	leg := hlBool(rc.DailyLossEnabled, true)
+	if master && leg {
+		return "no enforced daily limit (no limit configured)"
+	}
+	cfgLimit := rc.DailyLossLimitUSD
+	if cfgLimit <= 0 {
+		cfgLimit = limit
+	}
+	off := []string{}
+	if !master {
+		off = append(off, "guardrails master OFF")
+	}
+	if !leg {
+		off = append(off, "daily_loss_enabled OFF")
+	}
+	amount := "no value set"
+	if cfgLimit > 0 {
+		amount = fmt.Sprintf("$%.0f", cfgLimit)
+	}
+	return fmt.Sprintf("daily limit %s is DECORATIVE — %s; it enforces nothing until %s move",
+		amount, strings.Join(off, " and "), map[bool]string{true: "that switch", false: "both switches"}[len(off) == 1])
 }
