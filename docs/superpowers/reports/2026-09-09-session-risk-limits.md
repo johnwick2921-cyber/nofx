@@ -223,6 +223,14 @@ resting when the band opens is **cancelled, not grandfathered**, through the sam
 seam the close uses. `sessionEntryBlocked` gains the A28 `At(now)` seam so both
 paths read one band with one clock.
 
+**The non-obvious half of the band: cancel, not grandfather.** Refusing only NEW
+arms while an arm placed at 11:58 rests into 12:00 is a band that stops
+AUTHORING and not ENTERING — the same class of defect as the one this wave
+exists to fix, one layer in. The gap was found independently by the W5 lane,
+whose filing would have stopped at refusing new arms; the owner's addition was
+the cancel. An arm whose fill would land inside the band is not an arm we are
+willing to own, however long it has been sitting there.
+
 **D3 — post-loss counter, never a gate.** Triggered on a losing close; labels the
 arm card and increments a per-(trader, session-day, session) counter.
 K = `30` min `[I]`.
@@ -387,6 +395,24 @@ window`. Pinned RED, mutation-tested.
   `placedBrackets` — a bound that lives in the AddOn, not in Go.
 
 None of these are regressions from this wave; all predate it.
+
+## OWED AT MERGE — three sentences this boot makes false
+
+The W5 lane (`nofx-6b`) is booting a docs wave that writes the no-trade-band gap
+into the Guide and SYSTEM-MAP in plain words, correctly, because at rev
+`954f11b1` it is TRUE. **This wave falsifies all three**, and the GUIDE CONTENT
+LAW puts that on the wave that changes the gate:
+
+| file | the sentence that goes false |
+|---|---|
+| `web/src/guide/content/plays.ts` | *"refuses AI-decision entries only … by NOTHING on the arm path … with plan_mode=strict it refuses nothing"* |
+| `web/src/guide/content/planCard.ts` | *"Nothing on the ARM path reads them … neither band can refuse an entry"* |
+| `docs/superpowers/SYSTEM-MAP.md` | *"WHICH PATH EACH BLACKOUT BINDS (W5, measured at rev 954f11b1) … They do not bind the ARM path … grep = 0"* |
+
+They are corrected **after** the merge that brings them in, and **rewritten, not
+deleted** — the SYSTEM-MAP row is deliberately rev-stamped, and a reader who
+loses it loses the fact that this was ever a gap. Sequenced this way because
+none of the three text exists on this branch until W5 merges.
 
 ---
 
