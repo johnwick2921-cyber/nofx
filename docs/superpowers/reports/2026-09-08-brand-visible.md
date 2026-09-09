@@ -2,7 +2,7 @@
 
 Updated 2026-09-09. Branch `fix/brand-visible`; lane `brand-visible-0b955fbc/root[unlisted]`; isolated worktree `/tmp/nofx-brand-visible`. Accepted from dev `954f11b15f2e7615678f7d2b708c47895faebf1e`, then merged refreshed dev before implementation. This lane owns only the visible-brand changes and pins. It does not own Stage A's archive repair or the held `fix/rebrand-phase-1-2` work.
 
-**Implemented and tested; not merged to dev or deployed.** Main's Stage A lock remains held with a stale heartbeat; stale is not dead. The owner has been asked to coordinate release or authorize a recorded reclaim. No main-tree write, build of a release binary, RELEASE update, dist swap, service restart, DB write, or gate edit occurred. A new cutover still requires the dispatch's owner GO, safe window and fresh five-leg gate. No live brand result is claimed.
+**Implemented and tested; not merged to dev or deployed.** Stage A released its lock after publishing its passed-boot marker. This lane acquired the now-free lock on 2026-09-09 with automatic heartbeat started at acquisition; no reclaim was used. No main-tree write, build of a release binary, RELEASE update, dist swap, service restart, DB write, or gate edit occurred. A new cutover still requires the dispatch's owner GO, safe window and fresh five-leg gate. No live brand result is claimed.
 
 ## Owner correction — imports are allowed
 
@@ -132,7 +132,7 @@ No release binary or dist has been built/swapped for this wave. `GUIDE_BUILT_REV
 
 Preserve the binary actually running at cutover as `nofx-bin.old.<verified held revision>`, with DB/dist rollback artifacts. RELEASE → atomic mv → VERIFY → **print the exact owner kill command**; do not execute it under this dispatch. After an acknowledged good boot, verify all five references, read the real banner, push marker from the same main tree before releasing the lock. No old gate-script exception or previous wave's override is reused.
 
-Current numbering census (both formats, sorted with `uniq -c`): highest **93**; existing duplicates **75/76/77** each count 2. No class number assigned before merge. The checklist entry must cite C1 and the display/identifier scope boundary. This report is on the branch, **not yet dev**; publication will not be described as merged until it is.
+Pre-assignment numbering census (both formats, sorted with `uniq -c`): highest **93**; existing duplicates **75/76/77** each count 2. At merge preparation the repeated `sort -n | uniq -c` census again showed highest 93; **class 94** is assigned to this wave. Existing duplicated classes are untouched. Class 94 cites C1 and the display/identifier scope boundary. This report is on the branch, **not yet dev**; publication will not be described as merged until it is.
 
 ## Source freshness
 
