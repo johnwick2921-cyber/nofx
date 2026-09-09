@@ -113,12 +113,12 @@ export const guards: GuideSection = {
         [
           'Lunch / session windows / EOD flat',
           'HARD',
-          'Clock gates: no entries 12:00–13:30 CT; flat at session end.',
+          'Outside an enabled session window, inside the lunch or first-N no-trade band, or past the session close: no NEW entry. Since 2026-09-09 the band is enforced on the ARM path too — under plan_mode=strict the arm path is the only way in, and armed_executor.go previously contained zero references to it, so the band guarded only the path strict forbids from trading. An arm inside the band is refused, and an arm already resting when the band opens is CANCELLED rather than grandfathered: an arm whose fill would land inside the band is not one we are willing to own, however long it has been sitting there.',
         ],
         [
-          'Consecutive-loss halt (guardrails ON)',
+          'Consecutive-loss breaker',
           'HARD',
-          'N losers in a row → halt (guardrails master must be ON).',
+          'After N consecutive losing closes in one CME session-day, no new entry on EITHER path until the 17:00 CT roll. N is 8 by default and the owner may set it; a WARN at 5 counts and surfaces without refusing. This is the ONE session limit that is not gated by the guardrails master, so it bites whether or not that switch is on — and since 2026-09-09 it is wired to the ARM path as well as the decision path, which under plan_mode=strict is the only path that trades. Honest about its own reach: on the retained tape the longest run of losers is SEVEN, so a threshold of 8 would never have fired. An UNRESOLVABLE P&L ends a run rather than bridging it — an unknown outcome must not push the desk toward a halt.',
         ],
         [
           'Side-quota (0-on-a-side / empty map)',
@@ -222,7 +222,7 @@ export const guards: GuideSection = {
     { kind: 'h', text: 'Guardrails + SIM lock' },
     {
       kind: 'p',
-      text: 'Risk guardrails: the master switch (default ON, currently OFF by owner ruling — the boot log says "master OFF") arms daily loss/profit/trade limits, consecutive-loss halt, re-entry cooldown, blackout windows, max-contracts and notional caps. The always-on pair (max contracts/order, notional cap) needs no toggle. Would-have-tripped counters are visible in the dashboard. SIM lock: every account list is filtered to SIM; the bot cannot route to a live NT account — do not try.',
+      text: 'Risk guardrails: TWO switches must be on before the daily loss limit does anything. The master (guardrails_enabled) arms the whole block, and daily_loss_enabled arms this leg — both are OFF today, so the configured $450 limit is DECORATIVE and enforces nothing until both move. The desk strip DAY line says exactly that, in those words. The master also arms the daily profit/trade limits, re-entry cooldown, blackout windows, max-contracts and notional caps; the always-on pair (max contracts/order, notional cap) needs no toggle. The consecutive-loss breaker is deliberately OUTSIDE all of this and works regardless. Would-have-tripped counters are visible in the dashboard. SIM lock: every account list is filtered to SIM; the bot cannot route to a live NT account — do not try.',
     },
     { kind: 'h', text: 'WHEN A PLAN IS REJECTED: THE REPAIR RETRY (class 44)' },
     {
