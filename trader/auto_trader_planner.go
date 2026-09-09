@@ -2415,6 +2415,7 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 		ReadKind:         session + " scheduled read (stored+cached data)",
 		Price:            price,
 		DATR:             dATR,
+		ATR5m:            kernel.StaleConfirmATR5m(bars),
 		Regime:           regime,
 		Levels:           scored,
 		Pool:             pool,

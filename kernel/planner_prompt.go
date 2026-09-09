@@ -30,9 +30,13 @@ type PlannerInput struct {
 	ReadKind           string    // e.g. "closed-market 16:55 CT read (from stored data)"
 	Price              float64
 	DATR               float64
-	Regime             RegimeBlock
-	Levels             []ScoredLevel // Go-ranked, graded (P1.5) — the decision-critical block
-	StructureSummary   []string      // one line per timeframe
+	// ATR5m is the 5-minute Wilder ATR14 — the SAME series the confirm and stop
+	// paths use (StaleConfirmATR5m). W3 renders map distances in it. Zero means
+	// it could not be computed, and the map prints n/a rather than a 0 (A24).
+	ATR5m            float64
+	Regime           RegimeBlock
+	Levels           []ScoredLevel // Go-ranked, graded (P1.5) — the decision-critical block
+	StructureSummary []string      // one line per timeframe
 	// G2.2 (2026-08-24) — nearest in-band HTF zones (S/D/FVG/OB), graded, for a
 	// dedicated prompt section. They exist in the data but lose the top-8 seat
 	// race to structural levels (cluster collapse + seat priority), so the model
@@ -508,6 +512,15 @@ func BuildPlannerPrompt(in PlannerInput) string {
 				role = string(RoleReactZone)
 			}
 			fmt.Fprintf(&b, "  %-9.2f %-20s grade %s  %-8s %-15s %s%.1f\n", l.Price, label, l.Grade, l.Fresh, role, sign, absF(l.Distance))
+		}
+		// W3 (2026-09-09) — the MERGED map the owner's card shows: overlapping
+		// references as ONE candidate carrying all its names, the map role, the
+		// distance in ATR5m, projections beyond the mapped range, and the entry
+		// shortlist in reachability order. Rendered BELOW the ranked table, which
+		// is left exactly as the scorer produced it (the score is untouched).
+		if mb := RenderMapBlock(BuildMapCandidates(in.Levels, in.Price, in.ATR5m, MapCandidateOpts{}), in.Price); mb != "" {
+			b.WriteString("\n")
+			b.WriteString(mb)
 		}
 	}
 	b.WriteString("\n")
