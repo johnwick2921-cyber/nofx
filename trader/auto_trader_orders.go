@@ -113,9 +113,14 @@ func (at *AutoTrader) consecutiveLossHalted() (string, bool) {
 	if at.store == nil || at.config.StrategyConfig == nil {
 		return "", false
 	}
-	n := at.config.StrategyConfig.RiskControl.ConsecutiveLossHalt
+	// D2 (2026-09-09) — ONE RESOLUTION, BOTH PATHS. This read the knob directly
+	// and treated 0 as OFF; the ARM path resolves N through breakerHaltN, which
+	// falls back to the [I] default when the owner has not set a value. Two
+	// resolutions of one threshold is how the two paths come to disagree about
+	// whether the desk is halted (A24: never a second copy).
+	n := breakerHaltN(at.config.StrategyConfig)
 	if n <= 0 {
-		return "", false // OFF
+		return "", false // explicitly OFF (BREAKER_HALT_N=0)
 	}
 	sinceMs := kernel.CMESessionDayStart(time.Now()).UnixMilli()
 	losses, err := at.store.Position().CountConsecutiveLossesSince(at.id, sinceMs)

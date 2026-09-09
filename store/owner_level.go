@@ -62,8 +62,8 @@ func (s *OwnerLevelStore) Save(l *OwnerLevelDB) error {
 }
 
 // ListActiveForUser returns the user's non-consumed levels for a symbol (sticky
-// across sessions — no session/plan filter). user_id='' rows (pre-C2 legacy,
-// backfilled to the original owner) stay visible only via the '' match below,
+// across sessions — no session/plan filter). user_id=” rows (pre-C2 legacy,
+// backfilled to the original owner) stay visible only via the ” match below,
 // so a second user sees ONLY their own rows.
 func (s *OwnerLevelStore) ListActiveForUser(userID, symbol string) ([]*OwnerLevelDB, error) {
 	var rows []*OwnerLevelDB
@@ -88,7 +88,7 @@ func (s *OwnerLevelStore) MarkConsumed(id int64) error {
 // UpdateNoteTag (UI-verification 2026-08-18) writes the edit sheet's note +
 // scenario-tag changes through to the sticky owner row, re-anchored by PRICE
 // IDENTITY + label (never index), WHERE-scoped to the symbol AND the owner
-// (C2: user_id = ? OR '' legacy). Returns whether a row matched.
+// (C2: user_id = ? OR ” legacy). Returns whether a row matched.
 func (s *OwnerLevelStore) UpdateNoteTag(userID, symbol string, price float64, label, note, tag string) (bool, error) {
 	q := s.db.Model(&OwnerLevelDB{}).
 		Where("symbol = ? AND price = ? AND label = ?", symbol, price, label)
@@ -108,7 +108,7 @@ func (s *OwnerLevelStore) Delete(id int64) error {
 }
 
 // DeleteForUser removes an owner level, scoped to the owner (C2): a user can
-// only delete their own rows (or '' legacy rows).
+// only delete their own rows (or ” legacy rows).
 func (s *OwnerLevelStore) DeleteForUser(id int64, userID string) error {
 	q := s.db.Where("id = ?", id)
 	if userID == "" {

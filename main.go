@@ -484,6 +484,12 @@ func main() {
 	logger.Infof("🔗 %s", st.AttributionBootLine())
 	logger.Infof("⚙ %s", store.KnobRegistryBootLine())
 	logger.Infof("%s", trader.ArmsBootLine())
+	// SESSION RISK (2026-09-09, dispatch 104 D5) — every field READ from the
+	// code that enforces it, and every invented threshold carries its evidence
+	// tier. The daily limit prints DECORATIVE when either toggle is off, in the
+	// owner's own words, because a limit that is displayed but not enforced is
+	// worse than no limit: it is a limit someone is relying on.
+	logger.Infof("🛑 %s", trader.SessionRiskBootLineForBoot(st))
 	// BRACKET-OCO SEPARATION (2026-09-07) — D7. Three of these fields describe
 	// the C# AddOn, which this process cannot read from its own source, so they
 	// are read from the broker's book and print n/a until one arrives. At boot

@@ -6,7 +6,7 @@ import (
 )
 
 // C2 (2026-08-25) — sticky owner levels are per-user: reads, note-tag updates
-// and deletes are scoped to the creator. Pre-C2 '' (legacy) rows remain
+// and deletes are scoped to the creator. Pre-C2 ” (legacy) rows remain
 // visible to everyone (they were backfilled to the original owner at migration).
 func TestOwnerLevelsUserScoped(t *testing.T) {
 	st, err := New(filepath.Join(t.TempDir(), "ol.db"))

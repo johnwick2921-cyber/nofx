@@ -17,14 +17,14 @@ type AlertStore struct {
 
 // AlertDB is one alert.
 type AlertDB struct {
-	ID        int64  `gorm:"primaryKey;autoIncrement" json:"id"`
-	TraderID  string `gorm:"column:trader_id;not null;default:'';index:idx_alert_trader" json:"trader_id"`
-	Level     string `gorm:"column:level;not null;default:'P2'" json:"level"`         // P0 | P1 | P2
-	EventID   string `gorm:"column:event_id;not null;default:'';index:idx_alert_event" json:"event_id"` // dedupe key
-	Kind      string `gorm:"column:kind;not null;default:''" json:"kind"`
-	Title     string `gorm:"column:title;not null;default:''" json:"title"`
-	Body      string `gorm:"column:body;not null;default:''" json:"body"`
-	Acked     bool   `gorm:"column:acked;not null;default:false" json:"acked"`
+	ID       int64  `gorm:"primaryKey;autoIncrement" json:"id"`
+	TraderID string `gorm:"column:trader_id;not null;default:'';index:idx_alert_trader" json:"trader_id"`
+	Level    string `gorm:"column:level;not null;default:'P2'" json:"level"`                           // P0 | P1 | P2
+	EventID  string `gorm:"column:event_id;not null;default:'';index:idx_alert_event" json:"event_id"` // dedupe key
+	Kind     string `gorm:"column:kind;not null;default:''" json:"kind"`
+	Title    string `gorm:"column:title;not null;default:''" json:"title"`
+	Body     string `gorm:"column:body;not null;default:''" json:"body"`
+	Acked    bool   `gorm:"column:acked;not null;default:false" json:"acked"`
 	// Dismissed hides the alert from the owner's FEED without destroying the
 	// event (ITEM 5, 2026-08-17). AUDIT, NOT AMNESIA: the row stays, so history
 	// and any later analysis are intact — a P0 halt that was dismissed is still

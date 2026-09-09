@@ -16,18 +16,18 @@ import (
 // LevelStatsDB is one evaluated level row. PK = (trader_id, session_day, price,
 // label) — one row per level per day.
 type LevelStatsDB struct {
-	TraderID   string  `gorm:"column:trader_id;primaryKey"`
-	SessionDay string  `gorm:"column:session_day;primaryKey"` // CME session-day key YYYY-MM-DD
-	Price      float64 `gorm:"column:price;primaryKey"`
-	Label      string  `gorm:"column:label;primaryKey"`
-	Kind       string  `gorm:"column:kind;not null;default:''"`
-	Grade      string  `gorm:"column:grade;not null;default:''"`
-	Role       string  `gorm:"column:role;not null;default:''"`
-	Family     string  `gorm:"column:family;not null;default:''"`
-	Touched    bool    `gorm:"column:touched;not null;default:false"`
-	Reacted    bool    `gorm:"column:reacted;not null;default:false"`
-	BrokeClean bool    `gorm:"column:broke_clean;not null;default:false"`
-	Chopped    bool    `gorm:"column:chopped;not null;default:false"`
+	TraderID   string    `gorm:"column:trader_id;primaryKey"`
+	SessionDay string    `gorm:"column:session_day;primaryKey"` // CME session-day key YYYY-MM-DD
+	Price      float64   `gorm:"column:price;primaryKey"`
+	Label      string    `gorm:"column:label;primaryKey"`
+	Kind       string    `gorm:"column:kind;not null;default:''"`
+	Grade      string    `gorm:"column:grade;not null;default:''"`
+	Role       string    `gorm:"column:role;not null;default:''"`
+	Family     string    `gorm:"column:family;not null;default:''"`
+	Touched    bool      `gorm:"column:touched;not null;default:false"`
+	Reacted    bool      `gorm:"column:reacted;not null;default:false"`
+	BrokeClean bool      `gorm:"column:broke_clean;not null;default:false"`
+	Chopped    bool      `gorm:"column:chopped;not null;default:false"`
 	CreatedAt  time.Time `gorm:"column:created_at;autoCreateTime"`
 }
 
@@ -67,12 +67,12 @@ func (s *LevelStatsStore) PruneOlderThan(cutoffMs int64) (int64, error) {
 // AggregateByGrade returns per-grade touched/reacted/broke/chopped COUNTS for
 // the verdict ("grades predictive: YES/NO/PARTIAL").
 type GradeAgg struct {
-	Grade       string `gorm:"column:grade"`
-	Rows        int64  `gorm:"column:rows"`
-	Touched     int64  `gorm:"column:touched"`
-	Reacted     int64  `gorm:"column:reacted"`
-	BrokeClean  int64  `gorm:"column:broke_clean"`
-	Chopped     int64  `gorm:"column:chopped"`
+	Grade      string `gorm:"column:grade"`
+	Rows       int64  `gorm:"column:rows"`
+	Touched    int64  `gorm:"column:touched"`
+	Reacted    int64  `gorm:"column:reacted"`
+	BrokeClean int64  `gorm:"column:broke_clean"`
+	Chopped    int64  `gorm:"column:chopped"`
 }
 
 func (s *LevelStatsStore) AggregateByGrade() ([]GradeAgg, error) {
@@ -85,11 +85,11 @@ func (s *LevelStatsStore) AggregateByGrade() ([]GradeAgg, error) {
 
 // AggregateByFamily mirrors the grade aggregate across confluence families.
 type FamilyAgg struct {
-	Family      string `gorm:"column:family"`
-	Rows        int64  `gorm:"column:rows"`
-	Touched     int64  `gorm:"column:touched"`
-	Reacted     int64  `gorm:"column:reacted"`
-	BrokeClean  int64  `gorm:"column:broke_clean"`
+	Family     string `gorm:"column:family"`
+	Rows       int64  `gorm:"column:rows"`
+	Touched    int64  `gorm:"column:touched"`
+	Reacted    int64  `gorm:"column:reacted"`
+	BrokeClean int64  `gorm:"column:broke_clean"`
 }
 
 func (s *LevelStatsStore) AggregateByFamily() ([]FamilyAgg, error) {

@@ -12,9 +12,9 @@ import (
 type HistorySummary struct {
 	TotalTrades        int     `json:"total_trades"`        // resolved rows only
 	UnresolvedExcluded int     `json:"unresolved_excluded"` // P&L-TRUTH WAVE: unknown-P&L rows left out of every figure
-	WinRate        float64 `json:"win_rate"`
-	TotalPnL       float64 `json:"total_pnl"`
-	AvgTradeReturn float64 `json:"avg_trade_return"`
+	WinRate            float64 `json:"win_rate"`
+	TotalPnL           float64 `json:"total_pnl"`
+	AvgTradeReturn     float64 `json:"avg_trade_return"`
 
 	BestSymbols  []SymbolStats `json:"best_symbols"`
 	WorstSymbols []SymbolStats `json:"worst_symbols"`

@@ -313,6 +313,47 @@ func (at *AutoTrader) maybeManageArmedOrdersAt(snap map[string]kernel.StructureS
 		}
 		at.logInfof("%s (per-trader resolved, 0C shadow demotion)", kernel.ConditionStatusLedger(base, nil, kernel.ShadowConditionsEnv()))
 	}
+	// ── SESSION RISK (2026-09-09, dispatch 104 D2 + the no-trade band) ──────
+	//
+	// Both of these guards existed and guarded the WRONG PATH. The
+	// consecutive-loss breaker was wired only in executeDecisionWithRecord, and
+	// the lunch / first-N no-trade band only at auto_trader_orders.go:281 —
+	// both on the DECISION path, which plan_mode=strict forbids from entering
+	// ("plan_mode=strict executes plan scenarios on the ARM path only",
+	// entry_gate.go). Under strict the arm path is the ONLY way in, and it
+	// consulted neither: armed_executor.go held ZERO references to
+	// InLunchNoTrade, InFirstNoTradeMinutes or sessionEntryBlocked.
+	//
+	// Adjudicated ONCE per cycle, not per leg: both are session-level facts, so
+	// a per-leg re-query would ask the same question of the database N times and
+	// could answer it differently within one cycle.
+	risk := at.sessionRiskGateAt(now)
+	if risk.Warn {
+		at.logWarnf("🛑 %s", risk.Reason)
+	}
+	if risk.Refuse {
+		if armRefusalChanged(&at.armRefusalLast, at.id+":session_risk", risk.Class) {
+			shown := ""
+			if at.store != nil && plan != nil {
+				if n, cerr := store.IncArmRefusal(at.store, at.id, kernel.PlanTradeDateFor(plan), plan.Session, risk.Class); cerr == nil {
+					shown = fmt.Sprintf(" · %s refusals this session: %d", risk.Class, n)
+				}
+			}
+			at.logWarnf("🛑 arm REFUSED (session risk): %s%s", risk.Reason, shown)
+		}
+		// A resting arm is not grandfathered by a band that opened after it was
+		// placed: an arm whose fill would land inside the band is not an arm we
+		// are willing to own, whether it was placed a second ago or an hour ago.
+		// Cancelled through the same seam the close uses, so each cancel is a
+		// wire cancel the book can confirm — never a ledger assumption.
+		if risk.Class == "no_trade_band" {
+			if n, unacked := at.cancelArmedOrdersSync("no-trade band opened — " + risk.Reason); n > 0 || unacked > 0 {
+				at.logWarnf("🔒 no-trade band: %d resting arm(s) cancelled, %d unacked — an arm resting into the band is cancelled, not grandfathered", n, unacked)
+			}
+		}
+		return
+	}
+
 	for _, sc := range doc.Scenarios {
 		if sc.Arm == nil || !sc.Arm.Enabled {
 			continue
@@ -639,7 +680,22 @@ func (at *AutoTrader) maybeManageArmedOrdersAt(snap map[string]kernel.StructureS
 				// path learned and the authored path never did.
 				aval := fmt.Sprintf("%s entry=%.2f", side, leg.Entry)
 				if armedActually(row.ID, row.State) && armRefusalChanged(&at.armAuthoredLast, akey, aval) {
-					at.logInfof("⚔️ armed %s %s leg %d %s limit %.2f SL %.2f TP %.2f (tick-managed placement is Phase 2)", plan.Session, sc.ID, li+1, side, leg.Entry, leg.Stop, leg.Target)
+					// D3 (2026-09-09) — POST-LOSS RE-ARM, COUNTED AND LABELLED,
+					// NEVER REFUSED. The research asks how new fade permissions
+					// respond after several level failures; nobody has measured
+					// what this desk does after a loser, so the first job is to
+					// count it. A threshold invented before the measurement is a
+					// threshold nobody can defend — so this reaches no verdict.
+					postLossNote := ""
+					if isRe, label := at.postLossReArm(leg.Entry, now); isRe {
+						postLossNote = " · " + label
+						if at.store != nil {
+							if n, cerr := store.IncPostLossReArm(at.store, at.id, kernel.PlanTradeDateFor(plan), plan.Session); cerr == nil {
+								postLossNote += fmt.Sprintf(" · post-loss re-arms this session: %d", n)
+							}
+						}
+					}
+					at.logInfof("⚔️ armed %s %s leg %d %s limit %.2f SL %.2f TP %.2f (tick-managed placement is Phase 2)%s", plan.Session, sc.ID, li+1, side, leg.Entry, leg.Stop, leg.Target, postLossNote)
 				}
 			} else {
 				// CHURN GUARD (2.1): re-spec a working arm's bracket only when the
@@ -1536,6 +1592,21 @@ func armRefusalClass(verdict string) string {
 		return "min_sl"
 	case strings.Contains(v, "veto"):
 		return "veto"
+	// D4(d) (2026-09-09) — THE COUNTER THE DAILY LIMIT WOULD BE WATCHED BY.
+	// EntryGate leg D refuses with "daily_force_flat" (entry_gate.go), and this
+	// classifier had no case for it, so every such refusal was tallied as
+	// "other" and vanished into the bucket nobody reads. vet-06 listed this as
+	// the fourth hole in the daily limit; it is the only one of the four that
+	// is this classifier's to fix.
+	case strings.Contains(v, "daily_force_flat"):
+		return "daily_force_flat"
+	// SESSION RISK (2026-09-09) — the two session-level refusals get their own
+	// classes so a run-of-losses halt and a lunch-band refusal are never read as
+	// the same event.
+	case strings.Contains(v, "consecutive_loss"):
+		return "consecutive_loss"
+	case strings.Contains(v, "no_trade_band"):
+		return "no_trade_band"
 	case strings.Contains(v, "not armable") || strings.Contains(v, "non-armable"):
 		return "not_armable"
 	default:

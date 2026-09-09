@@ -94,8 +94,8 @@ func (s *PositionStore) CountConsecutiveLossesSince(traderID string, sinceMs int
 	err := s.db.
 		// A-2 (2026-08-28): exclude legacy unverified rows from the loss
 		// streak too (reconcile_flat + class-27 unresolved + e7 test-seam).
-		Where("trader_id = ? AND status = ? AND close_reason NOT IN (?, ?, ?) AND pnl_corrected IS NOT NULL AND exit_time >= ?",
-			traderID, "CLOSED", CloseReasonReconcileFlat, CloseReasonUnresolved, CloseReasonTestSeam, sinceMs).
+		Where("trader_id = ? AND status = ? AND close_reason <> ? AND exit_time >= ?",
+			traderID, "CLOSED", CloseReasonTestSeam, sinceMs).
 		Order("exit_time DESC").
 		Find(&rows).Error
 	if err != nil {
@@ -103,9 +103,26 @@ func (s *PositionStore) CountConsecutiveLossesSince(traderID string, sinceMs int
 	}
 	n := 0
 	for _, r := range rows {
+		// D2 (2026-09-09) — AN UNKNOWN CLOSE ENDS THE RUN; IT DOES NOT BRIDGE IT.
+		//
+		// The WHERE used to drop unresolved and legacy-unverified rows, with a
+		// comment saying they were "never counted either way". Excluding a row
+		// from the scan does not make it neutral — it makes it TRANSPARENT: a
+		// run of 3 losses, an unresolvable close, then 3 more was counted as
+		// SIX, because the unknown row was not there to break it.
+		//
+		// Transparent is the DESTRUCTIVE direction. Blocking new entries is
+		// this counter's harmful branch, and bridging lengthens the run, so an
+		// unknown close made a halt MORE likely — exactly what A24 forbids.
+		// "We do not know whether that trade won" honestly ends a run of KNOWN
+		// losses. The e7 test-seam stays excluded in the WHERE: a synthetic row
+		// is not a trade that happened, so it neither counts nor breaks.
+		if r.CloseReason == CloseReasonReconcileFlat || r.CloseReason == CloseReasonUnresolved {
+			break
+		}
 		pnl, resolved := r.CorrectedPnL()
 		if !resolved {
-			continue // UNRESOLVED (defensive — the WHERE excludes these): never counted either way
+			break
 		}
 		if pnl < 0 {
 			n++

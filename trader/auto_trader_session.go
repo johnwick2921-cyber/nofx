@@ -24,11 +24,18 @@ import (
 // sessionEntryBlocked reports (reason, blocked): whether NEW entries are blocked
 // because we are outside an enabled session window or inside a no-trade
 // sub-window. Gated on day_plan → dormant by default.
+// sessionEntryBlocked is the entry point and owns the clock (A28/class 60); the
+// judgement lives in sessionEntryBlockedAt so the ARM path — which already
+// carries its own `now` — can consult the SAME band without a second clock read
+// and without a second copy of the rule.
 func (at *AutoTrader) sessionEntryBlocked() (string, bool) {
+	return at.sessionEntryBlockedAt(time.Now())
+}
+
+func (at *AutoTrader) sessionEntryBlockedAt(now time.Time) (string, bool) {
 	if !at.dayPlanEnabled() {
 		return "", false
 	}
-	now := time.Now()
 	reg := at.sessionRegistry(now)
 	// W9 + PART A — the strategy's session enable gates ENTRIES too (not just reads),
 	// through the SAME resolver the read scheduler uses: an explicit per-session

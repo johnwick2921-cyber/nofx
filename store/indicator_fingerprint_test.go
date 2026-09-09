@@ -45,7 +45,7 @@ func TestAIConfigFingerprint(t *testing.T) {
 	}
 
 	// nil vs empty slice must NOT change the hash (omitempty normalizes both).
-	a := IndicatorConfig{EnableEMA: true}                     // EMAPeriods nil
+	a := IndicatorConfig{EnableEMA: true}                      // EMAPeriods nil
 	b := IndicatorConfig{EnableEMA: true, EMAPeriods: []int{}} // EMAPeriods empty
 	if a.AIConfigFingerprint() != b.AIConfigFingerprint() {
 		t.Fatal("nil and empty period slices must hash identically")
