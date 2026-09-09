@@ -56,9 +56,13 @@ func TestW10RVBaselineFrom5m(t *testing.T) {
 // (warming cleared); with no baseline it stays honestly warming. VIX stays n/a.
 func TestW10RegimeConsumesBaseline(t *testing.T) {
 	min5 := synth5m(1) // ~1 day of recent 5m → recent RV computes
-	baseline, ok := RVBaselineFrom5m(synth5m(8), 20, 5)
+	// D2 (BARS HORIZON 2026-09-09) — the day count now travels with the value.
+	baseline, days, ok := RVBaselineFrom5mDays(synth5m(8), 20, 5)
 	if !ok {
 		t.Fatal("expected a baseline from 8 days")
+	}
+	if days <= 0 || days >= 20 {
+		t.Fatalf("baseline fed from 8 synthetic days reports %d — it must report what was FED, not the ask", days)
 	}
 
 	warm := ComputeRegime(RegimeInputs{Price: 18000, Min5Bars: min5}) // no baseline
@@ -66,7 +70,7 @@ func TestW10RegimeConsumesBaseline(t *testing.T) {
 		t.Fatal("no baseline supplied → RV must be warming")
 	}
 
-	fed := ComputeRegime(RegimeInputs{Price: 18000, Min5Bars: min5, RVBaseline20d: baseline})
+	fed := ComputeRegime(RegimeInputs{Price: 18000, Min5Bars: min5, RVBaseline: baseline, RVBaselineDays: days})
 	if fed.RVWarming {
 		t.Fatal("baseline supplied → RV must NOT be warming")
 	}

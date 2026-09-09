@@ -18,27 +18,42 @@ import (
 // RegimeInputs are the (partial) series the caller can supply. Any empty series
 // yields an "n/a" field — honest cold-start behavior.
 type RegimeInputs struct {
-	Price         float64
-	DailyBars     []market.Kline // EMA200-daily trend, dATR, ATR14 percentile
-	Hour1Bars     []market.Kline // 1h trend
-	Min5Bars      []market.Kline // realized vol
-	PriorClose    float64        // prior session close (overnight gap)
-	SessionOpen   float64        // this session's open (overnight gap)
-	VIX           float64        // 0 = unavailable (no feed)
-	RVBaseline20d float64        // 0 = warming (no 20d baseline yet)
+	Price       float64
+	DailyBars   []market.Kline // EMA200-daily trend, dATR, ATR14 percentile
+	Hour1Bars   []market.Kline // 1h trend
+	Min5Bars    []market.Kline // realized vol
+	PriorClose  float64        // prior session close (overnight gap)
+	SessionOpen float64        // this session's open (overnight gap)
+	VIX         float64        // 0 = unavailable (no feed)
+	// RVBaseline is the realized-vol baseline; 0 = warming (no baseline yet).
+	//
+	// D2 (BARS HORIZON 2026-09-09) — RENAMED from RVBaseline20d. It was fed
+	// RVBaselineFrom5m(min5Long, 20, 5) over about SEVEN complete session-days
+	// while the name said twenty, and the ask above it (5m × 3000 = 250.0 h
+	// against a 208.3 h ring) could never have delivered twenty. The value is
+	// unchanged; the name stopped promising a window nobody supplied.
+	RVBaseline float64
+	// RVBaselineDays is how many COMPLETE session-days RVBaseline was averaged
+	// over. 0 means there is no baseline (RVBaseline is 0 too) — never "zero
+	// days of a real baseline" (A24).
+	RVBaselineDays int
 }
 
 // RegimeBlock is the computed regime snapshot.
 type RegimeBlock struct {
-	TrendDaily       string  `json:"trend_daily"` // up | down | flat | n/a
-	Trend1h          string  `json:"trend_1h"`    // up | down | flat | n/a
-	ATR14            float64 `json:"atr14"`       // daily ATR (dATR); 0 = n/a
-	ATRRegime        string  `json:"atr_regime"`  // LOW | NORMAL | HIGH | EXTREME | n/a
-	ATRPercentile    float64 `json:"atr_pctile"`  // 0..100 (−1 = n/a)
-	RealizedVolPct   float64 `json:"rv_pct"`      // recent daily RV%, or recent/baseline%
-	RVWarming        bool    `json:"rv_warming"`  // true → no 20d baseline yet
-	VIXLevel         float64 `json:"vix_level"`   // 0 = unavailable
-	VIXRegime        string  `json:"vix_regime"`  // <15 | 15-20 | 20-30 | >30 | unavailable
+	TrendDaily     string  `json:"trend_daily"` // up | down | flat | n/a
+	Trend1h        string  `json:"trend_1h"`    // up | down | flat | n/a
+	ATR14          float64 `json:"atr14"`       // daily ATR (dATR); 0 = n/a
+	ATRRegime      string  `json:"atr_regime"`  // LOW | NORMAL | HIGH | EXTREME | n/a
+	ATRPercentile  float64 `json:"atr_pctile"`  // 0..100 (−1 = n/a)
+	RealizedVolPct float64 `json:"rv_pct"`      // recent daily RV%, or recent/baseline%
+	RVWarming      bool    `json:"rv_warming"`  // true → no baseline yet
+	// RVBaselineDays is the baseline's REAL window in complete session-days.
+	// 0 with RVWarming=true means there is no baseline; it is never a claim
+	// that the baseline covers zero days (A24).
+	RVBaselineDays   int     `json:"rv_baseline_days"`
+	VIXLevel         float64 `json:"vix_level"`  // 0 = unavailable
+	VIXRegime        string  `json:"vix_regime"` // <15 | 15-20 | 20-30 | >30 | unavailable
 	ExpectedRangePts float64 `json:"expected_range_pts"`
 	OvernightGapATR  float64 `json:"overnight_gap_atr"` // gap / dATR (0 if unavailable)
 	HasGap           bool    `json:"has_gap"`
@@ -80,8 +95,9 @@ func ComputeRegime(in RegimeInputs) RegimeBlock {
 
 	// realized_vol_pct (5m RV; vs-20d when a baseline is supplied).
 	if rv, ok := recentDailyVolPct(in.Min5Bars); ok {
-		if in.RVBaseline20d > 0 {
-			r.RealizedVolPct = 100 * rv / in.RVBaseline20d
+		if in.RVBaseline > 0 {
+			r.RealizedVolPct = 100 * rv / in.RVBaseline
+			r.RVBaselineDays = in.RVBaselineDays
 			r.RVWarming = false
 		} else {
 			r.RealizedVolPct = rv
@@ -219,8 +235,13 @@ func (r RegimeBlock) Render() string {
 	if r.RealizedVolPct > 0 {
 		if r.RVWarming {
 			fmt.Fprintf(&sb, " · RV=%.1f%%(warming)", r.RealizedVolPct)
+		} else if r.RVBaselineDays > 0 {
+			// D2 — the baseline NAMES its window. "of-normal" asserted a norm
+			// with no stated window over a value averaged from about 7 days.
+			fmt.Fprintf(&sb, " · RV=%.0f%%-of-baseline(%d complete session-days)", r.RealizedVolPct, r.RVBaselineDays)
 		} else {
-			fmt.Fprintf(&sb, " · RV=%.0f%%-of-normal", r.RealizedVolPct)
+			// A24: a baseline whose window was not reported is UNKNOWN, not 20d.
+			fmt.Fprintf(&sb, " · RV=%.0f%%-of-baseline(window UNKNOWN)", r.RealizedVolPct)
 		}
 	}
 	if r.VIXLevel > 0 {
