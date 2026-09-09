@@ -825,6 +825,18 @@ func (e *StrategyEngine) formatTimeframeSeriesData(sb *strings.Builder, data *ma
 // per-timeframe tables (never a second formatter). The newest row carries the
 // "  <- current" marker exactly as the executor always rendered it.
 func FormatCandleTable(sb *strings.Builder, klines []market.KlineBar, volume bool) {
+	FormatCandleTableNoted(sb, klines, volume, nil)
+}
+
+// FormatCandleTableNoted is the SAME formatter with a per-row note appended
+// (BARS HORIZON, 2026-09-09 — D1). notes[i] is written verbatim after row i;
+// a nil/short slice notes nothing, which is exactly what FormatCandleTable
+// passes. Adding a second formatter here was not an option: the repo renders
+// every candle table through this one function so a row can never be shaped
+// two ways.
+//
+// A24: a note NEVER changes a rendered O/H/L/C/V. It is appended text only.
+func FormatCandleTableNoted(sb *strings.Builder, klines []market.KlineBar, volume bool, notes []string) {
 	if len(klines) == 0 {
 		return
 	}
@@ -839,6 +851,9 @@ func FormatCandleTable(sb *strings.Builder, klines []market.KlineBar, volume boo
 		marker := ""
 		if i == len(klines)-1 {
 			marker = "  <- current"
+		}
+		if i < len(notes) {
+			marker += notes[i]
 		}
 		if volume {
 			sb.WriteString(fmt.Sprintf("%-14s %-9.4f %-9.4f %-9.4f %-9.4f %-12.2f%s\n",

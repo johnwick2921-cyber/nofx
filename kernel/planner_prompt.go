@@ -373,27 +373,48 @@ func ChainWarnings(doc PlanDoc) []string {
 	return out
 }
 
-// BuildPlannerCandleTables (W2b, weekly-bias wave 2026-08-30) renders the
+// BuildPlannerCandleTablesAt (W2b, weekly-bias wave 2026-08-30) renders the
 // "## Candles" block from the 1m slice: last 12×15m · 12×1h · 8×4h ·
 // 8×daily rows — the SAME aggregation helpers the planner already uses
 // (kernel.AggregateBars on the 1m slice; daily = session-day candles).
 // Empty input → "".
-func BuildPlannerCandleTables(bars1m []market.Kline) string {
+func BuildPlannerCandleTablesAt(bars1m []market.Kline, asked1m int, now time.Time) string {
 	if len(bars1m) == 0 {
 		return ""
 	}
 	var b strings.Builder
-	render := func(title string, bars []market.Kline, n int) {
+
+	// D1 (BARS HORIZON 2026-09-09) — the block declares the tape it is built
+	// from BEFORE any table, because the prompt disclosed its depth nowhere.
+	b.WriteString(candleTapeLine(HorizonOf(bars1m, "1m", asked1m, now)) + "\n")
+	b.WriteString(candleMarkerLegend + "\n\n")
+
+	// render takes the FULL aggregated slice and the coverage measured on it,
+	// then tail-trims BOTH together, so a marker can never land on the wrong
+	// row. The heading is computed from what survives the trim.
+	render := func(label string, bars []market.Kline, cov []RowCoverage, n int) {
 		if len(bars) > n {
 			bars = bars[len(bars)-n:]
+			cov = cov[len(cov)-n:]
 		}
-		fmt.Fprintf(&b, "### %s\n", title)
-		FormatCandleTable(&b, KlineBars(bars), true)
+		notes := make([]string, len(cov))
+		for i, c := range cov {
+			notes[i] = c.Marker()
+		}
+		b.WriteString(tableHeading(label, len(bars), n, cov) + "\n")
+		FormatCandleTableNoted(&b, KlineBars(bars), true, notes)
 	}
-	render("15m (last 12)", AggregateBars(bars1m, 15*60*1000), 12)
-	render("1h (last 12)", AggregateBars(bars1m, 60*60*1000), 12)
-	render("4h (last 8)", AggregateBars(bars1m, 240*60*1000), 8)
-	render("daily session candles (last 8)", DailySessionBars(bars1m), 8)
+
+	agg := func(label string, bucketMs int64, n int) {
+		rows := AggregateBars(bars1m, bucketMs)
+		render(label, rows, aggregateCoverage(bars1m, rows, bucketMs, now), n)
+	}
+	agg("15m", 15*60*1000, 12)
+	agg("1h", 60*60*1000, 12)
+	agg("4h", 240*60*1000, 8)
+
+	daily := DailySessionBars(bars1m)
+	render("daily session candles", daily, sessionCoverage(bars1m, daily, now), 8)
 	return b.String()
 }
 

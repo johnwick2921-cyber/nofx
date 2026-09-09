@@ -2355,10 +2355,10 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 	var candleTables string
 	var bars1m []market.Kline
 	if market.FuturesBarsProvider != nil {
-		bars1m = market.FuturesBarsProvider(symbol, "1m", 12000)
+		bars1m = market.FuturesBarsProvider(symbol, "1m", plannerCandleTapeBars)
 	}
 	if kernel.PlannerCandlesEnabled() {
-		candleTables = kernel.BuildPlannerCandleTables(bars1m)
+		candleTables = kernel.BuildPlannerCandleTablesAt(bars1m, plannerCandleTapeBars, now)
 	}
 	// VOID PARITY (2026-09-02) — resolve the void scope ONCE. The prompt and the
 	// persisted read-facts row must carry the identical list; computing it twice
@@ -2865,3 +2865,9 @@ func plannerATR5m(symbol string) float64 {
 	}
 	return market.ExportCalculateATR(kernel.AcceptanceBars(market.FuturesBarsProvider(symbol, "5m", 200), "2x5m"), 14)
 }
+
+// plannerCandleTapeBars is the 1m depth the planner's candle tables ask for.
+// 8 CME session-days × ~1,380 open minutes ≈ 11,040, so 12,000 is the honest
+// ask for an "8 daily session candles" table. It is NAMED rather than a
+// literal so the ask and the disclosure that reports it cannot drift.
+const plannerCandleTapeBars = 12000
