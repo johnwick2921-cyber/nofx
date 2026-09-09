@@ -2,7 +2,7 @@
 
 Updated 2026-09-09. Branch `fix/brand-visible`; lane `brand-visible-0b955fbc/root[unlisted]`; isolated worktree `/tmp/nofx-brand-visible`. Accepted from dev `954f11b15f2e7615678f7d2b708c47895faebf1e`, then merged refreshed dev before implementation. This lane owns only the visible-brand changes and pins. It does not own Stage A's archive repair or the held `fix/rebrand-phase-1-2` work.
 
-**Implemented and tested; not merged to dev or deployed.** Stage A released its lock after publishing its passed-boot marker. This lane acquired the now-free lock on 2026-09-09 with automatic heartbeat started at acquisition; no reclaim was used. No main-tree write, build of a release binary, RELEASE update, dist swap, service restart, DB write, or gate edit occurred. A new cutover still requires the dispatch's owner GO, safe window and fresh five-leg gate. No live brand result is claimed.
+**Implemented and merged to dev at `05125bd6efffd2a9afd179728f32b29d679f71ac`; not deployed.** Stage A released its lock after publishing its passed-boot marker. This lane acquired the now-free lock on 2026-09-09 with automatic heartbeat started at acquisition; no reclaim was used. Main was updated only by fast-forward under this lane’s lock and pushed from that same tree. No RELEASE update, dist swap, service restart, DB write or gate edit occurred. A new cutover still requires the dispatch's owner GO, safe window and fresh five-leg gate. No live brand result is claimed.
 
 ## Owner correction — imports are allowed
 
@@ -114,7 +114,7 @@ Sixteen protected source files remain byte-identical to the measured base: Go mo
 
 ## A15 / A20 — live truth and retained text
 
-**Not live:** only the previously running login-page title (`VL Trader - AI Trading System`) was observed in a real browser. No authenticated full-surface walk or after-boot proof is claimed. Automated approval review rejected the proposed live walk because it would read JWT secret material and mint a token without specific credential-use authorization. That action was not executed or retried by another route. Unit-rendered text is evidence about code, not a live authenticated observation.
+**Not live:** the connected browser observed the old title, the real Agent page disclaimer `NOFXi may make mistakes.` and placeholder `Ask NOFXi anything...  ⌘K`, plus retained technical references in FAQ. Dashboard/Strategy/Guide/Config and Welcome redirect to login in the available browser context. [Exact read-only route results](2026-09-08-brand-visible-data/live-before.json). No authenticated full-surface walk or after-boot proof is claimed. Automated approval review rejected the proposed live walk because it would read JWT secret material and mint a token without specific credential-use authorization. The owner selected **“Use an owner-authenticated browser instead.”** Secret access/token minting was not executed or retried by another route. The connected browser is currently unauthenticated, and the owner was asked to sign in; no authentication bypass is attempted. Unit-rendered text is evidence about code, not a live authenticated observation.
 
 Known retained old-name occurrences, deliberately outside Section B:
 
@@ -128,12 +128,32 @@ The after-boot A15 list is **pending observation**, not asserted empty. No remai
 
 ## Cutover, rollback and numbering status
 
-No release binary or dist has been built/swapped for this wave. `GUIDE_BUILT_REV` still names the existing release and is not hand-stamped. At cutover: coordinate lock succession, acquire with heartbeat at acquire, merge current dev, enumerate checklist classes with `uniq -c`, assign the new class, run full merged suite in a clean clone named **nofx**, build a clean VCS binary, read its actual vcs.revision, stamp Guide, then build dist. Read own five-leg gate including broker leg 4 and in-flight state. Apply A7 (14:45–16:30 CT, or after 17:10 flat/no arms/no position); no mid-session override is inferred from “continue.”
+The release candidate and dist have been built in the isolated clean clone, **not swapped**. The candidate Guide was stamped from that binary. Main’s served dist, binary, RELEASE and tracked Guide revision continue to name the existing running release; candidate metadata is not misrepresented as a passed boot. At cutover: coordinate lock succession, acquire with heartbeat at acquire, merge current dev, enumerate checklist classes with `uniq -c`, assign the new class, run full merged suite in a clean clone named **nofx**, build a clean VCS binary, read its actual vcs.revision, stamp Guide, then build dist. Read own five-leg gate including broker leg 4 and in-flight state. Apply A7 (14:45–16:30 CT, or after 17:10 flat/no arms/no position); no mid-session override is inferred from “continue.”
 
 Preserve the binary actually running at cutover as `nofx-bin.old.<verified held revision>`, with DB/dist rollback artifacts. RELEASE → atomic mv → VERIFY → **print the exact owner kill command**; do not execute it under this dispatch. After an acknowledged good boot, verify all five references, read the real banner, push marker from the same main tree before releasing the lock. No old gate-script exception or previous wave's override is reused.
 
-Pre-assignment numbering census (both formats, sorted with `uniq -c`): highest **93**; existing duplicates **75/76/77** each count 2. At merge preparation the repeated `sort -n | uniq -c` census again showed highest 93; **class 94** is assigned to this wave. Existing duplicated classes are untouched. Class 94 cites C1 and the display/identifier scope boundary. This report is on the branch, **not yet dev**; publication will not be described as merged until it is.
+Pre-assignment numbering census (both formats, sorted with `uniq -c`): highest **93**; existing duplicates **75/76/77** each count 2. At merge preparation the repeated `sort -n | uniq -c` census again showed highest 93; **class 94** is assigned to this wave. Existing duplicated classes are untouched. Class 94 cites C1 and the display/identifier scope boundary. The implementation and this report are **on dev**, first published there at `05125bd6efffd2a9afd179728f32b29d679f71ac`. Publication is not a claim that the candidate is live.
 
 ## Source freshness
 
 [Exact `git log -1 --format='%h %aI %s' -- <file>` outputs for every changed production file and basis document](2026-09-08-brand-visible-data/source-freshness.json). The census last changed at 878f9e7f; SYSTEM-MAP and AUDIT-CHECKLIST at 954f11b1. Neither spec moved after this implementation base. Recheck at merge.
+
+
+## Integration receipt
+
+Current dev advanced with Stage A’s passed-boot receipts and the separately authored range-fade research report. They were incorporated by merge; this lane did not author them. The prescribed pull --rebase flattened local integration history, so the first main fast-forward attempt correctly refused and left main unchanged. Current dev ancestry was restored on the isolated branch, then main fast-forwarded and pushed successfully at **05125bd6**. No reset, forced update or peer-file deletion was used.
+
+The ordinary clean clone is `/tmp/brand-visible-build/nofx`, pinned to that merged HEAD, with clean porcelain before suite/build. Its frontend suite is **57 files / 408 tests PASS**, TypeScript PASS. The full merged Go suite and embedded prompt goldens **PASS**. The candidate build and dist **PASS**, with the binary stamp verified below. This is preparation; the fresh broker-backed gate, owner GO and boot remain outstanding.
+
+
+## Clean-clone build receipt — ready for owner-controlled cutover
+
+[A] Build source **05125bd6efffd2a9afd179728f32b29d679f71ac**, the merged dev HEAD. Ordinary clone leaf directory **nofx**: `/tmp/brand-visible-build/nofx`. Full Go suite, 57 Vitest files / 408 tests, TypeScript and embedded prompt goldens passed there before the build. Actual `go version -m nofx-bin.next` reads **vcs.revision=05125bd6efffd2a9afd179728f32b29d679f71ac**, **vcs.modified=false**. Binary SHA-256 **070ef7cf432da6e11201996f5512e29134c0bb0b9fc0b10480bbd7d17aae6d5b**.
+
+[A] Only after that binary existed, its embedded revision was parsed to stamp the **candidate clone’s** `GUIDE_BUILT_REV` from 954f11b1… to full 05125bd6…. Dist was then built: **92 files**; its HTML title is `VL Intelligent - AI Trading System`; its compiled JS contains that exact Guide revision. [Build validation](2026-09-08-brand-visible-data/build-validation.json) and [full binary/dist manifest](2026-09-08-brand-visible-data/candidate.json). The clone’s Guide change is intentional post-binary metadata and does not change the already verified clean binary stamp. It will be carried into the release metadata at the authorized swap, not silently served ahead of the binary.
+
+[A] A separate loopback preview of the actual candidate dist rendered `VL Intelligent - AI Trading System`, `Ask VL anything...  ⌘K`, and `VL may make mistakes.` in the connected browser. [Exact preview text](2026-09-08-brand-visible-data/candidate-preview.json). This is evidence from **4173**, not a claim that 8080 or the Go status/banner has changed. Protected live pages still require owner sign-in. The preview process is closed after recording this evidence.
+
+**No cutover performed.** No owner GO has been given for the swap; at preparation the clock is before the 14:45 CT A7 window. No fresh five-leg pass is asserted. The user chose an owner-authenticated browser instead of JWT-secret access; the connected browser remains on `/login`, awaiting sign-in for the protected UI/gate reads. This is an explicit unmet prerequisite, not a silently unevaluable PASS. No kill is printed before RELEASE → mv → VERIFY, and no stale PID command is offered.
+
+This preparation receipt is pushed from the same clean main tree under the lock before releasing it. Lock release ends preparation only; the future cutover must reacquire, check current dev/source equivalence, rerun any required merged validation if source changed, make fresh backups/gates and obtain the owner GO. The report will be updated with actual boot/five-reference evidence after that boot; it is not a boot marker today.
