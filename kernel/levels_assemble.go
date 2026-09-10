@@ -349,8 +349,8 @@ func detectHTFLevels(fetch func(tf string, count int) []market.Kline, timeframes
 	}
 	seen := map[string]bool{}
 	var out []DetectedLevel
-	for _, tf := range timeframes {
-		tf = strings.ToLower(strings.TrimSpace(tf))
+	for _, rawTF := range timeframes {
+		tf := canonicalDetectionTF(rawTF)
 		if tf == "" {
 			continue
 		}
@@ -431,6 +431,32 @@ func htfWindowSpan(cb []market.Kline) string {
 	return fmt.Sprintf("%s→%s", first.Format("2006-01-02"), last.Format("2006-01-02"))
 }
 
+// canonicalDetectionTF resolves a CONFIGURED timeframe string to the one the
+// store and every tier table speak.
+//
+// This is the join that was missing. The bound strategy's planner_timeframes
+// has read ["D","4h","1h","15m","5m"] since the default was written
+// (store/strategy.go:1407) — the owner's configuration has been ASKING for
+// daily structure all along. The detection gate only ever knew "1d", so "D"
+// fell through the `!isHTFDetectionTF(tf)` branch and was dropped in silence,
+// which is why 0 of 297 stored plans carry a daily level while the config names
+// one first.
+//
+// Canonicalising HERE, where the value enters detection, follows the repo's
+// canonical-casing law (checklist 28: one canonicaliser per identifier, called
+// where the value ENTERS). The alias set is deliberately small — only the forms
+// the day-plan config actually uses.
+func canonicalDetectionTF(tf string) string {
+	t := strings.ToLower(strings.TrimSpace(tf))
+	switch t {
+	case "d", "1day", "daily":
+		return "1d"
+	case "w", "1week", "weekly":
+		return "1w"
+	}
+	return t
+}
+
 // isHTFDetectionTF lists the timeframes DetectHTFLevels runs on.
 //
 // W-TF (2026-09-10, owner ruling): the daily family — 1d, 3d, 1w — joins the
@@ -446,12 +472,31 @@ func htfWindowSpan(cb []market.Kline) string {
 // 15m. Widening this set downward is a decision, not an omission — TestE1c pins
 // it so the next lane has to mean it.
 func isHTFDetectionTF(tf string) bool {
-	switch tf {
-	case "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w":
-		return true
+	for _, t := range HTFDetectionTFs {
+		if t == tf {
+			return true
+		}
 	}
 	return false
 }
+
+// HTFDetectionTFs is the ORDERED single source for which timeframes the
+// per-timeframe pass runs on. The membership test above ranges over it and every
+// caller that needs a default set reads it, so a timeframe added here reaches
+// the gate and every call site in the same second.
+//
+// This shape is deliberate. Checklist class 107: centralising a hand-typed list
+// is a behaviour change wherever the lists differed, and the remedy is a single
+// SOURCE, never a second list beside the predicate — a []string sitting next to
+// a hardcoded switch diverges exactly as readily as a switch and a SQL literal.
+var HTFDetectionTFs = []string{"15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w"}
+
+// DefaultHTFDetectionTFs is the set a caller uses when it has no configured
+// list of its own — one rung per scale rather than all eleven, because a caller
+// on a per-decision path pays a fetch and four detector passes per timeframe.
+// Callers WITH a configured list (the planner reads planner_timeframes) pass
+// theirs; this is not a competing default for them.
+var DefaultHTFDetectionTFs = []string{"15m", "1h", "4h", "1d", "1w"}
 
 // tagHTFLevel marks a detected level with its HTF origin + a TF-suffixed label
 // ("EQH·1h", "Demand·4h") so the ranked table and the card show provenance.

@@ -397,3 +397,63 @@ func TestD4b_LookbackIsTheWindowActuallySearched(t *testing.T) {
 		t.Errorf("report resolved params %q do not name the real window", rep.Resolved["1w"])
 	}
 }
+
+// ---------------------------------------------------------------- the live config
+
+// TestD1_TheOwnersConfiguredTimeframesReachDetection — the test that decides
+// whether this wave is real. A29's question is "production call sites: 0?", and
+// the answer here was nearly yes: the gate learned "1d" while the bound
+// strategy's planner_timeframes says "D".
+//
+// The list below is the LIVE configured value, read from the bound strategy on
+// 2026-09-10 (traders.strategy_id -> strategies.config.day_plan.
+// planner_timeframes = ["D","4h","1h","15m","5m"]). It is exercised verbatim,
+// including the entries that must NOT produce HTF levels, so this asserts the
+// whole configured set behaves as intended rather than the one entry the wave
+// added.
+func TestD1_TheOwnersConfiguredTimeframesReachDetection(t *testing.T) {
+	now := tfTestNow()
+	configured := []string{"D", "4h", "1h", "15m", "5m"}
+
+	fetch := func(tf string, _ int) []market.Kline {
+		switch tf {
+		case "1d":
+			return barsWithTwoEqualPivotHighs(30, 29500, tfTestDayMs, now)
+		case "4h", "1h", "15m":
+			return barsWithTwoEqualPivotHighs(30, 29500, 60*tfTestMinuteMs, now)
+		}
+		return nil // 5m is not fetched: it is outside the HTF detection set
+	}
+
+	levels, rep := DetectHTFLevelsReport(fetch, configured, "MNQ", now)
+
+	var daily int
+	for _, l := range levels {
+		if l.TF == "1d" {
+			daily++
+		}
+	}
+	if daily == 0 {
+		t.Fatalf("the owner's configured timeframes produced NO daily level; \"D\" never reached detection (report=%+v)", rep)
+	}
+	if rep.Counts["1d"] == 0 {
+		t.Errorf("report records 1d=%d; the boot line would say the daily pass found nothing", rep.Counts["1d"])
+	}
+	if _, skipped := rep.Skipped["5m"]; !skipped {
+		t.Errorf("5m is not recorded as skipped; a configured timeframe that is deliberately not detected on must say so, not vanish")
+	}
+}
+
+// TestD1b_DailyAliasesCanonicaliseOnce — the alias set, pinned. "D" is what the
+// config writes; "1d" is what the store and every tier table speak.
+func TestD1b_DailyAliasesCanonicaliseOnce(t *testing.T) {
+	for in, want := range map[string]string{
+		"D": "1d", "d": "1d", " D ": "1d", "daily": "1d", "1day": "1d",
+		"W": "1w", "w": "1w", "weekly": "1w",
+		"1d": "1d", "1w": "1w", "4h": "4h", "15m": "15m", "": "",
+	} {
+		if got := canonicalDetectionTF(in); got != want {
+			t.Errorf("canonicalDetectionTF(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
