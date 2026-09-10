@@ -4,9 +4,12 @@
 **Session** bars-horizon-2bdef526/nofx-07[aa8e26] · **worktree** `/home/hoang/nofx-barshorizon`
 **Status** pushed, green, **NOT deployed and NOT merged** (A3).
 **Rounds** built → 3 reviewers → **REPAIRED (this round, 2026-09-09 evening)**.
-**Head** `54a7bf25` · `git ls-remote origin fix/bars-horizon` = `54a7bf25` (A18:
-a push exiting zero proves a ref matched, nothing more — so the ref was read
-back).
+**Head** — the code freeze is `54a7bf25` (the history join below); report-only
+commits follow it. A18: a push exiting zero proves a ref matched and nothing
+more, so `git ls-remote origin fix/bars-horizon` was READ BACK after every push
+and compared to local `HEAD`; they matched every time. The final value is in the
+dispatch's structured result, not written here — a document cannot name the sha
+of the commit that contains it without being wrong by one.
 
 > **HOW THIS WAS PUSHED, because it is not a plain fast-forward.** The dispatch
 > required a rebase onto the dev tip, which moved the branch off its own pushed
