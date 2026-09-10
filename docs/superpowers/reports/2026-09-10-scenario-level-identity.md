@@ -622,8 +622,9 @@ job logs identify failures in unchanged workflow setup:
 
 [Exact failure excerpts](2026-09-10-scenario-level-identity-data/remote-ci-setup-failures.txt).
 No `.github` workflow, Dockerfile, dependency manifest or Go toolchain was
-changed by 105. These failures are recorded under A15, not repaired under the
-identity dispatch. The full local Go suite, 421 frontend tests and candidate
+changed by 105. Owner ruling at cutover GO: these three CI setup failure groups are
+**pre-existing, owed to cleanup batch 2**. They are recorded under A15 and
+not repaired under the identity dispatch. The full local Go suite, 421 frontend tests and candidate
 build results above remain separately established.
 
 **[A] Partner handoff:** `/home/hoang/vlautoagenttraderv1` is at
@@ -636,3 +637,20 @@ wave's prerequisite `kernel/plan_doc.go`, `kernel/scenario_state.go` and
 `/tmp/identity-build/partner-identity.patch`. Applying/building it requires the
 partner's prerequisite baseline/history synchronization; no successful mirror
 application or mirror test result is claimed.
+
+
+### Cutover GO and partner routing (2026-09-10)
+
+Owner authorized 105 after W2 boots and releases its lock, with 105's own
+fresh five-leg gate and RELEASE → mv → VERIFY → exact kill command.
+W2 boot was directly observed at 18:47:08 CT: `BOOT INTEGRITY OK — rev
+4fc670aa4508 · expected 4fc670aa · goldens PASS`; its fade-permission
+boot line was present at 18:47:15. Lock release and 105's gate remain
+separate prerequisites.
+
+The owner routes the partner patch to **Binnie's lane, handoff only**.
+105 must not apply it. Prepared patch: `/tmp/identity-build/partner-identity.patch`,
+SHA256 `59c582b9684173f8cc3caf29cf8b56f9d4b2f0bb8418c37b44e418d0bdedc138`.
+The prerequisite and dirty-checkout observations above travel with that handoff.
+A handoff note is staged beside the patch; no delivery acknowledgement from
+Binnie's lane has yet been observed.
