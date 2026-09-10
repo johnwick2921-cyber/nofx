@@ -20,11 +20,19 @@ deploy/nofx-lock.sh acquire <session> "<task>" [minutes]   # atomic; REFUSES if 
 deploy/nofx-lock.sh heartbeat <session>                    # acquire starts the keeper; do NOT hand-beat — a second writer into the lock dir is the class-102 failure the keeper closed
 deploy/nofx-lock.sh with-heartbeat <session> -- <cmd>      # wrap long steps (builds, suites)
 deploy/nofx-lock.sh status                                 # human-readable: holder, task, heartbeat age, expiry, auto-beat on/ENDED/off
-deploy/nofx-lock.sh check                                  # rc 0 free · 1 held · 2 stale · 3 incomplete · 4 abandoned-incomplete
-deploy/nofx-lock.sh reclaim <you> <stale> "<corroboration>"  # succession, ON THE RECORD; REFUSED while the heartbeat is fresh; returns rc 3
+deploy/nofx-lock.sh check                                  # CHECK rc: 0 free · 1 held · 2 stale · 3 incomplete · 4 abandoned-incomplete
+deploy/nofx-lock.sh reclaim <you> <stale> "<corroboration>"  # succession, ON THE RECORD; REFUSED while the heartbeat is fresh; returns RECLAIM rc 3 (inherited, not taken)
 deploy/nofx-lock.sh release <session>                      # only the holder may release; ends the keeper group, WAITS, and FAILS (rc 1) if the directory survives
 deploy/nofx-lock.sh clear-incomplete                       # removes a lock that names NOBODY; refuses one with meta, and one younger than 30s
 ```
+
+**RC CODES ARE PER-VERB, AND TWO OF THEM COLLIDE ON 3.** `check` rc 3 means *an
+acquire is in flight — never take this over*; `reclaim` rc 3 means *you have
+INHERITED an abandoned lock rather than taken a free one*. Those are close to
+opposite, they sit on adjacent lines, and a lane skimming the block can carry
+away "rc 3" as a fact about the tool rather than about a verb. Hence the
+qualifiers above. (Spotted by a peer reading the block, not by a test — no
+assertion can see this, because both lines are individually correct.)
 
 **`check` rc 3 and 4 (added `757eb578`) are ADDITIVE.** 0/1/2 keep the meanings the
 tree-guard spec was written against, so a caller that has not been taught the new
