@@ -373,27 +373,58 @@ func ChainWarnings(doc PlanDoc) []string {
 	return out
 }
 
-// BuildPlannerCandleTables (W2b, weekly-bias wave 2026-08-30) renders the
+// BuildPlannerCandleTablesAt (W2b, weekly-bias wave 2026-08-30) renders the
 // "## Candles" block from the 1m slice: last 12×15m · 12×1h · 8×4h ·
 // 8×daily rows — the SAME aggregation helpers the planner already uses
 // (kernel.AggregateBars on the 1m slice; daily = session-day candles).
 // Empty input → "".
-func BuildPlannerCandleTables(bars1m []market.Kline) string {
+func BuildPlannerCandleTablesAt(bars1m []market.Kline, asked1m int, now time.Time) string {
 	if len(bars1m) == 0 {
 		return ""
 	}
 	var b strings.Builder
-	render := func(title string, bars []market.Kline, n int) {
-		if len(bars) > n {
-			bars = bars[len(bars)-n:]
+
+	// D1 (BARS HORIZON 2026-09-09) — the block declares the tape it is built
+	// from BEFORE any table, because the prompt disclosed its depth nowhere.
+	b.WriteString(candleTapeLine(HorizonOf(bars1m, "1m", asked1m, now)) + "\n")
+	b.WriteString(candleMarkerLegend + "\n\n")
+
+	// TAIL-TRIM FIRST, THEN MEASURE. The trim used to run after coverage was
+	// computed for every row of the full aggregate — ~1,170 calendar walks per
+	// planner read on the store-deepened 12,000-bar tape, ~99% of them for rows
+	// that were then discarded. Only the rows that will be PRINTED are measured
+	// (found in review, 2026-09-09). rows and every parallel slice are trimmed
+	// together, so a marker can never land on the wrong row.
+	tail := func(rows []market.Kline, n int) []market.Kline {
+		if len(rows) > n {
+			return rows[len(rows)-n:]
 		}
-		fmt.Fprintf(&b, "### %s\n", title)
-		FormatCandleTable(&b, KlineBars(bars), true)
+		return rows
 	}
-	render("15m (last 12)", AggregateBars(bars1m, 15*60*1000), 12)
-	render("1h (last 12)", AggregateBars(bars1m, 60*60*1000), 12)
-	render("4h (last 8)", AggregateBars(bars1m, 240*60*1000), 8)
-	render("daily session candles (last 8)", DailySessionBars(bars1m), 8)
+	render := func(label, unit string, bars []market.Kline, cov []RowCoverage, absent []int, n int) {
+		notes := make([]string, len(cov))
+		for i, c := range cov {
+			notes[i] = c.Marker()
+			if i > 0 {
+				if a := absentRowNote(absent[i], unit, bars[i-1].OpenTime, bars[i].OpenTime); a != "" {
+					notes[i] = a + notes[i]
+				}
+			}
+		}
+		b.WriteString(tableHeading(label, len(bars), n, cov, absent) + "\n")
+		FormatCandleTableNoted(&b, KlineBars(bars), true, notes)
+	}
+
+	agg := func(label string, bucketMs int64, n int) {
+		rows := tail(AggregateBars(bars1m, bucketMs), n)
+		render(label, label, rows, aggregateCoverage(bars1m, rows, bucketMs, now), absentAggregateRows(rows, bucketMs), n)
+	}
+	agg("15m", 15*60*1000, 12)
+	agg("1h", 60*60*1000, 12)
+	agg("4h", 240*60*1000, 8)
+
+	daily := tail(DailySessionBars(bars1m), 8)
+	render("daily session candles", "session-day", daily, sessionCoverage(bars1m, daily, now), absentSessionRows(daily), 8)
 	return b.String()
 }
 

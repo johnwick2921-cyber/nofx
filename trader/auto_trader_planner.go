@@ -19,6 +19,7 @@ import (
 	"nofx/kernel"
 	"nofx/market"
 	"nofx/mcp"
+	nt "nofx/provider/ninjatrader"
 	"nofx/store"
 	"nofx/telemetry"
 )
@@ -2244,21 +2245,55 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 	// keeps the owner-prepended levels above the floor.
 	scored = kernel.FilterLevelsByMinGrade(scored, minGrade)
 
-	var daily, hour1, min5, min5Long []market.Kline
+	// D2 CHOICE (a) — READ THE STORE. WHY: this tape is aggregated into the
+	// "8 daily session candles" table, which needs ~11,040 open 1m intervals.
+	// The ring ceiling is 2,500 bars (41.7 h), so the 8-row table rendered 2 or
+	// 3 rows in 55 of 55 stored prompts and NEVER 8. The bars table holds MNQ 1m
+	// back 21 days (measured 2026-09-09: 20,788 rows from 2026-08-19), bounded
+	// by the 1m retention of 90 days. The ring still owns the live tail — the
+	// store only extends it backwards (barsWithStoreDepthFrom rule 3).
+	//
+	// IT IS READ HERE, ABOVE THE REGIME BLOCK, because the realized-vol
+	// baseline is now served from THIS tape (owner condition (b), below) as
+	// well as by the candle tables and the weekly thin-history count. One read,
+	// three consumers, so they can never disagree about the tape.
+	//
+	// THREE CONSUMERS, ALL NAMED (the second and third were undisclosed until
+	// review, 2026-09-09):
+	//   1. kernel.BuildPlannerCandleTablesAt — the candle tables (D1);
+	//   2. ResolveRVBaselineTape             — the realized-vol baseline;
+	//   3. kernel.CompletedWeekCount         — the WEEKLY line's "(thin history
+	//      %dw)" clause. MEASURED against the live store 2026-09-09: 2,500 1m
+	//      bars (43.6 h) → 0 completed weeks; 12,000 (309.0 h) → 2. The count
+	//      gets MORE accurate, but it does move, and it renders in the prompt.
+	bars1m := at.barsWithStoreDepth(symbol, "1m", plannerCandleTapeBars, now)
+
+	var daily, hour1, min5, ring5m []market.Kline
 	if market.FuturesBarsProvider != nil {
 		daily = market.FuturesBarsProvider(symbol, "1d", 300)
 		hour1 = market.FuturesBarsProvider(symbol, "1h", 300)
-		min5 = market.FuturesBarsProvider(symbol, "5m", 300)      // recent (~1 day) → RV recent
-		min5Long = market.FuturesBarsProvider(symbol, "5m", 3000) // multi-day → RV baseline
+		min5 = market.FuturesBarsProvider(symbol, "5m", 300)                           // recent (~1 day) → RV recent
+		ring5m = market.FuturesBarsProvider(symbol, "5m", rvBaselineFallback5mBarsAsk) // FALLBACK ONLY (see below)
 	}
 	// W10 — supply the realized-vol baseline (was never fed → RV stuck "warming").
 	// Same 5m estimator as the recent value; VIX stays honest n/a (no feed).
-	rvBaseline, _ := kernel.RVBaselineFrom5m(min5Long, 20, 5)
+	//
+	// OWNER CONDITION (b), 2026-09-09 — THE 5m ASK IS SERVED FROM THE
+	// REHYDRATED 1m TAIL. The estimator (kernel.RVBaselineFrom5mDays) is
+	// byte-for-byte the same RULE; only the INPUT is corrected, from a 5m ring
+	// that could reach ~7 complete session-days to the 1m tape's ~9. ring5m
+	// remains as the FALLBACK so a thin 1m tape can never turn the baseline
+	// OFF — see ResolveRVBaselineTape (trader/regime_input_window.go) for the
+	// measured numbers and the reason stored 5m rows are refused.
+	rvTape := ResolveRVBaselineTape(bars1m, ring5m, rvBaselineMaxDays)
+	rvBaseline, rvBaselineDays := rvTape.Baseline, rvTape.Days
+	at.logInfof("📈 regime input: %s (rule unchanged; owner ruling 2026-09-09)", rvTape.Line())
 	// W11b — supply overnight-gap inputs (prior close + session open, ×ATR) from the
 	// daily bars (was never fed → the gap field stayed inert).
 	priorClose, sessionOpen := kernel.PriorCloseSessionOpen(daily)
 	regime := kernel.ComputeRegime(kernel.RegimeInputs{
-		Price: price, DailyBars: daily, Hour1Bars: hour1, Min5Bars: min5, RVBaseline20d: rvBaseline,
+		Price: price, DailyBars: daily, Hour1Bars: hour1, Min5Bars: min5,
+		RVBaseline: rvBaseline, RVBaselineDays: rvBaselineDays,
 		PriorClose: priorClose, SessionOpen: sessionOpen,
 	})
 
@@ -2353,12 +2388,10 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 	// 12×1h · 8×4h · 8×daily) built from the 1m slice via kernel.AggregateBars.
 	// Candles are ground truth for structure. Knob PLANNER_CANDLES (default on).
 	var candleTables string
-	var bars1m []market.Kline
-	if market.FuturesBarsProvider != nil {
-		bars1m = market.FuturesBarsProvider(symbol, "1m", 12000)
-	}
+	// bars1m is read ABOVE, beside the regime block — one store-deepened tape,
+	// three consumers (candle tables · RV baseline · CompletedWeekCount).
 	if kernel.PlannerCandlesEnabled() {
-		candleTables = kernel.BuildPlannerCandleTables(bars1m)
+		candleTables = kernel.BuildPlannerCandleTablesAt(bars1m, plannerCandleTapeBars, now)
 	}
 	// VOID PARITY (2026-09-02) — resolve the void scope ONCE. The prompt and the
 	// persisted read-facts row must carry the identical list; computing it twice
@@ -2475,36 +2508,14 @@ func (at *AutoTrader) persistReadFacts(in kernel.PlannerInput, scope kernel.Void
 	if at == nil || at.store == nil {
 		return
 	}
-	recs := make([]store.VoidLevelRecord, 0, len(void))
-	for _, v := range void {
-		recs = append(recs, store.VoidLevelRecord{Price: v.Price, Short: v.Short, ReclaimedAt: v.ReclaimedAtCT})
-	}
-	mult := kernel.MinSLATRMult()
-	floor := 0.0
-	if atr5m > 0 && mult > 0 {
-		floor = atr5m * mult
-	}
-	row := &store.PlannerReadFact{
-		TraderID:     at.id,
-		TradeDate:    plannerTradeDateCT(now),
-		Session:      in.Session,
-		PromptHash:   in.AIConfigHash,
-		VoidLevels:   store.EncodeVoidLevels(recs),
-		VoidCount:    len(recs),
-		StopFloorPts: floor,
-		ATR5m:        atr5m,
-		StopFloorMlt: mult,
-		BiasRegime:   fmt.Sprintf("%s/%s", in.Regime.TrendDaily, in.Regime.ATRRegime),
-		ScopeSinceMs: scope.SinceMs,
-		ScopeBars:    len(scope.Bars),
-		ScopeIntv:    scope.Interval,
-	}
+	row := buildReadFactRow(at.id, in, scope, void, atr5m, now)
 	if err := at.store.PlannerReadFacts().SaveReadFact(row); err != nil {
 		at.logWarnf("📓 read-facts write failed: %v", err)
 		return
 	}
-	at.logInfof("📓 read facts: void=%d · floor=%.1f pts (%.1f×ATR5m %.2f) · scope=%s×%d since=%d (cap %d)",
-		len(recs), floor, mult, atr5m, scope.Interval, len(scope.Bars), scope.SinceMs, store.PlannerReadFactsCap)
+	at.logInfof("📓 read facts: void=%d · floor=%.1f pts (%.1f×ATR5m %.2f) · scope=%s×%d since=%d (cap %d) · horizon %s",
+		row.VoidCount, row.StopFloorPts, row.StopFloorMlt, row.ATR5m, row.ScopeIntv, row.ScopeBars,
+		row.ScopeSinceMs, store.PlannerReadFactsCap, scope.Horizon.Line())
 }
 
 // maybeWriteDigests writes the 3-line session digest at each enabled session's
@@ -2864,4 +2875,107 @@ func plannerATR5m(symbol string) float64 {
 		return 0
 	}
 	return market.ExportCalculateATR(kernel.AcceptanceBars(market.FuturesBarsProvider(symbol, "5m", 200), "2x5m"), 14)
+}
+
+// plannerCandleTapeBars is the 1m depth the planner's candle tables ask for.
+// 8 CME session-days × ~1,380 open minutes ≈ 11,040, so 12,000 is the honest
+// ask for an "8 daily session candles" table. It is NAMED rather than a
+// literal so the ask and the disclosure that reports it cannot drift.
+const plannerCandleTapeBars = 12000
+
+// rvBaselineFallback5mBarsAsk is the 5m depth the realized-vol baseline asks
+// for WHEN THE 1m TAPE CANNOT ANSWER — it is no longer the primary input.
+//
+// RENAMED TO WHAT IT ACTUALLY RECEIVES (owner condition (b), 2026-09-09). It
+// was rvBaseline5mBarsAsk, the one and only source; the baseline now comes from
+// the store-deepened 1m tape aggregated to 5m (ResolveRVBaselineTape,
+// trader/regime_input_window.go) and falls back to this ring read only so a
+// thin 1m tape can never turn a working baseline OFF (A10 — degrade, never
+// gate).
+//
+// THE ASK ITSELF WAS ALSO CORRECTED (D2 choice (b)): it was 5m × 3000 = 250.0 h
+// against a 208.3 h ring ceiling — unreachable BY CONSTRUCTION, not by market
+// conditions. It is now READ from the ring's own ceiling rather than copied
+// from it, so the ask and the ceiling cannot drift (A11).
+//
+// WHY THE STORE'S 5m ROWS ARE STILL REFUSED, at this site and in the boot
+// rehydrate:
+//  1. the store's 5m does not reach 20 days either — measured 2026-09-09 it
+//     held 3,314 MNQ 5m rows back to 2026-08-24, about 16 days — so a store
+//     read would swap one unmet promise for another; and
+//  2. the stored 5m rows are NT8 aggregates that this repo has already judged
+//     inconsistent with their own 1m constituents (store/bar_history.go
+//     Migrate step 4 deleted every tf != "1m" row for exactly that reason, and
+//     the per-TF persistence added back on 2026-09-02 did not re-establish
+//     their agreement). MEASURED: over the SAME nine complete session-days the
+//     stored 5m rows give 0.884746 and the 1m constituents give 0.893543.
+//     Feeding the aggregate into a LIVE regime input is not a depth
+//     improvement; it is an unverified substitution.
+const rvBaselineFallback5mBarsAsk = nt.DefaultBarCacheMaxBars
+
+// rvBaselineMaxDays is the averaging window cap handed to the estimator. It is
+// UNCHANGED at 20 — this wave does not alter what anything computes — but it is
+// now named rather than a literal beside a field that claimed to be fed it.
+const rvBaselineMaxDays = 20
+
+// buildReadFactRow builds the one planner_read_facts row per read. Extracted
+// from persistReadFacts (class 86) so a pin drives THE PRODUCTION BUILDER
+// rather than a copy of it, and pure — it reads no clock (A28: `now` comes in).
+//
+// D4 (BARS HORIZON 2026-09-09) — WHAT CHANGED, AND WHAT DELIBERATELY DID NOT:
+//
+// ScopeBars IS NOT REDEFINED. It has always been len(scope.Bars): the SERVED
+// count, after truncation. The premise that it recorded the REQUEST is NOT
+// REPRODUCED — 67 of 67 live rows (ids 1..67) record scope_bars=2000 against a
+// 2000 ask, so the void scope has never been short, and reinterpreting the
+// column would silently rewrite the meaning of 67 correct rows.
+//
+// What a COUNT cannot express is a SPAN or a HOLE. Rows 64 and 66 were
+// identical on the record, yet row 66's tape reached back to 2026-09-07 10:23
+// CT — 3,055 minutes — with 696 OPEN-MARKET minutes missing inside it. So four
+// additive columns carry the request, the span, the oldest bar's age and the
+// gap count, plus read_horizons as the JSON of the horizons themselves.
+//
+// UNKNOWN vs ZERO: read_horizons == "" marks a row whose horizon was never
+// computed; its four numerics are UNKNOWN, not zero (HorizonRecorded, A24).
+func buildReadFactRow(traderID string, in kernel.PlannerInput, scope kernel.VoidScope, void []kernel.VoidBreakdownLevel, atr5m float64, now time.Time) *store.PlannerReadFact {
+	recs := make([]store.VoidLevelRecord, 0, len(void))
+	for _, v := range void {
+		recs = append(recs, store.VoidLevelRecord{Price: v.Price, Short: v.Short, ReclaimedAt: v.ReclaimedAtCT})
+	}
+	mult := kernel.MinSLATRMult()
+	floor := 0.0
+	if atr5m > 0 && mult > 0 {
+		floor = atr5m * mult
+	}
+	row := &store.PlannerReadFact{
+		TraderID:     traderID,
+		TradeDate:    plannerTradeDateCT(now),
+		Session:      in.Session,
+		PromptHash:   in.AIConfigHash,
+		VoidLevels:   store.EncodeVoidLevels(recs),
+		VoidCount:    len(recs),
+		StopFloorPts: floor,
+		ATR5m:        atr5m,
+		StopFloorMlt: mult,
+		BiasRegime:   fmt.Sprintf("%s/%s", in.Regime.TrendDaily, in.Regime.ATRRegime),
+		ScopeSinceMs: scope.SinceMs,
+		ScopeBars:    len(scope.Bars), // SERVED — unchanged, and NOT the request
+		ScopeIntv:    scope.Interval,
+	}
+	h := scope.Horizon
+	if h.Interval == "" {
+		// The scope was built without a horizon (a pre-wave caller or a bare
+		// literal). Leave every horizon column at its zero value AND
+		// read_horizons empty, so the row reads UNKNOWN rather than "no gaps".
+		return row
+	}
+	row.ScopeRequestedBars = h.Requested
+	row.ScopeSpanMs = h.SpanMs
+	row.ScopeOldestAgeMs = h.OldestAgeMs
+	row.ScopeGapCount = h.GapCount
+	if b, err := json.Marshal([]kernel.BarHorizon{h}); err == nil {
+		row.ReadHorizons = string(b)
+	}
+	return row
 }

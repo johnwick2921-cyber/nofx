@@ -304,3 +304,40 @@ func RetentionCutoffMs(now time.Time) int64 {
 	}
 	return now.Add(-time.Duration(days) * 24 * time.Hour).UnixMilli()
 }
+
+// LastNBars returns the NEWEST n bars for (symbol, tf), ASCENDING by open time
+// — the same order and shape every ring reader already expects, so a caller can
+// splice a store read and a cache read without reordering either.
+//
+// THE STORE IS THE HORIZON; THE RING IS THE CACHE (owner ruling 2026-09-09).
+// The BarCache ring holds DefaultBarCacheMaxBars = 2500 per (symbol, timeframe)
+// and is rebuilt from a 2000-bar seed on every Go restart, so three call sites
+// asked for depth no market condition could supply: 1m × 12000 (200.0 h) twice
+// and 5m × 3000 (250.0 h), against ring ceilings of 41.7 h and 208.3 h.
+//
+// Retention bounds what this can give — RetentionDaysFor(tf): 1m 90d, 3m/5m
+// 180d, 15m/30m 365d, 1h and coarser forever. Nothing has ever been pruned, so
+// as measured on 2026-09-09 the bars table held MNQ 1m 20,043 rows back to
+// 2026-08-19 10:00 CT (21 days).
+//
+// n <= 0 returns nil. A read error is returned, never swallowed — the caller
+// WARNs and degrades to the ring (A10).
+func (s *BarHistoryStore) LastNBars(symbol, tf string, n int) ([]BarHistoryDB, error) {
+	if s == nil || s.db == nil {
+		return nil, fmt.Errorf("store required")
+	}
+	if n <= 0 {
+		return nil, nil
+	}
+	var desc []BarHistoryDB
+	if err := s.db.Where("symbol = ? AND tf = ?", symbol, tf).
+		Order("open_time_ms DESC").Limit(n).Find(&desc).Error; err != nil {
+		return nil, err
+	}
+	// Reverse in place — ASCENDING is the contract every bar reader in this
+	// repo relies on (mergeBarsByTime, AggregateBars, the indicator engine).
+	for i, j := 0, len(desc)-1; i < j; i, j = i+1, j-1 {
+		desc[i], desc[j] = desc[j], desc[i]
+	}
+	return desc, nil
+}

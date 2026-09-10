@@ -2935,3 +2935,147 @@ are one feature. Where the release is tied to a recurring boundary, the code tha
 detects the boundary performs the release — and a pin asserts that crossing the
 boundary lifts the latch, because the comment saying so is the thing most likely
 to be wrong.
+
+---
+
+## PENDING NUMBERS — appended by wave BARS HORIZON (2026-09-09), branch `fix/bars-horizon`
+
+*Numbers are assigned AT MERGE (A16). Two classes, both found by measurement
+during this wave and both fixed in the same branch.*
+
+### (pending) A COUNT IS NOT A HORIZON
+
+**Root cause.** A recorded or rendered COUNT — "2000 bars served", "8 rows" —
+cannot express a SPAN or a HOLE, and every reader silently treats it as if it
+could. Two instances, one in the prompt and one in the record:
+
+- `kernel/planner_prompt.go` baked the row count into the table title as a
+  literal and truncated only when the slice was LONG, so
+  `"daily session candles (last 8)"` stood over 2 or 3 rows. Measured over the
+  stored prompts (`planner_rejected_prompts`, n=54 carrying a Candles block,
+  ids 70–142): 15m rendered 12 in 54/54, 1h 12 in 54/54, 4h 8 in 54/54, daily
+  **2 rows in 19 and 3 rows in 35 — never 8, in 0 of 54**. The prompt then told
+  the model "On conflict, trust the candles".
+- `planner_read_facts` rows 64 and 66 were identical in every recorded field,
+  yet id 66's tape spanned 3,055 minutes with **696 open-market minutes
+  missing** inside it.
+
+**Probe.**
+1. For every count a reader is shown, ask what it would look like if the
+   underlying window were HALF PRESENT. If the answer is "the same number",
+   the count is not a horizon.
+2. Compare the literal in a heading against the rows actually rendered, over a
+   population of STORED artefacts — not one sample and not the code's intent.
+3. For any bucketed/aggregated row, check whether the bucket's first element is
+   assumed to be the window's start. `DailySessionBars` took the first bar it
+   SAW as the session Open with no completeness check, so a tape starting at
+   02:39 CT presented a part-session as a whole one.
+
+**Law.** **Any surface that states a quantity of history states HELD vs
+REQUESTED, and marks a partial window as partial** — including when it is
+complete, because a disclosure that appears only on failure is one the reader
+learns to skim past. Coverage is measured against the SAME calendar the
+trading gate reads, an unclassifiable day is UNKNOWN and never guessed, and a
+missing bar is MARKED — never interpolated, carried forward or synthesised.
+
+### (pending) A CROSS-SESSION COMPARISON IS A REGIME COMPARISON, NOT A MEASUREMENT
+
+**Root cause.** This wave's opening dispatch asserted, as fact, that the ATR was
+inflated and that a resting arm was over-sized on it. The claim rested on
+comparing **today's NY read against today's ASIA read**. ASIA and NY are
+different volatility regimes; the comparison could only ever produce a
+difference, and that difference was read as a defect.
+
+Held to the same session, from `planner_read_facts`, the claim inverts:
+
+| session | id | atr5m | stop_floor_pts | created (CT) |
+|---|---|---|---|---|
+| 09-08 NY | 54 | 36.7439730211274 | 55.115959531691 | 2026-09-08 10:02:43 |
+| 09-08 NY | 55 | 32.2843805014897 | 48.4265707522345 | 2026-09-08 10:45:01 |
+| 09-08 NY | 56 | 28.0296201145494 | 42.044430171824 | 2026-09-08 12:15:00 |
+| 09-09 NY | 65 | 20.514183795639 | 30.7712756934586 | 2026-09-09 13:08:08 |
+| 09-09 NY | 66 | 19.7631429163709 | 29.6447143745564 | 2026-09-09 13:18:13 |
+| 09-09 NY | 67 | 16.6611226001067 | 24.99168390016 | 2026-09-09 13:55:06 |
+
+Today's NY ATR is roughly HALF yesterday's NY ATR. Nothing was inflated.
+
+**Probe.** Before any "X is elevated / depressed / wrong" claim: name the two
+populations being compared and ask whether they differ in SESSION, day type,
+calendar class or regime. If they do, the number measures that difference, not
+the thing under audit. Re-run same-session, same-class, and quote both rows.
+
+**Law.** **A comparison across sessions is a regime comparison.** A claim about
+a level, a floor, a size or a threshold is only a measurement when both sides
+come from the same session and the same calendar class, and the report quotes
+the row ids on both sides (A21).
+
+### (pending) A MARKER ON EVERY READ IS A MARKER ON NOTHING — and a COUNT cannot see a row that is NOT there
+
+*Appended by the SAME wave, after review, 2026-09-09. Both instances are the
+wave's own defect class reproduced one layer down, INSIDE the fix — which is
+why they are filed rather than quietly patched.*
+
+**Root cause A — the boundary that rounds the wrong way.** A disclosure that
+measures "held vs expected" must decide what is expected AT `now`. The first cut
+rounded UP to the end of the minute `now` falls in, counting the minute still IN
+PROGRESS as an interval the tape ought to hold. Bars are delivered on close, so
+on a PERFECTLY GAPLESS tape the newest row of all four tables rendered
+`⏳FORMING ⚠PARTIAL — holds only 1309 of the 1310 open 1m intervals` while the
+TAPE line six lines above it said `gaps 0` — a self-contradiction, on 100% of
+live reads, under a prompt that tells the model to trust the candles. Nobody
+noticed because the builder's own sample render contained it and read as normal.
+
+**Root cause B — the row that does not exist is measured by nothing.** Row
+coverage measures INSIDE a rendered row; the heading counts ROWS. An aggregator
+emits no row for a bucket that holds no bars, so a whole absent bucket is
+invisible to BOTH. A tape holding 18:00–19:00 and 20:00–22:00 CT (market open
+throughout) rendered
+`### 15m — HELD 12 of 12 requested rows · all held rows COMPLETE`
+with FOUR whole 15m windows missing between two adjacent-LOOKING rows.
+
+**Probe.**
+1. Render the disclosure on a **HEALTHY** input. If it marks something, the
+   marker is noise and the reader will learn to ignore it. Assert the healthy
+   case explicitly — most suites only assert the broken one.
+2. Render it at two clocks that differ only in whether the forming element has
+   been delivered. If the output differs, the boundary is counting the element
+   in progress on one side only.
+3. Take any list rendered from bucketed data and ask what an EMPTY bucket
+   produces. If the answer is "no row", then no per-row check and no row count
+   can see it: the gap must be measured BETWEEN rows, on the grid.
+4. Distinguish an ABSENT window from a CLOSED one. A weekend, a holiday or a
+   maintenance halt has zero expected elements and must NOT be reported missing,
+   or the marker becomes noise again (root cause A, by another door).
+
+**Law.** **A disclosure is judged on the healthy case first.** The element in
+progress is counted on NEITHER side. Gaps BETWEEN rendered rows are measured on
+the expected grid, not inferred from the row count, and an unmeasurable gap is
+UNKNOWN — never zero. And a completeness claim is scoped to what was actually
+printed (`every row PRINTED here is COMPLETE`), never to rows that were never
+rendered.
+
+### (pending) A REPORT THAT CLAIMS NO BEHAVIOUR CHANGE WHILE THE BOOT LINE SHOWS ONE (class 82, restated)
+
+**Root cause.** A wave corrected the INPUT to an estimator and then wrote, in
+three shipped artifacts at once — the report, `SYSTEM-MAP.md` and a user-facing
+guide card — that "the computed value did not change". The estimator was indeed
+byte-for-byte unchanged; the value it produced moved, because the tape it was
+fed got deeper. The parity test offered as proof built BOTH sides' inputs itself
+(class 53), so it could not see the input move, and the guide's drift banner was
+silent because `GUIDE_BUILT_REV` happened to equal the running rev.
+
+**Probe.**
+1. For every "unchanged" claim, ask **unchanged at which layer** — the function,
+   or the value the system renders? Name the layer in the sentence.
+2. Grep the wave's own boot/log lines for anything that reports a before/after.
+   If one exists, the claim of no change is refuted by the wave's own output.
+3. Enumerate EVERY consumer of a widened input, not just the one the wave was
+   about. Here a 1m tape widened for candle tables also fed
+   `CompletedWeekCount` (0 → 2), `WeeklyShadowRefs` (1 → 3) and
+   `ComputeWeeklyFacts` — none of which the change inventory mentioned.
+
+**Law.** **Name every value the wave moves, with its measured delta, in the same
+document that claims the rule is unchanged.** A parity pin must exercise the
+PRODUCTION CALL SITE, not a fixture both sides share. And when a change is
+authorised by ruling rather than by scope, say so plainly — an authorised
+expansion recorded as "no change" is indistinguishable from a scope violation.

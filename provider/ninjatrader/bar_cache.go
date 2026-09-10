@@ -361,6 +361,15 @@ func (c *BarCache) Count(symbol, timeframe string) int {
 	return len(c.bars[barKey(symbol, timeframe)])
 }
 
+// MaxBars is this cache's ring capacity — READ, not assumed.
+// DefaultBarCacheMaxBars is the DEFAULT; NewBarCache accepts any value, so a
+// line that names the ring must ask the cache rather than the constant (A11).
+func (c *BarCache) MaxBars() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.maxBars
+}
+
 // Keys returns the list of currently-populated (symbol, timeframe) pairs.
 // Returned in unspecified order. Useful for diagnostics + the Stage 4
 // chart relay enumerating its outbound subscriptions.
@@ -417,4 +426,72 @@ func splitBarKey(k string) (symbol, timeframe string, ok bool) {
 		}
 	}
 	return "", "", false
+}
+
+// RehydrateOlder EXTENDS an already-live ring BACKWARDS with older bars — the
+// D3 half of the BARS HORIZON wave (2026-09-09, owner-authorised).
+//
+// THE PROBLEM: a Go restart drops the ring to the AddOn's 2000-bar seed
+// (defaultAutoBarsBack, tcp_server.go) while the persisted `bars` table holds
+// 21 days. SeedHistorical merges WITHIN a process, so the ring climbs 2000 →
+// 2500 across a session, but nothing rehydrates it from the store — every
+// restart shortened the horizon again, silently.
+//
+// IT IS NOT SeedHistorical, AND THE DIFFERENCE IS DELIBERATE:
+//
+//   - A COLD KEY IS A NO-OP. SeedHistorical seeds an empty key; this refuses
+//     to. An empty ring means the feed is down or the AddOn replay has not
+//     landed, and filling it from the store would make a dead feed look alive
+//     to every reader downstream. The store DEEPENS a live tape; it never
+//     stands in for one.
+//   - EXISTING WINS ON OVERLAP. SeedHistorical lets `incoming` win because
+//     incoming is the freshest wire OHLCV; here `incoming` is the STORE, which
+//     is by definition not fresher than the live ring. Only bars strictly
+//     OLDER than the ring's oldest are taken, so no live or forming bar can be
+//     replaced by a stored one.
+//
+// Placeholder bars are refused at this door exactly as at every other (NO
+// SYNTHETIC BARS, EVER — isPlaceholderBar). Nothing is invented, interpolated
+// or carried forward: only bars the caller actually handed over are stored.
+//
+// Returns how many bars were ACTUALLY added, so the boot line can report a
+// resolved count rather than an intention (A11).
+func (c *BarCache) RehydrateOlder(symbol, timeframe string, bars []Bar) int {
+	if c == nil || symbol == "" || timeframe == "" || len(bars) == 0 {
+		return 0
+	}
+	bars, bad := dropPlaceholderBars(bars)
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.dropped += int64(bad)
+	key := barKey(symbol, timeframe)
+	existing := c.bars[key]
+	if len(existing) == 0 {
+		return 0 // COLD KEY — the store never substitutes for the live feed.
+	}
+	oldest := existing[0].T
+	older := make([]Bar, 0, len(bars))
+	for _, b := range bars {
+		if b.T < oldest {
+			older = append(older, b)
+		}
+	}
+	if len(older) == 0 {
+		return 0
+	}
+	// EXISTING is `incoming` here, so the live ring wins every overlap. The
+	// filter above already removed every overlapping bar, so this is a plain
+	// ascending splice — mergeBarsByTime is reused rather than re-derived so
+	// the ordering rule has exactly one implementation.
+	merged := mergeBarsByTime(older, existing)
+	if len(merged) > c.maxBars {
+		// Trim the OLDEST. The live tail is never the part that goes.
+		merged = merged[len(merged)-c.maxBars:]
+	}
+	added := len(merged) - len(existing)
+	if added < 0 {
+		added = 0
+	}
+	c.bars[key] = merged
+	return added
 }

@@ -81,7 +81,23 @@ func (at *AutoTrader) snapshotSessionProfiles() {
 		at.logInfof("%s", BarSourceBootLine(at.barResolver(), at.futuresSymbol(), time.Now()))
 		// R1 — print again once the NT8 replay has actually landed.
 		ntTrader.SetAfterBackfillHook(func() {
-			at.logInfof("%s", BarSourceBootLineAfterBackfill(at.barResolver(), at.futuresSymbol(), time.Now()))
+			hookNow := time.Now() // `now` at the entry point, handed down (A28)
+			at.logInfof("%s", BarSourceBootLineAfterBackfill(at.barResolver(), at.futuresSymbol(), hookNow))
+			// BARS HORIZON owner condition (c), 2026-09-09 — the regime
+			// input's served window IN DAYS, BEFORE and AFTER, so the change
+			// this wave makes to what RVBaseline is fed is visible and dated.
+			// It runs HERE because the hook fires after the boot rehydrate has
+			// landed (trader/ninjatrader/bar_persist_wire.go), so both halves
+			// describe the ring the bot will actually use. Every field is READ
+			// (A11); an uncomputed window prints UNKNOWN, never 0 (A24).
+			sym := at.futuresSymbol()
+			var ring5m []market.Kline
+			if market.FuturesBarsProvider != nil {
+				ring5m = market.FuturesBarsProvider(sym, "5m", rvBaselineFallback5mBarsAsk)
+			}
+			at.logInfof("%s", RegimeInputWindowBootLine(
+				at.barsWithStoreDepth(sym, "1m", plannerCandleTapeBars, hookNow),
+				ring5m, rvBaselineMaxDays, hookNow))
 		})
 	})
 	installActivePlanProvider(at, st)
