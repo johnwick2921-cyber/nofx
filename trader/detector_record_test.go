@@ -62,7 +62,7 @@ func TestDetectorWritesThroughTheProductionPath(t *testing.T) {
 	}
 
 	at.recordDetectorOutputs("MNQ", "2026-09-03:ASIA:hoang", "ASIA", 3, all, seated,
-		level, 300, 1.5, 12, now)
+		level, 300, 1.5, 12, now, nil)
 
 	ts := st.TouchOutcomes()
 	if n := ts.CountOutcomes(); n == 0 {
@@ -95,7 +95,7 @@ func TestDetectorWritesThroughTheProductionPath(t *testing.T) {
 	// IDEMPOTENT: a second read writes nothing new — the watermark is the store.
 	before := ts.CountOutcomes()
 	at.recordDetectorOutputs("MNQ", "2026-09-03:ASIA:hoang", "ASIA", 3, all, seated,
-		level, 300, 1.5, 12, now)
+		level, 300, 1.5, 12, now, nil)
 	if after := ts.CountOutcomes(); after != before {
 		t.Errorf("a repeated read must write no new episodes: %d → %d", before, after)
 	}
@@ -139,7 +139,7 @@ func TestDetectorRecordingNeverStopsTheLoop(t *testing.T) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		at.recordDetectorOutputs("MNQ", "p", "ASIA", 1, nil, nil, 29000, 300, 1.5, 12, time.Now())
+		at.recordDetectorOutputs("MNQ", "p", "ASIA", 1, nil, nil, 29000, 300, 1.5, 12, time.Now(), nil)
 	}()
 	select {
 	case <-done:
