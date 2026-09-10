@@ -599,3 +599,40 @@ rebase/merge against then-current dev, assign the checklist number and rerun the
 merged-head suite/build/gate sequence. Do not deploy a stale prepared binary if
 the merged source differs. No RELEASE, main-tree binary or running process was
 changed while preparing this candidate.
+
+
+### Remote CI and partner handoff — not a green-remote-CI claim
+
+**[A] PR #101**, head `71127ef5d20787d279764f55190bf7d8643cae1d` at this
+observation, is mergeable, but its remote checks are **not all green**. Completed
+job logs identify failures in unchanged workflow setup:
+
+- Security run `34543205125`: installation of `govulncheck@latest` selects
+  `golang.org/x/vuln v1.8.0`, which requires Go >=1.26; the job runs 1.25.3 with
+  `GOTOOLCHAIN=local`. The scanner did not complete. Its npm production-dependency
+  job separately fails with exit 127 while running `husky`.
+- Image run `34543205094`: generated image tags have an empty prefix, e.g.
+  `nofx-backend:-4ed4efa-amd64`, and fail as invalid reference format before
+  the image build. No image publication is claimed.
+- Docker frontend job `103090143569` cannot resolve
+  `../../../branding/product.txt?raw` from `src/constants/branding.ts` inside
+  its build context. That branding import and Dockerfile are unchanged by 105.
+- Other backend checks were still running at inspection. Their eventual
+  outcomes are not inferred from the local suite or from another job.
+
+[Exact failure excerpts](2026-09-10-scenario-level-identity-data/remote-ci-setup-failures.txt).
+No `.github` workflow, Dockerfile, dependency manifest or Go toolchain was
+changed by 105. These failures are recorded under A15, not repaired under the
+identity dispatch. The full local Go suite, 421 frontend tests and candidate
+build results above remain separately established.
+
+**[A] Partner handoff:** `/home/hoang/vlautoagenttraderv1` is at
+`f6ae7597fb3bc9caeaaedb25ce8c3c48bca72247` (2026-08-23), lacks the identity
+wave's prerequisite `kernel/plan_doc.go`, `kernel/scenario_state.go` and
+`store/touch_outcomes.go`, and already has uncommitted changes in
+`agent/planner_runtime_state_test.go`, `agent/skill_dispatcher_test.go` and
+`agent/trader_scope_test.go`. It was not modified or pushed. A complete
+`format-patch` handoff from the W2 base is prepared at
+`/tmp/identity-build/partner-identity.patch`. Applying/building it requires the
+partner's prerequisite baseline/history synchronization; no successful mirror
+application or mirror test result is claimed.
