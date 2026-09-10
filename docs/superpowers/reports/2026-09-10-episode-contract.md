@@ -187,7 +187,7 @@ than silent. It is not the single-reader ideal of class 97 and is not claimed to
    lost — but a reviewer reading `git log` will see each early commit twice, and
    should read the merge commits for why.
 
-## G · THREE DEFECTS FOUND, NONE MINE
+## G · THREE DEFECTS FOUND, NONE MINE, ONE FIXED WITHIN THE HOUR
 
 Found while verifying my Guide change. **Filed, not fixed — A31 scopes this wave,
 and both belong to the rebrand lane.**
@@ -316,7 +316,7 @@ protected-file change is exactly the conversation the guard exists to force.
 8e also checked what my report had not: whether the unread window hid drift in any
 **other** protected file. It did not — 1 of 16 drifted, and it was theirs.
 
-### G3 — dev's Go suite is red every day between 12:00 and 13:30 CT
+### G3 — dev's Go suite was red every day between 12:00 and 13:30 CT (FIXED, verified in-band)
 
 Found by running my own verification at 12:11 CT instead of 11:58. **Eight tests
 fail; all eight cite one line:**
@@ -361,8 +361,38 @@ divergent install: one machine, one commit, one lane, green at 11:58 and red at
 for the class.
 
 **Owed and now paid.** "The wall-clock entry-point sweep in checklist 60" has been
-on my owed list since the class-52 wave. It is no longer theoretical: it is red on
-dev right now, and it will be green again at 13:30 without anyone touching it.
+on my owed list since the class-52 wave. It was not theoretical.
+
+**FIXED on dev at `bd295804`** by nofx-8e, who owns the session-risk rule and whose
+own two verification runs today (11:26, 11:58) both happened to land before noon.
+`armTestClock` searches the registry for a moment inside an enabled session and
+outside every no-trade sub-window — searched, not hard-coded, because the windows
+are configuration and a constant would be this defect with a longer fuse. The lint
+gains a third half: tests must USE a seam, not merely have one.
+
+**Verified independently here, INSIDE the band** — the only window in which the fix
+is falsifiable at all. Merged at `bd295804`, run 12:32–12:34 CDT: the eight tests
+pass, the full suite is **31 ok / 0 fail**, and all three seam lints are green
+including the new `TestArmEntryPointIsNotCalledFromTests`. After 13:30 none of that
+could have been checked until the next day.
+
+**Still owed, and recorded by 8e rather than left in their head:** the general lint
+finds 35 sites and most are false positives, because `clock-seams.list` contains
+entries named `Save` and `observe` and a textual `.Save(` cannot distinguish
+`at.Save(` from `db.Save(` without resolving the receiver's type. The shipped check
+is therefore scoped to `maybeManageArmedOrders`; a receiver-aware version is OWED.
+**Until it exists, a time-banded rule added to any OTHER seamed entry point
+reintroduces this outage with nothing failing.**
+
+**Acted on in this wave.** My three recorder pins in
+`trader/scenario_link_wiring_test.go` handed `time.Now()` to
+`recordDetectorOutputs`. That path reaches no banded rule today — `validityFor`
+checks only `formedAtMs > 0` and recording is unconditional — so they passed at any
+hour by luck, not design, and the scoped lint would not have caught a band added
+there later. They now take a fixed clock. `armTestClock` does not fit (it needs an
+`*AutoTrader` the fixture has not built yet) and is not needed: for a path with no
+session dependence, a fixed moment is strictly more deterministic than a searched
+one.
 
 **Consequence for this wave's cutover.** My 14:45 window is outside the band, so
 the pre-cutover suite will be green — but that green is *itself* an environment
@@ -383,7 +413,7 @@ claims, applied to suite claims:
 | **vite** | **6.4.3** — matches `web/package-lock.json`; `npm ls vite` agrees |
 | vitest | `4.1.11` |
 | sqlite3 | `3.45.1` |
-| **wall clock** | **results below were taken OUTSIDE 12:00–13:30 CT** — inside it, eight arm-path tests fail (§G3) |
+| **wall clock** | the 12:00–13:30 CT hazard is FIXED at `bd295804`; final results below were taken 12:32–12:34 CDT **inside** the former band, deliberately (§G3) |
 
 The main tree measures the FE suite differently at vite `6.4.1`. Any suite result
 below is a claim about THIS table, not about the commit alone.
@@ -393,7 +423,7 @@ below is a claim about THIS table, not about the commit alone.
 |---|---|
 | `go build ./...` | OK at merged HEAD |
 | `go vet ./store/... ./trader/... ./kernel/...` | OK |
-| `go test ./...` | 31 ok / 0 FAIL at 11:58 CT · **30 ok / 8 tests FAIL at 12:11 CT** — see §G3, wall clock, not the commit |
+| `go test ./...` | **31 ok / 0 FAIL**, run 12:32–12:34 CDT inside the former lunch band (§G3) |
 | `npx tsc --noEmit` | OK |
 | `npm run build` | OK — 4.60s |
 | `npx vitest run` @ vite 6.4.3 (lockfile) | 12 files red from G1; 354 collected |
