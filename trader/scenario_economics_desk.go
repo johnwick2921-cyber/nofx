@@ -15,11 +15,15 @@ func (at *AutoTrader) deskScenarioEconomics(now time.Time) DeskLine {
 	}
 	lines := make([]string, 0, len(p.Doc.Scenarios))
 	unknown := false
+	// W2 — every scenario carries its fade label on the strip (D4). The
+	// live reading at `now`; the durable per-episode stamp is fixed at open.
+	fade := at.FadeLabelsFor(now, &p.Doc, at.LastPriceForDesk(), nil)
 	for _, s := range p.Doc.Scenarios {
-		lines = append(lines, kernel.EconomicsSummary(s))
+		lines = append(lines, kernel.EconomicsSummary(s)+" · "+fadeChipText(fade[s.ID]))
 		v := kernel.EconomicsFor(s)
 		unknown = unknown || v.ObstacleR == nil || v.ArmR == nil
 	}
+	lines = append(lines, at.FadeCounterToday(now).Text())
 	if len(lines) == 0 {
 		return deskUnknown(14, "scenarios", "SCENARIOS", source, "no authored scenarios")
 	}

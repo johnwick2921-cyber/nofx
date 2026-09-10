@@ -492,6 +492,11 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 		// Current evaluator statuses, read only from the displayed version.
 		// An uncomputed version has no map; legacy unversioned keys are ignored.
 		"scenario_status": scenarioStatusForLifecycle(s.scenarioStatus(traderID, row.PlanID, row.Version), row.Lifecycle, doc),
+		// W2 FADE PERMISSION (2026-09-10) — per-scenario label and the
+		// session-day counter, both READ. A LABEL, never a gate: the card
+		// renders it beside the scenario and nothing downstream refuses on it.
+		"fade_permission": s.fadePermissionFor(traderID, &doc),
+		"fade_counter":    s.fadeCounterFor(traderID),
 		// A1/A4 (fail-register wave): verdict basis (machine vs prose-anchor
 		// heuristic) + unevaluable scenario ids — the card renders them
 		// distinctly instead of dressing a heuristic as a machine verdict.
@@ -2339,4 +2344,23 @@ func planW3Map(traderID, symbol string, bars []market.Kline, now time.Time) []ke
 		return nil
 	}
 	return kernel.BuildMapCandidates(scored, price, kernel.StaleConfirmATR5m(bars), kernel.MapCandidateOpts{})
+}
+
+// fadePermissionFor evaluates the live fade label for every scenario in doc.
+// Nil-safe: a trader that cannot be resolved yields an empty map, which the
+// card renders as "not evaluated" — never as permitted.
+func (s *Server) fadePermissionFor(traderID string, doc *kernel.PlanDoc) map[string]trader.FadeLabelView {
+	at, err := s.traderManager.GetTrader(traderID)
+	if err != nil || at == nil || doc == nil {
+		return map[string]trader.FadeLabelView{}
+	}
+	return at.FadeLabelsFor(time.Now(), doc, at.LastPriceForDesk(), nil)
+}
+
+func (s *Server) fadeCounterFor(traderID string) trader.FadeCounterView {
+	at, err := s.traderManager.GetTrader(traderID)
+	if err != nil || at == nil {
+		return trader.FadeCounterView{}
+	}
+	return at.FadeCounterToday(time.Now())
 }

@@ -12,6 +12,7 @@ import type {
 } from '../../lib/api/plan'
 import { OrderTerms } from './OrderTerms'
 import { ScenarioEconomics } from './ScenarioEconomics'
+import { FadePermissionChip, type FadeLabelView } from './FadePermissionChip'
 import { StatusDot, type ScenarioStatus } from './chips'
 
 export function QualityChip({ quality }: { quality: string }) {
@@ -324,6 +325,7 @@ export function ScenarioList({
   meta,
   fvgStates,
   armedStates,
+  fadeLabels,
   language,
 }: {
   scenarios: PlanScenario[]
@@ -331,6 +333,8 @@ export function ScenarioList({
   deaths?: Record<string, ScenarioDeath>
   /** Wave 2 armed orders — per-scenario arm state (⏳/📌/⚡/✕+reason). */
   armedStates?: Record<string, PlanArmView>
+  /** W2 FADE PERMISSION — per-scenario label; absent renders "not evaluated". */
+  fadeLabels?: Record<string, FadeLabelView>
   /** A1/A4/C1 (fail-register wave): verdict basis, unevaluable ids, confirm verdicts */
   meta?: {
     basis?: Record<string, string>
@@ -428,6 +432,8 @@ export function ScenarioList({
                   )}
                   {/* Wave 2 armed orders — the arm state chip (⏳/📌/⚡/✕). */}
                   <ArmedChip arm={armedStates?.[s.id]} />
+                  {/* W2 fade permission — a label, never a gate. */}
+                  <FadePermissionChip id={s.id} v={fadeLabels?.[s.id]} />
                 </div>
               )}
               <ScenarioEconomics scenario={s} />

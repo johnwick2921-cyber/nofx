@@ -17,6 +17,7 @@ import { WeeklyChip } from './WeeklyChip'
 import { BiasBlock } from './BiasBlock'
 import { ZoneTable } from './ZoneTable'
 import { ScenarioList } from './ScenarioList'
+import type { FadeLabelView } from './FadePermissionChip'
 import { RulesBlock, type NoTradeBandWindow } from './RulesBlock'
 import { ArmedUnderBlock, type OpenPositionProvenance } from './ArmedUnderBlock'
 import { PlanFooter } from './PlanFooter'
@@ -836,6 +837,10 @@ export function SessionPlanCard({
           scenarios={doc.scenarios}
           statusMap={plan.scenario_status}
           deaths={plan.scenario_deaths}
+          fadeLabels={
+            (plan as { fade_permission?: Record<string, FadeLabelView> })
+              .fade_permission
+          }
           armedStates={
             (
               plan as {
