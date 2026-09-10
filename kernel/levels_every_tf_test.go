@@ -55,9 +55,12 @@ func barsWithTwoEqualPivotHighs(n int, base float64, stepMs int64, end time.Time
 		o := base
 		h := base + 2
 		l := base - 2
-		// Two isolated peaks at the same high, far enough apart to both be
-		// strict pivots with k=2 (indices 3 and 8 of a >=12 bar window).
-		if i == 3 || i == 8 {
+		// Two isolated peaks at the same high. Their positions are DERIVED from
+		// the window size, not typed: a strict pivot with k=2 needs two bars
+		// either side, so index 2 and index n-3 are the outermost valid
+		// positions for any n >= 7. Hardcoding 3 and 8 silently produced a
+		// one-pivot window at n=9 and made a test SKIP rather than assert.
+		if i == 2 || i == n-3 {
 			h = base + 20
 		}
 		out = append(out, market.Kline{
@@ -284,5 +287,113 @@ func TestC6c_DailyCarriesTheHTFFlag(t *testing.T) {
 		if !l.HTF {
 			t.Errorf("daily level %s @%.2f has HTF=false — it would miss the multiplier every other higher timeframe receives", l.Kind, l.Price)
 		}
+	}
+}
+
+// ---------------------------------------------------------------- E6 / E2
+
+// TestE6_LegacyInputUnchangedByTheIdentityWiden — the no-regression pin, stated
+// as a property rather than a fixture. Widening the dedupe key can only change
+// behaviour for inputs that DIFFER in the new field; for any input where every
+// level carries the same timeframe, the new key and the old key must select the
+// same survivors. Proving it this way means the claim does not depend on
+// whichever shapes the existing fixtures happen to contain — the Stage A golden
+// passing is not by itself evidence, because nothing guarantees it holds a
+// cross-timeframe collision.
+func TestE6_LegacyInputUnchangedByTheIdentityWiden(t *testing.T) {
+	// Every level on one timeframe: the pre-W-TF world, where TF was set by
+	// tagHTFLevel for HTF detections and left "" for the 1m slice.
+	for _, tf := range []string{"", "1h"} {
+		in := []DetectedLevel{
+			{Kind: KindOB, Price: 29500.00, Label: "OB", TF: tf},
+			{Kind: KindOB, Price: 29500.10, Label: "OB", TF: tf},   // within a tick — collapses
+			{Kind: KindOB, Price: 29520.00, Label: "OB", TF: tf},   // apart — survives
+			{Kind: KindEQH, Price: 29500.00, Label: "EQH", TF: tf}, // other kind — survives
+		}
+		out := dedupeSameKind(in)
+		if len(out) != 3 {
+			t.Errorf("tf=%q: %d survivors, want 3 — the identity widen changed a single-timeframe result", tf, len(out))
+		}
+	}
+}
+
+// TestE2_CrossTimeframeCoincidenceIsOneCandidateWithBothNames — D3. W3's merge
+// groups references within the cluster width into ONE map candidate carrying
+// every name. It keys on price alone, so it was already timeframe-blind in the
+// direction this wave needs: a 15m level and a 1d level at one price merge
+// rather than compete. What this asserts is that both TIMEFRAMES survive into
+// the candidate's names, so the owner reads "Supply·1h · SWG-H·1d" and not one
+// of them silently standing for both.
+func TestE2_CrossTimeframeCoincidenceIsOneCandidateWithBothNames(t *testing.T) {
+	scored := []ScoredLevel{
+		{DetectedLevel: DetectedLevel{Kind: KindOB, Price: 29500, Lo: 29500, Hi: 29500, Label: "OB·1h", TF: "1h"}, Score: 0.7, Grade: "B"},
+		{DetectedLevel: DetectedLevel{Kind: KindEQH, Price: 29500, Lo: 29500, Hi: 29500, Label: "EQH·1d", TF: "1d"}, Score: 0.6, Grade: "B"},
+	}
+	got := BuildMapCandidates(scored, 29400, 20, MapCandidateOpts{})
+	if len(got) != 1 {
+		t.Fatalf("two references at one price produced %d candidates, want 1 merged", len(got))
+	}
+	names := got[0].NamesLine()
+	if !strings.Contains(names, "1h") || !strings.Contains(names, "1d") {
+		t.Errorf("merged candidate names = %q; both timeframes must appear — a cross-timeframe confluence the owner cannot see is one he cannot weigh", names)
+	}
+	if got[0].MergedCredit != 1 {
+		t.Errorf("merged candidate carries credit %d, want 1 — W3's rule is one credit per candidate however many names", got[0].MergedCredit)
+	}
+}
+
+// ---------------------------------------------------------------- D4 / A9
+
+// TestD4_DetectedLevelNamesItsTimeframeAndWindow — E2 above proves the MERGE
+// carries both timeframes, but it builds its labels by hand, so it never drives
+// tagHTFLevel: a mutation removing the "·tf" suffix from real detection
+// survived it. This test closes that by asserting on the output of detection
+// itself.
+//
+// A9 (loud logging): every level emitted names its timeframe. D4 (12a): it also
+// records the window that found it, which is a different fact from the
+// timeframe and from its age.
+func TestD4_DetectedLevelNamesItsTimeframeAndWindow(t *testing.T) {
+	now := tfTestNow()
+	const bars = 30
+	daily := barsWithTwoEqualPivotHighs(bars, 29500, tfTestDayMs, now)
+
+	got := DetectHTFLevels(fetchFor("1d", daily), []string{"1d"}, "MNQ", now)
+	if len(got) == 0 {
+		t.Fatalf("no daily level produced; this test cannot distinguish a correct zero from a broken fixture")
+	}
+	for _, l := range got {
+		if !strings.HasSuffix(l.Label, "·1d") {
+			t.Errorf("level label %q does not name its timeframe — the owner reads the label, not the struct", l.Label)
+		}
+		if l.LookbackBars != bars {
+			t.Errorf("level %q records LookbackBars=%d, want %d — the window that found a level is not derivable from its timeframe", l.Label, l.LookbackBars, bars)
+		}
+		if l.TF == "" {
+			t.Errorf("level %q has an empty TF field", l.Label)
+		}
+	}
+}
+
+// TestD4b_LookbackIsTheWindowActuallySearched — not the window requested. A
+// timeframe holding fewer bars than the fetch depth must record what it really
+// searched, or the field asserts a depth that never existed (A24: a placeholder
+// that reads as data).
+func TestD4b_LookbackIsTheWindowActuallySearched(t *testing.T) {
+	now := tfTestNow()
+	const short = 9 // above htfMinClosedBars, far below the fetch depth
+	weekly := barsWithTwoEqualPivotHighs(short, 29500, 7*tfTestDayMs, now)
+
+	got, rep := DetectHTFLevelsReport(fetchFor("1w", weekly), []string{"1w"}, "MNQ", now)
+	if len(got) == 0 {
+		t.Fatalf("a %d-bar window produced no level; the fixture must assert, never skip", short)
+	}
+	for _, l := range got {
+		if l.LookbackBars != short {
+			t.Errorf("LookbackBars=%d, want %d — the recorded window must be what was searched, not what was asked for", l.LookbackBars, short)
+		}
+	}
+	if !strings.Contains(rep.Resolved["1w"], "bars=9") {
+		t.Errorf("report resolved params %q do not name the real window", rep.Resolved["1w"])
 	}
 }
