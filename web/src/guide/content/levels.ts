@@ -88,7 +88,7 @@ export const levels: GuideSection = {
     },
     { kind: 'h', text: 'Which timeframes the detectors run on' },
     {
-      kind: 'text',
+      kind: 'p',
       text: 'Four detector families — equal highs/lows, supply/demand zones, fair-value gaps and order blocks — run with the SAME definition on every timeframe in the detection set: 15m, 30m, 1h, 2h, 4h, 6h, 8h, 12h, 1d, 3d and 1w. Before 10 September the set stopped at 12h, so no daily or weekly swing, zone, order block or gap could reach a plan: of 297 stored plans, none carried one. The strategy config had been asking for daily structure the whole time — planner_timeframes reads ["D","4h","1h","15m","5m"] and names D first — but the detector only recognised the spelling "1d", so "D" was dropped without a word. Anything below 15m stays out on purpose: intraday noise adds nothing to higher-timeframe structure, and swing detection already covers 5m and 15m.',
     },
     {
@@ -115,7 +115,7 @@ export const levels: GuideSection = {
       ],
     },
     {
-      kind: 'text',
+      kind: 'p',
       text: 'Daily and weekly levels are graded as if they were 4h. That is a CLASSIFICATION, not a measurement: the alternative was to let them fall through to the 1-minute noise floor, where a daily zone would score with the weakest evidence on the board and be capped at grade C. Nothing here establishes that a daily level is stronger than a 1h one. The research round that governs this wave found the ×1.2 higher-timeframe weight has no tested foundation at all, and it is carried unchanged and marked untested. Whether the daily family deserves the 4h tier, its own, or none is a question for measurement, not for the person who wired it.',
     },
     { kind: 'h', text: 'The 5 roles — what a level is FOR' },
