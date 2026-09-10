@@ -15,10 +15,33 @@
 ```sql
 sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro" \
  "SELECT * FROM trader_positions WHERE status='OPEN';"                        -- 0 rows
+
+-- ⚠ SUPERSEDED — DO NOT COPY THE QUERY BELOW. It retyped 5 of the 7 terminal
+-- states and invented a 6th ('done') that the code never sets. See class 99 in
+-- docs/superpowers/AUDIT-CHECKLIST.md. Use the code's own predicate,
+-- isTerminalArmState (trader/one_contract.go:285), or the exported SQL fragment
+-- once it lands.
 sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro" \
  "SELECT * FROM armed_orders
    WHERE state NOT IN ('filled','cancelled','canceled','expired','done');"    -- 0 rows
+
+-- ✅ THE CORRECT FORM — all seven states isTerminalArmState returns true for:
+sqlite3 "file:/home/hoang/nofx/data/data.db?mode=ro" \
+ "SELECT * FROM armed_orders
+   WHERE state NOT IN ('filled','cancelled','canceled','rejected',
+                       'expired','superseded','shadowed');"                   -- 0 rows
 ```
+
+**Both forms returned 0 that night, and that is the trap.** The retyped list was true when it
+was written — the highest arm id in the table was 37, and the first row it would have
+miscounted (id 92, `superseded`) was not created until 2026-09-04 10:44:01 CT. The defect
+stayed latent for five days. On 2026-09-09 the same query counted **10** rows as resting arms
+when every one of them was `superseded`, the true count was **0**, and that number went to the
+owner as the reason to hold a cutover. Re-run against the same table at the same instant today,
+the two forms return **10** and **0**. A hand-typed state list agrees with the code for exactly
+as long as the table happens not to contain the states it omits — which is why no snapshot of
+`select distinct state` can catch this. The wrong query is left standing beside the right one
+deliberately. See class 99.
 
 The last position (id 591) closed 2026-09-03 09:20:45 CT. The last arm (id 37) was cancelled
 2026-09-03 12:15:01 CT. Nothing has been working at the broker since.

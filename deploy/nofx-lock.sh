@@ -31,19 +31,31 @@
 # before any clearing, and this script never clears a lock itself at any age.
 #
 # Usage:
-#   nofx-lock acquire <session> <task> [minutes]   # atomic; refuses if held
+#   nofx-lock acquire <session> <task> [minutes]   # atomic; refuses if held.
+#                                                  # STARTS A KEEPER that beats
+#                                                  # until the [minutes] window
+#                                                  # you declared, then STOPS.
 #   nofx-lock heartbeat <session>                  # holder rewrites; every 2m
 #   nofx-lock status                               # free | held | STALE + age
 #   nofx-lock check                                # rc 0 free · 1 held · 2 stale
 #   nofx-lock with-heartbeat <session> -- <cmd>    # beats for <cmd>'s lifetime
 #   nofx-lock reclaim <new> <stale> "<corroboration>"  # ONLY on a stale heartbeat
-#   nofx-lock release <session>                    # only the holder may release
+#   nofx-lock release <session>                    # holder only; STOPS the keeper
+#
+# THE KEEPER NEVER EXTENDS YOUR WINDOW. It beats until the expiry you asked for
+# at acquire and then stops, so the lock goes STALE at the window you declared
+# rather than never. A holder who needs longer RE-ACQUIRES OR EXTENDS
+# EXPLICITLY — there is no path by which simply staying busy keeps the tree.
+# That bound is deliberate: an unbounded keeper survives its own session and
+# beats forever for a holder who is gone, turning a 5-minute false STALE
+# (recoverable, and corroboration is required anyway) into a permanent false
+# ALIVE that no succession path can reach.
 set -uo pipefail
 
 LOCK_DIR="${NOFX_LOCK_DIR:-$HOME/nofx-main.lock.d}"
 LEGACY_LOCK="${NOFX_LEGACY_LOCK:-$HOME/nofx-main.lock}"
 HEARTBEAT_STALE_SECONDS="${NOFX_LOCK_STALE_SECONDS:-300}"   # 5 min
-HEARTBEAT_EVERY_SECONDS=120                                  # 2 min
+HEARTBEAT_EVERY_SECONDS="${NOFX_LOCK_BEAT_SECONDS:-120}"     # 2 min
 
 _now()      { date -Is; }
 _epoch()    { date +%s; }
@@ -78,18 +90,184 @@ session=$session
 task=$task
 acquired=$(_now)
 expiry=$(date -Is -d "+$mins minutes")
+expiry_epoch=$(date +%s -d "+$mins minutes")
 heartbeat=$(_now)
 heartbeat_epoch=$(_epoch)
 META
-  echo "ACQUIRED by $session — heartbeat every ${HEARTBEAT_EVERY_SECONDS}s, stale after ${HEARTBEAT_STALE_SECONDS}s"
+  _spawn_keeper "$session"
+  echo "ACQUIRED by $session — a keeper is beating every ${HEARTBEAT_EVERY_SECONDS}s until $(_field expiry), then it STOPS; stale after ${HEARTBEAT_STALE_SECONDS}s. It never extends the window: need longer, re-acquire or extend explicitly."
 }
 
-# The beat is owner-scoped. An unauthenticated beat would let any lane keep a
-# stranger's abandoned lock looking alive, which is failure (1) rebuilt.
+# THE KEEPER (2026-09-09). Until today acquire PRINTED "heartbeat every 120s" and
+# started nothing: a holder who simply WAITED — for a position to close, for an
+# owner to run the kill — went stale at 300s with no writer in existence, and
+# status printed the reclaim recipe over a live cutover. The verb was never
+# broken; nothing called it for a holder who was not running commands. Class 88:
+# a liveness signal that is a side effect of activity, dying exactly when the
+# work pauses — when the whole point of a lock is to be held while you wait.
+#
+# BOUNDED BY THE DECLARED EXPIRY, AND THAT BOUND IS THE DESIGN. An unbounded
+# keeper survives its session and beats forever for a holder who is gone, turning
+# a 5-minute false STALE — recoverable, and the canon already says corroborate —
+# into a permanent false ALIVE no succession path can reach. Bounded, an
+# abandoned lock still goes stale: at the window its holder asked for, not never.
+#
+# THE PID IS A STOP HANDLE, NEVER LIVENESS (class 70). It lives in its own file,
+# never in meta, and nothing reads it to decide whether the holder is working —
+# that is still the heartbeat, and only the heartbeat. release uses it to stop
+# the process it started, so no writer outlives its lock.
+_spawn_keeper() {
+  local session="$1" self="${BASH_SOURCE[0]}" exp kpid pgid
+  exp="$(_field expiry_epoch)"
+  [ -n "$exp" ] || return 0
+  # setsid makes the keeper a SESSION AND GROUP LEADER, so the group contains
+  # exactly the keeper loop and whatever it spawns — which is what release has
+  # to be able to end as one thing. See _stop_keeper for why.
+  setsid nohup bash -c '
+    lock="$1"; sess="$2"; exp="$3"; every="$4"; self="$5"
+    why=""
+    while [ -d "$lock" ]; do
+      if [ "$(date +%s)" -ge "$exp" ]; then why="ended at the declared expiry"; break; fi
+      NOFX_LOCK_DIR="$lock" bash "$self" heartbeat "$sess" >/dev/null 2>&1 || { why="stopped: this session is no longer the holder"; break; }
+      sleep "$every"
+    done
+    # WHY IT STOPPED, RECORDED. A keeper that exits ON PURPOSE at the window its
+    # holder declared leaves a lock that goes stale — which reads identically to
+    # the defect this keeper was built to fix unless the tool says otherwise.
+    [ -n "$why" ] && [ -d "$lock" ] && printf %s "$why" > "$lock/keeper.ended" 2>/dev/null
+    rm -f "$lock/keeper.pid" 2>/dev/null
+  ' _ "$LOCK_DIR" "$session" "$exp" "$HEARTBEAT_EVERY_SECONDS" "$self" >/dev/null 2>&1 &
+  kpid=$!
+  # The GROUP id, read from /proc rather than assumed: setsid forks in some
+  # shells and execs in others, so $! is not reliably the leader.
+  #
+  # THE FIELD IS COUNTED AFTER comm, NOT FROM THE START OF THE LINE. /proc/PID/stat
+  # is "pid (comm) state ppid pgrp ...", and comm is the only field that can hold
+  # spaces or parens. Splitting the raw line puts pgrp at $5 only while comm is a
+  # single bare word; strip through the LAST ')' first and pgrp is unambiguously
+  # the third field of what remains.
+  #
+  # This line previously carried '"'"' quoting — the form for embedding a quote
+  # inside an ALREADY single-quoted string. Here it is at top level, so bash read
+  # {print $5} in a DOUBLE-quoted region, expanded $5 against the function's own
+  # (empty) arguments, and `set -u` aborted the substitution: every acquire printed
+  # "line 143: $5: unbound variable" to stderr and the /proc read never once ran.
+  # The fallback below silently covered it, which is why 75 green tests missed it.
+  #
+  # AND THE READ MUST WAIT FOR setsid, OR IT RECORDS **OUR OWN** GROUP.
+  # Job control is off in a non-interactive shell, so a background job does NOT
+  # get its own process group — it starts in THIS SHELL'S. `setsid` moves it only
+  # once it execs. `kpid=$!` returns before that, so a /proc read that wins the
+  # race returns the PARENT's pgrp — and _stop_keeper would then send SIGTERM to
+  # the process group of whoever invoked this script. That is not theoretical:
+  # it killed the test run that found it, exit 143.
+  #
+  # So the value is accepted ONLY once it is its own group LEADER (pgrp == pid),
+  # which is true exactly when setsid has completed and is impossible for a
+  # value borrowed from our parent. If that never happens the keeper is still in
+  # our group and must be stopped as a lone PID, never as a group; we record it
+  # and let _stop_keeper make that call from the same evidence.
+  pgid=""
+  _kw=0
+  while [ "$_kw" -lt 50 ]; do
+    _cand="$(sed -e 's/^.*) //' "/proc/$kpid/stat" 2>/dev/null | awk '{print $3}')"
+    if [ -n "$_cand" ] && [ "$_cand" = "$kpid" ]; then pgid="$_cand"; break; fi
+    [ -d "/proc/$kpid" ] || break
+    sleep 0.1; _kw=$((_kw+1))
+  done
+  [ -n "$pgid" ] || pgid="$kpid"
+  echo "$pgid" > "$LOCK_DIR/keeper.pid"
+  disown 2>/dev/null || true
+}
+
+# _keeper_owns — is $1 a live process belonging to THIS lock's keeper?
+# Identification is POSITIVE: the cmdline must name this lock directory. A pid
+# that is gone, recycled, or someone else's fails, and its caller signals nothing.
+_keeper_owns() {
+  local p="$1"
+  [ -n "$p" ] && [ -r "/proc/$p/cmdline" ] || return 1
+  tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null | grep -qF -- "$LOCK_DIR"
+}
+
+# _is_group_leader — does $1 name a process GROUP, or merely a process?
+# pgrp == pid is true only for a leader. Every other number, signalled with
+# `kill -- -N`, hits a group we did not create.
+_is_group_leader() {
+  local p="$1" pg
+  [ -r "/proc/$p/stat" ] || return 1
+  pg="$(sed -e 's/^.*) //' "/proc/$p/stat" 2>/dev/null | awk '{print $3}')"
+  [ -n "$pg" ] && [ "$pg" = "$p" ]
+}
+
+# _stop_keeper ends the process GROUP this script started, and WAITS for it.
+#
+# THE DEFECT THIS REPLACES, found by an adversarial pass before this ever
+# shipped: it killed only the keeper LOOP. The loop runs `bash "$self" heartbeat`
+# as a foreground CHILD, so killing the parent ORPHANED that child — and
+# _write_meta mv's into "$LOCK_DIR/meta" by absolute path with no identity check.
+# An orphan that had already passed _require_holder while A held the lock landed
+# A's meta into the lock B created at the same path seconds later. B then held
+# the tree while the lock said A: B could not release its own lock, and A —
+# holding nothing — could, freeing the tree under a live cutover. The atomic mv
+# is what made it silent; the wrong content landed whole, never torn.
+#
+# That is failure (2) from this file's own header — a write that clobbers —
+# rebuilt one layer down by the keeper wave. The group kill CLOSES the window
+# rather than narrowing it: loop and child die together, and release never
+# removes the directory while a writer could still be inside it.
+#
+# ON /proc: this is NOT class-70 pid liveness. It never answers "is the holder
+# working" — that is the heartbeat, and only the heartbeat. It answers "has the
+# process I just signalled finished dying", about a child this script started,
+# bounded, and reachable from nowhere but here. status and check cannot see it.
+_stop_keeper() {
+  local pg i=0
+  pg="$(cat "$LOCK_DIR/keeper.pid" 2>/dev/null || true)"
+  rm -f "$LOCK_DIR/keeper.pid" "$LOCK_DIR/keeper.ended" 2>/dev/null
+  [ -n "$pg" ] || return 0
+  # A24 — UNKNOWN TAKES NO DESTRUCTIVE BRANCH. Everything below signals; nothing
+  # below signals a target it has not positively identified as OUR keeper.
+  case "$pg" in ''|*[!0-9]*) return 0 ;; esac
+  _keeper_owns "$pg" || return 0
+  # Group-kill ONLY a genuine group leader. A number that is not one names some
+  # OTHER group — possibly this shell's — and `kill -- -N` would signal it whole.
+  if _is_group_leader "$pg"; then _sig() { kill "-$1" -- "-$pg" 2>/dev/null; }
+  else                           _sig() { kill "-$1" "$pg" 2>/dev/null; }; fi
+  _sig TERM
+  # BOUNDED WAIT, ~5s. Never rm under a live writer.
+  while [ "$i" -lt 50 ]; do
+    [ -d "/proc/$pg" ] || break
+    sleep 0.1; i=$((i+1))
+  done
+  # Whatever is left in the group cannot execute another statement after this.
+  [ -d "/proc/$pg" ] || return 0
+  _sig KILL
+  return 0
+}
+
 cmd_heartbeat() {
   local session="${1:?session required}"
   [ -d "$LOCK_DIR" ] || { echo "REFUSED — no lock to beat."; return 1; }
   _require_holder "$session" || return 1
+  # THE WINDOW IS A BOUND, NOT A DISPLAY — enforced HERE, at the only place a
+  # heartbeat can be written.
+  #
+  # Until now `expiry` was written at acquire and only ever PRINTED; nothing
+  # compared it, so any writer could extend a lock forever. Bounding the keeper's
+  # own loop was not enough: it constrains the keeper this script starts and
+  # nothing else, and every lane on this machine has been running a hand-rolled
+  # beater for exactly as long as the tool failed to start one. Refusing at the
+  # source makes it an invariant — NO writer extends a window, hand-rolled or
+  # not — and it terminates the keeper for free, because the loop breaks on the
+  # same non-zero rc.
+  #
+  # A lock created before this change carries no expiry_epoch; it is left
+  # unbounded rather than retroactively expired.
+  local exp; exp="$(_field expiry_epoch)"
+  if [ -n "$exp" ] && [ "$(date +%s)" -ge "$exp" ]; then
+    echo "REFUSED — past the declared expiry ($(_field expiry)). No writer extends a window: re-acquire, or extend explicitly."
+    return 1
+  fi
   { _meta | grep -v '^heartbeat'; echo "heartbeat=$(_now)"; echo "heartbeat_epoch=$(_epoch)"; } | _write_meta
   echo "heartbeat $(_now)"
 }
@@ -118,15 +296,35 @@ cmd_status() {
     # STALE, NOT DEAD. The distinction is the whole point: a stale heartbeat
     # says the holder has not checked in, not that it has stopped. Corroborate
     # before clearing — HEAD moving, a build in flight, the session answering.
-    echo "STALE — held by '$session' (task: $task), heartbeat ${age}s old (> ${HEARTBEAT_STALE_SECONDS}s), expiry $(_field expiry)."
+    echo "STALE — held by '$session' (task: $task), heartbeat ${age}s old (> ${HEARTBEAT_STALE_SECONDS}s), expiry $(_field expiry) · $(_auto_beat)."
     echo "  DO NOT CLEAR ON THIS ALONE. Corroborate first: is HEAD moving? is a build running?"
     echo "  does '$session' answer? Clear only with a note naming what you checked."
     echo "  To take it over on the record: nofx-lock reclaim <you> '$session' \"<what you checked>\""
     _show_history
     return 2
   fi
-  echo "held by '$session' (task: $task), heartbeat ${age}s old — ALIVE, expiry $(_field expiry)"
+  echo "held by '$session' (task: $task), heartbeat ${age}s old — ALIVE, expiry $(_field expiry) · $(_auto_beat)"
   _show_history
+}
+
+# _auto_beat says whether acquire started a keeper, READ FROM THE FILE. It never
+# probes a process: asking "is that pid alive" would make the pid the liveness
+# answer, which is class 70 rebuilt. This distinguishes the two readings STALE
+# could not tell apart — "the holder is gone" from "the tool never beat for a
+# holder who was waiting" — which is the whole reason the keeper exists.
+_auto_beat() {
+  if [ -f "$LOCK_DIR/keeper.pid" ]; then
+    echo "auto-beat: on (until $(_field expiry); it never extends the window)"
+  elif [ -s "$LOCK_DIR/keeper.ended" ]; then
+    # THE EXPIRY FIELD IS LOAD-BEARING NOW. It was written at acquire and only
+    # ever printed; with a keeper bounded by it, a holder who UNDER-DECLARES
+    # their window goes stale mid-cutover with the keeper having exited on
+    # purpose. Silence there is indistinguishable from the defect this wave
+    # fixed, so the reason is carried out loud.
+    echo "auto-beat: ENDED — $(cat "$LOCK_DIR/keeper.ended" 2>/dev/null); re-acquire or extend explicitly"
+  else
+    echo "auto-beat: off — this holder must beat by hand"
+  fi
 }
 
 # For scripts (the tree guard): 0 free · 1 held-fresh · 2 held-stale.
@@ -205,6 +403,7 @@ cmd_release() {
   [ -d "$LOCK_DIR" ] || { echo "no lock"; return 0; }
   _require_holder "$session" || return 1
   _show_history
+  _stop_keeper
   rm -rf "$LOCK_DIR"; echo "released by $session"
 }
 

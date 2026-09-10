@@ -10,7 +10,7 @@ in CLAUDE.md).
 
 ## PART 1 — THE BUG CLASSES (name · root cause · probe · law)
 
-*Highest occupied class: **53** (2026-09-03). Numbers are assigned AT MERGE and
+*Highest occupied class: **105** (2026-09-10). Numbers are assigned AT MERGE and
 never renumbered; a gap means a wave took a later slot to avoid a collision.*
 
 1. **Self-imposed caps.** Root cause: an AI/HTTP/token cap chosen without
@@ -1545,6 +1545,17 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     by `deploy/nofx-lock-test.sh` — 56 assertions including a second acquire
     refusing, a stale heartbeat never reading "dead", and a source pin that the
     script cannot express `kill -0`, `pgrep` or `$$`. `with-heartbeat` beats
+    **`acquire` now STARTS A KEEPER (2026-09-09)** that beats for you until the
+    window you declared, then stops — because the message had promised
+    "heartbeat every 120s" and started nothing, so a holder who simply WAITED
+    (for a position to close, for an owner to run the kill) went STALE at 300s
+    with no writer in existence, and `status` printed the reclaim recipe over a
+    live cutover. **The keeper never extends the window:** need longer,
+    re-acquire or extend explicitly. Its pid is a STOP HANDLE in `keeper.pid`,
+    never in `meta` and never consulted as liveness — that is still the
+    heartbeat alone (class 70). `status` reports `auto-beat: on/off` from the
+    file, never by probing a process, which is what finally tells "the holder is
+    gone" apart from "the tool never beat for a holder who was waiting".
     only for the lifetime of the command it wraps: a beater that outlived its
     job would reinvent the pid problem in a new costume. **Succession is on the
     record:** `reclaim <new> <stale> "<corroboration>"` is refused while the
@@ -2628,10 +2639,38 @@ are recorded so the next reader knows the collision is real and pre-existing.
 Count with this, which sees both:
 
 ```
-{ grep -oE "^[0-9]{2}\. \*\*" docs/superpowers/AUDIT-CHECKLIST.md | grep -oE "^[0-9]{2}"
-  grep -oE "^## CLASS [0-9]+" docs/superpowers/AUDIT-CHECKLIST.md | grep -oE "[0-9]+$"
+F=docs/superpowers/AUDIT-CHECKLIST.md
+b=$(grep -nE '^## CLASS [0-9]+' "$F" | head -1 | cut -d: -f1); b="${b:-999999}"
+{ awk -v n="$b" 'NR<n' "$F" | grep -oE '^[0-9]+\. \*\*[^*]+\.\*\*' | grep -oE '^[0-9]+'
+  grep -oE '^## CLASS [0-9]+' "$F" | grep -oE '[0-9]+$'
 } | sort -n | uniq -c | awk '$1>1{print "DUPLICATE: "$2} $1==1{l=$2} END{print "highest: "l}'
 ```
+
+**THE CENSUS ITSELF HAS BEEN WRONG TWICE (corrected 2026-09-10).** Both failures
+were in the PART 1 half, and both reported FALSE DUPLICATES while still giving
+the right maximum — which is why they survived: everyone ran it for the maximum.
+
+- The first version matched `^[0-9]{2}\. \*\*` — exactly two digits. It silently
+  skips single-digit classes 1-9, and now that the file has passed 99 it **also
+  skips every three-digit PART 1 entry**, because `107. ` has no `.` in the third
+  position. Harmless today only because the maximum currently lives in the
+  `## CLASS` half.
+- Widening it to `^[0-9]+\. \*\*` then swept in two things that are not class
+  numbers: the **pre-cutover protocol's** ordinary steps (`1. **Tree gate:**`,
+  `2. **Build:**` …), and **bolded numbered lists inside class bodies** — the
+  entry for class 107 has a three-item list that made the census report 1, 2 and
+  3 as duplicates. A class about format-blind censuses broke the census.
+
+Hence the two filters above, which are both load-bearing: scan for PART 1 entries
+only ABOVE the first `## CLASS` heading (excludes class-body prose), and require
+the title to end `.**` (excludes the protocol steps, which end `:**`). Verified
+2026-09-10: reports exactly 75/76/77/92/93 and `highest: 107`, and each of those
+five was confirmed by eye to be a genuine two-format collision.
+
+**Read the duplicate line as a DIFF, not as a pass/fail.** Five collisions are
+pre-existing and permanent (below). A clean run is not "no duplicates" — it is
+"the same duplicates as dev's copy, and no more". Caught by a peer lane whose own
+census would otherwise have reported a free number a second time.
 
 **Law:** a "highest occupied" read is only as wide as the format it greps for.
 Where a document has grown more than one convention, the census must enumerate
@@ -3197,3 +3236,453 @@ A hand-typed lifecycle list is a second classifier. `store.IsTerminalArmState` n
 Leg 4 compares broker orders against placed/unconfirmed non-terminal ledger rows. An `armed` row with no signal id is an authorization, counted separately on the informational `armed_unplaced` line. It never fails the leg. `place_pending` is working/unconfirmed; a missing signal on a pending/working/unknown row does not make it informational. Pins: two unplaced authorizations + empty broker PASS; pending placement + empty broker FAIL (unconfirmed); broker order + no ledger placement FAIL; copied list FAIL. Existing broker freshness and explicitly labelled pre-first-snapshot fallback are unchanged.
 
 The class-33 boot sweep still has no scenario-validity adoption policy. Its state selection now uses the canonical non-terminal predicate, including cancel_pending; it still skips empty signal ids and cancels selected prior-process placed rows. Adopt-or-cancel by scenario validity remains a separate wave.
+## CLASS 99 — A GATE QUERY THAT RETYPES THE TERMINAL SET (born 2026-09-09, dispatch 103 W3)
+
+**Root cause:** the pre-cutover flat check was written as a hand-typed exclusion list — `state NOT IN ('filled','cancelled','canceled','expired','done')` — while the code's own predicate `isTerminalArmState` (`trader/one_contract.go:285-291`) returns true for **seven** states: `filled · cancelled · canceled · rejected · expired · superseded · shadowed`. The query matched five of the seven and invented a sixth (`done`) that the code never sets. On 2026-09-09 it counted **10** rows as resting arms blocking a cutover; the true count was **0** — every row was `superseded`, several of them days old. The wrong number was reported to the owner as the reason to hold.
+
+**Correction of this entry, 2026-09-10 (A24).** This entry first said **11**, and the query never returned 11 — every reading in the transcript is **10**. The 11 came from a hardcoded shell label, `echo "--- what the 11 arms are ---"`, printed directly above output that read `10`, and it propagated from there into this entry, into `reports/2026-09-09-candidates-not-entitlements.md`, and into what was told the owner and a peer lane. A count typed into an `echo` above a query is a placeholder that reads as data; it survived because it sat beside the real number and agreed with the story being told. The entry about not hand-typing values carried a hand-typed value in its own headline — the class caught its own author, in its own text, five days running.
+
+**Second instance — the mirror image, same predicate, same day, one hour later.** Lane nofx-07 ran, repeatedly between 21:05 and 22:21 CT on 2026-09-09 and inside three successive Monitor loops:
+
+```sql
+select count(*) from armed_orders where state in ('armed','working')
+```
+
+This was an **uncommitted operator query, not a code site** — there is no file:line to open, and it is recorded that way deliberately so no reader goes hunting for one. It is a POSITIVE list of live states, the mirror of the negative list above. At 22:12:53 CT it returned **0** while arm **143** rested at the broker in state `place_pending` (ASIA · S5 · SHORT · entry 29435.58 · stop 29464.48 · target 29372.50; the broker's own snapshot read `order_count=1 working_count=1` at 22:13:36; the arm later went `working` and FILLED at 29435.50). `place_pending` is in neither operator's list. Had the owner not independently ordered a wait, that gate would have called the desk flat and handed over a kill, and the class-33 boot sweep would have cancelled a live order placed 90 seconds earlier.
+
+Reproduced 2026-09-10, three predicates against the same table at the same instant:
+
+| predicate | form | rows |
+|---|---|---|
+| `isTerminalArmState` — the code's seven | negative | **0** |
+| nofx-07's `IN ('armed','working')` | positive | **0** |
+| this entry's five-of-seven `NOT IN` | negative | **10** |
+
+The table has only ever PERSISTED three states — `cancelled` 77, `filled` 22, `superseded` 10. Every live state (`armed`, `place_pending`, `working`, `cancel_pending`) is real, code-set and transient, so none of them is visible in a snapshot. **`select distinct state` cannot catch this class**; only the code's predicate knows the full set.
+
+**Probe:** for any query that decides whether it is safe to act, name the Go predicate it is standing in for and diff the two sets. `grep` the predicate, list its cases, and compare them to the SQL literal character by character. A gate whose SQL and whose code disagree is a gate that will hold when it should release, or release when it should hold — and the direction of the error is not predictable from reading either side alone.
+
+**Law:** a gate query reads the code's terminal set; it never retypes it. **A negative list of terminal states that omits one OVER-reports live rows and fails SAFE; a positive list of live states that omits one UNDER-reports and fails OPEN — the gate calls the desk flat while a real order rests at the broker.** A hand-typed list is therefore not merely wrong, it is wrong in a direction that depends on which way you happened to type it, and that is the argument for reading the code's set rather than for typing a better list.
+
+The structural remedy is to export ONE SQL fragment derived from the predicate, so the switch and every gate query have a single source. **Read class 107 before building it.** As stated, this paragraph is dangerous on its own: a lane that centralised every arm-state list onto a single `NonTerminalArmStateSQL()` pointed `store/boot_sweep.go` at a set that INCLUDES `cancel_pending`, and the sweep's raw `cancelled` write then re-cancelled rows whose cancels were sent but never confirmed. The three-state list it replaced was a deliberate, undocumented exception. The remedy is a single **SOURCE**, never a single **PREDICATE** — one name per intent (`SweepableArmStateSQL()` alongside `NonTerminalArmStateSQL()`), each carrying the comment that says why its set differs. That work is owned by lane nofx-80 and is **not on dev as of `a4c72ff7`** (`TerminalArmStates|terminalArmStatesSQL|ArmTerminalSQL` → zero hits). A caveat for whoever builds it, which is class 102 in this file seen from another angle: a `[]string` sitting *beside* a hardcoded `switch` does not close this class, it moves it — two hand-typed lists in one file diverge as readily as one in Go and one in SQL. It closes only when the switch ranges over the same slice the SQL is built from. Until then the fallback applies: the query quotes the predicate's file:line beside the literal and a test pins them equal, so a state added to the Go switch fails the test instead of silently widening the gate. The same rule covers any "is it finished / is it safe" list: order states, position states, plan lifecycle states. Related: class 53 (parity tests exercise production CALL SITES — a test that builds both sides' inputs proves only self-consistency). A worked example — the wrong query annotated in place beside the correct one — is preserved at `reports/2026-09-04-two-day-audit.md` §0. Dispatch 103 report: `reports/2026-09-09-candidates-not-entitlements.md`.
+
+## CLASS 100 — A BRANCH ON A STALE BASE IS A DELETION PATCH (born 2026-09-09, dispatch 103 W3)
+
+**Root cause:** this wave's branch was cut from dev's tip at accept and was correct for eight hours. While it held for a flat gate, a combined-boot lane merged it — plus three other waves — onto a shared boot head. Every one of this wave's files was then ALREADY on dev. The branch, still based on the pre-merge tip, no longer described "my work added"; it described "dev, as it looked before three other lanes landed." `git diff --stat origin/dev HEAD` read **37 files changed, 150 insertions, 5,403 deletions** — `bar_horizon_warn.go`, `regime_input_window.go`, `read_facts_horizon_test.go` (102) and `weeklyBias.ts` (101) among the casualties. Nothing conflicted. Nothing failed. A `--ff-only` merge was impossible, but an ordinary merge would have committed the deletions as an intended change.
+
+**Probe:** before ANY merge, run `git diff --stat origin/dev HEAD` and read the DELETION count, not the conflict list. A wave that adds a feature should show deletions only in files it deliberately edits; a four-figure deletion count against a branch that added code means the base moved under it. Cross-check with `git log --oneline origin/dev..HEAD` and `git log --oneline HEAD..origin/dev` — the second list is what landed while you were not looking. Then confirm your own files: `git cat-file -e origin/dev:<path>` for each one you created. If they are already there, your work landed by another route and the branch is now a rollback of everything that landed after it.
+
+**Law:** a branch is only as safe as its base is fresh, and staleness is silent — no conflict, no test failure, no hook. Diff against the CURRENT dev and read deletions before merging, every time, including when the branch has not been touched since it was green. When your own files are already on dev, do not merge the branch: reset onto the current tip and re-apply only the genuinely unlanded deltas, then re-run the same deletion check to prove the reset is additive. Related: the SPEC-FRESHNESS LAW (CLAUDE.md canon — a worktree cut from an older base freezes a moving spec; it has NO checklist slot, and CLAUDE.md's "Checklist class 73" names the hook class instead — see class 105 instance 3, which corrects this line) and PUSH-EMPTY-AT-ACCEPT, whose founding incident was a lane's branch merged into dev without its author ever being told. This is that incident seen from the author's side. Dispatch 103 report: `reports/2026-09-09-candidates-not-entitlements.md`.
+
+## CLASS 101 — A BOUND THAT IS WRITTEN, PRINTED, AND NEVER COMPARED (born 2026-09-10, fix/lock-keeper-on-acquire)
+
+**Name.** A field that looks like a constraint and is decoration. It is set at
+creation, rendered on every status line, cited in documentation and in people's
+reasoning — and no code path ever compares it to anything.
+
+**Read beside class 88** (*a liveness signal that is a side effect of activity*),
+which is the defect this one was found while fixing, and **class 97**.
+
+**Root cause.** `deploy/nofx-lock.sh` wrote `expiry` at `acquire` and printed it
+in every `status` line, ALIVE and STALE alike. Three occurrences in the file:
+written once, printed twice. `cmd_heartbeat` refused on exactly two conditions —
+no lock directory, and not the holder. **Past its expiry a lock beat happily,
+forever.**
+
+Everyone read the field as a bound. It appeared beside the holder and the task on
+every status line a lane looked at, and lanes reasoned with it out loud ("expiry
+16:53, so I have an hour"). Nothing enforced it, and for months nothing needed
+to — because the tool started no keeper, so the only writer was a human running
+the verb by hand and locks went stale on their own.
+
+**Then the keeper wave made it load-bearing.** Bounding the keeper's own loop by
+the expiry looked sufficient and was not: it constrains the keeper THIS SCRIPT
+starts and nothing else, and every lane on the machine had been running a
+hand-rolled beater for exactly as long as the tool had failed to start one. The
+first design would have shipped an invariant that held only for the writer that
+did not exist yesterday.
+
+**The fix is where, not what.** Refusing at `cmd_heartbeat` — the single place a
+heartbeat can be written — makes it an invariant for EVERY writer, hand-rolled or
+not, and terminates the keeper for free because its loop breaks on the same
+non-zero rc. Bounding the loop would have been the same rule enforced at one of
+its callers.
+
+**Probe, five questions:**
+1. For every field that reads like a limit — expiry, deadline, max, ttl, cap —
+   grep it. Count the sites that WRITE it, the sites that PRINT it, and the sites
+   that COMPARE it. A comparison count of zero is the finding, and it takes one
+   command.
+2. Do people reason with the field in prose, tickets or chat? A decorative bound
+   is most dangerous exactly when it is trusted, and being quoted is the evidence
+   that it is.
+3. If you are about to make it load-bearing, ask who else writes the thing it
+   bounds. Enforcing in your own new code path constrains your own new code path.
+4. Where is the narrowest chokepoint every writer must pass? Enforce there. A
+   rule enforced at a caller is a rule with as many holes as there are callers.
+5. When it starts being enforced, does anything now FAIL that used to pass — and
+   does the failure explain itself? A bound that begins biting silently reads
+   exactly like the bug you were fixing.
+
+**Law:** **a bound is enforced at the point of WRITE, or it is a comment with a
+timestamp.** Where a field constrains an action, the code that performs the
+action compares it — not the code that happens to have started the actor.
+
+**Corollary.** Found by a peer lane reading the shipped file while the fix was
+still staged, and its own caveat was the useful part: it had read dev's pre-fix
+copy, so half its finding was moot and it said so. The half that survived was
+architectural and better than my design — enforce at the source, not at the loop.
+
+## CLASS 102 — THE FIX THAT REBUILDS ITS OWN DEFECT ONE LAYER DOWN (born 2026-09-10, fix/lock-keeper-on-acquire, adversarial pass)
+
+**Name.** A wave fixes a defect and introduces the same defect class inside the
+fix — because the fix adds a new actor of exactly the kind the original defect
+was about, and the wave's attention is on the old actor.
+
+**Root cause.** The lock's header names its three founding failures, the second
+being *a live pid silently overwritten by a second writer*. The keeper wave added
+a background heartbeat writer — the first the tool had ever had — and then
+stopped it by killing the loop only. The loop runs its beat as a foreground
+CHILD, so killing the parent ORPHANED that child, and `_write_meta` mv's into
+`$LOCK_DIR/meta` by absolute path with no identity check.
+
+An orphan that had passed `_require_holder` while A held the lock landed A's meta
+into the lock B created at the same path seconds later. B held the tree, the lock
+said A: **B could not release its own lock, and A — holding nothing — could**,
+freeing the tree under a live cutover. The atomic `mv` is what made it silent;
+the wrong content landed whole, never torn. Failure (2) from the file's own
+header, rebuilt one layer down by the wave that existed to make holding safer.
+
+**Why the wave could not see it.** Every test was about the OLD failure — does a
+waiting holder stay alive, does the keeper stop at expiry, is the pid never
+liveness. The new actor was the subject of the fix and therefore not the subject
+of suspicion. It was found by an adversarial pass told to attack the fix, and
+four of that pass's findings were pre-existing; only this one was created by the
+wave.
+
+**Probe, five questions:**
+1. Does your fix introduce a new WRITER, PROCESS, CACHE or FILE? Then re-read the
+   defect list this component already has and ask which entries now apply to your
+   new thing.
+2. Read the component's own header or postmortem list. A file that documents
+   three failures is telling you which three to re-check against every change.
+3. If your fix spawns something, what kills it — and does that reach everything
+   it spawned? A process that spawns children needs its GROUP ended, not its pid.
+4. Where is the identity check on the write? "The right process is writing" is
+   not the same claim as "this write belongs in this object", and only the second
+   survives a race.
+5. Would an attacker told "break this fix" find it in an hour? If you have not
+   asked someone to try, the wave's tests are all arguing for the same side.
+
+**Law:** **the defect list a component already carries is the test list for any
+change to it** — most of all for a change that adds an actor of the kind those
+defects were about.
+
+**Corollary.** The pin for it took four attempts, and the first three passed with
+the defect fully present: it asserted the keeper FILE was gone (`rm -rf` does
+that anyway), then the PROCESS but on a beat so short an unstopped keeper exited
+by itself first (measuring the OS, not the code), then SAMPLED the race eight
+times against a natural rate near one in sixty. It bites only with a CONDITIONAL
+timing shim that parks exactly one write. **A race pin that does not widen its
+window is testing luck**, and three drafts of mine reported success from it.
+
+## CLASS 103 — THE FALLBACK THAT HIDES THE FAILURE OF THE PATH IT BACKS UP (born 2026-09-10, one hour after the keeper shipped)
+
+**Name.** A primary path fails totally and permanently; a fallback beneath it
+produces a plausible value; behaviour is therefore correct, and every
+behavioural test passes. The defensive code is dead and the hazard it was
+written to defend against is live — and nothing in the observable behaviour of
+the system says so.
+
+**Read beside class 102** (*the fix that rebuilds its own defect one layer
+down*), which this was found while smoking, and class 88.
+
+**Root cause.** `_spawn_keeper` reads the keeper's process GROUP from
+`/proc/PID/stat`, because `release` must kill loop and child together and the
+comment two lines above states plainly that `$!` is *not reliably the group
+leader*. The line was written with the `'"'"'` form — the correct way to embed a
+quote inside an ALREADY single-quoted string. It was not inside one. At top
+level bash read `{print $5}` in a **double**-quoted region, expanded `$5` against
+the function's own empty argument list, and `set -u` aborted the substitution.
+
+Two things followed, both live on dev for an hour:
+
+1. Every `acquire` printed `line 143: $5: unbound variable` to stderr. The verb
+   still succeeded and still printed its success line, so the warning read as
+   noise attached to a working command — the shape a lane learns to scroll past.
+2. The `/proc` read never executed once. `pgid` came from
+   `[ -n "$pgid" ] || pgid="$kpid"` — from `$!`, the exact value the comment
+   above it says cannot be trusted.
+
+**Why it survived 75 green tests.** Behaviour was correct. `setsid` execs rather
+than forks when it is not already a session leader, so on this platform
+`pid == pgid` and the fallback's answer happened to equal the right one. Every
+assertion in the suite was behavioural — does the keeper beat, does release end
+the group, does no writer outlive its lock — and behaviour was right for a
+reason that had nothing to do with the code under test. **The suite was
+measuring the platform, not the implementation.**
+
+**What actually found it.** Running the shipped verb once, by hand, and reading
+its stderr — before announcing it to other lanes. Not the suite.
+
+**Probe, five questions:**
+1. Does the verb write anything to stderr on the SUCCESS path? Run it with
+   `2>&1 >/dev/null` and look at what is left. A command that must warn in order
+   to succeed has an unexamined failure inside it.
+2. For every fallback (`||`, `or`, `except:`, a default on a nil read), ask: if
+   the primary path never ran at all, what would I observe? If the answer is
+   "nothing", the fallback is a mask and needs its own assertion.
+3. Is there a comment explaining why the primary path is necessary? That comment
+   is a testable claim. Here it said `$!` is unreliable — so a test should prove
+   the code is not using `$!`, and none did.
+4. Did the value come out right for a reason the code controls, or for a reason
+   the platform happens to guarantee today? Change the platform assumption and
+   see whether the test still passes.
+5. Are your assertions all behavioural? Behaviour is downstream of the fallback.
+   Assert on the ARTEFACT — stderr, the recorded value, the syscall — when the
+   defect can be invisible downstream.
+
+**Law:** **a fallback must be observable when it fires.** Where code has a
+primary path and a backup, something must record which one ran — a counter, a
+log line, or a test that asserts the primary's own output. Otherwise the backup
+silently becomes the only path, and the first evidence is the day the platform
+assumption changes.
+
+**Corollary — pin the artefact, not the outcome.** The pin that catches this is
+`acquire writes nothing to stderr`, mutation-tested to fail on the shipped script
+with the exact `$5: unbound variable` line. No behavioural assertion could have
+caught it, because there was nothing wrong with the behaviour.
+
+## CLASS 104 — THE CORRECTION THAT IS MORE DANGEROUS THAN THE DEFECT (born 2026-09-10, minutes after class 103)
+
+**Name.** Broken code is inert. Fixing it makes it *run* — and the code that had
+never executed carries a hazard nobody reviewed, because until now it did
+nothing. The repair is the moment the latent bug goes live.
+
+**Read immediately after class 103**, which is the defect this is the correction
+to. The pair is the lesson; neither half is complete alone.
+
+**Root cause.** Class 103 was a `/proc` group read that never once executed —
+mis-quoting aborted the substitution and a fallback silently supplied a working
+value. The obvious fix was to make the read work.
+
+Making it work exposed a race that the broken version had been hiding:
+
+> Job control is off in a non-interactive shell, so a background job does **not**
+> get its own process group — it starts in the SHELL'S. `setsid` moves it only
+> once it execs. `kpid=$!` returns before that.
+
+So a `/proc` read that WINS the race returns the **parent's** pgrp. That value
+landed in `keeper.pid`, and `_stop_keeper` ran `kill -TERM -- "-$pg"` against it
+— sending SIGTERM to the process group of whoever invoked the script. **It killed
+the test run that found it, exit 143**, and the exit code was first misread as an
+unrelated environment problem.
+
+**The broken version was accidentally safer.** It always fell through to
+`pgid="$kpid"`, and `$kpid` after `setsid` genuinely IS its own group leader. The
+defect and the safety were the same line. Removing the defect removed the safety.
+
+**Probe, five questions:**
+1. You are fixing code that never ran. What does it DO once it runs? Review it as
+   NEW code, because operationally it is — it has never executed in production
+   even once.
+2. What was the broken path doing INSTEAD, and was that behaviour load-bearing?
+   A fallback that has served for months is the de-facto implementation; the
+   "real" path is the untested one.
+3. Does the newly-live code compute a value that something DESTRUCTIVE consumes —
+   a kill, a delete, a truncate, a force-push? Then the fix is not done until the
+   consumer validates what it is handed.
+4. Is there a race between recording a value and that value becoming true? `$!`,
+   a pid before exec, a row before commit, a file before rename — all give a
+   correct read of a not-yet-correct state.
+5. After the fix, did an unrelated thing start failing? An exit 143, a killed
+   runner, a vanished shell — do not attribute it to the environment before
+   grepping your own diff for the signal it sends. Here the entire codebase
+   contained exactly ONE `SIGTERM` and it was the new code.
+
+**Law:** **a fix to code that never executed is a new feature, not a repair** —
+and it earns a new feature's review, especially where it feeds a destructive
+operation. Corollary: **never signal, delete, or overwrite a target you have not
+positively identified.** `kill -- -N` on a number that is not a verified group
+leader signals a group you did not create; the fix is identification
+(`/proc/<pid>/cmdline` names this lock), not a narrower race window.
+
+**Corollary — two layers or none.** The fix here is at the WRITER (accept a pgid
+only once `pgrp == pid`, true exactly when `setsid` completed) *and* at the
+CONSUMER (signal only a positively-identified target). Layer one alone still
+trusts whatever is already in the file; layer two alone still writes a dangerous
+value for anything else to read.
+
+## CLASS 105 — DOCUMENTATION DESCRIBING CODE, IN A PLACE THE CODE'S TESTS CANNOT SEE (born 2026-09-10, dispatch 103)
+
+**Root cause:** a statement ABOUT the code — a cap, a verb, a sequence, a rule — written where nothing can compare it to the code it describes. It is correct until the code moves, and from then on it is wrong silently and for as long as anyone leaves it. The build passes, the suite passes, review sees nothing, because no test reads prose. Three instances, across the whole range: one in tracked source that tests still cannot reach, and two in a file git cannot reach at all — the second of which caught the author of this entry mid-draft.
+
+**Instance 1 — a comment in tracked source.** `api/handler_svp.go:50`:
+
+```go
+// Default 5m. Pull up to 2000 bars (the cache cap); sessions off the visible
+// range are skipped by the renderer.
+bars := provider(symbol, interval, 2000)
+```
+
+The cache cap is **2500** — `DefaultBarCacheMaxBars` (`provider/ninjatrader/bar_cache.go:24`), which `market/data.go:225` names correctly as "2500 = the BarCache cap". What makes this sharper than drift: **2000 is not a stale number.** It is `AISVPBarCount` (`kernel/svp.go:47`) and it is the correct argument to pass. The comment was REWRITTEN at `f94118e6`, which replaced "1m/2000 matches the AI's exact input" with "2000 bars (the cache cap)". The value survived the rewrite; its description did not. A reader now learns a wrong cap from a line sitting directly above correct code — and a reader who later "fixes" the code to match the comment would break the AI's SVP input. Nothing failed, because a comment is unreachable from a test even when the file it lives in is fully covered.
+
+**Instance 2 — a rule in an untracked file.** `CLAUDE.md:205` instructed every lane on this machine:
+
+```
+deploy/nofx-lock.sh heartbeat <session>                    # beat every ~2 min as you work
+```
+
+On 2026-09-10 the lock-keeper wave (`417599a3`, classes 101–104) made `acquire` start the heartbeat itself. Hand-beating became a **second writer into the lock dir** — the precise failure that wave existed to close. The one file instructing every lane to hand-beat was the one file the wave could not touch: `CLAUDE.md` is **untracked**, so no branch could correct it, no review could see it drift, and no test could assert it still matched the script. This is the worse half of the class. Instance 1 misleads a reader; instance 2 **instructs** one, and a lane following it faithfully would have caused the defect the wave had just removed.
+
+**Instance 3 — the one that caught the author of this entry, while writing it.** `CLAUDE.md`'s SPEC-FRESHNESS block ends: *"(Checklist class 73, read beside 70 and 72.)"* Checklist slot **73** is **"A hook registered one start too late"**, and slot 73's own text records why: it was renumbered 69→70→73 at merge because "70/71/72 were taken by the lock, stash-stack and flaky-clock classes landing in the same boot." SPEC-FRESHNESS was numbered on its branch, the number moved under it at merge (A27), and the untracked file kept the branch number. **SPEC-FRESHNESS has no checklist slot at all** — it is CLAUDE.md-only canon, and the only two occurrences of the string in this file are the Related lines discussed below.
+
+Drafting this entry, I read that citation, believed it, and wrote "class 73 (SPEC-FRESHNESS)" into the Related line of **class 100 — which is on dev**, and into the first draft of this one. It was caught only by checking every citation against the file before merge, and only because this file's own ⚠ NUMBERING HAZARD section (added 2026-09-07) says it carries two heading formats, which forced a second grep in the other format. The same paragraph also cost a second wrong citation: "the prompt feeds forward" is **slot 50**, not 45, and slot 50's own text says so — *"(Dispatch 'class 45'; checklist slot 45 was already the pantry class, hence 50.)"* The dispatch's name for a wave and its merged slot number are different facts, and a memory or a doc that records the first will keep asserting it after the second is decided. Class 100's Related line is corrected in the same commit as this entry.
+
+**Probe:** for every statement about the code that a reader could ACT on — a cap, a limit, a default, a verb, an ordering — ask two questions, in this order. **Is it in a file git tracks?** If not, it cannot be corrected by a wave, and its being wrong is not a bug anyone can fix on a branch. **Is there a test that fails when the code moves?** If not, being right today is luck. Then check the statement itself: a comment that names a value should name the CONSTANT (`DefaultBarCacheMaxBars`), not a transcription of it, so a reader who follows the name arrives at the truth. Be most suspicious of parentheticals that explain what a number *is* — `2000 (the cache cap)` — because the number is verified by the compiler and the gloss by nobody. When a comment is rewritten rather than written, diff what the prose asserted before and after: values are reviewed, descriptions are not.
+
+**Law:** a rule about the code lives in a **tracked file with a contract test**, and untracked guidance **points at it** rather than restating it. A restatement is a second copy that drifts from the code and from the original, independently and silently; a pointer cannot be wrong about anything except where to look.
+
+Partial remedy already on dev: `docs/superpowers/CLAUDE-canon.md` (landed `557494c7`) mirrors the MAIN-TREE LOCK LAW into a tracked file, and it declares itself newer by construction because it is the copy a wave can reach. That closes the git half. **The test half is not closed** — `git grep CLAUDE-canon -- '*.go' '*.sh'` returns zero, so nothing asserts the mirror still matches `deploy/nofx-lock.sh`, and a mirror with no contract test is this class with one more copy in it. The pointer half is not closed either: `CLAUDE.md` cannot be made to point at the canon file by any wave, only by the owner. Until both halves land, treat the canon file as authoritative over `CLAUDE.md` and the script as authoritative over both.
+
+Related: **slot 50** (the prompt withheld what the validator enforces — a document that instructs a reader to do the thing a guard forbids; the dispatch called it "class 45", the merged slot is 50), the **SPEC-FRESHNESS LAW** (CLAUDE.md canon — it has NO checklist slot, and CLAUDE.md's claim that it is class 73 is instance 3 above), and the **GUIDE CONTENT LAW**, which is this law already applied to one surface: a guide that lies about the running binary is worse than no guide.
+
+## CLASS 106 — A CORRECT READ OF A NOT-YET-CORRECT STATE (born 2026-09-10; generalised out of class 104 at a peer's suggestion)
+
+**Number note (updated at merge):** 105 is now OCCUPIED on dev by *documentation
+describing code where the code's tests cannot see it*. A second lane also claims
+105 on `origin/docs/worktree-tmp-locked-prune` (locked worktrees making a
+dangling registration immortal) — **that branch must renumber before it lands.**
+Numbers land at merge per A27, and this collision is exactly what A27 exists to
+catch: two lanes both read "highest is 104" and both took the next one.
+
+**Name.** You read a value. The read succeeds, the value is real, and it is the
+right value *for the state the system is in at that instant* — but that state is
+about to change into the one you actually meant to ask about. Nothing errors.
+Nothing is null. The read is simply early, and an early read of a mutable
+identity is indistinguishable from a correct one.
+
+**Read after class 104**, which is the instance this was generalised from, and
+beside class 88.
+
+**The instance.** `kpid=$!` after `setsid nohup bash -c '…' &`. Job control is
+off in a non-interactive shell, so a background job does **not** get its own
+process group — it starts in the SHELL'S, and `setsid` moves it only once it
+execs. `$!` returns before that. So `/proc/$kpid/stat`'s `pgrp` field is a
+perfectly valid read that returns the PARENT's group, and the consumer then
+signalled it: `kill -TERM -- "-$pg"` against the invoking shell's process group.
+
+**Why this is its own class and not a shell footnote.** The shape has nothing to
+do with process groups. The value is real before the operation that determines
+what it *means*:
+
+| read | the operation that gives it meaning |
+|---|---|
+| a pid | the `exec` that changes what that pid IS |
+| a row | the commit that makes it visible/durable |
+| a filename | the rename that puts it at its final path |
+| a branch diff | the base moving under it (SPEC-FRESHNESS, class 73) |
+| a config value | the reload that makes it the running config |
+| a price/quote | the fill that makes it a transacted price |
+
+Every one of them reads fine at the moment you read it. Retrying does not help,
+because there is no error. Logging does not help, because the logged value looks
+right. **Only a predicate that is FALSE before the transition and TRUE after it
+distinguishes the two states** — here, `pgrp == pid`, which is true exactly when
+`setsid` has completed and is impossible for a value borrowed from the parent.
+
+**Probe, five questions:**
+1. Between reading this value and using it, is there an operation that changes
+   what the value MEANS rather than what it is? Name it. If you can, you have
+   this class.
+2. What predicate is false before that operation and true after? If you cannot
+   state one, you cannot detect the early read — and a sleep is not a predicate.
+3. Does the early value look VALID? The dangerous case is when it does. A null or
+   an error is a gift; a plausible wrong number is this class.
+4. Who consumes it, and is that consumer destructive? An early read feeding a
+   log is a cosmetic bug; feeding a kill, a delete, or an overwrite, it is an
+   incident.
+5. Does a retry loop "fix" it? If the loop has no predicate it is not waiting for
+   the transition, it is waiting for luck — and it will pass in testing.
+
+**Law:** **wait on the predicate, not on the clock, and re-validate at the point
+of use.** Where a value's meaning is established by a later operation, the reader
+waits for a condition that operation makes true, and the consumer re-checks
+identity before acting — because the reader does not control who wrote the value
+it is handed.
+
+**Corollary.** Found because the early read reached a `kill`. It had presumably
+been early many times before that without consequence, which is the ordinary
+career of this bug: invisible until it feeds something that bites.
+
+## CLASS 107 — CENTRALIZING A HAND-TYPED LIST IS A BEHAVIOUR CHANGE WHEREVER THE LISTS DIFFERED (born 2026-09-10, boot-sweep cancel_pending)
+
+**Name.** Several sites hand-type the same list and the lists disagree. You fix
+that — correctly — by deriving one predicate from a single source and pointing
+every site at it. **The differences you just erased were not all typos.** Some
+were deliberate exceptions that nobody wrote down, and each one becomes a defect
+the moment the sites agree.
+
+**This is the INVERSE of class 99**, and must be read with it. 99 is *two
+hand-typed lists diverge and one silently widens a gate*. 107 is *the remedy for
+99, applied without asking why each site's list is the shape it is.* Fixing 99
+without 107 trades a divergence bug for a uniformity bug — and the uniformity bug
+is harder to see, because the code now looks principled.
+
+**Root cause.** `store/boot_sweep.go:47` hand-typed
+`state IN ('armed','place_pending','working')`; `store/armed_orders.go:242`
+hand-typed the same four states **with** `cancel_pending`. Five such lists
+existed across two files, with three distinct memberships. The one-predicate wave
+exported `NonTerminalArmStateSQL()` from a single `armStates` map and pointed the
+sweep at it.
+
+But the sweep's omission was **load-bearing**. Its terminal write is
+`SetState(id, "cancelled", …)` — a raw update — while `ConfirmCancel` is
+documented as *the only way a row becomes 'cancelled', and it requires the id of
+the snapshot whose book no longer listed the order.* `cancel_pending` means a
+cancel was sent and NOT confirmed: **the order may still be live at the broker.**
+Sweeping it marks the row cancelled with no evidence — the precise blindness a
+previous wave had closed. A/B on one seeded row: dev `swept=0`, row stays
+`cancel_pending`; branch `swept=1`, row `cancelled`, `settled_snapshot_id=0`.
+
+**Why nobody caught it.** Three reinforcing reasons, all of which generalise:
+
+1. **The doc comment already disagreed with the code.** `ListPreBoot`'s comment
+   said it "returns ONE trader's non-terminal rows" while the SQL listed three of
+   the four non-terminal states. Anyone checking intent against implementation
+   read that as the bug — and "fixed" it.
+2. **The suite stayed green.** Every existing test seeded `working` rows. No test
+   named `cancel_pending` and the boot sweep together, because the exclusion had
+   never been written down as a behaviour.
+3. **The path is barely trodden.** In all history 5 rows ever requested a cancel,
+   max attempts 1 against a cap of 5, and `ConfirmCancel` had never once fired.
+   A regression on a cold path ships green and stays quiet.
+
+**Probe, five questions:**
+1. Before unifying, DIFF THE MEMBERSHIPS and list every element that appears in
+   some sites and not others. That set is the entire risk surface, and it takes
+   one command.
+2. For each difference, ask "what does this site DO with the rows it selects?" A
+   site that only READS can usually widen safely. A site that WRITES, cancels,
+   deletes, or signals cannot.
+3. Is the narrower list the one attached to the destructive action? Then assume
+   deliberate until proven otherwise — A24's never-list, applied to refactoring.
+4. Does a comment near the site disagree with the code? Do not assume the code is
+   wrong. Find out which one is load-bearing BEFORE aligning them; here the
+   comment was wrong and the SQL was right.
+5. After unifying, does any test fail? If none does, that is not reassurance —
+   ask whether any test ever exercised the differing elements at all.
+
+**Law:** **a shared predicate needs a NAME PER INTENT, not one name for all
+callers.** Where two sites legitimately select different sets, derive BOTH from
+the single source and give each its own named function whose comment states why
+it differs — `SweepableArmStateSQL()` (non-terminal MINUS `cancel_pending`,
+"because the sweep's write bypasses ConfirmCancel") alongside
+`NonTerminalArmStateSQL()`. One source, several named intents. The class-99
+remedy is the single SOURCE, never the single PREDICATE.
+
+**Corollary.** Found only because the dispatch ordered *establish whether the
+omission is deliberate BEFORE changing anything, and quote the code path*. Asking
+"is this a bug or a decision?" first is what separates 99 from 107; the
+refactor had already been written, tested and pushed on the other reading.
+
