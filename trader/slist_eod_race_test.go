@@ -256,7 +256,7 @@ func TestSListDormancySyncCancelsWorkingArm(t *testing.T) {
 		Stream:  func() <-chan ntwire.OrderUpdatePayload { return acks },
 		Timeout: time.Second,
 	}
-	at.maybeManageArmedOrders(nil)
+	at.maybeManageArmedOrdersAt(nil, armTestClock(t, at))
 	rows, err := st.ArmedOrders().ListNonTerminal(at.id)
 	if err != nil || len(rows) != 0 {
 		t.Fatalf("dormant must cancel ALL arms (rows=%d err=%v)", len(rows), err)

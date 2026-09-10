@@ -51,7 +51,7 @@ func TestArmedOrderUpsertAndGateRR(t *testing.T) {
 	}
 	installActivePlanProvider(at, st)
 
-	at.maybeManageArmedOrders(nil)
+	at.maybeManageArmedOrdersAt(nil, armTestClock(t, at))
 
 	rows, err := st.ArmedOrders().ListNonTerminal(at.id)
 	if err != nil || len(rows) != 1 {
@@ -127,7 +127,7 @@ func TestArmedCancelOnDormant(t *testing.T) {
 		t.Fatal(err)
 	}
 	installActivePlanProvider(at, st)
-	at.maybeManageArmedOrders(nil)
+	at.maybeManageArmedOrdersAt(nil, armTestClock(t, at))
 	rows, err := st.ArmedOrders().ListNonTerminal(at.id)
 	if err != nil || len(rows) != 0 {
 		t.Fatalf("non-terminal rows = %d err=%v — dormant must cancel ALL arms", len(rows), err)
@@ -141,7 +141,7 @@ func TestArmedCancelOnNoActivePlan(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = now
-	at.maybeManageArmedOrders(nil)
+	at.maybeManageArmedOrdersAt(nil, armTestClock(t, at))
 	if rows, err := st.ArmedOrders().ListNonTerminal(at.id); err != nil || len(rows) != 0 {
 		t.Fatalf("no active plan must cancel arms (rows=%d err=%v)", len(rows), err)
 	}

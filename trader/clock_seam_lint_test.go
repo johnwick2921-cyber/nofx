@@ -152,3 +152,72 @@ func (at *AutoTrader) somethingTimedAt(now time.Time) bool {
 		t.Fatalf("detector rejected a correct seam: %v", st)
 	}
 }
+
+// THE THIRD HALF OF THE SEAM: THE TESTS MUST USE IT.
+//
+// Added 2026-09-10 after dev's Go suite went red for 90 minutes a day with no
+// commit involved. The two assertions above were both GREEN throughout: the …At
+// variant existed and the entry point was a clean one-line delegate. A28 was
+// perfectly honoured — by production. Eight tests then called the WALL-CLOCK
+// entry point and handed a correctly-seamed rule the real hour of the day, and
+// the suite failed inside the lunch no-trade band and passed outside it.
+//
+// A seam only the production path honours is half a seam.
+//
+// SCOPED, DELIBERATELY, to the entry point that caused the outage. The general
+// form — "no test calls any seamed entry point" — was written first and finds 35
+// sites, of which most are FALSE POSITIVES: clock-seams.list contains entries
+// named `Save` and `observe`, and a textual `.Save(` cannot tell `at.Save(` from
+// `db.Save(` without resolving the receiver's type. A lint that cries wolf 20
+// times gets deleted, and then the 15 real ones go unwatched too.
+//
+// So this asserts the one rule with a KNOWN, LIVE consequence, and the general
+// case is recorded as owed rather than shipped noisy:
+//
+//	OWED: a receiver-aware version of this check (go/ast, not strings.Contains)
+//	covering every entry in clock-seams.list. Until it exists, a time-banded
+//	rule added to any OTHER seamed entry point can reintroduce exactly this
+//	outage and nothing will fail.
+func TestArmEntryPointIsNotCalledFromTests(t *testing.T) {
+	files, err := filepath.Glob("*_test.go")
+	if err != nil || len(files) == 0 {
+		t.Fatalf("no _test.go files found to scan: %v", err)
+	}
+	found := 0
+	for _, f := range files {
+		// THIS FILE CARRIES THE PATTERN AS A STRING LITERAL and would match
+		// itself — the same self-match that makes `pkill -f` kill its own shell.
+		if f == "clock_seam_lint_test.go" {
+			continue
+		}
+		b, err := os.ReadFile(f)
+		if err != nil {
+			t.Fatalf("read %s: %v", f, err)
+		}
+		for i, ln := range strings.Split(string(b), "\n") {
+			code := ln
+			if k := strings.Index(code, "//"); k >= 0 {
+				code = code[:k] // a mention in a comment is not a call
+			}
+			if !strings.Contains(code, ".maybeManageArmedOrders(") {
+				continue
+			}
+			found++
+			t.Errorf(`%s:%d calls the wall-clock entry point maybeManageArmedOrders().
+
+  Use maybeManageArmedOrdersAt(snap, now) with a clock the test controls.
+
+  maybeManageArmedOrders() reads time.Now() and delegates. Calling it from a test
+  hands a correctly-seamed rule the real hour of the day, so the test passes or
+  fails on WHEN it ran. On 2026-09-10 that made dev RED from 12:00 to 13:30 CT
+  daily and green either side, with no commit involved — the arm path refuses
+  inside the lunch no-trade band.
+
+  armTestClock(t, at) in arm_test_clock_test.go returns a moment inside an
+  enabled session and outside every no-trade window.
+
+    %s`, f, i+1, strings.TrimSpace(ln))
+		}
+	}
+	_ = found
+}

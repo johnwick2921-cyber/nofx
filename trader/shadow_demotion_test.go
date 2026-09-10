@@ -138,7 +138,7 @@ func TestShadowDemotionAuthorsInertRow(t *testing.T) {
 	at, st := resetTrader(t, cfg)
 	pid := shadowPlanAt(t, at, st, armedDoc()) // fvg_entry
 
-	at.maybeManageArmedOrders(nil)
+	at.maybeManageArmedOrdersAt(nil, armTestClock(t, at))
 
 	rows, err := st.ArmedOrders().ListForPlan(pid)
 	if err != nil || len(rows) != 1 {
@@ -183,7 +183,7 @@ func TestShadowDemotionE8WritesCounterfactual(t *testing.T) {
 	market.FuturesBarsProvider = func(string, string, int) []market.Kline { return shadowBarsNear(100) }
 	t.Cleanup(func() { market.FuturesBarsProvider = prev })
 
-	at.maybeManageArmedOrders(nil)
+	at.maybeManageArmedOrdersAt(nil, armTestClock(t, at))
 
 	var n int64
 	if err := st.DB().QueryRow("SELECT COUNT(*) FROM ab_confirm_log WHERE condition='fvg_entry' AND is_counterfactual=1").Scan(&n); err != nil || n == 0 {
@@ -206,7 +206,7 @@ func TestShadowDemotionNoWireFrameOnLoopback(t *testing.T) {
 	market.FuturesBarsProvider = func(string, string, int) []market.Kline { return shadowBarsNear(100) }
 	t.Cleanup(func() { market.FuturesBarsProvider = prev })
 
-	at.maybeManageArmedOrders(nil)
+	at.maybeManageArmedOrdersAt(nil, armTestClock(t, at))
 
 	select {
 	case s := <-sigs:
@@ -240,7 +240,7 @@ func TestLiveConditionPlacesOnLoopback(t *testing.T) {
 	market.FuturesBarsProvider = func(string, string, int) []market.Kline { return shadowBarsNear(100) }
 	t.Cleanup(func() { market.FuturesBarsProvider = prev })
 
-	at.maybeManageArmedOrders(nil)
+	at.maybeManageArmedOrdersAt(nil, armTestClock(t, at))
 
 	select {
 	case s := <-sigs:
@@ -271,7 +271,7 @@ func TestShadowedRestingOrderCancelledAtBoot(t *testing.T) {
 		t.Fatal(err)
 	}
 	installActivePlanProvider(at, st)
-	at.maybeManageArmedOrders(nil)
+	at.maybeManageArmedOrdersAt(nil, armTestClock(t, at))
 
 	select {
 	case c := <-cancels:
@@ -300,7 +300,7 @@ func TestConfigFlipToLiveAllowsArming(t *testing.T) {
 		t.Fatal("config live must resolve live")
 	}
 	shadowPlanAt(t, at, st, armedDoc())
-	at.maybeManageArmedOrders(nil)
+	at.maybeManageArmedOrdersAt(nil, armTestClock(t, at))
 	// The live-configured condition must arm normally (state armed, not shadowed).
 	allRows, err2 := st.ArmedOrders().ListNonTerminal(at.id)
 	if err2 != nil || len(allRows) != 1 || allRows[0].State != "armed" {
