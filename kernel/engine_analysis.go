@@ -398,9 +398,18 @@ func GetFullDecisionWithStrategy(ctx *Context, mcpClient mcp.AIClient, engine *S
 			// same HTF swing/zone pass (1h+4h default; the planner uses the
 			// owner's configured planner_timeframes set).
 			if market.FuturesBarsProvider != nil {
-				extra = append(extra, DetectHTFLevels(func(tf string, count int) []market.Kline {
+				// ONE detection pass, both of its outputs. Calling it twice —
+				// once for the levels and once for the report — would be two
+				// reads that can disagree, which is the defect this wave's own
+				// observability exists to prevent (checklist 107: a second
+				// source beside the first diverges).
+				htf, rep := detectHTFLevels(func(tf string, count int) []market.Kline {
 					return market.FuturesBarsProvider(activeSymbol, tf, count)
-				}, DefaultHTFDetectionTFs, activeSymbol, snapshotNow)...)
+				}, DefaultHTFDetectionTFs, activeSymbol, snapshotNow)
+				extra = append(extra, htf...)
+				// A9 — every level emitted names its timeframe, and every
+				// timeframe that emitted nothing says why.
+				logger.Infof("%s", TFReadLine(rep))
 			}
 			// H7 — the registry is the admin registry the DECIDING trader
 			// resolves (per-trader provider; never another trader's).

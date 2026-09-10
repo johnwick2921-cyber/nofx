@@ -390,17 +390,10 @@ func detectHTFLevels(fetch func(tf string, count int) []market.Kline, timeframes
 		rep.Resolved[tf] = fmt.Sprintf("bars=%d atr=%.2f tol=%.2f span=%s", len(cb), atr, tol, htfWindowSpan(cb))
 		lookback := len(cb)
 		before := len(out)
-		for _, l := range EqualHighsLows(cb, tol, now) {
-			out = append(out, tagHTFLevel(l, tf, lookback))
-		}
-		for _, l := range SupplyDemandZones(cb, atr, now) {
-			out = append(out, tagHTFLevel(l, tf, lookback))
-		}
-		for _, l := range FairValueGaps(cb, atr, now) {
-			out = append(out, tagHTFLevel(l, tf, lookback))
-		}
-		for _, l := range OrderBlocks(cb, atr, now) {
-			out = append(out, tagHTFLevel(l, tf, lookback))
+		for _, d := range htfDetectors {
+			for _, l := range d.Run(cb, atr, tol, now) {
+				out = append(out, tagHTFLevel(l, tf, lookback))
+			}
 		}
 		// A computed zero, recorded as one — distinct from Skipped above.
 		rep.Counts[tf] = len(out) - before
@@ -429,6 +422,100 @@ func htfWindowSpan(cb []market.Kline) string {
 	first := time.UnixMilli(cb[0].OpenTime).In(chicago())
 	last := time.UnixMilli(cb[len(cb)-1].OpenTime).In(chicago())
 	return fmt.Sprintf("%s→%s", first.Format("2006-01-02"), last.Format("2006-01-02"))
+}
+
+// TFBootLine is W-TF's boot posture. Every field is READ from its resolver; the
+// per-read counts are n/a because no detection has run yet, exactly as W3's map
+// line does (A11: a field the process cannot know yet prints n/a, never a
+// plausible zero).
+//
+// `planner tfs` is LABELLED per-trader rather than printed, because this process
+// serves several traders and each reads its own planner_timeframes — the same
+// reason the map line labels `cap` per-trader instead of naming one value.
+func TFBootLine(defaultSet []string, detectors int) string {
+	return fmt.Sprintf(
+		"🗺 tf: detection-set=[%s] · detectors=%d (%s) · detectors×tfs=%d · "+
+			"planner tfs=per-trader (planner_timeframes; D→1d) · "+
+			"levels=n/a (by tf: n/a) · cross-tf merged=n/a · "+
+			"htf-weight=%.1f[I] · daily/weekly tier=4h[I]",
+		strings.Join(defaultSet, ","), detectors, strings.Join(HTFDetectorNames(), ","),
+		detectors*len(defaultSet), HTFScoreMultiplier)
+}
+
+// TFReadLine is the per-read counterpart: the same fields with the numbers the
+// detection pass actually produced. Skipped timeframes are printed with their
+// REASON, so "1w found nothing" and "1w was never read" stay distinguishable on
+// the one line an operator looks at.
+func TFReadLine(rep *HTFDetectionReport) string {
+	if rep == nil {
+		return "🗺 tf: no detection report"
+	}
+	total := 0
+	var byTF []string
+	for _, tf := range rep.Requested {
+		tf = canonicalDetectionTF(tf)
+		if n, ok := rep.Counts[tf]; ok {
+			total += n
+			byTF = append(byTF, fmt.Sprintf("%s=%d", tf, n))
+		}
+	}
+	var skipped []string
+	for _, tf := range rep.Requested {
+		tf = canonicalDetectionTF(tf)
+		if why, ok := rep.Skipped[tf]; ok {
+			skipped = append(skipped, fmt.Sprintf("%s(%s)", tf, why))
+		}
+	}
+	skip := "none"
+	if len(skipped) > 0 {
+		skip = strings.Join(skipped, " ")
+	}
+	list := "none"
+	if len(byTF) > 0 {
+		list = strings.Join(byTF, " ")
+	}
+	return fmt.Sprintf("🗺 tf read: levels=%d (by tf: %s) · skipped=%s · htf-weight=%.1f[I]",
+		total, list, skip, HTFScoreMultiplier)
+}
+
+// htfDetectors is the per-timeframe detector set, as a table rather than four
+// inline loops, so "how many detectors run per timeframe" is a value the boot
+// line can READ instead of a number someone types next to it (A11/A24). The
+// DEFINITIONS are untouched — this wave changes which timeframes they run on,
+// never what any of them looks for (A31).
+//
+// Every detector receives the SAME family definition on every timeframe (round
+// 12, 12e: hold the family definition constant initially). What differs per
+// timeframe is only the volatility-derived tolerance, resolved from that
+// timeframe's own ATR and recorded in the report.
+var htfDetectors = []struct {
+	Name string
+	Run  func(cb []market.Kline, atr, tol float64, now time.Time) []DetectedLevel
+}{
+	{"equal-highs-lows", func(cb []market.Kline, _, tol float64, now time.Time) []DetectedLevel {
+		return EqualHighsLows(cb, tol, now)
+	}},
+	{"supply-demand", func(cb []market.Kline, atr, _ float64, now time.Time) []DetectedLevel {
+		return SupplyDemandZones(cb, atr, now)
+	}},
+	{"fair-value-gaps", func(cb []market.Kline, atr, _ float64, now time.Time) []DetectedLevel {
+		return FairValueGaps(cb, atr, now)
+	}},
+	{"order-blocks", func(cb []market.Kline, atr, _ float64, now time.Time) []DetectedLevel {
+		return OrderBlocks(cb, atr, now)
+	}},
+}
+
+// HTFDetectorCount is what the boot line reads.
+func HTFDetectorCount() int { return len(htfDetectors) }
+
+// HTFDetectorNames lists the detector families, for the Guide and the report.
+func HTFDetectorNames() []string {
+	out := make([]string, 0, len(htfDetectors))
+	for _, d := range htfDetectors {
+		out = append(out, d.Name)
+	}
+	return out
 }
 
 // canonicalDetectionTF resolves a CONFIGURED timeframe string to the one the

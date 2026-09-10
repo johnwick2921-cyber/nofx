@@ -158,6 +158,14 @@ var zoneEvidenceByKind = map[LevelKind]map[string]float64{
 // zoneTFMult is the "HTF alignment" multiplier per detection timeframe tier.
 var zoneTFMult = map[string]float64{"1m": 1.0, "15m": 1.1, "1h": 1.2, "4h": 1.3}
 
+// HTFScoreMultiplier is the higher-timeframe weight applied to a level whose
+// DetectedLevel.HTF is set. NAMED, not changed: the boot line and the Guide must
+// print the number the scorer actually uses rather than one typed beside it
+// (A11). Round 12 (12c) finds this multiplier UNTESTED — it has no established
+// foundation and is carried as [I] until E4 measures it. W-TF does not touch its
+// value.
+const HTFScoreMultiplier = 1.2
+
 // zoneReversalBonus rewards RBD/DBR (reversal) over RBR/DBD (continuation).
 const zoneReversalBonus = 1.1
 
@@ -504,7 +512,7 @@ func scoreLevelsPool(levels []DetectedLevel, price, dATR float64, freshness func
 		}
 		htf := 1.0
 		if l.HTF {
-			htf = 1.2
+			htf = HTFScoreMultiplier
 		}
 		var score float64
 		if isZoneKind(l.Kind) {
