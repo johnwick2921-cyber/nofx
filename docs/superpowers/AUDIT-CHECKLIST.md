@@ -3542,3 +3542,74 @@ it is handed.
 **Corollary.** Found because the early read reached a `kill`. It had presumably
 been early many times before that without consequence, which is the ordinary
 career of this bug: invisible until it feeds something that bites.
+
+## CLASS 107 — CENTRALIZING A HAND-TYPED LIST IS A BEHAVIOUR CHANGE WHEREVER THE LISTS DIFFERED (born 2026-09-10, boot-sweep cancel_pending)
+
+**Name.** Several sites hand-type the same list and the lists disagree. You fix
+that — correctly — by deriving one predicate from a single source and pointing
+every site at it. **The differences you just erased were not all typos.** Some
+were deliberate exceptions that nobody wrote down, and each one becomes a defect
+the moment the sites agree.
+
+**This is the INVERSE of class 99**, and must be read with it. 99 is *two
+hand-typed lists diverge and one silently widens a gate*. 107 is *the remedy for
+99, applied without asking why each site's list is the shape it is.* Fixing 99
+without 107 trades a divergence bug for a uniformity bug — and the uniformity bug
+is harder to see, because the code now looks principled.
+
+**Root cause.** `store/boot_sweep.go:47` hand-typed
+`state IN ('armed','place_pending','working')`; `store/armed_orders.go:242`
+hand-typed the same four states **with** `cancel_pending`. Five such lists
+existed across two files, with three distinct memberships. The one-predicate wave
+exported `NonTerminalArmStateSQL()` from a single `armStates` map and pointed the
+sweep at it.
+
+But the sweep's omission was **load-bearing**. Its terminal write is
+`SetState(id, "cancelled", …)` — a raw update — while `ConfirmCancel` is
+documented as *the only way a row becomes 'cancelled', and it requires the id of
+the snapshot whose book no longer listed the order.* `cancel_pending` means a
+cancel was sent and NOT confirmed: **the order may still be live at the broker.**
+Sweeping it marks the row cancelled with no evidence — the precise blindness a
+previous wave had closed. A/B on one seeded row: dev `swept=0`, row stays
+`cancel_pending`; branch `swept=1`, row `cancelled`, `settled_snapshot_id=0`.
+
+**Why nobody caught it.** Three reinforcing reasons, all of which generalise:
+
+1. **The doc comment already disagreed with the code.** `ListPreBoot`'s comment
+   said it "returns ONE trader's non-terminal rows" while the SQL listed three of
+   the four non-terminal states. Anyone checking intent against implementation
+   read that as the bug — and "fixed" it.
+2. **The suite stayed green.** Every existing test seeded `working` rows. No test
+   named `cancel_pending` and the boot sweep together, because the exclusion had
+   never been written down as a behaviour.
+3. **The path is barely trodden.** In all history 5 rows ever requested a cancel,
+   max attempts 1 against a cap of 5, and `ConfirmCancel` had never once fired.
+   A regression on a cold path ships green and stays quiet.
+
+**Probe, five questions:**
+1. Before unifying, DIFF THE MEMBERSHIPS and list every element that appears in
+   some sites and not others. That set is the entire risk surface, and it takes
+   one command.
+2. For each difference, ask "what does this site DO with the rows it selects?" A
+   site that only READS can usually widen safely. A site that WRITES, cancels,
+   deletes, or signals cannot.
+3. Is the narrower list the one attached to the destructive action? Then assume
+   deliberate until proven otherwise — A24's never-list, applied to refactoring.
+4. Does a comment near the site disagree with the code? Do not assume the code is
+   wrong. Find out which one is load-bearing BEFORE aligning them; here the
+   comment was wrong and the SQL was right.
+5. After unifying, does any test fail? If none does, that is not reassurance —
+   ask whether any test ever exercised the differing elements at all.
+
+**Law:** **a shared predicate needs a NAME PER INTENT, not one name for all
+callers.** Where two sites legitimately select different sets, derive BOTH from
+the single source and give each its own named function whose comment states why
+it differs — `SweepableArmStateSQL()` (non-terminal MINUS `cancel_pending`,
+"because the sweep's write bypasses ConfirmCancel") alongside
+`NonTerminalArmStateSQL()`. One source, several named intents. The class-99
+remedy is the single SOURCE, never the single PREDICATE.
+
+**Corollary.** Found only because the dispatch ordered *establish whether the
+omission is deliberate BEFORE changing anything, and quote the code path*. Asking
+"is this a bug or a decision?" first is what separates 99 from 107; the
+refactor had already been written, tested and pushed on the other reading.
