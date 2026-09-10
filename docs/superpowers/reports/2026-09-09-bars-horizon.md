@@ -1,6 +1,6 @@
 # BARS HORIZON — a count is not a horizon
 
-**Branch** `fix/bars-horizon` · **base** `origin/dev` @ `27e062ea` (rebased twice; see SPEC FRESHNESS)
+**Branch** `fix/bars-horizon` · **base** `origin/dev` @ **`6a8e14c9`** (rebased THREE times — `05125bd6` → `8dfe6bc1` → `27e062ea` → `6a8e14c9`; see SPEC FRESHNESS). `git merge-base HEAD origin/dev` = `6a8e14c9` = the dev tip, so the branch is a strict fast-forward ahead of dev and is **not merged**.
 **Session** bars-horizon-2bdef526/nofx-07[aa8e26] · **worktree** `/home/hoang/nofx-barshorizon`
 **Status** pushed, green, **NOT deployed and NOT merged** (A3).
 **Rounds** built → 3 reviewers → **REPAIRED (this round, 2026-09-09 evening)**.
@@ -110,7 +110,13 @@ docs/superpowers/SYSTEM-MAP.md  27e062ea 2026-09-09 14:55:48 -0500  merge dev (W
 docs/superpowers/AUDIT-CHECKLIST.md 27e062ea 2026-09-09 14:55:48 -0500  (same commit)
 ```
 
-**Dev moved under this wave twice and it was rebased both times.** The first
+**Dev moved under this wave THREE times and it was rebased each time.** The
+third move landed during the review round: `6a8e14c9`, a deploy boot marker
+setting `RELEASE=27e062ea` + `GUIDE_BUILT_REV=27e062ea` from the main tree. That
+marker is exactly what makes the guide's drift banner silent for this branch
+(§SCOPE), which would have been invisible without re-reading the tip.
+
+**Dev moved under this wave twice before that and it was rebased both times.** The first
 base (`05125bd6`, a `fix/brand-visible` merge) was replaced by `8dfe6bc1`; then
 `SYSTEM-MAP.md` and `AUDIT-CHECKLIST.md` — two files this wave edits — moved at
 14:55:48 in `27e062ea`, **after** that base, so the branch was rebased again
@@ -1025,7 +1031,7 @@ Six commits. Each is revertible on its own **except** that D3 uses
 | D3 `ring rehydrates from the store` | the boot rehydrate and the `📈 regime input window` line; the ring returns to the AddOn seed **and the RV baseline returns to ~7 days via the fallback arm** | pre-wave ring behaviour exactly |
 | D2 `store is the horizon` | the 1m store splice; the daily table returns to 2–3 rows; `nw`/`WeeklyShadowRefs` return to 0/1 | pre-wave asks (but the 3 unreachable asks come back) |
 | D1 `HELD-vs-REQUESTED` | all candle disclosure; headings return to baked `(last 12)` literals | pre-wave prompt text |
-| `4b2edea3` (bridge observability) | the 🕳 warn + counters | pre-wave silence at the choke point |
+| `a2d85bad` (bridge observability; was `4b2edea3` before three rebases) | the 🕳 warn + counters | pre-wave silence at the choke point |
 
 A revert of any of these is **safe at any time** — none of them gates, sizes,
 routes or blocks anything, so a revert can only remove observability and depth,
