@@ -153,10 +153,50 @@ _spawn_keeper() {
   # (empty) arguments, and `set -u` aborted the substitution: every acquire printed
   # "line 143: $5: unbound variable" to stderr and the /proc read never once ran.
   # The fallback below silently covered it, which is why 75 green tests missed it.
-  pgid="$(sed -e 's/^.*) //' "/proc/$kpid/stat" 2>/dev/null | awk '{print $3}')"
+  #
+  # AND THE READ MUST WAIT FOR setsid, OR IT RECORDS **OUR OWN** GROUP.
+  # Job control is off in a non-interactive shell, so a background job does NOT
+  # get its own process group — it starts in THIS SHELL'S. `setsid` moves it only
+  # once it execs. `kpid=$!` returns before that, so a /proc read that wins the
+  # race returns the PARENT's pgrp — and _stop_keeper would then send SIGTERM to
+  # the process group of whoever invoked this script. That is not theoretical:
+  # it killed the test run that found it, exit 143.
+  #
+  # So the value is accepted ONLY once it is its own group LEADER (pgrp == pid),
+  # which is true exactly when setsid has completed and is impossible for a
+  # value borrowed from our parent. If that never happens the keeper is still in
+  # our group and must be stopped as a lone PID, never as a group; we record it
+  # and let _stop_keeper make that call from the same evidence.
+  pgid=""
+  _kw=0
+  while [ "$_kw" -lt 50 ]; do
+    _cand="$(sed -e 's/^.*) //' "/proc/$kpid/stat" 2>/dev/null | awk '{print $3}')"
+    if [ -n "$_cand" ] && [ "$_cand" = "$kpid" ]; then pgid="$_cand"; break; fi
+    [ -d "/proc/$kpid" ] || break
+    sleep 0.1; _kw=$((_kw+1))
+  done
   [ -n "$pgid" ] || pgid="$kpid"
   echo "$pgid" > "$LOCK_DIR/keeper.pid"
   disown 2>/dev/null || true
+}
+
+# _keeper_owns — is $1 a live process belonging to THIS lock's keeper?
+# Identification is POSITIVE: the cmdline must name this lock directory. A pid
+# that is gone, recycled, or someone else's fails, and its caller signals nothing.
+_keeper_owns() {
+  local p="$1"
+  [ -n "$p" ] && [ -r "/proc/$p/cmdline" ] || return 1
+  tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null | grep -qF -- "$LOCK_DIR"
+}
+
+# _is_group_leader — does $1 name a process GROUP, or merely a process?
+# pgrp == pid is true only for a leader. Every other number, signalled with
+# `kill -- -N`, hits a group we did not create.
+_is_group_leader() {
+  local p="$1" pg
+  [ -r "/proc/$p/stat" ] || return 1
+  pg="$(sed -e 's/^.*) //' "/proc/$p/stat" 2>/dev/null | awk '{print $3}')"
+  [ -n "$pg" ] && [ "$pg" = "$p" ]
 }
 
 # _stop_keeper ends the process GROUP this script started, and WAITS for it.
@@ -185,14 +225,23 @@ _stop_keeper() {
   pg="$(cat "$LOCK_DIR/keeper.pid" 2>/dev/null || true)"
   rm -f "$LOCK_DIR/keeper.pid" "$LOCK_DIR/keeper.ended" 2>/dev/null
   [ -n "$pg" ] || return 0
-  kill -TERM -- "-$pg" 2>/dev/null
+  # A24 — UNKNOWN TAKES NO DESTRUCTIVE BRANCH. Everything below signals; nothing
+  # below signals a target it has not positively identified as OUR keeper.
+  case "$pg" in ''|*[!0-9]*) return 0 ;; esac
+  _keeper_owns "$pg" || return 0
+  # Group-kill ONLY a genuine group leader. A number that is not one names some
+  # OTHER group — possibly this shell's — and `kill -- -N` would signal it whole.
+  if _is_group_leader "$pg"; then _sig() { kill "-$1" -- "-$pg" 2>/dev/null; }
+  else                           _sig() { kill "-$1" "$pg" 2>/dev/null; }; fi
+  _sig TERM
   # BOUNDED WAIT, ~5s. Never rm under a live writer.
   while [ "$i" -lt 50 ]; do
     [ -d "/proc/$pg" ] || break
     sleep 0.1; i=$((i+1))
   done
   # Whatever is left in the group cannot execute another statement after this.
-  kill -KILL -- "-$pg" 2>/dev/null
+  [ -d "/proc/$pg" ] || return 0
+  _sig KILL
   return 0
 }
 

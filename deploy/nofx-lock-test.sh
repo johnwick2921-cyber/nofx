@@ -377,6 +377,50 @@ check "pgrp survives a comm with spaces and parens" "$got" "9999"
 naive="$(printf '%s\n' "$synth" | awk '{print $5}')"
 check "and the naive whole-line split is the wrong number"  "$naive" "S"
 
+echo "== release NEVER signals a group it did not create =="
+#
+# THIS PIN EXISTS BECAUSE THE BUG KILLED THE RUN THAT FOUND IT (exit 143).
+#
+# Job control is off in a non-interactive shell, so `setsid ... &` starts in THIS
+# SHELL'S process group and moves to its own only once setsid execs. `kpid=$!`
+# returns before that. A /proc read that wins the race records the PARENT's pgrp
+# in keeper.pid — and _stop_keeper's `kill -TERM -- "-$pg"` then SIGTERMs the
+# process group of whoever invoked the script, test runner included.
+#
+# The old broken awk never read /proc at all, so it always used the $kpid
+# fallback, which after setsid IS its own leader. Making the read work turned
+# dead code into a live shell-killer. Hence: identify positively, or signal
+# nothing.
+KWN="$(mktemp -d)"
+N() { NOFX_LOCK_DIR="$KWN/lock.d" NOFX_LOCK_STALE_SECONDS=600 NOFX_LOCK_BEAT_SECONDS=30 bash "$LOCK_SH" "$@" 2>&1; }
+N acquire sess-N 'a holder whose keeper.pid lies' 60 >/dev/null
+# An innocent bystander in its OWN group, standing in for the invoking shell.
+setsid bash -c 'sleep 30' >/dev/null 2>&1 &
+victim=$!
+sleep 0.3
+vg="$(sed -e 's/^.*) //' "/proc/$victim/stat" 2>/dev/null | awk '{print $3}')"
+# Point the stop handle at the bystander, exactly as the race did.
+printf '%s' "$vg" > "$KWN/lock.d/keeper.pid"
+N release sess-N >/dev/null 2>&1
+sleep 0.5
+if kill -0 "$victim" 2>/dev/null; then
+  ok "a keeper.pid naming someone else's group is not signalled"
+else
+  bad "a keeper.pid naming someone else's group is not signalled" "release killed pid $victim (group $vg)"
+fi
+kill -KILL "$victim" 2>/dev/null
+rm -rf "$KWN"
+
+echo "== a keeper.pid that is not a number is inert =="
+KWJ="$(mktemp -d)"
+J() { NOFX_LOCK_DIR="$KWJ/lock.d" NOFX_LOCK_STALE_SECONDS=600 NOFX_LOCK_BEAT_SECONDS=30 bash "$LOCK_SH" "$@" 2>&1; }
+J acquire sess-J 'a holder with a corrupt stop handle' 60 >/dev/null
+printf 'not-a-pid' > "$KWJ/lock.d/keeper.pid"
+out="$(J release sess-J 2>&1)"; rc=$?
+check "release of a lock with a corrupt keeper.pid still succeeds" "$rc" "0"
+hasi  "and reports the release"                                    "$out" "released"
+rm -rf "$KWJ"
+
 echo
 printf 'pass=%d fail=%d\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
