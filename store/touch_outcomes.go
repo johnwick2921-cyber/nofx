@@ -68,7 +68,42 @@ type TouchOutcomeRow struct {
 	// AutoMigrate ran, which is the exact fabrication this column exists to
 	// prevent. An empty validity means NOT CERTIFIED and is excluded from
 	// every rate until the migration classifies it.
-	Validity  string    `gorm:"index"`
+	Validity string `gorm:"index"`
+
+	// ── W1 EPISODE CONTRACT ─────────────────────────────────────────────────
+	// All POINTERS on purpose: NULL means NOT CAPTURED and must never render as
+	// 0 or "" (A24). The precedent is Validity above, which deliberately takes
+	// no SQL default so a migration cannot stamp uncertified rows as certified.
+
+	// Scenario is the touch → scenario link, resolved at SEAT/AUTHORING time.
+	// NULL where it could not be resolved, with ScenarioLinkNote saying why —
+	// never recovered later by matching level_price against the trigger prices
+	// inside plans.doc, because a price collision would silently attribute a
+	// touch to the wrong setup.
+	Scenario         *string `gorm:"index"`
+	ScenarioLinkNote string
+
+	// OpportunityOutcome is the rung this chance closed on; always set at close
+	// (E6), NULL only while the episode is still open.
+	OpportunityOutcome *string `gorm:"index"`
+	CloseCause         *string
+
+	// AttainableEntry is the price actually available — for a confirmed
+	// scenario the first tradeable price AFTER confirmation; for a resting arm
+	// its entry, with the assumption named in AttainableEntryBasis. NULL for a
+	// scenario that never armed: a touch is not a fill.
+	AttainableEntry      *float64
+	AttainableEntryBasis *string
+
+	// The terms AT THE MOMENT they became executable. Captured FORWARD, never
+	// reconstructed: armed_orders is a MUTATED STATE ROW whose entry/stop/target
+	// are updated in place, so a historical row's terms are unrecoverable and
+	// the backfill marks them unrecomputable:mutated_in_place.
+	TermsCapturedAtMs *int64
+	TermsStop         *float64
+	TermsTarget       *float64
+	TermsR            *float64
+
 	CreatedAt time.Time `gorm:"index"`
 }
 
