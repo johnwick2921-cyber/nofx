@@ -25,3 +25,7 @@ The sole updated brand baseline is `deploy/nofx-lock.sh` at **97a6525cb6d10d6c88
 [A] At 11:38:57 CT, the normal owner-authenticated browser read `/api/cutover-gate` HTTP 200 and all five legs PASS: DB open=0, API positions=0, NT8 count=0, broker working=0 / ledger=0 (snapshot age 16s), no planner read. This is an observation, not a reusable cutover permit; the actual swap requires another fresh read after validation/build/dist.
 
 [A] Main is on dev and the deploy lock is free, but `.CLAUDE.md.swp` belongs to a LIVE nano editor, pid **2203882**. The owner was asked to close it cleanly. No file was removed and no lock was acquired over a dirty main tree. The running service remains pid **1953256**, clean binary rev **8941ec68612cc019edc3002b999272ab2ed20516**. This is the rollback baseline; no boot of arm-state has occurred yet.
+
+### Dev advanced during cutover preparation
+
+Before merging the validation follow-up, dev advanced to `757eb578`, bringing `ace51598` from `fix/lock-defects-release-meta-halfbuilt`. Its report records owner-pinned scope and 101 passing lock checks. I integrated that branch and updated the protected lock baseline to its exact SHA256 `46fcbf76478c43943fb7607bd2929fe3629371ae5b8571ec9da8e1fa6e96c6ab`; this supersedes the keeper-only hash above. I authored neither lock implementation; the deployed tree must carry and be validated with both. Their report is [Three lock defects](2026-09-10-lock-three-defects.md).
