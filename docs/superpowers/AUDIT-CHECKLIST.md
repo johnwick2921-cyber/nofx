@@ -2398,6 +2398,24 @@ curl -s -o /dev/null -w "HTTP %{http_code}  %{size_download} bytes\n" \
    malformed reaper message as REAL-1 — a checker that passes the message which
    caused the incident is decoration; mutation-tested by hollowing the regex).
 
+   **AND A PEER'S STATED PLAN IS NOT PROVENANCE EITHER (added 2026-09-10).**
+   PROVENANCE says provenance comes from the branch, the worktree and the
+   timestamp, never from the author field. The same applies to an INTENTION. A
+   lane wrote "that work is owned by lane <X>" into class 99's Law on the
+   strength of a message in which X had said *"I am folding it into my next
+   wave's Section C."* X never built it; by then it was a day old on
+   `fix/arm-state-predicate`, claimed by a different lane — and one
+   `git ls-remote --heads origin | grep arm` would have said so.
+
+   Two reasons this is worse than an ordinary credit error. First, an
+   **attribution is a POINTER**: it tells the next reader where to go and whom to
+   ask, so a wrong one costs everybody who follows it, not just the person
+   miscredited. Second, a plan is the one input that looks authoritative and is
+   guaranteed stale — the lane that stated it may have been reassigned, ended, or
+   beaten to it, which is exactly what happened here. **Before naming an owner in
+   a durable document, resolve it against `git ls-remote --heads origin` and the
+   claim commit, not against what someone told you they were going to do.**
+
    **QUOTE THE BRANCH, NEVER THE CLAIM SHA** (owner ruling 2026-09-04). A claim
    commit does NOT survive a routine `git pull --rebase origin dev` — the rebase
    replays it onto the new base and it comes back with a different sha, so the
