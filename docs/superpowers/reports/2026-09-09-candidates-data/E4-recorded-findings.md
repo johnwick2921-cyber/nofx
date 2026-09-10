@@ -62,3 +62,35 @@ Closing F1 properly requires deciding what ONE zone width means, which changes s
 W3 merges for the card, the model's table, and the entry shortlist it builds — so the owner and the
 model both SEE one candidate with three names — while the scored `conf` term is left exactly as it
 is and the scoring golden stays byte-identical (E7).
+
+---
+
+## E4-3 · The seat race: daily levels detect, sit in band, and lose every seat (recorded 2026-09-10, W-TF + fix/collapse-keeps-names)
+
+**Recorded, not fixed** — owner ruling 2026-09-10: score and seat-race outcomes are E4's to measure, never a wave's to tune.
+
+**The funnel, measured on live bars at 29143.5 with the ±364pt band, running rev `770e2297`:**
+
+| stage | 1d | 1w |
+|---|---|---|
+| detected (`DetectHTFLevels`, 500-bar window) | 64 | 24 |
+| in band ±364 | 6 | 0 |
+| after `collapseLevelClusters` (3.00pt) | 5 | 0 |
+| **seated (cap 12)** | **0** | **0** |
+
+Every one of the 12 seats went to 1h (9) or 4h (3). **Best in-band daily score 0.862 · lowest seated score 1.260.** Daily levels sit ~30% below the seat floor.
+
+**The two OB rows, same kind, near-same distance:**
+
+```
+OB(bull)·1h  @ 29144.50   1.0 pt from price   score 1.260   grade C   tier 1h
+OB(bull)·1d  @ 29126.25  17.2 pt from price   score 0.786   grade C   tier 4h   ← 38% lower
+```
+
+The daily OB is classified into the **4h tier** (multiplier 1.3 vs 1h's 1.2; evidence 0.72 vs 0.70) — a *higher* tier than the hourly — and still scores 38% lower. The tier ruling is doing what it was asked to; something else is pulling daily zones down.
+
+**Suspect, UNCONFIRMED: `zoneSizeMult`.** The ladder (`levels_score.go`, ≤0.3×ATR ×1.25 … >2.5×ATR ×0.50) prices a zone's width against one ATR, and a daily order block is structurally wider than an hourly one — so a daily zone may be paying the ×0.50 penalty for being exactly what a daily zone is. This was not confirmed in the probe and is named here as the first thing E4 should check, not as a finding.
+
+**What this means for the map.** The daily family is now detected and classified, and the owner will see it on the map **only when a daily level outscores an hourly one at the seat** — which, on this evidence, is rare at the current ladder. That is a measurement E4 owns. Nothing in W-TF or this fix moved a weight, multiplier, ladder or cap.
+
+**Probe caveat.** The scorer was called directly on raw detections, bypassing `dedupeSameKind`; doubled rows in the raw probe output are an artifact of that, not a live defect.

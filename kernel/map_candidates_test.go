@@ -1,6 +1,7 @@
 package kernel
 
 import (
+	"reflect"
 	"testing"
 )
 
@@ -88,7 +89,10 @@ func TestE7_BuildMapCandidatesDoesNotMutateItsInput(t *testing.T) {
 	_ = BuildMapCandidates(in, 29650.00, 20.0, MapCandidateOpts{})
 
 	for i := range in {
-		if in[i] != before[i] {
+		// DeepEqual, not !=: DetectedLevel now carries a slice (CollapsedNames,
+		// fix/collapse-keeps-names) and a struct with a slice is not comparable
+		// with ==. The assertion's meaning is unchanged — the input is untouched.
+		if !reflect.DeepEqual(in[i], before[i]) {
 			t.Fatalf("BuildMapCandidates mutated its input at %d:\n got  %+v\n want %+v", i, in[i], before[i])
 		}
 	}

@@ -157,6 +157,9 @@ func BuildMapCandidates(scored []ScoredLevel, price, atr5m float64, opts MapCand
 		for i := range out {
 			if math.Abs(out[i].Price-s.Price) <= width {
 				out[i].Names = appendDistinct(out[i].Names, s.Label)
+				for _, n := range s.CollapsedNames {
+					out[i].Names = appendDistinct(out[i].Names, n)
+				}
 				out[i].Kinds = append(out[i].Kinds, s.Kind)
 				out[i].MergedCount++
 				merged = true
@@ -168,7 +171,7 @@ func BuildMapCandidates(scored []ScoredLevel, price, atr5m float64, opts MapCand
 		}
 		c := MapCandidate{
 			Price:        s.Price,
-			Names:        appendDistinct(nil, s.Label),
+			Names:        namesWithCollapsed(s),
 			Kinds:        []LevelKind{s.Kind},
 			Grade:        s.Grade,
 			Score:        s.Score,
@@ -468,6 +471,17 @@ func mapRoleForNonEntry(c *MapCandidate, price float64) MapRole {
 }
 
 // appendDistinct appends a label once, preserving first-seen order.
+// namesWithCollapsed seeds a candidate's name list from the level's own label
+// plus every label collapseLevelClusters folded into it from another timeframe
+// (fix/collapse-keeps-names). One credit, one seat, several names.
+func namesWithCollapsed(s ScoredLevel) []string {
+	names := appendDistinct(nil, s.Label)
+	for _, n := range s.CollapsedNames {
+		names = appendDistinct(names, n)
+	}
+	return names
+}
+
 func appendDistinct(dst []string, label string) []string {
 	l := strings.TrimSpace(label)
 	if l == "" {

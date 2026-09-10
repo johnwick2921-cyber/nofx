@@ -788,6 +788,19 @@ func collapseLevelClusters(scored []ScoredLevel, tol float64) []ScoredLevel {
 					kept[i].Research.Overrides = append(kept[i].Research.Overrides, fmt.Sprintf("cluster confluence display %d -> %d; score unchanged", kept[i].Confluence, kept[i].Confluence+cand.Confluence+1))
 				}
 				kept[i].Confluence += cand.Confluence + 1
+				// fix/collapse-keeps-names (2026-09-10). A level collapsed from a
+				// DIFFERENT timeframe is a distinct reference the owner reads
+				// differently, not a duplicate — W-TF's D3 promised its name on the
+				// map. Carried on a json:"-" field, so the survivor set, its score
+				// and the Stage A golden are untouched (E7). Same-timeframe
+				// collapses are genuine duplicates and carry nothing. Transitive:
+				// whatever the loser had already absorbed rides along.
+				if cand.TF != kept[i].TF {
+					kept[i].CollapsedNames = appendDistinct(kept[i].CollapsedNames, cand.Label)
+				}
+				for _, n := range cand.CollapsedNames {
+					kept[i].CollapsedNames = appendDistinct(kept[i].CollapsedNames, n)
+				}
 				merged = true
 				break
 			}

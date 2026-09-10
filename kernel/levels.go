@@ -95,6 +95,15 @@ type DetectedLevel struct {
 	// the same lookback in bars and nine years apart in time. 0 = not recorded
 	// (every pre-W-TF level), never "zero bars".
 	LookbackBars int `json:"lookback_bars,omitempty"`
+	// CollapsedNames are the labels of levels that collapseLevelClusters folded
+	// INTO this one (a stronger level within the 3.00pt cluster tolerance
+	// absorbs a weaker one, keeping only a confluence increment). Before this
+	// field the absorbed level's name was simply gone, so a daily reference
+	// sitting on a 4h one reached the map as one name — the D3 case W-TF
+	// promised as "one candidate, ALL names". Carried ONLY to the map's name
+	// line; never a second credit, never a second seat. json:"-" so the Stage A
+	// golden cannot move (E7): this is a render-time carrier, not a score input.
+	CollapsedNames []string `json:"-"`
 }
 
 // lineLevel builds a single-price DetectedLevel (Lo==Hi==price).
