@@ -1,4 +1,4 @@
-import type { ScenarioDeath } from '../../lib/api/plan'
+import type { ScenarioDeath, ScenarioLevelIdentity } from '../../lib/api/plan'
 // P4.3 — scenario rows: StatusDot · id · quality · name/grammar + the target
 // (uses) chain. Status is READ-ONLY from the backend (single-authority rule) —
 // absent → 'armed' (plan-born). The UI never computes trading state.
@@ -322,6 +322,7 @@ export function ScenarioList({
   scenarios,
   statusMap,
   deaths,
+  identities,
   meta,
   fvgStates,
   armedStates,
@@ -331,6 +332,7 @@ export function ScenarioList({
   scenarios: PlanScenario[]
   statusMap?: Record<string, ScenarioStatusValue>
   deaths?: Record<string, ScenarioDeath>
+  identities?: Record<string, ScenarioLevelIdentity>
   /** Wave 2 armed orders — per-scenario arm state (⏳/📌/⚡/✕+reason). */
   armedStates?: Record<string, PlanArmView>
   /** W2 FADE PERMISSION — per-scenario label; absent renders "not evaluated". */
@@ -436,12 +438,58 @@ export function ScenarioList({
                   <FadePermissionChip id={s.id} v={fadeLabels?.[s.id]} />
                 </div>
               )}
+              <ScenarioIdentity
+                identity={identities?.[s.id]}
+                authoredId={s.level_id}
+              />
               <ScenarioEconomics scenario={s} />
               <OrderTerms legs={armedStates?.[s.id]?.legs} />
             </div>
           )
         })}
       </div>
+    </div>
+  )
+}
+
+export function ScenarioIdentity({
+  identity,
+  authoredId,
+}: {
+  identity?: ScenarioLevelIdentity
+  authoredId?: string | null
+}) {
+  const id = identity?.level_id ?? authoredId ?? null
+  const level = identity?.level
+  return (
+    <div
+      data-testid="scenario-level-identity"
+      style={{ fontSize: 11, overflowWrap: 'anywhere' }}
+    >
+      Level ID: {id ?? 'NULL'}
+      {level ? (
+        <>
+          {' '}
+          · {level.label} @ {level.price.toFixed(2)} · {level.tf ?? 'UNKNOWN'} ·
+          formation close {level.formed_close_ms ?? 'UNKNOWN'}
+          {identity?.disagreed && (
+            <>
+              {' '}
+              · evaluator anchor{' '}
+              {identity.evaluator_anchor?.toFixed(2) ?? 'UNKNOWN'} differs;
+              decision unchanged
+            </>
+          )}
+        </>
+      ) : (
+        <>
+          {' '}
+          ·{' '}
+          {id
+            ? 'Unresolved [WARN]'
+            : 'Unnamed / legacy [WARN] — no identity inferred'}
+        </>
+      )}
     </div>
   )
 }

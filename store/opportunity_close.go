@@ -58,6 +58,7 @@ func (s *TouchOutcomeStore) CloseOpenOpportunities(
 	traderID, planID string, planVersion int, session, cause string,
 	factsFor func(scenario *string) OpportunityFacts,
 	entryFor func(scenario *string) *AttainableInputs,
+	scenarioFor ...func(TouchOutcomeRow) *string,
 ) (int, error) {
 	if s == nil || s.db == nil || factsFor == nil {
 		return 0, nil
@@ -84,14 +85,18 @@ func (s *TouchOutcomeStore) CloseOpenOpportunities(
 
 	closed := 0
 	for i := range rows {
-		outcome := OpportunityOutcomeFor(factsFor(rows[i].ScenarioNearest))
+		scenario := rows[i].ScenarioNearest
+		if len(scenarioFor) > 0 {
+			scenario = scenarioFor[0](rows[i])
+		}
+		outcome := OpportunityOutcomeFor(factsFor(scenario))
 		c := cause
 		// The attainable entry, resolved from the SAME facts that decided the
 		// outcome, so the two can never disagree about whether an entry existed.
 		var aePrice *float64
 		var aeBasis *string
 		if entryFor != nil {
-			if in := entryFor(rows[i].ScenarioNearest); in != nil {
+			if in := entryFor(scenario); in != nil {
 				got := ResolveAttainableEntry(*in)
 				aePrice, aeBasis = got.Price, &got.Basis
 			}

@@ -212,3 +212,60 @@ func StampAuthoredIdentity(doc *PlanDoc, candidates []MapCandidate) IdentityWarn
 	}
 	return w
 }
+
+// ScenarioIdentities is the shared read projection for cards and desk strips.
+// It keeps the trading evaluator's original anchor visible beside the ID.
+func ScenarioIdentities(doc *PlanDoc) map[string]ScenarioIdentity {
+	out := map[string]ScenarioIdentity{}
+	if doc == nil {
+		return out
+	}
+	for _, sc := range doc.Scenarios {
+		a, ok := ScenarioAnchor(sc, doc.Levels)
+		out[sc.ID] = ResolveScenarioIdentity(sc, doc.IdentityLevels, a, ok)
+	}
+	return out
+}
+
+// EpisodeLevelID names only an EXACT primary reference actually named by this
+// plan. An unnamed raw member, unknown formation, or a changed map stays NULL.
+func EpisodeLevelID(l DetectedLevel, doc *PlanDoc) *string {
+	if doc == nil {
+		return nil
+	}
+	own := CandidateIdentity(l)
+	if own.ID == nil {
+		return nil
+	}
+	for _, sc := range doc.Scenarios {
+		if sc.LevelID == nil || *sc.LevelID != *own.ID {
+			continue
+		}
+		if _, ok := LevelByID(sc.LevelID, doc.IdentityLevels); ok {
+			return own.ID
+		}
+	}
+	return nil
+}
+
+// EpisodeScenarioByID does not choose between two scenarios naming one level.
+// Corroborating ScenarioNearest is a fallback only when the row has no ID.
+func EpisodeScenarioByID(id *string, doc *PlanDoc) *string {
+	if doc == nil {
+		return nil
+	}
+	if _, ok := LevelByID(id, doc.IdentityLevels); !ok {
+		return nil
+	}
+	var found *string
+	for _, sc := range doc.Scenarios {
+		if sc.LevelID != nil && *sc.LevelID == *id {
+			if found != nil {
+				return nil
+			}
+			v := sc.ID
+			found = &v
+		}
+	}
+	return found
+}

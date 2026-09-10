@@ -1,6 +1,7 @@
 package trader
 
 import (
+	"encoding/json"
 	"strings"
 
 	"nofx/kernel"
@@ -107,7 +108,20 @@ func (at *AutoTrader) closeEpisodesForSessionClose(reason string) {
 		return &in
 	}
 
-	n, err := to.CloseOpenOpportunities(at.id, "", 0, "", closeCauseFor(reason), facts, entryFor)
+	n, err := to.CloseOpenOpportunities(at.id, "", 0, "", closeCauseFor(reason), facts, entryFor, func(row store.TouchOutcomeRow) *string {
+		if row.LevelID == nil {
+			return row.ScenarioNearest
+		}
+		p, err := at.store.Plan().GetPlan(row.PlanID, row.PlanVersion)
+		if err != nil || p == nil || p.StrategyID != at.id {
+			return nil
+		}
+		var doc kernel.PlanDoc
+		if json.Unmarshal([]byte(p.Doc), &doc) != nil {
+			return nil
+		}
+		return kernel.EpisodeScenarioByID(row.LevelID, &doc)
+	})
 	if err != nil {
 		at.logWarnf("🎫 episode close failed (%s): %v", reason, err)
 		return
