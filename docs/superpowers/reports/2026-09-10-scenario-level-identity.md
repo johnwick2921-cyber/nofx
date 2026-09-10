@@ -42,6 +42,16 @@ last-change line was:
 2ee867afdb9b674a7caeaad133f2b1df7b38347b 2026-09-10T17:32:19-05:00 docs(checklist): class 114 — the verifier is wrong, and its wrongness reads as a result
 ```
 
+The standing census command's before-first-CLASS boundary also admitted PART 3
+step **0**, whose bold title ends in a period. The receipt retains that initial
+output and the corrected reader bounded to PART 1: **67 PART 1 entries + 29
+CLASS headings**, with no extra heading formats found. Both give highest 114;
+the five existing collisions are 75/76/77/92/93. This reader error is recorded,
+not repaired in the shared checklist. The newer tracked canon was also read;
+its last change is `07b53e6500c18b2531ec30a78675393cf09caef4` (2026-09-10
+17:31:05 CT, “cleanup batch 1 — B5 the mutation harness that cannot fake a
+verdict, B6 the worktree-add check”).
+
 Evidence labels: **[A]** directly read/measured; **[B]** consequence inferred
 from the verified call chain. The audit follows
 `docs/superpowers/AUDIT-CHECKLIST.md`, PART 2 R1–R10 and PART 3, with the dispatch's
