@@ -4,6 +4,19 @@
 **Session** bars-horizon-2bdef526/nofx-07[aa8e26] · **worktree** `/home/hoang/nofx-barshorizon`
 **Status** pushed, green, **NOT deployed and NOT merged** (A3).
 **Rounds** built → 3 reviewers → **REPAIRED (this round, 2026-09-09 evening)**.
+**Head** `54a7bf25` · `git ls-remote origin fix/bars-horizon` = `54a7bf25` (A18:
+a push exiting zero proves a ref matched, nothing more — so the ref was read
+back).
+
+> **HOW THIS WAS PUSHED, because it is not a plain fast-forward.** The dispatch
+> required a rebase onto the dev tip, which moved the branch off its own pushed
+> tip `53786a44`. Force-push is not available to this session, so the old tip was
+> **joined, not overwritten**: `git merge -s ours 53786a44`, a history join that
+> changes **no content** (`git diff HEAD^1 HEAD --stat` is empty). Verified
+> before the join that `git diff 53786a44 HEAD` is exactly (a) this round's
+> additions, (b) the deliberate corrections to sentences the reviewers proved
+> false, and (c) dev's own `deploy/RELEASE` + `web/src/guide/types.ts` moving
+> forward at `6a8e14c9`. Nothing from the old tip is lost. Nothing was rewritten.
 The repair fixes both D1 blockers, implements the owner's D3 ruling with all
 four conditions, and corrects every sentence the reviewers proved false.
 **Checklist numbers** not assigned — two new classes are appended to
