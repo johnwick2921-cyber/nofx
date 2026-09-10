@@ -187,7 +187,7 @@ than silent. It is not the single-reader ideal of class 97 and is not claimed to
    lost — but a reviewer reading `git log` will see each early commit twice, and
    should read the merge commits for why.
 
-## G · THREE DEFECTS FOUND, NONE MINE, ONE FIXED WITHIN THE HOUR
+## G · FOUR DEFECTS FOUND, NONE MINE, TWO FIXED WITHIN THE HOUR
 
 Found while verifying my Guide change. **Filed, not fixed — A31 scopes this wave,
 and both belong to the rebrand lane.**
@@ -399,6 +399,55 @@ the pre-cutover suite will be green — but that green is *itself* an environmen
 claim, which is why §H records the clock alongside the versions. Filed, not fixed:
 A31, and the fix belongs with whoever owns the arm-path tests.
 
+### G4 — a wall-clock flake I diagnosed wrongly, corrected by its owner
+
+**FIXED on dev at `7871a1d2`. My diagnosis of it was wrong and the correction is
+the useful part.**
+
+I reported `TestSplitArmWritesTwoLedgerRows` as order-or-state interference
+inside the package, on the evidence that it passed standalone six times and
+failed when the package ran whole. nofx-8e then reproduced it **standalone** at
+13:20 on the same commit. There was no interference. It was the wall clock the
+entire time — and I had the disproof in my own message: one standalone RED at
+13:09:00 against six GREENs from 13:09:40. I filed that flip as "a timing
+component on top" of an interference story instead of as the story.
+
+**Two independent causes**, both introduced by that morning's `armTestClock`
+fix, and both found by 8e:
+
+1. **Five-minute bucket alignment.** The leg-2 confirm needs the last five 1m
+   bars to form a COMPLETE 5m bucket below the ref. Bucket boundaries are
+   absolute, so the tape's meaning depends on `now` **modulo 5 minutes**, and a
+   clock searched forward from `time.Now()` walks that modulus through the day.
+   Identical code passed 12:43–12:59 and failed at 13:20.
+2. **The trade date.** A clock based on a fixed past date (2026-08-18) appended
+   the plan for `PlanChainTradeDate(sess, now)` while the arm path resolves the
+   CURRENT trade date — a plan written for a date nothing looks for. The arm
+   produced zero rows **and not one refusal log**. That silence is the tell: a
+   refused arm says why; a missing plan says nothing at all.
+
+The fix is both halves — today's date at a fixed 5m-aligned hour, via
+`armTestClockFrom(t, at, base)`, with `armTestClock` keeping `time.Now()` for
+tests whose only binding constraint is being inside a session.
+
+**What I got right, and it was the useful half:** I flagged "got 0, not got 1".
+The earlier defect in this same test was one-leg-of-two from a 25-minute skew;
+zero legs means the arm never happened. Same costume, different mechanism. 8e
+says filing it as a recurrence would have cost them ten minutes in the split
+logic.
+
+**What my bisect actually measured.** Testing `b11659ea`, `c11632c3`, `5e273442`
+and `a98a92c7` returned green at all four — not because the commits were green
+but because each happened to be tested at a passing moment. **A bisect that
+varies the commit while the real variable is time is a measurement of when you
+ran it.** I concluded "the commit axis says nothing, the in-package axis says
+everything" when the honest conclusion was "neither axis is the variable and I
+have not found it yet."
+
+Verified green here at the merged HEAD, **run 13:25:30–13:28:34 CDT, inside the
+12:00–13:30 band**: 31 packages ok, 0 fail. Run in-band deliberately, because
+outside it the result would not have been falsifiable.
+
 ## H · VERIFICATION
 
 **The environment these results were measured in**, because §G is the proof that a
@@ -423,7 +472,7 @@ below is a claim about THIS table, not about the commit alone.
 |---|---|
 | `go build ./...` | OK at merged HEAD |
 | `go vet ./store/... ./trader/... ./kernel/...` | OK |
-| `go test ./...` | **31 ok / 0 FAIL**, run 12:32–12:34 CDT inside the former lunch band (§G3) |
+| `go test ./...` | **31 ok / 0 FAIL**, run 13:25:30–13:28:34 CDT — deliberately INSIDE the 12:00–13:30 band, where §G3 and §G4 are falsifiable |
 | `npx tsc --noEmit` | OK |
 | `npm run build` | OK — 4.60s |
 | `npx vitest run` @ vite 6.4.3 (lockfile) | 12 files red from G1; 354 collected |
@@ -437,6 +486,7 @@ Stated here rather than reported as green.
 dev moved **five times** under this branch during the wave (`557494c7` →
 `c16a182d` → `cefcf08d` → `33e6d008` → `757eb578`); the suite was re-run at each
 merged HEAD rather than carried forward — a branch green alone is not green merged.
+
 
 ## I · CLASSES FILED
 
@@ -464,3 +514,105 @@ measuring it properly:
   colour as a test that passes.* 8e is taking it into the settlement wave's pins,
   and notes it is the same shape as their class 103 — a fallback producing a
   plausible value so the failure behind it stays invisible.
+
+## J · THE FIRST BOOT SHIPPED ONE OF FOUR ITEMS WIRED
+
+`95f387ae` booted cleanly at 12:49:54 CDT — integrity OK, goldens PASS, five
+references agreeing, gate five-for-five, sweep 0/0. And it shipped **one quarter
+of this wave**.
+
+The `🎫 episodes:` line never printed. That absence was the only symptom, and it
+is the reason the defect was found at all.
+
+| function | production call sites at `95f387ae` |
+|---|---|
+| `ResolveScenarioLink` | **1** — `trader/detector_record.go` |
+| `CloseOpenOpportunities` | **0** |
+| `ResolveAttainableEntry` | **0** |
+| `BackfillOpportunities` | **0** |
+| `EpisodeBootLine` | **0** |
+
+Three of four items were built, unit-tested, described in this report, and called
+by nobody. What *was* live is item 1, the one the owner ruled load-bearing: 55
+rows carry `scenario_link_basis`, a column that did not exist before that boot,
+so those rows are proof the recorder runs. `opportunity_outcome` and
+`close_cause` were NULL on all 4,915 rows, because the closer and the backfill
+were never reached.
+
+### Why the suite did not catch it
+
+**Because the check that catches exactly this already existed and I registered
+one item in it.**
+
+`trader/wiring_gate_test.go` is the A29 standing gate. It walks the whole repo —
+`store/` included — and fails when a function claiming a production call path has
+zero production callers. It was written for three instances of this shape inside
+24 hours in September, one of which was `detector_record.go` declaring itself
+"THE PRODUCTION CALL PATH" while nothing called it.
+
+This wave added exactly two names to it: `scenarioAnchorsFrom` and
+`scenarioLinkBand` — item 1's. The other three items were never registered, so
+the gate had nothing to check and reported green. **The gate was not at fault;
+the registration was.**
+
+That is the whole answer, and it is worse than "the suite was too weak". The
+suite contained a purpose-built detector for this exact defect, and the defect
+walked past it because I only pointed it at the item I happened to be thinking
+about while writing the pin. Every unit test in the wave passed, because every
+unit test proved a function works when called — which is precisely the thing A29
+exists to say is not enough.
+
+Two smaller contributors, neither exculpatory:
+
+- **The suite cannot boot the binary.** Nothing in `go test ./...` renders the
+  boot block, so a missing boot line is invisible to it. The absence was visible
+  in 12 seconds of reading the boot log, which is why the pre-cutover protocol
+  has a boot checklist at all.
+- **I read the wave's own report as evidence.** §A–§E describe four working
+  items. They describe the code correctly and say nothing about whether anything
+  calls it, and I did not distinguish those two claims when checking my own work.
+
+### The fix, and one finding inside it
+
+All four call sites now exist, each pinned, each **mutation-verified**:
+
+| mutation | result |
+|---|---|
+| remove the closer's call site | RED — `closeEpisodesForSessionClose` |
+| remove the backfill call | RED — `BackfillOpportunities` |
+| remove the boot line call | RED — `EpisodeBootLine` |
+| remove the attainable call | RED — `ResolveAttainableEntry` |
+
+**The first mutation SURVIVED on the first attempt, and that is a finding about
+the gate itself.** Deleting the only production call to
+`closeEpisodesForSessionClose` left `CloseOpenOpportunities` still counted as
+called — by the wrapper that had just become dead code. The gate counts a call
+made from an unreachable function as wiring, so **an unwired wrapper satisfies it
+for everything inside it**. Registering only the inner function pins nothing.
+Whenever a call site is a wrapper, the wrapper is the name that must be listed;
+that is now stated in the gate's own comment beside the registration.
+
+### One deviation from the order, stated rather than made quietly
+
+The instruction was to wire the attainable entry **into the recorder**. It is
+wired into the **closer** instead. At the moment a touch is recorded it has not
+confirmed, armed or filled, so resolving it there would stamp
+`none:never_confirmed_never_armed` onto an episode that is still open — a
+fabricated fact, and exactly the kind this wave exists to avoid. The
+observations it needs exist at close, and it is computed there from the SAME
+facts that decide the outcome, so the two can never disagree about whether an
+entry existed.
+
+### A limitation this fix does not remove
+
+The closer's facts come from the scenario's observed confirm/arm state, never
+from `armed_orders` — that row is mutated in place, and under the settlement
+wave a timed-out cancel now rests at `cancel_pending` rather than reaching
+`cancelled`, so a state read would be reading a value deliberately not yet final
+(flagged by nofx-8e before it could distort a count). But the touch → scenario
+link is still a price-proximity heuristic and is NULL whenever two levels sit
+inside the band or nothing is close. **A row with a NULL link closes as
+`reached_declined`** — correct for a touch nothing was armed at, and not yet
+distinguishable from one whose arm this wave cannot see. Until the identity wave
+lands, the honest reading of `reached_declined` is "no arm was linked to this
+touch", not "no arm existed".

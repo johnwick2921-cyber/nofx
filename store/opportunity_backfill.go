@@ -44,7 +44,7 @@ func (s *TouchOutcomeStore) BackfillOpportunities(traderID string) (BackfillResu
 	era := DayPlanEraStart.UnixMilli()
 
 	var rows []TouchOutcomeRow
-	if err := s.db.Where("trader_id = ? AND opportunity_outcome IS NULL", traderID).
+	if err := scopeTrader(s.db, traderID).Where("opportunity_outcome IS NULL").
 		Find(&rows).Error; err != nil {
 		return res, err
 	}

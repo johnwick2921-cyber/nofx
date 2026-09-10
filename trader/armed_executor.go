@@ -258,6 +258,12 @@ func (at *AutoTrader) maybeManageArmedOrdersAt(snap map[string]kernel.StructureS
 				at.logWarnf("⚠️ armed cancel: %d unacked after retry (ledger cancelled; wire reconciles next cycle)", unacked)
 			}
 		}
+		// W1 EPISODE CONTRACT — E6: every episode closes, and says why. This is
+		// the session-close path: the plan is gone, dormant or the session has
+		// ended, so no touch recorded under it can still be open. Idempotent by
+		// predicate (it selects on a NULL outcome), so running it on every cycle
+		// that reaches here closes each row exactly once.
+		at.closeEpisodesForSessionClose(reason)
 		return
 	}
 

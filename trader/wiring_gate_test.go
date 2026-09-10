@@ -42,6 +42,28 @@ var alsoRequireWired = []string{
 	// recorder stops calling it; removing the wiring turns this test red.
 	"scenarioAnchorsFrom",
 	"scenarioLinkBand",
+	// W1 FOLLOW-UP (2026-09-10, after the 95f387ae boot shipped ONE of four
+	// items wired). These four were built, unit-tested, reported, and called by
+	// nobody. This gate already existed and would have caught every one of them
+	// — I registered item 1 in it and not the other three, so the suite was
+	// green on four items and honest about one. The gate is not at fault; the
+	// registration was. Every function the report claims ships is now listed
+	// here, and removing any call site turns this test red.
+	"CloseOpenOpportunities",
+	"CountOpenOpportunities",
+	"CountClosedByOutcome",
+	"BackfillOpportunities",
+	"ResolveAttainableEntry",
+	"EpisodeBootLine",
+	// AND THE WRAPPER ITSELF. Registering only the inner function is NOT
+	// enough, proven by mutation: deleting the one production call to
+	// closeEpisodesForSessionClose left CloseOpenOpportunities still "called"
+	// — by the wrapper that had just become dead code. The gate counts a call
+	// from an unreachable function as wiring, so an unwired wrapper satisfies
+	// it for everything it calls. Whenever a call site is a wrapper, the
+	// WRAPPER is the name that has to be pinned; pinning only what it calls
+	// pins nothing.
+	"closeEpisodesForSessionClose",
 	// WAVE A — the writers this wave added. Each must keep at least one
 	// production call site; removing one turns this test red.
 	"recordAcceptedRisk",
