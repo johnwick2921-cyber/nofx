@@ -36,10 +36,22 @@ import (
 // invalidate — which would be this same defect with a longer fuse.
 func armTestClock(t *testing.T, at *AutoTrader) time.Time {
 	t.Helper()
+	return armTestClockFrom(t, at, time.Now())
+}
+
+// armTestClockFrom is the same search from a CALLER-CHOSEN base.
+//
+// Pass a FIXED base when the test's fixtures are sensitive to the absolute
+// value of the clock rather than merely to being inside a session — bar bucket
+// boundaries are the case that bit: a tape whose confirm depends on the last
+// five 1m bars forming a complete 5m bucket means the tape's meaning depends on
+// `now` MODULO 5 MINUTES, and searching from time.Now() moves that modulus
+// through the day. Fixed base, fixed modulus, same answer every run.
+func armTestClockFrom(t *testing.T, at *AutoTrader, base time.Time) time.Time {
+	t.Helper()
 	// Search the surrounding 24h in 5-minute steps, nearest-first in both
 	// directions, so the chosen moment stays on the session day the fixtures
 	// were built for wherever possible.
-	base := time.Now()
 	for i := 0; i < 288; i++ {
 		for _, delta := range []time.Duration{
 			time.Duration(i) * 5 * time.Minute,
