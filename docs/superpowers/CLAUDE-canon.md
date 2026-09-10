@@ -90,3 +90,39 @@ code, in a place the code's own tests could not see.
 from `~/nofx/CLAUDE.md:205` — quoted before and after in the wave's message. Detail:
 `docs/superpowers/reports/2026-09-10-lock-keeper-on-acquire.md`, checklist classes
 101–104.**
+
+---
+
+## WORKTREE LAW — `git worktree add` IS CHECKED, AND THE CHECK IS CHECKED
+
+A lane committed onto another lane's branch this week by scripting
+`git worktree add … && cd …` and never reading the exit code. When the add fails,
+`cd` lands in whatever directory the shell was already in — very often the MAIN
+TREE — and the next `git commit` goes somewhere nobody chose. The failure is
+silent because every command after it succeeds.
+
+```
+W=/home/hoang/nofx-<task>
+git worktree add --detach "$W" origin/dev || { echo "worktree add FAILED"; exit 1; }
+git -C "$W" rev-parse --is-inside-work-tree >/dev/null 2>&1 \
+  || { echo "$W is not a worktree"; exit 1; }
+cd "$W" || exit 1
+[ "$(pwd -P)" = "$W" ] || { echo "cd landed at $(pwd -P), not $W"; exit 1; }
+```
+
+**Three checks, because each catches something the others cannot:** the exit code
+catches a refused add; the `rev-parse` catches a directory that exists but is not
+a worktree; `pwd -P` catches a `cd` that silently landed elsewhere (a symlink, a
+`CDPATH`, a stale shell).
+
+**AND THE CHECK ITSELF CAN BE WRONG — this is the part worth reading.** On
+2026-09-10 a lane wrote `[ -d "$W/.git" ]` as its verification and it reported
+failure on a perfectly good worktree. **In a worktree, `.git` is a FILE, not a
+directory** — it contains `gitdir: /path/to/.git/worktrees/<name>`. The guard was
+correct-looking, ran green in the author's head, and failed closed on a healthy
+tree. Use `git rev-parse --is-inside-work-tree`, which asks git rather than
+guessing at git's layout.
+
+That is the same shape as everything else in this file: a statement ABOUT the
+tool, written where nothing compares it to the tool. The remedy is the same —
+ask the tool.

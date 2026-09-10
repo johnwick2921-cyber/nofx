@@ -4081,3 +4081,62 @@ check and the test-side check together, because all three are the same query
 against the same graph. Filed as OWED rather than built: it is a tool, it is
 outside every current wave's footprint, and three separate half-measures would
 cost more than the one pass.
+
+## CLASS 114 — THE VERIFIER IS WRONG, AND ITS WRONGNESS READS AS A RESULT (born 2026-09-10, fix/cleanup-batch-1)
+
+**Name.** A check written to prove something produces a confident answer while
+being incapable of producing the right one. The answer is not an error, a crash
+or a blank — it is a plausible verdict, which is why nobody re-reads it.
+
+**Root cause.** Every check embeds a belief about the thing it inspects. When
+that belief is wrong, the check still runs, still returns, and still reports. It
+is the *verifier* that has drifted, not the subject — so re-running it, adding
+more of them, or making them stricter does not help.
+
+**Three instances, all in one wave, all found only by disbelieving a result:**
+
+1. **A proof that can never pass.** The dispatch specified `git diff -w --stat`
+   reading zero as proof that a `gofmt` diff is whitespace-only. It cannot read
+   zero: gofmt also **reorders imports** and **expands single-line `if` bodies
+   onto three lines**. Both are semantics-preserving; neither is whitespace, and
+   `-w` shows them. A lane trusting the stated method would have concluded the
+   gofmt had smuggled in a real change. **The correct proof — `gofmt(before)`
+   byte-identical to after — is also strictly stronger**, because it additionally
+   shows no hand edit rode along, which `-w` could never have shown.
+2. **A guard that fails closed on a healthy system.** `[ -d "$W/.git" ]`, written
+   to verify a worktree, reported failure on a perfectly good one: **in a
+   worktree `.git` is a FILE** holding a `gitdir:` pointer, not a directory. The
+   guard was correct-looking and green in its author's head. Remedy: ask the tool
+   (`git rev-parse --is-inside-work-tree`), never guess at the tool's layout.
+3. **A verdict inferred from an absence.** A mutation harness read the absence of
+   `--- FAIL` as SURVIVED. Four times in one week that absence meant the sed
+   never matched (class 89) or the mutant never compiled — the experiment had not
+   run at all. Remedy: `scripts/mutate.sh`, which proves the edit landed and the
+   mutant builds *before* it will read the suite, and names NOT-APPLIED and
+   BUILD-FAILED as distinct verdicts.
+
+**Probe, four questions.** (1) State what this check would print if the thing it
+inspects were PERFECTLY healthy — then run it on a healthy case. A check that
+marks a healthy subject is measuring itself. (2) State what it would print if the
+subject did not exist at all. If that is indistinguishable from "fine", it cannot
+report absence. (3) Does the check infer a verdict from something NOT being
+present? Absence is only evidence once you have proved the experiment ran.
+(4) Does the check encode a belief about a tool's internals (a file layout, an
+exit code, an output format)? Ask the tool instead.
+
+**Law:** **a verification method is itself unverified until it has been run
+against a known-good and a known-bad case.** Quote both. Where a check embeds a
+belief about a tool, the check asks the tool rather than reproducing its rules —
+and where a verdict rests on an absence, the absence is only admissible after the
+experiment is shown to have run.
+
+**Relation to its neighbours.** This is the general case of **class 89** (a wave
+verified by a toolchain that cannot see half of it) and the mirror of **class
+105** (documentation describing code where tests cannot see it): 105 is prose
+that drifts from the code, 114 is a *check* that drifts from the thing it checks.
+Both are invisible for the same reason — the artifact keeps producing a
+believable answer. Related: class 100 (dev moving under a branch), which this
+wave hit **twice in one hour** despite a peer's explicit warning, because the
+deletion count was read at merge time and then again a minute too early; the
+remedy is to rebase and re-check *immediately* before the merge, since dev moves
+in minutes.
