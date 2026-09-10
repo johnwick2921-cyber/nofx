@@ -10,7 +10,7 @@ in CLAUDE.md).
 
 ## PART 1 — THE BUG CLASSES (name · root cause · probe · law)
 
-*Highest occupied class: **105** (2026-09-10). Numbers are assigned AT MERGE and
+*Highest occupied class: **108** (2026-09-10). Numbers are assigned AT MERGE and
 never renumbered; a gap means a wave took a later slot to avoid a collision.*
 
 1. **Self-imposed caps.** Root cause: an AI/HTTP/token cap chosen without
@@ -3727,3 +3727,9 @@ omission is deliberate BEFORE changing anything, and quote the code path*. Askin
 "is this a bug or a decision?" first is what separates 99 from 107; the
 refactor had already been written, tested and pushed on the other reading.
 
+
+## CLASS 108 — A SOURCE GUARD THAT SCANS NOTHING (assigned at arm-state cutover follow-up merge, 2026-09-10)
+
+**Finding:** TestTZGuardSingleTimeSource searched for a directory basename ending in nofx and swallowed walk errors. `/tmp/nofx-arm-state` therefore scanned `/kernel`, `/trader`, `/api`, `/agent`, read nothing and passed. A clean clone named nofx exposed four pre-existing timezone violations. A successful process exit was not evidence that the guard had examined source.
+
+**Law and pin:** resolve the package's actual repository parent, require go.mod and propagate directory/read errors. A restored bare layout must fail in a worktree whose name does not end in nofx. The four renderers now use canonical CT helpers with byte-identical output. This guard correction is independent of arm-state classification and never weakens a terminal-state or flat-gate check. Receipt: `reports/2026-09-10-arm-state-cutover.md`.

@@ -1,4 +1,7 @@
 // Dispatch 102 freezes load-bearing identifiers, including their surrounding guards.
+// Lock baseline advanced after the separately authorized lock-keeper wave:
+// deploy/nofx-lock.sh @ 97a6525cb6d10d6c8898b2d277c0fe7581872c24.
+// Only its recorded hash changes; protected-file mutation checks remain enforced.
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'

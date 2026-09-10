@@ -1,5 +1,7 @@
 # One arm-state predicate; leg 4 separates authorization from placement
 
+**2026-09-10 update:** corrected PR #97 is merged at `8140f8f2`. The original sweep inclusion was a regression and is corrected below. Current cutover status and merged-head validation are in [the cutover receipt](2026-09-10-arm-state-cutover.md); earlier validation sections are pre-merge receipts.
+
 Branch **fix/arm-state-predicate**, base **8941ec68612cc019edc3002b999272ab2ed20516**, claimed by `arm-state-0b955fbc/root[unlisted]`. Number assigned only at merge. This is the next code task after brand-visible; no deployment or live database write is part of this implementation receipt.
 
 ## Finding and implementation

@@ -107,6 +107,6 @@ func RegimeInputWindowBootLine(bars1m, ring5m []market.Kline, maxDays int, now t
 		delta = fmt.Sprintf("%+d day(s)", after.Days-before.Days)
 	}
 	return fmt.Sprintf(
-		"📈 regime input window @%s CT: BEFORE %s · AFTER %s · Δ%s · cap=%d days (rule UNCHANGED — same estimator, deeper input; owner ruling 2026-09-09)",
-		now.In(kernel.CTLocation()).Format("15:04:05"), before.Line(), after.Line(), delta, maxDays)
+		"📈 regime input window @%s: BEFORE %s · AFTER %s · Δ%s · cap=%d days (rule UNCHANGED — same estimator, deeper input; owner ruling 2026-09-09)",
+		kernel.ClockCTSeconds(now), before.Line(), after.Line(), delta, maxDays)
 }
