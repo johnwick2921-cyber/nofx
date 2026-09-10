@@ -13,11 +13,21 @@ import (
 	"nofx/store"
 )
 
+// THE CLOCK IS FIXED, NOT time.Now(). The recorder reaches no time-banded rule
+// today — validityFor is age-independent and recording is unconditional — so
+// these passed at any hour by luck rather than by design. On 2026-09-10 eight
+// arm-path tests were red between 12:00 and 13:30 CT for exactly that shape
+// (report §G3), and the shipped clock-seam lint is scoped to
+// maybeManageArmedOrders, so it would not catch a band added to the recorder.
+// A fixed moment costs nothing here and cannot be reintroduced by someone
+// else's later change.
+var recorderTestClock = time.Date(2026, 9, 10, 14, 0, 0, 0, time.FixedZone("CDT", -5*60*60))
+
 // The happy path: one anchor inside the band lands on the row WITH its basis
 // and both distances.
 func TestRecordedRowCarriesTheScenarioLink(t *testing.T) {
 	const level = 29141.25
-	at, st, now := recorderFixture(t, level, 2000, time.Now())
+	at, st, now := recorderFixture(t, level, 2000, recorderTestClock)
 	formed := now.Add(-6 * time.Hour).UnixMilli()
 
 	at.recordDetectorOutputs("MNQ", "P1", "NY", 1,
@@ -44,7 +54,7 @@ func TestRecordedRowCarriesTheScenarioLink(t *testing.T) {
 // reader can tell "nothing authored" from "nothing close".
 func TestRecordedRowStatesWhyTheLinkIsNull(t *testing.T) {
 	const level = 29141.25
-	at, st, now := recorderFixture(t, level, 2000, time.Now())
+	at, st, now := recorderFixture(t, level, 2000, recorderTestClock)
 	formed := now.Add(-6 * time.Hour).UnixMilli()
 
 	at.recordDetectorOutputs("MNQ", "P1", "NY", 1,
@@ -67,7 +77,7 @@ func TestRecordedRowStatesWhyTheLinkIsNull(t *testing.T) {
 // width means the record cannot say which scenario this touch belongs to.
 func TestAmbiguousLinkReachesTheRowAsNull(t *testing.T) {
 	const level = 29141.25
-	at, st, now := recorderFixture(t, level, 2000, time.Now())
+	at, st, now := recorderFixture(t, level, 2000, recorderTestClock)
 	formed := now.Add(-6 * time.Hour).UnixMilli()
 
 	at.recordDetectorOutputs("MNQ", "P1", "NY", 1,
