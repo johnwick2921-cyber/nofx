@@ -10,7 +10,7 @@ in CLAUDE.md).
 
 ## PART 1 — THE BUG CLASSES (name · root cause · probe · law)
 
-*Highest occupied class: **108** (2026-09-10). Numbers are assigned AT MERGE and
+*Highest occupied class: **112** (2026-09-10). Numbers are assigned AT MERGE and
 never renumbered; a gap means a wave took a later slot to avoid a collision.*
 
 1. **Self-imposed caps.** Root cause: an AI/HTTP/token cap chosen without
@@ -3998,3 +3998,19 @@ were never written down. Per-opportunity figures begin at the boot that ships
 this. **Probe:** before promising a backfill, count the rows that hold every
 input it needs — if that count is zero, say so in the dispatch rather than in
 the report.
+
+## CLASS 112 — A CONFIGURED VALUE THE CODE SILENTLY DOES NOT UNDERSTAND (born 2026-09-10, dispatch 103 W-TF)
+
+**Root cause:** an identifier crosses a boundary in a spelling the consumer does not recognise, and the consumer's rejection path is a bare `continue`. The setting is present, correct, and named FIRST; the feature it asks for simply never happens, and nothing anywhere says so. This is not a missing feature and not a bug in the consumer — both sides are individually reasonable. It is a **missing join between two vocabularies**, and the silence is what makes it survive.
+
+The instance. The bound strategy's `planner_timeframes` reads `["D","4h","1h","15m","5m"]` and has since the default was written (`store/strategy.go:1407`). `"D"` is the daily timeframe and it is the FIRST entry. The level-detection gate `isHTFDetectionTF` (`levels_assemble.go`) recognised `"1d"` and had never heard of `"D"`, so every planner cycle passed `"D"` into `DetectHTFLevels`, hit `if !isHTFDetectionTF(tf) { continue }`, and dropped it. **Measured 2026-09-10 at running rev `8941ec68`: 0 of 297 stored plans carry a level from any daily timeframe** (C4), while the store holds 1d n=1902 back to 2019-05-02 and 1w n=384 back to 2019-04-26 (C2). The owner had configured daily structure and had never once received it.
+
+**Why nothing caught it.** Every individual check passed. The config was valid — it round-tripped through the strategy loader unchanged. The gate was correct — it was written when the daily family genuinely was not supported, with a comment explaining why (`"TFs below 15m and \"D\" are skipped"`), so the exclusion was *documented and deliberate at the time* and simply outlived its reason. The detector ran, on the timeframes it did understand, and produced levels; a map full of 1h references looks exactly like a working map (C4: `·1h` 160 · `·5m` 72 · `·15m` 30 · `·4h` 8 across the 40 most recent plans). There was no error, no counter, no empty result — the request for daily was not refused, it was **never asked**. Compare class 88, where a signal stops because the work stops: here the work never started and the absence had no shape.
+
+A second vocabulary gap sat beside it, unfired: `trader/auto_trader_planner.go:2051` states that `"D"` maps to the provider's `"1d"` interval. `structureSummaryLines` performs no such mapping. A comment describing a join that does not exist is class 105 in the same file as the join that was missing.
+
+**Probe:** take every CONFIGURED identifier — timeframe, symbol, session name, mode, strategy key, account label — and trace it to the predicate that consumes it. Ask two questions and accept only measured answers. **(1) Does the consumer's vocabulary contain the exact string the config produces?** Not a similar one; the exact one, compared character by character, with the config's real live value read from the database rather than from a default in the source. `"D"` and `"1d"` are the same timeframe to a human and different strings to a `switch`. **(2) When the consumer rejects a value, what does an operator see?** If the answer is "nothing", the gap is unfalsifiable from outside and will be found by someone auditing the feature, not by anyone running it. A `continue` with no record is the whole class.
+
+The cheapest detection is a count nobody has to request: emit, per configured value, whether it was CONSUMED or SKIPPED and why, and keep those two sets disjoint. `DetectHTFLevelsReport` does this — `Counts` and `Skipped` are separate maps, so "produced nothing" and "was never read" stop being the same observation.
+
+**Law:** a configured value is either **honoured** or **refused out loud**; there is no third state. Where two components name the same thing differently, ONE canonicaliser owns the translation and lives where the value ENTERS the consumer (class 28), never at each use site. A consumer that silently discards input it does not recognise is indistinguishable from one that has no input, and the difference is invisible for exactly as long as nobody audits the feature — five months, in this instance, across every plan the machine has ever written. Related: class 105 (documentation describing code, in a place the code's tests cannot see — the comment claiming the `D`→`1d` map exists), class 107 (centralising a hand-typed list is a behaviour change wherever the lists differed — the same two-vocabularies shape, seen at merge time instead of at read time), class 88 (a liveness signal that is a side effect of activity — the neighbouring failure where a signal stops because the work stops, rather than never starting), and class 28 (one canonicaliser per identifier, at the boundary). Wave report: `reports/2026-09-10-every-detector-every-timeframe.md`, C1–C4.
