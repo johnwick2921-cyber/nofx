@@ -60,7 +60,7 @@ Visible brand (Dispatch 102): `branding/product.txt` = VL Intelligent; `branding
 
 ## 2 · LEVELS — detection, scoring, seating, roles
 
-**What it does:** detects ~30 level kinds off the 1m bar tape, scores them (evidence type × HTF zone tier × size × freshness × anchors), seats a per-trader TOTAL of `max_levels` into the plan (NOT per side — `levels_score.go:603-605` truncates the whole slice; `seatBothSides` rebalances WITHIN that total), and assigns roles.
+**What it does:** detects ~30 level kinds across ELEVEN timeframes, scores them (evidence type × HTF zone tier × size × freshness × anchors), seats a per-trader TOTAL of `max_levels` into the plan (NOT per side — `levels_score.go:603-605` truncates the whole slice; `seatBothSides` rebalances WITHIN that total), and assigns roles.
 
 **W3 (2026-09-09) — candidates, not entitlements.** The whole map is kept; what changed is how many of its levels are offered as ENTRY candidates and in what order, plus references PROJECTED beyond the mapped range. All of it is a RENDER-TIME view (`kernel/map_candidates.go`, `kernel/map_projections.go`) built from `[]ScoredLevel` — **no score, weight, ladder, cap or detector moved**, and `stage_a_score_legacy.json` is byte-identical.
 
@@ -71,6 +71,22 @@ Visible brand (Dispatch 102): `branding/product.txt` = VL Intelligent; `branding
 | candidacy `[I]` | a level is an ENTRY candidate only with an opposing reference at ≥ the resolved minimum (default: the stop floor, `MinSLATRMult()×ATR5m`) — the wave's ONLY new refusal, and it refuses CANDIDACY, never an authored scenario | `map_candidates.go assignMapRoles` |
 | order `[I]` | the entry shortlist ranks by REACHABILITY (distance, nearest first); the score is carried and shown but ranks second | `map_candidates.go BuildMapCandidates` |
 | projections `[I]` | beyond the mapped range: PWH/PWL from the **daily** bar source, round numbers, ATR-projected session extreme, measured move. TARGETS/OBSTACLES only — never entry candidates | `map_projections.go` |
+
+**W-TF (2026-09-10) — every detector, every timeframe.** The per-timeframe pass already existed (`DetectHTFLevels`, G2/G3 2026-08-24); what changed is which timeframes reach it and whether a timeframe is part of a level's identity. **No detector definition, score weight, multiplier, cap or tolerance moved.**
+
+| step | what it does | where |
+|---|---|---|
+| detection set | ONE ordered source, `HTFDetectionTFs` = 15m·30m·1h·2h·4h·6h·8h·12h·**1d·3d·1w**; `isHTFDetectionTF` ranges over it. Sub-15m stays OUT — intraday noise adds nothing to HTF structure and base swings already serve 5m/15m | `levels_assemble.go isHTFDetectionTF` |
+| alias | `canonicalDetectionTF` resolves the config's `"D"`/`"W"` to the store's `1d`/`1w`, at the point the value ENTERS detection (class 28) | `levels_assemble.go canonicalDetectionTF` |
+| detectors | a TABLE, not four inline loops, so "how many detectors per timeframe" is a value the boot line READS: equal-highs-lows · supply-demand · fair-value-gaps · order-blocks | `levels_assemble.go htfDetectors` |
+| identity | the dedupe key is `(kind, tf, price±tick)`. A 1h and a 1d order block at one price are TWO references; before this the second vanished into the first with no record | `levels_assemble.go dedupeSameKind` |
+| lookback `[I]` | `DetectedLevel.LookbackBars` records the window actually searched on that timeframe — 500 weekly bars and 500 quarter-hourly bars are the same lookback in bars and nine years apart in time (round 12, 12a) | `levels.go DetectedLevel` |
+| partial window | a timeframe below `htfMinClosedBars` emits NOTHING and records why; `Counts` and `Skipped` are disjoint, so "produced nothing" and "was never read" stay distinguishable | `levels_assemble.go detectHTFLevels` |
+| daily tier `[I]` | `zoneTierFor` classifies `1d`/`3d`/`1w` into the **4h** tier. Nothing was reweighted: this classifies an input that was previously impossible. Without it the default routed a daily level to the 1m noise floor — multiplier 1.0 vs 4h's 1.3, `KindOB` evidence 0.40 vs 0.72, and the zone grader's 1m clause forcing grade C | `levels_score.go zoneTierFor` |
+
+**The daily family was configured all along.** The bound strategy's `planner_timeframes` reads `["D","4h","1h","15m","5m"]` and has since the default was written (`store/strategy.go:1407`) — `"D"` is named FIRST. The gate only knew `"1d"`, so `"D"` was dropped in silence. Measured 2026-09-10: **0 of 297** stored plans carry a level from any daily timeframe, while the store holds 1d n=1902 back to 2019-05-02 and 1w n=384 back to 2019-04-26.
+
+**Nothing here asserts that a daily level is stronger.** The 4h-tier inheritance and the ×1.2 HTF weight are both `[I]`: round 12 (12c) finds the multiplier untested and establishes no timeframe hierarchy. This wave makes the question answerable by E4; it does not answer it.
 
 **Exclusion is not invalidation (class 93).** A level cut from the entry shortlist stays in the map, the plan document and the chart, carrying its role.
 

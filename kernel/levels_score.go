@@ -158,6 +158,14 @@ var zoneEvidenceByKind = map[LevelKind]map[string]float64{
 // zoneTFMult is the "HTF alignment" multiplier per detection timeframe tier.
 var zoneTFMult = map[string]float64{"1m": 1.0, "15m": 1.1, "1h": 1.2, "4h": 1.3}
 
+// HTFScoreMultiplier is the higher-timeframe weight applied to a level whose
+// DetectedLevel.HTF is set. NAMED, not changed: the boot line and the Guide must
+// print the number the scorer actually uses rather than one typed beside it
+// (A11). Round 12 (12c) finds this multiplier UNTESTED — it has no established
+// foundation and is carried as [I] until E4 measures it. W-TF does not touch its
+// value.
+const HTFScoreMultiplier = 1.2
+
 // zoneReversalBonus rewards RBD/DBR (reversal) over RBR/DBD (continuation).
 const zoneReversalBonus = 1.1
 
@@ -175,6 +183,18 @@ func zoneTierFor(tf string) string {
 	case "2h":
 		return "1h"
 	case "6h", "8h", "12h":
+		return "4h"
+	case "1d", "3d", "1w":
+		// W-TF (owner ruling 2026-09-10). These timeframes could not reach a
+		// level before this wave, so no value moves: this classifies an input
+		// that was previously impossible. Without it the default below would
+		// route a DAILY level to the 1m noise floor — multiplier 1.0 against
+		// 4h's 1.3, KindOB evidence 0.40 against 0.72, and the zone grader's
+		// 1m clause forcing grade C — making a daily zone the weakest thing on
+		// the map. Inheriting the 4h tier is [I], not established: round 12
+		// (12c) says no timeframe hierarchy is proven and E4 measures whether
+		// this classification is right. No weight, multiplier, cap or tolerance
+		// changes here.
 		return "4h"
 	default:
 		// Keep the known tier names as-is; anything else → 1m (noise floor),
@@ -492,7 +512,7 @@ func scoreLevelsPool(levels []DetectedLevel, price, dATR float64, freshness func
 		}
 		htf := 1.0
 		if l.HTF {
-			htf = 1.2
+			htf = HTFScoreMultiplier
 		}
 		var score float64
 		if isZoneKind(l.Kind) {

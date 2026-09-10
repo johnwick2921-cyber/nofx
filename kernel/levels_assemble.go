@@ -260,7 +260,16 @@ func dedupeSameKind(levels []DetectedLevel) []DetectedLevel {
 	for _, l := range levels {
 		dup := false
 		for _, o := range out {
-			if o.Kind == l.Kind && math.Abs(o.Price-l.Price) <= dedupeTick {
+			// D2 — TIMEFRAME IS IDENTITY. The key is (kind, tf, price±tick), not
+			// (kind, price±tick). A 1h order block and a 1d order block at one
+			// price are two references that a trader reads differently, and
+			// before this the second one vanished into the first with no record
+			// — the survivor kept its own timeframe and the loser's existence
+			// was simply lost. Cross-timeframe coincidence is a MERGE input
+			// (D3), never a dedupe casualty. Same kind AND same timeframe still
+			// collapses, which is what this dedupe was added for (register S4:
+			// the dual nPOC paths could seat one POC twice).
+			if o.Kind == l.Kind && o.TF == l.TF && math.Abs(o.Price-l.Price) <= dedupeTick {
 				researchCut(l, fmt.Sprintf("same-kind duplicate of %s %.2f [%s]", o.Kind, o.Price, o.Label))
 				dup = true
 				break
@@ -281,9 +290,58 @@ func dedupeSameKind(levels []DetectedLevel) []DetectedLevel {
 // intraday noise adds nothing, and the daily anchors are already covered by
 // ExtractMultiDayLevels. Cluster tolerance scales with the TF's own ATR
 // (3 ticks is meaningless on a 1h bar).
-func DetectHTFLevels(fetch func(tf string, count int) []market.Kline, timeframes []string, symbol string, now time.Time) []DetectedLevel {
-	if fetch == nil || len(timeframes) == 0 {
+// HTFDetectionReport is what the per-timeframe pass RECORDS about itself, so
+// the boot line and the observability log READ the detection rather than
+// recomputing it (A11: a boot line is read, never literal). Counts and Skipped
+// are disjoint: a timeframe appears in exactly one of them, so "produced
+// nothing" and "was never read" stop being the same observation from outside.
+type HTFDetectionReport struct {
+	Requested []string          // the timeframes asked for, in order
+	Counts    map[string]int    // tf -> levels emitted (0 is a real, computed zero)
+	Skipped   map[string]string // tf -> why nothing was read from it
+	Resolved  map[string]string // tf -> the volatility-derived params it actually used
+}
+
+func newHTFDetectionReport(timeframes []string) *HTFDetectionReport {
+	return &HTFDetectionReport{
+		Requested: append([]string(nil), timeframes...),
+		Counts:    map[string]int{},
+		Skipped:   map[string]string{},
+		Resolved:  map[string]string{},
+	}
+}
+
+// TFsWithLevels returns the timeframes that emitted at least one level, in the
+// order they were requested — the boot line's `by tf` list.
+func (r *HTFDetectionReport) TFsWithLevels() []string {
+	if r == nil {
 		return nil
+	}
+	var out []string
+	for _, tf := range r.Requested {
+		if r.Counts[tf] > 0 {
+			out = append(out, tf)
+		}
+	}
+	return out
+}
+
+// DetectHTFLevelsReport is DetectHTFLevels plus the record of what each
+// timeframe did. DetectHTFLevels remains the level-only entry point so existing
+// call sites are untouched.
+func DetectHTFLevelsReport(fetch func(tf string, count int) []market.Kline, timeframes []string, symbol string, now time.Time) ([]DetectedLevel, *HTFDetectionReport) {
+	return detectHTFLevels(fetch, timeframes, symbol, now)
+}
+
+func DetectHTFLevels(fetch func(tf string, count int) []market.Kline, timeframes []string, symbol string, now time.Time) []DetectedLevel {
+	levels, _ := detectHTFLevels(fetch, timeframes, symbol, now)
+	return levels
+}
+
+func detectHTFLevels(fetch func(tf string, count int) []market.Kline, timeframes []string, symbol string, now time.Time) ([]DetectedLevel, *HTFDetectionReport) {
+	rep := newHTFDetectionReport(timeframes)
+	if fetch == nil || len(timeframes) == 0 {
+		return nil, rep
 	}
 	tick := market.FuturesTickSize(symbol)
 	if tick <= 0 {
@@ -291,16 +349,36 @@ func DetectHTFLevels(fetch func(tf string, count int) []market.Kline, timeframes
 	}
 	seen := map[string]bool{}
 	var out []DetectedLevel
-	for _, tf := range timeframes {
-		tf = strings.ToLower(strings.TrimSpace(tf))
-		if tf == "" || seen[tf] || !isHTFDetectionTF(tf) {
+	for _, rawTF := range timeframes {
+		tf := canonicalDetectionTF(rawTF)
+		if tf == "" {
+			continue
+		}
+		if seen[tf] {
+			rep.Skipped[tf] = "requested more than once"
+			continue
+		}
+		if !isHTFDetectionTF(tf) {
+			// Not a silent drop: a timeframe outside the detection set is a
+			// DECISION (sub-15m is intraday noise; the set is isHTFDetectionTF),
+			// and a lane asking why 5m has no zones deserves the reason rather
+			// than an empty list.
+			rep.Skipped[tf] = "outside the HTF detection set"
 			continue
 		}
 		seen[tf] = true
-		cb := closedBars(fetch(tf, 500), now)
-		if len(cb) < 5 {
+		cb := closedBars(fetch(tf, htfDetectionFetchBars), now)
+		if len(cb) < htfMinClosedBars {
+			// D1 — a timeframe with too few bars for the definition emits
+			// NOTHING and says so. A level built from a partial window is worse
+			// than no level: it looks identical to one built from a full one.
+			rep.Skipped[tf] = fmt.Sprintf("only %d closed bars, need %d for the definition", len(cb), htfMinClosedBars)
 			continue
 		}
+		// D1 — parameters stated in BARS stay in bars (the pivot width k, the
+		// fetch depth); parameters stated in VOLATILITY are resolved against
+		// THIS timeframe's own ATR and recorded, because 3 ticks means something
+		// different on a 1w bar than on a 15m one.
 		atr := market.ExportCalculateATR(cb, 14)
 		if atr <= 0 {
 			atr = 0.002 * cb[len(cb)-1].Close
@@ -309,37 +387,211 @@ func DetectHTFLevels(fetch func(tf string, count int) []market.Kline, timeframes
 		if alt := 0.15 * atr; alt > tol {
 			tol = alt
 		}
-		for _, l := range EqualHighsLows(cb, tol, now) {
-			out = append(out, tagHTFLevel(l, tf))
+		rep.Resolved[tf] = fmt.Sprintf("bars=%d atr=%.2f tol=%.2f span=%s", len(cb), atr, tol, htfWindowSpan(cb))
+		lookback := len(cb)
+		before := len(out)
+		for _, d := range htfDetectors {
+			for _, l := range d.Run(cb, atr, tol, now) {
+				out = append(out, tagHTFLevel(l, tf, lookback))
+			}
 		}
-		for _, l := range SupplyDemandZones(cb, atr, now) {
-			out = append(out, tagHTFLevel(l, tf))
+		// A computed zero, recorded as one — distinct from Skipped above.
+		rep.Counts[tf] = len(out) - before
+	}
+	return out, rep
+}
+
+// htfDetectionFetchBars is the per-timeframe fetch depth. Stated in BARS (12e:
+// a parameter in bars stays in bars across timeframes), so 1w reads 500 weeks
+// where 15m reads 500 quarter-hours and the definition is unchanged.
+const htfDetectionFetchBars = 500
+
+// htfMinClosedBars is the floor every detector in this pass needs. It matches
+// the strictest guard among them — EqualHighsLows returns nil below 5 closed
+// bars — and exists so the LOOP can say why a timeframe emitted nothing instead
+// of each detector silently returning an empty slice.
+const htfMinClosedBars = 5
+
+// htfWindowSpan describes the lookback window in calendar terms, so D4's three
+// distinct facts (formation timeframe, lookback window, age at read) are each
+// recorded rather than inferred from one another.
+func htfWindowSpan(cb []market.Kline) string {
+	if len(cb) == 0 {
+		return "n/a"
+	}
+	first := time.UnixMilli(cb[0].OpenTime).In(chicago())
+	last := time.UnixMilli(cb[len(cb)-1].OpenTime).In(chicago())
+	return fmt.Sprintf("%s→%s", first.Format("2006-01-02"), last.Format("2006-01-02"))
+}
+
+// TFBootLine is W-TF's boot posture. Every field is READ from its resolver; the
+// per-read counts are n/a because no detection has run yet, exactly as W3's map
+// line does (A11: a field the process cannot know yet prints n/a, never a
+// plausible zero).
+//
+// `planner tfs` is LABELLED per-trader rather than printed, because this process
+// serves several traders and each reads its own planner_timeframes — the same
+// reason the map line labels `cap` per-trader instead of naming one value.
+func TFBootLine(defaultSet []string, detectors int) string {
+	return fmt.Sprintf(
+		"🗺 tf: detection-set=[%s] · detectors=%d (%s) · detectors×tfs=%d · "+
+			"planner tfs=per-trader (planner_timeframes; D→1d) · "+
+			"levels=n/a (by tf: n/a) · cross-tf merged=n/a · "+
+			"htf-weight=%.1f[I] · daily/weekly tier=4h[I]",
+		strings.Join(defaultSet, ","), detectors, strings.Join(HTFDetectorNames(), ","),
+		detectors*len(defaultSet), HTFScoreMultiplier)
+}
+
+// TFReadLine is the per-read counterpart: the same fields with the numbers the
+// detection pass actually produced. Skipped timeframes are printed with their
+// REASON, so "1w found nothing" and "1w was never read" stay distinguishable on
+// the one line an operator looks at.
+func TFReadLine(rep *HTFDetectionReport) string {
+	if rep == nil {
+		return "🗺 tf: no detection report"
+	}
+	total := 0
+	var byTF []string
+	for _, tf := range rep.Requested {
+		tf = canonicalDetectionTF(tf)
+		if n, ok := rep.Counts[tf]; ok {
+			total += n
+			byTF = append(byTF, fmt.Sprintf("%s=%d", tf, n))
 		}
-		for _, l := range FairValueGaps(cb, atr, now) {
-			out = append(out, tagHTFLevel(l, tf))
+	}
+	var skipped []string
+	for _, tf := range rep.Requested {
+		tf = canonicalDetectionTF(tf)
+		if why, ok := rep.Skipped[tf]; ok {
+			skipped = append(skipped, fmt.Sprintf("%s(%s)", tf, why))
 		}
-		for _, l := range OrderBlocks(cb, atr, now) {
-			out = append(out, tagHTFLevel(l, tf))
-		}
+	}
+	skip := "none"
+	if len(skipped) > 0 {
+		skip = strings.Join(skipped, " ")
+	}
+	list := "none"
+	if len(byTF) > 0 {
+		list = strings.Join(byTF, " ")
+	}
+	return fmt.Sprintf("🗺 tf read: levels=%d (by tf: %s) · skipped=%s · htf-weight=%.1f[I]",
+		total, list, skip, HTFScoreMultiplier)
+}
+
+// htfDetectors is the per-timeframe detector set, as a table rather than four
+// inline loops, so "how many detectors run per timeframe" is a value the boot
+// line can READ instead of a number someone types next to it (A11/A24). The
+// DEFINITIONS are untouched — this wave changes which timeframes they run on,
+// never what any of them looks for (A31).
+//
+// Every detector receives the SAME family definition on every timeframe (round
+// 12, 12e: hold the family definition constant initially). What differs per
+// timeframe is only the volatility-derived tolerance, resolved from that
+// timeframe's own ATR and recorded in the report.
+var htfDetectors = []struct {
+	Name string
+	Run  func(cb []market.Kline, atr, tol float64, now time.Time) []DetectedLevel
+}{
+	{"equal-highs-lows", func(cb []market.Kline, _, tol float64, now time.Time) []DetectedLevel {
+		return EqualHighsLows(cb, tol, now)
+	}},
+	{"supply-demand", func(cb []market.Kline, atr, _ float64, now time.Time) []DetectedLevel {
+		return SupplyDemandZones(cb, atr, now)
+	}},
+	{"fair-value-gaps", func(cb []market.Kline, atr, _ float64, now time.Time) []DetectedLevel {
+		return FairValueGaps(cb, atr, now)
+	}},
+	{"order-blocks", func(cb []market.Kline, atr, _ float64, now time.Time) []DetectedLevel {
+		return OrderBlocks(cb, atr, now)
+	}},
+}
+
+// HTFDetectorCount is what the boot line reads.
+func HTFDetectorCount() int { return len(htfDetectors) }
+
+// HTFDetectorNames lists the detector families, for the Guide and the report.
+func HTFDetectorNames() []string {
+	out := make([]string, 0, len(htfDetectors))
+	for _, d := range htfDetectors {
+		out = append(out, d.Name)
 	}
 	return out
 }
 
-// isHTFDetectionTF lists the timeframes DetectHTFLevels runs on (≥15m, not "D").
+// canonicalDetectionTF resolves a CONFIGURED timeframe string to the one the
+// store and every tier table speak.
+//
+// This is the join that was missing. The bound strategy's planner_timeframes
+// has read ["D","4h","1h","15m","5m"] since the default was written
+// (store/strategy.go:1407) — the owner's configuration has been ASKING for
+// daily structure all along. The detection gate only ever knew "1d", so "D"
+// fell through the `!isHTFDetectionTF(tf)` branch and was dropped in silence,
+// which is why 0 of 297 stored plans carry a daily level while the config names
+// one first.
+//
+// Canonicalising HERE, where the value enters detection, follows the repo's
+// canonical-casing law (checklist 28: one canonicaliser per identifier, called
+// where the value ENTERS). The alias set is deliberately small — only the forms
+// the day-plan config actually uses.
+func canonicalDetectionTF(tf string) string {
+	t := strings.ToLower(strings.TrimSpace(tf))
+	switch t {
+	case "d", "1day", "daily":
+		return "1d"
+	case "w", "1week", "weekly":
+		return "1w"
+	}
+	return t
+}
+
+// isHTFDetectionTF lists the timeframes DetectHTFLevels runs on.
+//
+// W-TF (2026-09-10, owner ruling): the daily family — 1d, 3d, 1w — joins the
+// set. Before this, the gate stopped at 12h on the reasoning that "the daily
+// anchors are already covered by ExtractMultiDayLevels"; that covers PDH/PDL
+// and the prior-week extremes, not a daily SWING, ZONE, ORDER BLOCK or FVG.
+// Measured on 2026-09-10: 0 of 297 stored plans carried a level from any daily
+// timeframe, while the store holds 1d n=1902 back to 2019-05-02 and 1w n=384
+// back to 2019-04-26.
+//
+// Sub-15m stays OUT and the original reason stands: intraday noise adds nothing
+// to higher-timeframe structure, and base swing detection already serves 5m and
+// 15m. Widening this set downward is a decision, not an omission — TestE1c pins
+// it so the next lane has to mean it.
 func isHTFDetectionTF(tf string) bool {
-	switch tf {
-	case "15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h":
-		return true
+	for _, t := range HTFDetectionTFs {
+		if t == tf {
+			return true
+		}
 	}
 	return false
 }
 
+// HTFDetectionTFs is the ORDERED single source for which timeframes the
+// per-timeframe pass runs on. The membership test above ranges over it and every
+// caller that needs a default set reads it, so a timeframe added here reaches
+// the gate and every call site in the same second.
+//
+// This shape is deliberate. Checklist class 107: centralising a hand-typed list
+// is a behaviour change wherever the lists differed, and the remedy is a single
+// SOURCE, never a second list beside the predicate — a []string sitting next to
+// a hardcoded switch diverges exactly as readily as a switch and a SQL literal.
+var HTFDetectionTFs = []string{"15m", "30m", "1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w"}
+
+// DefaultHTFDetectionTFs is the set a caller uses when it has no configured
+// list of its own — one rung per scale rather than all eleven, because a caller
+// on a per-decision path pays a fetch and four detector passes per timeframe.
+// Callers WITH a configured list (the planner reads planner_timeframes) pass
+// theirs; this is not a competing default for them.
+var DefaultHTFDetectionTFs = []string{"15m", "1h", "4h", "1d", "1w"}
+
 // tagHTFLevel marks a detected level with its HTF origin + a TF-suffixed label
 // ("EQH·1h", "Demand·4h") so the ranked table and the card show provenance.
 // Also sets the structured TF field the v3 zone tiers grade on.
-func tagHTFLevel(l DetectedLevel, tf string) DetectedLevel {
+func tagHTFLevel(l DetectedLevel, tf string, lookbackBars int) DetectedLevel {
 	l.HTF = true
 	l.TF = tf
+	l.LookbackBars = lookbackBars
 	l.Label = l.Label + "·" + tf
 	return l
 }

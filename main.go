@@ -509,6 +509,13 @@ func main() {
 	// pwh/pwl seatable reflects whether a DAILY bar source is actually installed
 	// — the prior-week anchors come from daily bars, never from the 1m ring.
 	logger.Infof("%s", kernel.MapBootLine(kernel.DefaultMaxLevels, kernel.PlanHardMaxLevels, kernel.DailySourceInstalled()))
+	// W-TF D6 (2026-09-10) — which timeframes every detector runs on. The
+	// detection set and the detector names are READ from their tables, so the
+	// line cannot claim a pass the binary does not perform; per-tf counts are
+	// n/a until a read happens and ride TFReadLine. The daily/weekly tier and
+	// the htf weight are both marked [I]: round 12 establishes no timeframe
+	// hierarchy and E4 measures both.
+	logger.Infof("%s", kernel.TFBootLine(kernel.DefaultHTFDetectionTFs, kernel.HTFDetectorCount()))
 	// VOID PARITY (2026-09-02) — the ONE scope the prompt's VOID list and the
 	// write-site validator both read. Every field READ from its resolver.
 	logger.Infof("📜 %s", kernel.VoidScopeBootLine())

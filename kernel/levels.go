@@ -88,6 +88,13 @@ type DetectedLevel struct {
 	// The W6 wake loop (2026-08-25) diffs this against the plan row's birth
 	// time to find events the plan never saw.
 	FormedAtMs int64 `json:"formed_at_ms,omitempty"`
+	// LookbackBars is the size of the window the detector actually searched on
+	// this level's own timeframe. D4 (round 12, 12a): formation timeframe,
+	// lookback window and age at read are THREE different facts and none can be
+	// derived from the others — 500 weekly bars and 500 quarter-hourly bars are
+	// the same lookback in bars and nine years apart in time. 0 = not recorded
+	// (every pre-W-TF level), never "zero bars".
+	LookbackBars int `json:"lookback_bars,omitempty"`
 }
 
 // lineLevel builds a single-price DetectedLevel (Lo==Hi==price).
