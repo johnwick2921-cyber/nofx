@@ -433,6 +433,7 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 	}
 
 	c.JSON(200, gin.H{
+		"scenario_identity": kernel.ScenarioIdentities(&doc),
 		"scenario_liveness": liveness,
 		"scenario_deaths":   scenarioDeaths,
 		"found":             true,

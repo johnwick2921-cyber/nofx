@@ -1,12 +1,11 @@
 package trader
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math"
 	"nofx/kernel"
+	"nofx/levelidentity"
 	"nofx/researchsnapshot"
 	"nofx/store"
 	"time"
@@ -28,8 +27,8 @@ func recordResearchCandidatesAt(id, symbol string, raw []kernel.DetectedLevel, s
 		out := make([]researchsnapshot.Fact, 0, len(raw))
 		for _, l := range raw {
 			f := researchsnapshot.NewFact("candidate", "planner_read", researchsnapshot.Value(id), researchsnapshot.Clocks{ObservationMS: researchsnapshot.Value(observed.UnixMilli()), ReceiptMS: researchsnapshot.Value(received.UnixMilli())})
-			f.Set("stable_id", researchCandidateID(symbol, l))
-			f.Set("identity_basis", "symbol/kind/bounds/origin date/timeframe/formation; unknown formation may alias episodes")
+			recordResearchCandidateIdentity(&f, symbol, l)
+			f.Set("identity_basis", "symbol/kind/bounds/origin date/timeframe/separate formation CLOSE; missing input means NULL id")
 			f.Set("root_symbol", symbol)
 			f.Set("raw_origin", l)
 			f.Set("price", l.Price)
@@ -225,10 +224,31 @@ func recordResearchOutcomeAt(p *store.TraderPosition, now time.Time) {
 	})
 }
 
-func researchCandidateID(symbol string, l kernel.DetectedLevel) string {
-	identity := fmt.Sprintf("%s|%s|%g|%g|%s|%s|%d", symbol, l.Kind, l.Lo, l.Hi, l.OriginDate, l.TF, l.FormedAtMs)
-	h := sha256.Sum256([]byte(identity))
-	return hex.EncodeToString(h[:])
+func researchCandidateID(symbol string, l kernel.DetectedLevel) *string {
+	l.IdentitySymbol = symbol
+	return kernel.CandidateIdentity(l).ID
+}
+func recordResearchCandidateIdentity(f *researchsnapshot.Fact, symbol string, l kernel.DetectedLevel) {
+	l.IdentitySymbol = symbol
+	record := kernel.CandidateIdentity(l)
+	if id := researchCandidateID(symbol, l); id != nil {
+		f.Set("stable_id", *id)
+	} else {
+		_, missing := levelidentity.ID(kernel.IdentityInputs(record))
+		f.Unknown("stable_id", "missing "+missing)
+	}
+	f.Set("identity_inputs", kernel.IdentityInputs(record))
+	if l.FormedCloseMs != nil {
+		f.Set("formed_close_ms", *l.FormedCloseMs)
+	} else {
+		f.Unknown("formed_close_ms", "formation close not captured")
+	}
+	f.Set("formation_basis", l.FormationBasis)
+	if l.FormationLookback > 0 {
+		f.Set("formation_lookback", l.FormationLookback)
+	} else {
+		f.Unknown("formation_lookback", "not captured")
+	}
 }
 func recordResearchEpisodes(id, symbol string, l kernel.DetectedLevel, episodes []kernel.TouchOutcome, k, delta float64, horizon int, exitOn string, observed time.Time) {
 	recordResearchEpisodesAt(id, symbol, l, episodes, k, delta, horizon, exitOn, observed, time.Now())
@@ -237,7 +257,7 @@ func recordResearchEpisodesAt(id, symbol string, l kernel.DetectedLevel, episode
 	defer researchsnapshot.Contain("episode recording")
 	researchsnapshot.Record("candidate:prior_episodes", func() []researchsnapshot.Fact {
 		f := researchsnapshot.NewFact("candidate", "prior_episodes", researchsnapshot.Value(id), researchsnapshot.Clocks{ObservationMS: researchsnapshot.Value(observed.UnixMilli()), ReceiptMS: researchsnapshot.Value(received.UnixMilli())})
-		f.Set("stable_id", researchCandidateID(symbol, l))
+		recordResearchCandidateIdentity(&f, symbol, l)
 		f.Set("root_symbol", symbol)
 		if episodes == nil {
 			episodes = []kernel.TouchOutcome{}

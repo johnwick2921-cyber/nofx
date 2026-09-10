@@ -23,6 +23,9 @@ type calDayAgg struct {
 	high, low       float64
 	closePx         float64
 	closeOpenTime   int64
+	closeTime       int64 // recording only; never selects a price
+	rthCloseTime    int64
+	rthCount        int
 	rthHigh, rthLow float64
 	hasRTH          bool
 	count           int // closed bars in this calendar-day bucket
@@ -56,6 +59,8 @@ func ExtractMultiDayLevels(bars []market.Kline, reg SessionRegistry, now time.Ti
 	cal := map[string]*calDayAgg{}
 	var asH, asL, ldnH, ldnL float64 = math.Inf(-1), math.Inf(1), math.Inf(-1), math.Inf(1)
 	var hasAS, hasLDN bool
+	var asClose, ldnClose, pwClose, pmClose int64
+	var asCount, ldnCount, pwCount, pmCount int
 	var pwH, pwL float64 = math.Inf(-1), math.Inf(1)
 	var pmH, pmL float64 = math.Inf(-1), math.Inf(1)
 	var hasPW, hasPM bool
@@ -83,6 +88,7 @@ func ExtractMultiDayLevels(bars []market.Kline, reg SessionRegistry, now time.Ti
 		if b.OpenTime >= a.closeOpenTime {
 			a.closePx = b.Close
 			a.closeOpenTime = b.OpenTime
+			a.closeTime = b.CloseTime
 		}
 
 		session := ""
@@ -90,6 +96,10 @@ func ExtractMultiDayLevels(bars []market.Kline, reg SessionRegistry, now time.Ti
 			session = s.Name
 		}
 		if session == SessionNY {
+			a.rthCount++
+			if b.CloseTime > a.rthCloseTime {
+				a.rthCloseTime = b.CloseTime
+			}
 			a.hasRTH = true
 			if b.High > a.rthHigh {
 				a.rthHigh = b.High
@@ -103,6 +113,10 @@ func ExtractMultiDayLevels(bars []market.Kline, reg SessionRegistry, now time.Ti
 		if CMESessionDayKey(bt) == nowFut {
 			switch session {
 			case SessionAsia:
+				asCount++
+				if b.CloseTime > asClose {
+					asClose = b.CloseTime
+				}
 				hasAS = true
 				if b.High > asH {
 					asH = b.High
@@ -111,6 +125,10 @@ func ExtractMultiDayLevels(bars []market.Kline, reg SessionRegistry, now time.Ti
 					asL = b.Low
 				}
 			case SessionLondon:
+				ldnCount++
+				if b.CloseTime > ldnClose {
+					ldnClose = b.CloseTime
+				}
 				hasLDN = true
 				if b.High > ldnH {
 					ldnH = b.High
@@ -122,6 +140,10 @@ func ExtractMultiDayLevels(bars []market.Kline, reg SessionRegistry, now time.Ti
 		}
 
 		if !bt.Before(priorWeekStart) && bt.Before(priorWeekEnd) {
+			pwCount++
+			if b.CloseTime > pwClose {
+				pwClose = b.CloseTime
+			}
 			hasPW = true
 			if b.High > pwH {
 				pwH = b.High
@@ -131,6 +153,10 @@ func ExtractMultiDayLevels(bars []market.Kline, reg SessionRegistry, now time.Ti
 			}
 		}
 		if !bt.Before(priorMonthStart) && bt.Before(priorMonthEnd) {
+			pmCount++
+			if b.CloseTime > pmClose {
+				pmClose = b.CloseTime
+			}
 			hasPM = true
 			if b.High > pmH {
 				pmH = b.High
@@ -210,6 +236,31 @@ func ExtractMultiDayLevels(bars []market.Kline, reg SessionRegistry, now time.Ti
 		)
 	}
 
+	for i := range out {
+		l := out[i]
+		closeMs, count := int64(0), 0
+		switch l.Kind {
+		case KindPDH, KindPDL, KindPDC:
+			if a := cal[l.OriginDate]; a != nil {
+				closeMs, count = a.closeTime, a.count
+			}
+		case KindRTHH, KindRTHL:
+			if a := cal[l.OriginDate]; a != nil {
+				closeMs, count = a.rthCloseTime, a.rthCount
+			}
+		case KindASH, KindASL:
+			closeMs, count = completedSessionSourceClose(asClose, SessionAsia, reg, now), asCount
+		case KindLDNH, KindLDNL:
+			closeMs, count = completedSessionSourceClose(ldnClose, SessionLondon, reg, now), ldnCount
+		case KindONH, KindONL:
+			closeMs, count = completedSessionSourceClose(ldnClose, SessionLondon, reg, now), asCount+ldnCount
+		case KindPWH, KindPWL:
+			closeMs, count = pwClose, pwCount
+		case KindPMH, KindPML:
+			closeMs, count = pmClose, pmCount
+		}
+		out[i] = WithFormationClose(l, closeMs, count, "existing_bucket_last_source_close", now)
+	}
 	return out
 }
 

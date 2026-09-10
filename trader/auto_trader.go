@@ -842,6 +842,7 @@ func (at *AutoTrader) Run() error {
 	// E1 — the per-trader ledger boot block (sessions/cutoffs, pause, cadence,
 	// roll, balance-alert). The process half prints in main.go.
 	at.logLedgerBootBlock(time.Now())
+	at.logLevelIdentityBootAt(time.Now())
 
 	logger.Info("🚀 AI-driven automatic trading system started")
 	at.logInfof("💰 Initial balance: %.2f USDT", at.initialBalance)

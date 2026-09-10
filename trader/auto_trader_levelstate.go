@@ -221,6 +221,7 @@ func (at *AutoTrader) recordScenarioStateAt(now time.Time) {
 	statuses, evals := kernel.EvaluatePlanScenarios(
 		plan.Doc, windowed, price, dATR, kernel.ActivationWindowK, rule, true, now.UnixMilli())
 
+	identities := at.observeScenarioIdentity(&plan.Doc, plan.PlanID, plan.Version, evals, now)
 	if len(statuses) == 0 {
 		// Nothing resolvable — say nothing rather than write an empty verdict.
 		return
@@ -260,7 +261,7 @@ func (at *AutoTrader) recordScenarioStateAt(now time.Time) {
 			confirms[sc.ID] = kernel.EvaluateScenarioConfirm(sc, bars, plan.BirthMs, now.UnixMilli())
 		}
 	}
-	if metaBlob, mErr := json.Marshal(map[string]any{"basis": basis, "unevaluable": unevaluable, "confirm": confirms, "observed_at": now}); mErr == nil {
+	if metaBlob, mErr := json.Marshal(map[string]any{"level_identity": identities, "basis": basis, "unevaluable": unevaluable, "confirm": confirms, "observed_at": now}); mErr == nil {
 		_ = at.store.SetSystemConfig(store.ScenarioMetaKey(at.id, resolvedPlanID, plan.Version), string(metaBlob))
 		recordResearchPermissions(resolvedPlanID, plan.Version, string(metaBlob), now, evals)
 	}

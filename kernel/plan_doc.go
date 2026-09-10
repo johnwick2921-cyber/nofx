@@ -23,10 +23,22 @@ type PlanBias struct {
 
 // PlanLevel is one graded reference level with an instruction verb.
 type PlanLevel struct {
-	Price       float64 `json:"price"`
-	Label       string  `json:"label"`       // provenance chip: PDH, ONH, nPOC·Tue, RN, EQH…
-	Grade       string  `json:"grade"`       // A | B | C (MODEL-written)
-	Instruction string  `json:"instruction"` // instruction verb, e.g. "fade", "reclaim-long"
+	ID            *string  `json:"id"`
+	Symbol        *string  `json:"symbol"`
+	Kind          *string  `json:"kind"`
+	Lo            *float64 `json:"lo"`
+	Hi            *float64 `json:"hi"`
+	OriginDate    *string  `json:"origin_date"`
+	TF            *string  `json:"tf"`
+	FormedAtMs    *int64   `json:"formed_at_ms"`
+	FormedCloseMs *int64   `json:"formed_close_ms"`
+	LookbackBars  *int     `json:"lookback_bars"`
+	Names         []string `json:"names,omitempty"`
+	SourceIDs     []string `json:"source_ids,omitempty"` // exact merged members, captured by the existing merge
+	Price         float64  `json:"price"`
+	Label         string   `json:"label"`       // provenance chip: PDH, ONH, nPOC·Tue, RN, EQH…
+	Grade         string   `json:"grade"`       // A | B | C (MODEL-written)
+	Instruction   string   `json:"instruction"` // instruction verb, e.g. "fade", "reclaim-long"
 	// MachineGrade is the deterministic detector-side grade (type × freshness ×
 	// confluence × HTF — levels_score.go) stamped at plan write by matching the
 	// plan level back to the Go-ranked candidate table. Empty when no match
@@ -50,6 +62,7 @@ type PlanConfirm struct {
 }
 
 type PlanScenario struct {
+	LevelID *string `json:"level_id"` // NULL on legacy; WARN-only on new authoring.
 	// Absent on legacy records: never inferred or required during stored reads.
 	Economics   *ScenarioEconomics `json:"economics,omitempty"`
 	ID          string             `json:"id"`           // S1, S2, S3
@@ -257,6 +270,8 @@ type PlanFvgEntry struct {
 
 // PlanDoc is the full plan (stored as the plans.doc JSON).
 type PlanDoc struct {
+	// Frozen machine map actually shown at authoring; never model-authored.
+	IdentityLevels []PlanLevel    `json:"identity_levels"`
 	Reasoning      string         `json:"reasoning"` // reasoning FIRST
 	Bias           PlanBias       `json:"bias"`
 	Levels         []PlanLevel    `json:"levels"`
@@ -820,12 +835,13 @@ func MislabeledStructuralLevels(d *PlanDoc, machineLabels map[float64]string) []
 }
 
 type PlanFacts struct {
-	Price  float64     // reference price at read time
-	DATR   float64     // daily ATR proxy
-	PDH    float64     // prior day high (0 = unknown → gap rules skipped)
-	PDL    float64     // prior day low (0 = unknown → gap rules skipped)
-	PDC    float64     // prior day close (CLASS 50b — the bias-label tree leg)
-	Regime RegimeBlock // CLASS 50b — the bias-label regime leg (read-time copy)
+	IdentityMap []MapCandidate `json:"-"` // record-only snapshot, ignored by every trading validator
+	Price       float64        // reference price at read time
+	DATR        float64        // daily ATR proxy
+	PDH         float64        // prior day high (0 = unknown → gap rules skipped)
+	PDL         float64        // prior day low (0 = unknown → gap rules skipped)
+	PDC         float64        // prior day close (CLASS 50b — the bias-label tree leg)
+	Regime      RegimeBlock    // CLASS 50b — the bias-label regime leg (read-time copy)
 }
 
 // ValidatePlanDocWithFacts = schema rules + facts rules:

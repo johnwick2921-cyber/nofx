@@ -83,7 +83,7 @@ func ownerLevels(base, final PlanDoc) []PlanLevel {
 		switch {
 		case !found:
 			out = append(out, fl) // the owner added this price
-		case bl != fl:
+		case !sameTradingPlanLevel(bl, fl):
 			out = append(out, fl) // same price, owner changed label/grade/instruction
 		}
 	}
@@ -106,7 +106,7 @@ func CarryOwnerEdits(oldBase, oldFinal, newDoc PlanDoc, patches []string) CarryR
 	var ops []map[string]any
 	for _, ol := range ownerLevels(oldBase, oldFinal) {
 		if existing, found := hasLevelAt(newDoc.Levels, ol.Price); found {
-			if existing == ol {
+			if sameTradingPlanLevel(existing, ol) {
 				continue // already exactly right in the new plan — nothing to do
 			}
 			// The new plan has its OWN idea about this price. Re-applying the

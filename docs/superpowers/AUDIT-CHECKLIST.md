@@ -4192,3 +4192,17 @@ including "trend-down extension / oversold reversal watch". A naive `= 'trend'`
 misses 77 of 269. An exclusion keyed on it would string-match an LLM's
 adjectives and call the result a measurement. Pin it by reflecting over the
 facts struct (`TestFadeFactsCarriesNoDayType`).
+
+## CLASS 116 — AN IDENTITY HASH WITH INPUTS THE RECORD NEVER HELD (assigned at identity merge, 2026-09-10)
+
+Assigned after the three-format census of dev `4dc0fae1`: ceiling 115; existing
+duplicates 75/76/77 retained. An identity
+hash requires every recorded input, including the separate formation close;
+missing input is NULL, never a hash of a zero. Legacy scenario links stay
+labelled heuristics. Recording identity must not replace the trading evaluator's
+anchor: disagreement is a counted finding. Pins: parser→named map→episode,
+separate closes, all-input backfill, WARN-only missing/unknown ID, distinct
+candidate/evaluator prices, production call-site removals, and baseline output
+parity. C1–C4 and W1's pinned basis are in the
+[105 report](reports/2026-09-10-scenario-level-identity.md), initially published
+in `f19afe5dbd04199ddaa253a51958c0b909b8c4ae` before implementation.

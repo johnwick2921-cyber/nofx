@@ -16,7 +16,26 @@ export interface PlanBias {
   bias_label?: string
 }
 
+export interface ScenarioLevelIdentity {
+  level_id: string | null
+  level: PlanLevel | null
+  basis: string
+  evaluator_anchor: number | null
+  disagreed: boolean
+}
+
 export interface PlanLevel {
+  id?: string | null
+  symbol?: string | null
+  kind?: string | null
+  lo?: number | null
+  hi?: number | null
+  origin_date?: string | null
+  tf?: string | null
+  formed_at_ms?: number | null
+  formed_close_ms?: number | null
+  lookback_bars?: number | null
+  names?: string[]
   price: number
   label: string // provenance chip: PDH, ONH, nPOC·Tue, RN, EQH…
   grade: string // A | B | C
@@ -40,6 +59,7 @@ export interface ScenarioEconomics {
 }
 
 export interface PlanScenario {
+  level_id?: string | null
   economics?: ScenarioEconomics
   arm?: { enabled?: boolean; entry: number; stop: number; target: number }
   id: string // S1, S2, S3
@@ -197,6 +217,7 @@ export interface PlanToday {
   /** P2 — true when too much of the regime map was dark to fully trust the plan. */
   degraded?: boolean
   // Per-scenario live status keyed by scenario id (executor-phase; absent now).
+  scenario_identity?: Record<string, ScenarioLevelIdentity>
   scenario_status?: Record<string, ScenarioStatusValue>
   scenario_liveness?: ScenarioLiveness
   scenario_deaths?: Record<string, ScenarioDeath>

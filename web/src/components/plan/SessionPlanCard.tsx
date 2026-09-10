@@ -841,6 +841,7 @@ export function SessionPlanCard({
             (plan as { fade_permission?: Record<string, FadeLabelView> })
               .fade_permission
           }
+          identities={plan.scenario_identity}
           armedStates={
             (
               plan as {

@@ -117,6 +117,7 @@ func GapLevels(bars []market.Kline, atr, minGapATR float64, now time.Time) []Det
 			OriginDate: origin,
 			Info:       fmt.Sprintf("size %.2f, unfilled", gHi-gLo),
 		})
+		out[len(out)-1] = WithFormationClose(out[len(out)-1], c.CloseTime, len(closed), "gap_source_close", now)
 	}
 	return out
 }
@@ -145,6 +146,8 @@ func OpeningRangeLevels(bars []market.Kline, reg SessionRegistry, now time.Time)
 
 	var orH, orL, ibH, ibL float64 = math.Inf(-1), math.Inf(1), math.Inf(-1), math.Inf(1)
 	var hasOR, hasIB bool
+	var orClose, ibClose int64
+	var orCount, ibCount int
 	for i := range bars {
 		b := bars[i]
 		if b.CloseTime >= nowMs {
@@ -152,10 +155,18 @@ func OpeningRangeLevels(bars []market.Kline, reg SessionRegistry, now time.Time)
 		}
 		bt := time.UnixMilli(b.OpenTime).In(loc)
 		if !bt.Before(rthOpen) && bt.Before(orEnd) {
+			orCount++
+			if b.CloseTime > orClose {
+				orClose = b.CloseTime
+			}
 			hasOR = true
 			orH, orL = math.Max(orH, b.High), math.Min(orL, b.Low)
 		}
 		if !bt.Before(rthOpen) && bt.Before(ibEnd) {
+			ibCount++
+			if b.CloseTime > ibClose {
+				ibClose = b.CloseTime
+			}
 			hasIB = true
 			ibH, ibL = math.Max(ibH, b.High), math.Min(ibL, b.Low)
 		}
@@ -179,6 +190,16 @@ func OpeningRangeLevels(bars []market.Kline, reg SessionRegistry, now time.Time)
 			lineLevel(KindIBL, ibL-0.5*r, "IB-1.5x", origin, false),
 			lineLevel(KindIBL, ibL-1.0*r, "IB-2x", origin, false),
 		)
+	}
+	for i := range out {
+		end, closeMs, count := orEnd, orClose, orCount
+		if out[i].Kind == KindIBH || out[i].Kind == KindIBL {
+			end, closeMs, count = ibEnd, ibClose, ibCount
+		}
+		if now.Before(end) || closeMs < end.UnixMilli()-1 || closeMs > end.UnixMilli() {
+			closeMs = 0
+		}
+		out[i] = WithFormationClose(out[i], closeMs, count, "completed_window_source_close", now)
 	}
 	return out
 }

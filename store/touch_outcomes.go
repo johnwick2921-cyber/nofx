@@ -81,6 +81,8 @@ type TouchOutcomeRow struct {
 	// mistakes it for what the planner meant. NULL whenever two scenarios sit
 	// inside the band or nothing is close — ambiguity is NULL, never
 	// nearest-wins. ScenarioLinkBasis always states how, or why not.
+	// LevelID is the named candidate; NULL until a scenario names a resolvable ID.
+	LevelID               *string `gorm:"index"`
 	ScenarioNearest       *string `gorm:"index"`
 	ScenarioLinkBasis     string
 	ScenarioLinkDistPts   *float64

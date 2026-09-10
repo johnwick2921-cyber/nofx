@@ -1,10 +1,12 @@
-# Dispatch 105 — scenario-level identity: measured premises and STOP correction
+# Dispatch 105 — scenario-level identity: corrected premises and implementation
 
-**Status: STOP before implementation, under dispatch A17/A23/A31.** The missing
-candidate identity is established. The proposed fix crosses existing trading
-consumers and uses formation semantics that differ from the running source.
-This report supplies the correction for an owner ruling; it claims no shipped
-identity feature, migration, new counter, test pass, or boot.
+**Current status: implementation built and verified on the owner's corrected
+scope; ready for review and a separate cutover GO. Not deployed.** The owner approved
+separate `formed_close_ms`, unchanged evaluator/gate/wake inputs, complete-input
+backfills and WARN-first authoring. The original STOP audit below remains the
+historical evidence for that correction; its unperformed-work section describes
+the pre-approval state. The implementation addendum supersedes that status.
+
 
 **Lane:** `fix/scenario-level-identity`, session
 `scenario-identity-ac5a801d/root[unlisted]`. Claimed with `deploy/nofx-claim.sh new`,
@@ -379,3 +381,276 @@ of this report requires only reverting its documentation commit. A future
 cutover must perform the full backup, merged suite, clean-clone build, source
 Guide stamp, fresh gate, RELEASE/swap/VERIFY sequence and then observe live
 proof. This report is not a deploy authorization or a five-leg gate result.
+
+
+## Implementation addendum — owner-approved corrected scope
+
+**[A] Branch:** `fix/scenario-level-identity`; isolated locked worktree
+`/tmp/nofx-scenario-level-identity`. Rebased onto dev
+`08aea8b81124bab5f1e18e9eccd76e35f108668c`, preserving the intervening collapse-keeps-names
+changes. The deletion comparison now includes no deletions of another lane's
+files. No main-tree edit, deploy lock, live DB write or boot occurred.
+
+### Contract and separation
+
+- `levelidentity.ID` is the sole seven-input hash implementation. Formation is
+  the separately captured close. Every missing input names its reason and returns
+  NULL; no zero-formation or partial hash. Bounds must be present and finite.
+- `DetectedLevel.FormedAtMs`, existing `TF` and all trading inputs stay unchanged.
+  `formed_close_ms` rides separately into the frozen plan map and research record.
+  PlanLevel metadata comes from the machine map, not model-supplied extra fields.
+- `LevelByID` validates a stored ID against every frozen input. Cards, desk,
+  evaluation recording and episode attribution use that resolver. The existing
+  `ScenarioAnchor` and `EvaluateScenario` code is unchanged. The evaluator's own
+  anchor remains beside the resolved candidate; > existing merge width is a
+  recorded disagreement, never a decision change.
+- `StampAuthoredIdentity` is called after ordinary accepted-plan validation.
+  Missing and unknown IDs are WARN plus recorded event, not a refusal. Events
+  are scoped to trader/plan/version/scenario. Disagreement counts are unique
+  version/scenario observations; polling does not increase them. Counter-write
+  errors warn, and recording panics are contained.
+- `touch_outcomes.level_id` is the sole added episode column. Existing ordinal,
+  k, delta, horizon, formation-open scan floor, watermark and proximity fields
+  retain their meanings. Exact primary references and merged members recorded by the existing merge
+  receive the named primary ID; unnamed or changed references remain NULL.
+  Membership is stored as exact source IDs, never reconstructed by price. A candidate named by two
+  scenarios remains ambiguous at the scenario join. A named row cannot read a
+  different active plan version's scenario facts merely because both are S1.
+- Backfill population is **episode rows**, not inferred legacy scenario counts.
+  Before the measured W-TF creation cutoff, rows are untouched. Later rows need
+  all seven inputs from an already-named frozen candidate in the exact plan
+  version. Missing fields are `unrecomputable:<fields>`. Legacy plan documents
+  are never rewritten. Classification rows, with IDs, are preserved in the
+  trader-scoped `level_identity_backfill:` sidecar. No live migration was run.
+
+**[A] Formation output matrix:** prior-calendar PDH/PDL/PDC and NY-subset RTH
+use the actual last source close of their existing buckets, not an invented
+CME boundary. AS/London/overnight and OR/IB require an actual completed-window
+last close; developing or missing-final-bar outputs retain NULL. Weekly/monthly
+references and profile/pdVWAP/nPOC use the existing bucket's last source close.
+Session/eVWAP use their explicitly defined anchor only when its source bar is
+present. Gap, S/D, FVG, iFVG, OB and swings carry their source-completion close;
+iFVG records inversion close separately from the unchanged original-gap open.
+Round numbers, owner references and durable legacy extras without source
+formation remain NULL. Lookback is recorded alongside, not substituted for TF.
+
+### Scope correction approved during implementation
+
+The full Go run found the brand wave's `TestExistingGoImportTargetsPreserved`
+rejecting removal of obsolete `crypto/sha256` and `encoding/hex` imports from
+`trader/research_snapshot.go`. Moving the hash to the shared helper made these
+imports unused. The guard compared all future changes to `954f11b1`, extending
+that wave's import constraint indefinitely. The owner explicitly approved
+narrowing it to protect `nofx/...`; the existing rename-to-`vl/...` rejection
+pin remains and a standard-library-removal pin was added. No existing project
+import target or Go module path was renamed. Evidence:
+[initial full Go result](2026-09-10-scenario-level-identity-data/go-before-guard-correction.txt).
+
+The corrected RULEBOOK was absent from dev. Its unchanged baseline is carried
+from `daeb654978b0c739592e8589a393c5e79171560d` (branch
+`docs/rulebook-trading-corrections-20260910`); only the identity note in §A is
+this lane's addition. No §B policy is authored or amended here. Guide and
+SYSTEM-MAP plan/levels notes accompany it. All three explicitly distinguish
+source implementation from live proof.
+
+### Verification record
+
+**[A] E1/E5 original red:** the actual parser discarded `level_id`; the OR emitter
+had no separate close. See [red output](2026-09-10-scenario-level-identity-data/E1-E5-red.txt).
+Compilation failures while writing fixtures are not counted as semantic red pins.
+
+**[A] Green pins:** actual accepted planner write → frozen map → `LevelByID` →
+production episode row; missing and unknown IDs remain ACTIVE and counted;
+different closes yield different IDs and every missing hash input yields NULL;
+P versus P+5 preserves evaluator output and records attribution disagreement;
+legacy stored plan reads NULL; PDH prior calendar source close, OR 08:35, IB
+09:30 and existing extensions, VWAP source anchor, and round-number NULL are
+pinned with explicit clocks. The production-path episode test also recomputes
+its IDs from complete frozen inputs. UI pins cover legacy NULL, unknown WARN
+and the distinct candidate/evaluator prices.
+
+**[A] Behavior golden:** generated on the exact dev baseline `08aea8b8` in a
+separate locked worktree; 302,824 bytes. The current production detector → dedupe
+→ scorer → seat output and old map text compare byte-for-byte. Golden:
+`kernel/testdata/identity_legacy_output.json`; test
+`TestIdentityLegacyOutputParity`. This is a deterministic fixture proof, not a
+claim that every possible tape has been enumerated.
+
+**[A] E7:** removing only the added `id=` column from the new model map text
+returns the previous text exactly. The other planner prompt change is the new
+scenario schema field; no authoring policy instruction was changed.
+
+**[A] E8:** the AST wiring gate names actual production files and counts their
+calls; declarations and tests cannot satisfy it. [Caller receipts and parity
+result](2026-09-10-scenario-level-identity-data/parity-wiring.txt).
+
+**[A] E10:** seven mutations, seven confirmed source replacements, seven
+successful package builds, seven failing pins. The mutations omit formation
+from the hash, turn WARN into REFUSE, substitute the evaluator anchor for the
+ID's candidate price, and disconnect episode identity, plan stamping, boot
+logging and formation capture. Each artifact quotes BEFORE/AFTER and the test
+failure: [manifest](2026-09-10-scenario-level-identity-data/mutations.json).
+The first authority run had an overly strict script confirmation check; it is
+not counted. The corrected confirmation checks the exact mutated file, and
+all mutations were restored before final suites.
+
+**[A] Frontend:** full vitest 59 files / 417 tests PASS; `tsc --noEmit` PASS.
+The sandboxed frontend run could not spawn the existing brand test's Go
+subprocess (EPERM); rerunning with that execution permission passed, without
+changing the test. [Vitest output](2026-09-10-scenario-level-identity-data/vitest-full.txt).
+Full Go final result and final tested commit are recorded below when complete.
+
+### Remaining cutover proof and rollback
+
+This addendum claims no live named-plan count, no live backfill count and no
+identity boot. Those require the owner's separate GO and a fresh gate. The
+boot reader is trader-bound; unavailable map/counter/backfill data prints n/a,
+not a plausible zero. Legacy IDs remain NULL by design. Guide source revision
+must be stamped from the clean-clone binary before dist. Checklist class number
+is assigned at merge; none is reserved here.
+
+Cutover still owes backup + integrity check before any migration, full suite at
+the merged head, clean clone named `nofx`, binary `vcs.modified=false`, source
+GUIDE_BUILT_REV then dist, own five-leg gate, RELEASE → mv → VERIFY, permitted
+restart, owner boot acknowledgment, pushed same-tree marker and five-reference
+verification before lock release. Preserve the old binary by its actual embedded
+revision. Rollback restores that binary and matching RELEASE/dist/Guide marker;
+the additive nullable column and versioned recording sidecars may remain.
+No account, order, execution or detector policy changes are part of this wave.
+
+[Implementation source freshness receipts](2026-09-10-scenario-level-identity-data/implementation-source-receipts.json)
+quote `git log -1` against the dev base for each existing touched file. Original
+running-revision evidence and its sample IDs remain in C1–C6 above.
+
+
+### W2 integration checkpoint
+
+**[A]** The first restored full Go suite passed at
+`aa145338cae425afdd09e09aa06e49726a4eaf6e`. Dev then acquired W2 through
+`de26d1e4867b2b1e356b7c90d7b93305060cff41`, so that run is not claimed as W2
+integration proof. Rebase retained W2's fade episode fields, production stamp,
+API data, chip, Guide and class 115. Two textual conflicts were resolved by
+retaining both lanes: `SessionPlanCard.tsx` props and the checklist tail. The
+identity lane did not author or modify `kernel/fade_permission.go` or the fade
+stamp. A subsequent merged-source suite and build are required below.
+
+The recorded formation TF now reads the existing `AISVPBarInterval` constant
+for the base series. Exact merge membership is captured as `source_ids` beside
+the primary identity; a merged member can attach to that named primary through
+those recorded IDs. No later proximity guess, merge width change or score
+change is involved. The legacy production-output golden still pins the output.
+
+**Test chronology boundary:** E1 parser and E5 OR pins were run red before their
+implementation. E2/E3/E4 have confirmed build-green mutation reds after the core
+was introduced, followed by restored green runs; this report does not represent
+those as pre-code baseline executions.
+
+
+### Final prepared-candidate verification
+
+**[A] Code candidate:** `b30afc6570936a628c8cef1f462dc9e8dd8216d9`, based on
+`de26d1e4867b2b1e356b7c90d7b93305060cff41` (W2 included). The restored **full
+`go test ./...` passes** on this combined source; kernel 1.296s, trader 133.945s.
+[Full Go receipt](2026-09-10-scenario-level-identity-data/go-w2-final.txt).
+The complete frontend suite after W2 integration and the binary-derived Guide
+stamp passes **60 files / 421 tests**. `npm run build` passes both TypeScript
+and Vite; Vite's existing chunk-size warning is advisory, not a failed build.
+[Frontend receipt](2026-09-10-scenario-level-identity-data/vitest-w2-full.txt).
+
+**[A] Clean clone:** `/tmp/identity-build/nofx`, porcelain-clean before `go build`.
+The built `/tmp/identity-build/nofx-bin` reports:
+
+```
+vcs.revision=b30afc6570936a628c8cef1f462dc9e8dd8216d9
+vcs.modified=false
+MD5=42bf7006f44b6a0f1f7e4ca4137df8df
+SHA256=169827b0621a809d8ba5bdfe34f014f909205d36fa7b9550b5567ba4d2975694
+```
+
+The Guide SOURCE in this branch and the build clone was then stamped to that
+exact binary revision, **before** building dist. The subsequent documentation
+and Guide-stamp commit is not represented as the binary's revision. Dist has
+92 files, with [a file-by-file SHA256 manifest](2026-09-10-scenario-level-identity-data/candidate-dist-manifest.json).
+[Build information](2026-09-10-scenario-level-identity-data/candidate-buildinfo.txt)
+and [dist build output](2026-09-10-scenario-level-identity-data/candidate-dist-build.txt).
+These are prepared artifacts, not live references.
+
+**[A] Scope/deletion review:** compared against the W2 base, no changes to
+`kernel/scenario_state.go`, `kernel/entry_gate.go`, `trader/armed_executor.go`,
+`kernel/levels_score.go`, `kernel/fade_permission.go`, or W2's fade stamp wiring.
+The detector changes are output metadata; baseline output parity passes.
+No file from W2 or the collapse-keeps-names lane is deleted. The module remains
+`nofx`; the new `nofx/levelidentity` import is additive. Standard-library hash
+imports moved out of the research writer under the explicitly approved guard
+correction. E8 production-call receipts remain available above.
+
+**A15, test fixture observation:** the pre-existing `recorderFixture` in
+`trader/detector_formation_test.go` returns `time.Now()` even when given a fixed
+`endAt`; last changed at `c6f75756f3e54a56646ca3cfa9c86f116b5d4541`.
+105's new integration fixture supplies its own fixed clock and does not use
+that helper. No failure attributable to this observation was measured here,
+and it was not changed under this wave.
+
+**Still not claimed:** a merge/boot on dev, an identity boot line from the live
+process, a migration against live data, or the first named live plan. The
+original correction report is already on dev via PR #100; this implementation
+addendum accompanies the implementation branch pending its merge. On owner GO,
+rebase/merge against then-current dev, assign the checklist number and rerun the
+merged-head suite/build/gate sequence. Do not deploy a stale prepared binary if
+the merged source differs. No RELEASE, main-tree binary or running process was
+changed while preparing this candidate.
+
+
+### Remote CI and partner handoff — not a green-remote-CI claim
+
+**[A] PR #101**, head `71127ef5d20787d279764f55190bf7d8643cae1d` at this
+observation, is mergeable, but its remote checks are **not all green**. Completed
+job logs identify failures in unchanged workflow setup:
+
+- Security run `34543205125`: installation of `govulncheck@latest` selects
+  `golang.org/x/vuln v1.8.0`, which requires Go >=1.26; the job runs 1.25.3 with
+  `GOTOOLCHAIN=local`. The scanner did not complete. Its npm production-dependency
+  job separately fails with exit 127 while running `husky`.
+- Image run `34543205094`: generated image tags have an empty prefix, e.g.
+  `nofx-backend:-4ed4efa-amd64`, and fail as invalid reference format before
+  the image build. No image publication is claimed.
+- Docker frontend job `103090143569` cannot resolve
+  `../../../branding/product.txt?raw` from `src/constants/branding.ts` inside
+  its build context. That branding import and Dockerfile are unchanged by 105.
+- Other backend checks were still running at inspection. Their eventual
+  outcomes are not inferred from the local suite or from another job.
+
+[Exact failure excerpts](2026-09-10-scenario-level-identity-data/remote-ci-setup-failures.txt).
+No `.github` workflow, Dockerfile, dependency manifest or Go toolchain was
+changed by 105. Owner ruling at cutover GO: these three CI setup failure groups are
+**pre-existing, owed to cleanup batch 2**. They are recorded under A15 and
+not repaired under the identity dispatch. The full local Go suite, 421 frontend tests and candidate
+build results above remain separately established.
+
+**[A] Partner handoff:** `/home/hoang/vlautoagenttraderv1` is at
+`f6ae7597fb3bc9caeaaedb25ce8c3c48bca72247` (2026-08-23), lacks the identity
+wave's prerequisite `kernel/plan_doc.go`, `kernel/scenario_state.go` and
+`store/touch_outcomes.go`, and already has uncommitted changes in
+`agent/planner_runtime_state_test.go`, `agent/skill_dispatcher_test.go` and
+`agent/trader_scope_test.go`. It was not modified or pushed. A complete
+`format-patch` handoff from the W2 base is prepared at
+`/tmp/identity-build/partner-identity.patch`. Applying/building it requires the
+partner's prerequisite baseline/history synchronization; no successful mirror
+application or mirror test result is claimed.
+
+
+### Cutover GO and partner routing (2026-09-10)
+
+Owner authorized 105 after W2 boots and releases its lock, with 105's own
+fresh five-leg gate and RELEASE → mv → VERIFY → exact kill command.
+W2 boot was directly observed at 18:47:08 CT: `BOOT INTEGRITY OK — rev
+4fc670aa4508 · expected 4fc670aa · goldens PASS`; its fade-permission
+boot line was present at 18:47:15. Lock release and 105's gate remain
+separate prerequisites.
+
+The owner routes the partner patch to **Binnie's lane, handoff only**.
+105 must not apply it. Prepared patch: `/tmp/identity-build/partner-identity.patch`,
+SHA256 `59c582b9684173f8cc3caf29cf8b56f9d4b2f0bb8418c37b44e418d0bdedc138`.
+The prerequisite and dirty-checkout observations above travel with that handoff.
+A handoff note is staged beside the patch; no delivery acknowledgement from
+Binnie's lane has yet been observed.

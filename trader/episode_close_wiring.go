@@ -63,7 +63,10 @@ func (at *AutoTrader) closeEpisodesForSessionClose(reason string) {
 	armed := map[string]bool{}
 	filled := map[string]bool{}
 	entries := map[string]store.AttainableInputs{}
+	var activeDoc *kernel.PlanDoc
+	activePlanID, activeVersion := "", 0
 	if ap := kernel.ActivePlanFor(at.id, at.futuresSymbol()); ap != nil {
+		activeDoc, activePlanID, activeVersion = &ap.Doc, ap.PlanID, ap.Version
 		for _, sc := range ap.Doc.Scenarios {
 			if sc.Confirm != nil && sc.Confirm.RefPrice > 0 {
 				confirmed[sc.ID] = true
@@ -107,7 +110,17 @@ func (at *AutoTrader) closeEpisodesForSessionClose(reason string) {
 		return &in
 	}
 
-	n, err := to.CloseOpenOpportunities(at.id, "", 0, "", closeCauseFor(reason), facts, entryFor)
+	n, err := to.CloseOpenOpportunities(at.id, "", 0, "", closeCauseFor(reason), facts, entryFor, func(row store.TouchOutcomeRow) *string {
+		if row.LevelID == nil {
+			return row.ScenarioNearest
+		}
+		// Identity must not attach this row to a different plan version's
+		// mutable facts merely because both scenarios happen to be called S1.
+		if activeDoc == nil || row.PlanID != activePlanID || row.PlanVersion != activeVersion {
+			return nil
+		}
+		return kernel.EpisodeScenarioByID(row.LevelID, activeDoc)
+	})
 	if err != nil {
 		at.logWarnf("🎫 episode close failed (%s): %v", reason, err)
 		return

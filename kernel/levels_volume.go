@@ -49,7 +49,11 @@ func SessionVWAPLevels(bars []market.Kline, now time.Time) []DetectedLevel {
 		return nil
 	}
 	day := time.UnixMilli(sessStart).In(CTLocation()).Format("2006-01-02")
-	return []DetectedLevel{
+	anchor := int64(0)
+	if session[0].OpenTime == sessStart {
+		anchor = sessStart
+	}
+	return captureFormationGroup([]DetectedLevel{
 		lineLevel(KindVWAP, vwap, "VWAP", day, false),
 		lineLevel(KindVWAP, vwap+sd, "VWAP+1σ", day, false),
 		lineLevel(KindVWAP, vwap-sd, "VWAP−1σ", day, false),
@@ -57,7 +61,7 @@ func SessionVWAPLevels(bars []market.Kline, now time.Time) []DetectedLevel {
 		// ruling (the dispatched spec listed them; the emission was missing).
 		lineLevel(KindVWAP2S, vwap+2*sd, "VWAP+2σ", day, false),
 		lineLevel(KindVWAP2S, vwap-2*sd, "VWAP−2σ", day, false),
-	}
+	}, anchor, len(session), "session_anchor", now)
 }
 
 // vwapAndStdev computes the session VWAP (typical price = (H+L+C)/3, weighted
@@ -115,7 +119,11 @@ func EVWAPLevels(bars []market.Kline, now time.Time) []DetectedLevel {
 	if ev <= 0 || len(win) < 2 {
 		return nil
 	}
-	return []DetectedLevel{lineLevel(KindEVWAP, ev, "eVWAP", anchorCT.Format("2006-01-02"), false)}
+	anchor := int64(0)
+	if win[0].OpenTime == anchorMs {
+		anchor = anchorMs
+	}
+	return captureFormationGroup([]DetectedLevel{lineLevel(KindEVWAP, ev, "eVWAP", anchorCT.Format("2006-01-02"), false)}, anchor, len(win), "cash_close_anchor", now)
 }
 
 // ── prior-day volume profile (pdPOC / VAH / VAL) ───────────────────────────
@@ -151,6 +159,7 @@ func PriorDayProfileLevels(bars []market.Kline, now time.Time) []DetectedLevel {
 		return nil
 	}
 	out := profileLevels(prior, dayKey, "")
+	out = captureFormationGroup(out, prior[len(prior)-1].CloseTime, len(prior), "prior_profile_last_source_close", now)
 	if len(out) > 0 {
 		pdProfileCache.Store(dayKey, out)
 	}
@@ -264,6 +273,7 @@ func NakedPOCLevels(bars []market.Kline, now time.Time) []DetectedLevel {
 		day   string
 		poc   float64
 		birth int64 // first bar open of the day (touch comparisons start after)
+		bars  int   // recording-only source window size
 	}
 	var days []dayPOC
 	for d := 1; d <= 10; d++ {
@@ -286,6 +296,7 @@ func NakedPOCLevels(bars []market.Kline, now time.Time) []DetectedLevel {
 			day:   dayStart.In(CTLocation()).Format("2006-01-02"),
 			poc:   prof[0].Price,
 			birth: dayBars[len(dayBars)-1].CloseTime,
+			bars:  len(dayBars),
 		})
 	}
 	var out []DetectedLevel
@@ -305,7 +316,7 @@ func NakedPOCLevels(bars []market.Kline, now time.Time) []DetectedLevel {
 		if touched {
 			continue // retire-on-touch
 		}
-		out = append(out, lineLevel(KindNPOC, d.poc, "nPOC·"+d.day, d.day, false))
+		out = append(out, WithFormationClose(lineLevel(KindNPOC, d.poc, "nPOC·"+d.day, d.day, false), d.birth, d.bars, "prior_profile_last_source_close", now))
 	}
 	return out
 }
@@ -333,7 +344,7 @@ func PDVWAPLevels(bars []market.Kline, now time.Time) []DetectedLevel {
 		return nil
 	}
 	day := curDay.AddDate(0, 0, -1).In(CTLocation()).Format("2006-01-02")
-	return []DetectedLevel{lineLevel(KindPDVWAP, v, "pdVWAP", day, false)}
+	return captureFormationGroup([]DetectedLevel{lineLevel(KindPDVWAP, v, "pdVWAP", day, false)}, prior[len(prior)-1].CloseTime, len(prior), "prior_vwap_last_source_close", now)
 }
 
 // SETTLevels (B1) — prior settlement, approximated by the prior session-day's
@@ -348,16 +359,20 @@ func SETTLevels(bars []market.Kline, now time.Time) []DetectedLevel {
 	endMs := curDay.UnixMilli()
 	var sett float64
 	var day string
+	var sourceClose int64
+	var sourceCount int
 	for _, b := range cb {
 		if b.OpenTime < endMs && b.OpenTime >= curDay.AddDate(0, 0, -1).UnixMilli() {
 			sett = b.Close
+			sourceClose = b.CloseTime
+			sourceCount++
 			day = time.UnixMilli(b.OpenTime).In(CTLocation()).Format("2006-01-02")
 		}
 	}
 	if sett <= 0 {
 		return nil
 	}
-	return []DetectedLevel{lineLevel(KindSETT, sett, "SETT", day, false)}
+	return captureFormationGroup([]DetectedLevel{lineLevel(KindSETT, sett, "SETT", day, false)}, sourceClose, sourceCount, "settlement_proxy_source_close", now)
 }
 
 // MIDOLevels (B1) — the overnight range midpoint: (ONH+ONL)/2 for the CURRENT
@@ -376,8 +391,14 @@ func MIDOLevels(bars []market.Kline, now time.Time) []DetectedLevel {
 	}
 	sessStart := CMESessionDayStart(now)
 	hi, lo := math.Inf(-1), math.Inf(1)
+	var sourceClose int64
+	var sourceCount int
 	for _, b := range cb {
 		if b.OpenTime >= sessStart.UnixMilli() && b.OpenTime <= cutover.UnixMilli() {
+			sourceCount++
+			if b.CloseTime > sourceClose {
+				sourceClose = b.CloseTime
+			}
 			hi = math.Max(hi, b.High)
 			lo = math.Min(lo, b.Low)
 		}
@@ -386,7 +407,12 @@ func MIDOLevels(bars []market.Kline, now time.Time) []DetectedLevel {
 		return nil
 	}
 	mid := (hi + lo) / 2
-	return []DetectedLevel{lineLevel(KindMIDO, mid, "MID-O", sessStart.In(CTLocation()).Format("2006-01-02"), false)}
+	// The existing inclusive-open detector includes the 08:30 bar. Record its
+	// actual later close; never stamp 08:30 while a contributing bar is future.
+	if !cutover.Before(now) || sourceClose <= cutover.UnixMilli() {
+		sourceClose = 0
+	}
+	return captureFormationGroup([]DetectedLevel{lineLevel(KindMIDO, mid, "MID-O", sessStart.In(CTLocation()).Format("2006-01-02"), false)}, sourceClose, sourceCount, "inclusive_overnight_last_source_close", now)
 }
 
 // VolumeLevels (B1) — the full volume family for one cycle (all detectors).

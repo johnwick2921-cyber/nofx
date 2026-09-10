@@ -1,6 +1,7 @@
 package trader
 
 import (
+	"encoding/json"
 	"time"
 
 	"nofx/kernel"
@@ -54,6 +55,10 @@ func (at *AutoTrader) recordDetectorOutputs(
 	k, horizon, exitOn := kernel.DetectorK(), kernel.DetectorHorizonBars(), kernel.DetectorExitOn()
 	ts := at.store.TouchOutcomes()
 
+	var identityDoc *kernel.PlanDoc
+	if p, err := at.store.Plan().GetPlan(planID, planVersion); err == nil && p != nil && p.StrategyID == at.id {
+		_ = json.Unmarshal([]byte(p.Doc), &identityDoc)
+	}
 	written, preFormation, noFormation := 0, 0, 0
 	for _, lv := range seated {
 		if lv.Price <= 0 {
@@ -89,7 +94,7 @@ func (at *AutoTrader) recordDetectorOutputs(
 		last := ts.LastOpenedAtMs(at.id, symbol, lv.Price, lv.FormedAtMs)
 		for _, e := range kernel.NewEpisodesSince(eps, last) {
 			row := &store.TouchOutcomeRow{
-				TraderID: at.id, Symbol: symbol,
+				TraderID: at.id, Symbol: symbol, CreatedAt: now,
 				LevelPrice: lv.Price, LevelKind: string(lv.Kind),
 				CandidateSeated: true, PlanID: planID, PlanVersion: planVersion, Session: session,
 				// D1c — the ordinal counts within the EPISODE's own session-day.
@@ -109,6 +114,7 @@ func (at *AutoTrader) recordDetectorOutputs(
 			// tolerance; ambiguity resolves NULL with its reason rather than
 			// picking a nearest and calling it a fact.
 			link := store.ResolveScenarioLink(lv.Price, anchors, delta, scenarioLinkBand())
+			row.LevelID = kernel.EpisodeLevelID(lv.DetectedLevel, identityDoc)
 			row.ScenarioNearest = link.Scenario
 			row.ScenarioLinkBasis = link.Basis
 			row.ScenarioLinkDistPts = link.DistPts

@@ -55,7 +55,9 @@ const (
 // It is a view built at render time from []ScoredLevel and is never stored on
 // a ScoredLevel.
 type MapCandidate struct {
-	Price float64
+	ID       *string   `json:"id"`
+	Identity PlanLevel `json:"identity"`
+	Price    float64
 	// Names carries EVERY merged reference's label, strongest first
 	// ("Supply·1h", "PDC", "VWAP+1σ"). D2: three names for one price.
 	Names []string
@@ -161,6 +163,9 @@ func BuildMapCandidates(scored []ScoredLevel, price, atr5m float64, opts MapCand
 					out[i].Names = appendDistinct(out[i].Names, n)
 				}
 				out[i].Kinds = append(out[i].Kinds, s.Kind)
+				if member := CandidateIdentity(s.DetectedLevel); member.ID != nil {
+					out[i].Identity.SourceIDs = appendDistinct(out[i].Identity.SourceIDs, *member.ID)
+				}
 				out[i].MergedCount++
 				merged = true
 				break
@@ -180,6 +185,8 @@ func BuildMapCandidates(scored []ScoredLevel, price, atr5m float64, opts MapCand
 			MergedCredit: 1, // one price, one confirmation, however many names
 			Distance:     s.Price - price,
 		}
+		c.Identity = CandidateIdentity(s.DetectedLevel)
+		c.ID = c.Identity.ID
 		if atr5m > 0 {
 			c.DistanceATR = c.Distance / atr5m
 			c.HasATR = true
@@ -319,6 +326,16 @@ func CountMap(detected int, cs []MapCandidate) MapCounts {
 // text (that is the Guide-strings lane's). This renders what the map IS, never
 // what to do about it.
 func RenderMapBlock(cs []MapCandidate, price float64) string {
+	return renderMapBlock(cs, price, false)
+}
+
+// RenderIdentityMapBlock adds only the identity column to the planner table.
+// The executor's existing map text is unchanged.
+func RenderIdentityMapBlock(cs []MapCandidate, price float64) string {
+	return renderMapBlock(cs, price, true)
+}
+
+func renderMapBlock(cs []MapCandidate, price float64, showID bool) string {
 	if len(cs) == 0 {
 		return ""
 	}
@@ -342,6 +359,13 @@ func RenderMapBlock(cs []MapCandidate, price float64) string {
 			tail = "  projection: " + c.ProjectionMethod
 		} else if !c.EntryCandidate && c.RefusedReason != "" {
 			tail = "  not-an-entry: " + c.RefusedReason
+		}
+		if showID {
+			id := "NULL"
+			if c.ID != nil {
+				id = *c.ID
+			}
+			fmt.Fprintf(&b, "  id=%s", id)
 		}
 		fmt.Fprintf(&b, "  %-9s %-44s %s  %-16s %s%s pt / %s ATR%s\n",
 			trimFloat(c.Price), names, grade, c.Role,

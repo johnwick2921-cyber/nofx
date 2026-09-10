@@ -88,6 +88,13 @@ type DetectedLevel struct {
 	// The W6 wake loop (2026-08-25) diffs this against the plan row's birth
 	// time to find events the plan never saw.
 	FormedAtMs int64 `json:"formed_at_ms,omitempty"`
+	// Recording-only output metadata. Kept out of legacy detector/scorer JSON:
+	// the identity writer explicitly persists it, and no trading consumer reads it.
+	FormedCloseMs     *int64 `json:"-"`
+	FormationTF       string `json:"-"`
+	FormationLookback int    `json:"-"`
+	FormationBasis    string `json:"-"`
+	IdentitySymbol    string `json:"-"`
 	// LookbackBars is the size of the window the detector actually searched on
 	// this level's own timeframe. D4 (round 12, 12a): formation timeframe,
 	// lookback window and age at read are THREE different facts and none can be
