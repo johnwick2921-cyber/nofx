@@ -86,9 +86,15 @@ func TestT1NewsFlatTraderArmCancelled(t *testing.T) {
 	if !at.enforceT1ForceFlatAt(now) {
 		t.Fatal("a due T1 window with a working arm must report an action")
 	}
+	// UPDATED 2026-09-10 (settlement wave, C1). The fixture's ack stream is
+	// silent, so this cancel is UNCONFIRMED — and an unconfirmed cancel is not a
+	// cancellation. The row is held cancel_pending for the settlement pass; the
+	// test's real subject (a FLAT trader's working arm IS cancelled inside the
+	// window, reason=news_window, nothing flattened) is unchanged and still
+	// asserted below.
 	state, reason := armedRowState(t, st)
-	if state != "cancelled" {
-		t.Fatalf("armed row state = %q, want cancelled", state)
+	if state != store.StateCancelPending {
+		t.Fatalf("armed row state = %q, want %q — the ack never came, and promoting on a timeout is the C1 defect", state, store.StateCancelPending)
 	}
 	if !strings.HasPrefix(reason, "news_window") {
 		t.Fatalf("state_reason = %q, want news_window prefix", reason)
@@ -117,9 +123,11 @@ func TestT1NewsArmedCancelBeforeFlatten(t *testing.T) {
 	if !at.enforceT1ForceFlatAt(now) {
 		t.Fatal("a due T1 window with an open position must act")
 	}
+	// UPDATED 2026-09-10 (settlement wave, C1) — same reason as its twin above.
+	// The subject here is the WIRE ORDER (cancel before close), asserted below.
 	state, _ := armedRowState(t, st)
-	if state != "cancelled" {
-		t.Fatalf("armed row state = %q, want cancelled", state)
+	if state != store.StateCancelPending {
+		t.Fatalf("armed row state = %q, want %q — the fixture never acks the cancel", state, store.StateCancelPending)
 	}
 	ev := rt.snapshot()
 	firstCancel, firstClose := -1, -1

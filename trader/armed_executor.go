@@ -2018,22 +2018,61 @@ func (at *AutoTrader) armGateVerdictFor(sc kernel.PlanScenario, leg kernel.PlanA
 
 // cancelArmedOrders moves non-terminal rows for THIS trader to cancelled with a
 // reason. Returns the count.
-func (at *AutoTrader) cancelArmedOrders(reason string) int {
+// cancelArmedOrders is the NO-BROKER-LINK fallback: it is reached from
+// cancelArmedOrdersSync exactly when at.armedTrader() is nil, i.e. when the NT8
+// bridge is absent — which is precisely when resting orders are most likely to
+// outlive us.
+//
+// IT MAKES NO BROKER CONTACT, SO IT MAY NOT DECLARE A BROKER OUTCOME.
+// It previously walked every non-terminal row and wrote SetState(id,
+// "cancelled", reason) — no wire, no book, no state test — and its count then
+// fed the operator-facing flat claim ("🔒 EOD-FLAT: %d armed order(s)
+// cancelled"). A flat claim with zero broker contact behind it.
+//
+// 'cancelled' is the destructive word here: it frees the arm slot in UpsertArm
+// and it is what cutover leg 4 counts. Writing it without evidence lets a
+// replacement be armed while the original still rests at the broker — the
+// 2026-09-06 naked-stop shape arriving from the exit side.
+//
+// So the rows go to cancel_pending: NON-TERMINAL, so the slot stays taken and
+// nothing can replace them, and the settlement pass owns them the moment a book
+// is available again. The intent is recorded; the outcome is not invented. This
+// is the same ruling one_contract.go and the no-wire branch of
+// cancelArmedOrdersSyncWith already follow.
+//
+// It returns the two counts SEPARATELY — retired (never placed, so truthfully
+// terminal) and unsettled (held cancel_pending) — because a number that means
+// "we asked" must never be printed as "we did".
+func (at *AutoTrader) cancelArmedOrders(reason string) (retired, unsettled int) {
 	rows, err := at.store.ArmedOrders().ListNonTerminal(at.id)
 	if err != nil {
-		return 0
+		return 0, 0
 	}
-	n := 0
+	now := time.Now().UnixMilli()
 	for _, r := range rows {
 		if r.TraderID != at.id {
 			continue
 		}
-		if err := at.store.ArmedOrders().SetState(r.ID, "cancelled", reason); err == nil {
-			n++
-			at.logInfof("✕ armed cancel %s %s: %s", r.Scenario, r.PlanID, reason)
+		if r.SignalID == "" {
+			// AUTHORIZED BUT NEVER PLACED — nothing exists at the broker, so
+			// there is no outcome to be wrong about. This row can be retired
+			// truthfully without a book, and holding it cancel_pending would
+			// strand a slot on an order that never existed.
+			if err := at.store.ArmedOrders().SetState(r.ID, store.StateCancelled, reason+" (never placed — no broker order existed)"); err == nil {
+				retired++
+			}
+			continue
+		}
+		if err := at.store.ArmedOrders().RequestCancel(r.ID, reason+" (no broker link — intent recorded, never settled)", now); err == nil {
+			unsettled++
+			at.logWarnf("✕ armed cancel UNSETTLED %s %s signal=%s — no broker link; held cancel_pending, NOT cancelled: %s",
+				r.Scenario, r.PlanID, shortID(r.SignalID), reason)
 		}
 	}
-	return n
+	if unsettled > 0 {
+		at.logWarnf("✕ armed cancel (%s): %d row(s) UNSETTLED — no broker link, so nothing may be called cancelled; the settlement pass owns them", reason, unsettled)
+	}
+	return retired, unsettled
 }
 
 // ── S-LIST CLOSER (2026-08-27) — synchronous armed cancel ────────────────────
@@ -2098,7 +2137,10 @@ func (at *AutoTrader) cancelArmedOrdersSync(reason string) (n, unacked int) {
 	}
 	nt := at.armedTrader()
 	if nt == nil {
-		return at.cancelArmedOrders(reason), 0
+		// The unsettled rows are UNACKED, not cancelled — this used to return
+		// them in `n`, so the operator-facing flat line reported rows nothing
+		// had confirmed as "armed order(s) cancelled".
+		return at.cancelArmedOrders(reason)
 	}
 	return at.cancelArmedOrdersSyncWith(reason, armedCancelAckTimeout(), nt.CancelOrder,
 		func() <-chan ntwire.OrderUpdatePayload { return at.armedUpdateStream(nt) })
@@ -2117,6 +2159,10 @@ func (at *AutoTrader) cancelArmedOrdersSyncWith(reason string, timeout time.Dura
 	if err != nil {
 		return 0, 0
 	}
+	// Rows that FILLED during the drain. Counted separately from `n` because a
+	// fill is not a cancel, and separately from `unacked` because the row is
+	// settled — just not the way the flatten wanted.
+	filled := 0
 	var mine []store.ArmedOrderDB
 	for _, r := range rows {
 		if r.TraderID == at.id {
@@ -2198,13 +2244,53 @@ func (at *AutoTrader) cancelArmedOrdersSyncWith(reason string, timeout time.Dura
 				}
 			}
 		}
-		if acked {
+		// WHAT ACTUALLY HAPPENED TO THIS ROW — read, not inferred from a boolean.
+		//
+		// `acked` above means only "the row left the non-terminal set". EVERY
+		// terminal state satisfies that, including FILLED: a limit that filled
+		// two seconds before the close was counted by n++ and logged as an order
+		// we cancelled. The two facts are opposite. So the outcome is read back
+		// and named.
+		final, readable := ledger.StateOf(r.ID)
+		switch {
+		case acked && readable && final == store.StateFilled:
+			// NOT A CANCEL. The order became a POSITION during the drain, and
+			// reporting it as a cancel understates the book at exactly the
+			// moment the flatten is about to claim the book is empty. The
+			// position re-read that follows the flatten is what catches it; this
+			// makes it audible instead of silent.
+			filled++
+			at.logWarnf("⚠️ armed sync cancel: %s signal=%s FILLED during the drain — this is a POSITION, not a cancelled order; the flatten's position re-read must clear it",
+				r.Scenario, shortID(r.SignalID))
+		case acked:
 			n++
-		} else {
-			_ = ledger.SetState(r.ID, "cancelled", reason+" (ack timeout — flatten proceeds)")
+		default:
+			// THE CANCEL WAS NOT CONFIRMED, SO IT IS NOT CANCELLED.
+			//
+			// This wrote SetState(r.ID, "cancelled", "… (ack timeout — flatten
+			// proceeds)"): a TIMEOUT promoted the row straight to the word that
+			// frees the arm slot and that cutover leg 4 counts, skipping the
+			// entire RequestCancel → cancel_pending → ConfirmCancel lifecycle
+			// the 2026-09-06 wave exists to enforce. A row promoted on a timeout
+			// can be replaced while its order still rests at the broker.
+			//
+			// Not hearing an ack is not evidence the order is gone — it is the
+			// absence of evidence either way, and 'cancelled' is the destructive
+			// branch here because it is what unlocks a replacement (A24). The
+			// row stays cancel_pending, keeps its slot, and the settlement pass
+			// owns it: it confirms against a snapshot or re-requests to the cap,
+			// and only a book that no longer lists the order may promote it.
+			//
+			// This is the same ruling the no-broker-link branch above already
+			// follows — a missing answer records the INTENT, never the outcome.
+			_ = ledger.RequestCancel(r.ID, reason+" (ack timeout — unconfirmed, settlement pass owns it)", time.Now().UnixMilli())
 			unacked++
-			at.logWarnf("⚠️ armed sync cancel UNACKED %s signal=%s after retry — ledger cancelled, flatten proceeds", r.Scenario, r.SignalID)
+			at.logWarnf("⚠️ armed sync cancel UNACKED %s signal=%s after retry — held cancel_pending, NOT promoted; the flatten proceeds and the settlement pass will confirm or re-request",
+				r.Scenario, shortID(r.SignalID))
 		}
+	}
+	if filled > 0 {
+		at.logWarnf("⚠️ armed sync cancel (%s): %d row(s) FILLED during the drain and are NOT counted as cancels — the book is not empty on their account", reason, filled)
 	}
 	return n, unacked
 }

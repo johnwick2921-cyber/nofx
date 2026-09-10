@@ -93,7 +93,33 @@ func TestSplitArmWritesTwoLedgerRows(t *testing.T) {
 	// derive from this value; handing the arm path a different moment than the
 	// fixtures were built for skews the confirmation bucket and arms only the
 	// first leg — which reads as a split-arm bug rather than a clock skew.
-	now := armTestClock(t, at)
+	// A FIXED, 5-MINUTE-ALIGNED CLOCK. This test's tape is built relative to
+	// `now`, and the leg-2 confirm depends on the last five 1m bars forming a
+	// COMPLETE 5m bucket below the ref. Bucket boundaries are absolute, so the
+	// tape's meaning depends on `now` MODULO 5 MINUTES.
+	//
+	// armTestClock steps from time.Now(), so that modulus moved with the wall
+	// clock: the test passed at 12:43-12:59 and failed at 13:20 on identical
+	// code, with the entry gate reporting the tape as 'accepted through' rather
+	// than as a met confirm. A searched clock earns its keep where a SESSION
+	// WINDOW binds; here the binding constraint is bucket alignment, and a fixed
+	// moment is strictly more deterministic.
+	// TODAY'S trade date, at a FIXED 5-minute-aligned hour.
+	//
+	// Both halves matter and each was learned the hard way. The DATE must be
+	// today's: the plan is appended for PlanChainTradeDate(sess, now) while the
+	// arm path resolves the CURRENT trade date, so a base on a fixed past date
+	// writes a plan nothing looks for — the arm then produces zero rows and not
+	// one refusal log, which reads as a broken gate rather than a missing plan.
+	//
+	// The TIME must be fixed and 5m-aligned: this tape's leg-2 confirm depends on
+	// the last five 1m bars forming a COMPLETE 5m bucket below the ref, and bucket
+	// boundaries are absolute, so the tape's meaning depends on `now` MODULO 5
+	// MINUTES. Searching from time.Now() moved that modulus through the day: the
+	// test passed at 12:43-12:59 and failed at 13:20 on identical code, with the
+	// entry gate reading the tape as 'accepted through' instead of a met confirm.
+	nowBase := time.Now().In(chicagoLoc())
+	now := armTestClockFrom(t, at, time.Date(nowBase.Year(), nowBase.Month(), nowBase.Day(), 10, 0, 0, 0, chicagoLoc()))
 	sess, ok := at.sessionRegistry(now).ActiveSession(now)
 	if !ok {
 		t.Skip("no active session right now")

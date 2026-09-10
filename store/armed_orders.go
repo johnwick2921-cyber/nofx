@@ -659,6 +659,29 @@ func (s *ArmedOrderStore) ListPlacePending(traderID string) ([]ArmedOrderDB, err
 
 // FindBySignal resolves a row by the signal id a frame names. Frames carry the
 // signal, not our row id, so every confirmation path needs this join.
+// StateOf returns one row's CURRENT state, and whether it could be read.
+//
+// The drain loop in cancelArmedOrdersSyncWith previously asked only "is this row
+// still in the non-terminal set?" and treated false as "the cancel was acked".
+// Every terminal state answers false — including FILLED. A limit that filled two
+// seconds before the close was therefore counted and logged as an order we
+// cancelled. The two facts are opposite and the caller needs to tell them apart,
+// so it reads the state rather than a boolean derived from it.
+//
+// ok=false means the row could not be read AT ALL (a failed query, a deleted
+// row). It is never "terminal" — A24: unknown takes no branch that declares an
+// outcome.
+func (s *ArmedOrderStore) StateOf(id int64) (state string, ok bool) {
+	if s == nil || s.db == nil {
+		return "", false
+	}
+	var row ArmedOrderDB
+	if err := s.db.Select("state").First(&row, id).Error; err != nil {
+		return "", false
+	}
+	return strings.ToLower(strings.TrimSpace(row.State)), true
+}
+
 func (s *ArmedOrderStore) FindBySignal(traderID, signalID string) (*ArmedOrderDB, error) {
 	sig := strings.TrimSpace(signalID)
 	if sig == "" {
