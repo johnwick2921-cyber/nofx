@@ -133,6 +133,7 @@ func AssembleScoredLevels(traderID string, bars []market.Kline, reg SessionRegis
 	// Level-truth wave (2026-08-27) — recent 5m/15m fractal swings (T3).
 	all = append(all, SwingPointLevels(bars, now)...)
 	all = append(all, extraLevels...) // nPOC etc. from the durable store (P1.3)
+	CaptureIdentityContext(all, symbol, "1m")
 	// S4 (mega-research 2026-08-26) — nPOC is emitted twice (in-kernel 120-bin
 	// POC + store-fed SVP-row POC; prices can differ by >1pt). Dedupe on
 	// (kind, price within 1 tick) BEFORE scoring so one POC = one seat.
@@ -188,6 +189,7 @@ func AssembleScoredLevelsMinGrade(traderID string, bars []market.Kline, reg Sess
 	all = append(all, SwingPointLevels(bars, now)...)
 	all = append(all, extraLevels...) // nPOC etc. from the durable store (P1.3)
 	// S4 — same dedupe as AssembleScoredLevels (one POC = one seat).
+	CaptureIdentityContext(all, symbol, "1m")
 	all = dedupeSameKind(all)
 
 	scored, _ = ScoreLevelsMinGradeFull(all, price, dATR, levelFreshnessFn(traderID, symbol), maxLevels, proximityK, minGrade)
@@ -243,6 +245,7 @@ func AssembleResearchLevels(traderID string, bars []market.Kline, reg SessionReg
 	// Level-truth wave (2026-08-27) — recent 5m/15m fractal swings (T3).
 	all = append(all, SwingPointLevels(bars, now)...)
 	all = append(all, extraLevels...) // nPOC etc. from the durable store (P1.3)
+	CaptureIdentityContext(all, symbol, "1m")
 	raw = researchLevels(all)
 	all = dedupeSameKind(raw)
 

@@ -79,9 +79,10 @@ func swingPointsFor(agg []market.Kline, tfMin int, now time.Time) []DetectedLeve
 	}
 	k := structureSwingK()
 	type pt struct {
-		high   bool
-		price  float64
-		timeMs int64
+		high        bool
+		price       float64
+		timeMs      int64
+		confirmedMs int64 // recording only; pivot selection continues to use timeMs
 	}
 	swings := make([]pt, 0, 16)
 	for i := k; i < n-k; i++ {
@@ -109,7 +110,7 @@ func swingPointsFor(agg []market.Kline, tfMin int, now time.Time) []DetectedLeve
 			if (hi && price <= swings[len(swings)-1].price) || (!hi && price >= swings[len(swings)-1].price) {
 				continue
 			}
-			swings[len(swings)-1] = pt{price: price, timeMs: t, high: hi}
+			swings[len(swings)-1] = pt{price: price, timeMs: t, high: hi, confirmedMs: closed[i+k].CloseTime}
 			continue
 		}
 		if len(swings) > 0 {
@@ -121,7 +122,7 @@ func swingPointsFor(agg []market.Kline, tfMin int, now time.Time) []DetectedLeve
 				continue
 			}
 		}
-		swings = append(swings, pt{price: price, timeMs: t, high: hi})
+		swings = append(swings, pt{price: price, timeMs: t, high: hi, confirmedMs: closed[i+k].CloseTime})
 	}
 	if len(swings) == 0 {
 		return nil
@@ -162,6 +163,7 @@ func swingPointsFor(agg []market.Kline, tfMin int, now time.Time) []DetectedLeve
 			OriginDate: day,
 			TF:         tfName(tfMin),
 		})
+		out[len(out)-1] = WithFormationClose(out[len(out)-1], s.confirmedMs, len(closed), "pivot_confirmation_close", now)
 	}
 	return out
 }

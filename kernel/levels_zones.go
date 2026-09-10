@@ -38,18 +38,21 @@ func EqualHighsLows(bars []market.Kline, tol float64, now time.Time) []DetectedL
 	}
 	const k = 2
 	var hi, lo []float64
+	hiCloses, loCloses := map[float64]int64{}, map[float64]int64{}
 	for i := k; i < len(cb)-k; i++ {
 		if isStrictPivotHigh(cb, i, k) {
 			hi = append(hi, cb[i].High)
+			hiCloses[cb[i].High] = cb[i+k].CloseTime
 		}
 		if isStrictPivotLow(cb, i, k) {
 			lo = append(lo, cb[i].Low)
+			loCloses[cb[i].Low] = cb[i+k].CloseTime
 		}
 	}
 	origin := time.UnixMilli(cb[len(cb)-1].OpenTime).In(chicago()).Format("2006-01-02")
 	var out []DetectedLevel
-	out = append(out, clusterEqual(hi, tol, KindEQH, "EQH", true, origin)...)
-	out = append(out, clusterEqual(lo, tol, KindEQL, "EQL", false, origin)...)
+	out = append(out, clusterEqual(hi, tol, KindEQH, "EQH", true, origin, equalFormation{hiCloses, len(cb), now})...)
+	out = append(out, clusterEqual(lo, tol, KindEQL, "EQL", false, origin, equalFormation{loCloses, len(cb), now})...)
 	return out
 }
 
@@ -73,7 +76,13 @@ func isStrictPivotLow(b []market.Kline, i, k int) bool {
 
 // clusterEqual groups pivot prices within tol; a group of ≥2 is an equal-highs/
 // lows liquidity level (at the group max for highs, min for lows).
-func clusterEqual(prices []float64, tol float64, kind LevelKind, label string, high bool, origin string) []DetectedLevel {
+type equalFormation struct {
+	closes   map[float64]int64
+	lookback int
+	now      time.Time
+}
+
+func clusterEqual(prices []float64, tol float64, kind LevelKind, label string, high bool, origin string, captured ...equalFormation) []DetectedLevel {
 	if len(prices) < 2 {
 		return nil
 	}
@@ -91,6 +100,15 @@ func clusterEqual(prices []float64, tol float64, kind LevelKind, label string, h
 				p = prices[j-1] // group max (highs)
 			}
 			out = append(out, lineLevel(kind, p, label, origin, false))
+			if len(captured) > 0 {
+				var closeMs int64
+				for _, price := range prices[i:j] {
+					if v := captured[0].closes[price]; v > closeMs {
+						closeMs = v
+					}
+				}
+				out[len(out)-1] = WithFormationClose(out[len(out)-1], closeMs, captured[0].lookback, "last_cluster_pivot_confirmation_close", captured[0].now)
+			}
 		}
 		i = j
 	}
@@ -145,11 +163,13 @@ func SupplyDemandZones(bars []market.Kline, atr float64, now time.Time) []Detect
 				zl := zoneLevel(KindDemand, baseLo, baseHi, "Demand", origin)
 				zl.ZonePattern = pattern
 				zl.FormedAtMs = d.OpenTime // W6: birth = departure bar
+				zl = WithFormationClose(zl, d.CloseTime, len(cb), "departure_close", now)
 				out = append(out, zl)
 			} else if -move >= departure {
 				zl := zoneLevel(KindSupply, baseLo, baseHi, "Supply", origin)
 				zl.ZonePattern = pattern
 				zl.FormedAtMs = d.OpenTime // W6: birth = departure bar
+				zl = WithFormationClose(zl, d.CloseTime, len(cb), "departure_close", now)
 				out = append(out, zl)
 			}
 		}
@@ -239,13 +259,16 @@ func FairValueGaps(bars []market.Kline, minGap float64, now time.Time) []Detecte
 		// W6 inversion: a later CLOSE beyond the far edge (below a bullish
 		// gap's low, above a bearish gap's high) flips the imbalance.
 		inverted := false
+		inversionClose := int64(0)
 		for j := i + 1; j < len(cb); j++ {
 			if bullish && cb[j].Close < gLo {
 				inverted = true
+				inversionClose = cb[j].CloseTime
 				break
 			}
 			if !bullish && cb[j].Close > gHi {
 				inverted = true
+				inversionClose = cb[j].CloseTime
 				break
 			}
 		}
@@ -258,11 +281,13 @@ func FairValueGaps(bars []market.Kline, minGap float64, now time.Time) []Detecte
 			}
 			lvl.Info = "filled→inverted"
 			lvl.FormedAtMs = c.OpenTime
+			lvl = WithFormationClose(lvl, inversionClose, len(cb), "inversion_close", now)
 			out = append(out, lvl)
 			continue
 		}
 		lvl := zoneLevel(KindFVG, gLo, gHi, "FVG", origin)
 		lvl.FormedAtMs = c.OpenTime
+		lvl = WithFormationClose(lvl, c.CloseTime, len(cb), "gap_completion_close", now)
 		out = append(out, lvl)
 	}
 	return out
@@ -311,6 +336,7 @@ func OrderBlocks(bars []market.Kline, atr float64, now time.Time) []DetectedLeve
 				if cb[j].Close < cb[j].Open {
 					zl := zoneLevel(KindOB, cb[j].Low, cb[j].High, "OB(bull)", origin)
 					zl.FormedAtMs = cb[i].OpenTime // W6: birth = displacement bar
+					zl = WithFormationClose(zl, cb[i].CloseTime, len(cb), "displacement_close", now)
 					out = append(out, zl)
 					break
 				}
@@ -320,6 +346,7 @@ func OrderBlocks(bars []market.Kline, atr float64, now time.Time) []DetectedLeve
 				if cb[j].Close > cb[j].Open {
 					zl := zoneLevel(KindOB, cb[j].Low, cb[j].High, "OB(bear)", origin)
 					zl.FormedAtMs = cb[i].OpenTime // W6: birth = displacement bar
+					zl = WithFormationClose(zl, cb[i].CloseTime, len(cb), "displacement_close", now)
 					out = append(out, zl)
 					break
 				}
