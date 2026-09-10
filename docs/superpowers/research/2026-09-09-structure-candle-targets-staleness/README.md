@@ -33,15 +33,15 @@ The first record concerns `2026-09-08-range-fade/report.md`; the second concerns
 
 Three quantities must be distinguished: the **formation timeframe** of a completed swing, the **lookback window** used to find a level, and the **age** since formation or last interaction. They are different experimental variables. A 240-minute rolling minimum is not a swing confirmed on a four-hour chart, and sampling a price process every 90 seconds is not testing weekly structure.
 
-**Osler (2000)** tests published support/resistance from six FX firms against artificial comparators. The brief's “about as well” wording understates the result: Table 8 reports **60.8% versus 56.2%** bounce frequencies overall, with the published levels higher in all sixteen firm/currency combinations. The sample comprises 64,200 supplied level values for three currency pairs, January 1996–March 1998. This is useful positive evidence for those published levels, not a comparison of weekly versus five-minute formation, and not an exactly distance-matched NQ experiment.[^7]
+**Osler (2000)** contradicts the brief's “about as well” wording: Table 8 reports **60.8% versus 56.2%** bounce frequencies for published versus artificial levels. Her six-firm FX sample contains approximately 64,200 level values, January 1996–March 1998. It does not compare weekly versus five-minute formations.[^7]
 
-**TRANSFERS to intraday Nasdaq-100 futures?** The artificial-level benchmark is a transferable research method. The FX rates and effect size do not transfer as an NQ reaction probability or timeframe weight.
+**TRANSFERS to intraday Nasdaq-100 futures?** The comparator method transfers; the FX effect size does not establish an NQ reaction probability or timeframe weight.
 
 **Garzarelli et al. (2014)** examine nine London stocks over 251 trading days in 2002, with time grainings from one to 180 seconds. Prior bounces contain information relative to shuffled series, but the memory weakens under coarser sampling. Table 1's tests remain significant through 60 seconds; the reported p-values at 90 and 180 seconds are not significant at 5%. This does not establish that longer-chart levels are stronger; it measures a different kind of scale dependence.[^8]
 
 **TRANSFERS?** A reason to test bounce history and sampling resolution, not a daily/weekly NQ hierarchy. Stocks, their trading sessions and their level detector differ from a nearly continuous futures market.
 
-**Chung and Bellotti (2021)** use 2018 minute prices: EUR/USD, 372,607 observations; Lloyds, 127,606; Brent, 307,678. Their rolling extrema show a prior-bounce effect and time decay that vary by asset. Comparisons of 60- and 240-minute windows and the wider window-length exercise do not support a universal “longer is stronger” rule. Their zone-width construction uses a whole-series price-increment statistic, a caution when translating the study into a causal test.[^9]
+**Chung and Bellotti (2021)** use 2018 minute prices: EUR/USD, 372,607 observations; Lloyds, 127,606; Brent, 307,678. Prior-bounce and decay effects vary by asset. Their lookback comparisons do not support a universal “longer is stronger” rule. Zone width uses a whole-series price-increment statistic, requiring care in a causal replication.[^9]
 
 **TRANSFERS?** The hypotheses and algorithm can be tested on NQ; neither the window results nor a fitted decay parameter is an established NQ daily/weekly coefficient.
 
@@ -55,9 +55,9 @@ Three quantities must be distinguished: the **formation timeframe** of a complet
 
 **UNTESTED:** no verified NQ study establishes that a daily/weekly level is a superior target or invalidation boundary while being an inferior entry, or that “higher timeframe” should multiply a score by 1.2. That coefficient is a design choice unless estimated and validated on the relevant objective. Calling all coefficients practitioner doctrine is also too broad: a coefficient can be an honestly fitted model parameter. This particular coefficient has no verified calibration in the cited literature.
 
-Osler's order-book study provides a **mechanism**, not that missing comparison. Her 2003 journal paper, with a 2001 staff-report version, examines 9,667 conditional FX orders at one bank, September 1999–April 2000. Stop-loss and take-profit orders cluster differently around salient prices, helping explain both reversals and acceleration through levels.[^11]
+**Osler (2003)** examines 9,667 conditional FX orders at one bank, September 1999–April 2000. Different stop-loss and take-profit clustering helps explain reversals and acceleration through levels.[^11]
 
-**TRANSFERS?** Qualitatively, the same price can matter differently to entry and exit decisions. Quantitative transfer to NQ, weekly structure, or this stop rule is untested. A dealer's distributed FX order book differs from CME's centralized matching and separate NQ/MNQ queues.
+**TRANSFERS?** A role-dependent mechanism, not quantitative NQ, weekly-level or stop-rule validation; dealer FX orders differ from centralized futures matching.
 
 **[I— inference] “Exclusion is not invalidation” is an information-contract distinction, not a proven trading law.** A price omitted from an entry shortlist has failed a selection rule; it has not necessarily ceased to exist or ceased to matter to an open position. Conversely, retaining it as context does not prove it should be used as a stop or target. The earlier report supports this separation as system design, while Osler supplies only the narrower empirical observation that orders with different purposes have different clustering.[^5][^11]
 
@@ -91,7 +91,7 @@ The following are **[T] candidate definitions**, not established winners:
 
 ### 13a. Rejection shape, penetration and failed pushes
 
-The closest negative futures result is **Fock, Klein and Zwergel (2005)**: their study of intraday DAX and Bund candlestick patterns reports no predictive success, with or without momentum filters. The accessible primary abstract does not expose a verifiable sample period, observation count or precise forecast horizon, so those are **unverified**, not filled in from later citations. It tests completed candlestick patterns, not an evolving NQ candle conditioned on a premarked level.[^13]
+**Fock, Klein and Zwergel (2005)** report no predictive success for tested intraday DAX/Bund candlesticks, with or without momentum filters. Period, n and precise horizon are **unverified** from the accessible primary abstract. These are completed patterns, not forming NQ candles at premarked levels.[^13]
 
 **TRANSFERS?** Relevant caution against assuming named patterns create an edge; no direct rejection of all forming-candle rules on NQ. Bund is a bond future and DAX is a different equity index.
 
@@ -210,9 +210,9 @@ The relevant event is not simply “price eventually touched this number.” It 
 
 ### 14c. Does an extended day favor exhaustion or standing aside?
 
-**Baltussen, Da, Lammers and Martens (2021)** document intraday momentum linked to hedging demand across futures markets. Their NQ series spans April 12, 1996–May 1, 2020, with **6,017 daily observations**; earlier-session returns predict the final half-hour in their framework. It is not a study conditioned on 1.5× median range or on leaving an independently authored map.[^25]
+**Baltussen, Da, Lammers and Martens (2021)** find intraday momentum in futures. Their NQ series spans April 12, 1996–May 1, 2020, **6,017 days**; earlier-session returns predict the final half-hour. They do not condition on 1.5× median range or an authored map.[^25]
 
-**TRANSFERS?** Directly relevant NQ evidence that continuation exists. Historical contract/market structure and the final-half-hour window limit application: this book exits at 14:45 CT, halfway through the 14:30–15:00 interval. The full published closing-window trade is unavailable to it.
+**TRANSFERS?** NQ continuation evidence, with historical-market limits. This book's 14:45 CT cutoff permits only half of the studied 14:30–15:00 closing interval.
 
 **Grant, Wolf and Yu (2005)** find intraday reversal after large opening moves in US stock-index futures over approximately fifteen years, November 1987–September 2002. The accessible primary material supports the reversal finding and weakening after transaction costs; an exact event count was not verified. **Yu, Rentzler and Wolf (2005)** specifically study NQ momentum/reversal relationships involving overnight and prior-day returns; its accessible primary abstract does not establish a reproducible period or sample count for this report.[^26][^27]
 
@@ -222,9 +222,9 @@ Thus both blanket prescriptions exceed the evidence: “extended means exhausted
 
 ### 14d. Fixed targets versus trailing or structural exits
 
-**Wang, Wu and Chung (2015 conference; 2016 proceedings)** provide a relevant paired exit comparison in TAIEX futures. Their minute-data period is January 4, 2010–March 25, 2015, **1,291 days and 1,180 trades per arm**. With a 30-point stop, adding a 60-point target lowers average gross profit from **5.09 to 3.69 points**, raises the win rate from **44.58% to 46.10%**, and reduces maximum drawdown from **659 to 581 points**. The reported exercise excludes transaction costs.[^28]
+**Wang, Wu and Chung (2015/2016)** compare TAIEX exits over 2010–2015: **1,291 days, 1,180 trades per arm**. With a 30-point stop, adding a 60-point target lowers average gross profit from **5.09 to 3.69 points** and maximum drawdown from **659 to 581 points**; costs are excluded.[^28]
 
-**TRANSFERS?** Evidence that target choice changes both average return and drawdown on an index-futures strategy. It is not NQ, not specifically out-of-map runs, and not proof that a trailing or structure-based exit beats a fixed target for this fade book.
+**TRANSFERS?** An index-futures exit tradeoff, not NQ out-of-map evidence or a test of trailing/structural superiority for this book.
 
 **Leung and Zhang (2017, revised 2019)** derive optimal trading with a trailing stop under a diffusion model; their result can include a sell limit together with the trail. There is no empirical futures sample or observed target hit rate.[^29] **TRANSFERS?** Mathematical counterexample to a universal “trailing means never use a target” claim, not a calibrated MNQ exit policy.
 
@@ -271,7 +271,7 @@ An administrative confirmation clock can start at publication. An **information-
 
 **[I— doctrine]** Steve Spencer's SMB account, *Why I Game Plan Every Day*, describes preplanned ideas that become actionable as intraday conditions develop. This is an equity-desk practitioner account, not a systematic NQ experiment or published optimal refresh cadence.[^32]
 
-**[I— doctrine]** Optiver's published risk-management interview describes continuous monitoring and coordinated risk processes. It illustrates an automated trading firm's oversight, not a disclosed level-fade algorithm, a validated plan TTL, or a rule for refreshing this owner's prompts.[^33]
+**[I— doctrine]** Wouter Frans's 2024 Optiver account describes automated risk monitoring and coordinated review of positions and economic events. It documents oversight, not a disclosed level-fade algorithm or validated plan TTL.[^33]
 
 **[I— doctrine]** Dalton's auction framework uses developing market information to revise interpretation.[^20] It is not a controlled comparison of invalidation-on-drift, pre-entry revalidation and plan-free execution.
 
@@ -327,7 +327,7 @@ References below identify the primary material used. “Not verified” means th
 
 [^2]: Codex (2026). *Range-fade / level-rejection intraday strategies on index futures — what the style requires to work*. Repository research report, [commit-pinned Markdown](https://github.com/johnwick2921-cyber/nofx/blob/8941ec68612cc019edc3002b999272ab2ed20516/docs/superpowers/research/2026-09-08-range-fade/report.md). This is the prior Round 11 synthesis, not a new primary empirical study; its studies have separate instruments and samples. **TRANSFERS:** inherited methodological constraints, not additional independent observations. Round 10's summary is owner-supplied in source 1; its primary execution sources are 3 and 4 below.
 
-[^3]: Lalor, Luca, and Anatoliy Swishchuk (2024; revised 2026). *Market Simulation under Adverse Selection*. arXiv **2409.12721v3**, [primary full text, §2.2 and Table 2](https://arxiv.org/html/2409.12721v3). NQ June 2024, April 25, 2024: 1,929 TT simulated fills, 1,269 adverse; ES June 2024, April 24: 941/767. **TRANSFERS:** direct NQ execution relevance; no universal MNQ percentage, candle comparison or eventual trade-loss rate. Preprint; one-day posting experiments, not audited live level-fade performance.
+[^3]: Lalor, Luca, and Anatoliy Swishchuk (2024; revised 2026). *Market Simulation under Adverse Selection*. [arXiv **2409.12721v3**, §2.2, Table 2](https://arxiv.org/html/2409.12721v3). NQ June 2024 contract, April 25, 2024: n=1,929 TT simulated fills. **TRANSFERS:** execution mechanism, not a universal MNQ rate or candle comparison. Preprint, not audited live fades.
 
 [^4]: Lo, Andrew W., A. Craig MacKinlay, and June Zhang (2002). *Econometric Models of Limit-Order Executions*. **Journal of Financial Economics 65(1), 31–71**. DOI [10.1016/S0304-405X(02)00134-4](https://doi.org/10.1016/S0304-405X(02)00134-4); [primary working version, NBER 6257](https://www.nber.org/system/files/working_papers/w6257/w6257.pdf). Actual limit orders in the 100 largest S&P 500 stocks, August 1994–August 1995; exact order count not verified here. Hypothetical price-based execution measures poorly describe actual execution times. **TRANSFERS:** execution-model caution; not an NQ queue model or fill probability.
 
@@ -335,7 +335,7 @@ References below identify the primary material used. “Not verified” means th
 
 [^6]: nofx contributors (revision inspected 2026-09-09). *AUDIT-CHECKLIST.md*, [pinned repository checklist](https://github.com/johnwick2921-cyber/nofx/blob/8941ec68612cc019edc3002b999272ab2ed20516/docs/superpowers/AUDIT-CHECKLIST.md). Methodological source for bounded read-only verification and provenance. No instrument-period empirical sample; **TRANSFERS:** repository process only, not trading evidence.
 
-[^7]: Osler, Carol L. (2000). *Support for Resistance: Technical Analysis and Intraday Exchange Rates*. **Federal Reserve Bank of New York Economic Policy Review 6(2), 53–68**. [Primary paper, especially Table 8](https://www.newyorkfed.org/medialibrary/media/research/epr/00v06n2/0007osle.pdf). USD/DEM, USD/JPY, GBP/USD, January 1996–March 1998; 64,200 published level values from six firms. **TRANSFERS:** comparator method; not NQ timeframe ranking. No verified DOI needed; institutional journal publication.
+[^7]: Osler, Carol L. (2000). *Support for Resistance: Technical Analysis and Intraday Exchange Rates*. **FRBNY Economic Policy Review 6(2), 53–68**. [Primary paper, Tables 8 and 10](https://www.newyorkfed.org/medialibrary/media/research/epr/00v06n2/0007osle.pdf). USD/DEM, USD/JPY, GBP/USD, January 1996–March 1998. Approximate n=64,200, summing the paper's rounded 23,700/22,800/17,700 level counts; not independent touches. **TRANSFERS:** comparator method, not NQ ranking.
 
 [^8]: Garzarelli, Federico, Matthieu Cristelli, Gabriele Pompa, Andrea Zaccaria, and Luciano Pietronero (2014). *Memory effects in stock price dynamics: evidences of technical trading*. **Scientific Reports 4, 4487**. DOI [10.1038/srep04487](https://doi.org/10.1038/srep04487); [primary full text and Table 1](https://pmc.ncbi.nlm.nih.gov/articles/PMC3967202/). Nine LSE stocks, 251 days in 2002; exact tick count not verified. **TRANSFERS:** scale-dependent memory hypothesis, not daily/weekly NQ superiority.
 
@@ -343,7 +343,7 @@ References below identify the primary material used. “Not verified” means th
 
 [^10]: TradingStats.net (2026-03-22). *PDH/PDL Probability: How Often Does Price Break Previous Day High and Low?* [Vendor's primary article](https://tradingstats.net/pdh-pdl-sweep-probability/). NQ one-minute data; claimed 3,121 days/~12.5 years, year table 2014–2025; exact endpoints unverified. **TRANSFERS:** same-index descriptive crossing hypothesis only. Count inconsistencies and nonchronological validation preclude adoption as a calibrated probability; no intraday reaction, weekly/monthly comparison or target-before-stop result.
 
-[^11]: Osler, Carol L. (2003). *Currency Orders and Exchange Rate Dynamics: An Explanation for the Predictive Success of Technical Analysis*. **Journal of Finance 58(5), 1791–1819**. DOI [10.1111/1540-6261.00588](https://doi.org/10.1111/1540-6261.00588). [Primary working version, FRBNY Staff Report 125 (2001)](https://www.newyorkfed.org/medialibrary/media/research/staff_reports/sr125.pdf), whose title differs slightly. One bank, USD/JPY, EUR/USD and GBP/USD, September 1, 1999–April 11, 2000; **9,667 conditional orders**. **TRANSFERS:** order-purpose/clustering mechanism only; not higher-timeframe NQ target or invalidation superiority.
+[^11]: Osler, Carol L. (2003). *Currency Orders and Exchange Rate Dynamics: An Explanation for the Predictive Success of Technical Analysis*. **Journal of Finance 58(5), 1791–1819**. DOI [10.1111/1540-6261.00588](https://doi.org/10.1111/1540-6261.00588); [primary working version, FRBNY Staff Report 125 (2001)](https://www.newyorkfed.org/medialibrary/media/research/staff_reports/sr125.pdf). USD/JPY, EUR/USD, GBP/USD; September 1, 1999–April 11, 2000; n=9,667 orders. **TRANSFERS:** mechanism, not NQ calibration.
 
 [^12]: Lo, Andrew W., Harry Mamaysky, and Jiang Wang (2000). *Foundations of Technical Analysis: Computational Algorithms, Statistical Inference, and Empirical Implementation*. **Journal of Finance 55(4), 1705–1765**. [Author-hosted primary paper](https://web.mit.edu/wangj/www/pap/LoMamayskyWang00.pdf). Daily US stocks, 1962–1996; fifty stocks sampled in each of seven five-year subperiods, with replacement across sampling; not necessarily 350 distinct firms. **TRANSFERS:** formal detection methodology, not tested daily/weekly NQ zones or a best detector. Exact observation count varies across patterns.
 
@@ -387,6 +387,6 @@ References below identify the primary material used. “Not verified” means th
 
 [^32]: Spencer, Steve (date not verified). *Why I Game Plan Every Day*. **SMB Training**, [primary practitioner account](https://www.smbtraining.com/blog/why-i-game-plan-every-day). Equity trading desk; no audited instrument-period sample or statistical n. **TRANSFERS:** conditional preparation doctrine, not systematic NQ revalidation efficacy or refresh timing.
 
-[^33]: Optiver (date not verified). *Risk and reward within a dynamic trading firm: Insights from Optiver’s CRO Europe*. [Primary firm interview](https://www.optiver.com/join-us/stories/risk-and-reward-within-a-dynamic-trading-firm-insights-from-optivers-cro-europe/). Automated trading firm's risk process, not a disclosed level-fade system; instrument-period and n not applicable. **TRANSFERS:** documented monitoring practice, not tested NQ plan decay, a universal desk practice or a numerical cadence.
+[^33]: Frans, Wouter (2024-01-12). *Risk and reward within a dynamic trading firm: Insights from Optiver’s CRO Europe*. **Optiver**, [primary practitioner account](https://www.optiver.com/join-us/stories/risk-and-reward-within-a-dynamic-trading-firm-insights-from-optivers-cro-europe/). Automated trading firm's risk process; no disclosed level-fade system or empirical instrument-period/n. **TRANSFERS:** documented monitoring practice, not tested NQ plan decay, a universal desk practice or a numerical cadence.
 
 [^34]: nofx contributors (revision **8941ec68612cc019edc3002b999272ab2ed20516**, inspected 2026-09-09). Primary schemas: [`store/plan.go`](https://github.com/johnwick2921-cyber/nofx/blob/8941ec68612cc019edc3002b999272ab2ed20516/store/plan.go#L11) and [`store/planner_read_facts.go`](https://github.com/johnwick2921-cyber/nofx/blob/8941ec68612cc019edc3002b999272ab2ed20516/store/planner_read_facts.go#L10). **[A]** Read-only source inspection. Actual plans/decisions were not queried; sample period and current row n remain unverified. **TRANSFERS:** directly defines the system's available joins and missingness risks, not the result of the proposed drift test.
