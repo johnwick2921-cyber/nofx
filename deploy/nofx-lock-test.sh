@@ -343,6 +343,40 @@ check "a beat inside the window succeeds" "$(Y heartbeat sess-Y >/dev/null 2>&1;
 Y release sess-Y >/dev/null 2>&1
 rm -rf "$KWY"
 
+echo "== acquire is CLEAN on stderr — a spawn that warns is a spawn nobody reads =="
+#
+# WHY THIS PIN EXISTS. _spawn_keeper read the keeper's process GROUP out of
+# /proc so `release` could kill loop and child together. The line was written
+# with '"'"' quoting — correct only INSIDE an already single-quoted string.
+# At top level bash read {print $5} in a DOUBLE-quoted region, expanded $5
+# against the function's own empty arguments, and `set -u` aborted the
+# substitution: every acquire printed "$5: unbound variable" and the /proc read
+# never ran once. The `[ -n "$pgid" ] || pgid="$kpid"` fallback then produced a
+# working value, so behaviour was right and 75 green tests saw nothing.
+#
+# The defect was invisible to every behavioural assertion and LOUD on stderr.
+# So stderr is what gets pinned. Any acquire that has to warn to succeed fails
+# here, whatever the exit code says.
+KSE="$(mktemp -d)"
+err="$(NOFX_LOCK_DIR="$KSE/lock.d" NOFX_LOCK_BEAT_SECONDS=60 bash "$LOCK_SH" acquire sess-E 'stderr must be silent' 30 2>&1 >/dev/null)"
+if [ -z "$err" ]; then ok "acquire writes nothing to stderr"
+else bad "acquire writes nothing to stderr" "stderr: $err"; fi
+NOFX_LOCK_DIR="$KSE/lock.d" bash "$LOCK_SH" release sess-E >/dev/null 2>&1
+rm -rf "$KSE"
+
+echo "== pgrp is counted AFTER comm, so a comm with spaces cannot shift it =="
+#
+# /proc/PID/stat is "pid (comm) state ppid pgrp ...". comm is the ONLY field
+# that may hold spaces or parens, so splitting the raw line puts pgrp at $5
+# only while comm is a single bare word. Strip through the LAST ')' and pgrp is
+# the third field of what remains, whatever comm contained. A wrong pgrp is not
+# a cosmetic error: `release` kills that group.
+synth='4242 (my proc (x)) S 4200 9999 0 -1 4194304 0 0'
+got="$(printf '%s\n' "$synth" | sed -e 's/^.*) //' | awk '{print $3}')"
+check "pgrp survives a comm with spaces and parens" "$got" "9999"
+naive="$(printf '%s\n' "$synth" | awk '{print $5}')"
+check "and the naive whole-line split is the wrong number"  "$naive" "S"
+
 echo
 printf 'pass=%d fail=%d\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

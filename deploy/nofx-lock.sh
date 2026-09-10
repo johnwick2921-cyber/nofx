@@ -140,7 +140,20 @@ _spawn_keeper() {
   kpid=$!
   # The GROUP id, read from /proc rather than assumed: setsid forks in some
   # shells and execs in others, so $! is not reliably the leader.
-  pgid="$(awk '"'"'{print $5}'"'"' "/proc/$kpid/stat" 2>/dev/null)"
+  #
+  # THE FIELD IS COUNTED AFTER comm, NOT FROM THE START OF THE LINE. /proc/PID/stat
+  # is "pid (comm) state ppid pgrp ...", and comm is the only field that can hold
+  # spaces or parens. Splitting the raw line puts pgrp at $5 only while comm is a
+  # single bare word; strip through the LAST ')' first and pgrp is unambiguously
+  # the third field of what remains.
+  #
+  # This line previously carried '"'"' quoting — the form for embedding a quote
+  # inside an ALREADY single-quoted string. Here it is at top level, so bash read
+  # {print $5} in a DOUBLE-quoted region, expanded $5 against the function's own
+  # (empty) arguments, and `set -u` aborted the substitution: every acquire printed
+  # "line 143: $5: unbound variable" to stderr and the /proc read never once ran.
+  # The fallback below silently covered it, which is why 75 green tests missed it.
+  pgid="$(sed -e 's/^.*) //' "/proc/$kpid/stat" 2>/dev/null | awk '{print $3}')"
   [ -n "$pgid" ] || pgid="$kpid"
   echo "$pgid" > "$LOCK_DIR/keeper.pid"
   disown 2>/dev/null || true
