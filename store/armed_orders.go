@@ -515,6 +515,24 @@ func (s *ArmedOrderStore) ListCancelPending(traderID string) ([]ArmedOrderDB, er
 	return out, err
 }
 
+// CountForeignBootCancelAttempts (B2) counts rows whose cancel_attempts were
+// tallied by a process OTHER than this one — the rows whose budget resets on
+// their next request. It is the carry the cancel boot line reports, and it is a
+// MEASURED number: a read failure returns -1 so the caller prints UNKNOWN
+// rather than a zero it did not earn (A24).
+func (s *ArmedOrderStore) CountForeignBootCancelAttempts() int64 {
+	if s == nil || s.db == nil {
+		return -1
+	}
+	var n int64
+	if err := s.db.Model(&ArmedOrderDB{}).
+		Where("cancel_attempts > 0 AND cancel_attempts_boot <> ?", ProcessBootID()).
+		Count(&n).Error; err != nil {
+		return -1
+	}
+	return n
+}
+
 // CountCancelPending is the boot line's figure — READ, never a literal (A11).
 func (s *ArmedOrderStore) CountCancelPending() int64 {
 	if s == nil || s.db == nil {

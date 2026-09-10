@@ -13,7 +13,7 @@ sized or exited differs.
 | # | verdict | what |
 |---|---|---|
 | B1 | **CLOSED** | `SweepableArmStateSQL()` landed in `41023d0c`; `boot_sweep.go:38-40` already matches the SQL. No four-over-three discrepancy remains. |
-| B2 | **FIXED** | The cancel budget is now per process. New column `cancel_attempts_boot`. |
+| B2 | **FIXED** | The cancel budget is now per process. New column `cancel_attempts_boot`, and the cancel boot line says so. |
 | B3 | **FIXED** | `api/handler_svp.go:50`'s "the cache cap" corrected; the value at `:63` untouched. |
 | B4 | **FIXED** | Ten `agent/` files gofmt'd, `gofmt -l` 10 → 0. **The dispatch's proof method was wrong** — corrected below. |
 | B5 | **FIXED** | `scripts/mutate.sh` + `scripts/mutate-selftest.sh` (6 pins). A verdict is refused unless the experiment demonstrably ran. |
@@ -124,6 +124,31 @@ layout.
   Instance 2 (line 205) the owner fixed by hand. **Instance 3 is open**: the SPEC-FRESHNESS
   block cites "class 73", slot 73 is a different class, and SPEC-FRESHNESS has no checklist
   slot at all. Owner-only.
+
+## THE BOOT LINE (owner's instruction: say the change is inert)
+
+Extended the EXISTING `CancelBootLine` rather than adding a competing line:
+
+```
+cancels: confirm=broker-snapshot · pending=0 · unconfirmed=0 ·
+slot-guard=on(refuse-on-live|stale) · timeout=1m30s · stale-bound=1m0s ·
+rerequest-cap=5 budget=per-process carry=UNKNOWN
+(inert until a cancel is re-requested after a restart) · reconciled=n/a (no broker book yet)
+```
+
+`budget=per-process` is the clause that matters: a reader seeing `rerequest-cap=5`
+alone cannot tell a per-row-forever budget (the defect) from a per-process one (the
+fix) — both render identically. `carry=` is the MEASURED count of rows whose attempts
+a departed process tallied, i.e. exactly those whose budget resets on their next
+request; a ledger that cannot be read prints `UNKNOWN`, never 0 (A24). Every field is
+read from the enforcing code (A11): the cap from `cancelReRequestMax()`, the carry from
+`CountForeignBootCancelAttempts()`.
+
+Pinned by `TestCancelBootLineStatesThePerProcessBudget` and
+`TestCancelBootLineCountsTheForeignBootCarry` (carry=0 on an empty ledger, carry=1 with
+one foreign-boot row). **Mutated through `scripts/mutate.sh` — B5's first real use:**
+removing the clause reports KILLED with the sed confirmed applied and the mutant
+building.
 
 ## CUTOVER
 

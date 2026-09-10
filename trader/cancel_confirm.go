@@ -526,10 +526,18 @@ func (at *AutoTrader) reconcileAgainstBroker(ledger *store.ArmedOrderStore, now 
 // sites in this tree. Key on the text "cancels:", never on the glyph (A24).
 func CancelBootLine(st *store.Store, rec ReconcileCounts, nowMs int64) string {
 	pending, unconfirmed := int64(0), int64(0)
+	// B2 — rows whose attempts a DEPARTED process counted. -1 means the ledger
+	// could not be read, and prints UNKNOWN rather than a zero nobody measured.
+	carry := int64(-1)
 	if st != nil {
 		ao := st.ArmedOrders()
 		pending = ao.CountCancelPending()
 		unconfirmed = ao.CountCancelUnconfirmed(nowMs, cancelConfirmTimeout().Milliseconds())
+		carry = ao.CountForeignBootCancelAttempts()
+	}
+	carryStr := "UNKNOWN"
+	if carry >= 0 {
+		carryStr = strconv.FormatInt(carry, 10)
 	}
 	reconciled := "reconciled=n/a (no broker book yet)"
 	if rec.Ran {
@@ -537,8 +545,8 @@ func CancelBootLine(st *store.Store, rec ReconcileCounts, nowMs int64) string {
 			rec.ConfirmedGone, rec.LiveAtBroker, rec.Unconfirmed, rec.SnapshotID)
 	}
 	return fmt.Sprintf(
-		"cancels: confirm=broker-snapshot · pending=%d · unconfirmed=%d · slot-guard=on(refuse-on-live|stale) · timeout=%s · stale-bound=%s · rerequest-cap=%d · %s",
-		pending, unconfirmed, cancelConfirmTimeout(), snapshotMaxAge(), cancelReRequestMax(), reconciled)
+		"cancels: confirm=broker-snapshot · pending=%d · unconfirmed=%d · slot-guard=on(refuse-on-live|stale) · timeout=%s · stale-bound=%s · rerequest-cap=%d budget=per-process carry=%s (inert until a cancel is re-requested after a restart) · %s",
+		pending, unconfirmed, cancelConfirmTimeout(), snapshotMaxAge(), cancelReRequestMax(), carryStr, reconciled)
 }
 
 // ── A DARK ADDON IS AN OUTAGE, NOT A QUIET DAY (owner ruling 2026-09-06) ─────
