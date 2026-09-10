@@ -430,7 +430,7 @@ Returns: [{"symbol":"<string>","side":"long|short","quantity":<float>,"entry_pri
 			s.routeWithSchema(protected, "GET", "/cutover-gate", "Pre-cutover gate: all five legs in one payload (class 33)",
 				`Query: ?trader_id=<EXACT trader_id from GET /api/my-traders>
 Returns: {"ready":<bool>,"legs":[{"n":1..5,"name":"<string>","pass":<bool>,"detail":"<string>","source":"<string>"}],"note":"<string>"}
-Legs: 1 db_open_positions · 2 api_positions · 3 nt8_positions_snapshot · 4 working_orders (armed_orders ledger) · 5 planner_in_flight. A leg that cannot be evaluated FAILS.`,
+Legs: 1 db_open_positions · 2 api_positions · 3 nt8_positions_snapshot · 4 working_orders (broker versus placed/unconfirmed ledger rows) · 5 planner_in_flight. Leg 4's armed_unplaced count is informational: authorized arms without a signal id do not fail it.`,
 				s.handleCutoverGate)
 			s.routeWithSchema(protected, "GET", "/decisions", "AI trading decisions (decision records)",
 				`Query: ?trader_id=<EXACT trader_id from GET /api/my-traders>&limit=<int, default 20>

@@ -2,6 +2,7 @@ package trader
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	ntwire "nofx/provider/ninjatrader"
@@ -20,8 +21,9 @@ import (
 // process's order would have been a position nobody's stop was attached to.
 //
 // This sweep runs ONCE per process per trader, at the head of the armed
-// subsystem, BEFORE anything is authored or placed: every non-terminal row
-// stamped by a DIFFERENT boot is cancelled at the broker and in the ledger.
+// subsystem, BEFORE anything is authored or placed. Sweepable rows stamped by
+// a DIFFERENT boot are cancelled at the broker and in the ledger; cancel_pending
+// belongs to confirmPendingCancels and is deliberately excluded from this sweep.
 // It generalises the 0C shadow sweep (armed_executor.go — "the first cycle
 // after boot IS the boot-time sweep") from shadowed conditions to ALL pre-boot
 // arms. The stale-window reconcile stays exactly as it is: the backstop.
@@ -131,9 +133,8 @@ func BootSweepBootLine(swept, skippedUnplaced int, leg4Source string) string {
 		leg4Source, swept, skippedUnplaced)
 }
 
-// ledgerOpenOrders renders THIS trader's non-terminal ledger rows as the
-// working-order book for flat-gate leg 4. NT8 emits no working-order frame
-// (audit F12), so the ledger is the only truth — and every row says so.
+// ledgerOpenOrders renders THIS trader's non-terminal rows. Leg 4 separately
+// counts unplaced ARMED rows; placed/unconfirmed rows cross-check the broker.
 func (at *AutoTrader) ledgerOpenOrders(symbol string) ([]types.OpenOrder, error) {
 	if at.store == nil || at.store.ArmedOrders() == nil {
 		return nil, fmt.Errorf("armed_orders ledger unavailable")
@@ -157,8 +158,8 @@ func (at *AutoTrader) ledgerOpenOrders(symbol string) ([]types.OpenOrder, error)
 			typ = "STOP_MARKET"
 		}
 		status := "NEW"
-		switch r.State {
-		case "armed":
+		switch strings.ToLower(strings.TrimSpace(r.State)) {
+		case store.StateArmed:
 			status = "ARMED" // authorized, NOT yet at the broker
 		case store.StatePlacePending:
 			// SENT, NOT CONFIRMED (2026-09-07). Nothing may render this as an
@@ -170,7 +171,8 @@ func (at *AutoTrader) ledgerOpenOrders(symbol string) ([]types.OpenOrder, error)
 		out = append(out, types.OpenOrder{
 			OrderID: r.SignalID, Symbol: at.futuresSymbol(), Side: side, PositionSide: posSide,
 			Type: typ, Price: r.EntryPx, StopPrice: r.StopPx, Quantity: 1, Status: status,
-			Source: "ledger (no NT8 order frame — F12 open)",
+			ArmState: r.State,
+			Source:   "armed_orders ledger (broker acceptance is a separate observation)",
 		})
 	}
 	return out, nil

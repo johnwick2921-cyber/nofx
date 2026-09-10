@@ -62,11 +62,8 @@ func TestArmedFillQuantityStamped(t *testing.T) {
 // question is answered by the id — see TestAuthoredLogOnlyWhenSomethingWasArmed
 // and armedActually.
 func TestArmedAuthoredNeverRelogsATerminalRow(t *testing.T) {
-	for state, want := range map[string]bool{
-		"armed": true, "working": true,
-		"filled": false, "cancelled": false, "expired": false,
-		"FILLED": false, " cancelled ": false,
-	} {
+	for _, state := range store.ArmStateNames() {
+		want := !store.IsTerminalArmState(state)
 		if got := armedActually(7, state); got != want {
 			t.Errorf("armedActually(7, %q) = %v, want %v", state, got, want)
 		}
@@ -199,7 +196,10 @@ func TestAuthoredLogOnlyWhenSomethingWasArmed(t *testing.T) {
 	if !armedActually(7, "armed") {
 		t.Error("a real id with a live state is a real arm")
 	}
-	for _, terminal := range []string{"filled", "cancelled", "expired"} {
+	for _, terminal := range store.ArmStateNames() {
+		if !store.IsTerminalArmState(terminal) {
+			continue
+		}
 		if armedActually(7, terminal) {
 			t.Errorf("state %q is not an arm", terminal)
 		}

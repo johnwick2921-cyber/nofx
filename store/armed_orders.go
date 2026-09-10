@@ -239,14 +239,14 @@ func (s *ArmedOrderStore) UpsertArm(row *ArmedOrderDB) error {
 	// cutover gate's leg 4 to "broker 1 vs ledger 23 — MISMATCH". The
 	// record-keeping law was right; the row it was applied to was wrong.
 	err := s.db.Where("plan_id = ? AND scenario = ? AND leg_index = ?", row.PlanID, row.Scenario, row.LegIndex).
-		Order("CASE WHEN state IN ('armed','place_pending','working','cancel_pending') THEN 0 ELSE 1 END, placement_seq DESC, id DESC").First(&existing).Error
+		Order("CASE WHEN " + NonTerminalArmStateSQL() + " THEN 0 ELSE 1 END, placement_seq DESC, id DESC").First(&existing).Error
 	if err == nil {
 		// D5 — a WORKING row is a LIVE BROKER ORDER. Rewriting its prices in
 		// place overwrote the slot and lost the brackets (rows 582, 585): the
 		// ledger and the broker then held two different orders under one id.
 		// Replacing a live order requires a cancel, and the store cannot issue
 		// one, so it declines rather than diverge.
-		if existing.State == StateWorking || existing.State == StatePlacePending {
+		if !IsTerminalArmState(existing.State) && existing.State != StateArmed && existing.State != StateCancelPending {
 			return fmt.Errorf("armed_orders: refusing to rewrite %s/%s — the row is %s (signal %q); replace requires cancel first",
 				row.PlanID, row.Scenario, existing.State, existing.SignalID)
 		}
@@ -373,7 +373,7 @@ func (s *ArmedOrderStore) ListNonTerminal(traderID string) ([]ArmedOrderDB, erro
 	// broker as far as anyone can prove, so it holds its slot, it is swept at
 	// boot like any live row, and cutover leg 4 counts it — which is what makes
 	// leg 4 agree with the broker instead of with our intentions.
-	err := s.db.Where("trader_id = ? AND state IN (?,?,?,?)", traderID, StateArmed, StatePlacePending, StateWorking, StateCancelPending).
+	err := s.db.Where("trader_id = ?", traderID).Where(NonTerminalArmStateSQL()).
 		Order("id").Find(&out).Error
 	return out, err
 }
@@ -421,12 +421,12 @@ func (s *ArmedOrderStore) ApplyPlacementReceipt(traderID, signalID, state, reaso
 		reason = "confirmed by " + reason
 	case StateRejected:
 		if strings.TrimSpace(reason) == "" {
-			q = q.Where("state IN (?,?,?)", StatePlacePending, StateWorking, StateCancelPending)
+			q = q.Where(NonTerminalArmStateSQL()).Where("state <> ?", StateArmed)
 			reason = PlacementReasonUnavailable
 		} else {
 			// A second receipt may supply the reason h1's first frame omitted.
 			// Enrich that absence without replacing an already received reason.
-			q = q.Where("(state IN (?,?,?) OR (state = ? AND state_reason = ?))", StatePlacePending, StateWorking, StateCancelPending, StateRejected, PlacementReasonUnavailable)
+			q = q.Where("(("+NonTerminalArmStateSQL()+" AND state <> ?) OR (state = ? AND state_reason = ?))", StateArmed, StateRejected, PlacementReasonUnavailable)
 		}
 	default:
 		return fmt.Errorf("armed_orders: unsupported placement receipt %q", state)

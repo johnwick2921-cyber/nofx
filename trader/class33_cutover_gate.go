@@ -26,6 +26,8 @@ type CutoverLeg struct {
 	Pass   bool   `json:"pass"`
 	Detail string `json:"detail"`
 	Source string `json:"source,omitempty"`
+	// Informational authorization count; nil means the ledger was unavailable.
+	ArmedUnplaced *int `json:"armed_unplaced,omitempty"`
 }
 
 // CutoverGate is the whole five-leg verdict. Ready is true only when EVERY
@@ -110,7 +112,7 @@ func (at *AutoTrader) CutoverGateStatus() CutoverGate {
 	default:
 		book, acct, sym := at.brokerBook()
 		leg := Leg4FromBrokerAt(book, acct, sym, OrderSnapshotInterval(), orders, time.Now())
-		add(4, leg.Name, leg.Pass, leg.Detail, leg.Source)
+		g.Legs = append(g.Legs, leg)
 	}
 
 	// Leg 5 — IN-FLIGHT WORK (the 2026-08-31 17:34 defect).
@@ -127,7 +129,7 @@ func (at *AutoTrader) CutoverGateStatus() CutoverGate {
 			g.Ready = false
 		}
 	}
-	g.Note = "class 33: leg 4 reads the armed_orders ledger (NT8 emits no working-order frame, audit F12); a leg that cannot be evaluated FAILS. Boot sweep counter key: " + store.BootSweptKey
+	g.Note = "leg 4 compares broker working orders with placed/unconfirmed ledger rows; armed rows without a signal are counted separately and do not fail the leg. Boot sweep counter key: " + store.BootSweptKey
 	return g
 }
 
