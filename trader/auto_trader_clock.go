@@ -525,7 +525,11 @@ func (at *AutoTrader) enforceEODFlatAt(now time.Time) bool {
 		acted = true
 	}
 	if unacked > 0 {
-		at.logWarnf("⚠️ EOD-FLAT: %d armed cancel(s) unacked after retry — flattening anyway (wire reconciles next cycle)", unacked)
+		// NOT CANCELLED. These rows are held cancel_pending: the cancel was sent
+		// (or could not be), no book confirmed it, and only ConfirmCancel may
+		// promote them. The flatten proceeds — it is never held hostage by a
+		// stuck ack — but the BOOK IS NOT PROVEN EMPTY on their account.
+		at.logWarnf("⚠️ EOD-FLAT: %d armed cancel(s) UNCONFIRMED — held cancel_pending, NOT cancelled; flattening anyway, the settlement pass confirms against a snapshot or re-requests", unacked)
 		acted = true
 	}
 	// Positions are read AFTER the cancel: a fill that won the race mid-cancel
@@ -537,8 +541,34 @@ func (at *AutoTrader) enforceEODFlatAt(now time.Time) bool {
 		return acted
 	}
 	if len(positions) == 0 {
+		// OUR TABLE IS EMPTY. That is one reader, and it is the one documented
+		// to lag the broker by up to ~80s (position_desync.go:18). Ask the
+		// broker before claiming the book is flat at the close.
+		v := at.flatTruthAt(len(positions), now)
+		if v.Disagrees() {
+			// THE EXPENSIVE DIRECTION, AND IT ALARMS RATHER THAN ACTS.
+			//
+			// Closing these would mean issuing exits for positions our store has
+			// no row for — a broker-side close path that has never run, invented
+			// at the close, from a reader we have just discovered we disagree
+			// with. A24: UNKNOWN takes no destructive branch. The honest and
+			// safe move is to refuse the word "flat", say exactly what each
+			// reader answered, and leave the position for the reconciler and the
+			// owner rather than guessing at an exit.
+			at.logErrorf("🚨 EOD-FLAT (%s): NOT FLAT — our table shows no open position and the BROKER REPORTS %d. %s. The close is proceeding with a position the ledger cannot see; this needs an owner. Nothing is auto-closed from the broker's answer alone.",
+				flat, v.BrokerOpen, v.Why())
+			telemetry.IncGateBlock(at.id, "flat_claim_refused_broker_disagrees")
+			return true
+		}
+		if !v.ProvenFlat() {
+			// UNVERIFIED is not FLAT. No link, or a failed read: say which, and
+			// never print the word "flat" on one reader's say-so.
+			at.logWarnf("⚠️ EOD-FLAT (%s): local table shows no open position but flatness is UNVERIFIED — %s. The close proceeds; the next cycle re-checks.",
+				flat, v.Why())
+			return acted
+		}
 		if acted {
-			at.logWarnf("🕒 EOD-FLAT (%s): no open position — arms retired; book flat", flat)
+			at.logWarnf("🕒 EOD-FLAT (%s): no open position — arms retired; book flat [%s]", flat, v.Why())
 		}
 		return acted
 	}
@@ -716,7 +746,7 @@ func (at *AutoTrader) enforceT1ForceFlatAt(now time.Time) bool {
 		at.logWarnf("🔒 T1-FORCE-FLAT: %d armed order(s) cancelled before the red-news window", n)
 	}
 	if unacked > 0 {
-		at.logWarnf("⚠️ T1-FORCE-FLAT: %d armed cancel(s) unacked after retry", unacked)
+		at.logWarnf("⚠️ T1-FORCE-FLAT: %d armed cancel(s) UNCONFIRMED — held cancel_pending, NOT cancelled; the settlement pass owns them", unacked)
 	}
 	positions, err := at.store.Position().GetOpenPositions(at.id)
 	if err != nil {
@@ -728,7 +758,20 @@ func (at *AutoTrader) enforceT1ForceFlatAt(now time.Time) bool {
 		return n+unacked > 0
 	}
 	if len(positions) == 0 {
-		return n+unacked > 0 // flat — the arm-cancel above is the whole job
+		// Two minutes before a red-news print is the worst moment to believe one
+		// reader. Same check as the EOD path, same reason.
+		v := at.flatTruthAt(len(positions), now)
+		if v.Disagrees() {
+			at.logErrorf("🚨 T1-FORCE-FLAT (%s): NOT FLAT — our table shows no open position and the BROKER REPORTS %d. %s. Entering the red-news window with a position the ledger cannot see; this needs an owner. Nothing is auto-closed from the broker's answer alone.",
+				due, v.BrokerOpen, v.Why())
+			telemetry.IncGateBlock(at.id, "flat_claim_refused_broker_disagrees")
+			return true
+		}
+		if !v.ProvenFlat() {
+			at.logWarnf("⚠️ T1-FORCE-FLAT (%s): local table shows no open position but flatness is UNVERIFIED — %s. Entering the red-news window unproven.",
+				due, v.Why())
+		}
+		return n+unacked > 0 // the arm-cancel above is the whole job
 	}
 	at.logWarnf("📰 T1-FORCE-FLAT (%s): flattening %d open position(s) — red-news forced close at T-%dmin (research v5 C.5).", due, len(positions), t1ForceFlatLead)
 	for _, p := range positions {

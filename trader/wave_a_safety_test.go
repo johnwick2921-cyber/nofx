@@ -35,7 +35,7 @@ func TestWaveARecordersNeverPanicTheTradingLoop(t *testing.T) {
 		t.Fatalf("recordAcceptedRisk panicked through to the loop: %v", r)
 	}
 	if r := recoverOf(func() {
-		at.recordDetectorOutputs("MNQ", "P1", "NY", 1, nil, nil, 29000, 10, 2.0, 12, time.Now())
+		at.recordDetectorOutputs("MNQ", "P1", "NY", 1, nil, nil, 29000, 10, 2.0, 12, time.Now(), nil)
 	}); r != nil {
 		t.Fatalf("recordDetectorOutputs panicked through to the loop: %v", r)
 	}

@@ -68,7 +68,7 @@ func TestRecorderNeverRecordsAnEpisodeBeforeTheLevelFormed(t *testing.T) {
 	formed := now.Add(-60 * time.Minute).UnixMilli()
 
 	at.recordDetectorOutputs("MNQ", "P1", "NY", 1,
-		nil, seatedAt(level, 0, formed), level, 10, 2.0, 12, now)
+		nil, seatedAt(level, 0, formed), level, 10, 2.0, 12, now, nil)
 
 	rows, err := st.TouchOutcomes().AllOutcomes()
 	if err != nil {
@@ -104,14 +104,14 @@ func TestRecorderWritesOneRowPerEpisodeAcrossRepeatedReads(t *testing.T) {
 	at, st, now := recorderFixture(t, level, 2000, boundary.Add(-10*time.Minute))
 	seated := seatedAt(level, 0, 0) // formed long ago: formation is not what this pin tests
 
-	at.recordDetectorOutputs("MNQ", "P1", "NY", 1, nil, seated, level, 10, 2.0, 12, now)
+	at.recordDetectorOutputs("MNQ", "P1", "NY", 1, nil, seated, level, 10, 2.0, 12, now, nil)
 	first := st.TouchOutcomes().CountOutcomes()
 	if first == 0 {
 		t.Fatalf("fixture produced no episodes at all — the tape does not exercise the recorder")
 	}
 	// Two more identical reads. Nothing new happened on the tape.
-	at.recordDetectorOutputs("MNQ", "P1", "NY", 1, nil, seated, level, 10, 2.0, 12, now)
-	at.recordDetectorOutputs("MNQ", "P1", "NY", 1, nil, seated, level, 10, 2.0, 12, now)
+	at.recordDetectorOutputs("MNQ", "P1", "NY", 1, nil, seated, level, 10, 2.0, 12, now, nil)
+	at.recordDetectorOutputs("MNQ", "P1", "NY", 1, nil, seated, level, 10, 2.0, 12, now, nil)
 	after := st.TouchOutcomes().CountOutcomes()
 
 	t.Logf("read1=%d  after 3 identical reads=%d", first, after)
@@ -130,7 +130,7 @@ func TestRecorderOrdinalIsNotResetByAReRead(t *testing.T) {
 	at, st, now := recorderFixture(t, level, 2000, boundary.Add(-10*time.Minute))
 	seated := seatedAt(level, 0, 0)
 
-	at.recordDetectorOutputs("MNQ", "P1", "NY", 1, nil, seated, level, 10, 2.0, 12, now)
+	at.recordDetectorOutputs("MNQ", "P1", "NY", 1, nil, seated, level, 10, 2.0, 12, now, nil)
 
 	rows, err := st.TouchOutcomes().AllOutcomes()
 	if err != nil {
@@ -177,7 +177,7 @@ func TestLineLevelsCannotBeCertifiedAndAreExcludedFromRates(t *testing.T) {
 
 	// A LINE level: exactly what lineLevel produces — no formation time.
 	seated := seatedAt(level, 0, 0)
-	at.recordDetectorOutputs("MNQ", "P1", "NY", 1, nil, seated, level, 10, 2.0, 12, now)
+	at.recordDetectorOutputs("MNQ", "P1", "NY", 1, nil, seated, level, 10, 2.0, 12, now, nil)
 
 	rows, err := st.TouchOutcomes().AllOutcomes()
 	if err != nil {

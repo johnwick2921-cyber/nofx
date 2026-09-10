@@ -432,3 +432,79 @@ The card's `ScenarioEconomics` block and desk SCENARIOS line display obstacle pr
 `store.IsTerminalArmState` owns the arm lifecycle classification; `TerminalArmStateSQL` and its negation are generated from the same table. Store liveness queries, arm readers and the boot census use it. Pre-boot selection uses the named `SweepableArmStateSQL`: non-terminal MINUS cancel_pending. The settlement pass owns cancel_pending and only confirms cancellation with a persisted snapshot id; the sweep must not bypass that evidence through raw SetState. Read-only scripts obtain the SQL through `go run ./cmd/arm-state-sql` or `scripts/arm_state.py`; they do not retype state lists. Unknown/NULL states remain non-terminal.
 
 `Leg4FromBrokerAt` splits authorized `armed` rows with no signal id from placed/unconfirmed rows. The former are reported separately (`armed_unplaced`) and do not fail the leg. `place_pending` remains working/unconfirmed; broker-only orders and missing broker placements fail. The received broker snapshot still supplies order truth. The class-33 sweep does not gain scenario-validity adoption in this wave; it still cancels selected prior-process placed rows. The boot's `arm placement census` reads the same classification and prints UNKNOWN on a failed ledger read.
+
+### The episode contract (fix/episode-contract, classes 109/111)
+
+RECORDING ONLY. No rule, threshold, gate, order, plan content, level score or
+surface behaviour changes; the wave adds columns to `touch_outcomes` and fills
+them. Every added VALUE column is a pointer — NULL means NOT CAPTURED, never zero
+and never false. The one exception is `ScenarioLinkBasis`, a plain string,
+because `ResolveScenarioLink` always returns a basis: on a row this wave wrote it
+is one of the four constants, so an EMPTY basis means a row written before this
+wave and is the pre-wave marker, not a missing reading.
+
+**The unit.** A touch was already the row; what it lacked was the ladder above
+it. `store/opportunity_outcome.go` defines five rungs — `never_reached`,
+`reached_declined`, `confirmed_not_armed`, `armed_not_filled`, `filled` — and
+`OpportunityOutcomeFor` derives them from four booleans in one switch, highest
+rung first, so the set is exhaustive by construction rather than by a default
+branch. `store/opportunity_close.go` selects on NULL outcome (idempotent by
+predicate, not by a flag) and calls `factsFor` PER ROW; a batch cannot smear one
+row's facts across its neighbours.
+
+**The link is a heuristic and says so.** A touch has a price, not a scenario id;
+nothing in the plan path stamps one. `store/scenario_link.go` resolves the
+nearest anchor within a band and records `ScenarioLinkBasis = price_proximity`
+with the distance in points AND in Δ. The column is `scenario_nearest`, never
+`scenario` — a name that would read as fact. Two anchors inside the band yield
+NULL with basis `unresolved:two_scenarios_within_band`: ambiguity is recorded as
+ambiguity, never resolved nearest-wins. Nothing close yields
+`unresolved:nearest_outside_band`; no plan at the seat yields
+`unresolved:no_scenario_at_seat`. A zero Δ leaves `dist_delta` NULL rather than
+dividing. `trader/scenario_anchor.go` takes `Confirm.RefPrice` when present and
+falls back to `Arm.Entry`, counts what it cannot anchor, and sizes the band from
+`kernel.LevelClusterTicks` — the map's own clustering distance, not a new knob.
+`trader/auto_trader_planner.go` now parses the `latest.Doc` it previously fetched
+and discarded. The identity wave — a real scenario id on the touch — comes after;
+this is the labelled stand-in, and the label is the point.
+
+**The attainable entry.** `store/attainable_entry.go` orders MEASURED before
+ASSUMED: `observed_fill` when a fill exists, then
+`resting_limit:assumed_fill_at_entry` and `stop_entry:assumed_fill_at_trigger`
+for the two arm shapes, then `first_tradeable_after_confirm`. Never confirmed and
+never armed is `none:never_confirmed_never_armed`; confirmed with no price on the
+record is `not_captured:confirmed_but_no_price_recorded` — a different fact from
+`none`, and stored differently. The level price is never a branch: what the level
+said is not what the tape offered.
+
+**The backfill recomputes nothing, and that is the finding.**
+`store/opportunity_backfill.go` is three-state — `unrecomputable:no_formation`,
+`unrecomputable:no_scenario_link`, `unrecomputable:terms_mutated_in_place` — and
+on the live archive it recomputes ZERO historical rows. Measured on
+`data/data.db` at 2026-09-10: 4,860 in-era rows examined, 0 pre-era untouched,
+4,677 `unrecomputable:no_formation`, 183 `unrecomputable:no_scenario_link`,
+**0 recomputed**. `formed_at_ms` is present on 183 of 4,860 rows — 3.77%,
+measured, not the research's 26% — and those 183 are exactly the rows that then
+fall at the second gate, because no historical row carries a scenario link at
+all. `armed_orders` is a
+state row mutated in place rather than an event log, so historical terms are
+unrecomputable by construction and are marked so rather than reconstructed from
+`updated_at`. `trade_excursions` is UNIQUE(position_id) — filled-only — and is
+the wrong key for an opportunity; it is not extended. The zero is reported as
+the research's claim MEASURED, not as a failure of the backfill.
+
+**Boot line.** Join key `🎫 episodes:`. Open and closed-today counts, the
+five-rung breakdown, and the backfill's recomputed/unrecomputable pair are READ,
+never literal. The detector scope names its RESOLVER, not a value —
+`Δ=resolved-per-read (kernel.MeanAbsIncrement, the tape's own scale)` — because Δ
+is per-read and a number printed at boot is a literal by another name; `k` and
+`H` print `[I]` for their env source. `store` cannot import `kernel` (kernel
+imports store), so `store/episode_detector_scope.go` reads DETECTOR_K and
+DETECTOR_HORIZON_BARS through the identical env names — one source, two readers
+by name, which is the closest this dependency direction allows and is stated
+here rather than left to be discovered.
+
+**Not done, deliberately.** No scenario identity on the touch. No episode table —
+the ruling was to extend `touch_outcomes`, and a second table would have been a
+second key for the same unit. No historical terms. The ordinal was already true
+and was dropped rather than re-implemented.

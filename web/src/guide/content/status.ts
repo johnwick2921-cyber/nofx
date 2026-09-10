@@ -10,7 +10,7 @@ export const status: GuideSection = {
     { kind: 'h', text: 'Scenario activation and order authorization' },
     {
       kind: 'p',
-      text: 'Scenario activation describes the evaluator’s view of the setup. In activation window and confirmation MET do not authorize or place an order. The separate order authorized chip means the ledger has an authorization; working, filled and cancelled describe that ledger record, not a direct broker settlement. Prices and order selection are addressed separately.',
+      text: 'Scenario activation describes the evaluator’s view of the setup. In activation window and confirmation MET do not authorize or place an order. The separate order authorized chip means the ledger has an authorization; working, filled and cancelled describe that ledger record, not a direct broker settlement. Prices and order selection are addressed separately. CANCEL PENDING is a fourth state and it means exactly what it says: a cancel was sent and NO broker book has confirmed the order is gone, so the order may still be resting. Since 2026-09-10 a cancel that times out, or that could not be sent because the NT8 link was down, is HELD at cancel pending rather than written cancelled — cancelled is the word that frees the slot for a replacement, and an unconfirmed cancel must never free it. The settlement pass confirms it against a snapshot or re-requests up to a cap; only a book that no longer lists the order may promote it.',
     },
     { kind: 'h', text: 'Dashboard layout and Desk loading' },
     {
