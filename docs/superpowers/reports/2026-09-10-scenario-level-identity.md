@@ -29,6 +29,19 @@ deletions in another lane's checklist/report additions. After rebase it showed
 none. Those changes were retained. No main-tree operation or deploy lock was
 needed for this report.
 
+Before publication, cleanup batch 1 landed at
+`29eda2b39d8d6e707e455838f449fe0df623070d`; this report branch was rebased again
+onto that actual merged dev tip. Its diff against dev contains only this report
+and its evidence files, with no deletions. The final two-format `uniq -c`
+[census](2026-09-10-scenario-level-identity-data/checklist-census.txt) reads
+**highest occupied 114**, not the dispatch's earlier 112. No class was assigned
+or reserved: this is a correction report, not a fix. The final checklist
+last-change line was:
+
+```text
+2ee867afdb9b674a7caeaad133f2b1df7b38347b 2026-09-10T17:32:19-05:00 docs(checklist): class 114 — the verifier is wrong, and its wrongness reads as a result
+```
+
 Evidence labels: **[A]** directly read/measured; **[B]** consequence inferred
 from the verified call chain. The audit follows
 `docs/superpowers/AUDIT-CHECKLIST.md`, PART 2 R1–R10 and PART 3, with the dispatch's
