@@ -2,8 +2,8 @@
 
 **Wave:** lock keeper on acquire (relayed by lane nofx-07, GO'd by the owner)
 **Branch:** `fix/lock-keeper-on-acquire`
-**Landed on dev:** `a4c72ff7` (keeper), then `88d40920` (the stderr defect below)
-**Suites at the merged head:** lock 82 pass / 0 fail · claim 17 / 0 · Go build OK
+**Landed on dev:** `a4c72ff7` (keeper), then `88d40920` and `97a6525c` (findings 3 and 4 below)
+**Suites at the merged head:** lock 85 pass / 0 fail · claim 17 / 0 · Go 30 ok / 0 fail
 **Scope:** `deploy/nofx-lock.sh`, `deploy/nofx-lock-test.sh`, `AUDIT-CHECKLIST.md`.
 No Go source, no binary, no boot. SIM untouched.
 
@@ -119,6 +119,47 @@ only field that may contain spaces or parens. New pin: **acquire writes nothing
 to stderr**, mutation-tested to fail on the shipped script with that exact
 message. It is an stderr assertion because no behavioural assertion could catch
 it.
+
+### 4. Correcting finding 3 could SIGTERM the invoking shell — CLASS 104
+
+**The correction was more dangerous than the defect, and it fired.**
+
+Making the `/proc` read work exposed a race the broken version had been hiding.
+Job control is off in a non-interactive shell, so a background job does **not**
+get its own process group — it starts in the SHELL'S, and `setsid` moves it only
+once it execs. `kpid=$!` returns before that. A read that WINS the race returns
+the **parent's** pgrp, which landed in `keeper.pid`, and `_stop_keeper` ran
+`kill -TERM -- "-$pg"` against it — SIGTERM to the process group of whoever
+invoked the script.
+
+It killed the test run that found it, **exit 143**. I first read that exit code
+as an unrelated environment problem. The entire codebase contains exactly one
+`SIGTERM`, and it was the new code.
+
+The broken version was **accidentally safer**: it always fell through to
+`pgid="$kpid"`, and `$kpid` after `setsid` genuinely is its own group leader. The
+defect and the safety were the same line.
+
+Fixed in two layers, because either alone leaves a hole:
+
+1. **At the writer** — `_spawn_keeper` accepts a pgid only once `pgrp == pid`,
+   true exactly when `setsid` has completed and impossible for a value borrowed
+   from the parent. If that never holds, the keeper is still in our group and is
+   recorded as a plain pid for layer 2 to judge.
+2. **At the consumer** — `_stop_keeper` signals nothing it has not positively
+   identified as THIS lock's keeper: numeric, `/proc/<pid>/cmdline` names this
+   lock directory, and the group form used only for a verified group leader.
+   A24 applied to signals — UNKNOWN takes no destructive branch.
+
+New pin: **a `keeper.pid` naming someone else's group is not signalled**,
+mutation-tested to fail on the prior commit with `release killed pid <n>`. Plus:
+a corrupt, non-numeric `keeper.pid` leaves `release` working.
+
+**This changes what finding 3's lesson is.** Class 103 says a fallback hides the
+failure of the path it backs up. Class 104 adds the other half: that hidden path,
+once repaired, runs for the first time in production — so **a fix to code that
+never executed is a new feature, not a repair**, and it earns a new feature's
+review, most of all where it feeds a destructive operation.
 
 ---
 
