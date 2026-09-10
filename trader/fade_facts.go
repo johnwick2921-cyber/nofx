@@ -57,8 +57,10 @@ func (at *AutoTrader) fadeFactsAt(now time.Time, symbol string, price float64, s
 	sess, ok := reg.ActiveSession(now)
 	var open time.Time
 	if ok && sess != nil && sess.WindowStartCT != "" {
-		if t, err := time.ParseInLocation("15:04", sess.WindowStartCT, loc); err == nil {
-			open = time.Date(nowCT.Year(), nowCT.Month(), nowCT.Day(), t.Hour(), t.Minute(), 0, 0, loc)
+		// hhmmToMin is the same parse the clock, cadence and cutoff paths use
+		// — one parser, no bare time layout (class 38 / tz guard).
+		if startMin, okS := hhmmToMin(sess.WindowStartCT); okS {
+			open = time.Date(nowCT.Year(), nowCT.Month(), nowCT.Day(), startMin/60, startMin%60, 0, 0, loc)
 			f.SessionOpen = open
 			// (e) reuses the existing no-trade band's N (D1e) — never retyped.
 			f.FirstNMinutes = kernel.FirstNoTradeMinutes()
@@ -67,7 +69,7 @@ func (at *AutoTrader) fadeFactsAt(now time.Time, symbol string, price float64, s
 
 	// (a) and (b) need 5m bars at or before now. Bars opening at/after now do
 	// not exist yet from the evaluator's point of view and are dropped.
-	if !open.IsZero() {
+	if !open.IsZero() && market.FuturesBarsProvider != nil {
 		bars := market.FuturesBarsProvider(symbol, "5m", 400)
 		var sessBars []market.Kline
 		for _, b := range bars {

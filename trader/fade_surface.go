@@ -122,7 +122,7 @@ func fadeChipText(v FadeLabelView) string {
 // wake-levels path use. Zero when no bar exists — the predicate treats zero
 // as "price unknown" and (b)/(c) stay unevaluated rather than firing on 0.
 func (at *AutoTrader) LastPriceForDesk() float64 {
-	if at == nil {
+	if at == nil || market.FuturesBarsProvider == nil {
 		return 0
 	}
 	bars := market.FuturesBarsProvider(at.futuresSymbol(), "1m", 1)

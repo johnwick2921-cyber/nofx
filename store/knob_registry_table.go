@@ -119,6 +119,7 @@ var knobRegistry = map[string]KnobEntry{
 	"oi_top_limit":                     {Path: "oi_top_limit", Status: KnobLive, Consumers: []string{"kernel/engine.go:468"}, Note: ""},
 	"plan_enabled":                     {Path: "plan_enabled", Status: KnobLive, Consumers: []string{"kernel/engine_analysis.go:365"}, Note: ""},
 	"plan_mode":                        {Path: "plan_mode", Status: KnobLive, Consumers: []string{"trader/entry_gate.go:160"}, Note: ""},
+	"fade_or_wide_k":                   {Path: "fade_or_wide_k", Status: KnobLive, Consumers: []string{"trader/fade_facts.go:155"}, Note: "W2 LABEL knob: sets exclusion (a)'s k; changes what is RECORDED, never what is armed. Zero = C5 default 1.28."},
 	"planner_model":                    {Path: "planner_model", Status: KnobLive, Consumers: []string{"trader/auto_trader_planner.go:71"}, Note: ""},
 	"planner_timeframes":               {Path: "planner_timeframes", Status: KnobLive, Consumers: []string{"trader/auto_trader_planner.go:1990"}, Note: ""},
 	"price_ranking_duration":           {Path: "price_ranking_duration", Status: KnobLive, Consumers: []string{"kernel/engine.go:1002"}, Note: ""},
