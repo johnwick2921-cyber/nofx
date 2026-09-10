@@ -87,8 +87,22 @@ type ArmedOrderDB struct {
 	// zero standing in for a measurement.
 	CancelRequestedAtMs int64 `gorm:"default:0"`
 	// CancelAttempts counts REQUESTS SENT, not confirmations. A re-request
-	// bumps it; the confirmation does not.
+	// bumps it; the confirmation does not. It is counted PER PROCESS — see
+	// CancelAttemptsBoot.
 	CancelAttempts int `gorm:"default:0"`
+	// CancelAttemptsBoot (B2, 2026-09-10) is the ProcessBootID under which
+	// CancelAttempts was counted. A restart resets the budget, because the
+	// restart is exactly the event that changes the facts the cap was guarding
+	// against: a new wire, a re-seeded book, a broker that may now answer.
+	// Before this column a row that hit the cap pre-restart arrived capped and
+	// confirmPendingCancels (trader/cancel_confirm.go) would neither re-request
+	// nor promote it — it was stranded in cancel_pending for the life of the
+	// ledger.
+	//
+	// It is DELIBERATELY not the existing BootID column: that one answers "which
+	// process AUTHORED this row" (class 33). Two questions on one field is the
+	// failure this repo keeps meeting; they get one field each.
+	CancelAttemptsBoot string `gorm:"default:''"`
 	// CancelSettledSnapshotID is the nt8_order_snapshots id whose book no
 	// longer listed the order — the evidence the cancel actually happened.
 	// 0 on a row that reached 'cancelled' any other way, which is every row
@@ -140,6 +154,7 @@ CREATE TABLE IF NOT EXISTS armed_orders (
 	leg_count     INTEGER NOT NULL DEFAULT 0,
 	kind          TEXT    NOT NULL DEFAULT '',
 	boot_id       TEXT    NOT NULL DEFAULT '',
+	cancel_attempts_boot TEXT NOT NULL DEFAULT '',
 	created_at    DATETIME,
 	updated_at    DATETIME
 )`
@@ -179,6 +194,12 @@ func (s *ArmedOrderStore) Migrate() error {
 			// every historical row — not an uncomputed value dressed as data.
 			{"cancel_requested_at_ms", "INTEGER NOT NULL DEFAULT 0"},
 			{"cancel_attempts", "INTEGER NOT NULL DEFAULT 0"},
+			// B2 (2026-09-10) — the boot that counted cancel_attempts. Empty on
+			// every historical row, which reads as "counted by no process this
+			// one can identify", so the first request after this ships resets the
+			// budget once. That is the correct answer for a row whose attempts
+			// were accumulated by a process that is gone.
+			{"cancel_attempts_boot", "TEXT NOT NULL DEFAULT ''"},
 			{"cancel_settled_snapshot_id", "INTEGER NOT NULL DEFAULT 0"},
 		} {
 			var n int64
@@ -449,10 +470,18 @@ func (s *ArmedOrderStore) RequestCancel(id int64, reason string, nowMs int64) er
 	if err := s.db.First(&row, id).Error; err != nil {
 		return err
 	}
+	// B2 — the budget is PER PROCESS. A row whose attempts were counted by a
+	// different (or no longer identifiable) process starts again at 1 under
+	// this one, so a restart re-opens a capped row instead of stranding it.
+	attempts := row.CancelAttempts + 1
+	if row.CancelAttemptsBoot != ProcessBootID() {
+		attempts = 1
+	}
 	upd := map[string]any{
-		"state":           StateCancelPending,
-		"state_reason":    reason,
-		"cancel_attempts": row.CancelAttempts + 1,
+		"state":                StateCancelPending,
+		"state_reason":         reason,
+		"cancel_attempts":      attempts,
+		"cancel_attempts_boot": ProcessBootID(),
 	}
 	if row.CancelRequestedAtMs == 0 {
 		upd["cancel_requested_at_ms"] = nowMs

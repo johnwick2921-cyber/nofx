@@ -1,12 +1,12 @@
 package agent
 
 import (
-	"nofx/kernel"
 	"encoding/json"
 	"fmt"
 	"log/slog"
 	"math"
 	"net/http"
+	"nofx/kernel"
 	"nofx/safe"
 	"strconv"
 	"strings"
