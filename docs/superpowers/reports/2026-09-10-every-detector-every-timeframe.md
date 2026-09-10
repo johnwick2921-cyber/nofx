@@ -216,6 +216,32 @@ skipped test is not evidence.
 9. **Executor cost measured, not assumed**: the 2→5 timeframe expansion moves one
    detection pass from **217µs to 535µs** (`-benchtime 20x`, same 500-bar input
    per timeframe). Sub-millisecond on a path that runs about once a minute.
+11. **`nofx/trader` is RED on dev, and it is not the lunch band.**
+    `TestSplitArmWritesTwoLedgerRows` fails with *"split arm must write 2 ledger
+    rows (legs), got 0"*. Measured **[A]** at three heads in clean worktrees
+    carrying none of this wave's commits:
+
+    | head | what it is | result |
+    |---|---|---|
+    | my merged head | W-TF + dev | FAIL |
+    | `a98a92c7` | dev tip, after the settlement merge | FAIL |
+    | `a48af5d7` | dev tip, BEFORE the settlement merge | FAIL |
+
+    So it is neither this wave's nor the settlement wave's. The cause is **not**
+    the wall clock: commit `2cc7c28c` (12:26 CT today, *"the arm-path tests read
+    the wall clock, so dev is RED for 90 minutes a day"*) reached this test — it
+    uses `armTestClock(t, at)` and derives its session, plan and bars from that
+    one value, so A28 is honoured. The refusal is:
+
+    ```
+    🛑 arm stop NY S1 leg 1 short: stop 29510.75 · anchor none (stop_unanchored) · atr_floor
+    🚦 entry-gate REFUSED arm NY: entry_gate: scenario S1 invalidated at an earlier cycle
+    ```
+
+    An entry-gate invalidation, not a band refusal. **This blocks Section F's
+    "suite at the merged HEAD" requirement** and is recorded, not fixed (A23,
+    and it is another lane's file).
+
 10. **`3d` is in the gate but not in `DefaultHTFDetectionTFs`.** It will only run
     for a trader whose configured `planner_timeframes` names it. Deliberate: one
     rung per scale on the default path.
