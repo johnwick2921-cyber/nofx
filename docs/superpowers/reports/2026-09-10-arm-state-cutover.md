@@ -1,6 +1,6 @@
 # Arm-state correction and cutover receipt — 2026-09-10
 
-## Correction merged; cutover validation in progress
+## HOLD — correction merged; no cutover
 
 [A] PR #97 merged as **8140f8f208287f115697584b77797bf6ea751865**. The owner-requested sweep correction is **41023d0c**: `SweepableArmStateSQL` derives non-terminal MINUS cancel_pending, leaving pending cancellations to the snapshot settlement pass. Leg 4 and the arm-state source guard remain intact. The production pin reproduced the regression before the correction (`swept=1 sends=1 state=cancelled snapshot=0`) and passes afterward (`swept=0`, no-book pending=1, resting-book pending=1, empty book cancelled with the exact persisted snapshot id). This was my branch's regression, not a dev defect.
 
@@ -29,3 +29,7 @@ The sole updated brand baseline is `deploy/nofx-lock.sh` at **97a6525cb6d10d6c88
 ### Dev advanced during cutover preparation
 
 Before merging the validation follow-up, dev advanced to `757eb578`, bringing `ace51598` from `fix/lock-defects-release-meta-halfbuilt`. Its report records owner-pinned scope and 101 passing lock checks. I integrated that branch and updated the protected lock baseline to its exact SHA256 `46fcbf76478c43943fb7607bd2929fe3629371ae5b8571ec9da8e1fa6e96c6ab`; this supersedes the keeper-only hash above. I authored neither lock implementation; the deployed tree must carry and be validated with both. Their report is [Three lock defects](2026-09-10-lock-three-defects.md).
+
+## Fresh lock suite blocks cutover
+
+[A] My own isolated `bash deploy/nofx-lock-test.sh` at the merged lock-defects code returned **99 PASS / 2 FAIL**, unlike the other lane’s recorded 101/0. Both failures are in the corrupt keeper.pid fixture: release returned rc=1 instead of expected 0, and printed that the lock directory still existed after rm instead of claiming release. The fixture intentionally replaces the stop handle while the keeper is alive; I did not modify the script, its expected result, or its fixture. [Full fresh lock-suite output](2026-09-10-arm-state-cutover-data/lock-tests.txt). This is an unresolved cutover blocker, alongside the active main-tree nano editor. No RELEASE write, dist publication, binary swap or kill has occurred.
