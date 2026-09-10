@@ -1747,6 +1747,11 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     A build artifact carries its build path into production, so the build
     directory is part of the deploy, not scratch space.
 
+    **Number collision (A16).** The number 75 is used TWICE in this file. The
+    other one is `## CLASS 75 — SYSTEM-MAP CONTRACT`
+    in the appendices — a different class, not a restatement of this one. If you
+    followed a cross-reference about a stale system map, you want that one, not this.
+
 76. **Canon relocated to where nothing could read it.** (Found 2026-09-03,
     minutes after boot 7; fixed by the same lane at `86a11888`.) Root cause: the
     standing laws lived in a **gitignored** `CLAUDE.md`, which is a real defect —
@@ -1773,6 +1778,11 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     reach by the lane building the guard for exactly that.
     **Family: "a healthy-looking absence"** (PART 3 step 0) — with 74, and with
     the lost dispatch that has no claim branch.
+
+    **Number collision (A16).** The number 76 is used TWICE in this file. The
+    other one is `## CLASS 76 — THE POSITIONAL ARGUMENT IN THE WRONG SLOT`
+    in the appendices — a different class, not a restatement of this one. If you
+    followed a cross-reference about a positional argument in the wrong slot, you want that one, not this.
 
 77. **A counter destroyed by the act of reporting it.** (Number assigned at
     merge, A27 — 74/75/76 were already taken on this base when I checked, two of
@@ -1803,6 +1813,11 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     report zero, never a negative — a negative count reads as a fix. Fixed in
     `provider/ninjatrader/bar_persist.go`; the log message is byte-identical and
     reports the same interval numbers it always did.
+
+    **Number collision (A16).** The number 77 is used TWICE in this file. The
+    other one is `## CLASS 77 — A CANONICALIZER ADDED AT ONE BOUNDARY, CONSUMERS LEFT ORDINAL`
+    in the appendices — a different class, not a restatement of this one. If you
+    followed a cross-reference about a canonicalizer added at one boundary only, you want that one, not this.
 
 78. **A plan that could only trade one direction.** (Number assigned at merge,
     A16 — highest occupied on dev was 76 when this was written; 77 is claimed by
@@ -2244,6 +2259,11 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     enforcing". Fixed in W5 as words only; the code defect (arm path ignores the
     band) is filed for a later wave.
 
+    **Number collision (A16).** The number 92 is used TWICE in this file. The
+    other one is `## CLASS 92 — SCENARIO ECONOMICS: A PATH, AN ORDER TARGET, AND MISSING LEGACY DECLARATIONS`
+    in the appendices — a different class, not a restatement of this one. If you
+    followed a cross-reference about scenario economics or order-target geometry, you want that one, not this.
+
 93. **A guard that derives its expectation from the thing it guards.** (Number
     assigned at merge, A16 — highest occupied on dev was 92 by a two-format
     `uniq -c` census; class **97** does NOT yet exist on dev, it is inbound on
@@ -2274,6 +2294,11 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     unrelated NY session range `08:30–14:45` — a guard calibrated by guesswork
     fails on correct text, so the window was calibrated against the real
     sentences instead.
+
+    **Number collision (A16).** The number 93 is used TWICE in this file. The
+    other one is `## CLASS 93 — COMPUTED EVIDENCE LOST AT THE RECORDER BOUNDARY`
+    in the appendices — a different class, not a restatement of this one. If you
+    followed a cross-reference about evidence lost at a recorder boundary, you want that one, not this.
 
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
@@ -2493,6 +2518,10 @@ curl -s -o /dev/null -w "HTTP %{http_code}  %{size_download} bytes\n" \
 
 ## CLASS 75 — SYSTEM-MAP CONTRACT (born 2026-09-04, docs/system-map-0904)
 
+**Number collision (A16).** The number 75 is used TWICE in this file. The other
+one is PART 1's "The build directory is in every log line." — a different class, not a
+restatement of this one. If you followed a cross-reference about a build-directory prefix in log paths, you want that one, not this.
+
 **Symptom:** a knob, gate leg, window, threshold, refusal string, or boot line
 changes in a wave; the map of the system goes stale; the next lane believes the
 map and not the code.
@@ -2513,6 +2542,10 @@ line must update the map in the same commit or the contract test fails both
 sides.
 
 ## CLASS 76 — THE POSITIONAL ARGUMENT IN THE WRONG SLOT (born 2026-09-05, fix/wave-b-stop-entry, C1-C3)
+
+**Number collision (A16).** The number 76 is used TWICE in this file. The other
+one is PART 1's "Canon relocated to where nothing could read it." — a different class, not a
+restatement of this one. If you followed a cross-reference about canon moved out of reach of its readers, you want that one, not this.
 
 **Symptom:** an order the broker ACCEPTS, acknowledges, and lists in its own
 book — and then never acts on. No reject, no error, no counter, nothing in any
@@ -2565,6 +2598,10 @@ same artifact or merely echoing one source.
 
 
 ## CLASS 77 — A CANONICALIZER ADDED AT ONE BOUNDARY, CONSUMERS LEFT ORDINAL (born 2026-09-05, fix/wave-b-stop-entry repair pass)
+
+**Number collision (A16).** The number 77 is used TWICE in this file. The other
+one is PART 1's "A counter destroyed by the act of reporting it." — a different class, not a
+restatement of this one. If you followed a cross-reference about a counter destroyed by reporting it, you want that one, not this.
 
 **Symptom:** none, for two days, and then a live order in the OPPOSITE
 DIRECTION. Class 28 ("one canonicalizer per identifier, called where the value
@@ -2861,6 +2898,10 @@ reach a door the incident report never opened.
 
 ## CLASS 92 — SCENARIO ECONOMICS: A PATH, AN ORDER TARGET, AND MISSING LEGACY DECLARATIONS
 
+**Number collision (A16).** The number 92 is used TWICE in this file. The other
+one is PART 1's "A description that lives in a DB row nobody audits." — a different class, not a
+restatement of this one. If you followed a cross-reference about a self-description rotting in a DB row, you want that one, not this.
+
 Assigned at merge for `fix/scenario-economics`, 2026-09-08, after a fresh two-format `sort -n | uniq -c` census: prior highest 91; 75/76/77 each duplicated twice, unchanged.
 
 **Evidence:** frozen C1 45/111 first-listed target distances below 1R; C2 six under-2R authored arm geometries; C3 four off-path arm targets (plans 178/S1, 194/S3, 230/S4, 259/S1); C4 London plan 270/S2 targets a confluence level, S3 invalidates on a target level. Authored geometry is not execution or a loss rate. Research `982091d4d908f4a5b8b65022cedf5b8c7c8202d5` §§02/03/07/09 requires coherent obstacle/response/target/R; §09 says “Do not prescribe now: a mandatory 1R first target.” §05 preserves target/obstacle/invalidation uses of entry-excluded levels. C5 correction: E=p*b-(1-p)-c, break-even p=(1+c)/(1+b). C6 NOT ESTABLISHED, dropped.
@@ -2871,6 +2912,10 @@ Assigned at merge for `fix/scenario-economics`, 2026-09-08, after a fresh two-fo
 
 
 ## CLASS 93 — COMPUTED EVIDENCE LOST AT THE RECORDER BOUNDARY
+
+**Number collision (A16).** The number 93 is used TWICE in this file. The other
+one is PART 1's "A guard that derives its expectation from the thing it guards." — a different class, not a
+restatement of this one. If you followed a cross-reference about a guard deriving its expectation from what it guards, you want that one, not this.
 
 Assigned at merge for `fix/stage-a-snapshot`, 2026-09-08. Fresh two-format `sort -n | uniq -c` census at integrated head `13017618`: highest occupied 92; existing 75/76/77 duplicates retained.
 
