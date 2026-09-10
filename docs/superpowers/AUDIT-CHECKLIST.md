@@ -2967,6 +2967,75 @@ detects the boundary performs the release — and a pin asserts that crossing th
 boundary lifts the latch, because the comment saying so is the thing most likely
 to be wrong.
 
+## CLASS 97 — TWO READERS THAT HAPPEN TO AGREE (born 2026-09-09, fix/session-risk-limits, the wave's own boot line)
+
+**Name.** One fact, resolved independently in two places. They agree on the day
+they are written — which is why nobody notices they are two — and then one of
+them is right for a reason the other does not share.
+
+**Read beside class 82** (*a green word that answers a narrower question than the
+reader will assume*) and **class 92**. 82 is what the reader sees; this is why it
+was there.
+
+**Root cause.** "Which risk knobs govern this desk?" had two answers in one
+wave, written hours apart by the same author:
+
+  · `deskGuardrail` (`trader/desk_facts.go`) read `at.config.StrategyConfig` —
+    the trader's OWN bound row.
+  · `bootRiskFacts` (`trader/session_risk.go`) scanned every strategy row and
+    returned the first carrying risk-shaped fields.
+
+Both were tested. Both passed. On a store with ONE strategy they return the same
+thing forever, and the difference is invisible.
+
+The live store held **nine**. The scan found `70695b25` — "New Strategy",
+`daily_loss_enabled=true`, `consecutive_loss_halt=2` — a row **bound to no
+trader at all**, sorting before the real one. The boot line printed
+`daily_loss_enabled on · breaker=2` about a desk whose bound strategy
+(`a5b7662e`) had the leg OFF and no halt knob.
+
+The RUNTIME was never wrong: the gate itself reads the trader's config, so the
+breaker really was the default 8. Only the line that exists to say what is
+enforced was wrong — and it was wrong in exactly the class the same wave had
+just fixed one function away.
+
+**Why the usual checks miss it.** Each reader has a test; each test seeds the
+data ITS reader expects. A29 asks whether the function is called — it is. A
+review of either function alone finds nothing: both are correct implementations
+of *a* rule. The defect is not in either place; it is that there are two.
+
+**Probe, five questions:**
+1. For any fact a surface reports, ask: how many functions resolve it? If the
+   answer is more than one, they are already drifting; you are asking when, not
+   whether.
+2. Seed the ADVERSARIAL shape and see if they still agree — more rows than one,
+   an orphan row, a row that sorts first. A fixture with one of everything is a
+   fixture that cannot see this class.
+3. Which reader has the AUTHORITY? The runtime path is the authority; the
+   reporting path must resolve through the same join, not through a query that
+   returns the same answer today.
+4. Does one reader join and the other scan? A scan with no join is a guess with
+   a stable seed.
+5. If they disagreed right now, which would you believe — and does anything in
+   the code make that the one it uses?
+
+**Law:** **one source, both readers — never two readers that happen to agree.**
+Where a surface reports what a gate enforces, it resolves through the gate's own
+lookup. Two implementations that return the same value are not a redundancy;
+they are a scheduled divergence, and the day they part is the day the surface
+starts lying with a passing test suite.
+
+**Corollary.** Found by its own boot line on its own cutover, not by review, and
+not by any of the fourteen tests the wave added. The store on a developer's
+machine has one strategy; the store on the desk had nine.
+
+**Numbering note (2026-09-09).** `92` is now duplicated across this file's two
+formats — `92. **A description that lives in a DB row nobody audits.**` and
+`## CLASS 92 — SCENARIO ECONOMICS…` — joining 75/76/77. Left per A16 (never
+renumber another lane's entry) and recorded here so the collision is visible
+rather than discovered. Count with the two-format census in the NUMBERING HAZARD
+note above; a single-format grep reports a free number that is taken.
+
 ---
 
 ## PENDING NUMBERS — appended by wave BARS HORIZON (2026-09-09), branch `fix/bars-horizon`
