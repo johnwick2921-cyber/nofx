@@ -122,6 +122,56 @@ function ZoneRow({
           m:{fact.machine_grade}
         </span>
       )}
+      {/* W3 (2026-09-09) — the merged map, matched to this level by price.
+          ONE wrapper on purpose: the row grid declares five tracks at :73, so
+          these ride in a single cell instead of overflowing it. Every badge is
+          absent-renders-nothing — an unmatched level looks exactly as before. */}
+      <div className="flex items-center gap-1">
+        {fact.names && fact.names.length > 1 && (
+          <span
+            className="inline-flex items-center text-[9px] font-mono"
+            style={{ color: 'var(--vl-faint)' }}
+            title={`one price, ${fact.names.length} references — merged: ${fact.names.join(' · ')}`}
+            data-testid="level-merged-names"
+          >
+            {fact.names.join(' · ')}
+          </span>
+        )}
+        {fact.map_role && (
+          <span
+            className="inline-flex items-center text-[9px] font-mono"
+            style={{ color: 'var(--vl-faint)' }}
+            title={
+              fact.entry_candidate === false && fact.not_entry_reason
+                ? `not an entry — ${fact.not_entry_reason}`
+                : 'what this reference is FOR in this read'
+            }
+            data-testid="level-map-role"
+          >
+            {fact.map_role}
+          </span>
+        )}
+        {fact.projection && (
+          <span
+            className="inline-flex items-center text-[9px] font-mono"
+            style={{ color: 'var(--vl-faint)' }}
+            title={`projection — ${fact.projection_method ?? 'method not recorded'} · never an entry`}
+            data-testid="level-projection"
+          >
+            projection
+          </span>
+        )}
+        {typeof fact.distance_atr === 'number' && (
+          <span
+            className="inline-flex items-center text-[9px] font-mono"
+            style={{ color: 'var(--vl-faint)' }}
+            title="distance from price in ATR5m"
+            data-testid="level-distance-atr"
+          >
+            {Math.abs(fact.distance_atr).toFixed(1)}·ATR
+          </span>
+        )}
+      </div>
       <FreshDot fresh={fresh} language={language} />
 
       <div className="flex items-center justify-end gap-2">

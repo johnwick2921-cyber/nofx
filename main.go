@@ -448,6 +448,12 @@ func main() {
 		// 1B D7 — the calibrated detector and the two tables that record it.
 		logger.Infof("🔬 %s", kernel.DetectorBootLine(st.TouchOutcomes().CountOutcomes(), st.CandidatePool().CountPool()))
 	}
+	// W3 D7 (2026-09-09) — the map posture. Per-READ counts are n/a at boot (no
+	// planner read has happened); `cap` is LABELLED per-trader because this
+	// process serves several traders and none of their values is global.
+	// pwh/pwl seatable reflects whether a DAILY bar source is actually installed
+	// — the prior-week anchors come from daily bars, never from the 1m ring.
+	logger.Infof("%s", kernel.MapBootLine(kernel.DefaultMaxLevels, kernel.PlanHardMaxLevels, kernel.DailySourceInstalled()))
 	// VOID PARITY (2026-09-02) — the ONE scope the prompt's VOID list and the
 	// write-site validator both read. Every field READ from its resolver.
 	logger.Infof("📜 %s", kernel.VoidScopeBootLine())

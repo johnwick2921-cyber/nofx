@@ -60,7 +60,21 @@ Visible brand (Dispatch 102): `branding/product.txt` = VL Intelligent; `branding
 
 ## 2 · LEVELS — detection, scoring, seating, roles
 
-**What it does:** detects ~30 level kinds off the 1m bar tape, scores them (evidence type × HTF zone tier × size × freshness × anchors), seats up to 8 per side into the plan, and assigns roles (entry-trigger vs target-only).
+**What it does:** detects ~30 level kinds off the 1m bar tape, scores them (evidence type × HTF zone tier × size × freshness × anchors), seats a per-trader TOTAL of `max_levels` into the plan (NOT per side — `levels_score.go:603-605` truncates the whole slice; `seatBothSides` rebalances WITHIN that total), and assigns roles.
+
+**W3 (2026-09-09) — candidates, not entitlements.** The whole map is kept; what changed is how many of its levels are offered as ENTRY candidates and in what order, plus references PROJECTED beyond the mapped range. All of it is a RENDER-TIME view (`kernel/map_candidates.go`, `kernel/map_projections.go`) built from `[]ScoredLevel` — **no score, weight, ladder, cap or detector moved**, and `stage_a_score_legacy.json` is byte-identical.
+
+| step | what it does | where |
+|---|---|---|
+| merge | references within one zone-width become ONE candidate carrying ALL names (`"29657.38 — Supply·1h · PDC · VWAP+1σ"`) and contributing ONE credit | `map_candidates.go BuildMapCandidates` |
+| map role | `entry-candidate` / `target` / `obstacle` / `invalidation` — a SECOND axis, distinct from the five `LevelRole` values, which are unchanged and still serialized into the parity golden | `map_candidates.go MapRole` |
+| candidacy `[I]` | a level is an ENTRY candidate only with an opposing reference at ≥ the resolved minimum (default: the stop floor, `MinSLATRMult()×ATR5m`) — the wave's ONLY new refusal, and it refuses CANDIDACY, never an authored scenario | `map_candidates.go assignMapRoles` |
+| order `[I]` | the entry shortlist ranks by REACHABILITY (distance, nearest first); the score is carried and shown but ranks second | `map_candidates.go BuildMapCandidates` |
+| projections `[I]` | beyond the mapped range: PWH/PWL from the **daily** bar source, round numbers, ATR-projected session extreme, measured move. TARGETS/OBSTACLES only — never entry candidates | `map_projections.go` |
+
+**Exclusion is not invalidation (class 93).** A level cut from the entry shortlist stays in the map, the plan document and the chart, carrying its role.
+
+**The confluence term is NOT touched by W3** and two findings about it are RECORDED for experiment E4, not fixed here: three names at one price earn a 1.40× score premium (cap 1.60×), and the window confluence is COUNTED over (`confBand = 0.10×dATR`, ≈±20 pt) is ~6.8× the width clusters COLLAPSE within (3.00 pt) — both commented "cluster tolerance". See `docs/superpowers/reports/2026-09-09-candidates-data/E4-recorded-findings.md`.
 
 **Level kinds — definitions with windows** (all CT; `kernel/levels*.go`):
 
@@ -71,7 +85,7 @@ Visible brand (Dispatch 102): `branding/product.txt` = VL Intelligent; `branding
 | AS-H/AS-L | overnight Asia (session ASIA) of current session-day | levels_multiday.go:105-121,176-181 |
 | LDN-H/LDN-L | overnight London of current session-day | levels_multiday.go:105-121,182-187 |
 | ONH/ONL | composite overnight high/low = max/min(AS, LDN) | levels_multiday.go:188-196 |
-| PWH/PWL | prior week Mon–Sun (needs ≥4320 bars) | levels_multiday.go:131-141,207-215 |
+| PWH/PWL (projection, W3) | prior week Mon–Sun (needs ≥4320 bars) | levels_multiday.go:131-141,207-215 |
 | PMH/PML | prior calendar month (needs ≥10080 bars) | levels_multiday.go:142-150,216-223 |
 | RN (round) | multiples of 100/50/25 within ±proximityK×dATR | levels_intraday.go:17-48 |
 | GAP | unfilled gap ≥ 1.0×ATR | levels_intraday.go:56-105 |
@@ -95,9 +109,9 @@ Visible brand (Dispatch 102): `branding/product.txt` = VL Intelligent; `branding
 
 Assembly order: MultiDay → Round → OR/IB → Gap → EQH/EQL → S/D → FVG → OB → Volume → Swing → nPOC, then same-kind dedupe within 1 tick — `levels_assemble.go:81-96`.
 
-**Scoring weights** (`levels_score.go`): kind weights :87-122 (structural 1.0 · VWAP/POC 0.90 · ON/nPOC/SWG/VWAP±2σ/eVWAP/pdVWAP 0.85 · VAH/VAL/SETT 0.80 · AS/LDN/OR/IB/EQ 0.70 · MID-O 0.60 · Round/Gap 0.55 · zones 0.30 confluence-only · default 0.50) `[I]` · zone TF tiers 1.0/1.1/1.2/1.3 (:148-161) `[I]` · zone reversal bonus ×1.1 `[I]` · ConfluenceCap 3 (:192-203) `[I]` · zoneSizeMult ladder ≤0.3×ATR ×1.25 … >2.5 ×0.50 (:205-222) `[I]` · freshness ladders (anchor 1/.8/.6/.5 :359-372; zone 1/.6/.3/.15 :378-390) `[I]` · proximity band = proximityK×dATR (:414), default 1.5, owner retune 0.3 per-trader config (plan_lifecycle.go:16,23-29) `[O]` · confluence band 0.10×dATR (:415-418) · cluster tolerance 12 ticks = 3.0 pt (:678-685) `[I]` · tier-1 proximity 12 ticks (:256) `[I]` · DefaultMaxLevels 8 (:54) · MinSideLevels 3 (:753). **`[T]`-positive** (conformance 2026-09-04 corrected a census misread): swing seats DO improve turn capture — missed-turns 80.0/75.0/79.2% → 65.0/60.0/66.7% (grand-audit.md:74, PROVEN) — seats kept `[T]`.
+**Scoring weights** (`levels_score.go`): kind weights :87-122 (structural 1.0 · VWAP/POC 0.90 · ON/nPOC/SWG/VWAP±2σ/eVWAP/pdVWAP 0.85 · VAH/VAL/SETT 0.80 · AS/LDN/OR/IB/EQ 0.70 · MID-O 0.60 · Round/Gap 0.55 · zones 0.30 confluence-only · default 0.50) `[I]` · zone TF tiers 1.0/1.1/1.2/1.3 (:148-161) `[I]` · zone reversal bonus ×1.1 `[I]` · ConfluenceCap 3 (:192-203) `[I]` · zoneSizeMult ladder ≤0.3×ATR ×1.25 … >2.5 ×0.50 (:205-222) `[I]` · freshness ladders (anchor 1/.8/.6/.5 :359-372; zone 1/.6/.3/.15 :378-390) `[I]` · proximity band = proximityK×dATR (:423), default 1.5, owner retune 0.3 per-trader config (plan_lifecycle.go:16,23-29) `[O]` · confluence band 0.10×dATR (:427) · cluster tolerance 12 ticks = 3.0 pt (:717-726) `[I]` · tier-1 proximity 12 ticks (:256) `[I]` · DefaultMaxLevels 8 (:54) · MinSideLevels 3 (:753). **`[T]`-positive** (conformance 2026-09-04 corrected a census misread): swing seats DO improve turn capture — missed-turns 80.0/75.0/79.2% → 65.0/60.0/66.7% (grand-audit.md:74, PROVEN) — seats kept `[T]`.
 
-**Roles:** five roles — `levels_role.go:24-29`; consumed / 3rd-touch / far-HTF → **target_only, never entry** (:28,107-118) `[I]`.
+**Roles — TWO axes, never merged.** (1) `LevelRole`, five values describing auction CHARACTER — `levels_role.go:24-29`; consumed / 3rd-touch / far-HTF → **target_only, never entry** (:28,107-118) `[I]`. (2) `MapRole` (W3), four values describing USE IN THIS READ — entry-candidate / target / obstacle / invalidation, `map_candidates.go`. A level can be a `react_zone` (character) and an `obstacle` (use) at once.
 
 **Touch record (`touch_outcomes`) — WAVE A, 2026-09-05.** One row per D1′ episode, written per planner read from `trader/detector_record.go`.
 
