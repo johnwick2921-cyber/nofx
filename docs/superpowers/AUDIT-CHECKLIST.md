@@ -3417,3 +3417,63 @@ assumption changes.
 `acquire writes nothing to stderr`, mutation-tested to fail on the shipped script
 with the exact `$5: unbound variable` line. No behavioural assertion could have
 caught it, because there was nothing wrong with the behaviour.
+
+## CLASS 104 — THE CORRECTION THAT IS MORE DANGEROUS THAN THE DEFECT (born 2026-09-10, minutes after class 103)
+
+**Name.** Broken code is inert. Fixing it makes it *run* — and the code that had
+never executed carries a hazard nobody reviewed, because until now it did
+nothing. The repair is the moment the latent bug goes live.
+
+**Read immediately after class 103**, which is the defect this is the correction
+to. The pair is the lesson; neither half is complete alone.
+
+**Root cause.** Class 103 was a `/proc` group read that never once executed —
+mis-quoting aborted the substitution and a fallback silently supplied a working
+value. The obvious fix was to make the read work.
+
+Making it work exposed a race that the broken version had been hiding:
+
+> Job control is off in a non-interactive shell, so a background job does **not**
+> get its own process group — it starts in the SHELL'S. `setsid` moves it only
+> once it execs. `kpid=$!` returns before that.
+
+So a `/proc` read that WINS the race returns the **parent's** pgrp. That value
+landed in `keeper.pid`, and `_stop_keeper` ran `kill -TERM -- "-$pg"` against it
+— sending SIGTERM to the process group of whoever invoked the script. **It killed
+the test run that found it, exit 143**, and the exit code was first misread as an
+unrelated environment problem.
+
+**The broken version was accidentally safer.** It always fell through to
+`pgid="$kpid"`, and `$kpid` after `setsid` genuinely IS its own group leader. The
+defect and the safety were the same line. Removing the defect removed the safety.
+
+**Probe, five questions:**
+1. You are fixing code that never ran. What does it DO once it runs? Review it as
+   NEW code, because operationally it is — it has never executed in production
+   even once.
+2. What was the broken path doing INSTEAD, and was that behaviour load-bearing?
+   A fallback that has served for months is the de-facto implementation; the
+   "real" path is the untested one.
+3. Does the newly-live code compute a value that something DESTRUCTIVE consumes —
+   a kill, a delete, a truncate, a force-push? Then the fix is not done until the
+   consumer validates what it is handed.
+4. Is there a race between recording a value and that value becoming true? `$!`,
+   a pid before exec, a row before commit, a file before rename — all give a
+   correct read of a not-yet-correct state.
+5. After the fix, did an unrelated thing start failing? An exit 143, a killed
+   runner, a vanished shell — do not attribute it to the environment before
+   grepping your own diff for the signal it sends. Here the entire codebase
+   contained exactly ONE `SIGTERM` and it was the new code.
+
+**Law:** **a fix to code that never executed is a new feature, not a repair** —
+and it earns a new feature's review, especially where it feeds a destructive
+operation. Corollary: **never signal, delete, or overwrite a target you have not
+positively identified.** `kill -- -N` on a number that is not a verified group
+leader signals a group you did not create; the fix is identification
+(`/proc/<pid>/cmdline` names this lock), not a narrower race window.
+
+**Corollary — two layers or none.** The fix here is at the WRITER (accept a pgid
+only once `pgrp == pid`, true exactly when `setsid` completed) *and* at the
+CONSUMER (signal only a positively-identified target). Layer one alone still
+trusts whatever is already in the file; layer two alone still writes a dangerous
+value for anything else to read.
