@@ -30,7 +30,7 @@ export const guards: GuideSection = {
     },
     {
       kind: 'p',
-      text: 'The AddOn now sends its working-order book every 30 seconds and immediately whenever an order changes state, and that is what the leg reads. Our ledger becomes the cross-check: if the two disagree the leg FAILS and shows you both counts and both lists rather than picking the one that would let the cutover proceed. A book older than 60 seconds is refused as stale — a book we have not heard about is not a flat book. Until you reload the AddOn in NinjaTrader the leg still reads the ledger, and it says so in its own source line every time; the rule is never a SILENT fallback, not never a fallback.',
+      text: 'The AddOn sends its working-order book every 30 seconds and whenever an order changes state. Leg 4 compares that book with placed ledger orders. An armed row with no signal id is only an authorization: it appears on a separate informational line and does not fail the gate. A placement awaiting a broker receipt still counts as working/unconfirmed and blocks cutover, even if the book is empty. Working orders at either source, or disagreement between them, fail the leg. Terminal rows are excluded by one shared classifier, also used by audit queries. A book older than 60 seconds is refused as stale. Before the first AddOn snapshot, the existing explicitly labelled ledger fallback remains; it is not broker proof.',
     },
     { kind: 'h', text: 'Overriding the gate with a position open' },
     {
@@ -315,7 +315,7 @@ export const guards: GuideSection = {
     { kind: 'h', text: 'THE FIVE-LEG CUTOVER GATE (class 33)' },
     {
       kind: 'p',
-      text: 'Before any restart of the bot, GET /api/cutover-gate answers all five legs in one payload: (1) open positions in the database, (2) positions from the API, (3) the NinjaTrader positions snapshot for the bound account, (4) working orders — read from the armed_orders ledger, because NinjaTrader sends no working-order frame, and (5) in-flight planner work. ready:false means HOLD. Legs 4 and 5 are new on 2026-09-02: leg 4 used to be a stub that always answered empty, so it passed at every cutover from 35 to 41 including one with two orders resting; leg 5 did not exist, so a kill on 2026-08-31 17:34 CT landed mid-read and the planner chain died silently. A leg that cannot be evaluated counts as failed.',
+      text: 'Before any restart of the bot, GET /api/cutover-gate answers all five legs in one payload: (1) open positions in the database, (2) positions from the API, (3) the NinjaTrader positions snapshot for the bound account, (4) working orders — the broker book cross-checked against placed or unconfirmed ledger rows; armed rows without a signal id appear separately and do not fail this leg, and (5) in-flight planner work. ready:false means HOLD. Legs 4 and 5 are new on 2026-09-02: leg 4 used to be a stub that always answered empty, so it passed at every cutover from 35 to 41 including one with two orders resting; leg 5 did not exist, so a kill on 2026-08-31 17:34 CT landed mid-read and the planner chain died silently. A leg that cannot be evaluated counts as failed.',
     },
     { kind: 'h', text: 'WHEN THE MODEL CALL FAILS (class 49)' },
     {

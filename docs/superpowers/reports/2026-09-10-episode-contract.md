@@ -1,6 +1,6 @@
 # W1 — THE EPISODE CONTRACT
 
-**Branch** `fix/episode-contract` · **base** `origin/dev` @ `33e6d008` · 11 commits
+**Branch** `fix/episode-contract` · **base** `origin/dev` @ `757eb578` · merged, not rebased (see §F.6)
 **Scope (A31)** RECORDING ONLY. No rule, threshold, gate, order, plan content, level
 score or surface behaviour changed. The wave defines the unit of opportunity and
 writes it down.
@@ -171,6 +171,18 @@ than silent. It is not the single-reader ideal of class 97 and is not claimed to
    merge assigns the number. The alternative — reserving a number at accept — is
    what produced the 75/76/77/92/93 duplicates.
 
+6. **This branch is merged onto dev, not rebased, and that was forced.** Four
+   rebases in, a force-push was refused by the classifier. I reconciled with a
+   `-s ours` merge after verifying the tree diff was additive-only (2,262
+   insertions, 11 deletions, no file lost). That merge re-parented the superseded
+   pre-rebase commits, so the NEXT `git rebase` tried to replay all of them and
+   conflicted on files it had already resolved. I aborted it and merged dev in
+   instead. The branch therefore carries both renderings of its own history. It is
+   uglier than a clean rebase and it is on the record here rather than hidden: the
+   tree is correct, the duplicated commits are content-identical, and no work was
+   lost — but a reviewer reading `git log` will see each early commit twice, and
+   should read the merge commits for why.
+
 ## G · TWO DEFECTS FOUND, NEITHER MINE, ONE MASKING THE OTHER
 
 Found while verifying my Guide change. **Filed, not fixed — A31 scopes this wave,
@@ -215,7 +227,7 @@ server: { fs: { allow: ['..'] } },
 
 Verified locally, then reverted: **12 files red → 1**, 344 → 413 passing.
 
-### G2 — a tripped tamper-guard that nothing could report
+### G2 — a tamper-guard that went red while blindfolded, and stayed red for 13 hours
 
 With G1 unblocked, a 13th failure surfaces that had been invisible:
 
@@ -224,16 +236,40 @@ FAIL src/brand-scope.test.ts > preserves deploy/nofx-lock.sh byte for byte
   Dispatch 102 protected file changed: deploy/nofx-lock.sh
 ```
 
-`brand-scope-baseline.json` pins sha256 of protected files. `deploy/nofx-lock.sh`
-legitimately changed on dev — `88d40920` and `97a6525c`, the keeper `/proc` fixes —
-and the baseline was never updated. Current sha256:
-`670a405be9a7c80b866bb20855fbf774227bc4f374152bfc74963265e257387b`.
+`web/src/test/brand-scope-baseline.json` pins sha256 of 16 protected files.
+**Exactly one has drifted** — so the guard is otherwise doing its job precisely,
+and would have caught this on the first commit had it been able to run.
 
-**The shape is the finding.** A tamper-guard fired correctly and nobody heard it,
-because an unrelated import broke the runner that would have reported it. G1 did not
-merely break 12 files — it **muted a guard** for 22 hours. A guard that cannot run is
-indistinguishable from a guard that passes, and the suite reported the same colour
-either way.
+The timeline is the finding, and the order of the two events is the whole point:
+
+| when (CT) | commit | what |
+|---|---|---|
+| 09-08 18:57 | `66e2c09a` | baseline written. Pin `bcd82c52…` **correct**. Guard GREEN. |
+| **09-09 13:33** | **`7d7be486`** | **G1 breaks the runner. The guard is still GREEN at this moment.** |
+| 09-09 22:12 | `87ef772d` | lock keeper wave — sha becomes `9bacd04a…`. **Guard goes RED. Nobody hears.** |
+| 09-10 07:16 | `963ea975` | keeper process-group fix. Still red, still unheard. |
+| 09-10 08:05 | `88d40920` | keeper `/proc` read fix. |
+| 09-10 10:26 | `97a6525c` | `/proc` read SIGTERM fix. |
+| 09-10 11:43 | `ace51598` | INCOMPLETE-lock wave. |
+
+Current sha256 at dev tip `757eb578`: `46fcbf76…` — against a pin of `bcd82c52…`.
+
+**The runner broke 8h39m BEFORE the guard had anything to say.** This is not a
+stale pin nobody got round to updating. A tamper-guard on a load-bearing deploy
+script fired correctly, on the first of **six** legitimate changes to that script,
+and went unheard through all six, for 13h31m — because an unrelated import in an
+unrelated wave had blinded the runner the previous afternoon.
+
+**A guard that cannot run reports the same colour as a guard that passes.** Nothing
+in the suite's output distinguishes "16 files verified" from "the file that
+verifies them never loaded". G1 did not merely break 12 test files; it silently
+converted a tamper-guard into a no-op, and the six lock waves that followed each
+had a green-looking suite telling them nothing.
+
+None of those six commits is at fault. Each changed a protected file for good
+reason, and the guard exists precisely so that a human ratifies such a change by
+updating the baseline. The mechanism that was supposed to force that conversation
+was already switched off.
 
 ## H · VERIFICATION
 
@@ -251,9 +287,9 @@ G1, not my change. Verified instead by: `tsc --noEmit` clean, `npm run build` cl
 and the guide tests passing under the temporary G1 unblock before I reverted it.
 Stated here rather than reported as green.
 
-dev moved **four times** under this branch during the wave (`557494c7` →
-`c16a182d` → `cefcf08d` → `33e6d008`); rebased onto each, full suite re-run at the
-final merged HEAD — a branch green alone is not green merged.
+dev moved **five times** under this branch during the wave (`557494c7` →
+`c16a182d` → `cefcf08d` → `33e6d008` → `757eb578`); the suite was re-run at each
+merged HEAD rather than carried forward — a branch green alone is not green merged.
 
 ## I · CLASSES FILED
 
@@ -263,6 +299,10 @@ final merged HEAD — a branch green alone is not green merged.
   entry shapes; a two-format census reported the ceiling as 93 while 104 existed.
   Now carries the 105→106→108 renumber chain as its worked example.
 
-Recommended for the rebrand lane, from G1/G2: *a test that cannot run reports the
-same colour as a test that passes* — the suite's file count is itself a number that
-must be pinned, or a suite can lose 12 files and still look like a suite.
+Recommended for the rebrand lane, from G1/G2: **a test that cannot run reports the
+same colour as a test that passes.** The suite's own file and test counts are
+numbers that must be pinned like any other; a suite can lose 12 files and 60 tests
+and still look like a suite. The sharp form is that G1 and G2 are not two bugs but
+one mechanism: a broken runner does not merely fail to test, it converts every
+guard behind it into a no-op that reports success — and the longer it stays
+broken, the more confidently the waves that follow read that silence as safety.

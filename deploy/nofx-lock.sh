@@ -38,9 +38,16 @@
 #   nofx-lock heartbeat <session>                  # holder rewrites; every 2m
 #   nofx-lock status                               # free | held | STALE + age
 #   nofx-lock check                                # rc 0 free · 1 held · 2 stale
+#                                                  #    · 3 incomplete (acquire
+#                                                  #      in flight) · 4 abandoned
+#                                                  #      -incomplete (names nobody)
 #   nofx-lock with-heartbeat <session> -- <cmd>    # beats for <cmd>'s lifetime
 #   nofx-lock reclaim <new> <stale> "<corroboration>"  # ONLY on a stale heartbeat
 #   nofx-lock release <session>                    # holder only; STOPS the keeper
+#   nofx-lock clear-incomplete                     # removes a lock that names
+#                                                  # NOBODY and has stood past
+#                                                  # the abandon window; refuses
+#                                                  # any lock that has meta
 #
 # THE KEEPER NEVER EXTENDS YOUR WINDOW. It beats until the expiry you asked for
 # at acquire and then stops, so the lock goes STALE at the window you declared
@@ -56,6 +63,12 @@ LOCK_DIR="${NOFX_LOCK_DIR:-$HOME/nofx-main.lock.d}"
 LEGACY_LOCK="${NOFX_LEGACY_LOCK:-$HOME/nofx-main.lock}"
 HEARTBEAT_STALE_SECONDS="${NOFX_LOCK_STALE_SECONDS:-300}"   # 5 min
 HEARTBEAT_EVERY_SECONDS="${NOFX_LOCK_BEAT_SECONDS:-120}"     # 2 min
+# How long a lock directory may exist with NO meta before it is ABANDONED rather
+# than merely being born. `acquire` fills meta ~7ms after mkdir (measured, n=10:
+# min 6.92ms, mean 7.35ms, max 7.71ms), so 30s is ~4000x the observed window —
+# wide enough that a loaded machine cannot cross it, narrow enough that a lock
+# orphaned mid-creation clears within the minute.
+INCOMPLETE_ABANDON_SECONDS="${NOFX_LOCK_INCOMPLETE_SECONDS:-30}"
 
 _now()      { date -Is; }
 _epoch()    { date +%s; }
@@ -282,6 +295,30 @@ _show_history() {
 
 _age() { local hb; hb="$(_field heartbeat_epoch)"; echo $(( $(_epoch) - ${hb:-0} )); }
 
+# ── AN INCOMPLETE LOCK IS ITS OWN STATE ──────────────────────────────────────
+# `mkdir` is the atomic step and meta arrives ~7ms later, so between the two the
+# directory exists and describes nobody. Every reader used to treat that as a
+# COMPLETE lock whose fields happened to be empty: _age fell back to
+# ${hb:-0} and returned ~1.79 BILLION seconds, so status printed
+# "STALE — held by '' (task: )" and check returned 2. Two different situations —
+# "being created right now" and "held by someone who stopped beating" — arrived
+# at the same reader as the same answer, and the second is the one that invites a
+# takeover.
+#
+# Worse, it was TERMINAL. _require_holder compares against an empty session, so
+# every verb refused: release ("'x' is not the holder ('')"), reclaim (it will
+# not let you name an empty holder), acquire (the directory exists). A lock
+# nobody can clear with the tool is a tree nobody can unlock without rm -rf,
+# which is the one thing this tool exists to stop people doing by hand.
+_has_meta() { [ -f "$LOCK_DIR/meta" ]; }
+
+# Seconds since the DIRECTORY was created — the only clock available when there
+# is no meta to read.
+_dir_age() {
+  local t; t="$(stat -c %Y "$LOCK_DIR" 2>/dev/null)" || { echo 0; return; }
+  echo $(( $(_epoch) - ${t:-0} ))
+}
+
 cmd_status() {
   if [ -f "$LEGACY_LOCK" ]; then
     echo "LEGACY lock file present at $LEGACY_LOCK — a lane is still on the old shape:"
@@ -290,6 +327,21 @@ cmd_status() {
   if [ ! -d "$LOCK_DIR" ]; then
     [ -f "$LEGACY_LOCK" ] && return 0
     echo "free"; return 0
+  fi
+  # A directory with no meta is BEING BORN or was ORPHANED mid-creation. It is
+  # never "stale", because staleness is a statement about a holder and there is
+  # no holder yet. Reported before the age branch, which cannot describe it.
+  if ! _has_meta; then
+    local dage; dage="$(_dir_age)"
+    if [ "$dage" -ge "$INCOMPLETE_ABANDON_SECONDS" ]; then
+      echo "ABANDONED-INCOMPLETE — '$LOCK_DIR' has existed ${dage}s with no meta (> ${INCOMPLETE_ABANDON_SECONDS}s)."
+      echo "  An acquire created the directory and died before writing its identity, so this lock"
+      echo "  names nobody and no verb can address it. Clear it with: nofx-lock clear-incomplete"
+      return 4
+    fi
+    echo "INCOMPLETE — '$LOCK_DIR' exists but has no meta yet (${dage}s old); an acquire is in flight."
+    echo "  This is NOT stale and NOT abandoned. Look again in a moment."
+    return 3
   fi
   local age session task; age="$(_age)"; session="$(_field session)"; task="$(_field task)"
   if [ "$age" -gt "$HEARTBEAT_STALE_SECONDS" ]; then
@@ -330,8 +382,44 @@ _auto_beat() {
 # For scripts (the tree guard): 0 free · 1 held-fresh · 2 held-stale.
 cmd_check() {
   [ -d "$LOCK_DIR" ] || { echo free; return 0; }
+  # rc 3 and 4 are ADDITIVE — 0/1/2 keep the meanings the tree-guard spec was
+  # written against. A caller that has not been taught the new codes still sees a
+  # non-zero "not free", which is the safe reading; one that has can tell "an
+  # acquire is in flight" from "held by someone who stopped beating", and only
+  # the latter is ever grounds for a takeover.
+  if ! _has_meta; then
+    if [ "$(_dir_age)" -ge "$INCOMPLETE_ABANDON_SECONDS" ]; then echo abandoned-incomplete; return 4; fi
+    echo incomplete; return 3
+  fi
   if [ "$(_age)" -gt "$HEARTBEAT_STALE_SECONDS" ]; then echo stale; return 2; fi
   echo held; return 1
+}
+
+# clear-incomplete — the ONLY way to remove a lock that names nobody.
+#
+# It refuses a lock with meta (that one has a holder; use release or reclaim) and
+# refuses one younger than the abandon threshold (that one is an acquire in
+# flight, and taking it would be the class-70 replacement bug wearing a new hat).
+# Both refusals matter: this verb needs no session and so is the one verb an
+# impatient reader could point at a live lock.
+cmd_clear_incomplete() {
+  [ -d "$LOCK_DIR" ] || { echo "no lock"; return 0; }
+  if _has_meta; then
+    echo "REFUSED — this lock HAS meta and names a holder ('$(_field session)', task: $(_field task))."
+    echo "  clear-incomplete only removes a lock that names nobody. Use release, or reclaim on the record."
+    return 1
+  fi
+  local dage; dage="$(_dir_age)"
+  if [ "$dage" -lt "$INCOMPLETE_ABANDON_SECONDS" ]; then
+    echo "REFUSED — '$LOCK_DIR' is only ${dage}s old; an acquire completes in milliseconds, so this one is probably in flight."
+    echo "  Wait until it is ${INCOMPLETE_ABANDON_SECONDS}s old and look again: if meta has appeared, it is a real lock."
+    return 1
+  fi
+  if ! rm -rf "$LOCK_DIR" 2>/dev/null || [ -d "$LOCK_DIR" ]; then
+    echo "CLEAR FAILED — '$LOCK_DIR' still exists after rm. Fix the cause and try again."
+    return 1
+  fi
+  echo "cleared an incomplete lock that had stood ${dage}s with no meta"
 }
 
 # Beats while <cmd> runs and STOPS when it ends. The beater's lifetime is
@@ -404,7 +492,24 @@ cmd_release() {
   _require_holder "$session" || return 1
   _show_history
   _stop_keeper
-  rm -rf "$LOCK_DIR"; echo "released by $session"
+  # THE REMOVAL IS THE RELEASE. This was `rm -rf "$LOCK_DIR"; echo "released"`,
+  # and the `;` threw rm's exit status away: the function returned echo's 0. A
+  # read-only parent, a stale NFS handle or a permissions change printed
+  # "released by <session>", returned SUCCESS, and left the directory standing —
+  # while _stop_keeper above had ALREADY stopped the heartbeat. The lock then
+  # went STALE on a holder who was alive and believed it had finished, and the
+  # next lane to look saw an abandoned lock that was nothing of the kind.
+  #
+  # So: rm's status is checked, AND the directory is confirmed gone, because a
+  # zero exit is a claim and the absent directory is the fact.
+  if ! rm -rf "$LOCK_DIR" 2>/dev/null || [ -d "$LOCK_DIR" ]; then
+    echo "RELEASE FAILED — '$LOCK_DIR' still exists after rm."
+    echo "  The lock is STILL HELD by $session and its keeper has been STOPPED,"
+    echo "  so it will read STALE within ${HEARTBEAT_STALE_SECONDS}s though you are still here."
+    echo "  Fix the cause (permissions on the parent? read-only mount?) and release again."
+    return 1
+  fi
+  echo "released by $session"
 }
 
 case "${1:-status}" in
@@ -415,5 +520,6 @@ case "${1:-status}" in
   with-heartbeat) shift; cmd_with_heartbeat "$@" ;;
   reclaim)        shift; cmd_reclaim "$@" ;;
   release)        shift; cmd_release "$@" ;;
-  *) echo "usage: nofx-lock {acquire <session> <task> [mins]|heartbeat <session>|status|check|with-heartbeat <session> -- <cmd>|reclaim <new> <stale> \"<corroboration>\"|release <session>}"; exit 64 ;;
+  clear-incomplete) cmd_clear_incomplete ;;
+  *) echo "usage: nofx-lock {acquire <session> <task> [mins]|heartbeat <session>|status|check|with-heartbeat <session> -- <cmd>|reclaim <new> <stale> \"<corroboration>\"|release <session>|clear-incomplete}"; exit 64 ;;
 esac
