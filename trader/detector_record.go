@@ -24,7 +24,12 @@ import (
 func (at *AutoTrader) recordDetectorOutputs(
 	symbol, planID, session string, planVersion int,
 	allLevels []kernel.DetectedLevel, seated []kernel.ScoredLevel,
-	price, dATR, proximityK float64, maxLevels int, now time.Time, researchIDs ...string,
+	price, dATR, proximityK float64, maxLevels int, now time.Time,
+	// anchors are the plan's scenarios reduced to the one price a level can be
+	// compared against. NIL is a legitimate input — it means no scenario was
+	// authored, and the row records that as its link basis rather than as a
+	// blank (W1 item 1).
+	anchors []store.ScenarioAnchor, researchIDs ...string,
 ) {
 	if at == nil || at.store == nil {
 		return
@@ -99,6 +104,15 @@ func (at *AutoTrader) recordDetectorOutputs(
 				OpenedAtMs: e.OpenedAtMs, ClosedAtMs: e.ClosedAtMs,
 				FormedAtMs: lv.FormedAtMs, Validity: validityFor(lv.FormedAtMs),
 			}
+			// W1 item 1 — the touch → scenario link, recorded as the HEURISTIC
+			// it is. The band is the MAP'S OWN cluster width, not a second
+			// tolerance; ambiguity resolves NULL with its reason rather than
+			// picking a nearest and calling it a fact.
+			link := store.ResolveScenarioLink(lv.Price, anchors, delta, scenarioLinkBand())
+			row.ScenarioNearest = link.Scenario
+			row.ScenarioLinkBasis = link.Basis
+			row.ScenarioLinkDistPts = link.DistPts
+			row.ScenarioLinkDistDelta = link.DistDelta
 			if err := ts.SaveOutcome(row); err != nil {
 				at.logWarnf("🔬 detector: touch_outcomes write failed (level %.2f): %v", lv.Price, err)
 				continue

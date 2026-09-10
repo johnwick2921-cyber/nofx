@@ -2406,8 +2406,23 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 	if at.store != nil {
 		detPlanID := at.store.Plan().ResolvePlanID(tradeDate, session, at.id)
 		detVersion := 0
+		// W1 item 1 — the in-force plan's scenarios, reduced to the one price a
+		// level can be compared against. The Doc was already fetched here and
+		// discarded; only .Version was read. Deriving the anchors at THIS point
+		// is what lets the recorder stamp the link at write instead of a reader
+		// price-matching plans.doc afterwards.
+		var detAnchors []store.ScenarioAnchor
+		detUnanchorable := 0
 		if latest, lerr := at.store.Plan().GetLatestPlanForTraderSession(tradeDate, session, at.id); lerr == nil && latest != nil {
 			detVersion = latest.Version
+			if doc, derr := kernel.ParsePlanDoc(latest.Doc); derr == nil && doc != nil {
+				detAnchors, detUnanchorable = scenarioAnchorsFrom(doc)
+			}
+		}
+		if detUnanchorable > 0 {
+			// A24: counted, never dropped silently. A scenario with no confirm
+			// ref and no armed entry cannot be compared against a level at all.
+			at.logWarnf("🎫 episodes: %d scenario(s) unanchorable (no confirm ref, no armed entry) — their touches record a NULL link", detUnanchorable)
 		}
 		// pool is []ScoredLevel; the recorder classifies raw DetectedLevels
 		// against the seated set itself and must not be handed a second scoring.
@@ -2416,7 +2431,7 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 			detAll = append(detAll, c.DetectedLevel)
 		}
 		at.recordDetectorOutputs(symbol, detPlanID, session, detVersion,
-			detAll, scored, price, dATR, at.proximityFilterATR(), maxLevels, now, researchID)
+			detAll, scored, price, dATR, at.proximityFilterATR(), maxLevels, now, detAnchors, researchID)
 	}
 
 	// 1B WIRING (owner ruling 2026-09-03) — the detector's ONE production call
