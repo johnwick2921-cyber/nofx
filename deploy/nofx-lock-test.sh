@@ -421,6 +421,73 @@ check "release of a lock with a corrupt keeper.pid still succeeds" "$rc" "0"
 hasi  "and reports the release"                                    "$out" "released"
 rm -rf "$KWJ"
 
+echo "== C1 — release REPORTS a failed removal instead of claiming success =="
+#
+# This was `rm -rf "$LOCK_DIR"; echo "released by $session"`. The `;` threw rm's
+# status away and the function returned echo's 0. A read-only parent, a stale
+# handle or a permissions change printed "released", returned SUCCESS, and left
+# the directory standing — while _stop_keeper had ALREADY stopped the heartbeat.
+# The lock then went STALE on a holder who was alive and thought it had finished,
+# and the next lane saw an abandoned lock that was nothing of the kind.
+KR="$(mktemp -d)"; mkdir -p "$KR/parent"
+R() { NOFX_LOCK_DIR="$KR/parent/lock.d" NOFX_LOCK_BEAT_SECONDS=60 bash "$LOCK_SH" "$@" 2>&1; }
+R acquire sess-R 'a release that cannot remove' 30 >/dev/null
+chmod a-w "$KR/parent"                       # rm cannot unlink the child
+out="$(R release sess-R)"; rc=$?
+check "release of an unremovable lock FAILS"        "$rc" "1"
+hasi  "and says the lock is still held"             "$out" "RELEASE FAILED"
+hasi  "and warns the keeper is already stopped"     "$out" "keeper has been STOPPED"
+hasnt "and does NOT claim it released"              "$out" "released by sess-R"
+chmod u+w "$KR/parent"
+kp="$(cat "$KR/parent/lock.d/keeper.pid" 2>/dev/null || true)"; [ -n "$kp" ] && kill -- -"$kp" 2>/dev/null
+rm -rf "$KR"
+
+echo "== C3 — a half-built lock is INCOMPLETE, never STALE with an empty holder =="
+#
+# mkdir is the atomic step and meta lands ~7ms later (measured n=10: 6.92-7.71ms).
+# In that window every reader saw a COMPLETE lock whose fields were empty: _age
+# fell back to ${hb:-0} and returned ~1.79 BILLION seconds, so status printed
+# "STALE — held by '' (task: )" and check returned 2. "Being created right now"
+# and "held by someone who stopped beating" reached the reader as the same
+# answer — and only the second is ever grounds for a takeover.
+KI="$(mktemp -d)"; export NOFX_LOCK_DIR="$KI/lock.d"; mkdir -p "$KI/lock.d"
+out="$(bash "$LOCK_SH" status 2>&1)"
+hasi  "a meta-less lock reads INCOMPLETE"           "$out" "INCOMPLETE"
+hasnt "and is NOT reported stale"                   "$out" "STALE"
+hasnt "and invents no empty holder"                 "$out" "held by ''"
+check "check rc for an acquire in flight"           "$(bash "$LOCK_SH" check >/dev/null 2>&1; echo $?)" "3"
+# ...and once it has stood past the abandon window it is ABANDONED, not stale.
+touch -d '2 minutes ago' "$KI/lock.d"
+out="$(bash "$LOCK_SH" status 2>&1)"
+hasi  "an orphaned half-built lock reads ABANDONED" "$out" "ABANDONED-INCOMPLETE"
+check "check rc for an abandoned half-built lock"   "$(bash "$LOCK_SH" check >/dev/null 2>&1; echo $?)" "4"
+
+echo "== C2 — a lock that names NOBODY can be cleared, but only that kind =="
+#
+# _require_holder compares against an empty session, so every verb refused a
+# meta-less directory: release ("'x' is not the holder ('')"), reclaim (it will
+# not let you name an empty holder), acquire (the directory exists). The lock was
+# TERMINAL — clearable only by an rm -rf outside the tool, which is the one thing
+# this tool exists to stop people doing by hand.
+out="$(bash "$LOCK_SH" clear-incomplete 2>&1)"; rc=$?
+check "clear-incomplete removes an abandoned lock"  "$rc" "0"
+if [ -d "$KI/lock.d" ]; then bad "the directory is gone" "still present"; else ok "the directory is gone"; fi
+# The verb takes NO session, so it is the one verb an impatient reader could aim
+# at a live lock. Both refusals below are what stop that.
+mkdir -p "$KI/lock.d"
+out="$(bash "$LOCK_SH" clear-incomplete 2>&1)"; rc=$?
+check "a lock too YOUNG to be abandoned is refused" "$rc" "1"
+hasi  "and says an acquire is probably in flight"   "$out" "in flight"
+rm -rf "$KI/lock.d"
+NOFX_LOCK_BEAT_SECONDS=60 bash "$LOCK_SH" acquire sess-C2 'a genuine holder' 30 >/dev/null 2>&1
+out="$(bash "$LOCK_SH" clear-incomplete 2>&1)"; rc=$?
+check "a lock WITH a holder is refused"             "$rc" "1"
+hasi  "and names the holder it refused to clear"    "$out" "sess-C2"
+kp="$(cat "$KI/lock.d/keeper.pid" 2>/dev/null || true)"
+bash "$LOCK_SH" release sess-C2 >/dev/null 2>&1; [ -n "$kp" ] && kill -- -"$kp" 2>/dev/null
+unset NOFX_LOCK_DIR; export NOFX_LOCK_DIR="$WORK/nofx-main.lock.d"
+rm -rf "$KI"
+
 echo
 printf 'pass=%d fail=%d\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
