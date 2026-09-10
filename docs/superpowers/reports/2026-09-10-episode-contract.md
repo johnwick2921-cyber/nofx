@@ -1,6 +1,6 @@
 # W1 — THE EPISODE CONTRACT
 
-**Branch** `fix/episode-contract` · **base** `origin/dev` @ `cefcf08d` · 10 commits
+**Branch** `fix/episode-contract` · **base** `origin/dev` @ `33e6d008` · 11 commits
 **Scope (A31)** RECORDING ONLY. No rule, threshold, gate, order, plan content, level
 score or surface behaviour changed. The wave defines the unit of opportunity and
 writes it down.
@@ -163,10 +163,13 @@ than silent. It is not the single-reader ideal of class 97 and is not claimed to
    **pre-wave row**, not a missing reading. Caught by grepping my own prose against
    the code before committing. This is class 105's lesson applied to the commit
    that introduced class 105.
-5. **My classes 105/106 became 106/107 at merge.** Dispatch 103 landed its own 105
-   on dev while this branch was rebasing. That is A27 working exactly as written,
-   and class 107 now carries it as the worked example: a census tells you the
-   ceiling, only the merge assigns the number.
+5. **My classes 105/106 landed as 108/109 — renumbered twice.** Dispatch 103 took
+   105 while this branch rebased; then 106 and 107 went too (a peer's
+   generalisation of class 104, and the boot-sweep `cancel_pending` wave). Four
+   dev tips in one wave. That is A27 working exactly as written, and class 109
+   now carries it as the worked example: a census tells you the ceiling, only the
+   merge assigns the number. The alternative — reserving a number at accept — is
+   what produced the 75/76/77/92/93 duplicates.
 
 ## G · TWO DEFECTS FOUND, NEITHER MINE, ONE MASKING THE OTHER
 
@@ -248,17 +251,17 @@ G1, not my change. Verified instead by: `tsc --noEmit` clean, `npm run build` cl
 and the guide tests passing under the temporary G1 unblock before I reverted it.
 Stated here rather than reported as green.
 
-dev moved **three times** under this branch during the wave (`557494c7` →
-`c16a182d` → `cefcf08d`); rebased onto each, full suite re-run at the final merged
-HEAD — a branch green alone is not green merged.
+dev moved **four times** under this branch during the wave (`557494c7` →
+`c16a182d` → `cefcf08d` → `33e6d008`); rebased onto each, full suite re-run at the
+final merged HEAD — a branch green alone is not green merged.
 
 ## I · CLASSES FILED
 
-- **106 — THE UNIT AN EXPERIMENT NEEDS, WHICH THE RECORD NEVER HELD.** Every
+- **108 — THE UNIT AN EXPERIMENT NEEDS, WHICH THE RECORD NEVER HELD.** Every
   experiment measures value per opportunity; the record held only fills.
-- **107 — A CENSUS THAT CANNOT SEE ITS OWN THIRD FORMAT.** The checklist has three
+- **109 — A CENSUS THAT CANNOT SEE ITS OWN THIRD FORMAT.** The checklist has three
   entry shapes; a two-format census reported the ceiling as 93 while 104 existed.
-  Now carries the 105→106 renumber as its worked example.
+  Now carries the 105→106→108 renumber chain as its worked example.
 
 Recommended for the rebrand lane, from G1/G2: *a test that cannot run reports the
 same colour as a test that passes* — the suite's file count is itself a number that

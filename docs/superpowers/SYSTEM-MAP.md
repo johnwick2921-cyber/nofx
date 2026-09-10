@@ -412,7 +412,7 @@ The card's `ScenarioEconomics` block and desk SCENARIOS line display obstacle pr
 `researchsnapshot.Open` and `OpenReadOnly` resolve filesystem paths with `filepath.Abs` before constructing the escaped SQLite file URI. The production default `data/data.db.research.db` must resolve relative to the service working directory, not serialize as a URI authority. The startup pin calls `Start` and `CurrentBootLineAt`, verifies the actual archive schema and persisted row count, and reads the same file through the relative export opener. Absolute-path-only fixtures missed the deployed failure. A failed startup still WARNs and prints schema=UNKNOWN; no schema value is fabricated. The 18:11:54 CT boot of 6f677b55 proved scenario-economics live but Stage A unavailable.
 
 
-### The episode contract (fix/episode-contract, classes 106/107)
+### The episode contract (fix/episode-contract, classes 108/109)
 
 RECORDING ONLY. No rule, threshold, gate, order, plan content, level score or
 surface behaviour changes; the wave adds columns to `touch_outcomes` and fills
