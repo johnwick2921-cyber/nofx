@@ -2639,10 +2639,38 @@ are recorded so the next reader knows the collision is real and pre-existing.
 Count with this, which sees both:
 
 ```
-{ grep -oE "^[0-9]{2}\. \*\*" docs/superpowers/AUDIT-CHECKLIST.md | grep -oE "^[0-9]{2}"
-  grep -oE "^## CLASS [0-9]+" docs/superpowers/AUDIT-CHECKLIST.md | grep -oE "[0-9]+$"
+F=docs/superpowers/AUDIT-CHECKLIST.md
+b=$(grep -nE '^## CLASS [0-9]+' "$F" | head -1 | cut -d: -f1); b="${b:-999999}"
+{ awk -v n="$b" 'NR<n' "$F" | grep -oE '^[0-9]+\. \*\*[^*]+\.\*\*' | grep -oE '^[0-9]+'
+  grep -oE '^## CLASS [0-9]+' "$F" | grep -oE '[0-9]+$'
 } | sort -n | uniq -c | awk '$1>1{print "DUPLICATE: "$2} $1==1{l=$2} END{print "highest: "l}'
 ```
+
+**THE CENSUS ITSELF HAS BEEN WRONG TWICE (corrected 2026-09-10).** Both failures
+were in the PART 1 half, and both reported FALSE DUPLICATES while still giving
+the right maximum — which is why they survived: everyone ran it for the maximum.
+
+- The first version matched `^[0-9]{2}\. \*\*` — exactly two digits. It silently
+  skips single-digit classes 1-9, and now that the file has passed 99 it **also
+  skips every three-digit PART 1 entry**, because `107. ` has no `.` in the third
+  position. Harmless today only because the maximum currently lives in the
+  `## CLASS` half.
+- Widening it to `^[0-9]+\. \*\*` then swept in two things that are not class
+  numbers: the **pre-cutover protocol's** ordinary steps (`1. **Tree gate:**`,
+  `2. **Build:**` …), and **bolded numbered lists inside class bodies** — the
+  entry for class 107 has a three-item list that made the census report 1, 2 and
+  3 as duplicates. A class about format-blind censuses broke the census.
+
+Hence the two filters above, which are both load-bearing: scan for PART 1 entries
+only ABOVE the first `## CLASS` heading (excludes class-body prose), and require
+the title to end `.**` (excludes the protocol steps, which end `:**`). Verified
+2026-09-10: reports exactly 75/76/77/92/93 and `highest: 107`, and each of those
+five was confirmed by eye to be a genuine two-format collision.
+
+**Read the duplicate line as a DIFF, not as a pass/fail.** Five collisions are
+pre-existing and permanent (below). A clean run is not "no duplicates" — it is
+"the same duplicates as dev's copy, and no more". Caught by a peer lane whose own
+census would otherwise have reported a free number a second time.
 
 **Law:** a "highest occupied" read is only as wide as the format it greps for.
 Where a document has grown more than one convention, the census must enumerate
@@ -3229,7 +3257,7 @@ The table has only ever PERSISTED three states — `cancelled` 77, `filled` 22, 
 
 **Law:** a gate query reads the code's terminal set; it never retypes it. **A negative list of terminal states that omits one OVER-reports live rows and fails SAFE; a positive list of live states that omits one UNDER-reports and fails OPEN — the gate calls the desk flat while a real order rests at the broker.** A hand-typed list is therefore not merely wrong, it is wrong in a direction that depends on which way you happened to type it, and that is the argument for reading the code's set rather than for typing a better list.
 
-The structural remedy is to export ONE SQL fragment derived from the predicate, so the switch and every gate query have a single source. That work is owned by lane nofx-80 and is **not on dev as of `a4c72ff7`** (`TerminalArmStates|terminalArmStatesSQL|ArmTerminalSQL` → zero hits). A caveat for whoever builds it, which is class 102 in this file seen from another angle: a `[]string` sitting *beside* a hardcoded `switch` does not close this class, it moves it — two hand-typed lists in one file diverge as readily as one in Go and one in SQL. It closes only when the switch ranges over the same slice the SQL is built from. Until then the fallback applies: the query quotes the predicate's file:line beside the literal and a test pins them equal, so a state added to the Go switch fails the test instead of silently widening the gate. The same rule covers any "is it finished / is it safe" list: order states, position states, plan lifecycle states. Related: class 53 (parity tests exercise production CALL SITES — a test that builds both sides' inputs proves only self-consistency). A worked example — the wrong query annotated in place beside the correct one — is preserved at `reports/2026-09-04-two-day-audit.md` §0. Dispatch 103 report: `reports/2026-09-09-candidates-not-entitlements.md`.
+The structural remedy is to export ONE SQL fragment derived from the predicate, so the switch and every gate query have a single source. **Read class 107 before building it.** As stated, this paragraph is dangerous on its own: a lane that centralised every arm-state list onto a single `NonTerminalArmStateSQL()` pointed `store/boot_sweep.go` at a set that INCLUDES `cancel_pending`, and the sweep's raw `cancelled` write then re-cancelled rows whose cancels were sent but never confirmed. The three-state list it replaced was a deliberate, undocumented exception. The remedy is a single **SOURCE**, never a single **PREDICATE** — one name per intent (`SweepableArmStateSQL()` alongside `NonTerminalArmStateSQL()`), each carrying the comment that says why its set differs. That work is owned by lane nofx-80 and is **not on dev as of `a4c72ff7`** (`TerminalArmStates|terminalArmStatesSQL|ArmTerminalSQL` → zero hits). A caveat for whoever builds it, which is class 102 in this file seen from another angle: a `[]string` sitting *beside* a hardcoded `switch` does not close this class, it moves it — two hand-typed lists in one file diverge as readily as one in Go and one in SQL. It closes only when the switch ranges over the same slice the SQL is built from. Until then the fallback applies: the query quotes the predicate's file:line beside the literal and a test pins them equal, so a state added to the Go switch fails the test instead of silently widening the gate. The same rule covers any "is it finished / is it safe" list: order states, position states, plan lifecycle states. Related: class 53 (parity tests exercise production CALL SITES — a test that builds both sides' inputs proves only self-consistency). A worked example — the wrong query annotated in place beside the correct one — is preserved at `reports/2026-09-04-two-day-audit.md` §0. Dispatch 103 report: `reports/2026-09-09-candidates-not-entitlements.md`.
 
 ## CLASS 100 — A BRANCH ON A STALE BASE IS A DELETION PATCH (born 2026-09-09, dispatch 103 W3)
 
