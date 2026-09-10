@@ -3803,11 +3803,33 @@ NinjaScript only from the Windows AddOns path, so editing a repo `.cs` does
 nothing until copy → F5 → **full restart**. A file in the repo that is not the
 artifact actually running is the same defect wearing different clothes.
 
+**THE WALL CLOCK IS A ROW IN THAT TABLE (second instance, same day).** Hours
+after this entry was filed, dev's Go suite was 31 ok / 0 fail at 11:26 and 11:58
+and RED at 12:11 — eight `trader/` tests, one machine, one commit, one install,
+nothing touched. The clock had crossed into the lunch no-trade band
+(12:00–13:30 CT) that the session-risk wave added, and the tests were calling a
+wall-clock entry point instead of the `…At(now)` seam beside it. It would have
+gone green again at 13:30 on its own.
+
+**This instance is strictly nastier than the version-skew one**, and it is why
+the class is not a dependency-management story. The first needed two divergent
+installs. This one needs no divergence at all: two lanes on identical trees, at
+identical commits, with identical `node_modules`, will disagree if one runs at
+12:15 and the other at 11:55 — and both will be certain, and neither report will
+contain the one fact that explains it. **The hour of the day is an environment.**
+So is the day of the week, the session calendar, and whether a holiday half-day
+is in force.
+
+(The underlying test defect is class 60 — the entry owns the clock, the rule
+takes it as an argument. What makes it belong HERE is that the failure was
+reported as a property of a commit by two lanes who did not record when they ran.)
+
 **Probe, five questions:**
 1. Does the report state the resolved version of every tool whose output it
-   cites? A pass count with no runner version is a characterisation standing in
-   for the ref — read it the way A21 makes you read a claim about rows with no
-   sample ids.
+   cites — **and the wall-clock time the suite ran at**? A pass count with no
+   runner version is a characterisation standing in for the ref, read the way
+   A21 makes you read a claim about rows with no sample ids; a pass count with
+   no timestamp is the same thing for any rule that consults a clock.
 2. Does `node_modules` (or the venv, or the toolchain) agree with the LOCKFILE?
    `npm ls --depth=0`, `go version` against `go.mod`. Disagreement is the finding.
 3. When did the install happen? A stale install is invisible in git and invisible
