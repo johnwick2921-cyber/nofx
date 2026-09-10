@@ -84,10 +84,11 @@ func TestEveryFactSetProducesAnOutcome(t *testing.T) {
 // never inferred from a price.
 func TestScenarioLinkIsNullNotEmpty(t *testing.T) {
 	r := TouchOutcomeRow{}
-	if r.Scenario != nil {
-		t.Fatal("an unlinked touch row must carry a NULL scenario, not a value")
+	if r.ScenarioNearest != nil {
+		t.Fatal("an unlinked touch row must carry a NULL link, not a value")
 	}
-	if note := ScenarioLinkUnresolved; note == "" {
+	// The column is named for the heuristic it is, not for the fact it is not.
+	if ScenarioLinkNoScenario == "" {
 		t.Fatal("an unresolved link must carry a stated reason, never a bare NULL")
 	}
 	// The attainable entry is NULL for a scenario that never armed — not 0.0,
