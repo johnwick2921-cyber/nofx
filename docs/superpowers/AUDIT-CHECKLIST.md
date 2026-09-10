@@ -4196,7 +4196,7 @@ facts struct (`TestFadeFactsCarriesNoDayType`).
 ## CLASS 116 — AN IDENTITY HASH WITH INPUTS THE RECORD NEVER HELD (assigned at identity merge, 2026-09-10)
 
 Assigned after the three-format census of dev `4dc0fae1`: ceiling 115; existing
-duplicates 75/76/77/92/93 retained. An identity
+duplicates 75/76/77 retained. An identity
 hash requires every recorded input, including the separate formation close;
 missing input is NULL, never a hash of a zero. Legacy scenario links stay
 labelled heuristics. Recording identity must not replace the trading evaluator's
