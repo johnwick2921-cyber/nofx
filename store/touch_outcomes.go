@@ -75,13 +75,16 @@ type TouchOutcomeRow struct {
 	// 0 or "" (A24). The precedent is Validity above, which deliberately takes
 	// no SQL default so a migration cannot stamp uncertified rows as certified.
 
-	// Scenario is the touch → scenario link, resolved at SEAT/AUTHORING time.
-	// NULL where it could not be resolved, with ScenarioLinkNote saying why —
-	// never recovered later by matching level_price against the trigger prices
-	// inside plans.doc, because a price collision would silently attribute a
-	// touch to the wrong setup.
-	Scenario         *string `gorm:"index"`
-	ScenarioLinkNote string
+	// ScenarioNearest is the touch → scenario link, and it is NOT identity.
+	// PlanScenario carries no level reference at all, so the tie can only ever
+	// be nearest-by-price; the column is named for what it is so no reader
+	// mistakes it for what the planner meant. NULL whenever two scenarios sit
+	// inside the band or nothing is close — ambiguity is NULL, never
+	// nearest-wins. ScenarioLinkBasis always states how, or why not.
+	ScenarioNearest       *string `gorm:"index"`
+	ScenarioLinkBasis     string
+	ScenarioLinkDistPts   *float64
+	ScenarioLinkDistDelta *float64
 
 	// OpportunityOutcome is the rung this chance closed on; always set at close
 	// (E6), NULL only while the episode is still open.

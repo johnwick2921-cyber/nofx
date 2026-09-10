@@ -36,15 +36,6 @@ const (
 	OpportunityFilled = "filled"
 )
 
-// ScenarioLinkUnresolved is the stated reason on a NULL scenario link.
-//
-// The link is resolved at SEAT/AUTHORING time, when the level and the scenario
-// are both in hand. It is never recovered later by matching level_price against
-// the scenario trigger prices inside plans.doc — that match is the fragile
-// thing this wave replaces, and a price collision would silently attribute a
-// touch to the wrong setup.
-const ScenarioLinkUnresolved = "unresolved:no_scenario_at_seat"
-
 // OpportunityFacts are the four observations the outcome is derived from. They
 // are facts about what HAPPENED, not judgements: each is set by the site that
 // witnesses it.
