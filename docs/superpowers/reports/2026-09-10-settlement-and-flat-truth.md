@@ -258,6 +258,22 @@ anything downstream reads the clock. Until something does, the lint's green mean
 "this entry point delegates", not "this path is seamed" — and those read
 identically in a suite.
 
+**Both are now one checklist class — 113, "a gate that certifies a name, not a
+path"** — filed jointly with lane 101, who found the third instance (their A29
+wiring gate counts a call from DEAD CODE as wiring, so an unwired wrapper
+satisfies it for everything inside). All three want one thing: resolve the call
+graph instead of matching the token.
+
+**Adjacent, and NOT mine** — recorded because it touches the same planner as
+item 1 and would otherwise live only in a chat log. Lane 101 found that on
+2026-09-03 the planner re-seated its levels AHEAD of price all morning (max
+seated 29375.25 → 29539.38 → 29619.50 as price ran), which makes any "price
+beyond the map" test structurally blind: the map moves with the run, so price
+never clears it. Their owner ruled it a finding for the planner rather than for
+their wave, and they are recording it in A15. Anyone taking the plan-provider
+seam above should read it first — same subsystem, and it suggests the planner's
+level-seating has its own clock-shaped assumption.
+
 Related and already recorded in `trader/clock_seam_lint_test.go`: the general
 form of the *test-side* check ("no test calls any seamed entry point") cannot
 ship textually, because `clock-seams.list` contains entries named `Save` and
