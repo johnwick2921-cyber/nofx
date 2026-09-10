@@ -3775,10 +3775,18 @@ mine:
   (`1. **Tree gate:**`, `2. **Build:**` …) and bolded lists inside class BODIES.
   Fix: scan only ABOVE the protocol heading and above the first `## CLASS`.
 - **Under-count.** b3's suggested `.**`-suffix filter returns 68 and is wrong by
-  21 the other way: it requires the title to end `.**` on its first line, so every
-  entry whose title WRAPS is dropped — 33, 36–45, 49–53, 55, 57, 60, 66, 67, 82,
-  84 are all real classes it discards. A filter that fixes an over-count by
-  inventing an under-count has not made the number true, only differently false.
+  **22** the other way: it requires the title to end `.**` on its FIRST line, so
+  every entry whose title WRAPS is dropped. The exact set, because a range here
+  would repeat the error this entry is about:
+
+        33 36 37 38 39 40 41 43 44 45 49 50 51 52 53 55 57 60 66 67 82 84
+
+  All 22 are real classes — 33 is cutover safety, 40 is P&L truth, 45 is
+  prompt-feeds-forward. **Note the hole at 42**: its title fits one line and
+  survives, so "36–45" is wrong and b3 caught me writing it that way. A filter
+  that fixes an over-count by inventing an under-count has not made the number
+  true, only differently false — and a RANGE that approximates the damaged set
+  is the same sin one level down.
 
 **The corrected census at this commit**, and the duplicate list corrected with it:
 
@@ -3790,11 +3798,17 @@ mine:
     TRUE duplicates (a number in BOTH formats)  : 75, 76, 77, 92, 93
     NOT duplicates                              : 1–7
 
-**1 through 7 were never duplicates.** Earlier drafts of this very entry listed
-them as such. They appear twice in PART 1 because classes 1–7 exist AND the
-pre-cutover protocol's first seven steps are numbered 1–7; none of them has a
-`## CLASS N` heading at all. A census artifact was recorded as a collision, in the
-entry warning against census artifacts.
+**1 through 7 were never duplicates**, and the reason is stronger than "they were
+miscounted". Earlier drafts of this very entry listed them as collisions. Measured:
+`## CLASS 1` … `## CLASS 7` have **ZERO** headings between them, so not one of them
+CAN be a cross-shape collision. What they are is the same shape repeating — classes
+1–7, plus the pre-cutover protocol's steps 1–7, plus a third numbered list for
+1, 2 and 3, which appear three times each rather than twice.
+
+A same-shape repeat and a two-shape duplicate are different findings with different
+fixes, and the census that cannot tell them apart reports both as "duplicate". A
+census artifact was recorded as a collision, in the entry warning against census
+artifacts, and a peer then carried the wrong list because I published it.
 
 **Law.** Count every shape that starts a class, bound the region you count, and
 then ASSERT the union against the file. A census is a claim about a file and must
