@@ -16,5 +16,7 @@
   "trader/f12_leg4.go": "c84bd247 2026-09-03T20:04:23-05:00 feat(F12): the AddOn emits its order book; leg 4 asks the broker; build_id is proven by receipt",
   "trader/one_contract.go": "7797b36f 2026-09-07T10:25:18-05:00 fix(cancel): D4 \u2014 every cancel sender is guarded, and the census proves it",
   "trader/zerob_exit_sanity_test.go": "59d01948 2026-09-04T08:11:25-05:00 feat(arms D1/D4/D5/D6): the prompt names what can be armed; the ledger stops lying",
-  "web/src/guide/content/guards.ts": "27e062ea 2026-09-09T14:55:48-05:00 merge dev (W5) + correct the three sentences this boot makes false"
+  "web/src/guide/content/guards.ts": "27e062ea 2026-09-09T14:55:48-05:00 merge dev (W5) + correct the three sentences this boot makes false",
+  "trader/types/interface.go": "c84bd247 2026-09-03T20:04:23-05:00 feat(F12): the AddOn emits its order book; leg 4 asks the broker; build_id is proven by receipt",
+  "web/src/guide/content/status.ts": "20dd8ac5 2026-09-09T14:13:40-05:00 docs(guide+map): session risk surfaces, and a guide line that was wrong"
 }

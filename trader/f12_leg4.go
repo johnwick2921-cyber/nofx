@@ -42,15 +42,15 @@ func Leg4FromBrokerAt(
 	workingLedger := make([]OpenOrder, 0, len(ledger))
 	armed, unconfirmed := 0, 0
 	for _, row := range ledger {
-		if store.IsTerminalArmState(row.Status) {
+		if store.IsTerminalArmState(row.ArmState) {
 			continue
 		}
-		if store.IsUnplacedArm(row.Status, row.OrderID) {
+		if store.IsUnplacedArm(row.ArmState, row.OrderID) {
 			armed++
 			continue
 		}
 		workingLedger = append(workingLedger, row)
-		if strings.TrimSpace(row.OrderID) == "" || strings.HasPrefix(strings.ToLower(row.Status), "pending") || strings.EqualFold(row.Status, store.StatePlacePending) {
+		if strings.TrimSpace(row.OrderID) == "" || strings.ToLower(strings.TrimSpace(row.ArmState)) == store.StatePlacePending {
 			unconfirmed++
 		}
 	}

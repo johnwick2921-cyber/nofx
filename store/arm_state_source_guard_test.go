@@ -16,6 +16,14 @@ import (
 // This grep/AST guard includes executable audit scripts wherever they live,
 // plus new untracked source files. Captured JSON and historical prose are
 // receipts, not executable readers. Broker order states are a different domain.
+func armStateExecutable(path string) bool {
+	switch filepath.Ext(path) {
+	case ".go", ".py", ".sh", ".sql", ".ts", ".tsx", ".js", ".mjs", ".cjs", ".bash", ".zsh", ".ps1", ".cs":
+		return true
+	}
+	return false
+}
+
 func armStateListViolations(path string, data []byte) []string {
 	if path == "store/arm_state.go" {
 		return nil
@@ -24,7 +32,7 @@ func armStateListViolations(path string, data []byte) []string {
 		return nil
 	} // broker classifier / historical broker replay
 	ext := filepath.Ext(path)
-	if ext != ".go" && ext != ".py" && ext != ".sh" && ext != ".sql" {
+	if !armStateExecutable(path) {
 		return nil
 	}
 	states := map[string]bool{}
@@ -89,6 +97,47 @@ func armStateListViolations(path string, data []byte) []string {
 			bad = append(bad, "copied arm state set; call store.IsTerminalArmState")
 		}
 	}
+	// Only these reviewed broker-status readers have a separate enum. Merely
+	// naming an arm classifier's argument "status" must not bypass the guard.
+	brokerFunctions := map[string]string{
+		"api/handler_trader_status.go":   "pollAndUpdateOrderStatus",
+		"trader/auto_trader_decision.go": "recordAndConfirmOrder",
+		"trader/bybit/trader_orders.go":  "GetOrderStatus",
+		"trader/kucoin/trader_orders.go": "GetOrderStatus",
+	}
+	brokerExpressions := map[ast.Expr]bool{}
+	for _, decl := range f.Decls {
+		if fn, ok := decl.(*ast.FuncDecl); ok && fn.Name.Name == brokerFunctions[path] {
+			ast.Inspect(fn.Body, func(n ast.Node) bool {
+				if expr, ok := n.(ast.Expr); ok {
+					brokerExpressions[expr] = true
+				}
+				return true
+			})
+		}
+	}
+	brokerStatus := func(e ast.Expr) bool {
+		name := ""
+		switch v := e.(type) {
+		case *ast.Ident:
+			name = v.Name
+		case *ast.SelectorExpr:
+			name = v.Sel.Name
+		}
+		name = strings.ToLower(name)
+		return brokerExpressions[e] && strings.Contains(name, "status") && !strings.Contains(name, "arm")
+	}
+	brokerCases := map[*ast.CaseClause]bool{}
+	ast.Inspect(f, func(n ast.Node) bool {
+		if sw, ok := n.(*ast.SwitchStmt); ok && brokerStatus(sw.Tag) {
+			for _, stmt := range sw.Body.List {
+				if clause, ok := stmt.(*ast.CaseClause); ok {
+					brokerCases[clause] = true
+				}
+			}
+		}
+		return true
+	})
 	ast.Inspect(f, func(n ast.Node) bool {
 		switch v := n.(type) {
 		case *ast.BasicLit:
@@ -97,8 +146,14 @@ func armStateListViolations(path string, data []byte) []string {
 				checkSQL(s)
 			}
 		case *ast.CaseClause:
-			checkSet(v.List)
+			if !brokerCases[v] {
+				checkSet(v.List)
+			}
 		case *ast.CompositeLit:
+			// Broker test inputs are data for a separate enum, not arm readers.
+			if _, array := v.Type.(*ast.ArrayType); array && strings.HasSuffix(path, "_test.go") && (strings.Contains(string(data), "NT8Order") || strings.Contains(string(data), "ClassifyOrderState")) {
+				break
+			}
 			if typ, ok := v.Type.(*ast.MapType); ok {
 				if value, ok := typ.Value.(*ast.Ident); !ok || value.Name != "bool" {
 					break
@@ -119,10 +174,7 @@ func armStateListViolations(path string, data []byte) []string {
 				ast.Inspect(v, func(n ast.Node) bool {
 					if b, ok := n.(*ast.BinaryExpr); ok && (b.Op == token.EQL || b.Op == token.NEQ) {
 						// Broker Status aliases are not an armed_orders.State predicate.
-						if sel, ok := b.X.(*ast.SelectorExpr); ok && sel.Sel.Name == "Status" {
-							return true
-						}
-						if sel, ok := b.Y.(*ast.SelectorExpr); ok && sel.Sel.Name == "Status" {
+						if brokerStatus(b.X) || brokerStatus(b.Y) {
 							return true
 						}
 						if stateName(b.X) != "" {
@@ -154,9 +206,7 @@ func TestArmStateNoRetypedLists(t *testing.T) {
 		if path == "" {
 			continue
 		}
-		switch filepath.Ext(path) {
-		case ".go", ".py", ".sh", ".sql":
-		default:
+		if !armStateExecutable(path) {
 			continue
 		}
 		data, err := os.ReadFile(filepath.Join(root, path))
@@ -175,7 +225,7 @@ func TestArmStateGrepRejectsRetypedListAnywhere(t *testing.T) {
 	names := ArmStateNames()
 	sql := "SELECT id FROM armed_orders WHERE " + "state " + "IN ('" + strings.Join(names, "','") + "')"
 	goSource := "package stray\nfunc copied(s string) bool { switch s { case " + strconv.Quote(names[0]) + ", " + strconv.Quote(names[1]) + ": return true }; return false }"
-	for _, path := range []string{"new-watch.py", "scripts/stray.sql", "docs/reports/audit.sh", "unrelated/new_reader.go"} {
+	for _, path := range []string{"new-watch.py", "scripts/stray.sql", "docs/reports/audit.sh", "unrelated/new_reader.go", "web/watch.ts", "scripts/check.ps1"} {
 		input := sql
 		if strings.HasSuffix(path, ".go") {
 			input = goSource
@@ -186,6 +236,7 @@ func TestArmStateGrepRejectsRetypedListAnywhere(t *testing.T) {
 	}
 	for _, source := range []string{
 		"package stray\nfunc copied(s string) bool { return s == " + strconv.Quote(names[0]) + " || s == " + strconv.Quote(names[1]) + " }",
+		strings.NewReplacer("s string", "status string", "switch s", "switch status").Replace(goSource),
 		strings.ReplaceAll(goSource, strconv.Quote(names[0]), strconv.Quote(strings.ToUpper(names[0]))),
 	} {
 		if got := armStateListViolations("elsewhere/copied.go", []byte(source)); len(got) == 0 {

@@ -94,7 +94,7 @@ export const status: GuideSection = {
         '📜 prompt/validator contract: N restrictions, all stated in prompt  ← class 38',
         '⚖ arm normalizer: legs on non-sweep → single arm + WARN  ← class 39',
         '🔁 planner stream policy (class 41): stream_tries=3 backoff=2s→15s→45s watchdog_log=on keepalive=30s serialize_executor=off resend_identical=on  ← class 41 (per trader)',
-        '🛡 cutover safety (class 33): flat gate legs=5 … leg4 reads the armed_orders LEDGER … boot sweep cancels pre-boot arms  ← class 33',
+        '🛡 cutover safety (class 33): gate legs=5 · leg4=<broker|ledger (no snapshot yet)|STALE> · boot sweep cancelled <N> pre-boot arm(s) (<M> authorized-but-never-placed left for this process)  ← class 33',
         '✂ planner schema: 9 top-level fields, ALL consumed … plan JSON ~920 tokens of a 23,769-token p50 output (3.9%); reasoning is ~96%  ← root-fix part A (measured, no cut shipped)',
         '🔬 shadow A/B (root-fix part B): OFF target_n=10 done=0 … promotion criterion: legal-rate ≥ max AND median wall ≤50% of max at n≥10',
         '🩹 repair (class 44): contract=full-doc restated head+tail · vocab-suffix=on · law excerpts=all-matching · outcomes recorded  ← class 44',

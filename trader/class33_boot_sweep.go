@@ -2,6 +2,7 @@ package trader
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	ntwire "nofx/provider/ninjatrader"
@@ -156,8 +157,8 @@ func (at *AutoTrader) ledgerOpenOrders(symbol string) ([]types.OpenOrder, error)
 			typ = "STOP_MARKET"
 		}
 		status := "NEW"
-		switch r.State {
-		case "armed":
+		switch strings.ToLower(strings.TrimSpace(r.State)) {
+		case store.StateArmed:
 			status = "ARMED" // authorized, NOT yet at the broker
 		case store.StatePlacePending:
 			// SENT, NOT CONFIRMED (2026-09-07). Nothing may render this as an
@@ -169,7 +170,8 @@ func (at *AutoTrader) ledgerOpenOrders(symbol string) ([]types.OpenOrder, error)
 		out = append(out, types.OpenOrder{
 			OrderID: r.SignalID, Symbol: at.futuresSymbol(), Side: side, PositionSide: posSide,
 			Type: typ, Price: r.EntryPx, StopPrice: r.StopPx, Quantity: 1, Status: status,
-			Source: "armed_orders ledger (broker acceptance is a separate observation)",
+			ArmState: r.State,
+			Source:   "armed_orders ledger (broker acceptance is a separate observation)",
 		})
 	}
 	return out, nil

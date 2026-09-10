@@ -45,6 +45,14 @@ func TestArmStateGateSeparatesAuthorizationFromPlacement(t *testing.T) {
 			if leg.ArmedUnplaced == nil {
 				t.Fatal("successful ledger read must expose authorization count")
 			}
+			// Labels may change without changing the ledger's classification.
+			for i := range orders {
+				orders[i].Status = "a translated display label"
+			}
+			relabelled := Leg4FromBrokerAt(book, "SimFixture", "MNQ", 30*time.Second, orders, now)
+			if relabelled.Pass != leg.Pass || relabelled.Detail != leg.Detail {
+				t.Fatalf("display label changed gate: before=%+v after=%+v", leg, relabelled)
+			}
 			if tc.name == "two authorized, empty book" {
 				if *leg.ArmedUnplaced != 2 {
 					t.Fatalf("authorization count=%d", *leg.ArmedUnplaced)
@@ -70,5 +78,14 @@ func TestArmStateReadersAgreeOnFinishedRows(t *testing.T) {
 		if armedActually(123, state) {
 			t.Errorf("terminal state %q must not be reported armed", state)
 		}
+	}
+}
+
+func TestArmStateCancelKeepsGoNormalization(t *testing.T) {
+	book := []nt.NT8Order{{Name: "entry", Symbol: "MNQ", State: "Working"}}
+	// EqualFold differs from ToLower for dotted capital I. Preserve the
+	// original cancel predicate's normalization when using the shared table.
+	if got := adjudicateArmCancel("cancel_pendİng", "entry", book, true); got.Allow {
+		t.Fatalf("normalized cancellation in flight must stay refused: %+v", got)
 	}
 }
