@@ -155,6 +155,29 @@ New pin: **a `keeper.pid` naming someone else's group is not signalled**,
 mutation-tested to fail on the prior commit with `release killed pid <n>`. Plus:
 a corrupt, non-numeric `keeper.pid` leaves `release` working.
 
+**WHAT WAS ACTUALLY EXPOSED ON DEV — checked, because two of us guessed wrong.**
+A peer sharpened this to "for one hour a release could SIGKILL its caller's
+process group", and I had told them those handles were "safe only because
+`_stop_keeper` re-validates". Both are wrong, and the correction matters for
+anyone auditing the window.
+
+The dangerous combination is a LIVE `/proc` read with NO consumer validation.
+That pairing existed in exactly one commit, `88d40920`, and **it never reached
+dev on its own** — it was pushed bundled with the hardening in `417599a3`.
+
+During the hour dev sat at `a4c72ff7`, the `awk` aborted every time, so `pgid`
+ALWAYS fell through to `$kpid`, and `$kpid` after `setsid` is a genuine group
+leader. Verified by running that exact rev: it prints `$5: unbound variable`,
+writes `keeper.pid=2204404` whose `pgrp` is `2204404`, and releases without
+touching the calling shell. `_is_group_leader` and `_keeper_owns` have zero
+occurrences at that rev and `_stop_keeper` signalled an unchecked value — but the
+value was never wrong, because the bug guaranteed the fallback.
+
+So the window was **safe by accident, not by validation**. The accident is the
+same one that made the original defect invisible. Stated precisely: the hazard
+was real in my working tree, was pinned before it shipped, and was never live on
+dev.
+
 **This changes what finding 3's lesson is.** Class 103 says a fallback hides the
 failure of the path it backs up. Class 104 adds the other half: that hidden path,
 once repaired, runs for the first time in production — so **a fix to code that

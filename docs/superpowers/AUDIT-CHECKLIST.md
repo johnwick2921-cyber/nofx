@@ -10,7 +10,7 @@ in CLAUDE.md).
 
 ## PART 1 — THE BUG CLASSES (name · root cause · probe · law)
 
-*Highest occupied class: **100** (2026-09-10). Numbers are assigned AT MERGE and
+*Highest occupied class: **105** (2026-09-10). Numbers are assigned AT MERGE and
 never renumbered; a gap means a wave took a later slot to avoid a collision.*
 
 1. **Self-imposed caps.** Root cause: an AI/HTTP/token cap chosen without
@@ -3237,7 +3237,7 @@ The structural remedy is to export ONE SQL fragment derived from the predicate, 
 
 **Probe:** before ANY merge, run `git diff --stat origin/dev HEAD` and read the DELETION count, not the conflict list. A wave that adds a feature should show deletions only in files it deliberately edits; a four-figure deletion count against a branch that added code means the base moved under it. Cross-check with `git log --oneline origin/dev..HEAD` and `git log --oneline HEAD..origin/dev` — the second list is what landed while you were not looking. Then confirm your own files: `git cat-file -e origin/dev:<path>` for each one you created. If they are already there, your work landed by another route and the branch is now a rollback of everything that landed after it.
 
-**Law:** a branch is only as safe as its base is fresh, and staleness is silent — no conflict, no test failure, no hook. Diff against the CURRENT dev and read deletions before merging, every time, including when the branch has not been touched since it was green. When your own files are already on dev, do not merge the branch: reset onto the current tip and re-apply only the genuinely unlanded deltas, then re-run the same deletion check to prove the reset is additive. Related: class 73 (SPEC-FRESHNESS — a worktree cut from an older base freezes a moving spec) and PUSH-EMPTY-AT-ACCEPT, whose founding incident was a lane's branch merged into dev without its author ever being told. This is that incident seen from the author's side. Dispatch 103 report: `reports/2026-09-09-candidates-not-entitlements.md`.
+**Law:** a branch is only as safe as its base is fresh, and staleness is silent — no conflict, no test failure, no hook. Diff against the CURRENT dev and read deletions before merging, every time, including when the branch has not been touched since it was green. When your own files are already on dev, do not merge the branch: reset onto the current tip and re-apply only the genuinely unlanded deltas, then re-run the same deletion check to prove the reset is additive. Related: the SPEC-FRESHNESS LAW (CLAUDE.md canon — a worktree cut from an older base freezes a moving spec; it has NO checklist slot, and CLAUDE.md's "Checklist class 73" names the hook class instead — see class 105 instance 3, which corrects this line) and PUSH-EMPTY-AT-ACCEPT, whose founding incident was a lane's branch merged into dev without its author ever being told. This is that incident seen from the author's side. Dispatch 103 report: `reports/2026-09-09-candidates-not-entitlements.md`.
 
 ## CLASS 101 — A BOUND THAT IS WRITTEN, PRINTED, AND NEVER COMPARED (born 2026-09-10, fix/lock-keeper-on-acquire)
 
@@ -3478,7 +3478,181 @@ CONSUMER (signal only a positively-identified target). Layer one alone still
 trusts whatever is already in the file; layer two alone still writes a dangerous
 value for anything else to read.
 
-## CLASS 105 — THE GUARD THAT OUTLIVES WHAT IT GUARDED (born 2026-09-10, `docs/worktree-tmp-locked-prune`, found during a worktree audit)
+## CLASS 105 — DOCUMENTATION DESCRIBING CODE, IN A PLACE THE CODE'S TESTS CANNOT SEE (born 2026-09-10, dispatch 103)
+
+**Root cause:** a statement ABOUT the code — a cap, a verb, a sequence, a rule — written where nothing can compare it to the code it describes. It is correct until the code moves, and from then on it is wrong silently and for as long as anyone leaves it. The build passes, the suite passes, review sees nothing, because no test reads prose. Three instances, across the whole range: one in tracked source that tests still cannot reach, and two in a file git cannot reach at all — the second of which caught the author of this entry mid-draft.
+
+**Instance 1 — a comment in tracked source.** `api/handler_svp.go:50`:
+
+```go
+// Default 5m. Pull up to 2000 bars (the cache cap); sessions off the visible
+// range are skipped by the renderer.
+bars := provider(symbol, interval, 2000)
+```
+
+The cache cap is **2500** — `DefaultBarCacheMaxBars` (`provider/ninjatrader/bar_cache.go:24`), which `market/data.go:225` names correctly as "2500 = the BarCache cap". What makes this sharper than drift: **2000 is not a stale number.** It is `AISVPBarCount` (`kernel/svp.go:47`) and it is the correct argument to pass. The comment was REWRITTEN at `f94118e6`, which replaced "1m/2000 matches the AI's exact input" with "2000 bars (the cache cap)". The value survived the rewrite; its description did not. A reader now learns a wrong cap from a line sitting directly above correct code — and a reader who later "fixes" the code to match the comment would break the AI's SVP input. Nothing failed, because a comment is unreachable from a test even when the file it lives in is fully covered.
+
+**Instance 2 — a rule in an untracked file.** `CLAUDE.md:205` instructed every lane on this machine:
+
+```
+deploy/nofx-lock.sh heartbeat <session>                    # beat every ~2 min as you work
+```
+
+On 2026-09-10 the lock-keeper wave (`417599a3`, classes 101–104) made `acquire` start the heartbeat itself. Hand-beating became a **second writer into the lock dir** — the precise failure that wave existed to close. The one file instructing every lane to hand-beat was the one file the wave could not touch: `CLAUDE.md` is **untracked**, so no branch could correct it, no review could see it drift, and no test could assert it still matched the script. This is the worse half of the class. Instance 1 misleads a reader; instance 2 **instructs** one, and a lane following it faithfully would have caused the defect the wave had just removed.
+
+**Instance 3 — the one that caught the author of this entry, while writing it.** `CLAUDE.md`'s SPEC-FRESHNESS block ends: *"(Checklist class 73, read beside 70 and 72.)"* Checklist slot **73** is **"A hook registered one start too late"**, and slot 73's own text records why: it was renumbered 69→70→73 at merge because "70/71/72 were taken by the lock, stash-stack and flaky-clock classes landing in the same boot." SPEC-FRESHNESS was numbered on its branch, the number moved under it at merge (A27), and the untracked file kept the branch number. **SPEC-FRESHNESS has no checklist slot at all** — it is CLAUDE.md-only canon, and the only two occurrences of the string in this file are the Related lines discussed below.
+
+Drafting this entry, I read that citation, believed it, and wrote "class 73 (SPEC-FRESHNESS)" into the Related line of **class 100 — which is on dev**, and into the first draft of this one. It was caught only by checking every citation against the file before merge, and only because this file's own ⚠ NUMBERING HAZARD section (added 2026-09-07) says it carries two heading formats, which forced a second grep in the other format. The same paragraph also cost a second wrong citation: "the prompt feeds forward" is **slot 50**, not 45, and slot 50's own text says so — *"(Dispatch 'class 45'; checklist slot 45 was already the pantry class, hence 50.)"* The dispatch's name for a wave and its merged slot number are different facts, and a memory or a doc that records the first will keep asserting it after the second is decided. Class 100's Related line is corrected in the same commit as this entry.
+
+**Probe:** for every statement about the code that a reader could ACT on — a cap, a limit, a default, a verb, an ordering — ask two questions, in this order. **Is it in a file git tracks?** If not, it cannot be corrected by a wave, and its being wrong is not a bug anyone can fix on a branch. **Is there a test that fails when the code moves?** If not, being right today is luck. Then check the statement itself: a comment that names a value should name the CONSTANT (`DefaultBarCacheMaxBars`), not a transcription of it, so a reader who follows the name arrives at the truth. Be most suspicious of parentheticals that explain what a number *is* — `2000 (the cache cap)` — because the number is verified by the compiler and the gloss by nobody. When a comment is rewritten rather than written, diff what the prose asserted before and after: values are reviewed, descriptions are not.
+
+**Law:** a rule about the code lives in a **tracked file with a contract test**, and untracked guidance **points at it** rather than restating it. A restatement is a second copy that drifts from the code and from the original, independently and silently; a pointer cannot be wrong about anything except where to look.
+
+Partial remedy already on dev: `docs/superpowers/CLAUDE-canon.md` (landed `557494c7`) mirrors the MAIN-TREE LOCK LAW into a tracked file, and it declares itself newer by construction because it is the copy a wave can reach. That closes the git half. **The test half is not closed** — `git grep CLAUDE-canon -- '*.go' '*.sh'` returns zero, so nothing asserts the mirror still matches `deploy/nofx-lock.sh`, and a mirror with no contract test is this class with one more copy in it. The pointer half is not closed either: `CLAUDE.md` cannot be made to point at the canon file by any wave, only by the owner. Until both halves land, treat the canon file as authoritative over `CLAUDE.md` and the script as authoritative over both.
+
+Related: **slot 50** (the prompt withheld what the validator enforces — a document that instructs a reader to do the thing a guard forbids; the dispatch called it "class 45", the merged slot is 50), the **SPEC-FRESHNESS LAW** (CLAUDE.md canon — it has NO checklist slot, and CLAUDE.md's claim that it is class 73 is instance 3 above), and the **GUIDE CONTENT LAW**, which is this law already applied to one surface: a guide that lies about the running binary is worse than no guide.
+
+## CLASS 106 — A CORRECT READ OF A NOT-YET-CORRECT STATE (born 2026-09-10; generalised out of class 104 at a peer's suggestion)
+
+**Number note (updated at merge):** 105 is now OCCUPIED on dev by *documentation
+describing code where the code's tests cannot see it*. A second lane also claims
+105 on `origin/docs/worktree-tmp-locked-prune` (locked worktrees making a
+dangling registration immortal) — **that branch must renumber before it lands.**
+Numbers land at merge per A27, and this collision is exactly what A27 exists to
+catch: two lanes both read "highest is 104" and both took the next one.
+
+**Name.** You read a value. The read succeeds, the value is real, and it is the
+right value *for the state the system is in at that instant* — but that state is
+about to change into the one you actually meant to ask about. Nothing errors.
+Nothing is null. The read is simply early, and an early read of a mutable
+identity is indistinguishable from a correct one.
+
+**Read after class 104**, which is the instance this was generalised from, and
+beside class 88.
+
+**The instance.** `kpid=$!` after `setsid nohup bash -c '…' &`. Job control is
+off in a non-interactive shell, so a background job does **not** get its own
+process group — it starts in the SHELL'S, and `setsid` moves it only once it
+execs. `$!` returns before that. So `/proc/$kpid/stat`'s `pgrp` field is a
+perfectly valid read that returns the PARENT's group, and the consumer then
+signalled it: `kill -TERM -- "-$pg"` against the invoking shell's process group.
+
+**Why this is its own class and not a shell footnote.** The shape has nothing to
+do with process groups. The value is real before the operation that determines
+what it *means*:
+
+| read | the operation that gives it meaning |
+|---|---|
+| a pid | the `exec` that changes what that pid IS |
+| a row | the commit that makes it visible/durable |
+| a filename | the rename that puts it at its final path |
+| a branch diff | the base moving under it (SPEC-FRESHNESS, class 73) |
+| a config value | the reload that makes it the running config |
+| a price/quote | the fill that makes it a transacted price |
+
+Every one of them reads fine at the moment you read it. Retrying does not help,
+because there is no error. Logging does not help, because the logged value looks
+right. **Only a predicate that is FALSE before the transition and TRUE after it
+distinguishes the two states** — here, `pgrp == pid`, which is true exactly when
+`setsid` has completed and is impossible for a value borrowed from the parent.
+
+**Probe, five questions:**
+1. Between reading this value and using it, is there an operation that changes
+   what the value MEANS rather than what it is? Name it. If you can, you have
+   this class.
+2. What predicate is false before that operation and true after? If you cannot
+   state one, you cannot detect the early read — and a sleep is not a predicate.
+3. Does the early value look VALID? The dangerous case is when it does. A null or
+   an error is a gift; a plausible wrong number is this class.
+4. Who consumes it, and is that consumer destructive? An early read feeding a
+   log is a cosmetic bug; feeding a kill, a delete, or an overwrite, it is an
+   incident.
+5. Does a retry loop "fix" it? If the loop has no predicate it is not waiting for
+   the transition, it is waiting for luck — and it will pass in testing.
+
+**Law:** **wait on the predicate, not on the clock, and re-validate at the point
+of use.** Where a value's meaning is established by a later operation, the reader
+waits for a condition that operation makes true, and the consumer re-checks
+identity before acting — because the reader does not control who wrote the value
+it is handed.
+
+**Corollary.** Found because the early read reached a `kill`. It had presumably
+been early many times before that without consequence, which is the ordinary
+career of this bug: invisible until it feeds something that bites.
+
+## CLASS 107 — CENTRALIZING A HAND-TYPED LIST IS A BEHAVIOUR CHANGE WHEREVER THE LISTS DIFFERED (born 2026-09-10, boot-sweep cancel_pending)
+
+**Name.** Several sites hand-type the same list and the lists disagree. You fix
+that — correctly — by deriving one predicate from a single source and pointing
+every site at it. **The differences you just erased were not all typos.** Some
+were deliberate exceptions that nobody wrote down, and each one becomes a defect
+the moment the sites agree.
+
+**This is the INVERSE of class 99**, and must be read with it. 99 is *two
+hand-typed lists diverge and one silently widens a gate*. 107 is *the remedy for
+99, applied without asking why each site's list is the shape it is.* Fixing 99
+without 107 trades a divergence bug for a uniformity bug — and the uniformity bug
+is harder to see, because the code now looks principled.
+
+**Root cause.** `store/boot_sweep.go:47` hand-typed
+`state IN ('armed','place_pending','working')`; `store/armed_orders.go:242`
+hand-typed the same four states **with** `cancel_pending`. Five such lists
+existed across two files, with three distinct memberships. The one-predicate wave
+exported `NonTerminalArmStateSQL()` from a single `armStates` map and pointed the
+sweep at it.
+
+But the sweep's omission was **load-bearing**. Its terminal write is
+`SetState(id, "cancelled", …)` — a raw update — while `ConfirmCancel` is
+documented as *the only way a row becomes 'cancelled', and it requires the id of
+the snapshot whose book no longer listed the order.* `cancel_pending` means a
+cancel was sent and NOT confirmed: **the order may still be live at the broker.**
+Sweeping it marks the row cancelled with no evidence — the precise blindness a
+previous wave had closed. A/B on one seeded row: dev `swept=0`, row stays
+`cancel_pending`; branch `swept=1`, row `cancelled`, `settled_snapshot_id=0`.
+
+**Why nobody caught it.** Three reinforcing reasons, all of which generalise:
+
+1. **The doc comment already disagreed with the code.** `ListPreBoot`'s comment
+   said it "returns ONE trader's non-terminal rows" while the SQL listed three of
+   the four non-terminal states. Anyone checking intent against implementation
+   read that as the bug — and "fixed" it.
+2. **The suite stayed green.** Every existing test seeded `working` rows. No test
+   named `cancel_pending` and the boot sweep together, because the exclusion had
+   never been written down as a behaviour.
+3. **The path is barely trodden.** In all history 5 rows ever requested a cancel,
+   max attempts 1 against a cap of 5, and `ConfirmCancel` had never once fired.
+   A regression on a cold path ships green and stays quiet.
+
+**Probe, five questions:**
+1. Before unifying, DIFF THE MEMBERSHIPS and list every element that appears in
+   some sites and not others. That set is the entire risk surface, and it takes
+   one command.
+2. For each difference, ask "what does this site DO with the rows it selects?" A
+   site that only READS can usually widen safely. A site that WRITES, cancels,
+   deletes, or signals cannot.
+3. Is the narrower list the one attached to the destructive action? Then assume
+   deliberate until proven otherwise — A24's never-list, applied to refactoring.
+4. Does a comment near the site disagree with the code? Do not assume the code is
+   wrong. Find out which one is load-bearing BEFORE aligning them; here the
+   comment was wrong and the SQL was right.
+5. After unifying, does any test fail? If none does, that is not reassurance —
+   ask whether any test ever exercised the differing elements at all.
+
+**Law:** **a shared predicate needs a NAME PER INTENT, not one name for all
+callers.** Where two sites legitimately select different sets, derive BOTH from
+the single source and give each its own named function whose comment states why
+it differs — `SweepableArmStateSQL()` (non-terminal MINUS `cancel_pending`,
+"because the sweep's write bypasses ConfirmCancel") alongside
+`NonTerminalArmStateSQL()`. One source, several named intents. The class-99
+remedy is the single SOURCE, never the single PREDICATE.
+
+**Corollary.** Found only because the dispatch ordered *establish whether the
+omission is deliberate BEFORE changing anything, and quote the code path*. Asking
+"is this a bug or a decision?" first is what separates 99 from 107; the
+refactor had already been written, tested and pushed on the other reading.
+
+
+## CLASS 108 — THE GUARD THAT OUTLIVES WHAT IT GUARDED (born 2026-09-10, `docs/worktree-tmp-locked-prune`, found during a worktree audit)
 
 **The shape.** A protective flag means "do not clean this up — its absence is
 temporary". When the absence becomes PERMANENT, that same flag prevents every
