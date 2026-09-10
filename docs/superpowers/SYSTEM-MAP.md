@@ -508,3 +508,67 @@ here rather than left to be discovered.
 the ruling was to extend `touch_outcomes`, and a second table would have been a
 second key for the same unit. No historical terms. The ordinal was already true
 and was dropped rather than re-implemented.
+
+
+### Fade permission (fix/fade-permission, W2 — a LABEL, never a gate)
+
+RECORDING AND SHOWING ONLY. No gate, arm, order, scenario, level, exit or cadence
+changes. `trader/fade_no_refusal_test.go` fails if any file on the
+arm-authorization path (`armed_executor.go`, `entry_gate.go`,
+`auto_trader_orders.go`, `session_risk.go`, `kernel/risk_limits.go`,
+`plan_authored_invalidation.go`, `engine_analysis.go`) can reference the label
+— the same seven files C1 measured as holding zero `day_type` reads.
+
+**The predicate** `kernel.FadePermissionAt(now, facts)` is pure: no clock, no
+store, no globals. Five pre-declared exclusions, `[I]`, evaluated independently
+with ALL that fire named: `or_wide` (OR > k× prior-session median; k from
+`day_plan.fade_or_wide_k` else the C5 default 1.28 = p80/median, n=13),
+`ib_held` (beyond the IB and holding a CLOSED 5m bucket — CONTINUOUS, by owner
+ruling, because the dispatch's "by 09:30" deadline was blind to 09-03 whose
+break came at 10:00), `beyond_map` (past every seated reference in the
+scenario's own direction), `t1_news` (UNKNOWN when no real calendar slice; UNKNOWN
+never excludes — the gate's static fail-closed fallback is right for refusing and
+wrong for a label), `first_n` (reuses `kernel.FirstNoTradeMinutes()`).
+`day_type` is NEVER an input: it is model-worded free text (ten distinct values in
+the corpus) and `TestFadeFactsCarriesNoDayType` reflects over the struct.
+
+**The facts builder** `trader/fade_facts.go` is the only production assembler of
+`FadeFacts`, and where the research law bites: bars opening at or after `now` are
+not read, a 5m bar counts as closed only once `now >= open+5m`, the completed
+session is never consulted. `now` is passed in — pinned by PATH (class 113),
+because the predicate's purity would prove nothing if the builder reached the wall.
+The prior-session OR median comes from `store.BarHistoryStore.PriorSessionORMedian`
+and returns the n it FOUND (13 at this boot; the dispatch asked for 20).
+
+**The stamp** lands on W1's episode row as four additive NULL-able columns —
+`fade_permitted *bool`, `fade_exclusions`, `fade_measured` (JSON), `fade_evaluated_ms`.
+`*bool` not `bool`: NULL means NOT EVALUATED, which is a different fact from
+"permitted", and a plain bool would have rendered every historical row permitted
+in one migration. FIXED AT OPEN by predicate (`WHERE fade_permitted IS NULL`), not
+by flag: a second stamp is a no-op. The call site is `detector_record.go` at episode
+open with the clock set to the episode's own open; `recover()` pinned (A10).
+
+**The surface.** `/api/plan/today` carries `fade_permission` (per-scenario, live at
+`now`) and `fade_counter` (session-day counts READ from the table). The card's
+`FadePermissionChip` renders three states; an ABSENT label renders `not evaluated`,
+never `permitted` (vitest pins). The desk strip's SCENARIOS line carries the chip
+per scenario and the counter line. Live vs durable are labelled as such.
+
+**Boot line** join key `🚦 fade permission:`. Counts READ; k names its resolver
+(`[I:strategy]` or `[I:default:C5 p80/median]`); the three-state backfill's counts
+(`recomputed / unrecomputable / untouched`); and the coverage note in the line's own
+text.
+
+**The finding this wave carries** (owner's headline): **on the one day we have,
+the label would have PERMITTED the damaging trade.** 2026-09-03 NY authorized
+three arms (ids 35, 36, 37); the one that FILLED (35, short 29285.00 at 09:02) is
+covered by none of the five — OR was 0.77× median, the IB did not exist until
+09:30, and price never cleared the authored map because the planner re-seated
+ahead of price all morning (v4 29375.25 → v5 29539.38 → v6/v7 29619.50). E3's null,
+stated in advance.
+
+**A15, not fixed here:** (c) is structurally blind to a planner that re-seats ahead
+of price — a finding for the planner. "Fade" has two definitions in the codebase
+(by condition 157/269, by direction-vs-bias 64/269); the stamp labels every
+scenario so it sidesteps this, the counter counts episodes not fades. The
+corrected rulebook (PR #99) is NOT on dev — its §A sentence is in the report.

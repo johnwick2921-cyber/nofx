@@ -312,6 +312,26 @@ export const guards: GuideSection = {
       kind: 'p',
       text: 'The backfill over history recomputed NOTHING, and that is the finding rather than a shortfall: formation time is absent on 96.2% of in-era rows and the scenario link is a new column, so no historical row carries the inputs. Every per-opportunity figure this system reports therefore begins at the boot that shipped this; anything earlier is honestly unrecoverable rather than quietly missing.',
     },
+    {
+      kind: 'h',
+      text: 'IS THE BOOK ALLOWED TO FADE RIGHT NOW? — A LABEL, NEVER A GATE',
+    },
+    {
+      kind: 'p',
+      text: 'The book is a level fade, and until 2026-09-10 it had no permission step: it faded every day the same way, and on 2026-09-03 it sold into a +483-point run. Every scenario now carries a fade-permission label — permitted, excluded (with the exclusion named and what it measured against what), or not evaluated — and every episode is stamped with its label at the moment it OPENS. Nothing reads that label to refuse. An excluded scenario is authorized, armed, placed and traded exactly as a permitted one. The arm path cannot even see the column; a test fails if it ever can.',
+    },
+    {
+      kind: 'p',
+      text: "Why only a label. The research (round 11 §1) found no reliable early range-vs-trend classifier for MNQ and named a published claim that should NOT be adopted. So instead of a classifier there are five PRE-DECLARED exclusions, each evaluated independently and each computed only from what is knowable at the moment of evaluation — never from the completed session. (a) opening range wider than k× the prior-session median, k resolved from the bound strategy or the tape's own 80th percentile (1.28, n=13); (b) price beyond the initial balance and holding a CLOSED 5-minute bucket there, evaluated continuously; (c) price past every seated reference in the scenario's direction; (d) inside a Tier-1 news blackout — UNKNOWN when the calendar has no slice, and UNKNOWN never excludes; (e) the first N minutes after the open, reusing the existing no-trade band's N.",
+    },
+    {
+      kind: 'p',
+      text: 'What the label would NOT have caught, stated here because a label that implies protection it lacks is worse than no label. On 2026-09-03 the New York session authorized exactly three arms, and the one that FILLED — short at 29285.00 at 09:02 — is covered by none of the five: the opening range was 0.77× the median (narrow, not wide); the initial balance did not exist until 09:30; and price never cleared the authored map, because the planner re-seated its levels ahead of price all morning. On the one day we have, this label would have permitted the damaging trade. That is the null the E3 experiment is pre-registered against: the label has no known coverage, and twenty sessions of stamped episodes will show whether any exclusion acquires some.',
+    },
+    {
+      kind: 'p',
+      text: "The label is fixed at the episode's open and never rewritten. A row that says not evaluated says exactly that — it is not permission, and the column is NULL rather than false so the two can never be confused. The desk strip counts today's permitted, excluded and not-evaluated episodes from the table; the boot line prints the same counts, names which resolver set k, and carries this coverage note in its own text.",
+    },
     { kind: 'h', text: 'THE FIVE-LEG CUTOVER GATE (class 33)' },
     {
       kind: 'p',

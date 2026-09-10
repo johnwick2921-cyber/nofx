@@ -4140,3 +4140,55 @@ wave hit **twice in one hour** despite a peer's explicit warning, because the
 deletion count was read at merge time and then again a minute too early; the
 remedy is to rebase and re-check *immediately* before the merge, since dev moves
 in minutes.
+
+## CLASS 115 — A LABEL THAT IMPLIES COVERAGE IT DOES NOT HAVE (born 2026-09-10, fix/fade-permission, dispatch 101 W2)
+
+**Root cause.** A guard is specified FROM a motivating incident and shipped
+without being replayed AGAINST it. The specification reads as though it would
+have caught the case that justified it, and nobody checks, because the incident
+is the reason the guard exists and that feels like proof.
+
+**The evidence.** W2 was dispatched to give the level-fade book a permission
+step after 2026-09-03, when it sold into a +483-point run. The dispatch named
+three candidate exclusions derived from that day: opening range too wide, IB
+broken and held by 09:30, price beyond the map. Replayed against the day itself
+(C2, n=3 arms, ids 35/36/37):
+
+    (a) OR too wide         09-03 OR = 62.25 = 0.77x the 13-session median.
+                            BELOW median. Cannot fire at any k >= 1.0.
+    (b) IB held by 09:30    09:30 close 29287.75, INSIDE the IB. The break
+                            came at 10:00 — thirty minutes after the deadline.
+    (c) beyond the map      price never cleared the authored map: the planner
+                            re-seated ahead of price all morning
+                            (29375.25 -> 29539.38 -> 29619.50).
+
+**The one arm that FILLED — id 35, short 29285.00 at 09:02 — is covered by none
+of the five exclusions.** The day that motivated the wave opened narrow, ranged
+inside its IB for ninety minutes, and only then ran. Every exclusion keyed to
+the open or to a first-hour deadline is blind to a trend that starts late.
+
+**Law.** A guard derived from an incident is REPLAYED against that incident
+before it ships, at the clock the guard would actually have run at, and the
+result is written into the guard's own help text — "would not have fired on
+2026-09-03 (OR 0.77x median)" — so the label cannot imply protection it lacks.
+The honest headline, ruled by the owner: *on the one day we have, the label
+would have permitted the damaging trade.* That sentence is the E3 experiment's
+null, pre-registered; a label that admits it caught nothing is more useful than
+no label, because it records the exclusions' verdicts per episode, which is the
+only way E3 can ever find one that works. **Do not invent a further exclusion
+to make the incident come out right** — that is fitting a rule to n=1, which is
+how the published-classifier claim round 11 §1 warns against got made.
+
+**Probe.** For every exclusion/gate/guard born from an incident: name the
+incident's ids; state the clock at which the guard would have evaluated; quote
+the guard's verdict at that clock; if it does not fire, say so in the guard's
+text. C1: no gate reads day_type (16 references, 0 gates). C3: "fade" has two
+definitions disagreeing 2.5x (157/269 by condition, 64/269 by direction) —
+define once, read from one place. Read beside classes 82 and 113.
+
+**Corollary — model-worded fields are not inputs.** `day_type` is not merely
+model-authored; it is free text with ten distinct values in the corpus,
+including "trend-down extension / oversold reversal watch". A naive `= 'trend'`
+misses 77 of 269. An exclusion keyed on it would string-match an LLM's
+adjectives and call the result a measurement. Pin it by reflecting over the
+facts struct (`TestFadeFactsCarriesNoDayType`).
