@@ -187,7 +187,7 @@ than silent. It is not the single-reader ideal of class 97 and is not claimed to
    lost — but a reviewer reading `git log` will see each early commit twice, and
    should read the merge commits for why.
 
-## G · FOUR DEFECTS FOUND, NONE MINE, ONE FIXED WITHIN THE HOUR
+## G · FOUR DEFECTS FOUND, NONE MINE, TWO FIXED WITHIN THE HOUR
 
 Found while verifying my Guide change. **Filed, not fixed — A31 scopes this wave,
 and both belong to the rebrand lane.**
@@ -399,33 +399,54 @@ the pre-cutover suite will be green — but that green is *itself* an environmen
 claim, which is why §H records the clock alongside the versions. Filed, not fixed:
 A31, and the fix belongs with whoever owns the arm-path tests.
 
-### G4 — dev's trader package is RED in-package, green standalone
+### G4 — a wall-clock flake I diagnosed wrongly, corrected by its owner
 
-Found while verifying the follow-up. `TestSplitArmWritesTwoLedgerRows`:
+**FIXED on dev at `7871a1d2`. My diagnosis of it was wrong and the correction is
+the useful part.**
 
-```
-go test -count=1 ./trader/ -run TestSplitArmWritesTwoLedgerRows   → ok (6 runs)
-go test -count=1 ./trader/                                        → --- FAIL
-    split_entry_test.go:143: split arm must write 2 ledger rows (legs), got 0 ([])
-```
+I reported `TestSplitArmWritesTwoLedgerRows` as order-or-state interference
+inside the package, on the evidence that it passed standalone six times and
+failed when the package ran whole. nofx-8e then reproduced it **standalone** at
+13:20 on the same commit. There was no interference. It was the wall clock the
+entire time — and I had the disproof in my own message: one standalone RED at
+13:09:00 against six GREENs from 13:09:40. I filed that flip as "a timing
+component on top" of an interference story instead of as the story.
 
-Reproduced on a CLEAN worktree at `origin/dev` `a98a92c7` with none of my
-wiring, so it is neither branch. Order or state interference inside the package,
-not the wall clock and not a bad merge.
+**Two independent causes**, both introduced by that morning's `armTestClock`
+fix, and both found by 8e:
 
-**My bisect was worthless and the reason is instructive.** Testing `b11659ea`,
-`c11632c3`, `5e273442` and `a98a92c7` one at a time returned green for all four
-— because I ran the test standalone at each. The commit axis said nothing; the
-in-package axis said everything. A bisect that varies the commit while holding
-the wrong execution mode fixed is a measurement of the mode.
+1. **Five-minute bucket alignment.** The leg-2 confirm needs the last five 1m
+   bars to form a COMPLETE 5m bucket below the ref. Bucket boundaries are
+   absolute, so the tape's meaning depends on `now` **modulo 5 minutes**, and a
+   clock searched forward from `time.Now()` walks that modulus through the day.
+   Identical code passed 12:43–12:59 and failed at 13:20.
+2. **The trade date.** A clock based on a fixed past date (2026-08-18) appended
+   the plan for `PlanChainTradeDate(sess, now)` while the arm path resolves the
+   CURRENT trade date — a plan written for a date nothing looks for. The arm
+   produced zero rows **and not one refusal log**. That silence is the tell: a
+   refused arm says why; a missing plan says nothing at all.
 
-Filed with nofx-8e, whose wave neighbours it. Not fixed here: A31, and I have
-already been wrong once today about a defect in another lane's file by measuring
-in an environment I had not pinned.
+The fix is both halves — today's date at a fixed 5m-aligned hour, via
+`armTestClockFrom(t, at, base)`, with `armTestClock` keeping `time.Now()` for
+tests whose only binding constraint is being inside a session.
 
-**Consequence: no cutover can honestly claim a green suite on dev right now**,
-mine included. Reported as the reason my own gate is not green rather than
-worked around.
+**What I got right, and it was the useful half:** I flagged "got 0, not got 1".
+The earlier defect in this same test was one-leg-of-two from a 25-minute skew;
+zero legs means the arm never happened. Same costume, different mechanism. 8e
+says filing it as a recurrence would have cost them ten minutes in the split
+logic.
+
+**What my bisect actually measured.** Testing `b11659ea`, `c11632c3`, `5e273442`
+and `a98a92c7` returned green at all four — not because the commits were green
+but because each happened to be tested at a passing moment. **A bisect that
+varies the commit while the real variable is time is a measurement of when you
+ran it.** I concluded "the commit axis says nothing, the in-package axis says
+everything" when the honest conclusion was "neither axis is the variable and I
+have not found it yet."
+
+Verified green here at the merged HEAD, **run 13:25:30–13:28:34 CDT, inside the
+12:00–13:30 band**: 31 packages ok, 0 fail. Run in-band deliberately, because
+outside it the result would not have been falsifiable.
 
 ## H · VERIFICATION
 
@@ -451,7 +472,7 @@ below is a claim about THIS table, not about the commit alone.
 |---|---|
 | `go build ./...` | OK at merged HEAD |
 | `go vet ./store/... ./trader/... ./kernel/...` | OK |
-| `go test ./...` | **31 ok / 0 FAIL**, run 12:32–12:34 CDT inside the former lunch band (§G3) |
+| `go test ./...` | **31 ok / 0 FAIL**, run 13:25:30–13:28:34 CDT — deliberately INSIDE the 12:00–13:30 band, where §G3 and §G4 are falsifiable |
 | `npx tsc --noEmit` | OK |
 | `npm run build` | OK — 4.60s |
 | `npx vitest run` @ vite 6.4.3 (lockfile) | 12 files red from G1; 354 collected |
