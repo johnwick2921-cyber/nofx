@@ -470,8 +470,9 @@ export function ScenarioIdentity({
       {level ? (
         <>
           {' '}
-          · {level.label} @ {level.price.toFixed(2)} · {level.tf ?? 'UNKNOWN'} ·
-          formation close {level.formed_close_ms ?? 'UNKNOWN'}
+          · {level.names?.join(' · ') || level.label} @ {level.price.toFixed(2)}{' '}
+          · {level.tf ?? 'UNKNOWN'} · formation close{' '}
+          {level.formed_close_ms ?? 'UNKNOWN'}
           {identity?.disagreed && (
             <>
               {' '}

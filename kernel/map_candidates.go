@@ -163,6 +163,9 @@ func BuildMapCandidates(scored []ScoredLevel, price, atr5m float64, opts MapCand
 					out[i].Names = appendDistinct(out[i].Names, n)
 				}
 				out[i].Kinds = append(out[i].Kinds, s.Kind)
+				if member := CandidateIdentity(s.DetectedLevel); member.ID != nil {
+					out[i].Identity.SourceIDs = appendDistinct(out[i].Identity.SourceIDs, *member.ID)
+				}
 				out[i].MergedCount++
 				merged = true
 				break

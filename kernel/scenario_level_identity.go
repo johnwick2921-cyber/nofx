@@ -233,8 +233,8 @@ func ScenarioIdentities(doc *PlanDoc) map[string]ScenarioIdentity {
 	return out
 }
 
-// EpisodeLevelID names only an EXACT primary reference actually named by this
-// plan. An unnamed raw member, unknown formation, or a changed map stays NULL.
+// EpisodeLevelID names an exact primary or an exactly recorded merged member.
+// Membership comes from the map's existing merge, never a later price guess.
 func EpisodeLevelID(l DetectedLevel, doc *PlanDoc) *string {
 	if doc == nil {
 		return nil
@@ -243,15 +243,26 @@ func EpisodeLevelID(l DetectedLevel, doc *PlanDoc) *string {
 	if own.ID == nil {
 		return nil
 	}
+	var found *string
 	for _, sc := range doc.Scenarios {
-		if sc.LevelID == nil || *sc.LevelID != *own.ID {
+		named, ok := LevelByID(sc.LevelID, doc.IdentityLevels)
+		if !ok {
 			continue
 		}
-		if _, ok := LevelByID(sc.LevelID, doc.IdentityLevels); ok {
-			return own.ID
+		match := *named.ID == *own.ID
+		for _, memberID := range named.SourceIDs {
+			if memberID == *own.ID {
+				match = true
+			}
+		}
+		if match {
+			if found != nil && *found != *named.ID {
+				return nil
+			}
+			found = named.ID
 		}
 	}
-	return nil
+	return found
 }
 
 // EpisodeScenarioByID does not choose between two scenarios naming one level.

@@ -227,3 +227,28 @@ func TestIdentityDuplicateScenarioNamesStayAmbiguous(t *testing.T) {
 		t.Fatal("picked a scenario arbitrarily")
 	}
 }
+
+func TestIdentityMergedMembersUseRecordedMembership(t *testing.T) {
+	now := time.Date(2026, 9, 10, 8, 36, 0, 0, CTLocation())
+	closeMs := now.Add(-time.Minute).UnixMilli()
+	a := DetectedLevel{Kind: KindORH, Price: 20000, Lo: 20000, Hi: 20000, Label: "OR-H", OriginDate: "2026-09-10", IdentitySymbol: "MNQ", FormationTF: "1m", FormedCloseMs: &closeMs}
+	b := a
+	b.Kind = KindPDH
+	b.Price = 20001
+	b.Lo = 20001
+	b.Hi = 20001
+	b.Label = "PDH"
+	cs := BuildMapCandidates([]ScoredLevel{{DetectedLevel: a, Score: 2}, {DetectedLevel: b, Score: 1}}, 20000, 10, MapCandidateOpts{})
+	if len(cs) != 1 || cs[0].ID == nil {
+		t.Fatal("fixture did not merge")
+	}
+	doc := &PlanDoc{Scenarios: []PlanScenario{{ID: "S1", LevelID: cs[0].ID}}}
+	StampAuthoredIdentity(doc, cs)
+	if got := EpisodeLevelID(b, doc); got == nil || *got != *cs[0].ID {
+		t.Fatal("known merged member lost the named primary ID")
+	}
+	b.FormedCloseMs = nil
+	if EpisodeLevelID(b, doc) != nil {
+		t.Fatal("missing formation was guessed by price")
+	}
+}

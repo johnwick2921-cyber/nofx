@@ -34,6 +34,7 @@ type PlanLevel struct {
 	FormedCloseMs *int64   `json:"formed_close_ms"`
 	LookbackBars  *int     `json:"lookback_bars"`
 	Names         []string `json:"names,omitempty"`
+	SourceIDs     []string `json:"source_ids,omitempty"` // exact merged members, captured by the existing merge
 	Price         float64  `json:"price"`
 	Label         string   `json:"label"`       // provenance chip: PDH, ONH, nPOC·Tue, RN, EQH…
 	Grade         string   `json:"grade"`       // A | B | C (MODEL-written)

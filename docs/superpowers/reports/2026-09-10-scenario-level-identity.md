@@ -411,8 +411,9 @@ files. No main-tree edit, deploy lock, live DB write or boot occurred.
   errors warn, and recording panics are contained.
 - `touch_outcomes.level_id` is the sole added episode column. Existing ordinal,
   k, delta, horizon, formation-open scan floor, watermark and proximity fields
-  retain their meanings. Exact primary references named by the plan receive the
-  ID; unnamed or changed references remain NULL. A candidate named by two
+  retain their meanings. Exact primary references and merged members recorded by the existing merge
+  receive the named primary ID; unnamed or changed references remain NULL.
+  Membership is stored as exact source IDs, never reconstructed by price. A candidate named by two
   scenarios remains ambiguous at the scenario join. A named row cannot read a
   different active plan version's scenario facts merely because both are S1.
 - Backfill population is **episode rows**, not inferred legacy scenario counts.
@@ -520,3 +521,26 @@ No account, order, execution or detector policy changes are part of this wave.
 [Implementation source freshness receipts](2026-09-10-scenario-level-identity-data/implementation-source-receipts.json)
 quote `git log -1` against the dev base for each existing touched file. Original
 running-revision evidence and its sample IDs remain in C1–C6 above.
+
+
+### W2 integration checkpoint
+
+**[A]** The first restored full Go suite passed at
+`aa145338cae425afdd09e09aa06e49726a4eaf6e`. Dev then acquired W2 through
+`de26d1e4867b2b1e356b7c90d7b93305060cff41`, so that run is not claimed as W2
+integration proof. Rebase retained W2's fade episode fields, production stamp,
+API data, chip, Guide and class 115. Two textual conflicts were resolved by
+retaining both lanes: `SessionPlanCard.tsx` props and the checklist tail. The
+identity lane did not author or modify `kernel/fade_permission.go` or the fade
+stamp. A subsequent merged-source suite and build are required below.
+
+The recorded formation TF now reads the existing `AISVPBarInterval` constant
+for the base series. Exact merge membership is captured as `source_ids` beside
+the primary identity; a merged member can attach to that named primary through
+those recorded IDs. No later proximity guess, merge width change or score
+change is involved. The legacy production-output golden still pins the output.
+
+**Test chronology boundary:** E1 parser and E5 OR pins were run red before their
+implementation. E2/E3/E4 have confirmed build-green mutation reds after the core
+was introduced, followed by restored green runs; this report does not represent
+those as pre-code baseline executions.
