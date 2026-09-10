@@ -204,3 +204,42 @@ green in isolation. The split-arm fixture is **green** at this head.
 ## ROLLBACK
 
 `mv nofx-bin nofx-bin.failed.<rev> && mv nofx-bin.old.<prev> nofx-bin && echo <prev> > deploy/RELEASE && kill -9 $(pgrep -x nofx-bin)`. The columns are additive and NULL; nothing reads them to act.
+
+---
+
+## F · CUTOVER + PROOF — booted 18:47:07 CDT, marker `4dc0fae1`
+
+`🔐 BOOT INTEGRITY OK — rev 4fc670aa4508 · expected 4fc670aa · goldens PASS`.
+Clean clone in a dir named `nofx`, **`vcs.modified=false`**. Five references +
+`/proc/exe` all `4fc670aa4508`. Leg 5 went in flight between gate and swap;
+waited out (1004s), re-read five-for-five, then the kill.
+
+**The line, verbatim:**
+
+```
+🚦 fade permission: LABEL ONLY (no refusal) · exclusions=[or_wide k=1.28[I:default:C5 p80/median]
+ib_held[I:continuous] beyond_map[I] t1_news[O:UNKNOWN-never-excludes] first_n=5[O:no-trade-band]]
+· today permitted=7 excluded=0 not-evaluated=0 · backfill recomputed=1296 unrecomputable=3844
+untouched=0 · coverage: on 2026-09-03 the label would have PERMITTED the filled arm (id 35, 09:02)
+— E3's null
+```
+
+| proof | evidence |
+|---|---|
+| backfill, table (via WAL) | permitted 912 + excluded 413 = 1325 · unrecomputable 3844 · untouched 0 |
+| first episodes under the new binary | ids 5148–5166, ASIA, stamped at their own open |
+| first `excluded` with measured values | ids 5144, 5160: `first_n {"measured":4,"threshold":5}` |
+| E4 live | episode 4840: `ib_held,t1_news` — both named; `t1_news` **fired** |
+| **D3 in production** | arm 150 (S2 SHORT @29123.5) went out at a level whose episodes 4840/4841 are `excluded`; all 13 arms today went out |
+| chip + strip | S1/S2 `fade: excluded — ib_held price 29091.00 held beyond IB 29099.50`; counter `permitted 11 / excluded 0 / not-evaluated 0` |
+
+**A correction against myself.** My first table read said recomputed=1014 and I
+chased a phantom "294 rows counted but not written". I had copied `data.db`
+without its 10 MB `-wal`; the backfill walks `opened_at ASC`, so today's rows sat
+in the WAL. Read through the WAL, every number reconciles. Class 110, different
+variable.
+
+**Owed:** the backfill's stamp omits `fade_measured` (live path fills it); the
+RULEBOOK §A sentence waits on PR #99.
+
+**Sha-pinned:** report at `de26d1e4`+marker `4dc0fae1`; size = `git ls-tree`.
