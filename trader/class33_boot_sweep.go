@@ -131,9 +131,8 @@ func BootSweepBootLine(swept, skippedUnplaced int, leg4Source string) string {
 		leg4Source, swept, skippedUnplaced)
 }
 
-// ledgerOpenOrders renders THIS trader's non-terminal ledger rows as the
-// working-order book for flat-gate leg 4. NT8 emits no working-order frame
-// (audit F12), so the ledger is the only truth — and every row says so.
+// ledgerOpenOrders renders THIS trader's non-terminal rows. Leg 4 separately
+// counts unplaced ARMED rows; placed/unconfirmed rows cross-check the broker.
 func (at *AutoTrader) ledgerOpenOrders(symbol string) ([]types.OpenOrder, error) {
 	if at.store == nil || at.store.ArmedOrders() == nil {
 		return nil, fmt.Errorf("armed_orders ledger unavailable")
@@ -170,7 +169,7 @@ func (at *AutoTrader) ledgerOpenOrders(symbol string) ([]types.OpenOrder, error)
 		out = append(out, types.OpenOrder{
 			OrderID: r.SignalID, Symbol: at.futuresSymbol(), Side: side, PositionSide: posSide,
 			Type: typ, Price: r.EntryPx, StopPrice: r.StopPx, Quantity: 1, Status: status,
-			Source: "ledger (no NT8 order frame — F12 open)",
+			Source: "armed_orders ledger (broker acceptance is a separate observation)",
 		})
 	}
 	return out, nil

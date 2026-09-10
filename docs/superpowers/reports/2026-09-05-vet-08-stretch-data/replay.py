@@ -16,7 +16,14 @@ Rules encoded (path:line cited in the report):
  - reaper reads the broker book (class 79 fix) -> no silence reaping
  - daily-limit leg: inert (strategy a5b7662e guardrails_enabled=false) ; bias-arm warning: warn-only, counted
 """
-import csv, json, sys, bisect, math
+import csv, json, sys, bisect, math, pathlib
+repo=next(p for p in pathlib.Path(__file__).resolve().parents if (p/'go.mod').exists())
+sys.path.insert(0,str(repo/'scripts'))
+from arm_state import is_terminal_arm_state
+# Replay-only synthetic states are not ledger lifecycle values.
+def replay_arm_active(state):
+    return not is_terminal_arm_state(state) and state != 'none' and state != 'refused'
+
 sys.path.insert(0,'/home/hoang/nofx-analysis/vet-08-0905')
 from common import *
 TICK=0.25; BAND=25.0; RR_MIN=2.0; MULT=1.5; ANCHOR_MAX=3.0; CLR=2*TICK; NOISE_ATR=0.2; OFFSET=2*TICK
@@ -178,12 +185,12 @@ def run(mode):
                     positions.append(p); open_pos=None
         price=last_close(t); atr=A.at(t)
         for c in cands:
-            if c['state'] in ('filled','cancelled','refused'): continue
+            if (is_terminal_arm_state(c['state']) or c['state']=='refused'): continue
             if t<c['born'] or t>=c['end']:
-                if t>=c['end'] and c['state'] in('armed','working'): c['state']='cancelled'; c['reason']='superseded/session end'
+                if t>=c['end'] and replay_arm_active(c['state']): c['state']='cancelled'; c['reason']='superseded/session end'
                 continue
             if in_gap(t,c['gaps']):
-                if c['state'] in('armed','working'): c['state']='cancelled'; c['reason']='plan dormant'
+                if replay_arm_active(c['state']): c['state']='cancelled'; c['reason']='plan dormant'
                 continue
             if price is None or atr is None: continue
             lv=levels.get((c['td'],c['sess'],c['v']),[])
@@ -232,7 +239,7 @@ def run(mode):
                         c['state']='filled'; c['filled_at']=ms; c['fill_px']=fill
                         open_pos=dict(c); open_pos['filled_at']=ms
                         for o2 in cands:
-                            if o2 is not c and o2['state'] in('armed','working'): o2['state']='cancelled'; o2['reason']='one_open_position: other arm filled'
+                            if o2 is not c and replay_arm_active(o2['state']): o2['state']='cancelled'; o2['reason']='one_open_position: other arm filled'
         t+=120000
     if open_pos:
         open_pos['exit_at']=None; open_pos['exit_reason']='OPEN at end'; open_pos['pts']=0; positions.append(open_pos)

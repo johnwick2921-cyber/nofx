@@ -236,7 +236,7 @@ func (at *AutoTrader) cancelOtherArmsInPlan(ledger *store.ArmedOrderStore, rows 
 		if rr.ID == placed.ID {
 			continue
 		}
-		if isTerminalArmState(rr.State) {
+		if store.IsTerminalArmState(rr.State) {
 			continue
 		}
 		// A ROW THAT CARRIES A SIGNAL ID IS AT THE BROKER, and it goes to
@@ -252,7 +252,7 @@ func (at *AutoTrader) cancelOtherArmsInPlan(ledger *store.ArmedOrderStore, rows 
 				// D4 (2026-09-07) — THE SAME FILLED-ARM GUARD AS THE SEVEN IN
 				// armed_executor.go. This sender was missed by the 09-06 wave:
 				// each site was reviewed on its own, and this one sends the
-				// identical frame. isTerminalArmState above already skips a
+				// identical frame. store.IsTerminalArmState above already skips a
 				// row the LEDGER calls filled — but the ledger is a memory, and
 				// at 23:37:02 it was a minute out of date. The book decides.
 				if v := at.cancelSafetyFor(rr, now); !v.Allow {
@@ -279,13 +279,4 @@ func (at *AutoTrader) cancelOtherArmsInPlan(ledger *store.ArmedOrderStore, rows 
 		at.logWarnf("✕ armed %s leg %d cancelled — %s reached the wire (one live entry per plan)",
 			rr.Scenario, rr.LegIndex+1, placed.Scenario)
 	}
-}
-
-// isTerminalArmState — a row already finished is left alone.
-func isTerminalArmState(s string) bool {
-	switch strings.ToLower(strings.TrimSpace(s)) {
-	case "filled", "cancelled", "canceled", "rejected", "expired", "superseded", "shadowed":
-		return true
-	}
-	return false
 }

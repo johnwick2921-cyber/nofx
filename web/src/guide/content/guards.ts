@@ -30,7 +30,7 @@ export const guards: GuideSection = {
     },
     {
       kind: 'p',
-      text: 'The AddOn now sends its working-order book every 30 seconds and immediately whenever an order changes state, and that is what the leg reads. Our ledger becomes the cross-check: if the two disagree the leg FAILS and shows you both counts and both lists rather than picking the one that would let the cutover proceed. A book older than 60 seconds is refused as stale — a book we have not heard about is not a flat book. Until you reload the AddOn in NinjaTrader the leg still reads the ledger, and it says so in its own source line every time; the rule is never a SILENT fallback, not never a fallback.',
+      text: 'The AddOn sends its working-order book every 30 seconds and whenever an order changes state. Leg 4 compares that book with placed ledger orders. An armed row with no signal id is only an authorization: it appears on a separate informational line and does not fail the gate. A placement awaiting a broker receipt still counts as working/unconfirmed and blocks cutover, even if the book is empty. Working orders at either source, or disagreement between them, fail the leg. Terminal rows are excluded by one shared classifier, also used by audit queries. A book older than 60 seconds is refused as stale. Before the first AddOn snapshot, the existing explicitly labelled ledger fallback remains; it is not broker proof.',
     },
     { kind: 'h', text: 'Overriding the gate with a position open' },
     {

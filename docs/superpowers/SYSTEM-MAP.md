@@ -410,3 +410,9 @@ The card's `ScenarioEconomics` block and desk SCENARIOS line display obstacle pr
 ### Stage A archive startup repair
 
 `researchsnapshot.Open` and `OpenReadOnly` resolve filesystem paths with `filepath.Abs` before constructing the escaped SQLite file URI. The production default `data/data.db.research.db` must resolve relative to the service working directory, not serialize as a URI authority. The startup pin calls `Start` and `CurrentBootLineAt`, verifies the actual archive schema and persisted row count, and reads the same file through the relative export opener. Absolute-path-only fixtures missed the deployed failure. A failed startup still WARNs and prints schema=UNKNOWN; no schema value is fabricated. The 18:11:54 CT boot of 6f677b55 proved scenario-economics live but Stage A unavailable.
+
+### Arm state and cutover order classification
+
+`store.IsTerminalArmState` owns the arm lifecycle classification; `TerminalArmStateSQL` and its negation are generated from the same table. Store queries, the pre-boot selection, arm readers and the boot census use it. Read-only scripts obtain the SQL through `go run ./cmd/arm-state-sql` or `scripts/arm_state.py`; they do not retype state lists. Unknown/NULL states remain non-terminal.
+
+`Leg4FromBrokerAt` splits authorized `armed` rows with no signal id from placed/unconfirmed rows. The former are reported separately (`armed_unplaced`) and do not fail the leg. `place_pending` remains working/unconfirmed; broker-only orders and missing broker placements fail. The received broker snapshot still supplies order truth. The class-33 sweep does not gain scenario-validity adoption in this wave; it still cancels selected prior-process placed rows. The boot's `arm placement census` reads the same classification and prints UNKNOWN on a failed ledger read.

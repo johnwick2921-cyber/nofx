@@ -110,12 +110,10 @@ func adjudicateArmCancelWith(ledgerState, signalID string, book []nt.NT8Order, h
 		return armCancelVerdict{true, "the broker reports FLAT — no position exists for these orders to be protecting, and a resting orphan stop can fire later and open a naked one (class 27)"}
 	}
 	// THE LEDGER'S OWN WORD, first and cheapest. A filled arm is never cancelled.
-	switch strings.ToLower(strings.TrimSpace(ledgerState)) {
-	case store.StateFilled:
+	if strings.EqualFold(strings.TrimSpace(ledgerState), store.StateFilled) {
 		return armCancelVerdict{false, "the arm is FILLED — its entry is a position, and the only orders left under this signal are its protections"}
-	case store.StateArmed, store.StatePlacePending, store.StateWorking:
-		// keep going: the ledger thinks it is live, and the book decides.
-	default:
+	}
+	if store.IsTerminalArmState(ledgerState) || !store.IsKnownArmState(ledgerState) || strings.EqualFold(strings.TrimSpace(ledgerState), store.StateCancelPending) {
 		return armCancelVerdict{false, "the arm is " + ledgerState + " — not a live order"}
 	}
 	// THE BOOK DECIDES. The ledger is a memory; at 23:37:02 it was a minute out
