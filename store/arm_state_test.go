@@ -32,7 +32,7 @@ func TestArmStateSQLAndGoAgreeAtStoreCallSites(t *testing.T) {
 	ledger := NewArmedOrderStore(db)
 	states := append(ArmStateNames(), "", "future_state")
 	for _, raw := range states {
-		for _, state := range []string{raw, "\t\n\u00a0" + strings.ToUpper(raw) + "\u2003\r"} {
+		for _, state := range []string{raw, "\t\n\u00a0" + strings.ToUpper(raw) + "\u2003\r", strings.ReplaceAll(raw, "i", "İ")} {
 			row := &ArmedOrderDB{TraderID: "scope", PlanID: "p", Scenario: "fixture", State: state, BootID: "previous"}
 			if err := db.Create(row).Error; err != nil {
 				t.Fatal(err)

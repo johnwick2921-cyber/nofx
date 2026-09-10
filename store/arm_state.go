@@ -75,7 +75,18 @@ func buildTerminalArmSQL() string {
 			spaces = append(spaces, strconv.Itoa(int(r)))
 		}
 	}
-	return "lower(trim(coalesce(state, ''), char(" + strings.Join(spaces, ",") + "))) IN (" + strings.Join(quoted, ",") + ")"
+	// SQLite LOWER is ASCII-only. Derive the non-ASCII characters Go maps
+	// into ASCII (e.g. dotted capital I), so they cannot disagree on a state.
+	expr := "coalesce(state, '')"
+	for _, span := range unicode.CaseRanges {
+		for r := span.Lo; r <= span.Hi; r++ {
+			lower := unicode.ToLower(rune(r))
+			if r > unicode.MaxASCII && lower >= 'a' && lower <= 'z' {
+				expr = fmt.Sprintf("replace(%s, char(%d), '%c')", expr, r, lower)
+			}
+		}
+	}
+	return "lower(trim(" + expr + ", char(" + strings.Join(spaces, ",") + "))) IN (" + strings.Join(quoted, ",") + ")"
 }
 
 // TerminalArmStateSQL is a predicate for the armed_orders state column.

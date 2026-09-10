@@ -54,6 +54,7 @@ func armStateListViolations(path string, data []byte) []string {
 	stateName := func(e ast.Expr) string {
 		if v, ok := e.(*ast.BasicLit); ok && v.Kind == token.STRING {
 			s, _ := strconv.Unquote(v.Value)
+			s = strings.ToLower(strings.TrimSpace(s))
 			if states[s] {
 				return s
 			}
@@ -117,11 +118,18 @@ func armStateListViolations(path string, data []byte) []string {
 				es := []ast.Expr{}
 				ast.Inspect(v, func(n ast.Node) bool {
 					if b, ok := n.(*ast.BinaryExpr); ok && (b.Op == token.EQL || b.Op == token.NEQ) {
-						if sel, ok := b.X.(*ast.SelectorExpr); ok && sel.Sel.Name == "State" {
-							es = append(es, b.Y)
+						// Broker Status aliases are not an armed_orders.State predicate.
+						if sel, ok := b.X.(*ast.SelectorExpr); ok && sel.Sel.Name == "Status" {
+							return true
 						}
-						if sel, ok := b.Y.(*ast.SelectorExpr); ok && sel.Sel.Name == "State" {
+						if sel, ok := b.Y.(*ast.SelectorExpr); ok && sel.Sel.Name == "Status" {
+							return true
+						}
+						if stateName(b.X) != "" {
 							es = append(es, b.X)
+						}
+						if stateName(b.Y) != "" {
+							es = append(es, b.Y)
 						}
 					}
 					return true
@@ -174,6 +182,14 @@ func TestArmStateGrepRejectsRetypedListAnywhere(t *testing.T) {
 		}
 		if got := armStateListViolations(path, []byte(input)); len(got) == 0 {
 			t.Fatalf("retyped list escaped at %s: %s", path, input)
+		}
+	}
+	for _, source := range []string{
+		"package stray\nfunc copied(s string) bool { return s == " + strconv.Quote(names[0]) + " || s == " + strconv.Quote(names[1]) + " }",
+		strings.ReplaceAll(goSource, strconv.Quote(names[0]), strconv.Quote(strings.ToUpper(names[0]))),
+	} {
+		if got := armStateListViolations("elsewhere/copied.go", []byte(source)); len(got) == 0 {
+			t.Fatalf("copied classifier escaped: %s", source)
 		}
 	}
 }

@@ -37,3 +37,9 @@ Basis `git log -1` outputs at acceptance: one_contract.go `7797b36f 2026-09-07T1
 Main was already owned by the combined-boot lane, with dirty RELEASE/Guide deployment metadata. This task used an isolated locked worktree and did not alter or take over that main tree. Merge/build/boot claims require fresh evidence after that lane releases the lock.
 
 [Per-file source freshness](2026-09-09-arm-state-predicate-data/source-freshness.json) records the last committed change for every modified existing file before this implementation commit.
+
+## Validation follow-up
+
+[A] At implementation commit **715f361a3be80914a31672f11c8264c7f6f08524**, full `go test ./...` PASS; frontend **58 files / 414 tests PASS**; TypeScript PASS; Python helper smoke PASS. The pre-commit hook initially could not spawn ESLint because the new worktree lacked installed dependencies; linking the existing ignored web/node_modules let the unchanged hook pass. No hook was bypassed.
+
+[A] Review then found a Go/SQLite Unicode casing discrepancy: `IsTerminalArmState("FİLLED")=true`, but SQLite LOWER alone returned false. The new store-reader variant reproduced it as `SQL/Go disagree for "expİred"` ([RED](2026-09-09-arm-state-predicate-data/unicode-red.txt)). The SQL generator now derives non-ASCII-to-ASCII replacements from Go's Unicode case ranges, as well as its Unicode whitespace set. The parity pin passes after correction. The Go classifier is unchanged. Final integrated-head Go validation follows this correction.

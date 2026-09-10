@@ -67,9 +67,6 @@ func TestArmStateReadersAgreeOnFinishedRows(t *testing.T) {
 		if !store.IsTerminalArmState(state) {
 			continue
 		}
-		if !store.IsTerminalArmState(state) {
-			t.Fatalf("reference predicate unexpectedly live: %q", state)
-		}
 		if armedActually(123, state) {
 			t.Errorf("terminal state %q must not be reported armed", state)
 		}
