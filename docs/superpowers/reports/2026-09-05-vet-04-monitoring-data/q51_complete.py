@@ -2,6 +2,9 @@
 import sqlite3,json,math,datetime,pathlib,zoneinfo,hashlib,subprocess
 ROOT=pathlib.Path('/home/hoang/nofx-analysis/vet-04-complete-0905')
 ct=zoneinfo.ZoneInfo('America/Chicago')
+# Resolve the current classifier; do not retype the ledger lifecycle here.
+repo=next(p for p in pathlib.Path(__file__).resolve().parents if (p/'go.mod').exists())
+nonterminal_arm_sql=subprocess.check_output(['go','run','./cmd/arm-state-sql'],cwd=repo,text=True).strip()
 def ms(s): return int(datetime.datetime.fromisoformat(s).replace(tzinfo=ct).timestamp()*1000)
 def wilson(k,n):
  if not n:return None
@@ -35,7 +38,7 @@ o['excursions']=q('excursions','SELECT COUNT(*) n FROM trade_excursions')
 o['eligible_mae_mfe_coverage']={'n':len(e),'covered':sum(r['mae'] is not None and r['mfe'] is not None for r in e)}
 q('arm35','SELECT id,signal_id,side,entry_px,stop_px,target_px,fill_price,state,created_at,updated_at FROM armed_orders WHERE id=35')
 q('open_positions','SELECT id,symbol,side,quantity,entry_price,entry_time FROM trader_positions WHERE status=\'OPEN\'')
-q('current_pending_arms',"SELECT id,signal_id,scenario,side,entry_px,stop_px,target_px,state,created_at,updated_at FROM armed_orders WHERE state IN ('armed','working') ORDER BY id")
+q('current_pending_arms',"SELECT id,signal_id,scenario,side,entry_px,stop_px,target_px,state,created_at,updated_at FROM armed_orders WHERE "+nonterminal_arm_sql+" ORDER BY id")
 q('digest_receipts','SELECT id,trade_date,session,kind,created_at,text FROM day_plan_digests WHERE id IN (55,56,59,60,63,64)')
 q('gap_log_ids','SELECT id,ts_utc,message FROM log_events WHERE id IN (25754,25755)')
 q('outage_alerts','SELECT id,level,kind,created_at,acked,dismissed FROM day_plan_alerts WHERE id IN (629,654)')

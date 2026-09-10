@@ -2398,6 +2398,24 @@ curl -s -o /dev/null -w "HTTP %{http_code}  %{size_download} bytes\n" \
    malformed reaper message as REAL-1 — a checker that passes the message which
    caused the incident is decoration; mutation-tested by hollowing the regex).
 
+   **AND A PEER'S STATED PLAN IS NOT PROVENANCE EITHER (added 2026-09-10).**
+   PROVENANCE says provenance comes from the branch, the worktree and the
+   timestamp, never from the author field. The same applies to an INTENTION. A
+   lane wrote "that work is owned by lane <X>" into class 99's Law on the
+   strength of a message in which X had said *"I am folding it into my next
+   wave's Section C."* X never built it; by then it was a day old on
+   `fix/arm-state-predicate`, claimed by a different lane — and one
+   `git ls-remote --heads origin | grep arm` would have said so.
+
+   Two reasons this is worse than an ordinary credit error. First, an
+   **attribution is a POINTER**: it tells the next reader where to go and whom to
+   ask, so a wrong one costs everybody who follows it, not just the person
+   miscredited. Second, a plan is the one input that looks authoritative and is
+   guaranteed stale — the lane that stated it may have been reassigned, ended, or
+   beaten to it, which is exactly what happened here. **Before naming an owner in
+   a durable document, resolve it against `git ls-remote --heads origin` and the
+   claim commit, not against what someone told you they were going to do.**
+
    **QUOTE THE BRANCH, NEVER THE CLAIM SHA** (owner ruling 2026-09-04). A claim
    commit does NOT survive a routine `git pull --rebase origin dev` — the rebase
    replays it onto the new base and it comes back with a different sha, so the
@@ -2666,6 +2684,23 @@ only ABOVE the first `## CLASS` heading (excludes class-body prose), and require
 the title to end `.**` (excludes the protocol steps, which end `:**`). Verified
 2026-09-10: reports exactly 75/76/77/92/93 and `highest: 107`, and each of those
 five was confirmed by eye to be a genuine two-format collision.
+
+**AND THE CENSUS IS ONLY AS FRESH AS THE CHECKOUT YOU RUN IT IN.** Class 93's
+own text records that its number was taken because "highest occupied on dev was
+92 by a two-format `uniq -c` census". `## CLASS 93` had been on dev since
+2026-09-08 16:53; the PART 1 entry was written 2026-09-09 18:36, a day later. The
+appendix half of the command handles `## CLASS NN` correctly and WOULD have
+found it — so the census did not fail on its pattern, it failed on its BASE. A
+census run in a worktree cut from an older dev reports a free number that dev
+already holds, and it prints a confident maximum while doing so. This is the
+SPEC-FRESHNESS LAW (class 73) applied to the checklist itself. **Fetch, then
+census at your actual merge point** — not at your branch base, and not from
+memory of a run you did earlier in the wave.
+
+(Recorded because a peer read this collision as more evidence for the `^[0-9]{2}`
+pattern bug. It is not: that bug only ever affected the PART 1 half, and the
+number missed here lived in the appendix half. Two separate defects in one tool,
+and the fix for the first does nothing for the second.)
 
 **Read the duplicate line as a DIFF, not as a pass/fail.** Five collisions are
 pre-existing and permanent (below). A clean run is not "no duplicates" — it is
@@ -3229,6 +3264,13 @@ expansion recorded as "no change" is indistinguishable from a scope violation.
 
 **Law:** selection, ordering and presentation may change without touching a score. Overlapping references merge for the card, the model's table and the entry shortlist; the scored confluence term is NOT recomputed, because whether confluence is worth anything is unmeasured — that comparison is experiment E4 and a wave may not pre-empt it. A level is an ENTRY candidate only with an opposing reference at ≥ the resolved minimum (default: the stop floor), and that refusal governs candidacy only, never a scenario already authored. The entry shortlist ranks by reachability with the score carried and shown; every such rule is labelled `[I]` on the boot line, in the code and in the Guide until measured. Projections beyond the mapped range are TARGETS and OBSTACLES only, carry the word `projection` and their method, and carry no detector grade. **Prior-week anchors come from the DAILY bar source — never from a relaxed ring guard, which would compute a "prior-week high" from a day and a half.** Exclusion is not invalidation: see class 93, which this wave does not restate. A boot line may not print a per-read count before any read has happened, and may not print one trader's resolved value as if it were global. Dispatch 103 report: `reports/2026-09-09-candidates-not-entitlements.md`.
 
+## Arm-state implementation of classes 99 and 107
+
+A hand-typed lifecycle list is a second classifier. `store.IsTerminalArmState` now owns the terminal set; `TerminalArmStateSQL` is derived from that classifier, and `NonTerminalArmStateSQL` negates it. All ledger liveness readers use the Go predicate or its SQL. Watches/audits use `cmd/arm-state-sql` or `scripts/arm_state.py`. Unknown and NULL states are non-terminal; they cannot disappear from exposure reads. `TestArmStateNoRetypedLists` scans Go, Python, shell and SQL readers, including executable audit scripts and untracked source; `TestArmStateGrepRejectsRetypedListAnywhere` proves a copied list fails outside the original files. Historical captured receipts and broker-state classifiers are not arm-lifecycle readers.
+
+Leg 4 compares broker orders against placed/unconfirmed non-terminal ledger rows. An `armed` row with no signal id is an authorization, counted separately on the informational `armed_unplaced` line. It never fails the leg. `place_pending` is working/unconfirmed; a missing signal on a pending/working/unknown row does not make it informational. Pins: two unplaced authorizations + empty broker PASS; pending placement + empty broker FAIL (unconfirmed); broker order + no ledger placement FAIL; copied list FAIL. Existing broker freshness and explicitly labelled pre-first-snapshot fallback are unchanged.
+
+The class-33 boot sweep still has no scenario-validity adoption policy. Its state selection uses `SweepableArmStateSQL`, derived from non-terminal MINUS cancel_pending. The exclusion is deliberate: the sweep’s raw SetState must never bypass ConfirmCancel and its persisted snapshot id; confirmPendingCancels owns the excluded rows. The production sweep-to-settlement pin proves both halves; it still skips empty signal ids and cancels selected prior-process placed rows. Adopt-or-cancel by scenario validity remains a separate wave.
 ## CLASS 99 — A GATE QUERY THAT RETYPES THE TERMINAL SET (born 2026-09-09, dispatch 103 W3)
 
 **Root cause:** the pre-cutover flat check was written as a hand-typed exclusion list — `state NOT IN ('filled','cancelled','canceled','expired','done')` — while the code's own predicate `isTerminalArmState` (`trader/one_contract.go:285-291`) returns true for **seven** states: `filled · cancelled · canceled · rejected · expired · superseded · shadowed`. The query matched five of the seven and invented a sixth (`done`) that the code never sets. On 2026-09-09 it counted **10** rows as resting arms blocking a cutover; the true count was **0** — every row was `superseded`, several of them days old. The wrong number was reported to the owner as the reason to hold.
@@ -3257,7 +3299,7 @@ The table has only ever PERSISTED three states — `cancelled` 77, `filled` 22, 
 
 **Law:** a gate query reads the code's terminal set; it never retypes it. **A negative list of terminal states that omits one OVER-reports live rows and fails SAFE; a positive list of live states that omits one UNDER-reports and fails OPEN — the gate calls the desk flat while a real order rests at the broker.** A hand-typed list is therefore not merely wrong, it is wrong in a direction that depends on which way you happened to type it, and that is the argument for reading the code's set rather than for typing a better list.
 
-The structural remedy is to export ONE SQL fragment derived from the predicate, so the switch and every gate query have a single source. **Read class 107 before building it.** As stated, this paragraph is dangerous on its own: a lane that centralised every arm-state list onto a single `NonTerminalArmStateSQL()` pointed `store/boot_sweep.go` at a set that INCLUDES `cancel_pending`, and the sweep's raw `cancelled` write then re-cancelled rows whose cancels were sent but never confirmed. The three-state list it replaced was a deliberate, undocumented exception. The remedy is a single **SOURCE**, never a single **PREDICATE** — one name per intent (`SweepableArmStateSQL()` alongside `NonTerminalArmStateSQL()`), each carrying the comment that says why its set differs. That work is owned by lane nofx-80 and is **not on dev as of `a4c72ff7`** (`TerminalArmStates|terminalArmStatesSQL|ArmTerminalSQL` → zero hits). A caveat for whoever builds it, which is class 102 in this file seen from another angle: a `[]string` sitting *beside* a hardcoded `switch` does not close this class, it moves it — two hand-typed lists in one file diverge as readily as one in Go and one in SQL. It closes only when the switch ranges over the same slice the SQL is built from. Until then the fallback applies: the query quotes the predicate's file:line beside the literal and a test pins them equal, so a state added to the Go switch fails the test instead of silently widening the gate. The same rule covers any "is it finished / is it safe" list: order states, position states, plan lifecycle states. Related: class 53 (parity tests exercise production CALL SITES — a test that builds both sides' inputs proves only self-consistency). A worked example — the wrong query annotated in place beside the correct one — is preserved at `reports/2026-09-04-two-day-audit.md` §0. Dispatch 103 report: `reports/2026-09-09-candidates-not-entitlements.md`.
+The structural remedy is to export ONE SQL fragment derived from the predicate, so the switch and every gate query have a single source. **Read class 107 before building it.** As stated, this paragraph is dangerous on its own: a lane that centralised every arm-state list onto a single `NonTerminalArmStateSQL()` pointed `store/boot_sweep.go` at a set that INCLUDES `cancel_pending`, and the sweep's raw `cancelled` write then re-cancelled rows whose cancels were sent but never confirmed. The three-state list it replaced was a deliberate, undocumented exception. The remedy is a single **SOURCE**, never a single **PREDICATE** — one name per intent (`SweepableArmStateSQL()` alongside `NonTerminalArmStateSQL()`), each carrying the comment that says why its set differs. **Attribution corrected 2026-09-10:** that work was NOT built by lane nofx-80. It exists, largely complete, on the unmerged branch `origin/fix/arm-state-predicate` @`45d677f5`, claimed by `arm-state-0b955fbc/root[unlisted]` on 2026-09-09 — a lane that has since ended. It exports `armStates` / `TerminalArmStateSQL()` / `NonTerminalArmStateSQL()` and retires every hand-typed list, and **it carries the class-107 regression described above**. Still not on dev (`origin/dev` keeps the safe three-state list at `store/boot_sweep.go:47`), and it must not merge until the sweep reads a named predicate. Finding, A/B and the owner-ruled fix: `reports/2026-09-10-boot-sweep-cancel-pending.md`. A caveat for whoever builds it, which is class 102 in this file seen from another angle: a `[]string` sitting *beside* a hardcoded `switch` does not close this class, it moves it — two hand-typed lists in one file diverge as readily as one in Go and one in SQL. It closes only when the switch ranges over the same slice the SQL is built from. Until then the fallback applies: the query quotes the predicate's file:line beside the literal and a test pins them equal, so a state added to the Go switch fails the test instead of silently widening the gate. The same rule covers any "is it finished / is it safe" list: order states, position states, plan lifecycle states. Related: class 53 (parity tests exercise production CALL SITES — a test that builds both sides' inputs proves only self-consistency). A worked example — the wrong query annotated in place beside the correct one — is preserved at `reports/2026-09-04-two-day-audit.md` §0. Dispatch 103 report: `reports/2026-09-09-candidates-not-entitlements.md`.
 
 ## CLASS 100 — A BRANCH ON A STALE BASE IS A DELETION PATCH (born 2026-09-09, dispatch 103 W3)
 
@@ -3663,8 +3705,14 @@ previous wave had closed. A/B on one seeded row: dev `swept=0`, row stays
 4. Does a comment near the site disagree with the code? Do not assume the code is
    wrong. Find out which one is load-bearing BEFORE aligning them; here the
    comment was wrong and the SQL was right.
-5. After unifying, does any test fail? If none does, that is not reassurance —
-   ask whether any test ever exercised the differing elements at all.
+5. After unifying, does any test fail? If none does, that is not reassurance.
+   **A test suite cannot distinguish "this path is correct" from "this path is
+   never taken", and centralisation is exactly the kind of change that touches
+   many paths while being exercised on few.** Count the production rows that
+   ever went down the differing branch before you trust a green run: here it was
+   5 cancel requests in the entire history, max 1 attempt against a cap of 5, and
+   `ConfirmCancel` had never once fired. **A regression on a cold path ships
+   green.** (Generalisation owed to the author of class 99.)
 
 **Law:** **a shared predicate needs a NAME PER INTENT, not one name for all
 callers.** Where two sites legitimately select different sets, derive BOTH from

@@ -57,7 +57,7 @@ func TestReauthorizationDoesNotSpawnARowPerCycle(t *testing.T) {
 	}
 	live := 0
 	for _, r := range rows {
-		if r.State == "armed" || r.State == "working" {
+		if !IsTerminalArmState(r.State) {
 			live++
 		}
 	}

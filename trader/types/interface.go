@@ -115,9 +115,12 @@ type OpenOrder struct {
 	StopPrice    float64 `json:"stop_price"`    // Trigger price (for stop orders)
 	Quantity     float64 `json:"quantity"`
 	Status       string  `json:"status"` // NEW
+	// ArmState is the raw ledger state when Source is armed_orders. Gate
+	// classification must not depend on the human-readable Status label.
+	ArmState string `json:"arm_state,omitempty"`
 	// Source (CLASS 33, 2026-09-02) names WHERE this row came from so no
-	// reader mistakes it for broker truth. The NT8 path has no working-order
-	// frame (audit F12), so its only source is the armed_orders ledger.
+	// reader mistakes a ledger row for broker truth. The NT8 gate reads the
+	// order_snapshot frame separately to cross-check the armed_orders ledger.
 	// Empty on every exchange that answers from the venue itself.
 	Source string `json:"source,omitempty"`
 }

@@ -184,7 +184,12 @@ func (s *Store) WaveARecordBootLine(armed bool, ran WaveACounts, backup string) 
 	// its order may still be at the broker — so it counts as LIVE here. Without
 	// this it would appear in no bucket at all and the census would read 0 live
 	// while an order rested.
-	live := ac[StateArmed] + ac[StatePlacePending] + ac[StateWorking] + ac[StateCancelPending]
+	live := int64(0)
+	for armState, count := range ac {
+		if !IsTerminalArmState(armState) {
+			live += count
+		}
+	}
 	return fmt.Sprintf(
 		"record: touches=%d (valid=%d no_formation=%d invalid:pre_formation=%d invalid:dup=%d legacy=%d unclassified=%d) · excursions=%d %s · exit-cause=broker · accepted-risk rows=%d (with broker stop=%d) · mae/mfe 0→NULL=%d/%d · arms live=%d (superseded=%d cancelled=%d filled=%d) · migration %s",
 		total, get(ValidityValid), get(ValidityNoFormation), get(ValidityPreFormation),
@@ -192,5 +197,5 @@ func (s *Store) WaveARecordBootLine(armed bool, ran WaveACounts, backup string) 
 		exTotal, ex, ar.Count(), ar.WithAcceptedStop(),
 		ran.MAEZeroed, ran.MFEZeroed,
 		live, ac["superseded"], ac["cancelled"], ac["filled"],
-		state)
+		state) + "\n" + s.ArmedOrders().PlacementCensusLine()
 }

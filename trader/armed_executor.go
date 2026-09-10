@@ -404,7 +404,7 @@ func (at *AutoTrader) maybeManageArmedOrdersAt(snap map[string]kernel.StructureS
 			if rows, lerr := ledger.ListNonTerminal(at.id); lerr == nil {
 				for _, rr := range rows {
 					if rr.TraderID == at.id && rr.PlanID == plan.PlanID && rr.Scenario == sc.ID &&
-						(rr.State == "working" || rr.State == store.StatePlacePending || rr.State == "armed") {
+						(!store.IsTerminalArmState(rr.State) && rr.State != store.StateCancelPending) {
 						if nt := at.armedTrader(); nt != nil && rr.SignalID != "" {
 							// A SEND IS NOT A SETTLEMENT. The row moves to
 							// cancel_pending and holds its slot until a fresh
@@ -514,7 +514,7 @@ func (at *AutoTrader) maybeManageArmedOrdersAt(snap map[string]kernel.StructureS
 				if rows, lerr := ledger.ListNonTerminal(at.id); lerr == nil {
 					for _, r := range rows {
 						if r.TraderID == at.id && r.PlanID == plan.PlanID && r.Scenario == sc.ID &&
-							(r.State == "working" || r.State == store.StatePlacePending) && r.SignalID != "" {
+							(!store.IsTerminalArmState(r.State) && r.State != store.StateArmed && r.State != store.StateCancelPending) && r.SignalID != "" {
 							if nt := at.armedTrader(); nt != nil {
 								if v := at.cancelSafetyFor(r, now); !v.Allow {
 									at.logWarnf("🛟 armed cancel REFUSED (gate changed): %s %s signal=%s — %s", plan.Session, sc.ID, shortID(r.SignalID), v.Why)
@@ -562,7 +562,7 @@ func (at *AutoTrader) maybeManageArmedOrdersAt(snap map[string]kernel.StructureS
 				if rows, lerr := ledger.ListNonTerminal(at.id); lerr == nil {
 					for _, rr := range rows {
 						if rr.TraderID == at.id && rr.PlanID == plan.PlanID && rr.Scenario == sc.ID &&
-							rr.LegIndex == li && (rr.State == "working" || rr.State == store.StatePlacePending || rr.State == "armed") && rr.SignalID != "" {
+							rr.LegIndex == li && (!store.IsTerminalArmState(rr.State) && rr.State != store.StateCancelPending) && rr.SignalID != "" {
 							if nt := at.armedTrader(); nt != nil {
 								// FIX 2 + 3 (2026-09-07) — A CANCEL TARGETS THE
 								// ENTRY. NT8 cancels by SIGNAL ID, so cancelling
@@ -889,7 +889,7 @@ func splitSiblingCancelDecision(pair []store.ArmedOrderDB, closed []store.Trader
 		return nil
 	}
 	for _, leg := range pair {
-		if leg.State == "armed" || leg.State == store.StatePlacePending || leg.State == "working" {
+		if !store.IsTerminalArmState(leg.State) && leg.State != store.StateCancelPending {
 			out = append(out, leg)
 		}
 	}
@@ -2408,9 +2408,5 @@ func armedActually(id int64, state string) bool {
 	if id == 0 {
 		return false // the upsert declined; nothing was armed
 	}
-	switch strings.ToLower(strings.TrimSpace(state)) {
-	case "filled", "cancelled", "expired":
-		return false
-	}
-	return true
+	return !store.IsTerminalArmState(state)
 }
