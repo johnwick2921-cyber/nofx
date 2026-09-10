@@ -98,6 +98,21 @@ type TouchOutcomeRow struct {
 	AttainableEntry      *float64
 	AttainableEntryBasis *string
 
+	// ── W2 FADE PERMISSION ──────────────────────────────────────────────────
+	// FIXED AT THE EPISODE'S OPEN and never rewritten: E3 compares episodes BY
+	// this value, so a permission that drifted with the day would corrupt the
+	// comparison while leaving the row looking populated.
+	//
+	// *bool, not bool, for the reason the whole block above is pointers: NULL
+	// means NOT EVALUATED, which is a different fact from "evaluated and
+	// permitted". A plain bool would render an unevaluated episode as
+	// excluded=false, i.e. permitted, which is the plausible zero A24 forbids —
+	// and it would do it on every historical row at once.
+	FadePermitted   *bool `gorm:"index"`
+	FadeExclusions  *string
+	FadeMeasured    *string // JSON: exclusion -> {measured, threshold, n}
+	FadeEvaluatedMs *int64
+
 	// The terms AT THE MOMENT they became executable. Captured FORWARD, never
 	// reconstructed: armed_orders is a MUTATED STATE ROW whose entry/stop/target
 	// are updated in place, so a historical row's terms are unrecoverable and
