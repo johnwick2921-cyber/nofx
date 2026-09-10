@@ -2639,10 +2639,38 @@ are recorded so the next reader knows the collision is real and pre-existing.
 Count with this, which sees both:
 
 ```
-{ grep -oE "^[0-9]{2}\. \*\*" docs/superpowers/AUDIT-CHECKLIST.md | grep -oE "^[0-9]{2}"
-  grep -oE "^## CLASS [0-9]+" docs/superpowers/AUDIT-CHECKLIST.md | grep -oE "[0-9]+$"
+F=docs/superpowers/AUDIT-CHECKLIST.md
+b=$(grep -nE '^## CLASS [0-9]+' "$F" | head -1 | cut -d: -f1); b="${b:-999999}"
+{ awk -v n="$b" 'NR<n' "$F" | grep -oE '^[0-9]+\. \*\*[^*]+\.\*\*' | grep -oE '^[0-9]+'
+  grep -oE '^## CLASS [0-9]+' "$F" | grep -oE '[0-9]+$'
 } | sort -n | uniq -c | awk '$1>1{print "DUPLICATE: "$2} $1==1{l=$2} END{print "highest: "l}'
 ```
+
+**THE CENSUS ITSELF HAS BEEN WRONG TWICE (corrected 2026-09-10).** Both failures
+were in the PART 1 half, and both reported FALSE DUPLICATES while still giving
+the right maximum — which is why they survived: everyone ran it for the maximum.
+
+- The first version matched `^[0-9]{2}\. \*\*` — exactly two digits. It silently
+  skips single-digit classes 1-9, and now that the file has passed 99 it **also
+  skips every three-digit PART 1 entry**, because `107. ` has no `.` in the third
+  position. Harmless today only because the maximum currently lives in the
+  `## CLASS` half.
+- Widening it to `^[0-9]+\. \*\*` then swept in two things that are not class
+  numbers: the **pre-cutover protocol's** ordinary steps (`1. **Tree gate:**`,
+  `2. **Build:**` …), and **bolded numbered lists inside class bodies** — the
+  entry for class 107 has a three-item list that made the census report 1, 2 and
+  3 as duplicates. A class about format-blind censuses broke the census.
+
+Hence the two filters above, which are both load-bearing: scan for PART 1 entries
+only ABOVE the first `## CLASS` heading (excludes class-body prose), and require
+the title to end `.**` (excludes the protocol steps, which end `:**`). Verified
+2026-09-10: reports exactly 75/76/77/92/93 and `highest: 107`, and each of those
+five was confirmed by eye to be a genuine two-format collision.
+
+**Read the duplicate line as a DIFF, not as a pass/fail.** Five collisions are
+pre-existing and permanent (below). A clean run is not "no duplicates" — it is
+"the same duplicates as dev's copy, and no more". Caught by a peer lane whose own
+census would otherwise have reported a free number a second time.
 
 **Law:** a "highest occupied" read is only as wide as the format it greps for.
 Where a document has grown more than one convention, the census must enumerate
