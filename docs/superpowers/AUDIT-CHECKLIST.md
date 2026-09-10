@@ -2233,6 +2233,37 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     enforcing". Fixed in W5 as words only; the code defect (arm path ignores the
     band) is filed for a later wave.
 
+93. **A guard that derives its expectation from the thing it guards.** (Number
+    assigned at merge, A16 — highest occupied on dev was 92 by a two-format
+    `uniq -c` census; class **97** does NOT yet exist on dev, it is inbound on
+    fix/session-risk-limits, and this entry is its WORKED EXAMPLE — renumber or
+    cross-reference at whichever merges second.) W5 shipped a contract test to
+    stop the Guide's lunch window drifting from `kernel.LunchWindowCT()`. It
+    built its forbidden-literal list FROM the resolver and asked whether the
+    Guide contained those literals. Mutate the resolver to `12:15`/`13:45` and
+    the Guide's stale `12:00–13:30` matches none of the new literals, the loop
+    falls through, and **the test reports `ok`**. It could only ever confirm
+    today's agreement. A sibling lane's class 97 ("one source, both readers —
+    never two readers that happen to agree") is the general law; this is the
+    same defect inside a guard written to prevent it, one function from where
+    its author was fixing that very class. **The wave's own E5 step — "mutate
+    the resolved value E1 reads" — was owed and unrun; when finally run, it
+    refuted the fixture.** **Probe:** for any test asserting agreement between a
+    document and a resolver, MUTATE the resolver. If the test still passes, the
+    test compares the document with itself. **Law:** a drift guard derives its
+    expectation from ONE side and asserts EQUALITY against the other — find
+    every value the document states, then require it to equal what the code
+    resolves. Never enumerate "forbidden" values from the resolver, because the
+    stale value you are hunting is by definition not among them. Fixed in
+    `kernel/guide_clock_contract_test.go`: the inverted pin finds every
+    `HH:MM–HH:MM` range written near "lunch" and requires it to equal the
+    resolved pair; the same mutation now fails on plays.ts, settings.ts and
+    tradingDay.ts at once. A second lesson from the fix itself: the first
+    inversion used a ±160-character window and failed on tradingDay.ts's
+    unrelated NY session range `08:30–14:45` — a guard calibrated by guesswork
+    fails on correct text, so the window was calibrated against the real
+    sentences instead.
+
 ## PART 2 — PRE-AUDIT (standing hard rules)
 
 - **R1 fresh evidence only** — produced THIS run: CT-timestamped queries,
