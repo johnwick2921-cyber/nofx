@@ -3786,3 +3786,55 @@ was installed to prevent.
 Read beside class 45 (a staged deletion that is really a stale checkout), class
 79 (silence read as death), class 100 (a branch on a stale base), and the
 WORKTREE LAW itself — this class is what enforces its path clause.
+
+### Second instance, from the reader's side (2026-09-10, `deploy/nofx-lock.sh`, defect 3 of the lock-three-defects wave)
+
+The worktree case above is the WRITER's side: a flag set for a temporary
+condition and never re-examined when the condition turned permanent. The lock
+script had the same confusion arriving from the other direction, and it is worth
+recording as a pair because the two look nothing alike in code.
+
+`mkdir ~/nofx-main.lock.d` is atomic and the meta file lands about 7ms later
+(instrumented: n=10, min 6.92ms, mean 7.35ms, max 7.71ms). In that window the
+lock directory exists and names nobody. `_age` fell back to `${hb:-0}`, so
+`status` computed an age against epoch zero and reported **STALE with an empty
+holder** — 1,789,058,294 seconds. Two completely different situations reached
+every reader as one answer:
+
+- **transient** — an acquire in flight, 7ms old, about to be a healthy lock;
+- **permanent** — a directory orphaned mid-creation, which no verb could clear,
+  because `_require_holder` compares against an empty session and so `release`,
+  `reclaim` AND `acquire` all refused it.
+
+The reader could not tell which it held, and the answer it got — STALE — invited
+exactly the wrong action on the transient one: a reclaim against a lock that was
+milliseconds from being someone's live hold.
+
+**What generalises, and it is not the flag.** In both instances a state that is
+legitimately TEMPORARY was represented in a way that could not distinguish it
+from the same state made PERMANENT, and the remedy was the same: give the
+transient thing **its own name**, then let AGE do the discriminating. The lock
+now reports `INCOMPLETE` (rc 3) in flight and `ABANDONED-INCOMPLETE` (rc 4) past
+30s — a threshold measured at ~4000x the observed window, not chosen — and the
+new `clear-incomplete` verb refuses a lock that HAS meta (that one has a holder)
+and refuses one younger than 30s (that one is being born). The worktree case
+wants the same discrimination and has no tool offering it, which is why probe 4
+above insists on resolving the HEAD before pruning: `prune` cannot tell a
+worktree that is briefly absent from one that is gone for good, so the operator
+must.
+
+**Corollary for rc codes.** The new codes are ADDITIVE — 0/1/2 keep their old
+meanings — so a caller that never learned about 3 and 4 still reads "not free"
+and fails safe. Splitting a conflated state is only non-breaking if the split
+lands on NEW values; renaming what 2 means would have silently changed every
+existing caller's behaviour.
+
+Full account: `docs/superpowers/reports/2026-09-10-lock-three-defects.md`.
+Defects 1 and 2 of that wave are NOT this class and are recorded there, not
+here: `release` discarded `rm`'s exit status behind a `;` and returned the
+`echo`'s 0, so a failed removal printed "released" and returned success — with
+the keeper already stopped, manufacturing the false STALE the heartbeat model
+exists to prevent; and a meta-less lock was terminal, because `_require_holder`
+compares against an empty session and so no verb could clear it. Deliberately
+left unnumbered here: this section is the one place a wrong pointer would be
+self-refuting, and I did not verify a number for either shape.
