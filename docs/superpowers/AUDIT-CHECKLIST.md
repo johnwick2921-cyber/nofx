@@ -2702,6 +2702,30 @@ pattern bug. It is not: that bug only ever affected the PART 1 half, and the
 number missed here lived in the appendix half. Two separate defects in one tool,
 and the fix for the first does nothing for the second.)
 
+**AND ASSERT THE SHAPES SUM TO THE FILE (added 2026-09-10).** Both fixes above
+make the census see the shapes we KNOW about. Neither can see a shape nobody has
+thought of — and this file has grown a new one more than once. So make the census
+falsifiable against the file instead of trusting its own coverage:
+
+```
+F=docs/superpowers/AUDIT-CHECKLIST.md
+A=$(grep -cE '^#+ CLASS [0-9]+' "$F")                       # appendix shape
+B=$(awk -v n="$(grep -nE '^## CLASS [0-9]+' "$F" | head -1 | cut -d: -f1)" 'NR<n' "$F" \
+      | grep -cE '^[0-9]+\. \*\*[^*]+\.\*\*')              # PART 1 shape
+echo "counted $((A+B)) class entries"     # ← compare against the file yourself
+grep -cE '^\*\*CLASS [0-9]+|^#+ [0-9]+\. |^CLASS [0-9]+ —' "$F"   # shapes at 0 — count them anyway
+```
+
+**If the shapes you counted do not add up to the classes actually in the file,
+your ceiling is wrong** — and "the highest is N" is falsifiable in one command
+that nobody had run for three waves. At `1dd6eac1`: 23 appendix + 68 PART 1, the
+three other shapes at 0, and three `N. **…**` lines below the boundary that are
+PROSE inside class 107's body, not entries. Verified by eye, because a count that
+matches for the wrong reason is the thing this note exists to stop.
+
+Owed to the lane that filed *a census that cannot see its own third format* after
+taking a number on a two-format count.
+
 **Read the duplicate line as a DIFF, not as a pass/fail.** Five collisions are
 pre-existing and permanent (below). A clean run is not "no duplicates" — it is
 "the same duplicates as dev's copy, and no more". Caught by a peer lane whose own
