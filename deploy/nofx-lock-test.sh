@@ -145,6 +145,115 @@ hasnt "no kill -0"  "$src" "kill -0"
 hasnt "no pgrep"    "$src" "pgrep"
 hasnt "no \$\$"     "$src" '$$'
 
+# ── THE KEEPER (2026-09-09) ─────────────────────────────────────────────────
+#
+# acquire printed "heartbeat every 120s" and started NOTHING. A holder who
+# simply WAITED — for a position to close, for an owner to run the kill — went
+# STALE at 300s with no writer in existence, and status then printed the reclaim
+# recipe over a live cutover. Measured: acquired 21:25:07, and at 21:50:16 the
+# meta's heartbeat was byte-identical to `acquired`, never beaten once.
+#
+# The verb was never broken — a hand-beat revives it. Nothing called it for a
+# holder who was not running commands. Class 88's shape: a liveness signal that
+# is a side effect of activity, dying the moment the work pauses, when the whole
+# point of a lock is to be held while you WAIT.
+#
+# THE KEEPER IS BOUNDED BY THE DECLARED EXPIRY, and that bound is the design.
+# An UNBOUNDED keeper survives its session and beats forever for a holder who is
+# gone — turning a 5-minute false STALE (recoverable, and the canon already says
+# corroborate) into a permanent false ALIVE that no succession path can reach.
+# Bounded, an abandoned lock still goes stale — at the window its holder asked
+# for, instead of never.
+#
+# Thresholds are compressed so these run in seconds, not the 400 the real window
+# would need.
+echo "== the keeper: acquire starts one, and a WAITING holder stays ALIVE =="
+KW="$(mktemp -d)"
+K() { NOFX_LOCK_DIR="$KW/lock.d" NOFX_LOCK_STALE_SECONDS=4 NOFX_LOCK_BEAT_SECONDS=1 bash "$LOCK_SH" "$@" 2>&1; }
+out="$(K acquire nofx-keeper 'waiting on a position to close' 60)"
+check "acquire rc" "$?" "0"
+hasi  "acquire confirms" "$out" "acquired"
+hasnti "the acquire message no longer promises an unstarted beat" "$out" "heartbeat every"
+
+sleep 6   # LONGER than the stale window, with NO other action of any kind
+out="$(K status)"
+hasi   "a WAITING holder is still ALIVE past the stale window" "$out" "alive"
+hasnti "a waiting holder is not reported STALE" "$out" "stale"
+hasi   "status reports the auto-beat" "$out" "auto-beat"
+
+echo "== killing the keeper makes it STALE — the beat is a process, not a fiction =="
+kp="$(cat "$KW/lock.d/keeper.pid" 2>/dev/null || echo)"
+if [ -n "$kp" ]; then
+  ok "a keeper pid is recorded as a stop handle"
+  kill "$kp" 2>/dev/null; sleep 6
+  hasi "with the keeper dead the lock goes STALE" "$(K status)" "stale"
+else
+  bad "a keeper pid is recorded as a stop handle" "no $KW/lock.d/keeper.pid"
+fi
+
+echo "== a second acquire never succeeds while the lock lives =="
+out="$(K acquire nofx-other 'a different cutover' 60)"; rc=$?
+check "second acquire rc is a refusal" "$rc" "1"
+hasi  "second acquire is REFUSED" "$out" "refused"
+
+echo "== release stops the keeper — no writer outlives its lock =="
+# THE PROCESS, NOT THE FILE, AND ON A BEAT LONG ENOUGH TO SEE IT.
+#
+# Two drafts of this pin failed to bite. The first checked only that keeper.pid
+# was gone — which rm -rf "$LOCK_DIR" does anyway, so deleting _stop_keeper left
+# it green with an orphan still looping. The second checked the PROCESS but ran
+# on a 1s beat, so an unstopped keeper noticed the missing directory and exited
+# by itself before the assertion — the pin was measuring the OS's timing, not
+# the code. With a 30s beat an unstopped keeper is still sleeping when we look,
+# and only _stop_keeper can have ended it.
+#
+# (The script may not use kill -0 — class 70 — but this test may: the pins forbid
+# pid liveness in the TOOL, where a reader could mistake it for an answer, not in
+# a test that is asking about a process on purpose.)
+KWR="$(mktemp -d)"
+R() { NOFX_LOCK_DIR="$KWR/lock.d" NOFX_LOCK_STALE_SECONDS=600 NOFX_LOCK_BEAT_SECONDS=30 bash "$LOCK_SH" "$@" 2>&1; }
+R acquire nofx-rel 'a holder that will release' 60 >/dev/null
+kp2="$(cat "$KWR/lock.d/keeper.pid" 2>/dev/null || echo)"
+hasi "release confirms" "$(R release nofx-rel)" "released"
+sleep 1
+if [ -n "$kp2" ] && kill -0 "$kp2" 2>/dev/null; then
+  bad "release STOPS the keeper process" "pid $kp2 still running after release — a writer outliving its lock"
+  kill "$kp2" 2>/dev/null
+else
+  ok "release STOPS the keeper process"
+fi
+rm -rf "$KWR"
+rm -rf "$KW"
+
+echo "== the keeper OUTLIVES the shell that spawned it =="
+# A keeper that dies with its session reproduces the defect one layer down.
+KW2="$(mktemp -d)"
+( NOFX_LOCK_DIR="$KW2/lock.d" NOFX_LOCK_STALE_SECONDS=4 NOFX_LOCK_BEAT_SECONDS=1 \
+    bash "$LOCK_SH" acquire nofx-detached 'spawned by a shell that exits' 60 >/dev/null 2>&1 )
+sleep 6
+out="$(NOFX_LOCK_DIR="$KW2/lock.d" NOFX_LOCK_STALE_SECONDS=4 bash "$LOCK_SH" status 2>&1)"
+hasi "a keeper spawned by an exited shell keeps beating" "$out" "alive"
+NOFX_LOCK_DIR="$KW2/lock.d" bash "$LOCK_SH" release nofx-detached >/dev/null 2>&1
+rm -rf "$KW2"
+
+echo "== THE BOUND: the keeper stops at the declared expiry, and never extends it =="
+KW3="$(mktemp -d)"
+# a lock declared for 0 minutes is already expired: the keeper must not beat it
+( NOFX_LOCK_DIR="$KW3/lock.d" NOFX_LOCK_STALE_SECONDS=4 NOFX_LOCK_BEAT_SECONDS=1 \
+    bash "$LOCK_SH" acquire nofx-brief 'a window that has already closed' 0 >/dev/null 2>&1 )
+sleep 6
+out="$(NOFX_LOCK_DIR="$KW3/lock.d" NOFX_LOCK_STALE_SECONDS=4 bash "$LOCK_SH" status 2>&1)"
+hasi "a lock past its declared expiry goes STALE — the keeper never auto-extends" "$out" "stale"
+NOFX_LOCK_DIR="$KW3/lock.d" bash "$LOCK_SH" release nofx-brief >/dev/null 2>&1
+rm -rf "$KW3"
+
+echo "== the acquire message says what the keeper actually does =="
+src2="$(cat "$LOCK_SH")"
+case "$src2" in
+  *keeper.pid*) ok "the acquire path records a keeper" ;;
+  *) bad "the acquire path records a keeper" "no keeper.pid anywhere — the message would be the defect again" ;;
+esac
+
 echo
 printf 'pass=%d fail=%d\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

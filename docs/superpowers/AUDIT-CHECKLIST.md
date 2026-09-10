@@ -1545,6 +1545,17 @@ never renumbered; a gap means a wave took a later slot to avoid a collision.*
     by `deploy/nofx-lock-test.sh` — 56 assertions including a second acquire
     refusing, a stale heartbeat never reading "dead", and a source pin that the
     script cannot express `kill -0`, `pgrep` or `$$`. `with-heartbeat` beats
+    **`acquire` now STARTS A KEEPER (2026-09-09)** that beats for you until the
+    window you declared, then stops — because the message had promised
+    "heartbeat every 120s" and started nothing, so a holder who simply WAITED
+    (for a position to close, for an owner to run the kill) went STALE at 300s
+    with no writer in existence, and `status` printed the reclaim recipe over a
+    live cutover. **The keeper never extends the window:** need longer,
+    re-acquire or extend explicitly. Its pid is a STOP HANDLE in `keeper.pid`,
+    never in `meta` and never consulted as liveness — that is still the
+    heartbeat alone (class 70). `status` reports `auto-beat: on/off` from the
+    file, never by probing a process, which is what finally tells "the holder is
+    gone" apart from "the tool never beat for a holder who was waiting".
     only for the lifetime of the command it wraps: a beater that outlived its
     job would reinvent the pid problem in a new costume. **Succession is on the
     record:** `reclaim <new> <stale> "<corroboration>"` is refused while the

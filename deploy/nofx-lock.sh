@@ -31,19 +31,31 @@
 # before any clearing, and this script never clears a lock itself at any age.
 #
 # Usage:
-#   nofx-lock acquire <session> <task> [minutes]   # atomic; refuses if held
+#   nofx-lock acquire <session> <task> [minutes]   # atomic; refuses if held.
+#                                                  # STARTS A KEEPER that beats
+#                                                  # until the [minutes] window
+#                                                  # you declared, then STOPS.
 #   nofx-lock heartbeat <session>                  # holder rewrites; every 2m
 #   nofx-lock status                               # free | held | STALE + age
 #   nofx-lock check                                # rc 0 free · 1 held · 2 stale
 #   nofx-lock with-heartbeat <session> -- <cmd>    # beats for <cmd>'s lifetime
 #   nofx-lock reclaim <new> <stale> "<corroboration>"  # ONLY on a stale heartbeat
-#   nofx-lock release <session>                    # only the holder may release
+#   nofx-lock release <session>                    # holder only; STOPS the keeper
+#
+# THE KEEPER NEVER EXTENDS YOUR WINDOW. It beats until the expiry you asked for
+# at acquire and then stops, so the lock goes STALE at the window you declared
+# rather than never. A holder who needs longer RE-ACQUIRES OR EXTENDS
+# EXPLICITLY — there is no path by which simply staying busy keeps the tree.
+# That bound is deliberate: an unbounded keeper survives its own session and
+# beats forever for a holder who is gone, turning a 5-minute false STALE
+# (recoverable, and corroboration is required anyway) into a permanent false
+# ALIVE that no succession path can reach.
 set -uo pipefail
 
 LOCK_DIR="${NOFX_LOCK_DIR:-$HOME/nofx-main.lock.d}"
 LEGACY_LOCK="${NOFX_LEGACY_LOCK:-$HOME/nofx-main.lock}"
 HEARTBEAT_STALE_SECONDS="${NOFX_LOCK_STALE_SECONDS:-300}"   # 5 min
-HEARTBEAT_EVERY_SECONDS=120                                  # 2 min
+HEARTBEAT_EVERY_SECONDS="${NOFX_LOCK_BEAT_SECONDS:-120}"     # 2 min
 
 _now()      { date -Is; }
 _epoch()    { date +%s; }
@@ -78,10 +90,57 @@ session=$session
 task=$task
 acquired=$(_now)
 expiry=$(date -Is -d "+$mins minutes")
+expiry_epoch=$(date +%s -d "+$mins minutes")
 heartbeat=$(_now)
 heartbeat_epoch=$(_epoch)
 META
-  echo "ACQUIRED by $session — heartbeat every ${HEARTBEAT_EVERY_SECONDS}s, stale after ${HEARTBEAT_STALE_SECONDS}s"
+  _spawn_keeper "$session"
+  echo "ACQUIRED by $session — a keeper is beating every ${HEARTBEAT_EVERY_SECONDS}s until $(_field expiry), then it STOPS; stale after ${HEARTBEAT_STALE_SECONDS}s. It never extends the window: need longer, re-acquire or extend explicitly."
+}
+
+# THE KEEPER (2026-09-09). Until today acquire PRINTED "heartbeat every 120s" and
+# started nothing: a holder who simply WAITED — for a position to close, for an
+# owner to run the kill — went stale at 300s with no writer in existence, and
+# status printed the reclaim recipe over a live cutover. The verb was never
+# broken; nothing called it for a holder who was not running commands. Class 88:
+# a liveness signal that is a side effect of activity, dying exactly when the
+# work pauses — when the whole point of a lock is to be held while you wait.
+#
+# BOUNDED BY THE DECLARED EXPIRY, AND THAT BOUND IS THE DESIGN. An unbounded
+# keeper survives its session and beats forever for a holder who is gone, turning
+# a 5-minute false STALE — recoverable, and the canon already says corroborate —
+# into a permanent false ALIVE no succession path can reach. Bounded, an
+# abandoned lock still goes stale: at the window its holder asked for, not never.
+#
+# THE PID IS A STOP HANDLE, NEVER LIVENESS (class 70). It lives in its own file,
+# never in meta, and nothing reads it to decide whether the holder is working —
+# that is still the heartbeat, and only the heartbeat. release uses it to stop
+# the process it started, so no writer outlives its lock.
+_spawn_keeper() {
+  local session="$1" self="${BASH_SOURCE[0]}" exp
+  exp="$(_field expiry_epoch)"
+  [ -n "$exp" ] || return 0
+  nohup bash -c '
+    lock="$1"; sess="$2"; exp="$3"; every="$4"; self="$5"
+    while [ -d "$lock" ]; do
+      [ "$(date +%s)" -ge "$exp" ] && break
+      NOFX_LOCK_DIR="$lock" bash "$self" heartbeat "$sess" >/dev/null 2>&1 || break
+      sleep "$every"
+    done
+    rm -f "$lock/keeper.pid" 2>/dev/null
+  ' _ "$LOCK_DIR" "$session" "$exp" "$HEARTBEAT_EVERY_SECONDS" "$self" >/dev/null 2>&1 &
+  echo "$!" > "$LOCK_DIR/keeper.pid"
+  disown 2>/dev/null || true
+}
+
+# _stop_keeper ends the process this script started. It is the only reader of
+# keeper.pid, and it asks nothing about liveness.
+_stop_keeper() {
+  local kp
+  kp="$(cat "$LOCK_DIR/keeper.pid" 2>/dev/null || true)"
+  [ -n "$kp" ] && kill "$kp" 2>/dev/null
+  rm -f "$LOCK_DIR/keeper.pid" 2>/dev/null
+  return 0
 }
 
 # The beat is owner-scoped. An unauthenticated beat would let any lane keep a
@@ -118,15 +177,28 @@ cmd_status() {
     # STALE, NOT DEAD. The distinction is the whole point: a stale heartbeat
     # says the holder has not checked in, not that it has stopped. Corroborate
     # before clearing — HEAD moving, a build in flight, the session answering.
-    echo "STALE — held by '$session' (task: $task), heartbeat ${age}s old (> ${HEARTBEAT_STALE_SECONDS}s), expiry $(_field expiry)."
+    echo "STALE — held by '$session' (task: $task), heartbeat ${age}s old (> ${HEARTBEAT_STALE_SECONDS}s), expiry $(_field expiry) · $(_auto_beat)."
     echo "  DO NOT CLEAR ON THIS ALONE. Corroborate first: is HEAD moving? is a build running?"
     echo "  does '$session' answer? Clear only with a note naming what you checked."
     echo "  To take it over on the record: nofx-lock reclaim <you> '$session' \"<what you checked>\""
     _show_history
     return 2
   fi
-  echo "held by '$session' (task: $task), heartbeat ${age}s old — ALIVE, expiry $(_field expiry)"
+  echo "held by '$session' (task: $task), heartbeat ${age}s old — ALIVE, expiry $(_field expiry) · $(_auto_beat)"
   _show_history
+}
+
+# _auto_beat says whether acquire started a keeper, READ FROM THE FILE. It never
+# probes a process: asking "is that pid alive" would make the pid the liveness
+# answer, which is class 70 rebuilt. This distinguishes the two readings STALE
+# could not tell apart — "the holder is gone" from "the tool never beat for a
+# holder who was waiting" — which is the whole reason the keeper exists.
+_auto_beat() {
+  if [ -f "$LOCK_DIR/keeper.pid" ]; then
+    echo "auto-beat: on (until $(_field expiry); it never extends the window)"
+  else
+    echo "auto-beat: off — this holder must beat by hand"
+  fi
 }
 
 # For scripts (the tree guard): 0 free · 1 held-fresh · 2 held-stale.
@@ -205,6 +277,7 @@ cmd_release() {
   [ -d "$LOCK_DIR" ] || { echo "no lock"; return 0; }
   _require_holder "$session" || return 1
   _show_history
+  _stop_keeper
   rm -rf "$LOCK_DIR"; echo "released by $session"
 }
 
