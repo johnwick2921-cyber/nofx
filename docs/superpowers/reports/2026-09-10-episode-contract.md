@@ -188,46 +188,78 @@ than silent. It is not the single-reader ideal of class 97 and is not claimed to
 Found while verifying my Guide change. **Filed, not fixed — A31 scopes this wave,
 and both belong to the rebrand lane.**
 
-### G1 — the FE suite has been red repo-wide for ~22 hours
+### G1 — the FE suite is red at the version the lockfile pins, green at the one the main tree has
 
-`7d7be486` ("fix(brand): share visible VL names without renaming identifiers",
-2026-09-09 13:33 CT, **on dev**) added to `web/src/constants/branding.ts`:
+**This section was wrong in the first two drafts and is corrected here.** I wrote
+that the suite "fails everywhere, main tree included". It does not. A peer
+(nofx-8e) measured it GREEN in the main tree and challenged the finding. They were
+right about the observation and wrong about the cause; I was right about the
+observation in my tree and wrong about the cause. Neither of us was measuring
+badly. **We were running different versions of vite.**
 
-```ts
-import productName from '../../../branding/product.txt?raw'
+**The controlled experiment** — same worktree, same commit, same config, same test
+file, only the vite version swapped, `--no-save` so nothing else moved:
+
+| vite | result |
+|---|---|
+| **6.4.1** | `Test Files 1 passed · Tests 9 passed` |
+| **6.4.3** | `Test Files 1 failed · Tests 9 failed` — `Error: Denied ID /…/branding/product.txt?raw` |
+
+That is causation, not correlation: one variable, both directions, reproduced.
+
+**Which version is the repo's?** `web/package-lock.json` is TRACKED and pins
+**6.4.3** — the failing one. `web/package.json` declares `"vite": "^6.0.7"`, so the
+caret range admits both. The main tree's `node_modules` holds **6.4.1**: a stale
+install that predates the lockfile move and has not been reinstalled since.
+
+So the correct statement is the inverse of my first draft:
+
+- **The suite is red at the dependency state this repo actually declares.**
+- The main tree's green is an artifact of an install that no longer matches the
+  lockfile.
+- Anyone running `npm ci` — a fresh clone, a new lane's worktree, the A4
+  clean-clone deploy path — gets 6.4.3 and gets 12 red files.
+
+**Mechanism**, now measured rather than assumed. `web/src/constants/branding.ts`
+(added by `7d7be486`) does `import productName from '../../../branding/product.txt?raw'`.
+Vite's workspace root here is `web/`, confirmed by asking vite itself:
+
+```
+searchForWorkspaceRoot('/…/web') = /…/web
 ```
 
-That path is **outside vite's workspace root**, so vitest's module runner denies it:
+because the ancestry carries no root marker — no repo-root `package.json`,
+`pnpm-workspace.yaml` or `lerna.json` in any tree (and `.git` is commented out of
+vite's `ROOT_FILES`, so the worktree-vs-clone distinction I first reached for is
+irrelevant). `../branding/` is therefore outside the allow root. 6.4.3 enforces
+that on this import path; 6.4.1 did not.
 
-```
-Error: Denied ID /…/branding/product.txt?raw
-```
+**Blast radius:** 12 test files fail to load. Zero assertion failures. And the
+count that matters: **354 tests collected red versus 414 green — 60 tests silently
+do not exist**, while the file total reads 58 either way.
 
-**12 test files / 10 tests fail, all from this single cause. Zero assertion failures.**
+`npm run build` is **unaffected at both versions** — rollup does not apply
+`server.fs.allow`. Verified at 6.4.3: `✓ built in 4.51s`. **The cutover is not
+blocked**, and a build-only CI would never see any of this.
 
-Bisected: `08f9f88f` (the commit before) → **9 passed**. `7d7be486` and every commit
-after → **9 failed**, same file, same test.
-
-**It is not a worktree artifact.** I first hypothesised the linked worktree's `.git`
-file; that was wrong — `.git` is commented out of vite's `ROOT_FILES` in this
-version. The root resolves via `searchForPackageRoot` to the nearest `package.json`,
-which is `web/`. There is **no repo-root `package.json`, `pnpm-workspace.yaml` or
-`lerna.json`** in any tree, main included. So the workspace root is `web/`
-everywhere and this fails everywhere.
-
-`npm run build` is **unaffected** — rollup does not apply `server.fs.allow`. Verified:
-`✓ built in 4.60s`. So the shipped bundle is fine and CI-by-build would never have
-caught it.
-
-**Fix is one line** in `web/vitest.config.ts`:
+**Fix** is one line in `web/vitest.config.ts`:
 
 ```ts
 server: { fs: { allow: ['..'] } },
 ```
 
-Verified locally, then reverted: **12 files red → 1**, 344 → 413 passing.
+Verified at 6.4.3, then reverted: 12 red files → 1, 344 → 413 passing.
 
-### G2 — a tamper-guard that went red while blindfolded, and stayed red for 13 hours
+**The finding underneath the finding.** Two lanes ran "the suite" on the same
+commit, got opposite answers, and each correctly believed their own measurement.
+A caret range plus a tracked lockfile plus long-lived `node_modules` directories
+means **"the suite passes" is not a property of a commit** — it is a property of a
+commit *and* whenever someone last ran install. Neither number is on the record
+anywhere. My first draft asserted a defect in another lane's file on the strength
+of a measurement whose environment I had not pinned, which is the same error in
+the opposite direction.
+
+### G2 — a tamper-guard that was red and legible for 13 hours in a suite nobody on that wave ran
 
 With G1 unblocked, a 13th failure surfaces that had been invisible:
 
@@ -254,22 +286,31 @@ The timeline is the finding, and the order of the two events is the whole point:
 
 Current sha256 at dev tip `757eb578`: `46fcbf76…` — against a pin of `bcd82c52…`.
 
-**The runner broke 8h39m BEFORE the guard had anything to say.** This is not a
-stale pin nobody got round to updating. A tamper-guard on a load-bearing deploy
-script fired correctly, on the first of **six** legitimate changes to that script,
-and went unheard through all six, for 13h31m — because an unrelated import in an
-unrelated wave had blinded the runner the previous afternoon.
+**Corrected after nofx-8e's challenge, and the correction is against my own
+framing.** I first wrote that G1 had blinded this guard. In the environment where
+8e actually worked — the main tree, vite 6.4.1 — **the guard ran fine and was
+plainly RED, naming their file, for the whole 13h31m.** It was not muted there. It
+was legible and unread, because that wave ran Go and the lock suite every time and
+treated those as "the suite". 8e states this plainly as their own miss, and it is
+the more useful reading: a protected-file guard lived in a suite the wave had
+decided, without ever deciding, was not theirs.
 
-**A guard that cannot run reports the same colour as a guard that passes.** Nothing
-in the suite's output distinguishes "16 files verified" from "the file that
-verifies them never loaded". G1 did not merely break 12 test files; it silently
-converted a tamper-guard into a no-op, and the six lock waves that followed each
-had a green-looking suite telling them nothing.
+Both things are true at once, and which one you hit depends on your installed vite:
 
-None of those six commits is at fault. Each changed a protected file for good
-reason, and the guard exists precisely so that a human ratifies such a change by
-updating the baseline. The mechanism that was supposed to force that conversation
-was already switched off.
+- at **6.4.1** (main tree): the guard **runs and is red** — a legible signal nobody read
+- at **6.4.3** (lockfile-pinned): the guard's file **never loads** — no signal to read
+
+The second is strictly worse, and it is the state anyone gets from a fresh install.
+
+None of the six commits is at fault. Each changed a protected file for good reason,
+and the guard exists precisely so a human ratifies that change by updating the
+baseline. **The pin has since been ratified** at `e79bf298` by another lane, and 8e
+fast-forwarded the main tree to `a8b66cd0` and re-ran: 58 files, 414 tests, green.
+I did not touch their baseline and should not have — ratifying another lane's
+protected-file change is exactly the conversation the guard exists to force.
+
+8e also checked what my report had not: whether the unread window hid drift in any
+**other** protected file. It did not — 1 of 16 drifted, and it was theirs.
 
 ## H · VERIFICATION
 
@@ -280,10 +321,11 @@ was already switched off.
 | `go test ./...` | **30 packages ok, 0 FAIL** at merged HEAD |
 | `npx tsc --noEmit` | OK |
 | `npm run build` | OK — 4.60s |
-| `npx vitest run` | 12 files red **from G1 alone**; with G1 unblocked locally, 413/414 pass, the 1 being G2 |
+| `npx vitest run` @ vite 6.4.3 (lockfile) | 12 files red from G1; 354 collected |
+| `npx vitest run` @ vite 6.4.1 (main tree's stale install) | green — see §G1 |
 
-**My Guide change is not verified by the suite**, because the suite cannot run —
-G1, not my change. Verified instead by: `tsc --noEmit` clean, `npm run build` clean,
+**My Guide change is not verified by the suite at the lockfile-pinned vite**,
+because 12 files including the guide's do not load there — G1, not my change. Verified instead by: `tsc --noEmit` clean, `npm run build` clean,
 and the guide tests passing under the temporary G1 unblock before I reverted it.
 Stated here rather than reported as green.
 
@@ -299,10 +341,21 @@ merged HEAD rather than carried forward — a branch green alone is not green me
   entry shapes; a two-format census reported the ceiling as 93 while 104 existed.
   Now carries the 105→106→108 renumber chain as its worked example.
 
-Recommended for the rebrand lane, from G1/G2: **a test that cannot run reports the
-same colour as a test that passes.** The suite's own file and test counts are
-numbers that must be pinned like any other; a suite can lose 12 files and 60 tests
-and still look like a suite. The sharp form is that G1 and G2 are not two bugs but
-one mechanism: a broken runner does not merely fail to test, it converts every
-guard behind it into a no-op that reports success — and the longer it stays
-broken, the more confidently the waves that follow read that silence as safety.
+**Two more classes are owed from §G and are NOT filed here**, because each belongs
+to a lane that owns the file and because I got the first one wrong twice before
+measuring it properly:
+
+- **A suite's result is a property of a commit AND an install date.** A caret
+  range plus a tracked lockfile plus long-lived `node_modules` means two lanes can
+  run "the suite" on one commit and get opposite answers, both honestly. Neither
+  the installed versions nor the install date appear in any report. The remedy is
+  cheap: print the resolved version of the runner alongside the pass count, and
+  fail when `node_modules` disagrees with the lockfile.
+- **Pin the suite's own file and test counts.** Red here reads
+  `12 failed | 46 passed (58)` and green reads `58 passed (58)` — but the test
+  totals are **354 versus 414**. Sixty tests vanish and no number in the default
+  output says so. This is the remedy for the general shape I sent 8e and which
+  survives all the corrections above: *a test that cannot run reports the same
+  colour as a test that passes.* 8e is taking it into the settlement wave's pins,
+  and notes it is the same shape as their class 103 — a fallback producing a
+  plausible value so the failure behind it stays invisible.
