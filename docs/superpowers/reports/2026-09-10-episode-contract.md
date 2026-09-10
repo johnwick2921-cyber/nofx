@@ -187,7 +187,7 @@ than silent. It is not the single-reader ideal of class 97 and is not claimed to
    lost — but a reviewer reading `git log` will see each early commit twice, and
    should read the merge commits for why.
 
-## G · TWO DEFECTS FOUND, NEITHER MINE, ONE MASKING THE OTHER
+## G · THREE DEFECTS FOUND, NONE MINE
 
 Found while verifying my Guide change. **Filed, not fixed — A31 scopes this wave,
 and both belong to the rebrand lane.**
@@ -316,6 +316,59 @@ protected-file change is exactly the conversation the guard exists to force.
 8e also checked what my report had not: whether the unread window hid drift in any
 **other** protected file. It did not — 1 of 16 drifted, and it was theirs.
 
+### G3 — dev's Go suite is red every day between 12:00 and 13:30 CT
+
+Found by running my own verification at 12:11 CT instead of 11:58. **Eight tests
+fail; all eight cite one line:**
+
+```
+🛑 arm REFUSED (session risk): no_trade_band: lunch no-trade window (12:00–13:30 CT)
+```
+
+    TestArmedOrderUpsertAndGateRR          TestLiveConditionPlacesOnLoopback
+    TestShadowDemotionAuthorsInertRow      TestShadowedRestingOrderCancelledAtBoot
+    TestShadowDemotionE8WritesCounterfactual   TestConfigFlipToLiveAllowsArming
+    TestShadowDemotionNoWireFrameOnLoopback    TestSplitArmWritesTwoLedgerRows
+
+**Not my merge.** Reproduced on `origin/dev` @ `43c0890f` in a clean worktree with
+none of my commits: same test, same failure, same lunch refusal. I touch none of
+`armed_executor`, `shadow_demotion`, `split_entry`, `session_risk` or the no-trade
+band. The same suite was green at 11:26 and 11:58 today on nearly the same tree.
+**The clock crossed 12:00.**
+
+**The seam is not missing — the tests bypass it.** `sessionRiskGateAt(now)` takes
+its clock as an argument and production passes one correctly from
+`armed_executor.go:330`. The failing tests do `now := time.Now()` and hand the real
+wall clock to a correctly-seamed rule.
+
+That is class 60 surviving its own fix. `clock-seams.list` exists, the lint at
+`trader/clock_seam_lint_test.go` reads it, and the list's header states the class
+in one line:
+
+> *a suite verified at 11:00 was red at 14:50 because a fixed-fixture test reached
+> a wall-clock entry point. The entry owns the clock; the rule takes it as an
+> argument.*
+
+That is this defect, described in the file meant to prevent it, eight months of
+waves ago. **The lint asserts the seam EXISTS; nothing asserts the tests USE it.**
+A seam only the production path honours is half a seam.
+
+**This is class 110 with a different variable.** 8e filed "a green suite is a claim
+about an environment, not about a commit" an hour ago, with an installed package
+version as the variable. Here the variable is the **wall clock**, and it needs no
+divergent install: one machine, one commit, one lane, green at 11:58 and red at
+12:11. Two independent instances of one class inside one afternoon is the argument
+for the class.
+
+**Owed and now paid.** "The wall-clock entry-point sweep in checklist 60" has been
+on my owed list since the class-52 wave. It is no longer theoretical: it is red on
+dev right now, and it will be green again at 13:30 without anyone touching it.
+
+**Consequence for this wave's cutover.** My 14:45 window is outside the band, so
+the pre-cutover suite will be green — but that green is *itself* an environment
+claim, which is why §H records the clock alongside the versions. Filed, not fixed:
+A31, and the fix belongs with whoever owns the arm-path tests.
+
 ## H · VERIFICATION
 
 **The environment these results were measured in**, because §G is the proof that a
@@ -330,6 +383,7 @@ claims, applied to suite claims:
 | **vite** | **6.4.3** — matches `web/package-lock.json`; `npm ls vite` agrees |
 | vitest | `4.1.11` |
 | sqlite3 | `3.45.1` |
+| **wall clock** | **results below were taken OUTSIDE 12:00–13:30 CT** — inside it, eight arm-path tests fail (§G3) |
 
 The main tree measures the FE suite differently at vite `6.4.1`. Any suite result
 below is a claim about THIS table, not about the commit alone.
@@ -339,7 +393,7 @@ below is a claim about THIS table, not about the commit alone.
 |---|---|
 | `go build ./...` | OK at merged HEAD |
 | `go vet ./store/... ./trader/... ./kernel/...` | OK |
-| `go test ./...` | **30 packages ok, 0 FAIL** at merged HEAD |
+| `go test ./...` | 31 ok / 0 FAIL at 11:58 CT · **30 ok / 8 tests FAIL at 12:11 CT** — see §G3, wall clock, not the commit |
 | `npx tsc --noEmit` | OK |
 | `npm run build` | OK — 4.60s |
 | `npx vitest run` @ vite 6.4.3 (lockfile) | 12 files red from G1; 354 collected |

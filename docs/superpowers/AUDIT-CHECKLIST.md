@@ -3760,14 +3760,59 @@ refactor had already been written, tested and pushed on the other reading.
 
 ## CLASS 109 — A CENSUS THAT CANNOT SEE ITS OWN THIRD FORMAT (born 2026-09-10, fix/episode-contract)
 
-**Root cause.** A16 says take a checklist number by `uniq -c` census, never
-`uniq` alone, and lanes have been passing around a TWO-format census (`N. **…**`
-and `## N. …`). This file has THREE: at this commit, 100 entries as
-`N. **…**` and 26 as `## CLASS N — …` (the third shape, `**CLASS N`, is at 0 —
-count it anyway, it existed). The two-format census reports the ceiling as 93
-while 104 exists. I took 93 for a rider on that count; it is now a duplicate,
-joining 75, 76, 77 and 92 — collisions produced by the counting method itself,
-not by two lanes racing.
+**Root cause.** A16 says take a checklist number by `uniq -c` census, never `uniq`
+alone, and lanes have been passing around a TWO-format census (`N. **…**` and
+`## N. …`). This file has THREE shapes, and a two-shape census reported the ceiling
+as 93 while 104 already existed. I took 93 for a rider on that count; it is now a
+duplicate.
+
+**This entry has itself been miscounted twice, in opposite directions, and both
+corrections are the class.** nofx-b3 found the first while taking a number next to
+mine:
+
+- **Over-count.** A bare `grep -cE "^[0-9]+\. \*\*"` returns 100 and is wrong by
+  11. It sweeps in the PRE-CUTOVER PROTOCOL's ordinary numbered steps
+  (`1. **Tree gate:**`, `2. **Build:**` …) and bolded lists inside class BODIES.
+  Fix: scan only ABOVE the protocol heading and above the first `## CLASS`.
+- **Under-count.** b3's suggested `.**`-suffix filter returns 68 and is wrong by
+  21 the other way: it requires the title to end `.**` on its first line, so every
+  entry whose title WRAPS is dropped — 33, 36–45, 49–53, 55, 57, 60, 66, 67, 82,
+  84 are all real classes it discards. A filter that fixes an over-count by
+  inventing an under-count has not made the number true, only differently false.
+
+**The corrected census at this commit**, and the duplicate list corrected with it:
+
+    PART 1 entries (above the protocol heading) : 89   max 93
+    '## CLASS N' headings                       : 26   max 111
+    '**CLASS N' (third shape)                   : 0    count it anyway, it existed
+    UNION = distinct classes                    : 110  ceiling 111
+
+    TRUE duplicates (a number in BOTH formats)  : 75, 76, 77, 92, 93
+    NOT duplicates                              : 1–7
+
+**1 through 7 were never duplicates.** Earlier drafts of this very entry listed
+them as such. They appear twice in PART 1 because classes 1–7 exist AND the
+pre-cutover protocol's first seven steps are numbered 1–7; none of them has a
+`## CLASS N` heading at all. A census artifact was recorded as a collision, in the
+entry warning against census artifacts.
+
+**Law.** Count every shape that starts a class, bound the region you count, and
+then ASSERT the union against the file. A census is a claim about a file and must
+be checked against it — "highest is 93" was falsifiable in one command and nobody
+ran it, myself included, for three waves. **Probe:**
+
+    b=$(grep -nE '^## CLASS [0-9]+' "$F" | head -1 | cut -d: -f1)
+    p=$(grep -nE '^#+ .*PRE-CUTOVER' "$F" | head -1 | cut -d: -f1)
+    # PART 1: distinct numbers above BOTH boundaries, no suffix filter
+    awk -v n="${p:-$b}" 'NR<n' "$F" | grep -oE '^[0-9]+\. \*\*' | grep -oE '^[0-9]+' | sort -nu | wc -l
+    grep -cE '^#+ CLASS [0-9]+' "$F"
+    grep -cE '^\*\*CLASS [0-9]+' "$F"
+
+Take the UNION for the ceiling, not the sum — the sum double-counts every number
+that exists in two shapes, which is exactly the five true duplicates above. If
+your shapes do not reconcile against the classes you can count by eye, your
+ceiling is wrong; and verify by eye anyway, because **a count that matches for the
+wrong reason is what this note exists to stop.**
 
 **And a census is only true at the instant it runs.** These two classes were
 written as 105/106 against a census that was correct when it ran. They were
