@@ -28,7 +28,7 @@ Centralizing selection means ListPreBoot now includes **all canonically non-term
 
 [A] [RED before production edits](2026-09-09-arm-state-predicate-data/red.txt): two authorizations caused `broker 0 vs ledger 2 — MISMATCH`; the pending-row detail did not say unconfirmed; rejected/superseded/shadowed/canceled rows were reported armed. Focused store/trader tests now PASS, including SQL/Go parity through real store readers, all requested gate cases, malformed/unknown states, API count propagation and the actual boot census.
 
-[Mutation receipts](2026-09-09-arm-state-predicate-data/mutations.json): hiding pending placement and ignoring a broker-only order each changed FAIL to an incorrect PASS and were caught by the production-path pin. A copied SQL list in a newly created audit script made the repository guard fail. All three mutations returned test exit 1. Full-suite receipts follow as they complete. All deliberate mutations are restored before validation/commit. No live order, account binding, database row or running process is changed.
+[Mutation receipts](2026-09-09-arm-state-predicate-data/mutations.json): hiding pending placement and ignoring a broker-only order each changed FAIL to an incorrect PASS and were caught by the production-path pin. A copied SQL list in a newly created audit script made the repository guard fail. All three mutations returned test exit 1. Final full-suite receipts are linked below. All deliberate mutations are restored before validation/commit. No live order, account binding, database row or running process is changed.
 
 ## Source freshness and publication
 
@@ -42,6 +42,12 @@ Main was already owned by the combined-boot lane, with dirty RELEASE/Guide deplo
 
 [A] At implementation commit **715f361a3be80914a31672f11c8264c7f6f08524**, full `go test ./...` PASS; frontend **58 files / 414 tests PASS**; TypeScript PASS; Python helper smoke PASS. The pre-commit hook initially could not spawn ESLint because the new worktree lacked installed dependencies; linking the existing ignored web/node_modules let the unchanged hook pass. No hook was bypassed.
 
-[A] Review then found a Go/SQLite Unicode casing discrepancy: `IsTerminalArmState("FİLLED")=true`, but SQLite LOWER alone returned false. The new store-reader variant reproduced it as `SQL/Go disagree for "expİred"` ([RED](2026-09-09-arm-state-predicate-data/unicode-red.txt)). The SQL generator now derives non-ASCII-to-ASCII replacements from Go's Unicode case ranges, as well as its Unicode whitespace set. The parity pin passes after correction. The Go classifier is unchanged. Final integrated-head Go validation follows this correction.
+[A] Review then found a Go/SQLite Unicode casing discrepancy: `IsTerminalArmState("FİLLED")=true`, but SQLite LOWER alone returned false. The new store-reader variant reproduced it as `SQL/Go disagree for "expİred"` ([RED](2026-09-09-arm-state-predicate-data/unicode-red.txt)). The SQL generator now derives non-ASCII-to-ASCII replacements from Go's Unicode case ranges, as well as its Unicode whitespace set. The parity pin passes after correction. The Go classifier is unchanged. Final integrated-head validation below includes this correction.
 
 [A] Final review also pins that changing every rendered order Status label leaves the gate verdict/detail unchanged. The cancellation reader retains the original Go lower/trim semantics, including `cancel_pendİng`; this prevents the shared classifier migration from making an in-flight cancellation eligible again. The Guide’s older five-leg description and sample boot line now agree with its current broker-book description.
+
+## Final integrated validation
+
+[A] At **2d6186c7acabb3b7893c3c0caeb8fcae906bc8f2**, containing current dev **d1a19cd3d2713da5c8fb7505156c1c2d18ff93dd**: `go test ./...` PASS, `go build ./...` PASS, frontend **58 files / 414 tests PASS**, TypeScript PASS, canonical Python helper and modified audit-script syntax PASS. [Validation receipt](2026-09-09-arm-state-predicate-data/validation.json) records exact command results and log hashes; [Go package results](2026-09-09-arm-state-predicate-data/go-test.txt) preserve the full suite output. The subsequent publication commit changes only this report and its receipts.
+
+The code is published for review on `fix/arm-state-predicate`; it is **not yet on dev and not booted**. No deploy lock was acquired, no live database was written, and no order or process was touched. The next authorized deployment must validate its own merged head and fresh five-leg gate.
