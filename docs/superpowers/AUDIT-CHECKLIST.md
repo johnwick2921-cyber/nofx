@@ -3477,3 +3477,68 @@ only once `pgrp == pid`, true exactly when `setsid` completed) *and* at the
 CONSUMER (signal only a positively-identified target). Layer one alone still
 trusts whatever is already in the file; layer two alone still writes a dangerous
 value for anything else to read.
+
+## CLASS 106 — A CORRECT READ OF A NOT-YET-CORRECT STATE (born 2026-09-10; generalised out of class 104 at a peer's suggestion)
+
+**Number note:** 105 is claimed by `origin/docs/worktree-tmp-locked-prune` (locked
+worktrees making a dangling registration immortal). Numbers are assigned at merge
+per A27; if that branch never lands, 105 is a hole rather than a collision.
+
+**Name.** You read a value. The read succeeds, the value is real, and it is the
+right value *for the state the system is in at that instant* — but that state is
+about to change into the one you actually meant to ask about. Nothing errors.
+Nothing is null. The read is simply early, and an early read of a mutable
+identity is indistinguishable from a correct one.
+
+**Read after class 104**, which is the instance this was generalised from, and
+beside class 88.
+
+**The instance.** `kpid=$!` after `setsid nohup bash -c '…' &`. Job control is
+off in a non-interactive shell, so a background job does **not** get its own
+process group — it starts in the SHELL'S, and `setsid` moves it only once it
+execs. `$!` returns before that. So `/proc/$kpid/stat`'s `pgrp` field is a
+perfectly valid read that returns the PARENT's group, and the consumer then
+signalled it: `kill -TERM -- "-$pg"` against the invoking shell's process group.
+
+**Why this is its own class and not a shell footnote.** The shape has nothing to
+do with process groups. The value is real before the operation that determines
+what it *means*:
+
+| read | the operation that gives it meaning |
+|---|---|
+| a pid | the `exec` that changes what that pid IS |
+| a row | the commit that makes it visible/durable |
+| a filename | the rename that puts it at its final path |
+| a branch diff | the base moving under it (SPEC-FRESHNESS, class 73) |
+| a config value | the reload that makes it the running config |
+| a price/quote | the fill that makes it a transacted price |
+
+Every one of them reads fine at the moment you read it. Retrying does not help,
+because there is no error. Logging does not help, because the logged value looks
+right. **Only a predicate that is FALSE before the transition and TRUE after it
+distinguishes the two states** — here, `pgrp == pid`, which is true exactly when
+`setsid` has completed and is impossible for a value borrowed from the parent.
+
+**Probe, five questions:**
+1. Between reading this value and using it, is there an operation that changes
+   what the value MEANS rather than what it is? Name it. If you can, you have
+   this class.
+2. What predicate is false before that operation and true after? If you cannot
+   state one, you cannot detect the early read — and a sleep is not a predicate.
+3. Does the early value look VALID? The dangerous case is when it does. A null or
+   an error is a gift; a plausible wrong number is this class.
+4. Who consumes it, and is that consumer destructive? An early read feeding a
+   log is a cosmetic bug; feeding a kill, a delete, or an overwrite, it is an
+   incident.
+5. Does a retry loop "fix" it? If the loop has no predicate it is not waiting for
+   the transition, it is waiting for luck — and it will pass in testing.
+
+**Law:** **wait on the predicate, not on the clock, and re-validate at the point
+of use.** Where a value's meaning is established by a later operation, the reader
+waits for a condition that operation makes true, and the consumer re-checks
+identity before acting — because the reader does not control who wrote the value
+it is handed.
+
+**Corollary.** Found because the early read reached a `kill`. It had presumably
+been early many times before that without consequence, which is the ordinary
+career of this bug: invisible until it feeds something that bites.
