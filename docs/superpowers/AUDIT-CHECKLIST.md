@@ -10,7 +10,7 @@ in CLAUDE.md).
 
 ## PART 1 — THE BUG CLASSES (name · root cause · probe · law)
 
-*Highest occupied class: **100** (2026-09-10). Numbers are assigned AT MERGE and
+*Highest occupied class: **105** (2026-09-10). Numbers are assigned AT MERGE and
 never renumbered; a gap means a wave took a later slot to avoid a collision.*
 
 1. **Self-imposed caps.** Root cause: an AI/HTTP/token cap chosen without
@@ -3237,7 +3237,7 @@ The structural remedy is to export ONE SQL fragment derived from the predicate, 
 
 **Probe:** before ANY merge, run `git diff --stat origin/dev HEAD` and read the DELETION count, not the conflict list. A wave that adds a feature should show deletions only in files it deliberately edits; a four-figure deletion count against a branch that added code means the base moved under it. Cross-check with `git log --oneline origin/dev..HEAD` and `git log --oneline HEAD..origin/dev` — the second list is what landed while you were not looking. Then confirm your own files: `git cat-file -e origin/dev:<path>` for each one you created. If they are already there, your work landed by another route and the branch is now a rollback of everything that landed after it.
 
-**Law:** a branch is only as safe as its base is fresh, and staleness is silent — no conflict, no test failure, no hook. Diff against the CURRENT dev and read deletions before merging, every time, including when the branch has not been touched since it was green. When your own files are already on dev, do not merge the branch: reset onto the current tip and re-apply only the genuinely unlanded deltas, then re-run the same deletion check to prove the reset is additive. Related: class 73 (SPEC-FRESHNESS — a worktree cut from an older base freezes a moving spec) and PUSH-EMPTY-AT-ACCEPT, whose founding incident was a lane's branch merged into dev without its author ever being told. This is that incident seen from the author's side. Dispatch 103 report: `reports/2026-09-09-candidates-not-entitlements.md`.
+**Law:** a branch is only as safe as its base is fresh, and staleness is silent — no conflict, no test failure, no hook. Diff against the CURRENT dev and read deletions before merging, every time, including when the branch has not been touched since it was green. When your own files are already on dev, do not merge the branch: reset onto the current tip and re-apply only the genuinely unlanded deltas, then re-run the same deletion check to prove the reset is additive. Related: the SPEC-FRESHNESS LAW (CLAUDE.md canon — a worktree cut from an older base freezes a moving spec; it has NO checklist slot, and CLAUDE.md's "Checklist class 73" names the hook class instead — see class 105 instance 3, which corrects this line) and PUSH-EMPTY-AT-ACCEPT, whose founding incident was a lane's branch merged into dev without its author ever being told. This is that incident seen from the author's side. Dispatch 103 report: `reports/2026-09-09-candidates-not-entitlements.md`.
 
 ## CLASS 101 — A BOUND THAT IS WRITTEN, PRINTED, AND NEVER COMPARED (born 2026-09-10, fix/lock-keeper-on-acquire)
 
@@ -3477,3 +3477,37 @@ only once `pgrp == pid`, true exactly when `setsid` completed) *and* at the
 CONSUMER (signal only a positively-identified target). Layer one alone still
 trusts whatever is already in the file; layer two alone still writes a dangerous
 value for anything else to read.
+
+## CLASS 105 — DOCUMENTATION DESCRIBING CODE, IN A PLACE THE CODE'S TESTS CANNOT SEE (born 2026-09-10, dispatch 103)
+
+**Root cause:** a statement ABOUT the code — a cap, a verb, a sequence, a rule — written where nothing can compare it to the code it describes. It is correct until the code moves, and from then on it is wrong silently and for as long as anyone leaves it. The build passes, the suite passes, review sees nothing, because no test reads prose. Three instances, across the whole range: one in tracked source that tests still cannot reach, and two in a file git cannot reach at all — the second of which caught the author of this entry mid-draft.
+
+**Instance 1 — a comment in tracked source.** `api/handler_svp.go:50`:
+
+```go
+// Default 5m. Pull up to 2000 bars (the cache cap); sessions off the visible
+// range are skipped by the renderer.
+bars := provider(symbol, interval, 2000)
+```
+
+The cache cap is **2500** — `DefaultBarCacheMaxBars` (`provider/ninjatrader/bar_cache.go:24`), which `market/data.go:225` names correctly as "2500 = the BarCache cap". What makes this sharper than drift: **2000 is not a stale number.** It is `AISVPBarCount` (`kernel/svp.go:47`) and it is the correct argument to pass. The comment was REWRITTEN at `f94118e6`, which replaced "1m/2000 matches the AI's exact input" with "2000 bars (the cache cap)". The value survived the rewrite; its description did not. A reader now learns a wrong cap from a line sitting directly above correct code — and a reader who later "fixes" the code to match the comment would break the AI's SVP input. Nothing failed, because a comment is unreachable from a test even when the file it lives in is fully covered.
+
+**Instance 2 — a rule in an untracked file.** `CLAUDE.md:205` instructed every lane on this machine:
+
+```
+deploy/nofx-lock.sh heartbeat <session>                    # beat every ~2 min as you work
+```
+
+On 2026-09-10 the lock-keeper wave (`417599a3`, classes 101–104) made `acquire` start the heartbeat itself. Hand-beating became a **second writer into the lock dir** — the precise failure that wave existed to close. The one file instructing every lane to hand-beat was the one file the wave could not touch: `CLAUDE.md` is **untracked**, so no branch could correct it, no review could see it drift, and no test could assert it still matched the script. This is the worse half of the class. Instance 1 misleads a reader; instance 2 **instructs** one, and a lane following it faithfully would have caused the defect the wave had just removed.
+
+**Instance 3 — the one that caught the author of this entry, while writing it.** `CLAUDE.md`'s SPEC-FRESHNESS block ends: *"(Checklist class 73, read beside 70 and 72.)"* Checklist slot **73** is **"A hook registered one start too late"**, and slot 73's own text records why: it was renumbered 69→70→73 at merge because "70/71/72 were taken by the lock, stash-stack and flaky-clock classes landing in the same boot." SPEC-FRESHNESS was numbered on its branch, the number moved under it at merge (A27), and the untracked file kept the branch number. **SPEC-FRESHNESS has no checklist slot at all** — it is CLAUDE.md-only canon, and the only two occurrences of the string in this file are the Related lines discussed below.
+
+Drafting this entry, I read that citation, believed it, and wrote "class 73 (SPEC-FRESHNESS)" into the Related line of **class 100 — which is on dev**, and into the first draft of this one. It was caught only by checking every citation against the file before merge, and only because this file's own ⚠ NUMBERING HAZARD section (added 2026-09-07) says it carries two heading formats, which forced a second grep in the other format. The same paragraph also cost a second wrong citation: "the prompt feeds forward" is **slot 50**, not 45, and slot 50's own text says so — *"(Dispatch 'class 45'; checklist slot 45 was already the pantry class, hence 50.)"* The dispatch's name for a wave and its merged slot number are different facts, and a memory or a doc that records the first will keep asserting it after the second is decided. Class 100's Related line is corrected in the same commit as this entry.
+
+**Probe:** for every statement about the code that a reader could ACT on — a cap, a limit, a default, a verb, an ordering — ask two questions, in this order. **Is it in a file git tracks?** If not, it cannot be corrected by a wave, and its being wrong is not a bug anyone can fix on a branch. **Is there a test that fails when the code moves?** If not, being right today is luck. Then check the statement itself: a comment that names a value should name the CONSTANT (`DefaultBarCacheMaxBars`), not a transcription of it, so a reader who follows the name arrives at the truth. Be most suspicious of parentheticals that explain what a number *is* — `2000 (the cache cap)` — because the number is verified by the compiler and the gloss by nobody. When a comment is rewritten rather than written, diff what the prose asserted before and after: values are reviewed, descriptions are not.
+
+**Law:** a rule about the code lives in a **tracked file with a contract test**, and untracked guidance **points at it** rather than restating it. A restatement is a second copy that drifts from the code and from the original, independently and silently; a pointer cannot be wrong about anything except where to look.
+
+Partial remedy already on dev: `docs/superpowers/CLAUDE-canon.md` (landed `557494c7`) mirrors the MAIN-TREE LOCK LAW into a tracked file, and it declares itself newer by construction because it is the copy a wave can reach. That closes the git half. **The test half is not closed** — `git grep CLAUDE-canon -- '*.go' '*.sh'` returns zero, so nothing asserts the mirror still matches `deploy/nofx-lock.sh`, and a mirror with no contract test is this class with one more copy in it. The pointer half is not closed either: `CLAUDE.md` cannot be made to point at the canon file by any wave, only by the owner. Until both halves land, treat the canon file as authoritative over `CLAUDE.md` and the script as authoritative over both.
+
+Related: **slot 50** (the prompt withheld what the validator enforces — a document that instructs a reader to do the thing a guard forbids; the dispatch called it "class 45", the merged slot is 50), the **SPEC-FRESHNESS LAW** (CLAUDE.md canon — it has NO checklist slot, and CLAUDE.md's claim that it is class 73 is instance 3 above), and the **GUIDE CONTENT LAW**, which is this law already applied to one surface: a guide that lies about the running binary is worse than no guide.
