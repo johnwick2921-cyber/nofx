@@ -254,6 +254,67 @@ case "$src2" in
   *) bad "the acquire path records a keeper" "no keeper.pid anywhere — the message would be the defect again" ;;
 esac
 
+echo "== NO WRITER OUTLIVES ITS LOCK: an orphan cannot land in the next holder's lock =="
+#
+# The keeper loop runs `bash "$self" heartbeat` as a foreground CHILD. Killing
+# only the loop orphaned it, and _write_meta mv's into $LOCK_DIR/meta by absolute
+# path with no identity check — so a writer that passed _require_holder while A
+# held the lock landed A's meta into the lock B created at the same path seconds
+# later. B held the tree, the lock said A: B could not release its own lock and
+# A, holding nothing, could.
+#
+# THE SHIM IS CONDITIONAL, AND THAT IS THE WHOLE TECHNIQUE. Two earlier drafts of
+# this pin passed with the defect fully present. The first sampled the race —
+# eight rounds against a natural rate near one in sixty, which tests nothing. The
+# second widened the window with an UNCONDITIONAL sleep in mktemp, which also
+# slowed `acquire` (it writes meta too) and shifted the very timing it meant to
+# expose. Slowness has to be switchable: on for the one beat being parked, off
+# for everything else.
+SLOWFLAG="$(mktemp -u)"
+SHIM="$(mktemp -d)"
+cat > "$SHIM/mktemp" <<SHIMEOF
+#!/usr/bin/env bash
+[ -e "$SLOWFLAG" ] && sleep 3
+exec /usr/bin/mktemp "\$@"
+SHIMEOF
+chmod +x "$SHIM/mktemp"
+KWO="$(mktemp -d)"
+export NOFX_LOCK_DIR="$KWO/lock.d"
+O() { NOFX_LOCK_STALE_SECONDS=600 NOFX_LOCK_BEAT_SECONDS=1 PATH="$SHIM:$PATH" bash "$LOCK_SH" "$@" 2>&1; }
+rm -f "$SLOWFLAG"
+O acquire sess-A "lane A cutover" 45 >/dev/null
+touch "$SLOWFLAG"      # the NEXT beat parks inside mktemp holding A's meta
+sleep 1.5
+rm -f "$SLOWFLAG"      # everything after this is fast again
+O release sess-A >/dev/null
+O acquire sess-B "lane B — a DIFFERENT cutover" 45 >/dev/null
+sleep 4                # give the parked writer time to land its mv
+who="$(bash "$LOCK_SH" status 2>&1)"
+hasnt "a second acquire never sees the first holder's identity" "$who" "sess-A"
+has   "the lock reports the holder that actually took it"       "$who" "sess-B"
+rel="$(bash "$LOCK_SH" release sess-B 2>&1)"
+hasi  "the holder can release its OWN lock"                     "$rel" "released"
+kp="$(cat "$NOFX_LOCK_DIR/keeper.pid" 2>/dev/null || true)"
+[ -n "$kp" ] && kill -KILL -- "-$kp" 2>/dev/null
+rm -rf "$KWO" "$SHIM"; rm -f "$SLOWFLAG"
+unset NOFX_LOCK_DIR
+export NOFX_LOCK_DIR="$WORK/nofx-main.lock.d"
+
+echo "== release kills the GROUP, so no keeper member survives it =="
+KWG="$(mktemp -d)"
+G() { NOFX_LOCK_DIR="$KWG/lock.d" NOFX_LOCK_STALE_SECONDS=600 NOFX_LOCK_BEAT_SECONDS=30 bash "$LOCK_SH" "$@" 2>&1; }
+G acquire sess-G "a holder with a slow beat" 60 >/dev/null
+pg="$(cat "$KWG/lock.d/keeper.pid" 2>/dev/null || echo)"
+G release sess-G >/dev/null
+sleep 1
+if [ -n "$pg" ] && kill -0 -- "-$pg" 2>/dev/null; then
+  bad "release stops the whole keeper group" "process group $pg still alive after release"
+  kill -KILL -- "-$pg" 2>/dev/null
+else
+  ok "release stops the whole keeper group"
+fi
+rm -rf "$KWG"
+
 echo
 printf 'pass=%d fail=%d\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

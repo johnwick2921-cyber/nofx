@@ -117,10 +117,13 @@ META
 # that is still the heartbeat, and only the heartbeat. release uses it to stop
 # the process it started, so no writer outlives its lock.
 _spawn_keeper() {
-  local session="$1" self="${BASH_SOURCE[0]}" exp
+  local session="$1" self="${BASH_SOURCE[0]}" exp kpid pgid
   exp="$(_field expiry_epoch)"
   [ -n "$exp" ] || return 0
-  nohup bash -c '
+  # setsid makes the keeper a SESSION AND GROUP LEADER, so the group contains
+  # exactly the keeper loop and whatever it spawns — which is what release has
+  # to be able to end as one thing. See _stop_keeper for why.
+  setsid nohup bash -c '
     lock="$1"; sess="$2"; exp="$3"; every="$4"; self="$5"
     while [ -d "$lock" ]; do
       [ "$(date +%s)" -ge "$exp" ] && break
@@ -129,22 +132,52 @@ _spawn_keeper() {
     done
     rm -f "$lock/keeper.pid" 2>/dev/null
   ' _ "$LOCK_DIR" "$session" "$exp" "$HEARTBEAT_EVERY_SECONDS" "$self" >/dev/null 2>&1 &
-  echo "$!" > "$LOCK_DIR/keeper.pid"
+  kpid=$!
+  # The GROUP id, read from /proc rather than assumed: setsid forks in some
+  # shells and execs in others, so $! is not reliably the leader.
+  pgid="$(awk '"'"'{print $5}'"'"' "/proc/$kpid/stat" 2>/dev/null)"
+  [ -n "$pgid" ] || pgid="$kpid"
+  echo "$pgid" > "$LOCK_DIR/keeper.pid"
   disown 2>/dev/null || true
 }
 
-# _stop_keeper ends the process this script started. It is the only reader of
-# keeper.pid, and it asks nothing about liveness.
+# _stop_keeper ends the process GROUP this script started, and WAITS for it.
+#
+# THE DEFECT THIS REPLACES, found by an adversarial pass before this ever
+# shipped: it killed only the keeper LOOP. The loop runs `bash "$self" heartbeat`
+# as a foreground CHILD, so killing the parent ORPHANED that child — and
+# _write_meta mv's into "$LOCK_DIR/meta" by absolute path with no identity check.
+# An orphan that had already passed _require_holder while A held the lock landed
+# A's meta into the lock B created at the same path seconds later. B then held
+# the tree while the lock said A: B could not release its own lock, and A —
+# holding nothing — could, freeing the tree under a live cutover. The atomic mv
+# is what made it silent; the wrong content landed whole, never torn.
+#
+# That is failure (2) from this file's own header — a write that clobbers —
+# rebuilt one layer down by the keeper wave. The group kill CLOSES the window
+# rather than narrowing it: loop and child die together, and release never
+# removes the directory while a writer could still be inside it.
+#
+# ON /proc: this is NOT class-70 pid liveness. It never answers "is the holder
+# working" — that is the heartbeat, and only the heartbeat. It answers "has the
+# process I just signalled finished dying", about a child this script started,
+# bounded, and reachable from nowhere but here. status and check cannot see it.
 _stop_keeper() {
-  local kp
-  kp="$(cat "$LOCK_DIR/keeper.pid" 2>/dev/null || true)"
-  [ -n "$kp" ] && kill "$kp" 2>/dev/null
+  local pg i=0
+  pg="$(cat "$LOCK_DIR/keeper.pid" 2>/dev/null || true)"
   rm -f "$LOCK_DIR/keeper.pid" 2>/dev/null
+  [ -n "$pg" ] || return 0
+  kill -TERM -- "-$pg" 2>/dev/null
+  # BOUNDED WAIT, ~5s. Never rm under a live writer.
+  while [ "$i" -lt 50 ]; do
+    [ -d "/proc/$pg" ] || break
+    sleep 0.1; i=$((i+1))
+  done
+  # Whatever is left in the group cannot execute another statement after this.
+  kill -KILL -- "-$pg" 2>/dev/null
   return 0
 }
 
-# The beat is owner-scoped. An unauthenticated beat would let any lane keep a
-# stranger's abandoned lock looking alive, which is failure (1) rebuilt.
 cmd_heartbeat() {
   local session="${1:?session required}"
   [ -d "$LOCK_DIR" ] || { echo "REFUSED — no lock to beat."; return 1; }
