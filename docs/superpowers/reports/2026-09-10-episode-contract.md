@@ -314,6 +314,23 @@ protected-file change is exactly the conversation the guard exists to force.
 
 ## H · VERIFICATION
 
+**The environment these results were measured in**, because §G is the proof that a
+suite result without one is not falsifiable — the same standard A21 sets for row
+claims, applied to suite claims:
+
+| | |
+|---|---|
+| tree | `/home/hoang/nofx-episode` (linked worktree), `npm ci` from the tracked lockfile |
+| go | `go1.25.3` |
+| node / npm | `v22.22.1` / `10.9.4` |
+| **vite** | **6.4.3** — matches `web/package-lock.json`; `npm ls vite` agrees |
+| vitest | `4.1.11` |
+| sqlite3 | `3.45.1` |
+
+The main tree measures the FE suite differently at vite `6.4.1`. Any suite result
+below is a claim about THIS table, not about the commit alone.
+
+
 | gate | result |
 |---|---|
 | `go build ./...` | OK at merged HEAD |
