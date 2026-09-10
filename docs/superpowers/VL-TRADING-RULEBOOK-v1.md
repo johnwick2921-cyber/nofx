@@ -1,280 +1,278 @@
-# VL INTELLIGENT — THE TRADING RULEBOOK
-### What the system does every day, in a trader's words · 2026-09-10 · v1
+# VL TRADING RULEBOOK v1 — corrected evidence and policy structure
 
-This is not the plan and not the checklist. It is the book: the rules the system
-trades by, written so a trader can read them in ten minutes and know what will
-happen and what will not. Every rule carries its evidence label — **[R]** researched,
-**[T]** measured on our own tape, **[O]** owner-ruled, **[I]** invented and unproven.
-Where a rule is [I], the system still follows it — but it says so, and it is being
-measured.
+**Documentation correction: 2026-09-10. This document describes and proposes no code changes.**
 
-The system today, in one sentence: **it marks levels on every timeframe, waits for
-price to reach one, fades it if the level holds, and stops itself out beyond it —
-one contract, one position, flat at the close.** Everything below is the detail.
+This revision separates **A. what runs**, **B. what is wanted**, and **C. what is still to build or prove**. Historical measurements and trader recommendations have their own sections. A roadmap item, an owner preference and a verified implementation are not interchangeable.
 
----
+**Evidence boundary.** The health endpoint returned `status=ok`, revision `95f387ae3cfe`, at **2026-09-10 13:01:15 CT**. Implementation citations below are pinned to full commit **`95f387ae3cfe675919cd6f81a689010a85889059`**. The PR was accepted from dev **`5e27344271fb1d04550426fee9a3e2a96ee737d3`** and rebased onto **`a98a92c76b62d4b9533e12cc4a51f6c142d2ecb6`** before publication; dev and the observed running revision are deliberately distinguished. Reading code establishes the implementation at that revision, not that every configured route is enabled or every broker outcome has been demonstrated. Active strategy/environment settings and live broker state were not re-read for this documentation correction.
 
-## PART 1 — WHAT IT IS
+**Original-file provenance.** The supplied Desktop file is preserved byte-for-byte in commit `3b449ff04269dc623f7aa01f8848c0ce4571b6bc`: 280 lines, 14,769 bytes, SHA256 `62611a3bc06e535cce7657c2adbb892326bbb3fbc2e9596ae38b5ea473a6e621`. It was not previously tracked on dev.
 
-**A level trader.** Not a momentum trader, not a scalper, not a trend-follower. It
-believes price reacts at prices that mattered before: yesterday's high, the
-overnight low, the opening range, the volume shelf, a swing that held. It marks
-those, and it trades the reaction.
+**Labels.** `[R]` = research-supported statement with its market/sample limits; `[T]` = measured result from the explicitly named population, not necessarily a new measurement; `[I]` = unvalidated hypothesis or proposed analytical/documentary choice. `[O]` identifies a carried-forward owner rule, not empirical support or deployment proof. Code citations `[Cnn]` establish implementation; audit citations `[Ann]` establish what the archived audit reported.
 
-**A fade book, by weight.** 116 reject scenarios, 80 sweep-reclaims, 34 reclaims,
-29 retests in the record. When it has a choice, it sells the top of the range and
-buys the bottom. It carries continuation plays in its vocabulary; it rarely
-arms them. [T]
+## A. WHAT RUNS — implementation at the observed revision
 
-**With a Market Profile map and ICT names.** The map is Dalton's — value area, POC,
-initial balance, opening range, VWAP. The play names are ICT's — sweep, reclaim,
-order block, FVG, displacement. The execution is classic support/resistance: a
-resting limit at the level, a stop beyond it. Three schools; the rulebook below is
-what survived when we asked which parts have evidence.
+Every implementation statement in this section cites a code line. Defaults and conditional branches are described as such; no unresolved setting is silently called enabled.
 
-**What it is NOT allowed to be.** It does not scale in. It does not average down.
-It does not move stops to breakeven or trail (suspended by 0B until measured). It
-does not hold overnight. It does not trade a second contract. It does not enter
-without a plan scenario that names the trade — `plan_mode=strict`, the decision
-loop's own entries are refused. [O]
+### Part 1 — Entry families and routing
 
----
+The entry-law table distinguishes reject, FVG, sweep-reclaim, reclaim, breakout-retest, acceptance/hold and continuation conditions. The name “level-fade book” is a description of the studied style, not a statement that these conditions share one execution rule. [C01] [C03]
 
-## PART 2 — THE DAY, HOUR BY HOUR (all times CT)
+When `plan_mode=strict` is selected, the shared gate refuses decision-path market entries and requires an arm-path entry to cite a scenario with a matching direction. This is a conditional code fact; the current strategy's resolved mode is not established by this document. [C06]
 
-```
-16:30  ASIA read       — the planner writes the ASIA plan
-17:00  Globex opens    — arms may rest; the fade book is live
-01:30  LONDON read     — new plan; ASIA's arms are superseded
-08:00  NY read         — new plan
-08:30  RTH opens       — OR forms (first 5 min), IB forms (first 60)
-08:30–11:00  morning   — the highest-weighted window [I]
-12:00–13:30  lunch     — NO NEW ENTRIES, both paths [O, enforced 09-09]
-13:30–14:45  afternoon — entries permitted
-14:20  last entry      — 25 min before the flat [O]
-14:45  FLAT            — position closed, arms cancelled, pending
-                         placements dropped, confirmed by the broker book [O]
-14:45–16:30            — the maintenance window; no reads, no arms
-```
+### Part 2 — The day: read time, activation, entry cutoff and flat are distinct
 
-**Shortened sessions** (Labor Day, Thanksgiving Friday, Christmas Eve, New Year's
-Eve): the session calendar says so at boot, the close is the stated early close,
-and the book is flat at it. Full closures: no reads, no arms. A date the calendar
-cannot classify is CLOSED and named on the boot line. [O]
-
-**What wakes a re-plan between reads:** a seated level touched, broken, or
-invalidated · a new level seated · a structure event (MSS/BOS) · a fast-market
-move ≥ 1.5×ATR5m · the plan's own flip or death condition · the last tradeable
-scenario dying (exhaustion, WARN + counter for now). Cooldown 30 min and cutoff
-25 min before the flat, both enforced; fast-market exempts the cooldown only. [O]
-
----
-
-## PART 3 — THE MAP
-
-**Every level, every timeframe, always kept.** Nothing is deleted from the map
-because it lost a seat. A level not good enough to enter on is still the target,
-the obstacle, or the invalidation. **Exclusion is not invalidation.** [R — the
-research's one structural ruling]
-
-**What is marked** (and what it is called on the card):
-
-| Family | Definition | Evidence |
+| Source-defined item | What the inspected implementation says | Code |
 |---|---|---|
-| PDH / PDL / PDC | prior session-day high/low/close (calendar-day bucketing is a known defect — fix pending) | [R Osler, FX] |
-| ONH / ONL | overnight session high/low, current session-day | [I] |
-| OR-H / OR-L | first 5 minutes after 08:30 | [R Zarattini, ETF only] |
-| IB-H / IB-L | first 60 minutes | [I doctrine — Dalton] |
-| VWAP, ±1σ, ±2σ | session VWAP anchored 17:00 | [I] |
-| POC / VAH / VAL | prior-session volume profile (close-bin proxy, not true volume-at-price — known) | [I doctrine] |
-| Swings | 5m / 15m fractal pivots | [T positive — the one seat rule with a measured effect] |
-| Supply / Demand zones | 6-candle base, 1.5×ATR departure | [I] |
-| OB / FVG | ICT order block, fair value gap | [I — no evidence anywhere] |
-| Round numbers | 100 / 50 / 25 multiples | [R Osler, FX clustering] |
-| PWH / PWL | prior-week high/low, from daily bars | [I — untested on NQ] |
-| Projections | measured move, ATR-projected extreme, round numbers beyond the range | [I — targets and obstacles only, never entries] |
+| Asia registry | Read 16:30; window 17:00–02:00 CT; flat 02:00; default enabled=false. | [C11] |
+| London registry | Read 01:30; window 02:00–08:30 CT; flat 08:30; default enabled=false. | [C11] |
+| NY registry | Read 08:00; window 08:30–14:45 CT; flat 14:45; default enabled=true. | [C11] |
+| Opening no-entry band | First five minutes after the relevant session open. | [C12] |
+| Lunch no-entry band | 12:00–13:30 CT. | [C12] |
+| Last-entry offset | Default 15 minutes before session end; per-session overrides take precedence. Normal NY at that default gives 14:30, not an unconditional 14:20. | [C13] [C14] |
+| Earlier holiday close | The last-entry calculation can pull in to the calendar's earlier close minus the resolved offset. | [C14] |
+| Arm-path session risk | The arm path calls the shared session-risk adjudication, whose no-trade-band refusal precedes its loss-run check. | [C18] [C15] |
+| 2026-12-31 | The inspected calendar classifies this date as NORMAL. That is the stored calendar classification, not independent proof of the future exchange schedule. | [C27] |
 
-**How the shortlist is built.** Overlapping references within 3 points merge into
-one candidate carrying all its names — three names on one price count once for the
-model, though the score still counts them (known, E4 will judge). A level is an
-ENTRY candidate only when an opposing reference exists at least a stop-floor away.
-The entry shortlist orders by reachability — nearest first — up to the 12-seat cap.
-Tier-1 anchors (PDH/PDL/PDC, ONH/ONL, VWAP) always seat. [O, labelled I]
+The table describes registry defaults and implementations, not a fresh determination of enabled sessions or account-specific overrides. In particular, a 01:30 read is not itself a 01:30 London activation, and a replan cutoff must not be substituted for a last-entry cutoff.
 
-**The grade is a label, not a probability.** Kind × freshness × confluence × HTF
-1.2 — every term is uncalibrated. The research says so; the card says so. [R]
+Exchange hours are a separate external fact: CME lists normal Micro E-mini Globex hours as 17:00–16:00 CT. The strategy's 14:45 flat and subsequent idle period should not be called the exchange's maintenance window. Holiday trading, settlement and floor hours must be distinguished. [R1] [R2]
 
----
+### Part 3 — The map: supported construction, not an all-timeframe promise
 
-## PART 4 — THE TRADE
-
-**A scenario must state, before it is accepted** [O, since 09-08]:
-entry zone · trigger · confirmation · structural invalidation · protective stop ·
-**the first opposing obstacle** between entry and target, with its provenance ·
-**what it will do there** (pass / reduce / exit / decline) · the arm target · the
-implied R to the obstacle and to the target.
-
-A scenario that contradicts itself — target off its own path, obstacle beyond
-the target, R that disagrees with its geometry — is **refused at write**. A first
-obstacle under 1R is **not refused, but marked** — a fact the owner sees, not a
-rule the system enforces. [O — the research forbids prescribing a target policy]
-
-**Confirmation** [O, since 09-09]:
-- "5m close beyond X" means a **closed** 5-minute bucket. A forming bucket is NOT
-  MET. Not "≈ met." The verdict names the bucket and its close time.
-- "Sweep then reclaim" checks the **order**. Part two must occur after part one.
-  If part one's instant cannot be established, the verdict is UNKNOWN — not met,
-  never plan-birth.
-- Immediate-mode displacement keeps its own named rule, `1m_displacement`, and
-  never borrows the 5m function.
-
-**Entry.** A resting limit at the level for fades; a stop-entry beyond the trigger
-for reclaim. The entry order carries its own OCO; the stop and target are created
-on the fill with a *different* shared OCO — so cancelling an unfilled entry can
-never touch a bracket. [O, since 09-08]
-
-**Known cost of the resting limit:** ~66% of passive NQ fills immediately precede
-an adverse move. The fade is selling adverse selection back to the market; its
-edge, if any, must exceed that. [R Lalor & Swishchuk 2024]
-
-**The stop.** Beyond the nearest seated level, or 1.5×ATR5m, whichever is wider.
-The floor is owner-ruled and unvalidated; the first number pointing at it — winners'
-MAE p80 22.5 vs a 33-point floor, n=18 — says it may be wide. [O, labelled I]
-
-**The target.** Whatever the scenario named — and the scenario now has to name the
-first obstacle on the way. 79% of first targets historically sat past a nearer
-level; planned 2.55R paid 1.66R. No target family is prescribed; E2 decides. [T]
-
-**The gate, in the order it runs** — every leg must pass or no order goes out:
-
-```
-one open position     one contract, one position; working entries count as
-                      exposure per ACCOUNT, checked against the broker's book [O]
-daily limit           $450 — DECORATIVE by owner choice (both switches off) [O]
-strict                only a plan scenario may trade [O]
-scenario direction    the scenario's side matches the order [O]
-shadow                shadowed conditions cannot place [O]
-invalidation          a scenario already invalidated cannot arm [O]
-R:R at fill           ≥ 2.0 against the arm's target [O]
-min-SL                ≥ 1.5×ATR5m [O, I]
-no-trade band         lunch 12:00–13:30 and first-N, on BOTH paths [O]
-breaker               8 consecutive losers halts the day; 5 warns [I]
-marketable guard      a limit already through its level is cancelled, not chased [O]
-```
-
-**What the gate has proven so far:** the 44 refusals since 09-02, taken at their
-authored geometry on the real tape, would have **lost $861**. The gates are not the
-problem. [T]
-
----
-
-## PART 5 — THE POSITION
-
-**Once filled:** the bracket rests at the broker — stop-market, GTC, target limit,
-one OCO. The system reads the broker's book as truth, never its own ledger. A
-position whose bracket the ledger cannot see is reported PROTECTION UNKNOWN on the
-desk strip, not assumed protected. [O]
-
-**Nothing moves the stop.** Breakeven and trail are suspended — the knob in Studio
-says ON, the binary says OFF, the Guide now says so. Until E2 measures the exit
-geometry, the initial stop is the stop. [O — 0B]
-
-**Exits:** the stop, the target, or the 14:45 flat. The exit cause is recorded from
-the broker's own event, never inferred from price. [O, since 09-06]
-
-**A cancel is confirmed by the broker's book** — never by the call returning. A
-placement is `place_pending` until a received frame names it. A rejection goes
-terminal in the broker's own words. [O, classes 81/83]
-
----
-
-## PART 6 — RISK
-
-```
-size            1 contract, always                                 [O]
-positions       1 at a time                                        [O]
-daily limit     $450 — set, NOT enforced (owner's choice)          [O]
-breaker         8 losers → halt; 5 → warn                          [I]
-flat            14:45, or the early close — position AND arms      [O]
-overnight       never                                              [O]
-scaling         never                                              [O]
-live money      NO — the gate is n≥100 over ≥40 active days under
-                one unchanged policy, both 95% lower bounds > 0,
-                max DD ≤ $900, worst day ≤ $450. Every line fails. [O]
-```
-
----
-
-## PART 7 — WHAT THE RECORD SAYS ABOUT THE BOOK
-
-```
-58 trades · 12 CME days · −$466 · 32% wins · payoff 1.75
-expectancy −$8.04, 95% CI [−$35.55, +$22.04] — indistinguishable from zero
-longs −$808 (19) · shorts +$342 (39)
-ASIA −$552 (16) · LONDON +$24 · NY +$62
-reject fades +$586 (31, the only positive cell) · every follow play negative
-levels hold 48.8% of first touches, n=423, [44.1%, 53.6%] — a coin flip
-zero trades under the rules running today
-```
-
-**What that means, as a trader:** the book has not shown an edge. The fade is the
-only cell that pays; longs and follows lose; ASIA loses. None of it is enough
-trades to call. And the research says no intraday strategy at one-contract retail
-scale on NQ is proven either — so "switch strategies" is not an answer the evidence
-supports. **The answer is: select.** When to fade, which level, which entry, what
-geometry. Every one of those is now a recorded question.
-
----
-
-## PART 8 — WHAT A TRADER WOULD DO THAT IT DOES NOT — YET
-
-| The trader | The system today | The wave |
+| Component | What the inspected implementation supports | Code |
 |---|---|---|
-| Reads the first hour and decides range or trend; stands aside on trend | Fades every day the same way — sold into +483 pts | W2 fade permission (label first, gate after E3) |
-| Picks the one level that matters | Writes 3–5, arms whichever fires first | W3 shipped the shortlist; "one trade" waits on E4 |
-| Watches the candle form at the level | Waits for a closed 5m bar, checked every 2 min | W-LIVE, after 13f's test |
-| Draws every timeframe | Detects swings on 5m/15m, zones on 1h; daily/weekly never | W-TF, detection now, weight after round 12 |
-| Knows what's beyond the last level on a trend day | Had no target past the map until 09-09 | 103 shipped projections as targets only |
-| Takes the first obstacle or trails through it | Aimed three levels away, paid 2R for 0.6R | scenario economics shipped; E2 decides the policy |
-| Manages the winner | Initial stop is the stop | after E2 |
-| Sizes by conviction | One contract, always | after live-money gate |
+| Main level assembly | Calls multi-day, round-number, opening-range, gap, equal-high/low, supply/demand, FVG, order-block, volume and swing detectors, then includes extra supplied levels and returns raw, pool and seated outputs. | [C19] |
+| HTF detection | Runs selected structure detectors on requested supported timeframes; its explicit whitelist is 15m, 30m, 1h, 2h, 4h, 6h, 8h and 12h. This is not an all-timeframe detector claim. | [C20] [C21] |
+| Session VWAP | Uses the session-day window and volume-weighted typical price with deviation bands. | [C22] |
+| Profile approximation | Accumulates each bar's volume into the bin containing that bar's close. It is a close-bin proxy, not observed volume at every traded price. | [C23] |
 
----
+The exact intended definitions of prior-day, overnight, OR, IB, weekly references and merge/seat policy are retained in section B as a specification to reconcile with source and data. Their existence in a wish list is not proof that every reference was available to a particular historical plan.
 
-## PART 9 — THE RULES THE SYSTEM MUST NEVER BREAK
+### Part 4 — The trade
 
-1. **The broker's book is the truth.** Never the ledger's word.
-2. **A send is not a settlement.** Placed means a frame came back; cancelled means
-   the book no longer lists it; flat means the book is empty.
-3. **UNKNOWN never takes the destructive branch.** A stale book refuses a
-   placement; it never confirms a cancel; it never reads as flat.
-4. **A forming bar is not a closed bar.** A confirmation on a bucket that has not
-   closed is not met.
-5. **A scenario may not contradict itself.** Target on its path; obstacle before
-   the target; R that matches its geometry.
-6. **A level cut from the shortlist stays on the map.** Exclusion is not
-   invalidation.
-7. **One contract, one position, per account, counting working entries.**
-8. **Flat means flat** — position, arms, and pending placements, book-confirmed.
-9. **No market belief ships without a research verdict, and every rule carries its
-   label.** A grade is a label. A floor is a parameter. A [I] is a guess we are
-   measuring.
-10. **The system says what it does.** Every boot line reads from the code that
-    enforces it; every Guide sentence matches the binary; a number nobody can
-    compute reads UNKNOWN, never zero.
+**Entry — reject arms on the TOUCH condition.** More precisely, an enabled `reject` scenario is a **touch-entry fade**: its legal confirmation rule is `touch`, with a limit entry at the level. It does not wait for a five-minute rejection close; the entry-law table marks close confirmation on a reject fade as illegal. This describes the rule, not a guarantee of arming, placement or fill when other gates refuse. [C01]
 
----
+The touch evaluator marks a level touched when an observed bar spans its price; it can mark a forming touch MET and only assigns a known ordered event time when the minute is complete. It does not establish that the level subsequently held. Creation of an internal arm, its touch condition, broker submission and execution are distinct events. [C02]
 
-## PART 10 — WHAT CHANGES THIS BOOK, AND WHAT DOES NOT
+**Touch-entry and confirmed-entry are two different trades.** They can produce different fills, stop distances, attainable targets, time remaining and expectancy. A confirmation observed later cannot justify booking the earlier touch price. E1 compares them side by side on the same initially observable opportunities, with their own executable entries and unchanged declared comparison assumptions; E1 does not presume either is better. This is the research design in section C, not a newly enabled entry condition. [I]
 
-**Changes it:** an experiment on the record — E1 entry type, E2 exit geometry,
-E3 fade permission, E4 ranking vs distance, E5 session risk — each paired,
-chronologically split, with a Reality Check, returning SUPPORTED / CONTRADICTED /
-INCONCLUSIVE. Or an owner ruling, labelled [O], recorded with its date.
+**Other confirmation rules.** Sweep-reclaim permits the table's touch and confirmation combinations; reclaim permits a five-minute close or one-minute structure confirmation. The close-rule evaluator reports completed rule-timeframe close evidence. These rules must not be generalised into “every setup waits for five minutes.” [C03] [C07]
 
-**Does not change it:** a good week. A bad week. A trader's instinct without a
-number. A research round that says "untested." A green suite. A passing check.
+**Stop-entry availability.** The stop-entry route requires `STOP_ENTRY_SEAM=on`; its default is off, and the arm path checks the switch before proceeding. This document does not assert its current environment value or that every reclaim became a broker order. [C04] [C05]
 
-That is the book. It is a level fade, it is honest about what it knows, and as of
-this week it can be measured. The first honest answer — does the fade pay on range
-days — is E3, after twenty recorded sessions.
+**Stop composition.** The arm path composes the stop before validation. The composition keeps the widest of the authored stop, qualifying risk-side structural anchor plus clearance, and a valid ATR floor. The authored stop can therefore remain wider than the other two. An unavailable/nonpositive ATR skips that composition leg; that limitation is not a claim that a particular order passed all other gates. [C29] [C09] [C28]
+
+**Target and first obstacle.** New-authoring economics checks require explicit geometry and an obstacle response, check numeric/path coherence, and record a sub-1R first obstacle as a warning rather than a mandatory target-policy refusal. The accepted response vocabulary includes pass_through, reduce, exit and decline_setup. Schema acceptance of a word does not prove a corresponding live management action exists. [C08] [C24]
+
+**R:R admission.** The inspected arm validator computes R from the arm leg's entry, stop and target before placement and compares it with the resolved arm threshold; its documented default is 2.0. This is **arm-time geometry**, not a guarantee of R≥2 at the eventual broker fill. The same validator checks the configured ATR stop floor when ATR is available. [C10]
+
+**Quantity at the inspected send sites.** The limit and stop-entry send calls shown here each pass quantity one. These two lines establish those call-site quantities, not proof of account-wide exposure, all broker paths or current broker inventory. [C25] [C26]
+
+### Part 5 — Position, cancellation and flat: verification boundary
+
+This correction does not certify that every cancel or flat attempt settled correctly. Broker-confirmed protection and full flatness are desired obligations in section B; current proof is an open item in section C. A healthy endpoint, a desired rule and a missing order are insufficient by themselves to prove a safe position state.
+
+No blanket “only stop, target or 14:45 can exit” statement is made here. The session registry has distinct flat times, and this documentation change did not perform an exhaustive exit-path or broker-event audit. [C11]
+
+### Part 6 — Risk: describe the resolver and its exceptions
+
+| Item | Verified source behaviour | Code |
+|---|---|---|
+| Loss-run adjudication | The adjudicator refuses at a positive resolved halt count, warns at a positive warning count, and evaluates the no-trade band first. | [C15] |
+| Read failure | If the loss-run query fails, the inspected gate logs that the breaker is not applied in that cycle and adjudicates with zero losses while retaining any band refusal. This is an explicit fail-open exception. | [C16] |
+| Daily-limit description | The boot-line formatter marks the limit DECORATIVE when either the master or daily leg is off. The formatter is not proof of the current switches; those values were not read for this correction. | [C17] |
+
+Owner thresholds and SIM restrictions are stated in section B as policy. They must not be mistaken for fully verified current enforcement.
+
+## B. WHAT IS WANTED — owner policy and the intended trading contract
+
+These are carried-forward owner choices from the supplied rulebook or explicitly marked analytical hypotheses. **Their presence here is not a deployment claim or an instruction to change code.** Exact runtime settings, exceptions and settlement evidence belong in section A only when verified.
+
+### B1. Scope and style
+
+- [O] SIM evaluation; one contract and one position per account, including working-entry exposure; no averaging down or fractional scaling.
+- [O] Strict scenario attribution: the plan, candidate, version, direction and permitted action should remain identifiable.
+- [O] Breakeven/trailing remain suspended under the carried-forward rule. Their current runtime status is not newly certified here.
+- [O] The supplied policy names a $450 daily limit with its switches off by choice, and warning/halt counts of 5/8. Retain these as owner choices pending resolved-setting evidence; do not describe an unenforced figure as protection.
+- [I] The economic hypothesis is a level-fade book. First-touch fade, confirmed rejection, sweep/reclaim and continuation are separate hypotheses; their names alone do not establish an edge.
+
+### B2. Intended map and context
+
+| Reference | Definition the trading specification must make explicit |
+|---|---|
+| PDH / PDL / PDC | Prior trading-session boundaries; RTH versus full-session scope; last trade versus settlement for “close”; holiday handling. |
+| ONH / ONL | Exact overnight start/end, trading date, developing/final status. |
+| OR / IB | Intended 5-minute OR and 60-minute IB after the cash open, with developing values distinguished from completed values. These durations are parameters, not proven optimal NQ choices. |
+| VWAP and bands | Session anchor, typical-price input, volume source, variance convention and reset. |
+| POC / VAH / VAL | Source session and price-volume method; a proxy must retain its proxy label. |
+| Swings and zones | Source timeframe, zone edges, formation and confirmation times; the time the level first became knowable. |
+| OB / FVG | Operational definition and source lineage; predictive value remains unestablished for this implementation. |
+| Round and weekly references | Chosen grid, contract/price basis, completed-week boundaries and data sufficiency. |
+| Projections | Clearly labelled hypothetical targets/obstacles; not historical traded structure or automatically eligible entries. |
+
+[O] Preserve the full map and distinguish entry, target, obstacle and invalidation roles. Exclusion from a shortlist is not invalidation. The original three-point merge, 12-seat cap, Tier-1 preference, freshness/confluence factors and HTF multiplier are specified choices to document and evaluate, not calibrated probabilities. [I]
+
+A reference's availability at the decision time matters more than its later appearance on a chart. Merged aliases must retain underlying prices/zone edges and shared provenance, so repeated constructions are not counted as independent evidence. [I]
+
+### B3. Intended scenario and management contract
+
+[O] Before a scenario is accepted as a trading plan, its meaning should be explicit: entry zone, trigger, confirmation, structural invalidation, protective stop, first obstacle and provenance, executable response there, broker target, R to obstacle and target, time horizon and expiry.
+
+The intended contract must choose whether an intervening reference is the actual profit target or an obstacle to pass under a stated condition. “Next opposing level” and “whatever far target clears the gate” must not stand in for the same policy. With one contract, “reduce” cannot mean a fractional partial exit; it needs an executable whole-position interpretation or an unavailable label. [I]
+
+Structural invalidation and the mechanical protective stop are distinct. A wider stop changes dollar risk and available R. Any claim about managing a failed premise before the protective stop, a time exit or a news event must say whether it is desired policy, a tested variant or established behaviour. [I]
+
+[O] The intended bracket contract is a protective stop-market and target limit sharing their bracket OCO, separate from the unfilled entry's OCO. GTC duration does not remove the session-end cancellation obligation. These are retained owner requirements; this correction does not certify the AddOn's current bracket or OCO behaviour.
+
+[O] A cancelled order should be resolved using fresh broker evidence and the resulting position; its absence alone does not distinguish cancellation from a fill. Flat should cover positions, working orders, pending placements and arms that can re-place, for the correct account/contract. Existing protection must remain distinguishable from unknown protection.
+
+### B4. Intended clocks, validity and risk governance
+
+[O] Keep read, publication, activation, entry cutoff, order expiry, session flat and exchange close separate. “No overnight” must say whether it means no carry across a strategy-session boundary or no carry across a CME trading-day boundary; it cannot silently contradict an Asia session spanning midnight.
+
+[I] A plan's data age, publication age and last-validation age are different. Record what invalidates the plan, what merely requests a refresh, what happens during a replan cooldown, and how an existing position relates to a replacement version. The original 30-minute cooldown, 25-minute replan cutoff and 1.5×ATR fast-move trigger are carried-forward parameters, not established optimal lifetimes.
+
+[O] Retain the original live-money gate as a governance proposal: at least 100 closed trades and 40 active CME days under one unchanged policy, documented costs, drawdown/day-loss tolerances, fee verification and protection/cancel/reconnect/kill drills. **The two “95% lower bounds” must name their metrics and interval methods before the gate is evaluable.** No present-tense pass/fail claim about all gate items is made from old snapshots.
+
+## C. WHAT IS STILL TO BUILD OR PROVE — backlog and research, not current behaviour
+
+These names are carried forward from Master Plan v5 to identify unfinished specification/proof obligations. They do not assert that a named branch is currently unimplemented, authorize a boot, assign another agent, or propose a code patch.
+
+| Workstream | Completion evidence still required by the trading contract |
+|---|---|
+| W1 episode contract / identity | Stable candidate and scenario identity; first-known times; real event sequence; explicit heuristic links and missing-data reasons; unambiguous opportunity denominator. |
+| Map / W-TF | An inventory showing actual detector coverage by timeframe and data availability. Added model-visible context belongs to a new policy cohort unless decision neutrality is established. |
+| W2 fade permission | Causal context labels made from information available at the decision, with visible labels distinguished from truly decision-invisible collection. |
+| Settlement / flat / working-versus-armed | Current broker-event receipts and complete state reconciliation, including fills during cancellation and in-flight placements. |
+| W-LIVE / 13f | Eligible forming-bar observations, declared prediction horizon/null and unseen evaluation; no inference from unavailable formation times. |
+| Plan drift / 15e | Event-based and time-based validity comparisons with their own delay, churn and missed-opportunity costs. |
+| Documentation truth | Current settings and source pin; one status per claim; no roadmap sentence silently promoted to present tense. |
+
+### Experiments retained, with their estimands made explicit
+
+| Test | Fixed comparison basis | Compared alternatives and required accounting |
+|---|---|---|
+| **E1 — first-touch versus confirmation** | Same originally knowable opportunities and declared absolute stop/target or risk-normalised design. | Touch-entry, rejection confirmation, failed-break and reclaim evaluated side by side. Each gets its own attainable fill, resulting stop distance/R, delay, expiry and missed trades. Never-confirmed is a zero-trade opportunity where appropriate, not a filled flat trade. |
+| **E2 — stop / target / horizon** | A declared entry policy and cohort. | Structural/ATR/other stop variants with structural/fixed-R/no fixed target and explicit remaining exit horizon. Use all eligible paths, not only historical winners; distinguish price touch from feasible fill. |
+| **E3 — context permission** | Frozen downstream policy and causal context. | Predeclared exclusions against a declared comparator. Analytical comparisons do not suspend owner risk/news restrictions in the running bot. |
+| **E4 — ranking** | Same full candidate universe and downstream policy. | Score/seat variants against a role-aware distance baseline; retained exclusions and score components; one-position opportunity conflicts. |
+| **E5 — risk** | Explicit account/day/session units and cost assumptions. | Loss clustering, tail loss, time underwater, slippage and opportunity cost. Historical worst loss is not a maximum possible loss. |
+| **14b — continuation / projections** | Its own knowable context and eligible population. | Test continuation separately from fade; projection reach is not itself a trade-profit result. |
+
+[I] Approximately 20 sessions is a recording checkpoint, not a universal statistical sample size. Name whether a session is Asia/London/NY or a CME day; account for shared-day dependence and repeated plan versions. Predeclare effect size, uncertainty, test universe and untouched evaluation data. Test the combined selected policy once on a fresh holdout rather than combining independently selected winners and calling the combination validated.
+
+## D. HISTORICAL RECORD — each population stands on its own [T]
+
+**These are the archived audits' own reported populations, not fresh account performance or proof about the policy at the current source pin.** Their membership, exclusions and assumptions must travel with the numbers. [A01] [A02] [A03] [A04]
+
+### D1. Realised trades and authored geometry are different populations
+
+| Population / metric | Audit result with n | Provenance and interpretation |
+|---|---|---|
+| Compliant realised cohort | **n=58 trades**, 12 CME days; 18 wins / 38 losses / 2 flats; corrected P&L **−$466.428572**; mean approximately **−$8.04/trade**. | Era entry cutoff 2026-08-15 00:00 CT; resolved plan, non-test, corrected non-NULL P&L. Exact exclusions are in the audit. Gross of commission; not a net expectancy estimate. [A02] [A04] [D01] |
+| Win-rate denominator | **18/56 decided = 32.14%**; **18/58 including flats = 31.03%**. | Do not put a decided-only percentage beside n=58 without naming the denominator. Arithmetic from the population above. |
+| Winner/loss payoff | Mean winner **$125.47** / mean losing-trade magnitude **$71.71** ≈ **1.75**, from **18 winners and 38 losers**, within the 58-trade cohort. | Ratio of average dollar outcomes, not the mean realised R of the same planned scenarios. [A01] [D01] |
+| Broader authored-geometry census | **254 plan rows**, 253 scenario-bearing; **738 scenarios**, **132 complete arms**; planned-R median **2.36**, p25 2.10, p75 2.93. | Repeated versions are not independent trades. This is a plan/arm population, not the 58 realised trades. [A01] [D02] |
+| Frozen scenario-economics cohort | **45/111 = 40.54%** of complete geometries have a positive directional first-listed target below 1R; **6/111** have arm-target R below 2. | 111 complete geometries within 280 scenario documents. A first-listed target is not automatically the first opposing obstacle. [A06] [A07] [D03] |
+| Later retained scenario census | **69/177 = 38.98%** below 1R at the first-listed target; **17/177** below 2 at the arm target. | 177 complete geometries within 799 scenarios. This is a different census, not additional independent trades. [A06] [D03] |
+
+The former paired “planned versus paid” headline is withdrawn. The table does not claim any of these separate populations is a paired estimate of realised target deterioration. A valid paired analysis needs the plan/arm identity, immutable initial risk, actual fill, fees and realised exit for the same trade.
+
+### D2. Refusal replay — event rows and deduplicated opportunities differ
+
+| Archived grouping | n and outcome counts | Reported counterfactual result |
+|---|---|---|
+| Raw refusal event rows | **n=61**: 42 STOP, 13 TARGET, 5 horizon-flat, 1 never-filled. | Session-flat **−$726.14**; CME-day horizon **−$902.02**. |
+| Grouped by `cf_fill_ct` | **n=55**: 39 STOP, 10 TARGET, 5 horizon-flat, 1 never-filled. | Session-flat **−$862.14**; CME-day horizon **−$1,038.02**. |
+
+Source: the audit's independent reconciliation of `refusals.csv`, including its tested grouping rules. [A03] These are counterfactuals under that replay's authored geometry, fill and horizon assumptions—not broker-realised P&L, and not a proof that any gate is optimal. The former unreconciled population/total pairing and the blanket conclusion that the gates cannot be the problem are withdrawn.
+
+### D3. What the old record cannot establish
+
+- [T] The corrected level audit separates contaminated touch history from its forward, first-recorded-read diagnostic; it states that formation-adjusted lifetime rates remain unmeasurable from that table. A historical reaction percentage is not a “coin flip” verdict or independent trade probability. [A05]
+- [T] The old “no post-strict eligible trade” statement belongs to that audit's cutoff and exclusions. It is not a newly queried count for 10 September. [A04]
+- [T] Winners-only excursion summaries describe selected winners; they cannot establish an optimal tighter stop or the opportunity cost of all rejected trades. The archived audit also records changing sample membership. [A01]
+- [T] Style/plan inventories measure vocabulary and mix; they do not demonstrate profitability of the current policy. [A08]
+
+## E. TRADER'S RECOMMENDATIONS — separate from implementation
+
+Each item has one evidence label. These are recommendations for the **trading specification, analysis and reporting**. No code patch, parameter change, new entry gate, live-money action or deployment is proposed by this section.
+
+1. **[I] State the economic premise for each playbook.** Separate first-touch fade, confirmed rejection, failed-break/reclaim and continuation. For each, write why a reaction is expected, what currently permits the trade, and what would refute it. Balance/directional/transition/unknown are proposed context labels, not hindsight declarations that a day was a trend day.
+
+2. **[R] Price the actual entry, not the earlier signal.** Research on actual limit-order execution warns against substituting simple hypothetical price passage for executable fills. Use realistic fill assumptions and include confirmation delay, missed fills and deteriorated entry in E1. The cited evidence is from equities; it does not supply a calibrated MNQ fill probability. [R3]
+
+3. **[I] Write one executable first-obstacle decision.** Before entry, specify the first obstacle, final target, time available and permitted whole-position action. With one contract, no fractional runner is available. A farther target's attractive R does not answer whether the nearer obstacle can be passed; conversely, an obstacle under 1R does not by itself prove the trade must be refused.
+
+4. **[I] Separate invalidation, protective stop and risk budget in the plan.** Show the premise-defeating reference, stop components, final risk and remaining reward. Do not treat a nearby unrelated reference as the thesis merely because it is nearest. Evaluate tighter/wider stops on the full eligible population rather than conditioning on winners.
+
+5. **[T] Keep the corrected population table attached to any conclusion.** The authored-arm census, compliant realised trades, raw refusal events and grouped refusal replay answer different questions. Preserve n, IDs/exclusions, snapshot, costs and method; do not compress them into one claimed edge or one gate verdict. [A01] [A03] [A04] [A06]
+
+6. **[I] Define plan validity and version handover.** Record data cutoff, publication, last validation, effective session and expiry separately. List which market events invalidate a premise and which merely request a refresh. A cooldown is a scheduling choice, not evidence that an obsolete premise remains true.
+
+7. **[I] Document what the level-ranking experiment predicts.** Reachability, reaction, feasible fill and net trade outcome are different targets. Preserve full-map roles, causal availability, zone edges, rejected candidates and correlated confluence components. A grade is not a calibrated probability.
+
+8. **[R] Add a contract-month and price-basis note to preparation.** CME lists 14 September 2026 as the customary U.S. equity-index roll and 18 September as September expiry. A trader should identify the chart/data and execution contract and distinguish raw from adjusted continuous prices. The calendar fact does not prescribe a roll decision or validate transferring levels between contracts. [R4]
+
+9. **[I] Specify event risk, competing scenarios and repeat attempts.** Document the intended treatment of news during the trade horizon, mutually exclusive long/short opportunities, re-entry at a previously failed level and end-of-session exposure. Evaluate the one-position portfolio, not a sum of trades that could not coexist.
+
+10. **[R] Account for the full research search and keep a final holdout.** Sullivan, Timmermann and White report a nominal p-value 0.042 becoming 0.908 after a rule-universe adjustment in their historical S&P futures comparison. The applicable lesson is selection discipline, not a claim that all technical trading fails. A combined entry/target/ranking policy needs its own untouched evaluation. [R5]
+
+11. **[I] Make the promotion gate interpretable.** Name both lower-bound metrics, cost convention, confidence-interval method, dependence treatment and unchanged-policy definition. The minimum trade/day counts do not automatically supply statistical power. Treat operational evidence separately from evidence of positive expectancy.
+
+12. **[R] Narrow the adverse-selection citation.** Lalor and Swishchuk report **1,269/1,929 = 65.79%** adverse NQ fills in one specified TT simulation day, with “adverse” defined by the next relevant quote move. This supports realistic execution modelling; it does not establish a universal passive-fill loss rate, a cost in MNQ points, or a verdict against the bot's entry method. [R6]
+
+## Sources and verification notes
+
+All internal implementation/audit references below are pinned to the observed source revision. An archived audit citation verifies the report's population statement, not a new replay of its raw data. External sources retain their instrument, period and methodological limits.
+
+The local verification for this correction checks the single-document diff, all internal source paths and one-based line anchors, the preserved original bytes, the corrected arithmetic and the separation of runtime facts from desired/backlog/recommendation sections. Trading tests and builds are not claimed for a Markdown-only change.
+
+[C01]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/kernel/entry_law.go#L38
+[C02]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/kernel/confirmation_evidence.go#L27
+[C03]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/kernel/entry_law.go#L49
+[C04]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/kernel/entry_law.go#L105
+[C05]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/trader/armed_executor.go#L1071
+[C06]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/trader/entry_gate.go#L184
+[C07]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/kernel/confirmation_evidence.go#L91
+[C08]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/kernel/scenario_economics.go#L137
+[C09]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/trader/arm_stop_anchor.go#L71
+[C10]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/trader/armed_executor.go#L1976
+[C11]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/kernel/session_registry.go#L86
+[C12]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/kernel/no_trade_band.go#L34
+[C13]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/store/strategy.go#L1006
+[C14]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/trader/auto_trader_clock.go#L395
+[C15]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/trader/session_risk.go#L92
+[C16]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/trader/session_risk.go#L120
+[C17]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/trader/session_risk.go#L143
+[C18]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/trader/armed_executor.go#L330
+[C19]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/kernel/levels_assemble.go#L210
+[C20]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/kernel/levels_assemble.go#L284
+[C21]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/kernel/levels_assemble.go#L329
+[C22]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/kernel/levels_volume.go#L35
+[C23]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/kernel/levels_volume.go#L162
+[C24]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/kernel/scenario_economics.go#L188
+[C25]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/trader/armed_executor.go#L1125
+[C26]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/trader/armed_executor.go#L1426
+[C27]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/kernel/session_calendar.json#L119
+[C28]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/trader/arm_stop_anchor.go#L138
+[C29]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/trader/armed_executor.go#L470
+[A01]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/docs/superpowers/reports/2026-09-05-vet-01-way-it-trades.md#L77
+[A02]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/docs/superpowers/reports/2026-09-05-vet-01-way-it-trades.md#L48
+[A03]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/docs/superpowers/reports/2026-09-05-veteran-part-d.md#L167
+[A04]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/docs/superpowers/reports/2026-09-05-vet-02-levels-complete.md#L29
+[A05]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/docs/superpowers/reports/2026-09-05-vet-02-levels-complete.md#L33
+[A06]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/docs/superpowers/reports/2026-09-08-scenario-economics.md#L44
+[A07]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/docs/superpowers/reports/2026-09-08-scenario-economics.md#L22
+[A08]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/docs/superpowers/reports/2026-09-08-the-strategy.md#L1
+[D01]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/docs/superpowers/reports/2026-09-05-vet-01-way-it-trades-data/revise/r01_headline.out#L1
+[D02]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/docs/superpowers/reports/2026-09-05-vet-01-way-it-trades-data/q11_planned_rr.out#L1
+[D03]: https://github.com/johnwick2921-cyber/nofx/blob/95f387ae3cfe675919cd6f81a689010a85889059/docs/superpowers/reports/2026-09-08-scenario-economics-data/scenarios.json#L1
+
+[R1]: https://www.cmegroup.com/trading/equity-index/files/cme-micro-e-mini-futures-fact-card.pdf
+[R2]: https://www.cmegroup.com/trading-hours.html
+[R3]: https://web.mit.edu/Alo/www/Papers/limit10.html
+[R4]: https://www.cmegroup.com/trading/equity-index/rolldates.html
+[R5]: https://eprints.lse.ac.uk/119144/1/dp303.pdf
+[R6]: https://arxiv.org/html/2409.12721v3
