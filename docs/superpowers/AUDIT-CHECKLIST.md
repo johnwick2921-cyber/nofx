@@ -4014,3 +4014,70 @@ A second vocabulary gap sat beside it, unfired: `trader/auto_trader_planner.go:2
 The cheapest detection is a count nobody has to request: emit, per configured value, whether it was CONSUMED or SKIPPED and why, and keep those two sets disjoint. `DetectHTFLevelsReport` does this — `Counts` and `Skipped` are separate maps, so "produced nothing" and "was never read" stop being the same observation.
 
 **Law:** a configured value is either **honoured** or **refused out loud**; there is no third state. Where two components name the same thing differently, ONE canonicaliser owns the translation and lives where the value ENTERS the consumer (class 28), never at each use site. A consumer that silently discards input it does not recognise is indistinguishable from one that has no input, and the difference is invisible for exactly as long as nobody audits the feature — five months, in this instance, across every plan the machine has ever written. Related: class 105 (documentation describing code, in a place the code's tests cannot see — the comment claiming the `D`→`1d` map exists), class 107 (centralising a hand-typed list is a behaviour change wherever the lists differed — the same two-vocabularies shape, seen at merge time instead of at read time), class 88 (a liveness signal that is a side effect of activity — the neighbouring failure where a signal stops because the work stops, rather than never starting), and class 28 (one canonicaliser per identifier, at the boundary). Wave report: `reports/2026-09-10-every-detector-every-timeframe.md`, C1–C4.
+
+## CLASS 113 — A GATE THAT CERTIFIES A NAME, NOT A PATH (born 2026-09-10, from two lanes' findings converging)
+
+**Name.** A guard is written to prove a property of the system, and what it
+actually proves is a property of an IDENTIFIER. The name is present, registered,
+called, delegated — and the guard reports success. Whether the PATH through that
+name has the property is a question the guard never asks, and cannot.
+
+**Three instances found the same day, in different subsystems, by two lanes who
+did not know they were describing one thing:**
+
+1. **A29 wiring gate — a call from DEAD CODE counts as wiring.** Deleting the only
+   production call to a wrapper left the inner function still "called", by the
+   wrapper that had just become unreachable. **An unwired wrapper satisfies the
+   gate for everything inside it.** The mutation survived; the gate stayed green
+   on three of four items in a shipped boot.
+2. **Clock-seam lint — a registered entry point vouches for everything beneath
+   it.** `maybeManageArmedOrders:maybeManageArmedOrdersAt` was registered and BOTH
+   halves verified — the `…At` variant exists, the entry is a one-line delegate.
+   Both green for a full day while `runArmedPlacement`, called one line below the
+   clock its caller had been handed, read `time.Now()` itself. The clock was
+   threaded to the door and dropped. **Green meant "this entry delegates", never
+   "this path is seamed"**, and the two are indistinguishable in a suite.
+3. **The test-side seam check cannot even be written textually.** "No test calls a
+   seamed entry point" needs to know whether `.Save(` is `at.Save(` or
+   `db.Save(` — `clock-seams.list` contains entries named `Save` and `observe`.
+   Matching text gives 35 hits, most of them false. The check is blocked on the
+   same missing capability as (1) and (2).
+
+**The common shape.** Each guard matches a NAME — in a registry, in a call
+expression, in source text — and infers a property of the CALL GRAPH from it.
+That inference is unsound in both directions: a name can be present on a path
+that lacks the property (1 and 2), and a name can be absent from a path that has
+it (3). **All three want the same thing and none of them has it: resolve the
+graph instead of matching the token.**
+
+**Why this class is expensive rather than merely wrong.** These guards are the
+ones people rely on to stop looking. A green wiring gate says "it is wired"; a
+green seam lint says "the clock is controlled". Both were consulted, both
+answered, and both answered a narrower question than the one asked — which is
+class 82's shape reaching the tools we check our own work with. (2) cost most of
+a day and produced two wrong published mechanisms before the real one.
+
+**Probe, five questions:**
+1. Does the guard resolve a call graph, or match a string / a registry key? If it
+   matches, it certifies a name.
+2. For a registered ENTRY POINT, what asserts the property holds BELOW it? If
+   nothing walks the callees, the registration covers exactly one function.
+3. For a "this is called" check, is the CALLER reachable? A call inside dead code
+   is a call. Delete the outermost production call site and see whether the guard
+   notices.
+4. Can the guard be defeated by a rename, a wrapper, or one more layer of
+   indirection? Add a wrapper deliberately and re-run it.
+5. What does GREEN entitle a reader to conclude? Write that sentence out. If it
+   is narrower than what people use the guard for, the gap is this class.
+
+**Law:** **a guard over a graph must resolve the graph.** Where it matches names
+instead, its green means only "the name is present as expected" — and it must SAY
+so, in its own failure text and its own header, so nobody spends a day treating a
+token match as a property of the path.
+
+**Corollary — the remedy is one piece of work, not three.** A receiver-aware pass
+(`go/ast`, not `strings.Contains`) closes the callee walk, the dead-code caller
+check and the test-side check together, because all three are the same query
+against the same graph. Filed as OWED rather than built: it is a tool, it is
+outside every current wave's footprint, and three separate half-measures would
+cost more than the one pass.
