@@ -186,6 +186,18 @@ func TestSListEODFlatCancelsArmsBeforeFlatten(t *testing.T) {
 // TestSListEODFlatCancelAckTimeoutStillFlattens — fixture (b). The ack stream
 // never delivers: the sync cancel retries once, logs the loud WARN path (the
 // ledger carries the honest reason), and the flatten proceeds regardless.
+//
+// UPDATED 2026-09-10 (settlement wave, Section C1). This asserted the row was
+// 'cancelled' after an ack timeout. That was the defect: a TIMEOUT promoted the
+// row to the word that frees the arm slot and that cutover leg 4 counts,
+// skipping RequestCancel → cancel_pending → ConfirmCancel entirely, so a row
+// could be replaced while its order still rested at the broker. Not hearing an
+// ack is not evidence the order is gone.
+//
+// THE TEST'S REAL SUBJECT IS UNCHANGED and still asserted below: the flatten
+// PROCEEDS, the cancel is retried exactly once, and the wire order holds. Only
+// the ledger claim moved — from "cancelled" to "held cancel_pending, and the
+// settlement pass owns it".
 func TestSListEODFlatCancelAckTimeoutStillFlattens(t *testing.T) {
 	now := time.Date(2026, 8, 18, 14, 30, 0, 0, chicagoLoc())
 	offset := 15
@@ -206,8 +218,12 @@ func TestSListEODFlatCancelAckTimeoutStillFlattens(t *testing.T) {
 	}
 	assertWireOrder(t, "long", ev)
 	rows, _ := at.store.ArmedOrders().ListForPlan("2026-08-18:NY:trader-1")
-	if len(rows) != 1 || rows[0].State != "cancelled" || !strings.Contains(rows[0].StateReason, "ack timeout") {
-		t.Fatalf("row after ack timeout must be cancelled with the honest reason: %+v", rows)
+	if len(rows) != 1 || rows[0].State != store.StateCancelPending || !strings.Contains(rows[0].StateReason, "ack timeout") {
+		t.Fatalf("an unacked cancel must HOLD the row %q with the honest reason — promoting it on a timeout is the C1 defect: %+v",
+			store.StateCancelPending, rows)
+	}
+	if rows[0].CancelSettledSnapshotID != 0 {
+		t.Fatalf("nothing confirmed the cancel, so no settling snapshot may be recorded: %+v", rows[0])
 	}
 }
 
