@@ -125,11 +125,16 @@ _spawn_keeper() {
   # to be able to end as one thing. See _stop_keeper for why.
   setsid nohup bash -c '
     lock="$1"; sess="$2"; exp="$3"; every="$4"; self="$5"
+    why=""
     while [ -d "$lock" ]; do
-      [ "$(date +%s)" -ge "$exp" ] && break
-      NOFX_LOCK_DIR="$lock" bash "$self" heartbeat "$sess" >/dev/null 2>&1 || break
+      if [ "$(date +%s)" -ge "$exp" ]; then why="ended at the declared expiry"; break; fi
+      NOFX_LOCK_DIR="$lock" bash "$self" heartbeat "$sess" >/dev/null 2>&1 || { why="stopped: this session is no longer the holder"; break; }
       sleep "$every"
     done
+    # WHY IT STOPPED, RECORDED. A keeper that exits ON PURPOSE at the window its
+    # holder declared leaves a lock that goes stale — which reads identically to
+    # the defect this keeper was built to fix unless the tool says otherwise.
+    [ -n "$why" ] && [ -d "$lock" ] && printf %s "$why" > "$lock/keeper.ended" 2>/dev/null
     rm -f "$lock/keeper.pid" 2>/dev/null
   ' _ "$LOCK_DIR" "$session" "$exp" "$HEARTBEAT_EVERY_SECONDS" "$self" >/dev/null 2>&1 &
   kpid=$!
@@ -165,7 +170,7 @@ _spawn_keeper() {
 _stop_keeper() {
   local pg i=0
   pg="$(cat "$LOCK_DIR/keeper.pid" 2>/dev/null || true)"
-  rm -f "$LOCK_DIR/keeper.pid" 2>/dev/null
+  rm -f "$LOCK_DIR/keeper.pid" "$LOCK_DIR/keeper.ended" 2>/dev/null
   [ -n "$pg" ] || return 0
   kill -TERM -- "-$pg" 2>/dev/null
   # BOUNDED WAIT, ~5s. Never rm under a live writer.
@@ -182,6 +187,25 @@ cmd_heartbeat() {
   local session="${1:?session required}"
   [ -d "$LOCK_DIR" ] || { echo "REFUSED — no lock to beat."; return 1; }
   _require_holder "$session" || return 1
+  # THE WINDOW IS A BOUND, NOT A DISPLAY — enforced HERE, at the only place a
+  # heartbeat can be written.
+  #
+  # Until now `expiry` was written at acquire and only ever PRINTED; nothing
+  # compared it, so any writer could extend a lock forever. Bounding the keeper's
+  # own loop was not enough: it constrains the keeper this script starts and
+  # nothing else, and every lane on this machine has been running a hand-rolled
+  # beater for exactly as long as the tool failed to start one. Refusing at the
+  # source makes it an invariant — NO writer extends a window, hand-rolled or
+  # not — and it terminates the keeper for free, because the loop breaks on the
+  # same non-zero rc.
+  #
+  # A lock created before this change carries no expiry_epoch; it is left
+  # unbounded rather than retroactively expired.
+  local exp; exp="$(_field expiry_epoch)"
+  if [ -n "$exp" ] && [ "$(date +%s)" -ge "$exp" ]; then
+    echo "REFUSED — past the declared expiry ($(_field expiry)). No writer extends a window: re-acquire, or extend explicitly."
+    return 1
+  fi
   { _meta | grep -v '^heartbeat'; echo "heartbeat=$(_now)"; echo "heartbeat_epoch=$(_epoch)"; } | _write_meta
   echo "heartbeat $(_now)"
 }
@@ -229,6 +253,13 @@ cmd_status() {
 _auto_beat() {
   if [ -f "$LOCK_DIR/keeper.pid" ]; then
     echo "auto-beat: on (until $(_field expiry); it never extends the window)"
+  elif [ -s "$LOCK_DIR/keeper.ended" ]; then
+    # THE EXPIRY FIELD IS LOAD-BEARING NOW. It was written at acquire and only
+    # ever printed; with a keeper bounded by it, a holder who UNDER-DECLARES
+    # their window goes stale mid-cutover with the keeper having exited on
+    # purpose. Silence there is indistinguishable from the defect this wave
+    # fixed, so the reason is carried out loud.
+    echo "auto-beat: ENDED — $(cat "$LOCK_DIR/keeper.ended" 2>/dev/null); re-acquire or extend explicitly"
   else
     echo "auto-beat: off — this holder must beat by hand"
   fi

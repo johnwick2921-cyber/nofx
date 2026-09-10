@@ -315,6 +315,34 @@ else
 fi
 rm -rf "$KWG"
 
+echo "== NO WRITER EXTENDS A WINDOW — not even a hand-rolled one =="
+#
+# `expiry` was written at acquire and only ever PRINTED; nothing compared it. So
+# bounding the keeper's own loop constrained the keeper this script starts and
+# NOTHING else — and every lane had been running a hand-rolled beater for
+# precisely as long as the tool failed to start one. A peer lane read the shipped
+# file and named it: refuse at the source, and the invariant holds for every
+# writer. This pin beats BY HAND, the way a lane would.
+KWX="$(mktemp -d)"
+X() { NOFX_LOCK_DIR="$KWX/lock.d" NOFX_LOCK_STALE_SECONDS=600 NOFX_LOCK_BEAT_SECONDS=1 bash "$LOCK_SH" "$@" 2>&1; }
+X acquire sess-X 'a window of zero minutes' 0 >/dev/null
+sleep 1
+out="$(X heartbeat sess-X)"; rc=$?
+check "a hand beat past the declared expiry is REFUSED" "$rc" "1"
+hasi  "and says why"                                    "$out" "past the declared expiry"
+# The holder is still the holder — expiry bounds the WINDOW, not the identity.
+hasi  "the lock still names its holder"                 "$(X status)" "sess-X"
+X release sess-X >/dev/null 2>&1
+rm -rf "$KWX"
+
+echo "== a lock inside its window still beats normally =="
+KWY="$(mktemp -d)"
+Y() { NOFX_LOCK_DIR="$KWY/lock.d" NOFX_LOCK_STALE_SECONDS=600 NOFX_LOCK_BEAT_SECONDS=1 bash "$LOCK_SH" "$@" 2>&1; }
+Y acquire sess-Y 'a normal window' 45 >/dev/null
+check "a beat inside the window succeeds" "$(Y heartbeat sess-Y >/dev/null 2>&1; echo $?)" "0"
+Y release sess-Y >/dev/null 2>&1
+rm -rf "$KWY"
+
 echo
 printf 'pass=%d fail=%d\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]

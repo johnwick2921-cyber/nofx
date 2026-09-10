@@ -3216,3 +3216,115 @@ expansion recorded as "no change" is indistinguishable from a scope violation.
 **Probe:** before ANY merge, run `git diff --stat origin/dev HEAD` and read the DELETION count, not the conflict list. A wave that adds a feature should show deletions only in files it deliberately edits; a four-figure deletion count against a branch that added code means the base moved under it. Cross-check with `git log --oneline origin/dev..HEAD` and `git log --oneline HEAD..origin/dev` — the second list is what landed while you were not looking. Then confirm your own files: `git cat-file -e origin/dev:<path>` for each one you created. If they are already there, your work landed by another route and the branch is now a rollback of everything that landed after it.
 
 **Law:** a branch is only as safe as its base is fresh, and staleness is silent — no conflict, no test failure, no hook. Diff against the CURRENT dev and read deletions before merging, every time, including when the branch has not been touched since it was green. When your own files are already on dev, do not merge the branch: reset onto the current tip and re-apply only the genuinely unlanded deltas, then re-run the same deletion check to prove the reset is additive. Related: class 73 (SPEC-FRESHNESS — a worktree cut from an older base freezes a moving spec) and PUSH-EMPTY-AT-ACCEPT, whose founding incident was a lane's branch merged into dev without its author ever being told. This is that incident seen from the author's side. Dispatch 103 report: `reports/2026-09-09-candidates-not-entitlements.md`.
+
+## CLASS 101 — A BOUND THAT IS WRITTEN, PRINTED, AND NEVER COMPARED (born 2026-09-10, fix/lock-keeper-on-acquire)
+
+**Name.** A field that looks like a constraint and is decoration. It is set at
+creation, rendered on every status line, cited in documentation and in people's
+reasoning — and no code path ever compares it to anything.
+
+**Read beside class 88** (*a liveness signal that is a side effect of activity*),
+which is the defect this one was found while fixing, and **class 97**.
+
+**Root cause.** `deploy/nofx-lock.sh` wrote `expiry` at `acquire` and printed it
+in every `status` line, ALIVE and STALE alike. Three occurrences in the file:
+written once, printed twice. `cmd_heartbeat` refused on exactly two conditions —
+no lock directory, and not the holder. **Past its expiry a lock beat happily,
+forever.**
+
+Everyone read the field as a bound. It appeared beside the holder and the task on
+every status line a lane looked at, and lanes reasoned with it out loud ("expiry
+16:53, so I have an hour"). Nothing enforced it, and for months nothing needed
+to — because the tool started no keeper, so the only writer was a human running
+the verb by hand and locks went stale on their own.
+
+**Then the keeper wave made it load-bearing.** Bounding the keeper's own loop by
+the expiry looked sufficient and was not: it constrains the keeper THIS SCRIPT
+starts and nothing else, and every lane on the machine had been running a
+hand-rolled beater for exactly as long as the tool had failed to start one. The
+first design would have shipped an invariant that held only for the writer that
+did not exist yesterday.
+
+**The fix is where, not what.** Refusing at `cmd_heartbeat` — the single place a
+heartbeat can be written — makes it an invariant for EVERY writer, hand-rolled or
+not, and terminates the keeper for free because its loop breaks on the same
+non-zero rc. Bounding the loop would have been the same rule enforced at one of
+its callers.
+
+**Probe, five questions:**
+1. For every field that reads like a limit — expiry, deadline, max, ttl, cap —
+   grep it. Count the sites that WRITE it, the sites that PRINT it, and the sites
+   that COMPARE it. A comparison count of zero is the finding, and it takes one
+   command.
+2. Do people reason with the field in prose, tickets or chat? A decorative bound
+   is most dangerous exactly when it is trusted, and being quoted is the evidence
+   that it is.
+3. If you are about to make it load-bearing, ask who else writes the thing it
+   bounds. Enforcing in your own new code path constrains your own new code path.
+4. Where is the narrowest chokepoint every writer must pass? Enforce there. A
+   rule enforced at a caller is a rule with as many holes as there are callers.
+5. When it starts being enforced, does anything now FAIL that used to pass — and
+   does the failure explain itself? A bound that begins biting silently reads
+   exactly like the bug you were fixing.
+
+**Law:** **a bound is enforced at the point of WRITE, or it is a comment with a
+timestamp.** Where a field constrains an action, the code that performs the
+action compares it — not the code that happens to have started the actor.
+
+**Corollary.** Found by a peer lane reading the shipped file while the fix was
+still staged, and its own caveat was the useful part: it had read dev's pre-fix
+copy, so half its finding was moot and it said so. The half that survived was
+architectural and better than my design — enforce at the source, not at the loop.
+
+## CLASS 102 — THE FIX THAT REBUILDS ITS OWN DEFECT ONE LAYER DOWN (born 2026-09-10, fix/lock-keeper-on-acquire, adversarial pass)
+
+**Name.** A wave fixes a defect and introduces the same defect class inside the
+fix — because the fix adds a new actor of exactly the kind the original defect
+was about, and the wave's attention is on the old actor.
+
+**Root cause.** The lock's header names its three founding failures, the second
+being *a live pid silently overwritten by a second writer*. The keeper wave added
+a background heartbeat writer — the first the tool had ever had — and then
+stopped it by killing the loop only. The loop runs its beat as a foreground
+CHILD, so killing the parent ORPHANED that child, and `_write_meta` mv's into
+`$LOCK_DIR/meta` by absolute path with no identity check.
+
+An orphan that had passed `_require_holder` while A held the lock landed A's meta
+into the lock B created at the same path seconds later. B held the tree, the lock
+said A: **B could not release its own lock, and A — holding nothing — could**,
+freeing the tree under a live cutover. The atomic `mv` is what made it silent;
+the wrong content landed whole, never torn. Failure (2) from the file's own
+header, rebuilt one layer down by the wave that existed to make holding safer.
+
+**Why the wave could not see it.** Every test was about the OLD failure — does a
+waiting holder stay alive, does the keeper stop at expiry, is the pid never
+liveness. The new actor was the subject of the fix and therefore not the subject
+of suspicion. It was found by an adversarial pass told to attack the fix, and
+four of that pass's findings were pre-existing; only this one was created by the
+wave.
+
+**Probe, five questions:**
+1. Does your fix introduce a new WRITER, PROCESS, CACHE or FILE? Then re-read the
+   defect list this component already has and ask which entries now apply to your
+   new thing.
+2. Read the component's own header or postmortem list. A file that documents
+   three failures is telling you which three to re-check against every change.
+3. If your fix spawns something, what kills it — and does that reach everything
+   it spawned? A process that spawns children needs its GROUP ended, not its pid.
+4. Where is the identity check on the write? "The right process is writing" is
+   not the same claim as "this write belongs in this object", and only the second
+   survives a race.
+5. Would an attacker told "break this fix" find it in an hour? If you have not
+   asked someone to try, the wave's tests are all arguing for the same side.
+
+**Law:** **the defect list a component already carries is the test list for any
+change to it** — most of all for a change that adds an actor of the kind those
+defects were about.
+
+**Corollary.** The pin for it took four attempts, and the first three passed with
+the defect fully present: it asserted the keeper FILE was gone (`rm -rf` does
+that anyway), then the PROCESS but on a beat so short an unstopped keeper exited
+by itself first (measuring the OS, not the code), then SAMPLED the race eight
+times against a natural rate near one in sixty. It bites only with a CONDITIONAL
+timing shim that parks exactly one write. **A race pin that does not widen its
+window is testing luck**, and three drafts of mine reported success from it.
