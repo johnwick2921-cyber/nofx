@@ -8,7 +8,7 @@
 
 [A] The full suite at merged HEAD **8140f8f2**, in `/tmp/arm-state-cutover-20260910/nofx`, FAILED before the binary build. Kernel reported four bare clock formats. Frontend reported **413 PASS / 1 FAIL**: the brand-scope hash still pinned the lock script from before its independently authorized keeper change. No build, dist, RELEASE swap or kill followed those failures.
 
-[A] Both failures reproduce at the PR's first parent **2f80d743** in a separate clone named `nofx`; PR #97 has no diff in those affected source files. [Timezone parent failure](2026-09-10-arm-state-cutover-data/tz-parent-red.log), [brand-scope parent failure](2026-09-10-arm-state-cutover-data/brand-parent-red.log).
+[A] Both failures reproduce at the PR's first parent **2f80d743** in a separate clone named `nofx`; PR #97 has no diff in those affected source files. [Timezone parent failure](2026-09-10-arm-state-cutover-data/tz-parent-red.txt), [brand-scope parent failure](2026-09-10-arm-state-cutover-data/brand-parent-red.txt).
 
 The earlier arm-state worktree suite exited zero but its timezone guard was VACUOUS: it climbed until a directory name ended in `nofx`, reached `/` from `/tmp/nofx-arm-state`, then swallowed missing-directory errors. The clean-clone requirement exposed the defect. The guard now resolves the package's repository parent, requires go.mod and propagates walk errors. It scans the same source in either clone naming scheme.
 
