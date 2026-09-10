@@ -150,6 +150,25 @@ one foreign-boot row). **Mutated through `scripts/mutate.sh` — B5's first real
 removing the clause reports KILLED with the sed confirmed applied and the mutant
 building.
 
+## NEW CLASS: 114 — THE VERIFIER IS WRONG, AND ITS WRONGNESS READS AS A RESULT
+
+Taken at merge after a census across BOTH formats (highest occupied 113; not
+reserved in advance, per the dispatch). Three instances, all from this wave: the
+`git diff -w` proof that can never pass, the `[ -d "$W/.git" ]` guard that fails
+closed on a healthy worktree, and the mutation verdict inferred from an absence.
+It is the general case of class 89 and the mirror of class 105 — 105 is prose
+drifting from code, 114 is a *check* drifting from what it checks. Both stay
+invisible because the artifact keeps producing a believable answer.
+
+**Class 100 hit this wave TWICE in one hour**, despite nofx-6d warning me by name
+four hours earlier. First: dev moved 20 commits under a base of `580e88b3`, and
+the branch showed 459 deletions in `kernel/levels_every_tf_test.go` — that was the
+split-arm red, not 104's fixture. Second: dev gained class 113 in the minute
+between a rebase and a push, and the branch showed 0 insertions / 67 deletions in
+the checklist. Neither reached dev. The remedy is sharper than "check before every
+push": **rebase and re-check immediately before the merge**, because dev moves in
+minutes, and a check run even a minute early is a check run against the wrong tree.
+
 ## CUTOVER
 
 **Go files changed** (`store/armed_orders.go`), so this is boot-eligible per Section D —
