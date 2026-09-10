@@ -1,0 +1,68 @@
+# CLAUDE-canon — the operating rules that must SURVIVE, in a file a wave can reach
+
+**Why this file exists.** `~/nofx/CLAUDE.md` is **untracked**. Every rule in it is
+invisible to git: no wave can correct it on a branch, no review can see it drift, and
+no test can assert it still matches the code. On 2026-09-10 that cost real safety —
+the lock keeper wave (`417599a3`, checklist classes 101–104) made hand-beating a
+heartbeat *unsafe*, and the one file instructing every lane to hand-beat was the one
+file the wave could not touch. A lane following CLAUDE.md faithfully would have become
+the second writer the wave existed to eliminate.
+
+This file is the TRACKED mirror. Where the two disagree, **this one is newer by
+construction** — it can be changed by a wave; the other cannot.
+
+---
+
+## MAIN-TREE LOCK LAW — the corrected verbs
+
+```
+deploy/nofx-lock.sh acquire <session> "<task>" [minutes]   # atomic; REFUSES if held; STARTS THE KEEPER
+deploy/nofx-lock.sh heartbeat <session>                    # acquire starts the keeper; do NOT hand-beat — a second writer into the lock dir is the class-88 failure the keeper closed
+deploy/nofx-lock.sh with-heartbeat <session> -- <cmd>      # wrap long steps (builds, suites)
+deploy/nofx-lock.sh status | check                         # check: rc 0 free · 1 held · 2 stale; also reports auto-beat on/ENDED/off
+deploy/nofx-lock.sh release <session>                      # only the holder may release; ends the keeper group and WAITS before rm
+```
+
+**What changed on 2026-09-10 (`417599a3`), and what did not.**
+
+- `acquire` now spawns the keeper itself and records its process GROUP in `keeper.pid`
+  as a **stop handle only**. Nothing reads it as liveness. **Liveness is still the
+  heartbeat and only the heartbeat** — class 70 stays green, and a pid still answers
+  the wrong question ("does a process exist") rather than the right one ("is the owner
+  still working").
+- The keeper beats until your **declared expiry**, then stops and records why in
+  `keeper.ended`. It **never auto-extends**. Need longer: re-acquire or extend
+  explicitly.
+- **The expiry is now ENFORCED at `cmd_heartbeat`** — the single place a heartbeat can
+  be written, so it binds every writer including a hand-rolled one. Past your declared
+  expiry a beat is REFUSED. A lock acquired *before* this landed carries no
+  `expiry_epoch` and stays unbounded, deliberately: retroactively bounding a live lock
+  could refuse a holder's next heartbeat mid-cutover.
+- **DO NOT run your own beater.** A `while true; do nofx-lock.sh heartbeat …; sleep N; done`
+  alongside the keeper makes you a second writer into one lock dir. That is class 88.
+
+**The trap that nearly shipped inside the fix** (worth reading before you write any
+process-group code anywhere): `setsid … &` starts in the **invoking shell's** process
+group and moves only once `setsid` execs, while `$!` returns before that. So a naive
+`keeper.pid` can capture *your own shell's* group, and `release` will then
+`kill -TERM -- "-$pg"` **you**. It SIGTERMed a test run (exit 143) before it was caught,
+and the exit code was first misread as an environment problem. Before any
+`kill -- -$N`: confirm `N` is a genuine group leader (`pgrp == pid`) and positively
+identify the target. A bare pid signals whatever unrelated group owns that number.
+
+---
+
+## THE STANDING RULE THIS FILE ENCODES
+
+**An operating rule that lives only in an untracked file is a rule no wave can correct
+and no test can check.** When a rule changes, change it *here* — and treat any
+disagreement between this file and `CLAUDE.md` as evidence that `CLAUDE.md` is stale,
+not that this file is wrong. The same shape has now bitten twice: `api/handler_svp.go:50`
+calling `2000` "the cache cap" when the cap is `2500`, and `CLAUDE.md:205` instructing
+every lane to hand-beat after hand-beating became unsafe. Both were prose describing
+code, in a place the code's own tests could not see.
+
+**Mirrored 2026-09-10 by lane `claude-canon-2bdef526/nofx-07[aa8e26]`, on owner order,
+from `~/nofx/CLAUDE.md:205` — quoted before and after in the wave's message. Detail:
+`docs/superpowers/reports/2026-09-10-lock-keeper-on-acquire.md`, checklist classes
+101–104.**
