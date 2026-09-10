@@ -52,15 +52,19 @@ func TestArmStateSQLAndGoAgreeAtStoreCallSites(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, rows := range [][]ArmedOrderDB{live, preboot} {
+			for reader, rows := range [][]ArmedOrderDB{live, preboot} {
+				wantPresent := !terminal
+				if reader == 1 && strings.ToLower(strings.TrimSpace(state)) == StateCancelPending {
+					wantPresent = false // settlement owns this row, never the sweep
+				}
 				found := false
 				for _, r := range rows {
 					if r.ID == row.ID {
 						found = true
 					}
 				}
-				if found == terminal {
-					t.Fatalf("store reader disagrees with classifier: row %d state=%q", row.ID, state)
+				if found != wantPresent {
+					t.Fatalf("store reader %d disagrees with its predicate: row %d state=%q", reader, row.ID, state)
 				}
 			}
 			if err := db.Delete(row).Error; err != nil {

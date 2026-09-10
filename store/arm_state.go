@@ -53,6 +53,7 @@ func IsUnplacedArm(state, signalID string) bool {
 	return !IsTerminalArmState(state) && strings.EqualFold(strings.TrimSpace(state), StateArmed) && strings.TrimSpace(signalID) == ""
 }
 
+var normalizedArmStateSQL = buildNormalizedArmStateSQL()
 var terminalArmSQL = buildTerminalArmSQL()
 
 func buildTerminalArmSQL() string {
@@ -62,6 +63,10 @@ func buildTerminalArmSQL() string {
 			quoted = append(quoted, "'"+strings.ReplaceAll(state, "'", "''")+"'")
 		}
 	}
+	return normalizedArmStateSQL + " IN (" + strings.Join(quoted, ",") + ")"
+}
+
+func buildNormalizedArmStateSQL() string {
 	// SQLite's default TRIM removes only ASCII spaces. Derive its trim set
 	// from the same Unicode White_Space table used by Go's strings.TrimSpace.
 	spaces := []string{}
@@ -86,7 +91,7 @@ func buildTerminalArmSQL() string {
 			}
 		}
 	}
-	return "lower(trim(" + expr + ", char(" + strings.Join(spaces, ",") + "))) IN (" + strings.Join(quoted, ",") + ")"
+	return "lower(trim(" + expr + ", char(" + strings.Join(spaces, ",") + ")))"
 }
 
 // TerminalArmStateSQL is a predicate for the armed_orders state column.
@@ -95,6 +100,14 @@ func TerminalArmStateSQL() string { return terminalArmSQL }
 
 // NonTerminalArmStateSQL negates the canonical predicate; it owns no state list.
 func NonTerminalArmStateSQL() string { return "NOT (" + TerminalArmStateSQL() + ")" }
+
+// SweepableArmStateSQL excludes cancellations already owned by the settlement
+// pass. The boot sweep uses raw SetState; letting it select cancel_pending
+// would bypass ConfirmCancel and its persisted snapshot evidence. Liveness and
+// leg 4 still include those rows through NonTerminalArmStateSQL.
+func SweepableArmStateSQL() string {
+	return "(" + NonTerminalArmStateSQL() + ") AND " + normalizedArmStateSQL + " <> '" + StateCancelPending + "'"
+}
 
 // PlacementCensusLine reads the same terminal/authorization classification used
 // by leg 4. A failed read reports UNKNOWN, never a fabricated zero.

@@ -21,8 +21,9 @@ import (
 // process's order would have been a position nobody's stop was attached to.
 //
 // This sweep runs ONCE per process per trader, at the head of the armed
-// subsystem, BEFORE anything is authored or placed: every non-terminal row
-// stamped by a DIFFERENT boot is cancelled at the broker and in the ledger.
+// subsystem, BEFORE anything is authored or placed. Sweepable rows stamped by
+// a DIFFERENT boot are cancelled at the broker and in the ledger; cancel_pending
+// belongs to confirmPendingCancels and is deliberately excluded from this sweep.
 // It generalises the 0C shadow sweep (armed_executor.go — "the first cycle
 // after boot IS the boot-time sweep") from shadowed conditions to ALL pre-boot
 // arms. The stale-window reconcile stays exactly as it is: the backstop.
