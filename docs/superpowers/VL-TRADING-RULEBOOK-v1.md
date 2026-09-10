@@ -2,6 +2,14 @@
 
 **Documentation correction: 2026-09-10. This document describes and proposes no code changes.**
 
+**Canonical authority.** The owner has designated this corrected rulebook as the
+replacement for the supplied v1, effective on merge of PR #99. Its five substantive
+sections are A–E below; the sources appendix is supporting material. Every wave
+agrees with this file. A wave touching a trading rule updates **A. WHAT RUNS** in
+that same commit, with code-line evidence and an explicit revision/proof boundary;
+**B. WHAT IS WANTED** is never used to represent implemented behaviour. See the
+[Master Plan, §6](VL-MASTER-PLAN-v5.md#6-verification--how-every-claim-in-this-plan-is-checked).
+
 This revision separates **A. what runs**, **B. what is wanted**, and **C. what is still to build or prove**. Historical measurements and trader recommendations have their own sections. A roadmap item, an owner preference and a verified implementation are not interchangeable.
 
 **Evidence boundary.** The health endpoint returned `status=ok`, revision `95f387ae3cfe`, at **2026-09-10 13:01:15 CT**. Implementation citations below are pinned to full commit **`95f387ae3cfe675919cd6f81a689010a85889059`**. The PR was accepted from dev **`5e27344271fb1d04550426fee9a3e2a96ee737d3`** and rebased onto **`a98a92c76b62d4b9533e12cc4a51f6c142d2ecb6`** before publication; dev and the observed running revision are deliberately distinguished. Reading code establishes the implementation at that revision, not that every configured route is enabled or every broker outcome has been demonstrated. Active strategy/environment settings and live broker state were not re-read for this documentation correction.
