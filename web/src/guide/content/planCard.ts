@@ -7,6 +7,23 @@ export const planCard: GuideSection = {
   tagline: 'The centerpiece — every element, decoded.',
   asBuiltRev: GUIDE_BUILT_REV,
   blocks: [
+    { kind: 'h', text: 'Scenario level identity' },
+    {
+      kind: 'p',
+      text: 'A new scenario can name the candidate shown on its map with a level ID. The card shows that candidate beside the evaluator’s own anchor. A disagreement is recorded; it does not change a trading decision, gate or order.',
+    },
+    {
+      kind: 'p',
+      text: 'The ID includes the primary reference’s symbol, kind, bounds, origin date, formation timeframe and separately captured formation close. The existing candle-open timestamp stays unchanged. Round numbers have no formation event, so their IDs remain NULL. Missing inputs never produce a partial hash.',
+    },
+    {
+      kind: 'p',
+      text: 'Legacy scenarios keep NULL IDs by design. Missing or unknown IDs on new plans are accepted with WARN and recorded counters for the first two boots. A refusal requires a later owner ruling after at least five plans have been measured. A named level can belong to several scenarios; the episode record does not choose one arbitrarily.',
+    },
+    {
+      kind: 'p',
+      text: 'Backfill counts refer to episode rows: pre-capture rows are untouched; later rows require every recorded hash input to be recomputed, otherwise they name the missing inputs as unrecomputable. No legacy scenario identity is inferred from a nearby price. Boot counters count recorded plan-version scenarios, not polling ticks.',
+    },
     {
       kind: 'h',
       text: 'Scenario economics: obstacle, response and order objective',

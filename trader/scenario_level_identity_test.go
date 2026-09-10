@@ -76,6 +76,10 @@ func TestIdentityE1AuthoringToEpisodeAndE3WarnProduction(t *testing.T) {
 					t.Fatal("episode authority fell back to heuristic")
 				}
 			}
+			backfill, err := at.store.BackfillLevelIdentity(at.id)
+			if err != nil || backfill.Recomputed != len(rows) || backfill.Unrecomputable != 0 {
+				t.Fatalf("complete frozen inputs did not recompute %+v %v", backfill, err)
+			}
 			// Polling the same version is one measured disagreement, not N loop ticks.
 			at.observeScenarioIdentity(&doc, p.PlanID, version, []kernel.ScenarioEval{{ID: "S1", Anchor: 15480, HasAnchor: true}}, now)
 			c, _ = at.store.LevelIdentityCounts(at.id)

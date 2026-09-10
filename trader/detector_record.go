@@ -94,7 +94,7 @@ func (at *AutoTrader) recordDetectorOutputs(
 		last := ts.LastOpenedAtMs(at.id, symbol, lv.Price, lv.FormedAtMs)
 		for _, e := range kernel.NewEpisodesSince(eps, last) {
 			row := &store.TouchOutcomeRow{
-				TraderID: at.id, Symbol: symbol,
+				TraderID: at.id, Symbol: symbol, CreatedAt: now,
 				LevelPrice: lv.Price, LevelKind: string(lv.Kind),
 				CandidateSeated: true, PlanID: planID, PlanVersion: planVersion, Session: session,
 				// D1c — the ordinal counts within the EPISODE's own session-day.

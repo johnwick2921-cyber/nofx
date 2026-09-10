@@ -165,13 +165,19 @@ func StampAuthoredIdentity(doc *PlanDoc, candidates []MapCandidate) IdentityWarn
 	if doc == nil {
 		return w
 	}
-	doc.IdentityLevels = make([]PlanLevel, 0, len(candidates))
+	doc.IdentityLevels = nil
+	if candidates != nil {
+		doc.IdentityLevels = make([]PlanLevel, 0, len(candidates))
+	}
 	for _, c := range candidates {
 		l := c.Identity
 		l.Names = append([]string(nil), c.Names...)
 		doc.IdentityLevels = append(doc.IdentityLevels, l)
 	}
 	for i := range doc.Levels {
+		old := doc.Levels[i]
+		// Metadata is machine-supplied, never model-supplied.
+		doc.Levels[i] = PlanLevel{Price: old.Price, Label: old.Label, Grade: old.Grade, Instruction: old.Instruction, MachineGrade: old.MachineGrade}
 		// Only an exact, unique shown price can carry the machine's metadata.
 		// This does not name a scenario; only its authored level_id does that.
 		var match *PlanLevel

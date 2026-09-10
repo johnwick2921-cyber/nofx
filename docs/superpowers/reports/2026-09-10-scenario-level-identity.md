@@ -1,10 +1,12 @@
-# Dispatch 105 — scenario-level identity: measured premises and STOP correction
+# Dispatch 105 — scenario-level identity: corrected premises and implementation
 
-**Status: STOP before implementation, under dispatch A17/A23/A31.** The missing
-candidate identity is established. The proposed fix crosses existing trading
-consumers and uses formation semantics that differ from the running source.
-This report supplies the correction for an owner ruling; it claims no shipped
-identity feature, migration, new counter, test pass, or boot.
+**Current status: implementation built on the owner's corrected scope; final
+Go verification and publication in progress. Not deployed.** The owner approved
+separate `formed_close_ms`, unchanged evaluator/gate/wake inputs, complete-input
+backfills and WARN-first authoring. The original STOP audit below remains the
+historical evidence for that correction; its unperformed-work section describes
+the pre-approval state. The implementation addendum supersedes that status.
+
 
 **Lane:** `fix/scenario-level-identity`, session
 `scenario-identity-ac5a801d/root[unlisted]`. Claimed with `deploy/nofx-claim.sh new`,
@@ -379,3 +381,142 @@ of this report requires only reverting its documentation commit. A future
 cutover must perform the full backup, merged suite, clean-clone build, source
 Guide stamp, fresh gate, RELEASE/swap/VERIFY sequence and then observe live
 proof. This report is not a deploy authorization or a five-leg gate result.
+
+
+## Implementation addendum — owner-approved corrected scope
+
+**[A] Branch:** `fix/scenario-level-identity`; isolated locked worktree
+`/tmp/nofx-scenario-level-identity`. Rebased onto dev
+`08aea8b81124bab5f1e18e9eccd76e35f108668c`, preserving the intervening collapse-keeps-names
+changes. The deletion comparison now includes no deletions of another lane's
+files. No main-tree edit, deploy lock, live DB write or boot occurred.
+
+### Contract and separation
+
+- `levelidentity.ID` is the sole seven-input hash implementation. Formation is
+  the separately captured close. Every missing input names its reason and returns
+  NULL; no zero-formation or partial hash. Bounds must be present and finite.
+- `DetectedLevel.FormedAtMs`, existing `TF` and all trading inputs stay unchanged.
+  `formed_close_ms` rides separately into the frozen plan map and research record.
+  PlanLevel metadata comes from the machine map, not model-supplied extra fields.
+- `LevelByID` validates a stored ID against every frozen input. Cards, desk,
+  evaluation recording and episode attribution use that resolver. The existing
+  `ScenarioAnchor` and `EvaluateScenario` code is unchanged. The evaluator's own
+  anchor remains beside the resolved candidate; > existing merge width is a
+  recorded disagreement, never a decision change.
+- `StampAuthoredIdentity` is called after ordinary accepted-plan validation.
+  Missing and unknown IDs are WARN plus recorded event, not a refusal. Events
+  are scoped to trader/plan/version/scenario. Disagreement counts are unique
+  version/scenario observations; polling does not increase them. Counter-write
+  errors warn, and recording panics are contained.
+- `touch_outcomes.level_id` is the sole added episode column. Existing ordinal,
+  k, delta, horizon, formation-open scan floor, watermark and proximity fields
+  retain their meanings. Exact primary references named by the plan receive the
+  ID; unnamed or changed references remain NULL. A candidate named by two
+  scenarios remains ambiguous at the scenario join. A named row cannot read a
+  different active plan version's scenario facts merely because both are S1.
+- Backfill population is **episode rows**, not inferred legacy scenario counts.
+  Before the measured W-TF creation cutoff, rows are untouched. Later rows need
+  all seven inputs from an already-named frozen candidate in the exact plan
+  version. Missing fields are `unrecomputable:<fields>`. Legacy plan documents
+  are never rewritten. Classification rows, with IDs, are preserved in the
+  trader-scoped `level_identity_backfill:` sidecar. No live migration was run.
+
+**[A] Formation output matrix:** prior-calendar PDH/PDL/PDC and NY-subset RTH
+use the actual last source close of their existing buckets, not an invented
+CME boundary. AS/London/overnight and OR/IB require an actual completed-window
+last close; developing or missing-final-bar outputs retain NULL. Weekly/monthly
+references and profile/pdVWAP/nPOC use the existing bucket's last source close.
+Session/eVWAP use their explicitly defined anchor only when its source bar is
+present. Gap, S/D, FVG, iFVG, OB and swings carry their source-completion close;
+iFVG records inversion close separately from the unchanged original-gap open.
+Round numbers, owner references and durable legacy extras without source
+formation remain NULL. Lookback is recorded alongside, not substituted for TF.
+
+### Scope correction approved during implementation
+
+The full Go run found the brand wave's `TestExistingGoImportTargetsPreserved`
+rejecting removal of obsolete `crypto/sha256` and `encoding/hex` imports from
+`trader/research_snapshot.go`. Moving the hash to the shared helper made these
+imports unused. The guard compared all future changes to `954f11b1`, extending
+that wave's import constraint indefinitely. The owner explicitly approved
+narrowing it to protect `nofx/...`; the existing rename-to-`vl/...` rejection
+pin remains and a standard-library-removal pin was added. No existing project
+import target or Go module path was renamed. Evidence:
+[initial full Go result](2026-09-10-scenario-level-identity-data/go-before-guard-correction.txt).
+
+The corrected RULEBOOK was absent from dev. Its unchanged baseline is carried
+from `daeb654978b0c739592e8589a393c5e79171560d` (branch
+`docs/rulebook-trading-corrections-20260910`); only the identity note in §A is
+this lane's addition. No §B policy is authored or amended here. Guide and
+SYSTEM-MAP plan/levels notes accompany it. All three explicitly distinguish
+source implementation from live proof.
+
+### Verification record
+
+**[A] E1/E5 original red:** the actual parser discarded `level_id`; the OR emitter
+had no separate close. See [red output](2026-09-10-scenario-level-identity-data/E1-E5-red.txt).
+Compilation failures while writing fixtures are not counted as semantic red pins.
+
+**[A] Green pins:** actual accepted planner write → frozen map → `LevelByID` →
+production episode row; missing and unknown IDs remain ACTIVE and counted;
+different closes yield different IDs and every missing hash input yields NULL;
+P versus P+5 preserves evaluator output and records attribution disagreement;
+legacy stored plan reads NULL; PDH prior calendar source close, OR 08:35, IB
+09:30 and existing extensions, VWAP source anchor, and round-number NULL are
+pinned with explicit clocks. The production-path episode test also recomputes
+its IDs from complete frozen inputs. UI pins cover legacy NULL, unknown WARN
+and the distinct candidate/evaluator prices.
+
+**[A] Behavior golden:** generated on the exact dev baseline `08aea8b8` in a
+separate locked worktree; 302,824 bytes. The current production detector → dedupe
+→ scorer → seat output and old map text compare byte-for-byte. Golden:
+`kernel/testdata/identity_legacy_output.json`; test
+`TestIdentityLegacyOutputParity`. This is a deterministic fixture proof, not a
+claim that every possible tape has been enumerated.
+
+**[A] E7:** removing only the added `id=` column from the new model map text
+returns the previous text exactly. The other planner prompt change is the new
+scenario schema field; no authoring policy instruction was changed.
+
+**[A] E8:** the AST wiring gate names actual production files and counts their
+calls; declarations and tests cannot satisfy it. [Caller receipts and parity
+result](2026-09-10-scenario-level-identity-data/parity-wiring.txt).
+
+**[A] E10:** seven mutations, seven confirmed source replacements, seven
+successful package builds, seven failing pins. The mutations omit formation
+from the hash, turn WARN into REFUSE, substitute the evaluator anchor for the
+ID's candidate price, and disconnect episode identity, plan stamping, boot
+logging and formation capture. Each artifact quotes BEFORE/AFTER and the test
+failure: [manifest](2026-09-10-scenario-level-identity-data/mutations.json).
+The first authority run had an overly strict script confirmation check; it is
+not counted. The corrected confirmation checks the exact mutated file, and
+all mutations were restored before final suites.
+
+**[A] Frontend:** full vitest 59 files / 417 tests PASS; `tsc --noEmit` PASS.
+The sandboxed frontend run could not spawn the existing brand test's Go
+subprocess (EPERM); rerunning with that execution permission passed, without
+changing the test. [Vitest output](2026-09-10-scenario-level-identity-data/vitest-full.txt).
+Full Go final result and final tested commit are recorded below when complete.
+
+### Remaining cutover proof and rollback
+
+This addendum claims no live named-plan count, no live backfill count and no
+identity boot. Those require the owner's separate GO and a fresh gate. The
+boot reader is trader-bound; unavailable map/counter/backfill data prints n/a,
+not a plausible zero. Legacy IDs remain NULL by design. Guide source revision
+must be stamped from the clean-clone binary before dist. Checklist class number
+is assigned at merge; none is reserved here.
+
+Cutover still owes backup + integrity check before any migration, full suite at
+the merged head, clean clone named `nofx`, binary `vcs.modified=false`, source
+GUIDE_BUILT_REV then dist, own five-leg gate, RELEASE → mv → VERIFY, permitted
+restart, owner boot acknowledgment, pushed same-tree marker and five-reference
+verification before lock release. Preserve the old binary by its actual embedded
+revision. Rollback restores that binary and matching RELEASE/dist/Guide marker;
+the additive nullable column and versioned recording sidecars may remain.
+No account, order, execution or detector policy changes are part of this wave.
+
+[Implementation source freshness receipts](2026-09-10-scenario-level-identity-data/implementation-source-receipts.json)
+quote `git log -1` against the dev base for each existing touched file. Original
+running-revision evidence and its sample IDs remain in C1–C6 above.

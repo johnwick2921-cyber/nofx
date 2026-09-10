@@ -135,7 +135,30 @@ Assembly order: MultiDay → Round → OR/IB → Gap → EQH/EQL → S/D → FVG
 - **`validity` gates every rate.** `RatesBy` — the one chokepoint `DetectorReport` and all callers inherit — draws from `validity='valid'` only. Values: `valid` · `unverified:no_formation` · `invalid:pre_formation` · `invalid:duplicate` · `legacy:unverified`. No SQL default: an empty validity means NOT CERTIFIED.
 - **KNOWN LIMIT — 74.3% of the corpus cannot be certified.** `FormedAtMs` is set only by `kernel/levels_zones.go` (DEMAND/SUPPLY/OB/FVG). Every LINE level comes from `lineLevel` (`kernel/levels.go:93-95`), which never sets it — 503 of 677 live rows, including all 140 RTH-L rows. Those episodes are recorded as `unverified:no_formation` and excluded from rates. Giving line levels a birth time is what unlocks them.
 
+**105 identity metadata (implemented; awaiting cutover).** The primary merged
+reference carries a nullable SHA256 id over symbol, kind, bounds, origin date,
+formation timeframe and separately captured `formed_close_ms`. The existing
+`FormedAtMs` is unchanged. Actual source closes are captured at emitter outputs;
+VWAP uses its explicit source anchor. Missing formation, round numbers and
+uncaptured durable legacy references retain NULL IDs. Source:
+`kernel/scenario_level_identity.go`, `levelidentity/identity.go`. Detector
+selection, dedupe, scores, seats and merge width do not read these new fields.
+
 ## 3 · PLANNER — plan authoring and sessions
+
+**105 scenario identity (implemented; awaiting cutover).** New scenarios cite the
+map's `level_id`; accepted plans freeze the candidate metadata in `identity_levels`.
+`StampAuthoredIdentity` is WARN-only; missing and unknown IDs never add a refusal.
+`LevelByID` is the common attribution resolver for evaluation recording, episode
+identity, the card and desk. The trading evaluator keeps its original anchor and
+decisions. Disagreement is recorded once per trader/plan/version/scenario. The
+boot line counts recorded new-authoring events, not inferred legacy omissions.
+`touch_outcomes.level_id` is additive; the W1 proximity fields remain unchanged
+as corroboration and NULL-ID fallback. Multiple scenarios naming one candidate
+remain ambiguous at the scenario join. Backfill classifies pre-W-TF episode rows
+untouched, and later rows recomputed only with all seven recorded inputs, else
+`unrecomputable:<missing inputs>`. Legacy plans are never rewritten.
+
 
 **What it does:** the prompt (`kernel/planner_prompt.go`) instructs the LLM; the output parses into a plan document (`kernel/plan_doc.go`) with bias, levels, scenarios, confirms, arms; `ValidatePlanDocWithCaps` chains every write-site validator.
 

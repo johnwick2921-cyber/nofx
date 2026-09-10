@@ -152,3 +152,78 @@ func TestIdentityE7MapOnlyAddsIDColumn(t *testing.T) {
 		t.Fatalf("non-column prompt drift\nold=%s\nnew=%s", old, with)
 	}
 }
+
+func TestIdentityE5PriorCalendarBucketAndIBClose(t *testing.T) {
+	now := time.Date(2026, 9, 10, 10, 0, 0, 0, CTLocation())
+	var prior []market.Kline
+	start := now.AddDate(0, 0, -1)
+	start = time.Date(start.Year(), start.Month(), start.Day(), 0, 0, 0, 0, CTLocation())
+	for i := 0; i < 24*60; i++ {
+		s := start.Add(time.Duration(i) * time.Minute)
+		prior = append(prior, market.Kline{OpenTime: s.UnixMilli(), CloseTime: s.Add(time.Minute).UnixMilli() - 1, Open: 20000, High: 20005, Low: 19995, Close: 20001, Volume: 10})
+	}
+	levels := ExtractMultiDayLevels(prior, DefaultSessionRegistry(), now)
+	checked := 0
+	for _, l := range levels {
+		switch l.Kind {
+		case KindPDH, KindPDL, KindPDC:
+			checked++
+			if l.FormedCloseMs == nil || *l.FormedCloseMs != prior[len(prior)-1].CloseTime || l.FormedAtMs != 0 {
+				t.Fatalf("prior calendar source close lost %+v", l)
+			}
+		}
+	}
+	if checked != 3 {
+		t.Fatalf("did not exercise all prior lines: %d", checked)
+	}
+	open := time.Date(2026, 9, 10, 8, 30, 0, 0, CTLocation())
+	var bars []market.Kline
+	for i := 0; i < 60; i++ {
+		s := open.Add(time.Duration(i) * time.Minute)
+		bars = append(bars, market.Kline{OpenTime: s.UnixMilli(), CloseTime: s.Add(time.Minute).UnixMilli(), Open: 20000, High: 20005, Low: 19995, Close: 20000, Volume: 10})
+	}
+	checked = 0
+	for _, l := range OpeningRangeLevels(bars, DefaultSessionRegistry(), now) {
+		if l.Kind == KindIBH || l.Kind == KindIBL {
+			checked++
+			if l.FormedCloseMs == nil || *l.FormedCloseMs != open.Add(time.Hour).UnixMilli() {
+				t.Fatalf("IB close: %+v", l)
+			}
+		}
+	}
+	if checked != 6 { // two bounds and four existing extensions
+		t.Fatalf("IB fixture empty %d", checked)
+	}
+}
+
+func TestIdentityE5VWAPAnchorAndIncompleteWindow(t *testing.T) {
+	now := time.Date(2026, 9, 10, 18, 0, 0, 0, CTLocation())
+	start := CMESessionDayStart(now)
+	bars := []market.Kline{}
+	for i := 0; i < 3; i++ {
+		s := start.Add(time.Duration(i) * time.Minute)
+		bars = append(bars, market.Kline{OpenTime: s.UnixMilli(), CloseTime: s.Add(time.Minute).UnixMilli(), High: 20005, Low: 19995, Close: 20000, Volume: 10})
+	}
+	levels := SessionVWAPLevels(bars, now)
+	if len(levels) == 0 {
+		t.Fatal("empty VWAP fixture")
+	}
+	for _, l := range levels {
+		if l.FormedCloseMs == nil || *l.FormedCloseMs != start.UnixMilli() || l.FormedAtMs != 0 {
+			t.Fatalf("VWAP anchor wrong %+v", l)
+		}
+	}
+	for _, l := range SessionVWAPLevels(bars[1:], now) {
+		if l.FormedCloseMs != nil {
+			t.Fatal("missing source anchor was invented")
+		}
+	}
+}
+
+func TestIdentityDuplicateScenarioNamesStayAmbiguous(t *testing.T) {
+	l := identityFixture(t)
+	doc := &PlanDoc{IdentityLevels: []PlanLevel{l}, Scenarios: []PlanScenario{{ID: "S1", LevelID: l.ID}, {ID: "S2", LevelID: l.ID}}}
+	if EpisodeScenarioByID(l.ID, doc) != nil {
+		t.Fatal("picked a scenario arbitrarily")
+	}
+}

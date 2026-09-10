@@ -686,14 +686,15 @@ func (at *AutoTrader) deskPlanner(now time.Time) DeskLine {
 
 	state := "ok"
 	if plan := kernel.ActivePlanFor(at.id, at.futuresSymbol()); plan != nil {
+		identities := kernel.ScenarioIdentities(&plan.Doc)
 		for _, sc := range plan.Doc.Scenarios {
-			r := kernel.ScenarioIdentities(&plan.Doc)[sc.ID]
+			r := identities[sc.ID]
 			if r.Level == nil {
 				txt += fmt.Sprintf(" · %s level_id=%s (%s)", sc.ID, identityIDText(r.LevelID), r.Basis)
 			} else {
 				txt += fmt.Sprintf(" · %s level_id=%s @ %.2f formed_close_ms=%d", sc.ID, *r.LevelID, r.Level.Price, *r.Level.FormedCloseMs)
 				if r.Disagreed {
-					txt += fmt.Sprintf(" (evaluator %.2f; disagreement recorded)", *r.EvaluatorAnchor)
+					txt += fmt.Sprintf(" (evaluator %.2f differs; decision unchanged)", *r.EvaluatorAnchor)
 				}
 			}
 		}

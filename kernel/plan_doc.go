@@ -270,7 +270,7 @@ type PlanFvgEntry struct {
 // PlanDoc is the full plan (stored as the plans.doc JSON).
 type PlanDoc struct {
 	// Frozen machine map actually shown at authoring; never model-authored.
-	IdentityLevels []PlanLevel    `json:"identity_levels,omitempty"`
+	IdentityLevels []PlanLevel    `json:"identity_levels"`
 	Reasoning      string         `json:"reasoning"` // reasoning FIRST
 	Bias           PlanBias       `json:"bias"`
 	Levels         []PlanLevel    `json:"levels"`
