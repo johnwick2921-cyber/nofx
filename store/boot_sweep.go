@@ -35,17 +35,17 @@ func ProcessBootID() string {
 	return bootIDVal
 }
 
-// ListPreBoot returns ONE trader's non-terminal rows that were written by a
-// DIFFERENT process than the current boot — i.e. orders this process never
-// placed and has no listener for. An EMPTY boot_id (rows written before this
-// column existed) counts as pre-boot: those are exactly the legacy orphans.
+// ListPreBoot returns ONE trader's sweepable rows from a DIFFERENT process.
+// Sweepable means non-terminal EXCEPT cancel_pending: those rows belong to
+// confirmPendingCancels, which settles them only with a persisted snapshot id.
+// An EMPTY boot_id (written before this column existed) counts as pre-boot.
 func (s *ArmedOrderStore) ListPreBoot(traderID, bootID string) ([]ArmedOrderDB, error) {
 	if s == nil || s.db == nil {
 		return nil, fmt.Errorf("store required")
 	}
 	var out []ArmedOrderDB
-	err := s.db.Where("trader_id = ? AND state IN ('armed','place_pending','working') AND (boot_id IS NULL OR boot_id <> ?)",
-		traderID, bootID).Order("id").Find(&out).Error
+	err := s.db.Where("trader_id = ? AND (boot_id IS NULL OR boot_id <> ?)",
+		traderID, bootID).Where(SweepableArmStateSQL()).Order("id").Find(&out).Error
 	return out, err
 }
 

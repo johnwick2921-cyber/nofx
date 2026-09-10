@@ -302,7 +302,7 @@ func TestZeroBReArmAfterBootSweep(t *testing.T) {
 	}
 	for _, id := range []int64{s1, s3} {
 		row := armedRowByID(t, ledger, id)
-		if row.State == "armed" || row.State == "working" {
+		if !store.IsTerminalArmState(row.State) {
 			t.Fatalf("row %d must be terminal after the sweep, got %q", id, row.State)
 		}
 		if !store.IsBootSweepReason(row.StateReason) {

@@ -22,6 +22,7 @@ import (
 	"time"
 
 	nt "nofx/provider/ninjatrader"
+	"nofx/store"
 )
 
 // Leg4FromBrokerAt computes leg 4 from the broker's book, cross-checked against
@@ -36,8 +37,31 @@ func Leg4FromBrokerAt(
 	interval time.Duration,
 	ledger []OpenOrder,
 	now time.Time,
-) CutoverLeg {
+) (result CutoverLeg) {
 	const name = "working_orders"
+	workingLedger := make([]OpenOrder, 0, len(ledger))
+	armed, unconfirmed := 0, 0
+	for _, row := range ledger {
+		if store.IsTerminalArmState(row.ArmState) {
+			continue
+		}
+		if store.IsUnplacedArm(row.ArmState, row.OrderID) {
+			armed++
+			continue
+		}
+		workingLedger = append(workingLedger, row)
+		if strings.TrimSpace(row.OrderID) == "" || strings.ToLower(strings.TrimSpace(row.ArmState)) == store.StatePlacePending {
+			unconfirmed++
+		}
+	}
+	ledger = workingLedger
+	defer func() {
+		result.ArmedUnplaced = &armed
+		if unconfirmed > 0 {
+			result.Detail += fmt.Sprintf("; %d unconfirmed placement(s)", unconfirmed)
+		}
+		result.Detail += fmt.Sprintf("\n%d armed (authorized, no signal id; informational)", armed)
+	}()
 
 	// NO SILENT FALLBACK. Without a snapshot the leg FAILS and names the source
 	// it fell back to, so a cutover can never read a ledger answer as a broker
