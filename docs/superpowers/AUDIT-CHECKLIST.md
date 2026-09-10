@@ -4193,9 +4193,10 @@ misses 77 of 269. An exclusion keyed on it would string-match an LLM's
 adjectives and call the result a measurement. Pin it by reflecting over the
 facts struct (`TestFadeFactsCarriesNoDayType`).
 
-## Pending merge assignment — scenario level identity (105)
+## CLASS 116 — AN IDENTITY HASH WITH INPUTS THE RECORD NEVER HELD (assigned at identity merge, 2026-09-10)
 
-Do not reserve a class number: census all heading formats at merge. An identity
+Assigned after the three-format census of dev `4dc0fae1`: ceiling 115; existing
+duplicates 75/76/77/92/93 retained. An identity
 hash requires every recorded input, including the separate formation close;
 missing input is NULL, never a hash of a zero. Legacy scenario links stay
 labelled heuristics. Recording identity must not replace the trading evaluator's
