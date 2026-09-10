@@ -176,6 +176,18 @@ func zoneTierFor(tf string) string {
 		return "1h"
 	case "6h", "8h", "12h":
 		return "4h"
+	case "1d", "3d", "1w":
+		// W-TF (owner ruling 2026-09-10). These timeframes could not reach a
+		// level before this wave, so no value moves: this classifies an input
+		// that was previously impossible. Without it the default below would
+		// route a DAILY level to the 1m noise floor — multiplier 1.0 against
+		// 4h's 1.3, KindOB evidence 0.40 against 0.72, and the zone grader's
+		// 1m clause forcing grade C — making a daily zone the weakest thing on
+		// the map. Inheriting the 4h tier is [I], not established: round 12
+		// (12c) says no timeframe hierarchy is proven and E4 measures whether
+		// this classification is right. No weight, multiplier, cap or tolerance
+		// changes here.
+		return "4h"
 	default:
 		// Keep the known tier names as-is; anything else → 1m (noise floor),
 		// never a missing-map zero.
