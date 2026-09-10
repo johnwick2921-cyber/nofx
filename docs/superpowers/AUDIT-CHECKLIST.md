@@ -3203,11 +3203,33 @@ expansion recorded as "no change" is indistinguishable from a scope violation.
 
 ## CLASS 99 — A GATE QUERY THAT RETYPES THE TERMINAL SET (born 2026-09-09, dispatch 103 W3)
 
-**Root cause:** the pre-cutover flat check was written as a hand-typed exclusion list — `state NOT IN ('filled','cancelled','canceled','expired','done')` — while the code's own predicate `isTerminalArmState` (`trader/one_contract.go:284-289`) returns true for **seven** states: `filled · cancelled · canceled · rejected · expired · superseded · shadowed`. The query matched five of the seven and invented a sixth (`done`) that the code never sets. On 2026-09-09 it reported **11 resting arms** blocking a cutover; the true count was **0** — every row was `superseded`, several of them days old. The wrong number was reported to the owner as the reason to hold.
+**Root cause:** the pre-cutover flat check was written as a hand-typed exclusion list — `state NOT IN ('filled','cancelled','canceled','expired','done')` — while the code's own predicate `isTerminalArmState` (`trader/one_contract.go:285-291`) returns true for **seven** states: `filled · cancelled · canceled · rejected · expired · superseded · shadowed`. The query matched five of the seven and invented a sixth (`done`) that the code never sets. On 2026-09-09 it counted **10** rows as resting arms blocking a cutover; the true count was **0** — every row was `superseded`, several of them days old. The wrong number was reported to the owner as the reason to hold.
+
+**Correction of this entry, 2026-09-10 (A24).** This entry first said **11**, and the query never returned 11 — every reading in the transcript is **10**. The 11 came from a hardcoded shell label, `echo "--- what the 11 arms are ---"`, printed directly above output that read `10`, and it propagated from there into this entry, into `reports/2026-09-09-candidates-not-entitlements.md`, and into what was told the owner and a peer lane. A count typed into an `echo` above a query is a placeholder that reads as data; it survived because it sat beside the real number and agreed with the story being told. The entry about not hand-typing values carried a hand-typed value in its own headline — the class caught its own author, in its own text, five days running.
+
+**Second instance — the mirror image, same predicate, same day, one hour later.** Lane nofx-07 ran, repeatedly between 21:05 and 22:21 CT on 2026-09-09 and inside three successive Monitor loops:
+
+```sql
+select count(*) from armed_orders where state in ('armed','working')
+```
+
+This was an **uncommitted operator query, not a code site** — there is no file:line to open, and it is recorded that way deliberately so no reader goes hunting for one. It is a POSITIVE list of live states, the mirror of the negative list above. At 22:12:53 CT it returned **0** while arm **143** rested at the broker in state `place_pending` (ASIA · S5 · SHORT · entry 29435.58 · stop 29464.48 · target 29372.50; the broker's own snapshot read `order_count=1 working_count=1` at 22:13:36; the arm later went `working` and FILLED at 29435.50). `place_pending` is in neither operator's list. Had the owner not independently ordered a wait, that gate would have called the desk flat and handed over a kill, and the class-33 boot sweep would have cancelled a live order placed 90 seconds earlier.
+
+Reproduced 2026-09-10, three predicates against the same table at the same instant:
+
+| predicate | form | rows |
+|---|---|---|
+| `isTerminalArmState` — the code's seven | negative | **0** |
+| nofx-07's `IN ('armed','working')` | positive | **0** |
+| this entry's five-of-seven `NOT IN` | negative | **10** |
+
+The table has only ever PERSISTED three states — `cancelled` 77, `filled` 22, `superseded` 10. Every live state (`armed`, `place_pending`, `working`, `cancel_pending`) is real, code-set and transient, so none of them is visible in a snapshot. **`select distinct state` cannot catch this class**; only the code's predicate knows the full set.
 
 **Probe:** for any query that decides whether it is safe to act, name the Go predicate it is standing in for and diff the two sets. `grep` the predicate, list its cases, and compare them to the SQL literal character by character. A gate whose SQL and whose code disagree is a gate that will hold when it should release, or release when it should hold — and the direction of the error is not predictable from reading either side alone.
 
-**Law:** a gate query reads the code's terminal set; it never retypes it. Where SQL cannot call the predicate, the query quotes the predicate's file:line beside the literal and a test pins them equal, so a state added to the Go switch fails the test instead of silently widening the gate. The same rule covers any "is it finished / is it safe" list: order states, position states, plan lifecycle states. Related: class 53 (parity tests exercise production CALL SITES — a test that builds both sides' inputs proves only self-consistency). Dispatch 103 report: `reports/2026-09-09-candidates-not-entitlements.md`.
+**Law:** a gate query reads the code's terminal set; it never retypes it. **A negative list of terminal states that omits one OVER-reports live rows and fails SAFE; a positive list of live states that omits one UNDER-reports and fails OPEN — the gate calls the desk flat while a real order rests at the broker.** A hand-typed list is therefore not merely wrong, it is wrong in a direction that depends on which way you happened to type it, and that is the argument for reading the code's set rather than for typing a better list.
+
+The structural remedy is to export ONE SQL fragment derived from the predicate, so the switch and every gate query have a single source. That work is owned by lane nofx-80 and is **not on dev as of `a4c72ff7`** (`TerminalArmStates|terminalArmStatesSQL|ArmTerminalSQL` → zero hits). A caveat for whoever builds it, which is class 102 in this file seen from another angle: a `[]string` sitting *beside* a hardcoded `switch` does not close this class, it moves it — two hand-typed lists in one file diverge as readily as one in Go and one in SQL. It closes only when the switch ranges over the same slice the SQL is built from. Until then the fallback applies: the query quotes the predicate's file:line beside the literal and a test pins them equal, so a state added to the Go switch fails the test instead of silently widening the gate. The same rule covers any "is it finished / is it safe" list: order states, position states, plan lifecycle states. Related: class 53 (parity tests exercise production CALL SITES — a test that builds both sides' inputs proves only self-consistency). A worked example — the wrong query annotated in place beside the correct one — is preserved at `reports/2026-09-04-two-day-audit.md` §0. Dispatch 103 report: `reports/2026-09-09-candidates-not-entitlements.md`.
 
 ## CLASS 100 — A BRANCH ON A STALE BASE IS A DELETION PATCH (born 2026-09-09, dispatch 103 W3)
 

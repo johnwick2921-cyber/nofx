@@ -109,8 +109,12 @@ same wave.
 1. **`seats=8`** — quoted a 09-03 log line as current; the fix had shipped on 09-04.
 2. **The class number** — filed 95, collided twice; landed 98 after the combined-boot lane
    renumbered it correctly (A16 protects the *landed* entry).
-3. **The gate query** — retyped five of seven terminal states and invented a sixth. Reported **11
-   resting arms** to the owner as a reason to hold when the true count was **0**. → **class 99**.
+3. **The gate query** — retyped five of seven terminal states and invented a sixth. Reported
+   resting arms to the owner as a reason to hold when the true count was **0**. → **class 99**.
+   *(Corrected 2026-09-10: this said **11**; the query never returned 11 — every reading was
+   **10**. The 11 was a hardcoded `echo` label printed above output that said 10, and it
+   propagated from here into class 99 and into two lanes' messages. See the correction note in
+   class 99.)*
 4. **The stale base** — the branch was green and correct for eight hours, then diffed as **5,403
    deletions** of 102's and 101's landed work after a combined boot merged it. Nothing conflicted,
    nothing failed. → **class 100**, which then caught the same branch a **second** time the next
