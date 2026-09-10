@@ -417,7 +417,7 @@ The card's `ScenarioEconomics` block and desk SCENARIOS line display obstacle pr
 
 `Leg4FromBrokerAt` splits authorized `armed` rows with no signal id from placed/unconfirmed rows. The former are reported separately (`armed_unplaced`) and do not fail the leg. `place_pending` remains working/unconfirmed; broker-only orders and missing broker placements fail. The received broker snapshot still supplies order truth. The class-33 sweep does not gain scenario-validity adoption in this wave; it still cancels selected prior-process placed rows. The boot's `arm placement census` reads the same classification and prints UNKNOWN on a failed ledger read.
 
-### The episode contract (fix/episode-contract, classes 108/109)
+### The episode contract (fix/episode-contract, classes 109/111)
 
 RECORDING ONLY. No rule, threshold, gate, order, plan content, level score or
 surface behaviour changes; the wave adds columns to `touch_outcomes` and fills

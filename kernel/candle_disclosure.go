@@ -112,7 +112,7 @@ func (c RowCoverage) Marker() string {
 
 // ClockHHMMCT renders an instant as "HH:MM" CT. One formatter, so a marker and
 // a table row can never disagree about the clock they speak (A11).
-func ClockHHMMCT(t time.Time) string { return t.In(CTLocation()).Format("15:04") }
+func ClockHHMMCT(t time.Time) string { return CloseHHMMCT(t) }
 
 // observableEndMs is the end of the newest 1m interval that has actually CLOSED
 // at `now` — i.e. `now` floored to the minute grid.

@@ -163,13 +163,17 @@ than silent. It is not the single-reader ideal of class 97 and is not claimed to
    **pre-wave row**, not a missing reading. Caught by grepping my own prose against
    the code before committing. This is class 105's lesson applied to the commit
    that introduced class 105.
-5. **My classes 105/106 landed as 108/109 — renumbered twice.** Dispatch 103 took
-   105 while this branch rebased; then 106 and 107 went too (a peer's
-   generalisation of class 104, and the boot-sweep `cancel_pending` wave). Four
-   dev tips in one wave. That is A27 working exactly as written, and class 109
-   now carries it as the worked example: a census tells you the ceiling, only the
-   merge assigns the number. The alternative — reserving a number at accept — is
-   what produced the 75/76/77/92/93 duplicates.
+5. **My classes 105/106 landed as 109/111 — renumbered four times, across five
+   dev tips in one day.** 105 went to dispatch 103; 106 and 107 went to a peer's
+   generalisation of class 104 and to the boot-sweep wave; then 108 was contested
+   *three ways at once* — the arm-state lane's (merged, so it held), nofx-b3's,
+   and mine. The merged one wins and both unmerged ones move, which needs no
+   adjudication because merge order already decided it. 109 was uncontested and
+   stayed. That is A27 working exactly as written, and class 109 carries it as
+   the worked example: a census tells you the ceiling, only the merge assigns the
+   number. The alternative — reserving at accept — is what produced the
+   75/76/77/92/93 duplicates. I also messaged nofx-b3 before taking 111, since
+   coordination is cheaper than a fifth renumber.
 
 6. **This branch is merged onto dev, not rebased, and that was forced.** Four
    rebases in, a force-push was refused by the classifier. I reconciled with a
@@ -352,11 +356,11 @@ merged HEAD rather than carried forward — a branch green alone is not green me
 
 ## I · CLASSES FILED
 
-- **108 — THE UNIT AN EXPERIMENT NEEDS, WHICH THE RECORD NEVER HELD.** Every
+- **111 — THE UNIT AN EXPERIMENT NEEDS, WHICH THE RECORD NEVER HELD.** Every
   experiment measures value per opportunity; the record held only fills.
 - **109 — A CENSUS THAT CANNOT SEE ITS OWN THIRD FORMAT.** The checklist has three
   entry shapes; a two-format census reported the ceiling as 93 while 104 existed.
-  Now carries the 105→106→108 renumber chain as its worked example.
+  Now carries the 105→106→108→111 renumber chain as its worked example, including the three-way contest on 108 that merge order settled without adjudication.
 
 **Two more classes are owed from §G and are NOT filed here**, because each belongs
 to a lane that owns the file and because I got the first one wrong twice before

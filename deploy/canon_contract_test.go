@@ -242,3 +242,108 @@ func TestCanonMirrorDeclaresItsOwnPrecedence(t *testing.T) {
 			"only pointer that exists. Without it a reader has two documents and no precedence rule.", canonPath)
 	}
 }
+
+// ── THE FOURTH CLAIM: check's rc SET ─────────────────────────────────────────
+//
+// ADDED 2026-09-10, after this file passed green across a change that made the
+// canon wrong. The lock wave added `clear-incomplete` and rc 3/4 to cmd_check;
+// the canon still listed "rc 0 free · 1 held · 2 stale" and five verbs. Nothing
+// failed, because the verb list and the rc codes were a claim this file had
+// never pinned — and I read the green run as confirmation that the canon was
+// still accurate.
+//
+// THAT IS THE FAILURE MODE OF CONTRACT TESTS AS SUCH: a green result speaks only
+// about the assertions present, and silence about everything else is
+// indistinguishable from approval. The header above lists what was deliberately
+// excluded as cosmetic; an rc contract is not cosmetic, it was simply not
+// thought of. The remedy is not "be more careful" — it is to pin the surface, so
+// the next code that grows a return code fails here instead of drifting.
+// canonCheckLine returns the canon's single line documenting the `check` verb —
+// the list a lane reads to learn what the return codes mean. Scoping the rc
+// assertion to this line is what stops it being satisfied by prose elsewhere.
+func canonCheckLine(t *testing.T, canon string) string {
+	t.Helper()
+	for _, ln := range strings.Split(canon, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(ln), "deploy/nofx-lock.sh check") {
+			return ln
+		}
+	}
+	t.Fatalf("%s has no `deploy/nofx-lock.sh check` line.\n"+
+		"The canon is the copy lanes are told to trust over the untracked CLAUDE.md;\n"+
+		"if the verb block was restructured, this test must be taught the new shape.", canonPath)
+	return ""
+}
+
+func TestCanonNamesEveryCheckReturnCode(t *testing.T) {
+	script := readRepoFile(t, lockScriptPath)
+	canon := readRepoFile(t, canonPath)
+
+	// Every `return N` inside cmd_check — the codes the script can actually hand
+	// a caller. Read from the function BODY, never from a list kept beside it.
+	body := shellFunc(t, script, "cmd_check")
+	codes := map[string]bool{}
+	for _, m := range regexp.MustCompile(`return (\d+)`).FindAllStringSubmatch(body, -1) {
+		codes[m[1]] = true
+	}
+	if len(codes) < 3 {
+		t.Fatalf("cmd_check yielded only %d return codes (%v) — the parse is wrong, not the script", len(codes), codes)
+	}
+
+	// SCOPED TO THE CANON'S OWN rc LIST, not the whole file.
+	//
+	// The first draft of this assertion searched the entire canon for "rc N".
+	// A mutation that deleted rc 4 from the authoritative `check` line SURVIVED,
+	// because a paragraph further down happened to say "rc 4 means …". The test
+	// was satisfied by any mention anywhere, which is not the claim: the claim is
+	// that the LIST a lane reads to learn check's contract is complete. An
+	// assertion satisfied by prose is an assertion about prose.
+	line := canonCheckLine(t, canon)
+	for code := range codes {
+		if strings.Contains(line, code) {
+			continue
+		}
+		t.Errorf(`cmd_check can return %s, and the canon's rc list does not name it.
+
+  SCRIPT : deploy/nofx-lock.sh cmd_check returns %s
+  CANON  : %s check line reads: %s
+
+One of the two is wrong and this test does not know which. If the code is new,
+the canon's rc list needs it. If the code was removed, the canon describes a
+contract the script no longer offers.`, code, code, canonPath, line)
+	}
+}
+
+// TestCanonNamesEveryVerb pins the verb block for the same reason: a verb that
+// exists and is undocumented is as much a drift as a documented verb that does
+// not exist, and the canon is the copy lanes are told to trust over the
+// untracked CLAUDE.md.
+func TestCanonNamesEveryVerb(t *testing.T) {
+	script := readRepoFile(t, lockScriptPath)
+	canon := readRepoFile(t, canonPath)
+
+	// The dispatch table is the authority on which verbs exist.
+	tail := script
+	if i := strings.LastIndex(tail, `case "${1:-status}" in`); i >= 0 {
+		tail = tail[i:]
+	}
+	verbs := map[string]bool{}
+	for _, m := range regexp.MustCompile(`(?m)^\s{2}([a-z][a-z-]*)\)\s`).FindAllStringSubmatch(tail, -1) {
+		verbs[m[1]] = true
+	}
+	if len(verbs) < 5 {
+		t.Fatalf("parsed only %d verbs from the dispatch table (%v) — the parse is wrong, not the script", len(verbs), verbs)
+	}
+	flat := flattenProse(canon)
+	for v := range verbs {
+		if strings.Contains(flat, "nofx-lock.sh "+v) {
+			continue
+		}
+		t.Errorf(`the script accepts the verb %q and the canon never names it.
+
+  SCRIPT : deploy/nofx-lock.sh dispatches %q
+  CANON  : %s has no "nofx-lock.sh %s" line
+
+A verb lanes cannot find is a verb they will not use — and this file is the copy
+they are told to trust over the untracked CLAUDE.md.`, v, v, canonPath, v)
+	}
+}
