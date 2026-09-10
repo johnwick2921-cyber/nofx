@@ -94,3 +94,39 @@ happen in the cutover sequence (A4), not before.
 - `kernel/levels_score.go:1148-1150` and `kernel/planner_prompt.go:507-509` both fabricate an
   uncomputed role as `react_zone` (`if role == "" { role = string(RoleReactZone) }`) — a class-49
   fabricated value. The new map-role column will print `n/a`, and the existing column is left alone.
+
+---
+
+## Owner rulings, 2026-09-09 (recorded after the combined boot head was built)
+
+**R1 — 104's commits and the marker.** `fix/session-risk-limits` stays folded in; the boot marker
+names WHICH boot carried it. **Superseded by events:** a combined-boot lane merged 102, 103, 101 and
+104 onto one head at 21:25–21:27 (`cbbc0346` · `a59b6c9d` · `fcb42c49` · `8941ec68`), so 104 rides
+**that** combined boot, not this wave's. The marker for it is that lane's to write.
+
+**R2 — the episode contract is 101's, not 102's; 102 is bars-horizon.** A mis-assignment this
+session propagated: the dispatch says *"102 holds fix/episode-contract"* and I repeated it in a
+status report without checking whose lane it was. The map view reads its episode ids when it lands,
+not before. Nothing to revisit.
+
+**R3 — boot on the first genuine flat gate**, not on a clock: arms terminal, book empty, my own
+fresh read. The kill is printed for the owner to run (A3).
+
+## What happened to this branch, recorded because it is the PUSH-EMPTY-AT-ACCEPT case
+
+At 21:25–21:27 a combined-boot lane merged this wave's `35fa69cc` into a shared boot head, together
+with 102, 101 and 104. That lane also **renumbered this wave's CLASS 95 to 98 itself**, with a
+correct provenance note: dev had already landed 95 and 96 from `fix/session-risk-limits`, and A16
+forbids renumbering a LANDED entry, so the unlanded one moves. That is the right call and it is
+recorded here so the two provenance notes do not read as contradicting each other.
+
+**The hazard this created.** This branch was based on the pre-merge dev. Every W3 file was already on
+dev via the combined head, so `git diff origin/dev HEAD` showed **5,403 deletions** — 102's
+`bar_horizon_warn.go`, `regime_input_window.go` and 101's `weeklyBias.ts` among them. **Merging this
+branch as it stood would have deleted three other lanes' work.** It was reset onto the combined head
+instead, and only the genuinely-unlanded deltas re-applied: the owner's line-13 fix and class 99.
+
+The lesson is the one PUSH-EMPTY-AT-ACCEPT exists for, seen from the other side: a lane can have its
+work merged by someone else while it holds, and a branch that was correct an hour ago becomes a
+deletion patch without anything failing. Before any merge, diff against the CURRENT dev and read the
+deletion count — not just the conflict list.
