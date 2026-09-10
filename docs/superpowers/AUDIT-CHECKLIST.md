@@ -3477,3 +3477,62 @@ only once `pgrp == pid`, true exactly when `setsid` completed) *and* at the
 CONSUMER (signal only a positively-identified target). Layer one alone still
 trusts whatever is already in the file; layer two alone still writes a dangerous
 value for anything else to read.
+
+## CLASS 105 — THE GUARD THAT OUTLIVES WHAT IT GUARDED (born 2026-09-10, `docs/worktree-tmp-locked-prune`, found during a worktree audit)
+
+**The shape.** A protective flag means "do not clean this up — its absence is
+temporary". When the absence becomes PERMANENT, that same flag prevents every
+cleanup, forever, and the tool reports success while doing nothing. The guard
+becomes the leak, and the tool's own silence is what hides it.
+
+**The instance.** Fifteen worktrees had been cut into `/tmp/nofx-*` instead of
+the WORKTREE LAW path `../nofx-<task>`. `/tmp` was cleared (reboot / tmpfiles);
+all fifteen directories were destroyed. Every one of them also carried
+`git worktree lock` — a flag whose documented purpose is to stop `prune` from
+reaping a worktree on removable media that is merely unmounted.
+
+So `git worktree prune -n -v` printed **NOTHING**. Not "15 skipped" — nothing.
+`git worktree list` kept printing 65 worktrees, 15 of which did not exist, and
+every audit that counted worktrees counted ghosts. After `git worktree unlock`
+on each path, the same `prune` removed all 15 in one pass.
+
+**What was and was not lost [A].** Branch refs 242 → 242 (prune never touches
+refs), and every one of the 15 recorded HEADs was reachable from an origin ref,
+so the `/tmp` wipe took only uncommitted working-tree state. That is luck, not
+design: six of the fifteen were DETACHED, and a detached worktree has no branch
+ref keeping its commits alive. Had any of those HEADs been unpushed, the objects
+would have been unreferenced and one `gc` from gone, with the only pointer to
+them inside the very admin directory `prune` refuses to read.
+
+**Two independent defects, and both are needed for the failure.** `/tmp` alone
+loses uncommitted work on reboot. `lock` alone is correct and useful. Together
+they produce a registry that is permanently, silently wrong.
+
+**Probes.**
+
+1. `git worktree list --porcelain`, then test `-d` on EVERY `worktree <path>`.
+   The listing is a registry, not a filesystem. **An existence check is a
+   filesystem question, not a registry question.**
+2. Any worktree path under `/tmp`, `/var/tmp`, `/dev/shm`, or a mount you do not
+   own is NOT durable. The WORKTREE LAW path is `../nofx-<task>` for exactly this
+   reason: at cut time `/tmp` is indistinguishable from a durable directory, and
+   stays indistinguishable until the reboot.
+3. `git worktree prune -n -v` printing nothing is **not** proof the registrations
+   are healthy. It is silent on every locked entry. (Class 79, restated on a new
+   surface: silence read as health.)
+4. Before concluding a destroyed worktree cost nothing, resolve its recorded HEAD
+   out of `.git/worktrees/<name>/HEAD` and run
+   `git branch -r --contains <sha>`. No origin ref ⇒ the work is unreferenced.
+   Do this BEFORE pruning, because pruning deletes the last pointer.
+5. When you find yourself unlocking something in order to clean it up, ask what
+   the lock was protecting and whether that thing still exists. If it does not,
+   the lock is no longer a guard — it is the thing keeping a corpse on the books.
+
+**Law.** **A flag that says "do not clean this up" must be re-examined the moment
+the thing it protects is gone.** A guard conditioned on a temporary state, and
+never re-evaluated when that state turns permanent, inverts into the defect it
+was installed to prevent.
+
+Read beside class 45 (a staged deletion that is really a stale checkout), class
+79 (silence read as death), class 100 (a branch on a stale base), and the
+WORKTREE LAW itself — this class is what enforces its path clause.
