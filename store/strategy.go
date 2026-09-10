@@ -916,6 +916,11 @@ type DayPlanConfig struct {
 	PlannerModel string `json:"planner_model,omitempty"`
 	// PlanMode: advisory (default) | direction | strict. Promotion by evidence.
 	PlanMode string `json:"plan_mode,omitempty"`
+	// FadeORWideK (W2, 2026-09-10) overrides exclusion (a)'s k — "opening range
+	// wider than k× the prior-session median". Zero means the C5 own-tape
+	// default (p80/median = 1.28, n=13). A LABEL knob: it changes what is
+	// recorded, never what is armed.
+	FadeORWideK float64 `json:"fade_or_wide_k,omitempty"`
 	// PlannerTimeframes are the structure-summary TFs (default D,4h,1h,15m).
 	PlannerTimeframes []string `json:"planner_timeframes,omitempty"`
 	// ProximityFilterATR: day-trade lock, 0.5–3.0 (default 1.5).

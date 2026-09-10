@@ -64,6 +64,18 @@ var alsoRequireWired = []string{
 	// WRAPPER is the name that has to be pinned; pinning only what it calls
 	// pins nothing.
 	"closeEpisodesForSessionClose",
+	// W2 FADE PERMISSION (2026-09-10). The WRAPPERS are listed, not only the
+	// inner functions — the lesson of W1's dead-code mutant. Each of these is
+	// the report's claim list (E8): predicate, stamp writer, facts builder,
+	// backfill, boot line, counter.
+	"stampFadePermissionAtOpen",
+	"fadeFactsAt",
+	"FadePermissionAt",
+	"StampFadePermission",
+	"PriorSessionORMedian",
+	"BackfillFadePermission",
+	"FadePermissionBootLine",
+	"CountFadeLabels",
 	// WAVE A — the writers this wave added. Each must keep at least one
 	// production call site; removing one turns this test red.
 	"recordAcceptedRisk",

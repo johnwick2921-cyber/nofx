@@ -118,6 +118,12 @@ func (at *AutoTrader) recordDetectorOutputs(
 				continue
 			}
 			written++
+			// W2 — THE FADE-PERMISSION STAMP, at the episode's OPEN and never
+			// again. The clock handed to the facts builder is the episode's
+			// own open, not this cycle's now: an evaluation made with a later
+			// clock would label the touch with facts it could not have known.
+			// A LABEL ONLY (A31/D3) — nothing downstream reads it to refuse.
+			at.stampFadePermissionAtOpen(row.ID, symbol, time.UnixMilli(e.OpenedAtMs), lv.Price, seated, e.Entry)
 		}
 	}
 

@@ -83,3 +83,38 @@ func (s *TouchOutcomeStore) CountFadeLabels(traderID string, sinceMs int64) (per
 	err = q().Where("fade_permitted IS NULL AND opened_at_ms >= ?", sinceMs).Count(&notEvaluated).Error
 	return
 }
+
+// FadeBackfillResult is the D6 three-state report. Ran distinguishes "ran and
+// found nothing" from "has not run" — a zero and an unknown must never render
+// alike (A24/A30).
+type FadeBackfillResult struct {
+	Ran            bool
+	Recomputed     int
+	Unrecomputable int
+	Untouched      int
+}
+
+// OpenFadeCandidates returns episodes with no fade verdict yet, oldest first.
+func (s *TouchOutcomeStore) OpenFadeCandidates(traderID string, sinceMs int64) ([]TouchOutcomeRow, error) {
+	if s == nil || s.db == nil {
+		return nil, nil
+	}
+	var rows []TouchOutcomeRow
+	err := scopeTrader(s.db, traderID).
+		Where("fade_permitted IS NULL AND fade_exclusions IS NULL").
+		Order("opened_at_ms ASC").Find(&rows).Error
+	return rows, err
+}
+
+// MarkFadeUnrecomputable records WHY a row could not be labelled, in the
+// exclusions column with an "unrecomputable:" prefix, leaving fade_permitted
+// NULL. A row nobody could recompute must not be indistinguishable from one
+// nobody has looked at yet (A30).
+func (s *TouchOutcomeStore) MarkFadeUnrecomputable(id uint, why string) error {
+	if s == nil || s.db == nil {
+		return nil
+	}
+	return s.db.Model(&TouchOutcomeRow{}).
+		Where("id = ? AND fade_permitted IS NULL", id).
+		Update("fade_exclusions", "unrecomputable:"+why).Error
+}

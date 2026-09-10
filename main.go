@@ -501,6 +501,24 @@ func main() {
 				BackfillRecomputed:     int64(bf.Recomputed),
 				BackfillUnrecomputable: int64(totalUnrecomputable(bf)),
 			}))
+
+			// W2 FADE PERMISSION (2026-09-10) — a LABEL and a COUNTER, never a
+			// gate. The backfill runs ONE SHOT here, per trader, with the clock
+			// set to each episode's OPEN (never the completed session — round 11).
+			// It is three-state (A30) and its counts are READ onto the boot line.
+			// A fault in it must never stop the boot (A10): every branch WARNs.
+			var fadeBF store.FadeBackfillResult
+			for _, at := range traderManager.GetAllTraders() {
+				if at == nil {
+					continue
+				}
+				r := at.BackfillFadePermission(store.DayPlanEraStart.UnixMilli())
+				fadeBF.Ran = fadeBF.Ran || r.Ran
+				fadeBF.Recomputed += r.Recomputed
+				fadeBF.Unrecomputable += r.Unrecomputable
+				fadeBF.Untouched += r.Untouched
+			}
+			logger.Infof("%s", trader.FadePermissionBootLine(st, time.Now(), fadeBF))
 		}
 	}
 	// W3 D7 (2026-09-09) — the map posture. Per-READ counts are n/a at boot (no
