@@ -447,6 +447,61 @@ func main() {
 		}
 		// 1B D7 — the calibrated detector and the two tables that record it.
 		logger.Infof("🔬 %s", kernel.DetectorBootLine(st.TouchOutcomes().CountOutcomes(), st.CandidatePool().CountPool()))
+
+		// W1 EPISODE CONTRACT (2026-09-10) — the unit of opportunity, RECORDED.
+		//
+		// The 95f387ae boot shipped this wave with ONE of four items wired;
+		// these are the other three call sites, and the A29 gate now holds all
+		// of them (trader/wiring_gate_test.go). A29 in one line: built is not
+		// wired, and a passing unit test cannot tell the difference.
+		//
+		// Empty trader means ALL, the same convention BackfillExcursions uses
+		// above — a boot-time caller has no single trader in hand and must not
+		// invent one.
+		if to := st.TouchOutcomes(); to != nil {
+			// D4 — the three-state backfill, ONE SHOT at boot. It marks what it
+			// cannot recompute rather than reconstructing it; on the live
+			// archive it recomputes zero, which is the research's claim
+			// MEASURED and is the finding, not a failure.
+			bf, bfErr := to.BackfillOpportunities("")
+			if bfErr != nil {
+				logger.Errorf("🎫 episode backfill failed: %v", bfErr)
+			}
+			// The counts the boot line prints are READ from the table just
+			// touched, so the line cannot claim a number the process did not
+			// compute (A: boot lines are READ, never literal).
+			// The counts the boot line prints are READ from the table just
+			// touched, so the line cannot claim a number the process did not
+			// compute (boot lines are READ, never literal). The session-day
+			// boundary is kernel.CMESessionDayStart — the SAME resolver the
+			// rest of the system uses for "today", not a midnight of my own.
+			sinceMs := kernel.CMESessionDayStart(time.Now()).UnixMilli()
+			open, oErr := to.CountOpenOpportunities("")
+			byOutcome, cErr := to.CountClosedByOutcome("", sinceMs)
+			if oErr != nil || cErr != nil {
+				logger.Warnf("🎫 episodes: counts unavailable at boot (open=%v closed=%v) — the line prints what it could read", oErr, cErr)
+			}
+			var closed int64
+			for _, n := range byOutcome {
+				closed += n
+			}
+			logger.Infof("%s", store.EpisodeBootLine(store.EpisodeBootCounts{
+				Open:              open,
+				ClosedToday:       closed,
+				NeverReached:      byOutcome[store.OpportunityNeverReached],
+				ReachedDeclined:   byOutcome[store.OpportunityReachedDeclined],
+				ConfirmedNotArmed: byOutcome[store.OpportunityConfirmedNotArmed],
+				ArmedNotFilled:    byOutcome[store.OpportunityArmedNotFilled],
+				Filled:            byOutcome[store.OpportunityFilled],
+
+				// BackfillRan distinguishes "ran and found nothing" from "has
+				// not run" — the zero this wave expects is a MEASUREMENT, and
+				// it must not render the same as an absence.
+				BackfillRan:            bfErr == nil,
+				BackfillRecomputed:     int64(bf.Recomputed),
+				BackfillUnrecomputable: int64(totalUnrecomputable(bf)),
+			}))
+		}
 	}
 	// W3 D7 (2026-09-09) — the map posture. Per-READ counts are n/a at boot (no
 	// planner read has happened); `cap` is LABELLED per-trader because this
@@ -603,4 +658,15 @@ func formatTopP(v float64) string {
 		return "omitted"
 	}
 	return fmt.Sprintf("%.2f", v)
+}
+
+// totalUnrecomputable sums the three-state backfill's reason buckets. It is a
+// SUM OF WHAT WAS COUNTED, never a separate tally that could disagree with the
+// map it summarises (class 97: one source, both readers).
+func totalUnrecomputable(r store.BackfillResult) int {
+	n := 0
+	for _, v := range r.Unrecomputable {
+		n += v
+	}
+	return n
 }

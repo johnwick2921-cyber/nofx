@@ -48,7 +48,7 @@ func TestEveryOpportunityClosesAtSessionEnd(t *testing.T) {
 			// A touch row exists BECAUSE price entered the zone: reached is
 			// true by construction. Nothing else fired here.
 			return OpportunityFacts{Reached: true}
-		})
+		}, nil)
 	if err != nil {
 		t.Fatalf("close: %v", err)
 	}
@@ -79,7 +79,7 @@ func TestCloseRecordsPerRowOutcomes(t *testing.T) {
 				return OpportunityFacts{Reached: true, Confirmed: true, Armed: true, Filled: true}
 			}
 			return OpportunityFacts{Reached: true}
-		}); err != nil {
+		}, nil); err != nil {
 		t.Fatal(err)
 	}
 
@@ -105,8 +105,8 @@ func TestCloseIsIdempotent(t *testing.T) {
 	openRow(t, st, "S1", day)
 
 	f := func(*string) OpportunityFacts { return OpportunityFacts{Reached: true} }
-	first, _ := st.CloseOpenOpportunities("t1", "P1", 1, "NY", CloseCauseSessionEnd, f)
-	second, _ := st.CloseOpenOpportunities("t1", "P1", 1, "NY", CloseCauseSessionEnd, f)
+	first, _ := st.CloseOpenOpportunities("t1", "P1", 1, "NY", CloseCauseSessionEnd, f, nil)
+	second, _ := st.CloseOpenOpportunities("t1", "P1", 1, "NY", CloseCauseSessionEnd, f, nil)
 	if first != 1 || second != 0 {
 		t.Fatalf("first close %d, second %d — a closed episode must not re-close", first, second)
 	}
@@ -119,7 +119,7 @@ func TestCloseAlwaysStatesItsCause(t *testing.T) {
 	openRow(t, st, "S1", day)
 
 	if _, err := st.CloseOpenOpportunities("t1", "P1", 1, "NY", CloseCauseSessionEnd,
-		func(*string) OpportunityFacts { return OpportunityFacts{Reached: true} }); err != nil {
+		func(*string) OpportunityFacts { return OpportunityFacts{Reached: true} }, nil); err != nil {
 		t.Fatal(err)
 	}
 	rows, _ := st.AllOutcomes()

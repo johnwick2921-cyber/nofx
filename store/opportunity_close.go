@@ -9,6 +9,12 @@
 
 package store
 
+import (
+	"strings"
+
+	"gorm.io/gorm"
+)
+
 // Why an episode ended. Always recorded: a closed row with no cause has lost
 // the only thing that distinguishes an orderly close from an abandoned one.
 const (
@@ -17,6 +23,19 @@ const (
 	CloseCauseInvalidated       = "invalidated"
 	CloseCauseForcedExit        = "forced_exit"
 )
+
+// scopeTrader applies the trader filter, with EMPTY MEANING ALL — the same
+// convention BackfillExcursions uses at main.go's boot call, so a boot-time
+// caller that has no single trader in hand does not have to invent one. It is
+// one definition read by the closer, both counters and the backfill; a second
+// hand-written `trader_id = ?` somewhere else is how these drift apart
+// (class 97: one source, both readers).
+func scopeTrader(q *gorm.DB, traderID string) *gorm.DB {
+	if strings.TrimSpace(traderID) == "" {
+		return q
+	}
+	return q.Where("trader_id = ?", traderID)
+}
 
 // CloseOpenOpportunities closes every still-open episode for the key and
 // returns how many it closed.
@@ -28,18 +47,38 @@ const (
 //
 // Idempotent: it selects on a NULL outcome, so a second run closes nothing and
 // cannot overwrite a recorded verdict.
+//
+// entryFor is OPTIONAL. When supplied it returns the observations needed to
+// resolve the attainable entry for that row; nil leaves attainable_entry NULL,
+// which is the honest value for a caller that cannot see prices. It is
+// computed HERE and not at record time because a touch has not confirmed,
+// armed or filled at the moment it is recorded — writing a basis then would
+// stamp "none:never_confirmed_never_armed" on an episode that is still open.
 func (s *TouchOutcomeStore) CloseOpenOpportunities(
 	traderID, planID string, planVersion int, session, cause string,
 	factsFor func(scenario *string) OpportunityFacts,
+	entryFor func(scenario *string) *AttainableInputs,
 ) (int, error) {
 	if s == nil || s.db == nil || factsFor == nil {
 		return 0, nil
 	}
+	// The plan key is OPTIONAL, with empty meaning ANY — the same convention as
+	// scopeTrader above. A session that has ENDED has no active plan to name,
+	// and E6 says every open row closes; refusing to close a row because the
+	// plan that opened it is already gone would leave exactly the rows this
+	// wave exists to account for.
+	q := scopeTrader(s.db, traderID).Where("opportunity_outcome IS NULL")
+	if strings.TrimSpace(planID) != "" {
+		q = q.Where("plan_id = ?", planID)
+	}
+	if planVersion > 0 {
+		q = q.Where("plan_version = ?", planVersion)
+	}
+	if strings.TrimSpace(session) != "" {
+		q = q.Where("session = ?", session)
+	}
 	var rows []TouchOutcomeRow
-	if err := s.db.Where(
-		"trader_id = ? AND plan_id = ? AND plan_version = ? AND session = ? AND opportunity_outcome IS NULL",
-		traderID, planID, planVersion, session,
-	).Find(&rows).Error; err != nil {
+	if err := q.Find(&rows).Error; err != nil {
 		return 0, err
 	}
 
@@ -47,12 +86,19 @@ func (s *TouchOutcomeStore) CloseOpenOpportunities(
 	for i := range rows {
 		outcome := OpportunityOutcomeFor(factsFor(rows[i].ScenarioNearest))
 		c := cause
+		// The attainable entry, resolved from the SAME facts that decided the
+		// outcome, so the two can never disagree about whether an entry existed.
+		var aePrice *float64
+		var aeBasis *string
+		if entryFor != nil {
+			if in := entryFor(rows[i].ScenarioNearest); in != nil {
+				got := ResolveAttainableEntry(*in)
+				aePrice, aeBasis = got.Price, &got.Basis
+			}
+		}
 		if err := s.db.Model(&TouchOutcomeRow{}).
 			Where("id = ?", rows[i].ID).
-			Updates(map[string]any{
-				"opportunity_outcome": outcome,
-				"close_cause":         c,
-			}).Error; err != nil {
+			Updates(episodeCloseFields(outcome, c, aePrice, aeBasis)).Error; err != nil {
 			return closed, err
 		}
 		closed++
@@ -68,8 +114,8 @@ func (s *TouchOutcomeStore) CountOpenOpportunities(traderID string) (int64, erro
 		return 0, nil
 	}
 	var n int64
-	err := s.db.Model(&TouchOutcomeRow{}).
-		Where("trader_id = ? AND opportunity_outcome IS NULL", traderID).
+	err := scopeTrader(s.db.Model(&TouchOutcomeRow{}), traderID).
+		Where("opportunity_outcome IS NULL").
 		Count(&n).Error
 	return n, err
 }
@@ -85,9 +131,9 @@ func (s *TouchOutcomeStore) CountClosedByOutcome(traderID string, sinceMs int64)
 		N       int64
 	}
 	var rs []row
-	if err := s.db.Model(&TouchOutcomeRow{}).
+	if err := scopeTrader(s.db.Model(&TouchOutcomeRow{}), traderID).
 		Select("opportunity_outcome as outcome, COUNT(*) as n").
-		Where("trader_id = ? AND opportunity_outcome IS NOT NULL AND opened_at_ms >= ?", traderID, sinceMs).
+		Where("opportunity_outcome IS NOT NULL AND opened_at_ms >= ?", sinceMs).
 		Group("opportunity_outcome").Scan(&rs).Error; err != nil {
 		return out, err
 	}
@@ -95,4 +141,21 @@ func (s *TouchOutcomeStore) CountClosedByOutcome(traderID string, sinceMs int64)
 		out[r.Outcome] = r.N
 	}
 	return out, nil
+}
+
+// episodeCloseFields builds the update set. The attainable columns are written
+// ONLY when they were resolved: a nil price with a nil basis leaves both NULL,
+// so "we did not compute it" stays distinguishable from "there was none", which
+// is the whole reason AttainableNone and AttainableNotCaptured are different
+// constants.
+func episodeCloseFields(outcome, cause string, price *float64, basis *string) map[string]any {
+	f := map[string]any{
+		"opportunity_outcome": outcome,
+		"close_cause":         cause,
+	}
+	if basis != nil {
+		f["attainable_entry"] = price
+		f["attainable_entry_basis"] = *basis
+	}
+	return f
 }
