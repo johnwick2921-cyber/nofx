@@ -17,7 +17,7 @@ construction** — it can be changed by a wave; the other cannot.
 
 ```
 deploy/nofx-lock.sh acquire <session> "<task>" [minutes]   # atomic; REFUSES if held; STARTS THE KEEPER
-deploy/nofx-lock.sh heartbeat <session>                    # acquire starts the keeper; do NOT hand-beat — a second writer into the lock dir is the class-88 failure the keeper closed
+deploy/nofx-lock.sh heartbeat <session>                    # acquire starts the keeper; do NOT hand-beat — a second writer into the lock dir is the class-102 failure the keeper closed
 deploy/nofx-lock.sh with-heartbeat <session> -- <cmd>      # wrap long steps (builds, suites)
 deploy/nofx-lock.sh status | check                         # check: rc 0 free · 1 held · 2 stale; also reports auto-beat on/ENDED/off
 deploy/nofx-lock.sh release <session>                      # only the holder may release; ends the keeper group and WAITS before rm
