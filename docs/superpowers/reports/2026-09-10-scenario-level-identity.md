@@ -1,7 +1,7 @@
 # Dispatch 105 — scenario-level identity: corrected premises and implementation
 
-**Current status: implementation built on the owner's corrected scope; final
-Go verification and publication in progress. Not deployed.** The owner approved
+**Current status: implementation built and verified on the owner's corrected
+scope; ready for review and a separate cutover GO. Not deployed.** The owner approved
 separate `formed_close_ms`, unchanged evaluator/gate/wake inputs, complete-input
 backfills and WARN-first authoring. The original STOP audit below remains the
 historical evidence for that correction; its unperformed-work section describes
@@ -544,3 +544,58 @@ change is involved. The legacy production-output golden still pins the output.
 implementation. E2/E3/E4 have confirmed build-green mutation reds after the core
 was introduced, followed by restored green runs; this report does not represent
 those as pre-code baseline executions.
+
+
+### Final prepared-candidate verification
+
+**[A] Code candidate:** `b30afc6570936a628c8cef1f462dc9e8dd8216d9`, based on
+`de26d1e4867b2b1e356b7c90d7b93305060cff41` (W2 included). The restored **full
+`go test ./...` passes** on this combined source; kernel 1.296s, trader 133.945s.
+[Full Go receipt](2026-09-10-scenario-level-identity-data/go-w2-final.txt).
+The complete frontend suite after W2 integration and the binary-derived Guide
+stamp passes **60 files / 421 tests**. `npm run build` passes both TypeScript
+and Vite; Vite's existing chunk-size warning is advisory, not a failed build.
+[Frontend receipt](2026-09-10-scenario-level-identity-data/vitest-w2-full.txt).
+
+**[A] Clean clone:** `/tmp/identity-build/nofx`, porcelain-clean before `go build`.
+The built `/tmp/identity-build/nofx-bin` reports:
+
+```
+vcs.revision=b30afc6570936a628c8cef1f462dc9e8dd8216d9
+vcs.modified=false
+MD5=42bf7006f44b6a0f1f7e4ca4137df8df
+SHA256=169827b0621a809d8ba5bdfe34f014f909205d36fa7b9550b5567ba4d2975694
+```
+
+The Guide SOURCE in this branch and the build clone was then stamped to that
+exact binary revision, **before** building dist. The subsequent documentation
+and Guide-stamp commit is not represented as the binary's revision. Dist has
+92 files, with [a file-by-file SHA256 manifest](2026-09-10-scenario-level-identity-data/candidate-dist-manifest.json).
+[Build information](2026-09-10-scenario-level-identity-data/candidate-buildinfo.txt)
+and [dist build output](2026-09-10-scenario-level-identity-data/candidate-dist-build.txt).
+These are prepared artifacts, not live references.
+
+**[A] Scope/deletion review:** compared against the W2 base, no changes to
+`kernel/scenario_state.go`, `kernel/entry_gate.go`, `trader/armed_executor.go`,
+`kernel/levels_score.go`, `kernel/fade_permission.go`, or W2's fade stamp wiring.
+The detector changes are output metadata; baseline output parity passes.
+No file from W2 or the collapse-keeps-names lane is deleted. The module remains
+`nofx`; the new `nofx/levelidentity` import is additive. Standard-library hash
+imports moved out of the research writer under the explicitly approved guard
+correction. E8 production-call receipts remain available above.
+
+**A15, test fixture observation:** the pre-existing `recorderFixture` in
+`trader/detector_formation_test.go` returns `time.Now()` even when given a fixed
+`endAt`; last changed at `c6f75756f3e54a56646ca3cfa9c86f116b5d4541`.
+105's new integration fixture supplies its own fixed clock and does not use
+that helper. No failure attributable to this observation was measured here,
+and it was not changed under this wave.
+
+**Still not claimed:** a merge/boot on dev, an identity boot line from the live
+process, a migration against live data, or the first named live plan. The
+original correction report is already on dev via PR #100; this implementation
+addendum accompanies the implementation branch pending its merge. On owner GO,
+rebase/merge against then-current dev, assign the checklist number and rerun the
+merged-head suite/build/gate sequence. Do not deploy a stale prepared binary if
+the merged source differs. No RELEASE, main-tree binary or running process was
+changed while preparing this candidate.
