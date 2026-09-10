@@ -3350,3 +3350,70 @@ by itself first (measuring the OS, not the code), then SAMPLED the race eight
 times against a natural rate near one in sixty. It bites only with a CONDITIONAL
 timing shim that parks exactly one write. **A race pin that does not widen its
 window is testing luck**, and three drafts of mine reported success from it.
+
+## CLASS 103 — THE FALLBACK THAT HIDES THE FAILURE OF THE PATH IT BACKS UP (born 2026-09-10, one hour after the keeper shipped)
+
+**Name.** A primary path fails totally and permanently; a fallback beneath it
+produces a plausible value; behaviour is therefore correct, and every
+behavioural test passes. The defensive code is dead and the hazard it was
+written to defend against is live — and nothing in the observable behaviour of
+the system says so.
+
+**Read beside class 102** (*the fix that rebuilds its own defect one layer
+down*), which this was found while smoking, and class 88.
+
+**Root cause.** `_spawn_keeper` reads the keeper's process GROUP from
+`/proc/PID/stat`, because `release` must kill loop and child together and the
+comment two lines above states plainly that `$!` is *not reliably the group
+leader*. The line was written with the `'"'"'` form — the correct way to embed a
+quote inside an ALREADY single-quoted string. It was not inside one. At top
+level bash read `{print $5}` in a **double**-quoted region, expanded `$5` against
+the function's own empty argument list, and `set -u` aborted the substitution.
+
+Two things followed, both live on dev for an hour:
+
+1. Every `acquire` printed `line 143: $5: unbound variable` to stderr. The verb
+   still succeeded and still printed its success line, so the warning read as
+   noise attached to a working command — the shape a lane learns to scroll past.
+2. The `/proc` read never executed once. `pgid` came from
+   `[ -n "$pgid" ] || pgid="$kpid"` — from `$!`, the exact value the comment
+   above it says cannot be trusted.
+
+**Why it survived 75 green tests.** Behaviour was correct. `setsid` execs rather
+than forks when it is not already a session leader, so on this platform
+`pid == pgid` and the fallback's answer happened to equal the right one. Every
+assertion in the suite was behavioural — does the keeper beat, does release end
+the group, does no writer outlive its lock — and behaviour was right for a
+reason that had nothing to do with the code under test. **The suite was
+measuring the platform, not the implementation.**
+
+**What actually found it.** Running the shipped verb once, by hand, and reading
+its stderr — before announcing it to other lanes. Not the suite.
+
+**Probe, five questions:**
+1. Does the verb write anything to stderr on the SUCCESS path? Run it with
+   `2>&1 >/dev/null` and look at what is left. A command that must warn in order
+   to succeed has an unexamined failure inside it.
+2. For every fallback (`||`, `or`, `except:`, a default on a nil read), ask: if
+   the primary path never ran at all, what would I observe? If the answer is
+   "nothing", the fallback is a mask and needs its own assertion.
+3. Is there a comment explaining why the primary path is necessary? That comment
+   is a testable claim. Here it said `$!` is unreliable — so a test should prove
+   the code is not using `$!`, and none did.
+4. Did the value come out right for a reason the code controls, or for a reason
+   the platform happens to guarantee today? Change the platform assumption and
+   see whether the test still passes.
+5. Are your assertions all behavioural? Behaviour is downstream of the fallback.
+   Assert on the ARTEFACT — stderr, the recorded value, the syscall — when the
+   defect can be invisible downstream.
+
+**Law:** **a fallback must be observable when it fires.** Where code has a
+primary path and a backup, something must record which one ran — a counter, a
+log line, or a test that asserts the primary's own output. Otherwise the backup
+silently becomes the only path, and the first evidence is the day the platform
+assumption changes.
+
+**Corollary — pin the artefact, not the outcome.** The pin that catches this is
+`acquire writes nothing to stderr`, mutation-tested to fail on the shipped script
+with the exact `$5: unbound variable` line. No behavioural assertion could have
+caught it, because there was nothing wrong with the behaviour.
