@@ -3758,6 +3758,109 @@ refactor had already been written, tested and pushed on the other reading.
 
 **Law and pin:** resolve the package's actual repository parent, require go.mod and propagate directory/read errors. A restored bare layout must fail in a worktree whose name does not end in nofx. The four renderers now use canonical CT helpers with byte-identical output. This guard correction is independent of arm-state classification and never weakens a terminal-state or flat-gate check. Receipt: `reports/2026-09-10-arm-state-cutover.md`.
 
+## CLASS 109 — A CENSUS THAT CANNOT SEE ITS OWN THIRD FORMAT (born 2026-09-10, fix/episode-contract)
+
+**Root cause.** A16 says take a checklist number by `uniq -c` census, never `uniq`
+alone, and lanes have been passing around a TWO-format census (`N. **…**` and
+`## N. …`). This file has THREE shapes, and a two-shape census reported the ceiling
+as 93 while 104 already existed. I took 93 for a rider on that count; it is now a
+duplicate.
+
+**This entry has itself been miscounted twice, in opposite directions, and both
+corrections are the class.** nofx-b3 found the first while taking a number next to
+mine:
+
+- **Over-count.** A bare `grep -cE "^[0-9]+\. \*\*"` returns 100 and is wrong by
+  11. It sweeps in the PRE-CUTOVER PROTOCOL's ordinary numbered steps
+  (`1. **Tree gate:**`, `2. **Build:**` …) and bolded lists inside class BODIES.
+  Fix: scan only ABOVE the protocol heading and above the first `## CLASS`.
+- **Under-count.** b3's suggested `.**`-suffix filter returns 68 and is wrong by
+  **22** the other way: it requires the title to end `.**` on its FIRST line, so
+  every entry whose title WRAPS is dropped. The exact set, because a range here
+  would repeat the error this entry is about:
+
+        33 36 37 38 39 40 41 43 44 45 49 50 51 52 53 55 57 60 66 67 82 84
+
+  All 22 are real classes — 33 is cutover safety, 40 is P&L truth, 45 is
+  prompt-feeds-forward. **Note the hole at 42**: its title fits one line and
+  survives, so "36–45" is wrong and b3 caught me writing it that way. A filter
+  that fixes an over-count by inventing an under-count has not made the number
+  true, only differently false — and a RANGE that approximates the damaged set
+  is the same sin one level down.
+
+**The corrected census at this commit**, and the duplicate list corrected with it:
+
+    PART 1 entries (above the protocol heading) : 89   max 93
+    '## CLASS N' headings                       : 26   max 111
+    '**CLASS N' (third shape)                   : 0    count it anyway, it existed
+    UNION = distinct classes                    : 110  ceiling 111
+
+    TRUE duplicates (a number in BOTH formats)  : 75, 76, 77, 92, 93
+    NOT duplicates                              : 1–7
+
+**1 through 7 were never duplicates**, and the reason is stronger than "they were
+miscounted". Earlier drafts of this very entry listed them as collisions. Measured:
+`## CLASS 1` … `## CLASS 7` have **ZERO** headings between them, so not one of them
+CAN be a cross-shape collision. What they are is the same shape repeating — classes
+1–7, plus the pre-cutover protocol's steps 1–7, plus a third numbered list for
+1, 2 and 3, which appear three times each rather than twice.
+
+A same-shape repeat and a two-shape duplicate are different findings with different
+fixes, and the census that cannot tell them apart reports both as "duplicate". A
+census artifact was recorded as a collision, in the entry warning against census
+artifacts, and a peer then carried the wrong list because I published it.
+
+**Law.** Count every shape that starts a class, bound the region you count, and
+then ASSERT the union against the file. A census is a claim about a file and must
+be checked against it — "highest is 93" was falsifiable in one command and nobody
+ran it, myself included, for three waves. **Probe:**
+
+    b=$(grep -nE '^## CLASS [0-9]+' "$F" | head -1 | cut -d: -f1)
+    p=$(grep -nE '^#+ .*PRE-CUTOVER' "$F" | head -1 | cut -d: -f1)
+    # PART 1: distinct numbers above BOTH boundaries, no suffix filter
+    awk -v n="${p:-$b}" 'NR<n' "$F" | grep -oE '^[0-9]+\. \*\*' | grep -oE '^[0-9]+' | sort -nu | wc -l
+    grep -cE '^#+ CLASS [0-9]+' "$F"
+    grep -cE '^\*\*CLASS [0-9]+' "$F"
+
+Take the UNION for the ceiling, not the sum — the sum double-counts every number
+that exists in two shapes, which is exactly the five true duplicates above. If
+your shapes do not reconcile against the classes you can count by eye, your
+ceiling is wrong; and verify by eye anyway, because **a count that matches for the
+wrong reason is what this note exists to stop.**
+
+**And a census is only true at the instant it runs.** These two classes were
+written as 105/106 against a census that was correct when it ran. They were
+renumbered FOUR times before landing, across five dev tips in one day:
+
+    105/106  →  dispatch 103 merged its own 105 mid-rebase
+    106/107  →  106 taken (class 104 generalised) and 107 taken (boot-sweep)
+    108/109  →  108 taken by the arm-state lane, MERGED, so it held
+    109/111  →  109 was uncontested and stayed; the other moved to ceiling+1
+
+At the third collision, 108 was contested three ways at once — the arm-state
+lane's (merged, so it won), nofx-b3's, and mine. The merged one holds and BOTH
+unmerged ones move; that is the whole rule, and it needs no adjudication because
+merge order already decided it.
+
+That is A27 working, not failing: a number is not yours until the merge that
+lands it, and the right response to the fourth collision is the same as to the
+first. **The census tells you the ceiling; only the merge assigns the number.**
+If renumbering at merge feels expensive, note that the alternative — reserving a
+number at accept — is what produced the 75/76/77/92/93 duplicates above.
+
+**Two lanes can also just talk.** Before taking 111 I messaged nofx-b3, whose
+108 also had to move, and offered them 111 or 112 rather than letting us both
+re-census into each other. Coordination is cheaper than a fifth renumber, and
+the branch name on origin is the only claim this protocol has (class 70).
+
+**Law.** Count every shape that starts a class, then assert the count against
+the file: `grep -c` per format must sum to the number of classes you believe
+exist. A census is a claim about a file and must be checked against it —
+"highest is 93" was falsifiable in one command and nobody ran it, myself
+included, for three waves. **Probe:** `grep -oE "^[#*[:space:]]*[0-9]{1,3}[.)]"`
+plus `grep -cE "^#+ CLASS [0-9]+"`; if the shapes you counted do not add up to
+the classes in the file, your ceiling is wrong.
+
 ## CLASS 110 — A GREEN SUITE IS A CLAIM ABOUT AN ENVIRONMENT, NOT ABOUT A COMMIT (born 2026-09-10, settlement wave)
 
 **Number note:** 108 is three-way contested at birth — dev holds *a source guard
@@ -3852,3 +3955,46 @@ from node's resolver — different layers) on the strength of "the import fails"
 which is this file's recurring failure in miniature. Their own first mechanism
 was wrong twice before the version skew surfaced. **Neither of us got there
 alone, and nothing in either report would have gotten there without the other.**
+
+## CLASS 111 — THE UNIT AN EXPERIMENT NEEDS, WHICH THE RECORD NEVER HELD (born 2026-09-10, fix/episode-contract)
+
+**Root cause.** Every experiment measures value PER OPPORTUNITY, and the system
+had no such unit. It had levels, touches (`touch_outcomes`, 4,860 rows resolving
+HOLD/BREAK/AMBIGUOUS per touch), scenarios (`plans.doc`), arms (`armed_orders`)
+and trades (`trader_positions`) — and `plan_id` is the ONLY column common to all
+four. Nothing across them identifies a level, a scenario, a window or an order,
+so "this level was reachable from T1 to T2 with these terms" could not be
+expressed at all.
+
+**The measurement that mattered was a refutation of my own claim.** A join on
+(plan_id, version, session) returns 1,205 rows and looks like the missing link.
+It is a CROSS PRODUCT: 481 distinct touches × 9 arms × 7 positions, with one
+plan-version pairing 176 touch rows against 2 armed scenarios. A join whose row
+count exceeds every input's distinct count is a fan-out, not a correspondence —
+**check the distinct counts of each side before believing a join exists.**
+
+**The second refutation killed the fix as specified.** The link was to be
+resolved "at seat/authoring time, not by price-matching at read". But
+`PlanScenario` carries NO level reference — ID, Trigger, Condition, Direction,
+TargetChain, Invalid, Confirm, Quality, Fvg, Breakdown, ChainAfter, Arm, and
+Trigger/Invalid are free text. `kernel/scenario_state.go` already said so: "To
+evaluate a scenario we must first decide WHICH LEVEL it is about, and that
+resolution is a heuristic." Moving a heuristic earlier does not make it identity
+— it performs the same guess sooner and stores it where it reads as a fact.
+
+**Law.** A unit of analysis is defined by what can be JOINED, not by what can be
+named. Before building a record, prove the join with distinct counts on both
+sides. Where a link is a heuristic, NAME it one: the column is `ScenarioNearest`,
+it carries its basis (`price_proximity` / `two_scenarios_within_band` /
+`nearest_outside_band` / `no_scenario_at_seat`) and both distances, and ambiguity
+is NULL rather than nearest-wins. The band is read from the map's own cluster
+width, never restated (class 97).
+
+**And the honest backfill is zero.** Over 4,860 in-era rows: 4,677 blocked by
+absent formation (96.2%), 183 by the scenario link being a new column, **0
+recomputed**. That is the research's claim measured rather than argued — a
+never-confirmed setup is not a missing row someone can recover later; the inputs
+were never written down. Per-opportunity figures begin at the boot that ships
+this. **Probe:** before promising a backfill, count the rows that hold every
+input it needs — if that count is zero, say so in the dispatch rather than in
+the report.

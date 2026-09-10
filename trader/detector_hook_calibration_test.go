@@ -89,7 +89,7 @@ func TestDetectorHookIsACoinFlipThroughTheProductionPath(t *testing.T) {
 		})
 	}
 	at.recordDetectorOutputs("MNQ", "2026-09-03:ASIA:hoang", "ASIA", 1, nil, seated,
-		tape.StartClose, 300, 99.0, 64, now)
+		tape.StartClose, 300, 99.0, 64, now, nil)
 
 	ts := st.TouchOutcomes()
 	rates, err := ts.RatesBy("")

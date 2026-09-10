@@ -38,6 +38,10 @@ var wiringClaims = []string{"production call path", "the production call site"}
 // putting the claim in the function's own comment.
 var alsoRequireWired = []string{
 	"recordDetectorOutputs",
+	// W1 EPISODE CONTRACT (2026-09-10). The link is worth nothing if the
+	// recorder stops calling it; removing the wiring turns this test red.
+	"scenarioAnchorsFrom",
+	"scenarioLinkBand",
 	// WAVE A — the writers this wave added. Each must keep at least one
 	// production call site; removing one turns this test red.
 	"recordAcceptedRisk",
