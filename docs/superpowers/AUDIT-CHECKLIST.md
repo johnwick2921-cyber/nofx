@@ -3733,3 +3733,76 @@ refactor had already been written, tested and pushed on the other reading.
 **Finding:** TestTZGuardSingleTimeSource searched for a directory basename ending in nofx and swallowed walk errors. `/tmp/nofx-arm-state` therefore scanned `/kernel`, `/trader`, `/api`, `/agent`, read nothing and passed. A clean clone named nofx exposed four pre-existing timezone violations. A successful process exit was not evidence that the guard had examined source.
 
 **Law and pin:** resolve the package's actual repository parent, require go.mod and propagate directory/read errors. A restored bare layout must fail in a worktree whose name does not end in nofx. The four renderers now use canonical CT helpers with byte-identical output. This guard correction is independent of arm-state classification and never weakens a terminal-state or flat-gate check. Receipt: `reports/2026-09-10-arm-state-cutover.md`.
+
+## CLASS 110 — A GREEN SUITE IS A CLAIM ABOUT AN ENVIRONMENT, NOT ABOUT A COMMIT (born 2026-09-10, settlement wave)
+
+**Number note:** 108 is three-way contested at birth — dev holds *a source guard
+that scans nothing*, and `docs/worktree-tmp-locked-prune` and
+`fix/episode-contract` each carry a different 108 unmerged. 109 is claimed by
+`fix/episode-contract`. Taken as 110 per A27: the census gives the ceiling, only
+the merge assigns the number.
+
+**Name.** Two lanes run the same suite on the same commit and get opposite
+answers. Both are honest, both reports are internally consistent, and neither is
+falsifiable by the other — because neither recorded the environment the suite ran
+in. The disagreement is not the defect. **The unfalsifiability is.**
+
+**Root cause.** A tamper-guard on a protected file went red on a legitimate
+change. One lane reported the guard *blinded* — twelve test files dying at import,
+sixty tests never running. Another lane (me) reported the guard *working and
+correctly red*, with 413 of 414 tests passing, and "corrected" the first.
+
+Both measurements were real. The variable was the installed runner:
+
+```
+tracked web/package-lock.json pins   vite 6.4.3   → 12 files fail at import
+the deploy tree actually had         vite 6.4.1   → suite runs, guard legibly red
+web/package.json declares            ^6.0.7       → admits both
+```
+
+Settled by a controlled experiment — same worktree, same commit, same config,
+`npm install vite@6.4.1 --no-save`, then `npm ci` to restore — reproducing both
+directions on one variable. **The repo's DECLARED state was the failing one**, so
+the green was the artifact: a stale install predating the lockfile move. Any
+`npm ci` — fresh clone, new worktree, the clean-clone deploy path — gets the red.
+
+**The two failure modes are not equally bad.** *Environment recorded and differs*
+is a productive disagreement: two lanes compare, one reinstalls, done in a
+minute. *Environment not recorded* is not a weak result, it is a **non-result** —
+and it is what both reports had. What made them falsifiable was two agents
+arguing, which is not a mechanism anyone can rely on.
+
+**It is not about test runners.** It is about anything **installed rather than
+committed**: the Go toolchain, sqlite3, node itself, a linter's version. This
+repo's single most documented gotcha is already this class — NT8 compiles
+NinjaScript only from the Windows AddOns path, so editing a repo `.cs` does
+nothing until copy → F5 → **full restart**. A file in the repo that is not the
+artifact actually running is the same defect wearing different clothes.
+
+**Probe, five questions:**
+1. Does the report state the resolved version of every tool whose output it
+   cites? A pass count with no runner version is a characterisation standing in
+   for the ref — read it the way A21 makes you read a claim about rows with no
+   sample ids.
+2. Does `node_modules` (or the venv, or the toolchain) agree with the LOCKFILE?
+   `npm ls --depth=0`, `go version` against `go.mod`. Disagreement is the finding.
+3. When did the install happen? A stale install is invisible in git and invisible
+   in the test output, and it is the only thing that differed here.
+4. If a peer reported the opposite result, could you tell which of you is right
+   from the two reports ALONE? If not, neither report is evidence yet.
+5. Is the artifact under test the one the repo describes, or a copy that was
+   built, installed or deployed earlier? Ask it of binaries and AddOns, not only
+   of packages.
+
+**Law:** **record the environment beside every result you cite, or the result is
+not evidence.** One line is enough — resolved version plus lockfile-agreement
+status — and its absence should read as loudly as a missing sample id.
+
+**Corollary.** Found because a peer refused to accept my correction and ran an
+experiment instead of a restatement. My "correction" was a single observation in
+an environment I had not pinned, offered against a bisect; I also matched their
+error text to mine (`Denied ID` from vite's `fs.allow` vs `ERR_MODULE_NOT_FOUND`
+from node's resolver — different layers) on the strength of "the import fails",
+which is this file's recurring failure in miniature. Their own first mechanism
+was wrong twice before the version skew surfaced. **Neither of us got there
+alone, and nothing in either report would have gotten there without the other.**
