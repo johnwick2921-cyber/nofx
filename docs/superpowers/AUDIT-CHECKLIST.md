@@ -2685,6 +2685,23 @@ the title to end `.**` (excludes the protocol steps, which end `:**`). Verified
 2026-09-10: reports exactly 75/76/77/92/93 and `highest: 107`, and each of those
 five was confirmed by eye to be a genuine two-format collision.
 
+**AND THE CENSUS IS ONLY AS FRESH AS THE CHECKOUT YOU RUN IT IN.** Class 93's
+own text records that its number was taken because "highest occupied on dev was
+92 by a two-format `uniq -c` census". `## CLASS 93` had been on dev since
+2026-09-08 16:53; the PART 1 entry was written 2026-09-09 18:36, a day later. The
+appendix half of the command handles `## CLASS NN` correctly and WOULD have
+found it — so the census did not fail on its pattern, it failed on its BASE. A
+census run in a worktree cut from an older dev reports a free number that dev
+already holds, and it prints a confident maximum while doing so. This is the
+SPEC-FRESHNESS LAW (class 73) applied to the checklist itself. **Fetch, then
+census at your actual merge point** — not at your branch base, and not from
+memory of a run you did earlier in the wave.
+
+(Recorded because a peer read this collision as more evidence for the `^[0-9]{2}`
+pattern bug. It is not: that bug only ever affected the PART 1 half, and the
+number missed here lived in the appendix half. Two separate defects in one tool,
+and the fix for the first does nothing for the second.)
+
 **Read the duplicate line as a DIFF, not as a pass/fail.** Five collisions are
 pre-existing and permanent (below). A clean run is not "no duplicates" — it is
 "the same duplicates as dev's copy, and no more". Caught by a peer lane whose own
