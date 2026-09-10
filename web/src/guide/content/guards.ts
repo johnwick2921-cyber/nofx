@@ -291,6 +291,27 @@ export const guards: GuideSection = {
       kind: 'p',
       text: 'Saving reloads the running trader in place. Every save now prints one line per setting that actually changed, with the old and new values as the trader will resolve them, and stores the same rows so the change is answerable later. A save that changes nothing says so. This exists because on 2026-09-01 at 08:13 a save moved the minimum risk-to-reward from 3 to 2 in the middle of the New York session and nothing anywhere recorded it; the change had to be reconstructed afterwards from its effects. It was the third silent settings change that week.',
     },
+    { kind: 'h', text: 'THE UNIT ABOVE THE TOUCH — AN OPPORTUNITY' },
+    {
+      kind: 'p',
+      text: 'The detector answers per TOUCH. An experiment asks per OPPORTUNITY, and those are not the same thing: a level touched three times in a session is three touches and one chance. So each touch row now records what the CHANCE came to — never_reached, reached_declined, confirmed_not_armed, armed_not_filled, filled — and the cause it closed on. Every episode closes by session end; a row left open would be skipped in silence by anything counting outcomes, and the denominator would be quietly wrong.',
+    },
+    {
+      kind: 'p',
+      text: 'The point of that ladder is the second rung. A setup that was reached and declined is a ZERO-TRADE OUTCOME, not a missing row — and until now it was indistinguishable from one never reached at all, because neither was written down. A rate computed over the survivors of that is a rate over the wrong population.',
+    },
+    {
+      kind: 'p',
+      text: 'The link from a touch to the scenario written on it is a HEURISTIC and is labelled as one. A scenario names no level — it carries a trigger and an invalidation in free text and nothing else — so the tie can only ever be nearest-by-price. The column is called ScenarioNearest for that reason, it always records its basis, and it is NULL whenever two scenarios sit inside the map cluster width (kernel.LevelClusterTicks, the same tolerance the level merge uses to decide two references are the same reference) or nothing is close. Ambiguity is NULL, never nearest-wins: a tie-break would manufacture certainty the data does not contain.',
+    },
+    {
+      kind: 'p',
+      text: 'The entry recorded is the ATTAINABLE one, with its assumption named — an observed fill is a measurement, a resting-limit fill is an assumption, a first-tradeable-after-confirm is an approximation of one, and the LEVEL price is none of those and never appears. A touch is not a fill.',
+    },
+    {
+      kind: 'p',
+      text: 'The backfill over history recomputed NOTHING, and that is the finding rather than a shortfall: formation time is absent on 96.2% of in-era rows and the scenario link is a new column, so no historical row carries the inputs. Every per-opportunity figure this system reports therefore begins at the boot that shipped this; anything earlier is honestly unrecoverable rather than quietly missing.',
+    },
     { kind: 'h', text: 'THE FIVE-LEG CUTOVER GATE (class 33)' },
     {
       kind: 'p',

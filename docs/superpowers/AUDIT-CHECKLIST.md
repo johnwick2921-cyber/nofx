@@ -3679,3 +3679,77 @@ omission is deliberate BEFORE changing anything, and quote the code path*. Askin
 "is this a bug or a decision?" first is what separates 99 from 107; the
 refactor had already been written, tested and pushed on the other reading.
 
+
+## CLASS 108 — THE UNIT AN EXPERIMENT NEEDS, WHICH THE RECORD NEVER HELD (born 2026-09-10, fix/episode-contract)
+
+**Root cause.** Every experiment measures value PER OPPORTUNITY, and the system
+had no such unit. It had levels, touches (`touch_outcomes`, 4,860 rows resolving
+HOLD/BREAK/AMBIGUOUS per touch), scenarios (`plans.doc`), arms (`armed_orders`)
+and trades (`trader_positions`) — and `plan_id` is the ONLY column common to all
+four. Nothing across them identifies a level, a scenario, a window or an order,
+so "this level was reachable from T1 to T2 with these terms" could not be
+expressed at all.
+
+**The measurement that mattered was a refutation of my own claim.** A join on
+(plan_id, version, session) returns 1,205 rows and looks like the missing link.
+It is a CROSS PRODUCT: 481 distinct touches × 9 arms × 7 positions, with one
+plan-version pairing 176 touch rows against 2 armed scenarios. A join whose row
+count exceeds every input's distinct count is a fan-out, not a correspondence —
+**check the distinct counts of each side before believing a join exists.**
+
+**The second refutation killed the fix as specified.** The link was to be
+resolved "at seat/authoring time, not by price-matching at read". But
+`PlanScenario` carries NO level reference — ID, Trigger, Condition, Direction,
+TargetChain, Invalid, Confirm, Quality, Fvg, Breakdown, ChainAfter, Arm, and
+Trigger/Invalid are free text. `kernel/scenario_state.go` already said so: "To
+evaluate a scenario we must first decide WHICH LEVEL it is about, and that
+resolution is a heuristic." Moving a heuristic earlier does not make it identity
+— it performs the same guess sooner and stores it where it reads as a fact.
+
+**Law.** A unit of analysis is defined by what can be JOINED, not by what can be
+named. Before building a record, prove the join with distinct counts on both
+sides. Where a link is a heuristic, NAME it one: the column is `ScenarioNearest`,
+it carries its basis (`price_proximity` / `two_scenarios_within_band` /
+`nearest_outside_band` / `no_scenario_at_seat`) and both distances, and ambiguity
+is NULL rather than nearest-wins. The band is read from the map's own cluster
+width, never restated (class 97).
+
+**And the honest backfill is zero.** Over 4,860 in-era rows: 4,677 blocked by
+absent formation (96.2%), 183 by the scenario link being a new column, **0
+recomputed**. That is the research's claim measured rather than argued — a
+never-confirmed setup is not a missing row someone can recover later; the inputs
+were never written down. Per-opportunity figures begin at the boot that ships
+this. **Probe:** before promising a backfill, count the rows that hold every
+input it needs — if that count is zero, say so in the dispatch rather than in
+the report.
+
+## CLASS 109 — A CENSUS THAT CANNOT SEE ITS OWN THIRD FORMAT (born 2026-09-10, fix/episode-contract)
+
+**Root cause.** A16 says take a checklist number by `uniq -c` census, never
+`uniq` alone, and lanes have been passing around a TWO-format census (`N. **…**`
+and `## N. …`). This file has THREE: at this commit, 100 entries as
+`N. **…**` and 24 as `## CLASS N — …` (the third shape, `**CLASS N`, is at 0 —
+count it anyway, it existed). The two-format census reports the ceiling as 93
+while 104 exists. I took 93 for a rider on that count; it is now a duplicate,
+joining 75, 76, 77 and 92 — collisions produced by the counting method itself,
+not by two lanes racing.
+
+**And a census is only true at the instant it runs.** These two classes were
+written as 105/106 against a census that was correct when it ran. They were
+renumbered TWICE before landing: dispatch 103 merged its own 105 while this
+branch rebased, so they became 106/107 — and then 106 and 107 were taken too
+(a peer's generalisation of class 104, and the boot-sweep cancel_pending wave),
+so they landed as 108/109. Four dev tips in one wave. That is A27 working, not
+failing: a number is not yours until the merge that lands it, and the right
+response to the third collision is the same as to the first. **The census tells
+you the ceiling; only the merge assigns the number.** If renumbering at merge
+feels expensive, note that the alternative — reserving a number at accept —
+is what produced the 75/76/77/92/93 duplicates above.
+
+**Law.** Count every shape that starts a class, then assert the count against
+the file: `grep -c` per format must sum to the number of classes you believe
+exist. A census is a claim about a file and must be checked against it —
+"highest is 93" was falsifiable in one command and nobody ran it, myself
+included, for three waves. **Probe:** `grep -oE "^[#*[:space:]]*[0-9]{1,3}[.)]"`
+plus `grep -cE "^#+ CLASS [0-9]+"`; if the shapes you counted do not add up to
+the classes in the file, your ceiling is wrong.
