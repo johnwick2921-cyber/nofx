@@ -63,3 +63,4 @@ trader/research_snapshot.go:recordResearchEpisodes:recordResearchEpisodesAt
 researchsnapshot/plan.go:RequestConfig:RequestConfigAt
 trader/research_snapshot.go:recordResearchPlacement:recordResearchPlacementAt
 store/research_record.go:recordResearchPlacementTimeout:recordResearchPlacementTimeoutAt
+trader/armed_executor.go:runArmedPlacement:runArmedPlacementAt

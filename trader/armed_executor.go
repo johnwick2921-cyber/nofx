@@ -741,7 +741,7 @@ func (at *AutoTrader) maybeManageArmedOrdersAt(snap map[string]kernel.StructureS
 
 	// PHASE 2 — placement engine (armed → working within the tick band), wire
 	// cancel/modify, and the order_update event machine.
-	at.runArmedPlacement(bars, plan.BirthMs)
+	at.runArmedPlacementAt(bars, plan.BirthMs, now)
 }
 
 // biasDirectionFor normalizes the plan bias direction ("" → empty).
@@ -1011,7 +1011,27 @@ func (at *AutoTrader) armedLines() string {
 // the order_update event machine. No-op unless a TCPTrader is bound.
 // sinceMs = the plan's birth (the E7 stop-entry fallback window is measured
 // from it).
+// runArmedPlacement is the wall-clock ENTRY POINT (A28 / class 60): it owns the
+// clock and delegates. Everything beneath takes the clock as an argument.
+//
+// ADDED 2026-09-10. maybeManageArmedOrdersAt already received `now` and then
+// dropped it here — this function read time.Now() itself. In production the two
+// are microseconds apart and nothing was wrong; the SEAM was broken, which meant
+// no test could control the arm path's clock. TestSplitArmWritesTwoLedgerRows
+// then passed or failed on the hour: the fixture pinned the plan to a session it
+// chose, this function asked the WALL what session was live, and after 14:45 CT
+// the answer was "none" — so the arm never ran and the test reported zero legs
+// with no refusal log at all.
+//
+// The clock-seam lint reads clock-seams.list; this pair is registered there now.
+// maybeManageArmedOrders was registered and its callee was not, which is why the
+// lint stayed green across the whole failure: a seam is only as deep as the
+// chain that honours it.
 func (at *AutoTrader) runArmedPlacement(bars []market.Kline, sinceMs int64) {
+	at.runArmedPlacementAt(bars, sinceMs, time.Now())
+}
+
+func (at *AutoTrader) runArmedPlacementAt(bars []market.Kline, sinceMs int64, now time.Time) {
 	nt := at.armedTrader()
 	if nt == nil {
 		return
@@ -1021,7 +1041,6 @@ func (at *AutoTrader) runArmedPlacement(bars []market.Kline, sinceMs int64) {
 		return
 	}
 	at.logStopEntryBootLine()
-	now := time.Now()
 	price := 0.0
 	if len(bars) > 0 {
 		price = bars[len(bars)-1].Close

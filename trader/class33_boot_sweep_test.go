@@ -179,7 +179,11 @@ func TestClass33SweepPrecedesPlacement(t *testing.T) {
 	}
 	body := string(src)
 	sweep := strings.Index(body, "at.sweepPreBootArms(ledger)")
-	place := strings.Index(body, "at.runArmedPlacement(bars,")
+	// The call site is runArmedPlacementAt since 2026-09-10 — the clock is now
+	// threaded from maybeManageArmedOrdersAt rather than read inside the callee.
+	// Anchored on the shared prefix so this pins the ORDER, which is the class-33
+	// invariant, and not the arity of the call.
+	place := strings.Index(body, "at.runArmedPlacementAt(bars,")
 	if sweep < 0 || place < 0 {
 		t.Fatalf("anchors missing: sweep=%d place=%d", sweep, place)
 	}

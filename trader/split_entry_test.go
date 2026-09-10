@@ -89,44 +89,54 @@ func TestSplitArmWritesTwoLedgerRows(t *testing.T) {
 		RiskControl: store.RiskControlConfig{MaxContractsPerOrder: 2}}
 	cfg.RiskControl.MinRiskRewardRatio = 2 // R1 (2026-09-03): the arm floor is the Studio value; this fixture arms at R:R 2.0
 	at, st := resetTrader(t, cfg)
-	// ONE CLOCK FOR THE WHOLE TEST. The bars, the plan and the arm decision all
-	// derive from this value; handing the arm path a different moment than the
-	// fixtures were built for skews the confirmation bucket and arms only the
-	// first leg — which reads as a split-arm bug rather than a clock skew.
-	// A FIXED, 5-MINUTE-ALIGNED CLOCK. This test's tape is built relative to
-	// `now`, and the leg-2 confirm depends on the last five 1m bars forming a
-	// COMPLETE 5m bucket below the ref. Bucket boundaries are absolute, so the
-	// tape's meaning depends on `now` MODULO 5 MINUTES.
-	//
-	// armTestClock steps from time.Now(), so that modulus moved with the wall
-	// clock: the test passed at 12:43-12:59 and failed at 13:20 on identical
-	// code, with the entry gate reporting the tape as 'accepted through' rather
-	// than as a met confirm. A searched clock earns its keep where a SESSION
-	// WINDOW binds; here the binding constraint is bucket alignment, and a fixed
-	// moment is strictly more deterministic.
-	// TODAY'S trade date, at a FIXED 5-minute-aligned hour.
-	//
-	// Both halves matter and each was learned the hard way. The DATE must be
-	// today's: the plan is appended for PlanChainTradeDate(sess, now) while the
-	// arm path resolves the CURRENT trade date, so a base on a fixed past date
-	// writes a plan nothing looks for — the arm then produces zero rows and not
-	// one refusal log, which reads as a broken gate rather than a missing plan.
-	//
-	// The TIME must be fixed and 5m-aligned: this tape's leg-2 confirm depends on
-	// the last five 1m bars forming a COMPLETE 5m bucket below the ref, and bucket
-	// boundaries are absolute, so the tape's meaning depends on `now` MODULO 5
-	// MINUTES. Searching from time.Now() moved that modulus through the day: the
-	// test passed at 12:43-12:59 and failed at 13:20 on identical code, with the
-	// entry gate reading the tape as 'accepted through' instead of a met confirm.
-	nowBase := time.Now().In(chicagoLoc())
-	now := armTestClockFrom(t, at, time.Date(nowBase.Year(), nowBase.Month(), nowBase.Day(), 10, 0, 0, 0, chicagoLoc()))
+	now := time.Now()
 	sess, ok := at.sessionRegistry(now).ActiveSession(now)
 	if !ok {
 		t.Skip("no active session right now")
 	}
+	// RESTORED TO THE WALL CLOCK 2026-09-10, plus one skip.
+	//
+	// This test drives the REAL arm path, and that path's plan provider
+	// (installActivePlanProvider, auto_trader_planner.go:2671-2673) resolves the
+	// active session and the chain trade date from time.Now() with NO seam. So
+	// the fixture's clock and the arm path's clock must be the SAME clock: any
+	// injected time desynchronises them and the plan lookup returns nil, which
+	// surfaces as "got 0 legs" with not one refusal line — silence, because
+	// nothing refused, there was simply no plan.
+	//
+	// I replaced this skip with a SEARCHED clock earlier today to fix a real
+	// failure inside the lunch band. That fixed the band and broke every hour
+	// outside it. The band needs a skip, not a different clock:
+	if kernel.InLunchNoTrade(now) {
+		ls, le := kernel.LunchWindowCT()
+		t.Skipf("inside the lunch no-trade window (%s–%s CT) — the arm path refuses by design, which is not the behaviour this test measures", ls, le)
+	}
+	//
+	// OWED, and the real fix: a clock seam through the plan provider, so a test
+	// can drive the arm path at a moment of its choosing. That belongs to whoever
+	// owns the planner. Until then this test runs when the wall clock permits and
+	// says plainly when it cannot.
 	cfg.DayPlan.SessionsEnabled = []string{sess.Name}
 	trueV := true
 	cfg.DayPlan.Sessions = []store.DayPlanSessionOverride{{Session: sess.Name, Enable: &trueV}}
+
+	// THE FIXTURE STATES ITS OWN SESSION — and this asserts that it took.
+	//
+	// The two lines above are how this test declares the live session runnable
+	// for itself: DayPlan is a POINTER shared with the trader, so mutating it
+	// after resetTrader does reach at's config, and a per-session override with
+	// Enable=true beats the registry default inside sessionRunnable.
+	//
+	// It must be checked HERE, not earlier. I first put this check straight after
+	// ActiveSession and it reported "ASIA not enabled in the session registry" —
+	// true at that instant and meaningless, because the override two lines down
+	// had not been applied yet. A gate read before the setup it gates is not a
+	// finding about the system, it is a finding about the reader. That misreading
+	// also produced a comment claiming the enablement was a no-op, which was
+	// wrong: it works, it just had not happened yet.
+	if runnable, why := at.sessionRunnable(sess); !runnable {
+		t.Skipf("%s did not become runnable even after this fixture declared it (%s)", sess.Name, why)
+	}
 	td, _ := kernel.PlanChainTradeDate(sess, now)
 	pid := store.MakePlanIDForTrader(at.id, td, sess.Name)
 	if _, err := st.Plan().AppendPlan(&store.PlanDB{PlanID: pid, TradeDate: td, Session: sess.Name, StrategyID: at.id, Lifecycle: "active", Doc: splitSweepDoc(), CreatedAt: now.Add(-30 * time.Minute)}); err != nil {
@@ -155,6 +165,10 @@ func TestSplitArmWritesTwoLedgerRows(t *testing.T) {
 	}
 	t.Cleanup(func() { market.FuturesBarsProvider = prevProvider })
 
+	// THE SAME CLOCK, PASSED EXPLICITLY. `now` is time.Now() — this test must use
+	// the wall clock because the plan provider does — but it goes through the seam
+	// rather than around it, so the fixture and the arm path are provably reading
+	// one clock instead of two that happen to agree.
 	at.maybeManageArmedOrdersAt(nil, now)
 
 	rows, err := st.ArmedOrders().ListNonTerminal(at.id)

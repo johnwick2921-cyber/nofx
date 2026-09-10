@@ -194,3 +194,74 @@ reader as a seam.
 missed". A build failure and a surviving mutant are indistinguishable to a grep
 for failures. The harness now **withholds a verdict unless the build succeeds**.
 Every verdict above is build-verified.
+
+
+---
+
+# OWED — BATCH 2
+
+Two real defects found while chasing `TestSplitArmWritesTwoLedgerRows`. Both are
+recorded here rather than fixed, on the owner's ruling: batch 2, and neither is a
+box to tick.
+
+## 1. The plan provider has no clock seam, so nothing can drive the arm path
+
+`installActivePlanProvider` (`trader/auto_trader_planner.go:2671-2673`) closes
+over `time.Now()`:
+
+```go
+SessionRegistry: func() kernel.SessionRegistry { return at.sessionRegistry(time.Now()) },
+ActivePlan: func(symbol string) *kernel.ActivePlan {
+    now := time.Now()
+    …
+    sess, ok := reg.ActiveSession(now)
+    if !ok { return nil }
+```
+
+It resolves the active SESSION and the chain TRADE DATE from the wall clock and
+returns `nil` when no session is live. **That is correct in production** — the
+wall clock is the right clock there — and it is why the A28 seam above it cannot
+reach the plan lookup. `maybeManageArmedOrdersAt(snap, now)` takes a clock,
+threads it correctly, and then the plan it acts on was chosen by a different
+clock entirely.
+
+The cost is not a production bug; it is that **no test can drive the arm path at
+a moment of its choosing.** Every arm-path fixture is therefore pinned to
+whatever session happens to be open when the suite runs, which is how one test
+came to pass at 14:0x and fail at 17:04 with no diagnostic.
+
+**The failure mode is SILENCE, which is what makes it expensive.** A refused arm
+logs why. A missing plan logs nothing at all: the assertion reports "got 0 legs"
+and the operator-facing output is empty, so the reader looks at the split logic —
+the one thing that is not wrong. I lost most of an afternoon to that silence and
+filed two wrong mechanisms on the way.
+
+Fix belongs to whoever owns the planner: a clock argument through the provider,
+registered in `clock-seams.list` like every other seam.
+
+## 2. The clock-seam lint is blind to callees
+
+`clock-seams.list` registered `maybeManageArmedOrders:maybeManageArmedOrdersAt`,
+and `trader/clock_seam_lint_test.go` verified both halves of it: the `…At`
+variant exists, and the entry point is a one-line delegate. Both were GREEN
+throughout.
+
+`runArmedPlacement` — called from inside `maybeManageArmedOrdersAt`, one line
+below the clock it was handed — read `time.Now()` itself. The clock was threaded
+to the door and dropped. **A registered seam says nothing about the chain beneath
+it**, so the lint certifies the entry point of a path whose interior still reaches
+the wall.
+
+Fixed for this one pair (threaded, and registered). The general problem is not:
+nothing walks the call graph beneath a registered entry point and asks whether
+anything downstream reads the clock. Until something does, the lint's green means
+"this entry point delegates", not "this path is seamed" — and those read
+identically in a suite.
+
+Related and already recorded in `trader/clock_seam_lint_test.go`: the general
+form of the *test-side* check ("no test calls any seamed entry point") cannot
+ship textually, because `clock-seams.list` contains entries named `Save` and
+`observe` and `.Save(` cannot be told from `db.Save(` without resolving the
+receiver's type. A receiver-aware `go/ast` version would close both halves at
+once — the callee walk and the test-side check — and is the single piece of work
+that would retire this class here.
