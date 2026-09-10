@@ -187,7 +187,7 @@ than silent. It is not the single-reader ideal of class 97 and is not claimed to
    lost — but a reviewer reading `git log` will see each early commit twice, and
    should read the merge commits for why.
 
-## G · THREE DEFECTS FOUND, NONE MINE, ONE FIXED WITHIN THE HOUR
+## G · FOUR DEFECTS FOUND, NONE MINE, ONE FIXED WITHIN THE HOUR
 
 Found while verifying my Guide change. **Filed, not fixed — A31 scopes this wave,
 and both belong to the rebrand lane.**
@@ -399,6 +399,34 @@ the pre-cutover suite will be green — but that green is *itself* an environmen
 claim, which is why §H records the clock alongside the versions. Filed, not fixed:
 A31, and the fix belongs with whoever owns the arm-path tests.
 
+### G4 — dev's trader package is RED in-package, green standalone
+
+Found while verifying the follow-up. `TestSplitArmWritesTwoLedgerRows`:
+
+```
+go test -count=1 ./trader/ -run TestSplitArmWritesTwoLedgerRows   → ok (6 runs)
+go test -count=1 ./trader/                                        → --- FAIL
+    split_entry_test.go:143: split arm must write 2 ledger rows (legs), got 0 ([])
+```
+
+Reproduced on a CLEAN worktree at `origin/dev` `a98a92c7` with none of my
+wiring, so it is neither branch. Order or state interference inside the package,
+not the wall clock and not a bad merge.
+
+**My bisect was worthless and the reason is instructive.** Testing `b11659ea`,
+`c11632c3`, `5e273442` and `a98a92c7` one at a time returned green for all four
+— because I ran the test standalone at each. The commit axis said nothing; the
+in-package axis said everything. A bisect that varies the commit while holding
+the wrong execution mode fixed is a measurement of the mode.
+
+Filed with nofx-8e, whose wave neighbours it. Not fixed here: A31, and I have
+already been wrong once today about a defect in another lane's file by measuring
+in an environment I had not pinned.
+
+**Consequence: no cutover can honestly claim a green suite on dev right now**,
+mine included. Reported as the reason my own gate is not green rather than
+worked around.
+
 ## H · VERIFICATION
 
 **The environment these results were measured in**, because §G is the proof that a
@@ -438,6 +466,7 @@ dev moved **five times** under this branch during the wave (`557494c7` →
 `c16a182d` → `cefcf08d` → `33e6d008` → `757eb578`); the suite was re-run at each
 merged HEAD rather than carried forward — a branch green alone is not green merged.
 
+
 ## I · CLASSES FILED
 
 - **111 — THE UNIT AN EXPERIMENT NEEDS, WHICH THE RECORD NEVER HELD.** Every
@@ -464,3 +493,105 @@ measuring it properly:
   colour as a test that passes.* 8e is taking it into the settlement wave's pins,
   and notes it is the same shape as their class 103 — a fallback producing a
   plausible value so the failure behind it stays invisible.
+
+## J · THE FIRST BOOT SHIPPED ONE OF FOUR ITEMS WIRED
+
+`95f387ae` booted cleanly at 12:49:54 CDT — integrity OK, goldens PASS, five
+references agreeing, gate five-for-five, sweep 0/0. And it shipped **one quarter
+of this wave**.
+
+The `🎫 episodes:` line never printed. That absence was the only symptom, and it
+is the reason the defect was found at all.
+
+| function | production call sites at `95f387ae` |
+|---|---|
+| `ResolveScenarioLink` | **1** — `trader/detector_record.go` |
+| `CloseOpenOpportunities` | **0** |
+| `ResolveAttainableEntry` | **0** |
+| `BackfillOpportunities` | **0** |
+| `EpisodeBootLine` | **0** |
+
+Three of four items were built, unit-tested, described in this report, and called
+by nobody. What *was* live is item 1, the one the owner ruled load-bearing: 55
+rows carry `scenario_link_basis`, a column that did not exist before that boot,
+so those rows are proof the recorder runs. `opportunity_outcome` and
+`close_cause` were NULL on all 4,915 rows, because the closer and the backfill
+were never reached.
+
+### Why the suite did not catch it
+
+**Because the check that catches exactly this already existed and I registered
+one item in it.**
+
+`trader/wiring_gate_test.go` is the A29 standing gate. It walks the whole repo —
+`store/` included — and fails when a function claiming a production call path has
+zero production callers. It was written for three instances of this shape inside
+24 hours in September, one of which was `detector_record.go` declaring itself
+"THE PRODUCTION CALL PATH" while nothing called it.
+
+This wave added exactly two names to it: `scenarioAnchorsFrom` and
+`scenarioLinkBand` — item 1's. The other three items were never registered, so
+the gate had nothing to check and reported green. **The gate was not at fault;
+the registration was.**
+
+That is the whole answer, and it is worse than "the suite was too weak". The
+suite contained a purpose-built detector for this exact defect, and the defect
+walked past it because I only pointed it at the item I happened to be thinking
+about while writing the pin. Every unit test in the wave passed, because every
+unit test proved a function works when called — which is precisely the thing A29
+exists to say is not enough.
+
+Two smaller contributors, neither exculpatory:
+
+- **The suite cannot boot the binary.** Nothing in `go test ./...` renders the
+  boot block, so a missing boot line is invisible to it. The absence was visible
+  in 12 seconds of reading the boot log, which is why the pre-cutover protocol
+  has a boot checklist at all.
+- **I read the wave's own report as evidence.** §A–§E describe four working
+  items. They describe the code correctly and say nothing about whether anything
+  calls it, and I did not distinguish those two claims when checking my own work.
+
+### The fix, and one finding inside it
+
+All four call sites now exist, each pinned, each **mutation-verified**:
+
+| mutation | result |
+|---|---|
+| remove the closer's call site | RED — `closeEpisodesForSessionClose` |
+| remove the backfill call | RED — `BackfillOpportunities` |
+| remove the boot line call | RED — `EpisodeBootLine` |
+| remove the attainable call | RED — `ResolveAttainableEntry` |
+
+**The first mutation SURVIVED on the first attempt, and that is a finding about
+the gate itself.** Deleting the only production call to
+`closeEpisodesForSessionClose` left `CloseOpenOpportunities` still counted as
+called — by the wrapper that had just become dead code. The gate counts a call
+made from an unreachable function as wiring, so **an unwired wrapper satisfies it
+for everything inside it**. Registering only the inner function pins nothing.
+Whenever a call site is a wrapper, the wrapper is the name that must be listed;
+that is now stated in the gate's own comment beside the registration.
+
+### One deviation from the order, stated rather than made quietly
+
+The instruction was to wire the attainable entry **into the recorder**. It is
+wired into the **closer** instead. At the moment a touch is recorded it has not
+confirmed, armed or filled, so resolving it there would stamp
+`none:never_confirmed_never_armed` onto an episode that is still open — a
+fabricated fact, and exactly the kind this wave exists to avoid. The
+observations it needs exist at close, and it is computed there from the SAME
+facts that decide the outcome, so the two can never disagree about whether an
+entry existed.
+
+### A limitation this fix does not remove
+
+The closer's facts come from the scenario's observed confirm/arm state, never
+from `armed_orders` — that row is mutated in place, and under the settlement
+wave a timed-out cancel now rests at `cancel_pending` rather than reaching
+`cancelled`, so a state read would be reading a value deliberately not yet final
+(flagged by nofx-8e before it could distort a count). But the touch → scenario
+link is still a price-proximity heuristic and is NULL whenever two levels sit
+inside the band or nothing is close. **A row with a NULL link closes as
+`reached_declined`** — correct for a touch nothing was armed at, and not yet
+distinguishable from one whose arm this wave cannot see. Until the identity wave
+lands, the honest reading of `reached_declined` is "no arm was linked to this
+touch", not "no arm existed".
