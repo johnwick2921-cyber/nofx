@@ -89,7 +89,11 @@ func TestSplitArmWritesTwoLedgerRows(t *testing.T) {
 		RiskControl: store.RiskControlConfig{MaxContractsPerOrder: 2}}
 	cfg.RiskControl.MinRiskRewardRatio = 2 // R1 (2026-09-03): the arm floor is the Studio value; this fixture arms at R:R 2.0
 	at, st := resetTrader(t, cfg)
-	now := time.Now()
+	// ONE CLOCK FOR THE WHOLE TEST. The bars, the plan and the arm decision all
+	// derive from this value; handing the arm path a different moment than the
+	// fixtures were built for skews the confirmation bucket and arms only the
+	// first leg — which reads as a split-arm bug rather than a clock skew.
+	now := armTestClock(t, at)
 	sess, ok := at.sessionRegistry(now).ActiveSession(now)
 	if !ok {
 		t.Skip("no active session right now")
@@ -125,7 +129,7 @@ func TestSplitArmWritesTwoLedgerRows(t *testing.T) {
 	}
 	t.Cleanup(func() { market.FuturesBarsProvider = prevProvider })
 
-	at.maybeManageArmedOrders(nil)
+	at.maybeManageArmedOrdersAt(nil, now)
 
 	rows, err := st.ArmedOrders().ListNonTerminal(at.id)
 	if err != nil {
@@ -303,7 +307,7 @@ func TestSplitArmSessionEndCancelsBothLegs(t *testing.T) {
 		t.Fatal(err)
 	}
 	installActivePlanProvider(at, st)
-	at.maybeManageArmedOrders(nil)
+	at.maybeManageArmedOrdersAt(nil, armTestClock(t, at))
 	rows, err := st.ArmedOrders().ListNonTerminal(at.id)
 	if err != nil || len(rows) != 0 {
 		t.Fatalf("dormant must cancel BOTH split legs (rows=%d err=%v)", len(rows), err)
