@@ -158,7 +158,7 @@ func barHorizonWarn(now time.Time, h kernel.BarHorizon, symbol, tf, caller strin
 	}
 	extra := ""
 	if eaten > 0 {
-		extra = fmt.Sprintf(" · suppressed=%d since %s CT", eaten, since.In(kernel.CTLocation()).Format("15:04:05"))
+		extra = fmt.Sprintf(" · suppressed=%d since %s", eaten, kernel.ClockCTSeconds(since))
 	}
 	// WARN, never INFO: INFO is journald-suppressed here and never reaches
 	// log_events, so an INFO line lives only inside a log file that rotates on
@@ -253,7 +253,7 @@ func barHorizonBootLine(cache *ntwire.BarCache, now time.Time) string {
 	if txt == "" {
 		txt = "none cached yet"
 	}
-	return fmt.Sprintf("🕳 bar horizon: ring=%d · warn window=%s · boot grace=%s · at %s CT · depths %s",
+	return fmt.Sprintf("🕳 bar horizon: ring=%d · warn window=%s · boot grace=%s · at %s · depths %s",
 		cache.MaxBars(), barHorizonWarnWindow, barHorizonBootGrace,
-		now.In(kernel.CTLocation()).Format("15:04:05"), txt)
+		kernel.ClockCTSeconds(now), txt)
 }

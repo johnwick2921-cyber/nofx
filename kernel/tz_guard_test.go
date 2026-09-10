@@ -32,20 +32,24 @@ var (
 )
 
 func TestTZGuardSingleTimeSource(t *testing.T) {
-	repo, err := os.Getwd()
+	repo, err := filepath.Abs("..")
 	if err != nil {
 		t.Fatal(err)
 	}
-	// kernel tests live in kernel/; step up to the repo root.
-	for !strings.HasSuffix(repo, "nofx") && repo != "/" {
-		repo = filepath.Dir(repo)
+	// Go runs package tests in kernel/. Resolve its parent, independent of
+	// clone/worktree name, and refuse an absent tree instead of scanning nothing.
+	if _, err := os.Stat(filepath.Join(repo, "go.mod")); err != nil {
+		t.Fatalf("repository root: %v", err)
 	}
 
 	var violations []string
 	for _, dir := range tzGuardScanDirs {
 		root := filepath.Join(repo, dir)
 		err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-			if err != nil || info.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
+			if err != nil {
+				return err
+			}
+			if info.IsDir() || !strings.HasSuffix(path, ".go") || strings.HasSuffix(path, "_test.go") {
 				return nil
 			}
 			if err := tzGuardCheckFile(t, path, root); err != nil {
