@@ -15,7 +15,18 @@ import (
 
 // ── ONE SETUP — THE SEAM, driven end to end on the REAL arm path ─────────────
 
-func osOff(c *store.StrategyConfig) { off := false; c.DayPlan.OneSetupEnabled = &off }
+// oneSetupOff sets the switch OFF on a fixture config — for the pre-existing
+// wide-book fixtures (fvg_entry, sweep_reclaim splits, R:R at the seam) whose
+// subject is not one-setup. E2 proves OFF is today's book byte for byte.
+func oneSetupOff(c *store.StrategyConfig) {
+	off := false
+	if c.DayPlan == nil {
+		c.DayPlan = &store.DayPlanConfig{}
+	}
+	c.DayPlan.OneSetupEnabled = &off
+}
+
+func osOff(c *store.StrategyConfig) { oneSetupOff(c) }
 
 // osMap makes the fixture's S1 level (29490, grade A) the best level near
 // price and S2's (29500) a lower-graded one; every scenario permitted unless

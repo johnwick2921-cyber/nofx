@@ -223,6 +223,9 @@ func TestShadowDemotionNoWireFrameOnLoopback(t *testing.T) {
 // 7.4 — a live condition's arm places normally (regression pin, same wire).
 func TestLiveConditionPlacesOnLoopback(t *testing.T) {
 	cfg := store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true}}
+	// ONE SETUP (dispatch 102, 2026-09-11): this fixture exercises the WIDE book
+	// (a non-reject play / no map); the switch OFF restores it byte-identically (E2).
+	oneSetupOff(&cfg)
 	cfg.RiskControl.MinRiskRewardRatio = 2 // R1 (2026-09-03): the arm floor is the Studio value; this fixture arms at R:R 2.0
 	at, st, sigs, _ := shadowWireHarness(t, cfg)
 	live := kernel.PlanDoc{Bias: kernel.PlanBias{Direction: "long", Conviction: "low", FlipCondition: "n/a"},
@@ -294,6 +297,9 @@ func TestShadowedRestingOrderCancelledAtBoot(t *testing.T) {
 func TestConfigFlipToLiveAllowsArming(t *testing.T) {
 	cfg := store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true,
 		ConditionStatus: map[string]string{"fvg_entry": "live"}}}
+	// ONE SETUP (dispatch 102, 2026-09-11): this fixture exercises the WIDE book
+	// (a non-reject play / no map); the switch OFF restores it byte-identically (E2).
+	oneSetupOff(&cfg)
 	cfg.RiskControl.MinRiskRewardRatio = 2 // R1 (2026-09-03): the arm floor is the Studio value; this fixture arms at R:R 2.0
 	at, st := resetTrader(t, cfg)
 	if at.conditionShadowedFor("fvg_entry", "NY") {

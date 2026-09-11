@@ -13,6 +13,9 @@ import (
 func confirmationTrader(t *testing.T) (*AutoTrader, *store.Store, *kernel.ActivePlan, *[]market.Kline, time.Time) {
 	t.Helper()
 	cfg := store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true, ConditionStatus: map[string]string{"fvg_entry": "live"}}, RiskControl: store.RiskControlConfig{MinRiskRewardRatio: 1.5}}
+	// ONE SETUP (dispatch 102, 2026-09-11): this fixture exercises the WIDE book
+	// (an fvg_entry play); the switch OFF restores it byte-identically (E2).
+	oneSetupOff(&cfg)
 	at, st := resetTrader(t, cfg)
 	at.config.NinjaTraderSymbol = "MNQ"
 	base := time.Date(2026, 9, 8, 10, 0, 0, 0, chicagoLoc())

@@ -87,6 +87,9 @@ func TestSplitArmWritesTwoLedgerRows(t *testing.T) {
 	// leg capacity is ≥ 2 — the explicit max_contracts_per_order declares it.
 	cfg := store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true},
 		RiskControl: store.RiskControlConfig{MaxContractsPerOrder: 2}}
+	// ONE SETUP (dispatch 102, 2026-09-11): this fixture exercises the WIDE book
+	// (a non-reject play / no map); the switch OFF restores it byte-identically (E2).
+	oneSetupOff(&cfg)
 	cfg.RiskControl.MinRiskRewardRatio = 2 // R1 (2026-09-03): the arm floor is the Studio value; this fixture arms at R:R 2.0
 	at, st := resetTrader(t, cfg)
 	now := time.Now()
