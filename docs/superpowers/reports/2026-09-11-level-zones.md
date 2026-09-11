@@ -1,4 +1,4 @@
-# Level zones — merged-head validation and authorized cutover
+# Level zones — boot verified at 13:58:32 CT, running 6c96683c
 
 ## C1 — the owner's four lines, traced first
 
@@ -565,3 +565,92 @@ PASS. Only then was the binary built. Its embedded revision is
 `838ae0762ef5f00e04d857c18eabe033`. The Guide SOURCE stamp and RELEASE above
 were derived from that binary, not from a guessed git head. Dist is rebuilt
 from the stamped source next. This is a pre-cutover receipt, not a boot claim.
+
+
+## Boot marker — 2026-09-11 13:58:32 CT, PID3497330
+
+**[A] BOOT COMPLETE.** This supersedes the earlier A7 hold and pre-cutover
+status entries. Under the owner's explicit mid-session and agent-run-kill
+orders, this lane executed SIGKILL on old PID3366586 at **13:58:27 CT**.
+Systemd (`Restart=on-failure`) relaunched PID**3497330** at **13:58:32 CT**.
+Integrity and goldens passed within seconds. The running process is the clean
+merged binary, not the old executable. No unattended timer was used.
+
+[A] Fresh gate before swap: 13:57:11.543 CT, PASS; checked age33.4s at swap.
+Fresh gate immediately before kill: **13:58:21.756 CT**, PASS; checked age5.5s
+before SIGKILL. All five legs: DB open positions=0; API positions=0;
+NT8 snapshot positions=0; broker working=0 and ledger working=0,
+**armed/unplaced=0**; no planner read claimed. Broker snapshot age18s at the
+last read. **No resting arm existed to sweep, and no in-flight read required
+waiting.** No leg override or gate-script edit was used; the owner's override
+changed only the time window and who executed the kill.
+[Exact final gate](2026-09-11-level-zones-evidence/pre-kill-gate.json).
+
+[A] RELEASE and its committed HEAD value were already `6c96683c` before the
+swap. The old binary was moved to `nofx-bin.old.802fb00b`, verified to hold
+`802fb00b09e51f9801e8d4fbd1bf156c86865d95`, md5
+`bf71fabd7336ec2ecc183d22f048bb83`. Old dist is preserved at
+`/tmp/level-zones-build/dist.old.802fb00b`. New binary and dist were moved into
+place; VERIFY established the embedded revision and md5 **before** SIGKILL.
+The stamped dist contains the full new revision in `assets/index-DMbSO-tR.js`.
+
+| Reference | Observed value |
+|---|---|
+| Disk `deploy/RELEASE` | `6c96683c` |
+| `HEAD:deploy/RELEASE` | `6c96683c` |
+| Guide SOURCE `GUIDE_BUILT_REV` | `6c96683c704f9a9ea5267af0ea33f0c5df631261` |
+| `/api/health` | `6c96683c704f`, status `ok` |
+| `/proc/3497330/exe` VCS revision | `6c96683c704f9a9ea5267af0ea33f0c5df631261`, modified=false |
+
+[A] Built binary, on-disk binary and running executable md5 all equal
+**`838ae0762ef5f00e04d857c18eabe033`**. The pre-marker source HEAD is
+`aa5e90dbdfbe548710dcc462960b762cd0755186`; it is the Guide/RELEASE/report
+stamp commit, not the binary's build revision. These distinct commit roles are
+intentional; the five binary references above agree.
+[Verification receipt](2026-09-11-level-zones-evidence/boot-verification.json).
+
+### Actual boot lines, read from the new process
+
+```text
+09-11 13:58:32 [INFO] nofx/main.go:295 🔐 BOOT INTEGRITY OK — rev 6c96683c704f · built 2026-09-11T18:49:47Z · expected 6c96683c · goldens PASS
+09-11 13:58:32 [INFO] trader/auto_trader.go:44 [trader_id=8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 trader_name=hoang] 🗺 zones: width=max(wick,k×ATR) k=0.5[I] · merge=0.5×ATR5m[I] max-width=1×ATR5m[I] broad>1×ATR5m[I] (also standalone above max-width) round-width=2pt[I] · families capped=3[I] · rank=[touches,round,families,distance] weights=[1,1,1,1][I] htf-mult=removed-from-zone-order (score unchanged) · cap=12[O] · detected/merged/context/NULL-width=n/a (resolver=BuildLevelZones per read) · trader=8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 bound-strategy=a5b7662e-7bf7-49bb-9f09-7efa48f95ac8 · session cap re-resolved each read; no backfill
+09-11 13:58:33 [INFO] trader/auto_trader.go:44 [trader_id=8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265 trader_name=hoang] 🛡 cutover safety (class 33): gate legs=5 · leg4=ledger (no snapshot yet) · boot sweep cancelled 0 pre-boot arm(s) (0 authorized-but-never-placed left for this process)
+09-11 13:58:33 [INFO] nofx/main.go:297 🗄 research snapshot: schema=1 · objects=5 · rows today market=UNKNOWN candidate=UNKNOWN plan=UNKNOWN scenario=UNKNOWN exec=UNKNOWN · null-fields=UNKNOWN · dropped=0 · added latency p50=UNKNOWN
+09-11 13:58:33 [INFO] nofx/main.go:312 🖥 ui: served-by=go-static build=2026-09-11T18:55:43Z
+```
+
+[A] The zones line names bound strategy
+`a5b7662e-7bf7-49bb-9f09-7efa48f95ac8`, resolved k=.5, merge=.5, max-width=1,
+broad=1, RN width2, family cap3, four weights1, and session cap12. Per-read
+counts are explicitly `n/a (resolver=BuildLevelZones per read)`; these are not
+fabricated zeros or counts borrowed from the offline snapshot. The sweep line
+reports **cancelled0 / authorized-but-never-placed0**. Its initial "no snapshot
+yet" is a startup observation; the subsequent gate below reads the broker.
+The separate research recorder reports **schema=1**, not schema=UNKNOWN;
+UNKNOWN row counters remain exactly as the surface reports them.
+
+[A] At **13:59:37.888 CT**, the post-boot gate again passes all five legs:
+positions0, broker/ledger working0, armed0, no planner read; broker snapshot
+age4s. Historical frames resumed and replay logged verified live-scale MNQ4h
+rows at13:59:22. **First new-plan proof remains pending:** `/api/plan/today`
+still serves NY version6 authored **12:41:53.97648234 CT**, with no `zone_map`.
+It predates this boot; no backfill was performed and no forced planner read was
+triggered. The process and zone boot surface are live, but a merged zone in a
+new model table/card is not yet observed. The 843-reference acceptance fixture
+is evidence for the implementation, not a substitute for that live read.
+
+[A] Lane provenance remains the merge section above: this lane's PR104 plus
+the already-merged read-only research PR105; this lane built and gated their
+merged head, not all of their source. Full merged-head Go suite PASS
+(`nofx/trader 188.857s`), vitest427/427, tsc PASS. The two clock-fixture
+FAIL→PASS receipts on unchanged running source are pre-existing corrections,
+not regressions attributable to this wave. No production arm/gate line changed.
+
+Rollback, if needed: under the same safety protocol restore the preserved
+`802fb00b` binary, matching RELEASE/Guide/dist, and restart only after a fresh
+gate (or the owner's explicit scoped override). The old binary and dist remain
+available; no rollback was triggered because integrity and health passed.
+
+This marker is committed and pushed to dev from the same release tree before
+the deploy lock is released. Final remote/HEAD equality and pinned HTTP bytes
+are checked after the marker push; they are not inferred from this text.
