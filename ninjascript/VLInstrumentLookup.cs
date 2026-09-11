@@ -40,7 +40,34 @@ namespace NinjaTrader.NinjaScript.AddOns
             }
             if (instrument != null)
             {
-                return instrument;
+                // The rolling instrument names the front month but a BarsRequest
+                // against it returned ZERO bars on this build (2026-09-11 00:33 CT,
+                // every timeframe, 22 minutes blind). Ask its master for the
+                // rollover-aware front-month EXPIRY and resolve the CONCRETE
+                // contract NT8 says is current — that one has data and takes orders.
+                Instrument concrete = null;
+                string concreteName = "";
+                try
+                {
+                    var mi = instrument.MasterInstrument;
+                    DateTime exp = mi.GetNextExpiry(DateTime.Now);
+                    concreteName = string.Format(CultureInfo.InvariantCulture, "{0} {1:D2}-{2:D2}", mi.Name, exp.Month, exp.Year % 100);
+                    concrete = Instrument.GetInstrument(concreteName);
+                }
+                catch (Exception ex)
+                {
+                    if (logWarn != null) logWarn("VLInstrumentLookup: front-month expiry lookup for '" + rolling + "' threw: " + ex.Message);
+                }
+                if (concrete != null)
+                {
+                    how = "rolling->" + concreteName;
+                    return concrete;
+                }
+                if (logWarn != null)
+                {
+                    logWarn("VLInstrumentLookup: rolling '" + rolling + "' resolved but its concrete front month '"
+                            + concreteName + "' did not — falling back to the DATE RULE (owner ruling 2026-09-11: say so)");
+                }
             }
             // The rolling name was refused. Fall back to the computed expiry and SAY SO:
             // a silent fallback would put us back on a contract the platform is not on.
