@@ -355,6 +355,15 @@ namespace NinjaTrader.NinjaScript.AddOns
                 {
                     request = new BarsRequest(instrument, barsBack);
                     request.BarsPeriod = period;
+                    // DO NOT MERGE (owner ruling 2026-09-11, bar-source wave). With no
+                    // policy set here the request inherited NT8's global Merge policy,
+                    // and under MergeBackAdjusted the historical series for MNQ 12-26
+                    // was served ~290 pts below the live feed for the SAME minutes
+                    // (research facts 16516009 live 29358.25 vs 16518205 replay
+                    // 29068.25, 2026-09-10 22:37 CT). The replay and the live feed must
+                    // be one price scale; a back-adjusted history is a different
+                    // instrument wearing the same label.
+                    request.MergePolicy = MergePolicy.DoNotMerge;
                     // Force the EXTENDED (overnight/Globex) session so the series
                     // includes the evening session and .Update keeps firing past
                     // the 16:00 CT RTH close (the freeze fix). Non-fatal if the
