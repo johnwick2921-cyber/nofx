@@ -23,7 +23,8 @@ type PlannerCalendarEvent struct {
 
 // PlannerInput is everything the reasoner reads to write a plan.
 type PlannerInput struct {
-	ResearchSnapshotID string `json:"-"` // record link, never prompt content
+	Zones              *LevelZoneMap // Uncut presentation snapshot; never used as trading inputs.
+	ResearchSnapshotID string        `json:"-"` // record link, never prompt content
 	TradeDate          string
 	Session            string    // NY | ASIA | LONDON
 	Now                time.Time // labelled CT clock line (zero → omitted)
@@ -549,7 +550,12 @@ func BuildPlannerPrompt(in PlannerInput) string {
 		// distance in ATR5m, projections beyond the mapped range, and the entry
 		// shortlist in reachability order. Rendered BELOW the ranked table, which
 		// is left exactly as the scorer produced it (the score is untouched).
-		if mb := RenderIdentityMapBlock(BuildMapCandidates(in.Levels, in.Price, in.ATR5m, MapCandidateOpts{}), in.Price); mb != "" {
+		candidates := BuildMapCandidates(in.Levels, in.Price, in.ATR5m, MapCandidateOpts{})
+		mb := RenderIdentityMapBlock(candidates, in.Price)
+		if in.Zones != nil {
+			mb = RenderScoredReferenceBlock(candidates, in.Price)
+		}
+		if mb != "" {
 			b.WriteString("\n")
 			b.WriteString(mb)
 		}
@@ -557,6 +563,10 @@ func BuildPlannerPrompt(in PlannerInput) string {
 	b.WriteString("\n")
 
 	// ADDENDUM (1) — the role playbook (machine facts; your judgment stays).
+	if in.Zones != nil {
+		b.WriteString(in.Zones.Render())
+		b.WriteString("\n")
+	}
 	b.WriteString("## Level roles (machine-assigned, 5-line playbook)\n")
 	b.WriteString(RoleLegend + "\n")
 

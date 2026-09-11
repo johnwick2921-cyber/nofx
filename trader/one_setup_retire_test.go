@@ -22,9 +22,11 @@ import (
 // an ALLOWED one still places. Driven on the loopback wire so "placed" means a
 // signal frame, not a ledger state.
 func TestOneSetupDeclinedPreBootAuthorizationRetiredNeverPlaced(t *testing.T) {
+	// One fixture clock: 10:00 CT, outside lunch; TEST session is explicit.
+	now := time.Date(2026, time.September, 11, 15, 0, 0, 0, time.UTC)
 	cfg := store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true}}
 	cfg.RiskControl.MinRiskRewardRatio = 2
-	at, st, sigs, cancels := shadowWireHarness(t, cfg)
+	at, st, sigs, cancels := shadowWireHarnessAt(t, cfg, now)
 	// S1 reject long at 100 — the best level; S2 reject long at 92 — a lower
 	// graded level BELOW price (a resting long limit there is placeable, unlike
 	// one above price, which today's engine already refuses as marketable),
@@ -42,7 +44,7 @@ func TestOneSetupDeclinedPreBootAuthorizationRetiredNeverPlaced(t *testing.T) {
 		NoTrade: []string{}, DeathCondition: "n/a",
 	}
 	blob, _ := json.Marshal(live)
-	pid := shadowPlanAt(t, at, st, string(blob))
+	pid := shadowPlanAtTime(t, at, st, string(blob), now)
 	// Two PRE-BOOT authorizations, never placed (no signal id), authored by a
 	// process that is gone — exactly rows 150/153's shape.
 	for _, r := range []store.ArmedOrderDB{
@@ -62,10 +64,10 @@ func TestOneSetupDeclinedPreBootAuthorizationRetiredNeverPlaced(t *testing.T) {
 		}, Permission: map[string]kernel.FadeVerdict{"S1": {Evaluated: true, Permitted: true}, "S2": {Evaluated: true, Permitted: true}}}
 	}
 	prev := market.FuturesBarsProvider
-	market.FuturesBarsProvider = func(string, string, int) []market.Kline { return shadowBarsNear(100) }
+	market.FuturesBarsProvider = func(string, string, int) []market.Kline { return shadowBarsNearAt(100, now) }
 	t.Cleanup(func() { market.FuturesBarsProvider = prev })
 
-	at.maybeManageArmedOrdersAt(nil, armTestClock(t, at))
+	at.maybeManageArmedOrdersAt(nil, now)
 
 	// The ALLOWED scenario's pre-boot row still places: one signal, S1's.
 	select {

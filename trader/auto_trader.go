@@ -849,6 +849,7 @@ func (at *AutoTrader) Run() error {
 	// roll, balance-alert). The process half prints in main.go.
 	at.logLedgerBootBlock(time.Now())
 	at.logLevelIdentityBootAt(time.Now())
+	at.logLevelZonesBootAt(time.Now())
 
 	logger.Info("🚀 AI-driven automatic trading system started")
 	at.logInfof("💰 Initial balance: %.2f USDT", at.initialBalance)

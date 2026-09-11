@@ -270,6 +270,7 @@ type PlanFvgEntry struct {
 
 // PlanDoc is the full plan (stored as the plans.doc JSON).
 type PlanDoc struct {
+	Zones *LevelZoneMap `json:"zone_map,omitempty"` // frozen display snapshot, not an execution input
 	// Frozen machine map actually shown at authoring; never model-authored.
 	IdentityLevels []PlanLevel    `json:"identity_levels"`
 	Reasoning      string         `json:"reasoning"` // reasoning FIRST
@@ -842,6 +843,7 @@ func MislabeledStructuralLevels(d *PlanDoc, machineLabels map[float64]string) []
 }
 
 type PlanFacts struct {
+	Zones       *LevelZoneMap  `json:"-"` // presentation only
 	IdentityMap []MapCandidate `json:"-"` // record-only snapshot, ignored by every trading validator
 	Price       float64        // reference price at read time
 	DATR        float64        // daily ATR proxy

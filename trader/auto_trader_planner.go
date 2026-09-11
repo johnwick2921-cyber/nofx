@@ -922,7 +922,7 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 	// hard fail since the owner ruling 2026-08-31 removed the count concept),
 	// continuation scenario on gaps. PDH/PDL come from the detector universe
 	// (seated or raw).
-	facts := kernel.PlanFacts{IdentityMap: kernel.BuildMapCandidates(input.Levels, input.Price, input.ATR5m, kernel.MapCandidateOpts{}), Price: input.Price, DATR: input.DATR, Regime: input.Regime}
+	facts := kernel.PlanFacts{Zones: input.Zones, IdentityMap: kernel.BuildMapCandidates(input.Levels, input.Price, input.ATR5m, kernel.MapCandidateOpts{}), Price: input.Price, DATR: input.DATR, Regime: input.Regime}
 	// 8.4 — machine grades from the Go-ranked candidate table, keyed by rounded
 	// price so the write-site stamp can match the model's levels.
 	machineGrades := map[float64]string{}
@@ -1974,6 +1974,7 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 		kernel.TreeCallWord(facts.Price, facts.PDH, facts.PDL, facts.PDC),
 		kernel.RegimeCallWord(facts.Regime))
 	identityWarnings := at.stampPlanIdentity(doc, facts.IdentityMap)
+	doc.Zones = facts.Zones // frozen presentation; never model-authored or used by validators
 	docJSON, _ := json.Marshal(doc)
 	version, err := at.store.Plan().AppendPlan(&store.PlanDB{
 		CreatedAt:       authoredAt,
@@ -2164,10 +2165,13 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 	// candidate pool (before this, every detector ran on the 1m slice only).
 	// G2.1 — one observability line per read so a missing-zone question is
 	// answered with facts, not theories.
+	zoneSeries := map[string][]market.Kline{"1m": bars, "5m": kernel.AggregateBars(bars, 5*60_000), "15m": kernel.AggregateBars(bars, 15*60_000)}
 	var htfLevels []kernel.DetectedLevel
 	if market.FuturesBarsProvider != nil {
 		htfLevels = kernel.DetectHTFLevels(func(tf string, count int) []market.Kline {
-			return market.FuturesBarsProvider(symbol, tf, count)
+			series := market.FuturesBarsProvider(symbol, tf, count)
+			zoneSeries[tf] = series
+			return series
 		}, timeframes, symbol, now)
 		if len(htfLevels) > 0 {
 			counts := map[string]int{}
@@ -2514,6 +2518,9 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 	// Before this a rendered prompt survived only when the read FAILED, so a
 	// working fix erased its own evidence. Best-effort: telemetry never fails a
 	// read (A10).
+	zoneView := kernel.BuildLevelZones(researchRaw, price, in.ATR5m, kernel.LevelZoneInputs(researchRaw, zoneSeries, now), kernel.ResolveZoneOptions(maxLevels), now)
+	in.Zones = &zoneView
+	at.logInfof("%s", zoneView.Render())
 	in.ResearchSnapshotID = researchID
 	recordResearchCandidates(in.ResearchSnapshotID, symbol, researchRaw, scored, now)
 	at.persistReadFacts(in, voidScope, voidScopeLevels, voidScopeATR, now)

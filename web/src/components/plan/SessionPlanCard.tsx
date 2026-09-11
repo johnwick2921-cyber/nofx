@@ -16,6 +16,7 @@ import { LifecycleChip, VersionChips } from './chips'
 import { WeeklyChip } from './WeeklyChip'
 import { BiasBlock } from './BiasBlock'
 import { ZoneTable } from './ZoneTable'
+import { LevelZoneMap } from './LevelZoneMap'
 import { ScenarioList } from './ScenarioList'
 import type { FadeLabelView } from './FadePermissionChip'
 import type { OneSetupView } from './OneSetupChip'
@@ -775,6 +776,7 @@ export function SessionPlanCard({
         </div>
       )}
 
+      <LevelZoneMap map={doc.zone_map} />
       {/* levels — tap a row to edit (P5), ＋ to add an owner level */}
       <ZoneTable
         facts={facts}
