@@ -23,8 +23,10 @@ func osFacts(price float64, cands ...MapCandidate) OneSetupLevelFacts {
 	return OneSetupLevelFacts{Price: price, BandPts: 50, Candidates: cands}
 }
 
-func permitted() FadeVerdict  { return FadeVerdict{Evaluated: true, Permitted: true} }
-func excluded() FadeVerdict   { return FadeVerdict{Evaluated: true, Permitted: false, Exclusions: []FadeExclusion{{Name: FadeExIBBrokenHeld}}} }
+func permitted() FadeVerdict { return FadeVerdict{Evaluated: true, Permitted: true} }
+func excluded() FadeVerdict {
+	return FadeVerdict{Evaluated: true, Permitted: false, Exclusions: []FadeExclusion{{Name: FadeExIBBrokenHeld}}}
+}
 func notEvaluated() FadeVerdict { return FadeVerdict{} }
 
 // E1 — FIVE SCENARIOS, EXACTLY ONE ALLOWED. Every decline names all three verdicts.
