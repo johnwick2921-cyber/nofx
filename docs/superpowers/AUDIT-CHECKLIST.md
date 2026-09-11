@@ -4471,3 +4471,47 @@ cell negative), C3 (13 reads since W-TF's boot; the top-ranked level carried
 a scenario on 2, an armed scenario on 1), C9 (day zero: above hold 72 /
 break 42 / ambiguous 72, n=186; below 44 / 57 / 48, n=149), round 17 (not on
 dev at merge; the dispatch's summary is the citation until it lands).
+
+## CLASS 121 — A GATE ON AUTHORIZATION THAT DOES NOT COVER THE AUTHORIZATIONS THAT PREDATE IT (born 2026-09-11 01:47 CT, the one-setup boot; closed the same night by owner ruling)
+
+**The instance.** One-setup gates ARM AUTHORIZATION at the seam: a scenario
+is authorized only when its three verdicts hold. It booted at 01:45:07 CT over
+arm 154, which the class-33 sweep cancelled (it had a broker order). The sweep
+also left rows **150** (S2 reject LONG 29200.25) and **153** (S1 sweep_reclaim
+LONG 29156.25) — authorized by the previous process, never placed, no signal
+id — "armed for this process to place", by design. On the first cycle both
+scenarios were DECLINED (`level_not_best`, `play_not_reject`,
+`level_unresolved`) and counted `declined_while_resting=2`. The placement
+engine places any non-terminal `armed` row inside its 25-pt band and consults
+no verdict. Price 29236 → 150 was 36 pt from placement.
+
+**Why it is a class.** A regime change that filters the CREATION of a thing
+inherits every instance of the thing that already exists. The boot transition
+is exactly where the old regime's authorizations meet the new regime's
+placement engine, and a sweep that keeps unplaced rows "for this process"
+hands them over uninspected. The first boot found it because the owner's
+gate report quoted the resting rows by id and someone asked what the
+placement engine would do with them.
+
+**Checks.**
+1. A new gate on creation: list every path that CONSUMES the created thing
+   (placement, re-spec, re-arm, sweep). Each consumer either re-asks the gate
+   or refuses anything the gate did not stamp.
+2. At the boot after a new gate: `SELECT` every non-terminal row of the gated
+   kind and ask, row by row, whether the gate would allow it NOW. Anything it
+   would not is retired before the first placement pass, with the verdicts.
+3. The sweep's "left for this process" branch is a hand-over, not a
+   verdict: the receiving process re-judges what it inherits.
+
+**Law:** **a gate on creation is also a gate on inheritance — at the first
+cycle after a boot, every pre-existing instance is re-judged by the new gate
+before any consumer runs, and what fails is retired with its reasons.**
+
+The fix (`oneSetupRetireDeclined`, `trader/one_setup_wiring.go`): once per
+cycle, before D4's slot check and before the placement pass, a non-terminal
+`armed` row with no signal id whose scenario is currently declined is
+cancelled by ledger state — `declined by one-setup; pre-boot authorization not
+placed · level=… play=… permission=…` — and nothing is sent to the broker;
+rows with a signal id are never touched. Pinned on the loopback wire: the
+declined scenario's pre-boot row is retired, never placed; the allowed one
+still places. Counted `one_setup:retired`; on the boot line.
