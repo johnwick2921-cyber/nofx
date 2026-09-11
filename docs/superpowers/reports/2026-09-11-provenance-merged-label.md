@@ -41,3 +41,7 @@ NY 2026-09-11, attempt 1: `ai_call model=deepseek-v4-pro duration_ms=892488 fini
 
 ## Rollback
 Revert the one line; the pins go RED again.
+
+## Cutover — booted 08:58:4x CT 2026-09-11, PID 3366586
+
+Owner GO (mid-session, book empty — no resting arm to sweep). Lock `provenance-2bdef526/nofx-59[3f0200]`; gate read three times, legs 1–5 green, no read in flight. Clean clone `~/build-prov/nofx` at `802fb00b` → `vcs.modified=false`, md5 `bf71fabd7336ec2ecc183d22f048bb83`; `701637eb`: RELEASE 802fb00b + GUIDE_BUILT_REV; main tree `--ff-only`; dist rebuilt; A13 backup `nofx-bin.old.dd1e2f0f` (verified to hold dd1e2f0f); `mv` → VERIFY → the owner ran `kill -9 3338065`. Boot integrity: `/api/health` `802fb00b09e5`; `/proc/3366586/exe` `802fb00b…` modified=false, md5 `bf71fabd…` == the build. Sweep: `boot sweep cancelled 0 pre-boot arm(s)`. Five references agree. The next planner read with a merged structural label on a table row is the live proof (attempt 1 accepted without the provenance repair round).
