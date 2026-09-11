@@ -11,8 +11,8 @@
   "deploy/nofx-lock.sh": "46fcbf76478c43943fb7607bd2929fe3629371ae5b8571ec9da8e1fa6e96c6ab",
   "deploy/nofx-claim.sh": "d110a108cb7d1d6f3e92a48a1cca0ef8ab59ec4df320ec519898ead08e7bc236",
   "deploy/nofx-db-backup.sh": "2f762c1f41fcef933583e570a73acaab6ef4751add3ef6a577939e1d43e99757",
-  "provider/ninjatrader/tcp_server.go": "a0b84a01a1ce4cfa75ff8f1b33a32a2432c140727267a41c31e298669af0b8e2",
-  "provider/ninjatrader/tcp_framing.go": "dd44ee6523bc49f844e08d29b92d654ad27aef3d51ceba36714446fe460b66e1",
+  "provider/ninjatrader/tcp_server.go": "11a7bf1cca0e02708f4251c88bfe438775ab447ded23bace8d6433ea76ef9c5f",
+  "provider/ninjatrader/tcp_framing.go": "38c852cbe144cfdd0267ec04da6f729c6447bccc0c72ac7a0d2ad61e6b57bee0",
   "ninjascript/VLTraderTCPClient.cs": "1d90ba9e2e99a6f84264ad1f431b97c007a85d56b91bf0f8f413e799839846a1",
   "web/src/lib/agentChatStorage.ts": "de7f24ff74a913a4e9d4dad2563712a562239c4f9d206b1099bb1477896f6fb0"
 }

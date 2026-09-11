@@ -3,6 +3,15 @@
 // deploy/nofx-lock.sh @ ace51598 (fix/lock-defects-release-meta-halfbuilt),
 // following keeper @ 97a6525cb6d10d6c8898b2d277c0fe7581872c24.
 // Only its recorded hash changes; protected-file mutation checks remain enforced.
+// Bar-feed baselines advanced 2026-09-10 for two owner-dispatched waves that
+// touched the protected files without renaming an identifier:
+//   provider/ninjatrader/tcp_server.go  @ a53359ce (fix/contract-roll: the
+//     subscribed ACK now routes through observeContract; rollMu/lastNamed/rolls
+//     fields) — the roll wave's vitest ran in the MAIN tree, whose cwd-relative
+//     read of this file was the pre-roll copy, so its 421/421 never saw this
+//     change (class 110: a green suite is a claim about an environment).
+//   provider/ninjatrader/tcp_framing.go @ c9b224a6 (fix/bar-source: Bar.Source,
+//     Go-side only, json:"-").
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
