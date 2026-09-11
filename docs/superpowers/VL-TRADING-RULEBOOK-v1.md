@@ -39,6 +39,23 @@ filtered, never deleted. On roll the book re-seats: levels seated on the retired
 scale are phantom on the new one and are replaced by the next planner read from
 the purged ring.
 
+### One contract, two sources — implementation addition, awaiting cutover
+
+**Bar-source wave, 2026-09-10; recording only until its boot.** Every bar
+names the feed that delivered it (`bars.source`): live is the minute as it
+traded; historical is a replay the ring has judged to be on the live scale;
+mixed is a minute with one side on each scale and is never read; off-scale is
+a row measured to hold an unverified replay's values and is never read. A
+replay never overwrites a live bar, in the ring or in the store. A replay is
+held out of the store until the first live bar after it lets the ring compare
+scales — agree and it is released into the minutes live never wrote; disagree
+and it is discarded, the ring drops the seed and refills from the store's live
+rows, and the event is raised once as a P0 with both closes. An empty minute
+is a gap; a wrong-scale minute is a false event, and the book never sees one.
+The boot line `📼 bar source:` states the census, the hold, both thresholds
+and every mismatch of the process. The NT8 replay's scale is a finding for the
+AddOn, filed with the two research facts that prove it.
+
 What this corrects: on 2026-09-10 at 21:15 CT the subscription rolled MNQ 09-26
 → 12-26 on reconnect, the ring kept ~2,000 September bars under December ones,
 and a ~292-point basis presented to every reader as a move. Plan v7 (21:29 CT)

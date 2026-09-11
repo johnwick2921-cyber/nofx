@@ -4282,3 +4282,76 @@ every close-to-close delta from 18:55 to 21:13 is under seven points, and no
 backfill keyed on 19:00 would have been right. **The rule's answer and the wire's
 answer are different facts, and only the second is in the bars.** This is A17
 (measure first) in its most literal form.
+
+## CLASS 118 — ONE IDENTITY, TWO FEEDS: A REPLAY THAT REPAINTS THE RECORD (born 2026-09-10, the bar-source wave)
+
+**The shape.** A record is built from two feeds that claim the same identity —
+here NT8's live `bar_update` and its `bars_historical` replay, same
+subscription, same label `MNQ 12-26` — and nothing in the record says which
+feed wrote each fact. While the feeds agree the seam is invisible. When they
+stop agreeing, the feed that arrives LAST wins every collision, and the last
+one is always the replay, because a replay is what every boot and every
+reconnect begins with.
+
+**What it did.** Research archive, the 22:37 CT minute of 2026-09-10, same
+contract: fact 16516009 (`bar_update`) close **29358.25**; fact 16518205
+(`bars_historical`) close **29068.25**. ~290 points apart, ~1.0% of price,
+for the SAME minute of the SAME contract. The roll wave had just proved the
+tape was one contract and booted into a chart still discontinuous — the
+discontinuity was one contract, two sources. The pre-existing unconditional
+upsert (`ON CONFLICT DO UPDATE` with no WHERE) let that boot's replay
+overwrite **186 live rows** (restored from backup, markers ac76b47b, 33fee48e);
+the ring's merge said "incoming is freshest" and did the same in memory; the
+boot minute became a bar whose open was the replay's and whose close was
+live — the exact shape the roll minute had, mistaken for a roll.
+
+**The two doors.** (1) A collision: the replay lands on a minute live already
+wrote. The fix is a precedence rule stamped on every row — live overwrites
+anything, a replay fills only what live never wrote. (2) A gap: the replay
+lands on a minute live NEVER wrote — the restart gap, the seconds after a
+reconnect. No precedence rule helps; the wrong-scale row is the only row.
+The fix is that an unverified replay is not the record: it is held until the
+first live bar after it lets the ring compare scales, then released or
+discarded. **A fix that closes only door 1 is the one this wave nearly
+shipped;** the second door was found by asking what the NEXT boot's rehydrate
+would read from the store — 98 rows on the wrong scale (MNQ 51, ES 47) from
+the night's two boots, in exactly those gap minutes, labelled by measurement
+and never read.
+
+**Why it is a class.** Any record fed by a live stream AND a catch-up stream
+has this shape: order books rebuilt from snapshots, positions from a
+reconcile, fills from a history pull, bars from a replay. The catch-up stream
+is trusted BECAUSE it is complete, and its completeness is precisely what
+lets it overwrite everything. The questions:
+
+1. Does every persisted fact name the feed that delivered it? If two feeds
+   write the same table and the row cannot say which, the seam is already in
+   the data and the first disagreement will be read as an event.
+2. Which feed wins a collision, and is that written down as a rule the upsert
+   enforces — or is it whichever arrived last?
+3. What does the catch-up stream write into minutes the live stream never
+   saw? Those rows are unverified by construction. What verifies them, and
+   what happens to them if verification fails?
+4. What does the next boot READ BACK? A repair that fixes the ring and not the
+   store is undone by the first rehydrate.
+5. When the two feeds disagree, what does the disagreement LOOK LIKE to the
+   readers? Here: a 290-point candle, a 10× range, a fair-value gap, seven
+   levels — the most dramatic market event of the day. **A feed disagreement
+   is always the largest move on the chart, and the detectors will file it.**
+
+**Law:** **every fact names its feed; the live feed wins every collision; a
+catch-up feed is held until a live fact verifies its scale; a fact the record
+cannot verify is labelled and never read, never deleted.** The migration that
+adds the label chooses LIVE for what it cannot know — the record is what the
+bot saw — and off-scale only where the tape is measured (`offScale20260910`).
+
+**Corollary — the finding is not the fix.** The reason NT8's replay sits on
+another scale (a merge/back-adjust policy on the subscription, presumably) is
+the AddOn wave's to establish and remove. This class is about surviving a
+feed that lies, not about making it stop; both are owed, and shipping the
+second without the first would have left the record one restart from the same
+damage.
+
+Read beside 117 (one identity, two resolvers — the contract) and 113 (a gate
+that certifies a name, not a path — the contract label certified nothing about
+the scale).
