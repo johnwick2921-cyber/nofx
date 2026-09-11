@@ -71,7 +71,7 @@ func TestSourceBootLineIsReadNotLiteral(t *testing.T) {
 	}
 	line := SourceBootLine("MNQ", census, mm, 0.005, "replay-hold: held=0 released=0 discarded=2000")
 	for _, want := range []string{
-		"MNQ live=51087 historical=5 mixed=3 null=0",
+		"MNQ live=51087 historical=5 mixed=3 off-scale=0 null=0",
 		"unverified-replay-held=on",
 		"replay-hold: held=0 released=0 discarded=2000",
 		"threshold=0.50% AND 20x median body [I]",

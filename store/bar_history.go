@@ -139,6 +139,12 @@ const (
 	BarSourceLive       = "live"
 	BarSourceHistorical = "historical"
 	BarSourceMixed      = "mixed"
+	// BarSourceOffScale marks a row MEASURED to hold an unverified replay's
+	// values on another price scale than the live feed (the 2026-09-10 boots,
+	// before the replay hold existed). Written only by the migration's measured
+	// backfill — the wire discards such a replay and never writes it. No reader
+	// takes it; a live bar or a verified replay overwrites it.
+	BarSourceOffScale = "replay:off-scale"
 )
 
 // ContractMixed marks a bar whose OHLC straddles a contract roll: the AddOn
@@ -376,7 +382,7 @@ func (s *BarHistoryStore) BarsBetweenOn(symbol, tf, contract string, fromMs, toM
 		return nil, fmt.Errorf("store required")
 	}
 	var out []BarHistoryDB
-	q := s.db.Where("symbol = ? AND tf = ? AND open_time_ms >= ? AND open_time_ms < ? AND COALESCE(source, '') <> ?", symbol, tf, fromMs, toMs, BarSourceMixed)
+	q := s.db.Where("symbol = ? AND tf = ? AND open_time_ms >= ? AND open_time_ms < ? AND COALESCE(source, '') NOT IN (?, ?)", symbol, tf, fromMs, toMs, BarSourceMixed, BarSourceOffScale)
 	if c := strings.TrimSpace(contract); c != "" {
 		q = q.Where("contract = ?", c)
 	}
@@ -433,7 +439,7 @@ func (s *BarHistoryStore) LastNBarsOn(symbol, tf, contract string, n int) ([]Bar
 		return nil, nil
 	}
 	var desc []BarHistoryDB
-	q := s.db.Where("symbol = ? AND tf = ? AND COALESCE(source, '') <> ?", symbol, tf, BarSourceMixed)
+	q := s.db.Where("symbol = ? AND tf = ? AND COALESCE(source, '') NOT IN (?, ?)", symbol, tf, BarSourceMixed, BarSourceOffScale)
 	if c := strings.TrimSpace(contract); c != "" {
 		q = q.Where("contract = ?", c)
 	}

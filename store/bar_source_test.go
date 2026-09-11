@@ -138,3 +138,112 @@ func TestSourceBackfillIsConservativeAndIdempotent(t *testing.T) {
 		t.Fatalf("%d rows left unlabelled", c1[""])
 	}
 }
+
+// THE MEASURED BACKFILL. Rows shaped like the live DB's 2026-09-10 window,
+// written raw and unlabelled, come out with the label the tape supports:
+// off-scale only for a December row inside the window with both sides below
+// the dividing value; mixed for a straddle; live for everything else — a
+// September row at the same low price, a December row at the same low price
+// OUTSIDE the window, a December row inside the window on the live scale.
+func TestSourceBackfillLabelsTheMeasuredOffScaleRowsByValueNotRowid(t *testing.T) {
+	bh := rollStore(t)
+	type raw struct {
+		ms       int64
+		o, c     float64
+		contract string
+		want     string
+		why      string
+	}
+	cases := []raw{
+		{1789096440000, 29076.5, 29078.75, "MNQ 12-26", BarSourceOffScale, "22:14 CT, both sides on the replay scale, December"},
+		{1789093140000, 29080, 29081, "MNQ 12-26", BarSourceOffScale, "21:19 CT, a restart-gap minute the 22:14 boot's replay filled"},
+		{1789092840000, 29131.5, 29130, "MNQ 09-26", BarSourceLive, "21:14 CT September: low is its own scale"},
+		{1789096440000 - 86400000, 29076.5, 29078.75, "MNQ 12-26", BarSourceLive, "same price a day earlier: outside the window the value means nothing"},
+		{1789097940000, 29068.25, 29355.25, "MNQ 12-26", BarSourceMixed, "22:39 CT boot minute: replay open, live close"},
+		{1789092900000, 29131.5, 29416.0, "MNQ 12-26", BarSourceMixed, "21:15 CT roll minute whose spans-roll label the 22:39 replay overwrote"},
+		{1789097880000, 29360, 29367.25, "MNQ 12-26", BarSourceLive, "22:38 CT on the live scale (as a live row would be after reconstruction)"},
+		{1789097760000, 29068.75, 29067.25, "MNQ 12-26", BarSourceOffScale, "22:36 CT 3m, both sides on the replay scale (the aggregates were repainted too)"},
+	}
+	for i, x := range cases {
+		tf := "1m"
+		if i == 7 {
+			tf = "3m"
+		}
+		if err := bh.db.Exec(`INSERT INTO bars(symbol,tf,open_time_ms,o,h,l,c,v,convention,contract,source) VALUES ('MNQ',?,?,?,?,?,?,1,'epoch_floor',?,'')`,
+			tf, x.ms, x.o, x.o+1, x.c-1, x.c, x.contract).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := bh.migrateSourceColumn(); err != nil {
+		t.Fatal(err)
+	}
+	for i, x := range cases {
+		tf := "1m"
+		if i == 7 {
+			tf = "3m"
+		}
+		var r BarHistoryDB
+		if err := bh.db.Where("symbol='MNQ' AND tf=? AND open_time_ms=? AND contract=?", tf, x.ms, x.contract).First(&r).Error; err != nil {
+			t.Fatal(err)
+		}
+		if r.Source != x.want {
+			t.Fatalf("case %d (%s): labelled %q, want %q", i, x.why, r.Source, x.want)
+		}
+		if r.O != x.o || r.C != x.c {
+			t.Fatalf("case %d: VALUES changed (A24): o=%.2f c=%.2f", i, r.O, r.C)
+		}
+	}
+	// idempotent
+	c1, _ := bh.SourceCensus("MNQ")
+	if err := bh.migrateSourceColumn(); err != nil {
+		t.Fatal(err)
+	}
+	c2, _ := bh.SourceCensus("MNQ")
+	for k, v := range c1 {
+		if c2[k] != v {
+			t.Fatalf("second run changed %q: %d→%d", k, v, c2[k])
+		}
+	}
+}
+
+// NO READER TAKES AN OFF-SCALE ROW, and the two repair paths — a live bar, or
+// a VERIFIED replay released by the hold — overwrite it. Nothing else may
+// write the label: the wire discards an off-scale replay, it never files one.
+func TestOffScaleRowsAreUnreadableAndRepairable(t *testing.T) {
+	bh := rollStore(t)
+	const a, b, c = int64(1789096440000), int64(1789096500000), int64(1789096560000)
+	for _, ms := range []int64{a, b, c} {
+		if err := bh.db.Exec(`INSERT INTO bars(symbol,tf,open_time_ms,o,h,l,c,v,convention,contract,source) VALUES ('MNQ','1m',?,29076,29077,29075,29076,1,'epoch_floor','MNQ 12-26',?)`, ms, BarSourceOffScale).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+	last, _ := bh.LastNBarsOn("MNQ", "1m", "MNQ 12-26", 10)
+	between, _ := bh.BarsBetweenOn("MNQ", "1m", "MNQ 12-26", a, c+1)
+	if len(last) != 0 || len(between) != 0 {
+		t.Fatalf("a reader handed out off-scale rows: last=%d between=%d", len(last), len(between))
+	}
+	if IsReadableSource(BarSourceOffScale) {
+		t.Fatal("IsReadableSource must refuse off-scale")
+	}
+	// repair path 1: the minute as it traded (a reconstruction writes live)
+	if err := bh.InsertBars([]BarHistoryDB{bsRow(a, 29366.5, BarSourceLive)}); err != nil {
+		t.Fatal(err)
+	}
+	if r := readOne(t, bh, a); r.C != 29366.5 || r.Source != BarSourceLive {
+		t.Fatalf("a live row must overwrite an off-scale row, got %.2f %q", r.C, r.Source)
+	}
+	// repair path 2: a replay the ring judged on-scale, released by the hold
+	if err := bh.InsertBars([]BarHistoryDB{bsRow(b, 29365, BarSourceHistorical)}); err != nil {
+		t.Fatal(err)
+	}
+	if r := readOne(t, bh, b); r.C != 29365 || r.Source != BarSourceHistorical {
+		t.Fatalf("a verified replay must overwrite an off-scale row, got %.2f %q", r.C, r.Source)
+	}
+	// the label is the migration's alone
+	if err := bh.InsertBars([]BarHistoryDB{bsRow(c, 1, BarSourceOffScale)}); err == nil {
+		t.Fatal("InsertBars accepted replay:off-scale from a caller — only the measured backfill may write it")
+	}
+	if r := readOne(t, bh, c); r.C != 29076 {
+		t.Fatal("the refused insert changed the row")
+	}
+}

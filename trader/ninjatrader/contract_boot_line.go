@@ -74,8 +74,8 @@ func SourceBootLine(symbol string, census map[string]int64, mismatches []ntwire.
 	if hold == "" {
 		hold = "replay-hold: n/a"
 	}
-	return fmt.Sprintf("📼 bar source: %s live=%d historical=%d mixed=%d null=%d · replay-never-overwrites-live=on · unverified-replay-held=on · %s · scale-mismatch threshold=%.2f%% AND %.0fx median body [I] · mismatches this process: %s",
-		symbol, census[store.BarSourceLive], census[store.BarSourceHistorical], census[store.BarSourceMixed], census[""], hold, pct*100, ntwire.ScaleMismatchRangeMult, mm)
+	return fmt.Sprintf("📼 bar source: %s live=%d historical=%d mixed=%d off-scale=%d null=%d · replay-never-overwrites-live=on · unverified-replay-held=on · %s · scale-mismatch threshold=%.2f%% AND %.0fx median body [I] · mismatches this process: %s",
+		symbol, census[store.BarSourceLive], census[store.BarSourceHistorical], census[store.BarSourceMixed], census[store.BarSourceOffScale], census[""], hold, pct*100, ntwire.ScaleMismatchRangeMult, mm)
 }
 
 // contractBootLineFor assembles the line from live sources. Called after the
