@@ -93,8 +93,10 @@ func TestReadersExcludeMixed(t *testing.T) {
 	}
 }
 
-// The migration labels what it cannot know CONSERVATIVELY (historical), and
-// the roll wave's spans-roll rows as mixed. Idempotent.
+// The migration labels pre-column rows LIVE — the record of what traded, which
+// a future replay must not repaint — and the roll wave's spans-roll rows mixed.
+// Idempotent. (The first draft labelled them historical and would have licensed
+// the next boot's replay to overwrite the whole store again.)
 func TestSourceBackfillIsConservativeAndIdempotent(t *testing.T) {
 	bh := rollStore(t)
 	// pre-column rows, written raw
@@ -109,8 +111,15 @@ func TestSourceBackfillIsConservativeAndIdempotent(t *testing.T) {
 	if err := bh.migrateSourceColumn(); err != nil {
 		t.Fatal(err)
 	}
-	if r := readOne(t, bh, 1789092840000); r.Source != BarSourceHistorical {
-		t.Fatalf("an unknown-feed row must be labelled historical (conservative), got %q", r.Source)
+	if r := readOne(t, bh, 1789092840000); r.Source != BarSourceLive {
+		t.Fatalf("a pre-column row is the record of what traded and must be labelled live, got %q", r.Source)
+	}
+	// And the reason: a replay arriving later must NOT repaint it.
+	if err := bh.InsertBars([]BarHistoryDB{{Symbol: "MNQ", TF: "1m", OpenTimeMs: 1789092840000, O: 9, H: 9, L: 9, C: 9, V: 1, Contract: "MNQ 09-26", Source: BarSourceHistorical}}); err != nil {
+		t.Fatal(err)
+	}
+	if r := readOne(t, bh, 1789092840000); r.C == 9 {
+		t.Fatal("a replay repainted a pre-column row — the label the migration chose licensed the 22:39 damage again")
 	}
 	if r := readOne(t, bh, 1789092900000); r.Source != BarSourceMixed {
 		t.Fatalf("a spans-roll row is mixed, got %q", r.Source)

@@ -38,16 +38,27 @@ import (
 // another scale — is filed for the AddOn wave with the two facts above as the
 // evidence. This wave makes Go survive it.
 
-// migrateSourceColumn adds the column (idempotent) and backfills what can be
-// KNOWN about pre-existing rows. It cannot know which feed wrote a row before
-// the column existed, so it does not guess (A24): every such row is labelled
-// historical — the CONSERVATIVE label, meaning "a later live bar may overwrite
-// this". Labelling them live would make them unoverwritable by a future
-// correction; labelling them historical costs nothing, because a genuinely live
-// row has no later live twin to be overwritten by.
+// migrateSourceColumn adds the column (idempotent) and labels pre-existing rows.
 //
-// Exception, also known: rows that carry the roll wave's spans-roll contract
-// label are the mixed 21:15–21:17 bars, and they are marked mixed here too.
+// PRE-COLUMN ROWS ARE LABELLED LIVE. The first draft labelled them historical
+// and called it conservative — "a later live bar may overwrite this". That
+// reasoning covered live-over-historical and missed historical-over-historical:
+// a future REPLAY overwrites a historical row, which is exactly the damage of
+// 2026-09-10 22:39, and the label would have licensed it again at the very next
+// boot. The store is the record of what the bot saw as it traded; the whole
+// purpose of this wave is that a replay must not repaint that record. So the
+// record is live, and only rows this process itself receives as a replay are
+// historical.
+//
+// What this cannot know, stated: rows written by an earlier boot's replay (the
+// 22:14–22:39 CT window on 2026-09-10, ~26 per symbol) are on the replay's
+// scale and will be labelled live too. Protecting a wrong value is harmless
+// here — a future replay would bring the SAME wrong value — and the repair for
+// those rows is a reconstruction from the research archive's live facts, which
+// writes them as live and is owner-authorised separately.
+//
+// Rows carrying the roll wave's spans-roll contract label are the mixed
+// 21:15–21:17 bars and are marked mixed.
 func (s *BarHistoryStore) migrateSourceColumn() error {
 	var has int64
 	if err := s.db.Raw("SELECT COUNT(*) FROM pragma_table_info('bars') WHERE name='source'").Scan(&has).Error; err != nil {
@@ -65,7 +76,7 @@ func (s *BarHistoryStore) migrateSourceColumn() error {
 	if err := s.db.Exec("UPDATE bars SET source = ? WHERE source = '' AND contract = ?", BarSourceMixed, ContractMixed).Error; err != nil {
 		return err
 	}
-	if err := s.db.Exec("UPDATE bars SET source = ? WHERE source = ''", BarSourceHistorical).Error; err != nil {
+	if err := s.db.Exec("UPDATE bars SET source = ? WHERE source = ''", BarSourceLive).Error; err != nil {
 		return err
 	}
 	return s.db.Exec("CREATE INDEX IF NOT EXISTS idx_bars_source ON bars(symbol, tf, source, open_time_ms)").Error

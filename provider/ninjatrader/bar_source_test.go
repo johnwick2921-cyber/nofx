@@ -155,3 +155,35 @@ func TestReconnectReseedIsCheckedAgain(t *testing.T) {
 		t.Fatalf("a reconnect re-seed on another scale must be caught by the first live bar after it; fired=%d", fired)
 	}
 }
+
+// THE TAPE'S OWN SCALE. A move that clears the percent threshold but is
+// ordinary against the seed's bar bodies is a MOVE, not a scale shift. At price
+// 100 with one-point bodies, a five-point close-to-close is 5% of price — and
+// five bodies. Not a mismatch. (The percent rule alone fired on the ring-bound
+// test's one-point step.)
+func TestOrdinaryMoveAtSmallPriceIsNotAMismatch(t *testing.T) {
+	c := NewBarCache(2500)
+	var seed []Bar
+	for i := 0; i < 20; i++ {
+		ms := bsT0 - int64(20-i)*60_000
+		o := 100.0 + float64(i)
+		seed = append(seed, Bar{T: ms, O: o, H: o + 1.5, L: o - 0.5, C: o + 1, V: 1}) // one-point bodies
+	}
+	c.SeedHistorical("MNQ", "1m", seed)
+	fired := 0
+	OnScaleMismatch(func(ScaleMismatch) { fired++ })
+	t.Cleanup(func() { scaleListenersMu.Lock(); scaleListeners = nil; scaleListenersMu.Unlock() })
+	c.Upsert("MNQ", "1m", []Bar{{T: bsT0, O: 120, H: 126, L: 119, C: 125, V: 1}}) // +5 from last close 120: 4.2% of price, 5 bodies
+	time.Sleep(20 * time.Millisecond)
+	if fired != 0 || c.Count("MNQ", "1m") != 21 {
+		t.Fatalf("an ordinary move must not read as a scale shift: fired=%d ring=%d", fired, c.Count("MNQ", "1m"))
+	}
+	// And the real thing at the same price, for contrast: +50 is 50 bodies.
+	c2 := NewBarCache(2500)
+	c2.SeedHistorical("MNQ", "1m", seed)
+	c2.Upsert("MNQ", "1m", []Bar{{T: bsT0, O: 120, H: 171, L: 119, C: 170, V: 1}})
+	time.Sleep(20 * time.Millisecond)
+	if fired != 1 {
+		t.Fatalf("a fifty-body jump at the same price IS a scale shift; fired=%d", fired)
+	}
+}

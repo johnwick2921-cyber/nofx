@@ -22,7 +22,7 @@ func newBarStore(t *testing.T) *BarHistoryStore {
 
 func mkBar(sym, tf string, tMs int64, c float64) BarHistoryDB {
 	// ROLL WAVE — every written bar carries its contract; the fixture names one.
-	return BarHistoryDB{Symbol: sym, TF: tf, OpenTimeMs: tMs, O: c, H: c, L: c, C: c, V: 1, Contract: sym + " 09-26"}
+	return BarHistoryDB{Symbol: sym, TF: tf, OpenTimeMs: tMs, O: c, H: c, L: c, C: c, V: 1, Contract: sym + " 09-26", Source: BarSourceLive}
 }
 
 func TestBarInsertAndDedup(t *testing.T) {

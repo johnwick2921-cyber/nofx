@@ -44,7 +44,7 @@ func TestT1RunLevelStatsDayOnceWritesRows(t *testing.T) {
 	// Seed the persisted 1m window so the outcome evaluation has real klines.
 	var seed []store.BarHistoryDB
 	for i := int64(0); i < 10; i++ {
-		seed = append(seed, store.BarHistoryDB{Contract: "MNQ 09-26", Symbol: "MNQ", TF: "1m",
+		seed = append(seed, store.BarHistoryDB{Contract: "MNQ 09-26", Source: store.BarSourceLive, Symbol: "MNQ", TF: "1m",
 			OpenTimeMs: dayStart.UnixMilli() + i*60_000, O: 29200, H: 29205, L: 29195, C: 29202, V: 100})
 	}
 	if err := st.BarHistory().InsertBars(seed); err != nil {

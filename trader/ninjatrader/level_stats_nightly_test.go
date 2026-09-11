@@ -67,7 +67,7 @@ func TestLevelStatsNightlyEvaluatesSeatedRows(t *testing.T) {
 	for i := 0; i < 120; i++ {
 		ms := start.Add(time.Duration(i) * time.Minute).UnixMilli()
 		px := 100.0 + float64(i)*0.1
-		rows = append(rows, store.BarHistoryDB{Contract: "MNQ 09-26", Symbol: "MNQ", TF: "1m", OpenTimeMs: ms, O: px, H: px + 1, L: px - 1, C: px, V: 10})
+		rows = append(rows, store.BarHistoryDB{Contract: "MNQ 09-26", Source: store.BarSourceLive, Symbol: "MNQ", TF: "1m", OpenTimeMs: ms, O: px, H: px + 1, L: px - 1, C: px, V: 10})
 	}
 	if err := st.BarHistory().InsertBars(rows); err != nil {
 		t.Fatal(err)

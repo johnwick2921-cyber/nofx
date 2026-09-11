@@ -152,7 +152,7 @@ func WireBarPersistence(st *store.Store) {
 						rehydrateRingFromStoreWith(bh, server, time.Now(), true)
 						srcCensus, _ := bh.SourceCensus(m.Symbol)
 						logger.Errorf("🚨 P0 — REPLAY AND LIVE ARE ON DIFFERENT PRICE SCALES for %s %s at %s: last replay close %.2f, first live close %.2f, delta %.2f pts (> %.2f%% of price). %d historical bars DROPPED from the ring and refilled from the store's live rows; the straddling bar is labelled mixed and no reader takes it. This is NT8's merge/back-adjust policy on the subscription — filed for the AddOn wave. bars by source now %v. (bar-source wave 2026-09-10)",
-							m.Symbol, m.Timeframe, m.At.Format("15:04:05"), m.LastHistoricalC, m.FirstLiveC, m.DeltaPts, ntwire.ScaleMismatchPct*100, m.HistoricalDropped, srcCensus)
+							m.Symbol, m.Timeframe, kernel.ClockCTSeconds(m.At), m.LastHistoricalC, m.FirstLiveC, m.DeltaPts, ntwire.ScaleMismatchPct*100, m.HistoricalDropped, srcCensus)
 					})
 					ntwire.OnContractRoll(func(symbol, from, to string, at time.Time) {
 						go func() {

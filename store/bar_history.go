@@ -376,7 +376,7 @@ func (s *BarHistoryStore) BarsBetweenOn(symbol, tf, contract string, fromMs, toM
 		return nil, fmt.Errorf("store required")
 	}
 	var out []BarHistoryDB
-	q := s.db.Where("symbol = ? AND tf = ? AND open_time_ms >= ? AND open_time_ms < ? AND source <> ?", symbol, tf, fromMs, toMs, BarSourceMixed)
+	q := s.db.Where("symbol = ? AND tf = ? AND open_time_ms >= ? AND open_time_ms < ? AND COALESCE(source, '') <> ?", symbol, tf, fromMs, toMs, BarSourceMixed)
 	if c := strings.TrimSpace(contract); c != "" {
 		q = q.Where("contract = ?", c)
 	}
@@ -433,7 +433,7 @@ func (s *BarHistoryStore) LastNBarsOn(symbol, tf, contract string, n int) ([]Bar
 		return nil, nil
 	}
 	var desc []BarHistoryDB
-	q := s.db.Where("symbol = ? AND tf = ? AND source <> ?", symbol, tf, BarSourceMixed)
+	q := s.db.Where("symbol = ? AND tf = ? AND COALESCE(source, '') <> ?", symbol, tf, BarSourceMixed)
 	if c := strings.TrimSpace(contract); c != "" {
 		q = q.Where("contract = ?", c)
 	}

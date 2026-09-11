@@ -340,7 +340,7 @@ func TestClass36PinSundayWeekly(t *testing.T) {
 	var rows []store.BarHistoryDB
 	for i := 0; i < 2*390; i++ {
 		o := lastBar.Add(-time.Duration(2*390-1-i) * time.Minute).UnixMilli()
-		rows = append(rows, store.BarHistoryDB{Contract: "MNQ 09-26", Symbol: "MNQ", TF: "1m", OpenTimeMs: o, O: 15600 + float64(i%10), H: 15650 + float64(i%10), L: 15550 + float64(i%10), C: 15600 + float64(i%10), V: 100})
+		rows = append(rows, store.BarHistoryDB{Contract: "MNQ 09-26", Source: store.BarSourceLive, Symbol: "MNQ", TF: "1m", OpenTimeMs: o, O: 15600 + float64(i%10), H: 15650 + float64(i%10), L: 15550 + float64(i%10), C: 15600 + float64(i%10), V: 100})
 	}
 	if err := st.BarHistory().Migrate(); err != nil {
 		t.Fatal(err)

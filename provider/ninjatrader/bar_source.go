@@ -13,14 +13,44 @@ const (
 	BarSourceMixed      = "mixed"
 )
 
-// ScaleMismatchPct is the detection threshold for "the replay and the live feed
-// are on different price scales": the first live close after a historical seed
-// differing from the last historical close by more than this fraction of price.
-// A one-minute bar does not move half a percent of an index; a back-adjusted
-// replay against an unadjusted live feed does (MNQ 1.0%, ES 0.86% on
-// 2026-09-10). Stated on the boot line as [I]; NOFX_BAR_SCALE_MISMATCH_PCT
-// overrides.
-var ScaleMismatchPct = 0.005
+// ScaleMismatchPct and ScaleMismatchRangeMult are the detection thresholds for
+// "the replay and the live feed are on different price scales": the first live
+// close after a historical seed differing from the last historical close by
+// more than BOTH
+//   - this fraction of price (a one-minute bar does not move half a percent of
+//     an index; a back-adjusted replay against an unadjusted live feed did —
+//     MNQ 1.0%, ES 0.86% on 2026-09-10), AND
+//   - this multiple of the seed's own median bar body (the tape's own scale, so
+//     the rule needs no assumption about what the instrument's price IS —
+//     the percent alone fired on a one-point move in a fixture priced at 100).
+//
+// Both are [I], stated on the boot line. NOFX_BAR_SCALE_MISMATCH_PCT and
+// NOFX_BAR_SCALE_MISMATCH_MULT override.
+var (
+	ScaleMismatchPct       = 0.005
+	ScaleMismatchRangeMult = 20.0
+)
+
+// medianBody is the median |close-open| of the bars given — the tape's own
+// scale. Zero when there are no bars or every body is zero.
+func medianBody(bars []Bar) float64 {
+	bodies := make([]float64, 0, len(bars))
+	for _, b := range bars {
+		if d := math.Abs(b.C - b.O); d > 0 {
+			bodies = append(bodies, d)
+		}
+	}
+	if len(bodies) == 0 {
+		return 0
+	}
+	// insertion sort — n is small (a seed, not a history)
+	for i := 1; i < len(bodies); i++ {
+		for j := i; j > 0 && bodies[j] < bodies[j-1]; j-- {
+			bodies[j], bodies[j-1] = bodies[j-1], bodies[j]
+		}
+	}
+	return bodies[len(bodies)/2]
+}
 
 // ScaleMismatch records one detection for the boot line and the P0.
 type ScaleMismatch struct {
@@ -126,6 +156,13 @@ func (c *BarCache) detectScaleMismatch(key string, b Bar, now time.Time) (Bar, b
 	}
 	delta := math.Abs(b.C - last.C)
 	if delta <= ScaleMismatchPct*math.Abs(last.C) {
+		return b, false
+	}
+	// The tape's own scale: a move that is large in percent terms but ordinary
+	// against this seed's bar bodies is a move, not a scale shift. Requires a
+	// seed with SOME body to measure; a flat seed cannot vouch either way and
+	// the percent rule stands alone.
+	if mb := medianBody(existing); mb > 0 && delta <= ScaleMismatchRangeMult*mb {
 		return b, false
 	}
 	// Different scales. Drop the seed; label the straddling bar.
