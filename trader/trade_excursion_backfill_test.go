@@ -31,7 +31,7 @@ func TestExcursionBackfillCountsAndNoneRows(t *testing.T) {
 		return store.BarHistoryDB{Contract: "MNQ 09-26", Symbol: "MNQ", TF: "1m", OpenTimeMs: base + i*60_000, O: o, H: h, L: l, C: c}
 	}
 	// covered: bars 0..4 ; half: bars 0..1 only (its hold runs to bar 4)
-	if err := st.BarHistory().InsertBars([]store.BarHistoryDB{Contract: "MNQ 09-26",
+	if err := st.BarHistory().InsertBars([]store.BarHistoryDB{
 		mk(0, 100, 104, 96, 101), mk(1, 101, 108, 100, 107),
 		mk(2, 107, 110, 103, 104), mk(3, 104, 106, 92, 95), mk(4, 95, 99, 94, 98),
 	}); err != nil {
