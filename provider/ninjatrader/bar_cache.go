@@ -14,6 +14,7 @@ package ninjatrader
 import (
 	"strings"
 	"sync"
+	"time"
 )
 
 // DefaultBarCacheMaxBars is the per-(symbol, timeframe) ring-buffer
@@ -33,6 +34,11 @@ type BarCache struct {
 	maxBars int
 	// dropped counts NT8 empty-minute placeholder bars refused at ingest.
 	dropped int64
+	// BAR-SOURCE WAVE: per key, whether a live bar has been seen this process
+	// (the scale-mismatch check runs once, on the first), and every mismatch
+	// detected, for the boot line.
+	liveSeen   map[string]bool
+	mismatches map[string]ScaleMismatch
 }
 
 // NewBarCache constructs an empty cache. maxBars <= 0 uses
@@ -222,11 +228,19 @@ func (c *BarCache) SeedHistorical(symbol, timeframe string, bars []Bar) {
 		return
 	}
 	bars, bad := dropPlaceholderBars(bars)
-	bars = openStampBars(bars, timeframe) // close-stamp → OPEN-stamp, once, for every reader
+	bars = openStampBars(bars, timeframe)         // close-stamp → OPEN-stamp, once, for every reader
+	bars = stampSource(bars, BarSourceHistorical) // BAR-SOURCE WAVE: a replay is a replay
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.dropped += int64(bad)
 	key := barKey(symbol, timeframe)
+	// Every replay re-arms the scale check: the FIRST live bar after THIS seed
+	// is compared against it. Per-process arming would let a mid-session
+	// reconnect re-seed on a different scale and never be caught — a mutation
+	// survived on exactly that gap.
+	if c.liveSeen != nil {
+		delete(c.liveSeen, key)
+	}
 	existing := c.bars[key]
 	if len(existing) == 0 {
 		// First seed for this key — copy the tail (detaches from caller's array).
@@ -242,7 +256,10 @@ func (c *BarCache) SeedHistorical(symbol, timeframe string, bars []Bar) {
 		// Empty re-seed (cursor-deduped reconnect frame) — keep what we have.
 		return
 	}
-	merged := mergeBarsByTime(existing, bars)
+	// A REPLAY NEVER OVERWRITES A LIVE BAR (bar-source wave). mergeBarsByTime
+	// said "incoming is freshest"; for a replay landing on minutes that already
+	// traded live, that put a back-adjusted bar over a real one.
+	merged := mergeSeedKeepingLive(existing, bars)
 	if len(merged) > c.maxBars {
 		merged = merged[len(merged)-c.maxBars:]
 	}
@@ -301,7 +318,8 @@ func (c *BarCache) Upsert(symbol, timeframe string, bars []Bar) {
 		return
 	}
 	bars, bad := dropPlaceholderBars(bars)
-	bars = openStampBars(bars, timeframe) // close-stamp → OPEN-stamp, once, for every reader
+	bars = openStampBars(bars, timeframe)   // close-stamp → OPEN-stamp, once, for every reader
+	bars = stampSource(bars, BarSourceLive) // BAR-SOURCE WAVE: the minute as it traded
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.dropped += int64(bad)
@@ -309,6 +327,13 @@ func (c *BarCache) Upsert(symbol, timeframe string, bars []Bar) {
 		return // the whole update was placeholders
 	}
 	key := barKey(symbol, timeframe)
+	now := time.Now()
+	for i := range bars {
+		// THE BOOT MINUTE IS NEVER A MIXED BAR — detected on the first live bar
+		// after a historical seed; on a mismatch the seed is dropped and this
+		// bar is labelled mixed (values untouched, A24).
+		bars[i], _ = c.detectScaleMismatch(key, bars[i], now)
+	}
 	existing := c.bars[key]
 	for _, b := range bars {
 		if len(existing) == 0 {

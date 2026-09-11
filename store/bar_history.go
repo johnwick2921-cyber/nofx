@@ -47,6 +47,15 @@ type BarHistoryDB struct {
 	// Empty on rows written before the column existed and never backfilled;
 	// InsertBars refuses to write a new row without one.
 	Contract string `gorm:"column:contract"`
+	// Source (BAR-SOURCE WAVE 2026-09-10) names WHICH FEED this bar came from:
+	// BarSourceLive (a bar_update as the minute traded) or BarSourceHistorical
+	// (a bars_historical replay after a subscribe/reconnect). On 2026-09-10 NT8's
+	// replay served the December contract ~290 points below Tradovate's live feed
+	// for the SAME minutes under the SAME label — research facts 16516009 (live,
+	// 22:37 close 29358.25) vs 16518205 (replay, same bar, close 29068.25). A
+	// replay that can be on a different scale than live must never overwrite
+	// live, and a reader must be able to tell which it is holding.
+	Source string `gorm:"column:source"`
 }
 
 // TableName is the bars table (spec name).
@@ -121,6 +130,16 @@ func BarRetentionDays() int {
 	}
 	return 90
 }
+
+// Bar sources. Live is the truth of the minute as it traded; historical is a
+// replay and may be on a different price scale (NT8 merge/back-adjust policy).
+// Mixed marks a bar whose own body spans the two scales — the boot minute when
+// a replay seeded its open and a live update supplied its close.
+const (
+	BarSourceLive       = "live"
+	BarSourceHistorical = "historical"
+	BarSourceMixed      = "mixed"
+)
 
 // ContractMixed marks a bar whose OHLC straddles a contract roll: the AddOn
 // re-subscribed mid-bar and the frame carried the retired contract's open with
@@ -201,6 +220,10 @@ func (s *BarHistoryStore) Migrate() error {
 		if err := s.migrateContractColumn(); err != nil {
 			return err
 		}
+		// BAR-SOURCE WAVE: which feed wrote each row.
+		if err := s.migrateSourceColumn(); err != nil {
+			return err
+		}
 		if err := s.db.Exec("DROP INDEX IF EXISTS idx_bars_sym_tf_time").Error; err != nil {
 			return err
 		}
@@ -229,7 +252,7 @@ func (s *BarHistoryStore) InsertBars(rows []BarHistoryDB) error {
 		}
 		chunk := rows[start:end]
 		placeholders := make([]string, 0, len(chunk))
-		args := make([]interface{}, 0, len(chunk)*10)
+		args := make([]interface{}, 0, len(chunk)*11)
 		for _, r := range chunk {
 			if r.TF == "" {
 				continue // BAR-SOURCE WAVE 2026-09-02: every TF the cache holds
@@ -244,15 +267,33 @@ func (s *BarHistoryStore) InsertBars(rows []BarHistoryDB) error {
 			if strings.TrimSpace(r.Contract) == "" {
 				return fmt.Errorf("bars: refusing %s %s @%d with no contract — the subscription's resolved contract must be stamped at write time (roll wave 2026-09-10)", r.Symbol, r.TF, r.OpenTimeMs)
 			}
-			placeholders = append(placeholders, "(?,?,?,?,?,?,?,?,?,?)")
-			args = append(args, r.Symbol, r.TF, r.OpenTimeMs, r.O, r.H, r.L, r.C, r.V, r.Convention, r.Contract)
+			src := strings.TrimSpace(r.Source)
+			if src != BarSourceLive && src != BarSourceHistorical && src != BarSourceMixed {
+				return fmt.Errorf("bars: refusing %s %s @%d with source %q — every bar names its feed: live, historical or mixed (bar-source wave 2026-09-10)", r.Symbol, r.TF, r.OpenTimeMs, r.Source)
+			}
+			placeholders = append(placeholders, "(?,?,?,?,?,?,?,?,?,?,?)")
+			args = append(args, r.Symbol, r.TF, r.OpenTimeMs, r.O, r.H, r.L, r.C, r.V, r.Convention, r.Contract, src)
 		}
 		if len(placeholders) == 0 {
 			continue
 		}
-		q := "INSERT INTO bars(symbol, tf, open_time_ms, o, h, l, c, v, convention, contract) VALUES " +
+		// THE UPSERT RULE. A REPLAY NEVER OVERWRITES A LIVE BAR.
+		//
+		// This was an unconditional DO UPDATE — harmless while replay and live
+		// shared a scale, and on 2026-09-10 22:39 CT it let a back-adjusted
+		// replay overwrite 186 live bars (~290 points each) across both symbols
+		// and six timeframes. Restored from backup, owner-authorised, in two
+		// WHERE-scoped writes (markers ac76b47b and 33fee48e).
+		//
+		// Live overwrites anything: it is the minute as it traded. Historical
+		// fills only what live never wrote. Mixed is written once and then
+		// behaves as live for precedence — it is what the wire delivered for
+		// that minute, and hiding it behind a later replay would erase the
+		// evidence of the seam.
+		q := "INSERT INTO bars(symbol, tf, open_time_ms, o, h, l, c, v, convention, contract, source) VALUES " +
 			strings.Join(placeholders, ",") +
-			" ON CONFLICT(symbol, tf, open_time_ms) DO UPDATE SET o=excluded.o, h=excluded.h, l=excluded.l, c=excluded.c, v=excluded.v, convention=excluded.convention, contract=excluded.contract"
+			" ON CONFLICT(symbol, tf, open_time_ms) DO UPDATE SET o=excluded.o, h=excluded.h, l=excluded.l, c=excluded.c, v=excluded.v, convention=excluded.convention, contract=excluded.contract, source=excluded.source" +
+			" WHERE NOT (bars.source IN ('live','mixed') AND excluded.source = 'historical')"
 		if err := s.db.Exec(q, args...).Error; err != nil {
 			return err
 		}
@@ -335,7 +376,7 @@ func (s *BarHistoryStore) BarsBetweenOn(symbol, tf, contract string, fromMs, toM
 		return nil, fmt.Errorf("store required")
 	}
 	var out []BarHistoryDB
-	q := s.db.Where("symbol = ? AND tf = ? AND open_time_ms >= ? AND open_time_ms < ?", symbol, tf, fromMs, toMs)
+	q := s.db.Where("symbol = ? AND tf = ? AND open_time_ms >= ? AND open_time_ms < ? AND source <> ?", symbol, tf, fromMs, toMs, BarSourceMixed)
 	if c := strings.TrimSpace(contract); c != "" {
 		q = q.Where("contract = ?", c)
 	}
@@ -392,7 +433,7 @@ func (s *BarHistoryStore) LastNBarsOn(symbol, tf, contract string, n int) ([]Bar
 		return nil, nil
 	}
 	var desc []BarHistoryDB
-	q := s.db.Where("symbol = ? AND tf = ?", symbol, tf)
+	q := s.db.Where("symbol = ? AND tf = ? AND source <> ?", symbol, tf, BarSourceMixed)
 	if c := strings.TrimSpace(contract); c != "" {
 		q = q.Where("contract = ?", c)
 	}

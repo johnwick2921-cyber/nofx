@@ -80,13 +80,25 @@ func WireBarPersistence(st *store.Store) {
 			if src == "store-fallback" {
 				logger.Warnf("bars: persist %s %s stamping %d bar(s) as %s from the STORE FALLBACK — no subscription ACK yet this process", symbol, tf, len(closed), contract)
 			}
+			// BAR-SOURCE WAVE — the `historical` flag this callback has always
+			// received is now RECORDED, not discarded. A bar the ring labelled
+			// mixed (a boot minute across two scales) keeps that label.
+			feedSrc := store.BarSourceLive
+			if historical {
+				feedSrc = store.BarSourceHistorical
+			}
 			rows := make([]store.BarHistoryDB, 0, len(closed))
 			for _, b := range closed {
+				bs := feedSrc
+				if b.Source == ntwire.BarSourceMixed {
+					bs = store.BarSourceMixed
+				}
 				rows = append(rows, store.BarHistoryDB{
 					Symbol: symbol, TF: tf, OpenTimeMs: b.T,
 					O: b.O, H: b.H, L: b.L, C: b.C, V: b.V,
 					Convention: market.StampConvention(tf),
 					Contract:   contract,
+					Source:     bs,
 				})
 			}
 			if err := bh.InsertBars(rows); err != nil {
@@ -132,6 +144,16 @@ func WireBarPersistence(st *store.Store) {
 					// store for the new contract only, and say so ONCE where
 					// the owner will see it. Registered here so it runs with
 					// the same store handle the boot rehydrate used.
+					// BAR-SOURCE WAVE — when the first live bar shows the replay
+					// on a different scale, the ring has dropped its historical
+					// seed; refill it from the store, whose live rows the upsert
+					// rule now protects, and say so ONCE where the owner sees it.
+					ntwire.OnScaleMismatch(func(m ntwire.ScaleMismatch) {
+						rehydrateRingFromStoreWith(bh, server, time.Now(), true)
+						srcCensus, _ := bh.SourceCensus(m.Symbol)
+						logger.Errorf("🚨 P0 — REPLAY AND LIVE ARE ON DIFFERENT PRICE SCALES for %s %s at %s: last replay close %.2f, first live close %.2f, delta %.2f pts (> %.2f%% of price). %d historical bars DROPPED from the ring and refilled from the store's live rows; the straddling bar is labelled mixed and no reader takes it. This is NT8's merge/back-adjust policy on the subscription — filed for the AddOn wave. bars by source now %v. (bar-source wave 2026-09-10)",
+							m.Symbol, m.Timeframe, m.At.Format("15:04:05"), m.LastHistoricalC, m.FirstLiveC, m.DeltaPts, ntwire.ScaleMismatchPct*100, m.HistoricalDropped, srcCensus)
+					})
 					ntwire.OnContractRoll(func(symbol, from, to string, at time.Time) {
 						go func() {
 							// Let the AddOn's post-subscribe replay land first —
@@ -184,9 +206,12 @@ func backfillBars(bh *store.BarHistoryStore, server *ntwire.TCPServer) int {
 		}
 		rows := make([]store.BarHistoryDB, 0, len(closed))
 		for _, b := range closed {
+			// BAR-SOURCE WAVE — the ring stamped each bar at Seed/Upsert; the
+			// backfill carries that through. A ring bar with no source is a
+			// programming error and is refused by InsertBars rather than guessed.
 			rows = append(rows, store.BarHistoryDB{Symbol: pair[0], TF: pair[1], OpenTimeMs: b.T,
 				O: b.O, H: b.H, L: b.L, C: b.C, V: b.V, Convention: market.StampConvention(pair[1]),
-				Contract: contract})
+				Contract: contract, Source: b.Source})
 		}
 		if len(rows) > 0 {
 			if err := bh.InsertBars(rows); err != nil {
@@ -363,7 +388,7 @@ func rehydrateRingFromStoreWith(bh *store.BarHistoryStore, server *ntwire.TCPSer
 		}
 		bars := make([]ntwire.Bar, 0, len(rows))
 		for _, r := range rows {
-			bars = append(bars, ntwire.Bar{T: r.OpenTimeMs, O: r.O, H: r.H, L: r.L, C: r.C, V: r.V})
+			bars = append(bars, ntwire.Bar{T: r.OpenTimeMs, O: r.O, H: r.H, L: r.L, C: r.C, V: r.V, Source: r.Source})
 		}
 		added := cache.RehydrateOlder(symbol, tf, bars)
 		if added == 0 {
@@ -387,6 +412,9 @@ func rehydrateRingFromStoreWith(bh *store.BarHistoryStore, server *ntwire.TCPSer
 		}
 		seen[pair[0]] = true
 		logger.Infof("%s", contractBootLineFor(bh, server, pair[0], rehydrateKept, rehydrateFiltered, reseeded))
+		if sc, err := bh.SourceCensus(pair[0]); err == nil {
+			logger.Infof("%s", SourceBootLine(pair[0], sc, cache.ScaleMismatches(), ntwire.ScaleMismatchPct))
+		}
 	}
 }
 

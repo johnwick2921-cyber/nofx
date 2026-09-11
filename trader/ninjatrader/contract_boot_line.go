@@ -53,6 +53,28 @@ func ContractBootLine(symbol string, fact ntwire.ContractFact, haveFact bool, ce
 		cur, strings.Join(parts, " "), readerBarsKept, readerBarsKept+readerBarsFiltered, reseeded, lastRoll)
 }
 
+// SourceBootLine is the BAR-SOURCE WAVE's boot line: which feed wrote the
+// store's rows, and whether this process has caught the replay on a different
+// scale from live. Every field read; the threshold is stated as [I].
+func SourceBootLine(symbol string, census map[string]int64, mismatches []ntwire.ScaleMismatch, pct float64) string {
+	mm := "none"
+	if len(mismatches) > 0 {
+		parts := make([]string, 0, len(mismatches))
+		for _, m := range mismatches {
+			if m.Symbol != symbol {
+				continue
+			}
+			parts = append(parts, fmt.Sprintf("%s@%s Δ=%.2f (replay %.2f vs live %.2f, %d dropped)",
+				m.Timeframe, kernel.ClockCTSeconds(m.At), m.DeltaPts, m.LastHistoricalC, m.FirstLiveC, m.HistoricalDropped))
+		}
+		if len(parts) > 0 {
+			mm = strings.Join(parts, "; ")
+		}
+	}
+	return fmt.Sprintf("📼 bar source: %s live=%d historical=%d mixed=%d null=%d · replay-never-overwrites-live=on · scale-mismatch threshold=%.2f%% [I] · mismatches this process: %s",
+		symbol, census[store.BarSourceLive], census[store.BarSourceHistorical], census[store.BarSourceMixed], census[""], pct*100, mm)
+}
+
 // contractBootLineFor assembles the line from live sources. Called after the
 // boot rehydrate and again after a roll reseed.
 func contractBootLineFor(bh *store.BarHistoryStore, server *ntwire.TCPServer, symbol string, kept, filtered int, reseeded bool) string {

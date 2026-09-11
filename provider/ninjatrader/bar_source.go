@@ -1,0 +1,167 @@
+package ninjatrader
+
+import (
+	"math"
+	"sync"
+	"time"
+)
+
+// Bar sources, mirrored from store so the ring can stamp without importing it.
+const (
+	BarSourceLive       = "live"
+	BarSourceHistorical = "historical"
+	BarSourceMixed      = "mixed"
+)
+
+// ScaleMismatchPct is the detection threshold for "the replay and the live feed
+// are on different price scales": the first live close after a historical seed
+// differing from the last historical close by more than this fraction of price.
+// A one-minute bar does not move half a percent of an index; a back-adjusted
+// replay against an unadjusted live feed does (MNQ 1.0%, ES 0.86% on
+// 2026-09-10). Stated on the boot line as [I]; NOFX_BAR_SCALE_MISMATCH_PCT
+// overrides.
+var ScaleMismatchPct = 0.005
+
+// ScaleMismatch records one detection for the boot line and the P0.
+type ScaleMismatch struct {
+	Symbol, Timeframe string
+	At                time.Time
+	LastHistoricalC   float64
+	FirstLiveC        float64
+	DeltaPts          float64
+	HistoricalDropped int
+}
+
+// ScaleMismatchListener is called ONCE per (symbol, timeframe) per process.
+type ScaleMismatchListener func(m ScaleMismatch)
+
+var (
+	scaleListenersMu sync.RWMutex
+	scaleListeners   []ScaleMismatchListener
+)
+
+// OnScaleMismatch registers a listener (the persist wire registers one to
+// re-rehydrate from the store's live rows and raise the P0).
+func OnScaleMismatch(fn ScaleMismatchListener) {
+	if fn == nil {
+		return
+	}
+	scaleListenersMu.Lock()
+	scaleListeners = append(scaleListeners, fn)
+	scaleListenersMu.Unlock()
+}
+
+func stampSource(bars []Bar, src string) []Bar {
+	for i := range bars {
+		bars[i].Source = src
+	}
+	return bars
+}
+
+// mergeSeedKeepingLive is mergeBarsByTime with the one rule this wave exists
+// for: on a same-time collision an EXISTING live (or mixed) bar is kept over an
+// INCOMING historical one. The old merge said "incoming is freshest" — true for
+// a live update over a stale seed, false for a replay over a bar that traded.
+func mergeSeedKeepingLive(existing, incoming []Bar) []Bar {
+	out := make([]Bar, 0, len(existing)+len(incoming))
+	i, j := 0, 0
+	for i < len(existing) && j < len(incoming) {
+		switch {
+		case existing[i].T < incoming[j].T:
+			out = append(out, existing[i])
+			i++
+		case existing[i].T > incoming[j].T:
+			out = append(out, incoming[j])
+			j++
+		default:
+			if existing[i].Source == BarSourceLive || existing[i].Source == BarSourceMixed {
+				out = append(out, existing[i]) // the minute as it traded stays
+			} else {
+				out = append(out, incoming[j])
+			}
+			i++
+			j++
+		}
+	}
+	out = append(out, existing[i:]...)
+	out = append(out, incoming[j:]...)
+	return out
+}
+
+// detectScaleMismatch runs on a LIVE upsert. If the bar it is about to write
+// is the first live bar for this key, the ring holds a historical seed, and the
+// live close differs from the last historical close by more than
+// ScaleMismatchPct of price: the replay is on a different scale.
+//
+// Returns the (possibly re-stamped) bar and whether a mismatch was found. On a
+// mismatch the incoming bar — whose open the AddOn copied from its own
+// historical series and whose close is live — is stamped MIXED, and every
+// historical bar for the key is DROPPED from the ring: the store's live rows,
+// which the upsert rule now protects, are the right thing to refill it from.
+//
+// Not a value edit (A24): the bar keeps the values the wire delivered; it is
+// labelled so no reader takes it, and the label is the finding.
+func (c *BarCache) detectScaleMismatch(key string, b Bar, now time.Time) (Bar, bool) {
+	existing := c.bars[key]
+	if len(existing) == 0 {
+		return b, false
+	}
+	if c.liveSeen == nil {
+		c.liveSeen = make(map[string]bool)
+	}
+	if c.liveSeen[key] {
+		return b, false
+	}
+	c.liveSeen[key] = true
+	// last historical bar strictly before this minute
+	var last *Bar
+	for i := len(existing) - 1; i >= 0; i-- {
+		if existing[i].T < b.T && existing[i].Source == BarSourceHistorical {
+			last = &existing[i]
+			break
+		}
+	}
+	if last == nil || last.C == 0 {
+		return b, false
+	}
+	delta := math.Abs(b.C - last.C)
+	if delta <= ScaleMismatchPct*math.Abs(last.C) {
+		return b, false
+	}
+	// Different scales. Drop the seed; label the straddling bar.
+	kept := existing[:0]
+	dropped := 0
+	for _, e := range existing {
+		if e.Source == BarSourceHistorical {
+			dropped++
+			continue
+		}
+		kept = append(kept, e)
+	}
+	c.bars[key] = kept
+	b.Source = BarSourceMixed
+	sym, tf, _ := splitBarKey(key)
+	m := ScaleMismatch{Symbol: sym, Timeframe: tf, At: now, LastHistoricalC: last.C, FirstLiveC: b.C, DeltaPts: delta, HistoricalDropped: dropped}
+	if c.mismatches == nil {
+		c.mismatches = make(map[string]ScaleMismatch)
+	}
+	c.mismatches[key] = m
+	scaleListenersMu.RLock()
+	ls := append([]ScaleMismatchListener(nil), scaleListeners...)
+	scaleListenersMu.RUnlock()
+	for _, fn := range ls {
+		go fn(m)
+	}
+	return b, true
+}
+
+// ScaleMismatches returns every detection this process, for the boot line.
+func (c *BarCache) ScaleMismatches() []ScaleMismatch {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	out := make([]ScaleMismatch, 0, len(c.mismatches))
+	for _, m := range c.mismatches {
+		out = append(out, m)
+	}
+	return out
+}

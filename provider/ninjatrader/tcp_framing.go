@@ -502,6 +502,14 @@ type Bar struct {
 	L float64 `json:"l"`
 	C float64 `json:"c"`
 	V float64 `json:"v"` // volume can be tick-volume (fractional)
+	// Source is GO-SIDE ONLY (never on the wire; the AddOn does not send it):
+	// which feed delivered this bar — "live" (bar_update), "historical"
+	// (bars_historical replay) or "mixed" (a boot minute whose open came from a
+	// replay and whose close from live). Stamped by the cache at Seed/Upsert.
+	// BAR-SOURCE WAVE 2026-09-10: NT8's replay served the same minutes ~290
+	// points from the live feed under one label, and nothing could tell which
+	// it was holding.
+	Source string `json:"-"`
 }
 
 // BarsSubscribePayload is the Go-server → C#-AddOn subscribe frame per
