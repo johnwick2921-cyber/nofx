@@ -2,6 +2,7 @@ package ninjatrader
 
 import (
 	"fmt"
+	"nofx/kernel"
 	"sort"
 	"strings"
 	"time"
@@ -22,7 +23,7 @@ func ContractBootLine(symbol string, fact ntwire.ContractFact, haveFact bool, ce
 	if haveFact {
 		when := "boot"
 		if !fact.ReceivedAt.IsZero() {
-			when = fact.ReceivedAt.Format("15:04:05")
+			when = kernel.ClockCTSeconds(fact.ReceivedAt)
 		}
 		cur = fmt.Sprintf("%s (source=%s@%s)", fact.Contract, fact.Source, when)
 	}
@@ -42,7 +43,7 @@ func ContractBootLine(symbol string, fact ntwire.ContractFact, haveFact bool, ce
 	parts = append(parts, fmt.Sprintf("null=%d", census[""]))
 	lastRoll := "none"
 	if haveFact && fact.Previous != "" {
-		lastRoll = fmt.Sprintf("%s→%s @%s", fact.Previous, fact.Contract, fact.RolledAt.Format("15:04:05"))
+		lastRoll = fmt.Sprintf("%s→%s @%s", fact.Previous, fact.Contract, kernel.ClockCTSeconds(fact.RolledAt))
 	}
 	reseeded := "no"
 	if ringReseeded {

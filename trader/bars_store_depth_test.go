@@ -183,9 +183,13 @@ func TestRVBaselineCarriesItsActualDayCount(t *testing.T) {
 // PIN D2-F — A29. The new depth path and the day-count helper are WIRED.
 func TestD2WiredAtTheThreeCallSites(t *testing.T) {
 	for fn, wantIn := range map[string]string{
-		"barsWithStoreDepth(":         "trader/auto_trader_planner.go",
-		"barsWithStoreDepthFrom(":     "trader/bars_store_depth.go",
-		"LastNBars(":                  "trader/bars_store_depth.go",
+		"barsWithStoreDepth(":     "trader/auto_trader_planner.go",
+		"barsWithStoreDepthFrom(": "trader/bars_store_depth.go",
+		// ROLL WAVE — the depth path reads the CONTRACT-FILTERED form. The bare
+		// LastNBars( no longer appears here (and the reader-filter lint fails
+		// if it ever does); the wiring this pins is that the store read exists
+		// on the depth path at all.
+		"LastNBarsOn(":                "trader/bars_store_depth.go",
 		"RVBaselineFrom5mDays(":       "trader/regime_input_window.go",
 		"rvBaselineFallback5mBarsAsk": "trader/auto_trader_planner.go",
 		"at.barsWithStoreDepth(at.fu": "trader/auto_trader_weekly.go",

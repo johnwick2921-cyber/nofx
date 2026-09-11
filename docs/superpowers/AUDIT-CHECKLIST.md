@@ -4206,3 +4206,79 @@ candidate/evaluator prices, production call-site removals, and baseline output
 parity. C1–C4 and W1's pinned basis are in the
 [105 report](reports/2026-09-10-scenario-level-identity.md), initially published
 in `f19afe5dbd04199ddaa253a51958c0b909b8c4ae` before implementation.
+
+## CLASS 117 — ONE IDENTITY, TWO RESOLVERS, RESOLVED AT DIFFERENT MOMENTS (born 2026-09-10, the contract roll)
+
+**Name.** Two subsystems need the same identity — here, *which futures
+contract is "MNQ" right now* — and each resolves it for itself from the same
+rule. The rule is deterministic, so they agree… **whenever they happen to
+evaluate it at the same time.** They do not. One evaluates at subscribe-time and
+caches; the other evaluates at request-time, fresh. Between the rule changing its
+answer and the cached side re-evaluating, the two halves of one system are on
+different instruments, and nothing in either half can tell.
+
+**Root cause, measured [A].** `VLContractResolver.cs:80` picks the front month
+from `DateTime.UtcNow` (expiry − 8 days). September 2026 expires the 18th, so
+the rule flipped to December at 00:00 UTC on the 11th — **19:00 CT on the 10th**.
+
+- **Bars** resolve at subscribe-time (`VLBarsSubscriptionManager.cs:177`) and do
+  not re-evaluate until a reconnect. The subscription stayed on `MNQ 09-26`
+  until the 21:15:03 CT reconnect ACKed `MNQ 12-26` — research archive facts
+  16480370 (last September `bar_update`, 21:14:56) and 16480372 (first December
+  `bars_historical`, 21:15:03) pin the switch to seven seconds.
+- **Orders** resolve at request-time (`VLTraderTCPClient.cs:907`, `:1140`), fresh
+  from the clock. **Order 152**, placed 19:11:05 CT at 29094 — a September
+  price — resolved to `MNQ 12-26` and sat ~291 points below December's market
+  until the boot sweep cancelled it at 21:15:03.
+
+For 135 minutes the bars and the orders were on different contracts, on
+different price scales, and every log line said `MNQ`.
+
+**The second half — a basis change with no marker.** When the subscription did
+roll, the ring kept ~2,000 September bars and appended December ones. Nothing
+tagged the seam. A ~292-point step presented to every reader as a move: the desk
+strip read a 359-point RANGE (10.5× ATR), plan v7 at 21:29 seated **7 of 12
+levels on the retired scale** and one IFVG *inside the gap itself*, and three
+touch episodes (ids 1886–1888) recorded the roll bar sweeping through phantom
+levels as market behaviour. The 21:15/21:16/21:17 bars carried one contract's
+open and the other's close — bodies of +284.50, +296.75, +276.00 on a tape whose
+bodies are otherwise single digits.
+
+**Why it is a class and not a bug.** Any identity resolved from a *rule* rather
+than *told* by the authority has this shape: two callers of the rule are two
+clocks. The fix is never "call the rule more often" — it is to have ONE source
+that *announces* the identity and its change (here, the AddOn's `subscribed`
+ACK), and to stamp every fact with the identity it was received under so a
+change is visible in the record rather than only in the prices.
+
+**Probe, five questions:**
+1. For any identity two subsystems both need — contract, session, trade date,
+   account, schema version — where does EACH one get it? If the answer is "each
+   calls the same function", ask WHEN each calls it. Two call times are two
+   answers.
+2. Is the identity DERIVED (from a date, a config, a rule) or RECEIVED (from the
+   authority that owns it)? Derived identities drift silently; received ones
+   arrive with a timestamp you can stamp on everything after it.
+3. Does the persisted record carry the identity beside each fact? If a series
+   can change basis and nothing marks the row, every reader of the series is
+   already reading across a seam it cannot see.
+4. What does a reader see at the seam? Here: a fair-value gap, a 10× range, seven
+   levels. **A basis change reads as the most dramatic market event of the day**,
+   and the detectors will dutifully file it.
+5. When the identity changes, what is PURGED? A cache keyed without the identity
+   holds both sides of the change forever, and "rehydrate from the store" — the
+   thing that made the ring deep — is the path that carried the mixed tape back
+   in on the next boot.
+
+**Law:** **an identity that two things share is RECEIVED from one authority and
+STAMPED on every fact, never derived twice.** Where the authority announces a
+change, the caches keyed without it are purged, the readers filter to the
+current value, and the retired facts stay as history under their own label —
+filtered, never deleted.
+
+**Corollary.** The dispatch that ordered this fix stated the boundary as 19:00 CT
+— the rule's flip — while its own cited report said 21:15. The tape decides:
+every close-to-close delta from 18:55 to 21:13 is under seven points, and no
+backfill keyed on 19:00 would have been right. **The rule's answer and the wire's
+answer are different facts, and only the second is in the bars.** This is A17
+(measure first) in its most literal form.

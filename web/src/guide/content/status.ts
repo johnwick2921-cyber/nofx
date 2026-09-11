@@ -183,7 +183,10 @@ export const status: GuideSection = {
           'Age of the newest 1m bar, the NT8 link state, and the AddOn build the broker is actually running.',
         ],
         ['PLANNER', 'Idle, or a read in flight and since when.'],
-        ['RANGE', "The session's high, low and range against ATR5m."],
+        [
+          'RANGE',
+          "The session's high, low and range against ATR5m — on the CURRENT contract only. Since 2026-09-10 a range that suddenly reads ten times ATR is not a market event; it was the contract roll, and the ring no longer holds both contracts at once.",
+        ],
         [
           'LAST FILL',
           'The most recent fill. Slippage reads UNKNOWN because the intended price is not stored beside the fill.',
@@ -236,6 +239,11 @@ export const status: GuideSection = {
     {
       kind: 'p',
       text: "GET /api/risk/stream-cuts. Every early end of an AI stream — a peer FIN ('cut') or our own watchdog ('watchdog') — grouped by how long the connection had been idle before the call reused it, with what the identical resend then did. Born from 2026-09-03 08:11:38: a planner stream died to a peer FIN at 283.4s with 50,489 reasoning chars in, on a connection reused after 101,212ms idle; the resend that succeeded rode one idle 34,935ms. If cuts cluster above some idle threshold, setting IdleConnTimeout below it is the whole fix and needs nothing from the provider. NOTHING IS SET — the ruling was three more cuts before deciding. An unresolved resend counts as unresolved, never as a loss, and a connection that was not reused gets its own bucket so fresh dials never read as evidence about idleness. idle_before_ms and conn_reused ride every ai_call log line now, so this is greppable as well as queryable.",
+    },
+    { kind: 'h', text: 'The tape is one contract' },
+    {
+      kind: 'p',
+      text: "MODE now names the contract the bars are on — 'contract=MNQ 12-26 since 21:15:03 (subscribed@21:15:03)' — and, after a roll, 'ROLLED from MNQ 09-26 at …'. That value comes from the AddOn's subscription ACK, the one frame that names the instrument; it is never derived from a date, and 'n/a' means no ACK has arrived yet, never a guess. On 2026-09-10 at 21:15 CT the subscription rolled September → December on a reconnect, the bar ring kept ~2,000 September bars under the December ones, and a ~292-point step presented to every reader as a move: the desk strip showed a 359-point RANGE, and the 21:29 plan seated 7 of its 12 levels on the retired scale plus one 'fair-value gap' that was the roll itself. Now every stored bar carries its contract, the ring is purged and reseeded on roll, every reader filters to the current contract, and a bar whose window spans the roll is 'unrecomputable:spans_roll' — excluded, never read as one series, never deleted. The boot line '📜 contract:' prints the current contract with its source, the count of stored bars per contract, how many the filter kept out, and the last roll.",
     },
     { kind: 'h', text: 'Traffic light — one glance' },
     {

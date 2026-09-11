@@ -36,7 +36,7 @@ var wireBarPersistenceOnce sync.Once
 func contractFor(bh *store.BarHistoryStore, server *ntwire.TCPServer, symbol string) (contract, source string) {
 	if server != nil {
 		if f, ok := server.CurrentContract(symbol); ok {
-			return f.Contract, "subscribed@" + f.ReceivedAt.Format("15:04:05")
+			return f.Contract, "subscribed@" + kernel.ClockCTSeconds(f.ReceivedAt)
 		}
 	}
 	if bh != nil {

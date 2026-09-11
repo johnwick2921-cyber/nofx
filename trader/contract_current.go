@@ -1,6 +1,7 @@
 package trader
 
 import (
+	"nofx/kernel"
 	"time"
 
 	ntwire "nofx/provider/ninjatrader"
@@ -16,7 +17,7 @@ func (at *AutoTrader) currentContract(symbol string) (contract, source string) {
 	if nt := at.armedTrader(); nt != nil {
 		if srv := nt.GetServer(); srv != nil {
 			if f, ok := srv.CurrentContract(symbol); ok {
-				return f.Contract, "subscribed@" + f.ReceivedAt.Format("15:04:05")
+				return f.Contract, "subscribed@" + kernel.ClockCTSeconds(f.ReceivedAt)
 			}
 		}
 	}

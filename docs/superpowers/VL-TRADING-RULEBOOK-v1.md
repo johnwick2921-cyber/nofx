@@ -22,6 +22,41 @@ This revision separates **A. what runs**, **B. what is wanted**, and **C. what i
 
 Every implementation statement in this section cites a code line. Defaults and conditional branches are described as such; no unresolved setting is silently called enabled.
 
+### The tape is one contract — implementation addition, awaiting cutover
+
+**Roll wave, 2026-09-10; recording only until its boot.** Every bar the store
+holds carries the contract it was received on (`bars.contract`), stamped at
+write from the AddOn's most recent `subscribed` ACK — the one frame that names
+the instrument. The current contract is that ACK's value with its receipt time,
+exposed as `CurrentContract(symbol)`; it is never derived from a date. When the
+ACK names a different contract than it last did, the symbol's ring is purged on
+every timeframe, reseeded from the store for the new contract only, and the
+event is logged with both names and raised once as a P0. Every live bar reader
+asks for a contract: the current one for the tape being traded, or the contract
+a historical window was on; a window that spans a roll is
+`unrecomputable:spans_roll` and is never read as one series. Retired bars are
+filtered, never deleted. On roll the book re-seats: levels seated on the retired
+scale are phantom on the new one and are replaced by the next planner read from
+the purged ring.
+
+What this corrects: on 2026-09-10 at 21:15 CT the subscription rolled MNQ 09-26
+→ 12-26 on reconnect, the ring kept ~2,000 September bars under December ones,
+and a ~292-point basis presented to every reader as a move. Plan v7 (21:29 CT)
+seated 7 of 12 levels on the retired scale and one IFVG inside the gap itself.
+The AddOn resolves bars at subscribe-time and orders at request-time from the
+same date rule (`VLContractResolver.cs:80`), so for the 135 minutes between the
+rule's flip (19:00 CT) and the reconnect they disagreed — order 152 was placed at
+a September price on the December contract. That resolver is filed for the next
+AddOn wave; this wave makes Go read one contract regardless.
+
+Implementation: `store/bar_contract_roll.go`, `store/bar_history.go`
+(`InsertBars` refuses an unstamped bar; `LastNBarsOn`, `BarsBetweenOn`,
+`WindowContract`), `provider/ninjatrader/contract_roll.go`
+(`CurrentContract`, `observeContract`, `OnContractRoll`),
+`trader/ninjatrader/bar_persist_wire.go` (`contractFor`, the filtered
+rehydrate, the roll listener), `trader/contract_current.go`,
+`trader/bars_store_depth.go`, `trader/desk_facts.go` (MODE line).
+
 ### Scenario identity — implementation addition, awaiting cutover
 
 **105, recording only; not yet live.** A scenario names its level by candidate id.
