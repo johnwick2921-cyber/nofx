@@ -163,9 +163,9 @@ func BuildLevelZones(raw []DetectedLevel, price, atr5m float64, inputs map[strin
 		broad := s.Lo != nil && (atr5m <= 0 || hi-lo > o.BroadATR*atr5m || hi-lo > o.MaxWidthATR*atr5m)
 		best := -1
 		distance := math.Inf(1)
-		if !broad && atr5m > 0 {
+		if !broad && s.Lo != nil && atr5m > 0 {
 			for j, c := range v.Zones {
-				if c.Broad {
+				if c.Broad || c.Lo == nil {
 					continue
 				}
 				d := math.Abs(c.Anchor - l.Price)

@@ -550,7 +550,12 @@ func BuildPlannerPrompt(in PlannerInput) string {
 		// distance in ATR5m, projections beyond the mapped range, and the entry
 		// shortlist in reachability order. Rendered BELOW the ranked table, which
 		// is left exactly as the scorer produced it (the score is untouched).
-		if mb := RenderIdentityMapBlock(BuildMapCandidates(in.Levels, in.Price, in.ATR5m, MapCandidateOpts{}), in.Price); mb != "" {
+		candidates := BuildMapCandidates(in.Levels, in.Price, in.ATR5m, MapCandidateOpts{})
+		mb := RenderIdentityMapBlock(candidates, in.Price)
+		if in.Zones != nil {
+			mb = RenderScoredReferenceBlock(candidates, in.Price)
+		}
+		if mb != "" {
 			b.WriteString("\n")
 			b.WriteString(mb)
 		}

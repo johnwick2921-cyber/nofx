@@ -36,19 +36,48 @@ func TestLevelZonesOwnerSnapshot(t *testing.T) {
 		raw = append(raw, r.Origin)
 	}
 	before, _ := json.Marshal(raw)
-	view := BuildLevelZones(raw, fixture.Price, fixture.ATR, nil, DefaultZoneOptions(12), now)
+	// Recorded defining candles supplement output-only metadata absent from the old JSON.
+	widthData, err := os.ReadFile("../docs/superpowers/reports/2026-09-11-level-zones-evidence/pivot-width-evidence.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var evidence struct {
+		Rows []struct {
+			TF  string                                   `json:"tf"`
+			ATR float64                                  `json:"atr"`
+			Bar struct{ Open, High, Low, Close float64 } `json:"bar"`
+		} `json:"rows"`
+	}
+	if err = json.Unmarshal(widthData, &evidence); err != nil {
+		t.Fatal(err)
+	}
+	inputs := map[string]ZoneWidthInput{}
+	for _, l := range raw {
+		if l.Kind == KindSWGH && l.Price == 29475 {
+			for _, r := range evidence.Rows {
+				if r.TF == l.TF {
+					wick := ZonePivotWick(market.Kline{Open: r.Bar.Open, High: r.Bar.High, Low: r.Bar.Low, Close: r.Bar.Close}, true)
+					inputs[ZoneSourceKey(l)] = ZoneWidthInput{ATR: r.ATR, Wick: &wick}
+				}
+			}
+		}
+	}
+	view := BuildLevelZones(raw, fixture.Price, fixture.ATR, inputs, DefaultZoneOptions(12), now)
 	after, _ := json.Marshal(raw)
 	if string(before) != string(after) {
 		t.Fatal("render changed detector anchors/bounds")
 	}
-	if view.Broad != 164 || len(view.Zones) != 222 || view.Merged != 44 {
+	if view.Broad != 164 || len(view.Zones) != 498 || view.Merged != 25 {
 		t.Fatalf("native-bound census: %+v", view.Counts())
 	}
-	if view.WidestMerged > fixture.ATR || view.WidestMerged != 41.5 {
+	if view.WidestMerged > fixture.ATR {
 		t.Fatalf("width %g", view.WidestMerged)
 	}
 	var pair, daily bool
 	for _, z := range view.Zones {
+		if len(z.Sources) > 1 && (z.Incomplete || z.Lo == nil || *z.Hi-*z.Lo > fixture.ATR) {
+			t.Fatal("merge width must be known and under cap")
+		}
 		a, b := false, false
 		for _, s := range z.Sources {
 			if s.Price == 29475 && s.Kind == KindSWGH {
@@ -65,10 +94,24 @@ func TestLevelZonesOwnerSnapshot(t *testing.T) {
 		t.Fatalf("pair=%v daily separate=%v", pair, daily)
 	}
 	prompt := BuildPlannerPrompt(PlannerInput{Now: now, TradeDate: "2026-09-11", Session: "NY", Price: fixture.Price, Zones: &view})
+	t.Logf("%s; rendered bytes=%d", view.Counts(), len(view.Render()))
 	for _, name := range []string{"SWG-H·5m", "SWG-H·15m", "Demand·1d", "28810.75", "29202.50"} {
 		if !strings.Contains(prompt, name) {
 			t.Errorf("model table lost %s", name)
 		}
+	}
+}
+
+func TestLevelZonesSingleShortlistWithLegacyIdentityReferences(t *testing.T) {
+	now := time.Date(2026, 9, 11, 15, 30, 0, 0, time.UTC)
+	l := DetectedLevel{Kind: KindRound, Price: 100, Lo: 100, Hi: 100, Label: "RN 100"}
+	v := BuildLevelZones([]DetectedLevel{l}, 100, 24, nil, DefaultZoneOptions(12), now)
+	p := BuildPlannerPrompt(PlannerInput{Now: now, Session: "NY", Price: 100, ATR5m: 24, Levels: []ScoredLevel{{DetectedLevel: l}}, Zones: &v})
+	if strings.Count(p, "ENTRY SHORTLIST") != 1 {
+		t.Fatal("two incompatible shortlist orderings rendered")
+	}
+	if !strings.Contains(p, "id=NULL") {
+		t.Fatal("legacy identity references discarded")
 	}
 }
 
@@ -83,6 +126,8 @@ func TestLevelZonesRankingIgnoresHTFAndKeepsAllReferences(t *testing.T) {
 		t.Fatal("touch term not connected to shortlist or loser dropped")
 	}
 	raw[1].HTF = false
+	raw[1].TF = "5m"
+	inputs[ZoneSourceKey(raw[1])] = ZoneWidthInput{PriorTouches: &count}
 	w := BuildLevelZones(raw, 100, 24, inputs, o, now)
 	if *v.Zones[1].RankValue != *w.Zones[1].RankValue {
 		t.Fatal("HTF affects order")
@@ -135,7 +180,7 @@ func TestLevelZonesInputsExcludeFutureBarsAndRequireFormation(t *testing.T) {
 
 func TestLevelZonesCompatibilityAndNoChain(t *testing.T) {
 	now := time.Date(2026, 9, 11, 15, 30, 0, 0, time.UTC) // 10:30 NY session, CT
-	raw := []DetectedLevel{{Kind: KindEQH, Price: 100, Lo: 100, Hi: 100, Label: "a"}, {Kind: KindEQH, Price: 112, Lo: 112, Hi: 112, Label: "b"}, {Kind: KindEQH, Price: 124, Lo: 124, Hi: 124, Label: "c"}}
+	raw := []DetectedLevel{{Kind: KindEQH, Price: 100, Lo: 99.5, Hi: 100.5, Label: "a"}, {Kind: KindEQH, Price: 112, Lo: 111.5, Hi: 112.5, Label: "b"}, {Kind: KindEQH, Price: 124, Lo: 123.5, Hi: 124.5, Label: "c"}}
 	opts := DefaultZoneOptions(12)
 	v := BuildLevelZones(raw, 110, 24, nil, opts, now)
 	if len(v.Zones) != 2 {
@@ -155,11 +200,22 @@ func TestLevelZonesCompatibilityAndNoChain(t *testing.T) {
 func TestLevelZonesWidthFamilyAndUnknown(t *testing.T) {
 	now := time.Date(2026, 9, 11, 15, 30, 0, 0, time.UTC)
 	raw := []DetectedLevel{{Kind: KindSWGL, TF: "1d", Price: 100, Lo: 100, Hi: 100, Label: "daily"}, {Kind: KindSWGL, TF: "4h", Price: 100, Lo: 100, Hi: 100, Label: "4h"}, {Kind: KindSWGL, TF: "1h", Price: 100, Lo: 100, Hi: 100, Label: "1h"}, {Kind: KindPOC, Price: 100, Lo: 100, Hi: 100, Label: "POC"}, {Kind: KindRound, Price: 100, Lo: 100, Hi: 100, Label: "round"}, {Kind: KindPDH, Price: 100, Lo: 100, Hi: 100, Label: "PDH"}, {Kind: KindOB, Price: 100, Lo: 98, Hi: 102, Label: "OB"}}
-	v := BuildLevelZones(raw, 100, 24, nil, DefaultZoneOptions(12), now)
+	wick := 1.0
+	known := map[string]ZoneWidthInput{}
+	for _, l := range raw {
+		known[ZoneSourceKey(l)] = ZoneWidthInput{ATR: 4, Wick: &wick}
+	}
+	for n, want := range map[int]int{3: 1, 4: 2, 5: 3, 7: 3} {
+		part := BuildLevelZones(raw[:n], 100, 24, known, DefaultZoneOptions(12), now)
+		if len(part.Zones) != 1 || part.Zones[0].FamilyCount != want {
+			t.Fatalf("%d sources: want %d independent families, got %+v", n, want, part.Zones)
+		}
+	}
+	v := BuildLevelZones(raw, 100, 24, known, DefaultZoneOptions(12), now)
 	if len(v.Zones) != 1 || v.Zones[0].FamilyCount != 3 || len(v.Zones[0].Families) != 5 || len(v.Zones[0].Sources) != 7 {
 		t.Fatalf("families/names: %+v", v.Zones)
 	}
-	if v.NullWidths != 5 {
+	if v.NullWidths != 0 {
 		t.Fatalf("missing wick/ATR must be NULL, got %d", v.NullWidths)
 	}
 	if *v.Zones[0].Lo != 98 || *v.Zones[0].Hi != 102 {
@@ -170,5 +226,17 @@ func TestLevelZonesWidthFamilyAndUnknown(t *testing.T) {
 	v = BuildLevelZones(raw[:1], 100, 24, widths, DefaultZoneOptions(12), now)
 	if *v.Zones[0].Lo != 95 || *v.Zones[0].Hi != 105 {
 		t.Fatal("max(wick,k*ATR)/2 not applied")
+	}
+}
+
+func TestLevelZonesUnknownWidthCannotPassCompatibility(t *testing.T) {
+	now := time.Date(2026, 9, 11, 15, 30, 0, 0, time.UTC)
+	raw := []DetectedLevel{{Kind: KindSWGH, Price: 100, Lo: 100, Hi: 100, Label: "unknown"}, {Kind: KindOB, Price: 100, Lo: 98, Hi: 102, Label: "known"}}
+	v := BuildLevelZones(raw, 100, 24, nil, DefaultZoneOptions(12), now)
+	if len(v.Zones) != 2 || v.NullWidths != 1 || v.Merged != 0 {
+		t.Fatal("unknown width passed the maximum-width condition")
+	}
+	if ZonePivotWick(market.Kline{Open: 29434, High: 29475, Low: 29383.25, Close: 29472}, true) != 3 {
+		t.Fatal("opposite wick widened a swing high")
 	}
 }

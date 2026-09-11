@@ -167,7 +167,7 @@ func swingPointsFor(agg []market.Kline, tfMin int, now time.Time) []DetectedLeve
 		// Presentation evidence from the exact selected pivot, after selection.
 		for _, bar := range closed {
 			if bar.OpenTime == s.timeMs {
-				wick := ZoneBarWick(bar)
+				wick := ZonePivotWick(bar, s.high)
 				out[len(out)-1].ZoneDefiningWick = &wick
 				break
 			}

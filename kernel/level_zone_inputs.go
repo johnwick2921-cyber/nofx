@@ -6,6 +6,14 @@ import (
 	"time"
 )
 
+// The defining wick is on the selected swing side, not the opposite tail.
+func ZonePivotWick(b market.Kline, high bool) float64 {
+	if high {
+		return b.High - math.Max(b.Open, b.Close)
+	}
+	return math.Min(b.Open, b.Close) - b.Low
+}
+
 func ZoneBarWick(b market.Kline) float64 {
 	return math.Max(b.High-math.Max(b.Open, b.Close), math.Min(b.Open, b.Close)-b.Low)
 }

@@ -335,7 +335,13 @@ func RenderIdentityMapBlock(cs []MapCandidate, price float64) string {
 	return renderMapBlock(cs, price, true)
 }
 
-func renderMapBlock(cs []MapCandidate, price float64, showID bool) string {
+// RenderScoredReferenceBlock preserves the legacy identity/score references
+// without offering a second entry ordering beside the full zone shortlist.
+func RenderScoredReferenceBlock(cs []MapCandidate, price float64) string {
+	return renderMapBlock(cs, price, true, false)
+}
+
+func renderMapBlock(cs []MapCandidate, price float64, showID bool, shortlist ...bool) string {
 	if len(cs) == 0 {
 		return ""
 	}
@@ -370,6 +376,9 @@ func renderMapBlock(cs []MapCandidate, price float64, showID bool) string {
 		fmt.Fprintf(&b, "  %-9s %-44s %s  %-16s %s%s pt / %s ATR%s\n",
 			trimFloat(c.Price), names, grade, c.Role,
 			sign, trimFloat(math.Abs(c.Distance)), c.DistanceATRLabel(), tail)
+	}
+	if len(shortlist) > 0 && !shortlist[0] {
+		return b.String()
 	}
 	short := EntryShortlist(cs)
 	if len(short) == 0 {

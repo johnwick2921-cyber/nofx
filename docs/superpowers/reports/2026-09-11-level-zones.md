@@ -1,4 +1,4 @@
-# Level zones — corrected compatibility implementation; awaiting validation and cutover
+# Level zones — compatibility implemented; pre-existing suite failure blocks cutover
 
 ## C1 — the owner's four lines, traced first
 
@@ -302,3 +302,144 @@ mutant builds and width pin KILLS it. Merge mutation `d > o.MergeATR*atr5m` →
 `d > .01*atr5m`: builds, compatibility pin KILLS it. Further mutations/full
 suites, clean build, binary-derived Guide revision, merge and live proof remain
 pending. No deployment GO has been requested or used for this new wave.
+
+## Validation checkpoint before A23 stop — 2026-09-11
+
+[A] Full frontend suite **62 files / 427 tests PASS**, TypeScript PASS.
+The first sandboxed run failed to spawn Go (`EPERM`) in the branding suite;
+rerunning with process permission passes all eight branding tests. The dispatch's
+anticipated brand-scope failure was therefore NOT REPRODUCED in this run.
+
+[A] Five required semantic mutations all build and are KILLED through
+`scripts/mutate.sh`: width (`o.WidthK*in.ATR` → `.01*in.ATR`); merge distance
+(`o.MergeATR*atr5m` → `.01*atr5m`); name carrier (`Label: l.Label` →
+`Label: "lost"`); family count (`len(z.Families)` → `len(z.Sources)`);
+HTF ordering (insert `if z.Sources[0].TF == "1d" { rank *= 1.2 }`).
+The family pin includes one/two/three-family progression, not just the cap.
+A production dataflow mutation `in.Zones = &zoneView` → `in.Zones = nil`
+also builds and is KILLED by the wiring guard. Mutants were restored.
+The model now has one zone ENTRY SHORTLIST, while the older score/identity
+reference rows remain available without presenting a competing shortlist.
+
+[A] `go test ./...` is **FAIL**, solely on these two test failures in
+`nofx/trader`; kernel (including Stage A parity), store, API, deploy and the
+other listed packages pass:
+
+- `TestOneSetupDeclinedPreBootAuthorizationRetiredNeverPlaced`
+- `TestLiveConditionPlacesOnLoopback`
+
+Feature suite logs: `book age 35m0s exceeds the 1m0s bound`.
+**A/B on unchanged RUNNING SOURCE** in clean clone
+`/tmp/level-zones-baseline/nofx`, detached at
+`802fb00b09e51f9801e8d4fbd1bf156c86865d95`:
+
+```sh
+go test ./trader -run '^(TestOneSetupDeclinedPreBootAuthorizationRetiredNeverPlaced|TestLiveConditionPlacesOnLoopback)$' -count=1
+```
+
+Both fail again, `nofx/trader 4.403s`, now showing `book age 30m0s exceeds the
+1m0s bound`. [A] `shadowWireHarness` seeds `OrderSnapshots().PutAt(...,
+time.Now())`; both tests then run the arm manager at `armTestClock(t, at)`.
+That helper searches forward/backward in five-minute steps to escape blocked
+session windows. During lunch the selected evaluation time is 30–35 minutes
+later than the fixture receipt. **Pre-existing, not introduced by this wave.**
+The one-minute freshness guard correctly refuses it; it must not be weakened.
+[A/B receipt](2026-09-11-level-zones-evidence/arm-fixture-ab.txt).
+
+**STOP under A23.** The narrowly scoped correction would make these loopback
+fixtures use one chosen clock for session, plan/bars and broker snapshot receipt
+before calling the existing `...At(now)` entry point. No arm/gate production
+behaviour change is needed or proposed. These arm test fixtures are outside
+this lane's stated level-map footprint; owner ruling is required before editing
+them. No merge, Guide binary stamp, deploy or kill has occurred. Remaining
+call-removal mutations, clean build and merged-head suite are still owed.
+
+### Intermediate envelope counts — superseded by strict known-width pin below
+
+[Production replay output](2026-09-11-level-zones-evidence/compatibility-result.json)
+records: native unconditional overlap gave 4 components (largest 827 sources,
+2791.50pt); corrected compatibility gives **222 zones, 44 actual merges,
+164 broad contexts, widest merged envelope 41.50pt**, cap 42.11359506516323pt.
+There are 38 cross-TF and 37 cross-family merged zones; 19 candidate/cluster
+comparisons fail the width limit. Source widths missing in the archived
+snapshot remain NULL (294); incomplete envelopes are explicitly labelled.
+Thus 41.50pt is the maximum **known envelope**, not an assertion that missing
+member widths were measured. The final strict cap guarantee with unknown
+members still needs review before release; do not read the native-bound census
+as a completed proof for every newly derivable D1 point band.
+
+E4 distribution (different denominators, **not** a score experiment): original
+recorded score-family counts across 843 raw references are 1:4, 2:52, 3:11,
+4:132, 5:247, 6:173, 7:80, NULL:144. The new capped display count across
+222 zones is **1:185, 2:11, 3:26**. Source-name multiplicities range 1–45;
+the full histogram is in the replay JSON. No count is fed back into scoring.
+
+Exact model-table excerpts produced by the view:
+
+```text
+  anchor 29006.62 · band 28810.75–29202.50 · broad context · families=1 · incomplete-width=false
+    Demand·1d · tf=1d · anchor 29006.62 · formed_at=1778130000000 · width=native detector bounds
+  anchor 29456.00 · band 29454.75–29485.00 · local · families=3 · incomplete-width=true
+    SWG-H·5m · tf=5m · anchor 29475.00 · formed_at=NULL · width=NULL: defining wick or ATR(tf) unavailable
+    SWG-H·15m · tf=15m · anchor 29475.00 · formed_at=NULL · width=NULL: defining wick or ATR(tf) unavailable
+```
+
+The grouped local anchor is a display representative; each source retains its
+own anchor. These rows are an offline production-render replay, **not a live
+post-boot plan**. The full generated zone block is 109422 bytes; this increases
+the model input. No token/cadence/timeout knob was changed to hide that cost.
+
+A15: full Round 21 report remains absent from the accepted tree, no SHA invented.
+Legacy plans have no zone panel by design. Historical display widths/touch
+counts are not backfilled. Actual post-boot model adoption and clean merged-head
+validation remain unproved. The isolated worktree stays locked pending ruling.
+
+## Final in-scope correction: unknown width cannot pass the cap
+
+The intermediate 222-zone result above is **superseded**. Review found that it
+used an unknown-width source's anchor as a zero-width proxy in compatibility.
+That cannot prove D2(b). The implementation now keeps unknown-width references
+separate until defining evidence exists; no incomplete cluster can absorb a
+reference. This is enforcement of the approved BOTH condition, not a new
+trading gate. The strict-width focused tests and Stage A golden pass.
+
+The archived raw JSON never carried the new defining-wick metadata. For the two
+chart pivots, [pivot-width-evidence.json](2026-09-11-level-zones-evidence/pivot-width-evidence.json)
+records supplemental store rows: MNQ 09-26 / source=live, 5m open
+1789134900000 and 15m open 1789134300000. Both highs are 29475, upper defining
+wicks are 3 points, and the existing k=2 confirmation relationship matches
+archived formation closes 1789135800000 and 1789137000000 respectively.
+The 5m ATR is the archived input's exact 42.11359506516323; the 15m ATR is
+65.0852 at its recorded four-decimal precision. The selected swing-side wick
+is used, not its opposite tail. This supplements missing old output metadata;
+it is not a claim that the old snapshot serialized those values.
+
+**Final measured snapshot result: 843 sources → 498 total zones/references,
+25 multi-source merges, 164 broad contexts, 292 unknown-width singletons.
+The widest actual merged band is 41.50pt, below the 42.11359506516323 cap.**
+Every merged band is known and under the cap, pinned in the chart test. The
+remaining 17 singleton local references plus 25 merged local zones account for
+the rest. Thus the merger count is in the tens; total retained references are
+not, because broad and unknown references are preserved rather than discarded.
+
+Both E1 cases reach the production-rendered model table:
+
+```text
+  anchor 29006.62 · band 28810.75–29202.50 · broad context · families=1 · incomplete-width=false
+  anchor 29457.88 · band 29454.75–29491.27 · local · families=3 · incomplete-width=false
+    SWG-H·5m · tf=5m · anchor 29475.00 · formed_at=NULL · width=max(defining wick,k×ATR(tf)) [I]
+    SWG-H·15m · tf=15m · anchor 29475.00 · formed_at=NULL · width=max(defining wick,k×ATR(tf)) [I]
+```
+
+Final capped family histogram: {1: 477, 2: 20, 3: 1}. It is a
+presentation distribution, not a score change. The replay JSON above now holds
+these final counts. Prior intermediate counts remain labelled for auditability.
+
+The pre-existing two arm-fixture failures remain the external blocker. Full
+suite and additional call-removal mutations must be rerun after the fixture
+ruling; no deployment, merge or Guide-built revision is claimed here.
+
+Final in-scope verification: complete `go test ./kernel` PASS (0.814s), focused
+kernel/trader zone + parity + wiring tests PASS, `go build ./...` PASS. Dev
+freshness rechecked: still accepted tip `616b52a9`; no spec drift. Full trader
+suite remains blocked by the independently reproduced fixture-clock defect.

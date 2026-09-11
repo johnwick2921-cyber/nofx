@@ -28,3 +28,15 @@ docs/superpowers/reports/2026-09-10-every-detector-every-timeframe.md
 050cd5c1549b656ed06f6eaae8954b55a723ede4 docs(report): A15 — nofx/trader is RED on dev, and it is not the lunch band
 docs/superpowers/reports/2026-09-11-provenance-merged-label.md
 616b52a9def4042ce40308deba46529723ba01d7 marker(provenance): boot 802fb00b verified — PID 3366586 08:58 CT, five references + md5 agree, sweep 0, book empty; live proof owed to the next read with a merged structural label
+trader/arm_test_clock_test.go (accepted source)
+7871a1d20d232544270ecf09927a4d6327279391 fix(trader tests): the split-arm tape depends on now MODULO 5 MINUTES, and on today's trade date
+trader/shadow_demotion_test.go (accepted source)
+d4ab87db8ad3445ccd76477b4321d7aec9597139 one-setup: five pre-existing wide-book fixtures (fvg_entry, sweep_reclaim split, R:R at the seam, loopback placement, config flip) declare one_setup OFF — their subject is not one-setup and E2 proves OFF is today's book byte for byte
+trader/one_setup_retire_test.go (accepted source)
+6fe2c11c1b0dc0618ea029bf8e4eff7337829b02 one-setup: the gap the first boot found, closed (owner ruling (b), scoped) — at placement time an authorization whose scenario is currently DECLINED is retired by ledger state with the owner's reason and its three verdicts, never placed, nothing at the broker; an allowed one still places (pinned on the loopback wire, RED first, 2 mutants killed); boot-line key fix folded; CLASS 121; A29 registered; MAPCHECK recomputed; SYSTEM-MAP + RULEBOOK
+docs/superpowers/SYSTEM-MAP.md (accepted source)
+6fe2c11c1b0dc0618ea029bf8e4eff7337829b02 one-setup: the gap the first boot found, closed (owner ruling (b), scoped) — at placement time an authorization whose scenario is currently DECLINED is retired by ledger state with the owner's reason and its three verdicts, never placed, nothing at the broker; an allowed one still places (pinned on the loopback wire, RED first, 2 mutants killed); boot-line key fix folded; CLASS 121; A29 registered; MAPCHECK recomputed; SYSTEM-MAP + RULEBOOK
+docs/superpowers/VL-TRADING-RULEBOOK-v1.md (accepted source)
+6fe2c11c1b0dc0618ea029bf8e4eff7337829b02 one-setup: the gap the first boot found, closed (owner ruling (b), scoped) — at placement time an authorization whose scenario is currently DECLINED is retired by ledger state with the owner's reason and its three verdicts, never placed, nothing at the broker; an allowed one still places (pinned on the loopback wire, RED first, 2 mutants killed); boot-line key fix folded; CLASS 121; A29 registered; MAPCHECK recomputed; SYSTEM-MAP + RULEBOOK
+web/src/guide/content/candidates.ts (accepted source)
+22270ec1b64e9813d1ec0509669bfd6c8b657886 candidates(A12 Guide): section 15 'Candidates, Not Entitlements' + its vitest

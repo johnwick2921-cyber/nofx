@@ -20,7 +20,7 @@ export const candidates: GuideSection = {
     },
     {
       kind: 'p',
-      text: 'A reference joins the single nearest compatible cluster: original anchors must be within m × ATR5m, m=0.5 [I], and the resulting band must be no wider than 1.0 × ATR5m [I]. The first anchor stays fixed; clusters never join transitively. Native bands above the broad threshold of 1.0 × ATR5m [I], or above the merge width cap, remain separate context. All source names survive. Unknown source widths are counted and any incomplete merged bounds are labelled.',
+      text: 'A reference joins the single nearest compatible cluster: original anchors must be within m × ATR5m, m=0.5 [I], and the resulting band must be no wider than 1.0 × ATR5m [I]. The first anchor stays fixed; clusters never join transitively. Native bands above the broad threshold of 1.0 × ATR5m [I], or above the merge width cap, remain separate context. All source names survive. Unknown source widths are counted and remain separate: an unknown width cannot pass the maximum-width condition.',
     },
     {
       kind: 'p',
