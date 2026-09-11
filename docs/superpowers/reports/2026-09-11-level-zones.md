@@ -506,10 +506,30 @@ the frontend job explicitly reports `fatal: bad object
 954f11b15f2e7615678f7d2b708c47895faebf1e`, and Vite denies
 `/home/runner/work/nofx/nofx/branding/product.txt?raw`. The relevant workflow,
 branding guard and Vite configuration have no diff in this wave. These are
-reported setup surfaces, not reasons to weaken the guards. The separate
-coverage job `34631884694` exits 1 but the retrieved failing-step log ends
-without a failing-test diagnosis; its cause is not established by that log.
-Dev's same-tip coverage run `34607468613` also failed; matching status alone
-does not prove an identical cause. Security run `34631884852` reports 24 called
+reported setup surfaces, not reasons to weaken the guards. The summarized log initially hid the cause of coverage run `34631884694`.
+Retrieving the complete job log establishes it: the same two named arm fixtures
+fail with `book age 15m0s exceeds the 1m0s bound` (2.73s and 2.10s), and no
+other `--- FAIL:` appears. This is the same fixture-clock defect now corrected;
+the different age reflects the later CI wall time. Dev's same-tip coverage
+run `34607468613` also failed, but matching status alone is not proof of its cause. Security run `34631884852` reports 24 called
 standard-library vulnerabilities; go.mod/go.sum and the workflow are unchanged.
 No CI configuration or dependency changes are included in this wave.
+
+
+[A] Final focused race check: `go test -race ./trader -run
+'^(TestOneSetupDeclinedPreBootAuthorizationRetiredNeverPlaced|TestLiveConditionPlacesOnLoopback)$'
+-count=1` PASS (`nofx/trader 1.768s`). The full regular suite passed before the
+mutations, and every mutation restored its source. A final running-process
+read still returns health revision `802fb00b09e5`, PID3366586, executable
+`vcs.revision=802fb00b09e51f9801e8d4fbd1bf156c86865d95`,
+`vcs.modified=false`; service `Restart=on-failure`.
+
+**Cutover pending A7, not a new approval request.** At 13:25 CT the permitted
+14:45–16:30 CT window has not opened. No deploy lock is held by this lane, no
+merge or binary swap occurred, and no kill is offered outside the window. The
+owner's GO remains authorized. At cutover: acquire the free lock with its own
+bounded keeper, merge current dev, run the merged-head suite in a clean clone
+named `nofx`, derive the Guide revision from that binary before rebuilding dist,
+then perform this lane's fresh five-leg gate and RELEASE → mv → VERIFY → print
+the resolved owner-run kill. A gate measured now would not be a fresh cutover
+gate for that later window. Boot and first-plan live proof remain unmeasured.

@@ -40,3 +40,23 @@ docs/superpowers/VL-TRADING-RULEBOOK-v1.md (accepted source)
 6fe2c11c1b0dc0618ea029bf8e4eff7337829b02 one-setup: the gap the first boot found, closed (owner ruling (b), scoped) — at placement time an authorization whose scenario is currently DECLINED is retired by ledger state with the owner's reason and its three verdicts, never placed, nothing at the broker; an allowed one still places (pinned on the loopback wire, RED first, 2 mutants killed); boot-line key fix folded; CLASS 121; A29 registered; MAPCHECK recomputed; SYSTEM-MAP + RULEBOOK
 web/src/guide/content/candidates.ts (accepted source)
 22270ec1b64e9813d1ec0509669bfd6c8b657886 candidates(A12 Guide): section 15 'Candidates, Not Entitlements' + its vitest
+
+Authorized fixture correction: running-source freshness
+
+git log -1 802fb00b09e51f9801e8d4fbd1bf156c86865d95 -- trader/one_setup_retire_test.go
+commit 6fe2c11c1b0dc0618ea029bf8e4eff7337829b02
+Author: johnwick2921-cyber <johnwick2921@gmail.com>
+Date:   Fri Sep 11 01:55:36 2026 -0500
+
+    one-setup: the gap the first boot found, closed (owner ruling (b), scoped) — at placement time an authorization whose scenario is currently DECLINED is retired by ledger state with the owner's reason and its three verdicts, never placed, nothing at the broker; an allowed one still places (pinned on the loopback wire, RED first, 2 mutants killed); boot-line key fix folded; CLASS 121; A29 registered; MAPCHECK recomputed; SYSTEM-MAP + RULEBOOK
+    
+    Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+
+git log -1 802fb00b09e51f9801e8d4fbd1bf156c86865d95 -- trader/shadow_demotion_test.go
+commit d4ab87db8ad3445ccd76477b4321d7aec9597139
+Author: johnwick2921-cyber <johnwick2921@gmail.com>
+Date:   Fri Sep 11 01:29:22 2026 -0500
+
+    one-setup: five pre-existing wide-book fixtures (fvg_entry, sweep_reclaim split, R:R at the seam, loopback placement, config flip) declare one_setup OFF — their subject is not one-setup and E2 proves OFF is today's book byte for byte
+    
+    Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
