@@ -164,6 +164,14 @@ func swingPointsFor(agg []market.Kline, tfMin int, now time.Time) []DetectedLeve
 			TF:         tfName(tfMin),
 		})
 		out[len(out)-1] = WithFormationClose(out[len(out)-1], s.confirmedMs, len(closed), "pivot_confirmation_close", now)
+		// Presentation evidence from the exact selected pivot, after selection.
+		for _, bar := range closed {
+			if bar.OpenTime == s.timeMs {
+				wick := ZoneBarWick(bar)
+				out[len(out)-1].ZoneDefiningWick = &wick
+				break
+			}
+		}
 	}
 	return out
 }

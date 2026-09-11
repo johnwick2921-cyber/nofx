@@ -13,6 +13,24 @@ export const candidates: GuideSection = {
   tagline: 'A level on the map is not a permission to trade it.',
   asBuiltRev: GUIDE_BUILT_REV,
   blocks: [
+    { kind: 'h', text: 'Level zones — the full read-time map' },
+    {
+      kind: 'p',
+      text: 'The Level zones panel freezes every detector reference from the planner read, including references that lost a scored seat. Native bands retain their bounds. Point widths use max(defining wick, k × ATR of the source timeframe), with k=0.5 [I]; a missing defining wick or ATR stays NULL. Round numbers use a 2-point band [I]. The chart itself still draws the authored levels; the full zone map is a separate card panel.',
+    },
+    {
+      kind: 'p',
+      text: 'A reference joins the single nearest compatible cluster: original anchors must be within m × ATR5m, m=0.5 [I], and the resulting band must be no wider than 1.0 × ATR5m [I]. The first anchor stays fixed; clusters never join transitively. Native bands above the broad threshold of 1.0 × ATR5m [I], or above the merge width cap, remain separate context. All source names survive. Unknown source widths are counted and any incomplete merged bounds are labelled.',
+    },
+    {
+      kind: 'p',
+      text: 'The five display families are swing-structure, volume-node, round-number, session/derived, and imbalance. Their count is capped at 3 [I]. The score confluence input and score HTF multiplier are unchanged. The zone shortlist never reads that score: its rank is log(1 + known prior touches) + round proximity + capped families − distance/ATR5m, with weights 1 each [I]. Unknown touch counts remain UNKNOWN and contribute no touch bonus. Prior touches require a known formation and complete available post-formation 1m tape; they are not a historical hit rate. A shortlist place gives no permission to trade.',
+    },
+    {
+      kind: 'p',
+      text: 'Test ranges [I]: width k 0.25–0.75; merge m 0.25–0.75; maximum width and broad threshold 0.5–1.5 ATR5m; round width 1–4 points; family cap 1–5; each rank weight 0.25–2. The shortlist cap uses the bound session configuration unchanged (12 on the measured owner read). Zones versus lines and multi-timeframe confluence remain UNTESTED. Prior-touch and round-number research motivates the features, not these weights. Historical plans are not backfilled.',
+    },
+    { kind: 'h', text: 'Legacy scored map and execution roles' },
     {
       kind: 'p',
       text: 'The map used to hand every seated level to the model as if each were a place to trade. It was not — a level is a reference. This section is about the difference between a reference the machine drew and an entry it is willing to offer, and about what now exists BEYOND the edges of the map.',

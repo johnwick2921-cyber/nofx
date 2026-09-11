@@ -1,4 +1,4 @@
-# Level zones — corrected scope accepted; native-overlap replay STOP
+# Level zones — corrected compatibility implementation; awaiting validation and cutover
 
 ## C1 — the owner's four lines, traced first
 
@@ -250,3 +250,55 @@ separating contextual bands from mergeable zones must be explicit and [I].
 
 No production code changed. No build, DB write, or cutover occurred. The worktree
 remains locked for this dispatch while the ruling is pending.
+
+## Compatibility ruling accepted — implementation in progress
+
+Owner replaced unconditional overlap with BOTH fixed-anchor distance ≤m×ATR5m
+(default .5 [I]) and resulting width ≤1×ATR5m [I]. Each source joins its one
+nearest compatible cluster; clusters never join one another. Broad bands stay
+separate context. The earlier native-overlap STOP is resolved by this ruling.
+
+[A] The production snapshot pin now runs `BuildLevelZones` over all 843 archived
+outputs: **222 total zones = 58 local + 164 broad context**. Of the local zones,
+**44 contain multiple references**, 14 are singletons. It absorbs 621 references.
+The widest merged envelope is **41.50 points**, below the resolved
+**42.11359506516323** cap. The “tens” count refers to local/merged zones, not total
+zones: preserving 164 broad contexts makes a total in the tens impossible.
+The 29475 5m/15m pair remains together; 29006.625 daily demand remains its own
+28810.75–29202.50 context band. The actual model prompt contains both cases.
+These census numbers use archived native bounds and missing point evidence,
+not a claim that the archived JSON contains newly added defining-wick metadata.
+
+The breadth threshold resolves independently (`LEVEL_ZONE_BROAD_ATR`, default
+1 [I]); any band also wider than `LEVEL_ZONE_MAX_WIDTH_ATR` remains standalone.
+No context reference is dropped. Merge ordering is stable ascending original
+anchor, retaining detector emission order on ties; this deterministic ordering
+is [I]. A cluster anchor never moves. Unknown widths are preserved per source;
+merged envelopes with unknown members explicitly read incomplete.
+
+D4 is presentation-only. Five display families, capped at 3, are carried beside
+every source. The scorer's old taxonomy and confluence input remain unchanged.
+New zone ranking reads no Score or HTF multiplier. Its four weights default 1 [I]:
+log(1+known prior touches), 1/(1+distance to detected RN/ATR5m), capped family
+count, minus distance/ATR5m. Unknown touches receive no bonus and display NULL.
+Counts require known formation and complete available post-formation 1m tape;
+no stored legacy ordinal is relabelled as a complete history.
+
+D1 adds output-only exact pivot-wick evidence to swing results, after detection.
+Other points without derivable defining-bar/ATR inputs stay NULL and counted.
+Native bounds are retained; rounds receive a resolved 2-point width [I].
+All parameters and proposed sensitivity ranges are in the Guide. Source
+FormedAtMs, legacy identity, scoring output and all execution anchors remain
+unchanged. Historical plans are not backfilled; new plans freeze `zone_map`.
+The card panel displays that frozen map; the candle chart still draws authored
+levels, not every machine context zone (A15).
+
+Validation so far: initial chart/width/family/compatibility pins RED on undefined
+new view symbols; all now GREEN. `TestStageAScoreParityLegacy` PASS with unchanged
+binary JSON golden. Kernel/trader production-wiring pins PASS. Card and Guide
+checks: 2 files / 7 tests PASS. Width mutation initially NOT-APPLIED (spacing),
+then corrected through `scripts/mutate.sh`: `o.WidthK*in.ATR` → `.01*in.ATR`,
+mutant builds and width pin KILLS it. Merge mutation `d > o.MergeATR*atr5m` →
+`d > .01*atr5m`: builds, compatibility pin KILLS it. Further mutations/full
+suites, clean build, binary-derived Guide revision, merge and live proof remain
+pending. No deployment GO has been requested or used for this new wave.

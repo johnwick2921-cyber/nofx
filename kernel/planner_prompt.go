@@ -23,7 +23,8 @@ type PlannerCalendarEvent struct {
 
 // PlannerInput is everything the reasoner reads to write a plan.
 type PlannerInput struct {
-	ResearchSnapshotID string `json:"-"` // record link, never prompt content
+	Zones              *LevelZoneMap // Uncut presentation snapshot; never used as trading inputs.
+	ResearchSnapshotID string        `json:"-"` // record link, never prompt content
 	TradeDate          string
 	Session            string    // NY | ASIA | LONDON
 	Now                time.Time // labelled CT clock line (zero → omitted)
@@ -557,6 +558,10 @@ func BuildPlannerPrompt(in PlannerInput) string {
 	b.WriteString("\n")
 
 	// ADDENDUM (1) — the role playbook (machine facts; your judgment stays).
+	if in.Zones != nil {
+		b.WriteString(in.Zones.Render())
+		b.WriteString("\n")
+	}
 	b.WriteString("## Level roles (machine-assigned, 5-line playbook)\n")
 	b.WriteString(RoleLegend + "\n")
 

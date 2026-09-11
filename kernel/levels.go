@@ -68,14 +68,15 @@ const (
 // DetectedLevel is the uniform output of every detector (a line or a zone). For
 // a line, Lo == Hi == Price. HTF marks a higher-timeframe origin (grading input).
 type DetectedLevel struct {
-	Research   *LevelScoreCapture `json:"-"` // record-only provenance, excluded from every prompt
-	Kind       LevelKind          `json:"kind"`
-	Price      float64            `json:"price"`       // line price (zones: midpoint)
-	Lo         float64            `json:"lo"`          // zone bottom (== Price for a line)
-	Hi         float64            `json:"hi"`          // zone top (== Price for a line)
-	Label      string             `json:"label"`       // display label, e.g. "PDH", "RN 15500", "nPOC·Tue"
-	OriginDate string             `json:"origin_date"` // YYYY-MM-DD of formation
-	HTF        bool               `json:"htf"`         // higher-timeframe origin
+	ZoneDefiningWick *float64           `json:"-"` // output-only evidence; never a scoring input
+	Research         *LevelScoreCapture `json:"-"` // record-only provenance, excluded from every prompt
+	Kind             LevelKind          `json:"kind"`
+	Price            float64            `json:"price"`       // line price (zones: midpoint)
+	Lo               float64            `json:"lo"`          // zone bottom (== Price for a line)
+	Hi               float64            `json:"hi"`          // zone top (== Price for a line)
+	Label            string             `json:"label"`       // display label, e.g. "PDH", "RN 15500", "nPOC·Tue"
+	OriginDate       string             `json:"origin_date"` // YYYY-MM-DD of formation
+	HTF              bool               `json:"htf"`         // higher-timeframe origin
 	// TF is the DETECTION timeframe ("1m"…"4h"; "" = the 1m slice). Drives the
 	// v3 zone evidence tiers (owner-approved 2026-08-24).
 	TF string `json:"tf,omitempty"`

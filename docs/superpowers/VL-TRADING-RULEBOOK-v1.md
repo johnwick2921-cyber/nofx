@@ -20,6 +20,16 @@ This revision separates **A. what runs**, **B. what is wanted**, and **C. what i
 
 ## A. WHAT RUNS — implementation at the observed revision
 
+### Level zones — implementation addition, awaiting cutover
+
+| Surface | Representation and proof boundary |
+|---|---|
+| Full read-time map | `kernel/level_zones.go:BuildLevelZones` preserves every detected source, including seat losers. Native bounds stay intact; unknown point widths are NULL. Frozen `zone_map` reaches the model and card. This branch is not yet booted. |
+| Compatible merge [I] | One nearest fixed-anchor cluster, anchors within 0.5×ATR5m, union width ≤1×ATR5m. Both values resolve from display-only settings. No transitive chaining. Broad native bands (>resolved threshold, default 1×ATR5m) and bands above the merge cap stay separate context. |
+| Family and shortlist [I] | Five display families capped at 3; weights 1 each on log(1+known prior touches), round proximity, family count, and negative ATR distance. Legacy score confluence/HTF weighting and all trading anchors remain unchanged. Shortlist cap is the existing bound session value. |
+| Missing evidence | No defining wick/ATR means NULL width; no complete post-formation tape means UNKNOWN touches, not zero. No historical plan backfill. Zones versus lines and multi-timeframe confluence remain untested. |
+
+
 Every implementation statement in this section cites a code line. Defaults and conditional branches are described as such; no unresolved setting is silently called enabled.
 
 ### The tape is one contract — implementation addition, awaiting cutover

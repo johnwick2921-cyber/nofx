@@ -108,6 +108,7 @@ export interface PlanArmView {
 }
 
 export interface PlanDoc {
+  zone_map?: LevelZoneMap
   reasoning: string
   bias: PlanBias
   levels: PlanLevel[]
@@ -115,6 +116,36 @@ export interface PlanDoc {
   no_trade: string[]
   death_condition: string
   day_type?: string
+}
+
+export interface LevelZoneMap {
+  at: string
+  detected: number
+  broad: number
+  merged: number
+  null_widths: number
+  widest_merged: number
+  zones: Array<{
+    anchor: number
+    lo: number | null
+    hi: number | null
+    incomplete_width: boolean
+    broad: boolean
+    family_count: number
+    prior_touches: number | null
+    rank_value: number | null
+    shortlisted: boolean
+    sources: Array<{
+      kind: string
+      tf: string
+      price: number
+      label: string
+      formed_at: number | null
+      lo: number | null
+      hi: number | null
+      width_rule: string
+    }>
+  }>
 }
 
 // ── live per-level facts from the P0.4 evaluator (one array, three renderers) ──
