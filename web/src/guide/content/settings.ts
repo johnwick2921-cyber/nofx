@@ -656,7 +656,7 @@ export const settings: GuideSection = {
         [
           'candidate-unverified',
           'no known reader — pending verification',
-          'A field-level grep found no reader. That is not proof: a method-based reader would not appear in it. The note quotes the exact command run. It stays listed until someone runs a method-level grep and quotes that too.',
+          'A field-level grep found no reader. That is not proof: a method-based reader would not appear in it. Since 2026-09-11 the method-level check is CODE (store/knob_method_readers_test.go): every candidate row is re-checked for accessor-method readers on every test run, and a row with one fails the build. The first run found seven — the six wake_on_* / wake_min_interval_min knobs and acceptance_rule — all live all along; they now show live with their call sites. The rows still listed here genuinely have no reader either way.',
         ],
         ['advisory', '—', 'Feeds prompt text only, never a gate.'],
         [

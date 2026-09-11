@@ -4515,3 +4515,41 @@ placed · level=… play=… permission=…` — and nothing is sent to the brok
 rows with a signal id are never touched. Pinned on the loopback wire: the
 declined scenario's pre-boot row is retired, never placed; the allowed one
 still places. Counted `one_setup:retired`; on the boot line.
+
+## CLASS 122 — A CLASSIFIER THAT NAMES ITS OWN BLIND SPOT AND REPORTS THROUGH IT ANYWAY (assigned at merge of cleanup batch 2, 2026-09-11)
+
+**The instance.** The knob registry (`store/knob_registry_table.go`) classified
+sixteen fields `candidate-unverified` from a FIELD grep on 2026-09-03. Each row's
+note said, in full: *"A METHOD-based reader would NOT appear, so this is NOT
+dead and must not be removed: it needs a method-level grep."* The panel then
+rendered the derived label — **"no known reader — pending verification"** — and
+the operator read six wake switches as doing nothing. Seven of the sixteen had
+method readers: the five `wake_on_*` switches and `wake_min_interval_min`
+through `DayPlanConfig` accessors consumed in `trader/auto_trader_wake_levels.go`,
+and `acceptance_rule` through `AcceptanceRuleFor()` at three call sites. The
+note was right about its own limits and nothing acted on it for eight days.
+
+**Why it is a class.** A verifier that documents what it cannot see has done
+the honest half. The dishonest half is letting its verdict reach a surface
+that does not carry the caveat: the row said "unverified", the panel said "no
+reader", and the reader of the panel had no way to know a method-level check
+had never been run. The caveat lived where only the author would read it.
+
+**Probes:**
+1. Every derived status has a blind spot; is the blind spot a CHECK or a
+   sentence? If a sentence, what turns it into a check, and when?
+2. Does the rendered label carry the same uncertainty as the record? "No
+   known reader" and "no reader found by a field grep" are different claims.
+3. Who consumes the status — a person choosing whether to flip a switch? Then
+   the status is a trading-adjacent fact and its verifier's limits are too.
+
+**Law:** **a stated blind spot is a test that has not been written yet; write it
+in the same wave, or render the caveat wherever the verdict is rendered.** Here:
+`store/knob_method_readers_test.go` — reflection maps a json leaf to its Go
+field, go/ast finds accessor methods reading it and their production call
+sites; every `candidate-unverified` row must have none, and the wake knobs are
+pinned live with the call sites the detector found.
+
+Related: class 105 (documentation in a place the code's tests cannot see),
+class 113 (a gate that certifies a name, not a path).
+
