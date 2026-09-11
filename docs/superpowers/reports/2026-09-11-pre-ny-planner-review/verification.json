@@ -150,6 +150,10 @@
     {
       "check": "no raw identifier evidence/logs.json",
       "passed": true
+    },
+    {
+      "check": "Public prompt trailing-space normalization preserves wording and line numbers",
+      "passed": true
     }
   ],
   "credential_pattern_scan": "passed"

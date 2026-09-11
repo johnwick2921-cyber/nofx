@@ -1,8 +1,8 @@
 [
   {
     "path": "README.md",
-    "bytes": 802,
-    "sha256": "09b26981434149610aece29ddcd61e02da88596868bfab0d13fbe2b813e0beba"
+    "bytes": 905,
+    "sha256": "0d8232b700c43b5ff6f7e1741d1e2dadaa987954ff1e5772165fc5349270d074"
   },
   {
     "path": "evidence/anchor-reproduction.json",
@@ -61,8 +61,8 @@
   },
   {
     "path": "evidence/ny-prompt.txt",
-    "bytes": 38748,
-    "sha256": "23fb62c19af0808bd7a045612e5d59588d51d10206c3cb1db184c03555108665"
+    "bytes": 38618,
+    "sha256": "d7f7e97c011c23a007ce2f3efdec2955284f77bfd470be91d029e6e8a6f31ea4"
   },
   {
     "path": "evidence/plans.json",
@@ -91,7 +91,7 @@
   },
   {
     "path": "verification.json",
-    "bytes": 3633,
-    "sha256": "f12b25944596b5248c417bd5d1d505a3304a2ef54eed8a16a379160f6c115eb7"
+    "bytes": 3763,
+    "sha256": "8e3839df049aa36cdd82bb4d336f00a81bd14f904c0a4b78267b2b72c74c4ed6"
   }
 ]
