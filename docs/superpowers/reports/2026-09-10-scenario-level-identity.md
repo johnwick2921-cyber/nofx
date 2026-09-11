@@ -709,3 +709,20 @@ to the measured set before merge in `6f2ff668`.
 [backup](2026-09-10-scenario-level-identity-data/cutover-backup.json),
 [dist build](2026-09-10-scenario-level-identity-data/cutover-dist-build.txt),
 [Binnie handoff](2026-09-10-scenario-level-identity-data/BINNIE-HANDOFF.md).
+
+
+### Owner-approved final preparation, 19:05 CT
+
+The owner explicitly approved merging verification PR #102 and moving the
+pre-existing save file. It was preserved intact as
+`/tmp/identity-build/CLAUDE.md.save.pre-cutover` (20,171 bytes); main tree then
+read porcelain-clean. Automatic approval review had rejected the direct dev
+push and the follow-up PR merge before that explicit approval; no bypass was
+used. All publication continues through the approved PR.
+
+Own fresh gate at 19:05:04 CT: all five PASS, `ready:true`. DB/API/NT8 positions
+all zero; broker working 0 / ledger working 0; **1 armed without a signal id**,
+informational under the canonical leg-4 rule; no planner read claimed.
+[Complete payload](2026-09-10-scenario-level-identity-data/cutover-pre-release-gate.json).
+RELEASE is prepared as `cd8f9978` before the binary swap. This section is
+preparation evidence, not a claim that the new process is running.
