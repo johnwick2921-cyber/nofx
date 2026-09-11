@@ -98,6 +98,7 @@ var alsoRequireWired = []string{
 	"OneSetupAllowsAt",
 	"oneSetupVerdictsAt",
 	"oneSetupConsult",
+	"oneSetupRetireDeclined",
 	"oneSetupStampEpisodes",
 	"oneSetupSaveRecord",
 	"oneSetupObstacleTarget",

@@ -342,3 +342,60 @@ func (at *AutoTrader) oneSetupStampEpisodes(planID string, sc kernel.PlanScenari
 func oneSetupVerdictText(v kernel.OneSetupVerdict) string {
 	return fmt.Sprintf("level=%s play=%s permission=%s", v.Level, v.Play, v.Permission)
 }
+
+// oneSetupRetireDeclined — THE GAP THE FIRST BOOT FOUND, CLOSED (owner ruling
+// 2026-09-11 01:5x CT). One-setup filtered AUTHORIZATION; it did not touch an
+// authorization that predated it. The class-33 sweep leaves pre-boot rows
+// that were authorized but never placed "for this process to place", and the
+// placement engine places any non-terminal `armed` row inside its band — so
+// rows 150/153 (ASIA v10 S2/S1, both DECLINED on the first cycle) could have
+// reached the wire.
+//
+// THE RULE: at placement time, an authorization whose scenario is CURRENTLY
+// declined is NOT placed; it is retired by ledger state — cancelled, with the
+// owner's reason and all three verdicts — and NOTHING is sent to the broker,
+// because a row with no signal id has nothing at the broker under it. An
+// allowed scenario's row still places. Runs once per cycle right after the
+// verdicts and BEFORE the scenario loop and the placement pass, so D4's slot
+// check never counts a doomed row and the placement engine never sees it.
+// Rows already at the broker (signal id set) are not touched here — the
+// predicate never cancels a broker order (file header).
+func (at *AutoTrader) oneSetupRetireDeclined(c *oneSetupCycle, plan *kernel.ActivePlan, ledger *store.ArmedOrderStore, now time.Time) (retired int) {
+	if !c.on() || plan == nil || ledger == nil {
+		return 0
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			at.logWarnf("🎯 one setup: retire pass recovered from panic: %v (nothing retired this cycle)", r)
+		}
+	}()
+	rows, err := ledger.ListNonTerminal(at.id)
+	if err != nil {
+		return 0
+	}
+	for _, r := range rows {
+		if r.TraderID != at.id || r.PlanID != plan.PlanID || r.State != store.StateArmed || strings.TrimSpace(r.SignalID) != "" {
+			continue
+		}
+		v, ok := c.verdicts[r.Scenario]
+		if !ok || v.Allowed {
+			continue
+		}
+		origin := "authorization not placed"
+		if r.BootID != "" && r.BootID != store.ProcessBootID() {
+			origin = "pre-boot authorization not placed"
+		}
+		reason := "declined by one-setup; " + origin + " · " + oneSetupVerdictText(v)
+		if err := ledger.SetState(r.ID, store.StateCancelled, reason); err != nil {
+			at.logWarnf("🎯 one setup: retire of row %d failed: %v", r.ID, err)
+			continue
+		}
+		retired++
+		if at.store != nil {
+			_, _ = store.IncArmRefusal(at.store, at.id, kernel.PlanTradeDateFor(plan), plan.Session, store.OneSetupClassRetired)
+		}
+		at.logWarnf("🎯 one setup RETIRED row %d (%s %s leg %d %s entry=%.2f, %s): level=%s · play=%s · permission=%s — never placed, nothing at the broker under it",
+			r.ID, plan.Session, r.Scenario, r.LegIndex+1, r.Side, r.EntryPx, origin, v.Level, v.Play, v.Permission)
+	}
+	return retired
+}

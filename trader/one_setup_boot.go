@@ -55,6 +55,7 @@ func OneSetupBootLine(st *store.Store, now time.Time, traderIDs []string, bfV st
 			counts.ObstacleBelowFloor += c.ObstacleBelowFloor
 			counts.ObstacleMissing += c.ObstacleMissing
 			counts.DeclinedWhileResting += c.DeclinedWhileResting
+			counts.Retired += c.Retired
 			counts.Readable = counts.Readable || c.Readable
 			f := st.TouchOutcomes().CountFollowPlans(id, kernel.CMESessionDayStart(now).UnixMilli())
 			follow.Rows += f.Rows
@@ -67,8 +68,8 @@ func OneSetupBootLine(st *store.Store, now time.Time, traderIDs []string, bfV st
 	}
 	today := "today armable=n/a declined=n/a (counters unreadable)"
 	if counts.Readable {
-		today = fmt.Sprintf("today armable=%d declined=%d (level=%d play=%d day=%d not-evaluated=%d waiting=%d) · obstacle-below-floor=%d obstacle-missing=%d declined-while-resting=%d",
-			counts.Armable, counts.Declined, counts.Level, counts.Play, counts.Day, counts.NotEvaluated, counts.Wait, counts.ObstacleBelowFloor, counts.ObstacleMissing, counts.DeclinedWhileResting)
+		today = fmt.Sprintf("today armable=%d declined=%d (level=%d play=%d day=%d not-evaluated=%d waiting=%d) · obstacle-below-floor=%d obstacle-missing=%d declined-while-resting=%d retired=%d",
+			counts.Armable, counts.Declined, counts.Level, counts.Play, counts.Day, counts.NotEvaluated, counts.Wait, counts.ObstacleBelowFloor, counts.ObstacleMissing, counts.DeclinedWhileResting, counts.Retired)
 	}
 	fol := "breaks=n/a retests=n/a role-reversed=n/a (table unreadable)"
 	if follow.Readable {

@@ -110,8 +110,11 @@ existing refusal, counted `obstacle_below_floor`). One arm at a time per plan:
 the higher-quality allowed scenario arms first, the other reads
 `second_setup_waiting` until it is terminal. A declined scenario is still
 evaluated, confirmed and recorded — its episode row carries all three verdicts
-— and is never armed. The predicate gates authorization only: it cancels
-nothing. `one_setup_enabled` defaults ON `[O]`; OFF restores this section's
+— and is never armed. The predicate gates authorization, and (owner ruling
+2026-09-11, after the first boot) an authorization that predates it whose
+scenario is currently declined is retired by ledger state at placement time —
+never placed, nothing at the broker under it; a broker order is never
+cancelled by it. `one_setup_enabled` defaults ON `[O]`; OFF restores this section's
 previous behaviour byte-identically (pinned against a golden generated before
 the wave). Nothing the planner is shown changes.
 

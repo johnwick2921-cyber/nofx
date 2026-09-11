@@ -88,3 +88,15 @@ KILLED — a pin caught it.
      +func followRoute(p followPlacer, level float64) { _, _ = p.PlaceLimitEntry("MNQ", "short", 1, level, level+10, level-20) }
 KILLED — a pin caught it.
      --- FAIL: TestOneSetupE9RecorderNeverReachesTheWire (0.27s)
+=== RETIRE — the retire pass removed from the seam
+   edit landed:
+     -	at.oneSetupRetireDeclined(osCycle, plan, ledger, now)
+     +	_ = osCycle
+KILLED — a pin caught it.
+     --- FAIL: TestOneSetupDeclinedPreBootAuthorizationRetiredNeverPlaced (0.57s)
+=== RETIRE — the declined check inverted (allowed rows retired, declined placed)
+   edit landed:
+     -		if !ok || v.Allowed {
+     +		if !ok || !v.Allowed {
+KILLED — a pin caught it.
+     --- FAIL: TestOneSetupDeclinedPreBootAuthorizationRetiredNeverPlaced (0.55s)
