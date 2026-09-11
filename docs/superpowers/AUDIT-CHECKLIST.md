@@ -4404,3 +4404,67 @@ answered `GetNextExpiry`, and the concrete September contract resolved.
 The refutation was recorded as settled fact and closed the correct path for
 a quarter. A refutation is an experiment with a date and a build; it is
 re-run when the premise is load-bearing again, not cited.
+
+## CLASS 120 — A STORED RECORD RE-VALIDATED WITH THE WRITER'S RULES, AT THE READER'S CAP — THE PARSE FAILS SILENTLY AND WEARS A DATA LABEL (born 2026-09-11, fix/one-setup, dispatch 102)
+
+**The instance.** Section C of the one-setup wave asked how often the
+first-touched scenario armed (C1) and needed the touch→scenario link W1
+shipped. Since W1's boot, `touch_outcomes` held **999** rows and **0** carried
+`scenario_nearest`: 889 read `unresolved:no_scenario_at_seat`, 68
+`nearest_outside_band`, 42 NULL. `no_scenario_at_seat` is returned when the
+recorder receives **no anchors at all** (`store.ResolveScenarioLink`,
+`len(anchors)==0`). The anchors come from
+`kernel.ParsePlanDoc(latest.Doc)` in `auto_trader_planner.go` — the
+REJECT-at-write parser, re-run on the STORED document with its default level
+cap. The bound strategy seats 12 levels; the parser's default is 8. Reproduced
+on the stored ASIA v9 doc: `ParsePlanDoc ERROR: too many levels: 12 (max 8)`.
+Every live read since W1's boot parsed nothing, handed nil anchors to the
+recorder, and the recorder wrote a basis that reads like a fact about the tape
+("no scenario at seat") for what was a fact about the reader. 105's
+`identityDoc` on the same path uses `json.Unmarshal` and works.
+
+**Why it is a class, not a bug.** Three habits compound: (1) a validator
+built to REFUSE at write is reused to READ, and a read has no business
+refusing — the record already exists; (2) the reader's cap is the package
+default, not the strategy's resolved value (class 45/49's literal-vs-resolved,
+on the read side); (3) the swallowed error is converted into a NULL whose
+BASIS is a plausible data reason, so every later reader (including this
+wave's Section C) starts by believing the tape. The null carried a label
+that implied a measurement.
+
+**Checks.**
+1. Any `Parse*`/`Validate*` called on a value read FROM the store: does it
+   re-run write-time refusals? If yes, the read must use the record's own
+   decoder (`json.Unmarshal`) or the writer's RESOLVED caps, never the
+   package default.
+2. A swallowed parse/decode error on a read path must surface as
+   `unrecomputable:<the error>` or a WARN with the error text — never as a
+   basis string that could also mean "the data really was like that".
+3. For every `unresolved:*` / `unrecomputable:*` label: is there a code path
+   that reaches it with the record perfectly fine and the reader broken? If
+   so the label needs a second word that says which.
+4. At the first live boot of any linker/labeller: count the resolved share
+   in the first hour. 0 of 999 is not a tape; it is a reader.
+
+**Law:** **a stored record is decoded with the record's decoder and the
+writer's resolved caps; a reader never re-refuses what was already accepted,
+and a reader's failure never wears the data's label.**
+
+**Two smaller lessons from the same wave, recorded here rather than lost.**
+(a) An EQUIVALENT mutant reads SURVIVED: `through := false` → `true` was
+overwritten two lines later, so the suite could not notice and
+`scripts/mutate.sh` — which certifies that the edit landed and built — could
+not know the edit was inert. The harness proves the experiment ran; the
+operator still has to prove the experiment could fail. The real rule mutant
+(the through-by-a-tick tests replaced by `true`) was killed. (b) The
+SYSTEM-MAP MAPCHECK contract caught a 48-line shift in `armed_executor.go`
+from this wave's seam edits — twelve `symbol :NNN` pairs recomputed from the
+file, not by hand (class 75 working as designed).
+
+Cites: C1 (78 plans with ≥2 armable scenarios; first-touched armed 3/3 with a
+resolvable touch after birth, 44 never reached the ledger), C2 (`reject`
+n=39 +$314.00 pnl_corrected — the only positive cell; every follow-family
+cell negative), C3 (13 reads since W-TF's boot; the top-ranked level carried
+a scenario on 2, an armed scenario on 1), C9 (day zero: above hold 72 /
+break 42 / ambiguous 72, n=186; below 44 / 57 / 48, n=149), round 17 (not on
+dev at merge; the dispatch's summary is the citation until it lands).

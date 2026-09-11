@@ -96,6 +96,42 @@ rulebook is carried from `daeb654978b0c739592e8589a393c5e79171560d`, where it wa
 last changed; no section B policy is amended. Branch tests establish source
 behavior; the boot report must establish the eventual running revision.
 
+### One setup — implementation addition, awaiting cutover (dispatch 102, 2026-09-11)
+
+**The book arms ONE play; the follow is recorded.** At the arm seam, after the
+shared gate and before the arm row is composed, a scenario is authorized only
+when three verdicts hold at that instant: its level is the top-ranked merged
+candidate inside the reachability band (grade ≥ `one_setup_min_grade`, default
+B, then distance; any timeframe, any kind; an unresolved `level_id` never
+resolves by nearest), its condition is `reject`, and the fade-permission label
+reads permitted (NULL never permits). The arm's target is the scenario's
+recorded first obstacle and the existing R:R gate judges it (a refusal is the
+existing refusal, counted `obstacle_below_floor`). One arm at a time per plan:
+the higher-quality allowed scenario arms first, the other reads
+`second_setup_waiting` until it is terminal. A declined scenario is still
+evaluated, confirmed and recorded — its episode row carries all three verdicts
+— and is never armed. The predicate gates authorization only: it cancels
+nothing. `one_setup_enabled` defaults ON `[O]`; OFF restores this section's
+previous behaviour byte-identically (pinned against a golden generated before
+the wave). Nothing the planner is shown changes.
+
+Beside every fade-plan the follow-plan is RECORDED and never armed `[T]`: the
+break (first closed 5-minute bucket beyond the level), the role reversal on
+the episode row, the retest from the far side, the would-be passive-limit
+entry (filled only if the bar traded through by a tick — a touch is not a
+fill), MAE/MFE and net after 2-pt friction at 10 and 20 buckets, the retest's
+own hold-vs-break verdict, and the bias the break would imply — written
+beside the plan's frozen bias, never into it. Pre-registered null: role
+reversal ≤ 50%, follow ≤ 0 net.
+
+Implementation: `kernel/one_setup.go` (`OneSetupAllowsAt`, `OneSetupOrder`),
+`trader/one_setup_wiring.go` (`oneSetupVerdictsAt`, `oneSetupConsult`),
+`trader/armed_executor.go` (the seam), `kernel/follow_plan.go`
+(`ComputeFollowPlan`), `trader/follow_plan_wiring.go` (`recordFollowPlans`,
+`BackfillFollowPlans`), `store/one_setup.go`. Branch tests establish source
+behaviour; the boot report (`reports/2026-09-11-one-setup.md`) must establish
+the running revision.
+
 ### Part 1 — Entry families and routing
 
 The entry-law table distinguishes reject, FVG, sweep-reclaim, reclaim, breakout-retest, acceptance/hold and continuation conditions. The name “level-fade book” is a description of the studied style, not a statement that these conditions share one execution rule. [C01] [C03]
@@ -198,6 +234,15 @@ These are carried-forward owner choices from the supplied rulebook or explicitly
 A reference's availability at the decision time matters more than its later appearance on a chart. Merged aliases must retain underlying prices/zone edges and shared provenance, so repeated constructions are not counted as independent evidence. [I]
 
 ### B3. Intended scenario and management contract
+
+**Scope note (2026-09-11).** What runs (§A) arms one play — the fade — and
+records the follow. The wider book this section describes, and a LIVE follow
+side, are **what is wanted after the experiments**: round 17's cell criterion
+(approach direction × level timeframe, ~385 episodes per cell, role reversal
+with a 95% lower bound above 50% AND a net-positive follow after 2-pt friction)
+is the gate between the record and the wire. Until the owner's own record
+shows that cell, §B's follow is a specification, not a behaviour.
+
 
 [O] Before a scenario is accepted as a trading plan, its meaning should be explicit: entry zone, trigger, confirmation, structural invalidation, protective stop, first obstacle and provenance, executable response there, broker target, R to obstacle and target, time horizon and expiry.
 
