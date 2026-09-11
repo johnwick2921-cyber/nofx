@@ -19,9 +19,28 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"time"
 
 	"gorm.io/gorm"
 )
+
+// D9 boundaries — the boot instants the dispatch names, from the markers on
+// dev (2026-09-10, CT): W2's fade permission booted 18:47:07 (marker 4dc0fae1);
+// W1's episode contract booted ~12:52 (marker b11659ea 12:52:37). Verdicts are
+// recomputed for episodes opened at or after W2's boot (the permission stamp
+// exists from there); follow-plans for episodes at or after W1's. Derived
+// from the dates in CT so a zone error is visible, not silent.
+var (
+	OneSetupVerdictEraStart = time.Date(2026, 9, 10, 18, 47, 7, 0, ctLocationForEra())
+	FollowPlanEraStart      = time.Date(2026, 9, 10, 12, 52, 37, 0, ctLocationForEra())
+)
+
+func ctLocationForEra() *time.Location {
+	if loc, err := time.LoadLocation("America/Chicago"); err == nil {
+		return loc
+	}
+	return time.FixedZone("CDT", -5*3600)
+}
 
 // OneSetupKey is the scenario record's system_config key — sibling of
 // ScenarioMetaKey, so the card reads both for one plan version.
@@ -392,3 +411,23 @@ func FollowNet(entry, closeAt float64, dir int, frictionPts float64) float64 {
 const FollowFrictionPts = 2.0
 
 var _ = math.Abs
+
+// PoolReadBefore returns the candidate-pool rows of the LAST read at or before
+// atMs for a trader/symbol, and the read's instant. ok=false when no read
+// exists in the window [sinceMs, atMs] — the backfill then says
+// unrecomputable:no_pool_read rather than judging against a later map (A24).
+func (s *CandidatePoolStore) PoolReadBefore(traderID, symbol string, sinceMs, atMs int64) (rows []CandidatePoolRow, readAtMs int64, ok bool) {
+	if s == nil || s.db == nil {
+		return nil, 0, false
+	}
+	var at struct{ ReadAtMs int64 }
+	err := s.db.Model(&CandidatePoolRow{}).Select("MAX(read_at_ms) AS read_at_ms").
+		Where("trader_id = ? AND symbol = ? AND read_at_ms >= ? AND read_at_ms <= ?", traderID, symbol, sinceMs, atMs).Scan(&at).Error
+	if err != nil || at.ReadAtMs == 0 {
+		return nil, 0, false
+	}
+	if err := s.db.Where("trader_id = ? AND symbol = ? AND read_at_ms = ?", traderID, symbol, at.ReadAtMs).Find(&rows).Error; err != nil || len(rows) == 0 {
+		return nil, 0, false
+	}
+	return rows, at.ReadAtMs, true
+}

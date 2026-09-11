@@ -519,6 +519,31 @@ func main() {
 				fadeBF.Untouched += r.Untouched
 			}
 			logger.Infof("%s", trader.FadePermissionBootLine(st, time.Now(), fadeBF))
+
+			// ONE SETUP (dispatch 102, 2026-09-10) — D9's two backfills, three-state,
+			// ONE SHOT per trader: verdicts at each episode's OPEN since W2's boot,
+			// follow-plans since W1's boot through the roll wave's contract filter.
+			// Then D8's boot line, every field READ. A fault never stops the boot.
+			var osBF store.OneSetupBackfillResult
+			var fpBF store.FollowBackfillResult
+			var osIDs []string
+			for _, at := range traderManager.GetAllTraders() {
+				if at == nil {
+					continue
+				}
+				osIDs = append(osIDs, at.GetID())
+				v := at.BackfillOneSetupVerdicts(store.OneSetupVerdictEraStart.UnixMilli(), time.Now())
+				osBF.Ran = osBF.Ran || v.Ran
+				osBF.Recomputed += v.Recomputed
+				osBF.Unrecomputable += v.Unrecomputable
+				osBF.Untouched += v.Untouched
+				f := at.BackfillFollowPlans(store.FollowPlanEraStart.UnixMilli(), time.Now())
+				fpBF.Ran = fpBF.Ran || f.Ran
+				fpBF.Recomputed += f.Recomputed
+				fpBF.Unrecomputable += f.Unrecomputable
+				fpBF.Untouched += f.Untouched
+			}
+			logger.Infof("%s", trader.OneSetupBootLine(st, time.Now(), osIDs, osBF, fpBF))
 		}
 	}
 	// W3 D7 (2026-09-09) — the map posture. Per-READ counts are n/a at boot (no

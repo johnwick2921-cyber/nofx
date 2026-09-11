@@ -40,9 +40,9 @@ func fpInput(tp *fpTape, nowMs int64) FollowPlanInput {
 // bias_would_flip_to; the plan's live bias is not an input at all.
 func TestFollowPlanE8BreakRetestExcursion(t *testing.T) {
 	tp := &fpTape{t0: fpNow()}
-	tp.flat(5, 101)  // bucket 0: sitting on the support
-	tp.flat(5, 98)   // bucket 1: CLOSED below 100 → the break, direction down
-	tp.flat(3, 97)   // drifting away below
+	tp.flat(5, 101)              // bucket 0: sitting on the support
+	tp.flat(5, 98)               // bucket 1: CLOSED below 100 → the break, direction down
+	tp.flat(3, 97)               // drifting away below
 	tp.add(98, 100.25, 97.5, 99) // the RETEST from below: range contains 100, trades THROUGH by a tick
 	// 20 five-minute buckets after the retest bar: first leg goes to 96 (favourable for the short), then to 103 (adverse)
 	tp.flat(50, 96)
@@ -142,7 +142,7 @@ func TestFollowPlanTouchIsNotAFill(t *testing.T) {
 func TestFollowPlanResistanceMirror(t *testing.T) {
 	tp := &fpTape{t0: fpNow()}
 	tp.flat(5, 99)
-	tp.flat(5, 102) // closed above → break up
+	tp.flat(5, 102)                // closed above → break up
 	tp.add(102, 102.5, 99.75, 101) // retest from above, through by a tick (low 99.75)
 	tp.flat(50, 104)
 	tp.flat(50, 98)
