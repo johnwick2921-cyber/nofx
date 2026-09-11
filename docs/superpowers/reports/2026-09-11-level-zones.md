@@ -1,4 +1,4 @@
-# Level zones — compatibility implemented; authorized fixture correction verified
+# Level zones — merged-head validation and authorized cutover
 
 ## C1 — the owner's four lines, traced first
 
@@ -533,3 +533,35 @@ named `nofx`, derive the Guide revision from that binary before rebuilding dist,
 then perform this lane's fresh five-leg gate and RELEASE → mv → VERIFY → print
 the resolved owner-run kill. A gate measured now would not be a fresh cutover
 gate for that later window. Boot and first-plan live proof remain unmeasured.
+
+
+## Mid-session cutover authorization and merged-head build
+
+The owner explicitly overrode A7's time window and A3's owner-run kill:
+"boot now, mid-session" and "you run the kill yourself". This lane will execute
+the resolved SIGKILL only after its own fresh gate, RELEASE → mv → VERIFY.
+Open positions still block; any in-flight planner read is waited out. Resting
+arms, if present, must be quoted before and their sweep result after. No gate
+code was edited and no order-specific pass path exists in this wave.
+
+[A] Acquired the free main-tree lock at 13:46:30 CT for 60 minutes. The lock's
+own bounded keeper beats every 120 seconds through 14:46:30 CT. Main was clean,
+on dev. Current dev at merge included `027da6f2` (PR #105, branch
+`docs/forming-candle-test`, implementation/report commit `53accd5e`), a separate
+read-only research lane. That lane's report is included, not authored by this
+lane. This lane's work is PR #104, branch `fix/level-zones`: core `8cfc7394`,
+strict-width correction `5e81db95`, test-only arm-clock correction `30d8c722`,
+with report/checklist follow-ups. This lane **built and gated the merged head,
+not every commit it contains**. Prior provenance markers `701637eb`/`616b52a9`
+already described running `802fb00b`; they are not new code in this cutover.
+
+[A] PR #104 merged as `6c96683c704f9a9ea5267af0ea33f0c5df631261`, with checklist
+class 123 assigned from the fresh all-format census (previous ceiling 122).
+Main fast-forwarded under the lock. The separate clean clone
+`/tmp/level-zones-build/nofx` checked out that exact merged HEAD. Full
+`go test ./...` PASS there; frontend 62 files / 427 tests PASS; `tsc --noEmit`
+PASS. Only then was the binary built. Its embedded revision is
+`6c96683c704f9a9ea5267af0ea33f0c5df631261`, `vcs.modified=false`, md5
+`838ae0762ef5f00e04d857c18eabe033`. The Guide SOURCE stamp and RELEASE above
+were derived from that binary, not from a guessed git head. Dist is rebuilt
+from the stamped source next. This is a pre-cutover receipt, not a boot claim.
