@@ -22,6 +22,39 @@ const dayPlan: KnobSpec[] = [
       'Yes — tri-state per session: inherit global / advisory / direction / strict. Session override wins; inherit (blank) = the global row above.',
   },
   {
+    label: 'One setup (switch)',
+    where:
+      'Strategy → Day Plan → one_setup_enabled (saved config; no slider yet)',
+    what: 'The book arms ONE play — the fade (reject) — at the best level near price, only on a permitted day. Gates arm AUTHORIZATION only; never cancels a resting arm, never places. The follow side is recorded, never armed.',
+    trader:
+      'ON [O] by default (an unset strategy reads ON — the field is a tri-state so an unset value is never read as OFF). OFF restores the wide book byte-identically (pinned against a golden generated before the wave existed).',
+    consumer:
+      'store/resolve_source.go ResolveOneSetup · trader/one_setup_wiring.go oneSetupConfig · trader/armed_executor.go (the seam)',
+    range: 'true / false',
+    systemDefault: 'ON (nil)',
+    recommended:
+      "⭐ ON — the owner's ruling of 2026-09-10; the less-contradicted side of round 17, not a proven one.",
+    whenToTouch:
+      'Only to restore the wide book for a comparison; the boot line names the switch and its source.',
+    perSession: 'No.',
+  },
+  {
+    label: 'One setup — minimum grade',
+    where: 'Strategy → Day Plan → one_setup_min_grade',
+    what: 'The lowest merged-candidate grade the best level near price may carry (A+ | A | B | C). The best level is chosen grade-first, distance-second among candidates inside the reachability band; a scenario on a lower-graded level than the best is declined level_not_best.',
+    trader:
+      'Raising it to A means the book arms only on A/A+ levels; a day with no such level near price arms nothing (declined level_no_candidate).',
+    consumer:
+      'store/resolve_source.go ResolveOneSetup · kernel/one_setup.go OneSetupBestCandidate',
+    range:
+      'A+ / A / B / C (a non-grade falls back to B and the boot line says so)',
+    systemDefault: 'B',
+    recommended:
+      "⭐ B [O] — the owner's default; the record has no grade cells yet to argue for A.",
+    whenToTouch: 'After the record shows the grade cells — not before.',
+    perSession: 'No.',
+  },
+  {
     label: 'Proximity filter',
     where: 'Strategy → Day Plan → slider 0.1–3.0',
     what: 'The day-trade band around price that seats levels in the card (±K × the daily-range proxy, ~±300pt × K on MNQ).',

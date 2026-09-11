@@ -13,6 +13,7 @@ import type {
 import { OrderTerms } from './OrderTerms'
 import { ScenarioEconomics } from './ScenarioEconomics'
 import { FadePermissionChip, type FadeLabelView } from './FadePermissionChip'
+import { OneSetupChip, type OneSetupView } from './OneSetupChip'
 import { StatusDot, type ScenarioStatus } from './chips'
 
 export function QualityChip({ quality }: { quality: string }) {
@@ -327,6 +328,7 @@ export function ScenarioList({
   fvgStates,
   armedStates,
   fadeLabels,
+  oneSetup,
   language,
 }: {
   scenarios: PlanScenario[]
@@ -337,6 +339,8 @@ export function ScenarioList({
   armedStates?: Record<string, PlanArmView>
   /** W2 FADE PERMISSION — per-scenario label; absent renders "not evaluated". */
   fadeLabels?: Record<string, FadeLabelView>
+  /** ONE SETUP — the seam's recorded verdict per scenario; absent renders "not evaluated". */
+  oneSetup?: OneSetupView
   /** A1/A4/C1 (fail-register wave): verdict basis, unevaluable ids, confirm verdicts */
   meta?: {
     basis?: Record<string, string>
@@ -436,6 +440,8 @@ export function ScenarioList({
                   <ArmedChip arm={armedStates?.[s.id]} />
                   {/* W2 fade permission — a label, never a gate. */}
                   <FadePermissionChip id={s.id} v={fadeLabels?.[s.id]} />
+                  {/* ONE SETUP — what the arm seam decided, never a re-evaluation. */}
+                  <OneSetupChip id={s.id} os={oneSetup} />
                 </div>
               )}
               <ScenarioIdentity

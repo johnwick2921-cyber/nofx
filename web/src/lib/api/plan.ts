@@ -222,6 +222,29 @@ export interface PlanToday {
   scenario_liveness?: ScenarioLiveness
   scenario_deaths?: Record<string, ScenarioDeath>
   // A1/A4: verdict basis ("machine"|"heuristic") + scenarios with no anchor
+  /** ONE SETUP (dispatch 102) — the arm seam's recorded verdict per scenario. */
+  one_setup?: {
+    enabled: boolean
+    min_grade?: string
+    evaluated_ms?: number
+    scenarios?: Record<
+      string,
+      {
+        allowed: boolean
+        level: string
+        play: string
+        permission: string
+        reason?: string
+        best_price?: number
+        best_names?: string
+        best_grade?: string
+        target?: string
+        waiting?: boolean
+        rank?: number
+        evaluated_ms?: number
+      }
+    >
+  }
   scenario_meta?: {
     basis?: Record<string, string>
     unevaluable?: string[]

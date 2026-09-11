@@ -498,6 +498,10 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 		// renders it beside the scenario and nothing downstream refuses on it.
 		"fade_permission": s.fadePermissionFor(traderID, &doc),
 		"fade_counter":    s.fadeCounterFor(traderID),
+		// ONE SETUP (dispatch 102, 2026-09-10) — the arm seam's RECORDED verdict
+		// per scenario (what it decided, never a re-evaluation) plus the resolved
+		// switch; absent record → the switch only, scenarios empty (A24).
+		"one_setup": s.oneSetupFor(traderID, row.PlanID, row.Version),
 		// A1/A4 (fail-register wave): verdict basis (machine vs prose-anchor
 		// heuristic) + unevaluable scenario ids — the card renders them
 		// distinctly instead of dressing a heuristic as a machine verdict.
@@ -2345,6 +2349,29 @@ func planW3Map(traderID, symbol string, bars []market.Kline, now time.Time) []ke
 		return nil
 	}
 	return kernel.BuildMapCandidates(scored, price, kernel.StaleConfirmATR5m(bars), kernel.MapCandidateOpts{})
+}
+
+// oneSetupFor reads the arm seam's scenario record for the displayed version.
+// When no record exists (the seam has not run on this version, or the switch
+// is OFF) the payload carries the RESOLVED switch and grade with an empty
+// scenarios map — the chip then reads "one-setup: off" or "not evaluated",
+// never "allowed".
+func (s *Server) oneSetupFor(traderID, planID string, version int) map[string]any {
+	enabled, grade := true, "B"
+	if at, err := s.traderManager.GetTrader(traderID); err == nil && at != nil {
+		enabled, grade, _, _ = store.ResolveOneSetup(at.GetStrategyConfig())
+	}
+	out := map[string]any{"enabled": enabled, "min_grade": grade, "scenarios": map[string]any{}}
+	if s.store == nil {
+		return out
+	}
+	if rec := s.store.GetOneSetupRecord(traderID, planID, version); rec != nil {
+		out["enabled"] = rec.Enabled
+		out["min_grade"] = rec.MinGrade
+		out["evaluated_ms"] = rec.EvaluatedMs
+		out["scenarios"] = rec.Scenarios
+	}
+	return out
 }
 
 // fadePermissionFor evaluates the live fade label for every scenario in doc.
