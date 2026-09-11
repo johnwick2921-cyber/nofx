@@ -33,8 +33,13 @@ func OneSetupBootLine(st *store.Store, now time.Time, traderIDs []string, bfV st
 	if enabled {
 		sw = "ON"
 	}
-	// The session-day's TRADE DATE: a day that opens 17:00 CT carries the next calendar date.
-	tradeDate := plannerTradeDateCT(kernel.CMESessionDayStart(now).Add(23 * time.Hour))
+	// The counters are keyed by the PLAN'S trade date (kernel.PlanTradeDateFor
+	// at the seam = the session instance's chain date), so the boot line asks
+	// the same resolver: the active session's chain date, else the calendar
+	// date. The first boot (01:45 CT 09-11) derived a session-day date instead
+	// and printed 0 for a key that held 2 (class 45/49 on this line's own
+	// first emission; report §F).
+	tradeDate := oneSetupBootTradeDate(now)
 	counts := store.OneSetupCounts{}
 	follow := store.FollowPlanCounts{}
 	if st != nil {
@@ -230,4 +235,14 @@ func mergedFromPool(pool []store.CandidatePoolRow, price float64) []kernel.MapCa
 			Grade: p.Grade, Score: p.Score, MergedCount: 1, MergedCredit: 1, Distance: p.LevelPrice - price})
 	}
 	return out
+}
+
+// oneSetupBootTradeDate resolves "today" the way the plan chain does.
+func oneSetupBootTradeDate(now time.Time) string {
+	if sess, ok := kernel.DefaultSessionRegistry().ActiveSession(now); ok {
+		if td, ok := kernel.PlanChainTradeDate(sess, now); ok {
+			return td
+		}
+	}
+	return plannerTradeDateCT(now)
 }
