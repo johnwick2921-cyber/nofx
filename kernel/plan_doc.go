@@ -795,10 +795,17 @@ var structuralLabels = map[string]bool{
 // structuralPrefix returns the leading structural token of a label (e.g.
 // "PDL", "EQH·4h" → "EQH"), "" when the label isn't structural. Only the "·"
 // separator is split — RTH-H/AS-H/LDN-H are exact structural labels.
+//
+// W3's merged names (owner ruling 2026-09-11): a merged reference renders as
+// EVERY member's label joined by " · " ("RTH-H · EQL·4h · EQH·15m",
+// MapCandidate.NamesLine), and the model copies that line. The PRIMARY
+// component is the first one, so the split token is trimmed before the
+// lookup — "RTH-H " is "RTH-H". Before this, every merged label read as a
+// re-invented anchor and cost a repair round on every read.
 func structuralPrefix(label string) string {
 	l := strings.TrimSpace(label)
 	if i := strings.Index(l, "·"); i > 0 {
-		l = l[:i]
+		l = strings.TrimSpace(l[:i])
 	}
 	if structuralLabels[l] {
 		return l
