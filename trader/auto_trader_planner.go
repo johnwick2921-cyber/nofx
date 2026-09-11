@@ -2668,14 +2668,50 @@ func storedReplanCap(st *store.Store, traderID, session string) int {
 // plan lookup is trader-scoped: a trader can NEVER receive another trader's
 // plan row. no_trade/died plans and off-session return nil → the executor
 // prompt is unchanged.
+//
+// CLEANUP BATCH 2, B3 (2026-09-11): the wall clock is a SEAM now —
+// installActivePlanProviderAt takes the clock, this entry point hands it
+// time.Now (clock-seams.list). And the nil path is no longer silent: a
+// refused arm logs why, but a MISSING PLAN logged nothing, which is what
+// sent a lane to inspect the split logic — the one thing that was not
+// wrong. The provider is called every executor cycle, so the WARN fires on
+// the CHANGE of reason (and once more when a plan reappears), never per call.
 func installActivePlanProvider(at *AutoTrader, st *store.Store) {
+	installActivePlanProviderAt(at, st, time.Now)
+}
+
+// planProviderNilReason is the reason the provider last returned nil for a
+// trader ("" = it last returned a plan). Keyed per trader so two day-plan
+// traders never share a state (P0-A).
+var (
+	planProviderNilMu     sync.Mutex
+	planProviderNilReason = map[string]string{}
+)
+
+// notePlanProviderNil logs the reason the provider returns nil, once per
+// change of reason, and logs the recovery once when a plan is served again.
+func notePlanProviderNil(at *AutoTrader, reason string, now time.Time) {
+	planProviderNilMu.Lock()
+	prev, had := planProviderNilReason[at.id]
+	planProviderNilReason[at.id] = reason
+	planProviderNilMu.Unlock()
+	switch {
+	case reason == "" && had && prev != "":
+		at.logInfof("🗓️ active-plan provider: a plan is served again at %s (was: %s)", kernel.ClockCTSeconds(now), prev)
+	case reason != "" && reason != prev:
+		at.logWarnf("🗓️ active-plan provider returns NO PLAN at %s — %s. The executor runs without a plan until this changes; this line prints once per reason, not per cycle (cleanup batch 2, B3).", kernel.ClockCTSeconds(now), reason)
+	}
+}
+
+func installActivePlanProviderAt(at *AutoTrader, st *store.Store, clock func() time.Time) {
 	kernel.SetTraderPlanProviders(at.id, kernel.TraderPlanProviders{
-		SessionRegistry: func() kernel.SessionRegistry { return at.sessionRegistry(time.Now()) },
+		SessionRegistry: func() kernel.SessionRegistry { return at.sessionRegistry(clock()) },
 		ActivePlan: func(symbol string) *kernel.ActivePlan {
-			now := time.Now()
+			now := clock()
 			reg := at.sessionRegistry(now) // W8 — provider honors the admin registry too
 			sess, ok := reg.ActiveSession(now)
 			if !ok {
+				notePlanProviderNil(at, "no session is live in the registry", now)
 				return nil
 			}
 			// H8 — the executor must honor the SAME resolver the read scheduler uses.
@@ -2683,6 +2719,7 @@ func installActivePlanProvider(at *AutoTrader, st *store.Store) {
 			// on at the strategy level must reach the executor (before this it was
 			// written by the read and then dropped here).
 			if runnable, _ := at.sessionRunnable(sess); !runnable {
+				notePlanProviderNil(at, "session "+sess.Name+" is live but not runnable for this trader", now)
 				return nil
 			}
 			// P0-B — chain identity is the session INSTANCE's date (wrap-aware):
@@ -2694,15 +2731,26 @@ func installActivePlanProvider(at *AutoTrader, st *store.Store) {
 			}
 			// P0-A — trader-scoped lookup: THIS trader's row only.
 			row, err := st.Plan().GetLatestPlanForTraderSession(tradeDate, sess.Name, at.id)
-			if err != nil || row == nil || row.Lifecycle != "active" {
+			if err != nil {
+				notePlanProviderNil(at, fmt.Sprintf("plan lookup for %s %s failed: %v", sess.Name, tradeDate, err), now)
+				return nil
+			}
+			if row == nil {
+				notePlanProviderNil(at, fmt.Sprintf("no plan row for %s %s (nothing authored yet)", sess.Name, tradeDate), now)
+				return nil
+			}
+			if row.Lifecycle != "active" {
+				notePlanProviderNil(at, fmt.Sprintf("plan %s v%d for %s %s is %q, not active", row.PlanID, row.Version, sess.Name, tradeDate, row.Lifecycle), now)
 				return nil
 			}
 			// W4 — the executor cites the OVERLAY-RESOLVED plan_final (owner edits reach
 			// the brain), not the base doc. resolveActivePlanDoc folds overlays + armors.
 			doc, ok := resolveActivePlanDoc(st, row)
 			if !ok {
+				notePlanProviderNil(at, fmt.Sprintf("plan %s v%d could not be resolved with its overlays", row.PlanID, row.Version), now)
 				return nil
 			}
+			notePlanProviderNil(at, "", now)
 			// The cap must come from the SAME resolver the card uses. A literal 2 here
 			// meant the executor prompt and the dashboard narrated different rulebooks
 			// the moment a session overrode replan_cap: on 2026-08-16 the owner raised

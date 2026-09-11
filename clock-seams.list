@@ -64,3 +64,4 @@ researchsnapshot/plan.go:RequestConfig:RequestConfigAt
 trader/research_snapshot.go:recordResearchPlacement:recordResearchPlacementAt
 store/research_record.go:recordResearchPlacementTimeout:recordResearchPlacementTimeoutAt
 trader/armed_executor.go:runArmedPlacement:runArmedPlacementAt
+trader/auto_trader_planner.go:installActivePlanProvider:installActivePlanProviderAt
