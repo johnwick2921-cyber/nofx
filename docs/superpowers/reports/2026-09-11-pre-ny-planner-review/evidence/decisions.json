@@ -1,0 +1,57 @@
+[
+  {
+    "id": 40016,
+    "timestamp": "2026-09-11 13:17:16.373137649+00:00",
+    "decisions": "[{\"action\":\"wait\",\"symbol\":\"MNQ\",\"quantity\":0,\"leverage\":0,\"price\":0,\"reasoning\":\"Price 29438 after tagging ONH 29500.75 (08:05) and rejecting ~63 pts lower. 15m RSI 70.03 confirms overbought, supporting plan's short bias. But S1 confirm is NOT MET — it requires a touch/tag of PDH 29508.25 with a 1m/5m close back below; price only reached 29500.75. Chasing a short here at 29438 is poor structure: nearest entry-candidate ONH is 62.75 pts above, so a stop there vs. magnet VWAP+1σ at 29357 gives R:R \\u003c 2×. Best path is a retest of the 29500.75–29508.25 cluster for the S1 reject short. No high-confidence entry now; stand aside and let the armed S1 arm or a cleaner retest develop.\",\"order_id\":0,\"timestamp\":\"2026-09-11T13:17:15.372615231Z\",\"success\":true,\"error\":\"\"}]",
+    "success": 1,
+    "error_message": "",
+    "plan_id": "2026-09-11:LONDON:TRADER_A",
+    "plan_version": 5,
+    "overlay_version": 0,
+    "cited_scenario_id": ""
+  },
+  {
+    "id": 40015,
+    "timestamp": "2026-09-11 13:15:40.160821782+00:00",
+    "decisions": "[{\"action\":\"wait\",\"symbol\":\"MNQ\",\"quantity\":0,\"leverage\":0,\"price\":0,\"reasoning\":\"Flat. Price 29443 after rejecting ONH 29500.75; 5m/15m structure is ranging, 15m RSI 71. The plan's S1 short requires a rally into the 29503.38–29508.25 PDH/4h OB cluster with a close rejection below 29508.25 — not yet met. Current pullback lacks confirmed 5m close below 29434.50 or bearish displacement; entering now would be chasing an unproven fade with poor R:R. S2 long is inactive until a flush to PDC 29124.25 and reclaim. No high-confidence setup ≥60. Wait for S1 retest or a clean break with continuation thesis.\",\"order_id\":0,\"timestamp\":\"2026-09-11T13:15:39.160028674Z\",\"success\":true,\"error\":\"\"}]",
+    "success": 1,
+    "error_message": "",
+    "plan_id": "2026-09-11:LONDON:TRADER_A",
+    "plan_version": 5,
+    "overlay_version": 0,
+    "cited_scenario_id": ""
+  },
+  {
+    "id": 40014,
+    "timestamp": "2026-09-11 13:13:02.7672657+00:00",
+    "decisions": "[{\"action\":\"wait\",\"symbol\":\"MNQ\",\"quantity\":0,\"leverage\":0,\"price\":0,\"reasoning\":\"No active day plan is published, and the system explicitly refuses new entries this cycle (C6: plan dormant). With no open position and entries disallowed, the only valid action is wait.\\n\\nPrice is 29445.00, up near the ONH/PDH liquidity zone (29500.75–29508.25) after a sharp 15m BOS-up, but RSI on 15m is elevated (71.6) and the 1h structure remains trending down on the higher timeframe. The recent session shows a wide liquidation spike down to 29204.50 then a rapid reclaim. No new entry can be taken until a valid plan resumes.\",\"order_id\":0,\"timestamp\":\"2026-09-11T13:13:01.76722073Z\",\"success\":true,\"error\":\"\"}]",
+    "success": 1,
+    "error_message": "",
+    "plan_id": "",
+    "plan_version": 0,
+    "overlay_version": 0,
+    "cited_scenario_id": ""
+  },
+  {
+    "id": 40013,
+    "timestamp": "2026-09-11 13:11:00.562795358+00:00",
+    "decisions": "[{\"action\":\"wait\",\"symbol\":\"MNQ\",\"quantity\":0,\"leverage\":0,\"price\":0,\"reasoning\":\"No active day plan — plan dormant due to flip/death line breach; entries are refused this cycle per C6. Price is above value area and near ONH/PDH with RSI elevated, but without a valid plan scenario I cannot open. Standing aside and preserving capital.\",\"order_id\":0,\"timestamp\":\"2026-09-11T13:10:59.56247984Z\",\"success\":true,\"error\":\"\"}]",
+    "success": 1,
+    "error_message": "",
+    "plan_id": "",
+    "plan_version": 0,
+    "overlay_version": 0,
+    "cited_scenario_id": ""
+  },
+  {
+    "id": 40012,
+    "timestamp": "2026-09-11 13:09:01.394923434+00:00",
+    "decisions": "[{\"action\":\"wait\",\"symbol\":\"MNQ\",\"quantity\":0,\"leverage\":0,\"price\":0,\"reasoning\":\"No active plan; entries are refused per C6 (plan dormant / flip-death line breached). Flat with no position to manage. Price is above value area and RSI elevated, but no new entries permitted this cycle.\",\"order_id\":0,\"timestamp\":\"2026-09-11T13:09:00.39465684Z\",\"success\":true,\"error\":\"\"}]",
+    "success": 1,
+    "error_message": "",
+    "plan_id": "",
+    "plan_version": 0,
+    "overlay_version": 0,
+    "cited_scenario_id": ""
+  }
+]

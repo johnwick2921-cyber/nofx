@@ -1,0 +1,10 @@
+[
+  {
+    "id": 180,
+    "session": "NY",
+    "created_at": "2026-09-11 13:15:47.443029304+00:00",
+    "attempt": 1,
+    "reject_reason": "level label provenance: 29275.25 labeled \"RTH-H · EQL·4h · EQH·15m\" but the machine table says \"RTH-H\"; 29038.00 labeled \"PDL · SWG-L·15m · EQL·1h · EQL·15m\" but the machine table says \"PDL\" — copy the machine table's label for these prices",
+    "prompt_hash": "23fb62c19af0"
+  }
+]

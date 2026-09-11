@@ -1,0 +1,6 @@
+[
+  {
+    "key": "session_registry",
+    "value": "{\"sessions\": [{\"name\": \"ASIA\", \"window_start_ct\": \"17:00\", \"window_end_ct\": \"02:00\", \"read_ct\": \"16:30\", \"flat_ct\": \"02:00\", \"killzones\": [{\"name\": \"asia_kz\", \"start_ct\": \"19:00\", \"end_ct\": \"23:00\"}], \"enabled\": false}, {\"name\": \"LONDON\", \"window_start_ct\": \"02:00\", \"window_end_ct\": \"08:30\", \"read_ct\": \"01:30\", \"flat_ct\": \"08:30\", \"killzones\": [{\"name\": \"london_kz\", \"start_ct\": \"02:00\", \"end_ct\": \"05:00\"}], \"enabled\": false}, {\"name\": \"NY\", \"window_start_ct\": \"08:30\", \"window_end_ct\": \"14:45\", \"read_ct\": \"08:00\", \"flat_ct\": \"14:45\", \"killzones\": [{\"name\": \"ny_am\", \"start_ct\": \"08:30\", \"end_ct\": \"11:00\"}, {\"name\": \"ny_pm\", \"start_ct\": \"13:00\", \"end_ct\": \"14:45\"}], \"enabled\": true}], \"half_days\": {\"2026-09-06\": \"12:00\", \"2026-11-25\": \"12:00\", \"2026-11-26\": \"12:15\", \"2026-12-23\": \"12:15\"}}"
+  }
+]

@@ -1,0 +1,97 @@
+[
+  {
+    "path": "README.md",
+    "bytes": 802,
+    "sha256": "09b26981434149610aece29ddcd61e02da88596868bfab0d13fbe2b813e0beba"
+  },
+  {
+    "path": "evidence/anchor-reproduction.json",
+    "bytes": 800,
+    "sha256": "5b724e058dc1625b1c7d8a9204fc52f81920722dddf13d5a8dedcff07464f777"
+  },
+  {
+    "path": "evidence/bars-cpi.json",
+    "bytes": 16078,
+    "sha256": "f174332ad772623c37b5313e8755df452d16308174b939d92c2216645788ef3f"
+  },
+  {
+    "path": "evidence/bars-overnight-read.json",
+    "bytes": 119829,
+    "sha256": "33f5e8d322b2b31836a344cd96833d66e607a1c7f4c9f842f6f424c2c2512a51"
+  },
+  {
+    "path": "evidence/boot-policy-lines.txt",
+    "bytes": 2953,
+    "sha256": "cdf786414e389a0e651dc94d86504644562e93cca034f3be55157ef7ef140510"
+  },
+  {
+    "path": "evidence/candidate-pool.json",
+    "bytes": 24360,
+    "sha256": "1ef42187b07e3518a3706de2265039c42e82e99558cc493874ae1b8438bcbfed"
+  },
+  {
+    "path": "evidence/closeout.json",
+    "bytes": 5100,
+    "sha256": "6d28971c21c9a30a080385f2e3f8827089b570e172d263a74c40c5a55567693d"
+  },
+  {
+    "path": "evidence/day-plan-config.json",
+    "bytes": 947,
+    "sha256": "3cab1a5b7ceb55e8b8bdc5596b2b7252a984fe4dd29fb8bca160262f746944f7"
+  },
+  {
+    "path": "evidence/decisions.json",
+    "bytes": 4392,
+    "sha256": "372738a4d95c25a333141082729f02f0313afc212dc18976c0115ec407c5bd20"
+  },
+  {
+    "path": "evidence/facts.json",
+    "bytes": 11259,
+    "sha256": "5dbb0a49bd1fcd3a69ee8a497dfb30abf27602bcd41daf1150e7b1fde4e4b629"
+  },
+  {
+    "path": "evidence/lifecycle.json",
+    "bytes": 287,
+    "sha256": "d311f5b74f5784076358c2a634dd29408fce5695f8b9ef6000a1a9356ecdf687"
+  },
+  {
+    "path": "evidence/logs.json",
+    "bytes": 2485,
+    "sha256": "626ad867a04676d568ff2ec008dd729dae6803665ee600ad47869633ac939334"
+  },
+  {
+    "path": "evidence/ny-prompt.txt",
+    "bytes": 38748,
+    "sha256": "23fb62c19af0808bd7a045612e5d59588d51d10206c3cb1db184c03555108665"
+  },
+  {
+    "path": "evidence/plans.json",
+    "bytes": 81150,
+    "sha256": "8b4a74c54fa7fea4c84e0b271a4e27a907e69d355d1e3f982d9f9d5d62df7907"
+  },
+  {
+    "path": "evidence/rejected-ny.json",
+    "bytes": 442,
+    "sha256": "23925791ede403ec7a76609aa7fb19843a831d6d5c11eb5909e45b5c373bcaa2"
+  },
+  {
+    "path": "evidence/risk-fields.json",
+    "bytes": 148,
+    "sha256": "0a4df23577bf154c3d36b715e1844053ecec5f3195b1265ea6b582db468ab1e9"
+  },
+  {
+    "path": "evidence/session-registry.json",
+    "bytes": 996,
+    "sha256": "1c54823b5fc9e1f6e4fe0d0574ade793d3dc64e36b5a16ac37861e37fac7db44"
+  },
+  {
+    "path": "review.md",
+    "bytes": 26355,
+    "sha256": "f84047b39729c8627dc74b6fbbe3761cf999400f40f231943b56cba3a4eaccc1"
+  },
+  {
+    "path": "verification.json",
+    "bytes": 3633,
+    "sha256": "f12b25944596b5248c417bd5d1d505a3304a2ef54eed8a16a379160f6c115eb7"
+  }
+]

@@ -1,0 +1,10 @@
+[
+  {
+    "id": 32,
+    "plan_id": "2026-09-11:LONDON:TRADER_A",
+    "version": 4,
+    "event": "dormant",
+    "reason": "dormant:flip:flip-condition: 5m_close close above 29457.40 (buffer 0.5×ATR14, 2× 5m closes) → bias short",
+    "at": "2026-09-11 08:05:01.003199945-05:00"
+  }
+]

@@ -1,0 +1,56 @@
+[
+  {
+    "id": 44443,
+    "ts_utc": 1789132332502,
+    "level": "warning",
+    "component": "logger.go:158",
+    "trader_id": "TRADER_A",
+    "message": "[trader_id=TRADER_A trader_name=TRADER_A] 📐 planner attempt 1/3 rejected: level label provenance: 29275.25 labeled \"RTH-H · EQL·4h · EQH·15m\" but the machine table says \"RTH-H\" — copy the machine table's label for these prices",
+    "fields_json": "{}"
+  },
+  {
+    "id": 44447,
+    "ts_utc": 1789132404196,
+    "level": "warning",
+    "component": "logger.go:158",
+    "trader_id": "TRADER_A",
+    "message": "[trader_id=TRADER_A trader_name=TRADER_A] plan liveness write: 2026-09-11 LONDON S1 — UNKNOWN: authored invalidation is outside the supported explicit 1/2 × 5m close grammar; ACCEPTED for this check",
+    "fields_json": "{}"
+  },
+  {
+    "id": 44448,
+    "ts_utc": 1789132404198,
+    "level": "warning",
+    "component": "logger.go:158",
+    "trader_id": "TRADER_A",
+    "message": "[trader_id=TRADER_A trader_name=TRADER_A] plan liveness write: 2026-09-11 LONDON S2 — UNKNOWN: authored invalidation is outside the supported explicit 1/2 × 5m close grammar; ACCEPTED for this check",
+    "fields_json": "{}"
+  },
+  {
+    "id": 44458,
+    "ts_utc": 1789132547443,
+    "level": "warning",
+    "component": "logger.go:158",
+    "trader_id": "TRADER_A",
+    "message": "[trader_id=TRADER_A trader_name=TRADER_A] 📐 planner attempt 1/3 rejected: level label provenance: 29275.25 labeled \"RTH-H · EQL·4h · EQH·15m\" but the machine table says \"RTH-H\"; 29038.00 labeled \"PDL · SWG-L·15m · EQL·1h · EQL·15m\" but the machine table says \"PDL\" — copy the machine table's label for these prices",
+    "fields_json": "{}"
+  },
+  {
+    "id": 44460,
+    "ts_utc": 1789132592529,
+    "level": "warning",
+    "component": "logger.go:158",
+    "trader_id": "TRADER_A",
+    "message": "[trader_id=TRADER_A trader_name=TRADER_A] plan liveness write: 2026-09-11 NY S1 — UNKNOWN: authored invalidation is outside the supported explicit 1/2 × 5m close grammar; ACCEPTED for this check",
+    "fields_json": "{}"
+  },
+  {
+    "id": 44461,
+    "ts_utc": 1789132592529,
+    "level": "warning",
+    "component": "logger.go:158",
+    "trader_id": "TRADER_A",
+    "message": "[trader_id=TRADER_A trader_name=TRADER_A] plan liveness write: 2026-09-11 NY S2 — UNKNOWN: authored invalidation is outside the supported explicit 1/2 × 5m close grammar; ACCEPTED for this check",
+    "fields_json": "{}"
+  }
+]

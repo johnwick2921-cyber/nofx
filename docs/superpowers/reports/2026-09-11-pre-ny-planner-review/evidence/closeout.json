@@ -1,0 +1,89 @@
+{
+  "checked_at": "2026-09-11T08:24:00.581199-05:00",
+  "health": {
+    "revision": "dd1e2f0f0ae1",
+    "status": "ok",
+    "time": null
+  },
+  "newest_ny": [
+    {
+      "rowid": 316,
+      "plan_id": "2026-09-11:NY:TRADER_A",
+      "version": 1,
+      "created_at": "2026-09-11 08:16:32.529191783-05:00",
+      "prompt_hash": "23fb62c19af0",
+      "lifecycle": "active"
+    }
+  ],
+  "last_mnq_1m": [
+    {
+      "open_time_ms": 1789132980000,
+      "o": 29428.75,
+      "h": 29432.5,
+      "l": 29424.0,
+      "c": 29430.5,
+      "v": 1252.0,
+      "source": "live",
+      "contract": "MNQ 09-26"
+    }
+  ],
+  "last_mnq_5m": [
+    {
+      "open_time_ms": 1789132500000,
+      "o": 29443.25,
+      "h": 29448.5,
+      "l": 29427.25,
+      "c": 29430.5,
+      "v": 10840.0,
+      "source": "live",
+      "contract": "MNQ 09-26"
+    }
+  ],
+  "open_positions": [],
+  "armed_state_counts": [
+    {
+      "state": "cancelled",
+      "n": 83
+    },
+    {
+      "state": "filled",
+      "n": 23
+    },
+    {
+      "state": "superseded",
+      "n": 10
+    }
+  ],
+  "broker": [
+    {
+      "id": 19688,
+      "account": "SIM_ACCOUNT_A",
+      "orders_json": "[]",
+      "working_count": 0,
+      "received_at_ms": 1789133011706
+    }
+  ],
+  "decisions": [
+    {
+      "id": 40019,
+      "timestamp": "2026-09-11 13:23:36.092945968+00:00",
+      "plan_id": "2026-09-11:LONDON:TRADER_A",
+      "plan_version": 5,
+      "decisions": "[{\"action\":\"wait\",\"symbol\":\"MNQ\",\"quantity\":0,\"leverage\":0,\"price\":0,\"reasoning\":\"Price 29427 after a strong post-CPI rally (low 29204.50 → high 29500.75). The DAY PLAN's short bias is intact (no 5m close above 29508.25), but the primary setup S1 requires tagging 29508.25 PDH and printing a close back below it with 15m RSI \\u003e70. Price only reached 29500.75 ONH — the 29508.25 touch never occurred, so S1 is NOT confirmed.\\n\\nShorting here without the tagged rejection would be chasing a fade into an established 5m/15m uptrend, with ONH rests above (29500.75) requiring a stop beyond ~29508+, a ~80pt risk that breaches the 15–50pt sanity band. 15m/1h RSI 67.8/61.9 with no bearish displacement yet — a pullback could be ordinary retrace before continuation higher.\\n\\nS2 (long on PDC flush to 29124) remains far away and unconfirmed stale. No qualifying trigger on either scenario right now; post-CPI volatility argues for discipline over forcing an entry. Waiting for the PDH retest/rejection or a flush-and-reclaim is the correct posture.\",\"order_id\":0,\"timestamp\":\"2026-09-11T13:23:35.092004159Z\",\"success\":true,\"error\":\"\"}]"
+    },
+    {
+      "id": 40018,
+      "timestamp": "2026-09-11 13:21:28.90857842+00:00",
+      "plan_id": "2026-09-11:LONDON:TRADER_A",
+      "plan_version": 5,
+      "decisions": "[{\"action\":\"wait\",\"symbol\":\"MNQ\",\"quantity\":0,\"leverage\":0,\"price\":0,\"reasoning\":\"Price 29433.75 after a violent CPI-driven spike to ONH 29500.75 and pullback. It sits inside a tight chop between ~29427 and 29484 (VWAP+2σ), with 5m/15m explicitly RANGING — my own rule warns against trading inside sideways zones.\\n\\nS1 (fade the 29503–29508 PDH/OB cluster) is NOT triggered: price tagged 29500.75 but not 29508.25, and no 1m/5m close-back-below rejection has printed. The 4h supply/OB at 29433–29439 has already been swept and consumed, so it's not clean resistance anymore. S2 confirm is stale (context 29124 vs price now 29433).\\n\\n15m RSI cooling from 77 to 69 while price chops — no oversold/overbought edge either side. The magnet (VWAP+1σ at 29360) is ~70 pts away, too far to justify a chase short without a trigger at 29484 rejection evidence.\\n\\nCleanest read: post-news digestion, no high-confidence directional setup, both plan scenarios unmet. Wait for either a fresh retest/rejection of 29484–29508 for S1 or a deeper flush structure. Confidence \\u003c 60.\",\"order_id\":0,\"timestamp\":\"2026-09-11T13:21:27.907487884Z\",\"success\":true,\"error\":\"\"}]"
+    },
+    {
+      "id": 40017,
+      "timestamp": "2026-09-11 13:19:16.366500594+00:00",
+      "plan_id": "2026-09-11:LONDON:TRADER_A",
+      "plan_version": 5,
+      "decisions": "[{\"action\":\"wait\",\"symbol\":\"MNQ\",\"quantity\":0,\"leverage\":0,\"price\":0,\"reasoning\":\"Price 29439 is mid-range after a strong overnight rally to ONH 29500.75. The 4h OB (29439.62) and 4h Supply (29433.88) are both CONSUMED/flipped, so they offer no fresh short entry. 15m RSI is 70.25 (overbought), supporting the plan's short bias, but S1's entry condition requires a fresh touch and 1m/5m rejection of the 29503.38–29508.25 OB/PDH cluster — NOT yet met (price peaked at 29500.75, ~8 points shy). Entering short now at 29439 would be chasing a mid-range level with no reaction evidence, and long is prohibited before the PDC flush/reclaim. No breakdown scenario is authored for a displacement lower. Flat is correct: wait for the S1 rejection at the cluster or a deeper pullback toward VWAP+1σ.\",\"order_id\":0,\"timestamp\":\"2026-09-11T13:19:15.365467676Z\",\"success\":true,\"error\":\"\"}]"
+    }
+  ]
+}

@@ -1,0 +1,156 @@
+{
+  "scope": "Documentation publication; no live-system re-audit",
+  "checked_runtime_revision": "dd1e2f0f0ae11834ca3b1c6ff79fe8055a2284f7",
+  "publication_base": "616b52a9def4042ce40308deba46529723ba01d7",
+  "checks": [
+    {
+      "check": "local link evidence/plans.json",
+      "passed": true
+    },
+    {
+      "check": "local link evidence/facts.json",
+      "passed": true
+    },
+    {
+      "check": "local link evidence/ny-prompt.txt",
+      "passed": true
+    },
+    {
+      "check": "local link evidence/rejected-ny.json",
+      "passed": true
+    },
+    {
+      "check": "local link evidence/candidate-pool.json",
+      "passed": true
+    },
+    {
+      "check": "local link evidence/decisions.json",
+      "passed": true
+    },
+    {
+      "check": "local link evidence/closeout.json",
+      "passed": true
+    },
+    {
+      "check": "local link evidence/day-plan-config.json",
+      "passed": true
+    },
+    {
+      "check": "local link evidence/session-registry.json",
+      "passed": true
+    },
+    {
+      "check": "local link evidence/bars-cpi.json",
+      "passed": true
+    },
+    {
+      "check": "local link evidence/boot-policy-lines.txt",
+      "passed": true
+    },
+    {
+      "check": "local link evidence/risk-fields.json",
+      "passed": true
+    },
+    {
+      "check": "local link evidence/logs.json",
+      "passed": true
+    },
+    {
+      "check": "local link evidence/anchor-reproduction.json",
+      "passed": true
+    },
+    {
+      "check": "local link evidence/bars-overnight-read.json",
+      "passed": true
+    },
+    {
+      "check": "local link evidence/ny-prompt.txt",
+      "passed": true
+    },
+    {
+      "check": "local link evidence/lifecycle.json",
+      "passed": true
+    },
+    {
+      "check": "S1 first-obstacle R below 2",
+      "passed": true
+    },
+    {
+      "check": "S2 first-obstacle R below 2",
+      "passed": true
+    },
+    {
+      "check": "no raw identifier README.md",
+      "passed": true
+    },
+    {
+      "check": "no raw identifier review.md",
+      "passed": true
+    },
+    {
+      "check": "no raw identifier evidence/day-plan-config.json",
+      "passed": true
+    },
+    {
+      "check": "no raw identifier evidence/risk-fields.json",
+      "passed": true
+    },
+    {
+      "check": "no raw identifier evidence/lifecycle.json",
+      "passed": true
+    },
+    {
+      "check": "no raw identifier evidence/boot-policy-lines.txt",
+      "passed": true
+    },
+    {
+      "check": "no raw identifier evidence/closeout.json",
+      "passed": true
+    },
+    {
+      "check": "no raw identifier evidence/ny-prompt.txt",
+      "passed": true
+    },
+    {
+      "check": "no raw identifier evidence/rejected-ny.json",
+      "passed": true
+    },
+    {
+      "check": "no raw identifier evidence/session-registry.json",
+      "passed": true
+    },
+    {
+      "check": "no raw identifier evidence/anchor-reproduction.json",
+      "passed": true
+    },
+    {
+      "check": "no raw identifier evidence/facts.json",
+      "passed": true
+    },
+    {
+      "check": "no raw identifier evidence/candidate-pool.json",
+      "passed": true
+    },
+    {
+      "check": "no raw identifier evidence/decisions.json",
+      "passed": true
+    },
+    {
+      "check": "no raw identifier evidence/plans.json",
+      "passed": true
+    },
+    {
+      "check": "no raw identifier evidence/bars-overnight-read.json",
+      "passed": true
+    },
+    {
+      "check": "no raw identifier evidence/bars-cpi.json",
+      "passed": true
+    },
+    {
+      "check": "no raw identifier evidence/logs.json",
+      "passed": true
+    }
+  ],
+  "credential_pattern_scan": "passed"
+}

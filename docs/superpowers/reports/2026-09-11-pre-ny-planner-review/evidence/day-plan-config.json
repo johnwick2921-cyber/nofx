@@ -1,0 +1,50 @@
+{
+  "plan_enabled": true,
+  "plan_mode": "strict",
+  "planner_timeframes": [
+    "D",
+    "4h",
+    "1h",
+    "15m",
+    "5m"
+  ],
+  "proximity_filter_atr": 1,
+  "max_levels": 12,
+  "scenario_cap": 5,
+  "acceptance_rule": "5m_close",
+  "replan_cap": 4,
+  "sessions_enabled": [
+    "NY"
+  ],
+  "approval_required": false,
+  "evening_digest": true,
+  "realign_cap": 10,
+  "last_entry_ct": "13:00",
+  "eod_flat_ct": "14:45",
+  "sessions": [
+    {
+      "session": "NY",
+      "replan_cap": 4,
+      "acceptance_rule": "5m_close",
+      "min_grade": "B",
+      "max_trades": 10
+    },
+    {
+      "session": "ASIA",
+      "enable": true,
+      "replan_cap": 4,
+      "acceptance_rule": "5m_close",
+      "min_grade": "B",
+      "max_trades": 7
+    },
+    {
+      "session": "LONDON",
+      "enable": true,
+      "replan_cap": 4,
+      "acceptance_rule": "5m_close",
+      "min_grade": "B",
+      "max_trades": 10
+    }
+  ],
+  "wake_on_htf_ob": true
+}
