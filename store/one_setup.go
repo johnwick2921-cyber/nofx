@@ -166,6 +166,7 @@ type OneSetupCounts struct {
 	Level, Play, Day, NotEvaluated, Wait int
 	ObstacleBelowFloor, ObstacleMissing  int
 	DeclinedWhileResting                 int
+	Retired                              int
 	Readable                             bool
 }
 
@@ -178,6 +179,7 @@ const (
 	OneSetupClassNotEvaluated    = "one_setup:not_evaluated"
 	OneSetupClassWaiting         = "one_setup:waiting"
 	OneSetupClassResting         = "one_setup:declined_while_resting"
+	OneSetupClassRetired         = "one_setup:retired" // a declined scenario's unplaced authorization retired at placement time (owner ruling 2026-09-11)
 	OneSetupClassObstacleFloor   = "obstacle_below_floor"
 	OneSetupClassObstacleMissing = "obstacle_missing"
 )
@@ -210,6 +212,7 @@ func OneSetupCountsFor(st *Store, traderID, tradeDate string) OneSetupCounts {
 	c.Level, c.Play, c.Day = sum(OneSetupClassLevel), sum(OneSetupClassPlay), sum(OneSetupClassDay)
 	c.NotEvaluated, c.Wait = sum(OneSetupClassNotEvaluated), sum(OneSetupClassWaiting)
 	c.DeclinedWhileResting = sum(OneSetupClassResting)
+	c.Retired = sum(OneSetupClassRetired)
 	c.ObstacleBelowFloor, c.ObstacleMissing = sum(OneSetupClassObstacleFloor), sum(OneSetupClassObstacleMissing)
 	c.Declined = c.Level + c.Play + c.Day + c.NotEvaluated
 	return c

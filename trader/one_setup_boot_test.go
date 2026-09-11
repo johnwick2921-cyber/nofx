@@ -30,6 +30,19 @@ func osBootStore(t *testing.T, dayPlanJSON string) *store.Store {
 	return st
 }
 
+// The counters are keyed by the plan's trade date: at 01:45 CT on 09-11 the
+// in-force ASIA plan is 2026-09-10's, and the boot line must ask for THAT key.
+func TestOneSetupBootTradeDateIsThePlanChainDate(t *testing.T) {
+	asia := time.Date(2026, 9, 11, 1, 45, 0, 0, kernel.CTLocation())
+	if got := oneSetupBootTradeDate(asia); got != "2026-09-10" {
+		t.Fatalf("01:45 CT 09-11 is the ASIA instance that opened 17:00 09-10 → trade date 2026-09-10, got %s", got)
+	}
+	ny := time.Date(2026, 9, 11, 9, 0, 0, 0, kernel.CTLocation())
+	if got := oneSetupBootTradeDate(ny); got != "2026-09-11" {
+		t.Fatalf("09:00 CT 09-11 → 2026-09-11, got %s", got)
+	}
+}
+
 func TestOneSetupBootLineReadsTheBoundStrategy(t *testing.T) {
 	now := time.Date(2026, 9, 11, 9, 0, 0, 0, kernel.CTLocation())
 	// Absent knobs → ON [O] and B [O], shipped defaults named as the source.
@@ -51,7 +64,7 @@ func TestOneSetupBootLineReadsTheBoundStrategy(t *testing.T) {
 		}
 	}
 	// Counters are READ: record two declines and one armable for today's trade date.
-	td := plannerTradeDateCT(kernel.CMESessionDayStart(now).Add(23 * time.Hour))
+	td := oneSetupBootTradeDate(now)
 	for _, c := range []string{store.OneSetupClassLevel, store.OneSetupClassLevel, store.OneSetupClassArmable, store.OneSetupClassObstacleFloor} {
 		if _, err := store.IncArmRefusal(st, "trader-1", td, "NY", c); err != nil {
 			t.Fatal(err)

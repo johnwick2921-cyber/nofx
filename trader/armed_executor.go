@@ -368,6 +368,10 @@ func (at *AutoTrader) maybeManageArmedOrdersAt(snap map[string]kernel.StructureS
 	// nil verdicts, doc order, no record: today's book, byte for byte (E2).
 	osCycle := at.oneSetupVerdictsAt(plan, &doc, bars, atr5m, cfg, now)
 	defer at.oneSetupSaveRecord(osCycle)
+	// THE GAP THE FIRST BOOT FOUND (owner ruling 2026-09-11): an authorization
+	// whose scenario is currently declined is retired here, before D4's slot
+	// check and before the placement pass — never placed. OFF → no-op.
+	at.oneSetupRetireDeclined(osCycle, plan, ledger, now)
 	for _, sc := range kernel.OneSetupOrder(doc.Scenarios, osCycle.allowed()) {
 		if sc.Arm == nil || !sc.Arm.Enabled {
 			continue
