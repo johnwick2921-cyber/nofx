@@ -175,8 +175,10 @@ namespace NinjaTrader.NinjaScript.AddOns
             // canonical Go-side symbol stays "MNQ"; the contract suffix
             // exists only inside this GetInstrument call.
             string contract = VLContractResolver.ResolveFrontMonthContract(symbol);
-            logInfo("VLBarsSubscriptionManager: resolved " + symbol + " -> " + contract);
-            var instrument = Instrument.GetInstrument(contract);
+            string how;
+            var instrument = VLInstrumentLookup.Resolve(symbol, logWarn, out how);
+            logInfo("VLBarsSubscriptionManager: resolved " + symbol + " -> " + contract
+                    + " => " + (instrument != null ? VLInstrumentLookup.ContractName(instrument) : "<null>") + " (" + how + ")");
             if (instrument == null)
             {
                 // Clear unresolved signal (Phase 2) — no silent freeze. Either a
@@ -229,10 +231,12 @@ namespace NinjaTrader.NinjaScript.AddOns
             // Output window. Sent after the Subscribe loop; per-timeframe
             // failures (unsupported tf) are logged above and don't veto the
             // symbol-level ack.
+            // The ACK names the contract NT8 RESOLVED (from its expiry), never the
+            // rolling literal — Go keys the roll detection on this name.
             sendFrame("subscribed", new Dictionary<string, object>
             {
                 ["symbol"]            = symbol,
-                ["resolved_contract"] = instrument.FullName
+                ["resolved_contract"] = VLInstrumentLookup.ContractName(instrument)
             });
         }
 
@@ -355,6 +359,15 @@ namespace NinjaTrader.NinjaScript.AddOns
                 {
                     request = new BarsRequest(instrument, barsBack);
                     request.BarsPeriod = period;
+                    // DO NOT MERGE (owner ruling 2026-09-11, bar-source wave). With no
+                    // policy set here the request inherited NT8's global Merge policy,
+                    // and under MergeBackAdjusted the historical series for MNQ 12-26
+                    // was served ~290 pts below the live feed for the SAME minutes
+                    // (research facts 16516009 live 29358.25 vs 16518205 replay
+                    // 29068.25, 2026-09-10 22:37 CT). The replay and the live feed must
+                    // be one price scale; a back-adjusted history is a different
+                    // instrument wearing the same label.
+                    request.MergePolicy = MergePolicy.DoNotMerge;
                     // Force the EXTENDED (overnight/Globex) session so the series
                     // includes the evening session and .Update keeps firing past
                     // the 16:00 CT RTH close (the freeze fix). Non-fatal if the
@@ -380,6 +393,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                     Key       = key,
                     Symbol    = symbol,
                     Timeframe = timeframe,
+                    Contract  = VLInstrumentLookup.ContractName(instrument),
                     Request   = request,
                     LastEmittedTimeUtcMs = 0,
                     HistoricalSent = false,
@@ -468,6 +482,7 @@ namespace NinjaTrader.NinjaScript.AddOns
             {
                 ["symbol"]    = entry.Symbol,
                 ["timeframe"] = entry.Timeframe,
+                ["contract"]  = entry.Contract, // EVERY bar frame names its contract (owner ruling 2026-09-11)
                 ["bars"]      = barsList
             };
             sendFrame("bars_historical", payload);
@@ -521,6 +536,7 @@ namespace NinjaTrader.NinjaScript.AddOns
             {
                 ["symbol"]    = entry.Symbol,
                 ["timeframe"] = entry.Timeframe,
+                ["contract"]  = entry.Contract, // EVERY bar frame names its contract (owner ruling 2026-09-11)
                 ["bars"]      = emitted
             };
             sendFrame("bar_update", payload);
@@ -554,9 +570,11 @@ namespace NinjaTrader.NinjaScript.AddOns
                     // reconnect that straddles a quarterly roll picks up
                     // the new contract automatically.
                     string contract = VLContractResolver.ResolveFrontMonthContract(entry.Symbol);
+                    string how;
+                    var instrument = VLInstrumentLookup.Resolve(entry.Symbol, logWarn, out how);
                     logInfo("VLBarsSubscriptionManager: reconnect resolved "
-                            + entry.Symbol + " -> " + contract);
-                    var instrument = Instrument.GetInstrument(contract);
+                            + entry.Symbol + " -> " + contract + " => "
+                            + (instrument != null ? VLInstrumentLookup.ContractName(instrument) : "<null>") + " (" + how + ")");
                     if (instrument == null)
                     {
                         logWarn("VLBarsSubscriptionManager: reconnect — instrument "
@@ -884,6 +902,7 @@ namespace NinjaTrader.NinjaScript.AddOns
             public string       Key;
             public string       Symbol;
             public string       Timeframe;
+            public string       Contract;  // the contract NT8 resolved for this request ("MNQ 09-26")
             public BarsRequest  Request;
             public long         LastEmittedTimeUtcMs;
             public bool         HistoricalSent;

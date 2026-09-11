@@ -4283,75 +4283,124 @@ backfill keyed on 19:00 would have been right. **The rule's answer and the wire'
 answer are different facts, and only the second is in the bars.** This is A17
 (measure first) in its most literal form.
 
-## CLASS 118 — ONE IDENTITY, TWO FEEDS: A REPLAY THAT REPAINTS THE RECORD (born 2026-09-10, the bar-source wave)
+## CLASS 118 — A WORKAROUND BUILT ON A MISREAD CAUSE, AND THE TWO DEFECTS IT SHIPPED WITH (born 2026-09-10, the bar-source wave; corrected 2026-09-11)
 
-**The shape.** A record is built from two feeds that claim the same identity —
-here NT8's live `bar_update` and its `bars_historical` replay, same
-subscription, same label `MNQ 12-26` — and nothing in the record says which
-feed wrote each fact. While the feeds agree the seam is invisible. When they
-stop agreeing, the feed that arrives LAST wins every collision, and the last
-one is always the replay, because a replay is what every boot and every
-reconnect begins with.
+**What was believed at 22:5x CT.** NT8's replay (`bars_historical`) and its
+live feed (`bar_update`) reported the same minute of the same contract ~290
+points apart — research facts 16516009 (live, 29358.25) vs 16518205 (replay,
+29068.25), 22:37 CT, both labelled `MNQ 12-26`. The wave built a Go-side
+defence: a source label on every bar, a live-wins upsert, a scale-mismatch
+detector, and a hold that kept a replay out of the store until a live bar
+verified its scale.
 
-**What it did.** Research archive, the 22:37 CT minute of 2026-09-10, same
-contract: fact 16516009 (`bar_update`) close **29358.25**; fact 16518205
-(`bars_historical`) close **29068.25**. ~290 points apart, ~1.0% of price,
-for the SAME minute of the SAME contract. The roll wave had just proved the
-tape was one contract and booted into a chart still discontinuous — the
-discontinuity was one contract, two sources. The pre-existing unconditional
-upsert (`ON CONFLICT DO UPDATE` with no WHERE) let that boot's replay
-overwrite **186 live rows** (restored from backup, markers ac76b47b, 33fee48e);
-the ring's merge said "incoming is freshest" and did the same in memory; the
-boot minute became a bar whose open was the replay's and whose close was
-live — the exact shape the roll minute had, mistaken for a roll.
+**What was true.** NT8 had not rolled. Its front month, its charts and its
+fills were on **MNQ 09-26**. The AddOn's date rule (`VLContractResolver`,
+expiry−8d on `DateTime.UtcNow`) had put both the bar subscription and the
+order path on **MNQ 12-26** at 00:00 UTC. The December request's history was
+served at September's prices under the December name; its live ticks were
+December's. The ~290 was the Sep/Dec basis — carry at 2026 rates on ~29,000
+over a quarter — not a scale defect. My own earlier note "carry implies ~90"
+was arithmetic on the wrong rate, and it was the tell that a different
+mechanism was in play; I read past it. (Class 117 already named the actual
+defect: one identity, two resolvers. The evidence for it was in NT8's own
+log — `Instrument='MNQ 12-26'` on position 605's fill — and in no Go log,
+because the wire frames carry no instrument.)
 
-**The two doors.** (1) A collision: the replay lands on a minute live already
-wrote. The fix is a precedence rule stamped on every row — live overwrites
-anything, a replay fills only what live never wrote. (2) A gap: the replay
-lands on a minute live NEVER wrote — the restart gap, the seconds after a
-reconnect. No precedence rule helps; the wrong-scale row is the only row.
-The fix is that an unverified replay is not the record: it is held until the
-first live bar after it lets the ring compare scales, then released or
-discarded. **A fix that closes only door 1 is the one this wave nearly
-shipped;** the second door was found by asking what the NEXT boot's rehydrate
-would read from the store — 98 rows on the wrong scale (MNQ 51, ES 47) from
-the night's two boots, in exactly those gap minutes, labelled by measurement
-and never read.
+**What the workaround did on its one boot (abc420f8, 00:15 CT).** Two
+defects, both of the same shape — **a verification whose own precondition
+had disappeared:**
 
-**Why it is a class.** Any record fed by a live stream AND a catch-up stream
-has this shape: order books rebuilt from snapshots, positions from a
-reconcile, fills from a history pull, bars from a replay. The catch-up stream
-is trusted BECAUSE it is complete, and its completeness is precisely what
-lets it overwrite everything. The questions:
+1. **The 20×-median-body condition blinded the higher timeframes.** Added
+   to stop a fixture false positive (a 1-pt move at price 100), it made a
+   30m bar's body ×20 exceed the 296-pt gap, so 30m/1h/2h/4h/… replays were
+   "verified" and released. The check assumed a body scale it never
+   measured against the gap it was guarding.
+2. **A re-seed cleared the per-seed verdict and the re-check had nothing
+   to compare.** MNQ 1m was judged off-scale at 00:15:21; a second
+   `bars_historical` re-armed the check; by then the ring had been refilled
+   with live rows, the incoming seed collided with all of them and was
+   dropped by the live-wins merge, and the next live bar found no
+   historical bar before it — `last == nil` → "checked, on-scale" → 1998
+   rows released at 00:15:50. Per-seed arming was itself the fix for a
+   mutation survivor; the fix had a hole the pins did not cover.
 
-1. Does every persisted fact name the feed that delivered it? If two feeds
-   write the same table and the row cannot say which, the seam is already in
-   the data and the first disagreement will be read as an event.
-2. Which feed wins a collision, and is that written down as a rule the upsert
-   enforces — or is it whichever arrived last?
-3. What does the catch-up stream write into minutes the live stream never
-   saw? Those rows are unverified by construction. What verifies them, and
-   what happens to them if verification fails?
-4. What does the next boot READ BACK? A repair that fixes the ring and not the
-   store is undone by the first rehydrate.
-5. When the two feeds disagree, what does the disagreement LOOK LIKE to the
-   readers? Here: a 290-point candle, a 10× range, a fair-value gap, seven
-   levels — the most dramatic market event of the day. **A feed disagreement
-   is always the largest move on the chart, and the detectors will file it.**
+Net store damage 60 rows, all labelled, all deleted under authorisation.
+Rolled back to 0070fc79 on the owner's order.
 
-**Law:** **every fact names its feed; the live feed wins every collision; a
-catch-up feed is held until a live fact verifies its scale; a fact the record
-cannot verify is labelled and never read, never deleted.** The migration that
-adds the label chooses LIVE for what it cannot know — the record is what the
-bot saw — and off-scale only where the tape is measured (`offScale20260910`).
+**Why it is a class.** A defence built against the wrong cause can be
+internally consistent, fully pinned, mutation-tested — and still be a
+machine for a problem that does not exist, with failure modes of its own.
+The probes:
 
-**Corollary — the finding is not the fix.** The reason NT8's replay sits on
-another scale (a merge/back-adjust policy on the subscription, presumably) is
-the AddOn wave's to establish and remove. This class is about surviving a
-feed that lies, not about making it stop; both are owed, and shipping the
-second without the first would have left the record one restart from the same
-damage.
+1. Before building a defence, name the cause in the AUTHORITY's own record
+   — here NT8's log, not Go's. If the authority is not consulted, the wave
+   is defending against its own inference.
+2. When a number does not square (290 vs "carry ~90"), STOP. A residual
+   that size is the mechanism, not noise.
+3. Every verification has a precondition (a seed to compare against, a body
+   scale that matches the gap). Pin the precondition's absence, not only
+   the verification's outcome.
+4. When the cause is corrected, WITHDRAW the workaround explicitly. What
+   stands from this wave: `bars.source` (a label), the live-wins upsert, the
+   ring's live-over-replay merge. What is withdrawn: the scale-mismatch
+   detector and the replay hold (D4/D5) — with the platform's contract
+   correct they have nothing to catch, and they carry the two defects above.
 
-Read beside 117 (one identity, two resolvers — the contract) and 113 (a gate
-that certifies a name, not a path — the contract label certified nothing about
-the scale).
+**Law:** **a defence is built against a cause read from the authority's
+record, never from the symptom's arithmetic; and when the cause moves, the
+defence is withdrawn by name, not left running.**
+
+## CLASS 119 — A REVIEW THAT PREDICTS AN INCIDENT AND IS NOT CONVERTED INTO A GATE (born 2026-09-11, from vet-06-risk.md:255)
+
+**The instance.** `docs/superpowers/reports/2026-09-05-vet-06-risk.md:255`,
+dev `2a66d91c`, five days before the roll:
+
+> "The uncovered window is **19:00 CT 09-10 → 09-14: orders on DEC26, bars
+> and gate on SEP26**, and the gate's 3-day window not yet open. **What I
+> would refuse:** no new entries from the Thu 09-10 17:00 CT open until a
+> human has confirmed in the log that the bars ACK carries 'MNQ 12-26' …"
+
+The resolver flipped at 19:00 CT 09-10 as written. Order 152 went to
+December at 19:11 CT as written. Position 605 filled on December at 23:04 CT.
+The refusal the review specified — no entries until the contract is
+confirmed in the log — was never installed. The review was merged into dev
+as a document and nothing read it back as a rule.
+
+**Why it is a class.** A prediction with a date, a mechanism and a specific
+refusal is a gate that has already been designed. Filing it as prose
+converts it into something that will be read after the incident, as this
+one was — by grep, at 00:4x, while the bot was blind. The cost of the gate
+was one `if` on the boot line; the cost of the prose was 5½ hours, one
+position and the whole bar-source wave.
+
+**Probes:**
+1. Does the review name a DATE or a WINDOW? Then it names a gate with a
+   clock in it. Build the gate in the same wave that merges the review, or
+   open a named wave with that date as its deadline.
+2. Does it say "what I would refuse"? Then the refusal is specified. Ship
+   the refusal; the report can describe it afterwards.
+3. Who reads reports? If the answer is "the next agent that greps for the
+   symptom", the report is a post-mortem written in advance.
+4. At merge, every vet/review report is walked for dated predictions; each
+   becomes a tracked item with an owner or a written reason it is not one.
+
+**Law:** **a dated prediction in a review is a gate with a deadline; it is
+converted at merge or it is not merged as "reviewed".**
+
+**Sibling finding, same night.** The May plan
+(`docs/superpowers/plans/2026-05-22-nq-databento-ninjatrader.md:245`) ruled:
+
+> "**`GetNextExpiry` is UNBOOTSTRAPPABLE on Tradovate.** It needs a
+> `MasterInstrument`, which is obtained only from a qualified/continuous
+> `GetInstrument` — and **Tradovate has no continuous contracts** → null →
+> chicken-and-egg."
+
+NT8's own log, 2026-09-11 00:40:29:
+
+> `VLBarsSubscriptionManager: reconnect resolved MNQ -> MNQ ##-## => MNQ 09-26 (rolling->MNQ 09-26)`
+
+`GetInstrument("MNQ ##-##")` returned an instrument, its `MasterInstrument`
+answered `GetNextExpiry`, and the concrete September contract resolved.
+The refutation was recorded as settled fact and closed the correct path for
+a quarter. A refutation is an experiment with a date and a build; it is
+re-run when the premise is load-bearing again, not cited.

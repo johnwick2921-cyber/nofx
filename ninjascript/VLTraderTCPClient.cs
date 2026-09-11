@@ -905,8 +905,10 @@ namespace NinjaTrader.NinjaScript.AddOns
             // symbol on the wire stays "MNQ"; contract form only exists
             // inside this GetInstrument call.
             string contract = VLContractResolver.ResolveFrontMonthContract(symbol);
-            LogInfo("VLTraderTCPClient: resolved " + symbol + " -> " + contract);
-            var instrument = Instrument.GetInstrument(contract);
+            string how;
+            var instrument = VLInstrumentLookup.Resolve(symbol, LogWarn, out how);
+            LogInfo("VLTraderTCPClient: resolved " + symbol + " -> " + contract + " => "
+                    + (instrument != null ? VLInstrumentLookup.ContractName(instrument) : "<null>") + " (" + how + ")");
             if (instrument == null)
             {
                 LogWarn("VLTraderTCPClient: instrument " + symbol
@@ -1138,10 +1140,11 @@ namespace NinjaTrader.NinjaScript.AddOns
             {
                 string symbol = GetString(p, "symbol");
                 string contract = VLContractResolver.ResolveFrontMonthContract(symbol);
-                var instrument = Instrument.GetInstrument(contract);
+                string how;
+                var instrument = VLInstrumentLookup.Resolve(symbol, LogWarn, out how);
                 if (instrument == null)
                 {
-                    LogWarn("VLTraderTCPClient: close_position instrument not found " + symbol);
+                    LogWarn("VLTraderTCPClient: close_position instrument not found " + symbol + " (" + contract + ", " + how + ")");
                     return;
                 }
                 // PHASE 4 — resolve the account that actually HOLDS this symbol's open
@@ -1877,11 +1880,12 @@ namespace NinjaTrader.NinjaScript.AddOns
                 }
 
                 string contract = VLContractResolver.ResolveFrontMonthContract(symbol);
-                var instrument = Instrument.GetInstrument(contract);
+                string how;
+                var instrument = VLInstrumentLookup.Resolve(symbol, LogWarn, out how);
                 if (instrument == null)
                 {
                     LogWarn("VLTraderTCPClient: place_protective_stop — instrument " + symbol
-                            + " (resolved to " + contract + ") not found; position stays UNPROTECTED");
+                            + " (resolved to " + contract + ", " + how + ") not found; position stays UNPROTECTED");
                     SendAck("place_protective_stop_error");
                     return;
                 }
