@@ -145,7 +145,7 @@ func TestArmPathConsultsTheSessionRiskGate(t *testing.T) {
 	if fn < 0 {
 		t.Fatal("maybeManageArmedOrdersAt not found — this pin has lost its subject")
 	}
-	loop := strings.Index(src[fn:], "for _, sc := range doc.Scenarios {")
+	loop := strings.Index(src[fn:], "for _, sc := range kernel.OneSetupOrder(doc.Scenarios, osCycle.allowed()) {")
 	gate := strings.Index(src[fn:], "at.sessionRiskGateAt(now)")
 	if gate < 0 {
 		t.Fatal("the ARM path does not consult the session-risk gate — the no-trade band and the " +

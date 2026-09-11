@@ -360,7 +360,15 @@ func (at *AutoTrader) maybeManageArmedOrdersAt(snap map[string]kernel.StructureS
 		return
 	}
 
-	for _, sc := range doc.Scenarios {
+	// ONE SETUP (dispatch 102, 2026-09-10) — THE ONE CALL SITE. Every armable
+	// scenario's three verdicts, ONCE per cycle, at `now`, against the LIVE map
+	// and the LIVE permission (one_setup_wiring.go). Consulted at the seam below
+	// after the gate legs; the iteration order is D4's rank (allowed first, by
+	// quality) so the top-ranked allowed scenario reaches the row first. OFF →
+	// nil verdicts, doc order, no record: today's book, byte for byte (E2).
+	osCycle := at.oneSetupVerdictsAt(plan, &doc, bars, atr5m, cfg, now)
+	defer at.oneSetupSaveRecord(osCycle)
+	for _, sc := range kernel.OneSetupOrder(doc.Scenarios, osCycle.allowed()) {
 		if sc.Arm == nil || !sc.Arm.Enabled {
 			continue
 		}
@@ -493,6 +501,30 @@ func (at *AutoTrader) maybeManageArmedOrdersAt(snap map[string]kernel.StructureS
 				}
 				leg.Stop = comp.Stop
 			}
+			// ONE SETUP D3 — THE TARGET IS THE FIRST OBSTACLE. Composed here, BEFORE
+			// every downstream consumer (the gate's R:R leg, the ledger row, the
+			// churn guard) — the same position composeArmStop holds for the stop —
+			// so the existing R:R gate JUDGES the obstacle target and its refusal is
+			// the existing refusal. Only for a scenario the predicate ALLOWED; a
+			// missing or wrong-side obstacle leaves the authored target and is
+			// counted, never substituted with a plausible number (A24).
+			osTargetSubstituted := false
+			if osCycle.on() {
+				if v, ok := osCycle.verdicts[sc.ID]; ok && v.Allowed {
+					if tgt, label, ok := oneSetupObstacleTarget(sc, leg.Entry); ok {
+						leg.Target = tgt
+						osTargetSubstituted = true
+						osCycle.recordTarget(sc.ID, label)
+					} else {
+						osCycle.recordTarget(sc.ID, label)
+						okey := plan.PlanID + ":" + strconv.Itoa(plan.Version) + ":" + sc.ID + ":leg" + strconv.Itoa(li+1) + ":obstacle"
+						if armRefusalChanged(&at.armRefusalLast, okey, label) && at.store != nil {
+							_, _ = store.IncArmRefusal(at.store, at.id, kernel.PlanTradeDateFor(plan), plan.Session, store.OneSetupClassObstacleMissing)
+							at.logWarnf("🎯 one setup: %s %s leg %d target stays %s — no recorded first obstacle on the profit side (counted obstacle_missing)", plan.Session, sc.ID, li+1, label)
+						}
+					}
+				}
+			}
 			// S2b chained arm (autopsy-response wave): wait_confirm legs stay
 			// DORMANT until the chain confirm is machine-MET. E4: leg 1 chains
 			// on confirm2 (1m_mss|1x5m_close); a legacy single arm chains on
@@ -544,6 +576,13 @@ func (at *AutoTrader) maybeManageArmedOrdersAt(snap map[string]kernel.StructureS
 					// quoted against the benefit later.
 					class := armRefusalClass(verdict)
 					shown := ""
+					// ONE SETUP D3 — the R:R refusal of an OBSTACLE target is the
+					// existing refusal, counted under its own name beside it.
+					if osTargetSubstituted && class == "rr" && at.store != nil {
+						if n, cerr := store.IncArmRefusal(at.store, at.id, kernel.PlanTradeDateFor(plan), plan.Session, store.OneSetupClassObstacleFloor); cerr == nil {
+							at.logWarnf("🎯 one setup: %s %s leg %d obstacle target %.2f is below the R:R floor — the existing refusal stands (obstacle_below_floor this session: %d)", plan.Session, sc.ID, li+1, leg.Target, n)
+						}
+					}
 					if at.store != nil {
 						if n, cerr := store.IncArmRefusal(at.store, at.id, kernel.PlanTradeDateFor(plan), plan.Session, class); cerr != nil {
 							at.logWarnf("⚔️ arm refusal counter write failed: %v", cerr)
@@ -627,6 +666,14 @@ func (at *AutoTrader) maybeManageArmedOrdersAt(snap map[string]kernel.StructureS
 				if armRefusalChanged(&at.armRefusalLast, key, "entry_gate:"+armRefusalClass(greason)) {
 					at.recordEntryGateRefusal("arm", at.futuresSymbol(), "open_"+side, greason, plan)
 				}
+				continue
+			}
+			// ONE SETUP D1/D2 — THE CONSULT, after the gate legs and before the
+			// arm row is composed. A declined scenario is still evaluated,
+			// confirmed and recorded (its episode rows carry all three verdicts);
+			// it is never armed. D4: an allowed scenario waits while another holds
+			// the plan's one arm. Nothing here cancels (one_setup_wiring.go).
+			if at.oneSetupConsult(osCycle, plan, sc, li, ledger, now) {
 				continue
 			}
 			// D3: every leg's kind is derived from the condition and an

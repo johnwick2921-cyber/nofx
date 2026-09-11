@@ -155,6 +155,16 @@ func (at *AutoTrader) recordDetectorOutputs(
 	if err := at.store.CandidatePool().SavePool(rows); err != nil {
 		at.logWarnf("🔬 detector: candidate_pool write failed (%d rows): %v", len(rows), err)
 	}
+	// THE FOLLOW-PLAN RECORDER (dispatch 102, round 17) — beside every fade
+	// episode, the follow side is computed and RECORDED on the same read, over
+	// the ring the detector just judged (single-contract after the roll wave).
+	// Never arms, never places, never gates (E9). Its own line names the pass.
+	if market.FuturesBarsProvider != nil {
+		if ring := market.FuturesBarsProvider(symbol, kernel.AISVPBarInterval, kernel.AISVPBarCount); len(ring) > 0 {
+			scanned, breaks, retests := at.recordFollowPlans(symbol, ring, now)
+			at.logInfof("📐 follow-plans (RECORDED ONLY): scanned=%d new breaks=%d new retests=%d · tape=%d bars from %s", scanned, breaks, retests, len(ring), kernel.FormatCT(time.UnixMilli(ring[0].OpenTime)))
+		}
+	}
 	// A9 — every skipped bar and every level with no formation time is named.
 	at.logInfof("🔬 detector recorded: %d new episode(s) · pool %d candidate(s) (%d seated, %d cut) · k=%.0f Δ=%.2f band=±%.2f H=%d %s · pre-formation bars skipped=%d · levels with no formation time=%d",
 		written, len(rows), len(rows)-cut, cut, k, delta, k*delta, horizon, exitOn, preFormation, noFormation)
