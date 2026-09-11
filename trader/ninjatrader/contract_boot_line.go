@@ -56,7 +56,7 @@ func ContractBootLine(symbol string, fact ntwire.ContractFact, haveFact bool, ce
 // SourceBootLine is the BAR-SOURCE WAVE's boot line: which feed wrote the
 // store's rows, and whether this process has caught the replay on a different
 // scale from live. Every field read; the threshold is stated as [I].
-func SourceBootLine(symbol string, census map[string]int64, mismatches []ntwire.ScaleMismatch, pct float64) string {
+func SourceBootLine(symbol string, census map[string]int64, mismatches []ntwire.ScaleMismatch, pct float64, hold string) string {
 	mm := "none"
 	if len(mismatches) > 0 {
 		parts := make([]string, 0, len(mismatches))
@@ -71,8 +71,11 @@ func SourceBootLine(symbol string, census map[string]int64, mismatches []ntwire.
 			mm = strings.Join(parts, "; ")
 		}
 	}
-	return fmt.Sprintf("📼 bar source: %s live=%d historical=%d mixed=%d null=%d · replay-never-overwrites-live=on · scale-mismatch threshold=%.2f%% [I] · mismatches this process: %s",
-		symbol, census[store.BarSourceLive], census[store.BarSourceHistorical], census[store.BarSourceMixed], census[""], pct*100, mm)
+	if hold == "" {
+		hold = "replay-hold: n/a"
+	}
+	return fmt.Sprintf("📼 bar source: %s live=%d historical=%d mixed=%d null=%d · replay-never-overwrites-live=on · unverified-replay-held=on · %s · scale-mismatch threshold=%.2f%% AND %.0fx median body [I] · mismatches this process: %s",
+		symbol, census[store.BarSourceLive], census[store.BarSourceHistorical], census[store.BarSourceMixed], census[""], hold, pct*100, ntwire.ScaleMismatchRangeMult, mm)
 }
 
 // contractBootLineFor assembles the line from live sources. Called after the

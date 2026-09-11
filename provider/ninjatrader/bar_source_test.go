@@ -187,3 +187,35 @@ func TestOrdinaryMoveAtSmallPriceIsNotAMismatch(t *testing.T) {
 		t.Fatalf("a fifty-body jump at the same price IS a scale shift; fired=%d", fired)
 	}
 }
+
+// THE VERDICT FOLLOWS THE SEED. Unjudged until a live bar; off-scale sticks
+// for that seed; a fresh replay clears both so it is judged on its own.
+func TestSeedVerdictFollowsTheSeed(t *testing.T) {
+	c := NewBarCache(100)
+	seed := func(price float64) []Bar {
+		out := make([]Bar, 0, 5)
+		for i := int64(1); i <= 5; i++ {
+			out = append(out, Bar{T: i * 60_000, O: price, H: price + 2, L: price - 2, C: price + 1, V: 1})
+		}
+		return out
+	}
+	if ch, off := c.SeedVerdict("MNQ", "1m"); ch || off {
+		t.Fatal("a cold key has no verdict")
+	}
+	c.SeedHistorical("MNQ", "1m", seed(29060))
+	if ch, off := c.SeedVerdict("MNQ", "1m"); ch || off {
+		t.Fatal("a seed nobody has compared to a live bar has no verdict")
+	}
+	c.Upsert("MNQ", "1m", []Bar{{T: 6 * 60_000, O: 29350, H: 29352, L: 29348, C: 29351, V: 1}})
+	if ch, off := c.SeedVerdict("MNQ", "1m"); !ch || !off {
+		t.Fatalf("judged off-scale expected, got checked=%v offScale=%v", ch, off)
+	}
+	c.SeedHistorical("MNQ", "1m", seed(29350)) // reconnect: a replay on the live scale
+	if ch, off := c.SeedVerdict("MNQ", "1m"); ch || off {
+		t.Fatalf("a fresh seed must clear the verdict, got checked=%v offScale=%v", ch, off)
+	}
+	c.Upsert("MNQ", "1m", []Bar{{T: 7 * 60_000, O: 29350, H: 29352, L: 29348, C: 29351, V: 1}})
+	if ch, off := c.SeedVerdict("MNQ", "1m"); !ch || off {
+		t.Fatalf("judged on-scale expected, got checked=%v offScale=%v", ch, off)
+	}
+}

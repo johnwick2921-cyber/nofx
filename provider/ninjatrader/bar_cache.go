@@ -39,6 +39,10 @@ type BarCache struct {
 	// detected, for the boot line.
 	liveSeen   map[string]bool
 	mismatches map[string]ScaleMismatch
+	// seedOffScale is set when the CURRENT seed for a key was found on another
+	// scale, and cleared by the next SeedHistorical. mismatches keeps every
+	// detection for the boot line; this answers "is the seed I hold bad NOW".
+	seedOffScale map[string]bool
 }
 
 // NewBarCache constructs an empty cache. maxBars <= 0 uses
@@ -240,6 +244,9 @@ func (c *BarCache) SeedHistorical(symbol, timeframe string, bars []Bar) {
 	// survived on exactly that gap.
 	if c.liveSeen != nil {
 		delete(c.liveSeen, key)
+	}
+	if c.seedOffScale != nil {
+		delete(c.seedOffScale, key)
 	}
 	existing := c.bars[key]
 	if len(existing) == 0 {

@@ -47,6 +47,34 @@ func contractFor(bh *store.BarHistoryStore, server *ntwire.TCPServer, symbol str
 	return "", "none"
 }
 
+// barRowsForPersist is the persister's one mapping from a wire frame to store
+// rows. It is a named function, not a loop inside the closure, so the stamp
+// the callback writes can be pinned at the CALL SITE the worker actually
+// invokes (A29: built is not wired). The frame's `historical` flag names the
+// feed; a bar the ring has already labelled mixed (a boot minute across two
+// scales) keeps that label whichever feed carried it.
+func barRowsForPersist(symbol, tf, contract string, historical bool, closed []ntwire.Bar) []store.BarHistoryDB {
+	feedSrc := store.BarSourceLive
+	if historical {
+		feedSrc = store.BarSourceHistorical
+	}
+	rows := make([]store.BarHistoryDB, 0, len(closed))
+	for _, b := range closed {
+		bs := feedSrc
+		if b.Source == ntwire.BarSourceMixed {
+			bs = store.BarSourceMixed
+		}
+		rows = append(rows, store.BarHistoryDB{
+			Symbol: symbol, TF: tf, OpenTimeMs: b.T,
+			O: b.O, H: b.H, L: b.L, C: b.C, V: b.V,
+			Convention: market.StampConvention(tf),
+			Contract:   contract,
+			Source:     bs,
+		})
+	}
+	return rows
+}
+
 // WireBarPersistence attaches the store to the bar feed. st == nil → no-op.
 func WireBarPersistence(st *store.Store) {
 	if st == nil {
@@ -59,6 +87,16 @@ func WireBarPersistence(st *store.Store) {
 			return
 		}
 		ntwire.SetBarPersister(func(historical bool, symbol, tf string, bars []ntwire.Bar) {
+			srv, _ := getOrStartTCPServer()
+			// BAR-SOURCE WAVE — a LIVE frame is the moment the ring has judged
+			// the replay it holds; release or discard the held replay rows for
+			// this key FIRST, before this frame's own closed bars (which may be
+			// none: a bar_update for the current minute is not closed yet, and
+			// the verdict must not wait for the next one).
+			if !historical && srv != nil {
+				checked, offScale := srv.BarCache().SeedVerdict(symbol, tf)
+				barReplayHold.resolve(symbol, tf, checked, offScale, bh.InsertBars)
+			}
 			closed := ntwire.ClosedBarsOnly(bars, tf, time.Now().UnixMilli())
 			if historical {
 				// BAR-TRUTH 2026-08-28: replay frames arrive CLOSE-stamped -
@@ -71,7 +109,6 @@ func WireBarPersistence(st *store.Store) {
 			// ROLL WAVE — stamp the contract the AddOn most recently named.
 			// The bar frame itself carries none (C4), so the stamp is the
 			// subscription's, read at RECEIPT and with its source recorded.
-			srv, _ := getOrStartTCPServer()
 			contract, src := contractFor(bh, srv, symbol)
 			if contract == "" {
 				logger.Warnf("bars: persist %s %s SKIPPED %d bar(s) — no contract has been named this process and the store holds none; a bar on an unknown price scale is not written (roll wave)", symbol, tf, len(closed))
@@ -83,23 +120,12 @@ func WireBarPersistence(st *store.Store) {
 			// BAR-SOURCE WAVE — the `historical` flag this callback has always
 			// received is now RECORDED, not discarded. A bar the ring labelled
 			// mixed (a boot minute across two scales) keeps that label.
-			feedSrc := store.BarSourceLive
+			rows := barRowsForPersist(symbol, tf, contract, historical, closed)
 			if historical {
-				feedSrc = store.BarSourceHistorical
-			}
-			rows := make([]store.BarHistoryDB, 0, len(closed))
-			for _, b := range closed {
-				bs := feedSrc
-				if b.Source == ntwire.BarSourceMixed {
-					bs = store.BarSourceMixed
-				}
-				rows = append(rows, store.BarHistoryDB{
-					Symbol: symbol, TF: tf, OpenTimeMs: b.T,
-					O: b.O, H: b.H, L: b.L, C: b.C, V: b.V,
-					Convention: market.StampConvention(tf),
-					Contract:   contract,
-					Source:     bs,
-				})
+				// AN UNVERIFIED REPLAY IS NOT THE RECORD. Held until the first
+				// live bar lets the ring judge its scale; see replayHold.
+				barReplayHold.add(symbol, tf, rows)
+				return
 			}
 			if err := bh.InsertBars(rows); err != nil {
 				logger.Warnf("bars: persist %s %s failed: %v (never blocks the loop)", symbol, tf, err)
@@ -193,7 +219,7 @@ func WireBarPersistence(st *store.Store) {
 // arriving (the cache is empty for the first seconds after a Go restart).
 func backfillBars(bh *store.BarHistoryStore, server *ntwire.TCPServer) int {
 	now := time.Now().UnixMilli()
-	total := 0
+	total, held := 0, 0
 	for _, pair := range server.BarCache().AllPairs() {
 		closed := ntwire.ClosedBarsOnly(server.BarCache().Get(pair[0], pair[1]), pair[1], now)
 		contract, src := contractFor(bh, server, pair[0])
@@ -213,19 +239,36 @@ func backfillBars(bh *store.BarHistoryStore, server *ntwire.TCPServer) int {
 				O: b.O, H: b.H, L: b.L, C: b.C, V: b.V, Convention: market.StampConvention(pair[1]),
 				Contract: contract, Source: b.Source})
 		}
-		if len(rows) > 0 {
-			if err := bh.InsertBars(rows); err != nil {
+		// BAR-SOURCE WAVE — the boot ring is the AddOn's replay. It is HELD,
+		// not written: the store learns it only after the first live bar has
+		// let the ring judge its scale (replayHold). Bars the ring already
+		// holds as live or mixed are written now.
+		var write, hold []store.BarHistoryDB
+		for _, r := range rows {
+			if r.Source == store.BarSourceHistorical {
+				hold = append(hold, r)
+			} else {
+				write = append(write, r)
+			}
+		}
+		if len(hold) > 0 {
+			barReplayHold.add(pair[0], pair[1], hold)
+			held += len(hold)
+		}
+		if len(write) > 0 {
+			if err := bh.InsertBars(write); err != nil {
 				logger.Warnf("bars: backfill %s %s failed: %v", pair[0], pair[1], err)
 				continue
 			}
-			total += len(rows)
+			total += len(write)
 		}
 	}
 	pairs, _ := bh.SymbolTFCount()
 	count, _ := bh.Count()
-	logger.Infof("📦 bars: persisting %d symbol×tf retention=%dd rows=%d (backfilled %d)",
-		pairs, store.BarRetentionDays(), count, total)
-	return total
+	logger.Infof("📦 bars: persisting %d symbol×tf retention=%dd rows=%d (backfilled %d live/mixed · %d replay row(s) HELD until the first live bar judges their scale)",
+		pairs, store.BarRetentionDays(), count, total, held)
+	// The caller retries while nothing landed; a held replay HAS landed.
+	return total + held
 }
 
 // pruneLoop runs the retention prune + the NIGHTLY INTEGRITY CHECK (F5,
@@ -413,7 +456,7 @@ func rehydrateRingFromStoreWith(bh *store.BarHistoryStore, server *ntwire.TCPSer
 		seen[pair[0]] = true
 		logger.Infof("%s", contractBootLineFor(bh, server, pair[0], rehydrateKept, rehydrateFiltered, reseeded))
 		if sc, err := bh.SourceCensus(pair[0]); err == nil {
-			logger.Infof("%s", SourceBootLine(pair[0], sc, cache.ScaleMismatches(), ntwire.ScaleMismatchPct))
+			logger.Infof("%s", SourceBootLine(pair[0], sc, cache.ScaleMismatches(), ntwire.ScaleMismatchPct, barReplayHold.line(pair[0])))
 		}
 	}
 }

@@ -2,6 +2,9 @@ package ninjatrader
 
 import (
 	"math"
+	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -30,6 +33,18 @@ var (
 	ScaleMismatchPct       = 0.005
 	ScaleMismatchRangeMult = 20.0
 )
+
+func init() {
+	// A knob that is documented is a knob that exists (class 19). Positive
+	// finite values only; anything else keeps the default and says nothing —
+	// the boot line prints the value in force either way.
+	if v, err := strconv.ParseFloat(strings.TrimSpace(os.Getenv("NOFX_BAR_SCALE_MISMATCH_PCT")), 64); err == nil && v > 0 && !math.IsInf(v, 0) {
+		ScaleMismatchPct = v
+	}
+	if v, err := strconv.ParseFloat(strings.TrimSpace(os.Getenv("NOFX_BAR_SCALE_MISMATCH_MULT")), 64); err == nil && v > 0 && !math.IsInf(v, 0) {
+		ScaleMismatchRangeMult = v
+	}
+}
 
 // medianBody is the median |close-open| of the bars given — the tape's own
 // scale. Zero when there are no bars or every body is zero.
@@ -177,6 +192,10 @@ func (c *BarCache) detectScaleMismatch(key string, b Bar, now time.Time) (Bar, b
 	}
 	c.bars[key] = kept
 	b.Source = BarSourceMixed
+	if c.seedOffScale == nil {
+		c.seedOffScale = make(map[string]bool)
+	}
+	c.seedOffScale[key] = true
 	sym, tf, _ := splitBarKey(key)
 	m := ScaleMismatch{Symbol: sym, Timeframe: tf, At: now, LastHistoricalC: last.C, FirstLiveC: b.C, DeltaPts: delta, HistoricalDropped: dropped}
 	if c.mismatches == nil {
@@ -190,6 +209,23 @@ func (c *BarCache) detectScaleMismatch(key string, b Bar, now time.Time) (Bar, b
 		go fn(m)
 	}
 	return b, true
+}
+
+// SeedVerdict reports, for one symbol×timeframe, whether the ring has compared
+// a live bar against the seed it currently holds (checked) and whether that
+// seed was found on another scale (offScale). The persist wire holds a
+// replay's rows OUT of the store until checked is true, and discards them when
+// offScale is: an unverified replay is not the record, and a replay on the
+// wrong scale must never become one (the 22:39 boot wrote 186 such rows over
+// live ones through the old unconditional upsert; this is the second door).
+func (c *BarCache) SeedVerdict(symbol, timeframe string) (checked, offScale bool) {
+	if c == nil {
+		return false, false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	key := barKey(symbol, timeframe)
+	return c.liveSeen[key], c.seedOffScale[key]
 }
 
 // ScaleMismatches returns every detection this process, for the boot line.
