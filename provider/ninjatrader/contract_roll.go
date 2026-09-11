@@ -105,6 +105,12 @@ func (s *TCPServer) observeContract(symbol, contract string, at time.Time) {
 	if key == "" || contract == "" {
 		return
 	}
+	// ONE entry records the ACK. The subscription state (what CurrentContract
+	// reads) and the roll record are written together so no caller — handler
+	// or fixture — can update one and forget the other. The first draft had the
+	// handler call setSubState and then this; the pin called only this, and
+	// CurrentContract answered "nothing named" after a roll it had just seen.
+	s.setSubState(key, "subscribed", contract, "")
 	s.rollMu.Lock()
 	if s.lastNamed == nil {
 		s.lastNamed = make(map[string]string)

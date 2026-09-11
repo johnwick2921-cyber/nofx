@@ -1868,10 +1868,10 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 				s.logger.Warn("tcp_server: bad subscribed payload", "err", err)
 				continue
 			}
-			s.setSubState(p.Symbol, "subscribed", p.ResolvedContract, "")
 			s.logger.Info("tcp_server: subscription ACK", "symbol", p.Symbol, "contract", p.ResolvedContract)
 			// ROLL WAVE — this ACK is the ONE frame that names the contract.
-			// A different name than last time is a roll: purge, record, notify.
+			// observeContract records the subscription state AND detects a
+			// roll (a different name than last time → purge, record, notify).
 			s.observeContract(p.Symbol, p.ResolvedContract, time.Now())
 
 		case FrameUnsubscribed:
