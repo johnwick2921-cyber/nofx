@@ -27,7 +27,8 @@ var recorderTestClock = time.Date(2026, 9, 10, 14, 0, 0, 0, time.FixedZone("CDT"
 // and both distances.
 func TestRecordedRowCarriesTheScenarioLink(t *testing.T) {
 	const level = 29141.25
-	at, st, now := recorderFixture(t, level, 2000, recorderTestClock)
+	at, st, _ := recorderFixture(t, level, 2000, recorderTestClock)
+	now := recorderTestClock // the fixture hands back time.Now(); the tape ends at the FIXED clock
 	formed := now.Add(-6 * time.Hour).UnixMilli()
 
 	at.recordDetectorOutputs("MNQ", "P1", "NY", 1,
@@ -54,7 +55,8 @@ func TestRecordedRowCarriesTheScenarioLink(t *testing.T) {
 // reader can tell "nothing authored" from "nothing close".
 func TestRecordedRowStatesWhyTheLinkIsNull(t *testing.T) {
 	const level = 29141.25
-	at, st, now := recorderFixture(t, level, 2000, recorderTestClock)
+	at, st, _ := recorderFixture(t, level, 2000, recorderTestClock)
+	now := recorderTestClock // the fixture hands back time.Now(); the tape ends at the FIXED clock
 	formed := now.Add(-6 * time.Hour).UnixMilli()
 
 	at.recordDetectorOutputs("MNQ", "P1", "NY", 1,
@@ -77,7 +79,8 @@ func TestRecordedRowStatesWhyTheLinkIsNull(t *testing.T) {
 // width means the record cannot say which scenario this touch belongs to.
 func TestAmbiguousLinkReachesTheRowAsNull(t *testing.T) {
 	const level = 29141.25
-	at, st, now := recorderFixture(t, level, 2000, recorderTestClock)
+	at, st, _ := recorderFixture(t, level, 2000, recorderTestClock)
+	now := recorderTestClock // the fixture hands back time.Now(); the tape ends at the FIXED clock
 	formed := now.Add(-6 * time.Hour).UnixMilli()
 
 	at.recordDetectorOutputs("MNQ", "P1", "NY", 1,
