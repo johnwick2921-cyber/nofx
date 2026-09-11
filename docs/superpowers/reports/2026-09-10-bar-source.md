@@ -7,6 +7,129 @@
 
 ---
 
+## CORRECTION FIRST (2026-09-11 00:2x–00:4x CT) — THE PREMISE WAS WRONG; THE WAVE IS WITHDRAWN IN PART
+
+**NT8 had not rolled.** Its front month, its charts and its fills were on
+**MNQ 09-26**. The AddOn's date rule had put bars AND orders on **MNQ 12-26**.
+The ~290 points this wave called "one contract, two sources" was the
+**Sep/Dec basis** — the December request's history served at September's
+prices under the December name (NT8 serves the prior contract's history before
+its own rollover), against December's live ticks. Carry at 2026 rates on
+~29,000 over a quarter is ~275–290 points; my "carry implies ~90" was wrong
+arithmetic and the tell I read past.
+
+**Evidence [A], NT8's own log** (`log.20260910.00000.en.txt`), position 605:
+`23:04:03 Order='0f216950…/Sim101' Name='be8d5968…' New state='Filled'
+Instrument='MNQ 12-26' Action='Sell short' Fill price=29361.25`; bracket sl
+29478 / tp 29087.25 both `Instrument='MNQ 12-26'`. 299 `MNQ 09-26` order lines
+that day before 19:00 CT, 16 `MNQ 12-26` after. No Go log could show this —
+the wire frames carry no instrument (roll report C5).
+
+**The fix is C#, one door** (`ed6bac8b` + `c2eef211`, compiled and running
+since the owner's 00:40 restart): `VLInstrumentLookup` resolves NT8's rolling
+name `MNQ ##-##`, asks its `MasterInstrument.GetNextExpiry` for the platform's
+front month, and resolves the CONCRETE contract — for bars, orders,
+`close_position` and `place_protective_stop` alike. Verified 00:41 CT, all
+three the same: NT8 log `=> MNQ 09-26 (rolling->MNQ 09-26)` · ACK
+`instrument_info MNQ (MNQ 09-26)` · live fact 16639341 `MNQ 09-26` 29171.25;
+replay fact same minute 29172.25. The rolling instrument itself returns zero
+bars (00:33 CT, every timeframe) — the concrete resolution is required, not
+optional. Every `bars_historical`/`bar_update` frame now carries `contract`
+(Go reads it next wave).
+
+**Disposition of this wave.** Rolled back to 0070fc79 on the owner's order.
+What stands as correct: D1 `bars.source` (a label), D2 the live-wins upsert,
+D3 the ring's live-over-replay merge, D7 readers excluding `mixed`. **Withdrawn:
+D4 (scale-mismatch detector) and D5 (replay hold)** — a workaround for an
+AddOn defect, with two defects of their own (below), and nothing to catch once
+the platform's contract is right. D6's measured labels were superseded by the
+owner-authorised store repair (next section). Class 118 rewritten to say so.
+
+### The store, repaired under three authorisations (all WHERE-scoped, values untouched, backups quoted)
+
+| write | backup (integrity ok) | md5 | count |
+|---|---|---|---|
+| `contract='MNQ 09-26' WHERE symbol='MNQ' AND contract='MNQ 12-26' AND open_time_ms < 1789092903000` (21:15:03 ACK); ES same | `pre-relabel-20260911-002105` | `84bbe8b21ac7d052bbbb0147e439505f` | MNQ 24,783 · ES 26,373 (all tfs) · 0 still Dec in the key set after |
+| `DELETE WHERE source='historical'` (rows abc420f8 released) | same | same | 60 (MNQ 46, ES 14); non-historical SUM(o+h+l+c+v) 39,165,277,095.0 before = total after |
+| `DELETE WHERE source='replay:off-scale'` | `pre-offscale-delete-20260911-002622` | `df7fd8a1e3e0c7b5e4346db529f55bb8` | 38 (MNQ 5, ES 33); others' sum 39,164,888,108.5 unchanged |
+
+The relabel reverses the 22:39 ruling that kept the replay's `12-26` label on
+pre-ACK rows. In the owner's words for the marker: *the relabel was kept on
+the owner's ruling; it was wrong — September values under a December label is
+how the ring got two scales.* Under the corrected premise the relabel is also
+simply true: every bar received before the 21:15:03 ACK was a September bar.
+Not reached by the WHERE, for a separate call: MNQ 1m rowids 464739/464744 and
+ES 464740/464741 (21:16–21:17) open after the ACK, stay `12-26`, and carry
+September opens under December closes.
+
+### The two abc420f8 failures, verbatim — both "a verification whose own precondition disappeared"
+
+1. **The 20×-median-body condition blinded the higher timeframes.** Boot line
+   00:15:29: `mismatches this process: 1m@00:15:21 Δ=296.50 … 15m … 3m … 5m`
+   — and, the same second, `📼 replay verified on the live scale: MNQ 30m —
+   1998 row(s) released`, then 1h, 2h, 4h, 6h, 8h, 12h, 1d, 3d, 1w. A 30m
+   bar's median body ×20 exceeds a 296-pt gap. The condition was added to stop
+   a fixture false positive (`TestBarCache_RingBound`, a 1-pt move at price
+   100) and was never measured against the gap it guarded.
+2. **The re-seed cleared the per-seed verdict and the re-check had nothing to
+   compare.** `1m@00:15:21 Δ=296.50 (replay 29159.50 vs live 29456.00, 2000
+   dropped)` — then `00:15:50 📼 replay verified on the live scale: MNQ 1m —
+   1998 row(s) released`. Sequence: mismatch → seed dropped → ring refilled
+   from the store's live rows (`1 → 2060`) → a second `bars_historical`
+   re-armed the check (`delete(c.liveSeen, key)`, `delete(c.seedOffScale,
+   key)`) → `mergeSeedKeepingLive` dropped every colliding replay bar → the
+   next live bar's `last` search found no historical bar → `return b, false`
+   → `SeedVerdict = (checked, !offScale)` → released. Per-seed arming was
+   itself the fix for a mutation survivor; ES 1m, whose re-seed did not
+   collide the same way, discarded correctly at 00:15:41.
+
+Net damage 60 `historical` rows, all labelled, all deleted (table above).
+
+### The three findings the owner ordered into the record, no softening
+
+**1. `vet-06-risk.md:255` named this window five days early and was not acted
+on.** dev `2a66d91c`, 2026-09-05:
+
+> "The uncovered window is **19:00 CT 09-10 → 09-14: orders on DEC26, bars
+> and gate on SEP26**, and the gate's 3-day window not yet open. **What I
+> would refuse:** no new entries from the Thu 09-10 17:00 CT open until a
+> human has confirmed in the log that the bars ACK carries 'MNQ 12-26' …"
+
+19:00 CT flip — as written. Order 152 on December at 19:11 — as written.
+Position 605 on December at 23:04. The refusal was specified and never
+installed; the report was merged and nothing read it back as a rule. That is
+the class (119): a review that predicts an incident and is not converted into
+a gate.
+
+**2. The June procedure's premise IS the defect.** `docs/CONTRACT-ROLL.md`
+(`17cb3cec`, 2026-06-12, "June→September roll postmortem") prescribed: "if
+today ≥ roll date [expiry − 8 days], a fresh NT8 + bot restart lands on the
+new quarter automatically." It takes the AddOn's date for the platform's roll.
+Followed on 2026-09-11 it would have put the bot further onto December.
+Rewritten in this wave: the roll is whatever NT8's front month says, confirmed
+in the log — three lines naming one contract, matching the Control Center —
+before any entry.
+
+**3. The June plan's refutation is refuted by tonight's log.** Side by side:
+
+> plan `2026-05-22-nq-databento-ninjatrader.md:245` (2026-06-02): "**`GetNextExpiry`
+> is UNBOOTSTRAPPABLE on Tradovate.** It needs a `MasterInstrument`, which is
+> obtained only from a qualified/continuous `GetInstrument` — and **Tradovate
+> has no continuous contracts** → null → chicken-and-egg."
+
+> NT8 log 2026-09-11 00:40:29: `VLBarsSubscriptionManager: reconnect resolved
+> MNQ -> MNQ ##-## => MNQ 09-26 (rolling->MNQ 09-26)`
+
+The rolling name resolves; its master answers `GetNextExpiry`; the concrete
+contract resolves. The refutation was recorded as settled and closed the
+correct path for a quarter. The resolver's own June comment even named
+`MasterInstrument.GetNextExpiry` as the "later phase" — for energy and
+metals only.
+
+---
+
+## THE ORIGINAL REPORT FOLLOWS, AS WRITTEN AT 23:4x CT 09-10, ITS PREMISE NOW KNOWN TO BE WRONG
+
 ## THE FINDING (the roll boot's, restated with its evidence) [A]
 
 The roll wave separated MNQ 09-26 from MNQ 12-26 correctly and booted at
