@@ -801,3 +801,15 @@ hand-beaten. This marker must be published before that held lock is released.
 The three CI setup failure groups remain **pre-existing, owed to batch 2**.
 The partner patch remains a **Binnie-only handoff, unapplied by 105**; the
 handoff note is linked above and no receipt from Binnie is invented.
+
+
+### Targeted-restart ruling applied
+
+The owner requested current-contract-only purge and store reseed, conditioned
+on the store carrying separable contracts. It does not: contract is absent
+from the bars schema and natural key, with contaminated OHLC already persisted.
+No purge/reseed/additional restart was performed; counts 0/0. The current
+contract evidence and exact RANGE line are in the incident report. This
+STOP preserves the owner's prohibition against guessed contract attribution.
+The first new identity plan remains unproven: a timezone-normalized
+`julianday(created_at)` read after boot returned no authored plan yet.

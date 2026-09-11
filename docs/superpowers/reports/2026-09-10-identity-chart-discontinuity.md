@@ -130,3 +130,44 @@ without inspecting its captured input; later reads from this ring see them.
 No production code, DB row, order, planner state, account or feed setting was
 changed. A clean boot-integrity result proves build identity, not tape integrity.
 The boot report must carry this incident prominently.
+
+
+## Owner-requested targeted purge: STOP, store cannot select current contract
+
+Owner authorized purging non-current-contract ring bars, reseeding 1m from
+that contract's store rows, then restarting the same revision, with an explicit
+condition to report if the store itself mixes contracts. That condition is met.
+
+[A] At 21:27 CT `/api/nt/symbols` reports current subscription **MNQ 12-26**.
+The Windows compile-source `VLTraderTCPClient.cs:907` resolves execution
+through `VLContractResolver.ResolveFrontMonthContract`, the same resolver
+used by the bar subscription. Its current UTC-date result is December.
+No test order was sent to prove routing, and no contract was changed.
+
+[A] `PRAGMA table_info(bars)` lists only `symbol,tf,open_time_ms,o,h,l,c,v,convention`.
+The unique index is `(symbol,tf,open_time_ms)`. `symbol LIKE 'MNQ%'` finds
+only unsuffixed **MNQ**, across 14 timeframes; **22,466 1m rows** at the
+observation. There is no `MNQ 09-26` or `MNQ 12-26` partition and no per-row
+contract field. The mixed OHLC rows 464738/464739/464744 are persisted in it.
+`LastNBars` filters symbol and timeframe only, and `RehydrateOlder` receives
+no contract. Neither can implement the owner's requested contract-only reseed.
+
+**Purged: 0. Reseeded: 0. Additional restart: none.** A selective purge count
+cannot be computed from missing contract provenance. A price threshold or
+timestamp boundary would infer a contract, which the dispatch forbids.
+Purging the ring then replaying this store or the same mixed historical feed
+would restore the defect. The store is an unsafe reseed source; raw NT8 frames
+also already contain the mixed-price bars. Thus clearing only the ring is
+insufficient. No behavior/schema fix is smuggled into this targeted-boot request.
+
+Current desk at **21:27:44 CT**, not an after-repair claim:
+
+```text
+RANGE: session 29062.25–29421.25 = 359.00 pts on 265 bar(s) · 10.51× ATR5m (34.16)
+```
+
+It reports state=ok and verified=true despite the discontinuity; that flag
+certifies the calculated surface, not native contract continuity.
+[Exact desk payload](2026-09-10-scenario-level-identity-data/purge-blocked-desk.json).
+The next repair needs contract-provenance-safe storage and a verified uniform
+contract/price basis from NT8; this report does not authorize changing either.
