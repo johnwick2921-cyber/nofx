@@ -1,4 +1,4 @@
-# Level zones — Section C audit; implementation STOP
+# Level zones — corrected scope accepted; native-overlap replay STOP
 
 ## C1 — the owner's four lines, traced first
 
@@ -145,7 +145,7 @@ deduplicating identical prices. Captured rows 23093613–23093650: 38 references
 already detected references is available without changing detection. Distance
 to an abstract grid outside this window would be a distinct ranking choice.
 
-## Blocking corrections — STOP under A23 / H
+## Original blocking corrections — resolved by owner ruling
 
 1. E1's higher-timeframe swing-low trio is absent by detector design; the
    29475 pair already collapses. Use the actual recorded pair and its final
@@ -166,12 +166,18 @@ and anchor outputs byte-for-byte; build zones and five-family counts from the
 uncut detector universe on a separate render/shortlist path; rank that path
 without reading HTF-weighted Score. Apply volatility merge there and explicitly
 retain the legacy scorer's tolerance. Use measured available references for E1.
-This is a proposal, not an implemented or approved scope change.
+The owner subsequently accepted both corrections: E1 uses the observed 29475
+seat-loss pair plus daily demand, and D4 family count is presentation-only.
+The score confluence input remains untouched. The chart's “1D/4H/1H” label is
+the owner's reading of structure, not a claim about emitted detector references.
+The daily demand **band** overlaps the read's range; its **anchor** fails the
+legacy proximity cut. The earlier measured rejection is not withdrawn.
 
 No production edits, mutation experiments, changed fixtures, builds, merges,
 DB writes, or boots were performed in this audit. No RED/GREEN or golden
 preservation claim is made. The score incompatibility is source-proven design
-coupling, not a claimed executed mutant. A23 stops implementation here.
+coupling, not a claimed executed mutant. The original scope stop is resolved; the independent native-overlap stop below
+now prevents implementation.
 
 ## A15 / remaining proof
 
@@ -186,3 +192,61 @@ sample-size/power figures are not independently validated by this audit.
 Rollback: documentation-only; running binary and data are untouched. Final
 cutover proof, tests at merged HEAD, Guide stamp, boot counts, marker and
 SHA-pinned HTTP byte verification remain owed after corrected scope and build.
+
+## Follow-up C replay — D2 native overlap bridges the whole local map
+
+**[A] New STOP under A23, after the corrected scope was accepted.** The
+presentation/scoring separation is feasible. The obstacle is the requested
+merge relation applied to the actual native bands, not that separation.
+
+Read-only replay uses all 843 recorded detector outputs, their original native
+Lo/Hi, and the same frozen ATR5m. It adds an edge when two native intervals
+overlap or two anchors are within m×ATR5m, then takes connected components.
+No new point width, score, gate, cap, age filter or detector is introduced.
+This is an independent audit calculation, not an implemented production merge
+or a mutation claim. It does not rely on a greedy input order.
+
+| Rule | Components | Component sizes | Component holding both chart cases |
+|---|---:|---|---|
+| Native overlap only (m=0) | 4 | 827, 13, 2, 1 | 28313–31104.50 |
+| Native overlap or .25×ATR5m | 4 | 827, 13, 2, 1 | 28313–31104.50 |
+| Native overlap or .50×ATR5m | 4 | 827, 13, 2, 1 | 28313–31104.50 |
+| Native overlap or .75×ATR5m | 4 | 827, 13, 2, 1 | 28313–31104.50 |
+
+The dominant zone is **2791.50 points wide**. The two E1 cases would both reach
+a full-map render, but as members of this same 827-source zone. That is not a
+claim that the requested useful local zones have been delivered.
+
+A three-reference witness suffices, without any long transitive chain:
+
+| Archive id | Reference | Original bounds |
+|---|---|---|
+| 23094164 | SWG-H·5m, anchor 29475 | 29475–29475 |
+| 23094181 | Demand·1d, anchor 29006.625 | 28810.75–29202.50 |
+| 23094275 | OB(bull)·4h, anchor 29252.875, origin 2026-06-09 | **28500.75–30005** |
+
+The 4h OB directly contains both other references. Keeping its real bounds
+(D1), merging all overlaps (D2), and retaining every old reference (D6) forces
+these into one component. The 15m swing at 29475 (row 23094168) joins too.
+Adding point widths cannot split a component that native overlap already joins;
+changing m within the proposed test range cannot resolve this case.
+
+Reproduce:
+
+```sh
+python3 docs/superpowers/reports/2026-09-11-level-zones-evidence/overlap_replay.py
+```
+
+[Complete output and component row IDs](2026-09-11-level-zones-evidence/overlap-result.json).
+The independent union-find replay agrees with a separate iterative union replay:
+four components with sizes 827/13/2/1 at m=.5.
+
+**Ruling needed:** retain broad historical bands as separately rendered context,
+and make overlap alone insufficient to merge them with local reference zones?
+That would preserve every bound and name while allowing separate local zones,
+but it changes D2's unconditional overlap rule. No width cutoff, age cutoff,
+containment exception or deletion has been silently installed. The criterion
+separating contextual bands from mergeable zones must be explicit and [I].
+
+No production code changed. No build, DB write, or cutover occurred. The worktree
+remains locked for this dispatch while the ruling is pending.
