@@ -1,5 +1,10 @@
 # Dispatch 105 — scenario-level identity: corrected premises and implementation
 
+> **OPEN POST-BOOT DATA INCIDENT:** the shared chart/planner ring contains
+> ~292-point discontinuities after the MNQ September→December subscription
+> change. Binary identity is verified; market-data integrity is NOT certified.
+> See [read-only investigation](2026-09-10-identity-chart-discontinuity.md).
+
 **Current status: implementation built and verified on the owner's corrected
 scope; ready for review and a separate cutover GO. Not deployed.** The owner approved
 separate `formed_close_ms`, unchanged evaluator/gate/wake inputs, complete-input
@@ -726,3 +731,73 @@ informational under the canonical leg-4 rule; no planner read claimed.
 [Complete payload](2026-09-10-scenario-level-identity-data/cutover-pre-release-gate.json).
 RELEASE is prepared as `cd8f9978` before the binary swap. This section is
 preparation evidence, not a claim that the new process is running.
+
+
+## Boot marker — owner-reported boot verified 2026-09-10 21:15 CT
+
+**[A] Boot is verified, PID `2826476`.** Journal at 21:15:02 CT:
+
+```text
+🔐 BOOT INTEGRITY OK — rev cd8f99780eaf · built 2026-09-10T23:55:46Z · expected cd8f9978 · goldens PASS
+🪪 level identity: map ids=n/a (no-formation=n/a; no captured map) · scenarios named=0 unnamed=0[WARN] unresolved=0[WARN] · heuristic-disagreed=0 · backfill recomputed=0 unrecomputable=321 untouched=5050
+```
+
+The identity recorder is live. The boot used a legacy plan without a captured
+identity map, so `n/a` is deliberate unavailable data, not a map count of zero.
+Legacy IDs remain NULL by design. Named/unnamed/unresolved counts are recorded
+new-authoring events, not a retroactive classification of every legacy scenario.
+A first newly authored plan with named IDs is a separate proof, pending below.
+The nullable TEXT `touch_outcomes.level_id` column exists after boot. All 5,371
+rows then read NULL; the durable backfill sidecar records all row ids and three
+classifications: recomputed 0, unrecomputable 321, untouched 5,050. No partial
+hash was used. [Row-id receipt](2026-09-10-scenario-level-identity-data/cutover-backfill-live.json).
+
+**[A] Five revision references agree** (full SHA
+`cd8f99780eafe20fbb0b51a9c87955d3a2a4e887`):
+
+1. `/api/health`: `cd8f99780eaf`, status `ok`.
+2. `/proc/2826476/exe`: full SHA above; `vcs.modified=false`.
+3. `deploy/RELEASE`: `cd8f9978`.
+4. committed Guide SOURCE: full SHA above.
+5. served dist: full SHA above; all 92 file hashes match the prepared manifest.
+
+The installed binary and running inode both have MD5
+`b32d80dba7d9dcfb335a194c71fcd7d9`, exactly matching the clean-clone candidate.
+[Reference receipt](2026-09-10-scenario-level-identity-data/cutover-postboot-references.json).
+
+**[A] W2 remains live:** its 21:15:03 boot line says LABEL ONLY (no refusal),
+today permitted=56 excluded=10 not-evaluated=0, and retains its E3-null coverage
+statement. This is W2's work from `fix/fade-permission` (code `4fc670aa`, marker
+`4dc0fae1`, report `b952f2c4`). Identity came from `fix/scenario-level-identity`
+via PR #101 / merge `cd8f9978`. PR #102 / merge `d495d0b4` carries the
+subsequent Guide, RELEASE and preparation receipts, with no Go changes after
+the tested build. 105 built and gated the merged head, not authored all of it.
+[Exact boot lines](2026-09-10-scenario-level-identity-data/cutover-boot-lines.txt).
+
+**A15 — boot timing and sweep must not be misread.** The last pre-swap gate was
+19:07:45 CT, all five PASS, broker working=0 / ledger working=0 / armed-unplaced=1.
+105 swapped and verified the candidate, then printed `kill -9 2778818` for the
+owner; 105 did not execute that command. The observed boot is timestamped
+21:15:02 CT. The earlier gate is NOT a fresh gate for that later boot.
+Arm **152**, ASIA plan v3 / S1, was created at 19:11:05 CT and carried signal
+`62a9aa52-0c57-432b-bbc5-67a967550ca4`, entry 29094.00 by boot. The class-33
+sweep cancelled it at 21:15:03; the row reads cancelled, snapshot-id 0.
+This matches the separately recorded sweep limitation: it cancels prior-process
+orders, including intended resting orders. It was not changed by 105.
+[Exact arm receipt](2026-09-10-scenario-level-identity-data/cutover-live-data-proof.json).
+
+The first post-boot browser gate at 21:15:41 CT was all PASS with no positions,
+working orders or armed rows. At 21:17:03 a new planner read was in flight:
+legs 1–4 remained PASS and leg 5 correctly read HOLD. This is normal activity
+after boot, not permission for another restart.
+[Later complete gate](2026-09-10-scenario-level-identity-data/cutover-postboot-gate.json).
+
+**A15 — lock liveness:** the keeper ended at its declared 19:53:50 CT expiry
+while waiting for the owner-executed kill. On resume it was STALE, still naming
+this same 105 session; neither main HEAD nor the source tree had moved, both
+were clean, and no other session owned it. No lock was silently seized or
+hand-beaten. This marker must be published before that held lock is released.
+
+The three CI setup failure groups remain **pre-existing, owed to batch 2**.
+The partner patch remains a **Binnie-only handoff, unapplied by 105**; the
+handoff note is linked above and no receipt from Binnie is invented.
