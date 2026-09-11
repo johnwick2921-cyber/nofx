@@ -120,6 +120,8 @@ var knobRegistry = map[string]KnobEntry{
 	"plan_enabled":                     {Path: "plan_enabled", Status: KnobLive, Consumers: []string{"kernel/engine_analysis.go:365"}, Note: ""},
 	"plan_mode":                        {Path: "plan_mode", Status: KnobLive, Consumers: []string{"trader/entry_gate.go:160"}, Note: ""},
 	"fade_or_wide_k":                   {Path: "fade_or_wide_k", Status: KnobLive, Consumers: []string{"trader/fade_facts.go:155"}, Note: "W2 LABEL knob: sets exclusion (a)'s k; changes what is RECORDED, never what is armed. Zero = C5 default 1.28."},
+	"one_setup_enabled":                {Path: "one_setup_enabled", Status: KnobLive, Consumers: []string{"store/resolve_source.go:ResolveOneSetup", "trader/one_setup_wiring.go:oneSetupConfig"}, Note: "ONE SETUP (dispatch 102): nil=ON [O]; false restores the wide book byte-identically (E2). Gates arm AUTHORIZATION only — never cancels, never places."},
+	"one_setup_min_grade":              {Path: "one_setup_min_grade", Status: KnobLive, Consumers: []string{"store/resolve_source.go:ResolveOneSetup", "kernel/one_setup.go:OneSetupBestCandidate"}, Note: "ONE SETUP: the lowest grade the best level near price may carry; empty=B [O]."},
 	"planner_model":                    {Path: "planner_model", Status: KnobLive, Consumers: []string{"trader/auto_trader_planner.go:71"}, Note: ""},
 	"planner_timeframes":               {Path: "planner_timeframes", Status: KnobLive, Consumers: []string{"trader/auto_trader_planner.go:1990"}, Note: ""},
 	"price_ranking_duration":           {Path: "price_ranking_duration", Status: KnobLive, Consumers: []string{"kernel/engine.go:1002"}, Note: ""},

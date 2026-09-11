@@ -124,6 +124,45 @@ type TouchOutcomeRow struct {
 	TermsTarget       *float64
 	TermsR            *float64
 
+	// ── ONE SETUP (dispatch 102, 2026-09-10) — THE VERDICT, RECORDED ────────
+	// The arm seam's three-legged verdict for the scenario this episode belongs
+	// to, stamped ONCE (W2's pattern: WHERE one_setup_verdicts IS NULL). NULL
+	// means the seam never judged this row — a different fact from "allowed".
+	// OneSetupEvaluatedMs is the clock the verdict was made with: the arm
+	// seam's `now` live, the episode's OPEN for the backfill (D9), so a reader
+	// can tell which. OneSetupBackfill is D9's three-state mark.
+	OneSetupVerdicts    *string `gorm:"index"` // "level=<v> play=<v> permission=<v>"
+	OneSetupReason      *string // "allowed" | the joined decline
+	OneSetupScenario    *string `gorm:"index"`
+	OneSetupEvaluatedMs *int64
+	OneSetupBackfill    *string // recomputed | unrecomputable:<which> | untouched
+
+	// ── THE FOLLOW-PLAN (round 17) — RECORDED ONLY, NEVER ARMED ─────────────
+	// Beside every fade-plan the level ALSO carries a follow-plan: break → role
+	// reversal → retest, with the would-be entry and its MAE/MFE. Every field
+	// is NULL until its event occurs; a level never broken is a ROW with
+	// FollowBreakAtMs NULL — a zero-trade outcome, not a missing row. Nothing
+	// here reaches the wire (E9). FollowBackfill is D9's three-state mark;
+	// FollowState is the recorder's lifecycle (open | no_break |
+	// broken_no_retest | retested | complete | unrecomputable:<which>).
+	FollowBreakAtMs     *int64  `gorm:"index"`
+	FollowBreakDir      *string // "up" | "down"
+	FollowRetestAtMs    *int64
+	FollowEntryPx       *float64
+	FollowEntryBasis    *string
+	FollowMAE10         *float64
+	FollowMFE10         *float64
+	FollowNet10         *float64 // pts at the 10th closed 5m bucket after entry, net of 2-pt friction
+	FollowMAE20         *float64
+	FollowMFE20         *float64
+	FollowNet20         *float64
+	FollowRetestOutcome *string // the retest's own detector verdict, joined by level + session-day + ordinal
+	FollowRoleReversed  *bool   // did the reversed level HOLD on the retest
+	BiasWouldFlipTo     *string // "long" | "short" — the direction the break implies; the live bias is untouched
+	PlanBiasFrozen      *string // the plan's bias at the recording, beside it, never into it
+	FollowState         *string `gorm:"index"`
+	FollowBackfill      *string
+
 	CreatedAt time.Time `gorm:"index"`
 }
 

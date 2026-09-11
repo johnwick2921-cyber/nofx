@@ -921,6 +921,15 @@ type DayPlanConfig struct {
 	// default (p80/median = 1.28, n=13). A LABEL knob: it changes what is
 	// recorded, never what is armed.
 	FadeORWideK float64 `json:"fade_or_wide_k,omitempty"`
+	// OneSetupEnabled (dispatch 102, 2026-09-10) — the book arms ONE play (the
+	// fade) at the best level near price, only on a permitted day; the follow
+	// side is recorded, never armed. *bool: nil = ON (the [O] default), an
+	// explicit false restores today's wide book byte-identically (E2). A plain
+	// bool would read an unset strategy as OFF — the plausible zero A24 forbids.
+	OneSetupEnabled *bool `json:"one_setup_enabled,omitempty"`
+	// OneSetupMinGrade — the lowest merged-candidate grade the best level may
+	// carry ("A+" | "A" | "B" | "C"); empty = B [O].
+	OneSetupMinGrade string `json:"one_setup_min_grade,omitempty"`
 	// PlannerTimeframes are the structure-summary TFs (default D,4h,1h,15m).
 	PlannerTimeframes []string `json:"planner_timeframes,omitempty"`
 	// ProximityFilterATR: day-trade lock, 0.5–3.0 (default 1.5).

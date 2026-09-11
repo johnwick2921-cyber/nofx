@@ -54,3 +54,27 @@ func ResolvePlanMode(c *DayPlanConfig, session string) (string, string) {
 	}
 	return strings.ToLower(strings.TrimSpace(mode)), source
 }
+
+// ResolveOneSetup (dispatch 102) resolves the two one-setup knobs from THE
+// BOUND STRATEGY, with their sources: enabled defaults ON [O] (nil, never a
+// plain false), min grade defaults B [O]. A malformed grade falls back to B
+// and says so — a boot line that prints a grade the predicate does not use is
+// worse than none (class 45/49).
+func ResolveOneSetup(cfg *StrategyConfig) (enabled bool, minGrade, enabledSource, gradeSource string) {
+	enabled, enabledSource = true, SourceShippedDefault
+	minGrade, gradeSource = "B", SourceShippedDefault
+	if cfg == nil || cfg.DayPlan == nil {
+		return
+	}
+	if cfg.DayPlan.OneSetupEnabled != nil {
+		enabled, enabledSource = *cfg.DayPlan.OneSetupEnabled, SourceSaved
+	}
+	switch g := strings.ToUpper(strings.TrimSpace(cfg.DayPlan.OneSetupMinGrade)); g {
+	case "A+", "A", "B", "C":
+		minGrade, gradeSource = g, SourceSaved
+	case "":
+	default:
+		gradeSource = SourceShippedDefault + " (saved value " + g + " is not a grade)"
+	}
+	return
+}
