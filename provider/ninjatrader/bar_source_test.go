@@ -1,9 +1,28 @@
 package ninjatrader
 
 import (
+	"sync"
 	"testing"
 	"time"
 )
+
+// scaleCapture collects listener events under a lock — the ring fires listeners
+// on their own goroutine, so an unguarded slice/int is a data race under -race
+// (the CI coverage job runs -race; cleanup batch 2, B8).
+type scaleCapture struct {
+	mu  sync.Mutex
+	got []ScaleMismatch
+}
+
+func (c *scaleCapture) listen() {
+	OnScaleMismatch(func(m ScaleMismatch) { c.mu.Lock(); c.got = append(c.got, m); c.mu.Unlock() })
+}
+func (c *scaleCapture) events() []ScaleMismatch {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return append([]ScaleMismatch(nil), c.got...)
+}
+func (c *scaleCapture) fired() int { return len(c.events()) }
 
 // ── BAR-SOURCE WAVE PINS (ring half) ─────────────────────────────────────────
 //
@@ -65,8 +84,8 @@ func TestScaleMismatchDropsTheSeedAndLabelsTheBootMinute(t *testing.T) {
 	if n := c.Count("MNQ", "1m"); n != 30 {
 		t.Fatalf("seed: want 30, got %d", n)
 	}
-	var got []ScaleMismatch
-	OnScaleMismatch(func(m ScaleMismatch) { got = append(got, m) })
+	cap := &scaleCapture{}
+	cap.listen()
 	t.Cleanup(func() { scaleListenersMu.Lock(); scaleListeners = nil; scaleListenersMu.Unlock() })
 
 	// 22:37 arrives live: the AddOn copied its open from its own historical
@@ -84,28 +103,28 @@ func TestScaleMismatchDropsTheSeedAndLabelsTheBootMinute(t *testing.T) {
 	if bars[0].O != bsLow || bars[0].C != bsHigh {
 		t.Fatalf("A24: the mixed bar's VALUES must be untouched; got o=%.2f c=%.2f", bars[0].O, bars[0].C)
 	}
-	if len(got) != 1 || got[0].DeltaPts != bsDelta || got[0].HistoricalDropped != 30 {
+	if got := cap.events(); len(got) != 1 || got[0].DeltaPts != bsDelta || got[0].HistoricalDropped != 30 {
 		t.Fatalf("listener: want one event Δ=%.2f dropped=30, got %+v", bsDelta, got)
 	}
 	// A second live bar is ordinary live — no second event, no second mixed.
 	c.Upsert("MNQ", "1m", []Bar{{T: bsT0 + 60_000, O: bsHigh, H: bsHigh + 1, L: bsHigh - 1, C: bsHigh + 0.5, V: 1}})
 	time.Sleep(20 * time.Millisecond)
 	bars = c.Get("MNQ", "1m")
-	if len(got) != 1 || bars[len(bars)-1].Source != BarSourceLive {
-		t.Fatalf("only the FIRST live bar is checked; events=%d last source=%q", len(got), bars[len(bars)-1].Source)
+	if cap.fired() != 1 || bars[len(bars)-1].Source != BarSourceLive {
+		t.Fatalf("only the FIRST live bar is checked; events=%d last source=%q", cap.fired(), bars[len(bars)-1].Source)
 	}
 }
 
 // Same scale → no mismatch, nothing dropped, nothing labelled.
 func TestNoMismatchOnTheSameScale(t *testing.T) {
 	c := seededRing(t)
-	fired := 0
-	OnScaleMismatch(func(ScaleMismatch) { fired++ })
+	cap := &scaleCapture{}
+	cap.listen()
 	t.Cleanup(func() { scaleListenersMu.Lock(); scaleListeners = nil; scaleListenersMu.Unlock() })
 	c.Upsert("MNQ", "1m", []Bar{{T: bsT0, O: bsLow, H: bsLow + 2, L: bsLow - 1, C: bsLow + 1, V: 1}})
 	time.Sleep(20 * time.Millisecond)
-	if fired != 0 || c.Count("MNQ", "1m") != 31 {
-		t.Fatalf("same scale: fired=%d ring=%d (want 0, 31)", fired, c.Count("MNQ", "1m"))
+	if cap.fired() != 0 || c.Count("MNQ", "1m") != 31 {
+		t.Fatalf("same scale: fired=%d ring=%d (want 0, 31)", cap.fired(), c.Count("MNQ", "1m"))
 	}
 	for _, b := range c.Get("MNQ", "1m") {
 		if b.Source == BarSourceMixed {
@@ -131,16 +150,16 @@ func TestEveryRingBarNamesItsSource(t *testing.T) {
 // live bar after THAT seed must catch it. RED with a per-process guard.
 func TestReconnectReseedIsCheckedAgain(t *testing.T) {
 	c := seededRing(t) // low-scale seed
-	fired := 0
-	OnScaleMismatch(func(ScaleMismatch) { fired++ })
+	cap := &scaleCapture{}
+	cap.listen()
 	t.Cleanup(func() { scaleListenersMu.Lock(); scaleListeners = nil; scaleListenersMu.Unlock() })
 
 	// live on the SAME (low) scale — a clean boot, nothing fires
 	c.Upsert("MNQ", "1m", []Bar{{T: bsT0, O: bsLow, H: bsLow + 1, L: bsLow - 1, C: bsLow + 0.5, V: 1}})
 	c.Upsert("MNQ", "1m", []Bar{{T: bsT0 + 60_000, O: bsLow, H: bsLow + 1, L: bsLow - 1, C: bsLow + 0.25, V: 1}})
 	time.Sleep(20 * time.Millisecond)
-	if fired != 0 {
-		t.Fatalf("same-scale boot must not fire; fired=%d", fired)
+	if cap.fired() != 0 {
+		t.Fatalf("same-scale boot must not fire; fired=%d", cap.fired())
 	}
 	// reconnect: the replay comes back on the HIGH scale for later minutes
 	var re []Bar
@@ -151,8 +170,8 @@ func TestReconnectReseedIsCheckedAgain(t *testing.T) {
 	// first live bar after the re-seed, on the LOW scale (live never moved)
 	c.Upsert("MNQ", "1m", []Bar{{T: bsT0 + 6*60_000, O: bsHigh, H: bsHigh + 1, L: bsLow - 1, C: bsLow, V: 1}})
 	time.Sleep(20 * time.Millisecond)
-	if fired != 1 {
-		t.Fatalf("a reconnect re-seed on another scale must be caught by the first live bar after it; fired=%d", fired)
+	if cap.fired() != 1 {
+		t.Fatalf("a reconnect re-seed on another scale must be caught by the first live bar after it; fired=%d", cap.fired())
 	}
 }
 
@@ -170,21 +189,21 @@ func TestOrdinaryMoveAtSmallPriceIsNotAMismatch(t *testing.T) {
 		seed = append(seed, Bar{T: ms, O: o, H: o + 1.5, L: o - 0.5, C: o + 1, V: 1}) // one-point bodies
 	}
 	c.SeedHistorical("MNQ", "1m", seed)
-	fired := 0
-	OnScaleMismatch(func(ScaleMismatch) { fired++ })
+	cap := &scaleCapture{}
+	cap.listen()
 	t.Cleanup(func() { scaleListenersMu.Lock(); scaleListeners = nil; scaleListenersMu.Unlock() })
 	c.Upsert("MNQ", "1m", []Bar{{T: bsT0, O: 120, H: 126, L: 119, C: 125, V: 1}}) // +5 from last close 120: 4.2% of price, 5 bodies
 	time.Sleep(20 * time.Millisecond)
-	if fired != 0 || c.Count("MNQ", "1m") != 21 {
-		t.Fatalf("an ordinary move must not read as a scale shift: fired=%d ring=%d", fired, c.Count("MNQ", "1m"))
+	if cap.fired() != 0 || c.Count("MNQ", "1m") != 21 {
+		t.Fatalf("an ordinary move must not read as a scale shift: fired=%d ring=%d", cap.fired(), c.Count("MNQ", "1m"))
 	}
 	// And the real thing at the same price, for contrast: +50 is 50 bodies.
 	c2 := NewBarCache(2500)
 	c2.SeedHistorical("MNQ", "1m", seed)
 	c2.Upsert("MNQ", "1m", []Bar{{T: bsT0, O: 120, H: 171, L: 119, C: 170, V: 1}})
 	time.Sleep(20 * time.Millisecond)
-	if fired != 1 {
-		t.Fatalf("a fifty-body jump at the same price IS a scale shift; fired=%d", fired)
+	if cap.fired() != 1 {
+		t.Fatalf("a fifty-body jump at the same price IS a scale shift; fired=%d", cap.fired())
 	}
 }
 

@@ -25,6 +25,11 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          # B8 (2026-09-11): branding/scope_test.go diffs every .go file
+          # against base 954f11b1 to prove no import target was renamed; on a
+          # depth-1 checkout that sha is absent and `git diff` exits 128.
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v5
