@@ -144,7 +144,11 @@ type TCPServer struct {
 	// (subscribed / unsubscribed / subscribe_error). "pending" until an ack
 	// arrives (a pre-P5.3 AddOn never acks → stays pending; bars still flow).
 	subStateMu sync.RWMutex
-	subStates  map[string]SymbolSubState
+	// ROLL WAVE — the last contract each symbol's ACK named, and observed rolls.
+	rollMu    sync.RWMutex
+	lastNamed map[string]string
+	rolls     map[string]rollEvent
+	subStates map[string]SymbolSubState
 
 	// Plan 4.11 — latest real account snapshot from the C# AddOn
 	// (account_balance frame). Replaces the $50k mock in
@@ -1866,6 +1870,9 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			}
 			s.setSubState(p.Symbol, "subscribed", p.ResolvedContract, "")
 			s.logger.Info("tcp_server: subscription ACK", "symbol", p.Symbol, "contract", p.ResolvedContract)
+			// ROLL WAVE — this ACK is the ONE frame that names the contract.
+			// A different name than last time is a roll: purge, record, notify.
+			s.observeContract(p.Symbol, p.ResolvedContract, time.Now())
 
 		case FrameUnsubscribed:
 			var p UnsubscribedPayload

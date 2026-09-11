@@ -75,10 +75,22 @@ func (at *AutoTrader) storeBarReader(symbol, tf string) func(int) ([]market.Klin
 		if at == nil || at.store == nil {
 			return nil, errStoreUnavailable
 		}
-		rows, err := at.store.BarHistory().LastNBars(symbol, tf, n)
+		// ROLL WAVE — the store deepens the ring with the CURRENT contract
+		// only. This unfiltered read is how the planner received ~2,000
+		// September bars under December ones: the merge preserved the live
+		// tail and extended it backwards across a ~292-point basis, and the
+		// 359-point RANGE on the desk strip was that step, not the market.
+		contract, src := at.currentContract(symbol)
+		if contract == "" {
+			// UNKNOWN is not "everything": with no contract named, the depth
+			// read is skipped and the ring stands alone (A24).
+			return nil, errContractUnknown
+		}
+		rows, err := at.store.BarHistory().LastNBarsOn(symbol, tf, contract, n)
 		if err != nil {
 			return nil, err
 		}
+		_ = src
 		return storeRowsToKlines(rows, tf), nil
 	}
 }
@@ -86,6 +98,16 @@ func (at *AutoTrader) storeBarReader(symbol, tf string) func(int) ([]market.Klin
 // errStoreUnavailable distinguishes "there is no store" from "the store is
 // empty" — an uncomputed answer is UNKNOWN, never zero (A24).
 var errStoreUnavailable = storeUnavailableError{}
+
+// errContractUnknown — no frame has named the contract and the store holds no
+// stamped bar to fall back to. The depth read is skipped, never widened.
+var errContractUnknown = contractUnknownError{}
+
+type contractUnknownError struct{}
+
+func (contractUnknownError) Error() string {
+	return "no contract named yet — depth read skipped rather than read across a roll"
+}
 
 type storeUnavailableError struct{}
 

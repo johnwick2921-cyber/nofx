@@ -211,7 +211,16 @@ func installNakedPOCProvider(st *store.Store) {
 		// could never retire. The bars table supplies the historical leg.
 		if len(bars) > 0 {
 			earliest := bars[0].OpenTime
-			if old, err := st.BarHistory().BarsBetween(symbol, "1m", 0, earliest); err == nil && len(old) > 0 {
+			// ROLL WAVE — the historical leg is the CURRENT contract's. A POC
+			// seated on the retired contract's scale must not be "touched" by
+			// bars 292 points away on the new one.
+			// This installer has no trader handle, so the contract is the
+			// store's newest usable stamp — the same fallback the persist
+			// wire uses before an ACK, and the same value the ACK converges
+			// to within seconds of a boot. Empty → the historical leg is
+			// skipped, never read unfiltered.
+			contract, _ := st.BarHistory().LatestContract(symbol)
+			if old, err := st.BarHistory().BarsBetweenOn(symbol, "1m", contract, 0, earliest); contract != "" && err == nil && len(old) > 0 {
 				combined := make([]market.Kline, 0, len(old)+len(bars))
 				for _, b := range old {
 					combined = append(combined, market.Kline{OpenTime: b.OpenTimeMs, CloseTime: b.OpenTimeMs + 59_999, Open: b.O, High: b.H, Low: b.L, Close: b.C, Volume: b.V})

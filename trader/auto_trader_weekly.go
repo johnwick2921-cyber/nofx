@@ -72,7 +72,16 @@ func (at *AutoTrader) weeklyBars1m(now time.Time) []market.Kline {
 	if at.store == nil {
 		return nil
 	}
-	rows, err := at.store.BarHistory().BarsBetween(at.futuresSymbol(), "1m", 0, now.UnixMilli())
+	// ROLL WAVE — the weekly bias is a statement about the contract being
+	// TRADED. A read from epoch 0 spanned September and December and built a
+	// weekly bar with a 292-point step inside it. Current contract only; the
+	// retired contract's weeks are history, not this instrument's.
+	contract, _ := at.currentContract(at.futuresSymbol())
+	if contract == "" {
+		at.logErrorf("📅 WEEKLY READ: no contract named yet — stored bars not read across an unknown roll")
+		return nil
+	}
+	rows, err := at.store.BarHistory().BarsBetweenOn(at.futuresSymbol(), "1m", contract, 0, now.UnixMilli())
 	if err != nil {
 		at.logErrorf("📅 WEEKLY READ: stored 1m bars load failed: %v", err)
 		return nil
@@ -100,7 +109,11 @@ func (at *AutoTrader) barResolver() *market.BarResolver {
 			if at.store == nil {
 				return nil
 			}
-			rows, err := at.store.BarHistory().BarsBetween(symbol, "1m", fromMs, toMs)
+			contract, _ := at.currentContract(symbol)
+			if contract == "" {
+				return nil
+			}
+			rows, err := at.store.BarHistory().BarsBetweenOn(symbol, "1m", contract, fromMs, toMs)
 			if err != nil {
 				return nil
 			}

@@ -154,7 +154,18 @@ func (at *AutoTrader) excursionBars(fromMs, toMs int64) []market.Kline {
 		return nil
 	}
 	// one bar of slack on each side so the bar CONTAINING the fill is present
-	rows, err := at.store.BarHistory().BarsBetween(at.futuresSymbol(), "1m", fromMs-60_000, toMs+60_000)
+	// ROLL WAVE — a trade's excursion is measured on the contract the TRADE
+	// was on. A window across the roll is unrecomputable, not "the bars we
+	// happen to have".
+	contract, ok := at.store.BarHistory().WindowContract(at.futuresSymbol(), fromMs-60_000, toMs+60_000)
+	if !ok {
+		// nil is this function's "no usable bars" — the caller already treats
+		// it as UNRESOLVED rather than zero. A window that spans the roll is
+		// exactly that: not measurable on one scale.
+		_ = contract
+		return nil
+	}
+	rows, err := at.store.BarHistory().BarsBetweenOn(at.futuresSymbol(), "1m", contract, fromMs-60_000, toMs+60_000)
 	if err != nil || len(rows) == 0 {
 		return nil
 	}

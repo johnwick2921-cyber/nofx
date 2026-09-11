@@ -18,6 +18,35 @@ import (
 // it, only the first wires.
 var wireBarPersistenceOnce sync.Once
 
+// contractFor is the ONE place this file resolves a symbol's contract.
+//
+// ROLL WAVE (2026-09-10). Source order, and the order is the point:
+//  1. the AddOn's most recent `subscribed` ACK for the symbol — the frame that
+//     names the instrument (the hello carries only build_id; bar frames carry
+//     no instrument at all);
+//  2. if no ACK has arrived THIS PROCESS yet (the first seconds after a boot),
+//     the contract of the newest usable bar already in the store — the last
+//     thing the broker told a previous process. Labelled as a fallback wherever
+//     it is printed, never silently.
+//  3. otherwise "" — and a writer given "" REFUSES (InsertBars), a reader given
+//     "" reads nothing rather than everything. A24: no plausible value.
+//
+// Never a date rule. The AddOn's date rule is the defect that put two contracts
+// on one tape; consulting a calendar here would rebuild it in Go.
+func contractFor(bh *store.BarHistoryStore, server *ntwire.TCPServer, symbol string) (contract, source string) {
+	if server != nil {
+		if f, ok := server.CurrentContract(symbol); ok {
+			return f.Contract, "subscribed@" + f.ReceivedAt.Format("15:04:05")
+		}
+	}
+	if bh != nil {
+		if c, ok := bh.LatestContract(symbol); ok {
+			return c, "store-fallback"
+		}
+	}
+	return "", "none"
+}
+
 // WireBarPersistence attaches the store to the bar feed. st == nil → no-op.
 func WireBarPersistence(st *store.Store) {
 	if st == nil {
@@ -39,12 +68,25 @@ func WireBarPersistence(st *store.Store) {
 			if len(closed) == 0 {
 				return
 			}
+			// ROLL WAVE — stamp the contract the AddOn most recently named.
+			// The bar frame itself carries none (C4), so the stamp is the
+			// subscription's, read at RECEIPT and with its source recorded.
+			srv, _ := getOrStartTCPServer()
+			contract, src := contractFor(bh, srv, symbol)
+			if contract == "" {
+				logger.Warnf("bars: persist %s %s SKIPPED %d bar(s) — no contract has been named this process and the store holds none; a bar on an unknown price scale is not written (roll wave)", symbol, tf, len(closed))
+				return
+			}
+			if src == "store-fallback" {
+				logger.Warnf("bars: persist %s %s stamping %d bar(s) as %s from the STORE FALLBACK — no subscription ACK yet this process", symbol, tf, len(closed), contract)
+			}
 			rows := make([]store.BarHistoryDB, 0, len(closed))
 			for _, b := range closed {
 				rows = append(rows, store.BarHistoryDB{
 					Symbol: symbol, TF: tf, OpenTimeMs: b.T,
 					O: b.O, H: b.H, L: b.L, C: b.C, V: b.V,
 					Convention: market.StampConvention(tf),
+					Contract:   contract,
 				})
 			}
 			if err := bh.InsertBars(rows); err != nil {
@@ -85,6 +127,24 @@ func WireBarPersistence(st *store.Store) {
 					// had — two lines about the same instant, and the older,
 					// more-read one wrong.
 					rehydrateRingFromStore(bh, server, time.Now())
+					// ROLL WAVE (D5) — when the AddOn names a NEW contract, the
+					// server has already purged the ring; reseed it from the
+					// store for the new contract only, and say so ONCE where
+					// the owner will see it. Registered here so it runs with
+					// the same store handle the boot rehydrate used.
+					ntwire.OnContractRoll(func(symbol, from, to string, at time.Time) {
+						go func() {
+							// Let the AddOn's post-subscribe replay land first —
+							// the ring must not be cold when the reseed reads
+							// AllPairs(), and the replay is the new contract's
+							// own history.
+							time.Sleep(5 * time.Second)
+							rehydrateRingFromStore(bh, server, time.Now())
+							census, _ := bh.ContractCensus(symbol)
+							logger.Errorf("🚨 P0 — CONTRACT ROLLED %s → %s at %s: the ring was purged and reseeded from the store for %s only; bars by contract now %v. Levels seated on %s are on the retired scale and will re-seat on the next planner read. (roll wave 2026-09-10)",
+								from, to, at.Format("2006-01-02 15:04:05 MST"), to, census, from)
+						}()
+					})
 					// R1 (2026-09-02) — the boot 📊 bars line ran before this
 					// replay landed, so it reported own1m for every TF on a
 					// cold cache. Now that the pantry is in, say what the
@@ -114,10 +174,19 @@ func backfillBars(bh *store.BarHistoryStore, server *ntwire.TCPServer) int {
 	total := 0
 	for _, pair := range server.BarCache().AllPairs() {
 		closed := ntwire.ClosedBarsOnly(server.BarCache().Get(pair[0], pair[1]), pair[1], now)
+		contract, src := contractFor(bh, server, pair[0])
+		if contract == "" {
+			logger.Warnf("bars: backfill %s %s SKIPPED %d bar(s) — no contract named yet (roll wave)", pair[0], pair[1], len(closed))
+			continue
+		}
+		if src == "store-fallback" {
+			logger.Warnf("bars: backfill %s %s stamping as %s from the STORE FALLBACK", pair[0], pair[1], contract)
+		}
 		rows := make([]store.BarHistoryDB, 0, len(closed))
 		for _, b := range closed {
 			rows = append(rows, store.BarHistoryDB{Symbol: pair[0], TF: pair[1], OpenTimeMs: b.T,
-				O: b.O, H: b.H, L: b.L, C: b.C, V: b.V, Convention: market.StampConvention(pair[1])})
+				O: b.O, H: b.H, L: b.L, C: b.C, V: b.V, Convention: market.StampConvention(pair[1]),
+				Contract: contract})
 		}
 		if len(rows) > 0 {
 			if err := bh.InsertBars(rows); err != nil {
@@ -256,7 +325,17 @@ func rehydrateRingFromStore(bh *store.BarHistoryStore, server *ntwire.TCPServer,
 	for _, pair := range selected {
 		symbol, tf := pair[0], pair[1]
 		before := cache.Count(symbol, tf)
-		rows, err := bh.LastNBars(symbol, tf, cache.MaxBars())
+		// ROLL WAVE — the store is read for the CURRENT contract only. This
+		// unfiltered LastNBars is precisely how ~2,000 September bars were
+		// spliced under December ones on the 4fc670aa boot: the ring's depth is
+		// bounded by how much of THIS contract exists, which is the truth.
+		contract, src := contractFor(bh, server, symbol)
+		if contract == "" {
+			failed++
+			logger.Warnf("🧯 ring rehydrate %s %s SKIPPED: no contract named and none in the store — the ring keeps the AddOn seed (%d bars)", symbol, tf, before)
+			continue
+		}
+		rows, err := bh.LastNBarsOn(symbol, tf, contract, cache.MaxBars())
 		if err != nil {
 			failed++
 			logger.Warnf("🧯 ring rehydrate %s %s FAILED: %v — boot continues on the AddOn seed alone (%d bars)", symbol, tf, err, before)
@@ -277,8 +356,8 @@ func rehydrateRingFromStore(bh *store.BarHistoryStore, server *ntwire.TCPServer,
 		deepened++
 		after := cache.Get(symbol, tf)
 		h := kernel.HorizonOf(barsToKlines(after, tf), tf, cache.MaxBars(), now)
-		logger.Infof("🧯 ring rehydrated %s %s: %d → %d bars (+%d older from the store, cap %d) · %s",
-			symbol, tf, before, len(after), added, cache.MaxBars(), h.Line())
+		logger.Infof("🧯 ring rehydrated %s %s: %d → %d bars (+%d older from the store, cap %d) · contract=%s (%s) · %s",
+			symbol, tf, before, len(after), added, cache.MaxBars(), contract, src, h.Line())
 	}
 	logger.Infof("🧯 ring rehydrate done: %d of %d symbol×tf pairs deepened, +%d bars total, %d read failure(s), %d pair(s) SKIPPED as tf!=%s (stored non-1m rows are NT8 aggregates — never fed to a live regime input) · store retention %s=%dd (the ring is the cache; the store is the horizon)",
 		deepened, len(pairs), totalAdded, failed, skipped, rehydrateTimeframe, rehydrateTimeframe, store.RetentionDaysFor(rehydrateTimeframe))

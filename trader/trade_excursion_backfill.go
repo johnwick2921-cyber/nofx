@@ -107,7 +107,17 @@ func BackfillExcursions(st *store.Store, symbol, traderID string, from, to time.
 // barsFor reads the 1m tape covering a hold, with one bar of slack each side so
 // the bar CONTAINING the fill is present.
 func excursionBarsFor(st *store.Store, symbol string, fromMs, toMs int64) []market.Kline {
-	rows, err := st.BarHistory().BarsBetween(symbol, "1m", fromMs-60_000, toMs+60_000)
+	// ROLL WAVE — same rule as the live hook: the trade's own contract, or
+	// unrecomputable.
+	contract, ok := st.BarHistory().WindowContract(symbol, fromMs-60_000, toMs+60_000)
+	if !ok {
+		// nil is this function's "no usable bars" — the caller already treats
+		// it as UNRESOLVED rather than zero. A window that spans the roll is
+		// exactly that: not measurable on one scale.
+		_ = contract
+		return nil
+	}
+	rows, err := st.BarHistory().BarsBetweenOn(symbol, "1m", contract, fromMs-60_000, toMs+60_000)
 	if err != nil || len(rows) == 0 {
 		return nil
 	}

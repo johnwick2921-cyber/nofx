@@ -107,7 +107,18 @@ func runLevelStatsDayAt(st *store.Store, ls *store.LevelStatsStore, traderID str
 // evaluated rows and a descriptive error for every skip reason (no more silent
 // continues).
 func runLevelStatsDayOnce(st *store.Store, ls *store.LevelStatsStore, traderID, dayKey string, dayStartMs, dayEndMs, nowMs int64) (int, error) {
-	barsDB, err := st.BarHistory().BarsBetween("MNQ", "1m", dayStartMs, dayEndMs)
+	// ROLL WAVE — a day's level stats are measured on the contract THAT DAY
+	// was on: a September day on September bars, never on the current one. A
+	// day that straddles the roll cannot be measured on one scale and is
+	// reported as such rather than computed on a mixed tape (A24).
+	contract, ok := st.BarHistory().WindowContract("MNQ", dayStartMs, dayEndMs)
+	if !ok {
+		if contract == store.ContractMixed {
+			return 0, fmt.Errorf("bars read: day %s spans a contract roll — unrecomputable on one scale", dayKey)
+		}
+		return 0, fmt.Errorf("bars read: no contract stamped for day %s", dayKey)
+	}
+	barsDB, err := st.BarHistory().BarsBetweenOn("MNQ", "1m", contract, dayStartMs, dayEndMs)
 	if err != nil {
 		return 0, fmt.Errorf("bars read: %w", err)
 	}

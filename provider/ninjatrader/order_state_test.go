@@ -4,9 +4,9 @@ import "testing"
 
 // TestUnknownIsNotHistory — the owner's ruling, 2026-09-07:
 //
-//   "terminalOrderStates containing "unknown": true is wrong — an unreadable
-//    state is not history. UNKNOWN is non-terminal and takes no destructive
-//    branch; a cancel or a reconciliation that meets it does nothing and logs."
+//	"terminalOrderStates containing "unknown": true is wrong — an unreadable
+//	 state is not history. UNKNOWN is non-terminal and takes no destructive
+//	 branch; a cancel or a reconciliation that meets it does nothing and logs."
 //
 // Until today `unknown` sat in terminalOrderStates beside `filled` and
 // `cancelled`, so an order whose state we could not read vanished from the

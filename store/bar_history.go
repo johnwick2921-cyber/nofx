@@ -36,6 +36,17 @@ type BarHistoryDB struct {
 	// bucket start is stamped on: "epoch_floor" (ours) or "fri_thu" (NT8's
 	// native weekly). Empty on rows written before the column existed.
 	Convention string `gorm:"column:convention"`
+	// Contract (ROLL WAVE 2026-09-10) names the futures contract this bar was
+	// received on — the qualified NT8 name the AddOn's subscription ACK
+	// carried, e.g. "MNQ 09-26" or "MNQ 12-26". NEVER derived from a date
+	// rule: the AddOn's own date-based resolver rolled the subscription
+	// mid-ASIA at 21:15 CT on 2026-09-10 and three bars per symbol arrived with
+	// one contract's open and the other's close (a ~292-point phantom on MNQ,
+	// ~65 on ES). Those rows carry ContractMixed and no reader accepts them.
+	//
+	// Empty on rows written before the column existed and never backfilled;
+	// InsertBars refuses to write a new row without one.
+	Contract string `gorm:"column:contract"`
 }
 
 // TableName is the bars table (spec name).
@@ -111,6 +122,20 @@ func BarRetentionDays() int {
 	return 90
 }
 
+// ContractMixed marks a bar whose OHLC straddles a contract roll: the AddOn
+// re-subscribed mid-bar and the frame carried the retired contract's open with
+// the new contract's close. It matches NO contract filter by construction, so
+// every reader that asks for the current contract skips it — which is the only
+// honest thing to do with a bar that is not on any single price scale.
+const ContractMixed = "unrecomputable:spans_roll"
+
+// IsUsableContract reports whether a contract label can be read as a single
+// price scale. Empty (pre-column, un-backfilled) and MIXED both fail.
+func IsUsableContract(c string) bool {
+	c = strings.TrimSpace(c)
+	return c != "" && c != ContractMixed
+}
+
 // BarHistoryStore persists closed bars (gorm-backed, like the other sub-stores).
 type BarHistoryStore struct {
 	db *gorm.DB
@@ -172,6 +197,10 @@ func (s *BarHistoryStore) Migrate() error {
 				return err
 			}
 		}
+		// ROLL WAVE: the contract column and its one-time backfill.
+		if err := s.migrateContractColumn(); err != nil {
+			return err
+		}
 		if err := s.db.Exec("DROP INDEX IF EXISTS idx_bars_sym_tf_time").Error; err != nil {
 			return err
 		}
@@ -200,22 +229,30 @@ func (s *BarHistoryStore) InsertBars(rows []BarHistoryDB) error {
 		}
 		chunk := rows[start:end]
 		placeholders := make([]string, 0, len(chunk))
-		args := make([]interface{}, 0, len(chunk)*8)
+		args := make([]interface{}, 0, len(chunk)*10)
 		for _, r := range chunk {
 			if r.TF == "" {
 				continue // BAR-SOURCE WAVE 2026-09-02: every TF the cache holds
 				// is now persisted (owner ruling) — the old `TF != "1m"` gate
 				// threw away 383 weekly / 1500 daily bars on every restart.
 			}
-			placeholders = append(placeholders, "(?,?,?,?,?,?,?,?,?)")
-			args = append(args, r.Symbol, r.TF, r.OpenTimeMs, r.O, r.H, r.L, r.C, r.V, r.Convention)
+			// ROLL WAVE: NOT NULL going forward, enforced HERE because SQLite
+			// cannot add a NOT NULL column to a populated table without a
+			// default, and a default would be a date rule in disguise. A bar
+			// with no contract is a bar on an unknown price scale; refusing it
+			// is cheaper than every reader having to guess.
+			if strings.TrimSpace(r.Contract) == "" {
+				return fmt.Errorf("bars: refusing %s %s @%d with no contract — the subscription's resolved contract must be stamped at write time (roll wave 2026-09-10)", r.Symbol, r.TF, r.OpenTimeMs)
+			}
+			placeholders = append(placeholders, "(?,?,?,?,?,?,?,?,?,?)")
+			args = append(args, r.Symbol, r.TF, r.OpenTimeMs, r.O, r.H, r.L, r.C, r.V, r.Convention, r.Contract)
 		}
 		if len(placeholders) == 0 {
 			continue
 		}
-		q := "INSERT INTO bars(symbol, tf, open_time_ms, o, h, l, c, v, convention) VALUES " +
+		q := "INSERT INTO bars(symbol, tf, open_time_ms, o, h, l, c, v, convention, contract) VALUES " +
 			strings.Join(placeholders, ",") +
-			" ON CONFLICT(symbol, tf, open_time_ms) DO UPDATE SET o=excluded.o, h=excluded.h, l=excluded.l, c=excluded.c, v=excluded.v, convention=excluded.convention"
+			" ON CONFLICT(symbol, tf, open_time_ms) DO UPDATE SET o=excluded.o, h=excluded.h, l=excluded.l, c=excluded.c, v=excluded.v, convention=excluded.convention, contract=excluded.contract"
 		if err := s.db.Exec(q, args...).Error; err != nil {
 			return err
 		}
@@ -287,12 +324,22 @@ func (s *BarHistoryStore) PruneOlderThan(cutoffMs int64) (int64, error) {
 // BarsBetween is the one-line replay read: bars for (symbol, tf) in
 // [fromMs, toMs). Join with structure_json.atr by timestamp in scripts.
 func (s *BarHistoryStore) BarsBetween(symbol, tf string, fromMs, toMs int64) ([]BarHistoryDB, error) {
+	return s.BarsBetweenOn(symbol, tf, "", fromMs, toMs)
+}
+
+// BarsBetweenOn is BarsBetween restricted to ONE contract. An empty contract
+// means "unfiltered" and exists only for replay/audit tooling that wants to see
+// the seam; every live reader passes the current contract.
+func (s *BarHistoryStore) BarsBetweenOn(symbol, tf, contract string, fromMs, toMs int64) ([]BarHistoryDB, error) {
 	if s == nil || s.db == nil {
 		return nil, fmt.Errorf("store required")
 	}
 	var out []BarHistoryDB
-	err := s.db.Where("symbol = ? AND tf = ? AND open_time_ms >= ? AND open_time_ms < ?",
-		symbol, tf, fromMs, toMs).Order("open_time_ms").Find(&out).Error
+	q := s.db.Where("symbol = ? AND tf = ? AND open_time_ms >= ? AND open_time_ms < ?", symbol, tf, fromMs, toMs)
+	if c := strings.TrimSpace(contract); c != "" {
+		q = q.Where("contract = ?", c)
+	}
+	err := q.Order("open_time_ms").Find(&out).Error
 	return out, err
 }
 
@@ -323,6 +370,21 @@ func RetentionCutoffMs(now time.Time) int64 {
 // n <= 0 returns nil. A read error is returned, never swallowed — the caller
 // WARNs and degrades to the ring (A10).
 func (s *BarHistoryStore) LastNBars(symbol, tf string, n int) ([]BarHistoryDB, error) {
+	return s.LastNBarsOn(symbol, tf, "", n)
+}
+
+// LastNBarsOn is LastNBars restricted to ONE contract.
+//
+// ROLL WAVE (2026-09-10). Before the contract column existed this read
+// straddled the roll: a request for the last 2000 1m bars at 21:20 CT returned
+// ~1,995 September bars and ~5 December ones, and the ~292-point basis between
+// them presented to every consumer — ATR, RANGE, regime, the planner's level
+// table — as a real move. Filtering to the current contract means depth is
+// bounded by how much of THIS contract has been received, which is the truth:
+// the retired contract's history is not history of the thing being traded.
+//
+// Empty contract = unfiltered, for audit tooling only.
+func (s *BarHistoryStore) LastNBarsOn(symbol, tf, contract string, n int) ([]BarHistoryDB, error) {
 	if s == nil || s.db == nil {
 		return nil, fmt.Errorf("store required")
 	}
@@ -330,8 +392,11 @@ func (s *BarHistoryStore) LastNBars(symbol, tf string, n int) ([]BarHistoryDB, e
 		return nil, nil
 	}
 	var desc []BarHistoryDB
-	if err := s.db.Where("symbol = ? AND tf = ?", symbol, tf).
-		Order("open_time_ms DESC").Limit(n).Find(&desc).Error; err != nil {
+	q := s.db.Where("symbol = ? AND tf = ?", symbol, tf)
+	if c := strings.TrimSpace(contract); c != "" {
+		q = q.Where("contract = ?", c)
+	}
+	if err := q.Order("open_time_ms DESC").Limit(n).Find(&desc).Error; err != nil {
 		return nil, err
 	}
 	// Reverse in place — ASCENDING is the contract every bar reader in this
