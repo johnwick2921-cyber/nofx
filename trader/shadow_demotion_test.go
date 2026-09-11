@@ -37,7 +37,13 @@ func shadowEnableTestSession(t *testing.T, st *store.Store) string {
 
 func shadowPlanAt(t *testing.T, at *AutoTrader, st *store.Store, doc string) string {
 	t.Helper()
-	now := time.Now()
+	pid := shadowPlanAtTime(t, at, st, doc, time.Now())
+	installActivePlanProvider(at, st) // Existing callers retain their live provider clock.
+	return pid
+}
+
+func shadowPlanAtTime(t *testing.T, at *AutoTrader, st *store.Store, doc string, now time.Time) string {
+	t.Helper()
 	sessName := shadowEnableTestSession(t, st)
 	// The provider's sessionRunnable gate requires the strategy to declare the
 	// session (registry Enabled=true alone is not enough).
@@ -48,12 +54,15 @@ func shadowPlanAt(t *testing.T, at *AutoTrader, st *store.Store, doc string) str
 	if _, err := st.Plan().AppendPlan(&store.PlanDB{PlanID: pid, TradeDate: td, Session: sessName, StrategyID: at.id, Lifecycle: "active", Doc: doc, CreatedAt: now.Add(-30 * time.Minute)}); err != nil {
 		t.Fatal(err)
 	}
-	installActivePlanProvider(at, st)
+	installActivePlanProviderAt(at, st, func() time.Time { return now })
 	return pid
 }
 
 func shadowBarsNear(entry float64) []market.Kline {
-	now := time.Now()
+	return shadowBarsNearAt(entry, time.Now())
+}
+
+func shadowBarsNearAt(entry float64, now time.Time) []market.Kline {
 	base := now.Add(-80 * time.Minute).Truncate(time.Minute).UnixMilli()
 	out := make([]market.Kline, 0, 80)
 	for i := 0; i < 80; i++ {
@@ -65,6 +74,11 @@ func shadowBarsNear(entry float64) []market.Kline {
 }
 
 func shadowWireHarness(t *testing.T, cfg store.StrategyConfig) (*AutoTrader, *store.Store, chan ntwire.SignalPayload, chan ntwire.CancelOrderPayload) {
+	t.Helper()
+	return shadowWireHarnessAt(t, cfg, time.Now())
+}
+
+func shadowWireHarnessAt(t *testing.T, cfg store.StrategyConfig, now time.Time) (*AutoTrader, *store.Store, chan ntwire.SignalPayload, chan ntwire.CancelOrderPayload) {
 	t.Helper()
 	s := ntwire.NewTCPServer(nil)
 	s.SetAddrForTest("127.0.0.1:0")
@@ -119,7 +133,7 @@ func shadowWireHarness(t *testing.T, cfg store.StrategyConfig) (*AutoTrader, *st
 	// represents a dark AddOn, not a flat account, and every placement test
 	// here would be asserting the wrong thing.
 	if snaps := s.OrderSnapshots(); snaps != nil {
-		snaps.PutAt(ntwire.OrderSnapshotPayload{Account: "Sim101", Orders: []ntwire.NT8Order{}}, time.Now())
+		snaps.PutAt(ntwire.OrderSnapshotPayload{Account: "Sim101", Orders: []ntwire.NT8Order{}}, now)
 	}
 
 	at := &AutoTrader{id: "trader-1", exchange: "ninjatrader", store: st, trader: tr}
@@ -222,12 +236,14 @@ func TestShadowDemotionNoWireFrameOnLoopback(t *testing.T) {
 
 // 7.4 — a live condition's arm places normally (regression pin, same wire).
 func TestLiveConditionPlacesOnLoopback(t *testing.T) {
+	// One fixture clock: 10:00 CT, outside lunch; TEST session is explicit.
+	now := time.Date(2026, time.September, 11, 15, 0, 0, 0, time.UTC)
 	cfg := store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true}}
 	// ONE SETUP (dispatch 102, 2026-09-11): this fixture exercises the WIDE book
 	// (a non-reject play / no map); the switch OFF restores it byte-identically (E2).
 	oneSetupOff(&cfg)
 	cfg.RiskControl.MinRiskRewardRatio = 2 // R1 (2026-09-03): the arm floor is the Studio value; this fixture arms at R:R 2.0
-	at, st, sigs, _ := shadowWireHarness(t, cfg)
+	at, st, sigs, _ := shadowWireHarnessAt(t, cfg, now)
 	live := kernel.PlanDoc{Bias: kernel.PlanBias{Direction: "long", Conviction: "low", FlipCondition: "n/a"},
 		Levels: []kernel.PlanLevel{{Price: 100, Label: "PDH", Grade: "A", Instruction: "fade"}},
 		Scenarios: []kernel.PlanScenario{{ID: "S1", Trigger: "t", Condition: "reject", Direction: "long",
@@ -238,12 +254,12 @@ func TestLiveConditionPlacesOnLoopback(t *testing.T) {
 		NoTrade: []string{}, DeathCondition: "n/a",
 	}
 	blob, _ := json.Marshal(live)
-	shadowPlanAt(t, at, st, string(blob))
+	shadowPlanAtTime(t, at, st, string(blob), now)
 	prev := market.FuturesBarsProvider
-	market.FuturesBarsProvider = func(string, string, int) []market.Kline { return shadowBarsNear(100) }
+	market.FuturesBarsProvider = func(string, string, int) []market.Kline { return shadowBarsNearAt(100, now) }
 	t.Cleanup(func() { market.FuturesBarsProvider = prev })
 
-	at.maybeManageArmedOrdersAt(nil, armTestClock(t, at))
+	at.maybeManageArmedOrdersAt(nil, now)
 
 	select {
 	case s := <-sigs:

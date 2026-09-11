@@ -1,4 +1,4 @@
-# Level zones — compatibility implemented; pre-existing suite failure blocks cutover
+# Level zones — compatibility implemented; authorized fixture correction verified
 
 ## C1 — the owner's four lines, traced first
 
@@ -443,3 +443,73 @@ Final in-scope verification: complete `go test ./kernel` PASS (0.814s), focused
 kernel/trader zone + parity + wiring tests PASS, `go build ./...` PASS. Dev
 freshness rechecked: still accepted tip `616b52a9`; no spec drift. Full trader
 suite remains blocked by the independently reproduced fixture-clock defect.
+
+
+## Owner-authorized clock-only fixture correction (2026-09-11)
+
+The owner's explicit ruling supersedes the earlier A23 fixture STOP: fix both
+fixtures with one clock, test-only, no production line, then cut over on this
+lane's own fresh gate. No gate or arm predicate was changed.
+
+[A] Both fixtures now own `2026-09-11T15:00:00Z` (10:00 CT, outside lunch) and
+explicitly install the persisted whole-day TEST session. That same value feeds
+the broker snapshot receipt, plan creation, existing active-plan provider clock
+seam, bar timestamps, and `maybeManageArmedOrdersAt(nil, now)`. The helpers and
+the two consumers are entirely in `_test.go` files. Existing helper callers
+retain their wall-clock provider. No production line is part of this correction.
+
+| Fixture | Before, unchanged running source `802fb00b09e51f9801e8d4fbd1bf156c86865d95` | After, same production source + test-only patch |
+|---|---|---|
+| `TestOneSetupDeclinedPreBootAuthorizationRetiredNeverPlaced` | FAIL (2.23s): `book age 30m0s exceeds the 1m0s bound`; `the allowed scenario's pre-boot authorization did NOT place — the retire pass over-reached` | PASS (1.55s): allowed S1 places, declined S2 retires, no second signal or spurious broker cancel |
+| `TestLiveConditionPlacesOnLoopback` | FAIL (2.17s): `book age 30m0s exceeds the 1m0s bound`; `live condition did NOT place — regression in the arm seam` | PASS (0.93s): nonempty signal reaches the loopback wire |
+
+[A] The unchanged-source before run was at 13:01 CT in
+`/tmp/level-zones-baseline/nofx`, HEAD exactly the running SHA above, initially
+porcelain-clean. The identical test-only patch was then applied there; the two
+tests passed together (`nofx/trader 2.489s`). Thus these are **pre-existing fixture
+failures, not regressions introduced by level zones**. Feature before-run age
+was 35 minutes; baseline age was 30 minutes because the real clock advanced;
+both failures are the identical stale-book predicate, not identical elapsed age.
+The freshness refusal remains intact. Test patch and concise output receipts:
+[clock patch](2026-09-11-level-zones-evidence/arm-fixture-clock.patch),
+[after on running production source](2026-09-11-level-zones-evidence/arm-fixture-after.txt).
+
+The first corrected feature run also passed (`nofx/trader 0.733s`). Full suite,
+remaining call-removal mutations, merged-head validation and deployment evidence
+are recorded below as they complete. No cutover has occurred at this entry;
+A7's next permitted window is 14:45–16:30 CT. The owner's GO stands, subject to
+the deployment lock and this lane's fresh five-leg gate at cutover.
+
+
+### Validation after the authorized fixture correction
+
+[A] `go test ./...` PASS, exit 0, including `nofx/trader 223.667s`.
+The two arm fixture files are the only Go diff against the preceding feature
+commit `5e81db95c1ac9788fd26caa23fa4bfaee119dfff`; the production delta for
+this correction is empty. No Stage A golden changed. Earlier full frontend
+validation remains 62 files / 427 tests PASS and tsc PASS; this correction
+contains no frontend code change. Merged-head checks remain required at cutover.
+
+[A] All five semantic mutations were rerun against the final strict-width
+implementation through `scripts/mutate.sh`: width, merge, names, family count,
+and reintroduced HTF ranking multiplier. All applied, built, and were KILLED.
+Six additional call-removal/replacement mutations also applied, built, and were
+KILLED: production width-input assembly, zone-map build input, planner rendering,
+boot invocation, family classifier, and width input lookup. The source was
+restored after every run. [Exact changes and verdicts](2026-09-11-level-zones-evidence/mutation-receipts.txt).
+
+### A15 — CI is not claimed green
+
+[A] PR #104 at `5e81db95` reports CI failures despite the passing local full
+suite. Test job `34631884981` shows the branding Go history guard exiting 128;
+the frontend job explicitly reports `fatal: bad object
+954f11b15f2e7615678f7d2b708c47895faebf1e`, and Vite denies
+`/home/runner/work/nofx/nofx/branding/product.txt?raw`. The relevant workflow,
+branding guard and Vite configuration have no diff in this wave. These are
+reported setup surfaces, not reasons to weaken the guards. The separate
+coverage job `34631884694` exits 1 but the retrieved failing-step log ends
+without a failing-test diagnosis; its cause is not established by that log.
+Dev's same-tip coverage run `34607468613` also failed; matching status alone
+does not prove an identical cause. Security run `34631884852` reports 24 called
+standard-library vulnerabilities; go.mod/go.sum and the workflow are unchanged.
+No CI configuration or dependency changes are included in this wave.
