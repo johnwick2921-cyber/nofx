@@ -654,3 +654,75 @@ SHA256 `59c582b9684173f8cc3caf29cf8b56f9d4b2f0bb8418c37b44e418d0bdedc138`.
 The prerequisite and dirty-checkout observations above travel with that handoff.
 A handoff note is staged beside the patch; no delivery acknowledgement from
 Binnie's lane has yet been observed.
+
+
+### Merged cutover candidate — 19:01 CT, not yet booted
+
+**[A]** PR #101 merged at `cd8f99780eafe20fbb0b51a9c87955d3a2a4e887`,
+including W2's final dev report `b952f2c4` and marker `4dc0fae1`. 105 acquired
+the free lock as `scenario-identity-ac5a801d/root[unlisted]` at 18:53:50 CT;
+the acquire-started keeper runs until 19:53:50 CT. No hand-beater was started.
+
+**[A]** Full `go test ./...` passed in clean clone
+`/tmp/identity-cutover/nofx` at that merged head (trader: 176.580 seconds).
+Full frontend suite passed: 60 files / 421 tests. The clone was porcelain-clean
+before `go build`. The binary reports:
+
+```text
+vcs.revision=cd8f99780eafe20fbb0b51a9c87955d3a2a4e887
+vcs.modified=false
+MD5=b32d80dba7d9dcfb335a194c71fcd7d9
+SHA256=0ba70b618b1e4697b9d95a23e109930867e8a98b8a9408da6854e6c759781ddb
+```
+
+The binary-derived revision was stamped into BOTH the source worktree and
+clone's `web/src/guide/types.ts`, THEN dist built successfully. The main
+checkout has not yet been advanced or swapped.
+
+**[A]** SQLite online backup, including committed WAL contents, completed at
+18:56:55 CT: `/home/hoang/nofx-backups/identity-cd8f9978-20260910/data.db`,
+793,993,216 bytes; backup `PRAGMA integrity_check` returned `ok`. No live
+migration or identity boot is claimed before the actual restart.
+
+**[A]** Own browser-authenticated gate at 19:01:31 CT returned `ready:true`: DB
+OPEN 0; API positions 0; NT8 positions count 0; broker working 0 / ledger
+working 0 / armed-unplaced 0; no planner read claimed. Earlier reads at
+18:52 and 18:57 correctly held on planner work. A new read is required at
+the eventual swap; this observation is not a standing authorization.
+
+**A15 main-tree residue:** untracked `CLAUDE.md.save`, 20,171 bytes, mtime
+12:49:45 CT, predates this cutover. It does not equal `CLAUDE.md`. It has
+not been edited or removed; permission to preserve it outside the main
+checkout was requested because the literal clean-tree gate currently fails.
+
+**Provenance:** 105 authored identity changes on `fix/scenario-level-identity`.
+W2's fade-permission code and boot came from `fix/fade-permission`, as its
+marker and report record. 105 built and tested their merged head; it did not
+author W2's code. Protected trading files and W2's fade files have no 105 diff.
+Class 116 was assigned after the three-format census: highest 115; existing
+duplicates only 75, 76, 77. The intermediate prose listing 92/93 was corrected
+to the measured set before merge in `6f2ff668`.
+
+[Go receipt](2026-09-10-scenario-level-identity-data/cutover-go-merged.txt),
+[frontend receipt](2026-09-10-scenario-level-identity-data/cutover-vitest-merged.txt),
+[build metadata](2026-09-10-scenario-level-identity-data/cutover-buildinfo.txt),
+[backup](2026-09-10-scenario-level-identity-data/cutover-backup.json),
+[dist build](2026-09-10-scenario-level-identity-data/cutover-dist-build.txt),
+[Binnie handoff](2026-09-10-scenario-level-identity-data/BINNIE-HANDOFF.md).
+
+
+### Owner-approved final preparation, 19:05 CT
+
+The owner explicitly approved merging verification PR #102 and moving the
+pre-existing save file. It was preserved intact as
+`/tmp/identity-build/CLAUDE.md.save.pre-cutover` (20,171 bytes); main tree then
+read porcelain-clean. Automatic approval review had rejected the direct dev
+push and the follow-up PR merge before that explicit approval; no bypass was
+used. All publication continues through the approved PR.
+
+Own fresh gate at 19:05:04 CT: all five PASS, `ready:true`. DB/API/NT8 positions
+all zero; broker working 0 / ledger working 0; **1 armed without a signal id**,
+informational under the canonical leg-4 rule; no planner read claimed.
+[Complete payload](2026-09-10-scenario-level-identity-data/cutover-pre-release-gate.json).
+RELEASE is prepared as `cd8f9978` before the binary swap. This section is
+preparation evidence, not a claim that the new process is running.
