@@ -1,0 +1,31 @@
+{
+  "id": 15482,
+  "received_at_ms": 1789009716407,
+  "orders": [
+    {
+      "order_id": "dac48bcb0b3647159ba69e31bd02f733",
+      "symbol": "MNQ",
+      "name": "87acc3bb-a989-473f-b07b-c77c04bfb419-sl",
+      "action": "sell",
+      "type": "stop",
+      "stop_price": 29342,
+      "quantity": 1,
+      "state": "Accepted",
+      "oco": "87acc3bb-a989-473f-b07b-c77c04bfb419-exit",
+      "tif": "Gtc"
+    },
+    {
+      "order_id": "9f5a73d0b91445e199a2734c8c3c631a",
+      "symbol": "MNQ",
+      "name": "87acc3bb-a989-473f-b07b-c77c04bfb419-tp",
+      "action": "sell",
+      "type": "limit",
+      "limit_price": 29435.5,
+      "quantity": 1,
+      "state": "Working",
+      "oco": "87acc3bb-a989-473f-b07b-c77c04bfb419-exit",
+      "tif": "Gtc"
+    }
+  ],
+  "received_ct": "2026-09-09T22:08:36.407000-05:00"
+}

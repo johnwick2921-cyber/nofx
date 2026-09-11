@@ -1,0 +1,177 @@
+[
+  {
+    "file": "trace.20260908.00000.txt",
+    "line": 722,
+    "text": "2026-09-08 02:52:11:901 (lucid ) Cbi.Account.OrderUpdateCallback: realOrderState=Submitted orderId='031639e73d714ab2b9d3255ffc9f2f89' account='[redacted]' name='f159e573-9c38-4d24-be8f-24586c214d16-sl' orderState=Submitted instrument='MNQ 09-26' orderAction=Sell limitPrice=0 stopPrice=29510 quantity=1 orderType='Stop Market' filled=0 averageFillPrice=0 time='2026-09-08 02:52:11' statementDate='2026-09-08' error=NoError comment='' nr=-1"
+  },
+  {
+    "file": "trace.20260908.00000.txt",
+    "line": 729,
+    "text": "2026-09-08 02:52:12:020 (lucid ) Cbi.Account.OrderUpdateCallback: realOrderState=Accepted orderId='031639e73d714ab2b9d3255ffc9f2f89' account='[redacted]' name='f159e573-9c38-4d24-be8f-24586c214d16-sl' orderState=Accepted instrument='MNQ 09-26' orderAction=Sell limitPrice=0 stopPrice=29510 quantity=1 orderType='Stop Market' filled=0 averageFillPrice=0 time='2026-09-08 02:52:12' statementDate='2026-09-08' error=NoError comment='' nr=-1"
+  },
+  {
+    "file": "trace.20260908.00000.txt",
+    "line": 744,
+    "text": "2026-09-08 03:02:04:823 (lucid ) Cbi.Account.OrderUpdateCallback: realOrderState=Working orderId='031639e73d714ab2b9d3255ffc9f2f89' account='[redacted]' name='f159e573-9c38-4d24-be8f-24586c214d16-sl' orderState=Working instrument='MNQ 09-26' orderAction=Sell limitPrice=0 stopPrice=29510 quantity=1 orderType='Stop Market' filled=0 averageFillPrice=0 time='2026-09-08 03:02:04' statementDate='2026-09-08' error=NoError comment='' nr=-1"
+  },
+  {
+    "file": "trace.20260908.00000.txt",
+    "line": 747,
+    "text": "2026-09-08 03:02:04:824 (lucid ) Cbi.Account.OrderUpdateCallback: realOrderState=Filled orderId='031639e73d714ab2b9d3255ffc9f2f89' account='[redacted]' name='f159e573-9c38-4d24-be8f-24586c214d16-sl' orderState=Filled instrument='MNQ 09-26' orderAction=Sell limitPrice=0 stopPrice=29510 quantity=1 orderType='Stop Market' filled=1 averageFillPrice=29510 time='2026-09-08 03:02:04' statementDate='2026-09-08' error=NoError comment='' nr=-1"
+  },
+  {
+    "file": "trace.20260908.00000.txt",
+    "line": 1196,
+    "text": "2026-09-08 08:44:39:907 (lucid ) Cbi.Account.OrderUpdateCallback: realOrderState=Submitted orderId='fdbc976f8c734ad590588604b3f803db' account='[redacted]' name='f68d8dc6-8b5c-4a2f-be80-b30de90f6ca8-sl' orderState=Submitted instrument='MNQ 09-26' orderAction=Sell limitPrice=0 stopPrice=29435.25 quantity=1 orderType='Stop Market' filled=0 averageFillPrice=0 time='2026-09-08 08:44:39' statementDate='2026-09-08' error=NoError comment='' nr=-1"
+  },
+  {
+    "file": "trace.20260908.00000.txt",
+    "line": 1203,
+    "text": "2026-09-08 08:44:40:017 (lucid ) Cbi.Account.OrderUpdateCallback: realOrderState=Accepted orderId='fdbc976f8c734ad590588604b3f803db' account='[redacted]' name='f68d8dc6-8b5c-4a2f-be80-b30de90f6ca8-sl' orderState=Accepted instrument='MNQ 09-26' orderAction=Sell limitPrice=0 stopPrice=29435.25 quantity=1 orderType='Stop Market' filled=0 averageFillPrice=0 time='2026-09-08 08:44:40' statementDate='2026-09-08' error=NoError comment='' nr=-1"
+  },
+  {
+    "file": "trace.20260908.00000.txt",
+    "line": 1232,
+    "text": "2026-09-08 09:10:25:387 (lucid ) Cbi.Account.OrderUpdateCallback: realOrderState=Working orderId='fdbc976f8c734ad590588604b3f803db' account='[redacted]' name='f68d8dc6-8b5c-4a2f-be80-b30de90f6ca8-sl' orderState=Working instrument='MNQ 09-26' orderAction=Sell limitPrice=0 stopPrice=29435.25 quantity=1 orderType='Stop Market' filled=0 averageFillPrice=0 time='2026-09-08 09:10:25' statementDate='2026-09-08' error=NoError comment='' nr=-1"
+  },
+  {
+    "file": "trace.20260908.00000.txt",
+    "line": 1235,
+    "text": "2026-09-08 09:10:25:387 (lucid ) Cbi.Account.OrderUpdateCallback: realOrderState=Filled orderId='fdbc976f8c734ad590588604b3f803db' account='[redacted]' name='f68d8dc6-8b5c-4a2f-be80-b30de90f6ca8-sl' orderState=Filled instrument='MNQ 09-26' orderAction=Sell limitPrice=0 stopPrice=29435.25 quantity=1 orderType='Stop Market' filled=1 averageFillPrice=29435.25 time='2026-09-08 09:10:25' statementDate='2026-09-08' error=NoError comment='' nr=-1"
+  },
+  {
+    "file": "trace.20260908.00000.txt",
+    "line": 1312,
+    "text": "2026-09-08 09:44:31:678 (lucid ) Cbi.Account.OrderUpdateCallback: realOrderState=Submitted orderId='2bb152392e7e4203baff9ab48119299c' account='[redacted]' name='55a2f48f-0cd4-46a9-a6a7-fa29a461dcdb-sl' orderState=Submitted instrument='MNQ 09-26' orderAction=BuyToCover limitPrice=0 stopPrice=29601.75 quantity=1 orderType='Stop Market' filled=0 averageFillPrice=0 time='2026-09-08 09:44:31' statementDate='2026-09-08' error=NoError comment='' nr=-1"
+  },
+  {
+    "file": "trace.20260908.00000.txt",
+    "line": 1319,
+    "text": "2026-09-08 09:44:31:791 (lucid ) Cbi.Account.OrderUpdateCallback: realOrderState=Accepted orderId='2bb152392e7e4203baff9ab48119299c' account='[redacted]' name='55a2f48f-0cd4-46a9-a6a7-fa29a461dcdb-sl' orderState=Accepted instrument='MNQ 09-26' orderAction=BuyToCover limitPrice=0 stopPrice=29601.75 quantity=1 orderType='Stop Market' filled=0 averageFillPrice=0 time='2026-09-08 09:44:31' statementDate='2026-09-08' error=NoError comment='' nr=-1"
+  },
+  {
+    "file": "trace.20260908.00000.txt",
+    "line": 1351,
+    "text": "2026-09-08 10:13:20:087 (lucid ) Cbi.Account.OrderUpdateCallback: realOrderState=Working orderId='2bb152392e7e4203baff9ab48119299c' account='[redacted]' name='55a2f48f-0cd4-46a9-a6a7-fa29a461dcdb-sl' orderState=Working instrument='MNQ 09-26' orderAction=BuyToCover limitPrice=0 stopPrice=29601.75 quantity=1 orderType='Stop Market' filled=0 averageFillPrice=0 time='2026-09-08 10:13:20' statementDate='2026-09-08' error=NoError comment='' nr=-1"
+  },
+  {
+    "file": "trace.20260908.00000.txt",
+    "line": 1354,
+    "text": "2026-09-08 10:13:20:087 (lucid ) Cbi.Account.OrderUpdateCallback: realOrderState=Filled orderId='2bb152392e7e4203baff9ab48119299c' account='[redacted]' name='55a2f48f-0cd4-46a9-a6a7-fa29a461dcdb-sl' orderState=Filled instrument='MNQ 09-26' orderAction=BuyToCover limitPrice=0 stopPrice=29601.75 quantity=1 orderType='Stop Market' filled=1 averageFillPrice=29601.75 time='2026-09-08 10:13:20' statementDate='2026-09-08' error=NoError comment='' nr=-1"
+  },
+  {
+    "file": "trace.20260908.00000.txt",
+    "line": 1580,
+    "text": "2026-09-08 12:56:45:981 (lucid ) Cbi.Account.OrderUpdateCallback: realOrderState=Submitted orderId='72e28c0224064353b9881b7f85e4611d' account='[redacted]' name='dae090d5-680f-42d6-93c0-197920abc97d-sl' orderState=Submitted instrument='MNQ 09-26' orderAction=Sell limitPrice=0 stopPrice=29552.75 quantity=1 orderType='Stop Market' filled=0 averageFillPrice=0 time='2026-09-08 12:56:45' statementDate='2026-09-08' error=NoError comment='' nr=-1"
+  },
+  {
+    "file": "trace.20260908.00000.txt",
+    "line": 1587,
+    "text": "2026-09-08 12:56:46:100 (lucid ) Cbi.Account.OrderUpdateCallback: realOrderState=Accepted orderId='72e28c0224064353b9881b7f85e4611d' account='[redacted]' name='dae090d5-680f-42d6-93c0-197920abc97d-sl' orderState=Accepted instrument='MNQ 09-26' orderAction=Sell limitPrice=0 stopPrice=29552.75 quantity=1 orderType='Stop Market' filled=0 averageFillPrice=0 time='2026-09-08 12:56:46' statementDate='2026-09-08' error=NoError comment='' nr=-1"
+  },
+  {
+    "file": "trace.20260908.00000.txt",
+    "line": 1603,
+    "text": "2026-09-08 12:58:19:053 (lucid ) Cbi.Account.OrderUpdateCallback: realOrderState=CancelPending orderId='72e28c0224064353b9881b7f85e4611d' account='[redacted]' name='dae090d5-680f-42d6-93c0-197920abc97d-sl' orderState=CancelPending instrument='MNQ 09-26' orderAction=Sell limitPrice=0 stopPrice=29552.75 quantity=1 orderType='Stop Market' filled=0 averageFillPrice=0 time='2026-09-08 12:58:19' statementDate='2026-09-08' error=NoError comment='' nr=-1"
+  },
+  {
+    "file": "trace.20260908.00000.txt",
+    "line": 1613,
+    "text": "2026-09-08 12:58:19:053 (lucid ) Cbi.Account.OrderUpdateCallback: realOrderState=CancelSubmitted orderId='72e28c0224064353b9881b7f85e4611d' account='[redacted]' name='dae090d5-680f-42d6-93c0-197920abc97d-sl' orderState=CancelSubmitted instrument='MNQ 09-26' orderAction=Sell limitPrice=0 stopPrice=29552.75 quantity=1 orderType='Stop Market' filled=0 averageFillPrice=0 time='2026-09-08 12:58:19' statementDate='2026-09-08' error=NoError comment='' nr=-1"
+  },
+  {
+    "file": "trace.20260908.00000.txt",
+    "line": 1618,
+    "text": "2026-09-08 12:58:19:158 (lucid ) Cbi.Account.OrderUpdateCallback: realOrderState=Cancelled orderId='72e28c0224064353b9881b7f85e4611d' account='[redacted]' name='dae090d5-680f-42d6-93c0-197920abc97d-sl' orderState=Cancelled instrument='MNQ 09-26' orderAction=Sell limitPrice=0 stopPrice=29552.75 quantity=1 orderType='Stop Market' filled=0 averageFillPrice=0 time='2026-09-08 12:58:19' statementDate='2026-09-08' error=NoError comment='' nr=5"
+  },
+  {
+    "file": "trace.20260908.00000.txt",
+    "line": 1638,
+    "text": "2026-09-08 12:58:21:373 (lucid ) Cbi.Account.OrderUpdateCallback: realOrderState=Submitted orderId='d99065217a17455cb34e2568f7dc0182' account='[redacted]' name='fdbaffce-40fb-458d-a8a1-965854b1cde1-sl' orderState=Submitted instrument='MNQ 09-26' orderAction=Sell limitPrice=0 stopPrice=29552.75 quantity=1 orderType='Stop Market' filled=0 averageFillPrice=0 time='2026-09-08 12:58:21' statementDate='2026-09-08' error=NoError comment='' nr=-1"
+  },
+  {
+    "file": "trace.20260908.00000.txt",
+    "line": 1645,
+    "text": "2026-09-08 12:58:21:485 (lucid ) Cbi.Account.OrderUpdateCallback: realOrderState=Accepted orderId='d99065217a17455cb34e2568f7dc0182' account='[redacted]' name='fdbaffce-40fb-458d-a8a1-965854b1cde1-sl' orderState=Accepted instrument='MNQ 09-26' orderAction=Sell limitPrice=0 stopPrice=29552.75 quantity=1 orderType='Stop Market' filled=0 averageFillPrice=0 time='2026-09-08 12:58:21' statementDate='2026-09-08' error=NoError comment='' nr=-1"
+  },
+  {
+    "file": "trace.20260908.00000.txt",
+    "line": 1662,
+    "text": "2026-09-08 13:00:27:967 (lucid ) Cbi.Account.OrderUpdateCallback: realOrderState=CancelPending orderId='d99065217a17455cb34e2568f7dc0182' account='[redacted]' name='fdbaffce-40fb-458d-a8a1-965854b1cde1-sl' orderState=CancelPending instrument='MNQ 09-26' orderAction=Sell limitPrice=0 stopPrice=29552.75 quantity=1 orderType='Stop Market' filled=0 averageFillPrice=0 time='2026-09-08 13:00:27' statementDate='2026-09-08' error=NoError comment='' nr=3"
+  },
+  {
+    "file": "trace.20260908.00000.txt",
+    "line": 1674,
+    "text": "2026-09-08 13:00:27:968 (lucid ) Cbi.Account.OrderUpdateCallback: realOrderState=CancelSubmitted orderId='d99065217a17455cb34e2568f7dc0182' account='[redacted]' name='fdbaffce-40fb-458d-a8a1-965854b1cde1-sl' orderState=CancelSubmitted instrument='MNQ 09-26' orderAction=Sell limitPrice=0 stopPrice=29552.75 quantity=1 orderType='Stop Market' filled=0 averageFillPrice=0 time='2026-09-08 13:00:27' statementDate='2026-09-08' error=NoError comment='' nr=4"
+  },
+  {
+    "file": "trace.20260908.00000.txt",
+    "line": 1678,
+    "text": "2026-09-08 13:00:28:079 (lucid ) Cbi.Account.OrderUpdateCallback: realOrderState=Cancelled orderId='d99065217a17455cb34e2568f7dc0182' account='[redacted]' name='fdbaffce-40fb-458d-a8a1-965854b1cde1-sl' orderState=Cancelled instrument='MNQ 09-26' orderAction=Sell limitPrice=0 stopPrice=29552.75 quantity=1 orderType='Stop Market' filled=0 averageFillPrice=0 time='2026-09-08 13:00:28' statementDate='2026-09-08' error=NoError comment='' nr=-1"
+  },
+  {
+    "file": "trace.20260908.00001.txt",
+    "line": 601,
+    "text": "2026-09-08 23:43:53:305 (lucid ) Cbi.Account.OrderUpdateCallback: realOrderState=Submitted orderId='c77d4bfe0f804cb8a6650637570b3b8b' account='[redacted]' name='c5424fe7-6fa3-446a-8e94-de6d73620b0f-sl' orderState=Submitted instrument='MNQ 09-26' orderAction=BuyToCover limitPrice=0 stopPrice=29629.75 quantity=1 orderType='Stop Market' filled=0 averageFillPrice=0 time='2026-09-08 23:43:53' statementDate='2026-09-08' error=NoError comment='' nr=-1"
+  },
+  {
+    "file": "trace.20260908.00001.txt",
+    "line": 608,
+    "text": "2026-09-08 23:43:53:421 (lucid ) Cbi.Account.OrderUpdateCallback: realOrderState=Accepted orderId='c77d4bfe0f804cb8a6650637570b3b8b' account='[redacted]' name='c5424fe7-6fa3-446a-8e94-de6d73620b0f-sl' orderState=Accepted instrument='MNQ 09-26' orderAction=BuyToCover limitPrice=0 stopPrice=29629.75 quantity=1 orderType='Stop Market' filled=0 averageFillPrice=0 time='2026-09-08 23:43:53' statementDate='2026-09-08' error=NoError comment='' nr=-1"
+  },
+  {
+    "file": "trace.20260909.00000.txt",
+    "line": 14,
+    "text": "2026-09-09 01:14:21:580 (lucid ) Cbi.Account.OrderUpdateCallback: realOrderState=Working orderId='c77d4bfe0f804cb8a6650637570b3b8b' account='[redacted]' name='c5424fe7-6fa3-446a-8e94-de6d73620b0f-sl' orderState=Working instrument='MNQ 09-26' orderAction=BuyToCover limitPrice=0 stopPrice=29629.75 quantity=1 orderType='Stop Market' filled=0 averageFillPrice=0 time='2026-09-09 01:14:21' statementDate='2026-09-09' error=NoError comment='' nr=-1"
+  },
+  {
+    "file": "trace.20260909.00000.txt",
+    "line": 17,
+    "text": "2026-09-09 01:14:21:580 (lucid ) Cbi.Account.OrderUpdateCallback: realOrderState=Filled orderId='c77d4bfe0f804cb8a6650637570b3b8b' account='[redacted]' name='c5424fe7-6fa3-446a-8e94-de6d73620b0f-sl' orderState=Filled instrument='MNQ 09-26' orderAction=BuyToCover limitPrice=0 stopPrice=29629.75 quantity=1 orderType='Stop Market' filled=1 averageFillPrice=29629.75 time='2026-09-09 01:14:21' statementDate='2026-09-09' error=NoError comment='' nr=-1"
+  },
+  {
+    "file": "trace.20260909.00001.txt",
+    "line": 8476,
+    "text": "2026-09-09 19:57:10:702 (lucid ) Cbi.Account.OrderUpdateCallback: realOrderState=Submitted orderId='fab42136783242f9b4eb1ab45e153e3c' account='[redacted]' name='6705d2c4-158b-41b4-951d-0e5ba09dfb90-sl' orderState=Submitted instrument='MNQ 09-26' orderAction=Sell limitPrice=0 stopPrice=29386.5 quantity=1 orderType='Stop Market' filled=0 averageFillPrice=0 time='2026-09-09 19:57:10' statementDate='2026-09-09' error=NoError comment='' nr=-1"
+  },
+  {
+    "file": "trace.20260909.00001.txt",
+    "line": 8483,
+    "text": "2026-09-09 19:57:10:807 (lucid ) Cbi.Account.OrderUpdateCallback: realOrderState=Accepted orderId='fab42136783242f9b4eb1ab45e153e3c' account='[redacted]' name='6705d2c4-158b-41b4-951d-0e5ba09dfb90-sl' orderState=Accepted instrument='MNQ 09-26' orderAction=Sell limitPrice=0 stopPrice=29386.5 quantity=1 orderType='Stop Market' filled=0 averageFillPrice=0 time='2026-09-09 19:57:10' statementDate='2026-09-09' error=NoError comment='' nr=-1"
+  },
+  {
+    "file": "trace.20260909.00001.txt",
+    "line": 8513,
+    "text": "2026-09-09 20:20:50:977 (lucid ) Cbi.Account.OrderUpdateCallback: realOrderState=Working orderId='fab42136783242f9b4eb1ab45e153e3c' account='[redacted]' name='6705d2c4-158b-41b4-951d-0e5ba09dfb90-sl' orderState=Working instrument='MNQ 09-26' orderAction=Sell limitPrice=0 stopPrice=29386.5 quantity=1 orderType='Stop Market' filled=0 averageFillPrice=0 time='2026-09-09 20:20:50' statementDate='2026-09-09' error=NoError comment='' nr=-1"
+  },
+  {
+    "file": "trace.20260909.00001.txt",
+    "line": 8516,
+    "text": "2026-09-09 20:20:50:978 (lucid ) Cbi.Account.OrderUpdateCallback: realOrderState=Filled orderId='fab42136783242f9b4eb1ab45e153e3c' account='[redacted]' name='6705d2c4-158b-41b4-951d-0e5ba09dfb90-sl' orderState=Filled instrument='MNQ 09-26' orderAction=Sell limitPrice=0 stopPrice=29386.5 quantity=1 orderType='Stop Market' filled=1 averageFillPrice=29386.5 time='2026-09-09 20:20:50' statementDate='2026-09-09' error=NoError comment='' nr=-1"
+  },
+  {
+    "file": "trace.20260909.00001.txt",
+    "line": 8638,
+    "text": "2026-09-09 21:27:13:642 (lucid ) Cbi.Account.OrderUpdateCallback: realOrderState=Submitted orderId='dac48bcb0b3647159ba69e31bd02f733' account='[redacted]' name='87acc3bb-a989-473f-b07b-c77c04bfb419-sl' orderState=Submitted instrument='MNQ 09-26' orderAction=Sell limitPrice=0 stopPrice=29342 quantity=1 orderType='Stop Market' filled=0 averageFillPrice=0 time='2026-09-09 21:27:13' statementDate='2026-09-09' error=NoError comment='' nr=1"
+  },
+  {
+    "file": "trace.20260909.00001.txt",
+    "line": 8645,
+    "text": "2026-09-09 21:27:13:747 (lucid ) Cbi.Account.OrderUpdateCallback: realOrderState=Accepted orderId='dac48bcb0b3647159ba69e31bd02f733' account='[redacted]' name='87acc3bb-a989-473f-b07b-c77c04bfb419-sl' orderState=Accepted instrument='MNQ 09-26' orderAction=Sell limitPrice=0 stopPrice=29342 quantity=1 orderType='Stop Market' filled=0 averageFillPrice=0 time='2026-09-09 21:27:13' statementDate='2026-09-09' error=NoError comment='' nr=-1"
+  },
+  {
+    "file": "trace.20260909.00001.txt",
+    "line": 8708,
+    "text": "2026-09-09 22:09:00:022 (lucid ) Cbi.Account.OrderUpdateCallback: realOrderState=CancelPending orderId='dac48bcb0b3647159ba69e31bd02f733' account='[redacted]' name='87acc3bb-a989-473f-b07b-c77c04bfb419-sl' orderState=CancelPending instrument='MNQ 09-26' orderAction=Sell limitPrice=0 stopPrice=29342 quantity=1 orderType='Stop Market' filled=0 averageFillPrice=0 time='2026-09-09 22:09:00' statementDate='2026-09-09' error=NoError comment='' nr=3"
+  },
+  {
+    "file": "trace.20260909.00001.txt",
+    "line": 8717,
+    "text": "2026-09-09 22:09:00:023 (lucid ) Cbi.Account.OrderUpdateCallback: realOrderState=CancelSubmitted orderId='dac48bcb0b3647159ba69e31bd02f733' account='[redacted]' name='87acc3bb-a989-473f-b07b-c77c04bfb419-sl' orderState=CancelSubmitted instrument='MNQ 09-26' orderAction=Sell limitPrice=0 stopPrice=29342 quantity=1 orderType='Stop Market' filled=0 averageFillPrice=0 time='2026-09-09 22:09:00' statementDate='2026-09-09' error=NoError comment='' nr=-1"
+  },
+  {
+    "file": "trace.20260909.00001.txt",
+    "line": 8719,
+    "text": "2026-09-09 22:09:00:134 (lucid ) Cbi.Account.OrderUpdateCallback: realOrderState=Cancelled orderId='dac48bcb0b3647159ba69e31bd02f733' account='[redacted]' name='87acc3bb-a989-473f-b07b-c77c04bfb419-sl' orderState=Cancelled instrument='MNQ 09-26' orderAction=Sell limitPrice=0 stopPrice=29342 quantity=1 orderType='Stop Market' filled=0 averageFillPrice=0 time='2026-09-09 22:09:00' statementDate='2026-09-09' error=NoError comment='' nr=-1"
+  }
+]
