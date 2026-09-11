@@ -307,15 +307,29 @@ func (at *AutoTrader) deskMode(now time.Time, book DeskLine) DeskLine {
 		state, reason = "unknown", "NT8 link state has not been received"
 	}
 
+	// ROLL WAVE — the contract, from the AddOn's frame, with when it said so.
+	// "n/a" when no frame has named one; never a date, never a literal (A24).
+	contractText := "contract=n/a (no subscription ACK received)"
+	if f, ok := at.contractFactFor(at.futuresSymbol()); ok {
+		since := "boot"
+		if !f.ReceivedAt.IsZero() {
+			since = kernel.ClockCTSeconds(f.ReceivedAt)
+		}
+		contractText = fmt.Sprintf("contract=%s since %s (%s)", f.Contract, since, f.Source)
+		if f.Previous != "" {
+			contractText += fmt.Sprintf(" · ROLLED from %s at %s", f.Previous, kernel.ClockCTSeconds(f.RolledAt))
+		}
+	}
+
 	return DeskLine{
 		N: 1, Key: "mode", Label: "MODE", State: state, Verified: linkKnown, Reason: reason,
-		Source: "strategy config · session registry · bars · NT8 link",
+		Source: "strategy config · session registry · bars · NT8 link · subscription ACK",
 		AsOfMs: now.UnixMilli(),
 		// The clock routes through kernel/tz.go's ONE time source (class 60 /
 		// the TZ guard): a bare "15:04:05" here is a second, unlabelled clock,
 		// and this repo has already been bitten by two of those.
-		Text: fmt.Sprintf("%s · plan_mode=%s · session=%s · CME %s · %s · process responding · feed %s · link %s · book %s",
-			acct, mode, session, market, kernel.ClockCTSeconds(now), feed, link, book.Text),
+		Text: fmt.Sprintf("%s · plan_mode=%s · session=%s · CME %s · %s · %s · process responding · feed %s · link %s · book %s",
+			acct, mode, session, market, kernel.ClockCTSeconds(now), contractText, feed, link, book.Text),
 	}
 }
 
