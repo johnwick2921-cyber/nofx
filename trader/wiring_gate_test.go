@@ -91,6 +91,26 @@ var alsoRequireWired = []string{
 	// the 09-06 hole is open again and every test in this wave still passes.
 	"reconcileProtectionAt",
 	"protectionPricesFor",
+	// ONE SETUP (dispatch 102, 2026-09-11). E11: the report's claim list —
+	// predicate, call site, consult, stamp, record, recorder (both callers),
+	// backfills, boot line, counters, chip payload — each with ≥1 production
+	// caller. The WRAPPERS are listed (W1's lesson), not only what they call.
+	"OneSetupAllowsAt",
+	"oneSetupVerdictsAt",
+	"oneSetupConsult",
+	"oneSetupStampEpisodes",
+	"oneSetupSaveRecord",
+	"oneSetupObstacleTarget",
+	"StampOneSetup",
+	"OneSetupCountsFor",
+	"ComputeFollowPlan",
+	"recordFollowPlans",
+	"BackfillFollowPlans",
+	"BackfillOneSetupVerdicts",
+	"StampFollowPlan",
+	"OneSetupBootLine",
+	"oneSetupFor",
+	"oneSetupChipText",
 }
 
 func TestEveryClaimedProductionPathHasACallSite(t *testing.T) {

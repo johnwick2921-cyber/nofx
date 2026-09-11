@@ -18,6 +18,7 @@ import { BiasBlock } from './BiasBlock'
 import { ZoneTable } from './ZoneTable'
 import { ScenarioList } from './ScenarioList'
 import type { FadeLabelView } from './FadePermissionChip'
+import type { OneSetupView } from './OneSetupChip'
 import { RulesBlock, type NoTradeBandWindow } from './RulesBlock'
 import { ArmedUnderBlock, type OpenPositionProvenance } from './ArmedUnderBlock'
 import { PlanFooter } from './PlanFooter'
@@ -841,6 +842,7 @@ export function SessionPlanCard({
             (plan as { fade_permission?: Record<string, FadeLabelView> })
               .fade_permission
           }
+          oneSetup={(plan as { one_setup?: OneSetupView }).one_setup}
           identities={plan.scenario_identity}
           armedStates={
             (

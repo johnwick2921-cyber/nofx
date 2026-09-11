@@ -29,6 +29,9 @@ func armedDoc() string {
 
 func TestArmedOrderUpsertAndGateRR(t *testing.T) {
 	cfg := store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true}}
+	// ONE SETUP (dispatch 102, 2026-09-11): this fixture exercises the WIDE book
+	// (a non-reject play / no map); the switch OFF restores it byte-identically (E2).
+	oneSetupOff(&cfg)
 	// 0C shadow demotion (2026-08-31): armedDoc's S1 is fvg_entry, which resolves
 	// SHADOW by default — the arm seam would refuse it and this R:R-gate fixture
 	// would never row up. Declare fvg_entry live for THIS fixture: it tests the

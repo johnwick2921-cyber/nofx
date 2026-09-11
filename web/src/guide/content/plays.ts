@@ -8,6 +8,26 @@ export const plays: GuideSection = {
   asBuiltRev: GUIDE_BUILT_REV,
   blocks: [
     {
+      kind: 'h',
+      text: 'ONE SETUP — THE BOOK ARMS ONE PLAY; THE FOLLOW IS RECORDED',
+    },
+    {
+      kind: 'p',
+      text: "Owner's ruling, 2026-09-10 [O]: \"one setup you understand completely beats five you half-do.\" Since this build the book ARMS exactly one play — the fade (`reject`) — and only when three things hold at the moment of authorization: (1) LEVEL — the scenario's level IS the best merged candidate within the reachability band right now, grade first (at or above the min grade, default B), distance second, any timeframe, any kind; (2) PLAY — the condition is `reject`; (3) PERMISSION — the fade-permission label reads permitted at that instant. NULL never permits and an unresolved level identity never resolves by 'nearest'. A declined scenario is still evaluated, confirmed and recorded as an episode — its row carries all three verdicts — it is just never armed. Its chip reads 'one-setup: declined — level=… · play=… · permission=…'. The target of an allowed arm is the scenario's RECORDED first obstacle, not the authored target, and the existing R:R gate judges it: under the floor is the existing refusal, counted as obstacle_below_floor. One arm at a time per plan: when two scenarios are allowed the higher-quality one arms first and the other reads second_setup_waiting until the first is terminal. A resting arm is never cancelled by a later flip of the best level (that would meet MANUAL-CANCEL-WINS and kill the re-arm); the case is counted as declined_while_resting.",
+    },
+    {
+      kind: 'p',
+      text: 'The map is untouched. Nothing the planner is shown changes: the level block, the seat race, the merge, the candidates and the planner prompt are byte-identical with the switch on or off (pinned by a golden generated before the wave existed). This is a filter at the arm seam, not a change to what the desk sees.',
+    },
+    {
+      kind: 'p',
+      text: "THE FOLLOW-PLAN — RECORDED ONLY [T]. A real trader knows one level, two plans: hold it and the trend confirms, break it and the bias flips. Round 17 measured the second half and found nothing on MNQ: role reversal is UNTESTED on index futures and the naive follow LOSES (Mesfin: 80.7% pullback stop-out; the sweep loses both ways). So for EVERY level a scenario is authored on, beside the fade-plan the book now RECORDS the follow-plan and never arms it: the BREAK (the first CLOSED 5-minute bucket beyond the level — a forming bucket is not a break), the role reversal from that instant (recorded on the episode row, never on the map), the RETEST (the first touch of the reversed level from the far side), the would-be entry (a passive limit at the level, filled only if the retest bar traded THROUGH by a tick — a touch is not a fill, so an untouched-through retest records NULL with the reason), its MAE/MFE at 10 and 20 five-minute buckets and the net after 2-pt friction, whether the reversed level HELD on the retest (the detector's own verdict for that touch), and the bias the break implies — written BESIDE the plan's frozen bias, never into it. Every field is NULL until its event; a level never broken is a row with break_at NULL, a zero-trade outcome exactly as never-confirmed is for the fade. Nothing here reaches the wire: removing the recorder changes no arm, no order, no gate verdict.",
+    },
+    {
+      kind: 'p',
+      text: "The pre-registered null and the cell that would change the ruling: role reversal ≤ 50% and the follow ≤ 0 net. The follow goes live only if the owner's OWN record shows a cell (approach direction × level timeframe, ~385 episodes per cell, pooled first) where broken levels reverse role with a 95% lower bound above 50% AND the follow nets positive after 2-pt friction at both horizons. Day zero of that record is this boot. The knobs: one_setup_enabled (ON by default; OFF restores the wide book byte-identically) and one_setup_min_grade (B). Boot line: '🎯 one setup: ON[O] · level=best-near-price(min-grade B)[O] · play=reject · target=first-obstacle · permission-required=yes · map=untouched · today armable=… declined=… · follow-plan=RECORDED-ONLY[T] breaks=… retests=… role-reversed=…/… · bias-flip=recorded-only · off-switch=one_setup_enabled'.",
+    },
+    {
       kind: 'cards',
       cards: [
         {

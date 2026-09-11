@@ -441,6 +441,12 @@ type AutoTrader struct {
 	armRefusalLast map[string]string
 	// 0B — per-arm stop-composition log dedup (plan:version:scenario:leg:stop).
 	armStopCompLast map[string]string
+	// oneSetupFactsForTest (dispatch 102) is a TEST SEAM ONLY: when non-nil it
+	// supplies the map, price, band and per-scenario permission the one-setup
+	// call site would otherwise assemble from the live tape, so the seam tests
+	// can drive the REAL arm path with a known map. Nil in production
+	// (TestOneSetupTestSeamIsNilInProduction pins it).
+	oneSetupFactsForTest func(now time.Time) oneSetupTestFacts
 	// armAuthoredLast dedupes the every-cycle "⚔️ armed" log (PRE-REOPEN F3,
 	// 2026-08-28) — the dead-row re-log spam (69+ lines/day) fired on every
 	// placement beat because the ledger row already existed. Log once per
