@@ -12,6 +12,10 @@
 //     change (class 110: a green suite is a claim about an environment).
 //   provider/ninjatrader/tcp_framing.go @ c9b224a6 (fix/bar-source: Bar.Source,
 //     Go-side only, json:"-").
+//   ninjascript/VLTraderTCPClient.cs @ ed6bac8b (owner-ordered front-month fix,
+//     2026-09-11: the three GetInstrument sites route through VLInstrumentLookup;
+//     no identifier renamed). Advanced in cleanup batch 2 — the red was
+//     pre-existing on dev since that commit.
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
