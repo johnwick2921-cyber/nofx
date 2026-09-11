@@ -4553,3 +4553,31 @@ pinned live with the call sites the detector found.
 Related: class 105 (documentation in a place the code's tests cannot see),
 class 113 (a gate that certifies a name, not a path).
 
+
+
+## CLASS 123 — A SEAT LIMIT THAT HIDES THE MAP (assigned at level-zones merge, 2026-09-11)
+
+**Measured:** snapshot `7f9db41a-815f-4be8-a9e2-ea124db26b67`, rows
+23093602–23094444, contains 843 references. The 5m/15m swings at 29475
+already collapse but lose their seat; the daily demand anchor 29006.625 is
+excluded by proximity although its band overlaps the region. A capped entry
+shortlist is not the complete level map. Native bands were already retained
+by detectors; missing rendering was not proof of missing detection.
+
+**Law:** keep the full reference map separate from entry selection. Merge only
+known-width references whose fixed anchors and union band satisfy the resolved
+ATR bounds, choosing one nearest compatible cluster without transitive union.
+Broad context and unknown-width references remain separate; every source name
+survives. Family counts and zone ranking never modify the existing score or
+execution anchor. The measured fixture yields 498 retained zones/references,
+25 multi-source merges, widest merged band 41.50pt under 42.113595pt.
+
+**Pins:** `TestLevelZonesOwnerSnapshot`, width/unknown, compatibility/no-chain,
+family and ranking tests; unchanged Stage A score golden; production wiring
+mutations. C1–C5 and exact sample evidence:
+`reports/2026-09-11-level-zones.md` at
+`2d30329feb064501c680dc073072a18e7261b4f3` (subsequent deployment receipts follow
+on the same report). Round 21 full text has not landed; the owner's dispatch
+RESEARCH LAW is the operative basis, with no fabricated research SHA. The
+class census used bounded numbered entries plus both CLASS heading formats,
+`sort -n | uniq -c`, highest 122 immediately before this assignment.
