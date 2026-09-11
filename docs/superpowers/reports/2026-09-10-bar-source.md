@@ -37,13 +37,24 @@ bars (00:33 CT, every timeframe) — the concrete resolution is required, not
 optional. Every `bars_historical`/`bar_update` frame now carries `contract`
 (Go reads it next wave).
 
-**Disposition of this wave.** Rolled back to 0070fc79 on the owner's order.
-What stands as correct: D1 `bars.source` (a label), D2 the live-wins upsert,
-D3 the ring's live-over-replay merge, D7 readers excluding `mixed`. **Withdrawn:
-D4 (scale-mismatch detector) and D5 (replay hold)** — a workaround for an
-AddOn defect, with two defects of their own (below), and nothing to catch once
-the platform's contract is right. D6's measured labels were superseded by the
-owner-authorised store repair (next section). Class 118 rewritten to say so.
+**Disposition of this wave — CORRECTED 2026-09-11 02:2x CT (cleanup batch 2).**
+abc420f8 was rolled back to 0070fc79 on the owner's order at 00:45. But the
+wave's Go code had already been merged to dev at `0864db9e` (00:4x), and every
+binary built from dev since — **06ccaf48 (booted 01:45) and f42e39aa — carries
+ALL of it, D4 and D5 included, and runs it.** The earlier text of this
+paragraph said D4/D5 were "withdrawn"; that described an intent, not the
+binary, and a report that says withdrawn while the binary runs the code is how
+the next reader gets misled. What actually shipped and runs: D1 `bars.source`,
+D2 the live-wins upsert, D3 the ring's live-over-replay merge, **D4 the
+scale-mismatch detector, D5 the replay hold,** D7 readers excluding `mixed` and
+`replay:off-scale`. Since the 01:45 boot the hold has released 138 rows as
+`historical` — all on the platform's contract, same scale as live, correct.
+**Owner ruling 2026-09-11: keep the code; record it.** The two defects found on
+the 00:15 boot (the 20×-median-body condition blinding higher timeframes; a
+re-seed clearing the per-seed verdict) are therefore LIVE DEFECTS in running
+code, harmless while replay = live, and OWED to a named wave — not withdrawn.
+D6's measured labels were superseded by the owner-authorised store repair
+(next section). Class 118 stands as written about the misread cause.
 
 ### The store, repaired under three authorisations (all WHERE-scoped, values untouched, backups quoted)
 
