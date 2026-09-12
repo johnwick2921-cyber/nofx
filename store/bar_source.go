@@ -161,3 +161,15 @@ func IsReadableSource(src string) bool {
 	src = strings.TrimSpace(src)
 	return src == BarSourceLive || src == BarSourceHistorical
 }
+
+// IsBacktestReadable reports whether a bar may be read by a BACKTEST reader.
+// Backtests may hold imported history (wave 101: deliberately pulled named-
+// contract tape, a third feed distinct from the live-path replay) beside live
+// and historical. Mixed and off-scale never are, and continuous:adjusted rows
+// are never persisted at all. Live trading readers keep IsReadableSource, so
+// imported rows are invisible to every live path even without a contract
+// filter — the current-contract filter remains the seam guard, this is the
+// second lock.
+func IsBacktestReadable(src string) bool {
+	return IsReadableSource(src) || strings.TrimSpace(src) == BarSourceHistoricalImport
+}

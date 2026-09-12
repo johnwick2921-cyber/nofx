@@ -79,6 +79,10 @@ func (at *AutoTrader) snapshotSessionProfiles() {
 		// BAR-SOURCE WAVE — per-TF source/earliest/count, read from the resolver.
 		at.logInfof("%s", NoChaseBootLine())
 		at.logInfof("%s", BarSourceBootLine(at.barResolver(), at.futuresSymbol(), time.Now()))
+		// HISTORY IMPORT (wave 101) — per-contract × per-TF held history, READ
+		// from the store, never a literal. A contract the store has never seen
+		// is not printed as zero (A24): the line reports what is HELD.
+		at.logInfof("%s", HistoryHeldBootLine(at.store, at.futuresSymbol()))
 		// R1 — print again once the NT8 replay has actually landed.
 		ntTrader.SetAfterBackfillHook(func() {
 			hookNow := time.Now() // `now` at the entry point, handed down (A28)

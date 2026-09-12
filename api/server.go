@@ -535,6 +535,14 @@ Fetch a specific version's full doc with GET /plan/today?version=<n>.`,
 			s.routeWithSchema(protected, "POST", "/armed/test-arm", "E2 seam: place/cancel a TEST-E2 armed order on the real path (env-gated + SIM-only)",
 				`Body: {"trader_id":"<id>","action":"place","side":"long","entry":1,"stop":1,"target":1} or {"action":"cancel","signal_id":"<sid>"}.`,
 				s.handleArmedTestArm)
+			// HISTORY IMPORT (wave 101) — pull years of NAMED-contract minute
+			// history from NT8 through the live wire and write it into the bars
+			// table (contract-stamped, source=historical_import, never
+			// overwrites). Env-gated (HISTORICAL_IMPORT_SEAM=on, default OFF).
+			// Production call sites: 0 — an owner-triggered maintenance path.
+			s.routeWithSchema(protected, "POST", "/admin/bars/import", "Pull one named contract's history into the bars store (env-gated)",
+				`Body: {"symbol":"MNQ","contract":"MNQ 09-23","timeframes":["1m","5m","15m","1h"],"from_ms":0,"to_ms":0}. from_ms=0/to_ms=0 means the contract's whole history. Returns {results:[{contract,timeframe,status,imported,skipped,first_bar_ms,last_bar_ms,unavailable,elapsed_sec}]}. Status is three-state: imported | skipped_only | unavailable | partial. Refuses with 409 when HISTORICAL_IMPORT_SEAM is off.`,
+				s.handleAdminBarsImport)
 			s.routeWithSchema(protected, "GET", "/plan/alerts", "In-app alert feed (P0/P1/P2) + unacked count",
 				`Query: ?trader_id=<EXACT trader_id>. Returns: {alerts:[{id,level,kind,title,body,acked,created_at}], unacked:<int>}`,
 				s.handlePlanAlerts)

@@ -70,6 +70,13 @@ func getOrStartTCPServer() (*ntwire.TCPServer, error) {
 	return tcpServerInst, tcpServerErr
 }
 
+// TCPServer exposes the singleton wire server for maintenance paths that ride
+// the running process (HISTORY IMPORT, wave 101): the wire holds exactly one
+// connected client, so a named-contract historical pull must go through the
+// live server, never a second process. Returns the server, or the cached bind
+// error.
+func TCPServer() (*ntwire.TCPServer, error) { return getOrStartTCPServer() }
+
 // SplitSymbolList parses the P5.2 symbol-as-list config form: the Exchange
 // row's NT instrument field may be a comma-separated list ("MNQ,ES,NQ"). The
 // FIRST element is the PRIMARY (the trading symbol — orders, ticks, gate); the

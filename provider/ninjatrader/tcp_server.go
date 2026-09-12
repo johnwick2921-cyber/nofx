@@ -150,6 +150,15 @@ type TCPServer struct {
 	rolls     map[string]rollEvent
 	subStates map[string]SymbolSubState
 
+	// HISTORY IMPORT (wave 101) — request-id-keyed streams for the
+	// bars_history_data / bars_history_error frames. Nothing here feeds the
+	// live bar ingest; the importer (trader/historical_import.go) is the ONLY
+	// consumer, and the server only fans frames out. Rows are written by the
+	// importer via store.ImportBars — never by this server.
+	histSubMu       sync.RWMutex
+	historyDataSubs map[string]chan BarsHistoryDataPayload
+	historyErrSubs  map[string]chan BarsHistoryErrorPayload
+
 	// Plan 4.11 — latest real account snapshot from the C# AddOn
 	// (account_balance frame). Replaces the $50k mock in
 	// TCPTrader.GetBalance once the first frame arrives.
@@ -400,6 +409,65 @@ func (s *TCPServer) SubscribeRejectsFor(symbol, account string) <-chan PositionC
 // subscription is still per-(symbol,account) so each trader has its own channel.
 func (s *TCPServer) SubscribeInstrumentInfoFor(symbol, account string) <-chan InstrumentInfoPayload {
 	return subscribeFor(s, &s.instrSubs, symbol, account)
+}
+
+// SubscribeBarsHistoryFor returns the data and error streams for one named-
+// contract pull, keyed by the caller's request id. HISTORY IMPORT (wave 101):
+// the importer installs a subscription BEFORE sending the request frame. Both
+// channels are buffered so the C# side's chunk stream never stalls the read
+// loop.
+func (s *TCPServer) SubscribeBarsHistoryFor(requestID string) (<-chan BarsHistoryDataPayload, <-chan BarsHistoryErrorPayload) {
+	s.ensureRouters()
+	key := strings.TrimSpace(requestID)
+	s.histSubMu.Lock()
+	defer s.histSubMu.Unlock()
+	if s.historyDataSubs == nil {
+		s.historyDataSubs = make(map[string]chan BarsHistoryDataPayload)
+		s.historyErrSubs = make(map[string]chan BarsHistoryErrorPayload)
+	}
+	if old, ok := s.historyDataSubs[key]; ok {
+		close(old)
+	}
+	if old, ok := s.historyErrSubs[key]; ok {
+		close(old)
+	}
+	dataCh := make(chan BarsHistoryDataPayload, 32)
+	errCh := make(chan BarsHistoryErrorPayload, 4)
+	s.historyDataSubs[key] = dataCh
+	s.historyErrSubs[key] = errCh
+	return dataCh, errCh
+}
+
+// UnsubscribeBarsHistoryFor removes one pull's channels (importer teardown).
+func (s *TCPServer) UnsubscribeBarsHistoryFor(requestID string) {
+	key := strings.TrimSpace(requestID)
+	s.histSubMu.Lock()
+	defer s.histSubMu.Unlock()
+	if ch, ok := s.historyDataSubs[key]; ok {
+		close(ch)
+		delete(s.historyDataSubs, key)
+	}
+	if ch, ok := s.historyErrSubs[key]; ok {
+		close(ch)
+		delete(s.historyErrSubs, key)
+	}
+}
+
+// SendBarsHistoryRequest asks the AddOn to pull one named contract's history
+// over [from, to). Immediate command: errors if no NT client is connected, so
+// the importer can state `unavailable` instead of hanging (three-state honesty).
+func (s *TCPServer) SendBarsHistoryRequest(payload BarsHistoryRequestPayload) error {
+	s.connMu.Lock()
+	c := s.conn
+	s.connMu.Unlock()
+	if c == nil {
+		return fmt.Errorf("ninjatrader/tcp: no NT client connected")
+	}
+	s.writeMu.Lock()
+	_ = c.SetWriteDeadline(time.Now().Add(5 * time.Second))
+	err := WriteFrame(c, FrameBarsHistoryRequest, payload)
+	s.writeMu.Unlock()
+	return err
 }
 
 // barIngestMsg is the internal envelope passed from the socket read loop
@@ -1910,6 +1978,48 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 				continue
 			}
 			s.enqueueBarHistorical(p.Symbol, p.Timeframe, p.Bars)
+
+		case FrameBarsHistoryData:
+			// HISTORY IMPORT (wave 101) — fan one chunk out to the importer
+			// that owns the request id. No live-bar path reads these frames.
+			var p BarsHistoryDataPayload
+			if err := json.Unmarshal(env.Payload, &p); err != nil {
+				s.logger.Warn("tcp_server: bad bars_history_data payload", "err", err)
+				continue
+			}
+			s.histSubMu.RLock()
+			ch, ok := s.historyDataSubs[strings.TrimSpace(p.RequestID)]
+			s.histSubMu.RUnlock()
+			if !ok {
+				s.logger.Warn("tcp_server: bars_history_data for unknown request id — dropped",
+					"request_id", p.RequestID, "contract", p.Contract, "bars", len(p.Bars))
+				continue
+			}
+			select {
+			case ch <- p:
+			default:
+				s.logger.Warn("tcp_server: bars_history_data channel full — chunk dropped (importer too slow)",
+					"request_id", p.RequestID, "contract", p.Contract)
+			}
+
+		case FrameBarsHistoryError:
+			var p BarsHistoryErrorPayload
+			if err := json.Unmarshal(env.Payload, &p); err != nil {
+				s.logger.Warn("tcp_server: bad bars_history_error payload", "err", err)
+				continue
+			}
+			s.histSubMu.RLock()
+			ch, ok := s.historyErrSubs[strings.TrimSpace(p.RequestID)]
+			s.histSubMu.RUnlock()
+			if !ok {
+				s.logger.Warn("tcp_server: bars_history_error for unknown request id — dropped",
+					"request_id", p.RequestID, "contract", p.Contract, "reason", p.Reason)
+				continue
+			}
+			select {
+			case ch <- p:
+			default:
+			}
 
 		case FrameBarUpdate:
 			// Plan 4.4 Stage 2 — streaming updates. The bars array may

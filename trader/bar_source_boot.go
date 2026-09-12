@@ -36,6 +36,27 @@ func BarSourceBootLine(r *market.BarResolver, symbol string, now time.Time) stri
 	return "📊 bars: " + barSourceFields(r, symbol, now) + " (cache cold at boot — see the 📊 bars after backfill line)"
 }
 
+// HistoryHeldBootLine (HISTORY IMPORT, wave 101) reports the imported history
+// the store HOLDS, per contract × per timeframe — the boot line D7 asks for.
+// READ from the store, never a literal; rows are counted by their source so a
+// contract's LIVE window and its IMPORTED history are named separately.
+
+func HistoryHeldBootLine(st *store.Store, symbol string) string {
+	if st == nil || st.BarHistory() == nil {
+		return "📚 history held: store unavailable — nothing read"
+	}
+	rows, err := st.BarHistory().HistoryHeld(symbol)
+	if err != nil || len(rows) == 0 {
+		return "📚 history held: none imported yet (wave 101) — the live table holds only the subscribed contract's tape"
+	}
+	parts := make([]string, 0, len(rows))
+	for _, r := range rows {
+		parts = append(parts, fmt.Sprintf("%s·%s=%d [%s→%s]", r.Contract, r.TF, r.N,
+			time.UnixMilli(r.FirstMs).UTC().Format("2006-01-02"), time.UnixMilli(r.LastMs).UTC().Format("2006-01-02")))
+	}
+	return "📚 history held: " + strings.Join(parts, " · ")
+}
+
 // barSourceFields renders the per-TF source report both prints share.
 func barSourceFields(r *market.BarResolver, symbol string, now time.Time) string {
 	if r == nil {

@@ -271,6 +271,52 @@ for this symbol." The AddOn disposes the affected `BarsRequest`s, stops
 emitting `bar_update` frames for them, and removes them from its
 subscription registry.
 
+### 8b. `bars_history_request` / `bars_history_data` / `bars_history_error` — HISTORY IMPORT (wave 101)
+
+The live `bars_subscribe` path resolves the PLATFORM's front month and can
+never ask for an expired contract. These three frames are the named-contract
+channel: a one-off pull of `"MNQ 09-23"` over an explicit `[from, to)` window,
+answered in chunks. It never touches the live subscription state.
+
+```json
+// Go server → C# AddOn
+{ "type": "bars_history_request",
+  "payload": {
+    "request_id": "imp-3f9a…",     // caller-chosen correlation id
+    "symbol":      "MNQ",
+    "contract":    "MNQ 09-23",    // EXPLICIT name — never a date rule
+    "timeframe":   "1m",           // 1m 3m 5m 15m 30m 1h 2h 4h 6h 8h 12h 1d
+    "from_ms":     1700000000000,  // first bar open, epoch ms UTC (0 = contract start)
+    "to_ms":       1710000000000   // exclusive end (0 = contract end)
+  } }
+
+// C# AddOn → Go server, one chunk per ~8k bars, ascending by time,
+// seq from 1, last=true terminates the stream.
+{ "type": "bars_history_data",
+  "payload": {
+    "request_id": "imp-3f9a…",
+    "symbol":      "MNQ",
+    "contract":    "MNQ 09-23",    // the instrument's REAL ContractName — echoed
+    "timeframe":   "1m",
+    "seq": 2, "last": true,
+    "bars": [ { "t": 1700000000000, "o": 21500.25, "h": 21501.0,
+                "l": 21500.0, "c": 21500.75, "v": 42 } ]
+  } }
+
+// C# AddOn → Go server — a pull that cannot be served is ANSWERED, never silent.
+{ "type": "bars_history_error",
+  "payload": { "request_id": "imp-3f9a…", "contract": "MNQ 09-23",
+               "reason": "unavailable: instrument MNQ 09-23 not found on this platform" } }
+```
+
+Rules the pull obeys: `MergePolicy.DoNotMerge` ALWAYS (a back-adjusted series is
+a different price scale wearing the same label — the 09-10 replay damage);
+`TradingHours` = CME US Index Futures ETH; the request is disposable and the
+AddOn tears it down on completion or terminate. The Go importer writes only
+through `store.ImportBars` (no upsert; collision = keep + count) with
+`source=historical_import`, and refuses a data frame whose echoed contract
+differs from the one it asked for.
+
 ### 9. `subscribed` / `unsubscribed` / `subscribe_error` (C# AddOn → Go server) — P5.3
 
 Subscription lifecycle acks, sent by the AddOn in response to `bars_subscribe` / `bars_unsubscribe`:

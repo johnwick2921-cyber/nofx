@@ -207,6 +207,10 @@ namespace NinjaTrader.NinjaScript.AddOns
         // writeLock so bar frames cannot interleave with signal/fill bytes.
         private VLBarsSubscriptionManager barsManager;
 
+        // HISTORY IMPORT (wave 101) — named-contract historical pulls, kept
+        // strictly separate from the live subscription manager.
+        private VLHistoryPullManager historyPulls;
+
         // Phase 0 — data-feed reconnect recovery state. NT8 does NOT auto-resume
         // a BarsRequest after the price feed drops, so we recreate them on
         // recovery (VLBarsSubscriptionManager.OnConnectionReconnected). Guard so
@@ -258,6 +262,12 @@ namespace NinjaTrader.NinjaScript.AddOns
                 // proven signal/fill/heartbeat path.
                 barsManager = new VLBarsSubscriptionManager(SendFrame, LogInfo, LogWarn);
 
+                // HISTORY IMPORT (wave 101) — instantiate the named-contract
+                // history pull manager beside the bars manager. It owns ONLY
+                // disposable, per-request BarsRequests for EXPLICIT contract
+                // names; it never touches the live subscriptions.
+                historyPulls = new VLHistoryPullManager(SendFrame, LogInfo, LogWarn);
+
                 // Phase 0 — hook the NT8 data-feed status so BarsRequests get
                 // recreated when the NT8<->provider price feed recovers. Without
                 // this, NT8 silently stops delivering bars after a feed reconnect
@@ -296,6 +306,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                 }
                 try { Connection.ConnectionStatusUpdate -= OnVLConnectionStatusUpdate; } catch { }
                 try { barsManager?.DisposeAll(); } catch { }
+                try { historyPulls?.DisposeAll(); } catch { }
                 try { stream?.Close(); } catch { }
                 try { client?.Close(); } catch { }
                 LogInfo("VLTraderTCPClient: AddOn Terminated");
@@ -691,6 +702,12 @@ namespace NinjaTrader.NinjaScript.AddOns
                 {
                     // Plan 4.4 Stage 1 — forward to the bars manager.
                     barsManager?.HandleBarsUnsubscribe(payload);
+                }
+                else if (type == "bars_history_request")
+                {
+                    // HISTORY IMPORT (wave 101) — named-contract pull. Zero
+                    // interaction with the live subscription state.
+                    historyPulls?.HandleBarsHistoryRequest(payload);
                 }
                 else if (type == "hello")
                 {
