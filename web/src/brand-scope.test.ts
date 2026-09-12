@@ -16,6 +16,13 @@
 //     2026-09-11: the three GetInstrument sites route through VLInstrumentLookup;
 //     no identifier renamed). Advanced in cleanup batch 2 — the red was
 //     pre-existing on dev since that commit.
+// Bar-feed baselines advanced 2026-09-11 for wave 101 (fix/historical-backfill):
+//   provider/ninjatrader/tcp_server.go  — bars_history_request/data/error fan-out
+//     + SubscribeBarsHistoryFor (additive; no identifier renamed).
+//   provider/ninjatrader/tcp_framing.go — the three new frame types + payloads
+//     (additive; no identifier renamed).
+//   ninjascript/VLTraderTCPClient.cs   — historyPulls wiring + the
+//     bars_history_request dispatch (additive; no identifier renamed).
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
