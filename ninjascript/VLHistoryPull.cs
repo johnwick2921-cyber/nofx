@@ -280,6 +280,10 @@ namespace NinjaTrader.NinjaScript.AddOns
 
         // Mirror of VLBarsSubscriptionManager's time conversion: the bar's
         // timestamp in the session's zone, expressed as UTC epoch ms.
+        // FLAG: NT8 API — on this build `TradingHours.TimeZoneInfo` is a
+        // TimeZoneInfo OBJECT (not a string); assigning it directly is the
+        // pattern the compiling manager uses. Passing it to
+        // FindSystemTimeZoneById(string) is CS1503.
         private static long ToUtcEpochMs(DateTime localTime, TradingHours tradingHours)
         {
             DateTime utc;
@@ -292,12 +296,20 @@ namespace NinjaTrader.NinjaScript.AddOns
                 TimeZoneInfo tz = null;
                 if (tradingHours != null)
                 {
-                    try { tz = TimeZoneInfo.FindSystemTimeZoneById(tradingHours.TimeZoneInfo); } catch { }
+                    tz = tradingHours.TimeZoneInfo;
                 }
-                if (tz == null) tz = TimeZoneInfo.FindSystemTimeZoneById("Central Standard Time");
-                utc = TimeZoneInfo.ConvertTimeToUtc(localTime, tz);
+                if (tz == null)
+                {
+                    // Fall back to the machine's local zone — wrong if the
+                    // bars were stamped in CT and the machine is in another
+                    // zone, but better than throwing.
+                    tz = TimeZoneInfo.Local;
+                }
+                utc = TimeZoneInfo.ConvertTimeToUtc(
+                    DateTime.SpecifyKind(localTime, DateTimeKind.Unspecified), tz);
             }
-            return (long)(utc - new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalMilliseconds;
+            var unixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            return (long)((utc - unixEpoch).TotalMilliseconds);
         }
 
         private static string TryGetString(Dictionary<string, object> p, string key)
