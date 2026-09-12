@@ -276,6 +276,63 @@ const (
 	FrameBarsUnsubscribe FrameType = "bars_unsubscribe"
 )
 
+// HISTORY IMPORT (wave 101, 2026-09-11) — contract-qualified historical pull,
+// Go-server → C#-AddOn → Go-server. The live bars_subscribe path resolves the
+// PLATFORM's front month (VLInstrumentLookup.cs) and can never ask for an
+// expired contract; a backtest needs years, contract by contract. These three
+// frames are the named-contract channel:
+//
+//	bars_history_request  Go → C# : ask for one named contract, one timeframe,
+//	                               one [from, to) window. The contract is the
+//	                               EXPLICIT name ("MNQ 09-23") — never derived
+//	                               from a date (that is the 09-10 roll bug).
+//	bars_history_data     C# → Go : one chunk of the answer, ascending by time.
+//	                               The C# side chunks at ~8k bars to stay under
+//	                               the 1 MB envelope; seq/last terminate the
+//	                               stream.
+//	bars_history_error    C# → Go : the contract/timeframe could not be served
+//	                               (three-state honesty: unavailable is named).
+//
+// A bars_history_request NEVER touches the live BarsRequest subscriptions and
+// never mutates NT8 state; the AddOn disposes its request on completion.
+const (
+	FrameBarsHistoryRequest FrameType = "bars_history_request"
+	FrameBarsHistoryData    FrameType = "bars_history_data"
+	FrameBarsHistoryError   FrameType = "bars_history_error"
+)
+
+// BarsHistoryRequestPayload is one named-contract historical pull. FromMs/ToMs
+// are the CLOSED bar open-time window [from, to).
+type BarsHistoryRequestPayload struct {
+	RequestID string `json:"request_id"` // caller-chosen correlation id
+	Symbol    string `json:"symbol"`     // root, e.g. "MNQ"
+	Contract  string `json:"contract"`   // EXPLICIT name, e.g. "MNQ 09-23"
+	Timeframe string `json:"timeframe"`  // "1m" | "5m" | "15m" | "1h" | ...
+	FromMs    int64  `json:"from_ms"`    // first bar open, epoch ms UTC
+	ToMs      int64  `json:"to_ms"`      // exclusive end, epoch ms UTC
+}
+
+// BarsHistoryDataPayload is one chunk of a named-contract pull. Seq numbers the
+// chunks from 1; Last=true ends the stream. Contract echoes the ACKed name the
+// bars were actually served from (the C# side sends the instrument's real
+// ContractName — never the request string).
+type BarsHistoryDataPayload struct {
+	RequestID string `json:"request_id"`
+	Symbol    string `json:"symbol"`
+	Contract  string `json:"contract"`
+	Timeframe string `json:"timeframe"`
+	Seq       int    `json:"seq"`
+	Last      bool   `json:"last"`
+	Bars      []Bar  `json:"bars"` // ascending by time
+}
+
+// BarsHistoryErrorPayload names a pull the AddOn could not serve, and why.
+type BarsHistoryErrorPayload struct {
+	RequestID string `json:"request_id"`
+	Contract  string `json:"contract"`
+	Reason    string `json:"reason"`
+}
+
 // Plan 4.11 — real NT account balance. C#-AddOn → Go-server, additive frame
 // (same envelope: 4-byte BE length + JSON {type, payload}). The C# AddOn emits
 // it from the resolved Sim account on AccountItemUpdate + periodically, so the

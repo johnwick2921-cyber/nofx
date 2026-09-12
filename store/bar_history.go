@@ -111,7 +111,11 @@ func (s *BarHistoryStore) PruneByTF(now time.Time) (map[string]int64, error) {
 			continue // keep forever
 		}
 		cutoff := now.AddDate(0, 0, -days).UnixMilli()
-		res := s.db.Exec("DELETE FROM bars WHERE tf = ? AND open_time_ms < ?", tf, cutoff)
+		// HISTORY IMPORT (wave 101): imported history is NEVER pruned — it is
+		// irreplaceable tape pulled once from NT8, and the retention sweep
+		// exists to bound LIVE churn. The source column carries the exemption:
+		// a row marked historical_import survives any cutoff.
+		res := s.db.Exec("DELETE FROM bars WHERE tf = ? AND open_time_ms < ? AND source != ?", tf, cutoff, BarSourceHistoricalImport)
 		if res.Error != nil {
 			return out, res.Error
 		}
@@ -145,6 +149,18 @@ const (
 	// backfill — the wire discards such a replay and never writes it. No reader
 	// takes it; a live bar or a verified replay overwrites it.
 	BarSourceOffScale = "replay:off-scale"
+	// BarSourceHistoricalImport (HISTORY IMPORT, wave 101) marks a bar pulled
+	// deliberately from a NAMED expired contract and written by the importer
+	// (store.ImportBars), never by the live ingest. It is the third feed:
+	// distinct from BarSourceHistorical (a live-path replay). Imported rows are
+	// never pruned (PruneByTF skips them) and never overwrite anything (the
+	// importer has no upsert at all).
+	BarSourceHistoricalImport = "historical_import"
+	// BarSourceContinuous marks an ADJUSTED continuous series built deliberately
+	// by BuildContinuous with an explicit per-seam basis — never raw tape. The
+	// store REFUSES to persist it (ImportBars and InsertBars both reject it), so
+	// an adjusted series can never be mistaken for raw bars.
+	BarSourceContinuous = "continuous:adjusted"
 )
 
 // ContractMixed marks a bar whose OHLC straddles a contract roll: the AddOn
@@ -305,6 +321,86 @@ func (s *BarHistoryStore) InsertBars(rows []BarHistoryDB) error {
 		}
 	}
 	return nil
+}
+
+// ImportBars writes pulled historical bars under source=historical_import.
+// HISTORY IMPORT (wave 101). The rules, all pinned by tests:
+//
+//   - NO UPSERT, ever: a key collision keeps the existing row's values and is
+//     COUNTED as a skip. This is deliberately NOT the InsertBars upsert — the
+//     09-10 damage was exactly an import-shaped write overwriting live tape.
+//   - Every row must carry a non-empty contract and source=historical_import;
+//     anything else is refused with the row named (A24: an unstamped bar is
+//     never written).
+//   - Returns (inserted, skipped, error): the three-state import report builds
+//     on this, so a caller can say imported/skipped/unavailable with counts.
+func (s *BarHistoryStore) ImportBars(rows []BarHistoryDB) (inserted int64, skipped int64, err error) {
+	if s == nil || s.db == nil {
+		return 0, 0, fmt.Errorf("store required")
+	}
+	if len(rows) == 0 {
+		return 0, 0, nil
+	}
+	const batch = 200
+	for start := 0; start < len(rows); start += batch {
+		end := start + batch
+		if end > len(rows) {
+			end = len(rows)
+		}
+		chunk := rows[start:end]
+		placeholders := make([]string, 0, len(chunk))
+		args := make([]interface{}, 0, len(chunk)*11)
+		for _, r := range chunk {
+			if r.TF == "" {
+				return inserted, skipped, fmt.Errorf("bars: import refusing %s %s @%d with no timeframe", r.Symbol, r.Contract, r.OpenTimeMs)
+			}
+			if strings.TrimSpace(r.Contract) == "" {
+				return inserted, skipped, fmt.Errorf("bars: import refusing %s %s @%d with no contract — every imported bar names the series it came from (wave 101)", r.Symbol, r.TF, r.OpenTimeMs)
+			}
+			if r.Source != BarSourceHistoricalImport {
+				return inserted, skipped, fmt.Errorf("bars: import refusing %s %s %s @%d with source %q — only historical_import rows enter through this door (wave 101)", r.Symbol, r.TF, r.Contract, r.OpenTimeMs, r.Source)
+			}
+			placeholders = append(placeholders, "(?,?,?,?,?,?,?,?,?,?,?)")
+			args = append(args, r.Symbol, r.TF, r.OpenTimeMs, r.O, r.H, r.L, r.C, r.V, r.Convention, r.Contract, r.Source)
+		}
+		if len(placeholders) == 0 {
+			continue
+		}
+		q := "INSERT INTO bars(symbol, tf, open_time_ms, o, h, l, c, v, convention, contract, source) VALUES " +
+			strings.Join(placeholders, ",") +
+			" ON CONFLICT(symbol, tf, open_time_ms) DO NOTHING"
+		res := s.db.Exec(q, args...)
+		if res.Error != nil {
+			return inserted, skipped, res.Error
+		}
+		inserted += res.RowsAffected
+		skipped += int64(len(chunk)) - res.RowsAffected
+	}
+	return inserted, skipped, nil
+}
+
+// HistoryHeldRow is one (contract, tf) group of imported history (wave 101).
+type HistoryHeldRow struct {
+	Contract string
+	TF       string
+	N        int64
+	FirstMs  int64
+	LastMs   int64
+}
+
+// HistoryHeld reports the imported history the store HOLDS for a symbol,
+// per contract × timeframe, oldest contract first. READ, never literal: a
+// contract the store has never seen is simply absent.
+func (s *BarHistoryStore) HistoryHeld(symbol string) ([]HistoryHeldRow, error) {
+	if s == nil || s.db == nil {
+		return nil, fmt.Errorf("store required")
+	}
+	var rows []HistoryHeldRow
+	err := s.db.Raw(`SELECT contract, tf, COUNT(*) AS n, MIN(open_time_ms) AS first_ms, MAX(open_time_ms) AS last_ms
+		FROM bars WHERE symbol = ? AND source = ? AND contract != '' AND contract != ?
+		GROUP BY contract, tf ORDER BY MIN(open_time_ms), contract, tf`,
+		symbol, BarSourceHistoricalImport, ContractMixed).Scan(&rows).Error
+	return rows, err
 }
 
 // ClearSince deletes rows with open_time_ms >= sinceMs for (symbol, tf) — the
