@@ -4608,3 +4608,21 @@ for raw tape.
 prune exemption dropped, source stamp check disabled). The class census for the
 number used both heading formats (`grep -oE "^## (Class|CLASS) [0-9]+" | sort -n
 | uniq -c`), highest 123 immediately before this assignment.
+
+## CLASS 125 — A BACKTEST THAT ASSUMES FILL-ON-TOUCH REPORTS AN OPTIMISM THE MARKET DENIES (born 2026-09-12, research/backtest-zone-fade, BACKTEST 1)
+
+A resting-limit backtest whose only fill assumption is "filled when price
+touches the anchor" states the round-10 adverse-selection bias as a result. On
+4.4 years of contract-stamped MNQ (11,302 first touches of seated zones), the
+zone fade loses −0.79 pts/trade net under touch fills, but the subset of touches
+that actually print ONE TICK THROUGH the anchor (31.7% of them) loses −4.93
+pts/trade — the fills that exist are the bad ones, and the touch-fill headline
+hides exactly that. Every backtest of a passive entry must report at least three
+fill assumptions side by side — (a) filled on touch, (b) filled only on a
+through-tick print, (c) filled with one tick of adverse slippage — and must
+state which of them its headline survives. A result that survives only (a) is
+not a result; here the verdict was negative under all three, but the (a)-only
+shape is the trap. Companion law (same wave): a zone-band "hold rate" of 73%
+against a bare-anchor detector hold rate of 50.6% on the same tape is a band-
+width artifact — a hold rate computed on wider barriers inflates with the width
+and answers nothing about expectancy (hold 73.3%, net win rate 46.8%).
