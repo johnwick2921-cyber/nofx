@@ -148,20 +148,24 @@ namespace NinjaTrader.NinjaScript.AddOns
                     + " [" + from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)
                     + ", " + to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) + ")");
 
-            request.Request((bars, errorCode, errorMessage) =>
+            // FLAG: NT8 API — the Request callback's FIRST parameter is the
+            // BarsRequest itself, not the Bars collection (the same signature
+            // the compiling VLBarsSubscriptionManager.cs:420 uses). The bars
+            // hang off `req.Bars`. CS1503 is exactly this mismatch.
+            request.Request((req, errorCode, errorMessage) =>
             {
                 VLHistoryPullEntry entry;
                 lock (inFlight) { inFlight.TryGetValue(requestId, out entry); }
                 if (entry == null) return; // torn down while in flight
                 try
                 {
-                    if (errorCode != ErrorCode.NoError || bars == null)
+                    if (errorCode != ErrorCode.NoError || req.Bars == null)
                     {
                         SendError(requestId, realName, "unavailable: NT8 error " + errorCode
                                   + (string.IsNullOrEmpty(errorMessage) ? "" : ": " + errorMessage));
                         return;
                     }
-                    EmitChunks(entry, bars);
+                    EmitChunks(entry, req.Bars);
                 }
                 catch (Exception ex)
                 {
