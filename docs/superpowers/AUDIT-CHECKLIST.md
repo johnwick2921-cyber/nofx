@@ -4581,3 +4581,30 @@ on the same report). Round 21 full text has not landed; the owner's dispatch
 RESEARCH LAW is the operative basis, with no fabricated research SHA. The
 class census used bounded numbered entries plus both CLASS heading formats,
 `sort -n | uniq -c`, highest 122 immediately before this assignment.
+
+## CLASS 124 — A MAINTENANCE IMPORT THAT COULD UPSERT THE LIVE TAPE (born 2026-09-11, fix/historical-backfill, wave 101)
+
+A history import is the most tempting place to reuse the bars writer's upsert
+("fill what the live feed never wrote"), and it is exactly the shape of the
+09-10 damage: a back-adjusted replay overwriting 186 live bars under one label.
+The import door must be a DIFFERENT write path with no upsert at all — `ON
+CONFLICT DO NOTHING`, collision counted as a skip — and the imported rows must
+be a third source (`historical_import`) that (a) is refused by the live writer's
+source whitelist, (b) is not live-readable (`IsReadableSource` unchanged), and
+(c) is exempt from the retention prune by the same column. The import itself is
+an env-gated admin seam (`HISTORICAL_IMPORT_SEAM=on`, default off) that rides
+the running process because the wire holds exactly ONE client — a second
+process can never claim the NT8 connection, and a pull for an EXPIRED contract
+must name the contract explicitly (`Instrument.GetInstrument("MNQ 09-23")`,
+`MergePolicy.DoNotMerge`), never derive it from a date (that is the
+`VLContractResolver.cs:80` roll bug). A continuous backtest series is built
+deliberately with an EXPLICIT per-seam basis, labelled `continuous:adjusted`,
+and the store refuses to persist it — an accidental join can never be mistaken
+for raw tape.
+
+**Pins:** `TestImportBarsNeverOverwritesExistingRow` · `TestImportBarsRefusesUnstampedRows`
+· `TestImportSeamContractFilterAndContinuousLabel` · `TestPruneNeverDeletesImportedHistory`
+· `TestRoundTrip_BarsHistoryFrames`; mutations KILLED ×3 (upsert reintroduced,
+prune exemption dropped, source stamp check disabled). The class census for the
+number used both heading formats (`grep -oE "^## (Class|CLASS) [0-9]+" | sort -n
+| uniq -c`), highest 123 immediately before this assignment.
