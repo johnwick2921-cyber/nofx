@@ -161,3 +161,68 @@ own merge/back-adjust policy is filed with the AddOn wave.
 Report committed at the merge head; blob byte size == `git ls-tree` (verified
 after commit). Import-run results (D5/D6 three-state tables) append to this
 report at the gate, after the owner's F5+restart + GO.
+
+---
+
+## APPENDIX — THE CUTOVER AND IMPORT RUN (2026-09-12, executed on owner GO)
+
+**Cutover (A19):** five-leg gate 5/5 (DB OPEN=0 · armed non-terminal=0 · API `[]` ·
+NT8 snapshots both accounts count=0, 00:16:38 · no planner read in flight) →
+`deploy/RELEASE` + `HISTORICAL_IMPORT_SEAM=on` written BEFORE the kill → binary
+swap (`nofx-bin.old.6c96683c` = rollback) → `kill -9 3497330` → systemd
+(`Restart=on-failure`, verified) relaunched PID 3671783 →
+**`🔐 BOOT INTEGRITY OK — rev 400ea26c12c8 · built 2026-09-12T05:19:33Z · expected 400ea26c12c8 · goldens PASS`**
+(A4 clean-clone build: `vcs.modified=false`, md5 `93e8bd17`). Marker `379713e3`
+(RELEASE + GUIDE_BUILT_REV → 400ea26c, five references) pushed before the lock
+released. Boot notes: the `📚 history held:` census line prints at the FIRST
+cycle (Sunday 17:00 CT) together with the other per-trader boot lines — market
+closed Saturday; the CLOCK CRITICAL boot line is the stale-feed reading before
+the first bar (system time verified correct) and is log-only.
+
+**A13 pre-import backup:** `~/nofx-backups/historical-backfill/data.db.pre-import.20260912-002200`
+— integrity **ok**, md5 **`f1ab180acd549d22cc200e3ea0306280`**.
+
+**D5 — three-state result** (raw responses:
+`2026-09-11-historical-backfill-data/import-results.jsonl`):
+
+| Contract | 1m | 5m | 15m | 1h | skips (where) |
+|---|---|---|---|---|---|
+| MNQ 06-22 | 51,779 | 10,356 | 3,452 | 863 | 0 |
+| MNQ 09-22 | 85,716 | 17,205 | 5,736 | 1,434 | 0 |
+| MNQ 12-22 | 85,264 | 17,081 | 5,695 | 1,425 | 0 |
+| MNQ 03-23 | 78,178 | 15,636 | 5,212 | 1,303 | 0 |
+| MNQ 06-23 | 82,095 | 16,419 | 5,473 | 1,369 | 0 |
+| MNQ 09-23 | 82,093 | 16,419 | 5,473 | 1,369 | 0 |
+| MNQ 12-23 | 82,332 | 16,467 | 5,489 | 1,373 | 0 |
+| MNQ 03-24 | 79,551 | 15,911 | 5,304 | 1,326 | 0 |
+| MNQ 06-24 | 81,155 | 16,231 | 5,411 | 1,353 | 0 |
+| MNQ 09-24 | 76,302 | 15,265 | 5,089 | 1,273 | 0 |
+| MNQ 12-24 | 76,810 | 15,363 | 5,121 | 1,281 | 0 |
+| MNQ 03-25 | 71,967 | 14,395 | 4,799 | 1,201 | 0 |
+| MNQ 06-25 | 75,655 | 15,132 | 5,044 | 1,261 | 0 |
+| MNQ 09-25 | 77,715 | 15,543 | 5,181 | 1,296 | 0 |
+| MNQ 12-25 | 77,549 | 15,510 | 5,170 | 1,294 | 0 |
+| MNQ 03-26 | 73,743 | 14,749 | 4,917 | 1,230 | 0 |
+| MNQ 06-26 | 77,955 | 15,591 | 5,197 | 832 | 468 (1h — live-era rows kept) |
+| MNQ 09-26 | 75,492 | 16,133 | 4,065 | 66 | 34,983 / 8,001 / 4,072 / 1,969 (live-era rows kept) |
+| MNQ 12-26 | 4 | 4 | 4 | 4 | 5,164 / 1,234 / 411 / 100 (live-era rows kept) |
+| MNQ 03-21, MNQ 06-19 | 0 | 0 | 0 | 0 | **zero bars served — empty on this account (named, not silent)** |
+
+Totals: **1,784,150 imported** · ~56,402 skipped (all collisions with existing
+rows — kept, counted) · 0 unavailable-with-error. Store arithmetic exact:
+102,785 pre-existing + 1,784,150 = 1,886,935 rows.
+
+**D6 — verification (not the tool's message):**
+- Store per-contract×tf counts match the API's per-run numbers exactly.
+- **No existing row's values changed:** sha256 over all 102,785 non-import rows,
+  pre-import backup vs live DB — identical (`66523b63…`).
+- **No cross-contract timestamp collisions** among imported rows (the seam is
+  clean by construction; readers stay per-contract via `BarsBetweenOn`).
+- Spot-check (3 bars, MNQ 06-22 1m, ids in store): OHLC relations hold, prices
+  on the April-2022 MNQ scale (14,209–14,216). Visual against the NT8 chart is
+  the owner's one-minute check; the skip pattern above is the overlap proof.
+- Surprises, recorded: the feed served MNQ 09-26 from **2026-04-30** (not
+  03-13 as the folder listing suggested) and up to 2026-09-02; MNQ 12-26 served
+  09-06→09-11; the overlapping windows contain NO identical timestamps. The
+  `📚 history held:` boot line fires at the first cycle (Sunday reopen) — the
+  live proof rides the Sunday 17:00 CT boot census.
