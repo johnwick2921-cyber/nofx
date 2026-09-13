@@ -144,6 +144,14 @@
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
+    "assignment": 19,
+    "files": 95,
+    "ledger_errors": [],
+    "named_go_declarations": 279,
+    "missing_named_go_notes": [],
+    "warning": "Consistency only; not independent semantic or runtime verification."
+  },
+  {
     "assignment": 20,
     "files": 26,
     "ledger_errors": [],
