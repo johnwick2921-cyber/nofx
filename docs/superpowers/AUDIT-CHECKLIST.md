@@ -4781,3 +4781,11 @@ The stop helper returned no outcome; its caller closed the pass and retired
 other scenarios even on guard/build refusal. Test the actual placement loop
 with two scenarios. Commitment starts at successful durable registration, before
 transmission: a later ambiguous send error must still reserve the account.
+
+## PENDING CLASS — PROMPT AND WARNINGS MUST FOLLOW THE COMPOSITION BRANCH
+
+Branch `fix/repo-audit-control-boundaries-20260913`, base `63968be6`.
+Reject-fade execution used frozen structural geometry while prompt facts and
+feasibility warnings still imposed the legacy ATR floor on authored prices.
+Exercise the production prompt builder and warning function; distinguish plays,
+use composed geometry for admission, and never suggest a route bypass.

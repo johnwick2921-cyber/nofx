@@ -157,3 +157,14 @@ All three cases pass. A separate dispatch regression confirms registration
 still commits the account after an ambiguous send failure. Existing receipt,
 slot and fast-rejection tests pass (`/tmp/nofx-stop-refusal-after.log`).
 The limit-path behavior after an ambiguous send remains a separate review item.
+
+## Structural prompt and advisory parity
+
+[A] After the owner reported the usage limit reset, the previously blocked
+regressions ran and reproduced a universal ATR-floor prompt and false legacy
+R:R/stop warnings for a reject arm. Prompt contract and facts now separate
+structural reject fades from non-reject legacy floors; omitted arms do not grant
+an AI-route bypass. Reject feasibility is left to composed-geometry admission,
+not authored-price legacy warnings. Focused prompt, warning and class45 checks
+pass (`/tmp/nofx-structural-prompt-after.log`). The existing heading and historical
+reject-warning assertions were updated; legacy floor arithmetic remains tested.
