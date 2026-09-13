@@ -342,3 +342,66 @@ This is the environment-dependent green failure described by checklist class 110
 0, NT8 positions 0, broker working 0 / ledger 0 / unplaced authorizations 0,
 no planner read claimed. This observation is preliminary; a fresh gate is still
 required immediately before cutover. Running revision remained `400ea26c12c8`.
+
+
+## Merged and built; runtime cutover held by A7 — 2026-09-13
+
+**[A] MERGED / VERIFIED / NOT DEPLOYED.** PR #115 merged at 00:12:58 CT as
+`4127979f2fcc5615f4e8b17540f7aba74bb4ea92`. Its first parent is the verified
+acceptance/current dev tip `e81602bb5c4bacb237ae2921e0188f8aa1d752bf`; second
+parent is reviewed candidate `316f1e468294e27311114ac26420164d92531a67`.
+The clean clone initially inherited a stale local dev ref from the source bare
+repository; this was caught before remote publication, refreshed, and the merge
+was recreated from GitHub's actual tip. The corrected merge tree is byte-identical
+to the preparatory tree; the full checks were rerun at the corrected SHA.
+Class 126 was assigned from the all-format census (previous maximum 125).
+
+[A] GitHub candidate checks: **25 SUCCESS, 1 SKIPPED, 0 FAILURE**. The skipped
+job is multi-architecture manifest publishing for the PR, not a test bypass.
+[Exact CI receipt](2026-09-12-structural-stop/evidence/github-checks.json).
+On the exact merged HEAD in clean clone `/tmp/structural-stop-release-build/nofx`:
+**full Go suite including goldens PASS; 63 frontend files / 429 tests PASS;
+TypeScript PASS**.
+[Go](2026-09-12-structural-stop/evidence/logs/go-merged-final.log),
+[frontend](2026-09-12-structural-stop/evidence/logs/vitest-merged-final.log),
+[TypeScript](2026-09-12-structural-stop/evidence/logs/tsc-merged-final.log).
+
+[A] Clean binary: build revision `4127979f2fcc5615f4e8b17540f7aba74bb4ea92`,
+Go 1.25.13, `vcs.modified=false`, **73,418,400 bytes**, MD5
+`300dc70535f708be9f6278d252124ba4`, SHA256
+`a826d045a5cf831def4f52af0762e9dc1a8505034cc9b0f2e20c4c2f10b800f9`.
+[Build receipt](2026-09-12-structural-stop/evidence/build.json).
+RELEASE and Guide SOURCE are stamped from that actual binary revision; their
+presence on dev denotes the prepared release, not a running-image claim.
+
+[A] Fresh online pre-cutover backup at 00:05:57 CT:
+`/home/hoang/nofx-backups/structural-stop-20260912/release-20260913/pre-cutover.db`,
+1,236,660,224 bytes, SQLite integrity_check `ok`, SHA256
+`f5904181390f857bbaaede8a33159a5f22e34cb6dbd5d5476dcc0b3900576f46`.
+A verified source bundle and CI receipt are preserved beside it. Live database,
+owner settings, account bindings and the running image were not changed.
+
+[A] The owner GO remains valid, but work crossed midnight CT. Dispatch A7 permits
+14:45–16:30 CT or after 17:10 flat, and requires an explicit owner exception
+outside that window. Therefore the binary/dist swap and kill are held. No timer
+or unattended deployment is scheduled. Before a resumed cutover, repeat the
+five-leg gate and exact source/marker/MD5 checks; move the actual-held-revision
+binary aside, then verify before kill. The initial midnight gate is not reusable
+as a fresh deployment gate.
+
+[A] Required live proof is **PENDING**, not passed: there is no composition or
+refusal under this binary until it boots and a real scenario reaches the arm
+composer. Current settings have no owner-set per-instrument risk cap, so this
+release does not authorize trades through an invented budget. E4 remains
+negative/unproven; neither this merge nor green checks establish profitable
+best-trade selection.
+
+
+[A] Prepared frontend build passed; the Guide stamp test passed (12 tests).
+`web/dist/assets/index-CGuFCQsg.js` contains the exact binary revision
+`4127979f2fcc5615f4e8b17540f7aba74bb4ea92`.
+[Dist manifest](2026-09-12-structural-stop/evidence/dist-manifest.json),
+[build log](2026-09-12-structural-stop/evidence/logs/frontend-build.log),
+[Guide stamp test](2026-09-12-structural-stop/evidence/logs/guide-stamp-test.log).
+The frontend build emits its existing large-chunk advisory; build exit is zero.
+This staged dist has not replaced the running frontend.
