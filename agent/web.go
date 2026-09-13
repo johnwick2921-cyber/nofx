@@ -99,9 +99,9 @@ func (w *WebHandler) HandleChat(rw http.ResponseWriter, r *http.Request) {
 		writeJSON(rw, 400, map[string]string{"error": "message required"})
 		return
 	}
-	if req.UserID == 0 {
-		req.UserID = SessionUserIDFromKey(storeUserIDFromContext(r.Context()))
-	}
+	// HTTP conversation identity comes from authenticated middleware, never
+	// from a caller-supplied numeric key into another user's persisted state.
+	req.UserID = SessionUserIDFromKey(storeUserIDFromContext(r.Context()))
 	msg := req.Message
 	if req.Lang != "" {
 		msg = "[lang:" + req.Lang + "] " + msg
@@ -141,9 +141,9 @@ func (w *WebHandler) HandleChatStream(rw http.ResponseWriter, r *http.Request) {
 		writeJSON(rw, 400, map[string]string{"error": "message required"})
 		return
 	}
-	if req.UserID == 0 {
-		req.UserID = SessionUserIDFromKey(storeUserIDFromContext(r.Context()))
-	}
+	// HTTP conversation identity comes from authenticated middleware, never
+	// from a caller-supplied numeric key into another user's persisted state.
+	req.UserID = SessionUserIDFromKey(storeUserIDFromContext(r.Context()))
 	msg := req.Message
 	if req.Lang != "" {
 		msg = "[lang:" + req.Lang + "] " + msg

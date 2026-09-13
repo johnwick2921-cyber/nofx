@@ -126,3 +126,12 @@ The production-style fresh successor lost BootID and ArmedUnderVersion because
 its early Create bypassed initialization. Regression across canonical terminal
 states reproduced both blank values. Successor creation now stamps this process
 and the new authorization version. Focused provenance/append-only tests pass.
+
+## Authenticated chat memory
+
+Both HTTP handlers accepted a caller-selected numeric conversation ID. A
+synthetic authenticated `/clear` request reproduced deleting a different owner's
+history while leaving its own history intact. HTTP now always derives that
+identity from authenticated middleware. Normal and SSE handler regressions pass;
+no model/network call or real conversation was used. Telegram's separate identity
+flow is unchanged. Shared mutable AI-client selection remains an open finding.

@@ -7,6 +7,7 @@ export const guards: GuideSection = {
   tagline: 'What can hard-block a trade vs what only informs.',
   asBuiltRev: GUIDE_BUILT_REV,
   blocks: [
+    { kind: 'p', text: 'Chat memory and clear requests belong to the signed-in owner. A numeric conversation ID in a request cannot select another owner’s history, for either normal or streaming chat.' },
     { kind: 'p', text: 'Balance and risk sizing wait for the selected trader’s own account snapshot. Another account’s equity is never substituted. Position reconciliation can adopt a legacy row with no account only when that row belongs to the same trader; a different account’s row cannot hide a held position.' },
     { kind: 'p', text: 'At startup, cancellation of an old placed arm stays pending until a persisted broker snapshot confirms its absence. Sending a request or receiving a cancellation receipt alone does not unlock its replacement. The boot-sweep completion counter moves only after that confirmation.' },
     { kind: 'p', text: 'A missing or null broker order list is unavailable, not an empty book. Cancellation based on order-book evidence requires a fresh snapshot; a failed send remains a failure. The existing confirmed-flat cleanup exception remains.' },

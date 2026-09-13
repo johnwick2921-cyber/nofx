@@ -1,0 +1,45 @@
+package agent
+
+import (
+	"encoding/json"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+)
+
+func TestHTTPChatCannotSelectAnotherOwnersConversation(t *testing.T) {
+	for _, stream := range []bool{false, true} {
+		t.Run(map[bool]string{false: "chat", true: "stream"}[stream], func(t *testing.T) {
+			a := newTestAgentWithStore(t)
+			a.config = &Config{Language: "en"}
+			a.logger = slog.Default()
+			a.history = newChatHistory(10)
+			own := SessionUserIDFromKey("reader")
+			foreign := SessionUserIDFromKey("other-owner")
+			a.history.Add(own, "user", "own retained fixture")
+			a.history.Add(foreign, "user", "foreign retained fixture")
+			body, _ := json.Marshal(map[string]any{"message": "/clear", "user_id": foreign})
+			req := httptest.NewRequest(http.MethodPost, "/api/agent/chat", strings.NewReader(string(body)))
+			ctx := WithStoreUserID(req.Context(), "reader")
+			req = req.WithContext(WithSessionPolicy(ctx, SessionPolicy{Authenticated: true}))
+			rec := httptest.NewRecorder()
+			h := NewWebHandler(a, slog.Default())
+			if stream {
+				h.HandleChatStream(rec, req)
+			} else {
+				h.HandleChat(rec, req)
+			}
+			if rec.Code != 200 {
+				t.Fatalf("response %d: %s", rec.Code, rec.Body.String())
+			}
+			if len(a.history.Get(foreign)) != 1 {
+				t.Error("request-selected identity cleared another owner's history")
+			}
+			if len(a.history.Get(own)) != 0 {
+				t.Error("authenticated owner's clear did not address own history")
+			}
+		})
+	}
+}

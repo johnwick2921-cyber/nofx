@@ -4756,3 +4756,11 @@ position lookup must require both unassigned account and owning trader; passing
 empty to an optional filter means all accounts, not empty accounts. Test two
 accounts with the same symbol/side, not just a single legacy empty-account row.
 Pending-map reset must use the same mutex and lock order as fill/reconcile paths.
+
+## PENDING CLASS — AUTHENTICATION MUST ALSO BIND CONVERSATION MEMORY
+
+Branch `fix/repo-audit-control-boundaries-20260913`, base `63968be6`.
+Store CRUD used authenticated user identity while chat history trusted a numeric
+body field. Both normal and SSE `/clear` handler tests reproduced foreign memory
+deletion. Bind every state namespace at entry; authenticating the HTTP request
+and separately scoping resource tools does not authorize a caller-selected memory key.
