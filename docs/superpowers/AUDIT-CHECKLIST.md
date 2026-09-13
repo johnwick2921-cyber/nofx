@@ -4885,3 +4885,14 @@ ambiguous ownership. A closed owned row does not prove its entire account flat.
 Terminal cancelled/rejected exits must report their valid cumulative fills too;
 transient PartFilled must not be charged again on terminal receipt. Verify that
 rejection alarms preserve actual remaining protection.
+
+## PENDING CLASS — SERIALIZE EXECUTION EVIDENCE BEFORE TYPE FANOUT
+
+Separate ordered channels do not preserve order between entry updates, fills and
+exits. Exercise real TCP receive order in both directions, including a cumulative
+entry queued before an exit, same-order continuation after zero residual, and full
+replay. Bind one owner per account/symbol before its entries. Advisory fanout must
+not duplicate durable effects; handled flags must not be accepted from JSON.
+Preserve echo checks and test callback-to-wire progress without transport locks.
+Document storage backpressure, pre-owner queues, missing durable journal and the
+separate limits of exchange chronology and process-local analytics hooks.
