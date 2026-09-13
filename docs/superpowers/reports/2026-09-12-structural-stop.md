@@ -118,7 +118,7 @@ The changed path is the existing **`reject`** level-fade entry play, whether one
 
 [A] Only the ATR minimum-stop admission checks change role. The shared entry gate retains its resolved ATR multiplier for other consumers, including no-chase; a dedicated structural-validation flag bypasses only its minimum-stop leg. The detectors, merge, score, permission label, one-setup's three checks, cadence, R:R value, and post-entry exit management remain unchanged. The one-setup OFF fixture now keeps selection off while using the new geometry; its historical assertion of byte-identical reject targets is explicitly superseded.
 
-[A] A geometry refusal retires a matching unplaced authorization. An existing broker entry is cancelled only through the existing cancellation safety predicate and broker-confirmed cancellation workflow. Protective orders are not blindly cancelled. The TCP loopback refusal pin proves zero new order/cancel messages for an unplaced refused authorization.
+[A] A geometry refusal retires a matching unplaced authorization. An existing broker entry is cancelled only through the existing cancellation safety predicate and broker-confirmed cancellation workflow. Protective orders are not blindly cancelled. The TCP loopback refusal pin proves zero new order/cancel messages for an unplaced refused authorization. If its decision cannot be persisted or its old authorization cannot be safely retired, the entire placement phase is withheld for that cycle; a database failure cannot turn a refusal back into an order.
 
 Admission records mean **passed authoring gates**, not broker submission or fill. Transient pending checks remain quantity zero. Later gate refusals retain their recorded reason/detail. Counts are durable distinct **plan/version/scenario/leg/reason per CME day**; a pending-gates record cannot inflate a repeated refusal or erase an earlier one. ATR fallback is separately counted and not double-counted in total refusals.
 
@@ -279,7 +279,9 @@ F3/F4/F5/F6 baseline fixtures failed because no durable structural/refusal recor
 
 The owner-cap boundary pin verifies missing cap refusal, a $15 cap refusing $16 of modeled risk, equality at $16 preserving prices, and the contract point value changing modeled exposure to $160 when increased tenfold. All are one-contract calculations. Persistence pins verify trader/version scoping and counts surviving admission. A counter regression first reproduced **`map[rr:3]`** from one distinct refusal across pending-check cycles, then passed after durable per-day/spec/reason deduplication.
 
-Eight required mutations used **`scripts/mutate.sh`**. Each log proves that the edit landed, the mutant built, and a behavioral pin failed:
+An additional fault-injection RED against candidate `540c9e8d` forced the cancellation-state database write to fail. The old authorization then reached the loopback broker with quantity 1 despite the recorded R:R refusal. The corrected path returns before placement when persistence or retirement fails; the same fixture is GREEN with no wire order. This was an isolated candidate defect, not a live incident. [Fault RED](2026-09-12-structural-stop/evidence/logs/retirement-write-red.log), [fault GREEN](2026-09-12-structural-stop/evidence/logs/retirement-write-green.log).
+
+Eight required mutations plus the additional retirement-failure bypass mutation used **`scripts/mutate.sh`**. Each log proves that the edit landed, the mutant built, and a behavioral pin failed:
 
 | Mutation | Actual changed expression | Verdict |
 |---|---|---|
@@ -291,6 +293,7 @@ Eight required mutations used **`scripts/mutate.sh`**. Each log proves that the 
 | F5 widen | `stop -= tick` after composition | KILLED |
 | F5 tighten | `stop += tick` after composition | KILLED |
 | F5 move target | `target += 100` after target selection | KILLED |
+| F4 retirement failure | bypass `!saved || !retired` guard | KILLED |
 
 Exact changed lines, build confirmation and failed test names are in [mutation logs](2026-09-12-structural-stop/evidence/logs/). All source mutations were restored. A sandbox VCS-status failure before the first mutant run was retried with appropriate build access; it is not counted as a mutation result.
 

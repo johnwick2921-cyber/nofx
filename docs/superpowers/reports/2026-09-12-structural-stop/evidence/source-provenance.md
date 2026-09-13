@@ -68,8 +68,8 @@ AST calls from production Go files; wrappers are named beside the call. The main
 | `StructuralGeometryFor` | `api/handler_plan_geometry.go:6:15 in planStructuralGeometry` |
 | `composeGeometry` | `trader/structural_geometry.go:108:9 in ComposeLevelFadeGeometry`; `trader/structural_geometry.go:120:9 in ComposeFrozenLevelFadeGeometry` |
 | `planStructuralGeometry` | `api/handler_plan.go:505:26 in handlePlanToday` |
-| `retireGeometryRefusal` | `trader/armed_executor.go:506:6 in maybeManageArmedOrdersAt` |
-| `saveArmGeometry` | `trader/armed_executor.go:505:6 in maybeManageArmedOrdersAt`; `trader/armed_executor.go:517:9 in maybeManageArmedOrdersAt`; `trader/armed_executor.go:588:6 in maybeManageArmedOrdersAt`; `trader/armed_executor.go:658:6 in maybeManageArmedOrdersAt`; `trader/armed_executor.go:703:6 in maybeManageArmedOrdersAt`; `trader/armed_executor.go:741:6 in maybeManageArmedOrdersAt`; `trader/armed_executor.go:753:6 in maybeManageArmedOrdersAt`; `trader/armed_executor.go:762:9 in maybeManageArmedOrdersAt` |
+| `retireGeometryRefusal` | `trader/armed_executor.go:506:17 in maybeManageArmedOrdersAt` |
+| `saveArmGeometry` | `trader/armed_executor.go:505:15 in maybeManageArmedOrdersAt`; `trader/armed_executor.go:521:9 in maybeManageArmedOrdersAt`; `trader/armed_executor.go:592:10 in maybeManageArmedOrdersAt`; `trader/armed_executor.go:664:10 in maybeManageArmedOrdersAt`; `trader/armed_executor.go:711:10 in maybeManageArmedOrdersAt`; `trader/armed_executor.go:751:10 in maybeManageArmedOrdersAt`; `trader/armed_executor.go:765:10 in maybeManageArmedOrdersAt`; `trader/armed_executor.go:776:9 in maybeManageArmedOrdersAt` |
 
 No zero-call production claim. `ComposeFrozenLevelFadeGeometry` is a research-only wrapper and is deliberately excluded.
 

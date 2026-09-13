@@ -245,16 +245,17 @@ func (at *AutoTrader) saveArmGeometry(r store.StructuralGeometryRecord) bool {
 // Retire unplaced authorizations and cancel only broker-confirmed entry orders
 // through the existing safety predicate. A geometry refusal must not leave an
 // older authorization eligible for the placement pass later in the same cycle.
-func (at *AutoTrader) retireGeometryRefusal(plan *kernel.ActivePlan, sc kernel.PlanScenario, legIndex int, reason string, now time.Time) {
+func (at *AutoTrader) retireGeometryRefusal(plan *kernel.ActivePlan, sc kernel.PlanScenario, legIndex int, reason string, now time.Time) bool {
 	if at.store == nil {
-		return
+		return false
 	}
 	ledger := at.store.ArmedOrders()
 	rows, err := ledger.ListNonTerminal(at.id)
 	if err != nil {
 		at.logWarnf("🎯 geometry refusal retirement unreadable: %v", err)
-		return
+		return false
 	}
+	safe := true
 	for _, r := range rows {
 		if r.PlanID != plan.PlanID || r.Scenario != sc.ID || r.LegIndex != legIndex {
 			continue
@@ -262,6 +263,7 @@ func (at *AutoTrader) retireGeometryRefusal(plan *kernel.ActivePlan, sc kernel.P
 		if r.State == store.StateArmed && r.SignalID == "" {
 			if err := ledger.SetState(r.ID, store.StateCancelled, "geometry refusal: "+reason); err != nil {
 				at.logWarnf("🎯 geometry retirement failed row=%d: %v", r.ID, err)
+				safe = false
 			}
 			continue
 		}
@@ -271,15 +273,19 @@ func (at *AutoTrader) retireGeometryRefusal(plan *kernel.ActivePlan, sc kernel.P
 		if nt := at.armedTrader(); nt != nil {
 			if v := at.cancelSafetyFor(r, now); !v.Allow {
 				at.logWarnf("🛟 geometry cancellation refused row=%d: %s", r.ID, v.Why)
+				safe = false
 				continue
 			}
 			if err := nt.CancelOrder(r.SignalID); err != nil {
 				at.logWarnf("🎯 geometry cancel send failed row=%d: %v", r.ID, err)
+				safe = false
 				continue
 			}
 			if err := ledger.RequestCancel(r.ID, "geometry refusal: "+reason, now.UnixMilli()); err != nil {
 				at.logWarnf("🎯 geometry cancel record failed row=%d: %v", r.ID, err)
+				safe = false
 			}
 		}
 	}
+	return safe
 }

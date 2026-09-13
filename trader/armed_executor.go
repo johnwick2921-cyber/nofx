@@ -502,8 +502,12 @@ func (at *AutoTrader) maybeManageArmedOrdersAt(snap map[string]kernel.StructureS
 					leg.Target = *geometry.Target
 				}
 				if geometry.Reason != "" {
-					at.saveArmGeometry(*geometry)
-					at.retireGeometryRefusal(plan, sc, li, geometry.Reason, now)
+					saved := at.saveArmGeometry(*geometry)
+					retired := at.retireGeometryRefusal(plan, sc, li, geometry.Reason, now)
+					if !saved || !retired {
+						at.logWarnf("🎯 geometry refusal could not be fully recorded/retired; placement withheld this cycle")
+						return
+					}
 					if armRefusalChanged(&at.armRefusalLast, store.StructuralGeometryKey(*geometry), geometry.Reason) && at.store != nil {
 						_, _ = store.IncArmRefusal(at.store, at.id, kernel.PlanTradeDateFor(plan), plan.Session, "geometry_"+geometry.Reason)
 					}
@@ -515,7 +519,7 @@ func (at *AutoTrader) maybeManageArmedOrdersAt(snap map[string]kernel.StructureS
 				// Admission remains pending until all existing gates pass.
 				geometry.Reason = "pending_gates"
 				if !at.saveArmGeometry(*geometry) {
-					continue
+					return // unavailable decision record must not expose older authorizations
 				}
 			} else {
 				// 0B (2026-09-02) — STOP ANCHORED TO SEATED STRUCTURE. Compose the
@@ -585,7 +589,9 @@ func (at *AutoTrader) maybeManageArmedOrdersAt(snap map[string]kernel.StructureS
 				if geometry != nil {
 					geometry.Reason = "entry_gate"
 					geometry.Detail = verdict
-					at.saveArmGeometry(*geometry)
+					if !at.saveArmGeometry(*geometry) {
+						return
+					}
 				}
 				// F4 (LONDON-FORENSICS 2026-08-28) — log the REFUSED verdict ONCE
 				// per arm-spec (the same infeasible arm re-refused every cycle
@@ -655,7 +661,9 @@ func (at *AutoTrader) maybeManageArmedOrdersAt(snap map[string]kernel.StructureS
 				if geometry != nil {
 					geometry.Reason = "entry_gate"
 					geometry.Detail = verdict
-					at.saveArmGeometry(*geometry)
+					if !at.saveArmGeometry(*geometry) {
+						return
+					}
 				}
 				if rows, lerr := ledger.ListNonTerminal(at.id); lerr == nil {
 					for _, rr := range rows {
@@ -700,7 +708,9 @@ func (at *AutoTrader) maybeManageArmedOrdersAt(snap map[string]kernel.StructureS
 				if geometry != nil {
 					geometry.Reason = "entry_gate"
 					geometry.Detail = greason
-					at.saveArmGeometry(*geometry)
+					if !at.saveArmGeometry(*geometry) {
+						return
+					}
 				}
 				if rows, lerr := ledger.ListNonTerminal(at.id); lerr == nil {
 					for _, rr := range rows {
@@ -738,7 +748,9 @@ func (at *AutoTrader) maybeManageArmedOrdersAt(snap map[string]kernel.StructureS
 					if v, ok := osCycle.verdicts[sc.ID]; ok {
 						geometry.Detail = fmt.Sprintf("level=%s play=%s permission=%s waiting=%t", v.Level, v.Play, v.Permission, osCycle.record.Scenarios[sc.ID].Waiting)
 					}
-					at.saveArmGeometry(*geometry)
+					if !at.saveArmGeometry(*geometry) {
+						return
+					}
 				}
 				continue
 			}
@@ -750,7 +762,9 @@ func (at *AutoTrader) maybeManageArmedOrdersAt(snap map[string]kernel.StructureS
 				if geometry != nil {
 					geometry.Reason = "entry_gate"
 					geometry.Detail = kindRefusal
-					at.saveArmGeometry(*geometry)
+					if !at.saveArmGeometry(*geometry) {
+						return
+					}
 				}
 				at.logWarnf("✕ armed %s leg %d NOT authored — %s", sc.ID, li+1, kindRefusal)
 				continue
@@ -760,7 +774,7 @@ func (at *AutoTrader) maybeManageArmedOrdersAt(snap map[string]kernel.StructureS
 				geometry.Quantity = 1
 				geometry.Reason = "admitted"
 				if !at.saveArmGeometry(*geometry) {
-					continue
+					return // unavailable decision record must not expose older authorizations
 				}
 			}
 

@@ -2,6 +2,8 @@ package trader
 
 import (
 	"encoding/json"
+	"errors"
+	"gorm.io/gorm"
 	"nofx/kernel"
 	"nofx/market"
 	"nofx/store"
@@ -10,6 +12,15 @@ import (
 )
 
 func TestStructuralStopF4RefusalRetiresAuthorizationAndSendsNoOrder(t *testing.T) {
+	structuralRefusalWirePin(t, false)
+}
+
+func TestStructuralStopF4RetirementWriteFailureCannotReachWire(t *testing.T) {
+	structuralRefusalWirePin(t, true)
+}
+
+func structuralRefusalWirePin(t *testing.T, failRetirement bool) {
+	t.Helper()
 	now := time.Date(2026, 9, 11, 15, 0, 0, 0, time.UTC)
 	cfg := store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true}}
 	oneSetupOff(&cfg)
@@ -27,6 +38,16 @@ func TestStructuralStopF4RefusalRetiresAuthorizationAndSendsNoOrder(t *testing.T
 	previous := market.FuturesBarsProvider
 	market.FuturesBarsProvider = func(string, string, int) []market.Kline { return shadowBarsNearAt(100, now) }
 	t.Cleanup(func() { market.FuturesBarsProvider = previous })
+	if failRetirement {
+		err := st.GormDB().Callback().Update().Before("gorm:update").Register("structural_fixture_retirement_failure", func(tx *gorm.DB) {
+			if values, ok := tx.Statement.Dest.(map[string]any); ok && tx.Statement.Table == "armed_orders" && values["state"] == store.StateCancelled {
+				tx.AddError(errors.New("fixture: retirement write failed"))
+			}
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
 	at.maybeManageArmedOrdersAt(nil, now)
 	select {
 	case signal := <-signals:
@@ -39,7 +60,11 @@ func TestStructuralStopF4RefusalRetiresAuthorizationAndSendsNoOrder(t *testing.T
 	default:
 	}
 	rows, err := st.ArmedOrders().ListForPlan(pid)
-	if err != nil || len(rows) != 1 || rows[0].State != store.StateCancelled {
+	expectedState := store.StateCancelled
+	if failRetirement {
+		expectedState = store.StateArmed
+	}
+	if err != nil || len(rows) != 1 || rows[0].State != expectedState {
 		t.Fatalf("bad old authorization remains placeable: %+v %v", rows, err)
 	}
 	r := structuralRecord(t, st)
