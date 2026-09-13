@@ -283,3 +283,14 @@ obsolete claim that exclusions can never refuse; proximity slider direction now
 matches `band = proximityK * dATR`. Historical exit-posture example is labelled
 legacy and points readers to resolved current boot evidence. These are source
 consistency corrections, not changes to the owner's saved values.
+
+## Dependency advisories
+
+[A] A paginated authenticated GitHub API read confirmed five open advisories,
+recorded in `dependency-alerts-at-review.jsonl` (not inferred from the push banner).
+Go gnark-crypto0.19.0 is replaced by advisory-patched0.19.2 for GHSA-fj2x-735w-74vq.
+Only that module version and sums changed. Wallet package builds (no tests); mcp
+package tests pass (`/tmp/nofx-gnark-compatibility.log`). Four compatible npm
+updates are being handled in the frontend lane. This establishes affected
+versions, not exploitation or reachability in MNQ trading. Default-branch alert
+closure requires publication/scanning and is not claimed from a local update.
