@@ -300,6 +300,8 @@ func TestZeroBReArmAfterBootSweep(t *testing.T) {
 	if len(cancelled) != 2 || !strings.Contains(strings.Join(cancelled, ","), "sig-old-1") || !strings.Contains(strings.Join(cancelled, ","), "sig-old-3") {
 		t.Fatalf("both old broker orders must be cancelled at the wire, got %v", cancelled)
 	}
+	// A sent request cannot unlock the slot; the broker book settles it.
+	confirmBootSweepForTest(t, at, 2)
 	for _, id := range []int64{s1, s3} {
 		row := armedRowByID(t, ledger, id)
 		if !store.IsTerminalArmState(row.State) {

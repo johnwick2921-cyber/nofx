@@ -110,7 +110,7 @@ func TestReplacementAfterCancelIsASecondRow(t *testing.T) {
 	}
 	now := time.Now()
 	if err := st.UpsertArm(&ArmedOrderDB{
-		TraderID: "T1", PlanID: "P1", Scenario: "S1", Side: "long",
+		TraderID: "T1", PlanID: "P1", Version: seed.Version + 1, Scenario: "S1", Side: "long",
 		EntryPx: 29610, StopPx: 29580, TargetPx: 29670,
 		State: "armed", CreatedAt: now, UpdatedAt: now,
 	}); err != nil {

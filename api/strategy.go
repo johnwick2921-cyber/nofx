@@ -349,6 +349,25 @@ func (s *Server) handleUpdateStrategy(c *gin.Context) {
 		description = existing.Description
 	}
 
+	// Token overflow check — block save if all models exceed context limits
+	if mergedConfig.StrategyType == "" || mergedConfig.StrategyType == "ai_trading" {
+		estimate := mergedConfig.EstimateTokens()
+		allExceed := true
+		for _, ml := range estimate.ModelLimits {
+			if ml.UsagePct <= 100 {
+				allExceed = false
+				break
+			}
+		}
+		if allExceed && len(estimate.ModelLimits) > 0 {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":          fmt.Sprintf("Estimated %d tokens exceeds all known model context limits. Reduce coins, timeframes, or K-line count.", estimate.Total),
+				"token_estimate": estimate,
+			})
+			return
+		}
+	}
+
 	configJSON, err := json.Marshal(mergedConfig)
 	if err != nil {
 		SafeInternalError(c, "Serialize configuration", err)
@@ -376,25 +395,6 @@ func (s *Server) handleUpdateStrategy(c *gin.Context) {
 	// save now logs one line per RESOLVED knob that changed and persists the
 	// diff. Purely observational — the reload itself is unchanged.
 	s.logConfigDiff("studio_save", strategyID, baseConfig, mergedConfig)
-
-	// Token overflow check — block save if all models exceed context limits
-	if mergedConfig.StrategyType == "" || mergedConfig.StrategyType == "ai_trading" {
-		estimate := mergedConfig.EstimateTokens()
-		allExceed := true
-		for _, ml := range estimate.ModelLimits {
-			if ml.UsagePct <= 100 {
-				allExceed = false
-				break
-			}
-		}
-		if allExceed && len(estimate.ModelLimits) > 0 {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error":          fmt.Sprintf("Estimated %d tokens exceeds all known model context limits. Reduce coins, timeframes, or K-line count.", estimate.Total),
-				"token_estimate": estimate,
-			})
-			return
-		}
-	}
 
 	// Validate merged configuration and collect warnings
 	warnings := validateStrategyConfig(&mergedConfig)

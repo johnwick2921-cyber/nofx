@@ -122,10 +122,10 @@ func TestArmFeasibilityWarningsMatchTheLiveRefusals(t *testing.T) {
 	for _, s := range w {
 		byScenario[s[:2]]++
 	}
-	if byScenario["S1"] == 0 || byScenario["S2"] == 0 || byScenario["S3"] == 0 {
-		t.Fatalf("the three live-refused arms must all warn: %v", w)
+	if byScenario["S2"] == 0 || byScenario["S3"] == 0 {
+		t.Fatalf("legacy non-reject arms must warn: %v", w)
 	}
-	if byScenario["S4"] != 0 {
-		t.Fatalf("the ASIA v12 arm that filled must NOT warn: %v", w)
+	if byScenario["S1"] != 0 || byScenario["S4"] != 0 {
+		t.Fatalf("reject arms require composed geometry, not legacy authored warnings: %v", w)
 	}
 }

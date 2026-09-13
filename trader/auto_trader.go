@@ -7,6 +7,7 @@ import (
 	"nofx/mcp"
 	_ "nofx/mcp/payment"
 	_ "nofx/mcp/provider"
+	ntwire "nofx/provider/ninjatrader"
 	"nofx/store"
 	"nofx/telemetry"
 	"nofx/trader/aster"
@@ -395,10 +396,14 @@ type AutoTrader struct {
 	lastPlannerWakeAt     time.Time
 	lastAIBalanceDay      string // P5 daily balance poll throttle (AI_BALANCE_WARN)
 	isRunning             bool
-	isRunningMutex        sync.RWMutex          // Mutex to protect isRunning flag
-	startTime             time.Time             // System start time
-	callCount             int                   // AI call count
-	positionFirstSeenTime map[string]int64      // Position first seen time (symbol_side -> timestamp in milliseconds)
+	isRunningMutex        sync.RWMutex     // Mutex to protect isRunning flag
+	startTime             time.Time        // System start time
+	callCount             int              // AI call count
+	positionFirstSeenTime map[string]int64 // Position first seen time (symbol_side -> timestamp in milliseconds)
+	armedOrderUpdateMu    sync.Mutex       // Serializes cumulative fill receipts on this runtime.
+	limitFlattenMu        sync.Mutex       // Serializes delayed exits with Stop.
+	limitFlattenStopped   bool
+	limitFlattens         map[int64]*pendingLimitFlatten
 	stopMonitorCh         chan struct{}         // Used to stop monitoring goroutine
 	monitorWg             sync.WaitGroup        // Used to wait for monitoring goroutine to finish
 	kickCh                chan string           // discard-burn/post-exit: one-shot deferred-cycle kicks into the run loop (reason payload)
@@ -820,12 +825,16 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 		// THE LEDGER'S EAR FOR A REFUSAL (2026-09-07). Every entry-reject path
 		// in the NT8 trader calls this with the BROKER'S reason, verbatim.
 		nt.SetRejectSink(at.recordBrokerRejection)
+		at.installNTOrderedExecutions(nt)
 	}
 	return at, nil
 }
 
 // Run runs the automatic trading main loop
 func (at *AutoTrader) Run() error {
+	at.limitFlattenMu.Lock()
+	at.limitFlattenStopped = false
+	at.limitFlattenMu.Unlock()
 	at.isRunningMutex.Lock()
 	at.isRunning = true
 	at.isRunningMutex.Unlock()
@@ -1013,6 +1022,7 @@ func (at *AutoTrader) Run() error {
 
 // Stop stops the automatic trading
 func (at *AutoTrader) Stop() {
+	at.stopLimitFlattens()
 	at.isRunningMutex.Lock()
 	if !at.isRunning {
 		at.isRunningMutex.Unlock()
@@ -1250,4 +1260,12 @@ func (at *AutoTrader) recordBrokerRejection(signalID, brokerReason string) {
 	}
 	at.logWarnf("🚨 received armed entry rejection %s leg %d signal=%s reason=%q", row.Scenario, row.LegIndex+1, signalID, reason)
 	telemetry.IncGateBlock(at.id, "place_rejected_by_broker")
+}
+
+// installNTOrderedExecutions is shared by constructor and transport fixtures.
+func (at *AutoTrader) installNTOrderedExecutions(nt *ntTrader.TCPTrader) {
+	if at.store == nil {
+		return
+	}
+	nt.InstallOrderedExecutions(at.id, at.exchangeID, at.exchange, at.store, func(u ntwire.OrderUpdatePayload) { at.onArmedOrderUpdate(u, at.store.ArmedOrders()) })
 }

@@ -7,7 +7,9 @@ import (
 	"testing"
 	"time"
 
+	nt "nofx/provider/ninjatrader"
 	"nofx/store"
+	nttrader "nofx/trader/ninjatrader"
 )
 
 func class33Trader(t *testing.T) *AutoTrader {
@@ -61,13 +63,18 @@ func TestClass33BootSweepCancelsPreBootArms(t *testing.T) {
 		t.Fatalf("cancel frames wrong: %v", cancelled)
 	}
 	rows, _ := at.store.ArmedOrders().ListNonTerminal(at.id)
+	if len(rows) != 2 || rows[0].State != store.StateCancelPending || rows[1].State != store.StateCancelPending {
+		t.Fatalf("send must leave both cancellations pending: %+v", rows)
+	}
+	confirmBootSweepForTest(t, at, 2)
+	rows, _ = at.store.ArmedOrders().ListNonTerminal(at.id)
 	if len(rows) != 0 {
 		t.Fatalf("swept rows must be terminal, %d still non-terminal", len(rows))
 	}
 	var all []store.ArmedOrderDB
 	at.store.ArmedOrders().DB().Find(&all)
 	for _, r := range all {
-		if r.State != "cancelled" || r.StateReason != BootSweepReason {
+		if r.State != "cancelled" || !strings.HasPrefix(r.StateReason, BootSweepReason) {
 			t.Fatalf("row %s: state=%q reason=%q", r.Scenario, r.State, r.StateReason)
 		}
 	}
@@ -102,7 +109,7 @@ func TestClass33BootSweepNoPreBootRows(t *testing.T) {
 		t.Fatalf("this process's own arm must survive, got %d", len(rows))
 	}
 	// F12: leg4's source is a RESOLVED argument now, not a literal in the line.
-	if line := BootSweepBootLine(0, 0, "ledger (no snapshot yet)"); !strings.Contains(line, "cancelled 0 pre-boot arm(s)") {
+	if line := BootSweepBootLine(0, 0, "ledger (no snapshot yet)"); !strings.Contains(line, "requested 0 pre-boot cancel(s)") {
 		t.Fatalf("boot line: %s", line)
 	}
 }
@@ -137,16 +144,17 @@ func TestClass33BootSweepCancelFailureKeepsRowLive(t *testing.T) {
 		t.Fatalf("swept %d on a failed cancel, want 0", n)
 	}
 	rows, _ := at.store.ArmedOrders().ListNonTerminal(at.id)
-	if len(rows) != 1 || rows[0].State != "working" {
+	if len(rows) != 1 || rows[0].State != store.StateCancelPending {
 		t.Fatalf("a row whose cancel failed must stay non-terminal: %+v", rows)
 	}
 	if got, _ := store.BootSweptCount(at.store); got != 0 {
 		t.Fatalf("counter moved on a failed cancel: %d", got)
 	}
-	// Not latched: the retry succeeds.
-	if again := at.sweepPreBootArmsWith(at.store.ArmedOrders(), func(string) error { return nil }); again != 1 {
-		t.Fatalf("retry swept %d, want 1", again)
+	// The pending row belongs to settlement; boot must not send again.
+	if again := at.sweepPreBootArmsWith(at.store.ArmedOrders(), func(string) error { t.Fatal("pending belongs to settlement"); return nil }); again != 0 {
+		t.Fatalf("retry requested %d, want 0", again)
 	}
+	confirmBootSweepForTest(t, at, 1)
 }
 
 // E7 — the 0C shadow sweep is untouched: a "shadowed" row is inert by
@@ -193,5 +201,19 @@ func TestClass33SweepPrecedesPlacement(t *testing.T) {
 	head := strings.Index(body, "func (at *AutoTrader) maybeManageArmedOrders")
 	if head < 0 || sweep < head || sweep-head > 1200 {
 		t.Fatalf("the sweep must sit at the HEAD of maybeManageArmedOrders (head=%d sweep=%d)", head, sweep)
+	}
+}
+
+func confirmBootSweepForTest(t *testing.T, at *AutoTrader, want int) {
+	t.Helper()
+	at.trader = nttrader.NewTCPTrader(nt.NewTCPServer(nil), "MNQ", "SimBootFixture")
+	now := time.Now().Add(time.Second)
+	book := &store.NT8OrderSnapshot{Account: "SimBootFixture", OrdersJSON: "[]", ReceivedMs: now.UnixMilli()}
+	if err := at.store.NT8OrderSnapshots().Insert(book); err != nil {
+		t.Fatal(err)
+	}
+	n, pending, _ := at.confirmPendingCancels(at.store.ArmedOrders(), nil, now)
+	if n != want || pending != 0 {
+		t.Fatalf("book settlement=%d pending=%d want=%d", n, pending, want)
 	}
 }

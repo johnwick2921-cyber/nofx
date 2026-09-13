@@ -22,8 +22,9 @@ import (
 //
 // This sweep runs ONCE per process per trader, at the head of the armed
 // subsystem, BEFORE anything is authored or placed. Sweepable rows stamped by
-// a DIFFERENT boot are cancelled at the broker and in the ledger; cancel_pending
-// belongs to confirmPendingCancels and is deliberately excluded from this sweep.
+// a DIFFERENT boot receive cancellation intent; their rows stay cancel_pending
+// until confirmPendingCancels verifies a persisted broker snapshot. Pending rows
+// are deliberately excluded from this sweep.
 // It generalises the 0C shadow sweep (armed_executor.go — "the first cycle
 // after boot IS the boot-time sweep") from shadowed conditions to ALL pre-boot
 // arms. The stale-window reconcile stays exactly as it is: the backstop.
@@ -53,11 +54,16 @@ func (at *AutoTrader) sweepPreBootArms(ledger *store.ArmedOrderStore) {
 		at.logWarnf("🛡 boot sweep DEFERRED (class 33): NT8 link not ready — pre-boot arms are UNVERIFIED this cycle; retrying next cycle")
 		return
 	}
-	at.sweepPreBootArmsWith(ledger, nt.CancelOrder)
+	at.sweepPreBootArmsWith(ledger, func(signalID string) error {
+		if !at.cancelSignalIfSafe(nt.CancelOrder, signalID, "boot sweep", time.Now()) {
+			return fmt.Errorf("cancel refused or send failed")
+		}
+		return nil
+	})
 }
 
 // sweepPreBootArmsWith is the seam: cancelFn is the wire (nt.CancelOrder in
-// production, a recorder in fixtures). Returns the number of rows swept.
+// production, a recorder in fixtures). Returns the number of cancel requests sent, never a settled count.
 func (at *AutoTrader) sweepPreBootArmsWith(ledger *store.ArmedOrderStore, cancelFn func(signalID string) error) int {
 	if ledger == nil || cancelFn == nil {
 		return 0
@@ -86,28 +92,24 @@ func (at *AutoTrader) sweepPreBootArmsWith(ledger *store.ArmedOrderStore, cancel
 			at.logInfof("🛡 boot sweep: %s %s pre-boot but never placed (no signal id) — left armed for this process to place", r.Session, r.Scenario)
 			continue
 		}
+		// Persist intent before the send. Neither a successful write nor an
+		// ambiguous socket result establishes broker cancellation.
+		if err := ledger.RequestCancel(r.ID, BootSweepReason, time.Now().UnixMilli()); err != nil {
+			failed++
+			at.logWarnf("🛡 boot sweep: cannot record cancel intent for %s: %v", r.Scenario, err)
+			continue
+		}
 		if cerr := cancelFn(r.SignalID); cerr != nil {
 			// The order may still be live: do NOT mark the ledger terminal on
 			// a failed cancel — that would hide a live order behind a clean
-			// ledger. Retried next cycle (the latch stays unset below).
+			// ledger. The pending intent belongs to the settlement/retry pass.
 			failed++
 			at.logWarnf("🛡 boot sweep CANCEL FAILED (class 33): %s %s signal=%s entry=%.2f — order may still be LIVE at the broker: %v",
 				r.Session, r.Scenario, r.SignalID, r.EntryPx, cerr)
 			continue
 		}
-		if serr := ledger.SetState(r.ID, "cancelled", BootSweepReason); serr != nil {
-			failed++
-			at.logWarnf("🛡 boot sweep: cancelled at the broker but the ledger write FAILED for %s %s: %v", r.Session, r.Scenario, serr)
-			continue
-		}
 		swept++
-		at.logWarnf("🛡 boot sweep CANCELLED pre-boot arm (class 33): %s %s %s entry=%.2f stop=%.2f signal=%s authored_by_boot=%q this_boot=%q — the process that placed it is gone",
-			r.Session, r.Scenario, r.Side, r.EntryPx, r.StopPx, r.SignalID, r.BootID, bootID)
-	}
-	if swept > 0 {
-		if _, ierr := store.IncBootSwept(at.store, swept); ierr != nil {
-			at.logWarnf("🛡 boot sweep: counter write failed: %v", ierr)
-		}
+		at.logWarnf("🛡 boot sweep cancel REQUESTED: %s %s signal=%s — pending broker-book confirmation", r.Session, r.Scenario, r.SignalID)
 	}
 	if failed > 0 {
 		// Unfinished business — retry next cycle rather than latch a partial sweep.
@@ -129,7 +131,7 @@ func (at *AutoTrader) sweepPreBootArmsWith(ledger *store.ArmedOrderStore, cancel
 // is passed in rather than written here: F12 made it a resolved value, and a
 // literal in a boot line is a claim that cannot fail (A24).
 func BootSweepBootLine(swept, skippedUnplaced int, leg4Source string) string {
-	return fmt.Sprintf("🛡 cutover safety (class 33): gate legs=5 · leg4=%s · boot sweep cancelled %d pre-boot arm(s) (%d authorized-but-never-placed left for this process)",
+	return fmt.Sprintf("🛡 cutover safety (class 33): gate legs=5 · leg4=%s · boot sweep requested %d pre-boot cancel(s), confirmation pending (%d authorized-but-never-placed left for this process)",
 		leg4Source, swept, skippedUnplaced)
 }
 

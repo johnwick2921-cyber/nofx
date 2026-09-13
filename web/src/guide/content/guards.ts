@@ -7,7 +7,24 @@ export const guards: GuideSection = {
   tagline: 'What can hard-block a trade vs what only informs.',
   asBuiltRev: GUIDE_BUILT_REV,
   blocks: [
+    { kind: 'p', text: 'A completed exit records only its actual filled contracts. Any remaining contracts stay open, duplicate broker receipts do not count twice, and new entries wait for a fresh account-position snapshot after the exit. Entry fills reported with a cancellation still count as exposure. Cancelled or rejected exit orders also report any actual terminal cumulative fills; rejection alone never proves the account is flat. History excludes unresolved corrected P&L rather than substituting an unverified value.' },
+    { kind: 'p', text: 'A cancellation request does not prove an entry or protective order is gone. The system keeps tracking it until terminal broker evidence arrives. Bracket quantity changes remain pending until both actual leg quantities confirm; a rejected change is reported without repeatedly submitting another pair.' },
+    { kind: 'p', text: 'Close and emergency-stop requests use the selected SIM account and its actual held contract. An unknown account or an ambiguous bare symbol with multiple held expiries refuses instead of falling back to another account or expiry.' },
+    { kind: 'p', text: 'Chat memory and clear requests belong to the signed-in owner. A numeric conversation ID in a request cannot select another owner’s history, for either normal or streaming chat.' },
+    { kind: 'p', text: 'A stop-like order name alone does not prove protection. The broker order must be a stop acting against the position. Missing type or action leaves a potentially live named stop UNKNOWN, so the system does not claim coverage or blindly duplicate it.' },
+    { kind: 'p', text: 'Balance and risk sizing wait for the selected trader’s own account snapshot. Another account’s equity is never substituted. Position reconciliation can adopt a legacy row with no account only when that row belongs to the same trader; a different account’s row cannot hide a held position.' },
+    { kind: 'p', text: 'When current one-setup permission is unavailable, an older unplaced authorization cannot substitute for it. That authorization is retired; if retirement cannot be saved, the cycle submits no new entry. More generally, production placement requires that the row passed admission and was saved successfully in the current cycle.' },
+    { kind: 'p', text: 'A refused stop entry leaves other scenarios available. Once an entry attempt has been registered, its account commitment remains until reconciliation, including when transmission reports an error.' },
+    { kind: 'p', text: 'Session and news cutoff handling runs on the tick clock before unchanged-bar or bar-close skips. A quiet tape does not preserve an expired unfilled authorization.' },
+    { kind: 'p', text: 'At startup, cancellation of an old placed arm stays pending until a persisted broker snapshot confirms its absence. Sending a request or receiving a cancellation receipt alone does not unlock its replacement. The confirming snapshot must have been received at or after the cancel request; an older empty book cannot settle it. Retry budgets restart with a new process, while the order remains pending until confirmed. The boot-sweep completion counter moves only after that confirmation.' },
+    { kind: 'p', text: 'A missing or null broker order list is unavailable, not an empty book. Cancellation based on order-book evidence requires a fresh snapshot; a failed send remains a failure. The existing confirmed-flat cleanup exception remains.' },
+    { kind: 'p', text: 'Ask-Planner apply refuses when no session is active. Apply and realign follow the active session’s trading date, including an overnight session that began on the previous calendar day.' },
+    { kind: 'h', text: 'Boot integrity applies to every NT8 entry' },
+    { kind: 'p', text: 'Startup checks integrity before restarting saved traders. A failed check blocks market, resting-limit and stop-entry submission at the TCP adapter, including previously armed orders and test entry routes. Position reads, stop management, closes and cancellation remain available.' },
+    { kind: 'h', text: 'Trader ownership and rejected changes' },
+    { kind: 'p', text: 'Private trader requests check every supplied trader ID against the signed-in owner. Order-fill history also verifies the order and fill rows belong to that trader; history remains readable when its execution engine is stopped. A rejected strategy update leaves the saved configuration unchanged. Trader deletion either removes the trader and its equity history together or preserves both when it fails. Ask-Planner historical fallback stays with the selected trader; an empty plan can still show market facts.' },
     { kind: 'h', text: 'Structural stop and first-zone target — research candidate' },
+    { kind: 'p', text: 'Planner instructions distinguish reject fades from legacy ATR-floor plays. Authored reject prices do not generate legacy feasibility warnings: admission evaluates the composed structural trade. Omitting an arm does not authorize an AI-path bypass.' },
     { kind: 'p', text: '[I]/[T] a codeable research candidate, not a validated replacement. No external evidence fixes its buffer or proves that it will turn the losing book positive.' },
     { kind: 'p', text: 'If a structural decision cannot be recorded, or an older refused authorization cannot be retired safely, new placement pauses for that cycle.' },
     { kind: 'p', text: 'For the reject fade, the stop is beyond the whole entry zone by the resolved buffer; the target is the near edge of the first distinct eligible zone. Freeze both, then check costs, the existing R:R floor; the existing daily-loss and other entry guards then apply. Refuse unsuitable geometry without resizing, moving the target, or changing the stop to pass. Missing frozen provenance records ATR fallback and refuses admission. Legacy point references are not reconstructed into zones.' },
@@ -78,7 +95,7 @@ export const guards: GuideSection = {
         [
           'Boot sweep (class 33)',
           'HARD',
-          'At boot, before anything is armed: every resting order left behind by the PREVIOUS process is cancelled at NinjaTrader and marked cancelled in the ledger (reason boot_sweep). A cancel that FAILS leaves the row live and retries — the ledger never goes clean while an order might still be at the broker. On 2026-09-02 00:16 CT, before this existed, two arms outlived their process for 15 minutes and briefly double-ordered S3. Since 2026-09-07 the sweep asks the broker before each cancel: a pre-boot row whose entry FILLED before the restart is left alone, because the only orders under that signal are its stop and target.',
+          'At boot, before anything is armed: every eligible resting order left behind by the PREVIOUS process receives a cancel request and stays cancel pending in the ledger (reason boot_sweep). Only a fresh persisted broker book received at or after that request can confirm its absence. A cancel that FAILS leaves the row pending and retries — the ledger never goes clean while an order might still be at the broker. On 2026-09-02 00:16 CT, before this existed, two arms outlived their process for 15 minutes and briefly double-ordered S3. Since 2026-09-07 the sweep asks the broker before each cancel: a pre-boot row whose entry FILLED before the restart is left alone, because the only orders under that signal are its stop and target.',
         ],
         [
           'plan_mode direction/strict',
@@ -93,7 +110,7 @@ export const guards: GuideSection = {
         [
           'MIN-SL (env MIN_SL_ATR_MULT, 1.0)',
           'HARD',
-          'Stop closer than the floor (×ATR + 2-tick clearance) → refused.',
+          'For legacy plays, stops below the resolved volatility floor are refused. Structurally composed reject fades skip this ATR-floor leg; their frozen zone edge and buffer determine risk.',
         ],
         [
           'HTF veto',
@@ -101,14 +118,14 @@ export const guards: GuideSection = {
           "Entry against the HTF regime at a veto anchor → refused. MODE (HTF_VETO_MODE): 1h | cross | 4h — LIVE = cross: vetoes only when 1h AND 4h both agree (the 2026-08-28 autopsy: 1h-only blocked 3 would-have-won arms = +$352, 4h was RANGING at all 7 → cross blocks nothing the evidence doesn't support).",
         ],
         [
-          'ARM floors (ARM_MIN_RR 2.0)',
+          'Shared Studio R:R floor',
           'HARD',
-          'The resting-order gate: R:R ≥ 2.0 AND stop ≥ 1.0×ATR5m or the arm is REFUSED every cycle.',
+          'Both entry paths read the same Studio min_risk_reward_ratio. Reject fades check the composed structural stop and first eligible target; legacy plays retain their resolved stop-floor checks. A larger displayed R ratio is not proof of positive expectancy.',
         ],
         [
           'Entry gate (class 48) — ONE gate, BOTH paths',
           'HARD',
-          'Before any order leaves — resting arm or AI market entry — the SAME chain runs: scenario direction vs the cited scenario, shadow map (0C: breakout_retest + fvg_entry are authored + scored but NEVER placed), R:R vs min_risk_reward_ratio judged at the LIVE execution price (not the prompt snapshot), min-SL ×ATR5m, one-live-arm. Refusals are recorded per path. (2026-09-02: 587 and 589 filled BELOW the 2.0 floor because the floor was judged on a stale snapshot; 589/590 traded the shadowed breakout_retest.)',
+          'Before any order leaves — resting arm or AI market entry — the SAME chain runs: scenario direction vs the cited scenario, shadow map (0C: breakout_retest + fvg_entry are authored + scored but NEVER placed), R:R vs min_risk_reward_ratio judged at the LIVE execution price (not the prompt snapshot), legacy min-SL ×ATR5m (skipped for validated structural reject stops), one-live-arm. Refusals are recorded per path. (2026-09-02: 587 and 589 filled BELOW the 2.0 floor because the floor was judged on a stale snapshot; 589/590 traded the shadowed breakout_retest.)',
         ],
         [
           'T1 red news blackout',
@@ -175,7 +192,7 @@ export const guards: GuideSection = {
         },
         {
           title: '|entry−SL| below MIN_SL_ATR_MULT × ATR',
-          body: 'The stop is too tight for the volatility floor.',
+          body: 'A legacy play failed its volatility floor. For reject fades, inspect the structural geometry refusal instead.',
           cite: 'kernel/engine_position.go:196',
         },
         {
@@ -240,7 +257,7 @@ export const guards: GuideSection = {
     },
     {
       kind: 'p',
-      text: "The plan is written by a model that could not see three things the validator judges it by, so it kept being rejected for rules it was never shown. First, the prompt ordered a whole play, not a direction: below the prior day's low it said you MUST write a continuation short. When a level has already been taken back, the validator voids exactly that play — so the instruction and the rule contradicted each other, and the model lost attempts obeying the prompt. The order is now a DIRECTION, with the legal conditions named and the choice left to the model. Second, every breakdown level that price has already closed back across is now listed in the prompt as void, decided by the same code the validator runs rather than by a second copy of the logic that could drift from it. Third, the minimum stop distance is stated up front: since 0B a stop is floored at 1.5×ATR5m, and the planner was never told the number it had to clear. It is now printed with the current reading, so an authored stop can be right the first time instead of being silently widened at arm time.",
+      text: "The plan is written by a model that could not see three things the validator judges it by, so it kept being rejected for rules it was never shown. First, the prompt ordered a whole play, not a direction: below the prior day's low it said you MUST write a continuation short. When a level has already been taken back, the validator voids exactly that play — so the instruction and the rule contradicted each other, and the model lost attempts obeying the prompt. The order is now a DIRECTION, with the legal conditions named and the choice left to the model. Second, every breakdown level that price has already closed back across is now listed in the prompt as void, decided by the same code the validator runs rather than by a second copy of the logic that could drift from it. Third, the legacy stop-floor facts are shown for non-reject plays. Reject fades instead use the frozen zone edge plus buffer and the first eligible opposing target; their stops are not widened to an ATR floor. The planner and feasibility warnings now state that distinction.",
     },
     {
       kind: 'p',
@@ -319,15 +336,15 @@ export const guards: GuideSection = {
     },
     {
       kind: 'h',
-      text: 'IS THE BOOK ALLOWED TO FADE RIGHT NOW? — A LABEL, NEVER A GATE',
+      text: 'IS THE BOOK ALLOWED TO FADE RIGHT NOW? — PERMISSION AND EPISODE RECORDS',
     },
     {
       kind: 'p',
-      text: 'The book is a level fade, and until 2026-09-10 it had no permission step: it faded every day the same way, and on 2026-09-03 it sold into a +483-point run. Every scenario now carries a fade-permission label — permitted, excluded (with the exclusion named and what it measured against what), or not evaluated — and every episode is stamped with its label at the moment it OPENS. Nothing reads that label to refuse. An excluded scenario is authorized, armed, placed and traded exactly as a permitted one. The arm path cannot even see the column; a test fails if it ever can.',
+      text: 'The book is a level fade, and until 2026-09-10 it had no permission step: it faded every day the same way, and on 2026-09-03 it sold into a +483-point run. Every scenario can carry a fade-permission label — permitted, excluded (with the exclusion named and what it measured against what), or not evaluated — and every episode is stamped with its label at the moment it OPENS. The original rollout only recorded the label. Current One Setup admission consumes a freshly evaluated fade-permission verdict and can refuse an excluded or unavailable candidate. The immutable episode label is a historical measurement, not the current admission decision.',
     },
     {
       kind: 'p',
-      text: "Why only a label. The research (round 11 §1) found no reliable early range-vs-trend classifier for MNQ and named a published claim that should NOT be adopted. So instead of a classifier there are five PRE-DECLARED exclusions, each evaluated independently and each computed only from what is knowable at the moment of evaluation — never from the completed session. (a) opening range wider than k× the prior-session median, k resolved from the bound strategy or the tape's own 80th percentile (1.28, n=13); (b) price beyond the initial balance and holding a CLOSED 5-minute bucket there, evaluated continuously; (c) price past every seated reference in the scenario's direction; (d) inside a Tier-1 news blackout — UNKNOWN when the calendar has no slice, and UNKNOWN never excludes; (e) the first N minutes after the open, reusing the existing no-trade band's N.",
+      text: "Why exclusions rather than a proven regime classifier. The research (round 11 §1) found no reliable early range-vs-trend classifier for MNQ and named a published claim that should NOT be adopted. So instead of a classifier there are five PRE-DECLARED exclusions, each evaluated independently and each computed only from what is knowable at the moment of evaluation — never from the completed session. (a) opening range wider than k× the prior-session median, k resolved from the bound strategy or the tape's own 80th percentile (1.28, n=13); (b) price beyond the initial balance and holding a CLOSED 5-minute bucket there, evaluated continuously; (c) price past every seated reference in the scenario's direction; (d) inside a Tier-1 news blackout — UNKNOWN when the calendar has no slice, and UNKNOWN never excludes; (e) the first N minutes after the open, reusing the existing no-trade band's N.",
     },
     {
       kind: 'p',

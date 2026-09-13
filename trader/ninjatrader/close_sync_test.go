@@ -1,40 +1,27 @@
 package ninjatrader
 
 import (
-	"testing"
-
 	"nofx/store"
+	"testing"
 )
 
-func TestBuildExitFill(t *testing.T) {
-	owner := &store.TraderPosition{ID: 527, TraderID: "hoang"}
-	// LONG close → SELL fill.
-	f := buildExitFill(owner, "ninjatrader", "futures", "MNQ", "LONG", 30323.75, 1, -68.5, 1724000000000, "sig-1")
-	if f == nil {
-		t.Fatal("nil fill")
+func TestShortPartialCloseUsesActualQuantityAndFuturesPointValue(t *testing.T) {
+	tr, st, row := partialCloseFixture(t)
+	if err := st.GormDB().Model(&store.TraderPosition{}).Where("id = ?", row.ID).Update("side", "SHORT").Error; err != nil {
+		t.Fatal(err)
 	}
-	if f.Side != "SELL" {
-		t.Errorf("LONG close must be SELL, got %s", f.Side)
+	p := closeFixtureFrame()
+	p.PositionSide = "short"
+	p.ExitPrice = 90
+	tr.recordClose("owned", "ex", "ninjatrader", st, store.NewPositionBuilder(st.Position()), p)
+	var got store.TraderPosition
+	st.GormDB().First(&got, row.ID)
+	if got.Status != "OPEN" || got.Quantity != 2 || got.RealizedPnL != 20 {
+		t.Fatalf("short partial wrong: %+v", got)
 	}
-	if f.ExchangeTradeID != "nt8-exit-527" {
-		t.Errorf("deterministic trade id = %q", f.ExchangeTradeID)
-	}
-	if f.Quantity != 1 || f.Price != 30323.75 || f.RealizedPnL != -68.5 || f.CreatedAt != 1724000000000 {
-		t.Errorf("field mismatch: %+v", f)
-	}
-	if f.Symbol != "MNQ" {
-		t.Errorf("symbol must normalize to MNQ, got %q", f.Symbol)
-	}
-	// SHORT close → BUY fill; deterministic id must be stable across calls
-	// (idempotency anchor for CreateFill dedupe).
-	f2 := buildExitFill(owner, "ninjatrader", "futures", "MNQ", "SHORT", 30000, 2, 10, 1724000000001, "sig-1")
-	if f2.Side != "BUY" {
-		t.Errorf("SHORT close must be BUY, got %s", f2.Side)
-	}
-	if f2.ExchangeTradeID != "nt8-exit-527" {
-		t.Errorf("same row id must yield the same trade id, got %q", f2.ExchangeTradeID)
-	}
-	if buildExitFill(nil, "", "", "MNQ", "LONG", 1, 1, 0, 0, "") != nil {
-		t.Error("nil owner must yield nil fill")
+	var fill store.TraderFill
+	st.GormDB().First(&fill)
+	if fill.Side != "BUY" || fill.Quantity != 1 || fill.RealizedPnL != 20 {
+		t.Fatalf("short fill wrong: %+v", fill)
 	}
 }

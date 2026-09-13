@@ -63,7 +63,7 @@ func TestReconcileMaterializesUntrackedNT8Position(t *testing.T) {
 	// Now the close arrives (as the 2026-08-25 incident did): owner lookup finds
 	// the materialized row and records the REAL exit + ×pv P&L.
 	tr.recordClose(traderID, "nt", "ninjatrader", st, store.NewPositionBuilder(st.Position()),
-		ntwire.PositionClosePayload{Account: "Sim101", Symbol: "MNQ", PositionSide: "short", ExitPrice: 29350.50, Quantity: 1})
+		ntwire.PositionClosePayload{ExitOrderID: "broker-manual-close-mat", SignalID: "manual-close-mat", Account: "Sim101", Symbol: "MNQ", PositionSide: "short", ExitPrice: 29350.50, Quantity: 1})
 	closed, _ := st.Position().GetClosedPositions(traderID, 10, "Sim101")
 	if len(closed) != 1 {
 		t.Fatalf("expected 1 closed row after close frame, got %d", len(closed))
@@ -96,7 +96,7 @@ func TestReconcileConsumesParkedCloseForUntrackedPosition(t *testing.T) {
 
 	// Close frame arrives while still untracked: close-sync parks it (drop path).
 	tr.recordClose(traderID, "nt", "ninjatrader", st, store.NewPositionBuilder(st.Position()),
-		ntwire.PositionClosePayload{Account: "Sim101", Symbol: "MNQ", PositionSide: "long", ExitPrice: 29310, Quantity: 1})
+		ntwire.PositionClosePayload{ExitOrderID: "broker-manual-close-park", SignalID: "manual-close-park", Account: "Sim101", Symbol: "MNQ", PositionSide: "long", ExitPrice: 29310, Quantity: 1})
 	if open, _ := st.Position().GetOpenPositions(traderID); len(open) != 0 {
 		t.Fatalf("close before materialization must not create a row, got %d open", len(open))
 	}

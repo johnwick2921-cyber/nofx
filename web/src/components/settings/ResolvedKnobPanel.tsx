@@ -71,6 +71,8 @@ export function ResolvedKnobPanel({
 
   useEffect(() => {
     let live = true
+    setData(null)
+    setError(null)
     const params = new URLSearchParams()
     if (traderId) params.set('trader_id', traderId)
     if (session) params.set('session', session)
@@ -80,8 +82,18 @@ export function ResolvedKnobPanel({
     fetch(`/api/config/resolved${qs ? `?${qs}` : ''}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
-      .then((r) => r.json())
-      .then((j) => live && setData(j as Payload))
+      .then((r) => {
+        if (!r.ok) throw new Error('registry request failed')
+        return r.json()
+      })
+      .then((j) => {
+        if (!j || !j.summary || !Array.isArray(j.knobs))
+          throw new Error('invalid registry response')
+        if (live) {
+          setError(null)
+          setData(j as Payload)
+        }
+      })
       .catch(() => live && setError('could not read the registry'))
     return () => {
       live = false

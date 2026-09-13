@@ -1,5 +1,9 @@
 import { useEffect, useState, useCallback } from 'react'
-import { getSystemConfig, invalidateSystemConfig, type SystemConfig } from '../lib/config'
+import {
+  getSystemConfig,
+  invalidateSystemConfig,
+  type SystemConfig,
+} from '../lib/config'
 
 export function useSystemConfig() {
   const [config, setConfig] = useState<SystemConfig | null>(null)
@@ -13,6 +17,7 @@ export function useSystemConfig() {
     getSystemConfig()
       .then((data) => {
         if (!mounted) return
+        setError(null)
         setConfig(data)
         setLoading(false)
       })
@@ -31,7 +36,8 @@ export function useSystemConfig() {
   useEffect(() => {
     const handler = () => setFetchKey((k) => k + 1)
     window.addEventListener('system-config-invalidated', handler)
-    return () => window.removeEventListener('system-config-invalidated', handler)
+    return () =>
+      window.removeEventListener('system-config-invalidated', handler)
   }, [])
 
   const refresh = useCallback(() => {

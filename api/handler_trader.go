@@ -767,6 +767,10 @@ func (s *Server) handleUpdateTrader(c *gin.Context) {
 func (s *Server) handleDeleteTrader(c *gin.Context) {
 	userID := c.GetString("user_id")
 	traderID := c.Param("id")
+	if !s.traderOwnedBy(userID, traderID) {
+		SafeNotFound(c, "Trader")
+		return
+	}
 
 	// Delete from database
 	err := s.store.Trader().Delete(userID, traderID)

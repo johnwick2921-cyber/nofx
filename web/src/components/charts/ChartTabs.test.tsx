@@ -8,8 +8,22 @@ vi.mock('./EquityChart', () => ({
   EquityChart: () => <div data-testid="equity" />,
 }))
 vi.mock('./AdvancedChart', () => ({
-  AdvancedChart: ({ symbol }: { symbol: string }) => (
-    <div data-testid="market">{symbol}</div>
+  AdvancedChart: ({
+    symbol,
+    exchange,
+    selectedAccount,
+  }: {
+    symbol: string
+    exchange: string
+    selectedAccount?: string
+  }) => (
+    <div
+      data-testid="market"
+      data-exchange={exchange}
+      data-account={selectedAccount}
+    >
+      {symbol}
+    </div>
   ),
 }))
 beforeEach(() =>
@@ -45,7 +59,20 @@ describe('ChartTabs composition modes', () => {
     expect(screen.getAllByRole('option')).toHaveLength(6)
     fireEvent.change(select, { target: { value: 'crypto' } })
     expect(await screen.findByText('BTCUSDT')).toBeInTheDocument()
+    expect(screen.getByTestId('market')).toHaveAttribute(
+      'data-exchange',
+      'binance'
+    )
     fireEvent.change(select, { target: { value: 'ninjatrader' } })
     expect(await screen.findByText('MNQ')).toBeInTheDocument()
   })
+})
+
+it('passes selected account changes into the order snapshot scope', () => {
+  const { rerender } = render(
+    <ChartTabs traderId="test" selectedAccount="SimA" marketOnly />
+  )
+  expect(screen.getByTestId('market')).toHaveAttribute('data-account', 'SimA')
+  rerender(<ChartTabs traderId="test" selectedAccount="SimB" marketOnly />)
+  expect(screen.getByTestId('market')).toHaveAttribute('data-account', 'SimB')
 })

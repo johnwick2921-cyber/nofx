@@ -7,6 +7,7 @@ export const planCard: GuideSection = {
   tagline: 'The centerpiece — every element, decoded.',
   asBuiltRev: GUIDE_BUILT_REV,
   blocks: [
+    { kind: 'p', text: 'Level edits belong to the plan version you opened. If a re-read or another edit changes that plan, saving refuses and asks you to refresh and review the draft. A stale edit does not silently change a newer plan.' },
     { kind: 'h', text: 'Scenario level identity' },
     {
       kind: 'p',

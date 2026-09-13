@@ -7,6 +7,7 @@ export const status: GuideSection = {
   tagline: 'Every indicator strip, banner, and log line — decoded.',
   asBuiltRev: GUIDE_BUILT_REV,
   blocks: [
+    { kind: 'p', text: 'If an open-order refresh fails, the chart marks the result UNKNOWN and keeps only a prior snapshot from the same view as stale. A successful empty response clears it. The open-order endpoint uses the trader-bound account; selecting another dashboard account does not change that endpoint, and the chart labels this scope.' },
     { kind: 'h', text: 'Scenario activation and order authorization' },
     {
       kind: 'p',
@@ -83,7 +84,7 @@ export const status: GuideSection = {
       lines: [
         '🔐 BOOT INTEGRITY OK — rev <sha> [+dirty] · built <ts>',
         '🧾 P&L surfaces: <N> aggregators strict-corrected, 0 raw (corrected-column guard) — every P&L figure the model and the dashboard read is pnl_corrected; unresolved rows are counted and excluded, never coerced',
-        '🛑 exits: stop=max(anchor+clr, 1.5×ATR5m) · anchor_max=3.0×ATR5m · BE=off · trail=off · size=1 · re-arm-after-sweep=on (0B) — the whole exit posture in one line',
+        '🛑 exits: legacy play posture is printed from resolved settings; reject-fade geometry is reported separately as frozen zone edge + buffer and first eligible target. Read the current boot lines, not this historical example, for enabled controls.',
         '⏱ wakes: cutoff=25m(enforce) cooldown=30m(enforce, fast-market≥1.5×ATR exempt) cross-session=on stale-arm-expiry=on (class 47) — ENFORCING since 2026-09-03: a level_event wake with under 25 min to the flat is SKIPPED (its read would land after the last-entry gate closes), and so is one within 30 min of the last wake-authored version — UNLESS price has drifted ≥ FAST_MARKET_ATR (1.5×) from the plan being traded, which bypasses the cooldown and logs "cooldown bypassed: fast market <drift>×ATR". The 25-min cutoff is never exempted: a re-plan with 20 minutes left is a re-plan with 20 minutes left, fast or not. Scheduled reads, death re-plans and owner resets are untouched. cross-session defers WAKES (never scheduled reads) while a planner stream is open; stale-arm expiry retires never-placed arms from superseded plan versions',
         '    · expected <sha> · goldens PASS      ← code matches deploy record',
         '📜 planner playbook: playbook=v2 bias_tree=on …',
@@ -94,7 +95,7 @@ export const status: GuideSection = {
         '📜 prompt/validator contract: N restrictions, all stated in prompt  ← class 38',
         '⚖ arm normalizer: legs on non-sweep → single arm + WARN  ← class 39',
         '🔁 planner stream policy (class 41): stream_tries=3 backoff=2s→15s→45s watchdog_log=on keepalive=30s serialize_executor=off resend_identical=on  ← class 41 (per trader)',
-        '🛡 cutover safety (class 33): gate legs=5 · leg4=<broker|ledger (no snapshot yet)|STALE> · boot sweep cancelled <N> pre-boot arm(s) (<M> authorized-but-never-placed left for this process)  ← class 33',
+        '🛡 cutover safety (class 33): gate legs=5 · leg4=<broker|ledger (no snapshot yet)|STALE> · boot sweep requested <N> pre-boot cancel(s), confirmation pending (<M> authorized-but-never-placed left for this process)  ← class 33',
         '✂ planner schema: 9 top-level fields, ALL consumed … plan JSON ~920 tokens of a 23,769-token p50 output (3.9%); reasoning is ~96%  ← root-fix part A (measured, no cut shipped)',
         '🔬 shadow A/B (root-fix part B): OFF target_n=10 done=0 … promotion criterion: legal-rate ≥ max AND median wall ≤50% of max at n≥10',
         '🩹 repair (class 44): contract=full-doc restated head+tail · vocab-suffix=on · law excerpts=all-matching · outcomes recorded  ← class 44',

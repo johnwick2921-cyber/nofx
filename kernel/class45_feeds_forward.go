@@ -179,7 +179,7 @@ func RenderStopFloorLine(atr5m, mult float64) string {
 	if atr5m <= 0 || mult <= 0 {
 		return ""
 	}
-	return fmt.Sprintf("## Minimum stop distance this cycle\n%.1f pts (%.1f×ATR5m %.2f, resolved). Stops tighter than this are WIDENED by the executor before the R:R gate sees them — author stops AND targets consistent with it, or your R:R will not survive the widening.\n\n",
+	return fmt.Sprintf("## Legacy non-reject stop floor this cycle\n%.1f pts (%.1f×ATR5m %.2f, resolved). For non-reject arms, stops tighter than this are WIDENED by the executor before the R:R gate sees them. Reject fades use their frozen zone edge and configured buffer instead; this floor does not override their structural stop.\n\n",
 		mult*atr5m, mult, atr5m)
 }
 

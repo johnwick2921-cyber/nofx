@@ -21,6 +21,9 @@ export interface TelegramConfig {
 }
 
 export interface Exchange {
+  nt_data_dir?: string
+  nt_instrument_name?: string
+  nt_default_contract_qty?: number
   id: string // UUID (empty for supported exchange templates)
   exchange_type: string // "binance", "bybit", "okx", "hyperliquid", "aster", "lighter"
   account_name: string // User-defined account name

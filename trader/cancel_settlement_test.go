@@ -170,3 +170,31 @@ func TestDarkBookRaisesOneP0PerOutageAndClearsOnRecovery(t *testing.T) {
 	}
 	t.Logf("one outage → 1 P0 with the age; a later outage → a second, independent P0")
 }
+
+func TestPriorProcessCancelBudgetResetsBeforeCapCheck(t *testing.T) {
+	at := class33Trader(t)
+	ledger := at.store.ArmedOrders()
+	class33Seed(t, at, "prior-capped", "prior-entry", "prior-process", store.StateWorking)
+	var row store.ArmedOrderDB
+	if err := ledger.DB().Where("scenario = ?", "prior-capped").First(&row).Error; err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 9, 13, 12, 0, 0, 0, time.UTC)
+	if err := ledger.RequestCancel(row.ID, "old request", now.Add(-2*cancelConfirmTimeout()).UnixMilli()); err != nil {
+		t.Fatal(err)
+	}
+	if err := ledger.DB().Model(&store.ArmedOrderDB{}).Where("id = ?", row.ID).Updates(map[string]any{"cancel_attempts": cancelReRequestMax(), "cancel_attempts_boot": "prior-process"}).Error; err != nil {
+		t.Fatal(err)
+	}
+	sends := 0
+	settled, pending, re := at.confirmPendingCancels(ledger, func(string) error { sends++; return nil }, now)
+	if settled != 0 || pending != 1 || re != 1 || sends != 1 {
+		t.Fatalf("foreign process cap stranded request: %d/%d/%d sends=%d", settled, pending, re, sends)
+	}
+	if err := ledger.DB().First(&row, row.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if row.CancelAttempts != 1 || row.CancelAttemptsBoot != store.ProcessBootID() {
+		t.Fatalf("new process budget not recorded: %+v", row)
+	}
+}

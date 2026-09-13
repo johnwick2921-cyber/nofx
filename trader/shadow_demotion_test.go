@@ -118,6 +118,8 @@ func shadowWireHarnessAt(t *testing.T, cfg store.StrategyConfig, now time.Time) 
 		}
 	}()
 
+	knownFlatPositionsFrame(t, s, conn)
+
 	st, err := store.New(filepath.Join(t.TempDir(), "shadow.db"))
 	if err != nil {
 		t.Fatalf("store: %v", err)
@@ -330,4 +332,21 @@ func TestConfigFlipToLiveAllowsArming(t *testing.T) {
 	if err2 != nil || len(allRows) != 1 || allRows[0].State != "armed" {
 		t.Fatalf("live-configured condition must arm normally, got %+v (err=%v)", allRows, err2)
 	}
+}
+
+// Provide explicit broker truth through the real readLoop before placement.
+// A missing positions frame is unknown and must not stand in for a flat account.
+func knownFlatPositionsFrame(t *testing.T, s *ntwire.TCPServer, conn net.Conn) {
+	t.Helper()
+	if err := ntwire.WriteFrame(conn, ntwire.FramePositions, ntwire.PositionsPayload{Account: "Sim101", Positions: []ntwire.OpenPosition{}}); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) {
+		if ps, received, ok := s.PositionsForReceived("Sim101"); ok && len(ps) == 0 && !received.IsZero() {
+			return
+		}
+		time.Sleep(time.Millisecond)
+	}
+	t.Fatal("explicit flat account frame was not received")
 }

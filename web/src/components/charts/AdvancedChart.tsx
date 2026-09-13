@@ -58,6 +58,7 @@ interface OpenOrder {
 interface AdvancedChartProps {
   symbol: string
   interval?: string
+  selectedAccount?: string
   traderID?: string
   height?: number
   exchange?: string // Exchange type: binance, bybit, okx, bitget, hyperliquid, aster, lighter
@@ -113,6 +114,7 @@ export function AdvancedChart({
   symbol = 'BTCUSDT',
   interval = '5m',
   traderID,
+  selectedAccount,
   height = 550,
   exchange = 'binance', // Default to binance
   onSymbolChange: _onSymbolChange, // Available for future use
@@ -121,6 +123,16 @@ export function AdvancedChart({
   const { language } = useLanguage()
   const quoteUnit = getQuoteUnit(exchange)
   const baseUnit = getBaseUnit(exchange, symbol, language)
+  const identity = JSON.stringify([
+    symbol,
+    interval,
+    traderID,
+    exchange,
+    selectedAccount,
+  ])
+  const identityRef = useRef(identity)
+  identityRef.current = identity
+  const svpRequestRef = useRef(0)
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const candlestickSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
@@ -135,10 +147,22 @@ export function AdvancedChart({
   const priceLinesRef = useRef<any[]>([]) // Store open order price lines
   const latestKlinesRef = useRef<Kline[]>([]) // Most recent klines, for indicator re-render on toggle (1b)
 
+  const [orderSnapshot, setOrderSnapshot] = useState<{
+    identity: string
+    updated?: string
+    count?: number
+    failed: boolean
+  }>({ identity, failed: false })
+  const visibleOrders =
+    orderSnapshot.identity === identity
+      ? orderSnapshot
+      : { identity, failed: false }
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [showIndicatorPanel, setShowIndicatorPanel] = useState(false)
   const [showOrderMarkers, setShowOrderMarkers] = useState(true) // Order marker toggle, default on
+  const showOrderMarkersRef = useRef(showOrderMarkers)
+  showOrderMarkersRef.current = showOrderMarkers
   const isInitialLoadRef = useRef(true) // Track if this is initial load
   const [tooltipData, setTooltipData] = useState<any>(null)
   const tooltipRef = useRef<HTMLDivElement>(null)
@@ -525,30 +549,24 @@ export function AdvancedChart({
     traderID: string,
     symbol: string
   ): Promise<OpenOrder[]> => {
-    try {
-      console.log(
-        '[AdvancedChart] Fetching open orders for trader:',
-        traderID,
-        'symbol:',
-        symbol
+    const result = await httpClient.request(
+      `/api/open-orders?trader_id=${encodeURIComponent(traderID)}&symbol=${encodeURIComponent(symbol)}`,
+      { silent: true }
+    )
+    if (
+      !result.success ||
+      !Array.isArray(result.data) ||
+      result.data.some(
+        (order) =>
+          !order ||
+          typeof order.type !== 'string' ||
+          typeof order.quantity !== 'number' ||
+          typeof order.price !== 'number' ||
+          typeof order.stop_price !== 'number'
       )
-      const result = await httpClient.request(
-        `/api/open-orders?trader_id=${traderID}&symbol=${symbol}`,
-        { silent: true }
-      )
-
-      console.log('[AdvancedChart] Open orders API response:', result)
-
-      if (!result.success || !result.data) {
-        console.warn('[AdvancedChart] No open orders found')
-        return []
-      }
-
-      return result.data as OpenOrder[]
-    } catch (err) {
-      console.error('[AdvancedChart] Error fetching open orders:', err)
-      return []
-    }
+    )
+      throw new Error('Open-order snapshot unavailable')
+    return result.data as OpenOrder[]
   }
 
   // Initialize chart
@@ -715,11 +733,39 @@ export function AdvancedChart({
         svpPrimitiveRef.current = null
       }
       chart.remove()
+      chartRef.current = null
+      candlestickSeriesRef.current = null
+      volumeSeriesRef.current = null
+      svpRequestRef.current += 1
     }
   }, []) // Chart is created once, ResizeObserver handles dimension changes
 
   // Load data and indicators
   useEffect(() => {
+    let live = true
+    let request = 0
+    const series = candlestickSeriesRef.current
+    const owns = (id: number) =>
+      live &&
+      id === request &&
+      identityRef.current === identity &&
+      candlestickSeriesRef.current === series
+    indicatorSeriesRef.current.forEach((series) =>
+      chartRef.current?.removeSeries(series)
+    )
+    indicatorSeriesRef.current.clear()
+    latestKlinesRef.current = []
+    klineDataRef.current.clear()
+    series?.setData([])
+    volumeSeriesRef.current?.setData([])
+    setMarketStats(null)
+    setTooltipData(null)
+    svpRequestRef.current += 1
+    if (svpPrimitiveRef.current && series) {
+      series.detachPrimitive(svpPrimitiveRef.current)
+      svpPrimitiveRef.current = null
+    }
+
     // Reset initial load flag when symbol/interval changes (for auto-fit)
     isInitialLoadRef.current = true
 
@@ -735,7 +781,8 @@ export function AdvancedChart({
     }
 
     const loadData = async (isRefresh = false) => {
-      if (!candlestickSeriesRef.current) return
+      const id = ++request
+      if (!series || !owns(id)) return
 
       console.log(
         '[AdvancedChart] Loading data for',
@@ -752,8 +799,9 @@ export function AdvancedChart({
       try {
         // 1. Fetch kline data
         const klineData = await fetchKlineData(symbol, interval)
+        if (!owns(id)) return
         console.log('[AdvancedChart] Loaded', klineData.length, 'klines')
-        candlestickSeriesRef.current.setData(klineData)
+        series.setData(klineData)
         logBarDebug(
           'AdvancedChart',
           klineData.length
@@ -804,7 +852,7 @@ export function AdvancedChart({
 
         // 2. Display volume
         if (volumeSeriesRef.current) {
-          const volumeEnabled = indicators.find(
+          const volumeEnabled = indicatorsRef.current.find(
             (i) => i.id === 'volume'
           )?.enabled
           if (volumeEnabled) {
@@ -841,6 +889,7 @@ export function AdvancedChart({
             exchange === 'ninjatrader'
               ? await fetchPositionMarkers(traderID, symbol)
               : await fetchOrders(traderID, symbol)
+          if (!owns(id)) return
           console.log('[AdvancedChart] Received orders:', orders)
 
           if (orders.length > 0) {
@@ -979,7 +1028,7 @@ export function AdvancedChart({
               currentMarkersDataRef.current = markers
 
               // Using v5 API: createSeriesMarkers
-              const markersToShow = showOrderMarkers ? markers : []
+              const markersToShow = showOrderMarkersRef.current ? markers : []
 
               if (seriesMarkersRef.current) {
                 // If already exists, update markers
@@ -1001,6 +1050,7 @@ export function AdvancedChart({
               console.error('[AdvancedChart] ❌ Failed to set markers:', err)
             }
           } else {
+            currentMarkersDataRef.current = []
             console.log('[AdvancedChart] No orders found, clearing markers')
             try {
               if (seriesMarkersRef.current) {
@@ -1024,6 +1074,7 @@ export function AdvancedChart({
         }
         setLoading(false)
       } catch (err: any) {
+        if (!owns(id)) return
         console.error('[AdvancedChart] Error loading data:', err)
         setError(err.message || 'Failed to load chart data')
         setLoading(false)
@@ -1043,27 +1094,50 @@ export function AdvancedChart({
         refreshing = false
       })
     }, REFRESH_CHART_MS)
-    return () => clearInterval(refreshInterval)
-  }, [symbol, interval, traderID, exchange])
+    return () => {
+      live = false
+      request += 1
+      clearInterval(refreshInterval)
+    }
+  }, [symbol, interval, traderID, exchange, selectedAccount])
 
   // Refresh open order price lines separately (every 60s, avoid frequent exchange API calls)
   useEffect(() => {
-    if (!traderID || !candlestickSeriesRef.current) return
+    let live = true
+    let request = 0
+    const series = candlestickSeriesRef.current
+    priceLinesRef.current.forEach((line) => {
+      try {
+        series?.removePriceLine(line)
+      } catch {
+        /* removed series */
+      }
+    })
+    priceLinesRef.current = []
+    setOrderSnapshot({ identity, failed: false })
+    if (!traderID || !series) return
+    const owns = (id: number) =>
+      live &&
+      id === request &&
+      identityRef.current === identity &&
+      candlestickSeriesRef.current === series
 
     // Load open orders and display price lines
     const loadOpenOrders = async () => {
+      const id = ++request
       try {
-        // Clear old price lines first
-        priceLinesRef.current.forEach((line) => {
-          try {
-            candlestickSeriesRef.current?.removePriceLine(line)
-          } catch (e) {
-            // Ignore clear error
-          }
-        })
-        priceLinesRef.current = []
-
         const openOrders = await fetchOpenOrders(traderID, symbol)
+        if (!owns(id)) return
+        // Replace only after a successful, validated snapshot. A failed refresh
+        // cannot prove that orders disappeared from the broker.
+        priceLinesRef.current.forEach((line) => series.removePriceLine(line))
+        priceLinesRef.current = []
+        setOrderSnapshot({
+          identity,
+          updated: new Date().toISOString(),
+          count: openOrders.length,
+          failed: false,
+        })
         console.log('[AdvancedChart] Open orders for price lines:', openOrders)
 
         if (openOrders.length > 0 && candlestickSeriesRef.current) {
@@ -1139,6 +1213,11 @@ export function AdvancedChart({
           )
         }
       } catch (err) {
+        if (!owns(id)) return
+        setOrderSnapshot((previous) => ({
+          ...(previous.identity === identity ? previous : { identity }),
+          failed: true,
+        }))
         console.error('[AdvancedChart] Error loading open orders:', err)
       }
     }
@@ -1158,10 +1237,12 @@ export function AdvancedChart({
     }, REFRESH_OPEN_ORDERS_MS)
 
     return () => {
+      live = false
+      request += 1
       clearTimeout(initialTimeout)
       clearInterval(openOrdersInterval)
     }
-  }, [symbol, traderID])
+  }, [symbol, interval, traderID, exchange, selectedAccount])
 
   // Handle order marker show/hide separately to avoid reloading data
   useEffect(() => {
@@ -1272,6 +1353,7 @@ export function AdvancedChart({
   }
 
   const syncSVP = async () => {
+    const request = ++svpRequestRef.current
     const series = candlestickSeriesRef.current
     if (!series) return
     const enabled = indicatorsRef.current.find((i) => i.id === 'svp')?.enabled
@@ -1285,7 +1367,13 @@ export function AdvancedChart({
     const data = await fetchSVP()
     if (!data) return
     // The series may have been torn down while the fetch was in flight.
-    if (!candlestickSeriesRef.current) return
+    if (
+      request !== svpRequestRef.current ||
+      identityRef.current !== identity ||
+      candlestickSeriesRef.current !== series ||
+      !indicatorsRef.current.find((i) => i.id === 'svp')?.enabled
+    )
+      return
     if (!svpPrimitiveRef.current) {
       svpPrimitiveRef.current = new SessionVolumeProfile()
       candlestickSeriesRef.current.attachPrimitive(svpPrimitiveRef.current)
@@ -1299,6 +1387,23 @@ export function AdvancedChart({
   useEffect(() => {
     if (latestKlinesRef.current.length > 0) {
       updateIndicators(latestKlinesRef.current)
+    }
+    if (volumeSeriesRef.current) {
+      const enabled = indicatorsRef.current.find(
+        (i) => i.id === 'volume'
+      )?.enabled
+      volumeSeriesRef.current.setData(
+        enabled
+          ? latestKlinesRef.current.map((k) => ({
+              time: k.time as UTCTimestamp,
+              value: k.volume || 0,
+              color:
+                k.close >= k.open
+                  ? 'rgba(14, 203, 129, 0.5)'
+                  : 'rgba(246, 70, 93, 0.5)',
+            }))
+          : []
+      )
     }
     // Attach/update/detach the SVP primitive on toggle (idempotent).
     void syncSVP()
@@ -1326,6 +1431,26 @@ export function AdvancedChart({
         flexDirection: 'column',
       }}
     >
+      {traderID && (
+        <div
+          role="status"
+          className="px-4 py-1 text-xs"
+          style={{ color: visibleOrders.failed ? '#F0B90B' : '#848E9C' }}
+        >
+          Open orders — trader-bound account
+          {selectedAccount
+            ? `; dashboard selection ${selectedAccount} is not applied to this endpoint`
+            : ''}
+          .{' '}
+          {visibleOrders.failed
+            ? 'UNKNOWN — refresh failed.'
+            : visibleOrders.updated
+              ? `Last successful snapshot: ${visibleOrders.count} orders.`
+              : 'UNKNOWN — awaiting snapshot.'}
+          {visibleOrders.updated &&
+            ` Snapshot ${visibleOrders.updated}${visibleOrders.failed ? ' retained; lines may be stale.' : '.'}`}
+        </div>
+      )}
       {/* Compact Professional Header */}
       <div
         className="flex items-center justify-between px-4 py-2"

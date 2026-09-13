@@ -86,45 +86,40 @@ func maxI(a, b int) int {
 	return b
 }
 
-// C1 (2026-08-25) — cross-user IDOR gate for every /api/plan/* AND /api/risk/*
-// route that carries a trader_id. Handlers previously trusted ?trader_id (or a
-// body-carried one) blindly: any authenticated user could read or mutate another
-// user's trader by guessing a trader id (plan docs, force-flat, clear-freeze...).
-// Mounted on the protected group; it fires only for those path prefixes and 404s
-// (not 403 — never leak trader existence) when the JWT user does not own the
-// queried trader. Global risk feeds (/risk/freezes, /risk/gate-blocks,
-// /risk/errors) carry no trader_id and pass through unchanged.
+// planTraderOwnership retains its original name, but protects every trader ID
+// supplied to the authenticated group. Check query, body AND trader path IDs:
+// checking just one lets a second selector name a different owner's trader.
+// Requests without a trader selector retain their handler's scope/validation.
 func (s *Server) planTraderOwnership() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		p := c.FullPath()
-		if !strings.HasPrefix(p, "/api/plan/") && !strings.HasPrefix(p, "/api/risk/") {
-			c.Next()
-			return
+		traderIDs := append([]string(nil), c.QueryArray("trader_id")...)
+		if strings.HasPrefix(c.FullPath(), "/api/traders/:id") {
+			traderIDs = append(traderIDs, c.Param("id"))
 		}
-		traderID := strings.TrimSpace(c.Query("trader_id"))
 		// Body-carried trader_id (POST/PUT handlers accept it as an alternative
 		// to the query) is probed WITHOUT consuming the body: the bytes are read
 		// and restored so the handler's ShouldBindJSON still sees them.
-		if traderID == "" && c.Request != nil && c.Request.Body != nil &&
-			(c.Request.Method == "POST" || c.Request.Method == "PUT") {
+		if c.Request != nil && c.Request.Body != nil &&
+			(c.Request.Method == "POST" || c.Request.Method == "PUT" || c.Request.Method == "PATCH" || c.Request.Method == "DELETE") {
 			if raw, err := io.ReadAll(c.Request.Body); err == nil {
 				c.Request.Body = io.NopCloser(bytes.NewReader(raw))
 				var probe struct {
 					TraderID string `json:"trader_id"`
 				}
 				if json.Unmarshal(raw, &probe) == nil {
-					traderID = strings.TrimSpace(probe.TraderID)
+					traderIDs = append(traderIDs, probe.TraderID)
 				}
 			}
 		}
-		if traderID == "" {
-			c.Next() // the handler's own "trader_id is required" governs
-			return
-		}
-		if !s.traderOwnedBy(c.GetString("user_id"), traderID) {
-			SafeNotFound(c, "Trader")
-			c.Abort()
-			return
+		for _, traderID := range traderIDs {
+			if strings.TrimSpace(traderID) == "" {
+				continue
+			}
+			if !s.traderOwnedBy(c.GetString("user_id"), traderID) {
+				SafeNotFound(c, "Trader")
+				c.Abort()
+				return
+			}
 		}
 		c.Next()
 	}
@@ -440,6 +435,8 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 		"trade_date":        tradeDate,
 		"session":           sessName,
 		"version":           row.Version,
+		"plan_id":           row.PlanID,
+		"overlay_version":   latestOverlayRevision(overlays),
 		"reading":           reading,
 		// F7 — a read is running while THIS plan row is committed: the card
 		// renders the plan and shows a subtle re-reading chip, never "writing".
@@ -907,20 +904,34 @@ func mergedPriceViolations(doc *kernel.PlanDoc, lastPrice, dATR float64) []strin
 // active plan. test-op concurrency (§42): the patch is applied strictly to the
 // current plan_final; a failed `test` or bad op → 409. Owner prices pass B2 armor.
 // Origin defaults to "owner"; the Ask-Planner Apply passes "planner-revised".
+type planOverlayRevision struct {
+	PlanID         string `json:"expected_plan_id"`
+	PlanVersion    int    `json:"expected_plan_version"`
+	OverlayVersion *int   `json:"expected_overlay_version"`
+}
+
 func (s *Server) handlePlanOverlay(c *gin.Context) {
 	var body struct {
+		planOverlayRevision
 		TraderID string `json:"trader_id"`
 		Symbol   string `json:"symbol"`
 		Patch    string `json:"patch"`  // JSON array of RFC-6902 ops
 		Origin   string `json:"origin"` // owner | planner-revised (default owner)
 	}
-	_ = c.ShouldBindJSON(&body)
+	if err := c.ShouldBindJSON(&body); err != nil {
+		SafeBadRequest(c, "invalid overlay request")
+		return
+	}
 	traderID := strings.TrimSpace(c.Query("trader_id"))
 	if traderID == "" {
 		traderID = strings.TrimSpace(body.TraderID)
 	}
 	if traderID == "" {
 		SafeBadRequest(c, "trader_id is required")
+		return
+	}
+	if body.PlanID == "" || body.PlanVersion <= 0 || body.OverlayVersion == nil || *body.OverlayVersion < 0 {
+		SafeBadRequest(c, "expected plan and overlay revisions are required; refresh the plan")
 		return
 	}
 	at, err := s.traderManager.GetTrader(traderID)
@@ -995,7 +1006,7 @@ func (s *Server) handlePlanOverlay(c *gin.Context) {
 		}
 	}
 
-	overlayVersion, planVersion, code, msg := s.applyPlanOverlay(traderID, symbol, cleanPatch, origin, time.Now())
+	overlayVersion, planVersion, code, msg := s.applyPlanOverlay(traderID, symbol, cleanPatch, origin, time.Now(), &body.planOverlayRevision)
 	if code != 0 {
 		c.JSON(code, gin.H{"error": msg})
 		return
@@ -1013,7 +1024,7 @@ func (s *Server) handlePlanOverlay(c *gin.Context) {
 // validates enums/counts, then appends the overlay. Shared by the overlay POST
 // and the Ask-Planner Apply. Returns (overlayVersion, planVersion, httpCode, msg);
 // httpCode==0 means success.
-func (s *Server) applyPlanOverlay(traderID, symbol, patchJSON, origin string, now time.Time) (int, int, int, string) {
+func (s *Server) applyPlanOverlay(traderID, symbol, patchJSON, origin string, now time.Time, expected ...*planOverlayRevision) (int, int, int, string) {
 	if strings.TrimSpace(patchJSON) == "" {
 		return 0, 0, 400, "patch is required"
 	}
@@ -1044,7 +1055,25 @@ func (s *Server) applyPlanOverlay(traderID, symbol, patchJSON, origin string, no
 	if err != nil || row == nil {
 		return 0, 0, 404, "active plan not found"
 	}
-	overlays, _ := s.store.Plan().ListOverlays(row.PlanID, row.Version)
+	overlays, err := s.store.Plan().ListOverlays(row.PlanID, row.Version)
+	if err != nil {
+		return 0, 0, 500, "read overlays failed"
+	}
+	overlayRevision := 0
+	for _, ov := range overlays {
+		if ov.OverlayVersion > overlayRevision {
+			overlayRevision = ov.OverlayVersion
+		}
+	}
+	if len(expected) > 0 && expected[0] != nil {
+		e := expected[0]
+		if e.PlanID != row.PlanID || e.PlanVersion != row.Version || e.OverlayVersion == nil || *e.OverlayVersion != overlayRevision {
+			return 0, 0, 409, "plan changed; refresh and review your edit"
+		}
+	}
+	if row.Lifecycle != "active" {
+		return 0, 0, 409, "plan is no longer active"
+	}
 	patches := make([]string, 0, len(overlays))
 	for _, ov := range overlays {
 		patches = append(patches, ov.Patch)
@@ -1072,7 +1101,10 @@ func (s *Server) applyPlanOverlay(traderID, symbol, patchJSON, origin string, no
 		Patch:       patchJSON,
 		Origin:      origin,
 	}
-	overlayVersion, err := s.store.Plan().AppendOverlay(ov)
+	overlayVersion, err := s.store.Plan().AppendOverlayChecked(ov, overlayRevision)
+	if errors.Is(err, store.ErrPlanRevisionConflict) {
+		return 0, 0, 409, "plan changed; refresh and review your edit"
+	}
 	if err != nil {
 		return 0, 0, 500, "append overlay: " + err.Error()
 	}
@@ -1340,7 +1372,7 @@ func (s *Server) resolveAskContext(traderID, symbol string, now time.Time) askCo
 
 	// 2) Nothing for the live session → the most recent stored plan, even dead.
 	if ctx.row == nil {
-		if rows, err := s.store.Plan().ListRecent(1); err == nil && len(rows) > 0 {
+		if rows, err := s.store.Plan().ListRecentForTrader(traderID, 1); err == nil && len(rows) > 0 {
 			row := rows[0]
 			ctx.row, ctx.planID = row, row.PlanID
 			ctx.session, ctx.tradeDate = row.Session, row.TradeDate
@@ -1389,7 +1421,11 @@ func (s *Server) resolveAskContext(traderID, symbol string, now time.Time) askCo
 		if bars := market.FuturesBarsProvider(symbol, "1m", kernel.AISVPBarCount); len(bars) > 0 {
 			price, dATR := marketRef(symbol, now)
 			rule, _, left := s.planRules(traderID, ctx.session, ctx.tradeDate)
-			ctx.liveStatus = kernel.RenderPlanStatus(traderID, symbol, ctx.doc, bars, price, dATR, rule, left, now.UnixMilli(), ctx.row.CreatedAt.UnixMilli())
+			createdMs := int64(0) // No stored plan has no creation timestamp.
+			if ctx.row != nil {
+				createdMs = ctx.row.CreatedAt.UnixMilli()
+			}
+			ctx.liveStatus = kernel.RenderPlanStatus(traderID, symbol, ctx.doc, bars, price, dATR, rule, left, now.UnixMilli(), createdMs)
 		}
 	}
 	if ctx.planID == "" {
@@ -1671,21 +1707,14 @@ func (s *Server) handlePlanAskApply(c *gin.Context) {
 	// from an earlier (rolled/expired) plan must not silently patch a different
 	// active plan.
 	now := time.Now()
-	reg := s.planRegistry()
-	tradeDate := now.In(planChicago()).Format("2006-01-02")
-	sess, ok := reg.ActiveSession(now)
-	// P1 — sessionRunnable, not the raw registry flag.
-	runnable := true
-	if s.traderManager != nil {
-		if at, aErr := s.traderManager.GetTrader(traderID); aErr == nil && at != nil {
-			if okR, _ := at.SessionRunnable(sess); !okR {
-				runnable = false
-			}
-		}
+	sess, tradeDate, ok := s.planMutationSessionAt(traderID, now)
+	if !ok {
+		c.JSON(409, gin.H{"error": "this reply was authored against a plan that is no longer active"})
+		return
 	}
 	legacy := store.MakePlanID(tradeDate, sess.Name)
 	scoped := store.MakePlanIDForTrader(traderID, tradeDate, sess.Name)
-	if !ok || !runnable || (msg.PlanID != legacy && msg.PlanID != scoped) {
+	if msg.PlanID != legacy && msg.PlanID != scoped {
 		c.JSON(409, gin.H{"error": "this reply was authored against a plan that is no longer active"})
 		return
 	}
@@ -2106,19 +2135,8 @@ func (s *Server) handlePlanRealign(c *gin.Context) {
 
 	// SKIP: no active plan · night / disabled session · expired plan.
 	now := time.Now()
-	reg := s.planRegistry()
-	tradeDate := now.In(planChicago()).Format("2006-01-02")
-	sess, ok := reg.ActiveSession(now)
-	// P1 — sessionRunnable, not the raw registry flag.
-	runnable := true
-	if s.traderManager != nil {
-		if at, aErr := s.traderManager.GetTrader(traderID); aErr == nil && at != nil {
-			if okR, _ := at.SessionRunnable(sess); !okR {
-				runnable = false
-			}
-		}
-	}
-	if !ok || !runnable {
+	sess, tradeDate, ok := s.planMutationSessionAt(traderID, now)
+	if !ok {
 		c.JSON(200, gin.H{"status": "skipped", "reason": "night_or_disabled_session"})
 		return
 	}

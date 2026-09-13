@@ -3,8 +3,8 @@
 // against GET /api/health revision and warns on drift.
 import type { ReactNode } from 'react'
 
-// Stamped from the clean structural-stop release binary; see the release report.
-export const GUIDE_BUILT_REV = '0c9d4f30a0470510a15e4aa92d7fa6ec96e9c38d'
+// Source candidate reviewed at this revision; not a claim of deployment.
+export const GUIDE_BUILT_REV = '40ed5d95e27857d13f639ceb4ff14f768396a2ac'
 
 export interface Card {
   title: string

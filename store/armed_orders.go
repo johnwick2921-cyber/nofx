@@ -285,6 +285,31 @@ func (s *ArmedOrderStore) UpsertArm(row *ArmedOrderDB) error {
 			return fmt.Errorf("armed_orders: refusing to rewrite %s/%s — a cancel is in flight for signal %q and is not yet confirmed by the broker's book; the slot is not free",
 				row.PlanID, row.Scenario, existing.SignalID)
 		}
+		// MANUAL-CANCEL-WINS (2026-08-30 E7 incident): a TERMINAL row is
+		// re-authorized ONLY on a plan VERSION change. The old
+		// re-authorize-every-cycle behavior was the re-place loop:
+		// terminal → armed → marketable fill → stop-out → terminal → armed…
+		// forever while the confirm stayed MET, so an owner/NT8 cancel
+		// never won. Same version + terminal = the row STAYS terminal.
+		// 0B (owner ruling 2026-09-02) — RE-ARM AFTER BOOT SWEEP. The
+		// manual-cancel-wins law exists so the OWNER's cancels stick. A boot
+		// sweep is the machine's own housekeeping: it cancels pre-boot orders
+		// because the process that owned them died, not because anyone judged
+		// the setup dead. Leaving those rows sticky killed the live setup
+		// until the next plan version — on 09-02 00:16 that rule would have
+		// meant no position 587. Swept rows (state_reason prefixed
+		// "boot_sweep") re-authorize under the SAME version; every other
+		// terminal row stays terminal.
+		if IsTerminalArmState(existing.State) && existing.Version == row.Version && !IsBootSweepReason(existing.StateReason) {
+			return nil
+		}
+		// 0B — the re-arm is LOUD: a swept row coming back under the SAME version
+		// is the machine undoing its own boot housekeeping, and the journal must
+		// say so with the dead broker identity it replaces.
+		if IsTerminalArmState(existing.State) && existing.Version == row.Version && IsBootSweepReason(existing.StateReason) {
+			logger.Warnf("⚖ re-armed after boot sweep: %s %s leg %d — signal %s → (fresh arm, awaiting placement) · same plan version v%d",
+				row.Session, row.Scenario, row.LegIndex+1, signalOrNone(existing.SignalID), row.Version)
+		}
 		// A TERMINAL row that reached the broker keeps its record forever; the
 		// new authorization becomes the NEXT placement rather than erasing it.
 		// A row that never reached the broker has nothing to keep and still
@@ -304,6 +329,10 @@ func (s *ArmedOrderStore) UpsertArm(row *ArmedOrderDB) error {
 			row.SignalID = ""
 			row.FillPrice = 0
 			row.FillQuantity = 0
+			// This successor is a new authorization by this process, not an
+			// inherited placement. Stamp before this early create/return too.
+			row.BootID = ProcessBootID()
+			row.ArmedUnderVersion = row.Version
 			return s.db.Create(row).Error
 		}
 		if existing.State == "armed" {
@@ -327,31 +356,6 @@ func (s *ArmedOrderStore) UpsertArm(row *ArmedOrderDB) error {
 				"target_px": row.TargetPx, "updated_at": row.UpdatedAt,
 				"leg_count": row.LegCount, "kind": row.Kind,
 			}).Error
-		}
-		// MANUAL-CANCEL-WINS (2026-08-30 E7 incident): a TERMINAL row is
-		// re-authorized ONLY on a plan VERSION change. The old
-		// re-authorize-every-cycle behavior was the re-place loop:
-		// terminal → armed → marketable fill → stop-out → terminal → armed…
-		// forever while the confirm stayed MET, so an owner/NT8 cancel
-		// never won. Same version + terminal = the row STAYS terminal.
-		// 0B (owner ruling 2026-09-02) — RE-ARM AFTER BOOT SWEEP. The
-		// manual-cancel-wins law exists so the OWNER's cancels stick. A boot
-		// sweep is the machine's own housekeeping: it cancels pre-boot orders
-		// because the process that owned them died, not because anyone judged
-		// the setup dead. Leaving those rows sticky killed the live setup
-		// until the next plan version — on 09-02 00:16 that rule would have
-		// meant no position 587. Swept rows (state_reason prefixed
-		// "boot_sweep") re-authorize under the SAME version; every other
-		// terminal row stays terminal.
-		if existing.Version == row.Version && !IsBootSweepReason(existing.StateReason) {
-			return nil
-		}
-		// 0B — the re-arm is LOUD: a swept row coming back under the SAME version
-		// is the machine undoing its own boot housekeeping, and the journal must
-		// say so with the dead broker identity it replaces.
-		if existing.Version == row.Version && IsBootSweepReason(existing.StateReason) {
-			logger.Warnf("⚖ re-armed after boot sweep: %s %s leg %d — signal %s → (fresh arm, awaiting placement) · same plan version v%d",
-				row.Session, row.Scenario, row.LegIndex+1, signalOrNone(existing.SignalID), row.Version)
 		}
 		// New plan version → RE-AUTHORIZE: fresh armed state, fresh lineage.
 		row.ID = existing.ID
@@ -494,13 +498,34 @@ func (s *ArmedOrderStore) RequestCancel(id int64, reason string, nowMs int64) er
 // order. A caller with no snapshot cannot call it — which is the point.
 func (s *ArmedOrderStore) ConfirmCancel(id int64, snapshotID int64, reason string) error {
 	if s == nil || s.db == nil {
-		return nil
+		return fmt.Errorf("armed order store unavailable")
 	}
-	return s.db.Model(&ArmedOrderDB{}).Where("id = ?", id).Updates(map[string]any{
-		"state":                      StateCancelled,
-		"state_reason":               reason,
-		"cancel_settled_snapshot_id": snapshotID,
-	}).Error
+	if snapshotID <= 0 {
+		return fmt.Errorf("cancel confirmation requires a persisted snapshot id")
+	}
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		var row ArmedOrderDB
+		if err := tx.First(&row, id).Error; err != nil {
+			return err
+		}
+		if row.State != StateCancelPending {
+			return fmt.Errorf("arm %d is %s, not cancel_pending", id, row.State)
+		}
+		res := tx.Model(&ArmedOrderDB{}).Where("id = ? AND state = ?", id, StateCancelPending).Updates(map[string]any{
+			"state": StateCancelled, "state_reason": reason, "cancel_settled_snapshot_id": snapshotID,
+		})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected != 1 {
+			return fmt.Errorf("arm %d changed during cancel confirmation", id)
+		}
+		if IsBootSweepReason(row.StateReason) {
+			return tx.Exec(`INSERT INTO system_config (key, value) VALUES (?, '1')
+			 ON CONFLICT(key) DO UPDATE SET value = CAST(CAST(value AS INTEGER) + 1 AS TEXT)`, BootSweptKey).Error
+		}
+		return nil
+	})
 }
 
 // ListCancelPending returns this trader's rows awaiting confirmation, oldest

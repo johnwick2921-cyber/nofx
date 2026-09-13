@@ -588,6 +588,11 @@ func ArmFeasibilityWarnings(d *PlanDoc, atr5m, minRR, minSLMult float64) []strin
 		if a == nil || !a.Enabled {
 			continue
 		}
+		// Reject geometry is composed from frozen zones at admission. The
+		// authored stop/target cannot predict that trade's feasibility.
+		if sc.Condition == OneSetupPlay {
+			continue
+		}
 		dist := a.Entry - a.Stop
 		if strings.EqualFold(sc.Direction, "short") {
 			dist = a.Stop - a.Entry

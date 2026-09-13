@@ -19,440 +19,26 @@ import { WelcomeScreen } from '../components/agent/WelcomeScreen'
 import { ChatMessages } from '../components/agent/ChatMessages'
 import { ChatInput, type ChatInputHandle } from '../components/agent/ChatInput'
 import { UserPreferencesPanel } from '../components/agent/UserPreferencesPanel'
+import {
+  cleanupActiveAgentStream,
+  stopActiveAgentStream,
+  runAgentStream,
+} from '../lib/agentStream'
 import { useAgentChatStore } from '../stores/agentChatStore'
-import type { AgentMessage as Message, AgentStep } from '../types/agent'
+import type { AgentMessage as Message } from '../types/agent'
 import {
   chatStorageKey,
-  clearAgentMessages,
-  getStoredAuthUserId,
   loadAgentDraft,
   loadAgentMessages,
-  migrateAgentMessages,
   prepareAgentMessagesForPersistence,
   persistAgentDraft,
   persistAgentMessages,
 } from '../lib/agentChatStorage'
 
-let msgIdCounter = 0
-let activeStreamAbortController: AbortController | null = null
-let activeStreamReader: ReadableStreamDefaultReader<Uint8Array> | null = null
-
-function nextId() {
-  return `msg-${Date.now()}-${++msgIdCounter}`
-}
-
-function cleanupActiveAgentStream() {
-  activeStreamAbortController?.abort()
-  activeStreamAbortController = null
-  void activeStreamReader?.cancel().catch(() => {
-    // Ignore stream cancellation races during teardown.
-  })
-  activeStreamReader = null
-}
-
-function stopActiveAgentStream(userId?: string, language = 'zh') {
-  if (!activeStreamAbortController && !activeStreamReader) return
-  const stoppedText =
-    language === 'zh' ? '已中止当前回复。' : 'Stopped the current response.'
-  const now = new Date().toLocaleTimeString([], {
-    timeZone: 'America/Chicago', // owner contract: Houston time for every viewer
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-  patchMessagesInStore(
-    (prev) =>
-      prev.map((m) => {
-        if (m.role !== 'bot' || !m.streaming) return m
-        const text = m.text?.trim()
-          ? `${m.text.trimEnd()}\n\n${stoppedText}`
-          : stoppedText
-        return {
-          ...m,
-          text,
-          streaming: false,
-          time: m.time || now,
-        }
-      }),
-    userId
-  )
-  cleanupActiveAgentStream()
-  useAgentChatStore.getState().setLoading(false)
-}
-
-function persistMessagesSnapshotForUser(userId?: string) {
-  const { hydrated, messages } = useAgentChatStore.getState()
-  if (!hydrated) return
-  const persistable = prepareAgentMessagesForPersistence(messages).slice(-100)
-  persistAgentMessages(window.localStorage, userId, persistable)
-}
-
-function replaceMessagesInStore(nextMessages: Message[], userId?: string) {
-  useAgentChatStore.getState().setMessages(nextMessages)
-  persistMessagesSnapshotForUser(userId)
-}
-
-function patchMessagesInStore(
-  updater: (prev: Message[]) => Message[],
-  userId?: string
-) {
-  const nextMessages = updater(useAgentChatStore.getState().messages)
-  useAgentChatStore.getState().updateMessages(() => nextMessages)
-  persistMessagesSnapshotForUser(userId)
-}
-
-async function runAgentStream(params: {
-  text: string
-  token?: string | null
-  language: string
-  storageUserId?: string
-  onDone?: () => void
-}) {
-  const { text, token, language, storageUserId, onDone } = params
-  if (!text || useAgentChatStore.getState().loading) return
-
-  const time = new Date().toLocaleTimeString([], {
-    timeZone: 'America/Chicago', // owner contract: Houston time for every viewer
-    hour: '2-digit',
-    minute: '2-digit',
-  })
-  const userMsg: Message = { id: nextId(), role: 'user', text, time }
-  const botId = nextId()
-  const nextConversation: Message[] = [
-    userMsg,
-    {
-      id: botId,
-      role: 'bot',
-      text: '',
-      time: '',
-      streaming: true,
-    },
-  ]
-
-  replaceMessagesInStore(
-    text.trim() === '/clear'
-      ? nextConversation
-      : [...useAgentChatStore.getState().messages, ...nextConversation],
-    storageUserId
-  )
-  useAgentChatStore.getState().setLoading(true)
-
-  if (text.trim() === '/clear') {
-    try {
-      clearAgentMessages(window.localStorage, storageUserId)
-      useAgentChatStore.getState().setDraftText('')
-    } catch {
-      // Ignore storage cleanup failure.
-    }
-  }
-
-  let controller: AbortController | null = null
-  try {
-    activeStreamAbortController?.abort()
-    controller = new AbortController()
-    activeStreamAbortController = controller
-
-    const res = await fetch('/api/agent/chat/stream', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({ message: text, lang: language }),
-      signal: controller.signal,
-    })
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}))
-      throw new Error(errData.error || `Server error (${res.status})`)
-    }
-
-    const reader = res.body?.getReader()
-    const decoder = new TextDecoder()
-    if (!reader) throw new Error('No response body')
-    activeStreamReader = reader
-    controller.signal.addEventListener(
-      'abort',
-      () => {
-        void reader.cancel().catch(() => {
-          // Ignore double-cancel races.
-        })
-      },
-      { once: true }
-    )
-
-    let buffer = ''
-    let finalText = ''
-    let stepCounter = 0
-    const now = () =>
-      new Date().toLocaleTimeString([], {
-        timeZone: 'America/Chicago', // owner contract: Houston time for every viewer
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-    const mergeStreamText = (current: string, incoming: string) => {
-      if (!incoming) return current
-      if (!current) return incoming
-      if (incoming === current) return current
-      if (incoming.startsWith(current)) return incoming
-      if (current.startsWith(incoming)) return current
-      return current + incoming
-    }
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() || ''
-
-      let eventType = ''
-      for (const line of lines) {
-        if (line.startsWith('event: ')) {
-          eventType = line.slice(7).trim()
-        } else if (line.startsWith('data: ') && eventType) {
-          const rawData = line.slice(6)
-          let data: string
-          try {
-            data = JSON.parse(rawData)
-          } catch {
-            eventType = ''
-            continue
-          }
-          if (eventType === 'delta') {
-            finalText = mergeStreamText(finalText, data)
-            patchMessagesInStore(
-              (prev) =>
-                prev.map((m) =>
-                  m.id === botId ? { ...m, text: finalText, time: now() } : m
-                ),
-              storageUserId
-            )
-          } else if (eventType === 'plan') {
-            const parsedSteps = parsePlanSteps(data)
-            patchMessagesInStore(
-              (prev) =>
-                prev.map((m) =>
-                  m.id === botId
-                    ? {
-                        ...m,
-                        steps: parsedSteps.length > 0 ? parsedSteps : m.steps,
-                        time: now(),
-                      }
-                    : m
-                ),
-              storageUserId
-            )
-          } else if (eventType === 'step_start') {
-            stepCounter += 1
-            const nextStep = parseStepEvent(data, stepCounter)
-            patchMessagesInStore(
-              (prev) =>
-                prev.map((m) =>
-                  m.id === botId
-                    ? {
-                        ...m,
-                        steps: appendStep(m.steps, nextStep),
-                        time: now(),
-                      }
-                    : m
-                ),
-              storageUserId
-            )
-          } else if (eventType === 'step_complete') {
-            patchMessagesInStore(
-              (prev) =>
-                prev.map((m) =>
-                  m.id === botId
-                    ? {
-                        ...m,
-                        steps: markLatestRunningCompleted(m.steps, data),
-                        time: now(),
-                      }
-                    : m
-                ),
-              storageUserId
-            )
-          } else if (eventType === 'replan') {
-            patchMessagesInStore(
-              (prev) =>
-                prev.map((m) =>
-                  m.id === botId
-                    ? {
-                        ...m,
-                        steps: appendStep(m.steps, {
-                          id: `replan-${Date.now()}`,
-                          label: data,
-                          status: 'replanned',
-                          detail: data,
-                        }),
-                        time: now(),
-                      }
-                    : m
-                ),
-              storageUserId
-            )
-          } else if (eventType === 'done') {
-            patchMessagesInStore(
-              (prev) =>
-                prev.map((m) =>
-                  m.id === botId
-                    ? {
-                        ...m,
-                        text: finalText || m.text || data,
-                        time: now(),
-                        streaming: false,
-                      }
-                    : m
-                ),
-              storageUserId
-            )
-          } else if (eventType === 'error') {
-            throw new Error(data)
-          }
-          eventType = ''
-        }
-      }
-    }
-
-    patchMessagesInStore(
-      (prev) =>
-        prev.map((m) =>
-          m.id === botId && m.streaming
-            ? {
-                ...m,
-                text: finalText || m.text || 'No response',
-                streaming: false,
-                time: now(),
-              }
-            : m
-        ),
-      storageUserId
-    )
-    window.dispatchEvent(new CustomEvent('agent-preferences-refresh'))
-    window.dispatchEvent(new CustomEvent('agent-config-refresh'))
-  } catch (e: any) {
-    if (e.name === 'AbortError') {
-      patchMessagesInStore(
-        (prev) =>
-          prev.map((m) =>
-            m.id === botId
-              ? {
-                  ...m,
-                  streaming: false,
-                  time:
-                    m.time ||
-                    new Date().toLocaleTimeString([], {
-                      timeZone: 'America/Chicago', // owner contract: Houston time for every viewer
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    }),
-                }
-              : m
-          ),
-        storageUserId
-      )
-    } else {
-      patchMessagesInStore(
-        (prev) =>
-          prev.map((m) =>
-            m.id === botId
-              ? {
-                  ...m,
-                  text: '⚠️ Error: ' + e.message,
-                  time: new Date().toLocaleTimeString([], {
-                    timeZone: 'America/Chicago', // owner contract: Houston time for every viewer
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  }),
-                  streaming: false,
-                }
-              : m
-          ),
-        storageUserId
-      )
-    }
-  }
-
-  if (controller && activeStreamAbortController === controller) {
-    activeStreamAbortController = null
-  }
-  if (activeStreamReader) {
-    try {
-      activeStreamReader.releaseLock()
-    } catch {
-      // Ignore lock-release races when the stream is already closed.
-    }
-    activeStreamReader = null
-  }
-  useAgentChatStore.getState().setLoading(false)
-  onDone?.()
-}
-
-function appendStep(
-  existing: AgentStep[] | undefined,
-  step: AgentStep
-): AgentStep[] {
-  const prev = existing ?? []
-  const index = prev.findIndex((item) => item.id === step.id)
-  if (index === -1) return [...prev, step]
-  return prev.map((item, i) => (i === index ? { ...item, ...step } : item))
-}
-
-function parsePlanSteps(data: string): AgentStep[] {
-  const text = data.replace(/^🗺️\s*(Plan|计划):\s*/i, '').trim()
-  if (!text) return []
-  return text.split(/\s*->\s*/).map((part, index) => {
-    const cleaned = part.replace(/^\d+\./, '').trim()
-    return {
-      id: `action-${index + 1}`,
-      label: cleaned || `Step ${index + 1}`,
-      status: 'pending',
-    }
-  })
-}
-
-function parseStepEvent(data: string, fallbackIndex: number): AgentStep {
-  const match =
-    data.match(/Step\s+(\d+)\/(\d+):\s+(.+)$/i) ||
-    data.match(/步骤\s+(\d+)\/(\d+):\s+(.+)$/)
-  if (match) {
-    const id = `action-${match[1]}`
-    return {
-      id,
-      label: match[3].trim(),
-      status: 'running',
-      detail: data,
-    }
-  }
-  return {
-    id: `step-${fallbackIndex}`,
-    label: data,
-    status: 'running',
-    detail: data,
-  }
-}
-
-function markLatestRunningCompleted(
-  existing: AgentStep[] | undefined,
-  detail: string
-): AgentStep[] {
-  const prev = existing ?? []
-  for (let i = prev.length - 1; i >= 0; i--) {
-    if (prev[i].status === 'running') {
-      return prev.map((step, index) =>
-        index === i ? { ...step, status: 'completed', detail } : step
-      )
-    }
-  }
-  return prev
-}
-
 export function AgentChatPage() {
   const { language } = useLanguage()
   const { token, user } = useAuth()
-  const [storageUserId, setStorageUserId] = useState<string | undefined>(() =>
-    getStoredAuthUserId()
-  )
+  const storageUserId = user?.id
   const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 1024)
   const storageKey = chatStorageKey(user?.id || storageUserId)
   const messages = useAgentChatStore((state) => state.messages)
@@ -482,19 +68,11 @@ export function AgentChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  useEffect(() => {
-    setStorageUserId(user?.id || getStoredAuthUserId())
-  }, [user?.id])
-
-  useEffect(() => {
-    if (!user?.id) return
-    migrateAgentMessages(window.localStorage, user.id)
-  }, [user?.id])
-
   // Restore chat history for the current user when opening the agent page.
   useEffect(() => {
     const nextUserId = user?.id || storageUserId
     if (activeUserId === nextUserId && historyHydrated) return
+    cleanupActiveAgentStream()
     resetForUser(
       nextUserId,
       loadAgentMessages<Message>(window.localStorage, nextUserId).messages
@@ -512,7 +90,7 @@ export function AgentChatPage() {
 
   // Persist chat history locally so page navigation does not wipe the conversation.
   useEffect(() => {
-    if (!historyHydrated) return
+    if (!historyHydrated || activeUserId !== storageUserId) return
     try {
       const persistable =
         prepareAgentMessagesForPersistence(messages).slice(-100)
@@ -524,12 +102,19 @@ export function AgentChatPage() {
     } catch {
       // Ignore storage failures and keep the chat usable.
     }
-  }, [historyHydrated, messages, storageKey, storageUserId, user?.id])
+  }, [
+    activeUserId,
+    historyHydrated,
+    messages,
+    storageKey,
+    storageUserId,
+    user?.id,
+  ])
 
   // Persist the unsent draft so navigating away from the Agent page does not
   // wipe what the user was typing.
   useEffect(() => {
-    if (!historyHydrated) return
+    if (!historyHydrated || activeUserId !== storageUserId) return
     try {
       persistAgentDraft(
         window.localStorage,
@@ -539,7 +124,14 @@ export function AgentChatPage() {
     } catch {
       // Ignore storage failures and keep typing responsive.
     }
-  }, [draftText, historyHydrated, storageKey, storageUserId, user?.id])
+  }, [
+    activeUserId,
+    draftText,
+    historyHydrated,
+    storageKey,
+    storageUserId,
+    user?.id,
+  ])
 
   // Responsive sidebar
   useEffect(() => {

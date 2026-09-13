@@ -1,7 +1,7 @@
 import { PRODUCT_NAME } from '../constants/branding'
 import { LedgerDayPnl } from '../components/trader/LedgerDayPnl'
 import { useEffect, useState, useRef } from 'react'
-import { mutate } from 'swr'
+import { useSWRConfig } from 'swr'
 import { api } from '../lib/api'
 import { planApi } from '../lib/api/plan'
 import { EquityChart } from '../components/charts/EquityChart'
@@ -152,6 +152,7 @@ export function TraderDashboardPage({
   onNavigateToTraders,
   exchanges,
 }: TraderDashboardPageProps) {
+  const { mutate } = useSWRConfig()
   const [closingPosition, setClosingPosition] = useState<string | null>(null)
   const [selectedChartSymbol, setSelectedChartSymbol] = useState<
     string | undefined
@@ -293,8 +294,12 @@ export function TraderDashboardPage({
       notify.success(t('traderDashboard.positionClosed', language))
       // Use SWR mutate to refresh data instead of reloading page
       await Promise.all([
-        mutate(`positions-${selectedTraderId}`),
-        mutate(`account-${selectedTraderId}`),
+        mutate(
+          `positions-${selectedTraderId}${selectedAccount ? `-${selectedAccount}` : ''}`
+        ),
+        mutate(
+          `account-${selectedTraderId}${selectedAccount ? `-${selectedAccount}` : ''}`
+        ),
       ])
     } catch (err: unknown) {
       const errorMsg =
@@ -825,6 +830,7 @@ export function TraderDashboardPage({
             style={{ animationDelay: '0.1s' }}
           >
             <ChartTabs
+              selectedAccount={selectedAccount}
               marketOnly
               traderId={selectedTrader.trader_id}
               selectedSymbol={selectedChartSymbol}

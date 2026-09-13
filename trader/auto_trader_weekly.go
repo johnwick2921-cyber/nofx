@@ -131,14 +131,12 @@ func (at *AutoTrader) barResolver() *market.BarResolver {
 // yields TWO completed weeks, so the card rendered "WEEKLY thin · low" while
 // the NT8 cache held 1500 native DAILY bars back to 2020-11-11.
 //
-// It resolves "1w", whose ladder is 1d → 1m: native 1w is deliberately
-// EXCLUDED because NT8 stamps weekly bars Friday→Thursday while our weekly
-// vocabulary is Monday-governed (market.ExcludedNative("1w") carries the
-// reason). The returned bars are DAILY; CompletedWeekCandles buckets them with
-// weekStartMonday exactly as it bucketed 1m bars — same convention, same
-// output shape, more history. The weekly SIGNAL is untouched by this wave.
+// Resolve daily observations so CompletedWeekCandles alone assigns the CME
+// Monday-governed week. Requesting "1w" pre-aggregates into epoch-aligned
+// seven-day buckets and irreversibly mixes adjacent CME weeks. Native daily
+// history retains the individual observations needed by weekly references.
 func (at *AutoTrader) weeklyDailyBars(now time.Time) (bars []market.Kline, source string) {
-	s, err := at.barResolver().CompletedBars(at.futuresSymbol(), "1w", 0, now.UnixMilli())
+	s, err := at.barResolver().CompletedBars(at.futuresSymbol(), "1d", 0, now.UnixMilli())
 	if err != nil {
 		at.logWarnf("📅 WEEKLY READ: resolver failed (%v) — falling back to stored 1m", err)
 	}
@@ -223,11 +221,11 @@ func (at *AutoTrader) runWeeklyRead(now time.Time, monday string, bootBackfill b
 	}()
 	bars, barSource := at.weeklyDailyBars(now)
 	if len(bars) == 0 {
-		at.logErrorf("⚠️ WEEKLY READ FAILED for %s: no bars from any rung of the 1w ladder %v (thin/cold store)", monday, market.LadderFor("1w"))
+		at.logErrorf("⚠️ WEEKLY READ FAILED for %s: no daily observations from any rung of the 1d ladder %v (thin/cold store)", monday, market.LadderFor("1d"))
 		return
 	}
 	at.logInfof("📅 WEEKLY READ %s: %d bar(s) from %s → %d completed week(s) (ladder %v; native 1w excluded: %s)",
-		monday, len(bars), barSource, kernel.CompletedWeekCount(bars, now), market.LadderFor("1w"), market.ExcludedNative("1w"))
+		monday, len(bars), barSource, kernel.CompletedWeekCount(bars, now), market.LadderFor("1d"), market.ExcludedNative("1w"))
 	price := bars[len(bars)-1].Close
 	facts := kernel.ComputeWeeklyFacts(bars, now, price)
 	prompt := kernel.BuildWeeklyPrompt(facts)

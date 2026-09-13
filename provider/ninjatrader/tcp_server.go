@@ -168,7 +168,8 @@ type TCPServer struct {
 	// positions reported by the C# AddOn. Replaces the fill-only inference so
 	// GetPositions reflects NT8 truth across account switch-back + manual trades.
 	// Guarded by acctMu. Each frame REPLACES the account's slice (full snapshot).
-	acctPositions map[string][]OpenPosition
+	acctPositions         map[string][]OpenPosition
+	acctPositionsReceived map[string]time.Time
 
 	// Plan 4 Stage 4 — available accounts discovered by the C# AddOn
 	// (accounts_list frame). Emitted on connect and on account change.
@@ -184,12 +185,15 @@ type TCPServer struct {
 	// contamination bug). Legacy EMPTY-symbol payloads route to the PRIMARY
 	// trading symbol. Re-subscribing a symbol CLOSES the prior channel, which
 	// terminates a dead (reloaded-away) trader instance's consumer goroutine.
-	subsMu       sync.Mutex
-	fillSubs     map[string]chan FillPayload
-	closeSubs    map[string]chan PositionClosePayload
-	rejectSubs   map[string]chan PositionCloseRejectedPayload
-	instrSubs    map[string]chan InstrumentInfoPayload
-	orderUpdSubs map[string]chan OrderUpdatePayload
+	entryReceipts   map[string]*entryReceiptState // acctMu; survives adapter replacement
+	executionMu     sync.Mutex
+	executionOwners map[string]*OrderedExecutionHandlers
+	subsMu          sync.Mutex
+	fillSubs        map[string]chan FillPayload
+	closeSubs       map[string]chan PositionClosePayload
+	rejectSubs      map[string]chan PositionCloseRejectedPayload
+	instrSubs       map[string]chan InstrumentInfoPayload
+	orderUpdSubs    map[string]chan OrderUpdatePayload
 
 	// Connection state — single concurrent client (spec L4359).
 	connMu        sync.Mutex
@@ -626,18 +630,14 @@ func (s *TCPServer) AccountStateFor(account string) (AccountBalancePayload, bool
 // (caller falls back to the fill-derived cache). A non-nil empty slice means
 // the account is known-flat. Returns a defensive copy.
 func (s *TCPServer) PositionsFor(account string) ([]OpenPosition, bool) {
-	s.acctMu.RLock()
-	defer s.acctMu.RUnlock()
-	if account == "" || s.acctPositions == nil {
-		return nil, false
-	}
-	v, ok := s.acctPositions[account]
-	if !ok {
-		return nil, false
-	}
-	out := make([]OpenPosition, len(v))
-	copy(out, v)
-	return out, true
+	positions, _, ok := s.PositionsForReceived(account)
+	return positions, ok
+}
+
+// PositionsForReceived reads contents and their local receipt clock atomically.
+func (s *TCPServer) PositionsForReceived(account string) ([]OpenPosition, time.Time, bool) {
+	positions, received, _, ok := s.PositionsForExecutionReceipt(account, "")
+	return positions, received, ok
 }
 
 // GetAccountsList returns the list of available NT accounts discovered by the
@@ -1335,12 +1335,22 @@ func (s *TCPServer) ListenAddrForTest() net.Addr {
 // frame (mirrors the FramePositions receive path). Tests only; production is fed by
 // the C# AddOn's `positions` frames.
 func (s *TCPServer) SeedPositionsForTest(account string, ps []OpenPosition) {
+	s.SeedPositionsAtForTest(account, ps, time.Now())
+}
+func (s *TCPServer) SeedPositionsAtForTest(account string, ps []OpenPosition, received time.Time) {
 	s.acctMu.Lock()
+	defer s.acctMu.Unlock()
 	if s.acctPositions == nil {
 		s.acctPositions = make(map[string][]OpenPosition)
 	}
-	s.acctPositions[account] = ps
-	s.acctMu.Unlock()
+	if s.acctPositionsReceived == nil {
+		s.acctPositionsReceived = make(map[string]time.Time)
+	}
+	if ps == nil {
+		ps = []OpenPosition{}
+	} // fixture explicitly supplies an empty book
+	s.acctPositions[account] = append([]OpenPosition{}, ps...)
+	s.acctPositionsReceived[account] = received
 }
 
 // SeedAccountBalanceForTest injects a per-account balance snapshot (normally set
@@ -1843,6 +1853,7 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			if fill.Status == "rejected" {
 				s.retirePending(fill.Seq, fill.SignalID)
 			}
+			s.dispatchOrderedFill(&fill)
 			select {
 			case s.fillCh <- fill:
 			default:
@@ -1858,6 +1869,7 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 				s.logger.Warn("tcp_server: bad order_update payload", "err", err)
 				continue
 			}
+			s.dispatchOrderedOrder(&oup)
 			select {
 			case s.orderUpdCh <- oup:
 			default:
@@ -1989,8 +2001,8 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			}
 			s.histSubMu.RLock()
 			ch, ok := s.historyDataSubs[strings.TrimSpace(p.RequestID)]
-			s.histSubMu.RUnlock()
 			if !ok {
+				s.histSubMu.RUnlock()
 				s.logger.Warn("tcp_server: bars_history_data for unknown request id — dropped",
 					"request_id", p.RequestID, "contract", p.Contract, "bars", len(p.Bars))
 				continue
@@ -2001,6 +2013,9 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 				s.logger.Warn("tcp_server: bars_history_data channel full — chunk dropped (importer too slow)",
 					"request_id", p.RequestID, "contract", p.Contract)
 			}
+			// Teardown/replacement closes under the write lock. Keep the read
+			// lock through the nonblocking send so the channel cannot close.
+			s.histSubMu.RUnlock()
 
 		case FrameBarsHistoryError:
 			var p BarsHistoryErrorPayload
@@ -2010,8 +2025,8 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			}
 			s.histSubMu.RLock()
 			ch, ok := s.historyErrSubs[strings.TrimSpace(p.RequestID)]
-			s.histSubMu.RUnlock()
 			if !ok {
+				s.histSubMu.RUnlock()
 				s.logger.Warn("tcp_server: bars_history_error for unknown request id — dropped",
 					"request_id", p.RequestID, "contract", p.Contract, "reason", p.Reason)
 				continue
@@ -2020,6 +2035,9 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			case ch <- p:
 			default:
 			}
+			// Teardown/replacement closes under the write lock. Keep the read
+			// lock through the nonblocking send so the channel cannot close.
+			s.histSubMu.RUnlock()
 
 		case FrameBarUpdate:
 			// Plan 4.4 Stage 2 — streaming updates. The bars array may
@@ -2116,6 +2134,7 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 				continue
 			}
 			s.retirePending(p.Seq, p.SignalID)
+			s.dispatchOrderedClose(&p)
 			select {
 			case s.closeCh <- p:
 			default:
@@ -2133,11 +2152,19 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 				s.logger.Warn("tcp_server: bad positions payload", "err", err)
 				continue
 			}
+			if p.Account == "" || p.Positions == nil {
+				s.logger.Warn("tcp_server: positions unavailable (account missing or positions absent/null)")
+				continue
+			}
 			s.acctMu.Lock()
 			if s.acctPositions == nil {
 				s.acctPositions = make(map[string][]OpenPosition)
 			}
 			s.acctPositions[p.Account] = p.Positions
+			if s.acctPositionsReceived == nil {
+				s.acctPositionsReceived = make(map[string]time.Time)
+			}
+			s.acctPositionsReceived[p.Account] = time.Now()
 			s.acctMu.Unlock()
 			s.logger.Info("tcp_server: positions snapshot", "account", p.Account, "count", len(p.Positions))
 

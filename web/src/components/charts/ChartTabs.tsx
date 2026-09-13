@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 interface ChartTabsProps {
   /** Show only the market when the caller renders account equity beside it. */
   marketOnly?: boolean
+  selectedAccount?: string
   traderId: string
   selectedSymbol?: string // Externally selected symbol
   updateKey?: number // Force update key
@@ -142,6 +143,7 @@ function getMarketTypeFromExchange(exchangeId: string | undefined): MarketType {
 export function ChartTabs({
   marketOnly = false,
   traderId,
+  selectedAccount,
   selectedSymbol,
   updateKey,
   exchangeId,
@@ -178,11 +180,10 @@ export function ChartTabs({
 
   // Determine exchange from market type
   const marketConfig = MARKET_CONFIG[marketType]
-  // Prefer passed-in exchangeId (when not hyperliquid)
   const currentExchange =
-    marketType === 'hyperliquid'
-      ? 'hyperliquid'
-      : exchangeId || marketConfig.exchange
+    exchangeId && getMarketTypeFromExchange(exchangeId) === marketType
+      ? exchangeId
+      : marketConfig.exchange
 
   // Fetch available symbol list
   useEffect(() => {
@@ -514,6 +515,7 @@ export function ChartTabs({
               <AdvancedChart
                 symbol={chartSymbol}
                 interval={interval}
+                selectedAccount={selectedAccount}
                 traderID={traderId}
                 // Dynamic auto-sizing via ResizeObserver
                 exchange={currentExchange}

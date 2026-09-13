@@ -104,10 +104,9 @@ func ParseOrderSnapshot(b []byte) (OrderSnapshotPayload, error) {
 		return OrderSnapshotPayload{}, fmt.Errorf("order_snapshot: no account — unaddressable frame")
 	}
 	if p.Orders == nil {
-		// An absent list and an empty list must not collapse into each other:
-		// the AddOn sends [] for an empty book, and a nil here would later read
-		// as "we never got a book".
-		p.Orders = []NT8Order{}
+		// Only an explicit [] establishes an empty account book. Missing/null
+		// is an unanswered question, so retain the previous cache and its age.
+		return OrderSnapshotPayload{}, fmt.Errorf("order_snapshot: orders missing or null — broker book unavailable")
 	}
 	return p, nil
 }
@@ -211,7 +210,7 @@ func (s *TCPServer) SetOrderSnapshotSink(fn func(OrderSnapshotPayload)) { s.orde
 // running an older compile, and a line that read this constant as if it were
 // the running build would report success for a change that never landed
 // (class 6 — proof is a RECEIVED frame).
-const ExpectedAddonBuild = "2026-09-07-h1"
+const ExpectedAddonBuild = "2026-09-13-execution-evidence"
 
 // AddonBuildLine renders the build-id half of the boot line. `received` comes
 // from TCPServer.FarSideBuildID() — a value that arrived on the wire.

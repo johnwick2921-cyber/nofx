@@ -22,7 +22,7 @@ export const weeklyBias: GuideSection = {
       cards: [
         {
           title: 'One read per week (Sunday 16:30 CT) — REFS ONLY',
-          body: 'At WEEKLY_READ_CT (default "sun 16:30" CT) the bot runs ONE AI read over the bars: 12 completed weekly candles, weekly references (weekly_open · PWH/PWL/PWC), the last 5 weekend gaps (NWOG), the 20/40/60-day IPDA ranges, and a prior-week recap. Since class 50 the doc carries ONLY the price facts (weekly_levels: PWH / PWL / IPDA extremes / unfilled NWOG edges) and a ≤3-line facts narrative — NO bias, no conviction, no draw, no invalidation. The doc is stored on a plans row with session=WEEKLY; a stored doc means never re-run (idempotent). A Monday boot backfills exactly once.',
+          body: 'The reader preserves daily observations until they are grouped into Monday-governed CME weeks; it does not regroup pre-aggregated seven-day bars. At WEEKLY_READ_CT (default "sun 16:30" CT) the bot runs ONE AI read over the bars: 12 completed weekly candles, weekly references (weekly_open · PWH/PWL/PWC), the last 5 weekend gaps (NWOG), the 20/40/60-day IPDA ranges, and a prior-week recap. Since class 50 the doc carries ONLY the price facts (weekly_levels: PWH / PWL / IPDA extremes / unfilled NWOG edges) and a ≤3-line facts narrative — NO bias, no conviction, no draw, no invalidation. The doc is stored on a plans row with session=WEEKLY; a stored doc means never re-run (idempotent). A Monday boot backfills exactly once.',
         },
         {
           title: 'Why refs only — the calibration evidence',

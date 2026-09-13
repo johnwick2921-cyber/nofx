@@ -70,6 +70,7 @@ func (t *TCPTrader) StartPositionReconcile(traderID, exchangeID, exchangeType st
 	if st == nil {
 		return
 	}
+	t.loadExitSnapshotFence(st)
 	// GAR-F1 — wire the store handle BEFORE the repair pass so the reconcile
 	// goroutine and MoveStopToBreakeven can resolve materialized rows' entry
 	// identities (the #566 dead-cell fix).
@@ -80,6 +81,11 @@ func (t *TCPTrader) StartPositionReconcile(traderID, exchangeID, exchangeType st
 	}
 	t.mu.Unlock()
 	t.reconcileOnce.Do(func() {
+		done := t.observerLifetime()
+		stopped := make(chan struct{})
+		t.mu.Lock()
+		t.reconcileStopped = stopped
+		t.mu.Unlock()
 		// F3 (LONDON-FORENSICS 2026-08-28) — one-time idempotent repair: positions
 		// materialized before the lineage stamp existed (live proof: pos #567)
 		// get their armed-fill plan linkage back from the armed ledger.
@@ -89,8 +95,19 @@ func (t *TCPTrader) StartPositionReconcile(traderID, exchangeID, exchangeType st
 		go func() {
 			ticker := time.NewTicker(reconcileInterval)
 			defer ticker.Stop()
-			for range ticker.C {
-				t.reconcilePositions(traderID, exchangeID, exchangeType, st)
+			defer close(stopped)
+			for {
+				select {
+				case <-done:
+					return
+				case <-ticker.C:
+					select {
+					case <-done:
+						return
+					default:
+					}
+					t.reconcilePositions(traderID, exchangeID, exchangeType, st)
+				}
 			}
 		}()
 		logger.Infof("🔧 NinjaTrader position-reconcile started (anchors entry_price to NT8 avg + clears orphan rows)")
@@ -105,11 +122,19 @@ func (t *TCPTrader) reconcilePositions(traderID, exchangeID, exchangeType string
 	// DB rows as orphans. Empty boundAccount → PositionsFor("") !ok → early return
 	// (never touches the DB), preserving the ef550df7 refuse semantics.
 	acct := t.boundAccount
-	snap, ok := t.server.PositionsFor(acct)
+	snap, ok, snapshotErr := t.positionsAfterExit()
+	if snapshotErr != nil {
+		logger.Warnf("NT8 position reconciliation deferred: %v", snapshotErr)
+		return
+	}
 	if !ok {
 		// NT8 has not reported positions for this account — do NOT touch the DB.
 		return
 	}
+
+	// Apply complete durable exit evidence before orphan/quantity reconciliation.
+	t.retryPendingNT8Exits(st)
+	defer t.retryPendingNT8Exits(st)
 
 	// C8 (2026-08-25) — sweep stale UNCONFIRMED entries: a pending signal that
 	// never produced a fill (NT8 rejected it, or the AddOn dropped the frame)
@@ -371,9 +396,9 @@ func (t *TCPTrader) reconcilePositions(traderID, exchangeID, exchangeType string
 			// account="" (its order_update frame predates the account binding),
 			// so the account-scoped lookup above misses it and reconcile
 			// materializes a SECOND row for the same NT8 position. Retry
-			// account-agnostically; if found, backfill the bound account so the
+			// only within THIS trader's unassigned rows; if found, backfill the bound account so the
 			// later close-sync frame (which carries the account) finds its owner.
-			owner, oerr = st.Position().GetOpenPositionByAccountSymbol("", sym, side)
+			owner, oerr = st.Position().GetUnassignedOpenPositionForTrader(traderID, sym, side)
 			if oerr != nil {
 				logger.Warnf("ninjatrader/tcp: reconcile untracked owner lookup (account-agnostic) failed (%s %s): %v", sym, side, oerr)
 				continue

@@ -59,7 +59,7 @@ const dayPlan: KnobSpec[] = [
     where: 'Strategy → Day Plan → slider 0.1–3.0',
     what: 'The day-trade band around price that seats levels in the card (±K × the daily-range proxy, ~±300pt × K on MNQ).',
     trader:
-      'Higher = tighter card; lower = wider card. Far levels still feed the bias-tree anchors even when unseated.',
+      'Higher = wider candidate band; lower = tighter band. Far levels still feed the bias-tree anchors even when unseated.',
     consumer:
       'kernel/levels_score.go:389 (ScoreLevels proximityK) · trader/auto_trader_planconfig.go:47',
     range: '0.1 – 3.0 (× daily-range proxy, clamped)',
@@ -627,6 +627,7 @@ export const settings: GuideSection = {
     'Every knob on the Strategy page, what it really does, and who reads it.',
   asBuiltRev: GUIDE_BUILT_REV,
   blocks: [
+    { kind: 'p', text: 'AgentBeta uses the authenticated user’s configured AI model for each conversation request. Another user’s request cannot replace that selection. If your account has no enabled model, configure one; it does not inherit another account’s credentials.' },
     {
       kind: 'p',
       text: 'Every knob card below names the engine consumer (file:line) that reads it — so you always know whether a slider is real or decorative. FE persists but NO production code reads: nothing here is in that category; the three that used to be (plan_mode, proximity_filter_atr, …) are wired now.',

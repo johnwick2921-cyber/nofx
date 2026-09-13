@@ -248,6 +248,18 @@ func main() {
 		}
 	})
 
+	// P1 — BOOT INTEGRITY ASSERTION. Runs before any trader cycles. A mismatch
+	// with the intended release, or a drifted prompt golden, REFUSES TRADING for
+	// this process (entries blocked; everything else stays read-only usable).
+	integrity := kernel.AssertBootIntegrity()
+	if integrity.Refused {
+		logger.Errorf("%s", integrity.Line())
+		logger.Errorf("🔐 TRADING REFUSED — %s", integrity.Reason)
+		logger.Errorf("🔐 No new positions will be opened until this is fixed and the bot is restarted.")
+	} else {
+		logger.Infof("%s", integrity.Line())
+	}
+
 	if err := traderManager.LoadTradersFromStore(st); err != nil {
 		logger.Fatalf("❌ Failed to load traders: %v", err)
 	}
@@ -282,18 +294,6 @@ func main() {
 
 	// Plan 4 Task 25 — Prometheus metrics endpoint (T25 owns this marker; T23 leaves space below).
 
-	// Start API server
-	// P1 — BOOT INTEGRITY ASSERTION. Runs before any trader cycles. A mismatch
-	// with the intended release, or a drifted prompt golden, REFUSES TRADING for
-	// this process (entries blocked; everything else stays read-only usable).
-	integrity := kernel.AssertBootIntegrity()
-	if integrity.Refused {
-		logger.Errorf("%s", integrity.Line())
-		logger.Errorf("🔐 TRADING REFUSED — %s", integrity.Reason)
-		logger.Errorf("🔐 No new positions will be opened until this is fixed and the bot is restarted.")
-	} else {
-		logger.Infof("%s", integrity.Line())
-	}
 	logger.Infof("%s", researchsnapshot.CurrentBootLine())
 	// UI SERVING PATH (owner ruling 2026-09-03). Printed right after the boot
 	// integrity line because it answers the same question about a different

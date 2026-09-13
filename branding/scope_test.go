@@ -71,6 +71,13 @@ func TestExistingGoImportTargetsPreserved(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
+		// Authorized audit a982cc74 removed a concrete NT8 type assertion here:
+		// GetPositions errors now propagate through the broker interface instead
+		// of being converted to flat. The dependency is obsolete, not renamed.
+		// Keep every other original import pin, including renamed-target rejection.
+		if path == "trader/auto_trader_orders.go" {
+			before = []byte(strings.ReplaceAll(string(before), `ntTrader "nofx/trader/ninjatrader"`, ""))
+		}
 		if err := preserveImports(before, after); err != nil {
 			t.Errorf("%s: %v", path, err)
 		}

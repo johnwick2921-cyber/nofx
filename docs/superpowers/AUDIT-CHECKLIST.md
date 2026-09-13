@@ -4671,3 +4671,228 @@ remain unchanged.
 721/11,302 touches have eligible geometry; model A 207 fills average -2.6039 net
 points. At the initial boot the mistakenly mandatory per-trade cap made admission zero; the owner subsequently clarified DAILY loss and removed that added requirement. This class establishes
 honest trade construction and refusal, not profitable trade selection.
+
+## PENDING CLASS — OWNERSHIP AND VALIDATION MUST PRECEDE EVERY SIDE EFFECT
+
+Branch `fix/repo-audit-control-boundaries-20260913`, base `63968be6`.
+Number reserved until merge, per canon. Offline production-router regression
+reproduces authenticated foreign-trader deletion of equity history: the old
+ownership middleware guarded only plan/risk prefixes; the store deleted child
+rows before its user-scoped parent delete. Query-first/body-second resolution
+also left a second selector unchecked. Transactional deletion now establishes
+ownership before child mutation and rolls back when child deletion fails.
+
+The same review reproduced two Q&A context failures (a global historical fallback
+and no-plan plus available bars dereferencing a nil stored row), and a strategy
+PUT that persisted configuration before returning token-overflow rejection.
+
+**Probe:** two owners, real route registration/auth/middleware, a foreign selector
+in each input location and conflicting query/body IDs; assert exact ownership
+refusal and unchanged child/parent records. Inject a child-delete failure in a
+temporary database and verify rollback. Feed bars with no plan. Put a newest
+foreign plan beside an empty owned trader. Reject an oversized strategy update
+and compare persisted bytes, not only HTTP status.
+
+**Law:** authentication is not object authorization; validate every selector the
+consumer can use. Rejection must not imply unchanged state unless the writes are
+ordered or transacted to make that true. A scoped parent write does not authorize
+an earlier unscoped child write. Tests must traverse production call sites.
+
+## PENDING CLASS — A REFUSAL LATCH MUST BIND EVERY ENTRY AND PRECEDE AUTOSTART
+
+Branch `fix/repo-audit-control-boundaries-20260913`, base `63968be6`.
+The decision executor read boot integrity while the resting-order adapter did
+not. A ready isolated loopback peer received a limit entry while TradingRefused
+was true. Main also loaded/autostarted persisted running traders before asserting
+integrity. The repair checks all three TCP entry methods before placement side
+effects and asserts boot integrity before manager load. It preserves close,
+cancellation and protection/read operations. Adapter tests cover both market
+sides, limit sides, stop-entry sides and no placement registration on refusal;
+a ready loopback test proves refusal and subsequent allowed transmission. This
+is offline transport evidence, not a real NT8 fill or deployment claim.
+
+Related authorization-order failure: broker-terminal armed rows minted their
+successor before the existing same-version retirement rule. Tests reproduce
+successor creation after both cancelled and filled rows; the retirement check
+now precedes minting. New versions and boot-sweep exceptions retain their
+existing documented semantics. A permanent record is not permission to trade
+again.
+
+## PENDING CLASS — ABSENT BOOKS AND STALE EVIDENCE CANNOT AUTHORIZE
+
+Branch `fix/repo-audit-control-boundaries-20260913`, base `63968be6`.
+An omitted/null orders array was normalized to empty despite the explicit-empty
+wire contract. Cancellation ignored the available book age, and returned success
+after a failed send. Regressions exercise the production parser and cancellation
+entry points with synthetic snapshots and injected send failure. Preserve the
+distinction between no answer, a fresh empty book, and a completed cancellation.
+Read snapshot contents and receipt time atomically.
+
+## PENDING CLASS — CHANNEL OWNERSHIP MUST COVER DELIVERY AND CLOSE
+
+Branch `fix/repo-audit-control-boundaries-20260913`, base `63968be6`.
+History dispatch retrieved a channel under a read lock, released it, then sent;
+importer teardown closed under the write lock in that gap. A loopback race test
+reproduced process panic. Hold the ownership lock through nonblocking delivery
+or use an equivalent lifecycle protocol; locking only channel lookup is not enough.
+
+## PENDING CLASS — BOOT RECONCILIATION CANNOT BYPASS SETTLEMENT
+
+Branch `fix/repo-audit-control-boundaries-20260913`, base `63968be6`.
+A restart-specific cancel path wrote terminal state directly after sending,
+outside the established cancel_pending/confirmed lifecycle. Regression records
+a placed pre-boot row, a successful fake send, pending state, then a persisted
+broker snapshot. Cancellation receipts alone must not unlock pending slots.
+Completion counters must be committed with the confirmed state transition;
+requests and completions require distinct language.
+
+## PENDING CLASS — ACCOUNT FALLBACK MUST NOT WIDEN OWNERSHIP
+
+Branch `fix/repo-audit-control-boundaries-20260913`, base `63968be6`.
+A missing bound-account balance must remain unavailable. Falling back to the
+shared current account can size risk from another account even when the returned
+payload labels that account correctly. Similarly, a legacy unassigned-account
+position lookup must require both unassigned account and owning trader; passing
+empty to an optional filter means all accounts, not empty accounts. Test two
+accounts with the same symbol/side, not just a single legacy empty-account row.
+Pending-map reset must use the same mutex and lock order as fill/reconcile paths.
+
+## PENDING CLASS — AUTHENTICATION MUST ALSO BIND CONVERSATION MEMORY
+
+Branch `fix/repo-audit-control-boundaries-20260913`, base `63968be6`.
+Store CRUD used authenticated user identity while chat history trusted a numeric
+body field. Both normal and SSE `/clear` handler tests reproduced foreign memory
+deletion. Bind every state namespace at entry; authenticating the HTTP request
+and separately scoping resource tools does not authorize a caller-selected memory key.
+
+## PENDING CLASS — SETTLEMENT EVIDENCE MUST FOLLOW THE REQUEST
+
+Branch `fix/repo-audit-control-boundaries-20260913`, base `63968be6`.
+A fresh empty broker snapshot can still predate a later cancellation. Require
+receipt at or after the persisted request, valid receipt time and explicit orders
+before absence becomes settlement evidence. Test pre-request empty, post-request
+working, then post-request empty books. A retry budget scoped to process identity
+must reset before the cap check, not only inside the retry it otherwise blocks.
+
+## PENDING CLASS — REFUSAL IS NOT PLACEMENT COMMITMENT
+
+Branch `fix/repo-audit-control-boundaries-20260913`, base `63968be6`.
+The stop helper returned no outcome; its caller closed the pass and retired
+other scenarios even on guard/build refusal. Test the actual placement loop
+with two scenarios. Commitment starts at successful durable registration, before
+transmission: a later ambiguous send error must still reserve the account.
+
+## PENDING CLASS — PROMPT AND WARNINGS MUST FOLLOW THE COMPOSITION BRANCH
+
+Branch `fix/repo-audit-control-boundaries-20260913`, base `63968be6`.
+Reject-fade execution used frozen structural geometry while prompt facts and
+feasibility warnings still imposed the legacy ATR floor on authored prices.
+Exercise the production prompt builder and warning function; distinguish plays,
+use composed geometry for admission, and never suggest a route bypass.
+
+## PENDING CLASS — ORDER LABELS DO NOT PROVE PROTECTION
+
+Branch `fix/repo-audit-control-boundaries-20260913`, base `63968be6`.
+An `-sl` suffix bypassed type/action checks and counted a wrong-side or limit
+order as stop coverage. Exercise the production protection adjudicator with
+contradictory and missing wire fields. Missing shape is UNKNOWN, not permission
+to duplicate a possibly live stop; known contradictory shape is not coverage.
+
+## PENDING CLASS — UNKNOWN PERMISSION MUST COVER INHERITED AUTHORIZATION
+
+Branch `fix/repo-audit-control-boundaries-20260913`, base `63968be6`.
+A facts panic produced no current verdict, but old armed rows still reached
+the placement pass. Retire missing-verdict unplaced rows and stop new placement
+if that retirement cannot persist. Test actual cycle plus wire, including
+injected state-update failure; a fail-closed log is not enforcement.
+
+The inherited-authorization class also applies to ordinary quality/gate refusals:
+production placement consumes the successfully admitted row IDs for this cycle,
+not every stored armed row. Test a current quality refusal with an older row.
+
+## PENDING CLASS — CUTOFF RETIREMENT IS WALL-CLOCK WORK
+
+Branch `fix/repo-audit-control-boundaries-20260913`, base `63968be6`.
+Frozen-bar dedup skipped session/news retirement when local positions were flat,
+leaving unfilled authorizations alive. Exercise tickOnce with unchanged bars,
+a past cutoff and an armed row. Cutoff work precedes bar cadence and AI skips.
+
+## PENDING CLASS — OWNED CONTAINER DOES NOT AUTHORIZE CHILD ID
+
+Branch `fix/repo-audit-control-boundaries-20260913`, base `63968be6`.
+An owned trader selected a shared store whose fill query accepted an arbitrary
+order ID. Scope both parent order and fill rows to the authenticated trader.
+Test a foreign order and an inconsistent foreign fill attached to an owned order.
+History reads must not depend on a running execution instance.
+
+## PENDING CLASS — DRAFT REVISION MUST SURVIVE THE WRITE QUEUE
+
+Branch `fix/repo-audit-control-boundaries-20260913`, base `63968be6`.
+Index-based edits must carry the viewed plan ID/version/overlay revision. Check
+again inside the serialized writer alongside version/lifecycle changes; an API
+mutex alone does not serialize planner writes. Test two competing drafts and
+a planner append between read and append. Unknown/read-error state refuses.
+
+Registration commitment applies to BOTH limit and stop placement: an error
+after durable registration must not admit another row in the same pass.
+Logs must say registered, not sent or filled, unless transmission is observed.
+
+## PENDING CLASS — REQUEST MODEL SELECTION MUST NOT MUTATE SHARED AGENT
+
+Branch `fix/repo-audit-control-boundaries-20260913`, base `63968be6`.
+Two authenticated chats must retain their own selected model credentials through
+all follow-up calls and summaries. Shared history/flow locks stay shared without
+copying mutexes. Missing user configuration must not select another owner's
+default credentials. Exercise both HTTP identity and concurrent model selection.
+
+## PENDING CLASS — C# ORDER LIFECYCLE MUST SURVIVE REQUEST AMBIGUITY
+
+Branch `fix/repo-audit-control-boundaries-20260913`, integrated C# source lane
+`fix/repo-audit-nt8-lifecycle-20260913` at `f1b7cc10`. Explicit execution account
+must not fall back; close/protection resolve the actual held expiry. Retain entry
+and bracket identity on Cancel/Submit uncertainty. Execute production methods
+with synchronous partial/terminal callbacks and deferred/rejected Change.
+Requested quantities are not confirmed coverage; preserve terminal receipts even
+while Submit holds the identity reservation. Compile against actual NT8 refs,
+but report broker scheduling/OCO/runtime checks separately.
+
+## PENDING CLASS — FORMATION TIME IS NOT DEFINING-CANDLE IDENTITY
+
+Branch `fix/repo-audit-control-boundaries-20260913`, base `63968be6`.
+Swing presentation time is the pivot close, while candle lookup keys are opens.
+Do not use one as the other: that selected the next candle's wick for zone width.
+Retain exact pivot-open identity and confirmation-close provenance separately.
+Aggregation conservation includes the first source bar's volume. Synthetic
+pivot and bucket fixtures must differ enough to expose an off-by-one join.
+
+## PENDING CLASS — DO NOT REBUCKET ALREADY AGGREGATED CALENDAR EVIDENCE
+
+The weekly reader must pass daily observations into the CME-week consumer.
+A seven-day epoch aggregate has already lost the daily boundaries; assigning
+its timestamp to a Monday cannot reconstruct its OHLC. Exercise the production
+reader with distinct Friday extremes and assert known weekly values, not two
+identical resolver calls. The generic resolver calendar convention is a separate
+consumer audit; this fix does not establish every weekly consumer is corrected.
+
+## PENDING CLASS — CUMULATIVE ENTRY AND PARTIAL EXIT SHARE ONE RESIDUAL
+
+Actual filled quantity on a terminal entry cancellation is exposure. Completed
+exit-order quantity is not necessarily the whole position. Test actual entry
+callback interleaved with atomic exit receipt application: preserve residual
+quantity, incremental cost basis and accumulated realized P&L. Deduplicate with
+actual broker identity, retain unknown cumulative notional as NULL, and refuse
+ambiguous ownership. A closed owned row does not prove its entire account flat.
+Terminal cancelled/rejected exits must report their valid cumulative fills too;
+transient PartFilled must not be charged again on terminal receipt. Verify that
+rejection alarms preserve actual remaining protection.
+
+## PENDING CLASS — SERIALIZE EXECUTION EVIDENCE BEFORE TYPE FANOUT
+
+Separate ordered channels do not preserve order between entry updates, fills and
+exits. Exercise real TCP receive order in both directions, including a cumulative
+entry queued before an exit, same-order continuation after zero residual, and full
+replay. Bind one owner per account/symbol before its entries. Advisory fanout must
+not duplicate durable effects; handled flags must not be accepted from JSON.
+Preserve echo checks and test callback-to-wire progress without transport locks.
+Document storage backpressure, pre-owner queues, missing durable journal and the
+separate limits of exchange chronology and process-local analytics hooks.

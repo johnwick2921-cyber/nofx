@@ -55,6 +55,7 @@ func TestFourPlacementPathsWaitForEntryReceipt(t *testing.T) {
 			for s.FarSideBuildID() == "" && time.Now().Before(deadline) {
 				time.Sleep(time.Millisecond)
 			}
+			knownFlatPositionsFrame(t, s, conn)
 			broker := nttrader.NewTCPTrader(s, "MNQ", "Sim101")
 			broker.StartCloseSync(at.id, "fixture", "ninjatrader", st)
 			at.trader = broker
