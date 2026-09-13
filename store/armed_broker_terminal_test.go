@@ -44,6 +44,9 @@ func TestBrokerTerminalArmCannotReauthorizeSameVersion(t *testing.T) {
 			if err != nil || len(live) != 1 || live[0].SignalID != "" || live[0].Version != 3 {
 				t.Fatalf("new version must authorize fresh placement: %+v err=%v", live, err)
 			}
+			if live[0].BootID != ProcessBootID() || live[0].ArmedUnderVersion != 3 {
+				t.Fatalf("successor lost authorization provenance: boot=%q armed_under=%d", live[0].BootID, live[0].ArmedUnderVersion)
+			}
 		})
 	}
 }

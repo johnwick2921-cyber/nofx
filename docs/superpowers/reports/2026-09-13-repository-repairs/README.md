@@ -119,3 +119,10 @@ the existing legacy-empty-account deduplication case. An older test explicitly
 expecting foreign-balance fallback was corrected. No actual account was selected
 or mutated. The lock-ownership regression is controlled synchronization evidence,
 not proof of every possible interleaving.
+
+## Successor provenance
+
+The production-style fresh successor lost BootID and ArmedUnderVersion because
+its early Create bypassed initialization. Regression across canonical terminal
+states reproduced both blank values. Successor creation now stamps this process
+and the new authorization version. Focused provenance/append-only tests pass.

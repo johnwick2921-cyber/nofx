@@ -329,6 +329,10 @@ func (s *ArmedOrderStore) UpsertArm(row *ArmedOrderDB) error {
 			row.SignalID = ""
 			row.FillPrice = 0
 			row.FillQuantity = 0
+			// This successor is a new authorization by this process, not an
+			// inherited placement. Stamp before this early create/return too.
+			row.BootID = ProcessBootID()
+			row.ArmedUnderVersion = row.Version
 			return s.db.Create(row).Error
 		}
 		if existing.State == "armed" {
