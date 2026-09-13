@@ -4,6 +4,14 @@ Source base: `63968be62e44db2fb07a92883e02127b9064b0be`. Audit branch: `docs/rep
 
 The owner requested a detailed, accurately traced, approximately 30-agent repository review. This directory preserves the evidence and coverage rather than equating an index with understanding. Confirmed defects were repaired on separately scoped branches with focused and independent verification; integration and final verification are tracked below. This audit does not authorize deployment or account/settings changes.
 
+## Packaged reports
+
+- [CTO-REPORT.md](CTO-REPORT.md): assembled CTO assessment, later repair updates, disposition table, core source trace and coverage/checkpoint. Current package: **47,836 bytes / 5,659 whitespace-delimited words**; this is the source for the planned concise PDF.
+- [FULL-AUDIT.md](FULL-AUDIT.md): the same report plus **all 30 original review-report appendices**, each with historical scope notices. Current package: **775,591 bytes / 92,352 whitespace-delimited words**. [Download editable full Markdown](https://raw.githubusercontent.com/johnwick2921-cyber/nofx/refs/heads/docs/repo-understanding-20260913/docs/superpowers/reports/2026-09-13-repo-understanding/FULL-AUDIT.md) (branch URL; available after this documentation commit is pushed, and changes when the branch is updated).
+- [report-package.json](report-package.json) records exact input/output hashes and sizes; [PACKAGING-UPDATES.md](PACKAGING-UPDATES.md) records the later committed repairs that supersede specific older open items. Final ordered-execution repair, merged-head tests and release stamps remain root-owned.
+
+Rebuild from the repository root with `python3 docs/superpowers/reports/2026-09-13-repo-understanding/tools/build-reports.py`; append `--check` to verify deterministic output without writing. Edit the linked originals, then regenerate. Original review files and evidence artifacts are retained separately. Byte/word counts in this index must be refreshed if source documents change; the manifest is authoritative for each generated package. Packaging does not re-review the source or certify runtime behavior.
+
 ## Reading order
 
 Start with [CTO-TRADING-LOGIC.md](CTO-TRADING-LOGIC.md) for the trading-process assessment, then [REPAIR-STATUS.md](REPAIR-STATUS.md) for fixed/open/runtime-unverified dispositions and revision-scoped evidence. [CHECKPOINT.md](CHECKPOINT.md) lists publication work still due. The numbered reports preserve baseline findings even when a later repair resolves them; do not read their historical open lists as final status.
