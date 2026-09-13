@@ -104,10 +104,9 @@ func ParseOrderSnapshot(b []byte) (OrderSnapshotPayload, error) {
 		return OrderSnapshotPayload{}, fmt.Errorf("order_snapshot: no account — unaddressable frame")
 	}
 	if p.Orders == nil {
-		// An absent list and an empty list must not collapse into each other:
-		// the AddOn sends [] for an empty book, and a nil here would later read
-		// as "we never got a book".
-		p.Orders = []NT8Order{}
+		// Only an explicit [] establishes an empty account book. Missing/null
+		// is an unanswered question, so retain the previous cache and its age.
+		return OrderSnapshotPayload{}, fmt.Errorf("order_snapshot: orders missing or null — broker book unavailable")
 	}
 	return p, nil
 }

@@ -4717,3 +4717,13 @@ successor creation after both cancelled and filled rows; the retirement check
 now precedes minting. New versions and boot-sweep exceptions retain their
 existing documented semantics. A permanent record is not permission to trade
 again.
+
+## PENDING CLASS — ABSENT BOOKS AND STALE EVIDENCE CANNOT AUTHORIZE
+
+Branch `fix/repo-audit-control-boundaries-20260913`, base `63968be6`.
+An omitted/null orders array was normalized to empty despite the explicit-empty
+wire contract. Cancellation ignored the available book age, and returned success
+after a failed send. Regressions exercise the production parser and cancellation
+entry points with synthetic snapshots and injected send failure. Preserve the
+distinction between no answer, a fresh empty book, and a completed cancellation.
+Read snapshot contents and receipt time atomically.

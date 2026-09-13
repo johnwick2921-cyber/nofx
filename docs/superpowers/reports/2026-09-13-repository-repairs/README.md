@@ -62,3 +62,13 @@ the previous calendar date's chain. Focused tests cover the session gap and
 overnight date plus existing ask/realign/context tests. This defect was established
 by source inspection; the new helper tests were not run against the old code.
 Atomic proposal application/version binding remain separate open findings.
+
+## Broker-book evidence and cancellation
+
+Regressions reproduced missing/null `orders` parsing as an empty book, stale
+book evidence authorizing cancellation, and a failed cancel send returning true.
+The parser now rejects an uncomputed list (explicit `[]` remains valid). Live
+book data and receipt time are read under one cache lock. Signal/row cancellation
+uses the existing snapshot age limit and reports send failure as failure.
+The existing independently established flat-position exception is preserved.
+Focused parser, cancellation and desync tests pass. No real cancel was sent.
