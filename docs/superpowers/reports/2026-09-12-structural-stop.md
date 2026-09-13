@@ -1,5 +1,7 @@
 # Structural stop and first-zone target
 
+**Owner correction after this boot:** the owner meant the existing DAILY loss limit. The added mandatory per-trade cap is superseded by [the daily-loss correction](2026-09-13-structural-stop-daily-loss.md). The measurements and original boot receipts below remain historical evidence.
+
 **E4: the corrected conservative replay remains negative; geometry does not establish profitability. C1: the ATR floor won 180/200 logged compositions (90%), a selected log cohort spanning 27 distinct plan/version/scenario/leg specifications—not 200 independent arms. No numeric owner risk cap is configured, so actual structural admission refuses every opportunity. Booted to SIM at 2026-09-13 00:21:42 CT; the final boot marker below supersedes the earlier holds. First live composition/refusal proof remains pending the market reopening.**
 
 ## C5 — the measured overshoot and the buffer decision

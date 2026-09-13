@@ -59,15 +59,11 @@ func TestStructuralGeometryPersistenceAndCounts(t *testing.T) {
 	}
 }
 
-func TestStructuralPolicyOwnerCapAndMissingValues(t *testing.T) {
+func TestStructuralPolicyMeasuredBufferAndMissingValues(t *testing.T) {
 	c := StrategyConfig{DayPlan: &DayPlanConfig{}}
 	p := ResolveStructuralStop(&c, "MNQ")
-	if p.RiskCapKnown || !p.BufferKnown || p.BufferPoints != 4.5 {
-		t.Fatalf("unset cap is not unlimited, measured buffer must resolve: %+v", p)
-	}
-	c.RiskControl.MaxTradeLossUSD = map[string]float64{"MNQ": 50, "NQ": 500}
-	if ResolveStructuralStop(&c, "MNQ").RiskCapUSD != 50 || ResolveStructuralStop(&c, "NQ").RiskCapUSD != 500 {
-		t.Fatal("instrument caps were conflated")
+	if !p.BufferKnown || p.BufferPoints != 4.5 {
+		t.Fatalf("measured buffer must resolve independently of daily risk settings: %+v", p)
 	}
 	zero := 0.0
 	c.DayPlan.StructuralStop = &StructuralStopConfig{BufferPoints: &zero}
