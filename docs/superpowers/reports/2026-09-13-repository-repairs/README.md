@@ -294,3 +294,14 @@ package tests pass (`/tmp/nofx-gnark-compatibility.log`). Four compatible npm
 updates are being handled in the frontend lane. This establishes affected
 versions, not exploitation or reachability in MNQ trading. Default-branch alert
 closure requires publication/scanning and is not claimed from a local update.
+
+## Weekly reader calendar evidence
+
+[A] Production weeklyDailyBars returned two seven-day aggregates for ten daily
+observations, contradicting its own daily-input contract. Before regression
+failed; requesting completed daily observations preserves both CME weeks and
+the known prior-week high, low and close. Focused weekly tests pass in
+`/tmp/nofx-weekly-calendar-after.log`; before evidence is
+`/tmp/nofx-weekly-calendar-before.log`. This fixes that reader and its shared
+watch source. Generic epoch aggregation for other consumers and the information
+limits of daily bars for intraday weekend-gap timing remain separate issues.

@@ -131,14 +131,12 @@ func (at *AutoTrader) barResolver() *market.BarResolver {
 // yields TWO completed weeks, so the card rendered "WEEKLY thin · low" while
 // the NT8 cache held 1500 native DAILY bars back to 2020-11-11.
 //
-// It resolves "1w", whose ladder is 1d → 1m: native 1w is deliberately
-// EXCLUDED because NT8 stamps weekly bars Friday→Thursday while our weekly
-// vocabulary is Monday-governed (market.ExcludedNative("1w") carries the
-// reason). The returned bars are DAILY; CompletedWeekCandles buckets them with
-// weekStartMonday exactly as it bucketed 1m bars — same convention, same
-// output shape, more history. The weekly SIGNAL is untouched by this wave.
+// Resolve daily observations so CompletedWeekCandles alone assigns the CME
+// Monday-governed week. Requesting "1w" pre-aggregates into epoch-aligned
+// seven-day buckets and irreversibly mixes adjacent CME weeks. Native daily
+// history retains the individual observations needed by weekly references.
 func (at *AutoTrader) weeklyDailyBars(now time.Time) (bars []market.Kline, source string) {
-	s, err := at.barResolver().CompletedBars(at.futuresSymbol(), "1w", 0, now.UnixMilli())
+	s, err := at.barResolver().CompletedBars(at.futuresSymbol(), "1d", 0, now.UnixMilli())
 	if err != nil {
 		at.logWarnf("📅 WEEKLY READ: resolver failed (%v) — falling back to stored 1m", err)
 	}

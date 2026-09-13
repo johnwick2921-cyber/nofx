@@ -4864,3 +4864,12 @@ Do not use one as the other: that selected the next candle's wick for zone width
 Retain exact pivot-open identity and confirmation-close provenance separately.
 Aggregation conservation includes the first source bar's volume. Synthetic
 pivot and bucket fixtures must differ enough to expose an off-by-one join.
+
+## PENDING CLASS — DO NOT REBUCKET ALREADY AGGREGATED CALENDAR EVIDENCE
+
+The weekly reader must pass daily observations into the CME-week consumer.
+A seven-day epoch aggregate has already lost the daily boundaries; assigning
+its timestamp to a Monday cannot reconstruct its OHLC. Exercise the production
+reader with distinct Friday extremes and assert known weekly values, not two
+identical resolver calls. The generic resolver calendar convention is a separate
+consumer audit; this fix does not establish every weekly consumer is corrected.
