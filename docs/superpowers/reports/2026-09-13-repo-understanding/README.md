@@ -11,7 +11,7 @@ The owner requested a detailed, accurately traced, approximately 30-agent reposi
 - Tests, fixtures and historical non-code artifacts are inventoried; relevant ones are followed. This is **not** a claim that every test or historical artifact was manually read.
 - Go AST inventory: 1,292 files parsed, 10,269 functions/literals and 78,157 syntactic calls; zero parser errors. These are syntax inventories, **not type-resolved call edges or human reading**.
 - `orientation/` holds initial subsystem reviews with explicit read ledgers and unresolved concerns. Their findings require root/cross-review validation.
-- **12/30 scoped reviews reported**, covering 270 assigned source files / 99,523 lines. Remaining source and independent cross-boundary reviews are pending.
+- **16/30 scoped reviews reported**, covering 426 assigned source files / 133,644 lines. Remaining source and independent cross-boundary reviews are pending.
 - `review-plan.json` tracks assignments; `coverage-validation.json` checks source hashes, full line ranges, and named Go declaration notes. It does not certify semantic understanding or runtime behavior.
 
 ## Historical maps
@@ -31,4 +31,4 @@ methods, same-version terminal-arm retirement, session mutation chain dates,
 broker-book absence/freshness/send truth, history-channel teardown locking, and
 boot cancellation settlement. The separate repair report names reproductions
 and test limits. These changes are not deployed and do not alter owner settings.
-The full Go suite is running; no overall pass is claimed before it finishes.
+The first full Go suite completed with three store-test failures; all other packages passed. Corrected authorization fixtures pass focused reruns. Later account and chat repairs have focused tests; final combined verification remains pending.

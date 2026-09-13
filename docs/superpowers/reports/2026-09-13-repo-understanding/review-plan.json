@@ -2327,7 +2327,7 @@
         }
       ],
       "id": 11,
-      "status": "in_progress",
+      "status": "reported",
       "lines": 7100,
       "file_count": 22
     },
@@ -2777,7 +2777,7 @@
         }
       ],
       "id": 12,
-      "status": "in_progress",
+      "status": "reported",
       "lines": 7579,
       "file_count": 49
     },
@@ -3164,7 +3164,7 @@
         }
       ],
       "id": 13,
-      "status": "in_progress",
+      "status": "reported",
       "lines": 9436,
       "file_count": 42
     },
@@ -3732,7 +3732,7 @@
         }
       ],
       "id": 15,
-      "status": "pending",
+      "status": "in_progress",
       "lines": 10001,
       "file_count": 41
     },
@@ -4128,7 +4128,7 @@
         }
       ],
       "id": 16,
-      "status": "pending",
+      "status": "reported",
       "lines": 10006,
       "file_count": 43
     },
@@ -5091,7 +5091,7 @@
         }
       ],
       "id": 17,
-      "status": "pending",
+      "status": "in_progress",
       "lines": 8052,
       "file_count": 106
     },
@@ -6054,7 +6054,7 @@
         }
       ],
       "id": 18,
-      "status": "pending",
+      "status": "in_progress",
       "lines": 8052,
       "file_count": 106
     },
