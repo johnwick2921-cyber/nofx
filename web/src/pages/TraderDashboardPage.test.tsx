@@ -7,12 +7,20 @@ import {
   waitFor,
   cleanup,
 } from '@testing-library/react'
+import useSWR, { SWRConfig } from 'swr'
 import { TraderDashboardPage } from './TraderDashboardPage'
 const lifecycle = vi.hoisted(() => ({ mounts: 0, unmounts: 0 }))
 vi.mock('../contexts/LanguageContext', () => ({
   useLanguage: () => ({ language: 'en' }),
 }))
-vi.mock('../lib/api', () => ({ api: {} }))
+const closePosition = vi.hoisted(() =>
+  vi.fn().mockResolvedValue({ message: 'sent' })
+)
+vi.mock('../lib/api', () => ({ api: { closePosition } }))
+vi.mock('../lib/notify', () => ({
+  confirmToast: vi.fn().mockResolvedValue(true),
+  notify: { success: vi.fn(), error: vi.fn() },
+}))
 vi.mock('../lib/api/plan', () => ({
   planApi: { getRiskErrors: async () => ({ rows: [] }) },
 }))
@@ -174,4 +182,24 @@ describe('Dashboard production composition', () => {
     expect(table.querySelectorAll('th.hidden,td.hidden')).toHaveLength(0)
     expect(table.closest('.overflow-x-auto')).not.toBeNull()
   })
+})
+
+it('refreshes the active provider account-scoped cache after closing a position', async () => {
+  const fetcher = vi.fn(async (key: string) => key)
+  const p = { ...props(), selectedAccount: 'SimFixture' }
+  function Cached() {
+    useSWR(`positions-${p.selectedTraderId}-SimFixture`, fetcher)
+    useSWR(`account-${p.selectedTraderId}-SimFixture`, fetcher)
+    return null
+  }
+  render(
+    <SWRConfig value={{ provider: () => new Map(), dedupingInterval: 0 }}>
+      <Cached />
+      <TraderDashboardPage {...p} />
+    </SWRConfig>
+  )
+  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2))
+  fireEvent.click(screen.getByRole('button', { name: /^close$/i }))
+  await waitFor(() => expect(closePosition).toHaveBeenCalled())
+  await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(4))
 })

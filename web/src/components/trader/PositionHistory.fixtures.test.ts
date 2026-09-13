@@ -45,7 +45,7 @@ describe('classifyPosition — one fixture per state', () => {
       exit_price: 0,
     })
     expect(classifyPosition(p, [p])).toBe('unresolved')
-    expect(effectivePnl(p)).toBe(0)
+    expect(effectivePnl(p)).toBeNull()
   })
 
   it('duplicate → reconcile_flat sharing entry_order_id with a real close', () => {
@@ -193,4 +193,10 @@ describe('computeDayTotal — same rule as the ledger', () => {
     ]
     expect(computeDayTotal(all)).toBe(164.0)
   })
+})
+
+it('never substitutes raw realized PNL when correction is unresolved', () => {
+  const p = row({ id: 9001, pnl_corrected: null, realized_pnl: 9876 })
+  expect(effectivePnl(p)).toBeNull()
+  expect(classifyPosition(p, [p])).toBe('unresolved')
 })

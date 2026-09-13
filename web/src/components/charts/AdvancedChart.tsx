@@ -121,6 +121,10 @@ export function AdvancedChart({
   const { language } = useLanguage()
   const quoteUnit = getQuoteUnit(exchange)
   const baseUnit = getBaseUnit(exchange, symbol, language)
+  const identity = JSON.stringify([symbol, interval, traderID, exchange])
+  const identityRef = useRef(identity)
+  identityRef.current = identity
+  const svpRequestRef = useRef(0)
   const chartContainerRef = useRef<HTMLDivElement>(null)
   const chartRef = useRef<IChartApi | null>(null)
   const candlestickSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null)
@@ -139,6 +143,8 @@ export function AdvancedChart({
   const [error, setError] = useState<string | null>(null)
   const [showIndicatorPanel, setShowIndicatorPanel] = useState(false)
   const [showOrderMarkers, setShowOrderMarkers] = useState(true) // Order marker toggle, default on
+  const showOrderMarkersRef = useRef(showOrderMarkers)
+  showOrderMarkersRef.current = showOrderMarkers
   const isInitialLoadRef = useRef(true) // Track if this is initial load
   const [tooltipData, setTooltipData] = useState<any>(null)
   const tooltipRef = useRef<HTMLDivElement>(null)
@@ -715,11 +721,39 @@ export function AdvancedChart({
         svpPrimitiveRef.current = null
       }
       chart.remove()
+      chartRef.current = null
+      candlestickSeriesRef.current = null
+      volumeSeriesRef.current = null
+      svpRequestRef.current += 1
     }
   }, []) // Chart is created once, ResizeObserver handles dimension changes
 
   // Load data and indicators
   useEffect(() => {
+    let live = true
+    let request = 0
+    const series = candlestickSeriesRef.current
+    const owns = (id: number) =>
+      live &&
+      id === request &&
+      identityRef.current === identity &&
+      candlestickSeriesRef.current === series
+    indicatorSeriesRef.current.forEach((series) =>
+      chartRef.current?.removeSeries(series)
+    )
+    indicatorSeriesRef.current.clear()
+    latestKlinesRef.current = []
+    klineDataRef.current.clear()
+    series?.setData([])
+    volumeSeriesRef.current?.setData([])
+    setMarketStats(null)
+    setTooltipData(null)
+    svpRequestRef.current += 1
+    if (svpPrimitiveRef.current && series) {
+      series.detachPrimitive(svpPrimitiveRef.current)
+      svpPrimitiveRef.current = null
+    }
+
     // Reset initial load flag when symbol/interval changes (for auto-fit)
     isInitialLoadRef.current = true
 
@@ -735,7 +769,8 @@ export function AdvancedChart({
     }
 
     const loadData = async (isRefresh = false) => {
-      if (!candlestickSeriesRef.current) return
+      const id = ++request
+      if (!series || !owns(id)) return
 
       console.log(
         '[AdvancedChart] Loading data for',
@@ -752,8 +787,9 @@ export function AdvancedChart({
       try {
         // 1. Fetch kline data
         const klineData = await fetchKlineData(symbol, interval)
+        if (!owns(id)) return
         console.log('[AdvancedChart] Loaded', klineData.length, 'klines')
-        candlestickSeriesRef.current.setData(klineData)
+        series.setData(klineData)
         logBarDebug(
           'AdvancedChart',
           klineData.length
@@ -804,7 +840,7 @@ export function AdvancedChart({
 
         // 2. Display volume
         if (volumeSeriesRef.current) {
-          const volumeEnabled = indicators.find(
+          const volumeEnabled = indicatorsRef.current.find(
             (i) => i.id === 'volume'
           )?.enabled
           if (volumeEnabled) {
@@ -841,6 +877,7 @@ export function AdvancedChart({
             exchange === 'ninjatrader'
               ? await fetchPositionMarkers(traderID, symbol)
               : await fetchOrders(traderID, symbol)
+          if (!owns(id)) return
           console.log('[AdvancedChart] Received orders:', orders)
 
           if (orders.length > 0) {
@@ -979,7 +1016,7 @@ export function AdvancedChart({
               currentMarkersDataRef.current = markers
 
               // Using v5 API: createSeriesMarkers
-              const markersToShow = showOrderMarkers ? markers : []
+              const markersToShow = showOrderMarkersRef.current ? markers : []
 
               if (seriesMarkersRef.current) {
                 // If already exists, update markers
@@ -1001,6 +1038,7 @@ export function AdvancedChart({
               console.error('[AdvancedChart] ❌ Failed to set markers:', err)
             }
           } else {
+            currentMarkersDataRef.current = []
             console.log('[AdvancedChart] No orders found, clearing markers')
             try {
               if (seriesMarkersRef.current) {
@@ -1024,6 +1062,7 @@ export function AdvancedChart({
         }
         setLoading(false)
       } catch (err: any) {
+        if (!owns(id)) return
         console.error('[AdvancedChart] Error loading data:', err)
         setError(err.message || 'Failed to load chart data')
         setLoading(false)
@@ -1043,15 +1082,36 @@ export function AdvancedChart({
         refreshing = false
       })
     }, REFRESH_CHART_MS)
-    return () => clearInterval(refreshInterval)
+    return () => {
+      live = false
+      request += 1
+      clearInterval(refreshInterval)
+    }
   }, [symbol, interval, traderID, exchange])
 
   // Refresh open order price lines separately (every 60s, avoid frequent exchange API calls)
   useEffect(() => {
-    if (!traderID || !candlestickSeriesRef.current) return
+    let live = true
+    let request = 0
+    const series = candlestickSeriesRef.current
+    priceLinesRef.current.forEach((line) => {
+      try {
+        series?.removePriceLine(line)
+      } catch {
+        /* removed series */
+      }
+    })
+    priceLinesRef.current = []
+    if (!traderID || !series) return
+    const owns = (id: number) =>
+      live &&
+      id === request &&
+      identityRef.current === identity &&
+      candlestickSeriesRef.current === series
 
     // Load open orders and display price lines
     const loadOpenOrders = async () => {
+      const id = ++request
       try {
         // Clear old price lines first
         priceLinesRef.current.forEach((line) => {
@@ -1064,6 +1124,7 @@ export function AdvancedChart({
         priceLinesRef.current = []
 
         const openOrders = await fetchOpenOrders(traderID, symbol)
+        if (!owns(id)) return
         console.log('[AdvancedChart] Open orders for price lines:', openOrders)
 
         if (openOrders.length > 0 && candlestickSeriesRef.current) {
@@ -1158,10 +1219,12 @@ export function AdvancedChart({
     }, REFRESH_OPEN_ORDERS_MS)
 
     return () => {
+      live = false
+      request += 1
       clearTimeout(initialTimeout)
       clearInterval(openOrdersInterval)
     }
-  }, [symbol, traderID])
+  }, [symbol, interval, traderID, exchange])
 
   // Handle order marker show/hide separately to avoid reloading data
   useEffect(() => {
@@ -1272,6 +1335,7 @@ export function AdvancedChart({
   }
 
   const syncSVP = async () => {
+    const request = ++svpRequestRef.current
     const series = candlestickSeriesRef.current
     if (!series) return
     const enabled = indicatorsRef.current.find((i) => i.id === 'svp')?.enabled
@@ -1285,7 +1349,13 @@ export function AdvancedChart({
     const data = await fetchSVP()
     if (!data) return
     // The series may have been torn down while the fetch was in flight.
-    if (!candlestickSeriesRef.current) return
+    if (
+      request !== svpRequestRef.current ||
+      identityRef.current !== identity ||
+      candlestickSeriesRef.current !== series ||
+      !indicatorsRef.current.find((i) => i.id === 'svp')?.enabled
+    )
+      return
     if (!svpPrimitiveRef.current) {
       svpPrimitiveRef.current = new SessionVolumeProfile()
       candlestickSeriesRef.current.attachPrimitive(svpPrimitiveRef.current)
@@ -1299,6 +1369,23 @@ export function AdvancedChart({
   useEffect(() => {
     if (latestKlinesRef.current.length > 0) {
       updateIndicators(latestKlinesRef.current)
+    }
+    if (volumeSeriesRef.current) {
+      const enabled = indicatorsRef.current.find(
+        (i) => i.id === 'volume'
+      )?.enabled
+      volumeSeriesRef.current.setData(
+        enabled
+          ? latestKlinesRef.current.map((k) => ({
+              time: k.time as UTCTimestamp,
+              value: k.volume || 0,
+              color:
+                k.close >= k.open
+                  ? 'rgba(14, 203, 129, 0.5)'
+                  : 'rgba(246, 70, 93, 0.5)',
+            }))
+          : []
+      )
     }
     // Attach/update/detach the SVP primitive on toggle (idempotent).
     void syncSVP()

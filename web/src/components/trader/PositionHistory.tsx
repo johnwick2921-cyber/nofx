@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { api } from '../../lib/api'
 import { useAutoRefresh, REFRESH_HISTORY_MS } from '../../lib/autoRefresh'
 import { useLanguage } from '../../contexts/LanguageContext'
@@ -63,12 +63,12 @@ export const TEST_SEAM_REASONS = ['e7_farside_test']
 
 export type PositionKind = 'normal' | 'unresolved' | 'duplicate' | 'hidden'
 
-// effectivePnl mirrors the store aggregate rule: corrections win, then realized.
-export function effectivePnl(p: HistoricalPosition): number {
-  if (typeof p.pnl_corrected === 'number' && !isNaN(p.pnl_corrected)) {
+// Corrected-column law: NULL/nonfinite is unresolved and never replaced by raw P&L.
+export function effectivePnl(p: HistoricalPosition): number | null {
+  if (typeof p.pnl_corrected === 'number' && Number.isFinite(p.pnl_corrected)) {
     return p.pnl_corrected
   }
-  return p.realized_pnl || 0
+  return null
 }
 
 // classifyPosition — deterministic state per the dispatch:
@@ -96,7 +96,7 @@ export function classifyPosition(
     )
     return dupeOf ? 'duplicate' : 'hidden'
   }
-  return 'normal'
+  return effectivePnl(p) === null ? 'unresolved' : 'normal'
 }
 
 // duplicateOfId returns the REAL row id a duplicate row shadows (0 = none).
@@ -352,8 +352,9 @@ function PositionRow({
   const realizedPnl = effectivePnl(position)
   // unresolved and duplicate rows render "—" (their P&L is unknown / not a
   // real trade). normal rows render the ledger-effective number.
-  const pnlUnknown = kind === 'unresolved' || kind === 'duplicate'
-  const isProfitable = realizedPnl >= 0
+  const pnlUnknown =
+    kind === 'unresolved' || kind === 'duplicate' || realizedPnl === null
+  const isProfitable = realizedPnl !== null && realizedPnl >= 0
   const sideColor = isLong ? '#0ECB81' : '#F6465D'
   const pnlColor = isProfitable ? '#0ECB81' : '#F6465D'
 
@@ -432,9 +433,9 @@ function PositionRow({
                 color: '#F0B90B',
                 border: '1px solid #3A424B',
               }}
-              title="NT8 went flat but no close frame and no netting fill exist — the real exit price is unknown"
+              title="Corrected P&L is unresolved; excluded from totals"
             >
-              exit unknown
+              P&L unresolved
             </span>
           )}
         </div>
@@ -481,7 +482,7 @@ function PositionRow({
             title={
               kind === 'duplicate'
                 ? 'Duplicate row — the P&L belongs to the real trade it shadows'
-                : 'Exit unknown — NT8 went flat without a close frame or netting fill'
+                : 'Corrected P&L unresolved — excluded from totals'
             }
           >
             —
@@ -493,7 +494,7 @@ function PositionRow({
               style={{ color: pnlColor }}
             >
               {isProfitable ? '+' : ''}
-              {formatNumber(realizedPnl)}
+              {formatNumber(realizedPnl!)}
             </div>
             <div className="text-xs" style={{ color: pnlColor }}>
               {pnlPct >= 0 ? '+' : ''}
@@ -539,6 +540,10 @@ export function PositionHistory({ traderId }: PositionHistoryProps) {
   const [symbolStats, setSymbolStats] = useState<SymbolStats[]>([])
   const [directionStats, setDirectionStats] = useState<DirectionStats[]>([])
 
+  const historyIdentity = useRef(traderId)
+  historyIdentity.current = traderId
+  const historyRequest = useRef(0)
+
   // Pagination state
   const [pageSize, setPageSize] = useState<number>(20)
   const [currentPage, setCurrentPage] = useState<number>(1)
@@ -551,6 +556,12 @@ export function PositionHistory({ traderId }: PositionHistoryProps) {
   const [showDuplicates, setShowDuplicates] = useState<boolean>(false)
 
   useEffect(() => {
+    let live = true
+    const request = ++historyRequest.current
+    const current = () =>
+      live &&
+      historyIdentity.current === traderId &&
+      historyRequest.current === request
     const fetchData = async () => {
       try {
         setLoading(true)
@@ -561,19 +572,29 @@ export function PositionHistory({ traderId }: PositionHistoryProps) {
           Math.max(200, pageSize * 5),
           true
         )
+        if (!current()) return
         setPositions(data.positions || [])
         setStats(data.stats)
         setSymbolStats(data.symbol_stats || [])
         setDirectionStats(data.direction_stats || [])
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Failed to load history')
+        if (current())
+          setError(
+            err instanceof Error ? err.message : 'Failed to load history'
+          )
       } finally {
-        setLoading(false)
+        if (current()) setLoading(false)
       }
     }
 
     if (traderId) {
       fetchData()
+    } else {
+      setPositions([])
+      setLoading(false)
+    }
+    return () => {
+      live = false
     }
   }, [traderId, pageSize])
 
@@ -582,12 +603,20 @@ export function PositionHistory({ traderId }: PositionHistoryProps) {
   // Pagination/filter/sort/scroll all live in separate local state and are
   // untouched by a data update — the owner is never yanked off their page.
   useAutoRefresh(async () => {
-    if (!traderId) return
+    if (!traderId || loading) return
+    const request = ++historyRequest.current
     const data = await api.getPositionHistory(
       traderId,
       Math.max(200, pageSize * 5),
       true
     )
+    if (
+      historyIdentity.current !== traderId ||
+      historyRequest.current !== request
+    )
+      return
+    setError(null)
+    setLoading(false)
     setPositions(data.positions || [])
     setStats(data.stats)
     setSymbolStats(data.symbol_stats || [])
@@ -648,7 +677,9 @@ export function PositionHistory({ traderId }: PositionHistoryProps) {
             new Date(b.exit_time || 0).getTime()
           break
         case 'pnl':
-          comparison = (a.realized_pnl || 0) - (b.realized_pnl || 0)
+          if (effectivePnl(a) === null) return effectivePnl(b) === null ? 0 : 1
+          if (effectivePnl(b) === null) return -1
+          comparison = effectivePnl(a)! - effectivePnl(b)!
           break
         case 'pnl_pct': {
           const aPrice = a.entry_price || 1
@@ -679,11 +710,16 @@ export function PositionHistory({ traderId }: PositionHistoryProps) {
     let sum = 0
     for (const p of filteredAndSortedPositions) {
       if (classified.kinds.get(p.id) === 'normal') {
-        sum += effectivePnl(p)
+        const pnl = effectivePnl(p)
+        if (pnl !== null) sum += pnl
       }
     }
     return Math.round(sum * 100) / 100
   }, [filteredAndSortedPositions, classified])
+
+  const unresolvedCount = filteredAndSortedPositions.filter(
+    (p) => classified.kinds.get(p.id) === 'unresolved'
+  ).length
 
   // Day total — the SAME rule the ledger's session-day query uses
   // (unknown/test-seam/duplicate excluded, corrections win, A-2 NULLs out).
@@ -784,6 +820,16 @@ export function PositionHistory({ traderId }: PositionHistoryProps) {
 
   return (
     <div className="space-y-6">
+      {stats && (
+        <div
+          className="text-xs text-gray-400"
+          data-testid="aggregate-pnl-counts"
+        >
+          Server aggregate: {stats.resolved_trades ?? stats.total_trades}{' '}
+          resolved · {stats.unresolved_excluded ?? 'unknown'} unresolved
+          excluded
+        </div>
+      )}
       {/* Overall Stats - Row 1: Core Metrics */}
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-4">
@@ -1180,8 +1226,11 @@ export function PositionHistory({ traderId }: PositionHistoryProps) {
                 </span>
               </span>
             )}
-            <span title="Same exclusion rule as the ledger (unknown / test-seam / duplicate rows excluded, corrections win)">
-              Today (CT):{' '}
+            <span data-testid="unresolved-pnl-count">
+              {unresolvedCount} unresolved excluded (filtered history)
+            </span>
+            <span title="Loaded history only. Same exclusion rule as the ledger (unknown / test-seam / duplicate rows excluded, corrections win)">
+              Today (CT, loaded history):{' '}
               <span
                 className="font-mono font-semibold"
                 style={{ color: dayTotal >= 0 ? '#0ECB81' : '#F6465D' }}
