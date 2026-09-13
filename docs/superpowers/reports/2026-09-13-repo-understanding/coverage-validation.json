@@ -5,6 +5,8 @@
     "ledger_errors": [],
     "named_go_declarations": 144,
     "missing_named_go_notes": [],
+    "named_frontend_functions": 0,
+    "missing_named_frontend_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -13,6 +15,8 @@
     "ledger_errors": [],
     "named_go_declarations": 165,
     "missing_named_go_notes": [],
+    "named_frontend_functions": 0,
+    "missing_named_frontend_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -21,6 +25,8 @@
     "ledger_errors": [],
     "named_go_declarations": 301,
     "missing_named_go_notes": [],
+    "named_frontend_functions": 0,
+    "missing_named_frontend_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -29,6 +35,8 @@
     "ledger_errors": [],
     "named_go_declarations": 281,
     "missing_named_go_notes": [],
+    "named_frontend_functions": 0,
+    "missing_named_frontend_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -37,6 +45,8 @@
     "ledger_errors": [],
     "named_go_declarations": 299,
     "missing_named_go_notes": [],
+    "named_frontend_functions": 0,
+    "missing_named_frontend_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -45,6 +55,8 @@
     "ledger_errors": [],
     "named_go_declarations": 200,
     "missing_named_go_notes": [],
+    "named_frontend_functions": 0,
+    "missing_named_frontend_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -53,6 +65,8 @@
     "ledger_errors": [],
     "named_go_declarations": 184,
     "missing_named_go_notes": [],
+    "named_frontend_functions": 0,
+    "missing_named_frontend_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -61,6 +75,8 @@
     "ledger_errors": [],
     "named_go_declarations": 230,
     "missing_named_go_notes": [],
+    "named_frontend_functions": 0,
+    "missing_named_frontend_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -69,6 +85,8 @@
     "ledger_errors": [],
     "named_go_declarations": 253,
     "missing_named_go_notes": [],
+    "named_frontend_functions": 0,
+    "missing_named_frontend_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -77,6 +95,8 @@
     "ledger_errors": [],
     "named_go_declarations": 217,
     "missing_named_go_notes": [],
+    "named_frontend_functions": 0,
+    "missing_named_frontend_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -85,6 +105,8 @@
     "ledger_errors": [],
     "named_go_declarations": 215,
     "missing_named_go_notes": [],
+    "named_frontend_functions": 0,
+    "missing_named_frontend_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -93,6 +115,8 @@
     "ledger_errors": [],
     "named_go_declarations": 216,
     "missing_named_go_notes": [],
+    "named_frontend_functions": 0,
+    "missing_named_frontend_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -101,6 +125,8 @@
     "ledger_errors": [],
     "named_go_declarations": 397,
     "missing_named_go_notes": [],
+    "named_frontend_functions": 0,
+    "missing_named_frontend_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -109,6 +135,8 @@
     "ledger_errors": [],
     "named_go_declarations": 198,
     "missing_named_go_notes": [],
+    "named_frontend_functions": 0,
+    "missing_named_frontend_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -117,6 +145,8 @@
     "ledger_errors": [],
     "named_go_declarations": 382,
     "missing_named_go_notes": [],
+    "named_frontend_functions": 0,
+    "missing_named_frontend_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -125,6 +155,8 @@
     "ledger_errors": [],
     "named_go_declarations": 458,
     "missing_named_go_notes": [],
+    "named_frontend_functions": 0,
+    "missing_named_frontend_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -133,6 +165,8 @@
     "ledger_errors": [],
     "named_go_declarations": 84,
     "missing_named_go_notes": [],
+    "named_frontend_functions": 0,
+    "missing_named_frontend_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -141,6 +175,8 @@
     "ledger_errors": [],
     "named_go_declarations": 74,
     "missing_named_go_notes": [],
+    "named_frontend_functions": 0,
+    "missing_named_frontend_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -149,6 +185,8 @@
     "ledger_errors": [],
     "named_go_declarations": 279,
     "missing_named_go_notes": [],
+    "named_frontend_functions": 0,
+    "missing_named_frontend_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -157,6 +195,8 @@
     "ledger_errors": [],
     "named_go_declarations": 217,
     "missing_named_go_notes": [],
+    "named_frontend_functions": 0,
+    "missing_named_frontend_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -165,6 +205,8 @@
     "ledger_errors": [],
     "named_go_declarations": 197,
     "missing_named_go_notes": [],
+    "named_frontend_functions": 0,
+    "missing_named_frontend_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -173,6 +215,8 @@
     "ledger_errors": [],
     "named_go_declarations": 198,
     "missing_named_go_notes": [],
+    "named_frontend_functions": 0,
+    "missing_named_frontend_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -181,6 +225,8 @@
     "ledger_errors": [],
     "named_go_declarations": 227,
     "missing_named_go_notes": [],
+    "named_frontend_functions": 0,
+    "missing_named_frontend_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -189,6 +235,8 @@
     "ledger_errors": [],
     "named_go_declarations": 0,
     "missing_named_go_notes": [],
+    "named_frontend_functions": 184,
+    "missing_named_frontend_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -197,6 +245,8 @@
     "ledger_errors": [],
     "named_go_declarations": 0,
     "missing_named_go_notes": [],
+    "named_frontend_functions": 196,
+    "missing_named_frontend_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -205,6 +255,8 @@
     "ledger_errors": [],
     "named_go_declarations": 0,
     "missing_named_go_notes": [],
+    "named_frontend_functions": 221,
+    "missing_named_frontend_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   }
 ]

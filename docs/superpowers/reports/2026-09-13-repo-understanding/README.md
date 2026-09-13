@@ -12,7 +12,7 @@ The owner requested a detailed, accurately traced, approximately 30-agent reposi
 - Go AST inventory: 1,292 files parsed, 10,269 functions/literals and 78,157 syntactic calls; zero parser errors. These are syntax inventories, **not type-resolved call edges or human reading**.
 - `orientation/` holds initial subsystem reviews with explicit read ledgers and unresolved concerns. Their findings require root/cross-review validation.
 - **26/30 scoped reviews reported**, covering 1,016 assigned source files / 231,647 lines. Remaining source and independent cross-boundary reviews are pending.
-- `review-plan.json` tracks assignments; `coverage-validation.json` checks source hashes, full line ranges, and named Go declaration notes. It does not certify semantic understanding or runtime behavior.
+- `review-plan.json` tracks assignments; `coverage-validation.json` checks source hashes, full line ranges, and named Go/TypeScript/JavaScript function notes. It does not certify semantic understanding or runtime behavior.
 
 ## Historical maps
 
