@@ -1,14 +1,54 @@
 {
-  "revision": "c20d0a829ca8cc0a9975ab78eed3b6a700f3b11d",
+  "revision": "317dc5efd539a8fac1d657731ea2e68e22109b60",
   "scope": "selected production declarations; not runtime call graph",
   "entries": [
     {
       "boundary": "Transport",
       "path": "provider/ninjatrader/tcp_server.go",
       "function": "readLoop",
-      "line": 1725,
-      "sha256": "edefc6c54fcfa1dfd1422d0d1886b5c231613519eb6baff5e0065aafe38eb042",
+      "line": 1727,
+      "sha256": "a02d8ad6450859a7fe42adfb476120ee88a9e2416d1ba5e75ef5bba8335b553a",
       "note": "Decodes broker frames; execution processing order must be verified separately."
+    },
+    {
+      "boundary": "Ordered execution owner",
+      "path": "provider/ninjatrader/ordered_execution.go",
+      "function": "RegisterOrderedExecutionsFor",
+      "line": 17,
+      "sha256": "0a2077e3560dedd73682a50f5739a7eec75349a0c0b745aa7d4c0bd4b6aa41ab",
+      "note": "Exact account/symbol owner; preserves receive order before type fanout."
+    },
+    {
+      "boundary": "Ordered entry delivery",
+      "path": "provider/ninjatrader/ordered_execution.go",
+      "function": "dispatchOrderedOrder",
+      "line": 37,
+      "sha256": "0a2077e3560dedd73682a50f5739a7eec75349a0c0b745aa7d4c0bd4b6aa41ab",
+      "note": "Applies received entry evidence before advisory consumers can reorder it."
+    },
+    {
+      "boundary": "Ordered exit delivery",
+      "path": "provider/ninjatrader/ordered_execution.go",
+      "function": "dispatchOrderedClose",
+      "line": 54,
+      "sha256": "0a2077e3560dedd73682a50f5739a7eec75349a0c0b745aa7d4c0bd4b6aa41ab",
+      "note": "Applies received close evidence through the same serialized owner."
+    },
+    {
+      "boundary": "Owner installation",
+      "path": "trader/ninjatrader/ordered_execution.go",
+      "function": "InstallOrderedExecutions",
+      "line": 11,
+      "sha256": "ccc6131abddcb5c7c01bee505f41b795eb4d39255b7f768bf4f5ca64c2c3dd13",
+      "note": "Installs observation at successful construction; ordinary Stop retains it."
+    },
+    {
+      "boundary": "Fill cache",
+      "path": "trader/ninjatrader/tcp_trader.go",
+      "function": "handleFill",
+      "line": 192,
+      "sha256": "8e7b198afedbf5a4b5de36690458e133c0767f65680d407807a1390306e4cb86",
+      "note": "Preserves actual exposure and refuses duplicate fully exited entry cache replay."
     },
     {
       "boundary": "Market data",
@@ -95,7 +135,7 @@
       "path": "trader/armed_executor.go",
       "function": "maybeManageArmedOrdersAt",
       "line": 199,
-      "sha256": "c23c97ef12d4433b4f05e3f6fcf58825fa1c9780dd9d4445cf14d8e463ac1d14",
+      "sha256": "4fcc290be148d741fbb36b9a664dfbc82628dcc056b11b964b5ae1696c923dc7",
       "note": "Current-cycle authorization and gate results precede placement."
     },
     {
@@ -103,7 +143,7 @@
       "path": "trader/armed_executor.go",
       "function": "runArmedPlacementAt",
       "line": 1184,
-      "sha256": "c23c97ef12d4433b4f05e3f6fcf58825fa1c9780dd9d4445cf14d8e463ac1d14",
+      "sha256": "4fcc290be148d741fbb36b9a664dfbc82628dcc056b11b964b5ae1696c923dc7",
       "note": "Consumes currently eligible arm identities and broker/account evidence."
     },
     {
@@ -166,16 +206,16 @@
       "boundary": "Resting limit",
       "path": "trader/ninjatrader/tcp_trader.go",
       "function": "PlaceLimitEntry",
-      "line": 446,
-      "sha256": "7243d5906a2d8b1a702f928583eb9495b9b7a6606474bc6a255f057b5e11295f",
+      "line": 469,
+      "sha256": "8e7b198afedbf5a4b5de36690458e133c0767f65680d407807a1390306e4cb86",
       "note": "Registers identity before transmission; transmission is not broker acceptance."
     },
     {
       "boundary": "Stop entry",
       "path": "trader/ninjatrader/tcp_trader.go",
       "function": "PlaceStopEntry",
-      "line": 510,
-      "sha256": "7243d5906a2d8b1a702f928583eb9495b9b7a6606474bc6a255f057b5e11295f",
+      "line": 533,
+      "sha256": "8e7b198afedbf5a4b5de36690458e133c0767f65680d407807a1390306e4cb86",
       "note": "Kind-specific stop entry adapter; distinct from protective stop placement."
     },
     {
@@ -183,15 +223,15 @@
       "path": "trader/armed_executor.go",
       "function": "onArmedOrderUpdate",
       "line": 1952,
-      "sha256": "c23c97ef12d4433b4f05e3f6fcf58825fa1c9780dd9d4445cf14d8e463ac1d14",
+      "sha256": "4fcc290be148d741fbb36b9a664dfbc82628dcc056b11b964b5ae1696c923dc7",
       "note": "Consumes actual entry state/quantity including positive terminal cancellations."
     },
     {
       "boundary": "Entry accounting",
       "path": "trader/armed_executor.go",
       "function": "materializeArmedEntry",
-      "line": 2068,
-      "sha256": "c23c97ef12d4433b4f05e3f6fcf58825fa1c9780dd9d4445cf14d8e463ac1d14",
+      "line": 2071,
+      "sha256": "4fcc290be148d741fbb36b9a664dfbc82628dcc056b11b964b5ae1696c923dc7",
       "note": "Preserves cumulative entry quantity/notional and residual position accounting."
     },
     {
@@ -199,7 +239,7 @@
       "path": "trader/ninjatrader/close_sync.go",
       "function": "recordClose",
       "line": 88,
-      "sha256": "413b283373b9e70e54d2abd4e07eb75cfb766dac0f025f926ce6dbe9f9e30024",
+      "sha256": "318dc8926f4f66f107e79e79fc1bddd9cb1e42ec02232dc05fbade2632a967ba",
       "note": "Builds actual exit receipt with account and broker-order identity."
     },
     {
@@ -222,8 +262,8 @@
       "boundary": "Positions truth",
       "path": "trader/ninjatrader/tcp_trader.go",
       "function": "GetPositions",
-      "line": 921,
-      "sha256": "7243d5906a2d8b1a702f928583eb9495b9b7a6606474bc6a255f057b5e11295f",
+      "line": 944,
+      "sha256": "8e7b198afedbf5a4b5de36690458e133c0767f65680d407807a1390306e4cb86",
       "note": "Selected bound-account position snapshot and freshness admission."
     }
   ]

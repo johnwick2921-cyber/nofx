@@ -7,6 +7,11 @@ source=pathlib.Path(sys.argv[1]); out=pathlib.Path(__file__).resolve().parent.pa
 rev=subprocess.check_output(['git','rev-parse','HEAD'],cwd=source,text=True).strip()
 items=[
 ('Transport','provider/ninjatrader/tcp_server.go','readLoop','Decodes broker frames; execution processing order must be verified separately.'),
+('Ordered execution owner','provider/ninjatrader/ordered_execution.go','RegisterOrderedExecutionsFor','Exact account/symbol owner; preserves receive order before type fanout.'),
+('Ordered entry delivery','provider/ninjatrader/ordered_execution.go','dispatchOrderedOrder','Applies received entry evidence before advisory consumers can reorder it.'),
+('Ordered exit delivery','provider/ninjatrader/ordered_execution.go','dispatchOrderedClose','Applies received close evidence through the same serialized owner.'),
+('Owner installation','trader/ninjatrader/ordered_execution.go','InstallOrderedExecutions','Installs observation at successful construction; ordinary Stop retains it.'),
+('Fill cache','trader/ninjatrader/tcp_trader.go','handleFill','Preserves actual exposure and refuses duplicate fully exited entry cache replay.'),
 ('Market data','market/data.go','GetWithTimeframes','Builds requested market context; futures provider path differs from legacy crypto.'),
 ('Canonical symbol','market/data.go','Normalize','Preserves the CME normalization boundary.'),
 ('Level evidence','kernel/levels_assemble.go','AssembleResearchLevels','Assembles raw, pool and seated candidates; heuristic scores are not probabilities.'),

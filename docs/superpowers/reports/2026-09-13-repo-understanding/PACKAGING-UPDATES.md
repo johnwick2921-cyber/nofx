@@ -14,3 +14,20 @@ This additive disposition notice supersedes the specific older open items named 
 **Still unverified or open:** broker-side atomic expected-position fencing; crash-safe delivery of process-local hooks; eventual pending-receipt replay; ambiguous multi-row attribution; selected-account completeness in history/chart endpoints; other explicitly listed UI/persistence/operations findings without a named repair. No source audit establishes installed NT8 behavior, backup restoration, production safety, or out-of-sample profitability.
 
 Source receipts: [first snapshot/pending exit](https://github.com/johnwick2921-cyber/nofx/commit/c20d0a829ca8cc0a9975ab78eed3b6a700f3b11d), [observer replacement](https://github.com/johnwick2921-cyber/nofx/commit/d3e4638e495425874aedba34a2fab0585acdae85), [terminal EXIT](https://github.com/johnwick2921-cyber/nofx/commit/3f21431aff0d7830b0dc0457417365a7a555aee7), [order display](https://github.com/johnwick2921-cyber/nofx/commit/dd11670be159760942d886b5b8c1aef2573e0d02). These identify source commits, not final release stamps.
+
+## Receive-order and subsequent boundary checks
+
+9b379c8c installs one account/symbol execution owner before its own entries,
+processing OrderUpdate, Fill and PositionClose in TCP receive order. Real TCP
+tests distinguish entry1→entry2→exit1 from entry1→exit1→entry2 and preserve
+actual residuals and cost basis. Independent review and focused race tests
+cover owner replacement, raw/advisory replay, cache resurrection and outbound
+callback progress. This is receive-order accounting, not reconstructed exchange
+timestamps or a durable transport journal. Source commit9b379c8c is followed by
+additional positive-rejection/entry-snapshot checks; final combined results
+remain root-owned and must replace this qualification before release readiness.
+
+The AddOn candidate identifies itself as2026-09-13-execution-evidence; Go's
+expected source marker matches. Received installed-runtime identity was not
+changed or verified by this source audit. The final reference compile and
+regenerated89-assertion harness pass at this marker.
