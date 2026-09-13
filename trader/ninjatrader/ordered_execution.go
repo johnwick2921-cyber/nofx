@@ -4,7 +4,6 @@ import (
 	ntwire "nofx/provider/ninjatrader"
 	"nofx/store"
 	"strings"
-	"time"
 )
 
 // InstallOrderedExecutions installs durable execution observation at successful
@@ -33,16 +32,7 @@ func (t *TCPTrader) InstallOrderedExecutions(traderID, exchangeID, exchangeType 
 // Only growth of a cumulative entry observation advances the fence; repeated
 // old frames cannot invalidate a newer broker snapshot forever.
 func (t *TCPTrader) noteEntrySnapshotFence(signal string, quantity int) {
-	if signal == "" || quantity <= 0 {
-		return
-	}
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if t.entryObservedQty == nil {
-		t.entryObservedQty = make(map[string]int)
-	}
-	if quantity > t.entryObservedQty[signal] {
-		t.entryObservedQty[signal] = quantity
-		t.entryReceivedAt = time.Now()
+	if t.server != nil {
+		t.server.NoteEntryExecution(t.symbol, t.boundAccount, signal, quantity)
 	}
 }

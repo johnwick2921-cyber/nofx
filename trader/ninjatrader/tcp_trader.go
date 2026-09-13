@@ -56,8 +56,6 @@ type TCPTrader struct {
 	rejectSink       func(signalID, brokerReason string)
 	lastFill         ntwire.FillPayload
 	hasFill          bool
-	entryReceivedAt  time.Time
-	entryObservedQty map[string]int
 	positionsAfterMs int64 // local exit receipt fence; restored from durable receipts
 
 	// recentFills is a bounded ring of the last confirmed fills (class 27,
@@ -1048,7 +1046,6 @@ func (t *TCPTrader) GetPositions() ([]map[string]interface{}, error) {
 func (t *TCPTrader) positionsAfterExit() ([]ntwire.OpenPosition, bool, error) {
 	t.mu.Lock()
 	after := t.positionsAfterMs
-	entryAfter := t.entryReceivedAt
 	t.mu.Unlock()
 	if t.server == nil {
 		if after > 0 {
@@ -1056,7 +1053,7 @@ func (t *TCPTrader) positionsAfterExit() ([]ntwire.OpenPosition, bool, error) {
 		}
 		return nil, false, nil
 	}
-	positions, received, ok := t.server.PositionsForReceived(t.boundAccount)
+	positions, received, entryAfter, ok := t.server.PositionsForExecutionReceipt(t.boundAccount, t.symbol)
 	if ok && (received.IsZero() || time.Since(received) < 0 || time.Since(received) > 60*time.Second) {
 		return nil, false, fmt.Errorf("NT8 account positions unknown: snapshot is stale or has no valid receipt time")
 	}

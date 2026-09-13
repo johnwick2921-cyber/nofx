@@ -185,6 +185,7 @@ type TCPServer struct {
 	// contamination bug). Legacy EMPTY-symbol payloads route to the PRIMARY
 	// trading symbol. Re-subscribing a symbol CLOSES the prior channel, which
 	// terminates a dead (reloaded-away) trader instance's consumer goroutine.
+	entryReceipts   map[string]*entryReceiptState // acctMu; survives adapter replacement
 	executionMu     sync.Mutex
 	executionOwners map[string]*OrderedExecutionHandlers
 	subsMu          sync.Mutex
@@ -635,18 +636,8 @@ func (s *TCPServer) PositionsFor(account string) ([]OpenPosition, bool) {
 
 // PositionsForReceived reads contents and their local receipt clock atomically.
 func (s *TCPServer) PositionsForReceived(account string) ([]OpenPosition, time.Time, bool) {
-	s.acctMu.RLock()
-	defer s.acctMu.RUnlock()
-	if account == "" {
-		return nil, time.Time{}, false
-	}
-	v, ok := s.acctPositions[account]
-	if !ok || v == nil {
-		return nil, time.Time{}, false
-	}
-	out := make([]OpenPosition, len(v))
-	copy(out, v)
-	return out, s.acctPositionsReceived[account], true
+	positions, received, _, ok := s.PositionsForExecutionReceipt(account, "")
+	return positions, received, ok
 }
 
 // GetAccountsList returns the list of available NT accounts discovered by the

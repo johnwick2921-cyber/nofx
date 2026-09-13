@@ -1,6 +1,7 @@
 package ninjatrader
 
 import (
+	nt "nofx/provider/ninjatrader"
 	"nofx/store"
 	"testing"
 	"time"
@@ -79,6 +80,7 @@ func TestRejectedEntryFillPreservesExecutedSliceAndUnknownEvidence(t *testing.T)
 
 func TestLegacyGuardRejectionRequestedQuantityStillSettlesRefusal(t *testing.T) {
 	tr, _, _ := partialCloseFixture(t)
+	tr.server = nt.NewTCPServer(nil)
 	tr.pending = map[string]string{"entry-owned": "long"}
 	tr.pendingAt = map[string]int64{}
 	notified := false
@@ -92,7 +94,8 @@ func TestLegacyGuardRejectionRequestedQuantityStillSettlesRefusal(t *testing.T) 
 	if !notified || len(tr.pending) != 0 {
 		t.Fatal("pre-submit refusal receipt lost")
 	}
-	if !tr.hasFill || !tr.entryReceivedAt.IsZero() {
+	_, _, received, _ := tr.server.PositionsForExecutionReceipt(tr.boundAccount, tr.symbol)
+	if !tr.hasFill || !received.IsZero() {
 		t.Fatal("requested size changed existing exposure or execution fence")
 	}
 }
