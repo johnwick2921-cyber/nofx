@@ -52,6 +52,8 @@ func class27DesyncHarness(t *testing.T) (*AutoTrader, *ntwire.TCPServer, chan nt
 		}
 	}()
 
+	knownFlatPositionsFrame(t, s, conn)
+
 	st, err := store.New(filepath.Join(t.TempDir(), "desync-cancel.db"))
 	if err != nil {
 		t.Fatalf("store: %v", err)

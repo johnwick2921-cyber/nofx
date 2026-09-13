@@ -14,7 +14,9 @@ func TestBootRefusalCoversEveryTCPEntryMethod(t *testing.T) {
 	oldReason, oldRefused := kernel.TradingRefused()
 	t.Cleanup(func() { kernel.SetTradingRefusedForTest(oldRefused, oldReason) })
 	kernel.SetTradingRefusedForTest(true, "offline boot mismatch")
-	tr := NewTCPTrader(ntwire.NewTCPServer(nil), "MNQ", "Sim101")
+	server := ntwire.NewTCPServer(nil)
+	server.SeedPositionsForTest("Sim101", []ntwire.OpenPosition{}) // explicit known flat fixture, not absence
+	tr := NewTCPTrader(server, "MNQ", "Sim101")
 	registered := 0
 	register := func(string) error { registered++; return nil }
 	cases := []struct {
