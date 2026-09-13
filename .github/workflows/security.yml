@@ -27,7 +27,7 @@ jobs:
       # toolchain is isolated; analysis still uses the application's go.mod.
       # Findings continue to fail the job; no suppression or version spoofing.
       - name: Install pinned govulncheck
-        run: GOTOOLCHAIN=go1.26.7 go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+        run: GOTOOLCHAIN=go1.26.8 go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
       - name: Run govulncheck
         run: govulncheck ./...
 

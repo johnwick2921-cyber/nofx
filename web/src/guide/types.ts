@@ -4,7 +4,7 @@
 import type { ReactNode } from 'react'
 
 // Source candidate reviewed at this revision; not a claim of deployment.
-export const GUIDE_BUILT_REV = 'cd2978b77da54e2fceddfb19e1d3d148bd2bfb62'
+export const GUIDE_BUILT_REV = '40ed5d95e27857d13f639ceb4ff14f768396a2ac'
 
 export interface Card {
   title: string
