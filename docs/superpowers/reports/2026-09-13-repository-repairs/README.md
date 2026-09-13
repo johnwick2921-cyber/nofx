@@ -239,3 +239,14 @@ Logs: `/tmp/nofx-order-fills-before.log`, `/tmp/nofx-order-fills-after.log`.
 ## Request-local AgentBeta model selection
 
 [A] Concurrent authenticated `/status` requests with two synthetic model owners reproduced replacement of the shared/background AI client. Each chat/SSE request now owns a freshly selected client for all downstream calls; history, setup state and per-user flow locks stay shared through an explicit owner reference, never a copied mutex. An unconfigured authenticated user no longer inherits the default owner's credentials. Focused identity/model/history tests pass under `-race`; all agent package tests pass (`/tmp/nofx-agent-client-after.log`, `/tmp/nofx-agent-full-04.log`). Extra tests check model identity stability and shared setup/history ownership. The first reproduction fixture lacked chat configuration and panicked; the initialized fixture then reproduced the actual shared-client mutation (`/tmp/nofx-agent-client-before-02.log`). No AI endpoint was called. This does not claim all background lifecycle or trade-confirmation ownership issues are solved.
+
+## Integrated C# lifecycle repair
+
+[A] Integrated original repair9140f6c9 and independent follow-up f1b7cc10 as
+`e8d2243f` and `cc766e1c`. The follow-up reproduced deferred Change falsely
+counted as coverage and synchronous terminal receipts lost during Submit.
+Both are fixed. All33 extracted-production-method harness assertions pass;
+all five sources compile against installed NT8 references. Detailed evidence
+and limitations: `../2026-09-13-nt8-lifecycle-repair.md`. No AddOn deployment
+or real NT8 event scheduling/OCO verification occurred. Partial completed-exit
+wire semantics remain under a separate cross-boundary investigation.

@@ -4844,3 +4844,14 @@ Two authenticated chats must retain their own selected model credentials through
 all follow-up calls and summaries. Shared history/flow locks stay shared without
 copying mutexes. Missing user configuration must not select another owner's
 default credentials. Exercise both HTTP identity and concurrent model selection.
+
+## PENDING CLASS — C# ORDER LIFECYCLE MUST SURVIVE REQUEST AMBIGUITY
+
+Branch `fix/repo-audit-control-boundaries-20260913`, integrated C# source lane
+`fix/repo-audit-nt8-lifecycle-20260913` at `f1b7cc10`. Explicit execution account
+must not fall back; close/protection resolve the actual held expiry. Retain entry
+and bracket identity on Cancel/Submit uncertainty. Execute production methods
+with synchronous partial/terminal callbacks and deferred/rejected Change.
+Requested quantities are not confirmed coverage; preserve terminal receipts even
+while Submit holds the identity reservation. Compile against actual NT8 refs,
+but report broker scheduling/OCO/runtime checks separately.

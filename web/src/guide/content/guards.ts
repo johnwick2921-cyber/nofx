@@ -7,6 +7,8 @@ export const guards: GuideSection = {
   tagline: 'What can hard-block a trade vs what only informs.',
   asBuiltRev: GUIDE_BUILT_REV,
   blocks: [
+    { kind: 'p', text: 'A cancellation request does not prove an entry or protective order is gone. The system keeps tracking it until terminal broker evidence arrives. Bracket quantity changes remain pending until both actual leg quantities confirm; a rejected change is reported without repeatedly submitting another pair.' },
+    { kind: 'p', text: 'Close and emergency-stop requests use the selected SIM account and its actual held contract. An unknown account or an ambiguous bare symbol with multiple held expiries refuses instead of falling back to another account or expiry.' },
     { kind: 'p', text: 'Chat memory and clear requests belong to the signed-in owner. A numeric conversation ID in a request cannot select another owner’s history, for either normal or streaming chat.' },
     { kind: 'p', text: 'A stop-like order name alone does not prove protection. The broker order must be a stop acting against the position. Missing type or action leaves a potentially live named stop UNKNOWN, so the system does not claim coverage or blindly duplicate it.' },
     { kind: 'p', text: 'Balance and risk sizing wait for the selected trader’s own account snapshot. Another account’s equity is never substituted. Position reconciliation can adopt a legacy row with no account only when that row belongs to the same trader; a different account’s row cannot hide a held position.' },
