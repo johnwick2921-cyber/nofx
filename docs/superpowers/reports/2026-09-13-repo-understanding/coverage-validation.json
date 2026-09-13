@@ -1,0 +1,50 @@
+[
+  {
+    "assignment": 1,
+    "files": 24,
+    "ledger_errors": [],
+    "named_go_declarations": 144,
+    "missing_named_go_notes": [],
+    "warning": "Consistency only; not independent semantic or runtime verification."
+  },
+  {
+    "assignment": 2,
+    "files": 22,
+    "ledger_errors": [],
+    "named_go_declarations": 165,
+    "missing_named_go_notes": [],
+    "warning": "Consistency only; not independent semantic or runtime verification."
+  },
+  {
+    "assignment": 3,
+    "files": 15,
+    "ledger_errors": [],
+    "named_go_declarations": 301,
+    "missing_named_go_notes": [],
+    "warning": "Consistency only; not independent semantic or runtime verification."
+  },
+  {
+    "assignment": 4,
+    "files": 14,
+    "ledger_errors": [],
+    "named_go_declarations": 281,
+    "missing_named_go_notes": [],
+    "warning": "Consistency only; not independent semantic or runtime verification."
+  },
+  {
+    "assignment": 5,
+    "files": 14,
+    "ledger_errors": [],
+    "named_go_declarations": 299,
+    "missing_named_go_notes": [],
+    "warning": "Consistency only; not independent semantic or runtime verification."
+  },
+  {
+    "assignment": 20,
+    "files": 26,
+    "ledger_errors": [],
+    "named_go_declarations": 217,
+    "missing_named_go_notes": [],
+    "warning": "Consistency only; not independent semantic or runtime verification."
+  }
+]
