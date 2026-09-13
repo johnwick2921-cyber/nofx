@@ -80,6 +80,7 @@ export interface DayPlanSessionOverride {
 // DayPlanConfig — mirrors Go store.DayPlanConfig. plan_enabled=false is the
 // master switch (off). Additive + defaults-off.
 export interface DayPlanConfig {
+  structural_stop?: { buffer_points?: number; round_trip_cost_points?: number }
   plan_enabled: boolean
   planner_model?: string
   plan_mode?: string // advisory | direction | strict
@@ -240,6 +241,7 @@ export interface ExternalDataSource {
 }
 
 export interface RiskControlConfig {
+  max_trade_loss_usd?: Record<string, number>
   // Max number of coins held simultaneously (CODE ENFORCED)
   max_positions: number
 

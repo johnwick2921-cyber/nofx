@@ -543,7 +543,9 @@ func main() {
 				fpBF.Unrecomputable += f.Unrecomputable
 				fpBF.Untouched += f.Untouched
 			}
-			logger.Infof("%s", trader.OneSetupBootLine(st, time.Now(), osIDs, osBF, fpBF))
+			geometryBootNow := time.Now()
+			logger.Infof("%s", trader.OneSetupBootLine(st, geometryBootNow, osIDs, osBF, fpBF))
+			logger.Infof("%s", trader.StructuralGeometryBootLine(st, geometryBootNow, osIDs...))
 		}
 	}
 	// W3 D7 (2026-09-09) — the map posture. Per-READ counts are n/a at boot (no

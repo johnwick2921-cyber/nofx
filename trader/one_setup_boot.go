@@ -80,7 +80,7 @@ func OneSetupBootLine(st *store.Store, now time.Time, traderIDs []string, bfV st
 		bf = fmt.Sprintf("backfill verdicts recomputed=%d unrecomputable=%d untouched=%d · follow recomputed=%d unrecomputable=%d untouched=%d",
 			bfV.Recomputed, bfV.Unrecomputable, bfV.Untouched, bfF.Recomputed, bfF.Unrecomputable, bfF.Untouched)
 	}
-	return fmt.Sprintf("🎯 one setup: %s[O] · level=best-near-price(min-grade %s)[O] · play=%s · target=first-obstacle · permission-required=yes · map=untouched · %s · follow-plan=RECORDED-ONLY[T] %s · bias-flip=recorded-only · off-switch=one_setup_enabled (source: %s) · %s",
+	return fmt.Sprintf("🎯 one setup: %s[O] · level=best-near-price(min-grade %s)[O] · play=%s · target=first-distinct-eligible-zone · permission-required=yes · map=untouched · %s · follow-plan=RECORDED-ONLY[T] %s · bias-flip=recorded-only · off-switch=one_setup_enabled (source: %s) · %s",
 		sw, grade, kernel.OneSetupPlay, today, fol, src, bf)
 }
 

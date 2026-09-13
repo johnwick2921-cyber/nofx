@@ -17,6 +17,6 @@ it('C5 guide table follows the independently worked break-even equation', () => 
   expect(text).toContain('E[net R] = p*b − (1−p) − c')
   expect(text).toContain('Legacy scenarios retain UNKNOWN')
   expect(text).toContain(
-    'No structural, fixed-R, ATR, partial, trailing or mandatory-1R target policy'
+    'The structural-stop research candidate'
   )
 })

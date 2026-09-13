@@ -48,7 +48,7 @@ func TestOneSetupBootLineReadsTheBoundStrategy(t *testing.T) {
 	// Absent knobs → ON [O] and B [O], shipped defaults named as the source.
 	st := osBootStore(t, `{"plan_enabled":true}`)
 	line := OneSetupBootLine(st, now, []string{"trader-1"}, store.OneSetupBackfillResult{}, store.FollowBackfillResult{})
-	for _, want := range []string{"🎯 one setup: ON[O]", "level=best-near-price(min-grade B)[O]", "play=reject", "target=first-obstacle",
+	for _, want := range []string{"🎯 one setup: ON[O]", "level=best-near-price(min-grade B)[O]", "play=reject", "target=first-distinct-eligible-zone",
 		"permission-required=yes", "map=untouched", "today armable=0 declined=0 (level=0 play=0 day=0 not-evaluated=0 waiting=0)",
 		"follow-plan=RECORDED-ONLY[T] breaks=0 retests=0 role-reversed=0/0", "bias-flip=recorded-only", "off-switch=one_setup_enabled", "shipped default", "backfill=not-run"} {
 		if !strings.Contains(line, want) {

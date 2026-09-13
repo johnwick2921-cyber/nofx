@@ -26,6 +26,7 @@ func TestOneSetupDeclinedPreBootAuthorizationRetiredNeverPlaced(t *testing.T) {
 	now := time.Date(2026, time.September, 11, 15, 0, 0, 0, time.UTC)
 	cfg := store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true}}
 	cfg.RiskControl.MinRiskRewardRatio = 2
+	structuralTestPolicy(&cfg, .5)
 	at, st, sigs, cancels := shadowWireHarnessAt(t, cfg, now)
 	// S1 reject long at 100 — the best level; S2 reject long at 92 — a lower
 	// graded level BELOW price (a resting long limit there is placeable, unlike
@@ -43,6 +44,7 @@ func TestOneSetupDeclinedPreBootAuthorizationRetiredNeverPlaced(t *testing.T) {
 		},
 		NoTrade: []string{}, DeathCondition: "n/a",
 	}
+	structuralTestMap(&live, structuralTestZone{100, 95.5, 100, "PDL"}, structuralTestZone{92, 87.5, 92, "SWG-L"}, structuralTestZone{110, 110, 111, "target"})
 	blob, _ := json.Marshal(live)
 	pid := shadowPlanAtTime(t, at, st, string(blob), now)
 	// Two PRE-BOOT authorizations, never placed (no signal id), authored by a
@@ -57,7 +59,7 @@ func TestOneSetupDeclinedPreBootAuthorizationRetiredNeverPlaced(t *testing.T) {
 		}
 	}
 	at.oneSetupFactsForTest = func(now time.Time) oneSetupTestFacts {
-		a, b := "lvl-100", "lvl-92"
+		a, b := *structuralTestIdentity(100, "PDL").ID, *structuralTestIdentity(92, "SWG-L").ID
 		return oneSetupTestFacts{Price: 100, BandPts: 50, Candidates: []kernel.MapCandidate{
 			{ID: &a, Identity: kernel.PlanLevel{ID: &a, Price: 100}, Price: 100, Names: []string{"PDL"}, Grade: "A", Distance: 0},
 			{ID: &b, Identity: kernel.PlanLevel{ID: &b, Price: 92}, Price: 92, Names: []string{"SWG-L"}, Grade: "B", Distance: -8},

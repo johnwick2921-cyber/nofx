@@ -8,9 +8,13 @@ import (
 	"strings"
 
 	"nofx/kernel"
+	"nofx/store"
 )
 
 // ── 0B (2026-09-02) — STOP ANCHORED TO SEATED STRUCTURE ──────────────────────
+//
+// Historical rule below; superseded for reject fades by frozen structural
+// context. Other entry plays retain this construction and its telemetry.
 //
 // Week-in-review evidence: 15 of 27 losers printed stopped-too-tight, and on
 // the five biggest losers 0 of 5 stops sat ON a seated level while 2 of 5 sat
@@ -47,6 +51,7 @@ func armStopAnchorMaxATR() float64 {
 // StopComposition is one arm's stop decision, fully explained: every field the
 // per-arm log line prints, so the choice can be audited from the journal alone.
 type StopComposition struct {
+	Geometry     *store.StructuralGeometryRecord
 	Stop         float64 // the chosen stop
 	Authored     float64 // what the planner wrote
 	AnchorPrice  float64 // the seated level the stop sits beyond (0 = none)
@@ -68,7 +73,18 @@ type StopComposition struct {
 //	mult      MIN_SL_ATR_MULT (resolved)
 //	clearTicks the level-clearance leg (MinSLTickClearance)
 //	maxAnchorATR the dead-zone bound in ATR units; ≤0 disables anchoring
-func composeArmStop(side string, entry, authored, atr5m, tick float64, levels []kernel.PlanLevel, mult float64, clearTicks int, maxAnchorATR float64) StopComposition {
+func composeArmStop(side string, entry, authored, atr5m, tick float64, levels []kernel.PlanLevel, mult float64, clearTicks int, maxAnchorATR float64, structural ...armStructuralContext) StopComposition {
+	// Reject-fade production callers supply frozen structural context. Other
+	// entry plays and historical benchmark fixtures retain the legacy branch.
+	if len(structural) == 1 {
+		in := structural[0]
+		r := ComposeLevelFadeGeometry(in.Doc, in.Scenario, in.Leg, in.Policy, atr5m, tick, in.PointValue)
+		c := StopComposition{Authored: authored, Bound: r.StopSource, Geometry: &r, Unanchored: r.StopSource == "atr_fallback"}
+		if r.Stop != nil {
+			c.Stop = *r.Stop
+		}
+		return c
+	}
 	c := StopComposition{Stop: authored, Authored: authored, Bound: "authored"}
 	long := strings.EqualFold(strings.TrimSpace(side), "long")
 	if entry <= 0 || authored <= 0 {

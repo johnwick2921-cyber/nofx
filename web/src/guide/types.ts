@@ -3,7 +3,8 @@
 // against GET /api/health revision and warns on drift.
 import type { ReactNode } from 'react'
 
-export const GUIDE_BUILT_REV = '400ea26c12c8b6daa7069d14a88eddfe1c9297e5'
+// Candidate only; deploy must stamp the actual clean-build source revision.
+export const GUIDE_BUILT_REV = 'structural-stop-pending-owner-go'
 
 export interface Card {
   title: string

@@ -65,6 +65,7 @@ func oneSetupFixtureDoc() string {
 		},
 		NoTrade: []string{}, DeathCondition: "n/a",
 	}
+	structuralTestMap(&d, structuralTestZone{29490, 29485, 29495, "PDL"}, structuralTestZone{29500, 29495, 29505, "ONH"}, structuralTestZone{29520, 29520, 29522, "target-high"}, structuralTestZone{29470, 29468, 29470, "target-low"})
 	blob, _ := json.Marshal(d)
 	return string(blob)
 }
@@ -94,6 +95,7 @@ func driveOneSetupArmPath(t *testing.T, mutate func(*store.StrategyConfig), hook
 	t.Helper()
 	cfg := store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true}}
 	cfg.RiskControl.MinRiskRewardRatio = 2
+	structuralTestPolicy(&cfg, 5)
 	if mutate != nil {
 		mutate(&cfg)
 	}

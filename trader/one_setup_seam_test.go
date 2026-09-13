@@ -34,7 +34,7 @@ func osOff(c *store.StrategyConfig) { oneSetupOff(c) }
 func osMap(perm map[string]kernel.FadeVerdict) func(*AutoTrader, *store.Store, string) {
 	return func(at *AutoTrader, _ *store.Store, _ string) {
 		at.oneSetupFactsForTest = func(now time.Time) oneSetupTestFacts {
-			a, b := "lvl-29490", "lvl-29500"
+			a, b := *structuralTestIdentity(29490, "PDL").ID, *structuralTestIdentity(29500, "ONH").ID
 			cands := []kernel.MapCandidate{
 				{ID: &a, Identity: kernel.PlanLevel{ID: &a, Price: 29490}, Price: 29490, Names: []string{"PDL"}, Grade: "A", Distance: -5},
 				{ID: &b, Identity: kernel.PlanLevel{ID: &b, Price: 29500}, Price: 29500, Names: []string{"ONH"}, Grade: "B", Distance: 5},
@@ -52,11 +52,17 @@ func osMap(perm map[string]kernel.FadeVerdict) func(*AutoTrader, *store.Store, s
 
 // E2 — OFF PIN. one_setup_enabled=false reproduces the golden generated at the
 // base commit 499e4f83 byte for byte: today's book, both arms, no counters.
-func TestOneSetupE2OffIsTodayByteIdentical(t *testing.T) {
+func TestOneSetupE2OffKeepsSelectionOffWithStructuralGeometry(t *testing.T) {
 	want, err := os.ReadFile(oneSetupGoldenPath)
 	if err != nil {
 		t.Fatal(err)
 	}
+	var expected armPathGolden
+	if err := json.Unmarshal(want, &expected); err != nil {
+		t.Fatal(err)
+	}
+	expected.Rows[0]["target"], expected.Rows[1]["target"] = 29520.0, 29470.0 // explicit structural-target owner ruling
+	want = goldenBytes(t, expected)
 	g, _, _, _ := driveOneSetupArmPath(t, osOff, nil)
 	if got := goldenBytes(t, g); string(got) != string(want) {
 		t.Fatalf("OFF must be byte-identical to the base golden:\n--- base\n%s\n--- OFF\n%s", want, got)
@@ -88,7 +94,7 @@ func TestOneSetupE1SeamExactlyOneArms(t *testing.T) {
 	if rec.Scenarios["S3"].Play != "play_not_reject:sweep_reclaim" {
 		t.Fatalf("S3's play verdict must be recorded even though wait_confirm keeps it dormant: %+v", rec.Scenarios["S3"])
 	}
-	if rec.Scenarios["S1"].Target != "first_obstacle@29520.00" {
+	if rec.Scenarios["S1"].Target != "first-distinct-eligible-zone" {
 		t.Fatalf("record must name the target choice: %q", rec.Scenarios["S1"].Target)
 	}
 }
@@ -118,8 +124,8 @@ func TestOneSetupE3SeamNullPermissionDeclines(t *testing.T) {
 	}
 }
 
-// E5 (floor) — an obstacle under the R:R floor: the EXISTING refusal fires
-// and obstacle_below_floor is counted beside it; nothing arms.
+// E5 (floor) — the frozen target zone under the unchanged R:R floor refuses
+// with the new geometry reason; the one-setup selection checks are unchanged.
 func TestOneSetupE5ObstacleBelowFloorIsTheExistingRefusal(t *testing.T) {
 	var d kernel.PlanDoc
 	if err := json.Unmarshal([]byte(oneSetupFixtureDoc()), &d); err != nil {
@@ -127,14 +133,15 @@ func TestOneSetupE5ObstacleBelowFloorIsTheExistingRefusal(t *testing.T) {
 	}
 	near := 29505.0 // 1.5R from 29490 with a 10-pt stop — under the 2.0 floor
 	d.Scenarios[0].Economics.FirstObstacle.Price = &near
+	d.Zones.Zones[2].Lo = &near // the actual frozen target now governs admission
 	b, _ := json.Marshal(d)
 	oneSetupFixtureDocOverride = string(b)
 	g, _, _, _ := driveOneSetupArmPath(t, nil, osMap(nil))
 	if len(g.Rows) != 0 {
 		t.Fatalf("an obstacle target under the floor must not arm: %+v", g.Rows)
 	}
-	if g.Counters["rr"] != "1" || g.Counters[store.OneSetupClassObstacleFloor] != "1" {
-		t.Fatalf("the R:R refusal must be the existing one (rr=1) with obstacle_below_floor=1 beside it: %+v", g.Counters)
+	if g.Counters["geometry_rr"] != "1" {
+		t.Fatalf("the structural R:R refusal must be recorded as geometry_rr=1: %+v", g.Counters)
 	}
 }
 

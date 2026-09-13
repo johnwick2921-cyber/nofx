@@ -4626,3 +4626,41 @@ shape is the trap. Companion law (same wave): a zone-band "hold rate" of 73%
 against a bare-anchor detector hold rate of 50.6% on the same tape is a band-
 width artifact — a hold rate computed on wider barriers inflates with the width
 and answers nothing about expectancy (hold 73.3%, net win rate 46.8%).
+
+
+## CLASS 126 — STOP AND TARGET GEOMETRY MUST SHARE A FROZEN STRUCTURAL THESIS (assigned at structural-stop merge, 2026-09-13)
+
+[A] The structural-stop wave measured 200 logged compositions (27 distinct
+plan/version/scenario/leg specifications): the ATR floor won 180 (90%). These
+are selected changed/unanchored log events, not 200 independent attempts. The
+raw-touch target population and the already-admitted live ledger differ; do not
+substitute one denominator for the other. C1/C2 IDs and measurement protocol:
+[structural-stop report](reports/2026-09-12-structural-stop.md).
+
+[A] C5 reproduced 11,302 touches; training held events n=6,181 supplied p95
+4.3675648248 points, rounded outward to a 4.50-point MNQ buffer. This is a
+conditional OHLC penetration proxy and an [I] knob, not a validated universal
+noise allowance. Round 22's pinned basis is
+`e81602bb5c4bacb237ae2921e0188f8aa1d752bf`:
+[research candidate](research/2026-09-12-stop-target-geometry/README.md).
+C1/C5/report evidence published at `316f1e468294e27311114ac26420164d92531a67`.
+
+**Law:** freeze the entry zone, far-edge invalidation, buffer and first distinct
+eligible opposing zone; derive stop/target prices once, then evaluate net gain,
+unchanged owner R:R and owner-set instrument dollar cap. Inadequate geometry is
+quantity zero with its exact refusal. Never move either price or resize to pass.
+Missing provenance records the ATR fallback and refuses. Missing cap refuses.
+An available structural stop bypasses only the ATR minimum-stop leg.
+
+**Probe:** production arm-seam fixtures pin long and short far-edge stops,
+tighter-than-ATR behavior, fallback provenance, 23-for-4 refusal, net-before-R:R,
+and immutable prices. Nine applied/build-green mutants were killed. A refusal
+whose record or retirement fails MUST return before placement; otherwise an old
+arm can still reach the broker. The loopback fault-injection fixture pins that
+failure, not merely the pure arithmetic. Other selectors and post-entry exits
+remain unchanged.
+
+[A] The conservative corrected replay remains negative: at the p95 buffer,
+721/11,302 touches have eligible geometry; model A 207 fills average -2.6039 net
+points. Without an owner cap actual admission is zero. This class establishes
+honest trade construction and refusal, not profitable trade selection.

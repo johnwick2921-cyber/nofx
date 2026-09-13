@@ -909,6 +909,7 @@ func (c *StrategyConfig) UnmarshalJSON(data []byte) error {
 // an existing strategy byte-identical, and PlanEnabled=false is the master
 // switch even when the block is present. Lives at ROOT of StrategyConfig.
 type DayPlanConfig struct {
+	StructuralStop *StructuralStopConfig `json:"structural_stop,omitempty"`
 	// PlanEnabled is the master switch (default false = off).
 	PlanEnabled bool `json:"plan_enabled"`
 	// PlannerModel is the reasoner binding from the multi-key registry; empty
@@ -1683,6 +1684,9 @@ type ExternalDataSource struct {
 
 // RiskControlConfig risk control configuration
 type RiskControlConfig struct {
+	// Owner-set maximum modeled loss per trade, keyed by instrument. Missing is
+	// unresolved, never an unlimited budget. Exposure uses actual point value.
+	MaxTradeLossUSD map[string]float64 `json:"max_trade_loss_usd,omitempty"`
 	// Max number of coins held simultaneously (CODE ENFORCED)
 	MaxPositions int `json:"max_positions"`
 
