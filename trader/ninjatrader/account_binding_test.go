@@ -128,15 +128,9 @@ func TestGetBalance_ReadsBoundAccountNotCurrent(t *testing.T) {
 		t.Fatalf("balance must be tagged with the bound account Sim101; got %q", acct)
 	}
 
-	// Graceful fallback: a bound account with NO snapshot yet falls back to the
-	// streamed current (never zero/no-data) so we don't regress before the frame
-	// arrives — mirrors today's behavior, just correctly labeled.
+	// Missing own evidence must not borrow the shared display account.
 	trNoSnap := NewTCPTrader(s, "MNQ", "SimNoSnapshot")
-	balF, err := trNoSnap.GetBalance()
-	if err != nil {
-		t.Fatalf("GetBalance fallback: %v", err)
-	}
-	if acct, _ := balF["account"].(string); acct != "SimAccountX" {
-		t.Fatalf("bound account without a snapshot must fall back to current (SimAccountX); got %q", acct)
+	if bal, err := trNoSnap.GetBalance(); err == nil || bal != nil {
+		t.Fatalf("missing bound account must return unavailable: balance=%v err=%v", bal, err)
 	}
 }

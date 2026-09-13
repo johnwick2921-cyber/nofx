@@ -780,6 +780,33 @@ func (s *PositionStore) GetOpenPositionByAccountSymbol(account, symbol, side str
 	return nil, nil
 }
 
+// GetUnassignedOpenPositionForTrader finds only this trader's legacy row whose
+// account has not yet been recorded. Empty here means unassigned, never all accounts.
+func (s *PositionStore) GetUnassignedOpenPositionForTrader(traderID, symbol, side string) (*TraderPosition, error) {
+	find := func(sym string) (*TraderPosition, error) {
+		var pos TraderPosition
+		err := s.db.Where("trader_id = ? AND (account = '' OR account IS NULL) AND symbol = ? AND UPPER(side) = UPPER(?) AND status = ?", traderID, sym, side, "OPEN").Order("entry_time DESC").First(&pos).Error
+		if err == gorm.ErrRecordNotFound {
+			return nil, nil
+		}
+		if err != nil {
+			return nil, err
+		}
+		if pos.EntryQuantity == 0 {
+			pos.EntryQuantity = pos.Quantity
+		}
+		return &pos, nil
+	}
+	pos, err := find(symbol)
+	if err != nil || pos != nil {
+		return pos, err
+	}
+	if strings.HasSuffix(symbol, "USDT") {
+		return find(strings.TrimSuffix(symbol, "USDT"))
+	}
+	return nil, nil
+}
+
 // GetClosedPositions gets closed positions (optionally scoped to one account).
 // account=="" → trader-global (crypto + legacy); account!="" → only that NT
 // account's positions, excluding pre-migration rows (account=”).

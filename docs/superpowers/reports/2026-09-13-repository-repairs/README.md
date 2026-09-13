@@ -105,3 +105,17 @@ terminal states; append-only scenarios explicitly advance the plan version.
 Their original record-retention and no-row-per-cycle assertions remain. All
 three plus the expanded same-version regression pass in a focused rerun.
 This is not yet the final combined-suite result.
+
+## Account isolation and reset synchronization
+
+Synthetic regressions reproduced: a bound account with no balance snapshot (and
+an unbound adapter) returned another account's equity; another account's open
+MNQ row suppressed materialization of the bound account's held position; reset
+replaced pending maps without acquiring their mutex. Balance now returns
+unavailable without its own snapshot. Reconciliation's legacy fallback queries
+only the same trader's unassigned-account row. Reset takes pendingMu before mu,
+matching reconciliation's lock order. Focused tests pass under `-race`, including
+the existing legacy-empty-account deduplication case. An older test explicitly
+expecting foreign-balance fallback was corrected. No actual account was selected
+or mutated. The lock-ownership regression is controlled synchronization evidence,
+not proof of every possible interleaving.

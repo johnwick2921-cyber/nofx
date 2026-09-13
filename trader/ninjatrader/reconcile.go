@@ -371,9 +371,9 @@ func (t *TCPTrader) reconcilePositions(traderID, exchangeID, exchangeType string
 			// account="" (its order_update frame predates the account binding),
 			// so the account-scoped lookup above misses it and reconcile
 			// materializes a SECOND row for the same NT8 position. Retry
-			// account-agnostically; if found, backfill the bound account so the
+			// only within THIS trader's unassigned rows; if found, backfill the bound account so the
 			// later close-sync frame (which carries the account) finds its owner.
-			owner, oerr = st.Position().GetOpenPositionByAccountSymbol("", sym, side)
+			owner, oerr = st.Position().GetUnassignedOpenPositionForTrader(traderID, sym, side)
 			if oerr != nil {
 				logger.Warnf("ninjatrader/tcp: reconcile untracked owner lookup (account-agnostic) failed (%s %s): %v", sym, side, oerr)
 				continue

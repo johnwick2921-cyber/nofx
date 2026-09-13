@@ -4745,3 +4745,14 @@ a placed pre-boot row, a successful fake send, pending state, then a persisted
 broker snapshot. Cancellation receipts alone must not unlock pending slots.
 Completion counters must be committed with the confirmed state transition;
 requests and completions require distinct language.
+
+## PENDING CLASS — ACCOUNT FALLBACK MUST NOT WIDEN OWNERSHIP
+
+Branch `fix/repo-audit-control-boundaries-20260913`, base `63968be6`.
+A missing bound-account balance must remain unavailable. Falling back to the
+shared current account can size risk from another account even when the returned
+payload labels that account correctly. Similarly, a legacy unassigned-account
+position lookup must require both unassigned account and owning trader; passing
+empty to an optional filter means all accounts, not empty accounts. Test two
+accounts with the same symbol/side, not just a single legacy empty-account row.
+Pending-map reset must use the same mutex and lock order as fill/reconcile paths.

@@ -856,24 +856,12 @@ func (t *TCPTrader) CancelAllOrders(symbol string) error {
 }
 
 func (t *TCPTrader) GetBalance() (map[string]interface{}, error) {
-	// Plan 4.11 — serve the REAL NT SIM account from the latest account_balance
-	// frame (C# AddOn → tcp_server). No more $50k mock. Until the first frame
-	// arrives (AddOn connecting), report zeros so the dashboard shows "no data"
-	// rather than a fabricated balance; the C# emits on connect + periodically.
-	//
-	// Read THIS trader's OWN bound account (P5.4), mirroring GetPositions'
-	// decouple (cb00347d) — GetBalance was the missed twin. The shared NT8
-	// connection streams ONE "current" account; using AccountState() (current)
-	// here showed a trader the WRONG account's equity when another trader/panel
-	// owned the connection (a display AND a risk-sizing bug). Prefer the bound
-	// account's own snapshot; fall back to the streamed `current` ONLY when the
-	// bound account has no snapshot yet (AddOn hasn't streamed it), so this never
-	// regresses to zeros vs today's behavior. The returned "account" field names
-	// which NT account these numbers actually reflect.
-	acct, ok := t.server.AccountStateFor(t.boundAccount)
-	if !ok || t.boundAccount == "" {
-		acct, ok = t.server.AccountState()
+	// Risk sizing and display must use the bound account's own received
+	// snapshot. Another account's equity is never a substitute for no answer.
+	if t.server == nil || strings.TrimSpace(t.boundAccount) == "" {
+		return nil, fmt.Errorf("ninjatrader/tcp: balance unavailable — no bound account")
 	}
+	acct, ok := t.server.AccountStateFor(t.boundAccount)
 	if ok {
 		// Plan 4 Stage 4 — notify parent AutoTrader that balance has arrived
 		// (used by defer-until-balance guard in runCycle).
@@ -897,9 +885,7 @@ func (t *TCPTrader) GetBalance() (map[string]interface{}, error) {
 			"availableBalance":      avail,
 			"totalWalletBalance":    acct.CashValue,
 			"totalUnrealizedProfit": acct.UnrealizedPnL,
-			// Which NT account these numbers actually reflect (bound account when
-			// its snapshot exists, else the streamed current — see the decouple
-			// above). Lets the dashboard label/guard the balance accurately.
+			// The received bound account, never the shared display account.
 			"account": acct.Account,
 			// Issue 2B — NT reports its own realized/unrealized P&L per account.
 			// brokerNativePnL signals GetAccountInfo to use realized+unrealized as
@@ -910,10 +896,7 @@ func (t *TCPTrader) GetBalance() (map[string]interface{}, error) {
 			"brokerNativePnL":     true,
 		}, nil
 	}
-	return map[string]interface{}{
-		"totalEquity":      0.0,
-		"availableBalance": 0.0,
-	}, nil
+	return nil, fmt.Errorf("ninjatrader/tcp: balance unavailable for bound account %q — no snapshot", t.boundAccount)
 }
 
 // IsFeedConnected reports whether the NT8 price feed is usable (delegates to the
@@ -1181,6 +1164,9 @@ func (t *TCPTrader) CloseConfirmedSince(symbol, side string, sinceMs int64) bool
 // Called by the /api/account/select handler to ensure GetPositions() fetches fresh
 // data from the newly selected account (not stale cached fills from the old account).
 func (t *TCPTrader) ResetAccountState() {
+	// Reconcile also takes pendingMu before mu; keep that lock order.
+	t.pendingMu.Lock()
+	defer t.pendingMu.Unlock()
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	t.hasFill = false
