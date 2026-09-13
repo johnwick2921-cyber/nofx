@@ -4873,3 +4873,13 @@ its timestamp to a Monday cannot reconstruct its OHLC. Exercise the production
 reader with distinct Friday extremes and assert known weekly values, not two
 identical resolver calls. The generic resolver calendar convention is a separate
 consumer audit; this fix does not establish every weekly consumer is corrected.
+
+## PENDING CLASS — CUMULATIVE ENTRY AND PARTIAL EXIT SHARE ONE RESIDUAL
+
+Actual filled quantity on a terminal entry cancellation is exposure. Completed
+exit-order quantity is not necessarily the whole position. Test actual entry
+callback interleaved with atomic exit receipt application: preserve residual
+quantity, incremental cost basis and accumulated realized P&L. Deduplicate with
+actual broker identity, retain unknown cumulative notional as NULL, and refuse
+ambiguous ownership. A closed owned row does not prove its entire account flat.
+Cancelled partially filled exit orders remain a separate wire coverage limit.

@@ -7,6 +7,7 @@ export const guards: GuideSection = {
   tagline: 'What can hard-block a trade vs what only informs.',
   asBuiltRev: GUIDE_BUILT_REV,
   blocks: [
+    { kind: 'p', text: 'A completed exit records only its actual filled contracts. Any remaining contracts stay open, duplicate broker receipts do not count twice, and new entries wait for a fresh account-position snapshot after the exit. Entry fills reported with a cancellation still count as exposure. History excludes unresolved corrected P&L rather than substituting an unverified value.' },
     { kind: 'p', text: 'A cancellation request does not prove an entry or protective order is gone. The system keeps tracking it until terminal broker evidence arrives. Bracket quantity changes remain pending until both actual leg quantities confirm; a rejected change is reported without repeatedly submitting another pair.' },
     { kind: 'p', text: 'Close and emergency-stop requests use the selected SIM account and its actual held contract. An unknown account or an ambiguous bare symbol with multiple held expiries refuses instead of falling back to another account or expiry.' },
     { kind: 'p', text: 'Chat memory and clear requests belong to the signed-in owner. A numeric conversation ID in a request cannot select another owner’s history, for either normal or streaming chat.' },
