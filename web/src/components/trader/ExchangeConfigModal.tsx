@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import type { Exchange } from '../../types'
 import { t, type Language } from '../../i18n/translations'
 import { api } from '../../lib/api'
@@ -285,12 +285,21 @@ export function ExchangeConfigModal({
     indodax: { url: 'https://indodax.com/ref/Saep23/1', hasReferral: true },
   }
 
+  const seededExchange = useRef<string | null>()
   // Initialize form when editing
   useEffect(() => {
-    if (editingExchangeId && selectedExchange) {
+    if (
+      editingExchangeId &&
+      selectedExchange &&
+      seededExchange.current !== editingExchangeId
+    ) {
+      seededExchange.current = editingExchangeId
+      setNtDataDir(selectedExchange.nt_data_dir || '')
+      setNtInstrumentName(selectedExchange.nt_instrument_name || 'MNQ')
+      setNtDefaultContractQty(selectedExchange.nt_default_contract_qty ?? 1)
       setAccountName(selectedExchange.account_name || '')
-      setApiKey(selectedExchange.apiKey || '')
-      setSecretKey(selectedExchange.secretKey || '')
+      setApiKey('')
+      setSecretKey('')
       setPassphrase('')
       setTestnet(selectedExchange.testnet || false)
       setAsterUser(selectedExchange.asterUser || '')
@@ -369,6 +378,23 @@ export function ExchangeConfigModal({
   }
 
   const handleSelectExchange = (exchangeType: string) => {
+    setApiKey('')
+    setSecretKey('')
+    setPassphrase('')
+    setAccountName('')
+    setAsterUser('')
+    setAsterSigner('')
+    setAsterPrivateKey('')
+    setHyperliquidWalletAddr('')
+    setLighterWalletAddr('')
+    setLighterApiKeyPrivateKey('')
+    setLighterApiKeyIndex(0)
+    setNtDataDir('')
+    setNtInstrumentName('MNQ')
+    setNtDefaultContractQty(1)
+    setSecureInputTarget(null)
+    setTestnet(false)
+
     setSelectedExchangeType(exchangeType)
     setCurrentStep(1)
   }

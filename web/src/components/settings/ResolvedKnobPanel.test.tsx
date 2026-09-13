@@ -144,3 +144,21 @@ describe('ResolvedKnobPanel', () => {
     expect(init.headers.Authorization).toBe('Bearer tok123')
   })
 })
+
+it('shows an HTTP failure and recovers when the selected trader changes', async () => {
+  vi.stubGlobal(
+    'fetch',
+    vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        json: async () => ({ error: 'unauthorized' }),
+      })
+      .mockResolvedValueOnce({ ok: true, json: async () => payload })
+  )
+  const { rerender } = render(<ResolvedKnobPanel traderId="old" />)
+  await screen.findByText('could not read the registry')
+  rerender(<ResolvedKnobPanel traderId="new" />)
+  await screen.findAllByTestId('resolved-line')
+  expect(screen.queryByText('could not read the registry')).toBeNull()
+})

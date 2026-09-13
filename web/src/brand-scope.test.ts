@@ -1,3 +1,5 @@
+// Baseline advanced 2026-09-13 for authorized audit web-state repair: chat storage
+// keys remain unchanged; authenticated history no longer inherits unowned guest data.
 // Dispatch 102 freezes load-bearing identifiers, including their surrounding guards.
 // Lock baseline advanced after the separately authorized lock-keeper wave:
 // deploy/nofx-lock.sh @ ace51598 (fix/lock-defects-release-meta-halfbuilt),

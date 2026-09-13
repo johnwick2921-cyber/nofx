@@ -301,3 +301,34 @@ describe('EditSheet — prefill integrity (UI verification 2026-08-18)', () => {
     expect(patch[0].value.scenario_tag).toBe('S1')
   })
 })
+
+describe('overlay draft revision', () => {
+  it('keeps the opening revision and draft when polling changes the plan', async () => {
+    postOverlay.mockClear()
+    const props = {
+      open: true,
+      traderId: 't1',
+      symbol: 'MNQ',
+      language: 'en' as const,
+      level: fact({ price: 30246.5 }),
+      levelIndex: 2,
+      onClose: vi.fn(),
+      onSaved: vi.fn(),
+      revision: { plan_id: 'old', plan_version: 1, overlay_version: 0 },
+    }
+    const { rerender } = render(<EditSheet {...props} />)
+    fireEvent.change(document.querySelector('input')!, {
+      target: { value: '30250' },
+    })
+    rerender(
+      <EditSheet
+        {...props}
+        revision={{ plan_id: 'new', plan_version: 2, overlay_version: 3 }}
+      />
+    )
+    fireEvent.click(screen.getByText('Save'))
+    await waitFor(() => expect(postOverlay).toHaveBeenCalled())
+    expect(postOverlay.mock.calls.at(-1)?.[4]).toEqual(props.revision)
+    expect(postOverlay.mock.calls.at(-1)?.[1][0].value.price).toBe(30250)
+  })
+})

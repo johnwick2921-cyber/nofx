@@ -15,13 +15,20 @@ export function getSystemConfig(): Promise<SystemConfig> {
   if (configPromise) {
     return configPromise
   }
-  configPromise = fetch('/api/config')
-    .then((res) => res.json())
+  const request = fetch('/api/config')
+    .then((res) => {
+      if (!res.ok) throw new Error('Could not read system configuration')
+      return res.json()
+    })
     .then((data: SystemConfig) => {
-      cachedConfig = data
+      if (configPromise === request) cachedConfig = data
       return data
     })
-  return configPromise
+  configPromise = request
+  void request.catch(() => {
+    if (configPromise === request) configPromise = null
+  })
+  return request
 }
 
 /** Call after first-time setup completes so next check reflects initialized=true */

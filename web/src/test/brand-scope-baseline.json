@@ -14,5 +14,5 @@
   "provider/ninjatrader/tcp_server.go": "8284240bc92299e0c9e6742957cd7076f8ae6d41eb1514a56b7b0f6e398ccf32",
   "provider/ninjatrader/tcp_framing.go": "17deef59013a41dd33f9263de0b93b37b5cc7114db239236ed32d4722bf7e617",
   "ninjascript/VLTraderTCPClient.cs": "78565bce3703fea028a82217117d64fd29e9c69e6c0e879e87df27c63bbb472e",
-  "web/src/lib/agentChatStorage.ts": "de7f24ff74a913a4e9d4dad2563712a562239c4f9d206b1099bb1477896f6fb0"
+  "web/src/lib/agentChatStorage.ts": "3a486068047acfc64343f2f44e877fa5a403ebcd688916413002bcdea78f4009"
 }

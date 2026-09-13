@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
 import { Trash2, Brain, ExternalLink } from 'lucide-react'
 import type { AIModel } from '../../types'
@@ -55,12 +55,20 @@ export function ModelConfigModal({
   // Always prefer allModels (supportedModels) for provider/id lookup;
   // fall back to configuredModels for edit mode details (apiKey etc.)
   const selectedModel =
-    allModels?.find((m) => m.id === selectedModelId) ||
-    configuredModels?.find((m) => m.id === selectedModelId)
+    configuredModels?.find(
+      (m) => m.id === (editingModelId || selectedModelId)
+    ) || allModels?.find((m) => m.id === (editingModelId || selectedModelId))
 
+  const seededModel = useRef<string>()
   useEffect(() => {
-    if (editingModelId && selectedModel) {
-      setApiKey(selectedModel.apiKey || '')
+    if (
+      editingModelId &&
+      selectedModel &&
+      seededModel.current !== editingModelId
+    ) {
+      seededModel.current = editingModelId
+      setSelectedModelId(editingModelId)
+      setApiKey('')
       setBaseUrl(selectedModel.customApiUrl || '')
       setModelName(selectedModel.customModelName || '')
       setName(selectedModel.name || '')
@@ -70,6 +78,12 @@ export function ModelConfigModal({
   }, [editingModelId, selectedModel])
 
   const handleSelectModel = (modelId: string) => {
+    setApiKey('')
+    setBaseUrl('')
+    setModelName('')
+    setName('')
+    setThinkingMode('')
+    setReasoningEffort('')
     setSelectedModelId(modelId)
     setCurrentStep(1)
   }
@@ -470,8 +484,18 @@ function Claw402ConfigForm({
 
   // Truncate address for display
 
+  const keyGeneration = useRef(0)
   // Debounced validation when apiKey changes
   useEffect(() => {
+    const generation = ++keyGeneration.current
+    let live = true
+    const controller = new AbortController()
+    if (newWalletKey !== apiKey) {
+      setNewWalletKey('')
+      setShowNewWalletBackup(false)
+    }
+    setShowDeposit(false)
+    setTesting(false)
     setWalletAddress('')
     setUsdcBalance(null)
     setClaw402Status(null)
@@ -482,18 +506,23 @@ function Claw402ConfigForm({
 
     if (clientErr || !apiKey) {
       setValidating(false)
-      return
+      return () => {
+        live = false
+        keyGeneration.current += 1
+      }
     }
 
     setValidating(true)
     const timer = setTimeout(async () => {
       try {
         const res = await fetch('/api/wallet/validate', {
+          signal: controller.signal,
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ private_key: apiKey }),
         })
         const data = await res.json()
+        if (!live || generation !== keyGeneration.current) return
         if (data.valid) {
           setWalletAddress(data.address || '')
           setUsdcBalance(data.balance_usdc || '0.00')
@@ -503,16 +532,23 @@ function Claw402ConfigForm({
           setKeyError(data.error || 'Invalid key')
         }
       } catch {
+        if (!live) return
         setKeyError('Validation request failed')
       } finally {
-        setValidating(false)
+        if (live) setValidating(false)
       }
     }, 500)
 
-    return () => clearTimeout(timer)
+    return () => {
+      live = false
+      keyGeneration.current += 1
+      clearTimeout(timer)
+      controller.abort()
+    }
   }, [apiKey])
 
   const handleTestConnection = async () => {
+    const generation = keyGeneration.current
     setTesting(true)
     setTestResult(null)
     try {
@@ -522,6 +558,7 @@ function Claw402ConfigForm({
         body: JSON.stringify({ private_key: apiKey }),
       })
       const data = await res.json()
+      if (generation !== keyGeneration.current) return
       if (data.valid) {
         setWalletAddress(data.address || '')
         setUsdcBalance(data.balance_usdc || '0.00')
@@ -538,12 +575,13 @@ function Claw402ConfigForm({
         setTestResult({ status: 'error', message: data.error || 'Invalid key' })
       }
     } catch {
+      if (generation !== keyGeneration.current) return
       setTestResult({
         status: 'error',
         message: t('modelConfig.claw402Unreachable', language),
       })
     } finally {
-      setTesting(false)
+      if (generation === keyGeneration.current) setTesting(false)
     }
   }
 
@@ -735,17 +773,19 @@ function Claw402ConfigForm({
                     : '1px solid #2B3139',
                 color: '#EAECEF',
               }}
-              required
+              required={!editingModelId}
             />
             {!apiKey && (
               <button
                 type="button"
                 onClick={async () => {
+                  const generation = keyGeneration.current
                   try {
                     const res = await fetch('/api/wallet/generate', {
                       method: 'POST',
                     })
                     const data = await res.json()
+                    if (generation !== keyGeneration.current) return
                     if (data.private_key) {
                       onApiKeyChange(data.private_key)
                       setShowNewWalletBackup(true)
@@ -1150,7 +1190,7 @@ function Claw402ConfigForm({
         </button>
         <button
           type="submit"
-          disabled={!isKeyValid}
+          disabled={!isKeyValid && !(editingModelId && !apiKey)}
           className="flex-1 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold transition-all hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
           style={{
             background: isKeyValid
@@ -1351,7 +1391,7 @@ function StandardProviderConfigForm({
             border: '1px solid #2B3139',
             color: '#EAECEF',
           }}
-          required
+          required={!editingModelId}
         />
       </div>
 
