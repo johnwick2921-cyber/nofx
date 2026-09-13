@@ -39,3 +39,16 @@ rerun with approved cache access. That setup failure is not a product test resul
 Full suite, race coverage where relevant, independent repair review, guide rev
 finalization, publication and final artifact verification are **pending**.
 No runtime incident, exploitation, real fill, or deployment success is asserted.
+
+## Execution boundary repairs
+
+- Boot refusal: six adapter-side regression cases failed to see the boot latch;
+  a ready loopback peer additionally received a limit entry with refusal true.
+  Checks now precede market/limit/stop entry registration/send. Boot assertion
+  runs before saved-trader autostart. Existing capability and unbound-account
+  tests pass alongside the new tests. The loopback is a synthetic peer, not NT8.
+- Broker-terminal retirement: same-version cancelled and filled rows each minted
+  a fresh authorization in a temporary ledger. Retirement now precedes successor
+  creation. Focused store tests confirm new-version and boot-sweep behavior.
+
+These changes have not been deployed. Full combined review remains pending.

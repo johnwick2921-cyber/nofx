@@ -7,6 +7,8 @@ export const guards: GuideSection = {
   tagline: 'What can hard-block a trade vs what only informs.',
   asBuiltRev: GUIDE_BUILT_REV,
   blocks: [
+    { kind: 'h', text: 'Boot integrity applies to every NT8 entry' },
+    { kind: 'p', text: 'Startup checks integrity before restarting saved traders. A failed check blocks market, resting-limit and stop-entry submission at the TCP adapter, including previously armed orders and test entry routes. Position reads, stop management, closes and cancellation remain available.' },
     { kind: 'h', text: 'Trader ownership and rejected changes' },
     { kind: 'p', text: 'Private trader requests check every supplied trader ID against the signed-in owner. A rejected strategy update leaves the saved configuration unchanged. Trader deletion either removes the trader and its equity history together or preserves both when it fails. Ask-Planner historical fallback stays with the selected trader; an empty plan can still show market facts.' },
     { kind: 'h', text: 'Structural stop and first-zone target — research candidate' },

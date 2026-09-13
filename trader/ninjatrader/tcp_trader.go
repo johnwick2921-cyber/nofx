@@ -21,6 +21,7 @@ import (
 
 	"nofx/config"
 	"nofx/discipline"
+	"nofx/kernel"
 	"nofx/logger"
 	"nofx/market"
 	"nofx/provider/databento"
@@ -322,6 +323,9 @@ func (t *TCPTrader) isAccountTradeable(name string) bool {
 }
 
 func (t *TCPTrader) placeEntry(symbol, side string, quantity float64) (map[string]interface{}, error) {
+	if reason, refused := kernel.TradingRefused(); refused {
+		return nil, fmt.Errorf("ninjatrader/tcp: entry refused by boot integrity: %s", reason)
+	}
 	// SAFETY RAIL (Stage-2 Phase-1, defense-in-depth): never SEND an entry for an
 	// account that isn't tradeable (SIM + allow-listed). The C# AddOn enforces this
 	// again right before submit; this refuses in Go before the frame is even sent.
@@ -435,6 +439,9 @@ func (t *TCPTrader) placeEntry(symbol, side string, quantity float64) (map[strin
 // placeEntry (bound account + SIM + B3 guard); the AddOn submits OrderType.Limit
 // and defers SL/TP to SubmitBracketOnEntryFill, identical to market entries.
 func (t *TCPTrader) PlaceLimitEntry(symbol, side string, quantity float64, limitPx, sl, tp float64, beforeSend ...func(string) error) (string, error) {
+	if reason, refused := kernel.TradingRefused(); refused {
+		return "", fmt.Errorf("ninjatrader/tcp: entry refused by boot integrity: %s", reason)
+	}
 	tradeAcct := t.boundAccount
 	if tradeAcct == "" {
 		return "", fmt.Errorf("ninjatrader/tcp: refusing armed %s entry on %s — trader has no bound account", side, symbol)
@@ -496,6 +503,9 @@ func (t *TCPTrader) PlaceLimitEntry(symbol, side string, quantity float64, limit
 // tick offset is applied by the caller). Back-compat law: the frame is
 // additive JSON — only send it when the far-side AddOn has proven it.
 func (t *TCPTrader) PlaceStopEntry(symbol, side string, quantity float64, stopPx, sl, tp float64, beforeSend ...func(string) error) (string, error) {
+	if reason, refused := kernel.TradingRefused(); refused {
+		return "", fmt.Errorf("ninjatrader/tcp: entry refused by boot integrity: %s", reason)
+	}
 	// CAPABILITY HANDSHAKE — the far-side AddOn must PROVE, by a build_id that
 	// arrived on the wire, that it will BUILD this order correctly. Two distinct
 	// failures live behind this one gate:

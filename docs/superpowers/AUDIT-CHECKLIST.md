@@ -4697,3 +4697,23 @@ and compare persisted bytes, not only HTTP status.
 consumer can use. Rejection must not imply unchanged state unless the writes are
 ordered or transacted to make that true. A scoped parent write does not authorize
 an earlier unscoped child write. Tests must traverse production call sites.
+
+## PENDING CLASS — A REFUSAL LATCH MUST BIND EVERY ENTRY AND PRECEDE AUTOSTART
+
+Branch `fix/repo-audit-control-boundaries-20260913`, base `63968be6`.
+The decision executor read boot integrity while the resting-order adapter did
+not. A ready isolated loopback peer received a limit entry while TradingRefused
+was true. Main also loaded/autostarted persisted running traders before asserting
+integrity. The repair checks all three TCP entry methods before placement side
+effects and asserts boot integrity before manager load. It preserves close,
+cancellation and protection/read operations. Adapter tests cover both market
+sides, limit sides, stop-entry sides and no placement registration on refusal;
+a ready loopback test proves refusal and subsequent allowed transmission. This
+is offline transport evidence, not a real NT8 fill or deployment claim.
+
+Related authorization-order failure: broker-terminal armed rows minted their
+successor before the existing same-version retirement rule. Tests reproduce
+successor creation after both cancelled and filled rows; the retirement check
+now precedes minting. New versions and boot-sweep exceptions retain their
+existing documented semantics. A permanent record is not permission to trade
+again.

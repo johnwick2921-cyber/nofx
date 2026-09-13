@@ -285,6 +285,31 @@ func (s *ArmedOrderStore) UpsertArm(row *ArmedOrderDB) error {
 			return fmt.Errorf("armed_orders: refusing to rewrite %s/%s — a cancel is in flight for signal %q and is not yet confirmed by the broker's book; the slot is not free",
 				row.PlanID, row.Scenario, existing.SignalID)
 		}
+		// MANUAL-CANCEL-WINS (2026-08-30 E7 incident): a TERMINAL row is
+		// re-authorized ONLY on a plan VERSION change. The old
+		// re-authorize-every-cycle behavior was the re-place loop:
+		// terminal → armed → marketable fill → stop-out → terminal → armed…
+		// forever while the confirm stayed MET, so an owner/NT8 cancel
+		// never won. Same version + terminal = the row STAYS terminal.
+		// 0B (owner ruling 2026-09-02) — RE-ARM AFTER BOOT SWEEP. The
+		// manual-cancel-wins law exists so the OWNER's cancels stick. A boot
+		// sweep is the machine's own housekeeping: it cancels pre-boot orders
+		// because the process that owned them died, not because anyone judged
+		// the setup dead. Leaving those rows sticky killed the live setup
+		// until the next plan version — on 09-02 00:16 that rule would have
+		// meant no position 587. Swept rows (state_reason prefixed
+		// "boot_sweep") re-authorize under the SAME version; every other
+		// terminal row stays terminal.
+		if IsTerminalArmState(existing.State) && existing.Version == row.Version && !IsBootSweepReason(existing.StateReason) {
+			return nil
+		}
+		// 0B — the re-arm is LOUD: a swept row coming back under the SAME version
+		// is the machine undoing its own boot housekeeping, and the journal must
+		// say so with the dead broker identity it replaces.
+		if IsTerminalArmState(existing.State) && existing.Version == row.Version && IsBootSweepReason(existing.StateReason) {
+			logger.Warnf("⚖ re-armed after boot sweep: %s %s leg %d — signal %s → (fresh arm, awaiting placement) · same plan version v%d",
+				row.Session, row.Scenario, row.LegIndex+1, signalOrNone(existing.SignalID), row.Version)
+		}
 		// A TERMINAL row that reached the broker keeps its record forever; the
 		// new authorization becomes the NEXT placement rather than erasing it.
 		// A row that never reached the broker has nothing to keep and still
@@ -327,31 +352,6 @@ func (s *ArmedOrderStore) UpsertArm(row *ArmedOrderDB) error {
 				"target_px": row.TargetPx, "updated_at": row.UpdatedAt,
 				"leg_count": row.LegCount, "kind": row.Kind,
 			}).Error
-		}
-		// MANUAL-CANCEL-WINS (2026-08-30 E7 incident): a TERMINAL row is
-		// re-authorized ONLY on a plan VERSION change. The old
-		// re-authorize-every-cycle behavior was the re-place loop:
-		// terminal → armed → marketable fill → stop-out → terminal → armed…
-		// forever while the confirm stayed MET, so an owner/NT8 cancel
-		// never won. Same version + terminal = the row STAYS terminal.
-		// 0B (owner ruling 2026-09-02) — RE-ARM AFTER BOOT SWEEP. The
-		// manual-cancel-wins law exists so the OWNER's cancels stick. A boot
-		// sweep is the machine's own housekeeping: it cancels pre-boot orders
-		// because the process that owned them died, not because anyone judged
-		// the setup dead. Leaving those rows sticky killed the live setup
-		// until the next plan version — on 09-02 00:16 that rule would have
-		// meant no position 587. Swept rows (state_reason prefixed
-		// "boot_sweep") re-authorize under the SAME version; every other
-		// terminal row stays terminal.
-		if existing.Version == row.Version && !IsBootSweepReason(existing.StateReason) {
-			return nil
-		}
-		// 0B — the re-arm is LOUD: a swept row coming back under the SAME version
-		// is the machine undoing its own boot housekeeping, and the journal must
-		// say so with the dead broker identity it replaces.
-		if existing.Version == row.Version && IsBootSweepReason(existing.StateReason) {
-			logger.Warnf("⚖ re-armed after boot sweep: %s %s leg %d — signal %s → (fresh arm, awaiting placement) · same plan version v%d",
-				row.Session, row.Scenario, row.LegIndex+1, signalOrNone(existing.SignalID), row.Version)
 		}
 		// New plan version → RE-AUTHORIZE: fresh armed state, fresh lineage.
 		row.ID = existing.ID
