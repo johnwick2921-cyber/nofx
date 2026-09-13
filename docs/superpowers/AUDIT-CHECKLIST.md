@@ -4836,3 +4836,11 @@ a planner append between read and append. Unknown/read-error state refuses.
 Registration commitment applies to BOTH limit and stop placement: an error
 after durable registration must not admit another row in the same pass.
 Logs must say registered, not sent or filled, unless transmission is observed.
+
+## PENDING CLASS — REQUEST MODEL SELECTION MUST NOT MUTATE SHARED AGENT
+
+Branch `fix/repo-audit-control-boundaries-20260913`, base `63968be6`.
+Two authenticated chats must retain their own selected model credentials through
+all follow-up calls and summaries. Shared history/flow locks stay shared without
+copying mutexes. Missing user configuration must not select another owner's
+default credentials. Exercise both HTTP identity and concurrent model selection.

@@ -627,6 +627,7 @@ export const settings: GuideSection = {
     'Every knob on the Strategy page, what it really does, and who reads it.',
   asBuiltRev: GUIDE_BUILT_REV,
   blocks: [
+    { kind: 'p', text: 'AgentBeta uses the authenticated user’s configured AI model for each conversation request. Another user’s request cannot replace that selection. If your account has no enabled model, configure one; it does not inherit another account’s credentials.' },
     {
       kind: 'p',
       text: 'Every knob card below names the engine consumer (file:line) that reads it — so you always know whether a slider is real or decorative. FE persists but NO production code reads: nothing here is in that category; the three that used to be (plan_mode, proximity_filter_atr, …) are wired now.',
