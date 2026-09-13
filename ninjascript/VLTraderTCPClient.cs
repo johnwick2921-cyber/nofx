@@ -120,12 +120,17 @@ namespace NinjaTrader.NinjaScript.AddOns
             public Account     Account;
             public Instrument  Instrument;
             public OrderAction ExitAction;
-            public int         Qty;
+            public int         Qty;        // confirmed live coverage: minimum actual leg quantity
             public string      ExitOco;     // the OCO group the SL + TP share
             public double      TickSize;
             public bool        Submitting;
             public bool        Amending;
             public int         DesiredQty;
+            public int         RequestedQty;
+            public bool        AmendmentPending;
+            public bool        AmendmentFailed;
+            public bool        SlTerminal;
+            public bool        TpTerminal;
         }
         private readonly Dictionary<string, PlacedBracket> placedBrackets = new Dictionary<string, PlacedBracket>();
 
@@ -1133,18 +1138,21 @@ namespace NinjaTrader.NinjaScript.AddOns
 
         private void RetireTerminalBracket(Order order, OrderState eventState)
         {
-            if (order == null || !IsTerminalOrderState(eventState)) return;
+            if (order == null) return;
             string name = order.Name ?? "";
             if (!name.EndsWith("-sl") && !name.EndsWith("-tp")) return;
             string id = name.Substring(0, name.Length - 3);
             lock (signalMapLock)
             {
                 PlacedBracket pb;
-                if (!placedBrackets.TryGetValue(id, out pb) || pb.Submitting) return;
-                bool slDone = pb.SlOrder != null && (ReferenceEquals(pb.SlOrder, order)
-                    ? IsTerminalOrderState(eventState) : IsTerminalOrderState(pb.SlOrder.OrderState));
-                bool tpDone = pb.TpOrder != null && (ReferenceEquals(pb.TpOrder, order)
-                    ? IsTerminalOrderState(eventState) : IsTerminalOrderState(pb.TpOrder.OrderState));
+                if (!placedBrackets.TryGetValue(id, out pb)) return;
+                // Event state is authoritative even if the mutable Order object
+                // has not caught up. Preserve terminal receipts during Submit.
+                if (ReferenceEquals(pb.SlOrder, order) && IsTerminalOrderState(eventState)) pb.SlTerminal = true;
+                if (ReferenceEquals(pb.TpOrder, order) && IsTerminalOrderState(eventState)) pb.TpTerminal = true;
+                if (pb.Submitting) return;
+                bool slDone = pb.SlTerminal || (pb.SlOrder != null && IsTerminalOrderState(pb.SlOrder.OrderState));
+                bool tpDone = pb.TpTerminal || (pb.TpOrder != null && IsTerminalOrderState(pb.TpOrder.OrderState));
                 if (slDone && tpDone) { placedBrackets.Remove(id); signalIdentity.Remove(id); }
             }
         }
@@ -1337,8 +1345,23 @@ namespace NinjaTrader.NinjaScript.AddOns
                 string parentId = childName.Substring(0, childName.Length - 3);
                 PlacedBracket trackedBracket;
                 lock (signalMapLock) { placedBrackets.TryGetValue(parentId, out trackedBracket); }
-                if (trackedBracket != null && IsLiveAtExchange(e.OrderState))
-                    AmendBracketQuantity(parentId, trackedBracket, trackedBracket.DesiredQty);
+                if (trackedBracket != null)
+                {
+                    string error = e.Error.ToString();
+                    lock (signalMapLock)
+                    {
+                        if (trackedBracket.AmendmentPending && (!string.IsNullOrEmpty(error) && error != "NoError"
+                            || e.OrderState == OrderState.Rejected))
+                        {
+                            trackedBracket.AmendmentPending = false;
+                            trackedBracket.AmendmentFailed = true;
+                            LogWarn("VLTraderTCPClient: bracket quantity amendment rejected " + parentId
+                                + " desired=" + trackedBracket.DesiredQty + " — confirmed coverage must be read from actual legs; no automatic retry");
+                        }
+                    }
+                    if (IsLiveAtExchange(e.OrderState))
+                        AmendBracketQuantity(parentId, trackedBracket, trackedBracket.DesiredQty);
+                }
             }
             if (e.OrderState == OrderState.Cancelled || e.OrderState == OrderState.Rejected)
             {
@@ -2104,6 +2127,7 @@ namespace NinjaTrader.NinjaScript.AddOns
             {
                 if (placedBrackets.TryGetValue(signalId, out pb))
                 {
+                    if (filledQty > pb.DesiredQty && !pb.AmendmentPending) pb.AmendmentFailed = false;
                     pb.DesiredQty = Math.Max(pb.DesiredQty, filledQty);
                     if (pb.Submitting) return; // the submitting callback will catch up
                 }
@@ -2115,7 +2139,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                     // ambiguous acceptance must never create a second pair.
                     pb = new PlacedBracket {
                         Account = b.Account, Instrument = b.Instrument,
-                        ExitAction = b.ExitAction, Qty = filledQty, DesiredQty = filledQty,
+                        ExitAction = b.ExitAction, Qty = 0, DesiredQty = filledQty,
                         ExitOco = signalId + "-exit", Submitting = true,
                     };
                     placedBrackets[signalId] = pb;
@@ -2148,6 +2172,10 @@ namespace NinjaTrader.NinjaScript.AddOns
             {
                 lock (signalMapLock) { pb.Submitting = false; }
             }
+            // Submit can synchronously deliver both terminal child receipts.
+            // Recheck the saved receipts after releasing the reservation.
+            if (pb.SlOrder != null) RetireTerminalBracket(pb.SlOrder, pb.SlOrder.OrderState);
+            if (pb.TpOrder != null) RetireTerminalBracket(pb.TpOrder, pb.TpOrder.OrderState);
             AmendBracketQuantity(signalId, pb, pb.DesiredQty);
         }
 
@@ -2168,39 +2196,44 @@ namespace NinjaTrader.NinjaScript.AddOns
             if (pb == null || filledQty <= 0) return;
             lock (signalMapLock)
             {
+                // A new cumulative fill is a new target, not an event-driven
+                // retry loop for a rejected or still-ambiguous request.
+                if (filledQty > pb.DesiredQty && !pb.AmendmentPending) pb.AmendmentFailed = false;
                 pb.DesiredQty = Math.Max(pb.DesiredQty, filledQty);
-                if (pb.Submitting || pb.Amending || pb.DesiredQty <= pb.Qty) return;
+                bool live = pb.SlOrder != null && pb.TpOrder != null
+                    && !pb.SlTerminal && !pb.TpTerminal
+                    && IsLiveAtExchange(pb.SlOrder.OrderState) && IsLiveAtExchange(pb.TpOrder.OrderState);
+                pb.Qty = live ? Math.Min(pb.SlOrder.Quantity, pb.TpOrder.Quantity) : 0;
+                if (pb.AmendmentPending && pb.Qty >= pb.RequestedQty)
+                    pb.AmendmentPending = false; // both actual leg quantities confirm
+                if (pb.Submitting || pb.Amending || pb.AmendmentPending || pb.AmendmentFailed
+                    || pb.DesiredQty <= pb.Qty || !live || pb.Account == null) return;
                 pb.Amending = true;
-                filledQty = pb.DesiredQty;
+                pb.AmendmentPending = true; // before Change can synchronously callback
+                pb.RequestedQty = pb.DesiredQty;
+                filledQty = pb.RequestedQty;
             }
-            bool changed = false;
             try
             {
-                Account ba = pb.Account;
-                if (ba == null || pb.SlOrder == null || pb.TpOrder == null
-                    || !IsLiveAtExchange(pb.SlOrder.OrderState) || !IsLiveAtExchange(pb.TpOrder.OrderState))
-                {
-                    LogWarn("VLTraderTCPClient: bracket quantity awaiting live legs for " + signalId
-                        + " desired=" + filledQty + " (no replacement pair submitted)");
-                    return;
-                }
                 pb.SlOrder.QuantityChanged = filledQty;
                 pb.TpOrder.QuantityChanged = filledQty;
-                ba.Change(new[] { pb.SlOrder, pb.TpOrder });
-                lock (signalMapLock) { pb.Qty = filledQty; }
-                changed = true;
-                LogInfo("VLTraderTCPClient: bracket quantity change submitted " + signalId + " qty=" + filledQty);
+                pb.Account.Change(new[] { pb.SlOrder, pb.TpOrder });
+                LogInfo("VLTraderTCPClient: bracket quantity change requested " + signalId + " qty=" + filledQty
+                    + " — awaiting both actual leg quantities");
             }
             catch (Exception ex)
             {
+                // A throwing Change can already be accepted. Keep it pending;
+                // only actual quantities or an explicit rejection resolve it.
                 LogWarn("VLTraderTCPClient: bracket quantity change failed or UNKNOWN " + signalId + ": " + ex.Message);
             }
             finally
             {
                 lock (signalMapLock) { pb.Amending = false; }
             }
-            // A synchronous Change callback may have raised DesiredQty again.
-            if (changed && pb.DesiredQty > pb.Qty) AmendBracketQuantity(signalId, pb, pb.DesiredQty);
+            // Catch synchronous confirmations/new fills once. An unconfirmed
+            // request stays pending and returns without resubmission.
+            AmendBracketQuantity(signalId, pb, pb.DesiredQty);
         }
 
         // Position-history fix — emit a position_close frame when an OCO exit

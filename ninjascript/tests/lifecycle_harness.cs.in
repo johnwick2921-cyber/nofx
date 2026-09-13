@@ -18,11 +18,11 @@ class OrderEventArgs { public Order Order; public OrderState OrderState; public 
 class Account {
  public static List<Account> All=new List<Account>(); public string Name; public bool Sim=true; public Connection Connection=new Connection(); public List<Position> Positions=new List<Position>();
  public List<Order> Created=new List<Order>(), Submitted=new List<Order>(), Cancelled=new List<Order>(); public List<Instrument> Flattened=new List<Instrument>();
- public bool FailCancel, FailSubmit; public Action OnSubmit, OnChange; public int Changes;
+ public bool FailCancel, FailSubmit, DeferChange; public Action OnSubmit, OnChange; public int Changes;
  public Order CreateOrder(Instrument i,OrderAction a,OrderType t,OrderEntry e,TimeInForce f,int q,double l,double s,string o,string n,DateTime d,object c){var r=new Order{Account=this,Instrument=i,OrderAction=a,OrderType=t,Tif=f,Quantity=q,StopPrice=s,LimitPrice=l,Oco=o,Name=n};Created.Add(r);return r;}
  public void Submit(Order[] orders){Submitted.AddRange(orders);var cb=OnSubmit;OnSubmit=null;if(cb!=null)cb();if(FailSubmit)throw new Exception("ambiguous submit");}
  public void Cancel(IEnumerable<Order> orders){if(FailCancel)throw new Exception("cancel failed");Cancelled.AddRange(orders);}
- public void Change(Order[] orders){Changes++;var cb=OnChange;OnChange=null;if(cb!=null)cb();foreach(var o in orders)o.Quantity=o.QuantityChanged;}
+ public void Change(Order[] orders){Changes++;var cb=OnChange;OnChange=null;if(cb!=null)cb();if(!DeferChange)foreach(var o in orders)o.Quantity=o.QuantityChanged;}
  public void Flatten(Instrument[] instruments){Flattened.AddRange(instruments);}
 }
 static class Core { public static class Globals { public static DateTime MaxDate=DateTime.MaxValue; } }
@@ -81,6 +81,10 @@ class Harness {
  var pb=placedBrackets["partial"];active.FailCancel=true;CancelBracketsFor("partial","MNQ","Sim101");Check(placedBrackets.ContainsKey("partial"),"failed bracket cancel retains tracked pair");active.FailCancel=false;CancelBracketsFor("partial","MNQ","Sim101");Check(placedBrackets.ContainsKey("partial"),"successful bracket cancel request retains until terminal");
  Event(pb.SlOrder,OrderState.Cancelled,0);Check(placedBrackets.ContainsKey("partial"),"one terminal leg retains sibling tracking");Event(pb.TpOrder,OrderState.Cancelled,0);Check(!placedBrackets.ContainsKey("partial"),"two terminal legs retire bracket tracking");
  var old=Seed("old-expiry",target);Event(old,OrderState.Filled,1);var other=Seed("other-expiry",target);pendingBrackets["other-expiry"].Instrument=target.Positions[1].Instrument;Event(other,OrderState.Filled,1);target.Cancelled.Clear();CancelAllBracketsFor("MNQ 06-26","Sim102");Check(target.Cancelled.Count==2&&target.Cancelled.All(o=>o.Instrument.FullName=="MNQ 06-26"),"flat sweep isolates exact expiry from same-account sibling");
+ var deferred=Seed("deferred-change",active);Event(deferred,OrderState.PartFilled,1);active.DeferChange=true;Event(deferred,OrderState.Filled,3);var deferredPair=placedBrackets["deferred-change"];int changeCount=active.Changes;Event(deferredPair.SlOrder,OrderState.Working,0);Event(deferredPair.TpOrder,OrderState.Working,0);Check(deferredPair.Qty==1&&active.Changes==changeCount,"deferred Change keeps confirmed old coverage without request storm");
+ deferredPair.SlOrder.Quantity=3;Event(deferredPair.SlOrder,OrderState.Working,0);Check(deferredPair.Qty==1,"one amended leg does not confirm whole pair coverage");deferredPair.TpOrder.Quantity=3;Event(deferredPair.TpOrder,OrderState.Working,0);Check(deferredPair.Qty==3&&active.Changes==changeCount,"both broker leg quantities confirm deferred amendment");active.DeferChange=false;
+ var rejectedChange=Seed("rejected-change",active);Event(rejectedChange,OrderState.PartFilled,1);active.DeferChange=true;Event(rejectedChange,OrderState.Filled,3);var rejectedPair=placedBrackets["rejected-change"];int rejectedCount=active.Changes;OnOrderUpdate(this,new OrderEventArgs{Order=rejectedPair.SlOrder,OrderState=OrderState.Working,Error="OrderRejected"});Event(rejectedPair.SlOrder,OrderState.Working,0);Event(rejectedPair.TpOrder,OrderState.Working,0);Check(rejectedPair.Qty==1&&rejectedPair.AmendmentFailed&&!rejectedPair.AmendmentPending&&active.Changes==rejectedCount,"rejected Change retains actual coverage and latches failure without retry storm");active.DeferChange=false;
+ var terminalSubmit=Seed("terminal-submit",active);active.OnSubmit=()=>{var pair=placedBrackets["terminal-submit"];OnOrderUpdate(this,new OrderEventArgs{Order=pair.SlOrder,OrderState=OrderState.Rejected});OnOrderUpdate(this,new OrderEventArgs{Order=pair.TpOrder,OrderState=OrderState.Cancelled});};Event(terminalSubmit,OrderState.Filled,1);Check(!placedBrackets.ContainsKey("terminal-submit"),"synchronous terminal pair during Submit retires after reservation releases");
  Console.WriteLine("ALL OFFLINE LIFECYCLE TESTS PASSED");
  }
 }
