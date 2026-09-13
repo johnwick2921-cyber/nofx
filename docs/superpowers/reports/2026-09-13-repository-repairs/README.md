@@ -203,3 +203,12 @@ permission merely from their stored armed state. A failed refresh does not enter
 that set. Focused missing-permission, quality-refusal, valid-placement and split
 fixtures pass (`/tmp/nofx-arm-current-gate-after.log`). Direct offline/debug
 placement helpers retain their existing explicitly invoked test semantics.
+
+## Frozen tape and session retirement
+
+[A] A tickOnce regression reproduced an unplaced NY authorization surviving
+16:05 CT on unchanged bars. Session/news cutoff enforcement now precedes data
+cadence skips, using the tick clock. The regression and existing class32
+wall-clock scheduling/EOD/T1 tests pass (`/tmp/nofx-wallclock-retire-after.log`).
+The test uses an unconnected synthetic SIM adapter and temporary ledger; it
+does not claim a real resting broker order was cancelled.

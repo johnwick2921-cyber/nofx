@@ -4809,3 +4809,10 @@ injected state-update failure; a fail-closed log is not enforcement.
 The inherited-authorization class also applies to ordinary quality/gate refusals:
 production placement consumes the successfully admitted row IDs for this cycle,
 not every stored armed row. Test a current quality refusal with an older row.
+
+## PENDING CLASS — CUTOFF RETIREMENT IS WALL-CLOCK WORK
+
+Branch `fix/repo-audit-control-boundaries-20260913`, base `63968be6`.
+Frozen-bar dedup skipped session/news retirement when local positions were flat,
+leaving unfilled authorizations alive. Exercise tickOnce with unchanged bars,
+a past cutoff and an armed row. Cutoff work precedes bar cadence and AI skips.

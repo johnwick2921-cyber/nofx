@@ -974,6 +974,12 @@ func (at *AutoTrader) tickOnce(isGrid bool) (closedSkip bool) {
 	// scheduled read must never inherit the market's calendar.
 	at.evaluateWallClockWeeklyRead() // CLASS 36 — weekly first (Sunday: weekly lands → ASIA follows)
 	at.evaluateWallClockSessionReads()
+	// Session/news retirement is wall-clock work too. Frozen bars and a
+	// locally flat position must not preserve resting entry authorizations.
+	cutoffNow := traderNow()
+	if at.enforceEODFlatAt(cutoffNow) || at.enforceT1ForceFlatAt(cutoffNow) {
+		return
+	}
 	// U2 (watcher-eyes hotfix): a post_exit kick is a PROMISED immediate rescan
 	// — it bypasses the bar-close gate and the no-new-data dedup exactly once
 	// (the dodge bypass rides skipDodgeOnce, set together in noteKick).
