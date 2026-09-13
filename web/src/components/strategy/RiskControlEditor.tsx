@@ -197,6 +197,11 @@ export function RiskControlEditor({
 
   return (
     <div className="space-y-6">
+      {isFutures && <label className="block text-sm p-4">
+        {language === 'zh' ? '每笔 MNQ 最大亏损（美元，含成本；未设置则拒绝）' : language === 'id' ? 'Kerugian maksimum per transaksi MNQ ($, termasuk biaya; kosong menolak)' : 'Planned risk limit per MNQ trade ($, including costs; unset refuses)'}
+        <input aria-label="MNQ per-trade risk cap" type="number" min="0" step="0.5" disabled={disabled} value={config.max_trade_loss_usd?.MNQ ?? ''}
+          onChange={e => { const caps = { ...config.max_trade_loss_usd }; if (e.target.value === '') delete caps.MNQ; else caps.MNQ = Number(e.target.value); updateField('max_trade_loss_usd', caps) }} />
+      </label>}
       {/* Hold discipline (hold-lock) — applies to futures + crypto; default OFF */}
       <div
         className="p-4 rounded-lg"

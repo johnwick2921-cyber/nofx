@@ -479,52 +479,91 @@ func (at *AutoTrader) maybeManageArmedOrdersAt(snap map[string]kernel.StructureS
 			continue
 		}
 		for li, leg := range legs {
-			// 0B (2026-09-02) — STOP ANCHORED TO SEATED STRUCTURE. Compose the
-			// leg's stop BEFORE every downstream consumer (the gate's R:R and
-			// min-SL legs, the ledger row, the churn guard, placement): stop =
-			// beyond the nearest seated level on the risk side + clearance,
-			// floored at MIN_SL_ATR_MULT×ATR5m, widest wins, never tighter than
-			// authored. Logged once per (plan, version, scenario, leg, stop).
-			if comp := composeArmStop(strings.ToLower(strings.TrimSpace(sc.Direction)), leg.Entry, leg.Stop, atr5m,
-				market.FuturesTickSize(at.futuresSymbol()), doc.Levels, kernel.MinSLATRMult(),
-				kernel.MinSLTickClearance, armStopAnchorMaxATR()); comp.Stop != leg.Stop || comp.Unanchored {
-				skey := plan.PlanID + ":" + strconv.Itoa(plan.Version) + ":" + sc.ID + ":leg" + strconv.Itoa(li+1) + ":stop"
-				if armRefusalChanged(&at.armStopCompLast, skey, fmt.Sprintf("%.2f/%s", comp.Stop, comp.Bound)) {
-					at.logInfof("%s", armStopCompositionLine(plan.Session, sc.ID, li+1, sc.Direction, comp, atr5m, kernel.MinSLATRMult()))
-					// OWNER RULING 1 (0B): ARM_STOP_ANCHOR_MAX_ATR 3.0 is a
-					// PROVISIONAL [I] default, reviewed at n≥30 dead zones. The
-					// count is RECORDED (class-35 law), never inferred from logs.
-					if comp.Unanchored && at.store != nil {
-						if n, cerr := store.IncStopUnanchored(at.store); cerr != nil {
-							at.logWarnf("🛑 stop_unanchored counter write failed: %v", cerr)
-						} else {
-							at.logWarnf("🛑 stop_unanchored %s %s leg %d — no seated level within %.1f×ATR5m on the risk side; ATR floor governs. Recorded n=%d (provisional bound reviewed at n≥%d).",
-								plan.Session, sc.ID, li+1, armStopAnchorMaxATR(), n, store.StopUnanchoredReviewN)
+			// Structural geometry applies to the level-fade play. Momentum and
+			// explicit exit legs retain their existing construction (outside scope).
+			structuralFade := sc.Condition == kernel.OneSetupPlay && !strings.EqualFold(leg.Kind, "exit")
+			var geometry *store.StructuralGeometryRecord
+			osTargetSubstituted := false
+			if structuralFade {
+				policy := store.ResolveStructuralStop(cfg, at.futuresSymbol())
+				policy.MinRR = at.armMinRRFor(cfg)
+				comp := composeArmStop(sc.Direction, leg.Entry, leg.Stop, atr5m,
+					market.FuturesTickSize(at.futuresSymbol()), doc.Levels, kernel.MinSLATRMult(),
+					kernel.MinSLTickClearance, armStopAnchorMaxATR(), armStructuralContext{Doc: &doc, Scenario: sc, Leg: leg, Policy: policy, PointValue: market.FuturesPointValue(at.futuresSymbol())})
+				geometry = comp.Geometry
+				leg.Entry = geometry.Entry
+				geometry.TraderID, geometry.PlanID, geometry.Version = at.id, plan.PlanID, plan.Version
+				geometry.Leg, geometry.TimeMs, geometry.Symbol = li+1, now.UnixMilli(), at.futuresSymbol()
+				geometry.TradeDate = kernel.CMESessionDayKey(now)
+				if geometry.Stop != nil {
+					leg.Stop = *geometry.Stop
+				}
+				if geometry.Target != nil {
+					leg.Target = *geometry.Target
+				}
+				if geometry.Reason != "" {
+					at.saveArmGeometry(*geometry)
+					at.retireGeometryRefusal(plan, sc, li, geometry.Reason, now)
+					if armRefusalChanged(&at.armRefusalLast, store.StructuralGeometryKey(*geometry), geometry.Reason) && at.store != nil {
+						_, _ = store.IncArmRefusal(at.store, at.id, kernel.PlanTradeDateFor(plan), plan.Session, "geometry_"+geometry.Reason)
+					}
+					continue
+				}
+				if osCycle.on() {
+					osCycle.recordTarget(sc.ID, "first-distinct-eligible-zone")
+				}
+				// Admission remains pending until all existing gates pass.
+				geometry.Reason = "pending_gates"
+				if !at.saveArmGeometry(*geometry) {
+					continue
+				}
+			} else {
+				// 0B (2026-09-02) — STOP ANCHORED TO SEATED STRUCTURE. Compose the
+				// leg's stop BEFORE every downstream consumer (the gate's R:R and
+				// min-SL legs, the ledger row, the churn guard, placement): stop =
+				// beyond the nearest seated level on the risk side + clearance,
+				// floored at MIN_SL_ATR_MULT×ATR5m, widest wins, never tighter than
+				// authored. Logged once per (plan, version, scenario, leg, stop).
+				if comp := composeArmStop(strings.ToLower(strings.TrimSpace(sc.Direction)), leg.Entry, leg.Stop, atr5m,
+					market.FuturesTickSize(at.futuresSymbol()), doc.Levels, kernel.MinSLATRMult(),
+					kernel.MinSLTickClearance, armStopAnchorMaxATR()); comp.Stop != leg.Stop || comp.Unanchored {
+					skey := plan.PlanID + ":" + strconv.Itoa(plan.Version) + ":" + sc.ID + ":leg" + strconv.Itoa(li+1) + ":stop"
+					if armRefusalChanged(&at.armStopCompLast, skey, fmt.Sprintf("%.2f/%s", comp.Stop, comp.Bound)) {
+						at.logInfof("%s", armStopCompositionLine(plan.Session, sc.ID, li+1, sc.Direction, comp, atr5m, kernel.MinSLATRMult()))
+						// OWNER RULING 1 (0B): ARM_STOP_ANCHOR_MAX_ATR 3.0 is a
+						// PROVISIONAL [I] default, reviewed at n≥30 dead zones. The
+						// count is RECORDED (class-35 law), never inferred from logs.
+						if comp.Unanchored && at.store != nil {
+							if n, cerr := store.IncStopUnanchored(at.store); cerr != nil {
+								at.logWarnf("🛑 stop_unanchored counter write failed: %v", cerr)
+							} else {
+								at.logWarnf("🛑 stop_unanchored %s %s leg %d — no seated level within %.1f×ATR5m on the risk side; ATR floor governs. Recorded n=%d (provisional bound reviewed at n≥%d).",
+									plan.Session, sc.ID, li+1, armStopAnchorMaxATR(), n, store.StopUnanchoredReviewN)
+							}
 						}
 					}
+					leg.Stop = comp.Stop
 				}
-				leg.Stop = comp.Stop
-			}
-			// ONE SETUP D3 — THE TARGET IS THE FIRST OBSTACLE. Composed here, BEFORE
-			// every downstream consumer (the gate's R:R leg, the ledger row, the
-			// churn guard) — the same position composeArmStop holds for the stop —
-			// so the existing R:R gate JUDGES the obstacle target and its refusal is
-			// the existing refusal. Only for a scenario the predicate ALLOWED; a
-			// missing or wrong-side obstacle leaves the authored target and is
-			// counted, never substituted with a plausible number (A24).
-			osTargetSubstituted := false
-			if osCycle.on() {
-				if v, ok := osCycle.verdicts[sc.ID]; ok && v.Allowed {
-					if tgt, label, ok := oneSetupObstacleTarget(sc, leg.Entry); ok {
-						leg.Target = tgt
-						osTargetSubstituted = true
-						osCycle.recordTarget(sc.ID, label)
-					} else {
-						osCycle.recordTarget(sc.ID, label)
-						okey := plan.PlanID + ":" + strconv.Itoa(plan.Version) + ":" + sc.ID + ":leg" + strconv.Itoa(li+1) + ":obstacle"
-						if armRefusalChanged(&at.armRefusalLast, okey, label) && at.store != nil {
-							_, _ = store.IncArmRefusal(at.store, at.id, kernel.PlanTradeDateFor(plan), plan.Session, store.OneSetupClassObstacleMissing)
-							at.logWarnf("🎯 one setup: %s %s leg %d target stays %s — no recorded first obstacle on the profit side (counted obstacle_missing)", plan.Session, sc.ID, li+1, label)
+				// ONE SETUP D3 — THE TARGET IS THE FIRST OBSTACLE. Composed here, BEFORE
+				// every downstream consumer (the gate's R:R leg, the ledger row, the
+				// churn guard) — the same position composeArmStop holds for the stop —
+				// so the existing R:R gate JUDGES the obstacle target and its refusal is
+				// the existing refusal. Only for a scenario the predicate ALLOWED; a
+				// missing or wrong-side obstacle leaves the authored target and is
+				// counted, never substituted with a plausible number (A24).
+				if osCycle.on() {
+					if v, ok := osCycle.verdicts[sc.ID]; ok && v.Allowed {
+						if tgt, label, ok := oneSetupObstacleTarget(sc, leg.Entry); ok {
+							leg.Target = tgt
+							osTargetSubstituted = true
+							osCycle.recordTarget(sc.ID, label)
+						} else {
+							osCycle.recordTarget(sc.ID, label)
+							okey := plan.PlanID + ":" + strconv.Itoa(plan.Version) + ":" + sc.ID + ":leg" + strconv.Itoa(li+1) + ":obstacle"
+							if armRefusalChanged(&at.armRefusalLast, okey, label) && at.store != nil {
+								_, _ = store.IncArmRefusal(at.store, at.id, kernel.PlanTradeDateFor(plan), plan.Session, store.OneSetupClassObstacleMissing)
+								at.logWarnf("🎯 one setup: %s %s leg %d target stays %s — no recorded first obstacle on the profit side (counted obstacle_missing)", plan.Session, sc.ID, li+1, label)
+							}
 						}
 					}
 				}
@@ -542,7 +581,12 @@ func (at *AutoTrader) maybeManageArmedOrdersAt(snap map[string]kernel.StructureS
 			}
 			// gates AT ARM TIME — a resting order is a pre-passed entry; each gate
 			// input that changes materially later triggers a cancel (1.3).
-			if verdict := at.armGateVerdictFor(sc, leg, biasDirectionFor(doc.Bias.Direction), snap, atr5m, minQuality, cfg, plan.Session); verdict != "" {
+			if verdict := at.armGateVerdictFor(sc, leg, biasDirectionFor(doc.Bias.Direction), snap, atr5m, minQuality, cfg, plan.Session, structuralFade); verdict != "" {
+				if geometry != nil {
+					geometry.Reason = "entry_gate"
+					geometry.Detail = verdict
+					at.saveArmGeometry(*geometry)
+				}
 				// F4 (LONDON-FORENSICS 2026-08-28) — log the REFUSED verdict ONCE
 				// per arm-spec (the same infeasible arm re-refused every cycle
 				// printed ~120 lines/session); silent until the spec changes.
@@ -608,6 +652,11 @@ func (at *AutoTrader) maybeManageArmedOrdersAt(snap map[string]kernel.StructureS
 			// already-resting opposite-side order the same cycle. The only escape:
 			// a leg explicitly authored as an exit/flip leg (kind "exit").
 			if verdict := at.oneLiveArmGuard(sc, leg, side); verdict != "" {
+				if geometry != nil {
+					geometry.Reason = "entry_gate"
+					geometry.Detail = verdict
+					at.saveArmGeometry(*geometry)
+				}
 				if rows, lerr := ledger.ListNonTerminal(at.id); lerr == nil {
 					for _, rr := range rows {
 						if rr.TraderID == at.id && rr.PlanID == plan.PlanID && rr.Scenario == sc.ID &&
@@ -645,9 +694,14 @@ func (at *AutoTrader) maybeManageArmedOrdersAt(snap map[string]kernel.StructureS
 			// be held to a weaker standard than a decision entry. Refusals are
 			// logged AND recorded per path (arm-refusal counters), and an
 			// existing resting arm for this spec is cancelled the same cycle.
-			greason, refused := at.entryGateForArm(plan, sc, leg, side, biasDirectionFor(doc.Bias.Direction), atr5m)
+			greason, refused := at.entryGateForArm(plan, sc, leg, side, biasDirectionFor(doc.Bias.Direction), atr5m, structuralFade)
 			recordResearchGate("arm", plan.PlanID, plan.Version, sc.ID, greason, refused)
 			if refused {
+				if geometry != nil {
+					geometry.Reason = "entry_gate"
+					geometry.Detail = greason
+					at.saveArmGeometry(*geometry)
+				}
 				if rows, lerr := ledger.ListNonTerminal(at.id); lerr == nil {
 					for _, rr := range rows {
 						if rr.TraderID == at.id && rr.PlanID == plan.PlanID && rr.Scenario == sc.ID &&
@@ -678,6 +732,14 @@ func (at *AutoTrader) maybeManageArmedOrdersAt(snap map[string]kernel.StructureS
 			// it is never armed. D4: an allowed scenario waits while another holds
 			// the plan's one arm. Nothing here cancels (one_setup_wiring.go).
 			if at.oneSetupConsult(osCycle, plan, sc, li, ledger, now) {
+				if geometry != nil {
+					geometry.Reason = "one_setup"
+					geometry.Detail = "one_setup consult declined without a complete verdict; see warning"
+					if v, ok := osCycle.verdicts[sc.ID]; ok {
+						geometry.Detail = fmt.Sprintf("level=%s play=%s permission=%s waiting=%t", v.Level, v.Play, v.Permission, osCycle.record.Scenarios[sc.ID].Waiting)
+					}
+					at.saveArmGeometry(*geometry)
+				}
 				continue
 			}
 			// D3: every leg's kind is derived from the condition and an
@@ -685,8 +747,21 @@ func (at *AutoTrader) maybeManageArmedOrdersAt(snap map[string]kernel.StructureS
 			// the reason).
 			legKind, kindRefusal := armLegKindFor(sc, leg)
 			if kindRefusal != "" {
+				if geometry != nil {
+					geometry.Reason = "entry_gate"
+					geometry.Detail = kindRefusal
+					at.saveArmGeometry(*geometry)
+				}
 				at.logWarnf("✕ armed %s leg %d NOT authored — %s", sc.ID, li+1, kindRefusal)
 				continue
+			}
+
+			if geometry != nil {
+				geometry.Quantity = 1
+				geometry.Reason = "admitted"
+				if !at.saveArmGeometry(*geometry) {
+					continue
+				}
 			}
 
 			// D4 (2026-09-04) — FAR-ARM COUNTER, WARN-first. Nothing is refused
@@ -2022,7 +2097,7 @@ func (at *AutoTrader) armGateVerdict(sc kernel.PlanScenario, biasDirection strin
 // split legs gate independently — each leg is a pre-passed entry of its own).
 // The min-confidence gate is N/A for arms — the AI's authorization IS the
 // confidence signal (no per-scenario confidence exists to check).
-func (at *AutoTrader) armGateVerdictFor(sc kernel.PlanScenario, leg kernel.PlanArmLeg, biasDirection string, snap map[string]kernel.StructureState, atr5m float64, minQuality string, cfg *store.StrategyConfig, session string) string {
+func (at *AutoTrader) armGateVerdictFor(sc kernel.PlanScenario, leg kernel.PlanArmLeg, biasDirection string, snap map[string]kernel.StructureState, atr5m float64, minQuality string, cfg *store.StrategyConfig, session string, structural ...bool) string {
 	a := sc.Arm
 	if err := kernel.ArmSpecValid(sc); err != nil {
 		return err.Error()
@@ -2062,7 +2137,7 @@ func (at *AutoTrader) armGateVerdictFor(sc kernel.PlanScenario, leg kernel.PlanA
 		return fmt.Sprintf("R:R %.2f below arm min %.2f (studio min_risk_reward_ratio)", rr, at.armMinRRFor(cfg))
 	}
 	// min-SL — the same floor (×ATR5m) the entry path enforces.
-	if atr5m > 0 {
+	if atr5m > 0 && !(len(structural) == 1 && structural[0]) {
 		dist := leg.Entry - leg.Stop
 		if side == "short" {
 			dist = leg.Stop - leg.Entry

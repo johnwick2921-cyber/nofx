@@ -338,6 +338,11 @@ export function DayPlanEditor({ config, onChange, disabled, language }: Props) {
       style={{ fontFamily: 'var(--vl-font-ui)' }}
     >
       {/* master switch */}
+      <label className="text-sm p-2">
+        {language === 'zh' ? '区域外止损缓冲（点；留空使用实测默认值）' : language === 'id' ? 'Buffer stop di luar zona (poin; kosong memakai hasil pengukuran)' : 'Stop buffer beyond zone (points; blank uses measured default)'}
+        <input aria-label="Structural stop buffer" type="number" min="0.25" step="0.25" disabled={disabled} value={cfg.structural_stop?.buffer_points ?? ''}
+          onChange={e => update('structural_stop', { ...cfg.structural_stop, buffer_points: e.target.value === '' ? undefined : Number(e.target.value) })} />
+      </label>
       <FieldRow label={tp('enableDayPlan', language)}>
         <Toggle
           on={enabled}

@@ -44,9 +44,10 @@ type EntryIntent struct {
 	Stop   float64
 	Target float64
 
-	ATR5m     float64
-	MinRR     float64 // resolved min_risk_reward_ratio — ONE floor for BOTH paths (R1, 2026-09-03; ARM_MIN_RR deleted)
-	MinSLMult float64 // resolved MIN_SL_ATR_MULT (0 = leg off)
+	ATR5m                   float64
+	MinRR                   float64 // resolved min_risk_reward_ratio — ONE floor for BOTH paths (R1, 2026-09-03; ARM_MIN_RR deleted)
+	MinSLMult               float64 // resolved MIN_SL_ATR_MULT (0 = leg off)
+	StructuralStopValidated bool    // only the min-SL admission leg changes role
 
 	// Plan context (all optional — legs skip on absence).
 	PlanBias      string // resolved plan bias ("long"/"short"/"")
@@ -283,7 +284,7 @@ func EntryGate(in EntryIntent) (reason string, refused bool) {
 	}
 
 	// Leg 6 — min-SL ×ATR5m (same floor as both legacy chains).
-	if in.ATR5m > 0 && in.MinSLMult > 0 && in.Entry > 0 && in.Stop > 0 {
+	if !in.StructuralStopValidated && in.ATR5m > 0 && in.MinSLMult > 0 && in.Entry > 0 && in.Stop > 0 {
 		dist := in.Entry - in.Stop
 		if side == "short" {
 			dist = in.Stop - in.Entry
@@ -349,7 +350,7 @@ func armSeamATR5m(symbol string) float64 {
 // chain's own gates (armGateVerdictFor, oneLiveArmGuard) run before this —
 // EntryGate is the SAME function the decision path runs, so an arm can never
 // be held to a weaker standard than a market entry.
-func (at *AutoTrader) entryGateForArm(plan *kernel.ActivePlan, sc kernel.PlanScenario, leg kernel.PlanArmLeg, side, biasDir string, atr5m float64) (string, bool) {
+func (at *AutoTrader) entryGateForArm(plan *kernel.ActivePlan, sc kernel.PlanScenario, leg kernel.PlanArmLeg, side, biasDir string, atr5m float64, structural ...bool) (string, bool) {
 	openSide, openID, openVer, openScenario := "", int64(0), 0, ""
 	isExit := strings.EqualFold(strings.TrimSpace(leg.Kind), "exit")
 	// ONE OPEN POSITION (2026-09-03): the position's identity rides into the
@@ -390,6 +391,7 @@ func (at *AutoTrader) entryGateForArm(plan *kernel.ActivePlan, sc kernel.PlanSce
 		ATR5m:                     atr5m,
 		MinRR:                     at.armMinRRFor(nil), // R1: ONE floor — the Studio value, same as the decision path
 		MinSLMult:                 kernel.MinSLATRMult(),
+		StructuralStopValidated:   len(structural) == 1 && structural[0],
 		PlanBias:                  biasDir,
 		PlanMode:                  at.planModeFor(session),
 		CitedScenario:             sc.ID,

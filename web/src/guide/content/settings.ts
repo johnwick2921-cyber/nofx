@@ -411,21 +411,15 @@ const risk: KnobSpec[] = [
     perSession: 'No.',
   },
   {
-    label: 'Stop floor + structure anchor (0B)',
-    where: 'env MIN_SL_ATR_MULT · ARM_STOP_ANCHOR_MAX_ATR (no Studio row yet)',
-    what: 'Every armed stop is composed, not just accepted: stop = BEYOND the nearest seated level on the risk side + 2 ticks clearance, then floored at MIN_SL_ATR_MULT×ATR5m — WHICHEVER IS WIDER WINS — and never tighter than what the planner authored. When no seated level sits within ARM_STOP_ANCHOR_MAX_ATR×ATR5m on the risk side it is a DEAD ZONE: the arm logs stop_unanchored and the ATR floor governs. A level is never invented.',
-    trader:
-      'Why: 15 of 27 losers printed stopped-too-tight, and on the five biggest losers 0 of 5 stops sat ON a seated level while 2 of 5 sat in dead zones 40+ points away — a wider stop in a dead zone is still a stop in a dead zone. Each arm logs 🛑 with the chosen stop, the anchor, the ATR floor and which one bound. THE COST: a wider stop lowers R:R, so more arms are refused at ARM_MIN_RR 2.0 — the intended trade (owner ruling 2026-09-02). Refusals are RECORDED per session-day and per class (arm_refusals_0b:…) and the refusal line prints the running count, so the cost can be quoted against the benefit.',
-    consumer:
-      'kernel/min_sl.go (MinSLATRMultDefault) · trader/arm_stop_anchor.go (composeArmStop) · trader/armed_executor.go (arm leg loop)',
-    range:
-      'MIN_SL_ATR_MULT 0 (off) – 2.5 · ARM_STOP_ANCHOR_MAX_ATR 0 (no anchoring) – 5',
-    systemDefault:
-      '1.5×ATR5m floor [R researched] · 3.0×ATR5m dead-zone bound [I] PROVISIONAL',
-    recommended:
-      '⭐ 1.5 — the BOTTOM of the researched 1.5–2.5 day-trade range; the old 1.0 was uncited code-canon. The 3.0 dead-zone bound is [I] PROVISIONAL (owner ruling 2026-09-02: accepted as a default, NOT a ruling on the number) — reviewed when stop_unanchored reaches n≥30 recorded occurrences.',
-    whenToTouch:
-      'Raise the floor toward 2.5 only with MAE evidence — wave 1A records it per condition (`go run ./cmd/excursions`), so the floor can be set against the adverse-excursion distribution instead of a placeholder. The 3.0 bound is reviewed at n≥30 dead zones — the count is RECORDED in system_config (arm_stop_unanchored_0b) and every dead zone logs 🛑 stop_unanchored with the running n.',
+    label: 'Structural stop, buffer and risk cap',
+    where: 'Day Plan → stop buffer; Risk Control → maximum loss per MNQ trade',
+    what: 'A reject fade uses the far edge of its frozen entry zone plus the resolved buffer. The first distinct eligible target zone supplies the target. Prices are fixed before the admission checks; a failed ratio refuses the trade.',
+    trader: 'Missing structural provenance records ATR fallback but refuses entry. An unset owner dollar cap also refuses. One MNQ cannot be resized into a smaller trade. The ATR multiplier remains 1.5 but never overrides an available structural stop.',
+    consumer: 'store/structural_geometry.go:ResolveStructuralStop · trader/structural_geometry.go:ComposeLevelFadeGeometry · trader/armed_executor.go',
+    range: 'Measured training grid: 0.25, 1.25 and 4.50 MNQ points. No externally validated universal buffer.',
+    systemDefault: '4.50 points [I], outward-rounded p95 of 6,181 in-sample held touches. Dollar cap: unset until owner supplies it.',
+    recommended: '[I]/[T] a codeable research candidate, not a validated replacement. No external evidence fixes its buffer or proves that it will turn the losing book positive.',
+    whenToTouch: 'Choose a buffer only after judging the full corrected sweep. Select the dollar cap explicitly for the contract. Do not change either price merely to pass 2R.',
     perSession: 'No.',
   },
   {

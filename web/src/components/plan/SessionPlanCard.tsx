@@ -1,3 +1,4 @@
+import { StructuralGeometry } from './StructuralGeometry'
 import { PlanLiveness } from './PlanLiveness'
 // P4.3 / P5 — the SessionPlanCard: composes bias / mini-chart / levels /
 // scenarios / rules / footer, and renders every lifecycle state. It is a pure
@@ -835,6 +836,7 @@ export function SessionPlanCard({
       )}
 
       {/* scenarios */}
+      <StructuralGeometry rows={plan.structural_geometry} language={language} />
       {doc.scenarios && doc.scenarios.length > 0 && (
         <ScenarioList
           scenarios={doc.scenarios}

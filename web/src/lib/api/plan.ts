@@ -217,6 +217,7 @@ export interface ScenarioDeath {
 }
 
 export interface PlanToday {
+ structural_geometry?: StructuralGeometryView[] | null
   found: boolean
   trade_date: string
   session: string
@@ -329,6 +330,24 @@ export interface PlanToday {
   /** W7 (weekly-bias wave) — the Sunday weekly-bias doc for the current week
    * (null → grey "none" chip). Advisory view only. */
   weekly?: PlanWeekly | null
+}
+
+export interface StructuralGeometryView {
+ scenario: string
+ leg: number
+ entry: number
+ stop?: number
+ target?: number
+ zone_lo?: number
+ zone_hi?: number
+ buffer?: number
+ stop_source: string
+ reason: string
+ detail: string
+ quantity: number
+ loss_usd?: number
+ net_gain_points?: number
+ target_names?: string[]
 }
 
 // W7 (weekly-bias wave) — /api/plan/today weekly payload.

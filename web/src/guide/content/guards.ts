@@ -7,6 +7,10 @@ export const guards: GuideSection = {
   tagline: 'What can hard-block a trade vs what only informs.',
   asBuiltRev: GUIDE_BUILT_REV,
   blocks: [
+    { kind: 'h', text: 'Structural stop and first-zone target — research candidate' },
+    { kind: 'p', text: '[I]/[T] a codeable research candidate, not a validated replacement. No external evidence fixes its buffer or proves that it will turn the losing book positive.' },
+    { kind: 'p', text: 'For the reject fade, the stop is beyond the whole entry zone by the resolved buffer; the target is the near edge of the first distinct eligible zone. Freeze both, then check costs, the existing R:R floor and the owner-set dollar cap. Refuse unsuitable geometry without resizing, moving the target, or changing the stop to pass. Missing frozen provenance records ATR fallback and refuses admission. Legacy point references are not reconstructed into zones.' },
+    { kind: 'p', text: 'The provisional MNQ buffer is 4.50 points [I]: outward-rounded p95 of 6,181 in-sample held first touches. The sweep compares 0.25, 1.25 and 4.50 points. These conditional minute-bar measurements do not establish a 95% win rate or a profitable strategy. The plan card shows the recorded composed prices and exact refusal reason.' },
     { kind: 'h', text: 'One open position per instrument' },
     {
       kind: 'p',

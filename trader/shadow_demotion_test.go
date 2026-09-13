@@ -242,6 +242,7 @@ func TestLiveConditionPlacesOnLoopback(t *testing.T) {
 	// ONE SETUP (dispatch 102, 2026-09-11): this fixture exercises the WIDE book
 	// (a non-reject play / no map); the switch OFF restores it byte-identically (E2).
 	oneSetupOff(&cfg)
+	structuralTestPolicy(&cfg, .5)
 	cfg.RiskControl.MinRiskRewardRatio = 2 // R1 (2026-09-03): the arm floor is the Studio value; this fixture arms at R:R 2.0
 	at, st, sigs, _ := shadowWireHarnessAt(t, cfg, now)
 	live := kernel.PlanDoc{Bias: kernel.PlanBias{Direction: "long", Conviction: "low", FlipCondition: "n/a"},
@@ -253,6 +254,7 @@ func TestLiveConditionPlacesOnLoopback(t *testing.T) {
 		},
 		NoTrade: []string{}, DeathCondition: "n/a",
 	}
+	structuralTestMap(&live, structuralTestZone{100, 95.5, 100, "PDH"}, structuralTestZone{110, 110, 111, "target"})
 	blob, _ := json.Marshal(live)
 	shadowPlanAtTime(t, at, st, string(blob), now)
 	prev := market.FuturesBarsProvider

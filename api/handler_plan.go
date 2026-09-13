@@ -501,7 +501,8 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 		// ONE SETUP (dispatch 102, 2026-09-10) — the arm seam's RECORDED verdict
 		// per scenario (what it decided, never a re-evaluation) plus the resolved
 		// switch; absent record → the switch only, scenarios empty (A24).
-		"one_setup": s.oneSetupFor(traderID, row.PlanID, row.Version),
+		"one_setup":           s.oneSetupFor(traderID, row.PlanID, row.Version),
+		"structural_geometry": s.planStructuralGeometry(traderID, row.PlanID, row.Version),
 		// A1/A4 (fail-register wave): verdict basis (machine vs prose-anchor
 		// heuristic) + unevaluable scenario ids — the card renders them
 		// distinctly instead of dressing a heuristic as a machine verdict.

@@ -114,9 +114,7 @@ when three verdicts hold at that instant: its level is the top-ranked merged
 candidate inside the reachability band (grade ≥ `one_setup_min_grade`, default
 B, then distance; any timeframe, any kind; an unresolved `level_id` never
 resolves by nearest), its condition is `reject`, and the fade-permission label
-reads permitted (NULL never permits). The arm's target is the scenario's
-recorded first obstacle and the existing R:R gate judges it (a refusal is the
-existing refusal, counted `obstacle_below_floor`). One arm at a time per plan:
+reads permitted (NULL never permits). The structural-stop candidate replaces the reject arm target with the first distinct eligible zone near edge; its frozen geometry is judged before the unchanged selection checks. Refusals record their exact reason and quantity zero. One arm at a time per plan:
 the higher-quality allowed scenario arms first, the other reads
 `second_setup_waiting` until it is terminal. A declined scenario is still
 evaluated, confirmed and recorded — its episode row carries all three verdicts
@@ -192,11 +190,11 @@ The touch evaluator marks a level touched when an observed bar spans its price; 
 
 **Stop-entry availability.** The stop-entry route requires `STOP_ENTRY_SEAM=on`; its default is off, and the arm path checks the switch before proceeding. This document does not assert its current environment value or that every reclaim became a broker order. [C04] [C05]
 
-**Stop composition.** The arm path composes the stop before validation. The composition keeps the widest of the authored stop, qualifying risk-side structural anchor plus clearance, and a valid ATR floor. The authored stop can therefore remain wider than the other two. An unavailable/nonpositive ATR skips that composition leg; that limitation is not a claim that a particular order passed all other gates. [C29] [C09] [C28]
+**Stop composition — structural-stop candidate, awaiting owner-gated boot.** For a `reject` level fade, read the uniquely identified entry zone from the frozen machine map. Long: `floor_tick(zone.lo - buffer)`; short: `ceil_tick(zone.hi + buffer)`. The measured buffer is resolved from strategy configuration; provisional MNQ default 4.50 points [I], training p95. Neither the authored stop nor 1.5×ATR may override available structural invalidation. Missing usable provenance records the unchanged ATR multiplier as fallback, but refuses admission. Other entry plays and post-entry exits are unchanged. Sources: `trader/structural_geometry.go:ComposeLevelFadeGeometry`, `trader/arm_stop_anchor.go:composeArmStop`, `store/structural_geometry.go:ResolveStructuralStop`.
 
-**Target and first obstacle.** New-authoring economics checks require explicit geometry and an obstacle response, check numeric/path coherence, and record a sub-1R first obstacle as a warning rather than a mandatory target-policy refusal. The accepted response vocabulary includes pass_through, reduce, exit and decline_setup. Schema acceptance of a word does not prove a corresponding live management action exists. [C08] [C24]
+**Target and admission — structural-stop candidate.** The target is the near edge of the first complete sourced zone strictly beyond the entry zone in the profit direction, from the map already merged under its non-transitive rule. Never skip it for a more attractive ratio. Normalize entry to the existing execution tick rule, freeze stop and target, compute gross/net gain and one-contract dollar loss including costs. Refuse missing provenance/buffer/cost/cap, unresolved or nonpositive geometry, nonpositive net target gain, R:R below the unchanged bound strategy floor (owner 2.0), or loss beyond the owner-set instrument-specific cap. Quantity is zero on refusal; prices never move to pass. `ComposeLevelFadeGeometry` and the actual arm cycle record the decision. Research status: [I]/[T] a codeable research candidate, not a validated replacement. No external evidence fixes its buffer or proves that it will turn the losing book positive.
 
-**R:R admission.** The inspected arm validator computes R from the arm leg's entry, stop and target before placement and compares it with the resolved arm threshold; its documented default is 2.0. This is **arm-time geometry**, not a guarantee of R≥2 at the eventual broker fill. The same validator checks the configured ATR stop floor when ATR is available. [C10]
+**R:R admission.** The inspected arm validator computes R from the arm leg's entry, stop and target before placement and compares it with the resolved arm threshold; its documented default is 2.0. This is **arm-time geometry**, not a guarantee of R≥2 at the eventual broker fill. For a structurally composed reject fade the ATR leg no longer overrides the stop; other paths retain their prior floor. [C10]
 
 **Quantity at the inspected send sites.** The limit and stop-entry send calls shown here each pass quantity one. These two lines establish those call-site quantities, not proof of account-wide exposure, all broker paths or current broker inventory. [C25] [C26]
 

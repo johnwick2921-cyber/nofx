@@ -30,7 +30,7 @@ export const planCard: GuideSection = {
     },
     {
       kind: 'p',
-      text: 'Newly authored scenarios must state the entry zone, trigger, confirmation, structural invalidation, protective stop, first opposing obstacle with level/family/price provenance, planned response, arm target and both R values. The card separates the target path from the arm order objective. Prices and R describe authored geometry before costs, execution rounding and later stop composition; accepted broker prices remain separate. No structural, fixed-R, ATR, partial, trailing or mandatory-1R target policy is prescribed.',
+      text: 'Newly authored scenarios must state the entry zone, trigger, confirmation, structural invalidation, protective stop, first opposing obstacle with level/family/price provenance, planned response, arm target and both R values. The card separates the target path from the arm order objective. Prices and R describe authored geometry before costs, execution rounding and later stop composition; accepted broker prices remain separate. The earlier scenario-economics contract prescribed no exit policy. The structural-stop research candidate now derives reject-fade stops and targets from frozen zones; the separately recorded composition below is the admission decision.',
     },
     {
       kind: 'p',
