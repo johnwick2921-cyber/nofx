@@ -223,3 +223,15 @@ foreign fill attached to an owned order; all pass. Before repair the fixture
 failed because the stopped owned trader was unavailable, so that before run
 does not itself reproduce a foreign-data disclosure. No real records were read.
 Logs: `/tmp/nofx-order-fills-before.log`, `/tmp/nofx-order-fills-after.log`.
+
+## Combined Go verification checkpoint
+
+[A] At `99a065430cb28ced23c4992fe04ff9b13787dc3d`, `go test ./...` passed (all packages; `/tmp/nofx-repair-full-suite-03.log`). Focused race tests passed (`/tmp/nofx-repair-race-03.log`); this was not an all-package race run. `go build ./...` passed using explicit GIT_DIR/GIT_WORK_TREE to prevent Go's VCS discovery selecting the unrelated read-only `/tmp/.git` ancestor. The initial build failed at VCS discovery, not compilation. Build output: `/tmp/nofx-repair-build-02.log`, exit0. These results precede subsequent C#/frontend/overlay/limit repairs and do not certify their combined head.
+
+## Limit registration commits admission
+
+[A] `b63747ea` reproduces the asymmetry through the actual placement loop, TCPTrader, ledger callback and TCPServer: post-registration send-age rejection allowed a second row to register. Same-plan and different-plan regressions failed before repair. Limit registration now commits the pass even when send returns an error; same-plan unplaced siblings retire, other-plan rows remain armed, and the registered row remains pending. Pre-registration refusal preserves other candidates. Focused limit/stop/map checks pass. This tests an actual transport refusal after registration, not an observed partial-write broker incident. Logs and test names are preserved in `trader/limit_registration_commit_test.go`. Admission log wording now distinguishes registration from transmission.
+
+## Browser overlay revision binding
+
+[A] HTTP overlay edits require the plan ID, plan version and overlay revision the owner viewed. The current-plan response exposes these fields. The API rejects stale drafts with409; the serialized plan writer rechecks latest version, lifecycle and overlay revision so planner appends or competing edits cannot invalidate a checked snapshot before append. Read failures refuse edits. Temporary-database tests cover valid edits, stale plan/overlay drafts, competing writers and retired plans; all pass (`/tmp/nofx-overlay-revision-02.log`). The first test run exposed an invalid test fixture with zero scenarios; it was corrected to a schema-valid plan. No pre-repair runtime incident is claimed. Frontend snapshot propagation is a coordinated pending lane. Historical Q&A records do not store authored version; their separate test-op guard is not promoted to equivalent revision binding.

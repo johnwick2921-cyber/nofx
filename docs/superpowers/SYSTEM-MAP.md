@@ -542,10 +542,14 @@ second key for the same unit. No historical terms. The ordinal was already true
 and was dropped rather than re-implemented.
 
 
-### Fade permission (fix/fade-permission, W2 — a LABEL, never a gate)
+### Fade permission (original W2 label; now consumed by One Setup admission)
 
-RECORDING AND SHOWING ONLY. No gate, arm, order, scenario, level, exit or cadence
-changes. `trader/fade_no_refusal_test.go` fails if any file on the
+The original W2 rollout was recording/display only. That historical scope is
+superseded: `trader/one_setup_wiring.go` calls `FadePermissionAt` and supplies its
+verdict to `kernel.OneSetupAllowsAt`, which participates in current admission.
+The standalone predicate and episode stamp remain distinct from this consumer.
+The following original source guard covers direct references only, not transitive
+calls through One Setup. `trader/fade_no_refusal_test.go` fails if any file on the
 arm-authorization path (`armed_executor.go`, `entry_gate.go`,
 `auto_trader_orders.go`, `session_risk.go`, `kernel/risk_limits.go`,
 `plan_authored_invalidation.go`, `engine_analysis.go`) can reference the label

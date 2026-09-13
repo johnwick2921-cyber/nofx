@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"fmt"
 	"nofx/logger"
 	"sync"
@@ -315,12 +316,33 @@ func (s *PlanStore) UpdatePlanLifecycle(planID string, version int, lifecycle, t
 
 // AppendOverlay appends a new overlay version for (plan_id, plan_version).
 // Returns the assigned overlay_version.
+var ErrPlanRevisionConflict = errors.New("plan revision changed")
+
+// AppendOverlayChecked rechecks the read revision inside the plan writer,
+// including planner appends and lifecycle changes that do not use API locks.
+func (s *PlanStore) AppendOverlayChecked(o *PlanOverlayDB, expectedOverlay int) (int, error) {
+	return s.appendOverlay(o, &expectedOverlay)
+}
+
 func (s *PlanStore) AppendOverlay(o *PlanOverlayDB) (int, error) {
+	return s.appendOverlay(o, nil)
+}
+
+func (s *PlanStore) appendOverlay(o *PlanOverlayDB, expectedOverlay *int) (int, error) {
 	if o == nil || o.PlanID == "" || o.PlanVersion <= 0 {
 		return 0, fmt.Errorf("plan_id and plan_version required")
 	}
 	var assigned int
 	err := s.enqueue(func(db *gorm.DB) error {
+		if expectedOverlay != nil {
+			var current PlanDB
+			if err := db.Where("plan_id = ?", o.PlanID).Order("version DESC").First(&current).Error; err != nil {
+				return err
+			}
+			if current.Version != o.PlanVersion || current.Lifecycle != "active" {
+				return ErrPlanRevisionConflict
+			}
+		}
 		var maxV *int
 		if err := db.Model(&PlanOverlayDB{}).
 			Where("plan_id = ? AND plan_version = ?", o.PlanID, o.PlanVersion).
@@ -330,6 +352,9 @@ func (s *PlanStore) AppendOverlay(o *PlanOverlayDB) (int, error) {
 		next := 1
 		if maxV != nil {
 			next = *maxV + 1
+		}
+		if expectedOverlay != nil && next-1 != *expectedOverlay {
+			return ErrPlanRevisionConflict
 		}
 		o.OverlayVersion = next
 		if o.Patch == "" {

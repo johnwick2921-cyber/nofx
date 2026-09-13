@@ -435,6 +435,8 @@ func (s *Server) handlePlanToday(c *gin.Context) {
 		"trade_date":        tradeDate,
 		"session":           sessName,
 		"version":           row.Version,
+		"plan_id":           row.PlanID,
+		"overlay_version":   latestOverlayRevision(overlays),
 		"reading":           reading,
 		// F7 — a read is running while THIS plan row is committed: the card
 		// renders the plan and shows a subtle re-reading chip, never "writing".
@@ -902,20 +904,34 @@ func mergedPriceViolations(doc *kernel.PlanDoc, lastPrice, dATR float64) []strin
 // active plan. test-op concurrency (§42): the patch is applied strictly to the
 // current plan_final; a failed `test` or bad op → 409. Owner prices pass B2 armor.
 // Origin defaults to "owner"; the Ask-Planner Apply passes "planner-revised".
+type planOverlayRevision struct {
+	PlanID         string `json:"expected_plan_id"`
+	PlanVersion    int    `json:"expected_plan_version"`
+	OverlayVersion *int   `json:"expected_overlay_version"`
+}
+
 func (s *Server) handlePlanOverlay(c *gin.Context) {
 	var body struct {
+		planOverlayRevision
 		TraderID string `json:"trader_id"`
 		Symbol   string `json:"symbol"`
 		Patch    string `json:"patch"`  // JSON array of RFC-6902 ops
 		Origin   string `json:"origin"` // owner | planner-revised (default owner)
 	}
-	_ = c.ShouldBindJSON(&body)
+	if err := c.ShouldBindJSON(&body); err != nil {
+		SafeBadRequest(c, "invalid overlay request")
+		return
+	}
 	traderID := strings.TrimSpace(c.Query("trader_id"))
 	if traderID == "" {
 		traderID = strings.TrimSpace(body.TraderID)
 	}
 	if traderID == "" {
 		SafeBadRequest(c, "trader_id is required")
+		return
+	}
+	if body.PlanID == "" || body.PlanVersion <= 0 || body.OverlayVersion == nil || *body.OverlayVersion < 0 {
+		SafeBadRequest(c, "expected plan and overlay revisions are required; refresh the plan")
 		return
 	}
 	at, err := s.traderManager.GetTrader(traderID)
@@ -990,7 +1006,7 @@ func (s *Server) handlePlanOverlay(c *gin.Context) {
 		}
 	}
 
-	overlayVersion, planVersion, code, msg := s.applyPlanOverlay(traderID, symbol, cleanPatch, origin, time.Now())
+	overlayVersion, planVersion, code, msg := s.applyPlanOverlay(traderID, symbol, cleanPatch, origin, time.Now(), &body.planOverlayRevision)
 	if code != 0 {
 		c.JSON(code, gin.H{"error": msg})
 		return
@@ -1008,7 +1024,7 @@ func (s *Server) handlePlanOverlay(c *gin.Context) {
 // validates enums/counts, then appends the overlay. Shared by the overlay POST
 // and the Ask-Planner Apply. Returns (overlayVersion, planVersion, httpCode, msg);
 // httpCode==0 means success.
-func (s *Server) applyPlanOverlay(traderID, symbol, patchJSON, origin string, now time.Time) (int, int, int, string) {
+func (s *Server) applyPlanOverlay(traderID, symbol, patchJSON, origin string, now time.Time, expected ...*planOverlayRevision) (int, int, int, string) {
 	if strings.TrimSpace(patchJSON) == "" {
 		return 0, 0, 400, "patch is required"
 	}
@@ -1039,7 +1055,25 @@ func (s *Server) applyPlanOverlay(traderID, symbol, patchJSON, origin string, no
 	if err != nil || row == nil {
 		return 0, 0, 404, "active plan not found"
 	}
-	overlays, _ := s.store.Plan().ListOverlays(row.PlanID, row.Version)
+	overlays, err := s.store.Plan().ListOverlays(row.PlanID, row.Version)
+	if err != nil {
+		return 0, 0, 500, "read overlays failed"
+	}
+	overlayRevision := 0
+	for _, ov := range overlays {
+		if ov.OverlayVersion > overlayRevision {
+			overlayRevision = ov.OverlayVersion
+		}
+	}
+	if len(expected) > 0 && expected[0] != nil {
+		e := expected[0]
+		if e.PlanID != row.PlanID || e.PlanVersion != row.Version || e.OverlayVersion == nil || *e.OverlayVersion != overlayRevision {
+			return 0, 0, 409, "plan changed; refresh and review your edit"
+		}
+	}
+	if row.Lifecycle != "active" {
+		return 0, 0, 409, "plan is no longer active"
+	}
 	patches := make([]string, 0, len(overlays))
 	for _, ov := range overlays {
 		patches = append(patches, ov.Patch)
@@ -1067,7 +1101,10 @@ func (s *Server) applyPlanOverlay(traderID, symbol, patchJSON, origin string, no
 		Patch:       patchJSON,
 		Origin:      origin,
 	}
-	overlayVersion, err := s.store.Plan().AppendOverlay(ov)
+	overlayVersion, err := s.store.Plan().AppendOverlayChecked(ov, overlayRevision)
+	if errors.Is(err, store.ErrPlanRevisionConflict) {
+		return 0, 0, 409, "plan changed; refresh and review your edit"
+	}
 	if err != nil {
 		return 0, 0, 500, "append overlay: " + err.Error()
 	}

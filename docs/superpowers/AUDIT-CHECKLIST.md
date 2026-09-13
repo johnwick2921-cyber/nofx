@@ -4824,3 +4824,15 @@ An owned trader selected a shared store whose fill query accepted an arbitrary
 order ID. Scope both parent order and fill rows to the authenticated trader.
 Test a foreign order and an inconsistent foreign fill attached to an owned order.
 History reads must not depend on a running execution instance.
+
+## PENDING CLASS — DRAFT REVISION MUST SURVIVE THE WRITE QUEUE
+
+Branch `fix/repo-audit-control-boundaries-20260913`, base `63968be6`.
+Index-based edits must carry the viewed plan ID/version/overlay revision. Check
+again inside the serialized writer alongside version/lifecycle changes; an API
+mutex alone does not serialize planner writes. Test two competing drafts and
+a planner append between read and append. Unknown/read-error state refuses.
+
+Registration commitment applies to BOTH limit and stop placement: an error
+after durable registration must not admit another row in the same pass.
+Logs must say registered, not sent or filled, unless transmission is observed.

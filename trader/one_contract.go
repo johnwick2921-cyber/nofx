@@ -203,7 +203,7 @@ func (at *AutoTrader) refuseContract(r store.ArmedOrderDB, v contractVerdict, in
 	reason := v.Refusal()
 	if inPass {
 		class = "one_contract_placed_this_pass"
-		reason = "refused: another arm in this plan already reached the wire this cycle; one live entry per plan"
+		reason = "refused: another arm in this plan already registered a placement attempt this cycle; one live entry per plan"
 	} else if v.Action == contractUnverifiable {
 		class = "one_contract_unverifiable"
 		at.raiseBookOutageAlert(v.BookAge, now)
@@ -269,14 +269,14 @@ func (at *AutoTrader) cancelOtherArmsInPlan(ledger *store.ArmedOrderStore, rows 
 					rr.Session, rr.Scenario, rr.LegIndex+1)
 			}
 			_ = ledger.RequestCancel(rr.ID, "one_live_entry: "+placed.Scenario+" placed", now.UnixMilli())
-			at.logWarnf("✕ armed cancel REQUESTED (one_live_entry): %s %s leg %d — %s reached the wire; pending broker confirmation",
+			at.logWarnf("✕ armed cancel REQUESTED (one_live_entry): %s %s leg %d — %s registered a placement attempt; pending broker confirmation",
 				rr.Session, rr.Scenario, rr.LegIndex+1, placed.Scenario)
 			continue
 		}
 		// No signal id — never placed, so there is nothing at the broker to
 		// confirm against and this one may go terminal directly.
 		_ = ledger.SetState(rr.ID, "cancelled", "one_live_entry: "+placed.Scenario+" placed")
-		at.logWarnf("✕ armed %s leg %d cancelled — %s reached the wire (one live entry per plan)",
+		at.logWarnf("✕ armed %s leg %d cancelled — %s registered a placement attempt (one live entry per plan)",
 			rr.Scenario, rr.LegIndex+1, placed.Scenario)
 	}
 }
