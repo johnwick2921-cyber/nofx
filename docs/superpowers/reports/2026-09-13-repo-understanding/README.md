@@ -32,3 +32,5 @@ broker-book absence/freshness/send truth, history-channel teardown locking, and
 boot cancellation settlement. The separate repair report names reproductions
 and test limits. These changes are not deployed and do not alter owner settings.
 The first full Go suite completed with three store-test failures; all other packages passed. Corrected authorization fixtures pass focused reruns. Later account and chat repairs have focused tests; final combined verification remains pending.
+
+The latest execution limitation and exact resume queue are recorded in [CHECKPOINT.md](CHECKPOINT.md).
