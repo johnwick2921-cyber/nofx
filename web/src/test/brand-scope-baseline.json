@@ -1,5 +1,5 @@
 {
-  "go.mod": "fe9113a489976afa915a8d98419ac4ab613e50eb126e663c35031caacbb81cfb",
+  "go.mod": "0a93dc2922a5c201079de8339e9056439b1ba46d983b231e75cffac848cb3ace",
   "auth/auth.go": "5f03d4ee50086221d92db7461b8255bfbec7b5c0d2f694f700a572d0bd0238ea",
   "logger/logger.go": "2e799bce8b1718cbecc4974b9c1c8746bf10525872a2b641338547e1e5965998",
   "deploy/nofx.service": "b3d1a0c78d39a4ff9d4e2de16e500b1ee40b403d58dc2ec7e47e3f6843ab4e5d",
