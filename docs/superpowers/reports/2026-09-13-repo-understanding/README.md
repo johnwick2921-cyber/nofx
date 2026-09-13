@@ -1,8 +1,12 @@
-# Repository understanding and verification — work in progress
+# Repository understanding — completed baseline review, repair status tracked separately
 
 Source base: `63968be62e44db2fb07a92883e02127b9064b0be`. Audit branch: `docs/repo-understanding-20260913`; claim: `8c7bc6be8f1a425067135b612ba62933e1fc3da1`.
 
-The owner requested a detailed, accurately traced, approximately 30-agent repository review. This directory preserves the evidence and coverage rather than equating an index with understanding. The later instruction to repair confirmed defects is recorded; any repairs require a separately scoped branch, independent review and meaningful verification. This audit does not authorize deployment or account/settings changes.
+The owner requested a detailed, accurately traced, approximately 30-agent repository review. This directory preserves the evidence and coverage rather than equating an index with understanding. Confirmed defects were repaired on separately scoped branches with focused and independent verification; integration and final verification are tracked below. This audit does not authorize deployment or account/settings changes.
+
+## Reading order
+
+Start with [CTO-TRADING-LOGIC.md](CTO-TRADING-LOGIC.md) for the trading-process assessment, then [REPAIR-STATUS.md](REPAIR-STATUS.md) for fixed/open/runtime-unverified dispositions and revision-scoped evidence. [CHECKPOINT.md](CHECKPOINT.md) lists publication work still due. The numbered reports preserve baseline findings even when a later repair resolves them; do not read their historical open lists as final status.
 
 ## Scope and current status
 
@@ -28,6 +32,10 @@ The recovered Understand Anything graph is dated July 10, 2026 at `7a8adce004372
 this baseline audit. The detailed repair report records exact commits, test
 reproductions and limitations. Go full suite/build/focused race checks passed at
 99a06543; later C#, frontend and Go changes require combined verification.
+Frontend 28a6f32e passed71 files/451 tests and production build before integration
+as 6c4092bf. The control branch now includes completed-partial-exit/cumulative-entry
+repair a982cc74 and weekly-reader repair df4af389. These checkpoints are not a final
+combined pass. [REPAIR-STATUS.md](REPAIR-STATUS.md) preserves explicit limits.
 
 [CTO-TRADING-LOGIC.md](CTO-TRADING-LOGIC.md) explains the trading process and its
 limits. [CHECKPOINT.md](CHECKPOINT.md) records the current resume state. The
@@ -39,7 +47,10 @@ historical. Main checkout/runtime/accounts/settings remain untouched.
 Each report links to its read ledger, function notes and sourced graph edges in
 the same numbered directory. Function-note entries can include helper/callback
 groups and dependency notes; they are not claimed as a unique function census.
-Reviews29/30 do not increase primary source coverage. Named baseline Python
+Reviews 29/30 do not increase primary source coverage.
+[publication-validation.json](publication-validation.json) independently checks
+all 30 index links,120 artifacts and complete nonduplicated baseline assignments;
+it reports zero consistency errors and does not certify runtime semantics. Named baseline Python
 functions now also pass independent syntax-census consistency checks (385).
 
 | Review | Area | Assigned source files | Assigned lines | Function-note entries |

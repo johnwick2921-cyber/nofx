@@ -4,7 +4,8 @@ Status: SOURCE REVIEW COMPLETE; repairs and final combined verification in progr
 
 Source references below are repository-relative. Strategy source was inspected at
 `63968be62e44db2fb07a92883e02127b9064b0be`; repair-specific behavior is at
-the repair commits named in the repair report. The repair branch is undeployed.
+the repair commits named in [REPAIR-STATUS.md](REPAIR-STATUS.md). Named
+function boundaries below avoid carrying baseline line numbers onto changed source. The repair branch is undeployed.
 [A] means source inspected or an explicitly named test run; [B] means inference.
 Owner-supplied backtest numbers are not independently recomputed here. This is a
 repository engineering assessment, not a new literature review or evidence that
@@ -14,8 +15,8 @@ a discretionary trading doctrine is profitable.
 
 The system has many useful controls, but their number does not establish a
 coherent trading process. I cannot sign off on complete trading correctness.
-All30 scoped review reports are complete:28 source slices cover1,049 files and
-250,582 lines; two cross-boundary reviews examined repair99a06543. Subsequent
+All 30 scoped review reports are complete:28 source slices cover1,049 files and
+250,582 lines; two cross-boundary reviews examined repair 99a06543. Subsequent
 repairs receive separate focused review/tests. Final combined verification is
 still pending. The number of reviews is not the number of simultaneous agents.
 
@@ -41,7 +42,7 @@ all admission results; and why the chosen candidate outranked alternatives.
 This is an engineering acceptance requirement, not a new enabled trading rule.
 
 [A] `trader/armed_executor.go` separates placement from authoring. Repairs
-2dc94a19 and456b38d4 exercise the actual cycle and loopback transport: missing
+2dc94a19 and 456b38d4 exercise the actual cycle and loopback transport: missing
 permission or current quality refusal cannot leave an inherited authorization
 eligible. Placement consumes IDs admitted in the current cycle. Retirement
 write failure prevents placement. These are enforcement tests, not merely
@@ -49,18 +50,18 @@ assertions about the model's prose.
 
 ## 2. Stop location: invalidate the identified setup, then report its exposure
 
-[A] `trader/structural_geometry.go:28` resolves the entry zone from the scenario's
+[A] `ResolveEntryGeometryZone` in `trader/structural_geometry.go` resolves the entry zone from the scenario's
 frozen identity and source provenance. It refuses missing or ambiguous identity.
 This is stronger than attaching the stop to whatever unrelated level is nearest
 when the order is submitted.
 
-[A] For a valid reject-fade zone, `composeGeometry` at line123 sets the long stop
+[A] For a valid reject-fade zone, `composeGeometry` in that file sets the long stop
 below the lower zone edge by the configured buffer, rounding outward to the
 contract tick. A short stop is above the upper edge. Invalid/missing buffer is a
 refusal. The ATR fallback recorded when provenance is missing also returns
 `no_provenance`: it is diagnostic geometry, not permission to trade.
 
-[A] The production arm caller at `trader/armed_executor.go:484` selects this
+[A] The production arm caller at `trader/armed_executor.go` (the `structuralFade` branch) selects this
 structural branch for the reject play, excluding explicit exit legs. Other
 plays retain their legacy stop construction. Therefore “ATR has been removed
 from all stops” would be false.
@@ -73,7 +74,7 @@ The research review records that limitation without claiming a new calibration.
 
 ## 3. The planner and execution contract now agree on reject-fade geometry
 
-[A] Repair710ea1c8 updates the actual planner prompt builder, legacy stop-floor
+[A] Repair 710ea1c8 updates the actual planner prompt builder, legacy stop-floor
 facts and feasibility warning consumer. Reject fades use frozen structural
 geometry; the legacy ATR floor is explicitly scoped to other plays. The prompt
 no longer suggests switching execution routes to escape a refused arm. Authored
@@ -83,7 +84,7 @@ This is a consistency repair; it does not validate the buffer or trading edge.
 
 ## 4. Target selection: the next level is precise, but not proved optimal
 
-[A] `FirstGeometryTarget`, `trader/structural_geometry.go:79`, chooses the nearest
+[A] `FirstGeometryTarget`, `trader/structural_geometry.go`, chooses the nearest
 complete sourced zone strictly beyond the entry zone's profit-side edge. It does
 not rank by source count, grade, timeframe, minimum reward distance or measured
 quality. The long target uses the target zone's near lower edge; shorts use its
@@ -129,13 +130,16 @@ explain all fill-assumption differences.
 
 [A] The owner clarified DAILY loss, not a mandatory additional per-trade cap.
 The structural core explicitly retains that distinction at
-`trader/structural_geometry.go:206`. Do not restore the removed cap or silently
+`composeGeometry` in `trader/structural_geometry.go`. Do not restore the removed cap or silently
 set a new value. Contract value converts distance to planned exposure; it does
 not decide where the setup is invalidated.
 
-[A] `trader/session_risk.go:279` reads both the guardrails master and the
-individual daily-loss enable switch. `SessionRisk` reporting explicitly labels
-a configured but disabled limit decorative. A displayed dollar value alone is
+[A] `bootRiskFacts` in `trader/session_risk.go` reads the guardrails master and
+individual daily-loss enable switch for boot reporting. This is a reporting
+boundary, not evidence by itself that admission enforced the configured amount.
+`entryGateForArm` and `entryGateForDecision` supply `DailyForceFlatReason` to
+`EntryGate`; its daily-force-flat leg refuses when that resolver reports a trip.
+`SessionRiskBootLine` labels a configured but disabled limit decorative. A displayed dollar value alone is
 not proof of enforcement. Earlier observed settings are historical snapshots;
 this assessment did not read or change current settings.
 
@@ -155,9 +159,9 @@ settlement; pre-request empty snapshots being used as cancellation evidence;
 and previous-process retries exhausting a new process's retry allowance.
 
 [A] A production placement-loop test also reproduced a refused stop entry
-cancelling other scenarios as if it had placed. Commit7b2eb894 makes successful
+cancelling other scenarios as if it had placed. Commit 7b2eb894 makes successful
 pre-send registration the commitment boundary. A separate test retains that
-commitment after an ambiguous send error. Repairb63747ea covers the analogous limit path through the actual TCP adapter
+commitment after an ambiguous send error. Repair b63747ea covers the analogous limit path through the actual TCP adapter
 and registration callback. Both commit on durable registration; neither calls
 an ambiguous send a fill or confirmed cancellation.
 
@@ -166,7 +170,7 @@ accepted an order or that every asynchronous interleaving is correct.
 
 ## 8. NT8 protection and account routing: repaired source, bounded evidence
 
-[A] C# source repairs9140f6c9/f1b7cc10 resolve explicit accounts without fallback,
+[A] C# source repairs 9140f6c9/f1b7cc10 resolve explicit accounts without fallback,
 select the actual held expiry, refuse ambiguous bare roots, and preserve SIM,
 connection and session-account restrictions. Entry cancellation retains deferred
 protection until terminal broker evidence. Submit ambiguity retains bracket
@@ -180,11 +184,15 @@ not recreate NT8 scheduling, the broker's OCO implementation or real fills.
 The source AddOn has not been copied, compiled in the live NT8 installation or
 restarted. No runtime protection claim follows from the temporary DLL.
 
-[A] Additional cross-boundary tests reproduced partial completed exits being
-recorded as full-position closes and positive cumulative fills on cancellation
-being omitted by the Go arm consumer. Those repairs are in progress; they are
-not excused by the intended one-contract setup because the interfaces also
-handle other quantities and manual interactions.
+[A/report] Additional cross-boundary tests reproduced completed partial exits
+being recorded as whole-position closes and positive cumulative ENTRY fills on
+terminal cancellation being omitted. Repair a982cc74 now records actual exit
+quantity, receipt identity, fill and residual cost basis atomically, and handles
+cumulative entry growth without overwriting partial-exit accounting. The
+completed-exit frame remains Filled-only: positive-filled terminal-cancelled
+EXIT orders are still a concrete wire gap. This is not the same as repaired
+terminal ENTRY materialization. Current exit wire also lacks commission data;
+zero additional recorded fee is unreported commission, not measured zero cost.
 
 ## 9. One contract and management rules must remain executable
 
@@ -200,7 +208,7 @@ protective-stop restoration is different from discretionary tightening, but the
 UI and logs must identify which occurred. New plan versions must not become an
 accidental loophole around the owner's intended re-entry policy.
 
-Delayed flatten repair94e08cf0 checks immutable position/entry lineage, invalidates
+Delayed flatten repair 94e08cf0 checks immutable position/entry lineage, invalidates
 timers on Stop and preserves protection after close refusal. A broker-side atomic
 position fence is still absent: a stale local row cannot prove that no unseen
 replacement exists. Broker observers intentionally outlive ordinary Stop while
@@ -212,9 +220,9 @@ positions may remain. Final removal needs an explicit safe handoff design.
    authorization defects. Preserve SIM restrictions and real owner settings.
 2. Align planner, geometry, admission, execution and displayed explanations.
    Every refusal must name the actual reason and retire incompatible permissions.
-3. Complete runtime/frontend reviews and independent cross-boundary review.
-   Run the full suite on the final combined source, relevant race tests, frontend
-   verification and controlled broker lifecycle tests. Mark external/runtime
+3. Baseline frontend/runtime-source and independent cross-boundary reviews are
+   complete. Run the full suite on the final combined repaired source, relevant
+   race tests, frontend verification and controlled broker lifecycle tests. Mark external/runtime
    checks unavailable until actually observed.
 4. Validate the strategy separately: causal detector inputs and frozen levels;
    realistic limit fills, gaps and ambiguity; all costs; one-account chronological
@@ -235,8 +243,10 @@ is then to demonstrate that the selected opportunities pay after losses and cost
 ## Evidence and completion limits
 
 See README.md, CHECKPOINT.md, reviews/01 through reviews/30, coverage-validation.json
-and the separate repository-repairs report. Full Go/build/focused race checks
-passed at99a06543, before later changes. Final combined checks are still due.
+and [REPAIR-STATUS.md](REPAIR-STATUS.md), which separates repaired baseline
+findings from concrete remaining source/runtime limitations. Frontend 28a6f32e
+passed451 tests/build and was integrated as 6c4092bf. Full Go/build/focused race checks
+passed at 99a06543, before later changes. Final combined checks are still due.
 No deployment, owner-setting change, live database write or real order occurred.
 Historical runtime snapshots from the earlier daily-loss dispatch are not new
 observations. The earlier usage-blocked report is archived under interim/.
