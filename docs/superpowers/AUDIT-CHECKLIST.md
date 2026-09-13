@@ -4727,3 +4727,11 @@ after a failed send. Regressions exercise the production parser and cancellation
 entry points with synthetic snapshots and injected send failure. Preserve the
 distinction between no answer, a fresh empty book, and a completed cancellation.
 Read snapshot contents and receipt time atomically.
+
+## PENDING CLASS — CHANNEL OWNERSHIP MUST COVER DELIVERY AND CLOSE
+
+Branch `fix/repo-audit-control-boundaries-20260913`, base `63968be6`.
+History dispatch retrieved a channel under a read lock, released it, then sent;
+importer teardown closed under the write lock in that gap. A loopback race test
+reproduced process panic. Hold the ownership lock through nonblocking delivery
+or use an equivalent lifecycle protocol; locking only channel lookup is not enough.

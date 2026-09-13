@@ -72,3 +72,12 @@ book data and receipt time are read under one cache lock. Signal/row cancellatio
 uses the existing snapshot age limit and reports send failure as failure.
 The existing independently established flat-position exception is preserved.
 Focused parser, cancellation and desync tests pass. No real cancel was sent.
+
+## History stream teardown
+
+A race-detector test drives actual TCP history-frame dispatch concurrently with
+subscription teardown/replacement. The preceding implementation panicked with
+`send on closed channel` in `TCPServer.readLoop`. The read lock now covers the
+nonblocking send; teardown closes only under the corresponding write lock.
+The same test passes under `-race` and delivers a sentinel after the churn.
+This proves the exercised loopback interleaving; it is not NT8 integration proof.
