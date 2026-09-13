@@ -7,6 +7,8 @@
     "missing_named_go_notes": [],
     "named_frontend_functions": 0,
     "missing_named_frontend_notes": [],
+    "named_python_functions": 0,
+    "missing_named_python_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -17,6 +19,8 @@
     "missing_named_go_notes": [],
     "named_frontend_functions": 0,
     "missing_named_frontend_notes": [],
+    "named_python_functions": 0,
+    "missing_named_python_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -27,6 +31,8 @@
     "missing_named_go_notes": [],
     "named_frontend_functions": 0,
     "missing_named_frontend_notes": [],
+    "named_python_functions": 0,
+    "missing_named_python_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -37,6 +43,8 @@
     "missing_named_go_notes": [],
     "named_frontend_functions": 0,
     "missing_named_frontend_notes": [],
+    "named_python_functions": 0,
+    "missing_named_python_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -47,6 +55,8 @@
     "missing_named_go_notes": [],
     "named_frontend_functions": 0,
     "missing_named_frontend_notes": [],
+    "named_python_functions": 0,
+    "missing_named_python_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -57,6 +67,8 @@
     "missing_named_go_notes": [],
     "named_frontend_functions": 0,
     "missing_named_frontend_notes": [],
+    "named_python_functions": 0,
+    "missing_named_python_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -67,6 +79,8 @@
     "missing_named_go_notes": [],
     "named_frontend_functions": 0,
     "missing_named_frontend_notes": [],
+    "named_python_functions": 0,
+    "missing_named_python_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -77,6 +91,8 @@
     "missing_named_go_notes": [],
     "named_frontend_functions": 0,
     "missing_named_frontend_notes": [],
+    "named_python_functions": 0,
+    "missing_named_python_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -87,6 +103,8 @@
     "missing_named_go_notes": [],
     "named_frontend_functions": 0,
     "missing_named_frontend_notes": [],
+    "named_python_functions": 0,
+    "missing_named_python_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -97,6 +115,8 @@
     "missing_named_go_notes": [],
     "named_frontend_functions": 0,
     "missing_named_frontend_notes": [],
+    "named_python_functions": 0,
+    "missing_named_python_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -107,6 +127,8 @@
     "missing_named_go_notes": [],
     "named_frontend_functions": 0,
     "missing_named_frontend_notes": [],
+    "named_python_functions": 0,
+    "missing_named_python_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -117,6 +139,8 @@
     "missing_named_go_notes": [],
     "named_frontend_functions": 0,
     "missing_named_frontend_notes": [],
+    "named_python_functions": 0,
+    "missing_named_python_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -127,6 +151,8 @@
     "missing_named_go_notes": [],
     "named_frontend_functions": 0,
     "missing_named_frontend_notes": [],
+    "named_python_functions": 0,
+    "missing_named_python_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -137,6 +163,8 @@
     "missing_named_go_notes": [],
     "named_frontend_functions": 0,
     "missing_named_frontend_notes": [],
+    "named_python_functions": 0,
+    "missing_named_python_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -147,6 +175,8 @@
     "missing_named_go_notes": [],
     "named_frontend_functions": 0,
     "missing_named_frontend_notes": [],
+    "named_python_functions": 0,
+    "missing_named_python_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -157,6 +187,8 @@
     "missing_named_go_notes": [],
     "named_frontend_functions": 0,
     "missing_named_frontend_notes": [],
+    "named_python_functions": 0,
+    "missing_named_python_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -167,6 +199,8 @@
     "missing_named_go_notes": [],
     "named_frontend_functions": 0,
     "missing_named_frontend_notes": [],
+    "named_python_functions": 181,
+    "missing_named_python_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -177,6 +211,8 @@
     "missing_named_go_notes": [],
     "named_frontend_functions": 0,
     "missing_named_frontend_notes": [],
+    "named_python_functions": 174,
+    "missing_named_python_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -187,6 +223,8 @@
     "missing_named_go_notes": [],
     "named_frontend_functions": 0,
     "missing_named_frontend_notes": [],
+    "named_python_functions": 30,
+    "missing_named_python_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -197,6 +235,8 @@
     "missing_named_go_notes": [],
     "named_frontend_functions": 0,
     "missing_named_frontend_notes": [],
+    "named_python_functions": 0,
+    "missing_named_python_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -207,6 +247,8 @@
     "missing_named_go_notes": [],
     "named_frontend_functions": 0,
     "missing_named_frontend_notes": [],
+    "named_python_functions": 0,
+    "missing_named_python_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -217,6 +259,8 @@
     "missing_named_go_notes": [],
     "named_frontend_functions": 0,
     "missing_named_frontend_notes": [],
+    "named_python_functions": 0,
+    "missing_named_python_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -227,6 +271,8 @@
     "missing_named_go_notes": [],
     "named_frontend_functions": 0,
     "missing_named_frontend_notes": [],
+    "named_python_functions": 0,
+    "missing_named_python_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -237,6 +283,8 @@
     "missing_named_go_notes": [],
     "named_frontend_functions": 184,
     "missing_named_frontend_notes": [],
+    "named_python_functions": 0,
+    "missing_named_python_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -247,6 +295,8 @@
     "missing_named_go_notes": [],
     "named_frontend_functions": 196,
     "missing_named_frontend_notes": [],
+    "named_python_functions": 0,
+    "missing_named_python_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -257,6 +307,8 @@
     "missing_named_go_notes": [],
     "named_frontend_functions": 221,
     "missing_named_frontend_notes": [],
+    "named_python_functions": 0,
+    "missing_named_python_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -267,6 +319,8 @@
     "missing_named_go_notes": [],
     "named_frontend_functions": 121,
     "missing_named_frontend_notes": [],
+    "named_python_functions": 0,
+    "missing_named_python_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -277,6 +331,8 @@
     "missing_named_go_notes": [],
     "named_frontend_functions": 101,
     "missing_named_frontend_notes": [],
+    "named_python_functions": 0,
+    "missing_named_python_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -287,6 +343,8 @@
     "missing_named_go_notes": [],
     "named_frontend_functions": 0,
     "missing_named_frontend_notes": [],
+    "named_python_functions": 0,
+    "missing_named_python_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
@@ -297,6 +355,8 @@
     "missing_named_go_notes": [],
     "named_frontend_functions": 0,
     "missing_named_frontend_notes": [],
+    "named_python_functions": 0,
+    "missing_named_python_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
   }
 ]
