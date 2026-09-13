@@ -15,7 +15,7 @@ func StructuralGeometryBootLine(st *store.Store, now time.Time, traderIDs ...str
 	}
 	p := store.ResolveStructuralStop(cfg, "MNQ")
 	p.MinRR = resolvedMinRR(cfg)
-	buffer, percentile, cap := "n/a", "n/a", "UNSET (refuse)"
+	buffer, percentile := "n/a", "n/a"
 	if p.BufferKnown {
 		buffer = fmt.Sprintf("%.2f[I]", p.BufferPoints)
 	}
@@ -24,9 +24,7 @@ func StructuralGeometryBootLine(st *store.Store, now time.Time, traderIDs ...str
 	} else {
 		percentile = "owner override; percentile n/a"
 	}
-	if p.RiskCapKnown {
-		cap = fmt.Sprintf("$%.2f", p.RiskCapUSD)
-	}
+
 	counts, err := st.StructuralGeometryCounts(traderIDs, kernel.CMESessionDayKey(now))
 	readable := err == nil && len(traderIDs) > 0
 	fallback, refused := counts["atr_fallback"], 0
@@ -37,7 +35,7 @@ func StructuralGeometryBootLine(st *store.Store, now time.Time, traderIDs ...str
 	}
 	counter := "atr-fallback=n/a · refused today=n/a (records unreadable)"
 	if readable {
-		counter = fmt.Sprintf("atr-fallback=%d · refused today=%d (no_target=%d net<=0=%d rr<%.2f=%d risk_cap=%d no_provenance=%d other=%d)", fallback, refused, counts["no_target"], counts["net_nonpositive"], p.MinRR, counts["rr"], counts["risk_cap"]+counts["risk_cap_missing"], counts["no_provenance"], counts["invalid_geometry"]+counts["entry_gate"]+counts["one_setup"])
+		counter = fmt.Sprintf("atr-fallback=%d · refused today=%d (no_target=%d net<=0=%d rr<%.2f=%d no_provenance=%d other=%d)", fallback, refused, counts["no_target"], counts["net_nonpositive"], p.MinRR, counts["rr"], counts["no_provenance"], counts["invalid_geometry"]+counts["entry_gate"]+counts["one_setup"]+counts["risk_cap"]+counts["risk_cap_missing"])
 	}
-	return fmt.Sprintf("🎯 stop/target: stop=zone-edge+buffer buffer=%s (%s of measured overshoot; resolver=%s; calibration=%s; sweep=%v points[I]) · %s · target=first-distinct-eligible-zone · MNQ risk-cap=%s · never-widened=asserted · research-candidate", buffer, percentile, strings.TrimSpace(p.BufferSource), p.Calibration, store.StructuralBufferSweepPoints(), counter, cap)
+	return fmt.Sprintf("🎯 stop/target: stop=zone-edge+buffer buffer=%s (%s of measured overshoot; resolver=%s; calibration=%s; sweep=%v points[I]) · %s · target=first-distinct-eligible-zone · never-widened=asserted · research-candidate", buffer, percentile, strings.TrimSpace(p.BufferSource), p.Calibration, store.StructuralBufferSweepPoints(), counter)
 }

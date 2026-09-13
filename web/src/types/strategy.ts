@@ -241,7 +241,6 @@ export interface ExternalDataSource {
 }
 
 export interface RiskControlConfig {
-  max_trade_loss_usd?: Record<string, number>
   // Max number of coins held simultaneously (CODE ENFORCED)
   max_positions: number
 

@@ -19,7 +19,6 @@ func structuralTestPolicy(c *store.StrategyConfig, buffer float64) {
 		c.DayPlan = &store.DayPlanConfig{}
 	}
 	c.DayPlan.StructuralStop = &store.StructuralStopConfig{BufferPoints: &buffer}
-	c.RiskControl.MaxTradeLossUSD = map[string]float64{"MNQ": 10000}
 }
 
 type structuralTestZone struct {

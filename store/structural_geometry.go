@@ -14,10 +14,10 @@ type StructuralStopConfig struct {
 }
 
 type StructuralStopPolicy struct {
-	BufferPoints, CostPoints, RiskCapUSD, MinRR float64
-	BufferKnown, CostKnown, RiskCapKnown        bool
-	BufferSource, Calibration                   string
-	Percentile                                  int
+	BufferPoints, CostPoints, MinRR float64
+	BufferKnown, CostKnown          bool
+	BufferSource, Calibration       string
+	Percentile                      int
 }
 
 // C5, in-sample only: 6,181 HELD first touches, 2022-04-11–2025-09-11.
@@ -42,8 +42,6 @@ func ResolveStructuralStop(c *StrategyConfig, symbol string) StructuralStopPolic
 		return p
 	}
 	p.MinRR = c.RiskControl.MinRiskRewardRatio
-	cap, ok := c.RiskControl.MaxTradeLossUSD[strings.ToUpper(strings.TrimSpace(symbol))]
-	p.RiskCapUSD, p.RiskCapKnown = cap, ok && positiveFinite(cap)
 	if c.DayPlan != nil && c.DayPlan.StructuralStop != nil {
 		s := c.DayPlan.StructuralStop
 		if s.BufferPoints != nil {
@@ -93,10 +91,11 @@ type StructuralGeometryRecord struct {
 	GainPoints       *float64 `json:"gain_points,omitempty"`
 	NetGainPoints    *float64 `json:"net_gain_points,omitempty"`
 	LossUSD          *float64 `json:"loss_usd,omitempty"`
-	RiskCapUSD       *float64 `json:"risk_cap_usd,omitempty"`
-	Quantity         int      `json:"quantity"`
-	Reason           string   `json:"reason"`
-	Detail           string   `json:"detail"`
+	// Historical records may carry the superseded per-trade cap; never used for admission.
+	RiskCapUSD *float64 `json:"risk_cap_usd,omitempty"`
+	Quantity   int      `json:"quantity"`
+	Reason     string   `json:"reason"`
+	Detail     string   `json:"detail"`
 }
 
 func StructuralGeometryKey(r StructuralGeometryRecord) string {

@@ -1684,9 +1684,6 @@ type ExternalDataSource struct {
 
 // RiskControlConfig risk control configuration
 type RiskControlConfig struct {
-	// Owner-set maximum modeled loss per trade, keyed by instrument. Missing is
-	// unresolved, never an unlimited budget. Exposure uses actual point value.
-	MaxTradeLossUSD map[string]float64 `json:"max_trade_loss_usd,omitempty"`
 	// Max number of coins held simultaneously (CODE ENFORCED)
 	MaxPositions int `json:"max_positions"`
 

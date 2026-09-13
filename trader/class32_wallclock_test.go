@@ -7,6 +7,7 @@ import (
 
 	"nofx/kernel"
 	"nofx/market"
+	"nofx/store"
 )
 
 // CLASS 32 (owner ruling 2026-08-31) — scheduled reads must fire on wall-clock.
@@ -32,11 +33,28 @@ func class32FrozenBars(now time.Time) func(string, string, int) []market.Kline {
 	return func(string, string, int) []market.Kline { return bars }
 }
 
+// These session/data-cycle fixtures start with the weekly read already stored.
+// Otherwise tickOnce also spawns an unrelated weekly backfill worker that can
+// outlive the test and race restoration of the global bar provider.
+func class32ClockTrader(t *testing.T) (*AutoTrader, *store.Store) {
+	t.Helper()
+	at, st := asiaClockTrader(t)
+	monday := "2026-08-17"
+	if _, err := st.Plan().AppendPlan(&store.PlanDB{
+		PlanID:     st.Plan().ResolvePlanID(monday, "WEEKLY", at.id),
+		StrategyID: at.id, TradeDate: monday, Session: "WEEKLY",
+		TriggerReason: "test_weekly", Lifecycle: "active", Doc: `{}`,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return at, st
+}
+
 // 6.1 REGRESSION PIN — the whole wave. On the pre-class-32 code tickOnce
 // returned at the no-new-data skip before the read was ever evaluated, so this
 // test FAILS there (waitPlan gets nil) and passes on the fix.
 func TestClass32AsiaReadFiresAt1630WithFrozenBars(t *testing.T) {
-	at, st := asiaClockTrader(t)
+	at, st := class32ClockTrader(t)
 	prev := market.FuturesBarsProvider
 	t.Cleanup(func() { market.FuturesBarsProvider = prev })
 	now := ctTime(t, 2026, 8, 18, 16, 30) // Tuesday, inside the 16:00-17:00 halt
@@ -71,7 +89,7 @@ func TestClass32AsiaReadFiresAt1630WithFrozenBars(t *testing.T) {
 // in-flight claim ("already in flight — skipping duplicate call") make any
 // second tick a no-op.
 func TestClass32ReadFiresOnceWithFrozenTape(t *testing.T) {
-	at, st := asiaClockTrader(t)
+	at, st := class32ClockTrader(t)
 	prev := market.FuturesBarsProvider
 	t.Cleanup(func() { market.FuturesBarsProvider = prev })
 	now := ctTime(t, 2026, 8, 18, 16, 30)
@@ -112,7 +130,7 @@ func TestClass32ReadFiresOnceWithFrozenTape(t *testing.T) {
 // busy-looping the bar pipeline). At 15:00 no read window is active, the tape
 // is frozen, so tickOnce must not enter runCycle at all.
 func TestClass32FrozenTapeStillSkipsDataWork(t *testing.T) {
-	at, _ := asiaClockTrader(t)
+	at, _ := class32ClockTrader(t)
 	prev := market.FuturesBarsProvider
 	t.Cleanup(func() { market.FuturesBarsProvider = prev })
 	now := ctTime(t, 2026, 8, 18, 15, 0) // CME open, no session read window active

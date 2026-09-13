@@ -44,11 +44,7 @@ func structuralFixture(t *testing.T, entry, lo, hi, target, authored, buffer, co
 		m["structural_stop"] = map[string]any{"buffer_points": buffer, "round_trip_cost_points": cost}
 		raw, _ = json.Marshal(m)
 		_ = json.Unmarshal(raw, c.DayPlan)
-		raw, _ = json.Marshal(c.RiskControl)
-		_ = json.Unmarshal(raw, &m)
-		m["max_trade_loss_usd"] = map[string]float64{"MNQ": 10000}
-		raw, _ = json.Marshal(m)
-		_ = json.Unmarshal(raw, &c.RiskControl)
+
 	}
 	hook := func(at *AutoTrader, _ *store.Store, _ string) {
 		at.oneSetupFactsForTest = func(now time.Time) oneSetupTestFacts {
@@ -94,7 +90,7 @@ func TestStructuralStopF5FirstTargetIsNeverSkipped(t *testing.T) {
 	id = *identity.ID
 	doc := kernel.PlanDoc{IdentityLevels: []kernel.PlanLevel{identity}, Zones: &kernel.LevelZoneMap{Zones: []kernel.LevelZone{z(100, 99, 101), z(104, 104, 105), z(150, 150, 151)}}}
 	sc := kernel.PlanScenario{ID: "S1", LevelID: &id, Direction: "long"}
-	policy := store.StructuralStopPolicy{BufferPoints: 5, BufferKnown: true, CostPoints: 2, CostKnown: true, RiskCapUSD: 1000, RiskCapKnown: true, MinRR: 2}
+	policy := store.StructuralStopPolicy{BufferPoints: 5, BufferKnown: true, CostPoints: 2, CostKnown: true, MinRR: 2}
 	r := ComposeLevelFadeGeometry(&doc, sc, kernel.PlanArmLeg{Entry: 100}, policy, 20, .25, 2)
 	if r.Reason != "rr" || r.Stop == nil || *r.Stop != 94 || r.Target == nil || *r.Target != 104 {
 		t.Fatalf("freeze nearest target and structural stop; refuse without repair: %+v", r)
@@ -143,29 +139,29 @@ func TestStructuralStopF6BothFailNetReasonComesFirst(t *testing.T) {
 	}
 }
 
-func TestStructuralStopOwnerRiskCapUsesContractPointValue(t *testing.T) {
+func TestStructuralGeometryReportsContractRiskWithoutPerTradeCap(t *testing.T) {
 	z := func(lo, hi float64) kernel.LevelZone {
 		return kernel.LevelZone{Lo: geometryNumber(lo), Hi: geometryNumber(hi), Sources: []kernel.ZoneSource{{Label: "fixture"}}}
 	}
 	zones := []kernel.LevelZone{z(95, 100), z(120, 121)}
 	p := store.StructuralStopPolicy{BufferPoints: 1, BufferKnown: true, CostPoints: 2, CostKnown: true, MinRR: 2}
-	r := ComposeFrozenLevelFadeGeometry(zones, 0, "long", 100, p, 20, .25, 2)
-	if r.Reason != "risk_cap_missing" || r.LossUSD == nil || *r.LossUSD != 16 {
-		t.Fatalf("missing owner cap cannot authorize $16 modeled MNQ risk: %+v", r)
+	for _, v := range []struct{ pointValue, loss float64 }{{2, 16}, {20, 160}} {
+		r := ComposeFrozenLevelFadeGeometry(zones, 0, "long", 100, p, 20, .25, v.pointValue)
+		if r.Reason != "" || r.Stop == nil || *r.Stop != 94 || r.Target == nil || *r.Target != 120 || r.LossUSD == nil || *r.LossUSD != v.loss || r.RiskCapUSD != nil {
+			t.Fatalf("automatic structural prices and contract exposure must not require a per-trade cap: %+v", r)
+		}
 	}
-	p.RiskCapKnown = true
-	p.RiskCapUSD = 15
-	r = ComposeFrozenLevelFadeGeometry(zones, 0, "long", 100, p, 20, .25, 2)
-	if r.Reason != "risk_cap" || r.Quantity != 0 {
-		t.Fatalf("over-cap geometry must refuse: %+v", r)
+}
+
+func TestStructuralStopProductionCycleStillRefusesDailyLossTrip(t *testing.T) {
+	kernel.SetDailyForceFlat("trader-1", "daily loss limit hit (realized today=-492.00, limit=-450.00)")
+	t.Cleanup(func() { kernel.ClearDailyForceFlat("trader-1") })
+	g, _, st := structuralFixture(t, 29010, 29000, 29010, 29120, 28960, 5, 2, false)
+	r := structuralRecord(t, st)
+	if len(g.Rows) != 0 || r["quantity"] != float64(0) || r["reason"] != "entry_gate" || !strings.Contains(r["detail"].(string), "daily_force_flat") {
+		t.Fatalf("the production arm path must retain daily-loss refusal: rows=%+v record=%+v", g.Rows, r)
 	}
-	p.RiskCapUSD = 16
-	r = ComposeFrozenLevelFadeGeometry(zones, 0, "long", 100, p, 20, .25, 2)
-	if r.Reason != "" || r.Stop == nil || *r.Stop != 94 || r.Target == nil || *r.Target != 120 {
-		t.Fatalf("cap equality must preserve structural prices: %+v", r)
-	}
-	r = ComposeFrozenLevelFadeGeometry(zones, 0, "long", 100, p, 20, .25, 20)
-	if r.Reason != "risk_cap" || r.LossUSD == nil || *r.LossUSD != 160 {
-		t.Fatalf("contract point value must affect dollar exposure: %+v", r)
+	if r["stop"] != 28995.0 || r["target"] != 29120.0 {
+		t.Fatalf("daily refusal must not repair structural prices: %+v", r)
 	}
 }

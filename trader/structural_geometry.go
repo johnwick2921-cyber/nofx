@@ -204,14 +204,10 @@ func composeGeometry(doc *kernel.PlanDoc, sc kernel.PlanScenario, leg kernel.Pla
 	if g/d+1e-9 < p.MinRR {
 		return refuse("rr", fmt.Sprintf("gain=%.4f risk=%.4f rr=%.6f min=%.6f", g, d, g/d, p.MinRR))
 	}
-	if !p.RiskCapKnown || p.RiskCapUSD <= 0 || !geometryFinite(p.RiskCapUSD) {
-		return refuse("risk_cap_missing", "owner_per_trade_dollar_cap_unset")
-	}
-	r.RiskCapUSD = geometryNumber(p.RiskCapUSD)
-	if loss > p.RiskCapUSD {
-		return refuse("risk_cap", fmt.Sprintf("one_contract_loss=%.4f cap=%.4f", loss, p.RiskCapUSD))
-	}
-	r.Detail = fmt.Sprintf("geometry_pass risk=%.4f gain=%.4f net=%.4f one_contract_loss=%.4f cap=%.4f", d, g, net, loss, p.RiskCapUSD)
+	// Owner clarification 2026-09-13: the owner controls the DAILY loss limit.
+	// Geometry reports planned contract exposure; the existing daily-loss and
+	// other entry gates remain responsible for admission after this step.
+	r.Detail = fmt.Sprintf("geometry_pass risk=%.4f gain=%.4f net=%.4f one_contract_loss=%.4f", d, g, net, loss)
 	return r
 }
 

@@ -3959,6 +3959,13 @@ which is this file's recurring failure in miniature. Their own first mechanism
 was wrong twice before the version skew surfaced. **Neither of us got there
 alone, and nothing in either report would have gotten there without the other.**
 
+**2026-09-13 correction follow-up (PR #116):** race-enabled CI caught a class-32
+fixture restoring the global bars provider while an unrelated weekly-backfill
+worker still read it. Seed the completed weekly plan for tests of session/data
+scheduling, or join any spawned worker before teardown; do not count an ordinary
+non-race pass as evidence of safe fixture lifetime. Keep the intended production
+call-site assertions intact.
+
 ## CLASS 111 — THE UNIT AN EXPERIMENT NEEDS, WHICH THE RECORD NEVER HELD (born 2026-09-10, fix/episode-contract)
 
 **Root cause.** Every experiment measures value PER OPPORTUNITY, and the system
@@ -4647,9 +4654,9 @@ C1/C5/report evidence published at `316f1e468294e27311114ac26420164d92531a67`.
 
 **Law:** freeze the entry zone, far-edge invalidation, buffer and first distinct
 eligible opposing zone; derive stop/target prices once, then evaluate net gain,
-unchanged owner R:R and owner-set instrument dollar cap. Inadequate geometry is
+unchanged owner R:R, followed by the existing daily-loss and other entry gates. Inadequate geometry is
 quantity zero with its exact refusal. Never move either price or resize to pass.
-Missing provenance records the ATR fallback and refuses. Missing cap refuses.
+Missing provenance records the ATR fallback and refuses. Owner correction 2026-09-13: the owner meant DAILY loss; the added mandatory per-trade cap is removed (class 1: self-imposed caps).
 An available structural stop bypasses only the ATR minimum-stop leg.
 
 **Probe:** production arm-seam fixtures pin long and short far-edge stops,
@@ -4662,5 +4669,5 @@ remain unchanged.
 
 [A] The conservative corrected replay remains negative: at the p95 buffer,
 721/11,302 touches have eligible geometry; model A 207 fills average -2.6039 net
-points. Without an owner cap actual admission is zero. This class establishes
+points. At the initial boot the mistakenly mandatory per-trade cap made admission zero; the owner subsequently clarified DAILY loss and removed that added requirement. This class establishes
 honest trade construction and refusal, not profitable trade selection.
