@@ -123,3 +123,30 @@ also restored modules twice: once through setup-go and once through actions/cach
 The first run emitted thousands of existing-file extraction errors; the next
 run stalled in that redundant cache step before tests. Remove the duplicate
 restore and use `go-version-file: go.mod`, matching the release toolchain.
+
+## Verified release candidate
+
+[A] PR #116 merged as `0c9d4f30a0470510a15e4aa92d7fa6ec96e9c38d`. Before publication all 32 successful PR check
+results completed, with one intentionally skipped container-manifest job. The
+full local race/coverage suite passed; at the exact merged HEAD, full Go tests
+including goldens, **64 frontend files / 430 tests**, and TypeScript passed.
+The first merged frontend attempt was sandbox-blocked (`spawnSync go EPERM`);
+the permission-correct rerun executed all 430 tests successfully.
+
+[A] Clean clone `/tmp/structural-daily-loss-release/nofx`, Go go1.25.13,
+`vcs.modified=false`; binary **73,422,552 bytes**,
+MD5 `1dba3de51d4813481546ecb933325d4c`, SHA-256 `5738ec671b9d706e43f545c99c218bfcd18b4e982f22358c6dcf4581ee5045ca`. Guide SOURCE and RELEASE are stamped
+from this binary revision in the following metadata commit; the Go binary is not
+rebuilt from that deliberately different metadata revision.
+
+[A] Backup at 00:41:13 CT: `before-correction.db`, **1,236,676,608 bytes**,
+SQLite integrity `ok`, SHA-256
+`cd05846b018be69073329b746cefe4330af5aeec811a9830d19d802ff7311684`.
+Directory: `/home/hoang/nofx-backups/structural-daily-loss-20260913/`.
+The original release marker and Guide source are preserved separately.
+
+[A] Additional pre-edit source freshness at base `587148a6`:
+`trader/class32_wallclock_test.go`: `1ef5ad51 class 32: scheduled session reads fire on wall-clock`;
+`.github/workflows/pr-go-test-coverage.yml`: `5c757a74 B6+B8: the worktree recipe pointer; the three CI setup failures fixed as MEASURED, plus the two dev-red Go tests the coverage job actually fails on`.
+
+Cutover/boot evidence is appended only after it is observed.
