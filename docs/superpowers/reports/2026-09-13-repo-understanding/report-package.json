@@ -5,10 +5,10 @@
   "scope": "Document packaging only; original evidence limits and revision scopes preserved.",
   "builder_sha256": "69a09ae4e6e083be7c79f7c5cb1c27fe77086b3e36601b08bc9609b886d84974",
   "inputs": {
-    "PACKAGING-UPDATES.md": "8e6aa5133ba8905f7cb0ed3b5e936d8ce5c8e7f0b48cbdb787933f77cafb4249",
+    "PACKAGING-UPDATES.md": "74f7ebaaf65394b8d74a48ef6cbdcf968e547ae360f46b4fe04040a30c6f5d28",
     "CTO-TRADING-LOGIC.md": "d3a67436ee7360292f7fa61901487c9154d287ecb7693518d40101ca05fc3f4c",
     "REPAIR-STATUS.md": "4cb46bfab1a1fe3574ecd5deff62dd1a80beb270a1f4beebbfcfbac637286b3d",
-    "CORE-TRACE.md": "dc9f2ec4a8acc0933d4a7e7cca5b8964e5fad9b860fe6af189c592bc7ce53964",
+    "CORE-TRACE.md": "76d679d73bb5ab58906d59ac974595d2bbba7a2b33ff896a0a80d5295ccf2738",
     "CHECKPOINT.md": "7ce930bc53b987a744b7c95434173b65fdd235ed8add23a030c80724052e4753",
     "reviews/01/report.md": "16269caf522e419f5d7bf146deb04e1aa0624f0a8e7a82ae58d54c7b696f204a",
     "reviews/02/report.md": "deac73039d76150288094bb43c262cc99f0e4e54e8063995fdcb02b0d3d3308a",
@@ -43,14 +43,14 @@
   },
   "outputs": {
     "CTO-REPORT.md": {
-      "bytes": 47836,
-      "words_whitespace": 5659,
-      "sha256": "db7fb228f4995cc69cefd61f4fd31740c7e498b800275221a533a3e5e45fb0e1"
+      "bytes": 50170,
+      "words_whitespace": 5869,
+      "sha256": "b89d6dc2784f587bfd7ffa76d48f58a99c03e4d9883dd16df9f13f80df68f64e"
     },
     "FULL-AUDIT.md": {
-      "bytes": 775591,
-      "words_whitespace": 92352,
-      "sha256": "9373cfea8e47b60f2020ece0659b0596cb3ec9708276ed10d7555569fe647010"
+      "bytes": 777925,
+      "words_whitespace": 92562,
+      "sha256": "855d55ee1abe3b1939c8a81986035a2095b8c3854825d524966d51a66a8d07c0"
     }
   }
 }

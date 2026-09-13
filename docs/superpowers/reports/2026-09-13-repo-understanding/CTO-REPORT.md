@@ -37,6 +37,23 @@ This additive disposition notice supersedes the specific older open items named 
 
 Source receipts: [first snapshot/pending exit](https://github.com/johnwick2921-cyber/nofx/commit/c20d0a829ca8cc0a9975ab78eed3b6a700f3b11d), [observer replacement](https://github.com/johnwick2921-cyber/nofx/commit/d3e4638e495425874aedba34a2fab0585acdae85), [terminal EXIT](https://github.com/johnwick2921-cyber/nofx/commit/3f21431aff0d7830b0dc0457417365a7a555aee7), [order display](https://github.com/johnwick2921-cyber/nofx/commit/dd11670be159760942d886b5b8c1aef2573e0d02). These identify source commits, not final release stamps.
 
+### Receive-order and subsequent boundary checks
+
+9b379c8c installs one account/symbol execution owner before its own entries,
+processing OrderUpdate, Fill and PositionClose in TCP receive order. Real TCP
+tests distinguish entry1→entry2→exit1 from entry1→exit1→entry2 and preserve
+actual residuals and cost basis. Independent review and focused race tests
+cover owner replacement, raw/advisory replay, cache resurrection and outbound
+callback progress. This is receive-order accounting, not reconstructed exchange
+timestamps or a durable transport journal. Source commit9b379c8c is followed by
+additional positive-rejection/entry-snapshot checks; final combined results
+remain root-owned and must replace this qualification before release readiness.
+
+The AddOn candidate identifies itself as2026-09-13-execution-evidence; Go's
+expected source marker matches. Received installed-runtime identity was not
+changed or verified by this source audit. The final reference compile and
+regenerated89-assertion harness pass at this marker.
+
 ---
 
 <a id="section-2"></a>
@@ -381,38 +398,43 @@ The detailed control repair report lives on `fix/repo-audit-control-boundaries-2
 
 ## Core trading source trace
 
-Source snapshot: `c20d0a829ca8cc0a9975ab78eed3b6a700f3b11d`. Each link names an exact committed declaration. This is a selected source locator, not evidence that every branch ran. Detailed baseline function notes and connections are in the 30 review folders. Execution-order and integration tests must be read beside these source links.
+Source snapshot: `317dc5efd539a8fac1d657731ea2e68e22109b60`. Each link names an exact committed declaration. This is a selected source locator, not evidence that every branch ran. Detailed baseline function notes and connections are in the 30 review folders. Execution-order and integration tests must be read beside these source links.
 
 | Boundary | Exact source | Responsibility / transfer limit |
 | --- | --- | --- |
-| Transport | [readLoop](https://github.com/johnwick2921-cyber/nofx/blob/c20d0a829ca8cc0a9975ab78eed3b6a700f3b11d/provider/ninjatrader/tcp_server.go#L1725) | Decodes broker frames; execution processing order must be verified separately. |
-| Market data | [GetWithTimeframes](https://github.com/johnwick2921-cyber/nofx/blob/c20d0a829ca8cc0a9975ab78eed3b6a700f3b11d/market/data.go#L190) | Builds requested market context; futures provider path differs from legacy crypto. |
-| Canonical symbol | [Normalize](https://github.com/johnwick2921-cyber/nofx/blob/c20d0a829ca8cc0a9975ab78eed3b6a700f3b11d/market/data.go#L670) | Preserves the CME normalization boundary. |
-| Level evidence | [AssembleResearchLevels](https://github.com/johnwick2921-cyber/nofx/blob/c20d0a829ca8cc0a9975ab78eed3b6a700f3b11d/kernel/levels_assemble.go#L212) | Assembles raw, pool and seated candidates; heuristic scores are not probabilities. |
-| Weekly evidence | [weeklyDailyBars](https://github.com/johnwick2921-cyber/nofx/blob/c20d0a829ca8cc0a9975ab78eed3b6a700f3b11d/trader/auto_trader_weekly.go#L138) | Preserves daily input for CME-week aggregation. |
-| Weekly facts | [CompletedWeekCandles](https://github.com/johnwick2921-cyber/nofx/blob/c20d0a829ca8cc0a9975ab78eed3b6a700f3b11d/kernel/weekly_bias.go#L93) | Groups observations into completed Monday-governed weeks. |
-| Planner invocation | [runPlannerReadCoreWithFacts](https://github.com/johnwick2921-cyber/nofx/blob/c20d0a829ca8cc0a9975ab78eed3b6a700f3b11d/trader/auto_trader_planner.go#L1121) | Machine facts and model response enter planner persistence/validation. |
-| Frozen setup identity | [ResolveEntryGeometryZone](https://github.com/johnwick2921-cyber/nofx/blob/c20d0a829ca8cc0a9975ab78eed3b6a700f3b11d/trader/structural_geometry.go#L30) | Rejects missing or ambiguous frozen source identity. |
-| First structural obstacle | [FirstGeometryTarget](https://github.com/johnwick2921-cyber/nofx/blob/c20d0a829ca8cc0a9975ab78eed3b6a700f3b11d/trader/structural_geometry.go#L78) | Chooses nearest complete sourced zone beyond the entry zone. |
-| Geometry | [ComposeLevelFadeGeometry](https://github.com/johnwick2921-cyber/nofx/blob/c20d0a829ca8cc0a9975ab78eed3b6a700f3b11d/trader/structural_geometry.go#L106) | Production wrapper freezes structural stop/target before admission. |
-| Geometry arithmetic | [composeGeometry](https://github.com/johnwick2921-cyber/nofx/blob/c20d0a829ca8cc0a9975ab78eed3b6a700f3b11d/trader/structural_geometry.go#L123) | Zone-edge buffer, outward rounding, costs and gross-R refusal; no ranking proof. |
-| Arm orchestration | [maybeManageArmedOrdersAt](https://github.com/johnwick2921-cyber/nofx/blob/c20d0a829ca8cc0a9975ab78eed3b6a700f3b11d/trader/armed_executor.go#L199) | Current-cycle authorization and gate results precede placement. |
-| Placement | [runArmedPlacementAt](https://github.com/johnwick2921-cyber/nofx/blob/c20d0a829ca8cc0a9975ab78eed3b6a700f3b11d/trader/armed_executor.go#L1184) | Consumes currently eligible arm identities and broker/account evidence. |
-| One-contract guard | [oneContractGuard](https://github.com/johnwick2921-cyber/nofx/blob/c20d0a829ca8cc0a9975ab78eed3b6a700f3b11d/trader/one_contract.go#L159) | Account exposure and entry-order admission boundary. |
-| Session controls | [sessionRiskGateAt](https://github.com/johnwick2921-cyber/nofx/blob/c20d0a829ca8cc0a9975ab78eed3b6a700f3b11d/trader/session_risk.go#L120) | Session breaker/band verdict; does not alone establish daily-loss implementation. |
-| Daily reporting | [bootRiskFacts](https://github.com/johnwick2921-cyber/nofx/blob/c20d0a829ca8cc0a9975ab78eed3b6a700f3b11d/trader/session_risk.go#L260) | Reporting facts only; do not cite as executable daily-loss gate. |
-| Decision risk | [GetFullDecisionWithStrategy](https://github.com/johnwick2921-cyber/nofx/blob/c20d0a829ca8cc0a9975ab78eed3b6a700f3b11d/kernel/engine_analysis.go#L57) | Strategy decision/control pipeline; distinct from resting-arm placement. |
-| Position admission | [ntHeldPosition](https://github.com/johnwick2921-cyber/nofx/blob/c20d0a829ca8cc0a9975ab78eed3b6a700f3b11d/trader/auto_trader_orders.go#L377) | Broker position errors must remain unknown instead of flat. |
-| Decision long entry | [executeOpenLongWithRecord](https://github.com/johnwick2921-cyber/nofx/blob/c20d0a829ca8cc0a9975ab78eed3b6a700f3b11d/trader/auto_trader_orders.go#L464) | Actual decision entry call site; admission failure must prevent wire submission. |
-| Decision short entry | [executeOpenShortWithRecord](https://github.com/johnwick2921-cyber/nofx/blob/c20d0a829ca8cc0a9975ab78eed3b6a700f3b11d/trader/auto_trader_orders.go#L612) | Short counterpart requires the same ownership and exposure discipline. |
-| Resting limit | [PlaceLimitEntry](https://github.com/johnwick2921-cyber/nofx/blob/c20d0a829ca8cc0a9975ab78eed3b6a700f3b11d/trader/ninjatrader/tcp_trader.go#L446) | Registers identity before transmission; transmission is not broker acceptance. |
-| Stop entry | [PlaceStopEntry](https://github.com/johnwick2921-cyber/nofx/blob/c20d0a829ca8cc0a9975ab78eed3b6a700f3b11d/trader/ninjatrader/tcp_trader.go#L510) | Kind-specific stop entry adapter; distinct from protective stop placement. |
-| Cumulative entry | [onArmedOrderUpdate](https://github.com/johnwick2921-cyber/nofx/blob/c20d0a829ca8cc0a9975ab78eed3b6a700f3b11d/trader/armed_executor.go#L1952) | Consumes actual entry state/quantity including positive terminal cancellations. |
-| Entry accounting | [materializeArmedEntry](https://github.com/johnwick2921-cyber/nofx/blob/c20d0a829ca8cc0a9975ab78eed3b6a700f3b11d/trader/armed_executor.go#L2068) | Preserves cumulative entry quantity/notional and residual position accounting. |
-| Broker exit | [recordClose](https://github.com/johnwick2921-cyber/nofx/blob/c20d0a829ca8cc0a9975ab78eed3b6a700f3b11d/trader/ninjatrader/close_sync.go#L88) | Builds actual exit receipt with account and broker-order identity. |
-| Atomic exit | [ApplyNT8Exit](https://github.com/johnwick2921-cyber/nofx/blob/c20d0a829ca8cc0a9975ab78eed3b6a700f3b11d/store/nt8_exit_receipt.go#L44) | Receipt, actual fill and residual/P&L update share one transaction. |
-| Reconciliation | [reconcilePositions](https://github.com/johnwick2921-cyber/nofx/blob/c20d0a829ca8cc0a9975ab78eed3b6a700f3b11d/trader/ninjatrader/reconcile.go#L118) | Reconciles observations; a database row is not broker-flat proof. |
-| Positions truth | [GetPositions](https://github.com/johnwick2921-cyber/nofx/blob/c20d0a829ca8cc0a9975ab78eed3b6a700f3b11d/trader/ninjatrader/tcp_trader.go#L921) | Selected bound-account position snapshot and freshness admission. |
+| Transport | [readLoop](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/provider/ninjatrader/tcp_server.go#L1727) | Decodes broker frames; execution processing order must be verified separately. |
+| Ordered execution owner | [RegisterOrderedExecutionsFor](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/provider/ninjatrader/ordered_execution.go#L17) | Exact account/symbol owner; preserves receive order before type fanout. |
+| Ordered entry delivery | [dispatchOrderedOrder](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/provider/ninjatrader/ordered_execution.go#L37) | Applies received entry evidence before advisory consumers can reorder it. |
+| Ordered exit delivery | [dispatchOrderedClose](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/provider/ninjatrader/ordered_execution.go#L54) | Applies received close evidence through the same serialized owner. |
+| Owner installation | [InstallOrderedExecutions](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/ninjatrader/ordered_execution.go#L11) | Installs observation at successful construction; ordinary Stop retains it. |
+| Fill cache | [handleFill](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/ninjatrader/tcp_trader.go#L192) | Preserves actual exposure and refuses duplicate fully exited entry cache replay. |
+| Market data | [GetWithTimeframes](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/market/data.go#L190) | Builds requested market context; futures provider path differs from legacy crypto. |
+| Canonical symbol | [Normalize](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/market/data.go#L670) | Preserves the CME normalization boundary. |
+| Level evidence | [AssembleResearchLevels](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/kernel/levels_assemble.go#L212) | Assembles raw, pool and seated candidates; heuristic scores are not probabilities. |
+| Weekly evidence | [weeklyDailyBars](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/auto_trader_weekly.go#L138) | Preserves daily input for CME-week aggregation. |
+| Weekly facts | [CompletedWeekCandles](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/kernel/weekly_bias.go#L93) | Groups observations into completed Monday-governed weeks. |
+| Planner invocation | [runPlannerReadCoreWithFacts](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/auto_trader_planner.go#L1121) | Machine facts and model response enter planner persistence/validation. |
+| Frozen setup identity | [ResolveEntryGeometryZone](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/structural_geometry.go#L30) | Rejects missing or ambiguous frozen source identity. |
+| First structural obstacle | [FirstGeometryTarget](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/structural_geometry.go#L78) | Chooses nearest complete sourced zone beyond the entry zone. |
+| Geometry | [ComposeLevelFadeGeometry](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/structural_geometry.go#L106) | Production wrapper freezes structural stop/target before admission. |
+| Geometry arithmetic | [composeGeometry](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/structural_geometry.go#L123) | Zone-edge buffer, outward rounding, costs and gross-R refusal; no ranking proof. |
+| Arm orchestration | [maybeManageArmedOrdersAt](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/armed_executor.go#L199) | Current-cycle authorization and gate results precede placement. |
+| Placement | [runArmedPlacementAt](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/armed_executor.go#L1184) | Consumes currently eligible arm identities and broker/account evidence. |
+| One-contract guard | [oneContractGuard](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/one_contract.go#L159) | Account exposure and entry-order admission boundary. |
+| Session controls | [sessionRiskGateAt](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/session_risk.go#L120) | Session breaker/band verdict; does not alone establish daily-loss implementation. |
+| Daily reporting | [bootRiskFacts](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/session_risk.go#L260) | Reporting facts only; do not cite as executable daily-loss gate. |
+| Decision risk | [GetFullDecisionWithStrategy](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/kernel/engine_analysis.go#L57) | Strategy decision/control pipeline; distinct from resting-arm placement. |
+| Position admission | [ntHeldPosition](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/auto_trader_orders.go#L377) | Broker position errors must remain unknown instead of flat. |
+| Decision long entry | [executeOpenLongWithRecord](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/auto_trader_orders.go#L464) | Actual decision entry call site; admission failure must prevent wire submission. |
+| Decision short entry | [executeOpenShortWithRecord](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/auto_trader_orders.go#L612) | Short counterpart requires the same ownership and exposure discipline. |
+| Resting limit | [PlaceLimitEntry](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/ninjatrader/tcp_trader.go#L469) | Registers identity before transmission; transmission is not broker acceptance. |
+| Stop entry | [PlaceStopEntry](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/ninjatrader/tcp_trader.go#L533) | Kind-specific stop entry adapter; distinct from protective stop placement. |
+| Cumulative entry | [onArmedOrderUpdate](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/armed_executor.go#L1952) | Consumes actual entry state/quantity including positive terminal cancellations. |
+| Entry accounting | [materializeArmedEntry](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/armed_executor.go#L2071) | Preserves cumulative entry quantity/notional and residual position accounting. |
+| Broker exit | [recordClose](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/ninjatrader/close_sync.go#L88) | Builds actual exit receipt with account and broker-order identity. |
+| Atomic exit | [ApplyNT8Exit](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/store/nt8_exit_receipt.go#L44) | Receipt, actual fill and residual/P&L update share one transaction. |
+| Reconciliation | [reconcilePositions](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/ninjatrader/reconcile.go#L118) | Reconciles observations; a database row is not broker-flat proof. |
+| Positions truth | [GetPositions](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/ninjatrader/tcp_trader.go#L944) | Selected bound-account position snapshot and freshness admission. |
 
 The ordered execution boundary is under repair until final verification is stamped. Transport receipt, broker acceptance, execution, position reconciliation and permission to enter are separate facts. The root report records their verification status.
 
