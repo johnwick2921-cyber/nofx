@@ -11,11 +11,17 @@ vi.mock('./AdvancedChart', () => ({
   AdvancedChart: ({
     symbol,
     exchange,
+    selectedAccount,
   }: {
     symbol: string
     exchange: string
+    selectedAccount?: string
   }) => (
-    <div data-testid="market" data-exchange={exchange}>
+    <div
+      data-testid="market"
+      data-exchange={exchange}
+      data-account={selectedAccount}
+    >
       {symbol}
     </div>
   ),
@@ -60,4 +66,13 @@ describe('ChartTabs composition modes', () => {
     fireEvent.change(select, { target: { value: 'ninjatrader' } })
     expect(await screen.findByText('MNQ')).toBeInTheDocument()
   })
+})
+
+it('passes selected account changes into the order snapshot scope', () => {
+  const { rerender } = render(
+    <ChartTabs traderId="test" selectedAccount="SimA" marketOnly />
+  )
+  expect(screen.getByTestId('market')).toHaveAttribute('data-account', 'SimA')
+  rerender(<ChartTabs traderId="test" selectedAccount="SimB" marketOnly />)
+  expect(screen.getByTestId('market')).toHaveAttribute('data-account', 'SimB')
 })

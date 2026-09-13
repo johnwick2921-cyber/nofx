@@ -819,6 +819,7 @@ export function ExchangeConfigModal({
                 </label>
                 <input
                   type="text"
+                  readOnly={!!editingExchangeId}
                   value={accountName}
                   onChange={(e) => setAccountName(e.target.value)}
                   placeholder={t(
@@ -834,6 +835,13 @@ export function ExchangeConfigModal({
                   required
                 />
               </div>
+
+              {editingExchangeId && (
+                <p className="text-xs text-gray-400">
+                  Account name is read-only for an existing binding. Changing
+                  the bound account requires a separate reviewed migration.
+                </p>
+              )}
 
               {/* CEX Fields */}
               {(currentExchangeType === 'binance' ||
