@@ -1,6 +1,6 @@
 # Structural stop and first-zone target
 
-**E4: the corrected conservative replay remains negative; geometry does not establish profitability. C1: the ATR floor won 180/200 logged compositions (90%), a selected log cohort spanning 27 distinct plan/version/scenario/leg specifications—not 200 independent arms. No numeric owner risk cap is configured, so actual structural admission refuses every opportunity. This is the pre-boot review report, not a deployment claim.**
+**E4: the corrected conservative replay remains negative; geometry does not establish profitability. C1: the ATR floor won 180/200 logged compositions (90%), a selected log cohort spanning 27 distinct plan/version/scenario/leg specifications—not 200 independent arms. No numeric owner risk cap is configured, so actual structural admission refuses every opportunity. Booted to SIM at 2026-09-13 00:21:42 CT; the final boot marker below supersedes the earlier holds. First live composition/refusal proof remains pending the market reopening.**
 
 ## C5 — the measured overshoot and the buffer decision
 
@@ -405,3 +405,92 @@ best-trade selection.
 [Guide stamp test](2026-09-12-structural-stop/evidence/logs/guide-stamp-test.log).
 The frontend build emits its existing large-chunk advisory; build exit is zero.
 This staged dist has not replaced the running frontend.
+
+
+## Boot marker — 2026-09-13 00:21:42 CT
+
+**[A] DEPLOYED TO SIM; LIVE TRADE-CONSTRUCTION PROOF PENDING MARKET OPEN.**
+The owner's explicit **“go market closed”** authorized the A7 time exception.
+This supersedes the preceding A7 hold. No risk-cap value was supplied or invented,
+and no owner configuration/account binding was changed.
+
+[A] Lock `structuralstop-22fba7ca/Codex[unlisted]` acquired at 00:19:12 CT; its
+bounded keeper supplied the heartbeat. Main was clean on dev and advanced only
+by `--ff-only` to prepared release commit
+`8f4790ca98e09187873ab4318d584dff1bea93e1`. The restart policy was verified as
+`on-failure`. Fresh pre-kill gate at **00:21:10.266857 CT** passed all five legs:
+DB open=0, API positions=0, NT8 snapshot count=0, broker working=0 / ledger=0 /
+unplaced authorizations=0, and no planner read claimed. Broker snapshot age was
+one second. Gate age at kill was **26.41804 seconds**. There were no resting
+arms and no in-flight read to interrupt.
+[Exact gate](2026-09-12-structural-stop/evidence/pre-kill-gate.json).
+
+[A] RELEASE and its committed value preceded the swap. The old binary was
+**moved**, not copied, to
+`/home/hoang/nofx-backups/structural-stop-20260912/release-20260913/nofx-bin.old.400ea26c12c8b6daa7069d14a88eddfe1c9297e5`;
+its embedded revision was read before naming the backup, and old MD5 was
+`93e8bd17fe2d86a928e41a76768b1fae`. Old dist and release/Guide source are preserved
+beside it. New binary and UI were moved into place at **00:20:55 CT**; revision,
+MD5, Guide source and dist were verified **before** SIGKILL.
+[Swap verification](2026-09-12-structural-stop/evidence/swap-verification.json).
+
+[A] This agent sent SIGKILL to verified old PID **3671783** at
+**00:21:36.789756 CT**. Systemd relaunched PID **4165029**, which logged integrity
+success at **00:21:42 CT**, within the required 90 seconds. No timer, unattended
+deployment or rollback was used.
+[Restart receipt](2026-09-12-structural-stop/evidence/restart-request.json).
+
+> 09-13 00:21:42 [INFO] nofx/main.go:295 🔐 BOOT INTEGRITY OK — rev 4127979f2fcc · built 2026-09-13T05:10:17Z · expected 4127979f2fcc · goldens PASS
+
+[A] The actual resolved stop/target boot line reads:
+
+> stop=zone-edge+buffer buffer=4.50[I] (p95 of measured overshoot; resolver=ResolveStructuralStop:C5_MNQ_default[I]; calibration=C5-H12-IS-6181-p95-20260912; sweep=[0.25 1.25 4.5] points[I]) · atr-fallback=0 · refused today=0 (no_target=0 net<=0=0 rr<2.00=0 risk_cap=0 no_provenance=0 other=0) · target=first-distinct-eligible-zone · MNQ risk-cap=UNSET (refuse) · never-widened=asserted · research-candidate
+
+[Captured boot lines](2026-09-12-structural-stop/evidence/logs/boot-lines.txt).
+These zero counters are boot-time recorded values; they do not prove successful
+trade construction or a profitable strategy.
+
+| Reference | Verified value |
+|---|---|
+| Disk deploy/RELEASE | `4127979f2fcc5615f4e8b17540f7aba74bb4ea92` |
+| HEAD:deploy/RELEASE | `4127979f2fcc5615f4e8b17540f7aba74bb4ea92` |
+| Guide SOURCE | `4127979f2fcc5615f4e8b17540f7aba74bb4ea92` |
+| /api/health | `4127979f2fcc`, status `ok` |
+| /proc/4165029/exe | `4127979f2fcc5615f4e8b17540f7aba74bb4ea92`, modified=false |
+
+[A] Built, on-disk and running executable MD5 all equal
+**`300dc70535f708be9f6278d252124ba4`**. The served dist carries the same binary
+revision; all **92** manifest files matched SHA256. The prepared source/marker
+commit differs from the Go binary build commit by release metadata, Guide stamp
+and report/evidence; this is deliberate, not an unstamped binary.
+[Five-reference verification](2026-09-12-structural-stop/evidence/boot-verification.json).
+
+[A] Post-boot at **00:22:46 CT**, the five-leg gate again passed: no positions,
+no broker/ledger working orders, no unplaced authorizations, no planner read.
+NT8 reconnected and the trader auto-started.
+[Post-boot gate](2026-09-12-structural-stop/evidence/postboot-gate.json).
+
+### What is still unproven from live operation
+
+[A] At **00:24:38 CT**, the production store had **0** `structural_geometry:`
+records (keys `[]`) and the post-boot journal had **0** composition lines. The
+actual runtime says: `CME closed (weekend) — next open Sun 2026-09-13 17:00 CDT`.
+`trader/auto_trader_loop.go:220` returns at the closed-session gate before its
+arm-management call at line 432; the sweep is reached inside
+`trader/armed_executor.go:210`. Consequently **no actual sweep-result line was
+observed**, and this report does not invent “cancelled 0.” The lifetime sweep
+counter is 13, from the store, and is **not this boot's sweep count**. The gate
+proved that no resting order needed cancellation at this cutover.
+[Exact proof status](2026-09-12-structural-stop/evidence/postboot-proof-status.json).
+
+[A] The dispatch's first real structural composition (entry-zone edges, buffer,
+stop, first eligible target and admission numbers), first refusal, and actual
+sweep-result line remain pending an open-market cycle. The session gate was not
+bypassed and no fixture was injected into the live book to manufacture proof.
+The owner-set instrument risk cap remains UNSET; new otherwise-qualified fades
+will be refused until the owner configures it. E4 remains negative/unproven.
+
+Rollback assets retain the old binary, UI and release/Guide source alongside the
+verified DB backup. A code rollback must restore matching release metadata and
+old image under a fresh flat gate and lock; the historical DB must not be
+restored over any subsequent fills merely to roll back code.
