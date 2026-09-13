@@ -4773,3 +4773,11 @@ receipt at or after the persisted request, valid receipt time and explicit order
 before absence becomes settlement evidence. Test pre-request empty, post-request
 working, then post-request empty books. A retry budget scoped to process identity
 must reset before the cap check, not only inside the retry it otherwise blocks.
+
+## PENDING CLASS — REFUSAL IS NOT PLACEMENT COMMITMENT
+
+Branch `fix/repo-audit-control-boundaries-20260913`, base `63968be6`.
+The stop helper returned no outcome; its caller closed the pass and retired
+other scenarios even on guard/build refusal. Test the actual placement loop
+with two scenarios. Commitment starts at successful durable registration, before
+transmission: a later ambiguous send error must still reserve the account.

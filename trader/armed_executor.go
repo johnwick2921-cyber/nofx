@@ -1255,14 +1255,12 @@ func (at *AutoTrader) runArmedPlacementAt(bars []market.Kline, sinceMs int64, no
 					continue
 				}
 				d := decideStopEntry(side, r.EntryPx, float64(stopEntryOffsetTicks())*tick, tick, price)
-				at.placeOneStopEntry(nt, ledger, r, d, price, now, at.armSlotGuard(rows, r, now))
-				// A stop entry that reached the wire commits the account exactly
-				// as a limit does. The pass is closed either way — the ledger
-				// row's own state is not consulted, because "did we send" is the
-				// question here, not "did it work" (class 81: a send is not a
-				// settlement, so this latch is deliberately pessimistic).
-				placedThisPass = true
-				at.cancelOtherArmsInPlan(ledger, rows, r, now)
+				if at.placeOneStopEntry(nt, ledger, r, d, price, now, at.armSlotGuard(rows, r, now)) {
+					// Registration commits the account even if the subsequent send
+					// fails ambiguously. A refusal before registration does not.
+					placedThisPass = true
+					at.cancelOtherArmsInPlan(ledger, rows, r, now)
+				}
 				continue
 			}
 			if price > 0 && limitMarketableWrongSide(price, r.EntryPx, side) {
@@ -1545,7 +1543,9 @@ type armStateWriter interface {
 // placeOneStopEntry executes ONE adjudicated stop-entry arm, and is the only
 // path from an armed stop-entry row to the wire. A9: every line names the order
 // type, the trigger, the side and WHICH guard reached the verdict.
-func (at *AutoTrader) placeOneStopEntry(pl stopEntryPlacer, ledger armStateWriter, r store.ArmedOrderDB, d stopEntryDecision, price float64, now time.Time, guard slotVerdict) {
+// It returns whether the ledger registered an attempt before transmission;
+// send errors after registration remain committed until reconciliation.
+func (at *AutoTrader) placeOneStopEntry(pl stopEntryPlacer, ledger armStateWriter, r store.ArmedOrderDB, d stopEntryDecision, price float64, now time.Time, guard slotVerdict) (registered bool) {
 	// THE PLACEMENT KEYSPACE IS NAMED AND 1-BASED. Every other writer into
 	// at.armRefusalLast keys the same leg as strconv.Itoa(li+1) (:455, :498,
 	// :525, :579); a 0-based key here was byte-identical to the ARM-GATE key for
@@ -1588,7 +1588,11 @@ func (at *AutoTrader) placeOneStopEntry(pl stopEntryPlacer, ledger armStateWrite
 		at.refuseSlot(r, guard, "stop-entry", now)
 		return
 	}
-	sid, perr := pl.PlaceStopEntry(at.futuresSymbol(), d.Side, 1, d.Trigger, r.StopPx, r.TargetPx, func(sid string) error { return ledger.BeginPlacement(r.ID, sid) })
+	sid, perr := pl.PlaceStopEntry(at.futuresSymbol(), d.Side, 1, d.Trigger, r.StopPx, r.TargetPx, func(sid string) error {
+		err := ledger.BeginPlacement(r.ID, sid)
+		registered = err == nil
+		return err
+	})
 	recordResearchPlacement(r, sid, "stop_entry", d.Trigger, r.StopPx, r.TargetPx, perr)
 	if perr != nil {
 		// D5 — an AddOn that predates the stop-slot fix is refused at the wire,
@@ -1608,6 +1612,7 @@ func (at *AutoTrader) placeOneStopEntry(pl stopEntryPlacer, ledger armStateWrite
 	}
 	at.logInfof("📌 armed %s placement requested stop-entry [guard=stop-side verdict=%s action=%s] %s stop-market trigger=%.2f price=%.2f signal=%s (%s · no retest in %d bars, offset %dt)",
 		r.Scenario, d.Verdict, d.Action, strings.ToUpper(d.Side), d.Trigger, price, sid, d.Why, retestWaitBars(), stopEntryOffsetTicks())
+	return
 }
 
 // armRowTradeDate is the session-day key for a ledger row's counters. The row

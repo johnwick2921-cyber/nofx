@@ -146,3 +146,14 @@ evidence. A second regression reproduced a previous process exhausting the new
 process's retry cap. The cap check now applies the process identity before
 counting attempts. Both regressions and existing settlement/boot-sweep tests pass
 (`/tmp/nofx-cancel-evidence-after.log`). No broker or runtime settings were touched.
+
+## Stop-entry refusal and other scenarios
+
+[A] The actual placement-loop regression reproduced S2 being cancelled with
+`one_live_entry: S1 placed` when S1 was already through, had unknown price, or
+was refused by the AddOn build gate. The helper now returns whether placement
+was registered; only that result closes the pass and retires other scenarios.
+All three cases pass. A separate dispatch regression confirms registration
+still commits the account after an ambiguous send failure. Existing receipt,
+slot and fast-rejection tests pass (`/tmp/nofx-stop-refusal-after.log`).
+The limit-path behavior after an ambiguous send remains a separate review item.

@@ -37,10 +37,11 @@ type placeCall struct {
 }
 
 type fakePlacer struct {
-	calls         []placeCall
-	sid           string
-	err           error
-	afterRegister func()
+	calls            []placeCall
+	sid              string
+	err              error
+	afterRegister    func()
+	afterRegisterErr error
 }
 
 func (f *fakePlacer) PlaceStopEntry(symbol, side string, quantity float64, stopPx, sl, tp float64, beforeSend ...func(string) error) (string, error) {
@@ -59,7 +60,7 @@ func (f *fakePlacer) PlaceStopEntry(symbol, side string, quantity float64, stopP
 	if f.afterRegister != nil {
 		f.afterRegister()
 	}
-	return f.sid, nil
+	return f.sid, f.afterRegisterErr
 }
 
 type stateWrite struct {
