@@ -1,8 +1,19 @@
 import { defineConfig } from 'vitest/config'
 import react from '@vitejs/plugin-react'
+import { fileURLToPath } from 'node:url'
 
 export default defineConfig({
   plugins: [react()],
+  server: {
+    fs: {
+      // The shared product name is outside web; allow only its source tree
+      // alongside web, independently of the runner's workspace discovery.
+      allow: [
+        fileURLToPath(new URL('.', import.meta.url)),
+        fileURLToPath(new URL('../branding', import.meta.url)),
+      ],
+    },
+  },
   test: {
     globals: true,
     environment: 'jsdom',

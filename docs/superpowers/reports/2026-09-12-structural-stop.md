@@ -302,3 +302,43 @@ python3 docs/superpowers/reports/2026-09-12-structural-stop/harness/audit_ledger
 `numpy` is needed for the Python summaries. The source fixture/pure-function parity checks are in the evidence. No network feed, broker order or live detector mutation is needed for this replay.
 
 The publication receipt gives the raw report URL pinned to its complete commit SHA, HTTP status, downloaded byte count, `git ls-tree --long` size, branch `ls-remote` and tested SHA. Those values are generated after commit rather than embedding a circular self-commit identifier in this file. A branch URL, successful push alone or unverified local file size is not treated as publication proof.
+
+
+## Owner GO and CI reconciliation — 2026-09-13
+
+[A] The owner explicitly answered **“go”** after the negative E4 verdict and
+pre-deployment status. This authorizes the documented SIM cutover after checks;
+it supplies no numeric per-instrument risk cap. The cap remains owner-set.
+
+[A] PR #115 at `b6c5e9430d9b4797fc6ff3477b97597a7e8646c1` had three failed
+GitHub jobs despite the earlier local pass. The Test workflow used shallow
+checkouts: both import-preservation guards require baseline
+`954f11b15f2e7615678f7d2b708c47895faebf1e`, absent in that checkout. Its frontend
+also denied `branding/product.txt?raw` outside `web`. The security scan reported
+24 called standard-library vulnerabilities under Go 1.25.3. These are real failed
+checks; the earlier local pass does not supersede them.
+
+[A] The owner's GO to resolving these blockers adds a narrow build/test correction:
+full history for the Test workflow, explicit test-only filesystem access to `web`
+and `branding`, and Go 1.25.13 as the application patch toolchain. No module dependency
+or trading rule changes. The protected `go.mod` hash is advanced solely for this
+one-line patch-version change; all branding test assertions and protected imports
+remain intact. The old pinned scanner failed package analysis after the patch;
+`govulncheck v1.8.0`, built with isolated Go 1.26.7, successfully scans the application
+under its own Go 1.25.13 toolchain and reports **0 affected vulnerabilities** (one
+imported-package and four required-module findings are not on called paths).
+[Scanner output](2026-09-12-structural-stop/evidence/logs/govulncheck-current.log).
+No finding is suppressed. Official patch reference:
+[Go vulnerability GO-2026-6218](https://pkg.go.dev/vuln/GO-2026-6218).
+
+[A] Source freshness at this continuation: remote dev still
+`e81602bb5c4bacb237ae2921e0188f8aa1d752bf`. Last-change records before correction:
+`294d7a13 security(f1): dependency vuln scan + safe bumps + CI automation + class 22`
+for go.mod; `85794a72 feat: add X-Client-ID header for claw402 monitoring` for
+Test workflow; `ae9278c5 fix(E4): the pre-existing FE test pair` for Vitest config.
+This is the environment-dependent green failure described by checklist class 110.
+
+[A] At 2026-09-13 00:00:19 CT the five-leg API gate passed: DB open 0, API positions
+0, NT8 positions 0, broker working 0 / ledger 0 / unplaced authorizations 0,
+no planner read claimed. This observation is preliminary; a fresh gate is still
+required immediately before cutover. Running revision remained `400ea26c12c8`.
