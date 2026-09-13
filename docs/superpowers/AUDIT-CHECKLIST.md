@@ -4797,3 +4797,11 @@ An `-sl` suffix bypassed type/action checks and counted a wrong-side or limit
 order as stop coverage. Exercise the production protection adjudicator with
 contradictory and missing wire fields. Missing shape is UNKNOWN, not permission
 to duplicate a possibly live stop; known contradictory shape is not coverage.
+
+## PENDING CLASS — UNKNOWN PERMISSION MUST COVER INHERITED AUTHORIZATION
+
+Branch `fix/repo-audit-control-boundaries-20260913`, base `63968be6`.
+A facts panic produced no current verdict, but old armed rows still reached
+the placement pass. Retire missing-verdict unplaced rows and stop new placement
+if that retirement cannot persist. Test actual cycle plus wire, including
+injected state-update failure; a fail-closed log is not enforcement.

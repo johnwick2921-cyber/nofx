@@ -183,3 +183,13 @@ protection, short-side and map-reference tests pass in
 `/tmp/nofx-protection-shape-after.log`; map golden/prompt tests pass in
 `/tmp/nofx-map-guard-after.log`. These are synthetic book tests, not a live
 unprotected-position incident. Final combined suite remains due.
+
+## Missing permission and inherited authorizations
+
+[A] A synthetic permission-facts panic reproduced an old authorization reaching
+the loopback wire while the cycle logged fail closed. Missing verdicts now retire
+unplaced authorizations. Retirement query/write/panic errors propagate to the
+cycle, stopping new placement. The same production-cycle test with an injected
+SQLite retirement failure sends nothing; the existing allowed-versus-declined
+scenario test still passes (`/tmp/nofx-unknown-arm-after.log`). Named system-map
+coordinates were synchronized and the map reference check passes.

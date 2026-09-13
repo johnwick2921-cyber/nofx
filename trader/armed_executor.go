@@ -371,7 +371,10 @@ func (at *AutoTrader) maybeManageArmedOrdersAt(snap map[string]kernel.StructureS
 	// THE GAP THE FIRST BOOT FOUND (owner ruling 2026-09-11): an authorization
 	// whose scenario is currently declined is retired here, before D4's slot
 	// check and before the placement pass — never placed. OFF → no-op.
-	at.oneSetupRetireDeclined(osCycle, plan, ledger, now)
+	if _, err := at.oneSetupRetireDeclined(osCycle, plan, ledger, now); err != nil {
+		at.logWarnf("🎯 one setup retirement unavailable — no new placement this cycle: %v", err)
+		return
+	}
 	for _, sc := range kernel.OneSetupOrder(doc.Scenarios, osCycle.allowed()) {
 		if sc.Arm == nil || !sc.Arm.Enabled {
 			continue
