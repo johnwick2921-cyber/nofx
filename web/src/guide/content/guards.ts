@@ -7,6 +7,7 @@ export const guards: GuideSection = {
   tagline: 'What can hard-block a trade vs what only informs.',
   asBuiltRev: GUIDE_BUILT_REV,
   blocks: [
+    { kind: 'p', text: 'Ask-Planner apply refuses when no session is active. Apply and realign follow the active session’s trading date, including an overnight session that began on the previous calendar day.' },
     { kind: 'h', text: 'Boot integrity applies to every NT8 entry' },
     { kind: 'p', text: 'Startup checks integrity before restarting saved traders. A failed check blocks market, resting-limit and stop-entry submission at the TCP adapter, including previously armed orders and test entry routes. Position reads, stop management, closes and cancellation remain available.' },
     { kind: 'h', text: 'Trader ownership and rejected changes' },

@@ -52,3 +52,13 @@ No runtime incident, exploitation, real fill, or deployment success is asserted.
   creation. Focused store tests confirm new-version and boot-sweep behavior.
 
 These changes have not been deployed. Full combined review remains pending.
+
+## Session mutation repair
+
+Ask-Planner apply now resolves a session before dereferencing it; session gaps
+return the existing stale-plan refusal. Apply and realign use the wrap-aware
+chain date already used by plan reads, so after-midnight Asia mutations address
+the previous calendar date's chain. Focused tests cover the session gap and
+overnight date plus existing ask/realign/context tests. This defect was established
+by source inspection; the new helper tests were not run against the old code.
+Atomic proposal application/version binding remain separate open findings.
