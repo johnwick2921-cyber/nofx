@@ -11,7 +11,7 @@ The owner requested a detailed, accurately traced, approximately 30-agent reposi
 - Tests, fixtures and historical non-code artifacts are inventoried; relevant ones are followed. This is **not** a claim that every test or historical artifact was manually read.
 - Go AST inventory: 1,292 files parsed, 10,269 functions/literals and 78,157 syntactic calls; zero parser errors. These are syntax inventories, **not type-resolved call edges or human reading**.
 - `orientation/` holds initial subsystem reviews with explicit read ledgers and unresolved concerns. Their findings require root/cross-review validation.
-- **28/30 scoped reviews reported**, covering all 1,049 assigned source files / 250,582 lines. Two independent cross-boundary reviews are pending.
+- **30/30 scoped reviews reported**, covering all 1,049 assigned source files / 250,582 lines. The two independent cross-boundary reviews examined repair revision `99a06543`; subsequent repairs require their own verification.
 - `review-plan.json` tracks assignments; `coverage-validation.json` checks source hashes, full line ranges, and named Go/TypeScript/JavaScript function notes. It does not certify semantic understanding or runtime behavior.
 
 ## Historical maps

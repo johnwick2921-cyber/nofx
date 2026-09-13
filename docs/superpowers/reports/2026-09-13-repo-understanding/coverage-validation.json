@@ -278,5 +278,25 @@
     "named_frontend_functions": 101,
     "missing_named_frontend_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
+  },
+  {
+    "assignment": 29,
+    "files": 0,
+    "ledger_errors": [],
+    "named_go_declarations": 0,
+    "missing_named_go_notes": [],
+    "named_frontend_functions": 0,
+    "missing_named_frontend_notes": [],
+    "warning": "Consistency only; not independent semantic or runtime verification."
+  },
+  {
+    "assignment": 30,
+    "files": 0,
+    "ledger_errors": [],
+    "named_go_declarations": 0,
+    "missing_named_go_notes": [],
+    "named_frontend_functions": 0,
+    "missing_named_frontend_notes": [],
+    "warning": "Consistency only; not independent semantic or runtime verification."
   }
 ]
