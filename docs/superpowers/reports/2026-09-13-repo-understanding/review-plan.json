@@ -8856,7 +8856,7 @@
         }
       ],
       "id": 25,
-      "status": "in_progress",
+      "status": "complete",
       "lines": 12309,
       "file_count": 54
     },
@@ -9396,7 +9396,7 @@
         }
       ],
       "id": 26,
-      "status": "in_progress",
+      "status": "complete",
       "lines": 12309,
       "file_count": 59
     },
@@ -9711,7 +9711,7 @@
         }
       ],
       "id": 28,
-      "status": "pending",
+      "status": "in_progress",
       "lines": 9472,
       "file_count": 16
     },

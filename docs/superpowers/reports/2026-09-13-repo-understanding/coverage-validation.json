@@ -182,5 +182,21 @@
     "named_go_declarations": 227,
     "missing_named_go_notes": [],
     "warning": "Consistency only; not independent semantic or runtime verification."
+  },
+  {
+    "assignment": 25,
+    "files": 54,
+    "ledger_errors": [],
+    "named_go_declarations": 0,
+    "missing_named_go_notes": [],
+    "warning": "Consistency only; not independent semantic or runtime verification."
+  },
+  {
+    "assignment": 26,
+    "files": 59,
+    "ledger_errors": [],
+    "named_go_declarations": 0,
+    "missing_named_go_notes": [],
+    "warning": "Consistency only; not independent semantic or runtime verification."
   }
 ]
