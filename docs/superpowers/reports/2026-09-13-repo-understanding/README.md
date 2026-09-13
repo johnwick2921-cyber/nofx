@@ -11,7 +11,7 @@ The owner requested a detailed, accurately traced, approximately 30-agent reposi
 - Tests, fixtures and historical non-code artifacts are inventoried; relevant ones are followed. This is **not** a claim that every test or historical artifact was manually read.
 - Go AST inventory: 1,292 files parsed, 10,269 functions/literals and 78,157 syntactic calls; zero parser errors. These are syntax inventories, **not type-resolved call edges or human reading**.
 - `orientation/` holds initial subsystem reviews with explicit read ledgers and unresolved concerns. Their findings require root/cross-review validation.
-- **20/30 scoped reviews reported**, covering 774 assigned source files / 172,278 lines. Remaining source and independent cross-boundary reviews are pending.
+- **22/30 scoped reviews reported**, covering 815 assigned source files / 186,560 lines. Remaining source and independent cross-boundary reviews are pending.
 - `review-plan.json` tracks assignments; `coverage-validation.json` checks source hashes, full line ranges, and named Go declaration notes. It does not certify semantic understanding or runtime behavior.
 
 ## Historical maps
@@ -34,3 +34,5 @@ and test limits. These changes are not deployed and do not alter owner settings.
 The first full Go suite completed with three store-test failures; all other packages passed. Corrected authorization fixtures pass focused reruns. Later account and chat repairs have focused tests; final combined verification remains pending.
 
 The latest execution limitation and exact resume queue are recorded in [CHECKPOINT.md](CHECKPOINT.md).
+
+Resumed after owner reported usage reset: structural prompt regression reproduced and fixed at repair710ea1c8; focused kernel checks passed. Second full Go run is in progress.
