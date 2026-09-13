@@ -168,3 +168,18 @@ an AI-route bypass. Reject feasibility is left to composed-geometry admission,
 not authored-price legacy warnings. Focused prompt, warning and class45 checks
 pass (`/tmp/nofx-structural-prompt-after.log`). The existing heading and historical
 reject-warning assertions were updated; legacy floor arithmetic remains tested.
+
+## Second full Go suite and protection shape
+
+[A] The full suite at710ea1c8 completed with two failing tests: the historical
+no-one-setup-reference scan and source coordinates in SYSTEM-MAP. The former now
+exempts only the AST-bounded advisory ArmFeasibilityWarnings function; the map
+golden stays byte-identical. Updated coordinates and focused guard tests pass.
+
+[A] Four protection adjudicator regressions reproduced an `-sl` name overriding
+wrong side, wrong type, missing action and missing type. Known protection now
+requires the order shape; incomplete named live stops remain UNKNOWN. Focused
+protection, short-side and map-reference tests pass in
+`/tmp/nofx-protection-shape-after.log`; map golden/prompt tests pass in
+`/tmp/nofx-map-guard-after.log`. These are synthetic book tests, not a live
+unprotected-position incident. Final combined suite remains due.

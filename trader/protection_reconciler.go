@@ -64,14 +64,10 @@ type protectionVerdict struct {
 	HaveQty int
 }
 
-// isProtectiveStopFor reports whether this order is a stop that would CLOSE a
-// position on the given side. Two independent tells, because either can be
-// absent: our own bracket naming ("<signal>-sl"), and the order's own shape (a
-// stop order acting against the position).
+// isProtectiveStopFor requires a stop order acting against the position.
+// A bracket suffix identifies intent, but cannot override contradictory type
+// or action. Missing shape is handled as unknown by adjudicateProtection.
 func isProtectiveStopFor(o nt.NT8Order, side string) bool {
-	if strings.HasSuffix(strings.ToLower(strings.TrimSpace(o.Name)), "-sl") {
-		return true
-	}
 	if !strings.Contains(strings.ToLower(o.Type), "stop") {
 		return false
 	}
@@ -112,6 +108,12 @@ func adjudicateProtection(symbol, side string, posQty int, book []nt.NT8Order, h
 	for i := range book {
 		o := book[i]
 		if !sameSymbolLoose(o.Symbol, symbol) {
+			continue
+		}
+		namedStop := strings.HasSuffix(strings.ToLower(strings.TrimSpace(o.Name)), "-sl")
+		if namedStop && (strings.TrimSpace(o.Type) == "" || strings.TrimSpace(o.Action) == "") &&
+			(o.IsLiveAtExchange() || !o.IsStateReadable()) {
+			unreadable++ // possible protection; neither coverage nor absence is proved
 			continue
 		}
 		if !isProtectiveStopFor(o, side) {

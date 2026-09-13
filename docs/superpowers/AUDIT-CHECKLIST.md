@@ -4789,3 +4789,11 @@ Reject-fade execution used frozen structural geometry while prompt facts and
 feasibility warnings still imposed the legacy ATR floor on authored prices.
 Exercise the production prompt builder and warning function; distinguish plays,
 use composed geometry for admission, and never suggest a route bypass.
+
+## PENDING CLASS — ORDER LABELS DO NOT PROVE PROTECTION
+
+Branch `fix/repo-audit-control-boundaries-20260913`, base `63968be6`.
+An `-sl` suffix bypassed type/action checks and counted a wrong-side or limit
+order as stop coverage. Exercise the production protection adjudicator with
+contradictory and missing wire fields. Missing shape is UNKNOWN, not permission
+to duplicate a possibly live stop; known contradictory shape is not coverage.
