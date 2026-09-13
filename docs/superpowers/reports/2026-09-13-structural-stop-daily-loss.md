@@ -150,3 +150,53 @@ The original release marker and Guide source are preserved separately.
 `.github/workflows/pr-go-test-coverage.yml`: `5c757a74 B6+B8: the worktree recipe pointer; the three CI setup failures fixed as MEASURED, plus the two dev-red Go tests the coverage job actually fails on`.
 
 Cutover/boot evidence is appended only after it is observed.
+
+## Observed SIM cutover
+
+[A] Under the helper-owned main-tree lock and the owner's GO plus market-closed
+exception, main fast-forwarded to release metadata `642f8808`. Fresh pre-kill
+five-leg gate: all PASS; zero positions, broker working orders, unplaced arms,
+and planner claims. Gate age at SIGKILL: **0.28807 seconds**.
+The service's `Restart=on-failure` policy was verified. Old PID 4165029 was
+signaled at **2026-09-13T01:04:11.132267-05:00**; new PID 24534 was verified at **2026-09-13T01:04:20.177698-05:00**.
+
+```text
+09-13 01:04:16 [INFO] nofx/main.go:295 🔐 BOOT INTEGRITY OK — rev 0c9d4f30a047 · built 2026-09-13T05:58:55Z · expected 0c9d4f30a047 · goldens PASS
+09-13 01:04:16 [INFO] nofx/main.go:548 🎯 stop/target: stop=zone-edge+buffer buffer=4.50[I] (p95 of measured overshoot; resolver=ResolveStructuralStop:C5_MNQ_default[I]; calibration=C5-H12-IS-6181-p95-20260912; sweep=[0.25 1.25 4.5] points[I]) · atr-fallback=0 · refused today=0 (no_target=0 net<=0=0 rr<2.00=0 no_provenance=0 other=0) · target=first-distinct-eligible-zone · never-widened=asserted · research-candidate
+```
+
+[A] Disk RELEASE, committed RELEASE, Guide source, health revision and loaded
+executable all identify `0c9d4f30a0470510a15e4aa92d7fa6ec96e9c38d`. Built, disk and loaded MD5
+are `1dba3de51d4813481546ecb933325d4c`; all **92** dist files match
+the prepared SHA-256 manifest, and the main JS asset contains the same Guide
+revision. The new boot line contains no mandatory per-trade-cap requirement.
+
+[A] Bound strategy config SHA-256 remains
+`3e63209e52f9709b6366c1e7164ecdbaea5069567c0159e98593f170b5158a51`. **$450 saved daily-loss amount,
+master guardrails OFF, daily-loss switch OFF**: unchanged by this deployment.
+The daily-trip production fixture proves the existing gate still blocks when
+tripped; it does not mean the owner's currently disabled switch is enabled.
+
+[A] The previous `4127979f` binary and dist were moved into the correction
+backup directory with the full embedded old revision in their names. The new
+binary/dist, old release/source metadata, DB backup, source bundle and evidence
+are retained for recovery. No DB setting was written.
+
+[A] The initial post-boot order leg was explicitly ledger-only while the NT8
+snapshot had not yet arrived. At **01:05:09 CT**, all five post-boot legs passed
+with a real NT8 order snapshot (age 29 seconds, AddOn build 2026-09-07-h1), zero
+broker orders, zero positions and no planner claim.
+
+[A] At 01:04:30 CT, `system_config` prefix `structural_geometry:` contains
+**0 records**, keys `[]`; this process has **0 composition lines** and **0 actual
+boot-sweep result lines**. The observed weekend gate says next open Sunday
+2026-09-13 17:00 CDT. The closed-market return precedes the arm/sweep call.
+No live composition, live refusal, or sweep cancellation count is fabricated
+from fixtures or lifetime counters. Those proofs await an open-market cycle.
+
+[A] Closeout artifacts: [boot verification](2026-09-13-structural-stop-daily-loss-evidence/boot-verification.json),
+[pre-kill gate](2026-09-13-structural-stop-daily-loss-evidence/pre-kill-gate.json),
+[post-boot gate](2026-09-13-structural-stop-daily-loss-evidence/postboot-gate.json),
+[proof status](2026-09-13-structural-stop-daily-loss-evidence/postboot-proof-status.json).
+The corrective implementation and deployment are complete; profitability and the
+first open-market composition/refusal remain separate, unproven claims.
