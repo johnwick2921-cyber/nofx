@@ -12,8 +12,12 @@ import (
 )
 
 func TestOrderedTCPEntryExitChronology(t *testing.T) {
-	for _, inverse := range []bool{false, true} {
-		t.Run(map[bool]string{false: "entry_then_exit", true: "exit_then_entry"}[inverse], func(t *testing.T) {
+	for _, tc := range []struct {
+		name                       string
+		inverse, rejected, oldFlat bool
+	}{{name: "entry_then_exit"}, {name: "exit_then_entry", inverse: true}, {name: "positive_rejected_entry", rejected: true}, {name: "old_flat_cancelled_entry", oldFlat: true}} {
+		inverse := tc.inverse
+		t.Run(tc.name, func(t *testing.T) {
 			at := class33Trader(t)
 			class33Seed(t, at, "S1", "ordered-entry", store.ProcessBootID(), store.StateWorking)
 			srv := nt.NewTCPServer(nil)
@@ -34,6 +38,12 @@ func TestOrderedTCPEntryExitChronology(t *testing.T) {
 			defer conn.Close()
 			go io.Copy(io.Discard, conn)
 			first := nt.OrderUpdatePayload{SignalID: "ordered-entry", OrderName: "ordered-entry", State: "partfilled", Quantity: 1, FillPrice: 100, Symbol: "MNQ", Account: "Sim101"}
+			if tc.rejected {
+				first.State = "rejected"
+			}
+			if tc.oldFlat {
+				first.State = "cancelled"
+			}
 			second := first
 			second.State = "filled"
 			second.Quantity = 2
@@ -58,8 +68,30 @@ func TestOrderedTCPEntryExitChronology(t *testing.T) {
 				}
 				t.Fatal("readLoop barrier timed out")
 			}
+			if tc.oldFlat {
+				write(nt.FramePositions, map[string]any{"account": "Sim101", "positions": []nt.OpenPosition{}})
+				barrier("barrier-old-flat")
+			}
 			write(nt.FrameOrderUpdate, first)
-			write(nt.FrameFill, nt.FillPayload{SignalID: first.SignalID, Symbol: first.Symbol, Account: first.Account, Side: "long", Quantity: 1, FillPrice: 100, Status: "partial"})
+			if tc.oldFlat {
+				barrier("barrier-cancelled-positive")
+				positions, err := tr.GetPositions()
+				if err == nil && len(positions) == 0 {
+					t.Fatal("pre-entry empty snapshot erased positive cancelled entry")
+				}
+			}
+			fillStatus := "partial"
+			if tc.rejected {
+				fillStatus = "rejected"
+			}
+			write(nt.FrameFill, nt.FillPayload{SignalID: first.SignalID, Symbol: first.Symbol, Account: first.Account, Side: "long", Quantity: 1, FillPrice: 100, Status: fillStatus})
+			if tc.rejected {
+				barrier("barrier-positive-reject")
+				positions, err := tr.GetPositions()
+				if err != nil || len(positions) != 1 {
+					t.Fatalf("positive rejected entry lost actual exposure: %+v %v", positions, err)
+				}
+			}
 			if inverse {
 				write(nt.FramePositionClose, close)
 				write(nt.FrameOrderUpdate, second)
@@ -116,6 +148,14 @@ func TestOrderedTCPEntryExitChronology(t *testing.T) {
 			barrier("barrier-four")
 			write(nt.FramePositions, map[string]any{"account": "Sim101", "positions": []nt.OpenPosition{}})
 			barrier("barrier-flat")
+			write(nt.FrameOrderUpdate, first)
+			write(nt.FrameOrderUpdate, second)
+			protective := second
+			protective.OrderName = first.SignalID + "-sl"
+			protective.Quantity = 9
+			write(nt.FrameOrderUpdate, protective)
+			write(nt.FrameFill, nt.FillPayload{SignalID: first.SignalID, Symbol: first.Symbol, Account: first.Account, Side: "long", Quantity: 2, FillPrice: 105, Status: "filled"})
+			barrier("barrier-replayed-after-flat")
 			positions, err := tr.GetPositions()
 			if err != nil || len(positions) != 0 {
 				t.Fatalf("final broker flat snapshot: %+v %v", positions, err)

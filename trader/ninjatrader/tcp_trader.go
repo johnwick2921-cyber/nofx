@@ -12,6 +12,7 @@ package ninjatrader
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 	"strings"
 	"sync"
@@ -55,6 +56,8 @@ type TCPTrader struct {
 	rejectSink       func(signalID, brokerReason string)
 	lastFill         ntwire.FillPayload
 	hasFill          bool
+	entryReceivedAt  time.Time
+	entryObservedQty map[string]int
 	positionsAfterMs int64 // local exit receipt fence; restored from durable receipts
 
 	// recentFills is a bounded ring of the last confirmed fills (class 27,
@@ -219,10 +222,45 @@ func (t *TCPTrader) handleFill(fill ntwire.FillPayload) {
 		}
 		return
 	}
-	// C8 (2026-08-25) — a REJECTED entry must never become the
-	// fill-derived position (the phantom-position class). NT8 truth: NO
-	// position exists. Drop the pending marker, clear any cached fill for
-	// that signal, and alarm.
+	// Legacy pre-submit C# guards echo REQUESTED size, zero price and no
+	// account. This is a refusal receipt, not cumulative executed evidence.
+	if strings.EqualFold(fill.Status, "rejected") && fill.Quantity > 0 && fill.Account == "" && fill.FillPrice == 0 {
+		t.pendingMu.Lock()
+		delete(t.pending, fill.SignalID)
+		delete(t.pendingAt, fill.SignalID)
+		t.pendingMu.Unlock()
+		t.notifyReject(fill.SignalID, fill.Reason)
+		logger.Warnf("NT pre-submit entry refused signal=%s requested=%d reason=%q; existing exposure cache retained", fill.SignalID, fill.Quantity, fill.Reason)
+		return
+	}
+	if fill.Quantity > 0 && (strings.EqualFold(fill.Status, "filled") || strings.EqualFold(fill.Status, "partial") || strings.EqualFold(fill.Status, "rejected")) {
+		t.noteEntrySnapshotFence(fill.SignalID, fill.Quantity)
+	}
+	if strings.EqualFold(fill.Status, "rejected") && fill.Quantity < 0 {
+		logger.Warnf("NT rejected fill has invalid negative quantity; preserving pending/exposure")
+		return
+	}
+	if strings.EqualFold(fill.Status, "rejected") && fill.Quantity > 0 {
+		if fill.FillPrice <= 0 || math.IsNaN(fill.FillPrice) || math.IsInf(fill.FillPrice, 0) {
+			logger.Warnf("NT entry remainder rejected with positive quantity but unknown basis; preserving pending/exposure signal=%s qty=%d", fill.SignalID, fill.Quantity)
+			return
+		}
+		t.mu.Lock()
+		older := t.hasFill && t.lastFill.SignalID == fill.SignalID && t.lastFill.Quantity > fill.Quantity
+		t.mu.Unlock()
+		if older {
+			t.pendingMu.Lock()
+			delete(t.pending, fill.SignalID)
+			delete(t.pendingAt, fill.SignalID)
+			t.pendingMu.Unlock()
+			logger.Warnf("NT entry remainder rejection older than known execution; preserving exposure signal=%s", fill.SignalID)
+			return
+		}
+		logger.Warnf("NT entry remainder rejected after execution: signal=%s filled=%d reason=%q; preserving executed exposure", fill.SignalID, fill.Quantity, fill.Reason)
+		fill.Status = "partial"
+	}
+	// A zero-execution rejection settles pending submission and alarms.
+	// It cannot negate positive execution already observed for the signal.
 	if strings.EqualFold(fill.Status, "rejected") {
 		t.pendingMu.Lock()
 		if fill.SignalID != "" {
@@ -231,11 +269,12 @@ func (t *TCPTrader) handleFill(fill ntwire.FillPayload) {
 		}
 		t.pendingMu.Unlock()
 		t.mu.Lock()
-		if t.lastFill.SignalID == fill.SignalID {
+		knownExecuted := t.hasFill && t.lastFill.SignalID == fill.SignalID && t.lastFill.Quantity > 0
+		if t.lastFill.SignalID == fill.SignalID && !knownExecuted {
 			t.lastFill = ntwire.FillPayload{}
 			t.hasFill = false
 		}
-		if t.lastEntrySignalID == fill.SignalID {
+		if t.lastEntrySignalID == fill.SignalID && !knownExecuted {
 			t.lastEntrySignalID = ""
 		}
 		tid := t.traderID
@@ -245,11 +284,12 @@ func (t *TCPTrader) handleFill(fill ntwire.FillPayload) {
 		if strings.TrimSpace(reason) == "" {
 			reason = store.PlacementReasonUnavailable
 		}
-		logger.Errorf("🚨 C8 ENTRY REJECTED by NT8: %s %s qty=%d signal_id=%s reason=%q — no position exists; pending entry dropped (no phantom).",
+		logger.Errorf("🚨 C8 ENTRY REJECTED by NT8: %s %s qty=%d signal_id=%s reason=%q — pending entry settled; any known executed exposure retained.",
 			fill.Symbol, fill.Side, fill.Quantity, fill.SignalID, reason)
 		telemetry.RecordError(tid, "nt_entry_rejected", fmt.Sprintf("%s %s rejected (signal %s)", fill.Symbol, fill.Side, fill.SignalID), telemetry.CostNone)
 		return
 	}
+	executionFill := fill // preserve actual execution evidence before residual cache normalization
 	// Wire replay is fresh fanout but not fresh exposure. A completed exact
 	// entry already fully exited must not restore its old fill cache.
 	t.mu.Lock()
@@ -265,6 +305,10 @@ func (t *TCPTrader) handleFill(fill ntwire.FillPayload) {
 		if len(rows) == 1 && rows[0].Status == "CLOSED" && float64(fill.Quantity) <= rows[0].EntryQuantity {
 			return
 		}
+		if len(rows) == 1 && rows[0].Status == "OPEN" && float64(fill.Quantity) <= rows[0].EntryQuantity {
+			fill.Quantity = int(rows[0].Quantity)
+			fill.FillPrice = rows[0].EntryPrice
+		}
 	}
 	// A CONFIRMED fill resolves its pending entry marker.
 	t.pendingMu.Lock()
@@ -279,7 +323,7 @@ func (t *TCPTrader) handleFill(fill ntwire.FillPayload) {
 	// Class 27 (2026-08-31): retain confirmed fills in the netting ring
 	// so reconcile can reconstruct a netting-close's real exit price.
 	if strings.EqualFold(fill.Status, "filled") || strings.EqualFold(fill.Status, "partial") {
-		t.recordRecentFill(fill)
+		t.recordRecentFill(executionFill)
 	}
 	t.mu.Unlock()
 }
@@ -1004,6 +1048,7 @@ func (t *TCPTrader) GetPositions() ([]map[string]interface{}, error) {
 func (t *TCPTrader) positionsAfterExit() ([]ntwire.OpenPosition, bool, error) {
 	t.mu.Lock()
 	after := t.positionsAfterMs
+	entryAfter := t.entryReceivedAt
 	t.mu.Unlock()
 	if t.server == nil {
 		if after > 0 {
@@ -1017,6 +1062,9 @@ func (t *TCPTrader) positionsAfterExit() ([]ntwire.OpenPosition, bool, error) {
 	}
 	if after > 0 && (!ok || received.UnixMilli() <= after) {
 		return nil, false, fmt.Errorf("NT8 account positions unverified after exit: need a fresh post-receipt account snapshot")
+	}
+	if ok && !entryAfter.IsZero() && !received.After(entryAfter) {
+		return nil, false, fmt.Errorf("NT8 account positions unverified after entry: need a fresh post-entry account snapshot")
 	}
 	return positions, ok, nil
 }
