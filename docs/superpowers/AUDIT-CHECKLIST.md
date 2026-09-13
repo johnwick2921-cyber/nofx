@@ -4882,4 +4882,6 @@ callback interleaved with atomic exit receipt application: preserve residual
 quantity, incremental cost basis and accumulated realized P&L. Deduplicate with
 actual broker identity, retain unknown cumulative notional as NULL, and refuse
 ambiguous ownership. A closed owned row does not prove its entire account flat.
-Cancelled partially filled exit orders remain a separate wire coverage limit.
+Terminal cancelled/rejected exits must report their valid cumulative fills too;
+transient PartFilled must not be charged again on terminal receipt. Verify that
+rejection alarms preserve actual remaining protection.

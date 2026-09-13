@@ -7,6 +7,7 @@ export const status: GuideSection = {
   tagline: 'Every indicator strip, banner, and log line — decoded.',
   asBuiltRev: GUIDE_BUILT_REV,
   blocks: [
+    { kind: 'p', text: 'If an open-order refresh fails, the chart marks the result UNKNOWN and keeps only a prior snapshot from the same view as stale. A successful empty response clears it. The open-order endpoint uses the trader-bound account; selecting another dashboard account does not change that endpoint, and the chart labels this scope.' },
     { kind: 'h', text: 'Scenario activation and order authorization' },
     {
       kind: 'p',

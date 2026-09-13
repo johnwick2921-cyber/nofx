@@ -291,7 +291,8 @@ recorded in `dependency-alerts-at-review.jsonl` (not inferred from the push bann
 Go gnark-crypto0.19.0 is replaced by advisory-patched0.19.2 for GHSA-fj2x-735w-74vq.
 Only that module version and sums changed. Wallet package builds (no tests); mcp
 package tests pass (`/tmp/nofx-gnark-compatibility.log`). Four compatible npm
-updates are being handled in the frontend lane. This establishes affected
+updates are integrated in f5409132; their private updated install and combined
+frontend suite are recorded in the web repair report. This establishes affected
 versions, not exploitation or reachability in MNQ trading. Default-branch alert
 closure requires publication/scanning and is not claimed from a local update.
 
@@ -305,3 +306,23 @@ the known prior-week high, low and close. Focused weekly tests pass in
 `/tmp/nofx-weekly-calendar-before.log`. This fixes the active weekly reader. The old mid-week watch was removed
 from the loop; its legacy same-resolver fixture is not production parity proof. Generic epoch aggregation for other consumers and the information
 limits of daily bars for intraday weekend-gap timing remain separate issues.
+
+## Subsequent independent boundary repairs
+
+[A] a982cc74 adds atomic residual/receipt accounting and cumulative entry
+notional. d3e4638e retires a replaced reconciliation observer after its old close
+subscription drains; ordinary Stop retains protection observers. c20d0a82
+preserves valid currently excessive exits as pending and makes absent/old first
+account snapshots unknown rather than flat. A separate actual callback replay
+proved entry/exit consumers can reorder; its ordered-processing repair remains
+pending final integration and is a deployment blocker until verified.
+
+[A] 3f21431a emits valid cumulative EXIT fills on terminal cancellation/rejection
+as well as Filled. Transient PartFilled is not an additional charged receipt.
+89 extracted C# harness assertions and five-source reference compile passed;
+see the terminal-exit report. Installed NT8 callback behavior remains unverified.
+
+[A] dd11670b retains same-view order snapshots as visibly stale/UNKNOWN on refresh
+failure, ignores late account-view responses and states the endpoint's trader-bound
+account scope. Existing account names are read-only because backend rename and
+binding migration are not implemented. Creation and saved owner bindings are unchanged.
