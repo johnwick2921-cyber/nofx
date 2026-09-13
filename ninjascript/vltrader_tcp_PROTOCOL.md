@@ -473,3 +473,9 @@ an NT8 rejection or silently re-authorized as another placement.
 A completed exit receipt does not prove the account flat. Account positions must be an explicit array (including `[]` for known empty), received after the exit receipt and within the freshness window before another entry is admitted. Absent/null positions are unavailable, not empty.
 
 Terminal exit extension: `position_close` is emitted for Filled, Cancelled or Rejected EXIT orders only when cumulative filled quantity and average execution price are positive and finite. A zero-fill cancellation/rejection emits no close; transient PartFilled emits no close, so its cumulative amount is not counted twice when terminal evidence arrives. A rejected exit can emit both the actual-fill receipt and the rejection alarm. Neither message proves the whole account flat; residual positions require broker snapshots and keep their existing bracket protection. Repeated terminal evidence uses the same `exit_order_id` and is deduplicated by Go. Changed cumulative quantity after an already-applied terminal receipt remains a conflicting-evidence error requiring reconciliation; this is not a per-execution incremental stream.
+
+Source candidate build ID: `2026-09-13-execution-evidence`. This distinguishes
+the additive exit-order identity and terminal cumulative execution behavior from
+`2026-09-07-h1`. Protocol version stays3 (additive field). This is source metadata,
+not evidence that an installed NT8 process runs it; verify its received heartbeat
+after a separately authorized copy/compile/full restart.
