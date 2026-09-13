@@ -10,11 +10,8 @@ Penetration is the maximum excursion beyond the entry zone's far edge, from the 
 
 | Held-event population | n | Median points | p75 | p90 | p95 |
 |---|---:|---:|---:|---:|---:|
-
 | All periods | 8,041 | 0.0000 | 0.0000 | 1.2500 | 4.7500 |
-
 | Before 2025-09-12 | 6,181 | 0.0000 | 0.0000 | 1.2500 | 4.3676 |
-
 | 2025-09-12 onward, previously exposed | 1,860 | 0.0000 | 0.0000 | 1.5000 | 6.5125 |
 
 [I] **Default buffer: 4.50 points**, the training sample's p95 of 4.3675648248 points rounded outward to the 0.25-point MNQ tick. This percentile was chosen before the profit sweep to cover more of the observed held-event penetration tail. It is a tolerance hypothesis, not the profit-maximizing cell and not a validated universal buffer. The resolver records `C5-H12-IS-6181-p95-20260912` and the source on each composition.
@@ -25,25 +22,15 @@ The following are descriptive all-period splits, not separate fitted defaults. E
 
 | Group | n held | Penetration, points | Fraction of zone width | Fraction of ATR5m |
 |---|---:|---|---|---|
-
 | tf= (TF missing) | 7,235 | [0.0000, 0.0000, 1.2500, 4.5000] | [0.0000, 0.0000, 0.1345, 0.4419] | [0.0000, 0.0000, 0.1066, 0.3336] |
-
 | tf=5m | 420 | [0.0000, 0.0000, 2.6310, 6.9084] | [0.0000, 0.0000, 0.3177, 0.7445] | [0.0000, 0.0000, 0.2460, 0.6009] |
-
 | tf=15m | 386 | [0.0000, 0.0000, 0.9578, 3.3347] | [0.0000, 0.0000, 0.0933, 0.3653] | [0.0000, 0.0000, 0.0857, 0.3101] |
-
 | families=1 | 2,387 | [0.0000, 0.0000, 1.0510, 3.5000] | [0.0000, 0.0000, 0.1429, 0.4625] | [0.0000, 0.0000, 0.1043, 0.3337] |
-
 | families=2 | 4,181 | [0.0000, 0.0000, 1.2500, 4.5615] | [0.0000, 0.0000, 0.1340, 0.4408] | [0.0000, 0.0000, 0.1106, 0.3409] |
-
 | families=3 | 1,472 | [0.0000, 0.0000, 1.7500, 7.0483] | [0.0000, 0.0000, 0.1477, 0.4467] | [0.0000, 0.0000, 0.1336, 0.3710] |
-
 | families=4 | 1 | [0.0000, 0.0000, 0.0000, 0.0000] | [0.0000, 0.0000, 0.0000, 0.0000] | [0.0000, 0.0000, 0.0000, 0.0000] |
-
 | session=LONDON | 2,892 | [0.0000, 0.0000, 0.5000, 1.8791] | [0.0000, 0.0000, 0.0689, 0.3027] | [0.0000, 0.0000, 0.0612, 0.2386] |
-
 | session=NY | 2,310 | [0.0000, 0.0000, 6.0000, 10.0000] | [0.0000, 0.0000, 0.4960, 0.8310] | [0.0000, 0.0000, 0.3906, 0.6252] |
-
 | session=ASIA | 2,839 | [0.0000, 0.0000, 0.0000, 0.7500] | [0.0000, 0.0000, 0.0000, 0.0591] | [0.0000, 0.0000, 0.0000, 0.0548] |
 
 [B] Session heterogeneity matters: NY's all-period p95 is 10 points, compared with 0.75 in Asia. The pooled 4.50-point default must not be described as a validated NY noise allowance. No session-specific buffer was selected after inspecting profits in this wave. [C5 reproduction check](2026-09-12-structural-stop/evidence/logs/c5-parity.log) independently matches all stored held-event values and summary quantiles against the frozen event cache.
@@ -151,17 +138,11 @@ A = actual anchor-touch proxy; B = through-tick proxy; C = A with adverse entry 
 
 | Period | Geometry | A | B | C |
 |---|---|---:|---:|---:|
-
 | all | legacy_corrected | -5.0105 (3,815) | -5.3643 (3,612) | -5.2605 (3,815) |
-
 | all | p95 | -2.6039 (207) | -3.0817 (202) | -2.8539 (207) |
-
 | in_sample | legacy_corrected | -4.4334 (2,892) | -4.7517 (2,726) | -4.6834 (2,892) |
-
 | in_sample | p95 | -2.9293 (152) | -3.3666 (148) | -3.1793 (152) |
-
 | held_out | legacy_corrected | -6.8188 (923) | -7.2489 (886) | -7.0688 (923) |
-
 | held_out | p95 | -1.7045 (55) | -2.3009 (54) | -1.9545 (55) |
 
 [B] The structural candidate loses less per selected fill in this comparison, but it selects a different set of fills. That does not establish a paired policy improvement or positive expectancy. **Default p95 remains negative in every primary fill model in training and the exposed last year.**
@@ -174,55 +155,36 @@ The OHLC uncertainty is material. For all-period p95 A, **126/207 fills** have u
 
 | Period | Buffer points | A | B | C |
 |---|---:|---:|---:|---:|
-
 | all | .25 | -2.5709 (737) | -2.8827 (701) | -2.8209 (737) |
-
 | all | 1.25 | -2.9636 (515) | -3.3432 (496) | -3.2136 (515) |
-
 | all | 4.50 | -2.6039 (207) | -3.0817 (202) | -2.8539 (207) |
-
 | in_sample | .25 | -2.5583 (583) | -2.8739 (553) | -2.8083 (583) |
-
 | in_sample | 1.25 | -2.8741 (397) | -3.2434 (381) | -3.1241 (397) |
-
 | in_sample | 4.50 | -2.9293 (152) | -3.3666 (148) | -3.1793 (152) |
-
 | held_out | .25 | -2.6185 (154) | -2.9155 (148) | -2.8685 (154) |
-
 | held_out | 1.25 | -3.2648 (118) | -3.6739 (115) | -3.5148 (118) |
-
 | held_out | 4.50 | -1.7045 (55) | -2.3009 (54) | -1.9545 (55) |
+
+Summary across the nine candidate cells in each period:
 
 | Period | Positive candidate cells / 9 | Median mean | Best mean | Worst mean |
 |---|---:|---:|---:|---:|
-
 | all | 0/9 | -2.8827 | -2.5709 | -3.3432 |
-
 | in_sample | 0/9 | -2.9293 | -2.5583 | -3.3666 |
-
 | held_out | 0/9 | -2.8685 | -1.7045 | -3.6739 |
 
 [T] Multiplicity treatment: common circular moving-block resamples of **five observed CME days**, **4,000 draws**, seed **20260912**. Basic centered-bootstrap **95% two-sided Bonferroni simultaneous bounds** use tail probability `0.025/9`, with the three buffers × three fill models as the candidate family. The legacy control is not a tenth selectable candidate. Period splits are descriptive and evaluated separately; this is not a simultaneous claim across all later research rounds. Dependence beyond five observed days and extreme tails can weaken this approximation. No individual-trade symmetry/sign-flipping assumption is used.
 
 | All-period candidate | Fill | n / distinct days | Conservative mean | Simultaneous lower | Simultaneous upper | Favorable bar-model bound |
 |---|---|---:|---:|---:|---:|---:|
-
 | p50_p75_tick_floor | A_touch | 737 / 490 | -2.5709 | -3.4798 | -1.6738 | 7.4790 |
-
 | p50_p75_tick_floor | B_through | 701 / 478 | -2.8827 | -3.7629 | -2.0005 | 7.4643 |
-
 | p50_p75_tick_floor | C_adverse_tick | 737 / 490 | -2.8209 | -3.7298 | -1.9238 | 7.2290 |
-
 | p90 | A_touch | 515 / 366 | -2.9636 | -4.2204 | -1.7658 | 8.4102 |
-
 | p90 | B_through | 496 / 360 | -3.3432 | -4.5641 | -2.2125 | 8.3327 |
-
 | p90 | C_adverse_tick | 515 / 366 | -3.2136 | -4.4704 | -2.0158 | 8.1602 |
-
 | p95 | A_touch | 207 / 164 | -2.6039 | -5.5682 | 0.2896 | 11.4903 |
-
 | p95 | B_through | 202 / 161 | -3.0817 | -5.9188 | -0.3747 | 11.2698 |
-
 | p95 | C_adverse_tick | 207 / 164 | -2.8539 | -5.8182 | 0.0396 | 11.2403 |
 
 These confidence limits concern sampling uncertainty **conditional on the conservative model**. They do not remove fill-model uncertainty. No candidate has a positive lower bound. The default p95 A/C upper bounds still cross zero; the full family therefore does not meet a strong statistical “all policies negative” kill criterion even before considering favorable path bounds. Full era/cell statistics, reasons, IDs and adjusted one-sided p-values: [complete surface](2026-09-12-structural-stop/evidence/e-complete-surface.json); [reproducer](2026-09-12-structural-stop/harness/summarize.py).
@@ -231,11 +193,8 @@ These confidence limits concern sampling uncertainty **conditional on the conser
 
 | Buffer | Geometry eligible / 11,302 | Geometry refusal rate | A fills / all opportunities | B fills / all opportunities |
 |---|---:|---:|---:|---:|
-
 | .25 | 2,656 (23.50%) | 76.50% | 737 (6.52%) | 701 (6.20%) |
-
 | 1.25 | 1,853 (16.40%) | 83.60% | 515 (4.56%) | 496 (4.39%) |
-
 | 4.50 | 721 (6.38%) | 93.62% | 207 (1.83%) | 202 (1.79%) |
 
 [A] At p95, **10,310** opportunities fail R:R and **271** fail nonpositive net target gain; **721** clear geometry. Of those, A/C fill **207** and leave **514** unfilled; B fills **202** and leaves **519** unfilled in the first-touch opportunity minute. These are exact reason partitions, not inferred zero counters. IDs are in the opportunity/trade CSVs.
@@ -248,17 +207,11 @@ These confidence limits concern sampling uncertainty **conditional on the conser
 
 | Period, NY only, p95 | Fill | Fills | Mean net points | Closed-trade max drawdown points |
 |---|---|---:|---:|---:|
-
 | all | A_touch | 116 | -1.2586 | 228.0000 |
-
 | all | B_through | 112 | -1.8527 | 259.0000 |
-
 | all | C_adverse_tick | 116 | -1.5086 | 252.0000 |
-
 | held_out | A_touch | 25 | 0.8500 | 63.5000 |
-
 | held_out | B_through | 24 | -0.3854 | 63.5000 |
-
 | held_out | C_adverse_tick | 25 | 0.6000 | 65.2500 |
 
 The exposed-year NY subset contains only 24–25 fills; its positive A/C averages are not promotion evidence. Every selected occupancy ID is recorded in the complete surface. All-session diagnostics are provided there separately.
@@ -293,7 +246,7 @@ Eight required mutations plus the additional retirement-failure bypass mutation 
 | F5 widen | `stop -= tick` after composition | KILLED |
 | F5 tighten | `stop += tick` after composition | KILLED |
 | F5 move target | `target += 100` after target selection | KILLED |
-| F4 retirement failure | bypass `!saved || !retired` guard | KILLED |
+| F4 retirement failure | bypass the persistence/retirement failure guard | KILLED |
 
 Exact changed lines, build confirmation and failed test names are in [mutation logs](2026-09-12-structural-stop/evidence/logs/). All source mutations were restored. A sandbox VCS-status failure before the first mutant run was retried with appropriate build access; it is not counted as a mutation result.
 
