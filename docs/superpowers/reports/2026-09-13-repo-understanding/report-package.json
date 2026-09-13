@@ -9,7 +9,7 @@
     "CTO-TRADING-LOGIC.md": "d5caba1be918b691a0471b9e2d6197658359a4b9d5622614bdca0914d628abdd",
     "REPAIR-STATUS.md": "8e8ad62e4ac3de6cd511986ad4ea89442a9af13ae67fe930cb2d83c6c436bcd6",
     "CORE-TRACE.md": "ace37c8ad336239b458508dcac6723d6bec457a9bf98dc482d7bd20c7bb10b23",
-    "CHECKPOINT.md": "eee6bab0711c0d411792342def6b8e0eae54b1f7c23f6e45f8c3993a85e0a58f",
+    "CHECKPOINT.md": "9335a1651200004831075c87da417f67f32009fbe4080b792cf3f89087e92084",
     "reviews/01/report.md": "16269caf522e419f5d7bf146deb04e1aa0624f0a8e7a82ae58d54c7b696f204a",
     "reviews/02/report.md": "deac73039d76150288094bb43c262cc99f0e4e54e8063995fdcb02b0d3d3308a",
     "reviews/03/report.md": "39a57f6015d4c92533031d9f9363bed64e51d34a6f202c372ace1c5a32eaad1e",
@@ -43,14 +43,14 @@
   },
   "outputs": {
     "CTO-REPORT.md": {
-      "bytes": 51013,
-      "words_whitespace": 5990,
-      "sha256": "f2a9c1704fcdabfe8a86f5773b5c98c2ac6e52bbbc5244c9f46958e4e3246c0f"
+      "bytes": 51914,
+      "words_whitespace": 6088,
+      "sha256": "320360d0853c143fb4cad03a3ac16110c2f0f2132d172fb12abd3c1d02d605a3"
     },
     "FULL-AUDIT.md": {
-      "bytes": 778768,
-      "words_whitespace": 92683,
-      "sha256": "b50c7c01c94d19241639f4f08c9ac7c8e0a1e9bb9c15db86dcb63da113a7b55c"
+      "bytes": 779669,
+      "words_whitespace": 92781,
+      "sha256": "186c3a486ea7da7b0660b64d5931361da2944bd2a3485627dedbd37c9aca5a3d"
     }
   }
 }
