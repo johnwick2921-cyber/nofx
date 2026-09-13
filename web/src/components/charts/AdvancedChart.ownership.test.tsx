@@ -2,6 +2,8 @@ import { act, render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { AdvancedChart } from './AdvancedChart'
 const state = vi.hoisted(() => ({
+  line: vi.fn(),
+  removeLine: vi.fn(),
   candles: vi.fn(),
   attach: vi.fn(),
   request: vi.fn(),
@@ -29,8 +31,8 @@ vi.mock('lightweight-charts', () => ({
       priceScale: () => ({ applyOptions: vi.fn() }),
       attachPrimitive: state.attach,
       detachPrimitive: vi.fn(),
-      createPriceLine: vi.fn(),
-      removePriceLine: vi.fn(),
+      createPriceLine: state.line,
+      removePriceLine: state.removeLine,
     }),
     applyOptions: vi.fn(),
     remove: state.remove,
@@ -53,6 +55,8 @@ const bars = (price: number) => ({
   ],
 })
 beforeEach(() => {
+  state.line.mockReset().mockReturnValue({})
+  state.removeLine.mockReset()
   state.candles.mockReset()
   state.attach.mockReset()
   state.request.mockReset()
@@ -67,6 +71,7 @@ beforeEach(() => {
   vi.spyOn(console, 'log').mockImplementation(() => {})
 })
 afterEach(() => {
+  vi.useRealTimers()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
 })
@@ -121,4 +126,100 @@ it('does not reattach SVP after it was toggled off while loading', async () => {
   fireEvent.click(screen.getByText('SVP'))
   await act(async () => resolve({ success: true, data: { bins: [] } }))
   expect(state.attach).not.toHaveBeenCalled()
+})
+
+it('retains a snapshot on failure, clears on confirmed empty, and resets account scope', async () => {
+  vi.useFakeTimers()
+  let orders: unknown = {
+    success: true,
+    data: [
+      {
+        type: 'LIMIT',
+        status: 'NEW',
+        price: 200,
+        stop_price: 190,
+        quantity: 1,
+        side: 'BUY',
+      },
+    ],
+  }
+  state.request.mockImplementation((url: string) =>
+    Promise.resolve(
+      url.includes('/open-orders?') ? orders : { success: true, data: [] }
+    )
+  )
+  const { rerender } = render(
+    <AdvancedChart symbol="MNQ" traderID="trader" selectedAccount="SimA" />
+  )
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1000)
+  })
+  expect(state.line).toHaveBeenCalledOnce()
+  orders = { success: false, error: 'offline' }
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(60000)
+  })
+  expect(state.removeLine).not.toHaveBeenCalled()
+  expect(screen.getByRole('status').textContent).toContain(
+    'UNKNOWN — refresh failed'
+  )
+  expect(screen.getByRole('status').textContent).toContain(
+    'retained; lines may be stale'
+  )
+  orders = { success: true, data: { error: 'malformed response' } }
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(60000)
+  })
+  expect(state.removeLine).not.toHaveBeenCalled()
+  expect(screen.getByRole('status').textContent).toContain(
+    'UNKNOWN — refresh failed'
+  )
+  orders = { success: true, data: [] }
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(60000)
+  })
+  expect(state.removeLine).toHaveBeenCalledOnce()
+  expect(screen.getByRole('status').textContent).toContain('0 orders')
+  orders = { success: false }
+  rerender(
+    <AdvancedChart symbol="MNQ" traderID="trader" selectedAccount="SimB" />
+  )
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1000)
+  })
+  expect(screen.getByRole('status').textContent).toContain(
+    'UNKNOWN — refresh failed'
+  )
+  expect(screen.getByRole('status').textContent).not.toContain('retained')
+  expect(screen.getByRole('status').textContent).toContain(
+    'SimB is not applied'
+  )
+})
+it('discards a pending order result after changing the selected account', async () => {
+  vi.useFakeTimers()
+  let finish!: (value: unknown) => void
+  state.request.mockImplementation((url: string) =>
+    url.includes('/open-orders?')
+      ? new Promise((resolve) => {
+          finish = resolve
+        })
+      : Promise.resolve({ success: true, data: [] })
+  )
+  const { rerender } = render(
+    <AdvancedChart symbol="MNQ" traderID="trader" selectedAccount="SimA" />
+  )
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(1000)
+  })
+  rerender(
+    <AdvancedChart symbol="MNQ" traderID="trader" selectedAccount="SimB" />
+  )
+  await act(async () =>
+    finish({
+      success: true,
+      data: [{ type: 'LIMIT', price: 200, stop_price: 190, quantity: 1 }],
+    })
+  )
+  expect(state.line).not.toHaveBeenCalled()
+  expect(screen.getByRole('status').textContent).toContain('awaiting snapshot')
 })

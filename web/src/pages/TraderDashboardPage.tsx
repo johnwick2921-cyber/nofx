@@ -830,6 +830,7 @@ export function TraderDashboardPage({
             style={{ animationDelay: '0.1s' }}
           >
             <ChartTabs
+              selectedAccount={selectedAccount}
               marketOnly
               traderId={selectedTrader.trader_id}
               selectedSymbol={selectedChartSymbol}
