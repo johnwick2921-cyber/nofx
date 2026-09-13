@@ -59,7 +59,7 @@ const dayPlan: KnobSpec[] = [
     where: 'Strategy → Day Plan → slider 0.1–3.0',
     what: 'The day-trade band around price that seats levels in the card (±K × the daily-range proxy, ~±300pt × K on MNQ).',
     trader:
-      'Higher = tighter card; lower = wider card. Far levels still feed the bias-tree anchors even when unseated.',
+      'Higher = wider candidate band; lower = tighter band. Far levels still feed the bias-tree anchors even when unseated.',
     consumer:
       'kernel/levels_score.go:389 (ScoreLevels proximityK) · trader/auto_trader_planconfig.go:47',
     range: '0.1 – 3.0 (× daily-range proxy, clamped)',

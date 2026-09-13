@@ -273,3 +273,13 @@ fence, so an unseen broker replacement remains a limitation. Ordinary Stop
 retains broker observers intentionally: held positions still need reconciliation.
 Final observer disposal requires a safe handoff/removal design, not blindly
 killing protection/close listeners when entry scheduling stops.
+
+## Guide contradictions removed
+
+[A] Updated existing guide paragraphs, not only added newer notes: shared Studio
+R:R replaces obsolete ARM_MIN_RR prose; reject stops are explicitly exempt from
+legacy ATR-floor wording; current One Setup permission consumption replaces the
+obsolete claim that exclusions can never refuse; proximity slider direction now
+matches `band = proximityK * dATR`. Historical exit-posture example is labelled
+legacy and points readers to resolved current boot evidence. These are source
+consistency corrections, not changes to the owner's saved values.
