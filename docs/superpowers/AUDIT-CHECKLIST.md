@@ -4816,3 +4816,11 @@ Branch `fix/repo-audit-control-boundaries-20260913`, base `63968be6`.
 Frozen-bar dedup skipped session/news retirement when local positions were flat,
 leaving unfilled authorizations alive. Exercise tickOnce with unchanged bars,
 a past cutoff and an armed row. Cutoff work precedes bar cadence and AI skips.
+
+## PENDING CLASS — OWNED CONTAINER DOES NOT AUTHORIZE CHILD ID
+
+Branch `fix/repo-audit-control-boundaries-20260913`, base `63968be6`.
+An owned trader selected a shared store whose fill query accepted an arbitrary
+order ID. Scope both parent order and fill rows to the authenticated trader.
+Test a foreign order and an inconsistent foreign fill attached to an owned order.
+History reads must not depend on a running execution instance.

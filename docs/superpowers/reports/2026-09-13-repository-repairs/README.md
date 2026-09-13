@@ -212,3 +212,14 @@ cadence skips, using the tick clock. The regression and existing class32
 wall-clock scheduling/EOD/T1 tests pass (`/tmp/nofx-wallclock-retire-after.log`).
 The test uses an unconnected synthetic SIM adapter and temporary ledger; it
 does not claim a real resting broker order was cancelled.
+
+## Order-fill ownership
+
+[A] Source inspection found the authenticated order-fill handler calling a
+shared-store query by order ID alone. The repaired path verifies order ownership
+and filters fill ownership, and reads history without a running engine. The
+production-router fixture covers own order, foreign order and an inconsistent
+foreign fill attached to an owned order; all pass. Before repair the fixture
+failed because the stopped owned trader was unavailable, so that before run
+does not itself reproduce a foreign-data disclosure. No real records were read.
+Logs: `/tmp/nofx-order-fills-before.log`, `/tmp/nofx-order-fills-after.log`.
