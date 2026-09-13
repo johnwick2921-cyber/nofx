@@ -231,6 +231,9 @@ func (s *Store) initTables() error {
 	if err := s.Plan().MigrateLifecycleLog(); err != nil {
 		return fmt.Errorf("failed to initialize plan_lifecycle_log table: %w", err)
 	}
+	if err := s.gdb.AutoMigrate(&NT8ExitReceipt{}); err != nil {
+		return fmt.Errorf("failed to initialize nt8_exit_receipts table: %w", err)
+	}
 	if err := s.NT8OrderSnapshots().Migrate(); err != nil {
 		return fmt.Errorf("failed to initialize nt8_order_snapshots table: %w", err)
 	}

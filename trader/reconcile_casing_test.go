@@ -13,11 +13,23 @@ func TestNtHeldPosition_NormalizesUppercaseNT8SideToLower(t *testing.T) {
 	}}
 	at := &AutoTrader{trader: m}
 
-	if got := at.ntHeldPosition("MNQ"); got != "long" {
+	if got, err := at.ntHeldPosition("MNQ"); err != nil || got != "long" {
 		t.Fatalf("ntHeldPosition(MNQ) = %q, want \"long\" (uppercase NT8 side must normalize so reconcile routes to CloseLong)", got)
 	}
 	// No matching symbol → flat.
-	if got := at.ntHeldPosition("ES"); got != "" {
+	if got, err := at.ntHeldPosition("ES"); err != nil || got != "" {
 		t.Fatalf("ntHeldPosition(ES) = %q, want \"\" (flat)", got)
+	}
+}
+
+func TestNtHeldPositionPreservesSignedShortAndRefusesMissingQuantity(t *testing.T) {
+	m := &MockTrader{positions: []map[string]interface{}{{"symbol": "MNQ", "side": "SHORT", "positionAmt": -1.0}}}
+	at := &AutoTrader{trader: m}
+	if side, err := at.ntHeldPosition("MNQ"); err != nil || side != "short" {
+		t.Fatalf("short became flat: %s %v", side, err)
+	}
+	m.positions = []map[string]interface{}{{"symbol": "MNQ", "side": "LONG"}}
+	if _, err := at.ntHeldPosition("MNQ"); err == nil {
+		t.Fatal("missing quantity became flat")
 	}
 }

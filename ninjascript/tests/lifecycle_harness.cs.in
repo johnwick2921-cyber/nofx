@@ -13,7 +13,7 @@ class Connection { public ConnectionStatus Status = ConnectionStatus.Connected; 
 class MasterInstrument { public string Name; public double TickSize = .25; }
 class Instrument { public string FullName; public MasterInstrument MasterInstrument; }
 class Position { public int Quantity; public MarketPosition MarketPosition; public Instrument Instrument; }
-class Order { public Account Account; public string Name, Oco; public OrderAction OrderAction; public OrderType OrderType; public TimeInForce Tif; public Instrument Instrument; public int Quantity, QuantityChanged; public OrderState OrderState=OrderState.Working; public double StopPrice, LimitPrice; }
+class Order { public Account Account; public string Name, Oco, OrderId; public OrderAction OrderAction; public OrderType OrderType; public TimeInForce Tif; public Instrument Instrument; public int Quantity, QuantityChanged; public OrderState OrderState=OrderState.Working; public double StopPrice, LimitPrice; }
 class OrderEventArgs { public Order Order; public OrderState OrderState; public int Filled; public double AverageFillPrice; public string Comment=""; public string Error=""; }
 class Account {
  public static List<Account> All=new List<Account>(); public string Name; public bool Sim=true; public Connection Connection=new Connection(); public List<Position> Positions=new List<Position>();
@@ -40,7 +40,9 @@ class Harness {
  void SubscribeOrderUpdate(Account a){} void SendOrderUpdateFrame(OrderEventArgs e){}
  void SendAck(string a){acks.Add(a);} static void LogInfo(string s){} static void LogWarn(string s){}
  void SendPositionCloseRejectedFrame(string a,string b,string c,string d,string e){rejected++;}
- void SendPositionCloseFrame(string a,string b,string c,double d,int e,string f,string g){}
+ Dictionary<string,object> lastClose;
+ void StampIdentity(Dictionary<string,object> p,string signal){}
+ void WriteEnvelope(string kind,Dictionary<string,object> p){if(kind=="position_close")lastClose=p;}
  void SendFillFrame(string a,double b,string c,int d,double e,string f,string accountName="",string symbol=""){}
  /* PRODUCTION TYPES */
  /* PRODUCTION METHODS */
@@ -53,6 +55,11 @@ class Harness {
  static void Main(){new Harness().Run();}
  void Run(){
  var active=Add("Sim101"); var target=Add("Sim102","MNQ 06-26");account=active;
+ var manualExit=new Order{Name="Close",OrderId="broker-1",Account=active,Instrument=Inst("MNQ 09-26"),OrderAction=OrderAction.Sell};
+ Event(manualExit,OrderState.Filled,1);
+ Check((string)lastClose["exit_order_id"]=="broker-1"&&(int)lastClose["quantity"]==1&&(string)lastClose["signal_id"]=="Close","actual exit callback emits broker ID, execution quantity and separate correlation");
+ manualExit.OrderId="broker-2";Event(manualExit,OrderState.Filled,1);
+ Check((string)lastClose["exit_order_id"]=="broker-2","same manual name on next order preserves distinct broker identity");
  HandleClosePosition(Req("symbol","MNQ","account","Sim102","side","long","signal_id","close"));
  Check(target.Flattened.Count==1&&target.Flattened[0].FullName=="MNQ 06-26"&&active.Flattened.Count==0,"explicit close targets held old expiry and account");
  HandleClosePosition(Req("symbol","MNQ","account","missing"));Check(active.Flattened.Count==0&&rejected==1,"unknown explicit close refuses without fallback");

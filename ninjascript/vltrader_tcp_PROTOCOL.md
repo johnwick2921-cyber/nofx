@@ -465,3 +465,9 @@ a received entry rejection (`fill.status` or `order_update.state`) settles as
 A local socket return is not broker acceptance. Unanswered placements retain
 their pending state and slot; a queue-age refusal is logged, never presented as
 an NT8 rejection or silently re-authorized as another placement.
+
+### Completed exit receipts (2026-09-13 additive field)
+
+`position_close.exit_order_id` carries `OrderEventArgs.Order.OrderId`, the actual NT broker order identifier. `signal_id` remains the entry/operation correlation and `seq` remains its echo sequence. A completed exit order can reduce only part of an owned position: `quantity` is that order's actual cumulative filled quantity, not the original held position quantity. Go deduplicates the completed order by account, root symbol, held side and `exit_order_id`; retransmission or a changed echo sequence cannot apply it twice. Missing, zero and oversized execution quantities are unresolved errors. Legacy frames without `exit_order_id` are accepted only for known bot bracket lineage or UUID operation names; generic manual names are insufficient identity. No commission is transmitted, so Go preserves recorded entry fees and does not invent exit commission.
+
+A completed exit receipt does not prove the account flat. Account positions must be an explicit array (including `[]` for known empty), received after the exit receipt and within the freshness window before another entry is admitted. Absent/null positions are unavailable, not empty.

@@ -309,7 +309,7 @@ func TestMaterializeArmedEntryF3(t *testing.T) {
 		Scenario: "S2", Side: "long", EntryPx: 29371.5, StopPx: 29350.0, TargetPx: 29420.0,
 		State: "filled", SignalID: "sig-f3", FillPrice: 29347.25,
 	}
-	u := ntwire.OrderUpdatePayload{State: "filled", SignalID: "sig-f3", Account: "Sim101", FillPrice: 29347.25}
+	u := ntwire.OrderUpdatePayload{State: "filled", SignalID: "sig-f3", Account: "Sim101", FillPrice: 29347.25, Quantity: 1}
 	at.materializeArmedEntry(row, u)
 	// FIX 3 (class 27): rows are written with the UPPERCASE canonical side.
 	pos, err := st.Position().GetOpenPositionBySymbol(at.id, at.futuresSymbol(), "LONG")

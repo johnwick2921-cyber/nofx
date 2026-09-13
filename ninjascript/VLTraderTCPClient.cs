@@ -1457,7 +1457,7 @@ namespace NinjaTrader.NinjaScript.AddOns
                     string exitAcct = e.Order.Account != null ? e.Order.Account.Name
                                       : (account != null ? account.Name : "");
                     SendPositionCloseFrame(signalId, rootSymbol, positionSide,
-                                           e.AverageFillPrice, e.Filled, exitReason ?? "manual", exitAcct);
+                                           e.AverageFillPrice, e.Filled, exitReason ?? "manual", exitAcct, e.Order.OrderId);
                     // Legacy root hint is not used for execution routing; retire it on exit.
                     if (!string.IsNullOrEmpty(rootSymbol))
                         lock (posAcctLock) { positionAccountBySymbol.Remove(rootSymbol); }
@@ -2243,12 +2243,13 @@ namespace NinjaTrader.NinjaScript.AddOns
         private void SendPositionCloseFrame(string signalId, string symbol,
                                             string positionSide, double exitPrice,
                                             int qty, string exitReason,
-                                            string acctName = "")
+                                            string acctName = "", string exitOrderId = "")
         {
             var payload = new Dictionary<string, object>
             {
                 ["signal_id"]     = signalId,
                 ["symbol"]        = symbol ?? "",
+                ["exit_order_id"] = exitOrderId ?? "",
                 ["position_side"] = positionSide,
                 ["exit_price"]    = exitPrice,
                 ["quantity"]      = qty,

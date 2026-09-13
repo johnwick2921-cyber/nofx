@@ -9,8 +9,6 @@ import (
 	"nofx/market"
 	"nofx/store"
 	"nofx/telemetry"
-	ntTrader "nofx/trader/ninjatrader"
-	"strings"
 	"time"
 )
 
@@ -368,44 +366,39 @@ func (at *AutoTrader) executeDecisionWithRecord(decision *kernel.Decision, actio
 // reconcileFlattenTimeout / PollInterval bound the flatten-first await in
 // reconcileBeforeOpenNT — the auto-flatten polls NT8 net until flat, then opens.
 const (
-	// Heartbeat-aware backstop: the primary confirmation is the fill-confirmed
-	// position_close FRAME (arrives ~instantly), so this timeout is only hit when no
-	// frame comes — in which case we must give the 30s all-account positions
-	// heartbeat a chance before refusing. 35s > the 30s heartbeat (was 6s, which
-	// starved a non-active account whose snapshot only refreshes every 30s).
+	// Await the account snapshot, not completion of one exit order. The 35s
+	// timeout permits the 30s all-account heartbeat to report actual holdings.
 	reconcileFlattenTimeout      = 35 * time.Second
 	reconcileFlattenPollInterval = 500 * time.Millisecond
 )
 
 // ntHeldPosition returns the side ("long"/"short") NT8 currently holds for symbol,
-// or "" if flat / unreadable. Reads the NT8 positions snapshot via GetPositions.
-func (at *AutoTrader) ntHeldPosition(symbol string) string {
+// or "" if flat; unreadable is an error. Reads account snapshots via GetPositions.
+func (at *AutoTrader) ntHeldPosition(symbol string) (string, error) {
 	positions, err := at.trader.GetPositions()
 	if err != nil {
 		// P0-cleanup — read error is NOT flat; say so (it changes the
 		// reconcile decision downstream).
-		at.logWarnf("⚠️ positions read failed — reconcile treats as flat, reason: %v", err)
+		at.logWarnf("⚠️ positions read failed — reconcile refuses unknown account state: %v", err)
 		telemetry.RecordError(at.id, "positions_read_failed", err.Error(), telemetry.CostNone)
-		return ""
+		return "", err
 	}
 	for _, pos := range positions {
 		if pos["symbol"] != symbol {
 			continue
 		}
-		amt, _ := pos["positionAmt"].(float64)
+		amt, ok := pos["positionAmt"].(float64)
+		if !ok || math.IsNaN(amt) || math.IsInf(amt, 0) {
+			return "", fmt.Errorf("NT8 position quantity unavailable for %s", symbol)
+		}
 		if amt > 0 {
-			// Normalize casing: NT8 GetPositions/positionMap emits UPPERCASE
-			// "LONG"/"SHORT"; reconcileBeforeOpenNT compares held == "long", so an
-			// un-normalized "LONG" fell to the else branch and flattened the WRONG
-			// side (CloseShort on a long orphan) — the flatten never confirmed flat
-			// and the open was refused every cycle. Return lowercase to match.
-			if s, _ := pos["side"].(string); s != "" {
-				return strings.ToLower(s)
-			}
-			return "long"
+			return "long", nil
+		}
+		if amt < 0 {
+			return "short", nil
 		}
 	}
-	return ""
+	return "", nil
 }
 
 // reconcileBeforeOpenNT (TRACK B): NinjaTrader-only defense-in-depth run before an
@@ -429,13 +422,14 @@ func (at *AutoTrader) reconcileBeforeOpenNT(symbol, intendedSide string) error {
 	if down, status := at.ninjaFeedDown(); down {
 		return fmt.Errorf("reconcile-before-open: NT8 feed not Connected (%s) — refusing open", status)
 	}
-	held := at.ntHeldPosition(symbol)
+	held, err := at.ntHeldPosition(symbol)
+	if err != nil {
+		return fmt.Errorf("reconcile-before-open: account positions unknown: %w", err)
+	}
 	if held == "" {
 		return nil // NT8 flat → proceed
 	}
 	at.logWarnf("🚨 reconcile-before-open: NT8 holds a %s %s before an intended %s open — flattening first (awaiting fill) to avoid compounding onto an orphan.", held, symbol, intendedSide)
-	// Timestamp BEFORE the flatten so we only accept a close that our flatten caused.
-	t0 := time.Now().UnixMilli()
 	var ferr error
 	if held == "long" {
 		_, ferr = at.trader.CloseLong(symbol, 0)
@@ -445,25 +439,20 @@ func (at *AutoTrader) reconcileBeforeOpenNT(symbol, intendedSide string) error {
 	if ferr != nil {
 		return fmt.Errorf("reconcile-before-open: flatten submit failed: %w", ferr)
 	}
-	// AWAIT its own fill (NOT fire-and-forget — the trap 0118ca77 fixed). Prefer the
-	// FILL-CONFIRMED close FRAME (position_close), which arrives ~instantly for the
-	// bound account even when it is NOT the streamed/active account — so a non-active
-	// trader no longer waits on the 30s positions-snapshot heartbeat. The snapshot
-	// (ntHeldPosition) remains a fallback, and the timeout is heartbeat-aware.
-	ntTCP, _ := at.trader.(*ntTrader.TCPTrader)
+	// Await account truth. An exit receipt alone cannot establish account-flat;
+	// the adapter requires a fresh position snapshot after such a receipt.
 	deadline := time.Now().Add(reconcileFlattenTimeout)
 	for time.Now().Before(deadline) {
 		time.Sleep(reconcileFlattenPollInterval)
 		if down, _ := at.ninjaFeedDown(); down {
 			return fmt.Errorf("reconcile-before-open: feed dropped during flatten — refusing open")
 		}
-		// Frame path (fast, account-correct): our flatten's close was fill-confirmed.
-		if ntTCP != nil && ntTCP.CloseConfirmedSince(symbol, held, t0) {
-			at.logInfof("✅ reconcile-before-open: %s flatten fill-confirmed via position_close frame — proceeding to open.", symbol)
-			return nil
-		}
 		// Snapshot fallback (covers a manual/external flatten with no close frame).
-		if at.ntHeldPosition(symbol) == "" {
+		current, readErr := at.ntHeldPosition(symbol)
+		if readErr != nil {
+			return fmt.Errorf("reconcile-before-open: account positions unknown during flatten: %w", readErr)
+		}
+		if current == "" {
 			at.logInfof("✅ reconcile-before-open: %s flattened + confirmed flat (snapshot) — proceeding to open.", symbol)
 			return nil
 		}

@@ -173,14 +173,16 @@ type TraderPosition struct {
 	Symbol             string  `gorm:"column:symbol;not null" json:"symbol"`
 	Side               string  `gorm:"column:side;not null" json:"side"`
 	EntryQuantity      float64 `gorm:"column:entry_quantity;default:0" json:"entry_quantity"`
-	Quantity           float64 `gorm:"column:quantity;not null" json:"quantity"`
-	EntryPrice         float64 `gorm:"column:entry_price;not null" json:"entry_price"`
-	EntryOrderID       string  `gorm:"column:entry_order_id;default:''" json:"entry_order_id"`
-	EntryTime          int64   `gorm:"column:entry_time;not null;index:idx_positions_entry" json:"entry_time"` // Unix milliseconds UTC
-	ExitPrice          float64 `gorm:"column:exit_price;default:0" json:"exit_price"`
-	ExitOrderID        string  `gorm:"column:exit_order_id;default:''" json:"exit_order_id"`
-	ExitTime           int64   `gorm:"column:exit_time;index:idx_positions_exit" json:"exit_time"` // Unix milliseconds UTC, 0 means not set
-	RealizedPnL        float64 `gorm:"column:realized_pnl;default:0" json:"realized_pnl"`
+	// Cumulative executed entry notional; NULL means unknown (never a zero guess).
+	EntryNotional *float64 `gorm:"column:entry_notional" json:"entry_notional,omitempty"`
+	Quantity      float64  `gorm:"column:quantity;not null" json:"quantity"`
+	EntryPrice    float64  `gorm:"column:entry_price;not null" json:"entry_price"`
+	EntryOrderID  string   `gorm:"column:entry_order_id;default:''" json:"entry_order_id"`
+	EntryTime     int64    `gorm:"column:entry_time;not null;index:idx_positions_entry" json:"entry_time"` // Unix milliseconds UTC
+	ExitPrice     float64  `gorm:"column:exit_price;default:0" json:"exit_price"`
+	ExitOrderID   string   `gorm:"column:exit_order_id;default:''" json:"exit_order_id"`
+	ExitTime      int64    `gorm:"column:exit_time;index:idx_positions_exit" json:"exit_time"` // Unix milliseconds UTC, 0 means not set
+	RealizedPnL   float64  `gorm:"column:realized_pnl;default:0" json:"realized_pnl"`
 	// P0 pnl-record-integrity (2026-08-20): a wrong recorded PnL is corrected
 	// by a NEW value + note — the original is NEVER destructively edited
 	// (audit trail). Readers use EffectivePnL / COALESCE(pnl_corrected,
@@ -360,6 +362,11 @@ func (s *PositionStore) InitTables() error {
 				}
 			}
 
+			// Existing PostgreSQL tables skip AutoMigrate below. Preserve unknown
+			// historical cumulative notional as NULL on this path too.
+			if err := s.db.Exec(`ALTER TABLE trader_positions ADD COLUMN IF NOT EXISTS entry_notional DOUBLE PRECISION`).Error; err != nil {
+				return fmt.Errorf("add entry notional: %w", err)
+			}
 			// Just ensure index exists
 			s.db.Exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_positions_exchange_pos_unique ON trader_positions(exchange_id, exchange_position_id) WHERE exchange_position_id != ''`)
 			return nil
@@ -548,6 +555,7 @@ func (s *PositionStore) UpdatePositionQuantityAndPrice(id int64, addQty float64,
 	return s.db.Model(&TraderPosition{}).Where("id = ?", id).Updates(map[string]interface{}{
 		"quantity":       newQty,
 		"entry_quantity": newEntryQty,
+		"entry_notional": nil, // this legacy writer does not track cumulative order notional
 		"entry_price":    newEntryPrice,
 		"fee":            newFee,
 		"updated_at":     nowMs,

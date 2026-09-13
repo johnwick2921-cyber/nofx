@@ -6,7 +6,7 @@ Pass an output .cs path. Compile with framework csc or Roslyn + framework refs.
 from pathlib import Path
 import re,sys
 src=(Path(__file__).parents[1]/'VLTraderTCPClient.cs').read_text()
-names=['TryResolveExecutionAccount','TryResolveHeldPosition','HandleClosePosition','HandlePlaceProtectiveStop','HandleCancelOrder','OnOrderUpdate','SubmitBracketOnEntryFill','AmendBracketQuantity','IsLiveAtExchange','IsTerminalOrderState','RetireTerminalBracket','CancelBracketsFor','CancelAllBracketsFor','GetString','GetDouble','GetInt']
+names=['TryResolveExecutionAccount','TryResolveHeldPosition','HandleClosePosition','HandlePlaceProtectiveStop','HandleCancelOrder','OnOrderUpdate','SubmitBracketOnEntryFill','AmendBracketQuantity','IsLiveAtExchange','IsTerminalOrderState','RetireTerminalBracket','CancelBracketsFor','CancelAllBracketsFor','GetString','GetDouble','GetInt','SendPositionCloseFrame']
 def member(name):
  m=re.search(r'^        private (?:static )?[^\n]+\b'+name+r'\(',src,re.M)
  if not m:raise RuntimeError(name)

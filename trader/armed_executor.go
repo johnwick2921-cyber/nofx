@@ -11,6 +11,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"gorm.io/gorm"
+
 	"nofx/kernel"
 	"nofx/logger"
 	"nofx/market"
@@ -1948,6 +1950,8 @@ func logArmedOrderUpdateSummary() {
 
 // onArmedOrderUpdate applies one NT8 order state change to the armed ledger.
 func (at *AutoTrader) onArmedOrderUpdate(u ntwire.OrderUpdatePayload, ledger *store.ArmedOrderStore) {
+	at.armedOrderUpdateMu.Lock()
+	defer at.armedOrderUpdateMu.Unlock()
 	// Frame-receipt proof (cutover confirmation wave): the C# dispatcher's
 	// receive path stays provable from the journal via the 1-line/min summary;
 	// the per-frame content is DEBUG + 1-in-N sampled (FORENSICS HYGIENE —
@@ -1962,6 +1966,19 @@ func (at *AutoTrader) onArmedOrderUpdate(u ntwire.OrderUpdatePayload, ledger *st
 	}
 	logArmedOrderUpdateSummary()
 	if u.OrderName != "" && u.OrderName != u.SignalID {
+		return
+	}
+	state := strings.ToLower(u.State)
+	if u.SignalID == "" || (u.Symbol != "" && market.Normalize(u.Symbol) != market.Normalize(at.futuresSymbol())) {
+		return
+	}
+	if account := at.currentAccountName(); account != "" && u.Account != "" && !strings.EqualFold(account, u.Account) {
+		return
+	}
+	// NT8 reports CUMULATIVE executed quantity, including on cancellation or
+	// rejection. Terminal entry state does not erase an already executed slice.
+	if u.Quantity > 0 && (state == "partfilled" || ntwire.ClassifyOrderState(u.State) == ntwire.LivenessTerminal) {
+		at.applyArmedCumulativeFill(u, ledger)
 		return
 	}
 	if strings.EqualFold(u.State, "rejected") {
@@ -1995,7 +2012,7 @@ func (at *AutoTrader) onArmedOrderUpdate(u ntwire.OrderUpdatePayload, ledger *st
 			// the position open, so the priced close parked forever and NT8's
 			// equity diverged from the ledger.
 			at.materializeArmedEntry(r, u)
-			at.stampArmedFillLineage(r, u.FillPrice)
+			at.stampArmedFillLineage(r, u.FillPrice, u.Account)
 			at.logInfof("⚡ armed fill %s @ %.2f (entry_class=armed_fill — stale_reeval NOT applied)", r.Scenario, u.FillPrice)
 		case "cancelled":
 			if r.State == store.StateCancelPending {
@@ -2016,13 +2033,40 @@ func (at *AutoTrader) onArmedOrderUpdate(u ntwire.OrderUpdatePayload, ledger *st
 	}
 }
 
+// applyArmedCumulativeFill also finds terminal ledger rows: a partial fill can
+// precede a cancellation, or a terminal receipt can arrive before the fill.
+func (at *AutoTrader) applyArmedCumulativeFill(u ntwire.OrderUpdatePayload, ledger *store.ArmedOrderStore) {
+	var rows []store.ArmedOrderDB
+	if err := ledger.DB().Where("trader_id = ? AND signal_id = ?", at.id, u.SignalID).Limit(2).Find(&rows).Error; err != nil || len(rows) != 1 {
+		return // unknown or ambiguous lineage is not authority to create a position
+	}
+	r := rows[0]
+	if u.Quantity < r.FillQuantity {
+		return // an older cumulative receipt cannot reduce the observed fill
+	}
+	updates := map[string]any{"state": "filled", "state_reason": fmt.Sprintf("%s cumulative fill qty=%d", u.State, u.Quantity), "fill_quantity": u.Quantity}
+	if u.FillPrice > 0 && !math.IsNaN(u.FillPrice) && !math.IsInf(u.FillPrice, 0) {
+		updates["fill_price"] = u.FillPrice
+	}
+	if err := ledger.DB().Model(&store.ArmedOrderDB{}).Where("id = ?", r.ID).Updates(updates).Error; err != nil {
+		at.logWarnf("persist cumulative fill signal=%s: %v", u.SignalID, err)
+		return
+	}
+	r.StateReason = updates["state_reason"].(string)
+	if strings.TrimSpace(u.Account) == "" || u.FillPrice <= 0 || math.IsNaN(u.FillPrice) || math.IsInf(u.FillPrice, 0) {
+		at.logWarnf("cumulative fill signal=%s qty=%d lacks account or valid price; evidence retained without fabricating position", u.SignalID, u.Quantity)
+	}
+	at.materializeArmedEntry(r, u)
+	at.stampArmedFillLineage(r, u.FillPrice, u.Account)
+}
+
 // materializeArmedEntry (F3, 2026-08-30 E7 incident) creates the OPEN position
 // row from the armed fill at FILL time when no row exists yet. The ledger row
 // carries the fill truth (signal, fill price, plan attribution), so the sub-60s
 // round-trip becomes ledger-visible and the priced close the far side sends
 // finds its open row on the normal sync path.
 func (at *AutoTrader) materializeArmedEntry(r store.ArmedOrderDB, u ntwire.OrderUpdatePayload) {
-	if at.store == nil || u.FillPrice <= 0 || r.SignalID == "" {
+	if at.store == nil || strings.TrimSpace(u.Account) == "" || u.FillPrice <= 0 || math.IsNaN(u.FillPrice) || math.IsInf(u.FillPrice, 0) || u.Quantity <= 0 || r.SignalID == "" {
 		return
 	}
 	// CLASS-27 FIX 3 (2026-08-31): rows are written with UPPERCASE side (the
@@ -2032,6 +2076,67 @@ func (at *AutoTrader) materializeArmedEntry(r store.ArmedOrderDB, u ntwire.Order
 	// uppercase store convention and missed).
 	side := strings.ToUpper(strings.TrimSpace(r.Side))
 	if side == "" {
+		return
+	}
+	var entries []store.TraderPosition
+	if err := at.store.GormDB().Where("trader_id = ? AND entry_order_id = ?", at.id, r.SignalID).Limit(2).Find(&entries).Error; err != nil {
+		return
+	}
+	if len(entries) != 0 {
+		if len(entries) != 1 {
+			return
+		}
+		pos := entries[0]
+		if pos.Status != "OPEN" && float64(u.Quantity) > pos.EntryQuantity {
+			at.logWarnf("late cumulative entry signal=%s qty=%d exceeds closed entry qty=%.0f; evidence retained, no position fabricated", r.SignalID, u.Quantity, pos.EntryQuantity)
+		}
+		if pos.Status != "OPEN" || pos.Symbol != at.futuresSymbol() || !strings.EqualFold(pos.Side, side) || (u.Account != "" && pos.Account != u.Account) {
+			return // replay after close or conflicting identity cannot reopen/adopt a row
+		}
+		// EntryQuantity is lifetime cumulative entry; Quantity may already be
+		// reduced by an exit. Add only the newly observed entry delta.
+		for attempt := 0; attempt < 3 && pos.EntryQuantity > 0 && float64(u.Quantity) > pos.EntryQuantity; attempt++ {
+			delta := float64(u.Quantity) - pos.EntryQuantity
+			priorNotional := pos.EntryPrice * pos.EntryQuantity
+			q := at.store.GormDB().Model(&store.TraderPosition{}).
+				Where("id = ? AND status = ? AND entry_order_id = ? AND entry_quantity = ? AND account = ? AND symbol = ?", pos.ID, "OPEN", r.SignalID, pos.EntryQuantity, pos.Account, pos.Symbol)
+			if pos.EntryNotional != nil {
+				priorNotional = *pos.EntryNotional
+				q = q.Where("entry_notional = ?", priorNotional)
+			} else {
+				// Legacy basis describes all entries only before any exit. Keep
+				// that condition in SQL too: an exit may commit after this read.
+				if pos.Quantity != pos.EntryQuantity {
+					at.logWarnf("cumulative entry signal=%s has unknown prior notional after exit; evidence retained, refusing guessed residual basis", r.SignalID)
+					return
+				}
+				q = q.Where("entry_notional IS NULL AND quantity = entry_quantity AND entry_price = ?", pos.EntryPrice)
+			}
+			if priorNotional <= 0 || math.IsNaN(priorNotional) || math.IsInf(priorNotional, 0) {
+				return
+			}
+			newNotional := float64(u.Quantity) * u.FillPrice
+			deltaNotional := newNotional - priorNotional
+			if deltaNotional <= 0 || math.IsNaN(deltaNotional) || math.IsInf(deltaNotional, 0) {
+				return
+			}
+			res := q.Updates(map[string]any{
+				"quantity": gorm.Expr("quantity + ?", delta), "entry_quantity": u.Quantity, "entry_notional": newNotional,
+				"entry_price": gorm.Expr("CASE WHEN quantity = entry_quantity THEN ? ELSE (entry_price * quantity + ?) / (quantity + ?) END", u.FillPrice, deltaNotional, delta),
+			})
+			if res.Error != nil {
+				at.logWarnf("update cumulative entry signal=%s: %v", r.SignalID, res.Error)
+				return
+			}
+			if res.RowsAffected == 1 {
+				return
+			}
+			// Another writer advanced/closed the row after our read. Refetch
+			// cumulative entry before recomputing; never retry a stale delta.
+			if err := at.store.GormDB().First(&pos, pos.ID).Error; err != nil || pos.Status != "OPEN" || pos.EntryOrderID != r.SignalID || pos.Symbol != at.futuresSymbol() || (u.Account != "" && pos.Account != u.Account) {
+				return
+			}
+		}
 		return
 	}
 	if pos, err := at.store.Position().GetOpenPositionBySymbol(at.id, at.futuresSymbol(), side); err == nil && pos != nil {
@@ -2045,14 +2150,19 @@ func (at *AutoTrader) materializeArmedEntry(r store.ArmedOrderDB, u ntwire.Order
 		tradeDate = r.PlanID[:i]
 	}
 	nowMs := time.Now().UTC().UnixMilli()
+	entryNotional := float64(u.Quantity) * u.FillPrice
+	if math.IsNaN(entryNotional) || math.IsInf(entryNotional, 0) {
+		return
+	}
 	row := &store.TraderPosition{
 		TraderID:           at.id,
 		ExchangeType:       "ninjatrader",
 		ExchangePositionID: fmt.Sprintf("armed_%s_%d", r.SignalID, nowMs),
 		Symbol:             at.futuresSymbol(),
 		Side:               side,
-		Quantity:           1,
-		EntryQuantity:      1,
+		Quantity:           float64(u.Quantity),
+		EntryQuantity:      float64(u.Quantity),
+		EntryNotional:      &entryNotional,
 		EntryPrice:         u.FillPrice,
 		EntryTime:          nowMs,
 		EntryOrderID:       r.SignalID,
@@ -2080,18 +2190,20 @@ func (at *AutoTrader) materializeArmedEntry(r store.ArmedOrderDB, u ntwire.Order
 
 // stampArmedFillLineage links the freshly-filled position row to the plan the
 // arm cited — the same fields AI entries carry (S3 SetPlanLinkFull).
-func (at *AutoTrader) stampArmedFillLineage(r store.ArmedOrderDB, fillPrice float64) {
-	pos, err := at.store.Position().GetOpenPositionBySymbol(at.id, at.futuresSymbol(), r.Side)
-	if err != nil || pos == nil {
-		// PRE-REOPEN F4 (2026-08-28) — the fill frame precedes position
-		// materialization (all 4 live fills hit this race). The LEDGER row
-		// carries the pending marker; the reconcile materialization path
-		// (StampArmedLineageIfMatched) completes the stamp and clears it.
-		if e2 := at.store.ArmedOrders().SetState(r.ID, "filled", fmt.Sprintf("%s;stamp_pending", r.StateReason)); e2 != nil {
-			at.logWarnf("⚡ armed fill %s: pending-marker write failed: %v", r.Scenario, e2)
-			return
-		}
-		at.logInfof("⚡ armed fill %s @ %.2f: position row not materialized yet — stamp pending (reconcile completes it)", r.Scenario, fillPrice)
+func (at *AutoTrader) stampArmedFillLineage(r store.ArmedOrderDB, fillPrice float64, account string) {
+	if at.store == nil || strings.TrimSpace(account) == "" {
+		return
+	}
+	var entries []store.TraderPosition
+	err := at.store.GormDB().Where("trader_id = ? AND entry_order_id = ?", at.id, r.SignalID).Limit(2).Find(&entries).Error
+	if err != nil || len(entries) != 1 {
+		// Preserve a pending marker for reconcile, never stamp a same-side
+		// position whose entry identity belongs to a different order.
+		_ = at.store.ArmedOrders().SetState(r.ID, "filled", fmt.Sprintf("%s;stamp_pending", r.StateReason))
+		return
+	}
+	pos := &entries[0]
+	if pos.Status != "OPEN" || pos.Symbol != at.futuresSymbol() || !strings.EqualFold(pos.Side, r.Side) || (account != "" && pos.Account != account) {
 		return
 	}
 	tradeDate := r.PlanID
@@ -2101,12 +2213,8 @@ func (at *AutoTrader) stampArmedFillLineage(r store.ArmedOrderDB, fillPrice floa
 	if err := at.store.Position().SetPlanLinkFull(pos.ID, r.Version, r.Scenario, true, "armed_fill", r.PlanID, tradeDate, r.Session); err != nil {
 		at.logWarnf("⚡ armed fill lineage stamp failed: %v", err)
 	}
-	// F3 (2026-09-03) — the contracts the fill delivered, on the same path that
-	// stamps lineage. Row 35 read filled with fill_quantity=0 beside a position
-	// of quantity 1.
-	if err := at.store.ArmedOrders().SetFillQuantity(r.ID, int(pos.Quantity)); err != nil {
-		at.logWarnf("⚡ armed fill quantity stamp failed: %v", err)
-	}
+	// Cumulative fill quantity is recorded from the receipt, never from the
+	// remaining position quantity after a partial exit.
 	// F2 (2026-09-03) — the fill line names the version the arm BELONGS to,
 	// not whatever version is live by the time it fills.
 	at.logInfof("⚡ armed fill %s: armed under v%d %s %s (%s) · qty %.0f",

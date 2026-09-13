@@ -375,9 +375,10 @@ const FramePositionClose FrameType = "position_close"
 // action. RealizedPnL is left to the Go side to compute against the recorded
 // entry × the futures point value (single source of truth: market.FuturesPointValue).
 type PositionClosePayload struct {
-	SignalID     string  `json:"signal_id"`     // entry signal_id, for correlation
-	Symbol       string  `json:"symbol"`        // root symbol, e.g. "MNQ"
-	PositionSide string  `json:"position_side"` // "long" | "short" (held side)
+	ExitOrderID  string  `json:"exit_order_id,omitempty"` // actual NT broker order ID; completed-exit receipt identity
+	SignalID     string  `json:"signal_id"`               // entry signal_id, for correlation
+	Symbol       string  `json:"symbol"`                  // root symbol, e.g. "MNQ"
+	PositionSide string  `json:"position_side"`           // "long" | "short" (held side)
 	ExitPrice    float64 `json:"exit_price"`
 	Quantity     int     `json:"quantity"`
 	ExitReason   string  `json:"exit_reason"` // "sl" | "tp" | "manual"

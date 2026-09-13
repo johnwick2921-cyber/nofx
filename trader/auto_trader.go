@@ -399,6 +399,7 @@ type AutoTrader struct {
 	startTime             time.Time        // System start time
 	callCount             int              // AI call count
 	positionFirstSeenTime map[string]int64 // Position first seen time (symbol_side -> timestamp in milliseconds)
+	armedOrderUpdateMu    sync.Mutex       // Serializes cumulative fill receipts on this runtime.
 	limitFlattenMu        sync.Mutex       // Serializes delayed exits with Stop.
 	limitFlattenStopped   bool
 	limitFlattens         map[int64]*pendingLimitFlatten

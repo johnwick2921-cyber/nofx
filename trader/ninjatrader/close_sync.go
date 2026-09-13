@@ -1,7 +1,10 @@
 package ninjatrader
 
 import (
+	"crypto/sha256"
+	"encoding/json"
 	"fmt"
+	"github.com/google/uuid"
 	"strings"
 	"time"
 
@@ -14,12 +17,11 @@ import (
 
 // StartCloseSync consumes position_close frames from the TCP bridge and records
 // each close into trader_positions (real exit price + futures realized PnL),
-// then clears the in-memory fill so GetPositions reports flat.
+// preserves residual rows and requires fresh account snapshots after executions.
 //
-// NT closes positions broker-side via the OCO bracket (SL/TP); the bot never
-// issues a close_* order and — unlike every crypto broker — NT has no
-// order-sync. So this is the ONLY path that transitions an open NT position to
-// CLOSED, which is what populates the dashboard's position history.
+// An exit order's completed quantity can be smaller than the held position.
+// Record actual executions atomically; whole-position hooks run only when the
+// owned row reaches zero. Account-flat proof belongs to the broker snapshot.
 func (t *TCPTrader) StartCloseSync(traderID, exchangeID, exchangeType string, st *store.Store) {
 	if st == nil {
 		return
@@ -29,15 +31,12 @@ func (t *TCPTrader) StartCloseSync(traderID, exchangeID, exchangeType string, st
 	t.traderID = traderID
 	t.st = st // Entry rejection receipts need the ledger before any placement.
 	t.mu.Unlock()
+	t.loadExitSnapshotFence(st)
 	pb := store.NewPositionBuilder(st.Position())
 	t.closeSyncOnce.Do(func() {
 		go func() {
 			for p := range t.server.SubscribeClosesFor(t.symbol, t.boundAccount) { // P5.4 router-fed (per-symbol)
 				t.recordClose(traderID, exchangeID, exchangeType, st, pb, p)
-				// Fast, account-correct flat signal for reconcile-before-open: a
-				// position_close arrived for this trader's bound account (frame path
-				// beats the 30s positions-snapshot heartbeat on a non-active account).
-				t.MarkCloseConfirmed(p.Symbol, p.PositionSide)
 			}
 		}()
 		// Rejected exit/flatten watcher. The SIM/broker refused a close (e.g. "no
@@ -85,135 +84,121 @@ func (t *TCPTrader) recordClose(
 	pb *store.PositionBuilder,
 	p ntwire.PositionClosePayload,
 ) {
-	side, action := "LONG", "close_long"
-	if strings.EqualFold(p.PositionSide, "short") {
-		side, action = "SHORT", "close_short"
-	}
-
-	// The open record is keyed by the canonical bot symbol (root, e.g. "MNQ"),
-	// not the resolved front-month contract — prefer t.symbol.
+	side := strings.ToUpper(strings.TrimSpace(p.PositionSide))
 	symbol := t.symbol
 	if symbol == "" {
 		symbol = p.Symbol
 	}
-	qty := float64(p.Quantity)
-	if qty <= 0 {
-		qty = 1
-	}
-
-	exitMs := time.Now().UTC().UnixMilli()
-	if p.ExitTime != "" {
-		if ts, err := time.Parse(time.RFC3339, p.ExitTime); err == nil {
-			exitMs = ts.UTC().UnixMilli()
-		}
-	}
-
-	// OWNER-ROUTING: a position_close routes by SYMBOL to ONE trader's close-sync,
-	// which may NOT own the open row when multiple traders share a symbol — recording
-	// against the RECEIVER's trader_id then missed and the priced close was lost
-	// (reconcile later wrote exit=entry pnl=0). Find the trader that actually OWNS the
-	// open (account, symbol, side) row across ALL traders and record against IT.
-	// Single-trader: owner == this trader → byte-identical.
-	owner, oerr := st.Position().GetOpenPositionByAccountSymbol(p.Account, symbol, side)
-	if oerr != nil {
-		logger.Warnf("ninjatrader/tcp: recordClose owner lookup failed (%s %s acct=%q): %v", symbol, side, p.Account, oerr)
-	}
-	if owner == nil {
-		// PRICED close with NO matching open row anywhere. The old code logged a FALSE
-		// "📕 pnl" here (ProcessTrade skipped silently) and reconcile later wrote
-		// exit=entry pnl=0. Instead: alarm loudly and PARK the price so reconcile's
-		// orphan-close consumes it (priced-frame fallback) rather than fabricate a 0.
-		logger.Warnf("⚠️ ninjatrader/tcp: priced close DROPPED — no matching open row (trader=%s acct=%q sym=%s side=%s exit=%.2f). Parked for reconcile fallback.",
-			traderID, p.Account, symbol, side, p.ExitPrice)
-		putPricedClose(p.Account, symbol, side, p.ExitPrice, qty, exitMs)
-		t.mu.Lock()
-		t.hasFill = false
-		t.mu.Unlock()
+	if p.Symbol != "" && !equalSymbol(p.Symbol, symbol) {
+		logger.Warnf("NT8 exit refused: symbol mismatch")
 		return
 	}
-
-	// Realized P&L with the futures point value (PositionBuilder's fallback omits it),
-	// computed from the OWNING row's entry — and the OWNING ROW's QUANTITY.
-	//
-	// P0 pnl-record-integrity (2026-08-20): a MANUAL flatten in NT8 emits ONE
-	// position_close frame for the account's WHOLE flattened size. Position
-	// #526 proved it live: the bot held 1 lot short, the owner's manual
-	// activity flattened 21 contracts, the frame said qty=21 avg=29660.96, and
-	// this code recorded −$1,458 on a 1-lot row whose true loss was −$69.43.
-	// The frame's qty belongs to the NT8 POSITION EVENT; only the row's own
-	// size may ever be attributed to the row.
-	attributedQty := owner.Quantity
-	if attributedQty <= 0 {
-		attributedQty = 1
-	}
-	if qty > attributedQty {
-		logger.Warnf("⚖️ pnl-attribution: position_close frame carries qty=%.0f but the owning row holds %.2f — attributing the ROW's size only (the excess is foreign/manual activity on the same account; exit price %.2f is the frame's average).",
-			qty, attributedQty, p.ExitPrice)
-	}
-	pv := market.FuturesPointValue(symbol)
-	if pv <= 0 {
-		pv = 1
-	}
-	realizedPnL := 0.0
-	if owner.EntryPrice > 0 {
-		if side == "LONG" {
-			realizedPnL = (p.ExitPrice - owner.EntryPrice) * attributedQty * pv
-		} else {
-			realizedPnL = (owner.EntryPrice - p.ExitPrice) * attributedQty * pv
+	exitMs := time.Now().UTC().UnixMilli()
+	if p.ExitTime != "" {
+		ts, err := time.Parse(time.RFC3339Nano, p.ExitTime)
+		if err != nil {
+			logger.Warnf("NT8 exit refused: invalid exit time: %v", err)
+			return
 		}
+		exitMs = ts.UnixMilli()
 	}
+	// Completed order receipts use the broker order ID, independent of echo seq.
+	// Legacy frames are accepted only with a known bot entry/operation identity;
+	// generic manual names are not unique across separate orders.
+	reason := strings.ToLower(strings.TrimSpace(p.ExitReason))
+	leg := "exit"
+	if reason == "sl" || reason == "tp" {
+		leg = reason
+	}
+	identityParts := []any{p.Account, symbol, side, p.ExitOrderID}
+	if strings.TrimSpace(p.ExitOrderID) == "" {
+		if !t.knownLegacyExitIdentity(st, p, symbol, side, reason) {
+			logger.Warnf("NT8 exit refused: missing unique exit order identity account=%s signal=%s", p.Account, p.SignalID)
+			return
+		}
+		identityParts = []any{p.Account, symbol, side, p.SignalID, leg, p.Seq}
+	}
+	identity, _ := json.Marshal(identityParts)
+	key := fmt.Sprintf("nt8-exit-v2-%x", sha256.Sum256(identity))
+	receipt := store.NT8ExitReceipt{ID: key, Account: p.Account, Symbol: symbol, Side: side, SignalID: p.SignalID, TraderID: p.TraderID,
+		ExchangeID: exchangeID, ExchangeType: exchangeType, Reason: reason, Quantity: float64(p.Quantity), Price: p.ExitPrice,
+		PointValue: market.FuturesPointValue(symbol), ExitMs: exitMs, ReceivedMs: time.Now().UnixMilli()}
+	// No commission is present on this wire frame. Preserve existing row fees;
+	// do not invent or charge the entry commission again for each partial exit.
+	result, err := st.Position().ApplyNT8Exit(receipt)
+	if err != nil {
+		logger.Warnf("NT8 exit receipt refused/uncommitted account=%s signal=%s qty=%d: %v", p.Account, p.SignalID, p.Quantity, err)
+		return
+	}
+	if result.Pending || result.Applied {
+		t.noteExitSnapshotFence(receipt)
+	}
+	if result.Pending {
+		logger.Warnf("NT8 exit receipt pending owned entry evidence account=%s signal=%s qty=%d (not flat)", p.Account, p.SignalID, p.Quantity)
+		return
+	}
+	t.finishNT8Exit(receipt, result)
+}
 
-	// D3 — the broker's own cause travels WITH the close instead of being
-	// logged and thrown away. p.ExitReason is the same value line 204 below
-	// uses to arm the re-entry cooldown.
-	if err := pb.ProcessTradeWithExitReason(owner.TraderID, exchangeID, exchangeType, symbol, side, action,
-		attributedQty, p.ExitPrice, 0, realizedPnL, exitMs, p.SignalID, p.ExitReason); err != nil {
-		logger.Warnf("ninjatrader/tcp: record close failed (%s %s): %v", symbol, side, err)
-	} else {
-		// 4.2 — exit-fill persistence (NT8 SIM lineage): entries record fills in
-		// trader_fills (executeDecisionWithRecord poll path), exits NEVER did — NT
-		// closes return early there and wait for THIS frame. Write the tick-exact
-		// exit fill now, keyed deterministically on the owning position row so a
-		// retransmitted position_close frame can never double-count (CreateFill
-		// dedupes on exchange_trade_id).
-		if fill := buildExitFill(owner, exchangeID, exchangeType, symbol, side,
-			p.ExitPrice, attributedQty, realizedPnL, exitMs, p.SignalID); fill != nil {
-			if err := st.Order().CreateFill(fill); err != nil {
-				logger.Warnf("ninjatrader/tcp: exit fill record failed (%s %s): %v", symbol, side, err)
-			} else {
-				logger.Infof("📊 exit fill recorded: %s %s qty=%.2f @ %.2f (tick-exact, pnl %.2f)",
-					symbol, side, attributedQty, p.ExitPrice, realizedPnL)
+func (t *TCPTrader) noteExitSnapshotFence(receipt store.NT8ExitReceipt) {
+	if !strings.EqualFold(t.boundAccount, receipt.Account) {
+		return
+	}
+	t.mu.Lock()
+	if receipt.ReceivedMs > t.positionsAfterMs {
+		t.positionsAfterMs = receipt.ReceivedMs
+	}
+	t.mu.Unlock()
+}
+
+func (t *TCPTrader) finishNT8Exit(receipt store.NT8ExitReceipt, result store.NT8ExitResult) {
+	if !result.Applied {
+		return
+	} // durable duplicate; no hooks or cache mutation
+	owner := result.Position
+	if strings.EqualFold(t.boundAccount, receipt.Account) {
+		t.mu.Lock()
+		// Only reduce the cache belonging to this entry. Snapshot-backed positions
+		// remain authoritative; an unrelated or unidentified cached fill is not ours.
+		if t.hasFill && owner.EntryOrderID != "" && t.lastFill.SignalID == owner.EntryOrderID {
+			if result.Closed {
+				t.hasFill = false
+			} else if int(owner.Quantity) < t.lastFill.Quantity {
+				t.lastFill.Quantity = int(owner.Quantity)
 			}
 		}
-		// Phase 4 (final-bundle): notify the owning trader — one post-exit rescan.
-		if OnPositionClosed != nil {
-			OnPositionClosed(owner.TraderID, owner.ID)
+		t.mu.Unlock()
+	}
+	if !result.Closed {
+		logger.Warnf("NT8 partial exit recorded: row=%d actual_qty=%.0f residual=%.0f price=%.2f pnl=%.2f (still OPEN)", owner.ID, result.Quantity, owner.Quantity, receipt.Price, result.RealizedPnL)
+		return
+	}
+	if OnPositionClosed != nil {
+		OnPositionClosed(owner.TraderID, owner.ID)
+	}
+	if strings.EqualFold(receipt.Reason, "sl") {
+		discipline.NoteStopLossExit(owner.TraderID, receipt.Symbol, receipt.Side, receipt.Price, receipt.ExitMs)
+	}
+	logger.Warnf("📕 NT position closed: %s %s qty=%.2f exit=%.2f reason=%s pnl=%.2f (owner=%s row=%d final_execution_qty=%.0f)", receipt.Symbol, receipt.Side, owner.Quantity, owner.ExitPrice, receipt.Reason, owner.RealizedPnL, owner.TraderID, owner.ID, result.Quantity)
+}
+
+func (t *TCPTrader) retryPendingNT8Exits(st *store.Store) {
+	receipts, err := st.Position().PendingNT8Exits(t.boundAccount)
+	if err != nil {
+		logger.Warnf("NT8 pending exit read failed: %v", err)
+		return
+	}
+	for _, receipt := range receipts {
+		result, err := st.Position().ApplyNT8Exit(receipt)
+		if err != nil {
+			logger.Warnf("NT8 pending exit unresolved signal=%s: %v", receipt.SignalID, err)
+			continue
 		}
-		// T7 (2026-08-27) — the close path stamps pnl_corrected on the
-		// row immediately (same recompute the readers COALESCE to), so the
-		// column is non-NULL on every NEW close. The Δ≥$0.50 class-killer
-		// WARN lives inside the stamp.
-		st.StampPnlCorrectedOnClose(owner.ID, realizedPnL, realizedPnL)
-		// WARN (honest-logs 2026-08-19): a position close with realized P&L is
-		// owner-visible truth — must reach the log_events sink + dashboard even
-		// under journald frame-flood suppression.
-		logger.Warnf("📕 NT position closed: %s %s qty=%.2f exit=%.2f reason=%s pnl=%.2f (owner=%s)",
-			symbol, side, attributedQty, p.ExitPrice, p.ExitReason, realizedPnL, owner.TraderID)
+		if result.Applied {
+			t.noteExitSnapshotFence(receipt)
+		}
+		t.finishNT8Exit(receipt, result)
 	}
-
-	// B7 — re-entry cooldown: a STOP-LOSS exit (NT8 reason "sl") arms the
-	// same-direction re-entry cooldown for the OWNING trader on this symbol, measured
-	// from the SL fill price. Target/manual exits do NOT arm it. The kernel entry
-	// gate (applyReentryCooldown) enforces it; 0 = OFF disables it there.
-	if strings.EqualFold(p.ExitReason, "sl") {
-		discipline.NoteStopLossExit(owner.TraderID, symbol, side, p.ExitPrice, exitMs)
-		logger.Infof("⏳ re-entry cooldown armed: %s %s stop=%.2f (owner=%s)", symbol, side, p.ExitPrice, owner.TraderID)
-	}
-
-	// Mark flat so GetPositions stops reporting the now-closed position.
-	t.mu.Lock()
-	t.hasFill = false
-	t.mu.Unlock()
 }
 
 // OnPositionClosed (Phase 4, final-bundle 2026-08-19) is the package-level
@@ -222,37 +207,16 @@ func (t *TCPTrader) recordClose(
 // triggers exactly one post-exit rescan for the OWNING trader. Nil = no-op.
 var OnPositionClosed func(traderID string, positionID int64)
 
-// buildExitFill constructs the deterministic trader_fills row for an NT8 exit
-// (4.2). The exchange_trade_id is keyed on the owning position row id — one
-// close, one row, no double-count even if the position_close frame retransmits
-// (CreateFill dedupes). Side uses the fill convention (close_long = SELL,
-// close_short = BUY), matching recordOrderFill. Nil only when the owner row is
-// absent (caller already dropped those closes).
-func buildExitFill(owner *store.TraderPosition, exchangeID, exchangeType, symbol, side string,
-	exitPrice, qty, pnl float64, exitMs int64, signalID string) *store.TraderFill {
-	if owner == nil {
-		return nil
+// knownLegacyExitIdentity limits pre-exit_order_id compatibility to bot-owned
+// bracket lineage or UUID operation names. Generic manual order names refuse.
+func (t *TCPTrader) knownLegacyExitIdentity(st *store.Store, p ntwire.PositionClosePayload, symbol, side, reason string) bool {
+	if _, err := uuid.Parse(p.SignalID); err == nil {
+		return true
 	}
-	fillSide := "BUY"
-	if side == "LONG" {
-		fillSide = "SELL"
+	if reason != "sl" && reason != "tp" {
+		return false
 	}
-	return &store.TraderFill{
-		TraderID:        owner.TraderID,
-		ExchangeID:      exchangeID,
-		ExchangeType:    exchangeType,
-		OrderID:         0,
-		ExchangeOrderID: signalID,
-		ExchangeTradeID: fmt.Sprintf("nt8-exit-%d", owner.ID),
-		Symbol:          market.Normalize(symbol),
-		Side:            fillSide,
-		Price:           exitPrice,
-		Quantity:        qty,
-		QuoteQuantity:   exitPrice * qty,
-		Commission:      0,
-		CommissionAsset: "USD",
-		RealizedPnL:     pnl,
-		IsMaker:         false,
-		CreatedAt:       exitMs,
-	}
+	var count int64
+	err := st.GormDB().Model(&store.TraderPosition{}).Where("account = ? AND symbol = ? AND UPPER(side) = ? AND entry_order_id = ?", p.Account, symbol, side, p.SignalID).Count(&count).Error
+	return err == nil && count > 0 && p.SignalID != ""
 }

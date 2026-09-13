@@ -51,10 +51,11 @@ type TCPTrader struct {
 	guard    *orderGuard // B3: dupe-drop + rate breaker at the order-submission chokepoint
 	// openOrdersSrc (class 33) — the ledger-backed working-order source for
 	// GetOpenOrders (flat-gate leg 4). nil = unwired = the leg FAILS.
-	openOrdersSrc func(symbol string) ([]types.OpenOrder, error)
-	rejectSink    func(signalID, brokerReason string)
-	lastFill      ntwire.FillPayload
-	hasFill       bool
+	openOrdersSrc    func(symbol string) ([]types.OpenOrder, error)
+	rejectSink       func(signalID, brokerReason string)
+	lastFill         ntwire.FillPayload
+	hasFill          bool
+	positionsAfterMs int64 // local exit receipt fence; restored from durable receipts
 
 	// recentFills is a bounded ring of the last confirmed fills (class 27,
 	// 2026-08-31). A NETTING close emits no position_close frame — the only
@@ -924,7 +925,11 @@ func (t *TCPTrader) GetPositions() ([]map[string]interface{}, error) {
 	// reflects positions opened MANUALLY in NT8 (the AddOn emits a `positions`
 	// snapshot on select / connect / PositionUpdate).
 	acct := t.boundAccount
-	if snap, ok := t.server.PositionsFor(acct); ok {
+	snap, ok, err := t.positionsAfterExit()
+	if err != nil {
+		return nil, err
+	}
+	if ok {
 		// NT8-truth uPnL: the account_balance frame carries the account's LIVE
 		// unrealized P&L. When exactly ONE position is open, that total IS this
 		// position's uPnL — use it (and derive the mark) so the displayed P&L
@@ -965,6 +970,38 @@ func (t *TCPTrader) GetPositions() ([]map[string]interface{}, error) {
 	return []map[string]interface{}{
 		t.positionMap(t.symbol, fill.Side, float64(fill.Quantity), fill.FillPrice, nil),
 	}, nil
+}
+
+// positionsAfterExit refuses pre-exit, absent or stale account snapshots once
+// an exit receipt invalidates the old account view. It never invents an empty book.
+func (t *TCPTrader) positionsAfterExit() ([]ntwire.OpenPosition, bool, error) {
+	t.mu.Lock()
+	after := t.positionsAfterMs
+	t.mu.Unlock()
+	if t.server == nil {
+		if after > 0 {
+			return nil, false, fmt.Errorf("NT8 account positions unavailable after exit")
+		}
+		return nil, false, nil
+	}
+	positions, received, ok := t.server.PositionsForReceived(t.boundAccount)
+	if after > 0 && (!ok || received.IsZero() || received.UnixMilli() <= after || time.Since(received) < 0 || time.Since(received) > 60*time.Second) {
+		return nil, false, fmt.Errorf("NT8 account positions unverified after exit: need a fresh post-receipt account snapshot")
+	}
+	return positions, ok, nil
+}
+
+func (t *TCPTrader) loadExitSnapshotFence(st *store.Store) {
+	latest, err := st.Position().LatestNT8ExitReceiptMs(t.boundAccount)
+	if err != nil {
+		logger.Warnf("NT8 exit watermark unavailable: %v", err)
+		latest = time.Now().UnixMilli()
+	}
+	t.mu.Lock()
+	if latest > t.positionsAfterMs {
+		t.positionsAfterMs = latest
+	}
+	t.mu.Unlock()
 }
 
 // positionMap builds the UI/decision-context record for one open position, with

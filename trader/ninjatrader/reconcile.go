@@ -70,6 +70,7 @@ func (t *TCPTrader) StartPositionReconcile(traderID, exchangeID, exchangeType st
 	if st == nil {
 		return
 	}
+	t.loadExitSnapshotFence(st)
 	// GAR-F1 — wire the store handle BEFORE the repair pass so the reconcile
 	// goroutine and MoveStopToBreakeven can resolve materialized rows' entry
 	// identities (the #566 dead-cell fix).
@@ -105,11 +106,19 @@ func (t *TCPTrader) reconcilePositions(traderID, exchangeID, exchangeType string
 	// DB rows as orphans. Empty boundAccount → PositionsFor("") !ok → early return
 	// (never touches the DB), preserving the ef550df7 refuse semantics.
 	acct := t.boundAccount
-	snap, ok := t.server.PositionsFor(acct)
+	snap, ok, snapshotErr := t.positionsAfterExit()
+	if snapshotErr != nil {
+		logger.Warnf("NT8 position reconciliation deferred: %v", snapshotErr)
+		return
+	}
 	if !ok {
 		// NT8 has not reported positions for this account — do NOT touch the DB.
 		return
 	}
+
+	// Apply complete durable exit evidence before orphan/quantity reconciliation.
+	t.retryPendingNT8Exits(st)
+	defer t.retryPendingNT8Exits(st)
 
 	// C8 (2026-08-25) — sweep stale UNCONFIRMED entries: a pending signal that
 	// never produced a fill (NT8 rejected it, or the AddOn dropped the frame)
