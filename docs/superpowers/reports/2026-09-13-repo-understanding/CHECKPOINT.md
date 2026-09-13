@@ -1,55 +1,38 @@
-# Saved checkpoint — incomplete audit
+# Current audit and repair checkpoint
 
-20 of 30 scoped reviews have complete reports: assignments 1–20. Their
-assigned source totals are 774 files / 172,278 lines. Coverage-ledger validation
-passed; this validates hashes/ranges/function-note consistency, not semantics.
+Owner resumed the dispatch after the usage limit reset. The earlier blocked
+checkpoint is preserved in `interim/before-usage-reset-CHECKPOINT.md`; it is
+historical, not current status.
 
-Audit source base: `63968be62e44db2fb07a92883e02127b9064b0be`.
-Repair source checkpoint: `7b2eb894` on
-`fix/repo-audit-control-boundaries-20260913`. All repair commits remain undeployed.
+All30 scoped review assignments are complete:28 baseline source reviews cover
+1,049 first-party source files /250,582 lines, followed by two independent
+cross-boundary reviews at repair99a06543. The source coverage ledger has zero
+hash/range/missing named Go/JS/TS note errors. This is consistency evidence,
+not proof of semantic correctness, every test file read, or runtime behavior.
 
-## Execution block
+Baseline:63968be62e44db2fb07a92883e02127b9064b0be. Current repairs live on
+`fix/repo-audit-control-boundaries-20260913`; C# integration includes f1b7cc10.
+Go full suite, build and focused race checks passed at99a06543. Later repairs
+have focused checks; final combined verification remains pending.
 
-Automatic approval review rejected the next offline kernel test because the
-Codex usage limit was reached. The tool expressly prohibited bypass. Review
-agents 21 and 23 also errored with that usage-limit message. No blocked test
-was run by an alternate route or counted as passed. Assignment 22 is saving
-partial progress. Reviews 21–30 are not complete.
+Completed since the old checkpoint: structural prompt alignment; shape-based
+protection verification; current-cycle admission and missing-verdict retirement;
+wall-clock cutoff enforcement; scoped order-fill history; limit registration
+commitment; C# account/expiry/cancellation/bracket lifecycle; browser overlay
+revision checks; request-local chat model selection; delayed flatten identity
+and Stop lifecycle; swing wick provenance and aggregate volume conservation.
 
-## Verified versus pending
+Active work: frontend identity/edit/state repairs; partial close receipt and
+residual-position correctness; terminal cancellation with cumulative fill
+materialization; final combined tests and independent review; guide revision;
+full report and source/evidence backups/publication.
 
-Focused regressions pass for committed ownership, chat, account isolation,
-boot admission, terminal retirement, cancellation settlement/causality/retry,
-history-channel race and stop-refusal fixes. The first full Go suite at
-`234b0262` had three store-fixture failures; their corrected fixtures passed
-focused reruns. There has been no final combined full-suite run.
+No source audit action deployed/restarted the bot or NT8, changed owner settings,
+read/wrote live trading records, or submitted an order. Preserve those boundaries.
+Do not restore a mandatory per-trade dollar cap: the owner clarified DAILY loss.
+Ordinary Stop must retain protection/close observers for any held position;
+cleanup is not safe merely because entry scheduling stopped.
 
-The unchanged C# AddOn compiled offline against installed NT8 references into
-a temporary DLL. This is neither an NT8 runtime test nor verification of the
-open C# account-routing/cancel-race findings. No C# repair was made.
-
-Pending: remaining source reviews, independent cross-boundary and repair review,
-confirmed-defect triage/repairs, combined Go/race/frontend checks, guide revision
-finalization, publication/merge and final end-to-end evidence report.
-
-## Next concrete repair
-
-Current planner prompt and advisory feasibility warnings still treat the legacy
-ATR stop floor as universal. Reject fades now use frozen structural geometry.
-The source discrepancy is verified; no before/after regression has run. The
-prepared test is saved outside the branch at
-`/tmp/nofx-repository-audit-checkpoint-20260913/pending-tests/structural_prompt_contract_test.go`.
-No corresponding production change was made. Do not restore a mandatory
-per-trade loss cap: the owner clarified DAILY loss controls.
-
-## Resume order
-
-1. Restore review21 partial artifacts and finish its report; continue22/23.
-2. Complete24–28 then independent29/30, preserving explicit read ledgers.
-3. Reproduce/fix the prompt discrepancy; prioritize NT8 lifecycle/account
-   boundaries and other confirmed active-path defects from the review reports.
-4. Run final combined verification, independently review, then publish exact
-   commit-pinned report URL, byte count and downloadable evidence.
-
-Main checkout, running binary, live database, account bindings and settings
-were not changed by this audit. Completion is not claimed.
+Verified progress bundle: `/tmp/nofx-audit-progress-30-reviews.bundle`, containing
+four branch refs and requiring baseline63968be. It is an incremental backup,
+not a standalone full-repository restore. The final bundle/manifest is still due.

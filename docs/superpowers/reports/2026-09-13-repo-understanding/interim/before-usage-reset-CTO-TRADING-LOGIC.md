@@ -1,10 +1,10 @@
 # CTO assessment: does the system behave like a disciplined level trader?
 
-Status: SOURCE REVIEW COMPLETE; repairs and final combined verification in progress. Not a deployment or profitability approval.
+Status: INCOMPLETE AUDIT; not a deployment or profitability approval.
 
 Source references below are repository-relative. Strategy source was inspected at
 `63968be62e44db2fb07a92883e02127b9064b0be`; repair-specific behavior is at
-the repair commits named in the repair report. The repair branch is undeployed.
+`7b2eb89455b3a73e911de64e66f5ea8c358c5913`. The repair branch is undeployed.
 [A] means source inspected or an explicitly named test run; [B] means inference.
 Owner-supplied backtest numbers are not independently recomputed here. This is a
 repository engineering assessment, not a new literature review or evidence that
@@ -14,10 +14,8 @@ a discretionary trading doctrine is profitable.
 
 The system has many useful controls, but their number does not establish a
 coherent trading process. I cannot sign off on complete trading correctness.
-All30 scoped review reports are complete:28 source slices cover1,049 files and
-250,582 lines; two cross-boundary reviews examined repair99a06543. Subsequent
-repairs receive separate focused review/tests. Final combined verification is
-still pending. The number of reviews is not the number of simultaneous agents.
+The audit has 20 completed review reports covering 774 assigned source files;
+10 reviews, important repairs and final combined verification remain unfinished.
 
 The core standard is consistency: the same setup identity, contract, account,
 entry, stop, target, permission and lifecycle must survive from market data to
@@ -40,12 +38,12 @@ setup; entry condition; invalidation; opposing obstacles; composed geometry;
 all admission results; and why the chosen candidate outranked alternatives.
 This is an engineering acceptance requirement, not a new enabled trading rule.
 
-[A] `trader/armed_executor.go` separates placement from authoring. Repairs
-2dc94a19 and456b38d4 exercise the actual cycle and loopback transport: missing
-permission or current quality refusal cannot leave an inherited authorization
-eligible. Placement consumes IDs admitted in the current cycle. Retirement
-write failure prevents placement. These are enforcement tests, not merely
-assertions about the model's prose.
+[A] `trader/armed_executor.go:1174` separates placement from authoring. Existing
+armed rows are consumed later. Consequently “the latest model declined it” is
+insufficient unless the old authorization is retired too. Review20 A2 identifies
+missing-verdict and ordinary-refusal cases requiring production-loop regression.
+The geometry-refusal path already explicitly retires old authorizations; that
+stronger behavior must be checked across other refusal paths.
 
 ## 2. Stop location: invalidate the identified setup, then report its exposure
 
@@ -71,15 +69,24 @@ out of sample. An overshoot distribution conditioned only on levels that later
 held excludes breakdowns; it cannot by itself establish total stop-out risk.
 The research review records that limitation without claiming a new calibration.
 
-## 3. The planner and execution contract now agree on reject-fade geometry
+## 3. The planner currently contradicts that stop contract
 
-[A] Repair710ea1c8 updates the actual planner prompt builder, legacy stop-floor
-facts and feasibility warning consumer. Reject fades use frozen structural
-geometry; the legacy ATR floor is explicitly scoped to other plays. The prompt
-no longer suggests switching execution routes to escape a refused arm. Authored
-reject stops are not evaluated as if they were the later composed trade. Focused
-production builder/warning tests pass and the map golden remains unchanged.
-This is a consistency repair; it does not validate the buffer or trading edge.
+[A] `kernel/planner_prompt.go:798` still instructs arms to satisfy a universal
+ATR floor and suggests omitting the arm and using the AI path if both conditions
+cannot be met. `kernel/class45_feeds_forward.go:178` labels the legacy floor as
+this cycle's minimum and says tighter stops are widened.
+
+[A] `kernel/plan_doc.go:581` also calculates feasibility warnings from authored
+stops/targets, including reject scenarios whose production geometry is composed
+later. These warnings can describe a different trade from the one the executor
+will evaluate. This is a verified source contradiction; its prepared regression
+has not run because approval review hit the usage limit.
+
+Required repair: distinguish reject structural geometry from legacy plays in
+all prompt/facts/warning surfaces, preserve actual configured admission rules,
+and remove any suggestion that changing routes bypasses refusal. Verify the
+production prompt builder and production arm call site together. Do not merely
+edit a sentence while leaving its facts block and warnings contradictory.
 
 ## 4. Target selection: the next level is precise, but not proved optimal
 
@@ -157,34 +164,34 @@ and previous-process retries exhausting a new process's retry allowance.
 [A] A production placement-loop test also reproduced a refused stop entry
 cancelling other scenarios as if it had placed. Commit7b2eb894 makes successful
 pre-send registration the commitment boundary. A separate test retains that
-commitment after an ambiguous send error. Repairb63747ea covers the analogous limit path through the actual TCP adapter
-and registration callback. Both commit on durable registration; neither calls
-an ambiguous send a fill or confirmed cancellation.
+commitment after an ambiguous send error. The analogous limit-send-error path
+remains an open item; it is not covered by claiming the stop repair fixed both.
 
 All these are offline fixture results. They do not prove the installed AddOn
 accepted an order or that every asynchronous interleaving is correct.
 
-## 8. NT8 protection and account routing: repaired source, bounded evidence
+## 8. Open NT8 protection and account-routing concerns prevent sign-off
 
-[A] C# source repairs9140f6c9/f1b7cc10 resolve explicit accounts without fallback,
-select the actual held expiry, refuse ambiguous bare roots, and preserve SIM,
-connection and session-account restrictions. Entry cancellation retains deferred
-protection until terminal broker evidence. Submit ambiguity retains bracket
-identity; cumulative fills amend one pair. Actual leg quantities confirm an
-amendment, and synchronous terminal receipts survive submission reentrancy.
+[A] `ninjascript/VLTraderTCPClient.cs:1152` handles close requests using a
+symbol-to-account map and active-account fallback, rather than the request's
+explicit account. The map is keyed by root symbol, which is insufficient to
+represent two accounts holding the same symbol. The exact held expiry also
+needs verification against front-month instrument resolution. These are source
+findings; no wrong-account close was observed during this audit.
 
-[A] Independent review reproduced two gaps in the first repair, then verified
-both fixes. All33 extracted-production-method harness assertions pass and all
-five AddOn sources compile against installed NT8 assemblies. These checks do
-not recreate NT8 scheduling, the broker's OCO implementation or real fills.
-The source AddOn has not been copied, compiled in the live NT8 installation or
-restarted. No runtime protection claim follows from the temporary DLL.
+[A] `HandleCancelOrder` at line1735 attempts entry cancellation, but line1813
+removes deferred bracket intent even after a caught cancellation failure.
+`SubmitBracketOnEntryFill` at line2102 consumes that intent. [B] A cancel/fill
+race can therefore lose future bracket placement intent. Existing placed
+brackets are not cancelled by this handler; saying this code always removes an
+existing stop would be false. Terminal state, partial fills and ambiguous bracket
+submission need a coherent lifecycle repair with behavioral tests.
 
-[A] Additional cross-boundary tests reproduced partial completed exits being
-recorded as full-position closes and positive cumulative fills on cancellation
-being omitted by the Go arm consumer. Those repairs are in progress; they are
-not excused by the intended one-contract setup because the interfaces also
-handle other quantities and manual interactions.
+[A] `HandlePlaceProtectiveStop` at line1850 also needs explicit-account fallback
+review. Current SIM restrictions remain essential and must not be weakened.
+The unchanged AddOn compiled offline against installed NT8 references, but these
+findings are not repaired or behaviorally verified. Compilation is not protection
+proof. These concerns take priority over optimizing signal frequency.
 
 ## 9. One contract and management rules must remain executable
 
@@ -200,11 +207,8 @@ protective-stop restoration is different from discretionary tightening, but the
 UI and logs must identify which occurred. New plan versions must not become an
 accidental loophole around the owner's intended re-entry policy.
 
-Delayed flatten repair94e08cf0 checks immutable position/entry lineage, invalidates
-timers on Stop and preserves protection after close refusal. A broker-side atomic
-position fence is still absent: a stale local row cannot prove that no unseen
-replacement exists. Broker observers intentionally outlive ordinary Stop while
-positions may remain. Final removal needs an explicit safe handoff design.
+These are acceptance checks still requiring the remaining runtime/UI review,
+not assertions that every management rule currently agrees.
 
 ## 10. What establishes success, and the order of work
 
@@ -234,15 +238,10 @@ is then to demonstrate that the selected opportunities pay after losses and cost
 
 ## Evidence and completion limits
 
-See README.md, CHECKPOINT.md, reviews/01 through reviews/30, coverage-validation.json
-and the separate repository-repairs report. Full Go/build/focused race checks
-passed at99a06543, before later changes. Final combined checks are still due.
-No deployment, owner-setting change, live database write or real order occurred.
-Historical runtime snapshots from the earlier daily-loss dispatch are not new
-observations. The earlier usage-blocked report is archived under interim/.
-
-The final report must distinguish fixed/reproduced defects, static concerns,
-intentional policies, dormant legacy paths and checks requiring real runtime.
-Neither complete source coverage nor a green suite demonstrates profitable
-trade selection. Owner-supplied backtest statistics remain supplied context,
-not an independently repeated experiment in this engineering dispatch.
+See README.md, CHECKPOINT.md, reviews/01 through reviews/20 and the separate
+repair report. Reviews21/22 have partial artifacts;23–30 are unfinished.
+Automatic approval review blocked the next test because Codex usage was exhausted;
+several agents stopped for the same reason. No workaround was used to claim a
+blocked test passed. No deployment, owner setting change, live DB write or real
+order was performed for this assessment. This report is a traced interim CTO
+assessment, not the promised final end-to-end completion certificate.

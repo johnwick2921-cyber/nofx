@@ -22,17 +22,14 @@ The recovered Understand Anything graph is dated July 10, 2026 at `7a8adce004372
 
 [A] directly read/run/observed; [B] inference from cited evidence; [C] hypothesis. Static concerns, offline reproductions and runtime incidents are separate categories. Each final trace will name source revision and file/function/line, actual test results, and remaining uncertainty. A passing suite is not proof of every behavior. No fabricated coverage, caller resolution, runtime observations, profitability or universal safety claims.
 
-## Repair lane — still in progress
+## Repair lane — integration and verification in progress
 
-`fix/repo-audit-control-boundaries-20260913` holds isolated code repairs. Current
-checkpoint `7b2eb894` includes authenticated object ownership/deletion, Q&A
-empty/trader-scoped context, validation-before-save, boot refusal on all NT8 entry
-methods, same-version terminal-arm retirement, session mutation chain dates,
-broker-book absence/freshness/send truth, history-channel teardown locking, and
-boot cancellation settlement. The separate repair report names reproductions
-and test limits. These changes are not deployed and do not alter owner settings.
-The first full Go suite completed with three store-test failures; all other packages passed. Corrected authorization fixtures pass focused reruns. Later account and chat repairs have focused tests; final combined verification remains pending.
+`fix/repo-audit-control-boundaries-20260913` holds source repairs separately from
+this baseline audit. The detailed repair report records exact commits, test
+reproductions and limitations. Go full suite/build/focused race checks passed at
+99a06543; later C#, frontend and Go changes require combined verification.
 
-The latest execution limitation and exact resume queue are recorded in [CHECKPOINT.md](CHECKPOINT.md).
-
-Resumed after owner reported usage reset: structural prompt regression reproduced and fixed at repair710ea1c8; focused kernel checks passed. Second full Go run is in progress.
+[CTO-TRADING-LOGIC.md](CTO-TRADING-LOGIC.md) explains the trading process and its
+limits. [CHECKPOINT.md](CHECKPOINT.md) records the current resume state. The
+usage-blocked snapshots are preserved under `interim/` and are explicitly
+historical. Main checkout/runtime/accounts/settings remain untouched.
