@@ -185,12 +185,14 @@ type TCPServer struct {
 	// contamination bug). Legacy EMPTY-symbol payloads route to the PRIMARY
 	// trading symbol. Re-subscribing a symbol CLOSES the prior channel, which
 	// terminates a dead (reloaded-away) trader instance's consumer goroutine.
-	subsMu       sync.Mutex
-	fillSubs     map[string]chan FillPayload
-	closeSubs    map[string]chan PositionClosePayload
-	rejectSubs   map[string]chan PositionCloseRejectedPayload
-	instrSubs    map[string]chan InstrumentInfoPayload
-	orderUpdSubs map[string]chan OrderUpdatePayload
+	executionMu     sync.Mutex
+	executionOwners map[string]*OrderedExecutionHandlers
+	subsMu          sync.Mutex
+	fillSubs        map[string]chan FillPayload
+	closeSubs       map[string]chan PositionClosePayload
+	rejectSubs      map[string]chan PositionCloseRejectedPayload
+	instrSubs       map[string]chan InstrumentInfoPayload
+	orderUpdSubs    map[string]chan OrderUpdatePayload
 
 	// Connection state — single concurrent client (spec L4359).
 	connMu        sync.Mutex
@@ -1860,6 +1862,7 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 			if fill.Status == "rejected" {
 				s.retirePending(fill.Seq, fill.SignalID)
 			}
+			s.dispatchOrderedFill(&fill)
 			select {
 			case s.fillCh <- fill:
 			default:
@@ -1875,6 +1878,7 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 				s.logger.Warn("tcp_server: bad order_update payload", "err", err)
 				continue
 			}
+			s.dispatchOrderedOrder(&oup)
 			select {
 			case s.orderUpdCh <- oup:
 			default:
@@ -2139,6 +2143,7 @@ func (s *TCPServer) readLoop(ctx context.Context, c net.Conn) {
 				continue
 			}
 			s.retirePending(p.Seq, p.SignalID)
+			s.dispatchOrderedClose(&p)
 			select {
 			case s.closeCh <- p:
 			default:

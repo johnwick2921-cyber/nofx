@@ -71,9 +71,10 @@ type SignalPayload struct {
 // attributable. Empty = legacy AddOn (pre-P5.2) → consumers treat it as the
 // primary trading symbol (back-compat; new field is additive JSON).
 type FillPayload struct {
-	Reason   string `json:"reason,omitempty"` // Optional; h1 omits rejection reasons.
-	SignalID string `json:"signal_id"`
-	Symbol   string `json:"symbol,omitempty"` // P5.2 — order's root symbol; empty = legacy (primary)
+	OrderedHandled bool   `json:"-"`
+	Reason         string `json:"reason,omitempty"` // Optional; h1 omits rejection reasons.
+	SignalID       string `json:"signal_id"`
+	Symbol         string `json:"symbol,omitempty"` // P5.2 — order's root symbol; empty = legacy (primary)
 	// Account is the NT sub-account this fill executed on (H3 fix). The C# AddOn
 	// already sends it (VLTraderTCPClient SendFillFrame ["account"]); Go now parses
 	// it so fills route to the OWNING trader by (symbol,account) and a trader never
@@ -158,16 +159,18 @@ type ModifyBracketPayload struct {
 // OrderUpdatePayload is every NT8 order-state change (deduped per order name)
 // — the armed engine's working/cancelled/filled visibility.
 type OrderUpdatePayload struct {
-	Reason    string  `json:"reason,omitempty"` // Additive Go receive support; next AddOn wave emits it.
-	SignalID  string  `json:"signal_id"`
-	OrderName string  `json:"order_name"`
-	State     string  `json:"state"` // accepted|working|partfilled|filled|rejected|cancelled
-	FillPrice float64 `json:"fill_price"`
-	Quantity  int     `json:"quantity"`
-	Symbol    string  `json:"symbol"`
-	Account   string  `json:"account"`
-	TraderID  string  `json:"trader_id,omitempty"`
-	Seq       uint64  `json:"seq,omitempty"`
+	OrderedArrival bool    `json:"-"`
+	OrderedHandled bool    `json:"-"`
+	Reason         string  `json:"reason,omitempty"` // Additive Go receive support; next AddOn wave emits it.
+	SignalID       string  `json:"signal_id"`
+	OrderName      string  `json:"order_name"`
+	State          string  `json:"state"` // accepted|working|partfilled|filled|rejected|cancelled
+	FillPrice      float64 `json:"fill_price"`
+	Quantity       int     `json:"quantity"`
+	Symbol         string  `json:"symbol"`
+	Account        string  `json:"account"`
+	TraderID       string  `json:"trader_id,omitempty"`
+	Seq            uint64  `json:"seq,omitempty"`
 }
 
 // P5.3 — subscription acks (C#-AddOn → Go-server). The AddOn confirms or// rejects each bars_subscribe/bars_unsubscribe so the Go side (and the owner
@@ -375,14 +378,15 @@ const FramePositionClose FrameType = "position_close"
 // action. RealizedPnL is left to the Go side to compute against the recorded
 // entry × the futures point value (single source of truth: market.FuturesPointValue).
 type PositionClosePayload struct {
-	ExitOrderID  string  `json:"exit_order_id,omitempty"` // actual NT broker order ID; completed-exit receipt identity
-	SignalID     string  `json:"signal_id"`               // entry signal_id, for correlation
-	Symbol       string  `json:"symbol"`                  // root symbol, e.g. "MNQ"
-	PositionSide string  `json:"position_side"`           // "long" | "short" (held side)
-	ExitPrice    float64 `json:"exit_price"`
-	Quantity     int     `json:"quantity"`
-	ExitReason   string  `json:"exit_reason"` // "sl" | "tp" | "manual"
-	ExitTime     string  `json:"exit_time"`   // RFC3339
+	OrderedHandled bool    `json:"-"`
+	ExitOrderID    string  `json:"exit_order_id,omitempty"` // actual NT broker order ID; completed-exit receipt identity
+	SignalID       string  `json:"signal_id"`               // entry signal_id, for correlation
+	Symbol         string  `json:"symbol"`                  // root symbol, e.g. "MNQ"
+	PositionSide   string  `json:"position_side"`           // "long" | "short" (held side)
+	ExitPrice      float64 `json:"exit_price"`
+	Quantity       int     `json:"quantity"`
+	ExitReason     string  `json:"exit_reason"` // "sl" | "tp" | "manual"
+	ExitTime       string  `json:"exit_time"`   // RFC3339
 	// Account: the NT8 sub-account this close is on. The C# AddOn already SENDS it
 	// (SendPositionCloseFrame ["account"]); Go simply wasn't parsing it. Used by
 	// close-sync owner-routing to match the close to the trader that OWNS the row.

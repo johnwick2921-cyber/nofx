@@ -1950,6 +1950,9 @@ func logArmedOrderUpdateSummary() {
 
 // onArmedOrderUpdate applies one NT8 order state change to the armed ledger.
 func (at *AutoTrader) onArmedOrderUpdate(u ntwire.OrderUpdatePayload, ledger *store.ArmedOrderStore) {
+	if u.OrderedHandled {
+		return
+	}
 	at.armedOrderUpdateMu.Lock()
 	defer at.armedOrderUpdateMu.Unlock()
 	// Frame-receipt proof (cutover confirmation wave): the C# dispatcher's
@@ -2087,6 +2090,26 @@ func (at *AutoTrader) materializeArmedEntry(r store.ArmedOrderDB, u ntwire.Order
 			return
 		}
 		pos := entries[0]
+		// Synchronous receive order provides strictly greater cumulative fill
+		// evidence observed after the close for the same immutable entry. This
+		// establishes unaccounted exposure, not exchange execution timestamps.
+		if pos.Status == "CLOSED" && u.OrderedArrival && pos.Symbol == at.futuresSymbol() && pos.Side == side && pos.Account == u.Account && pos.EntryNotional != nil && pos.EntryQuantity > 0 && float64(u.Quantity) > pos.EntryQuantity {
+			delta := float64(u.Quantity) - pos.EntryQuantity
+			notional := float64(u.Quantity) * u.FillPrice
+			deltaNotional := notional - *pos.EntryNotional
+			if deltaNotional <= 0 || math.IsNaN(deltaNotional) || math.IsInf(deltaNotional, 0) {
+				return
+			}
+			// Check competing exposure inside the same SQL statement, not a stale pre-read.
+			result := at.store.GormDB().Model(&store.TraderPosition{}).Where("id = ? AND status = ? AND entry_order_id = ? AND account = ? AND symbol = ? AND entry_quantity = ? AND entry_notional = ?", pos.ID, "CLOSED", r.SignalID, pos.Account, pos.Symbol, pos.EntryQuantity, *pos.EntryNotional).Where("NOT EXISTS (SELECT 1 FROM trader_positions occupied WHERE occupied.account = ? AND occupied.symbol = ? AND occupied.status = ?)", pos.Account, pos.Symbol, "OPEN").Updates(map[string]any{
+				"status": "OPEN", "quantity": delta, "entry_quantity": u.Quantity, "entry_notional": notional, "entry_price": deltaNotional / delta,
+				"exit_time": 0, "exit_order_id": "", "close_reason": "", "pnl_corrected": nil, "pnl_correction_note": "", "updated_at": time.Now().UTC().UnixMilli(),
+			})
+			if result.Error != nil {
+				at.logWarnf("ordered entry continuation signal=%s: %v", r.SignalID, result.Error)
+			}
+			return
+		}
 		if pos.Status != "OPEN" && float64(u.Quantity) > pos.EntryQuantity {
 			at.logWarnf("late cumulative entry signal=%s qty=%d exceeds closed entry qty=%.0f; evidence retained, no position fabricated", r.SignalID, u.Quantity, pos.EntryQuantity)
 		}

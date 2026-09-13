@@ -91,6 +91,9 @@ func (t *TCPTrader) recordClose(
 	pb *store.PositionBuilder,
 	p ntwire.PositionClosePayload,
 ) {
+	if p.OrderedHandled {
+		return
+	}
 	side := strings.ToUpper(strings.TrimSpace(p.PositionSide))
 	symbol := t.symbol
 	if symbol == "" {

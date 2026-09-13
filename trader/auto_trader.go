@@ -7,6 +7,7 @@ import (
 	"nofx/mcp"
 	_ "nofx/mcp/payment"
 	_ "nofx/mcp/provider"
+	ntwire "nofx/provider/ninjatrader"
 	"nofx/store"
 	"nofx/telemetry"
 	"nofx/trader/aster"
@@ -824,6 +825,7 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 		// THE LEDGER'S EAR FOR A REFUSAL (2026-09-07). Every entry-reject path
 		// in the NT8 trader calls this with the BROKER'S reason, verbatim.
 		nt.SetRejectSink(at.recordBrokerRejection)
+		at.installNTOrderedExecutions(nt)
 	}
 	return at, nil
 }
@@ -1258,4 +1260,12 @@ func (at *AutoTrader) recordBrokerRejection(signalID, brokerReason string) {
 	}
 	at.logWarnf("🚨 received armed entry rejection %s leg %d signal=%s reason=%q", row.Scenario, row.LegIndex+1, signalID, reason)
 	telemetry.IncGateBlock(at.id, "place_rejected_by_broker")
+}
+
+// installNTOrderedExecutions is shared by constructor and transport fixtures.
+func (at *AutoTrader) installNTOrderedExecutions(nt *ntTrader.TCPTrader) {
+	if at.store == nil {
+		return
+	}
+	nt.InstallOrderedExecutions(at.id, at.exchangeID, at.exchange, at.store, func(u ntwire.OrderUpdatePayload) { at.onArmedOrderUpdate(u, at.store.ArmedOrders()) })
 }
