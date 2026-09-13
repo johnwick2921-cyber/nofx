@@ -1083,7 +1083,7 @@
         }
       ],
       "id": 6,
-      "status": "running",
+      "status": "reported",
       "lines": 9015,
       "file_count": 24,
       "agent": "review_06"
@@ -1318,7 +1318,7 @@
         }
       ],
       "id": 7,
-      "status": "running",
+      "status": "reported",
       "lines": 9071,
       "file_count": 25,
       "agent": "review_07"
@@ -1607,7 +1607,7 @@
         }
       ],
       "id": 8,
-      "status": "pending",
+      "status": "in_progress",
       "lines": 7721,
       "file_count": 31
     },
@@ -1886,7 +1886,7 @@
         }
       ],
       "id": 9,
-      "status": "pending",
+      "status": "in_progress",
       "lines": 7725,
       "file_count": 30
     },
@@ -2120,7 +2120,7 @@
         }
       ],
       "id": 10,
-      "status": "pending",
+      "status": "in_progress",
       "lines": 7199,
       "file_count": 25
     },
@@ -3353,7 +3353,7 @@
         }
       ],
       "id": 14,
-      "status": "running",
+      "status": "reported",
       "lines": 10442,
       "file_count": 20,
       "agent": "review_14"

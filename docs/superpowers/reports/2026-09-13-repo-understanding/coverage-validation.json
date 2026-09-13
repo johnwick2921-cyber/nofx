@@ -40,6 +40,30 @@
     "warning": "Consistency only; not independent semantic or runtime verification."
   },
   {
+    "assignment": 6,
+    "files": 24,
+    "ledger_errors": [],
+    "named_go_declarations": 200,
+    "missing_named_go_notes": [],
+    "warning": "Consistency only; not independent semantic or runtime verification."
+  },
+  {
+    "assignment": 7,
+    "files": 25,
+    "ledger_errors": [],
+    "named_go_declarations": 184,
+    "missing_named_go_notes": [],
+    "warning": "Consistency only; not independent semantic or runtime verification."
+  },
+  {
+    "assignment": 14,
+    "files": 20,
+    "ledger_errors": [],
+    "named_go_declarations": 198,
+    "missing_named_go_notes": [],
+    "warning": "Consistency only; not independent semantic or runtime verification."
+  },
+  {
     "assignment": 20,
     "files": 26,
     "ledger_errors": [],
