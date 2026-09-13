@@ -11,12 +11,12 @@ The owner requested a detailed, accurately traced, approximately 30-agent reposi
 - Tests, fixtures and historical non-code artifacts are inventoried; relevant ones are followed. This is **not** a claim that every test or historical artifact was manually read.
 - Go AST inventory: 1,292 files parsed, 10,269 functions/literals and 78,157 syntactic calls; zero parser errors. These are syntax inventories, **not type-resolved call edges or human reading**.
 - `orientation/` holds initial subsystem reviews with explicit read ledgers and unresolved concerns. Their findings require root/cross-review validation.
-- **26/30 scoped reviews reported**, covering 1,016 assigned source files / 231,647 lines. Remaining source and independent cross-boundary reviews are pending.
+- **28/30 scoped reviews reported**, covering all 1,049 assigned source files / 250,582 lines. Two independent cross-boundary reviews are pending.
 - `review-plan.json` tracks assignments; `coverage-validation.json` checks source hashes, full line ranges, and named Go/TypeScript/JavaScript function notes. It does not certify semantic understanding or runtime behavior.
 
 ## Historical maps
 
-The recovered Understand Anything graph is dated July 10, 2026 at `7a8adce0043729950f3d7cbfaf30810c8304709a`: 3,121 nodes, 9,588 edges, 11 layers and 15 tour steps. Its SHA-256 is `23aa686864d6e1af4e6b43ae52856175356d0e90418a2c43f`. CGC responds with 781 indexed files and 5,095 functions, but exposes no index revision/date. Both require comparison with current source. Neither establishes current completeness.
+The recovered Understand Anything graph is dated July 10, 2026 at `7a8adce0043729950f3d7cbfaf30810c8304709a`: 3,121 nodes, 9,588 edges, 11 layers and 15 tour steps. Its SHA-256 is `23aa686864d6e1af4e6b43ae52856175356d07e8baf066fe36d0e90418a2c43f`. CGC responds with 781 indexed files and 5,095 functions, but exposes no index revision/date. Both require comparison with current source. Neither establishes current completeness.
 
 ## Evidence contract
 
