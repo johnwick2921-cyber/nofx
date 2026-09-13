@@ -117,3 +117,9 @@ not a reason to rerun a red job until it happens to pass.
 
 [A] All class-32 fixtures pass 15 consecutive race-enabled repetitions.
 [Race verification](2026-09-13-structural-stop-daily-loss-evidence/class32-race.log).
+
+[A] The complete local race/coverage suite passed. CI's separate coverage workflow
+also restored modules twice: once through setup-go and once through actions/cache.
+The first run emitted thousands of existing-file extraction errors; the next
+run stalled in that redundant cache step before tests. Remove the duplicate
+restore and use `go-version-file: go.mod`, matching the release toolchain.
