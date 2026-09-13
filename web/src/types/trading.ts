@@ -202,6 +202,8 @@ export interface HistoricalPosition {
 
 // Matches Go TraderStats struct exactly
 export interface TraderStats {
+  resolved_trades?: number
+  unresolved_excluded?: number
   total_trades: number
   win_trades: number
   loss_trades: number

@@ -197,7 +197,6 @@ export function RiskControlEditor({
 
   return (
     <div className="space-y-6">
-
       {/* Hold discipline (hold-lock) — applies to futures + crypto; default OFF */}
       <div
         className="p-4 rounded-lg"
@@ -856,16 +855,21 @@ export function RiskControlEditor({
             />
           </GuardrailRow>
 
-          <GuardrailRow
-            label={ts(riskControl.consecutiveLossHalt, language)}
-            enabled={(config.consecutive_loss_halt ?? 0) > 0}
-            onToggle={(v) => updateField('consecutive_loss_halt', v ? 2 : 0)}
-            disabled={disabled}
-          >
+          <div className="space-y-2" data-testid="consecutive-loss-control">
+            <label
+              htmlFor="consecutive-loss-threshold"
+              className="text-sm text-gray-200"
+            >
+              {ts(riskControl.consecutiveLossHalt, language)}
+            </label>
+            <p className="text-xs text-gray-400">
+              {ts(riskControl.consecutiveLossDefault, language)}
+            </p>
             <input
+              id="consecutive-loss-threshold"
               type="number"
-              value={config.consecutive_loss_halt || ''}
-              placeholder="e.g. 2"
+              value={config.consecutive_loss_halt ?? 0}
+              placeholder="0"
               onChange={(e) =>
                 updateField(
                   'consecutive_loss_halt',
@@ -881,7 +885,7 @@ export function RiskControlEditor({
                 color: '#EAECEF',
               }}
             />
-          </GuardrailRow>
+          </div>
 
           {isFutures && (
             <GuardrailRow

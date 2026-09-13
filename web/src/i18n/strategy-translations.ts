@@ -582,6 +582,12 @@ export const riskControl = {
     en: 'Max daily trades',
     es: 'Máx. operaciones diarias',
   },
+  consecutiveLossDefault: {
+    en: '0 uses the server threshold (default 8 unless overridden). This field cannot switch the breaker off.',
+    zh: '0 使用服务器阈值（未覆盖时默认为 8）。此字段不能关闭熔断器。',
+    es: '0 usa el umbral del servidor (8 por defecto salvo configuración). Este campo no desactiva el freno.',
+    id: '0 menggunakan ambang server (default 8 kecuali diganti). Kolom ini tidak dapat mematikan pemutus.',
+  },
   consecutiveLossHalt: {
     zh: '连续亏损熔断 (N 笔后停止开仓)',
     en: 'Consecutive-loss halt (stop after N losers)',

@@ -65,6 +65,7 @@ interface AuthContextType {
   isLoading: boolean
 }
 
+let sessionSequence = 0
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -346,7 +347,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   // A new authentication session owns a new cache, including in-flight requests.
-  const sessionKey = `${user?.id || 'guest'}:${token || ''}`
+  const sessionKey = useMemo(() => ++sessionSequence, [user?.id, token])
   const cacheConfig = useMemo(
     () => ({ provider: () => new Map() }),
     [sessionKey]
