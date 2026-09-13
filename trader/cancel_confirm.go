@@ -161,6 +161,9 @@ func cancelSettled(
 	if !haveBook {
 		return false, "no broker snapshot has been received"
 	}
+	if bookAge < 0 {
+		return false, "broker snapshot receipt is in the future relative to the evaluation clock"
+	}
 	if maxAge > 0 && bookAge > maxAge {
 		return false, fmt.Sprintf("book is %s old, older than the %s bound", bookAge.Round(time.Second), maxAge.Round(time.Second))
 	}
@@ -263,9 +266,10 @@ func (at *AutoTrader) persistedBook(now time.Time) (orders []nt.NT8Order, haveBo
 		at.logWarnf("🧾 cancel: snapshot %d has unreadable orders_json — settling nothing from it: %v", row.ID, err)
 		return nil, false, 0, row.ID
 	}
-	if row.ReceivedMs > 0 {
-		age = time.Duration(now.UnixMilli()-row.ReceivedMs) * time.Millisecond
+	if book == nil || row.ReceivedMs <= 0 {
+		return nil, false, 0, row.ID
 	}
+	age = time.Duration(now.UnixMilli()-row.ReceivedMs) * time.Millisecond
 	return book, true, age, row.ID
 }
 
@@ -369,6 +373,9 @@ func (at *AutoTrader) confirmPendingCancels(ledger *store.ArmedOrderStore, cance
 	for i := range rows {
 		r := rows[i]
 		ok, why := cancelSettled(book, have, age, maxAge, r.SignalID)
+		if ok && (r.CancelRequestedAtMs <= 0 || now.Add(-age).UnixMilli() < r.CancelRequestedAtMs) {
+			ok, why = false, "broker snapshot predates the cancel request or request time is unavailable"
+		}
 		if ok && snapID > 0 {
 			// The ORIGINAL reason survives the confirmation. Each cancel site
 			// names WHY it cancelled (gate changed, one_live_arm_guard,
@@ -394,9 +401,13 @@ func (at *AutoTrader) confirmPendingCancels(ledger *store.ArmedOrderStore, cance
 			continue // still inside its window; nothing to say yet
 		}
 		telemetry.IncGateBlock(at.id, "cancel_unconfirmed")
-		if r.CancelAttempts >= cap {
+		attempts := r.CancelAttempts
+		if r.CancelAttemptsBoot != store.ProcessBootID() {
+			attempts = 0 // RequestCancel records this process's first attempt below.
+		}
+		if attempts >= cap {
 			at.logWarnf("🧾 cancel UNCONFIRMED %s signal=%s after %s and %d attempt(s) — attempt cap reached, NOT re-requesting and NOT promoting to cancelled (%s)",
-				r.Scenario, shortID(r.SignalID), reqAge.Round(time.Second), r.CancelAttempts, why)
+				r.Scenario, shortID(r.SignalID), reqAge.Round(time.Second), attempts, why)
 			continue
 		}
 		if cancelFn == nil {
@@ -415,7 +426,7 @@ func (at *AutoTrader) confirmPendingCancels(ledger *store.ArmedOrderStore, cance
 		}
 		reRequested++
 		at.logWarnf("🧾 cancel UNCONFIRMED %s signal=%s after %s (%s) — re-requested, attempt %d of %d; the row stays %s",
-			r.Scenario, shortID(r.SignalID), reqAge.Round(time.Second), why, r.CancelAttempts+1, cap, store.StateCancelPending)
+			r.Scenario, shortID(r.SignalID), reqAge.Round(time.Second), why, attempts+1, cap, store.StateCancelPending)
 	}
 	return settled, stillPending, reRequested
 }

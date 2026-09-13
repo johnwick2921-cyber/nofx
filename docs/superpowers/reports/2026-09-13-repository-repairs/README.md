@@ -135,3 +135,14 @@ history while leaving its own history intact. HTTP now always derives that
 identity from authenticated middleware. Normal and SSE handler regressions pass;
 no model/network call or real conversation was used. Telegram's separate identity
 flow is unchanged. Shared mutable AI-client selection remains an open finding.
+
+## Cancellation evidence timing and restart budgets
+
+[A] A regression reproduced a fresh but pre-request empty snapshot settling a
+later cancellation. Confirmation now requires a valid explicit book whose receipt
+is at or after the persisted cancel request; missing and future receipt times
+remain unavailable. The test follows older empty, newer working and newer empty
+evidence. A second regression reproduced a previous process exhausting the new
+process's retry cap. The cap check now applies the process identity before
+counting attempts. Both regressions and existing settlement/boot-sweep tests pass
+(`/tmp/nofx-cancel-evidence-after.log`). No broker or runtime settings were touched.

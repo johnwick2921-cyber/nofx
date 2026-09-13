@@ -9,7 +9,7 @@ export const guards: GuideSection = {
   blocks: [
     { kind: 'p', text: 'Chat memory and clear requests belong to the signed-in owner. A numeric conversation ID in a request cannot select another owner’s history, for either normal or streaming chat.' },
     { kind: 'p', text: 'Balance and risk sizing wait for the selected trader’s own account snapshot. Another account’s equity is never substituted. Position reconciliation can adopt a legacy row with no account only when that row belongs to the same trader; a different account’s row cannot hide a held position.' },
-    { kind: 'p', text: 'At startup, cancellation of an old placed arm stays pending until a persisted broker snapshot confirms its absence. Sending a request or receiving a cancellation receipt alone does not unlock its replacement. The boot-sweep completion counter moves only after that confirmation.' },
+    { kind: 'p', text: 'At startup, cancellation of an old placed arm stays pending until a persisted broker snapshot confirms its absence. Sending a request or receiving a cancellation receipt alone does not unlock its replacement. The confirming snapshot must have been received at or after the cancel request; an older empty book cannot settle it. Retry budgets restart with a new process, while the order remains pending until confirmed. The boot-sweep completion counter moves only after that confirmation.' },
     { kind: 'p', text: 'A missing or null broker order list is unavailable, not an empty book. Cancellation based on order-book evidence requires a fresh snapshot; a failed send remains a failure. The existing confirmed-flat cleanup exception remains.' },
     { kind: 'p', text: 'Ask-Planner apply refuses when no session is active. Apply and realign follow the active session’s trading date, including an overnight session that began on the previous calendar day.' },
     { kind: 'h', text: 'Boot integrity applies to every NT8 entry' },
@@ -87,7 +87,7 @@ export const guards: GuideSection = {
         [
           'Boot sweep (class 33)',
           'HARD',
-          'At boot, before anything is armed: every resting order left behind by the PREVIOUS process is cancelled at NinjaTrader and marked cancelled in the ledger (reason boot_sweep). A cancel that FAILS leaves the row live and retries — the ledger never goes clean while an order might still be at the broker. On 2026-09-02 00:16 CT, before this existed, two arms outlived their process for 15 minutes and briefly double-ordered S3. Since 2026-09-07 the sweep asks the broker before each cancel: a pre-boot row whose entry FILLED before the restart is left alone, because the only orders under that signal are its stop and target.',
+          'At boot, before anything is armed: every eligible resting order left behind by the PREVIOUS process receives a cancel request and stays cancel pending in the ledger (reason boot_sweep). Only a fresh persisted broker book received at or after that request can confirm its absence. A cancel that FAILS leaves the row pending and retries — the ledger never goes clean while an order might still be at the broker. On 2026-09-02 00:16 CT, before this existed, two arms outlived their process for 15 minutes and briefly double-ordered S3. Since 2026-09-07 the sweep asks the broker before each cancel: a pre-boot row whose entry FILLED before the restart is left alone, because the only orders under that signal are its stop and target.',
         ],
         [
           'plan_mode direction/strict',

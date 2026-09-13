@@ -36,6 +36,14 @@ func TestArmSweepLeavesPendingCancelForSnapshotConfirmation(t *testing.T) {
 	if settled, pending, re := at.confirmPendingCancels(ledger, wire, now.Add(time.Second)); settled != 0 || pending != 1 || re != 0 {
 		t.Fatalf("no-book settlement: got %d/%d/%d, want 0/1/0", settled, pending, re)
 	}
+	// A fresh but pre-request empty book cannot prove the cancellation.
+	oldBook := &store.NT8OrderSnapshot{Account: "SimArmSweep", OrdersJSON: "[]", ReceivedMs: now.Add(-time.Millisecond).UnixMilli()}
+	if err := at.store.NT8OrderSnapshots().Insert(oldBook); err != nil {
+		t.Fatal(err)
+	}
+	if settled, pending, re := at.confirmPendingCancels(ledger, wire, now.Add(time.Second)); settled != 0 || pending != 1 || re != 0 {
+		t.Fatalf("pre-request book settled a later cancel: got %d/%d/%d", settled, pending, re)
+	}
 	book := &store.NT8OrderSnapshot{Account: "SimArmSweep", OrdersJSON: `[{"name":"pending-entry","state":"Working","symbol":"MNQ"}]`, ReceivedMs: now.Add(time.Second).UnixMilli()}
 	if err := at.store.NT8OrderSnapshots().Insert(book); err != nil {
 		t.Fatal(err)

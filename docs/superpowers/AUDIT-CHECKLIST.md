@@ -4764,3 +4764,12 @@ Store CRUD used authenticated user identity while chat history trusted a numeric
 body field. Both normal and SSE `/clear` handler tests reproduced foreign memory
 deletion. Bind every state namespace at entry; authenticating the HTTP request
 and separately scoping resource tools does not authorize a caller-selected memory key.
+
+## PENDING CLASS — SETTLEMENT EVIDENCE MUST FOLLOW THE REQUEST
+
+Branch `fix/repo-audit-control-boundaries-20260913`, base `63968be6`.
+A fresh empty broker snapshot can still predate a later cancellation. Require
+receipt at or after the persisted request, valid receipt time and explicit orders
+before absence becomes settlement evidence. Test pre-request empty, post-request
+working, then post-request empty books. A retry budget scoped to process identity
+must reset before the cap check, not only inside the retry it otherwise blocks.
