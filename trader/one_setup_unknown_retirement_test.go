@@ -10,8 +10,12 @@ import (
 )
 
 func TestUnknownOneSetupVerdictCannotPlaceOldAuthorization(t *testing.T) {
-	for _, failRetirement := range []bool{false, true} {
+	for _, tc := range []struct{ failRetirement, lowQuality bool }{{}, {failRetirement: true}, {lowQuality: true}} {
+		failRetirement := tc.failRetirement
 		name := "missing verdict"
+		if tc.lowQuality {
+			name = "current quality refused"
+		}
 		if failRetirement {
 			name = "retirement write fails"
 		}
@@ -19,6 +23,9 @@ func TestUnknownOneSetupVerdictCannotPlaceOldAuthorization(t *testing.T) {
 			now := time.Date(2026, 9, 11, 15, 0, 0, 0, time.UTC)
 			cfg := store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true}}
 			cfg.RiskControl.MinRiskRewardRatio = 2
+			if tc.lowQuality {
+				cfg.DayPlan.MinScenarioQuality = "A"
+			}
 			structuralTestPolicy(&cfg, .5)
 			at, st, sigs, _ := shadowWireHarnessAt(t, cfg, now)
 			doc := kernel.PlanDoc{Bias: kernel.PlanBias{Direction: "long", Conviction: "low", FlipCondition: "n/a"}, Levels: []kernel.PlanLevel{{Price: 100, Label: "PDL", Grade: "A", Instruction: "fade"}}, Scenarios: []kernel.PlanScenario{{ID: "S1", Trigger: "t", Condition: "reject", Direction: "long", TargetChain: []float64{110}, Invalid: "i", Quality: "B", Confirm: &kernel.PlanConfirm{Rule: "touch", RefPrice: 100, Side: "above"}, Arm: &kernel.PlanArmSpec{Enabled: true, Entry: 100, Stop: 95, Target: 110}}}, NoTrade: []string{}, DeathCondition: "n/a"}
@@ -34,7 +41,13 @@ func TestUnknownOneSetupVerdictCannotPlaceOldAuthorization(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			at.oneSetupFactsForTest = func(time.Time) oneSetupTestFacts { panic("synthetic unavailable permission facts") }
+			at.oneSetupFactsForTest = func(time.Time) oneSetupTestFacts {
+				if !tc.lowQuality {
+					panic("synthetic unavailable permission facts")
+				}
+				id := *structuralTestIdentity(100, "PDL").ID
+				return oneSetupTestFacts{Price: 100, BandPts: 50, Candidates: []kernel.MapCandidate{{ID: &id, Identity: kernel.PlanLevel{ID: &id, Price: 100}, Price: 100, Names: []string{"PDL"}, Grade: "A"}}, Permission: map[string]kernel.FadeVerdict{"S1": {Evaluated: true, Permitted: true}}}
+			}
 			previous := market.FuturesBarsProvider
 			market.FuturesBarsProvider = func(string, string, int) []market.Kline { return shadowBarsNearAt(100, now) }
 			t.Cleanup(func() { market.FuturesBarsProvider = previous })
@@ -45,7 +58,7 @@ func TestUnknownOneSetupVerdictCannotPlaceOldAuthorization(t *testing.T) {
 			if row.SignalID != "" {
 				t.Fatalf("unknown verdict registered old authorization: %+v", row)
 			}
-			if !failRetirement && row.State != store.StateCancelled {
+			if !failRetirement && !tc.lowQuality && row.State != store.StateCancelled {
 				t.Fatalf("unknown authorization not retired: %s", row.State)
 			}
 			select {

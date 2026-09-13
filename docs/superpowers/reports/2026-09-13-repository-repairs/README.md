@@ -193,3 +193,13 @@ cycle, stopping new placement. The same production-cycle test with an injected
 SQLite retirement failure sends nothing; the existing allowed-versus-declined
 scenario test still passes (`/tmp/nofx-unknown-arm-after.log`). Named system-map
 coordinates were synchronized and the map reference check passes.
+
+## Current admission covers the placement pass
+
+[A] A second production-cycle regression reproduced an inherited row reaching
+the wire after current scenario quality was refused. Production now passes the
+IDs of successfully admitted/saved rows into placement. Old rows cannot inherit
+permission merely from their stored armed state. A failed refresh does not enter
+that set. Focused missing-permission, quality-refusal, valid-placement and split
+fixtures pass (`/tmp/nofx-arm-current-gate-after.log`). Direct offline/debug
+placement helpers retain their existing explicitly invoked test semantics.

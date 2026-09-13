@@ -375,6 +375,7 @@ func (at *AutoTrader) maybeManageArmedOrdersAt(snap map[string]kernel.StructureS
 		at.logWarnf("🎯 one setup retirement unavailable — no new placement this cycle: %v", err)
 		return
 	}
+	eligibleRows := map[int64]bool{} // only successfully revalidated authorizations may place this cycle
 	for _, sc := range kernel.OneSetupOrder(doc.Scenarios, osCycle.allowed()) {
 		if sc.Arm == nil || !sc.Arm.Enabled {
 			continue
@@ -862,8 +863,12 @@ func (at *AutoTrader) maybeManageArmedOrdersAt(snap map[string]kernel.StructureS
 				}
 				row.EntryPx, row.StopPx, row.TargetPx = leg.Entry, leg.Stop, leg.Target
 				row.Version = plan.Version
-				_ = ledger.UpsertArm(row)
+				if err := ledger.UpsertArm(row); err != nil {
+					at.logWarnf("⚔️ arm refresh failed %s %s leg %d: %v", plan.Session, sc.ID, li+1, err)
+					continue
+				}
 			}
+			eligibleRows[row.ID] = true
 		}
 	}
 
@@ -884,7 +889,7 @@ func (at *AutoTrader) maybeManageArmedOrdersAt(snap map[string]kernel.StructureS
 
 	// PHASE 2 — placement engine (armed → working within the tick band), wire
 	// cancel/modify, and the order_update event machine.
-	at.runArmedPlacementAt(bars, plan.BirthMs, now)
+	at.runArmedPlacementAt(bars, plan.BirthMs, now, eligibleRows)
 }
 
 // biasDirectionFor normalizes the plan bias direction ("" → empty).
@@ -1174,7 +1179,7 @@ func (at *AutoTrader) runArmedPlacement(bars []market.Kline, sinceMs int64) {
 	at.runArmedPlacementAt(bars, sinceMs, time.Now())
 }
 
-func (at *AutoTrader) runArmedPlacementAt(bars []market.Kline, sinceMs int64, now time.Time) {
+func (at *AutoTrader) runArmedPlacementAt(bars []market.Kline, sinceMs int64, now time.Time, eligible ...map[int64]bool) {
 	nt := at.armedTrader()
 	if nt == nil {
 		return
@@ -1219,6 +1224,9 @@ func (at *AutoTrader) runArmedPlacementAt(bars []market.Kline, sinceMs int64, no
 		}
 		switch r.State {
 		case "armed":
+			if len(eligible) > 0 && !eligible[0][r.ID] {
+				continue // current admission did not authorize this stored row
+			}
 			// ONE CANONICALIZER, WHERE THE VALUE ENTERS THE PLACEMENT PATH
 			// (class 28 → class 77, 2026-09-05). store.UpsertArm canonicalizes
 			// Side to UPPERCASE at the write; both wire calls below handed that

@@ -4805,3 +4805,7 @@ A facts panic produced no current verdict, but old armed rows still reached
 the placement pass. Retire missing-verdict unplaced rows and stop new placement
 if that retirement cannot persist. Test actual cycle plus wire, including
 injected state-update failure; a fail-closed log is not enforcement.
+
+The inherited-authorization class also applies to ordinary quality/gate refusals:
+production placement consumes the successfully admitted row IDs for this cycle,
+not every stored armed row. Test a current quality refusal with an older row.
