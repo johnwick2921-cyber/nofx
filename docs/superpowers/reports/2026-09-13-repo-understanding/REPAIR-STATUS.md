@@ -1,6 +1,6 @@
 # Repair disposition and publication status
 
-This is the bridge between the **baseline review** and **later repairs**. It prevents a fixed baseline finding from being presented as still current, or a focused repair from being presented as runtime proof. Candidate source: `cd2978b77da54e2fceddfb19e1d3d148bd2bfb62`. Final verification appears only in [CHECKPOINT.md](CHECKPOINT.md#final-verification).
+This is the bridge between the **baseline review** and **later repairs**. It prevents a fixed baseline finding from being presented as still current, or a focused repair from being presented as runtime proof. Candidate source: `13882f01f72c313f4454bd29a309d5e31b6ec0cd` (security dependency follow-up 40ed5d95, build alignment d174ca95). Final verification appears only in [CHECKPOINT.md](CHECKPOINT.md#final-verification).
 
 ## How to read the evidence
 
@@ -60,4 +60,8 @@ For final candidate results and publication stamps, use the single ledger in [CH
 
 The original 30 reviews retain baseline and bounded cross-review findings; this table is their current principal disposition, not a declaration that every concern was repaired. Earlier usage-blocked snapshots remain under interim/. Selected function anchors in CORE-TRACE.md are regenerated at the candidate, while historical line coordinates remain in their original reports.
 
-Detailed source/test receipts remain on the control repair branch in `docs/superpowers/reports/2026-09-13-repository-repairs/README.md`, `2026-09-13-ordered-execution-repair.md`, `2026-09-13-nt8-entry-receipt-replacement.md`, and the NT8 partial/terminal lifecycle reports; frontend receipts remain in `2026-09-13-web-state-repairs/README.md`. Some chronological repair receipts describe work as pending before later follow-ups; this candidate disposition supersedes those named historical states. Packaging reads those receipts and does not invent an independent rerun.
+Detailed source/test receipts are included alongside this audit and on the control repair branch in `docs/superpowers/reports/2026-09-13-repository-repairs/README.md`, `2026-09-13-ordered-execution-repair.md`, `2026-09-13-nt8-entry-receipt-replacement.md`, and the NT8 partial/terminal lifecycle reports; frontend receipts remain in `2026-09-13-web-state-repairs/README.md`. Some chronological repair receipts describe work as pending before later follow-ups; this candidate disposition supersedes those named historical states. Packaging reads those receipts and does not invent an independent rerun.
+
+## Final security follow-up
+
+Dependency repair 40ed5d95 selects x/crypto 0.56.0 and only required graph updates, with Go 1.26.8. Build/CI alignment d174ca95 removes stale Go 1.21 setup pins and updates the Docker Go family. This resolves three version-fixable SSH advisories. Default Linux/amd64 production and test closures import neither SSH nor OpenPGP; govulncheck reports zero reachable or imported-package vulnerabilities and one module-only advisory, GO-2026-5932, with no fixed version. See [the primary-source advisory report](../2026-09-13-crypto-security-repair.md). This is not a claim that every platform/build tag or dependency is vulnerability-free.

@@ -5,11 +5,11 @@
   "scope": "Document packaging only; original evidence limits and revision scopes preserved.",
   "builder_sha256": "c49fd629f6cdeb8abb150ffc28163241968e791c17fbcbdefb97ec787b0e5eb1",
   "inputs": {
-    "PACKAGING-UPDATES.md": "003bbfcb68e2680f61167a4f3d72838fdf3849cfd391557055fbac759b5d6271",
+    "PACKAGING-UPDATES.md": "d08ae474f96db5e5441040a61956519f83353e82b4e89fd9f1bc1e10ec213088",
     "CTO-TRADING-LOGIC.md": "d5caba1be918b691a0471b9e2d6197658359a4b9d5622614bdca0914d628abdd",
-    "REPAIR-STATUS.md": "8e8ad62e4ac3de6cd511986ad4ea89442a9af13ae67fe930cb2d83c6c436bcd6",
-    "CORE-TRACE.md": "ace37c8ad336239b458508dcac6723d6bec457a9bf98dc482d7bd20c7bb10b23",
-    "CHECKPOINT.md": "9335a1651200004831075c87da417f67f32009fbe4080b792cf3f89087e92084",
+    "REPAIR-STATUS.md": "39160fdc7cc9ae53f9841463bf5805aec2b011ba402c819044474d2371aa7e66",
+    "CORE-TRACE.md": "bebf6404326342b7727e3a2c08f13b3d97e296b4673e67d79f869a31f337713e",
+    "CHECKPOINT.md": "bb9292f2c77b71f68f0914d79b1949a207d96a82f10e95ea8a79252d6e60ba26",
     "reviews/01/report.md": "16269caf522e419f5d7bf146deb04e1aa0624f0a8e7a82ae58d54c7b696f204a",
     "reviews/02/report.md": "deac73039d76150288094bb43c262cc99f0e4e54e8063995fdcb02b0d3d3308a",
     "reviews/03/report.md": "39a57f6015d4c92533031d9f9363bed64e51d34a6f202c372ace1c5a32eaad1e",
@@ -43,14 +43,14 @@
   },
   "outputs": {
     "CTO-REPORT.md": {
-      "bytes": 51914,
-      "words_whitespace": 6088,
-      "sha256": "320360d0853c143fb4cad03a3ac16110c2f0f2132d172fb12abd3c1d02d605a3"
+      "bytes": 54809,
+      "words_whitespace": 6413,
+      "sha256": "2e751fb6eb4cff6ab6b6cf5e589cbe3c6cf40ed4d1650b2d728b8fd9e475b08f"
     },
     "FULL-AUDIT.md": {
-      "bytes": 779669,
-      "words_whitespace": 92781,
-      "sha256": "186c3a486ea7da7b0660b64d5931361da2944bd2a3485627dedbd37c9aca5a3d"
+      "bytes": 782564,
+      "words_whitespace": 93106,
+      "sha256": "e2bfed3bc4676bb855777f0faa6925815676830b69a8b710789723a88f1d8c28"
     }
   }
 }

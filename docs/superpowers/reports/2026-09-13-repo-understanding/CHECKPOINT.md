@@ -4,7 +4,7 @@
 
 All 30 scoped assignments are reported. At baseline 63968be62e44db2fb07a92883e02127b9064b0be, 28 primary reviews cover 1,049 unique first-party files / 250,582 lines. Two bounded independent reviews examine repair 99a06543 and add no primary files. Coverage and publication validators establish artifact/hash/range/function-note consistency, not a second semantic reading or runtime correctness. The 30 reports and their 120 standard artifacts are preserved.
 
-Current candidate: `cd2978b77da54e2fceddfb19e1d3d148bd2bfb62` on `fix/repo-audit-control-boundaries-20260913`. The disposition and CTO assessment include the ordered-execution and positive-entry/replacement follow-ups through this revision. Those implementation tasks are committed; they are not awaiting an unspecified future repair. CORE-TRACE.md pins 35 declarations to frozen verification tree `e333de41`.
+Current candidate: `13882f01f72c313f4454bd29a309d5e31b6ec0cd` on `fix/repo-audit-control-boundaries-20260913`. The disposition and CTO assessment include the ordered-execution and positive-entry/replacement follow-ups through this revision. Those implementation tasks are committed; they are not awaiting an unspecified future repair. CORE-TRACE.md pins 35 declarations to frozen verification tree `13882f01f72c313f4454bd29a309d5e31b6ec0cd`.
 
 Historical checkpoints remain revision-scoped: Go full suite/build and selected race checks at 99a06543; frontend 71 files/451 tests plus build at 28a6f32e; later chart follow-up 9 focused tests/build; final-marker C# reference compilation and 89 extracted assertions. No earlier green result is relabelled as a pass at the final candidate.
 
@@ -18,20 +18,24 @@ The audit did not establish production database restoration, a first live struct
 
 ## Final verification
 
-Root-owned ledger. Frozen verification tree: `e333de41bfffec2ea2cce67ab4296ce8bbd12fc0`; backend source candidate and guide stamp: `cd2978b77da54e2fceddfb19e1d3d148bd2bfb62`. The intervening freeze commit changes protected hashes/guide/report metadata. The guide stamp identifies this source candidate, not a running or shipped binary. Results below are supplied by the root runner; this documentation pass did not rerun them.
+**Source checks complete at `13882f01f72c313f4454bd29a309d5e31b6ec0cd`.** The full security-updated Go suite and race run were first verified at b45b3efd. The only subsequent change, 13882f01, updates the independently reviewed go.mod protected hash; all mutation assertions remain active. Full Go tests/build and the frontend suite were rerun on that clean commit. Every runner receipt records exact command, commit before/after, clean state, exit code, duration and log SHA-256. Historical failed runs are retained and never relabelled as passes.
 
-| Required record | Result |
+| Check | Verified result and scope |
 | --- | --- |
-| Combined Go suite at e333de41 | PASS: `go test ./...`, 350.964 seconds; exact command/log hash in verification/go-full.json |
-| Final Go build | PASS, root runner at frozen tree |
-| Race verification at e333de41 | PASS: full store, provider/ninjatrader, trader/ninjatrader, trader packages; 373.162 seconds; verification/go-race.json |
-| Final frontend suite and production build | PASS: 71 files / 454 tests; production build passes with existing chunk-size warning |
-| Offline smoke checks | PASS, root runner |
-| C# source marker/reference compile/harness | PASS: all five files compiled against installed NT8 references; 89 extracted-production-method assertions. Candidate AddOn ID `2026-09-13-execution-evidence`; no installed AddOn change. |
-| Final guide/source identity and publication hashes | Pending root stamp |
-| Final evidence bundle, PDF and downloadable Markdown links | Pending root publication |
-| Deployment / installed NT8 / live SIM lifecycle | Not performed by this audit; no approval inferred |
+| Full Go suite | PASS: `go test ./...` at b45b3efd (314.242s), then at13882f01 (3.759s, cached package results). [Final receipt](verification/go-full-release.json). |
+| Race detector | PASS: full store, provider/ninjatrader, trader/ninjatrader and trader packages, 322.822s at b45b3efd. Subsequent diff is one frontend hash string. [Receipt](verification/go-race-final.json). This is not an all-repository race run. |
+| Backend build | PASS: `go build ./...` with explicit worktree Git environment and VCS metadata preserved, Go1.26.8. [Receipt](verification/go-build-release.json). |
+| Frontend suite | PASS:71 files /454 tests at13882f01. The preceding run correctly caught the changed go.mod hash (453 passed,1 failed); the reviewed hash update resolved it without weakening the guard. [Receipt](verification/web-tests-release.json). |
+| Frontend production build | PASS at b45b3efd; the subsequent hash-only test-data edit does not enter the product bundle. Existing large-chunk warning remains. [Receipt](verification/web-build-final.json). |
+| Offline futures smokes | PASS: prompt and synthetic TCP roundtrip at13882f01. [Prompt](verification/smoke-prompt-release.json), [roundtrip](verification/smoke-roundtrip-release.json). No live broker order. |
+| C# | Five files compile against installed NT8 references;89 extracted-production-method assertions pass. Receipts at e333de41; those C# sources are unchanged in the final candidate. [Compile](verification/csharp-reference-compile.json), [harness](verification/csharp-harness.json). Not installed-NT8 execution. |
+| Dependency security | npm audit:0 findings in selected lockfile. govulncheck:0 reachable and0 imported-package vulnerabilities in default Linux/amd64 app/test closure; GO-2026-5932 remains module-only, no fixed version. [Advisory report](../2026-09-13-crypto-security-repair.md). Remote Trivy on b45b3efd cleared its previous version-fixable alerts; other remote jobs are separately reported and not universally declared green. |
+| Review consistency |30 indexed reviews /120 standard artifacts; hash/range/named-function-note and publication checks pass.35 selected core declarations are pinned to the final source commit. These checks prove artifact consistency, not runtime semantics. |
+| Source backup | Standalone full-history bundle: **78,752,411 bytes**, SHA-256 `6e29a3f7d09769fbffcbfc96e9f29e4defb07cbcb4e7059a957ebc79fd030265`. Fresh clone, full fsck, exact-revision checkout and clean-tree check passed. [Restore record](verification/source-backup.json). |
+| Runtime / installed NT8 / profitability | Not verified or changed by this audit. No deployment, owner-account/settings changes, live database mutation or new profitability experiment. |
 
-After completing this ledger, regenerate assembled reports with tools/build-reports.py and update index sizes from report-package.json. The final source checkpoint bundle is standalone (no prerequisites): e333de41 repair / d8f110fe docs, 78,730,522 bytes, SHA256 `85b8ebc742dfe8f05f24fd5424bf806f3d02e4bddcd073221140d34194550123`. A fresh clone, full fsck, detached exact-revision checkout and clean-tree check passed; see verification/source-backup.json. Later publication Markdown is additionally packaged. This is a source/history restore, not a live database restore.
+The source bundle records repair13882f01 and docs9988cd55; final publication Markdown and verification receipts are additionally present in the delivery ZIP. PDF exports and the ZIP receive separate byte/hash/integrity receipts outside Git, avoiding circular self-hashes. The source restore is **not** a production database restore. Earlier progress bundles and usage-blocked reports are historical.
 
-Security follow-up: remote Trivy reported x/crypto advisories after the successful e333de41 checks. The dependency repair and its subsequent verification are being completed before the source candidate leaves draft. The e333 receipts remain valid historical results and are not relabelled to the upcoming dependency revision.
+Guide stamp40ed5d95 identifies the backend source candidate including the patched module graph; it does not identify the running binary. AddOn candidate ID remains `2026-09-13-execution-evidence`. A future deployment must follow the existing release procedure and coordinate Go/C# installation; this report grants no deployment approval.
+
+The final report distinguishes repaired and reproduced defects from unresolved source/runtime limits. All baseline findings without a named repair retain their original qualifications. A later documentation-only merge must retain this source revision provenance and must not be described as an additional source audit.
