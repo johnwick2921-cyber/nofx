@@ -395,10 +395,13 @@ type AutoTrader struct {
 	lastPlannerWakeAt     time.Time
 	lastAIBalanceDay      string // P5 daily balance poll throttle (AI_BALANCE_WARN)
 	isRunning             bool
-	isRunningMutex        sync.RWMutex          // Mutex to protect isRunning flag
-	startTime             time.Time             // System start time
-	callCount             int                   // AI call count
-	positionFirstSeenTime map[string]int64      // Position first seen time (symbol_side -> timestamp in milliseconds)
+	isRunningMutex        sync.RWMutex     // Mutex to protect isRunning flag
+	startTime             time.Time        // System start time
+	callCount             int              // AI call count
+	positionFirstSeenTime map[string]int64 // Position first seen time (symbol_side -> timestamp in milliseconds)
+	limitFlattenMu        sync.Mutex       // Serializes delayed exits with Stop.
+	limitFlattenStopped   bool
+	limitFlattens         map[int64]*pendingLimitFlatten
 	stopMonitorCh         chan struct{}         // Used to stop monitoring goroutine
 	monitorWg             sync.WaitGroup        // Used to wait for monitoring goroutine to finish
 	kickCh                chan string           // discard-burn/post-exit: one-shot deferred-cycle kicks into the run loop (reason payload)
@@ -826,6 +829,9 @@ func NewAutoTrader(config AutoTraderConfig, st *store.Store, userID string) (*Au
 
 // Run runs the automatic trading main loop
 func (at *AutoTrader) Run() error {
+	at.limitFlattenMu.Lock()
+	at.limitFlattenStopped = false
+	at.limitFlattenMu.Unlock()
 	at.isRunningMutex.Lock()
 	at.isRunning = true
 	at.isRunningMutex.Unlock()
@@ -1013,6 +1019,7 @@ func (at *AutoTrader) Run() error {
 
 // Stop stops the automatic trading
 func (at *AutoTrader) Stop() {
+	at.stopLimitFlattens()
 	at.isRunningMutex.Lock()
 	if !at.isRunning {
 		at.isRunningMutex.Unlock()
