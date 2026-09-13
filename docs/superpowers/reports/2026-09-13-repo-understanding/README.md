@@ -11,7 +11,8 @@ The owner requested a detailed, accurately traced, approximately 30-agent reposi
 - Tests, fixtures and historical non-code artifacts are inventoried; relevant ones are followed. This is **not** a claim that every test or historical artifact was manually read.
 - Go AST inventory: 1,292 files parsed, 10,269 functions/literals and 78,157 syntactic calls; zero parser errors. These are syntax inventories, **not type-resolved call edges or human reading**.
 - `orientation/` holds initial subsystem reviews with explicit read ledgers and unresolved concerns. Their findings require root/cross-review validation.
-- `review-plan.json` tracks detailed assignments. Reports and function notes will be added as reviews complete.
+- **12/30 scoped reviews reported**, covering 270 assigned source files / 99,523 lines. Remaining source and independent cross-boundary reviews are pending.
+- `review-plan.json` tracks assignments; `coverage-validation.json` checks source hashes, full line ranges, and named Go declaration notes. It does not certify semantic understanding or runtime behavior.
 
 ## Historical maps
 
@@ -20,3 +21,14 @@ The recovered Understand Anything graph is dated July 10, 2026 at `7a8adce004372
 ## Evidence contract
 
 [A] directly read/run/observed; [B] inference from cited evidence; [C] hypothesis. Static concerns, offline reproductions and runtime incidents are separate categories. Each final trace will name source revision and file/function/line, actual test results, and remaining uncertainty. A passing suite is not proof of every behavior. No fabricated coverage, caller resolution, runtime observations, profitability or universal safety claims.
+
+## Repair lane — still in progress
+
+`fix/repo-audit-control-boundaries-20260913` holds isolated code repairs. Current
+checkpoint `234b0262` includes authenticated object ownership/deletion, Q&A
+empty/trader-scoped context, validation-before-save, boot refusal on all NT8 entry
+methods, same-version terminal-arm retirement, session mutation chain dates,
+broker-book absence/freshness/send truth, history-channel teardown locking, and
+boot cancellation settlement. The separate repair report names reproductions
+and test limits. These changes are not deployed and do not alter owner settings.
+The full Go suite is running; no overall pass is claimed before it finishes.
