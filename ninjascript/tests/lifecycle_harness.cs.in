@@ -40,9 +40,9 @@ class Harness {
  void SubscribeOrderUpdate(Account a){} void SendOrderUpdateFrame(OrderEventArgs e){}
  void SendAck(string a){acks.Add(a);} static void LogInfo(string s){} static void LogWarn(string s){}
  void SendPositionCloseRejectedFrame(string a,string b,string c,string d,string e){rejected++;}
- Dictionary<string,object> lastClose;
+ Dictionary<string,object> lastClose; int closeFrames;
  void StampIdentity(Dictionary<string,object> p,string signal){}
- void WriteEnvelope(string kind,Dictionary<string,object> p){if(kind=="position_close")lastClose=p;}
+ void WriteEnvelope(string kind,Dictionary<string,object> p){if(kind=="position_close"){lastClose=p;closeFrames++;}}
  void SendFillFrame(string a,double b,string c,int d,double e,string f,string accountName="",string symbol=""){}
  /* PRODUCTION TYPES */
  /* PRODUCTION METHODS */
@@ -92,6 +92,37 @@ class Harness {
  deferredPair.SlOrder.Quantity=3;Event(deferredPair.SlOrder,OrderState.Working,0);Check(deferredPair.Qty==1,"one amended leg does not confirm whole pair coverage");deferredPair.TpOrder.Quantity=3;Event(deferredPair.TpOrder,OrderState.Working,0);Check(deferredPair.Qty==3&&active.Changes==changeCount,"both broker leg quantities confirm deferred amendment");active.DeferChange=false;
  var rejectedChange=Seed("rejected-change",active);Event(rejectedChange,OrderState.PartFilled,1);active.DeferChange=true;Event(rejectedChange,OrderState.Filled,3);var rejectedPair=placedBrackets["rejected-change"];int rejectedCount=active.Changes;OnOrderUpdate(this,new OrderEventArgs{Order=rejectedPair.SlOrder,OrderState=OrderState.Working,Error="OrderRejected"});Event(rejectedPair.SlOrder,OrderState.Working,0);Event(rejectedPair.TpOrder,OrderState.Working,0);Check(rejectedPair.Qty==1&&rejectedPair.AmendmentFailed&&!rejectedPair.AmendmentPending&&active.Changes==rejectedCount,"rejected Change retains actual coverage and latches failure without retry storm");active.DeferChange=false;
  var terminalSubmit=Seed("terminal-submit",active);active.OnSubmit=()=>{var pair=placedBrackets["terminal-submit"];OnOrderUpdate(this,new OrderEventArgs{Order=pair.SlOrder,OrderState=OrderState.Rejected});OnOrderUpdate(this,new OrderEventArgs{Order=pair.TpOrder,OrderState=OrderState.Cancelled});};Event(terminalSubmit,OrderState.Filled,1);Check(!placedBrackets.ContainsKey("terminal-submit"),"synchronous terminal pair during Submit retires after reservation releases");
+
+ active.OnSubmit=null; active.OnChange=null;
+ foreach(var terminal in new[]{OrderState.Cancelled,OrderState.Rejected})
+ foreach(var action in new[]{OrderAction.Sell,OrderAction.BuyToCover})
+ foreach(var suffix in new[]{"", "-lx", "-sl", "-tp"}) {
+   string stem="terminal-exit-"+terminal+action+suffix;
+   var order=new Order{Name=stem+suffix,OrderId="broker-"+stem,Account=active,Instrument=active.Positions[0].Instrument,OrderAction=action,Quantity=3};
+   int frames=closeFrames, cancels=active.Cancelled.Count, alarms=rejected;
+   Event(order,OrderState.PartFilled,1);
+   Check(closeFrames==frames,"transient exit not double counted "+stem);
+   Event(order,terminal,1);
+   string reason=suffix=="-sl"?"sl":suffix=="-tp"?"tp":suffix=="-lx"?"limit":"manual";
+   Check(closeFrames==frames+1&&(int)lastClose["quantity"]==1&&(double)lastClose["exit_price"]==110&&(string)lastClose["exit_order_id"]==order.OrderId&&(string)lastClose["position_side"]==(action==OrderAction.Sell?"long":"short")&&(string)lastClose["exit_reason"]==reason,"terminal cumulative exit recorded "+stem);
+   Check(active.Cancelled.Count==cancels&&rejected==alarms+(terminal==OrderState.Rejected?1:0),"residual protection preserved and rejection alarm independent "+stem);
+ }
+ var zeroExit=new Order{Name="zero-close",OrderId="zero",Account=active,Instrument=active.Positions[0].Instrument,OrderAction=OrderAction.Sell,Quantity=3};
+ int zeroFrames=closeFrames;
+ Event(zeroExit,OrderState.Cancelled,0); Event(zeroExit,OrderState.Rejected,0);
+ Check(closeFrames==zeroFrames,"zero-fill terminal exit never emits close");
+ foreach(double invalid in new[]{0.0,Double.NaN,Double.PositiveInfinity}) OnOrderUpdate(this,new OrderEventArgs{Order=zeroExit,OrderState=OrderState.Cancelled,Filled=1,AverageFillPrice=invalid});
+ Check(closeFrames==zeroFrames,"invalid terminal execution price never emits close");
+
+ foreach(var terminal in new[]{OrderState.Cancelled,OrderState.Rejected})
+ foreach(var action in new[]{OrderAction.Sell,OrderAction.BuyToCover}) {
+   string trackedId="tracked-exit-"+terminal+action;
+   var trackedEntry=Seed(trackedId,active);pendingBrackets[trackedId].ExitAction=action;Event(trackedEntry,OrderState.Filled,3);
+   var trackedPair=placedBrackets[trackedId];trackedPair.SlOrder.OrderId="actual-sl-"+trackedId;
+   int countBefore=closeFrames, cancelBefore=active.Cancelled.Count;
+   Event(trackedPair.SlOrder,terminal,1);
+   Check(closeFrames==countBefore+1&&placedBrackets.ContainsKey(trackedId)&&trackedPair.TpOrder.OrderState==OrderState.Working&&active.Cancelled.Count==cancelBefore,"actual terminal partial bracket leg retains live sibling "+trackedId);
+ }
  Console.WriteLine("ALL OFFLINE LIFECYCLE TESTS PASSED");
  }
 }

@@ -1378,8 +1378,9 @@ namespace NinjaTrader.NinjaScript.AddOns
             }
 
             if (e.OrderState == OrderState.Cancelled) RetireTerminalBracket(e.Order, e.OrderState);
-            // Only act on filled/rejected states; ignore accepted/working.
+            // Terminal cancellation may carry real cumulative EXIT fills too.
             if (e.OrderState != OrderState.Filled
+                && e.OrderState != OrderState.Cancelled
                 && e.OrderState != OrderState.Rejected
                 && e.OrderState != OrderState.PartFilled)
             {
@@ -1435,21 +1436,25 @@ namespace NinjaTrader.NinjaScript.AddOns
                 else
                 {
                     LogWarn("VLTraderTCPClient: limit exit " + signalId + "-lx is " + e.OrderState
-                            + ", NOT Filled — the position is still open, so its bracket is LEFT ALONE"
-                            + " (protective orders are not cancelled by an exit that did not happen)");
+                            + ", NOT Filled — bracket LEFT ALONE pending actual remaining broker position"
+                            + " (terminal cumulative fills, if present, are accounted separately)");
                 }
             }
 
             var action = e.Order.OrderAction;
             bool isExit = (action == OrderAction.Sell || action == OrderAction.BuyToCover);
 
-            // position_close with the real exit price (reason from the leg name,
-            // else "manual"). Only on a full Filled — PartFilled is transient (NT
-            // sends a final Filled; per-partial would duplicate the close) and a
-            // rejection is an error. Held side is opposite the exit action.
+            // One cumulative close receipt at terminal order state. Cancelled or
+            // Rejected orders may already have filled contracts. PartFilled is
+            // transient and must not emit an increment on this terminal protocol.
+            // Broker order ID makes repeated terminal callbacks idempotent in Go.
             if (isExit)
             {
-                if (e.OrderState == OrderState.Filled)
+                bool terminalExit = e.OrderState == OrderState.Filled
+                    || e.OrderState == OrderState.Cancelled || e.OrderState == OrderState.Rejected;
+                bool validExecution = e.Filled > 0 && e.AverageFillPrice > 0
+                    && !double.IsNaN(e.AverageFillPrice) && !double.IsInfinity(e.AverageFillPrice);
+                if (terminalExit && validExecution)
                 {
                     string positionSide = (action == OrderAction.BuyToCover) ? "short" : "long";
                     string rootSymbol = "";
@@ -1465,13 +1470,11 @@ namespace NinjaTrader.NinjaScript.AddOns
                     // A filled leg alone does not prove its OCO sibling cancelled.
                     RetireTerminalBracket(e.Order, e.OrderState);
                 }
-                else if (e.OrderState == OrderState.Rejected)
+                if (e.OrderState == OrderState.Rejected)
                 {
-                    // The SIM/broker REJECTED the exit/flatten (e.g. "There is no
-                    // market data available to drive the simulation engine" while the
-                    // data feed is down). The close did NOT take — the position is
-                    // STILL OPEN in NT8. Tell Go so it never records a phantom close
-                    // and raises an alarm (the id=45→id=46 net-2 root cause).
+                    // Rejection remains an independent alarm even when part of
+                    // the exit executed. The receipt above accounts only for real
+                    // fills; the broker position snapshot establishes the residual.
                     string positionSide = (action == OrderAction.BuyToCover) ? "short" : "long";
                     string rootSymbol = "";
                     try { rootSymbol = e.Order.Instrument.MasterInstrument.Name; } catch { }
@@ -1484,7 +1487,8 @@ namespace NinjaTrader.NinjaScript.AddOns
                     RetireTerminalBracket(e.Order, e.OrderState);
                     LogWarn("VLTraderTCPClient: exit/flatten REJECTED signal_id=" + signalId
                             + " " + positionSide + " reason=" + reason
-                            + " — position STILL OPEN (not closed)");
+                            + " cumulative_filled=" + e.Filled
+                            + " — rejection does not prove account flat; verify remaining broker position");
                 }
                 return;
             }
