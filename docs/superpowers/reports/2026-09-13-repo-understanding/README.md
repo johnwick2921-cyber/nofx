@@ -85,3 +85,5 @@ functions now also pass independent syntax-census consistency checks (385).
 | [28](reviews/28/report.md) | web-trading-and-settings | 16 | 9472 | 110 |
 | [29](reviews/29/report.md) | independent-control-boundaries | cross-review | bounded excerpts/diff | 96 |
 | [30](reviews/30/report.md) | independent-end-to-end-and-graph-validation | cross-review | bounded excerpts/diff | 32 |
+
+[Core trading source trace](CORE-TRACE.md) pins selected production declarations to their exact repair commit. It is a source locator, not runtime coverage.
