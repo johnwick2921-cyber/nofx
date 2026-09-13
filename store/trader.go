@@ -221,11 +221,24 @@ func (s *TraderStore) UpdateCustomPrompt(userID, id string, customPrompt string,
 
 // Delete deletes trader and associated data
 func (s *TraderStore) Delete(userID, id string) error {
-	// Delete associated equity snapshots first
-	s.db.Where("trader_id = ?", id).Delete(&EquitySnapshot{})
-
-	// Delete the trader
-	return s.db.Where("id = ? AND user_id = ?", id, userID).Delete(&Trader{}).Error
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		// Establish ownership inside the transaction before touching child rows.
+		var owned Trader
+		if err := tx.Where("id = ? AND user_id = ?", id, userID).First(&owned).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("trader_id = ?", id).Delete(&EquitySnapshot{}).Error; err != nil {
+			return err
+		}
+		result := tx.Where("id = ? AND user_id = ?", id, userID).Delete(&Trader{})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return gorm.ErrRecordNotFound
+		}
+		return nil
+	})
 }
 
 // GetFullConfig gets trader full configuration

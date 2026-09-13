@@ -86,45 +86,40 @@ func maxI(a, b int) int {
 	return b
 }
 
-// C1 (2026-08-25) — cross-user IDOR gate for every /api/plan/* AND /api/risk/*
-// route that carries a trader_id. Handlers previously trusted ?trader_id (or a
-// body-carried one) blindly: any authenticated user could read or mutate another
-// user's trader by guessing a trader id (plan docs, force-flat, clear-freeze...).
-// Mounted on the protected group; it fires only for those path prefixes and 404s
-// (not 403 — never leak trader existence) when the JWT user does not own the
-// queried trader. Global risk feeds (/risk/freezes, /risk/gate-blocks,
-// /risk/errors) carry no trader_id and pass through unchanged.
+// planTraderOwnership retains its original name, but protects every trader ID
+// supplied to the authenticated group. Check query, body AND trader path IDs:
+// checking just one lets a second selector name a different owner's trader.
+// Requests without a trader selector retain their handler's scope/validation.
 func (s *Server) planTraderOwnership() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		p := c.FullPath()
-		if !strings.HasPrefix(p, "/api/plan/") && !strings.HasPrefix(p, "/api/risk/") {
-			c.Next()
-			return
+		traderIDs := append([]string(nil), c.QueryArray("trader_id")...)
+		if strings.HasPrefix(c.FullPath(), "/api/traders/:id") {
+			traderIDs = append(traderIDs, c.Param("id"))
 		}
-		traderID := strings.TrimSpace(c.Query("trader_id"))
 		// Body-carried trader_id (POST/PUT handlers accept it as an alternative
 		// to the query) is probed WITHOUT consuming the body: the bytes are read
 		// and restored so the handler's ShouldBindJSON still sees them.
-		if traderID == "" && c.Request != nil && c.Request.Body != nil &&
-			(c.Request.Method == "POST" || c.Request.Method == "PUT") {
+		if c.Request != nil && c.Request.Body != nil &&
+			(c.Request.Method == "POST" || c.Request.Method == "PUT" || c.Request.Method == "PATCH" || c.Request.Method == "DELETE") {
 			if raw, err := io.ReadAll(c.Request.Body); err == nil {
 				c.Request.Body = io.NopCloser(bytes.NewReader(raw))
 				var probe struct {
 					TraderID string `json:"trader_id"`
 				}
 				if json.Unmarshal(raw, &probe) == nil {
-					traderID = strings.TrimSpace(probe.TraderID)
+					traderIDs = append(traderIDs, probe.TraderID)
 				}
 			}
 		}
-		if traderID == "" {
-			c.Next() // the handler's own "trader_id is required" governs
-			return
-		}
-		if !s.traderOwnedBy(c.GetString("user_id"), traderID) {
-			SafeNotFound(c, "Trader")
-			c.Abort()
-			return
+		for _, traderID := range traderIDs {
+			if strings.TrimSpace(traderID) == "" {
+				continue
+			}
+			if !s.traderOwnedBy(c.GetString("user_id"), traderID) {
+				SafeNotFound(c, "Trader")
+				c.Abort()
+				return
+			}
 		}
 		c.Next()
 	}
@@ -1340,7 +1335,7 @@ func (s *Server) resolveAskContext(traderID, symbol string, now time.Time) askCo
 
 	// 2) Nothing for the live session → the most recent stored plan, even dead.
 	if ctx.row == nil {
-		if rows, err := s.store.Plan().ListRecent(1); err == nil && len(rows) > 0 {
+		if rows, err := s.store.Plan().ListRecentForTrader(traderID, 1); err == nil && len(rows) > 0 {
 			row := rows[0]
 			ctx.row, ctx.planID = row, row.PlanID
 			ctx.session, ctx.tradeDate = row.Session, row.TradeDate
@@ -1389,7 +1384,11 @@ func (s *Server) resolveAskContext(traderID, symbol string, now time.Time) askCo
 		if bars := market.FuturesBarsProvider(symbol, "1m", kernel.AISVPBarCount); len(bars) > 0 {
 			price, dATR := marketRef(symbol, now)
 			rule, _, left := s.planRules(traderID, ctx.session, ctx.tradeDate)
-			ctx.liveStatus = kernel.RenderPlanStatus(traderID, symbol, ctx.doc, bars, price, dATR, rule, left, now.UnixMilli(), ctx.row.CreatedAt.UnixMilli())
+			createdMs := int64(0) // No stored plan has no creation timestamp.
+			if ctx.row != nil {
+				createdMs = ctx.row.CreatedAt.UnixMilli()
+			}
+			ctx.liveStatus = kernel.RenderPlanStatus(traderID, symbol, ctx.doc, bars, price, dATR, rule, left, now.UnixMilli(), createdMs)
 		}
 	}
 	if ctx.planID == "" {

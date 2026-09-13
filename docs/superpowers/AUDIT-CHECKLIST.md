@@ -4671,3 +4671,29 @@ remain unchanged.
 721/11,302 touches have eligible geometry; model A 207 fills average -2.6039 net
 points. At the initial boot the mistakenly mandatory per-trade cap made admission zero; the owner subsequently clarified DAILY loss and removed that added requirement. This class establishes
 honest trade construction and refusal, not profitable trade selection.
+
+## PENDING CLASS — OWNERSHIP AND VALIDATION MUST PRECEDE EVERY SIDE EFFECT
+
+Branch `fix/repo-audit-control-boundaries-20260913`, base `63968be6`.
+Number reserved until merge, per canon. Offline production-router regression
+reproduces authenticated foreign-trader deletion of equity history: the old
+ownership middleware guarded only plan/risk prefixes; the store deleted child
+rows before its user-scoped parent delete. Query-first/body-second resolution
+also left a second selector unchecked. Transactional deletion now establishes
+ownership before child mutation and rolls back when child deletion fails.
+
+The same review reproduced two Q&A context failures (a global historical fallback
+and no-plan plus available bars dereferencing a nil stored row), and a strategy
+PUT that persisted configuration before returning token-overflow rejection.
+
+**Probe:** two owners, real route registration/auth/middleware, a foreign selector
+in each input location and conflicting query/body IDs; assert exact ownership
+refusal and unchanged child/parent records. Inject a child-delete failure in a
+temporary database and verify rollback. Feed bars with no plan. Put a newest
+foreign plan beside an empty owned trader. Reject an oversized strategy update
+and compare persisted bytes, not only HTTP status.
+
+**Law:** authentication is not object authorization; validate every selector the
+consumer can use. Rejection must not imply unchanged state unless the writes are
+ordered or transacted to make that true. A scoped parent write does not authorize
+an earlier unscoped child write. Tests must traverse production call sites.

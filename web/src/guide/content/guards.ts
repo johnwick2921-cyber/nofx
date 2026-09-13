@@ -7,6 +7,8 @@ export const guards: GuideSection = {
   tagline: 'What can hard-block a trade vs what only informs.',
   asBuiltRev: GUIDE_BUILT_REV,
   blocks: [
+    { kind: 'h', text: 'Trader ownership and rejected changes' },
+    { kind: 'p', text: 'Private trader requests check every supplied trader ID against the signed-in owner. A rejected strategy update leaves the saved configuration unchanged. Trader deletion either removes the trader and its equity history together or preserves both when it fails. Ask-Planner historical fallback stays with the selected trader; an empty plan can still show market facts.' },
     { kind: 'h', text: 'Structural stop and first-zone target — research candidate' },
     { kind: 'p', text: '[I]/[T] a codeable research candidate, not a validated replacement. No external evidence fixes its buffer or proves that it will turn the losing book positive.' },
     { kind: 'p', text: 'If a structural decision cannot be recorded, or an older refused authorization cannot be retired safely, new placement pauses for that cycle.' },

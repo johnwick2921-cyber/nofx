@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"nofx/market"
 	"nofx/store"
 )
 
@@ -42,6 +43,34 @@ func TestAskContextNoPlanStillOpens(t *testing.T) {
 	}
 	if ctx.planID == "" {
 		t.Error("a plan id is still required so the thread has somewhere to live")
+	}
+}
+
+func TestAskContextNoPlanWithLiveBars(t *testing.T) {
+	s, _ := askTestServer(t)
+	previous := market.FuturesBarsProvider
+	t.Cleanup(func() { market.FuturesBarsProvider = previous })
+	market.FuturesBarsProvider = func(symbol, interval string, limit int) []market.Kline {
+		return []market.Kline{{OpenTime: 1786838340000, CloseTime: 1786838399999, Open: 20000, High: 20001, Low: 19999, Close: 20000, Volume: 10}}
+	}
+	ctx := s.resolveAskContext("empty", "MNQ", time.Date(2026, 8, 16, 4, 0, 0, 0, time.UTC))
+	if ctx.kind != askContextNoPlan || ctx.row != nil || ctx.planID == "" {
+		t.Fatalf("expected usable no-plan context, got %+v", ctx)
+	}
+}
+
+func TestAskContextHistoricalFallbackStaysWithTrader(t *testing.T) {
+	s, st := askTestServer(t)
+	if _, err := st.Plan().AppendPlan(&store.PlanDB{
+		PlanID: store.MakePlanIDForTrader("foreign", "2026-08-16", "ASIA"), StrategyID: "foreign",
+		TradeDate: "2026-08-16", Session: "ASIA", Lifecycle: "no_trade",
+		Doc: `{"reasoning":"foreign private context","bias":{"direction":"neutral","conviction":"low","flip_condition":"n/a"},"levels":[],"scenarios":[],"no_trade":[],"death_condition":"dead"}`,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	ctx := s.resolveAskContext("empty", "MNQ", time.Date(2026, 8, 16, 4, 0, 0, 0, time.UTC))
+	if ctx.row != nil || ctx.kind != askContextNoPlan || strings.Contains(ctx.planBlock, "foreign private") {
+		t.Fatalf("foreign plan entered Q&A context: %+v", ctx)
 	}
 }
 
