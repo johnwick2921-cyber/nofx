@@ -34,8 +34,15 @@ func (t *TCPTrader) StartCloseSync(traderID, exchangeID, exchangeType string, st
 	t.loadExitSnapshotFence(st)
 	pb := store.NewPositionBuilder(st.Position())
 	t.closeSyncOnce.Do(func() {
+		done := t.observerLifetime()
+		// Install ownership before returning: a delayed old goroutine must never
+		// subscribe after the replacement and steal its account stream.
+		closes := t.server.SubscribeClosesFor(t.symbol, t.boundAccount)
+		rejects := t.server.SubscribeRejectsFor(t.symbol, t.boundAccount)
+		instruments := t.server.SubscribeInstrumentInfoFor(t.symbol, t.boundAccount)
 		go func() {
-			for p := range t.server.SubscribeClosesFor(t.symbol, t.boundAccount) { // P5.4 router-fed (per-symbol)
+			defer close(done) // drain all queued receipts before stopping reconcile
+			for p := range closes {
 				t.recordClose(traderID, exchangeID, exchangeType, st, pb, p)
 			}
 		}()
@@ -47,7 +54,7 @@ func (t *TCPTrader) StartCloseSync(traderID, exchangeID, exchangeType string, st
 		// natural bounded retry) and the periodic reconcile keeps the DB anchored to
 		// NT8 truth, so the orphan can't be netted onto by the next entry.
 		go func() {
-			for r := range t.server.SubscribeRejectsFor(t.symbol, t.boundAccount) { // P5.4 router-fed (per-symbol)
+			for r := range rejects {
 				logger.Warnf("🚨 NT close REJECTED: %s %s — STILL OPEN in NT8, NOT recording closed (reason: %q, account: %s). Will retry on next decision cycle / reconnect.",
 					r.Symbol, r.PositionSide, r.Reason, r.Account)
 			}
@@ -58,7 +65,7 @@ func (t *TCPTrader) StartCloseSync(traderID, exchangeID, exchangeType string, st
 		// (no table entry) NT8 is the only source. The tables stay authoritative for
 		// the math; this is defense-in-depth + drift detection.
 		go func() {
-			for in := range t.server.SubscribeInstrumentInfoFor(t.symbol, t.boundAccount) { // P5.4 router-fed (per-symbol)
+			for in := range instruments {
 				tablePV := market.FuturesPointValue(in.Symbol)
 				tableTick := market.FuturesTickSize(in.Symbol)
 				switch {
@@ -219,4 +226,13 @@ func (t *TCPTrader) knownLegacyExitIdentity(st *store.Store, p ntwire.PositionCl
 	var count int64
 	err := st.GormDB().Model(&store.TraderPosition{}).Where("account = ? AND symbol = ? AND UPPER(side) = ? AND entry_order_id = ?", p.Account, symbol, side, p.SignalID).Count(&count).Error
 	return err == nil && count > 0 && p.SignalID != ""
+}
+
+func (t *TCPTrader) observerLifetime() chan struct{} {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if t.observerDone == nil {
+		t.observerDone = make(chan struct{})
+	}
+	return t.observerDone
 }

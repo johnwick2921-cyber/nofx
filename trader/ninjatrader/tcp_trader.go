@@ -109,6 +109,10 @@ type TCPTrader struct {
 	// reconcileOnce guards StartPositionReconcile (mirrors closeSyncOnce) so a
 	// re-entrant AutoTrader.Run never spawns a second reconcile goroutine.
 	reconcileOnce sync.Once
+	// Observer lifetime ends only after same-account replacement drains closes.
+	// Ordinary trading Stop and socket disconnect do not retire these observers.
+	observerDone     chan struct{} // initialized under mu; closed by close consumer
+	reconcileStopped chan struct{} // initialized under mu; closed by reconcile worker
 
 	// flatSince tracks, per open-position row id, the first time the reconcile loop
 	// observed it NT8-flat-but-DB-open (Unix ms). It implements the flat-grace
