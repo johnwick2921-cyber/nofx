@@ -81,3 +81,16 @@ subscription teardown/replacement. The preceding implementation panicked with
 nonblocking send; teardown closes only under the corresponding write lock.
 The same test passes under `-race` and delivers a sentinel after the churn.
 This proves the exercised loopback interleaving; it is not NT8 integration proof.
+
+## Boot sweep settlement
+
+A temporary-ledger regression reproduced successful cancel transmission becoming
+`cancelled` with snapshot ID zero. The sweep now persists cancellation intent,
+uses the guarded sender, and leaves the row pending. A received cancellation
+update does not bypass pending snapshot confirmation. Existing same-version
+boot-sweep reauthorization occurs only after confirmation. The recorded completion
+counter increments transactionally with that transition, not at send time.
+The boot line now says requests, not completed cancellations. Focused boot-sweep,
+reauthorization and cancel-lifecycle tests pass. Old tests that equated send with
+settlement were updated to inject persisted broker evidence. Historical counter
+values are not retrospectively corrected by this code change.

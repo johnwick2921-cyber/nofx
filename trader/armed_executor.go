@@ -1976,6 +1976,10 @@ func (at *AutoTrader) onArmedOrderUpdate(u ntwire.OrderUpdatePayload, ledger *st
 			at.stampArmedFillLineage(r, u.FillPrice)
 			at.logInfof("⚡ armed fill %s @ %.2f (entry_class=armed_fill — stale_reeval NOT applied)", r.Scenario, u.FillPrice)
 		case "cancelled":
+			if r.State == store.StateCancelPending {
+				at.logInfof("✕ armed %s cancellation receipt received — awaiting persisted broker book", r.Scenario)
+				return
+			}
 			_ = ledger.SetState(r.ID, "cancelled", "cancelled in NT8")
 			at.logInfof("✕ armed %s cancelled in NT8", r.Scenario)
 		default:

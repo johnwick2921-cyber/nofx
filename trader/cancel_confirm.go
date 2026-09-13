@@ -409,7 +409,7 @@ func (at *AutoTrader) confirmPendingCancels(ledger *store.ArmedOrderStore, cance
 		}
 		// The re-request is recorded whether or not the SEND returned nil —
 		// because the send is not the point.
-		if err := ledger.RequestCancel(r.ID, "re-requested after "+reqAge.Round(time.Second).String()+" unconfirmed", now.UnixMilli()); err != nil {
+		if err := ledger.RequestCancel(r.ID, strings.TrimSpace(r.StateReason)+" — re-requested after "+reqAge.Round(time.Second).String()+" unconfirmed", now.UnixMilli()); err != nil {
 			at.logWarnf("🧾 cancel re-request: ledger write failed for %s: %v", r.Scenario, err)
 			continue
 		}

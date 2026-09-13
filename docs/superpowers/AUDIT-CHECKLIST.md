@@ -4735,3 +4735,13 @@ History dispatch retrieved a channel under a read lock, released it, then sent;
 importer teardown closed under the write lock in that gap. A loopback race test
 reproduced process panic. Hold the ownership lock through nonblocking delivery
 or use an equivalent lifecycle protocol; locking only channel lookup is not enough.
+
+## PENDING CLASS — BOOT RECONCILIATION CANNOT BYPASS SETTLEMENT
+
+Branch `fix/repo-audit-control-boundaries-20260913`, base `63968be6`.
+A restart-specific cancel path wrote terminal state directly after sending,
+outside the established cancel_pending/confirmed lifecycle. Regression records
+a placed pre-boot row, a successful fake send, pending state, then a persisted
+broker snapshot. Cancellation receipts alone must not unlock pending slots.
+Completion counters must be committed with the confirmed state transition;
+requests and completions require distinct language.

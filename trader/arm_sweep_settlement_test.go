@@ -58,3 +58,28 @@ func TestArmSweepLeavesPendingCancelForSnapshotConfirmation(t *testing.T) {
 	}
 	t.Logf("boot swept=0; no book pending=1; resting book pending=1; empty book cancelled with snapshot=%d", book.ID)
 }
+
+func TestBootSweepSendDoesNotSettleWorkingEntry(t *testing.T) {
+	at := class33Trader(t)
+	class33Seed(t, at, "working-at-boot", "working-entry", "prior-process", store.StateWorking)
+	ledger := at.store.ArmedOrders()
+	sent := 0
+	at.sweepPreBootArmsWith(ledger, func(string) error { sent++; return nil })
+	var row store.ArmedOrderDB
+	if err := ledger.DB().Where("scenario = ?", "working-at-boot").First(&row).Error; err != nil {
+		t.Fatal(err)
+	}
+	if sent != 1 || row.State != store.StateCancelPending || row.CancelSettledSnapshotID != 0 {
+		t.Fatalf("send is not settlement: sent=%d state=%s snapshot=%d", sent, row.State, row.CancelSettledSnapshotID)
+	}
+	at.onArmedOrderUpdate(nt.OrderUpdatePayload{SignalID: "working-entry", OrderName: "working-entry", State: "Cancelled"}, ledger)
+	if err := ledger.DB().First(&row, row.ID).Error; err != nil {
+		t.Fatal(err)
+	}
+	if row.State != store.StateCancelPending {
+		t.Fatalf("receipt bypassed book confirmation: %s", row.State)
+	}
+	if got, _ := store.BootSweptCount(at.store); got != 0 {
+		t.Fatalf("unconfirmed cancellation counted as completed: %d", got)
+	}
+}

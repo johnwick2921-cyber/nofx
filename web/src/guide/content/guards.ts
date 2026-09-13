@@ -7,6 +7,7 @@ export const guards: GuideSection = {
   tagline: 'What can hard-block a trade vs what only informs.',
   asBuiltRev: GUIDE_BUILT_REV,
   blocks: [
+    { kind: 'p', text: 'At startup, cancellation of an old placed arm stays pending until a persisted broker snapshot confirms its absence. Sending a request or receiving a cancellation receipt alone does not unlock its replacement. The boot-sweep completion counter moves only after that confirmation.' },
     { kind: 'p', text: 'A missing or null broker order list is unavailable, not an empty book. Cancellation based on order-book evidence requires a fresh snapshot; a failed send remains a failure. The existing confirmed-flat cleanup exception remains.' },
     { kind: 'p', text: 'Ask-Planner apply refuses when no session is active. Apply and realign follow the active session’s trading date, including an overnight session that began on the previous calendar day.' },
     { kind: 'h', text: 'Boot integrity applies to every NT8 entry' },
