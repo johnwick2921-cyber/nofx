@@ -128,4 +128,3 @@ All assigned SHA256 hashes match the manifest. Full/manual ranges cover every as
 - `trader/research_snapshot.go:1–308` — StageA snapshots preserve explicit NULL/missing versus0, source clocks, stable identity, strictcorrected outcome exclusions/costunknown; async closures ownership relies Record sync serialization; inspect Record.
 
 - `trader/session_risk.go:1–282` — Session risk band first, breaker strategy/env then defaults8/5; count trader/day not account. Explicit query error failopen. Daily boot decorative if either switch off; fixed maxrun7 neverfires claim false for configurableN<=7. No pertrade cap added.
-

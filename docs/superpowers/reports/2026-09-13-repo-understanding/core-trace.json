@@ -1,13 +1,13 @@
 {
-  "revision": "317dc5efd539a8fac1d657731ea2e68e22109b60",
+  "revision": "e333de41bfffec2ea2cce67ab4296ce8bbd12fc0",
   "scope": "selected production declarations; not runtime call graph",
   "entries": [
     {
       "boundary": "Transport",
       "path": "provider/ninjatrader/tcp_server.go",
       "function": "readLoop",
-      "line": 1727,
-      "sha256": "a02d8ad6450859a7fe42adfb476120ee88a9e2416d1ba5e75ef5bba8335b553a",
+      "line": 1718,
+      "sha256": "ebced810b2a1dcf92cd30b88567d26038ddb2e65a81a81f55592d4b1815b8481",
       "note": "Decodes broker frames; execution processing order must be verified separately."
     },
     {
@@ -35,19 +35,35 @@
       "note": "Applies received close evidence through the same serialized owner."
     },
     {
+      "boundary": "Shared entry receipt",
+      "path": "provider/ninjatrader/entry_receipt.go",
+      "function": "NoteEntryExecution",
+      "line": 17,
+      "sha256": "056ebe07c731918a81ac4e8455b21566cdf0a72d4d8751e161805c85e21a9663",
+      "note": "Account/symbol cumulative evidence survives adapter replacement for shared server lifetime."
+    },
+    {
+      "boundary": "Atomic position evidence",
+      "path": "provider/ninjatrader/entry_receipt.go",
+      "function": "PositionsForExecutionReceipt",
+      "line": 42,
+      "sha256": "056ebe07c731918a81ac4e8455b21566cdf0a72d4d8751e161805c85e21a9663",
+      "note": "Reads position snapshot and entry receipt under the same mutex; no guessed flat fallback."
+    },
+    {
       "boundary": "Owner installation",
       "path": "trader/ninjatrader/ordered_execution.go",
       "function": "InstallOrderedExecutions",
-      "line": 11,
-      "sha256": "ccc6131abddcb5c7c01bee505f41b795eb4d39255b7f768bf4f5ca64c2c3dd13",
+      "line": 12,
+      "sha256": "a17e403ac04984b83771775e5c1022f338e35a743b4686cb81055ed3cadfa4e4",
       "note": "Installs observation at successful construction; ordinary Stop retains it."
     },
     {
       "boundary": "Fill cache",
       "path": "trader/ninjatrader/tcp_trader.go",
       "function": "handleFill",
-      "line": 192,
-      "sha256": "8e7b198afedbf5a4b5de36690458e133c0767f65680d407807a1390306e4cb86",
+      "line": 193,
+      "sha256": "9956daa91dee5b1aaf0197f93b20bdfbd061038902734f429c731498cbde1efb",
       "note": "Preserves actual exposure and refuses duplicate fully exited entry cache replay."
     },
     {
@@ -206,16 +222,16 @@
       "boundary": "Resting limit",
       "path": "trader/ninjatrader/tcp_trader.go",
       "function": "PlaceLimitEntry",
-      "line": 469,
-      "sha256": "8e7b198afedbf5a4b5de36690458e133c0767f65680d407807a1390306e4cb86",
+      "line": 511,
+      "sha256": "9956daa91dee5b1aaf0197f93b20bdfbd061038902734f429c731498cbde1efb",
       "note": "Registers identity before transmission; transmission is not broker acceptance."
     },
     {
       "boundary": "Stop entry",
       "path": "trader/ninjatrader/tcp_trader.go",
       "function": "PlaceStopEntry",
-      "line": 533,
-      "sha256": "8e7b198afedbf5a4b5de36690458e133c0767f65680d407807a1390306e4cb86",
+      "line": 575,
+      "sha256": "9956daa91dee5b1aaf0197f93b20bdfbd061038902734f429c731498cbde1efb",
       "note": "Kind-specific stop entry adapter; distinct from protective stop placement."
     },
     {
@@ -262,8 +278,8 @@
       "boundary": "Positions truth",
       "path": "trader/ninjatrader/tcp_trader.go",
       "function": "GetPositions",
-      "line": 944,
-      "sha256": "8e7b198afedbf5a4b5de36690458e133c0767f65680d407807a1390306e4cb86",
+      "line": 986,
+      "sha256": "9956daa91dee5b1aaf0197f93b20bdfbd061038902734f429c731498cbde1efb",
       "note": "Selected bound-account position snapshot and freshness admission."
     }
   ]

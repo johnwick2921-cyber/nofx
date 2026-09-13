@@ -1,67 +1,35 @@
-# Current audit, repair and publication checkpoint
+# Audit and repair checkpoint
 
-The usage-blocked checkpoint under `interim/` is historical. Start with
-[REPAIR-STATUS.md](REPAIR-STATUS.md) for the current repair/open-limit table;
-[CTO-TRADING-LOGIC.md](CTO-TRADING-LOGIC.md) explains the trading-process judgment.
+## Completed scope
 
-## Completed baseline coverage
+All 30 scoped assignments are reported. At baseline 63968be62e44db2fb07a92883e02127b9064b0be, 28 primary reviews cover 1,049 unique first-party files / 250,582 lines. Two bounded independent reviews examine repair 99a06543 and add no primary files. Coverage and publication validators establish artifact/hash/range/function-note consistency, not a second semantic reading or runtime correctness. The 30 reports and their 120 standard artifacts are preserved.
 
-All 30 scoped review assignments are reported:28 primary slices cover1,049 unique
-first-party source files /250,582 lines at **63968be62e44db2fb07a92883e02127b9064b0be**.
-Two independent cross-reviews use repair 99a06543 and add no primary coverage.
-The independent publication check finds all 30 index links and120 standard artifacts,
-no duplicate assignments, missing reports, unread items, hash/range gaps or
-recorded named-function validator errors. These are baseline consistency facts,
-not full-source coverage of later repairs, every test/document read, or runtime proof.
+Current candidate: `cd2978b77da54e2fceddfb19e1d3d148bd2bfb62` on `fix/repo-audit-control-boundaries-20260913`. The disposition and CTO assessment include the ordered-execution and positive-entry/replacement follow-ups through this revision. Those implementation tasks are committed; they are not awaiting an unspecified future repair. CORE-TRACE.md pins selected declarations to this candidate.
 
-## Repair checkpoints
+Historical checkpoints remain revision-scoped: Go full suite/build and selected race checks at 99a06543; frontend 71 files/451 tests plus build at 28a6f32e; later chart follow-up 9 focused tests/build; final-marker C# reference compilation and 89 extracted assertions. No earlier green result is relabelled as a pass at the final candidate.
 
-Control branch: `fix/repo-audit-control-boundaries-20260913`, observed at 939e21db.
-Frontend source branch: `fix/repo-audit-web-state-20260913`, pushed at 28a6f32e.
-Root is integrating and testing; do not use these snapshot hashes as final publication stamps.
+## Substantive remaining limits
 
-- Go full suite/build and selected race checks passed at 99a06543, before later repairs.
-- C# lifecycle source 9140f6c9/f1b7cc10 integrated as e8d2243f/cc766e1c; extracted-method harness and NT8-reference compile evidence are scoped in the repair report. No installed AddOn change occurred.
-- Frontend source/dependency/state commits ed85a80a/e26f63a8/28a6f32e integrated as 03090352/f5409132/6c4092bf. Private updated dependencies passed71 files/451 tests and production build at 28a6f32e; npm audit reported0. Default-branch GitHub alert closure is not asserted.
-- a982cc74 repairs completed partial exits and cumulative ENTRY terminal receipt accounting. Positive-filled terminal-cancelled EXIT wire handling remains open. A receipt transaction cannot guarantee process-local hooks across crash; pending receipts still need later delivery/reconciliation.
-- df4af389 fixes the weekly reader's production daily-input call site. Other generic epoch aggregation and daily-data intraday-gap limits remain separate.
-- Guide 6058d9fe/939e21db removes old ATR/permission claims and explains residual exposure. Final GUIDE_BUILT_REV must follow final source integration.
+Receive-order processing does not reconstruct exchange chronology or pre-owner queued events. No durable inbound journal or crash-atomic process-local hook delivery exists; storage failures still need later evidence/replay. Synchronous callbacks backpressure TCP; continuing cumulative exposure does not rebuild all already-emitted terminal analytics. Broker-side atomic expected-position fencing remains absent. Ambiguous multiple-row attribution refuses. Replacement handoff is repaired, while installed NT8 scheduling/OCO, reconnect and final shutdown still need controlled verification.
 
-## Remaining source and runtime limitations
+UI limits include backend selected-account completeness in history/chart/orders, forming-candle marker association, bulk model payload replay/extra-model thinking knobs, submit lifecycle and DayPlanEditor draft/default/inheritance/translation issues. Existing account names are now read-only; backend binding migration is separate. Corrected-PNL fallback, stale response identity and open-order error-to-empty have named repairs and are not wholly open.
 
-Concrete execution gaps: positive-filled cancelled EXIT orders outside the Filled-only
-exit wire path; no atomic broker-side expected-position fence; safe observer replacement
-and final disposal/handoff; crash-time process-local hook delivery; unresolved replay and
-ambiguous multiple-row attribution. These are not dismissed as minor cosmetic debt.
+The audit did not establish backup restoration, a first live structural composition/refusal, calibrated stop buffers, target optimality or causal out-of-sample net expectancy. Historical exploratory research is qualified separately from current measurement dependencies. Main runtime, owner settings, accounts and live records were not changed by this source audit; SIM and the owner's daily-loss policy remain intact.
 
-Active UI/data gaps: selected-account history/chart completeness; bounded loaded history
-versus complete aggregates; current-forming-candle marker association; open-order errors
-still converted to empty data; bulk model replay/extra-instance thinking knobs; model
-submit busy lifecycle; account-name persistence; DayPlanEditor polled-draft/default/
-inheritance/translation problems. Specific corrected-PNL, chart identity, cache refresh
-and breaker display defects have later repairs and should not be relisted as wholly open.
+## Final verification
 
-Runtime and strategy evidence: installed NT8 callback/OCO/fill behavior, first live
-structural composition/refusal, backup restore rehearsal, and causal out-of-sample net
-expectancy remain unverified by this audit. Source understanding is not runtime or
-profitability approval. Archived exploratory script flaws are qualified separately
-from currently relied-on measurements in their source reviews.
+Root-owned ledger. Frozen verification tree: `e333de41bfffec2ea2cce67ab4296ce8bbd12fc0`; backend source candidate and guide stamp: `cd2978b77da54e2fceddfb19e1d3d148bd2bfb62`. The intervening freeze commit changes protected hashes/guide/report metadata. The guide stamp identifies this source candidate, not a running or shipped binary. Results below are supplied by the root runner; this documentation pass did not rerun them.
 
-## Root-owned final publication work
+| Required record | Result |
+| --- | --- |
+| Final combined Go suite | Pending root runner result |
+| Final Go build | PASS, root runner at frozen tree |
+| Final relevant race verification | Pending root runner results |
+| Final frontend suite and production build | PASS: 71 files / 454 tests; production build passes with existing chunk-size warning |
+| Offline smoke checks | PASS, root runner |
+| Final C# source marker/reference compile/harness receipt | Pending root consolidation of revision-scoped receipts |
+| Final guide/source identity and publication hashes | Pending root stamp |
+| Final evidence bundle, PDF and downloadable Markdown links | Pending root publication |
+| Deployment / installed NT8 / live SIM lifecycle | Not performed by this audit; no approval inferred |
 
-Final integrated source revision: **pending**. Combined Go/web/race/build log results:
-**pending** (root started final combined 01; no result inferred). Final guide revision:
-**pending**. Final source/evidence bundle, manifest hashes and publication links:
-**pending**. Root updates these once actually verified; preceding branch-green results
-must not be relabelled as final merged results.
-
-Verified earlier progress bundle: `/tmp/nofx-audit-progress-30-reviews.bundle`,
-containing four branch refs and requiring baseline 63968be. It is incremental,
-not a standalone full-repository restore. Preserve that limitation when shipping
-its replacement and include the separate repair reports in the final evidence set.
-
-No source audit action deployed/restarted the bot or NT8, changed owner settings,
-read/wrote live trade records or submitted an order. DAILY loss remains the owner's
-control; no additional mandatory per-trade cap or quantity policy was introduced.
-Ordinary Stop must retain protection/close observers for held positions until a
-safe handoff exists.
+After completing this ledger, regenerate assembled reports with tools/build-reports.py and update index sizes from report-package.json. The earlier progress bundle was incremental and required baseline 63968be; it was not a standalone restoration backup. Final publication must retain that distinction.
