@@ -74,7 +74,7 @@ def section(name, index, appendix=False):
                   'with baseline 63968be. It adds no primary source coverage and is not a review of all later repairs.')
     if not appendix:
         notice = ('Preserved source document; its own revision/checkpoint statements govern. '
-                  'Read Packaging-time repair updates before interpreting older open lists.')
+                  'Read current repair disposition before interpreting historical review findings.')
     return (f'\n---\n\n<a id="section-{index}"></a>\n\n'
             f'> Original: [{name}]({name}). {notice}\n\n' + body(name))
 
@@ -86,7 +86,7 @@ def build(full=False):
 
 Generated from preserved Markdown sources by `tools/build-reports.py`. This is an editable assembled report; make durable corrections in the linked originals and rebuild. Baseline source scope is **1,049 files / 250,582 lines at {BASE}**, across 28 primary reviews plus two bounded independent reviews. Source review is not runtime verification, deployment approval, or profitability evidence.
 
-**Final source revision, combined test results and release/guide stamps remain root-owned and pending unless explicitly recorded in the underlying final disposition.** Packaging is not an additional audit or test pass. The packaging-time updates below supersede only their named historical open items; unified ordered execution remains active at this snapshot.
+**Final verification is recorded only in [CHECKPOINT.md](CHECKPOINT.md#final-verification).** Packaging is not an additional audit or test pass. Current disposition includes committed ordered-execution and entry-receipt lifetime repairs; original numbered appendices remain historical.
 
 Relative links have been rebased to the original artifacts; fragment links point to the original document to avoid duplicate-heading ambiguity. Code fences and original source files are preserved. Machine-readable baseline consistency evidence remains in [coverage-validation.json](coverage-validation.json) and [publication-validation.json](publication-validation.json); the checkpoint describes its limits.
 

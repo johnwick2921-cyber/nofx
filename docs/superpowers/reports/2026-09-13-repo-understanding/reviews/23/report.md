@@ -129,4 +129,3 @@ Historical July10@7a8adce0 graph:51 nodes for7 assignedpaths,417 incident edges 
 - `trader/rootfix_shadow_ab.go:1–246` — Default-off bounded sample shadow fast-mode experiment; async global shadow lock only, mutates shared liveclient thinking and resets not deferred; validator rereads current bars/time and omits newer live checks. Counts outcomes, logs but no plan publication; successful persistence count required to bound billing.
 
 - `trader/trade_excursion_backfill.go:1–157` — Recompute closed hold excursions from uniquely identified contract window with slack; ambiguous/unknown contract no usable bars, corrected PNL retained nullable. Nearest decision stop/target not signal identity; SetLevels error ignored and stop final set initial despite possible moves.
-

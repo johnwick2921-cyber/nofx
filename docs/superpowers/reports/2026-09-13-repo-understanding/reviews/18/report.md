@@ -497,4 +497,3 @@ Every entry below is a full manual source read. Function start/end boundaries an
 ### 106. `docs/superpowers/research/2026-09-12-backtest-zone-fade/harness/surface.go`
 
 [A] Lines 1–295. Archive 81-cell surfaces; map events share tape but permutations treat map groups independently; hold outcomes globally shuffled per horizon, loses cross-horizon/tape dependence. No production gating.
-

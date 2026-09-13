@@ -276,4 +276,3 @@ Paths below are relative to repository root; all are full/manual reads. Function
 104. `docs/superpowers/research/2026-09-12-backtest-zone-fade/harness/render_c1.py:1–19` — Markdown table renderer with n<30 decided flag; consume saved JSON, no computation of sample validity.
 
 105. `docs/superpowers/research/2026-09-12-backtest-zone-fade/harness/stop_port.go:1–237` — Legacy stop widest-wins port and startup byteguard; current production variadic structural signature differs so replay aborts; guard compares embedded string, not callable copiedbody.
-

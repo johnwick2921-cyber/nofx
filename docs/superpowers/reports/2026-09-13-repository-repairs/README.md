@@ -1,4 +1,4 @@
-# Repository control-boundary repairs — in progress
+# Repository control-boundary repairs — source candidate
 
 Owner requested detailed traced review and repairs until complete. Source base:
 `63968be62e44db2fb07a92883e02127b9064b0be`; branch
@@ -330,3 +330,7 @@ binding migration are not implemented. Creation and saved owner bindings are unc
 ## Final source freeze preparation
 
 Reviewed protected-file hashes updated only for the ordered TCP execution dispatch, shared entry-receipt fence, and C# execution-evidence build marker. The mutation guard remains active. The guide revision identifies backend source candidate cd2978b7; it does not identify the running binary. Adapter replacement receipt preservation is covered by the dedicated 2026-09-13 NT8 entry receipt report.
+
+## Final disposition index
+
+This report preserves chronological repair checkpoints; earlier pending statements describe their named checkpoints. Current issue dispositions and exact combined verification are in [the audit final ledger](../2026-09-13-repo-understanding/CHECKPOINT.md#final-verification). All 30 review artifacts are complete. This does not claim every baseline finding was repaired, deployment occurred, or trading profitability was established. The additional x/crypto dependency finding is being resolved before final publication.

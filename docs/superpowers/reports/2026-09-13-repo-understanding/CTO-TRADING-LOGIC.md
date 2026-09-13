@@ -1,6 +1,6 @@
 # CTO assessment: does the system behave like a disciplined level trader?
 
-Status: SOURCE REVIEW COMPLETE; repairs and final combined verification in progress. Not a deployment or profitability approval.
+Status: baseline source review complete; reviewed repair candidate `cd2978b77da54e2fceddfb19e1d3d148bd2bfb62`. Final verification is recorded only in [CHECKPOINT.md](CHECKPOINT.md#final-verification). Not a deployment or profitability approval.
 
 Source references below are repository-relative. Strategy source was inspected at
 `63968be62e44db2fb07a92883e02127b9064b0be`; repair-specific behavior is at
@@ -17,8 +17,7 @@ The system has many useful controls, but their number does not establish a
 coherent trading process. I cannot sign off on complete trading correctness.
 All 30 scoped review reports are complete:28 source slices cover1,049 files and
 250,582 lines; two cross-boundary reviews examined repair 99a06543. Subsequent
-repairs receive separate focused review/tests. Final combined verification is
-still pending. The number of reviews is not the number of simultaneous agents.
+repairs receive separate focused review/tests. Final combined verification has its own ledger in CHECKPOINT.md. The number of reviews is not the number of simultaneous agents.
 
 The core standard is consistency: the same setup identity, contract, account,
 entry, stop, target, permission and lifecycle must survive from market data to
@@ -188,11 +187,20 @@ restarted. No runtime protection claim follows from the temporary DLL.
 being recorded as whole-position closes and positive cumulative ENTRY fills on
 terminal cancellation being omitted. Repair a982cc74 now records actual exit
 quantity, receipt identity, fill and residual cost basis atomically, and handles
-cumulative entry growth without overwriting partial-exit accounting. The
-completed-exit frame remains Filled-only: positive-filled terminal-cancelled
-EXIT orders are still a concrete wire gap. This is not the same as repaired
-terminal ENTRY materialization. Current exit wire also lacks commission data;
+cumulative entry growth without overwriting partial-exit accounting. Repair 3f21431a also emits valid positive cumulative EXIT evidence on terminal cancellation/rejection; the report records 89 extracted-method assertions and five-source reference compilation. This is distinct from terminal ENTRY materialization. Current exit wire also lacks commission data;
 zero additional recorded fee is unreported commission, not measured zero cost.
+
+### Receive order, positive evidence and replacement lifetime
+
+[A/source and reported offline tests] Repair 9b379c8c installs one exact account/symbol execution owner at successful trader construction. OrderUpdate, Fill and PositionClose are applied from TCP readLoop before advisory fanout. Internal handled flags prevent older consumers from reapplying events. Registration replacement and cleanup compare owner identity. Tests exercise the actual TCP path, both cumulative-entry/exit orders, raw and advisory replay, foreign accounts, cache resurrection and reentrant outbound progress.
+
+For entry1@100 → cumulative entry2@105 → exit1@120, the expected residual is one contract at105 and realized MNQ P&L30USD. For entry1@100 → exit1@120 → cumulative entry2@105, it is one contract at110 with realized P&L40USD. Later cumulative growth of the same immutable order is observed exposure, not permission for another entry. Earlier exits and realized P&L are retained; corrected final P&L becomes unresolved while exposure continues. These fixtures establish their accounting cases, not exchange execution chronology.
+
+Repair c20d0a82 retains a valid exit exceeding currently materialized entry quantity as pending rather than discarding it, and refuses absent/stale first position snapshots. Follow-up d7b70a90 preserves positive entry exposure even on rejection and fences a snapshot received before positive execution evidence. A rejection alarm cannot erase an actual partial fill.
+
+Repair cd2978b7 moves the positive-entry receipt and cumulative deduplication state into the shared TCPServer, keyed by canonical symbol/account. Position data, receipt time and entry watermark are read together under one mutex. Replacing an adapter therefore neither forgets the prior entry nor lets an old duplicate renew its fence against a newer snapshot. The two replacement directions were reproduced before repair and covered by focused race tests; this summary reads their report rather than claiming another full source review.
+
+The guarantee is receive order for an installed owner. There is no durable inbound journal or reconstruction of events received before ownership existed. Synchronous storage callbacks can backpressure transport and must not wait for broker replies. Failures still require later evidence/replay; committed database changes cannot guarantee subsequent process-local hooks across a crash. Same-order continuation does not retroactively repair all terminal analytics or excursion rows. These substantive limits remain after the named defects are fixed.
 
 ## 9. One contract and management rules must remain executable
 
@@ -212,7 +220,7 @@ Delayed flatten repair 94e08cf0 checks immutable position/entry lineage, invalid
 timers on Stop and preserves protection after close refusal. A broker-side atomic
 position fence is still absent: a stale local row cannot prove that no unseen
 replacement exists. Broker observers intentionally outlive ordinary Stop while
-positions may remain. Final removal needs an explicit safe handoff design.
+positions may remain. Repair d3e4638e retires a replaced reconciliation worker after its old close channel drains; an already executing pass can finish. Ordinary Stop still preserves protection observation. This bounded replacement handoff does not certify every shutdown path.
 
 ## 10. What establishes success, and the order of work
 
@@ -245,8 +253,7 @@ is then to demonstrate that the selected opportunities pay after losses and cost
 See README.md, CHECKPOINT.md, reviews/01 through reviews/30, coverage-validation.json
 and [REPAIR-STATUS.md](REPAIR-STATUS.md), which separates repaired baseline
 findings from concrete remaining source/runtime limitations. Frontend 28a6f32e
-passed451 tests/build and was integrated as 6c4092bf. Full Go/build/focused race checks
-passed at 99a06543, before later changes. Final combined checks are still due.
+passed451 tests/build and was integrated as 6c4092bf. Full Go/build/focused race checks passed at 99a06543, before later changes. These are historical checkpoints; the single final verification ledger is in CHECKPOINT.md.
 No deployment, owner-setting change, live database write or real order occurred.
 Historical runtime snapshots from the earlier daily-loss dispatch are not new
 observations. The earlier usage-blocked report is archived under interim/.

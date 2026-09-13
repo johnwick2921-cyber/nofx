@@ -10,6 +10,8 @@ items=[
 ('Ordered execution owner','provider/ninjatrader/ordered_execution.go','RegisterOrderedExecutionsFor','Exact account/symbol owner; preserves receive order before type fanout.'),
 ('Ordered entry delivery','provider/ninjatrader/ordered_execution.go','dispatchOrderedOrder','Applies received entry evidence before advisory consumers can reorder it.'),
 ('Ordered exit delivery','provider/ninjatrader/ordered_execution.go','dispatchOrderedClose','Applies received close evidence through the same serialized owner.'),
+('Shared entry receipt','provider/ninjatrader/entry_receipt.go','NoteEntryExecution','Account/symbol cumulative evidence survives adapter replacement for shared server lifetime.'),
+('Atomic position evidence','provider/ninjatrader/entry_receipt.go','PositionsForExecutionReceipt','Reads position snapshot and entry receipt under the same mutex; no guessed flat fallback.'),
 ('Owner installation','trader/ninjatrader/ordered_execution.go','InstallOrderedExecutions','Installs observation at successful construction; ordinary Stop retains it.'),
 ('Fill cache','trader/ninjatrader/tcp_trader.go','handleFill','Preserves actual exposure and refuses duplicate fully exited entry cache replay.'),
 ('Market data','market/data.go','GetWithTimeframes','Builds requested market context; futures provider path differs from legacy crypto.'),
@@ -52,6 +54,6 @@ text=['# Core trading source trace','',f'Source snapshot: `{rev}`. Each link nam
 for row in rows:
  url=f'https://github.com/johnwick2921-cyber/nofx/blob/{rev}/{row["path"]}#L{row["line"]}'
  text.append(f'| {row["boundary"]} | [{row["function"]}]({url}) | {row["note"]} |')
-text.extend(['','The ordered execution boundary is under repair until final verification is stamped. Transport receipt, broker acceptance, execution, position reconciliation and permission to enter are separate facts. The root report records their verification status.',''])
+text.extend(['','Ordered execution and shared receipt lifetime are repaired at the source snapshot above; final verification is recorded in CHECKPOINT.md. Transport receipt, broker acceptance, execution, position reconciliation and permission to enter are separate facts. The root report records their verification status.',''])
 (out/'CORE-TRACE.md').write_text('\n'.join(text))
 print(f'{len(rows)} exact declarations pinned to {rev}')

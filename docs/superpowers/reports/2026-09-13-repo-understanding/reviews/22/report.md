@@ -105,4 +105,3 @@ All assigned source reading and bounded dependency/test/graph review are complet
 - `trader/types/interface.go` lines1–238: Trader interface exactly19 methods preserved; GridTrader embeds +3. Fallback adapter uses protective stop/takeprofit setters as supposed entry, fabricated ClientID result NEW, ignores reduce/post/position side; no actual entry semantics. GetOrderBook nil,nil,nil uncomputed ambiguity. Need venue reachability trace.
 
 - `trader/watchdog_fire_wire.go` lines1–89: Global watchdog hook last registered trader labels all fires as that trader; acknowledged single-trader assumption. Latest unresolved fire linking lacks call identity. Table header UTC but formats CT; telemetry only.
-

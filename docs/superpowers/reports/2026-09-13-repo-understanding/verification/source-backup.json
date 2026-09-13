@@ -1,0 +1,19 @@
+{
+  "created_utc": "2026-09-13T14:46:24.873827+00:00",
+  "bundle": "/tmp/nofx-repository-audit-source-20260913.bundle",
+  "bytes": 78730522,
+  "sha256": "85b8ebc742dfe8f05f24fd5424bf806f3d02e4bddcd073221140d34194550123",
+  "complete_history": true,
+  "prerequisites": [],
+  "repair_revision": "e333de41bfffec2ea2cce67ab4296ce8bbd12fc0",
+  "docs_snapshot": "d8f110fe84e3e69d39e448e34bfe57c1ed17c2f4",
+  "restore_directory": "/tmp/nofx-audit-final-restore-20260913",
+  "restore_checks": [
+    "git bundle verify: exit 0",
+    "fresh clone --no-checkout: exit 0",
+    "git fsck --full: exit 0",
+    "detached checkout of repair revision: exit 0"
+  ],
+  "restored_clean": true,
+  "scope": "Full tracked source/history through these two references; final publication Markdown is additionally included in delivery ZIP. Not a live database backup or restoration."
+}

@@ -6,9 +6,9 @@ The owner requested a detailed, accurately traced, approximately 30-agent reposi
 
 ## Packaged reports
 
-- [CTO-REPORT.md](CTO-REPORT.md): assembled CTO assessment, later repair updates, disposition table, core source trace and coverage/checkpoint. Current package: **47,836 bytes / 5,659 whitespace-delimited words**; this is the source for the planned concise PDF.
-- [FULL-AUDIT.md](FULL-AUDIT.md): the same report plus **all 30 original review-report appendices**, each with historical scope notices. Current package: **775,591 bytes / 92,352 whitespace-delimited words**. [Download editable full Markdown](https://raw.githubusercontent.com/johnwick2921-cyber/nofx/refs/heads/docs/repo-understanding-20260913/docs/superpowers/reports/2026-09-13-repo-understanding/FULL-AUDIT.md) (branch URL; available after this documentation commit is pushed, and changes when the branch is updated).
-- [report-package.json](report-package.json) records exact input/output hashes and sizes; [PACKAGING-UPDATES.md](PACKAGING-UPDATES.md) records the later committed repairs that supersede specific older open items. Final ordered-execution repair, merged-head tests and release stamps remain root-owned.
+- [CTO-REPORT.md](CTO-REPORT.md): assembled CTO assessment, repair dispositions, core source trace and verification ledger. This is the source for the summary PDF.
+- [FULL-AUDIT.md](FULL-AUDIT.md): the same report plus **all 30 original review-report appendices**, each with historical scope notices. Exact byte counts and SHA-256 hashes are recorded in [report-package.json](report-package.json). The delivery receipt supplies a raw URL pinned to the published commit.
+- [report-package.json](report-package.json) records exact input/output hashes and sizes; [PACKAGING-UPDATES.md](PACKAGING-UPDATES.md) records the later committed repairs that supersede specific older open items. Ordered-execution repairs are committed; final merged-head results and publication stamps are recorded in CHECKPOINT.md.
 
 Rebuild from the repository root with `python3 docs/superpowers/reports/2026-09-13-repo-understanding/tools/build-reports.py`; append `--check` to verify deterministic output without writing. Edit the linked originals, then regenerate. Original review files and evidence artifacts are retained separately. Byte/word counts in this index must be refreshed if source documents change; the manifest is authoritative for each generated package. Packaging does not re-review the source or certify runtime behavior.
 
@@ -34,21 +34,11 @@ The recovered Understand Anything graph is dated July 10, 2026 at `7a8adce004372
 
 [A] directly read/run/observed; [B] inference from cited evidence; [C] hypothesis. Static concerns, offline reproductions and runtime incidents are separate categories. Each final trace will name source revision and file/function/line, actual test results, and remaining uncertainty. A passing suite is not proof of every behavior. No fabricated coverage, caller resolution, runtime observations, profitability or universal safety claims.
 
-## Repair lane — integration and verification in progress
+## Repaired candidate and verification
 
-`fix/repo-audit-control-boundaries-20260913` holds source repairs separately from
-this baseline audit. The detailed repair report records exact commits, test
-reproductions and limitations. Go full suite/build/focused race checks passed at
-99a06543; later C#, frontend and Go changes require combined verification.
-Frontend 28a6f32e passed71 files/451 tests and production build before integration
-as 6c4092bf. The control branch now includes completed-partial-exit/cumulative-entry
-repair a982cc74 and weekly-reader repair df4af389. These checkpoints are not a final
-combined pass. [REPAIR-STATUS.md](REPAIR-STATUS.md) preserves explicit limits.
+Current candidate `cd2978b77da54e2fceddfb19e1d3d148bd2bfb62` on `fix/repo-audit-control-boundaries-20260913` includes the scoped Go, C#, frontend, dependency and execution-evidence repairs. Ordered receipt processing, positive rejected entry evidence, shared-server entry fencing across adapter replacement, terminal cancelled/rejected EXIT receipts, observer replacement and UNKNOWN order display are committed. [REPAIR-STATUS.md](REPAIR-STATUS.md) separates those repairs from substantive remaining limits.
 
-[CTO-TRADING-LOGIC.md](CTO-TRADING-LOGIC.md) explains the trading process and its
-limits. [CHECKPOINT.md](CHECKPOINT.md) records the current resume state. The
-usage-blocked snapshots are preserved under `interim/` and are explicitly
-historical. Main checkout/runtime/accounts/settings remain untouched.
+The one [final verification ledger](CHECKPOINT.md#final-verification) records root-run merged-head results and publication stamps. Earlier passing fixtures retain their original revisions. All 30 baseline reports remain unchanged; the usage-blocked snapshots under interim/ are historical. Source review did not deploy the candidate, mutate owner accounts/settings, or establish profitable trade selection.
 
 ## Review index
 

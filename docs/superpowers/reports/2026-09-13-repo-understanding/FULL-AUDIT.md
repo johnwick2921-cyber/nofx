@@ -2,7 +2,7 @@
 
 Generated from preserved Markdown sources by `tools/build-reports.py`. This is an editable assembled report; make durable corrections in the linked originals and rebuild. Baseline source scope is **1,049 files / 250,582 lines at 63968be62e44db2fb07a92883e02127b9064b0be**, across 28 primary reviews plus two bounded independent reviews. Source review is not runtime verification, deployment approval, or profitability evidence.
 
-**Final source revision, combined test results and release/guide stamps remain root-owned and pending unless explicitly recorded in the underlying final disposition.** Packaging is not an additional audit or test pass. The packaging-time updates below supersede only their named historical open items; unified ordered execution remains active at this snapshot.
+**Final verification is recorded only in [CHECKPOINT.md](CHECKPOINT.md#final-verification).** Packaging is not an additional audit or test pass. Current disposition includes committed ordered-execution and entry-receipt lifetime repairs; original numbered appendices remain historical.
 
 Relative links have been rebased to the original artifacts; fragment links point to the original document to avoid duplicate-heading ambiguity. Code fences and original source files are preserved. Machine-readable baseline consistency evidence remains in [coverage-validation.json](coverage-validation.json) and [publication-validation.json](publication-validation.json); the checkpoint describes its limits.
 
@@ -48,51 +48,25 @@ Relative links have been rebased to the original artifacts; fragment links point
 
 <a id="section-1"></a>
 
-> Original: [PACKAGING-UPDATES.md](PACKAGING-UPDATES.md). Preserved source document; its own revision/checkpoint statements govern. Read Packaging-time repair updates before interpreting older open lists.
+> Original: [PACKAGING-UPDATES.md](PACKAGING-UPDATES.md). Preserved source document; its own revision/checkpoint statements govern. Read current repair disposition before interpreting historical review findings.
 
-## Packaging-time repair updates
+## Report scope and repair candidate
 
-This additive disposition notice supersedes the specific older open items named below. It preserves the original reports and their revision-scoped evidence. Commit existence and the corresponding source/report changes were inspected during packaging; this packaging step did not rerun repair tests. The root reviewer still owns final combined verification and revision stamps.
+This report joins a completed baseline source review with separately reviewed repairs. The baseline is `63968be62e44db2fb07a92883e02127b9064b0be`; 28 primary reviews cover 1,049 unique files / 250,582 lines, and reviews 29/30 examine bounded repairs at 99a06543 without adding primary coverage. The current repair candidate is `cd2978b77da54e2fceddfb19e1d3d148bd2bfb62`. Final verification freezes metadata at e333de41; the guide source stamp cd2978b7 identifies the candidate, not the running binary. Its scope is not another full repository reading.
 
-| Later committed repair | Superseded historical open item | Scope and remaining limit |
-| --- | --- | --- |
-| `c20d0a82` — unresolved exits and account truth | First-ever missing position snapshot treated as flat; valid exit quantity greater than currently materialized entry discarded | Missing/stale account state refuses admission; excess exit receipt remains pending for later resolution. Pending evidence does not itself prove replay or causal execution ordering. |
-| `d3e4638e` — observer replacement handoff | Replaced reconciliation observer continues indefinitely | Synchronous subscriptions and receipt-channel drain retire the replaced instance's periodic worker. Ordinary Stop retains protection observation; an already running reconciliation pass may finish. This does not prove live NT8 lifecycle scheduling or all shutdown paths. |
-| `3f21431a` — terminal cancelled/rejected EXIT fills | Positive-filled terminal EXIT outside the Filled-only wire path | The bounded C# repair includes positive terminal cumulative exits and retains bracket siblings for residual exposure. Its report records an extracted 89-assertion harness and five-source reference compilation; these are reported offline evidence, not an installed AddOn or real fill. |
-| `dd11670b` — open-order display uncertainty | HTTP failures displayed as fresh empty orders; editable existing account name silently ignored | Same-view prior snapshot retained as UNKNOWN/stale; selected-account changes invalidate requests, while the banner discloses trader-bound endpoint scope. Existing binding names are read-only; account creation remains editable. Backend selected-account filtering and binding migration remain separate work. |
+The summary documents now incorporate ordered execution (9b379c8c), missing first snapshots and pending excess exits (c20d0a82), observer replacement (d3e4638e), cancelled/rejected EXIT evidence (3f21431a), uncertain order display (dd11670b), positive rejected ENTRY evidence and stale-snapshot fencing (d7b70a90), and shared-server entry receipt lifetime across replacement (cd2978b7). These are committed repairs with bounded source/test evidence, not still-open implementation tasks. Their verification limits remain in the disposition table.
 
-**Still active at packaging:** the unified ordered-execution repair and its final verification. Do not interpret the preceding patches as resolving every interleaving between transport receipt, entry accounting, exit accounting and position reconciliation. The root reviewer will update the final disposition after that work and merged-head tests finish.
-
-**Still unverified or open:** broker-side atomic expected-position fencing; crash-safe delivery of process-local hooks; eventual pending-receipt replay; ambiguous multi-row attribution; selected-account completeness in history/chart endpoints; other explicitly listed UI/persistence/operations findings without a named repair. No source audit establishes installed NT8 behavior, backup restoration, production safety, or out-of-sample profitability.
-
-Source receipts: [first snapshot/pending exit](https://github.com/johnwick2921-cyber/nofx/commit/c20d0a829ca8cc0a9975ab78eed3b6a700f3b11d), [observer replacement](https://github.com/johnwick2921-cyber/nofx/commit/d3e4638e495425874aedba34a2fab0585acdae85), [terminal EXIT](https://github.com/johnwick2921-cyber/nofx/commit/3f21431aff0d7830b0dc0457417365a7a555aee7), [order display](https://github.com/johnwick2921-cyber/nofx/commit/dd11670be159760942d886b5b8c1aef2573e0d02). These identify source commits, not final release stamps.
-
-### Receive-order and subsequent boundary checks
-
-9b379c8c installs one account/symbol execution owner before its own entries,
-processing OrderUpdate, Fill and PositionClose in TCP receive order. Real TCP
-tests distinguish entry1→entry2→exit1 from entry1→exit1→entry2 and preserve
-actual residuals and cost basis. Independent review and focused race tests
-cover owner replacement, raw/advisory replay, cache resurrection and outbound
-callback progress. This is receive-order accounting, not reconstructed exchange
-timestamps or a durable transport journal. Source commit9b379c8c is followed by
-additional positive-rejection/entry-snapshot checks; final combined results
-remain root-owned and must replace this qualification before release readiness.
-
-The AddOn candidate identifies itself as2026-09-13-execution-evidence; Go's
-expected source marker matches. Received installed-runtime identity was not
-changed or verified by this source audit. The final reference compile and
-regenerated89-assertion harness pass at this marker.
+The 30 numbered reports remain historical originals. Their old findings are not silently rewritten; consult REPAIR-STATUS.md for the current disposition. Findings without a named repair retain their original reachability and evidence qualifications. [CHECKPOINT.md](CHECKPOINT.md#final-verification) is the only final verification ledger. Source review, document packaging and a passing offline suite are distinct from installed NT8 behavior, deployment approval, backup restoration and strategy profitability.
 
 ---
 
 <a id="section-2"></a>
 
-> Original: [CTO-TRADING-LOGIC.md](CTO-TRADING-LOGIC.md). Preserved source document; its own revision/checkpoint statements govern. Read Packaging-time repair updates before interpreting older open lists.
+> Original: [CTO-TRADING-LOGIC.md](CTO-TRADING-LOGIC.md). Preserved source document; its own revision/checkpoint statements govern. Read current repair disposition before interpreting historical review findings.
 
 ## CTO assessment: does the system behave like a disciplined level trader?
 
-Status: SOURCE REVIEW COMPLETE; repairs and final combined verification in progress. Not a deployment or profitability approval.
+Status: baseline source review complete; reviewed repair candidate `cd2978b77da54e2fceddfb19e1d3d148bd2bfb62`. Final verification is recorded only in [CHECKPOINT.md](CHECKPOINT.md#final-verification). Not a deployment or profitability approval.
 
 Source references below are repository-relative. Strategy source was inspected at
 `63968be62e44db2fb07a92883e02127b9064b0be`; repair-specific behavior is at
@@ -109,8 +83,7 @@ The system has many useful controls, but their number does not establish a
 coherent trading process. I cannot sign off on complete trading correctness.
 All 30 scoped review reports are complete:28 source slices cover1,049 files and
 250,582 lines; two cross-boundary reviews examined repair 99a06543. Subsequent
-repairs receive separate focused review/tests. Final combined verification is
-still pending. The number of reviews is not the number of simultaneous agents.
+repairs receive separate focused review/tests. Final combined verification has its own ledger in CHECKPOINT.md. The number of reviews is not the number of simultaneous agents.
 
 The core standard is consistency: the same setup identity, contract, account,
 entry, stop, target, permission and lifecycle must survive from market data to
@@ -280,11 +253,20 @@ restarted. No runtime protection claim follows from the temporary DLL.
 being recorded as whole-position closes and positive cumulative ENTRY fills on
 terminal cancellation being omitted. Repair a982cc74 now records actual exit
 quantity, receipt identity, fill and residual cost basis atomically, and handles
-cumulative entry growth without overwriting partial-exit accounting. The
-completed-exit frame remains Filled-only: positive-filled terminal-cancelled
-EXIT orders are still a concrete wire gap. This is not the same as repaired
-terminal ENTRY materialization. Current exit wire also lacks commission data;
+cumulative entry growth without overwriting partial-exit accounting. Repair 3f21431a also emits valid positive cumulative EXIT evidence on terminal cancellation/rejection; the report records 89 extracted-method assertions and five-source reference compilation. This is distinct from terminal ENTRY materialization. Current exit wire also lacks commission data;
 zero additional recorded fee is unreported commission, not measured zero cost.
+
+#### Receive order, positive evidence and replacement lifetime
+
+[A/source and reported offline tests] Repair 9b379c8c installs one exact account/symbol execution owner at successful trader construction. OrderUpdate, Fill and PositionClose are applied from TCP readLoop before advisory fanout. Internal handled flags prevent older consumers from reapplying events. Registration replacement and cleanup compare owner identity. Tests exercise the actual TCP path, both cumulative-entry/exit orders, raw and advisory replay, foreign accounts, cache resurrection and reentrant outbound progress.
+
+For entry1@100 → cumulative entry2@105 → exit1@120, the expected residual is one contract at105 and realized MNQ P&L30USD. For entry1@100 → exit1@120 → cumulative entry2@105, it is one contract at110 with realized P&L40USD. Later cumulative growth of the same immutable order is observed exposure, not permission for another entry. Earlier exits and realized P&L are retained; corrected final P&L becomes unresolved while exposure continues. These fixtures establish their accounting cases, not exchange execution chronology.
+
+Repair c20d0a82 retains a valid exit exceeding currently materialized entry quantity as pending rather than discarding it, and refuses absent/stale first position snapshots. Follow-up d7b70a90 preserves positive entry exposure even on rejection and fences a snapshot received before positive execution evidence. A rejection alarm cannot erase an actual partial fill.
+
+Repair cd2978b7 moves the positive-entry receipt and cumulative deduplication state into the shared TCPServer, keyed by canonical symbol/account. Position data, receipt time and entry watermark are read together under one mutex. Replacing an adapter therefore neither forgets the prior entry nor lets an old duplicate renew its fence against a newer snapshot. The two replacement directions were reproduced before repair and covered by focused race tests; this summary reads their report rather than claiming another full source review.
+
+The guarantee is receive order for an installed owner. There is no durable inbound journal or reconstruction of events received before ownership existed. Synchronous storage callbacks can backpressure transport and must not wait for broker replies. Failures still require later evidence/replay; committed database changes cannot guarantee subsequent process-local hooks across a crash. Same-order continuation does not retroactively repair all terminal analytics or excursion rows. These substantive limits remain after the named defects are fixed.
 
 ### 9. One contract and management rules must remain executable
 
@@ -304,7 +286,7 @@ Delayed flatten repair 94e08cf0 checks immutable position/entry lineage, invalid
 timers on Stop and preserves protection after close refusal. A broker-side atomic
 position fence is still absent: a stale local row cannot prove that no unseen
 replacement exists. Broker observers intentionally outlive ordinary Stop while
-positions may remain. Final removal needs an explicit safe handoff design.
+positions may remain. Repair d3e4638e retires a replaced reconciliation worker after its old close channel drains; an already executing pass can finish. Ordinary Stop still preserves protection observation. This bounded replacement handoff does not certify every shutdown path.
 
 ### 10. What establishes success, and the order of work
 
@@ -337,8 +319,7 @@ is then to demonstrate that the selected opportunities pay after losses and cost
 See README.md, CHECKPOINT.md, reviews/01 through reviews/30, coverage-validation.json
 and [REPAIR-STATUS.md](REPAIR-STATUS.md), which separates repaired baseline
 findings from concrete remaining source/runtime limitations. Frontend 28a6f32e
-passed451 tests/build and was integrated as 6c4092bf. Full Go/build/focused race checks
-passed at 99a06543, before later changes. Final combined checks are still due.
+passed451 tests/build and was integrated as 6c4092bf. Full Go/build/focused race checks passed at 99a06543, before later changes. These are historical checkpoints; the single final verification ledger is in CHECKPOINT.md.
 No deployment, owner-setting change, live database write or real order occurred.
 Historical runtime snapshots from the earlier daily-loss dispatch are not new
 observations. The earlier usage-blocked report is archived under interim/.
@@ -353,11 +334,11 @@ not an independently repeated experiment in this engineering dispatch.
 
 <a id="section-3"></a>
 
-> Original: [REPAIR-STATUS.md](REPAIR-STATUS.md). Preserved source document; its own revision/checkpoint statements govern. Read Packaging-time repair updates before interpreting older open lists.
+> Original: [REPAIR-STATUS.md](REPAIR-STATUS.md). Preserved source document; its own revision/checkpoint statements govern. Read current repair disposition before interpreting historical review findings.
 
 ## Repair disposition and publication status
 
-This is the bridge between the **baseline review** and **later repairs**. It prevents a fixed baseline finding from being presented as still current, or a focused repair from being presented as runtime proof. Snapshot: audit branch 65e19141; control repair branch observed at 939e21db; frontend branch 28a6f32e pushed to origin. Root will stamp final integrated hashes and test results after the remaining work. No final combined revision is asserted here.
+This is the bridge between the **baseline review** and **later repairs**. It prevents a fixed baseline finding from being presented as still current, or a focused repair from being presented as runtime proof. Candidate source: `cd2978b77da54e2fceddfb19e1d3d148bd2bfb62`. Final verification appears only in [CHECKPOINT.md](CHECKPOINT.md#final-verification).
 
 ### How to read the evidence
 
@@ -373,17 +354,21 @@ This is the bridge between the **baseline review** and **later repairs**. It pre
 | Structural planner contract, current-cycle admission, missing permission retirement ([08](reviews/08/report.md), [11](reviews/11/report.md), [30](reviews/30/report.md)) | Prompt 710ea1c8; admission 2dc94a19/456b38d4 and associated control repairs | Production builder/admission fixtures. No buffer calibration, ranking quality or expectancy validation. |
 | Stop/limit registration ambiguity ([20](reviews/20/report.md), [29](reviews/29/report.md), [30](reviews/30/report.md)) | Stop 7b2eb894; limit b63747ea | Both commit admission on durable registration. Actual adapter/loop tests; no claim that ambiguous transmission is accepted/filled. The limit gap recorded at 99a06543 is subsequently repaired. |
 | C# explicit account/expiry, entry cancel/protection and bracket amendments ([14](reviews/14/report.md), [29](reviews/29/report.md)) | Original 9140f6c9/f1b7cc10 integrated as e8d2243f/cc766e1c |33 extracted production-method assertions and five-source compilation against installed references reported. Live AddOn not installed/restarted; NT8 scheduling/OCO remains unverified. |
-| Delayed flatten and Stop observer lifetime ([22](reviews/22/report.md), [23](reviews/23/report.md)) |94e08cf0 binds fallback to position lineage, invalidates timers on Stop, preserves protection on close refusal | Focused lifecycle/race checks. No broker-side atomic expected-position fence; final observer disposal still needs safe handoff. Ordinary Stop cannot blindly remove protection observers. |
-| Completed partial exits and cumulative **entry** terminal receipts | a982cc74 adds atomic receipt/fill/residual accounting and cumulative entry growth | Focused store/adapter/trader/race and C# reference/harness evidence reported. Positive-filled cancelled **exit** orders remain outside the Filled-only wire path; process-local hooks can be lost after commit/crash; missing replay/delivery and ambiguous multi-row attribution remain limits. |
+| Delayed flatten and Stop observer lifetime ([22](reviews/22/report.md), [23](reviews/23/report.md)) |94e08cf0 binds fallback to position lineage, invalidates timers on Stop, preserves protection on close refusal | Focused lifecycle/race checks. No broker-side atomic expected-position fence; replacement handoff is repaired by d3e4638e: the old close subscription drains before its periodic worker retires. Ordinary Stop retains protection observers; full shutdown is not certified. |
+| Completed partial exits and cumulative **entry** terminal receipts | a982cc74 adds atomic receipt/fill/residual accounting and cumulative entry growth | Focused store/adapter/trader/race and C# reference/harness evidence reported. 3f21431a adds positive terminal cancelled/rejected **exit** receipts, with 89 extracted assertions and reference compilation reported; process-local hooks can be lost after commit/crash; missing replay/delivery and ambiguous multi-row attribution remain limits. |
+| TCP execution ordering / cumulative continuation | 9b379c8c | Actual receive-order owner applies entry/order/exit before advisory fanout. TCP fixtures distinguish both interleavings, residual basis, duplicates, foreign accounts and outbound reentrancy. No exchange chronology reconstruction, durable inbound journal or retroactive terminal analytics repair. |
+| First snapshot and exit-before-entry-growth | c20d0a82 | Missing/stale first account state refuses admission; currently excessive valid exit remains pending. Later replay/delivery still required. |
+| Positive rejected entry / older flat snapshot | d7b70a90 | Positive execution survives rejection; older account snapshots cannot override newer entry evidence. Zero/legacy rejection remains distinct. Reported focused tests; final suite in CHECKPOINT.md. |
+| Entry receipt across adapter replacement | cd2978b7 | Shared TCPServer account/symbol receipt and cumulative dedup survive replacement; position and receipt read atomically. Actual constructor/replacement regressions and targeted race checks reported. Memory lasts for server lifetime; no durable journal is introduced. |
 | Agent HTTP identity / per-request model choice ([03](reviews/03/report.md), [04](reviews/04/report.md), [26](reviews/26/report.md)) | Control ownership fixes and c8323d09 request-local clients | Synthetic authenticated ownership/model tests; selected race checks. Not a claim that every agent trade-confirmation/background lifecycle is fully isolated. |
 | Browser chat, SSE, local history and SWR cache ([25](reviews/25/report.md), [26](reviews/26/report.md)) | Frontend ed85a80a; integrated source 03090352. Data-truth follow-up 28a6f32e uses provider-local dashboard mutate and opaque cache key | Production stream/cache fixtures, arbitrary chunk splits, late-user/same-user completions. Browser abort is not backend tool cancellation. Unowned guest history retained separately, not assigned to later users. |
 | Indexed plan edits ([24](reviews/24/report.md), [30](reviews/30/report.md)) | Control API expected-revision checks plus frontend opening-snapshot save/delete tuple in ed85a80a | API temporary-store conflicts and frontend draft/poll fixture. Historical Ask/Q&A proposals lack equivalent authored-version identity; separate JSON Patch test operations are not the same guarantee. |
-| Corrected P&L UI and chart ownership ([26](reviews/26/report.md), [28](reviews/28/report.md), [30](reviews/30/report.md)) | Frontend 28a6f32e integrated as 6c4092bf | Missing/nonfinite corrections excluded and counted; server aggregate counts separated from loaded filtered counts. Late chart/history results and SVP toggle races tested. Selected-account completeness, forming-candle marker association and empty-on-error open-order wrapper remain open. |
-| Modal drafts, NT edit defaults, config/errors, market selector and unsafe FAQ ([25](reviews/25/report.md), [28](reviews/28/report.md)) | Frontend ed85a80a / integration 03090352 | Core targeted fixtures and type/build checks. Not every wallet/model form path reproduced. Bulk model replay/extra-instance knobs, submit busy lifecycle and account-name persistence remain open. |
+| Corrected P&L UI and chart ownership ([26](reviews/26/report.md), [28](reviews/28/report.md), [30](reviews/30/report.md)) | Frontend 28a6f32e integrated as 6c4092bf | Missing/nonfinite corrections excluded and counted; server aggregate counts separated from loaded filtered counts. Late chart/history results and SVP toggle races tested. dd11670b repairs the empty-on-error wrapper with visibly UNKNOWN/stale snapshots and selected-account request invalidation. The endpoint remains trader-bound; backend selected-account completeness and forming-candle marker association remain open. |
+| Modal drafts, NT edit defaults, config/errors, market selector and unsafe FAQ ([25](reviews/25/report.md), [28](reviews/28/report.md)) | Frontend ed85a80a / integration 03090352 | Core targeted fixtures and type/build checks. Not every wallet/model form path reproduced. Bulk model replay/extra-instance knobs, submit busy lifecycle remain open. dd11670b makes existing binding names read-only; backend account migration remains separate. |
 | Breaker zero/default display ([27](reviews/27/report.md)) | Frontend 28a6f32e removes false Off in **RiskControlEditor**, not DayPlanEditor |0 means server threshold(default 8 unless overridden); env 0 can disable. No daily-loss policy, saved values, quantities or mandatory per-trade cap changed. |
 | Swing wick provenance / aggregate volume / weekly daily-input reader ([10](reviews/10/report.md), [12](reviews/12/report.md)) |05a1775c and df4af389 | Synthetic detector/aggregate and actual weekly-reader regressions. Generic epoch aggregation elsewhere and daily-data limits on intraday gap timing remain open. Corrected input measurement, not proof of improved trading returns or recalibrated distributions. |
 | Five dependency advisories | gnark-crypto0.19.2 in ffbcf3e4; four npm transitives in e26f63a8, integrated f5409132 | Targeted compatible versions; npm audit 0and web suite/build at private updated install. Advisory affected versions confirmed by paginated GitHub read. Default-branch alert closure awaits merge/scanning; exploitation/reachability not established. |
-| Maps/guide discrepancies ([24](reviews/24/report.md), [30](reviews/30/report.md)) | Existing stale guide paragraphs corrected 6058d9fe; actual-fill guide 939e21db; final GUIDE_BUILT_REV/root map synchronization pending | Historical UA/CGC stay historical. Narrow map line guards do not verify all prose. Final published source revision must be stamped after integration. |
+| Maps/guide discrepancies ([24](reviews/24/report.md), [30](reviews/30/report.md)) | Existing stale guide paragraphs corrected 6058d9fe; actual-fill guide 939e21db; current candidate uses matched execution-evidence source identity; final publication identity belongs to CHECKPOINT.md | Historical UA/CGC stay historical. Narrow map line guards do not verify all prose. Source-marker reference compilation is not installed-runtime identity verification. |
 | Backup, runtime composition and strategy profitability ([17](reviews/17/report.md), [18](reviews/18/report.md), [19](reviews/19/report.md), [30](reviews/30/report.md)) | **Not certified by source review** | Prior receipt is not a restore rehearsal. Partial backup cleanup/weekly copy risks remain reported. First live composition/refusal, NT8 lifecycle and causal out-of-sample net expectancy remain unverified. |
 
 The table tracks principal reviewed repair boundaries, not a declaration that every finding in all 30 reports was repaired. Findings without an explicit repair disposition retain their baseline status and reachability qualifications. In particular, crypto broker/client contracts ([06](reviews/06/report.md), [07](reviews/07/report.md), [13](reviews/13/report.md)), persistence/query concerns ([15](reviews/15/report.md), [16](reviews/16/report.md)), and operations/tooling concerns ([19](reviews/19/report.md)) were reviewed but not globally rewritten. They must not disappear behind the phrase “source review complete.”
@@ -397,150 +382,117 @@ The table tracks principal reviewed repair boundaries, not a declaration that ev
 | C# lifecycle source pair |33 extracted-method harness assertions; five AddOn sources compile with NT8 references | Installed AddOn version, real callback timing, account/broker OCO or live fills |
 | Coverage publication check |30 indexed reviews,120 artifacts,1,049 unique primary files,250,582 lines; errors[] | Every tracked test/document read, exact function correctness, runtime safety or edge |
 
-Final integration revision: **pending root stamp**. Final combined Go/web/race/build outputs: **pending root stamp**. Final guide revision: **pending root stamp**. Final bundle/manifest and publication links: **pending root stamp**. These fields are intentionally unresolved, not inferred from preceding checkpoints.
+For final candidate results and publication stamps, use the single ledger in [CHECKPOINT.md](CHECKPOINT.md#final-verification). Earlier checkpoints above retain their original scope.
 
 ### Open work that must survive publication
 
-**Execution correctness:** positive-filled terminal-cancelled EXIT orders still lack the completed-Filled exit wire receipt; broker-side atomic expected-position fencing is absent; observer replacement/final removal needs a safe handoff; process-local hooks are not transactionally delivered across a crash after receipt commit; durable pending receipts still require later replay/delivery; ambiguous same-account/root/side multi-row attribution refuses rather than infers. Completed partial exits and cumulative ENTRY terminal receipts were repaired in a982cc74 and must not be conflated with the remaining cancelled-EXIT gap. Controlled NT8 lifecycle confirmation remains outstanding.
+**Execution and accounting:** no broker-side atomic expected-position fence; receive order does not establish exchange chronology; events queued before an execution owner existed are not retroactively ordered. No durable inbound journal or crash-atomic process-local hook delivery exists. Storage failures and pending receipts require later evidence/replay, and synchronous callbacks can backpressure TCP. Ambiguous same-account/root/side multi-row attribution refuses. Same-order continuation does not retroactively rebuild terminal analytics/excursions. Installed NT8 callback/OCO, reconnect and controlled shutdown behavior remain unverified. These are limits of the repaired design, not claims that terminal EXIT, positive rejected ENTRY, replacement receipt lifetime or observer handoff are still unimplemented.
 
-**Active UI/data truth:** account-qualified history/chart completeness; loaded-window versus complete aggregate distinctions; forming-candle marker matching; open-order failures represented as empty; bulk model payload replay and missing extra-model thinking knobs; submit request lifecycle; editable account name without backend persistence; DayPlanEditor polled-draft reset/default/inheritance/translation issues. The breaker display, ordinary corrected-PNL fallback and late-response identity bugs listed as baseline findings have specific later repairs above.
+**Active UI/data truth:** backend account-qualified history/chart/orders completeness; loaded-window versus complete aggregate distinctions; forming-candle marker matching; bulk model payload replay and missing extra-model thinking knobs; submit request lifecycle; DayPlanEditor polled-draft reset/default/inheritance/translation issues. Binding migration remains separate; an existing account name is now read-only. The breaker display, corrected-PNL fallback, late-response identity and open-order error-to-empty defects have named repairs above.
 
 **Research and historical analysis:** many scripts are archived exploratory tools rather than production admission. Flaws there do not by themselves prove the live measurements are wrong. Equally, an in-sample held-level overshoot distribution does not establish unconditional stop risk, trade win rate or profitable expectancy. Retain chronological/account constraints, all candidates and refusals, fill ambiguity, costs and untouched evaluation samples for any later strategy experiment.
 
 **Dormant paths:** legacy crypto/CSV/competition/chart/reset-password prose or interfaces are not automatically active execution or reachable exploits. Preserve the reachability qualifications in individual reports. The current NT8 SIM source path and its active issues take priority.
 
-### Concrete corrections found during publication review
+### Report provenance
 
-1. CHECKPOINT still called all frontend state work active although its source/dependency/core-data batches were committed and the last branch pushed. Now separate lane completion from integration/final verification.
-2. CTO section 10 still instructed completing runtime/frontend source reviews after its header said all 30 complete. Now source review is complete; controlled runtime verification is a different outstanding activity.
-3. CTO daily-risk citation used `session_risk.go:279`, which is **boot reporting facts**, as if it established admission. Now explicitly identify the reporting boundary; runtime enforcement needs its own tests/call sites.
-4. CTO structural function coordinate 28 was a comment/start vicinity, not the resolver declaration 30; named function anchors now identify the boundary. Review-specific source lines must not be silently restamped as final-repair locations.
-5. Repair report on the separately owned control branch still described frontend propagation and npm work as pending at the snapshot. This table records the committed lanes without editing that branch; root must update its final repair README/hash stamps.
-6. Thirty completed assignments are not thirty simultaneous agents, thirty new full source inventories, or a final merged test pass. Primary and cross-review counts remain distinct throughout.
+The original 30 reviews retain baseline and bounded cross-review findings; this table is their current principal disposition, not a declaration that every concern was repaired. Earlier usage-blocked snapshots remain under interim/. Selected function anchors in CORE-TRACE.md are regenerated at the candidate, while historical line coordinates remain in their original reports.
 
-The detailed control repair report lives on `fix/repo-audit-control-boundaries-20260913` at `docs/superpowers/reports/2026-09-13-repository-repairs/README.md`; frontend evidence lives on `fix/repo-audit-web-state-20260913` at `docs/superpowers/reports/2026-09-13-web-state-repairs/README.md`. Include those branches/reports in the final publication bundle. Neither is rewritten as part of this docs-only publication pass.
+Detailed source/test receipts remain on the control repair branch in `docs/superpowers/reports/2026-09-13-repository-repairs/README.md`, `2026-09-13-ordered-execution-repair.md`, `2026-09-13-nt8-entry-receipt-replacement.md`, and the NT8 partial/terminal lifecycle reports; frontend receipts remain in `2026-09-13-web-state-repairs/README.md`. Some chronological repair receipts describe work as pending before later follow-ups; this candidate disposition supersedes those named historical states. Packaging reads those receipts and does not invent an independent rerun.
 
 ---
 
 <a id="section-4"></a>
 
-> Original: [CORE-TRACE.md](CORE-TRACE.md). Preserved source document; its own revision/checkpoint statements govern. Read Packaging-time repair updates before interpreting older open lists.
+> Original: [CORE-TRACE.md](CORE-TRACE.md). Preserved source document; its own revision/checkpoint statements govern. Read current repair disposition before interpreting historical review findings.
 
 ## Core trading source trace
 
-Source snapshot: `317dc5efd539a8fac1d657731ea2e68e22109b60`. Each link names an exact committed declaration. This is a selected source locator, not evidence that every branch ran. Detailed baseline function notes and connections are in the 30 review folders. Execution-order and integration tests must be read beside these source links.
+Source snapshot: `e333de41bfffec2ea2cce67ab4296ce8bbd12fc0`. Each link names an exact committed declaration. This is a selected source locator, not evidence that every branch ran. Detailed baseline function notes and connections are in the 30 review folders. Execution-order and integration tests must be read beside these source links.
 
 | Boundary | Exact source | Responsibility / transfer limit |
 | --- | --- | --- |
-| Transport | [readLoop](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/provider/ninjatrader/tcp_server.go#L1727) | Decodes broker frames; execution processing order must be verified separately. |
-| Ordered execution owner | [RegisterOrderedExecutionsFor](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/provider/ninjatrader/ordered_execution.go#L17) | Exact account/symbol owner; preserves receive order before type fanout. |
-| Ordered entry delivery | [dispatchOrderedOrder](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/provider/ninjatrader/ordered_execution.go#L37) | Applies received entry evidence before advisory consumers can reorder it. |
-| Ordered exit delivery | [dispatchOrderedClose](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/provider/ninjatrader/ordered_execution.go#L54) | Applies received close evidence through the same serialized owner. |
-| Owner installation | [InstallOrderedExecutions](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/ninjatrader/ordered_execution.go#L11) | Installs observation at successful construction; ordinary Stop retains it. |
-| Fill cache | [handleFill](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/ninjatrader/tcp_trader.go#L192) | Preserves actual exposure and refuses duplicate fully exited entry cache replay. |
-| Market data | [GetWithTimeframes](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/market/data.go#L190) | Builds requested market context; futures provider path differs from legacy crypto. |
-| Canonical symbol | [Normalize](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/market/data.go#L670) | Preserves the CME normalization boundary. |
-| Level evidence | [AssembleResearchLevels](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/kernel/levels_assemble.go#L212) | Assembles raw, pool and seated candidates; heuristic scores are not probabilities. |
-| Weekly evidence | [weeklyDailyBars](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/auto_trader_weekly.go#L138) | Preserves daily input for CME-week aggregation. |
-| Weekly facts | [CompletedWeekCandles](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/kernel/weekly_bias.go#L93) | Groups observations into completed Monday-governed weeks. |
-| Planner invocation | [runPlannerReadCoreWithFacts](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/auto_trader_planner.go#L1121) | Machine facts and model response enter planner persistence/validation. |
-| Frozen setup identity | [ResolveEntryGeometryZone](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/structural_geometry.go#L30) | Rejects missing or ambiguous frozen source identity. |
-| First structural obstacle | [FirstGeometryTarget](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/structural_geometry.go#L78) | Chooses nearest complete sourced zone beyond the entry zone. |
-| Geometry | [ComposeLevelFadeGeometry](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/structural_geometry.go#L106) | Production wrapper freezes structural stop/target before admission. |
-| Geometry arithmetic | [composeGeometry](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/structural_geometry.go#L123) | Zone-edge buffer, outward rounding, costs and gross-R refusal; no ranking proof. |
-| Arm orchestration | [maybeManageArmedOrdersAt](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/armed_executor.go#L199) | Current-cycle authorization and gate results precede placement. |
-| Placement | [runArmedPlacementAt](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/armed_executor.go#L1184) | Consumes currently eligible arm identities and broker/account evidence. |
-| One-contract guard | [oneContractGuard](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/one_contract.go#L159) | Account exposure and entry-order admission boundary. |
-| Session controls | [sessionRiskGateAt](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/session_risk.go#L120) | Session breaker/band verdict; does not alone establish daily-loss implementation. |
-| Daily reporting | [bootRiskFacts](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/session_risk.go#L260) | Reporting facts only; do not cite as executable daily-loss gate. |
-| Decision risk | [GetFullDecisionWithStrategy](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/kernel/engine_analysis.go#L57) | Strategy decision/control pipeline; distinct from resting-arm placement. |
-| Position admission | [ntHeldPosition](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/auto_trader_orders.go#L377) | Broker position errors must remain unknown instead of flat. |
-| Decision long entry | [executeOpenLongWithRecord](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/auto_trader_orders.go#L464) | Actual decision entry call site; admission failure must prevent wire submission. |
-| Decision short entry | [executeOpenShortWithRecord](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/auto_trader_orders.go#L612) | Short counterpart requires the same ownership and exposure discipline. |
-| Resting limit | [PlaceLimitEntry](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/ninjatrader/tcp_trader.go#L469) | Registers identity before transmission; transmission is not broker acceptance. |
-| Stop entry | [PlaceStopEntry](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/ninjatrader/tcp_trader.go#L533) | Kind-specific stop entry adapter; distinct from protective stop placement. |
-| Cumulative entry | [onArmedOrderUpdate](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/armed_executor.go#L1952) | Consumes actual entry state/quantity including positive terminal cancellations. |
-| Entry accounting | [materializeArmedEntry](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/armed_executor.go#L2071) | Preserves cumulative entry quantity/notional and residual position accounting. |
-| Broker exit | [recordClose](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/ninjatrader/close_sync.go#L88) | Builds actual exit receipt with account and broker-order identity. |
-| Atomic exit | [ApplyNT8Exit](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/store/nt8_exit_receipt.go#L44) | Receipt, actual fill and residual/P&L update share one transaction. |
-| Reconciliation | [reconcilePositions](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/ninjatrader/reconcile.go#L118) | Reconciles observations; a database row is not broker-flat proof. |
-| Positions truth | [GetPositions](https://github.com/johnwick2921-cyber/nofx/blob/317dc5efd539a8fac1d657731ea2e68e22109b60/trader/ninjatrader/tcp_trader.go#L944) | Selected bound-account position snapshot and freshness admission. |
+| Transport | [readLoop](https://github.com/johnwick2921-cyber/nofx/blob/e333de41bfffec2ea2cce67ab4296ce8bbd12fc0/provider/ninjatrader/tcp_server.go#L1718) | Decodes broker frames; execution processing order must be verified separately. |
+| Ordered execution owner | [RegisterOrderedExecutionsFor](https://github.com/johnwick2921-cyber/nofx/blob/e333de41bfffec2ea2cce67ab4296ce8bbd12fc0/provider/ninjatrader/ordered_execution.go#L17) | Exact account/symbol owner; preserves receive order before type fanout. |
+| Ordered entry delivery | [dispatchOrderedOrder](https://github.com/johnwick2921-cyber/nofx/blob/e333de41bfffec2ea2cce67ab4296ce8bbd12fc0/provider/ninjatrader/ordered_execution.go#L37) | Applies received entry evidence before advisory consumers can reorder it. |
+| Ordered exit delivery | [dispatchOrderedClose](https://github.com/johnwick2921-cyber/nofx/blob/e333de41bfffec2ea2cce67ab4296ce8bbd12fc0/provider/ninjatrader/ordered_execution.go#L54) | Applies received close evidence through the same serialized owner. |
+| Shared entry receipt | [NoteEntryExecution](https://github.com/johnwick2921-cyber/nofx/blob/e333de41bfffec2ea2cce67ab4296ce8bbd12fc0/provider/ninjatrader/entry_receipt.go#L17) | Account/symbol cumulative evidence survives adapter replacement for shared server lifetime. |
+| Atomic position evidence | [PositionsForExecutionReceipt](https://github.com/johnwick2921-cyber/nofx/blob/e333de41bfffec2ea2cce67ab4296ce8bbd12fc0/provider/ninjatrader/entry_receipt.go#L42) | Reads position snapshot and entry receipt under the same mutex; no guessed flat fallback. |
+| Owner installation | [InstallOrderedExecutions](https://github.com/johnwick2921-cyber/nofx/blob/e333de41bfffec2ea2cce67ab4296ce8bbd12fc0/trader/ninjatrader/ordered_execution.go#L12) | Installs observation at successful construction; ordinary Stop retains it. |
+| Fill cache | [handleFill](https://github.com/johnwick2921-cyber/nofx/blob/e333de41bfffec2ea2cce67ab4296ce8bbd12fc0/trader/ninjatrader/tcp_trader.go#L193) | Preserves actual exposure and refuses duplicate fully exited entry cache replay. |
+| Market data | [GetWithTimeframes](https://github.com/johnwick2921-cyber/nofx/blob/e333de41bfffec2ea2cce67ab4296ce8bbd12fc0/market/data.go#L190) | Builds requested market context; futures provider path differs from legacy crypto. |
+| Canonical symbol | [Normalize](https://github.com/johnwick2921-cyber/nofx/blob/e333de41bfffec2ea2cce67ab4296ce8bbd12fc0/market/data.go#L670) | Preserves the CME normalization boundary. |
+| Level evidence | [AssembleResearchLevels](https://github.com/johnwick2921-cyber/nofx/blob/e333de41bfffec2ea2cce67ab4296ce8bbd12fc0/kernel/levels_assemble.go#L212) | Assembles raw, pool and seated candidates; heuristic scores are not probabilities. |
+| Weekly evidence | [weeklyDailyBars](https://github.com/johnwick2921-cyber/nofx/blob/e333de41bfffec2ea2cce67ab4296ce8bbd12fc0/trader/auto_trader_weekly.go#L138) | Preserves daily input for CME-week aggregation. |
+| Weekly facts | [CompletedWeekCandles](https://github.com/johnwick2921-cyber/nofx/blob/e333de41bfffec2ea2cce67ab4296ce8bbd12fc0/kernel/weekly_bias.go#L93) | Groups observations into completed Monday-governed weeks. |
+| Planner invocation | [runPlannerReadCoreWithFacts](https://github.com/johnwick2921-cyber/nofx/blob/e333de41bfffec2ea2cce67ab4296ce8bbd12fc0/trader/auto_trader_planner.go#L1121) | Machine facts and model response enter planner persistence/validation. |
+| Frozen setup identity | [ResolveEntryGeometryZone](https://github.com/johnwick2921-cyber/nofx/blob/e333de41bfffec2ea2cce67ab4296ce8bbd12fc0/trader/structural_geometry.go#L30) | Rejects missing or ambiguous frozen source identity. |
+| First structural obstacle | [FirstGeometryTarget](https://github.com/johnwick2921-cyber/nofx/blob/e333de41bfffec2ea2cce67ab4296ce8bbd12fc0/trader/structural_geometry.go#L78) | Chooses nearest complete sourced zone beyond the entry zone. |
+| Geometry | [ComposeLevelFadeGeometry](https://github.com/johnwick2921-cyber/nofx/blob/e333de41bfffec2ea2cce67ab4296ce8bbd12fc0/trader/structural_geometry.go#L106) | Production wrapper freezes structural stop/target before admission. |
+| Geometry arithmetic | [composeGeometry](https://github.com/johnwick2921-cyber/nofx/blob/e333de41bfffec2ea2cce67ab4296ce8bbd12fc0/trader/structural_geometry.go#L123) | Zone-edge buffer, outward rounding, costs and gross-R refusal; no ranking proof. |
+| Arm orchestration | [maybeManageArmedOrdersAt](https://github.com/johnwick2921-cyber/nofx/blob/e333de41bfffec2ea2cce67ab4296ce8bbd12fc0/trader/armed_executor.go#L199) | Current-cycle authorization and gate results precede placement. |
+| Placement | [runArmedPlacementAt](https://github.com/johnwick2921-cyber/nofx/blob/e333de41bfffec2ea2cce67ab4296ce8bbd12fc0/trader/armed_executor.go#L1184) | Consumes currently eligible arm identities and broker/account evidence. |
+| One-contract guard | [oneContractGuard](https://github.com/johnwick2921-cyber/nofx/blob/e333de41bfffec2ea2cce67ab4296ce8bbd12fc0/trader/one_contract.go#L159) | Account exposure and entry-order admission boundary. |
+| Session controls | [sessionRiskGateAt](https://github.com/johnwick2921-cyber/nofx/blob/e333de41bfffec2ea2cce67ab4296ce8bbd12fc0/trader/session_risk.go#L120) | Session breaker/band verdict; does not alone establish daily-loss implementation. |
+| Daily reporting | [bootRiskFacts](https://github.com/johnwick2921-cyber/nofx/blob/e333de41bfffec2ea2cce67ab4296ce8bbd12fc0/trader/session_risk.go#L260) | Reporting facts only; do not cite as executable daily-loss gate. |
+| Decision risk | [GetFullDecisionWithStrategy](https://github.com/johnwick2921-cyber/nofx/blob/e333de41bfffec2ea2cce67ab4296ce8bbd12fc0/kernel/engine_analysis.go#L57) | Strategy decision/control pipeline; distinct from resting-arm placement. |
+| Position admission | [ntHeldPosition](https://github.com/johnwick2921-cyber/nofx/blob/e333de41bfffec2ea2cce67ab4296ce8bbd12fc0/trader/auto_trader_orders.go#L377) | Broker position errors must remain unknown instead of flat. |
+| Decision long entry | [executeOpenLongWithRecord](https://github.com/johnwick2921-cyber/nofx/blob/e333de41bfffec2ea2cce67ab4296ce8bbd12fc0/trader/auto_trader_orders.go#L464) | Actual decision entry call site; admission failure must prevent wire submission. |
+| Decision short entry | [executeOpenShortWithRecord](https://github.com/johnwick2921-cyber/nofx/blob/e333de41bfffec2ea2cce67ab4296ce8bbd12fc0/trader/auto_trader_orders.go#L612) | Short counterpart requires the same ownership and exposure discipline. |
+| Resting limit | [PlaceLimitEntry](https://github.com/johnwick2921-cyber/nofx/blob/e333de41bfffec2ea2cce67ab4296ce8bbd12fc0/trader/ninjatrader/tcp_trader.go#L511) | Registers identity before transmission; transmission is not broker acceptance. |
+| Stop entry | [PlaceStopEntry](https://github.com/johnwick2921-cyber/nofx/blob/e333de41bfffec2ea2cce67ab4296ce8bbd12fc0/trader/ninjatrader/tcp_trader.go#L575) | Kind-specific stop entry adapter; distinct from protective stop placement. |
+| Cumulative entry | [onArmedOrderUpdate](https://github.com/johnwick2921-cyber/nofx/blob/e333de41bfffec2ea2cce67ab4296ce8bbd12fc0/trader/armed_executor.go#L1952) | Consumes actual entry state/quantity including positive terminal cancellations. |
+| Entry accounting | [materializeArmedEntry](https://github.com/johnwick2921-cyber/nofx/blob/e333de41bfffec2ea2cce67ab4296ce8bbd12fc0/trader/armed_executor.go#L2071) | Preserves cumulative entry quantity/notional and residual position accounting. |
+| Broker exit | [recordClose](https://github.com/johnwick2921-cyber/nofx/blob/e333de41bfffec2ea2cce67ab4296ce8bbd12fc0/trader/ninjatrader/close_sync.go#L88) | Builds actual exit receipt with account and broker-order identity. |
+| Atomic exit | [ApplyNT8Exit](https://github.com/johnwick2921-cyber/nofx/blob/e333de41bfffec2ea2cce67ab4296ce8bbd12fc0/store/nt8_exit_receipt.go#L44) | Receipt, actual fill and residual/P&L update share one transaction. |
+| Reconciliation | [reconcilePositions](https://github.com/johnwick2921-cyber/nofx/blob/e333de41bfffec2ea2cce67ab4296ce8bbd12fc0/trader/ninjatrader/reconcile.go#L118) | Reconciles observations; a database row is not broker-flat proof. |
+| Positions truth | [GetPositions](https://github.com/johnwick2921-cyber/nofx/blob/e333de41bfffec2ea2cce67ab4296ce8bbd12fc0/trader/ninjatrader/tcp_trader.go#L986) | Selected bound-account position snapshot and freshness admission. |
 
-The ordered execution boundary is under repair until final verification is stamped. Transport receipt, broker acceptance, execution, position reconciliation and permission to enter are separate facts. The root report records their verification status.
+Ordered execution and shared receipt lifetime are repaired at the source snapshot above; final verification is recorded in CHECKPOINT.md. Transport receipt, broker acceptance, execution, position reconciliation and permission to enter are separate facts. The root report records their verification status.
 
 ---
 
 <a id="section-5"></a>
 
-> Original: [CHECKPOINT.md](CHECKPOINT.md). Preserved source document; its own revision/checkpoint statements govern. Read Packaging-time repair updates before interpreting older open lists.
+> Original: [CHECKPOINT.md](CHECKPOINT.md). Preserved source document; its own revision/checkpoint statements govern. Read current repair disposition before interpreting historical review findings.
 
-## Current audit, repair and publication checkpoint
+## Audit and repair checkpoint
 
-The usage-blocked checkpoint under `interim/` is historical. Start with
-[REPAIR-STATUS.md](REPAIR-STATUS.md) for the current repair/open-limit table;
-[CTO-TRADING-LOGIC.md](CTO-TRADING-LOGIC.md) explains the trading-process judgment.
+### Completed scope
 
-### Completed baseline coverage
+All 30 scoped assignments are reported. At baseline 63968be62e44db2fb07a92883e02127b9064b0be, 28 primary reviews cover 1,049 unique first-party files / 250,582 lines. Two bounded independent reviews examine repair 99a06543 and add no primary files. Coverage and publication validators establish artifact/hash/range/function-note consistency, not a second semantic reading or runtime correctness. The 30 reports and their 120 standard artifacts are preserved.
 
-All 30 scoped review assignments are reported:28 primary slices cover1,049 unique
-first-party source files /250,582 lines at **63968be62e44db2fb07a92883e02127b9064b0be**.
-Two independent cross-reviews use repair 99a06543 and add no primary coverage.
-The independent publication check finds all 30 index links and120 standard artifacts,
-no duplicate assignments, missing reports, unread items, hash/range gaps or
-recorded named-function validator errors. These are baseline consistency facts,
-not full-source coverage of later repairs, every test/document read, or runtime proof.
+Current candidate: `cd2978b77da54e2fceddfb19e1d3d148bd2bfb62` on `fix/repo-audit-control-boundaries-20260913`. The disposition and CTO assessment include the ordered-execution and positive-entry/replacement follow-ups through this revision. Those implementation tasks are committed; they are not awaiting an unspecified future repair. CORE-TRACE.md pins 35 declarations to frozen verification tree `e333de41`.
 
-### Repair checkpoints
+Historical checkpoints remain revision-scoped: Go full suite/build and selected race checks at 99a06543; frontend 71 files/451 tests plus build at 28a6f32e; later chart follow-up 9 focused tests/build; final-marker C# reference compilation and 89 extracted assertions. No earlier green result is relabelled as a pass at the final candidate.
 
-Control branch: `fix/repo-audit-control-boundaries-20260913`, observed at 939e21db.
-Frontend source branch: `fix/repo-audit-web-state-20260913`, pushed at 28a6f32e.
-Root is integrating and testing; do not use these snapshot hashes as final publication stamps.
+### Substantive remaining limits
 
-- Go full suite/build and selected race checks passed at 99a06543, before later repairs.
-- C# lifecycle source 9140f6c9/f1b7cc10 integrated as e8d2243f/cc766e1c; extracted-method harness and NT8-reference compile evidence are scoped in the repair report. No installed AddOn change occurred.
-- Frontend source/dependency/state commits ed85a80a/e26f63a8/28a6f32e integrated as 03090352/f5409132/6c4092bf. Private updated dependencies passed71 files/451 tests and production build at 28a6f32e; npm audit reported0. Default-branch GitHub alert closure is not asserted.
-- a982cc74 repairs completed partial exits and cumulative ENTRY terminal receipt accounting. Positive-filled terminal-cancelled EXIT wire handling remains open. A receipt transaction cannot guarantee process-local hooks across crash; pending receipts still need later delivery/reconciliation.
-- df4af389 fixes the weekly reader's production daily-input call site. Other generic epoch aggregation and daily-data intraday-gap limits remain separate.
-- Guide 6058d9fe/939e21db removes old ATR/permission claims and explains residual exposure. Final GUIDE_BUILT_REV must follow final source integration.
+Receive-order processing does not reconstruct exchange chronology or pre-owner queued events. No durable inbound journal or crash-atomic process-local hook delivery exists; storage failures still need later evidence/replay. Synchronous callbacks backpressure TCP; continuing cumulative exposure does not rebuild all already-emitted terminal analytics. Broker-side atomic expected-position fencing remains absent. Ambiguous multiple-row attribution refuses. Replacement handoff is repaired, while installed NT8 scheduling/OCO, reconnect and final shutdown still need controlled verification.
 
-### Remaining source and runtime limitations
+UI limits include backend selected-account completeness in history/chart/orders, forming-candle marker association, bulk model payload replay/extra-model thinking knobs, submit lifecycle and DayPlanEditor draft/default/inheritance/translation issues. Existing account names are now read-only; backend binding migration is separate. Corrected-PNL fallback, stale response identity and open-order error-to-empty have named repairs and are not wholly open.
 
-Concrete execution gaps: positive-filled cancelled EXIT orders outside the Filled-only
-exit wire path; no atomic broker-side expected-position fence; safe observer replacement
-and final disposal/handoff; crash-time process-local hook delivery; unresolved replay and
-ambiguous multiple-row attribution. These are not dismissed as minor cosmetic debt.
+The audit did not establish production database restoration, a first live structural composition/refusal, calibrated stop buffers, target optimality or causal out-of-sample net expectancy. Historical exploratory research is qualified separately from current measurement dependencies. Main runtime, owner settings, accounts and live records were not changed by this source audit; SIM and the owner's daily-loss policy remain intact.
 
-Active UI/data gaps: selected-account history/chart completeness; bounded loaded history
-versus complete aggregates; current-forming-candle marker association; open-order errors
-still converted to empty data; bulk model replay/extra-instance thinking knobs; model
-submit busy lifecycle; account-name persistence; DayPlanEditor polled-draft/default/
-inheritance/translation problems. Specific corrected-PNL, chart identity, cache refresh
-and breaker display defects have later repairs and should not be relisted as wholly open.
+### Final verification
 
-Runtime and strategy evidence: installed NT8 callback/OCO/fill behavior, first live
-structural composition/refusal, backup restore rehearsal, and causal out-of-sample net
-expectancy remain unverified by this audit. Source understanding is not runtime or
-profitability approval. Archived exploratory script flaws are qualified separately
-from currently relied-on measurements in their source reviews.
+Root-owned ledger. Frozen verification tree: `e333de41bfffec2ea2cce67ab4296ce8bbd12fc0`; backend source candidate and guide stamp: `cd2978b77da54e2fceddfb19e1d3d148bd2bfb62`. The intervening freeze commit changes protected hashes/guide/report metadata. The guide stamp identifies this source candidate, not a running or shipped binary. Results below are supplied by the root runner; this documentation pass did not rerun them.
 
-### Root-owned final publication work
+| Required record | Result |
+| --- | --- |
+| Combined Go suite at e333de41 | PASS: `go test ./...`, 350.964 seconds; exact command/log hash in verification/go-full.json |
+| Final Go build | PASS, root runner at frozen tree |
+| Race verification at e333de41 | PASS: full store, provider/ninjatrader, trader/ninjatrader, trader packages; 373.162 seconds; verification/go-race.json |
+| Final frontend suite and production build | PASS: 71 files / 454 tests; production build passes with existing chunk-size warning |
+| Offline smoke checks | PASS, root runner |
+| C# source marker/reference compile/harness | PASS: all five files compiled against installed NT8 references; 89 extracted-production-method assertions. Candidate AddOn ID `2026-09-13-execution-evidence`; no installed AddOn change. |
+| Final guide/source identity and publication hashes | Pending root stamp |
+| Final evidence bundle, PDF and downloadable Markdown links | Pending root publication |
+| Deployment / installed NT8 / live SIM lifecycle | Not performed by this audit; no approval inferred |
 
-Final integrated source revision: **pending**. Combined Go/web/race/build log results:
-**pending** (root started final combined 01; no result inferred). Final guide revision:
-**pending**. Final source/evidence bundle, manifest hashes and publication links:
-**pending**. Root updates these once actually verified; preceding branch-green results
-must not be relabelled as final merged results.
+After completing this ledger, regenerate assembled reports with tools/build-reports.py and update index sizes from report-package.json. The final source checkpoint bundle is standalone (no prerequisites): e333de41 repair / d8f110fe docs, 78,730,522 bytes, SHA256 `85b8ebc742dfe8f05f24fd5424bf806f3d02e4bddcd073221140d34194550123`. A fresh clone, full fsck, detached exact-revision checkout and clean-tree check passed; see verification/source-backup.json. Later publication Markdown is additionally packaged. This is a source/history restore, not a live database restore.
 
-Verified earlier progress bundle: `/tmp/nofx-audit-progress-30-reviews.bundle`,
-containing four branch refs and requiring baseline 63968be. It is incremental,
-not a standalone full-repository restore. Preserve that limitation when shipping
-its replacement and include the separate repair reports in the final evidence set.
-
-No source audit action deployed/restarted the bot or NT8, changed owner settings,
-read/wrote live trade records or submitted an order. DAILY loss remains the owner's
-control; no additional mandatory per-trade cap or quantity policy was introduced.
-Ordinary Stop must retain protection/close observers for held positions until a
-safe handoff exists.
+Security follow-up: remote Trivy reported x/crypto advisories after the successful e333de41 checks. The dependency repair and its subsequent verification are being completed before the source candidate leaves draft. The e333 receipts remain valid historical results and are not relabelled to the upcoming dependency revision.
 
 ---
 
