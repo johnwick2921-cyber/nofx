@@ -302,6 +302,6 @@ observations, contradicting its own daily-input contract. Before regression
 failed; requesting completed daily observations preserves both CME weeks and
 the known prior-week high, low and close. Focused weekly tests pass in
 `/tmp/nofx-weekly-calendar-after.log`; before evidence is
-`/tmp/nofx-weekly-calendar-before.log`. This fixes that reader and its shared
-watch source. Generic epoch aggregation for other consumers and the information
+`/tmp/nofx-weekly-calendar-before.log`. This fixes the active weekly reader. The old mid-week watch was removed
+from the loop; its legacy same-resolver fixture is not production parity proof. Generic epoch aggregation for other consumers and the information
 limits of daily bars for intraday weekend-gap timing remain separate issues.

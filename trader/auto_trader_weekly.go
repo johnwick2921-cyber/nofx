@@ -221,11 +221,11 @@ func (at *AutoTrader) runWeeklyRead(now time.Time, monday string, bootBackfill b
 	}()
 	bars, barSource := at.weeklyDailyBars(now)
 	if len(bars) == 0 {
-		at.logErrorf("⚠️ WEEKLY READ FAILED for %s: no bars from any rung of the 1w ladder %v (thin/cold store)", monday, market.LadderFor("1w"))
+		at.logErrorf("⚠️ WEEKLY READ FAILED for %s: no daily observations from any rung of the 1d ladder %v (thin/cold store)", monday, market.LadderFor("1d"))
 		return
 	}
 	at.logInfof("📅 WEEKLY READ %s: %d bar(s) from %s → %d completed week(s) (ladder %v; native 1w excluded: %s)",
-		monday, len(bars), barSource, kernel.CompletedWeekCount(bars, now), market.LadderFor("1w"), market.ExcludedNative("1w"))
+		monday, len(bars), barSource, kernel.CompletedWeekCount(bars, now), market.LadderFor("1d"), market.ExcludedNative("1w"))
 	price := bars[len(bars)-1].Close
 	facts := kernel.ComputeWeeklyFacts(bars, now, price)
 	prompt := kernel.BuildWeeklyPrompt(facts)
