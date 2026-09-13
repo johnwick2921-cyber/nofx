@@ -1296,18 +1296,24 @@ func (at *AutoTrader) runArmedPlacementAt(bars []market.Kline, sinceMs int64, no
 					at.refuseSlot(r, g, "limit", now)
 					continue
 				}
-				sid, perr := nt.PlaceLimitEntry(at.futuresSymbol(), side, 1, r.EntryPx, r.StopPx, r.TargetPx, func(sid string) error { return ledger.BeginPlacement(r.ID, sid) })
+				registered := false
+				sid, perr := nt.PlaceLimitEntry(at.futuresSymbol(), side, 1, r.EntryPx, r.StopPx, r.TargetPx, func(sid string) error {
+					err := ledger.BeginPlacement(r.ID, sid)
+					registered = err == nil
+					return err
+				})
 				recordResearchPlacement(r, sid, "limit", r.EntryPx, r.StopPx, r.TargetPx, perr)
+				if registered {
+					// Registration commits this pass even when transmission fails;
+					// reconciliation owns the pending attempt, not another arm.
+					placedThisPass = true
+					at.cancelOtherArmsInPlan(ledger, rows, r, now)
+				}
 				if perr != nil {
 					at.logWarnf("📌 armed place failed %s: %v", r.Scenario, perr)
 					continue
 				}
 				at.logInfof("📌 armed %s placement requested limit %.2f signal=%s (band ±%.0ft)", r.Scenario, r.EntryPx, sid, band/tick)
-				// ONE LIVE ENTRY PER PLAN (owner ruling 2026-09-06): the moment
-				// one arm reaches the wire, every other arm in the plan is
-				// cancelled. A plan gets one entry, not one per scenario.
-				placedThisPass = true
-				at.cancelOtherArmsInPlan(ledger, rows, r, now)
 			}
 		}
 	}
