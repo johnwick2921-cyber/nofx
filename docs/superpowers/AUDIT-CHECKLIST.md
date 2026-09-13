@@ -3959,6 +3959,13 @@ which is this file's recurring failure in miniature. Their own first mechanism
 was wrong twice before the version skew surfaced. **Neither of us got there
 alone, and nothing in either report would have gotten there without the other.**
 
+**2026-09-13 correction follow-up (PR #116):** race-enabled CI caught a class-32
+fixture restoring the global bars provider while an unrelated weekly-backfill
+worker still read it. Seed the completed weekly plan for tests of session/data
+scheduling, or join any spawned worker before teardown; do not count an ordinary
+non-race pass as evidence of safe fixture lifetime. Keep the intended production
+call-site assertions intact.
+
 ## CLASS 111 — THE UNIT AN EXPERIMENT NEEDS, WHICH THE RECORD NEVER HELD (born 2026-09-10, fix/episode-contract)
 
 **Root cause.** Every experiment measures value PER OPPORTUNITY, and the system

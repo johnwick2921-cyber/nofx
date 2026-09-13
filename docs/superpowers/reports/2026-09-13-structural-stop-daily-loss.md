@@ -103,3 +103,17 @@ still requires fresh gates, backups, clean build, marker and observed boot.
 [A] Frontend verification: **64 files / 430 tests PASS**, TypeScript PASS.
 [Full frontend](2026-09-13-structural-stop-daily-loss-evidence/vitest-full.log),
 [TypeScript](2026-09-13-structural-stop-daily-loss-evidence/tsc.log).
+
+## CI race found during correction
+
+[A] The full local Go suite passed. PR #116's race/coverage job then caught
+`TestClass32FrozenTapeStillSkipsDataWork` restoring `market.FuturesBarsProvider`
+while an unrelated weekly-backfill goroutine still read it (`auto_trader_weekly.go:103`).
+The class-32 session/data-cycle fixtures now seed their already-completed weekly
+document through the real plan store, so the weekly scheduler takes its existing
+skip branch. Their session-read and frozen-data assertions are unchanged; no
+production scheduler or market code changes. This is a fixture-lifetime failure,
+not a reason to rerun a red job until it happens to pass.
+
+[A] All class-32 fixtures pass 15 consecutive race-enabled repetitions.
+[Race verification](2026-09-13-structural-stop-daily-loss-evidence/class32-race.log).
