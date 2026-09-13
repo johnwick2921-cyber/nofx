@@ -286,6 +286,13 @@ export function BeginnerOnboardingPage() {
                   </div>
                 </section>
               </div>
+            ) : error ? (
+              <div role="alert" className="p-6 text-red-300">
+                <p>{error}</p>
+                <button type="button" onClick={() => void loadOnboarding(true)}>
+                  {isZh ? '重试' : 'Retry'}
+                </button>
+              </div>
             ) : null}
           </div>
         </div>

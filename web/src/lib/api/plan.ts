@@ -216,8 +216,16 @@ export interface ScenarioDeath {
   observed_at: string
 }
 
+export interface PlanRevision {
+  plan_id: string
+  plan_version: number
+  overlay_version: number
+}
+
 export interface PlanToday {
- structural_geometry?: StructuralGeometryView[] | null
+  plan_id?: string
+  overlay_version?: number
+  structural_geometry?: StructuralGeometryView[] | null
   found: boolean
   trade_date: string
   session: string
@@ -333,21 +341,21 @@ export interface PlanToday {
 }
 
 export interface StructuralGeometryView {
- scenario: string
- leg: number
- entry: number
- stop?: number
- target?: number
- zone_lo?: number
- zone_hi?: number
- buffer?: number
- stop_source: string
- reason: string
- detail: string
- quantity: number
- loss_usd?: number
- net_gain_points?: number
- target_names?: string[]
+  scenario: string
+  leg: number
+  entry: number
+  stop?: number
+  target?: number
+  zone_lo?: number
+  zone_hi?: number
+  buffer?: number
+  stop_source: string
+  reason: string
+  detail: string
+  quantity: number
+  loss_usd?: number
+  net_gain_points?: number
+  target_names?: string[]
 }
 
 // W7 (weekly-bias wave) — /api/plan/today weekly payload.
@@ -668,8 +676,14 @@ export const planApi = {
     traderId: string,
     patch: PatchOp[],
     origin: 'owner' | 'planner-revised' = 'owner',
-    symbol = 'MNQ'
+    symbol = 'MNQ',
+    revision?: PlanRevision
   ): Promise<{ ok: boolean; error?: string; overlay_version?: number }> {
+    if (!revision)
+      return {
+        ok: false,
+        error: 'Plan revision unavailable; reopen the plan before editing.',
+      }
     const res = await httpClient.request<{ overlay_version: number }>(
       `${API_BASE}/plan/overlay`,
       {
@@ -678,6 +692,9 @@ export const planApi = {
           trader_id: traderId,
           symbol,
           patch: JSON.stringify(patch),
+          expected_plan_id: revision.plan_id,
+          expected_plan_version: revision.plan_version,
+          expected_overlay_version: revision.overlay_version,
           origin,
         },
         silent: true,

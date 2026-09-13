@@ -40,38 +40,41 @@ describe('agentChatStorage', () => {
     expect(normalizeStorageUserId('')).toBeUndefined()
   })
 
-  it('falls back to guest history for a logged-in user when user history is empty', () => {
+  it('does not expose guest history to an authenticated user', () => {
     const storage = createStorage()
     const guestMessages = [{ id: '1', text: 'hello' }]
     storage.setItem(chatStorageKey('guest'), JSON.stringify(guestMessages))
 
     expect(loadAgentMessages(storage, 'user-1')).toEqual({
-      messages: guestMessages,
-      sourceKey: chatStorageKey('guest'),
+      messages: [],
+      sourceKey: chatStorageKey('user-1'),
     })
   })
 
-  it('migrates guest history into the user-specific key after login', () => {
+  it('does not automatically assign unowned history to a user', () => {
     const storage = createStorage()
     const guestMessages = [{ id: '1', text: 'hello' }]
     storage.setItem(chatStorageKey('guest'), JSON.stringify(guestMessages))
 
     migrateAgentMessages(storage, 'user-1')
 
-    expect(storage.getItem(chatStorageKey('user-1'))).toBe(JSON.stringify(guestMessages))
+    expect(storage.getItem(chatStorageKey('user-1'))).toBeNull()
   })
 
-  it('clears primary and fallback chat storage keys', () => {
+  it('clears only the current user history', () => {
     const storage = createStorage()
     storage.setItem(chatStorageKey('user-1'), JSON.stringify([{ id: '1' }]))
     storage.setItem(chatStorageKey('guest'), JSON.stringify([{ id: '2' }]))
-    storage.setItem(LEGACY_AGENT_CHAT_STORAGE_KEY, JSON.stringify([{ id: '3' }]))
+    storage.setItem(
+      LEGACY_AGENT_CHAT_STORAGE_KEY,
+      JSON.stringify([{ id: '3' }])
+    )
 
     clearAgentMessages(storage, 'user-1')
 
     expect(storage.getItem(chatStorageKey('user-1'))).toBeNull()
-    expect(storage.getItem(chatStorageKey('guest'))).toBeNull()
-    expect(storage.getItem(LEGACY_AGENT_CHAT_STORAGE_KEY)).toBeNull()
+    expect(storage.getItem(chatStorageKey('guest'))).not.toBeNull()
+    expect(storage.getItem(LEGACY_AGENT_CHAT_STORAGE_KEY)).not.toBeNull()
   })
 
   it('persists streaming messages as non-streaming snapshots', () => {
@@ -81,7 +84,13 @@ describe('agentChatStorage', () => {
     ]
 
     expect(prepareAgentMessagesForPersistence(messages)).toEqual([
-      { id: '1', text: 'hello', streaming: false, steps: [{ id: 's1' }], time: '' },
+      {
+        id: '1',
+        text: 'hello',
+        streaming: false,
+        steps: [{ id: 's1' }],
+        time: '',
+      },
       { id: '2', text: 'done', streaming: false },
     ])
   })

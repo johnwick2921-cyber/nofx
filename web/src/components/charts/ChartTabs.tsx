@@ -178,11 +178,10 @@ export function ChartTabs({
 
   // Determine exchange from market type
   const marketConfig = MARKET_CONFIG[marketType]
-  // Prefer passed-in exchangeId (when not hyperliquid)
   const currentExchange =
-    marketType === 'hyperliquid'
-      ? 'hyperliquid'
-      : exchangeId || marketConfig.exchange
+    exchangeId && getMarketTypeFromExchange(exchangeId) === marketType
+      ? exchangeId
+      : marketConfig.exchange
 
   // Fetch available symbol list
   useEffect(() => {

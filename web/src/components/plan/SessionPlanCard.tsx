@@ -122,6 +122,7 @@ export function SessionPlanCard({
     open: boolean
     level?: PlanLevelFact
     index?: number
+    revision?: import('../../lib/api/plan').PlanRevision
   }>({ open: false })
   const [askOpen, setAskOpen] = useState(false)
   const [bulkOpen, setBulkOpen] = useState(false)
@@ -785,7 +786,22 @@ export function SessionPlanCard({
         language={language}
         onEdit={
           doorEnabled
-            ? (level, index) => setEdit({ open: true, level, index })
+            ? (level, index) =>
+                setEdit({
+                  open: true,
+                  level,
+                  index,
+                  revision:
+                    plan?.plan_id &&
+                    plan.version != null &&
+                    plan.overlay_version != null
+                      ? {
+                          plan_id: plan.plan_id,
+                          plan_version: plan.version,
+                          overlay_version: plan.overlay_version,
+                        }
+                      : undefined,
+                })
             : undefined
         }
         onAdd={doorEnabled ? () => setEdit({ open: true }) : undefined}
@@ -941,6 +957,7 @@ export function SessionPlanCard({
             language={language}
             level={edit.level}
             levelIndex={edit.index}
+            revision={edit.revision}
             scenarioIds={(doc.scenarios ?? []).map((s) => s.id)}
             onClose={() => setEdit({ open: false })}
             onSaved={(change) => {

@@ -11,7 +11,11 @@ import type { Language } from '../../i18n/translations'
 import { tp } from '../../i18n/plan-translations'
 import { api } from '../../lib/api'
 import { guardedCall } from '../../lib/api/guarded'
-import type { PlanLevelFact, RealignChange } from '../../lib/api/plan'
+import type {
+  PlanLevelFact,
+  RealignChange,
+  PlanRevision,
+} from '../../lib/api/plan'
 import { LEVEL_TYPES, INSTRUCTION_VERBS, GRADES } from './vocab'
 import { fmtPrice } from './levelState'
 
@@ -23,6 +27,7 @@ interface Props {
   // editing an existing card level: its fact + index in the plan doc; omitted = Add.
   level?: PlanLevelFact
   levelIndex?: number
+  revision?: PlanRevision
   scenarioIds?: string[]
   onClose: () => void
   onSaved: (change?: RealignChange) => void // parent re-fetches + W13 re-align
@@ -68,6 +73,7 @@ export function EditSheet({
   language,
   level,
   levelIndex,
+  revision,
   scenarioIds = [],
   onClose,
   onSaved,
@@ -80,11 +86,19 @@ export function EditSheet({
   const [note, setNote] = useState('')
   const [scenarioTag, setScenarioTag] = useState('')
   const [busy, setBusy] = useState(false)
+  const draftRevision = useRef(revision)
+  const wasOpen = useRef(false)
   const firstRef = useRef<HTMLInputElement>(null)
 
   // seed from the tapped level; reset on open.
   useEffect(() => {
-    if (!open) return
+    if (!open) {
+      wasOpen.current = false
+      return
+    }
+    if (wasOpen.current) return
+    wasOpen.current = true
+    draftRevision.current = revision ? { ...revision } : undefined
     setPrice(level ? fmtPrice(level.price) : '')
     setGrade(level?.grade || 'B')
     setInstruction(level?.instruction || 'watch_reclaim')
@@ -93,7 +107,7 @@ export function EditSheet({
     setScenarioTag(level?.scenario_id || '')
     setBusy(false)
     setTimeout(() => firstRef.current?.focus(), 30)
-  }, [open, level])
+  }, [open, level, revision])
 
   // Esc closes.
   useEffect(() => {
@@ -135,7 +149,8 @@ export function EditSheet({
           traderId,
           [{ op: 'replace', path: `/levels/${levelIndex}`, value }],
           'owner',
-          symbol
+          symbol,
+          draftRevision.current
         )
       )
       setBusy(false)
@@ -187,7 +202,8 @@ export function EditSheet({
         traderId,
         [{ op: 'remove', path: `/levels/${levelIndex}` }],
         'owner',
-        symbol
+        symbol,
+        draftRevision.current
       )
     )
     setBusy(false)

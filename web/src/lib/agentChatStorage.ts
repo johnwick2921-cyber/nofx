@@ -42,12 +42,9 @@ function loadMessagesFromKey<T>(storage: Storage, key: string): T[] {
 }
 
 function candidateStorageKeys(userId?: string): string[] {
-  const keys = [chatStorageKey(userId)]
-  if (userId) {
-    keys.push(chatStorageKey('guest'))
-  }
-  keys.push(LEGACY_AGENT_CHAT_STORAGE_KEY)
-  return [...new Set(keys)]
+  return userId
+    ? [chatStorageKey(userId)]
+    : [chatStorageKey(), LEGACY_AGENT_CHAT_STORAGE_KEY]
 }
 
 export function loadAgentMessages<T>(storage: Storage, userId?: string) {
@@ -86,12 +83,7 @@ export function persistAgentDraft(
 }
 
 export function clearAgentDraft(storage: Storage, userId?: string) {
-  for (const key of [
-    chatDraftStorageKey(userId),
-    chatDraftStorageKey('guest'),
-  ]) {
-    storage.removeItem(key)
-  }
+  storage.removeItem(chatDraftStorageKey(userId))
 }
 
 export function prepareAgentMessagesForPersistence<
@@ -116,23 +108,8 @@ export function prepareAgentMessagesForPersistence<
   })
 }
 
-export function migrateAgentMessages(storage: Storage, userId?: string) {
-  if (!userId) return
-
-  const targetKey = chatStorageKey(userId)
-  const targetMessages = loadMessagesFromKey(storage, targetKey)
-  if (targetMessages.length > 0) return
-
-  for (const sourceKey of [
-    chatStorageKey('guest'),
-    LEGACY_AGENT_CHAT_STORAGE_KEY,
-  ]) {
-    const sourceMessages = loadMessagesFromKey(storage, sourceKey)
-    if (sourceMessages.length === 0) continue
-    storage.setItem(targetKey, JSON.stringify(sourceMessages))
-    return
-  }
-}
+// Legacy unowned history must never be attributed to an authenticated user.
+export function migrateAgentMessages(_storage: Storage, _userId?: string) {}
 
 export function clearAgentMessages(storage: Storage, userId?: string) {
   for (const key of candidateStorageKeys(userId)) {

@@ -8,8 +8,16 @@ vi.mock('./EquityChart', () => ({
   EquityChart: () => <div data-testid="equity" />,
 }))
 vi.mock('./AdvancedChart', () => ({
-  AdvancedChart: ({ symbol }: { symbol: string }) => (
-    <div data-testid="market">{symbol}</div>
+  AdvancedChart: ({
+    symbol,
+    exchange,
+  }: {
+    symbol: string
+    exchange: string
+  }) => (
+    <div data-testid="market" data-exchange={exchange}>
+      {symbol}
+    </div>
   ),
 }))
 beforeEach(() =>
@@ -45,6 +53,10 @@ describe('ChartTabs composition modes', () => {
     expect(screen.getAllByRole('option')).toHaveLength(6)
     fireEvent.change(select, { target: { value: 'crypto' } })
     expect(await screen.findByText('BTCUSDT')).toBeInTheDocument()
+    expect(screen.getByTestId('market')).toHaveAttribute(
+      'data-exchange',
+      'binance'
+    )
     fireEvent.change(select, { target: { value: 'ninjatrader' } })
     expect(await screen.findByText('MNQ')).toBeInTheDocument()
   })

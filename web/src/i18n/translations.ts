@@ -802,7 +802,7 @@ export const translations = {
     faqStopLossTakeProfit:
       'Does ' + PERSONA_NAME + ' support stop-loss and take-profit?',
     faqStopLossTakeProfitAnswer:
-      'The AI can suggest stop-loss/take-profit levels in its decisions, but these are guidance-based rather than hard-coded exchange orders. The AI monitors positions each cycle and may decide to close based on P/L. For guaranteed stop-loss, you can set exchange-level orders manually or adjust the strategy prompt to be more conservative.',
+      'The active NinjaTrader SIM path submits protective stop and target orders around fills and reconciles broker protection state. A requested order is not proof of broker acceptance or a guaranteed execution price. Check the order and protection status; prompt text alone does not establish protection.',
 
     faqMultipleTraders: 'Can I run multiple traders?',
     faqMultipleTradersAnswer:
@@ -825,7 +825,7 @@ export const translations = {
 
     faqDatabaseLocked: 'Database locked error',
     faqDatabaseLockedAnswer:
-      'Multiple processes accessing SQLite simultaneously. Solution: 1) Stop all processes: "docker compose down" or "pkill nofx"; 2) Remove lock files if present: "rm -f data/data.db-wal data/data.db-shm"; 3) Restart: "docker compose up -d". Only one backend instance should access the database.',
+      'For a locked SQLite database, preserve data.db together with its WAL and SHM files. WAL can contain committed transactions; do not delete these files. Check the backup and restore runbook in deploy/RESTORE.md and coordinate any process changes with the deployment owner in a safe window.',
 
     faqTALibNotFound: 'TA-Lib not found during build',
     faqTALibNotFoundAnswer:
@@ -1311,7 +1311,7 @@ export const translations = {
         'Recommended: create a dedicated wallet with a small USDC balance',
       walletPrivateKey: 'Wallet Private Key (Base Chain EVM)',
       privateKeyNote:
-        'Private key is only used locally for signing. Never uploaded. No ETH or gas needed.',
+        'This key is sent to your configured server for wallet validation and signing. Use a dedicated wallet.',
       howToFundUsdc: 'How to Fund USDC',
       fundStep1:
         'Withdraw USDC from exchange (Binance/OKX/Coinbase) to your wallet',
@@ -2188,7 +2188,7 @@ export const translations = {
 
     faqStopLossTakeProfit: PERSONA_NAME + ' 支持止损止盈吗？',
     faqStopLossTakeProfitAnswer:
-      'AI 可以在决策中建议止损/止盈价位，但这是基于指导而非交易所硬编码订单。AI 每个周期监控持仓，可能根据盈亏决定平仓。如需保证止损，可以手动在交易所设置订单，或调整策略提示词使其更保守。',
+      '当前 NinjaTrader SIM 路径在成交时提交止损和止盈保护单，并核对经纪商保护状态。发出请求不等于经纪商已接受，也不能保证成交价格。请检查订单和保护状态，提示词本身不是保护凭证。',
 
     faqMultipleTraders: '可以运行多个交易员吗？',
     faqMultipleTradersAnswer:
@@ -2211,7 +2211,7 @@ export const translations = {
 
     faqDatabaseLocked: '数据库锁定错误',
     faqDatabaseLockedAnswer:
-      '多个进程同时访问 SQLite 导致。解决方案：1）停止所有进程："docker compose down" 或 "pkill nofx"；2）如有锁文件删除："rm -f data/data.db-wal data/data.db-shm"；3）重启："docker compose up -d"。只能有一个后端实例访问数据库。',
+      'SQLite 数据库锁定时，请保留 data.db 及其 WAL、SHM 文件。WAL 可能包含已提交的数据，不要删除这些文件。参阅 deploy/RESTORE.md 备份恢复手册，并由部署负责人在安全窗口协调进程操作。',
 
     faqTALibNotFound: '构建时找不到 TA-Lib',
     faqTALibNotFoundAnswer:
@@ -2679,7 +2679,7 @@ export const translations = {
       dedicatedWallet: '建议新建一个专用钱包，充入少量 USDC 即可',
       walletPrivateKey: '钱包私钥（Base 链 EVM）',
       privateKeyNote:
-        '私钥仅在本地签名使用，不会上传或发送交易。无需 ETH，无 Gas 费用。',
+        '私钥会发送至您配置的服务器用于钱包验证和签名。请使用专用钱包。',
       howToFundUsdc: '如何充值 USDC',
       fundStep1: '从交易所（Binance / OKX / Coinbase）提 USDC 到你的钱包地址',
       fundStep2: '选择 Base 网络（手续费极低）',
@@ -3546,7 +3546,7 @@ export const translations = {
     faqStopLossTakeProfit:
       'Apakah ' + PERSONA_NAME + ' mendukung stop-loss dan take-profit?',
     faqStopLossTakeProfitAnswer:
-      'AI dapat menyarankan level stop-loss/take-profit dalam keputusannya, tetapi ini bersifat panduan bukan order bursa yang dikodekan keras.',
+      'Jalur NinjaTrader SIM aktif mengirim order stop dan target saat fill serta memeriksa status perlindungan broker. Permintaan order bukan bukti penerimaan atau jaminan harga eksekusi. Periksa status order dan perlindungan; teks prompt saja tidak membuktikannya.',
     faqMultipleTraders: 'Bisakah saya menjalankan beberapa trader?',
     faqMultipleTradersAnswer:
       'Ya! ' +
@@ -3563,7 +3563,7 @@ export const translations = {
       'Backend mungkin tidak berjalan. Periksa: "curl http://127.0.0.1:8080/api/health" harus mengembalikan {"status":"ok"}.',
     faqDatabaseLocked: 'Error database terkunci',
     faqDatabaseLockedAnswer:
-      'Beberapa proses mengakses SQLite bersamaan. Hentikan semua, hapus file lock, restart.',
+      'Jika SQLite terkunci, simpan data.db beserta WAL dan SHM. WAL dapat berisi transaksi yang sudah dikomit; jangan hapus file tersebut. Ikuti deploy/RESTORE.md dan koordinasikan perubahan proses dengan pemilik deployment pada waktu yang aman.',
     faqTALibNotFound: 'TA-Lib tidak ditemukan saat build',
     faqTALibNotFoundAnswer:
       'Instal TA-Lib: macOS: "brew install ta-lib"; Ubuntu: "sudo apt-get install libta-lib0-dev".',

@@ -1,4 +1,13 @@
-import React, { createContext, useContext, useState, useEffect } from 'react'
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+} from 'react'
+import { SWRConfig } from 'swr'
+import { resetAgentSession } from '../lib/agentStream'
 import { flushSync } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { getSystemConfig, invalidateSystemConfig } from '../lib/config'
@@ -69,39 +78,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Reset 401 flag on page load to allow fresh 401 handling
     reset401Flag()
 
-    // Check if admin mode is active (uses cached system config)
-    getSystemConfig()
-      .then(() => {
-        // No longer simulate login in admin mode; check local storage uniformly
+    let canceled = false
+    const restore = () => {
+      if (canceled) return
+      try {
         const savedToken = localStorage.getItem('auth_token')
-        const savedUser = localStorage.getItem('auth_user')
-        if (savedToken && savedUser && !isJwtExpired(savedToken)) {
+        const parsed = JSON.parse(localStorage.getItem('auth_user') || 'null')
+        if (
+          savedToken &&
+          !isJwtExpired(savedToken) &&
+          typeof parsed?.id === 'string' &&
+          parsed.id &&
+          typeof parsed?.email === 'string'
+        ) {
           setToken(savedToken)
-          setUser(JSON.parse(savedUser))
-        } else if (savedToken && isJwtExpired(savedToken)) {
-          // Expired token → clear it so the app shows the login page instead of
-          // sitting "logged in" while every API call 401s (the stuck state).
+          setUser(parsed)
+        } else {
           localStorage.removeItem('auth_token')
           localStorage.removeItem('auth_user')
+          localStorage.removeItem('user_id')
         }
-
+      } catch {
+        localStorage.removeItem('auth_token')
+        localStorage.removeItem('auth_user')
+        localStorage.removeItem('user_id')
+      } finally {
         setIsLoading(false)
-      })
-      .catch((err) => {
-        console.error('Failed to fetch system config:', err)
-        // On error, continue checking local storage
-        const savedToken = localStorage.getItem('auth_token')
-        const savedUser = localStorage.getItem('auth_user')
-
-        if (savedToken && savedUser && !isJwtExpired(savedToken)) {
-          setToken(savedToken)
-          setUser(JSON.parse(savedUser))
-        } else if (savedToken && isJwtExpired(savedToken)) {
-          localStorage.removeItem('auth_token')
-          localStorage.removeItem('auth_user')
-        }
-        setIsLoading(false)
-      })
+      }
+    }
+    void getSystemConfig()
+      .catch(() => undefined)
+      .then(restore)
+    return () => {
+      canceled = true
+    }
   }, [])
 
   // Listen for unauthorized events from httpClient (401 responses)
@@ -109,6 +119,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const handleUnauthorized = () => {
       console.log('Unauthorized event received - clearing auth state')
       // Clear auth state when 401 is detected
+      resetAgentSession()
+      localStorage.removeItem('user_id')
       setUser(null)
       setToken(null)
       // Note: localStorage cleanup is already done in httpClient
@@ -127,6 +139,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     mode?: UserMode
   ) => {
     reset401Flag()
+    resetAgentSession()
 
     if (mode) {
       setUserMode(mode)
@@ -196,11 +209,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (response.ok) {
         // Reset 401 flag on successful login
         reset401Flag()
+        resetAgentSession()
 
         const userInfo = {
           id: data.user_id || 'admin',
           email: data.email || 'admin@localhost',
         }
+        localStorage.setItem('user_id', userInfo.id)
         localStorage.setItem('auth_token', data.token)
         localStorage.setItem('auth_user', JSON.stringify(userInfo))
         flushSync(() => {
@@ -320,13 +335,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         /* ignore network errors on logout */
       })
     }
+    resetAgentSession()
     setUser(null)
     setToken(null)
     localStorage.removeItem('auth_token')
     localStorage.removeItem('auth_user')
+    localStorage.removeItem('user_id')
     invalidateSystemConfig()
     navigate(ROUTES.home)
   }
+
+  // A new authentication session owns a new cache, including in-flight requests.
+  const sessionKey = `${user?.id || 'guest'}:${token || ''}`
+  const cacheConfig = useMemo(
+    () => ({ provider: () => new Map() }),
+    [sessionKey]
+  )
+  useLayoutEffect(() => {
+    resetAgentSession()
+    return () => resetAgentSession()
+  }, [sessionKey])
 
   return (
     <AuthContext.Provider
@@ -341,7 +369,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isLoading,
       }}
     >
-      {children}
+      <SWRConfig key={sessionKey} value={cacheConfig}>
+        {children}
+      </SWRConfig>
     </AuthContext.Provider>
   )
 }

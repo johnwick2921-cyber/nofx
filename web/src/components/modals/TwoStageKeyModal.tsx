@@ -60,13 +60,24 @@ export function TwoStageKeyModal({
     string | null
   >(null)
 
+  const generation = useRef(0)
+  const stageTimer = useRef<ReturnType<typeof setTimeout>>()
+  useEffect(() => {
+    generation.current += 1
+    handleReset()
+    return () => {
+      generation.current += 1
+      clearTimeout(stageTimer.current)
+    }
+  }, [isOpen, contextLabel, expectedLength])
+
   const stage1Ref = useRef<HTMLInputElement>(null)
   const stage2Ref = useRef<HTMLInputElement>(null)
 
   // UX improvement: Use 58 + 6 split (most of the key + last 6 chars)
   // Advantage: Second stage only requires entering 6 characters, much easier to count
-  const expectedPart1Length = expectedLength - 6  // 64 - 6 = 58
-  const expectedPart2Length = 6  // Last 6 characters
+  const expectedPart1Length = expectedLength - 6 // 64 - 6 = 58
+  const expectedPart2Length = 6 // Last 6 characters
 
   useEffect(() => {
     if (isOpen && stage === 1 && stage1Ref.current) {
@@ -77,6 +88,7 @@ export function TwoStageKeyModal({
   }, [isOpen, stage])
 
   const handleStage1Next = async () => {
+    const attempt = generation.current
     // ✅ Normalize input (remove possible 0x prefix) before validating length
     const normalized1 = part1.startsWith('0x') ? part1.slice(2) : part1
     if (normalized1.length < expectedPart1Length) {
@@ -100,6 +112,7 @@ export function TwoStageKeyModal({
       if (navigator.clipboard) {
         try {
           await navigator.clipboard.writeText(obfuscation)
+          if (attempt !== generation.current) return
           setClipboardStatus('copied')
           setObfuscationLog([
             ...obfuscationLog,
@@ -107,6 +120,7 @@ export function TwoStageKeyModal({
           ])
           toast.success('已复制混淆字符串到剪贴板')
         } catch {
+          if (attempt !== generation.current) return
           setClipboardStatus('failed')
           setObfuscationLog([
             ...obfuscationLog,
@@ -123,7 +137,8 @@ export function TwoStageKeyModal({
         toast('当前浏览器不支持自动复制，请手动复制')
       }
 
-      setTimeout(() => {
+      stageTimer.current = setTimeout(() => {
+        if (attempt !== generation.current) return
         setStage(2)
         setProcessing(false)
       }, 2000)
@@ -161,9 +176,11 @@ export function TwoStageKeyModal({
       value: fullKey,
       obfuscationLog: finalLog,
     })
+    handleReset()
   }
 
   const handleReset = () => {
+    clearTimeout(stageTimer.current)
     setStage(1)
     setPart1('')
     setPart2('')
