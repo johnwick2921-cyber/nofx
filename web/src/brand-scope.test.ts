@@ -1,3 +1,8 @@
+// Authorized audit baseline advance 2026-09-13 (combined branch):
+// go.mod @ ffbcf3e4 patches gnark-crypto; tcp_server/tcp_framing and
+// VLTraderTCPClient @ a982cc74 preserve fresh account snapshots and add actual
+// exit_order_id, on reviewed lifecycle fixes e8d2243f/cc766e1c. No protected
+// branding identifier is renamed. Full-file and mutation checks remain active.
 // Baseline advanced 2026-09-13 for authorized audit web-state repair: chat storage
 // keys remain unchanged; authenticated history no longer inherits unowned guest data.
 // Dispatch 102 freezes load-bearing identifiers, including their surrounding guards.
