@@ -223,10 +223,12 @@
         }
       ],
       "id": 1,
-      "status": "running",
+      "status": "reported",
       "lines": 6649,
       "file_count": 24,
-      "agent": "review_01"
+      "agent": "review_01",
+      "coverage_validation_errors": [],
+      "report": "reviews/01/report.md"
     },
     {
       "area": "api-auth-and-manager",
@@ -431,10 +433,12 @@
         }
       ],
       "id": 2,
-      "status": "running",
+      "status": "reported",
       "lines": 6660,
       "file_count": 22,
-      "agent": "review_02"
+      "agent": "review_02",
+      "coverage_validation_errors": [],
+      "report": "reviews/02/report.md"
     },
     {
       "area": "conversational-agent",
@@ -712,9 +716,10 @@
         }
       ],
       "id": 4,
-      "status": "pending",
+      "status": "running",
       "lines": 9223,
-      "file_count": 14
+      "file_count": 14,
+      "agent": "review_04"
     },
     {
       "area": "conversational-agent",
@@ -847,9 +852,10 @@
         }
       ],
       "id": 5,
-      "status": "pending",
+      "status": "running",
       "lines": 9224,
-      "file_count": 14
+      "file_count": 14,
+      "agent": "review_05"
     },
     {
       "area": "crypto-brokers",
