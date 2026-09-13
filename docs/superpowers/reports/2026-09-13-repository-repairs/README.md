@@ -326,3 +326,7 @@ see the terminal-exit report. Installed NT8 callback behavior remains unverified
 failure, ignores late account-view responses and states the endpoint's trader-bound
 account scope. Existing account names are read-only because backend rename and
 binding migration are not implemented. Creation and saved owner bindings are unchanged.
+
+## Final source freeze preparation
+
+Reviewed protected-file hashes updated only for the ordered TCP execution dispatch, shared entry-receipt fence, and C# execution-evidence build marker. The mutation guard remains active. The guide revision identifies backend source candidate cd2978b7; it does not identify the running binary. Adapter replacement receipt preservation is covered by the dedicated 2026-09-13 NT8 entry receipt report.
