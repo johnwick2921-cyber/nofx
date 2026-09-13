@@ -13,6 +13,6 @@
   "deploy/nofx-db-backup.sh": "2f762c1f41fcef933583e570a73acaab6ef4751add3ef6a577939e1d43e99757",
   "provider/ninjatrader/tcp_server.go": "edefc6c54fcfa1dfd1422d0d1886b5c231613519eb6baff5e0065aafe38eb042",
   "provider/ninjatrader/tcp_framing.go": "9cf887be2851c6b66a9618d2e8b687151ae75ce429515612f98dfee503a74da6",
-  "ninjascript/VLTraderTCPClient.cs": "bc30922f6221b66f2cc3350685f803cf8fe1a17b6363e4b2ecc9403b75cf369b",
+  "ninjascript/VLTraderTCPClient.cs": "0f3bca361ce68b1ed008110d9c8a7f0070f87667cee2cf4542e3a15fa730b66b",
   "web/src/lib/agentChatStorage.ts": "3a486068047acfc64343f2f44e877fa5a403ebcd688916413002bcdea78f4009"
 }

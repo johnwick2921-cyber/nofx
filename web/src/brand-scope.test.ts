@@ -1,3 +1,5 @@
+// C# hash additionally advances for reviewed terminal partial-exit repair3f21431a;
+// actual89-assertion production-method harness and NT8-reference compile passed.
 // Authorized audit baseline advance 2026-09-13 (combined branch):
 // go.mod @ ffbcf3e4 patches gnark-crypto; tcp_server/tcp_framing and
 // VLTraderTCPClient @ a982cc74 preserve fresh account snapshots and add actual
