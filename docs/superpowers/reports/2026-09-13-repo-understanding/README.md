@@ -33,3 +33,44 @@ reproductions and limitations. Go full suite/build/focused race checks passed at
 limits. [CHECKPOINT.md](CHECKPOINT.md) records the current resume state. The
 usage-blocked snapshots are preserved under `interim/` and are explicitly
 historical. Main checkout/runtime/accounts/settings remain untouched.
+
+## Review index
+
+Each report links to its read ledger, function notes and sourced graph edges in
+the same numbered directory. Function-note entries can include helper/callback
+groups and dependency notes; they are not claimed as a unique function census.
+Reviews29/30 do not increase primary source coverage. Named baseline Python
+functions now also pass independent syntax-census consistency checks (385).
+
+| Review | Area | Assigned source files | Assigned lines | Function-note entries |
+| --- | --- | ---: | ---: | ---: |
+| [01](reviews/01/report.md) | api-auth-and-manager | 24 | 6649 | 144 |
+| [02](reviews/02/report.md) | api-auth-and-manager | 22 | 6660 | 165 |
+| [03](reviews/03/report.md) | conversational-agent | 15 | 9219 | 310 |
+| [04](reviews/04/report.md) | conversational-agent | 14 | 9223 | 281 |
+| [05](reviews/05/report.md) | conversational-agent | 14 | 9224 | 299 |
+| [06](reviews/06/report.md) | crypto-brokers | 24 | 9015 | 213 |
+| [07](reviews/07/report.md) | crypto-brokers | 25 | 9071 | 193 |
+| [08](reviews/08/report.md) | kernel-engine-clocks-and-risk | 31 | 7721 | 230 |
+| [09](reviews/09/report.md) | kernel-engine-clocks-and-risk | 30 | 7725 | 253 |
+| [10](reviews/10/report.md) | kernel-levels-and-structure | 25 | 7199 | 217 |
+| [11](reviews/11/report.md) | kernel-plans-and-permissions | 22 | 7100 | 215 |
+| [12](reviews/12/report.md) | market-and-other-data-providers | 49 | 7579 | 216 |
+| [13](reviews/13/report.md) | nt8-execution-adapter + ai-client-and-providers | 42 | 9436 | 397 |
+| [14](reviews/14/report.md) | nt8-wire-and-addon | 20 | 10442 | 306 |
+| [15](reviews/15/report.md) | persistence-and-config | 41 | 10001 | 382 |
+| [16](reviews/16/report.md) | persistence-and-config | 43 | 10006 | 458 |
+| [17](reviews/17/report.md) | research-tools | 106 | 8052 | 278 |
+| [18](reviews/18/report.md) | research-tools | 106 | 8052 | 252 |
+| [19](reviews/19/report.md) | runtime-operations-and-support | 95 | 12529 | 407 |
+| [20](reviews/20/report.md) | trader-admission-and-orders | 26 | 7375 | 217 |
+| [21](reviews/21/report.md) | trader-planning-and-context | 15 | 6816 | 197 |
+| [22](reviews/22/report.md) | trader-runtime-and-positions | 26 | 7466 | 198 |
+| [23](reviews/23/report.md) | trader-runtime-and-positions | 27 | 7481 | 227 |
+| [24](reviews/24/report.md) | web-plan-and-guide | 61 | 12988 | 201 |
+| [25](reviews/25/report.md) | web-shell-chart-and-chat | 54 | 12309 | 205 |
+| [26](reviews/26/report.md) | web-shell-chart-and-chat | 59 | 12309 | 235 |
+| [27](reviews/27/report.md) | web-trading-and-settings | 17 | 9463 | 123 |
+| [28](reviews/28/report.md) | web-trading-and-settings | 16 | 9472 | 110 |
+| [29](reviews/29/report.md) | independent-control-boundaries | cross-review | bounded excerpts/diff | 96 |
+| [30](reviews/30/report.md) | independent-end-to-end-and-graph-validation | cross-review | bounded excerpts/diff | 32 |
