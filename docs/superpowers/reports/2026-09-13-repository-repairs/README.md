@@ -94,3 +94,14 @@ The boot line now says requests, not completed cancellations. Focused boot-sweep
 reauthorization and cancel-lifecycle tests pass. Old tests that equated send with
 settlement were updated to inject persisted broker evidence. Historical counter
 values are not retrospectively corrected by this code change.
+
+## First complete Go-suite result
+
+`go test ./...` at repair checkpoint `234b0262` completed: every package passed
+except store. Three tests failed: the new terminal-state fixture duplicated
+canonical state names, and two older append-only fixtures expected replacement
+without advancing authorization version. The fixture now enumerates canonical
+terminal states; append-only scenarios explicitly advance the plan version.
+Their original record-retention and no-row-per-cycle assertions remain. All
+three plus the expanded same-version regression pass in a focused rerun.
+This is not yet the final combined-suite result.

@@ -3,7 +3,10 @@ package store
 import "testing"
 
 func TestBrokerTerminalArmCannotReauthorizeSameVersion(t *testing.T) {
-	for _, state := range []string{"cancelled", "filled"} {
+	for _, state := range ArmStateNames() {
+		if !IsTerminalArmState(state) {
+			continue
+		}
 		t.Run(state, func(t *testing.T) {
 			db := newArmedTestDB(t)
 			st := NewArmedOrderStore(db)

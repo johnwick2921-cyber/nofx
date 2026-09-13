@@ -42,7 +42,9 @@ func TestReauthorizationDoesNotSpawnARowPerCycle(t *testing.T) {
 
 	// The re-authorization cycle runs many times, as it does live (~2 min).
 	for i := 0; i < 10; i++ {
-		if err := st.UpsertArm(mk()); err != nil {
+		next := mk()
+		next.Version = seed.Version + 1 // new authorization; same-version cancellation stays sticky
+		if err := st.UpsertArm(next); err != nil {
 			t.Fatalf("cycle %d: %v", i, err)
 		}
 	}
