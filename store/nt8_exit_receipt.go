@@ -89,8 +89,15 @@ func (s *PositionStore) ApplyNT8Exit(in NT8ExitReceipt) (out NT8ExitResult, err 
 		if (strings.EqualFold(in.Reason, "sl") || strings.EqualFold(in.Reason, "tp")) && row.EntryOrderID != "" && row.EntryOrderID != in.SignalID {
 			return fmt.Errorf("NT8 exit entry lineage mismatch")
 		}
-		if !finitePositive(row.Quantity) || math.Trunc(row.Quantity) != row.Quantity || !finitePositive(row.EntryPrice) || in.Quantity > row.Quantity {
+		if !finitePositive(row.Quantity) || math.Trunc(row.Quantity) != row.Quantity || !finitePositive(row.EntryPrice) {
 			return fmt.Errorf("NT8 exit quantity %.0f exceeds or cannot resolve owned residual %.8g", in.Quantity, row.Quantity)
+		}
+		if in.Quantity > row.Quantity {
+			// A valid completed exit may beat later cumulative entry updates.
+			// Retain the original receipt for retry; never invent extra holdings
+			// or discard broker evidence because the current row is incomplete.
+			out.Pending = true
+			return nil
 		}
 		entryQty := row.EntryQuantity
 		if entryQty <= 0 {

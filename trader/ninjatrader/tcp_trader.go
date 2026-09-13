@@ -967,7 +967,7 @@ func (t *TCPTrader) GetPositions() ([]map[string]interface{}, error) {
 	t.mu.Lock()
 	if !t.hasFill {
 		t.mu.Unlock()
-		return []map[string]interface{}{}, nil
+		return nil, fmt.Errorf("NT8 account positions unknown: no account snapshot or confirmed entry fill")
 	}
 	fill := t.lastFill
 	t.mu.Unlock()
@@ -989,7 +989,10 @@ func (t *TCPTrader) positionsAfterExit() ([]ntwire.OpenPosition, bool, error) {
 		return nil, false, nil
 	}
 	positions, received, ok := t.server.PositionsForReceived(t.boundAccount)
-	if after > 0 && (!ok || received.IsZero() || received.UnixMilli() <= after || time.Since(received) < 0 || time.Since(received) > 60*time.Second) {
+	if ok && (received.IsZero() || time.Since(received) < 0 || time.Since(received) > 60*time.Second) {
+		return nil, false, fmt.Errorf("NT8 account positions unknown: snapshot is stale or has no valid receipt time")
+	}
+	if after > 0 && (!ok || received.UnixMilli() <= after) {
 		return nil, false, fmt.Errorf("NT8 account positions unverified after exit: need a fresh post-receipt account snapshot")
 	}
 	return positions, ok, nil

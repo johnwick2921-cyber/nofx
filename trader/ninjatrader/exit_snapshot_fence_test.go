@@ -56,3 +56,29 @@ func TestExitRequiresFreshPostReceiptAccountSnapshotAcrossRestart(t *testing.T) 
 		t.Fatal("stale post-receipt empty accepted")
 	}
 }
+
+func TestBeforeFirstExitRequiresKnownAccountState(t *testing.T) {
+	srv := nt.NewTCPServer(nil)
+	tr := &TCPTrader{symbol: "MNQ", boundAccount: "Sim101", server: srv}
+	if rows, err := tr.GetPositions(); err == nil {
+		t.Fatalf("never-reported became flat: %+v", rows)
+	}
+	tr.hasFill = true
+	tr.lastFill = nt.FillPayload{SignalID: "known", Side: "long", Quantity: 1, FillPrice: 100}
+	if rows, err := tr.GetPositions(); err != nil || len(rows) != 1 {
+		t.Fatalf("positive known entry lost: %+v %v", rows, err)
+	}
+	tr.hasFill = false
+	srv.SeedPositionsForTest("SimOther", []nt.OpenPosition{})
+	if _, err := tr.GetPositions(); err == nil {
+		t.Fatal("foreign empty proves own flat")
+	}
+	srv.SeedPositionsAtForTest("Sim101", []nt.OpenPosition{}, time.Now().Add(-61*time.Second))
+	if _, err := tr.GetPositions(); err == nil {
+		t.Fatal("old empty proves own flat before first exit")
+	}
+	srv.SeedPositionsForTest("Sim101", []nt.OpenPosition{})
+	if rows, err := tr.GetPositions(); err != nil || len(rows) != 0 {
+		t.Fatalf("explicit fresh flat refused: %+v %v", rows, err)
+	}
+}

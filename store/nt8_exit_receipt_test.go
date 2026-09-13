@@ -97,3 +97,38 @@ func TestFinalExitRestoresCumulativeEntryBasisForHistory(t *testing.T) {
 		t.Fatalf("final history basis: %+v %v", r, err)
 	}
 }
+
+func TestExcessExitReceiptWaitsForCumulativeEntryWithoutLosingEvidence(t *testing.T) {
+	st := newPlanTestStore(t)
+	p := &TraderPosition{TraderID: "t", Account: "Sim101", Symbol: "MNQ", Side: "LONG", EntryOrderID: "entry", Quantity: 1, EntryQuantity: 1, EntryPrice: 100, EntryTime: 1, Status: "OPEN"}
+	if err := st.Position().Create(p); err != nil {
+		t.Fatal(err)
+	}
+	receipt := NT8ExitReceipt{ID: "exit-after-entry-partial", Account: "Sim101", Symbol: "MNQ", Side: "LONG", SignalID: "entry", TraderID: "t", Reason: "tp", Quantity: 2, Price: 110, PointValue: 2, ExitMs: 10, ReceivedMs: 20}
+	result, err := st.Position().ApplyNT8Exit(receipt)
+	if err != nil || !result.Pending || result.Applied {
+		t.Fatalf("excess evidence discarded/applied: %+v %v", result, err)
+	}
+	pending, err := st.Position().PendingNT8Exits("Sim101")
+	if err != nil || len(pending) != 1 || pending[0].Quantity != 2 || pending[0].ReceivedMs != 20 {
+		t.Fatalf("original evidence lost: %+v %v", pending, err)
+	}
+	var got TraderPosition
+	st.GormDB().First(&got, p.ID)
+	if got.Quantity != 1 || got.RealizedPnL != 0 || got.Status != "OPEN" {
+		t.Fatalf("pending receipt invented fill: %+v", got)
+	}
+	// This isolated store test supplies subsequently known entry quantity. The
+	// trader tests separately exercise the real cumulative entry callback.
+	if err := st.GormDB().Model(p).Updates(map[string]any{"quantity": 2, "entry_quantity": 2}).Error; err != nil {
+		t.Fatal(err)
+	}
+	result, err = st.Position().ApplyNT8Exit(pending[0])
+	if err != nil || !result.Applied || !result.Closed || result.RealizedPnL != 40 {
+		t.Fatalf("retained receipt not applied after entry: %+v %v", result, err)
+	}
+	result, err = st.Position().ApplyNT8Exit(pending[0])
+	if err != nil || result.Applied {
+		t.Fatalf("retry duplicated exit: %+v %v", result, err)
+	}
+}
