@@ -18,3 +18,9 @@ Validation before dependency updates:
 - Detailed raw logs retained locally at /tmp/nofx-web-{overlay-before,overlay-after,chart-before,focused,focused2,suite,suite-final,brand,build}.log. Reports do not claim a final merged Go/web suite pass.
 
 Residuals explicitly outside this batch: AdvancedChart request-generation/marker ownership, legacy comparison chart, corrected-only PositionHistory aggregation, bulk model payload replay/extra-model knob loss, model submit await/UI state, account-name backend persistence, all historical review findings not listed above, and end-to-end broker/runtime/backup evidence. Root controls further prioritization; dormant paths remain reports. Dependency alerts handled in a separate compatible-lock change after source commit.
+
+## Compatible dependency update
+
+After source committed ed85a80a, removed only this worktree's node_modules symlink and copied the shared tree into a private directory. `npm update baseline-browser-mapping browserslist @humanfs/node postcss-selector-parser --ignore-scripts --no-fund` updated the four affected transitives and their compatible dependent metadata/data packages, with no package.json or major-range changes. Exact10entry version delta is npm-version-changes.json. Target versions: baseline-browser-mapping2.11.23, browserslist4.28.9, @humanfs/node0.16.8, postcss-selector-parser6.1.4. They exceed parent-verified advisory patched floors2.11.0,4.28.7,0.16.8,6.1.3 respectively. Primary advisory input: /tmp/nofx-open-dependency-alerts.jsonl.
+
+Registry `npm audit --json` reports0vulnerabilities (saved npm-audit.json); this is npm's current database result, not a claim of exhaustive security proof or GitHub remote alert closure before merge. Private updated dependencies pass all69Vitest files/442tests in one escalated offline invocation and npm run build. Existing large-bundle warning remains. Shared dependency installation untouched. Go gnark advisory belongs to root.
