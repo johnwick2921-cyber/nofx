@@ -1,0 +1,86 @@
+using System;
+using System.Globalization;
+using System.Collections.Generic;
+using System.Linq;
+enum OrderState { Unknown, Working, Accepted, Filled, PartFilled, Rejected, Cancelled }
+enum OrderAction { Buy, SellShort, Sell, BuyToCover }
+enum OrderType { Market, Limit, StopMarket }
+enum OrderEntry { Manual }
+enum TimeInForce { Day, Gtc }
+enum MarketPosition { Flat, Long, Short }
+enum ConnectionStatus { Connected, Disconnected }
+class Connection { public ConnectionStatus Status = ConnectionStatus.Connected; }
+class MasterInstrument { public string Name; public double TickSize = .25; }
+class Instrument { public string FullName; public MasterInstrument MasterInstrument; }
+class Position { public int Quantity; public MarketPosition MarketPosition; public Instrument Instrument; }
+class Order { public Account Account; public string Name, Oco; public OrderAction OrderAction; public OrderType OrderType; public TimeInForce Tif; public Instrument Instrument; public int Quantity, QuantityChanged; public OrderState OrderState=OrderState.Working; public double StopPrice, LimitPrice; }
+class OrderEventArgs { public Order Order; public OrderState OrderState; public int Filled; public double AverageFillPrice; public string Comment=""; public string Error=""; }
+class Account {
+ public static List<Account> All=new List<Account>(); public string Name; public bool Sim=true; public Connection Connection=new Connection(); public List<Position> Positions=new List<Position>();
+ public List<Order> Created=new List<Order>(), Submitted=new List<Order>(), Cancelled=new List<Order>(); public List<Instrument> Flattened=new List<Instrument>();
+ public bool FailCancel, FailSubmit; public Action OnSubmit, OnChange; public int Changes;
+ public Order CreateOrder(Instrument i,OrderAction a,OrderType t,OrderEntry e,TimeInForce f,int q,double l,double s,string o,string n,DateTime d,object c){var r=new Order{Account=this,Instrument=i,OrderAction=a,OrderType=t,Tif=f,Quantity=q,StopPrice=s,LimitPrice=l,Oco=o,Name=n};Created.Add(r);return r;}
+ public void Submit(Order[] orders){Submitted.AddRange(orders);var cb=OnSubmit;OnSubmit=null;if(cb!=null)cb();if(FailSubmit)throw new Exception("ambiguous submit");}
+ public void Cancel(IEnumerable<Order> orders){if(FailCancel)throw new Exception("cancel failed");Cancelled.AddRange(orders);}
+ public void Change(Order[] orders){Changes++;var cb=OnChange;OnChange=null;if(cb!=null)cb();foreach(var o in orders)o.Quantity=o.QuantityChanged;}
+ public void Flatten(Instrument[] instruments){Flattened.AddRange(instruments);}
+}
+static class Core { public static class Globals { public static DateTime MaxDate=DateTime.MaxValue; } }
+static class VLInstrumentLookup { public static string ContractName(Instrument i){return i.FullName;} }
+class Harness {
+ Account account; object signalMapLock=new object(),posAcctLock=new object();
+ Dictionary<string,PendingBracket> pendingBrackets=new Dictionary<string,PendingBracket>();
+ Dictionary<string,PlacedBracket> placedBrackets=new Dictionary<string,PlacedBracket>();
+ Dictionary<string,Order> workingEntries=new Dictionary<string,Order>();
+ Dictionary<string,object> signalIdentity=new Dictionary<string,object>();
+ Dictionary<string,Account> positionAccountBySymbol=new Dictionary<string,Account>();
+ Dictionary<string,double> signalEntryByOco=new Dictionary<string,double>(),signalTickSizeByOco=new Dictionary<string,double>();
+ HashSet<string> allowed=new HashSet<string>(); List<string> acks=new List<string>(); int rejected;
+ bool IsSimAccount(Account a){return a!=null&&a.Sim;} bool IsSessionAccount(string a){return allowed.Contains(a);}
+ void SubscribeOrderUpdate(Account a){} void SendOrderUpdateFrame(OrderEventArgs e){}
+ void SendAck(string a){acks.Add(a);} static void LogInfo(string s){} static void LogWarn(string s){}
+ void SendPositionCloseRejectedFrame(string a,string b,string c,string d,string e){rejected++;}
+ void SendPositionCloseFrame(string a,string b,string c,double d,int e,string f,string g){}
+ void SendFillFrame(string a,double b,string c,int d,double e,string f,string accountName="",string symbol=""){}
+ /* PRODUCTION TYPES */
+ /* PRODUCTION METHODS */
+ static Instrument Inst(string name){return new Instrument{FullName=name,MasterInstrument=new MasterInstrument{Name=name.Split(' ')[0]}};}
+ static Dictionary<string,object> Req(params object[] values){var d=new Dictionary<string,object>();for(int i=0;i<values.Length;i+=2)d[(string)values[i]]=values[i+1];return d;}
+ static void Check(bool ok,string message){if(!ok)throw new Exception(message);Console.WriteLine("PASS "+message);}
+ Account Add(string name, string contract="MNQ 09-26",int qty=3){var a=new Account{Name=name};a.Positions.Add(new Position{Instrument=Inst(contract),Quantity=qty,MarketPosition=MarketPosition.Long});Account.All.Add(a);allowed.Add(name);return a;}
+ Order Seed(string id,Account a){var i=a.Positions[0].Instrument;var o=new Order{Name=id,Account=a,Instrument=i,OrderAction=OrderAction.Buy,Quantity=3};workingEntries[id]=o;pendingBrackets[id]=new PendingBracket{Account=a,Instrument=i,Qty=3,Sl=100,Tp=120,ExitAction=OrderAction.Sell};return o;}
+ void Event(Order o,OrderState st,int filled){o.OrderState=st;OnOrderUpdate(this,new OrderEventArgs{Order=o,OrderState=st,Filled=filled,AverageFillPrice=110});}
+ static void Main(){new Harness().Run();}
+ void Run(){
+ var active=Add("Sim101"); var target=Add("Sim102","MNQ 06-26");account=active;
+ HandleClosePosition(Req("symbol","MNQ","account","Sim102","side","long","signal_id","close"));
+ Check(target.Flattened.Count==1&&target.Flattened[0].FullName=="MNQ 06-26"&&active.Flattened.Count==0,"explicit close targets held old expiry and account");
+ HandleClosePosition(Req("symbol","MNQ","account","missing"));Check(active.Flattened.Count==0&&rejected==1,"unknown explicit close refuses without fallback");
+ target.Positions.Add(new Position{Instrument=Inst("MNQ 12-26"),Quantity=1,MarketPosition=MarketPosition.Long});
+ HandleClosePosition(Req("symbol","MNQ","account","Sim102"));Check(target.Flattened.Count==1,"ambiguous root refuses two held expiries");
+ HandleClosePosition(Req("symbol","MNQ 12-26","account","Sim102"));Check(target.Flattened.Count==2&&target.Flattened[1].FullName=="MNQ 12-26","qualified close selects exact held expiry");
+ var stop=Req("symbol","MNQ","account","missing","position_side","LONG","signal_id","protect","quantity",1,"stop_price",100);
+ HandlePlaceProtectiveStop(stop);Check(active.Submitted.Count==0,"unknown protective account refuses fallback");
+ stop["account"]="Sim102";HandlePlaceProtectiveStop(stop);Check(target.Submitted.Count==0,"ambiguous protective contract refuses");
+ stop["symbol"]="MNQ 06-26";HandlePlaceProtectiveStop(stop);Check(target.Submitted.Count==1&&target.Submitted[0].Instrument.FullName=="MNQ 06-26"&&target.Submitted[0].Tif==TimeInForce.Gtc,"protective stop follows explicit held contract GTC");
+ int flattenedBefore=target.Flattened.Count;target.FailSubmit=true;HandleClosePosition(Req("symbol","MNQ 06-26","account","Sim102","side","long","signal_id","limit-close","quantity",1,"limit_price",112));target.FailSubmit=false;Check(target.Flattened.Count==flattenedBefore&&acks.Last()=="close_position_error","ambiguous limit Submit never falls back to second market close");
+ int before=target.Submitted.Count;stop["quantity"]=4;HandlePlaceProtectiveStop(stop);stop["quantity"]=1;stop["position_side"]="SHORT";HandlePlaceProtectiveStop(stop);Check(target.Submitted.Count==before,"protective side and oversize refused");
+ foreach(int guard in new[]{0,1,2}){target.Sim=guard!=0;target.Connection.Status=guard==1?ConnectionStatus.Disconnected:ConnectionStatus.Connected;if(guard==2)allowed.Remove(target.Name);Account resolved;Check(!TryResolveExecutionAccount("Sim102",out resolved),"routing guard "+guard+" refuses");}target.Sim=true;allowed.Add(target.Name);
+ var entry=Seed("partial",active);active.FailCancel=true;HandleCancelOrder(Req("signal_id","partial"));Check(workingEntries.ContainsKey("partial")&&pendingBrackets.ContainsKey("partial")&&acks.Last()=="cancel_order_error","failed cancel retains entry and deferred protection");
+ active.FailCancel=false;HandleCancelOrder(Req("signal_id","partial"));Check(workingEntries.ContainsKey("partial")&&pendingBrackets.ContainsKey("partial"),"cancel request retains intent before terminal evidence");
+ Event(entry,OrderState.Cancelled,2);Check(!workingEntries.ContainsKey("partial")&&!pendingBrackets.ContainsKey("partial")&&placedBrackets["partial"].Qty==2,"terminal cancel protects cumulative partial before retirement");
+ int pairs=active.Submitted.Count;Event(entry,OrderState.PartFilled,1);Check(active.Submitted.Count==pairs&&placedBrackets["partial"].Qty==2,"delayed smaller partial neither duplicates nor shrinks bracket");
+ var cancelledThenFilled=Seed("cancel-race",active);HandleCancelOrder(Req("signal_id","cancel-race"));Event(cancelledThenFilled,OrderState.Filled,3);Check(placedBrackets["cancel-race"].Qty==3,"fill winning cancel race still receives full protection");
+ var rejectedPartial=Seed("reject-partial",active);Event(rejectedPartial,OrderState.Rejected,1);Check(placedBrackets["reject-partial"].Qty==1&&!pendingBrackets.ContainsKey("reject-partial"),"terminal rejection protects cumulative filled quantity");
+ var unfilled=Seed("unfilled",active);Event(unfilled,OrderState.Cancelled,0);Check(!pendingBrackets.ContainsKey("unfilled")&&!workingEntries.ContainsKey("unfilled"),"unfilled terminal cancellation retires deferred state");
+ var ambiguous=Seed("ambiguous",active);active.FailSubmit=true;Event(ambiguous,OrderState.PartFilled,1);int count=active.Submitted.Count;Event(ambiguous,OrderState.Filled,3);Check(active.Submitted.Count==count&&placedBrackets["ambiguous"].Qty==3,"ambiguous accepted submit retains pair identity on later full fill");active.FailSubmit=false;
+ active.OnChange=()=>Event(placedBrackets["ambiguous"].SlOrder,OrderState.Working,0);
+ var amend=Seed("amend",active);Event(amend,OrderState.PartFilled,1);active.OnChange=()=>Event(placedBrackets["amend"].SlOrder,OrderState.Working,0);Event(amend,OrderState.Filled,3);Check(placedBrackets["amend"].Qty==3,"synchronous Change event cannot recursively amend");
+ var reentrant=Seed("reentrant",active);active.OnSubmit=()=>Event(reentrant,OrderState.Filled,3);Event(reentrant,OrderState.PartFilled,1);Check(placedBrackets["reentrant"].Qty==3&&active.Created.Count(o=>o.Name=="reentrant-sl")==1,"reentrant fill reserves one pair and catches up quantity");
+ int cancelsBefore=active.Cancelled.Count;var exit=new Order{Name="close-lx",Account=active,Instrument=active.Positions[0].Instrument,OrderAction=OrderAction.Sell};Event(exit,OrderState.Rejected,0);Event(exit,OrderState.PartFilled,1);Event(exit,OrderState.Filled,1);Check(active.Cancelled.Count==cancelsBefore,"rejected partial or smaller completed close preserves remaining-position protection");
+ var pb=placedBrackets["partial"];active.FailCancel=true;CancelBracketsFor("partial","MNQ","Sim101");Check(placedBrackets.ContainsKey("partial"),"failed bracket cancel retains tracked pair");active.FailCancel=false;CancelBracketsFor("partial","MNQ","Sim101");Check(placedBrackets.ContainsKey("partial"),"successful bracket cancel request retains until terminal");
+ Event(pb.SlOrder,OrderState.Cancelled,0);Check(placedBrackets.ContainsKey("partial"),"one terminal leg retains sibling tracking");Event(pb.TpOrder,OrderState.Cancelled,0);Check(!placedBrackets.ContainsKey("partial"),"two terminal legs retire bracket tracking");
+ var old=Seed("old-expiry",target);Event(old,OrderState.Filled,1);var other=Seed("other-expiry",target);pendingBrackets["other-expiry"].Instrument=target.Positions[1].Instrument;Event(other,OrderState.Filled,1);target.Cancelled.Clear();CancelAllBracketsFor("MNQ 06-26","Sim102");Check(target.Cancelled.Count==2&&target.Cancelled.All(o=>o.Instrument.FullName=="MNQ 06-26"),"flat sweep isolates exact expiry from same-account sibling");
+ Console.WriteLine("ALL OFFLINE LIFECYCLE TESTS PASSED");
+ }
+}
