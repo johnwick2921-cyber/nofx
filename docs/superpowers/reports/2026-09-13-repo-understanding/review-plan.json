@@ -1607,7 +1607,7 @@
         }
       ],
       "id": 8,
-      "status": "in_progress",
+      "status": "reported",
       "lines": 7721,
       "file_count": 31
     },
@@ -2120,7 +2120,7 @@
         }
       ],
       "id": 10,
-      "status": "in_progress",
+      "status": "reported",
       "lines": 7199,
       "file_count": 25
     },
@@ -2327,7 +2327,7 @@
         }
       ],
       "id": 11,
-      "status": "pending",
+      "status": "in_progress",
       "lines": 7100,
       "file_count": 22
     },
@@ -2777,7 +2777,7 @@
         }
       ],
       "id": 12,
-      "status": "pending",
+      "status": "in_progress",
       "lines": 7579,
       "file_count": 49
     },
