@@ -250,3 +250,26 @@ all five sources compile against installed NT8 references. Detailed evidence
 and limitations: `../2026-09-13-nt8-lifecycle-repair.md`. No AddOn deployment
 or real NT8 event scheduling/OCO verification occurred. Partial completed-exit
 wire semantics remain under a separate cross-boundary investigation.
+
+## Swing evidence provenance and aggregate volume
+
+[A] Synthetic detector fixtures reproduced two errors: zone defining wick came
+from the next candle (pivot close used as an open-time lookup), and the first
+bar's volume vanished from each aggregate bucket. Exact pivot-open identity
+now supplies the wick while existing presentation/confirmation timestamps stay
+separate. Aggregate initialization includes first-bar volume. Before tests failed;
+focused swing/T3/zone/formation tests pass (`/tmp/nofx-swing-evidence-before.log`,
+`/tmp/nofx-swing-evidence-after.log`). This corrects measured inputs; no strategy
+expectancy improvement or recalibrated zone-width distribution is claimed.
+
+## Delayed flatten lifecycle
+
+[A] Repair94e08cf0 binds a scheduled fallback to immutable owned position row
+and entry lineage. Known replacement, ambiguity or missing identity refuses;
+Stop invalidates timers and waits for active callbacks. Immediate and delayed
+close failures preserve protections. Production flatten/callback fixtures and
+focused race tests pass. The broker command still has no atomic expected-position
+fence, so an unseen broker replacement remains a limitation. Ordinary Stop
+retains broker observers intentionally: held positions still need reconciliation.
+Final observer disposal requires a safe handoff/removal design, not blindly
+killing protection/close listeners when entry scheduling stops.

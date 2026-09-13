@@ -4855,3 +4855,12 @@ with synchronous partial/terminal callbacks and deferred/rejected Change.
 Requested quantities are not confirmed coverage; preserve terminal receipts even
 while Submit holds the identity reservation. Compile against actual NT8 refs,
 but report broker scheduling/OCO/runtime checks separately.
+
+## PENDING CLASS — FORMATION TIME IS NOT DEFINING-CANDLE IDENTITY
+
+Branch `fix/repo-audit-control-boundaries-20260913`, base `63968be6`.
+Swing presentation time is the pivot close, while candle lookup keys are opens.
+Do not use one as the other: that selected the next candle's wick for zone width.
+Retain exact pivot-open identity and confirmation-close provenance separately.
+Aggregation conservation includes the first source bar's volume. Synthetic
+pivot and bucket fixtures must differ enough to expose an off-by-one join.

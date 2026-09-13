@@ -7,6 +7,7 @@ export const levels: GuideSection = {
   tagline: 'levels = WHERE · roles = WHAT-FOR · grades = HOW-STRONG.',
   asBuiltRev: GUIDE_BUILT_REV,
   blocks: [
+    { kind: 'p', text: 'A swing zone’s defining wick comes from the selected pivot candle. Its later confirmation time is recorded separately. Aggregated swing bars include every source bar’s volume, including the first bar in each bucket.' },
     {
       kind: 'p',
       text: 'Every plan and every decision hangs on levels. A level is a price the machine detected (structure, volume, imbalance); a role says what to DO with it; and a grade is a letter — A, B or C — that gradeFromScore (kernel/levels_score.go) assigns by thresholding a score built from hand-set evidence weights, a freshness ladder, a confluence multiplier and a timeframe multiplier, then capped by the zone-timeframe and Tier-1 proximity rules. It is a SEATING PRIORITY label, not a probability: nothing in the scoring path reads an outcome table, and no grade has ever been calibrated against what those levels actually did.',
