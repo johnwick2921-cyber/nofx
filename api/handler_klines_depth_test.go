@@ -119,6 +119,37 @@ func TestKlinesNinjaTraderStoreDepthContractFiltered(t *testing.T) {
 	}
 }
 
+// F1.2 (2026-09-14) — an EMPTY native ring for the requested TF is aggregated
+// from the finer live rung (closed buckets only). Measured live: after a
+// re-subscribe NT8 returned zero 2h/4h bars while the 1h ring held 1,500.
+func TestKlinesAggregatedDepthFillsEmptyBase(t *testing.T) {
+	now := time.Date(2026, 9, 14, 18, 0, 0, 0, time.UTC)
+	one := func(h int) market.Kline {
+		return market.Kline{OpenTime: now.Add(-time.Duration(h) * time.Hour).UnixMilli(), Open: float64(h), High: float64(h) + 1, Low: float64(h) - 1, Close: float64(h) + 0.5, Volume: 1}
+	}
+	// 1h rung: 09:00,10:00,11:00,12:00 → one closed 4h bucket (08:00-12:00) and
+	// one bucket (12:00-16:00, closed too). At 18:00 both are closed.
+	ring1h := []market.Kline{one(9), one(8), one(7), one(6)}
+	provider := func(symbol, tf string, count int) []market.Kline {
+		if tf == "1h" {
+			return ring1h
+		}
+		return nil // the requested TF's own ring is EMPTY
+	}
+	out := klinesWithAggregatedDepth(nil, provider, "MNQ", "4h", 10, now)
+	if len(out) != 2 {
+		t.Fatalf("empty base + deep finer rung must aggregate: got %d 4h bars, want 2", len(out))
+	}
+	if out[0].OpenTime != now.Add(-10*time.Hour).Truncate(4*time.Hour).UnixMilli() {
+		t.Fatalf("oldest aggregated bucket %d, want 08:00", out[0].OpenTime)
+	}
+	for _, k := range out {
+		if k.OpenTime+4*3600_000 > now.UnixMilli() {
+			t.Fatalf("a forming 4h bucket was served from an empty base: %+v", k)
+		}
+	}
+}
+
 // F1 — no store attached: the handler serves the ring exactly as before.
 func TestKlinesNinjaTraderNoStoreServesRing(t *testing.T) {
 	orig := market.FuturesBarsProvider

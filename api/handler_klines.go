@@ -415,12 +415,22 @@ const klinesFinerRungFetch = 5000
 // aggregating a finer ladder rung that has depth. PURE so a pin drives it.
 func klinesWithAggregatedDepth(base []market.Kline, provider func(string, string, int) []market.Kline, symbol, tf string, limit int, now time.Time) []market.Kline {
 	mins := market.TFMinutes(tf)
-	if mins == 0 || len(base) == 0 || limit <= 0 {
+	if mins == 0 || limit <= 0 {
 		return base
 	}
 	span := int64(mins) * 60000
 	nowMs := now.UnixMilli()
-	oldest := base[0].OpenTime
+	// An EMPTY native ring is not a dead chart: on a young contract NT8 can
+	// return zero bars for the requested TF itself (measured 2026-09-14: 2h
+	// and 4h EMPTY on re-subscribe) while a finer rung is deep. Aggregating
+	// the finer LIVE rung is contract-pure ring data — not a store substitute
+	// — so an empty base is aggregated, never left empty when a finer rung can
+	// answer (closed buckets only).
+	oldest := int64(0)
+	haveBase := len(base) > 0
+	if haveBase {
+		oldest = base[0].OpenTime
+	}
 	for _, finer := range market.LadderFor(tf) {
 		if finer == tf {
 			continue
@@ -436,10 +446,10 @@ func klinesWithAggregatedDepth(base []market.Kline, provider func(string, string
 		agg := market.AggregateToTF(raw, finerMins, mins)
 		older := make([]market.Kline, 0, len(agg))
 		for _, k := range agg {
-			// Closed buckets only, and only buckets strictly older than the
-			// series' oldest bar: a forming bucket is never served, and a
-			// bucket the ring already covers is never duplicated.
-			if k.OpenTime+span <= nowMs && k.OpenTime < oldest {
+			// Closed buckets only; when the base exists, only buckets strictly
+			// older than its oldest bar — a forming bucket is never served and
+			// a bucket the ring already covers is never duplicated.
+			if k.OpenTime+span <= nowMs && (!haveBase || k.OpenTime < oldest) {
 				older = append(older, k)
 			}
 		}
