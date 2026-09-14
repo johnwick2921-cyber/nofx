@@ -111,7 +111,26 @@ func BarsWithStoreDepthDisplay(ring []market.Kline, st *store.Store, contract, s
 		}
 		return storeRowsToKlines(kept, tf), nil
 	}
-	return barsWithStoreDepthFrom(ring, reader, symbol, tf, n, now)
+	out := barsWithStoreDepthFrom(ring, reader, symbol, tf, n, now)
+	// The RING side of the display: NT8's own BarsRequest seed carries the
+	// same sparse import snapshots (measured 2026-09-14: the four 1m bars at
+	// 09-07 17:00 / 09-08·09·10 21:00Z arrived in the RING, not in the
+	// splice — the store-side filter above never sees them). Filter by open
+	// time against the store's import rows: the bars key is (symbol, tf,
+	// open_time_ms), so a matched timestamp is either the import row or
+	// nothing, and a matching ring bar is dropped whatever its values.
+	drop, err := st.BarHistory().ImportSnapshotTimes(symbol, tf, contract)
+	if err != nil || len(drop) == 0 {
+		return out
+	}
+	kept := make([]market.Kline, 0, len(out))
+	for _, k := range out {
+		if drop[k.OpenTime] {
+			continue
+		}
+		kept = append(kept, k)
+	}
+	return kept
 }
 
 // storeBarReader returns the store read as a closure, so barsWithStoreDepthFrom
