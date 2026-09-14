@@ -1,6 +1,7 @@
 package trader
 
 import (
+	"strings"
 	"time"
 
 	"nofx/kernel"
@@ -64,6 +65,25 @@ func (at *AutoTrader) barsWithStoreDepth(symbol, tf string, n int, now time.Time
 		ring = market.FuturesBarsProvider(symbol, tf, n)
 	}
 	return barsWithStoreDepthFrom(ring, at.storeBarReader(symbol, tf), symbol, tf, n, now)
+}
+
+// BarsWithStoreDepth is the API/dashboard seam: the same contract-filtered
+// store splice the planner uses, driven by an explicit contract instead of the
+// AutoTrader's ACK lookup (F1, 2026-09-14). A nil store or an unnamed contract
+// returns the ring untouched — the chart may be shallow, it is never
+// wrong or mixed-scale (A10/A24, roll wave).
+func BarsWithStoreDepth(ring []market.Kline, st *store.Store, contract, symbol, tf string, n int, now time.Time) []market.Kline {
+	if st == nil || st.BarHistory() == nil || strings.TrimSpace(contract) == "" {
+		return ring
+	}
+	reader := func(n int) ([]market.Kline, error) {
+		rows, err := st.BarHistory().LastNBarsOn(symbol, tf, contract, n)
+		if err != nil {
+			return nil, err
+		}
+		return storeRowsToKlines(rows, tf), nil
+	}
+	return barsWithStoreDepthFrom(ring, reader, symbol, tf, n, now)
 }
 
 // storeBarReader returns the store read as a closure, so barsWithStoreDepthFrom

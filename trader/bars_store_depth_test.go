@@ -12,6 +12,7 @@ import (
 
 	"nofx/kernel"
 	"nofx/market"
+	"nofx/store"
 )
 
 // ── D2 PINS (wave BARS HORIZON, 2026-09-09) ─────────────────────────────────
@@ -241,6 +242,35 @@ func TestStoreDepthNeverServesMoreThanAsked(t *testing.T) {
 	wantOldest := ring[len(ring)-1].OpenTime - int64(n-1)*60_000
 	if out[0].OpenTime != wantOldest {
 		t.Fatalf("the trim kept the wrong end: oldest served %d, want %d (the newest %d bars)", out[0].OpenTime, wantOldest, n)
+	}
+}
+
+// F1 (2026-09-14) — the API/dashboard seam must degrade to the ring whenever it
+// cannot answer: nil store, or no contract named, or a store with nothing to
+// add. The splice itself is pinned by D2-A..D2-G; these guard the NEW surface.
+func TestBarsWithStoreDepthSeamDegradesWhenUnanswerable(t *testing.T) {
+	now := time.Date(2026, 9, 14, 10, 0, 0, 0, kernel.CTLocation())
+	ring := d2Bars(now.Add(-100*time.Minute), 100, time.Minute)
+
+	if out := BarsWithStoreDepth(ring, nil, "MNQ 12-26", "MNQ", "1m", 200, now); len(out) != 100 {
+		t.Fatalf("a nil store must serve the ring alone: %d bars", len(out))
+	}
+
+	st, err := store.New(filepath.Join(t.TempDir(), "seam.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	if err := st.BarHistory().Migrate(); err != nil {
+		t.Fatal(err)
+	}
+	// A real store but NO contract named — UNKNOWN is not "everything" (A24).
+	if out := BarsWithStoreDepth(ring, st, "   ", "MNQ", "1m", 200, now); len(out) != 100 {
+		t.Fatalf("an unnamed contract must serve the ring alone: %d bars", len(out))
+	}
+	// A real store + a named contract, but the table has no bars — ring alone.
+	if out := BarsWithStoreDepth(ring, st, "MNQ 12-26", "MNQ", "1m", 200, now); len(out) != 100 {
+		t.Fatalf("an empty store must serve the ring alone: %d bars", len(out))
 	}
 }
 
