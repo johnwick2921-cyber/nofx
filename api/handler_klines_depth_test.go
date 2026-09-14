@@ -104,7 +104,7 @@ func TestKlinesNinjaTraderStoreDepthContractFiltered(t *testing.T) {
 	if err := st.BarHistory().InsertBars(rows); err != nil {
 		t.Fatal(err)
 	}
-	if err := st.BarHistory().ImportBars([]store.BarHistoryDB{snapshot}); err != nil {
+	if _, _, err := st.BarHistory().ImportBars([]store.BarHistoryDB{snapshot}); err != nil {
 		t.Fatal(err)
 	}
 
