@@ -392,7 +392,67 @@ func (s *Server) getKlinesFromNinjaTrader(symbol, interval string, limit int) []
 			klines = trader.BarsWithStoreDepth(klines, s.store, contract, symbol, interval, limit, time.Now())
 		}
 	}
+	// F1.1 (2026-09-14) — COARSE-TF AGGREGATION. On a young contract NT8's
+	// replay is deep on 1m/5m/15m/1h but nearly empty on 2h/4h/1d (measured
+	// live 2026-09-14: the 4h ring held 10 bars while the 1h ring held 1,500,
+	// so a 4h chart showed a handful of candles although weeks of 4h exist in
+	// the finer rungs). When the series is still short of the ask, aggregate
+	// the first finer ladder rung with depth into the requested TF — CLOSED
+	// buckets, strictly older than the series' oldest — and prepend. The ring
+	// is contract-pure (purged on roll), so the aggregate never mixes
+	// contracts, and a forming bucket is never served.
+	if len(klines) < limit {
+		klines = klinesWithAggregatedDepth(klines, provider, symbol, interval, limit, time.Now())
+	}
 	return klines
+}
+
+// klinesFinerRungFetch is how many bars the finer aggregation rung may fetch
+// from the ring — comfortably past the 2,500-bar ring ceiling.
+const klinesFinerRungFetch = 5000
+
+// klinesWithAggregatedDepth extends a thin coarse-TF series backwards by
+// aggregating a finer ladder rung that has depth. PURE so a pin drives it.
+func klinesWithAggregatedDepth(base []market.Kline, provider func(string, string, int) []market.Kline, symbol, tf string, limit int, now time.Time) []market.Kline {
+	mins := market.TFMinutes(tf)
+	if mins == 0 || len(base) == 0 || limit <= 0 {
+		return base
+	}
+	span := int64(mins) * 60000
+	nowMs := now.UnixMilli()
+	oldest := base[0].OpenTime
+	for _, finer := range market.LadderFor(tf) {
+		if finer == tf {
+			continue
+		}
+		finerMins := market.TFMinutes(finer)
+		if finerMins == 0 || finerMins >= mins {
+			continue
+		}
+		raw := provider(symbol, finer, klinesFinerRungFetch)
+		if len(raw) == 0 {
+			continue
+		}
+		agg := market.AggregateToTF(raw, finerMins, mins)
+		older := make([]market.Kline, 0, len(agg))
+		for _, k := range agg {
+			// Closed buckets only, and only buckets strictly older than the
+			// series' oldest bar: a forming bucket is never served, and a
+			// bucket the ring already covers is never duplicated.
+			if k.OpenTime+span <= nowMs && k.OpenTime < oldest {
+				older = append(older, k)
+			}
+		}
+		if len(older) == 0 {
+			continue
+		}
+		out := append(older, base...)
+		if len(out) > limit {
+			out = out[len(out)-limit:]
+		}
+		return out
+	}
+	return base
 }
 
 // handleSymbols returns available symbols for a given exchange
