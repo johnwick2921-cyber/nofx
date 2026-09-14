@@ -9,6 +9,58 @@ import (
 	"nofx/store"
 )
 
+// F1.1 (2026-09-14) — a thin coarse-TF ring gets older CLOSED buckets
+// aggregated from a deep finer rung, capped at the ask, and a ring the finer
+// rung cannot extend passes through unchanged.
+func TestKlinesAggregatedDepthPrependsOlderClosedBuckets(t *testing.T) {
+	now := time.Date(2026, 9, 14, 18, 0, 0, 0, time.UTC)
+	base := []market.Kline{
+		{OpenTime: now.Add(-6 * time.Hour).UnixMilli(), Open: 10, High: 11, Low: 9, Close: 10.5},
+		{OpenTime: now.Add(-2 * time.Hour).UnixMilli(), Open: 11, High: 12, Low: 10, Close: 11.5},
+	}
+	one := func(h int) market.Kline {
+		return market.Kline{OpenTime: now.Add(-time.Duration(h) * time.Hour).UnixMilli(), Open: float64(h), High: float64(h) + 1, Low: float64(h) - 1, Close: float64(h) + 0.5, Volume: 1}
+	}
+	ring1h := []market.Kline{one(10), one(9), one(8), one(7), one(6), one(5)}
+	provider := func(symbol, tf string, count int) []market.Kline {
+		if tf == "1h" {
+			return ring1h
+		}
+		return base
+	}
+	out := klinesWithAggregatedDepth(base, provider, "MNQ", "4h", 10, now)
+	if len(out) != 3 {
+		t.Fatalf("served %d bars, want 3 (1 aggregated closed 4h bucket + 2 base)", len(out))
+	}
+	wantOldest := now.Add(-10 * time.Hour).Truncate(4 * time.Hour).UnixMilli()
+	if out[0].OpenTime != wantOldest {
+		t.Fatalf("oldest served %d, want the 08:00-12:00 aggregated bucket %d", out[0].OpenTime, wantOldest)
+	}
+	// The AGGREGATED prefix must be closed (the base's own tail may hold the
+	// forming bucket — the chart shows it, the splice never ADDS one).
+	if out[0].OpenTime+4*3600_000 > now.UnixMilli() {
+		t.Fatalf("a forming 4h bucket was served: %+v", out[0])
+	}
+}
+
+func TestKlinesAggregatedDepthFallsBackWhenNoOlder(t *testing.T) {
+	now := time.Date(2026, 9, 14, 18, 0, 0, 0, time.UTC)
+	base := []market.Kline{
+		{OpenTime: now.Add(-6 * time.Hour).UnixMilli(), Open: 10, High: 11, Low: 9, Close: 10.5},
+	}
+	// The finer rung holds NOTHING older than the base's oldest bar.
+	provider := func(symbol, tf string, count int) []market.Kline {
+		if tf == "1h" {
+			return []market.Kline{{OpenTime: now.Add(-1 * time.Hour).UnixMilli(), Close: 5}}
+		}
+		return base
+	}
+	out := klinesWithAggregatedDepth(base, provider, "MNQ", "4h", 10, now)
+	if len(out) != 1 {
+		t.Fatalf("a rung with no older bars must not change the series: %d bars", len(out))
+	}
+}
+
 // F1 (2026-09-14) — the dashboard klines path (ninjatrader) deepens from the
 // store on the CURRENT contract only. The retired contract's rows exist but must
 // never be served, and a ring (live) bar is never replaced by a stored one.
