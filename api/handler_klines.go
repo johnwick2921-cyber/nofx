@@ -15,6 +15,7 @@ import (
 	"nofx/provider/coinank/coinank_enum"
 	"nofx/provider/hyperliquid"
 	"nofx/provider/twelvedata"
+	"nofx/trader"
 
 	"github.com/gin-gonic/gin"
 )
@@ -354,7 +355,21 @@ func (s *Server) getKlinesFromNinjaTrader(symbol, interval string, limit int) []
 	}
 	klines := provider(symbol, interval, limit)
 	if klines == nil {
-		return []market.Kline{}
+		klines = []market.Kline{}
+	}
+	// F1 (2026-09-14) — DASHBOARD DEPTH. The ring caps at
+	// DefaultBarCacheMaxBars (2,500) per (symbol, timeframe), so after a
+	// restart — or any ask past the ceiling — the chart was shallow although
+	// the store held the bars. When the ask exceeds what the ring served,
+	// splice the CURRENT contract's stored bars onto the older end. The
+	// contract is the store's own fallback (newest usable bar) — the same
+	// shadow the trader's currentContract uses when no ACK has arrived. An
+	// unnamed contract or a failed store read degrades to the ring alone: the
+	// chart may be shallow, it is never mixed-scale (A10/A24, roll wave).
+	if s.store != nil && len(klines) < limit {
+		if contract, ok := s.store.BarHistory().LatestContract(symbol); ok {
+			klines = trader.BarsWithStoreDepth(klines, s.store, contract, symbol, interval, limit, time.Now())
+		}
 	}
 	return klines
 }
