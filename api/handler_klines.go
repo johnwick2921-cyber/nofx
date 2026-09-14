@@ -389,7 +389,7 @@ func (s *Server) getKlinesFromNinjaTrader(symbol, interval string, limit int) []
 	// chart may be shallow, it is never mixed-scale (A10/A24, roll wave).
 	if s.store != nil && len(klines) < limit {
 		if contract, ok := s.store.BarHistory().LatestContract(symbol); ok {
-			klines = trader.BarsWithStoreDepth(klines, s.store, contract, symbol, interval, limit, time.Now())
+			klines = trader.BarsWithStoreDepthDisplay(klines, s.store, contract, symbol, interval, limit, time.Now())
 		}
 	}
 	// F1.1 (2026-09-14) — COARSE-TF AGGREGATION. On a young contract NT8's

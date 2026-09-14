@@ -86,6 +86,34 @@ func BarsWithStoreDepth(ring []market.Kline, st *store.Store, contract, symbol, 
 	return barsWithStoreDepthFrom(ring, reader, symbol, tf, n, now)
 }
 
+// BarsWithStoreDepthDisplay is BarsWithStoreDepth for CHART DISPLAY: it skips
+// historical_import rows. Wave-101 bulk imports are sparse snapshots (measured
+// 2026-09-14: MNQ 12-26 1m had ONE bar per day at 09-07 17:00, 09-08/09/10
+// 21:00) — honest history for the store, but on a chart they render as four
+// lonely candles with 24-hour gaps where NT8's own chart shows nothing (NT8's
+// 1m for the contract starts 09-11 05:29). The planner and every other reader
+// keep the full store; only the dashboard splice filters them.
+func BarsWithStoreDepthDisplay(ring []market.Kline, st *store.Store, contract, symbol, tf string, n int, now time.Time) []market.Kline {
+	if st == nil || st.BarHistory() == nil || strings.TrimSpace(contract) == "" {
+		return ring
+	}
+	reader := func(n int) ([]market.Kline, error) {
+		rows, err := st.BarHistory().LastNBarsOn(symbol, tf, contract, n)
+		if err != nil {
+			return nil, err
+		}
+		kept := rows[:0:0]
+		for _, r := range rows {
+			if r.Source == store.BarSourceHistoricalImport {
+				continue
+			}
+			kept = append(kept, r)
+		}
+		return storeRowsToKlines(kept, tf), nil
+	}
+	return barsWithStoreDepthFrom(ring, reader, symbol, tf, n, now)
+}
+
 // storeBarReader returns the store read as a closure, so barsWithStoreDepthFrom
 // — the merge that actually matters — is driven by pins rather than by a copy
 // of itself (class 86). A nil store yields a reader that reports UNAVAILABLE

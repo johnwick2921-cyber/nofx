@@ -97,7 +97,14 @@ func TestKlinesNinjaTraderStoreDepthContractFiltered(t *testing.T) {
 	for i := 4; i <= 6; i++ {
 		rows = append(rows, store.BarHistoryDB{Symbol: "MNQ", TF: "1m", OpenTimeMs: older(i), O: -1, H: -1, L: -1, C: -1, V: 1, Contract: "MNQ 09-26", Source: store.BarSourceLive})
 	}
+	// A wave-101 bulk-import snapshot OLDER than everything else, sentinel
+	// Close=50: honest store history, but the DISPLAY chart must skip it.
+	// (Imports ride ImportBars — InsertBars refuses historical_import.)
+	snapshot := store.BarHistoryDB{Symbol: "MNQ", TF: "1m", OpenTimeMs: older(7), O: 50, H: 50, L: 50, C: 50, V: 1, Contract: "MNQ 12-26", Source: store.BarSourceHistoricalImport}
 	if err := st.BarHistory().InsertBars(rows); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := st.BarHistory().ImportBars([]store.BarHistoryDB{snapshot}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -115,6 +122,9 @@ func TestKlinesNinjaTraderStoreDepthContractFiltered(t *testing.T) {
 	for _, k := range out {
 		if k.Close < 0 {
 			t.Fatalf("a retired-contract (09-26) bar was served: %+v", k)
+		}
+		if k.Close == 50 {
+			t.Fatalf("a historical_import snapshot rendered on the display chart: %+v", k)
 		}
 	}
 }
