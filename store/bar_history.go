@@ -549,3 +549,30 @@ func (s *BarHistoryStore) LastNBarsOn(symbol, tf, contract string, n int) ([]Bar
 	}
 	return desc, nil
 }
+
+// ImportSnapshotTimes returns the open times of historical_import rows for
+// (symbol, tf, contract) — the sparse wave-101 pull snapshots. The DISPLAY
+// seam (BarsWithStoreDepthDisplay) uses this set to drop the same sparse bars
+// when NT8's own BarsRequest seed served them INTO the ring: the store-side
+// splice filter only sees rows it read, but the ring carries the snapshots too
+// (measured 2026-09-14: MNQ 12-26 1m's first four ring bars were the import
+// snapshots at 09-07 17:00 / 09-08·09·10 21:00Z, where NT8's chart renders
+// nothing). Empty contract = unfiltered, mirroring LastNBarsOn.
+func (s *BarHistoryStore) ImportSnapshotTimes(symbol, tf, contract string) (map[int64]bool, error) {
+	if s == nil || s.db == nil {
+		return nil, fmt.Errorf("store required")
+	}
+	var times []int64
+	q := s.db.Table("bars").Where("symbol = ? AND tf = ? AND source = ?", symbol, tf, BarSourceHistoricalImport)
+	if c := strings.TrimSpace(contract); c != "" {
+		q = q.Where("contract = ?", c)
+	}
+	if err := q.Pluck("open_time_ms", &times).Error; err != nil {
+		return nil, err
+	}
+	out := make(map[int64]bool, len(times))
+	for _, t := range times {
+		out[t] = true
+	}
+	return out, nil
+}

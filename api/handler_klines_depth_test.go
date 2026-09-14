@@ -160,6 +160,59 @@ func TestKlinesAggregatedDepthFillsEmptyBase(t *testing.T) {
 	}
 }
 
+// F1 (2026-09-14) — NT8's BarsRequest seed carries the sparse wave-101 import
+// snapshots INTO the ring itself; the store-side splice filter never sees
+// them. The display seam drops them by open time, so the chart's left edge
+// matches NT8's own chart (nothing rendered there).
+func TestKlinesNinjaTraderDisplayDropsRingImportSnapshots(t *testing.T) {
+	orig := market.FuturesBarsProvider
+	defer func() { market.FuturesBarsProvider = orig }()
+
+	st, err := store.New(filepath.Join(t.TempDir(), "klines-ring.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	if err := st.BarHistory().Migrate(); err != nil {
+		t.Fatal(err)
+	}
+
+	snap := time.Date(2026, 9, 7, 17, 0, 0, 0, time.UTC)
+	live := snap.Add(time.Minute)
+	// The ring holds BOTH the sparse snapshot (Close sentinel 50) and a live
+	// bar — exactly the measured live shape where the ring's left edge was the
+	// import snapshot.
+	market.FuturesBarsProvider = func(symbol, tf string, count int) []market.Kline {
+		return []market.Kline{
+			{OpenTime: snap.UnixMilli(), Open: 50, High: 50, Low: 50, Close: 50, Volume: 1},
+			{OpenTime: live.UnixMilli(), Open: 101, High: 102, Low: 100, Close: 101.5, Volume: 1},
+		}
+	}
+	// The same snapshot exists in the store as an import row (ImportBars — the
+	// only writer that accepts historical_import).
+	if _, _, err := st.BarHistory().ImportBars([]store.BarHistoryDB{{
+		Symbol: "MNQ", TF: "1m", OpenTimeMs: snap.UnixMilli(),
+		O: 50, H: 50, L: 50, C: 50, V: 1, Contract: "MNQ 12-26",
+		Source: store.BarSourceHistoricalImport,
+	}}); err != nil {
+		t.Fatal(err)
+	}
+
+	s := &Server{store: st}
+	out := s.getKlinesFromNinjaTrader("MNQ", "1m", 5)
+	if len(out) != 1 {
+		t.Fatalf("served %d bars, want 1 — the ring's import snapshot must be dropped from the display chart: %+v", len(out), out)
+	}
+	if out[0].OpenTime != live.UnixMilli() {
+		t.Fatalf("served bar at %d, want the live bar at %d", out[0].OpenTime, live.UnixMilli())
+	}
+	for _, k := range out {
+		if k.Close == 50 {
+			t.Fatalf("a historical_import snapshot rendered on the display chart: %+v", k)
+		}
+	}
+}
+
 // F1 — no store attached: the handler serves the ring exactly as before.
 func TestKlinesNinjaTraderNoStoreServesRing(t *testing.T) {
 	orig := market.FuturesBarsProvider
