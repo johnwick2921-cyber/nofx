@@ -80,3 +80,29 @@ func TestKlinesNinjaTraderNoStoreServesRing(t *testing.T) {
 		t.Fatalf("without a store the ring must pass through unchanged: %+v", out)
 	}
 }
+
+// F1 (2026-09-14) — the dashboard's 5,000-bar ask must SURVIVE the handler's
+// limit parsing. The global 1500 clamp was a Coinank constraint that was
+// silently also capping the ninjatrader path, so the store splice could never
+// fire on a warm ring.
+func TestResolveKlinesLimitPerExchange(t *testing.T) {
+	cases := []struct {
+		exchange string
+		limit    string
+		want     int
+	}{
+		{"ninjatrader", "5000", 5000},    // F1 dashboard ask survives
+		{"ninjatrader", "999999", 20000}, // ninjatrader ceiling, not Coinank's
+		{"NinjaTrader", "5000", 5000},    // case-insensitive
+		{"binance", "5000", 1500},        // Coinank cap unchanged
+		{"", "5000", 1500},               // default exchange inherits Coinank cap
+		{"binance", "abc", 1000},         // bad value → default
+		{"ninjatrader", "0", 1000},       // non-positive → default
+		{"", "", 1000},                   // missing → default
+	}
+	for _, tc := range cases {
+		if got := resolveKlinesLimit(tc.exchange, tc.limit); got != tc.want {
+			t.Errorf("resolveKlinesLimit(%q, %q) = %d, want %d", tc.exchange, tc.limit, got, tc.want)
+		}
+	}
+}
