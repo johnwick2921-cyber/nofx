@@ -20,6 +20,35 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+// resolveKlinesLimit parses and clamps the klines `limit` query per exchange.
+//
+// Coinank (and the other external providers routed through it) caps a request
+// at 1500 klines. The ninjatrader path serves from the live ring PLUS our own
+// bars store (F1, 2026-09-14 — the dashboard asks 5,000 so the store splice has
+// room past the 2,500-bar ring ceiling), so it keeps its own ceiling instead of
+// inheriting the Coinank one. A bad or missing value falls back to 1000.
+func resolveKlinesLimit(exchange, limitStr string) int {
+	const (
+		defaultLimit     = 1000
+		coinankMax       = 1500
+		ntKlinesMaxLimit = 20000 // bounded by store retention and payload size
+	)
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil || limit <= 0 {
+		return defaultLimit
+	}
+	if strings.EqualFold(strings.TrimSpace(exchange), "ninjatrader") {
+		if limit > ntKlinesMaxLimit {
+			return ntKlinesMaxLimit
+		}
+		return limit
+	}
+	if limit > coinankMax {
+		return coinankMax
+	}
+	return limit
+}
+
 // handleKlines K-line data (supports multiple exchanges via coinank)
 func (s *Server) handleKlines(c *gin.Context) {
 	// Get query parameters
@@ -31,18 +60,10 @@ func (s *Server) handleKlines(c *gin.Context) {
 
 	interval := c.DefaultQuery("interval", "5m")
 	exchange := c.DefaultQuery("exchange", "binance") // Default to binance for backward compatibility
-	limitStr := c.DefaultQuery("limit", "1000")
-	limit, err := strconv.Atoi(limitStr)
-	if err != nil || limit <= 0 {
-		limit = 1000
-	}
-
-	// Coinank API has a maximum limit of 1500 klines per request
-	if limit > 1500 {
-		limit = 1500
-	}
+	limit := resolveKlinesLimit(exchange, c.DefaultQuery("limit", "1000"))
 
 	var klines []market.Kline
+	var err error
 	exchangeLower := strings.ToLower(exchange)
 
 	// Route to appropriate data source based on exchange type
