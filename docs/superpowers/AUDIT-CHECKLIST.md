@@ -4671,3 +4671,21 @@ remain unchanged.
 721/11,302 touches have eligible geometry; model A 207 fills average -2.6039 net
 points. At the initial boot the mistakenly mandatory per-trade cap made admission zero; the owner subsequently clarified DAILY loss and removed that added requirement. This class establishes
 honest trade construction and refusal, not profitable trade selection.
+
+---
+
+**Class (number assigned at merge) — Platform rollover switched the data scale
+without a subscription-name change (2026-09-14).** Root cause: the C# AddOn
+stamps every bar frame with the contract name computed ONCE at subscribe time.
+On 2026-09-14 the owner rolled MNQ in NT8's Database Management at 10:30 CT;
+NT8's rolling instrument started serving December data under the still-live
+September BarsRequest, so bars carried December prices wearing the September
+label (a +303.25-point 1m candle at 15:26 UTC) and the Go roll detector — keyed
+on the `subscribed` ACK name change — never fired, so the ring was not purged
+and ~16 minutes of mixed-scale rows persisted. Probe: on every roll, compare the
+ACK-named contract against the newest live bar's price scale (or re-derive the
+frame label per bar / force re-resolve on platform roll). Law: the contract
+label on the wire must be re-derived per emission, never cached for the life of
+a subscription; a data-scale switch without a name change is the same defect as
+a name change without a purge. Resolution that day: full NT8 restart → fresh
+ACK naming MNQ 12-26 → roll wave purged and reseeded correctly.
