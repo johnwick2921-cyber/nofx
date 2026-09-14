@@ -214,7 +214,9 @@ export function AdvancedChart({
   // Fetch kline data from service
   const fetchKlineData = async (symbol: string, interval: string) => {
     try {
-      const limit = 1500
+      // F1 (2026-09-14) — ask past the 2,500-bar ring ceiling so the backend
+      // splices the store's contract-filtered depth onto the older end.
+      const limit = 5000
       const klineUrl = `/api/klines?symbol=${symbol}&interval=${interval}&limit=${limit}&exchange=${exchange}`
       const result = await httpClient.request(klineUrl, { silent: true })
 
