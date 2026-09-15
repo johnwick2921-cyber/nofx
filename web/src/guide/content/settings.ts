@@ -23,8 +23,7 @@ const dayPlan: KnobSpec[] = [
   },
   {
     label: 'One setup (switch)',
-    where:
-      'Strategy → Day Plan → one_setup_enabled (saved config; no slider yet)',
+    where: 'Strategy → Day Plan → One setup (switch) + min grade (A/B/C)',
     what: 'The book arms ONE play — the fade (reject) — at the best level near price, only on a permitted day. Gates arm AUTHORIZATION only; never cancels a resting arm, never places. The follow side is recorded, never armed.',
     trader:
       'ON [O] by default (an unset strategy reads ON — the field is a tri-state so an unset value is never read as OFF). OFF restores the wide book byte-identically (pinned against a golden generated before the wave existed).',
@@ -412,14 +411,21 @@ const risk: KnobSpec[] = [
   },
   {
     label: 'Automatic structural stop and target',
-    where: 'Day Plan → stop buffer; Risk Control → existing daily loss controls',
+    where:
+      'Day Plan → stop buffer; Risk Control → existing daily loss controls',
     what: 'A reject fade uses the far edge of its frozen entry zone plus the resolved buffer. The first distinct eligible target zone supplies the target. Prices are fixed before the admission checks; a failed ratio refuses the trade.',
-    trader: 'Missing structural provenance records ATR fallback but refuses entry. The owner controls daily loss through the existing daily guardrails; no separate per-trade dollar cap is required. One MNQ cannot be resized into a smaller trade. The ATR multiplier remains 1.5 but never overrides an available structural stop.',
-    consumer: 'store/structural_geometry.go:ResolveStructuralStop · trader/structural_geometry.go:ComposeLevelFadeGeometry · trader/armed_executor.go',
-    range: 'Measured training grid: 0.25, 1.25 and 4.50 MNQ points. No externally validated universal buffer.',
-    systemDefault: '4.50 points [I], outward-rounded p95 of 6,181 in-sample held touches. Daily-loss settings retain their existing value and switches.',
-    recommended: '[I]/[T] a codeable research candidate, not a validated replacement. No external evidence fixes its buffer or proves that it will turn the losing book positive.',
-    whenToTouch: 'Choose a buffer only after judging the full corrected sweep. The system calculates the stop price; daily-loss controls are separate. Do not change either price merely to pass 2R.',
+    trader:
+      'Missing structural provenance records ATR fallback but refuses entry. The owner controls daily loss through the existing daily guardrails; no separate per-trade dollar cap is required. One MNQ cannot be resized into a smaller trade. The ATR multiplier remains 1.5 but never overrides an available structural stop.',
+    consumer:
+      'store/structural_geometry.go:ResolveStructuralStop · trader/structural_geometry.go:ComposeLevelFadeGeometry · trader/armed_executor.go',
+    range:
+      'Measured training grid: 0.25, 1.25 and 4.50 MNQ points. No externally validated universal buffer.',
+    systemDefault:
+      '4.50 points [I], outward-rounded p95 of 6,181 in-sample held touches. Daily-loss settings retain their existing value and switches.',
+    recommended:
+      '[I]/[T] a codeable research candidate, not a validated replacement. No external evidence fixes its buffer or proves that it will turn the losing book positive.',
+    whenToTouch:
+      'Choose a buffer only after judging the full corrected sweep. The system calculates the stop price; daily-loss controls are separate. Do not change either price merely to pass 2R.',
     perSession: 'No.',
   },
   {
