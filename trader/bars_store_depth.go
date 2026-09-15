@@ -86,13 +86,17 @@ func BarsWithStoreDepth(ring []market.Kline, st *store.Store, contract, symbol, 
 	return barsWithStoreDepthFrom(ring, reader, symbol, tf, n, now)
 }
 
-// BarsWithStoreDepthDisplay is BarsWithStoreDepth for CHART DISPLAY: it skips
-// historical_import rows. Wave-101 bulk imports are sparse snapshots (measured
-// 2026-09-14: MNQ 12-26 1m had ONE bar per day at 09-07 17:00, 09-08/09/10
-// 21:00) — honest history for the store, but on a chart they render as four
-// lonely candles with 24-hour gaps where NT8's own chart shows nothing (NT8's
-// 1m for the contract starts 09-11 05:29). The planner and every other reader
-// keep the full store; only the dashboard splice filters them.
+// BarsWithStoreDepthDisplay is BarsWithStoreDepth for CHART DISPLAY: it keeps
+// historical_import rows EXCEPT isolated ones. Wave-101 bulk imports are sparse
+// snapshots (measured 2026-09-14: MNQ 12-26 1m had ONE bar per day at
+// 09-07 17:00, 09-08/09/10 21:00) — honest history for the store, but on a
+// chart they render as lonely candles with 24-hour gaps where NT8's own chart
+// shows nothing. The dense history import (F1 hole fill, 2026-09-14) is the
+// SAME source flag, so a source filter can no longer tell the two apart: an
+// import bar is dropped only when it is ISOLATED in the merged display series
+// (both neighbors farther than 3× the TF span, a missing neighbor counting as
+// far). A dense import fill renders; a lonely snapshot does not. The planner
+// and every other reader keep the full store, untouched.
 func BarsWithStoreDepthDisplay(ring []market.Kline, st *store.Store, contract, symbol, tf string, n int, now time.Time) []market.Kline {
 	if st == nil || st.BarHistory() == nil || strings.TrimSpace(contract) == "" {
 		return ring
@@ -102,30 +106,49 @@ func BarsWithStoreDepthDisplay(ring []market.Kline, st *store.Store, contract, s
 		if err != nil {
 			return nil, err
 		}
-		kept := rows[:0:0]
-		for _, r := range rows {
-			if r.Source == store.BarSourceHistoricalImport {
-				continue
-			}
-			kept = append(kept, r)
-		}
-		return storeRowsToKlines(kept, tf), nil
+		return storeRowsToKlines(rows, tf), nil
 	}
 	out := barsWithStoreDepthFrom(ring, reader, symbol, tf, n, now)
-	// The RING side of the display: NT8's own BarsRequest seed carries the
-	// same sparse import snapshots (measured 2026-09-14: the four 1m bars at
-	// 09-07 17:00 / 09-08·09·10 21:00Z arrived in the RING, not in the
-	// splice — the store-side filter above never sees them). Filter by open
-	// time against the store's import rows: the bars key is (symbol, tf,
-	// open_time_ms), so a matched timestamp is either the import row or
-	// nothing, and a matching ring bar is dropped whatever its values.
+	// The RING side too: NT8's own BarsRequest seed carries the same sparse
+	// import snapshots (measured 2026-09-14: the four 1m bars at 09-07 17:00 /
+	// 09-08·09·10 21:00Z arrived in the RING, not in the splice). The bars key
+	// is (symbol, tf, open_time_ms), so a matched timestamp is either the
+	// import row or nothing — but only an ISOLATED one is dropped, by the same
+	// neighbor test as the store side.
 	drop, err := st.BarHistory().ImportSnapshotTimes(symbol, tf, contract)
 	if err != nil || len(drop) == 0 {
 		return out
 	}
-	kept := make([]market.Kline, 0, len(out))
-	for _, k := range out {
-		if drop[k.OpenTime] {
+	return dropIsolatedImportSnapshots(out, drop, importIsolationGap(tf))
+}
+
+// importIsolationGap is the neighbor distance that makes an import bar
+// "isolated" on the display chart: 3× the TF span. Dense history (1m gap) is
+// never isolated; the wave-101 one-bar-per-day snapshots are.
+func importIsolationGap(tf string) int64 {
+	mins := market.TFMinutes(tf)
+	if mins <= 0 {
+		mins = 1
+	}
+	return 3 * int64(mins) * 60000
+}
+
+// dropIsolatedImportSnapshots removes import-marked bars only when BOTH
+// neighbors are farther than gap away (a missing neighbor counts as far).
+// `in` must be ascending by OpenTime — the seam's merge contract.
+func dropIsolatedImportSnapshots(in []market.Kline, snap map[int64]bool, gap int64) []market.Kline {
+	if len(in) == 0 {
+		return in
+	}
+	kept := make([]market.Kline, 0, len(in))
+	for i, k := range in {
+		if !snap[k.OpenTime] {
+			kept = append(kept, k)
+			continue
+		}
+		prevFar := i == 0 || in[i-1].OpenTime < k.OpenTime-gap
+		nextFar := i == len(in)-1 || in[i+1].OpenTime > k.OpenTime+gap
+		if prevFar && nextFar {
 			continue
 		}
 		kept = append(kept, k)

@@ -178,10 +178,10 @@ func TestKlinesNinjaTraderDisplayDropsRingImportSnapshots(t *testing.T) {
 	}
 
 	snap := time.Date(2026, 9, 7, 17, 0, 0, 0, time.UTC)
-	live := snap.Add(time.Minute)
+	live := snap.Add(60 * time.Minute)
 	// The ring holds BOTH the sparse snapshot (Close sentinel 50) and a live
-	// bar — exactly the measured live shape where the ring's left edge was the
-	// import snapshot.
+	// bar an HOUR later — the snapshot is isolated in the merged series, which
+	// is what makes it droppable; a dense import is not (separate pin below).
 	market.FuturesBarsProvider = func(symbol, tf string, count int) []market.Kline {
 		return []market.Kline{
 			{OpenTime: snap.UnixMilli(), Open: 50, High: 50, Low: 50, Close: 50, Volume: 1},
@@ -209,6 +209,55 @@ func TestKlinesNinjaTraderDisplayDropsRingImportSnapshots(t *testing.T) {
 	for _, k := range out {
 		if k.Close == 50 {
 			t.Fatalf("a historical_import snapshot rendered on the display chart: %+v", k)
+		}
+	}
+}
+
+// F1 (2026-09-14) — the dense history import is the SAME source flag as the
+// sparse wave-101 snapshots: a source filter can no longer tell them apart.
+// The display seam keeps dense import fills (neighbors within 3×TF) and drops
+// only isolated ones — otherwise the 09-11 hole fill would be invisible.
+func TestKlinesNinjaTraderDisplayKeepsDenseImportHistory(t *testing.T) {
+	orig := market.FuturesBarsProvider
+	defer func() { market.FuturesBarsProvider = orig }()
+
+	st, err := store.New(filepath.Join(t.TempDir(), "klines-dense.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	if err := st.BarHistory().Migrate(); err != nil {
+		t.Fatal(err)
+	}
+
+	now := time.Date(2026, 9, 14, 10, 0, 0, 0, time.UTC)
+	market.FuturesBarsProvider = func(symbol, tf string, count int) []market.Kline {
+		return []market.Kline{{OpenTime: now.UnixMilli(), Open: 100, High: 101, Low: 99, Close: 100.5, Volume: 1}}
+	}
+	// Dense import fill: three consecutive minutes strictly older than the
+	// ring's oldest bar.
+	var rows []store.BarHistoryDB
+	for i := 3; i >= 1; i-- {
+		rows = append(rows, store.BarHistoryDB{
+			Symbol: "MNQ", TF: "1m", OpenTimeMs: now.Add(-time.Duration(i) * time.Minute).UnixMilli(),
+			O: 90, H: 91, L: 89, C: 90.5, V: 1, Contract: "MNQ 12-26", Source: store.BarSourceHistoricalImport,
+		})
+	}
+	if _, _, err := st.BarHistory().ImportBars(rows); err != nil {
+		t.Fatal(err)
+	}
+
+	s := &Server{store: st}
+	out := s.getKlinesFromNinjaTrader("MNQ", "1m", 5)
+	if len(out) != 4 {
+		t.Fatalf("served %d bars, want 4 (3 dense import + 1 ring): %+v", len(out), out)
+	}
+	if out[0].OpenTime != now.Add(-3*time.Minute).UnixMilli() {
+		t.Fatalf("oldest served %d, want the dense import's oldest minute %d", out[0].OpenTime, now.Add(-3*time.Minute).UnixMilli())
+	}
+	for i := 1; i < len(out); i++ {
+		if out[i].OpenTime != out[i-1].OpenTime+60000 {
+			t.Fatalf("dense import rendered with a hole at index %d: %+v", i, out)
 		}
 	}
 }
