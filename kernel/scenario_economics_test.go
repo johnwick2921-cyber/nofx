@@ -179,6 +179,58 @@ func TestScenarioEconomicsExceptionTickAndShortMirror(t *testing.T) {
 	}
 }
 
+// R4 (owner ruling 2026-09-15): a misstated r_to_arm_target whose computed
+// value is at or above the minimum floor is auto-corrected and accepted, not
+// refused. The strict contradiction survives for sub-floor computed R and for
+// call sites that pass no floor (stored readers, offline validator).
+func TestScenarioEconomicsOverMinAutoCorrected(t *testing.T) {
+	before := ScenarioEconomicsCounters()
+	raw := economicsRaw(t, 265, "S2")
+	s := economicsScenario(raw)
+	e := s["economics"].(map[string]any)
+	e["r_to_arm_target"] = 2.0 // rounded shorthand; the true value is well above 2
+	e["target_path_exception"] = "R4 auto-correct test"
+	doc, err := ParsePlanDocCappedWithMinRR(economicsJSON(t, raw), 12, 5, 2.0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	after := ScenarioEconomicsCounters()
+	if after.Corrected != before.Corrected+1 || after.Contradictions != before.Contradictions {
+		t.Fatalf("over-min mismatch must correct, not refuse: %+v -> %+v", before, after)
+	}
+	got := doc.Scenarios[0].Economics.RToArmTarget
+	want := EconomicsFor(doc.Scenarios[0]).ArmR
+	if got == nil || want == nil || math.Abs(*got-*want) > 1e-9 {
+		t.Fatalf("stated R was not corrected to computed: stated=%v computed=%v", got, want)
+	}
+}
+
+func TestScenarioEconomicsUnderMinStillRefused(t *testing.T) {
+	raw := economicsRaw(t, 265, "S2")
+	s := economicsScenario(raw)
+	e := s["economics"].(map[string]any)
+	arm := s["arm"].(map[string]any)
+	entry, stop := arm["entry"].(float64), arm["stop"].(float64)
+	risk := math.Abs(entry - stop)
+	arm["target"] = entry + 1.9*risk // computed R 1.9 < floor 2.0
+	e["r_to_arm_target"] = 2.5       // claimed above the floor
+	e["target_path_exception"] = "R4 lie-direction test"
+	if _, err := ParsePlanDocCappedWithMinRR(economicsJSON(t, raw), 12, 5, 2.0); err == nil || !strings.Contains(err.Error(), "disagrees") {
+		t.Fatalf("sub-floor computed R must stay refused: %v", err)
+	}
+}
+
+func TestScenarioEconomicsZeroMinStrict(t *testing.T) {
+	raw := economicsRaw(t, 265, "S2")
+	s := economicsScenario(raw)
+	e := s["economics"].(map[string]any)
+	e["r_to_arm_target"] = 2.0
+	e["target_path_exception"] = "R4 zero-floor test"
+	if _, err := ParsePlanDocCappedWithMinRR(economicsJSON(t, raw), 12, 5, 0); err == nil || !strings.Contains(err.Error(), "disagrees") {
+		t.Fatalf("zero floor must keep the strict contradiction: %v", err)
+	}
+}
+
 func TestScenarioEconomicsLegacyViewAndNoVersionBypass(t *testing.T) {
 	raw := economicsRaw(t, 265, "S2")
 	s := economicsScenario(raw)
@@ -222,13 +274,13 @@ func TestScenarioEconomicsBootAndProductionWiring(t *testing.T) {
 	if !strings.Contains(line, "legacy UNKNOWN by design") {
 		t.Fatalf("boot must explain intentional legacy UNKNOWN: %s", line)
 	}
-	for _, w := range []string{"contract=on", "obstacle-required=on", fmt.Sprintf("target-path-coherent=%d/%d", c.PathCoherent, c.PathEvaluated), fmt.Sprintf("sub-1R-first-obstacle=%d", c.Sub1), fmt.Sprintf("role-use-disagreements=%d", c.RoleWarnings), fmt.Sprintf("contradictions refused=%d", c.Contradictions)} {
+	for _, w := range []string{"contract=on", "obstacle-required=on", fmt.Sprintf("target-path-coherent=%d/%d", c.PathCoherent, c.PathEvaluated), fmt.Sprintf("sub-1R-first-obstacle=%d", c.Sub1), fmt.Sprintf("role-use-disagreements=%d", c.RoleWarnings), fmt.Sprintf("contradictions refused=%d", c.Contradictions), fmt.Sprintf("corrected=%d", c.Corrected)} {
 		if !strings.Contains(line, w) {
 			t.Fatalf("boot not reading counters: %s missing %s", line, w)
 		}
 	}
 	// Call-site pins: moving/removing the call may leave the pure tests green.
-	for _, pin := range []struct{ path, call string }{{"levels_volume_boot.go", "logger.Info(ScenarioEconomicsBootLine())"}, {"../trader/auto_trader_planner.go", "kernel.ParsePlanDocCapped(raw, maxLevels, scenarioCap)"}} {
+	for _, pin := range []struct{ path, call string }{{"levels_volume_boot.go", "logger.Info(ScenarioEconomicsBootLine())"}, {"../trader/auto_trader_planner.go", "kernel.ParsePlanDocCappedWithMinRR(raw, maxLevels, scenarioCap, at.armMinRRFor(nil))"}} {
 		b, err := os.ReadFile(pin.path)
 		if err != nil {
 			t.Fatal(err)

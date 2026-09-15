@@ -453,7 +453,7 @@ func planGradeRank(g string) int {
 // schema at the SHIPPED caps (8 levels / 3 scenarios). Any failure → error, which
 // the planner treats as a retryable/fail-closed event.
 func ParsePlanDoc(raw string) (*PlanDoc, error) {
-	return parsePlanDocument(raw, 0, 0, false)
+	return parsePlanDocument(raw, 0, 0, false, 0)
 }
 
 // ParsePlanDocCapped is ParsePlanDoc with the RESOLVED config caps (max_levels,
@@ -461,11 +461,19 @@ func ParsePlanDoc(raw string) (*PlanDoc, error) {
 // pass validation instead of making every read fail-closed against the hardcoded
 // 8/3.
 func ParsePlanDocCapped(raw string, maxLevels, maxScenarios int) (*PlanDoc, error) {
-	return parsePlanDocument(raw, maxLevels, maxScenarios, true)
+	return parsePlanDocument(raw, maxLevels, maxScenarios, true, 0)
+}
+
+// ParsePlanDocCappedWithMinRR is ParsePlanDocCapped plus the resolved R:R floor
+// for new-authoring economics (R4, owner ruling 2026-09-15). An over-floor
+// misstated r_to_arm_target is auto-corrected to the computed value; minRR <= 0
+// keeps the strict contradiction refusal.
+func ParsePlanDocCappedWithMinRR(raw string, maxLevels, maxScenarios int, minRR float64) (*PlanDoc, error) {
+	return parsePlanDocument(raw, maxLevels, maxScenarios, true, minRR)
 }
 
 // The boolean is a trusted call-site boundary, never a JSON version switch.
-func parsePlanDocument(raw string, maxLevels, maxScenarios int, newAuthoring bool) (*PlanDoc, error) {
+func parsePlanDocument(raw string, maxLevels, maxScenarios int, newAuthoring bool, minRR float64) (*PlanDoc, error) {
 	js := extractJSONObject(raw)
 	if js == "" {
 		return nil, fmt.Errorf("no JSON object found in planner output")
@@ -478,7 +486,7 @@ func parsePlanDocument(raw string, maxLevels, maxScenarios int, newAuthoring boo
 		return nil, err
 	}
 	if newAuthoring && scenarioEconomicsRequired {
-		if err := validateNewScenarioEconomics(&doc); err != nil {
+		if err := validateNewScenarioEconomics(&doc, minRR); err != nil {
 			return nil, err
 		}
 	}

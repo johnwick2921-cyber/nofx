@@ -126,7 +126,7 @@ func shadowABLine(n, target int, session, tradeDate string, v ShadowABVerdict, l
 // have been rejected for. It writes nothing.
 func (at *AutoTrader) shadowVerdictFor(raw string, maxLevels, scenarioCap int, facts kernel.PlanFacts, machineLabels, htfLabels map[float64]string, requiredBias string) (bool, []string) {
 	var reasons []string
-	d, perr := kernel.ParsePlanDocCapped(raw, maxLevels, scenarioCap)
+	d, perr := kernel.ParsePlanDocCappedWithMinRR(raw, maxLevels, scenarioCap, at.armMinRRFor(nil))
 	if perr != nil {
 		return false, []string{"parse/schema: " + perr.Error()}
 	}
