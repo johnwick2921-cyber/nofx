@@ -4,7 +4,7 @@
 import type { ReactNode } from 'react'
 
 // Stamped from the clean structural-stop release binary; see the release report.
-export const GUIDE_BUILT_REV = '70092c7f7d17ebb033cfa6c3c5e62610e38f62d7'
+export const GUIDE_BUILT_REV = '3ce4281a4b6b866496f8dfe6a06d8983dea62a18'
 
 export interface Card {
   title: string
