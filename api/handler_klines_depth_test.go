@@ -262,6 +262,58 @@ func TestKlinesNinjaTraderDisplayKeepsDenseImportHistory(t *testing.T) {
 	}
 }
 
+// F1 (2026-09-14) — NT8's local seed has INTERIOR holes (NT8 was off 09-11
+// 09:06-12:45) that the history import filled in the STORE. The display seam
+// interleaves store bars into ring holes so the chart is continuous — the
+// ring keeps every timestamp it holds, the store only fills the gaps.
+func TestKlinesNinjaTraderDisplayFillsRingHoles(t *testing.T) {
+	orig := market.FuturesBarsProvider
+	defer func() { market.FuturesBarsProvider = orig }()
+
+	st, err := store.New(filepath.Join(t.TempDir(), "klines-hole.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = st.Close() }()
+	if err := st.BarHistory().Migrate(); err != nil {
+		t.Fatal(err)
+	}
+
+	base := time.Date(2026, 9, 14, 10, 0, 0, 0, time.UTC)
+	// The ring has a 5-minute interior hole: 10:00 and 10:05.
+	market.FuturesBarsProvider = func(symbol, tf string, count int) []market.Kline {
+		return []market.Kline{
+			{OpenTime: base.UnixMilli(), Open: 100, High: 101, Low: 99, Close: 100.5, Volume: 1},
+			{OpenTime: base.Add(5 * time.Minute).UnixMilli(), Open: 105, High: 106, Low: 104, Close: 105.5, Volume: 1},
+		}
+	}
+	// The store holds the missing minutes (dense import fill).
+	var rows []store.BarHistoryDB
+	for i := 1; i <= 4; i++ {
+		rows = append(rows, store.BarHistoryDB{
+			Symbol: "MNQ", TF: "1m", OpenTimeMs: base.Add(time.Duration(i) * time.Minute).UnixMilli(),
+			O: 101, H: 102, L: 100, C: 101.5, V: 1, Contract: "MNQ 12-26", Source: store.BarSourceHistoricalImport,
+		})
+	}
+	if _, _, err := st.BarHistory().ImportBars(rows); err != nil {
+		t.Fatal(err)
+	}
+
+	s := &Server{store: st}
+	out := s.getKlinesFromNinjaTrader("MNQ", "1m", 10)
+	if len(out) != 6 {
+		t.Fatalf("served %d bars, want 6 (2 ring + 4 store fill): %+v", len(out), out)
+	}
+	for i := 1; i < len(out); i++ {
+		if out[i].OpenTime != out[i-1].OpenTime+60000 {
+			t.Fatalf("ring hole not filled at index %d: %+v", i, out)
+		}
+	}
+	if out[0].OpenTime != base.UnixMilli() || out[5].OpenTime != base.Add(5*time.Minute).UnixMilli() {
+		t.Fatalf("ring edges displaced: %+v", out)
+	}
+}
+
 // F1 — no store attached: the handler serves the ring exactly as before.
 func TestKlinesNinjaTraderNoStoreServesRing(t *testing.T) {
 	orig := market.FuturesBarsProvider

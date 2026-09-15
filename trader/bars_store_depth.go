@@ -1,6 +1,7 @@
 package trader
 
 import (
+	"sort"
 	"strings"
 	"time"
 
@@ -109,9 +110,21 @@ func BarsWithStoreDepthDisplay(ring []market.Kline, st *store.Store, contract, s
 		return storeRowsToKlines(rows, tf), nil
 	}
 	out := barsWithStoreDepthFrom(ring, reader, symbol, tf, n, now)
-	// The RING side too: NT8's own BarsRequest seed carries the same sparse
-	// import snapshots (measured 2026-09-14: the four 1m bars at 09-07 17:00 /
-	// 09-08·09·10 21:00Z arrived in the RING, not in the splice). The bars key
+	// F1 hole-fill (2026-09-14): NT8's local seed has INTERIOR holes (measured
+	// 09-11 09:06-12:45 — NT8 was off that window) that the history import
+	// filled in the STORE. The ring also holds the sparse snapshot bars at its
+	// left edge, so the "strictly older" splice above can never fire for them
+	// (nothing in the store predates the ring's oldest). Interleave store rows
+	// into ring holes: a store row is inserted only where the ring has NO bar
+	// at that open time — the ring wins every collision, the live tail is
+	// untouched, and both sides are the same 12-26 scale.
+	stored, err := st.BarHistory().LastNBarsOn(symbol, tf, contract, n)
+	if err == nil && len(stored) > 0 {
+		out = mergeStoreIntoRingHoles(out, storeRowsToKlines(stored, tf), n)
+	}
+	// The RING side of the sparse-snapshot filter: NT8's own BarsRequest seed
+	// carries the wave-101 import snapshots (the four 1m bars at 09-07 17:00 /
+	// 09-08·09·10 21:00Z arrive IN the ring, not in the splice). The bars key
 	// is (symbol, tf, open_time_ms), so a matched timestamp is either the
 	// import row or nothing — but only an ISOLATED one is dropped, by the same
 	// neighbor test as the store side.
@@ -120,6 +133,33 @@ func BarsWithStoreDepthDisplay(ring []market.Kline, st *store.Store, contract, s
 		return out
 	}
 	return dropIsolatedImportSnapshots(out, drop, importIsolationGap(tf))
+}
+
+// mergeStoreIntoRingHoles interleaves store bars into ring holes: every stored
+// bar whose open time is absent from the ring series is inserted, then the
+// series is re-sorted ascending and capped at n. Ring bars win every
+// timestamp collision (they are the live truth); the ring's oldest bar is
+// never displaced.
+func mergeStoreIntoRingHoles(ring []market.Kline, stored []market.Kline, n int) []market.Kline {
+	if len(stored) == 0 {
+		return ring
+	}
+	have := make(map[int64]bool, len(ring))
+	for _, k := range ring {
+		have[k.OpenTime] = true
+	}
+	out := ring
+	for _, k := range stored {
+		if have[k.OpenTime] {
+			continue
+		}
+		out = append(out, k)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].OpenTime < out[j].OpenTime })
+	if n > 0 && len(out) > n {
+		out = out[len(out)-n:]
+	}
+	return out
 }
 
 // importIsolationGap is the neighbor distance that makes an import bar
