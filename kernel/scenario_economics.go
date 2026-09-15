@@ -110,7 +110,7 @@ func EconomicsSummary(s PlanScenario) string {
 	return fmt.Sprintf("%s obstacle=%s response=%s arm-target=%s · obstacle R=%s · arm R=%s%s", s.ID, obstacle, response, target, economicsNumber(v.ObstacleR), economicsNumber(v.ArmR), mark)
 }
 
-type ScenarioEconomicsCounts struct{ Checked, PathEvaluated, PathCoherent, Sub1, RoleWarnings, Contradictions, SchemaRefusals uint64 }
+type ScenarioEconomicsCounts struct{ Checked, PathEvaluated, PathCoherent, Sub1, RoleWarnings, Contradictions, Corrected, SchemaRefusals uint64 }
 
 var economicsCounts struct {
 	sync.Mutex
@@ -131,16 +131,19 @@ func ScenarioEconomicsBootLine() string {
 	if scenarioObstacleRequired {
 		required = "on"
 	}
-	return fmt.Sprintf("📐 scenario economics: contract=%s · obstacle-required=%s · target-path-coherent=%d/%d · sub-1R-first-obstacle=%d · role-use-disagreements=%d · contradictions refused=%d · schema refusals=%d · checked=%d (new-authoring checks since boot; legacy UNKNOWN by design)", contract, required, c.PathCoherent, c.PathEvaluated, c.Sub1, c.RoleWarnings, c.Contradictions, c.SchemaRefusals, c.Checked)
+	return fmt.Sprintf("📐 scenario economics: contract=%s · obstacle-required=%s · target-path-coherent=%d/%d · sub-1R-first-obstacle=%d · role-use-disagreements=%d · contradictions refused=%d · corrected=%d · schema refusals=%d · checked=%d (new-authoring checks since boot; legacy UNKNOWN by design)", contract, required, c.PathCoherent, c.PathEvaluated, c.Sub1, c.RoleWarnings, c.Contradictions, c.Corrected, c.SchemaRefusals, c.Checked)
 }
 
 // validateNewScenarioEconomics is called at the existing model-output parser,
 // including retries/shadow authoring. It is never called by stored-plan readers.
-func validateNewScenarioEconomics(d *PlanDoc) error {
+// minRR is the resolved R:R floor (R4, owner ruling 2026-09-15): a misstated
+// r_to_arm_target whose computed value is at or above the floor is auto-corrected
+// and accepted; minRR <= 0 keeps the strict contradiction refusal.
+func validateNewScenarioEconomics(d *PlanDoc, minRR float64) error {
 	var errors []string
 	for i := range d.Scenarios {
 		s := &d.Scenarios[i]
-		issues, contradiction, pathKnown, pathCoherent := scenarioEconomicsIssues(*s)
+		issues, contradiction, pathKnown, pathCoherent, corrected := scenarioEconomicsIssues(*s, minRR)
 		v := EconomicsFor(*s)
 		warnings := scenarioRoleWarnings(*s, d.Levels)
 		// Record one complete observation atomically, so a concurrent boot/log
@@ -164,6 +167,9 @@ func validateNewScenarioEconomics(d *PlanDoc) error {
 				economicsCounts.values.SchemaRefusals++
 			}
 		}
+		if corrected {
+			economicsCounts.values.Corrected++
+		}
 		economicsCounts.Unlock()
 		if v.Sub1 {
 			warnings = append(warnings, "sub-1R first obstacle: fact only; target policy unchanged")
@@ -185,10 +191,10 @@ func validateNewScenarioEconomics(d *PlanDoc) error {
 
 // Geometry coherence, not target selection. The MNQ tick is read from the
 // instrument registry; comparison is in price units, never dimensionless R.
-func scenarioEconomicsIssues(s PlanScenario) (issues []string, contradiction, pathKnown, pathCoherent bool) {
+func scenarioEconomicsIssues(s PlanScenario, minRR float64) (issues []string, contradiction, pathKnown, pathCoherent, corrected bool) {
 	e := s.Economics
 	if e == nil {
-		return []string{"economics required for new authoring (including first_obstacle)"}, false, false, false
+		return []string{"economics required for new authoring (including first_obstacle)"}, false, false, false, false
 	}
 	if len(e.EntryZone) != 2 || !economicsPrice(e.EntryZone[0]) || !economicsPrice(e.EntryZone[1]) || e.EntryZone[0] > e.EntryZone[1] {
 		issues = append(issues, "entry_zone requires positive [low, high]")
@@ -224,6 +230,18 @@ func scenarioEconomicsIssues(s PlanScenario) (issues []string, contradiction, pa
 			continue
 		}
 		if r.computed != nil && math.Abs(*r.stated-*r.computed)*risk > tick+1e-8 {
+			// R4 (owner ruling 2026-09-15): an arm-target R at or above the
+			// minimum floor is AUTO-CORRECTED to the machine's computed value
+			// and accepted. The machine trusts its own math over the model's
+			// rounding; the downstream minimum gates (arm seam, entry gate,
+			// structural geometry) still refuse anything below the floor, so
+			// no protection is weakened. minRR <= 0 keeps the strict legacy
+			// refusal (stored readers / offline validator pass no floor).
+			if r.name == "r_to_arm_target" && minRR > 0 && *r.computed >= minRR {
+				*r.stated = *r.computed
+				corrected = true
+				continue
+			}
 			issues = append(issues, fmt.Sprintf("implied_r %s stated %.6f disagrees with geometry %.6f (entry %.2f stop %.2f; tolerance %.2f price points)", r.name, *r.stated, *r.computed, g.Entry, g.Stop, tick))
 			contradiction = true
 		}

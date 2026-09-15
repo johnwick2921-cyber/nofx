@@ -1602,7 +1602,7 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 			rejectHistory = addDistinctReject(rejectHistory, lastErr)
 			continue
 		}
-		d, perr := kernel.ParsePlanDocCapped(raw, maxLevels, scenarioCap)
+		d, perr := kernel.ParsePlanDocCappedWithMinRR(raw, maxLevels, scenarioCap, at.armMinRRFor(nil))
 		if perr != nil {
 			lastErr = perr
 			at.logWarnf("📐 planner attempt %d/3 parse/schema rejected: %v", attempt, perr)
