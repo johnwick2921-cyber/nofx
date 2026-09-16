@@ -50,8 +50,13 @@ Regime → Candles → Weekly → Indicators → void/floor/displacement → Ran
 levels → Consumed → FRESH FVGs → roles → Structure → HTF zones → Auction →
 Calendar → digests → owner note → prior invalidation → prior levels → anchors →
 BIAS-TREE (`:140` RenderBiasTree, branches `:163-170`) → chain → no-trade gates
-→ killzone → stop-doing → OUTPUT contract (`:743-835`: caps 8/3, ≥3 levels each
-side, exact labels, arm rules, entry law, economics 6-decimal R).
+→ killzone → stop-doing → OUTPUT contract (`:743-835`: caps = `resolvePlanCaps`,
+`kernel/plan_doc.go:388` — shipped defaults **8 levels / 3 scenarios**
+(planMaxLevels/planMaxScenarios :375-376), HARD ceilings **12/5**
+(PlanHardMaxLevels/PlanHardMaxScenarios :381-382). LIVE trader config
+(verified 09-16, read-only DB): `day_plan.max_levels=12`, `scenario_cap=5`;
+latest stored plan (LONDON 09-16 v11) actually carried **8 levels / 2
+scenarios**. ≥3 levels each side, exact labels, arm rules, entry law, economics 6-decimal R).
 
 Economics honesty (R4): `kernel/scenario_economics.go:139-228` — stated R must
 match computed within 1 tick in price units; **arm-R at/above min floor is
@@ -78,7 +83,9 @@ place-confirm → cancel-confirm → boot reconcile.
 
 Refusal classes (census `arm_refusals_0b:<trader>:<date>:<session>:<class>`):
 `invalidated, rr, min_sl, veto, daily_force_flat, consecutive_loss,
-no_trade_band, not_armable, other` + `geometry_<reason>` + `stop_entry:*` +
+no_trade_band, not_armable, other` + `geometry_<reason>` (a COUNTER suffix,
+never a journal line — the journal prints e.g. `🎯 geometry …` WARN at
+armed_executor.go:508) + `stop_entry:*` +
 `one_setup:*`.
 
 ## D. DECISION PIPELINE (legacy crypto cycle — runs, cannot open in strict futures)
