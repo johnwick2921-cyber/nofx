@@ -138,3 +138,10 @@ Marker: this commit, from `~/nofx`, `deploy/RELEASE=c6579347` (written by the ru
 - Live proof owed at the next scheduled boot: the `🧮 planner tape` line (import rows=426 on 12-26, Δ rows,
   Δ baseline), the `📈` line, the R1 line, and `🖥 … bundle-rev=<rev> matches the binary` once the f53f4e94
   dist is installed (or a later one built at the booted rev).
+
+**STAGED AND GREEN (not booted):** PR #135 merged fast-forward → dev `7e87a375`. Clean-clone binary at that
+sha: `scratchpad/cc101e/nofx/nofx-bin` — `vcs.revision=7e87a375…`, `vcs.modified=false`, dir `nofx`, md5
+`03a82609ff78e88bf83abc8ecbbf7969`, 73,554,832 bytes. Rides the NEXT scheduled boot (CTO ruling (b), no
+boot today); at that boot the dist built at the booted rev is installed alongside it (`GUIDE_BUILT_REV`
+stamp + dist build follow the 642f8808 precedent), and the proofs are: `🧮 planner tape` (import rows=426
+on 12-26, Δ rows, Δ baseline), `📈`, R1, and `🖥 … bundle-rev=<rev> matches the binary`.
