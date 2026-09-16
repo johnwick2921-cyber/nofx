@@ -55,9 +55,22 @@ bash deploy/nofx-lock.sh check
 # a lock — reclaim on the record.
 curl -s http://127.0.0.1:8080/api/health   # live rev
 sqlite3 -readonly /home/hoang/nofx/data/data.db "SELECT COUNT(*) FROM trader_positions WHERE status='OPEN';"
-tail -20 "$(ls -t /home/hoang/nofx/data/nofx_*.log | head -1)" | grep 'BOOT INTEGRITY OK' | tail -1
+grep -a 'BOOT INTEGRITY OK' "$(ls -t /home/hoang/nofx/data/nofx_*.log | head -1)" | tail -1
 # boot line comes from the app log FILE (named nofx_<date of boot>.log — the
-# date is computed once at Init, logger/logger.go:90), NOT from journald.
+# date is computed once at Init, logger/logger.go:90), NOT from journald. Do NOT
+# use `tail -20 | grep` — an hours-old boot line is outside the last 20 lines.
+```
+
+Observed outputs (worktree `nofx-handoff`, 2026-09-16 08:00 CT):
+
+```
+git status --porcelain → (empty; 0 lines)
+git rev-list --count HEAD..origin/dev → 0
+bash deploy/nofx-lock.sh check → free (rc 0)
+curl http://127.0.0.1:8080/api/health → {"revision":"3ce4281a4b6b","status":"ok"}
+sqlite3 … trader_positions WHERE status='OPEN' → 0
+grep 'BOOT INTEGRITY OK' newest nofx_*.log →
+  09-15 22:15:10 🔐 BOOT INTEGRITY OK — rev 3ce4281a4b6b · built 2026-09-15T20:09:23Z · expected 3ce4281a4b6b · goldens PASS
 ```
 
 **Canon precedence (tracked > mirrors):**
