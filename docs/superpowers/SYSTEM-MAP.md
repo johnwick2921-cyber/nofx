@@ -61,6 +61,41 @@ Visible brand (Dispatch 102): `branding/product.txt` = VL Intelligent; `branding
 
 **Boot lines:** `"tcp_server: listening"` `tcp_server.go:981` · `"wire_liveness"` `:1024` · `"tcp_server: hello handshake OK"` `:1713` · `"tcp_server: sent bars_subscribe"` `:1478` · `"tcp_server: feed status"` `:2028` · `"⚠️ %s %s: CME futures symbol but no NT8 bar provider wired; skipping"` `market/data.go:247`.
 
+**101 — history at subscribe, the scale check, and the chart across the roll (2026-09-16).**
+NT8 honours `bars_back` at subscribe: the AddOn's own `emitted bars_historical
+<key> bars=<n>` lines showed 2,000 per tf ≤ 30m, 1,536 for 1h, 69 for 1d at the
+09-15 22:15 boot — 13,054 MNQ bars. `📼 bar source: … historical=<n>` is a STORE
+census (rows by source; the replay-hold keeps replay rows out of the store by
+design), not a delivery count. The Go-side delivery count is now the `🧯 nt8
+history at subscribe:` line — per tf `received/asked`, `n/a` for no frame, and
+a ZERO frame called out by name (a BarsRequest that ran while the feed was down;
+five such reconnects on 09-16).
+
+**Non-1m rings are live + NT8-replay only.** The store rehydrate is 1m-only
+(`rehydrateTimeframe`, class 86, owner condition 2026-09-09). After a confirmed
+scale break the 🚨 line now says what the ring IS for that tf — "LIVE-ONLY UNTIL
+NT8's NEXT FULL REPLAY" for anything but 1m — and `telemetry.ScaleBreakCounts`
+records events and bars dropped since boot.
+
+**The scale check (bar_source.go `detectScaleMismatch`) judges ADJACENT bars
+only.** Its reference must lie within `scaleCheckAdjacencyIntervals` (2) of the
+live bar; older is a time gap, not a scale gap — SKIPPED, WARNed with both ages
+(`🕳 scale check SKIPPED …`), the seed kept and the check left armed. An EMPTY
+replay no longer re-arms the check (`SeedHistorical` returns before the re-arm
+on an empty frame onto a populated ring). Class 127 carries the 09-16 event.
+
+**The horizon WARN keys on the condition, not the observer:** (symbol, tf, why),
+one line per five minutes, callers aggregated on the line that closes the window.
+
+**The chart shows every stored contract [O].** `/api/klines` serves the current
+contract's ring + store, then prior contracts fill STRICTLY BEFORE the current
+contract's first LIVE row (`store.FirstLiveOn` / `PriorContractBarsBefore`,
+display-only); every kline carries `contract`; the roll is a visible basis step,
+never adjusted. `NOFX_CHART_ACROSS_ROLL=off` disables; the resolved value is on
+the `📈 chart:` boot line. **The bot decides on the current contract only** —
+`LastNBarsOn`/`BarsBetweenOn` are byte-identical and no kernel/levels/arm path
+calls the display readers (E4 grep: 0).
+
 ## 2 · LEVELS — detection, scoring, seating, roles
 
 **What it does:** detects ~30 level kinds across ELEVEN timeframes, scores them (evidence type × HTF zone tier × size × freshness × anchors), seats a per-trader TOTAL of `max_levels` into the plan (NOT per side — `levels_score.go:603-605` truncates the whole slice; `seatBothSides` rebalances WITHIN that total), and assigns roles.

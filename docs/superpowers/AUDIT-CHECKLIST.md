@@ -4689,3 +4689,54 @@ label on the wire must be re-derived per emission, never cached for the life of
 a subscription; a data-scale switch without a name change is the same defect as
 a name change without a purge. Resolution that day: full NT8 restart → fresh
 ACK naming MNQ 12-26 → roll wave purged and reseeded correctly.
+
+## CLASS 127 — A GUARD THAT COMPARES ACROSS A TIME GAP AND READS IT AS A SCALE GAP (born 2026-09-16, fix/nt8-history-and-chart-depth, dispatch 101)
+
+**Root cause.** A detector compares "the last replay bar" with "the first live
+bar" without asking whether the two are ADJACENT. After a long live run the
+last replay bar is hours old; any reconnect that re-arms the check hands it
+that stale reference, and an ordinary overnight move reads as a change of
+price scale. The response to a scale break is destructive (drop every replay
+bar for the key), so a false positive costs the whole seed — and the refill
+path (1m-only by an owner condition) cannot put it back.
+
+**The evidence (2026-09-16, MNQ 5m).** NT8 delivered 2,000 5m bars at 22:15
+CT on 09-15 (`emitted bars_historical MNQ|5M bars=2000` in the NT8 log; the
+Go-side `📼 historical=139` is a STORE census and was misread as a delivery
+count — that misreading was the dispatch's premise). The 5m horizon read
+`served=2131 span=285h55m` at 09:10. The feed flapped five times that morning;
+each reconnect's BarsRequest ran while the feed was down and emitted `bars=0`;
+`SeedHistorical` re-armed the scale check BEFORE its `len(bars)==0` return; at
+09:22:11 the next live bar (29467.25) was judged against the boot replay's last
+bar (22:10 the previous evening, 29320.50 — the store confirms the price),
+146.75 pts cleared the 0.5% line by 0.15 pt, and **1,999 5m and 1,832 1m
+historical bars were dropped**. Horizon after: `served=134 span=11h5m`.
+
+**Law.** A comparison between two bars is only a comparison when the bars are
+adjacent — within one or two intervals. A reference older than that is not a
+scale question, it is a time gap: SKIP, record both ages, say so (A9), leave
+the check ARMED for a later adjacent pair, never drop. And an EMPTY replay
+cannot re-arm anything: nothing to judge means nothing to arm. A destructive
+guard needs a stronger precondition than a non-destructive one, because its
+false positives are not free.
+
+**Probe.** For every "compare A with B" guard: does the code assert A and B are
+neighbours in time before comparing them? What does an empty input do to the
+guard's state? Replay the guard's own worst logged event as the fixture, with
+the clocks it actually saw. `provider/ninjatrader/scale_check_adjacency_test.go`
+is the worked example: the 09:22 event reproduced to the number, both 5m and
+1m, plus the rule that a real adjacent break still drops.
+
+**Corollary — a store census is not a delivery count.** `📼 bar source:
+live=57395 historical=139` counts ROWS BY SOURCE in the store; a 2,500-cap ring
+cannot hold 57,395 of anything. The replay-hold keeps replay rows OUT of the
+store by design, so "historical=139" says the hold is working, not that NT8
+sent 139 bars. Two lanes and a dispatch read it the other way. Read beside
+classes 82, 110 and 113: a number on a line is a claim about what the line
+counts, and the line has to say what that is.
+
+**Corollary — the dedupe key was the observer, not the condition.** The
+horizon WARN keyed on (symbol, tf, caller, requested, served, gaps); served
+grows by one per bar and requested differs per caller, so 8,258 lines fired
+since boot in a 5.1 GB log. The key is the CONDITION (symbol, tf, why); the
+callers are a list on the line.

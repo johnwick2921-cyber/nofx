@@ -84,6 +84,36 @@ Implementation: `store/bar_contract_roll.go`, `store/bar_history.go`
 rehydrate, the roll listener), `trader/contract_current.go`,
 `trader/bars_store_depth.go`, `trader/desk_facts.go` (MODE line).
 
+### The scale check judges neighbours; the chart shows every contract — implementation addition, awaiting cutover
+
+**Dispatch 101, 2026-09-16; recording and display only until its boot.** The
+scale comparison above is made only between ADJACENT bars — the replay's last
+bar and the live bar within two intervals of it. A reference older than that
+is a time gap, not a scale gap: the check is skipped, said once with both ages,
+the seed kept and the check left armed for a later adjacent pair. An empty
+replay (a reconnect whose BarsRequest ran while the feed was down) re-arms
+nothing. What this corrects: on 2026-09-16 at 09:22 CT a zero-bar reconnect
+replay re-armed the check, the next live bar was judged against the 22:10 bar
+from the previous evening, 146.75 points of overnight move read as a scale
+break, and 1,999 five-minute and 1,832 one-minute bars of history NT8 had
+delivered at 22:15 were dropped — the 5m horizon fell from 12 days to 11 hours
+for the life of the process. After a confirmed break the P0 line now says what
+the ring is for that timeframe: live-only until NT8's next full replay, because
+the store rehydrate is 1m-only by the owner's condition of 2026-09-09.
+
+The chart is served across contract rolls [O]: the current contract's bars,
+then prior contracts filling strictly before the current contract's first live
+bar, every bar labelled with its contract, the roll a visible basis step and
+never adjusted. **The book decides on the current contract only** — the
+contract-scoped readers are unchanged and nothing on the level, plan or arm
+path reads across the roll.
+
+Implementation: `provider/ninjatrader/bar_source.go` (adjacency, skips),
+`bar_cache.go` (empty replay), `history_at_subscribe.go` (the `🧯` line),
+`store/bar_history_across_roll.go` (display readers), `api/handler_klines.go`
+(`klinesAcrossRoll`, `NOFX_CHART_ACROSS_ROLL`), `trader/ninjatrader/bar_horizon_warn.go`
+(one WARN per condition per five minutes).
+
 ### Scenario identity — implementation addition, awaiting cutover
 
 **105, recording only; not yet live.** A scenario names its level by candidate id.
