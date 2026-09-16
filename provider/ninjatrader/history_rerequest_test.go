@@ -2,6 +2,7 @@ package ninjatrader
 
 import (
 	"encoding/json"
+	"errors"
 	"net"
 	"testing"
 	"time"
@@ -13,9 +14,11 @@ import (
 // The AddOn's N4 path already DISPOSES + RECREATES its BarsRequest on a repeat
 // bars_subscribe ("a fresh BarsRequest re-reads NT8's DB over the full
 // barsBack lookback"), so a Go-side re-send IS the re-request — no AddOn
-// change. Three pins: one frame per break; not twice inside the window (a
-// flapping feed must not storm the AddOn); nothing at all while the feed is
-// down (that is exactly how the 09-16 reconnects produced bars=0).
+// change. Three pins: one frame per break; ONCE PER SYMBOL PER BOOT — a
+// second break after a re-request is a diagnosis ("the replay is on another
+// contract"), and retrying it would re-pollute the ring every cycle (nofx-93's
+// objection 2); nothing at all while the feed is down (that is exactly how the
+// 09-16 reconnects produced bars=0).
 
 func readSubscribeFrame(t *testing.T, cli net.Conn, wait time.Duration) (BarsSubscribePayload, bool) {
 	t.Helper()
@@ -60,9 +63,11 @@ func TestConfirmedBreakRequestsAFreshReplayOnce(t *testing.T) {
 	if err := s.RequestHistoryReplayAt("MNQ", now); err != nil {
 		t.Fatalf("first re-request: %v", err)
 	}
-	// a second break on another tf of the same symbol, seconds later
-	if err := s.RequestHistoryReplayAt("MNQ", now.Add(5*time.Second)); err == nil {
-		t.Errorf("a second re-request inside the window must be refused (rate limit), got nil")
+	// a second break on the same symbol — seconds OR hours later — is refused
+	// and says why: the budget is per boot, not per window
+	err := s.RequestHistoryReplayAt("MNQ", now.Add(3*time.Hour))
+	if err == nil || !errors.Is(err, ErrHistoryReplaySpent) {
+		t.Errorf("a second re-request this boot must be refused as SPENT with the diagnosis, got %v", err)
 	}
 	var got []BarsSubscribePayload
 	for p := range done {
@@ -94,8 +99,8 @@ func TestReplayIsNotRequestedWhileTheFeedIsDown(t *testing.T) {
 	}
 }
 
-// Past the window the same symbol may ask again.
-func TestReplayRequestReArmsAfterTheWindow(t *testing.T) {
+// The budget is per SYMBOL: a break on ES after MNQ's re-request still asks.
+func TestReplayBudgetIsPerSymbol(t *testing.T) {
 	s := NewTCPServer(nil)
 	srv, cli := net.Pipe()
 	defer srv.Close()
@@ -115,7 +120,10 @@ func TestReplayRequestReArmsAfterTheWindow(t *testing.T) {
 	if err := s.RequestHistoryReplayAt("MNQ", t0); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.RequestHistoryReplayAt("MNQ", t0.Add(historyReplayMinInterval+time.Second)); err != nil {
-		t.Fatalf("past the window the symbol may ask again: %v", err)
+	if err := s.RequestHistoryReplayAt("ES", t0.Add(time.Second)); err != nil {
+		t.Fatalf("another symbol's first re-request must go: %v", err)
+	}
+	if s.HistoryReplaysSent("MNQ") != 1 || s.HistoryReplaysSent("ES") != 1 {
+		t.Fatalf("sent counts: MNQ=%d ES=%d, want 1/1 (READ by the summary line)", s.HistoryReplaysSent("MNQ"), s.HistoryReplaysSent("ES"))
 	}
 }

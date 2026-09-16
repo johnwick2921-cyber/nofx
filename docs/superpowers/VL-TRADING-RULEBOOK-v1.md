@@ -98,8 +98,17 @@ from the previous evening, 146.75 points of overnight move read as a scale
 break, and 1,999 five-minute and 1,832 one-minute bars of history NT8 had
 delivered at 22:15 were dropped — the 5m horizon fell from 12 days to 11 hours
 for the life of the process. After a confirmed break the P0 line now says what
-the ring is for that timeframe: live-only until NT8's next full replay, because
-the store rehydrate is 1m-only by the owner's condition of 2026-09-09.
+the ring is for that timeframe, and asks NT8 for its full replay again — once
+per symbol per boot. A second confirmed break in the same boot is not retried:
+the line says the replay is on another contract and the AddOn restart is the
+fix, and that ring stays live-only. (A timed retry would loop: the wrong-scale
+replay overwrites the store's rows every cycle until a live bar judges it.)
+
+Every timeframe's ring is refilled from the store at boot and after a drop
+["i want fuull data", 2026-09-16, superseding the 1m-only condition of
+2026-09-09], through one door: after a drop only live rows come back; every
+row enters as replay-grade, never as a live bar; imported history is refused
+at that door and counted on the boot line; the contract is the current one.
 
 The chart is served across contract rolls [O]: the current contract's bars,
 then prior contracts filling strictly before the current contract's first live
@@ -110,7 +119,9 @@ path reads across the roll.
 
 Implementation: `provider/ninjatrader/bar_source.go` (adjacency, skips),
 `bar_cache.go` (empty replay), `history_at_subscribe.go` (the `🧯` line),
-`store/bar_history_across_roll.go` (display readers), `api/handler_klines.go`
+`history_rerequest.go` (once-per-boot re-request), `trader/ninjatrader/bar_persist_wire.go`
+(`rehydrateRowsFor` — the door), `store/bar_history_across_roll.go` (display readers,
+the current contract excluded from "prior"), `api/handler_klines.go`
 (`klinesAcrossRoll`, `NOFX_CHART_ACROSS_ROLL`), `trader/ninjatrader/bar_horizon_warn.go`
 (one WARN per condition per five minutes).
 

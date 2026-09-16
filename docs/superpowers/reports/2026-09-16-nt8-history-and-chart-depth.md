@@ -102,7 +102,7 @@ Position 606 reads CLOSED, not OPEN as dispatched. The running binary's log path
 | **D1'(1)** an empty replay cannot re-arm the scale check | `bar_cache.go` | `TestZeroBarReplayDoesNotReArmTheScaleCheck` (5m+1m), `TestZeroBarReseedDoesNotRejudgeAVerifiedSeed` |
 | **D1'(2)** the check judges ADJACENT bars only (≤2 intervals); older → SKIP + WARN with both ages, stay armed | `bar_source.go`, `bar_persist_wire.go` | `TestStaleReferenceIsSkippedNotDropped`, `TestPastGapBackfillDoesNotDrop`; rule 3 `TestAdjacentRealBreakStillDrops` |
 | **D1'(3) narrow** a confirmed break is COUNTED and the P0 says "LIVE-ONLY UNTIL NT8's NEXT FULL REPLAY" for non-1m | `telemetry/scale_break.go`, `bar_persist_wire.go` | `TestScaleBreakDropIsCountedWithItsBars` |
-| **D2** chart across the roll, flag ON [O] | `store/bar_history_across_roll.go`, `api/handler_klines.go`, `market.Kline.Contract` (additive, omitempty) | `TestPriorContractsFillBehindTheCurrentContract`, `TestKlinesAcrossRollLabelsEveryBarAndKeepsTheStep`, `TestDecisionReadersStayCurrentContractOnly` |
+| **D2** chart across the roll, flag ON [O] | `store/bar_history_across_roll.go`, `api/handler_klines.go`, `market.Kline.Contract` (additive, omitempty) | `TestPriorContractsFillBehindTheCurrentContract`, `TestKlinesAcrossRollLabelsEveryBarAndKeepsTheStep`, `TestCurrentContractReaderReturnsImportsUnfiltered` (was `TestDecisionReadersStayCurrentContractOnly` — its 500 measured an empty set, §D'' below) |
 | **D3(b)** one horizon WARN per (symbol,tf,why) per 5 min, callers aggregated | `bar_horizon_warn.go` | `TestFourCallersInOneWindowEmitOneLineWithCallersAggregated`, `TestHorizonWindowIsFiveMinutesAndReArmsWithCallers` |
 | **E1** `🧯 nt8 history at subscribe:` per-tf received/asked, n/a for absent | `history_at_subscribe.go`, `tcp_server.go` (enqueue count) | `TestHistoryAtSubscribeLineRendersResolvedValues`, `…AbsentIsNotZero` |
 | **A12** class 127, SYSTEM-MAP bars section, RULEBOOK §A | docs | same commit |
@@ -128,6 +128,76 @@ A31 grep against the do-not-touch list: none. Class 100 deletions vs dev: none.
   the delete), which closes the 09-16 path; a NON-empty re-seed still clears it, which is
   correct (a new replay is a new verdict) but races the hold. Ordering the hold's read
   before the clear is 104's.
+
+## D'' · (3a)/(3b) — SHIPPED under the owner's direct word ("i want fuull data", 2026-09-16, in my chat)
+
+The CTO relayed the ruling first; I held (3a)/(3b) for the owner's own words per the dispatch's
+"GO comes from the owner in his chat". They came. Built to the CTO's amendment-2 spec, then
+**revised twice on nofx-93's review of `4099cc69` (both objections SUSTAINED by the CTO)**.
+
+| | what | files | pinned by |
+|---|---|---|---|
+| **(3a)** a CONFIRMED scale break re-requests NT8's full replay — **once per symbol per BOOT** | `history_rerequest.go`, `bar_persist_wire.go` | `TestConfirmedBreakRequestsAFreshReplayOnce` (two breaks → ONE frame, second refused as SPENT), `TestReplayIsNotRequestedWhileTheFeedIsDown`, `TestReplayBudgetIsPerSymbol` |
+| **(3b)** every symbol×tf pair rehydrates from the store at boot and after a drop, four guards | `bar_persist_wire.go` (`pairsToRehydrate`, `rehydrateRowsFor`, `rehydrateBarsFromRows`) | `TestRehydrateSelectsEveryPair` (was `TestRehydrateSelectsOnly1mPairs`, the class-86 pin, renamed never deleted), `TestRehydratedRowsEnterTheRingAsHistorical`, `TestPostDropRefillExcludesHistoricalRows`, `TestRehydrateDoorExcludesImportsOnBothPaths` |
+
+**The four guards, as code:**
+(i) after a confirmed drop only LIVE store rows refill (the replay rows are what the drop judged);
+(ii) every rehydrated row enters the ring stamped `historical` — replay-grade to this process, never a
+sacred live bar; (iii) `historical_import` rows are refused **at the door**, on both paths, and the
+boot line prints the refused COUNT; (iv) the contract is the current one (`LastNBarsOn`).
+
+**AddOn premise for (3a), verified by 104 (recorded, not assumed):** N4 `Subscribe` on an active
+key disposes and recreates the `BarsRequest` → a full `barsBack` replay; deployed AddOn md5 ==
+repo. **No AddOn change.**
+
+### nofx-93 objection 1 — guard (iii) was a boot-line literal with no code behind it (SUSTAINED, class 82 + new class 128)
+
+At `4099cc69` the per-tf line printed `import=excluded-by-reader`. It was false: `LastNBarsOn`'s
+filter is `COALESCE(source,'') NOT IN ('mixed','off-scale')` (`store/bar_history.go:481/:538`)
+and hands imports to every caller. My E4 fixture "measured" 500-not-505 because its 5 import
+rows sat on open times the 09-26 series already held — the bars PK is `(symbol, tf,
+open_time_ms)`, no contract — so `ImportBars` **skipped all five** and the assertion measured an
+empty set. I wrote "measured, not assumed" over a measurement of nothing.
+
+Fix, as 93 specified and the CTO ruled: **exclude at the rehydrate door, not in the shared
+reader.** `rehydrateRowsFor` now returns `(kept, importExcluded)`, refuses
+`BarSourceHistoricalImport` on both paths, and the line reads
+`import=<n> (refused at the door — guard iii)` from that count. RED first, end to end on a real
+store: 500 live + 5 import 12-26 rows at NON-colliding times → `LastNBarsOn` returns 505 → door
+keeps 500, counts 5 (`bar_horizon_warn_test.go:349: door kept 505 (want 500), counted import=0
+(want 5)` before the fix). The store-side premise is pinned on its own:
+`TestCurrentContractReaderReturnsImportsUnfiltered` asserts **505 with 5 imports** from the
+reader. The fixture now proves its own census (`ImportBars inserted=5 skipped=0` or fatal).
+
+The same fixture defect hid a second thing: `PriorContractBarsBefore`'s per-timestamp
+"best source" dedupe can never fire (one row per open time by PK), and with imports in HOLES
+of the 09-26 series — the only place production's 426 can be — the display reader returned a
+12-26-priced import inside the 09-26 series (RED: `row 2000 is MNQ 12-26`). Fixed by making
+"prior" literal: the reader now takes `current` and excludes it. A hole in the prior series
+stays a hole. E3 re-pointed to 2,995 (3,000 slots, 5 holes). API E3 unchanged and green.
+
+### nofx-93 objection 2 — a 5-minute re-request floor loops on a TRUE break (SUSTAINED)
+
+`mergeSeedKeepingLive` keeps the existing bar only when it is `live`/`mixed`; historical over
+historical, the INCOMING wins. So on a real break: drop (guard (ii) rows included) → post-drop
+rehydrate restores them → re-request → NT8 replays the wrong scale again → it overwrites the
+store-backed rows → off-scale until the next live bar of that tf judges it → drop → again, every
+five minutes. Fix: `historyReplayMaxPerBoot = 1`, per symbol. The second refusal is
+`ErrHistoryReplaySpent` and the P0 line reads, verbatim (A24):
+`🚨 P0 — second scale break this boot — replay on another contract, restart the AddOn (<sym> <tf>;
+ring left live-only)`. Counter (`IncScaleBreakDrop`) still increments on every break. A8
+mutation: the time floor put back at `history_rerequest.go:64` (build rc=0) → `got <nil>` and
+`want exactly ONE bars_subscribe frame, got 2`; restored, green.
+
+### NOTE 4 — guard (ii) changes what `historical` means
+
+The `📼 bar source: live=N historical=M` census and the P0 drop counts now include store-backed
+rows entered by (3b), not only what NT8 replayed this boot. A post-drop refill therefore
+over-excludes: guard (i) refuses every store row stamped `historical`, which includes rows a
+PRIOR boot received as NT8 replay and persisted under that stamp (13 of 598 on `12-26` 5m
+today) — never judged wrong, refused because the stamp cannot tell them from what this boot's
+drop judged. Rows persisted `live` survive. Read the per-tf `🧯 ring rehydrated … store_live=
+store_hist= import=` line to separate them; the 📼 line alone no longer does.
 
 ## E · MUTATIONS — line quoted, sed confirmed, build GREEN, RED quoted
 
@@ -157,8 +227,9 @@ off, the 09-14 behaviour exactly.
 2. **The served bundle is `index-COvgwytr.js` with `limit=1500`** — L5's dist rebuild is
    needed for the chart to ask past 1,500 at all; the `contract` label on each kline arrives
    with this boot but the FE that renders it is L5's.
-3. **After this boot, a TRUE scale break still leaves 5m+ live-only** until NT8's next full
-   replay — (3a)/(3b) are what change that, and both wait on the owner's direct word.
+3. **After this boot, a TRUE scale break gets ONE re-request per symbol per boot** (3a); a
+   second break in the same boot is diagnosed on the P0 line and the ring is left live-only
+   for that tf until the AddOn is restarted. That is the bound, by design.
 4. **The five `bars=0` reconnect replays** (07:20, 07:22, 07:34, 08:33, 09:22 — BarsRequest
    run while the feed was down) are an observation for 104; the AddOn returns nothing and
    says so honestly. With rule 1 they are harmless; they are still wasted requests.
@@ -166,6 +237,15 @@ off, the 09-14 behaviour exactly.
    the drain. Noted, unverified; did not fall out of the fixtures.
 6. **The running binary's log paths say `nofx-deploy-r4/main.go`** — built in a directory
    not named `nofx` (class 75). This build is from a clean clone named `nofx`.
+8. **THE SECOND DOOR — the planner's 1m tape reads imports TODAY [A].** `trader/bars_store_depth.go:81/106/121/219`
+   feed the planner's and the weekly reader's 1m splice through `LastNBarsOn` with
+   `n = plannerCandleTapeBars = 12000` (`auto_trader_planner.go:2957`, `auto_trader_weekly.go:494`).
+   Read from `data/data.db` (read-only) at this report: `MNQ 12-26` 1m = **2,873 live + 25
+   replay + 426 `historical_import`** = 3,324 < 12,000, so **all 426 import rows are inside the
+   planner's 1m tape now**; on any `09-26` resolve the store holds **75,492** 1m import rows
+   (5m 16,133 · 15m 4,065 · 1h 66). Guard (iii) keeps them out of the RING; nothing keeps them
+   out of the planner's store splice. Excluding there changes today's planner input (class 82)
+   and is the owner's yes/no — the CTO has put it to him. **Not in this PR.**
 7. The **1833 vs 1832** in the 1m fixture is the ring cap trimming one bar on the live upsert
    — 2,000 seeded + ~667 live > 2,500 — the same arithmetic as the live "1832 dropped". A
    non-defect that reads like one.
@@ -224,10 +304,9 @@ Accepted and reproduced. What matters for this PR and the next:
 
 ## OWED (not this PR)
 
-- (3a) AddOn re-request on a confirmed break; (3b) all-tf store rehydrate with the four guards
-  — **held for the owner's word**, then as the CTO specified.
-- (3c)/(3d) follow (3b): regime fallback arm, `weeklyBias.ts:122` (to L5), the rehydrate
-  done-line, `bar_horizon_warn_test.go:243`, both headers — none change until (3b) does.
+- **The second door** (A15 §8): imports in the planner's 1m store splice — owner's yes/no.
+- (3c)/(3d): `weeklyBias.ts:122` (to L5); the regime fallback arm now serves from the 1m tail
+  (condition (b)) — its before/after boot line is quoted at the boot.
 - The Guide paragraph for `web/src/guide/content/status.ts` — sent to L5 as text.
 - Store-count re-run at the gate — nofx-93's offer, accepted.
 

@@ -4740,3 +4740,30 @@ horizon WARN keyed on (symbol, tf, caller, requested, served, gaps); served
 grows by one per bar and requested differs per caller, so 8,258 lines fired
 since boot in a 5.1 GB log. The key is the CONDITION (symbol, tf, why); the
 callers are a list on the line.
+
+## CLASS 128 — A FIXTURE THAT SEEDS THROUGH A SKIP-ON-CONFLICT PATH AND NEVER ASKS WHAT LANDED (born 2026-09-16, fix/nt8-history-and-chart-depth, dispatch 101, found by nofx-93)
+
+**Shape.** A test seeds rows through a helper that silently SKIPS conflicts (`ImportBars` on the
+bars PK `(symbol, tf, open_time_ms)` — no contract in the key), then "measures" that a reader
+excludes those rows. The rows never landed; the reader excludes nothing; the assertion passes on an
+empty set and the report says "measured, not assumed". The boot line then repeats the claim
+(`import=excluded-by-reader`) with no code behind it — class 82 wearing a test.
+
+**How it hid.** The colliding timestamps were plausible (inside the prior contract's window, the
+09-07..09-14 shape) and the PK collision is invisible from the fixture's point of view. The reader's
+real filter (`NOT IN (mixed, off-scale)`) was one grep away and nobody grepped it because the test
+was green.
+
+**Probes.**
+- Every seed helper that goes through an upsert/skip/ignore path asserts its own `inserted/skipped`
+  and fatals on a miss (the fixture proves its census, class 109 applied to test data).
+- A "reader excludes X" assertion is paired with a "reader RETURNS X when X is present" assertion
+  on the same fixture; if the second cannot be written, the first measures nothing.
+- A boot-line literal that names a filter (`excluded-by-…`) is grepped to the line of code that
+  filters. No line → the literal is a lie (class 82).
+- When the PK lacks a column the domain has (contract), ask where rows carrying the OTHER value of
+  that column can physically sit: only in slots the first series does not hold. Fixtures put them
+  there; readers are judged on that shape.
+
+**Fix pattern.** Assert the seed census; put the exclusion at one door with a counted result the
+boot line prints; pin the reader's real behaviour separately.

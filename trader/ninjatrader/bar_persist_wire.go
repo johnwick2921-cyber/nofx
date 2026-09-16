@@ -1,6 +1,7 @@
 package ninjatrader
 
 import (
+	"errors"
 	"nofx/market"
 	"sync"
 	"sync/atomic"
@@ -201,7 +202,11 @@ func WireBarPersistence(st *store.Store) {
 						// symbol and refused while the feed is down; a refusal is
 						// WARNed with its reason, never silent (A9).
 						if rerr := server.RequestHistoryReplayAt(m.Symbol, time.Now()); rerr != nil {
-							logger.Warnf("🧯 history replay NOT re-requested for %s after the %s scale break: %v", m.Symbol, m.Timeframe, rerr)
+							if errors.Is(rerr, ntwire.ErrHistoryReplaySpent) {
+								logger.Errorf("🚨 P0 — second scale break this boot — replay on another contract, restart the AddOn (%s %s; ring left live-only): %v", m.Symbol, m.Timeframe, rerr)
+							} else {
+								logger.Warnf("🧯 history replay NOT re-requested for %s after the %s scale break: %v", m.Symbol, m.Timeframe, rerr)
+							}
 						}
 						rehydrateRingFromStoreWith(bh, server, time.Now(), true)
 						srcCensus, _ := bh.SourceCensus(m.Symbol)
@@ -469,16 +474,19 @@ func rehydrateRingFromStoreWith(bh *store.BarHistoryStore, server *ntwire.TCPSer
 		if len(rows) == 0 {
 			continue
 		}
-		// guard (i), then the source breakdown the boot line names [O]
+		// the source breakdown the boot line names [O], then guards (i)+(iii)
 		storeLive, storeHist := 0, 0
 		for _, r := range rows {
-			if r.Source == store.BarSourceHistorical {
+			switch r.Source {
+			case store.BarSourceHistorical:
 				storeHist++
-			} else {
+			case store.BarSourceHistoricalImport:
+				// counted by the door below
+			default:
 				storeLive++
 			}
 		}
-		rows = rehydrateRowsFor(rows, reseeded)
+		rows, importExcluded := rehydrateRowsFor(rows, reseeded)
 		// guard (ii)
 		bars := rehydrateBarsFromRows(rows)
 		added := cache.RehydrateOlder(symbol, tf, bars)
@@ -490,10 +498,12 @@ func rehydrateRingFromStoreWith(bh *store.BarHistoryStore, server *ntwire.TCPSer
 		after := cache.Get(symbol, tf)
 		h := kernel.HorizonOf(barsToKlines(after, tf), tf, cache.MaxBars(), now)
 		// nt8=<what the ring held from NT8 before> store_live/store_hist=<what
-		// the store offered by stamp> import=<excluded by LastNBarsOn's filter>
-		// total=<t>/cap — every number READ, the [O] naming the ruling.
-		logger.Infof("🧯 ring rehydrated %s %s [O 2026-09-16]: nt8=%d store_live=%d store_hist=%d (post-drop excluded=%v) import=excluded-by-reader total=%d/%d (+%d older, all entered as historical — guard ii) · contract=%s (%s) · %s",
-			symbol, tf, before, storeLive, storeHist, reseeded, len(after), cache.MaxBars(), added, contract, src, h.Line())
+		// the store offered by stamp> import=<rows the DOOR refused — guard
+		// (iii), counted in rehydrateRowsFor; LastNBarsOn filters only
+		// mixed+off-scale and hands imports to its callers> total=<t>/cap —
+		// every number READ, the [O] naming the ruling.
+		logger.Infof("🧯 ring rehydrated %s %s [O 2026-09-16]: nt8=%d store_live=%d store_hist=%d (post-drop excluded=%v) import=%d (refused at the door — guard iii) total=%d/%d (+%d older, all entered as historical — guard ii) · contract=%s (%s) · %s",
+			symbol, tf, before, storeLive, storeHist, reseeded, importExcluded, len(after), cache.MaxBars(), added, contract, src, h.Line())
 	}
 	logger.Infof("🧯 ring rehydrate done [O \"i want fuull data\" 2026-09-16]: %d of %d symbol×tf pairs deepened, +%d bars total, %d read failure(s), %d pair(s) not selected · every rehydrated row enters as historical (replay-grade to this process); the regime baseline is served from the %s tail (condition (b)) · store retention %s=%dd (the ring is the cache; the store is the horizon)",
 		deepened, len(pairs), totalAdded, failed, skipped, rehydrateTimeframe, rehydrateTimeframe, store.RetentionDaysFor(rehydrateTimeframe))
@@ -553,18 +563,25 @@ func pairsToRehydrate(pairs [][2]string) [][2]string {
 // rehydrateRowsFor applies guard (i): after a confirmed drop (reseeded=true)
 // rows stamped `historical` are excluded — they are the rejected seed's kin;
 // on the boot path they were verified in a prior boot and are kept.
-func rehydrateRowsFor(rows []store.BarHistoryDB, reseeded bool) []store.BarHistoryDB {
-	if !reseeded {
-		return rows
-	}
+func rehydrateRowsFor(rows []store.BarHistoryDB, reseeded bool) (kept []store.BarHistoryDB, importExcluded int) {
 	out := make([]store.BarHistoryDB, 0, len(rows))
 	for _, r := range rows {
-		if r.Source == store.BarSourceHistorical {
+		// guard (iii): an import never enters the ring, on either path. The
+		// reader (LastNBarsOn) filters mixed+off-scale ONLY and hands imports
+		// to every caller; this door is the only line that keeps them out of
+		// the ring, and the boot line prints THIS count (nofx-93 objection 1).
+		if r.Source == store.BarSourceHistoricalImport {
+			importExcluded++
+			continue
+		}
+		// guard (i): after a confirmed drop, store-backed replay rows are
+		// what the drop just judged — only live rows refill
+		if reseeded && r.Source == store.BarSourceHistorical {
 			continue
 		}
 		out = append(out, r)
 	}
-	return out
+	return out, importExcluded
 }
 
 // rehydrateBarsFromRows applies guard (ii): EVERY row enters the ring stamped

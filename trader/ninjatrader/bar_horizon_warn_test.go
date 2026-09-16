@@ -243,7 +243,9 @@ func TestRingRehydrateIsWiredAtBoot(t *testing.T) {
 // baseline is served from the 1m tail; the 5m ring is only its fallback —
 // TestRegimeLabelUnchanged pins that it did not move). The pin keeps its name,
 // its A29 check and its owner; what it asserts is the new selection.
-func TestRehydrateSelectsOnly1mPairs(t *testing.T) {
+// (was TestRehydrateSelectsOnly1mPairs — the class-86 pin; renamed to what it
+// asserts after the [O] "i want fuull data" ruling of 2026-09-16, never deleted)
+func TestRehydrateSelectsEveryPair(t *testing.T) {
 	in := [][2]string{
 		{"MNQ", "1m"}, {"MNQ", "5m"}, {"MNQ", "15m"}, {"MNQ", "1h"},
 		{"MNQ", "4h"}, {"MNQ", "1d"}, {"MNQ", "1w"}, {"ES", "1m"}, {"ES", "5m"},
@@ -292,11 +294,65 @@ func TestPostDropRefillExcludesHistoricalRows(t *testing.T) {
 		{OpenTimeMs: 1_060_000, Source: store.BarSourceHistorical},
 		{OpenTimeMs: 1_120_000, Source: store.BarSourceLive},
 	}
-	if got := rehydrateRowsFor(rows, true); len(got) != 2 {
-		t.Fatalf("post-drop: want the 2 live rows only, got %d", len(got))
+	if got, imp := rehydrateRowsFor(rows, true); len(got) != 2 || imp != 0 {
+		t.Fatalf("post-drop: want the 2 live rows only (0 imports), got %d (%d)", len(got), imp)
 	}
-	if got := rehydrateRowsFor(rows, false); len(got) != 3 {
-		t.Fatalf("boot path: want all 3 rows, got %d", len(got))
+	if got, imp := rehydrateRowsFor(rows, false); len(got) != 3 || imp != 0 {
+		t.Fatalf("boot path: want all 3 rows (0 imports), got %d (%d)", len(got), imp)
+	}
+}
+
+// GUARD (iii) IS REAL CODE, AT THE DOOR, ON BOTH PATHS — nofx-93 objection 1
+// (2026-09-16). The reader LastNBarsOn hands imports to its callers (its filter
+// is mixed+off-scale only — pinned in store TestCurrentContractReaderReturns
+// ImportsUnfiltered); the first cut of this wave printed
+// "import=excluded-by-reader" on a boot line without a line of code behind it
+// (class 82). End to end on a real store: 500 live + 5 import rows on 12-26 at
+// NON-colliding open times (the bars PK has no contract; an import on an
+// occupied slot is skipped) → the reader returns 505 → the door admits 500 and
+// COUNTS the 5, so the boot line prints a number it read.
+func TestRehydrateDoorExcludesImportsOnBothPaths(t *testing.T) {
+	st, err := store.New(filepath.Join(t.TempDir(), "door.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	bh := st.BarHistory()
+	if err := bh.Migrate(); err != nil {
+		t.Fatal(err)
+	}
+	const fiveMin = int64(5 * 60 * 1000)
+	base := int64(1_789_000_000_000)
+	var imports, live []store.BarHistoryDB
+	for i := 0; i < 5; i++ { // older than every live row: no slot collides
+		imports = append(imports, store.BarHistoryDB{Symbol: "MNQ", TF: "5m", OpenTimeMs: base + int64(i)*fiveMin, O: 29290, H: 29300, L: 29280, C: 29295, V: 1, Contract: "MNQ 12-26", Source: store.BarSourceHistoricalImport})
+	}
+	for i := 0; i < 500; i++ {
+		live = append(live, store.BarHistoryDB{Symbol: "MNQ", TF: "5m", OpenTimeMs: base + int64(100+i)*fiveMin, O: 29290, H: 29300, L: 29280, C: 29295, V: 1, Contract: "MNQ 12-26", Source: store.BarSourceLive})
+	}
+	if err := bh.InsertBars(live); err != nil {
+		t.Fatal(err)
+	}
+	if ins, skip, err := bh.ImportBars(imports); err != nil || ins != 5 || skip != 0 {
+		t.Fatalf("fixture imports inserted=%d skipped=%d err=%v, want 5/0", ins, skip, err)
+	}
+	rows, err := bh.LastNBarsOn("MNQ", "5m", "MNQ 12-26", 5000)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 505 {
+		t.Fatalf("premise: the reader must hand the door 505 rows (imports included), got %d", len(rows))
+	}
+	for _, reseeded := range []bool{false, true} {
+		kept, excluded := rehydrateRowsFor(rows, reseeded)
+		if len(kept) != 500 || excluded != 5 {
+			t.Fatalf("reseeded=%v: door kept %d (want 500), counted import=%d (want 5)", reseeded, len(kept), excluded)
+		}
+		for _, r := range kept {
+			if r.Source == store.BarSourceHistoricalImport {
+				t.Fatalf("reseeded=%v: an import row (%d) got through the door", reseeded, r.OpenTimeMs)
+			}
+		}
 	}
 }
 

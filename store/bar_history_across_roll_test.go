@@ -13,20 +13,33 @@ import "testing"
 
 const fiveMin = int64(5 * 60_000)
 
+// importHoles are the 09-26 slots the fixture leaves EMPTY so the 12-26 imports
+// can occupy them. The bars PK is (symbol, tf, open_time_ms) — no contract —
+// so an import at a time a 09-26 row holds is SKIPPED by ImportBars, in the
+// fixture and in production alike (nofx-93's objection 1, 2026-09-16: the
+// first cut of this fixture put its 5 imports on occupied slots, ImportBars
+// skipped all 5, and E4's "500, imports excluded" measured an empty set). The
+// 426 real 12-26 import rows therefore sit at times NO 09-26 row holds.
+var importHoles = map[int]bool{2000: true, 2200: true, 2400: true, 2600: true, 2800: true}
+
 func rollSeed(t *testing.T, bh *BarHistoryStore) (boundaryMs int64) {
 	t.Helper()
 	var rows []BarHistoryDB
 	base := int64(1_789_000_000_000)
-	// 09-26: 3,000 live bars, older
+	// 09-26: 2,995 live bars, older, with five holes
 	for i := 0; i < 3000; i++ {
+		if importHoles[i] {
+			continue
+		}
 		ts := base + int64(i)*fiveMin
 		rows = append(rows, BarHistoryDB{Symbol: "MNQ", TF: "5m", OpenTimeMs: ts, O: 29000, H: 29010, L: 28990, C: 29005, V: 1, Contract: "MNQ 09-26", Source: BarSourceLive})
 	}
-	// 12-26: sparse daily imports OVERLAPPING the 09-26 window (the 09-07..09-14
-	// shape). Imports enter through ImportBars — InsertBars refuses the source.
+	// 12-26: sparse imports INSIDE the 09-26 window, in the holes (the
+	// 09-07..09-14 shape). Imports enter through ImportBars — InsertBars
+	// refuses the source.
 	var imports []BarHistoryDB
-	for i := 0; i < 5; i++ {
-		ts := base + int64(2000+i*288)*fiveMin
+	for i := range importHoles {
+		ts := base + int64(i)*fiveMin
 		imports = append(imports, BarHistoryDB{Symbol: "MNQ", TF: "5m", OpenTimeMs: ts, O: 29290, H: 29300, L: 29280, C: 29295, V: 1, Contract: "MNQ 12-26", Source: BarSourceHistoricalImport})
 	}
 	// 12-26: 500 live bars starting right after the 09-26 series — the roll
@@ -38,8 +51,13 @@ func rollSeed(t *testing.T, bh *BarHistoryStore) (boundaryMs int64) {
 	if err := bh.InsertBars(rows); err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	if _, _, err := bh.ImportBars(imports); err != nil {
+	ins, skip, err := bh.ImportBars(imports)
+	if err != nil {
 		t.Fatalf("seed imports: %v", err)
+	}
+	// the fixture proves its own census (class 109): every import LANDED
+	if ins != 5 || skip != 0 {
+		t.Fatalf("fixture: ImportBars inserted=%d skipped=%d, want 5/0 — an import on an occupied slot is skipped by the PK and the test measures nothing", ins, skip)
 	}
 	return boundaryMs
 }
@@ -51,16 +69,20 @@ func TestPriorContractsFillBehindTheCurrentContract(t *testing.T) {
 	bh := newBarStore(t)
 	boundary := rollSeed(t, bh)
 
-	rows, err := bh.PriorContractBarsBefore("MNQ", "5m", boundary, 4500)
+	rows, err := bh.PriorContractBarsBefore("MNQ", "5m", "MNQ 12-26", boundary, 4500)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(rows) != 3000 {
-		t.Fatalf("want all 3000 prior 09-26 rows (only 3000 exist before the boundary), got %d", len(rows))
+	// 2,995, not 3,000: the fixture leaves five 09-26 slots EMPTY for the
+	// 12-26 imports, and the reader does not fill a prior-series hole with the
+	// current contract's import (a hole stays a hole — one bar of 12-26 price
+	// space inside the 09-26 series would be a 290-point spike on the chart).
+	if len(rows) != 2995 {
+		t.Fatalf("want the 2995 prior 09-26 rows (3000 slots, 5 holes held by 12-26 imports), got %d", len(rows))
 	}
 	for i, r := range rows {
 		if r.Contract != "MNQ 09-26" {
-			t.Fatalf("row %d is %s — a 12-26 import interleaved into the 09-26 series (the overlap must not mix)", i, r.Contract)
+			t.Fatalf("row %d is %s — a 12-26 import in a 09-26 hole interleaved into the 09-26 series (the current contract is not a PRIOR contract; before its first live row the front month was 09-26)", i, r.Contract)
 		}
 		if r.OpenTimeMs >= boundary {
 			t.Fatalf("row %d at %d is not strictly before the boundary %d", i, r.OpenTimeMs, boundary)
@@ -75,26 +97,34 @@ func TestPriorContractsFillBehindTheCurrentContract(t *testing.T) {
 	}
 }
 
-// E4 (store half): the decision readers are untouched and still contract-pure.
-func TestDecisionReadersStayCurrentContractOnly(t *testing.T) {
+// E4 (store half): the decision reader is untouched and contract-pure — and
+// it does NOT filter imports. 505, not 500: LastNBarsOn's filter is
+// `source NOT IN (mixed, off-scale)` (store/bar_history.go), so the 5 import
+// rows come back with the 500 live ones. Guard (iii) — keeping imports out of
+// the ring — therefore lives at the rehydrate DOOR (trader/ninjatrader
+// rehydrateRowsFor), not in this reader (nofx-93 objection 1 + CTO ruling,
+// 2026-09-16: do not change the shared reader in this PR; the planner's 1m
+// splice through trader/bars_store_depth.go reads it too and excluding there
+// changes today's planner input — the owner's call).
+func TestCurrentContractReaderReturnsImportsUnfiltered(t *testing.T) {
 	bh := newBarStore(t)
-	boundary := rollSeed(t, bh)
+	rollSeed(t, bh)
 	rows, err := bh.LastNBarsOn("MNQ", "5m", "MNQ 12-26", 5000)
 	if err != nil {
 		t.Fatal(err)
 	}
+	imports := 0
 	for _, r := range rows {
 		if r.Contract != "MNQ 12-26" {
 			t.Fatalf("LastNBarsOn leaked a %s row — a decision reader must be contract-pure", r.Contract)
 		}
+		if r.Source == BarSourceHistoricalImport {
+			imports++
+		}
 	}
-	// 500, not 505: the decision reader already EXCLUDES historical_import
-	// rows (its own source filter) — measured here, not assumed. That is the
-	// CTO's amendment-2 guard (iii) already in force for planner rings.
-	if got := len(rows); got != 500 {
-		t.Fatalf("LastNBarsOn(12-26) = %d rows, want 500 (live only; imports excluded) — the current-contract reader must be byte-identical in behaviour", got)
+	if got := len(rows); got != 505 || imports != 5 {
+		t.Fatalf("LastNBarsOn(12-26) = %d rows (%d import), want 505 (5 import) — the reader hands imports to its callers; the door excludes them", got, imports)
 	}
-	_ = boundary
 }
 
 // FirstLiveOn: the boundary is the current contract's first LIVE row — sparse

@@ -21,14 +21,29 @@ import (
 	"time"
 )
 
-// historyReplayMinInterval is the per-symbol floor between re-requests.
-const historyReplayMinInterval = 5 * time.Minute
+// historyReplayMaxPerBoot bounds the AUTOMATIC re-request to ONE per symbol
+// per process (nofx-93's objection 2, 2026-09-16). A time floor turned a TRUE
+// break into a loop: mismatch → drop (which under guard (ii) includes the
+// store-backed rows) → post-drop rehydrate restores them as historical →
+// re-request → NT8's replay lands on the wrong scale again and, historical
+// over historical, mergeSeedKeepingLive lets the INCOMING bar win → the ring
+// is off-scale until the next live bar of that tf judges it (a full bar
+// duration on a slow ring) → drop → again. The 09-16 false-positive shape
+// needs exactly one re-request; a SECOND break on the same symbol after one
+// means the replay is on another contract, and the AddOn restart is the fix.
+// Bounded and loud beats bounded and looping.
+const historyReplayMaxPerBoot = 1
 
 type historyReplayState struct {
 	mu   sync.Mutex
 	last map[string]time.Time // symbol -> last re-request sent
 	sent map[string]int       // symbol -> count since boot (READ by the summary line)
 }
+
+// ErrHistoryReplaySpent is returned when the per-boot budget is used: the
+// caller's P0 line names it, because a second break after a re-request is a
+// diagnosis, not a retry.
+var ErrHistoryReplaySpent = fmt.Errorf("history replay budget spent for this boot (%d/%d): a second scale break after a re-request means the replay is on ANOTHER CONTRACT than the platform — the AddOn restart is the fix, not another request", historyReplayMaxPerBoot, historyReplayMaxPerBoot)
 
 // RequestHistoryReplayAt re-sends the bars_subscribe frame for symbol —
 // trading or extra — so the AddOn rebuilds its BarsRequest and replays the
@@ -46,9 +61,9 @@ func (s *TCPServer) RequestHistoryReplayAt(symbol string, now time.Time) error {
 		s.histReplay.last = map[string]time.Time{}
 		s.histReplay.sent = map[string]int{}
 	}
-	if last, ok := s.histReplay.last[symbol]; ok && now.Sub(last) < historyReplayMinInterval {
+	if s.histReplay.sent[symbol] >= historyReplayMaxPerBoot {
 		s.histReplay.mu.Unlock()
-		return fmt.Errorf("tcp_server: history replay %s: last request %s ago (< %s) — not repeated", symbol, now.Sub(last).Truncate(time.Second), historyReplayMinInterval)
+		return fmt.Errorf("tcp_server: history replay %s: %w", symbol, ErrHistoryReplaySpent)
 	}
 	s.histReplay.last[symbol] = now
 	s.histReplay.sent[symbol]++

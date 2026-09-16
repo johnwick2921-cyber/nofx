@@ -94,7 +94,23 @@ display-only); every kline carries `contract`; the roll is a visible basis step,
 never adjusted. `NOFX_CHART_ACROSS_ROLL=off` disables; the resolved value is on
 the `📈 chart:` boot line. **The bot decides on the current contract only** —
 `LastNBarsOn`/`BarsBetweenOn` are byte-identical and no kernel/levels/arm path
-calls the display readers (E4 grep: 0).
+calls the display readers (E4 grep: 0). `PriorContractBarsBefore` takes the
+current contract and EXCLUDES it — the current contract's rows before its first
+live row are imports in holes of the prior series, and a hole stays a hole.
+
+**Full data [O "i want fuull data" 2026-09-16].** Every symbol×tf pair rehydrates
+its ring from the store at boot and after a confirmed drop, through ONE door
+(`rehydrateRowsFor`): (i) post-drop only live rows refill; (ii) every row enters
+stamped `historical`; (iii) `historical_import` is refused at the door and the
+`🧯 ring rehydrated … import=<n>` line prints the refused count — `LastNBarsOn`
+itself filters only mixed+off-scale and hands imports to the planner's 1m store
+splice (`trader/bars_store_depth.go`), which is the owner's open call; (iv) the
+contract is the current one. A CONFIRMED scale break re-requests NT8's full replay
+**once per symbol per boot** (`RequestHistoryReplayAt`, `historyReplayMaxPerBoot`);
+a second break in the same boot prints `second scale break this boot — replay on
+another contract, restart the AddOn` and leaves that ring live-only — a time floor
+would loop, because historical-over-historical the incoming replay wins in
+`mergeSeedKeepingLive`.
 
 ## 2 · LEVELS — detection, scoring, seating, roles
 

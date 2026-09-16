@@ -586,7 +586,7 @@ func klinesAcrossRoll(base []market.Kline, bh *store.BarHistoryStore, current, s
 	if need <= 0 {
 		return base
 	}
-	rows, err := bh.PriorContractBarsBefore(symbol, tf, boundary, need)
+	rows, err := bh.PriorContractBarsBefore(symbol, tf, current, boundary, need)
 	if err != nil || len(rows) == 0 {
 		return base
 	}
