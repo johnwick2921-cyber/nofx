@@ -190,10 +190,17 @@ func (c *BarCache) detectScaleMismatch(key string, b Bar, now time.Time) (Bar, b
 			c.scaleSkips = make(map[string]ScaleCheckSkip)
 		}
 		if prev, ok := c.scaleSkips[key]; !ok || prev.ReferenceT != last.T {
-			c.scaleSkips[key] = ScaleCheckSkip{
+			sk := ScaleCheckSkip{
 				Symbol: sym, Timeframe: tf, At: now,
 				ReferenceT: last.T, LiveT: b.T,
 				ReferenceAge: time.Duration(b.T-last.T) * time.Millisecond,
+			}
+			c.scaleSkips[key] = sk
+			skipListenersMu.RLock()
+			ls := append([]ScaleCheckSkipListener(nil), skipListeners...)
+			skipListenersMu.RUnlock()
+			for _, fn := range ls {
+				go fn(sk)
 			}
 		}
 		return b, false
@@ -279,6 +286,22 @@ type ScaleCheckSkip struct {
 	At                time.Time
 	ReferenceT, LiveT int64
 	ReferenceAge      time.Duration
+}
+
+// ScaleCheckSkipListener receives a skip the moment it is recorded — the
+// persist wire WARNs it (A9). Same shape as OnScaleMismatch.
+type ScaleCheckSkipListener func(s ScaleCheckSkip)
+
+var (
+	skipListenersMu sync.RWMutex
+	skipListeners   []ScaleCheckSkipListener
+)
+
+// OnScaleCheckSkip registers a listener for skipped scale checks.
+func OnScaleCheckSkip(fn ScaleCheckSkipListener) {
+	skipListenersMu.Lock()
+	defer skipListenersMu.Unlock()
+	skipListeners = append(skipListeners, fn)
 }
 
 // ScaleCheckSkips returns every key's most recent skip, sorted by key.

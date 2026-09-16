@@ -10,6 +10,7 @@ import (
 	"nofx/logger"
 	ntwire "nofx/provider/ninjatrader"
 	"nofx/store"
+	"nofx/telemetry"
 )
 
 // WireBarPersistence (2026-08-26) — installs the closed-bar writer on the TCP
@@ -174,11 +175,34 @@ func WireBarPersistence(st *store.Store) {
 					// on a different scale, the ring has dropped its historical
 					// seed; refill it from the store, whose live rows the upsert
 					// rule now protects, and say so ONCE where the owner sees it.
+					// 101 D1'(2): a scale check that could not be made because its
+					// only reference was not adjacent is SAID, once per reference,
+					// with both ages (A9) — never silently skipped. The seed stays;
+					// the check stays armed; the replay's rows stay held from the
+					// store until an adjacent pair can judge them.
+					ntwire.OnScaleCheckSkip(func(sk ntwire.ScaleCheckSkip) {
+						logger.Warnf("🕳 scale check SKIPPED for %s %s at %s: the only reference bar is %s old (replay tail %s, live bar %s) — not adjacent, so a time gap is not judged as a scale gap; seed kept, check stays armed, replay rows held from the store (101 D1' 2026-09-16)",
+							sk.Symbol, sk.Timeframe, kernel.ClockCTSeconds(sk.At), sk.ReferenceAge.Truncate(time.Minute),
+							kernel.ClockCTSeconds(time.UnixMilli(sk.ReferenceT)), kernel.ClockCTSeconds(time.UnixMilli(sk.LiveT)))
+					})
 					ntwire.OnScaleMismatch(func(m ntwire.ScaleMismatch) {
+						// 101 D1'(3), narrow form: COUNT the break (A11 reads it
+						// onto the summary line) and SAY what the ring is now —
+						// the store rehydrate below is 1m-only by the owner's
+						// 2026-09-09 condition, so every other timeframe is
+						// live-only until NT8's next full replay. That sentence
+						// is the difference between a thin chart that is
+						// explained and one that is a surprise.
+						telemetry.IncScaleBreakDrop(m.HistoricalDropped)
 						rehydrateRingFromStoreWith(bh, server, time.Now(), true)
 						srcCensus, _ := bh.SourceCensus(m.Symbol)
-						logger.Errorf("🚨 P0 — REPLAY AND LIVE ARE ON DIFFERENT PRICE SCALES for %s %s at %s: last replay close %.2f, first live close %.2f, delta %.2f pts (> %.2f%% of price). %d historical bars DROPPED from the ring and refilled from the store's live rows; the straddling bar is labelled mixed and no reader takes it. This is NT8's merge/back-adjust policy on the subscription — filed for the AddOn wave. bars by source now %v. (bar-source wave 2026-09-10)",
-							m.Symbol, m.Timeframe, kernel.ClockCTSeconds(m.At), m.LastHistoricalC, m.FirstLiveC, m.DeltaPts, ntwire.ScaleMismatchPct*100, m.HistoricalDropped, srcCensus)
+						refill := "refilled from the store's live rows"
+						if m.Timeframe != rehydrateTimeframe {
+							refill = "LIVE-ONLY UNTIL NT8's NEXT FULL REPLAY (the store rehydrate is " + rehydrateTimeframe + "-only, owner condition 2026-09-09)"
+						}
+						events, bars := telemetry.ScaleBreakCounts()
+						logger.Errorf("🚨 P0 — REPLAY AND LIVE ARE ON DIFFERENT PRICE SCALES for %s %s at %s: last replay close %.2f, first live close %.2f, delta %.2f pts (> %.2f%% of price). %d historical bars DROPPED from the ring; %s; the straddling bar is labelled mixed and no reader takes it. scale-break drops since boot: %d event(s), %d bar(s). bars by source now %v. (bar-source wave 2026-09-10; adjacency guard 101 2026-09-16)",
+							m.Symbol, m.Timeframe, kernel.ClockCTSeconds(m.At), m.LastHistoricalC, m.FirstLiveC, m.DeltaPts, ntwire.ScaleMismatchPct*100, m.HistoricalDropped, refill, events, bars, srcCensus)
 					})
 					ntwire.OnContractRoll(func(symbol, from, to string, at time.Time) {
 						go func() {
