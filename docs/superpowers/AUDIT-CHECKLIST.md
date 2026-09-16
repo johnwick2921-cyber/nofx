@@ -4824,7 +4824,7 @@ hook was born 2026-09-09 and had won every boot until a restart 58 minutes after
 
 **Fix pattern.** landed + fired flags under one mutex; both orders pinned; identity over time.
 
-## CLASS NN (assigned at merge) — ONE TABLE FOR TWO JOBS: THE STRUCTURE SEAT RACE (born 2026-09-16, feat/structure-map, S1 under the CTO's delegation)
+## CLASS 131 — ONE TABLE FOR TWO JOBS: THE STRUCTURE SEAT RACE (born 2026-09-16, feat/structure-map, S1 under the CTO's delegation)
 
 **Shape.** One 12-seat ranked table carries both jobs — where price may ENTER (15m/5m/1m + today's
 references) and which way the higher timeframes LEAN (D/4h/1h). Every rule that makes the entry table
