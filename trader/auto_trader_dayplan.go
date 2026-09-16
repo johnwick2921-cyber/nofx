@@ -188,7 +188,8 @@ func installLevelStateProvider(at *AutoTrader, st *store.Store) {
 		// routed through the new grader, and only when the knob is ON; every
 		// non-HTF level and every OFF config keeps the W7 persisted 1m-touch
 		// ladder below byte-identically.
-		if dp := at.config.StrategyConfig.DayPlan; dp != nil && dp.LevelsFreshByTFEnabled() &&
+		if at != nil && at.config.StrategyConfig != nil && at.config.StrategyConfig.DayPlan != nil &&
+			at.config.StrategyConfig.DayPlan.LevelsFreshByTFEnabled() &&
 			l.HTF && kernel.IsHTFFreshTF(l.TF) {
 			grade, _ := kernel.LevelFreshnessByTF(l, time.Now(), levelTFBars(st, at.futuresSymbol(), l.TF))
 			return grade
