@@ -194,6 +194,30 @@ Accepted and reproduced. What matters for this PR and the next:
   The CTO's optional in-scope WARN (persist path: a `bar_update` whose close predates the
   subscribe) is **LEFT**: a diagnostic line is not worth a rebuild of a binary already parked
   green at a gate blocked on the main tree; it is one fixture and one line for 104.
+
+  **The two refs the fix starts from — nofx-93, path owner, verbatim, at 10f424b0 (read-only;
+  assignment is the owner's):**
+
+  1. `trader/ninjatrader/bar_persist_wire.go:57-60` `barRowsForPersist` — `feedSrc :=
+     store.BarSourceLive` unless `historical`; the stamp comes from the FRAME TYPE alone, and
+     the call site `:124` passes the frame's `historical` straight through. The fixture: a bar
+     in `closed` whose close (`b.T + tfDur`) predates the key's subscribe/ACK receipt this
+     process → `store.BarSourceHistorical` (replay-grade) + one WARN naming count and key, and
+     it then takes the `historical` branch at `:125-129` into `barReplayHold.add` like any
+     other unverified replay, so the ring's verdict still gates it. RED first: a `bar_update`
+     frame carrying 9 closed bars older than the ACK must produce 9 `historical` rows and 0
+     `live`; GREEN today produces 9 `live`.
+  2. `provider/ninjatrader/bar_cache.go:347` `Upsert` — `stampSource(bars, BarSourceLive)` on
+     every bar of a `bar_update` frame; the same catch-up bars enter the RING as `live`, which
+     is why `mergeSeedKeepingLive` shields them from the next replay and `detectScaleMismatch`
+     (reference = `Source==historical` only) never judges them. Same predicate, ring side:
+     bars whose close predates the key's subscribe time → `BarSourceHistorical` before the
+     merge. **Pin both or the store and the ring disagree about the same bar.**
+
+  The timestamp both need: the `subscribed{resolved_contract}` ACK's receipt time
+  (`tcp_server.go:842` describes the ACK; `contractFor` already reads it "at receipt", so the
+  receipt clock is the one to record per key — not `time.Now()` at the frame, and not the
+  bar's own T). One value, one clock, both sites.
 - The 09-26 pre-wave `live` rows on every tf (3m 4805 of 5453 before the 09-11 cutoff …)
   are the migration's stamp — the `source` column did not exist before 09-10. Age alone
   cannot distinguish them from real live rows. Same conclusion: ring-side, not store-side.
