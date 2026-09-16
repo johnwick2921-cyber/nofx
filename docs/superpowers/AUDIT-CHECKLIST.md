@@ -4823,3 +4823,19 @@ hook was born 2026-09-09 and had won every boot until a restart 58 minutes after
   minutes before the binary (`TestUIBootLineIsFreshByRevEvenWhenTheBundleIsOlder`).
 
 **Fix pattern.** landed + fired flags under one mutex; both orders pinned; identity over time.
+
+## CLASS NN (assigned at merge) — S2 by-TF freshness
+
+**Shape.** A freshness grade computed from one timeframe's bars while the scoring
+ladder it feeds was calibrated against another (1m touches). A 4h zone was
+downgraded C by one 1m bar trading into it, so the 12-seat table stopped seating
+HTF structure. **Rule:** when a grade changes MEANING as its source timeframe
+changes, keep the display vocabulary and the scoring ladder separate — the new
+grader may only feed the ladder through an explicit normalization map, and every
+legacy string must pass through it as identity (proved by
+`TestNormalizeByTFGrade_IdentityOnLegacy` + `TestScoreLevels_ByTFVocabScoresLikeCanonical`).
+
+**Fix pattern (S2).** `kernel/levels_fresh_by_tf.go` grades HTF levels on their
+own-TF bars (fresh/tested-1/tested-2/stale); `normalizeByTFGrade` maps the new
+vocabulary onto the unchanged `freshMult`/`zoneFreshMult` tables; knob default
+OFF so goldens stay byte-identical.
