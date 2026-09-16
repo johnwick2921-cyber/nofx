@@ -1,6 +1,7 @@
 package kernel
 
 import (
+	"fmt"
 	"math"
 	"sort"
 	"strings"
@@ -195,4 +196,78 @@ func structureZonesFor(pool []ScoredLevel, tf string) []StructureZone {
 		zs = zs[:StructureZoneCap]
 	}
 	return zs
+}
+
+// RenderStructureSection renders the STRUCTURE table for the planner prompt —
+// bias only, never an entry. nil → "" (byte-identical prompt, knob off).
+func RenderStructureSection(m *StructureMap) string {
+	if m == nil || len(m.TFs) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("## STRUCTURE — bias only, not entries\n")
+	b.WriteString("  Direction per timeframe from the last swings; pd = where price sits in the last impulse (0 = low, 1 = high). A structure zone is context — never an entry; entries come only from the ranked table below.\n")
+	for _, tf := range StructureMapTFs {
+		st, ok := m.TFs[tf]
+		if !ok {
+			continue
+		}
+		fmt.Fprintf(&b, "  %s: %s", tf, st.Trend)
+		if st.ImpulseHi > st.ImpulseLo {
+			fmt.Fprintf(&b, " · impulse %.2f–%.2f · pd=%.2f", st.ImpulseLo, st.ImpulseHi, st.PremiumDiscount)
+		}
+		if st.LastSwingHigh != nil && st.LastSwingLow != nil {
+			fmt.Fprintf(&b, " · last swing H %.2f / L %.2f", st.LastSwingHigh.Price, st.LastSwingLow.Price)
+		}
+		fmt.Fprintf(&b, " · %d bars", st.Bars)
+		if len(st.Zones) > 0 {
+			parts := make([]string, 0, len(st.Zones))
+			for _, z := range st.Zones {
+				parts = append(parts, fmt.Sprintf("%s %.2f–%.2f (%s)", z.Kind, z.Lo, z.Hi, z.Fresh))
+			}
+			b.WriteString(" · zones: " + strings.Join(parts, "; "))
+		}
+		b.WriteString("\n")
+	}
+	b.WriteString("\n")
+	return b.String()
+}
+
+// StructureLogLine is the per-read observability line:
+// "🗺 structure @NY: D=up 4h=range 1h=down zones=3 pd4h=0.33". nil → n/a.
+func StructureLogLine(m *StructureMap, session string) string {
+	if m == nil || len(m.TFs) == 0 {
+		return "🗺 structure @" + session + ": n/a (no map computed)"
+	}
+	parts := make([]string, 0, 5)
+	zones := 0
+	for _, tf := range StructureMapTFs {
+		st, ok := m.TFs[tf]
+		if !ok {
+			parts = append(parts, tf+"=n/a")
+			continue
+		}
+		parts = append(parts, tf+"="+st.Trend)
+		zones += len(st.Zones)
+	}
+	line := "🗺 structure @" + session + ": " + strings.Join(parts, " ") + fmt.Sprintf(" zones=%d", zones)
+	if st, ok := m.TFs["4h"]; ok {
+		line += fmt.Sprintf(" pd4h=%.2f", st.PremiumDiscount)
+	} else {
+		line += " pd4h=n/a"
+	}
+	return line
+}
+
+// StructureBootLine — "🗺 structure: off|on(D/4h/1h)|n/a", READ from the knob;
+// known=false means no strategy config was there to read.
+func StructureBootLine(enabled, known bool) string {
+	switch {
+	case !known:
+		return "🗺 structure: n/a"
+	case enabled:
+		return "🗺 structure: on(" + strings.Join(StructureMapTFs, "/") + ")"
+	default:
+		return "🗺 structure: off"
+	}
 }

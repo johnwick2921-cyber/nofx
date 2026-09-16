@@ -38,6 +38,9 @@ type PlannerInput struct {
 	Regime           RegimeBlock
 	Levels           []ScoredLevel // Go-ranked, graded (P1.5) — the decision-critical block
 	StructureSummary []string      // one line per timeframe
+	// Structure (S1, 2026-09-16) — the STRUCTURE table; nil = knob off =
+	// nothing rendered (byte-identical prompt).
+	Structure *StructureMap
 	// G2.2 (2026-08-24) — nearest in-band HTF zones (S/D/FVG/OB), graded, for a
 	// dedicated prompt section. They exist in the data but lose the top-8 seat
 	// race to structural levels (cluster collapse + seat priority), so the model
@@ -487,6 +490,10 @@ func BuildPlannerPrompt(in PlannerInput) string {
 		b.WriteString("## Indicators (executor mirror — your ai_config toggles, computed values)\n")
 		b.WriteString(in.IndicatorsBlock + "\n\n")
 	}
+
+	// S1 (2026-09-16) — the STRUCTURE table, knob-gated (nil → nothing):
+	// direction only, before the entry table it must never be confused with.
+	b.WriteString(RenderStructureSection(in.Structure))
 
 	// Ranked level table — the decision-critical block, high-salience.
 	// CLASS 45 E2/E3 — feed forward what the validator/composer already know:
