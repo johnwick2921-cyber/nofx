@@ -6,6 +6,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"nofx/telemetry"
 )
 
 // OfferBudget bounds synchronous admission work, not disk latency. Builders,
@@ -22,22 +24,38 @@ type work struct {
 }
 
 type Recorder struct {
-	sink        Sink
-	queue       chan work
-	stop        chan struct{}
-	done        chan struct{}
-	once        sync.Once
-	dropped     atomic.Uint64
-	warn        func(string)
-	dropNotices chan string
-	latency     [1002]atomic.Uint64 // microsecond histogram; final bucket is overflow
+	sink         Sink
+	queue        chan work
+	stop         chan struct{}
+	done         chan struct{}
+	once         sync.Once
+	dropped      atomic.Uint64
+	warn         func(string)
+	dropNotices  chan string
+	latency      [1002]atomic.Uint64 // microsecond histogram; final bucket is overflow
+	info         func(string)        // INFO line sink (rollups); falls back to warn
+	rowsMu       sync.Mutex
+	rows         map[string]uint64
+	rollupEvery  time.Duration
+	lastRollupAt time.Time
+	rollupMu     sync.Mutex
+	warnMu       sync.Mutex
+	warnAt       time.Time
+	warnDelta    uint64
+	warnReason   string
+	dropWindow   time.Duration
+	rollupT      *time.Ticker
 }
 
 func NewRecorder(sink Sink, capacity int, warn func(string)) *Recorder {
 	if capacity < 1 {
 		capacity = 1
 	}
-	r := &Recorder{sink: sink, queue: make(chan work, capacity), stop: make(chan struct{}), done: make(chan struct{}), warn: warn, dropNotices: make(chan string, 16)}
+	r := &Recorder{sink: sink, queue: make(chan work, capacity), stop: make(chan struct{}), done: make(chan struct{}), warn: warn, dropNotices: make(chan string, 16),
+		rollupEvery: envDur("RESEARCH_LOG_EVERY_S", 60*time.Second),
+		dropWindow:  200 * time.Millisecond,
+		rows:        make(map[string]uint64)}
+	r.rollupT = time.NewTicker(r.rollupEvery)
 	go r.run()
 	return r
 }
@@ -83,6 +101,7 @@ func (r *Recorder) offerWithClock(clock func() time.Time, name string, build fun
 
 func (r *Recorder) drop(reason string) {
 	r.dropped.Add(1)
+	telemetry.IncResearchSnapshotDrop()
 	select {
 	case r.dropNotices <- reason:
 	default:
@@ -91,10 +110,16 @@ func (r *Recorder) drop(reason string) {
 
 func (r *Recorder) log(message string) {
 	defer func() { _ = recover() }()
-	if r.warn != nil {
+	if r.info != nil {
+		r.info(message)
+	} else if r.warn != nil {
 		r.warn(message)
 	}
 }
+
+// SetInfoLog attaches the INFO-level sink used for rollups and status lines.
+// Drop warnings always go to the warn func passed to NewRecorder.
+func (r *Recorder) SetInfoLog(info func(string)) { r.info = info }
 
 func (r *Recorder) perform(job work) {
 	defer func() {
@@ -112,16 +137,7 @@ func (r *Recorder) perform(job work) {
 		r.drop(fmt.Sprintf("archive write %s: %v", job.name, err))
 		return
 	}
-	for _, f := range facts {
-		r.log(fmt.Sprintf("research snapshot written: object=%s event=%s snapshot=%v missing=%v", f.Object, f.Event, stringValue(f.SnapshotID), f.Missing))
-	}
-}
-
-func stringValue(p *string) string {
-	if p == nil {
-		return "UNKNOWN"
-	}
-	return *p
+	r.noteRows(facts)
 }
 
 func (r *Recorder) run() {
@@ -136,7 +152,7 @@ func (r *Recorder) run() {
 				r.perform(job)
 			}
 		case reason := <-r.dropNotices:
-			r.log(fmt.Sprintf("WARN research snapshot dropped: %s; total=%d", reason, r.Dropped()))
+			r.coalesceDrop(reason)
 		case <-r.stop:
 			for {
 				select {
@@ -208,8 +224,10 @@ func (r *Recorder) flushNotices() {
 	for {
 		select {
 		case reason := <-r.dropNotices:
-			r.log(fmt.Sprintf("WARN research snapshot dropped: %s; total=%d", reason, r.Dropped()))
+			r.coalesceDrop(reason)
 		default:
+			r.emitDropWarn(true)
+			r.emitRollup(true)
 			return
 		}
 	}

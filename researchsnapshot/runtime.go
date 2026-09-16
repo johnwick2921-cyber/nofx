@@ -3,7 +3,9 @@ package researchsnapshot
 import (
 	"context"
 	"fmt"
+	"os"
 	"runtime/debug"
+	"strings"
 	"sync/atomic"
 	"time"
 )
@@ -32,7 +34,7 @@ func Record(name string, build func() []Fact) (accepted bool) {
 	return r.Offer(name, build)
 }
 
-func Start(path string, log func(string)) (closeRecorder func()) {
+func Start(path string, log func(string), warn func(string)) (closeRecorder func()) {
 	closeRecorder = func() {}
 	emit := func(message string) {
 		defer func() { _ = recover() }()
@@ -40,13 +42,25 @@ func Start(path string, log func(string)) (closeRecorder func()) {
 			log(message)
 		}
 	}
+	warnEmit := func(message string) {
+		defer func() { _ = recover() }()
+		if warn != nil {
+			warn(message)
+		} else if log != nil {
+			log(message)
+		}
+	}
 	defer func() {
 		if recover() != nil {
-			if log != nil {
-				emit("WARN research snapshot initialization panic; capture unavailable")
-			}
+			warnEmit("WARN research snapshot initialization panic; capture unavailable")
 		}
 	}()
+	// RESEARCH_SNAPSHOT gate (dispatch 103): unset or 0 leaves the recorder off.
+	if v := os.Getenv("RESEARCH_SNAPSHOT"); v == "" || v == "0" || strings.EqualFold(v, "false") {
+		setStatusNote("OFF (RESEARCH_SNAPSHOT unset)")
+		emit("research snapshot: OFF (RESEARCH_SNAPSHOT unset)")
+		return
+	}
 	rev := ""
 	if info, ok := debug.ReadBuildInfo(); ok {
 		for _, s := range info.Settings {
@@ -57,12 +71,35 @@ func Start(path string, log func(string)) (closeRecorder func()) {
 	}
 	a, err := Open(path, rev)
 	if err != nil {
-		emit("WARN research snapshot archive unavailable; capture disabled")
+		setStatusNote("OFF (archive unavailable)")
+		warnEmit("WARN research snapshot archive unavailable; capture disabled")
 		return
 	}
-	r := NewRecorder(a, 128, log)
+	// Retention at boot (RESEARCH_RETAIN_DAYS, default 7). VACUUM is never run
+	// automatically: on a ~77 GB archive it would rewrite the whole file on the
+	// trading DB's disk — space reclamation is the owner's call.
+	if n, err := pruneOldFacts(a, retainDays()); err == nil && n > 0 {
+		emit(fmt.Sprintf("research snapshot: pruned %d row(s) older than %dd at boot (no auto-VACUUM — owner decides when to reclaim disk)", n, retainDays()))
+	}
+	r := NewRecorder(a, 128, warnEmit)
+	r.SetInfoLog(emit)
 	Install(r)
-	return func() { Install(nil); r.Close(); _ = a.Close() }
+	retentionStop := make(chan struct{})
+	go func() {
+		t := time.NewTicker(24 * time.Hour)
+		defer t.Stop()
+		for {
+			select {
+			case <-t.C:
+				if _, err := pruneOldFacts(a, retainDays()); err != nil {
+					warnEmit(fmt.Sprintf("WARN research snapshot daily prune failed: %v", err))
+				}
+			case <-retentionStop:
+				return
+			}
+		}
+	}()
+	return func() { close(retentionStop); Install(nil); r.Close(); _ = a.Close() }
 }
 
 func BootLineAt(a *Archive, r *Recorder, now time.Time) string {
@@ -130,7 +167,7 @@ func CurrentBootLine() string {
 func CurrentBootLineAt(now time.Time) string {
 	r := Active()
 	if r == nil {
-		return BootLineAt(nil, nil, now)
+		return "research snapshot: " + currentStatusNote()
 	}
 	a, _ := r.sink.(*Archive)
 	return BootLineAt(a, r, now)
