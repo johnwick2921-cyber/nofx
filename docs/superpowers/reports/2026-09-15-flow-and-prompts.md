@@ -141,6 +141,15 @@ above ~6 is a fantasy target and gets WARN-flagged at write.
 
 ### 2.4 SCENARIO ECONOMICS CONTRACT — `kernel/planner_prompt.go:782`
 
+> **V9-F4 — the exact machine armable set** (`kernel/arm_kind.go`, ArmKindFor):
+> **reject, fvg_entry, sweep_reclaim, breakup_continue, breakdown_continue →
+> limit; reclaim → stop_entry.** That is the complete set of 6. **hold,
+> acceptance, breakout_retest NEVER arm.** `ArmableConditionsPipe:89` renders
+> this set into the OUTPUT template; the prompt sentence "EVERY other condition
+> … must arm SINGLE" enumerates only 4 of the 5 armable singles (reclaim is
+> omitted there but IS armable as a stop entry). Do not read that sentence as
+> the full list.
+
 ```text
 SCENARIO ECONOMICS CONTRACT (required for NEW AUTHORING; legacy reads remain
 UNKNOWN): every scenario states entry zone, trigger, confirm{}, structural
@@ -188,7 +197,9 @@ trigger/invalid prose.
 ## No-trade gates (the machine enforces the windows below; the rest are yours)
   - balance-day (open inside prior value area AND VAs overlap) → edges-only, or skip
   - opening gap >1.2×ATR or open outside the prior range → NEVER fade; the gap is a target
-  - no A/B zone in reach AND no pool swept by 10:30 CT → declare the skip in the plan
+  - no A/B zone in reach AND no pool swept by 09:30 CT → declare the skip in the plan
+    (V9-F1: template renders ETtoCT("10:30") — 10:30 EASTERN → 09:30 CENTRAL;
+    kernel/no_trade_band.go:243, rendered at planner_prompt.go:694)
   - lunch <start>–<end> CT: no new entries (refused on the AI-decision path only —
     no band predicate exists in the arm path, so with plan_mode=strict nothing
     refuses an entry here)
@@ -267,6 +278,9 @@ authority) → `## THE POSITION` → `## THE ORIGINAL ENTRY DECISION (verbatim �
 this is the ONLY thesis you judge)` (fenced) → `## MACHINE STRUCTURE (Go-computed)`
 → `## TOUCH` → `## YOUR QUESTIONS` (2: did the original invalidation trigger;
 does machine structure contradict — `structure_conflict: none|warning|confirmed`).
+(V9-F2: an EMPTY thesis does not get judged — `engine_prompt_observer.go:29-31`
+substitutes `(no stated thesis recorded — judge only the stated stop/target
+levels)`.)
 
 Output contract (`:93-98`): one JSON object —
 `{"thesis_status":"intact|weakening|invalidated","invalidation_cited":"REQUIRED
