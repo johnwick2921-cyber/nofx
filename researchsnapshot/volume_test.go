@@ -316,3 +316,32 @@ func firstContaining(lines []string, sub string) string {
 	}
 	return "<none>"
 }
+
+// Re-review pin: the rollup ticker must be STOPPED on shutdown, and no rollup
+// line may fire after Close returns. RED on d2f0a8cf (the ticker leaked — no
+// r.rollupT.Stop() existed anywhere in the package).
+func TestVolumeRollupStopsOnClose(t *testing.T) {
+	t.Setenv("RESEARCH_LOG_EVERY_S", "1")
+	sink := &captureSink{}
+	log := &lineCapture{}
+	r := NewRecorder(sink, 128, log.add)
+
+	now := time.Date(2026, 9, 16, 12, 0, 0, 0, time.UTC)
+	clock := func() time.Time { return now }
+	r.offerWithClock(clock, "market", func() []Fact { return []Fact{NewFact("market", "tick", nil, Clocks{})} })
+	time.Sleep(1200 * time.Millisecond) // let one 1s rollup fire
+	before := len(log.snapshot())
+	if before == 0 {
+		t.Fatal("expected at least one rollup line before Close")
+	}
+
+	r.Close()
+	after := len(log.snapshot())        // Close emits its final rollup — count from here
+	time.Sleep(1500 * time.Millisecond) // a leaked ticker would fire here
+	if n := len(log.snapshot()); n != after {
+		t.Fatalf("rollup fired after Close returned: %d -> %d lines", after, n)
+	}
+	if !r.rollupStopped.Load() {
+		t.Fatalf("rollup ticker not stopped on shutdown (leak): rollupStopped=false after Close")
+	}
+}

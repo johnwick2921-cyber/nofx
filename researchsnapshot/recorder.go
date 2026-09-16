@@ -24,28 +24,29 @@ type work struct {
 }
 
 type Recorder struct {
-	sink         Sink
-	queue        chan work
-	stop         chan struct{}
-	done         chan struct{}
-	once         sync.Once
-	dropped      atomic.Uint64
-	warn         func(string)
-	dropNotices  chan string
-	latency      [1002]atomic.Uint64 // microsecond histogram; final bucket is overflow
-	info         func(string)        // INFO line sink (rollups); falls back to warn
-	rowsMu       sync.Mutex
-	rows         map[string]uint64
-	rollupEvery  time.Duration
-	lastRollupAt time.Time
-	rollupMu     sync.Mutex
-	warnMu       sync.Mutex
-	warnAt       time.Time
-	warnDelta    uint64
-	warnReason   string
-	warnSince    time.Time
-	dropWindow   time.Duration
-	rollupT      *time.Ticker
+	sink          Sink
+	queue         chan work
+	stop          chan struct{}
+	done          chan struct{}
+	once          sync.Once
+	dropped       atomic.Uint64
+	warn          func(string)
+	dropNotices   chan string
+	latency       [1002]atomic.Uint64 // microsecond histogram; final bucket is overflow
+	info          func(string)        // INFO line sink (rollups); falls back to warn
+	rowsMu        sync.Mutex
+	rows          map[string]uint64
+	rollupEvery   time.Duration
+	lastRollupAt  time.Time
+	rollupMu      sync.Mutex
+	warnMu        sync.Mutex
+	warnAt        time.Time
+	warnDelta     uint64
+	warnReason    string
+	warnSince     time.Time
+	dropWindow    time.Duration
+	rollupT       *time.Ticker
+	rollupStopped atomic.Bool // set when the rollup ticker is stopped (shutdown leak pin)
 }
 
 func NewRecorder(sink Sink, capacity int, warn func(string)) *Recorder {
@@ -171,6 +172,10 @@ func (r *Recorder) run() {
 						r.drop("shutdown queued: " + job.name)
 					}
 				default:
+					r.rollupT.Stop()
+					r.rollupStopped.Store(true)
+					r.emitDropWarn(true)
+					r.emitRollup(true)
 					r.log(fmt.Sprintf("research snapshot stopped: dropped=%d", r.Dropped()))
 					return
 				}
