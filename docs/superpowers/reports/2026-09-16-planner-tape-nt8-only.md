@@ -88,3 +88,36 @@ RULEBOOK §A (the planner's tape is NT8's own), SYSTEM-MAP §1 (doors + the kept
 
 ## Rollback
 Go binary swap only; no migration, no flag. The readers are additive; the previous binary reads the shared readers.
+
+## F3 · THE BOOT — c6579347, 2026-09-16 15:31:59 CT (owner-run runbook; F3 PARTIAL)
+
+PID 2748996. `🔐 BOOT INTEGRITY OK — rev c6579347580a · built 2026-09-16T19:57:23Z · expected c6579347580a
+· goldens PASS`; `/api/health` c6579347; `deploy/RELEASE=c6579347`; `nofx-bin.old.9e200002` HOLDS 9e200002
+(`go version -m`). `🧯 nt8 history at subscribe: MNQ 1m..30m 2000/2000, HTF n/a`; `🧯 ring rehydrated MNQ 1m
+[O]: nt8=2001 store_live=2500 store_hist=0 import=0 (refused at the door — guard iii) total=2500/2500`;
+`🧯 ring rehydrate done: 9 of 17 pairs deepened, +1104`; `📼 … mismatches this process: none`; zero
+`scale check SKIPPED` / `DIFFERENT PRICE SCALES` lines; 4h horizon 406/500 at 14:5x on the prior boot,
+HTF `n/a` at this subscribe (lands late, as before).
+
+**F3 PARTIAL — the `🧮 planner tape` and `📈 regime input window` lines did NOT print this boot.** Read
+from timing [A]: both are emitted by the trader's `afterBackfillHook` (`auto_trader_dayplan.go:87` →
+`SetAfterBackfillHook`). This boot the replay landed fast — `📦 bars: persisting` 15:32:02, the hook check
+and the `🕳 bar horizon:` boot line 15:32:03 — and the trader installed the hook at 15:32:05 (its `📊 bars`
+line): `afterBackfillHook.Load()` was nil, the block skipped it silently, and the R1 "📊 bars after
+backfill" line is missing with them. At 14:33 the backfill waited until 14:33:11 and the trader had loaded
+at 14:33:11 — the hook won by chance. **Class candidate: a hook that loses when its event beats its
+installer** (silent by construction — absent, not wrong; A24). The exclusion itself is live (the planner's
+reads go through `LastNBarsFromNT8On`; static pins + lint); the LIVE accounting is owed. CTO ruling (b):
+no third boot for a log line — the fix (hook fires immediately if the backfill already landed; 🖥 compares
+bundle rev to binary rev, not timestamps) ships as the next PR and the `🧮` proof is taken at the next
+scheduled boot.
+
+**Correction (CTO, [A]):** my first read said "dist f53f4e94 installed by the owner". Wrong. `web/dist`
+serves `assets/index-C0CWYHKw.js` — the **bcd70c0d** dist (bundle `GUIDE_BUILT_REV=9e200002`, mtime
+14:40:15), installed after the 14:33 boot (which served the 09-13 bundle). The **f53f4e94** dist
+(`index-GYuDKImr.js`, rev c6579347, parked at `scratchpad/cc101d/web-dist-f53f4e94/`) is NOT installed
+and is owed — the owner ran the binary runbook only. So the `🖥 ui … STALE` line this boot is REAL (bundle
+rev 9e200002 ≠ binary c6579347) and the Guide banner shows drift until that cp runs; the timestamp-vs-rev
+point is a separate small fix, not this boot's explanation.
+
+Marker: this commit, from `~/nofx`, `deploy/RELEASE=c6579347` (written by the runbook before the kill, A19).
