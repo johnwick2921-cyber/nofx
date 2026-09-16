@@ -194,6 +194,15 @@ func WireBarPersistence(st *store.Store) {
 						// is the difference between a thin chart that is
 						// explained and one that is a surprise.
 						telemetry.IncScaleBreakDrop(m.HistoricalDropped)
+						// (3a) [O "I want full data", 2026-09-16] — ask NT8 for the
+						// window again. The AddOn rebuilds its BarsRequest on a repeat
+						// subscribe; the reply is bars_historical with ≈bars_back per
+						// tf, judged by the ring like any replay. Rate-limited per
+						// symbol and refused while the feed is down; a refusal is
+						// WARNed with its reason, never silent (A9).
+						if rerr := server.RequestHistoryReplayAt(m.Symbol, time.Now()); rerr != nil {
+							logger.Warnf("🧯 history replay NOT re-requested for %s after the %s scale break: %v", m.Symbol, m.Timeframe, rerr)
+						}
 						rehydrateRingFromStoreWith(bh, server, time.Now(), true)
 						srcCensus, _ := bh.SourceCensus(m.Symbol)
 						refill := "refilled from the store's live rows"
