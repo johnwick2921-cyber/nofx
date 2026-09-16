@@ -36,27 +36,33 @@ func TestShortReadWarnIsDedupedAndCounted(t *testing.T) {
 	base := telemetry.BarHorizonCounts()["short"]
 	// The live arm-133 instant, to the second, so the "since" below is a
 	// RESOLVED clock rather than a literal.
+	// 101 D3(b) (2026-09-16): the window is FIVE minutes, pinned as a policy
+	// value here rather than derived from the constant (class 93). 280 reads
+	// one second apart = 4m39s, inside one window.
+	if barHorizonWarnWindow != 5*time.Minute {
+		t.Fatalf("barHorizonWarnWindow = %s, want 5m (101 D3(b))", barHorizonWarnWindow)
+	}
 	start := bhCT(2026, time.September, 9, 13, 18).Add(13 * time.Second)
-	for i := 0; i < 700; i++ {
+	for i := 0; i < 280; i++ {
 		read(start.Add(time.Duration(i) * time.Second))
 	}
 	if n := bhCountLines(get(), "bar horizon"); n != 1 {
-		t.Fatalf("%d emitted lines inside the 15-minute window, want 1", n)
+		t.Fatalf("%d emitted lines inside the five-minute window, want 1", n)
 	}
-	if got := telemetry.BarHorizonCounts()["short"] - base; got != 700 {
-		t.Fatalf("BarHorizonCounts()[\"short\"] rose by %d, want 700 — every DETECTION is counted, not only the emitted one", got)
+	if got := telemetry.BarHorizonCounts()["short"] - base; got != 280 {
+		t.Fatalf("BarHorizonCounts()[\"short\"] rose by %d, want 280 — every DETECTION is counted, not only the emitted one", got)
 	}
 
 	// Past the re-arm window the key speaks again, and it says how many it ate.
-	read(start.Add(16 * time.Minute))
+	read(start.Add(6 * time.Minute))
 	lines := get()
 	if n := bhCountLines(lines, "bar horizon"); n != 2 {
 		t.Fatalf("after the window re-armed: %d emitted lines, want 2: %v", n, lines)
 	}
-	if bhCountLines(lines, "suppressed=699 since ") != 1 {
+	if bhCountLines(lines, "suppressed=279 since ") != 1 {
 		t.Fatalf("the re-armed line must name what it suppressed and since when: %v", lines)
 	}
-	if bhCountLines(lines, "suppressed=699 since 13:18:13 CT") != 1 {
+	if bhCountLines(lines, "suppressed=279 since 13:18:13 CT") != 1 {
 		t.Fatalf("the 'since' must be a RESOLVED clock, not a literal or a duration: %v", lines)
 	}
 
@@ -64,8 +70,8 @@ func TestShortReadWarnIsDedupedAndCounted(t *testing.T) {
 	// day. The rollover must CLEAR the state, so the next line carries no
 	// "suppressed=" at all — without the rollover the window path would emit
 	// the same line WITH suppressed=5, which is what this discriminates.
-	for i := 1; i <= 5; i++ {
-		read(start.Add(16*time.Minute + time.Duration(i)*time.Second))
+	for i := 1; i <= 5; i++ { // inside the window the 6-minute read opened
+		read(start.Add(6*time.Minute + time.Duration(i)*time.Second))
 	}
 	read(start.Add(24 * time.Hour))
 	lines = get()
