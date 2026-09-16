@@ -42,6 +42,7 @@ type episodeRec struct {
 	TF          string  `json:"tf"`
 	Family      string  `json:"family"`
 	HTF         bool    `json:"htf"`
+	Entry       string  `json:"entry,omitempty"` // D1′ entry side: below=long-side touch, above=short-side touch
 	Ordinal     int     `json:"ordinal"`
 	Outcome     string  `json:"outcome"`
 	MFE         float64 `json:"mfe"`
@@ -89,18 +90,34 @@ var refKindsQ4 = map[string]bool{
 }
 
 func runEval(bd *barDB, reads []*readSnapshot, outDir string) error {
+	return runEvalWith(bd, reads, outDir, nil)
+}
+
+// runEvalWith is runEval plus the optional S4 pass (-s4): episodes gain their
+// entry side, every read emits its S1 trend row, and HTF level-scans emit Q-A
+// freshness grades under BOTH the 1m-touch and the own-TF (S2) grading.
+func runEvalWith(bd *barDB, reads []*readSnapshot, outDir string, s4 *s4State) error {
 	epFile, err := os.Create(filepath.Join(outDir, "episodes.jsonl"))
 	if err != nil {
 		return err
 	}
 	w := bufio.NewWriterSize(epFile, 1<<20)
+	defer func() {
+		w.Flush()
+		epFile.Close()
+	}()
 
 	q1 := map[string]*cellAgg{} // "K|tf|kind" and "F|tf|family"
 	q4 := map[string]*cellAgg{} // "kind|ordinal"
 	var nEp, nLevelScans, nSkipped int
 
 	for _, r := range reads {
-		np, ns, nsk, err := processRead(bd, r, w, q1, q4)
+		if s4 != nil {
+			if err := s4.emitTrends(bd, r); err != nil {
+				return err
+			}
+		}
+		np, ns, nsk, err := processRead(bd, r, w, q1, q4, s4)
 		if err != nil {
 			return err
 		}
@@ -126,7 +143,7 @@ func runEval(bd *barDB, reads []*readSnapshot, outDir string) error {
 }
 
 // processRead evaluates one read snapshot (streaming — snapshots are not kept).
-func processRead(bd *barDB, r *readSnapshot, w *bufio.Writer, q1, q4 map[string]*cellAgg) (nEp, nLevelScans, nSkipped int, err error) {
+func processRead(bd *barDB, r *readSnapshot, w *bufio.Writer, q1, q4 map[string]*cellAgg, s4 *s4State) (nEp, nLevelScans, nSkipped int, err error) {
 	delta := delta5d(bd, r.Contract, r.ReadTime.UnixMilli())
 	if delta <= 0 {
 		delta = r.Delta // tape too thin for 5 days — fall back to the read's own Δ
@@ -159,9 +176,15 @@ func processRead(bd *barDB, r *readSnapshot, w *bufio.Writer, q1, q4 map[string]
 		for _, e := range eps {
 			rec := episodeRec{
 				Kind: string(l.Kind), TF: tf, Family: fam, HTF: l.HTF,
+				Entry:   e.Entry,
 				Ordinal: e.Ordinal, Outcome: e.Outcome, MFE: e.MFE, MAE: e.MAE,
 				OpenedAtMs: e.OpenedAtMs, ClosedAtMs: e.ClosedAtMs,
 				DistAtRead: dist, AgeAtReadMs: age, Day: r.Day, Session: r.Session,
+			}
+			if s4 != nil && e.Ordinal == 1 && l.HTF && s1HTFFreshTF(tf) {
+				if err := s4.emitQA(bd, r, l, tf, e); err != nil {
+					return nEp, nLevelScans, nSkipped, err
+				}
 			}
 			if e.Ordinal == 1 {
 				ti := idxByOpen(bars, e.OpenedAtMs)

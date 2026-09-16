@@ -27,6 +27,9 @@ func main() {
 		start  = flag.String("start", "2022-04-11", "first CME day YYYY-MM-DD (CT), inclusive")
 		end    = flag.String("end", "", "last CME day YYYY-MM-DD (CT), inclusive; empty = last bar day")
 		limit  = flag.Int("limit", 0, "debug: stop after N reads (0 = all)")
+		q6     = flag.Bool("q6", false, "run the Q6 seat-share replay instead of the episode pass")
+		s4     = flag.Bool("s4", false, "run the S4 measurement pass: entry field + trends.jsonl + qa.jsonl")
+		q6n    = flag.Int("q6n", 30, "Q6: number of recent session-plans to replay")
 	)
 	flag.Parse()
 	if *dbPath == "" || *outDir == "" {
@@ -66,6 +69,19 @@ func main() {
 	fmt.Printf("era: %s → %s (CT), %d 1m bars\n",
 		startD.Format("2006-01-02"), endD.Format("2006-01-02"), len(bd.merged1m))
 
+	if *q6 {
+		// trader id resolved by name 'hoang' (the live trader) — read from the copy
+		var traderID string
+		if err := db.QueryRow(`SELECT id FROM traders WHERE name='hoang' ORDER BY updated_at DESC LIMIT 1`).Scan(&traderID); err != nil {
+			fatal("trader lookup: %v", err)
+		}
+		if err := runQ6(bd, db, *outDir, traderID, *q6n); err != nil {
+			fatal("q6: %v", err)
+		}
+		fmt.Println("done")
+		return
+	}
+
 	var reads []*readSnapshot
 	for day := startD; !day.After(endD); day = day.AddDate(0, 0, 1) {
 		for _, sess := range []string{"LONDON", "NY", "ASIA"} {
@@ -82,7 +98,18 @@ func main() {
 collected:
 	fmt.Printf("reads built: %d\n", len(reads))
 
-	if err := runEval(bd, reads, *outDir); err != nil {
+	if *s4 {
+		st, err := newS4State(*outDir)
+		if err != nil {
+			fatal("s4 state: %v", err)
+		}
+		if err := runEvalWith(bd, reads, *outDir, st); err != nil {
+			fatal("eval: %v", err)
+		}
+		if err := st.close(); err != nil {
+			fatal("s4 close: %v", err)
+		}
+	} else if err := runEval(bd, reads, *outDir); err != nil {
 		fatal("eval: %v", err)
 	}
 	fmt.Println("done")
