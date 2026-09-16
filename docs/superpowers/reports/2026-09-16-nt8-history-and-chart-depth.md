@@ -318,6 +318,29 @@ Accepted and reproduced. What matters for this PR and the next:
 - The Guide paragraph for `web/src/guide/content/status.ts` — sent to L5 as text.
 - Store-count re-run at the gate — nofx-93's offer, accepted.
 
+## F3 · THE BOOT — 9e200002, 2026-09-16 14:33:08 CT (owner-run swap, mid-session by the owner's explicit "go" ×2 in 101's chat + GO to the CTO 13:44 CT)
+
+Tree recovered by the owner first (A2b cleared: `~/nofx` at `50cd0fdd == origin/dev`, porcelain 0;
+staged WIP preserved on `wip/class45-staged-20260916`; CLAUDE.md 421 lines). Swap + kill were
+OWNER-RUN via `~/nofx-backups/cutover-101-9e200002.sh` — both agent classifiers deny the deploy
+path. PID 1834811 → **2704230**. Every line below read from `data/nofx_2026-09-16.log` [A].
+
+- `🔐 BOOT INTEGRITY OK — rev 9e200002d6a2 · built 2026-09-16T17:35:50Z · expected 9e200002d6a2 · goldens PASS`
+- `🧯 nt8 history at subscribe: MNQ 1m=2000/2000 3m=2000/2000 5m=2000/2000 15m=2000/2000 30m=2000/2000 1h=n/a/2000 … 1w=n/a/2000` — NT8 delivered the window on every subscribed intraday tf (the dispatch's premise, refuted in §THE FINDING, now on a boot line).
+- `🧯 ring rehydrated MNQ 1m [O 2026-09-16]: nt8=2000 store_live=2500 store_hist=0 (post-drop excluded=false) import=0 (refused at the door — guard iii) total=2500/2500 (+500 older, all entered as historical — guard ii)` — `import=0` is a COUNT: the 426 12-26 import rows are older than the newest 2,500 the reader hands the door. Same shape on ES 1m.
+- `🧯 ring rehydrate done [O "i want fuull data" 2026-09-16]: 2 of 9 symbol×tf pairs deepened, +1000 bars total, 0 read failure(s), 0 pair(s) not selected` — non-1m pairs did not deepen because the store's 12-26 depth (5m: 623 of the newest 2,500 rows on 12-26) is shallower than NT8's 2,000-bar replay, exactly the CTO's amendment-2 premise; (3a) is what carries those tfs.
+- `🕳 bar horizon … MNQ 5m asked=2500 served=2000 span=225h50m0s … gaps=3` — **5m served 2,000 / 9.4 days** (the 09-15 boot on 3ce4281a showed the same 2,000 at boot; the defect fired 11 hours later — the fixtures, not the boot line, prove rules 1–2; zero `scale check SKIPPED` / `DIFFERENT PRICE SCALES` lines since boot).
+- `📈 chart: across-roll=on[O] · prior contracts fill strictly before the current contract's first live row · step never adjusted · limit max=20000 · decision readers=current-contract-only`
+- `/api/klines?symbol=MNQ&interval=5m&limit=5000&exchange=ninjatrader` → **5,000 klines, `MNQ 09-26`=2,995 + `MNQ 12-26`=2,005**, monotonic, 08-21 08:45 → 09-16 14:35 CT; the roll step **`09-26 29617.00 → 12-26 29918.50`, Δ +301.50 at 09-07 04:40 CT** (`FirstLiveOn` = the first live 12-26 row, [O] never adjusted).
+- Condition (c) `📈 regime input window @14:33:12 CT: BEFORE window=7 · baseline=0.965453 · 2000 5m rows via 5m-ring (pre-wave) · AFTER window=7 · baseline=0.965453 · 2000 5m rows via 5m-ring-fallback · Δ+0 day(s)` — unchanged, as the RULEBOOK says it must be.
+- `🖥 ui: served-by=go-static build=2026-09-13T06:02:55Z STALE` — expected; L5 owes the dist (A15 §2).
+- A13: `nofx-bin.old.3ce4281a` now HOLDS 3ce4281a; the file that held 83b76c51 is `nofx-bin.old.83b76c51`.
+- Still 0 at 14:35 CT: **MNQ 1h / 4h / 1d horizons** (NT8 answered `n/a` for every HTF at subscribe) — the AddOn HTF starvation (acceptance-gate F-2, 2026-08-15), not this wave; re-read owed when NT8's HTF replay lands.
+- `🚨 CLOCK EARLY-WARNING |drift| 47.5s` (WSL2 time-sync) and `guardrail_would_trip realized today=-2136.00` — pre-existing, logged, not this wave.
+
+Marker: this commit, from `~/nofx` (the SAME tree that booted), `deploy/RELEASE=9e200002` written before the kill (A19).
+`GUIDE_BUILT_REV` is NOT bumped here: `web/` is L5's under this dispatch's do-not-touch list; the Guide paragraph went to L5 via the CTO.
+
 ## ROLLBACK
 
 Go half: `mv nofx-bin nofx-bin.failed.<rev> && mv nofx-bin.old.<prev-rev> nofx-bin && echo <prev> > deploy/RELEASE && kill -9 $(pgrep -x nofx-bin)`. No AddOn half. No migration (Kline.Contract is wire-only; no DB column). `NOFX_CHART_ACROSS_ROLL=off` disables D2 without a rebuild.
