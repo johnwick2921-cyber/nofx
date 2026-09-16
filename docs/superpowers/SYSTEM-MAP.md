@@ -108,7 +108,8 @@ splice (`trader/bars_store_depth.go`), which is the owner's open call; (iv) the
 contract is the current one. A CONFIRMED scale break re-requests NT8's full replay
 **once per symbol per boot** (`RequestHistoryReplayAt`, `historyReplayMaxPerBoot`);
 a second break in the same boot prints `second scale break this boot — replay on
-another contract, restart the AddOn` and leaves that ring live-only — a time floor
+another contract, restart the AddOn`; NT8 is not re-asked, the store refill still
+runs (live rows, replay-grade) — a time floor
 would loop, because historical-over-historical the incoming replay wins in
 `mergeSeedKeepingLive`.
 

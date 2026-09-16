@@ -1,6 +1,7 @@
 package ninjatrader
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -376,5 +377,29 @@ func TestBarHorizonWarnLineCarriesTheCounters(t *testing.T) {
 	after := barHorizonCountsTxt()
 	if !strings.Contains(after, fmt.Sprintf("short=%d", before+1)) {
 		t.Fatalf("the rendered totals do not READ telemetry (A11): before=%d line=%q", before, after)
+	}
+}
+
+// THE P0 LINE SAYS WHAT THE RING HOLDS UNDER [O] "i want fuull data": every tf
+// refills from the store after a drop (3b), so "LIVE-ONLY … 1m-only, owner
+// condition 2026-09-09" is a superseded literal on a non-1m break (class 82);
+// and it says whether NT8 was re-asked (3a) — once per boot, then not.
+func TestScaleBreakP0TextMatchesTheRefillAndTheReask(t *testing.T) {
+	for _, tf := range []string{"1m", "5m", "1h"} {
+		got := scaleBreakRefillTxt(tf, nil)
+		if strings.Contains(got, "1m-only") || strings.Contains(got, "LIVE-ONLY") {
+			t.Fatalf("%s: superseded 1m-only literal on the P0 line: %q", tf, got)
+		}
+		if !strings.Contains(got, "store") || !strings.Contains(got, "NT8 re-asked") {
+			t.Fatalf("%s: want the store refill + the re-ask named, got %q", tf, got)
+		}
+	}
+	spent := scaleBreakRefillTxt("5m", ntwire.ErrHistoryReplaySpent)
+	if !strings.Contains(spent, "NT8 NOT re-asked") || !strings.Contains(spent, "restart the AddOn") {
+		t.Fatalf("spent budget must be named with the fix, got %q", spent)
+	}
+	down := scaleBreakRefillTxt("5m", errors.New("tcp_server: feed down"))
+	if !strings.Contains(down, "NT8 NOT re-asked") || !strings.Contains(down, "feed down") {
+		t.Fatalf("a refused re-ask must carry its reason, got %q", down)
 	}
 }

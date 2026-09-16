@@ -201,19 +201,17 @@ func WireBarPersistence(st *store.Store) {
 						// tf, judged by the ring like any replay. Rate-limited per
 						// symbol and refused while the feed is down; a refusal is
 						// WARNed with its reason, never silent (A9).
-						if rerr := server.RequestHistoryReplayAt(m.Symbol, time.Now()); rerr != nil {
+						rerr := server.RequestHistoryReplayAt(m.Symbol, time.Now())
+						if rerr != nil {
 							if errors.Is(rerr, ntwire.ErrHistoryReplaySpent) {
-								logger.Errorf("🚨 P0 — second scale break this boot — replay on another contract, restart the AddOn (%s %s; ring left live-only): %v", m.Symbol, m.Timeframe, rerr)
+								logger.Errorf("🚨 P0 — second scale break this boot — replay on another contract, restart the AddOn (%s %s: NT8 NOT re-asked; the ring keeps its live bars + the store refill below, entered replay-grade): %v", m.Symbol, m.Timeframe, rerr)
 							} else {
 								logger.Warnf("🧯 history replay NOT re-requested for %s after the %s scale break: %v", m.Symbol, m.Timeframe, rerr)
 							}
 						}
 						rehydrateRingFromStoreWith(bh, server, time.Now(), true)
 						srcCensus, _ := bh.SourceCensus(m.Symbol)
-						refill := "refilled from the store's live rows"
-						if m.Timeframe != rehydrateTimeframe {
-							refill = "LIVE-ONLY UNTIL NT8's NEXT FULL REPLAY (the store rehydrate is " + rehydrateTimeframe + "-only, owner condition 2026-09-09)"
-						}
+						refill := scaleBreakRefillTxt(m.Timeframe, rerr)
 						events, bars := telemetry.ScaleBreakCounts()
 						logger.Errorf("🚨 P0 — REPLAY AND LIVE ARE ON DIFFERENT PRICE SCALES for %s %s at %s: last replay close %.2f, first live close %.2f, delta %.2f pts (> %.2f%% of price). %d historical bars DROPPED from the ring; %s; the straddling bar is labelled mixed and no reader takes it. scale-break drops since boot: %d event(s), %d bar(s). bars by source now %v. (bar-source wave 2026-09-10; adjacency guard 101 2026-09-16)",
 							m.Symbol, m.Timeframe, kernel.ClockCTSeconds(m.At), m.LastHistoricalC, m.FirstLiveC, m.DeltaPts, ntwire.ScaleMismatchPct*100, m.HistoricalDropped, refill, events, bars, srcCensus)
@@ -526,8 +524,6 @@ func rehydrateRingFromStoreWith(bh *store.BarHistoryStore, server *ntwire.TCPSer
 	}
 }
 
-// rehydrateTimeframe is the ONLY timeframe the boot rehydrate touches. See the
-// header above for why it is not every pair the cache holds.
 // rehydrateTimeframe was the 1m-only selection of owner condition (a),
 // 2026-09-09. It remains the name of the FEED-OWN timeframe (the tape every
 // other series is aggregated from, the one the regime baseline is served
@@ -593,4 +589,22 @@ func rehydrateBarsFromRows(rows []store.BarHistoryDB) []ntwire.Bar {
 		bars = append(bars, ntwire.Bar{T: r.OpenTimeMs, O: r.O, H: r.H, L: r.L, C: r.C, V: r.V, Source: ntwire.BarSourceHistorical})
 	}
 	return bars
+}
+
+// scaleBreakRefillTxt is the P0 line's account of what the ring holds for the
+// broken timeframe after the drop, and whether NT8 was asked again. Under [O]
+// "i want fuull data" (2026-09-16) EVERY timeframe refills from the store's
+// live rows (3b, entered replay-grade — guard ii); the 1m-only "LIVE-ONLY
+// UNTIL NT8's NEXT FULL REPLAY" literal of the 09-09 condition is retired
+// here with it. The re-ask (3a) is once per boot; a refusal names its reason.
+func scaleBreakRefillTxt(tf string, reask error) string {
+	refill := tf + " ring = live bars + the store's live rows (entered replay-grade)"
+	switch {
+	case reask == nil:
+		return refill + "; NT8 re-asked for its full replay (1/1 this boot)"
+	case errors.Is(reask, ntwire.ErrHistoryReplaySpent):
+		return refill + "; NT8 NOT re-asked — second break this boot, restart the AddOn"
+	default:
+		return refill + "; NT8 NOT re-asked (" + reask.Error() + ")"
+	}
 }

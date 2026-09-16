@@ -101,7 +101,7 @@ for the life of the process. After a confirmed break the P0 line now says what
 the ring is for that timeframe, and asks NT8 for its full replay again — once
 per symbol per boot. A second confirmed break in the same boot is not retried:
 the line says the replay is on another contract and the AddOn restart is the
-fix, and that ring stays live-only. (A timed retry would loop: the wrong-scale
+fix; the store refill still runs, NT8 is simply not asked again. (A timed retry would loop: the wrong-scale
 replay overwrites the store's rows every cycle until a live bar judges it.)
 
 Every timeframe's ring is refilled from the store at boot and after a drop

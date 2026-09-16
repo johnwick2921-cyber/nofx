@@ -184,8 +184,9 @@ rehydrate restores them → re-request → NT8 replays the wrong scale again →
 store-backed rows → off-scale until the next live bar of that tf judges it → drop → again, every
 five minutes. Fix: `historyReplayMaxPerBoot = 1`, per symbol. The second refusal is
 `ErrHistoryReplaySpent` and the P0 line reads, verbatim (A24):
-`🚨 P0 — second scale break this boot — replay on another contract, restart the AddOn (<sym> <tf>;
-ring left live-only)`. Counter (`IncScaleBreakDrop`) still increments on every break. A8
+`🚨 P0 — second scale break this boot — replay on another contract, restart the AddOn (<sym> <tf>:
+NT8 NOT re-asked; the ring keeps its live bars + the store refill below, entered replay-grade)`
+(93's wording nit, taken: the post-drop refill (3b) still runs, so "live-only" was false). Counter (`IncScaleBreakDrop`) still increments on every break. A8
 mutation: the time floor put back at `history_rerequest.go:64` (build rc=0) → `got <nil>` and
 `want exactly ONE bars_subscribe frame, got 2`; restored, green.
 
@@ -228,8 +229,9 @@ off, the 09-14 behaviour exactly.
    needed for the chart to ask past 1,500 at all; the `contract` label on each kline arrives
    with this boot but the FE that renders it is L5's.
 3. **After this boot, a TRUE scale break gets ONE re-request per symbol per boot** (3a); a
-   second break in the same boot is diagnosed on the P0 line and the ring is left live-only
-   for that tf until the AddOn is restarted. That is the bound, by design.
+   second break in the same boot is diagnosed on the P0 line; NT8 is not re-asked, the store
+   refill (3b) still runs (live rows, entered replay-grade), and the AddOn restart is the fix.
+   That is the bound, by design.
 4. **The five `bars=0` reconnect replays** (07:20, 07:22, 07:34, 08:33, 09:22 — BarsRequest
    run while the feed was down) are an observation for 104; the AddOn returns nothing and
    says so honestly. With rule 1 they are harmless; they are still wasted requests.
