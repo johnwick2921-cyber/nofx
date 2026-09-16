@@ -121,3 +121,20 @@ rev 9e200002 ≠ binary c6579347) and the Guide banner shows drift until that cp
 point is a separate small fix, not this boot's explanation.
 
 Marker: this commit, from `~/nofx`, `deploy/RELEASE=c6579347` (written by the runbook before the kill, A19).
+
+## FOLLOW-UP PR — the hook race and the 🖥 rule (CTO ruling (b): rides the next scheduled boot)
+
+- `SetAfterBackfillHook` / `fireAfterBackfillHook` share one mutex with `landed` + `fired` flags: install
+  after the event fires immediately, exactly once; install before fires once at the event. RED quotes:
+  `hook installed AFTER the backfill landed fired 0 time(s), want exactly 1` and `want exactly one firing,
+  got 2` (the old mailbox double-fired on a second landing).
+- `api.UIServingBootLine(dist, binaryAt, binaryRev)` judges by rev: finds the entry bundle index.html
+  references, every distinct 40-hex literal in it, and says `bundle-rev=<x> matches the binary` or
+  `bundle-rev=<x> STALE — built for another rev than binary <y>`; no literal → `bundle-rev=UNKNOWN`, not
+  judged; the mtime rides as `· bundle mtime predates the binary by …`. RED quotes: the 9e200002 bundle
+  with a NEWER mtime under c6579347 printed no STALE; the c6579347 bundle 17 min older printed STALE. The
+  timestamp-only function is deleted (class 100: no caller left); its three tests re-pointed.
+- CLASS 130 appended. Wiring gate: `fireAfterBackfillHook`, `UIServingBootLine`.
+- Live proof owed at the next scheduled boot: the `🧮 planner tape` line (import rows=426 on 12-26, Δ rows,
+  Δ baseline), the `📈` line, the R1 line, and `🖥 … bundle-rev=<rev> matches the binary` once the f53f4e94
+  dist is installed (or a later one built at the booted rev).

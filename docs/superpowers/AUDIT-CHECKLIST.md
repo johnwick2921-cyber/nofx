@@ -4798,3 +4798,28 @@ doors are found by reading every call site of the shared reader, not by listing 
 **Fix pattern.** Add the decision reader beside the shared one (shared byte-identical); reroute every
 door found by grep; lint by body; census on the boot line; E7-style zero-delta golden proving the rule did
 not move.
+
+## CLASS 130 — A HOOK THAT LOSES WHEN ITS EVENT BEATS ITS INSTALLER (born 2026-09-16 15:32 CT, boot of c6579347, fix/after-backfill-hook-race)
+
+**Shape.** Package A exposes `SetHook(fn)` as a mailbox (`atomic.Value`); package B installs the hook at
+its own load; A's event fires once, checks the mailbox, finds nil, and moves on. When the event is
+fast (a quick restart — the replay already persisted, backfill done at +3 s) and the installer is slow
+(the trader loads at +6 s), the hook never fires and NOTHING says so: the 📈 regime line, the 🧮 planner
+tape line and the R1 "📊 bars after backfill" line were simply absent. At the previous boot the order
+happened to be reversed, and it was called proven.
+
+**How it hid.** A boot proof reads the lines that ARE there; an absent line has no glyph to grep. The
+hook was born 2026-09-09 and had won every boot until a restart 58 minutes after the last one.
+
+**Probes.**
+- Any `SetXHook` seam whose event can fire once must REMEMBER the event: install-after-event fires
+  immediately, exactly once, under the same lock as the event (no window between "checked nil" and
+  "installed"). Pin BOTH orders (`TestAfterBackfillHookFiresWhenInstalledAfterTheEvent`,
+  `…FiresOnceWhenInstalledBeforeTheEvent`).
+- A boot proof lists the lines EXPECTED and fails on absence, not only on wrong content.
+- A "STALE / fresh" judgement compares IDENTITY (the served bundle's `GUIDE_BUILT_REV` vs the binary's
+  `vcs.revision`), never timestamps that happen to correlate: the 🖥 timestamp rule was right at this
+  boot by luck (the wrong bundle was also older) and would have called the RIGHT bundle stale, built 17
+  minutes before the binary (`TestUIBootLineIsFreshByRevEvenWhenTheBundleIsOlder`).
+
+**Fix pattern.** landed + fired flags under one mutex; both orders pinned; identity over time.

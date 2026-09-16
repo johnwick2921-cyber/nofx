@@ -95,6 +95,9 @@ var alsoRequireWired = []string{
 	"ImportRowsOn",
 	"PlannerTapeBootLine",
 	"logPlannerTapeAccounting",
+	// after-backfill hook race + 🖥 by rev (2026-09-16 15:32 boot).
+	"fireAfterBackfillHook",
+	"UIServingBootLine",
 	// WAVE A — the writers this wave added. Each must keep at least one
 	// production call site; removing one turns this test red.
 	"recordAcceptedRisk",

@@ -111,7 +111,12 @@ PLANNER door reads the NT8-only readers instead (`store.LastNBarsFromNT8On` /
 tape` boot line prints import rows on the contract, the tape length and the
 regime baseline BOTH ways (class 82); `TestNoPlannerDoorReadsTheSharedBarReader`
 pins the doors by function body, `TestPlannerStoreReaderServesNoImportRows` by
-a real store. Still reading the shared readers (imports included), NOT planner
+a real store. The `🧮`/`📈`/R1 lines ride `afterBackfillHook`, which since
+2026-09-16 REMEMBERS the event (landed + once under a mutex): install after the
+backfill fires immediately (class 130 — the 15:32 boot lost all three lines to a
+two-second race). The `🖥 ui:` line judges the served bundle by its embedded
+`GUIDE_BUILT_REV` against the binary's `vcs.revision` (`api.UIServingBootLine`);
+the mtime is a secondary note. Still reading the shared readers (imports included), NOT planner
 doors, named for the CTO: `level_stats_wire.go:121`, `trade_excursion_hook.go:168`,
 `trade_excursion_backfill.go:120`, `follow_plan_wiring.go:217`,
 `one_setup_boot.go:174`, the display seam, the rehydrate read (whose door counts

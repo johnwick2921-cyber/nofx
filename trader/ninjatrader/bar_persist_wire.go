@@ -4,7 +4,6 @@ import (
 	"errors"
 	"nofx/market"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"nofx/kernel"
@@ -233,11 +232,7 @@ func WireBarPersistence(st *store.Store) {
 					// replay landed, so it reported own1m for every TF on a
 					// cold cache. Now that the pantry is in, say what the
 					// resolver can ACTUALLY reach.
-					if h := afterBackfillHook.Load(); h != nil {
-						if fn, ok := h.(func()); ok && fn != nil {
-							fn()
-						}
-					}
+					fireAfterBackfillHook()
 					logger.Infof("%s", barHorizonBootLine(server.BarCache(), time.Now()))
 					go pruneLoop(bh)
 					return
@@ -346,13 +341,60 @@ func pruneLoop(bh *store.BarHistoryStore) {
 	}
 }
 
-// afterBackfillHook lets the trader layer print its post-backfill bar-source
-// line without this package importing it. nil = nothing printed.
-var afterBackfillHook atomic.Value
+// afterBackfillHook lets the trader layer print its post-backfill lines (the
+// R1 "📊 bars after backfill", the 📈 regime input window, the 🧮 planner
+// tape) without this package importing it.
+//
+// ORDER MUST NOT MATTER (2026-09-16 15:32 CT, boot of c6579347): the trader
+// installs this hook at load; the backfill goroutine checked it at 15:32:03,
+// found nil, and the trader installed it at 15:32:05 — three boot lines gone,
+// silently. The earlier atomic.Value was a mailbox with no memory of the
+// event. Now: whichever side arrives second fires the hook, exactly once, under
+// one mutex — no window between "checked nil" and "installed".
+var (
+	afterBackfillMu     sync.Mutex
+	afterBackfillFn     func()
+	afterBackfillLanded bool
+	afterBackfillFired  bool
+)
 
-// SetAfterBackfillHook installs the callback fired once the first backfill
-// completes. Safe to call more than once; the last registration wins.
-func SetAfterBackfillHook(fn func()) { afterBackfillHook.Store(fn) }
+// SetAfterBackfillHook installs the callback. If the backfill has ALREADY
+// landed and nothing has fired yet, it fires now. Later registrations replace
+// the callback but never re-fire it.
+func SetAfterBackfillHook(fn func()) {
+	afterBackfillMu.Lock()
+	afterBackfillFn = fn
+	run := fn != nil && afterBackfillLanded && !afterBackfillFired
+	if run {
+		afterBackfillFired = true
+	}
+	afterBackfillMu.Unlock()
+	if run {
+		fn()
+	}
+}
+
+// fireAfterBackfillHook marks the event landed and fires the hook if one is
+// installed and it has not fired yet.
+func fireAfterBackfillHook() {
+	afterBackfillMu.Lock()
+	afterBackfillLanded = true
+	fn := afterBackfillFn
+	run := fn != nil && !afterBackfillFired
+	if run {
+		afterBackfillFired = true
+	}
+	afterBackfillMu.Unlock()
+	if run {
+		fn()
+	}
+}
+
+func resetAfterBackfillHookForTest() {
+	afterBackfillMu.Lock()
+	afterBackfillFn, afterBackfillLanded, afterBackfillFired = nil, false, false
+	afterBackfillMu.Unlock()
+}
 
 // ── D3 — THE RING REHYDRATES FROM THE STORE ON BOOT ─────────────────────────
 // (owner-authorised expansion, wave BARS HORIZON 2026-09-09)
