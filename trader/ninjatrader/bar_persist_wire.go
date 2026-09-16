@@ -479,6 +479,10 @@ func rehydrateRingFromStoreWith(bh *store.BarHistoryStore, server *ntwire.TCPSer
 		}
 		seen[pair[0]] = true
 		logger.Infof("%s", contractBootLineFor(bh, server, pair[0], rehydrateKept, rehydrateFiltered, reseeded))
+		// 101 E1 — what NT8 delivered at subscribe, per tf, READ from the
+		// server's own frame records. One line that answers "did the history
+		// arrive" without leaving Go (the 09-16 diagnosis needed the NT8 log).
+		logger.Infof("%s", server.HistoryAtSubscribeLineFor(pair[0]))
 		if sc, err := bh.SourceCensus(pair[0]); err == nil {
 			logger.Infof("%s", SourceBootLine(pair[0], sc, cache.ScaleMismatches(), ntwire.ScaleMismatchPct, barReplayHold.line(pair[0])))
 		}
