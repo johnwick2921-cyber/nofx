@@ -4689,3 +4689,47 @@ label on the wire must be re-derived per emission, never cached for the life of
 a subscription; a data-scale switch without a name change is the same defect as
 a name change without a purge. Resolution that day: full NT8 restart → fresh
 ACK naming MNQ 12-26 → roll wave purged and reseeded correctly.
+
+---
+
+**Class (number assigned at merge) — Editor buffers silently reverted the law
+file, a second time (2026-09-15/16).** The same class as the 09-03 ruling, 12
+days later: the root AGENTS.md/CLAUDE.md mirrors and the quarantined main tree
+hold stale or reverted content (64 commits behind, 62 files reverted to 08-31
+content) while a VS Code editor buffer "saved" over tracked state. Probe: tree
+gate first — `git status --porcelain` empty AND `git rev-list --count
+HEAD..origin/dev` == 0, else STOP and read via `git show origin/dev:<path>`.
+Law: canon lives in TRACKED files (docs/superpowers/CLAUDE-canon.md,
+AUDIT-CHECKLIST.md @ origin/dev); root AGENTS.md/CLAUDE.md are untracked mirrors
+believed last.
+
+**Class (number assigned at merge) — Rollback binaries not named for the rev
+they hold (A13).** `nofx-bin.old.*` files accumulate with arbitrary or
+misleading suffixes; a rollback restored from the wrong file would run the wrong
+revision. Probe: after every `mv`, run `go version -m nofx-bin.old.<rev12>` and
+assert vcs.revision matches the suffix (L10 owns
+`deploy/name-rollback-binary.sh`).
+
+**Class (number assigned at merge) — `status` returns rc 0 on a held-ALIVE
+lock.** The human-facing lock command exits 0 for both "free" and "held" states,
+so `status && proceed` gates nothing. Probe: use `check` (rc 0 free · 1 held ·
+2 stale · 3 incomplete · 4 abandoned-incomplete); never branch on `status` rc;
+never clear a lock — reclaim on the record.
+
+**Class (number assigned at merge) — Log file named for a date it does not
+contain.** `logger/logger.go:90` names `data/nofx_<date>.log` with the date
+computed ONCE at Init; after CT midnight the file keeps receiving lines dated
+the next day. Probe: read the boot line from `$(ls -t data/nofx_*.log | head
+-1)`, not from journald (WSL2 clock jumps rotate journald 50×/2h under a 2G
+cap). L3 owns the rollover fix.
+
+**Class (number assigned at merge) — Refusal census counter that re-counts on
+every reload.** Arm-refusal dedup keys are in-memory, so a trader reload or
+restart re-counts the same arm/class per session-day. Probe: replay 09-14/09-15
+logs through the new dedup and assert distinct counts (ASIA rr 6 not 8; NY 09-14
+rr 5 not 10). L7 owns the fix; census key format must stay unchanged.
+
+**Class (number assigned at merge) — A recorder that narrates every write.**
+The research snapshot recorder emits one INFO line per fact write, filling the
+journal and masking real signals. Probe: one rollup line per N seconds with
+drops routed to the warn sink. L2 owns the fix.
