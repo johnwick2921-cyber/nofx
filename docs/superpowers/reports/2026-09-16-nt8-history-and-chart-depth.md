@@ -170,6 +170,34 @@ off, the 09-14 behaviour exactly.
    — 2,000 seeded + ~667 live > 2,500 — the same arithmetic as the live "1832 dropped". A
    non-defect that reads like one.
 
+## STORE CENSUS AT THE GATE — nofx-93, read-only, against 10f424b0 semantics
+
+Accepted and reproduced. What matters for this PR and the next:
+
+- **10f424b0's 1m rehydrate on MNQ 12-26 selects 2,500 rows, all `live`, 0 `historical_import`,
+  filtered 0** (T2). The import yes/no is structurally open, numerically moot for this boot.
+  T4: zero `replay:off-scale` rows on MNQ.
+- **D2's boundary is right where it matters.** `FirstLiveOn(MNQ,5m,12-26)` = 09-14 10:00 CT,
+  dense at 5-minute gaps from the first row; 93's "7 before cutoff" are the 10:00–10:30 bars
+  just ahead of their 10:34 CT cutoff, not July. On 1h: 09-14 02:00 CT, 55 rows, largest gap 2h.
+- **93's T3 finding, verified here and named LEFT for 104 (the wire/persist path):** MNQ 12-26
+  carries ~9 `live`-stamped rows per tf dated BEFORE the roll — 1d from 09-02 at **rowid 438391**
+  (db max ≈2.27M), 4h from 09-11, 3d 18 back to 08-10, 1w 8 back to 07-17 — old rows recently
+  UPDATED to `live` + `12-26`. That is a fixed-count closed-bar catch-up delivered as
+  `bar_update` right after a (re)subscribe, stamped `live` by the persister because the
+  frame type says so, and upserted over real rows because only historical-over-live is
+  blocked. **A `bar_update` for a bar that closed before the subscribe is a replay.** The
+  mis-stamp is in the wire/persist path, not a separate higher-tf writer. For D2 it is
+  harmless (the chart labels contract, not source, and the prices are December's); for
+  (3b)'s guard (ii) it means the "older than boot" test cannot be store-side — it must be
+  ring-side, against this process's first live frame for the key, whatever the stamp says.
+  The CTO's optional in-scope WARN (persist path: a `bar_update` whose close predates the
+  subscribe) is **LEFT**: a diagnostic line is not worth a rebuild of a binary already parked
+  green at a gate blocked on the main tree; it is one fixture and one line for 104.
+- The 09-26 pre-wave `live` rows on every tf (3m 4805 of 5453 before the 09-11 cutoff …)
+  are the migration's stamp — the `source` column did not exist before 09-10. Age alone
+  cannot distinguish them from real live rows. Same conclusion: ring-side, not store-side.
+
 ## OWED (not this PR)
 
 - (3a) AddOn re-request on a confirmed break; (3b) all-tf store rehydrate with the four guards
