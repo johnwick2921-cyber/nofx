@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"nofx/config"
+	"nofx/kernel"
 	"nofx/logger"
 	"nofx/store"
 	"nofx/trader"
@@ -589,8 +590,10 @@ func (tm *TraderManager) addTraderFromStore(traderCfg *store.Trader, aiModelCfg 
 		if err != nil {
 			return fmt.Errorf("failed to parse strategy config for trader %s: %w", traderCfg.Name, err)
 		}
-		logger.Infof("✓ Trader %s loaded strategy config: %s", traderCfg.Name, strategy.Name)
-	} else {
+		logger.Infof("✓ Trader %s loaded strategy config: %s", traderCfg.Name, strategy.Name)				// D102-1 (2026-09-16): the exit posture, READ from the strategy
+				// toggles the mechanics honour — the main boot line prints n/a
+				// for these fields; this line prints the real values.
+				logger.Infof("🛑 %s", trader.ExitPolicyBootLineForStrategy(kernel.MinSLATRMult(), strategyConfig.RiskControl))	} else {
 		return fmt.Errorf("trader %s has no strategy configured", traderCfg.Name)
 	}
 

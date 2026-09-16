@@ -431,7 +431,7 @@ const risk: KnobSpec[] = [
   {
     label: 'Breakeven trigger — SUSPENDED (0B)',
     where: 'Strategy → Risk Control',
-    what: 'Move the stop to entry after the position gains this much. SUSPENDED 2026-09-02 pending MFE data (wave 1A): the knob is retained and the trigger still evaluates, but NO move_stop frame is sent — the boot line reads BE=off. It fired 2× on 09-01 with no measurement of whether it helps, and the net effect of breakeven moves is contested in the research.',
+    what: 'Move the stop to entry after the position gains this much. SUSPENDED 2026-09-02 pending MFE data (wave 1A): the knob is retained and the trigger still evaluates, but NO move_stop frame is sent while suspended. The boot line reads BE from the strategy toggle and seam=SUSPENDED from env — the two sources the mechanics honour. It fired 2× on 09-01 with no measurement of whether it helps, and the net effect of breakeven moves is contested in the research.',
     trader:
       'While suspended your exits are: fixed stop · fixed target · EOD flat · plan invalidation/dormant. Nothing silently moves your stop.',
     consumer:
@@ -447,7 +447,7 @@ const risk: KnobSpec[] = [
   {
     label: 'Trailing stop — SUSPENDED (0B)',
     where: 'Strategy → Risk Control',
-    what: 'ATR-multiplier trail. SUSPENDED 2026-09-02 pending MFE data (wave 1A): the ratchet still computes a level, but NO move_stop frame is sent — the boot line reads trail=off. It ratcheted 8× on 09-01 with no measurement; a 567,000-backtest study ranks ATR/Chandelier trails in the worst group of 15 exit families, and our own tape shows $719.50 of giveback with ZERO trail exits ever.',
+    what: 'ATR-multiplier trail. SUSPENDED 2026-09-02 pending MFE data (wave 1A): the ratchet still computes a level, but NO move_stop frame is sent while suspended. The boot line reads trail from the strategy toggle and seam=SUSPENDED from env — the two sources the mechanics honour. It ratcheted 8× on 09-01 with no measurement; a 567,000-backtest study ranks ATR/Chandelier trails in the worst group of 15 exit families, and our own tape shows $719.50 of giveback with ZERO trail exits ever.',
     trader:
       'Suspended, not deleted. Unmeasured mechanisms moving live stops is the problem — regardless of which way they cut.',
     consumer:
