@@ -4767,3 +4767,34 @@ was green.
 
 **Fix pattern.** Assert the seed census; put the exclusion at one door with a counted result the
 boot line prints; pin the reader's real behaviour separately.
+
+## CLASS 129 — A DECISION DOOR THAT READS ANOTHER FEED'S PROVENANCE (born 2026-09-16, fix/planner-tape-nt8-only, dispatch 101 follow-up, ruled by the CTO under the owner's delegation)
+
+**Shape.** A store column carries rows from more than one provenance (NT8's live feed, NT8's verified
+replay, a backtest/history IMPORT file) under one table and one shared reader. A decision door — the
+planner's 12,000-bar 1m tape, the weekly reader's weeks and window, the POC-touch historical leg that
+retires levels — reads the shared reader and admits the imported rows into a LIVE decision tape. Measured
+2026-09-16: 426 imported `MNQ 12-26` 1m bars inside the planner's tape (75,492 on any `09-26` resolve).
+The chart may show them, labelled; a decision may not be fed them.
+
+**How it hid.** The import flag existed and a DISPLAY filter used it, so "imports are filtered" was true
+of one reader and assumed of all. The ruling's own enumeration of doors missed one (the POC-touch leg):
+doors are found by reading every call site of the shared reader, not by listing the ones you remember.
+
+**Probes.**
+- Every reader of a multi-provenance table has a DECISION variant that excludes non-feed provenance in
+  SQL, and every decision door names that variant (`LastNBarsFromNT8On` / `BarsBetweenFromNT8On`).
+- A lint BY FUNCTION BODY (not by file position — a cut at the display seam missed `storeBarReader`,
+  which sits after it; the mutation showed it) pins each door to the decision reader
+  (`TestNoPlannerDoorReadsTheSharedBarReader`). Class-113 caveat stated: text, not the call graph.
+- A real-store fixture puts the foreign rows NEWER than the feed rows, so a reader that merely trims the
+  oldest cannot pass by accident (`TestPlannerStoreReaderServesNoImportRows`).
+- The boot line prints the import CENSUS on the contract and the decision input BOTH ways through the
+  production estimator (class 82) — a moved value is named, never inferred (`🧮 planner tape`).
+- Readers that MEASURE (excursions, level stats, recorded-only backfills, follow-plan records) stay on
+  the shared reader and are named LEFT with the reason — a measurement over imported minutes is a
+  separate question from a decision over them.
+
+**Fix pattern.** Add the decision reader beside the shared one (shared byte-identical); reroute every
+door found by grep; lint by body; census on the boot line; E7-style zero-delta golden proving the rule did
+not move.

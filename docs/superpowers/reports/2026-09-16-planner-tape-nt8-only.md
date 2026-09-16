@@ -22,11 +22,22 @@ and the weekly reader's 1m tape. On any `09-26` resolve: 75,492 import rows.
 | weekly `Own1m` window | `trader/auto_trader_weekly.go:116` | `BarsBetweenOn` | `BarsBetweenFromNT8On` |
 | POC-touch historical leg (level retirement) | `trader/auto_trader_dayplan.go:227` | `BarsBetweenOn` | `BarsBetweenFromNT8On` — **found by the lint, not by the ruling's list** |
 
-Kept on the shared readers (imports included), by design or out of this ruling's scope — for the CTO:
-`BarsWithStoreDepthDisplay` (:108/:123, the chart [O]); `bar_persist_wire.go:456` (the rehydrate read —
-its door refuses and COUNTS imports); `level_stats_wire.go:121`, `trade_excursion_hook.go:168`,
-`trade_excursion_backfill.go:120`, `follow_plan_wiring.go:217`, `one_setup_boot.go:174` — not planner
-doors; excursions and level stats over imported minutes are a separate question.
+Kept on the shared readers (imports included), by design: `BarsWithStoreDepthDisplay` (:108/:123, the
+chart [O]); `bar_persist_wire.go:456` (the rehydrate read — its door refuses and COUNTS imports).
+
+**LEFT by CTO ruling (they MEASURE, they do not decide):** `level_stats_wire.go:121` (nightly level
+stats), `trade_excursion_hook.go:168` and `trade_excursion_backfill.go:120` (MAE/MFE over a trade's
+window), `follow_plan_wiring.go:217` (recorded-only follow plan, [T]). A measurement over imported
+minutes is a separate question from a decision over them.
+
+**`one_setup_boot.go:174` — read the code, LEFT:** the call sits inside `BackfillOneSetupVerdicts`
+(header :87–95: "D9 for the verdicts, three-state. For every episode opened at or after sinceMs with no
+verdict: the LEVEL leg is judged against the last candidate-pool read before the episode's open … price
+from the store's bars through the contract filter"), reading the six minutes around a PAST episode's open
+(`r.OpenedAtMs-5*60_000, r.OpenedAtMs+60_000`) and writing
+`store.OneSetupStamp{… Backfill: "recomputed"}` via `ts.StampOneSetup(r.ID, stamp)` at :199–200. It stamps
+a verdict onto an episode that already happened; nothing at boot arms, retires or authorizes from it. The
+live one-setup verdict at an open is `one_setup_wiring.go` and reads the ring, not the store.
 
 `LastNBarsOn` / `BarsBetweenOn` are byte-identical. The new readers are theirs plus
 `AND COALESCE(source,'') <> 'historical_import'`; `ImportRowsOn` is the census the boot line prints.
@@ -69,6 +80,7 @@ baseline NT8-only=<x> vs with imports=<y> (Δ<x−y>) · chart keeps imports, la
 - Levels: the POC-touch leg no longer sees imported minutes, so a POC an import "touched" may un-retire
   at the next planner read. Named, not measured — no fixture can measure today's levels.
 - The chart is unchanged.
+- CLASS 129 appended to the checklist (the door shape, the by-body lint, the newer-than-feed fixture, the census line).
 
 ## A12 · Docs in this commit
 RULEBOOK §A (the planner's tape is NT8's own), SYSTEM-MAP §1 (doors + the kept readers), Guide `status.ts`
