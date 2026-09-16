@@ -27,11 +27,11 @@ status OPEN/CLOSED) · `trader_orders` · `trader_fills` ·
 
 | Key pattern | Meaning | Writer |
 |---|---|---|
-| `arm_refusals_0b:<trader>:<date>:<session>:<class>` | per-session-day refusal census | zerob_counters.go:40 |
-| `arm_stop_unanchored_0b` | stop-anchor misses | zerob_counters.go:17 |
-| `one_setup:<trader>:<date>:<session>:<scenario>` | one-setup verdicts | one_setup.go |
-| `plan_dormant_since:<date>:<session>:<trader>:2` | dormant flag | planner |
-| `uncarried_edits` / `confirm_grace_sessions_seen` | owner-edit carry | planner |
+| `arm_refusals_0b:<trader>:<date>:<session>:<class>` | per-session-day refusal census | zerob_counters.go:48 |
+| `arm_stop_unanchored_0b` | stop-anchor misses | zerob_counters.go:24 |
+| `one_setup:<trader>:<planID>:v<version>` | one-setup verdicts (planID embeds date:session) | one_setup.go:48 |
+| `plan_dormant_since:<planID>:<version>` | value = "0" when rearmed, epoch-ms when dormant | auto_trader_planner.go:592 |
+| `uncarried_edits:<plan_id>:v<version>` / `confirm_grace_sessions_seen` | owner-edit carry | plan.go:440 / planner |
 | class47 wake counters / `ArmSupersededKey` / shadow-ab / post-loss | wake+seam counters | class47_counters.go etc. |
 
 Census query:
@@ -113,5 +113,7 @@ journalctl -u nofx --since '30 min ago' -o cat | grep -a 'scenario economics:' |
 - research snapshots log `missing=map[…]` per event type (fields not captured) —
   by design.
 - `/api/risk/status` `not_enforced` array — by design (D6d).
-- `plan_dormant_since` value 2|0, touch-reference-missing by design
-  (`plan_confirm.go`), subagent-documented anomalies live in session memory R1/R2.
+- `plan_dormant_since` value: **"0" = rearmed, epoch-ms = dormant** (corrected by
+  the 20-agent sweep — there is no literal "2|0" value).
+- touch-reference-missing by design (`plan_confirm.go`); subagent-documented
+  anomalies live in session memory R1/R2.
