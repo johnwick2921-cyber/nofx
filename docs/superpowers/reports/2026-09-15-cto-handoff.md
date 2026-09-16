@@ -37,21 +37,42 @@ validator (honesty checks) ──▶ ARM GATES (7 doors) ──▶ SIM order bac
 
 ## 1. Session-start checklist (run in this order)
 
+**0. TREE GATE — before anything else:**
 ```bash
-cd /home/hoang/nofx
-git fetch origin --quiet && git log -1 --oneline origin/dev      # spec-freshness: read the TIP before building anything
-bash deploy/nofx-lock.sh status                                   # rc 0 free · 1 held · 2 stale — NEVER rm a lock, reclaim on the record
-curl -s http://127.0.0.1:8080/api/health                          # live rev must match RELEASE + deploy/RELEASE
-sqlite3 -readonly data/data.db "SELECT COUNT(*) FROM trader_positions WHERE status='OPEN';"   # flat gate truth
-journalctl -u nofx --since '5 min ago' -o cat | grep -a 'BOOT INTEGRITY OK' | tail -1
+git status --porcelain   # must be EMPTY
+git rev-list --count HEAD..origin/dev   # must be 0
 ```
+If either fails: STOP, and read source via `git show origin/dev:<path>` from a
+clean worktree. The main tree is quarantined (see §4) — never read source from
+it.
+
+```bash
+cd <your worktree at origin/dev>
+bash deploy/nofx-lock.sh check
+# rc: 0 free · 1 held · 2 stale · 3 incomplete · 4 abandoned-incomplete
+# NEVER branch on `status` rc — `status` returns 0 even for a held-ALIVE lock
+# (checklist class: status rc 0 on a held-alive lock). Use `check`. Never clear
+# a lock — reclaim on the record.
+curl -s http://127.0.0.1:8080/api/health   # live rev
+sqlite3 -readonly /home/hoang/nofx/data/data.db "SELECT COUNT(*) FROM trader_positions WHERE status='OPEN';"
+tail -20 "$(ls -t /home/hoang/nofx/data/nofx_*.log | head -1)" | grep 'BOOT INTEGRITY OK' | tail -1
+# boot line comes from the app log FILE (named nofx_<date of boot>.log — the
+# date is computed once at Init, logger/logger.go:90), NOT from journald.
+```
+
+**Canon precedence (tracked > mirrors):**
+1. `docs/superpowers/CLAUDE-canon.md` (TRACKED at origin/dev — the law file)
+2. `docs/superpowers/AUDIT-CHECKLIST.md` @ origin/dev (bug classes)
+3. `docs/superpowers/reports/2026-09-15-*.md` (this SYSTEM-MAP handoff)
+4. root `AGENTS.md` / `CLAUDE.md` — UNTRACKED mirrors, believed last, never
+   the source of truth (the tree gate exists because editor buffers silently
+   reverted them).
 
 Then read, in order:
 1. This file (sections 2–8)
 2. `2026-09-15-pipeline-map.md` (companion — full A–K logic inventory)
 3. `2026-09-15-trace-anchors.md` (companion — tables/counters/journal/API)
 4. Repo memory: `/memories/repo/system-read-2026-09-15.md` + `full-pipeline-2026-09-15.md` (same content, session-local)
-5. `AGENTS.md` / `CLAUDE.md` at repo root (canons, deploy law)
 
 ---
 
@@ -68,9 +89,10 @@ Then read, in order:
 - **Exit mechs unsuspended 22:15:** `EXIT_MECHS_SUSPENDED=0` appended to
   `~/nofx/.env` (line 47). Breakeven/trailing now obey ONLY the strategy knobs
   (both currently OFF by owner). Boot line `suspended=0`.
-- **JWT for API curls:** mint HS256 with `.env` JWT_SECRET, claims
-  sub=`396db319-…-516ff0008f53`, email=`johnwick2921@gmail.com`, iss=`nofxAI`
-  (working token cached at `/tmp/pw-token`).
+- **JWT for API curls:** mint per session, HS256 with `.env` JWT_SECRET, claims
+  sub=`396db319-…-516ff0008f53`, email=`johnwick2921@gmail.com`, iss=`nofxAI`.
+  NEVER cache a token in /tmp and NEVER print one — mint, use, discard in the
+  same command.
 - **Trader:** `8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265`
   ("hoang") · strategy `a5b7662e-7bf7-49bb-9f09-7efa48f95ac8` ("MNQ") ·
   Sim101 · plan_mode=strict · min R:R 2 · one_setup 0 · breakeven/trailing 0.
@@ -88,8 +110,8 @@ Then read, in order:
 6. `trader/ninjatrader/tcp_trader.go` + `provider/ninjatrader/tcp_server.go` — order out / fills in / SIM gate
 7. `ninjascript/vltrader_tcp_PROTOCOL.md` — wire spec (Go↔C# lockstep)
 
-**Tier 2 — subsystem docs** (exist on disk in dirty `~/nofx` main tree only;
-NOT tracked at dev tip — treat as historical, verify line numbers): kernel/,
+**Tier 2 — subsystem docs** (exist on disk in the quarantined `~/nofx` main tree
+only; NOT tracked at dev tip — treat as historical, verify line numbers): kernel/,
 market/, trader/, trader/ninjatrader/, provider/, provider/ninjatrader/,
 web/, cmd/nq_smoke/ `CLAUDE.md` files.
 
@@ -112,8 +134,11 @@ web/, cmd/nq_smoke/ `CLAUDE.md` files.
 
 ## 4. Standing canons (do not re-derive; cite them)
 
-- **WORKTREE LAW:** `~/nofx` main tree = ONE dispatch (deploy-only, dirty 66
-  files — NEVER build from it). All other work in `git worktree add` dirs.
+- **WORKTREE LAW:** the main tree `~/nofx` IS QUARANTINED — it is 64 commits
+  behind dev and 62 files are reverted to 08-31 content. NEVER read source from
+  it, build in it, copy out of it, or commit from it. All work runs in
+  `git worktree add ../nofx-<lane> -b <branch> origin/dev` + `git worktree lock`,
+  and the tree gate (empty porcelain + 0 behind) is checked first.
 - **MAIN-TREE LOCK:** `deploy/nofx-lock.sh acquire|heartbeat|with-heartbeat|
   status|release|reclaim <session> "<task>"`. Stale ≠ dead — corroborate, then
   `reclaim` (names holder + why). No `git reset` on dev outside deploy dispatch.
@@ -163,17 +188,32 @@ web/, cmd/nq_smoke/ `CLAUDE.md` files.
 
 ---
 
-## 6. Deploy runbook (condensed, full law in AGENTS.md)
+## 6. Deploy runbook (condensed; the full law is docs/superpowers/CLAUDE-canon.md)
 
-1. Owner "go" only · lock `acquire rrfix` · flat gate (DB + journal NT8 snapshot)
-2. PR merged → **fresh GitHub clone** → checkout MERGED sha → `go test ./...`
-   (SUITE_EXIT=0) → `go build -o nofx-bin .` → `go version -m` stamp == sha,
-   modified=false
-3. `echo -n <sha> > deploy/RELEASE` (before kill) · `mv nofx-bin
-   nofx-bin.old.<sha12>` · `cp` build in · `kill -9 <MainPID>`
-4. Poll ≤90s for `BOOT INTEGRITY OK` · `/api/health` rev == sha · marker commit
-   (RELEASE + GUIDE_BUILT_REV) → push `HEAD:dev` · `release`
-5. Rollback: restore `nofx-bin.old.<rev>` + RELEASE + kill again.
+0. **Preconditions (all at once, in a flat window):** tree gate green (§1),
+   `bash deploy/nofx-lock.sh check` = 0, owner present and acking, timers
+   BANNED for deploys outright.
+1. PR merged → **fresh GitHub clone** → checkout the MERGED sha →
+   `go test ./...` (SUITE_EXIT=0) → `go build -o nofx-bin .` → `go version -m
+   nofx-bin` shows vcs.revision == sha, modified=false. Then build the frontend:
+   `cd web && npm ci && npm run build`, and assert
+   `grep GUIDE_BUILT_REV web/src/guide/types.ts` == the merged sha; install
+   `web/dist` into the serving tree (post-boot gate: the `🖥 ui:` line must NOT
+   contain STALE).
+2. Five-reference verification BEFORE the kill (all five must agree on the
+   OLD rev you are replacing): `/api/health` revision · boot line in the newest
+   `data/nofx_*.log` · `deploy/RELEASE` · `go version -m nofx-bin`
+   vcs.revision · `md5sum nofx-bin`.
+3. Cutover, same tree: `echo -n <new-sha> > deploy/RELEASE` (RELEASE before the
+   kill) · `mv nofx-bin nofx-bin.old.<rev12>` where `<rev12>` is the rev THE
+   ROLLBACK BINARY HOLDS — verify immediately after the mv with
+   `go version -m nofx-bin.old.<rev12>` · install the new binary · `kill -9
+   <MainPID>` (systemd Restart=on-failure relaunches).
+4. Poll ≤90s for `🔐 BOOT INTEGRITY OK` · re-run the five references (now on the
+   NEW rev) · marker commit (RELEASE + GUIDE_BUILT_REV) pushed `HEAD:dev`
+   BEFORE the lock releases.
+5. Rollback: restore `nofx-bin.old.<rev12>` + RELEASE + kill again — never
+   rename rollback files (L10 owns `deploy/name-rollback-binary.sh`).
 
 ---
 
@@ -251,8 +291,13 @@ corrected. The corrected anchors are the ONLY ones to trust:
   stale).
 - **Trader interface: `trader/types/interface.go:43-105` (19 methods)** — not
   trader/types.go. A separate GridTrader interface adds 4 more methods.
-- **Databento lag: code says ~3h** (`provider/databento/client.go`, circuit
-  breaker 5 fails/5 min at :24); the "8h" figure exists only in CLAUDE.md prose.
+- **Databento lag (S8-F1, re-verified 2026-09-16):** the TRACKED repo at
+  `8f5f26ee` says **~3h** — `cmd/nq_smoke/main.go:68` ("Databento Historical
+  tier ~3h availability lag") and `cmd/nq_smoke/smoke_databento.go:27`. The
+  "8h" figure appears NOWHERE in tracked files at dev tip (0 hits in
+  `docs/superpowers/CLAUDE-canon.md` and all `.go`). Root `AGENTS.md`/
+  `CLAUDE.md` are UNTRACKED mirrors — whatever they say is a mirror claim, not
+  repo fact.
 - **NEVER verify against the main tree `~/nofx`** — it holds pre-R4 code
   (4-value scenarioEconomicsIssues) and pre-dev line numbers.
 
