@@ -17,6 +17,11 @@ export const status: GuideSection = {
       kind: 'p',
       text: 'Overview shows Market Chart beside Account Equity on wide screens and stacks them on narrow screens. The futures Planner, including Desk, follows both charts. Switching to Decisions hides Overview without unmounting Planner: its polling and local state continue. Entry, Mark and Value remain available in the horizontally scrollable position table on phones. The mobile market selector uses the same market choices as the desktop pills. While the first Desk read is pending, DESK shows Loading; this is not a claim that any fact is current. The Desk toggle announces whether the rows are expanded or collapsed.',
     },
+    { kind: 'h', text: 'Research snapshot recorder' },
+    {
+      kind: 'p',
+      text: "The research archive (data/data.db.research.db) keeps every fact the pipeline records; nothing here changes what the bot trades. The recorder is ON unless RESEARCH_SNAPSHOT is explicitly 0 or false in .env. When on, it writes one rollup line per minute (RESEARCH_LOG_EVERY_S, default 60) with rows-per-object, drops and queue depth — there is no per-fact narration any more. Drop notices are WARN-level, coalesced to one line per minute with the delta. RESEARCH_RETAIN_DAYS (unset = never prune; set = prune) removes rows older than that many days in bounded batches after boot and daily, and the archive is never VACUUMed automatically — on a ~77 GB file that step is a manual, owner-approved one.",
+    },
     { kind: 'h', text: 'Where this page comes from' },
     {
       kind: 'p',

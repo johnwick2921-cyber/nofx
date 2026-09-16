@@ -43,18 +43,27 @@ type Recorder struct {
 	warnAt       time.Time
 	warnDelta    uint64
 	warnReason   string
+	warnSince    time.Time
 	dropWindow   time.Duration
 	rollupT      *time.Ticker
 }
 
 func NewRecorder(sink Sink, capacity int, warn func(string)) *Recorder {
+	return NewRecorderWithInfo(sink, capacity, warn, nil)
+}
+
+// NewRecorderWithInfo builds the recorder with BOTH sinks attached before the
+// worker goroutine starts (no data race on r.info). The INFO sink carries
+// rollups and status lines; the WARN sink carries drop notices.
+func NewRecorderWithInfo(sink Sink, capacity int, warn, info func(string)) *Recorder {
 	if capacity < 1 {
 		capacity = 1
 	}
 	r := &Recorder{sink: sink, queue: make(chan work, capacity), stop: make(chan struct{}), done: make(chan struct{}), warn: warn, dropNotices: make(chan string, 16),
 		rollupEvery: envDur("RESEARCH_LOG_EVERY_S", 60*time.Second),
 		dropWindow:  200 * time.Millisecond,
-		rows:        make(map[string]uint64)}
+		rows:        make(map[string]uint64),
+		info:        info}
 	r.rollupT = time.NewTicker(r.rollupEvery)
 	go r.run()
 	return r
@@ -117,10 +126,6 @@ func (r *Recorder) log(message string) {
 	}
 }
 
-// SetInfoLog attaches the INFO-level sink used for rollups and status lines.
-// Drop warnings always go to the warn func passed to NewRecorder.
-func (r *Recorder) SetInfoLog(info func(string)) { r.info = info }
-
 func (r *Recorder) perform(job work) {
 	defer func() {
 		if p := recover(); p != nil {
@@ -153,6 +158,9 @@ func (r *Recorder) run() {
 			}
 		case reason := <-r.dropNotices:
 			r.coalesceDrop(reason)
+		case <-r.rollupT.C:
+			r.emitDropWarn(true)
+			r.emitRollup(false)
 		case <-r.stop:
 			for {
 				select {

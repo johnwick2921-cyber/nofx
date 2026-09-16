@@ -114,7 +114,13 @@ func TestResearchFailedStartupStillWarnsAndReportsUnknown(t *testing.T) {
 	if Active() != nil || !strings.Contains(line, "research snapshot: OFF (archive unavailable)") {
 		t.Fatalf("failed startup must report OFF honestly: %s", line)
 	}
-	if len(warnings) != 1 || !strings.Contains(warnings[0], "WARN research snapshot archive unavailable") {
-		t.Fatalf("failed startup must warn: %v", warnings)
+	warnCount := 0
+	for _, w := range warnings {
+		if strings.Contains(w, "WARN research snapshot archive unavailable") {
+			warnCount++
+		}
+	}
+	if warnCount != 1 {
+		t.Fatalf("failed startup must warn exactly once: %v", warnings)
 	}
 }

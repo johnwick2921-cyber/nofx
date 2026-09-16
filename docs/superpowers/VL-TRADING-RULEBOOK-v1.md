@@ -358,10 +358,11 @@ wave the recorder printed one INFO line per archived fact (measured 324,807
 lines/hour = 88.8% of the log, ~16 GiB/day archive, no retention, drops narrated
 at INFO). After: at most one rollup line per RESEARCH_LOG_EVERY_S (default 60s)
 carrying rows-per-object, live drops, and queue depth; drop notices are
-WARN-level, coalesced to one line per minute with the delta; RESEARCH_SNAPSHOT
-unset/0 leaves the recorder OFF ("research snapshot: OFF (RESEARCH_SNAPSHOT
-unset)"); RESEARCH_RETAIN_DAYS (default 7) prunes research_facts at boot and
-daily with no automatic VACUUM (a ~77 GB VACUUM on the trading DB's disk is the
+WARN-level, coalesced to one line per minute with the delta; RESEARCH_SNAPSHOT is
+opt-out: explicitly 0/false leaves the recorder OFF ("research snapshot: OFF
+(RESEARCH_SNAPSHOT=0)"); unset keeps it ON (today's behaviour).
+RESEARCH_RETAIN_DAYS unset = never prune; when set, batched off-boot-path
+prunes with no automatic VACUUM (a ~77 GB VACUUM on the trading DB's disk is the
 owner's call). Rows/s unchanged — the archive path is untouched.
 
 ## D. HISTORICAL RECORD — each population stands on its own [T]

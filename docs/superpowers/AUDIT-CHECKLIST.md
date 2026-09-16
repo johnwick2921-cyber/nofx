@@ -4824,7 +4824,7 @@ hook was born 2026-09-09 and had won every boot until a restart 58 minutes after
 
 **Fix pattern.** landed + fired flags under one mutex; both orders pinned; identity over time.
 
-## CLASS 131 — a recorder that narrates every write at INFO (born 2026-09-16, dispatch 103)
+## CLASS NN (assigned at merge) — a recorder that narrates every write at INFO (born 2026-09-16, dispatch 103, DS-103)
 
 **Symptom:** the research-snapshot recorder emitted one INFO line per archived
 fact — 324,807 "research snapshot written:" lines in a measured one-hour slice

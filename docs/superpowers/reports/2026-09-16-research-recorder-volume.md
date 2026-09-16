@@ -49,10 +49,11 @@ One-hour slice of the live log `data/nofx_2026-09-16.log`, 15:00–16:00 CT
 
 ## Boot line (every resolved value, no literals)
 
-- OFF: `research snapshot: OFF (RESEARCH_SNAPSHOT unset)` (or `… OFF (archive
-  unavailable)`).
-- ON: the existing boot line still prints schema/objects/rows-today/dropped/latency
-  live; the rollup carries the real dropped= continuously.
+- OFF: `research snapshot: OFF (RESEARCH_SNAPSHOT=0)` · not-started: `research
+  snapshot: n/a` · archive broken: `research snapshot: OFF (archive unavailable)`.
+- ON: `research snapshot: ON (default)` when the env is unset (opt-out gate, review B1).
+  The existing boot line still prints schema/objects/rows-today/dropped/latency live;
+  the rollup carries the real dropped= continuously.
 
 ## Owed to the owner
 

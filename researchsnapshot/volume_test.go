@@ -2,11 +2,21 @@ package researchsnapshot
 
 import (
 	"context"
+	"os"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 )
+
+// B1: the OFF note must never print when Start() was simply not called yet.
+func TestVolumeBootLineNABeforeStart(t *testing.T) {
+	startCalled.Store(false) // fresh-process semantics: Start never ran
+	Install(nil)
+	if !strings.Contains(CurrentBootLine(), "n/a") {
+		t.Fatalf("boot line must read n/a when Start() was never called; got %q", CurrentBootLine())
+	}
+}
 
 type captureSink struct {
 	mu    sync.Mutex
@@ -145,16 +155,46 @@ func TestVolumeDropNoticeWarnRateLimited(t *testing.T) {
 // RED 3: RESEARCH_SNAPSHOT env gate — unset or 0 means the recorder is not
 // started and the boot line says OFF.
 func TestVolumeResearchSnapshotEnvGate(t *testing.T) {
-	t.Setenv("RESEARCH_SNAPSHOT", "0")
-	log := &lineCapture{}
-	closeFn := Start(t.TempDir()+"/r.db", log.add, log.add)
-	defer closeFn()
-	if Active() != nil {
-		t.Fatal("recorder must NOT start when RESEARCH_SNAPSHOT=0; Active() is non-nil")
-	}
-	if !strings.Contains(CurrentBootLine(), "research snapshot: OFF (RESEARCH_SNAPSHOT unset)") {
-		t.Fatalf("boot line must say OFF when the gate is closed; got %q", CurrentBootLine())
-	}
+	t.Run("explicit zero is OFF", func(t *testing.T) {
+		t.Setenv("RESEARCH_SNAPSHOT", "0")
+		log := &lineCapture{}
+		closeFn := Start(t.TempDir()+"/r.db", log.add, log.add)
+		defer closeFn()
+		if Active() != nil {
+			t.Fatal("recorder must NOT start when RESEARCH_SNAPSHOT=0; Active() is non-nil")
+		}
+		if !strings.Contains(CurrentBootLine(), "research snapshot: OFF (RESEARCH_SNAPSHOT=0)") {
+			t.Fatalf("boot line must say OFF (RESEARCH_SNAPSHOT=0) when the gate is closed; got %q", CurrentBootLine())
+		}
+	})
+	t.Run("explicit false is OFF", func(t *testing.T) {
+		t.Setenv("RESEARCH_SNAPSHOT", "false")
+		log := &lineCapture{}
+		closeFn := Start(t.TempDir()+"/r.db", log.add, log.add)
+		defer closeFn()
+		if Active() != nil {
+			t.Fatal("recorder must NOT start when RESEARCH_SNAPSHOT=false")
+		}
+	})
+	t.Run("unset stays ON (opt-out, not opt-in)", func(t *testing.T) {
+		os.Unsetenv("RESEARCH_SNAPSHOT")
+		log := &lineCapture{}
+		closeFn := Start(t.TempDir()+"/r.db", log.add, log.add)
+		defer closeFn()
+		if Active() == nil {
+			t.Fatal("recorder must START when RESEARCH_SNAPSHOT is unset (opt-out); Active() is nil")
+		}
+		lines := log.snapshot()
+		found := false
+		for _, l := range lines {
+			if strings.Contains(l, "research snapshot: ON (default)") {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("boot line must read ON (default) when the env is unset; got %v", lines)
+		}
+	})
 }
 
 // RED 5: RESEARCH_RETAIN_DAYS (default 7) prunes research_facts by captured_ms
@@ -179,7 +219,7 @@ func TestVolumeRetentionPrunesAtStart(t *testing.T) {
 	closeFn := Start(path, log.add, log.add)
 	defer closeFn()
 
-	got := func() int {
+	count := func() int {
 		a2, err := Open(path, "")
 		if err != nil {
 			t.Fatalf("reopen: %v", err)
@@ -190,10 +230,82 @@ func TestVolumeRetentionPrunesAtStart(t *testing.T) {
 			t.Fatalf("count: %v", err)
 		}
 		return n
-	}()
-	if got != 0 {
-		t.Fatalf("rows older than RESEARCH_RETAIN_DAYS must be pruned at boot; %d remain", got)
 	}
+	deadline := time.Now().Add(5 * time.Second)
+	for count() != 0 && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if got := count(); got != 0 {
+		t.Fatalf("rows older than RESEARCH_RETAIN_DAYS must be pruned after boot; %d remain", got)
+	}
+}
+
+// B2: RESEARCH_RETAIN_DAYS unset means NO prune, ever.
+func TestVolumeRetentionUnsetPrunesNothing(t *testing.T) {
+	t.Setenv("RESEARCH_SNAPSHOT", "1")
+	os.Unsetenv("RESEARCH_RETAIN_DAYS")
+	path := t.TempDir() + "/r.db"
+	a, err := Open(path, "")
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	old := time.Now().Add(-8 * 24 * time.Hour).UnixMilli()
+	if _, err := a.db.Exec(`INSERT INTO research_facts (writer_revision, schema_version, object, snapshot_id, event, captured_ms, fields_json, missing_json, null_fields) VALUES ('', 1, 'market', NULL, 'test', ?, '{}', '{}', 0)`, old); err != nil {
+		t.Fatalf("seed: %v", err)
+	}
+	_ = a.Close()
+
+	log := &lineCapture{}
+	closeFn := Start(path, log.add, log.add)
+	defer closeFn()
+	time.Sleep(300 * time.Millisecond)
+
+	a2, err := Open(path, "")
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	defer a2.Close()
+	var n int
+	if err := a2.db.QueryRow(`SELECT COUNT(*) FROM research_facts WHERE captured_ms < ?`, time.Now().Add(-7*24*time.Hour).UnixMilli()).Scan(&n); err != nil {
+		t.Fatalf("count: %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("retention unset must prune NOTHING; %d rows changed", 1-n)
+	}
+}
+
+// B3: the periodic rollup and drop-warn must fire WITHOUT any Flush call —
+// the ticker is the production path.
+func TestVolumeRollupTickerFiresWithoutFlush(t *testing.T) {
+	t.Setenv("RESEARCH_LOG_EVERY_S", "1")
+	sink := &captureSink{}
+	log := &lineCapture{}
+	r := NewRecorder(sink, 128, log.add)
+	defer r.Close()
+	now := time.Date(2026, 9, 16, 12, 0, 0, 0, time.UTC)
+	clock := func() time.Time { return now }
+	r.offerWithClock(clock, "market", func() []Fact { return []Fact{NewFact("market", "tick", nil, Clocks{})} })
+	r.drop("queue full: market")
+
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		lines := log.snapshot()
+		hasRollup := false
+		hasWarn := false
+		for _, l := range lines {
+			if strings.Contains(l, "research snapshot rollup") {
+				hasRollup = true
+			}
+			if strings.Contains(l, "WARN research snapshot dropped") {
+				hasWarn = true
+			}
+		}
+		if hasRollup && hasWarn {
+			return // GREEN
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("ticker path never emitted without Flush; got %v", log.snapshot())
 }
 
 func firstContaining(lines []string, sub string) string {

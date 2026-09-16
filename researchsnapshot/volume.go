@@ -41,6 +41,7 @@ func (r *Recorder) noteRows(facts []Fact) {
 func (r *Recorder) coalesceDrop(reason string) {
 	r.warnMu.Lock()
 	if r.warnDelta == 0 {
+		r.warnSince = time.Now()
 		time.AfterFunc(r.dropWindow, func() { r.emitDropWarn(false) })
 	}
 	r.warnDelta++
@@ -62,7 +63,7 @@ func (r *Recorder) emitDropWarn(force bool) {
 	if !force && !r.warnAt.IsZero() && now.Sub(r.warnAt) < time.Minute {
 		return // rate-limited; the ticker will force it out within 60s
 	}
-	line := fmt.Sprintf("WARN research snapshot dropped: +%d since last minute (reason: %s); total=%d", r.warnDelta, r.warnReason, r.Dropped())
+	line := fmt.Sprintf("WARN research snapshot dropped: +%d over %s (reason: %s); total=%d", r.warnDelta, time.Since(r.warnSince).Round(100*time.Millisecond), r.warnReason, r.Dropped())
 	r.warnDelta = 0
 	r.warnReason = ""
 	r.warnAt = now
@@ -112,26 +113,44 @@ func (r *Recorder) emitRollup(force bool) {
 	}
 }
 
-// pruneOldFacts deletes research rows older than retainDays. VACUUM is NEVER
-// run automatically: on a ~77 GB archive a VACUUM rewrites the whole file on
-// the trading DB's disk — the owner decides when to reclaim space manually.
-func pruneOldFacts(a *Archive, retainDays int) (int64, error) {
+// pruneOldFacts deletes research rows older than retainDays in bounded batches
+// (DELETE ... LIMIT), one INFO line per batch, with a short sleep between
+// batches so the trading boot is never blocked on a ~77 GB delete. VACUUM is
+// NEVER run automatically: on a ~77 GB archive a VACUUM rewrites the whole
+// file on the trading DB's disk — the owner decides when to reclaim space.
+func pruneOldFacts(a *Archive, retainDays int, emit func(string)) int64 {
 	cutoff := time.Now().Add(-time.Duration(retainDays) * 24 * time.Hour).UnixMilli()
-	res, err := a.db.Exec(`DELETE FROM research_facts WHERE captured_ms < ?`, cutoff)
-	if err != nil {
-		return 0, err
+	var total int64
+	for {
+		res, err := a.db.Exec(`DELETE FROM research_facts WHERE id IN (SELECT id FROM research_facts WHERE captured_ms < ? LIMIT 1000)`, cutoff)
+		if err != nil {
+			if emit != nil {
+				emit(fmt.Sprintf("WARN research snapshot prune failed: %v", err))
+			}
+			return total
+		}
+		n, _ := res.RowsAffected()
+		total += n
+		if n == 0 {
+			return total
+		}
+		if emit != nil {
+			emit(fmt.Sprintf("research snapshot prune: -%d rows (batch) — %d total", n, total))
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
-	n, _ := res.RowsAffected()
-	return n, nil
 }
 
+// retainDays: RESEARCH_RETAIN_DAYS UNSET = 0 = NO prune, ever (review B2).
 func retainDays() int {
-	if v := os.Getenv("RESEARCH_RETAIN_DAYS"); v != "" {
-		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n > 0 {
-			return n
-		}
+	v := os.Getenv("RESEARCH_RETAIN_DAYS")
+	if v == "" {
+		return 0
 	}
-	return 7
+	if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil && n > 0 {
+		return n
+	}
+	return 0
 }
 
 var (
