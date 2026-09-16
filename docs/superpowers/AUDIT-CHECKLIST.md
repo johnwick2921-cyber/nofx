@@ -4823,3 +4823,31 @@ hook was born 2026-09-09 and had won every boot until a restart 58 minutes after
   minutes before the binary (`TestUIBootLineIsFreshByRevEvenWhenTheBundleIsOlder`).
 
 **Fix pattern.** landed + fired flags under one mutex; both orders pinned; identity over time.
+
+## CLASS NN (assigned at merge) — ONE TABLE FOR TWO JOBS: THE STRUCTURE SEAT RACE (born 2026-09-16, feat/structure-map, S1 under the CTO's delegation)
+
+**Shape.** One 12-seat ranked table carries both jobs — where price may ENTER (15m/5m/1m + today's
+references) and which way the higher timeframes LEAN (D/4h/1h). Every rule that makes the entry table
+good for entries makes it blind to structure: `isTodayPriority` sorts today's references first,
+`freshMult` decays a 4h zone after one 1m touch (1.12 → 0.67), `collapseLevelClusters` renames a 4h level
+under the reference it sits beside, `seatHTF` caps HTF at 2, `zoneTierFor` folds 5m into the 1m tier.
+Measured 2026-09-16 16:31 CT: 244 HTF levels detected (≈70 4h, ≈12 daily); 11 seated — 8 references,
+3 HTF, zero daily. The plan read the day with no daily structure at all and nothing said so.
+
+**How it hid.** The table was always full and always graded; a full table looks like coverage. No line
+counted what was DETECTED against what was SEATED per timeframe.
+
+**Probes.**
+- Two jobs → two tables. A direction read (trend / last impulse / premium-discount / top zones per HTF)
+  lives in its own structure (`kernel.StructureMap`), labels INTACT, never collapsed into references,
+  never an entry; the entry table keeps its 12 seats and its rules.
+- Every S-wave knob defaults OFF and the prompt is byte-identical with it off (the existing goldens are
+  the proof); the live plan changes only after the measurement wave (S4).
+- A field the read could not compute is ABSENT (`structure` omitted), never `{}` / `[]` (canon).
+- The read logs what it saw per TF (`🗺 structure @<session>: D=… 4h=… 1h=… zones=<n> pd4h=…`) and the boot
+  line names the knob from the bound strategy (`🗺 structure: off|on(D/4h/1h)|n/a`).
+- Fixtures from the real store (read-only export, dated) at the CALL SITE, not rebuilt inputs; a 10-bar
+  daily series reads `range` honestly rather than pretending a trend.
+
+**Fix pattern.** S1 (this) the structure table · S2 fresh-by-TF (DS-101) · S3 validator contract
+(DS-102) · S5 (DS-103) · S4 measurement (DS-R) before any knob turns on.
