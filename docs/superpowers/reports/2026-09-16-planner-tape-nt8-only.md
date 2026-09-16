@@ -145,3 +145,29 @@ sha: `scratchpad/cc101e/nofx/nofx-bin` — `vcs.revision=7e87a375…`, `vcs.modi
 boot today); at that boot the dist built at the booted rev is installed alongside it (`GUIDE_BUILT_REV`
 stamp + dist build follow the 642f8808 precedent), and the proofs are: `🧮 planner tape` (import rows=426
 on 12-26, Δ rows, Δ baseline), `📈`, R1, and `🖥 … bundle-rev=<rev> matches the binary`.
+
+## F3 · THE BOOT — 7e87a375, 2026-09-16 16:15:30 CT (owner-run: install-dist-97a1b0f3.sh then cutover-101-7e87a375.sh)
+
+Tree recovered from the THIRD class-45 strike first (15:51 CT, 57 files; the reverted content preserved on
+the local branch `junk/class45-strike3-20260916-1551`, never to be merged); `~/nofx` at `97a1b0f3 ==
+origin/dev`, porcelain 0. PID 2748996 → **2814144**. Read from the log [A]:
+
+- `🔐 BOOT INTEGRITY OK — rev 7e87a375acf7 · built 2026-09-16T20:47:45Z · expected 7e87a375acf7 · goldens PASS`;
+  `/api/health` 7e87a375acf7; `deploy/RELEASE=7e87a375`; `nofx-bin.old.c6579347` HOLDS c6579347.
+- **`🖥 ui: served-by=go-static build=2026-09-16T21:00:07Z bundle=index-CVZahq3s.js bundle-rev=7e87a375 matches
+  the binary`** — the rev-judged line, first live print; the bundle was built 13 minutes AFTER this binary,
+  which the old timestamp rule would also have passed, but for the wrong reason.
+- `🧯 nt8 history at subscribe: MNQ 1m..30m 2000/2000 1h=1553 6h=273 8h=205 12h=137 1d=69 3d=23 1w=15 (2h/4h n/a)`
+  — the HTF replays landed within the subscribe window this time; `🧯 ring rehydrated MNQ 1m … import=0
+  (refused at the door) total=2500/2500`; `🧯 ring rehydrate done: 2 of 24 pairs deepened, +1000`; zero
+  `scale check SKIPPED` / `DIFFERENT PRICE SCALES`; 4h 406 (prior read, CTO).
+- **The `🧮 planner tape` / `📈` / R1 lines are NOT yet printed at 16:21 CT, and this time the cause is the
+  session gate, not the hook:** their installer, `snapshotSessionProfiles()`, runs inside `runCycle`
+  AFTER `cmeSessionClosedSkip()` (`trader/auto_trader_loop.go`); this boot landed inside the 16:00–17:00 CT
+  daily break, so every cycle returns before reaching it (the 15:32 boot was inside RTH and reached it at
+  +6 s). The hook is installed at the 17:00 CT open — and fires immediately on install, which is exactly
+  the class-130 fix. **The `🧮` live proof (import rows=426 on 12-26, Δ rows, Δ baseline) is therefore due
+  at ~17:00:0x CT and is read then**, appended below when it lands.
+
+Marker: this commit, from `~/nofx`, `deploy/RELEASE=7e87a375` (runbook, before the kill); `GUIDE_BUILT_REV`
+= 7e87a375 (dev 97a1b0f3, web-only; the Go binary is the 7e87a375 build, md5 03a82609…).
