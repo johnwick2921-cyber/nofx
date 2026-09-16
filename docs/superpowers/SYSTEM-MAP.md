@@ -103,8 +103,19 @@ its ring from the store at boot and after a confirmed drop, through ONE door
 (`rehydrateRowsFor`): (i) post-drop only live rows refill; (ii) every row enters
 stamped `historical`; (iii) `historical_import` is refused at the door and the
 `🧯 ring rehydrated … import=<n>` line prints the refused count — `LastNBarsOn`
-itself filters only mixed+off-scale and hands imports to the planner's 1m store
-splice (`trader/bars_store_depth.go`), which is the owner's open call; (iv) the
+itself filters only mixed+off-scale and hands imports to the CHART; every
+PLANNER door reads the NT8-only readers instead (`store.LastNBarsFromNT8On` /
+`BarsBetweenFromNT8On`, CTO ruling 2026-09-16): `storeBarReader` +
+`BarsWithStoreDepth` (the 12,000-bar 1m tape), `auto_trader_weekly.go` (weeks +
+`Own1m`), `auto_trader_dayplan.go` (POC-touch historical leg). The `🧮 planner
+tape` boot line prints import rows on the contract, the tape length and the
+regime baseline BOTH ways (class 82); `TestNoPlannerDoorReadsTheSharedBarReader`
+pins the doors by function body, `TestPlannerStoreReaderServesNoImportRows` by
+a real store. Still reading the shared readers (imports included), NOT planner
+doors, named for the CTO: `level_stats_wire.go:121`, `trade_excursion_hook.go:168`,
+`trade_excursion_backfill.go:120`, `follow_plan_wiring.go:217`,
+`one_setup_boot.go:174`, the display seam, the rehydrate read (whose door counts
+its own refusals). (iv) the
 contract is the current one. A CONFIRMED scale break re-requests NT8's full replay
 **once per symbol per boot** (`RequestHistoryReplayAt`, `historyReplayMaxPerBoot`);
 a second break in the same boot prints `second scale break this boot — replay on

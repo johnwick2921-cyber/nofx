@@ -88,6 +88,7 @@ export const status: GuideSection = {
         '    · expected <sha> · goldens PASS      ← code matches deploy record',
         '🧯 nt8 history at subscribe: MNQ 1m=2000/2000 5m=2000/2000 … 1h=n/a/2000 — received/asked per timeframe; n/a is "not answered yet", never zero  ← dispatch 101',
         '🧯 ring rehydrated MNQ 1m [O 2026-09-16]: nt8=<n> store_live=<n> store_hist=<n> (post-drop excluded=<bool>) import=<n> (refused at the door — guard iii) total=<t>/<cap> — every number read; then "🧯 ring rehydrate done [O …]: <k> of <n> pairs deepened"  ← dispatch 101',
+        '🧮 planner tape [NT8-only, CTO ruling 2026-09-16] @<t>: MNQ 1m contract=<c> · import rows on contract=<n> (excluded from every planner door) · tape NT8-only=<a> rows vs with imports=<b> rows (Δ<a-b>) · regime baseline NT8-only=<x> vs with imports=<y> (Δ<x-y>) · chart keeps imports, labelled  ← 101 follow-up',
         "📈 chart: across-roll=on[O] · prior contracts fill strictly before the current contract's first live row · step never adjusted · limit max=20000 · decision readers=current-contract-only  ← dispatch 101",
         '📜 planner playbook: playbook=v2 bias_tree=on …',
         '🛡 plan facts guards: 0-side + empty map fail-closed …',
@@ -269,6 +270,10 @@ export const status: GuideSection = {
     {
       kind: 'p',
       text: "Every symbol×timeframe ring is also refilled from the store — at boot and after a drop — through ONE door ['i want fuull data', 2026-09-16, superseding the 1m-only condition of 2026-09-09]: after a drop only the store's LIVE rows come back (the replay rows are what the drop judged); every refilled row enters stamped 'historical' (replay-grade to this process — never a sacred live bar, so the '📼 bar source:' census now counts store-backed rows under historical too); imported history ('historical_import', the 09-07..09-14 file) is REFUSED at that door and the per-timeframe line prints the refused count ('🧯 ring rehydrated MNQ 1m [O 2026-09-16]: nt8=2000 store_live=2500 store_hist=0 … import=0 (refused at the door — guard iii) total=2500/2500'); the contract is the current one. The store's non-1m depth on a young contract is shallower than NT8's own 2,000-bar replay, so those rings usually read 'not deepened' — the re-request, not the store, is what carries them after a true break.",
+    },
+    {
+      kind: 'p',
+      text: "The planner's tape is NT8's own (CTO ruling under the owner's delegation, 2026-09-16). Every planner door — the 12,000-bar 1m candle tape, the weekly reader's weeks and window, the POC-touch historical leg — reads only bars NT8 produced (live, or replay verified on the live scale); imported history never reaches a decision, while the chart keeps it, labelled. On 2026-09-16, 426 imported 12-26 1m bars sat inside the planner's tape. Removing them moves what the regime baseline and the levels are fed, so the '🧮 planner tape' boot line prints the import count on the contract, the tape length and the regime baseline BOTH ways, measured through the same estimator (the rule did not change — the same input both ways is a zero delta).",
     },
     { kind: 'h', text: 'Traffic light — one glance' },
     {

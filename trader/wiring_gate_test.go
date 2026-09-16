@@ -88,6 +88,13 @@ var alsoRequireWired = []string{
 	"FirstLiveOn",
 	"klinesAcrossRoll",
 	"ChartAcrossRollResolved",
+	// 101 follow-up — PLANNER TAPE NT8-ONLY (CTO ruling 2026-09-16): the two
+	// readers every planner door must use, the census, the boot line.
+	"LastNBarsFromNT8On",
+	"BarsBetweenFromNT8On",
+	"ImportRowsOn",
+	"PlannerTapeBootLine",
+	"logPlannerTapeAccounting",
 	// WAVE A — the writers this wave added. Each must keep at least one
 	// production call site; removing one turns this test red.
 	"recordAcceptedRisk",

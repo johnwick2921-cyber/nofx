@@ -110,6 +110,15 @@ Every timeframe's ring is refilled from the store at boot and after a drop
 row enters as replay-grade, never as a live bar; imported history is refused
 at that door and counted on the boot line; the contract is the current one.
 
+The planner's tape is NT8's own [CTO ruling under the owner's delegation,
+2026-09-16]: every planner door — the 12,000-bar 1m candle tape, the weekly
+reader's weeks and window, the POC-touch historical leg, the planner seam —
+reads only bars NT8 produced (live, or replay verified on the live scale).
+Imported history never reaches a decision; the chart keeps it, labelled.
+Removing it moves what the regime baseline and the levels are fed, so the boot
+line prints the tape and the baseline both ways, measured, and the rule itself
+does not change (the same input both ways is a zero delta, pinned).
+
 The chart is served across contract rolls [O]: the current contract's bars,
 then prior contracts filling strictly before the current contract's first live
 bar, every bar labelled with its contract, the roll a visible basis step and
@@ -119,7 +128,8 @@ path reads across the roll.
 
 Implementation: `provider/ninjatrader/bar_source.go` (adjacency, skips),
 `bar_cache.go` (empty replay), `history_at_subscribe.go` (the `🧯` line),
-`history_rerequest.go` (once-per-boot re-request), `trader/ninjatrader/bar_persist_wire.go`
+`store/bar_history_nt8_only.go` (`LastNBarsFromNT8On`, `BarsBetweenFromNT8On`, `ImportRowsOn`),
+`trader/planner_tape_nt8_only.go` (the 🧮 accounting line), `history_rerequest.go` (once-per-boot re-request), `trader/ninjatrader/bar_persist_wire.go`
 (`rehydrateRowsFor` — the door), `store/bar_history_across_roll.go` (display readers,
 the current contract excluded from "prior"), `api/handler_klines.go`
 (`klinesAcrossRoll`, `NOFX_CHART_ACROSS_ROLL`), `trader/ninjatrader/bar_horizon_warn.go`
