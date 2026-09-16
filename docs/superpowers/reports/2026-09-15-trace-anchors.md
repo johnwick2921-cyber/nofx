@@ -45,7 +45,7 @@ sqlite3 -readonly data/data.db "SELECT key,value FROM system_config WHERE key LI
 |---|---|
 | Boot proof | `BOOT INTEGRITY OK` (also `bars integrity OK`, goldens PASS) |
 | Economics honesty (R4) | `scenario economics:` → `contradictions refused= corrected=` |
-| Arm refused | `armed` / `geometry_` / `one_setup:` / `entry_gate` |
+| Arm refused | `🎯 geometry` (WARN, armed_executor.go:508) / `✕ armed` (refusal-by-name WARNs) / `stop/target:` boot line (refused today=N) / `entry_gate: refused` — the census itself is DB-side (`arm_refusals_0b`), NOT a journal grep; `geometry_` is a counter suffix, never a journal line |
 | Breakeven/trailing | `auto-breakeven` / `trailing_armed` / `move_stop` |
 | Planner rejects | `planner attempt` / `parse/schema rejected` |
 | Config changes | `config diff (studio_save)` → `reloaded N running trader(s)` |
@@ -55,10 +55,10 @@ sqlite3 -readonly data/data.db "SELECT key,value FROM system_config WHERE key LI
 
 ## 4. API (JWT mint + curl)
 
-Mint (one-liner): HS256 with `.env` JWT_SECRET; header {alg HS256, typ JWT};
+Mint per session, use, discard in one command (NEVER cache a token in /tmp,
+NEVER print one): HS256 with `.env` JWT_SECRET; header {alg HS256, typ JWT};
 claims sub + user_id=`396db319-d3fe-4d63-9b97-516ff0008f53`,
-email=`johnwick2921@gmail.com`, iss=`nofxAI`, exp now+3600. (Working token
-cached at `/tmp/pw-token`.)
+email=`johnwick2921@gmail.com`, iss=`nofxAI`, exp now+3600.
 
 | Intent | Endpoint |
 |---|---|
@@ -96,16 +96,15 @@ Trader id: `8d5c8af5_8ef641a7-815c-4bb5-9798-b070b67d7998_deepseek_1781246265`.
 ## 6. Verification shortcuts for a fresh session (5 minutes)
 
 ```bash
-# code truth
-cd /home/hoang/nofx-rrfix   # or any clean worktree at origin/dev
+# code truth — run from YOUR worktree at origin/dev (tree gate first, see cto-handoff §1)
 git fetch origin && git log -1 --oneline origin/dev
 grep -n 'corrected' kernel/scenario_economics.go | head -3      # R4 in place
 grep -n 'armMinRRFor(nil)' trader/auto_trader_planner.go        # R4 call site
-grep -n 'EXIT_MECHS_SUSPENDED' /home/hoang/nofx/.env            # unsuspend
 # live truth
 curl -s http://127.0.0.1:8080/api/health
 sqlite3 -readonly /home/hoang/nofx/data/data.db "SELECT COUNT(*) FROM trader_positions WHERE status='OPEN';"
-journalctl -u nofx --since '30 min ago' -o cat | grep -a 'scenario economics:' | tail -1
+tail -50 "$(ls -t /home/hoang/nofx/data/nofx_*.log | head -1)" | grep -a 'scenario economics:' | tail -1
+# exit-mech state comes from the boot line (`suspended=0`), never from printing .env
 ```
 
 ## 7. Known honest gaps (do not "fix" silently)
