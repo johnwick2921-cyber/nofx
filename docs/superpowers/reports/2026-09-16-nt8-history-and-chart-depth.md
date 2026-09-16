@@ -217,6 +217,12 @@ production caller counted: `IncScaleBreakDrop` 1, `ScaleBreakCounts` 1, `OnScale
 `PriorContractBarsBefore`/`FirstLiveOn` 2 (api/ only; **0 under kernel/, trader/, provider/** — E4).
 
 **E6** at the merged head `8f5f26ee`, 11:42 CDT (outside 12:00–13:30): **SUITE 32 ok / 0 FAIL**;
+**E6 (second, for (3a)/(3b) + the 93 fixes)** at the merged head `9e200002`, 13:30:53–13:35:56 CDT
+(outside 12:00–13:30): **SUITE 32 ok / 0 FAIL / 0 panic**. Clean-clone binary at that head:
+`vcs.revision=9e200002…`, `vcs.modified=false`, dir `nofx`, md5 `ac4de9293299faaea8d0b92dd4085461`.
+Gate on a fresh read 13:22:01 CDT: ready=true, legs 1–5 PASS. Rollback file census (A13): the
+existing `nofx-bin.old.3ce4281a` HOLDS `83b76c51` — renamed to its true name before the live
+`3ce4281a` takes that name.
 lock suite 101/0. One pre-existing pin re-pointed: `TestKlinesNinjaTraderStoreDepthContractFiltered`
 asserted the 09-14 rule the 09-16 ruling reverses; it now pins the ruling and, with the flag
 off, the 09-14 behaviour exactly.
