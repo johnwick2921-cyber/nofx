@@ -3,9 +3,9 @@
 // against GET /api/health revision and warns on drift.
 import type { ReactNode } from 'react'
 
-// Stamped from the dispatch-101 release binary (scale-check adjacency, chart across the roll,
+// Stamped from the dispatch-101 follow-up binary (planner tape NT8-only; plus scale-check adjacency, chart across the roll,
 // full-data rehydrate); see docs/superpowers/reports/2026-09-16-nt8-history-and-chart-depth.md.
-export const GUIDE_BUILT_REV = '9e200002d6a2864ef9d3af041431763213641e1b'
+export const GUIDE_BUILT_REV = 'c6579347580a1720c343f6bba90717eacf3f810c'
 
 export interface Card {
   title: string
