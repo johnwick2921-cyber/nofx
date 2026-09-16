@@ -3,8 +3,9 @@
 // against GET /api/health revision and warns on drift.
 import type { ReactNode } from 'react'
 
-// Stamped from the clean structural-stop release binary; see the release report.
-export const GUIDE_BUILT_REV = '3ce4281a4b6b866496f8dfe6a06d8983dea62a18'
+// Stamped from the dispatch-101 release binary (scale-check adjacency, chart across the roll,
+// full-data rehydrate); see docs/superpowers/reports/2026-09-16-nt8-history-and-chart-depth.md.
+export const GUIDE_BUILT_REV = '9e200002d6a2864ef9d3af041431763213641e1b'
 
 export interface Card {
   title: string
