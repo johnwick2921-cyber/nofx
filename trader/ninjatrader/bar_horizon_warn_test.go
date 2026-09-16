@@ -10,6 +10,7 @@ import (
 	"time"
 
 	ntwire "nofx/provider/ninjatrader"
+	"nofx/store"
 	"nofx/telemetry"
 )
 
@@ -230,36 +231,72 @@ func TestRingRehydrateIsWiredAtBoot(t *testing.T) {
 // PIN D3-L — OWNER CONDITION (a), 2026-09-09. THE BOOT REHYDRATE TOUCHES 1m
 // AND NOTHING ELSE.
 //
-// THE DEFECT THIS CATCHES: the first cut rehydrated EVERY (symbol, timeframe)
-// pair the cache held, which deepened the 5m ring from the store and silently
-// moved a LIVE regime input using NT8 aggregates this repo has already judged
-// inconsistent with their own 1m constituents. The owner's ruling allowed the
-// regime input to change and required the depth to come from the 1m tape.
+// THE DEFECT THIS CAUGHT (class 86, 2026-09-09): the first cut rehydrated EVERY
+// (symbol, timeframe) pair and silently moved a LIVE regime input using NT8
+// aggregates this repo had judged inconsistent with their own 1m constituents.
+// The owner's 09-09 ruling required the depth to come from the 1m tape.
+//
+// RE-POINTED 2026-09-16 under the owner's direct ruling for dispatch 101 —
+// "i want fuull data" — which supersedes condition (a): EVERY subscribed
+// timeframe is rehydrated from the store's current-contract rows, with four
+// guards, and the regime input is protected by condition (b) instead (the
+// baseline is served from the 1m tail; the 5m ring is only its fallback —
+// TestRegimeLabelUnchanged pins that it did not move). The pin keeps its name,
+// its A29 check and its owner; what it asserts is the new selection.
 func TestRehydrateSelectsOnly1mPairs(t *testing.T) {
 	in := [][2]string{
 		{"MNQ", "1m"}, {"MNQ", "5m"}, {"MNQ", "15m"}, {"MNQ", "1h"},
 		{"MNQ", "4h"}, {"MNQ", "1d"}, {"MNQ", "1w"}, {"ES", "1m"}, {"ES", "5m"},
 	}
 	got := pairsToRehydrate(in)
-	if len(got) != 2 {
-		t.Fatalf("selected %d pairs from %d, want exactly the 2 that are 1m: %v", len(got), len(in), got)
+	if len(got) != len(in) {
+		t.Fatalf("selected %d pairs from %d, want EVERY subscribed timeframe [O 2026-09-16]: %v", len(got), len(in), got)
 	}
-	for _, p := range got {
-		if p[1] != rehydrateTimeframe {
-			t.Fatalf("a non-%s pair was selected for rehydration: %v — stored non-1m rows are NT8 aggregates and must never reach a live regime input", rehydrateTimeframe, p)
+	for i := range in {
+		if got[i] != in[i] {
+			t.Fatalf("the cache's order was not preserved at %d: %v", i, got)
 		}
-	}
-	if got[0] != ([2]string{"MNQ", "1m"}) || got[1] != ([2]string{"ES", "1m"}) {
-		t.Fatalf("the cache's order was not preserved: %v", got)
-	}
-	// An all-non-1m cache selects nothing, and says nothing was selected —
-	// never a silent full pass (A24).
-	if n := len(pairsToRehydrate([][2]string{{"MNQ", "5m"}, {"MNQ", "1d"}})); n != 0 {
-		t.Fatalf("a cache with no 1m pair selected %d pair(s)", n)
 	}
 	// A29 — the production loop consults it.
 	if n, where := prodCallSites(t, "pairsToRehydrate("); n == 0 {
 		t.Fatalf("pairsToRehydrate has 0 production call sites (A29) — the filter can be bypassed with the suite green (%v)", where)
+	}
+}
+
+// GUARD (ii) — RING-SIDE, from nofx-93's census: a store row is REPLAY-GRADE to
+// this process whatever its stamp says. The store carries 09-26 rows stamped
+// `live` by the migration and 12-26 rows stamped `live` by a closed-bar
+// catch-up delivered as bar_update after a subscribe (1d rows from 09-02 at
+// rowid 438391). Age alone distinguishes neither. So EVERY rehydrated row
+// enters the ring as historical, never as sacred live — and the scale check,
+// the merge and the persister all treat it as the replay it is.
+func TestRehydratedRowsEnterTheRingAsHistorical(t *testing.T) {
+	rows := []store.BarHistoryDB{
+		{OpenTimeMs: 1_000_000, O: 1, H: 2, L: 0.5, C: 1.5, V: 1, Source: store.BarSourceLive},
+		{OpenTimeMs: 1_060_000, O: 1, H: 2, L: 0.5, C: 1.5, V: 1, Source: store.BarSourceHistorical},
+	}
+	bars := rehydrateBarsFromRows(rows)
+	for i, b := range bars {
+		if b.Source != ntwire.BarSourceHistorical {
+			t.Fatalf("row %d entered the ring as %q; a store row is replay-grade to this process (guard ii)", i, b.Source)
+		}
+	}
+}
+
+// GUARD (i) — after a confirmed scale-break drop, rows stamped `historical`
+// are the rejected seed's kin and are excluded from that key's refill; on the
+// boot path they were verified in a prior boot and are kept.
+func TestPostDropRefillExcludesHistoricalRows(t *testing.T) {
+	rows := []store.BarHistoryDB{
+		{OpenTimeMs: 1_000_000, Source: store.BarSourceLive},
+		{OpenTimeMs: 1_060_000, Source: store.BarSourceHistorical},
+		{OpenTimeMs: 1_120_000, Source: store.BarSourceLive},
+	}
+	if got := rehydrateRowsFor(rows, true); len(got) != 2 {
+		t.Fatalf("post-drop: want the 2 live rows only, got %d", len(got))
+	}
+	if got := rehydrateRowsFor(rows, false); len(got) != 3 {
+		t.Fatalf("boot path: want all 3 rows, got %d", len(got))
 	}
 }
 

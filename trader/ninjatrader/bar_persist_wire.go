@@ -371,7 +371,14 @@ func SetAfterBackfillHook(fn func()) { afterBackfillHook.Store(fn) }
 //   - it is bounded by the ring's own maxBars;
 //   - it is a NO-OP on a cold key, so a dead feed can never be made to look alive.
 //
-// 1m ONLY — OWNER CONDITION (a), RULING 2026-09-09 18:18 CT.
+// EVERY SUBSCRIBED TIMEFRAME — OWNER RULING 2026-09-16, direct: "i want fuull
+// data". It supersedes condition (a) below; conditions (b), (c) and (d) stand
+// and are what keep the regime input where it was. The four guards are on
+// pairsToRehydrate. What follows is the 09-09 ruling and its measurement,
+// kept because they are the reason guard (ii) stamps every store row as
+// replay-grade rather than trusting an aggregate as a live bar.
+//
+// 1m ONLY — OWNER CONDITION (a), RULING 2026-09-09 18:18 CT — SUPERSEDED.
 //
 //	"RULING on D3: the regime input MAY change. Rehydrating the ring from the
 //	 store changes what RVBaseline is fed — and what it is fed today is 41
@@ -462,10 +469,18 @@ func rehydrateRingFromStoreWith(bh *store.BarHistoryStore, server *ntwire.TCPSer
 		if len(rows) == 0 {
 			continue
 		}
-		bars := make([]ntwire.Bar, 0, len(rows))
+		// guard (i), then the source breakdown the boot line names [O]
+		storeLive, storeHist := 0, 0
 		for _, r := range rows {
-			bars = append(bars, ntwire.Bar{T: r.OpenTimeMs, O: r.O, H: r.H, L: r.L, C: r.C, V: r.V, Source: r.Source})
+			if r.Source == store.BarSourceHistorical {
+				storeHist++
+			} else {
+				storeLive++
+			}
 		}
+		rows = rehydrateRowsFor(rows, reseeded)
+		// guard (ii)
+		bars := rehydrateBarsFromRows(rows)
 		added := cache.RehydrateOlder(symbol, tf, bars)
 		if added == 0 {
 			continue
@@ -474,10 +489,13 @@ func rehydrateRingFromStoreWith(bh *store.BarHistoryStore, server *ntwire.TCPSer
 		deepened++
 		after := cache.Get(symbol, tf)
 		h := kernel.HorizonOf(barsToKlines(after, tf), tf, cache.MaxBars(), now)
-		logger.Infof("🧯 ring rehydrated %s %s: %d → %d bars (+%d older from the store, cap %d) · contract=%s (%s) · %s",
-			symbol, tf, before, len(after), added, cache.MaxBars(), contract, src, h.Line())
+		// nt8=<what the ring held from NT8 before> store_live/store_hist=<what
+		// the store offered by stamp> import=<excluded by LastNBarsOn's filter>
+		// total=<t>/cap — every number READ, the [O] naming the ruling.
+		logger.Infof("🧯 ring rehydrated %s %s [O 2026-09-16]: nt8=%d store_live=%d store_hist=%d (post-drop excluded=%v) import=excluded-by-reader total=%d/%d (+%d older, all entered as historical — guard ii) · contract=%s (%s) · %s",
+			symbol, tf, before, storeLive, storeHist, reseeded, len(after), cache.MaxBars(), added, contract, src, h.Line())
 	}
-	logger.Infof("🧯 ring rehydrate done: %d of %d symbol×tf pairs deepened, +%d bars total, %d read failure(s), %d pair(s) SKIPPED as tf!=%s (stored non-1m rows are NT8 aggregates — never fed to a live regime input) · store retention %s=%dd (the ring is the cache; the store is the horizon)",
+	logger.Infof("🧯 ring rehydrate done [O \"i want fuull data\" 2026-09-16]: %d of %d symbol×tf pairs deepened, +%d bars total, %d read failure(s), %d pair(s) not selected · every rehydrated row enters as historical (replay-grade to this process); the regime baseline is served from the %s tail (condition (b)) · store retention %s=%dd (the ring is the cache; the store is the horizon)",
 		deepened, len(pairs), totalAdded, failed, skipped, rehydrateTimeframe, rehydrateTimeframe, store.RetentionDaysFor(rehydrateTimeframe))
 	// ROLL WAVE (D6) — the contract boot line, every field read. One per
 	// primary symbol the ring holds.
@@ -500,21 +518,62 @@ func rehydrateRingFromStoreWith(bh *store.BarHistoryStore, server *ntwire.TCPSer
 
 // rehydrateTimeframe is the ONLY timeframe the boot rehydrate touches. See the
 // header above for why it is not every pair the cache holds.
+// rehydrateTimeframe was the 1m-only selection of owner condition (a),
+// 2026-09-09. It remains the name of the FEED-OWN timeframe (the tape every
+// other series is aggregated from, the one the regime baseline is served
+// from under condition (b)); it is no longer the selection.
 const rehydrateTimeframe = "1m"
 
-// pairsToRehydrate is THE selection (owner condition (a), 2026-09-09),
-// extracted so a pin drives IT rather than a copy of it (class 86): only the
-// 1m pairs are rehydrated, and the order the cache handed us is preserved so
-// the log line's counts are reproducible.
+// pairsToRehydrate is THE selection, extracted so a pin drives IT rather than a
+// copy of it (class 86).
 //
-// A pin that only checked the constant still exists would pass a mutation that
-// disabled the filter, so the filter is a function with its own fixture.
+// OWNER RULING 2026-09-16, direct, verbatim: "i want fuull data". It
+// SUPERSEDES condition (a) of 2026-09-09 ("the boot rehydrate touches 1m
+// ONLY"): every subscribed timeframe is rehydrated from the store's
+// current-contract rows — at boot after NT8's replay lands, and after a
+// confirmed scale-break drop — under four guards enforced below and pinned:
+//
+//	(i)   post-drop, `historical` rows are the rejected seed's kin: excluded
+//	(ii)  RING-SIDE: every store row enters the ring as historical — a store
+//	      row is replay-grade to this process whatever its stamp says
+//	      (nofx-93's census: migration-stamped 09-26 `live`, catch-up-stamped
+//	      12-26 `live`; age distinguishes neither)
+//	(iii) historical_import rows never reach a planner ring (LastNBarsOn's own
+//	      filter — measured, E4)
+//	(iv)  deficit-only, NT8's replay wins, cap 2500 (RehydrateOlder's contract)
+//
+// The regime input is protected by condition (b), not by this selection:
+// TestRegimeLabelUnchanged pins that the baseline did not move.
 func pairsToRehydrate(pairs [][2]string) [][2]string {
 	out := make([][2]string, 0, len(pairs))
-	for _, p := range pairs {
-		if p[1] == rehydrateTimeframe {
-			out = append(out, p)
+	out = append(out, pairs...)
+	return out
+}
+
+// rehydrateRowsFor applies guard (i): after a confirmed drop (reseeded=true)
+// rows stamped `historical` are excluded — they are the rejected seed's kin;
+// on the boot path they were verified in a prior boot and are kept.
+func rehydrateRowsFor(rows []store.BarHistoryDB, reseeded bool) []store.BarHistoryDB {
+	if !reseeded {
+		return rows
+	}
+	out := make([]store.BarHistoryDB, 0, len(rows))
+	for _, r := range rows {
+		if r.Source == store.BarSourceHistorical {
+			continue
 		}
+		out = append(out, r)
 	}
 	return out
+}
+
+// rehydrateBarsFromRows applies guard (ii): EVERY row enters the ring stamped
+// historical. The scale check, the merge and the persister then treat it as
+// the replay it is to this process — never as a sacred live bar.
+func rehydrateBarsFromRows(rows []store.BarHistoryDB) []ntwire.Bar {
+	bars := make([]ntwire.Bar, 0, len(rows))
+	for _, r := range rows {
+		bars = append(bars, ntwire.Bar{T: r.OpenTimeMs, O: r.O, H: r.H, L: r.L, C: r.C, V: r.V, Source: ntwire.BarSourceHistorical})
+	}
+	return bars
 }
