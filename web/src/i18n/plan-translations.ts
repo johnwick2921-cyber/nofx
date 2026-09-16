@@ -492,6 +492,16 @@ export const planStrings = {
     zh: '最低场景质量',
     id: 'Kualitas skenario min',
   },
+  oneSetup: {
+    en: 'One setup — arm only the single best level',
+    zh: '单一设置 — 仅对最佳价位挂单',
+    id: 'One setup — pasang hanya level terbaik',
+  },
+  oneSetupMinGrade: {
+    en: 'One setup min grade',
+    zh: '单一设置最低等级',
+    id: 'Grade min one setup',
+  },
 
   // W15.C follow-up — the owner door only opens on the LIVE session, because every
   // mutating endpoint resolves the active session server-side.

@@ -331,4 +331,22 @@ describe('DayPlanEditor · the day-trader clock + re-align cap', () => {
     expect(screen.queryByTestId('eod-flat-ct')).toBeNull()
     expect(screen.queryByTestId('eod-flat-warning')).toBeNull()
   })
+
+  it('one setup: absent reads ON (mirrors Go pointer-bool), toggle stores false, grade selectable', () => {
+    const onChange = vi.fn()
+    const cfg: DayPlanConfig = { plan_enabled: true }
+    render(<DayPlanEditor config={cfg} onChange={onChange} language="en" />)
+    // absent one_setup_enabled renders ON (defaults object, pointer semantics)
+    const sw = screen.getByTestId('one-setup-toggle')
+    expect(sw).toHaveAttribute('aria-checked', 'true')
+    fireEvent.click(sw)
+    const off = onChange.mock.calls[0][0] as DayPlanConfig
+    expect(off.one_setup_enabled).toBe(false)
+    // grade: default B, selectable to A
+    const seg = screen.getByTestId('one-setup-min-grade')
+    expect(seg.textContent).toContain('B')
+    fireEvent.click(within(seg).getByRole('button', { name: 'A' }))
+    const withA = onChange.mock.calls[1][0] as DayPlanConfig
+    expect(withA.one_setup_min_grade).toBe('A')
+  })
 })

@@ -150,7 +150,7 @@ export function PlanMiniChart({
     let stop = false
     const load = async () => {
       try {
-        const url = `/api/klines?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&limit=1500&exchange=${encodeURIComponent(exchange)}`
+        const url = `/api/klines?symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&limit=5000&exchange=${encodeURIComponent(exchange)}`
         const res = await httpClient.request<
           Array<{
             openTime: number

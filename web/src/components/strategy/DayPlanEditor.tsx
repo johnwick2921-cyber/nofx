@@ -52,6 +52,10 @@ const DEFAULT_DAY_PLAN: DayPlanConfig = {
   seat_1h_zone: true,
   // R4 (2026-08-25) — scenario quality floor DEFAULT C (no restriction).
   min_scenario_quality: 'C',
+  // ONE SETUP (dispatch 102, 2026-09-10) — arm only the single best live
+  // setup. Pointer-bool mirrors Go: absent = ON; grade floor B.
+  one_setup_enabled: true,
+  one_setup_min_grade: 'B',
 }
 
 // C3 — the legacy day-scoped clock controls (last_entry_ct / eod_flat_ct) were
@@ -339,9 +343,26 @@ export function DayPlanEditor({ config, onChange, disabled, language }: Props) {
     >
       {/* master switch */}
       <label className="text-sm p-2">
-        {language === 'zh' ? '区域外止损缓冲（点；留空使用实测默认值）' : language === 'id' ? 'Buffer stop di luar zona (poin; kosong memakai hasil pengukuran)' : 'Stop buffer beyond zone (points; blank uses measured default)'}
-        <input aria-label="Structural stop buffer" type="number" min="0.25" step="0.25" disabled={disabled} value={cfg.structural_stop?.buffer_points ?? ''}
-          onChange={e => update('structural_stop', { ...cfg.structural_stop, buffer_points: e.target.value === '' ? undefined : Number(e.target.value) })} />
+        {language === 'zh'
+          ? '区域外止损缓冲（点；留空使用实测默认值）'
+          : language === 'id'
+            ? 'Buffer stop di luar zona (poin; kosong memakai hasil pengukuran)'
+            : 'Stop buffer beyond zone (points; blank uses measured default)'}
+        <input
+          aria-label="Structural stop buffer"
+          type="number"
+          min="0.25"
+          step="0.25"
+          disabled={disabled}
+          value={cfg.structural_stop?.buffer_points ?? ''}
+          onChange={(e) =>
+            update('structural_stop', {
+              ...cfg.structural_stop,
+              buffer_points:
+                e.target.value === '' ? undefined : Number(e.target.value),
+            })
+          }
+        />
       </label>
       <FieldRow label={tp('enableDayPlan', language)}>
         <Toggle
@@ -617,6 +638,29 @@ export function DayPlanEditor({ config, onChange, disabled, language }: Props) {
                 ]}
                 value={cfg.min_scenario_quality ?? 'C'}
                 onChange={(v) => update('min_scenario_quality', v)}
+                disabled={bodyDisabled}
+              />
+            </FieldRow>
+            {/* ONE SETUP (dispatch 102) — arm only the single best live setup.
+                Pointer-bool mirrors Go: absent = ON; grade floor B. */}
+            <FieldRow label={tp('oneSetup', language)}>
+              <Toggle
+                testId="one-setup-toggle"
+                on={cfg.one_setup_enabled !== false}
+                onChange={(v) => update('one_setup_enabled', v)}
+                disabled={bodyDisabled}
+              />
+            </FieldRow>
+            <FieldRow label={tp('oneSetupMinGrade', language)}>
+              <Segmented
+                testId="one-setup-min-grade"
+                options={[
+                  { key: 'A', label: 'A' },
+                  { key: 'B', label: 'B' },
+                  { key: 'C', label: 'C' },
+                ]}
+                value={cfg.one_setup_min_grade ?? 'B'}
+                onChange={(v) => update('one_setup_min_grade', v)}
                 disabled={bodyDisabled}
               />
             </FieldRow>
