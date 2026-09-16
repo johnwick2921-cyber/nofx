@@ -463,11 +463,11 @@ func scoreLevelsPool(levels []DetectedLevel, price, dATR float64, freshness func
 		if freshness != nil {
 			fRaw = freshness(l)
 		}
-		fm := freshMult(fRaw)
+		fm := freshMult(normalizeByTFGrade(fRaw))
 		if isZoneKind(l.Kind) {
 			// Pack B (2026-08-26) — the zone freshness ladder is steeper than
 			// the anchor ladder (1.0/0.6/0.3/0.15 vs 1.0/0.8/0.6/0.5).
-			fm = zoneFreshMult(fRaw)
+			fm = zoneFreshMult(normalizeByTFGrade(fRaw))
 		}
 		l.Research.Freshness = fRaw
 		l.Research.FreshMultiplier = scoreValue(fm)

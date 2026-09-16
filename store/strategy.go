@@ -975,6 +975,12 @@ type DayPlanConfig struct {
 	// Seat1HZone (1h wave, 2026-08-25) — reserve one of the two HTF seats for
 	// an in-band 1h S/D zone when one exists (pointer-bool, DEFAULT ON).
 	Seat1HZone *bool `json:"seat_1h_zone,omitempty"`
+	// LevelsFreshByTF (S2, 2026-09-16, structure-first planner) — HTF levels
+	// grade their freshness on their OWN timeframe bars instead of the 1m-touch
+	// ladder. Default false = today's grading byte-identical. Only the freshness
+	// STRING for HTF levels is routed through the new grader; freshMult /
+	// zoneFreshMult tables are unchanged.
+	LevelsFreshByTF bool `json:"levels_fresh_by_tf,omitempty"`
 	// MinScenarioQuality (R4, 2026-08-25) — the per-strategy scenario quality
 	// floor (A | B | C). Default C = no restriction (today's behavior,
 	// byte-identical). Per-session override below (like min_grade).
@@ -1507,6 +1513,12 @@ func (c *DayPlanConfig) Seat1HZoneEnabled() bool {
 		return true
 	}
 	return *c.Seat1HZone
+}
+
+// LevelsFreshByTFEnabled is the ONE resolution seam for the S2 by-TF freshness
+// knob: nil config or unset → OFF (today's 1m-touch grading).
+func (c *DayPlanConfig) LevelsFreshByTFEnabled() bool {
+	return c != nil && c.LevelsFreshByTF
 }
 
 // MinScenarioQualityFor (R4, 2026-08-25) resolves the scenario quality floor:
