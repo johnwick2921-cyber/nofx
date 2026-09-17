@@ -922,7 +922,7 @@ func (at *AutoTrader) runPlannerReadWithTriggerClaimedCtx(session, tradeDate, tr
 	// hard fail since the owner ruling 2026-08-31 removed the count concept),
 	// continuation scenario on gaps. PDH/PDL come from the detector universe
 	// (seated or raw).
-	facts := kernel.PlanFacts{Zones: input.Zones, IdentityMap: kernel.BuildMapCandidates(input.Levels, input.Price, input.ATR5m, kernel.MapCandidateOpts{}), Price: input.Price, DATR: input.DATR, Regime: input.Regime}
+	facts := kernel.PlanFacts{Zones: input.Zones, IdentityMap: kernel.BuildMapCandidates(input.Levels, input.Price, input.ATR5m, kernel.MapCandidateOpts{}), Price: input.Price, DATR: input.DATR, Regime: input.Regime, Structure: input.Structure}
 	// 8.4 — machine grades from the Go-ranked candidate table, keyed by rounded
 	// price so the write-site stamp can match the model's levels.
 	machineGrades := map[float64]string{}
@@ -1974,7 +1974,8 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 		kernel.TreeCallWord(facts.Price, facts.PDH, facts.PDL, facts.PDC),
 		kernel.RegimeCallWord(facts.Regime))
 	identityWarnings := at.stampPlanIdentity(doc, facts.IdentityMap)
-	doc.Zones = facts.Zones // frozen presentation; never model-authored or used by validators
+	doc.Zones = facts.Zones         // frozen presentation; never model-authored or used by validators
+	doc.Structure = facts.Structure // S1 — the STRUCTURE table the read saw; nil stays absent
 	docJSON, _ := json.Marshal(doc)
 	version, err := at.store.Plan().AppendPlan(&store.PlanDB{
 		CreatedAt:       authoredAt,
@@ -2462,6 +2463,14 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 	}
 	weeklyCtx := kernel.WeeklyContextLine(weeklyDoc, nw)
 
+	// S1 (2026-09-16) — the STRUCTURE table: one call, knob-gated, logged once
+	// per read. The pool is the uncapped HTF zone universe this read scored.
+	readContract, _ := at.currentContract(symbol)
+	structureMap := at.structureMapForRead(symbol, readContract, htfZonesFull, price, now)
+	if en, _ := at.structureMapEnabled(); en {
+		at.logInfof("%s", kernel.StructureLogLine(structureMap, session))
+	}
+
 	in := kernel.PlannerInput{
 		TradeDate:        tradeDate,
 		Session:          session,
@@ -2476,6 +2485,7 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 		HTFZones:         htfZoneScored,
 		HTFZonesFull:     htfZonesFull,
 		StructureSummary: structure,
+		Structure:        structureMap, // S1 — nil unless day_plan.structure_map is on
 		ConsumedLevels:   consumedLines,
 		// CLASS 45 E2/E3 (2026-09-02) — feed forward what the enforcers already
 		// know. The void verdict is the VALIDATOR'S OWN predicate reached through

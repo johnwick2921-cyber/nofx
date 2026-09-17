@@ -300,6 +300,12 @@ type PlanDoc struct {
 	// not a direction — no MUST attaches to either leg.
 	BiasLabel string `json:"bias_label,omitempty"`
 
+	// S1 (2026-09-16) — the STRUCTURE table the read saw (D/4h/1h, bias only,
+	// never an entry). ABSENT when the knob is off or nothing was computed —
+	// never an empty object (canon: no fabricated values). Machine-stamped at
+	// write, never model-authored. Field names are the S3/S5 contract.
+	Structure *StructureMap `json:"structure,omitempty"`
+
 	// NoTradeWindows (owner ruling 2026-09-02) — the MACHINE's structured
 	// no-trade constraints for this plan's session, written at plan time from
 	// enforcing sources only: the shared window definitions for first-N and
@@ -859,6 +865,7 @@ type PlanFacts struct {
 	PDL         float64        // prior day low (0 = unknown → gap rules skipped)
 	PDC         float64        // prior day close (CLASS 50b — the bias-label tree leg)
 	Regime      RegimeBlock    // CLASS 50b — the bias-label regime leg (read-time copy)
+	Structure   *StructureMap  `json:"-"` // S1 — stamped onto the doc at write when non-nil
 }
 
 // ValidatePlanDocWithFacts = schema rules + facts rules:

@@ -171,3 +171,18 @@ origin/dev`, porcelain 0. PID 2748996 → **2814144**. Read from the log [A]:
 
 Marker: this commit, from `~/nofx`, `deploy/RELEASE=7e87a375` (runbook, before the kill); `GUIDE_BUILT_REV`
 = 7e87a375 (dev 97a1b0f3, web-only; the Go binary is the 7e87a375 build, md5 03a82609…).
+
+### The 17:00 open — the 🧮 line landed (2026-09-16 17:01:27 CT, verbatim [A])
+
+The first cycle after the CME break reached `snapshotSessionProfiles()`, installed the hook AFTER the
+backfill had landed (16:15:47), and the hook fired immediately — all three lines at once (class 130 fix,
+proven live on the exact shape that lost them at 15:32):
+
+- `📊 bars after backfill: 1w nt8_agg via 1d since 2026-06-11 (13) · 1d nt8 since 2026-06-11 (69) · 4h nt8 since 2026-06-12 (406) · 1h nt8 since 2026-06-12 (1553) · 15m nt8 since 2026-08-18 (2000) · 5m nt8 since 2026-09-07 (2000) · 1m nt8 since 2026-09-15 (2499) …`
+- `📈 regime input window @17:01:27 CT: BEFORE window=7 complete session-days · baseline=0.966039 · 2001 5m rows via 5m-ring (pre-wave) · AFTER window=7 complete session-days · baseline=0.966039 · 2001 5m rows via 5m-ring-fallback · Δ+0 day(s) · cap=20 days`
+- **`🧮 planner tape [NT8-only, CTO ruling 2026-09-16] @17:01:27 CT: MNQ 1m contract=MNQ 12-26 · import rows on contract=426 (excluded from every planner door) · tape NT8-only=3113 rows vs with imports=3539 rows (Δ-426) · regime baseline NT8-only=0.966039 over 7 day(s) vs with imports=0.966039 over 7 day(s) (Δ+0.000000) · chart keeps imports, labelled`**
+
+Reading: the 426 imported rows WERE inside the planner's tape (3,539 → 3,113) and are now out; the regime
+baseline did not move (Δ+0.000000) because the imports sit before the 7 complete session-days the estimator
+uses — the exclusion changed the tape, not today's regime number. Named, not inferred (class 82). Levels:
+the POC-touch leg no longer sees those minutes; any un-retire shows on the next planner read.

@@ -94,6 +94,7 @@ export const status: GuideSection = {
         '🧯 nt8 history at subscribe: MNQ 1m=2000/2000 5m=2000/2000 … 1h=n/a/2000 — received/asked per timeframe; n/a is "not answered yet", never zero  ← dispatch 101',
         '🧯 ring rehydrated MNQ 1m [O 2026-09-16]: nt8=<n> store_live=<n> store_hist=<n> (post-drop excluded=<bool>) import=<n> (refused at the door — guard iii) total=<t>/<cap> — every number read; then "🧯 ring rehydrate done [O …]: <k> of <n> pairs deepened"  ← dispatch 101',
         '🧮 planner tape [NT8-only, CTO ruling 2026-09-16] @<t>: MNQ 1m contract=<c> · import rows on contract=<n> (excluded from every planner door) · tape NT8-only=<a> rows vs with imports=<b> rows (Δ<a-b>) · regime baseline NT8-only=<x> vs with imports=<y> (Δ<x-y>) · chart keeps imports, labelled  ← 101 follow-up',
+        '🗺 structure: off|on(D/4h/1h)|n/a — the S1 structure-table knob, READ from the bound strategy; per read: 🗺 structure @<session>: D=<up|down|range> 4h=… 1h=… zones=<n> pd4h=<0.xx>  ← S1 (2026-09-16)',
         "📈 chart: across-roll=on[O] · prior contracts fill strictly before the current contract's first live row · step never adjusted · limit max=20000 · decision readers=current-contract-only  ← dispatch 101",
         '📜 planner playbook: playbook=v2 bias_tree=on …',
         '🛡 plan facts guards: 0-side + empty map fail-closed …',
