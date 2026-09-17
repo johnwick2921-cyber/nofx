@@ -55,4 +55,40 @@ describe('StructurePanel', () => {
     expect(overlay[1].label).toBe('OB\u00b71h')
     expect(structureZonesToOverlay(undefined)).toEqual([])
   })
+
+  // D1 (review): the dev freshness vocabulary — '' is fresh and grades A,
+  // 'b' grades B; the chip renders 'fresh' for the empty string.
+  it('grades the dev freshness vocabulary, not the S2 display words', () => {
+    const freshBlank: StructureMapView = {
+      as_of_ms: 1760000000000,
+      tfs: {
+        '4h': {
+          trend: 'range',
+          premium_discount: 0,
+          bars: 1,
+          zones: [
+            { kind: 'OB', lo: 1, hi: 2, tf: '4h', fresh: '', score: 1 },
+            { kind: 'FVG', lo: 2, hi: 3, tf: '4h', fresh: 'b', score: 1 },
+            { kind: 'Supply', lo: 3, hi: 4, tf: '4h', fresh: 'consumed', score: 1 },
+          ],
+        },
+      },
+    }
+    const overlay = structureZonesToOverlay(freshBlank)
+    expect(overlay[0].grade).toBe('A')
+    expect(overlay[1].grade).toBe('B')
+    expect(overlay[2].grade).toBe('C')
+    render(<StructurePanel structure={freshBlank} />)
+    expect(screen.getAllByTestId('structure-zone')[0].textContent).toContain('fresh')
+  })
+
+  // D2 (review): no impulse lo/hi -> no pd text, ever.
+  it('prints no pd when the impulse range is absent', () => {
+    const noImpulse: StructureMapView = {
+      as_of_ms: 1760000000000,
+      tfs: { '4h': { trend: 'range', premium_discount: 0, bars: 1, zones: [] } },
+    }
+    const { container } = render(<StructurePanel structure={noImpulse} />)
+    expect(container.textContent).not.toContain('pd')
+  })
 })

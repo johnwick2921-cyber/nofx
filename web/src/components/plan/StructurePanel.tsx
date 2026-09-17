@@ -20,10 +20,26 @@ function trendArrow(trend: string): string {
   }
 }
 
+// D1 (review): mirror the scorer's freshMult ladder exactly — the dev
+// vocabulary is ""/"a"/"b"/"c"/"done"/"consumed"/"tested" (levels_score.go);
+// "fresh"/"tested-1"/"tested-2"/"stale" are S2's display vocabulary.
 function zoneGrade(fresh: string): 'A' | 'B' | 'C' {
-  if (fresh === 'fresh') return 'A'
-  if (fresh === 'tested-1') return 'B'
-  return 'C'
+  switch (fresh) {
+    case '':
+    case 'a':
+    case 'fresh':
+      return 'A'
+    case 'b':
+    case 'tested-1':
+      return 'B'
+    default:
+      return 'C'
+  }
+}
+
+/** D1: the chip shows the scorer's real label; empty means fresh. */
+function zoneFreshChip(fresh: string): string {
+  return fresh === '' ? 'fresh' : fresh
 }
 
 /** The chart's slice of the structure block: one overlay entry per zone. */
@@ -58,7 +74,7 @@ function ZoneRow({ z }: { z: StructureZoneView }) {
       <span>
         {z.lo.toFixed(2)}–{z.hi.toFixed(2)}
       </span>
-      <span className="opacity-70">{z.fresh}</span>
+      <span className="opacity-70">{zoneFreshChip(z.fresh)}</span>
     </span>
   )
 }
@@ -115,11 +131,13 @@ export function StructurePanel({
                   {st.impulse_lo.toFixed(2)}–{st.impulse_hi.toFixed(2)}
                 </span>
               )}
-              {typeof pd === 'number' && (
-                <span className="opacity-60">
-                  pd {(pd * 100).toFixed(0)}%
-                </span>
-              )}
+              {typeof st.impulse_lo === 'number' &&
+                typeof st.impulse_hi === 'number' &&
+                typeof pd === 'number' && (
+                  <span className="opacity-60">
+                    pd {(pd * 100).toFixed(0)}%
+                  </span>
+                )}
               <span className="opacity-50">bars {st.bars}</span>
               {(st.zones ?? []).length > 0 && (
                 <span className="flex flex-wrap gap-1">
