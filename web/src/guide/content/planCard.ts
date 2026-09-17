@@ -145,8 +145,8 @@ export const planCard: GuideSection = {
         },
         {
           title: '11 · 😴 dormant + auto-rearm',
-          body: 'Dormant = the plan (or its arm) was parked by a flip/death or no-active-plan — NOT dead. It auto-rearms when price closes back through the mirror buffer (0.5×ATR14, 2 decision-TF closes) and arms re-place on the next cycle.',
-          cite: 'kernel/plan_lifecycle.go (dormant + rearm) · trader/armed_executor.go',
+          body: 'Dormant = the plan (or its arm) was parked by a flip/death or no-active-plan — NOT dead. It auto-rearms when price closes back through the mirror buffer (0.5×ATR14, 2 decision-TF closes) and arms re-place on the next cycle. The 30-min flip hold counts from the plan\'s state (session birth, last flip/re-arm, or a bias change) — never from each re-read version.',
+          cite: 'kernel/plan_lifecycle.go (dormant + rearm) · kernel/flip_hold_anchor.go · trader/armed_executor.go',
         },
       ],
     },
