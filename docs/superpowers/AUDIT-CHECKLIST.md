@@ -4871,6 +4871,31 @@ Fixed 2026-09-16: researchsnapshot/* + main.go:77 wiring; pins in
 researchsnapshot/volume_test.go; measured before/after in
 docs/superpowers/reports/2026-09-16-research-recorder-volume.md.
 
+## CLASS 134 — A PROTECTED-FILE HASH PIN THAT OUTLIVED THE WAVE THAT CHANGED THE FILE (born at the #131/#132 merge 2026-09-16, found 2026-09-16 via PR #140 CI, fixed in W-brandscope)
+
+**Shape.** `web/src/brand-scope.test.ts` pins sha256 hashes of load-bearing files (dispatch 102's
+protected set) and throws "protected file changed" on any byte. A wave that legitimately changes one of
+those files (here dispatch 101: `provider/ninjatrader/tcp_server.go`, two additive fields + one call) is
+built and merged from a Go-only review — `go test ./...` green, the wave's own vitest never run — and the
+frontend suite on dev goes red for every LATER PR's CI. The wave that changed the file is the only one
+that knows why it changed; by the time CI complains, that lane has moved on.
+
+**How it hid.** The Go suite and the web suite are two commands; a Go wave runs one. The pin's failure
+names the FILE, not the WAVE, so the next lane sees a foreign red and either re-pins blind or waits.
+
+**Probes.**
+- Any diff touching a path in `web/src/test/brand-scope-baseline.json` runs `cd web && npx vitest run
+  src/brand-scope.test.ts` in the SAME wave and re-pins in the SAME PR, with the commit, the reason and
+  the guard lines quoted in the test's comment block (never a bare hash bump).
+- A re-pin names what the pin protects and shows it intact by line number (`SubscribeBarsHistoryFor`,
+  the `bars_history_request` write, the `_data`/`_error` fan-out).
+- "Additive; no identifier renamed" is checked with the diff's REMOVED lines, not assumed — gofmt
+  re-alignment removes and re-adds lines that must be shown to still exist.
+- The mutation check (`rejects a removed protected guard`) stays enforced; a re-pin never weakens it.
+
+**Fix pattern.** Re-pin with provenance in the same PR as the change; where a Go wave touches a pinned
+file, the web pin is part of that wave's suite (class 110: a green suite is a claim about an environment,
+and this environment has two suites).
 ## CLASS 133 — S2 by-TF freshness
 
 **Shape.** A freshness grade computed from one timeframe's bars while the scoring
