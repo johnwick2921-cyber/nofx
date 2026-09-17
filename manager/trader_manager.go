@@ -595,6 +595,8 @@ func (tm *TraderManager) addTraderFromStore(traderCfg *store.Trader, aiModelCfg 
 		logger.Infof("%s", trader.HtfKnobsBootLine(strategyConfig.DayPlan))
 		// W-FLIP-REREAD (2026-09-17) — the resolved flip knob, with its source.
 		logger.Infof("%s", trader.FlipRereadBootLine(strategyConfig.DayPlan))
+		// W-STRUCTURE-ZONE-SEATS (2026-09-17) — the resolved zone-seat knob.
+		logger.Infof("%s", trader.ZoneSeatsBootLine(strategyConfig.DayPlan))
 		// D102-1 (2026-09-16): the exit posture, READ from the strategy
 		// toggles the mechanics honour — the main boot line prints n/a
 		// for these fields; this line prints the real values, prefixed with the

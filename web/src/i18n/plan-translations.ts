@@ -441,6 +441,11 @@ export const planStrings = {
     zh: '结构地图 — D/4h/1h 趋势表 + 区域；仅上下文，永不作为入场',
     id: 'Peta struktur — tabel tren D/4h/1h + zona; konteks saja, bukan entri',
   },
+  structureZoneSeats: {
+    en: 'Zone seats — an in-band structure-map zone edge competes for a seat (ZONE-4H-DEMAND…); research (Round 24): zone-at-entry has no edge — live test',
+    zh: '区域席位 — 波段内结构区域的边缘参与席位竞争（ZONE-4H-DEMAND…）；研究（第24轮）：入场处的区域无优势 — 实盘测试',
+    id: 'Kursi zona — tepi zona peta struktur dalam band bersaing untuk kursi (ZONE-4H-DEMAND…); riset (Ronde 24): zona saat entri tanpa edge — uji live',
+  },
   freshByTf: {
     en: 'Freshness by timeframe — HTF levels graded on their own bars (re-entries), research says no edge either way',
     zh: '按周期新鲜度 — HTF 价位按自身周期 K 线评分（重入）；研究显示两种方式均无优势',

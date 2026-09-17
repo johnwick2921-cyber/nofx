@@ -5335,3 +5335,68 @@ cannot race by construction. No production code changed.
   path BEFORE merge — CI runs it, and CI is the last gate, not the first.
 - A red CI on the FIRST push after a merge is the merge's problem until proven
   otherwise: read the run's failing job before the next PR is opened.
+
+## CLASS NN — ONE-SETUP JUDGED ARMS AGAINST A DIFFERENT POOL THAN THE PLANNER AUTHORED ON (born 2026-09-10 with dispatch 102's arm seam, found 2026-09-17 by the #159 reviewer, feat/structure-zone-seats, W-STRUCTURE-ZONE-SEATS review fix 1; number assigned at merge)
+
+**Shape.** The planner seats its 12-seat table from the FULL assembly — the 1m
+detectors PLUS the HTF extras (`DetectHTFLevels` on D/4h/1h/15m, `trader/
+auto_trader_planner.go` `extra`), and, with the zone-seat knob on, the ZONE-*
+edge candidates. The plan's scenarios are authored on THAT table. The arm seam's
+one-setup predicate then judged "is this scenario's level the best level near
+price" against a map it re-assembled ITSELF at arm time with
+`AssembleScoredLevels(...)` and NO extras (`trader/one_setup_wiring.go:131` at
+`de869d38`): the 1m pool only. A scenario on a daily/4h/1h seat, or on a ZONE-*
+seat, therefore looked for a candidate at its price in a pool that never held
+one → `level_no_candidate` / `level_not_best:<some 1m row>` → DECLINED, every
+cycle, with one-setup ON by default (`store/resolve_source.go:63-65`). The
+planner could author it; the book could never arm it.
+
+**Measured (2026-09-17 17:09 CT, the golden fixture's REAL arm path, doc PDL
+29490 (A) / ONH 29500 (B), flat tape at 29495).** BEFORE: the plan's own A-grade
+PDL was absent from one-setup's map; best = a narrow-pool ONL@29494 (B); S1, S2,
+S3 all `level_not_best`; zero arms; `one_setup:level=2`. AFTER, default band
+(dATR 2.00 → 1.5 × 2 = 3 pt): UNCHANGED — the plan's levels at ±5 sit outside
+the 3-pt reachability band on that flat tape, so nothing there could change.
+AFTER, band that reaches the plan's levels (`proximity_filter_atr` 3.0 → 6 pt):
+S1 flips to ALLOWED (`level=ok best=PDL(A)`) and arms (entry 29490 stop 29480
+target 29520, `one_setup:armable=1`); S2/S3 `level_not_best:PDL@29490(A)`. A
+ZONE-4H-DEMAND seat and a plain `Demand·1d` seat at the same price arm the
+same way (`TestOneSetupArmSiteZoneSeatScenarioArms`,
+`TestOneSetupArmSiteDailyHTFSeatScenarioArms`). The E2 OFF golden
+(`one_setup_enabled=false`) is byte-identical: OFF builds no map.
+
+**Why it hid.** (1) The seam test fixtures fed the map through a test seam
+(`oneSetupFactsForTest`) that hands candidates in, so the production map build
+was never exercised with a plan authored on an HTF seat. (2) The golden fixture
+authors on PDL/ONH — 1m-pool names — and its flat tape's 3-pt band excludes
+them anyway, so `level_not_best` read as the intended verdict. (3) The decline
+is loud (A9) but names a plausible best level, so the log reads like a judgment,
+not a missing input. (4) D0/A31 said "one-setup never touches the map" — true —
+and nobody asked whether it READ the same map.
+
+**The fix shape.** `oneSetupSeedPlanLevels` (`trader/one_setup_wiring.go`): the
+plan doc's OWN levels are seeded into the live map before `BuildMapCandidates`
+as zero-score rows carrying the level's identity (so `CandidateIdentity`
+recomputes the doc's own id and `level_id` refs resolve). Zero score: a live row
+within the merge width stays the keeper and merely gains the name. BOUNDED
+(second re-review): only a MACHINE-graded level stands alone as a candidate; an
+unstamped level may only alias a live row within the merge width (live grade
+wins) and is otherwise dropped and COUNTED `one_setup:seed_unstamped_dropped` —
+the authored grade never authorizes an arm. NOT gated by
+`structure_zone_seats`: it changes live arm decisions for every trader at boot;
+the `one_setup:*` counters show the delta after the boot. "Seated for the planner" ==
+"candidate for one-setup" by construction; the permission facts still read the
+live `scored`. No kernel map file changed (E0 `TestOneSetupMapStaysWhole`).
+
+**Probes.**
+- Any consumer that RE-ASSEMBLES the map at a later moment (arm seam, card,
+  wake, re-plan) must be asked: does it assemble with the SAME inputs the
+  planner used (HTF extras, zone candidates, knobs)? `grep -n
+  "AssembleScoredLevels(" trader/ api/` — every call without the planner's
+  extras is a candidate for this class. Known remaining: `api/handler_plan.go
+  planW3Map` (card enrichment only; the row still renders from the doc).
+- A verdict that names a DIFFERENT level as best than the one the plan seated
+  at that price is this class until proven otherwise.
+- A fixture whose band cannot reach the plan's own levels proves nothing about
+  the predicate: state the band (`proximity_filter_atr × dATR`) beside every
+  one-setup measurement.

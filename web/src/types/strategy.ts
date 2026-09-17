@@ -102,6 +102,11 @@ export interface DayPlanConfig {
   /** W-FLIP-REREAD (2026-09-17) — a fired flip goes dormant AND requests one
    *  free re-read in the flipped direction. Default false (legacy dormant). */
   flip_reread?: boolean
+  /** W-STRUCTURE-ZONE-SEATS (2026-09-17) — an in-band structure-map zone's
+   *  nearest edge competes for a seat as ZONE-<TF>-<KIND> (same scorer, same
+   *  cap). Default false (seating byte-identical). Round 24: zone-at-entry
+   *  does not predict a better entry; the owner enabled it to test live. */
+  structure_zone_seats?: boolean
   acceptance_rule?: string // 2x5m | 15m-close
   replan_cap?: number
   sessions_enabled?: string[]

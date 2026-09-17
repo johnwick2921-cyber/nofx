@@ -548,6 +548,14 @@ export function DayPlanEditor({ config, onChange, disabled, language }: Props) {
               testId="structure-map-toggle"
             />
           </FieldRow>
+          <FieldRow label={tp('structureZoneSeats', language)}>
+            <Toggle
+              on={cfg.structure_zone_seats === true}
+              onChange={(v) => update('structure_zone_seats', v)}
+              disabled={bodyDisabled}
+              testId="structure-zone-seats-toggle"
+            />
+          </FieldRow>
           <FieldRow label={tp('freshByTf', language)}>
             <Toggle
               on={cfg.levels_fresh_by_tf === true}

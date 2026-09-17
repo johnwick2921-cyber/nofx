@@ -210,17 +210,59 @@ func AssembleScoredLevelsFullMinGrade(traderID string, bars []market.Kline, reg 
 // AssembleResearchLevels returns the pre-deduplication universe as evidence;
 // the trading outputs use the same detection, scoring and seating path.
 func AssembleResearchLevels(traderID string, bars []market.Kline, reg SessionRegistry, symbol string, maxLevels int, htfSeats *int, htfMult float64, now time.Time, proximityK float64, minGrade string, extraLevels ...DetectedLevel) (seated, pool []ScoredLevel, price, dATR float64, raw []DetectedLevel) {
+	return assembleResearchLevels(traderID, bars, reg, symbol, maxLevels, htfSeats, htfMult, now, proximityK, minGrade, nil, extraLevels...)
+}
+
+// AssembleResearchLevelsZoneSeats (W-STRUCTURE-ZONE-SEATS, 2026-09-17) is
+// AssembleResearchLevels with the structure-map zone candidates appended to the
+// pool BEFORE scoring (kernel/zone_seats.go; the alias within the cluster
+// tolerance is collapseLevelClusters' own merge). The knob-OFF call site keeps
+// calling AssembleResearchLevels, which is this function with no candidates —
+// element-for-element the same pool, the same scorer, the same seats (pinned
+// by TestZoneSeatsOffIsByteIdentical). injected/aliased are what the scorer's
+// output RECORDS (ZoneSeatOutcome) for the read's observability line.
+func AssembleResearchLevelsZoneSeats(traderID string, bars []market.Kline, reg SessionRegistry, symbol string, maxLevels int, htfSeats *int, htfMult float64, now time.Time, proximityK float64, minGrade string, zoneCands []DetectedLevel, extraLevels ...DetectedLevel) (seated, pool []ScoredLevel, price, dATR float64, raw []DetectedLevel, injected, aliased int) {
+	seated, pool, price, dATR, raw = assembleResearchLevels(traderID, bars, reg, symbol, maxLevels, htfSeats, htfMult, now, proximityK, minGrade, func(all []DetectedLevel) []DetectedLevel {
+		if len(zoneCands) == 0 {
+			return all
+		}
+		return append(all, zoneCands...) // rule 4; rule 3 (alias) is decided by collapseLevelClusters on survivors
+	}, extraLevels...)
+	injected, aliased, _ = ZoneSeatOutcome(pool, seated)
+	return seated, pool, price, dATR, raw, injected, aliased
+}
+
+// PlannerPriceAndRange is the read's reference price (last CLOSED 1m close)
+// and daily-range proxy (DailyRangeProxy, 0.8% of price until the map warms) —
+// the SAME derivation AssembleResearchLevels uses, exported so a pre-scoring
+// pass (the zone-seat candidates need the band before the pool exists) reads
+// the identical numbers instead of a second implementation. (0, 0) when no
+// closed bar exists.
+func PlannerPriceAndRange(bars []market.Kline, now time.Time) (price, dATR float64) {
 	cb := closedBars(bars, now)
 	if len(cb) == 0 {
-		return nil, nil, 0, 0, nil
+		return 0, 0
 	}
 	price = cb[len(cb)-1].Close
 	if price <= 0 {
-		return nil, nil, 0, 0, nil
+		return 0, 0
 	}
 	dATR = DailyRangeProxy(bars, now)
 	if dATR <= 0 {
 		dATR = 0.008 * price // fallback until the map warms
+	}
+	return price, dATR
+}
+
+// assembleResearchLevels is the shared body. `poolHook`, when non-nil, sees
+// the full candidate pool (every detector + extras, before identity capture
+// and dedupe) and returns the pool to score — the zone-seat merge point. nil =
+// the pool is scored as assembled (the legacy path).
+func assembleResearchLevels(traderID string, bars []market.Kline, reg SessionRegistry, symbol string, maxLevels int, htfSeats *int, htfMult float64, now time.Time, proximityK float64, minGrade string, poolHook func([]DetectedLevel) []DetectedLevel, extraLevels ...DetectedLevel) (seated, pool []ScoredLevel, price, dATR float64, raw []DetectedLevel) {
+	cb := closedBars(bars, now)
+	price, dATR = PlannerPriceAndRange(bars, now)
+	if price <= 0 {
+		return nil, nil, 0, 0, nil
 	}
 	atr := market.ExportCalculateATR(cb, 14)
 	if atr <= 0 {
@@ -245,6 +287,9 @@ func AssembleResearchLevels(traderID string, bars []market.Kline, reg SessionReg
 	// Level-truth wave (2026-08-27) — recent 5m/15m fractal swings (T3).
 	all = append(all, SwingPointLevels(bars, now)...)
 	all = append(all, extraLevels...) // nPOC etc. from the durable store (P1.3)
+	if poolHook != nil {
+		all = poolHook(all) // W-STRUCTURE-ZONE-SEATS — zone candidates merged BEFORE scoring
+	}
 	CaptureIdentityContext(all, symbol, AISVPBarInterval)
 	raw = researchLevels(all)
 	all = dedupeSameKind(raw)

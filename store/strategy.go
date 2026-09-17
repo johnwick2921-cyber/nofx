@@ -958,6 +958,13 @@ type DayPlanConfig struct {
 	// re-read in the flipped direction (trigger structure_flip). OFF = today's
 	// behaviour byte-identical.
 	FlipReread bool `json:"flip_reread,omitempty"`
+	// StructureZoneSeats (W-STRUCTURE-ZONE-SEATS, 2026-09-17): a structure-map
+	// zone (D/4h/1h) whose nearest edge is inside the proximity band becomes a
+	// CANDIDATE in the seat race (label ZONE-<TF>-<KIND>, same scorer, same
+	// priority rule, same cap — no reserved seat, no multiplier). OFF = today's
+	// seating byte-identical. Round 24 found zone-at-entry does NOT predict a
+	// better entry; the owner enabled this to test it live.
+	StructureZoneSeats bool `json:"structure_zone_seats,omitempty"`
 	// AcceptanceRule: 2x5m (default) | 15m-close.
 	AcceptanceRule string `json:"acceptance_rule,omitempty"`
 	// ReplanCap: re-reads per session, 0–4 (default 2).
@@ -1539,6 +1546,12 @@ func (c *DayPlanConfig) Seat1HZoneEnabled() bool {
 // (absent/false = OFF = today's dormant behaviour).
 func (c *DayPlanConfig) FlipRereadEnabled() bool {
 	return c != nil && c.FlipReread
+}
+
+// StructureZoneSeatsEnabled is the ONE resolution seam for the
+// W-STRUCTURE-ZONE-SEATS knob (absent/false = OFF = today's seating).
+func (c *DayPlanConfig) StructureZoneSeatsEnabled() bool {
+	return c != nil && c.StructureZoneSeats
 }
 
 // LevelsFreshByTFEnabled is the ONE resolution seam for the S2 by-TF freshness

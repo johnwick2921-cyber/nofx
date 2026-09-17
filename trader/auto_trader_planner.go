@@ -2517,7 +2517,25 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 		}
 		extra = append(extra, htfLevels...)
 	}
-	scored, pool, price, dATR, researchRaw := kernel.AssembleResearchLevels(at.id, bars, reg, symbol, maxLevels, htfSeats, htfMult, now, at.proximityFilterATR(), minGrade, extra...)
+	// W-STRUCTURE-ZONE-SEATS (2026-09-17) — knob OFF: the call below is the one
+	// this read has always made, untouched. Knob ON: the structure map's in-band
+	// zones become seat candidates merged into the pool BEFORE scoring (same
+	// scorer, same priority rule, same cap — kernel/zone_seats.go). The map this
+	// pass computes is reused by the S1 prompt section below when that knob is
+	// also on (identical inputs), so the read still computes it once.
+	readContract, _ := at.currentContract(symbol)
+	var scored, pool []kernel.ScoredLevel
+	var price, dATR float64
+	var researchRaw []kernel.DetectedLevel
+	var zoneSeatMap *kernel.StructureMap
+	if zoneCands, zm, zrep := at.zoneSeatCandidatesForRead(symbol, readContract, htfLevels, bars, now); at.zoneSeatsEnabled() {
+		zoneSeatMap = zm
+		var injected, aliased int
+		scored, pool, price, dATR, researchRaw, injected, aliased = kernel.AssembleResearchLevelsZoneSeats(at.id, bars, reg, symbol, maxLevels, htfSeats, htfMult, now, at.proximityFilterATR(), minGrade, zoneCands, extra...)
+		at.logInfof("%s", zoneSeatsReadLine(session, zrep, injected, aliased))
+	} else {
+		scored, pool, price, dATR, researchRaw = kernel.AssembleResearchLevels(at.id, bars, reg, symbol, maxLevels, htfSeats, htfMult, now, at.proximityFilterATR(), minGrade, extra...)
+	}
 	// 1h wave (2026-08-25) — the ranked table's HTF seats guarantee an in-band
 	// 1h S/D zone when one exists. Gated by the seat_1h_zone knob (default ON).
 	if dp != nil && dp.Seat1HZoneEnabled() {
@@ -2797,8 +2815,12 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 
 	// S1 (2026-09-16) — the STRUCTURE table: one call, knob-gated, logged once
 	// per read. The pool is the uncapped HTF zone universe this read scored.
-	readContract, _ := at.currentContract(symbol)
-	structureMap := at.structureMapForRead(symbol, readContract, htfZonesFull, price, now)
+	structureMap := zoneSeatMap // W-STRUCTURE-ZONE-SEATS — the pass above already computed it
+	if structureMap == nil {
+		structureMap = at.structureMapForRead(symbol, readContract, htfZonesFull, price, now)
+	} else if en, _ := at.structureMapEnabled(); !en {
+		structureMap = nil // the prompt section, its log and the doc stamp stay gated by day_plan.structure_map
+	}
 	if en, _ := at.structureMapEnabled(); en {
 		at.logInfof("%s", kernel.StructureLogLine(structureMap, session))
 	}

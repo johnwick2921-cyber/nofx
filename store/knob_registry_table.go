@@ -103,6 +103,7 @@ var knobRegistry = map[string]KnobEntry{
 	"htf_seats":                        {Path: "htf_seats", Status: KnobLive, Consumers: []string{"kernel/levels_score.go seatHTF (S3)"}, Note: "0-6, nil=2"},
 	"htf_score_multiplier":             {Path: "htf_score_multiplier", Status: KnobLive, Consumers: []string{"kernel/levels_score.go scoreLevelsPool (S3)"}, Note: "1.0-1.5, nil=1.2"},
 	"flip_reread":                      {Path: "flip_reread", Status: KnobLive, Consumers: []string{"trader/auto_trader_planner.go maybeRereadAfterFlip (W-FLIP-REREAD)"}, Note: "false=OFF (legacy dormant)"},
+	"structure_zone_seats":             {Path: "structure_zone_seats", Status: KnobLive, Consumers: []string{"trader/zone_seats_wire.go zoneSeatCandidatesForRead (W-STRUCTURE-ZONE-SEATS)", "kernel/zone_seats.go ZoneSeatCandidates", "kernel/levels_score.go collapseLevelClusters (ZONE-* alias)", "kernel/levels_assemble.go AssembleResearchLevelsZoneSeats"}, Note: "false=OFF (seating byte-identical); ON = in-band structure-map zones compete for seats as ZONE-<TF>-<KIND>"},
 	"max_margin_usage":                 {Path: "max_margin_usage", Status: KnobIneffective, Consumers: nil, Note: "prompt text only \u2014 advisory, never a gate (engine_prompt.go)"},
 	"max_notional_leverage":            {Path: "max_notional_leverage", Status: KnobLive, Consumers: []string{"kernel/engine_analysis.go:557"}, Note: ""},
 	"max_positions":                    {Path: "max_positions", Status: KnobLive, Consumers: []string{"kernel/engine_analysis.go:131"}, Note: ""},
