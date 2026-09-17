@@ -22,15 +22,19 @@ import (
 
 func main() {
 	var (
-		dbPath   = flag.String("db", "", "path to the DB copy (sqlite, read-only)")
-		outDir   = flag.String("out", "", "output directory")
-		start    = flag.String("start", "2022-04-11", "first CME day YYYY-MM-DD (CT), inclusive")
-		end      = flag.String("end", "", "last CME day YYYY-MM-DD (CT), inclusive; empty = last bar day")
-		limit    = flag.Int("limit", 0, "debug: stop after N reads (0 = all)")
-		q6       = flag.Bool("q6", false, "run the Q6 seat-share replay instead of the episode pass")
-		s4       = flag.Bool("s4", false, "run the S4 measurement pass: entry field + trends.jsonl + qa.jsonl")
-		blocksim = flag.Bool("blocksim", false, "S4b(2): block-simulate 3 rules on the live plans (read-only)")
-		q6n      = flag.Int("q6n", 30, "Q6: number of recent session-plans to replay")
+		dbPath    = flag.String("db", "", "path to the DB copy (sqlite, read-only)")
+		outDir    = flag.String("out", "", "output directory")
+		start     = flag.String("start", "2022-04-11", "first CME day YYYY-MM-DD (CT), inclusive")
+		end       = flag.String("end", "", "last CME day YYYY-MM-DD (CT), inclusive; empty = last bar day")
+		limit     = flag.Int("limit", 0, "debug: stop after N reads (0 = all)")
+		q6        = flag.Bool("q6", false, "run the Q6 seat-share replay instead of the episode pass")
+		s4        = flag.Bool("s4", false, "run the S4 measurement pass: entry field + trends.jsonl + qa.jsonl")
+		blocksim  = flag.Bool("blocksim", false, "S4b(2): block-simulate 3 rules on the live plans (read-only)")
+		eratrend  = flag.Bool("eratrend", false, "S4c: recompute D/4h trends on the era-wide de-stepped series -> era-trends.jsonl")
+		useEra    = flag.Bool("useera", false, "blocksim: use the era-wide series for D/4h state")
+		trendsIn  = flag.String("trendsin", "", "eratrend input trends.jsonl")
+		trendsOut = flag.String("trendsout", "", "eratrend output era-trends.jsonl")
+		q6n       = flag.Int("q6n", 30, "Q6: number of recent session-plans to replay")
 	)
 	flag.Parse()
 	if *dbPath == "" || *outDir == "" {
@@ -99,8 +103,18 @@ func main() {
 collected:
 	fmt.Printf("reads built: %d\n", len(reads))
 
+	if *eratrend {
+		if *trendsIn == "" || *trendsOut == "" {
+			fatal("eratrend needs -trendsin and -trendsout", nil)
+		}
+		if err := runEraTrend(db, *trendsIn, *trendsOut); err != nil {
+			fatal("eratrend: %v", err)
+		}
+		fmt.Println("done")
+		return
+	}
 	if *blocksim {
-		if err := runBlockSim(bd, db, *outDir, 10); err != nil {
+		if err := runBlockSim(bd, db, *outDir, 10, *useEra); err != nil {
 			fatal("blocksim: %v", err)
 		}
 		fmt.Println("done")

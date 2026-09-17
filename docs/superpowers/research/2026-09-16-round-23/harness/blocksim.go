@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"nofx/kernel"
+	"nofx/market"
 )
 
 type bsScenario struct {
@@ -71,8 +72,20 @@ type scenOutcome struct {
 	oppD, oppH                bool
 }
 
+// eraD1d/eraH4 are the S4c era-wide de-stepped series (nil = use the
+// contract-keyed store series, the S4b behavior).
+var eraD1d, eraH4 []market.Kline
+
 // runBlockSim executes S4b(2) and prints the report tables.
-func runBlockSim(bd *barDB, db *sql.DB, outDir string, nSessions int) error {
+func runBlockSim(bd *barDB, db *sql.DB, outDir string, nSessions int, useEra bool) error {
+	if useEra {
+		d1d, h4, err := loadEraSeries(db)
+		if err != nil {
+			return err
+		}
+		eraD1d, eraH4 = eraToKline(d1d), eraToKline(h4)
+		fmt.Printf("blocksim era state: 1d=%d bars, 4h=%d bars\n", len(eraD1d), len(eraH4))
+	}
 	rows, err := loadRecentPlans(db, nSessions)
 	if err != nil {
 		return err
@@ -107,8 +120,14 @@ func runBlockSim(bd *barDB, db *sql.DB, outDir string, nSessions int) error {
 		if delta <= 0 {
 			continue
 		}
-		dTrend, _, _ := trendFor(bd, contract, "1d", readTime.UnixMilli())
-		hTrend, _, _ := trendFor(bd, contract, "4h", readTime.UnixMilli())
+		var dTrend, hTrend string
+		if eraD1d != nil {
+			dTrend, _, _ = s1Trend(eraD1d, 1440, readTime.UnixMilli())
+			hTrend, _, _ = s1Trend(eraH4, 240, readTime.UnixMilli())
+		} else {
+			dTrend, _, _ = trendFor(bd, contract, "1d", readTime.UnixMilli())
+			hTrend, _, _ = trendFor(bd, contract, "4h", readTime.UnixMilli())
+		}
 		fmt.Printf("session %s %s contract=%s d_trend=%s h4_trend=%s\n", r.TradeDate, r.Session, contract, dTrend, hTrend)
 		_, bars := bd.sessionBars1m(contract, winStart.UnixMilli(), winEnd.UnixMilli())
 		if len(bars) < 2 {
