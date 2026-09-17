@@ -214,27 +214,23 @@ func AssembleResearchLevels(traderID string, bars []market.Kline, reg SessionReg
 }
 
 // AssembleResearchLevelsZoneSeats (W-STRUCTURE-ZONE-SEATS, 2026-09-17) is
-// AssembleResearchLevels with the structure-map zone candidates merged into the
-// pool BEFORE scoring (kernel/zone_seats.go MergeZoneSeatCandidates: alias
-// within the cluster tolerance, else a new row). The knob-OFF call site keeps
+// AssembleResearchLevels with the structure-map zone candidates appended to the
+// pool BEFORE scoring (kernel/zone_seats.go; the alias within the cluster
+// tolerance is collapseLevelClusters' own merge). The knob-OFF call site keeps
 // calling AssembleResearchLevels, which is this function with no candidates —
 // element-for-element the same pool, the same scorer, the same seats (pinned
-// by TestZoneSeatsOffIsByteIdentical). injected/aliased are what the merge
-// RECORDED for the read's observability line.
+// by TestZoneSeatsOffIsByteIdentical). injected/aliased are what the scorer's
+// output RECORDS (ZoneSeatOutcome) for the read's observability line.
 func AssembleResearchLevelsZoneSeats(traderID string, bars []market.Kline, reg SessionRegistry, symbol string, maxLevels int, htfSeats *int, htfMult float64, now time.Time, proximityK float64, minGrade string, zoneCands []DetectedLevel, extraLevels ...DetectedLevel) (seated, pool []ScoredLevel, price, dATR float64, raw []DetectedLevel, injected, aliased int) {
-	var merge zoneSeatMerge
 	seated, pool, price, dATR, raw = assembleResearchLevels(traderID, bars, reg, symbol, maxLevels, htfSeats, htfMult, now, proximityK, minGrade, func(all []DetectedLevel) []DetectedLevel {
 		if len(zoneCands) == 0 {
 			return all
 		}
-		out, inj, al := MergeZoneSeatCandidates(all, zoneCands, clusterToleranceFor(price))
-		merge.injected, merge.aliased = inj, al
-		return out
+		return append(all, zoneCands...) // rule 4; rule 3 (alias) is decided by collapseLevelClusters on survivors
 	}, extraLevels...)
-	return seated, pool, price, dATR, raw, merge.injected, merge.aliased
+	injected, aliased, _ = ZoneSeatOutcome(pool, seated)
+	return seated, pool, price, dATR, raw, injected, aliased
 }
-
-type zoneSeatMerge struct{ injected, aliased int }
 
 // PlannerPriceAndRange is the read's reference price (last CLOSED 1m close)
 // and daily-range proxy (DailyRangeProxy, 0.8% of price until the map warms) —

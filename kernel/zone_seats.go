@@ -26,15 +26,17 @@ import (
 //     (price inside the zone → still the nearer edge; a tie → the low edge).
 //  2. A candidate whose edge is farther than the proximity band from price is
 //     dropped — nothing changes for that zone.
-//  3. A candidate within the cluster-collapse distance (clusterToleranceFor,
-//     12 ticks = 3.00pt) of ANY pool level is NOT injected: the pool level keeps
-//     its seat and its label; the ZONE-<TF>-<KIND> name rides along on
-//     CollapsedNames so the merged map and the card say it is a zone.
-//  4. Otherwise the candidate enters the pool BEFORE scoring as a DetectedLevel
-//     that clones the zone's own detector row (kind, TF, Lo/Hi, HTF, pattern,
+//  3. The candidate enters the pool BEFORE scoring as a DetectedLevel that
+//     clones the zone's own detector row (kind, TF, Lo/Hi, HTF, pattern,
 //     origin) with Price = the edge and Label = ZONE-<TF>-<KIND>; it is graded
-//     by the SAME zone grader as every other zone on that TF and competes under
-//     the SAME priority rule and the SAME cap — no reserved seat, no multiplier.
+//     by the SAME zone grader as every other zone on that TF.
+//  4. In the cluster collapse (clusterToleranceFor, 12 ticks = 3.00pt) a ZONE-*
+//     row within the tolerance of ANY other survivor merges INTO it — never the
+//     other way round: the detector level keeps its seat and its label, and the
+//     ZONE-<TF>-<KIND> name rides along on CollapsedNames so the merged map and
+//     the card say it is a zone. Otherwise the ZONE-* row stands and competes
+//     under the SAME priority rule and the SAME cap — no reserved seat, no
+//     multiplier.
 //  5. The validator's structural-label rule (plan_doc.go structuralLabels) does
 //     not list ZONE-* — a scenario authored on a ZONE seat is a free label and
 //     is never rejected as a re-invented anchor (pinned by test).
@@ -140,31 +142,28 @@ func ZoneSeatCandidates(m *StructureMap, src []ScoredLevel, price, band float64)
 	return out, rep
 }
 
-// MergeZoneSeatCandidates is rules 3–4: each candidate either ALIASES the
-// nearest pool level within tol (its label is appended to that level's
-// CollapsedNames — no second seat, no second credit) or is APPENDED to the
-// pool as a new row. The pool slice is never mutated; a copy is returned. With
-// no candidates the returned pool is the input, element for element.
-func MergeZoneSeatCandidates(pool []DetectedLevel, cands []DetectedLevel, tol float64) (out []DetectedLevel, injected, aliased int) {
-	out = append([]DetectedLevel(nil), pool...)
-	for _, c := range cands {
-		best, bestDist := -1, math.MaxFloat64
-		// A previously injected zone row is a legal alias target too: two zone
-		// edges within tol (a 4h and a 1h base sharing an edge) fold into ONE
-		// row in map order (D, 4h, 1h) — collapseLevelClusters exempts zones,
-		// and the validator rejects two plan levels within the same tolerance.
-		for i := range out {
-			if d := math.Abs(out[i].Price - c.Price); d <= tol && d < bestDist {
-				best, bestDist = i, d
+// ZoneSeatOutcome is what the scorer's output RECORDS about the candidates
+// (counters record, never infer): injected = ZONE-* rows standing in the graded
+// pool; aliased = ZONE-* names that collapse folded into a detector row
+// (CollapsedNames); seated = ZONE-* rows in the seated table. Rule 3 lives in
+// collapseLevelClusters — a ZONE-* row within the cluster tolerance of ANY
+// other survivor merges INTO it (never the other way round), so the alias is
+// decided on survivors, after every cut, and can never be lost to a dedupe.
+func ZoneSeatOutcome(pool, seated []ScoredLevel) (injected, aliased, seatedN int) {
+	for _, p := range pool {
+		if IsZoneSeatLabel(p.Label) {
+			injected++
+		}
+		for _, n := range p.CollapsedNames {
+			if IsZoneSeatLabel(n) {
+				aliased++
 			}
 		}
-		if best >= 0 {
-			out[best].CollapsedNames = appendDistinct(out[best].CollapsedNames, c.Label)
-			aliased++
-			continue
-		}
-		out = append(out, c)
-		injected++
 	}
-	return out, injected, aliased
+	for _, s := range seated {
+		if IsZoneSeatLabel(s.Label) {
+			seatedN++
+		}
+	}
+	return injected, aliased, seatedN
 }

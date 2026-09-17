@@ -785,6 +785,14 @@ func collapseLevelClusters(scored []ScoredLevel, tol float64) []ScoredLevel {
 	order := append([]ScoredLevel(nil), scored...)
 	sort.SliceStable(order, func(i, j int) bool {
 		a, b := order[i], order[j]
+		// W-STRUCTURE-ZONE-SEATS — a ZONE-* seat row is never a cluster keeper
+		// over a detector row: it sorts after every non-zone-seat row, so within
+		// the tolerance "collapse keeps the detector level; the zone's label is
+		// appended". No ZONE-* row exists with the knob off → this key is inert.
+		az, bz := IsZoneSeatLabel(a.Label), IsZoneSeatLabel(b.Label)
+		if az != bz {
+			return bz
+		}
 		ai, bi := isTodayPriority(a.Kind), isTodayPriority(b.Kind)
 		if ai != bi {
 			return ai
@@ -800,15 +808,17 @@ func collapseLevelClusters(scored []ScoredLevel, tol float64) []ScoredLevel {
 	})
 	kept := make([]ScoredLevel, 0, len(scored))
 	for _, cand := range order {
-		if isZoneKind(cand.Kind) {
+		if isZoneKind(cand.Kind) && !IsZoneSeatLabel(cand.Label) {
 			// Zones are BANDS with their own semantics (proximal/distal),
 			// never duplicates of a line level — they survive collapse.
+			// A ZONE-* SEAT row (W-STRUCTURE-ZONE-SEATS) is the exception: it is
+			// one EDGE, a line reference, and collapses like any line level.
 			kept = append(kept, cand)
 			continue
 		}
 		merged := false
 		for i := range kept {
-			if isZoneKind(kept[i].Kind) {
+			if isZoneKind(kept[i].Kind) && !IsZoneSeatLabel(kept[i].Label) {
 				continue
 			}
 			if math.Abs(kept[i].Price-cand.Price) <= tol {
@@ -824,7 +834,10 @@ func collapseLevelClusters(scored []ScoredLevel, tol float64) []ScoredLevel {
 				// and the Stage A golden are untouched (E7). Same-timeframe
 				// collapses are genuine duplicates and carry nothing. Transitive:
 				// whatever the loser had already absorbed rides along.
-				if cand.TF != kept[i].TF {
+				// W-STRUCTURE-ZONE-SEATS: a ZONE-* edge folded into a detector
+				// row ALWAYS carries its name — that name is the only trace the
+				// zone was seated at all.
+				if cand.TF != kept[i].TF || IsZoneSeatLabel(cand.Label) {
 					kept[i].CollapsedNames = appendDistinct(kept[i].CollapsedNames, cand.Label)
 				}
 				for _, n := range cand.CollapsedNames {
