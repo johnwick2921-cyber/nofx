@@ -5335,3 +5335,69 @@ cannot race by construction. No production code changed.
   path BEFORE merge — CI runs it, and CI is the last gate, not the first.
 - A red CI on the FIRST push after a merge is the merge's problem until proven
   otherwise: read the run's failing job before the next PR is opened.
+
+## CLASS 143 — A STRAY ROW OF THE NEW CONTRACT BEFORE THE ROLL PULLS THE CHART BOUNDARY BACK AND ERASES THE OLD CONTRACT'S LAST WEEK (born 2026-09-14 at the Sept→Dec roll, reported by the owner 2026-09-17 16:40 CT "candles missing for several days", fix/chart-roll-hole, W-CHART-ROLL-HOLE)
+
+**Shape.** The chart across a roll is a time split: prior-contract rows before
+the current contract's first LIVE bar, current-contract rows after. The
+`bars` PK is `(symbol, tf, open_time_ms)` — the `contract` column is OUTSIDE
+the key — and inserts are INSERT-OR-IGNORE. NT8 served ~2,000 bars of
+"MNQ 12-26" history per TF at subscribe; wherever a "MNQ 09-26" row already
+held that open time the Dec row was dropped, and wherever it did not
+(holidays, Sunday evenings, the NT8-off windows) a stray Dec row LANDED
+(live 5m: 4 `historical_import` + 13 `historical` rows older than Dec's first
+live bar; 1m: 451). `klinesAcrossRoll` then took the boundary from
+`FirstLiveOn` (correct: 09-14 10:00 CT) and MOVED IT BACK to the base series'
+oldest bar — "nothing older than the series' own oldest bar may overlap it" —
+i.e. to the oldest surviving stray (09-10 22:10). `PriorContractBarsBefore`
+only takes rows strictly before the boundary, so every Sept row from 09-10
+22:10 to 09-14 09:55 was excluded and the only candles in that span were the
+13 strays, 292 points up: a three-trading-day hole with a stray candle or two
+in it.
+
+**How it hid.** (1) The isolation filter DID drop the four one-per-day import
+strays, so the boundary was not pulled back to 09-07 as the row census
+suggests — it was pulled to the first DENSE stray (five contiguous replay
+rows on the evening of 09-10), which no filter names. (2) Every existing pin
+built its prior series ENDING exactly where the current series began, so
+"base[0] < boundary" never fired in a test. (3) The kernel, levels and arm
+readers are contract-scoped and never see a prior contract, so nothing
+downstream disagreed with the chart. (4) The lonely candles looked like a
+data gap, not a boundary rule.
+
+**Probes.**
+- Per TF: `SELECT count(*) FROM bars WHERE contract = <current> AND
+  open_time_ms < (SELECT min(open_time_ms) FROM bars WHERE contract =
+  <current> AND source = 'live' AND tf = <tf>)` — any non-zero count is a
+  stray population the chart reader must DROP, never draw and never move the
+  boundary for (live 2026-09-17 17:10 CT: 1m 451 · 3m 12 · 5m 17 · 15m 10 ·
+  1h 4 · 3d 14).
+- A boundary rule must be MONOTONE: derived from one source (`FirstLiveOn`)
+  and never adjusted by the data it is about to split. "Never move the
+  boundary earlier" is the invariant; a clamp to `base[0]` is a rule that
+  lets the defect choose the boundary.
+- Pin the pure function with strays IN the base (a base whose oldest row is
+  older than the boundary) and the production route (`GET /api/klines`
+  through the router + JWT) with the live per-day shape; assert per-day
+  counts continuous across the roll, zero current-contract klines before the
+  boundary, zero prior-contract klines after it.
+- The prior-contract reader mirrors `LastNBarsOn`'s source filter
+  (`mixed`, `replay:off-scale` excluded) — a roll-straddling row is accepted
+  by no reader, the chart included.
+- A hole in the prior series stays a hole (the store reader's own ruling):
+  dropping a stray leaves its slot empty; drawing the next contract's price
+  space there is never the answer.
+
+**Fix.** `api/handler_klines.go klinesAcrossRoll`: `dropCurrentRowsBefore(base,
+boundary)` replaces the clamp; `store/bar_history_across_roll.go
+PriorContractBarsBefore`: source filter. Pins: `api/klines_across_roll_test.go
+TestKlinesAcrossRollDropsCurrentStraysOlderThanTheRoll`,
+`api/handler_klines_roll_hole_test.go TestKlinesAcrossRollNoHoleNoStrays`,
+`store/bar_history_across_roll_test.go
+TestPriorContractReaderExcludesMixedAndOffScaleSources`.
+
+**OWNER-GATED, NOT DONE HERE.** The root is the schema: a PK without the
+contract lets two contracts fight for one slot and the loser is silently
+dropped. Adding `contract` to the key (or a partial unique index per
+contract) is a migration over the live `bars` table and every reader that
+assumes one row per open time — the owner's call, not a display wave's.
