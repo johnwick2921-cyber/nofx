@@ -832,13 +832,35 @@ func FlipDirectionContradiction(biasDir string, flip *PlanCondition) error {
 // FlipToDirection parses the flip direction out of a killer line
 // ("flip-condition: ... → bias long") — "long"/"short", "" otherwise. Used by
 // the write site to enforce that a flip-triggered re-plan honors the flip.
+//
+// W-FLIP-REREAD BLOCKER 1 (2026-09-17): ONLY the arrow form is read — the
+// word after the LAST "→ bias " (or ASCII "-> bias "). The first version
+// looked for the substring "bias long" anywhere in the string, before
+// "bias short", and the structure_flip prior line ("PRIOR PLAN v3 bias long —
+// its flip condition fired → bias is now expected short … flip-condition: …
+// → bias short") echoes the OLD bias first: for long→short it answered
+// "long", so the write site demanded the stale bias, rejected every correct
+// short plan three times and would have accepted a wrong long one. The
+// killer is always the LAST thing in that line, so the last arrow is the
+// flip's destination. A "→ bias the other side" killer (empty flip_to) and a
+// string with no arrow at all answer "" — nothing is mandated.
 func FlipToDirection(killer string) string {
 	k := strings.ToLower(killer)
-	if i := strings.Index(k, "bias long"); i >= 0 {
-		return "long"
+	const arrowU, arrowA = "→ bias ", "-> bias "
+	i, n := strings.LastIndex(k, arrowU), len(arrowU)
+	if j := strings.LastIndex(k, arrowA); j > i {
+		i, n = j, len(arrowA)
 	}
-	if i := strings.Index(k, "bias short"); i >= 0 {
-		return "short"
+	if i < 0 {
+		return ""
+	}
+	rest := strings.TrimSpace(k[i+n:])
+	if sp := strings.IndexAny(rest, " \t\n\r.,;:)]"); sp >= 0 {
+		rest = rest[:sp]
+	}
+	switch rest {
+	case "long", "short":
+		return rest
 	}
 	return ""
 }

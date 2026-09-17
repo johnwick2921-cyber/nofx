@@ -342,6 +342,22 @@ const dayPlan: KnobSpec[] = [
     perSession: 'No.',
   },
   {
+    label: 'Flip re-read (W-FLIP-REREAD)',
+    where: 'Strategy → Day Plan → flip_reread toggle',
+    what: "When the plan's flip condition fires, the plan ALWAYS goes dormant first (wick-noise protection — unchanged). ON adds ONE free planner re-read in the flipped direction (trigger structure_flip, class-35 free like a level wake, same preflight and wake cadence). OFF = today's behaviour: the plan sleeps and the flipped bias is never authored.",
+    trader:
+      'ON = the flipped bias can actually materialize. The write site REQUIRES the flipped bias: the model authors it or the read writes nothing and the dormant plan stands (a same-bias plan is rejected, never written). One SUCCESSFUL re-read per fired flip; a refused or failed read is retried on later cycles while the plan sleeps (throttled to about one launch per wake_min_interval_min, default 10 min, up to 3 model calls per launch; no hard cap while the row stays dormant — the same cost shape as a level-event wake). If price closes back first, the old plan re-arms as before and the re-read is skipped.',
+    consumer:
+      'trader/auto_trader_planner.go maybeRereadAfterFlip · store.DayPlanConfig.FlipRereadEnabled',
+    range: 'ON | OFF',
+    systemDefault: 'OFF (legacy dormant)',
+    recommended:
+      '⭐ OFF until you have watched one flip the old way; then ON and compare.',
+    whenToTouch:
+      'Turn ON when you want a fired flip to re-read rather than sleep.',
+    perSession: 'No.',
+  },
+  {
     label: 'Wake triggers (5 toggles)',
     where: 'Strategy → Day Plan → Wake triggers',
     what: 'The five event classes that wake the planner mid-session: fresh S/D zones, HTF events, 15m events, invalidation, level-touch waves (the W6 wake wave).',

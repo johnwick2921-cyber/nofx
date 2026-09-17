@@ -99,6 +99,9 @@ export interface DayPlanConfig {
   /** S2 (2026-09-16) — HTF levels graded on their own timeframe bars.
    *  Default false. */
   levels_fresh_by_tf?: boolean
+  /** W-FLIP-REREAD (2026-09-17) — a fired flip goes dormant AND requests one
+   *  free re-read in the flipped direction. Default false (legacy dormant). */
+  flip_reread?: boolean
   acceptance_rule?: string // 2x5m | 15m-close
   replan_cap?: number
   sessions_enabled?: string[]

@@ -556,6 +556,14 @@ export function DayPlanEditor({ config, onChange, disabled, language }: Props) {
               testId="fresh-by-tf-toggle"
             />
           </FieldRow>
+          <FieldRow label={tp('flipReread', language)}>
+            <Toggle
+              on={cfg.flip_reread === true}
+              onChange={(v) => update('flip_reread', v)}
+              disabled={bodyDisabled}
+              testId="flip-reread-toggle"
+            />
+          </FieldRow>
           <FieldRow label={tp('maxReplans', language)}>
             <NumberField
               value={cfg.replan_cap ?? 2}
