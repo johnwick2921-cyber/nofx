@@ -426,6 +426,16 @@ export const planStrings = {
   filters: { en: 'Filters', zh: '筛选', id: 'Filter' },
   proximity: { en: 'Proximity', zh: '邻近度', id: 'Kedekatan' },
   maxLevels: { en: 'Max levels', zh: '最大价位数', id: 'Maks level' },
+  htfSeats: {
+    en: 'HTF seats (structure-first, S3)',
+    zh: 'HTF 席位 (结构优先, S3)',
+    id: 'Kursi HTF',
+  },
+  htfScoreMultiplier: {
+    en: 'HTF score multiplier (S3)',
+    zh: 'HTF 分数乘数 (S3)',
+    id: 'Pengali skor HTF',
+  },
   maxScenarios: { en: 'Max scenarios', zh: '最大情景数', id: 'Maks skenario' },
   maxReplans: {
     en: 'Max re-plans',

@@ -142,6 +142,14 @@ func PromptContracts() []PromptContract {
 			Site:       "plan_doc.go conditionRules vs confirmRules",
 			MustAppear: []string{"death/flip rules use their OWN vocabulary"},
 		},
+		{
+			// S3 (2026-09-16) — the structure relation contract: the validator
+			// stamps relation_d / relation_4h; the model never writes them and
+			// a counter-trend scenario is flagged, never blocked.
+			Rule:       "relation_d / relation_4h are validator-stamped — the model never writes them; counter-trend is a flag, not a block",
+			Site:       "kernel/structure_relation.go StampScenarioRelations → ValidatePlanDocWithFactsMachine",
+			MustAppear: []string{"the validator stamps relation_d / relation_4h itself, the model never writes them"},
+		},
 	}
 }
 
