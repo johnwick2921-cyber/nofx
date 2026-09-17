@@ -513,6 +513,7 @@ func (at *AutoTrader) describeActivePlanDeath(row *store.PlanDB) (kernel.PlanDea
 	if json.Unmarshal([]byte(row.Doc), &doc) != nil {
 		return kernel.PlanDeathDetail{}, false
 	}
+	noteFlipDirectionInverted(at, row, &doc, "active")
 	bars := market.FuturesBarsProvider(at.futuresSymbol(), kernel.AISVPBarInterval, kernel.AISVPBarCount)
 	if len(bars) == 0 {
 		return kernel.PlanDeathDetail{}, false
@@ -648,6 +649,7 @@ func (at *AutoTrader) describeDormantCleared(row *store.PlanDB) (bool, string) {
 	if json.Unmarshal([]byte(row.Doc), &doc) != nil {
 		return false, ""
 	}
+	noteFlipDirectionInverted(at, row, &doc, "dormant")
 	c := kernel.PlanCondition{}
 	if strings.HasPrefix(row.TriggerReason, "dormant:death:") {
 		if doc.DeathStructured != nil {
@@ -2789,6 +2791,39 @@ var (
 	planProviderNilMu     sync.Mutex
 	planProviderNilReason = map[string]string{}
 )
+
+// flipDirectionNoted remembers which stored plan versions have already been
+// named as inverted, keyed per trader + plan + version, so the line prints
+// ONCE per version rather than twice per tick for the plan's whole life
+// (the notePlanProviderNil idiom: record, never re-derive per cycle).
+var (
+	flipDirectionNotedMu sync.Mutex
+	flipDirectionNoted   = map[string]bool{}
+)
+
+// noteFlipDirectionInverted (W-FLIP-DIRECTION, 2026-09-17) names a stored
+// plan whose flip points the wrong way for its bias. The write site now
+// REJECTS that shape, but a plan written BEFORE it learned direction never
+// passes the write site again — the only places it is seen are the two
+// read-path evaluators, describeActivePlanDeath (active plans) and
+// describeDormantCleared (dormant plans), which both call this first. WARN
+// only, once per plan version: the evaluation itself is unchanged (LONDON v3
+// 2026-09-17: short + flip{below → long} could never flip on the rally).
+func noteFlipDirectionInverted(at *AutoTrader, row *store.PlanDB, doc *kernel.PlanDoc, site string) {
+	err := kernel.FlipDirectionContradiction(doc.Bias.Direction, doc.FlipStructured)
+	if err == nil {
+		return
+	}
+	key := fmt.Sprintf("%s|%s|v%d", at.id, row.PlanID, row.Version)
+	flipDirectionNotedMu.Lock()
+	seen := flipDirectionNoted[key]
+	flipDirectionNoted[key] = true
+	flipDirectionNotedMu.Unlock()
+	if seen {
+		return
+	}
+	at.logWarnf("flip_direction_inverted plan=%s v%d (%s) %v — this flip can never fire on the move it is meant to catch (written before W-FLIP-DIRECTION); printed once per plan version", row.PlanID, row.Version, site, err)
+}
 
 // notePlanProviderNil logs the reason the provider returns nil, once per
 // change of reason, and logs the recovery once when a plan is served again.

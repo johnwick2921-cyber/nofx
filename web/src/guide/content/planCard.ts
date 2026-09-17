@@ -125,7 +125,7 @@ export const planCard: GuideSection = {
         },
         {
           title: '7 · Death line + flip line',
-          body: 'Plan dies if … (structured death{} object, machine-evaluated every cycle) and Flips … (flip_to direction). A prose-only death gets a "PROSE-ONLY" warn at write.',
+          body: 'Plan dies if … (structured death{} object, machine-evaluated every cycle) and Flips … (flip_to direction). A prose-only death gets a "PROSE-ONLY" warn at write. Since 2026-09-17 (W-FLIP-DIRECTION, class 140) the flip SIDE is judged against the bias, not only its price: a short bias flips long only on a close ABOVE the line, a long bias flips short only on a close BELOW — a plan whose flip points the other way is REJECTED at write and repaired, and one already in the store is named once in the journal as flip_direction_inverted the next time it is evaluated, active or dormant (LONDON v3 that day shipped short + flip{below → long} and could never flip on the rally).',
           cite: 'web/src/components/plan/BiasBlock.tsx · kernel/plan_doc.go PlanCondition',
         },
         {

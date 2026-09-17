@@ -143,6 +143,14 @@ func PromptContracts() []PromptContract {
 			MustAppear: []string{"death/flip rules use their OWN vocabulary"},
 		},
 		{
+			// W-FLIP-DIRECTION (2026-09-17) — LONDON v3 shipped bias short +
+			// flip{below → long}; the validator checked the number, not the
+			// direction. Now it rejects, and the prompt states the law.
+			Rule:       "flip side must oppose the bias (short bias flips long on a close ABOVE; long bias flips short on a close BELOW)",
+			Site:       "plan_doc.go FlipDirectionContradiction",
+			MustAppear: []string{"flip side must oppose the bias: short bias flips long on a close ABOVE; long bias flips short on a close BELOW"},
+		},
+		{
 			// S3 (2026-09-16) — the structure relation contract: the validator
 			// stamps relation_d / relation_4h; the model never writes them and
 			// a counter-trend scenario is flagged, never blocked.
