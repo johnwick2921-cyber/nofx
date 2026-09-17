@@ -368,6 +368,7 @@ func TestFlipRereadAsiaV13ReplayFixture(t *testing.T) {
 	seedFlipBars(29400, 29430, 6*time.Minute, now)
 	rec := &flipRereadRecorder{} // no append: the read "succeeds" but authors nothing → dormant stands
 	installFlipRecorder(t, rec)
+	logBuf := captureTraderLog(t)
 
 	at.maybeRunSessionReadsAt(now)
 
@@ -386,7 +387,21 @@ func TestFlipRereadAsiaV13ReplayFixture(t *testing.T) {
 			t.Fatalf("ASIA prior must carry %q, got:\n%s", want, priors[0])
 		}
 	}
-	if v := sysCfgVal(t, st, flipRereadDoneKey(row)); v == "" || v == "0" {
-		t.Fatalf("the once-key must be consumed by the ASIA read, got %q", v)
+	// BLOCKER 2 (CTO review 2026-09-17): the seam reported true but the store
+	// holds NO newer active version — that is NOT success. The once-key must
+	// be left clear so the dormant branch retries next cycle, and the line
+	// must say so. (The first draft asserted the key consumed here — it
+	// pinned the very bug the owner watched: a "successful" read that
+	// authored nothing, and no retry ever.)
+	if !waitFor(t, 5*time.Second, func() bool {
+		return strings.Contains(logBuf.String(), "wrote NO new version — the dormant plan stands; the once-key is cleared for a retry next cycle")
+	}) {
+		t.Fatalf("no 'wrote NO new version' line; log:\n%s", logBuf.String())
+	}
+	if v := sysCfgVal(t, st, flipRereadDoneKey(row)); v != "" && v != "0" {
+		t.Fatalf("a read that wrote no version must NOT consume the once-key, got %q", v)
+	}
+	if got := versionLifecycle(t, st, td, "ASIA", at.id, 1); got != "dormant" {
+		t.Fatalf("the dormant plan must stand, got %q", got)
 	}
 }

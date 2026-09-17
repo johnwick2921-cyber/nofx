@@ -1535,14 +1535,14 @@ func (c *DayPlanConfig) Seat1HZoneEnabled() bool {
 	return *c.Seat1HZone
 }
 
-// LevelsFreshByTFEnabled is the ONE resolution seam for the S2 by-TF freshness
-// knob: nil config or unset → OFF (today's 1m-touch grading).
 // FlipRereadEnabled is the ONE resolution seam for the W-FLIP-REREAD knob
 // (absent/false = OFF = today's dormant behaviour).
 func (c *DayPlanConfig) FlipRereadEnabled() bool {
 	return c != nil && c.FlipReread
 }
 
+// LevelsFreshByTFEnabled is the ONE resolution seam for the S2 by-TF freshness
+// knob: nil config or unset → OFF (today's 1m-touch grading).
 func (c *DayPlanConfig) LevelsFreshByTFEnabled() bool {
 	return c != nil && c.LevelsFreshByTF
 }
