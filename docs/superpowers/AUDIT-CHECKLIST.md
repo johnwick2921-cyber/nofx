@@ -5025,3 +5025,77 @@ library's echo of the input stripped. When the library will not name the line,
 recover it by parsing growing prefixes and taking the line after the LAST
 prefix that parses (a quoted value may span lines, so the FIRST failing prefix
 is wrong — `TestDotEnvErrorLine_MultiLineQuoteBeforeBadLine`).
+
+## CLASS 138 — A TEST THAT SHARES THE WALL CLOCK WITH A REAL GATE (born 2026-09-09 with the session-risk band, found 2026-09-17 02:04 CT by the Chief, fix/split-arm-test-clock, W-CLOCK-TEST)
+
+**Shape.** A test drives a REAL gated path (here the arm path,
+`maybeManageArmedOrdersAt`) and hands it `time.Now()`. The gate refuses by the
+clock — the first 5 minutes of every session, the lunch window — so the test
+fails DETERMINISTICALLY in a window nobody is watching for, then passes again
+with nobody touching anything. `TestSplitArmWritesTwoLedgerRows` was red
+02:00:00–02:05:07 CT every day:
+
+	🛑 arm REFUSED (session risk): no_trade_band: LONDON first-5m no-trade window
+	split_entry_test.go: split arm must write 2 ledger rows (legs), got 0 ([])
+
+and green at 02:05:08. Same commit, same machine, same install.
+
+**How it hid.** Three ways, stacked. (1) It had been fixed once: on 2026-09-10
+the lunch band (12:00–13:30) turned eight trader/ tests red between two green
+runs and `armTestClock` was written to search for an armable moment — but this
+test could not use it, because its plan provider resolved the session from
+`time.Now()` with NO seam and an injected clock desynchronised the fixture from
+the path ("got 0 legs" with no refusal line, because there was no plan). So it
+got a `t.Skip` for the ONE band that had bitten, and a comment saying the real
+fix was owed. (2) The seam then LANDED — cleanup batch 2 B3, 2026-09-11,
+`installActivePlanProviderAt(at, st, clock)` — and nothing tied the owed note
+to the wave that discharged it; the comment kept saying "no seam" for six days
+after there was one. (3) A skip-list of bands is always one band short: the
+lunch skip made the test green 12:00–13:30 and left first-5m of ASIA, LONDON
+and NY (three windows of five minutes) to fail by the clock. Five minutes a
+day is rare enough that every observer blamed their own branch first.
+
+**Why it matters.** A suite that is red for five minutes a day, by the clock,
+is a false signal to every lane that runs it then — and the merged-HEAD suite
+of a cutover is run at whatever hour the cutover happens. Dispatch 102's
+cutover ran into exactly this window on 2026-09-11 and lost a re-run to it.
+
+**The fix shape.** ONE injected clock, threaded through EVERY clock read the
+path makes: the fixture's plan (trade date), the tape (bars relative to it),
+the provider (through its seam) and the entry call — so the fixture and the
+path are provably reading one clock, never two that happen to agree. The base
+is FIXED (a known weekday, mid-morning NY), searched by `armTestClockFrom` so a
+registry change moves the moment instead of silently invalidating it, and an
+env override (`SPLIT_ARM_TEST_CLOCK_CT`) lands the clock INSIDE a band on
+purpose — the RED is now reproducible at any hour instead of five minutes a
+day.
+
+**Probes.**
+- `grep -n 'time.Now()' trader/*_test.go` and, for each hit, ask whether the
+  value reaches a gate that refuses by the clock (`sessionRiskGateAt`,
+  `sessionEntryBlockedAt`, `InFirstNoTradeMinutes`, `InLunchNoTrade`,
+  `InT1Blackout`). A read that only stamps a record or a log is not this class;
+  a read that a verdict consumes is.
+- A test that needs a `t.Skip` for a band is this class with a shorter fuse:
+  the skip names one window and the gate has several. Count the windows the
+  gate knows; count the skips; they differ.
+- A seam that exists but that the tests do not use is half a seam
+  (`arm_test_clock_test.go`). When a seam LANDS, grep the test tree for the
+  comment that said it was owed — `grep -rn 'NO seam\|no seam\|OWED' *_test.go`
+  — and discharge it in the same wave, or the note outlives the debt.
+- Reproduce the RED on demand before calling it fixed: a failure that only the
+  clock can produce is a failure whose fix cannot be proven by running the suite
+  once at a convenient hour. Give the test a way to be placed inside the band.
+- Census at this wave (trader/ tests reading `time.Now()` on a path that reaches
+  the band gate, all of which currently SKIP or search rather than fail):
+  `one_setup_golden_fixture_test.go:103` (identical shape — full
+  `sessionEntryBlockedAt` skip, provider still on `time.Now`, same seam fix
+  applies, skips ~100 min/day), `split_entry_test.go`
+  `TestSplitArmSessionEndCancelsBothLegs` (plan/provider at `time.Now`, entry
+  at `armTestClock` — two clocks; passes inside a band only because the band
+  refusal itself cancels resting arms), `armed_executor_test.go` L42/L111/L142,
+  `shadow_demotion_test.go` L40/L62/L78/L282, `slist_eod_race_test.go` L236
+  (same two-clock shape: fixture at `time.Now`, entry at `armTestClock`). Not
+  this class, checked: `class33_boot_sweep_test.go` L25/L156 stamp
+  CreatedAt/UpdatedAt only and the sweep is not band-gated. None of the listed
+  tests fails by the clock today; each is one registry change from doing so.
