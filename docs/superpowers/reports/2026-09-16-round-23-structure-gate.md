@@ -6,6 +6,8 @@
 **Dispatch:** CTO 2026-09-16 22:58Z, section 5 (S4 MEASUREMENT GATE). This report decides
 whether ANY S1/S2/S3 knob defaults ON.
 
+**ACCEPTED as S4 gate by CTO 2026-09-16 21:35 CT @8fde4429.**
+
 Method, population, and instrument: `docs/superpowers/research/2026-09-16-round-23/README.md`
 and the DS-R→DS-R001 handover (`docs/superpowers/reports/2026-09-16-round-23-HANDOVER.md`).
 Data: 4,471,482 D1′ episodes / 2,680,931 level-scans / 3,093 replayed reads, full CME era,
