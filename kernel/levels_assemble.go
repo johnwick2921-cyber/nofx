@@ -29,7 +29,7 @@ func BuildKeyLevelsBlock(traderID string, bars []market.Kline, reg SessionRegist
 // planner table (one-sided tables and sub-min rows reached the executor before
 // this).
 func BuildKeyLevelsBlockOpts(traderID string, bars []market.Kline, reg SessionRegistry, symbol string, maxLevels int, now time.Time, proximityK float64, seat1HZone bool, minGrade string, extraLevels ...DetectedLevel) string {
-	scored, price, _ := AssembleScoredLevelsMinGrade(traderID, bars, reg, symbol, maxLevels, now, proximityK, minGrade, extraLevels...)
+	scored, price, _ := AssembleScoredLevelsMinGrade(traderID, bars, reg, symbol, maxLevels, LegacyHtfSeats, now, proximityK, minGrade, extraLevels...)
 	if price <= 0 {
 		return ""
 	}
@@ -152,7 +152,7 @@ func AssembleScoredLevels(traderID string, bars []market.Kline, reg SessionRegis
 // candidate — seatBothSides re-balances AFTER the filter, so the minGrade cut
 // can never leave the executor/planner table one-sided when candidates exist.
 // Empty minGrade → byte-identical to AssembleScoredLevels.
-func AssembleScoredLevelsMinGrade(traderID string, bars []market.Kline, reg SessionRegistry, symbol string, maxLevels int, now time.Time, proximityK float64, minGrade string, extraLevels ...DetectedLevel) (scored []ScoredLevel, price, dATR float64) {
+func AssembleScoredLevelsMinGrade(traderID string, bars []market.Kline, reg SessionRegistry, symbol string, maxLevels int, htfSeats int, now time.Time, proximityK float64, minGrade string, extraLevels ...DetectedLevel) (scored []ScoredLevel, price, dATR float64) {
 	cb := closedBars(bars, now)
 	if len(cb) == 0 {
 		return nil, 0, 0
@@ -192,7 +192,7 @@ func AssembleScoredLevelsMinGrade(traderID string, bars []market.Kline, reg Sess
 	CaptureIdentityContext(all, symbol, AISVPBarInterval)
 	all = dedupeSameKind(all)
 
-	scored, _ = ScoreLevelsMinGradeFull(all, price, dATR, levelFreshnessFn(traderID, symbol), maxLevels, proximityK, minGrade)
+	scored, _ = ScoreLevelsMinGradeFullSeats(all, price, dATR, levelFreshnessFn(traderID, symbol), maxLevels, proximityK, minGrade, htfSeats)
 	return scored, price, dATR
 }
 
@@ -202,14 +202,14 @@ func AssembleScoredLevelsMinGrade(traderID string, bars []market.Kline, reg Sess
 // machine-grade stamp map, so a level the model copies from the prompt that
 // LOST the seat race (a far nPOC, a carried swing) still gets stamped — the
 // stamp-gap regression fix (256/795 rows unstamped).
-func AssembleScoredLevelsFullMinGrade(traderID string, bars []market.Kline, reg SessionRegistry, symbol string, maxLevels int, now time.Time, proximityK float64, minGrade string, extraLevels ...DetectedLevel) (seated, pool []ScoredLevel, price, dATR float64) {
-	seated, pool, price, dATR, _ = AssembleResearchLevels(traderID, bars, reg, symbol, maxLevels, now, proximityK, minGrade, extraLevels...)
+func AssembleScoredLevelsFullMinGrade(traderID string, bars []market.Kline, reg SessionRegistry, symbol string, maxLevels int, htfSeats int, now time.Time, proximityK float64, minGrade string, extraLevels ...DetectedLevel) (seated, pool []ScoredLevel, price, dATR float64) {
+	seated, pool, price, dATR, _ = AssembleResearchLevels(traderID, bars, reg, symbol, maxLevels, htfSeats, now, proximityK, minGrade, extraLevels...)
 	return
 }
 
 // AssembleResearchLevels returns the pre-deduplication universe as evidence;
 // the trading outputs use the same detection, scoring and seating path.
-func AssembleResearchLevels(traderID string, bars []market.Kline, reg SessionRegistry, symbol string, maxLevels int, now time.Time, proximityK float64, minGrade string, extraLevels ...DetectedLevel) (seated, pool []ScoredLevel, price, dATR float64, raw []DetectedLevel) {
+func AssembleResearchLevels(traderID string, bars []market.Kline, reg SessionRegistry, symbol string, maxLevels int, htfSeats int, now time.Time, proximityK float64, minGrade string, extraLevels ...DetectedLevel) (seated, pool []ScoredLevel, price, dATR float64, raw []DetectedLevel) {
 	cb := closedBars(bars, now)
 	if len(cb) == 0 {
 		return nil, nil, 0, 0, nil
@@ -249,7 +249,7 @@ func AssembleResearchLevels(traderID string, bars []market.Kline, reg SessionReg
 	raw = researchLevels(all)
 	all = dedupeSameKind(raw)
 
-	seated, pool = ScoreLevelsMinGradeFull(all, price, dATR, levelFreshnessFn(traderID, symbol), maxLevels, proximityK, minGrade)
+	seated, pool = ScoreLevelsMinGradeFullSeats(all, price, dATR, levelFreshnessFn(traderID, symbol), maxLevels, proximityK, minGrade, htfSeats)
 	return seated, pool, price, dATR, raw
 }
 

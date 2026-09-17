@@ -426,11 +426,16 @@ func zoneFreshMult(f string) float64 {
 // (the owner's proximity_filter_atr; ≤0 → the spec constant 1.5) — the band
 // OUTSIDE which no level is generated or seated.
 func ScoreLevels(levels []DetectedLevel, price, dATR float64, freshness func(DetectedLevel) string, maxLevels int, proximityK float64) []ScoredLevel {
-	return scoreLevelsPool(levels, price, dATR, freshness, maxLevels, proximityK)
+	return scoreLevelsPool(levels, price, dATR, freshness, maxLevels, proximityK, LegacyHtfSeats)
 }
 
+// LegacyHtfSeats (S3, 2026-09-16) is the seatHTF count every legacy call path
+// resolves — the pre-S3 hardcoded maxHTFSeats. A path that never sees the
+// day_plan.htf_seats knob must seat exactly what it seated before.
+const LegacyHtfSeats = 2
+
 // scoreLevelsPool is the full scorer (lock → grade → collapse → seat → top-N).
-func scoreLevelsPool(levels []DetectedLevel, price, dATR float64, freshness func(DetectedLevel) string, maxLevels int, proximityK float64) []ScoredLevel {
+func scoreLevelsPool(levels []DetectedLevel, price, dATR float64, freshness func(DetectedLevel) string, maxLevels int, proximityK float64, htfSeats int) []ScoredLevel {
 	if price <= 0 || dATR <= 0 {
 		return nil
 	}
@@ -616,7 +621,7 @@ func scoreLevelsPool(levels []DetectedLevel, price, dATR float64, freshness func
 	// top-N table, so HTF swing/zone levels must WIN seats to reach the plan.
 	// The P0.1 side-balance pass may still swap a promoted seat if a side ends
 	// under-supplied (the hard rule wins).
-	scored = researchSeat("HTF seating", scored, maxLevels, seatHTF)
+	scored = researchSeat("HTF seating", scored, maxLevels, func(s []ScoredLevel, n int) []ScoredLevel { return seatHTF(s, n, htfSeats) })
 	scored = researchSeat("volume-family seating", scored, maxLevels, SeatVolumeFamily) // Pack B (2026-08-26) — E1 volume-family seat
 	scored = researchSeat("both-side seating", scored, maxLevels, seatBothSides)
 
@@ -655,6 +660,13 @@ func ScoreLevelsMinGrade(levels []DetectedLevel, price, dATR float64, freshness 
 // machine grade stamped, so the stamp map now records EVERY graded candidate,
 // not just the seated top-N.
 func ScoreLevelsMinGradeFull(levels []DetectedLevel, price, dATR float64, freshness func(DetectedLevel) string, maxLevels int, proximityK float64, minGrade string) ([]ScoredLevel, []ScoredLevel) {
+	return ScoreLevelsMinGradeFullSeats(levels, price, dATR, freshness, maxLevels, proximityK, minGrade, LegacyHtfSeats)
+}
+
+// ScoreLevelsMinGradeFullSeats is ScoreLevelsMinGradeFull with the resolved
+// day_plan.htf_seats knob (S3) — the production path; the legacy wrapper above
+// keeps every historical caller byte-identical at 2 seats.
+func ScoreLevelsMinGradeFullSeats(levels []DetectedLevel, price, dATR float64, freshness func(DetectedLevel) string, maxLevels int, proximityK float64, minGrade string, htfSeats int) ([]ScoredLevel, []ScoredLevel) {
 	eff := maxLevels
 	if eff <= 0 {
 		eff = DefaultMaxLevels
@@ -663,7 +675,7 @@ func ScoreLevelsMinGradeFull(levels []DetectedLevel, price, dATR float64, freshn
 		return nil, nil
 	}
 	levels = researchLevels(levels)
-	pool := scoreLevelsPool(levels, price, dATR, freshness, eff*2, proximityK)
+	pool := scoreLevelsPool(levels, price, dATR, freshness, eff*2, proximityK, htfSeats)
 	filtered := FilterLevelsByMinGrade(pool, minGrade)
 	if minGrade == "" || len(filtered) <= eff {
 		if len(filtered) > eff {
@@ -688,7 +700,7 @@ func ScoreLevelsMinGradeFull(levels []DetectedLevel, price, dATR float64, freshn
 		}
 		return filtered[i].Price < filtered[j].Price
 	})
-	filtered = researchSeat("post-grade HTF seating", filtered, eff, seatHTF)
+	filtered = researchSeat("post-grade HTF seating", filtered, eff, func(s []ScoredLevel, n int) []ScoredLevel { return seatHTF(s, n, htfSeats) })
 	filtered = researchSeat("post-grade volume seating", filtered, eff, SeatVolumeFamily) // Pack B — same guarantee after the min_grade cut
 	filtered = researchSeat("post-grade both-side seating", filtered, eff, seatBothSides)
 	if len(filtered) > eff {
@@ -1004,18 +1016,18 @@ func Seat1HZone(scored []ScoredLevel, maxLevels int) []ScoredLevel {
 	return out
 }
 
-// seatHTF (G2/G3/G6, 2026-08-24) — promote up to 2 HTF swing/zone levels into
-// the head seats (the top-N table is all the model sees). Demotes the weakest
-// non-today-priority, non-HTF entries to make room. Runs on the FULL sorted
-// list before seatBothSides; takes no action when nothing was cut.
-func seatHTF(scored []ScoredLevel, maxLevels int) []ScoredLevel {
+// seatHTF (G2/G3/G6, 2026-08-24; seats knob S3, 2026-09-16) — promote up to
+// `seats` HTF swing/zone levels into the head seats (the top-N table is all the
+// model sees). Demotes the weakest non-today-priority, non-HTF entries to make
+// room. Runs on the FULL sorted list before seatBothSides; takes no action when
+// nothing was cut. seats ≤ 0 = no HTF seating (a legal knob value).
+func seatHTF(scored []ScoredLevel, maxLevels, seats int) []ScoredLevel {
 	if maxLevels <= 0 {
 		maxLevels = DefaultMaxLevels
 	}
-	if len(scored) <= maxLevels {
+	if len(scored) <= maxLevels || seats <= 0 {
 		return scored
 	}
-	const maxHTFSeats = 2
 	head := append([]ScoredLevel(nil), scored[:maxLevels]...)
 	tail := append([]ScoredLevel(nil), scored[maxLevels:]...)
 	seated := 0
@@ -1024,7 +1036,7 @@ func seatHTF(scored []ScoredLevel, maxLevels int) []ScoredLevel {
 			seated++
 		}
 	}
-	need := maxHTFSeats - seated
+	need := seats - seated
 	if need <= 0 {
 		return scored
 	}

@@ -711,10 +711,10 @@ func (at *AutoTrader) noTradeLevelMap(session string) []kernel.PlanLevel {
 		return nil
 	}
 	now := time.Now()
-	maxLevels, minGrade, _ := resolveSessionPlanCfg(at.dayPlanCfg(), session)
+	maxLevels, htfSeats, minGrade, _ := resolveSessionPlanCfg(at.dayPlanCfg(), session)
 	// R2 4.7 (2026-08-25) — fail-closed maps obey min_grade: a NO-TRADE doc's
 	// level map must match what an active plan would have carried.
-	scored, _, _ := kernel.AssembleScoredLevelsMinGrade(at.id, bars, at.sessionRegistry(now), symbol, maxLevels, now, at.proximityFilterATR(), minGrade)
+	scored, _, _ := kernel.AssembleScoredLevelsMinGrade(at.id, bars, at.sessionRegistry(now), symbol, maxLevels, htfSeats, now, at.proximityFilterATR(), minGrade)
 
 	out := make([]kernel.PlanLevel, 0, len(scored)+4)
 	if owned, err := at.store.OwnerLevel().ListActiveForUser(at.ownerUserID(), symbol); err == nil {
@@ -1482,7 +1482,7 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 	// max_levels / scenario_cap (hard ceilings 12/5). Before this the parse
 	// hardcoded 8/3, so raising either setting made EVERY read fail-closed into a
 	// NO-TRADE plan + P0 alert — the upper half of the UI range was unreachable.
-	maxLevels, _, _ := resolveSessionPlanCfg(at.dayPlanCfg(), session)
+	maxLevels, _, _, _ := resolveSessionPlanCfg(at.dayPlanCfg(), session)
 	scenarioCap := at.scenarioCap()
 
 	var authoredAt time.Time
@@ -2029,15 +2029,27 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 // strategy-level day_plan values + the per-session override (min_grade). Nil /
 // unset fields fall back to the spec defaults, so a default config reproduces the
 // prior behavior byte-for-byte (max_levels 8, no min_grade filter, D/4h/1h/15m).
-// Pure — unit-tested without an AutoTrader.
-func resolveSessionPlanCfg(dp *store.DayPlanConfig, session string) (maxLevels int, minGrade string, timeframes []string) {
+// S3 (2026-09-16): htf_seats nil → 2 (the pre-S3 seatHTF constant); a legal 0
+// means NO HTF seating; anything above 6 clamps to 6. Pure — unit-tested
+// without an AutoTrader.
+func resolveSessionPlanCfg(dp *store.DayPlanConfig, session string) (maxLevels, htfSeats int, minGrade string, timeframes []string) {
 	maxLevels = kernel.DefaultMaxLevels
+	htfSeats = kernel.LegacyHtfSeats
 	timeframes = []string{"D", "4h", "1h", "15m"}
 	if dp == nil {
-		return maxLevels, minGrade, timeframes
+		return maxLevels, htfSeats, minGrade, timeframes
 	}
 	if dp.MaxLevels > 0 {
 		maxLevels = dp.MaxLevels
+	}
+	if dp.HtfSeats != nil {
+		htfSeats = *dp.HtfSeats
+		if htfSeats < 0 {
+			htfSeats = 0
+		}
+		if htfSeats > 6 {
+			htfSeats = 6
+		}
 	}
 	if len(dp.PlannerTimeframes) > 0 {
 		timeframes = dp.PlannerTimeframes
@@ -2047,7 +2059,7 @@ func resolveSessionPlanCfg(dp *store.DayPlanConfig, session string) (maxLevels i
 			minGrade = *so.MinGrade
 		}
 	}
-	return maxLevels, minGrade, timeframes
+	return maxLevels, htfSeats, minGrade, timeframes
 }
 
 // structureSummaryLines fetches one bar request per CONFIGURED planner timeframe
@@ -2151,7 +2163,7 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 	if at.config.StrategyConfig != nil {
 		dp = at.config.StrategyConfig.DayPlan
 	}
-	maxLevels, minGrade, timeframes := resolveSessionPlanCfg(dp, session)
+	maxLevels, htfSeats, minGrade, timeframes := resolveSessionPlanCfg(dp, session)
 
 	var bars []market.Kline
 	if market.FuturesBarsProvider != nil {
@@ -2185,7 +2197,7 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 		}
 		extra = append(extra, htfLevels...)
 	}
-	scored, pool, price, dATR, researchRaw := kernel.AssembleResearchLevels(at.id, bars, reg, symbol, maxLevels, now, at.proximityFilterATR(), minGrade, extra...)
+	scored, pool, price, dATR, researchRaw := kernel.AssembleResearchLevels(at.id, bars, reg, symbol, maxLevels, htfSeats, now, at.proximityFilterATR(), minGrade, extra...)
 	// 1h wave (2026-08-25) — the ranked table's HTF seats guarantee an in-band
 	// 1h S/D zone when one exists. Gated by the seat_1h_zone knob (default ON).
 	if dp != nil && dp.Seat1HZoneEnabled() {

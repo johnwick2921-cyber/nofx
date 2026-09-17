@@ -176,7 +176,7 @@ func TestSeatHTFPromotesSwingLevels(t *testing.T) {
 			Score:         0.84, Grade: "B", Fresh: "fresh", Distance: 100 + float64(i),
 		})
 	}
-	out := seatHTF(scored, 8)
+	out := seatHTF(scored, 8, 2)
 	head, tail := out[:8], out[8:]
 	htfInHead := 0
 	for _, l := range head {
@@ -195,7 +195,7 @@ func TestSeatHTFPromotesSwingLevels(t *testing.T) {
 		{DetectedLevel: DetectedLevel{Kind: KindPDH, Price: 1200, Label: "PDH", HTF: true}, Score: 1.4, Grade: "A", Fresh: "fresh", Distance: 200},
 	}
 	all := append(pri, scored...)
-	out2 := seatHTF(all, 8)
+	out2 := seatHTF(all, 8, 2)
 	priSeated := false
 	for _, l := range out2[:8] {
 		if l.Kind == KindPDH {
