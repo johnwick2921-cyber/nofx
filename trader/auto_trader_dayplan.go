@@ -52,11 +52,11 @@ func (at *AutoTrader) snapshotSessionProfiles() {
 		// 1h wave + R4 (2026-08-25) — one boot observability line for the new
 		// day-plan knobs so a config question is answered from the log.
 		at.logInfof("🗺️ day-plan knobs: seat_1h_zone=%v min_scenario_quality=%s ob_lookback_bars=%d",
-			dp.Seat1HZoneEnabled(), dp.MinScenarioQualityFor(""), kernel.OBLookbackBars())			// S2 (2026-09-16) — freshness mode + HTF weight, READ not typed:
-			// the mode comes from the resolved knob, the multiplier from the
-			// const the scorer actually applies.
-			at.logInfof("🧮 freshness: fresh=%s htf×=%g",
-					freshnessBootLabel(dp), kernel.HTFScoreMultiplier)		// A3 (2026-08-26) — min-SL guard observability (0 = off).
+			dp.Seat1HZoneEnabled(), dp.MinScenarioQualityFor(""), kernel.OBLookbackBars()) // S2 (2026-09-16) — freshness mode + HTF weight, READ not typed:
+		// the mode comes from the resolved knob, the multiplier from the
+		// const the scorer actually applies.
+		at.logInfof("🧮 freshness: fresh=%s htf×=%g",
+			freshnessBootLabel(dp), kernel.HTFScoreMultiplier) // A3 (2026-08-26) — min-SL guard observability (0 = off).
 		at.logInfof("🛑 min-sl guard: atr_mult=%.1f level_clearance=%dtick(s)",
 			kernel.MinSLATRMult(), kernel.MinSLTickClearance)
 		// PLAN-LIFECYCLE WAVE (2026-08-27) — hysteresis + dormant/re-arm +
@@ -182,16 +182,24 @@ func sessionHiLoFromBins(bins []kernel.SVPBin) (hi, lo float64) {
 // disappearing; PLAN STATUS annotates them; P1d aging heals scars across
 // session-days. Unknown level → "" (fresh).
 func installLevelStateProvider(at *AutoTrader, st *store.Store) {
-	_ = at
-	kernel.LevelStateProvider = func(traderID, symbol string, l kernel.DetectedLevel) string {
+	// S2 F3 (CTO review) — the own-TF bar series is assembled ONCE per install
+	// (not once per HTF level; today that was 339 store queries inside the
+	// freshness callback) and passed into the closure as a per-TF cache.
+	// The grader's re-entry semantics only read OpenTime/High/Low/Close.
+	barsByTF := map[string][]market.Kline{}
+	if at != nil && st != nil && st.BarHistory() != nil {
+		barsByTF = levelTFBarsCache(st, at.futuresSymbol())
+	}
+	kernel.LevelStateProvider = func(traderID, symbol string, l kernel.DetectedLevel, now time.Time) string {
 		// S2 (2026-09-16) — timeframe-aware freshness. ONLY the HTF branch is
 		// routed through the new grader, and only when the knob is ON; every
 		// non-HTF level and every OFF config keeps the W7 persisted 1m-touch
-		// ladder below byte-identically.
+		// ladder below byte-identically. `now` is the READ's now, threaded from
+		// the scoring call site (class 60 / F4), never time.Now() here.
 		if at != nil && at.config.StrategyConfig != nil && at.config.StrategyConfig.DayPlan != nil &&
 			at.config.StrategyConfig.DayPlan.LevelsFreshByTFEnabled() &&
 			l.HTF && kernel.IsHTFFreshTF(l.TF) {
-			grade, _ := kernel.LevelFreshnessByTF(l, time.Now(), levelTFBars(st, at.futuresSymbol(), l.TF))
+			grade, _, _ := kernel.LevelFreshnessByTF(l, now, barsByTF[l.TF])
 			return grade
 		}
 		key := store.MakeLevelKey(traderID, symbol, kernel.LevelTypeFromLabel(l.Label), "", kernel.LevelBinIndex(l.Price))
@@ -199,7 +207,7 @@ func installLevelStateProvider(at *AutoTrader, st *store.Store) {
 		if err != nil || cur == nil {
 			return "" // no persisted state → fresh (pre-W11b behavior)
 		}
-		return store.AgedFreshness(cur, time.Now())
+		return store.AgedFreshness(cur, now)
 	}
 }
 
@@ -212,33 +220,44 @@ func freshnessBootLabel(dp *store.DayPlanConfig) string {
 	return "1m"
 }
 
-// levelTFBars assembles a level's own-timeframe bar series for the S2 grader:
-// the live ring first, then the persisted NT8 history leg (same combination the
-// nPOC provider uses), scoped to the store's newest usable contract so a bar
-// from the retired contract's scale cannot "test" a level on the new one.
-func levelTFBars(st *store.Store, symbol, tf string) []market.Kline {
-	var bars []market.Kline
-	if market.FuturesBarsProvider != nil {
-		bars = market.FuturesBarsProvider(symbol, tf, 500)
+// levelTFBarsCache assembles, ONCE per install, the per-TF bar series the S2
+// grader reads: the live ring first, then the persisted NT8 history leg for the
+// newest usable contract (same combination the nPOC provider uses). F2 (CTO
+// review): the ring and the store overlap on recent bars — deduped by OpenTime;
+// CloseTime is left 0 because the grader never reads it (it reads
+// OpenTime/High/Low/Close only).
+func levelTFBarsCache(st *store.Store, symbol string) map[string][]market.Kline {
+	out := map[string][]market.Kline{}
+	tfs := []string{"1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w"}
+	for _, tf := range tfs {
+		var bars []market.Kline
+		if market.FuturesBarsProvider != nil {
+			bars = market.FuturesBarsProvider(symbol, tf, 500)
+		}
+		contract, _ := st.BarHistory().LatestContract(symbol)
+		if contract != "" {
+			if old, err := st.BarHistory().BarsBetweenFromNT8On(symbol, tf, contract, 0, time.Now().UnixMilli()); err == nil {
+				for _, b := range old {
+					bars = append(bars, market.Kline{
+						OpenTime: b.OpenTimeMs,
+						Open:     b.O, High: b.H, Low: b.L, Close: b.C, Volume: b.V,
+					})
+				}
+			}
+		}
+		// F2 — ring + store overlap: one bar = one OpenTime.
+		seen := map[int64]bool{}
+		deduped := bars[:0:0]
+		for _, b := range bars {
+			if seen[b.OpenTime] {
+				continue
+			}
+			seen[b.OpenTime] = true
+			deduped = append(deduped, b)
+		}
+		out[tf] = deduped
 	}
-	if st == nil || st.BarHistory() == nil {
-		return bars
-	}
-	contract, _ := st.BarHistory().LatestContract(symbol)
-	if contract == "" {
-		return bars
-	}
-	old, err := st.BarHistory().BarsBetweenFromNT8On(symbol, tf, contract, 0, time.Now().UnixMilli())
-	if err != nil || len(old) == 0 {
-		return bars
-	}
-	for _, b := range old {
-		bars = append(bars, market.Kline{
-			OpenTime: b.OpenTimeMs, CloseTime: b.OpenTimeMs + 59_999,
-			Open: b.O, High: b.H, Low: b.L, Close: b.C, Volume: b.V,
-		})
-	}
-	return bars
+	return out
 }
 
 // installNakedPOCProvider wires kernel.NakedPOCProvider to read this store's

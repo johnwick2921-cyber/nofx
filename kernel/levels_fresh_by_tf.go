@@ -36,26 +36,36 @@ func IsHTFFreshTF(tf string) bool {
 
 // LevelFreshnessByTF grades an HTF level's freshness on its own timeframe
 // bars. Caller routes: only levels with DetectedLevel.HTF==true and a TF in
-// htfFreshTFSet may enter. Bars MUST be that same timeframe. A bar "tests" the
-// level when it traded into [Lo,Hi] (bar.Low <= Hi && bar.High >= Lo) at or
-// after the level's origin. Origin resolution: OriginDate (YYYY-MM-DD), else
-// FormedAtMs; unknown origin → 0 tests (fresh) — the level's own bars cannot
-// contradict an unrecorded origin.
+// htfFreshTFSet may enter. Bars MUST be that same timeframe.
 //
-// Returns the S2 display grade ("fresh" | "tested-1" | "tested-2" | "stale")
-// and the test count. The display grade is what Research.Freshness carries;
-// scoring maps it onto the unchanged freshMult/zoneFreshMult ladders via
-// normalizeByTFGrade (levels_score.go).
-func LevelFreshnessByTF(l DetectedLevel, now time.Time, bars []market.Kline) (string, int) {
-	origin, ok := levelOriginTime(l)
+// RE-ENTRY semantics (S2 F1, CTO review 2026-09-17): a "test" is a RE-ENTRY,
+// not a touch. The level's formation bars are its birth — they close inside the
+// band and must never count. Counting starts only after the first own-TF bar
+// that CLOSES fully outside [Lo,Hi] after origin (price has left the zone);
+// each subsequent bar that trades back into the band while the previous bar was
+// outside counts ONE test — consecutive in-band bars are one visit, not N.
+//
+// Origin: FormedAtMs first, OriginDate (midnight) only as fallback. Unknown
+// origin → 0 tests (fresh) and originUsed="none"; originUsed is reported so the
+// replay table states which source each level used.
+//
+// Returns the S2 display grade ("fresh" | "tested-1" | "tested-2" | "stale"),
+// the test count, and which origin source was used ("formed_at" | "origin_date"
+// | "none"). The display grade is what Research.Freshness carries; scoring maps
+// it onto the unchanged freshMult/zoneFreshMult ladders via normalizeByTFGrade
+// (levels_score.go).
+func LevelFreshnessByTF(l DetectedLevel, now time.Time, bars []market.Kline) (string, int, string) {
+	origin, source, ok := levelOriginTimeSource(l)
 	if !ok || origin.IsZero() {
-		return "fresh", 0
+		return "fresh", 0, source
 	}
 	lo, hi := l.Lo, l.Hi
 	if hi < lo {
 		lo, hi = hi, lo
 	}
 	tests := 0
+	left := false       // the first bar that closed fully outside: price has left
+	prevOutside := true // formation bars are treated as one continuous inside visit
 	for _, b := range bars {
 		if b.OpenTime < origin.UnixMilli() {
 			continue // before the level existed — cannot test it
@@ -63,34 +73,47 @@ func LevelFreshnessByTF(l DetectedLevel, now time.Time, bars []market.Kline) (st
 		if b.OpenTime > now.UnixMilli() {
 			continue // future bar — not evidence
 		}
-		if b.Low <= hi && b.High >= lo {
-			tests++
+		inBand := b.Low <= hi && b.High >= lo
+		if !left {
+			// Formation: count nothing until a bar CLOSES fully outside the band.
+			if b.Close < lo || b.Close > hi {
+				left = true
+				prevOutside = true
+			}
+			continue
+		}
+		if inBand && prevOutside {
+			tests++ // one re-entry visit
+			prevOutside = false
+		} else if !inBand {
+			prevOutside = true
 		}
 	}
 	switch tests {
 	case 0:
-		return "fresh", 0
+		return "fresh", 0, source
 	case 1:
-		return "tested-1", 1
+		return "tested-1", 1, source
 	case 2:
-		return "tested-2", 2
+		return "tested-2", 2, source
 	default:
-		return "stale", tests
+		return "stale", tests, source
 	}
 }
 
-// levelOriginTime resolves a level's origin instant: OriginDate first, then
-// FormedAtMs. ok=false means no origin is recorded at all.
-func levelOriginTime(l DetectedLevel) (time.Time, bool) {
+// levelOriginTimeSource resolves a level's origin instant and names the source:
+// FormedAtMs preferred, OriginDate (midnight) as fallback, "none" when both are
+// absent.
+func levelOriginTimeSource(l DetectedLevel) (time.Time, string, bool) {
+	if l.FormedAtMs > 0 {
+		return time.UnixMilli(l.FormedAtMs), "formed_at", true
+	}
 	if d := strings.TrimSpace(l.OriginDate); d != "" {
 		if t, err := time.Parse("2006-01-02", d); err == nil {
-			return t, true
+			return t, "origin_date", true
 		}
 	}
-	if l.FormedAtMs > 0 {
-		return time.UnixMilli(l.FormedAtMs), true
-	}
-	return time.Time{}, false
+	return time.Time{}, "none", false
 }
 
 // normalizeByTFGrade maps the S2 display vocabulary onto the canonical ladder

@@ -1,3 +1,5 @@
+//go:build s2replay
+
 // Command s2-replay reproduces the 2026-09-16 16:31 CT "🗺️ G2 HTF detection"
 // level set from the PERSISTED NT8 bar history (read-only) and grades each
 // level two ways:
@@ -85,7 +87,7 @@ func main() {
 				}
 				seen[b.OpenTimeMs] = true
 				tfBars[tf] = append(tfBars[tf], market.Kline{
-					OpenTime: b.OpenTimeMs, CloseTime: b.OpenTimeMs + 59_999,
+					OpenTime: b.OpenTimeMs, // CloseTime 0: the grader never reads it (F2)
 					Open: b.O, High: b.H, Low: b.L, Close: b.C, Volume: b.V,
 				})
 			}
@@ -105,14 +107,15 @@ func main() {
 
 	ls := st.LevelState()
 	type row struct {
-		Label string
-		Kind  string
-		TF    string
-		Price float64
-		HTF   bool
-		Off   string
-		On    string
-		N     int
+		Label  string
+		Kind   string
+		TF     string
+		Price  float64
+		HTF    bool
+		Off    string
+		On     string
+		N      int
+		Origin string
 	}
 	rows := make([]row, 0, len(levels))
 	byKindTF := map[string]int{}
@@ -122,11 +125,11 @@ func main() {
 		if cur, err := ls.Get(key); err == nil && cur != nil {
 			off = store.AgedFreshness(cur, now)
 		}
-		on, n := "fresh", 0
+		on, n, origin := "fresh", 0, "n/a"
 		if l.HTF && kernel.IsHTFFreshTF(l.TF) {
-			on, n = kernel.LevelFreshnessByTF(l, now, tfBars[l.TF])
+			on, n, origin = kernel.LevelFreshnessByTF(l, now, tfBars[l.TF])
 		}
-		rows = append(rows, row{l.Label, string(l.Kind), l.TF, l.Price, l.HTF, off, on, n})
+		rows = append(rows, row{l.Label, string(l.Kind), l.TF, l.Price, l.HTF, off, on, n, origin})
 		byKindTF[l.Label]++
 	}
 
@@ -154,9 +157,9 @@ func main() {
 	}
 	fmt.Printf("HTF grades (TF∈S2 set, n=%d): OFF=%v ON=%v\n", htfN, offDist, onDist)
 
-	fmt.Println("# per-level table: label | kind | tf | price | OFF | ON | nTests")
+	fmt.Println("# per-level table: label | kind | tf | price | OFF | ON | nTests | origin")
 	for _, r := range rows {
-		fmt.Printf("%-16s %-10s %-3s %8.2f  off=%-8s on=%-9s n=%d\n", r.Label, r.Kind, r.TF, r.Price, display(r.Off), r.On, r.N)
+		fmt.Printf("%-16s %-10s %-3s %8.2f  off=%-8s on=%-9s n=%d origin=%s\n", r.Label, r.Kind, r.TF, r.Price, display(r.Off), r.On, r.N, r.Origin)
 	}
 }
 

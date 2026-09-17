@@ -11,49 +11,72 @@ import (
 // the equivalence test below runs through scoreLevelsPool — the production
 // call site — not a re-built input.
 
-func mkKline(openMs int64, h, l float64) market.Kline {
-	return market.Kline{OpenTime: openMs, High: h, Low: l}
+func mkKline(openMs int64, o, h, l, c float64) market.Kline {
+	return market.Kline{OpenTime: openMs, Open: o, High: h, Low: l, Close: c}
 }
 
-func tfFixture() []market.Kline {
+// reentryFixture: a zone [102,106]. Bars:
+//
+//	0-2: formation (inside band), 3: closes fully outside (leaves),
+//	4: re-enters (test 1), 5: stays in (same visit), 6: leaves,
+//	7: re-enters (test 2), 8: stays in, 9: leaves, 10: re-enters (test 3).
+func reentryFixture() []market.Kline {
 	base := time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC).UnixMilli()
 	step := int64(4 * time.Hour / time.Millisecond)
-	return []market.Kline{
-		mkKline(base, 100, 98),            // 0: misses the band
-		mkKline(base+step, 105, 102),      // 1: trades into [102,106]? see test
-		mkKline(base+2*step, 103, 101),    // 2
-		mkKline(base+3*step, 106, 104),    // 3
+	rows := [][4]float64{ // o,h,l,c
+		{103, 104, 102.5, 103.5}, {103.5, 104.5, 103, 104}, {104, 105, 103.5, 104.5}, // formation
+		{106.5, 107, 106.2, 106.7},   // leaves (closes fully above)
+		{105.5, 106.2, 104.5, 105.8}, // re-enter → test 1
+		{104, 105, 103.8, 104.6},     // stays in — same visit
+		{106.6, 107, 106.4, 106.8},   // leaves
+		{105.4, 106, 104.4, 105.7},   // re-enter → test 2
+		{104.2, 105, 103.9, 104.5},   // stays in — same visit
+		{106.8, 107.2, 106.5, 107},   // leaves
+		{105.3, 106.1, 104.3, 105.6}, // re-enter → test 3
+	}
+	bars := make([]market.Kline, len(rows))
+	for i, r := range rows {
+		bars[i] = mkKline(base+int64(i)*step, r[0], r[1], r[2], r[3])
+	}
+	return bars
+}
+
+func TestLevelFreshnessByTF_ReEntryCountsVisitsNotTouches(t *testing.T) {
+	bars := reentryFixture()
+	now := time.Date(2026, 9, 12, 0, 0, 0, 0, time.UTC)
+	l := DetectedLevel{Kind: KindSupply, Lo: 102, Hi: 106, TF: "4h", HTF: true,
+		FormedAtMs: time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC).UnixMilli()}
+	grade, n, src := LevelFreshnessByTF(l, now, bars)
+	if grade != "stale" || n != 3 || src != "formed_at" {
+		t.Fatalf("got %q/%d/%q, want stale/3/formed_at (3 re-entry visits)", grade, n, src)
 	}
 }
 
-func TestLevelFreshnessByTF_CountsAndOrigin(t *testing.T) {
-	bars := tfFixture()
+func TestLevelFreshnessByTF_FormationNeverCounts(t *testing.T) {
+	// Bars that never leave the band: formation only → fresh/0 even if touched 10×.
+	bars := reentryFixture()[:3]
 	now := time.Date(2026, 9, 12, 0, 0, 0, 0, time.UTC)
-	// Zone [102,106] on 4h: bar0 (100/98) misses, bars1-3 hit → 3 tests = stale.
-	l := DetectedLevel{Kind: KindSupply, Lo: 102, Hi: 106, TF: "4h", HTF: true, OriginDate: "2026-09-10"}
-	grade, n := LevelFreshnessByTF(l, now, bars)
-	if grade != "stale" || n != 3 {
-		t.Fatalf("got %q/%d, want stale/3", grade, n)
-	}
-	// Origin after all bars → 0 tests.
-	l2 := DetectedLevel{Kind: KindSupply, Lo: 102, Hi: 106, TF: "4h", HTF: true, OriginDate: "2026-09-13"}
-	if grade, n := LevelFreshnessByTF(l2, now, bars); grade != "fresh" || n != 0 {
-		t.Fatalf("future-origin got %q/%d, want fresh/0", grade, n)
-	}
-	// Two-touch zone [104.5,105.5]: bar1 (105/102) and bar3 (106/104) trade in.
-	l3 := DetectedLevel{Kind: KindSupply, Lo: 104.5, Hi: 105.5, TF: "4h", HTF: true, OriginDate: "2026-09-10"}
-	if grade, n := LevelFreshnessByTF(l3, now, bars); grade != "tested-2" || n != 2 {
-		t.Fatalf("got %q/%d, want tested-2/2", grade, n)
-	}
-}
-
-func TestLevelFreshnessByTF_NoOriginMeansFresh(t *testing.T) {
-	bars := tfFixture()
-	now := time.Date(2026, 9, 12, 0, 0, 0, 0, time.UTC)
-	l := DetectedLevel{Kind: KindSupply, Lo: 100, Hi: 106, TF: "4h", HTF: true} // no origin
-	grade, n := LevelFreshnessByTF(l, now, bars)
+	l := DetectedLevel{Kind: KindSupply, Lo: 102, Hi: 106, TF: "4h", HTF: true,
+		FormedAtMs: time.Date(2026, 9, 10, 0, 0, 0, 0, time.UTC).UnixMilli()}
+	grade, n, _ := LevelFreshnessByTF(l, now, bars)
 	if grade != "fresh" || n != 0 {
-		t.Fatalf("no-origin got %q/%d, want fresh/0", grade, n)
+		t.Fatalf("formation-only got %q/%d, want fresh/0 (F1: birth is not a test)", grade, n)
+	}
+}
+
+func TestLevelFreshnessByTF_OriginFallbackAndNone(t *testing.T) {
+	bars := reentryFixture()
+	now := time.Date(2026, 9, 12, 0, 0, 0, 0, time.UTC)
+	// FormedAtMs absent → OriginDate midnight fallback; same visit count, but the
+	// source must say origin_date.
+	l := DetectedLevel{Kind: KindSupply, Lo: 102, Hi: 106, TF: "4h", HTF: true, OriginDate: "2026-09-10"}
+	if grade, n, src := LevelFreshnessByTF(l, now, bars); grade != "stale" || n != 3 || src != "origin_date" {
+		t.Fatalf("fallback got %q/%d/%q, want stale/3/origin_date", grade, n, src)
+	}
+	// No origin at all → fresh/0/none.
+	l2 := DetectedLevel{Kind: KindSupply, Lo: 102, Hi: 106, TF: "4h", HTF: true}
+	if grade, n, src := LevelFreshnessByTF(l2, now, bars); grade != "fresh" || n != 0 || src != "none" {
+		t.Fatalf("no-origin got %q/%d/%q, want fresh/0/none", grade, n, src)
 	}
 }
 

@@ -424,7 +424,8 @@ func zoneFreshMult(f string) float64 {
 // from the level-state table (nil → everything fresh). maxLevels ≤ 0 → default 8.
 // proximityK is the resolved day-trade lock half-width in daily-ATR multiples
 // (the owner's proximity_filter_atr; ≤0 → the spec constant 1.5) — the band
-// OUTSIDE which no level is generated or seated.
+// OUTSIDE which no level is generated or seated. The freshness callback is
+// built by levelFreshnessFn WITH the read's now already captured (class 60).
 func ScoreLevels(levels []DetectedLevel, price, dATR float64, freshness func(DetectedLevel) string, maxLevels int, proximityK float64) []ScoredLevel {
 	return scoreLevelsPool(levels, price, dATR, freshness, maxLevels, proximityK)
 }
