@@ -4914,3 +4914,33 @@ fully outside the band.
 own-TF bars (fresh/tested-1/tested-2/stale, re-entry semantics); `normalizeByTFGrade`
 maps the new vocabulary onto the unchanged `freshMult`/`zoneFreshMult` tables; knob default
 OFF so goldens stay byte-identical.
+## CLASS 135 — A SEAT GUARANTEE UNDONE BY ITS OWN RESTORE SORT (born 2026-08-24, found 2026-09-16 by DS-102, fix/structure-seats-and-relation)
+
+**Shape.** A seating pass promotes a tail candidate into the top-N head, then
+"restores strict seating order" by re-sorting the WHOLE list with the same
+comparator used to build the head. The head IS the top-N of that comparator, so
+a promoted candidate — which loses the comparator to every head member — is
+restored to the tail by construction. `seatHTF` (kernel/levels_score.go) shipped
+its "2 guaranteed HTF seats" as a no-op since G2/G3 (2026-08-24): the pre-seat
+sort (:594-606) and the restore sort (~:1082-1096) share the comparator, and the
+caller slices [:maxLevels] afterwards.
+
+**How it hid.** The shipped pin test (`TestSeatHTFPromotesSwingLevels`) was
+vacuous: its HTF candidates OUTSCORED the head fillers, so the final sort alone
+seated them — the promotion path was never exercised, and the test passed for
+the wrong reason.
+
+**Probes.**
+- Any `seat*` pass: build a fixture where the promoted candidates score BELOW
+  the head fillers (the case that matters) and assert the seats appear only
+  under the knob that activates the pass.
+- A pass that returns ONLY its own maxLevels list (membership swap) survives its
+  reorder-sort (`seatBothSides` — probed healthy); a pass that re-sorts head and
+  tail TOGETHER nullifies itself (`seatHTF`).
+- Knob-gate the fix so the legacy path stays byte-identical: nil → the old
+  whole-list re-sort verbatim; saved → effective promotion, head and tail sorted
+  SEPARATELY.
+
+**Fix pattern.** Effective path: `sort(head)` + `sort(tail)` + `head ++ tail` —
+promoted slots keep their seats, order inside each block stays strict. Legacy
+path preserved as its own function until measurement gates the new behaviour.

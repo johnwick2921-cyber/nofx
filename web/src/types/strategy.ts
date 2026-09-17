@@ -88,6 +88,11 @@ export interface DayPlanConfig {
   proximity_filter_atr?: number
   max_levels?: number
   scenario_cap?: number
+  /** S3 (2026-09-16) — HTF seat count 0-6 (absent = legacy, non-effective).
+   *  Pointer semantics mirror Go: absent ≠ 0. */
+  htf_seats?: number
+  /** S3 (2026-09-16) — HTF score weight 1.0-1.5 (absent = 1.2 default). */
+  htf_score_multiplier?: number
   acceptance_rule?: string // 2x5m | 15m-close
   replan_cap?: number
   sessions_enabled?: string[]

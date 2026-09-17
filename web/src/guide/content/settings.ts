@@ -104,6 +104,37 @@ const dayPlan: KnobSpec[] = [
     perSession: 'Yes.',
   },
   {
+    label: 'HTF seats (structure-first, S3)',
+    where: 'Strategy → Day Plan → HTF seats 0–6',
+    what: 'How many higher-timeframe (HTF) swing/zone levels the seater may promote into the ENTRY table.',
+    trader:
+      'UNSET (nil) = the legacy path — today\u2019s table exactly, where the promotion is nullified by its own restore sort (class NN). SAVED 0–6 = the effective promotion: the promoted HTF seats survive. 0 = no HTF seating. The structure table (D/4h/1h, bias-only) is separate and never counts against max_levels.',
+    consumer:
+      'kernel/levels_score.go seatHTF/seatHTFLegacy · trader/auto_trader_planner.go resolveSessionPlanCfg',
+    range: '0 – 6 · unset = legacy',
+    systemDefault: 'unset (legacy, byte-identical to pre-S3)',
+    recommended:
+      '⭐ leave UNSET until the S4 measurement decides whether HTF promotion helps.',
+    whenToTouch:
+      'Only after the S4 structure-gate report; then set a value and watch the seated table.',
+    perSession: 'No.',
+  },
+  {
+    label: 'HTF score multiplier (S3)',
+    where: 'Strategy → Day Plan → HTF score multiplier 1.0–1.5',
+    what: 'The weight applied to a higher-timeframe level\u2019s score. Q-C measured that 1.2 promotes a group that holds LESS.',
+    trader:
+      'UNSET = 1.2 (today\u2019s const, byte-identical scores). SAVED 1.0 = no HTF premium. The boot line reads the resolved value with its source.',
+    consumer:
+      'kernel/levels_score.go scoreLevelsPool (htfMult) · ResolveHtfScoreMultiplier',
+    range: '1.0 – 1.5 · unset = 1.2',
+    systemDefault: '1.2 (unset)',
+    recommended:
+      '⭐ hold at 1.2 until the S4 final; the owner may set 1.0 after.',
+    whenToTouch: 'After S4 final, if the HTF premium is measured as a cost.',
+    perSession: 'No.',
+  },
+  {
     label: 'Max scenarios',
     where: 'Strategy → Day Plan → Max scenarios 1–5',
     what: 'Cap on S# rows the planner may write.',

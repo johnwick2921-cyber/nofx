@@ -944,6 +944,15 @@ type DayPlanConfig struct {
 	MaxLevels int `json:"max_levels,omitempty"`
 	// ScenarioCap: scenarios cap, 1–5 (default 3).
 	ScenarioCap int `json:"scenario_cap,omitempty"`
+	// HtfSeats (S3, 2026-09-16): how many HTF swing/zone levels seatHTF may
+	// promote into the ENTRY table, 0–6. A POINTER because 0 is a legal value
+	// (no HTF seating at all); nil = the shipped default 2 (today's behaviour).
+	HtfSeats *int `json:"htf_seats,omitempty"`
+	// HtfScoreMultiplier (S3, 2026-09-16): the higher-timeframe weight applied
+	// to HTF levels, 1.0–1.5. nil = the const default 1.2 (today's behaviour);
+	// Q-C says 1.2 promotes a group that holds LESS — the owner may set 1.0
+	// after the S4 measurement is final.
+	HtfScoreMultiplier *float64 `json:"htf_score_multiplier,omitempty"`
 	// AcceptanceRule: 2x5m (default) | 15m-close.
 	AcceptanceRule string `json:"acceptance_rule,omitempty"`
 	// ReplanCap: re-reads per session, 0–4 (default 2).
@@ -1434,6 +1443,7 @@ func DefaultDayPlanConfig() *DayPlanConfig {
 		ProximityFilterATR: 1.5,
 		MaxLevels:          8,
 		ScenarioCap:        3,
+		HtfSeats:           intPtr(2),
 		AcceptanceRule:     "2x5m",
 		ReplanCap:          2,
 		SessionsEnabled:    []string{"NY"},

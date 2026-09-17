@@ -711,10 +711,10 @@ func (at *AutoTrader) noTradeLevelMap(session string) []kernel.PlanLevel {
 		return nil
 	}
 	now := time.Now()
-	maxLevels, minGrade, _ := resolveSessionPlanCfg(at.dayPlanCfg(), session)
+	maxLevels, htfSeats, htfMult, minGrade, _ := resolveSessionPlanCfg(at.dayPlanCfg(), session)
 	// R2 4.7 (2026-08-25) — fail-closed maps obey min_grade: a NO-TRADE doc's
 	// level map must match what an active plan would have carried.
-	scored, _, _ := kernel.AssembleScoredLevelsMinGrade(at.id, bars, at.sessionRegistry(now), symbol, maxLevels, now, at.proximityFilterATR(), minGrade)
+	scored, _, _ := kernel.AssembleScoredLevelsMinGrade(at.id, bars, at.sessionRegistry(now), symbol, maxLevels, htfSeats, htfMult, now, at.proximityFilterATR(), minGrade)
 
 	out := make([]kernel.PlanLevel, 0, len(scored)+4)
 	if owned, err := at.store.OwnerLevel().ListActiveForUser(at.ownerUserID(), symbol); err == nil {
@@ -1257,11 +1257,18 @@ func (at *AutoTrader) fastMarketDrift(price float64) (float64, float64) {
 // instruction. Port of the weekly retry pattern — the 2026-08-31 LONDON read
 // burned attempts 1+2 on the IDENTICAL split-arm reject because the session
 // retry never told the model why it was rejected.
-func plannerRejectBlock(err error, live []string) string {
+func plannerRejectBlock(err error, live []string, struct4h string) string {
 	if err == nil {
 		return ""
 	}
-	return "\n\n## PREVIOUS ATTEMPT REJECTED / Validator reason (verbatim):\n" + err.Error() + "\nFix ONLY this defect, keep the rest structurally identical." + kernel.LiveConditionsLine(live)
+	block := "\n\n## PREVIOUS ATTEMPT REJECTED / Validator reason (verbatim):\n" + err.Error() + "\nFix ONLY this defect, keep the rest structurally identical." + kernel.LiveConditionsLine(live)
+	// S3 (2026-09-16) — when the structure table holds a directional 4h trend,
+	// the repair prompt carries the relation vocabulary it is judged by.
+	switch struct4h {
+	case "up", "down":
+		block += "\n" + kernel.RepairStructureRelationLaw
+	}
+	return block
 }
 
 // ── CLASS 45 E4 (owner addition, 2026-09-02) — THE CHAIN'S CUMULATIVE REJECTS,
@@ -1482,7 +1489,7 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 	// max_levels / scenario_cap (hard ceilings 12/5). Before this the parse
 	// hardcoded 8/3, so raising either setting made EVERY read fail-closed into a
 	// NO-TRADE plan + P0 alert — the upper half of the UI range was unreachable.
-	maxLevels, _, _ := resolveSessionPlanCfg(at.dayPlanCfg(), session)
+	maxLevels, _, _, _, _ := resolveSessionPlanCfg(at.dayPlanCfg(), session)
 	scenarioCap := at.scenarioCap()
 
 	var authoredAt time.Time
@@ -1586,7 +1593,7 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 			lastErr = err
 			at.logWarnf("📐 planner attempt %d/3 failed: %v", attempt, err)
 			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
-			rejectBlock = plannerRejectBlock(lastErr, liveConditions)
+			rejectBlock = plannerRejectBlock(lastErr, liveConditions, kernel.StructureTrend4h(facts.Structure))
 			rejectHistory = addDistinctReject(rejectHistory, lastErr)
 			continue
 		}
@@ -1598,7 +1605,7 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 			forceReauthor = true
 			at.recordRepairOutcome(raw, lastErr, prevReason)
 			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
-			rejectBlock = plannerRejectBlock(lastErr, liveConditions)
+			rejectBlock = plannerRejectBlock(lastErr, liveConditions, kernel.StructureTrend4h(facts.Structure))
 			rejectHistory = addDistinctReject(rejectHistory, lastErr)
 			continue
 		}
@@ -1611,7 +1618,7 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 				at.recordRepairOutcome(raw, perr, prevReason)
 			}
 			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
-			rejectBlock = plannerRejectBlock(lastErr, liveConditions)
+			rejectBlock = plannerRejectBlock(lastErr, liveConditions, kernel.StructureTrend4h(facts.Structure))
 			rejectHistory = addDistinctReject(rejectHistory, lastErr)
 			continue
 		}
@@ -1655,7 +1662,7 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 			lastErr = fmt.Errorf("prior plan flip already fired → bias %s is MANDATORY, got %q — the flip cannot be re-written away", requiredBias, d.Bias.Direction)
 			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
 			at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, lastErr)
-			rejectBlock = plannerRejectBlock(lastErr, liveConditions)
+			rejectBlock = plannerRejectBlock(lastErr, liveConditions, kernel.StructureTrend4h(facts.Structure))
 			rejectHistory = addDistinctReject(rejectHistory, lastErr)
 			continue
 		}
@@ -1668,7 +1675,7 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 			lastErr = fmt.Errorf("level label provenance: %s — copy the machine table's label for these prices", strings.Join(mis, "; "))
 			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
 			at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, lastErr)
-			rejectBlock = plannerRejectBlock(lastErr, liveConditions)
+			rejectBlock = plannerRejectBlock(lastErr, liveConditions, kernel.StructureTrend4h(facts.Structure))
 			rejectHistory = addDistinctReject(rejectHistory, lastErr)
 			continue
 		}
@@ -1679,13 +1686,32 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 		if verr := kernel.ValidatePlanDocWithFactsMachine(d, facts, machineLabels, maxLevels, scenarioCap); verr != nil {
 			lastErr = verr
 			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
-			rejectBlock = plannerRejectBlock(lastErr, liveConditions)
+			rejectBlock = plannerRejectBlock(lastErr, liveConditions, kernel.StructureTrend4h(facts.Structure))
 			rejectHistory = addDistinctReject(rejectHistory, lastErr)
 			at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, verr)
 			if modeLabel == "repair" {
 				at.recordRepairOutcome(raw, verr, prevReason)
 			}
 			continue
+		}
+		// S3 (2026-09-16) — the relation census. The validator stamped
+		// relation_d / relation_4h during validation; count each scenario once
+		// (4h when present, else D) per session. Counters record, never infer.
+		if at.store != nil {
+			for _, sc := range d.Scenarios {
+				rel := sc.Relation4h
+				if rel == "" {
+					rel = sc.RelationD
+				}
+				if rel == "" {
+					continue
+				}
+				if cnt, cerr := store.IncScenarioRelation(at.store, session, rel); cerr != nil {
+					at.logWarnf("⚖ relation counter write failed (%s/%s): %v", session, rel, cerr)
+				} else {
+					at.logInfof("⚖ dayplan_scenarios_by_relation:%s:%s = %d (recorded)", session, rel, cnt)
+				}
+			}
 		}
 		// F4 (LONDON-FORENSICS 2026-08-28) — arm feasibility WARN, never a
 		// fail: arms the gate-at-arm chain would refuse EVERY cycle (R:R <
@@ -1733,7 +1759,7 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 			if verr := kernel.ValidateFvgEntryScenarios(d, fvgBars, at.futuresSymbol(), origin, time.Now()); verr != nil {
 				lastErr = verr
 				at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
-				rejectBlock = plannerRejectBlock(lastErr, liveConditions)
+				rejectBlock = plannerRejectBlock(lastErr, liveConditions, kernel.StructureTrend4h(facts.Structure))
 				rejectHistory = addDistinctReject(rejectHistory, lastErr)
 				at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, verr)
 				if modeLabel == "repair" {
@@ -1755,7 +1781,7 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 			if verr := kernel.ValidateBreakdownContinueScenarios(d, bdScope, kernel.StaleConfirmATR5m(bdScope.Bars), facts.Price, time.Now().UnixMilli()); verr != nil {
 				lastErr = verr
 				at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
-				rejectBlock = plannerRejectBlock(lastErr, liveConditions)
+				rejectBlock = plannerRejectBlock(lastErr, liveConditions, kernel.StructureTrend4h(facts.Structure))
 				rejectHistory = addDistinctReject(rejectHistory, lastErr)
 				at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, verr)
 				if modeLabel == "repair" {
@@ -1801,7 +1827,7 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 		if verr := at.validateAuthoredScenariosAt(d, session, tradeDate, authoredAt); verr != nil {
 			lastErr = verr
 			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, verr, &prevReason, FactsSnapshotJSON(facts))
-			rejectBlock = plannerRejectBlock(verr, liveConditions)
+			rejectBlock = plannerRejectBlock(verr, liveConditions, kernel.StructureTrend4h(facts.Structure))
 			rejectHistory = addDistinctReject(rejectHistory, verr)
 			continue
 		}
@@ -2029,16 +2055,31 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 // strategy-level day_plan values + the per-session override (min_grade). Nil /
 // unset fields fall back to the spec defaults, so a default config reproduces the
 // prior behavior byte-for-byte (max_levels 8, no min_grade filter, D/4h/1h/15m).
+// S3 (2026-09-16): htf_seats nil → the LEGACY seatHTF path (byte-identical to
+// the pre-S3 table); a saved value clamps to 0-6 and activates the EFFECTIVE
+// promotion. htf_score_multiplier nil → 1.2 (the const); saved clamps 1.0-1.5.
 // Pure — unit-tested without an AutoTrader.
-func resolveSessionPlanCfg(dp *store.DayPlanConfig, session string) (maxLevels int, minGrade string, timeframes []string) {
+func resolveSessionPlanCfg(dp *store.DayPlanConfig, session string) (maxLevels int, htfSeats *int, htfMult float64, minGrade string, timeframes []string) {
 	maxLevels = kernel.DefaultMaxLevels
+	htfMult = kernel.HTFScoreMultiplier
 	timeframes = []string{"D", "4h", "1h", "15m"}
 	if dp == nil {
-		return maxLevels, minGrade, timeframes
+		return maxLevels, nil, htfMult, minGrade, timeframes
 	}
 	if dp.MaxLevels > 0 {
 		maxLevels = dp.MaxLevels
 	}
+	if dp.HtfSeats != nil {
+		v := *dp.HtfSeats
+		if v < 0 {
+			v = 0
+		}
+		if v > 6 {
+			v = 6
+		}
+		htfSeats = &v
+	}
+	htfMult = kernel.ResolveHtfScoreMultiplier(dp.HtfScoreMultiplier)
 	if len(dp.PlannerTimeframes) > 0 {
 		timeframes = dp.PlannerTimeframes
 	}
@@ -2047,7 +2088,7 @@ func resolveSessionPlanCfg(dp *store.DayPlanConfig, session string) (maxLevels i
 			minGrade = *so.MinGrade
 		}
 	}
-	return maxLevels, minGrade, timeframes
+	return maxLevels, htfSeats, htfMult, minGrade, timeframes
 }
 
 // structureSummaryLines fetches one bar request per CONFIGURED planner timeframe
@@ -2151,7 +2192,7 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 	if at.config.StrategyConfig != nil {
 		dp = at.config.StrategyConfig.DayPlan
 	}
-	maxLevels, minGrade, timeframes := resolveSessionPlanCfg(dp, session)
+	maxLevels, htfSeats, htfMult, minGrade, timeframes := resolveSessionPlanCfg(dp, session)
 
 	var bars []market.Kline
 	if market.FuturesBarsProvider != nil {
@@ -2185,7 +2226,7 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 		}
 		extra = append(extra, htfLevels...)
 	}
-	scored, pool, price, dATR, researchRaw := kernel.AssembleResearchLevels(at.id, bars, reg, symbol, maxLevels, now, at.proximityFilterATR(), minGrade, extra...)
+	scored, pool, price, dATR, researchRaw := kernel.AssembleResearchLevels(at.id, bars, reg, symbol, maxLevels, htfSeats, htfMult, now, at.proximityFilterATR(), minGrade, extra...)
 	// 1h wave (2026-08-25) — the ranked table's HTF seats guarantee an in-band
 	// 1h S/D zone when one exists. Gated by the seat_1h_zone knob (default ON).
 	if dp != nil && dp.Seat1HZoneEnabled() {

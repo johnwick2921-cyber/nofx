@@ -589,7 +589,8 @@ func (tm *TraderManager) addTraderFromStore(traderCfg *store.Trader, aiModelCfg 
 		if err != nil {
 			return fmt.Errorf("failed to parse strategy config for trader %s: %w", traderCfg.Name, err)
 		}
-		logger.Infof("✓ Trader %s loaded strategy config: %s", traderCfg.Name, strategy.Name)
+		logger.Infof("✓ Trader %s loaded strategy config: %s", traderCfg.Name, strategy.Name) // S3 (2026-09-16) — the resolved HTF knobs, with their sources.
+		logger.Infof("%s", trader.HtfKnobsBootLine(strategyConfig.DayPlan))
 	} else {
 		return fmt.Errorf("trader %s has no strategy configured", traderCfg.Name)
 	}
