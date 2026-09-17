@@ -346,7 +346,7 @@ const dayPlan: KnobSpec[] = [
     where: 'Strategy → Day Plan → flip_reread toggle',
     what: "When the plan's flip condition fires, the plan ALWAYS goes dormant first (wick-noise protection — unchanged). ON adds ONE free planner re-read in the flipped direction (trigger structure_flip, class-35 free like a level wake, same preflight and wake cadence). OFF = today's behaviour: the plan sleeps and the flipped bias is never authored.",
     trader:
-      'ON = the flipped bias can actually materialize; the model still authors the new plan and the validator still judges it. If the new plan keeps the old bias, it is logged (the model disagreed) — never a loop: one re-read per fired flip.',
+      'ON = the flipped bias can actually materialize. The write site REQUIRES the flipped bias: the model authors it or the read writes nothing and the dormant plan stands (a same-bias plan is rejected, never written). One SUCCESSFUL re-read per fired flip; a refused or failed read is retried on later cycles while the plan sleeps. If price closes back first, the old plan re-arms as before and the re-read is skipped.',
     consumer:
       'trader/auto_trader_planner.go maybeRereadAfterFlip · store.DayPlanConfig.FlipRereadEnabled',
     range: 'ON | OFF',

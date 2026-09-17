@@ -5253,12 +5253,48 @@ the flip line makes — a bias that FLIPS — had no producing code path.
   CODE produces a plan with that direction? A log line is not a code path.
 - A hysteresis pair (dormant on breach, re-arm on close-back) restores the OLD
   plan; a flip is a NEW thesis and needs its own read.
-- Pin the knob-gate: OFF = byte-identical dormant; ON = exactly ONE free re-read
-  per fired flip (plan+version key in system_config), refused/failed reads clear
-  the key and retry next cycle.
+- Pin the knob-gate: OFF = byte-identical dormant (no read, no key, the dormant
+  line unchanged). ON = one SUCCESSFUL free re-read per fired flip, where
+  success is decided by the STORE (a version newer than the dormant row with
+  lifecycle "active"), never by the read call's bool — that bool means "this
+  call claimed the read" and a wake-class read that exhausts its 3 attempts
+  returns (0,"kept_active",nil) with NO row and still reports true. The
+  once-key (`flip_reread_done:<plan>:<version>` in system_config) is written
+  only AFTER that decision; while the read runs an in-memory in-flight guard
+  stops a second launch. A read that is refused (preflight, wake cadence, an
+  open stream) or that lands no new active version leaves the key clear
+  ("0"/""), and the dormant branch of maybeRunSessionReadsAt calls
+  maybeRereadAfterFlip again every cycle the row sleeps — subject to the same
+  preflight and cadence — until a read succeeds or the row re-arms.
+- The write site ENFORCES the flipped bias: `requiredBias :=
+  kernel.FlipToDirection(priorKiller)` and "bias %s is MANDATORY". The model
+  authors the flipped bias or the read writes nothing and the dormant plan
+  stands. A same-bias plan therefore cannot come through the production write
+  site; the goroutine names one if a non-production writer lands it, never
+  loops.
+- The prior line echoes the OLD bias before its arrow ("PRIOR PLAN v3 bias
+  long — … → bias is now expected short … flip-condition: … → bias short").
+  Any parser of it must read the LAST "→ bias <word>" only; a substring scan
+  for "bias long" mandates the STALE bias and rejects every correct plan
+  (the review's BLOCKER 1).
+- The supersede of the dormant version must be a compare-and-set FROM
+  "dormant" (`UpdatePlanLifecycleIf`): the planner call can run 20 minutes and
+  the re-arm path may restore the row meanwhile. A refused CAS leaves both the
+  re-armed vN and the new vN+1 as written; the newest version governs at read
+  time (GetLatestPlanForTraderSession is ORDER BY version DESC). The goroutine
+  also re-reads the row right before the planner call and skips a row that is
+  no longer dormant.
+- A test that substitutes the read seam proves only the request. Every one of
+  the three blockers above sat behind a green recorder test; the real path
+  (claimed read → planner core → write site → store) must be exercised with
+  only the AI client scripted.
 
-**Fix pattern.** W-FLIP-REREAD: after the dormant write, request a structure_flip
-read (class-35 free, same preflight + wake cadence as a level wake) whose prompt
-carries "PRIOR PLAN v<N> bias <old> — … the prior plan is dormant"; on success the
-old version is superseded (`superseded:flip`); same-bias result is logged, never
-looped.
+**Fix pattern.** W-FLIP-REREAD: after the dormant write (and again from the
+dormant branch on every later cycle while the key is clear), request a
+structure_flip read (class-35 free, same preflight + wake cadence as a level
+wake) whose prompt carries "PRIOR PLAN v<N> bias <old> — … the prior plan is
+dormant. <killer>"; the write site mandates the flipped bias; when the store
+shows a newer active version the once-key is set and the old version is
+superseded by CAS from dormant (`superseded:flip`, reason
+`superseded:flip:v<N+1>`); otherwise the key is cleared and the dormant plan
+stands until the next cycle's retry.
