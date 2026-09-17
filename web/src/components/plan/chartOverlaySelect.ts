@@ -8,8 +8,10 @@
 //
 // Rule: the chart draws what the card seats, not the zone universe.
 //   1. seated levels (the plan's own level rows) — ALWAYS, every one;
-//   2. HTF zones — identical bands merged (same label = kind·tf, same lo, same
-//      hi), then only the N NEAREST to price unless the viewer asks for all.
+//   2. HTF zones — OFF by default (owner, after the CLASS 143 build: six bands
+//      = twelve edges + fills around price was "still a wall"). When the
+//      viewer opts in: identical bands merged (same label = kind·tf, same lo,
+//      same hi), then only the N NEAREST to price.
 // Labels stay "KIND·tf price" (the overlay's axis view formats them).
 //
 // PURE: no React, no chart. PlanMiniChart calls it; the tests pin it.
@@ -21,7 +23,7 @@ export const DEFAULT_NEAREST_ZONES = 6
 /** The planner seats at most this many levels; the chart never trims them. */
 export const SEATED_LEVEL_CAP = 12
 /** Per-viewer view preference (NOT a knob): remembered in localStorage. */
-export const SHOW_ALL_ZONES_KEY = 'vl.planChart.showAllZones'
+export const SHOW_ZONES_KEY = 'vl.planChart.showZones'
 
 export interface OverlaySelection {
   levels: OverlayLevel[]
@@ -82,11 +84,11 @@ export function selectChartOverlay(
   seated: OverlayLevel[],
   zones: OverlayLevel[],
   price: number | undefined,
-  opts: { showAll: boolean; nearest?: number }
+  opts: { showZones: boolean; nearest?: number }
 ): OverlaySelection {
   const distinct = dedupeZones(zones)
   const n = opts.nearest ?? DEFAULT_NEAREST_ZONES
-  const shown = opts.showAll ? distinct : nearestZones(distinct, price, n)
+  const shown = opts.showZones ? nearestZones(distinct, price, n) : []
   return {
     levels: [...seated, ...shown],
     zonesShown: shown.length,
@@ -95,18 +97,18 @@ export function selectChartOverlay(
 }
 
 /** localStorage is a per-viewer convenience: every read/write is guarded. */
-export function readShowAllZones(): boolean {
+export function readShowZones(): boolean {
   try {
-    return window.localStorage.getItem(SHOW_ALL_ZONES_KEY) === '1'
+    return window.localStorage.getItem(SHOW_ZONES_KEY) === '1'
   } catch {
     return false
   }
 }
 
-export function writeShowAllZones(on: boolean): void {
+export function writeShowZones(on: boolean): void {
   try {
-    if (on) window.localStorage.setItem(SHOW_ALL_ZONES_KEY, '1')
-    else window.localStorage.removeItem(SHOW_ALL_ZONES_KEY)
+    if (on) window.localStorage.setItem(SHOW_ZONES_KEY, '1')
+    else window.localStorage.removeItem(SHOW_ZONES_KEY)
   } catch {
     /* private window / blocked storage — the toggle still works in-session */
   }

@@ -75,34 +75,33 @@ describe('chartOverlaySelect', () => {
     expect(nearestZones(zones.slice(0, 2), 29500, 6)).toHaveLength(2)
   })
 
-  it('a 40-zone block draws at most 12 seated + 6 zones by default', () => {
+  it('DEFAULT (zones off): a 40-zone block draws the seated levels and ZERO bands; the total still counts the distinct zones', () => {
     const sel = selectChartOverlay(seated, fortyZones(), 29500, {
-      showAll: false,
+      showZones: false,
+    })
+    expect(sel.zonesShown).toBe(0)
+    expect(sel.zonesTotal).toBe(30)
+    expect(sel.levels).toEqual(seated)
+    expect(sel.levels.filter((l) => l.range)).toHaveLength(0)
+  })
+
+  it('zones ON: at most 12 seated + 6 nearest zones, labels intact', () => {
+    const sel = selectChartOverlay(seated, fortyZones(), 29500, {
+      showZones: true,
     })
     expect(DEFAULT_NEAREST_ZONES).toBe(6)
     expect(sel.zonesShown).toBe(6)
     expect(sel.zonesTotal).toBe(30)
     expect(sel.levels.length).toBeLessThanOrEqual(12 + 6)
-    // every seated level is drawn, every time
     for (const l of seated) expect(sel.levels).toContain(l)
-    // the drawn bands carry their kind·tf labels intact
+    expect(sel.levels.slice(0, 12)).toEqual(seated)
     const bands = sel.levels.filter((l) => l.range)
     expect(bands).toHaveLength(6)
     for (const b of bands) expect(b.label).toMatch(/^(SUPPLY|DEMAND)·(1h|4h)$/)
   })
 
-  it('"show all" draws every DISTINCT zone (still merged), seated levels first', () => {
-    const sel = selectChartOverlay(seated, fortyZones(), 29500, {
-      showAll: true,
-    })
-    expect(sel.zonesShown).toBe(30)
-    expect(sel.zonesTotal).toBe(30)
-    expect(sel.levels).toHaveLength(12 + 30)
-    expect(sel.levels.slice(0, 12)).toEqual(seated)
-  })
-
   it('no zones → seated levels only, counts 0/0', () => {
-    const sel = selectChartOverlay(seated, [], 29500, { showAll: false })
+    const sel = selectChartOverlay(seated, [], 29500, { showZones: true })
     expect(sel.levels).toEqual(seated)
     expect(sel.zonesShown).toBe(0)
     expect(sel.zonesTotal).toBe(0)
