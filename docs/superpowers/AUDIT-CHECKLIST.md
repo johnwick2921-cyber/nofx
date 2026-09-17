@@ -5336,6 +5336,35 @@ cannot race by construction. No production code changed.
 - A red CI on the FIRST push after a merge is the merge's problem until proven
   otherwise: read the run's failing job before the next PR is opened.
 
+## CLASS 144 — A DORMANT ROW JUDGED BY THE WRONG PREDICATE: DEATH-DORMANT RE-ARMS ON ITS FLIP LINE (born 2026-09-03 with D3's lifecycle-log move, found 2026-09-17 by the fix lane, fix/dormant-death-rearm, W-DORMANT-DEATH-REARM)
+
+**Shape.** The dormant write sends its kind ("dormant:death:…" / "dormant:flip:…")
+to the lifecycle log only — D3 made `plans.trigger_reason` the AUTHORING trigger.
+The re-arm predicate kept keying off `trigger_reason`, so the prefix check is
+always false: every D3+ dormant row falls to the FLIP condition. A death-dormant
+plan re-arms when its flip line clears while the death line stays breached, or
+(no flip line) re-arms immediately on "no machine condition" with the death line
+still hit.
+
+**How it hid.** The dormant write and the flip-rearm path were both individually
+correct and individually tested; the death path had no re-arm test, and the
+wrong-predicate outcome (a re-arm) looks like a SUCCESS unless the test asserts
+WHICH line the reason names.
+
+**Probes.**
+- A transition writes a marker to a NEW home; grep every reader of the OLD home
+  for the marker prefix — not just the writer.
+- For every predicate that says "the SAME structured condition that parked it",
+  pin the KIND: both dormant kinds must re-arm on their own line and only their
+  own line, with the reason naming the line price.
+- A re-arm test that only checks lifecycle=="active" cannot see a wrong
+  predicate — assert the `rearmed:` reason names the right line.
+
+**Fix pattern.** W-DORMANT-DEATH-REARM: `dormantDeathKillerOf` mirrors CLASS
+141's `dormantFlipKillerOf` (most recent dormant event in the lifecycle log);
+`describeDormantCleared` picks the condition by kind from the LOG, with a
+pre-D3 `trigger_reason` fallback for legacy rows. Tests at the production call
+site (`maybeRunSessionReadsAt`, real store row parked via `UpdatePlanLifecycle`).
 ## CLASS 143 — A STRAY ROW OF THE NEW CONTRACT BEFORE THE ROLL PULLS THE CHART BOUNDARY BACK AND ERASES THE OLD CONTRACT'S LAST WEEK (born 2026-09-14 at the Sept→Dec roll, reported by the owner 2026-09-17 16:40 CT "candles missing for several days", fix/chart-roll-hole, W-CHART-ROLL-HOLE)
 
 **Shape.** The chart across a roll is a time split: prior-contract rows before
