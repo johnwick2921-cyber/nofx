@@ -61,8 +61,10 @@ func (at *AutoTrader) snapshotSessionProfiles() {
 			kernel.MinSLATRMult(), kernel.MinSLTickClearance)
 		// PLAN-LIFECYCLE WAVE (2026-08-27) — hysteresis + dormant/re-arm +
 		// latency routing observability, so the mode is answerable from the log.
-		at.logInfof("🧬 plan lifecycle: hysteresis=buffer%.1f×ATR14 confirm=%dclose(s) · flip/death→dormant+auto-rearm (version unchanged, budget untouched) · exec_reasoning=%s plan_reasoning=%s",
-			kernel.FlipATRBuffer(), kernel.FlipConfirmCloses(), execReasoningLabel(), planReasoningLabel())
+		// W-FLIP-HOLD-ANCHOR (2026-09-17): the hold length and its anchor kinds
+		// are READ from the knob and the resolver's own table, never typed.
+		at.logInfof("🧬 plan lifecycle: hysteresis=buffer%.1f×ATR14 confirm=%dclose(s) · flip/death→dormant+auto-rearm (version unchanged, budget untouched) · flip_hold=%dmin anchored to %s · exec_reasoning=%s plan_reasoning=%s",
+			kernel.FlipATRBuffer(), kernel.FlipConfirmCloses(), kernel.FlipMinHoldMin(), kernel.FlipHoldAnchorLabel(), execReasoningLabel(), planReasoningLabel())
 		// Wave 2 armed orders (Phase 2, 2026-08-27) — placement engine mode.
 		at.logInfof("⚔️ armed_orders=on place_band=%dt stale_working=%dm test_seam=%s arm_rr=%.1f (gate-at-arm only; market-entry floor %.1f unchanged) (resting limits fill at the authorized price; stale_reeval NOT applied)",
 			armedPlaceTicks(), armedWorkingStaleMin(), armedSeamStateLabel(), at.armMinRRFor(nil), at.config.StrategyConfig.RiskControl.MinRiskRewardRatio) // F1a (LONDON-FORENSICS 2026-08-28) — planner completion budget boot line

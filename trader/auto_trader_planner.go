@@ -530,7 +530,12 @@ func (at *AutoTrader) describeActivePlanDeath(row *store.PlanDB) (kernel.PlanDea
 	// G7 (2026-08-21) — freshness-gated: a condition whose rule-TF series is
 	// provably stale is SKIPPED (logged flip_eval_skipped), never guessed. A
 	// fully-stale cycle defers the whole death check to the next fresh one.
-	killer, fired, skipped := kernel.PlanDeathOrFlipSinceFresh(doc, bars, at.acceptanceRuleFor(row.Session), sinceMs, now.UnixMilli())
+	// W-FLIP-HOLD-ANCHOR (2026-09-17): the flip hysteresis counts from the
+	// plan's STATE anchor (chain birth / re-plan / bias change / flip / re-arm,
+	// latest wins), NOT from this re-read version's created_at — sinceMs above
+	// still windows the condition's own bars, unchanged.
+	hold := at.flipHoldAnchor(row)
+	killer, fired, skipped := kernel.PlanDeathOrFlipSinceFreshHold(doc, bars, at.acceptanceRuleFor(row.Session), sinceMs, now.UnixMilli(), hold)
 	for _, s := range skipped {
 		at.logWarnf("flip_eval_skipped plan=%s v%d %s", row.PlanID, row.Version, s)
 	}
@@ -541,6 +546,45 @@ func (at *AutoTrader) describeActivePlanDeath(row *store.PlanDB) (kernel.PlanDea
 		return kernel.PlanDeathDetail{}, false
 	}
 	return kernel.DescribePlanDeath(doc, bars, at.acceptanceRuleFor(row.Session), sinceMs, now.UnixMilli())
+}
+
+// flipHoldAnchor resolves the instant the flip hysteresis counts from for
+// this plan row: the latest of the chain's first version, a deliberate
+// re-plan version, a bias-change version, or the last flip→dormant / re-arm
+// transition (kernel.FlipHoldAnchorKinds) — never a same-bias wake re-read.
+// A chain the store cannot read falls back to the row's own created_at,
+// tagged so the skip line reads "since version(fallback)".
+func (at *AutoTrader) flipHoldAnchor(row *store.PlanDB) kernel.FlipHoldAnchor {
+	fallback := int64(0)
+	if row != nil && !row.CreatedAt.IsZero() {
+		fallback = row.CreatedAt.UnixMilli()
+	}
+	if at.store == nil || row == nil || row.PlanID == "" {
+		return kernel.FlipHoldAnchor{SinceMs: fallback, Source: kernel.FlipHoldAnchorVersion}
+	}
+	facts, err := at.store.Plan().ListVersionFacts(row.PlanID)
+	if err != nil || len(facts) == 0 {
+		return kernel.FlipHoldAnchor{SinceMs: fallback, Source: kernel.FlipHoldAnchorVersion}
+	}
+	versions := make([]kernel.PlanVersionFact, 0, len(facts))
+	for _, f := range facts {
+		ms := int64(0)
+		if !f.CreatedAt.IsZero() {
+			ms = f.CreatedAt.UnixMilli()
+		}
+		versions = append(versions, kernel.PlanVersionFact{Version: f.Version, TriggerReason: f.TriggerReason, BiasDirection: f.BiasDirection, CreatedAtMs: ms})
+	}
+	var transitions []kernel.PlanTransitionFact
+	if events, lErr := at.store.Plan().LifecycleLogForPlan(row.PlanID); lErr == nil {
+		for _, e := range events {
+			ms := int64(0)
+			if !e.At.IsZero() {
+				ms = e.At.UnixMilli()
+			}
+			transitions = append(transitions, kernel.PlanTransitionFact{Version: e.Version, Event: e.Event, Reason: e.Reason, AtMs: ms})
+		}
+	}
+	return kernel.ResolveFlipHoldAnchor(versions, transitions, row.Version, fallback)
 }
 
 // executorPlanDeadReason (C6 / S2-1, 2026-08-25) — the executor evaluates the

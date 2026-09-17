@@ -545,3 +545,46 @@ func (s *PlanStore) LifecycleLog(planID string, version int) ([]PlanLifecycleEve
 		Order("id").Find(&out).Error
 	return out, err
 }
+
+// ── FLIP-HOLD ANCHOR READS (W-FLIP-HOLD-ANCHOR, 2026-09-17) ─────────────────
+//
+// The flip hysteresis is anchored to the plan's STATE (chain birth, deliberate
+// re-plan, bias change, flip, re-arm), never to the current re-read version.
+// These two reads give the resolver the chain facts by plan_id without
+// loading every version's doc: a projection of the versions and the whole
+// lifecycle log of the chain.
+
+// PlanVersionFact is one version's identity, authoring trigger, bias
+// direction (json_extract'd, "" when the doc carries none) and birth.
+type PlanVersionFact struct {
+	Version       int       `gorm:"column:version"`
+	TriggerReason string    `gorm:"column:trigger_reason"`
+	Lifecycle     string    `gorm:"column:lifecycle"`
+	BiasDirection string    `gorm:"column:bias_direction"`
+	CreatedAt     time.Time `gorm:"column:created_at"`
+}
+
+// ListVersionFacts returns the chain's versions, ascending, as PlanVersionFact.
+func (s *PlanStore) ListVersionFacts(planID string) ([]PlanVersionFact, error) {
+	if planID == "" {
+		return nil, fmt.Errorf("plan_id required")
+	}
+	var out []PlanVersionFact
+	err := s.db.Model(&PlanDB{}).
+		Select("version, trigger_reason, lifecycle, created_at, COALESCE(json_extract(doc, '$.bias.direction'), '') AS bias_direction").
+		Where("plan_id = ?", planID).
+		Order("version ASC").
+		Scan(&out).Error
+	return out, err
+}
+
+// LifecycleLogForPlan returns EVERY version's transitions for one chain,
+// oldest first (LifecycleLog is per version).
+func (s *PlanStore) LifecycleLogForPlan(planID string) ([]PlanLifecycleEvent, error) {
+	if planID == "" {
+		return nil, fmt.Errorf("plan_id required")
+	}
+	var out []PlanLifecycleEvent
+	err := s.db.Where("plan_id = ?", planID).Order("id").Find(&out).Error
+	return out, err
+}
