@@ -933,6 +933,11 @@ type DayPlanConfig struct {
 	OneSetupMinGrade string `json:"one_setup_min_grade,omitempty"`
 	// PlannerTimeframes are the structure-summary TFs (default D,4h,1h,15m).
 	PlannerTimeframes []string `json:"planner_timeframes,omitempty"`
+	// StructureMap (S1, 2026-09-16) — the STRUCTURE table (D/4h/1h, bias only,
+	// never an entry) computed at each planner read, stamped on the doc and
+	// rendered as a prompt section. nil/false = OFF (the shipped default; a
+	// saved false and an unset knob read the same — OFF is the zero, honestly).
+	StructureMap *bool `json:"structure_map,omitempty"`
 	// ProximityFilterATR: day-trade lock, 0.5–3.0 (default 1.5).
 	ProximityFilterATR float64 `json:"proximity_filter_atr,omitempty"`
 	// MaxLevels: level table cap, 3–12 (default 8).
