@@ -5336,7 +5336,7 @@ cannot race by construction. No production code changed.
 - A red CI on the FIRST push after a merge is the merge's problem until proven
   otherwise: read the run's failing job before the next PR is opened.
 
-## CLASS NN — A STRAY ROW OF THE NEW CONTRACT BEFORE THE ROLL PULLS THE CHART BOUNDARY BACK AND ERASES THE OLD CONTRACT'S LAST WEEK (born 2026-09-14 at the Sept→Dec roll, reported by the owner 2026-09-17 16:40 CT "candles missing for several days", fix/chart-roll-hole, W-CHART-ROLL-HOLE)
+## CLASS 143 — A STRAY ROW OF THE NEW CONTRACT BEFORE THE ROLL PULLS THE CHART BOUNDARY BACK AND ERASES THE OLD CONTRACT'S LAST WEEK (born 2026-09-14 at the Sept→Dec roll, reported by the owner 2026-09-17 16:40 CT "candles missing for several days", fix/chart-roll-hole, W-CHART-ROLL-HOLE)
 
 **Shape.** The chart across a roll is a time split: prior-contract rows before
 the current contract's first LIVE bar, current-contract rows after. The
