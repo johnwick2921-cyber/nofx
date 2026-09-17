@@ -5217,7 +5217,7 @@ sentence, and a repair excerpt `RepairFlipDirectionLaw` routed on the error's
 own words ("contradicts bias") — the model is told the rule it is judged by.
 Death is untouched (separate question). Tests at the production call site for
 all six bias×side×flip_to cases, empty flip_to inference, repair routing, and
-the trader WARN via a logrus hook.
+the trader WARN via captured log output at both evaluators (named once across two evaluations).
 
 **Probes.**
 - For every structured object with ≥2 enum fields (`PlanCondition`,
