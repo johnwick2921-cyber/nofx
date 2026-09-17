@@ -4944,3 +4944,32 @@ the wrong reason.
 **Fix pattern.** Effective path: `sort(head)` + `sort(tail)` + `head ++ tail` —
 promoted slots keep their seats, order inside each block stays strict. Legacy
 path preserved as its own function until measurement gates the new behaviour.
+## CLASS 136 — A BOOT LINE THAT PRINTS A VALUE THE PROCESS NEVER READ (born 2026-09-16, fix/exit-posture-bootline-honest, D102-1)
+
+**Shape.** A boot line states a knob's posture from the ENV / literal config
+alone while the mechanics gate on a different source. The 🛑 exit line printed
+`BE=on · trail=on` whenever `EXIT_MECHS_SUSPENDED=0`, reading ONLY the env seam
+(`trader/exit_mechs_suspend.go` `ExitPolicyBootLine`), even though the runtime
+truth is the AND of that seam with the per-strategy toggles
+(`breakevenTrigger` `trader/auto_trader.go:205`,
+`trailingConfig` `trader/auto_trader_trailing.go:43`). At the 22:14 restart on
+09-15 both strategy toggles were OFF and the line said on.
+
+**How it hid.** The line was honest about the seam and silent about the toggle —
+a reader checking the boot block could not tell which source each field came
+from, because the line named no source at all.
+
+**Probes.**
+- A boot/status line must state the SOURCE of every field it prints
+  (`BE=off(strategy) · seam=SUSPENDED(env)`), never a bare value.
+- When a source cannot be read at boot time (strategy not yet loaded), the field
+  prints `n/a` — never a literal, never the file default.
+- Pin the call sites, not the inputs: env on + strategy off must render off;
+  no strategy loaded must render n/a (`TestExitPolicyBootLineStrategyOffSeamActive`,
+  `TestExitPolicyBootLineNoStrategyReadsNA` in
+  `trader/exit_mechs_suspend_bootline_test.go`).
+
+**Fix pattern.** Render every posture field from the exact value the mechanics
+gate on, with its source in parens; print the n/a branch where the boot cannot
+know; log the resolved line again where the source becomes available (trader
+load).
