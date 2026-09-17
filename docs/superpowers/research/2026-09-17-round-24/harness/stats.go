@@ -1,3 +1,5 @@
+//go:build r24harness
+
 package main
 
 // stats.go — exact two-sided binomial p against the D1′ IID null

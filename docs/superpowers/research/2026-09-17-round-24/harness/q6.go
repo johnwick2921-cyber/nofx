@@ -1,3 +1,5 @@
+//go:build r24harness
+
 package main
 
 // q6.go — seat-share replay (Round 23 Q6).

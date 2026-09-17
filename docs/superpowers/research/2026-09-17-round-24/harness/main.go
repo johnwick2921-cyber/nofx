@@ -1,3 +1,5 @@
+//go:build r24harness
+
 package main
 
 // main.go — Round 23 ("HTF defines the map, LTF times the entry") harness.

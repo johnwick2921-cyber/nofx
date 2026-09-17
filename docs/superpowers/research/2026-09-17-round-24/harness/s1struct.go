@@ -1,3 +1,5 @@
+//go:build r24harness
+
 package main
 
 // s1struct.go — EXACT PORT of Claude-101's S1 structure-state definition for

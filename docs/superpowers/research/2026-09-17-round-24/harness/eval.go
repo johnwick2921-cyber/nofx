@@ -1,3 +1,5 @@
+//go:build r24harness
+
 package main
 
 // eval.go — episode generation + Q1/Q4 aggregation + Q5 entry-timing variants.

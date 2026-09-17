@@ -1,3 +1,5 @@
+//go:build r24harness
+
 package main
 
 // s4.go — S4 MEASUREMENT GATE (CTO dispatch 2026-09-16 22:58Z): Q-A freshness

@@ -1,3 +1,5 @@
+//go:build r24harness
+
 package main
 
 // detect.go — the per-read snapshot. Replicates trader/auto_trader_planner.go

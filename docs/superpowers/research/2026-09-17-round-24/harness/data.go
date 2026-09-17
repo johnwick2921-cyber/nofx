@@ -1,3 +1,5 @@
+//go:build r24harness
+
 package main
 
 // data.go — loads MNQ bars from the DB COPY in the worktree (never the live
