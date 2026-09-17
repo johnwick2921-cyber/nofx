@@ -27,8 +27,8 @@ import {
 } from './LevelOverlayPrimitive'
 import {
   selectChartOverlay,
-  readShowAllZones,
-  writeShowAllZones,
+  readShowZones,
+  writeShowZones,
   DEFAULT_NEAREST_ZONES,
 } from './chartOverlaySelect'
 
@@ -41,9 +41,9 @@ interface Props {
   height?: number
   /**
    * S5 — HTF structure zones (kind·tf labels + [lo,hi] bands), raw prices only.
-   * W-CHART-ZONE-WALL: the chart draws the seated levels ALWAYS and, by
-   * default, only the `nearestZones` zones nearest to the last close
-   * (duplicates merged); "Show all zones" under the chart draws every zone.
+   * W-CHART-ZONE-WALL: the chart draws the seated levels ALWAYS and NO zones
+   * by default; "Show zones (N)" under the chart draws the `nearestZones`
+   * zones nearest to the last close (duplicates merged).
    */
   structureZones?: OverlayLevel[]
   /** how many HTF zones draw when "show all" is off (default 6) */
@@ -84,9 +84,7 @@ export function PlanMiniChart({
   const overlayRef = useRef<LevelOverlayPrimitive | null>(null)
   const [failed, setFailed] = useState(false)
   // W-CHART-ZONE-WALL — a per-viewer VIEW preference (localStorage), not a knob.
-  const [showAllZones, setShowAllZones] = useState<boolean>(() =>
-    readShowAllZones()
-  )
+  const [showZones, setShowZones] = useState<boolean>(() => readShowZones())
   // the last loaded close: the price the "nearest zones" rule measures from
   const [lastClose, setLastClose] = useState<number | undefined>(undefined)
 
@@ -228,11 +226,11 @@ export function PlanMiniChart({
   const selection = useMemo(
     () =>
       selectChartOverlay(factsToOverlay(facts), structureZones, lastClose, {
-        showAll: showAllZones,
+        showZones,
         nearest: nearestZones,
       }),
 
-    [facts, zonesKey, lastClose, showAllZones, nearestZones]
+    [facts, zonesKey, lastClose, showZones, nearestZones]
   )
 
   // push levels to the overlay whenever the selection changes
@@ -241,9 +239,9 @@ export function PlanMiniChart({
       overlayRef.current.setData({ levels: selection.levels })
   }, [selection])
 
-  const toggleShowAll = (on: boolean) => {
-    setShowAllZones(on)
-    writeShowAllZones(on)
+  const toggleShowZones = (on: boolean) => {
+    setShowZones(on)
+    writeShowZones(on)
   }
 
   // The zone control renders whenever the block carries zones — also on the
@@ -256,17 +254,23 @@ export function PlanMiniChart({
     >
       <input
         type="checkbox"
-        checked={showAllZones}
-        onChange={(e) => toggleShowAll(e.target.checked)}
-        data-testid="chart-show-all-zones"
+        checked={showZones}
+        onChange={(e) => toggleShowZones(e.target.checked)}
+        data-testid="chart-show-zones"
       />
-      <span>{tp('chartShowAllZones', language)}</span>
-      <span data-testid="chart-zone-count">
-        {tp('chartZonesShown', language, {
-          shown: String(selection.zonesShown),
+      <span>
+        {tp('chartShowZones', language, {
           total: String(selection.zonesTotal),
         })}
       </span>
+      {showZones && (
+        <span data-testid="chart-zone-count">
+          {tp('chartZonesShown', language, {
+            shown: String(selection.zonesShown),
+            total: String(selection.zonesTotal),
+          })}
+        </span>
+      )}
     </label>
   )
 

@@ -288,15 +288,15 @@ export const planStrings = {
     id: 'Hanya bar — rencana ini tanpa level untuk ditumpuk',
   },
   // W-CHART-ZONE-WALL (2026-09-17) — the mini chart's zone control
-  chartShowAllZones: {
-    en: 'Show all zones',
-    zh: '显示全部区域',
-    id: 'Tampilkan semua zona',
+  chartShowZones: {
+    en: 'Show zones ({total})',
+    zh: '显示区域（{total}）',
+    id: 'Tampilkan zona ({total})',
   },
   chartZonesShown: {
     en: '({shown} of {total} HTF zones drawn)',
-    zh: '（绘制 {shown}/{total} 个高周期区域 — 最接近价格）',
-    id: '({shown} dari {total} zona HTF digambar — terdekat dengan harga)',
+    zh: '（绘制 {shown}/{total} 个高周期区域）',
+    id: '({shown} dari {total} zona HTF digambar)',
   },
 
   // ── scenarios ──
