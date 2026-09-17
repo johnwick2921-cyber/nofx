@@ -93,6 +93,12 @@ export interface DayPlanConfig {
   htf_seats?: number
   /** S3 (2026-09-16) — HTF score weight 1.0-1.5 (absent = 1.2 default). */
   htf_score_multiplier?: number
+  /** S1 (2026-09-16) — the STRUCTURE table (D/4h/1h, bias only). Pointer-bool
+   *  semantics mirror Go: absent/false = off. */
+  structure_map?: boolean
+  /** S2 (2026-09-16) — HTF levels graded on their own timeframe bars.
+   *  Default false. */
+  levels_fresh_by_tf?: boolean
   acceptance_rule?: string // 2x5m | 15m-close
   replan_cap?: number
   sessions_enabled?: string[]

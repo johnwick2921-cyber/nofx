@@ -40,7 +40,7 @@ const dayPlan: KnobSpec[] = [
   {
     label: 'Structure table (S1)',
     where:
-      'Strategy → Day Plan → structure_map (API/JSON knob; no editor toggle yet)',
+      'Strategy → Day Plan → structure_map (editor toggle: Structure map; default OFF)',
     what: "A SECOND table the planner reads, above the entry table: D / 4h / 1h direction from the last three labelled swings (HH/HL → up, LH/LL → down, mixed → range), the last swing high/low, the last impulse and where price sits in it (pd 0..1), plus each timeframe's top 4–6 zones with their labels INTACT. Bias only — never an entry; entries still come only from the ranked 12-seat table. Stamped on the plan doc as `structure` when computed; absent otherwise.",
     trader:
       "OFF by default (unset reads OFF — every S1 knob does; nothing changes the live plan until the S4 measurement). ON adds a '## STRUCTURE — bias only, not entries' section before the level table; OFF leaves the prompt byte-identical (the existing goldens prove it). The validator is untouched (that is S3).",

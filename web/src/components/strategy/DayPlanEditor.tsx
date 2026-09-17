@@ -540,6 +540,22 @@ export function DayPlanEditor({ config, onChange, disabled, language }: Props) {
               disabled={bodyDisabled}
             />
           </FieldRow>
+          <FieldRow label={tp('structureMap', language)}>
+            <Toggle
+              on={cfg.structure_map === true}
+              onChange={(v) => update('structure_map', v)}
+              disabled={bodyDisabled}
+              testId="structure-map-toggle"
+            />
+          </FieldRow>
+          <FieldRow label={tp('freshByTf', language)}>
+            <Toggle
+              on={cfg.levels_fresh_by_tf === true}
+              onChange={(v) => update('levels_fresh_by_tf', v)}
+              disabled={bodyDisabled}
+              testId="fresh-by-tf-toggle"
+            />
+          </FieldRow>
           <FieldRow label={tp('maxReplans', language)}>
             <NumberField
               value={cfg.replan_cap ?? 2}
