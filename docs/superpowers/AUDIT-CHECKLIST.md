@@ -4896,3 +4896,21 @@ names the FILE, not the WAVE, so the next lane sees a foreign red and either re-
 **Fix pattern.** Re-pin with provenance in the same PR as the change; where a Go wave touches a pinned
 file, the web pin is part of that wave's suite (class 110: a green suite is a claim about an environment,
 and this environment has two suites).
+## CLASS 133 — S2 by-TF freshness
+
+**Shape.** A freshness grade computed from one timeframe's bars while the scoring
+ladder it feeds was calibrated against another (1m touches). A 4h zone was
+downgraded C by one 1m bar trading into it, so the 12-seat table stopped seating
+HTF structure. **Rule:** when a grade changes MEANING as its source timeframe
+changes, keep the display vocabulary and the scoring ladder separate — the new
+grader may only feed the ladder through an explicit normalization map, and every
+legacy string must pass through it as identity (proved by
+`TestNormalizeByTFGrade_IdentityOnLegacy` + `TestScoreLevels_ByTFVocabScoresLikeCanonical`).
+Second rule (F1): a test is a RE-ENTRY — the level's own formation bars are its
+birth and never count; counting starts after the first own-TF bar that CLOSES
+fully outside the band.
+
+**Fix pattern (S2).** `kernel/levels_fresh_by_tf.go` grades HTF levels on their
+own-TF bars (fresh/tested-1/tested-2/stale, re-entry semantics); `normalizeByTFGrade`
+maps the new vocabulary onto the unchanged `freshMult`/`zoneFreshMult` tables; knob default
+OFF so goldens stay byte-identical.
