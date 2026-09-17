@@ -38,6 +38,23 @@ const dayPlan: KnobSpec[] = [
     perSession: 'No.',
   },
   {
+    label: 'Structure table (S1)',
+    where:
+      'Strategy → Day Plan → structure_map (API/JSON knob; no editor toggle yet)',
+    what: "A SECOND table the planner reads, above the entry table: D / 4h / 1h direction from the last three labelled swings (HH/HL → up, LH/LL → down, mixed → range), the last swing high/low, the last impulse and where price sits in it (pd 0..1), plus each timeframe's top 4–6 zones with their labels INTACT. Bias only — never an entry; entries still come only from the ranked 12-seat table. Stamped on the plan doc as `structure` when computed; absent otherwise.",
+    trader:
+      "OFF by default (unset reads OFF — every S1 knob does; nothing changes the live plan until the S4 measurement). ON adds a '## STRUCTURE — bias only, not entries' section before the level table; OFF leaves the prompt byte-identical (the existing goldens prove it). The validator is untouched (that is S3).",
+    consumer:
+      'store/resolve_source.go ResolveStructureMap · trader/structure_map_wire.go structureMapForRead · kernel/structure_map.go ComputeStructureMap / RenderStructureSection',
+    range: 'true / false',
+    systemDefault: 'OFF (nil)',
+    recommended:
+      "OFF until DS-R's S4 measures what the structure section changes in the plans; then the owner's call.",
+    whenToTouch:
+      "Only for the measured comparison. Boot line '🗺 structure: off|on(D/4h/1h)|n/a' names the knob; each read logs '🗺 structure @<session>: D=… 4h=… 1h=… zones=<n> pd4h=<0.xx>'.",
+    perSession: 'No.',
+  },
+  {
     label: 'One setup — minimum grade',
     where: 'Strategy → Day Plan → one_setup_min_grade',
     what: 'The lowest merged-candidate grade the best level near price may carry (A+ | A | B | C). The best level is chosen grade-first, distance-second among candidates inside the reachability band; a scenario on a lower-graded level than the best is declined level_not_best.',
@@ -85,6 +102,37 @@ const dayPlan: KnobSpec[] = [
     whenToTouch:
       'Leave alone; raise only if you find the card missing actionable levels.',
     perSession: 'Yes.',
+  },
+  {
+    label: 'HTF seats (structure-first, S3)',
+    where: 'Strategy → Day Plan → HTF seats 0–6',
+    what: 'How many higher-timeframe (HTF) swing/zone levels the seater may promote into the ENTRY table.',
+    trader:
+      'UNSET (nil) = the legacy path — today\u2019s table exactly, where the promotion is nullified by its own restore sort (class NN). SAVED 0–6 = the effective promotion: the promoted HTF seats survive. 0 = no HTF seating. The structure table (D/4h/1h, bias-only) is separate and never counts against max_levels.',
+    consumer:
+      'kernel/levels_score.go seatHTF/seatHTFLegacy · trader/auto_trader_planner.go resolveSessionPlanCfg',
+    range: '0 – 6 · unset = legacy',
+    systemDefault: 'unset (legacy, byte-identical to pre-S3)',
+    recommended:
+      '⭐ leave UNSET until the S4 measurement decides whether HTF promotion helps.',
+    whenToTouch:
+      'Only after the S4 structure-gate report; then set a value and watch the seated table.',
+    perSession: 'No.',
+  },
+  {
+    label: 'HTF score multiplier (S3)',
+    where: 'Strategy → Day Plan → HTF score multiplier 1.0–1.5',
+    what: 'The weight applied to a higher-timeframe level\u2019s score. Q-C measured that 1.2 promotes a group that holds LESS.',
+    trader:
+      'UNSET = 1.2 (today\u2019s const, byte-identical scores). SAVED 1.0 = no HTF premium. The boot line reads the resolved value with its source.',
+    consumer:
+      'kernel/levels_score.go scoreLevelsPool (htfMult) · ResolveHtfScoreMultiplier',
+    range: '1.0 – 1.5 · unset = 1.2',
+    systemDefault: '1.2 (unset)',
+    recommended:
+      '⭐ hold at 1.2 until the S4 final; the owner may set 1.0 after.',
+    whenToTouch: 'After S4 final, if the HTF premium is measured as a cost.',
+    perSession: 'No.',
   },
   {
     label: 'Max scenarios',
@@ -276,6 +324,22 @@ const dayPlan: KnobSpec[] = [
     recommended: '⭐ ON — the HTF floors only exist when seated.',
     whenToTouch: 'Turn OFF only for pure 5m/15m scalping studies.',
     perSession: 'Yes.',
+  },
+  {
+    label: 'HTF freshness by own timeframe',
+    where: 'Strategy → Day Plan → toggle (levels_fresh_by_tf)',
+    what: 'OFF = an HTF level decays on the 1m-touch ladder (one 1m bar into the zone marks it tested). ON = an HTF level (1h…1w) grades its freshness on ITS OWN timeframe bars only — a 4h zone is tested by a 4h bar trading into it, not by 1m noise. Grades: fresh / tested-1 / tested-2 / stale by test count.',
+    trader:
+      'OFF = today\u2019s scoring byte-identical. ON = HTF levels keep their seats longer; the scoring ladders (freshMult/zoneFreshMult) are unchanged.',
+    consumer:
+      'trader/auto_trader_dayplan.go (installLevelStateProvider → kernel.LevelFreshnessByTF)',
+    range: 'ON | OFF',
+    systemDefault: 'OFF',
+    recommended:
+      '⏳ OFF until the S4 measurement gate (round 23 structure gate) reports whether by-TF grading helps.',
+    whenToTouch:
+      'Only after S4 ships its report; the owner flips it in Studio.',
+    perSession: 'No.',
   },
   {
     label: 'Wake triggers (5 toggles)',

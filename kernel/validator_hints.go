@@ -64,6 +64,9 @@ const (
 	HintFieldConfirmRule HintRuleField = "confirm.rule"
 	// HintFieldConditionRule — death{}/flip{}.rule: 2x5m | 5m_close.
 	HintFieldConditionRule HintRuleField = "death/flip.rule"
+	// HintFieldRelation — relation_d / relation_4h values:
+	// with-trend | counter-trend | range (S3, 2026-09-16).
+	HintFieldRelation HintRuleField = "relation"
 )
 
 // ValidatorHint pairs a validator message/hint site with the enum tokens its
@@ -83,6 +86,11 @@ type ValidatorHint struct {
 // fails inside a death/flip hint, which is exactly the cross-field defect.
 var ruleTokenScan = regexp.MustCompile(`\b(2x5m_close|1x5m_close|15m_close|time_hold|1m_mss|5m_close|5m-close|2x_5m|1x15m|2x5m|1x5m|5mclose|touch|15m|2x)\b`)
 
+// relationShapeScan finds any *-trend token in hint prose (S3): a hint naming a
+// relation value must only name the enum (with-trend | counter-trend | range) —
+// an invented "against-trend" spelling is the same disease as reject_retest.
+var relationShapeScan = regexp.MustCompile(`\b([a-z]+-trend)\b`)
+
 // legalRuleTokens returns the enum a field's tokens must come from.
 func legalRuleTokens(field HintRuleField) map[string]bool {
 	switch field {
@@ -99,6 +107,14 @@ func legalRuleTokens(field HintRuleField) map[string]bool {
 // instruction; an instruction naming a token its field cannot hold punishes the
 // model for complying (rows 78 → 79).
 func validateHintTokens(h ValidatorHint) error {
+	if h.RuleField == HintFieldRelation {
+		for _, tok := range relationShapeScan.FindAllString(h.Text, -1) {
+			if !relationValues[strings.ToLower(tok)] {
+				return fmt.Errorf("validator hint %q names %q, which is not a legal %s (enum: with-trend | counter-trend | range) — a hint must never name a token its own field rejects", h.Site, tok, h.RuleField)
+			}
+		}
+		return nil
+	}
 	found := ruleTokenScan.FindAllString(h.Text, -1)
 	if len(found) == 0 {
 		return nil
@@ -147,6 +163,10 @@ func ValidatorHints() []ValidatorHint {
 		{Site: "planner_repair.go breakdown law", Text: RepairBreakdownLaw, Conditions: []string{"reject", "breakdown_continue"}},
 		{Site: "planner_repair.go arm-split law", Text: RepairArmSplitLaw, Conditions: []string{"sweep_reclaim"}, RuleField: HintFieldConfirmRule},
 		{Site: "planner_repair.go entry-law confirm", Text: RepairEntryConfirmLaw, Conditions: []string{"breakdown_continue"}, RuleField: HintFieldConfirmRule},
+		// S3 (2026-09-16) — the structure relation vocabulary: the prompt names
+		// the relation enum, and the guard checks every *-trend token against it.
+		{Site: "structure_relation.go counter-trend hint", Text: CounterTrendRelationHint, RuleField: HintFieldRelation},
+		{Site: "planner_repair.go structure relation law", Text: RepairStructureRelationLaw, RuleField: HintFieldRelation},
 	}
 	// CLASS 38 — the entry law Style strings are quoted VERBATIM into the
 	// rejection the model reads ("… not allowed for %s — entry law: %s"), so

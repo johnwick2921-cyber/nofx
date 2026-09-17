@@ -74,7 +74,7 @@ func main() {
 		}
 	}
 
-	closeResearch := researchsnapshot.Start(cfg.DBPath+".research.db", func(line string) { logger.Infof("%s", line) })
+	closeResearch := researchsnapshot.Start(cfg.DBPath+".research.db", func(line string) { logger.Infof("%s", line) }, func(line string) { logger.Warnf("%s", line) })
 	defer closeResearch()
 	logger.Infof("📋 Initializing database (%s)...", cfg.DBType)
 	dbType := store.DBTypeSQLite

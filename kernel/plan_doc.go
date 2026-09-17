@@ -64,13 +64,21 @@ type PlanConfirm struct {
 type PlanScenario struct {
 	LevelID *string `json:"level_id"` // NULL on legacy; WARN-only on new authoring.
 	// Absent on legacy records: never inferred or required during stored reads.
-	Economics   *ScenarioEconomics `json:"economics,omitempty"`
-	ID          string             `json:"id"`           // S1, S2, S3
-	Trigger     string             `json:"trigger"`      // the setup description
-	Condition   string             `json:"condition"`    // reclaim|hold|sweep_reclaim|reject|acceptance|breakout_retest|fvg_entry|breakdown_continue|breakup_continue
-	Direction   string             `json:"direction"`    // long | short
-	TargetChain []float64          `json:"target_chain"` // ordered targets
-	Invalid     string             `json:"invalid"`      // invalidation
+	Economics *ScenarioEconomics `json:"economics,omitempty"`
+	ID        string             `json:"id"`        // S1, S2, S3
+	Trigger   string             `json:"trigger"`   // the setup description
+	Condition string             `json:"condition"` // reclaim|hold|sweep_reclaim|reject|acceptance|breakout_retest|fvg_entry|breakdown_continue|breakup_continue
+	Direction string             `json:"direction"` // long | short
+	// S3 (2026-09-16): relations are VALIDATOR-COMPUTED — never model-authored.
+	// relation_d / relation_4h are stamped from the structure table's D and 4h
+	// trend vs this scenario's direction (with-trend | counter-trend | range).
+	// A model-supplied value in either field is moved to relation_claimed at
+	// stamp time and overwritten — the model's own claim is kept, never trusted.
+	RelationD       string    `json:"relation_d,omitempty"`
+	Relation4h      string    `json:"relation_4h,omitempty"`
+	RelationClaimed string    `json:"relation_claimed,omitempty"`
+	TargetChain     []float64 `json:"target_chain"` // ordered targets
+	Invalid         string    `json:"invalid"`      // invalidation
 	// Confirm (C1) — REQUIRED after the grace window; see PlanConfirm.
 	Confirm *PlanConfirm `json:"confirm,omitempty"`
 	Quality string       `json:"quality"` // A+ | A | B
@@ -299,6 +307,12 @@ type PlanDoc struct {
 	// label stamped at write: "bias: AI <x> · tree <y> · regime <z>". A LABEL,
 	// not a direction — no MUST attaches to either leg.
 	BiasLabel string `json:"bias_label,omitempty"`
+
+	// S1 (2026-09-16) — the STRUCTURE table the read saw (D/4h/1h, bias only,
+	// never an entry). ABSENT when the knob is off or nothing was computed —
+	// never an empty object (canon: no fabricated values). Machine-stamped at
+	// write, never model-authored. Field names are the S3/S5 contract.
+	Structure *StructureMap `json:"structure,omitempty"`
 
 	// NoTradeWindows (owner ruling 2026-09-02) — the MACHINE's structured
 	// no-trade constraints for this plan's session, written at plan time from
@@ -859,6 +873,7 @@ type PlanFacts struct {
 	PDL         float64        // prior day low (0 = unknown → gap rules skipped)
 	PDC         float64        // prior day close (CLASS 50b — the bias-label tree leg)
 	Regime      RegimeBlock    // CLASS 50b — the bias-label regime leg (read-time copy)
+	Structure   *StructureMap  `json:"-"` // S1 — stamped onto the doc at write when non-nil
 }
 
 // ValidatePlanDocWithFacts = schema rules + facts rules:
@@ -896,6 +911,10 @@ func ValidatePlanDocWithFactsMachine(d *PlanDoc, facts PlanFacts, machine map[fl
 	if err := ValidatePlanDocWithCaps(d, maxLevels, maxScenarios); err != nil {
 		return err
 	}
+	// S3 (2026-09-16) — the relation fields are VALIDATOR-COMPUTED: stamp
+	// relation_d / relation_4h from the structure table before any other check.
+	// The model's own claim is preserved in relation_claimed, never trusted.
+	StampScenarioRelations(d)
 	if facts.Price <= 0 {
 		return nil // no facts → schema-only (legacy callers/tests)
 	}
