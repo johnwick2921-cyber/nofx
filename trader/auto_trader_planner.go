@@ -1257,11 +1257,18 @@ func (at *AutoTrader) fastMarketDrift(price float64) (float64, float64) {
 // instruction. Port of the weekly retry pattern — the 2026-08-31 LONDON read
 // burned attempts 1+2 on the IDENTICAL split-arm reject because the session
 // retry never told the model why it was rejected.
-func plannerRejectBlock(err error, live []string) string {
+func plannerRejectBlock(err error, live []string, struct4h string) string {
 	if err == nil {
 		return ""
 	}
-	return "\n\n## PREVIOUS ATTEMPT REJECTED / Validator reason (verbatim):\n" + err.Error() + "\nFix ONLY this defect, keep the rest structurally identical." + kernel.LiveConditionsLine(live)
+	block := "\n\n## PREVIOUS ATTEMPT REJECTED / Validator reason (verbatim):\n" + err.Error() + "\nFix ONLY this defect, keep the rest structurally identical." + kernel.LiveConditionsLine(live)
+	// S3 (2026-09-16) — when the structure table holds a directional 4h trend,
+	// the repair prompt carries the relation vocabulary it is judged by.
+	switch struct4h {
+	case "up", "down":
+		block += "\n" + kernel.RepairStructureRelationLaw
+	}
+	return block
 }
 
 // ── CLASS 45 E4 (owner addition, 2026-09-02) — THE CHAIN'S CUMULATIVE REJECTS,
@@ -1586,7 +1593,7 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 			lastErr = err
 			at.logWarnf("📐 planner attempt %d/3 failed: %v", attempt, err)
 			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
-			rejectBlock = plannerRejectBlock(lastErr, liveConditions)
+			rejectBlock = plannerRejectBlock(lastErr, liveConditions, kernel.StructureTrend4h(facts.Structure))
 			rejectHistory = addDistinctReject(rejectHistory, lastErr)
 			continue
 		}
@@ -1598,7 +1605,7 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 			forceReauthor = true
 			at.recordRepairOutcome(raw, lastErr, prevReason)
 			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
-			rejectBlock = plannerRejectBlock(lastErr, liveConditions)
+			rejectBlock = plannerRejectBlock(lastErr, liveConditions, kernel.StructureTrend4h(facts.Structure))
 			rejectHistory = addDistinctReject(rejectHistory, lastErr)
 			continue
 		}
@@ -1611,7 +1618,7 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 				at.recordRepairOutcome(raw, perr, prevReason)
 			}
 			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
-			rejectBlock = plannerRejectBlock(lastErr, liveConditions)
+			rejectBlock = plannerRejectBlock(lastErr, liveConditions, kernel.StructureTrend4h(facts.Structure))
 			rejectHistory = addDistinctReject(rejectHistory, lastErr)
 			continue
 		}
@@ -1655,7 +1662,7 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 			lastErr = fmt.Errorf("prior plan flip already fired → bias %s is MANDATORY, got %q — the flip cannot be re-written away", requiredBias, d.Bias.Direction)
 			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
 			at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, lastErr)
-			rejectBlock = plannerRejectBlock(lastErr, liveConditions)
+			rejectBlock = plannerRejectBlock(lastErr, liveConditions, kernel.StructureTrend4h(facts.Structure))
 			rejectHistory = addDistinctReject(rejectHistory, lastErr)
 			continue
 		}
@@ -1668,7 +1675,7 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 			lastErr = fmt.Errorf("level label provenance: %s — copy the machine table's label for these prices", strings.Join(mis, "; "))
 			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
 			at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, lastErr)
-			rejectBlock = plannerRejectBlock(lastErr, liveConditions)
+			rejectBlock = plannerRejectBlock(lastErr, liveConditions, kernel.StructureTrend4h(facts.Structure))
 			rejectHistory = addDistinctReject(rejectHistory, lastErr)
 			continue
 		}
@@ -1679,13 +1686,32 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 		if verr := kernel.ValidatePlanDocWithFactsMachine(d, facts, machineLabels, maxLevels, scenarioCap); verr != nil {
 			lastErr = verr
 			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
-			rejectBlock = plannerRejectBlock(lastErr, liveConditions)
+			rejectBlock = plannerRejectBlock(lastErr, liveConditions, kernel.StructureTrend4h(facts.Structure))
 			rejectHistory = addDistinctReject(rejectHistory, lastErr)
 			at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, verr)
 			if modeLabel == "repair" {
 				at.recordRepairOutcome(raw, verr, prevReason)
 			}
 			continue
+		}
+		// S3 (2026-09-16) — the relation census. The validator stamped
+		// relation_d / relation_4h during validation; count each scenario once
+		// (4h when present, else D) per session. Counters record, never infer.
+		if at.store != nil {
+			for _, sc := range d.Scenarios {
+				rel := sc.Relation4h
+				if rel == "" {
+					rel = sc.RelationD
+				}
+				if rel == "" {
+					continue
+				}
+				if cnt, cerr := store.IncScenarioRelation(at.store, session, rel); cerr != nil {
+					at.logWarnf("⚖ relation counter write failed (%s/%s): %v", session, rel, cerr)
+				} else {
+					at.logInfof("⚖ dayplan_scenarios_by_relation:%s:%s = %d (recorded)", session, rel, cnt)
+				}
+			}
 		}
 		// F4 (LONDON-FORENSICS 2026-08-28) — arm feasibility WARN, never a
 		// fail: arms the gate-at-arm chain would refuse EVERY cycle (R:R <
@@ -1733,7 +1759,7 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 			if verr := kernel.ValidateFvgEntryScenarios(d, fvgBars, at.futuresSymbol(), origin, time.Now()); verr != nil {
 				lastErr = verr
 				at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
-				rejectBlock = plannerRejectBlock(lastErr, liveConditions)
+				rejectBlock = plannerRejectBlock(lastErr, liveConditions, kernel.StructureTrend4h(facts.Structure))
 				rejectHistory = addDistinctReject(rejectHistory, lastErr)
 				at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, verr)
 				if modeLabel == "repair" {
@@ -1755,7 +1781,7 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 			if verr := kernel.ValidateBreakdownContinueScenarios(d, bdScope, kernel.StaleConfirmATR5m(bdScope.Bars), facts.Price, time.Now().UnixMilli()); verr != nil {
 				lastErr = verr
 				at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, lastErr, &prevReason, FactsSnapshotJSON(facts))
-				rejectBlock = plannerRejectBlock(lastErr, liveConditions)
+				rejectBlock = plannerRejectBlock(lastErr, liveConditions, kernel.StructureTrend4h(facts.Structure))
 				rejectHistory = addDistinctReject(rejectHistory, lastErr)
 				at.logWarnf("📐 planner attempt %d/3 rejected: %v", attempt, verr)
 				if modeLabel == "repair" {
@@ -1801,7 +1827,7 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 		if verr := at.validateAuthoredScenariosAt(d, session, tradeDate, authoredAt); verr != nil {
 			lastErr = verr
 			at.plannerRejectBookkeeping(attempt, tradeDate, session, promptHash, userPrompt, verr, &prevReason, FactsSnapshotJSON(facts))
-			rejectBlock = plannerRejectBlock(verr, liveConditions)
+			rejectBlock = plannerRejectBlock(verr, liveConditions, kernel.StructureTrend4h(facts.Structure))
 			rejectHistory = addDistinctReject(rejectHistory, verr)
 			continue
 		}

@@ -69,6 +69,14 @@ type PlanScenario struct {
 	Trigger     string             `json:"trigger"`      // the setup description
 	Condition   string             `json:"condition"`    // reclaim|hold|sweep_reclaim|reject|acceptance|breakout_retest|fvg_entry|breakdown_continue|breakup_continue
 	Direction   string             `json:"direction"`    // long | short
+	// S3 (2026-09-16): relations are VALIDATOR-COMPUTED — never model-authored.
+	// relation_d / relation_4h are stamped from the structure table's D and 4h
+	// trend vs this scenario's direction (with-trend | counter-trend | range).
+	// A model-supplied value in either field is moved to relation_claimed at
+	// stamp time and overwritten — the model's own claim is kept, never trusted.
+	RelationD       string  `json:"relation_d,omitempty"`
+	Relation4h      string  `json:"relation_4h,omitempty"`
+	RelationClaimed string  `json:"relation_claimed,omitempty"`
 	TargetChain []float64          `json:"target_chain"` // ordered targets
 	Invalid     string             `json:"invalid"`      // invalidation
 	// Confirm (C1) — REQUIRED after the grace window; see PlanConfirm.
@@ -903,6 +911,10 @@ func ValidatePlanDocWithFactsMachine(d *PlanDoc, facts PlanFacts, machine map[fl
 	if err := ValidatePlanDocWithCaps(d, maxLevels, maxScenarios); err != nil {
 		return err
 	}
+	// S3 (2026-09-16) — the relation fields are VALIDATOR-COMPUTED: stamp
+	// relation_d / relation_4h from the structure table before any other check.
+	// The model's own claim is preserved in relation_claimed, never trusted.
+	StampScenarioRelations(d)
 	if facts.Price <= 0 {
 		return nil // no facts → schema-only (legacy callers/tests)
 	}
