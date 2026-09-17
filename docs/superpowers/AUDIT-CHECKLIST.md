@@ -5302,3 +5302,36 @@ shows a newer active version the once-key is set and the old version is
 superseded by CAS from dormant (`superseded:flip`, reason
 `superseded:flip:v<N+1>`); otherwise the key is cleared and the dormant plan
 stands until the next cycle's retry.
+
+## CLASS 142 — A TEST HARNESS THAT POLLS AN UNSYNCHRONIZED BUFFER A BACKGROUND GOROUTINE WRITES (born 2026-09-17 with the CLASS 141 real-path tests, found by CI `go test -race` on the first dev push after the merge, fix/test-log-capture-race)
+
+**Shape.** A test captures the journal by pointing the logger at a plain
+`bytes.Buffer` and then POLLS `buf.String()` until a line appears. The code
+under test logs from a goroutine it spawned (the structure_flip read, a wake).
+`bytes.Buffer` is not goroutine-safe; logrus serializes its own writes but
+nothing serializes the test's reads against them. Under the race detector the
+test FAILS; without it the test passes and the suite is green, so the defect
+ships to the one job that runs `-race` (CI "Go Unit Tests & Coverage") and
+turns every subsequent push red: 0d54518c, d83bbfe0, 3445ee7f, 9a397b26,
+13ef576c all failed on the same four tests while the local suites were 34/34.
+
+**Why it hid.** (1) The local gate was `go test ./...` without `-race`; the
+race only exists when two goroutines touch the buffer, which only the
+real-path tests do. (2) The race report names `bytes/buffer.go` and
+`logrus/entry.go`, not the test, so it reads like a library problem. (3) The
+PR merge for the next wave was refused ("not mergeable", checks UNSTABLE)
+before anyone looked at WHY CI was red.
+
+**The fix shape.** ONE capture helper, `captureTraderLog`, returns a
+mutex-guarded `syncLogBuf` (Write/String/Reset under the lock). Every test
+that polls the journal uses it, so a background logger and a polling test
+cannot race by construction. No production code changed.
+
+**Probes.**
+- Every `SetOutput(&buf)` / `bytes.Buffer` handed to a logger in a test:
+  grep `SetOutput(&` and `var buf bytes.Buffer` in `*_test.go`; if the code
+  under test can log from a goroutine, the buffer must be synchronized.
+- Run `go test -race` on any package whose tests exercise a goroutine-spawning
+  path BEFORE merge — CI runs it, and CI is the last gate, not the first.
+- A red CI on the FIRST push after a merge is the merge's problem until proven
+  otherwise: read the run's failing job before the next PR is opened.
