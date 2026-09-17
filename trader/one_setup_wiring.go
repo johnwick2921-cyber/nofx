@@ -18,6 +18,7 @@ package trader
 import (
 	"fmt"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -120,6 +121,38 @@ func oneSetupSeedPlanLevels(scored []kernel.ScoredLevel, doc *kernel.PlanDoc, pr
 	return out, dropped
 }
 
+// oneSetupDroppedSet is the debounce verdict for the seed_unstamped counter:
+// the sorted prices of the plan levels the bounded seeding drops this cycle
+// (unstamped, no live row within the merge width), rendered as one string.
+func oneSetupDroppedSet(scored []kernel.ScoredLevel, doc *kernel.PlanDoc, price float64) string {
+	if doc == nil {
+		return ""
+	}
+	width := kernel.ClusterTolerance(price)
+	var ps []float64
+	for _, l := range doc.Levels {
+		if l.Price <= 0 || l.MachineGrade != "" {
+			continue
+		}
+		alias := false
+		for _, s := range scored {
+			if math.Abs(s.Price-l.Price) <= width {
+				alias = true
+				break
+			}
+		}
+		if !alias {
+			ps = append(ps, l.Price)
+		}
+	}
+	sort.Float64s(ps)
+	parts := make([]string, len(ps))
+	for i, p := range ps {
+		parts[i] = strconv.FormatFloat(p, 'f', 2, 64)
+	}
+	return strings.Join(parts, ",")
+}
+
 // oneSetupTestFacts is the test seam's payload (see AutoTrader.oneSetupFactsForTest).
 type oneSetupTestFacts struct {
 	Candidates []kernel.MapCandidate
@@ -206,8 +239,16 @@ func (at *AutoTrader) oneSetupVerdictsAt(plan *kernel.ActivePlan, doc *kernel.Pl
 			if dropped > 0 && at.store != nil {
 				// RECORDED, never inferred: an unstamped plan level that could not
 				// alias a live row is not a candidate (second re-review of #159).
-				for i := 0; i < dropped; i++ {
-					_, _ = store.IncArmRefusal(at.store, at.id, kernel.PlanTradeDateFor(plan), plan.Session, store.OneSetupClassSeedUnstamped)
+				// DEBOUNCED like every sibling counter in oneSetupConsult: once per
+				// (plan id, version, dropped set) transition — a plan with 3
+				// unstamped levels counts 3 once, not 3 per arm cycle. The verdict
+				// is the dropped set itself (sorted prices), so a new version or a
+				// different set counts again; the same set on the next tick does not.
+				key := "seed_unstamped:" + plan.PlanID + ":v" + strconv.Itoa(plan.Version)
+				if armRefusalChanged(&at.armRefusalLast, key, oneSetupDroppedSet(scored, doc, price)) {
+					for i := 0; i < dropped; i++ {
+						_, _ = store.IncArmRefusal(at.store, at.id, kernel.PlanTradeDateFor(plan), plan.Session, store.OneSetupClassSeedUnstamped)
+					}
 				}
 			}
 			if len(seeded) > 0 {

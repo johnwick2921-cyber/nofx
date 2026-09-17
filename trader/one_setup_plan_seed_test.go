@@ -272,6 +272,31 @@ func TestOneSetupUnstampedSoloLevelIsNotACandidate(t *testing.T) {
 	if len(kv) != 1 || kv[0].Value != "2" {
 		t.Fatalf("both unstamped solo levels (PDL 29490, ONH 29500) must be counted dropped: %+v", kv)
 	}
+	// DEBOUNCE: the same plan/version/dropped set on the next cycle counts
+	// nothing (2, not 4); a new version with a different dropped set counts
+	// again (its one dropped level → 3).
+	count := func() string {
+		var rows []struct{ Key, Value string }
+		if err := st.GormDB().Raw("SELECT key, value FROM system_config WHERE key LIKE ?", "arm_refusals_0b:"+at.id+":%"+store.OneSetupClassSeedUnstamped).Scan(&rows).Error; err != nil || len(rows) != 1 {
+			t.Fatalf("counter read: %v %+v", err, rows)
+		}
+		return rows[0].Value
+	}
+	_ = at.oneSetupVerdictsAt(plan, &doc, bars, 1, &cfg, now.Add(time.Minute))
+	if got := count(); got != "2" {
+		t.Fatalf("same plan/version/set on the next cycle must not count again: %s", got)
+	}
+	plan2 := &kernel.ActivePlan{PlanID: "unstamped", Version: 2, Session: "NY"}
+	doc2 := doc
+	doc2.Levels = []kernel.PlanLevel{doc.Levels[0]} // one unstamped solo level
+	_ = at.oneSetupVerdictsAt(plan2, &doc2, bars, 1, &cfg, now.Add(2*time.Minute))
+	if got := count(); got != "3" {
+		t.Fatalf("a new version with a different dropped set counts again (2+1): %s", got)
+	}
+	_ = at.oneSetupVerdictsAt(plan2, &doc2, bars, 1, &cfg, now.Add(3*time.Minute))
+	if got := count(); got != "3" {
+		t.Fatalf("debounced on v2 too: %s", got)
+	}
 }
 
 // ── REVIEW FIX 2: a ZONE-* clone resolves freshness under its SOURCE row ─────
