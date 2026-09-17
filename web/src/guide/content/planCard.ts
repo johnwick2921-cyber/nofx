@@ -110,7 +110,7 @@ export const planCard: GuideSection = {
         },
         {
           title: '4 · Level-row anatomy',
-          body: 'price · provenance label (PDH, ONH, nPOC·Tue, RN, EQH…) · planner grade A/B/C · m: machine grade (detector-side: type × freshness × confluence × HTF) · ROLE badge (what the level is FOR) · distance (gold when within 12pt) · touch chip ○ approaching ◐ touching ✕ rejected ▲ accepted · fresh dot (fresh / tested / consumed — consumed rows dim).',
+          body: 'price · provenance label (PDH, ONH, nPOC·Tue, RN, EQH…) · planner grade A/B/C · m: machine grade (detector-side: type × freshness × confluence × HTF) · ROLE badge (what the level is FOR) · distance (gold when within 12pt) · touch chip ○ approaching ◐ touching ✕ rejected ▲ accepted · fresh dot (fresh / tested / consumed — consumed rows dim). An owner-added level (＋ Add / bulk add) is STICKY: it applies at the next planner read, not on save, and until then it is listed — and can be deleted — in the "Pending owner levels" block right under the table (chip pending → applied once the session plan seats it).',
           cite: 'web/src/components/plan/ZoneTable.tsx:28-150 · SessionPlanCard.tsx:682',
         },
         {
