@@ -1,8 +1,9 @@
 # S2 — Timeframe-Aware Freshness + Name-Preserving Collapse (DS-101)
 
 - **Lane:** DS-101 · **Branch:** `fix/levels-fresh-by-tf` · **Claim:** `f3d46176` · **Worktree:** `/home/hoang/nofx-ds101`
-- **Base:** `git log -1 -- docs/superpowers/AUDIT-CHECKLIST.md` on dev at cut = `f6465143` (dev tip at claim time; spec-freshness: the S2 dispatch spec is a bridge message, not a tracked file — no tracked spec moved after my base).
-- **Report:** 2026-09-16 ~19:30 CT. Dispatch due 21:00 CT.
+- **Base:** `git log -1 -- docs/superpowers/AUDIT-CHECKLIST.md` on dev at cut = `f6465143` (dev tip at claim time).
+- **REVIEW FIXES (CTO 00:06Z, F0–F5):** all landed at `324927ad`; re-entry grading semantics (F1), threaded read-now (F4), per-install bar cache + dedupe + CloseTime honesty (F2/F3), harness build tag + export pin (F0), gofmt (F5). F6 merge of origin/dev pending in the same wave.
+- **Report:** 2026-09-16 → 17 (revised after F0–F5).
 
 ## What shipped (files)
 
@@ -27,9 +28,11 @@
 
 - fRaw production today [A]: `kernel/levels_score.go:462-472` — the injected `freshness` callback (`levelFreshnessFn` → `LevelStateProvider` installed at `trader/auto_trader_dayplan.go:181`, reading W7 persisted `store.LevelState` grades).
 - Routing [A]: ONLY `l.HTF && IsHTFFreshTF(l.TF)` enters `LevelFreshnessByTF`; every non-HTF level and every OFF config takes the unchanged persisted ladder.
-- Grader: a bar of the level's TF that traded into `[Lo,Hi]` (`b.Low <= hi && b.High >= lo`) at/after origin (`OriginDate`, else `FormedAtMs`) is one test. Grade by count: **fresh (0) / tested-1 (1) / tested-2 (2) / stale (≥3)**.
+- Grader: a test is a RE-ENTRY (F1): counting starts only after the first own-TF bar that CLOSES fully outside [Lo,Hi] after origin; each later bar trading back into the band while the previous bar was outside counts ONE test; consecutive in-band bars are one visit. Grade by count: **fresh (0) / tested-1 (1) / tested-2 (2) / stale (≥3)**.
+- Origin: `FormedAtMs` preferred, `OriginDate` (midnight) fallback; the replay table states per level which was used.
 - Scoring: `normalizeByTFGrade` maps tested-1→b, tested-2→c, stale→done before `freshMult`/`zoneFreshMult` — **the two tables are unchanged** (dispatch's hard line). `Research.Freshness` keeps the S2 display vocabulary.
-- Bars source: live ring (`FuturesBarsProvider`, 500) + persisted NT8 history leg for the latest contract (same combination `installNakedPOCProvider` uses), assembled in `levelTFBars`.
+- Bars source (F2/F3): assembled ONCE per install into a per-TF cache (not once per level — 339 store queries before); live ring + persisted NT8 history leg deduped by OpenTime; `CloseTime` left 0 because the grader never reads it.
+- Clock (F4): `levelFreshnessFn` captures the READ's `now` at the scoring call site and passes it into `LevelStateProvider(traderID, symbol, l, now)` — the provider never calls `time.Now()` of its own. Call sites threaded: `AssembleScoredLevels` (`levels_assemble.go:145`), `AssembleScoredLevelsMinGrade` (:195), `AssembleScoredLevelsFullMinGrade` (:252), `RenderPlanStatusMinGrade` (`plan_render.go:213`).
 
 ## (c) Collapse names — verified, pinned
 
@@ -45,21 +48,21 @@ Harness `docs/superpowers/research/2026-09-16-s2-replay/harness/main.go` opens `
 
 **Coverage caveat, stated not hidden:** the live 16:31 detection ran over the in-memory NT8 ring; the store holds only ~230×15m bars for MNQ 12-26 (roll ≈09-14). Current-contract-only replay reproduces 50 levels (244 logged). Combined with the previous contract's history (09-26, the same historical-leg pattern the nPOC provider uses — basis-adjacent proxy [B]): **417 levels**. The 244 was produced from a bar universe between those two; the per-level table below is the combined-contract proxy. Sample ids are `label@price` rows in the output file.
 
-**Grade shift (HTF levels with TF∈S2 set, n=339, combined-contract proxy):**
+**Grade shift after the F1 re-entry fix (HTF levels with TF∈S2 set, n=339, combined-contract proxy):**
 
-| | fresh | B | tested | flipped |
+| | fresh | tested-1 | tested-2 | stale |
 |---|---|---|---|---|
-| OFF (1m ladder) | 239 | 83 | 11 | 6 |
-| ON (by-TF) | 104 (fresh) | — | 13 (tested-1) + 9 (tested-2) | 213 (stale) |
+| OFF (1m ladder) | 238 | — (11 tested) | — | — (6 flipped, 84 B) |
+| ON (by-TF, re-entry) | 116 | 47 | 19 | 157 |
 
-Direction of the shift: by-TF grading finds most HTF zones tested 3+ times on their OWN timeframe and grades them **stale** (→ `done` in the unchanged ladder → 0.5 anchor / 0.15 zone multiplier). That is the OPPOSITE direction from "1m-touch over-decays HTF": by-TF is stricter, not laxer. This table is the number S4 measures against; **no recommendation is made beyond the cells** — whether stricter HTF decay helps is S4's measurement, not this lane's call.
+The direction FLIPPED vs my pre-review table (which counted formation bars and said 213 stale): the birth artifact is gone — 47 levels sit at tested-1 where the old grader said stale, and 116 read fresh. 157 still read stale (≥3 genuine re-entries after price left the zone). Whether stricter HTF decay helps is S4's measurement, not this lane's call — cells only.
 
 ## Tests
 
-- NEW RED→GREEN: none were ever RED on the branch (grader was new) — all new tests GREEN at first run: `TestLevelFreshnessByTF_CountsAndOrigin`, `TestLevelFreshnessByTF_NoOriginMeansFresh`, `TestNormalizeByTFGrade_IdentityOnLegacy`, `TestScoreLevels_ByTFVocabScoresLikeCanonical` (production call site `scoreLevelsPool`), `TestS2_CollapsePin_PDHAbsorbsEQH4h`.
-- OFF-proof: existing goldens re-run green at this HEAD: `TestEnginePromptGolden`, `TestFuturesPrompt*`, `TestStructuralPromptContract`, `TestCollapse*` [A].
-- Full `go vet ./...` + `go test ./...` at HEAD: see final tail (ran 19:20 CT, background) — quote below in the DONE message.
-- Web: `npm ci && npm run build` in worktree (background, guide changes only) — quote rc in the DONE message.
+- NEW RED→GREEN: `TestW11bLevelStateProviderReadsStore` RED (nil-at deref + fixed-now CME-day mismatch) → GREEN. All new kernel tests GREEN: re-entry counts (`TestLevelFreshnessByTF_ReEntryCountsVisitsNotTouches`), formation-never-counts, origin fallback/none, normalize identity, vocab-score equivalence at `scoreLevelsPool`, collapse pin, export pin.
+- OFF-proof: existing goldens re-run green at this HEAD.
+- Full `go vet ./...` + `go test ./...` at HEAD `324927ad`: see the F-wave DONE message (real output tails pasted there, per F0).
+- Harness: `go run -tags s2replay ./docs/superpowers/research/2026-09-16-s2-replay/harness/` rc=0 — the tag keeps the research tool out of `./...` (F0).
 
 ## What I did NOT do
 
