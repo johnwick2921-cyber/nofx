@@ -287,6 +287,17 @@ export const planStrings = {
     zh: '仅K线 — 此计划无价位可叠加',
     id: 'Hanya bar — rencana ini tanpa level untuk ditumpuk',
   },
+  // W-CHART-ZONE-WALL (2026-09-17) — the mini chart's zone control
+  chartShowAllZones: {
+    en: 'Show all zones',
+    zh: '显示全部区域',
+    id: 'Tampilkan semua zona',
+  },
+  chartZonesShown: {
+    en: '({shown} of {total} HTF zones drawn)',
+    zh: '（绘制 {shown}/{total} 个高周期区域 — 最接近价格）',
+    id: '({shown} dari {total} zona HTF digambar — terdekat dengan harga)',
+  },
 
   // ── scenarios ──
   scenarios: { en: 'Scenarios', zh: '情景', id: 'Skenario' },
