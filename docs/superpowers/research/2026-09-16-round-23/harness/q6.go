@@ -252,7 +252,7 @@ func detectAt(bd *barDB, db *sql.DB, at time.Time) (seated, pool []kernel.Scored
 	}
 	reg := kernel.DefaultSessionRegistry()
 	seated, pool, _, _, _ = kernel.AssembleResearchLevels(
-		"round-23-q6", bars1m, reg, "MNQ", maxLevelsReplay, at, proximityKReplay, "", extra...)
+		"round-23-q6", bars1m, reg, "MNQ", maxLevelsReplay, nil, kernel.HTFScoreMultiplier, at, proximityKReplay, "", extra...)
 	return seated, pool, true
 }
 
