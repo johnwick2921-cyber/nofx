@@ -5026,7 +5026,7 @@ recover it by parsing growing prefixes and taking the line after the LAST
 prefix that parses (a quoted value may span lines, so the FIRST failing prefix
 is wrong — `TestDotEnvErrorLine_MultiLineQuoteBeforeBadLine`).
 
-## CLASS NN (assigned at merge) — A TEST THAT SHARES THE WALL CLOCK WITH A REAL GATE (born 2026-09-09 with the session-risk band, found 2026-09-17 02:04 CT by the Chief, fix/split-arm-test-clock, W-CLOCK-TEST)
+## CLASS 138 — A TEST THAT SHARES THE WALL CLOCK WITH A REAL GATE (born 2026-09-09 with the session-risk band, found 2026-09-17 02:04 CT by the Chief, fix/split-arm-test-clock, W-CLOCK-TEST)
 
 **Shape.** A test drives a REAL gated path (here the arm path,
 `maybeManageArmedOrdersAt`) and hands it `time.Now()`. The gate refuses by the
