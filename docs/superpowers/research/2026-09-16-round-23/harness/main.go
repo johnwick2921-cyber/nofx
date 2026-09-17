@@ -22,14 +22,15 @@ import (
 
 func main() {
 	var (
-		dbPath = flag.String("db", "", "path to the DB copy (sqlite, read-only)")
-		outDir = flag.String("out", "", "output directory")
-		start  = flag.String("start", "2022-04-11", "first CME day YYYY-MM-DD (CT), inclusive")
-		end    = flag.String("end", "", "last CME day YYYY-MM-DD (CT), inclusive; empty = last bar day")
-		limit  = flag.Int("limit", 0, "debug: stop after N reads (0 = all)")
-		q6     = flag.Bool("q6", false, "run the Q6 seat-share replay instead of the episode pass")
-		s4     = flag.Bool("s4", false, "run the S4 measurement pass: entry field + trends.jsonl + qa.jsonl")
-		q6n    = flag.Int("q6n", 30, "Q6: number of recent session-plans to replay")
+		dbPath   = flag.String("db", "", "path to the DB copy (sqlite, read-only)")
+		outDir   = flag.String("out", "", "output directory")
+		start    = flag.String("start", "2022-04-11", "first CME day YYYY-MM-DD (CT), inclusive")
+		end      = flag.String("end", "", "last CME day YYYY-MM-DD (CT), inclusive; empty = last bar day")
+		limit    = flag.Int("limit", 0, "debug: stop after N reads (0 = all)")
+		q6       = flag.Bool("q6", false, "run the Q6 seat-share replay instead of the episode pass")
+		s4       = flag.Bool("s4", false, "run the S4 measurement pass: entry field + trends.jsonl + qa.jsonl")
+		blocksim = flag.Bool("blocksim", false, "S4b(2): block-simulate 3 rules on the live plans (read-only)")
+		q6n      = flag.Int("q6n", 30, "Q6: number of recent session-plans to replay")
 	)
 	flag.Parse()
 	if *dbPath == "" || *outDir == "" {
@@ -98,6 +99,13 @@ func main() {
 collected:
 	fmt.Printf("reads built: %d\n", len(reads))
 
+	if *blocksim {
+		if err := runBlockSim(bd, db, *outDir, 10); err != nil {
+			fatal("blocksim: %v", err)
+		}
+		fmt.Println("done")
+		return
+	}
 	if *s4 {
 		st, err := newS4State(*outDir)
 		if err != nil {
