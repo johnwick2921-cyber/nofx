@@ -15,8 +15,10 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"nofx/auth"
+	"nofx/kernel"
 	"nofx/manager"
 	"nofx/store"
 )
@@ -196,5 +198,74 @@ func TestOwnerLevelsListLifecycle(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), `"levels":[]`) || out["count"].(float64) != 0 {
 		t.Fatalf("after delete the list must be [] / count 0, got %s", rec.Body.String())
+	}
+}
+
+// status is judged against the card's plan for the requested session: a
+// level the plan_final carries at the same tick reads "applied", one it does
+// not reads "pending", and judged_against names the plan the verdict came
+// from. Pinned to ?session=NY so the wall clock cannot move the referent.
+func TestOwnerLevelsStatusAppliedAgainstSessionPlan(t *testing.T) {
+	s, tok := newOwnerLevelsServer(t)
+	reg := kernel.DefaultSessionRegistry()
+	ny, ok := reg.SessionByName("NY")
+	if !ok {
+		t.Fatal("default registry has no NY session")
+	}
+	now := time.Now()
+	tradeDate := now.In(planChicago()).Format("2006-01-02")
+	if d, okD := kernel.PlanChainTradeDate(ny, now); okD {
+		tradeDate = d
+	}
+	planID := store.MakePlanIDForTrader(olTestTrader, tradeDate, "NY")
+	ver, err := s.store.Plan().AppendPlan(&store.PlanDB{
+		PlanID: planID, StrategyID: olTestTrader, TradeDate: tradeDate, Session: "NY",
+		Doc: `{"levels":[{"price":30150.25,"label":"PDH","grade":"A","instruction":"monitor"}]}`,
+	})
+	if err != nil || ver != 1 {
+		t.Fatalf("seed plan: v=%d err=%v", ver, err)
+	}
+
+	for _, body := range []string{
+		`{"trader_id":"` + olTestTrader + `","symbol":"MNQ","price":30150.25,"label":"in-plan"}`,
+		`{"trader_id":"` + olTestTrader + `","symbol":"MNQ","price":30200,"label":"not-yet"}`,
+	} {
+		if rec, _ := olDo(t, s, tok, http.MethodPost, "/api/plan/owner-level", body); rec.Code != http.StatusOK {
+			t.Fatalf("POST %s: %d %s", body, rec.Code, rec.Body.String())
+		}
+	}
+
+	rec, out := olDo(t, s, tok, http.MethodGet, "/api/plan/owner-levels?trader_id="+olTestTrader+"&session=NY", "")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list: %d %s", rec.Code, rec.Body.String())
+	}
+	judged, _ := out["judged_against"].(map[string]any)
+	if judged == nil || judged["plan_id"] != planID || judged["version"].(float64) != 1 || judged["session"] != "NY" || judged["trade_date"] != tradeDate {
+		t.Fatalf("judged_against must name the seeded plan, got %v", out["judged_against"])
+	}
+	levels, _ := out["levels"].([]any)
+	if len(levels) != 2 {
+		t.Fatalf("want 2 levels, got %v", out)
+	}
+	got := map[string]string{}
+	for _, l := range levels {
+		row := l.(map[string]any)
+		got[row["label"].(string)] = row["status"].(string)
+	}
+	if got["in-plan"] != "applied" {
+		t.Fatalf("a level the session plan carries must be applied, got %v", got)
+	}
+	if got["not-yet"] != "pending" {
+		t.Fatalf("a level no plan carries must stay pending, got %v", got)
+	}
+	// The status is per-referent: a session with NO plan row judges nothing.
+	rec, out = olDo(t, s, tok, http.MethodGet, "/api/plan/owner-levels?trader_id="+olTestTrader+"&session=ASIA", "")
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"judged_against":null`) {
+		t.Fatalf("no ASIA plan → judged_against null, got %d %s", rec.Code, rec.Body.String())
+	}
+	for _, l := range out["levels"].([]any) {
+		if l.(map[string]any)["status"] != "pending" {
+			t.Fatalf("with no referent every row is pending, got %v", out["levels"])
+		}
 	}
 }
