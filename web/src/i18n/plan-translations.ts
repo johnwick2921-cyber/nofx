@@ -108,6 +108,29 @@ export const planStrings = {
   freshTested: { en: 'tested', zh: '已测试', id: 'teruji' },
   freshConsumed: { en: 'consumed', zh: '已消耗', id: 'terpakai' },
   ownerLevel: { en: 'Owner level', zh: '所有者价位', id: 'Level pemilik' },
+  // W-OWNERLEVEL-UI (2026-09-17) — the add is STICKY: it seats at the NEXT
+  // read, so "Plan updated" would be a lie; delete goes through the sticky
+  // store too. Keys ride in every language like the rest of the file.
+  ownerLevelSaved: {
+    en: 'Saved — appears at the next plan read (👤)',
+    zh: '已保存 — 将在下次计划读取时生效（👤）',
+    id: 'Tersimpan — muncul pada pembacaan rencana berikutnya (👤)',
+  },
+  ownerLevelRemoved: {
+    en: 'Owner level removed — gone at the next read',
+    zh: '所有者价位已删除 — 将在下次读取时移除',
+    id: 'Level pemilik dihapus — hilang pada pembacaan berikutnya',
+  },
+  ownerLevelRemovedSeated: {
+    en: 'Owner level removed — the plan copy stays until the next read',
+    zh: '所有者价位已删除 — 计划中的副本保留至下次读取',
+    id: 'Level pemilik dihapus — salinan rencana tetap sampai pembacaan berikutnya',
+  },
+  ownerLevelNextRead: {
+    en: 'next read',
+    zh: '下次读取',
+    id: 'baca berikutnya',
+  },
   hasNote: {
     en: 'Has a note for the AI',
     zh: '含给 AI 的备注',

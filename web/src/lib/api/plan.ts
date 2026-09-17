@@ -741,6 +741,20 @@ export const planApi = {
     return { ok: false, error: res.message }
   },
 
+  // W-OWNERLEVEL-UI: the sticky rows themselves (seated or pending) for the
+  // trader/symbol. No fabricated rows: on failure the card renders nothing.
+  async listOwnerLevels(
+    traderId: string,
+    symbol = 'MNQ',
+    silent = true
+  ): Promise<OwnerLevelsResponse> {
+    const res = await httpClient.request<OwnerLevelsResponse>(
+      `${API_BASE}/plan/owner-levels?trader_id=${enc(traderId)}&symbol=${enc(symbol)}`,
+      { silent }
+    )
+    return res.success && res.data ? res.data : { levels: [], as_of_ms: 0 }
+  },
+
   async deleteOwnerLevel(traderId: string, id: number): Promise<boolean> {
     const res = await httpClient.request<{ deleted: boolean }>(
       `${API_BASE}/plan/owner-level/delete`,
@@ -956,6 +970,24 @@ export interface PatchOp {
   path: string
   value?: unknown
   from?: string
+}
+
+// W-OWNERLEVEL-UI (2026-09-17) — sticky owner levels as the API lane exposes
+// them: GET /api/plan/owner-levels?trader_id=&symbol= returns
+// {levels:[...], as_of_ms} with levels:[] when empty (never absent).
+export interface OwnerLevelRow {
+  id: number
+  symbol: string
+  price: number
+  label: string
+  note: string
+  scenario_tag: string
+  created_at: number
+  consumed: boolean
+}
+export interface OwnerLevelsResponse {
+  levels: OwnerLevelRow[]
+  as_of_ms: number
 }
 
 export type PointClass = 'NEW-INFO' | 'BARE-DISAGREEMENT'
