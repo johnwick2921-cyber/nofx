@@ -358,6 +358,23 @@ const dayPlan: KnobSpec[] = [
     perSession: 'No.',
   },
   {
+    label: 'Structure zone seats (W-STRUCTURE-ZONE-SEATS)',
+    where:
+      'Strategy → Day Plan → structure_zone_seats toggle (right under Structure map; default OFF)',
+    what: "Lets a structure-map zone (D / 4h / 1h — the same top-6-per-timeframe zones the Structure table shows) COMPETE for a seat in the ranked entry table. The candidate is the zone's edge nearest to price, labelled ZONE-<TF>-<KIND> (ZONE-4H-DEMAND, ZONE-D-OB…), graded by the same zone grader as every other zone on that timeframe, competing under the same priority rule and the same max_levels cap — no reserved seat, no multiplier. An edge outside the proximity band is ignored; an edge within the 3.00-pt cluster tolerance of any other level is NOT a second seat — that level keeps its seat and the ZONE name is appended to its merged names. The Structure table, death/flip rules, confirm rules, one-setup and arm authorization read the seated table exactly as before; a zone seat is just another seat. Works whether or not Structure map is ON (the map is computed for seating either way; the prompt section stays gated by its own knob).",
+    trader:
+      "OFF = today's seating byte-identical (pinned by test on the identity tape). ON = a zone edge near price can be a scenario trigger and an entry, with its ZONE-* label on the card. PLAINLY: research (Round 24, HTF-zone-entry) found zone-at-entry does NOT predict a better entry; the owner enabled this to test it live. The seat race is unchanged, so a zone edge farther than the 12th-nearest pooled row still never seats, and a strong zone can displace a reference you used to see (Round 25 measures that displacement).",
+    consumer:
+      'store.DayPlanConfig.StructureZoneSeatsEnabled · trader/zone_seats_wire.go zoneSeatCandidatesForRead · kernel/zone_seats.go ZoneSeatCandidates · kernel/levels_assemble.go AssembleResearchLevelsZoneSeats · kernel/levels_score.go collapseLevelClusters (ZONE-* alias)',
+    range: 'ON | OFF',
+    systemDefault: 'OFF (unset reads OFF)',
+    recommended:
+      '⭐ OFF — the research says no edge. ON only for the live test the owner asked for, and only while Round 25 is measuring it.',
+    whenToTouch:
+      "Turn ON to run the owner's live test. Boot line '🗺 zone-seats=off(default)|on(saved) (W-STRUCTURE-ZONE-SEATS)' names the knob beside the S3 htf line; each read logs '🗺 zone-seats @<session>: zones=… in_band=… out_of_band=… → merged injected=… aliased=… [ZONE-4H-DEMAND@<price> …]'.",
+    perSession: 'No.',
+  },
+  {
     label: 'Wake triggers (5 toggles)',
     where: 'Strategy → Day Plan → Wake triggers',
     what: 'The five event classes that wake the planner mid-session: fresh S/D zones, HTF events, 15m events, invalidation, level-touch waves (the W6 wake wave).',

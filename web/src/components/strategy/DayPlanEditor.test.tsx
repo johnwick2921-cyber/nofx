@@ -45,9 +45,11 @@ describe('DayPlanEditor', () => {
     const sm = screen.getByTestId('structure-map-toggle')
     const ft = screen.getByTestId('fresh-by-tf-toggle')
     const fr = screen.getByTestId('flip-reread-toggle')
+    const zs = screen.getByTestId('structure-zone-seats-toggle')
     expect(sm.getAttribute('aria-checked')).toBe('false')
     expect(ft.getAttribute('aria-checked')).toBe('false')
     expect(fr.getAttribute('aria-checked')).toBe('false')
+    expect(zs.getAttribute('aria-checked')).toBe('false')
   })
 
   it('W-KNOB-UI: toggling calls update with the right key', () => {
@@ -72,6 +74,11 @@ describe('DayPlanEditor', () => {
     fireEvent.click(screen.getByTestId('flip-reread-toggle'))
     expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({ flip_reread: true })
+    )
+    onChange.mockClear()
+    fireEvent.click(screen.getByTestId('structure-zone-seats-toggle'))
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({ structure_zone_seats: true })
     )
   })
 
