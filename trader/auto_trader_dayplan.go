@@ -188,10 +188,16 @@ func installLevelStateProvider(at *AutoTrader, st *store.Store) {
 	// S2 F3 (CTO review) — the own-TF bar series is assembled ONCE per install
 	// (not once per HTF level; today that was 339 store queries inside the
 	// freshness callback) and passed into the closure as a per-TF cache.
-	// The grader's re-entry semantics only read OpenTime/High/Low/Close.
-	barsByTF := map[string][]market.Kline{}
-	if at != nil && st != nil && st.BarHistory() != nil {
-		barsByTF = levelTFBarsCache(st, at.futuresSymbol())
+	// Built lazily on the first READ so the builder's upper bound is the READ's
+	// now (A28), never time.Now() of its own. The grader's re-entry semantics
+	// only read OpenTime/High/Low/Close.
+	var barsByTF map[string][]market.Kline
+	var barsOnce sync.Once
+	build := func(now time.Time) {
+		if at == nil || st == nil || st.BarHistory() == nil {
+			return
+		}
+		barsByTF = levelTFBarsCache(st, at.futuresSymbol(), now)
 	}
 	kernel.LevelStateProvider = func(traderID, symbol string, l kernel.DetectedLevel, now time.Time) string {
 		// S2 (2026-09-16) — timeframe-aware freshness. ONLY the HTF branch is
@@ -202,6 +208,7 @@ func installLevelStateProvider(at *AutoTrader, st *store.Store) {
 		if at != nil && at.config.StrategyConfig != nil && at.config.StrategyConfig.DayPlan != nil &&
 			at.config.StrategyConfig.DayPlan.LevelsFreshByTFEnabled() &&
 			l.HTF && kernel.IsHTFFreshTF(l.TF) {
+			barsOnce.Do(func() { build(now) })
 			grade, _, _ := kernel.LevelFreshnessByTF(l, now, barsByTF[l.TF])
 			return grade
 		}
@@ -228,8 +235,9 @@ func freshnessBootLabel(dp *store.DayPlanConfig) string {
 // newest usable contract (same combination the nPOC provider uses). F2 (CTO
 // review): the ring and the store overlap on recent bars — deduped by OpenTime;
 // CloseTime is left 0 because the grader never reads it (it reads
-// OpenTime/High/Low/Close only).
-func levelTFBarsCache(st *store.Store, symbol string) map[string][]market.Kline {
+// OpenTime/High/Low/Close only). `now` is the READ's now (A28): the store query
+// upper bound is now.UnixMilli(), never time.Now().
+func levelTFBarsCache(st *store.Store, symbol string, now time.Time) map[string][]market.Kline {
 	out := map[string][]market.Kline{}
 	tfs := []string{"1h", "2h", "4h", "6h", "8h", "12h", "1d", "3d", "1w"}
 	for _, tf := range tfs {
@@ -239,7 +247,7 @@ func levelTFBarsCache(st *store.Store, symbol string) map[string][]market.Kline 
 		}
 		contract, _ := st.BarHistory().LatestContract(symbol)
 		if contract != "" {
-			if old, err := st.BarHistory().BarsBetweenFromNT8On(symbol, tf, contract, 0, time.Now().UnixMilli()); err == nil {
+			if old, err := st.BarHistory().BarsBetweenFromNT8On(symbol, tf, contract, 0, now.UnixMilli()); err == nil {
 				for _, b := range old {
 					bars = append(bars, market.Kline{
 						OpenTime: b.OpenTimeMs,

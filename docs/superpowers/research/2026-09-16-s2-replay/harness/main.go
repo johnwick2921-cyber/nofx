@@ -88,7 +88,7 @@ func main() {
 				seen[b.OpenTimeMs] = true
 				tfBars[tf] = append(tfBars[tf], market.Kline{
 					OpenTime: b.OpenTimeMs, // CloseTime 0: the grader never reads it (F2)
-					Open: b.O, High: b.H, Low: b.L, Close: b.C, Volume: b.V,
+					Open:     b.O, High: b.H, Low: b.L, Close: b.C, Volume: b.V,
 				})
 			}
 		}
