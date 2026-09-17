@@ -4974,7 +4974,7 @@ gate on, with its source in parens; print the n/a branch where the boot cannot
 know; log the resolved line again where the source becomes available (trader
 load).
 
-## CLASS NN (assigned at merge) — A SWALLOWED CONFIG ERROR THAT SURFACES AS A DIFFERENT FAILURE (born 2026-09-16 on the partner install, fix/env-load-error-logged, W-ENV-PARSE-ERROR)
+## CLASS 137 — A SWALLOWED CONFIG ERROR THAT SURFACES AS A DIFFERENT FAILURE (born 2026-09-16 on the partner install, fix/env-load-error-logged, W-ENV-PARSE-ERROR)
 
 **Shape.** A config loader's error is discarded (`_ = godotenv.Load()`,
 `main.go:40`), the loader is all-or-nothing, and the first thing to notice is a
