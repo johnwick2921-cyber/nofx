@@ -326,6 +326,22 @@ const dayPlan: KnobSpec[] = [
     perSession: 'Yes.',
   },
   {
+    label: 'HTF freshness by own timeframe',
+    where: 'Strategy → Day Plan → toggle (levels_fresh_by_tf)',
+    what: 'OFF = an HTF level decays on the 1m-touch ladder (one 1m bar into the zone marks it tested). ON = an HTF level (1h…1w) grades its freshness on ITS OWN timeframe bars only — a 4h zone is tested by a 4h bar trading into it, not by 1m noise. Grades: fresh / tested-1 / tested-2 / stale by test count.',
+    trader:
+      'OFF = today\u2019s scoring byte-identical. ON = HTF levels keep their seats longer; the scoring ladders (freshMult/zoneFreshMult) are unchanged.',
+    consumer:
+      'trader/auto_trader_dayplan.go (installLevelStateProvider → kernel.LevelFreshnessByTF)',
+    range: 'ON | OFF',
+    systemDefault: 'OFF',
+    recommended:
+      '⏳ OFF until the S4 measurement gate (round 23 structure gate) reports whether by-TF grading helps.',
+    whenToTouch:
+      'Only after S4 ships its report; the owner flips it in Studio.',
+    perSession: 'No.',
+  },
+  {
     label: 'Wake triggers (5 toggles)',
     where: 'Strategy → Day Plan → Wake triggers',
     what: 'The five event classes that wake the planner mid-session: fresh S/D zones, HTF events, 15m events, invalidation, level-touch waves (the W6 wake wave).',

@@ -20,7 +20,7 @@ export const status: GuideSection = {
     { kind: 'h', text: 'Research snapshot recorder' },
     {
       kind: 'p',
-      text: "The research archive (data/data.db.research.db) keeps every fact the pipeline records; nothing here changes what the bot trades. The recorder is ON unless RESEARCH_SNAPSHOT is explicitly 0 or false in .env. When on, it writes one rollup line per minute (RESEARCH_LOG_EVERY_S, default 60) with rows-per-object, drops and queue depth — there is no per-fact narration any more. Drop notices are WARN-level, coalesced to one line per minute with the delta. RESEARCH_RETAIN_DAYS (unset = never prune; set = prune) removes rows older than that many days in bounded batches after boot and daily, and the archive is never VACUUMed automatically — on a ~77 GB file that step is a manual, owner-approved one.",
+      text: 'The research archive (data/data.db.research.db) keeps every fact the pipeline records; nothing here changes what the bot trades. The recorder is ON unless RESEARCH_SNAPSHOT is explicitly 0 or false in .env. When on, it writes one rollup line per minute (RESEARCH_LOG_EVERY_S, default 60) with rows-per-object, drops and queue depth — there is no per-fact narration any more. Drop notices are WARN-level, coalesced to one line per minute with the delta. RESEARCH_RETAIN_DAYS (unset = never prune; set = prune) removes rows older than that many days in bounded batches after boot and daily, and the archive is never VACUUMed automatically — on a ~77 GB file that step is a manual, owner-approved one.',
     },
     { kind: 'h', text: 'Where this page comes from' },
     {

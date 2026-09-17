@@ -142,7 +142,7 @@ func AssembleScoredLevels(traderID string, bars []market.Kline, reg SessionRegis
 	// W11b — persisted level-state (freshness A→B→C, consumed) now surfaces: the
 	// trader installs LevelStateProvider over store.LevelStateStore. Nil provider →
 	// all-fresh (byte-identical to the pre-W11b output the goldens capture).
-	scored = ScoreLevels(all, price, dATR, levelFreshnessFn(traderID, symbol), maxLevels, proximityK)
+	scored = ScoreLevels(all, price, dATR, levelFreshnessFn(traderID, symbol, now), maxLevels, proximityK)
 	return scored, price, dATR
 }
 
@@ -192,7 +192,7 @@ func AssembleScoredLevelsMinGrade(traderID string, bars []market.Kline, reg Sess
 	CaptureIdentityContext(all, symbol, AISVPBarInterval)
 	all = dedupeSameKind(all)
 
-	scored, _ = ScoreLevelsMinGradeFullSeats(all, price, dATR, levelFreshnessFn(traderID, symbol), maxLevels, proximityK, minGrade, htfSeats, htfMult)
+	scored, _ = ScoreLevelsMinGradeFullSeats(all, price, dATR, levelFreshnessFn(traderID, symbol, now), maxLevels, proximityK, minGrade, htfSeats, htfMult)
 	return scored, price, dATR
 }
 
@@ -249,7 +249,7 @@ func AssembleResearchLevels(traderID string, bars []market.Kline, reg SessionReg
 	raw = researchLevels(all)
 	all = dedupeSameKind(raw)
 
-	seated, pool = ScoreLevelsMinGradeFullSeats(all, price, dATR, levelFreshnessFn(traderID, symbol), maxLevels, proximityK, minGrade, htfSeats, htfMult)
+	seated, pool = ScoreLevelsMinGradeFullSeats(all, price, dATR, levelFreshnessFn(traderID, symbol, now), maxLevels, proximityK, minGrade, htfSeats, htfMult)
 	return seated, pool, price, dATR, raw
 }
 
@@ -339,6 +339,13 @@ func DetectHTFLevelsReport(fetch func(tf string, count int) []market.Kline, time
 func DetectHTFLevels(fetch func(tf string, count int) []market.Kline, timeframes []string, symbol string, now time.Time) []DetectedLevel {
 	levels, _ := detectHTFLevels(fetch, timeframes, symbol, now)
 	return levels
+}
+
+// DetectHTFLevelsExport is detectHTFLevels exported for read-only replay
+// harnesses (S2/S4 measurement gate, 2026-09-16): the same detector the live
+// path calls, over caller-supplied bars. No production path uses this entry.
+func DetectHTFLevelsExport(fetch func(tf string, count int) []market.Kline, timeframes []string, symbol string, now time.Time) ([]DetectedLevel, *HTFDetectionReport) {
+	return detectHTFLevels(fetch, timeframes, symbol, now)
 }
 
 func detectHTFLevels(fetch func(tf string, count int) []market.Kline, timeframes []string, symbol string, now time.Time) ([]DetectedLevel, *HTFDetectionReport) {

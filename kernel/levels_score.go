@@ -424,7 +424,8 @@ func zoneFreshMult(f string) float64 {
 // from the level-state table (nil → everything fresh). maxLevels ≤ 0 → default 8.
 // proximityK is the resolved day-trade lock half-width in daily-ATR multiples
 // (the owner's proximity_filter_atr; ≤0 → the spec constant 1.5) — the band
-// OUTSIDE which no level is generated or seated.
+// OUTSIDE which no level is generated or seated. The freshness callback is
+// built by levelFreshnessFn WITH the read's now already captured (class 60).
 func ScoreLevels(levels []DetectedLevel, price, dATR float64, freshness func(DetectedLevel) string, maxLevels int, proximityK float64) []ScoredLevel {
 	return scoreLevelsPool(levels, price, dATR, freshness, maxLevels, proximityK, nil, HTFScoreMultiplier)
 }
@@ -484,11 +485,11 @@ func scoreLevelsPool(levels []DetectedLevel, price, dATR float64, freshness func
 		if freshness != nil {
 			fRaw = freshness(l)
 		}
-		fm := freshMult(fRaw)
+		fm := freshMult(normalizeByTFGrade(fRaw))
 		if isZoneKind(l.Kind) {
 			// Pack B (2026-08-26) — the zone freshness ladder is steeper than
 			// the anchor ladder (1.0/0.6/0.3/0.15 vs 1.0/0.8/0.6/0.5).
-			fm = zoneFreshMult(fRaw)
+			fm = zoneFreshMult(normalizeByTFGrade(fRaw))
 		}
 		l.Research.Freshness = fRaw
 		l.Research.FreshMultiplier = scoreValue(fm)
