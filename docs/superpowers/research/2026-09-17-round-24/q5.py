@@ -31,36 +31,40 @@ def main():
         # reference: the unrestricted mixed cell under R24 labelling (both mixed cells)
         if rD in ("with", "against") and r4 in ("with", "against") and rD != r4:
             for scope in ("era", y):
-                cells[(scope, "ref", "D-%s/4h-%s" % (rD, r4), d, "*")].add(e)
+                cells[("all", scope, "ref", "D-%s/4h-%s" % (rD, r4), d, "*")].add(e)
         if not (rD == "with" and r4 == "against"):
             continue
         z = zones.get((e["day"], e["session"]))
         if not z: continue
         pl = place(e, z)
         if pl is None: continue
-        member, zrel, zkind, ztf, conflict = pl
+        member, zrel, zkind, ztf, conflict, own = pl
         if ztf not in ("1h", "4h"): continue
-        for scope in ("era", y):
-            cells[(scope, "zone", zrel, d, ztf)].add(e)
-            cells[(scope, "zone", zrel, d, "*")].add(e)
-            cells[(scope, "zone", zrel, "*", "*")].add(e)
+        for v in variants_of(conflict, own):
+          for scope in ("era", y):
+            cells[(v, scope, "zone", zrel, d, ztf)].add(e)
+            cells[(v, scope, "zone", zrel, d, "*")].add(e)
+            cells[(v, scope, "zone", zrel, "*", "*")].add(e)
     out = {"trace": trace, "episodes_ordinal1": n, "cells": {"|".join(k): c.row() for k, c in sorted(cells.items())}}
     json.dump(out, open(OUTF, "w"), indent=1)
-    print("Q5 — pullback entry at a 1h/4h zone: D-with & 4h-against (hold-trade), per year, per side")
-    for scope in ["era"] + sorted({k[0] for k in cells if k[0] != "era"}):
-        print("\n== %s ==" % scope)
+    print("Q5 — pullback entry at a 1h/4h zone: D-with & 4h-against (hold-trade; R23 approach label = D-against/4h-with), per year, per side")
+    for v in VARIANTS:
+      print("\n#################### VARIANT %s ####################" % v)
+      for scope in ["era"] + sorted({k[1] for k in cells if k[1] != "era"}):
+        print("\n== %s / %s ==" % (v, scope))
         for zrel in ("with", "against", "unknown"):
-            r = cells.get((scope, "zone", zrel, "*", "*"))
+            r = cells.get((v, scope, "zone", zrel, "*", "*"))
             if r: print("  %-7s zone, all sides: %s" % (zrel, fmt(r.row())))
             for d in ("long", "short"):
-                r = cells.get((scope, "zone", zrel, d, "*"))
+                r = cells.get((v, scope, "zone", zrel, d, "*"))
                 if r: print("     %-7s zone %-5s: %s" % (zrel, d, fmt(r.row())))
                 for tf in ("1h", "4h"):
-                    r = cells.get((scope, "zone", zrel, d, tf))
+                    r = cells.get((v, scope, "zone", zrel, d, tf))
                     if r: print("        %-7s zone %-5s @%s: %s" % (zrel, d, tf, fmt(r.row())))
-        for mix in ("D-with/4h-against", "D-against/4h-with"):
+        if v == "all":
+          for mix in ("D-with/4h-against", "D-against/4h-with"):
             for d in ("long", "short"):
-                r = cells.get((scope, "ref", mix, d, "*"))
+                r = cells.get(("all", scope, "ref", mix, d, "*"))
                 if r: print("  ref unrestricted %s %-5s: %s" % (mix, d, fmt(r.row())))
     print("\ndone episodes=%d output=%s" % (n, OUTF))
 

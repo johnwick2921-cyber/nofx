@@ -26,35 +26,37 @@ def main():
         if not z: continue
         pl = place(e, z)
         if pl is None: continue
-        member, zrel, zkind, ztf, conflict = pl
+        member, zrel, zkind, ztf, conflict, own = pl
         d = hold_trade(e)
-        for scope in ("era", year_of(e)):
-            cells[(scope, zrel, zkind, ztf, d)].add(e)
+        for v in variants_of(conflict, own):
+            for scope in ("era", year_of(e)):
+                cells[(v, scope, zrel, zkind, ztf, d)].add(e)
     rows = {"|".join(k): c.row() for k, c in cells.items()}
     # criterion
-    passing = []
-    keys = {(k[2], k[3], k[4]) for k in cells if k[1] == "with" and k[0] != "era"}
-    verdicts = {}
-    for kind, tf, d in sorted(keys):
-        years = sorted({k[0] for k in cells if k[1] == "with" and k[2:] == (kind, tf, d) and k[0] != "era"})
-        ok = True; detail = []
-        for y in years:
-            r = cells[(y, "with", kind, tf, d)].row()
-            good = r["n"] >= MIN_N and r["rate"] >= THRESH
-            ok = ok and good
-            detail.append("%s:%s%s" % (y, fmt(r), "" if good else " FAIL"))
-        verdicts["%s|%s|%s" % (kind, tf, d)] = {"passes_every_year": ok, "years": detail}
-        if ok: passing.append((kind, tf, d))
+    passing = []; verdicts = {}
+    print("Q2 — with-zone cells by kind x TF x side (hold-trade), per year (criterion: rate>=%.4f and n>=%d every measurable year)" % (THRESH, MIN_N))
+    for v in VARIANTS:
+        keys = {(k[3], k[4], k[5]) for k in cells if k[0] == v and k[2] == "with" and k[1] != "era"}
+        print("\n#################### VARIANT %s ####################" % v)
+        for kind, tf, d in sorted(keys):
+            years = sorted({k[1] for k in cells if k[0] == v and k[2] == "with" and k[3:] == (kind, tf, d) and k[1] != "era"})
+            ok = True; detail = []
+            for y in years:
+                r = cells[(v, y, "with", kind, tf, d)].row()
+                good = r["n"] >= MIN_N and r["rate"] >= THRESH
+                ok = ok and good
+                detail.append("%s:%s%s" % (y, fmt(r), "" if good else " FAIL"))
+            verdicts["%s|%s|%s|%s" % (v, kind, tf, d)] = {"passes_every_year": ok, "years": detail}
+            if ok: passing.append((v, kind, tf, d))
+            print("\n== %s / %s %s %s ==" % (v, kind, tf, d))
+            for line in detail: print("   ", line)
+            r = cells.get((v, "era", "with", kind, tf, d))
+            if r: print("    era:", fmt(r.row()))
+            ra = cells.get((v, "era", "against", kind, tf, d))
+            if ra: print("    era against-zone (contrast):", fmt(ra.row()))
+            print("    PASSES EVERY YEAR:", ok)
     out = {"trace": trace, "episodes_ordinal1": n, "cells": dict(sorted(rows.items())), "verdicts": verdicts, "passing": passing}
     json.dump(out, open(OUTF, "w"), indent=1)
-    print("Q2 — with-zone cells by kind x TF x side, per year (criterion: rate>=%.4f and n>=%d every measurable year)" % (THRESH, MIN_N))
-    for kind, tf, d in sorted(keys):
-        print("\n== %s %s %s ==" % (kind, tf, d))
-        for line in verdicts["%s|%s|%s" % (kind, tf, d)]["years"]:
-            print("   ", line)
-        r = cells.get(("era", "with", kind, tf, d))
-        if r: print("    era:", fmt(r.row()))
-        print("    PASSES EVERY YEAR:", verdicts["%s|%s|%s" % (kind, tf, d)]["passes_every_year"])
     print("\nPASSING CELLS:", passing if passing else "NONE")
     print("done episodes=%d output=%s" % (n, OUTF))
 

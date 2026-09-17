@@ -104,7 +104,8 @@ DEFINITIONS = {
     "approach": "D1' entry: 'below' = price came from below (level tested as RESISTANCE), 'above' = price came from above (level tested as SUPPORT)",
     "hold_trade": "the trade a HOLD pays: approach 'above' -> LONG at support; approach 'below' -> SHORT at resistance. NOTE: Round 23's s4_analysis.py direction() labelled approach 'below' as 'long' (the APPROACH direction); Round 24 reports the HOLD-TRADE direction, so R23 'agree' == R24 'against-trend' and vice versa",
     "zone_polarity": "support = DEMAND, EQL, OB(bull), iFVG(bull), FVG formed as a gap UP; resistance = SUPPLY, EQH, OB(bear), iFVG(bear), FVG formed as a gap DOWN; unknown = FVG whose formation candle was not found on its own series (never guessed)",
-    "zone_membership": "level price P vs zone [lo,hi] of the SAME read, zone tf in 1h/4h/1d: inside = lo<=P<=hi; near = lo-1*delta<=P<=hi+1*delta (EQH/EQL are lines: lo=hi=price, so 'near' is the +-1*delta band); the CLOSEST zone by |P-midpoint| decides; 'conflict' counted when both polarities contain P",
+    "zone_membership": "level price P vs zone [lo,hi] of the SAME read, zone tf in 1h/4h/1d: inside = lo<=P<=hi; near = lo-1*delta<=P<=hi+1*delta (EQH/EQL are lines: lo=hi=price, so 'near' is the +-1*delta band); the CLOSEST zone by |P-midpoint| decides",
+    "variants": "all = every episode at a zone (closest zone decides); noconflict = zones of only ONE polarity hold P within the near band (the density finding: 42% of at-zone episodes sit in overlapping zones of both polarities, where the closest-zone rule is geometry); own = the episode's own level IS an HTF zone (kind in zone kinds, tf in 1h/4h/1d): the D1' anchored at the zone midpoint, polarity = its own",
     "with_zone": "hold-trade LONG at a support-polarity zone, or hold-trade SHORT at a resistance-polarity zone; else against-zone; unknown polarity -> 'unknown'",
     "trend": "S4c era-wide S1 state per read (era-trends.jsonl: d_trend, h4_trend in up/down/range); with = hold-trade direction agrees with the trend, against = opposes, range = trend is range; 4h has no state before 2025-05 (n/a)",
     "hold_rate": "hold/(hold+break); ambiguous_* excluded from n and counted; Wilson 95% CI; lift = rate - p_null(0.5067) in pt",
@@ -138,8 +139,11 @@ def trend_rel(direction, trend):
     return "n/a"
 
 def place(e, zones):
-    """-> (membership, zone_rel, zkind, ztf, conflict) or None when not at any HTF zone.
-    membership: 'inside' | 'near'; zone_rel: 'with' | 'against' | 'unknown'."""
+    """-> (membership, zone_rel, zkind, ztf, conflict, own) or None when not at any HTF zone.
+    membership: 'inside' | 'near'; zone_rel: 'with' | 'against' | 'unknown';
+    conflict: zones of BOTH polarities hold P within the near band (the closest-zone rule
+    is then geometry, not signal); own: the episode's own level IS an HTF zone (the D1'
+    anchored at the zone's midpoint — the cleanest 'entry at the zone')."""
     P = e["price"]; delta = e["delta"]; d = hold_trade(e)
     best = None; pols = set()
     for lo, hi, mid, pol, kind, tf in zones:
@@ -147,19 +151,35 @@ def place(e, zones):
             dist = abs(P - mid)
             if best is None or dist < best[0]:
                 best = (dist, lo, hi, pol, kind, tf)
-            if lo <= P <= hi and pol:
+            if pol:
                 pols.add(pol)
     if best is None:
         return None
     _, lo, hi, pol, kind, tf = best
     member = "inside" if lo <= P <= hi else "near"
+    own = e["kind"] in ZONE_KINDS and e["tf"] in ZONE_TFS
+    if own:
+        pol = e.get("polarity", "") or pol
+        kind, tf = e["kind"], e["tf"]
     if not pol:
         rel = "unknown"
     elif (d == "long" and pol == "support") or (d == "short" and pol == "resistance"):
         rel = "with"
     else:
         rel = "against"
-    return member, rel, kind, tf, len(pols) > 1
+    return member, rel, kind, tf, len(pols) > 1, own
+
+VARIANTS = ("all", "noconflict", "own")
+
+def variants_of(conflict, own):
+    """all = every episode at a zone (closest zone decides); noconflict = only one polarity
+    holds P within the near band; own = the episode's level is itself the HTF zone."""
+    v = ["all"]
+    if not conflict:
+        v.append("noconflict")
+    if own:
+        v.append("own")
+    return v
 
 def iter_episodes(ordinal1_only=True):
     for l in open(EPISODES):

@@ -29,27 +29,37 @@ def main():
         pl = place(e, z)
         if pl is None:
             counts["not_at_zone"] += 1; continue
-        member, zrel, zkind, ztf, conflict = pl
+        member, zrel, zkind, ztf, conflict, own = pl
         counts["at_zone_" + member] += 1
         if conflict: counts["conflict_both_polarities"] += 1
+        if own: counts["own_zone_episode"] += 1
         d = hold_trade(e)
         dt, h4 = trends.get((e["day"], e["session"]), (None, None))
         r4, rD = trend_rel(d, h4), trend_rel(d, dt)
         y = year_of(e)
-        for scope in ("era", y):
-            cells[(scope, "zone", zrel, "*", "*")].add(e)                 # (a)
-            cells[(scope, "zone", zrel, "4h", r4)].add(e)                 # (b)
-            cells[(scope, "zone", zrel, "D", rD)].add(e)                  # (c)
-            cells[(scope, "cross", zrel, "4h=" + r4, "D=" + rD)].add(e)  # four-way
-            cells[(scope, "member", member, zrel, "*")].add(e)
-            cells[(scope, "side", d, zrel, "*")].add(e)
+        for v in variants_of(conflict, own):
+          for scope in ("era", y):
+            cells[(v, scope, "zone", zrel, "*", "*")].add(e)                 # (a)
+            cells[(v, scope, "zone", zrel, "4h", r4)].add(e)                 # (b)
+            cells[(v, scope, "zone", zrel, "D", rD)].add(e)                  # (c)
+            cells[(v, scope, "cross", zrel, "4h=" + r4, "D=" + rD)].add(e)  # four-way
+            cells[(v, scope, "member", member, zrel, "*")].add(e)
+            cells[(v, scope, "side", d, zrel, "*")].add(e)
     out = {"trace": trace, "episodes_ordinal1": n, "counts": dict(counts),
            "cells": {"|".join(k): c.row() for k, c in sorted(cells.items())}}
     json.dump(out, open(OUTF, "w"), indent=1)
-    print("Q1 — ZONE x TREND (ordinal-1, hold-trade direction; p_null=%.4f)" % P_NULL)
+    print("Q1 — ZONE x TREND (ordinal-1, hold-trade direction; R23 'approach' label = the opposite side; p_null=%.4f)" % P_NULL)
     print("counts:", dict(counts))
-    for scope in ["era"] + sorted({k[0] for k in cells if k[0] != "era"}):
-        print("\n== %s ==" % scope)
+    for v in VARIANTS:
+      print("\n#################### VARIANT %s ####################" % v)
+      for scope in ["era"] + sorted({k[1] for k in cells if k[1] != "era"}):
+        print("\n== %s / %s ==" % (v, scope))
+        cells_v = {k[1:]: c for k, c in cells.items() if k[0] == v}
+        _print_scope(cells_v, scope)
+    print("\ndone episodes=%d output=%s" % (n, OUTF))
+
+def _print_scope(cells, scope):
+    if True:
         for zrel in ("with", "against", "unknown"):
             r = cells.get((scope, "zone", zrel, "*", "*"))
             if r: print("  (a) %-8s zone: %s" % (zrel, fmt(r.row())))
@@ -71,7 +81,6 @@ def main():
             for zrel in ("with", "against"):
                 r = cells.get((scope, "side", d, zrel, "*"))
                 if r: print("  side %-5s x %-7s: %s" % (d, zrel, fmt(r.row())))
-    print("\ndone episodes=%d output=%s" % (n, OUTF))
 
 if __name__ == "__main__":
     main()
