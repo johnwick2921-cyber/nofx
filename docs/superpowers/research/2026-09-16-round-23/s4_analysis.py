@@ -80,8 +80,8 @@ def main(out):
     # ── Q-A: reaction rate by freshness grade, BOTH modes ─────────────────
     section("Q-A: HTF level-scan ordinal-1 reaction rate by grade, 1m-touch vs own-TF")
     o1_qa = [r for r in qa]  # qa rows are ordinal-1 by construction
-    for mode, key in [("1m-touch grading (today's live ladder A/B/C/done)", "grade_1m"),
-                      ("own-TF grading (S2 levels_fresh_by_tf)", "grade_tf")]:
+    for mode, key in [("1m-touch grading (today's live ladder A/B/C/done) — VALID", "grade_1m"),
+                      ("own-TF grading (S2 levels_fresh_by_tf) — INVALID — S2 F1 (CTO 00:06Z: formation bars counted as tests; re-run after DS-101 lands re-entry semantics)", "grade_tf")]:
         print(f"\n-- {mode} --")
         by = defaultdict(list)
         for r in o1_qa:
@@ -165,31 +165,33 @@ def main(out):
     z, p = two_prop(h1, n1, h2, n2)
     print(f"  HTF-nonzone vs intraday-nonzone two-prop: z={z:+.2f} p={p:.4f}")
 
-    # ── Q-D: 5m zones vs 1m zones (both sit in the '1m' tier today) ───────
+    # ── Q-D: 5m zones vs 1m zones (zoneTierFor maps 5m → '1m' tier today) ───────
     section("Q-D: 5m vs 1m zone reaction (zoneTierFor maps 5m → '1m' tier today)")
+    print("  [CORRECTION of the handover cell: the earlier z=-2.45 p=0.0143 compared the")
+    print("  5m SWING FAMILY vs the 1m swing FAMILY — confounded, because the 1m family is")
+    print("  dominated by EQH/EQL (not zones). Kind-pure 5m-vs-1m does not exist: no 1m")
+    print("  swing kinds are detected.]")
     kind5 = sorted({e["kind"] for e in o1 if e["tf"] == "5m"})
-    print(f"  kinds present at 5m: {kind5}")
-    for scope, sel in [
-        ("same kinds (5m kinds vs 1m same kinds)", lambda e: e["tf"] == "5m" or (e["tf"] == "1m" and e["kind"] in kind5)),
-        ("all kinds at each tf", lambda e: e["tf"] in ("5m", "1m")),
-    ]:
-        m5 = [e for e in o1 if e["tf"] == "5m" and sel(e)]
-        m1 = [e for e in o1 if e["tf"] == "1m" and sel(e)]
-        h5, n5 = hold_of(m5)
-        h1, n1 = hold_of(m1)
-        z, p = two_prop(h5, n5, h1, n1)
-        print(f"  [{scope}]")
-        print(f"    5m: {cell(h5, n5)}   1m: {cell(h1, n1)}   two-prop z={z:+.2f} p={p:.4f}")
-    # distance-matched: 5m vs 1m same-kind in each dist bucket
-    print("\n  distance-bucket matched (same kinds):")
+    print(f"  kinds present at 5m (ordinal-1): {kind5}")
+    m5 = [e for e in o1 if e["tf"] == "5m"]
+    m15 = [e for e in o1 if e["tf"] == "15m"]
+    h5, n5 = hold_of(m5)
+    h15, n15 = hold_of(m15)
+    print(f"  5m zones (SWG only): {cell(h5, n5)}")
+    print(f"  15m zones (SWG only): {cell(h15, n15)}")
+    z, p = two_prop(h5, n5, h15, n15)
+    print(f"  5m-vs-15m zones two-prop: z={z:+.2f} p={p:.4f}")
+    # null test: does 5m separate from the IID baseline at all?
+    lo5, hi5 = wilson(h5 / n5, n5) if n5 else (0, 0)
+    print(f"  5m vs p_null 0.5067: CI [{lo5:.3f},{hi5:.3f}] contains null -> "
+          f"{'null' if lo5 <= NULL <= hi5 else 'not null'}")
+    # distance-bucket 5m vs null
+    print("  5m zones by distance bucket:")
     for lo, hi in [(0, 25), (25, 50), (50, 100), (100, 200), (200, 10 ** 9)]:
-        m5 = [e for e in o1 if e["tf"] == "5m" and (lo <= e["dist_at_read"] < hi)]
-        m1 = [e for e in o1 if e["tf"] == "1m" and e["kind"] in kind5 and (lo <= e["dist_at_read"] < hi)]
-        h5, n5 = hold_of(m5)
-        h1, n1 = hold_of(m1)
-        if n5 == 0 and n1 == 0:
-            continue
-        print(f"    dist {lo:>3}-{hi:<4}: 5m {cell(h5, n5)}  1m {cell(h1, n1)}")
+        mb = [e for e in m5 if lo <= e["dist_at_read"] < hi]
+        hb, nb = hold_of(mb)
+        if nb:
+            print(f"    dist {lo:>3}-{hi:<4}: {cell(hb, nb)}")
 
 
 if __name__ == "__main__":
