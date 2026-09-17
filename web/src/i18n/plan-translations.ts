@@ -436,6 +436,16 @@ export const planStrings = {
     zh: 'HTF 分数乘数 (S3)',
     id: 'Pengali skor HTF',
   },
+  structureMap: {
+    en: 'Structure map — D/4h/1h trend table + zones on the card; context only, never entries',
+    zh: '结构地图 — D/4h/1h 趋势表 + 区域；仅上下文，永不作为入场',
+    id: 'Peta struktur — tabel tren D/4h/1h + zona; konteks saja, bukan entri',
+  },
+  freshByTf: {
+    en: 'Freshness by timeframe — HTF levels graded on their own bars (re-entries), research says no edge either way',
+    zh: '按周期新鲜度 — HTF 价位按自身周期 K 线评分（重入）；研究显示两种方式均无优势',
+    id: 'Kesegaran per TF — level HTF dinilai pada barnya sendiri (re-entries); riset: tanpa edge',
+  },
   maxScenarios: { en: 'Max scenarios', zh: '最大情景数', id: 'Maks skenario' },
   maxReplans: {
     en: 'Max re-plans',
