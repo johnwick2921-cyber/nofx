@@ -118,3 +118,40 @@ func htfsParityLevels() ([]DetectedLevel, float64, float64) {
 	)
 	return out, price, dATR
 }
+
+// TWIN PROBE (CTO ruling item d): seatBothSides swaps entries IN and OUT of the
+// maxLevels list and returns only that list, so its swap changes MEMBERSHIP and
+// its restore sort only reorders — the twin is NOT nullified. Gap-day fixture:
+// every today-priority kind sits ABOVE price; below-side candidates exist but
+// lose the comparator. The swap must seat them anyway.
+func TestSeatBothSidesSwapSurvivesOwnSort(t *testing.T) {
+	price := 1000.0
+	mk := func(kind LevelKind, dist, score float64) ScoredLevel {
+		return ScoredLevel{DetectedLevel: DetectedLevel{Kind: kind, Price: price + dist, Label: string(kind)}, Score: score, Grade: "B", Fresh: "fresh", Distance: dist}
+	}
+	scored := []ScoredLevel{
+		// head: 8 today-priority kinds, all ABOVE price (gap-down day shape)
+		mk(KindPDH, 80, 1.2), mk(KindRTHH, 90, 1.1),
+		mk(KindORH, 100, 1.0), mk(KindONH, 110, 0.9),
+		mk(KindPWH, 120, 0.8), mk(KindPMH, 130, 0.7),
+		mk(KindPDC, 140, 0.6), mk(KindSETT, 150, 0.5),
+		// rest: below-side candidates the comparator can never rank into head
+		mk(KindRound, -60, 0.4), mk(KindRound, -70, 0.4), mk(KindRound, -80, 0.4),
+	}
+	out := seatBothSides(scored, 8)
+	below := 0
+	for _, l := range out {
+		if l.Distance < 0 {
+			below++
+		}
+	}
+	if below < MinSideLevels {
+		t.Fatalf("gap-day rebalance failed: %d below-side levels seated, want >= %d — the swap does not survive", below, MinSideLevels)
+	}
+	// the seatHTF effective path runs BEFORE seatBothSides; a promoted HTF seat
+	// may be swapped out by the side rule (P0.1 wins) — asserted here as the
+	// documented interaction, not as a defect.
+	if len(out) != 8 {
+		t.Fatalf("seatBothSides must return exactly the cap, got %d", len(out))
+	}
+}
