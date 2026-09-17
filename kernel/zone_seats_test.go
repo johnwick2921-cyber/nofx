@@ -142,6 +142,9 @@ func TestZoneSeatsOnSeatsInBandZoneAtEdgeAndValidates(t *testing.T) {
 	if c.Price != edge || c.Label != "ZONE-4H-DEMAND" || c.Kind != KindDemand || c.TF != "4h" || !c.HTF || c.ZonePattern != "reversal" || c.Lo != zone.Lo || c.Hi != zone.Hi {
 		t.Fatalf("candidate must clone the detector row at the nearest edge: %+v", c)
 	}
+	if c.StateKeyLabel != zone.Label || c.StateKeyPrice != zone.Price {
+		t.Fatalf("the clone's freshness key must be the SOURCE row's (label %q price %.2f): %+v", zone.Label, zone.Price, c)
+	}
 	seated, pool, _, _, _, inj, al := AssembleResearchLevelsZoneSeats("zone-seats", bars, DefaultSessionRegistry(), "MNQ", 12, nil, HTFScoreMultiplier, now, 2, "", cands, zone)
 	if inj != 1 || al != 0 {
 		t.Fatalf("the free edge must be INJECTED (1/0), got injected=%d aliased=%d", inj, al)
@@ -417,8 +420,8 @@ func TestZoneSeatLabelIsNotStructural(t *testing.T) {
 func TestZoneSeatCandidatesNoSourceIsCountedNotInvented(t *testing.T) {
 	m := &StructureMap{TFs: map[string]StructureTF{"D": {Zones: []StructureZone{{Kind: "OB", Lo: 990, Hi: 1000, TF: "D"}}}}}
 	cands, rep := ZoneSeatCandidates(m, nil, 1010, 100)
-	if len(cands) != 1 || rep.NoSource != 1 || cands[0].ZonePattern != "" || cands[0].TF != "D" || !cands[0].HTF || cands[0].Price != 1000 || cands[0].Label != "ZONE-D-OB" {
-		t.Fatalf("no-source candidate: %+v %+v", cands, rep)
+	if len(cands) != 1 || rep.NoSource != 1 || cands[0].ZonePattern != "" || cands[0].TF != "D" || !cands[0].HTF || cands[0].Price != 1000 || cands[0].Label != "ZONE-D-OB" || cands[0].StateKeyLabel != "" {
+		t.Fatalf("no-source candidate (own identity, no state key): %+v %+v", cands, rep)
 	}
 	// the map may list one band twice (a periodic tape): one candidate, counted
 	m.TFs["D"] = StructureTF{Zones: []StructureZone{{Kind: "OB", Lo: 990, Hi: 1000, TF: "D"}, {Kind: "OB", Lo: 990, Hi: 1000, TF: "D"}}}

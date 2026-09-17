@@ -138,7 +138,14 @@ func ZoneSeatCandidates(m *StructureMap, src []ScoredLevel, price, band float64)
 				cand = DetectedLevel{Kind: LevelKind(z.Kind), Lo: z.Lo, Hi: z.Hi, TF: tf}
 			}
 			// Never carry the source row's record-only provenance or its merged
-			// names into a new row: the candidate is its own reference.
+			// names into a new row: the candidate is its own reference — except
+			// its FRESHNESS, which is the zone's, not the edge's: the clone keys
+			// its level-state lookup on the source row's label + price (review
+			// fix 2). A no-source candidate has nothing to key on and stays on
+			// its own label/edge.
+			if found {
+				cand.StateKeyLabel, cand.StateKeyPrice = cand.Label, cand.Price
+			}
 			cand.Research = nil
 			cand.CollapsedNames = nil
 			cand.Price = edge

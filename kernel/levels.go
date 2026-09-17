@@ -112,6 +112,17 @@ type DetectedLevel struct {
 	// line; never a second credit, never a second seat. json:"-" so the Stage A
 	// golden cannot move (E7): this is a render-time carrier, not a score input.
 	CollapsedNames []string `json:"-"`
+	// StateKeyLabel / StateKeyPrice (W-STRUCTURE-ZONE-SEATS review fix 2): the
+	// identity this level's FRESHNESS is looked up under when it is not its
+	// own. A ZONE-* edge clone is priced at the zone's edge and labelled
+	// ZONE-<TF>-<KIND>, so the W7 level-state key (type-from-label + 1.25-pt
+	// price bin) would miss the source row's state and a consumed/tested zone
+	// would resurface FRESH through its clone. The clone carries its source
+	// row's label and price here; the provider keys on them when set. Empty =
+	// the level's own label/price (every other level). json:"-": render-time
+	// carriers, never a score input, never in a golden.
+	StateKeyLabel string  `json:"-"`
+	StateKeyPrice float64 `json:"-"`
 }
 
 // lineLevel builds a single-price DetectedLevel (Lo==Hi==price).

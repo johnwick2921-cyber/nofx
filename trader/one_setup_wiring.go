@@ -59,6 +59,48 @@ func oneSetupLevelRef(sc kernel.PlanScenario, doc *kernel.PlanDoc) kernel.OneSet
 	return kernel.OneSetupLevelRef{Basis: "unresolved:no_anchor"}
 }
 
+// oneSetupSeedPlanLevels appends the plan doc's own levels to the live map as
+// zero-score rows carrying the level's identity (so CandidateIdentity recomputes
+// the doc's own id and level_id refs resolve) and its MACHINE grade when the
+// write site stamped one, else the authored grade. Zero score: a live row
+// within the merge width stays the keeper and merely gains the name; a level
+// the live pool lacks stands as its own candidate. The input slice is not
+// mutated. nil doc → the live rows unchanged.
+func oneSetupSeedPlanLevels(scored []kernel.ScoredLevel, doc *kernel.PlanDoc, price float64) []kernel.ScoredLevel {
+	out := append([]kernel.ScoredLevel(nil), scored...)
+	if doc == nil {
+		return out
+	}
+	str := func(p *string) string {
+		if p == nil {
+			return ""
+		}
+		return *p
+	}
+	for _, l := range doc.Levels {
+		if l.Price <= 0 {
+			continue
+		}
+		d := kernel.DetectedLevel{Kind: kernel.LevelKind(str(l.Kind)), Price: l.Price, Lo: l.Price, Hi: l.Price, Label: l.Label,
+			OriginDate: str(l.OriginDate), IdentitySymbol: str(l.Symbol), FormationTF: str(l.TF), FormedCloseMs: l.FormedCloseMs}
+		if l.Lo != nil && l.Hi != nil {
+			d.Lo, d.Hi = *l.Lo, *l.Hi
+		}
+		if l.FormedAtMs != nil {
+			d.FormedAtMs = *l.FormedAtMs
+		}
+		if l.LookbackBars != nil {
+			d.FormationLookback = *l.LookbackBars
+		}
+		grade := l.MachineGrade
+		if grade == "" {
+			grade = l.Grade
+		}
+		out = append(out, kernel.ScoredLevel{DetectedLevel: d, Grade: grade, Fresh: "plan", Score: 0, Distance: l.Price - price})
+	}
+	return out
+}
+
 // oneSetupTestFacts is the test seam's payload (see AutoTrader.oneSetupFactsForTest).
 type oneSetupTestFacts struct {
 	Candidates []kernel.MapCandidate
@@ -130,8 +172,21 @@ func (at *AutoTrader) oneSetupVerdictsAt(plan *kernel.ActivePlan, doc *kernel.Pl
 		if len(bars) > 0 {
 			scored, price, dATR = kernel.AssembleScoredLevels(at.id, bars, at.sessionRegistry(now), symbol, kernel.PlanHardMaxLevels, now, at.proximityFilterATR())
 		}
-		if price > 0 && len(scored) > 0 {
-			cands = kernel.BuildMapCandidates(scored, price, atr5m, kernel.MapCandidateOpts{})
+		// REVIEW FIX 1 (W-STRUCTURE-ZONE-SEATS, 2026-09-17; CLASS NN "one-setup
+		// judged arms against a DIFFERENT pool than the planner authored on"):
+		// the live re-assembly above runs the 1m detectors ONLY — no HTF extras,
+		// no zone candidates — so a scenario authored on a D/4h/1h seat (or a
+		// ZONE-* seat) found no candidate at its price and was declined
+		// level_not_best/level_no_candidate. The plan's OWN levels are what the
+		// planner authored on: they are seeded into the map (zero score, so a
+		// live row within the merge width stays the keeper and just gains the
+		// name), and "seated for the planner" == "candidate for one-setup" by
+		// construction. The permission facts still read the live `scored`.
+		if price > 0 {
+			seeded := oneSetupSeedPlanLevels(scored, doc, price)
+			if len(seeded) > 0 {
+				cands = kernel.BuildMapCandidates(seeded, price, atr5m, kernel.MapCandidateOpts{})
+			}
 		}
 		if dATR > 0 {
 			band = at.proximityFilterATR() * dATR

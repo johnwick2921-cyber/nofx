@@ -214,7 +214,14 @@ func installLevelStateProvider(at *AutoTrader, st *store.Store) {
 			grade, _, _ := kernel.LevelFreshnessByTF(l, now, barsByTF[l.TF])
 			return grade
 		}
-		key := store.MakeLevelKey(traderID, symbol, kernel.LevelTypeFromLabel(l.Label), "", kernel.LevelBinIndex(l.Price))
+		// W-STRUCTURE-ZONE-SEATS (review fix 2): a ZONE-* edge clone resolves its
+		// freshness under its SOURCE row's identity (label + price bin), never
+		// its own — a consumed zone must not resurface fresh through its edge.
+		keyLabel, keyPrice := l.Label, l.Price
+		if l.StateKeyLabel != "" {
+			keyLabel, keyPrice = l.StateKeyLabel, l.StateKeyPrice
+		}
+		key := store.MakeLevelKey(traderID, symbol, kernel.LevelTypeFromLabel(keyLabel), "", kernel.LevelBinIndex(keyPrice))
 		cur, err := st.LevelState().Get(key)
 		if err != nil || cur == nil {
 			return "" // no persisted state → fresh (pre-W11b behavior)
