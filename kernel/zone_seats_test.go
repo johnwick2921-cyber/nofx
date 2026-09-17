@@ -420,6 +420,11 @@ func TestZoneSeatCandidatesNoSourceIsCountedNotInvented(t *testing.T) {
 	if len(cands) != 1 || rep.NoSource != 1 || cands[0].ZonePattern != "" || cands[0].TF != "D" || !cands[0].HTF || cands[0].Price != 1000 || cands[0].Label != "ZONE-D-OB" {
 		t.Fatalf("no-source candidate: %+v %+v", cands, rep)
 	}
+	// the map may list one band twice (a periodic tape): one candidate, counted
+	m.TFs["D"] = StructureTF{Zones: []StructureZone{{Kind: "OB", Lo: 990, Hi: 1000, TF: "D"}, {Kind: "OB", Lo: 990, Hi: 1000, TF: "D"}}}
+	if c, r := ZoneSeatCandidates(m, nil, 1010, 100); len(c) != 1 || r.Duplicates != 1 || r.InBand != 2 || len(r.Candidates) != 1 {
+		t.Fatalf("duplicate zone must yield one candidate and be counted: %d %+v", len(c), r)
+	}
 	if c, r := ZoneSeatCandidates(nil, nil, 1010, 100); c != nil || r.Zones != 0 {
 		t.Fatal("nil map → nothing")
 	}

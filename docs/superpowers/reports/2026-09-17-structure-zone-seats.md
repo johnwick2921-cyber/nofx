@@ -38,7 +38,7 @@ Why rule 4 lives in the collapse rather than a pre-scoring alias: an alias decid
 | web | `types/strategy.ts`, `DayPlanEditor.tsx` toggle (under Structure map) + test, `plan-translations.ts` en/zh/id, `guide/content/settings.ts` entry, `GuidePage.test.tsx` 52 → 53 |
 
 Boot line: `🗺 zone-seats=off(default) (W-STRUCTURE-ZONE-SEATS)` / `🗺 zone-seats=on(saved) (W-STRUCTURE-ZONE-SEATS)`.
-Read line (ON only): `🗺 zone-seats @NY: zones=3 in_band=2 out_of_band=1 injected=0 aliased=0 no_source=0 → merged injected=1 aliased=1 [ZONE-4H-DEMAND@19980.00 ZONE-1H-SUPPLY@20040.00]` — the first counters are the candidate pass, the `merged` pair is what the scorer's output records.
+Read line (ON only): `🗺 zone-seats @NY: zones=3 in_band=2 out_of_band=1 duplicates=0 no_source=0 → merged injected=1 aliased=1 [ZONE-4H-DEMAND@19980.00 ZONE-1H-SUPPLY@20040.00]` — the first counters are the candidate pass, the `merged` pair is what the scorer's output records.
 
 The zone-seat pass computes the structure map whether or not `day_plan.structure_map` is on (the seating must not depend on whether a prompt section renders); the section, its log and the doc stamp stay gated by their own knob.
 
@@ -50,7 +50,8 @@ The zone-seat pass computes the structure map whether or not `day_plan.structure
 - **Coincident zone not double-seated** — `TestZoneSeatsCoincidentZoneIsNotDoubleSeated`: edge 1 pt from a seated detector row → `injected=0 aliased=1`, exactly one seat near the edge, the detector's label, ZONE name in its `CollapsedNames` and in the merged map's names.
 - **Out of band** — `TestZoneSeatsOutOfBandChangesNothing`: no candidate, seats `DeepEqual` to OFF.
 - **Collapse rule** — `TestZoneSeatCollapseKeepsDetectorRowAndFoldsZoneEdges`: a ZONE row scoring above a VWAP within 3 pt merges INTO the VWAP; two ZONE edges fold; a plain `Supply·1h` stays exempt; the no-ZONE path is unchanged.
-- Label rule, nearest-edge cases, no-source counting, boot/read lines, nil-safe resolver.
+- **The production call site** — `TestZoneSeatsAtThePlannerReadCallSite` (`trader/zone_seats_wire_test.go`): `assemblePlannerInput` on a stub tape with the log captured. OFF: no zone-seats line, no ZONE row. ON: exactly one read line per read; `Structure` stays nil (the section is gated by its own knob); every ZONE seat inside the band; the line's `merged injected` equals the ZONE rows the read's pool carries; with nothing injected the ON table equals the OFF table. ON + structure_map: the section carries the pass's map. On that periodic tape the map lists one 4h OB band six times — the pass records `duplicates=10` and emits one candidate per distinct band.
+- Label rule, nearest-edge cases, no-source and duplicate counting, boot/read lines, nil-safe resolver.
 
 ## The Round 24 finding this contradicts
 

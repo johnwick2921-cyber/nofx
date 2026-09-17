@@ -62,15 +62,14 @@ type ZoneSeatReport struct {
 	Zones      int      // structure-map zones examined (all TFs)
 	InBand     int      // whose nearest edge sits inside the band → candidates
 	OutOfBand  int      // dropped by rule 2
-	Injected   int      // rule 4 — entered the pool as a new row
-	Aliased    int      // rule 3 — name appended to an existing pool row
 	NoSource   int      // zones with no matching detector row in the source pool (graded from the zone fields alone; pattern unknown)
-	Candidates []string // the candidate labels with their edge price, in map order
+	Duplicates int      // in-band zones identical (kind, TF, lo, hi) to one already taken — the map may list the same band more than once; one candidate each
+	Candidates []string // the distinct candidate labels with their edge price, in map order
 }
 
 // String is the per-read observability line body.
 func (r ZoneSeatReport) String() string {
-	return fmt.Sprintf("zones=%d in_band=%d out_of_band=%d injected=%d aliased=%d no_source=%d", r.Zones, r.InBand, r.OutOfBand, r.Injected, r.Aliased, r.NoSource)
+	return fmt.Sprintf("zones=%d in_band=%d out_of_band=%d duplicates=%d no_source=%d", r.Zones, r.InBand, r.OutOfBand, r.Duplicates, r.NoSource)
 }
 
 // zoneNearestEdge is rule 1: the edge of [lo,hi] closest to price; a tie
@@ -97,6 +96,11 @@ func ZoneSeatCandidates(m *StructureMap, src []ScoredLevel, price, band float64)
 		return nil, rep
 	}
 	var out []DetectedLevel
+	type zoneKey struct {
+		kind, tf string
+		lo, hi   float64
+	}
+	taken := map[zoneKey]bool{}
 	for _, tf := range StructureMapTFs {
 		st, ok := m.TFs[tf]
 		if !ok {
@@ -113,6 +117,12 @@ func ZoneSeatCandidates(m *StructureMap, src []ScoredLevel, price, band float64)
 				continue
 			}
 			rep.InBand++
+			if k := (zoneKey{z.Kind, tf, z.Lo, z.Hi}); taken[k] {
+				rep.Duplicates++
+				continue
+			} else {
+				taken[k] = true
+			}
 			label := ZoneSeatLabel(tf, LevelKind(z.Kind))
 			var cand DetectedLevel
 			found := false

@@ -371,7 +371,7 @@ const dayPlan: KnobSpec[] = [
     recommended:
       '⭐ OFF — the research says no edge. ON only for the live test the owner asked for, and only while Round 25 is measuring it.',
     whenToTouch:
-      "Turn ON to run the owner's live test. Boot line '🗺 zone-seats=off(default)|on(saved) (W-STRUCTURE-ZONE-SEATS)' names the knob beside the S3 htf line; each read logs '🗺 zone-seats @<session>: zones=… in_band=… out_of_band=… → merged injected=… aliased=… [ZONE-4H-DEMAND@<price> …]'.",
+      "Turn ON to run the owner's live test. Boot line '🗺 zone-seats=off(default)|on(saved) (W-STRUCTURE-ZONE-SEATS)' names the knob beside the S3 htf line; each read logs '🗺 zone-seats @<session>: zones=… in_band=… out_of_band=… duplicates=… no_source=… → merged injected=… aliased=… [ZONE-4H-DEMAND@<price> …]'.",
     perSession: 'No.',
   },
   {
