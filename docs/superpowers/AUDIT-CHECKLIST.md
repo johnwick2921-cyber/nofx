@@ -5377,10 +5377,14 @@ and nobody asked whether it READ the same map.
 **The fix shape.** `oneSetupSeedPlanLevels` (`trader/one_setup_wiring.go`): the
 plan doc's OWN levels are seeded into the live map before `BuildMapCandidates`
 as zero-score rows carrying the level's identity (so `CandidateIdentity`
-recomputes the doc's own id and `level_id` refs resolve) and its MACHINE grade
-when the write site stamped one, else the authored grade. Zero score: a live row
-within the merge width stays the keeper and merely gains the name; a level the
-live pool lacks stands as its own candidate. "Seated for the planner" ==
+recomputes the doc's own id and `level_id` refs resolve). Zero score: a live row
+within the merge width stays the keeper and merely gains the name. BOUNDED
+(second re-review): only a MACHINE-graded level stands alone as a candidate; an
+unstamped level may only alias a live row within the merge width (live grade
+wins) and is otherwise dropped and COUNTED `one_setup:seed_unstamped_dropped` —
+the authored grade never authorizes an arm. NOT gated by
+`structure_zone_seats`: it changes live arm decisions for every trader at boot;
+the `one_setup:*` counters show the delta after the boot. "Seated for the planner" ==
 "candidate for one-setup" by construction; the permission facts still read the
 live `scored`. No kernel map file changed (E0 `TestOneSetupMapStaysWhole`).
 

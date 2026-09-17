@@ -772,6 +772,11 @@ func clusterToleranceFor(price float64) float64 {
 	return LevelClusterTicks * 0.25
 }
 
+// ClusterTolerance is the exported cluster/merge width (the same value
+// collapseLevelClusters and BuildMapCandidates use) for callers outside the
+// package that must decide "within the merge width" identically.
+func ClusterTolerance(price float64) float64 { return clusterToleranceFor(price) }
+
 // collapseLevelClusters merges levels within tol of a STRONGER survivor (kept in
 // the same relative position). Kept: highest score, then today-priority kind,
 // then nearer distance, then lower price. The survivor's confluence absorbs the

@@ -61,15 +61,30 @@ func oneSetupLevelRef(sc kernel.PlanScenario, doc *kernel.PlanDoc) kernel.OneSet
 
 // oneSetupSeedPlanLevels appends the plan doc's own levels to the live map as
 // zero-score rows carrying the level's identity (so CandidateIdentity recomputes
-// the doc's own id and level_id refs resolve) and its MACHINE grade when the
-// write site stamped one, else the authored grade. Zero score: a live row
-// within the merge width stays the keeper and merely gains the name; a level
-// the live pool lacks stands as its own candidate. The input slice is not
-// mutated. nil doc → the live rows unchanged.
-func oneSetupSeedPlanLevels(scored []kernel.ScoredLevel, doc *kernel.PlanDoc, price float64) []kernel.ScoredLevel {
-	out := append([]kernel.ScoredLevel(nil), scored...)
+// the doc's own id and level_id refs resolve). Zero score: a live row within
+// the merge width stays the keeper and merely gains the name.
+//
+// BOUNDED (second re-review of #159): a level the write site MACHINE-graded
+// stands as its own candidate with that grade. A level with NO machine grade
+// (unstamped / stale / model-invented — the population one-setup exists to
+// catch) may only ALIAS into a live row within the merge width (its name and
+// id ride along; the live grade wins); with no such row it is DROPPED and
+// counted (`dropped`, recorded by the caller as one_setup:seed_unstamped_dropped).
+// The authored grade is never a candidate grade. The input slice is not
+// mutated. nil doc → the live rows unchanged, 0 dropped.
+func oneSetupSeedPlanLevels(scored []kernel.ScoredLevel, doc *kernel.PlanDoc, price float64) (out []kernel.ScoredLevel, dropped int) {
+	out = append([]kernel.ScoredLevel(nil), scored...)
 	if doc == nil {
-		return out
+		return out, 0
+	}
+	width := kernel.ClusterTolerance(price)
+	hasLiveWithin := func(p float64) bool {
+		for _, s := range scored {
+			if math.Abs(s.Price-p) <= width {
+				return true
+			}
+		}
+		return false
 	}
 	str := func(p *string) string {
 		if p == nil {
@@ -94,11 +109,15 @@ func oneSetupSeedPlanLevels(scored []kernel.ScoredLevel, doc *kernel.PlanDoc, pr
 		}
 		grade := l.MachineGrade
 		if grade == "" {
-			grade = l.Grade
+			if !hasLiveWithin(l.Price) {
+				dropped++
+				continue
+			}
+			grade = "C" // never read: a zero-score alias merges into its live keeper, whose grade wins
 		}
 		out = append(out, kernel.ScoredLevel{DetectedLevel: d, Grade: grade, Fresh: "plan", Score: 0, Distance: l.Price - price})
 	}
-	return out
+	return out, dropped
 }
 
 // oneSetupTestFacts is the test seam's payload (see AutoTrader.oneSetupFactsForTest).
@@ -183,7 +202,14 @@ func (at *AutoTrader) oneSetupVerdictsAt(plan *kernel.ActivePlan, doc *kernel.Pl
 		// name), and "seated for the planner" == "candidate for one-setup" by
 		// construction. The permission facts still read the live `scored`.
 		if price > 0 {
-			seeded := oneSetupSeedPlanLevels(scored, doc, price)
+			seeded, dropped := oneSetupSeedPlanLevels(scored, doc, price)
+			if dropped > 0 && at.store != nil {
+				// RECORDED, never inferred: an unstamped plan level that could not
+				// alias a live row is not a candidate (second re-review of #159).
+				for i := 0; i < dropped; i++ {
+					_, _ = store.IncArmRefusal(at.store, at.id, kernel.PlanTradeDateFor(plan), plan.Session, store.OneSetupClassSeedUnstamped)
+				}
+			}
 			if len(seeded) > 0 {
 				cands = kernel.BuildMapCandidates(seeded, price, atr5m, kernel.MapCandidateOpts{})
 			}

@@ -179,7 +179,8 @@ const (
 	OneSetupClassNotEvaluated    = "one_setup:not_evaluated"
 	OneSetupClassWaiting         = "one_setup:waiting"
 	OneSetupClassResting         = "one_setup:declined_while_resting"
-	OneSetupClassRetired         = "one_setup:retired" // a declined scenario's unplaced authorization retired at placement time (owner ruling 2026-09-11)
+	OneSetupClassRetired         = "one_setup:retired"                // a declined scenario's unplaced authorization retired at placement time (owner ruling 2026-09-11)
+	OneSetupClassSeedUnstamped   = "one_setup:seed_unstamped_dropped" // a plan level with no MACHINE grade and no live row within the merge width: not a candidate (second re-review of #159)
 	OneSetupClassObstacleFloor   = "obstacle_below_floor"
 	OneSetupClassObstacleMissing = "obstacle_missing"
 )

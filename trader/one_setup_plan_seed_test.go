@@ -76,6 +76,26 @@ func oneSetupSeededFixtureDoc(t *testing.T, label, kind, tf string, lo, hi float
 	return string(blob)
 }
 
+// oneSetupStampedFixtureDoc is the golden fixture doc with PDL@29490 carrying
+// the write site's machine grade (A) — the seated, stamped level.
+func oneSetupStampedFixtureDoc(t *testing.T) string {
+	t.Helper()
+	var d kernel.PlanDoc
+	if err := json.Unmarshal([]byte(oneSetupFixtureDoc()), &d); err != nil {
+		t.Fatal(err)
+	}
+	for i := range d.Levels {
+		if d.Levels[i].Price == 29490 {
+			d.Levels[i].MachineGrade = "A"
+		}
+	}
+	blob, err := json.Marshal(&d)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(blob)
+}
+
 // reachBand widens the strategy's own proximity_filter_atr to its clamp (3.0):
 // the golden tape is flat (dATR 2.00), so the default band (1.5 × 2 = 3 pt)
 // cannot reach the plan's levels at ±5 — one-setup's reachability band is the
@@ -141,14 +161,28 @@ func TestOneSetupFixtureDecisionAfterSeeding(t *testing.T) {
 	if rec.Scenarios["S1"].Allowed || !strings.HasPrefix(rec.Scenarios["S1"].Level, "level_not_best:ONL") || len(g.Rows) != 0 {
 		t.Fatalf("default band (3 pt): the plan's levels stay unreachable, decision unchanged from before the fix: %+v rows=%v", rec.Scenarios["S1"], g.Rows)
 	}
+	// (b1) reach band, fixture UNSTAMPED (MachineGrade ""): the plan's PDL/ONH
+	// may only alias; PDL@29490 has no live row within 3 pt → dropped, S1 stays
+	// declined (bounded seeding, second re-review).
+	g1, at1, st1, _ := driveOneSetupArmPath(t, reachBand, nil)
+	rec1 := findOneSetupRecord(t, st1, at1.id)
+	if rec1 == nil {
+		t.Fatal("no record (band 6, unstamped)")
+	}
+	log("REACH-BAND-UNSTAMPED", g1, rec1)
+	if rec1.Scenarios["S1"].Allowed || rec1.Scenarios["S1"].Level == "ok" {
+		t.Fatalf("band 6 pt, unstamped PDL: S1 must NOT be allowed on an authored grade: %+v", rec1.Scenarios["S1"])
+	}
+	// (b2) reach band, PDL machine-stamped A: the decision change.
+	oneSetupFixtureDocOverride = oneSetupStampedFixtureDoc(t)
 	g2, at2, st2, _ := driveOneSetupArmPath(t, reachBand, nil)
 	rec2 := findOneSetupRecord(t, st2, at2.id)
 	if rec2 == nil {
 		t.Fatal("no record (band 6)")
 	}
-	log("REACH-BAND", g2, rec2)
+	log("REACH-BAND-STAMPED", g2, rec2)
 	if !rec2.Scenarios["S1"].Allowed || !strings.Contains(rec2.Scenarios["S1"].BestNames, "PDL") {
-		t.Fatalf("band 6 pt: S1 on the plan's own PDL must now be allowed with PDL best: %+v", rec2.Scenarios["S1"])
+		t.Fatalf("band 6 pt: S1 on the plan's own machine-stamped PDL must now be allowed with PDL best: %+v", rec2.Scenarios["S1"])
 	}
 	armed := false
 	for _, r := range g2.Rows {
@@ -169,9 +203,9 @@ func TestOneSetupSeedPlanLevels(t *testing.T) {
 	id.Grade, id.MachineGrade = "B", "A"
 	near := kernel.PlanLevel{Price: 29493, Label: "VWAP", Grade: "A"}
 	doc := &kernel.PlanDoc{Levels: []kernel.PlanLevel{id, near, {Price: 0, Label: "junk"}}}
-	seeded := oneSetupSeedPlanLevels(live, doc, price)
-	if len(seeded) != 3 || len(live) != 1 {
-		t.Fatalf("two seeded rows appended, input untouched: %d/%d", len(seeded), len(live))
+	seeded, dropped := oneSetupSeedPlanLevels(live, doc, price)
+	if len(seeded) != 3 || len(live) != 1 || dropped != 0 {
+		t.Fatalf("two seeded rows appended, input untouched: %d/%d dropped=%d", len(seeded), len(live), dropped)
 	}
 	cs := kernel.BuildMapCandidates(seeded, price, 5, kernel.MapCandidateOpts{})
 	// the near doc level merges INTO the live keeper (zero score) and lends its name
@@ -187,8 +221,56 @@ func TestOneSetupSeedPlanLevels(t *testing.T) {
 	if pd.ID == nil || id.ID == nil || *pd.ID != *id.ID {
 		t.Fatalf("the seeded candidate must carry the doc level's own id: got %v want %v", pd.ID, id.ID)
 	}
-	if got := oneSetupSeedPlanLevels(live, nil, price); len(got) != 1 {
+	if got, d := oneSetupSeedPlanLevels(live, nil, price); len(got) != 1 || d != 0 {
 		t.Fatal("nil doc → live rows only")
+	}
+	// BOUNDED: an UNSTAMPED level with no live row within the merge width is
+	// dropped and counted, never a candidate on its authored grade; an unstamped
+	// level within the width aliases and the live grade wins (`near` above: the
+	// merged candidate's grade stayed the live B, not the authored A).
+	unstamped := &kernel.PlanDoc{Levels: []kernel.PlanLevel{{Price: 29480, Label: "PDL", Grade: "A"}}}
+	got, d := oneSetupSeedPlanLevels(live, unstamped, price)
+	if len(got) != 1 || d != 1 {
+		t.Fatalf("unstamped solo level must be dropped and counted: rows=%d dropped=%d", len(got), d)
+	}
+	if _, ok := kernel.MatchMapCandidate(kernel.BuildMapCandidates(got, price, 5, kernel.MapCandidateOpts{}), 29480); ok {
+		t.Fatal("an unstamped solo level must not be a candidate")
+	}
+}
+
+// Through the arm seam: a scenario on an UNSTAMPED solo plan level is declined
+// level_no_candidate (min grade A leaves no live candidate) and the drop is
+// COUNTED as one_setup:seed_unstamped_dropped.
+func TestOneSetupUnstampedSoloLevelIsNotACandidate(t *testing.T) {
+	cfg := store.StrategyConfig{DayPlan: &store.DayPlanConfig{PlanEnabled: true, OneSetupMinGrade: "A"}}
+	at, st := resetTrader(t, cfg)
+	now := time.Now()
+	bars := oneSetupFixtureTape(now)
+	prev := market.FuturesBarsProvider
+	market.FuturesBarsProvider = func(symbol string, tf string, n int) []market.Kline { return bars }
+	t.Cleanup(func() { market.FuturesBarsProvider = prev })
+	var doc kernel.PlanDoc
+	if err := json.Unmarshal([]byte(oneSetupFixtureDoc()), &doc); err != nil {
+		t.Fatal(err)
+	}
+	for i := range doc.Levels {
+		if doc.Levels[i].MachineGrade != "" {
+			t.Fatal("fixture levels must be unstamped for this pin")
+		}
+	}
+	plan := &kernel.ActivePlan{PlanID: "unstamped", Version: 1, Session: "NY"}
+	c := at.oneSetupVerdictsAt(plan, &doc, bars, 1, &cfg, now)
+	v := c.verdicts["S1"]
+	t.Logf("unstamped: S1 level=%q best=%q", v.Level, v.BestNames)
+	if v.Level != "level_no_candidate" {
+		t.Fatalf("S1 on an unstamped solo level must be level_no_candidate: %+v", v)
+	}
+	var kv []struct{ Key, Value string }
+	if err := st.GormDB().Raw("SELECT key, value FROM system_config WHERE key LIKE ?", "arm_refusals_0b:"+at.id+":%"+store.OneSetupClassSeedUnstamped).Scan(&kv).Error; err != nil {
+		t.Fatal(err)
+	}
+	if len(kv) != 1 || kv[0].Value != "2" {
+		t.Fatalf("both unstamped solo levels (PDL 29490, ONH 29500) must be counted dropped: %+v", kv)
 	}
 }
 
