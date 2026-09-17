@@ -31,11 +31,28 @@ panics at init with `sql: Register called twice for driver sqlite` — that was
 Binnie's first-boot panic after `researchsnapshot/archive.go` grew its own
 import. `store/sqlitedriver.TestSingleRegistration` pins the invariant.
 
-Binnie update script line (replaces the private rebase branch):
+Partner update on a machine without gcc (replaces Binnie's private rebase branch).
+The mirror procedure is unchanged — build from a CLEAN head, THEN re-arm the two
+markers on disk (uncommitted), THEN build the dist — only the build gets the tag:
 
 ```
-git pull --ff-only origin dev && go build -tags cgofree -o nofx-bin . && (cd web && npm run build)
+git checkout HEAD -- deploy/RELEASE web/src/guide/types.ts     # drop the previous on-disk re-arm
+git checkout main && git pull --ff-only origin main             # partner main (a mirror of nofx's running tree)
+go build -tags cgofree -o nofx-bin.new . && go version -m nofx-bin.new | grep vcs.modified=false
+HEAD_SHA=$(git rev-parse HEAD)
+echo -n "$HEAD_SHA" > deploy/RELEASE                             # BOOT INTEGRITY compares the binary rev to this
+sed -i "s/^export const GUIDE_BUILT_REV = '[0-9a-f]*'/export const GUIDE_BUILT_REV = '$HEAD_SHA'/" web/src/guide/types.ts
+(cd web && npm run build)                                        # the 🖥 line must read bundle-rev == binary rev
+mv -n nofx-bin nofx-bin.old.$(go version -m nofx-bin | awk -F= '/vcs.revision/{print substr($2,1,8)}') && mv nofx-bin.new nofx-bin
 ```
+
+Then restart the bot the way that machine runs it (systemd where it exists;
+Binnie has no sudo and runs `setsid nohup ./nofx-bin &`, so stop the old pid and
+relaunch). Proofs to paste: `BOOT INTEGRITY OK — rev X · expected X · goldens
+PASS`, `🖥 … bundle-rev=X matches the binary`, `hello handshake OK`, positions
+`count=0`. The full step-by-step with rc checks is the CTO's
+`update-partner-machine.sh` (2026-09-17); it needs only `-tags cgofree` added
+to its `go build` line on this machine.
 
 Web side, same wave: `EquityChart` no longer throws on a missing
 `total_equity` (renders the empty state / `0.00`), and a root
