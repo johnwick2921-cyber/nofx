@@ -426,7 +426,7 @@ func zoneFreshMult(f string) float64 {
 // (the owner's proximity_filter_atr; ≤0 → the spec constant 1.5) — the band
 // OUTSIDE which no level is generated or seated.
 func ScoreLevels(levels []DetectedLevel, price, dATR float64, freshness func(DetectedLevel) string, maxLevels int, proximityK float64) []ScoredLevel {
-	return scoreLevelsPool(levels, price, dATR, freshness, maxLevels, proximityK, nil)
+	return scoreLevelsPool(levels, price, dATR, freshness, maxLevels, proximityK, nil, HTFScoreMultiplier)
 }
 
 // LegacyHtfSeats (S3, 2026-09-16) is the seatHTF count the pre-S3 code
@@ -434,8 +434,24 @@ func ScoreLevels(levels []DetectedLevel, price, dATR float64, freshness func(Det
 // kept as a named constant for the boot line and tests.
 const LegacyHtfSeats = 2
 
+// ResolveHtfScoreMultiplier (S3, 2026-09-16) resolves the knob: nil → the
+// const default 1.2 (today's behaviour); saved values clamp to 1.0–1.5.
+func ResolveHtfScoreMultiplier(p *float64) float64 {
+	if p == nil {
+		return HTFScoreMultiplier
+	}
+	v := *p
+	if v < 1.0 {
+		return 1.0
+	}
+	if v > 1.5 {
+		return 1.5
+	}
+	return v
+}
+
 // scoreLevelsPool is the full scorer (lock → grade → collapse → seat → top-N).
-func scoreLevelsPool(levels []DetectedLevel, price, dATR float64, freshness func(DetectedLevel) string, maxLevels int, proximityK float64, htfSeats *int) []ScoredLevel {
+func scoreLevelsPool(levels []DetectedLevel, price, dATR float64, freshness func(DetectedLevel) string, maxLevels int, proximityK float64, htfSeats *int, htfMult float64) []ScoredLevel {
 	if price <= 0 || dATR <= 0 {
 		return nil
 	}
@@ -517,7 +533,7 @@ func scoreLevelsPool(levels []DetectedLevel, price, dATR float64, freshness func
 		}
 		htf := 1.0
 		if l.HTF {
-			htf = HTFScoreMultiplier
+			htf = htfMult
 		}
 		var score float64
 		if isZoneKind(l.Kind) {
@@ -660,13 +676,13 @@ func ScoreLevelsMinGrade(levels []DetectedLevel, price, dATR float64, freshness 
 // machine grade stamped, so the stamp map now records EVERY graded candidate,
 // not just the seated top-N.
 func ScoreLevelsMinGradeFull(levels []DetectedLevel, price, dATR float64, freshness func(DetectedLevel) string, maxLevels int, proximityK float64, minGrade string) ([]ScoredLevel, []ScoredLevel) {
-	return ScoreLevelsMinGradeFullSeats(levels, price, dATR, freshness, maxLevels, proximityK, minGrade, nil)
+	return ScoreLevelsMinGradeFullSeats(levels, price, dATR, freshness, maxLevels, proximityK, minGrade, nil, HTFScoreMultiplier)
 }
 
 // ScoreLevelsMinGradeFullSeats is ScoreLevelsMinGradeFull with the resolved
-// day_plan.htf_seats knob (S3) — the production path; the legacy wrapper above
-// keeps every historical caller byte-identical (nil → legacy seating).
-func ScoreLevelsMinGradeFullSeats(levels []DetectedLevel, price, dATR float64, freshness func(DetectedLevel) string, maxLevels int, proximityK float64, minGrade string, htfSeats *int) ([]ScoredLevel, []ScoredLevel) {
+// day_plan.htf_seats + htf_score_multiplier knobs (S3) — the production path;
+// the legacy wrapper above keeps every historical caller byte-identical.
+func ScoreLevelsMinGradeFullSeats(levels []DetectedLevel, price, dATR float64, freshness func(DetectedLevel) string, maxLevels int, proximityK float64, minGrade string, htfSeats *int, htfMult float64) ([]ScoredLevel, []ScoredLevel) {
 	eff := maxLevels
 	if eff <= 0 {
 		eff = DefaultMaxLevels
@@ -675,7 +691,7 @@ func ScoreLevelsMinGradeFullSeats(levels []DetectedLevel, price, dATR float64, f
 		return nil, nil
 	}
 	levels = researchLevels(levels)
-	pool := scoreLevelsPool(levels, price, dATR, freshness, eff*2, proximityK, htfSeats)
+	pool := scoreLevelsPool(levels, price, dATR, freshness, eff*2, proximityK, htfSeats, htfMult)
 	filtered := FilterLevelsByMinGrade(pool, minGrade)
 	if minGrade == "" || len(filtered) <= eff {
 		if len(filtered) > eff {

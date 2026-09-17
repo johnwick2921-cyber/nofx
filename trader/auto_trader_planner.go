@@ -711,10 +711,10 @@ func (at *AutoTrader) noTradeLevelMap(session string) []kernel.PlanLevel {
 		return nil
 	}
 	now := time.Now()
-	maxLevels, htfSeats, minGrade, _ := resolveSessionPlanCfg(at.dayPlanCfg(), session)
+	maxLevels, htfSeats, htfMult, minGrade, _ := resolveSessionPlanCfg(at.dayPlanCfg(), session)
 	// R2 4.7 (2026-08-25) — fail-closed maps obey min_grade: a NO-TRADE doc's
 	// level map must match what an active plan would have carried.
-	scored, _, _ := kernel.AssembleScoredLevelsMinGrade(at.id, bars, at.sessionRegistry(now), symbol, maxLevels, htfSeats, now, at.proximityFilterATR(), minGrade)
+	scored, _, _ := kernel.AssembleScoredLevelsMinGrade(at.id, bars, at.sessionRegistry(now), symbol, maxLevels, htfSeats, htfMult, now, at.proximityFilterATR(), minGrade)
 
 	out := make([]kernel.PlanLevel, 0, len(scored)+4)
 	if owned, err := at.store.OwnerLevel().ListActiveForUser(at.ownerUserID(), symbol); err == nil {
@@ -1489,7 +1489,7 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 	// max_levels / scenario_cap (hard ceilings 12/5). Before this the parse
 	// hardcoded 8/3, so raising either setting made EVERY read fail-closed into a
 	// NO-TRADE plan + P0 alert — the upper half of the UI range was unreachable.
-	maxLevels, _, _, _ := resolveSessionPlanCfg(at.dayPlanCfg(), session)
+	maxLevels, _, _, _, _ := resolveSessionPlanCfg(at.dayPlanCfg(), session)
 	scenarioCap := at.scenarioCap()
 
 	var authoredAt time.Time
@@ -2057,12 +2057,14 @@ func (at *AutoTrader) runPlannerReadCoreObserved(authoringClock func() time.Time
 // prior behavior byte-for-byte (max_levels 8, no min_grade filter, D/4h/1h/15m).
 // S3 (2026-09-16): htf_seats nil → the LEGACY seatHTF path (byte-identical to
 // the pre-S3 table); a saved value clamps to 0-6 and activates the EFFECTIVE
-// promotion. Pure — unit-tested without an AutoTrader.
-func resolveSessionPlanCfg(dp *store.DayPlanConfig, session string) (maxLevels int, htfSeats *int, minGrade string, timeframes []string) {
+// promotion. htf_score_multiplier nil → 1.2 (the const); saved clamps 1.0-1.5.
+// Pure — unit-tested without an AutoTrader.
+func resolveSessionPlanCfg(dp *store.DayPlanConfig, session string) (maxLevels int, htfSeats *int, htfMult float64, minGrade string, timeframes []string) {
 	maxLevels = kernel.DefaultMaxLevels
+	htfMult = kernel.HTFScoreMultiplier
 	timeframes = []string{"D", "4h", "1h", "15m"}
 	if dp == nil {
-		return maxLevels, nil, minGrade, timeframes
+		return maxLevels, nil, htfMult, minGrade, timeframes
 	}
 	if dp.MaxLevels > 0 {
 		maxLevels = dp.MaxLevels
@@ -2077,6 +2079,7 @@ func resolveSessionPlanCfg(dp *store.DayPlanConfig, session string) (maxLevels i
 		}
 		htfSeats = &v
 	}
+	htfMult = kernel.ResolveHtfScoreMultiplier(dp.HtfScoreMultiplier)
 	if len(dp.PlannerTimeframes) > 0 {
 		timeframes = dp.PlannerTimeframes
 	}
@@ -2085,7 +2088,7 @@ func resolveSessionPlanCfg(dp *store.DayPlanConfig, session string) (maxLevels i
 			minGrade = *so.MinGrade
 		}
 	}
-	return maxLevels, htfSeats, minGrade, timeframes
+	return maxLevels, htfSeats, htfMult, minGrade, timeframes
 }
 
 // structureSummaryLines fetches one bar request per CONFIGURED planner timeframe
@@ -2189,7 +2192,7 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 	if at.config.StrategyConfig != nil {
 		dp = at.config.StrategyConfig.DayPlan
 	}
-	maxLevels, htfSeats, minGrade, timeframes := resolveSessionPlanCfg(dp, session)
+	maxLevels, htfSeats, htfMult, minGrade, timeframes := resolveSessionPlanCfg(dp, session)
 
 	var bars []market.Kline
 	if market.FuturesBarsProvider != nil {
@@ -2223,7 +2226,7 @@ func (at *AutoTrader) assemblePlannerInputWithCtx(session, tradeDate, priorKille
 		}
 		extra = append(extra, htfLevels...)
 	}
-	scored, pool, price, dATR, researchRaw := kernel.AssembleResearchLevels(at.id, bars, reg, symbol, maxLevels, htfSeats, now, at.proximityFilterATR(), minGrade, extra...)
+	scored, pool, price, dATR, researchRaw := kernel.AssembleResearchLevels(at.id, bars, reg, symbol, maxLevels, htfSeats, htfMult, now, at.proximityFilterATR(), minGrade, extra...)
 	// 1h wave (2026-08-25) — the ranked table's HTF seats guarantee an in-band
 	// 1h S/D zone when one exists. Gated by the seat_1h_zone knob (default ON).
 	if dp != nil && dp.Seat1HZoneEnabled() {

@@ -43,10 +43,10 @@ func TestS3StructureZonesDoNotCountAgainstMaxLevels(t *testing.T) {
 func TestStampScenarioRelations(t *testing.T) {
 	doc := &PlanDoc{
 		Scenarios: []PlanScenario{
-			{ID: "S1", Direction: "long", RelationD: "counter-trend"},              // model claim → moved
-			{ID: "S2", Direction: "short", RelationClaimed: "with-trend"},          // explicit claim kept
-			{ID: "S3", Direction: "long"},                                          // no claim
-			{ID: "S4", Direction: "neutral"},                                       // neutral → range
+			{ID: "S1", Direction: "long", RelationD: "counter-trend"},     // model claim → moved
+			{ID: "S2", Direction: "short", RelationClaimed: "with-trend"}, // explicit claim kept
+			{ID: "S3", Direction: "long"},                                 // no claim
+			{ID: "S4", Direction: "neutral"},                              // neutral → range
 		},
 		Structure: &StructureMap{TFs: map[string]StructureTF{
 			"D":  {Trend: "up"},
