@@ -440,7 +440,7 @@ func TFBootLine(defaultSet []string, detectors int) string {
 		"🗺 tf: detection-set=[%s] · detectors=%d (%s) · detectors×tfs=%d · "+
 			"planner tfs=per-trader (planner_timeframes; D→1d) · "+
 			"levels=n/a (by tf: n/a) · cross-tf merged=n/a · "+
-			"htf-weight=%.1f[I] · daily/weekly tier=4h[I]",
+			"htf-weight=%.1f(const, no strategy loaded) · daily/weekly tier=4h[I]",
 		strings.Join(defaultSet, ","), detectors, strings.Join(HTFDetectorNames(), ","),
 		detectors*len(defaultSet), HTFScoreMultiplier)
 }

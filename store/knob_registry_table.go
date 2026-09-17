@@ -100,7 +100,7 @@ var knobRegistry = map[string]KnobEntry{
 	"max_drawdown_pct":                 {Path: "max_drawdown_pct", Status: KnobLive, Consumers: []string{"kernel/formatter.go:162"}, Note: ""},
 	"max_levels":                       {Path: "max_levels", Status: KnobLive, Consumers: []string{"kernel/engine_analysis.go:366"}, Note: ""},
 	"htf_seats":                        {Path: "htf_seats", Status: KnobLive, Consumers: []string{"kernel/levels_score.go seatHTF (S3)"}, Note: "0-6, nil=2"},
-	"htf_score_multiplier":            {Path: "htf_score_multiplier", Status: KnobLive, Consumers: []string{"kernel/levels_score.go scoreLevelsPool (S3)"}, Note: "1.0-1.5, nil=1.2"},
+	"htf_score_multiplier":             {Path: "htf_score_multiplier", Status: KnobLive, Consumers: []string{"kernel/levels_score.go scoreLevelsPool (S3)"}, Note: "1.0-1.5, nil=1.2"},
 	"max_margin_usage":                 {Path: "max_margin_usage", Status: KnobIneffective, Consumers: nil, Note: "prompt text only \u2014 advisory, never a gate (engine_prompt.go)"},
 	"max_notional_leverage":            {Path: "max_notional_leverage", Status: KnobLive, Consumers: []string{"kernel/engine_analysis.go:557"}, Note: ""},
 	"max_positions":                    {Path: "max_positions", Status: KnobLive, Consumers: []string{"kernel/engine_analysis.go:131"}, Note: ""},

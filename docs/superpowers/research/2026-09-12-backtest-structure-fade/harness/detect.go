@@ -30,22 +30,22 @@ import (
 )
 
 type readSnapshot struct {
-	IDX        int
-	Day        string
-	Session    string
-	ReadTime   time.Time
-	WinStartMs int64
-	FlatMs     int64
-	Contract   string
-	Bars1m     []market.Kline
+	IDX         int
+	Day         string
+	Session     string
+	ReadTime    time.Time
+	WinStartMs  int64
+	FlatMs      int64
+	Contract    string
+	Bars1m      []market.Kline
 	SessionBars []market.Kline
-	PrevBar    *market.Kline
-	Price      float64
-	ATR5m      float64
-	Raw        []kernel.DetectedLevel
-	Inputs     map[string]kernel.ZoneWidthInput
-	Delta      float64
-	NPocCount  int
+	PrevBar     *market.Kline
+	Price       float64
+	ATR5m       float64
+	Raw         []kernel.DetectedLevel
+	Inputs      map[string]kernel.ZoneWidthInput
+	Delta       float64
+	NPocCount   int
 }
 
 var plannerTFs = []string{"D", "4h", "1h", "15m"}
