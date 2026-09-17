@@ -146,6 +146,98 @@ def main(out):
             z, p = two_prop(ha, na, ho, no)
             print(f"  agree-vs-oppose two-prop: z={z:+.2f} p={p:.4f}")
 
+    # ── Q-B extra: cross cells (CTO 02:23Z checks) ─────────────────────
+    section("Q-B extras: cross cells, 1h state, per-session, per-side")
+    def side(e):
+        return "long" if e.get("entry") == "below" else "short"
+    def rel(t, e):
+        d = t.get("d_trend"); h = t.get("h4_trend")
+        if d in ("up", "down") and h in ("up", "down"):
+            a1, a2 = agree(e, d), agree(e, h)
+            if a1 == "agree" and a2 == "agree":
+                return "agree-both"
+            if a1 == "oppose" and a2 == "oppose":
+                return "oppose-both"
+            return "mixed"
+        return "any-range"
+    by = defaultdict(list)
+    for e in o1:
+        t = tr.get((e["day"], e["session"]))
+        if t is None:
+            continue
+        by[rel(t, e)].append(e)
+    for g in ["agree-both", "mixed", "oppose-both", "any-range"]:
+        h, n = hold_of(by.get(g, []))
+        tag = "" if n >= 200 else "  [NOT MEASURED n<200]"
+        print(f"  D/4h cross {g:11s} hold {cell(h, n)}{tag}")
+    ha, na = hold_of(by.get("agree-both", []))
+    ho, no = hold_of(by.get("oppose-both", []))
+    if na > 0 and no > 0:
+        z, p = two_prop(ha, na, ho, no)
+        print(f"  agree-both-vs-oppose-both two-prop: z={z:+.2f} p={p:.4f}")
+    # 1h state
+    by1 = defaultdict(list)
+    for e in o1:
+        t = tr.get((e["day"], e["session"]))
+        if t is None:
+            continue
+        by1[agree(e, t.get("h1_trend") or "range")].append(e)
+    for g in ["agree", "oppose", "range"]:
+        h, n = hold_of(by1.get(g, []))
+        print(f"  vs 1h trend {g:7s} hold {cell(h, n)}")
+    # per-session (vs D)
+    print("  per-session (vs D trend):")
+    for sess in ["LONDON", "NY", "ASIA"]:
+        bys = defaultdict(list)
+        for e in o1:
+            if e["session"] != sess:
+                continue
+            t = tr.get((e["day"], e["session"]))
+            if t is None:
+                continue
+            bys[agree(e, t.get("d_trend") or "range")].append(e)
+        parts = []
+        for g in ["agree", "oppose", "range"]:
+            h, n = hold_of(bys.get(g, []))
+            if n:
+                parts.append(f"{g} {cell(h, n)}")
+        print(f"    {sess:8s}: " + " | ".join(parts))
+    # per-side (vs D)
+    print("  per-side (vs D trend):")
+    for sd in ["long", "short"]:
+        bys = defaultdict(list)
+        for e in o1:
+            if side(e) != sd:
+                continue
+            t = tr.get((e["day"], e["session"]))
+            if t is None:
+                continue
+            bys[agree(e, t.get("d_trend") or "range")].append(e)
+        parts = []
+        for g in ["agree", "oppose", "range"]:
+            h, n = hold_of(bys.get(g, []))
+            if n:
+                parts.append(f"{g} {cell(h, n)}")
+        print(f"    {sd:5s}: " + " | ".join(parts))
+
+    # ── Q-A per-family (CTO 02:23Z check 3) ────────────────────────────────
+    section("Q-A per-family fresh-vs-stale (1m-touch grades, VALID mode only)")
+    def zone(e):
+        return e["kind"] in ZONE_KINDS
+    fams = {
+        "HTF zones (Supply/Demand/FVG/IFVG/OB)": lambda r: zone(r),
+        "HTF references (all non-zone kinds)": lambda r: not zone(r),
+    }
+    for name, sel in fams.items():
+        rows = [r for r in qa if sel(r)]
+        fr = [r for r in rows if (r.get("grade_1m") or "fresh") == "fresh"]
+        st = [r for r in rows if (r.get("grade_1m") or "fresh") == "stale"]
+        hf, nf = hold_of(fr)
+        hs, ns = hold_of(st)
+        z, p = two_prop(hf, nf, hs, ns) if nf and ns else (0.0, 1.0)
+        tag = "" if (nf >= 200 and ns >= 200) else "  [some cell NOT MEASURED]"
+        print(f"  {name}: fresh {cell(hf, nf)} | stale {cell(hs, ns)} | z={z:+.2f} p={p:.4f}{tag}")
+
     # ── Q-C: HTFScoreMultiplier ×1.2 separation ───────────────────────────
     section("Q-C: ×1.2 multiplier applies to non-zone kinds only (levels_score.go:512-517 [A]) — does the promoted group react differently?")
     def zone(e):

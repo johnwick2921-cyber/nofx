@@ -84,6 +84,43 @@ kinds at 1m; 5m carries only SWG-H/SWG-L.
 The `zoneTierFor` merge of 5m into the "1m" tier is empirically moot: 5m zones react like
 noise, exactly like 1m zones.
 
+## Lookahead check (CTO 02:23Z) — CLEAN
+
+The S1 trend for a (day, session) is computed from bars with `OpenTime+iv <= read_time`
+(the exact `ComputeStructureMap` closed-bar filter), and the session registry reads 30
+minutes BEFORE the window opens (LONDON 01:30/02:00+, NY 08:00/08:30+, ASIA 16:30/17:00+).
+Verified on the whole set: **4,471,482/4,471,482 episodes have `opened_at_ms > read_at_ms`;
+0 violations; the minimum gap is exactly 1,800,000 ms (30 min)**. Therefore every bar in
+the trend computation closed at least 30 minutes before any episode in that session could
+open — no bar used in Q-B closed after any entry. Worked id: episode
+{day=2026-06-02, session=LONDON, kind=AS-H, tf=1m, opened_at_ms=1780478280000} — its read
+is 1780468200000 (gap 168 min), D trend "up" from 1831 closed daily bars; the LAST daily
+bar the port could use opens 1780376400000 and closes at the 1780462800000 bound, strictly
+before the episode entry (`close < entry` = 1 in the copy's bars table).
+
+## Q-B extras (CTO 02:23Z cross cells)
+
+D/4h cross: agree-both **0.540 [0.521,0.559] n=2606** · mixed **0.653 [0.626,0.680]
+n=1174** · oppose-both **0.408 [0.390,0.427] n=2655** · any-range 0.506 n=653979.
+agree-both vs oppose-both z = +9.56. (The mixed cell — with-trend at one TF, against at
+the other — holds most; n is modest, reported, not interpreted.)
+
+vs 1h trend: agree 0.506 [0.503,0.510] n=70611 · oppose 0.513 [0.510,0.516] n=111259 ·
+range 0.504 n=478544 — **the 1h state separates nothing.**
+
+Per-session (vs D): LONDON agree 0.546/oppose 0.449 · **NY agree 0.570/oppose 0.405** ·
+ASIA agree 0.530/oppose 0.468. The effect is largest in NY.
+
+Per-side (vs D): long agree 0.540/oppose 0.476 · short agree 0.555/**oppose 0.335** —
+the oppose penalty is concentrated on the short side (n=3843).
+
+## Q-A per-family (CTO 02:23Z check 3)
+
+HTF zones only: fresh n=1 (NOT MEASURED — 1m touches make every HTF zone stale almost
+immediately; this is the WHY-block pathology measured), stale 0.503 [0.494,0.512] n=11809.
+HTF references only: fresh 0.495 [0.479,0.510] n=4008 vs stale 0.504 [0.493,0.515] n=7721,
+z = −0.97, p = 0.332. **The ladder separates nothing in either family.**
+
 ## What the cells support (and only this)
 
 1. **Q-B is the one real effect.** The structure state (D trend especially) separates
