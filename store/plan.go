@@ -313,6 +313,47 @@ func (s *PlanStore) UpdatePlanLifecycle(planID string, version int, lifecycle, t
 	})
 }
 
+// UpdatePlanLifecycleIf (W-FLIP-REREAD BLOCKER 3, 2026-09-17) is
+// UpdatePlanLifecycle with a COMPARE-AND-SET on the current lifecycle: the row
+// moves from → to only if it is still in `from` at the moment of the write,
+// and the bool reports whether it moved. It exists because the structure_flip
+// read's supersede of the dormant version RACES the dormant re-arm path
+// (maybeRunSessionReadsAt: dormant → "active" when price closes back): an
+// unconditional UPDATE from a 20-minute planner call could stamp a
+// legitimately re-armed v1 "superseded:flip". Zero rows affected is NOT an
+// error here — it is the answer "someone else moved it first", and the caller
+// logs that and leaves both rows as they stand. Idempotent; WHERE-scoped to
+// (plan_id, version, lifecycle).
+func (s *PlanStore) UpdatePlanLifecycleIf(planID string, version int, from, to, triggerReason string) (bool, error) {
+	if planID == "" || version <= 0 {
+		return false, fmt.Errorf("plan_id and version required")
+	}
+	if from == "" || to == "" {
+		return false, fmt.Errorf("from and to lifecycles required")
+	}
+	moved := false
+	err := s.enqueue(func(db *gorm.DB) error {
+		res := db.Model(&PlanDB{}).
+			Where("plan_id = ? AND version = ? AND lifecycle = ?", planID, version, from).
+			Update("lifecycle", to)
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return nil // not in `from` any more (or no such row): refused, not failed
+		}
+		moved = true
+		if err := db.Create(&PlanLifecycleEvent{
+			PlanID: planID, Version: version, Event: to,
+			Reason: triggerReason, At: time.Now(),
+		}).Error; err != nil {
+			logger.Warnf("🗓 plan lifecycle log append failed (%s v%d → %s): %v", planID, version, to, err)
+		}
+		return nil
+	})
+	return moved, err
+}
+
 // AppendOverlay appends a new overlay version for (plan_id, plan_version).
 // Returns the assigned overlay_version.
 func (s *PlanStore) AppendOverlay(o *PlanOverlayDB) (int, error) {

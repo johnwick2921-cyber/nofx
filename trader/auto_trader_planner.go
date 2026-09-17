@@ -738,6 +738,18 @@ func (at *AutoTrader) maybeRereadAfterFlip(now time.Time, session, tradeDate str
 	// Non-fatal and async, exactly like the level-event wake: a failed read
 	// keeps the dormant plan and the once-key clears so the next cycle retries.
 	go func() {
+		// BLOCKER 3(b) (2026-09-17) — the row may have been re-armed between
+		// the dormant write and this goroutine's first instruction. Read it
+		// back and skip: nothing may be authored over a re-armed plan.
+		if cur, gerr := at.store.Plan().GetPlan(row.PlanID, row.Version); gerr != nil || cur == nil || cur.Lifecycle != "dormant" {
+			lc := "unreadable"
+			if cur != nil {
+				lc = cur.Lifecycle
+			}
+			at.logWarnf("🗓️ structure_flip read %s %s v%d — SKIPPED before the read: the row is %q, no longer dormant; nothing authored, the once-key stays clear.", tradeDate, session, row.Version, lc)
+			_ = at.store.SetSystemConfig(flipRereadDoneKey(row), "0")
+			return
+		}
 		if !flipRereadRun(at, session, tradeDate, prior, row, false) {
 			at.logWarnf("🗓️ structure_flip read %s %s v%d did not complete — the dormant plan stands.", tradeDate, session, row.Version)
 			_ = at.store.SetSystemConfig(flipRereadDoneKey(row), "0")
@@ -750,9 +762,19 @@ func (at *AutoTrader) maybeRereadAfterFlip(now time.Time, session, tradeDate str
 		if fdoc, derr := kernel.ParsePlanDoc(fresh.Doc); derr == nil && fdoc.Bias.Direction == oldBias {
 			at.logWarnf("🗓️ structure_flip: new v%d kept bias %s — the model disagreed with the flip (no loop; one read per fired flip).", fresh.Version, oldBias)
 		}
-		if err := at.store.Plan().UpdatePlanLifecycle(row.PlanID, row.Version, "superseded:flip", ""); err != nil {
-			at.logWarnf("🗓️ structure_flip: supersede write failed for v%d: %v", row.Version, err)
-		} else {
+		// BLOCKER 3(a) (2026-09-17) — supersede ONLY from dormant: a
+		// compare-and-set, because this goroutine's planner call can run 20
+		// minutes and the re-arm path (maybeRunSessionReadsAt, dormant →
+		// "active" on a close-back) may have restored v%d meanwhile. A refused
+		// CAS leaves BOTH rows as written; the newest version governs at read
+		// time (GetLatestPlanForTraderSession is ORDER BY version DESC).
+		moved, uerr := at.store.Plan().UpdatePlanLifecycleIf(row.PlanID, row.Version, "dormant", "superseded:flip", fmt.Sprintf("superseded:flip:v%d", fresh.Version))
+		switch {
+		case uerr != nil:
+			at.logWarnf("🗓️ structure_flip: supersede write failed for v%d: %v", row.Version, uerr)
+		case !moved:
+			at.logWarnf("🗓️ structure_flip: v%d was RE-ARMED meanwhile (no longer dormant) — supersede REFUSED; the re-armed v%d and the new v%d both stand as written, and the newest version (v%d) governs at read time.", row.Version, row.Version, fresh.Version, fresh.Version)
+		default:
 			at.logInfof("🗓️ plan %s %s v%d SUPERSEDED by the structure_flip read (new v%d).", tradeDate, session, row.Version, fresh.Version)
 		}
 		at.carryOwnerEditsInto(fresh.PlanID, row.Version, fresh.Version)
