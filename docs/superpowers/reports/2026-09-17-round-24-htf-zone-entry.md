@@ -1,6 +1,6 @@
 # Round 24 — IS A HIGHER-TIMEFRAME ZONE AN ENTRY? (lane 93 / nofx-dd)
 
-Branch `docs/round-24-htf-zone-entry` (claim `ea76c250`, scripts `19477226`). Dispatch: CTO
+Branch `docs/round-24-htf-zone-entry` (claim `ea76c250`, scripts `4c3c54b4`). Dispatch: CTO
 nofx-4c 2026-09-17 08:31 CT (owner question 02:10 CT). Cells only; no recommendation beyond
 the cells. Evidence tiers: every number below is **[A]** (computed by the named script at the
 named commit on the sha-pinned inputs) unless marked otherwise. Anything not in the MANIFEST is
@@ -89,12 +89,13 @@ penalty S4d found, wider when the entry is at an unambiguous zone.) By year, `no
 with-zone × 4h-with: 2025 0.425 n=2,952 · 2026 **0.316** n=1,410; with-zone × 4h-against: 2025
 0.464 n=3,321 · 2026 **0.643** n=2,052 — the 2026 spread is +33 pt, the 2025 spread +4 pt.
 
-**(c) Zone × D trend.** `own` era: with-zone × D-with 0.516 n=2,451 · with-zone × D-against
-0.520 n=2,633 · against-zone × D-with 0.478 n=2,155 · against-zone × D-against 0.523 n=1,969
-(table in the appendix; none clears +2 pt with n ≥ 2,000 in every year). `noconflict` era:
+**(c) Zone × D trend.** `own` era: with-zone × D-with 0.493 [0.472,0.515] n=2,023 ·
+with-zone × D-against 0.506 n=1,940 · against-zone × D-with 0.495 n=1,819 · against-zone ×
+D-against 0.525 [0.500,0.550] n=1,523 — every cell within CI of null. `noconflict` era:
 with-zone × D-with **0.532 [0.525,0.538] n=21,379** (+2.5 pt) · with-zone × D-against 0.516 ·
 against-zone × D-with **0.479** n=17,967 (−2.7 pt) — by year the with-zone × D-with cell is
-2022 0.459 · 2023 0.553 · 2024 0.538 · 2025 0.470 · 2026 0.508: sign flips (S4c's with-D shape).
+2022 0.459 n=3,729 · 2023 0.615 n=4,476 · 2024 0.514 n=6,446 · 2025 0.534 n=5,126 · 2026 0.531
+n=1,602: below null in 2022, +11 pt in 2023, +0.7 to +2.7 pt after — the with-D shape S4c found.
 
 **Four-way cross.** `own` cells are n=28–97 (NOT MEASURED at any useful width). `noconflict`
 era: with-zone × 4h-against × D-with 0.586 [0.537,0.634] n=394 · with-zone × 4h-against ×
@@ -180,7 +181,7 @@ was built against). Harness binary sha256 `df59fd66d1ea2ad8`; run: `run_harness.
 08:49:42 CT rc=0 (`out-r24/harness.log`). Inputs: `db.copy.db` 998a15ee230f321d ·
 `out-s4/qa.jsonl` 44e22a2205719527 · `out-s4/trends.jsonl` 00c3d6d5f19cfd3e ·
 `out-s4/era-trends.jsonl` 63a55eaea29e6275. Outputs: `episodes.jsonl` 529b41059b81cbdd ·
-`zones.jsonl` 37df53ab742675e2. All five analyses ran at scripts commit `19477226`, sequentially,
+`zones.jsonl` 37df53ab742675e2. All five analyses ran at scripts commit `4c3c54b4`, sequentially,
 `nice -n 19 ionice -c 3` (load rule, CTO 08:53 CT), reading the DB copy only. Reproduce:
 `python3 manifest.py > out-r24/manifest.md` after the five scripts.
 
@@ -193,11 +194,11 @@ the Go harness at the NY open and stalled the live bar persister (99 × "persist
 
 | Q | script | commit | inputs (sha256[:16]) | output | lookahead |
 |---|---|---|---|---|---|
-| Q0 | `q0_density.py` | `19477226` | zones.jsonl=37df53ab742675e2, era-trends.jsonl=63a55eaea29e6275 | `q0_density.json` |  |
-| Q1 | `q1.py` | `19477226` | episodes.jsonl=529b41059b81cbdd, zones.jsonl=37df53ab742675e2, era-trends.jsonl=63a55eaea29e6275 | `q1_cells.json` | zones and trend state are the READ snapshot (>=30 min before the session window, closed bars only); an episode is placed only against zones that existed at its  |
-| Q2 | `q2.py` | `19477226` | episodes.jsonl=529b41059b81cbdd, zones.jsonl=37df53ab742675e2 | `q2_cells.json` | zones and trend state are the READ snapshot (>=30 min before the session window, closed bars only); an episode is placed only against zones that existed at its  |
-| Q3 | `q3.py` | `19477226` | qa.jsonl=44e22a2205719527, trends.jsonl=00c3d6d5f19cfd3e, db.copy.db=998a15ee230f321d | `q3_cells.json` | own-TF bars with open+tf <= anchor (closed strictly before the touch); origin <= open; grader port of kernel/levels_fresh_by_tf.go@324927ad |
-| Q5 | `q5.py` | `19477226` | episodes.jsonl=529b41059b81cbdd, zones.jsonl=37df53ab742675e2, era-trends.jsonl=63a55eaea29e6275 | `q5_cells.json` | zones and trend state are the READ snapshot (>=30 min before the session window, closed bars only); an episode is placed only against zones that existed at its  |
+| Q0 | `q0_density.py` | `4c3c54b4` | zones.jsonl=37df53ab742675e2, era-trends.jsonl=63a55eaea29e6275 | `q0_density.json` |  |
+| Q1 | `q1.py` | `4c3c54b4` | episodes.jsonl=529b41059b81cbdd, zones.jsonl=37df53ab742675e2, era-trends.jsonl=63a55eaea29e6275 | `q1_cells.json` | zones and trend state are the READ snapshot (>=30 min before the session window, closed bars only); an episode is placed only against zones that existed at its  |
+| Q2 | `q2.py` | `4c3c54b4` | episodes.jsonl=529b41059b81cbdd, zones.jsonl=37df53ab742675e2 | `q2_cells.json` | zones and trend state are the READ snapshot (>=30 min before the session window, closed bars only); an episode is placed only against zones that existed at its  |
+| Q3 | `q3.py` | `4c3c54b4` | qa.jsonl=44e22a2205719527, trends.jsonl=00c3d6d5f19cfd3e, db.copy.db=998a15ee230f321d | `q3_cells.json` | own-TF bars with open+tf <= anchor (closed strictly before the touch); origin <= open; grader port of kernel/levels_fresh_by_tf.go@324927ad |
+| Q5 | `q5.py` | `4c3c54b4` | episodes.jsonl=529b41059b81cbdd, zones.jsonl=37df53ab742675e2, era-trends.jsonl=63a55eaea29e6275 | `q5_cells.json` | zones and trend state are the READ snapshot (>=30 min before the session window, closed bars only); an episode is placed only against zones that existed at its  |
 
 Harness pass: `run_harness.sh` → binary sha256 df59fd66d1ea2ad8 (built from `git archive d15db077` + this branch's `harness/eval.go`, diff vs d15db077 = 120 lines), `out-r24/harness.log` line 1; episodes.jsonl sha256 529b41059b81cbdd (4,471,482 lines = Round 23's count), zones.jsonl sha256 37df53ab742675e2 (556,237 zones).
 
